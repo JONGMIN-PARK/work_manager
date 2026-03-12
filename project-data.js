@@ -1228,6 +1228,10 @@ function showToast(msg, type) {
       if (typeof v === 'string' && (k === 'assignees' || k === 'dependencies' || k === 'project_ids' || k === 'tags' || k === 'items' || k === 'phases' || k === 'data' || k === 'date_range' || k === 'selected_names' || k === 'summary_history' || k === 'version_history')) {
         try { v = JSON.parse(v); } catch (e) { /* keep string */ }
       }
+      // NUMERIC 컬럼 → 숫자 변환 (node-postgres가 문자열로 반환)
+      if (typeof v === 'string' && (k === 'hours' || k === 'estimated_hours' || k === 'actual_hours' || k === 'total_hours' || k === 'progress' || k === 'weight')) {
+        v = parseFloat(v) || 0;
+      }
       out[ck] = v;
     }
     return out;
