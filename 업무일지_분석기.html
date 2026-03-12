@@ -2514,9 +2514,9 @@ document.addEventListener('click', function(e) {
 });
 
 /* ═══ INIT ═══ */
-(async()=>{
-  // 인증 초기화 (서버 모드일 때)
-  if(typeof authInit==='function'){var authOk=await authInit();if(!authOk&&typeof AUTH_SKIP!=='undefined'&&!AUTH_SKIP)return}
+var _initDone=false;
+async function _postAuthInit(){
+  if(_initDone)return;_initDone=true;
   if(typeof openDBv2==='function'){await openDBv2()}else{await openDB()}
   if(typeof loadOrdersToMap==='function'){try{await loadOrdersToMap()}catch(ex){console.warn('loadOrdersToMap:',ex)}}
   if(typeof initSettings==='function')initSettings();
@@ -2548,6 +2548,13 @@ document.addEventListener('click', function(e) {
   dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('active');hFile(e.dataTransfer.files[0])});
   document.body.addEventListener('dragover',e=>e.preventDefault());
   document.body.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files[0])hFile(e.dataTransfer.files[0])});
+}
+// 로그인 성공 후 콜백 — auth.js에서 호출
+function onAuthReady(){_postAuthInit()}
+(async()=>{
+  // 인증 초기화 (서버 모드일 때)
+  if(typeof authInit==='function'){var authOk=await authInit();if(!authOk&&typeof AUTH_SKIP!=='undefined'&&!AUTH_SKIP)return}
+  await _postAuthInit();
 })();
 </script>
 </body>
