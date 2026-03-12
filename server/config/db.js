@@ -1,12 +1,19 @@
 var { Pool } = require('pg');
 var config = require('./index');
 
-var pool = new Pool({
+var poolOpts = {
   connectionString: config.db.connectionString,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000
-});
+};
+
+// Supabase 등 외부 DB는 SSL 필요
+if (config.env === 'production' || (config.db.connectionString && config.db.connectionString.indexOf('supabase') >= 0)) {
+  poolOpts.ssl = { rejectUnauthorized: false };
+}
+
+var pool = new Pool(poolOpts);
 
 pool.on('error', function (err) {
   console.error('[DB] Unexpected pool error:', err.message);

@@ -11,7 +11,7 @@ COPY server/ server/
 COPY migrations/ migrations/
 
 # 프론트엔드 정적 파일
-COPY *.html *.js *.css ./
+COPY *.html *.js ./
 
 EXPOSE 3000
 
