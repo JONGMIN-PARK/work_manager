@@ -1,2 +1,7 @@
 .claude/
 .DS_Store
+node_modules/
+server/.env
+server/node_modules/
+*.log
+server/backups/

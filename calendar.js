@@ -40,6 +40,31 @@ async function renderCalendar() {
   }
   var events = expandRepeatingEvents(rawEvents, viewStart, viewEnd);
 
+  // 이슈 기한을 가상 이벤트로 추가
+  if (typeof issueGetAll === 'function') {
+    try {
+      var allIssues = await issueGetAll();
+      allIssues.forEach(function (iss) {
+        if (iss.dueDate && iss.status !== 'resolved' && iss.status !== 'closed') {
+          var urgColor = iss.urgency === 'urgent' ? '#EF4444' : iss.urgency === 'normal' ? '#F59E0B' : '#64748B';
+          events.push({
+            id: '_issDue_' + iss.id,
+            title: '🎫 ' + iss.title,
+            type: 'deadline',
+            startDate: iss.dueDate,
+            endDate: iss.dueDate,
+            projectIds: iss.projectId ? [iss.projectId] : [],
+            assignees: iss.assignees || [],
+            memo: '이슈 대응기한',
+            _issueId: iss.id,
+            _virtual: true,
+            _color: urgColor
+          });
+        }
+      });
+    } catch (e) { console.warn('[Calendar]', e); }
+  }
+
   // 대시보드 렌더
   renderDashboard(projects);
 
@@ -65,7 +90,7 @@ async function renderCalendar() {
   // Integration 9: 아카이브 요약 로드
   var archiveSummaries = [];
   if (typeof getWeeklyArchiveSummary === 'function') {
-    try { archiveSummaries = await getWeeklyArchiveSummary(); } catch (e) {}
+    try { archiveSummaries = await getWeeklyArchiveSummary(); } catch (e) { console.warn('[Calendar]', e); }
   }
 
   if (calViewMode === 'month') {

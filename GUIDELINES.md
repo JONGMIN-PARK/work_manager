@@ -37,18 +37,38 @@
 |------|------|
 | `업무일지_분석기.html` | 메인 HTML + CSS + 팀관리 JS (주간분석, 아카이브, 트렌드) |
 | `config.js` | 상수/설정 (테마, 색상, 업무분장 코드, AI 설정) |
-| `settings.js` | 팀원 그룹, 별칭, localStorage 래퍼 |
-| `order.js` | 수주번호 ↔ 수주명 매핑 |
+| `settings.js` | 팀원 그룹, 별칭, localStorage 래퍼, 전체 데이터 백업/복원 |
+| `order.js` | 수주번호 ↔ 수주명 매핑 (레거시, 엑셀 기반으로 전환) |
+| `pipeline.js` | 파이프라인 뷰 (6단계 칸반 보드) |
+| `order-view.js` | 수주 대장 뷰 (테이블, CRUD, 엑셀 연동) |
+| `issue-manager.js` | 이슈 관리 (테이블, 모달, 상세 패널, 대응 이력, 통계) |
 | `project-data.js` | IndexedDB CRUD, 프로젝트/마일스톤/이벤트 데이터, 유틸 함수 |
 | `calendar.js` | 달력 뷰 (월간/주간, 이벤트 등록, 드래그, ICS 가져오기) |
 | `timeline.js` | 타임라인/간트 뷰 (프로젝트 등록, 바 드래그, 의존관계 화살표) |
 | `dashboard.js` | 대시보드 위젯 (상태 카드, 리소스맵, AI 인사이트) |
+| `document-manager.js` | 문서 관리 (폴더, 파일, 미리보기, AI 요약) |
+| `auth.js` | 프론트엔드 인증 (로그인, 가입, JWT, 권한 헬퍼, 관리자 사용자 관리 UI) |
+
+### 서버 구조 (`server/`)
+
+| 파일 | 역할 |
+|------|------|
+| `server/server.js` | Express 서버 진입점 |
+| `server/app.js` | Express 앱 설정 (CORS, 헤더, 라우트 등록) |
+| `server/config/index.js` | 환경변수 기반 설정 |
+| `server/config/db.js` | PostgreSQL 연결 풀 + 쿼리/트랜잭션 헬퍼 |
+| `server/services/auth.service.js` | 인증 비즈니스 로직 (JWT, bcrypt, 토큰 관리) |
+| `server/middleware/auth.js` | JWT 인증 + 역할 검사 미들웨어 |
+| `server/routes/auth.js` | 인증 API (register, login, refresh, logout, me) |
+| `server/routes/users.js` | 사용자 관리 API (승인, 거절, 역할 변경) |
+| `server/scripts/seed-admin.js` | 초기 관리자 계정 생성 스크립트 |
+| `migrations/001_auth.sql` | PostgreSQL 인증 스키마 |
 
 ---
 
 ## 4. 데이터 구조
 
-### IndexedDB (`WorkAnalyzerDB` v3)
+### IndexedDB (`WorkAnalyzerDB` v7)
 
 | 스토어 | keyPath | 인덱스 | 용도 |
 |--------|---------|--------|------|
@@ -57,6 +77,11 @@
 | `milestones` | `id` | `projectId` | 마일스톤 |
 | `events` | `id` | `startDate` | 일정/이벤트 |
 | `progressHistory` | `id` | `projectId`, `date` | 진척률 히스토리 |
+| `orders` | `orderNo` | `client`, `date` | 수주 대장 |
+| `checklists` | `id` | `projectId`, `phase` | 단계별 체크리스트 |
+| `issues` | `id` | `projectId`, `orderNo`, `phase`, `dept`, `status`, `urgency` | 이슈 |
+| `issueLogs` | `id` | `issueId`, `date` | 이슈 대응 이력 |
+| `workRecords` | `id` (auto) | `date`, `name`, `orderNo`, `dateNameOrder` | 업무일지 레코드 |
 
 ### 팀 관리 데이터 (aD 배열)
 ```
@@ -66,12 +91,28 @@
 ### 프로젝트 데이터
 ```
 {id, orderNo, name, startDate: "YYYY-MM-DD", endDate, status, progress,
- estimatedHours, assignees: [], dependencies: [], color, memo}
+ estimatedHours, assignees: [], dependencies: [], color, memo,
+ currentPhase, phases: {order:{status,startDate,endDate}, ...}}
 ```
 
+### 이슈 데이터
+```
+{id, projectId, orderNo, phase, dept, type, urgency, status,
+ reportDate, dueDate, title, description, reporter, assignees: [],
+ tags: [], resolution, resolvedDate, createdAt}
+```
+
+### 수주맵 (ORDER_MAP)
+```
+ORDER_MAP[수주번호] = {name, date, client, amount, manager, delivery}
+```
+- 엑셀 입력 기본 형식: 수주번호, 수주일, 거래처, 프로젝트명, 납품예정
+- 파싱: BOM 제거 → 정확 매칭 → 부분 매칭 → 첫 열 폴백
+
 ### 공통 연결 키
-- `orderNo` — 수주번호로 팀 업무 ↔ 프로젝트 연결
+- `orderNo` — 수주번호로 팀 업무 ↔ 프로젝트 ↔ 수주 ↔ 이슈 연결
 - `name` ↔ `assignees` — 팀원명으로 연결
+- `projectId` — 프로젝트 ↔ 마일스톤/체크리스트/이슈/진척이력 연결
 - 날짜 형식 주의: 팀 측 `YYYYMMDD`, 프로젝트 측 `YYYY-MM-DD`
 
 ---

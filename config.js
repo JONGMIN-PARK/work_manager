@@ -106,14 +106,70 @@ var PROJ_STATUS = {
 
 /* ═══ 일정 유형 ═══ */
 var EVT_TYPE = {
-  milestone: { label: '마일스톤', color: '#8B5CF6', icon: '◆' },
-  meeting:   { label: '회의',     color: '#06B6D4', icon: '🤝' },
-  deadline:  { label: '납기',     color: '#EF4444', icon: '🏁' },
-  trip:      { label: '출장',     color: '#F97316', icon: '✈️' },
-  dayoff:    { label: '연차',     color: '#10B981', icon: '🌴' },
-  amoff:     { label: '오전반차', color: '#14B8A6', icon: '🌅' },
-  pmoff:     { label: '오후반차', color: '#0D9488', icon: '🌇' },
-  etc:       { label: '기타',     color: '#64748B', icon: '📌' }
+  milestone:    { label: '마일스톤', color: '#8B5CF6', icon: '◆' },
+  meeting:      { label: '회의',     color: '#06B6D4', icon: '🤝' },
+  deadline:     { label: '납기',     color: '#EF4444', icon: '🏁' },
+  trip:         { label: '출장',     color: '#F97316', icon: '✈️' },
+  fieldService: { label: '현장출동', color: '#DC2626', icon: '🔧' },
+  periodicChk:  { label: '정기점검', color: '#14B8A6', icon: '🛠️' },
+  dayoff:       { label: '연차',     color: '#10B981', icon: '🌴' },
+  amoff:        { label: '오전반차', color: '#14B8A6', icon: '🌅' },
+  pmoff:        { label: '오후반차', color: '#0D9488', icon: '🌇' },
+  etc:          { label: '기타',     color: '#64748B', icon: '📌' }
+};
+
+/* ═══ 프로젝트 라이프사이클 단계 ═══ */
+var PROJ_PHASE = {
+  order:       { label: '수주',   icon: '📋', color: '#6366F1', seq: 1 },
+  design:      { label: '설계',   icon: '📐', color: '#8B5CF6', seq: 2 },
+  manufacture: { label: '제작',   icon: '🏭', color: '#3B82F6', seq: 3 },
+  inspect:     { label: '검수',   icon: '🔍', color: '#06B6D4', seq: 4 },
+  deliver:     { label: '납품',   icon: '🚚', color: '#10B981', seq: 5 },
+  as:          { label: 'A/S',   icon: '🛠️', color: '#F59E0B', seq: 6 }
+};
+
+/* ═══ 부서 ═══ */
+var DEPT = {
+  design:        { label: '설계',       icon: '📐', color: '#8B5CF6' },
+  manufacturing: { label: '제조',       icon: '🏭', color: '#3B82F6' },
+  electrical:    { label: '전장',       icon: '⚡', color: '#F59E0B' },
+  control:       { label: '제어',       icon: '🎛️', color: '#06B6D4' },
+  process:       { label: '공정',       icon: '⚙️', color: '#10B981' },
+  software:      { label: '소프트웨어', icon: '💻', color: '#EC4899' }
+};
+
+/* ═══ 이슈 유형 ═══ */
+var ISSUE_TYPE = {
+  fault:       { label: '장애',     icon: '🔴', color: '#EF4444' },
+  defect:      { label: '불량',     icon: '🟠', color: '#F97316' },
+  change:      { label: '설계변경', icon: '🔵', color: '#3B82F6' },
+  performance: { label: '성능',     icon: '🟡', color: '#F59E0B' },
+  inquiry:     { label: '문의',     icon: '🟣', color: '#8B5CF6' },
+  improve:     { label: '개선',     icon: '🟢', color: '#10B981' },
+  periodic:    { label: '정기점검', icon: '🔧', color: '#14B8A6' },
+  etc:         { label: '기타',     icon: '⚪', color: '#64748B' }
+};
+
+/* ═══ 이슈 긴급도 ═══ */
+var ISSUE_URGENCY = {
+  urgent: { label: '긴급', icon: '🔴', color: '#EF4444' },
+  normal: { label: '보통', icon: '🟡', color: '#F59E0B' },
+  low:    { label: '일반', icon: '🟢', color: '#10B981' }
+};
+
+/* ═══ 이슈 상태 ═══ */
+var ISSUE_STATUS = {
+  open:       { label: '접수',   color: '#6366F1' },
+  inProgress: { label: '대응중', color: '#3B82F6' },
+  resolved:   { label: '해결',   color: '#10B981' },
+  closed:     { label: '종결',   color: '#94A3B8' },
+  hold:       { label: '보류',   color: '#F59E0B' }
+};
+
+/* ═══ AI 프롬프트 프리셋 ═══ */
+/* ═══ 역할 ═══ */
+var ROLE_LABELS = {
+  admin: '관리자', executive: '임원', manager: '팀장', member: '팀원'
 };
 
 /* ═══ AI 프롬프트 프리셋 ═══ */
