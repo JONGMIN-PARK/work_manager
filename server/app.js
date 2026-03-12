@@ -7,6 +7,9 @@ var config = require('./config');
 
 var app = express();
 
+// ─── 프록시 신뢰 (Render, Cloud Run 등 리버스 프록시 환경) ───
+app.set('trust proxy', 1);
+
 // ─── 보안 헤더 ───
 app.use(helmet({
   contentSecurityPolicy: false,
