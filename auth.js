@@ -71,7 +71,8 @@ async function apiFetch(url, opts) {
       return data;
     } catch (e) {
       lastErr = e;
-      if (attempt < maxRetries) {
+      // 네트워크 오류만 재시도 (4xx 등 응답 에러는 재시도하지 않음)
+      if (!e.status && attempt < maxRetries) {
         await new Promise(function(r) { setTimeout(r, 500 * (attempt + 1)); });
         continue;
       }
