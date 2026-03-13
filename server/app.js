@@ -68,7 +68,7 @@ var apiLimiter = rateLimit({
 app.use(express.static(path.join(__dirname, '..'), {
   index: '업무일지_분석기.html',
   extensions: ['html'],
-  maxAge: '1d',
+  maxAge: '1h',
   etag: true,
   lastModified: true,
   setHeaders: function (res, filePath) {
