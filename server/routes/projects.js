@@ -17,11 +17,11 @@ router.get('/', async function (req, res) {
     var r;
 
     if (role === 'admin' || role === 'executive' || role === 'manager') {
-      r = await db.query('SELECT id, name, order_no, status, progress, start_date, end_date, manager, department, weight, estimated_hours, actual_hours, priority, created_at, updated_at, version, COUNT(*) OVER() AS _total FROM projects ORDER BY created_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
+      r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM projects ORDER BY created_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
     } else {
       // member: 배정된 프로젝트만
       r = await db.query(
-        "SELECT p.id, p.name, p.order_no, p.status, p.progress, p.start_date, p.end_date, p.manager, p.department, p.weight, p.estimated_hours, p.actual_hours, p.priority, p.created_at, p.updated_at, p.version, COUNT(*) OVER() AS _total FROM projects p INNER JOIN project_members pm ON p.id = pm.project_id WHERE pm.user_id = $1 AND pm.released_at IS NULL ORDER BY p.created_at DESC LIMIT $2 OFFSET $3",
+        "SELECT p.*, COUNT(*) OVER() AS _total FROM projects p INNER JOIN project_members pm ON p.id = pm.project_id WHERE pm.user_id = $1 AND pm.released_at IS NULL ORDER BY p.created_at DESC LIMIT $2 OFFSET $3",
         [userId, pg.limit, pg.offset]
       );
     }

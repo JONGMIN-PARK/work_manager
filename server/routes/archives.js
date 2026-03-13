@@ -84,7 +84,7 @@ router.delete('/records', rbac.checkPermission('archive.manage'), async function
 router.get('/', async function (req, res) {
   try {
     var pg = parsePagination(req.query, 100);
-    var r = await db.query('SELECT id, label, date_range, selected_names, total_hours, saved_at, uploaded_by, COUNT(*) OVER() AS _total FROM work_archives ORDER BY saved_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
+    var r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM work_archives ORDER BY saved_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
     var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
