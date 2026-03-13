@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var rbac = require('../middleware/rbac');
+var { parsePagination } = require('../middleware/pagination');
 
 router.use(auth.authenticate);
 
@@ -18,9 +19,14 @@ router.get('/records', async function (req, res) {
     if (req.query.date) { sql += ' AND date = $' + idx++; params.push(req.query.date); }
     if (req.query.name) { sql += ' AND name = $' + idx++; params.push(req.query.name); }
     if (req.query.orderNo) { sql += ' AND order_no = $' + idx++; params.push(req.query.orderNo); }
-    sql += ' ORDER BY date DESC, name, order_no';
+    var countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as cnt');
+    var countResult = await db.query(countSql, params);
+
+    var pg = parsePagination(req.query, 100);
+    sql += ' ORDER BY date DESC, name, order_no LIMIT $' + idx++ + ' OFFSET $' + idx++;
+    params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
-    res.json({ data: r.rows });
+    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[work-records/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -77,8 +83,10 @@ router.delete('/records', rbac.checkPermission('archive.manage'), async function
 // GET /api/archives
 router.get('/', async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM work_archives ORDER BY saved_at DESC');
-    res.json({ data: r.rows });
+    var pg = parsePagination(req.query, 100);
+    var countResult = await db.query('SELECT COUNT(*) as cnt FROM work_archives');
+    var r = await db.query('SELECT * FROM work_archives ORDER BY saved_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
+    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[archives/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

@@ -37,28 +37,47 @@ async function apiFetch(url, opts) {
     opts.headers['Content-Type'] = 'application/json';
   }
 
-  var res = await fetch(API_BASE + url, opts);
+  var maxRetries = ((!opts.method || opts.method === 'GET') ? 2 : 0);
+  var lastErr;
+  for (var attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      var res = await fetch(API_BASE + url, opts);
 
-  // 401 → 토큰 갱신 시도
-  if (res.status === 401 && _refreshToken) {
-    var refreshed = await _tryRefresh();
-    if (refreshed) {
-      opts.headers['Authorization'] = 'Bearer ' + _accessToken;
-      res = await fetch(API_BASE + url, opts);
-    } else {
-      authLogout();
-      return null;
+      // 5xx → 재시도 (GET만)
+      if (res.status >= 500 && attempt < maxRetries) {
+        await new Promise(function(r) { setTimeout(r, 500 * (attempt + 1)); });
+        continue;
+      }
+
+      // 401 → 토큰 갱신 시도
+      if (res.status === 401 && _refreshToken) {
+        var refreshed = await _tryRefresh();
+        if (refreshed) {
+          opts.headers['Authorization'] = 'Bearer ' + _accessToken;
+          res = await fetch(API_BASE + url, opts);
+        } else {
+          authLogout();
+          return null;
+        }
+      }
+
+      var data = await res.json();
+      if (!res.ok) {
+        var err = new Error(data.message || res.statusText);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < maxRetries) {
+        await new Promise(function(r) { setTimeout(r, 500 * (attempt + 1)); });
+        continue;
+      }
+      throw e;
     }
   }
-
-  var data = await res.json();
-  if (!res.ok) {
-    var err = new Error(data.message || res.statusText);
-    err.status = res.status;
-    err.data = data;
-    throw err;
-  }
-  return data;
 }
 
 async function _tryRefresh() {

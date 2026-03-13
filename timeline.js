@@ -693,12 +693,12 @@ function addMsRow() {
 
 async function saveProjectUI(existingId) {
   var name = document.getElementById('projName').value.trim();
-  if (!name) { alert('프로젝트명을 입력하세요.'); return; }
+  if (!name) { showToast('프로젝트명을 입력하세요.','warn'); return; }
 
   var startDate = document.getElementById('projStart').value;
   var endDate = document.getElementById('projEnd').value;
-  if (!startDate || !endDate) { alert('시작일과 종료일을 입력하세요.'); return; }
-  if (startDate > endDate) { alert('종료일이 시작일보다 앞설 수 없습니다.'); return; }
+  if (!startDate || !endDate) { showToast('시작일과 종료일을 입력하세요.','warn'); return; }
+  if (startDate > endDate) { showToast('종료일이 시작일보다 앞설 수 없습니다.','warn'); return; }
 
   var assigneesStr = document.getElementById('projAssignees').value;
   var assignees = assigneesStr ? assigneesStr.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
@@ -707,7 +707,7 @@ async function saveProjectUI(existingId) {
   document.querySelectorAll('.proj-dep-chk:checked').forEach(function (c) { depIds.push(c.value); });
 
   // 순환 의존 방지
-  if (existingId && depIds.includes(existingId)) { alert('자기 자신을 선행 프로젝트로 지정할 수 없습니다.'); return; }
+  if (existingId && depIds.includes(existingId)) { showToast('자기 자신을 선행 프로젝트로 지정할 수 없습니다.','warn'); return; }
 
   var data = {
     orderNo: document.getElementById('projOrderNo').value.trim(),
@@ -1382,11 +1382,11 @@ function importProjectsJSON() {
       if (data.events) {
         for (var k = 0; k < data.events.length; k++) await evtPut(data.events[k]);
       }
-      alert('가져오기 완료!');
+      showToast('가져오기 완료!');
       renderTimeline();
       renderCalendar();
     } catch (err) {
-      alert('JSON 파일 형식 오류: ' + err.message);
+      showToast('JSON 파일 형식 오류: ' + err.message,'error');
     }
   };
   input.click();
@@ -1758,22 +1758,22 @@ function calcCriticalPathByDuration(projects) {
 /* ═══ Integration 6: 현재 담당자를 그룹으로 저장 ═══ */
 function saveAssigneesAsGroup() {
   var inp = document.getElementById('projAssignees');
-  if (!inp || !inp.value.trim()) { alert('담당자를 먼저 입력하세요.'); return; }
+  if (!inp || !inp.value.trim()) { showToast('담당자를 먼저 입력하세요.','warn'); return; }
   var members = inp.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-  if (!members.length) { alert('담당자를 먼저 입력하세요.'); return; }
+  if (!members.length) { showToast('담당자를 먼저 입력하세요.','warn'); return; }
   var name = prompt('새 그룹 이름을 입력하세요:', '');
   if (!name || !name.trim()) return;
   if (typeof createGroup === 'function') {
     createGroup(name.trim(), members);
     showToast('"' + name.trim() + '" 그룹 저장 (' + members.length + '명)');
   } else {
-    alert('설정 모듈(settings.js)이 로드되지 않았습니다.');
+    showToast('설정 모듈(settings.js)이 로드되지 않았습니다.','error');
   }
 }
 
 /* ═══ Integration 8: 마일스톤 제안 실행 ═══ */
 function runSuggestMilestones(orderNo) {
-  if (typeof suggestMilestones !== 'function') { alert('project-data.js가 로드되지 않았습니다.'); return; }
+  if (typeof suggestMilestones !== 'function') { showToast('project-data.js가 로드되지 않았습니다.','error'); return; }
 
   suggestMilestones(orderNo).then(function (suggestions) {
     if (!suggestions.length) {

@@ -4,14 +4,17 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
+var { parsePagination } = require('../middleware/pagination');
 
 router.use(auth.authenticate);
 
 // GET /api/orders
 router.get('/', async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM orders ORDER BY date DESC, order_no');
-    res.json({ data: r.rows });
+    var pg = parsePagination(req.query, 100);
+    var countResult = await db.query('SELECT COUNT(*) as cnt FROM orders');
+    var r = await db.query('SELECT * FROM orders ORDER BY date DESC, order_no LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
+    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[orders/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

@@ -2,6 +2,7 @@ var express = require('express');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
+var { parsePagination } = require('../middleware/pagination');
 
 router.use(auth.authenticate);
 
@@ -16,9 +17,16 @@ router.get('/folders', async function (req, res) {
       sql += ' WHERE project_id = $1';
       params.push(req.query.projectId);
     }
+    var countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as cnt');
+    var countResult = await db.query(countSql, params);
+
+    var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY name';
+    var idx = params.length + 1;
+    sql += ' LIMIT $' + idx++ + ' OFFSET $' + idx++;
+    params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
-    res.json({ data: r.rows });
+    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[folders/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -83,9 +91,14 @@ router.get('/files', async function (req, res) {
     var idx = 1;
     if (req.query.projectId) { sql += ' AND project_id = $' + idx++; params.push(req.query.projectId); }
     if (req.query.folderId) { sql += ' AND folder_id = $' + idx++; params.push(req.query.folderId); }
-    sql += ' ORDER BY created_at DESC';
+    var countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as cnt');
+    var countResult = await db.query(countSql, params);
+
+    var pg = parsePagination(req.query, 100);
+    sql += ' ORDER BY created_at DESC LIMIT $' + idx++ + ' OFFSET $' + idx++;
+    params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
-    res.json({ data: r.rows });
+    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[files/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

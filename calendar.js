@@ -466,12 +466,12 @@ async function checkEventConflicts(assignees, startDate, endDate, excludeEvtId) 
 
 async function saveEventUI(existingId) {
   var title = document.getElementById('evtTitle').value.trim();
-  if (!title) { alert('제목을 입력하세요.'); return; }
+  if (!title) { showToast('제목을 입력하세요.','warn'); return; }
 
   var evtStartVal = document.getElementById('evtStart').value;
   var evtEndVal = document.getElementById('evtEnd').value || evtStartVal;
-  if (!evtStartVal) { alert('시작일을 입력하세요.'); return; }
-  if (evtEndVal < evtStartVal) { alert('종료일이 시작일보다 앞설 수 없습니다.'); return; }
+  if (!evtStartVal) { showToast('시작일을 입력하세요.','warn'); return; }
+  if (evtEndVal < evtStartVal) { showToast('종료일이 시작일보다 앞설 수 없습니다.','warn'); return; }
 
   var projIds = [];
   document.querySelectorAll('.evt-proj-chk:checked').forEach(function (c) { projIds.push(c.value); });

@@ -451,9 +451,9 @@ function saveIssueModal(isEdit, editId) {
   var assigneesStr = document.getElementById('issModalAssignees').value.trim();
   var tagsStr = document.getElementById('issModalTags').value.trim();
 
-  if (!projId) { alert('프로젝트를 선택하세요.'); return; }
-  if (!dept) { alert('부서를 선택하세요.'); return; }
-  if (!title) { alert('제목을 입력하세요.'); return; }
+  if (!projId) { showToast('프로젝트를 선택하세요.','warn'); return; }
+  if (!dept) { showToast('부서를 선택하세요.','warn'); return; }
+  if (!title) { showToast('제목을 입력하세요.','warn'); return; }
 
   var assignees = assigneesStr ? assigneesStr.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
   var tags = tagsStr ? tagsStr.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
@@ -679,7 +679,7 @@ function issueAddLog(issueId) {
   var author = document.getElementById('issLogAuthor').value.trim();
   var content = document.getElementById('issLogContent').value.trim();
 
-  if (!content) { alert('대응 내용을 입력하세요.'); return; }
+  if (!content) { showToast('대응 내용을 입력하세요.','warn'); return; }
 
   createIssueLog({
     issueId: issueId, date: date, time: time,
@@ -756,7 +756,7 @@ function detectRepeatIssue(newIssue) {
         msg += '- ' + iss.title + ' (' + (iss.reportDate || '') + ')\n';
       });
       msg += '\n근본 원인 분석이 필요할 수 있습니다.';
-      alert(msg);
+      showToast(msg,'warn');
     }
   });
 }
@@ -924,7 +924,7 @@ function exportIssueExcel() {
       XLSX.writeFile(wb, '이슈대장_' + localDate() + '.xlsx');
       showToast('이슈 대장을 엑셀로 저장했습니다.');
     } else {
-      alert('SheetJS(xlsx) 라이브러리를 불러올 수 없습니다.');
+      showToast('SheetJS(xlsx) 라이브러리를 불러올 수 없습니다.','error');
     }
   });
 }
@@ -1006,7 +1006,7 @@ function issueBulkAction(action) {
   if (action === 'status') {
     var sel = document.getElementById('bulkStatusSel');
     var newStatus = sel ? sel.value : '';
-    if (!newStatus) { alert('상태를 선택하세요.'); return; }
+    if (!newStatus) { showToast('상태를 선택하세요.','warn'); return; }
     var updates = { status: newStatus };
     if (newStatus === 'resolved' || newStatus === 'closed') updates.resolvedDate = localDate();
     var stPromises = ids.map(function (id) { return updateIssue(id, updates); });
@@ -1021,7 +1021,7 @@ function issueBulkAction(action) {
   if (action === 'assignee') {
     var inp = document.getElementById('bulkAssigneeInput');
     var assigneeStr = inp ? inp.value.trim() : '';
-    if (!assigneeStr) { alert('담당자를 입력하세요.'); return; }
+    if (!assigneeStr) { showToast('담당자를 입력하세요.','warn'); return; }
     var assignees = assigneeStr.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
     var aPromises = ids.map(function (id) { return updateIssue(id, { assignees: assignees }); });
     Promise.all(aPromises).then(function () {

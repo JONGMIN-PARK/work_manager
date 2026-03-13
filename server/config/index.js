@@ -9,13 +9,21 @@ var config = {
     connectionString: process.env.DATABASE_URL
   },
 
-  jwt: {
-    secret: process.env.JWT_SECRET || 'dev-secret-change-me',
-    refreshSecret: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-me',
-    accessExpiresIn: '30m',
-    refreshExpiresIn: '7d',
-    refreshExpiresInMs: 7 * 24 * 60 * 60 * 1000
-  },
+  jwt: (function () {
+    var secret = process.env.JWT_SECRET || 'dev-secret-change-me';
+    var refreshSecret = process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-me';
+    if (process.env.NODE_ENV === 'production') {
+      if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET must be set in production');
+      if (!process.env.JWT_REFRESH_SECRET) throw new Error('JWT_REFRESH_SECRET must be set in production');
+    }
+    return {
+      secret: secret,
+      refreshSecret: refreshSecret,
+      accessExpiresIn: '30m',
+      refreshExpiresIn: '7d',
+      refreshExpiresInMs: 7 * 24 * 60 * 60 * 1000
+    };
+  })(),
 
   bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS, 10) || 12,
 

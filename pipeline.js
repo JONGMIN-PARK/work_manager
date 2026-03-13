@@ -279,7 +279,7 @@ function exportProjectReport() {
     var issues = results[3] || [];
     var chkMap = results[4] || {};
 
-    if (typeof XLSX === 'undefined') { alert('SheetJS(xlsx) 라이브러리를 불러올 수 없습니다.'); return; }
+    if (typeof XLSX === 'undefined') { showToast('SheetJS(xlsx) 라이브러리를 불러올 수 없습니다.','error'); return; }
 
     var wb = XLSX.utils.book_new();
 

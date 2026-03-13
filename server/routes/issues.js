@@ -4,6 +4,7 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
+var { parsePagination } = require('../middleware/pagination');
 
 router.use(auth.authenticate);
 
@@ -22,9 +23,14 @@ router.get('/', async function (req, res) {
     if (q.phase) { sql += ' AND phase = $' + idx++; params.push(q.phase); }
     if (q.dept) { sql += ' AND dept = $' + idx++; params.push(q.dept); }
 
-    sql += ' ORDER BY created_at DESC';
+    var countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as cnt');
+    var countResult = await db.query(countSql, params);
+
+    var pg = parsePagination(req.query, 100);
+    sql += ' ORDER BY created_at DESC LIMIT $' + idx++ + ' OFFSET $' + idx++;
+    params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
-    res.json({ data: r.rows });
+    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[issues/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

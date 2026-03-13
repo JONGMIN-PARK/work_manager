@@ -12,7 +12,16 @@ app.set('trust proxy', 1);
 
 // ─── 보안 헤더 ───
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdnjs.cloudflare.com", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "https://generativelanguage.googleapis.com", "https://api.anthropic.com"]
+    }
+  },
   crossOriginEmbedderPolicy: false
 }));
 
@@ -27,6 +36,16 @@ app.use(cors({
 // ─── JSON 파싱 ───
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Global string trim
+app.use(function (req, res, next) {
+  if (req.body && typeof req.body === 'object') {
+    Object.keys(req.body).forEach(function (k) {
+      if (typeof req.body[k] === 'string') req.body[k] = req.body[k].trim();
+    });
+  }
+  next();
+});
 
 // ─── Rate Limiting ───
 var loginLimiter = rateLimit({
@@ -48,7 +67,15 @@ var apiLimiter = rateLimit({
 // ─── 정적 파일 서빙 (프론트엔드) ───
 app.use(express.static(path.join(__dirname, '..'), {
   index: '업무일지_분석기.html',
-  extensions: ['html']
+  extensions: ['html'],
+  maxAge: '1d',
+  etag: true,
+  lastModified: true,
+  setHeaders: function (res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
 }));
 
 // ─── API 라우트 ───

@@ -4,6 +4,7 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
+var { parsePagination } = require('../middleware/pagination');
 
 router.use(auth.authenticate);
 
@@ -12,21 +13,25 @@ router.get('/', async function (req, res) {
   try {
     var role = req.user.role;
     var userId = req.user.sub;
-    var rows;
+    var pg = parsePagination(req.query, 100);
+    var rows, countResult;
 
-    if (role === 'admin' || role === 'executive') {
-      rows = (await db.query('SELECT * FROM projects ORDER BY created_at DESC')).rows;
-    } else if (role === 'manager') {
-      rows = (await db.query('SELECT * FROM projects ORDER BY created_at DESC')).rows;
+    if (role === 'admin' || role === 'executive' || role === 'manager') {
+      countResult = await db.query('SELECT COUNT(*) as cnt FROM projects');
+      rows = (await db.query('SELECT * FROM projects ORDER BY created_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset])).rows;
     } else {
       // member: 배정된 프로젝트만
-      rows = (await db.query(
-        "SELECT p.* FROM projects p INNER JOIN project_members pm ON p.id = pm.project_id WHERE pm.user_id = $1 AND pm.released_at IS NULL ORDER BY p.created_at DESC",
+      countResult = await db.query(
+        "SELECT COUNT(*) as cnt FROM projects p INNER JOIN project_members pm ON p.id = pm.project_id WHERE pm.user_id = $1 AND pm.released_at IS NULL",
         [userId]
+      );
+      rows = (await db.query(
+        "SELECT p.* FROM projects p INNER JOIN project_members pm ON p.id = pm.project_id WHERE pm.user_id = $1 AND pm.released_at IS NULL ORDER BY p.created_at DESC LIMIT $2 OFFSET $3",
+        [userId, pg.limit, pg.offset]
       )).rows;
     }
 
-    res.json({ data: rows });
+    res.json({ data: rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[projects/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

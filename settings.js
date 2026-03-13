@@ -106,7 +106,7 @@ function renderAliasModal() {
   if (existing) { existing.remove(); return; }
 
   const names = typeof aN !== 'undefined' ? aN : [];
-  if (!names.length) { alert('먼저 데이터를 업로드하세요.'); return; }
+  if (!names.length) { showToast('먼저 데이터를 업로드하세요.','warn'); return; }
 
   const modal = document.createElement('div');
   modal.id = 'aliasModal';
@@ -227,16 +227,16 @@ function renderGroupList() {
 function createGroupFromUI() {
   const nameInput = document.getElementById('newGroupName');
   const name = nameInput ? nameInput.value.trim() : '';
-  if (!name) { alert('그룹명을 입력하세요.'); return; }
+  if (!name) { showToast('그룹명을 입력하세요.','warn'); return; }
 
   const members = typeof sN !== 'undefined' ? [...sN] : [];
-  if (!members.length) { alert('먼저 주간분석에서 팀원을 선택하세요.'); return; }
+  if (!members.length) { showToast('먼저 주간분석에서 팀원을 선택하세요.','warn'); return; }
 
   createGroup(name, members);
   if (nameInput) nameInput.value = '';
   renderGroupList();
   updateGroupButtons();
-  alert(`✅ "${name}" 그룹 생성 (${members.length}명)`);
+  showToast(`"${name}" 그룹 생성 (${members.length}명)`);
 }
 
 /** 현재 활성 그룹 필터 ID (null이면 전체 보기) */
@@ -290,11 +290,11 @@ function showAllMembers() {
 
 function updateGroupMembers(id) {
   const members = typeof sN !== 'undefined' ? [...sN] : [];
-  if (!members.length) { alert('먼저 팀원을 선택하세요.'); return; }
+  if (!members.length) { showToast('먼저 팀원을 선택하세요.','warn'); return; }
   const g = updateGroup(id, { members });
   if (g) {
     renderGroupList();
-    alert(`✅ "${g.name}" 그룹 갱신 (${members.length}명)`);
+    showToast(`"${g.name}" 그룹 갱신 (${members.length}명)`);
   }
 }
 
@@ -433,7 +433,7 @@ function importBackupJSON(file) {
   reader.onload = function (e) {
     try {
       var backup = JSON.parse(e.target.result);
-      if (!backup.stores) { alert('유효하지 않은 백업 파일입니다.'); return; }
+      if (!backup.stores) { showToast('유효하지 않은 백업 파일입니다.','error'); return; }
 
       var storeNames = Object.keys(backup.stores);
       var totalItems = 0;
@@ -449,7 +449,7 @@ function importBackupJSON(file) {
 
       openDBv2().then(function (db) {
         var validStores = storeNames.filter(function (s) { return db.objectStoreNames.contains(s); });
-        if (validStores.length === 0) { alert('복원할 수 있는 스토어가 없습니다.'); return; }
+        if (validStores.length === 0) { showToast('복원할 수 있는 스토어가 없습니다.','error'); return; }
 
         var tx = db.transaction(validStores, 'readwrite');
         var clearPromises = validStores.map(function (storeName) {
@@ -486,7 +486,7 @@ function importBackupJSON(file) {
         });
       });
     } catch (err) {
-      alert('파일 파싱 실패: ' + err.message);
+      showToast('파일 파싱 실패: ' + err.message,'error');
     }
   };
   reader.readAsText(file);
