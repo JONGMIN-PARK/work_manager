@@ -1342,5 +1342,25 @@ function showToast(msg, type) {
   };
   fileDel = function (id) { return apiFetch('/api/docs/files/' + id, { method: 'DELETE' }); };
 
+  // ─── syncOrderMapToDB 서버 모드 오버라이드 ───
+  syncOrderMapToDB = function () {
+    if (typeof ORDER_MAP === 'undefined') return Promise.resolve();
+    var keys = Object.keys(ORDER_MAP);
+    if (keys.length === 0) return Promise.resolve();
+    var records = keys.map(function (k) {
+      var v = ORDER_MAP[k];
+      return {
+        orderNo: k,
+        date: (typeof v === 'object' ? v.date : '') || '',
+        client: (typeof v === 'object' ? v.client : '') || '',
+        name: (typeof v === 'object' ? v.name : v) || '',
+        amount: (typeof v === 'object' ? Number(v.amount) || 0 : 0),
+        manager: (typeof v === 'object' ? v.manager : '') || '',
+        delivery: (typeof v === 'object' ? v.delivery : '') || ''
+      };
+    });
+    return apiFetch('/api/orders/bulk', { method: 'POST', body: JSON.stringify({ records: records }) });
+  };
+
   console.log('[API] 서버 모드 — IndexedDB CRUD → REST API 전환 완료');
 })();

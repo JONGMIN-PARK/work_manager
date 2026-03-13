@@ -18,6 +18,27 @@ router.get('/', async function (req, res) {
   }
 });
 
+// POST /api/orders/bulk — 일괄 저장 (upsert)
+router.post('/bulk', rbac.checkPermission('order.edit'), async function (req, res) {
+  try {
+    var records = req.body.records || [];
+    if (!records.length) return res.json({ data: [], count: 0 });
+    var results = [];
+    for (var i = 0; i < records.length; i++) {
+      var b = records[i];
+      var r = await db.query(
+        "INSERT INTO orders (order_no, date, client, name, amount, manager, delivery, memo, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (order_no) DO UPDATE SET date=$2, client=$3, name=$4, amount=$5, manager=$6, delivery=$7, version=orders.version+1 RETURNING *",
+        [b.orderNo || b.order_no, b.date || '', b.client || '', b.name || '', b.amount || 0, b.manager || '', b.delivery || '', b.memo || '', req.user.sub]
+      );
+      results.push(r.rows[0]);
+    }
+    res.status(201).json({ data: results, count: results.length });
+  } catch (e) {
+    console.error('[orders/bulk]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // GET /api/orders/:orderNo
 router.get('/:orderNo', async function (req, res) {
   try {
