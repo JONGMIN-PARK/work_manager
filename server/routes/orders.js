@@ -12,9 +12,10 @@ router.use(auth.authenticate);
 router.get('/', async function (req, res) {
   try {
     var pg = parsePagination(req.query, 100);
-    var countResult = await db.query('SELECT COUNT(*) as cnt FROM orders');
-    var r = await db.query('SELECT * FROM orders ORDER BY date DESC, order_no LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
-    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
+    var r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM orders ORDER BY date DESC, order_no LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
+    var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
+    r.rows.forEach(function(row) { delete row._total; });
+    res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[orders/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -26,16 +27,16 @@ router.post('/bulk', rbac.checkPermission('order.edit'), async function (req, re
   try {
     var records = req.body.records || [];
     if (!records.length) return res.json({ data: [], count: 0 });
-    var results = [];
-    for (var i = 0; i < records.length; i++) {
-      var b = records[i];
-      var r = await db.query(
-        "INSERT INTO orders (order_no, date, client, name, amount, manager, delivery, memo, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (order_no) DO UPDATE SET date=$2, client=$3, name=$4, amount=$5, manager=$6, delivery=$7, version=orders.version+1 RETURNING *",
-        [b.orderNo || b.order_no, b.date || '', b.client || '', b.name || '', b.amount || 0, b.manager || '', b.delivery || '', b.memo || '', req.user.sub]
-      );
-      results.push(r.rows[0]);
-    }
-    res.status(201).json({ data: results, count: results.length });
+    var values = [];
+    var params = [];
+    var idx = 1;
+    records.forEach(function (b) {
+      values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
+      params.push(b.orderNo || b.order_no, b.date || '', b.client || '', b.name || '', b.amount || 0, b.manager || '', b.delivery || '', b.memo || '', req.user.sub);
+    });
+    var sql = 'INSERT INTO orders (order_no, date, client, name, amount, manager, delivery, memo, created_by) VALUES ' + values.join(',') + ' ON CONFLICT (order_no) DO UPDATE SET date=EXCLUDED.date, client=EXCLUDED.client, name=EXCLUDED.name, amount=EXCLUDED.amount, manager=EXCLUDED.manager, delivery=EXCLUDED.delivery, version=orders.version+1 RETURNING *';
+    var result = await db.query(sql, params);
+    res.status(201).json({ data: result.rows, count: result.rows.length });
   } catch (e) {
     console.error('[orders/bulk]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

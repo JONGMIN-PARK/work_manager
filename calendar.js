@@ -7,6 +7,8 @@ var calYear, calMonth, calViewMode = 'month';
 var calWeekStart = null; // 주간 뷰 시작일
 var calFilterProj = '', calFilterAssignee = '', calFilterType = '';
 var calDragEvtId = null; // 드래그 중인 이벤트 ID
+var _calRenderTimer;
+function renderCalendarDebounced(){clearTimeout(_calRenderTimer);_calRenderTimer=setTimeout(renderCalendar,80)}
 
 /* ═══ 초기화 ═══ */
 function initCalendar() {
@@ -21,9 +23,10 @@ async function renderCalendar() {
   var wrap = document.getElementById('calendarWrap');
   if (!wrap) return;
 
-  var projects = await projGetAll();
-  var rawEvents = await evtGetAll();
-  var milestones = await msGetAll();
+  var _calData = await Promise.all([projGetAll(), evtGetAll(), msGetAll()]);
+  var projects = _calData[0];
+  var rawEvents = _calData[1];
+  var milestones = _calData[2];
 
   // 반복 일정 확장 (현재 보이는 범위 기준)
   var viewStart, viewEnd;
@@ -129,9 +132,9 @@ function renderCalFilter(wrap, allProjects) {
   });
 
   fb.innerHTML =
-    '<select class="si" style="padding-left:8px;max-width:180px;font-size:11px" onchange="calFilterProj=this.value;renderCalendar()">' + projOpts + '</select>' +
-    '<select class="si" style="padding-left:8px;max-width:140px;font-size:11px" onchange="calFilterAssignee=this.value;renderCalendar()">' + assOpts + '</select>' +
-    '<select class="si" style="padding-left:8px;max-width:140px;font-size:11px" onchange="calFilterType=this.value;renderCalendar()">' + typeOpts + '</select>' +
+    '<select class="si" style="padding-left:8px;max-width:180px;font-size:11px" onchange="calFilterProj=this.value;renderCalendarDebounced()">' + projOpts + '</select>' +
+    '<select class="si" style="padding-left:8px;max-width:140px;font-size:11px" onchange="calFilterAssignee=this.value;renderCalendarDebounced()">' + assOpts + '</select>' +
+    '<select class="si" style="padding-left:8px;max-width:140px;font-size:11px" onchange="calFilterType=this.value;renderCalendarDebounced()">' + typeOpts + '</select>' +
     '<div style="display:flex;gap:3px">' +
       '<button class="btn btn-s ' + (calViewMode === 'month' ? 'btn-p' : 'btn-g') + '" onclick="calViewMode=\'month\';renderCalendar()">월간</button>' +
       '<button class="btn btn-s ' + (calViewMode === 'week' ? 'btn-p' : 'btn-g') + '" onclick="calViewMode=\'week\';renderCalendar()">주간</button>' +
@@ -144,6 +147,8 @@ function renderMonthView(wrap, projects, events, milestones, archiveSummaries) {
   var grid = document.getElementById('calGrid');
   if (!grid) return;
   grid.className = 'cal-month-mode';
+  var _calProjMap = {};
+  projects.forEach(function (p) { _calProjMap[p.id] = p; });
 
   var todayStr = localDate();
   var firstDay = new Date(calYear, calMonth, 1);
@@ -193,7 +198,7 @@ function renderMonthView(wrap, projects, events, milestones, archiveSummaries) {
     // 마일스톤 마커
     milestones.forEach(function (ms) {
       if (ms.endDate === dateStr) {
-        var msProj = projects.find(function (p) { return p.id === ms.projectId; });
+        var msProj = _calProjMap[ms.projectId];
         var msSt = PROJ_STATUS[ms.status] || PROJ_STATUS.waiting;
         var msLabel = ms.name + (msProj ? ' [' + (msProj.name || msProj.orderNo) + ']' : '');
         bars += '<div class="cal-ms" style="color:' + msSt.color + '" title="' + eH(ms.name) + (msProj ? ' (' + eH(msProj.name || msProj.orderNo) + ')' : '') + ' — ' + msSt.label + '">' + msSt.icon + ' ' + eH(msLabel) + '</div>';
@@ -246,6 +251,8 @@ function renderWeekView(wrap, projects, events, milestones, archiveSummaries) {
   var grid = document.getElementById('calGrid');
   if (!grid) return;
   grid.className = '';
+  var _calWkProjMap = {};
+  projects.forEach(function (p) { _calWkProjMap[p.id] = p; });
 
   if (!calWeekStart) {
     var t = new Date();
@@ -307,7 +314,7 @@ function renderWeekView(wrap, projects, events, milestones, archiveSummaries) {
     // 마일스톤
     milestones.forEach(function (ms) {
       if (ms.endDate === dateStr) {
-        var msProj = projects.find(function (p) { return p.id === ms.projectId; });
+        var msProj = _calWkProjMap[ms.projectId];
         var msSt = PROJ_STATUS[ms.status] || PROJ_STATUS.waiting;
         items += '<div class="cal-week-item" style="border-left:3px solid ' + msSt.color + ';background:' + msSt.bg + '">' +
           msSt.icon + ' ' + eH(ms.name) +
@@ -428,8 +435,9 @@ async function checkEventConflicts(assignees, startDate, endDate, excludeEvtId) 
   var eDate = endDate || startDate;
   var warnings = [];
 
-  var projects = await projGetAll();
-  var events = await evtGetAll();
+  var _ccData = await Promise.all([projGetAll(), evtGetAll()]);
+  var projects = _ccData[0];
+  var events = _ccData[1];
 
   assignees.forEach(function (name) {
     if (!name) return;

@@ -13,20 +13,20 @@ router.use(auth.authenticate);
 // GET /api/archives/records
 router.get('/records', async function (req, res) {
   try {
-    var sql = 'SELECT * FROM work_records WHERE 1=1';
+    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM work_records WHERE 1=1';
     var params = [];
     var idx = 1;
     if (req.query.date) { sql += ' AND date = $' + idx++; params.push(req.query.date); }
     if (req.query.name) { sql += ' AND name = $' + idx++; params.push(req.query.name); }
     if (req.query.orderNo) { sql += ' AND order_no = $' + idx++; params.push(req.query.orderNo); }
-    var countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as cnt');
-    var countResult = await db.query(countSql, params);
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY date DESC, name, order_no LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
-    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
+    var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
+    r.rows.forEach(function(row) { delete row._total; });
+    res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[work-records/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -84,9 +84,10 @@ router.delete('/records', rbac.checkPermission('archive.manage'), async function
 router.get('/', async function (req, res) {
   try {
     var pg = parsePagination(req.query, 100);
-    var countResult = await db.query('SELECT COUNT(*) as cnt FROM work_archives');
-    var r = await db.query('SELECT * FROM work_archives ORDER BY saved_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
-    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
+    var r = await db.query('SELECT id, label, date_range, selected_names, total_hours, saved_at, uploaded_by, COUNT(*) OVER() AS _total FROM work_archives ORDER BY saved_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
+    var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
+    r.rows.forEach(function(row) { delete row._total; });
+    res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[archives/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

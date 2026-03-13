@@ -10,14 +10,12 @@ router.use(auth.authenticate);
 // GET /api/events
 router.get('/', async function (req, res) {
   try {
-    var sql = 'SELECT * FROM events';
+    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM events';
     var params = [];
     if (req.query.from && req.query.to) {
       sql += ' WHERE start_date <= $1 AND end_date >= $2';
       params.push(req.query.to, req.query.from);
     }
-    var countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as cnt');
-    var countResult = await db.query(countSql, params);
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY start_date';
@@ -25,7 +23,9 @@ router.get('/', async function (req, res) {
     sql += ' LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
-    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
+    var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
+    r.rows.forEach(function(row) { delete row._total; });
+    res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[events/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

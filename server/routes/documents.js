@@ -11,14 +11,12 @@ router.use(auth.authenticate);
 // GET /api/folders?projectId=xxx
 router.get('/folders', async function (req, res) {
   try {
-    var sql = 'SELECT * FROM project_folders';
+    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM project_folders';
     var params = [];
     if (req.query.projectId) {
       sql += ' WHERE project_id = $1';
       params.push(req.query.projectId);
     }
-    var countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as cnt');
-    var countResult = await db.query(countSql, params);
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY name';
@@ -26,7 +24,9 @@ router.get('/folders', async function (req, res) {
     sql += ' LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
-    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
+    var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
+    r.rows.forEach(function(row) { delete row._total; });
+    res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[folders/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -68,11 +68,10 @@ router.put('/folders/:id', async function (req, res) {
 // DELETE /api/folders/:id
 router.delete('/folders/:id', async function (req, res) {
   try {
-    // 하위 파일도 folder 참조 해제
-    await db.query('UPDATE project_files SET folder_id = NULL WHERE folder_id = $1', [req.params.id]);
-    // 하위 폴더의 parent 해제
-    await db.query('UPDATE project_folders SET parent_id = NULL WHERE parent_id = $1', [req.params.id]);
-    var r = await db.query('DELETE FROM project_folders WHERE id = $1 RETURNING id', [req.params.id]);
+    var r = await db.query(
+      'WITH upd_files AS (UPDATE project_files SET folder_id = NULL WHERE folder_id = $1), upd_folders AS (UPDATE project_folders SET parent_id = NULL WHERE parent_id = $1) DELETE FROM project_folders WHERE id = $1 RETURNING id',
+      [req.params.id]
+    );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
@@ -86,19 +85,19 @@ router.delete('/folders/:id', async function (req, res) {
 // GET /api/files?projectId=xxx&folderId=yyy
 router.get('/files', async function (req, res) {
   try {
-    var sql = 'SELECT * FROM project_files WHERE 1=1';
+    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM project_files WHERE 1=1';
     var params = [];
     var idx = 1;
     if (req.query.projectId) { sql += ' AND project_id = $' + idx++; params.push(req.query.projectId); }
     if (req.query.folderId) { sql += ' AND folder_id = $' + idx++; params.push(req.query.folderId); }
-    var countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as cnt');
-    var countResult = await db.query(countSql, params);
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY created_at DESC LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
-    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
+    var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
+    r.rows.forEach(function(row) { delete row._total; });
+    res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[files/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

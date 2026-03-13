@@ -12,7 +12,7 @@ router.use(auth.authenticate);
 router.get('/', async function (req, res) {
   try {
     var q = req.query;
-    var sql = 'SELECT * FROM issues WHERE 1=1';
+    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM issues WHERE 1=1';
     var params = [];
     var idx = 1;
 
@@ -23,14 +23,13 @@ router.get('/', async function (req, res) {
     if (q.phase) { sql += ' AND phase = $' + idx++; params.push(q.phase); }
     if (q.dept) { sql += ' AND dept = $' + idx++; params.push(q.dept); }
 
-    var countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as cnt');
-    var countResult = await db.query(countSql, params);
-
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY created_at DESC LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
-    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
+    var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
+    r.rows.forEach(function(row) { delete row._total; });
+    res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[issues/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -104,8 +103,7 @@ router.put('/:id', async function (req, res) {
 // DELETE /api/issues/:id
 router.delete('/:id', rbac.checkPermission('issue.delete'), async function (req, res) {
   try {
-    await db.query('DELETE FROM issue_logs WHERE issue_id = $1', [req.params.id]);
-    var r = await db.query('DELETE FROM issues WHERE id = $1 RETURNING id', [req.params.id]);
+    var r = await db.query('WITH del_logs AS (DELETE FROM issue_logs WHERE issue_id = $1) DELETE FROM issues WHERE id = $1 RETURNING id', [req.params.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {

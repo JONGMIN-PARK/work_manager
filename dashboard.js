@@ -33,6 +33,8 @@ async function renderDashboard(projects) {
   var weStr = weekEnd.toISOString().slice(0, 10);
 
   var milestones = await msGetAll();
+  var _projMap = {};
+  projects.forEach(function (p) { _projMap[p.id] = p; });
   var weekMs = milestones.filter(function (m) {
     return m.endDate >= wsStr && m.endDate <= weStr;
   });
@@ -97,7 +99,7 @@ async function renderDashboard(projects) {
         '<div style="font-size:11px;font-weight:700;color:var(--t4);margin-bottom:8px">◆ 금주 마일스톤</div>' +
         (weekMs.length ?
           weekMs.map(function (m) {
-            var mProj = projects.find(function (p) { return p.id === m.projectId; });
+            var mProj = _projMap[m.projectId];
             var mSt = PROJ_STATUS[m.status] || PROJ_STATUS.waiting;
             return '<div style="font-size:11px;color:var(--t3);padding:2px 0;display:flex;align-items:center;gap:4px">' +
               '<span style="color:' + mSt.color + '">' + mSt.icon + '</span> ' +
@@ -119,7 +121,7 @@ async function renderDashboard(projects) {
       (pendingMs.length ?
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px">' +
         pendingMs.map(function (m) {
-          var mProj = projects.find(function (p) { return p.id === m.projectId; });
+          var mProj = _projMap[m.projectId];
           var mSt = PROJ_STATUS[m.status] || PROJ_STATUS.waiting;
           var isOverdue = m.endDate && m.endDate < today && m.status !== 'hold';
           var borderColor = isOverdue ? '#EF4444' : mSt.color;
@@ -280,9 +282,10 @@ async function runAiInsight() {
 }
 
 async function buildInsightPrompt() {
-  var projects = await projGetAll();
-  var milestones = await msGetAll();
-  var events = await evtGetAll();
+  var _ipData = await Promise.all([projGetAll(), msGetAll(), evtGetAll()]);
+  var projects = _ipData[0];
+  var milestones = _ipData[1];
+  var events = _ipData[2];
   var today = localDate();
 
   // 이슈 데이터 로드
@@ -313,9 +316,11 @@ async function buildInsightPrompt() {
     lines.push('- ' + (p.name || p.orderNo) + ' | ' + p.startDate + '~' + p.endDate + ' | 상태:' + (PROJ_STATUS[st] || {}).label + ' | 현재단계:' + phaseName + ' | 진척:' + (p.progress || 0) + '% | 담당:' + (p.assignees || []).join(',') + phaseInfo + (p.dependencies && p.dependencies.length ? ' | 선행:' + p.dependencies.length + '개' : ''));
   });
   lines.push('');
+  var _ipProjMap = {};
+  projects.forEach(function (p) { _ipProjMap[p.id] = p; });
   lines.push('[마일스톤]');
   milestones.forEach(function (m) {
-    var proj = projects.find(function (p) { return p.id === m.projectId; });
+    var proj = _ipProjMap[m.projectId];
     lines.push('- ' + m.name + ' (' + (proj ? proj.name : '?') + ') | ~' + m.endDate + ' | ' + (PROJ_STATUS[m.status] || {}).label);
   });
   lines.push('');
@@ -370,7 +375,7 @@ async function buildInsightPrompt() {
     var openIssues = issues.filter(function (i) { return i.status !== 'closed' && i.status !== 'resolved'; });
     lines.push('미해결: ' + openIssues.length + '건');
     openIssues.forEach(function (iss) {
-      var proj = projects.find(function (p) { return p.id === iss.projectId; });
+      var proj = _ipProjMap[iss.projectId];
       var projName = proj ? proj.name : (iss.orderNo || '?');
       var deptLabel = deptMap[iss.dept] ? deptMap[iss.dept].label : iss.dept;
       var typeLabel = issueTypes[iss.type] ? issueTypes[iss.type].label : iss.type;
@@ -462,11 +467,14 @@ function buildTaskDistSection(projects, taskDist) {
 }
 
 async function buildLocalInsight() {
-  var projects = await projGetAll();
-  var milestones = await msGetAll();
-  var events = await evtGetAll();
+  var _liData = await Promise.all([projGetAll(), msGetAll(), evtGetAll()]);
+  var projects = _liData[0];
+  var milestones = _liData[1];
+  var events = _liData[2];
   var today = localDate();
   var html = '';
+  var _liProjMap = {};
+  projects.forEach(function (p) { _liProjMap[p.id] = p; });
 
   // 1. 일정 충돌 감지: 같은 날짜에 같은 담당자가 여러 프로젝트
   var conflicts = [];
@@ -534,7 +542,7 @@ async function buildLocalInsight() {
   milestones.forEach(function (m) {
     if (m.status === 'done') return;
     if (m.endDate && m.endDate < today) {
-      var proj = projects.find(function (p) { return p.id === m.projectId; });
+      var proj = _liProjMap[m.projectId];
       risks.push('마일스톤 "' + m.name + '" (' + (proj ? proj.name : '?') + ') — ' + daysDiff(m.endDate, today) + '일 초과');
     }
   });
@@ -1249,6 +1257,8 @@ async function generateReport() {
 
   // 데이터 수집
   var projects = await projGetAll();
+  var _rptProjMap = {};
+  projects.forEach(function (p) { _rptProjMap[p.id] = p; });
   var allIssues = [];
   try { if (typeof issueGetAll === 'function') allIssues = await issueGetAll(); } catch (e) { console.warn('[Dashboard]', e); }
   var archWeeks = [];
@@ -1311,7 +1321,7 @@ async function generateReport() {
       openIssues.slice(0, 20).forEach(function (iss) {
         var urg = urgencies[iss.urgency] || { label: iss.urgency, color: '#94A3B8' };
         var ist = issStatuses[iss.status] || { label: iss.status, color: '#94A3B8' };
-        var proj = projects.find(function (p) { return p.id === iss.projectId; });
+        var proj = _rptProjMap[iss.projectId];
         rptHtml += '<tr>' +
           '<td>' + eH(iss.title) + '</td>' +
           '<td><span class="badge" style="background:' + urg.color + '22;color:' + urg.color + '">' + urg.label + '</span></td>' +

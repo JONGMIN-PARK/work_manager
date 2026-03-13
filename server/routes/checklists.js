@@ -10,19 +10,19 @@ router.use(auth.authenticate);
 // GET /api/checklists?projectId=xxx&phase=yyy
 router.get('/', async function (req, res) {
   try {
-    var sql = 'SELECT * FROM checklists WHERE 1=1';
+    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM checklists WHERE 1=1';
     var params = [];
     var idx = 1;
     if (req.query.projectId) { sql += ' AND project_id = $' + idx++; params.push(req.query.projectId); }
     if (req.query.phase) { sql += ' AND phase = $' + idx++; params.push(req.query.phase); }
-    var countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as cnt');
-    var countResult = await db.query(countSql, params);
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY created_at LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
-    res.json({ data: r.rows, total: parseInt(countResult.rows[0].cnt, 10), limit: pg.limit, offset: pg.offset });
+    var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
+    r.rows.forEach(function(row) { delete row._total; });
+    res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[checklists/list]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

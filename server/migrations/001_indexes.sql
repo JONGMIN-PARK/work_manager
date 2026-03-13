@@ -1,0 +1,10 @@
+CREATE INDEX IF NOT EXISTS idx_project_members_user_project ON project_members(user_id, project_id) WHERE released_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_issues_project_status ON issues(project_id, status);
+CREATE INDEX IF NOT EXISTS idx_issues_order_no ON issues(order_no);
+CREATE INDEX IF NOT EXISTS idx_work_records_date_name ON work_records(date, name);
+CREATE INDEX IF NOT EXISTS idx_work_archives_saved_at ON work_archives(saved_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_date_order_no ON orders(date, order_no);
+CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id, folder_id);
+CREATE INDEX IF NOT EXISTS idx_project_folders_project ON project_folders(project_id);
+CREATE INDEX IF NOT EXISTS idx_events_dates ON events(start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_milestones_project ON milestones(project_id, sort_order);

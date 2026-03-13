@@ -1,6 +1,7 @@
 var express = require('express');
 var cors = require('cors');
 var helmet = require('helmet');
+var compression = require('compression');
 var rateLimit = require('express-rate-limit');
 var path = require('path');
 var config = require('./config');
@@ -9,6 +10,9 @@ var app = express();
 
 // ─── 프록시 신뢰 (Render, Cloud Run 등 리버스 프록시 환경) ───
 app.set('trust proxy', 1);
+
+// ─── 응답 압축 ───
+app.use(compression({ threshold: 512 }));
 
 // ─── 보안 헤더 ───
 app.use(helmet({
@@ -34,21 +38,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// ─── JSON 파싱 ───
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Global string trim
-app.use(function (req, res, next) {
-  if (req.body && typeof req.body === 'object') {
-    Object.keys(req.body).forEach(function (k) {
-      if (typeof req.body[k] === 'string') req.body[k] = req.body[k].trim();
-    });
-  }
-  next();
-});
-
-// ─── Rate Limiting ───
+// ─── Rate Limiting (before body parsing) ───
 var loginLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 10,
@@ -64,6 +54,14 @@ var apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
+
+app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/register', loginLimiter);
+app.use('/api', apiLimiter);
+
+// ─── JSON 파싱 ───
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ─── 정적 파일 서빙 (프론트엔드) ───
 app.use(express.static(path.join(__dirname, '..'), {
@@ -95,10 +93,6 @@ var lockRoutes = require('./routes/locks');
 var departmentRoutes = require('./routes/departments');
 var profileRoutes = require('./routes/profile');
 var auditRoutes = require('./routes/audit');
-
-app.use('/api/auth/login', loginLimiter);
-app.use('/api/auth/register', loginLimiter);
-app.use('/api', apiLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);

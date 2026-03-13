@@ -21,8 +21,9 @@ async function renderTimeline() {
   var wrap = document.getElementById('timelineWrap');
   if (!wrap) return;
 
-  var allProjects = await projGetAll();
-  var milestones = await msGetAll();
+  var _tlData = await Promise.all([projGetAll(), msGetAll()]);
+  var allProjects = _tlData[0];
+  var milestones = _tlData[1];
 
   // 프로젝트 리스트 패널 렌더
   renderTlProjectList(allProjects);
@@ -312,6 +313,14 @@ function doTlScroll(projId) {
 }
 
 /* ═══ 레이블 최대 폭 측정 ═══ */
+var _measureCache={};
+function measureTextCached(ctx, text){
+  var key=ctx.font+'|'+text;
+  if(_measureCache[key]!==undefined)return _measureCache[key];
+  var w=ctx.measureText(text).width;
+  _measureCache[key]=w;
+  return w;
+}
 function calcLabelWidth(projects, milestones) {
   // 숨겨진 캔버스로 텍스트 폭 측정
   var canvas = document.createElement('canvas');
@@ -322,7 +331,7 @@ function calcLabelWidth(projects, milestones) {
   // 프로젝트: dot(8) + gap(6) + 이름 + padding(24)
   ctx.font = '600 12px "Noto Sans KR", sans-serif';
   projects.forEach(function (p) {
-    var nameW = ctx.measureText(p.name || p.orderNo).width;
+    var nameW = measureTextCached(ctx, p.name || p.orderNo);
     var w = 8 + 6 + nameW + 24;
     if (w > maxW) maxW = w;
   });
@@ -332,8 +341,8 @@ function calcLabelWidth(projects, milestones) {
   projects.forEach(function (p) {
     var st = autoProjectStatus(p);
     var stInfo = PROJ_STATUS[st] || PROJ_STATUS.waiting;
-    var badgeW = ctx.measureText(stInfo.icon + ' ' + stInfo.label).width + 14; // badge padding
-    var progW = p.progress ? ctx.measureText(p.progress + '%').width + 8 : 0;
+    var badgeW = measureTextCached(ctx, stInfo.icon + ' ' + stInfo.label) + 14; // badge padding
+    var progW = p.progress ? measureTextCached(ctx, p.progress + '%') + 8 : 0;
     var w = badgeW + progW + 24; // padding
     if (w > maxW) maxW = w;
   });
@@ -341,11 +350,11 @@ function calcLabelWidth(projects, milestones) {
   // 마일스톤: indent(24) + "└ " + 이름 + gap(4) + 뱃지 + padding(12)
   ctx.font = '400 11px "Noto Sans KR", sans-serif';
   milestones.forEach(function (ms) {
-    var nameW = ctx.measureText('└ ' + ms.name).width;
+    var nameW = measureTextCached(ctx, '└ ' + ms.name);
     var msSt = ms.status || 'waiting';
     var msStInfo = PROJ_STATUS[msSt] || PROJ_STATUS.waiting;
     ctx.font = '600 8px "Noto Sans KR", sans-serif';
-    var badgeW = ctx.measureText(msStInfo.label).width + 10; // badge padding
+    var badgeW = measureTextCached(ctx, msStInfo.label) + 10; // badge padding
     ctx.font = '400 11px "Noto Sans KR", sans-serif';
     var w = 24 + nameW + 4 + badgeW + 12;
     if (w > maxW) maxW = w;
@@ -1350,9 +1359,10 @@ function renderProgressHistoryChart(projectId, proj) {
 
 /* ═══ 프로젝트 데이터 내보내기 ═══ */
 async function exportProjectsJSON() {
-  var projects = await projGetAll();
-  var milestones = await msGetAll();
-  var events = await evtGetAll();
+  var _expData = await Promise.all([projGetAll(), msGetAll(), evtGetAll()]);
+  var projects = _expData[0];
+  var milestones = _expData[1];
+  var events = _expData[2];
 
   var data = { projects: projects, milestones: milestones, events: events, exportedAt: new Date().toISOString() };
   var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1446,7 +1456,8 @@ function drawDependencyArrows(projects, rangeStart, units, labelW) {
 
   // 의존관계가 있는 프로젝트 찾기
   var hasDeps = false;
-  projects.forEach(function (p) { if (p.dependencies && p.dependencies.length) hasDeps = true; });
+  var _depProjMap = {};
+  projects.forEach(function (p) { _depProjMap[p.id] = p; if (p.dependencies && p.dependencies.length) hasDeps = true; });
   if (!hasDeps) return;
 
   // 프로젝트 행 위치 맵핑
@@ -1490,7 +1501,7 @@ function drawDependencyArrows(projects, rangeStart, units, labelW) {
     p.dependencies.forEach(function (depId) {
       var fromRow = projRows[depId];
       if (!fromRow) return;
-      var fromProj = projects.find(function (pp) { return pp.id === depId; });
+      var fromProj = _depProjMap[depId];
       if (!fromProj) return;
 
       // 선행 프로젝트 끝 → 후행 프로젝트 시작

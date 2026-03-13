@@ -660,7 +660,9 @@ let sN=new Set(),sO=new Set(),sT=new Set(),sON=new Set(),sCL=new Set();
 let cKw='',cEnc='euc-kr',lBuf=null;
 let selWeek=null; // 선택된 주차 {start:'YYYYMMDD', end:'YYYYMMDD', label:'...'} or null=전체
 let pC=null,bC=null,tC=null,clPieC=null,clDayC=null;
-function destroyCharts(){[pC,bC,tC,clPieC,clDayC].forEach(function(c){if(c){try{c.destroy()}catch(e){}}});pC=bC=tC=clPieC=clDayC=null}
+function destroyCharts(){[pC,bC,tC,clPieC,clDayC].forEach(function(c){if(c){try{c.destroy()}catch(e){}}});pC=bC=tC=clPieC=clDayC=null;cmpPieCharts.forEach(function(c){if(c){try{c.destroy()}catch(e){}}});cmpPieCharts=[];if(cmpBarChart){try{cmpBarChart.destroy()}catch(e){}}cmpBarChart=null;if(cmpLineChart){try{cmpLineChart.destroy()}catch(e){}}cmpLineChart=null}
+var _upVTimer;
+function upVD(){clearTimeout(_upVTimer);_upVTimer=setTimeout(upV,30)}
 let avO=[],avT=[],avON=[],avCL=[];
 let fvN=[],fvO=false;
 let aiProv='gemini';
@@ -759,10 +761,10 @@ function setMode(m){curMode=m;
 /* ═══ FAVORITES ═══ */
 function ldFvS(){fvN=lsGetJSON('wa-fav-names',[]);return fvN.length>0}
 function saveFav(){const s=[...sN];if(!s.length){showToast('먼저 팀원을 선택하세요.','warn');return}fvN=s;lsSetJSON('wa-fav-names',fvN);upFvB();rNC();showToast(`⭐ ${s.length}명 즐겨찾기 저장`)}
-function loadFav(){if(!fvN.length)return;sN.clear();aN.forEach(n=>{if(fvN.includes(n))sN.add(n)});if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}syncCmpVisibility();rNC();rFL();upV()}
+function loadFav(){if(!fvN.length)return;sN.clear();aN.forEach(n=>{if(fvN.includes(n))sN.add(n)});if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}gfInvalidate();syncCmpVisibility();rNC();rFL();upV()}
 function clearFav(){fvN=[];lsRemove('wa-fav-names');lsRemove('wa-fav-only');upFvB();document.getElementById('favOnlyTog').checked=false;fvO=false;vN=[...aN];rNC()}
 function upFvB(){const h=fvN.length>0;document.getElementById('loadFavBtn').classList.toggle('hidden',!h);document.getElementById('clearFavBtn').classList.toggle('hidden',!h)}
-function togFavOnly(){fvO=document.getElementById('favOnlyTog').checked;lsSet('wa-fav-only',fvO?'1':'0');if(fvO&&fvN.length>0){vN=aN.filter(n=>fvN.includes(n));sN.forEach(n=>{if(!fvN.includes(n))sN.delete(n)})}else{vN=[...aN]}rNC();rFL();upV()}
+function togFavOnly(){fvO=document.getElementById('favOnlyTog').checked;lsSet('wa-fav-only',fvO?'1':'0');if(fvO&&fvN.length>0){vN=aN.filter(n=>fvN.includes(n));sN.forEach(n=>{if(!fvN.includes(n))sN.delete(n)})}else{vN=[...aN]}gfInvalidate();rNC();rFL();upV()}
 
 /* ═══ FILE ═══ */
 function parseFileBuf(buf,enc){
@@ -780,7 +782,7 @@ function parseFileBuf(buf,enc){
 }
 
 function applyADToUI(){
-  aN=[...new Set(aD.map(r=>r.name))].sort();ldFvS();upFvB();if(fvO&&fvN.length>0)vN=aN.filter(n=>fvN.includes(n));else vN=[...aN];sN.clear();sO.clear();sT.clear();cKw='';document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');document.getElementById('fileInfo').classList.remove('hidden');document.getElementById('rcDisp').textContent=aD.length;document.getElementById('uploadZone').classList.add('hidden');document.getElementById('mainArea').classList.remove('hidden');if(fvN.length>0){aN.forEach(n=>{if(fvN.includes(n))sN.add(n)});if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}}
+  aN=[...new Set(aD.map(r=>r.name))].sort();ldFvS();upFvB();if(fvO&&fvN.length>0)vN=aN.filter(n=>fvN.includes(n));else vN=[...aN];sN.clear();sO.clear();sT.clear();cKw='';gfInvalidate();invalidateOrderInfoCache();document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');document.getElementById('fileInfo').classList.remove('hidden');document.getElementById('rcDisp').textContent=aD.length;document.getElementById('uploadZone').classList.add('hidden');document.getElementById('mainArea').classList.remove('hidden');if(fvN.length>0){aN.forEach(n=>{if(fvN.includes(n))sN.add(n)});if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}}
   const dates=[...new Set(aD.map(r=>r.date))].sort();if(dates.length>0){const d=dates[0];const dt=new Date(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8));const wk=getISOWeek(dt);document.getElementById('weekLabel').value=d.slice(0,4)+'-W'+String(wk).padStart(2,'0');document.getElementById('weekAutoLabel').textContent=`(${fD(dates[0])} ~ ${fD(dates[dates.length-1])})`}
   initWeekSelector();syncCmpVisibility();rNC();rFL();upV();document.getElementById('sumOut').innerHTML='<div style="text-align:center;color:var(--t6);padding:30px;font-size:12px">위 "요약 생성" 버튼을 눌러주세요.</div>';
 }
@@ -1006,7 +1008,7 @@ function pickWeek(sunStart){
     document.getElementById('weekLabel').value=s.slice(0,4)+'-W'+String(wk).padStart(2,'0');
     document.getElementById('weekAutoLabel').textContent='('+selWeek.label+')';
   }
-  rFL();upV();
+  gfInvalidate();rFL();upV();
 }
 /* applyADToUI 후 주차 선택기 초기화 — 오늘 기준 주로 자동 선택 */
 function initWeekSelector(){
@@ -1053,23 +1055,23 @@ function syncCmpVisibility(){
     if(cmpMode){cmpMode=false;document.getElementById('cmpTog').checked=false;document.getElementById('cmpPanel').classList.add('hidden')}
   }
 }
-function togN(i){const n=aN[i];if(multiSel){sN.has(n)?sN.delete(n):sN.add(n)}else{const wasOnly=sN.size===1&&sN.has(n);sN.clear();if(!wasOnly)sN.add(n)}syncCmpVisibility();rNC();rFL();upOP();upV()}
-function selAll(){if(!multiSel)return;const l=getVisibleNames();l.forEach(n=>sN.add(n));syncCmpVisibility();rNC();rFL();upOP();upV()}
+function togN(i){const n=aN[i];if(multiSel){sN.has(n)?sN.delete(n):sN.add(n)}else{const wasOnly=sN.size===1&&sN.has(n);sN.clear();if(!wasOnly)sN.add(n)}gfInvalidate();syncCmpVisibility();rNC();rFL();upOP();upVD()}
+function selAll(){if(!multiSel)return;const l=getVisibleNames();l.forEach(n=>sN.add(n));gfInvalidate();syncCmpVisibility();rNC();rFL();upOP();upVD()}
 function getVisibleNames(){if(typeof activeGroupId!=='undefined'&&activeGroupId){const g=typeof getGroup==='function'?getGroup(activeGroupId):null;return g?aN.filter(n=>g.members.includes(n)):aN}return fvO&&fvN.length>0?vN:[...aN]}
-function deAll(){sN.clear();syncCmpVisibility();rNC();rFL();upOP();upV()}
+function deAll(){sN.clear();gfInvalidate();syncCmpVisibility();rNC();rFL();upOP();upVD()}
 
 /* ═══ FILTERS ═══ */
-function rFL(){let b=sN.size===0?[]:aD.filter(r=>sN.has(r.name));if(selWeek)b=b.filter(r=>r.date>=selWeek.start&&r.date<=selWeek.end);const om={};b.forEach(r=>{om[r.orderNo]=(om[r.orderNo]||0)+1});avO=Object.entries(om).sort(([a],[b])=>a.localeCompare(b));const tm={};b.forEach(r=>{tm[r.abbr]=(tm[r.abbr]||0)+1});avT=Object.entries(tm).sort(([a],[b])=>a.localeCompare(b));const onm={};b.forEach(r=>{const n=getOCmt(r.orderNo)||'(미지정)';onm[n]=(onm[n]||0)+1});avON=Object.entries(onm).sort(([a],[b])=>a.localeCompare(b,'ko'));const clm={};b.forEach(r=>{const c=getOClient(r.orderNo)||'(미지정)';clm[c]=(clm[c]||0)+1});avCL=Object.entries(clm).sort(([a],[b])=>a.localeCompare(b,'ko'));sO.forEach(o=>{if(!om[o])sO.delete(o)});sT.forEach(t=>{if(!tm[t])sT.delete(t)});sON.forEach(n=>{if(!onm[n])sON.delete(n)});sCL.forEach(c=>{if(!clm[c])sCL.delete(c)});rOL();rTL();rONL();rCLL()}
+function rFL(){let b=sN.size===0?[]:aD.filter(r=>sN.has(r.name));if(selWeek)b=b.filter(r=>r.date>=selWeek.start&&r.date<=selWeek.end);const om={},tm={},onm={},clm={};b.forEach(function(r){om[r.orderNo]=(om[r.orderNo]||0)+1;tm[r.abbr]=(tm[r.abbr]||0)+1;var on=getOCmt(r.orderNo)||'(미지정)';onm[on]=(onm[on]||0)+1;var cl=getOClient(r.orderNo)||'(미지정)';clm[cl]=(clm[cl]||0)+1});avO=Object.entries(om).sort(([a],[b])=>a.localeCompare(b));avT=Object.entries(tm).sort(([a],[b])=>a.localeCompare(b));avON=Object.entries(onm).sort(([a],[b])=>a.localeCompare(b,'ko'));avCL=Object.entries(clm).sort(([a],[b])=>a.localeCompare(b,'ko'));sO.forEach(o=>{if(!om[o])sO.delete(o)});sT.forEach(t=>{if(!tm[t])sT.delete(t)});sON.forEach(n=>{if(!onm[n])sON.delete(n)});sCL.forEach(c=>{if(!clm[c])sCL.delete(c)});gfInvalidate();rOL();rTL();rONL();rCLL()}
 function rOL(){const q=(document.getElementById('oSearch')||{}).value||'';const ql=q.toLowerCase();const filtered=q?avO.filter(([o])=>{const cmt=getOCmt(o);const cl=getOClient(o);return o.toLowerCase().includes(ql)||(cmt&&cmt.toLowerCase().includes(ql))||(cl&&cl.toLowerCase().includes(ql))}):avO;document.getElementById('oLB').innerHTML=filtered.map(([o,c])=>{const on=sO.has(o);const cmt=getOCmt(o);return`<div class="li ${on?'ck':''}" onclick="togO('${eA(o)}')"><span class="cb2">${on?'✓':''}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:5px"><span class="mono">${eH(o)}</span>${cmt?`<span style="font-size:9px;color:var(--t5);font-style:italic">${eH(cmt)}</span>`:''}</span><span style="font-size:9px;color:var(--t6)" class="mono">${c}</span></div>`}).join('')||'<div style="padding:10px;text-align:center;color:var(--t6);font-size:10px">'+(q?'검색 결과 없음':'팀원 선택 필요')+'</div>';document.getElementById('oFC').textContent=sO.size>0?`(${sO.size})`:''}
 function rTL(){document.getElementById('tLB').innerHTML=avT.map(([a,c])=>{const on=sT.has(a);return`<div class="li ${on?'ck':''}" onclick="togT('${a}')"><span class="cb2">${on?'✓':''}</span><span style="flex:1"><span class="badge" style="background:${ABG[a]||'#1A1F35'};color:${AFG[a]||'#94A3B8'};margin-right:4px">${a}</span>${AM[a]||a}</span><span style="font-size:9px;color:var(--t6)" class="mono">${c}</span></div>`}).join('')||'<div style="padding:10px;text-align:center;color:var(--t6);font-size:10px">팀원 선택 필요</div>';document.getElementById('tFC').textContent=sT.size>0?`(${sT.size})`:''}
-function togO(o){sO.has(o)?sO.delete(o):sO.add(o);rOL();upOP();upV()}
-function togT(t){sT.has(t)?sT.delete(t):sT.add(t);rTL();upV()}
-function rstO(){sO.clear();rOL();upOP();upV()}
-function rstT(){sT.clear();rTL();upV()}
-function togON(n){sON.has(n)?sON.delete(n):sON.add(n);rONL();upV()}
-function togCL(c){sCL.has(c)?sCL.delete(c):sCL.add(c);rCLL();upV()}
-function rstON(){sON.clear();rONL();upV()}
-function rstCL(){sCL.clear();rCLL();upV()}
+function togO(o){sO.has(o)?sO.delete(o):sO.add(o);gfInvalidate();rOL();upOP();upV()}
+function togT(t){sT.has(t)?sT.delete(t):sT.add(t);gfInvalidate();rTL();upV()}
+function rstO(){sO.clear();gfInvalidate();rOL();upOP();upV()}
+function rstT(){sT.clear();gfInvalidate();rTL();upV()}
+function togON(n){sON.has(n)?sON.delete(n):sON.add(n);gfInvalidate();rONL();upV()}
+function togCL(c){sCL.has(c)?sCL.delete(c):sCL.add(c);gfInvalidate();rCLL();upV()}
+function rstON(){sON.clear();gfInvalidate();rONL();upV()}
+function rstCL(){sCL.clear();gfInvalidate();rCLL();upV()}
 function rONL(){const q=(document.getElementById('onSearch')||{}).value||'';const ql=q.toLowerCase();const filtered=q?avON.filter(([n])=>n.toLowerCase().includes(ql)):avON;document.getElementById('onLB').innerHTML=filtered.map(([n,c])=>{const on=sON.has(n);return`<div class="li ${on?'ck':''}" onclick="togON('${eA(n)}')"><span class="cb2">${on?'✓':''}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">${eH(n)}</span><span style="font-size:9px;color:var(--t6)" class="mono">${c}</span></div>`}).join('')||'<div style="padding:10px;text-align:center;color:var(--t6);font-size:10px">'+(q?'검색 결과 없음':'팀원 선택 필요')+'</div>';document.getElementById('onFC').textContent=sON.size>0?`(${sON.size})`:''}
 function rCLL(){const q=(document.getElementById('clSearch')||{}).value||'';const ql=q.toLowerCase();const filtered=q?avCL.filter(([cl])=>cl.toLowerCase().includes(ql)):avCL;document.getElementById('clLB').innerHTML=filtered.map(([cl,c])=>{const on=sCL.has(cl);return`<div class="li ${on?'ck':''}" onclick="togCL('${eA(cl)}')"><span class="cb2">${on?'✓':''}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">${eH(cl)}</span><span style="font-size:9px;color:var(--t6)" class="mono">${c}</span></div>`}).join('')||'<div style="padding:10px;text-align:center;color:var(--t6);font-size:10px">'+(q?'검색 결과 없음':'팀원 선택 필요')+'</div>';document.getElementById('clFC').textContent=sCL.size>0?`(${sCL.size})`:''}
 
@@ -1083,8 +1085,23 @@ function getOrderInfo(orderNo){
   if(typeof info==='string')return{name:info,date:'',client:'',amount:'',manager:'',delivery:''};
   return info;
 }
+var _orderInfoCache=null;
+function _buildOrderInfoCache(){
+  if(_orderInfoCache)return _orderInfoCache;
+  _orderInfoCache={};
+  for(var i=0;i<localStorage.length;i++){
+    var k=localStorage.key(i);
+    if(k&&k.startsWith('wa-oc-')){
+      var oNo=k.slice(6);
+      try{_orderInfoCache[oNo]=lsGet(k)}catch(e){}
+    }
+  }
+  return _orderInfoCache;
+}
+function invalidateOrderInfoCache(){_orderInfoCache=null}
 function getOCmt(orderNo){
-  var ls=lsGet('wa-oc-'+orderNo);if(ls)return ls;
+  var cache=_buildOrderInfoCache();
+  var ls=cache[orderNo];if(ls)return ls;
   var info=getOrderInfo(orderNo);
   if(info&&info.name)return info.name;
   return '';
@@ -1123,6 +1140,7 @@ function saveOCmt(orderNo){
   if(!inp)return;
   const val=inp.value.trim();
   if(val)lsSet('wa-oc-'+orderNo,val);else lsRemove('wa-oc-'+orderNo)
+  invalidateOrderInfoCache();gfInvalidate();
   rOL();
   const fb=document.getElementById('ocfb_'+CSS.escape(orderNo));
   if(fb){fb.textContent='✅';setTimeout(()=>{fb.textContent=''},800)}
@@ -1212,7 +1230,7 @@ function handleOrderExcel(input){
         if(info.name)lsSet('wa-oc-'+no,info.name);else lsRemove('wa-oc-'+no)
         count++;
       }
-      rOL();upOP();
+      invalidateOrderInfoCache();gfInvalidate();rOL();upOP();
       if(typeof syncOrderMapToDB==='function')syncOrderMapToDB().then(function(){if(typeof renderOrders==='function')renderOrders()});
       showToast('✅ 수주맵 '+count+'건 불러오기 완료','success');
     }catch(err){
@@ -1289,14 +1307,16 @@ function upOP(){
     </div>`;
   }).join('');
 }
-function clrS(){cKw='';document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');upV()}
-function resetAll(){selWeek=null;renderWeekSelector();sO.clear();sT.clear();sON.clear();sCL.clear();cKw='';document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');rOL();rTL();rONL();rCLL();upOP();upV()}
+function clrS(){cKw='';document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');gfInvalidate();upV()}
+function resetAll(){selWeek=null;renderWeekSelector();sO.clear();sT.clear();sON.clear();sCL.clear();cKw='';document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');gfInvalidate();rOL();rTL();rONL();rCLL();upOP();upV()}
 var _siTimer;
-function onSI(){cKw=document.getElementById('cSearch').value.trim();document.getElementById('sClear').classList.toggle('hidden',!cKw);clearTimeout(_siTimer);_siTimer=setTimeout(upV,200)}
-function gF(){if(sN.size===0)return[];let r=aD.filter(r=>sN.has(r.name));if(selWeek)r=r.filter(x=>x.date>=selWeek.start&&x.date<=selWeek.end);if(sO.size>0)r=r.filter(x=>sO.has(x.orderNo));if(sT.size>0)r=r.filter(x=>sT.has(x.abbr));if(sON.size>0)r=r.filter(x=>sON.has(getOCmt(x.orderNo)||'(미지정)'));if(sCL.size>0)r=r.filter(x=>sCL.has(getOClient(x.orderNo)||'(미지정)'));if(cKw){const k=cKw.toLowerCase();r=r.filter(x=>x.content.toLowerCase().includes(k))}return r.sort((a,b)=>{const n=a.name.localeCompare(b.name,'ko');return n!==0?n:a.date.localeCompare(b.date)})}
+function onSI(){cKw=document.getElementById('cSearch').value.trim();document.getElementById('sClear').classList.toggle('hidden',!cKw);gfInvalidate();clearTimeout(_siTimer);_siTimer=setTimeout(upV,200)}
+var _gfCache=null,_gfDirty=true;
+function gfInvalidate(){_gfDirty=true;_gfCache=null}
+function gF(){if(!_gfDirty&&_gfCache)return _gfCache;if(sN.size===0){_gfCache=[];_gfDirty=false;return _gfCache}let r=aD.filter(r=>sN.has(r.name));if(selWeek)r=r.filter(x=>x.date>=selWeek.start&&x.date<=selWeek.end);if(sO.size>0)r=r.filter(x=>sO.has(x.orderNo));if(sT.size>0)r=r.filter(x=>sT.has(x.abbr));if(sON.size>0)r=r.filter(x=>sON.has(getOCmt(x.orderNo)||'(미지정)'));if(sCL.size>0)r=r.filter(x=>sCL.has(getOClient(x.orderNo)||'(미지정)'));if(cKw){const k=cKw.toLowerCase();r=r.filter(x=>x.content.toLowerCase().includes(k))}_gfCache=r.sort((a,b)=>{const n=a.name.localeCompare(b.name,'ko');return n!==0?n:a.date.localeCompare(b.date)});_gfDirty=false;return _gfCache}
 function hAF(){return sO.size>0||sT.size>0||sON.size>0||sCL.size>0||!!cKw||!!selWeek}
 function rAFT(){const t=[];if(selWeek)t.push({y:'w',l:'주차:'+selWeek.label,v:''});sO.forEach(o=>t.push({y:'o',l:'수주:'+o,v:o}));sT.forEach(x=>t.push({y:'t',l:AM[x]||x,v:x}));if(cKw)t.push({y:'s',l:'검색:"'+cKw+'"',v:''});document.getElementById('afTags').innerHTML=t.map(x=>`<span class="ft">${eH(x.l)}<span class="tx" onclick="rmFT('${x.y}','${eA(x.v)}')">&times;</span></span>`).join('');document.getElementById('resetBtn').classList.toggle('hidden',t.length===0)}
-function rmFT(y,v){if(y==='w'){selWeek=null;renderWeekSelector()}if(y==='o'){sO.delete(v);rOL()}if(y==='t'){sT.delete(v);rTL()}if(y==='s')clrS();upV()}
+function rmFT(y,v){if(y==='w'){selWeek=null;renderWeekSelector()}if(y==='o'){sO.delete(v);rOL()}if(y==='t'){sT.delete(v);rTL()}if(y==='s')clrS();gfInvalidate();upV()}
 function gTC(){const s=getComputedStyle(document.documentElement);return{g:s.getPropertyValue('--cg').trim(),t:s.getPropertyValue('--ct').trim(),l:s.getPropertyValue('--cl').trim()}}
 
 /* ═══ VIEW ═══ */
@@ -1551,7 +1571,7 @@ const cdm={};f.forEach(r=>{const cl=getOClient(r.orderNo)||'(미지정)';if(hide
 const cde=Object.entries(cdm).sort(([a],[b])=>a.localeCompare(b));const ck=cs.map(s=>s.n);
 if(clDayC)clDayC.destroy();clDayC=new Chart(document.getElementById('clientDayC').getContext('2d'),{type:'bar',data:{labels:cde.map(([d])=>fD(d)),datasets:ck.map((k,i)=>({label:k,data:cde.map(([,v])=>Math.round((v[k]||0)*10)/10),backgroundColor:COL[i%COL.length],borderRadius:3,borderSkipped:'bottom'}))},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{stacked:true,ticks:{color:tc.t,font:{size:10},callback:v=>v+'h'},grid:{color:tc.g}}},plugins:{legend:{labels:{color:tc.l,font:{size:10}},position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'h'}}}}})}
 
-function sTab(t){document.querySelectorAll('#statsS .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));document.getElementById('tTbl').classList.toggle('hidden',t!=='tbl');document.getElementById('tCht').classList.toggle('hidden',t!=='cht');document.getElementById('tAi').classList.toggle('hidden',t!=='ai');document.getElementById('tSum').classList.toggle('hidden',t!=='sum');if(t!=='cht')destroyCharts();if(t==='cht'){const f=gF();if(f.length>0)rCht(f)}if(t==='sum')rContentSum()}
+function sTab(t){document.querySelectorAll('#statsS .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));document.getElementById('tTbl').classList.toggle('hidden',t!=='tbl');document.getElementById('tCht').classList.toggle('hidden',t!=='cht');document.getElementById('tAi').classList.toggle('hidden',t!=='ai');document.getElementById('tSum').classList.toggle('hidden',t!=='sum');if(t!=='cht')destroyCharts();if(t==='cht'){destroyCharts();const f=gF();if(f.length>0)rCht(f)}if(t==='sum')rContentSum()}
 
 /* ═══ COMPARE (2D Chart.js) ═══ */
 /* CMP_COL, CMP_DASH, CMP_PT → config.js */
