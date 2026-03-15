@@ -1205,6 +1205,9 @@ function rCLL(){const q=(document.getElementById('clSearch')||{}).value||'';cons
 
 /* ═══ 수주번호 ↔ 수주 정보 매핑 (엑셀 기반 + localStorage 병합) ═══ */
 /* ORDER_MAP[수주번호] = {name, date, client, amount, manager, delivery} 또는 문자열(레거시) */
+/* 임시 수주명/거래처 오버라이드 — 편집모드 수정 적용 시 사용, 새로고침 시 초기화 (ORDER_MAP 미반영) */
+var _tmpOcmt={};
+var _tmpOclient={};
 var ORDER_FIELDS=['수주번호','수주일','거래처','프로젝트명','수주액','담당자','납품예정'];
 var ORDER_FIELD_KEYS=['orderNo','date','client','name','amount','manager','delivery'];
 function getOrderInfo(orderNo){
@@ -1454,9 +1457,6 @@ function upV(){rAFT();const f=gF();const ss=document.getElementById('statsS');if
 let editMode=false;
 let lastFiltered=[]; // 현재 필터 결과 참조 보관
 let editMap={}; // {rowIdx: {field: newValue}} 수정 추적
-/* 임시 수주명/거래처 오버라이드 — 페이지 새로고침 시 초기화 (ORDER_MAP 미반영) */
-var _tmpOcmt={};  // {orderNo: name}
-var _tmpOclient={}; // {orderNo: client}
 
 function rTbl(f){
   lastFiltered=f;
