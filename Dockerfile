@@ -1,4 +1,14 @@
-FROM node:20-alpine
+FROM node:20-slim
+
+# Chromium 및 필수 라이브러리 설치
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+
+# Puppeteer가 시스템 Chromium 사용하도록 설정
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 

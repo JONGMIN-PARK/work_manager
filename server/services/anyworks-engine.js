@@ -152,12 +152,22 @@ async function runEngine(jobId, config) {
       ]
     };
 
-    // puppeteer-core 사용 시 executablePath 필요
-    if (!puppeteer.executablePath || !fs.existsSync(puppeteer.executablePath())) {
-      var chromePath = findChromePath();
-      if (chromePath) {
-        launchOpts.executablePath = chromePath;
-        addLog(job, 'Chrome 경로: ' + chromePath);
+    // 환경변수 또는 시스템 Chrome 경로 사용
+    var envChrome = process.env.PUPPETEER_EXECUTABLE_PATH;
+    if (envChrome && fs.existsSync(envChrome)) {
+      launchOpts.executablePath = envChrome;
+      addLog(job, 'Chrome 경로 (env): ' + envChrome);
+    } else {
+      try {
+        if (puppeteer.executablePath && fs.existsSync(puppeteer.executablePath())) {
+          // puppeteer 내장 Chrome 사용
+        } else { throw new Error('no bundled'); }
+      } catch (e) {
+        var chromePath = findChromePath();
+        if (chromePath) {
+          launchOpts.executablePath = chromePath;
+          addLog(job, 'Chrome 경로: ' + chromePath);
+        }
       }
     }
 
