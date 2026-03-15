@@ -2612,7 +2612,7 @@ var _anyworksJobId = null;
 var _anyworksPollTimer = null;
 var _awActiveBase = '';  // 현재 사용 중인 API base URL
 var _awLocalPort = 5050;
-var _awLocalBase = 'http://localhost:' + _awLocalPort;
+var _awLocalBase = 'http://127.0.0.1:' + _awLocalPort;
 
 var ANYWORKS_TEAMS = ['기술연구소','장비사업부','모션사업부'];
 
@@ -2772,20 +2772,52 @@ async function awCheckConnection() {
       el.style.background = '#3B82F622'; el.style.color = '#3B82F6';
     } else {
       _awActiveBase = '';
-      el.textContent = '연결 없음';
       el.style.background = '#EF444422'; el.style.color = '#EF4444';
+      if (location.protocol === 'https:') {
+        el.textContent = '연결 없음 (HTTPS 차단 가능)';
+        awShowMixedContentTip();
+      } else {
+        el.textContent = '연결 없음';
+      }
     }
   } else if (mode === 'local') {
     _awActiveBase = _awLocalBase;
-    el.textContent = localOk ? '사내PC 연결됨' : '사내PC 미연결';
-    el.style.background = localOk ? '#10B98122' : '#EF444422';
-    el.style.color = localOk ? '#10B981' : '#EF4444';
-    if (!localOk) el.textContent += ' (python anyworks_api.py 실행 필요)';
+    if (localOk) {
+      el.textContent = '사내PC 연결됨';
+      el.style.background = '#10B98122'; el.style.color = '#10B981';
+    } else {
+      el.style.background = '#EF444422'; el.style.color = '#EF4444';
+      if (location.protocol === 'https:') {
+        el.textContent = '사내PC 미연결 (HTTPS 차단)';
+        awShowMixedContentTip();
+      } else {
+        el.textContent = '사내PC 미연결 (python anyworks_api.py 실행 필요)';
+      }
+    }
   } else {
     _awActiveBase = awGetServerBase();
     el.textContent = serverOk ? '클라우드 연결됨' : '클라우드 미연결';
     el.style.background = serverOk ? '#3B82F622' : '#EF444422';
     el.style.color = serverOk ? '#3B82F6' : '#EF4444';
+  }
+}
+
+function awShowMixedContentTip() {
+  var existing = document.getElementById('awMixedTip');
+  if (existing) return;
+  var tip = document.createElement('div');
+  tip.id = 'awMixedTip';
+  tip.style.cssText = 'margin:0 24px 12px;padding:10px 14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;font-size:11px;color:#FBBF24;line-height:1.6';
+  var httpUrl = location.href.replace('https://','http://');
+  tip.innerHTML = '<b>HTTPS → HTTP 연결 차단됨</b><br>'+
+    '브라우저 보안 정책으로 HTTPS 페이지에서 로컬 HTTP 서버 호출이 차단됩니다.<br>'+
+    '<b>해결방법:</b> 사내PC 모드를 사용하려면 아래 주소로 접속하세요:<br>'+
+    '<a href="'+httpUrl+'" style="color:#60A5FA;text-decoration:underline;word-break:break-all">'+httpUrl+'</a><br>'+
+    '<span style="font-size:10px;color:var(--t5)">또는 Chrome 주소창에 chrome://flags → Insecure origins treated as secure 에 http://127.0.0.1:5050 추가</span>';
+  var overlay = document.getElementById('anyworksOverlay');
+  if (overlay) {
+    var container = overlay.querySelector('div > div');
+    if (container) container.appendChild(tip);
   }
 }
 

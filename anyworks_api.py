@@ -183,8 +183,9 @@ class AnyworksHandler(BaseHTTPRequestHandler):
 
 def main():
     port = int(os.environ.get("ANYWORKS_API_PORT", 5050))
-    server = HTTPServer(("127.0.0.1", port), AnyworksHandler)
-    print(f"[anyworks-api] http://127.0.0.1:{port} 에서 시작")
+    server = HTTPServer(("0.0.0.0", port), AnyworksHandler)
+    print(f"[anyworks-api] http://0.0.0.0:{port} 에서 시작 (로컬+네트워크)")
+    print(f"[anyworks-api] 브라우저에서 http://127.0.0.1:{port}/health 로 연결 확인")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
