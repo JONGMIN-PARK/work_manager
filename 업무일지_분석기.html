@@ -687,7 +687,85 @@ function pNormDate(v){
   if(n>40000&&n<60000){var d=new Date((n-25569)*86400000);return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')}
   return null;
 }
-function pH(text){const doc=new DOMParser().parseFromString(text,'text/html');const r=[];let h=false;doc.querySelectorAll('tr').forEach(tr=>{const tds=tr.querySelectorAll('td');if(tds.length<7)return;const c=Array.from(tds).map(td=>td.textContent.trim());const dt=pNormDate(c[0]);if(!h&&!dt){h=true;return}if(dt)r.push({date:dt,name:c[1],orderNo:c[2],hours:parseFloat(c[3])||0,taskType:c[4],abbr:c[5],content:c[6]})});return r}
+/* ═══ 컬럼 자동 감지 ═══ */
+var COL_PATTERNS={
+  date:/^(날짜|일자|일시|date|작업일)$/i,
+  name:/^(이름|성명|name|작업자|담당자|사원)$/i,
+  orderNo:/^(수주번호|수주|주문번호|order|프로젝트|project)$/i,
+  hours:/^(시간|공수|hours|투입시간|작업시간|h)$/i,
+  taskType:/^(업무분장|분장|업무유형|task|type|구분)$/i,
+  abbr:/^(약자|약어|abbr|코드|code)$/i,
+  content:/^(업무내용|내용|content|비고|작업내용|설명)$/i
+};
+// 필수 컬럼
+var COL_REQUIRED=['date','name'];
+// 전체 필드 (순서)
+var COL_ALL=['date','name','orderNo','hours','taskType','abbr','content'];
+
+function pDetectColumns(headerCells){
+  var map={};
+  headerCells.forEach(function(cell,idx){
+    var v=String(cell).trim();
+    COL_ALL.forEach(function(key){
+      if(!map[key]&&COL_PATTERNS[key].test(v))map[key]=idx;
+    });
+  });
+  // 날짜를 못 찾으면 첫 번째 셀이 날짜인지 값으로 판단
+  if(map.date===undefined){
+    for(var i=0;i<headerCells.length;i++){
+      if(pNormDate(String(headerCells[i]).trim())){map.date=i;break}
+    }
+  }
+  return map;
+}
+
+function pMapRow(cells,colMap){
+  var dateIdx=colMap.date;
+  if(dateIdx===undefined)return null;
+  var dt=pNormDate(String(cells[dateIdx]||'').trim());
+  if(!dt)return null;
+  return{
+    date:dt,
+    name:String(cells[colMap.name!==undefined?colMap.name:1]||'').trim(),
+    orderNo:String(cells[colMap.orderNo!==undefined?colMap.orderNo:-1]||'').trim(),
+    hours:parseFloat(cells[colMap.hours!==undefined?colMap.hours:3])||0,
+    taskType:String(cells[colMap.taskType!==undefined?colMap.taskType:-1]||'').trim(),
+    abbr:String(cells[colMap.abbr!==undefined?colMap.abbr:-1]||'').trim(),
+    content:String(cells[colMap.content!==undefined?colMap.content:(cells.length-1)]||'').trim()
+  };
+}
+
+var _lastColMap=null; // 마지막 컬럼 매핑 (누락 알림용)
+
+function pH(text){
+  const doc=new DOMParser().parseFromString(text,'text/html');
+  const rows=doc.querySelectorAll('tr');
+  if(!rows.length)return[];
+  const r=[];
+  var colMap=null;
+  rows.forEach(function(tr){
+    const tds=tr.querySelectorAll('td,th');
+    if(tds.length<3)return;
+    const c=Array.from(tds).map(function(td){return td.textContent.trim()});
+    // 헤더 행 감지
+    if(!colMap){
+      var detected=pDetectColumns(c);
+      if(detected.date!==undefined&&detected.name!==undefined){colMap=detected;_lastColMap=colMap;return}
+      // 첫 행이 데이터일 수도 있음 (헤더 없는 파일)
+      if(pNormDate(c[0])){
+        colMap={date:0,name:1,orderNo:2,hours:3,taskType:c.length>=7?4:undefined,abbr:c.length>=7?5:undefined,content:c.length>=7?6:(c.length-1)};
+        _lastColMap=colMap;
+        // 이 행도 데이터로 처리
+        var rec=pMapRow(c,colMap);if(rec)r.push(rec);
+        return;
+      }
+      return; // 헤더도 아니고 데이터도 아닌 행 스킵
+    }
+    var rec=pMapRow(c,colMap);
+    if(rec)r.push(rec);
+  });
+  return r;
+}
 
 // SheetJS 바이너리 xls/xlsx 파싱
 function pXLS(buf){
@@ -697,29 +775,30 @@ function pXLS(buf){
     const json=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
     if(!json.length)return[];
     // 헤더 행 찾기
-    let hIdx=-1;
-    for(let i=0;i<Math.min(10,json.length);i++){
-      const row=json[i].map(c=>String(c).trim());
-      if(row.some(c=>/^(날짜|일자|일시|date)$/i.test(c))&&row.some(c=>/^(이름|성명|name)$/i.test(c))){hIdx=i;break}
+    var colMap=null;var hIdx=-1;
+    for(var i=0;i<Math.min(10,json.length);i++){
+      var row=json[i].map(function(c){return String(c).trim()});
+      var detected=pDetectColumns(row);
+      if(detected.date!==undefined&&detected.name!==undefined){colMap=detected;hIdx=i;break}
     }
-    if(hIdx===-1){for(let i=0;i<Math.min(5,json.length);i++){if(json[i].filter(c=>c!=='').length>=7){hIdx=i;break}}}
-    if(hIdx===-1)return[];
-    const r=[];
-    for(let i=hIdx+1;i<json.length;i++){
-      const row=json[i];if(!row||row.length<7)continue;
-      let dateVal=row[0];
-      // 숫자(엑셀 시리얼) → YYYYMMDD
-      if(typeof dateVal==='number'&&dateVal>40000&&dateVal<60000){
-        const d=new Date((dateVal-25569)*86400000);
-        dateVal=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
-      }else{
-        dateVal=String(dateVal).trim();
+    // 헤더 못 찾으면 첫 행 데이터 기반 추정
+    if(!colMap){
+      for(var i=0;i<Math.min(5,json.length);i++){
+        var row=json[i];if(!row)continue;
+        var nonEmpty=row.filter(function(c){return c!==''}).length;
+        if(nonEmpty>=3&&pNormDate(String(row[0]).trim())){
+          colMap={date:0,name:1,orderNo:2,hours:3,taskType:row.length>=7?4:undefined,abbr:row.length>=7?5:undefined,content:row.length>=7?6:(row.length-1)};
+          hIdx=i-1;break;
+        }
       }
-      // YYYY-MM-DD, YYYY/MM/DD → YYYYMMDD
-      if(/^\d{4}[-\/]\d{2}[-\/]\d{2}/.test(dateVal))dateVal=dateVal.slice(0,10).replace(/[-\/]/g,'');
-      if(!/^\d{8}$/.test(dateVal))continue;
-      const hours=typeof row[3]==='number'?row[3]:(parseFloat(row[3])||0);
-      r.push({date:dateVal,name:String(row[1]).trim(),orderNo:String(row[2]).trim(),hours:hours,taskType:String(row[4]).trim(),abbr:String(row[5]).trim(),content:String(row[6]).trim()});
+    }
+    if(!colMap)return[];
+    _lastColMap=colMap;
+    const r=[];
+    for(var i=hIdx+1;i<json.length;i++){
+      var row=json[i];if(!row||row.length<3)continue;
+      var rec=pMapRow(row,colMap);
+      if(rec)r.push(rec);
     }
     return r;
   }catch(e){console.log('SheetJS parse failed:',e);return[]}
@@ -785,29 +864,43 @@ function parseFileBuf(buf,enc){
   const u8=new Uint8Array(buf);
   const isOLE2=u8[0]===0xD0&&u8[1]===0xCF&&u8[2]===0x11&&u8[3]===0xE0;
   const isPK=u8[0]===0x50&&u8[1]===0x4B&&u8[2]===0x03&&u8[3]===0x04;
+  _lastColMap=null;
+  var result=[];
   if(isOLE2||isPK){
-    var parsed=pXLS(u8);
-    if(parsed.length)return parsed;
-    // SheetJS 실패 → HTML 테이블일 수 있음 (.xls 확장자의 HTML 파일)
-    console.log('SheetJS 파싱 실패, HTML 폴백 시도');
+    result=pXLS(u8);
+    if(!result.length)console.log('SheetJS 파싱 실패, HTML 폴백 시도');
   }
   // HTML/텍스트 파싱 시도 (EUC-KR → UTF-8 순서)
-  var encs=[enc,'euc-kr','utf-8','cp949'];
-  for(var ei=0;ei<encs.length;ei++){
-    try{
-      var text=new TextDecoder(encs[ei],{fatal:true}).decode(buf);
-      var result=pH(text);
-      if(result.length){console.log('HTML 파싱 성공 (인코딩:'+encs[ei]+', '+result.length+'건)');return result}
-    }catch(e){/* 다음 인코딩 시도 */}
+  if(!result.length){
+    var encs=[enc,'euc-kr','utf-8','cp949'];
+    for(var ei=0;ei<encs.length;ei++){
+      try{
+        var text=new TextDecoder(encs[ei],{fatal:true}).decode(buf);
+        result=pH(text);
+        if(result.length){console.log('HTML 파싱 성공 (인코딩:'+encs[ei]+', '+result.length+'건)');break}
+      }catch(e){/* 다음 인코딩 시도 */}
+    }
   }
-  // 최후의 시도: fatal:false
-  try{
-    var text=new TextDecoder(enc,{fatal:false}).decode(buf);
-    var result=pH(text);
-    if(result.length)return result;
-  }catch(e){}
-  showToast('파일에서 데이터를 파싱하지 못했습니다. 컬럼 구조(날짜/이름/수주번호/시간/업무분장/약자/업무내용)를 확인해주세요.','error');
-  return[];
+  if(!result.length){
+    try{
+      var text=new TextDecoder(enc,{fatal:false}).decode(buf);
+      result=pH(text);
+    }catch(e){}
+  }
+  if(!result.length){
+    showToast('파일에서 데이터를 파싱하지 못했습니다. 최소 날짜, 이름 컬럼이 필요합니다.','error');
+    return[];
+  }
+  // 누락 컬럼 안내
+  if(_lastColMap){
+    var labels={date:'날짜',name:'이름',orderNo:'수주번호',hours:'시간',taskType:'업무분장',abbr:'약자',content:'업무내용'};
+    var missing=COL_ALL.filter(function(k){return _lastColMap[k]===undefined});
+    if(missing.length>0){
+      var names=missing.map(function(k){return labels[k]});
+      showToast('📋 '+result.length+'건 로드 (누락 컬럼: '+names.join(', ')+' → 빈값 처리)','info');
+    }
+  }
+  return result;
 }
 
 function applyADToUI(){
