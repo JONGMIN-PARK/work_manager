@@ -2871,21 +2871,19 @@ async function pollAnyworksJob() {
         awAppendLog('소요시간: ' + elapsed + '초', 'INFO');
       }
 
-      // 다운로드 파일이 있으면 자동 로드 시도
+      // 다운로드 파일이 있으면 자동으로 업무일지에 로드
       var files = job.files || [];
       if (files.length > 0) {
         awAppendLog('', 'INFO');
-        awAppendLog('다운로드된 파일 ' + files.length + '개:', 'INFO');
-        files.forEach(function(f) {
-          awAppendLog('  📄 ' + f.name + ' (' + (f.size/1024).toFixed(1) + ' KB)', 'INFO');
-        });
-        // 첫 번째 파일을 자동으로 업무일지 분석기에 로드
+        awAppendLog('다운로드된 파일 ' + files.length + '개 → 업무일지에 자동 로드:', 'INFO');
+        // 전체 파일을 순차적으로 자동 로드
+        _awJobCache = job;
+        for (var fi = 0; fi < files.length; fi++) {
+          awAppendLog('  📄 ' + files[fi].name + ' (' + (files[fi].size/1024).toFixed(1) + ' KB) 로드중...', 'INFO');
+          await awLoadFile(fi);
+        }
         awAppendLog('', 'INFO');
-        awAppendLog('파일을 업무일지에 로드하려면 아래 버튼을 클릭하세요.', 'INFO');
-        var loadBtns = files.map(function(f, idx) {
-          return '<button onclick="awLoadFile(' + idx + ')" style="margin:4px 2px;padding:4px 12px;border:1px solid var(--ac);border-radius:6px;background:var(--ac-bg);color:var(--ac-t);cursor:pointer;font-size:10px;font-weight:600">📄 ' + f.name + ' 로드</button>';
-        }).join('');
-        document.getElementById('awLogBox').innerHTML += '<div style="margin-top:6px">' + loadBtns + '</div>';
+        awAppendLog('✓ 모든 파일이 업무일지에 반영되었습니다.', 'INFO');
       }
 
       // 결과 팝업 표시
@@ -2919,15 +2917,18 @@ async function cancelAnyworksJob() {
 }
 
 // 다운로드된 파일을 base64에서 Blob으로 변환하여 업무일지에 로드
-var _awDownloadedFiles = [];
+var _awJobCache = null;
 
 async function awLoadFile(idx) {
-  // 파일 정보를 다시 가져오기
-  if (!_anyworksJobId) { showToast('작업 정보가 없습니다', 'error'); return; }
-  var base = awGetApiBase();
-  try {
+  var job = _awJobCache;
+  // 캐시 없으면 서버에서 가져오기
+  if (!job) {
+    if (!_anyworksJobId) { showToast('작업 정보가 없습니다', 'error'); return; }
+    var base = awGetApiBase();
     var resp = await fetch(base + '/api/anyworks/jobs/' + _anyworksJobId);
-    var job = await resp.json();
+    job = await resp.json();
+  }
+  try {
     var files = job.files || [];
     if (idx >= files.length) { showToast('파일을 찾을 수 없습니다', 'error'); return; }
     var f = files[idx];
