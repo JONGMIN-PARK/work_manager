@@ -1,7 +1,8 @@
 """
 애니웍스 주간일지 다운로드 API 서버
 - engine.py의 DownloadEngine을 HTTP API로 노출
-- Express 서버에서 프록시하여 호출
+- 프론트엔드 정적 파일도 서빙 (HTTPS mixed content 우회)
+- 사내PC에서 http://127.0.0.1:5050 으로 접속
 """
 import os
 import sys
@@ -9,18 +10,25 @@ import json
 import threading
 import uuid
 import base64
-import traceback
+import mimetypes
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import unquote
 
 from engine import DownloadEngine
 
+# ── 경로 ──
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # ── 작업 저장소 ──
-_jobs = {}  # job_id -> { status, logs, results, started_at, finished_at, engine }
+_jobs = {}
 _lock = threading.Lock()
 
 DOWNLOAD_DIR = os.environ.get("ANYWORKS_DOWNLOAD_DIR",
-                              os.path.join(os.path.dirname(__file__), "downloads"))
+                              os.path.join(BASE_DIR, "downloads"))
+
+# ── Render 서버 URL (API 프록시용) ──
+RENDER_URL = os.environ.get("RENDER_URL", "")
 
 
 def _run_job(job_id, config):
@@ -44,7 +52,6 @@ def _run_job(job_id, config):
     try:
         results = engine.run(config.get("selected_teams"))
 
-        # 다운로드된 파일을 base64로 수집
         files = []
         for fname in os.listdir(config["download_dir"]):
             fpath = os.path.join(config["download_dir"], fname)
@@ -72,7 +79,7 @@ def _run_job(job_id, config):
 
 
 class AnyworksHandler(BaseHTTPRequestHandler):
-    """간단한 JSON API 핸들러"""
+    """API + 정적 파일 핸들러"""
 
     def _send_json(self, code, data):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -85,6 +92,29 @@ class AnyworksHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_file(self, file_path):
+        """정적 파일 서빙"""
+        try:
+            with open(file_path, "rb") as f:
+                data = f.read()
+            mime, _ = mimetypes.guess_type(file_path)
+            if mime is None:
+                mime = "application/octet-stream"
+            # HTML/JS는 UTF-8
+            if mime in ("text/html", "application/javascript", "text/javascript", "text/css"):
+                mime += "; charset=utf-8"
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(data)
+        except FileNotFoundError:
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"404 Not Found")
+
     def _read_body(self):
         length = int(self.headers.get("Content-Length", 0))
         if length == 0:
@@ -95,32 +125,50 @@ class AnyworksHandler(BaseHTTPRequestHandler):
         self._send_json(200, {})
 
     def do_GET(self):
-        # GET /health
-        if self.path == "/health":
+        path = unquote(self.path.split("?")[0])
+
+        # ── API 엔드포인트 ──
+        if path == "/health":
             self._send_json(200, {"status": "ok", "service": "anyworks-api"})
             return
 
-        # GET /jobs/<id>
-        if self.path.startswith("/jobs/"):
-            job_id = self.path.split("/jobs/")[1].split("?")[0]
+        if path.startswith("/jobs/"):
+            job_id = path.split("/jobs/")[1].split("?")[0]
             with _lock:
                 job = _jobs.get(job_id)
             if not job:
                 self._send_json(404, {"error": "JOB_NOT_FOUND"})
                 return
-            # 응답에서 engine 객체 제거
             resp = {k: v for k, v in job.items() if k != "engine"}
             self._send_json(200, resp)
             return
 
-        self._send_json(404, {"error": "NOT_FOUND"})
+        # ── 정적 파일 서빙 ──
+        # / → 업무일지_분석기.html
+        if path == "/" or path == "":
+            self._send_file(os.path.join(BASE_DIR, "업무일지_분석기.html"))
+            return
+
+        # .html, .js, .css 등 프론트엔드 파일
+        # 보안: BASE_DIR 밖의 파일 접근 차단
+        requested = os.path.normpath(os.path.join(BASE_DIR, path.lstrip("/")))
+        if not requested.startswith(os.path.normpath(BASE_DIR)):
+            self.send_response(403)
+            self.end_headers()
+            return
+
+        if os.path.isfile(requested):
+            self._send_file(requested)
+            return
+
+        # 파일 못 찾으면 SPA 폴백 → 메인 HTML
+        self._send_file(os.path.join(BASE_DIR, "업무일지_분석기.html"))
 
     def do_POST(self):
-        # POST /download — 다운로드 작업 시작
+        # POST /download
         if self.path == "/download":
             body = self._read_body()
 
-            # 필수 필드 검증
             required = ["username", "password", "start_date", "end_date", "teams"]
             missing = [f for f in required if not body.get(f)]
             if missing:
@@ -136,7 +184,7 @@ class AnyworksHandler(BaseHTTPRequestHandler):
                 "teams": body["teams"],
                 "start_date": body["start_date"],
                 "end_date": body["end_date"],
-                "download_dir": "",  # _run_job에서 설정
+                "download_dir": "",
                 "download_timeout": body.get("download_timeout", 15),
                 "page_load_timeout": body.get("page_load_timeout", 10),
             }
@@ -177,15 +225,17 @@ class AnyworksHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "NOT_FOUND"})
 
     def log_message(self, format, *args):
-        # 서버 로그 포맷
         sys.stderr.write("[anyworks-api] %s\n" % (format % args))
 
 
 def main():
     port = int(os.environ.get("ANYWORKS_API_PORT", 5050))
     server = HTTPServer(("0.0.0.0", port), AnyworksHandler)
-    print(f"[anyworks-api] http://0.0.0.0:{port} 에서 시작 (로컬+네트워크)")
-    print(f"[anyworks-api] 브라우저에서 http://127.0.0.1:{port}/health 로 연결 확인")
+    print(f"[anyworks-api] http://0.0.0.0:{port} 에서 시작")
+    print(f"")
+    print(f"  ▶ 사내PC 브라우저에서 접속: http://127.0.0.1:{port}")
+    print(f"  ▶ 애니웍스 가져오기 → 사내PC 모드로 자동 연결")
+    print(f"")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
