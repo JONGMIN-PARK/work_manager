@@ -806,12 +806,18 @@ function pXLS(buf){
 
 /* ═══ IndexedDB ═══ */
 let db=null;
-function openDB(){return new Promise((res,rej)=>{const req=indexedDB.open('WorkAnalyzerDB',1);req.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('weeks'))d.createObjectStore('weeks',{keyPath:'id'})};req.onsuccess=e=>{db=e.target.result;res(db)};req.onerror=e=>rej(e)})}
+function openDB(){return new Promise((res,rej)=>{const req=indexedDB.open('WorkAnalyzerDB',2);req.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('weeks'))d.createObjectStore('weeks',{keyPath:'id'});if(!d.objectStoreNames.contains('workRecords'))d.createObjectStore('workRecords',{autoIncrement:true})};req.onsuccess=e=>{db=e.target.result;res(db)};req.onerror=e=>rej(e)})}
 function wkPut(data){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').put(data);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
 function wkGetAll(){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readonly');const req=tx.objectStore('weeks').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
 function wkGet(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readonly');const req=tx.objectStore('weeks').get(id);req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
 function wkDel(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').delete(id);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
 function wkClear(){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
+/* ── workRecords DB 함수 ── */
+function wrBulkPut(records){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');const s=tx.objectStore('workRecords');records.forEach(r=>s.put({date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content}));tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
+function wrGetAll(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
+function wrCount(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').count();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
+function wrClear(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');tx.objectStore('workRecords').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
+function wrMerge(existing,newRecs){var keys=new Set(existing.map(r=>r.date+'|'+r.name+'|'+r.orderNo+'|'+r.content));var toAdd=newRecs.filter(r=>!keys.has(r.date+'|'+r.name+'|'+r.orderNo+'|'+r.content));return{toAdd:toAdd,added:toAdd.length}}
 
 /* ═══ MODE ═══ */
 let curMode='weekly';
@@ -2714,7 +2720,7 @@ async function _postAuthInit(){
   const presetEl=document.getElementById('aiPresetBtns');
   if(presetEl&&typeof AI_PRESETS!=='undefined'){presetEl.innerHTML=AI_PRESETS.map(p=>`<span class="chip co" style="padding:2px 8px;font-size:9px" onclick="addPre('${p.text.replace(/'/g,"\\'")}')">${p.label}</span>`).join('')}
   document.getElementById('fileInput').addEventListener('change',e=>hFile(e.target.files[0]));
-  document.getElementById('fileInput2').addEventListener('change',e=>hFile(e.target.files[0]));
+  document.getElementById('fileInput2').addEventListener('change',e=>{hFile(e.target.files[0]);e.target.value=''});
   const dz=document.getElementById('uploadZone');
   dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('active')});
   dz.addEventListener('dragleave',()=>dz.classList.remove('active'));
