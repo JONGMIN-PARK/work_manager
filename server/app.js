@@ -93,6 +93,7 @@ var lockRoutes = require('./routes/locks');
 var departmentRoutes = require('./routes/departments');
 var profileRoutes = require('./routes/profile');
 var auditRoutes = require('./routes/audit');
+var anyworksRoutes = require('./routes/anyworks');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -109,6 +110,7 @@ app.use('/api/locks', lockRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/anyworks', anyworksRoutes);
 
 // ─── 헬스 체크 ───
 app.get('/health', async function (req, res) {
