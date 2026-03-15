@@ -676,7 +676,18 @@ function fD(d){return d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8)}
 function eH(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function eA(s){return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
 // HTML 테이블 파싱 (기존)
-function pH(text){const doc=new DOMParser().parseFromString(text,'text/html');const r=[];let h=false;doc.querySelectorAll('tr').forEach(tr=>{const tds=tr.querySelectorAll('td');if(tds.length<7)return;const c=Array.from(tds).map(td=>td.textContent.trim());if(!h&&!/^\d{8}$/.test(c[0])){h=true;return}if(/^\d{8}$/.test(c[0]))r.push({date:c[0],name:c[1],orderNo:c[2],hours:parseFloat(c[3])||0,taskType:c[4],abbr:c[5],content:c[6]})});return r}
+function pNormDate(v){
+  v=String(v).trim();
+  // YYYYMMDD
+  if(/^\d{8}$/.test(v))return v;
+  // YYYY-MM-DD or YYYY/MM/DD
+  if(/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}/.test(v))return v.slice(0,10).replace(/[-\/]/g,'').replace(/^(\d{4})(\d{1,2})(\d{1,2})$/,function(m,y,mo,d){return y+mo.padStart(2,'0')+d.padStart(2,'0')});
+  // Excel serial number
+  var n=Number(v);
+  if(n>40000&&n<60000){var d=new Date((n-25569)*86400000);return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')}
+  return null;
+}
+function pH(text){const doc=new DOMParser().parseFromString(text,'text/html');const r=[];let h=false;doc.querySelectorAll('tr').forEach(tr=>{const tds=tr.querySelectorAll('td');if(tds.length<7)return;const c=Array.from(tds).map(td=>td.textContent.trim());const dt=pNormDate(c[0]);if(!h&&!dt){h=true;return}if(dt)r.push({date:dt,name:c[1],orderNo:c[2],hours:parseFloat(c[3])||0,taskType:c[4],abbr:c[5],content:c[6]})});return r}
 
 // SheetJS 바이너리 xls/xlsx 파싱
 function pXLS(buf){
@@ -776,12 +787,27 @@ function parseFileBuf(buf,enc){
   const isPK=u8[0]===0x50&&u8[1]===0x4B&&u8[2]===0x03&&u8[3]===0x04;
   if(isOLE2||isPK){
     var parsed=pXLS(u8);
-    if(!parsed.length)showToast('엑셀 파일을 읽었으나 데이터를 파싱하지 못했습니다. 컬럼 구조(날짜/이름/수주번호/시간/업무분장/약자/업무내용)를 확인해주세요.','error');
-    return parsed;
-  }else{
-    let text;try{text=new TextDecoder(enc,{fatal:false}).decode(buf)}catch{text=new TextDecoder('utf-8',{fatal:false}).decode(buf)}
-    return pH(text);
+    if(parsed.length)return parsed;
+    // SheetJS 실패 → HTML 테이블일 수 있음 (.xls 확장자의 HTML 파일)
+    console.log('SheetJS 파싱 실패, HTML 폴백 시도');
   }
+  // HTML/텍스트 파싱 시도 (EUC-KR → UTF-8 순서)
+  var encs=[enc,'euc-kr','utf-8','cp949'];
+  for(var ei=0;ei<encs.length;ei++){
+    try{
+      var text=new TextDecoder(encs[ei],{fatal:true}).decode(buf);
+      var result=pH(text);
+      if(result.length){console.log('HTML 파싱 성공 (인코딩:'+encs[ei]+', '+result.length+'건)');return result}
+    }catch(e){/* 다음 인코딩 시도 */}
+  }
+  // 최후의 시도: fatal:false
+  try{
+    var text=new TextDecoder(enc,{fatal:false}).decode(buf);
+    var result=pH(text);
+    if(result.length)return result;
+  }catch(e){}
+  showToast('파일에서 데이터를 파싱하지 못했습니다. 컬럼 구조(날짜/이름/수주번호/시간/업무분장/약자/업무내용)를 확인해주세요.','error');
+  return[];
 }
 
 function applyADToUI(){
