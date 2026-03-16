@@ -1240,6 +1240,7 @@ function getOCmt(orderNo){
 }
 function getOClient(orderNo){
   if(_tmpOclient[orderNo]!==undefined)return _tmpOclient[orderNo];
+  var ls=lsGet('wa-ocl-'+orderNo);if(ls)return ls;
   var info=getOrderInfo(orderNo);
   return info&&info.client?info.client:'';
 }
@@ -1557,10 +1558,16 @@ function applyEdits(){
     if(origIdx===-1)continue;
     // 수주번호 변경을 먼저 반영
     if(changes.orderNo!==undefined)aD[origIdx].orderNo=changes.orderNo;
-    const orderNo=aD[origIdx].orderNo;
+    const orderNo = aD[origIdx].orderNo;
     for(const[field,val]of Object.entries(changes)){
-      if(field==='ocmt'){_tmpOcmt[orderNo]=val}
-      else if(field==='oclient'){_tmpOclient[orderNo]=val}
+      if(field==='ocmt'){
+        _tmpOcmt[orderNo]=val;
+        if(val)lsSet('wa-oc-'+orderNo,val); else lsRemove('wa-oc-'+orderNo);
+      }
+      else if(field==='oclient'){
+        _tmpOclient[orderNo]=val;
+        if(val)lsSet('wa-ocl-'+orderNo,val); else lsRemove('wa-ocl-'+orderNo);
+      }
       else if(field!=='orderNo'){aD[origIdx][field]=val}
     }
     count++;
