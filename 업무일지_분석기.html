@@ -990,7 +990,7 @@ async function loadWorkRecordsFromDB(){
     if(typeof wrGetAll!=='function')return false;
     var records=await wrGetAll();
     if(!records||!records.length)return false;
-    aD=records.map(function(r){return{date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content}});
+    aD=records.map(function(r){return Object.assign({},r)});
     applyADToUI();
     return true;
   }catch(ex){console.warn('loadWorkRecordsFromDB err:',ex);return false}
