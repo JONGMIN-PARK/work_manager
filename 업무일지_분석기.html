@@ -1478,8 +1478,8 @@ function renderTblRows(f,editable){
   tb.innerHTML=f.map((r,idx)=>{
     const ni=aN.indexOf(r.name),c=COL[ni%COL.length];
     const dn=typeof shortName==='function'?shortName(r.name):r.name;
-    const ocmt=getOCmt(r.orderNo);
-    const oclient=getOClient(r.orderNo);
+    const ocmt=r.ocmt!==undefined?r.ocmt:getOCmt(r.orderNo);
+    const oclient=r.oclient!==undefined?r.oclient:getOClient(r.orderNo);
     const em=editMap[idx]||{};
     const curOrder=em.orderNo!==undefined?em.orderNo:r.orderNo;
     const curOcmt=em.ocmt!==undefined?em.ocmt:(em.orderNo!==undefined?getOCmt(em.orderNo):ocmt);
@@ -1560,15 +1560,7 @@ function applyEdits(){
     if(changes.orderNo!==undefined)aD[origIdx].orderNo=changes.orderNo;
     const orderNo = aD[origIdx].orderNo;
     for(const[field,val]of Object.entries(changes)){
-      if(field==='ocmt'){
-        _tmpOcmt[orderNo]=val;
-        if(val)lsSet('wa-oc-'+orderNo,val); else lsRemove('wa-oc-'+orderNo);
-      }
-      else if(field==='oclient'){
-        _tmpOclient[orderNo]=val;
-        if(val)lsSet('wa-ocl-'+orderNo,val); else lsRemove('wa-ocl-'+orderNo);
-      }
-      else if(field!=='orderNo'){aD[origIdx][field]=val}
+      if(field!=='orderNo'){aD[origIdx][field]=val}
     }
     count++;
   }
