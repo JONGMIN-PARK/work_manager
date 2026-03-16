@@ -1536,12 +1536,18 @@ function onCellEdit(cell){
   const newVal=cell.textContent.trim();
   let origVal;
   if(field==='hours')origVal=String(orig[field]);
-  else if(field==='ocmt')origVal=getOCmt(orig.orderNo)||'';
-  else if(field==='oclient')origVal=getOClient(orig.orderNo)||'';
-  else origVal=orig[field];
+  else if(field==='ocmt')origVal=orig.ocmt!==undefined?orig.ocmt:getOCmt(orig.orderNo);
+  else if(field==='oclient')origVal=orig.oclient!==undefined?orig.oclient:getOClient(orig.orderNo);
+  else origVal=orig[field]||'';
+  if(origVal===undefined||origVal===null)origVal='';
+  
   if(!editMap[idx])editMap[idx]={};
-  if(newVal===origVal){delete editMap[idx][field];if(!Object.keys(editMap[idx]).length)delete editMap[idx]}
-  else editMap[idx][field]=field==='hours'?(parseFloat(newVal)||0):newVal;
+  if(newVal===origVal){
+    delete editMap[idx][field];
+    if(!Object.keys(editMap[idx]).length)delete editMap[idx]
+  } else {
+    editMap[idx][field]=field==='hours'?(parseFloat(newVal)||0):newVal;
+  }
   cell.classList.toggle('modified',editMap[idx]&&editMap[idx][field]!==undefined);
   const hasAny=Object.keys(editMap).length>0;
   document.getElementById('editStatus').style.display=hasAny?'':'none';
