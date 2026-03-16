@@ -1704,7 +1704,12 @@ document.getElementById('perB').innerHTML=pp.map(p=>{const ni=aN.indexOf(p.n);co
 const dm={};f.forEach(r=>{if(!dm[r.date])dm[r.date]={};dm[r.date][r.abbr]=(dm[r.date][r.abbr]||0)+r.hours});const de=Object.entries(dm).sort(([a],[b])=>a.localeCompare(b));const ak=[...new Set(f.map(r=>r.abbr))].sort();if(bC)bC.destroy();bC=new Chart(document.getElementById('barC').getContext('2d'),{type:'bar',data:{labels:de.map(([d])=>fD(d)),datasets:ak.map(k=>({label:AM[k]||k,data:de.map(([,v])=>v[k]||0),backgroundColor:ABR[k]||'#64748B',borderRadius:3,borderSkipped:'bottom'}))},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{stacked:true,ticks:{color:tc.t,font:{size:10},callback:v=>v+'h'},grid:{color:tc.g}}},plugins:{legend:{labels:{color:tc.l,font:{size:10}}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'h'}}}}})
 /* ═══ 업체별 차트 ═══ */
 const hideUn=document.getElementById('hideUnassignedClient')&&document.getElementById('hideUnassignedClient').checked;
-const cm={};let cTH=0;f.forEach(r=>{const cl=getOClient(r.orderNo)||'(미지정)';if(hideUn&&cl==='(미지정)')return;cm[cl]=(cm[cl]||0)+r.hours;cTH+=r.hours});
+const cm={};let cTH=0;f.forEach(r=>{
+  const cl=r.oclient || getOClient(r.orderNo) || '(미지정)';
+  if(hideUn&&cl==='(미지정)')return;
+  cm[cl]=(cm[cl]||0)+r.hours;
+  cTH+=r.hours
+});
 const cs=Object.entries(cm).map(([k,v])=>({n:k,v:Math.round(v*10)/10,p:cTH>0?Math.round(v/cTH*1000)/10:0})).sort((a,b)=>b.v-a.v);
 // 1) 업체 대응 비율 도넛
 if(clPieC)clPieC.destroy();clPieC=new Chart(document.getElementById('clientPieC').getContext('2d'),{type:'doughnut',data:{labels:cs.map(s=>s.n),datasets:[{data:cs.map(s=>s.v),backgroundColor:cs.map((_,i)=>COL[i%COL.length]),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed+' h'}}}}});
