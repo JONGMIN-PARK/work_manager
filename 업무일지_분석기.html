@@ -813,7 +813,16 @@ function wkGet(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks
 function wkDel(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').delete(id);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
 function wkClear(){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
 /* ── workRecords DB 함수 ── */
-function wrBulkPut(records){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');const s=tx.objectStore('workRecords');records.forEach(r=>s.put({date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content}));tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
+function wrBulkPut(records){
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('workRecords','readwrite');
+    const s=tx.objectStore('workRecords');
+    s.clear();
+    records.forEach(r=>s.put(r));
+    tx.oncomplete=()=>res();
+    tx.onerror=e=>rej(e)
+  })
+}
 function wrGetAll(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
 function wrCount(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').count();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
 function wrClear(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');tx.objectStore('workRecords').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
@@ -1547,31 +1556,27 @@ function togEdit(){
   renderTblRows(lastFiltered,editMode);
 }
 
-function applyEdits(){
+async function applyEdits(){
   if(!Object.keys(editMap).length){showToast('수정 사항이 없습니다.','warn');return}
-  // 필터된 데이터 → 원본 aD에 반영
   let count=0;
   for(const[idxStr,changes]of Object.entries(editMap)){
     const fRow=lastFiltered[+idxStr];if(!fRow)continue;
-    // aD에서 해당 행 찾기 (date+name+orderNo+content 매칭)
     const origIdx=aD.findIndex(r=>r===fRow);
     if(origIdx===-1)continue;
-    // 수주번호 변경을 먼저 반영
     if(changes.orderNo!==undefined)aD[origIdx].orderNo=changes.orderNo;
-    const orderNo = aD[origIdx].orderNo;
     for(const[field,val]of Object.entries(changes)){
       if(field!=='orderNo'){aD[origIdx][field]=val}
     }
     count++;
   }
+  await wrBulkPut(aD);
   editMap={};editMode=false;
   document.getElementById('editTogBtn').textContent='✏️ 편집모드';
   document.getElementById('editApplyBtn').classList.add('hidden');
   document.getElementById('editCancelBtn').classList.add('hidden');
   document.getElementById('editStatus').style.display='none';
-  // 전체 뷰 갱신 (필터/차트/요약 모두)
   rFL();upV();
-  showToast(`✅ ${count}건 수정 적용 완료`);
+  showToast(`✅ ${count}건 수정 적용 및 DB 저장 완료`);
 }
 
 function cancelEdits(){
