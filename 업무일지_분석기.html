@@ -376,7 +376,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
         <div class="pnl-h"><h3 class="pnl-t">🔍 상세 필터</h3><div style="display:flex;gap:6px;align-items:center"><div id="afTags" style="display:flex;gap:5px;flex-wrap:wrap"></div><button class="btn btn-d btn-s hidden" onclick="resetAll()" id="resetBtn">✕ 초기화</button></div></div>
         <div style="margin-bottom:12px"><div class="fl">업무내용 검색</div><div class="sw"><span class="sic">🔎</span><input type="text" id="cSearch" class="si" placeholder="키워드 입력..." oninput="onSI()"><button class="hidden" id="sClear" onclick="clrS()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--t5);cursor:pointer;font-size:14px">✕</button></div></div>
         <div class="fg">
-          <div class="fc"><div class="fl"><span>수주번호 <span id="oFC"></span></span><span style="display:flex;gap:4px"><button class="btn btn-g" style="padding:3px 8px;font-size:10px" onclick="importOrderExcel()" title="엑셀에서 수주맵 불러오기">📥 불러오기</button><button class="btn btn-g" style="padding:3px 8px;font-size:10px" onclick="exportOrderExcel()" title="수주맵을 엑셀로 저장">📤 저장</button><button class="btn btn-g btn-s" onclick="rstO()">해제</button></span></div><input type="file" id="orderExcelInput" accept=".xls,.xlsx" style="display:none" onchange="handleOrderExcel(this)"><input type="text" id="oSearch" class="si" style="margin-bottom:4px;padding:5px 10px;font-size:11px" placeholder="수주번호 검색..." oninput="clearTimeout(this._dt);this._dt=setTimeout(rOL,150)"><div class="lb" id="oLB"></div></div>
+          <div class="fc"><div class="fl"><span>수주번호 <span id="oFC"></span></span><span style="display:flex;gap:4px"><button class="btn btn-g" style="padding:3px 8px;font-size:10px" onclick="importOrderExcel()" title="엑셀에서 수주맵 불러오기">📥 불러오기</button><button class="btn btn-g" style="padding:3px 8px;font-size:10px" onclick="exportOrderExcel()" title="수주맵을 엑셀로 저장">📤 저장</button><button class="btn btn-d" style="padding:3px 8px;font-size:10px" onclick="resetOcmtOclient()" title="모든 행의 개별 수주명/거래처 값을 삭제하고 수주맵 기본값으로 복원">🗑️ 수주명·거래처 초기화</button><button class="btn btn-g btn-s" onclick="rstO()">해제</button></span></div><input type="file" id="orderExcelInput" accept=".xls,.xlsx" style="display:none" onchange="handleOrderExcel(this)"><input type="text" id="oSearch" class="si" style="margin-bottom:4px;padding:5px 10px;font-size:11px" placeholder="수주번호 검색..." oninput="clearTimeout(this._dt);this._dt=setTimeout(rOL,150)"><div class="lb" id="oLB"></div></div>
           <div class="fc"><div class="fl"><span>업무분장 <span id="tFC"></span></span><button class="btn btn-g btn-s" onclick="rstT()">해제</button></div><div class="lb" id="tLB"></div></div>
           <div class="fc"><div class="fl"><span>수주명 <span id="onFC"></span></span><button class="btn btn-g btn-s" onclick="rstON()">해제</button></div><input type="text" id="onSearch" class="si" style="margin-bottom:4px;padding:5px 10px;font-size:11px" placeholder="수주명 검색..." oninput="clearTimeout(this._dt);this._dt=setTimeout(rONL,150)"><div class="lb" id="onLB"></div></div>
           <div class="fc"><div class="fl"><span>거래처 <span id="clFC"></span></span><button class="btn btn-g btn-s" onclick="rstCL()">해제</button></div><input type="text" id="clSearch" class="si" style="margin-bottom:4px;padding:5px 10px;font-size:11px" placeholder="거래처 검색..." oninput="clearTimeout(this._dt);this._dt=setTimeout(rCLL,150)"><div class="lb" id="clLB"></div></div>
@@ -942,8 +942,8 @@ async function ldBuf(buf,enc){lBuf=buf;
       var result=wrMerge(existing, newRecords);
       if(result.toAdd.length>0)await wrBulkPut(result.toAdd);
       aD=await wrGetAll();
-      // id 필드 제거 (UI용)
-      aD=aD.map(function(r){return{date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content}});
+      // id 필드 제거 (UI용), ocmt/oclient 개별 값 보존
+      aD=aD.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;return o});
       showToast('📊 업무일지 갱신: '+result.added+'건 추가 (중복 '+(newRecords.length-result.added)+'건 제외)');
     }else{
       // 대체: 기존 삭제 후 새로 저장
@@ -1029,7 +1029,7 @@ function importWorkRecordsJSON(file){
           var result=wrMerge(existing, data.records);
           if(result.toAdd.length>0)await wrBulkPut(result.toAdd);
           aD=await wrGetAll();
-          aD=aD.map(function(r){return{date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content}});
+          aD=aD.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;return o});
           showToast('📊 업무일지 갱신: '+result.added+'건 추가');
         }else{
           await wrClear();
@@ -1614,16 +1614,33 @@ function togEdit(){
 
 async function applyEdits(){
   if(!Object.keys(editMap).length){showToast('수정 사항이 없습니다.','warn');return}
+  /* 편집된 행의 수주번호 수집 (ocmt/oclient 변경 시 같은 수주번호의 미편집 행도 per-row 고정 필요) */
+  const editedOrders=new Set();
+  const editedIndices=new Set();
   let count=0;
   for(const[idxStr,changes]of Object.entries(editMap)){
     const fRow=lastFiltered[+idxStr];if(!fRow)continue;
     const origIdx=aD.findIndex(r=>r===fRow);
     if(origIdx===-1)continue;
+    editedIndices.add(origIdx);
+    if(changes.ocmt!==undefined||changes.oclient!==undefined){
+      editedOrders.add(changes.orderNo!==undefined?changes.orderNo:fRow.orderNo);
+    }
     if(changes.orderNo!==undefined)aD[origIdx].orderNo=changes.orderNo;
     for(const[field,val]of Object.entries(changes)){
       if(field!=='orderNo'){aD[origIdx][field]=val}
     }
     count++;
+  }
+  /* ocmt/oclient가 수정된 수주번호에 속하는 미편집 행들:
+     현재 표시값(order-level fallback)을 per-row로 고정하여 일괄 반영 방지 */
+  if(editedOrders.size>0){
+    aD.forEach(function(r,i){
+      if(editedIndices.has(i))return; // 이미 편집된 행은 스킵
+      if(!editedOrders.has(r.orderNo))return; // 관련 없는 수주번호 스킵
+      if(r.ocmt===undefined){var cm=getOCmt(r.orderNo);if(cm)r.ocmt=cm}
+      if(r.oclient===undefined){var cl=getOClient(r.orderNo);if(cl)r.oclient=cl}
+    });
   }
   await wrBulkPut(aD);
   editMap={};editMode=false;
@@ -1642,6 +1659,22 @@ function cancelEdits(){
   document.getElementById('editCancelBtn').classList.add('hidden');
   document.getElementById('editStatus').style.display='none';
   renderTblRows(lastFiltered,false);
+}
+
+async function resetOcmtOclient(){
+  if(!aD.length){showToast('데이터가 없습니다.','warn');return}
+  var cnt=aD.filter(function(r){return r.ocmt!==undefined||r.oclient!==undefined}).length;
+  if(!cnt){showToast('초기화할 개별 수주명/거래처 값이 없습니다.','info');return}
+  if(!confirm('전체 '+aD.length+'건 중 '+cnt+'건의 개별 수주명·거래처 값을 삭제합니다.\n삭제 후 수주맵(ORDER_MAP) 기본값으로 복원됩니다.\n\n계속하시겠습니까?'))return;
+  aD.forEach(function(r){delete r.ocmt;delete r.oclient});
+  _tmpOcmt={};_tmpOclient={};
+  await wrBulkPut(aD);
+  editMap={};editMode=false;
+  var elTog=document.getElementById('editTogBtn');if(elTog)elTog.textContent='✏️ 편집모드';
+  ['editApplyBtn','editCancelBtn'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  var elSt=document.getElementById('editStatus');if(elSt)elSt.style.display='none';
+  gfInvalidate();rFL();upV();
+  showToast('✅ '+cnt+'건 수주명·거래처 개별값 초기화 완료 (DB 반영)');
 }
 
 function exportXlsx(){
