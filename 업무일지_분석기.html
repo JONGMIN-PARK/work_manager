@@ -940,11 +940,10 @@ async function ldBuf(buf,enc){lBuf=buf;
       // 병합: 기존 + 신규 (중복 제거)
       var existing=await wrGetAll();
       var result=wrMerge(existing, newRecords);
-      if(result.toAdd.length>0)await wrBulkPut(result.toAdd);
-      aD=await wrGetAll();
-      // id 필드 제거 (UI용), ocmt/oclient 개별 값 보존
-      aD=aD.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;return o});
-      showToast('📊 업무일지 갱신: '+result.added+'건 추가 (중복 '+(newRecords.length-result.added)+'건 제외)');
+      var merged=existing.concat(result.toAdd);
+      await wrBulkPut(merged);
+      aD=merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;return o});
+      showToast('📊 업무일지 갱신: '+result.added+'건 추가, 총 '+merged.length+'건 (중복 '+(newRecords.length-result.added)+'건 제외)');
     }else{
       // 대체: 기존 삭제 후 새로 저장
       await wrClear();
@@ -1027,10 +1026,10 @@ function importWorkRecordsJSON(file){
         if(choice==='merge'){
           var existing=await wrGetAll();
           var result=wrMerge(existing, data.records);
-          if(result.toAdd.length>0)await wrBulkPut(result.toAdd);
-          aD=await wrGetAll();
-          aD=aD.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;return o});
-          showToast('📊 업무일지 갱신: '+result.added+'건 추가');
+          var merged=existing.concat(result.toAdd);
+          await wrBulkPut(merged);
+          aD=merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;return o});
+          showToast('📊 업무일지 갱신: '+result.added+'건 추가, 총 '+merged.length+'건');
         }else{
           await wrClear();
           await wrBulkPut(data.records);
