@@ -82,6 +82,10 @@ td{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--tdb)}tr:hover t
 .li.ck .cb2{background:var(--ac);border-color:var(--ac);color:#fff}
 .si{width:100%;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:7px;padding:8px 12px 8px 32px;font-size:12px;color:var(--t2);font-family:inherit;outline:none;transition:border-color .15s,box-shadow .15s}
 .si:focus{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac-g)}.si::placeholder{color:var(--t6)}
+.msel{background:var(--bg-i);border:1px solid var(--bd-i);border-radius:7px;padding:5px 28px 5px 10px;font-size:11px;color:var(--t2);font-family:inherit;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235E6A88'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;transition:border-color .15s;min-width:110px}
+.msel:focus{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac-g)}
+.msel:hover{border-color:var(--bd2)}
+.msel option{background:var(--bg-p);color:var(--t2)}
 .sw{position:relative}.sic{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--t6);pointer-events:none}
 .ft{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:5px;font-size:10px;font-weight:600;background:var(--tg);border:1px solid var(--tg-bd);color:var(--tg-t)}
 .ft .tx{cursor:pointer;color:var(--t5);font-size:12px;margin-left:2px}.ft .tx:hover{color:var(--d-t)}
@@ -341,6 +345,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
         <div class="pnl-h">
           <h3 class="pnl-t">📆 주차 선택 <span style="color:var(--t5);font-weight:400" id="weekSelCount"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
+            <select id="weekMonthSel" class="msel" onchange="weekMonthFilter=this.value;renderWeekSelector()" title="월 선택"><option value="">전체 월</option></select>
             <button class="btn btn-g btn-s" onclick="pickWeek(getSunStart(todayStr()))" title="오늘이 속한 주로 이동">📍 오늘 주</button>
             <button class="btn btn-g btn-s" onclick="pickWeek(null)">전체 보기</button>
           </div>
@@ -478,7 +483,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   <!-- ═══ ARCHIVE MODE ═══ -->
   <div id="mArchive" class="hidden">
     <div class="pnl">
-      <div class="pnl-h"><h3 class="pnl-t">🗄️ 저장된 주차 목록</h3><button class="btn btn-d btn-s" onclick="clearAllWeeks()">전체 삭제</button></div>
+      <div class="pnl-h"><h3 class="pnl-t">🗄️ 저장된 주차 목록</h3><div style="display:flex;gap:6px;align-items:center"><select id="archMonthSel" class="msel" onchange="archMonthFilter=this.value;renderArch()" title="월 선택"><option value="">전체 월</option></select><button class="btn btn-d btn-s" onclick="clearAllWeeks()">전체 삭제</button></div></div>
       <div id="archList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px"></div>
       <div id="archEmpty" style="text-align:center;color:var(--t6);padding:30px;font-size:12px">저장된 데이터가 없습니다. 주간 분석에서 "💾 주차 저장"을 눌러주세요.</div>
     </div>
@@ -550,6 +555,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   <div id="mTrend" class="hidden">
     <div class="pnl">
       <div class="pnl-h"><h3 class="pnl-t">📈 트렌드 분석 — 복수 주차 선택</h3><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="btn btn-p btn-s" onclick="runTrend()">트렌드 분석 실행</button><button class="btn btn-g btn-s" onclick="trendSelAll()">전체 선택</button><button class="btn btn-g btn-s" onclick="trendDeAll()">전체 해제</button></div></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:10px;font-weight:600;color:var(--t5)">월 필터:</span><select id="trendMonthSel" class="msel" onchange="trendMonthFilter=this.value;renderTrend()" title="월 선택"><option value="">전체 월</option></select></div>
       <div id="trendGroupFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
       <p style="font-size:11px;color:var(--t5);margin-bottom:12px">아카이브에서 저장된 주차들을 선택하면 월간/연간 누적 트렌드를 분석합니다. 그룹별 필터로 빠르게 선택할 수 있습니다.</p>
       <div id="trendList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div>
@@ -673,6 +679,9 @@ var DEPT_LIST=['장비사업부','기술연구소','모션사업부'];
 let fvN=[],fvO=false;
 let aiProv='gemini';
 let archSel=null; // selected archive id for detail
+var weekMonthFilter=""; // 주차 선택기 월 필터 (빈 문자열=전체)
+var archMonthFilter=""; // 아카이브 월 필터
+var trendMonthFilter=""; // 트렌드 월 필터
 let trendSel=new Set(); // selected week ids for trend
 
 function fD(d){return d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8)}
