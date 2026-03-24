@@ -1339,6 +1339,28 @@ function showToast(msg, type) {
   };
   chkDel = function (id) { return apiFetch('/api/checklists/' + id, { method: 'DELETE' }); };
 
+  // 서버 모드: createDefaultChecklists 오버라이드 (phase별 items 배열로 묶어서 저장)
+  createDefaultChecklists = function (projectId) {
+    var promises = [];
+    Object.keys(DEFAULT_CHECKLIST).forEach(function (phase) {
+      var items = DEFAULT_CHECKLIST[phase].map(function (text, idx) {
+        return { text: text, done: false, doneDate: null, doneBy: null, order: idx };
+      });
+      promises.push(apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
+        id: 'chk-' + uuid(), projectId: projectId, phase: phase, items: items
+      }) }).then(function (r) { return toCamel(r.data); }));
+    });
+    return Promise.all(promises);
+  };
+
+  // 서버 모드: createCheckItem 오버라이드 (개별 항목도 items 배열로 래핑)
+  createCheckItem = function (data) {
+    var items = [{ text: data.text || '', done: false, doneDate: null, doneBy: null, order: data.order || 0 }];
+    return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
+      id: 'chk-' + uuid(), projectId: data.projectId, phase: data.phase, items: items
+    }) }).then(function (r) { return toCamel(r.data); });
+  };
+
   // ─── 진척률 히스토리 ───
   getProgressHistory = function (pid) { return apiFetch('/api/progress?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
   saveProgressSnapshot = function (pid, progress, actualHours) {
