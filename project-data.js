@@ -1353,7 +1353,7 @@ function showToast(msg, type) {
         if (Array.isArray(items) && items.length > 0) {
           items.forEach(function (it, idx) {
             flat.push({
-              id: rc.id + '-' + idx,
+              id: rc.id + '::' + idx,
               _parentId: rc.id,
               projectId: rc.projectId,
               phase: rc.phase,
@@ -1388,10 +1388,10 @@ function showToast(msg, type) {
       });
   };
   chkDel = function (id) {
-    // flat id (chk-xxx-N) → 부모 row에서 해당 항목 제거
-    var parts = id.match(/^(.+)-(\d+)$/);
-    if (!parts) return apiFetch('/api/checklists/' + id, { method: 'DELETE' });
-    var parentId = parts[1], idx = parseInt(parts[2], 10);
+    // flat id (chk-xxx::N) → 부모 row에서 해당 항목 제거
+    var sep = id.indexOf('::');
+    if (sep < 0) return apiFetch('/api/checklists/' + id, { method: 'DELETE' });
+    var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
     return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
       var row = r.data;
       var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
@@ -1403,9 +1403,9 @@ function showToast(msg, type) {
 
   // 서버 모드: toggleCheckItem 오버라이드
   toggleCheckItem = function (id, doneBy) {
-    var parts = id.match(/^(.+)-(\d+)$/);
-    if (!parts) return Promise.resolve(null);
-    var parentId = parts[1], idx = parseInt(parts[2], 10);
+    var sep = id.indexOf('::');
+    if (sep < 0) return Promise.resolve(null);
+    var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
     return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
       var row = r.data;
       var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
