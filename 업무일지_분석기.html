@@ -359,7 +359,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   <!-- ═══ WEEKLY MODE ═══ -->
   <div id="mWeekly">
     <div class="dz hidden" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-      <input id="fileInput" type="file" accept=".xls,.xlsx,.html,.htm" style="display:none">
+      <input id="fileInput" type="file" accept=".xls,.xlsx,.html,.htm" multiple style="display:none">
       <div style="font-size:40px;margin-bottom:14px;opacity:.8">📊</div>
       <p style="font-size:14px;font-weight:700;color:var(--t2);margin-bottom:6px">업무일지 파일을 드래그하거나 클릭하여 업로드</p>
       <p style="font-size:11px;color:var(--t5);opacity:.8">.xls (HTML/바이너리) · .xlsx · 인코딩 자동감지</p>
@@ -379,7 +379,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap"><span style="font-size:11px;color:var(--t5);margin-right:3px">인코딩:</span><div id="encMain"></div></div>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-g" onclick="document.getElementById('fileInput2').click()">📁 다른파일<input id="fileInput2" type="file" accept=".xls,.xlsx,.html,.htm" style="display:none"></button>
+          <button class="btn btn-g" onclick="document.getElementById('fileInput2').click()">📁 다른파일<input id="fileInput2" type="file" accept=".xls,.xlsx,.html,.htm" multiple style="display:none"></button>
           <button class="btn btn-w" onclick="saveWeek()" id="saveWeekBtn">💾 주차 저장</button>
           <span class="mob-sep" style="color:var(--bd2)">│</span>
           <button class="btn btn-g" onclick="exportWorkRecordsJSON()">📤 업무일지 내보내기</button>
@@ -1171,6 +1171,19 @@ async function hFile(file,enc){if(!file)return;document.getElementById('fnDisp')
   var dept=detectDept(file.name);
   if(dept===null)dept=await showDeptSelectModal();
   const r=new FileReader();r.onload=async function(e){await ldBuf(e.target.result,enc||cEnc,dept)};r.readAsArrayBuffer(file)}
+
+/* 여러 파일 순차 처리 */
+async function hFiles(fileList){
+  if(!fileList||!fileList.length)return;
+  var files=Array.from(fileList).filter(function(f){return/\.(xls|xlsx|html?|csv)$/i.test(f.name)});
+  if(!files.length){showToast('지원하지 않는 파일 형식입니다.','error');return}
+  if(files.length===1){hFile(files[0]);return}
+  showToast('📂 '+files.length+'개 파일 로드 중...');
+  for(var i=0;i<files.length;i++){
+    await hFile(files[i]);
+  }
+  showToast('✓ '+files.length+'개 파일 로드 완료','success');
+}
 function chEnc(enc){cEnc=enc;rEC();if(lBuf){var newRecords=parseFileBuf(lBuf,enc);if(newRecords.length){aD=newRecords;applyADToUI()}}}
 function rEC(){['encUp','encMain'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.innerHTML=ENC.map(e=>`<span class="chip ${e===cEnc?'cn':'co'}" style="padding:3px 8px;font-size:10px" onclick="event.stopPropagation();chEnc('${e}')">${e}</span>`).join('')})}
 
@@ -3102,14 +3115,19 @@ async function _postAuthInit(){
   // AI 프리셋 버튼 렌더
   const presetEl=document.getElementById('aiPresetBtns');
   if(presetEl&&typeof AI_PRESETS!=='undefined'){presetEl.innerHTML=AI_PRESETS.map(p=>`<span class="chip co" style="padding:2px 8px;font-size:9px" onclick="addPre('${p.text.replace(/'/g,"\\'")}')">${p.label}</span>`).join('')}
-  document.getElementById('fileInput').addEventListener('change',e=>hFile(e.target.files[0]));
-  document.getElementById('fileInput2').addEventListener('change',e=>{hFile(e.target.files[0]);e.target.value=''});
+  document.getElementById('fileInput').addEventListener('change',e=>{hFiles(e.target.files);e.target.value=''});
+  document.getElementById('fileInput2').addEventListener('change',e=>{hFiles(e.target.files);e.target.value=''});
   const dz=document.getElementById('uploadZone');
   dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('active')});
   dz.addEventListener('dragleave',()=>dz.classList.remove('active'));
-  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('active');hFile(e.dataTransfer.files[0])});
-  document.body.addEventListener('dragover',e=>e.preventDefault());
-  document.body.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files[0])hFile(e.dataTransfer.files[0])});
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('active');hFiles(e.dataTransfer.files)});
+  // 본문 어디서든 드래그앤드롭 가능
+  var _dragOverlay=null;
+  document.body.addEventListener('dragover',e=>{e.preventDefault();
+    if(!_dragOverlay){_dragOverlay=document.createElement('div');_dragOverlay.id='dropOverlay';_dragOverlay.style.cssText='position:fixed;inset:0;z-index:9990;background:rgba(6,182,212,.12);border:3px dashed #06B6D4;display:flex;align-items:center;justify-content:center;pointer-events:none';_dragOverlay.innerHTML='<div style="font-size:16px;font-weight:700;color:#22D3EE;background:var(--bg-p);padding:16px 32px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3)">📂 파일을 여기에 놓으세요</div>';document.body.appendChild(_dragOverlay)}
+  });
+  document.body.addEventListener('dragleave',e=>{if(e.relatedTarget===null&&_dragOverlay){_dragOverlay.remove();_dragOverlay=null}});
+  document.body.addEventListener('drop',e=>{e.preventDefault();if(_dragOverlay){_dragOverlay.remove();_dragOverlay=null}if(e.dataTransfer.files.length)hFiles(e.dataTransfer.files)});
 }
 /* ═══════════════════════════════════════════
    애니웍스 주간일지 자동 가져오기
@@ -3215,38 +3233,35 @@ async function openAnyworksModal() {
   ov.id = 'anyworksOverlay';
   ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)';
 
-  var exeUrl = 'https://github.com/JONGMIN-PARK/work_manager/releases/latest/download/WeeklyDownloader.exe';
-
   ov.innerHTML =
-    '<div style="background:var(--bg-p);border-radius:14px;padding:28px;max-width:480px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,.4)">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'+
+    '<div style="background:var(--bg-p);border-radius:14px;padding:28px;max-width:440px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,.4)">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
         '<div style="font-size:15px;font-weight:700;color:var(--t1)">🌐 애니웍스 주간일지 가져오기</div>'+
         '<button onclick="closeAnyworksModal()" style="background:none;border:none;color:var(--t5);font-size:18px;cursor:pointer;padding:4px">✕</button>'+
       '</div>'+
 
-      '<!-- 방법 1: 자동 다운로드 (EXE) -->'+
-      '<div style="background:linear-gradient(135deg,rgba(6,182,212,.08),rgba(8,145,178,.08));border:1px solid rgba(6,182,212,.3);border-radius:10px;padding:16px;margin-bottom:14px">'+
-        '<div style="font-size:12px;font-weight:700;color:#22D3EE;margin-bottom:8px">⚡ 자동 다운로드 (권장)</div>'+
-        '<p style="font-size:11px;color:var(--t4);line-height:1.6;margin-bottom:12px">'+
-          'WeeklyDownloader를 실행하면 사업부별 엑셀을 <b>자동으로 일괄 다운로드</b>합니다.<br>'+
-          'Chrome이 설치된 PC에서 실행하세요.</p>'+
-        '<div style="display:flex;gap:8px">'+
-          '<a href="'+exeUrl+'" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:none;border-radius:8px;background:linear-gradient(135deg,#06B6D4,#0891B2);color:#fff;cursor:pointer;font-size:12px;font-weight:700;text-decoration:none" download>'+
-            '⬇️ WeeklyDownloader.exe</a>'+
-          '<button onclick="awCheckExeLocal()" style="padding:10px 14px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:11px" title="이미 설치된 경우 로컬에서 바로 실행">▶ 실행</button>'+
+      '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">'+
+        '<button onclick="window.open(\'https://works.animotion.co.kr\',\'_blank\')" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#06B6D4,#0891B2);color:#fff;cursor:pointer;font-size:13px;font-weight:700">🌐 애니웍스 열기</button>'+
+        '<button onclick="window.open(\'https://works.animotion.co.kr/Sales/Week_List.asp?top_id=80&mun=6&table=WeekList\',\'_blank\')" style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:12px;font-weight:600">📋 주간일지 페이지 바로가기</button>'+
+      '</div>'+
+
+      '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:14px;margin-bottom:16px">'+
+        '<div style="font-size:11px;color:var(--t4);line-height:1.8">'+
+          '① 애니웍스 로그인<br>'+
+          '② 사업부 선택 → 날짜 설정 → 검색 → <b>엑셀</b> 클릭<br>'+
+          '③ 사업부별 반복 (3회)<br>'+
+          '④ 여기로 돌아와서 <b style="color:var(--ac-t)">📁 다른파일</b> 또는 <b style="color:var(--ac-t)">화면에 드래그앤드롭</b>'+
         '</div>'+
       '</div>'+
 
-      '<!-- 방법 2: 수동 다운로드 -->'+
-      '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:16px">'+
-        '<div style="font-size:12px;font-weight:700;color:var(--t5);margin-bottom:8px">📋 수동 다운로드</div>'+
-        '<div style="display:flex;gap:8px;margin-bottom:10px">'+
-          '<button onclick="window.open(\'https://works.animotion.co.kr\',\'_blank\')" style="flex:1;padding:8px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-p);color:var(--t3);cursor:pointer;font-size:11px;font-weight:600">🌐 애니웍스 열기</button>'+
-          '<button onclick="window.open(\'https://works.animotion.co.kr/Sales/Week_List.asp?top_id=80&mun=6&table=WeekList\',\'_blank\')" style="flex:1;padding:8px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-p);color:var(--t3);cursor:pointer;font-size:11px;font-weight:600">📋 주간일지 바로가기</button>'+
-        '</div>'+
-        '<div style="font-size:10px;color:var(--t5);line-height:1.7">'+
-          '① 로그인 → ② 사업부/날짜 선택 → ③ 엑셀 다운로드 → ④ <b style="color:var(--ac-t)">📁 다른파일</b>로 불러오기'+
-        '</div>'+
+      '<div style="text-align:center;padding:12px;border:2px dashed var(--bd2);border-radius:10px;margin-bottom:16px;cursor:pointer;transition:border-color .2s" '+
+        'ondragover="event.preventDefault();this.style.borderColor=\'#06B6D4\'" '+
+        'ondragleave="this.style.borderColor=\'\'" '+
+        'ondrop="event.preventDefault();this.style.borderColor=\'\';closeAnyworksModal();hFiles(event.dataTransfer.files)" '+
+        'onclick="document.getElementById(\'fileInput2\').click();closeAnyworksModal()">'+
+        '<div style="font-size:24px;margin-bottom:6px">📂</div>'+
+        '<div style="font-size:12px;color:var(--t4);font-weight:600">다운로드한 파일을 여기에 드롭하거나 클릭</div>'+
+        '<div style="font-size:10px;color:var(--t6);margin-top:4px">여러 파일 동시 선택 가능</div>'+
       '</div>'+
 
       '<div style="text-align:right">'+
