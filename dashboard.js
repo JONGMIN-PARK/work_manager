@@ -32,7 +32,9 @@ async function renderDashboard(projects) {
   var wsStr = weekStart.toISOString().slice(0, 10);
   var weStr = weekEnd.toISOString().slice(0, 10);
 
-  var milestones = await msGetAll();
+  var _msEvtData = await Promise.all([msGetAll(), evtGetAll()]);
+  var milestones = _msEvtData[0];
+  var events = _msEvtData[1];
   var _projMap = {};
   projects.forEach(function (p) { _projMap[p.id] = p; });
   var weekMs = milestones.filter(function (m) {
@@ -50,8 +52,6 @@ async function renderDashboard(projects) {
   var monthStart = today.slice(0, 7) + '-01';
   var monthEndDate = new Date(parseInt(today.slice(0, 4)), parseInt(today.slice(5, 7)), 0);
   var monthEnd = monthEndDate.toISOString().slice(0, 10);
-
-  var events = await evtGetAll();
   var monthDeadlines = events.filter(function (e) {
     return e.type === 'deadline' && e.startDate >= monthStart && e.startDate <= monthEnd;
   });
@@ -932,13 +932,17 @@ async function showPersonReport(name) {
     var today = localDate();
     var displayName = typeof shortName === 'function' ? shortName(name) : name;
 
-    // 데이터 로드
-    var allProjects = await projGetAll();
-    var allIssues = [];
-    try { if (typeof issueGetAll === 'function') allIssues = await issueGetAll(); } catch (e) { console.warn('[Dashboard]', e); }
-    var allEvents = await evtGetAll();
-    var archWeeks = [];
-    try { if (typeof getRecentArchiveWeeks === 'function') archWeeks = await getRecentArchiveWeeks(4); } catch (e) { console.warn('[Dashboard]', e); }
+    // 데이터 로드 (병렬)
+    var _prData = await Promise.all([
+      projGetAll(),
+      (typeof issueGetAll === 'function') ? issueGetAll().catch(function (e) { console.warn('[Dashboard]', e); return []; }) : Promise.resolve([]),
+      evtGetAll(),
+      (typeof getRecentArchiveWeeks === 'function') ? getRecentArchiveWeeks(4).catch(function (e) { console.warn('[Dashboard]', e); return []; }) : Promise.resolve([])
+    ]);
+    var allProjects = _prData[0];
+    var allIssues = _prData[1] || [];
+    var allEvents = _prData[2];
+    var archWeeks = _prData[3] || [];
 
     // 1. 배정 프로젝트
     var myProjects = allProjects.filter(function (p) {
@@ -1085,16 +1089,24 @@ async function buildHealthScorecard(projects) {
   });
   if (!targetProjs.length) return;
 
-  // 이슈/체크리스트 데이터 로드
-  var allIssues = [];
-  try { if (typeof issueGetAll === 'function') allIssues = await issueGetAll(); } catch (e) { console.warn('[Dashboard]', e); }
+  // 이슈/체크리스트 데이터 로드 (병렬)
+  var _chkPromises = [];
+  var _chkProjIds = [];
+  if (typeof chkGetByProject === 'function') {
+    for (var i = 0; i < targetProjs.length; i++) {
+      _chkProjIds.push(targetProjs[i].id);
+      _chkPromises.push(chkGetByProject(targetProjs[i].id).catch(function (e) { console.warn('[Dashboard]', e); return []; }));
+    }
+  }
+  var _hsData = await Promise.all([
+    (typeof issueGetAll === 'function') ? issueGetAll().catch(function (e) { console.warn('[Dashboard]', e); return []; }) : Promise.resolve([]),
+    Promise.all(_chkPromises)
+  ]);
+  var allIssues = _hsData[0] || [];
+  var _chkResults = _hsData[1];
   var allChklists = {};
-  for (var i = 0; i < targetProjs.length; i++) {
-    try {
-      if (typeof chkGetByProject === 'function') {
-        allChklists[targetProjs[i].id] = await chkGetByProject(targetProjs[i].id);
-      }
-    } catch (e) { console.warn('[Dashboard]', e); }
+  for (var i = 0; i < _chkProjIds.length; i++) {
+    allChklists[_chkProjIds[i]] = _chkResults[i];
   }
 
   // 스코어 계산
@@ -1255,14 +1267,17 @@ async function generateReport() {
   var today = localDate();
   var periodLabel = period === 'weekly' ? '주간' : '월간';
 
-  // 데이터 수집
-  var projects = await projGetAll();
+  // 데이터 수집 (병렬)
+  var _grData = await Promise.all([
+    projGetAll(),
+    (typeof issueGetAll === 'function') ? issueGetAll().catch(function (e) { console.warn('[Dashboard]', e); return []; }) : Promise.resolve([]),
+    (typeof getRecentArchiveWeeks === 'function') ? getRecentArchiveWeeks(period === 'weekly' ? 1 : 4).catch(function (e) { console.warn('[Dashboard]', e); return []; }) : Promise.resolve([])
+  ]);
+  var projects = _grData[0];
   var _rptProjMap = {};
   projects.forEach(function (p) { _rptProjMap[p.id] = p; });
-  var allIssues = [];
-  try { if (typeof issueGetAll === 'function') allIssues = await issueGetAll(); } catch (e) { console.warn('[Dashboard]', e); }
-  var archWeeks = [];
-  try { if (typeof getRecentArchiveWeeks === 'function') archWeeks = await getRecentArchiveWeeks(period === 'weekly' ? 1 : 4); } catch (e) { console.warn('[Dashboard]', e); }
+  var allIssues = _grData[1] || [];
+  var archWeeks = _grData[2] || [];
 
   // 보고서 HTML 생성
   var rptStyles = '<style>' +

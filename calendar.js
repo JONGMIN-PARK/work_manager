@@ -23,10 +23,11 @@ async function renderCalendar() {
   var wrap = document.getElementById('calendarWrap');
   if (!wrap) return;
 
-  var _calData = await Promise.all([projGetAll(), evtGetAll(), msGetAll()]);
+  var _calData = await Promise.all([projGetAll(), evtGetAll(), msGetAll(), typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve(null)]);
   var projects = _calData[0];
   var rawEvents = _calData[1];
   var milestones = _calData[2];
+  var _prefetchedIssues = _calData[3];
 
   // 반복 일정 확장 (현재 보이는 범위 기준)
   var viewStart, viewEnd;
@@ -44,9 +45,9 @@ async function renderCalendar() {
   var events = expandRepeatingEvents(rawEvents, viewStart, viewEnd);
 
   // 이슈 기한을 가상 이벤트로 추가
-  if (typeof issueGetAll === 'function') {
+  if (_prefetchedIssues) {
     try {
-      var allIssues = await issueGetAll();
+      var allIssues = _prefetchedIssues;
       allIssues.forEach(function (iss) {
         if (iss.dueDate && iss.status !== 'resolved' && iss.status !== 'closed') {
           var urgColor = iss.urgency === 'urgent' ? '#EF4444' : iss.urgency === 'normal' ? '#F59E0B' : '#64748B';

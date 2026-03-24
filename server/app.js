@@ -75,22 +75,26 @@ console.log('[Server] Build version:', BUILD_VERSION);
 app.use(express.static(path.join(__dirname, '..'), {
   index: false, // HTML은 별도 미들웨어에서 처리
   extensions: ['html'],
-  maxAge: '1h',
+  maxAge: '30d',
   etag: true,
   lastModified: true
 }));
 
-// ─── HTML 서빙 시 ?v= 동적 치환 ───
+// ─── HTML 캐시: 시작 시 한 번만 읽고 ?v= 치환 ───
 var fs = require('fs');
 var htmlPath = path.join(__dirname, '..', '업무일지_분석기.html');
+var cachedHtml;
+try {
+  cachedHtml = fs.readFileSync(htmlPath, 'utf8').replace(/\?v=\d+"/g, '?v=' + BUILD_VERSION + '"');
+} catch (e) {
+  console.error('[Server] HTML 로드 실패:', e.message);
+}
+
 app.get(['/', '/index', '/index.html'], function (req, res) {
-  fs.readFile(htmlPath, 'utf8', function (err, html) {
-    if (err) return res.status(500).send('HTML 로드 실패');
-    html = html.replace(/\?v=\d+"/g, '?v=' + BUILD_VERSION + '"');
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.send(html);
-  });
+  if (!cachedHtml) return res.status(500).send('HTML 로드 실패');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.send(cachedHtml);
 });
 
 // ─── API 라우트 ───
@@ -149,13 +153,10 @@ app.get('*', function (req, res) {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'NOT_FOUND', message: '존재하지 않는 API입니다.' });
   }
-  fs.readFile(htmlPath, 'utf8', function (err, html) {
-    if (err) return res.status(500).send('HTML 로드 실패');
-    html = html.replace(/\?v=\d+"/g, '?v=' + BUILD_VERSION + '"');
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.send(html);
-  });
+  if (!cachedHtml) return res.status(500).send('HTML 로드 실패');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.send(cachedHtml);
 });
 
 // ─── 글로벌 에러 핸들러 ───

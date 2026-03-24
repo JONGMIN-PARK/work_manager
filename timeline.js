@@ -800,13 +800,15 @@ async function showProjectDetail(id) {
   var existingBd = document.getElementById('projDetailBackdrop');
   if (existingBd) existingBd.remove();
 
-  var proj = await projGet(id);
+  var [proj, projMs, allChk] = await Promise.all([
+    projGet(id),
+    msGetByProject(id),
+    typeof chkGetByProject === 'function' ? chkGetByProject(id) : Promise.resolve([])
+  ]);
   if (!proj) return;
-  var projMs = await msGetByProject(id);
   projMs.sort(function (a, b) { return a.order - b.order; });
   var st = autoProjectStatus(proj);
   var stInfo = PROJ_STATUS[st] || PROJ_STATUS.waiting;
-  var allChk = typeof chkGetByProject === 'function' ? await chkGetByProject(id) : [];
   var phaseProgress = {};
   var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
   var phaseKeys = Object.keys(phases).sort(function (a, b) { return (phases[a].seq || 0) - (phases[b].seq || 0); });
