@@ -216,7 +216,8 @@ function createProject(data) {
     currentPhase: data.currentPhase || 'order',
     phases: data.phases || defaultPhases,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    _isNew: true
   };
   return projPut(proj);
 }
@@ -256,7 +257,8 @@ function createMilestone(data) {
     endDate: data.endDate || '',
     status: data.status || 'waiting',
     order: data.order || 0,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    _isNew: true
   };
   return msPut(ms);
 }
@@ -1242,8 +1244,10 @@ function showToast(msg, type) {
   projGetAll = function () { return apiFetch('/api/projects').then(function (r) { return toCamelArray(r.data); }); };
   projGet = function (id) { return apiFetch('/api/projects/' + id).then(function (r) { return toCamel(r.data); }); };
   projPut = function (proj) {
-    if (!proj.id) return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
-    // id가 있어도 서버에 없을 수 있음 (createProject가 클라이언트에서 id 생성) → PUT 404 시 POST로 폴백
+    if (!proj.id || proj._isNew) {
+      delete proj._isNew;
+      return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
+    }
     return apiFetch('/api/projects/' + proj.id, { method: 'PUT', body: JSON.stringify(proj) })
       .then(function (r) { return toCamel(r.data); })
       .catch(function (err) {
@@ -1259,7 +1263,10 @@ function showToast(msg, type) {
   msGetAll = function () { return apiFetch('/api/milestones').then(function (r) { return toCamelArray(r.data); }); };
   msGetByProject = function (pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
   msPut = function (ms) {
-    if (!ms.id) return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
+    if (!ms.id || ms._isNew) {
+      delete ms._isNew;
+      return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
+    }
     return apiFetch('/api/milestones/' + ms.id, { method: 'PUT', body: JSON.stringify(ms) })
       .then(function (r) { return toCamel(r.data); })
       .catch(function (err) {
@@ -1359,6 +1366,37 @@ function showToast(msg, type) {
     return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
       id: 'chk-' + uuid(), projectId: data.projectId, phase: data.phase, items: items
     }) }).then(function (r) { return toCamel(r.data); });
+  };
+
+  // 서버 모드: createProjectFromOrder 오버라이드 (1회 API 호출로 프로젝트+마일스톤+체크리스트 일괄 생성)
+  createProjectFromOrder = function (order) {
+    var projId = 'proj-' + uuid();
+    var now = new Date().toISOString();
+    var startDate = order.date || localDate();
+    var endDate = order.delivery || '';
+    var defaultPhases = { order: { status: 'done', startDate: startDate, endDate: startDate }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, as: { status: 'waiting', startDate: '', endDate: '' } };
+    var phaseKeys = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'as'];
+    var phaseLabels = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
+    var milestones = phaseKeys.map(function (pk, idx) {
+      var label = phaseLabels[pk] ? phaseLabels[pk].label : pk;
+      return { id: 'ms-' + uuid(), name: label, startDate: '', endDate: '', status: 'waiting', order: idx };
+    });
+    var checklists = phaseKeys.map(function (pk) {
+      var items = (DEFAULT_CHECKLIST[pk] || []).map(function (text, idx) {
+        return { text: text, done: false, doneDate: null, doneBy: null, order: idx };
+      });
+      return { id: 'chk-' + uuid(), phase: pk, items: items };
+    });
+    var payload = {
+      id: projId, orderNo: order.orderNo, name: order.name || order.orderNo,
+      startDate: startDate, endDate: endDate, status: 'active', progress: 0,
+      estimatedHours: 0, assignees: order.manager ? [order.manager] : [],
+      dependencies: [], color: typeof COL !== 'undefined' ? COL[Math.floor(Math.random() * COL.length)] : '#3B82F6',
+      memo: '', currentPhase: 'design', phases: defaultPhases,
+      milestones: milestones, checklists: checklists
+    };
+    return apiFetch('/api/projects/full', { method: 'POST', body: JSON.stringify(payload) })
+      .then(function (r) { return toCamel(r.data); });
   };
 
   // ─── 진척률 히스토리 ───

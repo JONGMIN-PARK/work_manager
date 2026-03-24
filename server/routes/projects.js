@@ -103,6 +103,50 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
   }
 });
 
+// ─── POST /api/projects/full — 프로젝트+마일스톤+체크리스트 일괄 생성 (트랜잭션) ───
+router.post('/full', rbac.checkPermission('project.create'), async function (req, res) {
+  try {
+    var b = req.body;
+    var projId = b.id || ('proj-' + require('crypto').randomUUID().slice(0, 12));
+    var result = await db.transaction(async function (client) {
+      // 1. 프로젝트 생성
+      var pr = await client.query(
+        "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15) RETURNING *",
+        [projId, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
+         b.status || 'active', b.progress || 0, b.estimatedHours || b.estimated_hours || 0,
+         JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
+         b.color || '#3B82F6', b.memo || '', b.currentPhase || b.current_phase || 'order',
+         JSON.stringify(b.phases || {}), req.user.sub]
+      );
+      // 2. 마일스톤 일괄 생성
+      var milestones = b.milestones || [];
+      for (var i = 0; i < milestones.length; i++) {
+        var m = milestones[i];
+        var msId = m.id || ('ms-' + require('crypto').randomUUID().slice(0, 12));
+        await client.query(
+          "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+          [msId, projId, m.name || '', m.startDate || m.start_date || '', m.endDate || m.end_date || '', m.status || 'waiting', m.order || m.sort_order || i, req.user.sub]
+        );
+      }
+      // 3. 체크리스트 일괄 생성
+      var checklists = b.checklists || [];
+      for (var j = 0; j < checklists.length; j++) {
+        var c = checklists[j];
+        var chkId = c.id || ('chk-' + require('crypto').randomUUID().slice(0, 12));
+        await client.query(
+          "INSERT INTO checklists (id, project_id, phase, items, created_by) VALUES ($1,$2,$3,$4,$5)",
+          [chkId, projId, c.phase || null, JSON.stringify(c.items || []), req.user.sub]
+        );
+      }
+      return pr.rows[0];
+    });
+    res.status(201).json({ data: result });
+  } catch (e) {
+    console.error('[projects/full]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // ─── DELETE /api/projects/:id ───
 router.delete('/:id', rbac.checkPermission('project.delete'), async function (req, res) {
   try {
