@@ -1260,7 +1260,14 @@ function showToast(msg, type) {
   msGetByProject = function (pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
   msPut = function (ms) {
     if (!ms.id) return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
-    return apiFetch('/api/milestones/' + ms.id, { method: 'PUT', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/milestones/' + ms.id, { method: 'PUT', body: JSON.stringify(ms) })
+      .then(function (r) { return toCamel(r.data); })
+      .catch(function (err) {
+        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+          return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
+        }
+        throw err;
+      });
   };
   msDel = function (id) { return apiFetch('/api/milestones/' + id, { method: 'DELETE' }); };
 
@@ -1269,7 +1276,14 @@ function showToast(msg, type) {
   evtGet = function (id) { return apiFetch('/api/events/' + id).then(function (r) { return toCamel(r.data); }); };
   evtPut = function (evt) {
     if (!evt.id) return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
-    return apiFetch('/api/events/' + evt.id, { method: 'PUT', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/events/' + evt.id, { method: 'PUT', body: JSON.stringify(evt) })
+      .then(function (r) { return toCamel(r.data); })
+      .catch(function (err) {
+        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+          return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
+        }
+        throw err;
+      });
   };
   evtDel = function (id) { return apiFetch('/api/events/' + id, { method: 'DELETE' }); };
 
@@ -1287,7 +1301,14 @@ function showToast(msg, type) {
   issueGet = function (id) { return apiFetch('/api/issues/' + id).then(function (r) { return toCamel(r.data); }); };
   issuePut = function (issue) {
     if (!issue.id) return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
-    return apiFetch('/api/issues/' + issue.id, { method: 'PUT', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/issues/' + issue.id, { method: 'PUT', body: JSON.stringify(issue) })
+      .then(function (r) { return toCamel(r.data); })
+      .catch(function (err) {
+        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+          return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
+        }
+        throw err;
+      });
   };
   issueDel = function (id) { return apiFetch('/api/issues/' + id, { method: 'DELETE' }); };
   issueGetByProject = function (pid) { return apiFetch('/api/issues?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
@@ -1307,7 +1328,14 @@ function showToast(msg, type) {
   chkGetByProject = function (pid) { return apiFetch('/api/checklists?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
   chkPut = function (item) {
     if (!item.id) return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
-    return apiFetch('/api/checklists/' + item.id, { method: 'PUT', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/checklists/' + item.id, { method: 'PUT', body: JSON.stringify(item) })
+      .then(function (r) { return toCamel(r.data); })
+      .catch(function (err) {
+        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+          return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
+        }
+        throw err;
+      });
   };
   chkDel = function (id) { return apiFetch('/api/checklists/' + id, { method: 'DELETE' }); };
 
