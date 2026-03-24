@@ -511,26 +511,36 @@ async function saveEventUI(existingId) {
     repeatUntil: repeatSel ? (document.getElementById('evtRepeatUntil').value || '') : ''
   };
 
-  if (existingId) {
-    await updateEvent(existingId, data);
-  } else {
-    await createEvent(data);
-  }
+  try {
+    if (existingId) {
+      await updateEvent(existingId, data);
+    } else {
+      await createEvent(data);
+    }
 
-  document.getElementById('evtModal').remove();
-  await renderCalendar();
-  showToast(existingId ? '일정이 수정되었습니다' : '일정이 등록되었습니다');
+    document.getElementById('evtModal').remove();
+    await renderCalendar();
+    showToast(existingId ? '일정이 수정되었습니다' : '일정이 등록되었습니다');
+  } catch (err) {
+    console.error('[saveEventUI]', err);
+    if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 async function deleteEventUI(id) {
-  var ev = await evtGet(id);
-  var msg = '이 일정을 삭제하시겠습니까?';
-  if (ev && ev.repeat) msg = '이 반복 일정의 모든 인스턴스가 삭제됩니다. 계속하시겠습니까?';
-  if (!confirm(msg)) return;
-  await evtDel(id);
-  document.getElementById('evtModal').remove();
-  await renderCalendar();
-  showToast('일정이 삭제되었습니다', 'warn');
+  try {
+    var ev = await evtGet(id);
+    var msg = '이 일정을 삭제하시겠습니까?';
+    if (ev && ev.repeat) msg = '이 반복 일정의 모든 인스턴스가 삭제됩니다. 계속하시겠습니까?';
+    if (!confirm(msg)) return;
+    await evtDel(id);
+    document.getElementById('evtModal').remove();
+    await renderCalendar();
+    showToast('일정이 삭제되었습니다', 'warn');
+  } catch (err) {
+    console.error('[deleteEventUI]', err);
+    if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ Google Calendar / ICS 가져오기 ═══ */
@@ -702,18 +712,23 @@ async function calDropEvt(e, targetDate) {
   var evtId = e.dataTransfer.getData('text/plain') || calDragEvtId;
   if (!evtId) return;
 
-  var evt = await evtGet(evtId);
-  if (!evt) return;
+  try {
+    var evt = await evtGet(evtId);
+    if (!evt) return;
 
-  // 날짜 차이 계산하여 시작일/종료일 동시 이동
-  var duration = daysDiff(evt.startDate, evt.endDate) || 0;
-  var newStart = targetDate;
-  var nd = new Date(targetDate);
-  nd.setDate(nd.getDate() + duration);
-  var newEnd = nd.toISOString().slice(0, 10);
+    // 날짜 차이 계산하여 시작일/종료일 동시 이동
+    var duration = daysDiff(evt.startDate, evt.endDate) || 0;
+    var newStart = targetDate;
+    var nd = new Date(targetDate);
+    nd.setDate(nd.getDate() + duration);
+    var newEnd = nd.toISOString().slice(0, 10);
 
-  await updateEvent(evtId, { startDate: newStart, endDate: newEnd });
-  showToast('일정을 ' + targetDate + '로 이동했습니다');
-  calDragEvtId = null;
-  await renderCalendar();
+    await updateEvent(evtId, { startDate: newStart, endDate: newEnd });
+    showToast('일정을 ' + targetDate + '로 이동했습니다');
+    calDragEvtId = null;
+    await renderCalendar();
+  } catch (err) {
+    console.error('[calDropEvt]', err);
+    if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }

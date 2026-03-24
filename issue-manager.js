@@ -206,6 +206,9 @@ function renderIssues() {
       if (_issueTrendChart) { _issueTrendChart.destroy(); _issueTrendChart = null; }
       renderIssueTrendChart(allIssues);
     }
+  }).catch(function (err) {
+    console.error('[renderIssues]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -424,6 +427,9 @@ function showIssueModal(editId) {
     dialog.innerHTML = h;
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
+  }).catch(function (err) {
+    console.error('[showIssueModal]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -502,6 +508,9 @@ function confirmDeleteIssue(id) {
     var panel = document.getElementById('issueDetailPanel');
     if (panel) panel.remove();
     renderIssues();
+  }).catch(function (err) {
+    console.error('[confirmDeleteIssue]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -657,6 +666,9 @@ function showIssueDetail(id) {
 
     panel.innerHTML = h;
     document.body.appendChild(panel);
+  }).catch(function (err) {
+    console.error('[showIssueDetail]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -673,6 +685,9 @@ function issueQuickStatus(id, newStatus) {
     showToast('상태가 변경되었습니다.');
     showIssueDetail(id);
     renderIssues();
+  }).catch(function (err) {
+    console.error('[issueQuickStatus]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -723,6 +738,9 @@ function issueAddLog(issueId) {
     showToast('대응 이력이 추가되었습니다.');
     showIssueDetail(issueId);
     renderIssues();
+  }).catch(function (err) {
+    console.error('[issueAddLog]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -731,6 +749,9 @@ function issueSaveResolution(id) {
   if (!input) return;
   updateIssue(id, { resolution: input.value.trim() }).then(function () {
     showToast('조치 결과가 저장되었습니다.');
+  }).catch(function (err) {
+    console.error('[issueSaveResolution]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -739,6 +760,9 @@ function issueDeleteLog(logId, issueId) {
   issueLogDel(logId).then(function () {
     showToast('이력이 삭제되었습니다.');
     showIssueDetail(issueId);
+  }).catch(function (err) {
+    console.error('[issueDeleteLog]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -763,6 +787,9 @@ function detectRepeatIssue(newIssue) {
       msg += '\n근본 원인 분석이 필요할 수 있습니다.';
       showToast(msg,'warn');
     }
+  }).catch(function (err) {
+    console.error('[detectRepeatIssue]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -931,6 +958,9 @@ function exportIssueExcel() {
     } else {
       showToast('SheetJS(xlsx) 라이브러리를 불러올 수 없습니다.','error');
     }
+  }).catch(function (err) {
+    console.error('[exportIssueExcel]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -1004,6 +1034,9 @@ function issueBulkAction(action) {
       issueBulkSelected = {};
       showToast(ids.length + '건 삭제 완료');
       renderIssues();
+    }).catch(function (err) {
+      console.error('[issueBulkAction:delete]', err);
+      showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
     });
     return;
   }
@@ -1019,6 +1052,9 @@ function issueBulkAction(action) {
       issueBulkSelected = {};
       showToast(ids.length + '건 상태 변경 완료');
       renderIssues();
+    }).catch(function (err) {
+      console.error('[issueBulkAction:status]', err);
+      showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
     });
     return;
   }
@@ -1033,6 +1069,9 @@ function issueBulkAction(action) {
       issueBulkSelected = {};
       showToast(ids.length + '건 담당자 지정 완료');
       renderIssues();
+    }).catch(function (err) {
+      console.error('[issueBulkAction:assignee]', err);
+      showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
     });
     return;
   }

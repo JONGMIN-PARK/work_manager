@@ -273,6 +273,9 @@ function tlScrollToProject(projId) {
     // 재렌더 후 스크롤 실행
     renderTimeline().then(function () {
       doTlScroll(projId);
+    }).catch(function (err) {
+        console.error('[tlScrollToProject]', err);
+        if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
     });
     return;
   }
@@ -679,6 +682,9 @@ function renderAssigneeWorkload(excludeProjId) {
       html += '<div style="font-size:10px;color:#F59E0B;margin-top:3px">⚠️ 3건 이상 배정된 담당자가 있습니다</div>';
     }
     area.innerHTML = html;
+  }).catch(function (err) {
+      console.error('[renderAssigneeWorkload]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -773,11 +779,16 @@ async function saveProjectUI(existingId) {
 
 async function deleteProjectUI(id) {
   if (!confirm('이 프로젝트와 모든 마일스톤을 삭제하시겠습니까?')) return;
-  await deleteProjectCascade(id);
-  document.getElementById('projModal').remove();
-  await renderTimeline();
-  if (typeof renderCalendar === 'function') await renderCalendar();
-  showToast('프로젝트가 삭제되었습니다', 'warn');
+  try {
+    await deleteProjectCascade(id);
+    document.getElementById('projModal').remove();
+    await renderTimeline();
+    if (typeof renderCalendar === 'function') await renderCalendar();
+    showToast('프로젝트가 삭제되었습니다', 'warn');
+  } catch (err) {
+    console.error('[deleteProjectUI]', err);
+    if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ 프로젝트 상세 보기 ═══ */
@@ -1027,6 +1038,9 @@ function pdLoadIssues(projId) {
     });
 
     wrap.innerHTML = h;
+  }).catch(function (err) {
+      console.error('[pdLoadIssues]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -1111,6 +1125,9 @@ function pdLoadWork(projId) {
     }
 
     wrap.innerHTML = h;
+  }).catch(function (err) {
+      console.error('[pdLoadWork]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -1173,12 +1190,18 @@ function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
 function pdToggleCheck(projId, chkId) {
   toggleCheckItem(chkId).then(function () {
     showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+  }).catch(function (err) {
+      console.error('[pdToggleCheck]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
 function pdDeleteCheck(projId, chkId) {
   chkDel(chkId).then(function () {
     showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+  }).catch(function (err) {
+      console.error('[pdDeleteCheck]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -1190,6 +1213,9 @@ function pdAddCheck(projId, phase) {
     return createCheckItem({ projectId: projId, phase: phase, text: text, order: items.length });
   }).then(function () {
     showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+  }).catch(function (err) {
+      console.error('[pdAddCheck]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -1198,6 +1224,9 @@ function pdShowPhase(projId, phase) {
     var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
     var el = document.getElementById('pdPhaseChecklists');
     if (el) el.innerHTML = buildPhaseChecklistHtml(projId, phase, allChk, phases);
+  }).catch(function (err) {
+      console.error('[pdShowPhase]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -1258,6 +1287,9 @@ function pdChkDrop(e) {
     return Promise.all(updates);
   }).then(function () {
     showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+  }).catch(function (err) {
+      console.error('[pdChkDrop]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
   _pdChkDragId = null;
 }
@@ -1280,7 +1312,13 @@ function pdAdvancePhase(projId, targetPhase) {
       showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
       if (typeof renderPipeline === 'function') renderPipeline();
       if (typeof renderTimeline === 'function') renderTimeline();
+    }).catch(function (err) {
+        console.error('[pdAdvancePhase:transition]', err);
+        if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
     });
+  }).catch(function (err) {
+      console.error('[pdAdvancePhase]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -1299,6 +1337,7 @@ function renderProgressHistoryChart(projectId, proj) {
       '</div>';
       return;
     }
+
 
     var labels = history.map(function (h) { return h.date.slice(5); }); // MM-DD
     var progressData = history.map(function (h) { return h.progress; });
@@ -1362,6 +1401,9 @@ function renderProgressHistoryChart(projectId, proj) {
         }
       }
     });
+  }).catch(function (err) {
+      console.error('[renderProgressHistoryChart]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -1602,6 +1644,9 @@ function startBarDrag(bar, mode, startEvt) {
         renderTimeline();
         if (typeof renderCalendar === 'function') renderCalendar();
         showToast('기간이 변경되었습니다');
+      }).catch(function (err) {
+          console.error('[startBarDrag:proj]', err);
+          if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
       });
     } else if (type === 'ms') {
       // 마일스톤: get → update → put
@@ -1619,6 +1664,9 @@ function startBarDrag(bar, mode, startEvt) {
         renderTimeline();
         if (typeof renderCalendar === 'function') renderCalendar();
         showToast('기간이 변경되었습니다');
+      }).catch(function (err) {
+          console.error('[startBarDrag:ms]', err);
+          if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
       });
     }
   }
@@ -1820,5 +1868,8 @@ function runSuggestMilestones(orderNo) {
     });
 
     showToast(suggestions.length + '개 마일스톤 제안 완료');
+  }).catch(function (err) {
+      console.error('[runSuggestMilestones]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }

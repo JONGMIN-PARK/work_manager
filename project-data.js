@@ -1158,7 +1158,8 @@ function createDefaultFolders(projectId) {
       name: label,
       phase: phase,
       order: idx,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      _isNew: true
     });
   }));
 }
@@ -1434,8 +1435,18 @@ function showToast(msg, type) {
   folderGet = function (id) { return apiFetch('/api/docs/folders').then(function (r) { var all = toCamelArray(r.data); return all.find(function (f) { return f.id === id; }) || null; }); };
   folderGetByProject = function (pid) { return apiFetch('/api/docs/folders?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
   folderPut = function (f) {
-    if (!f.id) return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
-    return apiFetch('/api/docs/folders/' + f.id, { method: 'PUT', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+    if (!f.id || f._isNew) {
+      delete f._isNew;
+      return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+    }
+    return apiFetch('/api/docs/folders/' + f.id, { method: 'PUT', body: JSON.stringify(f) })
+      .then(function (r) { return toCamel(r.data); })
+      .catch(function (err) {
+        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+          return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+        }
+        throw err;
+      });
   };
   folderDel = function (id) { return apiFetch('/api/docs/folders/' + id, { method: 'DELETE' }); };
 
@@ -1445,8 +1456,18 @@ function showToast(msg, type) {
   fileGetByProject = function (pid) { return apiFetch('/api/docs/files?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
   fileGetByFolder = function (fid) { return apiFetch('/api/docs/files?folderId=' + fid).then(function (r) { return toCamelArray(r.data); }); };
   filePut = function (f) {
-    if (!f.id) return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
-    return apiFetch('/api/docs/files/' + f.id, { method: 'PUT', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+    if (!f.id || f._isNew) {
+      delete f._isNew;
+      return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+    }
+    return apiFetch('/api/docs/files/' + f.id, { method: 'PUT', body: JSON.stringify(f) })
+      .then(function (r) { return toCamel(r.data); })
+      .catch(function (err) {
+        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+          return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+        }
+        throw err;
+      });
   };
   fileDel = function (id) { return apiFetch('/api/docs/files/' + id, { method: 'DELETE' }); };
 

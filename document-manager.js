@@ -336,55 +336,61 @@ function docHandleDrop(e) {
 async function docHandleFiles(fileList) {
   if (!docSelProject) { showToast('프로젝트를 먼저 선택하세요.', 'warn'); return; }
 
-  var targetFolder = docSelFolder;
-  if (!targetFolder) {
-    // 전체 보기에서 업로드 시 첫 번째 폴더에 저장
-    var folders = await folderGetByProject(docSelProject);
-    if (folders.length) targetFolder = folders[0].id;
-    else { showToast('폴더가 없습니다.', 'error'); return; }
-  }
-
-  var count = 0;
-  var errors = [];
-
-  for (var i = 0; i < fileList.length; i++) {
-    var file = fileList[i];
-    if (file.size > DOC_MAX_FILE) {
-      errors.push(file.name + ' (크기 초과)');
-      continue;
+  try {
+    var targetFolder = docSelFolder;
+    if (!targetFolder) {
+      // 전체 보기에서 업로드 시 첫 번째 폴더에 저장
+      var folders = await folderGetByProject(docSelProject);
+      if (folders.length) targetFolder = folders[0].id;
+      else { showToast('폴더가 없습니다.', 'error'); return; }
     }
 
-    var ext = (file.name.split('.').pop() || '').toLowerCase();
-    var buf = await readFileAsArrayBuffer(file);
+    var count = 0;
+    var errors = [];
 
-    var record = {
-      id: 'file-' + uuid(),
-      projectId: docSelProject,
-      folderId: targetFolder,
-      name: file.name,
-      type: file.type || 'application/octet-stream',
-      ext: ext,
-      size: file.size,
-      data: buf,
-      textCache: '',
-      memo: '',
-      tags: [],
-      uploadedBy: '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    for (var i = 0; i < fileList.length; i++) {
+      var file = fileList[i];
+      if (file.size > DOC_MAX_FILE) {
+        errors.push(file.name + ' (크기 초과)');
+        continue;
+      }
 
-    // 텍스트 캐시 추출
-    record.textCache = await extractTextFromFile(record);
+      var ext = (file.name.split('.').pop() || '').toLowerCase();
+      var buf = await readFileAsArrayBuffer(file);
 
-    await filePut(record);
-    count++;
+      var record = {
+        id: 'file-' + uuid(),
+        projectId: docSelProject,
+        folderId: targetFolder,
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        ext: ext,
+        size: file.size,
+        data: buf,
+        textCache: '',
+        memo: '',
+        tags: [],
+        uploadedBy: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        _isNew: true
+      };
+
+      // 텍스트 캐시 추출
+      record.textCache = await extractTextFromFile(record);
+
+      await filePut(record);
+      count++;
+    }
+
+    if (count) showToast('📤 ' + count + '개 파일 업로드 완료');
+    if (errors.length) showToast('⚠️ ' + errors.join(', '), 'warn');
+
+    renderDocManager();
+  } catch (err) {
+    console.error('[docHandleFiles]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   }
-
-  if (count) showToast('📤 ' + count + '개 파일 업로드 완료');
-  if (errors.length) showToast('⚠️ ' + errors.join(', '), 'warn');
-
-  renderDocManager();
 }
 
 function readFileAsArrayBuffer(file) {
@@ -628,103 +634,108 @@ async function docRunSummary(fileId, presetId) {
   var resultEl = document.getElementById('docSumResult');
   if (!resultEl) return;
 
-  var f = await fileGet(fileId);
-  if (!f) { showToast('파일을 찾을 수 없습니다.', 'error'); return; }
-
-  // API 키 확인
-  var hasKey = typeof gAk === 'function' && gAk();
-  if (!hasKey) {
-    resultEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--d-t);font-size:11px">⚠️ AI API 키가 설정되지 않았습니다.<br>설정 탭에서 API 키를 등록하세요.</div>';
-    return;
-  }
-
-  // 텍스트 추출
-  var text = f.textCache || '';
-  if (!text) {
-    text = await extractTextFromFile(f);
-    if (text) {
-      f.textCache = text;
-      await filePut(f);
-    }
-  }
-
-  if (!text) {
-    resultEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--d-t);font-size:11px">⚠️ 이 파일에서 텍스트를 추출할 수 없습니다.</div>';
-    return;
-  }
-
-  // 프롬프트 구성
-  var presets = {
-    quick: '이 문서의 핵심 내용을 3~5줄로 요약해줘.',
-    detail: '이 문서의 주요 내용을 구조적으로 정리하고 핵심 포인트를 분석해줘.',
-    check: '이 문서에서 확인해야 할 체크리스트 항목을 추출해줘.',
-    issue: '이 문서에서 잠재적 리스크나 이슈 사항을 찾아줘.',
-    custom: ''
-  };
-
-  var userPrompt = presets[presetId] || '';
-  if (presetId === 'custom') {
-    var textarea = document.getElementById('docSumPrompt');
-    userPrompt = textarea ? textarea.value.trim() : '';
-    if (!userPrompt) { showToast('분석 내용을 입력하세요.', 'warn'); return; }
-  }
-
-  // 프로젝트 컨텍스트
-  var proj = await projGet(docSelProject);
-  var projName = proj ? (proj.name || '') : '';
-  var orderNo = proj ? (proj.orderNo || '') : '';
-  var phase = proj ? (proj.currentPhase || '') : '';
-
-  // 텍스트 축약 (토큰 제한 대응)
-  var maxChars = 8000;
-  var docText = text;
-  if (docText.length > maxChars) {
-    var head = docText.slice(0, Math.floor(maxChars * 0.5));
-    var mid = docText.slice(Math.floor(docText.length * 0.4), Math.floor(docText.length * 0.4) + Math.floor(maxChars * 0.2));
-    var tail = docText.slice(-Math.floor(maxChars * 0.2));
-    docText = head + '\n\n[... 중간 생략 ...]\n\n' + mid + '\n\n[... 생략 ...]\n\n' + tail;
-  }
-
-  var fullPrompt = '당신은 프로젝트 문서 분석 전문가입니다.\n';
-  fullPrompt += '프로젝트: ' + projName + (orderNo ? ' (수주번호: ' + orderNo + ')' : '') + '\n';
-  if (phase) fullPrompt += '현재 단계: ' + phase + '\n';
-  fullPrompt += '문서 파일: ' + f.name + ' (' + formatFileSize(f.size) + ', ' + (f.ext || '').toUpperCase() + ')\n\n';
-  fullPrompt += '=== 문서 내용 ===\n' + docText + '\n\n';
-  fullPrompt += '=== 분석 요청 ===\n' + userPrompt;
-
-  // 로딩 표시
-  resultEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:16px"><div class="sp" style="width:16px;height:16px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spn .6s linear infinite"></div><span style="font-size:11px;color:var(--t4)">AI 분석 중...</span></div>';
-
   try {
-    var aiResult = await callAI(fullPrompt);
+    var f = await fileGet(fileId);
+    if (!f) { showToast('파일을 찾을 수 없습니다.', 'error'); return; }
 
-    // summaryHistory에 자동 저장
-    var presetLabels = { quick: '핵심요약', detail: '상세분석', check: '체크리스트', issue: '이슈추출', custom: '자유입력' };
-    if (!f.summaryHistory) f.summaryHistory = [];
-    f.summaryHistory.unshift({
-      preset: presetLabels[presetId] || presetId,
-      text: aiResult,
-      date: new Date().toISOString().slice(0, 16).replace('T', ' ')
-    });
-    // 최대 20건 보관
-    if (f.summaryHistory.length > 20) f.summaryHistory = f.summaryHistory.slice(0, 20);
-    f.updatedAt = new Date().toISOString();
-    await filePut(f);
+    // API 키 확인
+    var hasKey = typeof gAk === 'function' && gAk();
+    if (!hasKey) {
+      resultEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--d-t);font-size:11px">⚠️ AI API 키가 설정되지 않았습니다.<br>설정 탭에서 API 키를 등록하세요.</div>';
+      return;
+    }
 
-    var resHtml = '<div style="font-size:10px;font-weight:700;color:var(--t4);margin-bottom:6px">🤖 분석 결과</div>';
-    resHtml += '<div id="docSumText" style="font-size:11px;color:var(--t2);line-height:1.7;background:var(--bg-i);border-radius:6px;padding:12px;max-height:280px;overflow-y:auto">' + (typeof rMD === 'function' ? rMD(aiResult) : eH(aiResult)) + '</div>';
-    resHtml += '<div style="display:flex;gap:4px;margin-top:8px">';
-    resHtml += '<button class="btn btn-g btn-s" onclick="docCopySummary()">📋 복사</button>';
-    resHtml += '<button class="btn btn-p btn-s" onclick="docSaveSummary(\'' + fileId + '\')">💾 메모 저장</button>';
-    resHtml += '<button class="btn btn-g btn-s" onclick="docShowSummaryHistory(\'' + fileId + '\')">📜 이력</button>';
-    resHtml += '</div>';
+    // 텍스트 추출
+    var text = f.textCache || '';
+    if (!text) {
+      text = await extractTextFromFile(f);
+      if (text) {
+        f.textCache = text;
+        await filePut(f);
+      }
+    }
 
-    resultEl.innerHTML = resHtml;
-    // 결과를 임시 저장
-    resultEl.dataset.lastResult = aiResult;
-  } catch (e) {
-    console.warn('[DocManager] AI summary error', e);
-    resultEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--d-t);font-size:11px">⚠️ AI 호출 오류: ' + eH(e.message || '알 수 없는 오류') + '</div>';
+    if (!text) {
+      resultEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--d-t);font-size:11px">⚠️ 이 파일에서 텍스트를 추출할 수 없습니다.</div>';
+      return;
+    }
+
+    // 프롬프트 구성
+    var presets = {
+      quick: '이 문서의 핵심 내용을 3~5줄로 요약해줘.',
+      detail: '이 문서의 주요 내용을 구조적으로 정리하고 핵심 포인트를 분석해줘.',
+      check: '이 문서에서 확인해야 할 체크리스트 항목을 추출해줘.',
+      issue: '이 문서에서 잠재적 리스크나 이슈 사항을 찾아줘.',
+      custom: ''
+    };
+
+    var userPrompt = presets[presetId] || '';
+    if (presetId === 'custom') {
+      var textarea = document.getElementById('docSumPrompt');
+      userPrompt = textarea ? textarea.value.trim() : '';
+      if (!userPrompt) { showToast('분석 내용을 입력하세요.', 'warn'); return; }
+    }
+
+    // 프로젝트 컨텍스트
+    var proj = await projGet(docSelProject);
+    var projName = proj ? (proj.name || '') : '';
+    var orderNo = proj ? (proj.orderNo || '') : '';
+    var phase = proj ? (proj.currentPhase || '') : '';
+
+    // 텍스트 축약 (토큰 제한 대응)
+    var maxChars = 8000;
+    var docText = text;
+    if (docText.length > maxChars) {
+      var head = docText.slice(0, Math.floor(maxChars * 0.5));
+      var mid = docText.slice(Math.floor(docText.length * 0.4), Math.floor(docText.length * 0.4) + Math.floor(maxChars * 0.2));
+      var tail = docText.slice(-Math.floor(maxChars * 0.2));
+      docText = head + '\n\n[... 중간 생략 ...]\n\n' + mid + '\n\n[... 생략 ...]\n\n' + tail;
+    }
+
+    var fullPrompt = '당신은 프로젝트 문서 분석 전문가입니다.\n';
+    fullPrompt += '프로젝트: ' + projName + (orderNo ? ' (수주번호: ' + orderNo + ')' : '') + '\n';
+    if (phase) fullPrompt += '현재 단계: ' + phase + '\n';
+    fullPrompt += '문서 파일: ' + f.name + ' (' + formatFileSize(f.size) + ', ' + (f.ext || '').toUpperCase() + ')\n\n';
+    fullPrompt += '=== 문서 내용 ===\n' + docText + '\n\n';
+    fullPrompt += '=== 분석 요청 ===\n' + userPrompt;
+
+    // 로딩 표시
+    resultEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:16px"><div class="sp" style="width:16px;height:16px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spn .6s linear infinite"></div><span style="font-size:11px;color:var(--t4)">AI 분석 중...</span></div>';
+
+    try {
+      var aiResult = await callAI(fullPrompt);
+
+      // summaryHistory에 자동 저장
+      var presetLabels = { quick: '핵심요약', detail: '상세분석', check: '체크리스트', issue: '이슈추출', custom: '자유입력' };
+      if (!f.summaryHistory) f.summaryHistory = [];
+      f.summaryHistory.unshift({
+        preset: presetLabels[presetId] || presetId,
+        text: aiResult,
+        date: new Date().toISOString().slice(0, 16).replace('T', ' ')
+      });
+      // 최대 20건 보관
+      if (f.summaryHistory.length > 20) f.summaryHistory = f.summaryHistory.slice(0, 20);
+      f.updatedAt = new Date().toISOString();
+      await filePut(f);
+
+      var resHtml = '<div style="font-size:10px;font-weight:700;color:var(--t4);margin-bottom:6px">🤖 분석 결과</div>';
+      resHtml += '<div id="docSumText" style="font-size:11px;color:var(--t2);line-height:1.7;background:var(--bg-i);border-radius:6px;padding:12px;max-height:280px;overflow-y:auto">' + (typeof rMD === 'function' ? rMD(aiResult) : eH(aiResult)) + '</div>';
+      resHtml += '<div style="display:flex;gap:4px;margin-top:8px">';
+      resHtml += '<button class="btn btn-g btn-s" onclick="docCopySummary()">📋 복사</button>';
+      resHtml += '<button class="btn btn-p btn-s" onclick="docSaveSummary(\'' + fileId + '\')">💾 메모 저장</button>';
+      resHtml += '<button class="btn btn-g btn-s" onclick="docShowSummaryHistory(\'' + fileId + '\')">📜 이력</button>';
+      resHtml += '</div>';
+
+      resultEl.innerHTML = resHtml;
+      // 결과를 임시 저장
+      resultEl.dataset.lastResult = aiResult;
+    } catch (e) {
+      console.warn('[DocManager] AI summary error', e);
+      resultEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--d-t);font-size:11px">⚠️ AI 호출 오류: ' + eH(e.message || '알 수 없는 오류') + '</div>';
+    }
+  } catch (err) {
+    console.error('[docRunSummary]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   }
 }
 
@@ -746,34 +757,49 @@ async function docSaveSummary(fileId) {
   var text = el ? (el.dataset.lastResult || '') : '';
   if (!text) return;
 
-  var f = await fileGet(fileId);
-  if (!f) return;
-  f.memo = text;
-  f.updatedAt = new Date().toISOString();
-  await filePut(f);
-  showToast('💾 요약 결과가 파일 메모에 저장됨');
+  try {
+    var f = await fileGet(fileId);
+    if (!f) return;
+    f.memo = text;
+    f.updatedAt = new Date().toISOString();
+    await filePut(f);
+    showToast('💾 요약 결과가 파일 메모에 저장됨');
+  } catch (err) {
+    console.error('[docSaveSummary]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ 파일 다운로드 ═══ */
 async function docDownloadFile(fileId) {
-  var f = await fileGet(fileId);
-  if (!f || !f.data) { showToast('파일 데이터 없음', 'error'); return; }
+  try {
+    var f = await fileGet(fileId);
+    if (!f || !f.data) { showToast('파일 데이터 없음', 'error'); return; }
 
-  var url = docCreateBlobUrl(f.data, f.type);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = f.name;
-  a.click();
-  showToast('💾 ' + f.name + ' 다운로드');
+    var url = docCreateBlobUrl(f.data, f.type);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = f.name;
+    a.click();
+    showToast('💾 ' + f.name + ' 다운로드');
+  } catch (err) {
+    console.error('[docDownloadFile]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ 파일 삭제 ═══ */
 async function docDeleteFile(fileId) {
   if (!confirm('이 파일을 삭제하시겠습니까?')) return;
-  await fileDel(fileId);
-  if (docSelFile === fileId) docSelFile = null;
-  showToast('🗑️ 파일 삭제됨');
-  renderDocManager();
+  try {
+    await fileDel(fileId);
+    if (docSelFile === fileId) docSelFile = null;
+    showToast('🗑️ 파일 삭제됨');
+    renderDocManager();
+  } catch (err) {
+    console.error('[docDeleteFile]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ 폴더 추가 ═══ */
@@ -782,64 +808,75 @@ async function docAddFolder() {
   var name = prompt('새 폴더 이름:');
   if (!name || !name.trim()) return;
 
-  var parentId = docSelFolder;
-  // 뎁스 체크 (최대 3)
-  if (parentId) {
-    var parent = await folderGet(parentId);
-    if (parent && parent.parentId) {
-      var grandparent = await folderGet(parent.parentId);
-      if (grandparent && grandparent.parentId) {
-        showToast('최대 3뎁스까지만 생성 가능합니다.', 'warn');
-        return;
+  try {
+    var parentId = docSelFolder;
+    // 뎁스 체크 (최대 3)
+    if (parentId) {
+      var parent = await folderGet(parentId);
+      if (parent && parent.parentId) {
+        var grandparent = await folderGet(parent.parentId);
+        if (grandparent && grandparent.parentId) {
+          showToast('최대 3뎁스까지만 생성 가능합니다.', 'warn');
+          return;
+        }
       }
     }
+
+    var folders = await folderGetByProject(docSelProject);
+    await folderPut({
+      id: 'fldr-' + uuid(),
+      projectId: docSelProject,
+      parentId: parentId,
+      name: name.trim(),
+      phase: null,
+      order: folders.length,
+      createdAt: new Date().toISOString(),
+      _isNew: true
+    });
+
+    showToast('📁 폴더 생성: ' + name.trim());
+    renderDocManager();
+  } catch (err) {
+    console.error('[docAddFolder]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   }
-
-  var folders = await folderGetByProject(docSelProject);
-  await folderPut({
-    id: 'fldr-' + uuid(),
-    projectId: docSelProject,
-    parentId: parentId,
-    name: name.trim(),
-    phase: null,
-    order: folders.length,
-    createdAt: new Date().toISOString()
-  });
-
-  showToast('📁 폴더 생성: ' + name.trim());
-  renderDocManager();
 }
 
 /* ═══ 폴더 삭제 ═══ */
 async function docDeleteFolder(folderId) {
-  var folder = await folderGet(folderId);
-  if (!folder) return;
-  if (folder.phase) {
-    showToast('기본 단계 폴더는 삭제할 수 없습니다.', 'warn');
-    return;
-  }
+  try {
+    var folder = await folderGet(folderId);
+    if (!folder) return;
+    if (folder.phase) {
+      showToast('기본 단계 폴더는 삭제할 수 없습니다.', 'warn');
+      return;
+    }
 
-  var files = await fileGetByFolder(folderId);
-  if (files.length) {
-    if (!confirm('이 폴더에 ' + files.length + '개의 파일이 있습니다.\n폴더와 파일을 모두 삭제하시겠습니까?')) return;
-    await Promise.all(files.map(function (f) { return fileDel(f.id); }));
-  } else {
-    if (!confirm('"' + folder.name + '" 폴더를 삭제하시겠습니까?')) return;
-  }
+    var files = await fileGetByFolder(folderId);
+    if (files.length) {
+      if (!confirm('이 폴더에 ' + files.length + '개의 파일이 있습니다.\n폴더와 파일을 모두 삭제하시겠습니까?')) return;
+      await Promise.all(files.map(function (f) { return fileDel(f.id); }));
+    } else {
+      if (!confirm('"' + folder.name + '" 폴더를 삭제하시겠습니까?')) return;
+    }
 
-  // 하위 폴더도 삭제
-  var allFolders = await folderGetByProject(folder.projectId);
-  var children = allFolders.filter(function (f) { return f.parentId === folderId; });
-  for (var i = 0; i < children.length; i++) {
-    var childFiles = await fileGetByFolder(children[i].id);
-    await Promise.all(childFiles.map(function (f) { return fileDel(f.id); }));
-    await folderDel(children[i].id);
-  }
+    // 하위 폴더도 삭제
+    var allFolders = await folderGetByProject(folder.projectId);
+    var children = allFolders.filter(function (f) { return f.parentId === folderId; });
+    for (var i = 0; i < children.length; i++) {
+      var childFiles = await fileGetByFolder(children[i].id);
+      await Promise.all(childFiles.map(function (f) { return fileDel(f.id); }));
+      await folderDel(children[i].id);
+    }
 
-  await folderDel(folderId);
-  docSelFolder = null;
-  showToast('🗑️ 폴더 삭제됨');
-  renderDocManager();
+    await folderDel(folderId);
+    docSelFolder = null;
+    showToast('🗑️ 폴더 삭제됨');
+    renderDocManager();
+  } catch (err) {
+    console.error('[docDeleteFolder]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ Phase 2: 파일 검색 ═══ */
@@ -855,135 +892,175 @@ function docSearchFiles(keyword) {
 
 /* ═══ Phase 2: 폴더 이름변경 ═══ */
 async function docRenameFolder(folderId) {
-  var folder = await folderGet(folderId);
-  if (!folder) return;
-  var newName = prompt('폴더 이름 변경:', folder.name);
-  if (!newName || !newName.trim() || newName.trim() === folder.name) return;
-  folder.name = newName.trim();
-  await folderPut(folder);
-  showToast('📁 폴더 이름 변경: ' + newName.trim());
-  renderDocManager();
+  try {
+    var folder = await folderGet(folderId);
+    if (!folder) return;
+    var newName = prompt('폴더 이름 변경:', folder.name);
+    if (!newName || !newName.trim() || newName.trim() === folder.name) return;
+    folder.name = newName.trim();
+    await folderPut(folder);
+    showToast('📁 폴더 이름 변경: ' + newName.trim());
+    renderDocManager();
+  } catch (err) {
+    console.error('[docRenameFolder]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ 폴더 메모 편집 ═══ */
 async function docEditFolderMemo(folderId) {
-  var folder = await folderGet(folderId);
-  if (!folder) return;
+  try {
+    var folder = await folderGet(folderId);
+    if (!folder) return;
 
-  var div = document.createElement('div');
-  div.innerHTML = '<div style="margin-bottom:12px">'
-    + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'
-    + '<span style="font-size:16px">📁</span>'
-    + '<span style="font-size:12px;font-weight:700;color:var(--t1)">' + eH(folder.name) + '</span>'
-    + (folder.phase ? '<span class="ft" style="font-size:9px">' + eH(folder.phase) + '</span>' : '')
-    + '</div>'
-    + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">📝 메모</label>'
-    + '<textarea id="docFolderMemo" style="width:100%;height:120px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:10px;font-size:11px;color:var(--t2);font-family:inherit;resize:vertical;outline:none;line-height:1.6" placeholder="미팅 내용, 사양 관련 메모, 회의 결과 등...">' + eH(folder.memo || '') + '</textarea>'
-    + '</div>'
-    + '<div style="display:flex;gap:6px">'
-    + '<button class="btn btn-p" onclick="docSaveFolderMemo(\'' + folderId + '\')" style="flex:1;justify-content:center">💾 저장</button>'
-    + (folder.memo ? '<button class="btn btn-d" onclick="docClearFolderMemo(\'' + folderId + '\')" style="justify-content:center">🗑️ 삭제</button>' : '')
-    + '</div>';
+    var div = document.createElement('div');
+    div.innerHTML = '<div style="margin-bottom:12px">'
+      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'
+      + '<span style="font-size:16px">📁</span>'
+      + '<span style="font-size:12px;font-weight:700;color:var(--t1)">' + eH(folder.name) + '</span>'
+      + (folder.phase ? '<span class="ft" style="font-size:9px">' + eH(folder.phase) + '</span>' : '')
+      + '</div>'
+      + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">📝 메모</label>'
+      + '<textarea id="docFolderMemo" style="width:100%;height:120px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:10px;font-size:11px;color:var(--t2);font-family:inherit;resize:vertical;outline:none;line-height:1.6" placeholder="미팅 내용, 사양 관련 메모, 회의 결과 등...">' + eH(folder.memo || '') + '</textarea>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px">'
+      + '<button class="btn btn-p" onclick="docSaveFolderMemo(\'' + folderId + '\')" style="flex:1;justify-content:center">💾 저장</button>'
+      + (folder.memo ? '<button class="btn btn-d" onclick="docClearFolderMemo(\'' + folderId + '\')" style="justify-content:center">🗑️ 삭제</button>' : '')
+      + '</div>';
 
-  createModal({ title: '📝 폴더 메모 — ' + folder.name, content: div, width: '460px' });
+    createModal({ title: '📝 폴더 메모 — ' + folder.name, content: div, width: '460px' });
+  } catch (err) {
+    console.error('[docEditFolderMemo]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 async function docSaveFolderMemo(folderId) {
-  var folder = await folderGet(folderId);
-  if (!folder) return;
-  var el = document.getElementById('docFolderMemo');
-  if (!el) return;
-  folder.memo = el.value.trim();
-  folder.updatedAt = new Date().toISOString();
-  await folderPut(folder);
-  var overlay = document.querySelector('.wa-modal-overlay');
-  if (overlay) overlay.remove();
-  showToast('📝 폴더 메모 저장됨');
-  renderDocManager();
+  try {
+    var folder = await folderGet(folderId);
+    if (!folder) return;
+    var el = document.getElementById('docFolderMemo');
+    if (!el) return;
+    folder.memo = el.value.trim();
+    folder.updatedAt = new Date().toISOString();
+    await folderPut(folder);
+    var overlay = document.querySelector('.wa-modal-overlay');
+    if (overlay) overlay.remove();
+    showToast('📝 폴더 메모 저장됨');
+    renderDocManager();
+  } catch (err) {
+    console.error('[docSaveFolderMemo]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 async function docClearFolderMemo(folderId) {
   if (!confirm('이 폴더의 메모를 삭제하시겠습니까?')) return;
-  var folder = await folderGet(folderId);
-  if (!folder) return;
-  folder.memo = '';
-  folder.updatedAt = new Date().toISOString();
-  await folderPut(folder);
-  var overlay = document.querySelector('.wa-modal-overlay');
-  if (overlay) overlay.remove();
-  showToast('🗑️ 폴더 메모 삭제됨');
-  renderDocManager();
+  try {
+    var folder = await folderGet(folderId);
+    if (!folder) return;
+    folder.memo = '';
+    folder.updatedAt = new Date().toISOString();
+    await folderPut(folder);
+    var overlay = document.querySelector('.wa-modal-overlay');
+    if (overlay) overlay.remove();
+    showToast('🗑️ 폴더 메모 삭제됨');
+    renderDocManager();
+  } catch (err) {
+    console.error('[docClearFolderMemo]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ Phase 2: 파일 이동 ═══ */
 async function docMoveFile(fileId) {
-  var f = await fileGet(fileId);
-  if (!f) return;
-  var folders = await folderGetByProject(f.projectId);
-  folders.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+  try {
+    var f = await fileGet(fileId);
+    if (!f) return;
+    var folders = await folderGetByProject(f.projectId);
+    folders.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
 
-  var html = '<div style="max-height:300px;overflow-y:auto">';
-  folders.forEach(function (folder) {
-    var isCurrent = f.folderId === folder.id;
-    html += '<div onclick="docExecMoveFile(\'' + fileId + '\',\'' + folder.id + '\')" style="padding:8px 12px;cursor:pointer;border-radius:6px;margin-bottom:4px;transition:all .15s;display:flex;align-items:center;gap:8px;font-size:12px;' + (isCurrent ? 'background:var(--ac-bg);color:var(--ac-t);font-weight:700' : 'color:var(--t2)') + '" onmouseover="if(!' + isCurrent + ')this.style.background=\'var(--bg-hv)\'" onmouseout="if(!' + isCurrent + ')this.style.background=\'none\'">';
-    html += '<span>📁</span><span>' + eH(folder.name) + '</span>';
-    if (isCurrent) html += '<span style="font-size:10px;color:var(--t5);margin-left:auto">(현재)</span>';
+    var html = '<div style="max-height:300px;overflow-y:auto">';
+    folders.forEach(function (folder) {
+      var isCurrent = f.folderId === folder.id;
+      html += '<div onclick="docExecMoveFile(\'' + fileId + '\',\'' + folder.id + '\')" style="padding:8px 12px;cursor:pointer;border-radius:6px;margin-bottom:4px;transition:all .15s;display:flex;align-items:center;gap:8px;font-size:12px;' + (isCurrent ? 'background:var(--ac-bg);color:var(--ac-t);font-weight:700' : 'color:var(--t2)') + '" onmouseover="if(!' + isCurrent + ')this.style.background=\'var(--bg-hv)\'" onmouseout="if(!' + isCurrent + ')this.style.background=\'none\'">';
+      html += '<span>📁</span><span>' + eH(folder.name) + '</span>';
+      if (isCurrent) html += '<span style="font-size:10px;color:var(--t5);margin-left:auto">(현재)</span>';
+      html += '</div>';
+    });
     html += '</div>';
-  });
-  html += '</div>';
 
-  createModal({ title: '📁 파일 이동: ' + f.name, html: html, width: '360px' });
+    createModal({ title: '📁 파일 이동: ' + f.name, html: html, width: '360px' });
+  } catch (err) {
+    console.error('[docMoveFile]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 async function docExecMoveFile(fileId, targetFolderId) {
-  var f = await fileGet(fileId);
-  if (!f) return;
-  if (f.folderId === targetFolderId) return;
-  f.folderId = targetFolderId;
-  f.updatedAt = new Date().toISOString();
-  await filePut(f);
-  // 모달 닫기
-  var overlay = document.querySelector('.wa-modal-overlay');
-  if (overlay) overlay.remove();
-  showToast('📁 파일 이동 완료');
-  renderDocManager();
+  try {
+    var f = await fileGet(fileId);
+    if (!f) return;
+    if (f.folderId === targetFolderId) return;
+    f.folderId = targetFolderId;
+    f.updatedAt = new Date().toISOString();
+    await filePut(f);
+    // 모달 닫기
+    var overlay = document.querySelector('.wa-modal-overlay');
+    if (overlay) overlay.remove();
+    showToast('📁 파일 이동 완료');
+    renderDocManager();
+  } catch (err) {
+    console.error('[docExecMoveFile]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ Phase 2: 파일 이름변경 ═══ */
 async function docRenameFile(fileId) {
-  var f = await fileGet(fileId);
-  if (!f) return;
-  var newName = prompt('파일 이름 변경:', f.name);
-  if (!newName || !newName.trim() || newName.trim() === f.name) return;
-  f.name = newName.trim();
-  f.ext = (newName.split('.').pop() || '').toLowerCase();
-  f.updatedAt = new Date().toISOString();
-  await filePut(f);
-  showToast('✏️ 파일 이름 변경됨');
-  renderDocManager();
+  try {
+    var f = await fileGet(fileId);
+    if (!f) return;
+    var newName = prompt('파일 이름 변경:', f.name);
+    if (!newName || !newName.trim() || newName.trim() === f.name) return;
+    f.name = newName.trim();
+    f.ext = (newName.split('.').pop() || '').toLowerCase();
+    f.updatedAt = new Date().toISOString();
+    await filePut(f);
+    showToast('✏️ 파일 이름 변경됨');
+    renderDocManager();
+  } catch (err) {
+    console.error('[docRenameFile]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ Phase 2: 파일 메모/태그 편집 ═══ */
 async function docEditFileMeta(fileId) {
-  var f = await fileGet(fileId);
-  if (!f) return;
+  try {
+    var f = await fileGet(fileId);
+    if (!f) return;
 
-  var div = document.createElement('div');
-  div.innerHTML = '<div style="margin-bottom:12px">'
-    + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">📝 메모</label>'
-    + '<textarea id="docMetaMemo" style="width:100%;height:80px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px;color:var(--t2);font-family:inherit;resize:vertical;outline:none">' + eH(f.memo || '') + '</textarea>'
-    + '</div>'
-    + '<div style="margin-bottom:12px">'
-    + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">🏷️ 태그 <span style="font-weight:400;color:var(--t5)">(쉼표로 구분)</span></label>'
-    + '<input id="docMetaTags" class="si" style="font-size:11px" value="' + eH((f.tags || []).join(', ')) + '" placeholder="예: 견적, 최종, v2">'
-    + '</div>'
-    + '<div style="margin-bottom:12px">'
-    + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">✏️ 파일명</label>'
-    + '<input id="docMetaName" class="si" style="font-size:11px" value="' + eH(f.name) + '">'
-    + '</div>'
-    + '<button class="btn btn-p" onclick="docSaveFileMeta(\'' + fileId + '\')" style="width:100%;justify-content:center">💾 저장</button>';
+    var div = document.createElement('div');
+    div.innerHTML = '<div style="margin-bottom:12px">'
+      + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">📝 메모</label>'
+      + '<textarea id="docMetaMemo" style="width:100%;height:80px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px;color:var(--t2);font-family:inherit;resize:vertical;outline:none">' + eH(f.memo || '') + '</textarea>'
+      + '</div>'
+      + '<div style="margin-bottom:12px">'
+      + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">🏷️ 태그 <span style="font-weight:400;color:var(--t5)">(쉼표로 구분)</span></label>'
+      + '<input id="docMetaTags" class="si" style="font-size:11px" value="' + eH((f.tags || []).join(', ')) + '" placeholder="예: 견적, 최종, v2">'
+      + '</div>'
+      + '<div style="margin-bottom:12px">'
+      + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">✏️ 파일명</label>'
+      + '<input id="docMetaName" class="si" style="font-size:11px" value="' + eH(f.name) + '">'
+      + '</div>'
+      + '<button class="btn btn-p" onclick="docSaveFileMeta(\'' + fileId + '\')" style="width:100%;justify-content:center">💾 저장</button>';
 
-  createModal({ title: '📄 파일 정보 편집', content: div, width: '400px' });
+    createModal({ title: '📄 파일 정보 편집', content: div, width: '400px' });
+  } catch (err) {
+    console.error('[docEditFileMeta]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ Phase 3: 전문 검색 (textCache 포함) ═══ */
@@ -997,174 +1074,195 @@ function docToggleDeepSearch() {
 async function docUploadWithVersion(fileList) {
   if (!docSelProject) { showToast('프로젝트를 먼저 선택하세요.', 'warn'); return; }
 
-  var targetFolder = docSelFolder;
-  if (!targetFolder) {
-    var folders = await folderGetByProject(docSelProject);
-    if (folders.length) targetFolder = folders[0].id;
-    else { showToast('폴더가 없습니다.', 'error'); return; }
-  }
-
-  var existingFiles = await fileGetByFolder(targetFolder);
-  var count = 0;
-
-  for (var i = 0; i < fileList.length; i++) {
-    var file = fileList[i];
-    if (file.size > DOC_MAX_FILE) continue;
-
-    var ext = (file.name.split('.').pop() || '').toLowerCase();
-    var buf = await readFileAsArrayBuffer(file);
-
-    // 동일 이름 파일 확인
-    var existing = existingFiles.find(function (f) { return f.name === file.name; });
-    if (existing) {
-      var action = confirm('"' + file.name + '" 파일이 이미 존재합니다.\n\n[확인] 새 버전으로 교체 (이전 버전 보관)\n[취소] 건너뛰기');
-      if (!action) continue;
-
-      // 이전 버전 이름 변경하여 보관
-      var ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-      var baseName = existing.name.replace(/\.[^.]+$/, '');
-      var oldExt = existing.ext || '';
-      existing.name = baseName + '_v' + ts + (oldExt ? '.' + oldExt : '');
-      existing.tags = (existing.tags || []).concat(['이전버전']);
-      existing.updatedAt = new Date().toISOString();
-      await filePut(existing);
+  try {
+    var targetFolder = docSelFolder;
+    if (!targetFolder) {
+      var folders = await folderGetByProject(docSelProject);
+      if (folders.length) targetFolder = folders[0].id;
+      else { showToast('폴더가 없습니다.', 'error'); return; }
     }
 
-    var record = {
-      id: 'file-' + uuid(),
-      projectId: docSelProject,
-      folderId: targetFolder,
-      name: file.name,
-      type: file.type || 'application/octet-stream',
-      ext: ext,
-      size: file.size,
-      data: buf,
-      textCache: '',
-      memo: '',
-      tags: [],
-      uploadedBy: '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    record.textCache = await extractTextFromFile(record);
-    await filePut(record);
-    count++;
-  }
+    var existingFiles = await fileGetByFolder(targetFolder);
+    var count = 0;
 
-  if (count) showToast('📤 ' + count + '개 파일 업로드 완료');
-  renderDocManager();
+    for (var i = 0; i < fileList.length; i++) {
+      var file = fileList[i];
+      if (file.size > DOC_MAX_FILE) continue;
+
+      var ext = (file.name.split('.').pop() || '').toLowerCase();
+      var buf = await readFileAsArrayBuffer(file);
+
+      // 동일 이름 파일 확인
+      var existing = existingFiles.find(function (f) { return f.name === file.name; });
+      if (existing) {
+        var action = confirm('"' + file.name + '" 파일이 이미 존재합니다.\n\n[확인] 새 버전으로 교체 (이전 버전 보관)\n[취소] 건너뛰기');
+        if (!action) continue;
+
+        // 이전 버전 이름 변경하여 보관
+        var ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+        var baseName = existing.name.replace(/\.[^.]+$/, '');
+        var oldExt = existing.ext || '';
+        existing.name = baseName + '_v' + ts + (oldExt ? '.' + oldExt : '');
+        existing.tags = (existing.tags || []).concat(['이전버전']);
+        existing.updatedAt = new Date().toISOString();
+        await filePut(existing);
+      }
+
+      var record = {
+        id: 'file-' + uuid(),
+        projectId: docSelProject,
+        folderId: targetFolder,
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        ext: ext,
+        size: file.size,
+        data: buf,
+        textCache: '',
+        memo: '',
+        tags: [],
+        uploadedBy: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        _isNew: true
+      };
+      record.textCache = await extractTextFromFile(record);
+      await filePut(record);
+      count++;
+    }
+
+    if (count) showToast('📤 ' + count + '개 파일 업로드 완료');
+    renderDocManager();
+  } catch (err) {
+    console.error('[docUploadWithVersion]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ Phase 3: 요약 이력 관리 ═══ */
 async function docShowSummaryHistory(fileId) {
-  var f = await fileGet(fileId);
-  if (!f) return;
+  try {
+    var f = await fileGet(fileId);
+    if (!f) return;
 
-  var history = f.summaryHistory || [];
-  if (!history.length && !f.memo) {
-    showToast('저장된 요약 이력이 없습니다.', 'warn');
-    return;
-  }
+    var history = f.summaryHistory || [];
+    if (!history.length && !f.memo) {
+      showToast('저장된 요약 이력이 없습니다.', 'warn');
+      return;
+    }
 
-  var html = '<div style="max-height:400px;overflow-y:auto">';
-  if (f.memo) {
-    html += '<div style="margin-bottom:12px;padding:10px;background:var(--bg-i);border-radius:6px;border-left:3px solid var(--ac)">';
-    html += '<div style="font-size:10px;font-weight:700;color:var(--t4);margin-bottom:4px">📝 현재 메모</div>';
-    html += '<div style="font-size:11px;color:var(--t2);line-height:1.6">' + (typeof rMD === 'function' ? rMD(f.memo) : eH(f.memo)) + '</div>';
+    var html = '<div style="max-height:400px;overflow-y:auto">';
+    if (f.memo) {
+      html += '<div style="margin-bottom:12px;padding:10px;background:var(--bg-i);border-radius:6px;border-left:3px solid var(--ac)">';
+      html += '<div style="font-size:10px;font-weight:700;color:var(--t4);margin-bottom:4px">📝 현재 메모</div>';
+      html += '<div style="font-size:11px;color:var(--t2);line-height:1.6">' + (typeof rMD === 'function' ? rMD(f.memo) : eH(f.memo)) + '</div>';
+      html += '</div>';
+    }
+    history.forEach(function (h, idx) {
+      html += '<div style="margin-bottom:10px;padding:10px;background:var(--bg-i);border-radius:6px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+      html += '<span style="font-size:10px;font-weight:700;color:var(--t4)">' + (h.preset || '자유입력') + '</span>';
+      html += '<span style="font-size:9px;color:var(--t5)">' + (h.date || '') + '</span></div>';
+      html += '<div style="font-size:11px;color:var(--t2);line-height:1.6;max-height:150px;overflow-y:auto">' + (typeof rMD === 'function' ? rMD(h.text) : eH(h.text)) + '</div>';
+      html += '</div>';
+    });
     html += '</div>';
-  }
-  history.forEach(function (h, idx) {
-    html += '<div style="margin-bottom:10px;padding:10px;background:var(--bg-i);border-radius:6px">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
-    html += '<span style="font-size:10px;font-weight:700;color:var(--t4)">' + (h.preset || '자유입력') + '</span>';
-    html += '<span style="font-size:9px;color:var(--t5)">' + (h.date || '') + '</span></div>';
-    html += '<div style="font-size:11px;color:var(--t2);line-height:1.6;max-height:150px;overflow-y:auto">' + (typeof rMD === 'function' ? rMD(h.text) : eH(h.text)) + '</div>';
-    html += '</div>';
-  });
-  html += '</div>';
 
-  createModal({ title: '📜 요약 이력: ' + f.name, html: html, width: '500px' });
+    createModal({ title: '📜 요약 이력: ' + f.name, html: html, width: '500px' });
+  } catch (err) {
+    console.error('[docShowSummaryHistory]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 /* ═══ Phase 3: 용량 대시보드 ═══ */
 async function docShowStorageDashboard() {
-  var projects = await projGetAll();
-  var allFiles = await fileGetAll();
+  try {
+    var projects = await projGetAll();
+    var allFiles = await fileGetAll();
 
-  var byProject = {};
-  var totalSize = 0;
-  allFiles.forEach(function (f) {
-    if (!byProject[f.projectId]) byProject[f.projectId] = { size: 0, count: 0 };
-    byProject[f.projectId].size += (f.size || 0);
-    byProject[f.projectId].count++;
-    totalSize += (f.size || 0);
-  });
+    var byProject = {};
+    var totalSize = 0;
+    allFiles.forEach(function (f) {
+      if (!byProject[f.projectId]) byProject[f.projectId] = { size: 0, count: 0 };
+      byProject[f.projectId].size += (f.size || 0);
+      byProject[f.projectId].count++;
+      totalSize += (f.size || 0);
+    });
 
-  // 확장자별 분포
-  var byExt = {};
-  allFiles.forEach(function (f) {
-    var ext = (f.ext || 'other').toLowerCase();
-    if (!byExt[ext]) byExt[ext] = { size: 0, count: 0 };
-    byExt[ext].size += (f.size || 0);
-    byExt[ext].count++;
-  });
+    // 확장자별 분포
+    var byExt = {};
+    allFiles.forEach(function (f) {
+      var ext = (f.ext || 'other').toLowerCase();
+      if (!byExt[ext]) byExt[ext] = { size: 0, count: 0 };
+      byExt[ext].size += (f.size || 0);
+      byExt[ext].count++;
+    });
 
-  var html = '<div style="margin-bottom:16px">';
-  html += '<div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:8px">📊 전체 용량: ' + formatFileSize(totalSize) + ' (' + allFiles.length + '개 파일)</div>';
-  html += '</div>';
-
-  // 프로젝트별
-  html += '<div style="font-size:11px;font-weight:700;color:var(--t4);margin-bottom:8px">프로젝트별 사용량</div>';
-  var sortedProjects = Object.entries(byProject).sort(function (a, b) { return b[1].size - a[1].size; });
-  sortedProjects.forEach(function (entry) {
-    var projId = entry[0];
-    var info = entry[1];
-    var proj = projects.find(function (p) { return p.id === projId; });
-    var name = proj ? (proj.name || proj.orderNo || projId) : projId;
-    var pct = totalSize > 0 ? Math.round(info.size / totalSize * 100) : 0;
-    html += '<div style="margin-bottom:6px">';
-    html += '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);margin-bottom:2px"><span>' + eH(name) + '</span><span>' + formatFileSize(info.size) + ' (' + info.count + ')</span></div>';
-    html += '<div style="height:6px;background:var(--pt);border-radius:3px"><div style="width:' + pct + '%;height:100%;background:var(--ac);border-radius:3px"></div></div>';
+    var html = '<div style="margin-bottom:16px">';
+    html += '<div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:8px">📊 전체 용량: ' + formatFileSize(totalSize) + ' (' + allFiles.length + '개 파일)</div>';
     html += '</div>';
-  });
 
-  // 확장자별
-  html += '<div style="font-size:11px;font-weight:700;color:var(--t4);margin:12px 0 8px">파일 유형별 분포</div>';
-  html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
-  Object.entries(byExt).sort(function (a, b) { return b[1].size - a[1].size; }).forEach(function (entry) {
-    var ext = entry[0];
-    var info = entry[1];
-    var icon = getDocIcon(ext);
-    html += '<div style="padding:6px 10px;background:var(--bg-i);border-radius:6px;font-size:10px;color:var(--t3)">';
-    html += icon.icon + ' .' + ext.toUpperCase() + ' <b>' + info.count + '</b>개 · ' + formatFileSize(info.size);
+    // 프로젝트별
+    html += '<div style="font-size:11px;font-weight:700;color:var(--t4);margin-bottom:8px">프로젝트별 사용량</div>';
+    var sortedProjects = Object.entries(byProject).sort(function (a, b) { return b[1].size - a[1].size; });
+    sortedProjects.forEach(function (entry) {
+      var projId = entry[0];
+      var info = entry[1];
+      var proj = projects.find(function (p) { return p.id === projId; });
+      var name = proj ? (proj.name || proj.orderNo || projId) : projId;
+      var pct = totalSize > 0 ? Math.round(info.size / totalSize * 100) : 0;
+      html += '<div style="margin-bottom:6px">';
+      html += '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);margin-bottom:2px"><span>' + eH(name) + '</span><span>' + formatFileSize(info.size) + ' (' + info.count + ')</span></div>';
+      html += '<div style="height:6px;background:var(--pt);border-radius:3px"><div style="width:' + pct + '%;height:100%;background:var(--ac);border-radius:3px"></div></div>';
+      html += '</div>';
+    });
+
+    // 확장자별
+    html += '<div style="font-size:11px;font-weight:700;color:var(--t4);margin:12px 0 8px">파일 유형별 분포</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+    Object.entries(byExt).sort(function (a, b) { return b[1].size - a[1].size; }).forEach(function (entry) {
+      var ext = entry[0];
+      var info = entry[1];
+      var icon = getDocIcon(ext);
+      html += '<div style="padding:6px 10px;background:var(--bg-i);border-radius:6px;font-size:10px;color:var(--t3)">';
+      html += icon.icon + ' .' + ext.toUpperCase() + ' <b>' + info.count + '</b>개 · ' + formatFileSize(info.size);
+      html += '</div>';
+    });
     html += '</div>';
-  });
-  html += '</div>';
 
-  createModal({ title: '💾 문서 용량 대시보드', html: html, width: '500px' });
+    createModal({ title: '💾 문서 용량 대시보드', html: html, width: '500px' });
+  } catch (err) {
+    console.error('[docShowStorageDashboard]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
 }
 
 async function docSaveFileMeta(fileId) {
-  var f = await fileGet(fileId);
-  if (!f) return;
+  try {
+    var f = await fileGet(fileId);
+    if (!f) return;
 
-  var memoEl = document.getElementById('docMetaMemo');
-  var tagsEl = document.getElementById('docMetaTags');
-  var nameEl = document.getElementById('docMetaName');
+    var memoEl = document.getElementById('docMetaMemo');
+    var tagsEl = document.getElementById('docMetaTags');
+    var nameEl = document.getElementById('docMetaName');
 
-  if (memoEl) f.memo = memoEl.value;
-  if (tagsEl) {
-    f.tags = tagsEl.value.split(',').map(function (t) { return t.trim(); }).filter(function (t) { return t; });
+    if (memoEl) f.memo = memoEl.value;
+    if (tagsEl) {
+      f.tags = tagsEl.value.split(',').map(function (t) { return t.trim(); }).filter(function (t) { return t; });
+    }
+    if (nameEl && nameEl.value.trim()) {
+      f.name = nameEl.value.trim();
+      f.ext = (f.name.split('.').pop() || '').toLowerCase();
+    }
+    f.updatedAt = new Date().toISOString();
+    await filePut(f);
+
+    var overlay = document.querySelector('.wa-modal-overlay');
+    if (overlay) overlay.remove();
+    showToast('💾 파일 정보 저장됨');
+    renderDocManager();
+  } catch (err) {
+    console.error('[docSaveFileMeta]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   }
-  if (nameEl && nameEl.value.trim()) {
-    f.name = nameEl.value.trim();
-    f.ext = (f.name.split('.').pop() || '').toLowerCase();
-  }
-  f.updatedAt = new Date().toISOString();
-  await filePut(f);
-
-  var overlay = document.querySelector('.wa-modal-overlay');
-  if (overlay) overlay.remove();
-  showToast('💾 파일 정보 저장됨');
-  renderDocManager();
 }

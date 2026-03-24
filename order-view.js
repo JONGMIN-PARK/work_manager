@@ -303,6 +303,9 @@ function confirmDeleteOrder(orderNo) {
   deleteOrder(orderNo).then(function () {
     showToast('🗑️ 수주 삭제 완료', 'success');
     renderOrders();
+  }).catch(function (err) {
+    console.error('[confirmDeleteOrder]', err);
+    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
