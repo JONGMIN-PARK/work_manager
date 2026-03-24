@@ -3183,6 +3183,12 @@ async function awQuickStart() {
   }
 }
 
+/* ── EXE 실행 안내 ── */
+function awCheckExeLocal() {
+  showToast('WeeklyDownloader.exe를 실행하세요.\n다운로드된 엑셀을 📁 다른파일 버튼으로 불러오세요.');
+  closeAnyworksModal();
+}
+
 /* ── 로컬 에이전트 연결 확인 ── */
 async function awCheckLocal() {
   try {
@@ -3209,29 +3215,37 @@ async function openAnyworksModal() {
   ov.id = 'anyworksOverlay';
   ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)';
 
+  var exeUrl = 'https://github.com/JONGMIN-PARK/work_manager/releases/latest/download/WeeklyDownloader.exe';
+
   ov.innerHTML =
-    '<div style="background:var(--bg-p);border-radius:14px;padding:28px;max-width:440px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,.4)">'+
+    '<div style="background:var(--bg-p);border-radius:14px;padding:28px;max-width:480px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,.4)">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'+
         '<div style="font-size:15px;font-weight:700;color:var(--t1)">🌐 애니웍스 주간일지 가져오기</div>'+
         '<button onclick="closeAnyworksModal()" style="background:none;border:none;color:var(--t5);font-size:18px;cursor:pointer;padding:4px">✕</button>'+
       '</div>'+
 
-      '<p style="font-size:12px;color:var(--t4);margin-bottom:16px;line-height:1.6">애니웍스 사이트에서 주간일지 엑셀을 다운로드한 후,<br><b style="color:var(--ac-t)">📁 다른파일</b> 버튼으로 불러오세요.</p>'+
-
-      '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">'+
-        '<button onclick="window.open(\'https://works.animotion.co.kr\',\'_blank\');closeAnyworksModal()" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#06B6D4,#0891B2);color:#fff;cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px">'+
-          '🌐 애니웍스 열기 <span style="font-size:10px;opacity:.7">(새 창)</span></button>'+
-        '<button onclick="window.open(\'https://works.animotion.co.kr/Sales/Week_List.asp?top_id=80&mun=6&table=WeekList\',\'_blank\');closeAnyworksModal()" style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px">'+
-          '📋 주간일지 페이지 바로가기</button>'+
+      '<!-- 방법 1: 자동 다운로드 (EXE) -->'+
+      '<div style="background:linear-gradient(135deg,rgba(6,182,212,.08),rgba(8,145,178,.08));border:1px solid rgba(6,182,212,.3);border-radius:10px;padding:16px;margin-bottom:14px">'+
+        '<div style="font-size:12px;font-weight:700;color:#22D3EE;margin-bottom:8px">⚡ 자동 다운로드 (권장)</div>'+
+        '<p style="font-size:11px;color:var(--t4);line-height:1.6;margin-bottom:12px">'+
+          'WeeklyDownloader를 실행하면 사업부별 엑셀을 <b>자동으로 일괄 다운로드</b>합니다.<br>'+
+          'Chrome이 설치된 PC에서 실행하세요.</p>'+
+        '<div style="display:flex;gap:8px">'+
+          '<a href="'+exeUrl+'" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:none;border-radius:8px;background:linear-gradient(135deg,#06B6D4,#0891B2);color:#fff;cursor:pointer;font-size:12px;font-weight:700;text-decoration:none" download>'+
+            '⬇️ WeeklyDownloader.exe</a>'+
+          '<button onclick="awCheckExeLocal()" style="padding:10px 14px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:11px" title="이미 설치된 경우 로컬에서 바로 실행">▶ 실행</button>'+
+        '</div>'+
       '</div>'+
 
-      '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:14px;margin-bottom:16px">'+
-        '<div style="font-size:10px;font-weight:700;color:var(--t5);margin-bottom:8px">다운로드 순서</div>'+
-        '<div style="font-size:11px;color:var(--t4);line-height:1.8">'+
-          '① 애니웍스 로그인<br>'+
-          '② 사업부 선택 → 날짜 설정 → 검색<br>'+
-          '③ <b>엑셀 다운로드</b> 클릭 (사업부별 반복)<br>'+
-          '④ 여기로 돌아와서 <b style="color:var(--ac-t)">📁 다른파일</b>로 불러오기'+
+      '<!-- 방법 2: 수동 다운로드 -->'+
+      '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:16px">'+
+        '<div style="font-size:12px;font-weight:700;color:var(--t5);margin-bottom:8px">📋 수동 다운로드</div>'+
+        '<div style="display:flex;gap:8px;margin-bottom:10px">'+
+          '<button onclick="window.open(\'https://works.animotion.co.kr\',\'_blank\')" style="flex:1;padding:8px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-p);color:var(--t3);cursor:pointer;font-size:11px;font-weight:600">🌐 애니웍스 열기</button>'+
+          '<button onclick="window.open(\'https://works.animotion.co.kr/Sales/Week_List.asp?top_id=80&mun=6&table=WeekList\',\'_blank\')" style="flex:1;padding:8px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-p);color:var(--t3);cursor:pointer;font-size:11px;font-weight:600">📋 주간일지 바로가기</button>'+
+        '</div>'+
+        '<div style="font-size:10px;color:var(--t5);line-height:1.7">'+
+          '① 로그인 → ② 사업부/날짜 선택 → ③ 엑셀 다운로드 → ④ <b style="color:var(--ac-t)">📁 다른파일</b>로 불러오기'+
         '</div>'+
       '</div>'+
 
