@@ -29,6 +29,18 @@ router.get('/', async function (req, res) {
   }
 });
 
+// GET /api/checklists/:id
+router.get('/:id', async function (req, res) {
+  try {
+    var r = await db.query('SELECT * FROM checklists WHERE id = $1', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.json({ data: r.rows[0] });
+  } catch (e) {
+    console.error('[checklists/get]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // POST /api/checklists
 router.post('/', async function (req, res) {
   try {

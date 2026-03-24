@@ -1342,7 +1342,37 @@ function showToast(msg, type) {
   };
 
   // ─── 체크리스트 ───
-  chkGetByProject = function (pid) { return apiFetch('/api/checklists?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
+  chkGetByProject = function (pid) {
+    return apiFetch('/api/checklists?projectId=' + pid).then(function (r) {
+      // 서버는 phase별 row에 items JSONB 배열 → 클라이언트는 개별 항목 기대 → flat 변환
+      var flat = [];
+      (r.data || []).forEach(function (row) {
+        var rc = toCamel(row);
+        var items = rc.items;
+        if (typeof items === 'string') try { items = JSON.parse(items); } catch (e) { items = []; }
+        if (Array.isArray(items) && items.length > 0) {
+          items.forEach(function (it, idx) {
+            flat.push({
+              id: rc.id + '-' + idx,
+              _parentId: rc.id,
+              projectId: rc.projectId,
+              phase: rc.phase,
+              text: it.text || '',
+              done: !!it.done,
+              doneDate: it.doneDate || null,
+              doneBy: it.doneBy || null,
+              dueDate: it.dueDate || '',
+              order: it.order !== undefined ? it.order : idx
+            });
+          });
+        } else if (!items || items.length === 0) {
+          // items가 비어있으면 row 자체 속성 사용 (하위 호환)
+          if (rc.text) flat.push(rc);
+        }
+      });
+      return flat;
+    });
+  };
   chkPut = function (item) {
     if (!item.id || item._isNew) {
       delete item._isNew;
@@ -1357,7 +1387,56 @@ function showToast(msg, type) {
         throw err;
       });
   };
-  chkDel = function (id) { return apiFetch('/api/checklists/' + id, { method: 'DELETE' }); };
+  chkDel = function (id) {
+    // flat id (chk-xxx-N) → 부모 row에서 해당 항목 제거
+    var parts = id.match(/^(.+)-(\d+)$/);
+    if (!parts) return apiFetch('/api/checklists/' + id, { method: 'DELETE' });
+    var parentId = parts[1], idx = parseInt(parts[2], 10);
+    return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
+      var row = r.data;
+      var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+      items.splice(idx, 1);
+      if (items.length === 0) return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'DELETE' });
+      return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
+    });
+  };
+
+  // 서버 모드: toggleCheckItem 오버라이드
+  toggleCheckItem = function (id, doneBy) {
+    var parts = id.match(/^(.+)-(\d+)$/);
+    if (!parts) return Promise.resolve(null);
+    var parentId = parts[1], idx = parseInt(parts[2], 10);
+    return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
+      var row = r.data;
+      var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+      if (idx < 0 || idx >= items.length) return null;
+      items[idx].done = !items[idx].done;
+      items[idx].doneDate = items[idx].done ? localDate() : null;
+      items[idx].doneBy = items[idx].done ? (doneBy || '') : null;
+      return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
+    });
+  };
+
+  // 서버 모드: createCheckItem — 기존 phase row에 항목 추가
+  createCheckItem = function (data) {
+    return chkGetByProject(data.projectId).then(function () {
+      // phase별 부모 row 찾기
+      return apiFetch('/api/checklists?projectId=' + data.projectId);
+    }).then(function (r) {
+      var rows = r.data || [];
+      var parentRow = rows.find(function (row) { return (row.phase || row.phase) === data.phase; });
+      if (parentRow) {
+        var items = typeof parentRow.items === 'string' ? JSON.parse(parentRow.items) : (parentRow.items || []);
+        items.push({ text: data.text || '', done: false, doneDate: null, doneBy: null, order: data.order || items.length });
+        return apiFetch('/api/checklists/' + encodeURIComponent(parentRow.id), { method: 'PUT', body: JSON.stringify({ items: items }) });
+      } else {
+        var items = [{ text: data.text || '', done: false, doneDate: null, doneBy: null, order: data.order || 0 }];
+        return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
+          id: 'chk-' + uuid(), projectId: data.projectId, phase: data.phase, items: items
+        }) });
+      }
+    }).then(function (r) { return toCamel(r.data); });
+  };
 
   // 서버 모드: createDefaultChecklists 오버라이드 (phase별 items 배열로 묶어서 저장)
   createDefaultChecklists = function (projectId) {
@@ -1371,14 +1450,6 @@ function showToast(msg, type) {
       }) }).then(function (r) { return toCamel(r.data); }));
     });
     return Promise.all(promises);
-  };
-
-  // 서버 모드: createCheckItem 오버라이드 (개별 항목도 items 배열로 래핑)
-  createCheckItem = function (data) {
-    var items = [{ text: data.text || '', done: false, doneDate: null, doneBy: null, order: data.order || 0 }];
-    return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
-      id: 'chk-' + uuid(), projectId: data.projectId, phase: data.phase, items: items
-    }) }).then(function (r) { return toCamel(r.data); });
   };
 
   // 서버 모드: createProjectFromOrder 오버라이드 (1회 API 호출로 프로젝트+마일스톤+체크리스트 일괄 생성)
