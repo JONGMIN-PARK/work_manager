@@ -1243,7 +1243,15 @@ function showToast(msg, type) {
   projGet = function (id) { return apiFetch('/api/projects/' + id).then(function (r) { return toCamel(r.data); }); };
   projPut = function (proj) {
     if (!proj.id) return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
-    return apiFetch('/api/projects/' + proj.id, { method: 'PUT', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
+    // id가 있어도 서버에 없을 수 있음 (createProject가 클라이언트에서 id 생성) → PUT 404 시 POST로 폴백
+    return apiFetch('/api/projects/' + proj.id, { method: 'PUT', body: JSON.stringify(proj) })
+      .then(function (r) { return toCamel(r.data); })
+      .catch(function (err) {
+        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+          return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
+        }
+        throw err;
+      });
   };
   projDel = function (id) { return apiFetch('/api/projects/' + id, { method: 'DELETE' }); };
 

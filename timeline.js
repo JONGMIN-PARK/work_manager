@@ -702,7 +702,9 @@ function addMsRow() {
 
 async function saveProjectUI(existingId) {
   var name = document.getElementById('projName').value.trim();
-  if (!name) { showToast('프로젝트명을 입력하세요.','warn'); return; }
+  var orderNo = document.getElementById('projOrderNo').value.trim();
+  // 프로젝트명이 없으면 수주번호로 대체, 둘 다 없으면 '미정'
+  if (!name) name = orderNo || '미정 프로젝트';
 
   var startDate = document.getElementById('projStart').value;
   var endDate = document.getElementById('projEnd').value;
@@ -719,7 +721,7 @@ async function saveProjectUI(existingId) {
   if (existingId && depIds.includes(existingId)) { showToast('자기 자신을 선행 프로젝트로 지정할 수 없습니다.','warn'); return; }
 
   var data = {
-    orderNo: document.getElementById('projOrderNo').value.trim(),
+    orderNo: orderNo,
     name: name,
     startDate: startDate,
     endDate: endDate,
