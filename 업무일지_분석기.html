@@ -345,9 +345,10 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
         <div class="pnl-h">
           <h3 class="pnl-t">📆 주차 선택 <span style="color:var(--t5);font-weight:400" id="weekSelCount"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
-            <select id="weekYearSel" class="msel" onchange="weekYearFilter=this.value;weekMonthFilter='';weekQtrFilter='';pickPeriod()" title="연도 선택" style="min-width:80px"><option value="">전체 연도</option></select>
-            <select id="weekQtrSel" class="msel" onchange="weekQtrFilter=this.value;if(this.value){weekMonthFilter='';document.getElementById('weekMonthSel').value=''}pickPeriod()" title="분기 선택" style="min-width:90px"><option value="">전체 분기</option><option value="1Q">1Q (1~3월)</option><option value="2Q">2Q (4~6월)</option><option value="3Q">3Q (7~9월)</option><option value="4Q">4Q (10~12월)</option></select>
-            <select id="weekMonthSel" class="msel" onchange="weekMonthFilter=this.value;if(this.value){weekQtrFilter='';document.getElementById('weekQtrSel').value=''}pickPeriod()" title="월 선택"><option value="">전체 월</option></select>
+            <select id="weekYearSel" class="msel" onchange="weekYearFilter=this.value;weekMonthFilter='';weekQtrFilter='';renderWeekSelector()" title="연도 선택" style="min-width:80px"><option value="">전체 연도</option></select>
+            <select id="weekQtrSel" class="msel" onchange="weekQtrFilter=this.value;if(this.value){weekMonthFilter='';document.getElementById('weekMonthSel').value=''}renderWeekSelector()" title="분기 선택" style="min-width:90px"><option value="">전체 분기</option><option value="1Q">1Q (1~3월)</option><option value="2Q">2Q (4~6월)</option><option value="3Q">3Q (7~9월)</option><option value="4Q">4Q (10~12월)</option></select>
+            <select id="weekMonthSel" class="msel" onchange="weekMonthFilter=this.value;if(this.value){weekQtrFilter='';document.getElementById('weekQtrSel').value=''}renderWeekSelector()" title="월 선택"><option value="">전체 월</option></select>
+            <button class="btn btn-p btn-s" onclick="pickPeriod()" id="periodSelBtn" title="드롭다운에서 선택한 기간의 주차를 일괄 선택">✔ 기간 선택</button>
             <button class="btn btn-g btn-s" onclick="pickWeek(getSunStart(todayStr()))" title="오늘이 속한 주로 이동">📍 오늘 주</button>
             <button class="btn btn-g btn-s" onclick="pickWeek(null)">전체 보기</button>
           </div>
@@ -1193,10 +1194,13 @@ function renderWeekSelector(){
   const todaySun=getSunStart(today);
   let html='<span class="chip '+(selWeek===null?'cn':'co')+'" style="padding:4px 10px;font-size:11px" onclick="pickWeek(null)">전체</span>';
   filtered.forEach(function(w){
-    const isSel=selWeek&&selWeek.start===w.start;
+    const isSel=selWeek&&(selWeek.start===w.start||(w.start>=selWeek.start&&w.start<=selWeek.end));
     const isToday=w.start===todaySun;
     const badge=isToday?' <span style="font-size:9px;color:#10B981">●오늘</span>':'';
-    html+='<span class="chip '+(isSel?'cn':'co')+'" style="padding:4px 10px;font-size:11px'+(isToday&&!isSel?';border-color:#10B981':'')
+    var chipStyle='padding:4px 10px;font-size:11px';
+    if(isSel)chipStyle+=';border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)';
+    else if(isToday)chipStyle+=';border-color:#10B981';
+    html+='<span class="chip '+(isSel?'cn':'co')+'" style="'+chipStyle
       +'" onclick="pickWeek(\''+w.start+'\')" title="'+w.count+'건">'+w.label+badge+' <span style="font-size:9px;color:var(--t6)">('+w.count+')</span></span>';
   });
   el.innerHTML=html;
@@ -1231,6 +1235,7 @@ function pickPeriod(){
   selWeek={start:s,end:e,label:label.trim()};
   document.getElementById('weekLabel').value='';
   document.getElementById('weekAutoLabel').textContent='('+selWeek.label+')';
+  renderWeekSelector();
   gfInvalidate();rFL();upV();
 }
 /* 주차 선택 */
