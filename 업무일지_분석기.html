@@ -345,6 +345,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
         <div class="pnl-h">
           <h3 class="pnl-t">📆 주차 선택 <span style="color:var(--t5);font-weight:400" id="weekSelCount"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
+            <select id="weekYearSel" class="msel" onchange="weekYearFilter=this.value;weekMonthFilter='';weekQtrFilter='';renderWeekSelector()" title="연도 선택" style="min-width:80px"><option value="">전체 연도</option></select>
             <select id="weekQtrSel" class="msel" onchange="weekQtrFilter=this.value;if(this.value){weekMonthFilter='';document.getElementById('weekMonthSel').value=''}renderWeekSelector()" title="분기 선택" style="min-width:90px"><option value="">전체 분기</option><option value="1Q">1Q (1~3월)</option><option value="2Q">2Q (4~6월)</option><option value="3Q">3Q (7~9월)</option><option value="4Q">4Q (10~12월)</option></select>
             <select id="weekMonthSel" class="msel" onchange="weekMonthFilter=this.value;if(this.value){weekQtrFilter='';document.getElementById('weekQtrSel').value=''}renderWeekSelector()" title="월 선택"><option value="">전체 월</option></select>
             <button class="btn btn-g btn-s" onclick="pickWeek(getSunStart(todayStr()))" title="오늘이 속한 주로 이동">📍 오늘 주</button>
@@ -680,6 +681,7 @@ var DEPT_LIST=['장비사업부','기술연구소','모션사업부'];
 let fvN=[],fvO=false;
 let aiProv='gemini';
 let archSel=null; // selected archive id for detail
+var weekYearFilter=""; // 주차 선택기 연도 필터
 var weekMonthFilter=""; // 주차 선택기 월 필터 (빈 문자열=전체)
 var weekQtrFilter=""; // 주차 선택기 분기 필터 (빈 문자열=전체)
 var archMonthFilter=""; // 아카이브 월 필터
@@ -1152,24 +1154,36 @@ function renderWeekSelector(){
   const el=document.getElementById('weekSelectorChips');
   if(!el)return;
   const weeks=buildWeekList();
-  // 월 드롭다운 동적 생성
+  // 연도 드롭다운 동적 생성
+  const yearSet=new Set();
+  weeks.forEach(function(w){yearSet.add(w.start.slice(0,4))});
+  const years=Array.from(yearSet).sort().reverse();
+  const ySel=document.getElementById('weekYearSel');
+  if(ySel){
+    const cv=weekYearFilter;
+    ySel.innerHTML='<option value="">전체 연도</option>';
+    years.forEach(function(y){ySel.innerHTML+='<option value="'+y+'"'+(cv===y?' selected':'')+'>'+y+'년</option>'});
+  }
+  // 연도 필터 먼저 적용
+  var yearFiltered=weekYearFilter?weeks.filter(function(w){return w.start.slice(0,4)===weekYearFilter}):weeks;
+  // 월 드롭다운 동적 생성 (선택된 연도 기준)
   const monthSet=new Set();
-  weeks.forEach(function(w){monthSet.add(w.start.slice(0,6))});
-  const months=Array.from(monthSet).sort().reverse();
+  yearFiltered.forEach(function(w){monthSet.add(w.start.slice(4,6))});
+  const months=Array.from(monthSet).sort();
   const mSel=document.getElementById('weekMonthSel');
   if(mSel){
     const cv=weekMonthFilter;
     mSel.innerHTML='<option value="">전체 월</option>';
-    months.forEach(function(m){mSel.innerHTML+='<option value="'+m+'"'+(cv===m?' selected':'')+'>'+m.slice(0,4)+'-'+m.slice(4)+'</option>'});
+    months.forEach(function(m){mSel.innerHTML+='<option value="'+m+'"'+(cv===m?' selected':'')+'>'+m+'월</option>'});
   }
   // 월/분기 필터 적용
-  var filtered=weeks;
+  var filtered=yearFiltered;
   if(weekQtrFilter){
     var qm={'1Q':['01','02','03'],'2Q':['04','05','06'],'3Q':['07','08','09'],'4Q':['10','11','12']};
     var mm=qm[weekQtrFilter]||[];
-    filtered=weeks.filter(function(w){return mm.indexOf(w.start.slice(4,6))>=0});
+    filtered=yearFiltered.filter(function(w){return mm.indexOf(w.start.slice(4,6))>=0});
   }else if(weekMonthFilter){
-    filtered=weeks.filter(function(w){return w.start.slice(0,6)===weekMonthFilter});
+    filtered=yearFiltered.filter(function(w){return w.start.slice(4,6)===weekMonthFilter});
   }
   const cntEl=document.getElementById('weekSelCount');
   if(cntEl)cntEl.textContent=selWeek?'(선택: '+selWeek.label+')':'(전체 '+filtered.length+'주)';
