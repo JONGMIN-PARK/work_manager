@@ -289,6 +289,11 @@ function saveOrderModal(isEdit) {
     if (typeof renderPipeline === 'function' && document.getElementById('mPipeline') && !document.getElementById('mPipeline').classList.contains('hidden')) {
       renderPipeline();
     }
+    // 주간분석 상세 필드도 갱신 (수주명/거래처 반영)
+    if (typeof invalidateOrderInfoCache === 'function') invalidateOrderInfoCache();
+    if (typeof gfInvalidate === 'function') gfInvalidate();
+    if (typeof rFL === 'function') rFL();
+    if (typeof upV === 'function') upV();
   }).catch(function (err) {
     console.error('[saveOrderModal]', err);
     var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';

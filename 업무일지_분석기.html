@@ -1557,7 +1557,7 @@ function saveOCmt(orderNo){
   const val=inp.value.trim();
   if(val)lsSet('wa-oc-'+orderNo,val);else lsRemove('wa-oc-'+orderNo)
   invalidateOrderInfoCache();gfInvalidate();
-  rOL();
+  rFL();rOL();upV();
   const fb=document.getElementById('ocfb_'+CSS.escape(orderNo));
   if(fb){fb.textContent='✅';setTimeout(()=>{fb.textContent=''},800)}
 }
@@ -1646,7 +1646,7 @@ function handleOrderExcel(input){
         if(info.name)lsSet('wa-oc-'+no,info.name);else lsRemove('wa-oc-'+no)
         count++;
       }
-      invalidateOrderInfoCache();gfInvalidate();rOL();upOP();
+      invalidateOrderInfoCache();gfInvalidate();rFL();rOL();upOP();upV();
       if(typeof syncOrderMapToDB==='function')syncOrderMapToDB().then(function(){if(typeof renderOrders==='function')renderOrders()});
       showToast('✅ 수주맵 '+count+'건 불러오기 완료','success');
     }catch(err){
@@ -1766,7 +1766,7 @@ function rmFT(y,v){if(y==='w'){selWeek=null;weekYearFilter='';weekQtrFilter='';w
 function gTC(){const s=getComputedStyle(document.documentElement);return{g:s.getPropertyValue('--cg').trim(),t:s.getPropertyValue('--ct').trim(),l:s.getPropertyValue('--cl').trim()}}
 
 /* ═══ VIEW ═══ */
-function upV(){rAFT();const f=gF();const ss=document.getElementById('statsS');if(f.length===0&&sN.size===0){ss.classList.add('hidden');document.getElementById('cmpPanel').classList.add('hidden');return}ss.classList.remove('hidden');const tH=Math.round(f.reduce((s,r)=>s+r.hours,0)*10)/10;const ds=[...new Set(f.map(r=>r.date))].sort();document.getElementById('sC').textContent=f.length;document.getElementById('sH').textContent=tH+'h';document.getElementById('sP').textContent=ds.length>0?fD(ds[0])+' ~ '+fD(ds[ds.length-1]):'-';document.getElementById('sA').textContent=(ds.length>0?Math.round(tH/ds.length*10)/10:0)+'h';rTbl(f);if(!document.getElementById('tCht').classList.contains('hidden'))rCht(f);if(cmpMode&&sN.size>=2)rCmp(f);else document.getElementById('cmpPanel').classList.add('hidden')}
+function upV(){rAFT();const f=gF();const ss=document.getElementById('statsS');if(f.length===0&&sN.size===0){ss.classList.add('hidden');document.getElementById('cmpPanel').classList.add('hidden');return}ss.classList.remove('hidden');const tH=Math.round(f.reduce((s,r)=>s+r.hours,0)*10)/10;const ds=[...new Set(f.map(r=>r.date))].sort();document.getElementById('sC').textContent=f.length;document.getElementById('sH').textContent=tH+'h';document.getElementById('sP').textContent=ds.length>0?fD(ds[0])+' ~ '+fD(ds[ds.length-1]):'-';document.getElementById('sA').textContent=(ds.length>0?Math.round(tH/ds.length*10)/10:0)+'h';rTbl(f);if(!document.getElementById('tCht').classList.contains('hidden'))rCht(f);if(!document.getElementById('tSum').classList.contains('hidden'))rContentSum();if(!document.getElementById('tAi').classList.contains('hidden')){var so=document.getElementById('sumOut');if(so&&so.dataset.generated){so.innerHTML='<div style="text-align:center;color:#F59E0B;padding:20px;font-size:12px">⚠️ 데이터가 변경되었습니다. "요약 생성" 버튼을 눌러 갱신하세요.</div>';so.dataset.generated=''}}if(cmpMode&&sN.size>=2)rCmp(f);else document.getElementById('cmpPanel').classList.add('hidden')}
 let editMode=false;
 let lastFiltered=[]; // 현재 필터 결과 참조 보관
 let editMap={}; // {rowIdx: {field: newValue}} 수정 추적
@@ -2199,13 +2199,14 @@ async function reqSum(){
   const f=gF();if(!f.length){showToast('데이터 없음','warn');return}
   const el=document.getElementById('sumOut'),btn=document.getElementById('sumBtn');
   const key=document.getElementById('akI').value.trim()||gAk();
-  if(!key){el.innerHTML=`<div style="padding:4px"><div style="padding:8px 12px;background:var(--tg);border:1px solid var(--tg-bd);border-radius:7px;margin-bottom:12px;font-size:11px;color:var(--tg-t)">ℹ️ API 키 없음 → 로컬 분석</div>${genLocal(f)}</div>`;return}
+  if(!key){el.innerHTML=`<div style="padding:4px"><div style="padding:8px 12px;background:var(--tg);border:1px solid var(--tg-bd);border-radius:7px;margin-bottom:12px;font-size:11px;color:var(--tg-t)">ℹ️ API 키 없음 → 로컬 분석</div>${genLocal(f)}</div>`;el.dataset.generated='1';return}
   const pl=aiProv==='gemini'?'Gemini':'Claude';
   btn.disabled=true;btn.textContent=pl+' 분석중...';
   el.innerHTML=`<div class="sld"><div class="sp"></div>${pl} 분석 중...</div>`;
   try{const txt=await callAI(buildPmt(f));el.innerHTML=`<div style="font-size:10px;color:var(--t6);margin-bottom:6px">✨ ${pl} 응답</div>`+rMD(txt)}
   catch(err){el.innerHTML=`<div style="padding:4px"><div style="padding:8px 12px;background:var(--d-bg);border:1px solid var(--d-bd);border-radius:7px;margin-bottom:12px"><p style="font-weight:600;color:var(--d-t);font-size:12px">⚠️ ${pl} 실패</p><p style="font-size:10px;color:var(--t5)">${eH(err.message)}</p></div>${genLocal(f)}</div>`}
   btn.disabled=false;btn.textContent='요약 생성';
+  el.dataset.generated='1';
 }
 
 function genLocal(f){const ns=[...new Set(f.map(r=>r.name))];const tH=Math.round(f.reduce((s,r)=>s+r.hours,0)*10)/10;const pp={};f.forEach(r=>{if(!pp[r.name])pp[r.name]={h:0,a:{},c:[]};pp[r.name].h+=r.hours;pp[r.name].a[r.abbr]=(pp[r.name].a[r.abbr]||0)+r.hours;pp[r.name].c.push(r.content)});const td={};f.forEach(r=>{td[r.abbr]=(td[r.abbr]||0)+r.hours});let html='<div style="color:var(--t3)">';html+='<h4 style="color:var(--t1);font-size:13px;margin-bottom:8px">📋 인원별 요약</h4>';for(const[n,i]of Object.entries(pp).sort(([,a],[,b])=>b.h-a.h)){const ta=Object.entries(i.a).sort(([,a],[,b])=>b-a)[0];const uc=[...new Set(i.c)];html+=`<div style="margin-bottom:10px;padding:8px;background:var(--bg-i);border-radius:7px"><div style="font-weight:600;color:var(--t1);font-size:12px;margin-bottom:3px">${eH(n)} — ${Math.round(i.h*10)/10}h (주력: ${AM[ta[0]]||ta[0]})</div><div style="font-size:11px;color:var(--t4)">${uc.slice(0,5).map(c=>eH(c)).join(' · ')}</div></div>`}html+='<h4 style="color:var(--t1);font-size:13px;margin:14px 0 8px">📊 분장 분포</h4>';for(const[a,h]of Object.entries(td).sort(([,a],[,b])=>b-a)){const p=Math.round(h/tH*1000)/10;html+=`<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span class="badge" style="background:${ABG[a]||'#1A1F35'};color:${AFG[a]||'#94A3B8'}">${a}</span><span style="font-size:11px">${AM[a]||a}</span><div style="flex:1;height:5px;background:var(--pt);border-radius:3px"><div style="width:${p}%;height:100%;background:${ABR[a]||'#64748B'};border-radius:3px"></div></div><span class="mono" style="color:var(--t4);font-size:10px">${Math.round(h*10)/10}h(${p}%)</span></div>`}html+='<h4 style="color:var(--t1);font-size:13px;margin:14px 0 8px">⚠️ 감지</h4>';const w=[];for(const[n,i]of Object.entries(pp)){const ds=[...new Set(f.filter(r=>r.name===n).map(r=>r.date))];const avg=i.h/ds.length;if(avg>9)w.push(`${n}: 일평균 ${Math.round(avg*10)/10}h — 과부하`)}const bR=(td['B']||0)/tH;if(bR>0.6)w.push(`제작(B) ${Math.round(bR*100)}% — 편중`);if(!w.length)w.push('이상 없음');w.forEach(x=>{html+=`<div style="font-size:11px;padding:5px 8px;background:var(--d-bg);border-radius:5px;margin-bottom:3px;color:var(--d-t)">⚡ ${eH(x)}</div>`});html+='</div>';return html}
