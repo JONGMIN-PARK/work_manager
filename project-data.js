@@ -1532,8 +1532,12 @@ function showToast(msg, type) {
   var _localWrGetAll = wrGetAll;
   var _localWrCount = wrCount;
   wrGetAll = function () {
-    return apiFetch('/api/archives/records').then(function (r) { return toCamelArray(r.data); })
-      .catch(function () { return _localWrGetAll(); });
+    return apiFetch('/api/archives/records?limit=50000').then(function (r) {
+      return toCamelArray(r.data).map(function (rec) {
+        if (typeof rec.hours === 'string') rec.hours = parseFloat(rec.hours) || 0;
+        return rec;
+      });
+    }).catch(function () { return _localWrGetAll(); });
   };
   wrCount = function () {
     return apiFetch('/api/archives/records/count').then(function (r) { return r.data.count; })

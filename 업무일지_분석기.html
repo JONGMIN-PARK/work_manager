@@ -3016,16 +3016,22 @@ async function _postAuthInit(){
       }
     }
   }catch(ex){console.warn('auto-load local:',ex)}
-  // 2단계: 로컬에 없으면 서버 API에서 로드 (모바일 등 다른 기기)
+  // 2단계: 로컬에 없으면 서버 API에서 전체 로드 (모바일 등 다른 기기)
   if(!_dataLoaded&&typeof apiFetch==='function'&&(typeof AUTH_SKIP==='undefined'||!AUTH_SKIP)&&_accessToken){
     try{
+      // 전체 데이터 로드 (limit=50000으로 페이지네이션 회피)
       var _srvRes=await Promise.race([
-        apiFetch('/api/archives/records'),
-        new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},10000)})
+        apiFetch('/api/archives/records?limit=50000'),
+        new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},15000)})
       ]);
       if(_srvRes&&_srvRes.data&&_srvRes.data.length>0){
         var _toCamel=function(row){if(!row)return row;var out={};for(var k in row){var ck=k.replace(/_([a-z])/g,function(m,c){return c.toUpperCase()});out[ck]=row[k]}return out};
-        aD=_srvRes.data.map(function(r){return _toCamel(r)});
+        aD=_srvRes.data.map(function(r){
+          var c=_toCamel(r);
+          // PostgreSQL NUMERIC → 숫자 변환
+          if(typeof c.hours==='string')c.hours=parseFloat(c.hours)||0;
+          return c;
+        });
         applyADToUI();
         _dataLoaded=true;
       }
