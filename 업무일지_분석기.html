@@ -823,7 +823,7 @@ function pXLS(buf){
 
 /* ═══ IndexedDB ═══ */
 let db=null;
-function openDB(){return new Promise((res,rej)=>{const req=indexedDB.open('WorkAnalyzerDB',2);req.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('weeks'))d.createObjectStore('weeks',{keyPath:'id'});if(!d.objectStoreNames.contains('workRecords'))d.createObjectStore('workRecords',{autoIncrement:true})};req.onsuccess=e=>{db=e.target.result;res(db)};req.onerror=e=>rej(e)})}
+function openDB(){return new Promise((res,rej)=>{const req=indexedDB.open('WorkAnalyzerDB');req.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('weeks'))d.createObjectStore('weeks',{keyPath:'id'});if(!d.objectStoreNames.contains('workRecords'))d.createObjectStore('workRecords',{autoIncrement:true})};req.onblocked=()=>{console.warn('DB blocked');try{const f=indexedDB.open('WorkAnalyzerDB');f.onsuccess=e=>{db=e.target.result;res(db)};f.onerror=e=>rej(e)}catch(ex){rej(ex)}};req.onsuccess=e=>{db=e.target.result;res(db)};req.onerror=e=>rej(e)})}
 function wkPut(data){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').put(data);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
 function wkGetAll(){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readonly');const req=tx.objectStore('weeks').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
 function wkGet(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readonly');const req=tx.objectStore('weeks').get(id);req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
@@ -2990,7 +2990,10 @@ var _initDone=false;
 async function _postAuthInit(){
   if(_initDone)return;_initDone=true;
   try{
-    if(typeof openDBv2==='function'){await openDBv2()}else{await openDB()}
+    await Promise.race([
+      (typeof openDBv2==='function'?openDBv2():openDB()),
+      new Promise(function(_,rej){setTimeout(function(){rej(new Error('DB open timeout'))},5000)})
+    ]);
   }catch(ex){console.warn('DB open err:',ex)}
   if(typeof loadOrdersToMap==='function'){try{await loadOrdersToMap()}catch(ex){console.warn('loadOrdersToMap:',ex)}}
   if(typeof initSettings==='function')initSettings();

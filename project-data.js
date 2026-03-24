@@ -102,6 +102,29 @@ function openDBv2() {
       if (!d.objectStoreNames.contains('weeks')) d.createObjectStore('weeks', { keyPath: 'id' });
       // v2+ 스토어
       upgradeProjectDB(d, e.target.transaction);
+      // workRecords 호환: v2에서 keyPath 없이 생성된 경우 재생성
+      if (d.objectStoreNames.contains('workRecords')) {
+        try {
+          var wrStore = e.target.transaction.objectStore('workRecords');
+          if (!wrStore.keyPath) {
+            d.deleteObjectStore('workRecords');
+            var wr = d.createObjectStore('workRecords', { keyPath: 'id', autoIncrement: true });
+            wr.createIndex('date', 'date', { unique: false });
+            wr.createIndex('name', 'name', { unique: false });
+            wr.createIndex('orderNo', 'orderNo', { unique: false });
+            wr.createIndex('dateNameOrder', ['date', 'name', 'orderNo'], { unique: false });
+          }
+        } catch (ex) { console.warn('workRecords upgrade:', ex); }
+      }
+    };
+    req.onblocked = function () {
+      console.warn('DB upgrade blocked — 다른 탭을 닫아주세요');
+      // blocked 상태에서도 기존 DB로 진행 시도
+      try {
+        var fallbackReq = indexedDB.open('WorkAnalyzerDB');
+        fallbackReq.onsuccess = function (e) { db = e.target.result; res(db); };
+        fallbackReq.onerror = function (e) { rej(e); };
+      } catch (ex) { rej(ex); }
     };
     req.onsuccess = function (e) { db = e.target.result; res(db); };
     req.onerror = function (e) { rej(e); };
