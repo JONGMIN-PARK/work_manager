@@ -386,7 +386,7 @@ async function buildInsightPrompt() {
   }
 
   lines.push('');
-  lines.push('업무분장 약자: A=CS현장, B=제작, D=개발, G=일반, M=관리, S=영업지원');
+  lines.push('업무분장 약자: A=CS현장, B=수주, D=개발, G=일반, M=양산, R=제안, S=영업지원');
   lines.push('부서: 설계, 제조, 전장, 제어, 공정, 소프트웨어');
   lines.push('');
   lines.push('다음 형식으로 한국어 분석:');
