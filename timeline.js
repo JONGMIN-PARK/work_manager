@@ -919,11 +919,11 @@ async function showProjectDetail(id) {
     html += '<div style="height:4px;background:var(--bg-i);border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:' + overviewChkPct + '%;background:' + overviewChkPh.color + ';border-radius:2px"></div></div>';
     overviewChkItems.forEach(function (item) {
       var cStyle = item.done ? 'text-decoration:line-through;color:var(--t6)' : 'color:var(--t2)';
-      html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">';
-      html += '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="pdToggleCheck(\'' + id + '\',\'' + item.id + '\')" style="cursor:pointer;flex-shrink:0">';
+      html += '<div class="pdChkRow" data-chkid="' + item.id + '" data-projid="' + id + '" data-phase="' + overviewChkPhase + '" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">';
+      html += '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="pdToggleCheck(\'' + id + '\',\'' + item.id + '\',this)" style="cursor:pointer;flex-shrink:0">';
       html += '<span class="pdChkTextSpan" data-projid="' + id + '" data-chkid="' + item.id + '" style="flex:1;font-size:11px;' + cStyle + ';cursor:text" title="클릭하여 수정" onclick="pdEditCheckInline(this)">' + eH(item.text) + '</span>';
-      if (item.doneDate) html += '<span style="font-size:9px;color:var(--t6);white-space:nowrap">' + item.doneDate + '</span>';
-      html += '<button style="background:none;border:none;color:var(--t6);cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0" onclick="pdDeleteCheck(\'' + id + '\',\'' + item.id + '\')" title="삭제">✕</button>';
+      html += '<input type="date" value="' + (item.doneDate || localDate()) + '" onchange="pdChangeDoneDate(\'' + id + '\',\'' + item.id + '\',this.value)" style="font-size:9px;padding:1px 2px;border:1px solid var(--bd);border-radius:3px;background:var(--bg-i);color:var(--t6);width:auto;' + (item.done ? '' : 'visibility:hidden;width:0;padding:0;border:0;') + '" title="완료 날짜">';
+      html += '<button style="background:none;border:none;color:var(--t6);cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0" onclick="pdDeleteCheck(\'' + id + '\',\'' + item.id + '\',this)" title="삭제">✕</button>';
       html += '</div>';
     });
   } else {
@@ -1200,18 +1200,16 @@ function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
     h += '<div id="pdChkList" data-projid="' + projId + '" data-phase="' + phase + '">';
     items.forEach(function (item, idx) {
       var checkStyle = item.done ? 'text-decoration:line-through;color:var(--t6)' : 'color:var(--t2)';
-      h += '<div class="pdChkItem" draggable="true" data-chkid="' + item.id + '" data-idx="' + idx + '" style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bd);cursor:grab" ondragstart="pdChkDragStart(event)" ondragover="pdChkDragOver(event)" ondrop="pdChkDrop(event)">';
+      h += '<div class="pdChkItem pdChkRow" draggable="true" data-chkid="' + item.id + '" data-projid="' + projId + '" data-phase="' + phase + '" data-idx="' + idx + '" style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bd);cursor:grab" ondragstart="pdChkDragStart(event)" ondragover="pdChkDragOver(event)" ondrop="pdChkDrop(event)">';
       h += '<span style="color:var(--t6);font-size:10px;cursor:grab;flex-shrink:0" title="드래그하여 순서 변경">⠿</span>';
-      h += '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="pdToggleCheck(\'' + projId + '\',\'' + item.id + '\')" style="cursor:pointer;flex-shrink:0">';
+      h += '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="pdToggleCheck(\'' + projId + '\',\'' + item.id + '\',this)" style="cursor:pointer;flex-shrink:0">';
       h += '<span class="pdChkTextSpan" data-projid="' + projId + '" data-chkid="' + item.id + '" style="flex:1;font-size:11px;' + checkStyle + ';cursor:text" title="클릭하여 수정" onclick="pdEditCheckInline(this)">' + eH(item.text) + '</span>';
-      if (item.doneDate) {
-        h += '<span style="font-size:9px;color:var(--t6);white-space:nowrap">' + item.doneDate + '</span>';
-      }
+      h += '<input type="date" value="' + (item.doneDate || localDate()) + '" onchange="pdChangeDoneDate(\'' + projId + '\',\'' + item.id + '\',this.value)" style="font-size:9px;padding:1px 2px;border:1px solid var(--bd);border-radius:3px;background:var(--bg-i);color:var(--t6);width:auto;' + (item.done ? '' : 'visibility:hidden;width:0;padding:0;border:0;') + '" title="완료 날짜">';
       if (item.dueDate && !item.done) {
         var overdue = item.dueDate < localDate();
         h += '<span style="font-size:9px;color:' + (overdue ? '#EF4444' : 'var(--t6)') + ';white-space:nowrap">' + (overdue ? '⚠️' : '') + item.dueDate + '</span>';
       }
-      h += '<button style="background:none;border:none;color:var(--t6);cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0" onclick="pdDeleteCheck(\'' + projId + '\',\'' + item.id + '\')" title="삭제">✕</button>';
+      h += '<button style="background:none;border:none;color:var(--t6);cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0" onclick="pdDeleteCheck(\'' + projId + '\',\'' + item.id + '\',this)" title="삭제">✕</button>';
       h += '</div>';
     });
     h += '</div>';
@@ -1228,28 +1226,94 @@ function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
 }
 
 /* ═══ 체크리스트 인터랙션 ═══ */
-function pdToggleCheck(projId, chkId) {
-  toggleCheckItem(chkId).then(function () {
-    showProjectDetail(projId);
+function pdToggleCheck(projId, chkId, checkbox) {
+  var row = checkbox.closest('.pdChkRow');
+  var textSpan = row ? row.querySelector('.pdChkTextSpan') : null;
+  var dateInput = row ? row.querySelector('input[type="date"]') : null;
+  var isDone = checkbox.checked;
+  var doneDate = isDone ? (dateInput ? dateInput.value || localDate() : localDate()) : null;
+
+  // 즉시 UI 반영
+  if (textSpan) {
+    textSpan.style.textDecoration = isDone ? 'line-through' : 'none';
+    textSpan.style.color = isDone ? 'var(--t6)' : 'var(--t2)';
+  }
+  if (dateInput) {
+    if (isDone) {
+      dateInput.value = doneDate;
+      dateInput.style.cssText = 'font-size:9px;padding:1px 2px;border:1px solid var(--bd);border-radius:3px;background:var(--bg-i);color:var(--t6);width:auto';
+    } else {
+      dateInput.style.cssText = 'visibility:hidden;width:0;padding:0;border:0';
+    }
+  }
+
+  toggleCheckItem(chkId, '', doneDate).then(function () {
+    pdRefreshChkProgress(projId);
   }).catch(function (err) {
     console.warn('[pdToggleCheck]', err);
-    showProjectDetail(projId);
+    checkbox.checked = !isDone;
+    if (textSpan) { textSpan.style.textDecoration = !isDone ? 'line-through' : 'none'; textSpan.style.color = !isDone ? 'var(--t6)' : 'var(--t2)'; }
   });
 }
 
-function pdDeleteCheck(projId, chkId) {
-  if (!confirm('이 항목을 삭제하시겠습니까?')) return;
+function pdDeleteCheck(projId, chkId, btn) {
+  var row = btn.closest('.pdChkRow');
+  if (row) row.style.opacity = '0.3';
   chkDel(chkId).then(function () {
-    showProjectDetail(projId);
+    if (row) row.remove();
+    pdRefreshChkProgress(projId);
   }).catch(function (err) {
     console.warn('[pdDeleteCheck]', err);
-    showProjectDetail(projId);
+    if (row) row.style.opacity = '1';
+  });
+}
+
+/* 완료 날짜 변경 */
+function pdChangeDoneDate(projId, chkId, newDate) {
+  var sep = chkId.indexOf('::');
+  if (sep >= 0 && typeof apiFetch === 'function' && (typeof AUTH_SKIP === 'undefined' || !AUTH_SKIP)) {
+    var parentId = chkId.slice(0, sep), idx = parseInt(chkId.slice(sep + 2), 10);
+    apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
+      var row = r.data;
+      var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+      if (idx >= 0 && idx < items.length) {
+        items[idx].doneDate = newDate;
+        return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
+      }
+    }).catch(function (err) { console.warn('[pdChangeDoneDate]', err); });
+  } else {
+    var store = db.transaction('checklists', 'readwrite').objectStore('checklists');
+    var req = store.get(chkId);
+    req.onsuccess = function () {
+      var item = req.result;
+      if (item) { item.doneDate = newDate; store.put(item); }
+    };
+  }
+}
+
+/* 체크리스트 진행률 카운터 인라인 갱신 */
+function pdRefreshChkProgress(projId) {
+  chkGetByProject(projId).then(function (allChk) {
+    var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
+    // 개요 탭 카운터 갱신
+    var panel = document.getElementById('projDetailPanel');
+    if (!panel) return;
+    var overviewCounters = panel.querySelectorAll('[data-chk-counter]');
+    var phaseKeys = Object.keys(phases);
+    phaseKeys.forEach(function (pk) {
+      var items = allChk.filter(function (c) { return c.phase === pk; });
+      var done = items.filter(function (c) { return c.done; }).length;
+      var pct = items.length ? Math.round(done / items.length * 100) : 0;
+      // 라이프사이클 단계 진행바의 카운터도 갱신
+      var phCounters = panel.querySelectorAll('[data-phase-count="' + pk + '"]');
+      phCounters.forEach(function (el) { el.textContent = done + '/' + items.length; });
+    });
   });
 }
 
 /* ═══ 체크리스트 항목 인라인 수정 ═══ */
 function pdEditCheckInline(span) {
-  if (span.querySelector('input')) return; // 이미 편집 중
+  if (span.querySelector('input')) return;
   var oldText = span.textContent;
   var projId = span.getAttribute('data-projid');
   var chkId = span.getAttribute('data-chkid');
@@ -1257,25 +1321,30 @@ function pdEditCheckInline(span) {
   input.type = 'text';
   input.value = oldText;
   input.style.cssText = 'width:100%;font-size:11px;padding:2px 6px;border:1px solid var(--ac);border-radius:3px;background:var(--bg-p);color:var(--t2);outline:none';
+  var saving = false;
+  function save() {
+    if (saving) return;
+    saving = true;
+    pdSaveCheckInline(span, projId, chkId, input.value.trim(), oldText);
+  }
   input.onkeydown = function (e) {
-    if (e.key === 'Enter') { e.preventDefault(); pdSaveCheckInline(projId, chkId, input.value.trim(), oldText); }
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
     if (e.key === 'Escape') { span.textContent = oldText; }
   };
-  input.onblur = function () { pdSaveCheckInline(projId, chkId, input.value.trim(), oldText); };
+  input.onblur = function () { save(); };
   span.textContent = '';
   span.appendChild(input);
   input.focus();
   input.select();
 }
 
-function pdSaveCheckInline(projId, chkId, newText, oldText) {
-  if (!newText || newText === oldText) {
-    showProjectDetail(projId);
-    return;
-  }
+function pdSaveCheckInline(span, projId, chkId, newText, oldText) {
+  // 즉시 span 텍스트 복원 (입력 제거)
+  span.textContent = newText || oldText;
+  if (!newText || newText === oldText) return;
+
   var sep = chkId.indexOf('::');
   if (sep >= 0 && typeof apiFetch === 'function' && (typeof AUTH_SKIP === 'undefined' || !AUTH_SKIP)) {
-    // 서버 모드: parent row의 items 배열에서 해당 항목 텍스트 수정
     var parentId = chkId.slice(0, sep);
     var idx = parseInt(chkId.slice(sep + 2), 10);
     apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
@@ -1285,22 +1354,18 @@ function pdSaveCheckInline(projId, chkId, newText, oldText) {
         items[idx].text = newText;
         return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
       }
-    }).then(function () {
-      showProjectDetail(projId);
     }).catch(function (err) {
       console.error('[pdSaveCheckInline]', err);
+      span.textContent = oldText;
       if (typeof showToast === 'function') showToast('수정 실패', 'error');
-      showProjectDetail(projId);
     });
   } else {
-    // 로컬 모드: IndexedDB에서 직접 수정
     var store = db.transaction('checklists', 'readwrite').objectStore('checklists');
     var req = store.get(chkId);
     req.onsuccess = function () {
       var item = req.result;
       if (item) { item.text = newText; store.put(item); }
     };
-    req.transaction.oncomplete = function () { showProjectDetail(projId); };
   }
 }
 
@@ -1308,16 +1373,17 @@ function pdAddCheck(projId, phase) {
   var inp = document.getElementById('pdNewChkText');
   var inp2 = document.getElementById('pdOverviewNewChk');
   var text = '';
-  if (inp && inp.value.trim()) { text = inp.value.trim(); }
-  else if (inp2 && inp2.value.trim()) { text = inp2.value.trim(); }
+  if (inp && inp.value.trim()) { text = inp.value.trim(); inp.value = ''; }
+  else if (inp2 && inp2.value.trim()) { text = inp2.value.trim(); inp2.value = ''; }
   if (!text) return;
   chkGetByPhase(projId, phase).then(function (items) {
     return createCheckItem({ projectId: projId, phase: phase, text: text, order: items.length });
   }).then(function () {
+    // 패널 전체 새로고침 (새 항목 DOM 생성 필요)
     showProjectDetail(projId);
   }).catch(function (err) {
       console.error('[pdAddCheck]', err);
-      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+      if (typeof showToast === 'function') showToast('추가 실패', 'error');
   });
 }
 

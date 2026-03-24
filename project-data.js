@@ -832,8 +832,8 @@ function createCheckItem(data) {
   return chkPut(item);
 }
 
-/* 체크리스트 항목 토글 */
-function toggleCheckItem(id, doneBy) {
+/* 체크리스트 항목 토글 (doneDate 지정 가능, 기본 오늘) */
+function toggleCheckItem(id, doneBy, doneDate) {
   return new Promise(function (res, rej) {
     var tx = db.transaction('checklists', 'readwrite');
     var store = tx.objectStore('checklists');
@@ -842,7 +842,7 @@ function toggleCheckItem(id, doneBy) {
       var item = req.result;
       if (!item) { res(null); return; }
       item.done = !item.done;
-      item.doneDate = item.done ? localDate() : null;
+      item.doneDate = item.done ? (doneDate || localDate()) : null;
       item.doneBy = item.done ? (doneBy || '') : null;
       store.put(item);
     };
@@ -1408,8 +1408,8 @@ function showToast(msg, type) {
     });
   };
 
-  // 서버 모드: toggleCheckItem 오버라이드
-  toggleCheckItem = function (id, doneBy) {
+  // 서버 모드: toggleCheckItem 오버라이드 (doneDate 지정 가능, 기본 오늘)
+  toggleCheckItem = function (id, doneBy, doneDate) {
     var sep = id.indexOf('::');
     if (sep < 0) return Promise.resolve(null);
     var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
@@ -1418,7 +1418,7 @@ function showToast(msg, type) {
       var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
       if (idx < 0 || idx >= items.length) return null;
       items[idx].done = !items[idx].done;
-      items[idx].doneDate = items[idx].done ? localDate() : null;
+      items[idx].doneDate = items[idx].done ? (doneDate || localDate()) : null;
       items[idx].doneBy = items[idx].done ? (doneBy || '') : null;
       return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
     }).catch(function (err) {
