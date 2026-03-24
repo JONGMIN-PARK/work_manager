@@ -283,7 +283,8 @@ function createEvent(data) {
     memo: data.memo || '',
     repeat: data.repeat || null, // null, 'weekly', 'biweekly', 'monthly'
     repeatUntil: data.repeatUntil || '', // 반복 종료일
-    createdAt: now
+    createdAt: now,
+    _isNew: true
   };
   return evtPut(evt);
 }
@@ -825,7 +826,8 @@ function createCheckItem(data) {
     doneBy: null,
     dueDate: data.dueDate || '',
     order: data.order || 0,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    _isNew: true
   };
   return chkPut(item);
 }
@@ -957,7 +959,8 @@ function createIssue(data) {
     resolvedDate: null,
     resolution: '',
     tags: data.tags || [],
-    createdAt: now
+    createdAt: now,
+    _isNew: true
   };
   return issuePut(issue);
 }
@@ -1282,7 +1285,10 @@ function showToast(msg, type) {
   evtGetAll = function () { return apiFetch('/api/events').then(function (r) { return toCamelArray(r.data); }); };
   evtGet = function (id) { return apiFetch('/api/events/' + id).then(function (r) { return toCamel(r.data); }); };
   evtPut = function (evt) {
-    if (!evt.id) return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
+    if (!evt.id || evt._isNew) {
+      delete evt._isNew;
+      return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
+    }
     return apiFetch('/api/events/' + evt.id, { method: 'PUT', body: JSON.stringify(evt) })
       .then(function (r) { return toCamel(r.data); })
       .catch(function (err) {
@@ -1307,7 +1313,10 @@ function showToast(msg, type) {
   issueGetAll = function () { return apiFetch('/api/issues').then(function (r) { return toCamelArray(r.data); }); };
   issueGet = function (id) { return apiFetch('/api/issues/' + id).then(function (r) { return toCamel(r.data); }); };
   issuePut = function (issue) {
-    if (!issue.id) return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
+    if (!issue.id || issue._isNew) {
+      delete issue._isNew;
+      return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
+    }
     return apiFetch('/api/issues/' + issue.id, { method: 'PUT', body: JSON.stringify(issue) })
       .then(function (r) { return toCamel(r.data); })
       .catch(function (err) {
@@ -1334,7 +1343,10 @@ function showToast(msg, type) {
   // ─── 체크리스트 ───
   chkGetByProject = function (pid) { return apiFetch('/api/checklists?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
   chkPut = function (item) {
-    if (!item.id) return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
+    if (!item.id || item._isNew) {
+      delete item._isNew;
+      return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
+    }
     return apiFetch('/api/checklists/' + item.id, { method: 'PUT', body: JSON.stringify(item) })
       .then(function (r) { return toCamel(r.data); })
       .catch(function (err) {

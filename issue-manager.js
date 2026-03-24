@@ -486,6 +486,11 @@ function saveIssueModal(isEdit, editId) {
       detectRepeatIssue(savedIssue);
     }
     renderIssues();
+  }).catch(function (err) {
+    console.error('[saveIssueModal]', err);
+    var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
+    if (err && err.status === 403) msg = '이슈 등록 권한이 없습니다.';
+    showToast('❌ 이슈 저장 실패: ' + msg, 'error');
   });
 }
 
