@@ -1193,19 +1193,21 @@ function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
 /* ═══ 체크리스트 인터랙션 ═══ */
 function pdToggleCheck(projId, chkId) {
   toggleCheckItem(chkId).then(function () {
-    showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+    return showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
   }).catch(function (err) {
-      console.error('[pdToggleCheck]', err);
-      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+    console.warn('[pdToggleCheck]', err);
+    // 404/500 → 체크리스트 데이터 손상, 화면만 새로고침
+    showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
   });
 }
 
 function pdDeleteCheck(projId, chkId) {
   chkDel(chkId).then(function () {
-    showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+    return showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
   }).catch(function (err) {
-      console.error('[pdDeleteCheck]', err);
-      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+    console.warn('[pdDeleteCheck]', err);
+    // 실패해도 화면 새로고침으로 현재 상태 반영
+    showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
   });
 }
 
