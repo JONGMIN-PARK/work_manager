@@ -13,19 +13,37 @@ router.use(auth.authenticate);
 // GET /api/archives/records
 router.get('/records', async function (req, res) {
   try {
-    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM work_records WHERE 1=1';
+    var where = 'WHERE 1=1';
     var params = [];
     var idx = 1;
-    if (req.query.date) { sql += ' AND date = $' + idx++; params.push(req.query.date); }
-    if (req.query.name) { sql += ' AND name = $' + idx++; params.push(req.query.name); }
-    if (req.query.orderNo) { sql += ' AND order_no = $' + idx++; params.push(req.query.orderNo); }
+    if (req.query.date) { where += ' AND date = $' + idx++; params.push(req.query.date); }
+    if (req.query.startDate) { where += ' AND date >= $' + idx++; params.push(req.query.startDate); }
+    if (req.query.endDate) { where += ' AND date <= $' + idx++; params.push(req.query.endDate); }
+    if (req.query.name) { where += ' AND name = $' + idx++; params.push(req.query.name); }
+    if (req.query.orderNo) { where += ' AND order_no = $' + idx++; params.push(req.query.orderNo); }
 
-    var pg = parsePagination(req.query, 100);
-    sql += ' ORDER BY date DESC, name, order_no LIMIT $' + idx++ + ' OFFSET $' + idx++;
+    // 부서 필터 (manager/member는 자기 부서만)
+    var role = req.user.role;
+    var deptId = req.user.departmentId;
+    if (deptId && role !== 'admin' && role !== 'executive') {
+      where += ' AND (user_id IN (SELECT id FROM users WHERE department_id = $' + idx++ + ') OR user_id IS NULL)';
+      params.push(deptId);
+    }
+
+    var pg = parsePagination(req.query, 200);
+
+    // total은 요청 시에만 계산 (성능)
+    var total = 0;
+    if (req.query.withTotal === 'true' || pg.offset === 0) {
+      var countR = await db.query('SELECT COUNT(*) as cnt FROM work_records ' + where, params.slice(0, idx - 1));
+      total = parseInt(countR.rows[0].cnt, 10);
+    }
+
+    var dataSql = 'SELECT * FROM work_records ' + where +
+      ' ORDER BY date DESC, name, order_no LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
-    var r = await db.query(sql, params);
-    var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
-    r.rows.forEach(function(row) { delete row._total; });
+    var r = await db.query(dataSql, params);
+
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[work-records/list]', e);

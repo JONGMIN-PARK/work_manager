@@ -243,7 +243,7 @@ function getPhaseName(phaseKey) {
 function pipelineLoadAllChecklists() {
   // 서버 모드: API를 통해 전체 체크리스트 로드
   if (typeof apiFetch === 'function' && (typeof AUTH_SKIP === 'undefined' || !AUTH_SKIP)) {
-    return apiFetch('/api/checklists?limit=5000').then(function (r) {
+    return apiFetch('/api/checklists?limit=5000&all=true').then(function (r) {
       var rows = r.data || [];
       var map = {};
       rows.forEach(function (row) {

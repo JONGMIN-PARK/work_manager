@@ -1532,7 +1532,7 @@ function showToast(msg, type) {
   var _localWrGetAll = wrGetAll;
   var _localWrCount = wrCount;
   wrGetAll = function () {
-    return apiFetch('/api/archives/records?limit=50000').then(function (r) {
+    return apiFetch('/api/archives/records?limit=50000&all=true').then(function (r) {
       return toCamelArray(r.data).map(function (rec) {
         if (typeof rec.hours === 'string') rec.hours = parseFloat(rec.hours) || 0;
         return rec;

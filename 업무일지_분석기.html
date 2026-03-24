@@ -3092,7 +3092,7 @@ async function _postAuthInit(){
     try{
       // 전체 데이터 로드 (limit=50000으로 페이지네이션 회피)
       var _srvRes=await Promise.race([
-        apiFetch('/api/archives/records?limit=50000'),
+        apiFetch('/api/archives/records?limit=50000&all=true'),
         new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},15000)})
       ]);
       if(_srvRes&&_srvRes.data&&_srvRes.data.length>0){

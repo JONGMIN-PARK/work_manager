@@ -114,6 +114,7 @@ var departmentRoutes = require('./routes/departments');
 var profileRoutes = require('./routes/profile');
 var auditRoutes = require('./routes/audit');
 var anyworksRoutes = require('./routes/anyworks');
+var statsRoutes = require('./routes/stats');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -131,6 +132,7 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/anyworks', anyworksRoutes);
+app.use('/api/stats', statsRoutes);
 
 // ─── 헬스 체크 ───
 app.get('/health', async function (req, res) {
