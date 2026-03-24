@@ -731,36 +731,42 @@ async function saveProjectUI(existingId) {
   };
 
   var projId;
-  if (existingId) {
-    await updateProject(existingId, data);
-    projId = existingId;
-    // 기존 마일스톤 삭제 후 새로 저장
-    await msDelByProject(existingId);
-  } else {
-    var p = await createProject(data);
-    projId = p.id;
-  }
+  try {
+    if (existingId) {
+      await updateProject(existingId, data);
+      projId = existingId;
+      // 기존 마일스톤 삭제 후 새로 저장
+      await msDelByProject(existingId);
+    } else {
+      var p = await createProject(data);
+      if (!p || !p.id) { showToast('프로젝트 저장 실패: DB 연결을 확인하세요.','warn'); return; }
+      projId = p.id;
+    }
 
-  // 마일스톤 저장
-  var msRows = document.querySelectorAll('#msRows .proj-ms-row');
-  for (var i = 0; i < msRows.length; i++) {
-    var row = msRows[i];
-    var msName = row.querySelector('.ms-name').value.trim();
-    if (!msName) continue;
-    await createMilestone({
-      projectId: projId,
-      name: msName,
-      startDate: row.querySelector('.ms-start').value,
-      endDate: row.querySelector('.ms-end').value,
-      status: row.querySelector('.ms-status').value,
-      order: i
-    });
-  }
+    // 마일스톤 저장
+    var msRows = document.querySelectorAll('#msRows .proj-ms-row');
+    for (var i = 0; i < msRows.length; i++) {
+      var row = msRows[i];
+      var msName = row.querySelector('.ms-name').value.trim();
+      if (!msName) continue;
+      await createMilestone({
+        projectId: projId,
+        name: msName,
+        startDate: row.querySelector('.ms-start').value,
+        endDate: row.querySelector('.ms-end').value,
+        status: row.querySelector('.ms-status').value,
+        order: i
+      });
+    }
 
-  document.getElementById('projModal').remove();
-  await renderTimeline();
-  if (typeof renderCalendar === 'function') await renderCalendar();
-  showToast(existingId ? '프로젝트가 수정되었습니다' : '프로젝트가 등록되었습니다');
+    document.getElementById('projModal').remove();
+    await renderTimeline();
+    if (typeof renderCalendar === 'function') await renderCalendar();
+    showToast(existingId ? '프로젝트가 수정되었습니다' : '프로젝트가 등록되었습니다');
+  } catch (err) {
+    console.error('[saveProjectUI] 저장 실패:', err);
+    showToast('프로젝트 저장 중 오류 발생: ' + (err.message || err), 'warn');
+  }
 }
 
 async function deleteProjectUI(id) {
