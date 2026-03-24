@@ -3124,6 +3124,65 @@ var _awLocalBase = 'http://127.0.0.1:' + _awLocalPort;
 
 var ANYWORKS_TEAMS = ['기술연구소','장비사업부','모션사업부'];
 
+function awDefaultStart() {
+  var d = new Date(); var dow = d.getDay() || 7;
+  var mon = new Date(d); mon.setDate(d.getDate() - dow + 1);
+  return mon.getFullYear()+String(mon.getMonth()+1).padStart(2,'0')+String(mon.getDate()).padStart(2,'0');
+}
+function awDefaultEnd() {
+  var d = new Date(); var dow = d.getDay() || 7;
+  var sun = new Date(d); sun.setDate(d.getDate() - dow + 7);
+  return sun.getFullYear()+String(sun.getMonth()+1).padStart(2,'0')+String(sun.getDate()).padStart(2,'0');
+}
+
+/* ── 간편 가져오기 (로컬 에이전트 연결 시) ── */
+async function awQuickStart() {
+  var start = document.getElementById('awStart').value.trim();
+  var end = document.getElementById('awEnd').value.trim();
+  var boxes = document.querySelectorAll('input[name="aw_team"]:checked');
+  var teams = []; boxes.forEach(function(b){ teams.push(b.value); });
+
+  if (!start || !end || !/^\d{8}$/.test(start) || !/^\d{8}$/.test(end)) { showToast('날짜를 YYYYMMDD 형식으로 입력하세요','error'); return; }
+  if (teams.length === 0) { showToast('사업부를 1개 이상 선택하세요','error'); return; }
+
+  localStorage.setItem('anyworks_start', start);
+  localStorage.setItem('anyworks_end', end);
+  localStorage.setItem('anyworks_teams', JSON.stringify(teams));
+
+  // 로컬 에이전트의 저장된 로그인 정보 사용
+  _awActiveBase = _awLocalBase;
+  var btn = document.getElementById('awStartBtn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.textContent = '실행 중...'; }
+  var cancelBtn = document.getElementById('awCancelBtn');
+  if (cancelBtn) cancelBtn.style.display = '';
+  var resultArea = document.getElementById('awResultArea');
+  if (resultArea) resultArea.style.display = 'block';
+  var logBox = document.getElementById('awLogBox');
+  if (logBox) logBox.innerHTML = '<div style="color:var(--t4)">[' + new Date().toLocaleTimeString() + '] 사내PC에서 다운로드 시작...</div>';
+
+  try {
+    // 로컬 에이전트에서 저장된 config 가져와서 로그인 정보 포함
+    var configResp = await fetch(_awLocalBase + '/health');
+    if (!configResp.ok) throw new Error('로컬 에이전트 연결 실패');
+
+    var resp = await fetch(_awLocalBase + '/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: '_saved_', password: '_saved_', start_date: start, end_date: end, teams: teams })
+    });
+    var data = await resp.json();
+    if (!resp.ok) { throw new Error(data.error || 'API 오류'); }
+
+    _anyworksJobId = data.job_id;
+    _awLastLogIndex = 0;
+    _anyworksPollTimer = setInterval(function(){ pollAnyworksJob(); }, 2000);
+  } catch(e) {
+    if (logBox) logBox.innerHTML += '<div style="color:#EF4444">오류: ' + e.message + '</div>';
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.textContent = '🚀 가져오기'; }
+    if (cancelBtn) cancelBtn.style.display = 'none';
+  }
+}
+
 /* ── 로컬 에이전트 연결 확인 ── */
 async function awCheckLocal() {
   try {
@@ -3146,6 +3205,75 @@ async function openAnyworksModal() {
   var old = document.getElementById('anyworksOverlay');
   if (old) old.remove();
 
+  // 로컬 에이전트 연결 확인
+  var localOk = await awCheckLocal();
+
+  var ov = document.createElement('div');
+  ov.id = 'anyworksOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)';
+
+  var statusColor = localOk ? '#10B981' : '#EF4444';
+  var statusText = localOk ? '✅ 사내PC 연결됨' : '❌ 사내PC 미연결';
+  var statusDesc = localOk
+    ? '웹앱에서 바로 다운로드할 수 있습니다.'
+    : '사내PC에서 아래 명령어를 실행하세요:';
+
+  ov.innerHTML =
+    '<div style="background:var(--bg-p);border-radius:14px;padding:28px;max-width:480px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,.4)">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'+
+        '<div style="font-size:15px;font-weight:700;color:var(--t1)">🌐 애니웍스 주간일지 가져오기</div>'+
+        '<button onclick="closeAnyworksModal()" style="background:none;border:none;color:var(--t5);font-size:18px;cursor:pointer;padding:4px">✕</button>'+
+      '</div>'+
+
+      '<div style="text-align:center;padding:20px 0">'+
+        '<div style="font-size:40px;margin-bottom:12px">📊</div>'+
+        '<div style="font-size:13px;font-weight:700;color:'+statusColor+';margin-bottom:8px">'+statusText+'</div>'+
+        '<p style="font-size:12px;color:var(--t4);margin-bottom:16px">'+statusDesc+'</p>'+
+        (localOk ? '' :
+          '<div style="background:#0a0a1e;border:1px solid var(--bd);border-radius:8px;padding:12px 16px;margin:0 auto 16px;max-width:380px;text-align:left">'+
+            '<code style="font-size:11px;color:#22D3EE;font-family:Consolas,monospace;word-break:break-all">python D:\\ai\\work\\weekly_report\\download_weekly.py</code>'+
+          '</div>'+
+          '<p style="font-size:11px;color:var(--t5);margin-bottom:16px">실행하면 GUI 창 + API 서버(포트 5050)가 함께 시작됩니다.<br>GUI에서 직접 다운로드하거나, 이 버튼을 다시 클릭하면 웹앱에서 연동됩니다.</p>'
+        )+
+      '</div>'+
+
+      (localOk ?
+        '<div id="awQuickForm">'+
+          '<div style="display:flex;gap:10px;margin-bottom:10px">'+
+            '<div style="flex:1"><label style="font-size:10px;color:var(--t5);font-weight:600;display:block;margin-bottom:3px">시작일</label>'+
+            '<input type="text" id="awStart" class="si" style="width:100%;padding:8px 10px;font-size:12px" placeholder="20260101" value="'+(localStorage.getItem('anyworks_start')||awDefaultStart())+'"></div>'+
+            '<div style="flex:1"><label style="font-size:10px;color:var(--t5);font-weight:600;display:block;margin-bottom:3px">종료일</label>'+
+            '<input type="text" id="awEnd" class="si" style="width:100%;padding:8px 10px;font-size:12px" placeholder="20260315" value="'+(localStorage.getItem('anyworks_end')||awDefaultEnd())+'"></div>'+
+          '</div>'+
+          '<div style="margin-bottom:12px">'+
+            '<label style="font-size:10px;color:var(--t5);font-weight:600;display:block;margin-bottom:4px">사업부</label>'+
+            '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+              ANYWORKS_TEAMS.map(function(t){
+                var chk = (JSON.parse(localStorage.getItem('anyworks_teams')||'[]')).indexOf(t)>=0 || !localStorage.getItem('anyworks_teams');
+                return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--t3);cursor:pointer"><input type="checkbox" name="aw_team" value="'+t+'"'+(chk?' checked':'')+'>'+t+'</label>';
+              }).join('')+
+            '</div>'+
+          '</div>'+
+          '<div id="awResultArea" style="display:none"><div id="awLogBox" style="max-height:200px;overflow-y:auto;background:#0a0a1e;border:1px solid var(--bd);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:10px;line-height:1.6;color:var(--t4);margin-bottom:12px"></div></div>'+
+          '<div id="awStatusBadge" style="display:none"></div>'+
+        '</div>' : ''
+      )+
+
+      '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">'+
+        '<button id="awCancelBtn" onclick="cancelAnyworksJob()" style="display:none;padding:8px 20px;border:1px solid #EF4444;border-radius:8px;background:rgba(239,68,68,.12);color:#F87171;cursor:pointer;font-size:12px;font-weight:600">취소</button>'+
+        '<button onclick="closeAnyworksModal()" style="padding:8px 20px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t4);cursor:pointer;font-size:12px">닫기</button>'+
+        (localOk ?
+          '<button id="awStartBtn" onclick="awQuickStart()" style="padding:8px 24px;border:none;border-radius:8px;background:linear-gradient(135deg,#06B6D4,#0891B2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">🚀 가져오기</button>' :
+          '<button onclick="closeAnyworksModal()" style="padding:8px 24px;border:none;border-radius:8px;background:#4a4a6a;color:#e0e0e0;cursor:pointer;font-size:12px;font-weight:600">확인</button>'
+        )+
+      '</div>'+
+    '</div>';
+
+  document.body.appendChild(ov);
+  ov.onclick = function(e) { if (e.target===ov) closeAnyworksModal(); };
+  return;
+
+  // ── 아래는 기존 전체 모달 (비활성) ──
   var savedId = localStorage.getItem('anyworks_id') || '';
   var savedPw = localStorage.getItem('anyworks_pw') || '';
   var savedTeams = [];
