@@ -2989,7 +2989,9 @@ document.addEventListener('click', function(e) {
 var _initDone=false;
 async function _postAuthInit(){
   if(_initDone)return;_initDone=true;
-  if(typeof openDBv2==='function'){await openDBv2()}else{await openDB()}
+  try{
+    if(typeof openDBv2==='function'){await openDBv2()}else{await openDB()}
+  }catch(ex){console.warn('DB open err:',ex)}
   if(typeof loadOrdersToMap==='function'){try{await loadOrdersToMap()}catch(ex){console.warn('loadOrdersToMap:',ex)}}
   if(typeof initSettings==='function')initSettings();
   ldFvS();upFvB();
@@ -2999,7 +3001,7 @@ async function _postAuthInit(){
   initAk();rEC();
   // DB에 저장된 업무일지 자동 로드
   try{
-    if(typeof wrCount==='function'){
+    if(typeof db!=='undefined'&&db&&typeof wrCount==='function'){
       var cnt=await wrCount();
       if(cnt>0){
         var statusEl=document.getElementById('wrDbStatus');
@@ -3501,7 +3503,11 @@ function showAnyworksResultPopup(results, job) {
 function onAuthReady(){_postAuthInit()}
 (async()=>{
   // 인증 초기화 (서버 모드일 때)
-  if(typeof authInit==='function'){var authOk=await authInit();if(!authOk&&typeof AUTH_SKIP!=='undefined'&&!AUTH_SKIP)return}
+  var authOk=true;
+  if(typeof authInit==='function'){
+    try{authOk=await authInit()}catch(e){console.warn('authInit err:',e);authOk=false}
+  }
+  // auth 실패해도 로컬 DB 데이터가 있으면 업무일지는 볼 수 있도록 _postAuthInit 실행
   await _postAuthInit();
 })();
 </script>

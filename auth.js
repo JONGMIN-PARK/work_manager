@@ -37,6 +37,11 @@ async function apiFetch(url, opts) {
     opts.headers['Content-Type'] = 'application/json';
   }
 
+  // 모바일 네트워크 대비 타임아웃 (15초)
+  var _abortCtrl = new AbortController();
+  var _abortTimer = setTimeout(function () { _abortCtrl.abort(); }, 15000);
+  if (!opts.signal) opts.signal = _abortCtrl.signal;
+
   var maxRetries = ((!opts.method || opts.method === 'GET') ? 2 : 0);
   var lastErr;
   for (var attempt = 0; attempt <= maxRetries; attempt++) {
@@ -62,6 +67,7 @@ async function apiFetch(url, opts) {
       }
 
       var data = await res.json();
+      clearTimeout(_abortTimer);
       if (!res.ok) {
         var err = new Error(data.message || res.statusText);
         err.status = res.status;
@@ -70,6 +76,7 @@ async function apiFetch(url, opts) {
       }
       return data;
     } catch (e) {
+      clearTimeout(_abortTimer);
       lastErr = e;
       // 네트워크 오류만 재시도 (4xx 등 응답 에러는 재시도하지 않음)
       if (!e.status && attempt < maxRetries) {
@@ -83,11 +90,15 @@ async function apiFetch(url, opts) {
 
 async function _tryRefresh() {
   try {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 8000);
     var res = await fetch(API_BASE + '/api/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: _refreshToken })
+      body: JSON.stringify({ refreshToken: _refreshToken }),
+      signal: controller.signal
     });
+    clearTimeout(timer);
     if (!res.ok) return false;
     var data = await res.json();
     _accessToken = data.data.accessToken;

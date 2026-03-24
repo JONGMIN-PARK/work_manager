@@ -1505,9 +1505,17 @@ function showToast(msg, type) {
   wkPut = function (data) { return apiFetch('/api/archives', { method: 'POST', body: JSON.stringify(data) }).then(function (r) { return toCamel(r.data); }); };
   wkDel = function (id) { return apiFetch('/api/archives/' + encodeURIComponent(id), { method: 'DELETE' }); };
 
-  // ─── 업무일지 레코드 ───
-  wrGetAll = function () { return apiFetch('/api/archives/records').then(function (r) { return toCamelArray(r.data); }); };
-  wrCount = function () { return apiFetch('/api/archives/records/count').then(function (r) { return r.data.count; }); };
+  // ─── 업무일지 레코드 (서버 실패 시 로컬 IndexedDB fallback) ───
+  var _localWrGetAll = wrGetAll;
+  var _localWrCount = wrCount;
+  wrGetAll = function () {
+    return apiFetch('/api/archives/records').then(function (r) { return toCamelArray(r.data); })
+      .catch(function () { return _localWrGetAll(); });
+  };
+  wrCount = function () {
+    return apiFetch('/api/archives/records/count').then(function (r) { return r.data.count; })
+      .catch(function () { return _localWrCount(); });
+  };
   wrBulkPut = function (records) { return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) }); };
   wrClear = function () { return apiFetch('/api/archives/records', { method: 'DELETE' }); };
 
