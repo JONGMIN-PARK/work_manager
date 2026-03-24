@@ -218,9 +218,65 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 /* 문서관리 엑셀 미리보기 테이블 */
 .doc-sheet table{border-collapse:collapse;width:100%}.doc-sheet th,.doc-sheet td{border:1px solid var(--bd);padding:3px 6px;font-size:10px;white-space:nowrap}
 .doc-sheet th{background:var(--th);color:var(--t4);font-weight:600}
-@media(max-width:768px){.cg,.fg{grid-template-columns:1fr}.sg{grid-template-columns:1fr 1fr}.hdr-in{flex-direction:column;align-items:flex-start}.cal-cell{min-height:60px}.tl-label,.tl-label-header{min-width:120px}#mTimeline>div{grid-template-columns:1fr!important}#tlListPanel{position:static!important}#docPanels{grid-template-columns:1fr!important}#docPreviewFlex,#docSumFlex{flex-direction:column!important}#docPreviewFlex>div:first-child,#docSumFlex>div:first-child{max-width:100%!important;border-right:none!important;border-bottom:1px solid var(--bd)!important;padding-right:0!important;padding-bottom:10px!important}}
-@media(max-width:480px){.hdr-in{padding:8px 12px}.con{padding:8px}h1{font-size:15px}.sub{font-size:9px}.sg{grid-template-columns:1fr 1fr}.sc{padding:10px 12px}.sv{font-size:18px}.sl{font-size:9px}.fg{grid-template-columns:1fr}.cg{grid-template-columns:1fr}.pnl{padding:12px}.tabs{gap:2px}.tab{padding:6px 10px;font-size:10px}.page-tabs .tab{padding:8px 14px;font-size:11px}.btn{padding:5px 10px;font-size:10px}.dz{padding:24px 12px}.tw{max-height:320px}th{font-size:9px;padding:7px 8px}td{font-size:11px;padding:6px 8px}}
 @media(max-width:1024px){.cg{grid-template-columns:1fr}.fg{grid-template-columns:1fr 1fr}}
+@media(max-width:768px){
+  .cg,.fg{grid-template-columns:1fr}.sg{grid-template-columns:1fr 1fr}
+  .hdr-in{flex-direction:column;align-items:flex-start}
+  .cal-cell{min-height:60px}.tl-label,.tl-label-header{min-width:120px}
+  #mTimeline>div{grid-template-columns:1fr!important}#tlListPanel{position:static!important}
+  #docPanels{grid-template-columns:1fr!important}
+  #docPreviewFlex,#docSumFlex{flex-direction:column!important}
+  #docPreviewFlex>div:first-child,#docSumFlex>div:first-child{max-width:100%!important;border-right:none!important;border-bottom:1px solid var(--bd)!important;padding-right:0!important;padding-bottom:10px!important}
+  .pnl{padding:12px;margin-bottom:10px}
+  .pnl-h{gap:6px;margin-bottom:10px}
+  .pnl-t{font-size:12px}
+  .btn{padding:5px 10px;font-size:10px}
+  .btn-s{padding:3px 8px;font-size:9px}
+  .chip{padding:4px 8px;font-size:10px;border-radius:6px}
+  .chip .dot{width:6px;height:6px;margin-right:4px}
+  #nameChips{gap:4px}
+  .msel{font-size:10px;padding:4px 22px 4px 8px;min-width:70px}
+  .sv{font-size:20px}.sv.sm{font-size:12px}.sl{font-size:9px}
+  .sc{padding:10px 12px}
+  .mob-sep{display:none}
+  .tabs{gap:2px}.tab{padding:6px 10px;font-size:10px}
+  .page-tabs .tab{padding:8px 14px;font-size:11px}
+}
+@media(max-width:480px){
+  .hdr{padding:10px 12px}
+  .hdr-in{padding:0;gap:6px}
+  .con{padding:6px 8px}
+  h1{font-size:14px}.sub{font-size:8px}
+  .sg{grid-template-columns:1fr 1fr;gap:6px}
+  .sc{padding:8px 10px}.sv{font-size:16px}.sv.sm{font-size:11px}.sl{font-size:8px;margin-bottom:3px}
+  .fg{grid-template-columns:1fr}.cg{grid-template-columns:1fr}
+  .pnl{padding:10px;margin-bottom:8px;border-radius:8px}
+  .pnl-h{flex-direction:column;align-items:flex-start;gap:6px;margin-bottom:8px}
+  .pnl-t{font-size:11px}
+  .btn{padding:4px 8px;font-size:9px;border-radius:5px}
+  .btn-s{padding:3px 6px;font-size:8px}
+  .chip{padding:3px 7px;font-size:9px;border-radius:5px}
+  .chip .dot{width:5px;height:5px;margin-right:3px}
+  #nameChips{gap:3px}
+  .msel{font-size:9px;padding:3px 20px 3px 6px;min-width:60px}
+  .tabs{gap:1px;padding:3px}.tab{padding:5px 8px;font-size:9px}
+  .page-tabs{gap:2px}.page-tabs .tab{padding:6px 10px;font-size:10px}
+  .dz{padding:20px 10px}
+  .tw{max-height:300px}
+  th{font-size:8px;padding:6px 6px;letter-spacing:.3px}
+  td{font-size:10px;padding:5px 6px}
+  .mob-sep{display:none}
+  .si{font-size:11px;padding:6px 10px 6px 28px}
+  .fl{font-size:10px}
+  .lb{max-height:120px}
+  .li{padding:5px 8px;font-size:10px}
+  #globalSearchInput{width:120px;font-size:10px;padding:5px 8px 5px 24px}
+  #globalSearchInput:focus{width:160px}
+  #globalSearchDropdown{width:280px;max-height:350px}
+  #notifDropdown{width:280px}
+  .thb{gap:2px}
+  .thd{width:14px;height:14px}
+}
 /* ═══ 통합 검색 ═══ */
 #globalSearchWrap{position:relative;flex-shrink:0}
 #globalSearchInput{background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:6px 10px 6px 28px;font-size:11px;color:var(--t2);font-family:inherit;outline:none;width:180px;transition:border-color .15s,width .25s,box-shadow .15s}
@@ -325,11 +381,11 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
         <div style="display:flex;gap:8px;align-items:center">
           <button class="btn btn-g" onclick="document.getElementById('fileInput2').click()">📁 다른파일<input id="fileInput2" type="file" accept=".xls,.xlsx,.html,.htm" style="display:none"></button>
           <button class="btn btn-w" onclick="saveWeek()" id="saveWeekBtn">💾 주차 저장</button>
-          <span style="color:var(--bd2)">│</span>
+          <span class="mob-sep" style="color:var(--bd2)">│</span>
           <button class="btn btn-g" onclick="exportWorkRecordsJSON()">📤 업무일지 내보내기</button>
           <button class="btn btn-g" onclick="document.getElementById('wrImportFile').click()">📥 업무일지 불러오기<input id="wrImportFile" type="file" accept=".json" style="display:none" onchange="importWorkRecordsJSON(this.files[0]);this.value=''"></button>
           <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer" title="원본 파일을 함께 저장하면 나중에 인코딩 변경 후 재파싱이 가능합니다"><input type="checkbox" id="saveRawTog" checked> 원본포함</label>
-          <span style="color:var(--bd2)">│</span>
+          <span class="mob-sep" style="color:var(--bd2)">│</span>
           <button class="btn btn-g" onclick="openAnyworksModal()" style="display:none;border-color:#06B6D4;color:#22D3EE">🌐 애니웍스</button>
         </div>
       </div>
@@ -345,7 +401,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
       <div class="pnl">
         <div class="pnl-h">
           <h3 class="pnl-t">📆 주차 선택 <span style="color:var(--t5);font-weight:400" id="weekSelCount"></span></h3>
-          <div style="display:flex;gap:6px;align-items:center">
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
             <select id="weekYearSel" class="msel" onchange="weekYearFilter=this.value;weekMonthFilter='';weekQtrFilter='';renderWeekSelector()" title="연도 선택" style="min-width:80px"><option value="">전체 연도</option></select>
             <select id="weekQtrSel" class="msel" onchange="weekQtrFilter=this.value;if(this.value){weekMonthFilter='';document.getElementById('weekMonthSel').value=''}renderWeekSelector()" title="분기 선택" style="min-width:90px"><option value="">전체 분기</option><option value="1Q">1Q (1~3월)</option><option value="2Q">2Q (4~6월)</option><option value="3Q">3Q (7~9월)</option><option value="4Q">4Q (10~12월)</option></select>
             <select id="weekMonthSel" class="msel" onchange="weekMonthFilter=this.value;if(this.value){weekQtrFilter='';document.getElementById('weekQtrSel').value=''}renderWeekSelector()" title="월 선택"><option value="">전체 월</option></select>
@@ -367,10 +423,10 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
             <button class="btn btn-w btn-s" onclick="saveFav()">⭐ 즐겨찾기 저장</button>
             <button class="btn btn-g btn-s hidden" onclick="loadFav()" id="loadFavBtn">⭐ 불러오기</button>
             <button class="btn btn-d btn-s hidden" onclick="clearFav()" id="clearFavBtn">⭐ 삭제</button>
-            <span style="color:var(--bd2)">│</span>
+            <span class="mob-sep" style="color:var(--bd2)">│</span>
             <button class="btn btn-g btn-s" onclick="renderGroupModal()" title="팀원 그룹 관리">👥 그룹</button>
             <button class="btn btn-g btn-s" onclick="renderAliasModal()" title="팀원 별칭 관리">🏷️ 별칭</button>
-            <span style="color:var(--bd2)">│</span>
+            <span class="mob-sep" style="color:var(--bd2)">│</span>
             <button class="btn btn-g btn-s hidden" id="selAllBtn" onclick="selAll()">전체 선택</button>
             <button class="btn btn-g btn-s" onclick="deAll()">전체 해제</button>
             <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer"><input type="checkbox" id="favOnlyTog" onchange="togFavOnly()"> 즐겨찾기만</label>
@@ -386,7 +442,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
         <div class="pnl-h"><h3 class="pnl-t">🔍 상세 필터</h3><div style="display:flex;gap:6px;align-items:center"><div id="afTags" style="display:flex;gap:5px;flex-wrap:wrap"></div><button class="btn btn-d btn-s hidden" onclick="resetAll()" id="resetBtn">✕ 초기화</button></div></div>
         <div style="margin-bottom:12px"><div class="fl">업무내용 검색</div><div class="sw"><span class="sic">🔎</span><input type="text" id="cSearch" class="si" placeholder="키워드 입력..." oninput="onSI()"><button class="hidden" id="sClear" onclick="clrS()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--t5);cursor:pointer;font-size:14px">✕</button></div></div>
         <div class="fg">
-          <div class="fc"><div class="fl"><span>수주번호 <span id="oFC"></span></span><span style="display:flex;gap:4px"><button class="btn btn-g" style="padding:3px 8px;font-size:10px" onclick="importOrderExcel()" title="엑셀에서 수주맵 불러오기">📥 불러오기</button><button class="btn btn-g" style="padding:3px 8px;font-size:10px" onclick="exportOrderExcel()" title="수주맵을 엑셀로 저장">📤 저장</button><button class="btn btn-d" style="padding:3px 8px;font-size:10px" onclick="resetOcmtOclient()" title="모든 행의 개별 수주명/거래처 값을 삭제하고 수주맵 기본값으로 복원">🗑️ 수주명·거래처 초기화</button><button class="btn btn-g btn-s" onclick="rstO()">해제</button></span></div><input type="file" id="orderExcelInput" accept=".xls,.xlsx" style="display:none" onchange="handleOrderExcel(this)"><input type="text" id="oSearch" class="si" style="margin-bottom:4px;padding:5px 10px;font-size:11px" placeholder="수주번호 검색..." oninput="clearTimeout(this._dt);this._dt=setTimeout(rOL,150)"><div class="lb" id="oLB"></div></div>
+          <div class="fc"><div class="fl"><span>수주번호 <span id="oFC"></span></span><span style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-g" style="padding:3px 8px;font-size:10px" onclick="importOrderExcel()" title="엑셀에서 수주맵 불러오기">📥 불러오기</button><button class="btn btn-g" style="padding:3px 8px;font-size:10px" onclick="exportOrderExcel()" title="수주맵을 엑셀로 저장">📤 저장</button><button class="btn btn-d" style="padding:3px 8px;font-size:10px" onclick="resetOcmtOclient()" title="모든 행의 개별 수주명/거래처 값을 삭제하고 수주맵 기본값으로 복원">🗑️ 초기화</button><button class="btn btn-g btn-s" onclick="rstO()">해제</button></span></div><input type="file" id="orderExcelInput" accept=".xls,.xlsx" style="display:none" onchange="handleOrderExcel(this)"><input type="text" id="oSearch" class="si" style="margin-bottom:4px;padding:5px 10px;font-size:11px" placeholder="수주번호 검색..." oninput="clearTimeout(this._dt);this._dt=setTimeout(rOL,150)"><div class="lb" id="oLB"></div></div>
           <div class="fc"><div class="fl"><span>업무분장 <span id="tFC"></span></span><button class="btn btn-g btn-s" onclick="rstT()">해제</button></div><div class="lb" id="tLB"></div></div>
           <div class="fc"><div class="fl"><span>수주명 <span id="onFC"></span></span><button class="btn btn-g btn-s" onclick="rstON()">해제</button></div><input type="text" id="onSearch" class="si" style="margin-bottom:4px;padding:5px 10px;font-size:11px" placeholder="수주명 검색..." oninput="clearTimeout(this._dt);this._dt=setTimeout(rONL,150)"><div class="lb" id="onLB"></div></div>
           <div class="fc"><div class="fl"><span>거래처 <span id="clFC"></span></span><button class="btn btn-g btn-s" onclick="rstCL()">해제</button></div><input type="text" id="clSearch" class="si" style="margin-bottom:4px;padding:5px 10px;font-size:11px" placeholder="거래처 검색..." oninput="clearTimeout(this._dt);this._dt=setTimeout(rCLL,150)"><div class="lb" id="clLB"></div></div>
@@ -420,7 +476,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
           <button class="tab" data-t="sum" onclick="sTab('sum')">📝 내용요약</button>
         </div>
         <!-- Table -->
-        <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button></div></div><div class="tw"><table><thead><tr><th style="width:70px">이름</th><th style="width:100px;white-space:nowrap">날짜</th><th style="width:100px">수주번호</th><th style="width:90px">수주명</th><th style="width:80px">거래처</th><th style="width:45px;text-align:right">시간</th><th style="width:70px;white-space:nowrap">업무분장</th><th style="width:36px">약자</th><th>업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div></div>
+        <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span class="mob-sep" style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button></div></div><div class="tw"><table><thead><tr><th style="width:70px">이름</th><th style="width:100px;white-space:nowrap">날짜</th><th style="width:100px">수주번호</th><th style="width:90px">수주명</th><th style="width:80px">거래처</th><th style="width:45px;text-align:right">시간</th><th style="width:70px;white-space:nowrap">업무분장</th><th style="width:36px">약자</th><th>업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div></div>
         </div>
         <!-- Content Summary (separate tab, no filter) -->
         <div id="tSum" class="hidden">
