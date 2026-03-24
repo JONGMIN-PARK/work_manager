@@ -63,19 +63,35 @@ app.use('/api', apiLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// ─── 캐시 버스팅: 서버 시작 시 빌드 버전 생성 ───
+var BUILD_VERSION = Date.now().toString(36);
+try {
+  var execSync = require('child_process').execSync;
+  BUILD_VERSION = execSync('git rev-parse --short HEAD', { cwd: path.join(__dirname, '..') }).toString().trim() || BUILD_VERSION;
+} catch (e) { /* git 없으면 타임스탬프 사용 */ }
+console.log('[Server] Build version:', BUILD_VERSION);
+
 // ─── 정적 파일 서빙 (프론트엔드) ───
 app.use(express.static(path.join(__dirname, '..'), {
-  index: '업무일지_분석기.html',
+  index: false, // HTML은 별도 미들웨어에서 처리
   extensions: ['html'],
   maxAge: '1h',
   etag: true,
-  lastModified: true,
-  setHeaders: function (res, filePath) {
-    if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-cache');
-    }
-  }
+  lastModified: true
 }));
+
+// ─── HTML 서빙 시 ?v= 동적 치환 ───
+var fs = require('fs');
+var htmlPath = path.join(__dirname, '..', '업무일지_분석기.html');
+app.get(['/', '/index', '/index.html'], function (req, res) {
+  fs.readFile(htmlPath, 'utf8', function (err, html) {
+    if (err) return res.status(500).send('HTML 로드 실패');
+    html = html.replace(/\?v=\d+"/g, '?v=' + BUILD_VERSION + '"');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(html);
+  });
+});
 
 // ─── API 라우트 ───
 var authRoutes = require('./routes/auth');
@@ -133,7 +149,13 @@ app.get('*', function (req, res) {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'NOT_FOUND', message: '존재하지 않는 API입니다.' });
   }
-  res.sendFile(path.join(__dirname, '..', '업무일지_분석기.html'));
+  fs.readFile(htmlPath, 'utf8', function (err, html) {
+    if (err) return res.status(500).send('HTML 로드 실패');
+    html = html.replace(/\?v=\d+"/g, '?v=' + BUILD_VERSION + '"');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(html);
+  });
 });
 
 // ─── 글로벌 에러 핸들러 ───

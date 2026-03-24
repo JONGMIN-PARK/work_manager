@@ -751,21 +751,23 @@ async function saveProjectUI(existingId) {
       projId = p.id;
     }
 
-    // 마일스톤 저장
+    // 마일스톤 병렬 저장
     var msRows = document.querySelectorAll('#msRows .proj-ms-row');
+    var msPromises = [];
     for (var i = 0; i < msRows.length; i++) {
       var row = msRows[i];
       var msName = row.querySelector('.ms-name').value.trim();
       if (!msName) continue;
-      await createMilestone({
+      msPromises.push(createMilestone({
         projectId: projId,
         name: msName,
         startDate: row.querySelector('.ms-start').value,
         endDate: row.querySelector('.ms-end').value,
         status: row.querySelector('.ms-status').value,
         order: i
-      });
+      }));
     }
+    await Promise.all(msPromises);
 
     document.getElementById('projModal').remove();
     await renderTimeline();
