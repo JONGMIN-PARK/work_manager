@@ -302,7 +302,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 
   <!-- ═══ WEEKLY MODE ═══ -->
   <div id="mWeekly">
-    <div class="dz" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+    <div class="dz hidden" id="uploadZone" onclick="document.getElementById('fileInput').click()">
       <input id="fileInput" type="file" accept=".xls,.xlsx,.html,.htm" style="display:none">
       <div style="font-size:40px;margin-bottom:14px;opacity:.8">📊</div>
       <p style="font-size:14px;font-weight:700;color:var(--t2);margin-bottom:6px">업무일지 파일을 드래그하거나 클릭하여 업로드</p>
@@ -316,6 +316,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
       </div>
       <div id="encUp" style="margin-top:12px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap"></div>
     </div>
+    <div id="initLoading" style="text-align:center;padding:60px 20px;color:var(--t5);font-size:13px">⏳ 데이터 로딩 중...</div>
 
     <div id="mainArea" class="hidden">
       <!-- Encoding + Reupload -->
@@ -3003,22 +3004,23 @@ async function _postAuthInit(){
   var _fo=lsGet('wa-fav-only');if(_fo==='1'&&fvN.length>0){fvO=true;document.getElementById('favOnlyTog').checked=true}
   initAk();rEC();
   // DB에 저장된 업무일지 자동 로드 (로컬 IndexedDB 직접 접근 — 서버 응답 대기 없음)
+  var _dataLoaded=false;
   try{
     if(typeof db!=='undefined'&&db&&db.objectStoreNames&&db.objectStoreNames.contains('workRecords')){
-      var _wrCnt=await new Promise(function(res){try{var tx=db.transaction('workRecords','readonly');var req=tx.objectStore('workRecords').count();req.onsuccess=function(){res(req.result)};req.onerror=function(){res(0)}}catch(e){res(0)}});
-      if(_wrCnt>0){
-        var statusEl=document.getElementById('wrDbStatus');
-        var statusText=document.getElementById('wrDbStatusText');
-        if(statusEl){statusEl.style.display='block';statusText.textContent='💾 DB에 저장된 업무일지 '+_wrCnt+'건이 있습니다.';}
-        // 로컬 IndexedDB에서 직접 로드 (서버 API 우회)
-        var _wrAll=await new Promise(function(res){try{var tx=db.transaction('workRecords','readonly');var req=tx.objectStore('workRecords').getAll();req.onsuccess=function(){res(req.result||[])};req.onerror=function(){res([])}}catch(e){res([])}});
-        if(_wrAll.length>0){
-          aD=_wrAll.map(function(r){return Object.assign({},r)});
-          applyADToUI();
-        }
+      var _wrAll=await new Promise(function(res){try{var tx=db.transaction('workRecords','readonly');var req=tx.objectStore('workRecords').getAll();req.onsuccess=function(){res(req.result||[])};req.onerror=function(){res([])}}catch(e){res([])}});
+      if(_wrAll.length>0){
+        aD=_wrAll.map(function(r){return Object.assign({},r)});
+        applyADToUI();
+        _dataLoaded=true;
       }
     }
   }catch(ex){console.warn('auto-load workRecords:',ex)}
+  // 로딩 표시 제거, 데이터 없으면 업로드 영역 표시
+  var _initLoadEl=document.getElementById('initLoading');
+  if(_initLoadEl)_initLoadEl.remove();
+  if(!_dataLoaded){
+    document.getElementById('uploadZone').classList.remove('hidden');
+  }
   // AI 프리셋 버튼 렌더
   const presetEl=document.getElementById('aiPresetBtns');
   if(presetEl&&typeof AI_PRESETS!=='undefined'){presetEl.innerHTML=AI_PRESETS.map(p=>`<span class="chip co" style="padding:2px 8px;font-size:9px" onclick="addPre('${p.text.replace(/'/g,"\\'")}')">${p.label}</span>`).join('')}
