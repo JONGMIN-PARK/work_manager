@@ -241,6 +241,27 @@ function getPhaseName(phaseKey) {
 
 /* ═══ 전체 체크리스트 로드 (파이프라인용) ═══ */
 function pipelineLoadAllChecklists() {
+  // 서버 모드: API를 통해 전체 체크리스트 로드
+  if (typeof apiFetch === 'function' && (typeof AUTH_SKIP === 'undefined' || !AUTH_SKIP)) {
+    return apiFetch('/api/checklists?limit=5000').then(function (r) {
+      var rows = r.data || [];
+      var map = {};
+      rows.forEach(function (row) {
+        var pid = row.project_id || row.projectId;
+        var phase = row.phase;
+        if (!pid || !phase) return;
+        if (!map[pid]) map[pid] = {};
+        if (!map[pid][phase]) map[pid][phase] = { total: 0, done: 0 };
+        var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+        items.forEach(function (it) {
+          map[pid][phase].total++;
+          if (it.done) map[pid][phase].done++;
+        });
+      });
+      return map;
+    }).catch(function () { return {}; });
+  }
+  // 로컬 모드: IndexedDB
   return new Promise(function (res) {
     if (typeof db === 'undefined' || !db) { res({}); return; }
     try {
@@ -248,7 +269,7 @@ function pipelineLoadAllChecklists() {
       var req = tx.objectStore('checklists').getAll();
       req.onsuccess = function () {
         var items = req.result || [];
-        var map = {}; // { projectId: { phase: { total, done } } }
+        var map = {};
         items.forEach(function (it) {
           if (!it.projectId || !it.phase) return;
           if (!map[it.projectId]) map[it.projectId] = {};

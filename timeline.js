@@ -899,6 +899,43 @@ async function showProjectDetail(id) {
         '<span class="badge" style="background:' + mSt.bg + ';color:' + mSt.color + ';font-size:8px;padding:1px 4px">' + mSt.label + '</span></div>';
     }).join('') : '<div style="font-size:11px;color:var(--t6)">마일스톤 없음</div>';
   html += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:6px">마일스톤 (' + projMs.length + ')</div>' + msHtml + '</div>';
+
+  // 개요 탭: 현재 단계 체크리스트 (기본 표시)
+  var overviewChkPhase = proj.currentPhase || 'order';
+  var overviewChkPh = phases[overviewChkPhase] || { label: overviewChkPhase, icon: '', color: '#94A3B8' };
+  var overviewChkItems = allChk.filter(function (c) { return c.phase === overviewChkPhase; });
+  overviewChkItems.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+  var overviewChkDone = overviewChkItems.filter(function (c) { return c.done; }).length;
+  var overviewChkPct = overviewChkItems.length ? Math.round(overviewChkDone / overviewChkItems.length * 100) : 0;
+
+  html += '<div style="margin-bottom:12px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+  html += '<span style="font-size:10px;color:var(--t5)">체크리스트 — ' + overviewChkPh.icon + ' ' + overviewChkPh.label + '</span>';
+  if (overviewChkItems.length > 0) {
+    html += '<span style="font-size:10px;color:' + overviewChkPh.color + ';font-weight:600">' + overviewChkDone + '/' + overviewChkItems.length + ' (' + overviewChkPct + '%)</span>';
+  }
+  html += '</div>';
+  if (overviewChkItems.length > 0) {
+    html += '<div style="height:4px;background:var(--bg-i);border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:' + overviewChkPct + '%;background:' + overviewChkPh.color + ';border-radius:2px"></div></div>';
+    overviewChkItems.forEach(function (item) {
+      var cStyle = item.done ? 'text-decoration:line-through;color:var(--t6)' : 'color:var(--t2)';
+      html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">';
+      html += '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="pdToggleCheck(\'' + id + '\',\'' + item.id + '\')" style="cursor:pointer;flex-shrink:0">';
+      html += '<span class="pdChkTextSpan" data-projid="' + id + '" data-chkid="' + item.id + '" style="flex:1;font-size:11px;' + cStyle + ';cursor:text" title="클릭하여 수정" onclick="pdEditCheckInline(this)">' + eH(item.text) + '</span>';
+      if (item.doneDate) html += '<span style="font-size:9px;color:var(--t6);white-space:nowrap">' + item.doneDate + '</span>';
+      html += '<button style="background:none;border:none;color:var(--t6);cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0" onclick="pdDeleteCheck(\'' + id + '\',\'' + item.id + '\')" title="삭제">✕</button>';
+      html += '</div>';
+    });
+  } else {
+    html += '<div style="text-align:center;color:var(--t6);font-size:11px;padding:12px 0">체크리스트 항목이 없습니다.<br><button class="btn btn-g btn-s" style="margin-top:6px;font-size:10px" onclick="pdGenerateChecklists(\'' + id + '\')">기본 체크리스트 생성</button></div>';
+  }
+  // 개요 탭 항목 추가 input
+  html += '<div style="margin-top:6px;display:flex;gap:4px">';
+  html += '<input type="text" id="pdOverviewNewChk" placeholder="새 항목 추가..." style="flex:1;font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t2)" onkeydown="if(event.key===\'Enter\')pdAddCheck(\'' + id + '\',\'' + overviewChkPhase + '\')">';
+  html += '<button class="btn btn-g btn-s" style="font-size:10px;padding:4px 8px" onclick="pdAddCheck(\'' + id + '\',\'' + overviewChkPhase + '\')">추가</button>';
+  html += '</div>';
+  html += '</div>';
+
   html += '</div>'; // end pdOverview
 
   // ── 라이프사이클 탭 ──
@@ -1166,7 +1203,7 @@ function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
       h += '<div class="pdChkItem" draggable="true" data-chkid="' + item.id + '" data-idx="' + idx + '" style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bd);cursor:grab" ondragstart="pdChkDragStart(event)" ondragover="pdChkDragOver(event)" ondrop="pdChkDrop(event)">';
       h += '<span style="color:var(--t6);font-size:10px;cursor:grab;flex-shrink:0" title="드래그하여 순서 변경">⠿</span>';
       h += '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="pdToggleCheck(\'' + projId + '\',\'' + item.id + '\')" style="cursor:pointer;flex-shrink:0">';
-      h += '<span style="flex:1;font-size:11px;' + checkStyle + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(item.text) + '">' + eH(item.text) + '</span>';
+      h += '<span class="pdChkTextSpan" data-projid="' + projId + '" data-chkid="' + item.id + '" style="flex:1;font-size:11px;' + checkStyle + ';cursor:text" title="클릭하여 수정" onclick="pdEditCheckInline(this)">' + eH(item.text) + '</span>';
       if (item.doneDate) {
         h += '<span style="font-size:9px;color:var(--t6);white-space:nowrap">' + item.doneDate + '</span>';
       }
@@ -1193,32 +1230,91 @@ function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
 /* ═══ 체크리스트 인터랙션 ═══ */
 function pdToggleCheck(projId, chkId) {
   toggleCheckItem(chkId).then(function () {
-    return showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+    showProjectDetail(projId);
   }).catch(function (err) {
     console.warn('[pdToggleCheck]', err);
-    // 404/500 → 체크리스트 데이터 손상, 화면만 새로고침
-    showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+    showProjectDetail(projId);
   });
 }
 
 function pdDeleteCheck(projId, chkId) {
+  if (!confirm('이 항목을 삭제하시겠습니까?')) return;
   chkDel(chkId).then(function () {
-    return showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+    showProjectDetail(projId);
   }).catch(function (err) {
     console.warn('[pdDeleteCheck]', err);
-    // 실패해도 화면 새로고침으로 현재 상태 반영
-    showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+    showProjectDetail(projId);
   });
+}
+
+/* ═══ 체크리스트 항목 인라인 수정 ═══ */
+function pdEditCheckInline(span) {
+  if (span.querySelector('input')) return; // 이미 편집 중
+  var oldText = span.textContent;
+  var projId = span.getAttribute('data-projid');
+  var chkId = span.getAttribute('data-chkid');
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.value = oldText;
+  input.style.cssText = 'width:100%;font-size:11px;padding:2px 6px;border:1px solid var(--ac);border-radius:3px;background:var(--bg-p);color:var(--t2);outline:none';
+  input.onkeydown = function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); pdSaveCheckInline(projId, chkId, input.value.trim(), oldText); }
+    if (e.key === 'Escape') { span.textContent = oldText; }
+  };
+  input.onblur = function () { pdSaveCheckInline(projId, chkId, input.value.trim(), oldText); };
+  span.textContent = '';
+  span.appendChild(input);
+  input.focus();
+  input.select();
+}
+
+function pdSaveCheckInline(projId, chkId, newText, oldText) {
+  if (!newText || newText === oldText) {
+    showProjectDetail(projId);
+    return;
+  }
+  var sep = chkId.indexOf('::');
+  if (sep >= 0 && typeof apiFetch === 'function' && (typeof AUTH_SKIP === 'undefined' || !AUTH_SKIP)) {
+    // 서버 모드: parent row의 items 배열에서 해당 항목 텍스트 수정
+    var parentId = chkId.slice(0, sep);
+    var idx = parseInt(chkId.slice(sep + 2), 10);
+    apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
+      var row = r.data;
+      var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+      if (idx >= 0 && idx < items.length) {
+        items[idx].text = newText;
+        return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
+      }
+    }).then(function () {
+      showProjectDetail(projId);
+    }).catch(function (err) {
+      console.error('[pdSaveCheckInline]', err);
+      if (typeof showToast === 'function') showToast('수정 실패', 'error');
+      showProjectDetail(projId);
+    });
+  } else {
+    // 로컬 모드: IndexedDB에서 직접 수정
+    var store = db.transaction('checklists', 'readwrite').objectStore('checklists');
+    var req = store.get(chkId);
+    req.onsuccess = function () {
+      var item = req.result;
+      if (item) { item.text = newText; store.put(item); }
+    };
+    req.transaction.oncomplete = function () { showProjectDetail(projId); };
+  }
 }
 
 function pdAddCheck(projId, phase) {
   var inp = document.getElementById('pdNewChkText');
-  var text = inp ? inp.value.trim() : '';
+  var inp2 = document.getElementById('pdOverviewNewChk');
+  var text = '';
+  if (inp && inp.value.trim()) { text = inp.value.trim(); }
+  else if (inp2 && inp2.value.trim()) { text = inp2.value.trim(); }
   if (!text) return;
   chkGetByPhase(projId, phase).then(function (items) {
     return createCheckItem({ projectId: projId, phase: phase, text: text, order: items.length });
   }).then(function () {
-    showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+    showProjectDetail(projId);
   }).catch(function (err) {
       console.error('[pdAddCheck]', err);
       if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
@@ -1281,22 +1377,47 @@ function pdChkDrop(e) {
   ids.splice(fromIdx, 1);
   ids.splice(toIdx, 0, _pdChkDragId);
 
-  // 순서 업데이트: 전체 항목 로드 후 매칭
-  chkGetByPhase(projId, phase).then(function (allItems) {
-    var itemMap = {};
-    allItems.forEach(function (it) { itemMap[it.id] = it; });
-    var updates = ids.map(function (cid, idx) {
-      var item = itemMap[cid];
-      if (item) { item.order = idx; return chkPut(item); }
-      return Promise.resolve();
-    });
-    return Promise.all(updates);
-  }).then(function () {
-    showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
-  }).catch(function (err) {
-      console.error('[pdChkDrop]', err);
-      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
-  });
+  // 순서 업데이트: parent row의 items 배열 순서를 직접 변경
+  (function () {
+    // flat ID에서 parent row id 추출
+    var parentId = ids[0] && ids[0].indexOf('::') >= 0 ? ids[0].split('::')[0] : null;
+    if (parentId && typeof apiFetch === 'function' && (typeof AUTH_SKIP === 'undefined' || !AUTH_SKIP)) {
+      // 서버 모드: parent row를 가져와서 items 배열 순서 변경 후 한 번에 PUT
+      apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
+        var row = r.data;
+        var rowItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+        // ids에서 index 추출하여 새 순서 만들기
+        var reordered = ids.map(function (cid) {
+          var idx = parseInt(cid.split('::')[1], 10);
+          return rowItems[idx];
+        }).filter(Boolean);
+        reordered.forEach(function (it, i) { it.order = i; });
+        return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: reordered }) });
+      }).then(function () {
+        showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+      }).catch(function (err) {
+        console.error('[pdChkDrop]', err);
+        if (typeof showToast === 'function') showToast('순서 변경 실패', 'error');
+      });
+    } else {
+      // 로컬 모드
+      chkGetByPhase(projId, phase).then(function (allItems) {
+        var itemMap = {};
+        allItems.forEach(function (it) { itemMap[it.id] = it; });
+        var updates = ids.map(function (cid, idx) {
+          var item = itemMap[cid];
+          if (item) { item.order = idx; return chkPut(item); }
+          return Promise.resolve();
+        });
+        return Promise.all(updates);
+      }).then(function () {
+        showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
+      }).catch(function (err) {
+        console.error('[pdChkDrop]', err);
+        if (typeof showToast === 'function') showToast('순서 변경 실패', 'error');
+      });
+    }
+  })();
   _pdChkDragId = null;
 }
 
