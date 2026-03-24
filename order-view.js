@@ -289,6 +289,11 @@ function saveOrderModal(isEdit) {
     if (typeof renderPipeline === 'function' && document.getElementById('mPipeline') && !document.getElementById('mPipeline').classList.contains('hidden')) {
       renderPipeline();
     }
+  }).catch(function (err) {
+    console.error('[saveOrderModal]', err);
+    var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
+    if (err && err.status === 403) msg = '수주 등록 권한이 없습니다. 관리자에게 문의하세요.';
+    showToast('❌ 수주 저장 실패: ' + msg, 'error');
   });
 }
 

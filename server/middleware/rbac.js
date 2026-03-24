@@ -88,7 +88,7 @@ function checkPermission(action, getResourceId) {
 
       // 수주
       case 'order.edit':
-        allowed = role === 'manager' || pl;
+        allowed = true; // 모든 인증 사용자 허용
         break;
 
       // 이벤트
