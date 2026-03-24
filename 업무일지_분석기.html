@@ -3003,8 +3003,9 @@ async function _postAuthInit(){
   setTimeout(refreshNotifBadge, 800);
   var _fo=lsGet('wa-fav-only');if(_fo==='1'&&fvN.length>0){fvO=true;document.getElementById('favOnlyTog').checked=true}
   initAk();rEC();
-  // DB에 저장된 업무일지 자동 로드 (로컬 IndexedDB 직접 접근 — 서버 응답 대기 없음)
+  // DB에 저장된 업무일지 자동 로드
   var _dataLoaded=false;
+  // 1단계: 로컬 IndexedDB 직접 읽기 (빠름)
   try{
     if(typeof db!=='undefined'&&db&&db.objectStoreNames&&db.objectStoreNames.contains('workRecords')){
       var _wrAll=await new Promise(function(res){try{var tx=db.transaction('workRecords','readonly');var req=tx.objectStore('workRecords').getAll();req.onsuccess=function(){res(req.result||[])};req.onerror=function(){res([])}}catch(e){res([])}});
@@ -3014,7 +3015,22 @@ async function _postAuthInit(){
         _dataLoaded=true;
       }
     }
-  }catch(ex){console.warn('auto-load workRecords:',ex)}
+  }catch(ex){console.warn('auto-load local:',ex)}
+  // 2단계: 로컬에 없으면 서버 API에서 로드 (모바일 등 다른 기기)
+  if(!_dataLoaded&&typeof apiFetch==='function'&&(typeof AUTH_SKIP==='undefined'||!AUTH_SKIP)&&_accessToken){
+    try{
+      var _srvRes=await Promise.race([
+        apiFetch('/api/archives/records'),
+        new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},10000)})
+      ]);
+      if(_srvRes&&_srvRes.data&&_srvRes.data.length>0){
+        var _toCamel=function(row){if(!row)return row;var out={};for(var k in row){var ck=k.replace(/_([a-z])/g,function(m,c){return c.toUpperCase()});out[ck]=row[k]}return out};
+        aD=_srvRes.data.map(function(r){return _toCamel(r)});
+        applyADToUI();
+        _dataLoaded=true;
+      }
+    }catch(ex){console.warn('auto-load server:',ex)}
+  }
   // 로딩 표시 제거, 데이터 없으면 업로드 영역 표시
   var _initLoadEl=document.getElementById('initLoading');
   if(_initLoadEl)_initLoadEl.remove();
