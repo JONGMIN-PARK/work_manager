@@ -345,9 +345,9 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
         <div class="pnl-h">
           <h3 class="pnl-t">📆 주차 선택 <span style="color:var(--t5);font-weight:400" id="weekSelCount"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
-            <select id="weekYearSel" class="msel" onchange="weekYearFilter=this.value;weekMonthFilter='';weekQtrFilter='';renderWeekSelector()" title="연도 선택" style="min-width:80px"><option value="">전체 연도</option></select>
-            <select id="weekQtrSel" class="msel" onchange="weekQtrFilter=this.value;if(this.value){weekMonthFilter='';document.getElementById('weekMonthSel').value=''}renderWeekSelector()" title="분기 선택" style="min-width:90px"><option value="">전체 분기</option><option value="1Q">1Q (1~3월)</option><option value="2Q">2Q (4~6월)</option><option value="3Q">3Q (7~9월)</option><option value="4Q">4Q (10~12월)</option></select>
-            <select id="weekMonthSel" class="msel" onchange="weekMonthFilter=this.value;if(this.value){weekQtrFilter='';document.getElementById('weekQtrSel').value=''}renderWeekSelector()" title="월 선택"><option value="">전체 월</option></select>
+            <select id="weekYearSel" class="msel" onchange="weekYearFilter=this.value;weekMonthFilter='';weekQtrFilter='';pickPeriod()" title="연도 선택" style="min-width:80px"><option value="">전체 연도</option></select>
+            <select id="weekQtrSel" class="msel" onchange="weekQtrFilter=this.value;if(this.value){weekMonthFilter='';document.getElementById('weekMonthSel').value=''}pickPeriod()" title="분기 선택" style="min-width:90px"><option value="">전체 분기</option><option value="1Q">1Q (1~3월)</option><option value="2Q">2Q (4~6월)</option><option value="3Q">3Q (7~9월)</option><option value="4Q">4Q (10~12월)</option></select>
+            <select id="weekMonthSel" class="msel" onchange="weekMonthFilter=this.value;if(this.value){weekQtrFilter='';document.getElementById('weekQtrSel').value=''}pickPeriod()" title="월 선택"><option value="">전체 월</option></select>
             <button class="btn btn-g btn-s" onclick="pickWeek(getSunStart(todayStr()))" title="오늘이 속한 주로 이동">📍 오늘 주</button>
             <button class="btn btn-g btn-s" onclick="pickWeek(null)">전체 보기</button>
           </div>
@@ -1201,6 +1201,38 @@ function renderWeekSelector(){
   });
   el.innerHTML=html;
 }
+/* 기간 드롭다운으로 선택 (연도/분기/월) */
+function pickPeriod(){
+  renderWeekSelector();
+  // 아무 필터도 없으면 전체
+  if(!weekYearFilter&&!weekQtrFilter&&!weekMonthFilter){selWeek=null;gfInvalidate();rFL();upV();return}
+  var y=weekYearFilter||new Date().getFullYear().toString();
+  var s,e;
+  if(weekMonthFilter){
+    // 특정 월
+    var m=weekMonthFilter;
+    s=y+m+'01';
+    var last=new Date(+y,+m,0).getDate();
+    e=y+m+String(last).padStart(2,'0');
+  }else if(weekQtrFilter){
+    var qr={'1Q':['01','03'],'2Q':['04','06'],'3Q':['07','09'],'4Q':['10','12']};
+    var range=qr[weekQtrFilter];
+    s=y+range[0]+'01';
+    var last2=new Date(+y,+range[1],0).getDate();
+    e=y+range[1]+String(last2).padStart(2,'0');
+  }else{
+    // 연도만
+    s=y+'0101';e=y+'1231';
+  }
+  var label='';
+  if(weekYearFilter)label+=y+'년 ';
+  if(weekQtrFilter)label+=weekQtrFilter+' ';
+  else if(weekMonthFilter)label+=weekMonthFilter+'월 ';
+  selWeek={start:s,end:e,label:label.trim()};
+  document.getElementById('weekLabel').value='';
+  document.getElementById('weekAutoLabel').textContent='('+selWeek.label+')';
+  gfInvalidate();rFL();upV();
+}
 /* 주차 선택 */
 function pickWeek(sunStart){
   if(sunStart===null){selWeek=null}
@@ -1653,7 +1685,7 @@ function gF(){
 }
 function hAF(){return sO.size>0||sT.size>0||sON.size>0||sCL.size>0||sDV.size>0||!!cKw||!!selWeek}
 function rAFT(){const t=[];if(selWeek)t.push({y:'w',l:'주차:'+selWeek.label,v:''});sO.forEach(o=>t.push({y:'o',l:'수주:'+o,v:o}));sT.forEach(x=>t.push({y:'t',l:AM[x]||x,v:x}));if(cKw)t.push({y:'s',l:'검색:"'+cKw+'"',v:''});document.getElementById('afTags').innerHTML=t.map(x=>`<span class="ft">${eH(x.l)}<span class="tx" onclick="rmFT('${x.y}','${eA(x.v)}')">&times;</span></span>`).join('');document.getElementById('resetBtn').classList.toggle('hidden',t.length===0)}
-function rmFT(y,v){if(y==='w'){selWeek=null;renderWeekSelector()}if(y==='o'){sO.delete(v);rOL()}if(y==='t'){sT.delete(v);rTL()}if(y==='s')clrS();gfInvalidate();upV()}
+function rmFT(y,v){if(y==='w'){selWeek=null;weekYearFilter='';weekQtrFilter='';weekMonthFilter='';var ys=document.getElementById('weekYearSel');if(ys)ys.value='';var qs=document.getElementById('weekQtrSel');if(qs)qs.value='';var ms=document.getElementById('weekMonthSel');if(ms)ms.value='';renderWeekSelector()}if(y==='o'){sO.delete(v);rOL()}if(y==='t'){sT.delete(v);rTL()}if(y==='s')clrS();gfInvalidate();upV()}
 function gTC(){const s=getComputedStyle(document.documentElement);return{g:s.getPropertyValue('--cg').trim(),t:s.getPropertyValue('--ct').trim(),l:s.getPropertyValue('--cl').trim()}}
 
 /* ═══ VIEW ═══ */
