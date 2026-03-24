@@ -39,7 +39,7 @@ var AM = {
 var ABG = { A: '#7F1D1D', B: '#1E3A5F', D: '#14532D', G: '#3B2F5E', S: '#78350F', M: '#1A1F35', R: '#4A1942' };
 
 /* 업무분장 전경색 */
-var AFG = { A: '#FCA5A5', B: '#93C5FD', D: '#86EFAC', G: '#C4B5FD', S: '#FCD34D', M: '#94A3B8', R: '#F0ABFC' };
+var AFG = { A: '#FEB2B2', B: '#A5D0FE', D: '#95F5BC', G: '#D0C4FE', S: '#FDE68A', M: '#B0BEC5', R: '#F5C0FE' };
 
 /* 업무분장 차트 바 색상 */
 var ABR = { A: '#EF4444', B: '#3B82F6', D: '#10B981', G: '#8B5CF6', S: '#F59E0B', M: '#64748B', R: '#D946EF' };
