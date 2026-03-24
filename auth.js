@@ -460,6 +460,12 @@ function updateAuthUI() {
   if (adminTab) {
     adminTab.style.display = currentUser.role === 'admin' ? '' : 'none';
   }
+  // 관리자 전용 애니웍스 버튼 표시/숨김
+  var isAdmin = currentUser.role === 'admin';
+  var awBtns = document.querySelectorAll('.awAdminBtn');
+  for (var i = 0; i < awBtns.length; i++) {
+    awBtns[i].style.display = isAdmin ? '' : 'none';
+  }
 }
 
 /* ═══ 관리자: 사용자 관리 탭 ═══ */

@@ -178,9 +178,9 @@ class AnyworksHandler(BaseHTTPRequestHandler):
             config = {
                 "username": body["username"],
                 "password": body["password"],
-                "base_url": body.get("base_url", "http://anyworks.co.kr/login"),
+                "base_url": body.get("base_url", "https://works.animotion.co.kr"),
                 "list_url": body.get("list_url",
-                    "http://anyworks.co.kr/Main3.asp?module=weeklyreport&pg=weeklyreport/weeklyreportList"),
+                    "https://works.animotion.co.kr/Sales/Week_List.asp?top_id=80&mun=6&table=WeekList"),
                 "teams": body["teams"],
                 "start_date": body["start_date"],
                 "end_date": body["end_date"],

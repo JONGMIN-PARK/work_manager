@@ -368,7 +368,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
         <button onclick="event.stopPropagation();loadWorkRecordsFromDB()" style="padding:6px 16px;border:1px solid var(--ac);border-radius:7px;background:var(--ac-bg);color:var(--ac-t);cursor:pointer;font-size:12px;font-weight:600">📂 저장된 업무일지 불러오기</button>
         <button onclick="event.stopPropagation();document.getElementById('wrImportFile2').click()" style="padding:6px 16px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:12px;margin-left:6px">📥 JSON 파일 불러오기</button>
         <input id="wrImportFile2" type="file" accept=".json" style="display:none" onchange="importWorkRecordsJSON(this.files[0]);this.value=''">
-        <button onclick="event.stopPropagation();openAnyworksModal()" style="display:none;padding:6px 16px;border:1px solid #06B6D4;border-radius:7px;background:rgba(6,182,212,.12);color:#22D3EE;cursor:pointer;font-size:12px;margin-left:6px;font-weight:600">🌐 애니웍스에서 가져오기</button>
+        <button class="awAdminBtn" onclick="event.stopPropagation();openAnyworksModal()" style="display:none;padding:6px 16px;border:1px solid #06B6D4;border-radius:7px;background:rgba(6,182,212,.12);color:#22D3EE;cursor:pointer;font-size:12px;margin-left:6px;font-weight:600">🌐 애니웍스에서 가져오기</button>
       </div>
       <div id="encUp" style="margin-top:12px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap"></div>
     </div>
@@ -386,7 +386,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
           <button class="btn btn-g" onclick="document.getElementById('wrImportFile').click()">📥 업무일지 불러오기<input id="wrImportFile" type="file" accept=".json" style="display:none" onchange="importWorkRecordsJSON(this.files[0]);this.value=''"></button>
           <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer" title="원본 파일을 함께 저장하면 나중에 인코딩 변경 후 재파싱이 가능합니다"><input type="checkbox" id="saveRawTog" checked> 원본포함</label>
           <span class="mob-sep" style="color:var(--bd2)">│</span>
-          <button class="btn btn-g" onclick="openAnyworksModal()" style="display:none;border-color:#06B6D4;color:#22D3EE">🌐 애니웍스</button>
+          <button class="btn btn-g awAdminBtn" onclick="openAnyworksModal()" style="display:none;border-color:#06B6D4;color:#22D3EE">🌐 애니웍스</button>
         </div>
       </div>
 
@@ -3412,7 +3412,9 @@ async function startAnyworksDownload() {
     var resp = await fetch(awApiUrl('/download'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username:id, password:pw, start_date:start, end_date:end, teams:teams })
+      body: JSON.stringify({ username:id, password:pw, start_date:start, end_date:end, teams:teams,
+        base_url:'https://works.animotion.co.kr',
+        list_url:'https://works.animotion.co.kr/Sales/Week_List.asp?top_id=80&mun=6&table=WeekList' })
     });
     var data = await resp.json();
     if (!resp.ok) {
