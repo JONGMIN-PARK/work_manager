@@ -766,14 +766,14 @@ function createProjectFromOrder(order) {
     memo: '', currentPhase: 'design', phases: defaultPhases,
     createdAt: now, updatedAt: now
   };
-  // 기본 마일스톤 6개 생성
+  // 기본 마일스톤 6개 생성 (프로젝트 저장 후 실행해야 FK 제약 충족)
   var phaseKeys = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'as'];
   var phaseLabels = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
-  var msPromises = phaseKeys.map(function (pk, idx) {
-    var label = phaseLabels[pk] ? phaseLabels[pk].label : pk;
-    return createMilestone({ projectId: projId, name: label, startDate: '', endDate: '', status: 'waiting', order: idx });
-  });
   return projPut(proj).then(function () {
+    var msPromises = phaseKeys.map(function (pk, idx) {
+      var label = phaseLabels[pk] ? phaseLabels[pk].label : pk;
+      return createMilestone({ projectId: projId, name: label, startDate: '', endDate: '', status: 'waiting', order: idx });
+    });
     return Promise.all(msPromises);
   }).then(function () {
     // 기본 체크리스트 생성
