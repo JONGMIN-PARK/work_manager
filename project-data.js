@@ -1390,14 +1390,21 @@ function showToast(msg, type) {
   chkDel = function (id) {
     // flat id (chk-xxx::N) → 부모 row에서 해당 항목 제거
     var sep = id.indexOf('::');
-    if (sep < 0) return apiFetch('/api/checklists/' + id, { method: 'DELETE' });
+    if (sep < 0) {
+      // 원본 row id → 전체 row 삭제 시도, 실패하면 무시
+      return apiFetch('/api/checklists/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
+    }
     var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
     return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
       var row = r.data;
       var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+      if (idx < 0 || idx >= items.length) return null;
       items.splice(idx, 1);
       if (items.length === 0) return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'DELETE' });
       return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
+    }).catch(function (err) {
+      console.warn('[chkDel] fallback delete:', err);
+      return null;
     });
   };
 
@@ -1414,6 +1421,9 @@ function showToast(msg, type) {
       items[idx].doneDate = items[idx].done ? localDate() : null;
       items[idx].doneBy = items[idx].done ? (doneBy || '') : null;
       return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
+    }).catch(function (err) {
+      console.warn('[toggleCheckItem] error:', err);
+      return null;
     });
   };
 
