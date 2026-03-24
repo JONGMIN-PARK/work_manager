@@ -61,14 +61,18 @@ router.post('/', async function (req, res) {
 router.put('/:id', async function (req, res) {
   try {
     var b = req.body;
-    var clean = {};
-    if (b.phase !== undefined) clean.phase = b.phase;
-    if (b.items !== undefined) clean.items = JSON.stringify(b.items);
-
-    var result = await lock.optimisticUpdate(db, 'checklists', 'id', req.params.id, b.version, clean);
-    if (result.conflict) return lock.sendConflict(res, result.latest, result.yourVersion);
-    if (!result.success) return res.status(404).json({ error: 'NOT_FOUND' });
-    res.json({ data: result.row });
+    var sets = [];
+    var params = [];
+    var idx = 1;
+    if (b.phase !== undefined) { sets.push('phase = $' + idx++); params.push(b.phase); }
+    if (b.items !== undefined) { sets.push('items = $' + idx++); params.push(JSON.stringify(b.items)); }
+    if (!sets.length) return res.status(400).json({ error: 'BAD_REQUEST', message: '수정할 항목이 없습니다.' });
+    sets.push('version = version + 1');
+    params.push(req.params.id);
+    var sql = 'UPDATE checklists SET ' + sets.join(', ') + ' WHERE id = $' + idx + ' RETURNING *';
+    var r = await db.query(sql, params);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.json({ data: r.rows[0] });
   } catch (e) {
     console.error('[checklists/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
