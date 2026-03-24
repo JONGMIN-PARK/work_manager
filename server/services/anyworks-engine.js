@@ -190,14 +190,14 @@ async function runEngine(jobId, config) {
     addLog(job, '[STEP 1] 로그인');
     addLog(job, '로그인 페이지 접속...');
 
-    var baseUrl = config.base_url || 'http://anyworks.co.kr/login';
-    await page.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 15000 });
+    var baseUrl = config.base_url || 'https://works.animotion.co.kr';
+    await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
     checkCancel(job);
 
     // 아이디 입력 필드 찾기
     var uidSelector = "input[type='text'][name*='id'], input[type='text'][name*='user'], input[type='text'][id*='id'], input[type='text'][placeholder*='아이디']";
     try {
-      await page.waitForSelector(uidSelector, { timeout: 10000 });
+      await page.waitForSelector(uidSelector, { timeout: 30000 });
     } catch (e) {
       addLog(job, '아이디 입력 필드를 찾을 수 없습니다', 'ERROR');
       throw new Error('로그인 페이지 로드 실패');
@@ -222,7 +222,7 @@ async function runEngine(jobId, config) {
     try {
       await page.waitForFunction(
         function () { return location.href.indexOf('Main3.asp') >= 0 || location.href.toLowerCase().indexOf('main') >= 0; },
-        { timeout: 15000 }
+        { timeout: 30000 }
       );
       addLog(job, '로그인 성공 → ' + page.url());
     } catch (e) {
@@ -236,7 +236,7 @@ async function runEngine(jobId, config) {
     addLog(job, '[STEP 2] 주간일지 페이지 이동');
     addLog(job, '주간일지 페이지 이동 (iframe src 교체)...');
 
-    var listUrl = config.list_url || 'http://anyworks.co.kr/Main3.asp?module=weeklyreport&pg=weeklyreport/weeklyreportList';
+    var listUrl = config.list_url || 'https://works.animotion.co.kr/Sales/Week_List.asp?top_id=80&mun=6&table=WeekList';
     await page.evaluate(function (url) {
       var iframes = document.getElementsByTagName('iframe');
       if (iframes.length > 0) iframes[0].src = url;
@@ -261,7 +261,7 @@ async function runEngine(jobId, config) {
 
     // TeamName 드롭다운 대기
     try {
-      await listFrame.waitForSelector('select[name="TeamName"]', { timeout: 8000 });
+      await listFrame.waitForSelector('select[name="TeamName"]', { timeout: 30000 });
       addLog(job, '주간일지 페이지 로드 성공');
     } catch (e) {
       addLog(job, 'TeamName 드롭다운 미발견', 'ERROR');
