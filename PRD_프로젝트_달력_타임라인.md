@@ -358,13 +358,15 @@ var EVT_TYPE = {
 
 | 항목 | 요구사항 |
 |------|----------|
-| **성능** | 50개 프로젝트, 200개 일정까지 렌더링 지연 없이 표시 |
-| **저장** | IndexedDB 기반, 서버 불필요 (기존과 동일) |
+| **성능** | 50개 프로젝트, 200개 일정까지 렌더링 지연 없이 표시. API 병렬 호출로 페이지 로드 최적화 |
+| **저장** | 듀얼 모드: 로컬(IndexedDB) + 서버(PostgreSQL REST API). 코드 변경 시 양쪽 모두 정상 동작 필수 |
 | **호환** | Chrome 90+, Edge 90+, Firefox 90+ |
 | **접근성** | 키보드 네비게이션 (달력 날짜 이동, 이벤트 선택) |
-| **테마** | 기존 7종 테마 모두 지원 |
+| **테마** | 기존 10종 테마 모두 지원 |
 | **데이터 백업** | 프로젝트/일정 데이터 JSON 내보내기/가져오기 |
-| **보안** | 로컬 전용, 외부 전송 없음 (AI 분석 시에만 API 호출) |
+| **보안** | JWT 인증, RBAC 권한 관리, CORS, Helmet 보안 헤더 |
+| **배포** | Render.com(서버) + Supabase(DB) + GitHub Pages(정적 보조) |
+| **캐시** | 정적 파일 30일 캐시 + git hash 기반 캐시 버스팅 자동화 |
 
 ---
 
@@ -376,16 +378,52 @@ var EVT_TYPE = {
 | 일정 한눈 파악 | 달력 뷰 진입 후 5초 이내 이번 달 전체 현황 파악 가능 |
 | 지연 감지 | 종료일 초과 프로젝트 자동 강조, 대시보드 경고 |
 | 업무일지 연계 | 수주번호 기반 자동 진척률 오차 ±10% 이내 |
+| 서버 응답 | API 단일 호출 300ms 이내, 일괄 생성 1초 이내 |
 
 ---
 
 ## 10. 제외 범위 (Out of Scope)
 
-- 멀티 유저 / 서버 동기화 (로컬 전용 유지)
 - 모바일 앱 (웹 반응형으로 대응)
 - 예산/비용 관리
 - 타 프로젝트 관리 도구(Jira, Notion 등) 연동
 - 알림/푸시 기능
+
+---
+
+## 11. 운영 아키텍처 (v8.8 기준)
+
+```
+┌─ 클라이언트 ─────────────────────────────────────┐
+│  업무일지_분석기.html (SPA)                        │
+│  ├─ auth.js (JWT 인증, apiFetch 래퍼)             │
+│  ├─ project-data.js (듀얼 모드: IndexedDB / API)  │
+│  ├─ timeline.js, calendar.js, dashboard.js        │
+│  ├─ issue-manager.js, order-view.js, pipeline.js  │
+│  └─ document-manager.js                          │
+│                                                   │
+│  로컬 모드: IndexedDB 직접 CRUD                    │
+│  서버 모드: apiFetch → REST API → PostgreSQL       │
+└───────────────────────────────────────────────────┘
+         │
+         ▼
+┌─ 서버 (Render.com) ──────────────────────────────┐
+│  Express.js + Helmet + CORS + JWT                 │
+│  ├─ /api/projects (+ /full 일괄 생성)             │
+│  ├─ /api/milestones, /api/events                  │
+│  ├─ /api/orders, /api/issues, /api/checklists     │
+│  ├─ /api/archives, /api/docs, /api/progress       │
+│  └─ /api/auth (Google OAuth + 자체 인증)          │
+│  정적 파일 서빙 (HTML 메모리 캐시, ?v= 자동 치환)   │
+└───────────────────────────────────────────────────┘
+         │
+         ▼
+┌─ DB (Supabase PostgreSQL) ───────────────────────┐
+│  projects, milestones, events, orders, issues,    │
+│  checklists, work_archives, work_records,         │
+│  users, project_members, project_folders/files    │
+└───────────────────────────────────────────────────┘
+```
 
 ---
 

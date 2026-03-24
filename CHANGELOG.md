@@ -1,5 +1,50 @@
 # 업무 관리자 — 변경 이력
 
+## v8.8 (2026-03-24) — 서버 안정화 + 속도 최적화 + UI 개선
+
+### 서버/클라이언트 데이터 동기화 수정
+- **PUT 404→POST 폴백**: 모든 `*Put` 함수(proj, ms, evt, issue, chk, folder, file)에서 클라이언트 id 미리 생성 → PUT 404 → POST 자동 폴백
+- **`_isNew` 플래그**: create 함수에서 신규 객체에 `_isNew: true` 추가, 서버 모드에서 바로 POST 호출 (불필요한 PUT 시도 제거)
+- **마일스톤 FK 제약 수정**: `createProjectFromOrder`에서 마일스톤이 프로젝트보다 먼저 생성되는 순서 버그 수정
+- **체크리스트 스키마 불일치 해결**: 서버(phase별 items JSONB) ↔ 클라이언트(개별 row) 변환 레이어 추가
+  - `chkGetByProject`: items JSONB → flat 개별 항목으로 변환
+  - `toggleCheckItem`, `chkDel`, `createCheckItem`: 서버 모드 오버라이드
+  - `GET /api/checklists/:id` 엔드포인트 추가
+- **프로젝트 일괄 생성 API**: `POST /api/projects/full` — 프로젝트+마일스톤+체크리스트를 단일 트랜잭션으로 처리 (13회→1회 API 호출)
+
+### 속도 최적화
+- **API 병렬화**: dashboard(4곳), showProjectDetail, calendar의 순차 API 호출을 `Promise.all` 병렬로 변경
+- **HTML 메모리 캐시**: 매 요청마다 디스크 I/O → 서버 시작 시 1회 읽기 + 메모리 캐시
+- **정적 파일 캐시**: `maxAge` 1h → 30d (캐시 버스팅으로 안전)
+- **CDN 라이브러리 defer**: Chart.js, XLSX, PDF.js, JSZip에 `defer` 속성 추가 (초기 로드 1~3초 절감)
+- **Docker 경량화**: Chromium 설치를 빌드 인수(`INSTALL_CHROMIUM`)로 조건부 처리 (이미지 ~800MB 축소)
+- **마일스톤 병렬 저장**: `saveProjectUI`에서 순차 for 루프 → `Promise.all`
+
+### 캐시 버스팅 자동화
+- 수동 `?v=4` → 서버 시작 시 git commit hash 기반 `BUILD_VERSION` 자동 생성
+- HTML 서빙 시 `?v=` 파라미터 동적 치환 (수동 버전 관리 불필요)
+
+### 에러 핸들링 일괄 추가
+- **issue-manager.js**: 13개 Promise 체인에 `.catch()` 추가
+- **timeline.js**: 16개 Promise 체인에 `.catch()` 추가
+- **calendar.js**: 3개 async 함수에 try-catch 추가
+- **document-manager.js**: 18개 async 함수에 try-catch 추가
+- **order-view.js**: `confirmDeleteOrder`, `saveOrderModal`에 `.catch()` 추가
+- **saveProjectUI**: try-catch + 저장 실패 시 토스트 표시
+
+### RBAC 권한 완화
+- `order.edit`: manager/PL 전용 → 모든 인증 사용자 허용
+
+### UI 개선
+- **주차 선택 대시보드**: 연도/분기(1Q~4Q)/월 계층 필터 드롭다운 추가
+- **기간 선택 버튼**: 드롭다운 기간 내 주차 일괄 선택 + accent 테두리 강조
+- **월 필터**: 주차/아카이브/트렌드에 월별 필터 드롭다운 추가
+- **프로젝트명 필수 제거**: 이름 없으면 수주번호 또는 '미정 프로젝트'로 대체
+
+## v8.7 (2026-03-16) — 버전 표시 업데이트
+
+## v8.6 (2026-03-16) — 사업부별 데이터 관리 및 팀원 선택
+
 ## v8.5 (2026-03-12) — 업무일지 영구 DB 전환
 
 ### 업무일지 DB 운영

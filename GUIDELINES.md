@@ -31,6 +31,19 @@
 
 ---
 
+## 2-1. 로컬/서버 듀얼 모드 규칙 (필수)
+
+> **모든 코드 변경은 로컬(IndexedDB)과 서버(API) 양쪽에서 정상 동작해야 한다.**
+
+- `project-data.js`에 IndexedDB 함수 + 서버 모드 오버라이드가 공존
+- **CRUD 함수 수정 시**: IndexedDB 로직과 서버 오버라이드 양쪽 확인
+- **새 CRUD 함수 추가 시**: 서버 모드 오버라이드도 반드시 함께 구현
+- **`_isNew` 플래그**: create 함수에서 `_isNew: true` 추가 → 서버 모드에서 PUT 시도 없이 바로 POST
+- **스키마 불일치 주의**: 서버 PostgreSQL 테이블 구조와 클라이언트 IndexedDB 객체 구조가 다를 수 있음 (예: checklists의 items JSONB vs 개별 row)
+- **에러 핸들링**: 모든 Promise 체인에 `.catch()` 또는 try-catch 필수
+
+---
+
 ## 3. 프로젝트 구조
 
 | 파일 | 역할 |
