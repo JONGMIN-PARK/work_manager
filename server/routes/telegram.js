@@ -173,4 +173,76 @@ router.put('/prefs', authenticate, async function (req, res) {
   }
 });
 
+/**
+ * GET /api/telegram/debug
+ * 봇 상태 + Webhook 상태 진단 (관리자 전용)
+ */
+router.get('/debug', authenticate, async function (req, res) {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 접근 가능' });
+    }
+
+    var result = { configured: telegramService.isConfigured() };
+
+    if (!result.configured) {
+      result.error = 'TELEGRAM_BOT_TOKEN 환경변수가 설정되지 않았습니다.';
+      return res.json({ data: result });
+    }
+
+    // 봇 정보 확인 (getMe)
+    var meRes = await fetch('https://api.telegram.org/bot' + config.telegram.botToken + '/getMe');
+    var me = await meRes.json();
+    result.bot = me.ok ? { username: me.result.username, name: me.result.first_name, id: me.result.id } : { error: me.description };
+
+    // Webhook 상태 확인
+    var whRes = await fetch('https://api.telegram.org/bot' + config.telegram.botToken + '/getWebhookInfo');
+    var wh = await whRes.json();
+    if (wh.ok) {
+      result.webhook = {
+        url: wh.result.url,
+        hasCustomCert: wh.result.has_custom_certificate,
+        pendingUpdates: wh.result.pending_update_count,
+        lastError: wh.result.last_error_message || null,
+        lastErrorDate: wh.result.last_error_date ? new Date(wh.result.last_error_date * 1000).toISOString() : null
+      };
+    }
+
+    // 설정값 (시크릿은 마스킹)
+    result.config = {
+      webhookUrl: config.telegram.webhookUrl || '(미설정)',
+      botUsername: config.telegram.botUsername || '(미설정)',
+      webhookSecret: config.telegram.webhookSecret ? '****' + config.telegram.webhookSecret.slice(-4) : '(미설정)'
+    };
+
+    // 테이블 존재 여부
+    try {
+      await db.query('SELECT 1 FROM telegram_links LIMIT 0');
+      result.tables = 'OK';
+    } catch (e) {
+      result.tables = 'ERROR: ' + e.message;
+    }
+
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/telegram/setup-webhook
+ * Webhook 수동 재등록 (관리자 전용)
+ */
+router.post('/setup-webhook', authenticate, async function (req, res) {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 접근 가능' });
+    }
+    var result = await telegramService.setWebhook();
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
 module.exports = router;
