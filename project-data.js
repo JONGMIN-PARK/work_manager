@@ -620,7 +620,7 @@ function suggestMilestones(orderNo, startDate, endDate) {
 
       function toISO(d) { return d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8); }
 
-      var amLabels = typeof AM !== 'undefined' ? AM : { A: 'A(CS현장)', B: 'B(제작)', D: 'D(개발)', G: 'G(일반)', M: 'M(관리)', S: 'S(영업지원)' };
+      var amLabels = typeof AM !== 'undefined' ? AM : { A: 'A(CS현장)', B: 'B(제작)', D: 'D(개발)', G: 'G(공통)', M: 'M(관리)', S: 'S(영업지원)' };
       var suggestions = phases.map(function (ph, idx) {
         var label = amLabels[ph.abbr] || ph.abbr;
         return { name: label + ' 집중 구간', startDate: toISO(ph.startDate), endDate: toISO(ph.endDate), status: 'done', order: idx };
