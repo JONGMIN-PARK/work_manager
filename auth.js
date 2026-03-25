@@ -699,6 +699,15 @@ async function showProfileModal() {
       '<label style="color:var(--sub,#888)">직급</label><input id="profPosition" value="' + eH(p.position || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">' +
       '<label style="color:var(--sub,#888)">연락처</label><input id="profPhone" value="' + eH(p.phone || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">' +
     '</div>' +
+    // ─── 텔레그램 연동 섹션 ───
+    '<div id="profTelegram" style="margin-top:20px;padding:16px;border-radius:10px;background:var(--bg,#0c0f1a);border:1px solid var(--border,#333)">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
+        '<span style="font-size:18px">&#x2708;&#xFE0F;</span>' +
+        '<span style="font-size:13px;font-weight:600;color:var(--text,#e0e0e0)">텔레그램 알림</span>' +
+        '<span id="tgStatus" style="font-size:11px;padding:2px 8px;border-radius:10px;margin-left:auto"></span>' +
+      '</div>' +
+      '<div id="tgContent" style="text-align:center;font-size:12px;color:var(--sub,#888)">로딩 중...</div>' +
+    '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">' +
       '<button id="profSave" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:#fff;cursor:pointer;font-size:13px">저장</button>' +
       '<button id="profChangePw" style="padding:8px 20px;border:none;border-radius:8px;background:#F59E0B;color:#fff;cursor:pointer;font-size:13px">비밀번호 변경</button>' +
@@ -749,6 +758,182 @@ async function showProfileModal() {
   };
 
   div.querySelector('#profCancel').onclick = function () { modal.close(); };
+
+  // ─── 텔레그램 연동 상태 로드 ───
+  loadTelegramStatus(div);
+}
+
+/** 텔레그램 연동 상태 확인 및 UI 렌더링 */
+async function loadTelegramStatus(container) {
+  var statusEl = container.querySelector('#tgStatus');
+  var contentEl = container.querySelector('#tgContent');
+  if (!statusEl || !contentEl) return;
+
+  try {
+    var data = await apiFetch('/api/telegram/status');
+    var s = data.data;
+
+    if (s.linked && s.isActive) {
+      // 연동 완료 상태
+      statusEl.textContent = '연동됨';
+      statusEl.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:10px;margin-left:auto;background:#065F46;color:#6EE7B7';
+
+      contentEl.innerHTML =
+        '<div style="text-align:left">' +
+          '<div style="font-size:12px;color:var(--text,#e0e0e0);margin-bottom:8px">' +
+            (s.username ? '@' + s.username + ' ' : '') + '연동됨' +
+            '<span style="font-size:10px;color:var(--sub,#888);margin-left:8px">' + new Date(s.linkedAt).toLocaleDateString('ko') + '</span>' +
+          '</div>' +
+          '<div id="tgPrefsArea" style="margin-bottom:12px"></div>' +
+          '<button id="tgUnlinkBtn" style="padding:6px 14px;border:none;border-radius:6px;background:#7F1D1D;color:#FCA5A5;cursor:pointer;font-size:11px">연동 해제</button>' +
+        '</div>';
+
+      // 알림 설정 로드
+      loadTelegramPrefs(container);
+
+      contentEl.querySelector('#tgUnlinkBtn').onclick = async function () {
+        if (!confirm('텔레그램 연동을 해제하시겠습니까?')) return;
+        try {
+          await apiFetch('/api/telegram/unlink', { method: 'DELETE' });
+          if (typeof showToast === 'function') showToast('텔레그램 연동이 해제되었습니다.');
+          loadTelegramStatus(container);
+        } catch (e) {
+          if (typeof showToast === 'function') showToast(e.message, 'error');
+        }
+      };
+    } else {
+      // 미연동 상태 → QR코드 발급
+      statusEl.textContent = '미연동';
+      statusEl.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:10px;margin-left:auto;background:#78350F;color:#FDE68A';
+
+      contentEl.innerHTML =
+        '<p style="font-size:12px;color:var(--sub,#888);margin-bottom:12px">QR코드를 스캔하여 텔레그램 봇과 연동하세요 (1회)</p>' +
+        '<button id="tgGenQR" style="padding:8px 20px;border:none;border-radius:8px;background:#0088CC;color:#fff;cursor:pointer;font-size:12px">QR코드 생성</button>' +
+        '<div id="tgQRArea" style="margin-top:12px"></div>';
+
+      contentEl.querySelector('#tgGenQR').onclick = function () {
+        generateTelegramQR(container);
+      };
+    }
+  } catch (e) {
+    // 서버 미지원 또는 에러
+    contentEl.innerHTML = '<span style="font-size:11px;color:var(--sub,#888)">텔레그램 연동 서비스를 사용할 수 없습니다.</span>';
+    statusEl.textContent = '';
+  }
+}
+
+/** QR코드 생성 */
+async function generateTelegramQR(container) {
+  var qrArea = container.querySelector('#tgQRArea');
+  var genBtn = container.querySelector('#tgGenQR');
+  if (!qrArea) return;
+
+  genBtn.disabled = true;
+  genBtn.textContent = '생성 중...';
+
+  try {
+    var data = await apiFetch('/api/telegram/auth-code', { method: 'POST' });
+    var info = data.data;
+
+    if (!info.deepLink) {
+      qrArea.innerHTML = '<p style="color:#EF4444;font-size:12px">봇이 설정되지 않았습니다. 관리자에게 문의하세요.</p>';
+      genBtn.disabled = false;
+      genBtn.textContent = 'QR코드 생성';
+      return;
+    }
+
+    qrArea.innerHTML =
+      '<div id="tgQRCode" style="display:inline-block;padding:12px;background:#fff;border-radius:8px;margin-bottom:10px"></div>' +
+      '<div style="font-size:11px;color:var(--sub,#888);margin-top:8px">' +
+        '<div>인증코드: <b style="color:var(--text,#e0e0e0);font-family:monospace;letter-spacing:2px">' + info.code + '</b></div>' +
+        '<div style="margin-top:4px">유효시간: 5분</div>' +
+      '</div>' +
+      '<div style="margin-top:8px">' +
+        '<a href="' + info.deepLink + '" target="_blank" style="font-size:11px;color:#0088CC;text-decoration:underline">텔레그램에서 열기</a>' +
+      '</div>';
+
+    // QR코드 렌더링
+    var qrEl = qrArea.querySelector('#tgQRCode');
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(qrEl, {
+        text: info.deepLink,
+        width: 180,
+        height: 180,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } else {
+      // QRCode 라이브러리 미로드 시 링크만 표시
+      qrEl.innerHTML = '<p style="color:#000;font-size:11px;padding:20px">QR 라이브러리 로드 실패<br>위 링크를 직접 클릭하세요</p>';
+    }
+
+    genBtn.textContent = '새 코드 생성';
+    genBtn.disabled = false;
+
+    // 5분 후 만료 표시
+    setTimeout(function () {
+      if (qrArea && qrArea.parentNode) {
+        qrArea.innerHTML = '<p style="color:#F59E0B;font-size:12px">인증코드가 만료되었습니다. 새 코드를 생성해주세요.</p>';
+      }
+    }, 300000);
+
+  } catch (e) {
+    qrArea.innerHTML = '<p style="color:#EF4444;font-size:12px">' + (e.message || 'QR코드 생성 실패') + '</p>';
+    genBtn.disabled = false;
+    genBtn.textContent = 'QR코드 생성';
+  }
+}
+
+/** 알림 설정 토글 로드 */
+async function loadTelegramPrefs(container) {
+  var prefsArea = container.querySelector('#tgPrefsArea');
+  if (!prefsArea) return;
+
+  var eventLabels = {
+    issue_assigned: '이슈 배정',
+    issue_status_changed: '이슈 상태 변경',
+    project_delayed: '프로젝트 지연',
+    deadline_d3: '납기 D-3 리마인더',
+    deadline_d1: '납기 D-1 리마인더',
+    deadline_today: '납기 D-day',
+    user_pending: '가입 승인 요청',
+    milestone_complete: '마일스톤 완료'
+  };
+
+  try {
+    var data = await apiFetch('/api/telegram/prefs');
+    var prefs = data.data || {};
+
+    var html = '<div style="font-size:11px;color:var(--sub,#888);margin-bottom:6px">알림 설정</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">';
+    Object.keys(eventLabels).forEach(function (evt) {
+      var checked = prefs[evt] !== false; // 기본값 true
+      html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text,#e0e0e0);padding:3px 0;cursor:pointer">' +
+        '<input type="checkbox" data-evt="' + evt + '" ' + (checked ? 'checked' : '') +
+        ' style="width:14px;height:14px;accent-color:#0088CC;cursor:pointer">' +
+        eventLabels[evt] + '</label>';
+    });
+    html += '</div>';
+    prefsArea.innerHTML = html;
+
+    // 토글 이벤트
+    prefsArea.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+      cb.onchange = async function () {
+        try {
+          await apiFetch('/api/telegram/prefs', {
+            method: 'PUT',
+            body: JSON.stringify({ event_type: cb.dataset.evt, is_enabled: cb.checked })
+          });
+        } catch (e) {
+          cb.checked = !cb.checked; // 실패 시 롤백
+          if (typeof showToast === 'function') showToast('설정 변경 실패', 'error');
+        }
+      };
+    });
+  } catch (e) {
+    prefsArea.innerHTML = '<span style="font-size:11px;color:var(--sub,#888)">알림 설정을 불러올 수 없습니다.</span>';
+  }
 }
 
 function showChangePasswordModal() {

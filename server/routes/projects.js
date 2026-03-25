@@ -5,6 +5,7 @@ var auth = require('../middleware/auth');
 var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
+var notificationService = require('../services/notification.service');
 
 router.use(auth.authenticate);
 
@@ -91,12 +92,25 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
     var clean = {};
     for (var k in updates) { if (updates[k] !== undefined) clean[k] = updates[k]; }
 
+    // 상태 변경 추적을 위해 이전 상태 조회
+    var prevR = clean.status ? await db.query('SELECT status, name, order_no, end_date FROM projects WHERE id = $1', [req.params.id]) : null;
+    var prev = prevR && prevR.rows[0] ? prevR.rows[0] : null;
+
     var result = await lock.optimisticUpdate(db, 'projects', 'id', req.params.id, b.version, clean, req.user.sub);
 
     if (result.conflict) return lock.sendConflict(res, result.latest, result.yourVersion);
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
 
     res.json({ data: result.row });
+
+    // 텔레그램 알림: 프로젝트 지연
+    try {
+      if (clean.status === 'delayed' && prev && prev.status !== 'delayed') {
+        notificationService.notifyProjectStakeholders('project_delayed', {
+          name: prev.name, orderNo: prev.order_no, endDate: prev.end_date
+        }, req.params.id).catch(function(e) { console.error('[noti]', e.message); });
+      }
+    } catch (_) { /* 알림 실패 무시 */ }
   } catch (e) {
     console.error('[projects/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

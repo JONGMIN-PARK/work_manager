@@ -5,6 +5,7 @@ var auth = require('../middleware/auth');
 var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
+var notificationService = require('../services/notification.service');
 
 router.use(auth.authenticate);
 
@@ -66,6 +67,19 @@ router.post('/', rbac.checkPermission('issue.create'), async function (req, res)
        req.user.sub]
     );
     res.status(201).json({ data: r.rows[0] });
+
+    // 텔레그램 알림: 이슈 배정
+    try {
+      var assigneeNames = b.assignees || [];
+      if (assigneeNames.length > 0) {
+        var uR = await db.query("SELECT id FROM users WHERE name = ANY($1) AND status = 'active'", [assigneeNames]);
+        var targetIds = uR.rows.map(function(u) { return u.id; });
+        notificationService.notify('issue_assigned', {
+          title: b.title, urgency: b.urgency || 'normal',
+          assignee: assigneeNames.join(', '), projectName: b.projectId || ''
+        }, targetIds).catch(function(e) { console.error('[noti]', e.message); });
+      }
+    } catch (_) { /* 알림 실패해도 이슈 생성은 성공 */ }
   } catch (e) {
     console.error('[issues/create]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -90,10 +104,30 @@ router.put('/:id', async function (req, res) {
     if (b.assignees !== undefined) clean.assignees = JSON.stringify(b.assignees);
     if (b.tags !== undefined) clean.tags = JSON.stringify(b.tags);
 
+    // 상태 변경 추적을 위해 이전 상태 조회
+    var prevR = clean.status ? await db.query('SELECT status, title, assignees, reporter_id FROM issues WHERE id = $1', [req.params.id]) : null;
+    var prev = prevR && prevR.rows[0] ? prevR.rows[0] : null;
+
     var result = await lock.optimisticUpdate(db, 'issues', 'id', req.params.id, b.version, clean, req.user.sub);
     if (result.conflict) return lock.sendConflict(res, result.latest, result.yourVersion);
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: result.row });
+
+    // 텔레그램 알림: 상태 변경
+    try {
+      if (clean.status && prev && clean.status !== prev.status) {
+        var targets = new Set();
+        if (prev.reporter_id) targets.add(prev.reporter_id);
+        var assignees = typeof prev.assignees === 'string' ? JSON.parse(prev.assignees) : (prev.assignees || []);
+        if (assignees.length > 0) {
+          var uR = await db.query("SELECT id FROM users WHERE name = ANY($1) AND status = 'active'", [assignees]);
+          uR.rows.forEach(function(u) { targets.add(u.id); });
+        }
+        notificationService.notify('issue_status_changed', {
+          title: prev.title, fromStatus: prev.status, toStatus: clean.status
+        }, Array.from(targets)).catch(function(e) { console.error('[noti]', e.message); });
+      }
+    } catch (_) { /* 알림 실패 무시 */ }
   } catch (e) {
     console.error('[issues/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

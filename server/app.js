@@ -24,7 +24,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "https://generativelanguage.googleapis.com", "https://api.anthropic.com"]
+      connectSrc: ["'self'", "https://generativelanguage.googleapis.com", "https://api.anthropic.com", "https://api.telegram.org"]
     }
   },
   crossOriginEmbedderPolicy: false
@@ -115,6 +115,7 @@ var profileRoutes = require('./routes/profile');
 var auditRoutes = require('./routes/audit');
 var anyworksRoutes = require('./routes/anyworks');
 var statsRoutes = require('./routes/stats');
+var telegramRoutes = require('./routes/telegram');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -133,6 +134,40 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/anyworks', anyworksRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/telegram', telegramRoutes);
+
+// ─── 텔레그램 Webhook 자동 등록 ───
+var telegramService = require('./services/telegram.service');
+if (telegramService.isConfigured()) {
+  telegramService.setWebhook().catch(function (e) {
+    console.error('[Telegram] Webhook 등록 실패:', e.message);
+  });
+}
+
+// ─── 납기 리마인더 스케줄러 (매일 KST 09:00 = UTC 00:00) ───
+var notificationService = require('./services/notification.service');
+function scheduleDeadlineReminder() {
+  var now = new Date();
+  var next = new Date(now);
+  next.setUTCHours(0, 0, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  var delay = next.getTime() - now.getTime();
+  setTimeout(function () {
+    notificationService.sendDeadlineReminders().catch(function (e) {
+      console.error('[Scheduler] Deadline reminder error:', e.message);
+    });
+    // 24시간 뒤 다시 실행
+    setInterval(function () {
+      notificationService.sendDeadlineReminders().catch(function (e) {
+        console.error('[Scheduler] Deadline reminder error:', e.message);
+      });
+    }, 24 * 60 * 60 * 1000);
+  }, delay);
+  console.log('[Scheduler] Deadline reminder scheduled, next run in', Math.round(delay / 60000), 'min');
+}
+if (telegramService.isConfigured()) {
+  scheduleDeadlineReminder();
+}
 
 // ─── 헬스 체크 ───
 app.get('/health', async function (req, res) {

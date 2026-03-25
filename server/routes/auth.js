@@ -4,6 +4,7 @@ var db = require('../config/db');
 var authService = require('../services/auth.service');
 var authMiddleware = require('../middleware/auth');
 var config = require('../config');
+var notificationService = require('../services/notification.service');
 
 // ─── POST /api/auth/register ───
 router.post('/register', async function (req, res) {
@@ -45,6 +46,11 @@ router.post('/register', async function (req, res) {
     );
 
     await authService.auditLog(user.id, 'register', 'user', user.id, { email: email }, req);
+
+    // 관리자에게 텔레그램 알림
+    notificationService.notifyAdmins('user_pending', {
+      userName: name
+    }).catch(function(e) { console.error('[noti]', e.message); });
 
     res.status(201).json({
       data: user,
