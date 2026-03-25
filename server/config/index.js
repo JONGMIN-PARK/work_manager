@@ -59,6 +59,14 @@ var config = {
     webhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',
     webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || '',
     botUsername: process.env.TELEGRAM_BOT_USERNAME || ''
+  },
+
+  ai: {
+    provider: process.env.AI_PROVIDER || 'gemini',
+    geminiKey: process.env.GEMINI_API_KEY || '',
+    geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    anthropicKey: process.env.ANTHROPIC_API_KEY || '',
+    anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'
   }
 };
 

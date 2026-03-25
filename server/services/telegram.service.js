@@ -4,6 +4,7 @@
  */
 var config = require('../config');
 var db = require('../config/db');
+var aiService = require('./ai.service');
 
 var BASE = 'https://api.telegram.org/bot';
 
@@ -234,7 +235,11 @@ async function cmdHelp(chatId) {
     '/team — 팀원별 금주 투입\n\n' +
     '<b>⚙️ 설정</b>\n' +
     '/unlink — 연동 해제\n' +
-    '/help — 명령어 안내';
+    '/help — 명령어 안내\n\n' +
+    '<b>💬 AI 질답</b>\n' +
+    '명령어 없이 자연어로 질문하세요!\n' +
+    '예: "이번 주 누가 제일 바빠?"\n' +
+    '예: "SK하이닉스 프로젝트 요약해줘"';
   return sendMessage(chatId, msg);
 }
 
@@ -1248,6 +1253,18 @@ async function handleUpdate(update) {
   // 알 수 없는 명령어
   if (text.startsWith('/')) {
     return sendMessage(chatId, '❓ 알 수 없는 명령어입니다.\n/help 로 사용 가능한 명령어를 확인하세요.');
+  }
+
+  // 일반 텍스트 → AI 자연어 질답
+  if (text.length >= 2) {
+    await sendMessage(chatId, '🤖 분석 중...');
+    try {
+      var answer = await aiService.answerQuestion(text, user.name);
+      return sendMessage(chatId, answer);
+    } catch (aiErr) {
+      console.error('[AI] Error:', aiErr.message);
+      return sendMessage(chatId, '🤖 AI 응답 생성에 실패했습니다.\n' + aiErr.message);
+    }
   }
 }
 
