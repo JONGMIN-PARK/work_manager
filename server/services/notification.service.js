@@ -128,6 +128,17 @@ async function notify(eventType, payload, targetUserIds) {
         });
       }
 
+      if (eventType === 'user_pending' && payload.pendingUserId) {
+        sendOpts.reply_markup = JSON.stringify({
+          inline_keyboard: [
+            [
+              { text: '✅ 승인', callback_data: 'approve_user:' + payload.pendingUserId },
+              { text: '❌ 반려', callback_data: 'reject_user:' + payload.pendingUserId }
+            ]
+          ]
+        });
+      }
+
       // 발송
       var result = await telegramService.sendMessage(chatId, text, sendOpts);
       var status = (result && result.ok) ? 'sent' : 'failed';

@@ -216,18 +216,22 @@ async function cmdHelp(chatId) {
     '/issues — 미해결 이슈 목록\n' +
     '/tasks — 미완료 작업\n' +
     '/done &lt;번호&gt; — 작업 완료 처리\n' +
+    '/log — 업무일지 빠른 등록\n' +
     '/my-stats — 내 월간 통계\n\n' +
     '<b>📊 분석</b>\n' +
     '/summary — 금주 업무시간 요약\n' +
     '/report — 월간 리포트\n' +
     '/overdue — 지연/긴급 현황\n' +
     '/project &lt;이름&gt; — 프로젝트 현황\n' +
-    '/checklist &lt;이름&gt; — 체크리스트\n\n' +
+    '/checklist &lt;이름&gt; — 체크리스트\n' +
+    '/weekly-report — 주간보고 생성\n\n' +
     '<b>📅 일정/수주</b>\n' +
     '/calendar — 이번 주 일정\n' +
     '/orders — 수주 목록\n' +
     '/order &lt;번호&gt; — 수주 상세\n' +
-    '/deliveries — 납품 예정\n\n' +
+    '/deliveries — 납품 예정\n' +
+    '/remind &lt;시간&gt; &lt;내용&gt; — 리마인더\n' +
+    '/vote — 팀 투표\n\n' +
     '<b>📁 문서</b>\n' +
     '/docs &lt;프로젝트&gt; — 문서 목록\n' +
     '/search-doc &lt;키워드&gt; — 문서 검색\n\n' +
@@ -239,7 +243,8 @@ async function cmdHelp(chatId) {
     '<b>💬 AI 질답</b>\n' +
     '명령어 없이 자연어로 질문하세요!\n' +
     '예: "이번 주 누가 제일 바빠?"\n' +
-    '예: "SK하이닉스 프로젝트 요약해줘"';
+    '예: "SK하이닉스 프로젝트 요약해줘"\n' +
+    '💡 "8h D B2024-001 업무내용" → 업무 등록';
   return sendMessage(chatId, msg);
 }
 
@@ -1146,13 +1151,198 @@ async function cmdSearchDoc(chatId, user, query) {
   return sendMessage(chatId, msg);
 }
 
+/** 사진 → 이슈 자동 등록 */
+async function handlePhotoIssue(chatId, user, msg) {
+  var caption = (msg.caption || '').trim();
+  if (!caption) {
+    return sendMessage(chatId, '📸 사진과 함께 설명을 입력하면 이슈로 등록됩니다.\n\n예: 사진 + "SK하이닉스 카메라 보정 불량"');
+  }
+
+  // 가장 큰 해상도의 사진 file_id
+  var photo = msg.photo[msg.photo.length - 1];
+  var fileId = photo.file_id;
+
+  // 이슈 생성
+  var crypto = require('crypto');
+  var issueId = 'iss-' + crypto.randomUUID().slice(0, 12);
+  var today = new Date().toISOString().slice(0, 10);
+
+  await db.query(
+    "INSERT INTO issues (id, title, description, urgency, status, report_date, reporter, reporter_id, assignees, tags, created_by, updated_by) VALUES ($1, $2, $3, 'normal', 'open', $4, $5, $6, $7, $8, $6, $6)",
+    [issueId, caption, '텔레그램 사진 첨부 (file_id: ' + fileId + ')', today, user.name, user.user_id, JSON.stringify([user.name]), JSON.stringify(['telegram', 'photo'])]
+  );
+
+  var response = '📸 <b>이슈 등록 완료</b>\n\n' +
+    '제목: ' + caption + '\n' +
+    '상태: 접수 (open)\n' +
+    '긴급도: 보통\n' +
+    '등록자: ' + user.name + '\n' +
+    '날짜: ' + today;
+
+  return sendMessage(chatId, response, {
+    reply_markup: JSON.stringify({
+      inline_keyboard: [
+        [
+          { text: '🔴 긴급으로 변경', callback_data: 'issue_urgent:' + issueId },
+          { text: '🔵 대응 시작', callback_data: 'issue_start:' + issueId }
+        ]
+      ]
+    })
+  });
+}
+
+/** 봇 명령어: /log — 업무일지 빠른 등록 */
+async function cmdLog(chatId, user, text) {
+  var match = text.match(/^\/?(log\s+)?(\d+\.?\d*)\s*h\s+([ABDGMRS])\s*([\w-]*\d[\w-]*)?\s*(.*)/i);
+  if (!match) return sendMessage(chatId, '❌ 형식: 8h D B2024-001 업무내용\n예: 4.5h A 현장점검');
+  var hours = parseFloat(match[2]);
+  var abbr = match[3].toUpperCase();
+  var orderNo = (match[4] || '').trim() || null;
+  var content = (match[5] || '').trim() || '(내용 없음)';
+
+  var today = new Date();
+  var dateStr = today.getFullYear() + ('0' + (today.getMonth() + 1)).slice(-2) + ('0' + today.getDate()).slice(-2);
+  var dateDisplay = today.toISOString().slice(0, 10);
+
+  await db.query(
+    'INSERT INTO work_records (date, name, hours, abbr, order_no, content, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+    [dateStr, user.name, hours, abbr, orderNo, content, user.user_id]
+  );
+
+  var totalR = await db.query(
+    'SELECT COALESCE(SUM(hours),0) as total FROM work_records WHERE name = $1 AND date = $2',
+    [user.name, dateStr]
+  );
+  var total = parseFloat(totalR.rows[0].total);
+
+  var logMsg = '✅ 업무 등록 완료\n' +
+    user.name + ' | ' + dateDisplay + ' | ' + (AM[abbr] || abbr) + ' ' + hours + 'h\n' +
+    (orderNo ? orderNo + ' | ' : '') + content + '\n\n' +
+    '📊 오늘 합계: ' + Math.round(total * 10) / 10 + 'h';
+
+  return sendMessage(chatId, logMsg);
+}
+
+/** 봇 명령어: /remind — 리마인더 */
+async function cmdRemind(chatId, user, text) {
+  var match = text.match(/^(\d+)\s*(m|h|d)\s+(.*)/i);
+  if (!match) return sendMessage(chatId, '사용법: /remind 2h 검수 서류 준비');
+  var num = parseInt(match[1]);
+  var unit = match[2].toLowerCase();
+  var reminderMsg = match[3].trim();
+  var ms = unit === 'm' ? num * 60000 : unit === 'h' ? num * 3600000 : num * 86400000;
+  if (ms > 7 * 86400000) return sendMessage(chatId, '❌ 최대 7일까지 설정 가능합니다.');
+
+  setTimeout(function() {
+    sendMessage(chatId, '⏰ <b>리마인더</b>\n\n' + reminderMsg);
+  }, ms);
+
+  return sendMessage(chatId, '⏰ 리마인더 설정 완료\n' + num + unit + ' 후: ' + reminderMsg);
+}
+
+/** 봇 명령어: /vote — 팀 투표 */
+async function cmdVote(chatId, user, text) {
+  var parts = text.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+  if (parts.length < 2) {
+    var qMatch = text.match(/^"([^"]+)"\s+(.*)/);
+    if (qMatch) {
+      parts = [qMatch[1]].concat(qMatch[2].split(/\s+/));
+    }
+  }
+  if (parts.length < 2) return sendMessage(chatId, '사용법: /vote 질문\n옵션1\n옵션2\n옵션3');
+
+  var question = parts[0];
+  var options = parts.slice(1);
+
+  var buttons = options.map(function(opt, i) {
+    return [{ text: opt + ' (0)', callback_data: 'vote:' + chatId + ':' + i + ':' + opt }];
+  });
+
+  return sendMessage(chatId, '📊 <b>투표</b>\n\n' + question, {
+    reply_markup: JSON.stringify({ inline_keyboard: buttons })
+  });
+}
+
+/** 봇 명령어: /weekly-report — 주간보고 자동 생성 */
+async function cmdWeeklyReport(chatId, user) {
+  var w = getWeekRange();
+  var records = await db.query(
+    'SELECT abbr, order_no, content, hours FROM work_records WHERE name = $1 AND date >= $2 AND date <= $3 ORDER BY date, abbr',
+    [user.name, w.start, w.end]
+  );
+
+  if (records.rows.length === 0) return sendMessage(chatId, '📝 금주 업무 기록이 없습니다.');
+
+  var totalHours = 0;
+  var byAbbr = {};
+  var byOrder = {};
+  records.rows.forEach(function(r) {
+    totalHours += parseFloat(r.hours);
+    if (!byAbbr[r.abbr]) byAbbr[r.abbr] = { hours: 0, items: [] };
+    byAbbr[r.abbr].hours += parseFloat(r.hours);
+    var contentStr = r.content || '';
+    if (contentStr && byAbbr[r.abbr].items.indexOf(contentStr) === -1) byAbbr[r.abbr].items.push(contentStr);
+    if (r.order_no) {
+      if (!byOrder[r.order_no]) byOrder[r.order_no] = 0;
+      byOrder[r.order_no] += parseFloat(r.hours);
+    }
+  });
+
+  var issues = await db.query(
+    "SELECT title, status FROM issues WHERE assignees::text LIKE $1 AND status NOT IN ('resolved','closed') LIMIT 5",
+    ['%' + user.name + '%']
+  );
+
+  var wrMsg = '📝 <b>주간 업무 보고</b>\n';
+  wrMsg += '<code>' + w.monStr + ' ~ ' + w.sunStr + '</code>\n';
+  wrMsg += '작성자: ' + user.name + '\n\n';
+
+  wrMsg += '<b>1. 금주 실적</b> (총 ' + Math.round(totalHours * 10) / 10 + 'h)\n';
+  Object.keys(byAbbr).sort().forEach(function(a) {
+    var info = byAbbr[a];
+    wrMsg += '\n<b>' + (AM[a] || a) + '</b> — ' + Math.round(info.hours * 10) / 10 + 'h\n';
+    info.items.slice(0, 5).forEach(function(item) {
+      wrMsg += '  · ' + item + '\n';
+    });
+  });
+
+  if (Object.keys(byOrder).length > 0) {
+    wrMsg += '\n<b>2. 수주별 투입</b>\n';
+    Object.entries(byOrder).sort(function(a, b) { return b[1] - a[1]; }).forEach(function(entry) {
+      wrMsg += '  · ' + entry[0] + ': ' + Math.round(entry[1] * 10) / 10 + 'h\n';
+    });
+  }
+
+  if (issues.rows.length > 0) {
+    wrMsg += '\n<b>3. 진행중 이슈</b>\n';
+    issues.rows.forEach(function(r) {
+      wrMsg += '  · ' + r.title + ' [' + r.status + ']\n';
+    });
+  }
+
+  wrMsg += '\n<b>4. 차주 계획</b>\n  · (텔레그램에서 추가 입력 가능)\n';
+
+  return sendMessage(chatId, wrMsg);
+}
+
 /** Webhook으로 들어온 메시지 처리 */
 async function handleUpdate(update) {
-  if (!update.message || !update.message.text) return;
+  if (!update.message) return;
+  if (!update.message.text && !update.message.photo) return;
 
   var msg = update.message;
   var chatId = msg.chat.id;
-  var text = msg.text.trim();
+
+  // 사진 → 이슈 등록
+  if (msg.photo && msg.photo.length > 0) {
+    var user = await getUserByChatId(chatId);
+    if (!user) return sendMessage(chatId, '🔒 먼저 계정 연동이 필요합니다.');
+    return handlePhotoIssue(chatId, user, msg);
+  }
+
+  var text = msg.text || '';
+  if (!text) return;
+  text = text.trim();
   var tgUsername = msg.from ? msg.from.username : null;
 
   // /start <인증코드>
@@ -1214,6 +1404,23 @@ async function handleUpdate(update) {
   if (text.startsWith('/search-doc')) {
     var sdQuery = text.replace(/^\/search-doc\s*/, '').trim();
     return cmdSearchDoc(chatId, user, sdQuery || null);
+  }
+  // 업무일지 빠른 등록 (명령어 또는 패턴 매치)
+  if (text.startsWith('/log ')) {
+    return cmdLog(chatId, user, text.replace(/^\/log\s+/, ''));
+  }
+  if (/^\d+\.?\d*\s*h\s+[ABDGMRS]/i.test(text)) {
+    return cmdLog(chatId, user, text);
+  }
+  if (text.startsWith('/remind ')) {
+    return cmdRemind(chatId, user, text.replace(/^\/remind\s+/, ''));
+  }
+  if (text.startsWith('/vote')) {
+    var voteText = text.replace(/^\/vote\s*/, '').trim();
+    return cmdVote(chatId, user, voteText);
+  }
+  if (text === '/weekly-report' || text === '/weeklyreport') {
+    return cmdWeeklyReport(chatId, user);
   }
   if (text === '/help') return cmdHelp(chatId);
 
@@ -1289,5 +1496,9 @@ module.exports = {
   cmdMyStats: cmdMyStats,
   cmdChecklist: cmdChecklist,
   cmdDocs: cmdDocs,
-  cmdSearchDoc: cmdSearchDoc
+  cmdSearchDoc: cmdSearchDoc,
+  cmdLog: cmdLog,
+  cmdRemind: cmdRemind,
+  cmdVote: cmdVote,
+  cmdWeeklyReport: cmdWeeklyReport
 };

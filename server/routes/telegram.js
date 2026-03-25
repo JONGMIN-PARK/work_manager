@@ -54,6 +54,42 @@ async function handleCallbackQuery(query) {
         }
       }
     }
+    else if (action === 'approve_user') {
+      var pendingId = parts[1];
+      if (user.role !== 'admin') {
+        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '관리자만 승인 가능합니다.' });
+        return;
+      }
+      await db.query("UPDATE users SET status = 'active', role = 'member', approved_by = $1, approved_at = NOW(), updated_at = NOW() WHERE id = $2 AND status = 'pending'", [user.user_id, pendingId]);
+      var approvedUser = await db.query('SELECT name FROM users WHERE id = $1', [pendingId]);
+      var approvedName = approvedUser.rows[0] ? approvedUser.rows[0].name : '?';
+      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ ' + approvedName + ' 승인 완료!' });
+      await telegramService.sendMessage(chatId, '✅ <b>' + approvedName + '</b>님의 가입이 승인되었습니다.');
+    }
+    else if (action === 'reject_user') {
+      var rejectId = parts[1];
+      if (user.role !== 'admin') {
+        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '관리자만 반려 가능합니다.' });
+        return;
+      }
+      await db.query("UPDATE users SET status = 'rejected', approved_by = $1, approved_at = NOW(), updated_at = NOW() WHERE id = $2 AND status = 'pending'", [user.user_id, rejectId]);
+      var rejectedUser = await db.query('SELECT name FROM users WHERE id = $1', [rejectId]);
+      var rejectedName = rejectedUser.rows[0] ? rejectedUser.rows[0].name : '?';
+      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '❌ ' + rejectedName + ' 반려' });
+      await telegramService.sendMessage(chatId, '❌ <b>' + rejectedName + '</b>님의 가입이 반려되었습니다.');
+    }
+    else if (action === 'issue_urgent') {
+      var urgentIssueId = parts[1];
+      await db.query("UPDATE issues SET urgency = 'urgent', updated_at = NOW(), updated_by = $1, version = version + 1 WHERE id = $2", [user.user_id, urgentIssueId]);
+      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '🔴 긴급으로 변경!' });
+      await telegramService.sendMessage(chatId, '🔴 이슈 긴급도가 <b>긴급</b>으로 변경되었습니다.');
+    }
+    else if (action === 'vote') {
+      // vote:{chatId}:{optionIndex}:{optionText}
+      var optText = parts.slice(3).join(':');
+      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '투표: ' + optText });
+      await telegramService.sendMessage(chatId, '🗳 <b>' + user.name + '</b>님이 <b>' + optText + '</b>에 투표했습니다.');
+    }
     else {
       await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '알 수 없는 액션' });
     }

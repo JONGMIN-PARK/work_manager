@@ -49,7 +49,8 @@ router.post('/register', async function (req, res) {
 
     // 관리자에게 텔레그램 알림
     notificationService.notifyAdmins('user_pending', {
-      userName: name
+      userName: name,
+      pendingUserId: user.id
     }).catch(function(e) { console.error('[noti]', e.message); });
 
     res.status(201).json({
