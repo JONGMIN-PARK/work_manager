@@ -67,7 +67,15 @@ router.post('/auth-code', authenticate, async function (req, res) {
 router.get('/status', authenticate, async function (req, res) {
   try {
     var configured = telegramService.isConfigured();
-    var link = configured ? await telegramService.getLinkStatus(req.user.sub) : null;
+    var link = null;
+    if (configured) {
+      try {
+        link = await telegramService.getLinkStatus(req.user.sub);
+      } catch (dbErr) {
+        // 테이블 미생성 등 DB 오류 → 미연동 취급
+        console.warn('[Telegram] DB query failed (table may not exist):', dbErr.message);
+      }
+    }
     res.json({
       data: {
         configured: configured,

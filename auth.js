@@ -831,9 +831,17 @@ async function loadTelegramStatus(container) {
       };
     }
   } catch (e) {
-    // 서버 미지원 또는 에러
-    contentEl.innerHTML = '<span style="font-size:11px;color:var(--sub,#888)">텔레그램 연동 서비스를 사용할 수 없습니다.</span>';
-    statusEl.textContent = '';
+    var errMsg = '';
+    if (e && e.status === 404) {
+      errMsg = '서버가 아직 최신 버전으로 배포되지 않았습니다.<br>배포 완료 후 다시 시도해주세요.';
+    } else if (e && e.status >= 500) {
+      errMsg = '서버 오류가 발생했습니다. (DB 마이그레이션 확인 필요)<br><code style="font-size:10px">' + (e.message || '') + '</code>';
+    } else {
+      errMsg = '서버에 연결할 수 없습니다.<br>네트워크 연결 또는 서버 상태를 확인해주세요.';
+    }
+    statusEl.textContent = '오류';
+    statusEl.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:10px;margin-left:auto;background:#7F1D1D;color:#FCA5A5';
+    contentEl.innerHTML = '<span style="font-size:11px;color:var(--sub,#888)">' + errMsg + '</span>';
   }
 }
 
