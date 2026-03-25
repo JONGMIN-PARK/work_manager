@@ -824,10 +824,26 @@ async function loadTelegramStatus(container) {
       contentEl.innerHTML =
         '<p style="font-size:12px;color:var(--sub,#888);margin-bottom:12px">QR코드를 스캔하여 텔레그램 봇과 연동하세요 (1회)</p>' +
         '<button id="tgGenQR" style="padding:8px 20px;border:none;border-radius:8px;background:#0088CC;color:#fff;cursor:pointer;font-size:12px">QR코드 생성</button>' +
-        '<div id="tgQRArea" style="margin-top:12px"></div>';
+        '<div id="tgQRArea" style="margin-top:12px"></div>' +
+        '<div style="margin-top:12px;border-top:1px solid var(--border,#333);padding-top:8px">' +
+          '<button id="tgDebugBtn" style="padding:4px 10px;border:none;border-radius:4px;background:var(--card,#1a1a2e);border:1px solid var(--border,#333);color:var(--sub,#888);cursor:pointer;font-size:10px">Webhook 진단</button>' +
+          '<pre id="tgDebugResult" style="display:none;margin-top:8px;font-size:10px;color:var(--sub,#888);background:var(--bg,#0c0f1a);padding:8px;border-radius:6px;overflow:auto;max-height:200px;white-space:pre-wrap"></pre>' +
+        '</div>';
 
       contentEl.querySelector('#tgGenQR').onclick = function () {
         generateTelegramQR(container);
+      };
+
+      contentEl.querySelector('#tgDebugBtn').onclick = async function () {
+        var pre = contentEl.querySelector('#tgDebugResult');
+        pre.style.display = 'block';
+        pre.textContent = '진단 중...';
+        try {
+          var d = await apiFetch('/api/telegram/debug');
+          pre.textContent = JSON.stringify(d.data, null, 2);
+        } catch (e) {
+          pre.textContent = 'Error: ' + (e.message || e);
+        }
       };
     }
   } catch (e) {
