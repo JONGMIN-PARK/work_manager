@@ -146,141 +146,16 @@ if (telegramService.isConfigured()) {
   });
 }
 
-// ─── 납기 리마인더 스케줄러 (매일 KST 09:00 = UTC 00:00) ───
+// ─── 스케줄러 등록 ───
 var notificationService = require('./services/notification.service');
-function scheduleDeadlineReminder() {
-  var now = new Date();
-  var next = new Date(now);
-  next.setUTCHours(0, 0, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1);
-  var delay = next.getTime() - now.getTime();
-  setTimeout(function () {
-    notificationService.sendDeadlineReminders().catch(function (e) {
-      console.error('[Scheduler] Deadline reminder error:', e.message);
-    });
-    // 24시간 뒤 다시 실행
-    setInterval(function () {
-      notificationService.sendDeadlineReminders().catch(function (e) {
-        console.error('[Scheduler] Deadline reminder error:', e.message);
-      });
-    }, 24 * 60 * 60 * 1000);
-  }, delay);
-  console.log('[Scheduler] Deadline reminder scheduled, next run in', Math.round(delay / 60000), 'min');
-}
-// ─── 일일 브리핑 스케줄러 (매일 KST 08:30 = UTC 23:30 전일) ───
-function scheduleDailyBriefing() {
-  var now = new Date();
-  var next = new Date(now);
-  next.setUTCHours(23, 30, 0, 0); // KST 08:30 = UTC 23:30 (전일)
-  if (next <= now) next.setDate(next.getDate() + 1);
-  var delay = next.getTime() - now.getTime();
-  setTimeout(function () {
-    notificationService.sendDailyBriefing().catch(function (e) {
-      console.error('[Scheduler] Daily briefing error:', e.message);
-    });
-    setInterval(function () {
-      notificationService.sendDailyBriefing().catch(function (e) {
-        console.error('[Scheduler] Daily briefing error:', e.message);
-      });
-    }, 24 * 60 * 60 * 1000);
-  }, delay);
-  console.log('[Scheduler] Daily briefing scheduled, next run in', Math.round(delay / 60000), 'min');
-}
-
-// ─── 수주 납품 리마인더 (매일 KST 09:10 = UTC 00:10) ───
-function scheduleOrderReminder() {
-  var now = new Date();
-  var next = new Date(now);
-  next.setUTCHours(0, 10, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1);
-  var delay = next.getTime() - now.getTime();
-  setTimeout(function () {
-    notificationService.sendOrderDeliveryReminders().catch(function (e) {
-      console.error('[Scheduler] Order reminder error:', e.message);
-    });
-    setInterval(function () {
-      notificationService.sendOrderDeliveryReminders().catch(function (e) {
-        console.error('[Scheduler] Order reminder error:', e.message);
-      });
-    }, 24 * 60 * 60 * 1000);
-  }, delay);
-  console.log('[Scheduler] Order delivery reminder scheduled');
-}
-
-// ─── 주간 다이제스트 (매주 월요일 KST 09:30 = UTC 00:30) ───
-function scheduleWeeklyDigest() {
-  function getNextMonday() {
-    var now = new Date();
-    var day = now.getDay();
-    var diff = day === 0 ? 1 : day === 1 ? (now.getUTCHours() < 1 ? 0 : 7) : 8 - day;
-    var next = new Date(now);
-    next.setDate(now.getDate() + diff);
-    next.setUTCHours(0, 30, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 7);
-    return next;
-  }
-  var next = getNextMonday();
-  var delay = next.getTime() - Date.now();
-  setTimeout(function () {
-    notificationService.sendWeeklyDigest().catch(function (e) {
-      console.error('[Scheduler] Weekly digest error:', e.message);
-    });
-    setInterval(function () {
-      notificationService.sendWeeklyDigest().catch(function (e) {
-        console.error('[Scheduler] Weekly digest error:', e.message);
-      });
-    }, 7 * 24 * 60 * 60 * 1000);
-  }, delay);
-  console.log('[Scheduler] Weekly digest scheduled, next Monday');
-}
-
-// ─── 진행률 경고 (매일 KST 17:00 = UTC 08:00) ───
-function scheduleProgressWarning() {
-  var now = new Date();
-  var next = new Date(now);
-  next.setUTCHours(8, 0, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1);
-  var delay = next.getTime() - now.getTime();
-  setTimeout(function () {
-    notificationService.sendProgressWarnings().catch(function (e) {
-      console.error('[Scheduler] Progress warning error:', e.message);
-    });
-    setInterval(function () {
-      notificationService.sendProgressWarnings().catch(function (e) {
-        console.error('[Scheduler] Progress warning error:', e.message);
-      });
-    }, 24 * 60 * 60 * 1000);
-  }, delay);
-  console.log('[Scheduler] Progress warning scheduled');
-}
-
-// ─── 과부하 경고 (매일 KST 18:00 = UTC 09:00) ───
-function scheduleOverloadWarning() {
-  var now = new Date();
-  var next = new Date(now);
-  next.setUTCHours(9, 0, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1);
-  var delay = next.getTime() - now.getTime();
-  setTimeout(function () {
-    notificationService.sendOverloadWarnings().catch(function (e) {
-      console.error('[Scheduler] Overload warning error:', e.message);
-    });
-    setInterval(function () {
-      notificationService.sendOverloadWarnings().catch(function (e) {
-        console.error('[Scheduler] Overload warning error:', e.message);
-      });
-    }, 24 * 60 * 60 * 1000);
-  }, delay);
-  console.log('[Scheduler] Overload warning scheduled');
-}
-
+var scheduler = require('./telegram/scheduler');
 if (telegramService.isConfigured()) {
-  scheduleDeadlineReminder();
-  scheduleDailyBriefing();
-  scheduleOrderReminder();
-  scheduleWeeklyDigest();
-  scheduleProgressWarning();
-  scheduleOverloadWarning();
+  scheduler.scheduleDaily(0, 0, function () { return notificationService.sendDeadlineReminders(); }, 'Deadline reminder');
+  scheduler.scheduleDaily(23, 30, function () { return notificationService.sendDailyBriefing(); }, 'Daily briefing');
+  scheduler.scheduleDaily(0, 10, function () { return notificationService.sendOrderDeliveryReminders(); }, 'Order delivery reminder');
+  scheduler.scheduleWeekly(1, 0, 30, function () { return notificationService.sendWeeklyDigest(); }, 'Weekly digest');
+  scheduler.scheduleDaily(8, 0, function () { return notificationService.sendProgressWarnings(); }, 'Progress warning');
+  scheduler.scheduleDaily(9, 0, function () { return notificationService.sendOverloadWarnings(); }, 'Overload warning');
 }
 
 // ─── 헬스 체크 ───
