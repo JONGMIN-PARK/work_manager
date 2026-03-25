@@ -165,8 +165,78 @@ function scheduleDeadlineReminder() {
   }, delay);
   console.log('[Scheduler] Deadline reminder scheduled, next run in', Math.round(delay / 60000), 'min');
 }
+// ─── 일일 브리핑 스케줄러 (매일 KST 08:30 = UTC 23:30 전일) ───
+function scheduleDailyBriefing() {
+  var now = new Date();
+  var next = new Date(now);
+  next.setUTCHours(23, 30, 0, 0); // KST 08:30 = UTC 23:30 (전일)
+  if (next <= now) next.setDate(next.getDate() + 1);
+  var delay = next.getTime() - now.getTime();
+  setTimeout(function () {
+    notificationService.sendDailyBriefing().catch(function (e) {
+      console.error('[Scheduler] Daily briefing error:', e.message);
+    });
+    setInterval(function () {
+      notificationService.sendDailyBriefing().catch(function (e) {
+        console.error('[Scheduler] Daily briefing error:', e.message);
+      });
+    }, 24 * 60 * 60 * 1000);
+  }, delay);
+  console.log('[Scheduler] Daily briefing scheduled, next run in', Math.round(delay / 60000), 'min');
+}
+
+// ─── 수주 납품 리마인더 (매일 KST 09:10 = UTC 00:10) ───
+function scheduleOrderReminder() {
+  var now = new Date();
+  var next = new Date(now);
+  next.setUTCHours(0, 10, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  var delay = next.getTime() - now.getTime();
+  setTimeout(function () {
+    notificationService.sendOrderDeliveryReminders().catch(function (e) {
+      console.error('[Scheduler] Order reminder error:', e.message);
+    });
+    setInterval(function () {
+      notificationService.sendOrderDeliveryReminders().catch(function (e) {
+        console.error('[Scheduler] Order reminder error:', e.message);
+      });
+    }, 24 * 60 * 60 * 1000);
+  }, delay);
+  console.log('[Scheduler] Order delivery reminder scheduled');
+}
+
+// ─── 주간 다이제스트 (매주 월요일 KST 09:30 = UTC 00:30) ───
+function scheduleWeeklyDigest() {
+  function getNextMonday() {
+    var now = new Date();
+    var day = now.getDay();
+    var diff = day === 0 ? 1 : day === 1 ? (now.getUTCHours() < 1 ? 0 : 7) : 8 - day;
+    var next = new Date(now);
+    next.setDate(now.getDate() + diff);
+    next.setUTCHours(0, 30, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 7);
+    return next;
+  }
+  var next = getNextMonday();
+  var delay = next.getTime() - Date.now();
+  setTimeout(function () {
+    notificationService.sendWeeklyDigest().catch(function (e) {
+      console.error('[Scheduler] Weekly digest error:', e.message);
+    });
+    setInterval(function () {
+      notificationService.sendWeeklyDigest().catch(function (e) {
+        console.error('[Scheduler] Weekly digest error:', e.message);
+      });
+    }, 7 * 24 * 60 * 60 * 1000);
+  }, delay);
+  console.log('[Scheduler] Weekly digest scheduled, next Monday');
+}
+
 if (telegramService.isConfigured()) {
   scheduleDeadlineReminder();
+  scheduleDailyBriefing();
+  scheduleOrderReminder();
+  scheduleWeeklyDigest();
 }
 
 // ─── 헬스 체크 ───

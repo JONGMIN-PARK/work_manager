@@ -210,17 +210,30 @@ async function cmdIssues(chatId, user) {
 async function cmdHelp(chatId) {
   var msg = '🤖 <b>Work Manager Bot</b>\n\n' +
     '<b>📋 개인</b>\n' +
-    '/my — 내 현황 요약 (이슈 + 납기)\n' +
+    '/today — 오늘 브리핑\n' +
+    '/my — 내 현황 (이슈 + 납기)\n' +
     '/issues — 미해결 이슈 목록\n' +
-    '/summary — 금주 업무시간 요약\n\n' +
+    '/tasks — 미완료 작업\n' +
+    '/done &lt;번호&gt; — 작업 완료 처리\n' +
+    '/my-stats — 내 월간 통계\n\n' +
     '<b>📊 분석</b>\n' +
+    '/summary — 금주 업무시간 요약\n' +
     '/report — 월간 리포트\n' +
-    '/overdue — 지연 프로젝트 + 긴급 이슈\n' +
-    '/project &lt;이름&gt; — 프로젝트 현황\n\n' +
+    '/overdue — 지연/긴급 현황\n' +
+    '/project &lt;이름&gt; — 프로젝트 현황\n' +
+    '/checklist &lt;이름&gt; — 체크리스트\n\n' +
+    '<b>📅 일정/수주</b>\n' +
+    '/calendar — 이번 주 일정\n' +
+    '/orders — 수주 목록\n' +
+    '/order &lt;번호&gt; — 수주 상세\n' +
+    '/deliveries — 납품 예정\n\n' +
+    '<b>📁 문서</b>\n' +
+    '/docs &lt;프로젝트&gt; — 문서 목록\n' +
+    '/search-doc &lt;키워드&gt; — 문서 검색\n\n' +
     '<b>👥 팀 (관리자/팀장)</b>\n' +
-    '/team — 팀원별 금주 투입시간\n\n' +
+    '/team — 팀원별 금주 투입\n\n' +
     '<b>⚙️ 설정</b>\n' +
-    '/unlink — 텔레그램 연동 해제\n' +
+    '/unlink — 연동 해제\n' +
     '/help — 명령어 안내';
   return sendMessage(chatId, msg);
 }
@@ -615,6 +628,519 @@ async function cmdOverdue(chatId, user) {
   return sendMessage(chatId, msg);
 }
 
+/** 봇 명령어: /calendar — 일정 조회 */
+async function cmdCalendar(chatId, user, days) {
+  days = days || 7;
+  var today = new Date();
+  var todayStr = today.toISOString().slice(0, 10);
+  var endDate = new Date(today);
+  endDate.setDate(today.getDate() + days - 1);
+  var endStr = endDate.toISOString().slice(0, 10);
+
+  var eventsR = await db.query(
+    'SELECT id, title, type, start_date, end_date, assignees, memo FROM events WHERE start_date <= $1 AND end_date >= $2 ORDER BY start_date, end_date LIMIT 20',
+    [endStr, todayStr]
+  );
+
+  if (eventsR.rows.length === 0) {
+    return sendMessage(chatId, '📅 등록된 일정이 없습니다.');
+  }
+
+  var typeIcons = {
+    milestone: '◆', meeting: '🤝', deadline: '🏁', trip: '✈️',
+    fieldService: '🔧', periodicChk: '🛠️', dayoff: '🌴',
+    amoff: '🌅', pmoff: '🌇', etc: '📌'
+  };
+  var dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+  // Group events by date
+  var grouped = {};
+  eventsR.rows.forEach(function (ev) {
+    var startD = new Date(ev.start_date);
+    var endD = new Date(ev.end_date);
+    var cursor = new Date(Math.max(startD.getTime(), today.getTime()));
+    var limit = new Date(Math.min(endD.getTime(), endDate.getTime()));
+    while (cursor <= limit) {
+      var dateKey = cursor.toISOString().slice(0, 10);
+      if (!grouped[dateKey]) grouped[dateKey] = [];
+      grouped[dateKey].push(ev);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  });
+
+  var msg = '📅 <b>일정 (' + days + '일)</b>\n\n';
+  var sortedDates = Object.keys(grouped).sort();
+  sortedDates.forEach(function (dateKey) {
+    var d = new Date(dateKey);
+    var dayName = dayNames[d.getDay()];
+    msg += '<b>' + dateKey.slice(5) + ' (' + dayName + ')</b>\n';
+    grouped[dateKey].forEach(function (ev) {
+      var icon = typeIcons[ev.type] || '📌';
+      msg += icon + ' ' + ev.title + '\n';
+    });
+    msg += '\n';
+  });
+
+  return sendMessage(chatId, msg);
+}
+
+/** 봇 명령어: /today — 오늘 브리핑 */
+async function cmdToday(chatId, user) {
+  var today = new Date().toISOString().slice(0, 10);
+  var todayCompact = today.replace(/-/g, '');
+
+  // 오늘 일정
+  var eventsR = await db.query(
+    'SELECT title, type FROM events WHERE start_date <= $1 AND end_date >= $1 ORDER BY start_date',
+    [today]
+  );
+
+  // 긴급 미해결 이슈
+  var issuesR = await db.query(
+    "SELECT title, urgency, status FROM issues WHERE assignees::text LIKE $1 AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 3",
+    ['%' + user.name + '%']
+  );
+
+  // 오늘 납기 프로젝트
+  var deadlinesR = await db.query(
+    "SELECT name, order_no FROM projects WHERE end_date = $1 AND status != 'done'",
+    [todayCompact]
+  );
+
+  var hasContent = eventsR.rows.length > 0 || issuesR.rows.length > 0 || deadlinesR.rows.length > 0;
+
+  if (!hasContent) {
+    return sendMessage(chatId, '✨ 오늘은 특별한 일정이 없습니다. 좋은 하루 되세요!');
+  }
+
+  var typeIcons = {
+    milestone: '◆', meeting: '🤝', deadline: '🏁', trip: '✈️',
+    fieldService: '🔧', periodicChk: '🛠️', dayoff: '🌴',
+    amoff: '🌅', pmoff: '🌇', etc: '📌'
+  };
+
+  var msg = '☀️ <b>' + user.name + '님, 오늘 브리핑</b>\n\n';
+
+  if (eventsR.rows.length > 0) {
+    msg += '📅 <b>오늘 일정</b>\n';
+    eventsR.rows.forEach(function (r) {
+      var icon = typeIcons[r.type] || '📌';
+      msg += icon + ' ' + r.title + '\n';
+    });
+    msg += '\n';
+  }
+
+  if (issuesR.rows.length > 0) {
+    msg += '🔴 <b>긴급 이슈</b>\n';
+    issuesR.rows.forEach(function (r) {
+      var icon = r.urgency === 'urgent' ? '🔴' : r.urgency === 'normal' ? '🟡' : '🟢';
+      msg += icon + ' ' + r.title + ' [' + r.status + ']\n';
+    });
+    msg += '\n';
+  }
+
+  if (deadlinesR.rows.length > 0) {
+    msg += '🏁 <b>오늘 납기</b>\n';
+    deadlinesR.rows.forEach(function (r) {
+      msg += '· ' + (r.order_no || '') + ' ' + r.name + '\n';
+    });
+  }
+
+  return sendMessage(chatId, msg);
+}
+
+/** 봇 명령어: /tasks — 미완료 작업 목록 */
+async function cmdTasks(chatId, user) {
+  var checklistsR = await db.query(
+    'SELECT c.id, c.project_id, c.phase, c.items, p.name as project_name FROM checklists c LEFT JOIN projects p ON p.id = c.project_id WHERE p.assignees::text LIKE $1 OR c.created_by = $2 ORDER BY p.name',
+    ['%' + user.name + '%', user.user_id]
+  );
+
+  var taskNum = 0;
+  var grouped = {};
+
+  checklistsR.rows.forEach(function (cl) {
+    var items = [];
+    try { items = typeof cl.items === 'string' ? JSON.parse(cl.items) : (cl.items || []); } catch (_) {}
+    items.forEach(function (item) {
+      if (item.done === true) return;
+      taskNum++;
+      var projName = cl.project_name || '(프로젝트 없음)';
+      if (!grouped[projName]) grouped[projName] = [];
+      grouped[projName].push({
+        num: taskNum,
+        title: item.title || item.text || item.name || '(제목없음)'
+      });
+    });
+  });
+
+  if (taskNum === 0) {
+    return sendMessage(chatId, '✅ 미완료 작업이 없습니다!');
+  }
+
+  var msg = '📋 <b>미완료 작업 (' + taskNum + '건)</b>\n\n';
+  var projNames = Object.keys(grouped);
+  projNames.forEach(function (projName) {
+    msg += '<b>' + projName + '</b>\n';
+    grouped[projName].forEach(function (t) {
+      msg += '⬜ ' + t.num + '. ' + t.title + '\n';
+    });
+    msg += '\n';
+  });
+
+  msg += '💡 완료: /done 번호';
+  return sendMessage(chatId, msg);
+}
+
+/** 봇 명령어: /done <번호> — 작업 완료 처리 */
+async function cmdDone(chatId, user, itemNumber) {
+  if (!itemNumber || isNaN(itemNumber)) {
+    return sendMessage(chatId, '사용법: /done <번호>\n\n/tasks 에서 번호를 확인하세요.');
+  }
+
+  var checklistsR = await db.query(
+    'SELECT c.id, c.project_id, c.phase, c.items, p.name as project_name FROM checklists c LEFT JOIN projects p ON p.id = c.project_id WHERE p.assignees::text LIKE $1 OR c.created_by = $2 ORDER BY p.name',
+    ['%' + user.name + '%', user.user_id]
+  );
+
+  var taskNum = 0;
+  var targetCl = null;
+  var targetItemIdx = -1;
+  var targetTitle = '';
+
+  checklistsR.rows.forEach(function (cl) {
+    var items = [];
+    try { items = typeof cl.items === 'string' ? JSON.parse(cl.items) : (cl.items || []); } catch (_) {}
+    items.forEach(function (item, idx) {
+      if (item.done === true) return;
+      taskNum++;
+      if (taskNum === itemNumber) {
+        targetCl = cl;
+        targetItemIdx = idx;
+        targetTitle = item.title || item.text || item.name || '(제목없음)';
+      }
+    });
+  });
+
+  if (!targetCl || targetItemIdx < 0) {
+    return sendMessage(chatId, '❌ 유효하지 않은 번호입니다.');
+  }
+
+  var items = [];
+  try { items = typeof targetCl.items === 'string' ? JSON.parse(targetCl.items) : (targetCl.items || []); } catch (_) {}
+  items[targetItemIdx].done = true;
+
+  await db.query(
+    'UPDATE checklists SET items = $1, version = version + 1 WHERE id = $2',
+    [JSON.stringify(items), targetCl.id]
+  );
+
+  return sendMessage(chatId, '✅ 완료: ' + targetTitle);
+}
+
+/** 봇 명령어: /orders — 수주 목록 */
+async function cmdOrders(chatId, user) {
+  var ordersR = await db.query(
+    'SELECT order_no, client, name, amount, manager, delivery, memo FROM orders ORDER BY delivery DESC NULLS LAST LIMIT 15'
+  );
+
+  if (ordersR.rows.length === 0) {
+    return sendMessage(chatId, '📦 등록된 수주가 없습니다.');
+  }
+
+  var today = new Date();
+  var msg = '📦 <b>수주 목록</b>\n\n';
+  ordersR.rows.forEach(function (r, i) {
+    msg += '<b>' + (i + 1) + '.</b> ';
+    if (r.order_no) msg += '<code>' + r.order_no + '</code> ';
+    msg += (r.name || r.client || '(미지정)');
+    if (r.amount) {
+      var amountStr = Number(r.amount).toLocaleString();
+      msg += ' — ' + amountStr + '천원';
+    }
+    if (r.delivery) {
+      msg += '\n   📅 납품: ' + r.delivery;
+      var delivDate = new Date(r.delivery.slice(0, 4) + '-' + r.delivery.slice(4, 6) + '-' + r.delivery.slice(6, 8));
+      if (isNaN(delivDate.getTime())) {
+        delivDate = new Date(r.delivery);
+      }
+      var diffDays = Math.ceil((delivDate - today) / 86400000);
+      if (diffDays >= 0 && diffDays <= 7) msg += ' ⚠️';
+    }
+    msg += '\n';
+  });
+
+  return sendMessage(chatId, msg);
+}
+
+/** 봇 명령어: /order <검색어> — 수주 상세 */
+async function cmdOrder(chatId, user, query) {
+  if (!query) return cmdOrders(chatId, user);
+
+  var orderR = await db.query(
+    'SELECT * FROM orders WHERE order_no ILIKE $1 OR client ILIKE $1 OR name ILIKE $1 LIMIT 1',
+    ['%' + query + '%']
+  );
+
+  if (orderR.rows.length === 0) {
+    return sendMessage(chatId, '❌ 수주를 찾을 수 없습니다.');
+  }
+
+  var o = orderR.rows[0];
+  var msg = '📦 <b>수주 상세</b>\n\n';
+  if (o.order_no) msg += '📋 수주번호: <code>' + o.order_no + '</code>\n';
+  if (o.client) msg += '🏢 고객: ' + o.client + '\n';
+  if (o.name) msg += '📁 건명: ' + o.name + '\n';
+  if (o.amount) {
+    var amountStr = Number(o.amount).toLocaleString();
+    msg += '💰 금액: ' + amountStr + '천원\n';
+  }
+  if (o.manager) msg += '👤 담당: ' + o.manager + '\n';
+  if (o.delivery) msg += '📅 납품: ' + o.delivery + '\n';
+  if (o.memo) msg += '📝 메모: ' + o.memo.slice(0, 200) + '\n';
+
+  // 투입 시간 조회
+  if (o.order_no) {
+    var workR = await db.query(
+      'SELECT COALESCE(SUM(hours),0) as hours, COUNT(DISTINCT name) as people FROM work_records WHERE order_no = $1',
+      [o.order_no]
+    );
+    if (workR.rows[0]) {
+      msg += '\n⏱ 투입: <b>' + Math.round(parseFloat(workR.rows[0].hours) * 10) / 10 + 'h</b> (' + workR.rows[0].people + '명)';
+    }
+  }
+
+  return sendMessage(chatId, msg);
+}
+
+/** 봇 명령어: /deliveries — 이번 달 납품 예정 */
+async function cmdDeliveries(chatId, user) {
+  var now = new Date();
+  var y = now.getFullYear();
+  var m = ('0' + (now.getMonth() + 1)).slice(-2);
+  var startYMD = y + '-' + m + '-01';
+  var endYMD = y + '-' + m + '-31';
+  var startCompact = y + m + '01';
+  var endCompact = y + m + '31';
+
+  // Try both date formats
+  var ordersR = await db.query(
+    'SELECT order_no, client, name, delivery, manager FROM orders WHERE (delivery >= $1 AND delivery <= $2) OR (delivery >= $3 AND delivery <= $4) ORDER BY delivery',
+    [startYMD, endYMD, startCompact, endCompact]
+  );
+
+  if (ordersR.rows.length === 0) {
+    return sendMessage(chatId, '📦 이번 달 납품 예정이 없습니다.');
+  }
+
+  var today = new Date();
+  var msg = '📦 <b>' + y + '년 ' + parseInt(m) + '월 납품 예정</b>\n\n';
+  ordersR.rows.forEach(function (r, i) {
+    msg += '<b>' + (i + 1) + '.</b> ';
+    if (r.order_no) msg += '<code>' + r.order_no + '</code> ';
+    msg += (r.name || r.client || '(미지정)');
+    if (r.delivery) {
+      msg += '\n   📅 ' + r.delivery;
+      var delivDate = new Date(r.delivery.slice(0, 4) + '-' + r.delivery.slice(4, 6) + '-' + r.delivery.slice(6, 8));
+      if (isNaN(delivDate.getTime())) {
+        delivDate = new Date(r.delivery);
+      }
+      var diffDays = Math.ceil((delivDate - today) / 86400000);
+      if (diffDays < 0) {
+        msg += ' (지남)';
+      } else if (diffDays === 0) {
+        msg += ' (오늘!)';
+      } else {
+        msg += ' (D-' + diffDays + ')';
+      }
+    }
+    if (r.manager) msg += ' 👤' + r.manager;
+    msg += '\n';
+  });
+
+  return sendMessage(chatId, msg);
+}
+
+/** 봇 명령어: /my-stats — 내 월간 통계 */
+async function cmdMyStats(chatId, user) {
+  var m = getMonthRange();
+
+  // 업무분장별 시간
+  var abbrR = await db.query(
+    'SELECT abbr, COALESCE(SUM(hours),0) as hours FROM work_records WHERE name = $1 AND date >= $2 AND date <= $3 GROUP BY abbr ORDER BY hours DESC',
+    [user.name, m.start, m.end]
+  );
+
+  // 주간별 시간
+  var weeklyR = await db.query(
+    'SELECT SUBSTRING(date,1,6) as ym, CEIL((CAST(SUBSTRING(date,7,2) AS INTEGER))::numeric / 7) as wk, COALESCE(SUM(hours),0) as hours FROM work_records WHERE name = $1 AND date >= $2 AND date <= $3 GROUP BY ym, wk ORDER BY wk',
+    [user.name, m.start, m.end]
+  );
+
+  // 관여 수주 수
+  var orderCntR = await db.query(
+    'SELECT COUNT(DISTINCT order_no) as cnt FROM work_records WHERE name = $1 AND date >= $2 AND date <= $3',
+    [user.name, m.start, m.end]
+  );
+
+  // 일별 근무일 수
+  var daysCntR = await db.query(
+    'SELECT COUNT(DISTINCT date) as days, COALESCE(SUM(hours),0) as hours FROM work_records WHERE name = $1 AND date >= $2 AND date <= $3',
+    [user.name, m.start, m.end]
+  );
+
+  var totalHours = parseFloat(daysCntR.rows[0].hours);
+  var workDays = parseInt(daysCntR.rows[0].days);
+  var dailyAvg = workDays > 0 ? Math.round(totalHours / workDays * 10) / 10 : 0;
+  var orderCnt = parseInt(orderCntR.rows[0].cnt);
+  var maxAbbr = abbrR.rows.length > 0 ? parseFloat(abbrR.rows[0].hours) : 1;
+
+  var msg = '📊 <b>' + user.name + '님 ' + m.label + ' 통계</b>\n\n';
+  msg += '⏱ 총 투입: <b>' + Math.round(totalHours * 10) / 10 + 'h</b>\n';
+  msg += '📅 근무일: <b>' + workDays + '일</b>\n';
+  msg += '📈 일평균: <b>' + dailyAvg + 'h</b>\n';
+  msg += '📋 수주 수: <b>' + orderCnt + '건</b>\n\n';
+
+  // 업무분장별 바 차트
+  if (abbrR.rows.length > 0) {
+    msg += '<b>업무분장별</b>\n';
+    abbrR.rows.forEach(function (r) {
+      var h = parseFloat(r.hours);
+      var pct = totalHours > 0 ? Math.round(h / totalHours * 100) : 0;
+      msg += '<code>' + textBar(h, maxAbbr, 12) + '</code> ' + (AM[r.abbr] || r.abbr) + ' <b>' + Math.round(h * 10) / 10 + 'h</b> (' + pct + '%)\n';
+    });
+    msg += '\n';
+  }
+
+  // 주간별
+  if (weeklyR.rows.length > 0) {
+    var maxWk = Math.max.apply(null, weeklyR.rows.map(function (r) { return parseFloat(r.hours); }));
+    msg += '<b>주간별</b>\n';
+    weeklyR.rows.forEach(function (r) {
+      var h = parseFloat(r.hours);
+      msg += '<code>' + textBar(h, maxWk, 10) + '</code> ' + r.wk + '주차 <b>' + Math.round(h * 10) / 10 + 'h</b>\n';
+    });
+  }
+
+  return sendMessage(chatId, msg);
+}
+
+/** 봇 명령어: /checklist — 체크리스트 조회 */
+async function cmdChecklist(chatId, user, query) {
+  if (!query) {
+    // 체크리스트가 있는 프로젝트 목록
+    var listR = await db.query(
+      'SELECT DISTINCT p.name, p.id, COUNT(c.id) as cl_count FROM checklists c LEFT JOIN projects p ON p.id = c.project_id GROUP BY p.id, p.name ORDER BY p.name LIMIT 15'
+    );
+    if (listR.rows.length === 0) {
+      return sendMessage(chatId, '📋 등록된 체크리스트가 없습니다.');
+    }
+    var msg = '📋 <b>체크리스트 프로젝트</b>\n\n';
+    listR.rows.forEach(function (r, i) {
+      msg += (i + 1) + '. ' + (r.name || '(프로젝트 없음)') + ' (' + r.cl_count + '개)\n';
+    });
+    msg += '\n💡 상세: /checklist 프로젝트명';
+    return sendMessage(chatId, msg);
+  }
+
+  var clR = await db.query(
+    'SELECT c.*, p.name as project_name FROM checklists c LEFT JOIN projects p ON p.id = c.project_id WHERE p.name ILIKE $1 ORDER BY c.phase',
+    ['%' + query + '%']
+  );
+
+  if (clR.rows.length === 0) {
+    return sendMessage(chatId, '❌ "' + query + '" 체크리스트를 찾을 수 없습니다.');
+  }
+
+  var msg = '📋 <b>' + (clR.rows[0].project_name || query) + ' 체크리스트</b>\n\n';
+
+  clR.rows.forEach(function (cl) {
+    var items = [];
+    try { items = typeof cl.items === 'string' ? JSON.parse(cl.items) : (cl.items || []); } catch (_) {}
+    var doneCount = items.filter(function (item) { return item.done === true; }).length;
+    var totalCount = items.length;
+    var pct = totalCount > 0 ? Math.round(doneCount / totalCount * 100) : 0;
+
+    msg += '<b>' + (cl.phase || '기타') + '</b> (' + pct + '%)\n';
+    items.forEach(function (item) {
+      var icon = item.done === true ? '✅' : '⬜';
+      msg += icon + ' ' + (item.title || item.text || item.name || '(항목)') + '\n';
+    });
+    msg += '\n';
+  });
+
+  return sendMessage(chatId, msg);
+}
+
+/** 봇 명령어: /docs — 문서 목록 */
+async function cmdDocs(chatId, user, query) {
+  var docsR;
+  if (!query) {
+    docsR = await db.query(
+      'SELECT pf.name, pf.ext, pf.size, pf.created_at, p.name as project_name FROM project_files pf LEFT JOIN projects p ON p.id = pf.project_id ORDER BY pf.created_at DESC LIMIT 10'
+    );
+  } else {
+    docsR = await db.query(
+      'SELECT pf.name, pf.ext, pf.size, pf.created_at, p.name as project_name FROM project_files pf LEFT JOIN projects p ON p.id = pf.project_id WHERE p.name ILIKE $1 OR pf.name ILIKE $1 ORDER BY pf.created_at DESC LIMIT 10',
+      ['%' + query + '%']
+    );
+  }
+
+  if (docsR.rows.length === 0) {
+    return sendMessage(chatId, '📁 문서가 없습니다.' + (query ? ' (검색: ' + query + ')' : ''));
+  }
+
+  var msg = '📁 <b>문서 목록</b>' + (query ? ' — ' + query : '') + '\n\n';
+  docsR.rows.forEach(function (r, i) {
+    var sizeStr = '';
+    if (r.size) {
+      var sizeKB = r.size / 1024;
+      sizeStr = sizeKB >= 1024 ? (Math.round(sizeKB / 1024 * 10) / 10) + 'MB' : Math.round(sizeKB) + 'KB';
+    }
+    var dateStr = r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : '';
+    msg += (i + 1) + '. ' + r.name + (r.ext ? '.' + r.ext : '');
+    if (sizeStr) msg += ' (' + sizeStr + ')';
+    if (dateStr) msg += ' ' + dateStr;
+    if (r.project_name) msg += '\n   📁 ' + r.project_name;
+    msg += '\n';
+  });
+
+  return sendMessage(chatId, msg);
+}
+
+/** 봇 명령어: /search-doc — 문서 검색 */
+async function cmdSearchDoc(chatId, user, query) {
+  if (!query) {
+    return sendMessage(chatId, '사용법: /search-doc <키워드>');
+  }
+
+  var docsR = await db.query(
+    'SELECT pf.name, pf.ext, pf.size, pf.created_at, p.name as project_name FROM project_files pf LEFT JOIN projects p ON p.id = pf.project_id WHERE pf.name ILIKE $1 OR pf.tags::text ILIKE $1 ORDER BY pf.created_at DESC LIMIT 10',
+    ['%' + query + '%']
+  );
+
+  if (docsR.rows.length === 0) {
+    return sendMessage(chatId, '📁 "' + query + '" 검색 결과가 없습니다.');
+  }
+
+  var msg = '🔍 <b>문서 검색: ' + query + '</b>\n\n';
+  docsR.rows.forEach(function (r, i) {
+    var sizeStr = '';
+    if (r.size) {
+      var sizeKB = r.size / 1024;
+      sizeStr = sizeKB >= 1024 ? (Math.round(sizeKB / 1024 * 10) / 10) + 'MB' : Math.round(sizeKB) + 'KB';
+    }
+    var dateStr = r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : '';
+    msg += (i + 1) + '. ' + r.name + (r.ext ? '.' + r.ext : '');
+    if (sizeStr) msg += ' (' + sizeStr + ')';
+    if (dateStr) msg += ' ' + dateStr;
+    if (r.project_name) msg += '\n   📁 ' + r.project_name;
+    msg += '\n';
+  });
+
+  return sendMessage(chatId, msg);
+}
+
 /** Webhook으로 들어온 메시지 처리 */
 async function handleUpdate(update) {
   if (!update.message || !update.message.text) return;
@@ -655,6 +1181,35 @@ async function handleUpdate(update) {
     var projQuery = text.replace(/^\/project\s*/, '').trim();
     return cmdProject(chatId, user, projQuery || null);
   }
+  if (text === '/today') return cmdToday(chatId, user);
+  if (text.startsWith('/calendar')) {
+    var calDays = parseInt(text.replace(/^\/calendar\s*/, '')) || 7;
+    return cmdCalendar(chatId, user, calDays);
+  }
+  if (text === '/tasks') return cmdTasks(chatId, user);
+  if (text.startsWith('/done')) {
+    var doneNum = parseInt(text.replace(/^\/done\s*/, ''));
+    return cmdDone(chatId, user, doneNum);
+  }
+  if (text === '/orders') return cmdOrders(chatId, user);
+  if (text.startsWith('/order ') && !text.startsWith('/orders')) {
+    var orderQuery = text.replace(/^\/order\s+/, '').trim();
+    return cmdOrder(chatId, user, orderQuery);
+  }
+  if (text === '/deliveries') return cmdDeliveries(chatId, user);
+  if (text === '/my-stats' || text === '/mystats') return cmdMyStats(chatId, user);
+  if (text.startsWith('/checklist')) {
+    var clQuery = text.replace(/^\/checklist\s*/, '').trim();
+    return cmdChecklist(chatId, user, clQuery || null);
+  }
+  if (text.startsWith('/docs')) {
+    var docQuery = text.replace(/^\/docs\s*/, '').trim();
+    return cmdDocs(chatId, user, docQuery || null);
+  }
+  if (text.startsWith('/search-doc')) {
+    var sdQuery = text.replace(/^\/search-doc\s*/, '').trim();
+    return cmdSearchDoc(chatId, user, sdQuery || null);
+  }
   if (text === '/help') return cmdHelp(chatId);
 
   if (text === '/unlink') {
@@ -678,5 +1233,16 @@ module.exports = {
   getLinkStatus: getLinkStatus,
   getUserByChatId: getUserByChatId,
   handleUpdate: handleUpdate,
-  generateAuthCode: generateAuthCode
+  generateAuthCode: generateAuthCode,
+  cmdCalendar: cmdCalendar,
+  cmdToday: cmdToday,
+  cmdTasks: cmdTasks,
+  cmdDone: cmdDone,
+  cmdOrders: cmdOrders,
+  cmdOrder: cmdOrder,
+  cmdDeliveries: cmdDeliveries,
+  cmdMyStats: cmdMyStats,
+  cmdChecklist: cmdChecklist,
+  cmdDocs: cmdDocs,
+  cmdSearchDoc: cmdSearchDoc
 };

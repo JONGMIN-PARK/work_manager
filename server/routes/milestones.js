@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var { parsePagination } = require('../middleware/pagination');
+var notificationService = require('../services/notification.service');
 
 router.use(auth.authenticate);
 
@@ -58,6 +59,20 @@ router.put('/:id', async function (req, res) {
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
+
+    // 텔레그램 알림: 마일스톤 완료
+    try {
+      if (b.status === 'done' && r.rows[0]) {
+        var ms = r.rows[0];
+        var projR = await db.query('SELECT name, order_no FROM projects WHERE id = $1', [ms.project_id]);
+        var proj = projR.rows[0];
+        if (proj) {
+          notificationService.notifyProjectStakeholders('milestone_complete', {
+            milestoneName: ms.name, orderNo: proj.order_no
+          }, ms.project_id).catch(function(e) { console.error('[noti]', e.message); });
+        }
+      }
+    } catch (_) { /* 알림 실패 무시 */ }
   } catch (e) {
     console.error('[milestones/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

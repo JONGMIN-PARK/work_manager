@@ -11,25 +11,84 @@ var telegramService = require('../services/telegram.service');
 var db = require('../config/db');
 var { authenticate } = require('../middleware/auth');
 
+/** 인라인 버튼 콜백 처리 */
+async function handleCallbackQuery(query) {
+  var chatId = query.message.chat.id;
+  var data = query.data || '';
+  var callbackId = query.id;
+
+  var user = await telegramService.getUserByChatId(chatId);
+  if (!user) {
+    await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '계정 연동이 필요합니다.' });
+    return;
+  }
+
+  var parts = data.split(':');
+  var action = parts[0];
+
+  try {
+    if (action === 'issue_start') {
+      // 이슈 상태 → inProgress
+      var issueId = parts[1];
+      await db.query("UPDATE issues SET status = 'inProgress', updated_at = NOW(), updated_by = $1, version = version + 1 WHERE id = $2", [user.user_id, issueId]);
+      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ 대응 시작!' });
+      await telegramService.sendMessage(chatId, '🔵 이슈 상태가 <b>대응중</b>으로 변경되었습니다.');
+    }
+    else if (action === 'issue_resolve') {
+      var issueId2 = parts[1];
+      await db.query("UPDATE issues SET status = 'resolved', resolved_date = $1, updated_at = NOW(), updated_by = $2, version = version + 1 WHERE id = $3", [new Date().toISOString().slice(0,10), user.user_id, issueId2]);
+      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ 해결 완료!' });
+      await telegramService.sendMessage(chatId, '✅ 이슈가 <b>해결</b> 처리되었습니다.');
+    }
+    else if (action === 'checklist_done') {
+      var clId = parts[1];
+      var itemIdx = parseInt(parts[2]);
+      var clR = await db.query('SELECT items FROM checklists WHERE id = $1', [clId]);
+      if (clR.rows.length > 0) {
+        var items = typeof clR.rows[0].items === 'string' ? JSON.parse(clR.rows[0].items) : clR.rows[0].items;
+        if (items[itemIdx]) {
+          items[itemIdx].done = true;
+          await db.query('UPDATE checklists SET items = $1, version = version + 1 WHERE id = $2', [JSON.stringify(items), clId]);
+          await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ 완료!' });
+          await telegramService.sendMessage(chatId, '✅ <b>' + (items[itemIdx].title || items[itemIdx].text || items[itemIdx].name || '항목') + '</b> 완료 처리됨');
+        }
+      }
+    }
+    else {
+      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '알 수 없는 액션' });
+    }
+  } catch (err) {
+    console.error('[Callback]', err.message);
+    await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '오류 발생: ' + err.message });
+  }
+}
+
 /**
  * POST /api/telegram/webhook
  * Telegram이 호출하는 Webhook 엔드포인트 (인증 불필요)
  */
 router.post('/webhook', function (req, res) {
-  // secret_token 검증
   if (config.telegram.webhookSecret) {
     var token = req.headers['x-telegram-bot-api-secret-token'];
     if (token !== config.telegram.webhookSecret) {
       return res.sendStatus(403);
     }
   }
-
-  // 비동기 처리 (Telegram에 즉시 200 응답)
   res.sendStatus(200);
 
-  telegramService.handleUpdate(req.body).catch(function (err) {
-    console.error('[Telegram Webhook] Error:', err.message);
-  });
+  // 일반 메시지
+  if (req.body.message) {
+    telegramService.handleUpdate(req.body).catch(function (err) {
+      console.error('[Telegram Webhook] Error:', err.message);
+    });
+  }
+
+  // 인라인 버튼 콜백
+  if (req.body.callback_query) {
+    handleCallbackQuery(req.body.callback_query).catch(function (err) {
+      console.error('[Telegram Callback] Error:', err.message);
+    });
+  }
 });
 
 /**

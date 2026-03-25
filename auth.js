@@ -952,11 +952,16 @@ async function loadTelegramPrefs(container) {
     issue_assigned: '이슈 배정',
     issue_status_changed: '이슈 상태 변경',
     project_delayed: '프로젝트 지연',
-    deadline_d3: '납기 D-3 리마인더',
-    deadline_d1: '납기 D-1 리마인더',
+    deadline_d3: '납기 D-3',
+    deadline_d1: '납기 D-1',
     deadline_today: '납기 D-day',
     user_pending: '가입 승인 요청',
-    milestone_complete: '마일스톤 완료'
+    milestone_complete: '마일스톤 완료',
+    event_today: '일일 브리핑 (08:30)',
+    order_delivery_d7: '납품 D-7',
+    order_delivery_d3: '납품 D-3',
+    weekly_digest: '주간 다이제스트 (월)',
+    progress_warning: '진행률 경고'
   };
 
   try {
