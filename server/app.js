@@ -232,11 +232,53 @@ function scheduleWeeklyDigest() {
   console.log('[Scheduler] Weekly digest scheduled, next Monday');
 }
 
+// ─── 진행률 경고 (매일 KST 17:00 = UTC 08:00) ───
+function scheduleProgressWarning() {
+  var now = new Date();
+  var next = new Date(now);
+  next.setUTCHours(8, 0, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  var delay = next.getTime() - now.getTime();
+  setTimeout(function () {
+    notificationService.sendProgressWarnings().catch(function (e) {
+      console.error('[Scheduler] Progress warning error:', e.message);
+    });
+    setInterval(function () {
+      notificationService.sendProgressWarnings().catch(function (e) {
+        console.error('[Scheduler] Progress warning error:', e.message);
+      });
+    }, 24 * 60 * 60 * 1000);
+  }, delay);
+  console.log('[Scheduler] Progress warning scheduled');
+}
+
+// ─── 과부하 경고 (매일 KST 18:00 = UTC 09:00) ───
+function scheduleOverloadWarning() {
+  var now = new Date();
+  var next = new Date(now);
+  next.setUTCHours(9, 0, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  var delay = next.getTime() - now.getTime();
+  setTimeout(function () {
+    notificationService.sendOverloadWarnings().catch(function (e) {
+      console.error('[Scheduler] Overload warning error:', e.message);
+    });
+    setInterval(function () {
+      notificationService.sendOverloadWarnings().catch(function (e) {
+        console.error('[Scheduler] Overload warning error:', e.message);
+      });
+    }, 24 * 60 * 60 * 1000);
+  }, delay);
+  console.log('[Scheduler] Overload warning scheduled');
+}
+
 if (telegramService.isConfigured()) {
   scheduleDeadlineReminder();
   scheduleDailyBriefing();
   scheduleOrderReminder();
   scheduleWeeklyDigest();
+  scheduleProgressWarning();
+  scheduleOverloadWarning();
 }
 
 // ─── 헬스 체크 ───

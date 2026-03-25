@@ -76,7 +76,8 @@ router.post('/', rbac.checkPermission('issue.create'), async function (req, res)
         var targetIds = uR.rows.map(function(u) { return u.id; });
         notificationService.notify('issue_assigned', {
           title: b.title, urgency: b.urgency || 'normal',
-          assignee: assigneeNames.join(', '), projectName: b.projectId || ''
+          assignee: assigneeNames.join(', '), projectName: b.projectId || '',
+          issueId: id
         }, targetIds).catch(function(e) { console.error('[noti]', e.message); });
       }
     } catch (_) { /* 알림 실패해도 이슈 생성은 성공 */ }

@@ -115,8 +115,21 @@ async function notify(eventType, payload, targetUserIds) {
       );
       if (dupR.rows.length > 0) continue;
 
+      // 인라인 버튼 생성 (이벤트별)
+      var sendOpts = {};
+      if (eventType === 'issue_assigned' && payload.issueId) {
+        sendOpts.reply_markup = JSON.stringify({
+          inline_keyboard: [
+            [
+              { text: '🔵 대응 시작', callback_data: 'issue_start:' + payload.issueId },
+              { text: '✅ 해결 완료', callback_data: 'issue_resolve:' + payload.issueId }
+            ]
+          ]
+        });
+      }
+
       // 발송
-      var result = await telegramService.sendMessage(chatId, text);
+      var result = await telegramService.sendMessage(chatId, text, sendOpts);
       var status = (result && result.ok) ? 'sent' : 'failed';
       var errorDetail = (result && !result.ok) ? result.description : null;
 
@@ -176,7 +189,17 @@ async function notifyProjectStakeholders(eventType, payload, projectId) {
   var adminR = await db.query("SELECT id FROM users WHERE role = 'admin' AND status = 'active'");
   adminR.rows.forEach(function (r) { ids.add(r.id); });
 
-  return notify(eventType, payload, Array.from(ids));
+  await notify(eventType, payload, Array.from(ids));
+
+  // 프로젝트 그룹 채팅방에도 발송
+  if (projectId) {
+    var template = TEMPLATES[eventType];
+    if (template) {
+      notifyGroup('project', projectId, template(payload)).catch(function (e) {
+        console.error('[Notification] Group notify error:', e.message);
+      });
+    }
+  }
 }
 
 /** 납기 리마인더 (매일 실행) */
@@ -377,13 +400,99 @@ async function sendWeeklyDigest() {
   console.log('[Notification] Weekly digest sent');
 }
 
+/** 진행률 경고 (매일 실행) — 기대 진행률보다 20%p 이상 뒤처진 프로젝트 */
+async function sendProgressWarnings() {
+  var today = new Date();
+  var projects = await db.query(
+    "SELECT id, name, order_no, start_date, end_date, progress FROM projects WHERE status = 'active' AND start_date IS NOT NULL AND end_date IS NOT NULL"
+  );
+
+  for (var i = 0; i < projects.rows.length; i++) {
+    var p = projects.rows[i];
+    try {
+      var startD = new Date(p.start_date.slice(0, 4) + '-' + p.start_date.slice(4, 6) + '-' + p.start_date.slice(6, 8));
+      var endD = new Date(p.end_date.slice(0, 4) + '-' + p.end_date.slice(4, 6) + '-' + p.end_date.slice(6, 8));
+      var totalDays = Math.max((endD - startD) / 86400000, 1);
+      var elapsed = Math.max((today - startD) / 86400000, 0);
+      var expected = Math.min(Math.round(elapsed / totalDays * 100), 100);
+      var actual = p.progress || 0;
+
+      if (expected - actual >= 20) {
+        await notifyProjectStakeholders('progress_warning', {
+          name: p.name, orderNo: p.order_no, progress: actual, expected: expected
+        }, p.id);
+      }
+    } catch (_) { /* skip */ }
+  }
+  console.log('[Notification] Progress warnings sent');
+}
+
+/** 과부하 경고 (매일 18:00 실행) — 금주 일평균 9h 초과 */
+async function sendOverloadWarnings() {
+  var now = new Date();
+  var day = now.getDay();
+  var diffMon = day === 0 ? -6 : 1 - day;
+  var mon = new Date(now);
+  mon.setDate(now.getDate() + diffMon);
+  function fmt(d) { return d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2); }
+  var start = fmt(mon);
+  var end = fmt(now);
+
+  var r = await db.query(
+    'SELECT name, COALESCE(SUM(hours),0) as hours, COUNT(DISTINCT date) as days FROM work_records WHERE date >= $1 AND date <= $2 GROUP BY name HAVING COUNT(DISTINCT date) >= 3',
+    [start, end]
+  );
+
+  var overloaded = r.rows.filter(function (row) {
+    return row.days > 0 && parseFloat(row.hours) / row.days > 9;
+  });
+
+  if (overloaded.length > 0) {
+    var msg = '⚠️ <b>과부하 경고</b>\n\n';
+    overloaded.forEach(function (row) {
+      var avg = Math.round(parseFloat(row.hours) / row.days * 10) / 10;
+      msg += '· ' + row.name + ' — 일평균 <b>' + avg + 'h</b> (' + row.days + '일간 ' + Math.round(parseFloat(row.hours) * 10) / 10 + 'h)\n';
+    });
+
+    // 관리자에게 알림
+    var admins = await db.query("SELECT id FROM users WHERE role IN ('admin','manager') AND status = 'active'");
+    var adminIds = admins.rows.map(function (a) { return a.id; });
+
+    for (var i = 0; i < adminIds.length; i++) {
+      var linkR = await db.query('SELECT chat_id FROM telegram_links WHERE user_id = $1 AND is_active = TRUE', [adminIds[i]]);
+      if (linkR.rows.length > 0) {
+        await telegramService.sendMessage(linkR.rows[0].chat_id, msg);
+      }
+    }
+  }
+  console.log('[Notification] Overload warnings sent');
+}
+
+/** 그룹 채팅방에 알림 발송 */
+async function notifyGroup(linkType, linkId, text) {
+  try {
+    var r = await db.query(
+      'SELECT chat_id FROM telegram_group_links WHERE link_type = $1 AND link_id = $2 AND is_active = TRUE',
+      [linkType, linkId]
+    );
+    for (var i = 0; i < r.rows.length; i++) {
+      await telegramService.sendMessage(r.rows[i].chat_id, text);
+    }
+  } catch (err) {
+    console.error('[Notification] Group send error:', err.message);
+  }
+}
+
 module.exports = {
   notify: notify,
   notifyAdmins: notifyAdmins,
   notifyProjectStakeholders: notifyProjectStakeholders,
+  notifyGroup: notifyGroup,
   sendDeadlineReminders: sendDeadlineReminders,
   sendDailyBriefing: sendDailyBriefing,
   sendOrderDeliveryReminders: sendOrderDeliveryReminders,
   sendWeeklyDigest: sendWeeklyDigest,
+  sendProgressWarnings: sendProgressWarnings,
+  sendOverloadWarnings: sendOverloadWarnings,
   TEMPLATES: TEMPLATES
 };

@@ -1217,6 +1217,34 @@ async function handleUpdate(update) {
     return sendMessage(chatId, '🔓 연동이 해제되었습니다.\n다시 연동하려면 웹에서 QR코드를 스캔해주세요.');
   }
 
+  // 그룹 채팅방 연동 (관리자 전용)
+  if (text.startsWith('/linkgroup') && msg.chat.type !== 'private') {
+    if (user.role !== 'admin' && user.role !== 'manager') {
+      return sendMessage(chatId, '🔒 관리자/팀장만 그룹 연동이 가능합니다.');
+    }
+    var lgParts = text.replace(/^\/linkgroup\s*/, '').trim().split(/\s+/);
+    var lgType = lgParts[0] || '';
+    var lgId = lgParts[1] || '';
+    if (!lgType || !['project', 'team', 'announce'].includes(lgType)) {
+      return sendMessage(chatId, '사용법: /linkgroup project &lt;프로젝트ID&gt;\n/linkgroup team &lt;부서ID&gt;\n/linkgroup announce');
+    }
+    try {
+      await db.query('DELETE FROM telegram_group_links WHERE chat_id = $1', [chatId]);
+      await db.query(
+        'INSERT INTO telegram_group_links (chat_id, link_type, link_id, linked_by) VALUES ($1, $2, $3, $4)',
+        [chatId, lgType, lgId || null, user.user_id]
+      );
+      return sendMessage(chatId, '✅ 그룹 연동 완료! (' + lgType + (lgId ? ': ' + lgId : '') + ')');
+    } catch (e) {
+      return sendMessage(chatId, '❌ 그룹 연동 실패: ' + e.message);
+    }
+  }
+
+  if (text === '/unlinkgroup' && msg.chat.type !== 'private') {
+    await db.query('DELETE FROM telegram_group_links WHERE chat_id = $1', [chatId]);
+    return sendMessage(chatId, '🔓 그룹 연동이 해제되었습니다.');
+  }
+
   // 알 수 없는 명령어
   if (text.startsWith('/')) {
     return sendMessage(chatId, '❓ 알 수 없는 명령어입니다.\n/help 로 사용 가능한 명령어를 확인하세요.');
