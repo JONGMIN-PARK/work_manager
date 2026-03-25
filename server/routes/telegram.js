@@ -66,9 +66,11 @@ router.post('/auth-code', authenticate, async function (req, res) {
  */
 router.get('/status', authenticate, async function (req, res) {
   try {
-    var link = await telegramService.getLinkStatus(req.user.sub);
+    var configured = telegramService.isConfigured();
+    var link = configured ? await telegramService.getLinkStatus(req.user.sub) : null;
     res.json({
       data: {
+        configured: configured,
         linked: !!link,
         username: link ? link.username : null,
         linkedAt: link ? link.linked_at : null,

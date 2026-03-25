@@ -769,9 +769,24 @@ async function loadTelegramStatus(container) {
   var contentEl = container.querySelector('#tgContent');
   if (!statusEl || !contentEl) return;
 
+  // 로컬 파일 모드 → 텔레그램 섹션 숨김
+  if (AUTH_SKIP) {
+    container.querySelector('#profTelegram').style.display = 'none';
+    return;
+  }
+
   try {
     var data = await apiFetch('/api/telegram/status');
+    if (!data || !data.data) throw new Error('no data');
     var s = data.data;
+
+    if (!s.configured) {
+      // 서버에 텔레그램 봇 토큰 미설정
+      statusEl.textContent = '미설정';
+      statusEl.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:10px;margin-left:auto;background:#374151;color:#9CA3AF';
+      contentEl.innerHTML = '<span style="font-size:12px;color:var(--sub,#888)">텔레그램 봇이 아직 설정되지 않았습니다.<br>관리자에게 TELEGRAM_BOT_TOKEN 환경변수 설정을 요청하세요.</span>';
+      return;
+    }
 
     if (s.linked && s.isActive) {
       // 연동 완료 상태
