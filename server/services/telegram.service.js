@@ -50,6 +50,43 @@ async function sendMessage(chatId, text, opts) {
   }, opts || {}));
 }
 
+/** 봇 명령어 자동완성 등록 (BotFather 대체) */
+async function setMyCommands() {
+  var commands = [
+    { command: 'today', description: '오늘 브리핑' },
+    { command: 'my', description: '내 현황 (이슈+납기)' },
+    { command: 'issues', description: '미해결 이슈 목록' },
+    { command: 'tasks', description: '미완료 작업' },
+    { command: 'done', description: '작업 완료 처리' },
+    { command: 'log', description: '업무일지 빠른 등록' },
+    { command: 'summary', description: '금주 업무시간 요약' },
+    { command: 'report', description: '월간 리포트' },
+    { command: 'weekly_report', description: '주간보고 생성' },
+    { command: 'my_stats', description: '내 월간 통계' },
+    { command: 'overdue', description: '지연/긴급 현황' },
+    { command: 'project', description: '프로젝트 현황' },
+    { command: 'checklist', description: '체크리스트' },
+    { command: 'calendar', description: '이번 주 일정' },
+    { command: 'orders', description: '수주 목록' },
+    { command: 'order', description: '수주 상세' },
+    { command: 'deliveries', description: '납품 예정' },
+    { command: 'team', description: '팀원별 금주 투입' },
+    { command: 'remind', description: '리마인더 설정' },
+    { command: 'vote', description: '팀 투표' },
+    { command: 'docs', description: '문서 목록' },
+    { command: 'search_doc', description: '문서 검색' },
+    { command: 'help', description: '명령어 안내' },
+    { command: 'unlink', description: '연동 해제' }
+  ];
+  var result = await callApi('setMyCommands', { commands: commands });
+  if (result && result.ok) {
+    console.log('[Telegram] Bot commands registered (' + commands.length + ')');
+  } else {
+    console.error('[Telegram] Failed to register commands:', result && result.description);
+  }
+  return result;
+}
+
 /** Webhook 등록 */
 async function setWebhook() {
   if (!config.telegram.webhookUrl) {
@@ -63,6 +100,8 @@ async function setWebhook() {
   var result = await callApi('setWebhook', body);
   if (result && result.ok) {
     console.log('[Telegram] Webhook registered:', config.telegram.webhookUrl);
+    // 명령어 자동완성도 등록
+    await setMyCommands();
   }
   return result;
 }
@@ -1392,7 +1431,7 @@ async function handleUpdate(update) {
     return cmdOrder(chatId, user, orderQuery);
   }
   if (text === '/deliveries') return cmdDeliveries(chatId, user);
-  if (text === '/my-stats' || text === '/mystats') return cmdMyStats(chatId, user);
+  if (text === '/my-stats' || text === '/mystats' || text === '/my_stats') return cmdMyStats(chatId, user);
   if (text.startsWith('/checklist')) {
     var clQuery = text.replace(/^\/checklist\s*/, '').trim();
     return cmdChecklist(chatId, user, clQuery || null);
@@ -1401,8 +1440,8 @@ async function handleUpdate(update) {
     var docQuery = text.replace(/^\/docs\s*/, '').trim();
     return cmdDocs(chatId, user, docQuery || null);
   }
-  if (text.startsWith('/search-doc')) {
-    var sdQuery = text.replace(/^\/search-doc\s*/, '').trim();
+  if (text.startsWith('/search-doc') || text.startsWith('/search_doc')) {
+    var sdQuery = text.replace(/^\/(search-doc|search_doc)\s*/, '').trim();
     return cmdSearchDoc(chatId, user, sdQuery || null);
   }
   // 업무일지 빠른 등록 (명령어 또는 패턴 매치)
@@ -1419,7 +1458,7 @@ async function handleUpdate(update) {
     var voteText = text.replace(/^\/vote\s*/, '').trim();
     return cmdVote(chatId, user, voteText);
   }
-  if (text === '/weekly-report' || text === '/weeklyreport') {
+  if (text === '/weekly-report' || text === '/weeklyreport' || text === '/weekly_report') {
     return cmdWeeklyReport(chatId, user);
   }
   if (text === '/help') return cmdHelp(chatId);
@@ -1479,6 +1518,7 @@ module.exports = {
   isConfigured: isConfigured,
   sendMessage: sendMessage,
   setWebhook: setWebhook,
+  setMyCommands: setMyCommands,
   createAuthCode: createAuthCode,
   verifyAndLink: verifyAndLink,
   unlink: unlink,
