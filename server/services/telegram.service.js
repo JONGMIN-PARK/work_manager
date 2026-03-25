@@ -221,6 +221,7 @@ async function cmdMy(chatId, user) {
     msg += '📅 임박 납기 없음\n';
   }
 
+  msg += '\n💡 /issues 상세 이슈 · /today 오늘 전체 · /summary 주간 요약';
   return sendMessage(chatId, msg);
 }
 
@@ -243,11 +244,187 @@ async function cmdIssues(chatId, user) {
     msg += '\n';
   });
 
+  msg += '\n💡 /done 작업완료 · /today 오늘 브리핑 · /overdue 지연 현황';
   return sendMessage(chatId, msg);
 }
 
+/** 명령어별 상세 도움말 */
+var CMD_HELP = {
+  log: {
+    title: '/log — 업무일지 빠른 등록',
+    usage: '/log {시간}h {분장} {수주번호} {내용}\n또는 바로: 8h D B2024-001 업무내용',
+    format: '시간: 0.5~24 (소수 가능)\n분장: A(CS현장) B(수주) D(개발) G(공통) M(양산) R(제안) S(영업지원)\n수주번호: 선택사항',
+    examples: ['4.5h A 현장 점검', '8h D B2024-001 카메라 보정', '2h G 주간회의 참석', '1.5h S B2024-003 견적 작성'],
+    tip: '/summary 로 금주 합계를 확인하세요!'
+  },
+  today: {
+    title: '/today — 오늘 브리핑',
+    usage: '/today',
+    format: '오늘 일정 + 긴급 이슈 + 납기를 한눈에',
+    examples: [],
+    tip: '/calendar 로 이번 주 전체 일정도 확인!'
+  },
+  my: {
+    title: '/my — 내 현황',
+    usage: '/my',
+    format: '미해결 이슈 + 임박 납기(7일) 요약',
+    examples: [],
+    tip: '/issues 로 이슈 상세, /overdue 로 지연 현황'
+  },
+  issues: {
+    title: '/issues — 미해결 이슈 목록',
+    usage: '/issues',
+    format: '나에게 배정된 미해결 이슈 (최대 10건)',
+    examples: [],
+    tip: '/done 으로 작업 완료, /today 로 오늘 전체 현황'
+  },
+  tasks: {
+    title: '/tasks — 미완료 작업',
+    usage: '/tasks',
+    format: '프로젝트별 미완료 체크리스트 항목',
+    examples: [],
+    tip: '/done 번호 로 완료 처리!'
+  },
+  done: {
+    title: '/done — 작업 완료 처리',
+    usage: '/done {번호}',
+    format: '/tasks 에서 표시된 번호를 입력',
+    examples: ['/done 1', '/done 3'],
+    tip: '/tasks 로 남은 작업 확인'
+  },
+  summary: {
+    title: '/summary — 금주 업무시간 요약',
+    usage: '/summary',
+    format: '업무분장별·일별·수주별 바차트',
+    examples: [],
+    tip: '/report 로 월간 리포트, /my-stats 로 개인 통계'
+  },
+  report: {
+    title: '/report — 월간 리포트',
+    usage: '/report',
+    format: '이번 달 핵심수치, 분장분포, 인원Top10',
+    examples: [],
+    tip: '/weekly-report 로 보고서 형태 생성'
+  },
+  'weekly-report': {
+    title: '/weekly-report — 주간보고 생성',
+    usage: '/weekly-report 또는 /weekly_report',
+    format: '복사해서 바로 보고 가능한 형태',
+    examples: [],
+    tip: '매주 금요일에 사용하면 편리합니다!'
+  },
+  'my-stats': {
+    title: '/my-stats — 내 월간 통계',
+    usage: '/my-stats 또는 /my_stats',
+    format: '업무분장 바차트 + 주간 추이',
+    examples: [],
+    tip: '/summary 는 팀 전체, /my-stats 는 개인'
+  },
+  overdue: {
+    title: '/overdue — 지연/긴급 현황',
+    usage: '/overdue',
+    format: '지연 프로젝트 + 납기초과 + 긴급이슈',
+    examples: [],
+    tip: '/project 이름 으로 상세 확인'
+  },
+  project: {
+    title: '/project — 프로젝트 현황',
+    usage: '/project\n/project {이름 또는 수주번호}',
+    format: '이름 없으면 목록, 있으면 상세',
+    examples: ['/project', '/project SK하이닉스', '/project B2024-001'],
+    tip: '/checklist 이름 으로 체크리스트 확인'
+  },
+  checklist: {
+    title: '/checklist — 체크리스트',
+    usage: '/checklist {프로젝트명}',
+    format: '프로젝트별 단계 체크리스트 진행률',
+    examples: ['/checklist SK하이닉스'],
+    tip: '/done 으로 항목 완료 처리'
+  },
+  calendar: {
+    title: '/calendar — 일정 조회',
+    usage: '/calendar\n/calendar {일수}',
+    format: '기본 7일, 숫자 지정 가능',
+    examples: ['/calendar', '/calendar 14', '/calendar 30'],
+    tip: '/today 로 오늘만 빠르게 확인'
+  },
+  orders: {
+    title: '/orders — 수주 목록',
+    usage: '/orders',
+    format: '진행중 수주 (납품일 순, 최대 15건)',
+    examples: [],
+    tip: '/order 번호 로 상세, /deliveries 로 납품 예정'
+  },
+  order: {
+    title: '/order — 수주 상세',
+    usage: '/order {수주번호 또는 업체명}',
+    format: '수주 상세 + 투입시간',
+    examples: ['/order B2024-001', '/order SK하이닉스'],
+    tip: '/orders 로 전체 목록'
+  },
+  deliveries: {
+    title: '/deliveries — 이번 달 납품 예정',
+    usage: '/deliveries',
+    format: 'D-day 카운트다운 포함',
+    examples: [],
+    tip: '/orders 로 전체 수주 현황'
+  },
+  team: {
+    title: '/team — 팀원별 금주 투입',
+    usage: '/team',
+    format: '관리자/팀장만 사용 가능, 과부하 경고 포함',
+    examples: [],
+    tip: '/report 로 월간 전체 리포트'
+  },
+  remind: {
+    title: '/remind — 리마인더',
+    usage: '/remind {시간} {내용}',
+    format: '시간: 30m, 1h, 2h, 1d (최대 7일)',
+    examples: ['/remind 30m 회의 준비', '/remind 2h 검수 서류', '/remind 1d 납품 확인'],
+    tip: '설정한 시간 후 봇이 알림을 보냅니다'
+  },
+  vote: {
+    title: '/vote — 팀 투표',
+    usage: '/vote 질문\n옵션1\n옵션2\n옵션3',
+    format: '줄바꿈으로 질문과 옵션 구분',
+    examples: ['/vote 회의 시간\n10시\n14시\n16시'],
+    tip: '그룹 채팅에서 사용하면 팀원 모두 투표 가능'
+  },
+  docs: {
+    title: '/docs — 문서 목록',
+    usage: '/docs\n/docs {프로젝트명}',
+    format: '최근 문서 또는 프로젝트별 문서',
+    examples: ['/docs', '/docs SK하이닉스'],
+    tip: '/search-doc 키워드 로 검색'
+  },
+  'search-doc': {
+    title: '/search-doc — 문서 검색',
+    usage: '/search-doc {키워드}',
+    format: '파일명·태그 기준 검색',
+    examples: ['/search-doc 검수', '/search-doc 도면'],
+    tip: '/docs 프로젝트명 으로 프로젝트별 조회'
+  }
+};
+
 /** 봇 명령어: /help */
-async function cmdHelp(chatId) {
+async function cmdHelp(chatId, arg) {
+  if (arg) {
+    var key = arg.replace(/^\//, '').toLowerCase().replace(/_/g, '-');
+    var h = CMD_HELP[key];
+    if (!h) return sendMessage(chatId, '❓ "' + arg + '" 명령어를 찾을 수 없습니다.\n/help 로 전체 목록을 확인하세요.');
+
+    var msg = '📖 <b>' + h.title + '</b>\n\n';
+    msg += '<b>사용법</b>\n<code>' + h.usage + '</code>\n\n';
+    if (h.format) msg += '<b>설명</b>\n' + h.format + '\n\n';
+    if (h.examples.length > 0) {
+      msg += '<b>예제</b>\n';
+      h.examples.forEach(function(ex) { msg += '  <code>' + ex + '</code>\n'; });
+      msg += '\n';
+    }
+    if (h.tip) msg += '💡 ' + h.tip;
+    return sendMessage(chatId, msg);
+  }
+
   var msg = '🤖 <b>Work Manager Bot</b>\n\n' +
     '<b>📋 개인</b>\n' +
     '/today — 오늘 브리핑\n' +
@@ -260,10 +437,10 @@ async function cmdHelp(chatId) {
     '<b>📊 분석</b>\n' +
     '/summary — 금주 업무시간 요약\n' +
     '/report — 월간 리포트\n' +
+    '/weekly-report — 주간보고 생성\n' +
     '/overdue — 지연/긴급 현황\n' +
     '/project &lt;이름&gt; — 프로젝트 현황\n' +
-    '/checklist &lt;이름&gt; — 체크리스트\n' +
-    '/weekly-report — 주간보고 생성\n\n' +
+    '/checklist &lt;이름&gt; — 체크리스트\n\n' +
     '<b>📅 일정/수주</b>\n' +
     '/calendar — 이번 주 일정\n' +
     '/orders — 수주 목록\n' +
@@ -278,12 +455,12 @@ async function cmdHelp(chatId) {
     '/team — 팀원별 금주 투입\n\n' +
     '<b>⚙️ 설정</b>\n' +
     '/unlink — 연동 해제\n' +
-    '/help — 명령어 안내\n\n' +
+    '/help &lt;명령어&gt; — 상세 도움말\n\n' +
     '<b>💬 AI 질답</b>\n' +
     '명령어 없이 자연어로 질문하세요!\n' +
     '예: "이번 주 누가 제일 바빠?"\n' +
-    '예: "SK하이닉스 프로젝트 요약해줘"\n' +
-    '💡 "8h D B2024-001 업무내용" → 업무 등록';
+    '💡 "8h D B2024-001 업무내용" → 업무 등록\n\n' +
+    '<i>💡 /help log 처럼 명령어 뒤에 이름을 붙이면 상세 설명을 볼 수 있습니다.</i>';
   return sendMessage(chatId, msg);
 }
 
@@ -372,6 +549,7 @@ async function cmdSummary(chatId, user) {
     });
   }
 
+  msg += '\n💡 /my-stats 개인통계 · /report 월간 · /weekly-report 보고서';
   return sendMessage(chatId, msg);
 }
 
@@ -392,7 +570,7 @@ async function cmdProject(chatId, user, query) {
       if (r.order_no) msg += ' <code>[' + r.order_no + ']</code>';
       msg += '\n   <code>' + textBar(pct, 100, 10) + '</code> ' + pct + '%\n';
     });
-    msg += '\n💡 상세 조회: /project 프로젝트명';
+    msg += '\n💡 /checklist 이름 체크리스트 · /overdue 지연 현황';
     return sendMessage(chatId, msg);
   }
 
@@ -591,6 +769,7 @@ async function cmdReport(chatId, user) {
     msg += '\n';
   }
 
+  msg += '\n💡 /weekly-report 보고서 · /team 팀원 현황 · /overdue 지연';
   return sendMessage(chatId, msg);
 }
 
@@ -730,6 +909,7 @@ async function cmdCalendar(chatId, user, days) {
     msg += '\n';
   });
 
+  msg += '💡 /today 오늘만 · /calendar 14 2주일치';
   return sendMessage(chatId, msg);
 }
 
@@ -837,7 +1017,7 @@ async function cmdTasks(chatId, user) {
     msg += '\n';
   });
 
-  msg += '💡 완료: /done 번호';
+  msg += '💡 /done 번호 로 완료 · /checklist 프로젝트명 상세';
   return sendMessage(chatId, msg);
 }
 
@@ -919,6 +1099,7 @@ async function cmdOrders(chatId, user) {
     msg += '\n';
   });
 
+  msg += '\n💡 /order 번호 상세 · /deliveries 납품 예정';
   return sendMessage(chatId, msg);
 }
 
@@ -1257,7 +1438,8 @@ async function cmdLog(chatId, user, text) {
   var logMsg = '✅ 업무 등록 완료\n' +
     user.name + ' | ' + dateDisplay + ' | ' + (AM[abbr] || abbr) + ' ' + hours + 'h\n' +
     (orderNo ? orderNo + ' | ' : '') + content + '\n\n' +
-    '📊 오늘 합계: ' + Math.round(total * 10) / 10 + 'h';
+    '📊 오늘 합계: ' + Math.round(total * 10) / 10 + 'h' +
+    '\n💡 /summary 금주 합계 · /my-stats 월간 통계';
 
   return sendMessage(chatId, logMsg);
 }
@@ -1393,7 +1575,19 @@ async function handleUpdate(update) {
     var code = parts[1].toUpperCase();
     var result = await verifyAndLink(code, chatId, tgUsername);
     if (result.ok) {
-      return sendMessage(chatId, '✅ <b>연동 완료!</b>\n\n' + result.userName + '님의 계정과 연결되었습니다.\n업무 알림을 이 채팅으로 받을 수 있습니다.\n\n/help 로 사용 가능한 명령어를 확인하세요.');
+      return sendMessage(chatId, '✅ <b>연동 완료!</b>\n\n' +
+        result.userName + '님, 환영합니다! 🎉\n\n' +
+        '<b>🚀 바로 시작해보세요</b>\n' +
+        '/today — 오늘 할 일 한눈에\n' +
+        '/issues — 내 이슈 확인\n' +
+        '/tasks — 미완료 작업\n\n' +
+        '<b>⚡ 빠른 업무 등록</b>\n' +
+        '<code>8h D B2024-001 업무내용</code>\n' +
+        '→ 바로 업무일지 등록!\n\n' +
+        '<b>💬 AI에게 물어보세요</b>\n' +
+        '"이번 주 누가 제일 바빠?"\n' +
+        '"SK하이닉스 프로젝트 요약해줘"\n\n' +
+        '💡 /help 로 전체 명령어, /help log 로 상세 설명');
     } else {
       return sendMessage(chatId, '❌ 인증코드가 만료되었거나 유효하지 않습니다.\n웹에서 새 코드를 발급받아 주세요.');
     }
@@ -1461,7 +1655,10 @@ async function handleUpdate(update) {
   if (text === '/weekly-report' || text === '/weeklyreport' || text === '/weekly_report') {
     return cmdWeeklyReport(chatId, user);
   }
-  if (text === '/help') return cmdHelp(chatId);
+  if (text === '/help' || text.startsWith('/help ')) {
+    var helpArg = text.replace(/^\/help\s*/, '').trim();
+    return cmdHelp(chatId, helpArg || null);
+  }
 
   if (text === '/unlink') {
     await unlink(user.user_id);
@@ -1499,6 +1696,32 @@ async function handleUpdate(update) {
   // 알 수 없는 명령어
   if (text.startsWith('/')) {
     return sendMessage(chatId, '❓ 알 수 없는 명령어입니다.\n/help 로 사용 가능한 명령어를 확인하세요.');
+  }
+
+  // 자연어 → 명령어 매핑
+  var nlMap = [
+    { patterns: [/내\s*이슈/, /이슈\s*보여/, /이슈\s*목록/, /이슈\s*뭐/], cmd: function() { return cmdIssues(chatId, user); } },
+    { patterns: [/내\s*현황/, /나\s*현황/, /내\s*상태/], cmd: function() { return cmdMy(chatId, user); } },
+    { patterns: [/오늘\s*일정/, /오늘\s*뭐/, /오늘\s*브리핑/], cmd: function() { return cmdToday(chatId, user); } },
+    { patterns: [/할\s*일/, /미완료/, /남은\s*작업/], cmd: function() { return cmdTasks(chatId, user); } },
+    { patterns: [/이번\s*주\s*일정/, /주간\s*일정/, /캘린더/], cmd: function() { return cmdCalendar(chatId, user, 7); } },
+    { patterns: [/수주\s*목록/, /수주\s*현황/, /수주\s*보여/], cmd: function() { return cmdOrders(chatId, user); } },
+    { patterns: [/납품\s*예정/, /납품\s*일정/], cmd: function() { return cmdDeliveries(chatId, user); } },
+    { patterns: [/주간\s*보고/, /주간\s*리포트/], cmd: function() { return cmdWeeklyReport(chatId, user); } },
+    { patterns: [/월간\s*보고/, /월간\s*리포트/, /월간\s*통계/], cmd: function() { return cmdReport(chatId, user); } },
+    { patterns: [/내\s*통계/, /나\s*통계/, /개인\s*통계/], cmd: function() { return cmdMyStats(chatId, user); } },
+    { patterns: [/지연/, /긴급\s*현황/, /오버듀/], cmd: function() { return cmdOverdue(chatId, user); } },
+    { patterns: [/팀\s*현황/, /팀원\s*투입/, /누가\s*바빠/], cmd: function() { return cmdTeam(chatId, user); } },
+    { patterns: [/도움말/, /명령어\s*목록/, /뭐\s*할\s*수/, /사용법/], cmd: function() { return cmdHelp(chatId, null); } }
+  ];
+
+  for (var ni = 0; ni < nlMap.length; ni++) {
+    var nl = nlMap[ni];
+    for (var pi = 0; pi < nl.patterns.length; pi++) {
+      if (nl.patterns[pi].test(text)) {
+        return nl.cmd();
+      }
+    }
   }
 
   // 일반 텍스트 → AI 자연어 질답
