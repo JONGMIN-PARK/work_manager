@@ -116,6 +116,7 @@ var auditRoutes = require('./routes/audit');
 var anyworksRoutes = require('./routes/anyworks');
 var statsRoutes = require('./routes/stats');
 var telegramRoutes = require('./routes/telegram');
+var aiRoutes = require('./routes/ai');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -135,6 +136,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/anyworks', anyworksRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/telegram', telegramRoutes);
+app.use('/api/ai', aiRoutes);
 
 // ─── 텔레그램 Webhook 자동 등록 ───
 var telegramService = require('./services/telegram.service');

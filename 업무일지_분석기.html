@@ -493,20 +493,9 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
         <!-- AI -->
         <div id="tAi" class="hidden"><div class="pnl">
           <div class="pnl-h"><h3 class="pnl-t">🤖 AI 요약 & 인사이트</h3><button class="btn btn-p btn-s" onclick="reqSum()" id="sumBtn">요약 생성</button></div>
-          <div style="margin-bottom:12px;padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:7px">
-            <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;flex-wrap:wrap">
-              <label style="font-size:11px;font-weight:600;color:var(--t4)">AI엔진</label>
-              <span class="chip co" style="padding:3px 8px;font-size:10px" id="pG" onclick="setProv('gemini')">🟦 Gemini</span>
-              <span class="chip co" style="padding:3px 8px;font-size:10px" id="pA" onclick="setProv('anthropic')">🟧 Claude</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <label style="font-size:11px;font-weight:600;color:var(--t4)" id="akL">🔑 Key</label>
-              <input type="password" id="akI" class="si" style="flex:1;min-width:180px;padding-left:12px;font-family:'JetBrains Mono',monospace;font-size:10px" placeholder="">
-              <button class="btn btn-g btn-s" onclick="togAkV()" id="akT">👁</button>
-              <button class="btn btn-w btn-s" onclick="saveAk()">💾</button>
-              <button class="btn btn-d btn-s hidden" onclick="clrAk()" id="akC">🗑</button>
-            </div>
-            <p style="font-size:10px;color:var(--t6);margin-top:6px" id="akH"></p>
+          <div style="margin-bottom:12px;padding:10px 12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:7px;display:flex;align-items:center;gap:8px">
+            <span id="aiStatusIcon" style="font-size:14px">🤖</span>
+            <span id="aiStatusText" style="font-size:11px;color:var(--t4)">AI 상태 확인 중...</span>
           </div>
           <div style="margin-bottom:12px;padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:7px">
             <div class="fl" style="margin-bottom:4px"><span>💬 추가 지시사항</span><span id="cmCnt"></span></div>
@@ -2156,13 +2145,21 @@ function rCmp(f){
 }
 
 /* ═══ AI ═══ */
-function initAk(){var p=lsGet('wa-ai-prov');if(p)aiProv=p;const k=gAk();if(k){document.getElementById('akI').value=k;document.getElementById('akC').classList.remove('hidden')}upProvUI()}
-function gAk(){return lsGet('wa-ak-'+aiProv,'')}
-function setProv(p){const ok=document.getElementById('akI').value.trim();if(ok)lsSet('wa-ak-'+aiProv,ok);aiProv=p;lsSet('wa-ai-prov',p);const nk=gAk();document.getElementById('akI').value=nk;document.getElementById('akC').classList.toggle('hidden',!nk);upProvUI()}
-function upProvUI(){const g=aiProv==='gemini';const cfg=AI_CONFIG[aiProv]||AI_CONFIG.gemini;document.getElementById('pG').className='chip '+(g?'cn':'co');document.getElementById('pA').className='chip '+(g?'co':'cn');document.getElementById('pG').style.cssText='padding:3px 8px;font-size:10px';document.getElementById('pA').style.cssText='padding:3px 8px;font-size:10px';document.getElementById('akI').placeholder=cfg.keyPlaceholder;document.getElementById('akL').textContent=cfg.keyLabel;document.getElementById('akH').innerHTML=`<a href="${cfg.keyLink}" target="_blank" style="color:var(--ac-t)">${cfg.keyLinkText}</a>`}
-function saveAk(){const k=document.getElementById('akI').value.trim();if(!k){showToast('키를 입력하세요.','warn');return}lsSet('wa-ak-'+aiProv,k);document.getElementById('akC').classList.remove('hidden');showToast('✅ 저장 ('+aiProv+')')}
-function clrAk(){lsRemove('wa-ak-'+aiProv);document.getElementById('akI').value='';document.getElementById('akC').classList.add('hidden')}
-function togAkV(){const i=document.getElementById('akI'),b=document.getElementById('akT');if(i.type==='password'){i.type='text';b.textContent='🙈'}else{i.type='password';b.textContent='👁'}}
+var _aiConfigured=false;var _aiProvider='';
+function initAk(){checkAiStatus()}
+async function checkAiStatus(){
+  var iconEl=document.getElementById('aiStatusIcon');var textEl=document.getElementById('aiStatusText');
+  if(!iconEl||!textEl)return;
+  if(AUTH_SKIP){iconEl.textContent='⚙️';textEl.textContent='로컬 모드 — 로컬 분석만 가능';return}
+  try{var d=await apiFetch('/api/ai/status');if(d&&d.data&&d.data.configured){_aiConfigured=true;_aiProvider=d.data.provider;iconEl.textContent='✅';textEl.innerHTML='<b>'+d.data.provider+'</b> 연결됨 — 서버 AI 사용'}else{iconEl.textContent='⚠️';textEl.textContent='AI 미설정 — 로컬 분석만 가능'}}
+  catch(e){iconEl.textContent='⚠️';textEl.textContent='AI 상태 확인 실패 — 로컬 분석 사용'}
+}
+function gAk(){return _aiConfigured?'server':''}
+function setProv(){}
+function upProvUI(){}
+function saveAk(){}
+function clrAk(){}
+function togAkV(){}
 function addPre(t){const ta=document.getElementById('sumCmt');ta.value=ta.value?(ta.value.trim()+'\n'+t):t;upCmCnt()}
 function upCmCnt(){const l=document.getElementById('sumCmt').value.length;document.getElementById('cmCnt').textContent=l>0?l+'자':''}
 
@@ -2181,30 +2178,20 @@ function buildPmt(f,extra){
   return `당신은 장비 제조회사의 SW팀 업무일지를 분석하는 전문가입니다.\n\n${dt}\n약자: A=CS현장,B=제작,D=개발,G=일반,M=관리,S=영업지원${ocBlock}${cb}\n\n다음 형식으로 한국어 분석:\n## 📋 업무 요약\n- 인원별 핵심 업무 2~3줄 (수주명이 있으면 프로젝트명으로 표기)\n## 📊 업무 분장 분석\n## 💡 인사이트\n- 팀장 관점 3~5개 (프로젝트별 리소스 배분 포함)\n## ⚠️ 주의사항\n\n추가 지시사항이 있으면 별도 섹션으로 상세 분석.`}
 
 async function callAI(prompt){
-  const key=document.getElementById('akI').value.trim()||gAk();
-  if(!key)return null;
-  const cfg=AI_CONFIG[aiProv]||AI_CONFIG.gemini;
-  if(aiProv==='gemini'){
-    const url=`${cfg.url}?key=${key}`;
-    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});
-    if(!r.ok){const e=await r.text();throw new Error(`${cfg.label} ${r.status}: ${e.slice(0,200)}`)}
-    const d=await r.json();return d.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('\n')||'(응답 없음)';
-  }else{
-    const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:cfg.model,max_tokens:1500,messages:[{role:'user',content:prompt}]})});
-    if(!r.ok){const e=await r.text();throw new Error(`${cfg.label} ${r.status}: ${e.slice(0,200)}`)}
-    const d=await r.json();return d.content.map(c=>c.text||'').join('\n');
-  }
+  if(!_aiConfigured){return null}
+  const d=await apiFetch('/api/ai/summary',{method:'POST',body:JSON.stringify({prompt:prompt})});
+  if(d&&d.data&&d.data.text)return d.data.text;
+  return null;
 }
 
 async function reqSum(){
   const f=gF();if(!f.length){showToast('데이터 없음','warn');return}
   const el=document.getElementById('sumOut'),btn=document.getElementById('sumBtn');
-  const key=document.getElementById('akI').value.trim()||gAk();
-  if(!key){el.innerHTML=`<div style="padding:4px"><div style="padding:8px 12px;background:var(--tg);border:1px solid var(--tg-bd);border-radius:7px;margin-bottom:12px;font-size:11px;color:var(--tg-t)">ℹ️ API 키 없음 → 로컬 분석</div>${genLocal(f)}</div>`;el.dataset.generated='1';return}
-  const pl=aiProv==='gemini'?'Gemini':'Claude';
+  if(!_aiConfigured){el.innerHTML=`<div style="padding:4px"><div style="padding:8px 12px;background:var(--tg);border:1px solid var(--tg-bd);border-radius:7px;margin-bottom:12px;font-size:11px;color:var(--tg-t)">ℹ️ 서버 AI 미설정 → 로컬 분석</div>${genLocal(f)}</div>`;el.dataset.generated='1';return}
+  const pl=_aiProvider||'AI';
   btn.disabled=true;btn.textContent=pl+' 분석중...';
   el.innerHTML=`<div class="sld"><div class="sp"></div>${pl} 분석 중...</div>`;
-  try{const txt=await callAI(buildPmt(f));el.innerHTML=`<div style="font-size:10px;color:var(--t6);margin-bottom:6px">✨ ${pl} 응답</div>`+rMD(txt)}
+  try{const txt=await callAI(buildPmt(f));if(!txt)throw new Error('응답 없음');el.innerHTML=`<div style="font-size:10px;color:var(--t6);margin-bottom:6px">✨ ${pl} 응답</div>`+rMD(txt)}
   catch(err){el.innerHTML=`<div style="padding:4px"><div style="padding:8px 12px;background:var(--d-bg);border:1px solid var(--d-bd);border-radius:7px;margin-bottom:12px"><p style="font-weight:600;color:var(--d-t);font-size:12px">⚠️ ${pl} 실패</p><p style="font-size:10px;color:var(--t5)">${eH(err.message)}</p></div>${genLocal(f)}</div>`}
   btn.disabled=false;btn.textContent='요약 생성';
   el.dataset.generated='1';
@@ -2540,10 +2527,8 @@ async function trendAI(){
   const weeks=[];for(const id of trendSel){const w=await wkGet(id);if(w)weeks.push(w)}
   weeks.sort((a,b)=>(a.label||'').localeCompare(b.label||''));
   const el=document.getElementById('trendAIOut');
-  const key=document.getElementById('akI')?document.getElementById('akI').value.trim():'';
-  const storedKey=gAk();const ak=key||storedKey;
-  if(!ak){el.innerHTML=`<div style="padding:8px 12px;background:var(--tg);border:1px solid var(--tg-bd);border-radius:7px;font-size:11px;color:var(--tg-t)">ℹ️ API 키를 AI 요약 탭에서 설정하면 월간 AI 인사이트를 받을 수 있습니다.</div>`;return}
-  el.innerHTML=`<div class="sld"><div class="sp"></div>트렌드 AI 분석 중...</div>`;
+  if(!_aiConfigured){el.innerHTML=`<div style="padding:8px 12px;background:var(--tg);border:1px solid var(--tg-bd);border-radius:7px;font-size:11px;color:var(--tg-t)">ℹ️ 서버 AI가 설정되면 월간 AI 인사이트를 받을 수 있습니다.</div>`;return}
+  el.innerHTML=`<div class="sld"><div class="sp"></div>${_aiProvider} 트렌드 분석 중...</div>`;
   // 주차별 요약 + 인원별 추이
   let summary='';
   const personWeekly={};
