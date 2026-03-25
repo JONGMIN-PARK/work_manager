@@ -849,16 +849,19 @@ async function loadTelegramStatus(container) {
 
       var setupBtn = contentEl.querySelector('#tgSetupBtn');
       if (setupBtn) setupBtn.onclick = async function () {
+        var pre = contentEl.querySelector('#tgDebugResult');
+        pre.style.display = 'block';
         setupBtn.textContent = '등록 중...';
         setupBtn.disabled = true;
         try {
           var d = await apiFetch('/api/telegram/setup-webhook', { method: 'POST' });
-          if (typeof showToast === 'function') showToast('Webhook 등록 완료!');
-          setupBtn.textContent = 'Webhook 등록 완료';
-        } catch (e) {
+          pre.textContent = 'Webhook 등록 결과:\n' + JSON.stringify(d.data, null, 2);
           setupBtn.textContent = 'Webhook 등록';
           setupBtn.disabled = false;
-          if (typeof showToast === 'function') showToast(e.message, 'error');
+        } catch (e) {
+          pre.textContent = 'Webhook 등록 실패:\n' + (e.message || e);
+          setupBtn.textContent = 'Webhook 등록';
+          setupBtn.disabled = false;
         }
       };
     }
