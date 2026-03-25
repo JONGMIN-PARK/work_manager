@@ -77,6 +77,15 @@
 - [ ] CDN: 정적 파일 Cloudflare
 - [ ] 모니터링/알림 설정
 
+### Phase 8: 개별 계정 주기적 백업
+- [ ] Phase 8-1: 사용자별 백업 스크립트 (backup-db.js → user_id 필터 + 연관 데이터 포함)
+- [ ] Phase 8-2: 자동 스케줄러 (매일 02:00 UTC, 활성 사용자별 자동 백업)
+- [ ] Phase 8-3: 백업 다운로드 API (GET /api/backups/mine, download, POST restore)
+- [ ] Phase 8-4: 외부 스토리지 연동 (Supabase Storage 또는 S3/Backblaze B2)
+- [ ] 프론트엔드 백업 관리 UI (내 백업 목록, 다운로드, 복원)
+- [ ] 증분 백업 지원 (last_backup_at 기준 변경분만)
+- [ ] 백업 보존 정책 (30일 자동 정리)
+
 ### 기타
 - [ ] API 엔드포인트 테스트 코드 작성
 - [ ] 에러 로깅 체계 (Sentry 등)
