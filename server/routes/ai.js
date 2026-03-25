@@ -25,8 +25,8 @@ router.post('/summary', async function (req, res) {
     }
 
     // 길이 제한 (토큰 절약)
-    if (prompt.length > 8000) {
-      prompt = prompt.slice(0, 8000) + '\n...(이하 생략)';
+    if (prompt.length > 15000) {
+      prompt = prompt.slice(0, 15000) + '\n...(이하 생략)';
     }
 
     var provider = config.ai.provider === 'anthropic' ? 'Claude' : 'Gemini';
@@ -72,7 +72,7 @@ async function callAIWithPrompt(prompt) {
       },
       body: JSON.stringify({
         model: config.ai.anthropicModel,
-        max_tokens: 2000,
+        max_tokens: 4096,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -89,7 +89,7 @@ async function callAIWithPrompt(prompt) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 2000, temperature: 0.3 }
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.3 }
     })
   });
   var data2 = await res2.json();
