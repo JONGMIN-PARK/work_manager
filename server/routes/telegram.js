@@ -195,16 +195,34 @@ router.get('/debug', authenticate, async function (req, res) {
     var me = await meRes.json();
     result.bot = me.ok ? { username: me.result.username, name: me.result.first_name, id: me.result.id } : { error: me.description };
 
-    // Webhook 상태 확인
-    var whRes = await fetch('https://api.telegram.org/bot' + config.telegram.botToken + '/getWebhookInfo');
-    var wh = await whRes.json();
-    if (wh.ok) {
+    // Webhook이 비어있으면 자동 등록 시도
+    var whInfoRes = await fetch('https://api.telegram.org/bot' + config.telegram.botToken + '/getWebhookInfo');
+    var whInfo = await whInfoRes.json();
+
+    if (whInfo.ok && !whInfo.result.url && config.telegram.webhookUrl) {
+      // Webhook 자동 등록
+      var setBody = { url: config.telegram.webhookUrl };
+      if (config.telegram.webhookSecret) setBody.secret_token = config.telegram.webhookSecret;
+      var setRes = await fetch('https://api.telegram.org/bot' + config.telegram.botToken + '/setWebhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(setBody)
+      });
+      var setResult = await setRes.json();
+      result.webhookSetup = setResult;
+
+      // 등록 후 다시 확인
+      var whRes2 = await fetch('https://api.telegram.org/bot' + config.telegram.botToken + '/getWebhookInfo');
+      whInfo = await whRes2.json();
+    }
+
+    if (whInfo.ok) {
       result.webhook = {
-        url: wh.result.url,
-        hasCustomCert: wh.result.has_custom_certificate,
-        pendingUpdates: wh.result.pending_update_count,
-        lastError: wh.result.last_error_message || null,
-        lastErrorDate: wh.result.last_error_date ? new Date(wh.result.last_error_date * 1000).toISOString() : null
+        url: whInfo.result.url,
+        hasCustomCert: whInfo.result.has_custom_certificate,
+        pendingUpdates: whInfo.result.pending_update_count,
+        lastError: whInfo.result.last_error_message || null,
+        lastErrorDate: whInfo.result.last_error_date ? new Date(whInfo.result.last_error_date * 1000).toISOString() : null
       };
     }
 
