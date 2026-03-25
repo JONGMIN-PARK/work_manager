@@ -826,7 +826,8 @@ async function loadTelegramStatus(container) {
         '<button id="tgGenQR" style="padding:8px 20px;border:none;border-radius:8px;background:#0088CC;color:#fff;cursor:pointer;font-size:12px">QR코드 생성</button>' +
         '<div id="tgQRArea" style="margin-top:12px"></div>' +
         '<div style="margin-top:12px;border-top:1px solid var(--border,#333);padding-top:8px">' +
-          '<button id="tgDebugBtn" style="padding:4px 10px;border:none;border-radius:4px;background:var(--card,#1a1a2e);border:1px solid var(--border,#333);color:var(--sub,#888);cursor:pointer;font-size:10px">Webhook 진단</button>' +
+          '<button id="tgDebugBtn" style="padding:4px 10px;border:none;border-radius:4px;background:var(--card,#1a1a2e);border:1px solid var(--border,#333);color:var(--sub,#888);cursor:pointer;font-size:10px">Webhook 진단</button> ' +
+          '<button id="tgSetupBtn" style="padding:4px 10px;border:none;border-radius:4px;background:#065F46;color:#6EE7B7;cursor:pointer;font-size:10px">Webhook 등록</button>' +
           '<pre id="tgDebugResult" style="display:none;margin-top:8px;font-size:10px;color:var(--sub,#888);background:var(--bg,#0c0f1a);padding:8px;border-radius:6px;overflow:auto;max-height:200px;white-space:pre-wrap"></pre>' +
         '</div>';
 
@@ -843,6 +844,21 @@ async function loadTelegramStatus(container) {
           pre.textContent = JSON.stringify(d.data, null, 2);
         } catch (e) {
           pre.textContent = 'Error: ' + (e.message || e);
+        }
+      };
+
+      var setupBtn = contentEl.querySelector('#tgSetupBtn');
+      if (setupBtn) setupBtn.onclick = async function () {
+        setupBtn.textContent = '등록 중...';
+        setupBtn.disabled = true;
+        try {
+          var d = await apiFetch('/api/telegram/setup-webhook', { method: 'POST' });
+          if (typeof showToast === 'function') showToast('Webhook 등록 완료!');
+          setupBtn.textContent = 'Webhook 등록 완료';
+        } catch (e) {
+          setupBtn.textContent = 'Webhook 등록';
+          setupBtn.disabled = false;
+          if (typeof showToast === 'function') showToast(e.message, 'error');
         }
       };
     }
