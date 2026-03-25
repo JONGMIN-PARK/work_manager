@@ -56,7 +56,29 @@ router.post('/auth-code', authenticate, async function (req, res) {
     });
   } catch (err) {
     console.error('[Telegram] auth-code error:', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '인증코드 생성 실패' });
+
+    // 테이블 미존재 시 자동 생성 시도
+    if (err.message && err.message.includes('does not exist')) {
+      try {
+        var fs = require('fs');
+        var path = require('path');
+        var migrationPath = path.join(__dirname, '..', 'migrations', '003_telegram.sql');
+        var sql = fs.readFileSync(migrationPath, 'utf8');
+        await db.query(sql);
+        console.log('[Telegram] Auto-created telegram tables');
+
+        // 재시도
+        var code = await telegramService.createAuthCode(req.user.sub);
+        var botUsername = config.telegram.botUsername;
+        var deepLink = botUsername ? 'https://t.me/' + botUsername + '?start=' + code : null;
+        return res.json({ data: { code: code, deepLink: deepLink, botUsername: botUsername, expiresInSeconds: 300 } });
+      } catch (migErr) {
+        console.error('[Telegram] Auto-migration failed:', migErr.message);
+        return res.status(500).json({ error: 'DB_ERROR', message: '텔레그램 테이블 생성 실패: ' + migErr.message });
+      }
+    }
+
+    res.status(500).json({ error: 'SERVER_ERROR', message: '인증코드 생성 실패: ' + err.message });
   }
 });
 
