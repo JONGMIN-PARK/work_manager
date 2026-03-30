@@ -316,7 +316,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle">v9.1</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.1</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -343,6 +343,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
     <button class="tab on" data-page="team" onclick="setPage('team')" role="tab" aria-selected="true" aria-controls="modeTabs">👥 팀 관리</button>
     <button class="tab" data-page="project" onclick="setPage('project')" role="tab" aria-selected="false" aria-controls="modeTabsProj">📁 프로젝트 관리</button>
     <button class="tab" data-page="useradmin" onclick="setPage('useradmin')" role="tab" aria-selected="false" id="tabUserAdmin" style="display:none">👤 사용자 관리</button>
+    <button class="tab" data-page="patchnotes" onclick="setPage('patchnotes')" role="tab" aria-selected="false">📋 패치노트</button>
   </div>
   <!-- 하위 모드 탭 -->
   <div class="tabs sub-tabs" id="modeTabs" role="tablist" aria-label="팀 관리 하위 탭">
@@ -572,6 +573,8 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   <div id="mDocs" class="hidden"></div>
   <!-- 사용자 관리 (admin only) -->
   <div id="mUserAdmin" class="hidden"></div>
+  <!-- 패치노트 -->
+  <div id="mPatchNotes" class="hidden"></div>
 
   <div id="mCalendar" class="hidden">
     <div id="dashCards" style="margin-bottom:16px"></div>
@@ -903,13 +906,18 @@ function setPage(page){
   document.getElementById('modeTabs').classList.toggle('hidden',page!=='team');
   document.getElementById('modeTabsProj').classList.toggle('hidden',page!=='project');
   // 모든 모드 숨기기
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mUserAdmin'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mUserAdmin','mPatchNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   // 해당 페이지의 첫 탭 활성화
   if(page==='useradmin'){
     document.getElementById('modeTabs').classList.add('hidden');
     document.getElementById('modeTabsProj').classList.add('hidden');
     var ua=document.getElementById('mUserAdmin');if(ua)ua.classList.remove('hidden');
     if(typeof renderUserAdmin==='function')renderUserAdmin();
+  }else if(page==='patchnotes'){
+    document.getElementById('modeTabs').classList.add('hidden');
+    document.getElementById('modeTabsProj').classList.add('hidden');
+    var pn=document.getElementById('mPatchNotes');if(pn)pn.classList.remove('hidden');
+    renderPatchNotes();
   }else if(page==='team'){
     var activeTab=document.querySelector('#modeTabs .tab.on');
     var m=activeTab?activeTab.dataset.m:'weekly';
@@ -926,7 +934,7 @@ function setMode(m){curMode=m;
   var projModes=['pipeline','calendar','timeline','orders','issues','docs'];
   var tabBar=teamModes.includes(m)?'#modeTabs':'#modeTabsProj';
   document.querySelectorAll(tabBar+' .tab').forEach(function(t){var sel=t.dataset.m===m;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mUserAdmin'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mUserAdmin','mPatchNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',issues:'mIssues',docs:'mDocs'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
   if(m==='archive')renderArch();if(m==='trend')renderTrend();if(m==='pipeline'&&typeof renderPipeline==='function')renderPipeline();if(m==='calendar'&&typeof initCalendar==='function')initCalendar();if(m==='timeline'&&typeof initTimeline==='function')initTimeline();if(m==='orders'&&typeof renderOrders==='function')renderOrders();if(m==='issues'&&typeof renderIssues==='function')renderIssues();if(m==='docs'&&typeof renderDocManager==='function')renderDocManager()
@@ -1947,6 +1955,98 @@ function exportXlsx(){
 }
 
 function cpTSV(){const f=gF(),h='이름\t날짜\t수주번호\t수주명\t거래처\t시간\t업무분장\t약자\t업무내용';const r=f.map((x,i)=>{const em=editMap[lastFiltered.indexOf(x)]||{};const oNo=em.orderNo!==undefined?em.orderNo:x.orderNo;const baseOcmt=x.ocmt!==undefined?x.ocmt:getOCmt(x.orderNo);const baseClient=x.oclient!==undefined?x.oclient:getOClient(x.orderNo);const curOcmt=em.ocmt!==undefined?em.ocmt:(em.orderNo!==undefined?getOCmt(em.orderNo):baseOcmt);const curClient=em.oclient!==undefined?em.oclient:(em.orderNo!==undefined?getOClient(em.orderNo):baseClient);return`${x.name}\t${fD(x.date)}\t${oNo}\t${curOcmt}\t${curClient}\t${em.hours!==undefined?em.hours:x.hours}\t${em.taskType!==undefined?em.taskType:x.taskType}\t${em.abbr!==undefined?em.abbr:x.abbr}\t${em.content!==undefined?em.content:x.content}`});navigator.clipboard.writeText([h,...r].join('\n')).then(()=>{const b=document.getElementById('cpBtn'),o=b.innerHTML;b.innerHTML='✅완료';setTimeout(()=>b.innerHTML=o,1200)})}
+
+/* ═══ PATCH NOTES ═══ */
+function renderPatchNotes(){
+  var el=document.getElementById('mPatchNotes');if(!el)return;
+  var PATCHES=[
+    {ver:'9.1',date:'2026-03-31',title:'엑셀/TSV 내보내기 수정',tag:'fix',items:[
+      '엑셀저장·TSV복사 시 수주명·거래처 편집값(editMap, 레코드 override) 정상 반영',
+      'TSV복사에서도 editMap 편집값(수주번호·시간·업무분장·약자·업무내용) 반영'
+    ]},
+    {ver:'9.0',date:'2026-03-25~26',title:'텔레그램 봇 통합 & AI',tag:'major',items:[
+      'QR코드 스캔 텔레그램 계정 연동',
+      '봇 명령어 24개 (today, my, issues, tasks, log, summary, report 등)',
+      '알림 시스템 13개 이벤트 (이슈 배정, 상태 변경, 납기 D-day 등)',
+      '스케줄러 6개 (일일 브리핑, 납기 리마인더, 주간 다이제스트 등)',
+      '사진→이슈 자동등록, 팀 투표, 개인 리마인더, 주간보고 자동생성',
+      '텔레그램 자연어 질답 (DB 기반 RAG)',
+      '웹 AI 요약 서버 Gemini API 전환',
+      '명령어별 상세 도움말, 자연어→명령어 자동 매핑',
+      '봇 명령어 자동완성 (setMyCommands)',
+      'telegram.service.js 1,767줄→461줄 리팩토링 (74% 감소)'
+    ]},
+    {ver:'8.8',date:'2026-03-24~25',title:'UI/성능/스케일링',tag:'feature',items:[
+      '업무분장 코드 변경: G(일반)→G(공통), R(제안) 범례 추가',
+      'DB 복합 인덱스 4개, user_id 컬럼, 집계 API',
+      '페이지네이션 상한 200, 부서별 접근제어',
+      '시인성/대비/배치 대폭 개선',
+      '다중 파일 드래그앤드롭 + 모달 간소화'
+    ]},
+    {ver:'8.7',date:'2026-03-23~24',title:'주차 관리/필터',tag:'feature',items:[
+      '월별/분기(1Q-4Q)/연도 필터 추가',
+      '기간 선택 버튼, 주차 칩 강조',
+      'PUT 404→POST 폴백, 프로젝트 일괄 생성 API',
+      'API 병렬화, HTML 캐시, CDN defer, Docker 경량화'
+    ]},
+    {ver:'8.6',date:'2026-03-22~23',title:'사업부/팀 관리',tag:'feature',items:[
+      '사업부별 데이터 분리 및 팀원 선택 기능',
+      '체크리스트: 기본 표시, 완료 날짜, 인라인 갱신',
+      '서버 모드 체크리스트 스키마 수정'
+    ]},
+    {ver:'8.5',date:'2026-03-20~22',title:'다중 사용자 웹 배포',tag:'major',items:[
+      'Express + PostgreSQL + JWT 인증',
+      'Docker + Render 배포',
+      'RBAC (admin/executive/manager/member)',
+      '낙관적 락, 감사 로그, 비밀번호 정책',
+      '수주/거래처 서버 저장 + 인라인 편집',
+      '애니웍스 연동 (Puppeteer)'
+    ]},
+    {ver:'7.0',date:'2026-03-19',title:'초기 버전',tag:'initial',items:[
+      '업무일지 분석기 단일 HTML 파일',
+      'IndexedDB 클라이언트 저장',
+      'Chart.js 시각화, AI 요약 (Gemini/Claude)',
+      '엑셀 파일 파싱 (XLS/XLSX), 7개 테마'
+    ]}
+  ];
+  var tagStyle={
+    major:'background:#7C3AED;color:#fff',
+    feature:'background:#3B82F6;color:#fff',
+    fix:'background:#F59E0B;color:#000',
+    initial:'background:#6B7280;color:#fff'
+  };
+  var tagLabel={major:'Major',feature:'Feature',fix:'Fix',initial:'Initial'};
+  var html='<div style="max-width:800px;margin:0 auto;padding:20px 0">';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px"><h2 style="margin:0;font-size:20px;color:var(--t2)">📋 패치노트</h2><span style="font-size:12px;color:var(--t6)">현재 v'+PATCHES[0].ver+'</span></div>';
+  PATCHES.forEach(function(p,i){
+    var isLatest=i===0;
+    html+='<div style="position:relative;padding-left:28px;margin-bottom:8px">';
+    // timeline line
+    html+='<div style="position:absolute;left:8px;top:0;bottom:0;width:2px;background:var(--bd)"></div>';
+    // timeline dot
+    html+='<div style="position:absolute;left:3px;top:18px;width:12px;height:12px;border-radius:50%;background:'+(isLatest?'var(--ac)':'var(--t6)')+';border:2px solid var(--bg)"></div>';
+    // card
+    html+='<div style="background:var(--bg-i);border:1px solid '+(isLatest?'var(--ac)':'var(--bd)')+';border-radius:10px;padding:16px 20px;margin-bottom:12px'+(isLatest?';box-shadow:0 0 12px rgba(99,102,241,.15)':'')+'">';
+    // header
+    html+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">';
+    html+='<span style="font-size:18px;font-weight:700;color:var(--t2)">v'+p.ver+'</span>';
+    html+='<span style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;'+tagStyle[p.tag]+'">'+tagLabel[p.tag]+'</span>';
+    if(isLatest)html+='<span style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;background:#10B981;color:#fff">Latest</span>';
+    html+='<span style="font-size:11px;color:var(--t6);margin-left:auto">'+p.date+'</span>';
+    html+='</div>';
+    // title
+    html+='<div style="font-size:14px;font-weight:600;color:var(--t3);margin-bottom:8px">'+p.title+'</div>';
+    // items
+    html+='<ul style="margin:0;padding-left:18px;list-style:none">';
+    p.items.forEach(function(item){
+      html+='<li style="font-size:12px;color:var(--t4);line-height:1.8;position:relative;padding-left:4px"><span style="position:absolute;left:-14px;color:var(--ac)">›</span>'+item+'</li>';
+    });
+    html+='</ul>';
+    html+='</div></div>';
+  });
+  html+='</div>';
+  el.innerHTML=html;
+}
 
 function rContentSum(){
   const el=document.getElementById('contentSummary');
