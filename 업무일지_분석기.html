@@ -6,6 +6,7 @@
 <title>업무 관리자</title>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>/* config.js 로드 실패 폴백 — file:// 프로토콜 CORS 대응 */</script>
 <script src="config.js?v=4" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="settings.js?v=4" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
@@ -57,6 +58,15 @@ h1{font-size:18px;font-weight:700;color:var(--t1);letter-spacing:-.3px}h1 .ac{co
 .chip .dot{width:7px;height:7px;border-radius:50%;margin-right:5px;flex-shrink:0}
 .sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px}
 .sc{background:var(--bg-c);border:1px solid var(--bd2);border-radius:10px;padding:16px 18px;transition:all .2s;position:relative;overflow:hidden}
+.cht-save-wrap{position:absolute;top:8px;right:8px;z-index:5}
+.cht-save-btn{background:var(--bg-i);border:1px solid var(--bd);color:var(--t5);font-size:10px;padding:3px 7px;border-radius:5px;cursor:pointer;opacity:.4;transition:opacity .15s}
+.sc:hover .cht-save-btn{opacity:1}
+.cht-save-btn:hover{border-color:var(--ac);color:var(--ac-t)}
+.cht-save-menu{display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-p);border:1px solid var(--bd2);border-radius:8px;padding:6px 0;min-width:150px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.cht-save-menu.show{display:block}
+.cht-save-menu div{padding:5px 14px;font-size:11px;color:var(--t3);cursor:pointer;white-space:nowrap;transition:background .1s}
+.cht-save-menu div:hover{background:var(--bg-hv)}
+.cht-save-menu hr{border:none;border-top:1px solid var(--bd);margin:4px 0}
 .sc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--ac);opacity:.4;border-radius:10px 10px 0 0}
 .sc:nth-child(1)::before{background:var(--stat-blue)}.sc:nth-child(2)::before{background:var(--stat-amber)}.sc:nth-child(3)::before{background:var(--stat-cyan)}.sc:nth-child(4)::before{background:var(--stat-green)}
 .sl{font-size:10px;color:var(--t4);margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
@@ -316,7 +326,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.1</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.2</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -490,7 +500,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
           </div>
         </div>
         <!-- Chart -->
-        <div id="tCht" class="hidden"><div class="cg"><div class="sc cb" id="pieS"><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">업무 분장 비율</h3><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="width:240px;height:240px"><canvas id="pieC"></canvas></div><div id="pieL" style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px"></div></div></div><div class="sc" id="perS"><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">인원별 분포</h3><div id="perB" style="display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto"></div><div id="abL" style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap"></div></div><div class="sc cf cb"><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">일별 투입시간</h3><div style="height:260px"><canvas id="barC"></canvas></div></div><div class="sc cb" id="clientPieS"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:13px;font-weight:600;color:var(--t4)">업체 대응 비율</h3><label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer"><input type="checkbox" id="hideUnassignedClient" onchange="rCht(gF())"> 미지정 숨기기</label></div><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="width:240px;height:240px"><canvas id="clientPieC"></canvas></div><div id="clientPieL" style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px"></div></div></div><div class="sc" id="clientBarS"><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">업체 대응별 시간</h3><div id="clientBarB" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto"></div></div><div class="sc cf cb"><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">일별 업체 투입시간</h3><div style="height:260px"><canvas id="clientDayC"></canvas></div></div></div></div>
+        <div id="tCht" class="hidden"><div class="cg"><div class="sc cb" id="pieS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="pieS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">업무 분장 비율</h3><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="width:240px;height:240px"><canvas id="pieC"></canvas></div><div id="pieL" style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px"></div></div></div><div class="sc" id="perS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="perS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">인원별 분포</h3><div id="perB" style="display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto"></div><div id="abL" style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap"></div></div><div class="sc cf cb" id="barCS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="barCS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">일별 투입시간</h3><div style="height:260px"><canvas id="barC"></canvas></div></div><div class="sc cb" id="clientPieS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="clientPieS"></div></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:13px;font-weight:600;color:var(--t4)">업체 대응 비율</h3><label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer"><input type="checkbox" id="hideUnassignedClient" onchange="rCht(gF())"> 미지정 숨기기</label></div><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="width:240px;height:240px"><canvas id="clientPieC"></canvas></div><div id="clientPieL" style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px"></div></div></div><div class="sc" id="clientBarS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="clientBarS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">업체 대응별 시간</h3><div id="clientBarB" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto"></div></div><div class="sc cf cb" id="clientDayCS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="clientDayCS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">일별 업체 투입시간</h3><div style="height:260px"><canvas id="clientDayC"></canvas></div></div></div></div>
         <!-- AI -->
         <div id="tAi" class="hidden"><div class="pnl">
           <div class="pnl-h"><h3 class="pnl-t">🤖 AI 요약 & 인사이트</h3><button class="btn btn-p btn-s" onclick="reqSum()" id="sumBtn">요약 생성</button></div>
@@ -522,12 +532,15 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
           </div>
           <!-- Compare charts (2D) -->
           <div class="cg">
-            <div class="sc cb"><h4 style="font-size:12px;font-weight:600;color:var(--t4);margin-bottom:10px">📊 업무분장 비교</h4><div style="height:280px"><canvas id="cmpBarC"></canvas></div></div>
-            <div class="sc cb"><h4 style="font-size:12px;font-weight:600;color:var(--t4);margin-bottom:10px">📈 일별 투입 비교</h4><div style="height:280px"><canvas id="cmpLineC"></canvas></div></div>
+            <div class="sc cb" id="cmpBarCS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="cmpBarCS"></div></div><h4 style="font-size:12px;font-weight:600;color:var(--t4);margin-bottom:10px">📊 업무분장 비교</h4><div style="height:280px"><canvas id="cmpBarC"></canvas></div></div>
+            <div class="sc cb" id="cmpLineCS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="cmpLineCS"></div></div><h4 style="font-size:12px;font-weight:600;color:var(--t4);margin-bottom:10px">📈 일별 투입 비교</h4><div style="height:280px"><canvas id="cmpLineC"></canvas></div></div>
           </div>
           <!-- Per-person pie charts -->
-          <h4 style="font-size:12px;font-weight:600;color:var(--t4);margin:12px 0 10px">🍩 인원별 업무분장 비율</h4>
-          <div id="cmpPies" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px"></div>
+          <div style="position:relative">
+            <div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="cmpPiesWrap"></div></div>
+            <h4 style="font-size:12px;font-weight:600;color:var(--t4);margin:12px 0 10px">🍩 인원별 업무분장 비율</h4>
+            <div id="cmpPiesWrap"><div id="cmpPies" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px"></div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -620,10 +633,16 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
       <div class="pnl">
         <div class="pnl-h"><h3 class="pnl-t">📊 트렌드 결과</h3><button class="btn btn-p btn-s" onclick="trendAI()">🤖 AI 월간 인사이트</button></div>
         <div class="sg" id="trendStats"></div>
-        <h4 style="font-size:12px;font-weight:600;color:var(--t4);margin-bottom:8px">📊 업무분장별 주차 추이</h4>
-        <div style="height:280px;margin-bottom:20px"><canvas id="trendChart"></canvas></div>
-        <h4 style="font-size:12px;font-weight:600;color:var(--t4);margin-bottom:8px">👤 인원별 주차 투입시간</h4>
-        <div style="height:300px;margin-bottom:20px"><canvas id="trendPersonChart"></canvas></div>
+        <div style="position:relative">
+          <div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="_trendChartWrap"></div></div>
+          <h4 style="font-size:12px;font-weight:600;color:var(--t4);margin-bottom:8px">📊 업무분장별 주차 추이</h4>
+          <div id="_trendChartWrap" style="height:280px;margin-bottom:20px"><canvas id="trendChart"></canvas></div>
+        </div>
+        <div style="position:relative">
+          <div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="_trendPersonWrap"></div></div>
+          <h4 style="font-size:12px;font-weight:600;color:var(--t4);margin-bottom:8px">👤 인원별 주차 투입시간</h4>
+          <div id="_trendPersonWrap" style="height:300px;margin-bottom:20px"><canvas id="trendPersonChart"></canvas></div>
+        </div>
         <div id="trendProjectContext"></div>
         <div id="trendAIOut"></div>
       </div>
@@ -1956,10 +1975,104 @@ function exportXlsx(){
 
 function cpTSV(){const f=gF(),h='이름\t날짜\t수주번호\t수주명\t거래처\t시간\t업무분장\t약자\t업무내용';const r=f.map((x,i)=>{const em=editMap[lastFiltered.indexOf(x)]||{};const oNo=em.orderNo!==undefined?em.orderNo:x.orderNo;const baseOcmt=x.ocmt!==undefined?x.ocmt:getOCmt(x.orderNo);const baseClient=x.oclient!==undefined?x.oclient:getOClient(x.orderNo);const curOcmt=em.ocmt!==undefined?em.ocmt:(em.orderNo!==undefined?getOCmt(em.orderNo):baseOcmt);const curClient=em.oclient!==undefined?em.oclient:(em.orderNo!==undefined?getOClient(em.orderNo):baseClient);return`${x.name}\t${fD(x.date)}\t${oNo}\t${curOcmt}\t${curClient}\t${em.hours!==undefined?em.hours:x.hours}\t${em.taskType!==undefined?em.taskType:x.taskType}\t${em.abbr!==undefined?em.abbr:x.abbr}\t${em.content!==undefined?em.content:x.content}`});navigator.clipboard.writeText([h,...r].join('\n')).then(()=>{const b=document.getElementById('cpBtn'),o=b.innerHTML;b.innerHTML='✅완료';setTimeout(()=>b.innerHTML=o,1200)})}
 
+/* ═══ CHART IMAGE SAVE ═══ */
+function toggleChartMenu(btn){
+  var menu=btn.nextElementSibling;
+  var isOpen=menu.classList.contains('show');
+  document.querySelectorAll('.cht-save-menu.show').forEach(function(m){m.classList.remove('show')});
+  if(isOpen)return;
+  var targetId=menu.dataset.target;
+  menu.innerHTML=
+    '<div onclick="saveChartImg(\''+targetId+'\',\'panel\')">🖼 배경·테두리 포함</div>'+
+    '<hr>'+
+    '<div onclick="saveChartImg(\''+targetId+'\',\'white\')">⬜ 흰색 배경</div>'+
+    '<div onclick="saveChartImg(\''+targetId+'\',\'black\')">⬛ 검정 배경</div>';
+  menu.classList.add('show');
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.cht-save-wrap'))document.querySelectorAll('.cht-save-menu.show').forEach(function(m){m.classList.remove('show')});
+});
+
+function saveChartImg(targetId,mode){
+  document.querySelectorAll('.cht-save-menu.show').forEach(function(m){m.classList.remove('show')});
+  var el=document.getElementById(targetId);if(!el)return;
+  var title=el.querySelector('h3,h4');
+  if(!title&&el.parentElement)title=el.parentElement.querySelector('h3,h4');
+  var fname='차트_'+(title?title.textContent.replace(/[^\w가-힣]/g,'').slice(0,20):'export')+'_'+new Date().toISOString().slice(0,10);
+
+  if(mode==='panel'){
+    // 패널 전체 캡처 (배경·테두리 포함)
+    if(typeof html2canvas==='undefined'){showToast('html2canvas 로딩 중...','warn');return}
+    var captureEl=el.closest('.sc')||el.parentElement||el;
+    // 저장 버튼 임시 숨기기
+    var saveBtns=captureEl.querySelectorAll('.cht-save-wrap');
+    saveBtns.forEach(function(b){b.style.display='none'});
+    html2canvas(captureEl,{
+      backgroundColor:null,
+      scale:2,
+      useCORS:true,
+      logging:false
+    }).then(function(canvas){
+      saveBtns.forEach(function(b){b.style.display=''});
+      downloadCanvas(canvas,fname+'.png');
+    }).catch(function(err){
+      saveBtns.forEach(function(b){b.style.display=''});
+      console.error(err);showToast('캡처 실패','warn');
+    });
+  }else{
+    // 흰색/검정 배경: canvas 직접 추출
+    var cvs=el.querySelector('canvas')||el.closest('.sc').querySelector('canvas');
+    if(!cvs){
+      // canvas가 없는 패널 (인원별 분포, 업체 대응별 시간 등) → html2canvas 사용
+      if(typeof html2canvas==='undefined'){showToast('html2canvas 로딩 중...','warn');return}
+      var captureEl2=el.closest('.sc')||el;
+      var saveBtns2=captureEl2.querySelectorAll('.cht-save-wrap');
+      saveBtns2.forEach(function(b){b.style.display='none'});
+      html2canvas(captureEl2,{backgroundColor:mode==='white'?'#FFFFFF':'#000000',scale:2,useCORS:true,logging:false}).then(function(canvas){
+        saveBtns2.forEach(function(b){b.style.display=''});
+        downloadCanvas(canvas,fname+'.png');
+      }).catch(function(err){
+        saveBtns2.forEach(function(b){b.style.display=''});
+        showToast('캡처 실패','warn');
+      });
+      return;
+    }
+    var pad=24;
+    var labelH=title?30:0;
+    var tmp=document.createElement('canvas');
+    tmp.width=cvs.width+pad*2;
+    tmp.height=cvs.height+pad*2+labelH;
+    var ctx=tmp.getContext('2d');
+    ctx.fillStyle=mode==='white'?'#FFFFFF':'#000000';
+    ctx.fillRect(0,0,tmp.width,tmp.height);
+    if(title){
+      ctx.fillStyle=mode==='white'?'#333333':'#E0E0E0';
+      ctx.font='bold '+Math.round(14*(cvs.width/400))+'px "Noto Sans KR",sans-serif';
+      ctx.fillText(title.textContent.trim(),pad,pad+Math.round(14*(cvs.width/400)));
+    }
+    ctx.drawImage(cvs,pad,pad+labelH);
+    downloadCanvas(tmp,fname+'.png');
+  }
+}
+
+function downloadCanvas(canvas,filename){
+  var link=document.createElement('a');
+  link.download=filename;
+  link.href=canvas.toDataURL('image/png');
+  link.click();
+  showToast('이미지 저장 완료','success');
+}
+
 /* ═══ PATCH NOTES ═══ */
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'9.2',date:'2026-03-31',title:'차트 이미지 저장 기능',tag:'feature',items:[
+      '모든 차트 패널에 📷 저장 버튼 추가 (hover 시 표시)',
+      '배경·테두리 포함 캡처 (html2canvas, 현재 테마 그대로)',
+      '흰색/검정 배경 선택 저장 (Chart.js canvas 직접 추출, 2x 해상도)',
+      'canvas 없는 패널(인원별 분포, 업체 대응별 시간)도 html2canvas로 캡처 지원'
+    ]},
     {ver:'9.1',date:'2026-03-31',title:'엑셀/TSV 내보내기 수정',tag:'fix',items:[
       '엑셀저장·TSV복사 시 수주명·거래처 편집값(editMap, 레코드 override) 정상 반영',
       'TSV복사에서도 editMap 편집값(수주번호·시간·업무분장·약자·업무내용) 반영'
