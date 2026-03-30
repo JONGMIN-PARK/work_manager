@@ -316,7 +316,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle">v9.0</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle">v9.1</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -1924,13 +1924,17 @@ function exportXlsx(){
   const f=gF();if(!f.length){showToast('데이터 없음','warn');return}
   const rows=f.map(r=>{
     const em=editMap[lastFiltered.indexOf(r)]||{};
-    const oNo=em.orderNo||r.orderNo;
+    const oNo=em.orderNo!==undefined?em.orderNo:r.orderNo;
+    const baseOcmt=r.ocmt!==undefined?r.ocmt:getOCmt(r.orderNo);
+    const baseClient=r.oclient!==undefined?r.oclient:getOClient(r.orderNo);
+    const curOcmt=em.ocmt!==undefined?em.ocmt:(em.orderNo!==undefined?getOCmt(em.orderNo):baseOcmt);
+    const curClient=em.oclient!==undefined?em.oclient:(em.orderNo!==undefined?getOClient(em.orderNo):baseClient);
     return{
       '이름':r.name,'날짜':fD(r.date),
-      '수주번호':oNo,'수주명':getOCmt(oNo),'거래처':getOClient(oNo),
+      '수주번호':oNo,'수주명':curOcmt,'거래처':curClient,
       '시간':em.hours!==undefined?em.hours:r.hours,
-      '업무분장':em.taskType||r.taskType,'약자':em.abbr||r.abbr,
-      '업무내용':em.content||r.content
+      '업무분장':em.taskType!==undefined?em.taskType:r.taskType,'약자':em.abbr!==undefined?em.abbr:r.abbr,
+      '업무내용':em.content!==undefined?em.content:r.content
     };
   });
   const ws=XLSX.utils.json_to_sheet(rows);
@@ -1942,7 +1946,7 @@ function exportXlsx(){
   XLSX.writeFile(wb,`업무일지_${ts}.xlsx`);
 }
 
-function cpTSV(){const f=gF(),h='이름\t날짜\t수주번호\t수주명\t거래처\t시간\t업무분장\t약자\t업무내용';const r=f.map(x=>`${x.name}\t${fD(x.date)}\t${x.orderNo}\t${getOCmt(x.orderNo)}\t${getOClient(x.orderNo)}\t${x.hours}\t${x.taskType}\t${x.abbr}\t${x.content}`);navigator.clipboard.writeText([h,...r].join('\n')).then(()=>{const b=document.getElementById('cpBtn'),o=b.innerHTML;b.innerHTML='✅완료';setTimeout(()=>b.innerHTML=o,1200)})}
+function cpTSV(){const f=gF(),h='이름\t날짜\t수주번호\t수주명\t거래처\t시간\t업무분장\t약자\t업무내용';const r=f.map((x,i)=>{const em=editMap[lastFiltered.indexOf(x)]||{};const oNo=em.orderNo!==undefined?em.orderNo:x.orderNo;const baseOcmt=x.ocmt!==undefined?x.ocmt:getOCmt(x.orderNo);const baseClient=x.oclient!==undefined?x.oclient:getOClient(x.orderNo);const curOcmt=em.ocmt!==undefined?em.ocmt:(em.orderNo!==undefined?getOCmt(em.orderNo):baseOcmt);const curClient=em.oclient!==undefined?em.oclient:(em.orderNo!==undefined?getOClient(em.orderNo):baseClient);return`${x.name}\t${fD(x.date)}\t${oNo}\t${curOcmt}\t${curClient}\t${em.hours!==undefined?em.hours:x.hours}\t${em.taskType!==undefined?em.taskType:x.taskType}\t${em.abbr!==undefined?em.abbr:x.abbr}\t${em.content!==undefined?em.content:x.content}`});navigator.clipboard.writeText([h,...r].join('\n')).then(()=>{const b=document.getElementById('cpBtn'),o=b.innerHTML;b.innerHTML='✅완료';setTimeout(()=>b.innerHTML=o,1200)})}
 
 function rContentSum(){
   const el=document.getElementById('contentSummary');
