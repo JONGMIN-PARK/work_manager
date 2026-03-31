@@ -330,7 +330,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.6</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.7</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2088,9 +2088,10 @@ async function saveManualInput(keepOpen){
     // UI 갱신 — 날짜순 정렬 + 필터/리스트 전체 갱신
     aD.sort(function(a,b){var n=a.name.localeCompare(b.name,'ko');return n!==0?n:a.date.localeCompare(b.date)});
     gfInvalidate();
-    if(!aN.includes(name)){aN.push(name);aN.sort(function(a,b){return a.localeCompare(b,'ko')});rNC()}
-    rFL();
-    if(sN.has(name)){upV()}
+    var isNew=!aN.includes(name);
+    if(isNew){aN.push(name);aN.sort(function(a,b){return a.localeCompare(b,'ko')})}
+    if(isNew||!sN.has(name)){sN.add(name)}
+    rNC();rFL();upV()
     if(keepOpen){
       // 일부 필드만 초기화
       document.getElementById('mi_content').value='';
@@ -2299,6 +2300,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'9.7',date:'2026-04-01',title:'수동입력 저장 후 자동 정렬 및 리스트 갱신',tag:'fix',items:[
+      '수동입력 저장 후 날짜순 자동 정렬 (이름→날짜 순)',
+      '저장 후 필터 리스트(수주번호/업무구분/수주명/거래처/부서) 즉시 갱신',
+      '새 이름 또는 미선택 이름 저장 시 자동 선택 → 테이블에 즉시 반영',
+      '이름 목록(rNC) 및 필터 옵션(rFL) 전체 동기화'
+    ]},
     {ver:'9.6',date:'2026-03-31',title:'휴가(V) 업무분장 추가 + 거래처/수주명 DB 저장 수정',tag:'feature',items:[
       '업무분장 코드 V(휴가) 추가 — 색상, 차트, 엑셀 반영',
       'DB 스키마에 ocmt(수주명), oclient(거래처) 컬럼 추가',
