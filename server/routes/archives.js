@@ -102,6 +102,44 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
   }
 });
 
+// PATCH /api/archives/records/batch — 변경된 레코드만 개별 업데이트
+router.patch('/records/batch', rbac.checkPermission('archive.manage'), async function (req, res) {
+  var client = await db.connect();
+  try {
+    var updates = req.body.updates || [];
+    if (!updates.length) return res.json({ data: [], count: 0 });
+
+    await client.query('BEGIN');
+    var count = 0;
+    for (var i = 0; i < updates.length; i++) {
+      var u = updates[i];
+      if (!u.id) continue;
+      var sets = [];
+      var params = [];
+      var idx = 1;
+      if (u.date !== undefined) { sets.push('date = $' + idx++); params.push(u.date); }
+      if (u.name !== undefined) { sets.push('name = $' + idx++); params.push(u.name); }
+      if (u.orderNo !== undefined || u.order_no !== undefined) { sets.push('order_no = $' + idx++); params.push(u.orderNo || u.order_no); }
+      if (u.hours !== undefined) { sets.push('hours = $' + idx++); params.push(u.hours); }
+      if (u.taskType !== undefined || u.task_type !== undefined) { sets.push('task_type = $' + idx++); params.push(u.taskType || u.task_type); }
+      if (u.abbr !== undefined) { sets.push('abbr = $' + idx++); params.push(u.abbr); }
+      if (u.content !== undefined) { sets.push('content = $' + idx++); params.push(u.content); }
+      if (!sets.length) continue;
+      params.push(u.id);
+      await client.query('UPDATE work_records SET ' + sets.join(', ') + ' WHERE id = $' + idx, params);
+      count++;
+    }
+    await client.query('COMMIT');
+    res.json({ data: [], count: count });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[work-records/batch-update]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  } finally {
+    client.release();
+  }
+});
+
 // DELETE /api/archives/records — 전체 삭제
 router.delete('/records', rbac.checkPermission('archive.manage'), async function (req, res) {
   try {

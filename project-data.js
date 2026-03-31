@@ -1067,6 +1067,17 @@ function wrCount() {
   });
 }
 
+// 변경된 레코드만 개별 업데이트 (로컬: IndexedDB put, 서버: PATCH)
+function wrUpdateRecords(records) {
+  return new Promise(function (res, rej) {
+    var tx = db.transaction('workRecords', 'readwrite');
+    var store = tx.objectStore('workRecords');
+    records.forEach(function (r) { store.put(r); });
+    tx.oncomplete = function () { res(); };
+    tx.onerror = function (e) { console.warn('[DB] wrUpdateRecords error', e); rej(e); };
+  });
+}
+
 /* 업무일지 레코드 중복 키 생성 (date+name+orderNo+content) */
 function wrRecordKey(r) {
   return (r.date || '') + '|' + (r.name || '') + '|' + (r.orderNo || '') + '|' + (r.content || '');
@@ -1545,6 +1556,9 @@ function showToast(msg, type) {
   };
   wrBulkPut = function (records) { return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) }); };
   wrClear = function () { return apiFetch('/api/archives/records', { method: 'DELETE' }); };
+  wrUpdateRecords = function (records) {
+    return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) });
+  };
 
   // ─── 문서 폴더 ───
   folderGetAll = function () { return apiFetch('/api/docs/folders').then(function (r) { return toCamelArray(r.data); }); };

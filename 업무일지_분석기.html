@@ -326,7 +326,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.3</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.4</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -1037,7 +1037,7 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
       var result=wrMerge(existing, newRecords);
       var merged=existing.concat(result.toAdd);
       await wrBulkPut(merged);
-      aD=merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
+      aD=merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
       showToast('📊 업무일지 갱신: '+result.added+'건 추가, 총 '+merged.length+'건 (중복 '+(newRecords.length-result.added)+'건 제외)');
     }else{
       // 대체: 기존 삭제 후 새로 저장
@@ -1123,7 +1123,7 @@ function importWorkRecordsJSON(file){
           var result=wrMerge(existing, data.records);
           var merged=existing.concat(result.toAdd);
           await wrBulkPut(merged);
-          aD=merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
+          aD=merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
           showToast('📊 업무일지 갱신: '+result.added+'건 추가, 총 '+merged.length+'건');
         }else{
           await wrClear();
@@ -1888,6 +1888,7 @@ async function applyEdits(){
   /* 편집된 행의 수주번호 수집 (ocmt/oclient 변경 시 같은 수주번호의 미편집 행도 per-row 고정 필요) */
   const editedOrders=new Set();
   const editedIndices=new Set();
+  const changedRecords=[];
   let count=0;
   for(const[idxStr,changes]of Object.entries(editMap)){
     const fRow=lastFiltered[+idxStr];if(!fRow)continue;
@@ -1901,19 +1902,26 @@ async function applyEdits(){
     for(const[field,val]of Object.entries(changes)){
       if(field!=='orderNo'){aD[origIdx][field]=val}
     }
+    changedRecords.push(aD[origIdx]);
     count++;
   }
   /* ocmt/oclient가 수정된 수주번호에 속하는 미편집 행들:
      현재 표시값(order-level fallback)을 per-row로 고정하여 일괄 반영 방지 */
   if(editedOrders.size>0){
     aD.forEach(function(r,i){
-      if(editedIndices.has(i))return; // 이미 편집된 행은 스킵
-      if(!editedOrders.has(r.orderNo))return; // 관련 없는 수주번호 스킵
+      if(editedIndices.has(i))return;
+      if(!editedOrders.has(r.orderNo))return;
       if(r.ocmt===undefined){var cm=getOCmt(r.orderNo);if(cm)r.ocmt=cm}
       if(r.oclient===undefined){var cl=getOClient(r.orderNo);if(cl)r.oclient=cl}
     });
   }
-  await wrBulkPut(aD);
+  // 변경된 레코드에 id가 있으면 변경분만 업데이트, 없으면 전체 교체
+  var hasIds=changedRecords.every(function(r){return r.id});
+  if(hasIds&&typeof wrUpdateRecords==='function'){
+    await wrUpdateRecords(changedRecords);
+  }else{
+    await wrBulkPut(aD);
+  }
   editMap={};editMode=false;
   document.getElementById('editTogBtn').textContent='✏️ 편집모드';
   document.getElementById('editApplyBtn').classList.add('hidden');
@@ -2068,6 +2076,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'9.4',date:'2026-03-31',title:'편집모드 변경분만 갱신',tag:'fix',items:[
+      '편집모드 적용 시 변경된 레코드만 DB 업데이트 (PATCH /records/batch)',
+      '레코드 id 보유 시 개별 UPDATE, 미보유 시 기존 전체 교체 폴백',
+      '엑셀 갱신(merge) 시 기존 레코드 id 보존'
+    ]},
     {ver:'9.3',date:'2026-03-31',title:'엑셀 갱신 시 중복 데이터 방지',tag:'fix',items:[
       '서버 모드 bulk 저장 시 트랜잭션(DELETE→INSERT)으로 중복 삽입 방지',
       '대량 데이터 배치 삽입 (500건씩, PostgreSQL 파라미터 한도 대비)',
