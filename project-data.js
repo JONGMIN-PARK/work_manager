@@ -1067,6 +1067,19 @@ function wrCount() {
   });
 }
 
+// 선택 레코드 삭제 (로컬: IndexedDB delete, 서버: DELETE batch)
+function wrDeleteRecords(records) {
+  return new Promise(function (res, rej) {
+    var tx = db.transaction('workRecords', 'readwrite');
+    var store = tx.objectStore('workRecords');
+    // IndexedDB에서 해당 레코드 제거 후 전체 재저장
+    store.clear();
+    records.forEach(function (r) { store.put(r); });
+    tx.oncomplete = function () { res(); };
+    tx.onerror = function (e) { console.warn('[DB] wrDeleteRecords error', e); rej(e); };
+  });
+}
+
 // 변경된 레코드만 개별 업데이트 (로컬: IndexedDB put, 서버: PATCH)
 function wrUpdateRecords(records) {
   return new Promise(function (res, rej) {
@@ -1558,6 +1571,13 @@ function showToast(msg, type) {
   wrClear = function () { return apiFetch('/api/archives/records', { method: 'DELETE' }); };
   wrUpdateRecords = function (records) {
     return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) });
+  };
+  wrDeleteRecords = function (remainingRecords, deletedIds) {
+    if (deletedIds && deletedIds.length) {
+      return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) });
+    }
+    // id 없는 경우 전체 교체
+    return wrClear().then(function () { return wrBulkPut(remainingRecords); });
   };
 
   // ─── 문서 폴더 ───

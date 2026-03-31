@@ -58,6 +58,10 @@ h1{font-size:18px;font-weight:700;color:var(--t1);letter-spacing:-.3px}h1 .ac{co
 .chip .dot{width:7px;height:7px;border-radius:50%;margin-right:5px;flex-shrink:0}
 .sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px}
 .sc{background:var(--bg-c);border:1px solid var(--bd2);border-radius:10px;padding:16px 18px;transition:all .2s;position:relative;overflow:hidden}
+.del-chk{width:14px;height:14px;cursor:pointer;accent-color:#EF4444}
+.del-bar{display:none;align-items:center;gap:8px}
+.del-bar.show{display:inline-flex}
+.del-bar .del-count{font-size:11px;color:#F87171;font-weight:600}
 .cht-save-wrap{position:absolute;top:8px;right:8px;z-index:5}
 .cht-save-btn{background:var(--bg-i);border:1px solid var(--bd);color:var(--t5);font-size:10px;padding:3px 7px;border-radius:5px;cursor:pointer;opacity:.4;transition:opacity .15s}
 .sc:hover .cht-save-btn{opacity:1}
@@ -326,7 +330,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.4</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.5</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -490,7 +494,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
           <button class="tab" data-t="sum" onclick="sTab('sum')">📝 내용요약</button>
         </div>
         <!-- Table -->
-        <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span class="mob-sep" style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button></div></div><div class="tw"><table><thead><tr><th style="width:70px">이름</th><th style="width:100px;white-space:nowrap">날짜</th><th style="width:100px">수주번호</th><th style="width:90px">수주명</th><th style="width:80px">거래처</th><th style="width:45px;text-align:right">시간</th><th style="width:70px;white-space:nowrap">업무분장</th><th style="width:36px">약자</th><th>업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div></div>
+        <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span class="del-bar" id="delBar"><span class="del-count" id="delCount">0건 선택</span><button class="btn btn-d btn-s" onclick="deleteSelected()">🗑️ 선택 삭제</button></span><span class="mob-sep" style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button></div></div><div class="tw"><table><thead><tr><th id="thChk" style="width:30px;display:none"><input type="checkbox" class="del-chk" onchange="toggleSelectAll(this)" title="전체 선택"></th><th style="width:70px">이름</th><th style="width:100px;white-space:nowrap">날짜</th><th style="width:100px">수주번호</th><th style="width:90px">수주명</th><th style="width:80px">거래처</th><th style="width:45px;text-align:right">시간</th><th style="width:70px;white-space:nowrap">업무분장</th><th style="width:36px">약자</th><th>업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div></div>
         </div>
         <!-- Content Summary (separate tab, no filter) -->
         <div id="tSum" class="hidden">
@@ -1788,17 +1792,20 @@ function upV(){rAFT();const f=gF();const ss=document.getElementById('statsS');if
 let editMode=false;
 let lastFiltered=[]; // 현재 필터 결과 참조 보관
 let editMap={}; // {rowIdx: {field: newValue}} 수정 추적
+let delSet=new Set(); // 삭제 선택 인덱스
 
 function rTbl(f){
   lastFiltered=f;
-  editMode=false;editMap={};
+  editMode=false;editMap={};delSet=new Set();
   document.getElementById('editTogBtn').textContent='✏️ 편집모드';
   document.getElementById('editApplyBtn').classList.add('hidden');
   document.getElementById('editCancelBtn').classList.add('hidden');
   document.getElementById('editStatus').style.display='none';
+  document.getElementById('thChk').style.display='none';
+  document.getElementById('delBar').classList.remove('show');
   document.getElementById('tInfo').textContent=f.length+'건·'+sN.size+'명'+(hAF()?' (필터)':'');
   const tb=document.getElementById('tBody');
-  if(!f.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--t6);padding:30px">결과 없음</td></tr>';document.getElementById('contentSummary').innerHTML='';return}
+  if(!f.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--t6);padding:30px">결과 없음</td></tr>';document.getElementById('contentSummary').innerHTML='';return}
   renderTblRows(f,false);
 }
 
@@ -1824,7 +1831,9 @@ function renderTblRows(f,editable){
     if(kw&&!editable){const rx=new RegExp('('+kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');ch=ch.replace(rx,'<mark style="background:var(--mk);color:var(--mk-t);padding:0 2px;border-radius:2px">$1</mark>')}
 
     if(editable){
-      return`<tr style="${hasEdit?'background:rgba(245,158,11,.06)':''}">
+      const isDel=delSet.has(idx);
+      return`<tr style="${isDel?'background:rgba(239,68,68,.08)':hasEdit?'background:rgba(245,158,11,.06)':''}">
+        <td><input type="checkbox" class="del-chk" data-delidx="${idx}" ${isDel?'checked':''} onchange="toggleDelRow(this)"></td>
         <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:${c}"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="${eH(r.name)}">${eH(dn)}</span></span></td>
         <td class="mono" style="color:var(--t4);white-space:nowrap">${fD(r.date)}</td>
         <td class="editable ${em.orderNo!==undefined?'modified':''}" contenteditable="true" data-row="${idx}" data-field="orderNo" oninput="onCellEdit(this)" style="color:var(--ac-t)">${eH(curOrder)}</td>
@@ -1877,9 +1886,13 @@ function onCellEdit(cell){
 
 function togEdit(){
   editMode=!editMode;
+  delSet=new Set();
   document.getElementById('editTogBtn').textContent=editMode?'🔒 편집종료':'✏️ 편집모드';
   document.getElementById('editApplyBtn').classList.toggle('hidden',!editMode);
   document.getElementById('editCancelBtn').classList.toggle('hidden',!editMode);
+  document.getElementById('thChk').style.display=editMode?'':'none';
+  document.getElementById('delBar').classList.remove('show');
+  var thChkInput=document.querySelector('#thChk input');if(thChkInput)thChkInput.checked=false;
   renderTblRows(lastFiltered,editMode);
 }
 
@@ -1932,12 +1945,65 @@ async function applyEdits(){
 }
 
 function cancelEdits(){
-  editMap={};editMode=false;
+  editMap={};editMode=false;delSet=new Set();
   document.getElementById('editTogBtn').textContent='✏️ 편집모드';
   document.getElementById('editApplyBtn').classList.add('hidden');
   document.getElementById('editCancelBtn').classList.add('hidden');
   document.getElementById('editStatus').style.display='none';
+  document.getElementById('thChk').style.display='none';
+  document.getElementById('delBar').classList.remove('show');
   renderTblRows(lastFiltered,false);
+}
+
+function toggleDelRow(chk){
+  var idx=+chk.dataset.delidx;
+  if(chk.checked)delSet.add(idx);else delSet.delete(idx);
+  chk.closest('tr').style.background=chk.checked?'rgba(239,68,68,.08)':'';
+  upDelBar();
+}
+function toggleSelectAll(chk){
+  var boxes=document.querySelectorAll('#tBody .del-chk');
+  boxes.forEach(function(b){b.checked=chk.checked;var idx=+b.dataset.delidx;if(chk.checked)delSet.add(idx);else delSet.delete(idx);b.closest('tr').style.background=chk.checked?'rgba(239,68,68,.08)':''});
+  upDelBar();
+}
+function upDelBar(){
+  var bar=document.getElementById('delBar');
+  var cnt=document.getElementById('delCount');
+  if(delSet.size>0){bar.classList.add('show');cnt.textContent=delSet.size+'건 선택'}
+  else{bar.classList.remove('show')}
+}
+async function deleteSelected(){
+  if(!delSet.size){showToast('삭제할 항목을 선택하세요.','warn');return}
+  if(!confirm(delSet.size+'건을 삭제합니다.\n이 작업은 되돌릴 수 없습니다.\n\n계속하시겠습니까?'))return;
+  // 삭제 대상과 남은 레코드 분리
+  var toDeleteIds=[];
+  var toDeleteRows=[];
+  delSet.forEach(function(idx){
+    var row=lastFiltered[idx];
+    if(row){
+      toDeleteRows.push(row);
+      if(row.id)toDeleteIds.push(row.id);
+    }
+  });
+  // aD에서 삭제
+  toDeleteRows.forEach(function(row){
+    var ai=aD.indexOf(row);
+    if(ai!==-1)aD.splice(ai,1);
+  });
+  // DB 반영
+  if(toDeleteIds.length===toDeleteRows.length&&toDeleteIds.length>0&&typeof wrDeleteRecords==='function'){
+    // 모든 삭제 대상에 id가 있으면 서버에서 개별 삭제
+    await wrDeleteRecords(aD, toDeleteIds);
+  }else{
+    // id 없는 레코드 포함 → 전체 교체
+    await wrBulkPut(aD);
+  }
+  var cnt=delSet.size;
+  delSet=new Set();editMap={};
+  document.getElementById('delBar').classList.remove('show');
+  var thChkInput=document.querySelector('#thChk input');if(thChkInput)thChkInput.checked=false;
+  rFL();upV();
+  showToast('🗑️ '+cnt+'건 삭제 완료');
 }
 
 async function resetOcmtOclient(){
@@ -2076,6 +2142,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'9.5',date:'2026-03-31',title:'작업 내용 선택 삭제 기능',tag:'feature',items:[
+      '편집모드에서 체크박스로 개별/멀티 선택 삭제',
+      '헤더 체크박스로 전체 선택/해제',
+      '선택 건수 실시간 표시 + 삭제 확인 다이얼로그',
+      'id 보유 레코드는 서버 개별 삭제(DELETE /records/batch), 미보유 시 전체 교체'
+    ]},
     {ver:'9.4',date:'2026-03-31',title:'편집모드 변경분만 갱신',tag:'fix',items:[
       '편집모드 적용 시 변경된 레코드만 DB 업데이트 (PATCH /records/batch)',
       '레코드 id 보유 시 개별 UPDATE, 미보유 시 기존 전체 교체 폴백',

@@ -140,6 +140,20 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
   }
 });
 
+// DELETE /api/archives/records/batch — 선택 삭제 (ID 배열)
+router.delete('/records/batch', rbac.checkPermission('archive.manage'), async function (req, res) {
+  try {
+    var ids = req.body.ids || [];
+    if (!ids.length) return res.json({ count: 0 });
+    var params = ids.map(function (_, i) { return '$' + (i + 1); });
+    var result = await db.query('DELETE FROM work_records WHERE id IN (' + params.join(',') + ')', ids);
+    res.json({ count: result.rowCount });
+  } catch (e) {
+    console.error('[work-records/batch-delete]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // DELETE /api/archives/records — 전체 삭제
 router.delete('/records', rbac.checkPermission('archive.manage'), async function (req, res) {
   try {
