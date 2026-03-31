@@ -2085,8 +2085,13 @@ async function saveManualInput(keepOpen){
     // aD 배열에 추가
     var newRec=saved||record;
     aD.push(newRec);
-    // 로컬 IndexedDB에도 동기화
-    if(typeof wrBulkPut==='function'){try{/* 로컬 단건 추가는 불필요 — 서버가 메인 */}catch(e){}}
+    // 로컬 IndexedDB에도 동기화 (재접속 시 IndexedDB 우선 로드되므로 필수)
+    try{
+      if(typeof db!=='undefined'&&db){
+        var idbTx=db.transaction('workRecords','readwrite');
+        idbTx.objectStore('workRecords').put(newRec);
+      }
+    }catch(e){console.warn('[saveManualInput] IndexedDB sync:',e)}
     status.textContent='✅ 저장 완료! (서버 DB 반영됨)';status.style.color='#10B981';
     // UI 갱신 — 날짜순 정렬 + 필터/리스트 전체 갱신
     aD.sort(function(a,b){var n=a.name.localeCompare(b.name,'ko');return n!==0?n:a.date.localeCompare(b.date)});
@@ -2303,9 +2308,10 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
-    {ver:'9.7',date:'2026-04-01',title:'수동입력 저장 후 화면 즉시 반영 수정',tag:'fix',items:[
+    {ver:'9.7',date:'2026-04-01',title:'수동입력 저장 후 화면 즉시 반영 + 재접속 유지',tag:'fix',items:[
       '수동입력 날짜 YYYY-MM-DD → YYYYMMDD 정규화 (필터/정렬 불일치 해소)',
       '서버 응답 date 필드도 YYYYMMDD 정규화 처리',
+      '저장 후 IndexedDB에도 동기화 — 재접속 시 데이터 유지',
       '저장 후 날짜순 자동 정렬 + 필터 리스트 즉시 갱신',
       '새 이름 또는 미선택 이름 저장 시 자동 선택 → 테이블에 즉시 반영'
     ]},
