@@ -2001,12 +2001,15 @@ async function deleteSelected(){
     if(ai!==-1)aD.splice(ai,1);
   });
   // DB 반영
-  if(toDeleteIds.length===toDeleteRows.length&&toDeleteIds.length>0&&typeof wrDeleteRecords==='function'){
-    // 모든 삭제 대상에 id가 있으면 서버에서 개별 삭제
-    await wrDeleteRecords(aD, toDeleteIds);
-  }else{
-    // id 없는 레코드 포함 → 전체 교체
-    await wrBulkPut(aD);
+  try{
+    if(toDeleteIds.length===toDeleteRows.length&&toDeleteIds.length>0&&typeof wrDeleteRecords==='function'){
+      await wrDeleteRecords(aD, toDeleteIds);
+    }else{
+      await wrBulkPut(aD);
+    }
+  }catch(dbErr){
+    console.error('[deleteSelected] DB 삭제 실패:',dbErr);
+    showToast('DB 삭제 실패: '+(dbErr.message||'서버 오류'),'error');
   }
   var cnt=delSet.size;
   delSet=new Set();editMap={};
@@ -2158,7 +2161,8 @@ function renderPatchNotes(){
       '서버 POST bulk/PATCH batch에서 ocmt, oclient 저장/갱신 처리',
       '새로고침/재로그인 후에도 수정된 거래처/수주명 유지',
       '편집 수정 적용 시 PATCH 실패 → bulk 폴백 + 에러 토스트 표시',
-      '서버 DB 연결/ROLLBACK 에러 처리 강화 (502 크래시 방지)'
+      '서버 DB 연결/ROLLBACK 에러 처리 강화 (502 크래시 방지)',
+      '서버 모드에서 삭제/수정/저장 시 로컬 IndexedDB도 동기화'
     ]},
     {ver:'9.5',date:'2026-03-31',title:'작업 내용 선택 삭제 기능',tag:'feature',items:[
       '편집모드에서 체크박스로 개별/멀티 선택 삭제',

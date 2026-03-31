@@ -1552,9 +1552,13 @@ function showToast(msg, type) {
   wkPut = function (data) { return apiFetch('/api/archives', { method: 'POST', body: JSON.stringify(data) }).then(function (r) { return toCamel(r.data); }); };
   wkDel = function (id) { return apiFetch('/api/archives/' + encodeURIComponent(id), { method: 'DELETE' }); };
 
-  // ─── 업무일지 레코드 (서버 실패 시 로컬 IndexedDB fallback) ───
+  // ─── 업무일지 레코드 (서버 + 로컬 IndexedDB 동기화) ───
   var _localWrGetAll = wrGetAll;
   var _localWrCount = wrCount;
+  var _localWrBulkPut = wrBulkPut;
+  var _localWrUpdateRecords = wrUpdateRecords;
+  var _localWrDeleteRecords = wrDeleteRecords;
+  var _localWrClear = wrClear;
   wrGetAll = function () {
     return apiFetch('/api/archives/records?limit=50000&all=true').then(function (r) {
       return toCamelArray(r.data).map(function (rec) {
@@ -1567,14 +1571,22 @@ function showToast(msg, type) {
     return apiFetch('/api/archives/records/count').then(function (r) { return r.data.count; })
       .catch(function () { return _localWrCount(); });
   };
-  wrBulkPut = function (records) { return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) }); };
-  wrClear = function () { return apiFetch('/api/archives/records', { method: 'DELETE' }); };
+  wrBulkPut = function (records) {
+    return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) })
+      .then(function (r) { _localWrClear().then(function () { _localWrBulkPut(records); }).catch(function () {}); return r; });
+  };
+  wrClear = function () {
+    return apiFetch('/api/archives/records', { method: 'DELETE' })
+      .then(function (r) { _localWrClear().catch(function () {}); return r; });
+  };
   wrUpdateRecords = function (records) {
-    return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) });
+    return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) })
+      .then(function (r) { _localWrUpdateRecords(records).catch(function () {}); return r; });
   };
   wrDeleteRecords = function (remainingRecords, deletedIds) {
     if (deletedIds && deletedIds.length) {
-      return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) });
+      return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) })
+        .then(function (r) { _localWrDeleteRecords(remainingRecords).catch(function () {}); return r; });
     }
     // id 없는 경우 전체 교체
     return wrClear().then(function () { return wrBulkPut(remainingRecords); });
