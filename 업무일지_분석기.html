@@ -2085,10 +2085,12 @@ async function saveManualInput(keepOpen){
     // 로컬 IndexedDB에도 동기화
     if(typeof wrBulkPut==='function'){try{/* 로컬 단건 추가는 불필요 — 서버가 메인 */}catch(e){}}
     status.textContent='✅ 저장 완료! (서버 DB 반영됨)';status.style.color='#10B981';
-    // UI 갱신
+    // UI 갱신 — 날짜순 정렬 + 필터/리스트 전체 갱신
+    aD.sort(function(a,b){var n=a.name.localeCompare(b.name,'ko');return n!==0?n:a.date.localeCompare(b.date)});
     gfInvalidate();
-    if(sN.has(name)){upV()}
     if(!aN.includes(name)){aN.push(name);aN.sort(function(a,b){return a.localeCompare(b,'ko')});rNC()}
+    rFL();
+    if(sN.has(name)){upV()}
     if(keepOpen){
       // 일부 필드만 초기화
       document.getElementById('mi_content').value='';
