@@ -2063,7 +2063,9 @@ async function saveManualInput(keepOpen){
   var content=document.getElementById('mi_content').value.trim();
   var status=document.getElementById('mi_status');
   if(!date||!name){status.textContent='⚠️ 날짜와 이름은 필수입니다.';status.style.color='#EF4444';return}
-  var record={date:date,name:name,orderNo:orderNo,hours:hours,ocmt:ocmt||null,oclient:oclient||null,abbr:abbr,taskType:taskType||AM[abbr]||'',content:content};
+  // YYYY-MM-DD → YYYYMMDD 변환
+  var normDate=date.replace(/[-\/]/g,'');
+  var record={date:normDate,name:name,orderNo:orderNo,hours:hours,ocmt:ocmt||null,oclient:oclient||null,abbr:abbr,taskType:taskType||AM[abbr]||'',content:content};
   status.textContent='저장 중...';status.style.color='var(--ac-t)';
   document.getElementById('mi_saveBtn').disabled=true;
   document.getElementById('mi_saveMoreBtn').disabled=true;
@@ -2076,6 +2078,7 @@ async function saveManualInput(keepOpen){
         // snake_case → camelCase
         var cc={};for(var k in saved){var ck=k.replace(/_([a-z])/g,function(m,c){return c.toUpperCase()});cc[ck]=saved[k]}
         if(typeof cc.hours==='string')cc.hours=parseFloat(cc.hours)||0;
+        if(cc.date&&/[-\/]/.test(cc.date))cc.date=cc.date.replace(/[-\/]/g,'').slice(0,8);
         saved=cc;
       }
     }
@@ -2300,11 +2303,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
-    {ver:'9.7',date:'2026-04-01',title:'수동입력 저장 후 자동 정렬 및 리스트 갱신',tag:'fix',items:[
-      '수동입력 저장 후 날짜순 자동 정렬 (이름→날짜 순)',
-      '저장 후 필터 리스트(수주번호/업무구분/수주명/거래처/부서) 즉시 갱신',
-      '새 이름 또는 미선택 이름 저장 시 자동 선택 → 테이블에 즉시 반영',
-      '이름 목록(rNC) 및 필터 옵션(rFL) 전체 동기화'
+    {ver:'9.7',date:'2026-04-01',title:'수동입력 저장 후 화면 즉시 반영 수정',tag:'fix',items:[
+      '수동입력 날짜 YYYY-MM-DD → YYYYMMDD 정규화 (필터/정렬 불일치 해소)',
+      '서버 응답 date 필드도 YYYYMMDD 정규화 처리',
+      '저장 후 날짜순 자동 정렬 + 필터 리스트 즉시 갱신',
+      '새 이름 또는 미선택 이름 저장 시 자동 선택 → 테이블에 즉시 반영'
     ]},
     {ver:'9.6',date:'2026-03-31',title:'휴가(V) 업무분장 추가 + 거래처/수주명 DB 저장 수정',tag:'feature',items:[
       '업무분장 코드 V(휴가) 추가 — 색상, 차트, 엑셀 반영',
