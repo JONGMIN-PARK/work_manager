@@ -326,7 +326,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.2</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.3</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -914,7 +914,8 @@ function wrBulkPut(records){
 function wrGetAll(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
 function wrCount(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').count();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
 function wrClear(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');tx.objectStore('workRecords').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
-function wrMerge(existing,newRecs){var keys=new Set(existing.map(r=>r.date+'|'+r.name+'|'+r.orderNo+'|'+(r.dept||'')+'|'+r.content));var toAdd=newRecs.filter(r=>!keys.has(r.date+'|'+r.name+'|'+r.orderNo+'|'+(r.dept||'')+'|'+r.content));return{toAdd:toAdd,added:toAdd.length}}
+function wrKey(r){return r.date+'|'+r.name+'|'+r.orderNo+'|'+r.hours+'|'+(r.abbr||'')+'|'+(r.dept||'')+'|'+r.content}
+function wrMerge(existing,newRecs){var keys=new Set(existing.map(wrKey));var toAdd=newRecs.filter(r=>!keys.has(wrKey(r)));return{toAdd:toAdd,added:toAdd.length}}
 
 /* ═══ MODE ═══ */
 let curMode='weekly';
@@ -2067,6 +2068,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'9.3',date:'2026-03-31',title:'엑셀 갱신 시 중복 데이터 방지',tag:'fix',items:[
+      '서버 모드 bulk 저장 시 트랜잭션(DELETE→INSERT)으로 중복 삽입 방지',
+      '대량 데이터 배치 삽입 (500건씩, PostgreSQL 파라미터 한도 대비)',
+      '중복 판별 키에 hours·abbr 추가 (date|name|orderNo|hours|abbr|dept|content)'
+    ]},
     {ver:'9.2',date:'2026-03-31',title:'차트 이미지 저장 기능',tag:'feature',items:[
       '모든 차트 패널에 📷 저장 버튼 추가 (hover 시 표시)',
       '배경·테두리 포함 캡처 (html2canvas, 현재 테마 그대로)',

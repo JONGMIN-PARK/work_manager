@@ -62,26 +62,43 @@ router.get('/records/count', async function (req, res) {
   }
 });
 
-// POST /api/archives/records/bulk — 일괄 저장
+// POST /api/archives/records/bulk — 일괄 저장 (기존 레코드 삭제 후 삽입, 트랜잭션)
 router.post('/records/bulk', rbac.checkPermission('archive.manage'), async function (req, res) {
+  var client = await db.connect();
   try {
     var records = req.body.records || [];
     if (!records.length) return res.json({ data: [], count: 0 });
 
-    var values = [];
-    var params = [];
-    var idx = 1;
-    records.forEach(function (r) {
-      values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
-      params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '');
-    });
+    await client.query('BEGIN');
 
-    var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content) VALUES ' + values.join(',') + ' RETURNING id';
-    var result = await db.query(sql, params);
-    res.status(201).json({ data: result.rows, count: result.rows.length });
+    // 기존 레코드 전체 삭제 (로컬 IndexedDB의 s.clear()와 동일)
+    await client.query('DELETE FROM work_records');
+
+    // 배치 삽입 (PostgreSQL 파라미터 한도 대비 500건씩)
+    var BATCH = 500;
+    var totalInserted = 0;
+    for (var b = 0; b < records.length; b += BATCH) {
+      var chunk = records.slice(b, b + BATCH);
+      var values = [];
+      var params = [];
+      var idx = 1;
+      chunk.forEach(function (r) {
+        values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
+        params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '');
+      });
+      var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content) VALUES ' + values.join(',');
+      await client.query(sql, params);
+      totalInserted += chunk.length;
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({ data: [], count: totalInserted });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[work-records/bulk]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  } finally {
+    client.release();
   }
 });
 
