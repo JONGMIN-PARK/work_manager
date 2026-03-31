@@ -66,7 +66,7 @@ router.get('/records/count', async function (req, res) {
 router.post('/records/bulk', rbac.checkPermission('archive.manage'), async function (req, res) {
   var client;
   try {
-    client = await db.connect();
+    client = await db.pool.connect();
   } catch (connErr) {
     console.error('[work-records/bulk] DB connect failed:', connErr);
     return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'DB 연결 실패' });
@@ -112,7 +112,7 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
 router.patch('/records/batch', rbac.checkPermission('archive.manage'), async function (req, res) {
   var client;
   try {
-    client = await db.connect();
+    client = await db.pool.connect();
   } catch (connErr) {
     console.error('[work-records/batch-update] DB connect failed:', connErr);
     return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'DB 연결 실패' });
