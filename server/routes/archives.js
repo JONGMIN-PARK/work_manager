@@ -154,6 +154,22 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
   }
 });
 
+// POST /api/archives/records — 단일 레코드 수동 추가
+router.post('/records', rbac.checkPermission('archive.manage'), async function (req, res) {
+  try {
+    var r = req.body;
+    if (!r.date || !r.name) return res.status(400).json({ error: 'INVALID', message: 'date, name 필수' });
+    var result = await db.query(
+      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+      [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null]
+    );
+    res.status(201).json({ data: result.rows[0] });
+  } catch (e) {
+    console.error('[work-records/create]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+  }
+});
+
 // DELETE /api/archives/records/batch — 선택 삭제 (ID 배열)
 router.delete('/records/batch', rbac.checkPermission('archive.manage'), async function (req, res) {
   try {

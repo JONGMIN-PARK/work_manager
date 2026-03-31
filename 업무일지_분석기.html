@@ -494,7 +494,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
           <button class="tab" data-t="sum" onclick="sTab('sum')">📝 내용요약</button>
         </div>
         <!-- Table -->
-        <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span class="del-bar" id="delBar"><span class="del-count" id="delCount">0건 선택</span><button class="btn btn-d btn-s" onclick="deleteSelected()">🗑️ 선택 삭제</button></span><span class="mob-sep" style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button></div></div><div class="tw"><table><thead><tr><th id="thChk" style="width:30px;display:none"><input type="checkbox" class="del-chk" onchange="toggleSelectAll(this)" title="전체 선택"></th><th style="width:70px">이름</th><th style="width:100px;white-space:nowrap">날짜</th><th style="width:100px">수주번호</th><th style="width:90px">수주명</th><th style="width:80px">거래처</th><th style="width:45px;text-align:right">시간</th><th style="width:70px;white-space:nowrap">업무분장</th><th style="width:36px">약자</th><th>업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div></div>
+        <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span class="del-bar" id="delBar"><span class="del-count" id="delCount">0건 선택</span><button class="btn btn-d btn-s" onclick="deleteSelected()">🗑️ 선택 삭제</button></span><span class="mob-sep" style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button><button class="btn btn-p btn-s" onclick="openManualInput()" title="수동 입력">➕ 수동입력</button></div></div><div class="tw"><table><thead><tr><th id="thChk" style="width:30px;display:none"><input type="checkbox" class="del-chk" onchange="toggleSelectAll(this)" title="전체 선택"></th><th style="width:70px">이름</th><th style="width:100px;white-space:nowrap">날짜</th><th style="width:100px">수주번호</th><th style="width:90px">수주명</th><th style="width:80px">거래처</th><th style="width:45px;text-align:right">시간</th><th style="width:70px;white-space:nowrap">업무분장</th><th style="width:36px">약자</th><th>업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div></div>
         </div>
         <!-- Content Summary (separate tab, no filter) -->
         <div id="tSum" class="hidden">
@@ -1963,6 +1963,148 @@ function cancelEdits(){
   document.getElementById('thChk').style.display='none';
   document.getElementById('delBar').classList.remove('show');
   renderTblRows(lastFiltered,false);
+}
+
+/* ═══ 수동 입력 모달 ═══ */
+function openManualInput(){
+  var existing=document.getElementById('manualInputOverlay');
+  if(existing)existing.remove();
+  var today=new Date();var td=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  var nameOpts=aN.length?aN.map(function(n){return'<option value="'+eH(n)+'">'+eH(n)+'</option>'}).join(''):'';
+  var abbrOpts=Object.keys(AM).map(function(k){return'<option value="'+k+'">'+k+' - '+eH(AM[k])+'</option>'}).join('');
+  var orderOpts='';
+  if(typeof ORDER_MAP!=='undefined'){
+    var oks=Object.keys(ORDER_MAP).sort();
+    orderOpts=oks.map(function(k){var info=ORDER_MAP[k];var label=typeof info==='object'&&info?info.name||'':'';return'<option value="'+eH(k)+'">'+(label?eH(k)+' ('+eH(label)+')':eH(k))+'</option>'}).join('');
+  }
+  var ov=document.createElement('div');
+  ov.id='manualInputOverlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)';
+  ov.onclick=function(e){if(e.target===ov)ov.remove()};
+  ov.innerHTML=`<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:24px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <h3 style="font-size:15px;font-weight:700;color:var(--t1)">➕ 상세 필드 수동 입력</h3>
+      <button onclick="document.getElementById('manualInputOverlay').remove()" style="background:none;border:none;color:var(--t5);font-size:18px;cursor:pointer">&times;</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:11px;color:var(--t4);font-weight:600">날짜 *</span>
+        <input type="date" id="mi_date" value="${td}" class="si" style="padding:7px 10px;font-size:12px">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:11px;color:var(--t4);font-weight:600">이름 *</span>
+        <input type="text" id="mi_name" list="mi_nameList" class="si" style="padding:7px 10px;font-size:12px" placeholder="이름 입력">
+        <datalist id="mi_nameList">${nameOpts}</datalist>
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:11px;color:var(--t4);font-weight:600">수주번호</span>
+        <input type="text" id="mi_orderNo" list="mi_orderList" class="si" style="padding:7px 10px;font-size:12px" placeholder="수주번호" oninput="onMiOrderChange()">
+        <datalist id="mi_orderList">${orderOpts}</datalist>
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:11px;color:var(--t4);font-weight:600">시간 (h)</span>
+        <input type="number" id="mi_hours" value="8" step="0.5" min="0" max="24" class="si" style="padding:7px 10px;font-size:12px">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:11px;color:var(--t4);font-weight:600">수주명 (수동)</span>
+        <input type="text" id="mi_ocmt" class="si" style="padding:7px 10px;font-size:12px" placeholder="엑셀 미반영 시 직접 입력">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:11px;color:var(--t4);font-weight:600">거래처 (수동)</span>
+        <input type="text" id="mi_oclient" class="si" style="padding:7px 10px;font-size:12px" placeholder="엑셀 미반영 시 직접 입력">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:11px;color:var(--t4);font-weight:600">업무분장</span>
+        <select id="mi_abbr" class="si" style="padding:7px 10px;font-size:12px">
+          <option value="">선택</option>
+          ${abbrOpts}
+        </select>
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:11px;color:var(--t4);font-weight:600">업무유형</span>
+        <input type="text" id="mi_taskType" class="si" style="padding:7px 10px;font-size:12px" placeholder="업무유형">
+      </label>
+    </div>
+    <label style="display:flex;flex-direction:column;gap:4px;margin-top:12px">
+      <span style="font-size:11px;color:var(--t4);font-weight:600">업무내용</span>
+      <textarea id="mi_content" class="si" rows="3" style="padding:7px 10px;font-size:12px;resize:vertical" placeholder="업무 내용 입력"></textarea>
+    </label>
+    <div id="mi_status" style="margin-top:10px;font-size:11px;color:var(--t5);min-height:18px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-g btn-s" onclick="document.getElementById('manualInputOverlay').remove()">취소</button>
+      <button class="btn btn-p btn-s" id="mi_saveBtn" onclick="saveManualInput(false)">💾 저장 (서버)</button>
+      <button class="btn btn-w btn-s" id="mi_saveMoreBtn" onclick="saveManualInput(true)">💾 저장 + 계속</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('mi_name').focus();
+}
+function onMiOrderChange(){
+  var orderNo=document.getElementById('mi_orderNo').value.trim();
+  if(!orderNo)return;
+  var ocmtEl=document.getElementById('mi_ocmt');
+  var oclEl=document.getElementById('mi_oclient');
+  if(ocmtEl.value)return; // 이미 수동 입력된 경우 덮어쓰지 않음
+  var info=typeof ORDER_MAP!=='undefined'?ORDER_MAP[orderNo]:null;
+  if(info&&typeof info==='object'){
+    if(!ocmtEl.value&&info.name)ocmtEl.value=info.name;
+    if(!oclEl.value&&info.client)oclEl.value=info.client;
+  }
+}
+async function saveManualInput(keepOpen){
+  var date=document.getElementById('mi_date').value;
+  var name=document.getElementById('mi_name').value.trim();
+  var orderNo=document.getElementById('mi_orderNo').value.trim();
+  var hours=parseFloat(document.getElementById('mi_hours').value)||0;
+  var ocmt=document.getElementById('mi_ocmt').value.trim();
+  var oclient=document.getElementById('mi_oclient').value.trim();
+  var abbr=document.getElementById('mi_abbr').value;
+  var taskType=document.getElementById('mi_taskType').value.trim();
+  var content=document.getElementById('mi_content').value.trim();
+  var status=document.getElementById('mi_status');
+  if(!date||!name){status.textContent='⚠️ 날짜와 이름은 필수입니다.';status.style.color='#EF4444';return}
+  var record={date:date,name:name,orderNo:orderNo,hours:hours,ocmt:ocmt||null,oclient:oclient||null,abbr:abbr,taskType:taskType||AM[abbr]||'',content:content};
+  status.textContent='저장 중...';status.style.color='var(--ac-t)';
+  document.getElementById('mi_saveBtn').disabled=true;
+  document.getElementById('mi_saveMoreBtn').disabled=true;
+  try{
+    var saved=null;
+    if(typeof apiFetch==='function'){
+      var res=await apiFetch('/api/archives/records',{method:'POST',body:JSON.stringify(record)});
+      if(res&&res.data){
+        saved=res.data;
+        // snake_case → camelCase
+        var cc={};for(var k in saved){var ck=k.replace(/_([a-z])/g,function(m,c){return c.toUpperCase()});cc[ck]=saved[k]}
+        if(typeof cc.hours==='string')cc.hours=parseFloat(cc.hours)||0;
+        saved=cc;
+      }
+    }
+    // aD 배열에 추가
+    var newRec=saved||record;
+    aD.push(newRec);
+    // 로컬 IndexedDB에도 동기화
+    if(typeof wrBulkPut==='function'){try{/* 로컬 단건 추가는 불필요 — 서버가 메인 */}catch(e){}}
+    status.textContent='✅ 저장 완료! (서버 DB 반영됨)';status.style.color='#10B981';
+    // UI 갱신
+    gfInvalidate();
+    if(sN.has(name)){upV()}
+    if(!aN.includes(name)){aN.push(name);aN.sort(function(a,b){return a.localeCompare(b,'ko')});rNC()}
+    if(keepOpen){
+      // 일부 필드만 초기화
+      document.getElementById('mi_content').value='';
+      document.getElementById('mi_ocmt').value='';
+      document.getElementById('mi_oclient').value='';
+      setTimeout(function(){status.textContent='';document.getElementById('mi_content').focus()},1200);
+    }else{
+      setTimeout(function(){var ov=document.getElementById('manualInputOverlay');if(ov)ov.remove()},800);
+    }
+  }catch(err){
+    console.error('[saveManualInput]',err);
+    status.textContent='❌ 저장 실패: '+(err.message||'서버 오류');status.style.color='#EF4444';
+  }finally{
+    document.getElementById('mi_saveBtn').disabled=false;
+    document.getElementById('mi_saveMoreBtn').disabled=false;
+  }
 }
 
 function toggleDelRow(chk){
