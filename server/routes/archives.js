@@ -64,10 +64,16 @@ router.get('/records/count', async function (req, res) {
 
 // POST /api/archives/records/bulk — 일괄 저장 (기존 레코드 삭제 후 삽입, 트랜잭션)
 router.post('/records/bulk', rbac.checkPermission('archive.manage'), async function (req, res) {
-  var client = await db.connect();
+  var client;
+  try {
+    client = await db.connect();
+  } catch (connErr) {
+    console.error('[work-records/bulk] DB connect failed:', connErr);
+    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'DB 연결 실패' });
+  }
   try {
     var records = req.body.records || [];
-    if (!records.length) return res.json({ data: [], count: 0 });
+    if (!records.length) { client.release(); return res.json({ data: [], count: 0 }); }
 
     await client.query('BEGIN');
 
@@ -83,10 +89,10 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
       var params = [];
       var idx = 1;
       chunk.forEach(function (r) {
-        values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
-        params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '');
+        values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
+        params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null);
       });
-      var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content) VALUES ' + values.join(',');
+      var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient) VALUES ' + values.join(',');
       await client.query(sql, params);
       totalInserted += chunk.length;
     }
@@ -94,20 +100,26 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
     await client.query('COMMIT');
     res.status(201).json({ data: [], count: totalInserted });
   } catch (e) {
-    await client.query('ROLLBACK');
+    try { await client.query('ROLLBACK'); } catch (rbErr) { console.error('[ROLLBACK failed]', rbErr); }
     console.error('[work-records/bulk]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
 // PATCH /api/archives/records/batch — 변경된 레코드만 개별 업데이트
 router.patch('/records/batch', rbac.checkPermission('archive.manage'), async function (req, res) {
-  var client = await db.connect();
+  var client;
+  try {
+    client = await db.connect();
+  } catch (connErr) {
+    console.error('[work-records/batch-update] DB connect failed:', connErr);
+    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'DB 연결 실패' });
+  }
   try {
     var updates = req.body.updates || [];
-    if (!updates.length) return res.json({ data: [], count: 0 });
+    if (!updates.length) { client.release(); return res.json({ data: [], count: 0 }); }
 
     await client.query('BEGIN');
     var count = 0;
@@ -124,6 +136,8 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
       if (u.taskType !== undefined || u.task_type !== undefined) { sets.push('task_type = $' + idx++); params.push(u.taskType || u.task_type); }
       if (u.abbr !== undefined) { sets.push('abbr = $' + idx++); params.push(u.abbr); }
       if (u.content !== undefined) { sets.push('content = $' + idx++); params.push(u.content); }
+      if (u.ocmt !== undefined) { sets.push('ocmt = $' + idx++); params.push(u.ocmt); }
+      if (u.oclient !== undefined) { sets.push('oclient = $' + idx++); params.push(u.oclient); }
       if (!sets.length) continue;
       params.push(u.id);
       await client.query('UPDATE work_records SET ' + sets.join(', ') + ' WHERE id = $' + idx, params);
@@ -132,11 +146,11 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
     await client.query('COMMIT');
     res.json({ data: [], count: count });
   } catch (e) {
-    await client.query('ROLLBACK');
+    try { await client.query('ROLLBACK'); } catch (rbErr) { console.error('[ROLLBACK failed]', rbErr); }
     console.error('[work-records/batch-update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 

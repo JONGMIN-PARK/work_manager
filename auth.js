@@ -66,8 +66,16 @@ async function apiFetch(url, opts) {
         }
       }
 
-      var data = await res.json();
       clearTimeout(_abortTimer);
+      var data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        var err2 = new Error('서버 응답 오류 (HTTP ' + res.status + ')');
+        err2.status = res.status;
+        err2.data = { error: 'PARSE_ERROR', message: err2.message };
+        throw err2;
+      }
       if (!res.ok) {
         var err = new Error(data.message || res.statusText);
         err.status = res.status;

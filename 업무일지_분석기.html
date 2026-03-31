@@ -330,7 +330,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.5</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.6</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -1929,11 +1929,21 @@ async function applyEdits(){
     });
   }
   // 변경된 레코드에 id가 있으면 변경분만 업데이트, 없으면 전체 교체
-  var hasIds=changedRecords.every(function(r){return r.id});
-  if(hasIds&&typeof wrUpdateRecords==='function'){
-    await wrUpdateRecords(changedRecords);
-  }else{
-    await wrBulkPut(aD);
+  try{
+    var hasIds=changedRecords.every(function(r){return r.id});
+    if(hasIds&&typeof wrUpdateRecords==='function'){
+      try{
+        await wrUpdateRecords(changedRecords);
+      }catch(patchErr){
+        console.warn('[applyEdits] PATCH 실패, bulk 폴백:',patchErr);
+        await wrBulkPut(aD);
+      }
+    }else{
+      await wrBulkPut(aD);
+    }
+  }catch(dbErr){
+    console.error('[applyEdits] DB 저장 실패:',dbErr);
+    showToast('DB 저장 실패: '+(dbErr.message||'서버 오류')+' (메모리에는 반영됨)','error');
   }
   editMap={};editMode=false;
   document.getElementById('editTogBtn').textContent='✏️ 편집모드';
@@ -1941,7 +1951,7 @@ async function applyEdits(){
   document.getElementById('editCancelBtn').classList.add('hidden');
   document.getElementById('editStatus').style.display='none';
   rFL();upV();
-  showToast(`✅ ${count}건 수정 적용 및 DB 저장 완료`);
+  showToast(`✅ ${count}건 수정 적용 완료`);
 }
 
 function cancelEdits(){
@@ -2142,6 +2152,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'9.6',date:'2026-03-31',title:'휴가(V) 업무분장 추가 + 거래처/수주명 DB 저장 수정',tag:'feature',items:[
+      '업무분장 코드 V(휴가) 추가 — 색상, 차트, 엑셀 반영',
+      'DB 스키마에 ocmt(수주명), oclient(거래처) 컬럼 추가',
+      '서버 POST bulk/PATCH batch에서 ocmt, oclient 저장/갱신 처리',
+      '새로고침/재로그인 후에도 수정된 거래처/수주명 유지',
+      '편집 수정 적용 시 PATCH 실패 → bulk 폴백 + 에러 토스트 표시',
+      '서버 DB 연결/ROLLBACK 에러 처리 강화 (502 크래시 방지)'
+    ]},
     {ver:'9.5',date:'2026-03-31',title:'작업 내용 선택 삭제 기능',tag:'feature',items:[
       '편집모드에서 체크박스로 개별/멀티 선택 삭제',
       '헤더 체크박스로 전체 선택/해제',
