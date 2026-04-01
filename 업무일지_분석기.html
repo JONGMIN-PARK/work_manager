@@ -2310,6 +2310,7 @@ function renderPatchNotes(){
   var PATCHES=[
     {ver:'9.7',date:'2026-04-01',title:'데이터 로드 서버 우선 + 수동입력 즉시 반영',tag:'fix',items:[
       '접속 시 서버 DB 우선 로드 → 모든 기기(PC/모바일)에서 동일 데이터 보장',
+      '인증 지연 대비 — 토큰 미발급 시 최대 5초 대기 후 서버 재시도',
       '서버 로드 성공 시 IndexedDB에 캐싱 (오프라인 폴백 대비)',
       '서버 실패/오프라인 시에만 로컬 IndexedDB 폴백',
       '수동입력 날짜 YYYY-MM-DD → YYYYMMDD 정규화',
@@ -3555,12 +3556,11 @@ async function _postAuthInit(){
   // DB에 저장된 업무일지 자동 로드 — 서버 DB 우선, 로컬 IndexedDB 폴백
   var _dataLoaded=false;
   var _toCamel=function(row){if(!row)return row;var out={};for(var k in row){var ck=k.replace(/_([a-z])/g,function(m,c){return c.toUpperCase()});out[ck]=row[k]}return out};
-  // 1단계: 서버 API에서 전체 로드 (모든 기기에서 동일 데이터 보장)
-  if(typeof apiFetch==='function'&&(typeof AUTH_SKIP==='undefined'||!AUTH_SKIP)&&_accessToken){
+  var _loadFromServer=async function(){
     try{
       var _srvRes=await Promise.race([
         apiFetch('/api/archives/records?limit=50000&all=true'),
-        new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},15000)})
+        new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},20000)})
       ]);
       if(_srvRes&&_srvRes.data&&_srvRes.data.length>0){
         aD=_srvRes.data.map(function(r){
@@ -3581,6 +3581,18 @@ async function _postAuthInit(){
         }catch(syncEx){console.warn('server→IndexedDB sync:',syncEx)}
       }
     }catch(ex){console.warn('auto-load server:',ex)}
+  };
+  // 1단계: 서버 API에서 전체 로드 (모든 기기에서 동일 데이터 보장)
+  if(typeof apiFetch==='function'&&(typeof AUTH_SKIP==='undefined'||!AUTH_SKIP)&&_accessToken){
+    await _loadFromServer();
+  }
+  // 1-b: 인증 지연 대비 — _accessToken이 아직 없으면 최대 5초 대기 후 재시도
+  if(!_dataLoaded&&typeof apiFetch==='function'&&(typeof AUTH_SKIP==='undefined'||!AUTH_SKIP)&&!_accessToken){
+    for(var _aw=0;_aw<10;_aw++){
+      await new Promise(function(r){setTimeout(r,500)});
+      if(_accessToken)break;
+    }
+    if(_accessToken)await _loadFromServer();
   }
   // 2단계: 서버 실패/오프라인 시 로컬 IndexedDB 폴백
   if(!_dataLoaded){
