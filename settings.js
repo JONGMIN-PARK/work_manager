@@ -1,6 +1,6 @@
 /**
  * 업무일지 분석기 — 설정 관리
- * 팀원 그룹, 별칭(닉네임), localStorage 래퍼
+ * 팀원 그룹, 별칭(닉네임) — 서버 DB 우선, localStorage 폴백
  */
 
 /* ═══ localStorage 키 접두사 ═══ */
@@ -11,9 +11,28 @@ function prefLsGet(key) { try { return localStorage.getItem(LS_PREFIX + key); } 
 function prefLsSet(key, val) { try { localStorage.setItem(LS_PREFIX + key, val); } catch(e) { console.warn('[LS]', e); } }
 function prefLsDel(key) { try { localStorage.removeItem(LS_PREFIX + key); } catch(e) { console.warn('[LS]', e); } }
 
+/* ═══ 서버 설정 저장/로드 헬퍼 ═══ */
+function _canUseServer() {
+  return typeof apiFetch === 'function' && typeof _accessToken !== 'undefined' && _accessToken;
+}
+
+async function _serverSettingsGet(key) {
+  if (!_canUseServer()) return null;
+  try {
+    var res = await apiFetch('/api/settings/' + key);
+    return res && res.data !== null ? res.data : null;
+  } catch (e) { console.warn('[Settings] server get:', e); return null; }
+}
+
+async function _serverSettingsPut(key, value) {
+  if (!_canUseServer()) return;
+  try {
+    await apiFetch('/api/settings/' + key, { method: 'PUT', body: JSON.stringify({ value: value }) });
+  } catch (e) { console.warn('[Settings] server put:', e); }
+}
+
 /* ═══════════════════════════════════════
    팀원 별칭 (Alias) 관리
-   저장 구조: wa-aliases = { "홍길동": "길동", "김철수": "CS팀장" }
    ═══════════════════════════════════════ */
 var aliasMap = {};
 
@@ -22,8 +41,17 @@ function loadAliases() {
   aliasMap = raw ? JSON.parse(raw) : {};
 }
 
+async function loadAliasesFromServer() {
+  var srv = await _serverSettingsGet('aliases');
+  if (srv && typeof srv === 'object') {
+    aliasMap = srv;
+    prefLsSet('aliases', JSON.stringify(aliasMap));
+  }
+}
+
 function saveAliases() {
   prefLsSet('aliases', JSON.stringify(aliasMap));
+  _serverSettingsPut('aliases', aliasMap);
 }
 
 function setAlias(realName, alias) {
@@ -52,10 +80,7 @@ function shortName(realName) {
 
 /* ═══════════════════════════════════════
    팀원 그룹 관리
-   저장 구조: wa-groups = [
-     { id: "...", name: "SW팀", members: ["홍길동","김철수"], color: "#3B82F6", createdAt: "..." },
-     ...
-   ]
+   서버 DB 우선 저장, localStorage 캐시
    ═══════════════════════════════════════ */
 var memberGroups = [];
 
@@ -64,8 +89,18 @@ function loadGroups() {
   memberGroups = raw ? JSON.parse(raw) : [];
 }
 
+async function loadGroupsFromServer() {
+  var srv = await _serverSettingsGet('groups');
+  if (srv && Array.isArray(srv)) {
+    memberGroups = srv;
+    prefLsSet('groups', JSON.stringify(memberGroups));
+    if (typeof updateGroupButtons === 'function') updateGroupButtons();
+  }
+}
+
 function saveGroups() {
   prefLsSet('groups', JSON.stringify(memberGroups));
+  _serverSettingsPut('groups', memberGroups);
 }
 
 function createGroup(name, members, color) {
@@ -209,6 +244,8 @@ function renderGroupList() {
 
   area.innerHTML = memberGroups.map(g => {
     const memberDisplay = g.members.map(m => shortName(m)).join(', ');
+    var dateStr = '-';
+    try { if (g.createdAt) { var d = new Date(g.createdAt); if (!isNaN(d.getTime())) dateStr = d.toLocaleDateString('ko'); } } catch(e) {}
     return `<div style="padding:10px;background:var(--bg-c);border:1px solid var(--bd2);border-radius:8px;margin-bottom:8px;border-left:3px solid ${g.color}">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span style="font-size:13px;font-weight:700;color:var(--t1)">${eH(g.name)}</span>
@@ -219,7 +256,7 @@ function renderGroupList() {
         </div>
       </div>
       <div style="font-size:11px;color:var(--t4)">${g.members.length}명: ${eH(memberDisplay)}</div>
-      <div style="font-size:9px;color:var(--t6);margin-top:4px">${new Date(g.createdAt).toLocaleDateString('ko')} 생성</div>
+      <div style="font-size:9px;color:var(--t6);margin-top:4px">${dateStr} 생성</div>
     </div>`;
   }).join('');
 }
@@ -493,9 +530,19 @@ function importBackupJSON(file) {
 }
 
 /* ═══════════════════════════════════════
-   초기화
+   초기화 — localStorage 즉시 로드 + 서버 비동기 동기화
    ═══════════════════════════════════════ */
 function initSettings() {
+  // 1) localStorage에서 즉시 로드 (빠른 UI 표시)
   loadAliases();
   loadGroups();
+  // 2) 서버에서 비동기 로드 (최신 데이터 동기화)
+  if (_canUseServer()) {
+    loadGroupsFromServer().then(function () {
+      if (typeof updateGroupButtons === 'function') updateGroupButtons();
+    }).catch(function () {});
+    loadAliasesFromServer().then(function () {
+      if (typeof rNC === 'function') rNC();
+    }).catch(function () {});
+  }
 }
