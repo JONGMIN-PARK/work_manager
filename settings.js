@@ -26,10 +26,19 @@ async function _serverSettingsGet(key) {
 
 async function _serverSettingsPut(key, value) {
   if (!_canUseServer()) return false;
-  try {
-    await apiFetch('/api/settings/' + key, { method: 'PUT', body: JSON.stringify({ value: value }) });
-    return true;
-  } catch (e) { console.warn('[Settings] server put error:', key, e.message || e); return false; }
+  // 최대 2회 재시도 (DB 콜드스타트 대비)
+  for (var i = 0; i < 3; i++) {
+    try {
+      await apiFetch('/api/settings/' + key, { method: 'PUT', body: JSON.stringify({ value: value }) });
+      return true;
+    } catch (e) {
+      console.warn('[Settings] put attempt', i + 1, key, e.status, e.message);
+      if (i < 2 && (!e.status || e.status >= 500)) {
+        await new Promise(function(r) { setTimeout(r, 2000); });
+      } else { return false; }
+    }
+  }
+  return false;
 }
 
 /* ═══════════════════════════════════════

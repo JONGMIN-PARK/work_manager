@@ -21,33 +21,38 @@ router.get('/', async function (req, res) {
   }
 });
 
-// GET /api/settings/:key — 특정 키 조회
+// GET /api/settings/:key — 특정 키 조회 (DB 콜드스타트 재시도)
 router.get('/:key', async function (req, res) {
-  try {
-    var r = await db.query(
-      'SELECT value FROM user_settings WHERE user_id = $1 AND key = $2',
-      [req.user.sub, req.params.key]
-    );
-    res.json({ data: r.rows.length ? r.rows[0].value : null });
-  } catch (e) {
-    console.error('[settings/get-key]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try {
+      var r = await db.query(
+        'SELECT value FROM user_settings WHERE user_id = $1 AND key = $2',
+        [req.user.sub, req.params.key]
+      );
+      return res.json({ data: r.rows.length ? r.rows[0].value : null });
+    } catch (e) {
+      console.error('[settings/get-key] attempt', attempt + 1, e.message);
+      if (attempt < 2) await new Promise(function (r) { setTimeout(r, 1000); });
+      else return res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+    }
   }
 });
 
-// PUT /api/settings/:key — 특정 키 저장 (upsert)
+// PUT /api/settings/:key — 특정 키 저장 (upsert, DB 콜드스타트 재시도)
 router.put('/:key', async function (req, res) {
-  try {
-    var value = req.body.value;
-    if (value === undefined) return res.status(400).json({ error: 'INVALID', message: 'value 필수' });
-    await db.query(
-      'INSERT INTO user_settings (user_id, key, value, updated_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (user_id, key) DO UPDATE SET value = $3, updated_at = NOW()',
-      [req.user.sub, req.params.key, JSON.stringify(value)]
-    );
-    res.json({ data: { key: req.params.key, value: value } });
-  } catch (e) {
-    console.error('[settings/put]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  var value = req.body.value;
+  if (value === undefined) return res.status(400).json({ error: 'INVALID', message: 'value 필수' });
+  var sql = 'INSERT INTO user_settings (user_id, key, value, updated_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (user_id, key) DO UPDATE SET value = $3, updated_at = NOW()';
+  var params = [req.user.sub, req.params.key, JSON.stringify(value)];
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try {
+      await db.query(sql, params);
+      return res.json({ data: { key: req.params.key, value: value } });
+    } catch (e) {
+      console.error('[settings/put] attempt', attempt + 1, e.message);
+      if (attempt < 2) await new Promise(function (r) { setTimeout(r, 1000); });
+      else return res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+    }
   }
 });
 
