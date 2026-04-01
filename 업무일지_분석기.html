@@ -2308,13 +2308,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
-    {ver:'9.7',date:'2026-04-01',title:'서버 우선 로드 + 그룹/별칭 서버 저장 + 수동입력 수정',tag:'fix',items:[
+    {ver:'9.7',date:'2026-04-01',title:'서버 우선 로드 + 그룹/별칭 서버 저장 + 날짜 정규화',tag:'fix',items:[
+      '서버 DB date 필드 YYYY-MM-DD → YYYYMMDD 정규화 (주차 NaN 표시 근본 수정)',
       '접속 시 서버 DB 우선 로드 → 모든 기기(PC/모바일)에서 동일 데이터 보장',
       '인증 지연 대비 — 토큰 미발급 시 최대 5초 대기 후 서버 재시도',
-      '서버 로드 성공 시 IndexedDB에 캐싱 (오프라인 폴백 대비)',
-      '팀원 그룹/별칭 서버 DB 저장 — PC/모바일 어디서든 동일 그룹 표시',
+      '팀원 그룹/별칭 서버 DB 저장 + 로드 시 서버 동기화',
       'user_settings 테이블 + /api/settings API 추가',
-      '그룹 생성일 NaN NaN 표시 방어 처리',
       '수동입력 날짜 YYYYMMDD 정규화 + IndexedDB 동기화 + 필터 즉시 갱신'
     ]},
     {ver:'9.6',date:'2026-03-31',title:'휴가(V) 업무분장 추가 + 거래처/수주명 DB 저장 수정',tag:'feature',items:[
@@ -3566,6 +3565,8 @@ async function _postAuthInit(){
         aD=_srvRes.data.map(function(r){
           var c=_toCamel(r);
           if(typeof c.hours==='string')c.hours=parseFloat(c.hours)||0;
+          // 날짜 정규화: YYYY-MM-DD / YYYY/MM/DD → YYYYMMDD
+          if(c.date&&typeof c.date==='string'&&c.date.length>8)c.date=c.date.replace(/[-\/]/g,'').slice(0,8);
           return c;
         });
         applyADToUI();
@@ -3579,6 +3580,12 @@ async function _postAuthInit(){
             aD.forEach(function(r){_syncStore.put(r)});
           }
         }catch(syncEx){console.warn('server→IndexedDB sync:',syncEx)}
+        // 서버 연결 확인됨 — 그룹/별칭도 서버에서 동기화
+        try{
+          if(typeof loadGroupsFromServer==='function')await loadGroupsFromServer();
+          if(typeof loadAliasesFromServer==='function')await loadAliasesFromServer();
+          if(typeof updateGroupButtons==='function')updateGroupButtons();
+        }catch(settEx){console.warn('settings sync:',settEx)}
       }
     }catch(ex){console.warn('auto-load server:',ex)}
   };
