@@ -903,25 +903,23 @@ function pXLS(buf){
 /* ═══ IndexedDB ═══ */
 let db=null;
 function openDB(){return new Promise((res,rej)=>{const req=indexedDB.open('WorkAnalyzerDB');req.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('weeks'))d.createObjectStore('weeks',{keyPath:'id'});if(!d.objectStoreNames.contains('workRecords'))d.createObjectStore('workRecords',{autoIncrement:true})};req.onblocked=()=>{console.warn('DB blocked');try{const f=indexedDB.open('WorkAnalyzerDB');f.onsuccess=e=>{db=e.target.result;res(db)};f.onerror=e=>rej(e)}catch(ex){rej(ex)}};req.onsuccess=e=>{db=e.target.result;res(db)};req.onerror=e=>rej(e)})}
-function wkPut(data){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').put(data);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
-function wkGetAll(){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readonly');const req=tx.objectStore('weeks').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
-function wkGet(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readonly');const req=tx.objectStore('weeks').get(id);req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
-function wkDel(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').delete(id);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
-function wkClear(){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
-/* ── workRecords DB 함수 ── */
-function wrBulkPut(records){
-  return new Promise((res,rej)=>{
-    const tx=db.transaction('workRecords','readwrite');
-    const s=tx.objectStore('workRecords');
-    s.clear();
-    records.forEach(r=>s.put(r));
-    tx.oncomplete=()=>res();
-    tx.onerror=e=>rej(e)
-  })
+/* wk* 함수: project-data.js가 서버 API 래퍼로 오버라이드함. 미로드 시 폴백 */
+if(typeof wkPut!=='function'){
+  var wkPut=function(data){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').put(data);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
+  var wkGetAll=function(){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readonly');const req=tx.objectStore('weeks').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})};
+  var wkGet=function(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readonly');const req=tx.objectStore('weeks').get(id);req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})};
+  var wkDel=function(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').delete(id);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
+  var wkClear=function(){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
 }
-function wrGetAll(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
-function wrCount(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').count();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})}
-function wrClear(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');tx.objectStore('workRecords').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
+/* ── workRecords DB 함수 ──
+   project-data.js가 로드되면 서버 API 래퍼로 오버라이드됨.
+   여기서는 project-data.js 미로드 시(file:// 등)에만 폴백으로 사용 */
+if(typeof wrBulkPut!=='function'){
+  var wrBulkPut=function(records){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');const s=tx.objectStore('workRecords');s.clear();records.forEach(r=>s.put(r));tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
+  var wrGetAll=function(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})};
+  var wrCount=function(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').count();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})};
+  var wrClear=function(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');tx.objectStore('workRecords').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
+}
 function wrKey(r){return r.date+'|'+r.name+'|'+r.orderNo+'|'+r.hours+'|'+(r.abbr||'')+'|'+(r.dept||'')+'|'+r.content}
 function wrMerge(existing,newRecs){var keys=new Set(existing.map(wrKey));var toAdd=newRecs.filter(r=>!keys.has(wrKey(r)));return{toAdd:toAdd,added:toAdd.length}}
 
