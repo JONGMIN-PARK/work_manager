@@ -75,26 +75,41 @@ console.log('[Server] Build version:', BUILD_VERSION);
 app.use(express.static(path.join(__dirname, '..'), {
   index: false, // HTML은 별도 미들웨어에서 처리
   extensions: ['html'],
-  maxAge: '30d',
   etag: true,
-  lastModified: true
+  lastModified: true,
+  setHeaders: function (res, filePath) {
+    // JS/CSS: 짧은 캐시 + 반드시 재검증 (배포 즉시 반영)
+    if (/\.(js|css)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    } else {
+      // 이미지, 폰트 등 정적 에셋: 장기 캐시
+      res.setHeader('Cache-Control', 'public, max-age=2592000');
+    }
+  }
 }));
 
-// ─── HTML 캐시: 시작 시 한 번만 읽고 ?v= 치환 ───
+// ─── HTML: 요청마다 읽어서 ?v= 치환 (배포 즉시 반영) ───
 var fs = require('fs');
 var htmlPath = path.join(__dirname, '..', '업무일지_분석기.html');
-var cachedHtml;
-try {
-  cachedHtml = fs.readFileSync(htmlPath, 'utf8').replace(/\?v=\d+"/g, '?v=' + BUILD_VERSION + '"');
-} catch (e) {
-  console.error('[Server] HTML 로드 실패:', e.message);
+
+function loadHtml() {
+  try {
+    return fs.readFileSync(htmlPath, 'utf8').replace(/\?v=\d+[a-f0-9]*"/gi, '?v=' + BUILD_VERSION + '"');
+  } catch (e) {
+    console.error('[Server] HTML 로드 실패:', e.message);
+    return null;
+  }
 }
 
+// 프로덕션: 캐시, 개발: 매번 읽기
+var cachedHtml = loadHtml();
+
 app.get(['/', '/index', '/index.html'], function (req, res) {
-  if (!cachedHtml) return res.status(500).send('HTML 로드 실패');
+  var html = process.env.NODE_ENV === 'production' ? cachedHtml : loadHtml();
+  if (!html) return res.status(500).send('HTML 로드 실패');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.send(cachedHtml);
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.send(html);
 });
 
 // ─── API 라우트 ───
