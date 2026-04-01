@@ -17,18 +17,20 @@ function _canUseServer() {
 }
 
 async function _serverSettingsGet(key) {
-  if (!_canUseServer()) return null;
+  if (!_canUseServer()) { console.log('[Settings] server get skip: no token'); return null; }
   try {
     var res = await apiFetch('/api/settings/' + key);
+    console.log('[Settings] server get', key, ':', res && res.data);
     return res && res.data !== null ? res.data : null;
-  } catch (e) { console.warn('[Settings] server get:', e); return null; }
+  } catch (e) { console.warn('[Settings] server get error:', key, e.message || e); return null; }
 }
 
 async function _serverSettingsPut(key, value) {
-  if (!_canUseServer()) return;
+  if (!_canUseServer()) { console.log('[Settings] server put skip: no token'); return; }
   try {
-    await apiFetch('/api/settings/' + key, { method: 'PUT', body: JSON.stringify({ value: value }) });
-  } catch (e) { console.warn('[Settings] server put:', e); }
+    var res = await apiFetch('/api/settings/' + key, { method: 'PUT', body: JSON.stringify({ value: value }) });
+    console.log('[Settings] server put', key, ':', res && res.data ? 'OK' : 'empty');
+  } catch (e) { console.warn('[Settings] server put error:', key, e.message || e); }
 }
 
 /* ═══════════════════════════════════════
@@ -43,15 +45,21 @@ function loadAliases() {
 
 async function loadAliasesFromServer() {
   var srv = await _serverSettingsGet('aliases');
-  if (srv && typeof srv === 'object') {
+  if (srv && typeof srv === 'object' && Object.keys(srv).length > 0) {
     aliasMap = srv;
     prefLsSet('aliases', JSON.stringify(aliasMap));
+  } else if (Object.keys(aliasMap).length > 0) {
+    // 서버에 데이터 없고 로컬에 있으면 → 최초 업로드
+    console.log('[Settings] uploading local aliases to server:', Object.keys(aliasMap).length);
+    await _serverSettingsPut('aliases', aliasMap);
   }
 }
 
 function saveAliases() {
   prefLsSet('aliases', JSON.stringify(aliasMap));
-  _serverSettingsPut('aliases', aliasMap);
+  _serverSettingsPut('aliases', aliasMap).catch(function(e){
+    console.warn('[Settings] aliases server sync failed:', e);
+  });
 }
 
 function setAlias(realName, alias) {
@@ -91,16 +99,26 @@ function loadGroups() {
 
 async function loadGroupsFromServer() {
   var srv = await _serverSettingsGet('groups');
-  if (srv && Array.isArray(srv)) {
+  if (srv && Array.isArray(srv) && srv.length > 0) {
     memberGroups = srv;
     prefLsSet('groups', JSON.stringify(memberGroups));
     if (typeof updateGroupButtons === 'function') updateGroupButtons();
+  } else if (memberGroups.length > 0) {
+    // 서버에 데이터 없고 로컬에 있으면 → 최초 업로드
+    console.log('[Settings] uploading local groups to server:', memberGroups.length);
+    await _serverSettingsPut('groups', memberGroups);
   }
 }
 
 function saveGroups() {
   prefLsSet('groups', JSON.stringify(memberGroups));
-  _serverSettingsPut('groups', memberGroups);
+  // 서버 저장은 await 불가 (동기 호출 컨텍스트), Promise 체인으로 에러 표시
+  _serverSettingsPut('groups', memberGroups).then(function(){
+    console.log('[Settings] groups synced to server');
+  }).catch(function(e){
+    console.warn('[Settings] groups server sync failed:', e);
+    if(typeof showToast==='function')showToast('그룹 서버 저장 실패','warn');
+  });
 }
 
 function createGroup(name, members, color) {
