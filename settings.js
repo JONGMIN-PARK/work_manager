@@ -17,20 +17,19 @@ function _canUseServer() {
 }
 
 async function _serverSettingsGet(key) {
-  if (!_canUseServer()) { console.log('[Settings] server get skip: no token'); return null; }
+  if (!_canUseServer()) return null;
   try {
     var res = await apiFetch('/api/settings/' + key);
-    console.log('[Settings] server get', key, ':', res && res.data);
     return res && res.data !== null ? res.data : null;
   } catch (e) { console.warn('[Settings] server get error:', key, e.message || e); return null; }
 }
 
 async function _serverSettingsPut(key, value) {
-  if (!_canUseServer()) { console.log('[Settings] server put skip: no token'); return; }
+  if (!_canUseServer()) return false;
   try {
-    var res = await apiFetch('/api/settings/' + key, { method: 'PUT', body: JSON.stringify({ value: value }) });
-    console.log('[Settings] server put', key, ':', res && res.data ? 'OK' : 'empty');
-  } catch (e) { console.warn('[Settings] server put error:', key, e.message || e); }
+    await apiFetch('/api/settings/' + key, { method: 'PUT', body: JSON.stringify({ value: value }) });
+    return true;
+  } catch (e) { console.warn('[Settings] server put error:', key, e.message || e); return false; }
 }
 
 /* ═══════════════════════════════════════
@@ -49,17 +48,14 @@ async function loadAliasesFromServer() {
     aliasMap = srv;
     prefLsSet('aliases', JSON.stringify(aliasMap));
   } else if (Object.keys(aliasMap).length > 0) {
-    // 서버에 데이터 없고 로컬에 있으면 → 최초 업로드
-    console.log('[Settings] uploading local aliases to server:', Object.keys(aliasMap).length);
     await _serverSettingsPut('aliases', aliasMap);
   }
 }
 
-function saveAliases() {
+async function saveAliases() {
   prefLsSet('aliases', JSON.stringify(aliasMap));
-  _serverSettingsPut('aliases', aliasMap).catch(function(e){
-    console.warn('[Settings] aliases server sync failed:', e);
-  });
+  var ok = await _serverSettingsPut('aliases', aliasMap);
+  if (!ok && _canUseServer()) { if (typeof showToast === 'function') showToast('별칭 서버 저장 실패', 'warn'); }
 }
 
 function setAlias(realName, alias) {
@@ -75,20 +71,18 @@ function getAlias(realName) {
   return aliasMap[realName] || null;
 }
 
-/** 표시용 이름: 별칭이 있으면 "별칭(원래이름)", 없으면 원래이름 */
 function displayName(realName) {
   const alias = aliasMap[realName];
   return alias ? `${alias}(${realName})` : realName;
 }
 
-/** 짧은 표시: 별칭만, 없으면 원래이름 */
 function shortName(realName) {
   return aliasMap[realName] || realName;
 }
 
 /* ═══════════════════════════════════════
    팀원 그룹 관리
-   서버 DB 우선 저장, localStorage 캐시
+   서버 DB 저장 + localStorage 캐시
    ═══════════════════════════════════════ */
 var memberGroups = [];
 
@@ -105,20 +99,15 @@ async function loadGroupsFromServer() {
     if (typeof updateGroupButtons === 'function') updateGroupButtons();
   } else if (memberGroups.length > 0) {
     // 서버에 데이터 없고 로컬에 있으면 → 최초 업로드
-    console.log('[Settings] uploading local groups to server:', memberGroups.length);
     await _serverSettingsPut('groups', memberGroups);
   }
 }
 
-function saveGroups() {
+/** 서버 + localStorage 동시 저장 */
+async function saveGroupsToServer() {
   prefLsSet('groups', JSON.stringify(memberGroups));
-  // 서버 저장은 await 불가 (동기 호출 컨텍스트), Promise 체인으로 에러 표시
-  _serverSettingsPut('groups', memberGroups).then(function(){
-    console.log('[Settings] groups synced to server');
-  }).catch(function(e){
-    console.warn('[Settings] groups server sync failed:', e);
-    if(typeof showToast==='function')showToast('그룹 서버 저장 실패','warn');
-  });
+  var ok = await _serverSettingsPut('groups', memberGroups);
+  return ok;
 }
 
 function createGroup(name, members, color) {
@@ -130,26 +119,28 @@ function createGroup(name, members, color) {
     createdAt: new Date().toISOString()
   };
   memberGroups.push(group);
-  saveGroups();
   return group;
 }
 
-function updateGroup(id, updates) {
+function updateGroupLocal(id, updates) {
   const idx = memberGroups.findIndex(g => g.id === id);
   if (idx === -1) return null;
   Object.assign(memberGroups[idx], updates);
-  saveGroups();
   return memberGroups[idx];
 }
 
-function deleteGroup(id) {
+function deleteGroupLocal(id) {
   memberGroups = memberGroups.filter(g => g.id !== id);
-  saveGroups();
 }
 
 function getGroup(id) {
   return memberGroups.find(g => g.id === id) || null;
 }
+
+// 호환용 래퍼 (HTML 스텁/기존 호출 대응)
+function saveGroups() { saveGroupsToServer(); }
+function updateGroup(id, updates) { var g = updateGroupLocal(id, updates); saveGroupsToServer(); return g; }
+function deleteGroup(id) { deleteGroupLocal(id); saveGroupsToServer(); }
 
 /* ═══════════════════════════════════════
    별칭 관리 UI
@@ -191,22 +182,24 @@ function renderAliasModal() {
   document.body.appendChild(modal);
 }
 
-function applyAliasModal() {
+async function applyAliasModal() {
   document.querySelectorAll('#aliasModal .alias-input').forEach(inp => {
     const name = inp.dataset.name;
     const alias = inp.value.trim();
-    setAlias(name, alias);
+    if (!alias || alias === name) { delete aliasMap[name]; }
+    else { aliasMap[name] = alias; }
   });
+  await saveAliases();
   document.getElementById('aliasModal').remove();
-  // 뷰 갱신
   if (typeof rNC === 'function') rNC();
   if (typeof upV === 'function') upV();
+  showToast('별칭 저장 완료');
 }
 
-function clearAllAliases() {
+async function clearAllAliases() {
   if (!confirm('모든 별칭을 삭제하시겠습니까?')) return;
   aliasMap = {};
-  saveAliases();
+  await saveAliases();
   document.getElementById('aliasModal').remove();
   if (typeof rNC === 'function') rNC();
   if (typeof upV === 'function') upV();
@@ -218,8 +211,6 @@ function clearAllAliases() {
 function renderGroupModal() {
   let existing = document.getElementById('groupModal');
   if (existing) { existing.remove(); return; }
-
-  const names = typeof aN !== 'undefined' ? aN : [];
 
   const modal = document.createElement('div');
   modal.id = 'groupModal';
@@ -237,10 +228,11 @@ function renderGroupModal() {
       <div style="font-size:12px;font-weight:600;color:var(--t4);margin-bottom:8px">➕ 새 그룹 만들기</div>
       <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
         <input type="text" id="newGroupName" class="si" placeholder="그룹명 입력..." style="flex:1;min-width:120px;padding:6px 10px;padding-left:10px;font-size:12px">
-        <button class="btn btn-p btn-s" onclick="createGroupFromUI()">생성</button>
+        <button class="btn btn-p btn-s" id="grpCreateBtn" onclick="createGroupFromUI()">생성</button>
       </div>
       <div style="font-size:10px;color:var(--t5);margin-bottom:6px">현재 선택된 인원 <b id="grpSelCount">${typeof sN !== 'undefined' ? sN.size : 0}</b>명이 그룹에 포함됩니다.</div>
       <p style="font-size:10px;color:var(--t6)">💡 주간분석에서 팀원을 다중선택한 뒤 여기서 그룹으로 저장하세요.</p>
+      <div id="grpSaveStatus" style="font-size:10px;min-height:16px;margin-top:4px"></div>
     </div>
 
     <!-- 기존 그룹 목록 -->
@@ -269,7 +261,7 @@ function renderGroupList() {
         <span style="font-size:13px;font-weight:700;color:var(--t1)">${eH(g.name)}</span>
         <div style="display:flex;gap:5px">
           <button class="btn btn-p btn-s" onclick="applyGroup('${g.id}')">선택 적용</button>
-          <button class="btn btn-w btn-s" onclick="updateGroupMembers('${g.id}')">현재 인원으로 갱신</button>
+          <button class="btn btn-w btn-s" onclick="updateGroupMembersUI('${g.id}')">현재 인원으로 갱신</button>
           <button class="btn btn-d btn-s" onclick="deleteGroupUI('${g.id}')">삭제</button>
         </div>
       </div>
@@ -279,22 +271,38 @@ function renderGroupList() {
   }).join('');
 }
 
-function createGroupFromUI() {
+async function createGroupFromUI() {
   const nameInput = document.getElementById('newGroupName');
   const name = nameInput ? nameInput.value.trim() : '';
-  if (!name) { showToast('그룹명을 입력하세요.','warn'); return; }
+  if (!name) { showToast('그룹명을 입력하세요.', 'warn'); return; }
 
   const members = typeof sN !== 'undefined' ? [...sN] : [];
-  if (!members.length) { showToast('먼저 주간분석에서 팀원을 선택하세요.','warn'); return; }
+  if (!members.length) { showToast('먼저 주간분석에서 팀원을 선택하세요.', 'warn'); return; }
+
+  // 버튼 비활성화 + 상태 표시
+  var btn = document.getElementById('grpCreateBtn');
+  var status = document.getElementById('grpSaveStatus');
+  if (btn) btn.disabled = true;
+  if (status) { status.textContent = '저장 중...'; status.style.color = 'var(--ac-t)'; }
 
   createGroup(name, members);
+  var ok = await saveGroupsToServer();
+
+  if (ok) {
+    if (status) { status.textContent = '✅ 서버 저장 완료'; status.style.color = '#10B981'; }
+    showToast(`"${name}" 그룹 생성 (${members.length}명)`);
+  } else {
+    if (status) { status.textContent = '⚠️ 로컬 저장됨 (서버 저장 실패)'; status.style.color = '#F59E0B'; }
+    showToast(`"${name}" 그룹 생성 (로컬만)`, 'warn');
+  }
+
   if (nameInput) nameInput.value = '';
+  if (btn) btn.disabled = false;
   renderGroupList();
   updateGroupButtons();
-  showToast(`"${name}" 그룹 생성 (${members.length}명)`);
 }
 
-/** 현재 활성 그룹 필터 ID (null이면 전체 보기) */
+/** 현재 활성 그룹 필터 ID */
 var activeGroupId = null;
 
 function applyGroup(id) {
@@ -302,21 +310,14 @@ function applyGroup(id) {
   if (!g) return;
   if (typeof sN === 'undefined' || typeof aN === 'undefined') return;
 
-  // 같은 그룹 다시 클릭 → 토글 해제 (전체 보기)
-  if (activeGroupId === id) {
-    activeGroupId = null;
-  } else {
-    activeGroupId = id;
-  }
+  if (activeGroupId === id) { activeGroupId = null; }
+  else { activeGroupId = id; }
 
-  // 그룹 필터 적용 시 선택 초기화 + 그룹 멤버만 선택
   if (activeGroupId) {
     sN.clear();
     g.members.forEach(m => { if (aN.includes(m)) sN.add(m); });
   }
-  // 전체 보기 복귀 시 선택 유지
 
-  // 다중선택 활성화
   if (sN.size > 1 && typeof multiSel !== 'undefined') {
     multiSel = true;
     const tog = document.getElementById('multiSelTog');
@@ -331,46 +332,46 @@ function applyGroup(id) {
   if (typeof upOP === 'function') upOP();
   if (typeof upV === 'function') upV();
 
-  // 모달 닫기
   const modal = document.getElementById('groupModal');
   if (modal) modal.remove();
 }
 
-/** 전체 보기 (그룹 필터 해제) */
 function showAllMembers() {
   activeGroupId = null;
   if (typeof rNC === 'function') rNC();
   if (typeof updateGroupButtons === 'function') updateGroupButtons();
 }
 
-function updateGroupMembers(id) {
+async function updateGroupMembersUI(id) {
   const members = typeof sN !== 'undefined' ? [...sN] : [];
-  if (!members.length) { showToast('먼저 팀원을 선택하세요.','warn'); return; }
-  const g = updateGroup(id, { members });
+  if (!members.length) { showToast('먼저 팀원을 선택하세요.', 'warn'); return; }
+  var g = updateGroupLocal(id, { members });
   if (g) {
+    var ok = await saveGroupsToServer();
     renderGroupList();
-    showToast(`"${g.name}" 그룹 갱신 (${members.length}명)`);
+    showToast(`"${g.name}" 그룹 갱신 (${members.length}명)` + (ok ? '' : ' — 로컬만'));
   }
 }
 
-function deleteGroupUI(id) {
+// 이전 호출 호환용
+function updateGroupMembers(id) { updateGroupMembersUI(id); }
+
+async function deleteGroupUI(id) {
   const g = getGroup(id);
   if (!g) return;
   if (!confirm(`"${g.name}" 그룹을 삭제하시겠습니까?`)) return;
-  deleteGroup(id);
+  deleteGroupLocal(id);
+  var ok = await saveGroupsToServer();
   renderGroupList();
   updateGroupButtons();
+  showToast(`"${g.name}" 그룹 삭제` + (ok ? '' : ' — 로컬만'));
 }
 
-/** 메인 UI에 그룹 빠른 적용 버튼 렌더링 */
 function renderGroupQuickButtons(containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
 
-  if (!memberGroups.length) {
-    el.innerHTML = '';
-    return;
-  }
+  if (!memberGroups.length) { el.innerHTML = ''; return; }
 
   const btns = memberGroups.map(g => {
     const isActive = activeGroupId === g.id;
@@ -448,7 +449,6 @@ function exportBackupJSON() {
     });
   });
 
-  // localStorage 데이터도 포함
   backup.localStorage = {};
   try {
     for (var i = 0; i < localStorage.length; i++) {
@@ -526,7 +526,6 @@ function importBackupJSON(file) {
           });
         });
 
-        // localStorage 복원
         if (backup.localStorage) {
           Object.keys(backup.localStorage).forEach(function (key) {
             try { localStorage.setItem(key, backup.localStorage[key]); } catch (e) { console.warn('[Settings]', e); }
@@ -536,7 +535,6 @@ function importBackupJSON(file) {
         Promise.all(clearPromises).then(function () {
           if (status) status.innerHTML = '<span style="color:#10B981">✅ 복원 완료 — ' + totalItems + '건</span>';
           if (typeof showToast === 'function') showToast('✅ 데이터 복원 완료 (' + totalItems + '건)', 'success');
-          // 화면 새로고침
           setTimeout(function () { location.reload(); }, 1000);
         });
       });
@@ -551,16 +549,19 @@ function importBackupJSON(file) {
    초기화 — localStorage 즉시 로드 + 서버 비동기 동기화
    ═══════════════════════════════════════ */
 function initSettings() {
-  // 1) localStorage에서 즉시 로드 (빠른 UI 표시)
   loadAliases();
   loadGroups();
-  // 2) 서버에서 비동기 로드 (최신 데이터 동기화)
-  if (_canUseServer()) {
-    loadGroupsFromServer().then(function () {
-      if (typeof updateGroupButtons === 'function') updateGroupButtons();
-    }).catch(function () {});
-    loadAliasesFromServer().then(function () {
-      if (typeof rNC === 'function') rNC();
-    }).catch(function () {});
-  }
+}
+
+/** 서버 인증 완료 후 호출 — 서버에서 그룹/별칭 동기화 */
+async function syncSettingsFromServer() {
+  if (!_canUseServer()) return;
+  try {
+    await loadGroupsFromServer();
+    if (typeof updateGroupButtons === 'function') updateGroupButtons();
+  } catch (e) { console.warn('[Settings] group sync:', e); }
+  try {
+    await loadAliasesFromServer();
+    if (typeof rNC === 'function') rNC();
+  } catch (e) { console.warn('[Settings] alias sync:', e); }
 }

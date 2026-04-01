@@ -3581,11 +3581,9 @@ async function _postAuthInit(){
           }
         }catch(syncEx){console.warn('server→IndexedDB sync:',syncEx)}
         // 서버 연결 확인됨 — 그룹/별칭도 서버에서 동기화
-        try{
-          if(typeof loadGroupsFromServer==='function')await loadGroupsFromServer();
-          if(typeof loadAliasesFromServer==='function')await loadAliasesFromServer();
-          if(typeof updateGroupButtons==='function')updateGroupButtons();
-        }catch(settEx){console.warn('settings sync:',settEx)}
+        if(typeof syncSettingsFromServer==='function'){
+          try{await syncSettingsFromServer()}catch(settEx){console.warn('settings sync:',settEx)}
+        }
       }
     }catch(ex){console.warn('auto-load server:',ex)}
   };
