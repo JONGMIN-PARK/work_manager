@@ -36,14 +36,18 @@ var AM = {
   V: 'V(휴가)'
 };
 
-/* 업무분장 배경색 */
-var ABG = { A: '#7F1D1D', B: '#1E3A5F', D: '#14532D', G: '#3B2F5E', S: '#78350F', M: '#1A1F35', R: '#4A1942', V: '#065F46' };
+/* 업무분장 배경색 (배지용) */
+var ABG = { A: '#7F1D1D', B: '#1E3A5F', D: '#14532D', G: '#3B1D6B', S: '#78350F', M: '#1A1F35', R: '#6B1D50', V: '#065F46' };
 
-/* 업무분장 전경색 */
-var AFG = { A: '#FEB2B2', B: '#A5D0FE', D: '#95F5BC', G: '#D0C4FE', S: '#FDE68A', M: '#B0BEC5', R: '#F5C0FE', V: '#6EE7B7' };
+/* 업무분장 전경색 (배지용) */
+var AFG = { A: '#FCA5A5', B: '#93C5FD', D: '#86EFAC', G: '#C4B5FD', S: '#FDE68A', M: '#B0BEC5', R: '#F9A8D4', V: '#5EEAD4' };
 
-/* 업무분장 차트 바 색상 */
-var ABR = { A: '#EF4444', B: '#3B82F6', D: '#10B981', G: '#8B5CF6', S: '#F59E0B', M: '#64748B', R: '#D946EF', V: '#34D399' };
+/* 업무분장 차트 바 색상 (기본값) */
+var ABR_DEFAULT = { A: '#EF4444', B: '#3B82F6', D: '#22C55E', G: '#A855F7', S: '#F59E0B', M: '#64748B', R: '#EC4899', V: '#2DD4BF' };
+var ABR = Object.assign({}, ABR_DEFAULT);
+
+/** 사용자 커스텀 색상 반영 — 모든 차트에서 이 함수로 색상 조회 */
+function getABR(code) { return ABR[code] || '#64748B'; }
 
 /* ═══ 인원 비교 차트 스타일 ═══ */
 var CMP_COL = [

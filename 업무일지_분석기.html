@@ -444,6 +444,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
             <span class="mob-sep" style="color:var(--bd2)">│</span>
             <button class="btn btn-g btn-s" onclick="renderGroupModal()" title="팀원 그룹 관리">👥 그룹</button>
             <button class="btn btn-g btn-s" onclick="renderAliasModal()" title="팀원 별칭 관리">🏷️ 별칭</button>
+            <button class="btn btn-g btn-s" onclick="renderAbbrColorModal()" title="업무분장 색상 설정">🎨 색상</button>
             <span class="mob-sep" style="color:var(--bd2)">│</span>
             <button class="btn btn-g btn-s hidden" id="selAllBtn" onclick="selAll()">전체 선택</button>
             <button class="btn btn-g btn-s" onclick="deAll()">전체 해제</button>
@@ -665,7 +666,9 @@ if(typeof ENC==='undefined'){
   var AM={A:'A(CS현장)',B:'B(수주)',D:'D(개발)',G:'G(공통)',M:'M(양산)',R:'R(제안)',S:'S(영업지원)'};
   var ABG={A:'#7F1D1D',B:'#1E3A5F',D:'#14532D',G:'#3B2F5E',S:'#78350F',M:'#1A1F35',R:'#4A1942'};
   var AFG={A:'#FCA5A5',B:'#93C5FD',D:'#86EFAC',G:'#C4B5FD',S:'#FCD34D',M:'#94A3B8',R:'#F0ABFC'};
-  var ABR={A:'#EF4444',B:'#3B82F6',D:'#10B981',G:'#8B5CF6',S:'#F59E0B',M:'#64748B',R:'#D946EF'};
+  var ABR_DEFAULT={A:'#EF4444',B:'#3B82F6',D:'#22C55E',G:'#A855F7',S:'#F59E0B',M:'#64748B',R:'#EC4899',V:'#2DD4BF'};
+  var ABR=Object.assign({},ABR_DEFAULT);
+  function getABR(c){return ABR[c]||'#64748B'}
   var CMP_COL=['#3B82F6','#EF4444','#10B981','#F59E0B','#A855F7','#EC4899','#06B6D4','#F97316','#84CC16','#E11D48','#6366F1','#14B8A6'];
   var CMP_DASH=[[],[5,5],[10,5],[2,2],[8,4,2,4],[15,5],[4,8],[1,4],[6,2],[3,6],[10,2,2,2],[5,10]];
   var CMP_PT=['circle','rect','triangle','rectRot','crossRot','star','circle','rect','triangle','rectRot','cross','star'];
@@ -690,6 +693,7 @@ if(typeof initSettings==='undefined'){
   window.renderGroupQuickButtons=function(){};window.updateGroupButtons=function(){};
   window.showBackupRestoreModal=function(){showToast('settings.js 로드 필요','error')};
   window.exportBackupJSON=function(){};window.importBackupJSON=function(){};
+  window.renderAbbrColorModal=function(){showToast('settings.js 로드 필요','error')};
   window.initSettings=function(){};
   console.warn('⚠️ settings.js 로드 실패 → 스텁 폴백 사용');
 }
@@ -2519,7 +2523,7 @@ function rContentSum(){
   });
   el.innerHTML=html;
 }
-function rCht(f){if(!f.length)return;const tc=gTC();const tm={};let tH=0;f.forEach(r=>{tm[r.abbr]=(tm[r.abbr]||0)+r.hours;tH+=r.hours});const ts=Object.entries(tm).map(([k,v])=>({a:k,n:AM[k]||k,v:Math.round(v*10)/10,p:tH>0?Math.round(v/tH*1000)/10:0})).sort((a,b)=>b.v-a.v);if(pC)pC.destroy();pC=new Chart(document.getElementById('pieC').getContext('2d'),{type:'doughnut',data:{labels:ts.map(s=>s.n),datasets:[{data:ts.map(s=>s.v),backgroundColor:ts.map((_,i)=>COL[i%COL.length]),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed+' h'}}}}});document.getElementById('pieL').innerHTML=ts.map((s,i)=>'<div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:3px;background:'+COL[i%COL.length]+'"></span><span style="flex:1;font-size:12px;color:var(--t3)">'+s.n+'</span><span class="mono" style="color:var(--t4)">'+s.v+'h</span><span class="mono" style="color:var(--ac-t);width:44px;text-align:right">'+s.p+'%</span></div>').join('');
+function rCht(f){if(!f.length)return;const tc=gTC();const tm={};let tH=0;f.forEach(r=>{tm[r.abbr]=(tm[r.abbr]||0)+r.hours;tH+=r.hours});const ts=Object.entries(tm).map(([k,v])=>({a:k,n:AM[k]||k,v:Math.round(v*10)/10,p:tH>0?Math.round(v/tH*1000)/10:0})).sort((a,b)=>b.v-a.v);if(pC)pC.destroy();pC=new Chart(document.getElementById('pieC').getContext('2d'),{type:'doughnut',data:{labels:ts.map(s=>s.n),datasets:[{data:ts.map(s=>s.v),backgroundColor:ts.map(s=>getABR(s.a)),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed+' h'}}}}});document.getElementById('pieL').innerHTML=ts.map((s,i)=>'<div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:3px;background:'+getABR(s.a)+'"></span><span style="flex:1;font-size:12px;color:var(--t3)">'+s.n+'</span><span class="mono" style="color:var(--t4)">'+s.v+'h</span><span class="mono" style="color:var(--ac-t);width:44px;text-align:right">'+s.p+'%</span></div>').join('');
 const ps=document.getElementById('perS');ps.classList.remove('hidden');document.getElementById('pieS').style.gridColumn='';const pm={};f.forEach(r=>{if(!pm[r.name])pm[r.name]={t:0,a:{}};pm[r.name].t+=r.hours;pm[r.name].a[r.abbr]=(pm[r.name].a[r.abbr]||0)+r.hours});const pp=Object.entries(pm).map(([n,s])=>({n,...s})).sort((a,b)=>a.n.localeCompare(b.n,'ko'));
 // 1명: 제목을 "업무분장별 시간"으로, 다중: "인원별 분포"
 document.querySelector('#perS h3').textContent=sN.size>1?'인원별 분포':'업무분장별 시간';

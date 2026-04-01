@@ -54,7 +54,15 @@ router.get('/records', async function (req, res) {
 // GET /api/archives/records/count
 router.get('/records/count', async function (req, res) {
   try {
-    var r = await db.query('SELECT COUNT(*) as cnt FROM work_records');
+    var where = 'WHERE 1=1';
+    var params = [];
+    var role = req.user.role;
+    var deptId = req.user.departmentId;
+    if (deptId && role !== 'admin' && role !== 'executive') {
+      where += ' AND (user_id IN (SELECT id FROM users WHERE department_id = $1) OR user_id IS NULL)';
+      params.push(deptId);
+    }
+    var r = await db.query('SELECT COUNT(*) as cnt FROM work_records ' + where, params);
     res.json({ data: { count: parseInt(r.rows[0].cnt, 10) } });
   } catch (e) {
     console.error('[work-records/count]', e);
@@ -62,7 +70,7 @@ router.get('/records/count', async function (req, res) {
   }
 });
 
-// POST /api/archives/records/bulk — 일괄 저장 (기존 레코드 삭제 후 삽입, 트랜잭션)
+// POST /api/archives/records/bulk — 일괄 저장 (해당 사용자 레코드만 삭제 후 삽입, 트랜잭션)
 router.post('/records/bulk', rbac.checkPermission('archive.manage'), async function (req, res) {
   var client;
   try {
@@ -73,14 +81,22 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
   }
   try {
     var records = req.body.records || [];
+    var userId = req.user.sub;
     if (!records.length) { client.release(); return res.json({ data: [], count: 0 }); }
 
     await client.query('BEGIN');
 
-    // 기존 레코드 전체 삭제 (로컬 IndexedDB의 s.clear()와 동일)
-    await client.query('DELETE FROM work_records');
+    // 해당 사용자의 레코드만 삭제 (다른 사용자 데이터 보호)
+    await client.query('DELETE FROM work_records WHERE user_id = $1', [userId]);
+    // user_id가 NULL인 고아 레코드도 정리 (이름 기반 매칭)
+    var nameSet = new Set(records.map(function (r) { return r.name || ''; }));
+    var names = [...nameSet].filter(Boolean);
+    if (names.length) {
+      var namePlaceholders = names.map(function (_, i) { return '$' + (i + 1); });
+      await client.query('DELETE FROM work_records WHERE user_id IS NULL AND name IN (' + namePlaceholders.join(',') + ')', names);
+    }
 
-    // 배치 삽입 (PostgreSQL 파라미터 한도 대비 500건씩)
+    // 배치 삽입 (PostgreSQL 파라미터 한도 대비 500건씩, user_id 포함)
     var BATCH = 500;
     var totalInserted = 0;
     for (var b = 0; b < records.length; b += BATCH) {
@@ -89,10 +105,10 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
       var params = [];
       var idx = 1;
       chunk.forEach(function (r) {
-        values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
-        params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null);
+        values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
+        params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, userId);
       });
-      var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient) VALUES ' + values.join(',');
+      var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, user_id) VALUES ' + values.join(',');
       await client.query(sql, params);
       totalInserted += chunk.length;
     }
@@ -139,8 +155,8 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
       if (u.ocmt !== undefined) { sets.push('ocmt = $' + idx++); params.push(u.ocmt); }
       if (u.oclient !== undefined) { sets.push('oclient = $' + idx++); params.push(u.oclient); }
       if (!sets.length) continue;
-      params.push(u.id);
-      await client.query('UPDATE work_records SET ' + sets.join(', ') + ' WHERE id = $' + idx, params);
+      params.push(u.id, req.user.sub);
+      await client.query('UPDATE work_records SET ' + sets.join(', ') + ' WHERE id = $' + idx + ' AND (user_id = $' + (idx + 1) + ' OR user_id IS NULL)', params);
       count++;
     }
     await client.query('COMMIT');
@@ -160,8 +176,8 @@ router.post('/records', rbac.checkPermission('archive.manage'), async function (
     var r = req.body;
     if (!r.date || !r.name) return res.status(400).json({ error: 'INVALID', message: 'date, name 필수' });
     var result = await db.query(
-      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
-      [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null]
+      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
+      [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, req.user.sub]
     );
     res.status(201).json({ data: result.rows[0] });
   } catch (e) {
@@ -175,8 +191,9 @@ router.delete('/records/batch', rbac.checkPermission('archive.manage'), async fu
   try {
     var ids = req.body.ids || [];
     if (!ids.length) return res.json({ count: 0 });
-    var params = ids.map(function (_, i) { return '$' + (i + 1); });
-    var result = await db.query('DELETE FROM work_records WHERE id IN (' + params.join(',') + ')', ids);
+    var placeholders = ids.map(function (_, i) { return '$' + (i + 1); });
+    var userIdx = ids.length + 1;
+    var result = await db.query('DELETE FROM work_records WHERE id IN (' + placeholders.join(',') + ') AND (user_id = $' + userIdx + ' OR user_id IS NULL)', ids.concat([req.user.sub]));
     res.json({ count: result.rowCount });
   } catch (e) {
     console.error('[work-records/batch-delete]', e);
@@ -184,10 +201,10 @@ router.delete('/records/batch', rbac.checkPermission('archive.manage'), async fu
   }
 });
 
-// DELETE /api/archives/records — 전체 삭제
+// DELETE /api/archives/records — 전체 삭제 (해당 사용자 레코드만)
 router.delete('/records', rbac.checkPermission('archive.manage'), async function (req, res) {
   try {
-    await db.query('DELETE FROM work_records');
+    await db.query('DELETE FROM work_records WHERE user_id = $1', [req.user.sub]);
     res.json({ message: '전체 삭제 완료' });
   } catch (e) {
     console.error('[work-records/clear]', e);

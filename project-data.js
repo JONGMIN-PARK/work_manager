@@ -1561,10 +1561,13 @@ function showToast(msg, type) {
   var _localWrClear = wrClear;
   wrGetAll = function () {
     return apiFetch('/api/archives/records?limit=50000&all=true').then(function (r) {
-      return toCamelArray(r.data).map(function (rec) {
+      var records = toCamelArray(r.data).map(function (rec) {
         if (typeof rec.hours === 'string') rec.hours = parseFloat(rec.hours) || 0;
         return rec;
       });
+      // 서버 데이터를 로컬 IndexedDB에 동기화 (폴백 최신화)
+      _localWrClear().then(function () { return _localWrBulkPut(records); }).catch(function () {});
+      return records;
     }).catch(function () { return _localWrGetAll(); });
   };
   wrCount = function () {
@@ -1573,20 +1576,28 @@ function showToast(msg, type) {
   };
   wrBulkPut = function (records) {
     return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) })
-      .then(function (r) { _localWrClear().then(function () { _localWrBulkPut(records); }).catch(function () {}); return r; });
+      .then(function (r) {
+        return _localWrClear().then(function () { return _localWrBulkPut(records); }).catch(function () {}).then(function () { return r; });
+      });
   };
   wrClear = function () {
     return apiFetch('/api/archives/records', { method: 'DELETE' })
-      .then(function (r) { _localWrClear().catch(function () {}); return r; });
+      .then(function (r) {
+        return _localWrClear().catch(function () {}).then(function () { return r; });
+      });
   };
   wrUpdateRecords = function (records) {
     return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) })
-      .then(function (r) { _localWrUpdateRecords(records).catch(function () {}); return r; });
+      .then(function (r) {
+        return _localWrUpdateRecords(records).catch(function () {}).then(function () { return r; });
+      });
   };
   wrDeleteRecords = function (remainingRecords, deletedIds) {
     if (deletedIds && deletedIds.length) {
       return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) })
-        .then(function (r) { _localWrDeleteRecords(remainingRecords).catch(function () {}); return r; });
+        .then(function (r) {
+          return _localWrDeleteRecords(remainingRecords).catch(function () {}).then(function () { return r; });
+        });
     }
     // id 없는 경우 전체 교체
     return wrClear().then(function () { return wrBulkPut(remainingRecords); });

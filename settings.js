@@ -555,11 +555,152 @@ function importBackupJSON(file) {
 }
 
 /* ═══════════════════════════════════════
+   업무분장 색상 커스터마이징
+   ═══════════════════════════════════════ */
+
+/** localStorage에서 사용자 커스텀 색상 로드 → ABR에 반영 */
+function loadAbbrColors() {
+  var raw = prefLsGet('abbrColors');
+  if (raw) {
+    try {
+      var custom = JSON.parse(raw);
+      Object.keys(custom).forEach(function(k) { if (custom[k]) ABR[k] = custom[k]; });
+    } catch(e) { console.warn('[Settings] abbrColors parse error', e); }
+  }
+}
+
+/** 서버에서 색상 동기화 */
+async function loadAbbrColorsFromServer() {
+  var srv = await _serverSettingsGet('abbrColors');
+  if (srv && typeof srv === 'object' && Object.keys(srv).length > 0) {
+    Object.keys(srv).forEach(function(k) { if (srv[k]) ABR[k] = srv[k]; });
+    prefLsSet('abbrColors', JSON.stringify(srv));
+  } else {
+    // 로컬에 커스텀이 있으면 서버로 업로드
+    var raw = prefLsGet('abbrColors');
+    if (raw) {
+      try { var local = JSON.parse(raw); if (Object.keys(local).length > 0) await _serverSettingsPut('abbrColors', local); } catch(e) {}
+    }
+  }
+}
+
+/** 커스텀 색상 저장 (서버 + localStorage) */
+async function saveAbbrColors() {
+  var custom = {};
+  Object.keys(ABR).forEach(function(k) {
+    if (ABR[k] !== ABR_DEFAULT[k]) custom[k] = ABR[k];
+  });
+  // 전부 기본이면 저장 제거
+  if (Object.keys(custom).length === 0) {
+    prefLsDel('abbrColors');
+    await _serverSettingsPut('abbrColors', {});
+  } else {
+    prefLsSet('abbrColors', JSON.stringify(custom));
+    await _serverSettingsPut('abbrColors', custom);
+  }
+}
+
+/** 색상을 기본값으로 리셋 */
+function resetAbbrColors() {
+  Object.keys(ABR_DEFAULT).forEach(function(k) { ABR[k] = ABR_DEFAULT[k]; });
+}
+
+/** 색상 설정 모달 UI */
+function renderAbbrColorModal() {
+  var existing = document.getElementById('abbrColorModal');
+  if (existing) { existing.remove(); return; }
+
+  var modal = document.createElement('div');
+  modal.id = 'abbrColorModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+
+  var keys = Object.keys(AM);
+  var rows = keys.map(function(k) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)">' +
+      '<span style="width:28px;height:28px;border-radius:6px;background:' + ABR[k] + ';display:inline-block;border:2px solid var(--bd)" class="abbrColorPreview" data-key="' + k + '"></span>' +
+      '<span style="font-size:13px;font-weight:700;color:var(--t1);min-width:90px">' + AM[k] + '</span>' +
+      '<input type="color" class="abbrColorInput" data-key="' + k + '" value="' + ABR[k] + '" style="width:40px;height:30px;border:1px solid var(--bd);border-radius:4px;cursor:pointer;background:none;padding:0">' +
+      '<span class="mono" style="font-size:10px;color:var(--t5)" data-hex="' + k + '">' + ABR[k] + '</span>' +
+      '<button class="btn btn-g btn-s" onclick="resetSingleAbbrColor(\'' + k + '\')" title="기본값으로" style="font-size:10px;padding:2px 6px">↺</button>' +
+    '</div>';
+  }).join('');
+
+  modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:480px;width:90%;max-height:80vh;overflow:auto">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+      '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">🎨 업무분장 색상 설정</h3>' +
+      '<button class="btn btn-g btn-s" onclick="document.getElementById(\'abbrColorModal\').remove()">✕ 닫기</button>' +
+    '</div>' +
+    '<p style="font-size:11px;color:var(--t5);margin-bottom:12px">업무분장 코드별 색상을 설정합니다. 모든 차트에 동일하게 적용됩니다.</p>' +
+    '<div style="margin-bottom:14px">' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--bg-i);border-radius:8px">' +
+        keys.map(function(k) {
+          return '<span style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--t4)"><span style="width:12px;height:12px;border-radius:3px;background:' + ABR[k] + '" class="abbrColorChip" data-key="' + k + '"></span>' + k + '</span>';
+        }).join('') +
+      '</div>' +
+      rows +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+      '<button class="btn btn-d btn-s" onclick="resetAllAbbrColors()">전체 초기화</button>' +
+      '<button class="btn btn-p" onclick="applyAbbrColorModal()">💾 저장</button>' +
+    '</div>' +
+  '</div>';
+
+  document.body.appendChild(modal);
+
+  // color input 실시간 미리보기
+  document.querySelectorAll('#abbrColorModal .abbrColorInput').forEach(function(inp) {
+    inp.addEventListener('input', function() {
+      var k = inp.dataset.key;
+      var color = inp.value;
+      // 프리뷰 업데이트
+      var preview = document.querySelector('#abbrColorModal .abbrColorPreview[data-key="' + k + '"]');
+      if (preview) preview.style.background = color;
+      var chip = document.querySelector('#abbrColorModal .abbrColorChip[data-key="' + k + '"]');
+      if (chip) chip.style.background = color;
+      var hex = document.querySelector('#abbrColorModal [data-hex="' + k + '"]');
+      if (hex) hex.textContent = color;
+    });
+  });
+}
+
+/** 단일 색상 기본값 복원 */
+function resetSingleAbbrColor(k) {
+  var inp = document.querySelector('#abbrColorModal .abbrColorInput[data-key="' + k + '"]');
+  if (inp) {
+    inp.value = ABR_DEFAULT[k];
+    inp.dispatchEvent(new Event('input'));
+  }
+}
+
+/** 전체 색상 기본값 복원 */
+function resetAllAbbrColors() {
+  if (!confirm('모든 색상을 기본값으로 초기화하시겠습니까?')) return;
+  Object.keys(ABR_DEFAULT).forEach(function(k) {
+    var inp = document.querySelector('#abbrColorModal .abbrColorInput[data-key="' + k + '"]');
+    if (inp) { inp.value = ABR_DEFAULT[k]; inp.dispatchEvent(new Event('input')); }
+  });
+}
+
+/** 모달에서 저장 적용 */
+async function applyAbbrColorModal() {
+  document.querySelectorAll('#abbrColorModal .abbrColorInput').forEach(function(inp) {
+    ABR[inp.dataset.key] = inp.value;
+  });
+  await saveAbbrColors();
+  document.getElementById('abbrColorModal').remove();
+  // 차트 갱신
+  if (typeof upV === 'function') upV();
+  showToast('업무분장 색상 저장 완료');
+}
+
+/* ═══════════════════════════════════════
    초기화 — localStorage 즉시 로드 + 서버 비동기 동기화
    ═══════════════════════════════════════ */
 function initSettings() {
   loadAliases();
   loadGroups();
+  loadAbbrColors();
 }
 
 /** 서버 인증 완료 후 호출 — 서버에서 그룹/별칭 동기화 */
@@ -573,4 +714,7 @@ async function syncSettingsFromServer() {
     await loadAliasesFromServer();
     if (typeof rNC === 'function') rNC();
   } catch (e) { console.warn('[Settings] alias sync:', e); }
+  try {
+    await loadAbbrColorsFromServer();
+  } catch (e) { console.warn('[Settings] abbrColors sync:', e); }
 }
