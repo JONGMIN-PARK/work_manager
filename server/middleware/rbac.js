@@ -106,7 +106,7 @@ function checkPermission(action, getResourceId) {
 
       // 업무일지
       case 'archive.manage':
-        allowed = role === 'manager';
+        allowed = true; // 모든 인증 사용자 허용
         break;
 
       default:
