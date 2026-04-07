@@ -3612,6 +3612,7 @@ async function _postAuthInit(){
         });
         applyADToUI();
         _dataLoaded=true;
+        var _iel=document.getElementById('initLoading');if(_iel)_iel.remove();
         // 서버 데이터를 로컬 IndexedDB에 캐싱 (오프라인 대비)
         try{
           if(typeof db!=='undefined'&&db&&db.objectStoreNames&&db.objectStoreNames.contains('workRecords')){
@@ -3649,6 +3650,7 @@ async function _postAuthInit(){
           aD=_wrAll.map(function(r){return Object.assign({},r)});
           applyADToUI();
           _dataLoaded=true;
+          var _iel2=document.getElementById('initLoading');if(_iel2)_iel2.remove();
         }
       }
     }catch(ex){console.warn('auto-load local:',ex)}
