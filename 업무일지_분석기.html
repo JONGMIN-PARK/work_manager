@@ -337,7 +337,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.9</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v10.0</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2380,17 +2380,18 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
-    {ver:'9.9',date:'2026-04-07',title:'서버 성능 최적화 + 중복 제거',tag:'feature',items:[
-      '서버 PATCH 배치 업데이트 — 개별 UPDATE 루프 → 단일 SQL (N배 속도 향상)',
-      '데이터 로드 경량화 — 전용 변환 함수로 불필요한 JSON.parse 제거',
-      '테이블 렌더링 최적화 — 이름별 색상 룩업 O(n²) → O(1)',
-      '중복 레코드 제거 버튼 추가 (🧹)',
-      '병합 시 동일 레코드 덮어쓰기(갱신) 지원',
-      '로딩 메시지 즉시 제거 + IndexedDB 캐싱 제거',
+    {ver:'10.0',date:'2026-04-07',title:'성능 최적화 + 편집 저장 안정화 + 모바일 개선',tag:'feature',items:[
+      '편집 적용 시 전체 데이터 저장으로 통일 — per-row 수주명/거래처 확실한 영속 보장',
+      '공통업무 수주명/거래처 per-row 저장 수정 (null 폴백 처리)',
+      '업무분장 비율·일별 투입시간 차트에 등록된 전체 코드(V 포함) 표시',
+      '인원별 분포 영역 10명 기본 표시 (max-height 확대)',
+      '모바일 화면 최적화 — 터치 영역 확대, 가독성 개선, 검색 드롭다운 전체 너비',
       '가상 스크롤 — 화면에 보이는 행만 렌더링 (수천 행 DOM 제거)',
       'GET 응답 ETag 캐싱 — 데이터 변경 없으면 304 반환',
       '서버 SELECT 필드 최소화 — 불필요 컬럼 제외로 전송량 감소',
-      '수주맵 불러오기 후 상세 항목 미반영 수정 (null 폴백)'
+      '데이터 로드 경량화 — 전용 변환 함수 + 중복 체크 제거',
+      '테이블 렌더링 최적화 — 이름별 색상 룩업 O(n²) → O(1)',
+      '중복 레코드 제거 버튼 추가 (🧹) + 병합 시 덮어쓰기 지원'
     ]},
     {ver:'9.8',date:'2026-04-07',title:'서버 DB 전용 전환 + 편집모드 저장 수정',tag:'fix',items:[
       '수주명/거래처 저장을 서버 DB 전용으로 단순화 (localStorage·메모리 임시저장 제거)',
