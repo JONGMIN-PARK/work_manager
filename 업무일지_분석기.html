@@ -2011,19 +2011,9 @@ async function applyEdits(){
       if(!r.oclient){var cl=getOClient(r.orderNo);if(cl)r.oclient=cl}
     });
   }
-  // 변경된 레코드에 id가 있으면 변경분만 업데이트, 없으면 전체 교체
+  // 전체 데이터 저장 (per-row ocmt/oclient 포함)
   try{
-    var hasIds=changedRecords.every(function(r){return r.id});
-    if(hasIds&&typeof wrUpdateRecords==='function'){
-      try{
-        await wrUpdateRecords(changedRecords);
-      }catch(patchErr){
-        console.warn('[applyEdits] PATCH 실패, bulk 폴백:',patchErr);
-        await wrBulkPut(aD);
-      }
-    }else{
-      await wrBulkPut(aD);
-    }
+    await wrBulkPut(aD);
   }catch(dbErr){
     console.error('[applyEdits] DB 저장 실패:',dbErr);
     showToast('DB 저장 실패: '+(dbErr.message||'서버 오류')+' (메모리에는 반영됨)','error');
