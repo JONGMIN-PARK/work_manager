@@ -125,51 +125,41 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
   }
 });
 
-// PATCH /api/archives/records/batch — 변경된 레코드 배치 업데이트 (단일 쿼리)
+// PATCH /api/archives/records/batch — 변경된 레코드 배치 업데이트
 router.patch('/records/batch', rbac.checkPermission('archive.manage'), async function (req, res) {
+  var client;
+  try {
+    client = await db.pool.connect();
+  } catch (connErr) {
+    console.error('[work-records/batch-update] DB connect failed:', connErr);
+    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'DB 연결 실패' });
+  }
   try {
     var updates = req.body.updates || [];
-    if (!updates.length) return res.json({ data: [], count: 0 });
+    if (!updates.length) { client.release(); return res.json({ data: [], count: 0 }); }
 
-    // 유효한 업데이트만 필터
-    var valid = updates.filter(function (u) { return u.id; });
-    if (!valid.length) return res.json({ data: [], count: 0 });
-
-    // 배치 UPDATE: unnest 배열로 단일 쿼리 실행
-    var ids = [], dates = [], names = [], orderNos = [], hours = [], taskTypes = [], abbrs = [], contents = [], ocmts = [], oclients = [];
-    valid.forEach(function (u) {
-      ids.push(u.id);
-      dates.push(u.date !== undefined ? u.date : null);
-      names.push(u.name !== undefined ? u.name : null);
-      orderNos.push(u.orderNo || u.order_no || null);
-      hours.push(u.hours !== undefined ? u.hours : null);
-      taskTypes.push(u.taskType || u.task_type || null);
-      abbrs.push(u.abbr !== undefined ? u.abbr : null);
-      contents.push(u.content !== undefined ? u.content : null);
-      ocmts.push(u.ocmt !== undefined ? u.ocmt : null);
-      oclients.push(u.oclient !== undefined ? u.oclient : null);
-    });
-
-    var sql = `UPDATE work_records AS w SET
-      date = COALESCE(v.date, w.date),
-      name = COALESCE(v.name, w.name),
-      order_no = COALESCE(v.order_no, w.order_no),
-      hours = COALESCE(v.hours, w.hours),
-      task_type = COALESCE(v.task_type, w.task_type),
-      abbr = COALESCE(v.abbr, w.abbr),
-      content = COALESCE(v.content, w.content),
-      ocmt = COALESCE(v.ocmt, w.ocmt),
-      oclient = COALESCE(v.oclient, w.oclient)
-      FROM (SELECT unnest($1::int[]) AS id, unnest($2::text[]) AS date, unnest($3::text[]) AS name,
-        unnest($4::text[]) AS order_no, unnest($5::numeric[]) AS hours, unnest($6::text[]) AS task_type,
-        unnest($7::text[]) AS abbr, unnest($8::text[]) AS content, unnest($9::text[]) AS ocmt, unnest($10::text[]) AS oclient
-      ) AS v WHERE w.id = v.id`;
-
-    await db.query(sql, [ids, dates, names, orderNos, hours, taskTypes, abbrs, contents, ocmts, oclients]);
-    res.json({ data: [], count: valid.length });
+    await client.query('BEGIN');
+    // 전체 필드를 명시적으로 SET (COALESCE 없이 직접 덮어쓰기)
+    var promises = [];
+    var count = 0;
+    for (var i = 0; i < updates.length; i++) {
+      var u = updates[i];
+      if (!u.id) continue;
+      promises.push(client.query(
+        'UPDATE work_records SET date=$1, name=$2, order_no=$3, hours=$4, task_type=$5, abbr=$6, content=$7, ocmt=$8, oclient=$9 WHERE id=$10',
+        [u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.id]
+      ));
+      count++;
+    }
+    await Promise.all(promises);
+    await client.query('COMMIT');
+    res.json({ data: [], count: count });
   } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (rbErr) { console.error('[ROLLBACK failed]', rbErr); }
     console.error('[work-records/batch-update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+  } finally {
+    if (client) client.release();
   }
 });
 

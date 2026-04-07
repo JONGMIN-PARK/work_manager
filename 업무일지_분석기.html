@@ -2007,8 +2007,8 @@ async function applyEdits(){
     aD.forEach(function(r,i){
       if(editedIndices.has(i))return;
       if(!editedOrders.has(r.orderNo))return;
-      if(r.ocmt===undefined){var cm=getOCmt(r.orderNo);if(cm)r.ocmt=cm}
-      if(r.oclient===undefined){var cl=getOClient(r.orderNo);if(cl)r.oclient=cl}
+      if(!r.ocmt){var cm=getOCmt(r.orderNo);if(cm)r.ocmt=cm}
+      if(!r.oclient){var cl=getOClient(r.orderNo);if(cl)r.oclient=cl}
     });
   }
   // 변경된 레코드에 id가 있으면 변경분만 업데이트, 없으면 전체 교체
