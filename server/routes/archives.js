@@ -86,15 +86,8 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
 
     await client.query('BEGIN');
 
-    // 해당 사용자의 레코드만 삭제 (다른 사용자 데이터 보호)
-    await client.query('DELETE FROM work_records WHERE user_id = $1', [userId]);
-    // user_id가 NULL인 고아 레코드도 정리 (이름 기반 매칭)
-    var nameSet = new Set(records.map(function (r) { return r.name || ''; }));
-    var names = [...nameSet].filter(Boolean);
-    if (names.length) {
-      var namePlaceholders = names.map(function (_, i) { return '$' + (i + 1); });
-      await client.query('DELETE FROM work_records WHERE user_id IS NULL AND name IN (' + namePlaceholders.join(',') + ')', names);
-    }
+    // 전체 레코드 삭제 후 재삽입 (팀 공유 데이터 — 전체 교체)
+    await client.query('DELETE FROM work_records');
 
     // 배치 삽입 (PostgreSQL 파라미터 한도 대비 500건씩, user_id 포함)
     var BATCH = 500;
