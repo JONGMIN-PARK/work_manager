@@ -1090,7 +1090,14 @@ async function loadWorkRecordsFromDB(){
     if(typeof wrGetAll!=='function')return false;
     var records=await wrGetAll();
     if(!records||!records.length)return false;
-    aD=records.map(function(r){return Object.assign({},r)});
+    /* 중복 레코드 제거 (동일 date+name+orderNo+hours+content → 첫 건만 유지) */
+    var seen=new Set();var deduped=[];
+    records.forEach(function(r){var k=wrKey(r);if(!seen.has(k)){seen.add(k);deduped.push(r)}});
+    if(deduped.length<records.length){
+      console.log('[loadWorkRecords] 중복 제거:',records.length,'→',deduped.length);
+      wrBulkPut(deduped).catch(function(e){console.warn('[dedup] DB 반영 실패:',e)});
+    }
+    aD=deduped.map(function(r){return Object.assign({},r)});
     applyADToUI();
     return true;
   }catch(ex){console.warn('loadWorkRecordsFromDB err:',ex);return false}
