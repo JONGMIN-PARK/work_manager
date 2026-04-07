@@ -39,10 +39,18 @@ router.get('/records', async function (req, res) {
       total = parseInt(countR.rows[0].cnt, 10);
     }
 
-    var dataSql = 'SELECT * FROM work_records ' + where +
+    var dataSql = 'SELECT id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient FROM work_records ' + where +
       ' ORDER BY date DESC, name, order_no LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(dataSql, params);
+
+    // ETag 기반 캐싱: 데이터 변경 없으면 304 반환
+    var etag = '"wr-' + r.rows.length + '-' + (r.rows.length > 0 ? r.rows[0].id : 0) + '-' + (r.rows.length > 0 ? r.rows[r.rows.length - 1].id : 0) + '"';
+    res.setHeader('Cache-Control', 'private, no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
 
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {

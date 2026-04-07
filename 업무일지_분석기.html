@@ -1833,61 +1833,107 @@ function rTbl(f){
   document.getElementById('delBar').classList.remove('show');
   document.getElementById('tInfo').textContent=f.length+'건·'+sN.size+'명'+(hAF()?' (필터)':'');
   const tb=document.getElementById('tBody');
-  if(!f.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--t6);padding:30px">결과 없음</td></tr>';document.getElementById('contentSummary').innerHTML='';return}
+  if(!f.length){_vsData=[];tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--t6);padding:30px">결과 없음</td></tr>';document.getElementById('contentSummary').innerHTML='';return}
   renderTblRows(f,false);
 }
 
+/* ═══ Virtual Scroll 상태 ═══ */
+var _vsData=[],_vsEditable=false,_vsKw='',_vsNameIdx=new Map(),_vsWrapEl=null;
+var VS_ROW_H=36,VS_BUFFER=10;
+var _vsRAF=0; // requestAnimationFrame guard
+
+function _vsRenderRow(r,idx,editable){
+  var ni=_vsNameIdx.get(r.name)||0,c=COL[ni%COL.length];
+  var dn=typeof shortName==='function'?shortName(r.name):r.name;
+  var ocmt=r.ocmt||getOCmt(r.orderNo);
+  var oclient=r.oclient||getOClient(r.orderNo);
+  var em=editMap[idx]||{};
+  var curOrder=em.orderNo!==undefined?em.orderNo:r.orderNo;
+  var curOcmt=em.ocmt!==undefined?em.ocmt:(em.orderNo!==undefined?getOCmt(em.orderNo):ocmt);
+  var curClient=em.oclient!==undefined?em.oclient:(em.orderNo!==undefined?getOClient(em.orderNo):oclient);
+  var curHours=em.hours!==undefined?em.hours:r.hours;
+  var curTask=em.taskType!==undefined?em.taskType:r.taskType;
+  var curAbbr=em.abbr!==undefined?em.abbr:r.abbr;
+  var curContent=em.content!==undefined?em.content:r.content;
+  var hasEdit=Object.keys(em).length>0;
+
+  var ch=eH(curContent);
+  if(_vsKw&&!editable){var rx=new RegExp('('+_vsKw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');ch=ch.replace(rx,'<mark style="background:var(--mk);color:var(--mk-t);padding:0 2px;border-radius:2px">$1</mark>')}
+
+  if(editable){
+    var isDel=delSet.has(idx);
+    return'<tr style="'+(isDel?'background:rgba(239,68,68,.08)':hasEdit?'background:rgba(245,158,11,.06)':'')+'">'
+      +'<td><input type="checkbox" class="del-chk" data-delidx="'+idx+'" '+(isDel?'checked':'')+' onchange="toggleDelRow(this)"></td>'
+      +'<td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:'+c+'"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="'+eH(r.name)+'">'+eH(dn)+'</span></span></td>'
+      +'<td class="mono" style="color:var(--t4);white-space:nowrap">'+fD(r.date)+'</td>'
+      +'<td class="editable '+(em.orderNo!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="orderNo" oninput="onCellEdit(this)" style="color:var(--ac-t)">'+eH(curOrder)+'</td>'
+      +'<td class="editable '+(em.ocmt!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="ocmt" oninput="onCellEdit(this)" style="font-size:10px;color:var(--t5);font-style:italic">'+eH(curOcmt)+'</td>'
+      +'<td class="editable '+(em.oclient!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="oclient" oninput="onCellEdit(this)" style="font-size:10px;color:var(--t5);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curClient)+'">'+eH(curClient)+'</td>'
+      +'<td class="editable mono '+(em.hours!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="hours" oninput="onCellEdit(this)" style="text-align:right;color:#F59E0B;font-weight:600">'+curHours+'</td>'
+      +'<td class="editable '+(em.taskType!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="taskType" oninput="onCellEdit(this)" style="font-size:11px;color:var(--c-t)">'+eH(curTask)+'</td>'
+      +'<td class="editable '+(em.abbr!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="abbr" oninput="onCellEdit(this)"><span style="font-size:11px">'+eH(curAbbr)+'</span></td>'
+      +'<td class="editable '+(em.content!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="content" oninput="onCellEdit(this)" style="color:var(--t3);font-size:11px">'+eH(curContent)+'</td>'
+      +'</tr>';
+  }else{
+    return'<tr style="'+(hasEdit?'background:rgba(245,158,11,.06)':'')+'">'
+      +'<td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:'+c+'"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="'+eH(r.name)+'">'+eH(dn)+'</span></span></td>'
+      +'<td class="mono" style="color:var(--t4);white-space:nowrap">'+fD(r.date)+'</td>'
+      +'<td class="mono" style="color:var(--ac-t)">'+eH(curOrder)+'</td>'
+      +'<td style="font-size:10px;color:var(--t5);font-style:italic;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curOcmt)+'">'+eH(curOcmt)+'</td>'
+      +'<td style="font-size:10px;color:var(--t5);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curClient)+'">'+eH(curClient)+'</td>'
+      +'<td class="mono" style="text-align:right;color:#F59E0B;font-weight:600">'+curHours+'</td>'
+      +'<td style="font-size:11px;color:var(--c-t)">'+eH(curTask)+'</td>'
+      +'<td><span class="badge" style="background:'+(ABG[curAbbr]||'#1A1F35')+';color:'+(AFG[curAbbr]||'#94A3B8')+'">'+curAbbr+'</span></td>'
+      +'<td style="color:var(--t3);font-size:11px;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curContent)+'">'+ch+'</td>'
+      +'</tr>';
+  }
+}
+
+function _vsRender(){
+  if(!_vsData.length){return}
+  if(!_vsWrapEl){_vsWrapEl=document.getElementById('tBody').closest('.tw')}
+  if(!_vsWrapEl)return;
+  var scrollTop=_vsWrapEl.scrollTop;
+  var viewH=_vsWrapEl.clientHeight;
+  var total=_vsData.length;
+  var colSpan=_vsEditable?10:9;
+
+  var startIdx=Math.max(0,Math.floor(scrollTop/VS_ROW_H)-VS_BUFFER);
+  var endIdx=Math.min(total,Math.ceil((scrollTop+viewH)/VS_ROW_H)+VS_BUFFER);
+
+  var topPad=startIdx*VS_ROW_H;
+  var bottomPad=(total-endIdx)*VS_ROW_H;
+
+  var parts=[];
+  if(topPad>0)parts.push('<tr style="height:'+topPad+'px"><td colspan="'+colSpan+'"></td></tr>');
+  for(var i=startIdx;i<endIdx;i++){
+    parts.push(_vsRenderRow(_vsData[i],i,_vsEditable));
+  }
+  if(bottomPad>0)parts.push('<tr style="height:'+bottomPad+'px"><td colspan="'+colSpan+'"></td></tr>');
+
+  document.getElementById('tBody').innerHTML=parts.join('');
+}
+
+function _vsOnScroll(){
+  if(_vsRAF)return;
+  _vsRAF=requestAnimationFrame(function(){_vsRAF=0;_vsRender()});
+}
+
 function renderTblRows(f,editable){
-  const kw=cKw?cKw.toLowerCase():'';
-  const tb=document.getElementById('tBody');
-  /* 이름→색상 인덱스 사전계산 (O(n) indexOf 제거) */
-  const _nameIdx=new Map();aN.forEach(function(n,i){_nameIdx.set(n,i)});
-  tb.innerHTML=f.map((r,idx)=>{
-    const ni=_nameIdx.get(r.name)||0,c=COL[ni%COL.length];
-    const dn=typeof shortName==='function'?shortName(r.name):r.name;
-    const ocmt=r.ocmt||getOCmt(r.orderNo);
-    const oclient=r.oclient||getOClient(r.orderNo);
-    const em=editMap[idx]||{};
-    const curOrder=em.orderNo!==undefined?em.orderNo:r.orderNo;
-    const curOcmt=em.ocmt!==undefined?em.ocmt:(em.orderNo!==undefined?getOCmt(em.orderNo):ocmt);
-    const curClient=em.oclient!==undefined?em.oclient:(em.orderNo!==undefined?getOClient(em.orderNo):oclient);
-    const curHours=em.hours!==undefined?em.hours:r.hours;
-    const curTask=em.taskType!==undefined?em.taskType:r.taskType;
-    const curAbbr=em.abbr!==undefined?em.abbr:r.abbr;
-    const curContent=em.content!==undefined?em.content:r.content;
-    const hasEdit=Object.keys(em).length>0;
+  _vsData=f;
+  _vsEditable=editable;
+  _vsKw=cKw?cKw.toLowerCase():'';
+  _vsNameIdx=new Map();
+  aN.forEach(function(n,i){_vsNameIdx.set(n,i)});
 
-    let ch=eH(curContent);
-    if(kw&&!editable){const rx=new RegExp('('+kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');ch=ch.replace(rx,'<mark style="background:var(--mk);color:var(--mk-t);padding:0 2px;border-radius:2px">$1</mark>')}
-
-    if(editable){
-      const isDel=delSet.has(idx);
-      return`<tr style="${isDel?'background:rgba(239,68,68,.08)':hasEdit?'background:rgba(245,158,11,.06)':''}">
-        <td><input type="checkbox" class="del-chk" data-delidx="${idx}" ${isDel?'checked':''} onchange="toggleDelRow(this)"></td>
-        <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:${c}"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="${eH(r.name)}">${eH(dn)}</span></span></td>
-        <td class="mono" style="color:var(--t4);white-space:nowrap">${fD(r.date)}</td>
-        <td class="editable ${em.orderNo!==undefined?'modified':''}" contenteditable="true" data-row="${idx}" data-field="orderNo" oninput="onCellEdit(this)" style="color:var(--ac-t)">${eH(curOrder)}</td>
-        <td class="editable ${em.ocmt!==undefined?'modified':''}" contenteditable="true" data-row="${idx}" data-field="ocmt" oninput="onCellEdit(this)" style="font-size:10px;color:var(--t5);font-style:italic">${eH(curOcmt)}</td>
-        <td class="editable ${em.oclient!==undefined?'modified':''}" contenteditable="true" data-row="${idx}" data-field="oclient" oninput="onCellEdit(this)" style="font-size:10px;color:var(--t5);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${eH(curClient)}">${eH(curClient)}</td>
-        <td class="editable mono ${em.hours!==undefined?'modified':''}" contenteditable="true" data-row="${idx}" data-field="hours" oninput="onCellEdit(this)" style="text-align:right;color:#F59E0B;font-weight:600">${curHours}</td>
-        <td class="editable ${em.taskType!==undefined?'modified':''}" contenteditable="true" data-row="${idx}" data-field="taskType" oninput="onCellEdit(this)" style="font-size:11px;color:var(--c-t)">${eH(curTask)}</td>
-        <td class="editable ${em.abbr!==undefined?'modified':''}" contenteditable="true" data-row="${idx}" data-field="abbr" oninput="onCellEdit(this)"><span style="font-size:11px">${eH(curAbbr)}</span></td>
-        <td class="editable ${em.content!==undefined?'modified':''}" contenteditable="true" data-row="${idx}" data-field="content" oninput="onCellEdit(this)" style="color:var(--t3);font-size:11px">${eH(curContent)}</td>
-      </tr>`;
-    }else{
-      return`<tr style="${hasEdit?'background:rgba(245,158,11,.06)':''}">
-        <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:${c}"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="${eH(r.name)}">${eH(dn)}</span></span></td>
-        <td class="mono" style="color:var(--t4);white-space:nowrap">${fD(r.date)}</td>
-        <td class="mono" style="color:var(--ac-t)">${eH(curOrder)}</td>
-        <td style="font-size:10px;color:var(--t5);font-style:italic;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${eH(curOcmt)}">${eH(curOcmt)}</td>
-        <td style="font-size:10px;color:var(--t5);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${eH(curClient)}">${eH(curClient)}</td>
-        <td class="mono" style="text-align:right;color:#F59E0B;font-weight:600">${curHours}</td>
-        <td style="font-size:11px;color:var(--c-t)">${eH(curTask)}</td>
-        <td><span class="badge" style="background:${ABG[curAbbr]||'#1A1F35'};color:${AFG[curAbbr]||'#94A3B8'}">${curAbbr}</span></td>
-        <td style="color:var(--t3);font-size:11px;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${eH(curContent)}">${ch}</td>
-      </tr>`;
-    }
-  }).join('');
+  /* .tw 래퍼에 scroll 이벤트 바인딩 (최초 1회) */
+  if(!_vsWrapEl){
+    _vsWrapEl=document.getElementById('tBody').closest('.tw');
+    if(_vsWrapEl)_vsWrapEl.addEventListener('scroll',_vsOnScroll);
+  }
+  /* 스크롤 위치 초기화 */
+  if(_vsWrapEl)_vsWrapEl.scrollTop=0;
+  _vsRender();
 }
 
 function onCellEdit(cell){
@@ -2343,7 +2389,11 @@ function renderPatchNotes(){
       '테이블 렌더링 최적화 — 이름별 색상 룩업 O(n²) → O(1)',
       '중복 레코드 제거 버튼 추가 (🧹)',
       '병합 시 동일 레코드 덮어쓰기(갱신) 지원',
-      '로딩 메시지 즉시 제거 + IndexedDB 캐싱 제거'
+      '로딩 메시지 즉시 제거 + IndexedDB 캐싱 제거',
+      '가상 스크롤 — 화면에 보이는 행만 렌더링 (수천 행 DOM 제거)',
+      'GET 응답 ETag 캐싱 — 데이터 변경 없으면 304 반환',
+      '서버 SELECT 필드 최소화 — 불필요 컬럼 제외로 전송량 감소',
+      '수주맵 불러오기 후 상세 항목 미반영 수정 (null 폴백)'
     ]},
     {ver:'9.8',date:'2026-04-07',title:'서버 DB 전용 전환 + 편집모드 저장 수정',tag:'fix',items:[
       '수주명/거래처 저장을 서버 DB 전용으로 단순화 (localStorage·메모리 임시저장 제거)',
