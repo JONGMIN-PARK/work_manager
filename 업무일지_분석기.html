@@ -921,7 +921,13 @@ if(typeof wrBulkPut!=='function'){
   var wrClear=function(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');tx.objectStore('workRecords').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
 }
 function wrKey(r){return r.date+'|'+r.name+'|'+r.orderNo+'|'+r.hours+'|'+(r.abbr||'')+'|'+(r.dept||'')+'|'+r.content}
-function wrMerge(existing,newRecs){var keys=new Set(existing.map(wrKey));var toAdd=newRecs.filter(r=>!keys.has(wrKey(r)));return{toAdd:toAdd,added:toAdd.length}}
+function wrMerge(existing,newRecs){
+  /* 기존 데이터 자체 중복도 제거 */
+  var seen=new Set();var deduped=[];
+  existing.forEach(function(r){var k=wrKey(r);if(!seen.has(k)){seen.add(k);deduped.push(r)}});
+  var toAdd=newRecs.filter(function(r){return!seen.has(wrKey(r))});
+  return{existing:deduped,toAdd:toAdd,added:toAdd.length,removedDups:existing.length-deduped.length}
+}
 
 /* ═══ MODE ═══ */
 let curMode='weekly';
@@ -1028,6 +1034,8 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
   var newRecords=parseFileBuf(buf,enc);
   if(!newRecords.length)return;
   if(dept)newRecords.forEach(function(r){r.dept=dept});
+  /* 파일 자체 중복 제거 */
+  var _seen=new Set();newRecords=newRecords.filter(function(r){var k=wrKey(r);if(_seen.has(k))return false;_seen.add(k);return true});
 
   // DB에 기존 데이터가 있는지 확인
   var existCount=0;
@@ -1038,10 +1046,10 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
     var choice=await showWorkRecordChoiceModal(existCount, newRecords.length);
     if(choice==='cancel')return;
     if(choice==='merge'){
-      // 병합: 기존 + 신규 (중복 제거)
+      // 병합: 기존 중복 제거 + 신규 추가
       var existing=await wrGetAll();
       var result=wrMerge(existing, newRecords);
-      var merged=existing.concat(result.toAdd);
+      var merged=result.existing.concat(result.toAdd);
       await wrBulkPut(merged);
       aD=merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
       showToast('📊 업무일지 갱신: '+result.added+'건 추가, 총 '+merged.length+'건 (중복 '+(newRecords.length-result.added)+'건 제외)');
@@ -1127,6 +1135,8 @@ function importWorkRecordsJSON(file){
     try{
       var data=JSON.parse(e.target.result);
       if(!data.records||!data.records.length){showToast('유효하지 않은 업무일지 파일입니다.','error');return}
+      /* 파일 자체 중복 제거 */
+      var _seen=new Set();data.records=data.records.filter(function(r){var k=wrKey(r);if(_seen.has(k))return false;_seen.add(k);return true});
       var existCount=await wrCount();
       if(existCount>0){
         var choice=await showWorkRecordChoiceModal(existCount, data.records.length);
@@ -1134,7 +1144,7 @@ function importWorkRecordsJSON(file){
         if(choice==='merge'){
           var existing=await wrGetAll();
           var result=wrMerge(existing, data.records);
-          var merged=existing.concat(result.toAdd);
+          var merged=result.existing.concat(result.toAdd);
           await wrBulkPut(merged);
           aD=merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
           showToast('📊 업무일지 갱신: '+result.added+'건 추가, 총 '+merged.length+'건');
