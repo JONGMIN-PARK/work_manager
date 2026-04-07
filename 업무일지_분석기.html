@@ -3844,26 +3844,60 @@ async function awRunServerDownload() {
   var runBtn = document.getElementById('awRunBtn');
   var cancelBtn = document.getElementById('awCancelBtn');
   var logBox = document.getElementById('awLogBox');
-  runBtn.disabled = true; runBtn.style.opacity = '0.5'; runBtn.textContent = '⏳ 실행 중...';
+  runBtn.disabled = true; runBtn.style.opacity = '0.5'; runBtn.textContent = '⏳ 연결 확인 중...';
   cancelBtn.style.display = '';
   logBox.style.display = 'block';
-  logBox.innerHTML = '<div style="color:#22D3EE">[시작] 서버에서 애니웍스 다운로드 시작...</div>';
+  logBox.innerHTML = '';
 
-  var serverBase = awGetServerBase();
+  var payload = { username: id, password: pw, start_date: start, end_date: end, teams: teams };
+  var useLocal = false;
+
+  // 1단계: 로컬 에이전트(사내 PC) 연결 시도
+  logBox.innerHTML += '<div style="color:#22D3EE">[확인] 사내 PC 로컬 에이전트 연결 시도 (localhost:'+_awLocalPort+')...</div>';
   try {
-    var resp = await apiFetch('/api/anyworks/download', {
-      method: 'POST',
-      body: JSON.stringify({ username: id, password: pw, start_date: start, end_date: end, teams: teams })
-    });
+    var ctrl = new AbortController();
+    var tid = setTimeout(function(){ ctrl.abort(); }, 2000);
+    var localHealth = await fetch(_awLocalBase + '/health', { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (localHealth.ok) {
+      useLocal = true;
+      _awActiveBase = _awLocalBase;
+      logBox.innerHTML += '<div style="color:#6A9955">[확인] 로컬 에이전트 연결 성공! 사내 PC에서 다운로드합니다.</div>';
+    }
+  } catch(e) {
+    logBox.innerHTML += '<div style="color:#FCD34D">[확인] 로컬 에이전트 미연결 → 클라우드 서버로 시도합니다.</div>';
+  }
+
+  runBtn.textContent = '⏳ 실행 중...';
+
+  try {
+    var resp;
+    if (useLocal) {
+      // 로컬 에이전트로 요청
+      var localResp = await fetch(_awLocalBase + '/download', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      resp = await localResp.json();
+      if (!localResp.ok) throw new Error(resp.error || 'API 오류');
+    } else {
+      // 클라우드 서버로 요청
+      _awActiveBase = '';
+      resp = await apiFetch('/api/anyworks/download', {
+        method: 'POST', body: JSON.stringify(payload)
+      });
+    }
     if (!resp || !resp.job_id) throw new Error('작업 생성 실패');
 
     _anyworksJobId = resp.job_id;
     _awLastLogIndex = 0;
+    logBox.innerHTML += '<div style="color:#22D3EE">[시작] 다운로드 작업 시작 (job: '+resp.job_id+')</div>';
 
     // 폴링 시작
     _anyworksPollTimer = setInterval(function() { awPollServerJob(logBox, runBtn, cancelBtn); }, 2000);
   } catch(e) {
     logBox.innerHTML += '<div style="color:#EF4444">오류: ' + eH(e.message) + '</div>';
+    if (!useLocal) logBox.innerHTML += '<div style="color:#FCD34D">💡 사내 PC에서 <b>node local-agent.js</b>를 실행하면 로컬 다운로드가 가능합니다.</div>';
     runBtn.disabled = false; runBtn.style.opacity = '1'; runBtn.textContent = '🚀 자동 다운로드 & 적용';
     cancelBtn.style.display = 'none';
   }
@@ -3872,7 +3906,13 @@ async function awRunServerDownload() {
 var _awLastLogIndex = 0;
 async function awPollServerJob(logBox, runBtn, cancelBtn) {
   try {
-    var resp = await apiFetch('/api/anyworks/jobs/' + _anyworksJobId);
+    var resp;
+    if (_awActiveBase) {
+      var r = await fetch(_awActiveBase + '/jobs/' + _anyworksJobId);
+      resp = await r.json();
+    } else {
+      resp = await apiFetch('/api/anyworks/jobs/' + _anyworksJobId);
+    }
     if (!resp) return;
 
     // 새 로그 추가
@@ -3959,7 +3999,11 @@ async function awPollServerJob(logBox, runBtn, cancelBtn) {
 
 function awCancelJob() {
   if (_anyworksJobId) {
-    apiFetch('/api/anyworks/cancel/' + _anyworksJobId, { method: 'POST' }).catch(function(){});
+    if (_awActiveBase) {
+      fetch(_awActiveBase + '/cancel/' + _anyworksJobId, { method: 'POST' }).catch(function(){});
+    } else {
+      apiFetch('/api/anyworks/cancel/' + _anyworksJobId, { method: 'POST' }).catch(function(){});
+    }
   }
   if (_anyworksPollTimer) { clearInterval(_anyworksPollTimer); _anyworksPollTimer = null; }
   var runBtn = document.getElementById('awRunBtn');
