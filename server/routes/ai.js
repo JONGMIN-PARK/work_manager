@@ -6,8 +6,10 @@ var router = express.Router();
 var config = require('../config');
 var aiService = require('../services/ai.service');
 var { authenticate } = require('../middleware/auth');
+var tenant = require('../middleware/tenant');
 
 router.use(authenticate);
+router.use(tenant.tenantScope);
 
 /**
  * POST /api/ai/summary

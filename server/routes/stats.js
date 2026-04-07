@@ -2,8 +2,10 @@ var express = require('express');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
+var tenant = require('../middleware/tenant');
 
 router.use(auth.authenticate);
+router.use(tenant.tenantScope);
 
 // ═══ GET /api/stats/summary ═══
 // 기간별 전체 요약 (총 시간, 인원수, 수주수, 업무분장 분포)
@@ -13,9 +15,9 @@ router.get('/summary', async function (req, res) {
     var endDate = req.query.endDate || '99991231';
     var names = req.query.names ? req.query.names.split(',') : null;
 
-    var whereBase = 'WHERE date >= $1 AND date <= $2';
-    var params = [startDate, endDate];
-    var idx = 3;
+    var whereBase = 'WHERE tenant_id = $1 AND date >= $2 AND date <= $3';
+    var params = [req.tenant.id, startDate, endDate];
+    var idx = 4;
     if (names && names.length > 0) {
       whereBase += ' AND name = ANY($' + idx++ + ')';
       params.push(names);
@@ -58,8 +60,8 @@ router.get('/weekly', async function (req, res) {
     var endDate = req.query.endDate || '99991231';
     var names = req.query.names ? req.query.names.split(',') : null;
 
-    var params = [startDate, endDate];
-    var idx = 3;
+    var params = [req.tenant.id, startDate, endDate];
+    var idx = 4;
     var nameFilter = '';
     if (names && names.length > 0) {
       nameFilter = ' AND name = ANY($' + idx++ + ')';
@@ -68,13 +70,13 @@ router.get('/weekly', async function (req, res) {
 
     // 날짜별 × 인원별 × 업무분장별 집계
     var sql = 'SELECT date, name, abbr, COALESCE(SUM(hours),0) as hours, COUNT(*) as cnt ' +
-      'FROM work_records WHERE date >= $1 AND date <= $2' + nameFilter +
+      'FROM work_records WHERE tenant_id = $1 AND date >= $2 AND date <= $3' + nameFilter +
       ' GROUP BY date, name, abbr ORDER BY date, name, abbr';
     var r = await db.query(sql, params);
 
     // 날짜별 소계
     var dailySql = 'SELECT date, COALESCE(SUM(hours),0) as hours, COUNT(DISTINCT name) as people ' +
-      'FROM work_records WHERE date >= $1 AND date <= $2' + nameFilter +
+      'FROM work_records WHERE tenant_id = $1 AND date >= $2 AND date <= $3' + nameFilter +
       ' GROUP BY date ORDER BY date';
     var dailyR = await db.query(dailySql, params);
 
@@ -101,10 +103,10 @@ router.get('/by-team', async function (req, res) {
       'FROM work_records wr ' +
       'LEFT JOIN users u ON u.name = wr.name AND u.status = \'active\' ' +
       'LEFT JOIN departments d ON u.department_id = d.id ' +
-      'WHERE wr.date >= $1 AND wr.date <= $2 ' +
+      'WHERE wr.tenant_id = $1 AND wr.date >= $2 AND wr.date <= $3 ' +
       'GROUP BY u.department_id, d.name, wr.name ' +
       'ORDER BY d.name NULLS LAST, total_hours DESC';
-    var r = await db.query(sql, [startDate, endDate]);
+    var r = await db.query(sql, [req.tenant.id, startDate, endDate]);
 
     res.json({ data: r.rows });
   } catch (e) {
@@ -121,8 +123,8 @@ router.get('/by-order', async function (req, res) {
     var endDate = req.query.endDate || '99991231';
     var names = req.query.names ? req.query.names.split(',') : null;
 
-    var params = [startDate, endDate];
-    var idx = 3;
+    var params = [req.tenant.id, startDate, endDate];
+    var idx = 4;
     var nameFilter = '';
     if (names && names.length > 0) {
       nameFilter = ' AND name = ANY($' + idx++ + ')';
@@ -131,7 +133,7 @@ router.get('/by-order', async function (req, res) {
 
     var sql = 'SELECT order_no, name, COALESCE(SUM(hours),0) as hours, ' +
       'COUNT(*) as record_count, MIN(date) as first_date, MAX(date) as last_date ' +
-      'FROM work_records WHERE date >= $1 AND date <= $2' + nameFilter +
+      'FROM work_records WHERE tenant_id = $1 AND date >= $2 AND date <= $3' + nameFilter +
       ' GROUP BY order_no, name ORDER BY order_no, hours DESC';
     var r = await db.query(sql, params);
 

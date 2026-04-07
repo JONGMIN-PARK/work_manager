@@ -4,16 +4,18 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var { parsePagination } = require('../middleware/pagination');
 var notificationService = require('../services/notification.service');
+var tenant = require('../middleware/tenant');
 
 router.use(auth.authenticate);
+router.use(tenant.tenantScope);
 
 // GET /api/milestones?projectId=xxx
 router.get('/', async function (req, res) {
   try {
-    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM milestones';
-    var params = [];
+    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM milestones WHERE tenant_id = $1';
+    var params = [req.tenant.id];
     if (req.query.projectId) {
-      sql += ' WHERE project_id = $1';
+      sql += ' AND project_id = $2';
       params.push(req.query.projectId);
     }
 
@@ -38,9 +40,9 @@ router.post('/', async function (req, res) {
     var b = req.body;
     var id = b.id || ('ms-' + require('crypto').randomUUID().slice(0, 12));
     var r = await db.query(
-      "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
+      "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
       [id, b.projectId || b.project_id, b.name || '', b.startDate || b.start_date || '',
-       b.endDate || b.end_date || '', b.status || 'waiting', b.order || b.sort_order || 0, req.user.sub]
+       b.endDate || b.end_date || '', b.status || 'waiting', b.order || b.sort_order || 0, req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
@@ -54,8 +56,8 @@ router.put('/:id', async function (req, res) {
   try {
     var b = req.body;
     var r = await db.query(
-      "UPDATE milestones SET name=COALESCE($1,name), start_date=COALESCE($2,start_date), end_date=COALESCE($3,end_date), status=COALESCE($4,status), sort_order=COALESCE($5,sort_order) WHERE id=$6 RETURNING *",
-      [b.name, b.startDate || b.start_date, b.endDate || b.end_date, b.status, b.order || b.sort_order, req.params.id]
+      "UPDATE milestones SET name=COALESCE($1,name), start_date=COALESCE($2,start_date), end_date=COALESCE($3,end_date), status=COALESCE($4,status), sort_order=COALESCE($5,sort_order) WHERE id=$6 AND tenant_id=$7 RETURNING *",
+      [b.name, b.startDate || b.start_date, b.endDate || b.end_date, b.status, b.order || b.sort_order, req.params.id, req.tenant.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
@@ -82,7 +84,7 @@ router.put('/:id', async function (req, res) {
 // DELETE /api/milestones/:id
 router.delete('/:id', async function (req, res) {
   try {
-    var r = await db.query('DELETE FROM milestones WHERE id = $1 RETURNING id', [req.params.id]);
+    var r = await db.query('DELETE FROM milestones WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {

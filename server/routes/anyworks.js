@@ -1,6 +1,11 @@
 var express = require('express');
 var router = express.Router();
 var engine = require('../services/anyworks-engine');
+var auth = require('../middleware/auth');
+var tenant = require('../middleware/tenant');
+
+router.use(auth.authenticate);
+router.use(tenant.tenantScope);
 
 // POST /api/anyworks/download — 다운로드 작업 시작
 router.post('/download', function (req, res) {

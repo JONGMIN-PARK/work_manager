@@ -2,17 +2,19 @@ var express = require('express');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
+var tenant = require('../middleware/tenant');
 
 router.use(auth.authenticate);
+router.use(tenant.tenantScope);
 router.use(auth.requireRole('admin'));
 
 // GET /api/audit — 감사 로그 조회
 router.get('/', async function (req, res) {
   try {
     var q = req.query;
-    var where = [];
-    var params = [];
-    var idx = 1;
+    var where = ['a.tenant_id = $1'];
+    var params = [req.tenant.id];
+    var idx = 2;
 
     if (q.userId) { where.push('a.user_id = $' + idx++); params.push(q.userId); }
     if (q.action) { where.push('a.action = $' + idx++); params.push(q.action); }
@@ -54,7 +56,7 @@ router.get('/', async function (req, res) {
 // GET /api/audit/actions — 사용 가능한 액션 목록
 router.get('/actions', async function (req, res) {
   try {
-    var r = await db.query('SELECT DISTINCT action FROM audit_logs ORDER BY action');
+    var r = await db.query('SELECT DISTINCT action FROM audit_logs WHERE tenant_id = $1 ORDER BY action', [req.tenant.id]);
     res.json({ data: r.rows.map(function (row) { return row.action; }) });
   } catch (e) {
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

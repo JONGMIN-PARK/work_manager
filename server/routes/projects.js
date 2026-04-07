@@ -6,8 +6,10 @@ var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var notificationService = require('../services/notification.service');
+var tenant = require('../middleware/tenant');
 
 router.use(auth.authenticate);
+router.use(tenant.tenantScope);
 
 // ─── GET /api/projects ───
 router.get('/', async function (req, res) {
@@ -20,18 +22,18 @@ router.get('/', async function (req, res) {
     var deptId = req.user.departmentId;
     if (role === 'admin' || role === 'executive') {
       // admin/executive: 전체 프로젝트
-      r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM projects ORDER BY created_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
+      r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM projects WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [req.tenant.id, pg.limit, pg.offset]);
     } else if (role === 'manager') {
       // manager: 소속 부서 프로젝트 + 본인이 멤버/PL인 프로젝트
       r = await db.query(
-        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL WHERE p.department_id = $2 OR pm.user_id IS NOT NULL OR p.department_id IS NULL ORDER BY p.created_at DESC LIMIT $3 OFFSET $4",
-        [userId, deptId, pg.limit, pg.offset]
+        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL WHERE p.tenant_id = $2 AND (p.department_id = $3 OR pm.user_id IS NOT NULL OR p.department_id IS NULL) ORDER BY p.created_at DESC LIMIT $4 OFFSET $5",
+        [userId, req.tenant.id, deptId, pg.limit, pg.offset]
       );
     } else {
       // member: 소속 부서 프로젝트(읽기) + 배정된 프로젝트
       r = await db.query(
-        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL WHERE p.department_id = $2 OR pm.user_id IS NOT NULL ORDER BY p.created_at DESC LIMIT $3 OFFSET $4",
-        [userId, deptId, pg.limit, pg.offset]
+        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL WHERE p.tenant_id = $2 AND (p.department_id = $3 OR pm.user_id IS NOT NULL) ORDER BY p.created_at DESC LIMIT $4 OFFSET $5",
+        [userId, req.tenant.id, deptId, pg.limit, pg.offset]
       );
     }
 
@@ -47,7 +49,7 @@ router.get('/', async function (req, res) {
 // ─── GET /api/projects/:id ───
 router.get('/:id', async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
+    var r = await db.query('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     res.json({ data: r.rows[0] });
   } catch (e) {
@@ -63,12 +65,12 @@ router.post('/', rbac.checkPermission('project.create'), async function (req, re
     var id = b.id || ('proj-' + require('crypto').randomUUID().slice(0, 12));
     var deptId = b.departmentId || b.department_id || req.user.departmentId || null;
     var r = await db.query(
-      "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16) RETURNING *",
+      "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16,$17) RETURNING *",
       [id, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
        b.status || 'active', b.progress || 0, b.estimatedHours || b.estimated_hours || 0,
        JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
        b.color || '#3B82F6', b.memo || '', b.currentPhase || b.current_phase || 'order',
-       JSON.stringify(b.phases || {}), req.user.sub, deptId]
+       JSON.stringify(b.phases || {}), req.user.sub, deptId, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
@@ -102,10 +104,10 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
     for (var k in updates) { if (updates[k] !== undefined) clean[k] = updates[k]; }
 
     // 상태 변경 추적을 위해 이전 상태 조회
-    var prevR = clean.status ? await db.query('SELECT status, name, order_no, end_date FROM projects WHERE id = $1', [req.params.id]) : null;
+    var prevR = clean.status ? await db.query('SELECT status, name, order_no, end_date FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]) : null;
     var prev = prevR && prevR.rows[0] ? prevR.rows[0] : null;
 
-    var result = await lock.optimisticUpdate(db, 'projects', 'id', req.params.id, b.version, clean, req.user.sub);
+    var result = await lock.optimisticUpdate(db, 'projects', 'id', req.params.id, b.version, clean, req.user.sub, { clause: 'AND tenant_id = $NEXT1', values: [req.tenant.id] });
 
     if (result.conflict) return lock.sendConflict(res, result.latest, result.yourVersion);
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
@@ -134,12 +136,12 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
     var result = await db.transaction(async function (client) {
       // 1. 프로젝트 생성
       var pr = await client.query(
-        "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15) RETURNING *",
+        "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16) RETURNING *",
         [projId, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
          b.status || 'active', b.progress || 0, b.estimatedHours || b.estimated_hours || 0,
          JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
          b.color || '#3B82F6', b.memo || '', b.currentPhase || b.current_phase || 'order',
-         JSON.stringify(b.phases || {}), req.user.sub]
+         JSON.stringify(b.phases || {}), req.user.sub, req.tenant.id]
       );
       // 2. 마일스톤 일괄 생성
       var milestones = b.milestones || [];
@@ -147,8 +149,8 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
         var m = milestones[i];
         var msId = m.id || ('ms-' + require('crypto').randomUUID().slice(0, 12));
         await client.query(
-          "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-          [msId, projId, m.name || '', m.startDate || m.start_date || '', m.endDate || m.end_date || '', m.status || 'waiting', m.order || m.sort_order || i, req.user.sub]
+          "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+          [msId, projId, m.name || '', m.startDate || m.start_date || '', m.endDate || m.end_date || '', m.status || 'waiting', m.order || m.sort_order || i, req.user.sub, req.tenant.id]
         );
       }
       // 3. 체크리스트 일괄 생성
@@ -157,8 +159,8 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
         var c = checklists[j];
         var chkId = c.id || ('chk-' + require('crypto').randomUUID().slice(0, 12));
         await client.query(
-          "INSERT INTO checklists (id, project_id, phase, items, created_by) VALUES ($1,$2,$3,$4,$5)",
-          [chkId, projId, c.phase || null, JSON.stringify(c.items || []), req.user.sub]
+          "INSERT INTO checklists (id, project_id, phase, items, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6)",
+          [chkId, projId, c.phase || null, JSON.stringify(c.items || []), req.user.sub, req.tenant.id]
         );
       }
       return pr.rows[0];
@@ -173,7 +175,7 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
 // ─── DELETE /api/projects/:id ───
 router.delete('/:id', rbac.checkPermission('project.delete'), async function (req, res) {
   try {
-    var r = await db.query('DELETE FROM projects WHERE id = $1 RETURNING id', [req.params.id]);
+    var r = await db.query('DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     res.json({ message: '삭제 완료' });
   } catch (e) {

@@ -4,8 +4,10 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
+var tenant = require('../middleware/tenant');
 
 router.use(auth.authenticate);
+router.use(tenant.tenantScope);
 
 // GET /api/events
 router.get('/', async function (req, res) {
@@ -15,6 +17,10 @@ router.get('/', async function (req, res) {
     var where = [];
     var params = [];
     var idx = 1;
+
+    // 테넌트 스코핑
+    where.push('tenant_id = $' + idx++);
+    params.push(req.tenant.id);
 
     // 부서 기반 필터 (admin/executive는 전체, manager/member는 소속 부서)
     if (role !== 'admin' && role !== 'executive' && deptId) {
@@ -45,7 +51,7 @@ router.get('/', async function (req, res) {
 // GET /api/events/:id
 router.get('/:id', async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM events WHERE id = $1', [req.params.id]);
+    var r = await db.query('SELECT * FROM events WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
@@ -61,11 +67,11 @@ router.post('/', async function (req, res) {
     var id = b.id || ('evt-' + require('crypto').randomUUID().slice(0, 12));
     var deptId = b.departmentId || b.department_id || req.user.departmentId || null;
     var r = await db.query(
-      "INSERT INTO events (id, title, type, start_date, end_date, project_ids, assignees, color, memo, repeat, repeat_until, created_by, department_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *",
+      "INSERT INTO events (id, title, type, start_date, end_date, project_ids, assignees, color, memo, repeat, repeat_until, created_by, department_id, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *",
       [id, b.title || '', b.type || 'etc', b.startDate || b.start_date || '',
        b.endDate || b.end_date || '', JSON.stringify(b.projectIds || b.project_ids || []),
        JSON.stringify(b.assignees || []), b.color || null, b.memo || '',
-       b.repeat || null, b.repeatUntil || b.repeat_until || null, req.user.sub, deptId]
+       b.repeat || null, b.repeatUntil || b.repeat_until || null, req.user.sub, deptId, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
@@ -90,7 +96,7 @@ router.put('/:id', async function (req, res) {
     if (b.repeat !== undefined) clean.repeat = b.repeat;
     if (b.repeatUntil !== undefined) clean.repeat_until = b.repeatUntil;
 
-    var result = await lock.optimisticUpdate(db, 'events', 'id', req.params.id, b.version, clean);
+    var result = await lock.optimisticUpdate(db, 'events', 'id', req.params.id, b.version, clean, undefined, { clause: 'AND tenant_id = $NEXT1', values: [req.tenant.id] });
     if (result.conflict) return lock.sendConflict(res, result.latest, result.yourVersion);
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: result.row });
@@ -103,7 +109,7 @@ router.put('/:id', async function (req, res) {
 // DELETE /api/events/:id
 router.delete('/:id', async function (req, res) {
   try {
-    var r = await db.query('DELETE FROM events WHERE id = $1 RETURNING id', [req.params.id]);
+    var r = await db.query('DELETE FROM events WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {

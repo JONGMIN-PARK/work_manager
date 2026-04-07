@@ -10,6 +10,7 @@ var config = require('../config');
 var telegramService = require('../services/telegram.service');
 var db = require('../config/db');
 var { authenticate } = require('../middleware/auth');
+var tenant = require('../middleware/tenant');
 
 /** 인라인 버튼 콜백 처리 */
 async function handleCallbackQuery(query) {
@@ -131,7 +132,7 @@ router.post('/webhook', function (req, res) {
  * POST /api/telegram/auth-code
  * 인증코드 발급 (로그인 사용자 전용)
  */
-router.post('/auth-code', authenticate, async function (req, res) {
+router.post('/auth-code', authenticate, tenant.tenantScope, async function (req, res) {
   try {
     if (!telegramService.isConfigured()) {
       return res.status(503).json({ error: 'TELEGRAM_NOT_CONFIGURED', message: '텔레그램 봇이 설정되지 않았습니다.' });
@@ -184,7 +185,7 @@ router.post('/auth-code', authenticate, async function (req, res) {
  * GET /api/telegram/status
  * 연동 상태 조회
  */
-router.get('/status', authenticate, async function (req, res) {
+router.get('/status', authenticate, tenant.tenantScope, async function (req, res) {
   try {
     var configured = telegramService.isConfigured();
     var link = null;
@@ -215,7 +216,7 @@ router.get('/status', authenticate, async function (req, res) {
  * DELETE /api/telegram/unlink
  * 연동 해제
  */
-router.delete('/unlink', authenticate, async function (req, res) {
+router.delete('/unlink', authenticate, tenant.tenantScope, async function (req, res) {
   try {
     await telegramService.unlink(req.user.sub);
     res.json({ message: '텔레그램 연동이 해제되었습니다.' });
@@ -229,11 +230,11 @@ router.delete('/unlink', authenticate, async function (req, res) {
  * GET /api/telegram/prefs
  * 알림 설정 조회
  */
-router.get('/prefs', authenticate, async function (req, res) {
+router.get('/prefs', authenticate, tenant.tenantScope, async function (req, res) {
   try {
     var r = await db.query(
-      'SELECT event_type, is_enabled FROM notification_prefs WHERE user_id = $1 AND channel = \'telegram\'',
-      [req.user.sub]
+      'SELECT event_type, is_enabled FROM notification_prefs WHERE user_id = $1 AND channel = \'telegram\' AND tenant_id = $2',
+      [req.user.sub, req.tenant.id]
     );
     var prefs = {};
     r.rows.forEach(function (row) { prefs[row.event_type] = row.is_enabled; });
@@ -248,7 +249,7 @@ router.get('/prefs', authenticate, async function (req, res) {
  * 알림 설정 변경
  * body: { event_type: string, is_enabled: boolean }
  */
-router.put('/prefs', authenticate, async function (req, res) {
+router.put('/prefs', authenticate, tenant.tenantScope, async function (req, res) {
   try {
     var eventType = req.body.event_type;
     var isEnabled = !!req.body.is_enabled;
@@ -258,8 +259,8 @@ router.put('/prefs', authenticate, async function (req, res) {
     }
 
     await db.query(
-      'INSERT INTO notification_prefs (user_id, channel, event_type, is_enabled) VALUES ($1, \'telegram\', $2, $3) ON CONFLICT (user_id, channel, event_type) DO UPDATE SET is_enabled = $3',
-      [req.user.sub, eventType, isEnabled]
+      'INSERT INTO notification_prefs (user_id, channel, event_type, is_enabled, tenant_id) VALUES ($1, \'telegram\', $2, $3, $4) ON CONFLICT (user_id, channel, event_type) DO UPDATE SET is_enabled = $3',
+      [req.user.sub, eventType, isEnabled, req.tenant.id]
     );
 
     res.json({ message: '설정이 변경되었습니다.', data: { event_type: eventType, is_enabled: isEnabled } });
@@ -272,7 +273,7 @@ router.put('/prefs', authenticate, async function (req, res) {
  * GET /api/telegram/debug
  * 봇 상태 + Webhook 상태 진단 (관리자 전용)
  */
-router.get('/debug', authenticate, async function (req, res) {
+router.get('/debug', authenticate, tenant.tenantScope, async function (req, res) {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 접근 가능' });
@@ -330,7 +331,7 @@ router.get('/debug', authenticate, async function (req, res) {
 
     // 테이블 존재 여부
     try {
-      await db.query('SELECT 1 FROM telegram_links LIMIT 0');
+      await db.query('SELECT 1 FROM telegram_links WHERE tenant_id = $1 LIMIT 0', [req.tenant.id]);
       result.tables = 'OK';
     } catch (e) {
       result.tables = 'ERROR: ' + e.message;
@@ -346,7 +347,7 @@ router.get('/debug', authenticate, async function (req, res) {
  * POST /api/telegram/setup-webhook
  * Webhook 수동 재등록 (관리자 전용)
  */
-router.post('/setup-webhook', authenticate, async function (req, res) {
+router.post('/setup-webhook', authenticate, tenant.tenantScope, async function (req, res) {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 접근 가능' });

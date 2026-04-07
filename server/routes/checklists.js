@@ -4,8 +4,10 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
+var tenant = require('../middleware/tenant');
 
 router.use(auth.authenticate);
+router.use(tenant.tenantScope);
 
 // GET /api/checklists?projectId=xxx&phase=yyy
 router.get('/', async function (req, res) {
@@ -13,6 +15,8 @@ router.get('/', async function (req, res) {
     var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM checklists WHERE 1=1';
     var params = [];
     var idx = 1;
+    // 테넌트 스코핑
+    sql += ' AND tenant_id = $' + idx++; params.push(req.tenant.id);
     if (req.query.projectId) { sql += ' AND project_id = $' + idx++; params.push(req.query.projectId); }
     if (req.query.phase) { sql += ' AND phase = $' + idx++; params.push(req.query.phase); }
 
@@ -32,7 +36,7 @@ router.get('/', async function (req, res) {
 // GET /api/checklists/:id
 router.get('/:id', async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM checklists WHERE id = $1', [req.params.id]);
+    var r = await db.query('SELECT * FROM checklists WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
@@ -47,8 +51,8 @@ router.post('/', async function (req, res) {
     var b = req.body;
     var id = b.id || ('chk-' + require('crypto').randomUUID().slice(0, 12));
     var r = await db.query(
-      "INSERT INTO checklists (id, project_id, phase, items, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING *",
-      [id, b.projectId || b.project_id, b.phase || null, JSON.stringify(b.items || []), req.user.sub]
+      "INSERT INTO checklists (id, project_id, phase, items, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
+      [id, b.projectId || b.project_id, b.phase || null, JSON.stringify(b.items || []), req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
@@ -69,7 +73,9 @@ router.put('/:id', async function (req, res) {
     if (!sets.length) return res.status(400).json({ error: 'BAD_REQUEST', message: '수정할 항목이 없습니다.' });
     sets.push('version = version + 1');
     params.push(req.params.id);
-    var sql = 'UPDATE checklists SET ' + sets.join(', ') + ' WHERE id = $' + idx + ' RETURNING *';
+    var idIdx = idx++;
+    params.push(req.tenant.id);
+    var sql = 'UPDATE checklists SET ' + sets.join(', ') + ' WHERE id = $' + idIdx + ' AND tenant_id = $' + idx + ' RETURNING *';
     var r = await db.query(sql, params);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
@@ -82,7 +88,7 @@ router.put('/:id', async function (req, res) {
 // DELETE /api/checklists/:id
 router.delete('/:id', async function (req, res) {
   try {
-    var r = await db.query('DELETE FROM checklists WHERE id = $1 RETURNING id', [req.params.id]);
+    var r = await db.query('DELETE FROM checklists WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {

@@ -2,10 +2,12 @@ var express = require('express');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
+var tenant = require('../middleware/tenant');
 var rbac = require('../middleware/rbac');
 var { parsePagination } = require('../middleware/pagination');
 
 router.use(auth.authenticate);
+router.use(tenant.tenantScope);
 
 // ─── 업무일지 레코드 (workRecords) ───
 // 주의: /:id 보다 먼저 정의해야 /records가 :id로 매칭되지 않음
@@ -19,19 +21,19 @@ router.get('/records', async function (req, res) {
 
     if ((role === 'manager' || role === 'executive') && deptId) {
       // 팀장/임원: 소속 부서 전체 업무일지 조회
-      where = 'WHERE user_id IN (SELECT id FROM users WHERE department_id = $1)';
-      params = [deptId];
-      idx = 2;
+      where = 'WHERE tenant_id = $1 AND user_id IN (SELECT id FROM users WHERE department_id = $2)';
+      params = [req.tenant.id, deptId];
+      idx = 3;
     } else if (role === 'admin') {
       // 관리자: 전체
-      where = 'WHERE 1=1';
-      params = [];
-      idx = 1;
+      where = 'WHERE tenant_id = $1';
+      params = [req.tenant.id];
+      idx = 2;
     } else {
       // member: 본인만
-      where = 'WHERE user_id = $1';
-      params = [req.user.sub];
-      idx = 2;
+      where = 'WHERE tenant_id = $1 AND user_id = $2';
+      params = [req.tenant.id, req.user.sub];
+      idx = 3;
     }
     if (req.query.date) { where += ' AND date = $' + idx++; params.push(req.query.date); }
     if (req.query.startDate) { where += ' AND date >= $' + idx++; params.push(req.query.startDate); }
@@ -75,14 +77,14 @@ router.get('/records/count', async function (req, res) {
     var deptId = req.user.departmentId;
     var sql, params;
     if ((role === 'manager' || role === 'executive') && deptId) {
-      sql = 'SELECT COUNT(*) as cnt FROM work_records WHERE user_id IN (SELECT id FROM users WHERE department_id = $1)';
-      params = [deptId];
+      sql = 'SELECT COUNT(*) as cnt FROM work_records WHERE tenant_id = $1 AND user_id IN (SELECT id FROM users WHERE department_id = $2)';
+      params = [req.tenant.id, deptId];
     } else if (role === 'admin') {
-      sql = 'SELECT COUNT(*) as cnt FROM work_records';
-      params = [];
+      sql = 'SELECT COUNT(*) as cnt FROM work_records WHERE tenant_id = $1';
+      params = [req.tenant.id];
     } else {
-      sql = 'SELECT COUNT(*) as cnt FROM work_records WHERE user_id = $1';
-      params = [req.user.sub];
+      sql = 'SELECT COUNT(*) as cnt FROM work_records WHERE tenant_id = $1 AND user_id = $2';
+      params = [req.tenant.id, req.user.sub];
     }
     var r = await db.query(sql, params);
     res.json({ data: { count: parseInt(r.rows[0].cnt, 10) } });
@@ -109,7 +111,7 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
     await client.query('BEGIN');
 
     // 해당 사용자의 레코드만 삭제 후 재삽입 (사용자별 데이터 분리)
-    await client.query('DELETE FROM work_records WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2', [userId, req.tenant.id]);
 
     // 배치 삽입 (PostgreSQL 파라미터 한도 대비 500건씩, user_id 포함)
     var BATCH = 500;
@@ -120,10 +122,10 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
       var params = [];
       var idx = 1;
       chunk.forEach(function (r) {
-        values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
-        params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, userId);
+        values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
+        params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, userId, req.tenant.id);
       });
-      var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, user_id) VALUES ' + values.join(',');
+      var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, user_id, tenant_id) VALUES ' + values.join(',');
       await client.query(sql, params);
       totalInserted += chunk.length;
     }
@@ -160,8 +162,8 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
       var u = updates[i];
       if (!u.id) continue;
       promises.push(client.query(
-        'UPDATE work_records SET date=$1, name=$2, order_no=$3, hours=$4, task_type=$5, abbr=$6, content=$7, ocmt=$8, oclient=$9 WHERE id=$10 AND user_id=$11',
-        [u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.id, req.user.sub]
+        'UPDATE work_records SET date=$1, name=$2, order_no=$3, hours=$4, task_type=$5, abbr=$6, content=$7, ocmt=$8, oclient=$9 WHERE id=$10 AND user_id=$11 AND tenant_id=$12',
+        [u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.id, req.user.sub, req.tenant.id]
       ));
       count++;
     }
@@ -183,8 +185,8 @@ router.post('/records', rbac.checkPermission('archive.manage'), async function (
     var r = req.body;
     if (!r.date || !r.name) return res.status(400).json({ error: 'INVALID', message: 'date, name 필수' });
     var result = await db.query(
-      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
-      [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, req.user.sub]
+      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, user_id, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+      [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: result.rows[0] });
   } catch (e) {
@@ -200,7 +202,8 @@ router.delete('/records/batch', rbac.checkPermission('archive.manage'), async fu
     if (!ids.length) return res.json({ count: 0 });
     var placeholders = ids.map(function (_, i) { return '$' + (i + 1); });
     var userIdx = ids.length + 1;
-    var result = await db.query('DELETE FROM work_records WHERE id IN (' + placeholders.join(',') + ') AND (user_id = $' + userIdx + ' OR user_id IS NULL)', ids.concat([req.user.sub]));
+    var tenantIdx = ids.length + 2;
+    var result = await db.query('DELETE FROM work_records WHERE id IN (' + placeholders.join(',') + ') AND (user_id = $' + userIdx + ' OR user_id IS NULL) AND tenant_id = $' + tenantIdx, ids.concat([req.user.sub, req.tenant.id]));
     res.json({ count: result.rowCount });
   } catch (e) {
     console.error('[work-records/batch-delete]', e);
@@ -211,7 +214,7 @@ router.delete('/records/batch', rbac.checkPermission('archive.manage'), async fu
 // DELETE /api/archives/records — 전체 삭제 (해당 사용자 레코드만)
 router.delete('/records', rbac.checkPermission('archive.manage'), async function (req, res) {
   try {
-    await db.query('DELETE FROM work_records WHERE user_id = $1', [req.user.sub]);
+    await db.query('DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2', [req.user.sub, req.tenant.id]);
     res.json({ message: '전체 삭제 완료' });
   } catch (e) {
     console.error('[work-records/clear]', e);
@@ -225,7 +228,7 @@ router.delete('/records', rbac.checkPermission('archive.manage'), async function
 router.get('/', async function (req, res) {
   try {
     var pg = parsePagination(req.query, 100);
-    var r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM work_archives ORDER BY saved_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
+    var r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM work_archives WHERE tenant_id = $1 ORDER BY saved_at DESC LIMIT $2 OFFSET $3', [req.tenant.id, pg.limit, pg.offset]);
     var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
@@ -238,7 +241,7 @@ router.get('/', async function (req, res) {
 // GET /api/archives/:id
 router.get('/:id', async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM work_archives WHERE id = $1', [req.params.id]);
+    var r = await db.query('SELECT * FROM work_archives WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
@@ -252,13 +255,13 @@ router.post('/', rbac.checkPermission('archive.manage'), async function (req, re
   try {
     var b = req.body;
     var r = await db.query(
-      "INSERT INTO work_archives (id, label, date_range, selected_names, total_hours, data, saved_at, uploaded_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO UPDATE SET label=$2, date_range=$3, selected_names=$4, total_hours=$5, data=$6, saved_at=$7 RETURNING *",
+      "INSERT INTO work_archives (id, label, date_range, selected_names, total_hours, data, saved_at, uploaded_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO UPDATE SET label=$2, date_range=$3, selected_names=$4, total_hours=$5, data=$6, saved_at=$7 RETURNING *",
       [b.id, b.label || '', JSON.stringify(b.dateRange || b.date_range || []),
        JSON.stringify(b.selectedNames || b.selected_names || []),
        b.totalHours || b.total_hours || 0,
        JSON.stringify(b.data || []),
        b.savedAt || b.saved_at || new Date().toISOString(),
-       req.user.sub]
+       req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
@@ -270,7 +273,7 @@ router.post('/', rbac.checkPermission('archive.manage'), async function (req, re
 // DELETE /api/archives/:id
 router.delete('/:id', rbac.checkPermission('archive.manage'), async function (req, res) {
   try {
-    var r = await db.query('DELETE FROM work_archives WHERE id = $1 RETURNING id', [req.params.id]);
+    var r = await db.query('DELETE FROM work_archives WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {

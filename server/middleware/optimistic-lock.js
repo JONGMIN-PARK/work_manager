@@ -14,7 +14,11 @@
  * @param {string} [updatedBy] — 수정한 사용자 ID
  * @returns {object} { success, row, conflict }
  */
-async function optimisticUpdate(client, table, idCol, idVal, clientVersion, updates, updatedBy) {
+async function optimisticUpdate(client, table, idCol, idVal, clientVersion, updates, updatedBy, extraWhere) {
+  // extraWhere: optional { clause: 'AND tenant_id = $N', values: [tenantId] }
+  var extraClause = (extraWhere && extraWhere.clause) ? ' ' + extraWhere.clause : '';
+  var extraValues = (extraWhere && extraWhere.values) ? extraWhere.values : [];
+
   // version이 없으면 잠금 없이 진행 (하위호환)
   if (clientVersion === undefined || clientVersion === null) {
     var cols = Object.keys(updates);
@@ -26,7 +30,14 @@ async function optimisticUpdate(client, table, idCol, idVal, clientVersion, upda
       vals.push(updatedBy);
     }
     vals.push(idVal);
-    var sql = 'UPDATE ' + table + ' SET ' + setClause + ' WHERE ' + idCol + ' = $' + vals.length + ' RETURNING *';
+    var whereIdx = vals.length;
+    // append extra where values with correct parameter indices
+    var resolvedExtra = extraClause;
+    for (var ei = 0; ei < extraValues.length; ei++) {
+      resolvedExtra = resolvedExtra.replace('$NEXT' + (ei + 1), '$' + (vals.length + 1));
+      vals.push(extraValues[ei]);
+    }
+    var sql = 'UPDATE ' + table + ' SET ' + setClause + ' WHERE ' + idCol + ' = $' + whereIdx + resolvedExtra + ' RETURNING *';
     var res = await client.query(sql, vals);
     return { success: res.rows.length > 0, row: res.rows[0] || null, conflict: false };
   }
@@ -43,7 +54,16 @@ async function optimisticUpdate(client, table, idCol, idVal, clientVersion, upda
   vals2.push(idVal);
   vals2.push(clientVersion);
 
-  var sql2 = 'UPDATE ' + table + ' SET ' + setClause2 + ' WHERE ' + idCol + ' = $' + (vals2.length - 1) + ' AND version = $' + vals2.length + ' RETURNING *';
+  var idIdx2 = vals2.length - 1;
+  var verIdx2 = vals2.length;
+  // append extra where values
+  var resolvedExtra2 = extraClause;
+  for (var ei2 = 0; ei2 < extraValues.length; ei2++) {
+    resolvedExtra2 = resolvedExtra2.replace('$NEXT' + (ei2 + 1), '$' + (vals2.length + 1));
+    vals2.push(extraValues[ei2]);
+  }
+
+  var sql2 = 'UPDATE ' + table + ' SET ' + setClause2 + ' WHERE ' + idCol + ' = $' + idIdx2 + ' AND version = $' + verIdx2 + resolvedExtra2 + ' RETURNING *';
   var res2 = await client.query(sql2, vals2);
 
   if (res2.rows.length > 0) {

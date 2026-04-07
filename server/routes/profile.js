@@ -2,16 +2,18 @@ var express = require('express');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
+var tenant = require('../middleware/tenant');
 var authService = require('../services/auth.service');
 
 router.use(auth.authenticate);
+router.use(tenant.tenantScope);
 
 // GET /api/profile — 내 프로필 상세
 router.get('/', async function (req, res) {
   try {
     var r = await db.query(
-      "SELECT u.id, u.email, u.name, u.display_name, u.role, u.department_id, d.name as department_name, u.position, u.phone, u.status, u.password_changed_at, u.created_at, u.last_login_at FROM users u LEFT JOIN departments d ON u.department_id = d.id WHERE u.id = $1",
-      [req.user.sub]
+      "SELECT u.id, u.email, u.name, u.display_name, u.role, u.department_id, d.name as department_name, u.position, u.phone, u.status, u.password_changed_at, u.created_at, u.last_login_at FROM users u LEFT JOIN departments d ON u.department_id = d.id WHERE u.id = $1 AND u.tenant_id = $2",
+      [req.user.sub, req.tenant.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
@@ -41,8 +43,11 @@ router.put('/', async function (req, res) {
 
     sets.push('updated_at = now()');
     params.push(req.user.sub);
+    var userIdx = idx++;
+    params.push(req.tenant.id);
+    var tenantIdx = idx;
 
-    var sql = 'UPDATE users SET ' + sets.join(', ') + ' WHERE id = $' + idx + ' RETURNING id, email, name, display_name, role, department_id, position, phone';
+    var sql = 'UPDATE users SET ' + sets.join(', ') + ' WHERE id = $' + userIdx + ' AND tenant_id = $' + tenantIdx + ' RETURNING id, email, name, display_name, role, department_id, position, phone';
     var r = await db.query(sql, params);
 
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
@@ -59,8 +64,8 @@ router.put('/', async function (req, res) {
 router.get('/password-status', async function (req, res) {
   try {
     var r = await db.query(
-      'SELECT password_changed_at FROM users WHERE id = $1',
-      [req.user.sub]
+      'SELECT password_changed_at FROM users WHERE id = $1 AND tenant_id = $2',
+      [req.user.sub, req.tenant.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
 

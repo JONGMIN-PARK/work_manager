@@ -2,14 +2,16 @@ var express = require('express');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
+var tenant = require('../middleware/tenant');
 var authService = require('../services/auth.service');
 
 router.use(auth.authenticate);
+router.use(tenant.tenantScope);
 
 // GET /api/departments — 전체 조직 트리
 router.get('/', async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM departments ORDER BY sort_order, name');
+    var r = await db.query('SELECT * FROM departments WHERE tenant_id = $1 ORDER BY sort_order, name', [req.tenant.id]);
     res.json({ data: r.rows });
   } catch (e) {
     console.error('[departments/list]', e);
@@ -22,8 +24,8 @@ router.post('/', auth.requireRole('admin'), async function (req, res) {
   try {
     var b = req.body;
     var r = await db.query(
-      "INSERT INTO departments (name, parent_id, sort_order) VALUES ($1, $2, $3) RETURNING *",
-      [b.name || '', b.parentId || b.parent_id || null, b.sortOrder || b.sort_order || 0]
+      "INSERT INTO departments (name, parent_id, sort_order, tenant_id) VALUES ($1, $2, $3, $4) RETURNING *",
+      [b.name || '', b.parentId || b.parent_id || null, b.sortOrder || b.sort_order || 0, req.tenant.id]
     );
     await authService.auditLog(req.user.sub, 'create_department', 'department', r.rows[0].id, { name: b.name }, req);
     res.status(201).json({ data: r.rows[0] });
@@ -38,8 +40,8 @@ router.put('/:id', auth.requireRole('admin'), async function (req, res) {
   try {
     var b = req.body;
     var r = await db.query(
-      "UPDATE departments SET name = COALESCE($1, name), parent_id = $2, sort_order = COALESCE($3, sort_order) WHERE id = $4 RETURNING *",
-      [b.name, b.parentId !== undefined ? b.parentId : b.parent_id, b.sortOrder || b.sort_order, req.params.id]
+      "UPDATE departments SET name = COALESCE($1, name), parent_id = $2, sort_order = COALESCE($3, sort_order) WHERE id = $4 AND tenant_id = $5 RETURNING *",
+      [b.name, b.parentId !== undefined ? b.parentId : b.parent_id, b.sortOrder || b.sort_order, req.params.id, req.tenant.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
@@ -53,10 +55,10 @@ router.put('/:id', auth.requireRole('admin'), async function (req, res) {
 router.delete('/:id', auth.requireRole('admin'), async function (req, res) {
   try {
     // 소속 사용자가 있으면 부서 해제
-    await db.query('UPDATE users SET department_id = NULL WHERE department_id = $1', [req.params.id]);
+    await db.query('UPDATE users SET department_id = NULL WHERE department_id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     // 하위 부서 parent 해제
-    await db.query('UPDATE departments SET parent_id = NULL WHERE parent_id = $1', [req.params.id]);
-    var r = await db.query('DELETE FROM departments WHERE id = $1 RETURNING id, name', [req.params.id]);
+    await db.query('UPDATE departments SET parent_id = NULL WHERE parent_id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var r = await db.query('DELETE FROM departments WHERE id = $1 AND tenant_id = $2 RETURNING id, name', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     await authService.auditLog(req.user.sub, 'delete_department', 'department', req.params.id, null, req);
     res.json({ message: '삭제 완료' });
@@ -70,8 +72,8 @@ router.delete('/:id', auth.requireRole('admin'), async function (req, res) {
 router.get('/:id/members', async function (req, res) {
   try {
     var r = await db.query(
-      "SELECT id, name, display_name, email, role, position, phone, status FROM users WHERE department_id = $1 AND status = 'active' ORDER BY name",
-      [req.params.id]
+      "SELECT id, name, display_name, email, role, position, phone, status FROM users WHERE department_id = $1 AND tenant_id = $2 AND status = 'active' ORDER BY name",
+      [req.params.id, req.tenant.id]
     );
     res.json({ data: r.rows });
   } catch (e) {
