@@ -1255,7 +1255,7 @@ function showToast(msg, type) {
   var toast = document.createElement('div');
   toast.className = 'wa-toast';
   var bg = type === 'error' ? '#EF4444' : type === 'warn' ? '#F59E0B' : '#10B981';
-  toast.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;color:#fff;background:' + bg + ';z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,.2);opacity:0;transition:opacity .3s;white-space:nowrap';
+  toast.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;color:#fff;background:' + bg + ';z-index:100000;box-shadow:0 4px 12px rgba(0,0,0,.2);opacity:0;transition:opacity .3s;white-space:nowrap';
   toast.textContent = msg;
   document.body.appendChild(toast);
   requestAnimationFrame(function () { toast.style.opacity = '1'; });
