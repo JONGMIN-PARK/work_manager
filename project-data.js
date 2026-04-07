@@ -1553,12 +1553,18 @@ function showToast(msg, type) {
   wkDel = function (id) { return apiFetch('/api/archives/' + encodeURIComponent(id), { method: 'DELETE' }); };
 
   // ─── 업무일지 레코드 (서버 DB 전용) ───
+  // work records 전용 경량 변환 (JSONB 파싱 불필요, 단일 순회)
+  function toWrRecord(r) {
+    return {
+      id: r.id, date: r.date, name: r.name,
+      orderNo: r.order_no, hours: typeof r.hours === 'string' ? parseFloat(r.hours) || 0 : r.hours || 0,
+      taskType: r.task_type, abbr: r.abbr, content: r.content,
+      ocmt: r.ocmt, oclient: r.oclient, dept: r.dept, userId: r.user_id
+    };
+  }
   wrGetAll = function () {
     return apiFetch('/api/archives/records?limit=50000&all=true').then(function (r) {
-      return toCamelArray(r.data).map(function (rec) {
-        if (typeof rec.hours === 'string') rec.hours = parseFloat(rec.hours) || 0;
-        return rec;
-      });
+      return (r.data || []).map(toWrRecord);
     });
   };
   wrCount = function () {

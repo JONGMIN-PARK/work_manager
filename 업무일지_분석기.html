@@ -330,7 +330,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.8</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.9</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -1114,14 +1114,7 @@ async function loadWorkRecordsFromDB(){
     if(typeof wrGetAll!=='function')return false;
     var records=await wrGetAll();
     if(!records||!records.length)return false;
-    /* 중복 레코드 제거 (동일 date+name+orderNo+hours+content → 첫 건만 유지) */
-    var seen=new Set();var deduped=[];
-    records.forEach(function(r){var k=wrKey(r);if(!seen.has(k)){seen.add(k);deduped.push(r)}});
-    if(deduped.length<records.length){
-      console.log('[loadWorkRecords] 중복 제거:',records.length,'→',deduped.length);
-      wrBulkPut(deduped).catch(function(e){console.warn('[dedup] DB 반영 실패:',e)});
-    }
-    aD=deduped.map(function(r){return Object.assign({},r)});
+    aD=records;
     applyADToUI();
     return true;
   }catch(ex){console.warn('loadWorkRecordsFromDB err:',ex);return false}
@@ -1847,8 +1840,10 @@ function rTbl(f){
 function renderTblRows(f,editable){
   const kw=cKw?cKw.toLowerCase():'';
   const tb=document.getElementById('tBody');
+  /* 이름→색상 인덱스 사전계산 (O(n) indexOf 제거) */
+  const _nameIdx=new Map();aN.forEach(function(n,i){_nameIdx.set(n,i)});
   tb.innerHTML=f.map((r,idx)=>{
-    const ni=aN.indexOf(r.name),c=COL[ni%COL.length];
+    const ni=_nameIdx.get(r.name)||0,c=COL[ni%COL.length];
     const dn=typeof shortName==='function'?shortName(r.name):r.name;
     const ocmt=r.ocmt!==undefined?r.ocmt:getOCmt(r.orderNo);
     const oclient=r.oclient!==undefined?r.oclient:getOClient(r.orderNo);
@@ -2342,6 +2337,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'9.9',date:'2026-04-07',title:'서버 성능 최적화 + 중복 제거',tag:'feature',items:[
+      '서버 PATCH 배치 업데이트 — 개별 UPDATE 루프 → 단일 SQL (N배 속도 향상)',
+      '데이터 로드 경량화 — 전용 변환 함수로 불필요한 JSON.parse 제거',
+      '테이블 렌더링 최적화 — 이름별 색상 룩업 O(n²) → O(1)',
+      '중복 레코드 제거 버튼 추가 (🧹)',
+      '병합 시 동일 레코드 덮어쓰기(갱신) 지원',
+      '로딩 메시지 즉시 제거 + IndexedDB 캐싱 제거'
+    ]},
     {ver:'9.8',date:'2026-04-07',title:'서버 DB 전용 전환 + 편집모드 저장 수정',tag:'fix',items:[
       '수주명/거래처 저장을 서버 DB 전용으로 단순화 (localStorage·메모리 임시저장 제거)',
       '로컬 IndexedDB 폴백 제거 — 서버 API만 사용',
@@ -3606,22 +3609,12 @@ async function _postAuthInit(){
         aD=_srvRes.data.map(function(r){
           var c=_toCamel(r);
           if(typeof c.hours==='string')c.hours=parseFloat(c.hours)||0;
-          // 날짜 정규화: YYYY-MM-DD / YYYY/MM/DD → YYYYMMDD
           if(c.date&&typeof c.date==='string'&&c.date.length>8)c.date=c.date.replace(/[-\/]/g,'').slice(0,8);
           return c;
         });
         applyADToUI();
         _dataLoaded=true;
         var _iel=document.getElementById('initLoading');if(_iel)_iel.remove();
-        // 서버 데이터를 로컬 IndexedDB에 캐싱 (오프라인 대비)
-        try{
-          if(typeof db!=='undefined'&&db&&db.objectStoreNames&&db.objectStoreNames.contains('workRecords')){
-            var _syncTx=db.transaction('workRecords','readwrite');
-            var _syncStore=_syncTx.objectStore('workRecords');
-            _syncStore.clear();
-            aD.forEach(function(r){_syncStore.put(r)});
-          }
-        }catch(syncEx){console.warn('server→IndexedDB sync:',syncEx)}
         // 서버 연결 확인됨 — 그룹/별칭도 서버에서 동기화
         if(typeof syncSettingsFromServer==='function'){
           try{await syncSettingsFromServer()}catch(settEx){console.warn('settings sync:',settEx)}
