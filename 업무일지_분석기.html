@@ -345,6 +345,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
       <div id="notifDropdown" style="display:none"></div>
     </div>
     <button onclick="showBackupRestoreModal()" style="border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'" title="데이터 백업/복원">💾</button>
+    <button onclick="deduplicateRecords()" style="border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'" title="중복 레코드 제거">🧹</button>
     <button onclick="resetAllData()" style="border:1px solid var(--d-bd);background:var(--d-bg);color:var(--d-t);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:opacity .15s" onmouseenter="this.style.opacity='.8'" onmouseleave="this.style.opacity='1'" title="전체 데이터 초기화">🗑️</button>
     <span id="authUserInfo" style="display:flex;align-items:center;gap:4px"></span>
     <div id="fileInfo" class="hidden" style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:var(--t5)">📄 <span id="fnDisp"></span></span><span class="badge" style="background:var(--ac-bg);color:var(--ac-t)"><span id="rcDisp"></span>건</span></div>
@@ -1180,6 +1181,25 @@ function importWorkRecordsJSON(file){
     }catch(ex){showToast('파일 읽기 실패: '+ex.message,'error')}
   };
   reader.readAsText(file);
+}
+
+/* 중복 레코드 제거 */
+async function deduplicateRecords(){
+  if(!aD.length){showToast('데이터가 없습니다.','warn');return}
+  var seen=new Set();var deduped=[];
+  aD.forEach(function(r){var k=wrIdKey(r);if(!seen.has(k)){seen.add(k);deduped.push(r)}});
+  var removed=aD.length-deduped.length;
+  if(!removed){showToast('중복 레코드가 없습니다.','info');return}
+  if(!confirm('총 '+aD.length+'건 중 '+removed+'건의 중복 레코드를 제거합니다.\n(날짜+이름+수주번호 기준)\n\n계속하시겠습니까?'))return;
+  try{
+    await wrBulkPut(deduped);
+    aD=deduped;
+    gfInvalidate();rFL();upV();
+    showToast('✅ 중복 '+removed+'건 제거 완료 ('+deduped.length+'건 유지)');
+  }catch(e){
+    console.error('[dedup]',e);
+    showToast('중복 제거 실패: '+(e.message||'서버 오류'),'error');
+  }
 }
 
 /* 전체 데이터 초기화 */
