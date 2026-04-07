@@ -115,7 +115,7 @@ router.post('/login', async function (req, res) {
     // 로그인 성공
     await authService.resetLoginFail(user.id);
 
-    var accessToken = authService.signAccessToken(user);
+    var accessToken = await authService.signAccessToken(user);
     var refreshToken = authService.signRefreshToken(user);
     await authService.saveRefreshToken(user.id, refreshToken, deviceInfo);
 
@@ -166,7 +166,7 @@ router.post('/refresh', async function (req, res) {
 
     // 기존 토큰 삭제 + 새 토큰 발급 (토큰 로테이션)
     await authService.deleteRefreshToken(refreshToken);
-    var newAccessToken = authService.signAccessToken(user);
+    var newAccessToken = await authService.signAccessToken(user);
     var newRefreshToken = authService.signRefreshToken(user);
     await authService.saveRefreshToken(user.id, newRefreshToken, stored.device_info);
 
@@ -378,7 +378,7 @@ router.get('/google/callback', async function (req, res) {
 
     // 4) JWT 발급
     await authService.resetLoginFail(user.id);
-    var accessToken = authService.signAccessToken(user);
+    var accessToken = await authService.signAccessToken(user);
     var refreshToken = authService.signRefreshToken(user);
     await authService.saveRefreshToken(user.id, refreshToken, 'google-oauth');
 

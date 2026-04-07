@@ -25,13 +25,27 @@ function validatePassword(pw) {
 }
 
 // ─── JWT ───
-function signAccessToken(user) {
+async function signAccessToken(user) {
+  // tenant_id가 user 객체에 없으면 DB에서 조회
+  var tenantId = user.tenant_id || null;
+  if (!tenantId && user.id) {
+    try {
+      var res = await db.query('SELECT tenant_id FROM users WHERE id = $1', [user.id]);
+      if (res.rows[0]) {
+        tenantId = res.rows[0].tenant_id || null;
+      }
+    } catch (e) {
+      // tenant_id 조회 실패 시 null로 진행
+    }
+  }
+
   var payload = {
     sub: user.id,
     email: user.email,
     name: user.name,
     role: user.role,
-    departmentId: user.department_id || null
+    departmentId: user.department_id || null,
+    tenantId: tenantId
   };
   return jwt.sign(payload, config.jwt.secret, { expiresIn: config.jwt.accessExpiresIn });
 }
