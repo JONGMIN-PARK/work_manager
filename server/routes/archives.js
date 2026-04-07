@@ -13,22 +13,14 @@ router.use(auth.authenticate);
 // GET /api/archives/records
 router.get('/records', async function (req, res) {
   try {
-    var where = 'WHERE 1=1';
-    var params = [];
-    var idx = 1;
+    var where = 'WHERE user_id = $1';
+    var params = [req.user.sub];
+    var idx = 2;
     if (req.query.date) { where += ' AND date = $' + idx++; params.push(req.query.date); }
     if (req.query.startDate) { where += ' AND date >= $' + idx++; params.push(req.query.startDate); }
     if (req.query.endDate) { where += ' AND date <= $' + idx++; params.push(req.query.endDate); }
     if (req.query.name) { where += ' AND name = $' + idx++; params.push(req.query.name); }
     if (req.query.orderNo) { where += ' AND order_no = $' + idx++; params.push(req.query.orderNo); }
-
-    // 부서 필터 (manager/member는 자기 부서만)
-    var role = req.user.role;
-    var deptId = req.user.departmentId;
-    if (deptId && role !== 'admin' && role !== 'executive') {
-      where += ' AND (user_id IN (SELECT id FROM users WHERE department_id = $' + idx++ + ') OR user_id IS NULL)';
-      params.push(deptId);
-    }
 
     var pg = parsePagination(req.query, 200);
 
@@ -62,15 +54,7 @@ router.get('/records', async function (req, res) {
 // GET /api/archives/records/count
 router.get('/records/count', async function (req, res) {
   try {
-    var where = 'WHERE 1=1';
-    var params = [];
-    var role = req.user.role;
-    var deptId = req.user.departmentId;
-    if (deptId && role !== 'admin' && role !== 'executive') {
-      where += ' AND (user_id IN (SELECT id FROM users WHERE department_id = $1) OR user_id IS NULL)';
-      params.push(deptId);
-    }
-    var r = await db.query('SELECT COUNT(*) as cnt FROM work_records ' + where, params);
+    var r = await db.query('SELECT COUNT(*) as cnt FROM work_records WHERE user_id = $1', [req.user.sub]);
     res.json({ data: { count: parseInt(r.rows[0].cnt, 10) } });
   } catch (e) {
     console.error('[work-records/count]', e);
@@ -94,8 +78,8 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
 
     await client.query('BEGIN');
 
-    // 전체 레코드 삭제 후 재삽입 (팀 공유 데이터 — 전체 교체)
-    await client.query('DELETE FROM work_records');
+    // 해당 사용자의 레코드만 삭제 후 재삽입 (사용자별 데이터 분리)
+    await client.query('DELETE FROM work_records WHERE user_id = $1', [userId]);
 
     // 배치 삽입 (PostgreSQL 파라미터 한도 대비 500건씩, user_id 포함)
     var BATCH = 500;
@@ -146,8 +130,8 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
       var u = updates[i];
       if (!u.id) continue;
       promises.push(client.query(
-        'UPDATE work_records SET date=$1, name=$2, order_no=$3, hours=$4, task_type=$5, abbr=$6, content=$7, ocmt=$8, oclient=$9 WHERE id=$10',
-        [u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.id]
+        'UPDATE work_records SET date=$1, name=$2, order_no=$3, hours=$4, task_type=$5, abbr=$6, content=$7, ocmt=$8, oclient=$9 WHERE id=$10 AND user_id=$11',
+        [u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.id, req.user.sub]
       ));
       count++;
     }

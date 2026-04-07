@@ -337,7 +337,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v10.0</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v10.1</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2380,6 +2380,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'10.1',date:'2026-04-07',title:'사용자별 데이터 분리 — 멀티 유저 지원',tag:'feature',items:[
+      '업무일지 데이터를 로그인 사용자별로 분리 (다른 사용자 데이터 보호)',
+      '엑셀 불러오기/저장/편집/삭제 모두 본인 데이터만 영향',
+      'NULL user_id 레코드 자동 백필 + 복합 인덱스 추가'
+    ]},
     {ver:'10.0',date:'2026-04-07',title:'성능 최적화 + 편집 저장 안정화 + 모바일 개선',tag:'feature',items:[
       '편집 적용 시 전체 데이터 저장으로 통일 — per-row 수주명/거래처 확실한 영속 보장',
       '공통업무 수주명/거래처 per-row 저장 수정 (null 폴백 처리)',
