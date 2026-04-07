@@ -432,6 +432,12 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
             <select id="weekQtrSel" class="msel" onchange="weekQtrFilter=this.value;if(this.value){weekMonthFilter='';document.getElementById('weekMonthSel').value=''}renderWeekSelector()" title="분기 선택" style="min-width:90px"><option value="">전체 분기</option><option value="1Q">1Q (1~3월)</option><option value="2Q">2Q (4~6월)</option><option value="3Q">3Q (7~9월)</option><option value="4Q">4Q (10~12월)</option></select>
             <select id="weekMonthSel" class="msel" onchange="weekMonthFilter=this.value;if(this.value){weekQtrFilter='';document.getElementById('weekQtrSel').value=''}renderWeekSelector()" title="월 선택"><option value="">전체 월</option></select>
             <button class="btn btn-p btn-s" onclick="pickPeriod()" id="periodSelBtn" title="드롭다운에서 선택한 기간의 주차를 일괄 선택">✔ 기간 선택</button>
+            <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--t4)">
+              <input type="date" id="dateRangeFrom" class="si" style="padding:4px 8px;font-size:11px;width:130px" title="시작일">
+              <span>~</span>
+              <input type="date" id="dateRangeTo" class="si" style="padding:4px 8px;font-size:11px;width:130px" title="종료일">
+              <button class="btn btn-p btn-s" onclick="pickDateRange()" title="날짜 범위 필터 적용">📅 적용</button>
+            </span>
             <button class="btn btn-g btn-s" onclick="pickWeek(getSunStart(todayStr()))" title="오늘이 속한 주로 이동">📍 오늘 주</button>
             <button class="btn btn-g btn-s" onclick="pickWeek(null)">전체 보기</button>
           </div>
@@ -1383,6 +1389,20 @@ function pickPeriod(){
   if(weekQtrFilter)label+=weekQtrFilter+' ';
   else if(weekMonthFilter)label+=weekMonthFilter+'월 ';
   selWeek={start:s,end:e,label:label.trim()};
+  document.getElementById('weekLabel').value='';
+  document.getElementById('weekAutoLabel').textContent='('+selWeek.label+')';
+  renderWeekSelector();
+  gfInvalidate();rFL();upV();
+}
+/* 날짜 범위 직접 선택 */
+function pickDateRange(){
+  var fromEl=document.getElementById('dateRangeFrom');
+  var toEl=document.getElementById('dateRangeTo');
+  if(!fromEl.value||!toEl.value){showToast('시작일과 종료일을 모두 선택하세요.','warn');return}
+  var s=fromEl.value.replace(/-/g,'');
+  var e=toEl.value.replace(/-/g,'');
+  if(s>e){showToast('시작일이 종료일보다 늦습니다.','warn');return}
+  selWeek={start:s,end:e,label:fD(s)+' ~ '+fD(e)};
   document.getElementById('weekLabel').value='';
   document.getElementById('weekAutoLabel').textContent='('+selWeek.label+')';
   renderWeekSelector();
