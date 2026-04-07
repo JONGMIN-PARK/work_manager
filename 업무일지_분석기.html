@@ -1019,7 +1019,7 @@ function parseFileBuf(buf,enc){
 }
 
 function applyADToUI(){
-  aN=[...new Set(aD.map(r=>r.name))].sort();ldFvS();upFvB();if(fvO&&fvN.length>0)vN=aN.filter(n=>fvN.includes(n));else vN=[...aN];sN.clear();sO.clear();sT.clear();sDV.clear();cKw='';gfInvalidate();invalidateOrderInfoCache();document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');document.getElementById('fileInfo').classList.remove('hidden');document.getElementById('rcDisp').textContent=aD.length;document.getElementById('uploadZone').classList.add('hidden');document.getElementById('mainArea').classList.remove('hidden');if(fvN.length>0){aN.forEach(n=>{if(fvN.includes(n))sN.add(n)});if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}}
+  aN=[...new Set(aD.map(r=>r.name))].sort();ldFvS();upFvB();if(fvO&&fvN.length>0)vN=aN.filter(n=>fvN.includes(n));else vN=[...aN];sN.clear();sO.clear();sT.clear();sDV.clear();cKw='';gfInvalidate();document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');document.getElementById('fileInfo').classList.remove('hidden');document.getElementById('rcDisp').textContent=aD.length;document.getElementById('uploadZone').classList.add('hidden');document.getElementById('mainArea').classList.remove('hidden');if(fvN.length>0){aN.forEach(n=>{if(fvN.includes(n))sN.add(n)});if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}}
   const dates=[...new Set(aD.map(r=>r.date))].sort();if(dates.length>0){const d=dates[0];const dt=new Date(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8));const wk=getISOWeek(dt);document.getElementById('weekLabel').value=d.slice(0,4)+'-W'+String(wk).padStart(2,'0');document.getElementById('weekAutoLabel').textContent=`(${fD(dates[0])} ~ ${fD(dates[dates.length-1])})`}
   initWeekSelector();syncCmpVisibility();rNC();rFL();upV();document.getElementById('sumOut').innerHTML='<div style="text-align:center;color:var(--t6);padding:30px;font-size:12px">위 "요약 생성" 버튼을 눌러주세요.</div>';
 }
@@ -1511,9 +1511,7 @@ function rCLL(){const q=(document.getElementById('clSearch')||{}).value||'';cons
 
 /* ═══ 수주번호 ↔ 수주 정보 매핑 (엑셀 기반 + localStorage 병합) ═══ */
 /* ORDER_MAP[수주번호] = {name, date, client, amount, manager, delivery} 또는 문자열(레거시) */
-/* 임시 수주명/거래처 오버라이드 — 편집모드 수정 적용 시 사용, 새로고침 시 초기화 (ORDER_MAP 미반영) */
-var _tmpOcmt={};
-var _tmpOclient={};
+/* 수주명/거래처는 per-record ocmt/oclient 필드로 서버 DB에 직접 저장 */
 var ORDER_FIELDS=['수주번호','수주일','거래처','프로젝트명','수주액','담당자','납품예정'];
 var ORDER_FIELD_KEYS=['orderNo','date','client','name','amount','manager','delivery'];
 function getOrderInfo(orderNo){
@@ -1522,31 +1520,12 @@ function getOrderInfo(orderNo){
   if(typeof info==='string')return{name:info,date:'',client:'',amount:'',manager:'',delivery:''};
   return info;
 }
-var _orderInfoCache=null;
-function _buildOrderInfoCache(){
-  if(_orderInfoCache)return _orderInfoCache;
-  _orderInfoCache={};
-  for(var i=0;i<localStorage.length;i++){
-    var k=localStorage.key(i);
-    if(k&&k.startsWith('wa-oc-')){
-      var oNo=k.slice(6);
-      try{_orderInfoCache[oNo]=lsGet(k)}catch(e){}
-    }
-  }
-  return _orderInfoCache;
-}
-function invalidateOrderInfoCache(){_orderInfoCache=null}
 function getOCmt(orderNo){
-  if(_tmpOcmt[orderNo]!==undefined)return _tmpOcmt[orderNo];
-  var cache=_buildOrderInfoCache();
-  var ls=cache[orderNo];if(ls)return ls;
   var info=getOrderInfo(orderNo);
   if(info&&info.name)return info.name;
   return '';
 }
 function getOClient(orderNo){
-  if(_tmpOclient[orderNo]!==undefined)return _tmpOclient[orderNo];
-  var ls=lsGet('wa-ocl-'+orderNo);if(ls)return ls;
   var info=getOrderInfo(orderNo);
   return info&&info.client?info.client:'';
 }
@@ -1559,7 +1538,6 @@ function getAllOrderMap(){
       merged[k]=(typeof v==='object'&&v)?v.name||'':v||'';
     });
   }
-  try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.startsWith('wa-oc-')){var no=k.slice(6);var v=lsGet(k);if(v)merged[no]=v}}}catch(e){console.warn('[OrderMap]',e)}
   return merged;
 }
 /* 전체 수주맵 상세 반환 — {수주번호: {name,date,client,...}} */
@@ -1572,15 +1550,16 @@ function getAllOrderDetails(){
       else merged[k]={name:v||'',date:'',client:'',amount:'',manager:'',delivery:''};
     });
   }
-  try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.startsWith('wa-oc-')){var no=k.slice(6);var v=lsGet(k);if(v){if(!merged[no])merged[no]={name:'',date:'',client:'',amount:'',manager:'',delivery:''};merged[no].name=v}}}}catch(e){console.warn('[OrderDetails]',e)}
   return merged;
 }
 function saveOCmt(orderNo){
   const inp=document.getElementById('oc_'+CSS.escape(orderNo));
   if(!inp)return;
   const val=inp.value.trim();
-  if(val)lsSet('wa-oc-'+orderNo,val);else lsRemove('wa-oc-'+orderNo)
-  invalidateOrderInfoCache();gfInvalidate();
+  /* per-record ocmt 업데이트: 해당 수주번호의 모든 레코드에 반영 후 서버 저장 */
+  aD.forEach(function(r){if(r.orderNo===orderNo)r.ocmt=val||null});
+  wrBulkPut(aD).catch(function(e){console.error('[saveOCmt] DB 저장 실패:',e)});
+  gfInvalidate();
   rFL();rOL();upV();
   const fb=document.getElementById('ocfb_'+CSS.escape(orderNo));
   if(fb){fb.textContent='✅';setTimeout(()=>{fb.textContent=''},800)}
@@ -1667,10 +1646,10 @@ function handleOrderExcel(input){
           info[key]=String(r[colMap[key]]||'').trim();
         });
         ORDER_MAP[no]=info;
-        if(info.name)lsSet('wa-oc-'+no,info.name);else lsRemove('wa-oc-'+no)
+        /* localStorage 캐시 제거됨 — ORDER_MAP에만 저장 */
         count++;
       }
-      invalidateOrderInfoCache();gfInvalidate();rFL();rOL();upOP();upV();
+      gfInvalidate();rFL();rOL();upOP();upV();
       if(typeof syncOrderMapToDB==='function')syncOrderMapToDB().then(function(){if(typeof renderOrders==='function')renderOrders()});
       showToast('✅ 수주맵 '+count+'건 불러오기 완료','success');
     }catch(err){
@@ -2180,7 +2159,6 @@ async function resetOcmtOclient(){
   if(!cnt){showToast('초기화할 개별 수주명/거래처 값이 없습니다.','info');return}
   if(!confirm('전체 '+aD.length+'건 중 '+cnt+'건의 개별 수주명·거래처 값을 삭제합니다.\n삭제 후 수주맵(ORDER_MAP) 기본값으로 복원됩니다.\n\n계속하시겠습니까?'))return;
   aD.forEach(function(r){delete r.ocmt;delete r.oclient});
-  _tmpOcmt={};_tmpOclient={};
   await wrBulkPut(aD);
   editMap={};editMode=false;
   var elTog=document.getElementById('editTogBtn');if(elTog)elTog.textContent='✏️ 편집모드';

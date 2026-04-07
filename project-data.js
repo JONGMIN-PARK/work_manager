@@ -1552,54 +1552,31 @@ function showToast(msg, type) {
   wkPut = function (data) { return apiFetch('/api/archives', { method: 'POST', body: JSON.stringify(data) }).then(function (r) { return toCamel(r.data); }); };
   wkDel = function (id) { return apiFetch('/api/archives/' + encodeURIComponent(id), { method: 'DELETE' }); };
 
-  // ─── 업무일지 레코드 (서버 + 로컬 IndexedDB 동기화) ───
-  var _localWrGetAll = wrGetAll;
-  var _localWrCount = wrCount;
-  var _localWrBulkPut = wrBulkPut;
-  var _localWrUpdateRecords = wrUpdateRecords;
-  var _localWrDeleteRecords = wrDeleteRecords;
-  var _localWrClear = wrClear;
+  // ─── 업무일지 레코드 (서버 DB 전용) ───
   wrGetAll = function () {
     return apiFetch('/api/archives/records?limit=50000&all=true').then(function (r) {
-      var records = toCamelArray(r.data).map(function (rec) {
+      return toCamelArray(r.data).map(function (rec) {
         if (typeof rec.hours === 'string') rec.hours = parseFloat(rec.hours) || 0;
         return rec;
       });
-      // 서버 데이터를 로컬 IndexedDB에 동기화 (폴백 최신화)
-      _localWrClear().then(function () { return _localWrBulkPut(records); }).catch(function () {});
-      return records;
-    }).catch(function () { return _localWrGetAll(); });
+    });
   };
   wrCount = function () {
-    return apiFetch('/api/archives/records/count').then(function (r) { return r.data.count; })
-      .catch(function () { return _localWrCount(); });
+    return apiFetch('/api/archives/records/count').then(function (r) { return r.data.count; });
   };
   wrBulkPut = function (records) {
-    return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) })
-      .then(function (r) {
-        return _localWrClear().then(function () { return _localWrBulkPut(records); }).catch(function () {}).then(function () { return r; });
-      });
+    return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) });
   };
   wrClear = function () {
-    return apiFetch('/api/archives/records', { method: 'DELETE' })
-      .then(function (r) {
-        return _localWrClear().catch(function () {}).then(function () { return r; });
-      });
+    return apiFetch('/api/archives/records', { method: 'DELETE' });
   };
   wrUpdateRecords = function (records) {
-    return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) })
-      .then(function (r) {
-        return _localWrUpdateRecords(records).catch(function () {}).then(function () { return r; });
-      });
+    return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) });
   };
   wrDeleteRecords = function (remainingRecords, deletedIds) {
     if (deletedIds && deletedIds.length) {
-      return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) })
-        .then(function (r) {
-          return _localWrDeleteRecords(remainingRecords).catch(function () {}).then(function () { return r; });
-        });
+      return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) });
     }
-    // id 없는 경우 전체 교체
     return wrClear().then(function () { return wrBulkPut(remainingRecords); });
   };
 
