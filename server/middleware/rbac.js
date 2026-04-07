@@ -17,6 +17,12 @@ async function isProjectPL(userId, projectId) {
   }
 }
 
+// 같은 부서 여부 확인
+async function isSameDept(userDeptId, resourceDeptId) {
+  if (!userDeptId || !resourceDeptId) return false;
+  return userDeptId === resourceDeptId;
+}
+
 // 프로젝트 참여자 여부 확인
 async function isProjectMember(userId, projectId) {
   if (!userId || !projectId) return false;
@@ -126,5 +132,6 @@ function checkPermission(action, getResourceId) {
 module.exports = {
   checkPermission: checkPermission,
   isProjectPL: isProjectPL,
-  isProjectMember: isProjectMember
+  isProjectMember: isProjectMember,
+  isSameDept: isSameDept
 };

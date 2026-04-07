@@ -13,9 +13,26 @@ router.use(auth.authenticate);
 // GET /api/archives/records
 router.get('/records', async function (req, res) {
   try {
-    var where = 'WHERE user_id = $1';
-    var params = [req.user.sub];
-    var idx = 2;
+    var role = req.user.role;
+    var deptId = req.user.departmentId;
+    var where, params, idx;
+
+    if ((role === 'manager' || role === 'executive') && deptId) {
+      // 팀장/임원: 소속 부서 전체 업무일지 조회
+      where = 'WHERE user_id IN (SELECT id FROM users WHERE department_id = $1)';
+      params = [deptId];
+      idx = 2;
+    } else if (role === 'admin') {
+      // 관리자: 전체
+      where = 'WHERE 1=1';
+      params = [];
+      idx = 1;
+    } else {
+      // member: 본인만
+      where = 'WHERE user_id = $1';
+      params = [req.user.sub];
+      idx = 2;
+    }
     if (req.query.date) { where += ' AND date = $' + idx++; params.push(req.query.date); }
     if (req.query.startDate) { where += ' AND date >= $' + idx++; params.push(req.query.startDate); }
     if (req.query.endDate) { where += ' AND date <= $' + idx++; params.push(req.query.endDate); }
@@ -54,7 +71,20 @@ router.get('/records', async function (req, res) {
 // GET /api/archives/records/count
 router.get('/records/count', async function (req, res) {
   try {
-    var r = await db.query('SELECT COUNT(*) as cnt FROM work_records WHERE user_id = $1', [req.user.sub]);
+    var role = req.user.role;
+    var deptId = req.user.departmentId;
+    var sql, params;
+    if ((role === 'manager' || role === 'executive') && deptId) {
+      sql = 'SELECT COUNT(*) as cnt FROM work_records WHERE user_id IN (SELECT id FROM users WHERE department_id = $1)';
+      params = [deptId];
+    } else if (role === 'admin') {
+      sql = 'SELECT COUNT(*) as cnt FROM work_records';
+      params = [];
+    } else {
+      sql = 'SELECT COUNT(*) as cnt FROM work_records WHERE user_id = $1';
+      params = [req.user.sub];
+    }
+    var r = await db.query(sql, params);
     res.json({ data: { count: parseInt(r.rows[0].cnt, 10) } });
   } catch (e) {
     console.error('[work-records/count]', e);

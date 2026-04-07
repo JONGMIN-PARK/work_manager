@@ -17,13 +17,21 @@ router.get('/', async function (req, res) {
     var pg = parsePagination(req.query, 100);
     var r;
 
-    if (role === 'admin' || role === 'executive' || role === 'manager') {
+    var deptId = req.user.departmentId;
+    if (role === 'admin' || role === 'executive') {
+      // admin/executive: 전체 프로젝트
       r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM projects ORDER BY created_at DESC LIMIT $1 OFFSET $2', [pg.limit, pg.offset]);
-    } else {
-      // member: 배정된 프로젝트만
+    } else if (role === 'manager') {
+      // manager: 소속 부서 프로젝트 + 본인이 멤버/PL인 프로젝트
       r = await db.query(
-        "SELECT p.*, COUNT(*) OVER() AS _total FROM projects p INNER JOIN project_members pm ON p.id = pm.project_id WHERE pm.user_id = $1 AND pm.released_at IS NULL ORDER BY p.created_at DESC LIMIT $2 OFFSET $3",
-        [userId, pg.limit, pg.offset]
+        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL WHERE p.department_id = $2 OR pm.user_id IS NOT NULL OR p.department_id IS NULL ORDER BY p.created_at DESC LIMIT $3 OFFSET $4",
+        [userId, deptId, pg.limit, pg.offset]
+      );
+    } else {
+      // member: 소속 부서 프로젝트(읽기) + 배정된 프로젝트
+      r = await db.query(
+        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL WHERE p.department_id = $2 OR pm.user_id IS NOT NULL ORDER BY p.created_at DESC LIMIT $3 OFFSET $4",
+        [userId, deptId, pg.limit, pg.offset]
       );
     }
 
@@ -53,13 +61,14 @@ router.post('/', rbac.checkPermission('project.create'), async function (req, re
   try {
     var b = req.body;
     var id = b.id || ('proj-' + require('crypto').randomUUID().slice(0, 12));
+    var deptId = b.departmentId || b.department_id || req.user.departmentId || null;
     var r = await db.query(
-      "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15) RETURNING *",
+      "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16) RETURNING *",
       [id, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
        b.status || 'active', b.progress || 0, b.estimatedHours || b.estimated_hours || 0,
        JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
        b.color || '#3B82F6', b.memo || '', b.currentPhase || b.current_phase || 'order',
-       JSON.stringify(b.phases || {}), req.user.sub]
+       JSON.stringify(b.phases || {}), req.user.sub, deptId]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
