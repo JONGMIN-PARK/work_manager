@@ -920,13 +920,26 @@ if(typeof wrBulkPut!=='function'){
   var wrCount=function(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').count();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})};
   var wrClear=function(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');tx.objectStore('workRecords').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
 }
+/* 완전 일치 키 (중복 제거용) */
 function wrKey(r){return r.date+'|'+r.name+'|'+r.orderNo+'|'+r.hours+'|'+(r.abbr||'')+'|'+(r.dept||'')+'|'+r.content}
+/* 식별 키 (같은 레코드 판별용 — 갱신 시 덮어쓰기) */
+function wrIdKey(r){return r.date+'|'+r.name+'|'+(r.orderNo||'')}
 function wrMerge(existing,newRecs){
-  /* 기존 데이터 자체 중복도 제거 */
+  /* 기존 데이터 자체 중복 제거 */
   var seen=new Set();var deduped=[];
   existing.forEach(function(r){var k=wrKey(r);if(!seen.has(k)){seen.add(k);deduped.push(r)}});
-  var toAdd=newRecs.filter(function(r){return!seen.has(wrKey(r))});
-  return{existing:deduped,toAdd:toAdd,added:toAdd.length,removedDups:existing.length-deduped.length}
+  /* 신규 데이터로 기존 데이터 덮어쓰기 (date+name+orderNo 기준) */
+  var newById=new Map();
+  newRecs.forEach(function(r){newById.set(wrIdKey(r),r)});
+  var updated=0,added=0;
+  var merged=deduped.map(function(r){
+    var ik=wrIdKey(r);
+    if(newById.has(ik)){var nr=newById.get(ik);newById.delete(ik);updated++;return Object.assign({},r,nr)}
+    return r;
+  });
+  /* 기존에 없는 완전 신규 레코드 추가 */
+  newById.forEach(function(r){merged.push(r);added++});
+  return{merged:merged,added:added,updated:updated,removedDups:existing.length-deduped.length}
 }
 
 /* ═══ MODE ═══ */
@@ -1049,10 +1062,12 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
       // 병합: 기존 중복 제거 + 신규 추가
       var existing=await wrGetAll();
       var result=wrMerge(existing, newRecords);
-      var merged=result.existing.concat(result.toAdd);
-      await wrBulkPut(merged);
-      aD=merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
-      showToast('📊 업무일지 갱신: '+result.added+'건 추가, 총 '+merged.length+'건 (중복 '+(newRecords.length-result.added)+'건 제외)');
+      await wrBulkPut(result.merged);
+      aD=result.merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
+      var msg='📊 업무일지 갱신: 총 '+result.merged.length+'건';
+      if(result.added)msg+=' (추가 '+result.added+'건)';
+      if(result.updated)msg+=' (갱신 '+result.updated+'건)';
+      showToast(msg);
     }else{
       // 대체: 기존 삭제 후 새로 저장
       await wrClear();
@@ -1144,10 +1159,12 @@ function importWorkRecordsJSON(file){
         if(choice==='merge'){
           var existing=await wrGetAll();
           var result=wrMerge(existing, data.records);
-          var merged=result.existing.concat(result.toAdd);
-          await wrBulkPut(merged);
-          aD=merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
-          showToast('📊 업무일지 갱신: '+result.added+'건 추가, 총 '+merged.length+'건');
+          await wrBulkPut(result.merged);
+          aD=result.merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
+          var msg='📊 업무일지 갱신: 총 '+result.merged.length+'건';
+          if(result.added)msg+=' (추가 '+result.added+'건)';
+          if(result.updated)msg+=' (갱신 '+result.updated+'건)';
+          showToast(msg);
         }else{
           await wrClear();
           await wrBulkPut(data.records);
