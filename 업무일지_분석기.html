@@ -394,7 +394,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
         <button onclick="event.stopPropagation();loadWorkRecordsFromDB()" style="padding:6px 16px;border:1px solid var(--ac);border-radius:7px;background:var(--ac-bg);color:var(--ac-t);cursor:pointer;font-size:12px;font-weight:600">📂 저장된 업무일지 불러오기</button>
         <button onclick="event.stopPropagation();document.getElementById('wrImportFile2').click()" style="padding:6px 16px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:12px;margin-left:6px">📥 JSON 파일 불러오기</button>
         <input id="wrImportFile2" type="file" accept=".json" style="display:none" onchange="importWorkRecordsJSON(this.files[0]);this.value=''">
-        <button class="awAdminBtn" onclick="event.stopPropagation();openAnyworksModal()" style="display:none;padding:6px 16px;border:1px solid #06B6D4;border-radius:7px;background:rgba(6,182,212,.12);color:#22D3EE;cursor:pointer;font-size:12px;margin-left:6px;font-weight:600">🌐 애니웍스에서 가져오기</button>
+        <button class="awAdminBtn" onclick="event.stopPropagation();openAnyworksModal()" style="padding:6px 16px;border:1px solid #06B6D4;border-radius:7px;background:rgba(6,182,212,.12);color:#22D3EE;cursor:pointer;font-size:12px;margin-left:6px;font-weight:600">🌐 애니웍스에서 가져오기</button>
       </div>
       <div id="encUp" style="margin-top:12px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap"></div>
     </div>
@@ -3822,6 +3822,153 @@ async function awQuickStart() {
   }
 }
 
+/* ── 서버 자동 다운로드 & 적용 ── */
+async function awRunServerDownload() {
+  var id = document.getElementById('awId').value.trim();
+  var pw = document.getElementById('awPw').value.trim();
+  var start = document.getElementById('awStart').value.trim();
+  var end = document.getElementById('awEnd').value.trim();
+  var boxes = document.querySelectorAll('input[name="aw_team"]:checked');
+  var teams = []; boxes.forEach(function(b){ teams.push(b.value); });
+
+  if (!id || !pw) { showToast('아이디/비밀번호를 입력하세요','error'); return; }
+  if (!start || !end || !/^\d{8}$/.test(start) || !/^\d{8}$/.test(end)) { showToast('날짜를 YYYYMMDD 형식으로 입력하세요','error'); return; }
+  if (!teams.length) { showToast('사업부를 1개 이상 선택하세요','error'); return; }
+
+  localStorage.setItem('anyworks_id', id);
+  localStorage.setItem('anyworks_pw', pw);
+  localStorage.setItem('anyworks_start', start);
+  localStorage.setItem('anyworks_end', end);
+  localStorage.setItem('anyworks_teams', JSON.stringify(teams));
+
+  var runBtn = document.getElementById('awRunBtn');
+  var cancelBtn = document.getElementById('awCancelBtn');
+  var logBox = document.getElementById('awLogBox');
+  runBtn.disabled = true; runBtn.style.opacity = '0.5'; runBtn.textContent = '⏳ 실행 중...';
+  cancelBtn.style.display = '';
+  logBox.style.display = 'block';
+  logBox.innerHTML = '<div style="color:#22D3EE">[시작] 서버에서 애니웍스 다운로드 시작...</div>';
+
+  var serverBase = awGetServerBase();
+  try {
+    var resp = await apiFetch('/api/anyworks/download', {
+      method: 'POST',
+      body: JSON.stringify({ username: id, password: pw, start_date: start, end_date: end, teams: teams })
+    });
+    if (!resp || !resp.job_id) throw new Error('작업 생성 실패');
+
+    _anyworksJobId = resp.job_id;
+    _awLastLogIndex = 0;
+
+    // 폴링 시작
+    _anyworksPollTimer = setInterval(function() { awPollServerJob(logBox, runBtn, cancelBtn); }, 2000);
+  } catch(e) {
+    logBox.innerHTML += '<div style="color:#EF4444">오류: ' + eH(e.message) + '</div>';
+    runBtn.disabled = false; runBtn.style.opacity = '1'; runBtn.textContent = '🚀 자동 다운로드 & 적용';
+    cancelBtn.style.display = 'none';
+  }
+}
+
+var _awLastLogIndex = 0;
+async function awPollServerJob(logBox, runBtn, cancelBtn) {
+  try {
+    var resp = await apiFetch('/api/anyworks/jobs/' + _anyworksJobId);
+    if (!resp) return;
+
+    // 새 로그 추가
+    if (resp.logs && resp.logs.length > _awLastLogIndex) {
+      for (var i = _awLastLogIndex; i < resp.logs.length; i++) {
+        var log = resp.logs[i];
+        var color = log.level === 'ERROR' ? '#EF4444' : log.level === 'WARN' ? '#FCD34D' : log.msg.indexOf('✓') >= 0 ? '#6A9955' : '#94A3B8';
+        logBox.innerHTML += '<div style="color:' + color + '">' + eH(log.msg) + '</div>';
+      }
+      _awLastLogIndex = resp.logs.length;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    if (resp.status === 'done' || resp.status === 'error') {
+      clearInterval(_anyworksPollTimer);
+      _anyworksPollTimer = null;
+      runBtn.disabled = false; runBtn.style.opacity = '1'; runBtn.textContent = '🚀 자동 다운로드 & 적용';
+      cancelBtn.style.display = 'none';
+
+      if (resp.status === 'error') {
+        showToast('다운로드 실패: ' + (resp.error || '서버 오류'), 'error');
+        return;
+      }
+
+      // 성공: base64 엑셀 파일을 자동 파싱 & 적용
+      if (resp.files && resp.files.length > 0) {
+        logBox.innerHTML += '<div style="color:#22D3EE">[적용] ' + resp.files.length + '개 파일 파싱 중...</div>';
+        var totalRecords = 0;
+        for (var fi = 0; fi < resp.files.length; fi++) {
+          var f = resp.files[fi];
+          try {
+            var binary = atob(f.base64);
+            var bytes = new Uint8Array(binary.length);
+            for (var bi = 0; bi < binary.length; bi++) bytes[bi] = binary.charCodeAt(bi);
+            var newRecords = parseFileBuf(bytes.buffer, 'utf-8');
+            if (newRecords.length) {
+              totalRecords += newRecords.length;
+              logBox.innerHTML += '<div style="color:#6A9955">  ' + f.name + ': ' + newRecords.length + '건 파싱</div>';
+            }
+          } catch(pe) {
+            logBox.innerHTML += '<div style="color:#FCD34D">  ' + f.name + ' 파싱 실패: ' + pe.message + '</div>';
+          }
+        }
+        // 기존 데이터와 병합
+        if (totalRecords > 0) {
+          // 전체 파일 다시 파싱해서 병합
+          var allNew = [];
+          for (var fi2 = 0; fi2 < resp.files.length; fi2++) {
+            try {
+              var bin2 = atob(resp.files[fi2].base64);
+              var b2 = new Uint8Array(bin2.length);
+              for (var j = 0; j < bin2.length; j++) b2[j] = bin2.charCodeAt(j);
+              var recs = parseFileBuf(b2.buffer, 'utf-8');
+              allNew = allNew.concat(recs);
+            } catch(e2) {}
+          }
+          // 파일 자체 중복 제거
+          var seen = new Set(); allNew = allNew.filter(function(r){var k=wrKey(r);if(seen.has(k))return false;seen.add(k);return true});
+
+          if (aD.length > 0) {
+            var result = wrMerge(aD, allNew);
+            await wrBulkPut(result.merged);
+            aD = result.merged;
+            var msg = '✅ 애니웍스 데이터 적용: 총 ' + result.merged.length + '건';
+            if (result.added) msg += ' (추가 ' + result.added + '건)';
+            if (result.updated) msg += ' (갱신 ' + result.updated + '건)';
+            showToast(msg);
+          } else {
+            await wrBulkPut(allNew);
+            aD = allNew;
+            showToast('✅ 애니웍스 데이터 적용: ' + allNew.length + '건');
+          }
+          applyADToUI();
+          logBox.innerHTML += '<div style="color:#22D3EE">[완료] 데이터 적용 완료!</div>';
+        }
+      } else {
+        showToast('다운로드된 파일이 없습니다', 'warn');
+      }
+    }
+  } catch(e) {
+    logBox.innerHTML += '<div style="color:#EF4444">폴링 오류: ' + eH(e.message) + '</div>';
+  }
+}
+
+function awCancelJob() {
+  if (_anyworksJobId) {
+    apiFetch('/api/anyworks/cancel/' + _anyworksJobId, { method: 'POST' }).catch(function(){});
+  }
+  if (_anyworksPollTimer) { clearInterval(_anyworksPollTimer); _anyworksPollTimer = null; }
+  var runBtn = document.getElementById('awRunBtn');
+  var cancelBtn = document.getElementById('awCancelBtn');
+  if (runBtn) { runBtn.disabled = false; runBtn.style.opacity = '1'; runBtn.textContent = '🚀 자동 다운로드 & 적용'; }
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  showToast('취소 요청 전송');
+}
+
 /* ── EXE 실행 안내 ── */
 function awCheckExeLocal() {
   showToast('WeeklyDownloader.exe를 실행하세요.\n다운로드된 엑셀을 📁 다른파일 버튼으로 불러오세요.');
@@ -3850,43 +3997,65 @@ async function openAnyworksModal() {
   var old = document.getElementById('anyworksOverlay');
   if (old) old.remove();
 
+  var savedId = localStorage.getItem('anyworks_id') || '';
+  var savedPw = localStorage.getItem('anyworks_pw') || '';
+  var savedTeams = [];
+  try { savedTeams = JSON.parse(localStorage.getItem('anyworks_teams') || '[]'); } catch(e) {}
+  if (!savedTeams.length) savedTeams = ANYWORKS_TEAMS.slice();
+
+  var now = new Date(); var dow = now.getDay() || 7;
+  var mon = new Date(now); mon.setDate(now.getDate() - dow + 1);
+  var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  var fmt = function(d) { return d.getFullYear()+('0'+(d.getMonth()+1)).slice(-2)+('0'+d.getDate()).slice(-2); };
+  var savedStart = localStorage.getItem('anyworks_start') || fmt(mon);
+  var savedEnd = localStorage.getItem('anyworks_end') || fmt(sun);
+
+  var teamCb = ANYWORKS_TEAMS.map(function(t) {
+    return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--t3);cursor:pointer"><input type="checkbox" name="aw_team" value="'+t+'"'+(savedTeams.indexOf(t)>=0?' checked':'')+'>'+t+'</label>';
+  }).join(' ');
+
   var ov = document.createElement('div');
   ov.id = 'anyworksOverlay';
   ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)';
 
   ov.innerHTML =
-    '<div style="background:var(--bg-p);border-radius:14px;padding:28px;max-width:440px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,.4)">'+
+    '<div style="background:var(--bg-p);border-radius:14px;padding:24px;max-width:480px;width:94%;box-shadow:0 24px 80px rgba(0,0,0,.4);max-height:90vh;overflow-y:auto">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
-        '<div style="font-size:15px;font-weight:700;color:var(--t1)">🌐 애니웍스 주간일지 가져오기</div>'+
+        '<div style="font-size:15px;font-weight:700;color:var(--t1)">🌐 애니웍스 주간일지 자동 가져오기</div>'+
         '<button onclick="closeAnyworksModal()" style="background:none;border:none;color:var(--t5);font-size:18px;cursor:pointer;padding:4px">✕</button>'+
       '</div>'+
 
-      '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">'+
-        '<button onclick="window.open(\'https://works.animotion.co.kr\',\'_blank\')" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#06B6D4,#0891B2);color:#fff;cursor:pointer;font-size:13px;font-weight:700">🌐 애니웍스 열기</button>'+
-        '<button onclick="window.open(\'https://works.animotion.co.kr/Sales/Week_List.asp?top_id=80&mun=6&table=WeekList\',\'_blank\')" style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:12px;font-weight:600">📋 주간일지 페이지 바로가기</button>'+
+      '<div style="display:flex;gap:10px;margin-bottom:12px">'+
+        '<div style="flex:1"><label style="font-size:10px;color:var(--t5);font-weight:600;display:block;margin-bottom:3px">아이디</label>'+
+        '<input type="text" id="awId" class="si" style="width:100%;padding:8px 10px;font-size:12px" placeholder="애니웍스 ID" value="'+savedId.replace(/"/g,'&quot;')+'"></div>'+
+        '<div style="flex:1"><label style="font-size:10px;color:var(--t5);font-weight:600;display:block;margin-bottom:3px">비밀번호</label>'+
+        '<input type="password" id="awPw" class="si" style="width:100%;padding:8px 10px;font-size:12px" placeholder="비밀번호" value="'+savedPw.replace(/"/g,'&quot;')+'"></div>'+
       '</div>'+
 
-      '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:14px;margin-bottom:16px">'+
-        '<div style="font-size:11px;color:var(--t4);line-height:1.8">'+
-          '① 애니웍스 로그인<br>'+
-          '② 사업부 선택 → 날짜 설정 → 검색 → <b>엑셀</b> 클릭<br>'+
-          '③ 사업부별 반복 (3회)<br>'+
-          '④ 여기로 돌아와서 <b style="color:var(--ac-t)">📁 다른파일</b> 또는 <b style="color:var(--ac-t)">화면에 드래그앤드롭</b>'+
+      '<div style="display:flex;gap:10px;margin-bottom:12px">'+
+        '<div style="flex:1"><label style="font-size:10px;color:var(--t5);font-weight:600;display:block;margin-bottom:3px">시작일 (YYYYMMDD)</label>'+
+        '<input type="text" id="awStart" class="si" style="width:100%;padding:8px 10px;font-size:12px" value="'+savedStart+'"></div>'+
+        '<div style="flex:1"><label style="font-size:10px;color:var(--t5);font-weight:600;display:block;margin-bottom:3px">종료일 (YYYYMMDD)</label>'+
+        '<input type="text" id="awEnd" class="si" style="width:100%;padding:8px 10px;font-size:12px" value="'+savedEnd+'"></div>'+
+      '</div>'+
+
+      '<div style="margin-bottom:14px"><label style="font-size:10px;color:var(--t5);font-weight:600;display:block;margin-bottom:5px">사업부 선택</label>'+
+        '<div style="display:flex;gap:12px;flex-wrap:wrap">'+teamCb+'</div></div>'+
+
+      '<button id="awRunBtn" onclick="awRunServerDownload()" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#06B6D4,#0891B2);color:#fff;cursor:pointer;font-size:13px;font-weight:700;margin-bottom:12px">🚀 자동 다운로드 & 적용</button>'+
+      '<button id="awCancelBtn" onclick="awCancelJob()" style="display:none;width:100%;padding:10px;border:1px solid #EF4444;border-radius:10px;background:rgba(239,68,68,.12);color:#F87171;cursor:pointer;font-size:12px;font-weight:600;margin-bottom:12px">■ 취소</button>'+
+
+      '<div id="awLogBox" style="display:none;background:#1a1f2e;border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;font-family:monospace;font-size:10px;line-height:1.6;margin-bottom:12px"></div>'+
+
+      '<div style="border-top:1px solid var(--bd);padding-top:12px;margin-top:4px">'+
+        '<div style="font-size:10px;color:var(--t6);margin-bottom:8px">또는 수동으로 엑셀 파일 불러오기:</div>'+
+        '<div style="text-align:center;padding:10px;border:2px dashed var(--bd2);border-radius:8px;cursor:pointer" '+
+          'ondragover="event.preventDefault();this.style.borderColor=\'#06B6D4\'" '+
+          'ondragleave="this.style.borderColor=\'\'" '+
+          'ondrop="event.preventDefault();this.style.borderColor=\'\';closeAnyworksModal();hFiles(event.dataTransfer.files)" '+
+          'onclick="document.getElementById(\'fileInput2\').click();closeAnyworksModal()">'+
+          '<div style="font-size:12px;color:var(--t4)">📂 파일 드롭 또는 클릭</div>'+
         '</div>'+
-      '</div>'+
-
-      '<div style="text-align:center;padding:12px;border:2px dashed var(--bd2);border-radius:10px;margin-bottom:16px;cursor:pointer;transition:border-color .2s" '+
-        'ondragover="event.preventDefault();this.style.borderColor=\'#06B6D4\'" '+
-        'ondragleave="this.style.borderColor=\'\'" '+
-        'ondrop="event.preventDefault();this.style.borderColor=\'\';closeAnyworksModal();hFiles(event.dataTransfer.files)" '+
-        'onclick="document.getElementById(\'fileInput2\').click();closeAnyworksModal()">'+
-        '<div style="font-size:24px;margin-bottom:6px">📂</div>'+
-        '<div style="font-size:12px;color:var(--t4);font-weight:600">다운로드한 파일을 여기에 드롭하거나 클릭</div>'+
-        '<div style="font-size:10px;color:var(--t6);margin-top:4px">여러 파일 동시 선택 가능</div>'+
-      '</div>'+
-
-      '<div style="text-align:right">'+
-        '<button onclick="closeAnyworksModal()" style="padding:8px 20px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t4);cursor:pointer;font-size:12px">닫기</button>'+
       '</div>'+
     '</div>';
 
