@@ -330,7 +330,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.7</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v9.8</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2288,6 +2288,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'9.8',date:'2026-04-07',title:'서버 DB 전용 전환 + 편집모드 저장 수정',tag:'fix',items:[
+      '수주명/거래처 저장을 서버 DB 전용으로 단순화 (localStorage·메모리 임시저장 제거)',
+      '로컬 IndexedDB 폴백 제거 — 서버 API만 사용',
+      '편집모드 수정 적용 후 이전 데이터 표시되는 캐시 버그 수정',
+      '업무일지 편집 권한을 모든 인증 사용자에게 허용',
+      '토스트 알림 위치를 화면 최상단으로 변경'
+    ]},
     {ver:'9.7',date:'2026-04-01',title:'서버 우선 로드 + 그룹/별칭 서버 저장 + 날짜 정규화',tag:'fix',items:[
       '서버 DB date 필드 YYYY-MM-DD → YYYYMMDD 정규화 (주차 NaN 표시 근본 수정)',
       '접속 시 서버 DB 우선 로드 → 모든 기기(PC/모바일)에서 동일 데이터 보장',
