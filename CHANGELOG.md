@@ -1,5 +1,36 @@
 # Work Manager — 변경 이력
 
+## v13.0 (2026-04-08) — Phase 1~3 전체 완료 + 프로덕션 레디
+
+### PostgreSQL RLS
+- Row-Level Security 정책 추가 (users, projects, issues, orders, audit_logs)
+- tenant_id 기반 자동 행 격리 (app.tenant_id 세션 변수)
+
+### AI 기능 보강
+- 테넌트별 AI API 키 관리 (GET/PUT `/api/ai/config`)
+- 자연어 질의 REST API (POST `/api/ai/query`) — RAG 기반 DB 데이터 자동 수집
+- 플랜별 월간 AI 쿼리 제한 (free=0, pro=100, business=500, enterprise=무제한)
+- AI 사용량 추적 테이블 (ai_query_usage)
+
+### 알림 시스템 3채널
+- 인앱 알림 (in_app_notifications 테이블 + REST API)
+- 이메일 알림 (기존 email.service.js 통합, 이벤트 템플릿)
+- 알림 센터 페이지 (`/dashboard/notifications`) — 전체/미읽음/환경설정 3탭
+- 이벤트별 채널 ON/OFF 설정 (인앱/텔레그램/이메일)
+- NotificationBell 컴포넌트: API 연동 + 30초 자동 갱신 + 실시간 뱃지
+
+### PWA 오프라인 + 모바일
+- Service Worker: Network First + 데이터 캐시 폴백 (프로젝트, 이슈, 수주 등)
+- 정적 파일: Cache First 전략
+- 오프라인 감지 + 상단 배너 표시
+- 모바일 터치 최적화 (44px 탭 타겟, iOS 줌 방지, safe-area, overscroll-behavior)
+
+### 인프라
+- DB 마이그레이션: `005_phase_remaining.sql` (RLS, tenant_ai_configs, ai_query_usage, in_app_notifications)
+- 신규 API: `/api/notifications`, `/api/ai/query`, `/api/ai/config`
+
+---
+
 ## v12.0 (2026-04-08) — Phase 3 엔터프라이즈 완료
 
 ### 3-1. SSO/SAML

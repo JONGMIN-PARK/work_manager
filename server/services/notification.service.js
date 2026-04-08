@@ -1,9 +1,10 @@
 /**
  * 알림 서비스
- * - 이벤트 발생 → 수신자 결정 → 텔레그램 발송
+ * - 이벤트 발생 → 수신자 결정 → 텔레그램 + 이메일 + 인앱 알림 발송
  */
 var db = require('../config/db');
 var telegramService = require('./telegram.service');
+var emailService = require('./email.service');
 
 /** 이벤트 메시지 템플릿 */
 var TEMPLATES = {
@@ -76,8 +77,64 @@ var TEMPLATES = {
  * @param {object} payload - 이벤트 데이터
  * @param {number[]} targetUserIds - 수신 대상 user_id 배열
  */
+/** 인앱 알림 생성 */
+async function createInAppNotification(userId, eventType, title, body, link, tenantId) {
+  try {
+    await db.query(
+      'INSERT INTO in_app_notifications (tenant_id, user_id, event_type, title, body, link) VALUES ($1, $2, $3, $4, $5, $6)',
+      [tenantId || null, userId, eventType, title, body || null, link || null]
+    );
+  } catch (e) {
+    // 테이블이 없으면 무시
+    if (e.code !== '42P01') console.error('[InApp] Error:', e.message);
+  }
+}
+
+/** 이메일 알림 발송 */
+async function sendEmailNotification(userId, eventType, payload) {
+  try {
+    // 이메일 알림 설정 확인
+    var prefR = await db.query(
+      "SELECT is_enabled FROM notification_prefs WHERE user_id = $1 AND channel = 'email' AND event_type = $2",
+      [userId, eventType]
+    );
+    if (prefR.rows.length > 0 && !prefR.rows[0].is_enabled) return;
+
+    var userR = await db.query('SELECT email, name FROM users WHERE id = $1', [userId]);
+    if (!userR.rows.length || !userR.rows[0].email) return;
+
+    var template = TEMPLATES[eventType];
+    if (!template) return;
+
+    var text = template(payload);
+    // HTML 태그를 이메일 호환으로 변환
+    var htmlBody = text.replace(/<b>/g, '<strong>').replace(/<\/b>/g, '</strong>')
+      .replace(/\n/g, '<br>');
+
+    var subject = EVENT_TITLES[eventType] || eventType;
+    await emailService.sendMail(userR.rows[0].email, subject, htmlBody);
+  } catch (e) {
+    console.error('[EmailNotify] Error:', e.message);
+  }
+}
+
+/** 이벤트별 제목 (이메일/인앱용) */
+var EVENT_TITLES = {
+  issue_assigned: '이슈가 배정되었습니다',
+  issue_status_changed: '이슈 상태가 변경되었습니다',
+  project_delayed: '프로젝트가 지연되고 있습니다',
+  deadline_d3: '납기 D-3 알림',
+  deadline_d1: '내일 납기일입니다',
+  deadline_today: '오늘 납기일입니다',
+  user_pending: '신규 가입 승인 요청',
+  milestone_complete: '마일스톤이 완료되었습니다',
+  order_delivery_d7: '납품 D-7 알림',
+  order_delivery_d3: '납품 D-3 알림',
+  weekly_digest: '주간 다이제스트',
+  progress_warning: '진행률 경고'
+};
+
 async function notify(eventType, payload, targetUserIds) {
-  if (!telegramService.isConfigured()) return;
   if (!targetUserIds || targetUserIds.length === 0) return;
 
   var template = TEMPLATES[eventType];
@@ -91,13 +148,24 @@ async function notify(eventType, payload, targetUserIds) {
   for (var i = 0; i < targetUserIds.length; i++) {
     var userId = targetUserIds[i];
     try {
-      // 알림 설정 확인
+      // 인앱 알림 생성 (항상)
+      var inAppTitle = EVENT_TITLES[eventType] || eventType;
+      var plainText = text.replace(/<[^>]+>/g, '');
+      createInAppNotification(userId, eventType, inAppTitle, plainText, null, null);
+
+      // 이메일 알림 (비동기)
+      sendEmailNotification(userId, eventType, payload);
+
+      // 텔레그램 알림 설정 확인
       var prefR = await db.query(
         'SELECT is_enabled FROM notification_prefs WHERE user_id = $1 AND channel = \'telegram\' AND event_type = $2',
         [userId, eventType]
       );
       // 설정이 없으면 기본 발송, 있으면 is_enabled 확인
       if (prefR.rows.length > 0 && !prefR.rows[0].is_enabled) continue;
+
+      // 텔레그램 미설정 시 스킵
+      if (!telegramService.isConfigured()) continue;
 
       // 텔레그램 연동 확인
       var linkR = await db.query(

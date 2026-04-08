@@ -20,6 +20,7 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <AuthProvider>{children}</AuthProvider>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -28,6 +29,9 @@ export default function RootLayout({ children }) {
                   navigator.serviceWorker.register('/sw.js');
                 });
               }
+              window.addEventListener('online', function() { document.body.classList.remove('offline'); });
+              window.addEventListener('offline', function() { document.body.classList.add('offline'); });
+              if (!navigator.onLine) document.body.classList.add('offline');
             `,
           }}
         />

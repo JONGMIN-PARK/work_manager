@@ -1,82 +1,58 @@
 /**
- * AI 라우트 — 웹 프론트엔드 AI 요약/분석
+ * AI 라우트 — 웹 프론트엔드 AI 요약/분석/자연어 질의
  */
 var express = require('express');
 var router = express.Router();
 var config = require('../config');
+var db = require('../config/db');
 var aiService = require('../services/ai.service');
 var { authenticate } = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var planGate = require('../middleware/plan-gate');
 
 router.use(authenticate);
 router.use(tenant.tenantScope);
 
-/**
- * POST /api/ai/summary
- * 프론트엔드에서 프롬프트를 보내면 서버의 AI 키로 처리
- */
-router.post('/summary', async function (req, res) {
+/** 플랜별 월간 AI 쿼리 한도 */
+var PLAN_LIMITS = { free: 0, pro: 100, business: 500, enterprise: 999999 };
+
+/** 이번 달 사용량 확인 */
+async function getMonthlyUsage(tenantId) {
+  var r = await db.query(
+    "SELECT COUNT(*) as cnt FROM ai_query_usage WHERE tenant_id = $1 AND created_at >= date_trunc('month', now())",
+    [tenantId]
+  );
+  return parseInt(r.rows[0].cnt, 10);
+}
+
+/** 사용량 기록 */
+async function logUsage(tenantId, userId, queryText, provider) {
+  await db.query(
+    'INSERT INTO ai_query_usage (tenant_id, user_id, query_text, provider) VALUES ($1, $2, $3, $4)',
+    [tenantId, userId, (queryText || '').slice(0, 500), provider]
+  );
+}
+
+/** 테넌트 AI 키 또는 글로벌 키로 AI 호출 */
+async function callAIWithPrompt(prompt, tenantId) {
+  // 1. 테넌트 전용 키 확인
+  var tenantCfg = null;
   try {
-    if (!aiService.isConfigured()) {
-      return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI API 키가 설정되지 않았습니다. 관리자에게 GEMINI_API_KEY 설정을 요청하세요.' });
-    }
+    var tr = await db.query('SELECT * FROM tenant_ai_configs WHERE tenant_id = $1', [tenantId]);
+    if (tr.rows.length && tr.rows[0].api_key) tenantCfg = tr.rows[0];
+  } catch (_) { /* table may not exist */ }
 
-    var prompt = req.body.prompt || '';
-    if (!prompt) {
-      return res.status(400).json({ error: 'BAD_REQUEST', message: '프롬프트가 필요합니다.' });
-    }
+  var provider = tenantCfg ? tenantCfg.provider : config.ai.provider;
+  var apiKey = tenantCfg ? tenantCfg.api_key : (provider === 'anthropic' ? config.ai.anthropicKey : config.ai.geminiKey);
+  var model = tenantCfg ? tenantCfg.model : (provider === 'anthropic' ? config.ai.anthropicModel : config.ai.geminiModel);
 
-    // 길이 제한 (토큰 절약)
-    if (prompt.length > 15000) {
-      prompt = prompt.slice(0, 15000) + '\n...(이하 생략)';
-    }
+  if (!apiKey) return null;
 
-    var provider = config.ai.provider === 'anthropic' ? 'Claude' : 'Gemini';
-
-    // AI 호출 (ai.service.js의 callAI 재사용)
-    var answer = await callAIWithPrompt(prompt);
-
-    if (!answer) {
-      return res.status(500).json({ error: 'AI_ERROR', message: 'AI 응답을 생성할 수 없습니다.' });
-    }
-
-    res.json({ data: { text: answer, provider: provider } });
-  } catch (err) {
-    console.error('[AI Route] summary error:', err.message);
-    res.status(500).json({ error: 'AI_ERROR', message: 'AI 요약 실패: ' + err.message });
-  }
-});
-
-/**
- * GET /api/ai/status
- * AI 설정 상태 확인
- */
-router.get('/status', function (req, res) {
-  var provider = config.ai.provider || 'gemini';
-  var configured = aiService.isConfigured();
-  res.json({
-    data: {
-      configured: configured,
-      provider: configured ? (provider === 'anthropic' ? 'Claude' : 'Gemini') : null
-    }
-  });
-});
-
-/** AI 호출 (Gemini / Claude) */
-async function callAIWithPrompt(prompt) {
-  if (config.ai.provider === 'anthropic' && config.ai.anthropicKey) {
+  if (provider === 'anthropic') {
     var res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': config.ai.anthropicKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: config.ai.anthropicModel,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: model, max_tokens: 4096, messages: [{ role: 'user', content: prompt }] })
     });
     var data = await res.json();
     if (data.content && data.content[0]) return data.content[0].text;
@@ -84,15 +60,12 @@ async function callAIWithPrompt(prompt) {
     return null;
   }
 
-  // Gemini (기본)
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + config.ai.geminiModel + ':generateContent?key=' + config.ai.geminiKey;
+  // Gemini
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + (model || 'gemini-2.5-flash') + ':generateContent?key=' + apiKey;
   var res2 = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 8192, temperature: 0.3 }
-    })
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 8192, temperature: 0.3 } })
   });
   var data2 = await res2.json();
   if (data2.candidates && data2.candidates[0] && data2.candidates[0].content) {
@@ -101,5 +74,148 @@ async function callAIWithPrompt(prompt) {
   if (data2.error) throw new Error(data2.error.message);
   return null;
 }
+
+/** 쿼리 한도 체크 미들웨어 */
+async function checkAIQuota(req, res, next) {
+  try {
+    var planR = await db.query('SELECT plan FROM tenants WHERE id = $1', [req.tenant.id]);
+    var plan = planR.rows.length ? planR.rows[0].plan : 'free';
+    var limit = PLAN_LIMITS[plan] || 0;
+
+    if (limit === 0) {
+      return res.status(403).json({ error: 'PLAN_REQUIRED', message: 'AI 기능은 Pro 플랜 이상에서 사용할 수 있습니다.' });
+    }
+
+    var usage = await getMonthlyUsage(req.tenant.id);
+    if (usage >= limit) {
+      return res.status(429).json({
+        error: 'AI_QUOTA_EXCEEDED',
+        message: '이번 달 AI 쿼리 한도(' + limit + '회)를 초과했습니다. 플랜 업그레이드를 고려하세요.',
+        data: { used: usage, limit: limit }
+      });
+    }
+
+    req.aiQuota = { used: usage, limit: limit, plan: plan };
+    next();
+  } catch (e) {
+    next(); // 쿼리 실패 시 통과
+  }
+}
+
+// ─── POST /api/ai/summary — AI 요약 ───
+router.post('/summary', checkAIQuota, async function (req, res) {
+  try {
+    var prompt = req.body.prompt || '';
+    if (!prompt) return res.status(400).json({ error: 'BAD_REQUEST', message: '프롬프트가 필요합니다.' });
+    if (prompt.length > 15000) prompt = prompt.slice(0, 15000) + '\n...(이하 생략)';
+
+    var answer = await callAIWithPrompt(prompt, req.tenant.id);
+    if (!answer) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI API 키가 설정되지 않았습니다.' });
+
+    await logUsage(req.tenant.id, req.user.sub, prompt, config.ai.provider);
+    var quota = req.aiQuota || {};
+
+    res.json({ data: { text: answer, provider: config.ai.provider, quota: { used: (quota.used || 0) + 1, limit: quota.limit } } });
+  } catch (err) {
+    console.error('[AI Route] summary error:', err.message);
+    res.status(500).json({ error: 'AI_ERROR', message: 'AI 요약 실패: ' + err.message });
+  }
+});
+
+// ─── POST /api/ai/query — 자연어 질의 (RAG) ───
+router.post('/query', checkAIQuota, async function (req, res) {
+  try {
+    var question = (req.body.question || '').trim();
+    if (!question) return res.status(400).json({ error: 'BAD_REQUEST', message: '질문을 입력하세요.' });
+
+    // RAG: 의도 분석 → DB 데이터 수집 → AI 응답
+    var intents = aiService.analyzeQuery(question);
+    var contextData = await aiService.gatherContext(intents, req.user.name || '사용자');
+
+    var systemPrompt = '당신은 "Work Manager"라는 업무 관리 시스템의 AI 어시스턴트입니다.\n' +
+      '아래 실제 데이터를 기반으로 사용자의 질문에 한국어로 답변하세요.\n' +
+      '마크다운 포맷을 사용할 수 있습니다.\n' +
+      '데이터에 없는 내용은 추측하지 말고 "해당 데이터가 없습니다"라고 답하세요.\n\n';
+
+    if (contextData) {
+      systemPrompt += '=== 현재 데이터 ===\n' + contextData + '\n=== 데이터 끝 ===\n\n';
+    }
+
+    systemPrompt += '질문: ' + question;
+
+    var answer = await callAIWithPrompt(systemPrompt, req.tenant.id);
+    if (!answer) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI API 키가 설정되지 않았습니다.' });
+
+    await logUsage(req.tenant.id, req.user.sub, question, config.ai.provider);
+    var quota = req.aiQuota || {};
+
+    res.json({
+      data: {
+        answer: answer,
+        intents: intents,
+        provider: config.ai.provider,
+        quota: { used: (quota.used || 0) + 1, limit: quota.limit }
+      }
+    });
+  } catch (err) {
+    console.error('[AI Route] query error:', err.message);
+    res.status(500).json({ error: 'AI_ERROR', message: 'AI 질의 실패: ' + err.message });
+  }
+});
+
+// ─── GET /api/ai/status — AI 상태 ───
+router.get('/status', async function (req, res) {
+  var provider = config.ai.provider || 'gemini';
+  var configured = aiService.isConfigured();
+
+  // 테넌트 전용 키 확인
+  var tenantKey = false;
+  try {
+    var tr = await db.query('SELECT provider FROM tenant_ai_configs WHERE tenant_id = $1 AND api_key IS NOT NULL', [req.tenant.id]);
+    if (tr.rows.length) { tenantKey = true; provider = tr.rows[0].provider; configured = true; }
+  } catch (_) { }
+
+  var usage = 0;
+  try { usage = await getMonthlyUsage(req.tenant.id); } catch (_) { }
+
+  var planR = await db.query('SELECT plan FROM tenants WHERE id = $1', [req.tenant.id]);
+  var plan = planR.rows.length ? planR.rows[0].plan : 'free';
+  var limit = PLAN_LIMITS[plan] || 0;
+
+  res.json({
+    data: {
+      configured: configured,
+      provider: configured ? (provider === 'anthropic' ? 'Claude' : 'Gemini') : null,
+      tenantKey: tenantKey,
+      quota: { used: usage, limit: limit, plan: plan }
+    }
+  });
+});
+
+// ─── GET /api/ai/config — 테넌트 AI 설정 조회 (admin) ───
+router.get('/config', require('../middleware/auth').requireRole('admin'), async function (req, res) {
+  try {
+    var r = await db.query('SELECT id, provider, model, created_at FROM tenant_ai_configs WHERE tenant_id = $1', [req.tenant.id]);
+    res.json({ data: r.rows[0] || null });
+  } catch (e) {
+    res.json({ data: null });
+  }
+});
+
+// ─── PUT /api/ai/config — 테넌트 AI 설정 저장 (admin) ───
+router.put('/config', require('../middleware/auth').requireRole('admin'), async function (req, res) {
+  try {
+    var b = req.body;
+    var r = await db.query(
+      'INSERT INTO tenant_ai_configs (tenant_id, provider, api_key, model) VALUES ($1, $2, $3, $4) ' +
+      'ON CONFLICT (tenant_id) DO UPDATE SET provider = $2, api_key = $3, model = $4, updated_at = now() RETURNING id, provider, model',
+      [req.tenant.id, b.provider || 'gemini', b.api_key || null, b.model || null]
+    );
+    res.json({ data: r.rows[0], message: 'AI 설정이 저장되었습니다.' });
+  } catch (e) {
+    console.error('[ai/config]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
 
 module.exports = router;

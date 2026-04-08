@@ -24,3 +24,51 @@ html { scroll-behavior: smooth; }
 
 /* Landing hover effects */
 a:hover { opacity: 0.9; }
+
+/* Mobile touch optimization */
+@media (max-width: 768px) {
+  /* Larger tap targets */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  input, select, textarea {
+    font-size: 16px !important; /* Prevent iOS zoom */
+    min-height: 44px;
+  }
+  /* Disable text selection on interactive elements */
+  button, a { -webkit-tap-highlight-color: transparent; }
+  /* Prevent pull-to-refresh interference */
+  body { overscroll-behavior-y: contain; }
+  /* Touch-friendly table cells */
+  td, th { padding: 12px 8px !important; }
+}
+
+/* Touch scrolling */
+.overflow-scroll { -webkit-overflow-scrolling: touch; }
+
+/* Safe area for notched devices */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* Offline indicator */
+@media (display-mode: standalone) {
+  body::after {
+    content: '';
+    display: none;
+  }
+}
+body.offline::before {
+  content: '오프라인 모드';
+  display: block;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  background: #F59E0B;
+  color: #000;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px;
+  z-index: 99999;
+}

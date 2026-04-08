@@ -11,6 +11,7 @@ var NAV_ITEMS = [
   { icon: '🎫', label: '이슈', href: '/dashboard/issues' },
   { icon: '📅', label: '일정', href: '/dashboard/calendar' },
   { icon: '📦', label: '수주', href: '/dashboard/orders' },
+  { icon: '🔔', label: '알림', href: '/dashboard/notifications' },
   { icon: '📜', label: '감사 로그', href: '/dashboard/audit', admin: true },
   { icon: '⚙️', label: '설정', href: '/dashboard/settings' },
 ];

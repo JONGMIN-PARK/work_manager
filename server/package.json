@@ -1,6 +1,6 @@
 {
   "name": "work-manager-api",
-  "version": "12.0.0",
+  "version": "13.0.0",
   "description": "업무 관리자 API 서버",
   "main": "server.js",
   "scripts": {
