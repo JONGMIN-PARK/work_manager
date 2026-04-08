@@ -5,13 +5,13 @@ import { useAuth } from '@/lib/auth-context';
 import { useState } from 'react';
 
 var NAV_ITEMS = [
-  { icon: '\uD83D\uDCCA', label: '\uB300\uC2DC\uBCF4\uB4DC', href: '/dashboard' },
-  { icon: '\uD83D\uDCCB', label: '\uC5C5\uBB34\uC77C\uC9C0', href: '/records' },
-  { icon: '\uD83D\uDCC1', label: '\uD504\uB85C\uC81D\uD2B8', href: '/projects' },
-  { icon: '\uD83C\uDFAB', label: '\uC774\uC288', href: '/issues' },
-  { icon: '\uD83D\uDCC5', label: '\uC77C\uC815', href: '/calendar' },
-  { icon: '\uD83D\uDCE6', label: '\uC218\uC8FC', href: '/orders' },
-  { icon: '\u2699\uFE0F', label: '\uC124\uC815', href: '/settings' },
+  { icon: '📊', label: '대시보드', href: '/dashboard' },
+  { icon: '📋', label: '업무일지', href: '/dashboard/records' },
+  { icon: '📁', label: '프로젝트', href: '/dashboard/projects' },
+  { icon: '🎫', label: '이슈', href: '/dashboard/issues' },
+  { icon: '📅', label: '일정', href: '/dashboard/calendar' },
+  { icon: '📦', label: '수주', href: '/dashboard/orders' },
+  { icon: '⚙️', label: '설정', href: '/dashboard/settings' },
 ];
 
 var styles = {
