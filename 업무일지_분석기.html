@@ -337,7 +337,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v10.2</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.0</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2400,6 +2400,17 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.0',date:'2026-04-08',title:'Phase 1~3 전체 완료 — 프로덕션 레디',tag:'feature',items:[
+      'Phase 3 엔터프라이즈: SSO/SAML (Azure AD, Okta), 커스텀 필드(8유형), 워크플로우 빌더, 화이트라벨',
+      '온프레미스 Docker Compose 원클릭 배포 + 설치 가이드 + 라이선스 키 시스템',
+      '감사 로그 대시보드 + GDPR 데이터 내보내기 + 접근 기록 리포트 + 보관 정책',
+      'PostgreSQL RLS (Row-Level Security) 테넌트 행 격리',
+      'AI 자연어 질의 REST API (RAG) + 테넌트별 AI 키 관리 + 플랜별 쿼리 제한',
+      '인앱/이메일/텔레그램 3채널 알림 시스템 + 알림 센터 UI + 채널별 환경설정',
+      'PWA 오프라인 데이터 캐싱 (Network First + 캐시 폴백) + 모바일 터치 최적화',
+      'SaaS 랜딩 페이지 (Hero, 8개 기능, 가격표 4단, CTA)',
+      '로그인 시도 횟수 제한 제거'
+    ]},
     {ver:'10.2',date:'2026-04-07',title:'사업부/부서별 접근 제어',tag:'feature',items:[
       '프로젝트: 부서별 소속 프로젝트 자동 필터링 + 생성 시 부서 자동 배정',
       '일정: 부서별 일정 필터링 (admin/executive는 전체, manager/member는 소속 부서)',
