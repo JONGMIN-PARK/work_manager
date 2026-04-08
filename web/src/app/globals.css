@@ -18,3 +18,9 @@ input, select, textarea { font-family: inherit; }
   .sidebar { display: none; }
   .main-content { padding: 12px; }
 }
+
+/* Smooth scroll */
+html { scroll-behavior: smooth; }
+
+/* Landing hover effects */
+a:hover { opacity: 0.9; }
