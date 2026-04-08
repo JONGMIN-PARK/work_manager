@@ -57,10 +57,13 @@ var apiLimiter = rateLimit({
 
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth/register', loginLimiter);
+app.use('/api/v1/auth/login', loginLimiter);
+app.use('/api/v1/auth/register', loginLimiter);
 app.use('/api', apiLimiter);
 
 // ─── Stripe Webhook (raw body 필요 — JSON 파싱 전에 등록) ───
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/v1/billing/webhook', express.raw({ type: 'application/json' }));
 
 // ─── JSON 파싱 ───
 app.use(express.json({ limit: '10mb' }));
@@ -138,7 +141,10 @@ var aiRoutes = require('./routes/ai');
 var settingsRoutes = require('./routes/settings');
 var tenantRoutes = require('./routes/tenants');
 var billingRoutes = require('./routes/billing');
+var v1Router = require('./routes/v1');
+var apiDocsRoutes = require('./routes/api-docs');
 
+// ─── 기존 /api/* 라우트 (하위 호환) ───
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
@@ -161,6 +167,12 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/tenants', tenantRoutes);
 app.use('/api/billing', billingRoutes);
+
+// ─── API v1 (버전 관리) ───
+app.use('/api/v1', v1Router);
+
+// ─── OpenAPI 문서 ───
+app.use('/api/api-docs', apiDocsRoutes);
 
 // ─── 텔레그램 Webhook 자동 등록 ───
 var telegramService = require('./services/telegram.service');

@@ -1,0 +1,14 @@
+{
+  "name": "Work Manager",
+  "short_name": "WorkMgr",
+  "description": "업무 관리 플랫폼",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0C0F1A",
+  "theme_color": "#3B82F6",
+  "orientation": "any",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

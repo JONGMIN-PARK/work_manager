@@ -9,3 +9,12 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', -
 a { color: var(--accent); text-decoration: none; }
 button { cursor: pointer; font-family: inherit; }
 input, select, textarea { font-family: inherit; }
+
+/* PWA mobile */
+@media (display-mode: standalone) {
+  body { -webkit-user-select: none; user-select: none; }
+}
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main-content { padding: 12px; }
+}
