@@ -14,7 +14,7 @@ function tenantScope(req, res, next) {
   if (!req.user || !req.user.tenantId) {
     return res.status(403).json({
       error: 'TENANT_REQUIRED',
-      message: '테넌트 정보가 없습니다'
+      message: '테넌트 정보가 없습니다. 조직에 가입하거나 조직을 생성해 주세요.'
     });
   }
 
@@ -57,7 +57,26 @@ function addTenantId(tenantId, data) {
   return result;
 }
 
+/**
+ * tenantScopeOptional — tenant_id가 있으면 설정, 없으면 통과
+ */
+function tenantScopeOptional(req, res, next) {
+  if (req.user && req.user.tenantId) {
+    req.tenant = { id: req.user.tenantId };
+    req.scopeQuery = function scopeQuery(query) {
+      var paramIndex = (query.values ? query.values.length : 0) + 1;
+      var scopedText = query.text + ' AND tenant_id = $' + paramIndex;
+      var scopedValues = (query.values || []).concat([req.user.tenantId]);
+      return { text: scopedText, values: scopedValues };
+    };
+  } else {
+    req.tenant = null;
+  }
+  next();
+}
+
 module.exports = {
   tenantScope: tenantScope,
+  tenantScopeOptional: tenantScopeOptional,
   addTenantId: addTenantId
 };

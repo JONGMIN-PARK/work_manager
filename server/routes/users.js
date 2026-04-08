@@ -5,23 +5,27 @@ var authService = require('../services/auth.service');
 var authMiddleware = require('../middleware/auth');
 var emailService = require('../services/email.service');
 
+var tenant = require('../middleware/tenant');
+
 // 모든 라우트에 인증 필요
 router.use(authMiddleware.authenticate);
+router.use(tenant.tenantScopeOptional);
 
 // ─── GET /api/users ───
 router.get('/', async function (req, res) {
   try {
     var role = req.user.role;
     var sql, params;
+    var tenantFilter = req.tenant ? " AND tenant_id = '" + req.tenant.id + "'" : "";
 
     if (role === 'admin') {
-      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users ORDER BY created_at DESC";
+      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE 1=1" + tenantFilter + " ORDER BY created_at DESC";
       params = [];
     } else if (role === 'manager') {
-      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE department_id = $1 ORDER BY name";
+      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE department_id = $1" + tenantFilter + " ORDER BY name";
       params = [req.user.departmentId];
     } else if (role === 'executive') {
-      sql = "SELECT id, email, name, display_name, role, department_id, position, status, created_at FROM users WHERE status = 'active' ORDER BY name";
+      sql = "SELECT id, email, name, display_name, role, department_id, position, status, created_at FROM users WHERE status = 'active'" + tenantFilter + " ORDER BY name";
       params = [];
     } else {
       return res.status(403).json({ error: 'FORBIDDEN', message: '권한이 없습니다.' });
