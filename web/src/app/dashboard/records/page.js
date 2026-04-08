@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
+import AISummary from '@/components/AISummary';
 
 // ── Styles ──────────────────────────────────────────────
 var S = {
@@ -337,7 +338,8 @@ export default function RecordsPage() {
       {/* Tabs */}
       <div style={S.tabBar}>
         <span onClick={function(){ setActiveTab('table'); }} style={{ ...(activeTab==='table' ? S.tabActive : S.tab), borderRadius: '8px 0 0 8px' }}>{'📊 상세'}</span>
-        <span onClick={function(){ setActiveTab('chart'); }} style={{ ...(activeTab==='chart' ? S.tabActive : S.tab), borderRadius: '0 8px 8px 0' }}>{'📈 차트'}</span>
+        <span onClick={function(){ setActiveTab('chart'); }} style={{ ...(activeTab==='chart' ? S.tabActive : S.tab) }}>{'📈 차트'}</span>
+        <span onClick={function(){ setActiveTab('ai'); }} style={{ ...(activeTab==='ai' ? S.tabActive : S.tab), borderRadius: '0 8px 8px 0' }}>{'🤖 AI 요약'}</span>
       </div>
 
       {/* Table View */}
@@ -386,6 +388,27 @@ export default function RecordsPage() {
             <div style={S.chartTitle}>인원별 투입시간</div>
             <HBar data={personData} />
           </div>
+        </div>
+      )}
+
+      {/* AI Summary View */}
+      {activeTab === 'ai' && (
+        <div style={S.chartCard}>
+          <AISummary
+            data={filtered.length ? (
+              '기간: ' + stats.period + '\n' +
+              '총 레코드: ' + stats.count + '건, 총 시간: ' + stats.hours.toFixed(1) + 'h, 인원: ' + stats.people + '명\n' +
+              '인원별: ' + personData.slice(0, 10).map(function(d){ return d.label + ' ' + d.value.toFixed(1) + 'h'; }).join(', ') + '\n' +
+              '업무분장: ' + taskTypeData.slice(0, 10).map(function(d){ return d.label + ' ' + d.value.toFixed(1) + 'h'; }).join(', ') + '\n' +
+              '주요 수주: ' + (function(){
+                var m = {};
+                filtered.forEach(function(r){ if(r.ocmt) m[r.ocmt] = (m[r.ocmt]||0) + (parseFloat(r.hours)||0); });
+                return Object.keys(m).sort(function(a,b){ return m[b]-m[a]; }).slice(0,8).map(function(k){ return k + ' ' + m[k].toFixed(1) + 'h'; }).join(', ');
+              })()
+            ) : ''}
+            context="업무일지 분석 데이터"
+            placeholder="현재 필터링된 업무일지 데이터를 AI가 분석하여 핵심 요약을 생성합니다."
+          />
         </div>
       )}
     </div>

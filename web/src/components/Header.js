@@ -2,6 +2,7 @@
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useState } from 'react';
+import NotificationBell from '@/components/NotificationBell';
 
 var PAGE_TITLES = {
   '/dashboard': '\uB300\uC2DC\uBCF4\uB4DC',
@@ -142,15 +143,7 @@ export default function Header() {
         </div>
 
         {/* Notification bell */}
-        <button
-          style={styles.iconBtn}
-          onMouseEnter={function(e) { e.currentTarget.style.backgroundColor = '#141824'; e.currentTarget.style.borderColor = '#2A2F45'; }}
-          onMouseLeave={function(e) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}
-          title="\uC54C\uB9BC"
-        >
-          {'\uD83D\uDD14'}
-          <div style={styles.notifBadge} />
-        </button>
+        <NotificationBell />
 
         {/* User avatar */}
         <button style={styles.userBtn} title={user?.name || '\uC0AC\uC6A9\uC790'}>
