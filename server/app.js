@@ -59,6 +59,9 @@ app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth/register', loginLimiter);
 app.use('/api', apiLimiter);
 
+// ─── Stripe Webhook (raw body 필요 — JSON 파싱 전에 등록) ───
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
+
 // ─── JSON 파싱 ───
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -134,6 +137,7 @@ var telegramRoutes = require('./routes/telegram');
 var aiRoutes = require('./routes/ai');
 var settingsRoutes = require('./routes/settings');
 var tenantRoutes = require('./routes/tenants');
+var billingRoutes = require('./routes/billing');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -156,6 +160,7 @@ app.use('/api/telegram', telegramRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/tenants', tenantRoutes);
+app.use('/api/billing', billingRoutes);
 
 // ─── 텔레그램 Webhook 자동 등록 ───
 var telegramService = require('./services/telegram.service');
