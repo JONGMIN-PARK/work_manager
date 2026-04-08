@@ -141,6 +141,12 @@ var aiRoutes = require('./routes/ai');
 var settingsRoutes = require('./routes/settings');
 var tenantRoutes = require('./routes/tenants');
 var billingRoutes = require('./routes/billing');
+var ssoRoutes = require('./routes/sso');
+var customFieldRoutes = require('./routes/custom-fields');
+var workflowRoutes = require('./routes/workflows');
+var whiteLabelRoutes = require('./routes/white-label');
+var licenseRoutes = require('./routes/license');
+var dataExportRoutes = require('./routes/data-export');
 var v1Router = require('./routes/v1');
 var apiDocsRoutes = require('./routes/api-docs');
 
@@ -167,6 +173,12 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/tenants', tenantRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/sso', ssoRoutes);
+app.use('/api/custom-fields', customFieldRoutes);
+app.use('/api/workflows', workflowRoutes);
+app.use('/api/white-label', whiteLabelRoutes);
+app.use('/api/license', licenseRoutes);
+app.use('/api/data-export', dataExportRoutes);
 
 // ─── API v1 (버전 관리) ───
 app.use('/api/v1', v1Router);

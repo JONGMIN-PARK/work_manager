@@ -1,5 +1,48 @@
 # Work Manager — 변경 이력
 
+## v12.0 (2026-04-08) — Phase 3 엔터프라이즈 완료
+
+### 3-1. SSO/SAML
+- SAML 2.0 IdP 연동 (Azure AD, Okta 호환)
+- SSO 설정 관리 UI (관리자 대시보드)
+- JIT 프로비저닝 (첫 SSO 로그인 시 계정 자동 생성)
+- SP 정보 (ACS URL, Entity ID, NameID Format) 자동 안내
+
+### 3-3. 커스텀 필드/워크플로우
+- 커스텀 필드 정의 (프로젝트/이슈/수주 — text, number, date, select, multiselect, checkbox, url, email)
+- 커스텀 필드 값 관리 API (엔티티별 일괄 저장/조회)
+- 워크플로우 빌더 UI (상태 정의, 전이 규칙, 기본 워크플로우)
+- 상태 전이 유효성 검사 API
+- 화이트라벨 설정 (로고, 파비콘, 색상, 앱 이름, 커스텀 도메인, CSS)
+
+### 3-4. 온프레미스 Docker Compose
+- 원클릭 배포: `docker compose -f docker-compose.onprem.yml up -d`
+- 4 서비스: PostgreSQL + API + Next.js Web + Nginx 리버스 프록시
+- Web Dockerfile (Next.js 빌드 + 프로덕션 실행)
+- Nginx 설정 (API/프론트엔드 자동 라우팅)
+- `.env.onprem` 환경 변수 템플릿
+- `INSTALL.md` 설치 가이드 문서
+- 라이선스 키 시스템 (생성/활성화/상태 조회, 플랜 자동 업그레이드)
+
+### 3-5. 감사/컴플라이언스
+- 감사 로그 대시보드 (필터, 검색, 페이지네이션)
+- 데이터 내보내기 (감사 로그 CSV, 사용자 JSON, 전체 데이터 JSON — GDPR 대응)
+- 접근 기록 리포트 (사용자별 로그인/활동/IP 요약)
+- 데이터 보관 정책 설정 (감사 로그/아카이브/삭제 데이터 보관 기간, 자동 정리)
+
+### 인프라/라우트
+- 신규 API: `/api/sso`, `/api/custom-fields`, `/api/workflows`, `/api/white-label`, `/api/license`, `/api/data-export`
+- DB 마이그레이션: `004_phase3.sql` (sso_configs, custom_field_definitions/values, workflow_definitions, white_label_configs, licenses, data_retention_policies)
+- 사이드바 관리자 섹션 추가 (SSO, 커스텀 필드, 워크플로우)
+- Next.js 감사 로그 페이지 (`/dashboard/audit`)
+
+### 통계
+- 총 API 엔드포인트: 155+
+- 총 DB 테이블: 36+
+- 총 프론트엔드 페이지: 14개
+
+---
+
 ## v9.0 (2026-03-25~26) — 텔레그램 봇 통합 & AI
 
 ### 텔레그램 봇 연동

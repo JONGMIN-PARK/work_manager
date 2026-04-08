@@ -11,7 +11,14 @@ var NAV_ITEMS = [
   { icon: '🎫', label: '이슈', href: '/dashboard/issues' },
   { icon: '📅', label: '일정', href: '/dashboard/calendar' },
   { icon: '📦', label: '수주', href: '/dashboard/orders' },
+  { icon: '📜', label: '감사 로그', href: '/dashboard/audit', admin: true },
   { icon: '⚙️', label: '설정', href: '/dashboard/settings' },
+];
+
+var ADMIN_ITEMS = [
+  { icon: '🔐', label: 'SSO/SAML', href: '/dashboard/admin/sso' },
+  { icon: '📝', label: '커스텀 필드', href: '/dashboard/admin/custom-fields' },
+  { icon: '🔄', label: '워크플로우', href: '/dashboard/admin/workflows' },
 ];
 
 var styles = {
@@ -155,7 +162,7 @@ export default function Sidebar() {
     <>
       <div style={styles.logo}>WorkManager</div>
       <nav style={styles.nav}>
-        {NAV_ITEMS.map(function(item) {
+        {NAV_ITEMS.filter(function(item) { return !item.admin || (user && user.role === 'admin'); }).map(function(item) {
           var active = isActive(item.href);
           var hovered = hoveredPath === item.href && !active;
           return (
@@ -176,6 +183,32 @@ export default function Sidebar() {
             </Link>
           );
         })}
+        {user && user.role === 'admin' && (
+          <>
+            <div style={{ fontSize: 10, color: '#475569', padding: '12px 12px 4px', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>관리자</div>
+            {ADMIN_ITEMS.map(function(item) {
+              var active = isActive(item.href);
+              var hovered = hoveredPath === item.href && !active;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  style={{
+                    ...styles.link,
+                    ...(active ? styles.linkActive : {}),
+                    ...(hovered ? styles.linkHover : {}),
+                  }}
+                  onMouseEnter={function() { setHoveredPath(item.href); }}
+                  onMouseLeave={function() { setHoveredPath(null); }}
+                  onClick={function() { setMobileOpen(false); }}
+                >
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </>
+        )}
       </nav>
       <div style={styles.bottom}>
         <div style={styles.userInfo}>
