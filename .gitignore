@@ -3,5 +3,8 @@
 node_modules/
 server/.env
 server/node_modules/
+web/node_modules/
+web/.next/
 *.log
 server/backups/
+.env
