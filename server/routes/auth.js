@@ -80,16 +80,6 @@ router.post('/login', async function (req, res) {
       return res.status(401).json({ error: 'AUTH_FAILED', message: '이메일 또는 비밀번호가 올바르지 않습니다.' });
     }
 
-    // 계정 잠금 확인
-    if (authService.isLocked(user)) {
-      var until = new Date(user.locked_until);
-      return res.status(423).json({
-        error: 'ACCOUNT_LOCKED',
-        message: '로그인 시도 횟수 초과로 계정이 잠겼습니다.',
-        lockedUntil: until.toISOString()
-      });
-    }
-
     // 계정 상태 확인
     if (user.status === 'pending') {
       return res.status(403).json({ error: 'PENDING', message: '관리자 승인 대기 중입니다.' });
@@ -104,11 +94,9 @@ router.post('/login', async function (req, res) {
     // 비밀번호 확인
     var valid = await authService.verifyPassword(password, user.password_hash);
     if (!valid) {
-      var failCount = await authService.incrementLoginFail(user.id);
-      var remaining = 5 - failCount;
       return res.status(401).json({
         error: 'AUTH_FAILED',
-        message: '이메일 또는 비밀번호가 올바르지 않습니다.' + (remaining > 0 ? ' (남은 시도: ' + remaining + '회)' : '')
+        message: '이메일 또는 비밀번호가 올바르지 않습니다.'
       });
     }
 
