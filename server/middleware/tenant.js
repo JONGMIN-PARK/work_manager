@@ -12,10 +12,13 @@
  */
 function tenantScope(req, res, next) {
   if (!req.user || !req.user.tenantId) {
-    return res.status(403).json({
-      error: 'TENANT_REQUIRED',
-      message: '테넌트 정보가 없습니다. 조직에 가입하거나 조직을 생성해 주세요.'
-    });
+    // 테넌트 없는 사용자 — 빈 UUID로 설정 (쿼리 결과 자연스럽게 0건)
+    req.tenant = { id: '00000000-0000-0000-0000-000000000000' };
+    req.scopeQuery = function scopeQuery(query) {
+      var paramIndex = (query.values ? query.values.length : 0) + 1;
+      return { text: query.text + ' AND tenant_id = $' + paramIndex, values: (query.values || []).concat(['00000000-0000-0000-0000-000000000000']) };
+    };
+    return next();
   }
 
   var tenantId = req.user.tenantId;

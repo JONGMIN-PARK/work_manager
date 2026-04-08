@@ -19,21 +19,33 @@ router.get('/', async function (req, res) {
     var pg = parsePagination(req.query, 100);
     var r;
 
-    var deptId = req.user.departmentId;
+    var deptId = req.user.departmentId || null;
     if (role === 'admin' || role === 'executive') {
       // admin/executive: 전체 프로젝트
       r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM projects WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [req.tenant.id, pg.limit, pg.offset]);
     } else if (role === 'manager') {
       // manager: 소속 부서 프로젝트 + 본인이 멤버/PL인 프로젝트
+      var mgrWhere = deptId
+        ? "(p.department_id = $3 OR pm.user_id IS NOT NULL OR p.department_id IS NULL)"
+        : "(pm.user_id IS NOT NULL OR p.department_id IS NULL)";
+      var mgrParams = deptId
+        ? [userId, req.tenant.id, deptId, pg.limit, pg.offset]
+        : [userId, req.tenant.id, pg.limit, pg.offset];
       r = await db.query(
-        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL WHERE p.tenant_id = $2 AND (p.department_id = $3 OR pm.user_id IS NOT NULL OR p.department_id IS NULL) ORDER BY p.created_at DESC LIMIT $4 OFFSET $5",
-        [userId, req.tenant.id, deptId, pg.limit, pg.offset]
+        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL WHERE p.tenant_id = $2 AND " + mgrWhere + " ORDER BY p.created_at DESC LIMIT $" + (deptId ? 4 : 3) + " OFFSET $" + (deptId ? 5 : 4),
+        mgrParams
       );
     } else {
       // member: 소속 부서 프로젝트(읽기) + 배정된 프로젝트
+      var memWhere = deptId
+        ? "(p.department_id = $3 OR pm.user_id IS NOT NULL)"
+        : "(pm.user_id IS NOT NULL OR p.department_id IS NULL)";
+      var memParams = deptId
+        ? [userId, req.tenant.id, deptId, pg.limit, pg.offset]
+        : [userId, req.tenant.id, pg.limit, pg.offset];
       r = await db.query(
-        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL WHERE p.tenant_id = $2 AND (p.department_id = $3 OR pm.user_id IS NOT NULL) ORDER BY p.created_at DESC LIMIT $4 OFFSET $5",
-        [userId, req.tenant.id, deptId, pg.limit, pg.offset]
+        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL WHERE p.tenant_id = $2 AND " + memWhere + " ORDER BY p.created_at DESC LIMIT $" + (deptId ? 4 : 3) + " OFFSET $" + (deptId ? 5 : 4),
+        memParams
       );
     }
 
