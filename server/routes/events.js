@@ -12,8 +12,6 @@ router.use(tenant.tenantScope);
 // GET /api/events
 router.get('/', async function (req, res) {
   try {
-    var role = req.user.role;
-    var deptId = req.user.departmentId;
     var where = [];
     var params = [];
     var idx = 1;
@@ -22,11 +20,6 @@ router.get('/', async function (req, res) {
     where.push('tenant_id = $' + idx++);
     params.push(req.tenant.id);
 
-    // 부서 기반 필터 (admin/executive는 전체, manager/member는 소속 부서)
-    if (role !== 'admin' && role !== 'executive' && deptId) {
-      where.push('(department_id = $' + idx++ + ' OR department_id IS NULL)');
-      params.push(deptId);
-    }
     if (req.query.from && req.query.to) {
       where.push('start_date <= $' + idx++ + ' AND end_date >= $' + idx++);
       params.push(req.query.to, req.query.from);
@@ -35,7 +28,6 @@ router.get('/', async function (req, res) {
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY start_date';
-    var idx = params.length + 1;
     sql += ' LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
@@ -65,13 +57,12 @@ router.post('/', async function (req, res) {
   try {
     var b = req.body;
     var id = b.id || ('evt-' + require('crypto').randomUUID().slice(0, 12));
-    var deptId = b.departmentId || b.department_id || req.user.departmentId || null;
     var r = await db.query(
-      "INSERT INTO events (id, title, type, start_date, end_date, project_ids, assignees, color, memo, repeat, repeat_until, created_by, department_id, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *",
+      "INSERT INTO events (id, title, type, start_date, end_date, project_ids, assignees, color, memo, repeat, repeat_until, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *",
       [id, b.title || '', b.type || 'etc', b.startDate || b.start_date || '',
        b.endDate || b.end_date || '', JSON.stringify(b.projectIds || b.project_ids || []),
        JSON.stringify(b.assignees || []), b.color || null, b.memo || '',
-       b.repeat || null, b.repeatUntil || b.repeat_until || null, req.user.sub, deptId, req.tenant.id]
+       b.repeat || null, b.repeatUntil || b.repeat_until || null, req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
