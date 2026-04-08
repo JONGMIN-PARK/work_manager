@@ -468,11 +468,10 @@ function updateAuthUI() {
   if (adminTab) {
     adminTab.style.display = currentUser.role === 'admin' ? '' : 'none';
   }
-  // 관리자 전용 애니웍스 버튼 표시/숨김
-  var isAdmin = currentUser.role === 'admin';
+  // 애니웍스 버튼 — 모든 사용자에게 표시
   var awBtns = document.querySelectorAll('.awAdminBtn');
   for (var i = 0; i < awBtns.length; i++) {
-    awBtns[i].style.display = isAdmin ? '' : 'none';
+    awBtns[i].style.display = '';
   }
 }
 
