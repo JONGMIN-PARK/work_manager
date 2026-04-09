@@ -54,7 +54,8 @@ function checkPermission(action, getResourceId) {
     // admin은 모든 권한
     if (role === 'admin') return next();
 
-    var projectId = getResourceId ? getResourceId(req) : (req.params.projectId || req.params.id || req.body.projectId || req.body.project_id);
+    var body = req.body || {};
+    var projectId = getResourceId ? getResourceId(req) : (req.params.projectId || req.params.id || body.projectId || body.project_id);
     var pl = projectId ? await isProjectPL(userId, projectId) : false;
     var member = projectId ? await isProjectMember(userId, projectId) : false;
 
