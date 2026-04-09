@@ -218,7 +218,7 @@ router.delete('/records', rbac.checkPermission('archive.manage'), async function
     res.json({ message: '전체 삭제 완료' });
   } catch (e) {
     console.error('[work-records/clear]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
   }
 });
 
