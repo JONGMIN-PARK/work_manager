@@ -1208,26 +1208,19 @@ async function deduplicateRecords(){
   }
 }
 
-/* 전체 데이터 초기화 */
+/* 전체 데이터 초기화 (서버 API) */
 async function resetAllData(){
-  if(!confirm('⚠️ 전체 데이터를 초기화하시겠습니까?\n\n모든 업무일지, 프로젝트, 이슈, 수주, 일정 데이터가 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.'))return;
+  if(!confirm('⚠️ 내 업무일지 데이터를 전체 초기화하시겠습니까?\n\n내 계정의 업무일지 데이터만 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.'))return;
   if(!confirm('정말 초기화하시겠습니까?\n(한번 더 확인)'))return;
   try{
-    var storeNames=['workRecords','projects','milestones','events','progressHistory','orders','checklists','issues','issueLogs'];
-    var tx=db.transaction(storeNames.filter(function(s){return db.objectStoreNames.contains(s)}),'readwrite');
-    storeNames.forEach(function(s){if(db.objectStoreNames.contains(s))tx.objectStore(s).clear()});
-    await new Promise(function(res,rej){tx.oncomplete=res;tx.onerror=rej});
-    // localStorage 초기화
-    try{
-      var keys=[];
-      for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf('wa-')===0)keys.push(k)}
-      keys.forEach(function(k){localStorage.removeItem(k)});
-    }catch(ex){console.warn('[Reset] localStorage cleanup error',ex)}
+    // 서버 데이터 삭제
+    if(typeof wrClear==='function') await wrClear();
+    // 메모리 초기화
     aD=[];aN=[];vN=[];sN.clear();sO.clear();sT.clear();sON.clear();sCL.clear();sDV.clear();
     document.getElementById('uploadZone').classList.remove('hidden');
     document.getElementById('mainArea').classList.add('hidden');
     document.getElementById('fileInfo').classList.add('hidden');
-    showToast('🗑️ 전체 데이터가 초기화되었습니다.');
+    showToast('🗑️ 내 업무일지 데이터가 초기화되었습니다.');
   }catch(ex){showToast('초기화 실패: '+ex.message,'error')}
 }
 function getISOWeek(d){const t=new Date(d.valueOf());const n=((d.getDay()+6)%7);t.setDate(t.getDate()-n+3);const f=t.valueOf();t.setMonth(0,1);if(t.getDay()!==4)t.setMonth(0,1+((4-t.getDay())+7)%7);return 1+Math.ceil((f-t)/604800000)}
@@ -2178,13 +2171,7 @@ async function saveManualInput(keepOpen){
     // aD 배열에 추가
     var newRec=saved||record;
     aD.push(newRec);
-    // 로컬 IndexedDB에도 동기화 (재접속 시 IndexedDB 우선 로드되므로 필수)
-    try{
-      if(typeof db!=='undefined'&&db){
-        var idbTx=db.transaction('workRecords','readwrite');
-        idbTx.objectStore('workRecords').put(newRec);
-      }
-    }catch(e){console.warn('[saveManualInput] IndexedDB sync:',e)}
+    // 서버 DB에 이미 저장됨 — 별도 동기화 불필요
     status.textContent='✅ 저장 완료! (서버 DB 반영됨)';status.style.color='#10B981';
     // UI 갱신 — 날짜순 정렬 + 필터/리스트 전체 갱신
     aD.sort(function(a,b){var n=a.name.localeCompare(b.name,'ko');return n!==0?n:a.date.localeCompare(b.date)});
