@@ -722,7 +722,7 @@ if(typeof PROJ_STATUS==='undefined'){
   var PROJ_STATUS={waiting:{label:'대기',color:'#94A3B8',bg:'rgba(148,163,184,.15)',icon:'⏳'},active:{label:'진행중',color:'#3B82F6',bg:'rgba(59,130,246,.15)',icon:'🔄'},delayed:{label:'지연',color:'#EF4444',bg:'rgba(239,68,68,.15)',icon:'⚠️'},done:{label:'완료',color:'#10B981',bg:'rgba(16,185,129,.15)',icon:'✅'},hold:{label:'보류',color:'#F59E0B',bg:'rgba(245,158,11,.15)',icon:'⏸️'}};
   var EVT_TYPE={milestone:{label:'마일스톤',color:'#8B5CF6',icon:'◆'},meeting:{label:'회의',color:'#06B6D4',icon:'🤝'},deadline:{label:'납기',color:'#EF4444',icon:'🏁'},trip:{label:'출장',color:'#F97316',icon:'✈️'},dayoff:{label:'연차',color:'#10B981',icon:'🌴'},amoff:{label:'오전반차',color:'#14B8A6',icon:'🌅'},pmoff:{label:'오후반차',color:'#0D9488',icon:'🌇'},etc:{label:'기타',color:'#64748B',icon:'📌'}};
 }
-if(typeof openDBv2==='undefined'){window.openDBv2=function(){return openDB()}}
+if(typeof openDBv2==='undefined'){window.openDBv2=function(){return Promise.resolve(null)}}
 if(typeof projGetAll==='undefined'){
   window.projGetAll=function(){return Promise.resolve([])};window.projGet=function(){return Promise.resolve(null)};window.projPut=function(p){return Promise.resolve(p)};window.projDel=function(){return Promise.resolve()};
   window.msGetAll=function(){return Promise.resolve([])};window.msGetByProject=function(){return Promise.resolve([])};window.msPut=function(m){return Promise.resolve(m)};window.msDel=function(){return Promise.resolve()};window.msDelByProject=function(){return Promise.resolve()};
@@ -914,26 +914,9 @@ function pXLS(buf){
   }catch(e){console.log('SheetJS parse failed:',e);return[]}
 }
 
-/* ═══ IndexedDB ═══ */
+/* ═══ DB 함수 (서버 API 전용 — project-data.js에서 오버라이드) ═══ */
 let db=null;
-function openDB(){return new Promise((res,rej)=>{const req=indexedDB.open('WorkAnalyzerDB');req.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('weeks'))d.createObjectStore('weeks',{keyPath:'id'});if(!d.objectStoreNames.contains('workRecords'))d.createObjectStore('workRecords',{autoIncrement:true})};req.onblocked=()=>{console.warn('DB blocked');try{const f=indexedDB.open('WorkAnalyzerDB');f.onsuccess=e=>{db=e.target.result;res(db)};f.onerror=e=>rej(e)}catch(ex){rej(ex)}};req.onsuccess=e=>{db=e.target.result;res(db)};req.onerror=e=>rej(e)})}
-/* wk* 함수: project-data.js가 서버 API 래퍼로 오버라이드함. 미로드 시 폴백 */
-if(typeof wkPut!=='function'){
-  var wkPut=function(data){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').put(data);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
-  var wkGetAll=function(){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readonly');const req=tx.objectStore('weeks').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})};
-  var wkGet=function(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readonly');const req=tx.objectStore('weeks').get(id);req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})};
-  var wkDel=function(id){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').delete(id);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
-  var wkClear=function(){return new Promise((res,rej)=>{const tx=db.transaction('weeks','readwrite');tx.objectStore('weeks').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
-}
-/* ── workRecords DB 함수 ──
-   project-data.js가 로드되면 서버 API 래퍼로 오버라이드됨.
-   여기서는 project-data.js 미로드 시(file:// 등)에만 폴백으로 사용 */
-if(typeof wrBulkPut!=='function'){
-  var wrBulkPut=function(records){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');const s=tx.objectStore('workRecords');s.clear();records.forEach(r=>s.put(r));tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
-  var wrGetAll=function(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').getAll();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})};
-  var wrCount=function(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readonly');const req=tx.objectStore('workRecords').count();req.onsuccess=()=>res(req.result);req.onerror=e=>rej(e)})};
-  var wrClear=function(){return new Promise((res,rej)=>{const tx=db.transaction('workRecords','readwrite');tx.objectStore('workRecords').clear();tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})};
-}
+function openDB(){return Promise.resolve(null)}
 /* 완전 일치 키 (중복 제거용) */
 function wrKey(r){return r.date+'|'+r.name+'|'+r.orderNo+'|'+r.hours+'|'+(r.abbr||'')+'|'+(r.dept||'')+'|'+r.content}
 /* 식별 키 (같은 레코드 판별용 — 갱신 시 덮어쓰기) */
