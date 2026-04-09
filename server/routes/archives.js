@@ -221,9 +221,15 @@ router.delete('/records', rbac.checkPermission('archive.manage'), async function
     return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'DB 연결 실패' });
   }
   try {
-    // 타임아웃 설정 (25초 — Render 프록시 30초 제한 대비)
     await client.query('SET statement_timeout = 25000');
-    var result = await client.query('DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2', [req.user.sub, req.tenant.id]);
+    // tenant_id 컬럼 존재 여부 확인 후 쿼리 분기
+    var colCheck = await client.query("SELECT 1 FROM information_schema.columns WHERE table_name='work_records' AND column_name='tenant_id'");
+    var result;
+    if (colCheck.rows.length > 0) {
+      result = await client.query('DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2', [req.user.sub, req.tenant.id]);
+    } else {
+      result = await client.query('DELETE FROM work_records WHERE user_id = $1', [req.user.sub]);
+    }
     res.json({ message: '전체 삭제 완료', deleted: result.rowCount });
   } catch (e) {
     console.error('[work-records/clear]', e);
