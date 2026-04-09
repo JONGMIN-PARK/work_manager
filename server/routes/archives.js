@@ -213,12 +213,23 @@ router.delete('/records/batch', rbac.checkPermission('archive.manage'), async fu
 
 // DELETE /api/archives/records — 전체 삭제 (해당 사용자 레코드만)
 router.delete('/records', rbac.checkPermission('archive.manage'), async function (req, res) {
+  var client;
   try {
-    await db.query('DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2', [req.user.sub, req.tenant.id]);
-    res.json({ message: '전체 삭제 완료' });
+    client = await db.pool.connect();
+  } catch (connErr) {
+    console.error('[work-records/clear] DB connect failed:', connErr);
+    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'DB 연결 실패' });
+  }
+  try {
+    // 타임아웃 설정 (25초 — Render 프록시 30초 제한 대비)
+    await client.query('SET statement_timeout = 25000');
+    var result = await client.query('DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2', [req.user.sub, req.tenant.id]);
+    res.json({ message: '전체 삭제 완료', deleted: result.rowCount });
   } catch (e) {
     console.error('[work-records/clear]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+  } finally {
+    if (client) client.release();
   }
 });
 

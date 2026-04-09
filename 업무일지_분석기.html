@@ -1196,8 +1196,15 @@ async function resetAllData(){
   if(!confirm('⚠️ 내 업무일지 데이터를 전체 초기화하시겠습니까?\n\n내 계정의 업무일지 데이터만 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.'))return;
   if(!confirm('정말 초기화하시겠습니까?\n(한번 더 확인)'))return;
   try{
-    // 서버 데이터 삭제
-    if(typeof wrClear==='function') await wrClear();
+    // 서버 데이터 삭제 (5xx 시 1회 재시도)
+    if(typeof wrClear==='function'){
+      try{ await wrClear(); }catch(e1){
+        if(e1.status>=500){
+          await new Promise(function(r){setTimeout(r,2000)});
+          await wrClear();
+        }else throw e1;
+      }
+    }
     // 메모리 초기화
     aD=[];aN=[];vN=[];sN.clear();sO.clear();sT.clear();sON.clear();sCL.clear();sDV.clear();
     document.getElementById('uploadZone').classList.remove('hidden');
