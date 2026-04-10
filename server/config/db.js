@@ -61,7 +61,7 @@ async function runMigrations() {
         }
       } else {
         // 트랜잭션 없는 파일은 문장별 개별 실행 (부분 실패 허용)
-        var stmts = sql.split(';').map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0 && !/^--/.test(s); });
+        var stmts = sql.split(';').map(function (s) { return s.replace(/--[^\n]*/g, '').trim(); }).filter(function (s) { return s.length > 0; });
         for (var j = 0; j < stmts.length; j++) {
           try {
             await pool.query(stmts[j]);
