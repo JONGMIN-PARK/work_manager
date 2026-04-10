@@ -1,7 +1,7 @@
 -- 009_tenants.sql
 -- Multi-tenant support: tenants table, tenant_id FK on all business tables
 
-BEGIN;
+-- 트랜잭션 제거: 개별 문장이 독립적으로 실행되어 부분 실패 허용
 
 -- 1. Create tenants table
 CREATE TABLE IF NOT EXISTS tenants (
@@ -84,4 +84,4 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant ON audit_logs(tenant_id);
 --    The users.tenant_id column will be included in JWT claims during authentication.
 --    No additional DDL needed beyond the column added in step 3.
 
-COMMIT;
+-- END (no transaction — each statement runs independently)

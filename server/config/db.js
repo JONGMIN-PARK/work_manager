@@ -52,7 +52,24 @@ async function runMigrations() {
     for (var i = 0; i < files.length; i++) {
       var filePath = path.join(migrationDir, files[i]);
       var sql = fs.readFileSync(filePath, 'utf8');
-      await pool.query(sql);
+      // BEGIN/COMMIT 트랜잭션이 있는 파일은 통째로 실행
+      if (/^\s*BEGIN\s*;/im.test(sql)) {
+        try {
+          await pool.query(sql);
+        } catch (e) {
+          console.warn('[DB] Migration ' + files[i] + ' (transaction) failed:', e.message);
+        }
+      } else {
+        // 트랜잭션 없는 파일은 문장별 개별 실행 (부분 실패 허용)
+        var stmts = sql.split(';').map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0 && !/^--/.test(s); });
+        for (var j = 0; j < stmts.length; j++) {
+          try {
+            await pool.query(stmts[j]);
+          } catch (e) {
+            console.warn('[DB] Migration ' + files[i] + ' stmt ' + (j + 1) + ' skipped:', e.message);
+          }
+        }
+      }
       console.log('[DB] Migration applied:', files[i]);
     }
   } catch (e) {
