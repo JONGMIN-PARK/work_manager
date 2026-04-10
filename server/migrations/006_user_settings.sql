@@ -1,7 +1,7 @@
 -- 사용자별 설정 저장 (그룹, 별칭 등)
 CREATE TABLE IF NOT EXISTS user_settings (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   key VARCHAR(100) NOT NULL,
   value JSONB NOT NULL DEFAULT '{}',
   updated_at TIMESTAMP DEFAULT NOW(),
