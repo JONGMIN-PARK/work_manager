@@ -853,6 +853,8 @@ function pH(text){
   if(!rows.length)return[];
   const r=[];
   var colMap=null;
+  var lastDate=''; // 병합 셀 대응
+  var lastName='';
   rows.forEach(function(tr){
     const tds=tr.querySelectorAll('td,th');
     if(tds.length<3)return;
@@ -865,14 +867,17 @@ function pH(text){
       if(pNormDate(c[0])){
         colMap={date:0,name:1,orderNo:2,hours:3,taskType:c.length>=7?4:undefined,abbr:c.length>=7?5:undefined,content:c.length>=7?6:(c.length-1)};
         _lastColMap=colMap;
-        // 이 행도 데이터로 처리
-        var rec=pMapRow(c,colMap);if(rec)r.push(rec);
+        var rec=pMapRow(c,colMap);if(rec){lastDate=rec.date;if(rec.name)lastName=rec.name;r.push(rec)}
         return;
       }
-      return; // 헤더도 아니고 데이터도 아닌 행 스킵
+      return;
     }
+    // 날짜 셀이 비어있으면 이전 날짜 사용 (병합 셀)
+    if(colMap.date!==undefined&&!c[colMap.date]&&lastDate){c[colMap.date]=lastDate}
+    // 이름 셀이 비어있으면 이전 이름 사용 (병합 셀)
+    if(colMap.name!==undefined&&!c[colMap.name]&&lastName){c[colMap.name]=lastName}
     var rec=pMapRow(c,colMap);
-    if(rec)r.push(rec);
+    if(rec){lastDate=rec.date;if(rec.name)lastName=rec.name;r.push(rec)}
   });
   return r;
 }
@@ -905,10 +910,18 @@ function pXLS(buf){
     if(!colMap)return[];
     _lastColMap=colMap;
     const r=[];
+    var lastDate=''; // 병합 셀 대응: 마지막 유효 날짜/이름 이어받기
+    var lastName='';
     for(var i=hIdx+1;i<json.length;i++){
       var row=json[i];if(!row||row.length<3)continue;
+      var cloned=false;
+      // 날짜 셀이 비어있으면 이전 날짜 사용 (병합 셀)
+      var dateVal=String(row[colMap.date]||'').trim();
+      if(!dateVal&&lastDate){if(!cloned){row=row.slice();cloned=true}row[colMap.date]=lastDate}
+      // 이름 셀이 비어있으면 이전 이름 사용 (병합 셀)
+      if(colMap.name!==undefined){var nameVal=String(row[colMap.name]||'').trim();if(!nameVal&&lastName){if(!cloned){row=row.slice();cloned=true}row[colMap.name]=lastName}}
       var rec=pMapRow(row,colMap);
-      if(rec)r.push(rec);
+      if(rec){lastDate=rec.date;if(rec.name)lastName=rec.name;r.push(rec)}
     }
     return r;
   }catch(e){console.log('SheetJS parse failed:',e);return[]}
