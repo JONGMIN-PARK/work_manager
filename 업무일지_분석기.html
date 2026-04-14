@@ -2438,6 +2438,10 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.14',date:'2026-04-15',title:'마일스톤 중복 자동 정리를 전 경로로 확대',tag:'fix',items:[
+      'msGetAll/msGetByProject 공통 훅(_msDedupe) — 타임라인/달력/대시보드/파이프라인/상세 어디서 로드하든 중복 탐지 시 서버에서 자동 삭제',
+      'projectId+name+startDate+endDate 키 매칭, sort_order/createdAt 빠른 것 우선 보존'
+    ]},
     {ver:'13.13',date:'2026-04-15',title:'프로젝트 마일스톤 중복 방지 & 저장 로직 보완',tag:'fix',items:[
       '프로젝트 편집 모달 오픈 시 마일스톤 중복 자동 정리 (name+startDate+endDate 키)',
       '저장 로직을 destroy-recreate → diff 기반 upsert로 변경 (PUT/POST/DELETE 분기)',

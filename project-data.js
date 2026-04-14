@@ -337,8 +337,36 @@ function updateProject(id, updates) {
 }
 
 /* ─── 마일스톤 ─── */
-function msGetAll() { return apiFetch('/api/milestones').then(function (r) { return toCamelArray(r.data); }); }
-function msGetByProject(pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
+// 마일스톤 중복 탐지 & 자동 정리 — (projectId|name|startDate|endDate) 키로
+// 가장 먼저 등장한 레코드만 유지, 나머지는 fire-and-forget 으로 서버에서 삭제.
+// sort_order(order) 낮은 것 우선, 동률이면 createdAt 빠른 것 우선.
+function _msDedupe(list) {
+  if (!Array.isArray(list) || list.length < 2) return list || [];
+  var sorted = list.slice().sort(function (a, b) {
+    var ao = (a.order == null ? 999999 : a.order);
+    var bo = (b.order == null ? 999999 : b.order);
+    if (ao !== bo) return ao - bo;
+    return (a.createdAt || '').localeCompare(b.createdAt || '');
+  });
+  var seen = {};
+  var uniq = [];
+  var dupIds = [];
+  sorted.forEach(function (m) {
+    var key = (m.projectId || '') + '|' + ((m.name || '').trim()) + '|' + (m.startDate || '') + '|' + (m.endDate || '');
+    if (seen[key]) dupIds.push(m.id);
+    else { seen[key] = true; uniq.push(m); }
+  });
+  if (dupIds.length) {
+    Promise.all(dupIds.map(function (id) {
+      return apiFetch('/api/milestones/' + id, { method: 'DELETE' }).catch(function () {});
+    })).then(function () {
+      if (typeof console !== 'undefined') console.info('[milestones] 중복 ' + dupIds.length + '개 자동 정리');
+    });
+  }
+  return uniq;
+}
+function msGetAll() { return apiFetch('/api/milestones').then(function (r) { return _msDedupe(toCamelArray(r.data)); }); }
+function msGetByProject(pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return _msDedupe(toCamelArray(r.data)); }); }
 function msPut(ms) {
   if (!ms.id || ms._isNew) {
     delete ms._isNew;
