@@ -51,7 +51,11 @@ router.get('/records', async function (req, res) {
       total = parseInt(countR.rows[0].cnt, 10);
     }
 
-    var dataSql = 'SELECT id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id FROM work_records ' + where +
+    // milestone_id 컬럼이 아직 없는 배포 환경도 허용 (migration 미적용 폴백)
+    var colCheck = await db.query("SELECT 1 FROM information_schema.columns WHERE table_name='work_records' AND column_name='milestone_id'");
+    var hasMs = colCheck.rows.length > 0;
+    var cols = 'id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient' + (hasMs ? ', milestone_id' : '');
+    var dataSql = 'SELECT ' + cols + ' FROM work_records ' + where +
       ' ORDER BY date DESC, name, order_no LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(dataSql, params);
