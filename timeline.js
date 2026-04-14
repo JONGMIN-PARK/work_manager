@@ -908,27 +908,12 @@ async function showProjectDetail(id) {
   var overviewChkDone = overviewChkItems.filter(function (c) { return c.done; }).length;
   var overviewChkPct = overviewChkItems.length ? Math.round(overviewChkDone / overviewChkItems.length * 100) : 0;
 
-  html += '<div style="margin-bottom:12px">';
+  html += '<div style="margin-bottom:12px" data-overview-chk-phase="' + overviewChkPhase + '">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
   html += '<span style="font-size:10px;color:var(--t5)">체크리스트 — ' + overviewChkPh.icon + ' ' + overviewChkPh.label + '</span>';
-  if (overviewChkItems.length > 0) {
-    html += '<span style="font-size:10px;color:' + overviewChkPh.color + ';font-weight:600">' + overviewChkDone + '/' + overviewChkItems.length + ' (' + overviewChkPct + '%)</span>';
-  }
+  html += '<span id="pdOverviewChkStat" style="font-size:10px;color:' + overviewChkPh.color + ';font-weight:600' + (overviewChkItems.length > 0 ? '' : ';display:none') + '">' + overviewChkDone + '/' + overviewChkItems.length + ' (' + overviewChkPct + '%)</span>';
   html += '</div>';
-  if (overviewChkItems.length > 0) {
-    html += '<div style="height:4px;background:var(--bg-i);border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:' + overviewChkPct + '%;background:' + overviewChkPh.color + ';border-radius:2px"></div></div>';
-    overviewChkItems.forEach(function (item) {
-      var cStyle = item.done ? 'text-decoration:line-through;color:var(--t6)' : 'color:var(--t2)';
-      html += '<div class="pdChkRow" data-chkid="' + item.id + '" data-projid="' + id + '" data-phase="' + overviewChkPhase + '" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">';
-      html += '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="pdToggleCheck(\'' + id + '\',\'' + item.id + '\',this)" style="cursor:pointer;flex-shrink:0">';
-      html += '<span class="pdChkTextSpan" data-projid="' + id + '" data-chkid="' + item.id + '" style="flex:1;font-size:11px;' + cStyle + ';cursor:text" title="클릭하여 수정" onclick="pdEditCheckInline(this)">' + eH(item.text) + '</span>';
-      html += '<input type="date" value="' + (item.doneDate || localDate()) + '" onchange="pdChangeDoneDate(\'' + id + '\',\'' + item.id + '\',this.value)" style="font-size:9px;padding:1px 2px;border:1px solid var(--bd);border-radius:3px;background:var(--bg-i);color:var(--t6);width:auto;' + (item.done ? '' : 'visibility:hidden;width:0;padding:0;border:0;') + '" title="완료 날짜">';
-      html += '<button style="background:none;border:none;color:var(--t6);cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0" onclick="pdDeleteCheck(\'' + id + '\',\'' + item.id + '\',this)" title="삭제">✕</button>';
-      html += '</div>';
-    });
-  } else {
-    html += '<div style="text-align:center;color:var(--t6);font-size:11px;padding:12px 0">체크리스트 항목이 없습니다.<br><button class="btn btn-g btn-s" style="margin-top:6px;font-size:10px" onclick="pdGenerateChecklists(\'' + id + '\')">기본 체크리스트 생성</button></div>';
-  }
+  html += '<div id="pdOverviewChkList">' + renderOverviewChkListHtml(id, overviewChkPhase, overviewChkPh, overviewChkItems) + '</div>';
   // 개요 탭 항목 추가 input
   html += '<div style="margin-top:6px;display:flex;gap:4px">';
   html += '<input type="text" id="pdOverviewNewChk" placeholder="새 항목 추가..." style="flex:1;font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t2)" onkeydown="if(event.key===\'Enter\')pdAddCheck(\'' + id + '\',\'' + overviewChkPhase + '\')">';
@@ -1376,6 +1361,51 @@ function pdSaveCheckInline(span, projId, chkId, newText, oldText) {
   }
 }
 
+/* 개요 탭 체크리스트 목록 HTML 생성 (추가/삭제/토글 시 부분 갱신용) */
+function renderOverviewChkListHtml(projId, phase, phMeta, items) {
+  var out = '';
+  if (items.length > 0) {
+    var done = items.filter(function (c) { return c.done; }).length;
+    var pct = Math.round(done / items.length * 100);
+    out += '<div style="height:4px;background:var(--bg-i);border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:' + pct + '%;background:' + phMeta.color + ';border-radius:2px"></div></div>';
+    items.forEach(function (item) {
+      var cStyle = item.done ? 'text-decoration:line-through;color:var(--t6)' : 'color:var(--t2)';
+      out += '<div class="pdChkRow" data-chkid="' + item.id + '" data-projid="' + projId + '" data-phase="' + phase + '" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">';
+      out += '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="pdToggleCheck(\'' + projId + '\',\'' + item.id + '\',this)" style="cursor:pointer;flex-shrink:0">';
+      out += '<span class="pdChkTextSpan" data-projid="' + projId + '" data-chkid="' + item.id + '" style="flex:1;font-size:11px;' + cStyle + ';cursor:text" title="클릭하여 수정" onclick="pdEditCheckInline(this)">' + eH(item.text) + '</span>';
+      out += '<input type="date" value="' + (item.doneDate || localDate()) + '" onchange="pdChangeDoneDate(\'' + projId + '\',\'' + item.id + '\',this.value)" style="font-size:9px;padding:1px 2px;border:1px solid var(--bd);border-radius:3px;background:var(--bg-i);color:var(--t6);width:auto;' + (item.done ? '' : 'visibility:hidden;width:0;padding:0;border:0;') + '" title="완료 날짜">';
+      out += '<button style="background:none;border:none;color:var(--t6);cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0" onclick="pdDeleteCheck(\'' + projId + '\',\'' + item.id + '\',this)" title="삭제">✕</button>';
+      out += '</div>';
+    });
+  } else {
+    out += '<div style="text-align:center;color:var(--t6);font-size:11px;padding:12px 0">체크리스트 항목이 없습니다.<br><button class="btn btn-g btn-s" style="margin-top:6px;font-size:10px" onclick="pdGenerateChecklists(\'' + projId + '\')">기본 체크리스트 생성</button></div>';
+  }
+  return out;
+}
+
+/* 개요 탭 체크리스트만 부분 갱신 (패널 전체 리로드 없이) */
+function pdRefreshOverviewChk(projId, phase) {
+  var listEl = document.getElementById('pdOverviewChkList');
+  if (!listEl || typeof chkGetByPhase !== 'function') return Promise.resolve();
+  var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
+  var phMeta = phases[phase] || { label: phase, icon: '', color: '#94A3B8' };
+  return chkGetByPhase(projId, phase).then(function (items) {
+    items.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+    listEl.innerHTML = renderOverviewChkListHtml(projId, phase, phMeta, items);
+    var stat = document.getElementById('pdOverviewChkStat');
+    if (stat) {
+      if (items.length > 0) {
+        var done = items.filter(function (c) { return c.done; }).length;
+        var pct = Math.round(done / items.length * 100);
+        stat.textContent = done + '/' + items.length + ' (' + pct + '%)';
+        stat.style.display = '';
+      } else {
+        stat.style.display = 'none';
+      }
+    }
+  });
+}
+
 function pdAddCheck(projId, phase) {
   // 활성 탭에 맞는 input 우선 사용 (감춰진 input에 남은 값이 엉뚱하게 쓰이지 않도록)
   var lifecycleEl = document.getElementById('pdLifecycle');
@@ -1391,9 +1421,15 @@ function pdAddCheck(projId, phase) {
   chkGetByPhase(projId, phase).then(function (items) {
     return createCheckItem({ projectId: projId, phase: phase, text: text, order: items.length });
   }).then(function () {
-    if (usedInput) usedInput.value = '';
-    // 패널 전체 새로고침 (새 항목 DOM 생성 필요)
-    showProjectDetail(projId);
+    if (usedInput) { usedInput.value = ''; usedInput.focus(); }
+    // 현재 활성 탭에 해당하는 영역만 부분 갱신 (패널은 유지)
+    var lifecycleEl2 = document.getElementById('pdLifecycle');
+    var lifecycleNow = lifecycleEl2 && lifecycleEl2.style.display !== 'none';
+    if (lifecycleNow && typeof pdShowPhase === 'function') {
+      pdShowPhase(projId, phase);
+    } else {
+      pdRefreshOverviewChk(projId, phase);
+    }
   }).catch(function (err) {
       console.error('[pdAddCheck]', err);
       var msg = (err && err.message) ? err.message : '추가 실패';
