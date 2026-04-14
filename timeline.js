@@ -774,8 +774,14 @@ async function saveProjectUI(existingId) {
     if (typeof renderCalendar === 'function') await renderCalendar();
     showToast(existingId ? '프로젝트가 수정되었습니다' : '프로젝트가 등록되었습니다');
   } catch (err) {
-    console.error('[saveProjectUI] 저장 실패:', err);
-    showToast('프로젝트 저장 중 오류 발생: ' + (err.message || err), 'warn');
+    console.error('[saveProjectUI] 저장 실패:', err, err && err.data);
+    var detail = '';
+    if (err && err.data) {
+      if (err.data.error === 'CONFLICT') detail = '다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.';
+      else detail = err.data.message || err.data.error || '';
+    }
+    var msg = detail || err.message || String(err);
+    showToast('프로젝트 저장 실패: ' + msg + (err && err.status ? ' (HTTP ' + err.status + ')' : ''), 'error');
   }
 }
 
