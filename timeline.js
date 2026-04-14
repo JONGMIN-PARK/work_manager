@@ -967,12 +967,19 @@ async function showProjectDetail(id) {
   // 단계 전환 버튼
   var curIdx = phaseKeys.indexOf(curPhase);
   var nextPhase = curIdx < phaseKeys.length - 1 ? phaseKeys[curIdx + 1] : null;
+  html += '<div style="text-align:center;margin-bottom:14px">';
   if (nextPhase) {
     var nextPh = phases[nextPhase];
-    html += '<div style="text-align:center;margin-bottom:14px">';
-    html += '<button class="btn btn-p btn-s" onclick="pdAdvancePhase(\'' + id + '\',\'' + nextPhase + '\')" style="font-size:11px">➡️ ' + nextPh.label + ' 단계로 전환</button>';
-    html += '</div>';
+    html += '<button class="btn btn-p btn-s" onclick="pdAdvancePhase(\'' + id + '\',\'' + nextPhase + '\')" style="font-size:11px;margin-right:8px">➡️ 다음 단계(' + nextPh.label + ')</button>';
   }
+  // 임의 단계 선택 드롭다운
+  html += '<select class="si" style="font-size:11px;padding:3px 6px;vertical-align:middle;width:auto;background:var(--bg-i);border-color:var(--bd);border-radius:6px" onchange="if(this.value){pdAdvancePhase(\'' + id + '\',this.value);this.value=\'\';}">';
+  html += '<option value="">(임의 단계로 이동...)</option>';
+  phaseKeys.forEach(function(pk){
+    if (pk !== curPhase) html += '<option value="' + pk + '">' + phases[pk].label + ' 단계로 이동</option>';
+  });
+  html += '</select>';
+  html += '</div>';
 
   // 현재 단계 체크리스트 (기본 표시)
   html += '<div id="pdPhaseChecklists">';

@@ -217,7 +217,7 @@ function pipelineDrop(e, targetPhase) {
       advancePhase(projId, targetPhase).then(function (result) {
         if (!result) return;
         if (result.gatePass === false) {
-          if (!confirm('현재 단계 체크리스트가 미완료입니다 (' + result.currentPct + '%). 강제로 ' + getPhaseName(targetPhase) + ' 단계로 이동하시겠습니까?')) return;
+          if (!confirm('현재 단계 체크리스트가 미완료입니다 (' + (result.progress ? result.progress.pct : 0) + '%). 강제로 ' + getPhaseName(targetPhase) + ' 단계로 이동하시겠습니까?')) return;
         }
         executePhaseTransition(projId, targetPhase).then(function () {
           showToast(getPhaseName(targetPhase) + ' 단계로 이동했습니다.');
