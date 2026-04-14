@@ -509,7 +509,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
           <button class="tab" data-t="sum" onclick="sTab('sum')">📝 내용요약</button>
         </div>
         <!-- Table -->
-        <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span class="del-bar" id="delBar"><span class="del-count" id="delCount">0건 선택</span><button class="btn btn-d btn-s" onclick="deleteSelected()">🗑️ 선택 삭제</button></span><span class="mob-sep" style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button><button class="btn btn-p btn-s" onclick="openManualInput()" title="수동 입력">➕ 수동입력</button></div></div><div class="tw"><table><thead><tr><th id="thChk" style="width:30px;display:none"><input type="checkbox" class="del-chk" onchange="toggleSelectAll(this)" title="전체 선택"></th><th style="width:70px">이름</th><th style="width:100px;white-space:nowrap">날짜</th><th style="width:100px">수주번호</th><th style="width:90px">수주명</th><th style="width:80px">거래처</th><th style="width:45px;text-align:right">시간</th><th style="width:70px;white-space:nowrap">업무분장</th><th style="width:36px">약자</th><th>업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div></div>
+        <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span class="del-bar" id="delBar"><span class="del-count" id="delCount">0건 선택</span><button class="btn btn-d btn-s" onclick="deleteSelected()">🗑️ 선택 삭제</button></span><span class="mob-sep" style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button><button class="btn btn-p btn-s" onclick="openManualInput()" title="수동 입력">➕ 수동입력</button></div></div><div class="tw"><table style="table-layout:fixed;width:100%;min-width:700px"><thead><tr><th id="thChk" style="width:30px;display:none"><input type="checkbox" class="del-chk" onchange="toggleSelectAll(this)" title="전체 선택"></th><th style="width:60px">이름</th><th style="width:75px">날짜</th><th style="width:90px">수주번호</th><th style="width:12%">수주명</th><th style="width:10%">거래처</th><th style="width:40px;text-align:right">시간</th><th style="width:65px">업무분장</th><th style="width:40px">약자</th><th style="width:auto">업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div></div>
         </div>
         <!-- Content Summary (separate tab, no filter) -->
         <div id="tSum" class="hidden">
@@ -961,7 +961,7 @@ function openDB(){return Promise.resolve(null)}
 /* 완전 일치 키 (중복 제거용) */
 function wrKey(r){return r.date+'|'+r.name+'|'+r.orderNo+'|'+r.hours+'|'+(r.abbr||'')+'|'+(r.dept||'')+'|'+r.content}
 /* 식별 키 (같은 레코드 판별용 — 갱신 시 덮어쓰기) */
-function wrIdKey(r){return r.date+'|'+r.name+'|'+(r.orderNo||'')}
+function wrIdKey(r){return r.date+'|'+r.name+'|'+(r.orderNo||'')+'|'+(r.content||'').trim().substring(0,30)}
 function wrMerge(existing,newRecs){
   /* 기존 데이터 자체 중복 제거 */
   var seen=new Set();var deduped=[];
@@ -1915,27 +1915,27 @@ function _vsRenderRow(r,idx,editable){
     var isDel=delSet.has(idx);
     return'<tr style="'+(isDel?'background:rgba(239,68,68,.08)':hasEdit?'background:rgba(245,158,11,.06)':'')+'">'
       +'<td><input type="checkbox" class="del-chk" data-delidx="'+idx+'" '+(isDel?'checked':'')+' onchange="toggleDelRow(this)"></td>'
-      +'<td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:'+c+'"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="'+eH(r.name)+'">'+eH(dn)+'</span></span></td>'
+      +'<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:'+c+'"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="'+eH(r.name)+'">'+eH(dn)+'</span></span></td>'
       +'<td class="mono" style="color:var(--t4);white-space:nowrap">'+fD(r.date)+'</td>'
-      +'<td class="editable '+(em.orderNo!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="orderNo" oninput="onCellEdit(this)" style="color:var(--ac-t)">'+eH(curOrder)+'</td>'
-      +'<td class="editable '+(em.ocmt!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="ocmt" oninput="onCellEdit(this)" style="font-size:10px;color:var(--t5);font-style:italic">'+eH(curOcmt)+'</td>'
-      +'<td class="editable '+(em.oclient!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="oclient" oninput="onCellEdit(this)" style="font-size:10px;color:var(--t5);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curClient)+'">'+eH(curClient)+'</td>'
+      +'<td class="editable '+(em.orderNo!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="orderNo" oninput="onCellEdit(this)" style="color:var(--ac-t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curOrder)+'">'+eH(curOrder)+'</td>'
+      +'<td class="editable '+(em.ocmt!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="ocmt" oninput="onCellEdit(this)" style="font-size:10px;color:var(--t5);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curOcmt)+'">'+eH(curOcmt)+'</td>'
+      +'<td class="editable '+(em.oclient!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="oclient" oninput="onCellEdit(this)" style="font-size:10px;color:var(--t5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curClient)+'">'+eH(curClient)+'</td>'
       +'<td class="editable mono '+(em.hours!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="hours" oninput="onCellEdit(this)" style="text-align:right;color:#F59E0B;font-weight:600">'+curHours+'</td>'
-      +'<td class="editable '+(em.taskType!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="taskType" oninput="onCellEdit(this)" style="font-size:11px;color:var(--c-t)">'+eH(curTask)+'</td>'
-      +'<td class="editable '+(em.abbr!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="abbr" oninput="onCellEdit(this)"><span style="font-size:11px">'+eH(curAbbr)+'</span></td>'
-      +'<td class="editable '+(em.content!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="content" oninput="onCellEdit(this)" style="color:var(--t3);font-size:11px">'+eH(curContent)+'</td>'
+      +'<td class="editable '+(em.taskType!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="taskType" oninput="onCellEdit(this)" style="font-size:11px;color:var(--c-t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curTask)+'">'+eH(curTask)+'</td>'
+      +'<td class="editable '+(em.abbr!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="abbr" oninput="onCellEdit(this)" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curAbbr)+'"><span style="font-size:11px">'+eH(curAbbr)+'</span></td>'
+      +'<td class="editable '+(em.content!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="content" oninput="onCellEdit(this)" style="color:var(--t3);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curContent)+'">'+eH(curContent)+'</td>'
       +'</tr>';
   }else{
     return'<tr style="'+(hasEdit?'background:rgba(245,158,11,.06)':'')+'">'
-      +'<td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:'+c+'"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="'+eH(r.name)+'">'+eH(dn)+'</span></span></td>'
+      +'<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:'+c+'"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="'+eH(r.name)+'">'+eH(dn)+'</span></span></td>'
       +'<td class="mono" style="color:var(--t4);white-space:nowrap">'+fD(r.date)+'</td>'
-      +'<td class="mono" style="color:var(--ac-t)">'+eH(curOrder)+'</td>'
-      +'<td style="font-size:10px;color:var(--t5);font-style:italic;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curOcmt)+'">'+eH(curOcmt)+'</td>'
-      +'<td style="font-size:10px;color:var(--t5);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curClient)+'">'+eH(curClient)+'</td>'
+      +'<td class="mono" style="color:var(--ac-t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curOrder)+'">'+eH(curOrder)+'</td>'
+      +'<td style="font-size:10px;color:var(--t5);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curOcmt)+'">'+eH(curOcmt)+'</td>'
+      +'<td style="font-size:10px;color:var(--t5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curClient)+'">'+eH(curClient)+'</td>'
       +'<td class="mono" style="text-align:right;color:#F59E0B;font-weight:600">'+curHours+'</td>'
-      +'<td style="font-size:11px;color:var(--c-t)">'+eH(curTask)+'</td>'
-      +'<td><span class="badge" style="background:'+(ABG[curAbbr]||'#1A1F35')+';color:'+(AFG[curAbbr]||'#94A3B8')+'">'+curAbbr+'</span></td>'
-      +'<td style="color:var(--t3);font-size:11px;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curContent)+'">'+ch+'</td>'
+      +'<td style="font-size:11px;color:var(--c-t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curTask)+'">'+eH(curTask)+'</td>'
+      +'<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curAbbr)+'"><span class="badge" style="background:'+(ABG[curAbbr]||'#1A1F35')+';color:'+(AFG[curAbbr]||'#94A3B8')+'">'+curAbbr+'</span></td>'
+      +'<td style="color:var(--t3);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curContent)+'">'+ch+'</td>'
       +'</tr>';
   }
 }
