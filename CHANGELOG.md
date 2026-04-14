@@ -1,5 +1,20 @@
 # Work Manager — 변경 이력
 
+## v13.8 (2026-04-14) — 프로젝트 관리 리팩토링 (2/2): 로컬 모드 제거
+
+### 리팩토링 — 로컬 IndexedDB 모드 제거
+- **`project-data.js` 서버 전용화**: 기존 로컬(IndexedDB) + 서버(REST) 듀얼 모드에서 **로컬 모드 전체 삭제**. 1653줄 → 1166줄 (≈487줄/30% 감소).
+- 제거: `upgradeProjectDB`, `openDBv2`, `db` 전역, `dbPut/GetAll/Get/Del/GetByIndex`, AUTH_SKIP/apiFetch 가드, IIFE 래퍼
+- IIFE 안에 있던 서버 오버라이드(`toCamel`, `toCamelArray`, `toSnake`, 그리고 entity CRUD들)를 모두 **top-level 선언**으로 승격
+- 서버 API를 사용하도록 재작성: `readAllArchiveRecords`, `suggestMilestones`, `getWeeklyArchiveSummary`, `getRecentArchiveWeeks` (`wrGetAll`/`wkGetAll` 기반)
+- 날짜 포맷(YYYYMMDD / YYYY-MM-DD) 양쪽 모두 방어적 처리
+- `apiFetch`는 전역에 반드시 있어야 하며, 없으면 런타임 오류 발생(의도된 동작)
+
+### 비고
+- 로컬 IndexedDB 백업/복원 UI(`settings.js`)는 그대로 두었으나 실제 기능은 동작하지 않음 (fallback `openDBv2` no-op). 추후 서버 API 기반 백업으로 교체 예정.
+
+---
+
 ## v13.7 (2026-04-14) — 프로젝트 관리 리팩토링 (1/2)
 
 ### 리팩토링 — 파일 분리

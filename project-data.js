@@ -1,135 +1,21 @@
 /**
- * 업무일지 분석기 — 프로젝트/마일스톤/일정 데이터 관리
- * IndexedDB 'WorkAnalyzerDB' v7 (projects, milestones, events, progressHistory, orders, checklists, issues, issueLogs, workRecords 스토어)
+ * 업무일지 분석기 — 프로젝트/마일스톤/일정 데이터 관리 (서버 모드 전용)
+ *
+ * 이전에는 IndexedDB(local) + REST API(server) 듀얼 모드였으나,
+ * 로컬 모드는 제거되고 서버 모드(REST API)만 사용합니다.
+ * apiFetch 가 전역에서 사용 가능해야 하며, 그렇지 않으면 런타임 오류가 발생합니다.
  *
  * === API 네이밍 규칙 (#14) ===
- * 공용 팩토리: dbPut(store, item), dbGetAll(store), dbGet(store, id), dbDel(store, id), dbGetByIndex(store, idx, key)
  * 엔티티별:   {prefix}Put, {prefix}GetAll, {prefix}Get, {prefix}Del
  *   proj*   → projects       | ms*      → milestones    | evt*     → events
  *   order*  → orders         | chk*     → checklists    | issue*   → issues
- *   issueLog* → issueLogs   | wr*      → workRecords
+ *   issueLog* → issueLogs   | wr*      → workRecords    | wk*      → weeks(archives)
+ *   folder* → projectFolders | file*   → projectFiles
  * localStorage: lsGet(key), lsSet(key,val), lsRemove(key), lsGetJSON(key,fallback), lsSetJSON(key,val)
  * 모달: createModal({title, html, content, width, onClose, closeOnOverlay})
  * 토스트: showToast(msg, type)
  * 아카이브 캐시: invalidateArchiveCache()
  */
-
-/* ═══ DB 업그레이드 (v1→v2→v3→v4) ═══ */
-function upgradeProjectDB(db, tx) {
-  if (!db.objectStoreNames.contains('projects')) {
-    var s = db.createObjectStore('projects', { keyPath: 'id' });
-    s.createIndex('orderNo', 'orderNo', { unique: false });
-    s.createIndex('status', 'status', { unique: false });
-  }
-  if (!db.objectStoreNames.contains('milestones')) {
-    var m = db.createObjectStore('milestones', { keyPath: 'id' });
-    m.createIndex('projectId', 'projectId', { unique: false });
-  }
-  if (!db.objectStoreNames.contains('events')) {
-    var ev = db.createObjectStore('events', { keyPath: 'id' });
-    ev.createIndex('startDate', 'startDate', { unique: false });
-  }
-  // v3: 진척률 히스토리 스토어
-  if (!db.objectStoreNames.contains('progressHistory')) {
-    var ph = db.createObjectStore('progressHistory', { keyPath: 'id' });
-    ph.createIndex('projectId', 'projectId', { unique: false });
-    ph.createIndex('date', 'date', { unique: false });
-  }
-  // v4: 수주 대장, v5: 체크리스트 스토어
-  if (!db.objectStoreNames.contains('orders')) {
-    var od = db.createObjectStore('orders', { keyPath: 'orderNo' });
-    od.createIndex('client', 'client', { unique: false });
-    od.createIndex('date', 'date', { unique: false });
-  }
-  // v5: 체크리스트 스토어
-  if (!db.objectStoreNames.contains('checklists')) {
-    var cl = db.createObjectStore('checklists', { keyPath: 'id' });
-    cl.createIndex('projectId', 'projectId', { unique: false });
-    cl.createIndex('phase', 'phase', { unique: false });
-  }
-  // v6: 이슈 스토어
-  if (!db.objectStoreNames.contains('issues')) {
-    var iss = db.createObjectStore('issues', { keyPath: 'id' });
-    iss.createIndex('projectId', 'projectId', { unique: false });
-    iss.createIndex('orderNo', 'orderNo', { unique: false });
-    iss.createIndex('phase', 'phase', { unique: false });
-    iss.createIndex('dept', 'dept', { unique: false });
-    iss.createIndex('status', 'status', { unique: false });
-    iss.createIndex('urgency', 'urgency', { unique: false });
-  }
-  // v6: 이슈 대응 이력 스토어
-  if (!db.objectStoreNames.contains('issueLogs')) {
-    var il = db.createObjectStore('issueLogs', { keyPath: 'id' });
-    il.createIndex('issueId', 'issueId', { unique: false });
-    il.createIndex('date', 'date', { unique: false });
-  }
-  // v7: 업무일지 레코드 스토어
-  if (!db.objectStoreNames.contains('workRecords')) {
-    var wr = db.createObjectStore('workRecords', { keyPath: 'id', autoIncrement: true });
-    wr.createIndex('date', 'date', { unique: false });
-    wr.createIndex('name', 'name', { unique: false });
-    wr.createIndex('orderNo', 'orderNo', { unique: false });
-    wr.createIndex('dateNameOrder', ['date', 'name', 'orderNo'], { unique: false });
-  }
-  // v8: 프로젝트 문서 관리 스토어
-  if (!db.objectStoreNames.contains('projectFolders')) {
-    var pf = db.createObjectStore('projectFolders', { keyPath: 'id' });
-    pf.createIndex('projectId', 'projectId', { unique: false });
-    pf.createIndex('parentId', 'parentId', { unique: false });
-  }
-  if (!db.objectStoreNames.contains('projectFiles')) {
-    var fi = db.createObjectStore('projectFiles', { keyPath: 'id' });
-    fi.createIndex('projectId', 'projectId', { unique: false });
-    fi.createIndex('folderId', 'folderId', { unique: false });
-    fi.createIndex('ext', 'ext', { unique: false });
-  }
-  // v4: projects에 currentPhase 인덱스 추가
-  if (tx && db.objectStoreNames.contains('projects')) {
-    var ps = tx.objectStore('projects');
-    if (!ps.indexNames.contains('currentPhase')) {
-      try { ps.createIndex('currentPhase', 'currentPhase', { unique: false }); } catch(ex) { /* 인덱스 이미 존재 — 정상 */ }
-    }
-  }
-}
-
-/* ═══ DB v3 열기 (기존 openDBv2 대체) ═══ */
-function openDBv2() {
-  return new Promise(function (res, rej) {
-    var req = indexedDB.open('WorkAnalyzerDB', 8);
-    req.onupgradeneeded = function (e) {
-      var d = e.target.result;
-      // v1 스토어
-      if (!d.objectStoreNames.contains('weeks')) d.createObjectStore('weeks', { keyPath: 'id' });
-      // v2+ 스토어
-      upgradeProjectDB(d, e.target.transaction);
-      // workRecords 호환: v2에서 keyPath 없이 생성된 경우 재생성
-      if (d.objectStoreNames.contains('workRecords')) {
-        try {
-          var wrStore = e.target.transaction.objectStore('workRecords');
-          if (!wrStore.keyPath) {
-            d.deleteObjectStore('workRecords');
-            var wr = d.createObjectStore('workRecords', { keyPath: 'id', autoIncrement: true });
-            wr.createIndex('date', 'date', { unique: false });
-            wr.createIndex('name', 'name', { unique: false });
-            wr.createIndex('orderNo', 'orderNo', { unique: false });
-            wr.createIndex('dateNameOrder', ['date', 'name', 'orderNo'], { unique: false });
-          }
-        } catch (ex) { console.warn('workRecords upgrade:', ex); }
-      }
-    };
-    req.onblocked = function () {
-      console.warn('DB upgrade blocked — 다른 탭을 닫아주세요');
-      // blocked 상태에서도 기존 DB로 진행 시도
-      try {
-        var fallbackReq = indexedDB.open('WorkAnalyzerDB');
-        fallbackReq.onsuccess = function (e) { db = e.target.result; res(db); };
-        fallbackReq.onerror = function (e) { rej(e); };
-      } catch (ex) { rej(ex); }
-    };
-    req.onsuccess = function (e) { db = e.target.result; res(db); };
-    req.onerror = function (e) { rej(e); };
-  });
-}
 
 /* ═══ UUID 생성 ═══ */
 function uuid() {
@@ -138,47 +24,27 @@ function uuid() {
   });
 }
 
-/* ═══ #1 리팩토링: 공용 CRUD 팩토리 ═══ */
-function dbPut(storeName, item) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction(storeName, 'readwrite');
-    tx.objectStore(storeName).put(item);
-    tx.oncomplete = function () { res(item); };
-    tx.onerror = function (e) { console.warn('[DB] put error on ' + storeName, e); rej(e); };
-  });
+/* ═══ camelCase ↔ snake_case 변환 헬퍼 ═══ */
+function toCamel(row) {
+  if (!row) return row;
+  var out = {};
+  for (var k in row) {
+    var ck = k.replace(/_([a-z])/g, function (m, c) { return c.toUpperCase(); });
+    var v = row[k];
+    // JSONB 문자열 → 파싱
+    if (typeof v === 'string' && (k === 'assignees' || k === 'dependencies' || k === 'project_ids' || k === 'tags' || k === 'items' || k === 'phases' || k === 'data' || k === 'date_range' || k === 'selected_names' || k === 'summary_history' || k === 'version_history')) {
+      try { v = JSON.parse(v); } catch (e) { /* keep string */ }
+    }
+    // NUMERIC 컬럼 → 숫자 변환 (node-postgres가 문자열로 반환)
+    if (typeof v === 'string' && (k === 'hours' || k === 'estimated_hours' || k === 'actual_hours' || k === 'total_hours' || k === 'progress' || k === 'weight')) {
+      v = parseFloat(v) || 0;
+    }
+    out[ck] = v;
+  }
+  return out;
 }
-function dbGetAll(storeName) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction(storeName, 'readonly');
-    var req = tx.objectStore(storeName).getAll();
-    req.onsuccess = function () { res(req.result || []); };
-    req.onerror = function (e) { console.warn('[DB] getAll error on ' + storeName, e); rej(e); };
-  });
-}
-function dbGet(storeName, id) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction(storeName, 'readonly');
-    var req = tx.objectStore(storeName).get(id);
-    req.onsuccess = function () { res(req.result); };
-    req.onerror = function (e) { console.warn('[DB] get error on ' + storeName, e); rej(e); };
-  });
-}
-function dbDel(storeName, id) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction(storeName, 'readwrite');
-    tx.objectStore(storeName).delete(id);
-    tx.oncomplete = function () { res(); };
-    tx.onerror = function (e) { console.warn('[DB] del error on ' + storeName, e); rej(e); };
-  });
-}
-function dbGetByIndex(storeName, indexName, key) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction(storeName, 'readonly');
-    var req = tx.objectStore(storeName).index(indexName).getAll(key);
-    req.onsuccess = function () { res(req.result || []); };
-    req.onerror = function (e) { console.warn('[DB] index query error on ' + storeName + '.' + indexName, e); rej(e); };
-  });
-}
+function toCamelArray(rows) { return (rows || []).map(toCamel); }
+function toSnake(s) { return s.replace(/[A-Z]/g, function (c) { return '_' + c.toLowerCase(); }); }
 
 /* ═══ #12 리팩토링: localStorage 래퍼 ═══ */
 function lsGet(key, fallback) {
@@ -214,107 +80,65 @@ var TOAST_DURATION = 2500;
 var TOAST_FADE = 300;
 var PROGRESS_MAX = 100;
 
-/* ═══ 프로젝트 CRUD (팩토리 기반) ═══ */
-function projPut(proj) { return dbPut('projects', proj); }
-function projGetAll() { return dbGetAll('projects'); }
-function projGet(id) { return dbGet('projects', id); }
-function projDel(id) { return dbDel('projects', id); }
+/* ═══ 기본 체크리스트 템플릿 ═══ */
+var DEFAULT_CHECKLIST = {
+  order: ['견적서 발행', '계약서 체결', '선급금 수령', '킥오프 미팅 완료', '요구사항 정의서 작성'],
+  design: ['기구 설계 완료', '전장 설계 완료', 'SW 설계 완료', '설계 검토(DR) 완료', '자재 발주'],
+  manufacture: ['자재 입고 확인', '기구 가공/조립 완료', '전장 배선 완료', 'SW 개발/탑재 완료', '단품 시험 완료'],
+  inspect: ['자체 검수 완료', '검수 성적서 작성', '고객 입회 검수(FAT) 완료', '불량 시정 완료'],
+  deliver: ['출하 검사 완료', '운송/설치 완료', '시운전 완료(SAT)', '운전 교육 완료', '인수인계서 서명'],
+  as: ['하자보증 기간 설정', '정기점검 일정 등록', 'A/S 연락처 공유']
+};
 
-function createProject(data) {
-  var now = new Date().toISOString();
-  var defaultPhases = { order: { status: 'waiting', startDate: '', endDate: '' }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, as: { status: 'waiting', startDate: '', endDate: '' } };
-  var proj = {
-    id: 'proj-' + uuid(),
-    orderNo: (data.orderNo || '').trim(),
-    name: (data.name || '').trim(),
-    startDate: data.startDate || '',
-    endDate: data.endDate || '',
-    status: data.status || 'active',
-    progress: data.progress || 0,
-    estimatedHours: data.estimatedHours || 0,
-    assignees: data.assignees || [],
-    dependencies: data.dependencies || [],
-    color: data.color || COL[(Math.random() * COL.length | 0)],
-    memo: data.memo || '',
-    currentPhase: data.currentPhase || 'order',
-    phases: data.phases || defaultPhases,
-    createdAt: now,
-    updatedAt: now,
-    _isNew: true
-  };
-  return projPut(proj);
+/* ═══ 문서 폴더 / 파일 상수 ═══ */
+var DOC_FOLDER_DEFAULTS = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'as'];
+var DOC_MAX_FILE = 50 * 1024 * 1024; // 50MB
+var DOC_MAX_PROJECT = 500 * 1024 * 1024; // 500MB
+
+var DOC_ICONS = {
+  pdf: { icon: '📕', color: '#EF4444' },
+  xlsx: { icon: '📗', color: '#10B981' }, xls: { icon: '📗', color: '#10B981' },
+  pptx: { icon: '📙', color: '#F59E0B' }, ppt: { icon: '📙', color: '#F59E0B' },
+  docx: { icon: '📘', color: '#3B82F6' }, doc: { icon: '📘', color: '#3B82F6' },
+  txt: { icon: '📄', color: '' }, csv: { icon: '📄', color: '' }, md: { icon: '📄', color: '' },
+  json: { icon: '📄', color: '' }, xml: { icon: '📄', color: '' }, log: { icon: '📄', color: '' },
+  png: { icon: '🖼️', color: '#8B5CF6' }, jpg: { icon: '🖼️', color: '#8B5CF6' },
+  jpeg: { icon: '🖼️', color: '#8B5CF6' }, gif: { icon: '🖼️', color: '#8B5CF6' },
+  svg: { icon: '🖼️', color: '#8B5CF6' }, bmp: { icon: '🖼️', color: '#8B5CF6' }
+};
+function getDocIcon(ext) { return DOC_ICONS[ext] || { icon: '📎', color: '' }; }
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + 'KB';
+  return (bytes / 1048576).toFixed(1) + 'MB';
 }
 
-function updateProject(id, updates) {
-  return projGet(id).then(function (p) {
-    if (!p) return null;
-    Object.assign(p, updates, { updatedAt: new Date().toISOString() });
-    return projPut(p);
-  });
-}
+/* ═══ 페이지네이션 ═══ */
+var PAGE_SIZE = 50;
+var MODAL_Z = 9999;
 
-/* ═══ 마일스톤 CRUD (팩토리 기반) ═══ */
-function msPut(ms) { return dbPut('milestones', ms); }
-function msGetAll() { return dbGetAll('milestones'); }
-
-function msGetByProject(projectId) {
-  return msGetAll().then(function (all) {
-    return all.filter(function (m) { return m.projectId === projectId; });
-  });
-}
-
-function msDel(id) { return dbDel('milestones', id); }
-
-function msDelByProject(projectId) {
-  return msGetByProject(projectId).then(function (list) {
-    return Promise.all(list.map(function (m) { return msDel(m.id); }));
-  });
-}
-
-function createMilestone(data) {
-  var ms = {
-    id: 'ms-' + uuid(),
-    projectId: data.projectId,
-    name: (data.name || '').trim(),
-    startDate: data.startDate || '',
-    endDate: data.endDate || '',
-    status: data.status || 'waiting',
-    order: data.order || 0,
-    createdAt: new Date().toISOString(),
-    _isNew: true
-  };
-  return msPut(ms);
-}
-
-/* ═══ 일정(이벤트) CRUD (팩토리 기반) ═══ */
-function evtPut(evt) { return dbPut('events', evt); }
-function evtGetAll() { return dbGetAll('events'); }
-function evtGet(id) { return dbGet('events', id); }
-function evtDel(id) { return dbDel('events', id); }
-
-function createEvent(data) {
-  var now = new Date().toISOString();
-  var evt = {
-    id: 'evt-' + uuid(),
-    title: (data.title || '').trim(),
-    type: data.type || 'etc',
-    startDate: data.startDate || '',
-    endDate: data.endDate || data.startDate || '',
-    projectIds: data.projectIds || [],
-    assignees: data.assignees || [],
-    color: data.color || (EVT_TYPE[data.type] || EVT_TYPE.etc).color,
-    memo: data.memo || '',
-    repeat: data.repeat || null, // null, 'weekly', 'biweekly', 'monthly'
-    repeatUntil: data.repeatUntil || '', // 반복 종료일
-    createdAt: now,
-    _isNew: true
-  };
-  return evtPut(evt);
-}
-
+/* ═══ 날짜 유틸 ═══ */
 function dateToStr(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
+
+function datesBetween(start, end) {
+  var arr = [];
+  var d = new Date(start);
+  var e = new Date(end);
+  while (d <= e) {
+    arr.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  return arr;
+}
+
+function daysDiff(start, end) {
+  return Math.round((new Date(end) - new Date(start)) / 86400000);
+}
+
+function localDate() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
 /* ═══ 반복 일정 인스턴스 확장 ═══ */
 function expandRepeatingEvents(events, viewStart, viewEnd) {
@@ -351,14 +175,6 @@ function expandRepeatingEvents(events, viewStart, viewEnd) {
   return result;
 }
 
-function updateEvent(id, updates) {
-  return evtGet(id).then(function (e) {
-    if (!e) return null;
-    Object.assign(e, updates);
-    return evtPut(e);
-  });
-}
-
 /* ═══ 프로젝트 상태 자동 판별 ═══ */
 function autoProjectStatus(proj) {
   if (proj.status === 'done' || proj.status === 'hold') return proj.status;
@@ -368,19 +184,254 @@ function autoProjectStatus(proj) {
   return 'waiting';
 }
 
-/* ═══ 프로젝트 삭제 (마일스톤 포함) ═══ */
+/* ═══ 업무일지 레코드 중복 키 / 병합 ═══ */
+function wrRecordKey(r) {
+  return (r.date || '') + '|' + (r.name || '') + '|' + (r.orderNo || '') + '|' + (r.content || '');
+}
+
+function wrMerge(existingRecords, newRecords) {
+  var keySet = {};
+  existingRecords.forEach(function (r) { keySet[wrRecordKey(r)] = true; });
+  var added = 0;
+  var toAdd = [];
+  newRecords.forEach(function (r) {
+    var k = wrRecordKey(r);
+    if (!keySet[k]) {
+      keySet[k] = true;
+      toAdd.push(r);
+      added++;
+    }
+  });
+  return { toAdd: toAdd, added: added };
+}
+
+/* ═══ 페이지네이션 유틸리티 ═══ */
+function paginate(items, page, size) {
+  size = size || PAGE_SIZE;
+  page = Math.max(1, page || 1);
+  var total = items.length;
+  var totalPages = Math.ceil(total / size) || 1;
+  page = Math.min(page, totalPages);
+  var start = (page - 1) * size;
+  return {
+    items: items.slice(start, start + size),
+    page: page,
+    totalPages: totalPages,
+    total: total,
+    hasNext: page < totalPages,
+    hasPrev: page > 1
+  };
+}
+
+function renderPagination(containerId, pageInfo, onPageChange) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  if (pageInfo.totalPages <= 1) { el.innerHTML = ''; return; }
+  var html = '<div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;font-size:11px;color:var(--t4)">';
+  html += '<button class="btn btn-g btn-s" ' + (pageInfo.hasPrev ? '' : 'disabled') + ' onclick="(' + onPageChange + ')(' + (pageInfo.page - 1) + ')">&lt;</button>';
+  html += '<span>' + pageInfo.page + ' / ' + pageInfo.totalPages + ' (' + pageInfo.total + '건)</span>';
+  html += '<button class="btn btn-g btn-s" ' + (pageInfo.hasNext ? '' : 'disabled') + ' onclick="(' + onPageChange + ')(' + (pageInfo.page + 1) + ')">&gt;</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+/* ═══ 공용 모달 프레임 ═══ */
+function createModal(opts) {
+  var ov = document.createElement('div');
+  ov.className = 'wa-modal-overlay';
+  ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.55);z-index:' + MODAL_Z + ';display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+  var box = document.createElement('div');
+  box.className = 'wa-modal-box';
+  box.style.cssText = 'background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:24px;max-width:' + (opts.width || '600px') + ';width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.3);color:var(--t2)';
+  if (opts.title) {
+    var hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px';
+    hdr.innerHTML = '<span style="font-size:15px;font-weight:700;color:var(--t1)">' + opts.title + '</span>';
+    var closeBtn = document.createElement('span');
+    closeBtn.textContent = '\u2715';
+    closeBtn.style.cssText = 'cursor:pointer;color:var(--t5);font-size:16px;padding:4px 8px;border-radius:6px;transition:all .15s';
+    closeBtn.onmouseover = function () { this.style.color = 'var(--d-t)'; this.style.background = 'var(--d-bg)'; };
+    closeBtn.onmouseout = function () { this.style.color = 'var(--t5)'; this.style.background = 'none'; };
+    closeBtn.onclick = function () { ov.remove(); if (opts.onClose) opts.onClose(); };
+    hdr.appendChild(closeBtn);
+    box.appendChild(hdr);
+  }
+  if (opts.html) { var body = document.createElement('div'); body.innerHTML = opts.html; box.appendChild(body); }
+  if (opts.content) { box.appendChild(opts.content); }
+  ov.appendChild(box);
+  if (opts.closeOnOverlay !== false) {
+    ov.addEventListener('click', function (e) { if (e.target === ov) { ov.remove(); if (opts.onClose) opts.onClose(); } });
+  }
+  document.body.appendChild(ov);
+  return { overlay: ov, box: box, close: function () { ov.remove(); if (opts.onClose) opts.onClose(); } };
+}
+
+/* ═══ 토스트 알림 ═══ */
+function showToast(msg, type) {
+  var existing = document.querySelectorAll('.wa-toast');
+  existing.forEach(function (t, i) { t.style.top = (12 + (i + 1) * 44) + 'px'; });
+  var toast = document.createElement('div');
+  toast.className = 'wa-toast';
+  var bg = type === 'error' ? '#EF4444' : type === 'warn' ? '#F59E0B' : '#10B981';
+  toast.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;color:#fff;background:' + bg + ';z-index:100000;box-shadow:0 4px 12px rgba(0,0,0,.2);opacity:0;transition:opacity .3s;white-space:nowrap';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  requestAnimationFrame(function () { toast.style.opacity = '1'; });
+  setTimeout(function () { toast.style.opacity = '0'; setTimeout(function () { toast.remove(); }, TOAST_FADE); }, TOAST_DURATION);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * 서버 모드 엔티티 CRUD (REST API)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── 프로젝트 ─── */
+function projGetAll() { return apiFetch('/api/projects').then(function (r) { return toCamelArray(r.data); }); }
+function projGet(id) { return apiFetch('/api/projects/' + id).then(function (r) { return toCamel(r.data); }); }
+function projPut(proj) {
+  if (!proj.id || proj._isNew) {
+    delete proj._isNew;
+    return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
+  }
+  return apiFetch('/api/projects/' + proj.id, { method: 'PUT', body: JSON.stringify(proj) })
+    .then(function (r) { return toCamel(r.data); })
+    .catch(function (err) {
+      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+        return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
+      }
+      throw err;
+    });
+}
+function projDel(id) { return apiFetch('/api/projects/' + id, { method: 'DELETE' }); }
+
+function createProject(data) {
+  var now = new Date().toISOString();
+  var defaultPhases = { order: { status: 'waiting', startDate: '', endDate: '' }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, as: { status: 'waiting', startDate: '', endDate: '' } };
+  var proj = {
+    id: 'proj-' + uuid(),
+    orderNo: (data.orderNo || '').trim(),
+    name: (data.name || '').trim(),
+    startDate: data.startDate || '',
+    endDate: data.endDate || '',
+    status: data.status || 'active',
+    progress: data.progress || 0,
+    estimatedHours: data.estimatedHours || 0,
+    assignees: data.assignees || [],
+    dependencies: data.dependencies || [],
+    color: data.color || (typeof COL !== 'undefined' ? COL[(Math.random() * COL.length | 0)] : '#3B82F6'),
+    memo: data.memo || '',
+    currentPhase: data.currentPhase || 'order',
+    phases: data.phases || defaultPhases,
+    createdAt: now,
+    updatedAt: now,
+    _isNew: true
+  };
+  return projPut(proj);
+}
+
+function updateProject(id, updates) {
+  return projGet(id).then(function (p) {
+    if (!p) return null;
+    Object.assign(p, updates, { updatedAt: new Date().toISOString() });
+    return projPut(p);
+  });
+}
+
+/* ─── 마일스톤 ─── */
+function msGetAll() { return apiFetch('/api/milestones').then(function (r) { return toCamelArray(r.data); }); }
+function msGetByProject(pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
+function msPut(ms) {
+  if (!ms.id || ms._isNew) {
+    delete ms._isNew;
+    return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
+  }
+  return apiFetch('/api/milestones/' + ms.id, { method: 'PUT', body: JSON.stringify(ms) })
+    .then(function (r) { return toCamel(r.data); })
+    .catch(function (err) {
+      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+        return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
+      }
+      throw err;
+    });
+}
+function msDel(id) { return apiFetch('/api/milestones/' + id, { method: 'DELETE' }); }
+
+function msDelByProject(projectId) {
+  return msGetByProject(projectId).then(function (list) {
+    return Promise.all(list.map(function (m) { return msDel(m.id); }));
+  });
+}
+
+function createMilestone(data) {
+  var ms = {
+    id: 'ms-' + uuid(),
+    projectId: data.projectId,
+    name: (data.name || '').trim(),
+    startDate: data.startDate || '',
+    endDate: data.endDate || '',
+    status: data.status || 'waiting',
+    order: data.order || 0,
+    createdAt: new Date().toISOString(),
+    _isNew: true
+  };
+  return msPut(ms);
+}
+
+/* ─── 이벤트 ─── */
+function evtGetAll() { return apiFetch('/api/events').then(function (r) { return toCamelArray(r.data); }); }
+function evtGet(id) { return apiFetch('/api/events/' + id).then(function (r) { return toCamel(r.data); }); }
+function evtPut(evt) {
+  if (!evt.id || evt._isNew) {
+    delete evt._isNew;
+    return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
+  }
+  return apiFetch('/api/events/' + evt.id, { method: 'PUT', body: JSON.stringify(evt) })
+    .then(function (r) { return toCamel(r.data); })
+    .catch(function (err) {
+      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+        return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
+      }
+      throw err;
+    });
+}
+function evtDel(id) { return apiFetch('/api/events/' + id, { method: 'DELETE' }); }
+
+function createEvent(data) {
+  var now = new Date().toISOString();
+  var evt = {
+    id: 'evt-' + uuid(),
+    title: (data.title || '').trim(),
+    type: data.type || 'etc',
+    startDate: data.startDate || '',
+    endDate: data.endDate || data.startDate || '',
+    projectIds: data.projectIds || [],
+    assignees: data.assignees || [],
+    color: data.color || (typeof EVT_TYPE !== 'undefined' ? (EVT_TYPE[data.type] || EVT_TYPE.etc).color : '#3B82F6'),
+    memo: data.memo || '',
+    repeat: data.repeat || null,
+    repeatUntil: data.repeatUntil || '',
+    createdAt: now,
+    _isNew: true
+  };
+  return evtPut(evt);
+}
+
+function updateEvent(id, updates) {
+  return evtGet(id).then(function (e) {
+    if (!e) return null;
+    Object.assign(e, updates);
+    return evtPut(e);
+  });
+}
+
+/* ─── 프로젝트 삭제 (캐스케이드) ─── */
 function deleteProjectCascade(id) {
-  // 이슈 + 이슈로그 삭제
   var issDel = typeof issueGetByProject === 'function'
     ? issueGetByProject(id).then(function (issues) {
         return Promise.all(issues.map(function (iss) { return deleteIssueCascade(iss.id); }));
       })
     : Promise.resolve();
-  // 체크리스트도 삭제
-  var chkDel = typeof chkDelByProject === 'function' ? chkDelByProject(id) : Promise.resolve();
-  // 문서 파일/폴더 삭제
   var docDel = typeof deleteProjectFiles === 'function' ? deleteProjectFiles(id) : Promise.resolve();
-  return Promise.all([issDel, chkDel, docDel]).then(function () { return msDelByProject(id); }).then(function () {
+  return Promise.all([issDel, docDel]).then(function () { return msDelByProject(id); }).then(function () {
     // 이벤트에서 삭제된 프로젝트 참조 제거
     return evtGetAll().then(function (events) {
       var updates = [];
@@ -409,306 +460,14 @@ function deleteProjectCascade(id) {
   });
 }
 
-/* ═══ 아카이브 전체 레코드 읽기 (캐시 적용) ═══ */
-function readAllArchiveRecords() {
-  var now = Date.now();
-  if (_archiveCache.data && (now - _archiveCache.ts) < ARCHIVE_CACHE_TTL) {
-    return Promise.resolve(_archiveCache.data);
-  }
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('weeks', 'readonly');
-    var req = tx.objectStore('weeks').getAll();
-    req.onsuccess = function () {
-      var weeks = req.result || [];
-      var records = [];
-      weeks.forEach(function (w) {
-        if (!w.data || !Array.isArray(w.data)) return;
-        w.data.forEach(function (r) { records.push(r); });
-      });
-      _archiveCache.data = records;
-      _archiveCache.ts = Date.now();
-      res(records);
-    };
-    req.onerror = function (e) { console.warn('[DB] readAllArchiveRecords error', e); rej(e); };
-  });
+/* ─── 수주 대장 ─── */
+function orderGetAll() { return apiFetch('/api/orders').then(function (r) { return toCamelArray(r.data); }); }
+function orderGet(orderNo) { return apiFetch('/api/orders/' + encodeURIComponent(orderNo)).then(function (r) { return toCamel(r.data); }); }
+function orderPut(order) {
+  return apiFetch('/api/orders', { method: 'POST', body: JSON.stringify(order) }).then(function (r) { return toCamel(r.data); });
 }
+function orderDel(orderNo) { return apiFetch('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' }); }
 
-/* ═══ 진척률 자동 산출 (아카이브 연동) ═══ */
-function calcProgressFromArchive() {
-  return readAllArchiveRecords().then(function (records) {
-    var hoursByOrder = {};
-    records.forEach(function (r) {
-      if (!r.orderNo) return;
-      var key = r.orderNo.trim();
-      hoursByOrder[key] = (hoursByOrder[key] || 0) + (r.hours || 0);
-    });
-    return hoursByOrder;
-  });
-}
-
-function autoUpdateProgress() {
-  return calcProgressFromArchive().then(function (hoursByOrder) {
-    return projGetAll().then(function (projects) {
-      var updates = [];
-      projects.forEach(function (p) {
-        if (!p.orderNo || !p.estimatedHours || p.estimatedHours <= 0) return;
-        var key = p.orderNo.trim();
-        var actual = hoursByOrder[key] || 0;
-        if (actual <= 0) return;
-        var progress = Math.min(Math.round((actual / p.estimatedHours) * 100), PROGRESS_MAX);
-        if (progress !== p.progress) {
-          updates.push({ id: p.id, progress: progress, actualHours: Math.round(actual * 10) / 10 });
-        }
-      });
-      return Promise.all(updates.map(function (u) {
-        return updateProject(u.id, { progress: u.progress, actualHours: u.actualHours });
-      })).then(function () {
-        // Integration 5: 진척률 변경 시 히스토리 스냅샷 저장
-        return Promise.all(updates.map(function (u) {
-          return saveProgressSnapshot(u.id, u.progress, u.actualHours);
-        }));
-      }).then(function () { return updates.length; });
-    });
-  });
-}
-
-/* ═══ Integration 1: 수주번호별 업무유형 분포 ═══ */
-function calcTaskDistByOrder() {
-  return readAllArchiveRecords().then(function (records) {
-    // { orderNo: { A: hours, B: hours, ... } }
-    var dist = {};
-    records.forEach(function (r) {
-      if (!r.orderNo || !r.abbr) return;
-      var key = r.orderNo.trim();
-      var abbr = r.abbr.trim().charAt(0).toUpperCase();
-      if (!dist[key]) dist[key] = {};
-      dist[key][abbr] = (dist[key][abbr] || 0) + (r.hours || 0);
-    });
-    return dist;
-  });
-}
-
-/* ═══ Integration 4: 마일스톤별 실적 시간 집계 ═══ */
-function calcHoursByMilestone(projectId) {
-  return projGet(projectId).then(function (proj) {
-    if (!proj || !proj.orderNo) return {};
-    return msGetByProject(projectId).then(function (milestones) {
-      if (!milestones.length) return {};
-      milestones.sort(function (a, b) { return (a.startDate || '') < (b.startDate || '') ? -1 : 1; });
-      return readAllArchiveRecords().then(function (records) {
-        var orderKey = proj.orderNo.trim();
-        var result = {};
-        milestones.forEach(function (ms) { result[ms.id] = { hours: 0, records: 0, name: ms.name }; });
-        records.forEach(function (r) {
-          if (!r.orderNo || r.orderNo.trim() !== orderKey) return;
-          if (!r.date) return;
-          // YYYYMMDD → YYYY-MM-DD
-          var recDate = r.date.length === 8
-            ? r.date.slice(0, 4) + '-' + r.date.slice(4, 6) + '-' + r.date.slice(6, 8)
-            : r.date;
-          // 해당 날짜를 포함하는 마일스톤 찾기
-          var matched = false;
-          for (var i = 0; i < milestones.length; i++) {
-            var ms = milestones[i];
-            if (ms.startDate && ms.endDate && recDate >= ms.startDate && recDate <= ms.endDate) {
-              result[ms.id].hours += (r.hours || 0);
-              result[ms.id].records += 1;
-              matched = true;
-              break;
-            }
-          }
-          // 매칭 안 되면 날짜가 가장 가까운 마일스톤에 배정
-          if (!matched && milestones.length) {
-            var bestIdx = 0;
-            var bestDist = Infinity;
-            for (var j = 0; j < milestones.length; j++) {
-              var msEnd = milestones[j].endDate || milestones[j].startDate;
-              if (!msEnd) continue;
-              var d = Math.abs(daysDiff(recDate, msEnd));
-              if (d < bestDist) { bestDist = d; bestIdx = j; }
-            }
-            result[milestones[bestIdx].id].hours += (r.hours || 0);
-            result[milestones[bestIdx].id].records += 1;
-          }
-        });
-        // 소수점 정리
-        Object.keys(result).forEach(function (k) {
-          result[k].hours = Math.round(result[k].hours * 10) / 10;
-        });
-        return result;
-      });
-    });
-  });
-}
-
-/* ═══ Integration 5: 진척률 히스토리 ═══ */
-function saveProgressSnapshot(projectId, progress, actualHours) {
-  var today = localDate();
-  if (!db.objectStoreNames.contains('progressHistory')) return Promise.resolve();
-  var snapshot = {
-    id: projectId + '_' + today,
-    projectId: projectId,
-    date: today,
-    progress: progress,
-    actualHours: actualHours || 0,
-    timestamp: new Date().toISOString()
-  };
-  return dbPut('progressHistory', snapshot);
-}
-
-function getProgressHistory(projectId) {
-  if (!db.objectStoreNames.contains('progressHistory')) return Promise.resolve([]);
-  return dbGetByIndex('progressHistory', 'projectId', projectId).then(function (results) {
-    return results.sort(function (a, b) {
-      return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
-    });
-  });
-}
-
-/* ═══ Integration 8: 아카이브 패턴 기반 마일스톤 자동 제안 ═══ */
-function suggestMilestones(orderNo, startDate, endDate) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('weeks', 'readonly');
-    var req = tx.objectStore('weeks').getAll();
-    req.onsuccess = function () {
-      var weeks = req.result || [];
-      var records = [];
-      weeks.forEach(function (w) {
-        if (!w.data || !Array.isArray(w.data)) return;
-        w.data.forEach(function (r) {
-          if (r.orderNo && r.orderNo.trim() === orderNo.trim()) {
-            records.push(r);
-          }
-        });
-      });
-      if (!records.length) { res([]); return; }
-
-      records.sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); });
-
-      // 날짜별 업무분장 시간 집계
-      var dateMap = {};
-      records.forEach(function (r) {
-        var d = r.date || '';
-        if (!dateMap[d]) dateMap[d] = {};
-        var abbr = (r.abbr || r.taskType || 'G').charAt(0).toUpperCase();
-        dateMap[d][abbr] = (dateMap[d][abbr] || 0) + (r.hours || 0);
-      });
-
-      var dates = Object.keys(dateMap).sort();
-      if (!dates.length) { res([]); return; }
-
-      // 각 날짜의 지배적 업무유형
-      var dominantByDate = dates.map(function (d) {
-        var dist = dateMap[d];
-        var maxAbbr = 'G'; var maxH = 0;
-        for (var k in dist) { if (dist[k] > maxH) { maxH = dist[k]; maxAbbr = k; } }
-        return { date: d, dominant: maxAbbr };
-      });
-
-      // 연속된 같은 지배적 유형을 구간으로 묶기
-      var phases = [];
-      var curPhase = { abbr: dominantByDate[0].dominant, startDate: dominantByDate[0].date, endDate: dominantByDate[0].date };
-      for (var i = 1; i < dominantByDate.length; i++) {
-        if (dominantByDate[i].dominant === curPhase.abbr) {
-          curPhase.endDate = dominantByDate[i].date;
-        } else {
-          phases.push(curPhase);
-          curPhase = { abbr: dominantByDate[i].dominant, startDate: dominantByDate[i].date, endDate: dominantByDate[i].date };
-        }
-      }
-      phases.push(curPhase);
-
-      function toISO(d) { return d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8); }
-
-      var amLabels = typeof AM !== 'undefined' ? AM : { A: 'A(CS현장)', B: 'B(제작)', D: 'D(개발)', G: 'G(공통)', M: 'M(관리)', S: 'S(영업지원)' };
-      var suggestions = phases.map(function (ph, idx) {
-        var label = amLabels[ph.abbr] || ph.abbr;
-        return { name: label + ' 집중 구간', startDate: toISO(ph.startDate), endDate: toISO(ph.endDate), status: 'done', order: idx };
-      });
-
-      // 인접 동일 유형 병합
-      var merged = [];
-      suggestions.forEach(function (s) {
-        if (merged.length && s.name === merged[merged.length - 1].name) {
-          merged[merged.length - 1].endDate = s.endDate;
-        } else {
-          merged.push({ name: s.name, startDate: s.startDate, endDate: s.endDate, status: s.status, order: merged.length });
-        }
-      });
-
-      res(merged);
-    };
-    req.onerror = function (e) { rej(e); };
-  });
-}
-
-/* ═══ Integration 9: 달력에 주간 업무 요약 오버레이 ═══ */
-function getWeeklyArchiveSummary() {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('weeks', 'readonly');
-    var req = tx.objectStore('weeks').getAll();
-    req.onsuccess = function () {
-      var weeks = req.result || [];
-      var summaries = [];
-      weeks.forEach(function (w) {
-        var dr = w.dateRange || [];
-        if (!dr.length || !dr[0]) return;
-        var startDate = dr[0].slice(0, 4) + '-' + dr[0].slice(4, 6) + '-' + dr[0].slice(6, 8);
-        var endDate = dr[1] ? dr[1].slice(0, 4) + '-' + dr[1].slice(4, 6) + '-' + dr[1].slice(6, 8) : startDate;
-        var memberCount = (w.selectedNames || []).length;
-        summaries.push({
-          startDate: startDate,
-          endDate: endDate,
-          totalHours: w.totalHours || 0,
-          memberCount: memberCount,
-          label: w.label || ''
-        });
-      });
-      res(summaries);
-    };
-    req.onerror = function (e) { rej(e); };
-  });
-}
-
-/* ═══ Integration 10 helper: 최근 아카이브 데이터 읽기 ═══ */
-function getRecentArchiveWeeks(count) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('weeks', 'readonly');
-    var req = tx.objectStore('weeks').getAll();
-    req.onsuccess = function () {
-      var weeks = req.result || [];
-      weeks.sort(function (a, b) { return (b.savedAt || '').localeCompare(a.savedAt || ''); });
-      res(weeks.slice(0, count || 4));
-    };
-    req.onerror = function (e) { rej(e); };
-  });
-}
-
-/* ═══ 날짜 유틸 ═══ */
-function datesBetween(start, end) {
-  var arr = [];
-  var d = new Date(start);
-  var e = new Date(end);
-  while (d <= e) {
-    arr.push(d.toISOString().slice(0, 10));
-    d.setDate(d.getDate() + 1);
-  }
-  return arr;
-}
-
-function daysDiff(start, end) {
-  return Math.round((new Date(end) - new Date(start)) / 86400000);
-}
-
-function localDate() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
-
-/* ═══ 수주 대장 CRUD (팩토리 기반) ═══ */
-function orderPut(order) { return dbPut('orders', order); }
-function orderGetAll() { return dbGetAll('orders'); }
-function orderGet(orderNo) { return dbGet('orders', orderNo); }
-function orderDel(orderNo) { return dbDel('orders', orderNo); }
-
-/* 수주 등록 + ORDER_MAP 동기화 */
 function createOrder(data) {
   var now = new Date().toISOString();
   var order = {
@@ -722,7 +481,6 @@ function createOrder(data) {
     memo: data.memo || '',
     createdAt: now
   };
-  // ORDER_MAP 동기화
   if (typeof ORDER_MAP !== 'undefined') {
     ORDER_MAP[order.orderNo] = { name: order.name, date: order.date, client: order.client, amount: String(order.amount), manager: order.manager, delivery: order.delivery };
   }
@@ -730,40 +488,30 @@ function createOrder(data) {
   return orderPut(order);
 }
 
-/* 수주 삭제 + ORDER_MAP 동기화 */
 function deleteOrder(orderNo) {
   if (typeof ORDER_MAP !== 'undefined') delete ORDER_MAP[orderNo];
   lsRemove('wa-oc-' + orderNo);
   return orderDel(orderNo);
 }
 
-/* 엑셀 → orders 스토어 일괄 동기화 */
+/* 엑셀 → orders 일괄 동기화 (서버 bulk API) */
 function syncOrderMapToDB() {
   if (typeof ORDER_MAP === 'undefined') return Promise.resolve();
   var keys = Object.keys(ORDER_MAP);
   if (keys.length === 0) return Promise.resolve();
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('orders', 'readwrite');
-    var store = tx.objectStore('orders');
-    var now = new Date().toISOString();
-    keys.forEach(function (k) {
-      var v = ORDER_MAP[k];
-      var rec = {
-        orderNo: k,
-        date: (typeof v === 'object' ? v.date : '') || '',
-        client: (typeof v === 'object' ? v.client : '') || '',
-        name: (typeof v === 'object' ? v.name : v) || '',
-        amount: (typeof v === 'object' ? Number(v.amount) || 0 : 0),
-        manager: (typeof v === 'object' ? v.manager : '') || '',
-        delivery: (typeof v === 'object' ? v.delivery : '') || '',
-        memo: '',
-        createdAt: now
-      };
-      store.put(rec);
-    });
-    tx.oncomplete = function () { res(); };
-    tx.onerror = function (e) { rej(e); };
+  var records = keys.map(function (k) {
+    var v = ORDER_MAP[k];
+    return {
+      orderNo: k,
+      date: (typeof v === 'object' ? v.date : '') || '',
+      client: (typeof v === 'object' ? v.client : '') || '',
+      name: (typeof v === 'object' ? v.name : v) || '',
+      amount: (typeof v === 'object' ? Number(v.amount) || 0 : 0),
+      manager: (typeof v === 'object' ? v.manager : '') || '',
+      delivery: (typeof v === 'object' ? v.delivery : '') || ''
+    };
   });
+  return apiFetch('/api/orders/bulk', { method: 'POST', body: JSON.stringify({ records: records }) });
 }
 
 /* orders DB → ORDER_MAP 동기화 (앱 시작 시) */
@@ -777,42 +525,68 @@ function loadOrdersToMap() {
   });
 }
 
-/* 수주에서 프로젝트 + 기본 마일스톤 자동 생성 */
-function createProjectFromOrder(order) {
-  var projId = 'proj-' + uuid();
-  var now = new Date().toISOString();
-  var startDate = order.date || localDate();
-  var endDate = order.delivery || '';
-  var defaultPhases = { order: { status: 'done', startDate: startDate, endDate: startDate }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, as: { status: 'waiting', startDate: '', endDate: '' } };
-  var proj = {
-    id: projId, orderNo: order.orderNo, name: order.name || order.orderNo,
-    startDate: startDate, endDate: endDate, status: 'active', progress: 0,
-    estimatedHours: 0, actualHours: 0, assignees: order.manager ? [order.manager] : [],
-    dependencies: [], color: typeof COL !== 'undefined' ? COL[Math.floor(Math.random() * COL.length)] : '#3B82F6',
-    memo: '', currentPhase: 'design', phases: defaultPhases,
-    createdAt: now, updatedAt: now
-  };
-  // 기본 마일스톤 6개 생성 (프로젝트 저장 후 실행해야 FK 제약 충족)
-  var phaseKeys = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'as'];
-  var phaseLabels = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
-  return projPut(proj).then(function () {
-    var msPromises = phaseKeys.map(function (pk, idx) {
-      var label = phaseLabels[pk] ? phaseLabels[pk].label : pk;
-      return createMilestone({ projectId: projId, name: label, startDate: '', endDate: '', status: 'waiting', order: idx });
+/* ─── 체크리스트 ─── */
+function chkGetByProject(pid) {
+  return apiFetch('/api/checklists?projectId=' + pid).then(function (r) {
+    // 서버는 phase별 row에 items JSONB 배열 → 클라이언트는 개별 항목 기대 → flat 변환
+    var flat = [];
+    (r.data || []).forEach(function (row) {
+      var rc = toCamel(row);
+      var items = rc.items;
+      if (typeof items === 'string') try { items = JSON.parse(items); } catch (e) { items = []; }
+      if (Array.isArray(items) && items.length > 0) {
+        items.forEach(function (it, idx) {
+          flat.push({
+            id: rc.id + '::' + idx,
+            _parentId: rc.id,
+            projectId: rc.projectId,
+            phase: rc.phase,
+            text: it.text || '',
+            done: !!it.done,
+            doneDate: it.doneDate || null,
+            doneBy: it.doneBy || null,
+            dueDate: it.dueDate || '',
+            order: it.order !== undefined ? it.order : idx
+          });
+        });
+      } else if (!items || items.length === 0) {
+        if (rc.text) flat.push(rc);
+      }
     });
-    return Promise.all(msPromises);
-  }).then(function () {
-    // 기본 체크리스트 생성
-    return createDefaultChecklists(projId);
-  }).then(function () { return proj; });
+    return flat;
+  });
 }
-
-/* ═══ 체크리스트 CRUD (팩토리 기반) ═══ */
-function chkPut(item) { return dbPut('checklists', item); }
-
-function chkGetByProject(projectId) {
-  return dbGetByIndex('checklists', 'projectId', projectId).then(function (items) {
-    return items.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+function chkPut(item) {
+  if (!item.id || item._isNew) {
+    delete item._isNew;
+    return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
+  }
+  return apiFetch('/api/checklists/' + item.id, { method: 'PUT', body: JSON.stringify(item) })
+    .then(function (r) { return toCamel(r.data); })
+    .catch(function (err) {
+      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+        return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
+      }
+      throw err;
+    });
+}
+function chkDel(id) {
+  // flat id (chk-xxx::N) → 부모 row에서 해당 항목 제거
+  var sep = id.indexOf('::');
+  if (sep < 0) {
+    return apiFetch('/api/checklists/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
+  }
+  var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
+  return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
+    var row = r.data;
+    var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+    if (idx < 0 || idx >= items.length) return null;
+    items.splice(idx, 1);
+    if (items.length === 0) return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'DELETE' });
+    return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
+  }).catch(function (err) {
+    console.warn('[chkDel] fallback delete:', err);
+    return null;
   });
 }
 
@@ -822,56 +596,60 @@ function chkGetByPhase(projectId, phase) {
   });
 }
 
-function chkDel(id) { return dbDel('checklists', id); }
-
-function chkDelByProject(projectId) {
-  return chkGetByProject(projectId).then(function (items) {
-    if (!items.length) return;
-    return new Promise(function (res, rej) {
-      var tx = db.transaction('checklists', 'readwrite');
-      var store = tx.objectStore('checklists');
-      items.forEach(function (i) { store.delete(i.id); });
-      tx.oncomplete = function () { res(); };
-      tx.onerror = function (e) { rej(e); };
-    });
-  });
-}
-
-/* 체크리스트 항목 생성 */
-function createCheckItem(data) {
-  var item = {
-    id: 'chk-' + uuid(),
-    projectId: data.projectId,
-    phase: data.phase,
-    text: data.text || '',
-    done: false,
-    doneDate: null,
-    doneBy: null,
-    dueDate: data.dueDate || '',
-    order: data.order || 0,
-    createdAt: new Date().toISOString(),
-    _isNew: true
-  };
-  return chkPut(item);
-}
-
-/* 체크리스트 항목 토글 (doneDate 지정 가능, 기본 오늘) */
+/* 토글 (서버 모드: 부모 row의 items 배열 갱신) */
 function toggleCheckItem(id, doneBy, doneDate) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('checklists', 'readwrite');
-    var store = tx.objectStore('checklists');
-    var req = store.get(id);
-    req.onsuccess = function () {
-      var item = req.result;
-      if (!item) { res(null); return; }
-      item.done = !item.done;
-      item.doneDate = item.done ? (doneDate || localDate()) : null;
-      item.doneBy = item.done ? (doneBy || '') : null;
-      store.put(item);
-    };
-    tx.oncomplete = function () { res(req.result); };
-    tx.onerror = function (e) { rej(e); };
+  var sep = id.indexOf('::');
+  if (sep < 0) return Promise.resolve(null);
+  var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
+  return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
+    var row = r.data;
+    var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+    if (idx < 0 || idx >= items.length) return null;
+    items[idx].done = !items[idx].done;
+    items[idx].doneDate = items[idx].done ? (doneDate || localDate()) : null;
+    items[idx].doneBy = items[idx].done ? (doneBy || '') : null;
+    return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
+  }).catch(function (err) {
+    console.warn('[toggleCheckItem] error:', err);
+    return null;
   });
+}
+
+/* 체크리스트 항목 생성 — 기존 phase row에 항목 추가 */
+function createCheckItem(data) {
+  return apiFetch('/api/checklists?projectId=' + encodeURIComponent(data.projectId)).then(function (r) {
+    var rows = r.data || [];
+    var parentRow = rows.find(function (row) { return row.phase === data.phase; });
+    var newItem = { text: data.text || '', done: false, doneDate: null, doneBy: null, dueDate: data.dueDate || '', order: 0 };
+    if (parentRow) {
+      var existing = parentRow.items;
+      if (typeof existing === 'string') { try { existing = JSON.parse(existing); } catch (e) { existing = []; } }
+      if (!Array.isArray(existing)) existing = [];
+      var items = existing.slice();
+      newItem.order = typeof data.order === 'number' ? data.order : items.length;
+      items.push(newItem);
+      return apiFetch('/api/checklists/' + encodeURIComponent(parentRow.id), { method: 'PUT', body: JSON.stringify({ items: items }) });
+    } else {
+      newItem.order = typeof data.order === 'number' ? data.order : 0;
+      return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
+        id: 'chk-' + uuid(), projectId: data.projectId, phase: data.phase, items: [newItem]
+      }) });
+    }
+  }).then(function (r) { return toCamel(r.data); });
+}
+
+/* 프로젝트에 기본 체크리스트 일괄 생성 (phase별 items 배열로 묶어서 저장) */
+function createDefaultChecklists(projectId) {
+  var promises = [];
+  Object.keys(DEFAULT_CHECKLIST).forEach(function (phase) {
+    var items = DEFAULT_CHECKLIST[phase].map(function (text, idx) {
+      return { text: text, done: false, doneDate: null, doneBy: null, order: idx };
+    });
+    promises.push(apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
+      id: 'chk-' + uuid(), projectId: projectId, phase: phase, items: items
+    }) }).then(function (r) { return toCamel(r.data); }));
+  });
+  return Promise.all(promises);
 }
 
 /* 단계별 완료율 계산 */
@@ -897,33 +675,11 @@ function calcAllPhaseProgress(projectId) {
   });
 }
 
-/* ═══ 기본 체크리스트 템플릿 ═══ */
-var DEFAULT_CHECKLIST = {
-  order: ['견적서 발행', '계약서 체결', '선급금 수령', '킥오프 미팅 완료', '요구사항 정의서 작성'],
-  design: ['기구 설계 완료', '전장 설계 완료', 'SW 설계 완료', '설계 검토(DR) 완료', '자재 발주'],
-  manufacture: ['자재 입고 확인', '기구 가공/조립 완료', '전장 배선 완료', 'SW 개발/탑재 완료', '단품 시험 완료'],
-  inspect: ['자체 검수 완료', '검수 성적서 작성', '고객 입회 검수(FAT) 완료', '불량 시정 완료'],
-  deliver: ['출하 검사 완료', '운송/설치 완료', '시운전 완료(SAT)', '운전 교육 완료', '인수인계서 서명'],
-  as: ['하자보증 기간 설정', '정기점검 일정 등록', 'A/S 연락처 공유']
-};
-
-/* 프로젝트에 기본 체크리스트 일괄 생성 */
-function createDefaultChecklists(projectId) {
-  var promises = [];
-  Object.keys(DEFAULT_CHECKLIST).forEach(function (phase) {
-    DEFAULT_CHECKLIST[phase].forEach(function (text, idx) {
-      promises.push(createCheckItem({ projectId: projectId, phase: phase, text: text, order: idx }));
-    });
-  });
-  return Promise.all(promises);
-}
-
 /* 단계 전환 (게이트 체크) */
 function advancePhase(projectId, targetPhase) {
   return projGet(projectId).then(function (proj) {
     if (!proj) return null;
     var curPhase = proj.currentPhase || 'order';
-    // 현재 단계 체크리스트 완료 확인
     return calcPhaseProgress(projectId, curPhase).then(function (prog) {
       var result = { proj: proj, fromPhase: curPhase, toPhase: targetPhase, gatePass: true, progress: prog };
       if (prog.total > 0 && prog.pct < 100) {
@@ -939,13 +695,11 @@ function executePhaseTransition(projectId, targetPhase) {
   return projGet(projectId).then(function (proj) {
     if (!proj) return null;
     if (!proj.phases) proj.phases = {};
-    // 현재 단계 완료 처리
     var curPhase = proj.currentPhase || 'order';
     if (proj.phases[curPhase]) {
       proj.phases[curPhase].status = 'done';
       if (!proj.phases[curPhase].endDate) proj.phases[curPhase].endDate = localDate();
     }
-    // 새 단계 활성화
     proj.currentPhase = targetPhase;
     if (!proj.phases[targetPhase]) proj.phases[targetPhase] = {};
     proj.phases[targetPhase].status = 'active';
@@ -955,13 +709,56 @@ function executePhaseTransition(projectId, targetPhase) {
   });
 }
 
-/* ═══ 이슈 CRUD (팩토리 기반) ═══ */
-function issuePut(issue) { return dbPut('issues', issue); }
-function issueGetAll() { return dbGetAll('issues'); }
-function issueGet(id) { return dbGet('issues', id); }
-function issueDel(id) { return dbDel('issues', id); }
-function issueGetByProject(projectId) { return dbGetByIndex('issues', 'projectId', projectId); }
-function issueGetByOrder(orderNo) { return dbGetByIndex('issues', 'orderNo', orderNo); }
+/* 수주에서 프로젝트 + 마일스톤 + 체크리스트 1회 호출 생성 */
+function createProjectFromOrder(order) {
+  var projId = 'proj-' + uuid();
+  var startDate = order.date || localDate();
+  var endDate = order.delivery || '';
+  var defaultPhases = { order: { status: 'done', startDate: startDate, endDate: startDate }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, as: { status: 'waiting', startDate: '', endDate: '' } };
+  var phaseKeys = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'as'];
+  var phaseLabels = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
+  var milestones = phaseKeys.map(function (pk, idx) {
+    var label = phaseLabels[pk] ? phaseLabels[pk].label : pk;
+    return { id: 'ms-' + uuid(), name: label, startDate: '', endDate: '', status: 'waiting', order: idx };
+  });
+  var checklists = phaseKeys.map(function (pk) {
+    var items = (DEFAULT_CHECKLIST[pk] || []).map(function (text, idx) {
+      return { text: text, done: false, doneDate: null, doneBy: null, order: idx };
+    });
+    return { id: 'chk-' + uuid(), phase: pk, items: items };
+  });
+  var payload = {
+    id: projId, orderNo: order.orderNo, name: order.name || order.orderNo,
+    startDate: startDate, endDate: endDate, status: 'active', progress: 0,
+    estimatedHours: 0, assignees: order.manager ? [order.manager] : [],
+    dependencies: [], color: typeof COL !== 'undefined' ? COL[Math.floor(Math.random() * COL.length)] : '#3B82F6',
+    memo: '', currentPhase: 'design', phases: defaultPhases,
+    milestones: milestones, checklists: checklists
+  };
+  return apiFetch('/api/projects/full', { method: 'POST', body: JSON.stringify(payload) })
+    .then(function (r) { return toCamel(r.data); });
+}
+
+/* ─── 이슈 ─── */
+function issueGetAll() { return apiFetch('/api/issues').then(function (r) { return toCamelArray(r.data); }); }
+function issueGet(id) { return apiFetch('/api/issues/' + id).then(function (r) { return toCamel(r.data); }); }
+function issuePut(issue) {
+  if (!issue.id || issue._isNew) {
+    delete issue._isNew;
+    return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
+  }
+  return apiFetch('/api/issues/' + issue.id, { method: 'PUT', body: JSON.stringify(issue) })
+    .then(function (r) { return toCamel(r.data); })
+    .catch(function (err) {
+      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+        return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
+      }
+      throw err;
+    });
+}
+function issueDel(id) { return apiFetch('/api/issues/' + id, { method: 'DELETE' }); }
+function issueGetByProject(pid) { return apiFetch('/api/issues?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
+function issueGetByOrder(orderNo) { return apiFetch('/api/issues?orderNo=' + encodeURIComponent(orderNo)).then(function (r) { return toCamelArray(r.data); }); }
 
 function createIssue(data) {
   var now = new Date().toISOString();
@@ -1005,18 +802,13 @@ function deleteIssueCascade(id) {
   });
 }
 
-/* ═══ 이슈 대응 이력 CRUD (팩토리 기반) ═══ */
-function issueLogPut(log) { return dbPut('issueLogs', log); }
-function issueLogDel(id) { return dbDel('issueLogs', id); }
-
-function issueLogGetByIssue(issueId) {
-  return dbGetByIndex('issueLogs', 'issueId', issueId).then(function (items) {
-    return items.sort(function (a, b) {
-      var da = (a.date || '') + (a.time || '');
-      var db2 = (b.date || '') + (b.time || '');
-      return da < db2 ? -1 : da > db2 ? 1 : 0;
-    });
-  });
+/* ─── 이슈 대응 이력 ─── */
+function issueLogGetByIssue(issueId) { return apiFetch('/api/issues/' + issueId + '/logs').then(function (r) { return toCamelArray(r.data); }); }
+function issueLogPut(log) {
+  return apiFetch('/api/issues/' + log.issueId + '/logs', { method: 'POST', body: JSON.stringify(log) }).then(function (r) { return toCamel(r.data); });
+}
+function issueLogDel(id) {
+  return apiFetch('/api/issues/_/logs/' + id, { method: 'DELETE' });
 }
 
 function createIssueLog(data) {
@@ -1035,164 +827,287 @@ function createIssueLog(data) {
   return issueLogPut(log);
 }
 
-/* ═══ 업무일지 레코드 CRUD (팩토리 기반) ═══ */
-function wrPut(record) { return dbPut('workRecords', record); }
-function wrGetAll() { return dbGetAll('workRecords'); }
-
-function wrClear() {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('workRecords', 'readwrite');
-    tx.objectStore('workRecords').clear();
-    tx.oncomplete = function () { res(); };
-    tx.onerror = function (e) { console.warn('[DB] wrClear error', e); rej(e); };
-  });
+/* ─── 진척률 히스토리 ─── */
+function getProgressHistory(pid) { return apiFetch('/api/progress?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
+function saveProgressSnapshot(pid, progress, actualHours) {
+  return apiFetch('/api/progress', { method: 'POST', body: JSON.stringify({ projectId: pid, date: localDate(), progress: progress, actualHours: actualHours }) });
 }
 
-function wrBulkPut(records) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('workRecords', 'readwrite');
-    var st = tx.objectStore('workRecords');
-    records.forEach(function (r) { st.put(r); });
-    tx.oncomplete = function () { res(); };
-    tx.onerror = function (e) { console.warn('[DB] wrBulkPut error', e); rej(e); };
-  });
-}
+/* ─── 업무일지 아카이브 (weeks) ─── */
+function wkGetAll() { return apiFetch('/api/archives').then(function (r) { return toCamelArray(r.data); }); }
+function wkGet(id) { return apiFetch('/api/archives/' + encodeURIComponent(id)).then(function (r) { return toCamel(r.data); }); }
+function wkPut(data) { return apiFetch('/api/archives', { method: 'POST', body: JSON.stringify(data) }).then(function (r) { return toCamel(r.data); }); }
+function wkDel(id) { return apiFetch('/api/archives/' + encodeURIComponent(id), { method: 'DELETE' }); }
 
-function wrCount() {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('workRecords', 'readonly');
-    var req = tx.objectStore('workRecords').count();
-    req.onsuccess = function () { res(req.result); };
-    req.onerror = function (e) { console.warn('[DB] wrCount error', e); rej(e); };
-  });
-}
-
-// 선택 레코드 삭제 (로컬: IndexedDB delete, 서버: DELETE batch)
-function wrDeleteRecords(records) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('workRecords', 'readwrite');
-    var store = tx.objectStore('workRecords');
-    // IndexedDB에서 해당 레코드 제거 후 전체 재저장
-    store.clear();
-    records.forEach(function (r) { store.put(r); });
-    tx.oncomplete = function () { res(); };
-    tx.onerror = function (e) { console.warn('[DB] wrDeleteRecords error', e); rej(e); };
-  });
-}
-
-// 변경된 레코드만 개별 업데이트 (로컬: IndexedDB put, 서버: PATCH)
-function wrUpdateRecords(records) {
-  return new Promise(function (res, rej) {
-    var tx = db.transaction('workRecords', 'readwrite');
-    var store = tx.objectStore('workRecords');
-    records.forEach(function (r) { store.put(r); });
-    tx.oncomplete = function () { res(); };
-    tx.onerror = function (e) { console.warn('[DB] wrUpdateRecords error', e); rej(e); };
-  });
-}
-
-/* 업무일지 레코드 중복 키 생성 (date+name+orderNo+content) */
-function wrRecordKey(r) {
-  return (r.date || '') + '|' + (r.name || '') + '|' + (r.orderNo || '') + '|' + (r.content || '');
-}
-
-/* 기존 DB 레코드에 새 레코드 병합 (중복 제거 후 추가) */
-function wrMerge(existingRecords, newRecords) {
-  var keySet = {};
-  existingRecords.forEach(function (r) { keySet[wrRecordKey(r)] = true; });
-  var added = 0;
-  var toAdd = [];
-  newRecords.forEach(function (r) {
-    var k = wrRecordKey(r);
-    if (!keySet[k]) {
-      keySet[k] = true;
-      toAdd.push(r);
-      added++;
-    }
-  });
-  return { toAdd: toAdd, added: added };
-}
-
-/* ═══ #9 리팩토링: 페이지네이션 유틸리티 ═══ */
-var PAGE_SIZE = 50;
-function paginate(items, page, size) {
-  size = size || PAGE_SIZE;
-  page = Math.max(1, page || 1);
-  var total = items.length;
-  var totalPages = Math.ceil(total / size) || 1;
-  page = Math.min(page, totalPages);
-  var start = (page - 1) * size;
+/* ─── 업무일지 레코드 (서버 DB 전용) ─── */
+function _toWrRecord(r) {
   return {
-    items: items.slice(start, start + size),
-    page: page,
-    totalPages: totalPages,
-    total: total,
-    hasNext: page < totalPages,
-    hasPrev: page > 1
+    id: r.id, date: r.date, name: r.name,
+    orderNo: r.order_no, hours: typeof r.hours === 'string' ? parseFloat(r.hours) || 0 : r.hours || 0,
+    taskType: r.task_type, abbr: r.abbr, content: r.content,
+    ocmt: r.ocmt, oclient: r.oclient, dept: r.dept, userId: r.user_id
   };
 }
-
-function renderPagination(containerId, pageInfo, onPageChange) {
-  var el = document.getElementById(containerId);
-  if (!el) return;
-  if (pageInfo.totalPages <= 1) { el.innerHTML = ''; return; }
-  var html = '<div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;font-size:11px;color:var(--t4)">';
-  html += '<button class="btn btn-g btn-s" ' + (pageInfo.hasPrev ? '' : 'disabled') + ' onclick="(' + onPageChange + ')(' + (pageInfo.page - 1) + ')">&lt;</button>';
-  html += '<span>' + pageInfo.page + ' / ' + pageInfo.totalPages + ' (' + pageInfo.total + '건)</span>';
-  html += '<button class="btn btn-g btn-s" ' + (pageInfo.hasNext ? '' : 'disabled') + ' onclick="(' + onPageChange + ')(' + (pageInfo.page + 1) + ')">&gt;</button>';
-  html += '</div>';
-  el.innerHTML = html;
+function wrGetAll() {
+  return apiFetch('/api/archives/records?limit=50000&all=true').then(function (r) {
+    return (r.data || []).map(_toWrRecord);
+  });
+}
+function wrCount() {
+  return apiFetch('/api/archives/records/count').then(function (r) { return r.data.count; });
+}
+function wrBulkPut(records) {
+  return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) });
+}
+function wrClear() {
+  return apiFetch('/api/archives/records', { method: 'DELETE' });
+}
+function wrUpdateRecords(records) {
+  return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) });
+}
+function wrDeleteRecords(remainingRecords, deletedIds) {
+  if (deletedIds && deletedIds.length) {
+    return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) });
+  }
+  return wrClear().then(function () { return wrBulkPut(remainingRecords); });
 }
 
-/* ═══ #11 리팩토링: 공용 모달 프레임 ═══ */
-var MODAL_Z = 9999;
-function createModal(opts) {
-  var ov = document.createElement('div');
-  ov.className = 'wa-modal-overlay';
-  ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.55);z-index:' + MODAL_Z + ';display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
-  var box = document.createElement('div');
-  box.className = 'wa-modal-box';
-  box.style.cssText = 'background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:24px;max-width:' + (opts.width || '600px') + ';width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.3);color:var(--t2)';
-  if (opts.title) {
-    var hdr = document.createElement('div');
-    hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px';
-    hdr.innerHTML = '<span style="font-size:15px;font-weight:700;color:var(--t1)">' + opts.title + '</span>';
-    var closeBtn = document.createElement('span');
-    closeBtn.textContent = '\u2715';
-    closeBtn.style.cssText = 'cursor:pointer;color:var(--t5);font-size:16px;padding:4px 8px;border-radius:6px;transition:all .15s';
-    closeBtn.onmouseover = function () { this.style.color = 'var(--d-t)'; this.style.background = 'var(--d-bg)'; };
-    closeBtn.onmouseout = function () { this.style.color = 'var(--t5)'; this.style.background = 'none'; };
-    closeBtn.onclick = function () { ov.remove(); if (opts.onClose) opts.onClose(); };
-    hdr.appendChild(closeBtn);
-    box.appendChild(hdr);
+/* ═══ 아카이브 전체 레코드 읽기 (캐시 적용, 서버 API) ═══ */
+function readAllArchiveRecords() {
+  var now = Date.now();
+  if (_archiveCache.data && (now - _archiveCache.ts) < ARCHIVE_CACHE_TTL) {
+    return Promise.resolve(_archiveCache.data);
   }
-  if (opts.html) { var body = document.createElement('div'); body.innerHTML = opts.html; box.appendChild(body); }
-  if (opts.content) { box.appendChild(opts.content); }
-  ov.appendChild(box);
-  if (opts.closeOnOverlay !== false) {
-    ov.addEventListener('click', function (e) { if (e.target === ov) { ov.remove(); if (opts.onClose) opts.onClose(); } });
-  }
-  document.body.appendChild(ov);
-  return { overlay: ov, box: box, close: function () { ov.remove(); if (opts.onClose) opts.onClose(); } };
+  return wrGetAll().then(function (records) {
+    _archiveCache.data = records;
+    _archiveCache.ts = Date.now();
+    return records;
+  });
 }
 
-/* ═══ 프로젝트 문서 관리 CRUD (v8) ═══ */
-var DOC_FOLDER_DEFAULTS = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'as'];
-var DOC_MAX_FILE = 50 * 1024 * 1024; // 50MB
-var DOC_MAX_PROJECT = 500 * 1024 * 1024; // 500MB
+/* ═══ 진척률 자동 산출 (아카이브 연동) ═══ */
+function calcProgressFromArchive() {
+  return readAllArchiveRecords().then(function (records) {
+    var hoursByOrder = {};
+    records.forEach(function (r) {
+      if (!r.orderNo) return;
+      var key = r.orderNo.trim();
+      hoursByOrder[key] = (hoursByOrder[key] || 0) + (r.hours || 0);
+    });
+    return hoursByOrder;
+  });
+}
 
-function folderPut(f) { return dbPut('projectFolders', f); }
-function folderGetAll() { return dbGetAll('projectFolders'); }
-function folderGet(id) { return dbGet('projectFolders', id); }
-function folderDel(id) { return dbDel('projectFolders', id); }
-function folderGetByProject(projId) { return dbGetByIndex('projectFolders', 'projectId', projId); }
+function autoUpdateProgress() {
+  return calcProgressFromArchive().then(function (hoursByOrder) {
+    return projGetAll().then(function (projects) {
+      var updates = [];
+      projects.forEach(function (p) {
+        if (!p.orderNo || !p.estimatedHours || p.estimatedHours <= 0) return;
+        var key = p.orderNo.trim();
+        var actual = hoursByOrder[key] || 0;
+        if (actual <= 0) return;
+        var progress = Math.min(Math.round((actual / p.estimatedHours) * 100), PROGRESS_MAX);
+        if (progress !== p.progress) {
+          updates.push({ id: p.id, progress: progress, actualHours: Math.round(actual * 10) / 10 });
+        }
+      });
+      return Promise.all(updates.map(function (u) {
+        return updateProject(u.id, { progress: u.progress, actualHours: u.actualHours });
+      })).then(function () {
+        return Promise.all(updates.map(function (u) {
+          return saveProgressSnapshot(u.id, u.progress, u.actualHours);
+        }));
+      }).then(function () { return updates.length; });
+    });
+  });
+}
 
-function filePut(f) { return dbPut('projectFiles', f); }
-function fileGetAll() { return dbGetAll('projectFiles'); }
-function fileGet(id) { return dbGet('projectFiles', id); }
-function fileDel(id) { return dbDel('projectFiles', id); }
-function fileGetByFolder(folderId) { return dbGetByIndex('projectFiles', 'folderId', folderId); }
-function fileGetByProject(projId) { return dbGetByIndex('projectFiles', 'projectId', projId); }
+/* ═══ Integration 1: 수주번호별 업무유형 분포 ═══ */
+function calcTaskDistByOrder() {
+  return readAllArchiveRecords().then(function (records) {
+    var dist = {};
+    records.forEach(function (r) {
+      if (!r.orderNo || !r.abbr) return;
+      var key = r.orderNo.trim();
+      var abbr = r.abbr.trim().charAt(0).toUpperCase();
+      if (!dist[key]) dist[key] = {};
+      dist[key][abbr] = (dist[key][abbr] || 0) + (r.hours || 0);
+    });
+    return dist;
+  });
+}
+
+/* ═══ Integration 4: 마일스톤별 실적 시간 집계 ═══ */
+function calcHoursByMilestone(projectId) {
+  return projGet(projectId).then(function (proj) {
+    if (!proj || !proj.orderNo) return {};
+    return msGetByProject(projectId).then(function (milestones) {
+      if (!milestones.length) return {};
+      milestones.sort(function (a, b) { return (a.startDate || '') < (b.startDate || '') ? -1 : 1; });
+      return readAllArchiveRecords().then(function (records) {
+        var orderKey = proj.orderNo.trim();
+        var result = {};
+        milestones.forEach(function (ms) { result[ms.id] = { hours: 0, records: 0, name: ms.name }; });
+        records.forEach(function (r) {
+          if (!r.orderNo || r.orderNo.trim() !== orderKey) return;
+          if (!r.date) return;
+          var recDate = r.date.length === 8
+            ? r.date.slice(0, 4) + '-' + r.date.slice(4, 6) + '-' + r.date.slice(6, 8)
+            : r.date;
+          var matched = false;
+          for (var i = 0; i < milestones.length; i++) {
+            var ms = milestones[i];
+            if (ms.startDate && ms.endDate && recDate >= ms.startDate && recDate <= ms.endDate) {
+              result[ms.id].hours += (r.hours || 0);
+              result[ms.id].records += 1;
+              matched = true;
+              break;
+            }
+          }
+          if (!matched && milestones.length) {
+            var bestIdx = 0;
+            var bestDist = Infinity;
+            for (var j = 0; j < milestones.length; j++) {
+              var msEnd = milestones[j].endDate || milestones[j].startDate;
+              if (!msEnd) continue;
+              var d = Math.abs(daysDiff(recDate, msEnd));
+              if (d < bestDist) { bestDist = d; bestIdx = j; }
+            }
+            result[milestones[bestIdx].id].hours += (r.hours || 0);
+            result[milestones[bestIdx].id].records += 1;
+          }
+        });
+        Object.keys(result).forEach(function (k) {
+          result[k].hours = Math.round(result[k].hours * 10) / 10;
+        });
+        return result;
+      });
+    });
+  });
+}
+
+/* ═══ Integration 8: 아카이브 패턴 기반 마일스톤 자동 제안 ═══ */
+function suggestMilestones(orderNo, startDate, endDate) {
+  return wrGetAll().then(function (allRecords) {
+    var records = allRecords.filter(function (r) {
+      return r.orderNo && r.orderNo.trim() === orderNo.trim();
+    });
+    if (!records.length) return [];
+
+    records.sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); });
+
+    // 날짜별 업무분장 시간 집계
+    var dateMap = {};
+    records.forEach(function (r) {
+      var d = r.date || '';
+      if (!dateMap[d]) dateMap[d] = {};
+      var abbr = (r.abbr || r.taskType || 'G').charAt(0).toUpperCase();
+      dateMap[d][abbr] = (dateMap[d][abbr] || 0) + (r.hours || 0);
+    });
+
+    var dates = Object.keys(dateMap).sort();
+    if (!dates.length) return [];
+
+    // 각 날짜의 지배적 업무유형
+    var dominantByDate = dates.map(function (d) {
+      var dist = dateMap[d];
+      var maxAbbr = 'G'; var maxH = 0;
+      for (var k in dist) { if (dist[k] > maxH) { maxH = dist[k]; maxAbbr = k; } }
+      return { date: d, dominant: maxAbbr };
+    });
+
+    // 연속된 같은 지배적 유형을 구간으로 묶기
+    var phases = [];
+    var curPhase = { abbr: dominantByDate[0].dominant, startDate: dominantByDate[0].date, endDate: dominantByDate[0].date };
+    for (var i = 1; i < dominantByDate.length; i++) {
+      if (dominantByDate[i].dominant === curPhase.abbr) {
+        curPhase.endDate = dominantByDate[i].date;
+      } else {
+        phases.push(curPhase);
+        curPhase = { abbr: dominantByDate[i].dominant, startDate: dominantByDate[i].date, endDate: dominantByDate[i].date };
+      }
+    }
+    phases.push(curPhase);
+
+    function toISO(d) {
+      if (!d) return '';
+      // 이미 ISO 형식이면 그대로, YYYYMMDD면 변환
+      if (d.length === 10 && d.indexOf('-') >= 0) return d;
+      return d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8);
+    }
+
+    var amLabels = typeof AM !== 'undefined' ? AM : { A: 'A(CS현장)', B: 'B(제작)', D: 'D(개발)', G: 'G(공통)', M: 'M(관리)', S: 'S(영업지원)' };
+    var suggestions = phases.map(function (ph, idx) {
+      var label = amLabels[ph.abbr] || ph.abbr;
+      return { name: label + ' 집중 구간', startDate: toISO(ph.startDate), endDate: toISO(ph.endDate), status: 'done', order: idx };
+    });
+
+    // 인접 동일 유형 병합
+    var merged = [];
+    suggestions.forEach(function (s) {
+      if (merged.length && s.name === merged[merged.length - 1].name) {
+        merged[merged.length - 1].endDate = s.endDate;
+      } else {
+        merged.push({ name: s.name, startDate: s.startDate, endDate: s.endDate, status: s.status, order: merged.length });
+      }
+    });
+
+    return merged;
+  });
+}
+
+/* ═══ Integration 9: 달력에 주간 업무 요약 오버레이 ═══ */
+function getWeeklyArchiveSummary() {
+  return wkGetAll().then(function (weeks) {
+    var summaries = [];
+    weeks.forEach(function (w) {
+      var dr = w.dateRange || [];
+      if (!dr.length || !dr[0]) return;
+      var startDate = dr[0].length === 8 ? dr[0].slice(0, 4) + '-' + dr[0].slice(4, 6) + '-' + dr[0].slice(6, 8) : dr[0];
+      var endDate = dr[1]
+        ? (dr[1].length === 8 ? dr[1].slice(0, 4) + '-' + dr[1].slice(4, 6) + '-' + dr[1].slice(6, 8) : dr[1])
+        : startDate;
+      var memberCount = (w.selectedNames || []).length;
+      summaries.push({
+        startDate: startDate,
+        endDate: endDate,
+        totalHours: w.totalHours || 0,
+        memberCount: memberCount,
+        label: w.label || ''
+      });
+    });
+    return summaries;
+  });
+}
+
+/* ═══ Integration 10 helper: 최근 아카이브 데이터 읽기 ═══ */
+function getRecentArchiveWeeks(count) {
+  return wkGetAll().then(function (weeks) {
+    weeks.sort(function (a, b) { return (b.savedAt || '').localeCompare(a.savedAt || ''); });
+    return weeks.slice(0, count || 4);
+  });
+}
+
+/* ─── 문서 폴더 ─── */
+function folderGetAll() { return apiFetch('/api/docs/folders').then(function (r) { return toCamelArray(r.data); }); }
+function folderGet(id) { return apiFetch('/api/docs/folders').then(function (r) { var all = toCamelArray(r.data); return all.find(function (f) { return f.id === id; }) || null; }); }
+function folderGetByProject(pid) { return apiFetch('/api/docs/folders?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
+function folderPut(f) {
+  if (!f.id || f._isNew) {
+    delete f._isNew;
+    return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+  }
+  return apiFetch('/api/docs/folders/' + f.id, { method: 'PUT', body: JSON.stringify(f) })
+    .then(function (r) { return toCamel(r.data); })
+    .catch(function (err) {
+      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+        return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+      }
+      throw err;
+    });
+}
+function folderDel(id) { return apiFetch('/api/docs/folders/' + id, { method: 'DELETE' }); }
 
 function createDefaultFolders(projectId) {
   var phaseLabels = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
@@ -1211,6 +1126,27 @@ function createDefaultFolders(projectId) {
   }));
 }
 
+/* ─── 문서 파일 ─── */
+function fileGetAll() { return apiFetch('/api/docs/files').then(function (r) { return toCamelArray(r.data); }); }
+function fileGet(id) { return apiFetch('/api/docs/files').then(function (r) { var all = toCamelArray(r.data); return all.find(function (f) { return f.id === id; }) || null; }); }
+function fileGetByProject(pid) { return apiFetch('/api/docs/files?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
+function fileGetByFolder(fid) { return apiFetch('/api/docs/files?folderId=' + fid).then(function (r) { return toCamelArray(r.data); }); }
+function filePut(f) {
+  if (!f.id || f._isNew) {
+    delete f._isNew;
+    return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+  }
+  return apiFetch('/api/docs/files/' + f.id, { method: 'PUT', body: JSON.stringify(f) })
+    .then(function (r) { return toCamel(r.data); })
+    .catch(function (err) {
+      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
+        return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+      }
+      throw err;
+    });
+}
+function fileDel(id) { return apiFetch('/api/docs/files/' + id, { method: 'DELETE' }); }
+
 function deleteProjectFiles(projectId) {
   return fileGetByProject(projectId).then(function (files) {
     return Promise.all(files.map(function (f) { return fileDel(f.id); }));
@@ -1228,426 +1164,3 @@ function getProjectStorageSize(projectId) {
     return { total: total, count: files.length };
   });
 }
-
-var DOC_ICONS = {
-  pdf: { icon: '📕', color: '#EF4444' },
-  xlsx: { icon: '📗', color: '#10B981' }, xls: { icon: '📗', color: '#10B981' },
-  pptx: { icon: '📙', color: '#F59E0B' }, ppt: { icon: '📙', color: '#F59E0B' },
-  docx: { icon: '📘', color: '#3B82F6' }, doc: { icon: '📘', color: '#3B82F6' },
-  txt: { icon: '📄', color: '' }, csv: { icon: '📄', color: '' }, md: { icon: '📄', color: '' },
-  json: { icon: '📄', color: '' }, xml: { icon: '📄', color: '' }, log: { icon: '📄', color: '' },
-  png: { icon: '🖼️', color: '#8B5CF6' }, jpg: { icon: '🖼️', color: '#8B5CF6' },
-  jpeg: { icon: '🖼️', color: '#8B5CF6' }, gif: { icon: '🖼️', color: '#8B5CF6' },
-  svg: { icon: '🖼️', color: '#8B5CF6' }, bmp: { icon: '🖼️', color: '#8B5CF6' }
-};
-function getDocIcon(ext) { return DOC_ICONS[ext] || { icon: '📎', color: '' }; }
-
-function formatFileSize(bytes) {
-  if (bytes < 1024) return bytes + 'B';
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + 'KB';
-  return (bytes / 1048576).toFixed(1) + 'MB';
-}
-
-/* ═══ 토스트 알림 ═══ */
-function showToast(msg, type) {
-  var existing = document.querySelectorAll('.wa-toast');
-  existing.forEach(function (t, i) { t.style.top = (12 + (i + 1) * 44) + 'px'; });
-  var toast = document.createElement('div');
-  toast.className = 'wa-toast';
-  var bg = type === 'error' ? '#EF4444' : type === 'warn' ? '#F59E0B' : '#10B981';
-  toast.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;color:#fff;background:' + bg + ';z-index:100000;box-shadow:0 4px 12px rgba(0,0,0,.2);opacity:0;transition:opacity .3s;white-space:nowrap';
-  toast.textContent = msg;
-  document.body.appendChild(toast);
-  requestAnimationFrame(function () { toast.style.opacity = '1'; });
-  setTimeout(function () { toast.style.opacity = '0'; setTimeout(function () { toast.remove(); }, TOAST_FADE); }, TOAST_DURATION);
-}
-
-/* ═══ 서버 모드 API 래퍼 (Phase 2) ═══
- * AUTH_SKIP === false 일 때, IndexedDB CRUD를 REST API 호출로 교체
- * 함수 시그니처를 동일하게 유지하여 UI 코드 변경 최소화
- */
-(function () {
-  if (typeof AUTH_SKIP === 'undefined' || AUTH_SKIP) return;
-  if (typeof apiFetch !== 'function') return;
-
-  // camelCase ↔ snake_case 변환 헬퍼
-  function toCamel(row) {
-    if (!row) return row;
-    var out = {};
-    for (var k in row) {
-      var ck = k.replace(/_([a-z])/g, function (m, c) { return c.toUpperCase(); });
-      var v = row[k];
-      // JSONB 문자열 → 파싱
-      if (typeof v === 'string' && (k === 'assignees' || k === 'dependencies' || k === 'project_ids' || k === 'tags' || k === 'items' || k === 'phases' || k === 'data' || k === 'date_range' || k === 'selected_names' || k === 'summary_history' || k === 'version_history')) {
-        try { v = JSON.parse(v); } catch (e) { /* keep string */ }
-      }
-      // NUMERIC 컬럼 → 숫자 변환 (node-postgres가 문자열로 반환)
-      if (typeof v === 'string' && (k === 'hours' || k === 'estimated_hours' || k === 'actual_hours' || k === 'total_hours' || k === 'progress' || k === 'weight')) {
-        v = parseFloat(v) || 0;
-      }
-      out[ck] = v;
-    }
-    return out;
-  }
-  function toCamelArray(rows) { return (rows || []).map(toCamel); }
-
-  // ─── 프로젝트 ───
-  projGetAll = function () { return apiFetch('/api/projects').then(function (r) { return toCamelArray(r.data); }); };
-  projGet = function (id) { return apiFetch('/api/projects/' + id).then(function (r) { return toCamel(r.data); }); };
-  projPut = function (proj) {
-    if (!proj.id || proj._isNew) {
-      delete proj._isNew;
-      return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
-    }
-    return apiFetch('/api/projects/' + proj.id, { method: 'PUT', body: JSON.stringify(proj) })
-      .then(function (r) { return toCamel(r.data); })
-      .catch(function (err) {
-        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-          return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
-        }
-        throw err;
-      });
-  };
-  projDel = function (id) { return apiFetch('/api/projects/' + id, { method: 'DELETE' }); };
-
-  // ─── 마일스톤 ───
-  msGetAll = function () { return apiFetch('/api/milestones').then(function (r) { return toCamelArray(r.data); }); };
-  msGetByProject = function (pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
-  msPut = function (ms) {
-    if (!ms.id || ms._isNew) {
-      delete ms._isNew;
-      return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
-    }
-    return apiFetch('/api/milestones/' + ms.id, { method: 'PUT', body: JSON.stringify(ms) })
-      .then(function (r) { return toCamel(r.data); })
-      .catch(function (err) {
-        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-          return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
-        }
-        throw err;
-      });
-  };
-  msDel = function (id) { return apiFetch('/api/milestones/' + id, { method: 'DELETE' }); };
-
-  // ─── 이벤트 ───
-  evtGetAll = function () { return apiFetch('/api/events').then(function (r) { return toCamelArray(r.data); }); };
-  evtGet = function (id) { return apiFetch('/api/events/' + id).then(function (r) { return toCamel(r.data); }); };
-  evtPut = function (evt) {
-    if (!evt.id || evt._isNew) {
-      delete evt._isNew;
-      return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
-    }
-    return apiFetch('/api/events/' + evt.id, { method: 'PUT', body: JSON.stringify(evt) })
-      .then(function (r) { return toCamel(r.data); })
-      .catch(function (err) {
-        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-          return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
-        }
-        throw err;
-      });
-  };
-  evtDel = function (id) { return apiFetch('/api/events/' + id, { method: 'DELETE' }); };
-
-  // ─── 수주 ───
-  orderGetAll = function () { return apiFetch('/api/orders').then(function (r) { return toCamelArray(r.data); }); };
-  orderGet = function (orderNo) { return apiFetch('/api/orders/' + encodeURIComponent(orderNo)).then(function (r) { return toCamel(r.data); }); };
-  orderPut = function (order) {
-    var key = order.orderNo || order.order_no;
-    return apiFetch('/api/orders', { method: 'POST', body: JSON.stringify(order) }).then(function (r) { return toCamel(r.data); });
-  };
-  orderDel = function (orderNo) { return apiFetch('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' }); };
-
-  // ─── 이슈 ───
-  issueGetAll = function () { return apiFetch('/api/issues').then(function (r) { return toCamelArray(r.data); }); };
-  issueGet = function (id) { return apiFetch('/api/issues/' + id).then(function (r) { return toCamel(r.data); }); };
-  issuePut = function (issue) {
-    if (!issue.id || issue._isNew) {
-      delete issue._isNew;
-      return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
-    }
-    return apiFetch('/api/issues/' + issue.id, { method: 'PUT', body: JSON.stringify(issue) })
-      .then(function (r) { return toCamel(r.data); })
-      .catch(function (err) {
-        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-          return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
-        }
-        throw err;
-      });
-  };
-  issueDel = function (id) { return apiFetch('/api/issues/' + id, { method: 'DELETE' }); };
-  issueGetByProject = function (pid) { return apiFetch('/api/issues?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
-  issueGetByOrder = function (orderNo) { return apiFetch('/api/issues?orderNo=' + encodeURIComponent(orderNo)).then(function (r) { return toCamelArray(r.data); }); };
-
-  // ─── 이슈 로그 ───
-  issueLogGetByIssue = function (issueId) { return apiFetch('/api/issues/' + issueId + '/logs').then(function (r) { return toCamelArray(r.data); }); };
-  issueLogPut = function (log) {
-    return apiFetch('/api/issues/' + log.issueId + '/logs', { method: 'POST', body: JSON.stringify(log) }).then(function (r) { return toCamel(r.data); });
-  };
-  issueLogDel = function (id) {
-    // issueId가 필요하지만, 삭제 시에는 로그 ID만으로도 가능하도록 서버에서 처리
-    return apiFetch('/api/issues/_/logs/' + id, { method: 'DELETE' });
-  };
-
-  // ─── 체크리스트 ───
-  chkGetByProject = function (pid) {
-    return apiFetch('/api/checklists?projectId=' + pid).then(function (r) {
-      // 서버는 phase별 row에 items JSONB 배열 → 클라이언트는 개별 항목 기대 → flat 변환
-      var flat = [];
-      (r.data || []).forEach(function (row) {
-        var rc = toCamel(row);
-        var items = rc.items;
-        if (typeof items === 'string') try { items = JSON.parse(items); } catch (e) { items = []; }
-        if (Array.isArray(items) && items.length > 0) {
-          items.forEach(function (it, idx) {
-            flat.push({
-              id: rc.id + '::' + idx,
-              _parentId: rc.id,
-              projectId: rc.projectId,
-              phase: rc.phase,
-              text: it.text || '',
-              done: !!it.done,
-              doneDate: it.doneDate || null,
-              doneBy: it.doneBy || null,
-              dueDate: it.dueDate || '',
-              order: it.order !== undefined ? it.order : idx
-            });
-          });
-        } else if (!items || items.length === 0) {
-          // items가 비어있으면 row 자체 속성 사용 (하위 호환)
-          if (rc.text) flat.push(rc);
-        }
-      });
-      return flat;
-    });
-  };
-  chkPut = function (item) {
-    if (!item.id || item._isNew) {
-      delete item._isNew;
-      return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
-    }
-    return apiFetch('/api/checklists/' + item.id, { method: 'PUT', body: JSON.stringify(item) })
-      .then(function (r) { return toCamel(r.data); })
-      .catch(function (err) {
-        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-          return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
-        }
-        throw err;
-      });
-  };
-  chkDel = function (id) {
-    // flat id (chk-xxx::N) → 부모 row에서 해당 항목 제거
-    var sep = id.indexOf('::');
-    if (sep < 0) {
-      // 원본 row id → 전체 row 삭제 시도, 실패하면 무시
-      return apiFetch('/api/checklists/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
-    }
-    var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
-    return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
-      var row = r.data;
-      var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
-      if (idx < 0 || idx >= items.length) return null;
-      items.splice(idx, 1);
-      if (items.length === 0) return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'DELETE' });
-      return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
-    }).catch(function (err) {
-      console.warn('[chkDel] fallback delete:', err);
-      return null;
-    });
-  };
-
-  // 서버 모드: toggleCheckItem 오버라이드 (doneDate 지정 가능, 기본 오늘)
-  toggleCheckItem = function (id, doneBy, doneDate) {
-    var sep = id.indexOf('::');
-    if (sep < 0) return Promise.resolve(null);
-    var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
-    return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
-      var row = r.data;
-      var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
-      if (idx < 0 || idx >= items.length) return null;
-      items[idx].done = !items[idx].done;
-      items[idx].doneDate = items[idx].done ? (doneDate || localDate()) : null;
-      items[idx].doneBy = items[idx].done ? (doneBy || '') : null;
-      return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
-    }).catch(function (err) {
-      console.warn('[toggleCheckItem] error:', err);
-      return null;
-    });
-  };
-
-  // 서버 모드: createCheckItem — 기존 phase row에 항목 추가
-  createCheckItem = function (data) {
-    return apiFetch('/api/checklists?projectId=' + encodeURIComponent(data.projectId)).then(function (r) {
-      var rows = r.data || [];
-      var parentRow = rows.find(function (row) { return row.phase === data.phase; });
-      var newItem = { text: data.text || '', done: false, doneDate: null, doneBy: null, dueDate: data.dueDate || '', order: 0 };
-      if (parentRow) {
-        var existing = parentRow.items;
-        if (typeof existing === 'string') { try { existing = JSON.parse(existing); } catch (e) { existing = []; } }
-        if (!Array.isArray(existing)) existing = [];
-        var items = existing.slice(); // 원본 mutation 방지
-        newItem.order = typeof data.order === 'number' ? data.order : items.length;
-        items.push(newItem);
-        return apiFetch('/api/checklists/' + encodeURIComponent(parentRow.id), { method: 'PUT', body: JSON.stringify({ items: items }) });
-      } else {
-        newItem.order = typeof data.order === 'number' ? data.order : 0;
-        return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
-          id: 'chk-' + uuid(), projectId: data.projectId, phase: data.phase, items: [newItem]
-        }) });
-      }
-    }).then(function (r) { return toCamel(r.data); });
-  };
-
-  // 서버 모드: createDefaultChecklists 오버라이드 (phase별 items 배열로 묶어서 저장)
-  createDefaultChecklists = function (projectId) {
-    var promises = [];
-    Object.keys(DEFAULT_CHECKLIST).forEach(function (phase) {
-      var items = DEFAULT_CHECKLIST[phase].map(function (text, idx) {
-        return { text: text, done: false, doneDate: null, doneBy: null, order: idx };
-      });
-      promises.push(apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
-        id: 'chk-' + uuid(), projectId: projectId, phase: phase, items: items
-      }) }).then(function (r) { return toCamel(r.data); }));
-    });
-    return Promise.all(promises);
-  };
-
-  // 서버 모드: createProjectFromOrder 오버라이드 (1회 API 호출로 프로젝트+마일스톤+체크리스트 일괄 생성)
-  createProjectFromOrder = function (order) {
-    var projId = 'proj-' + uuid();
-    var now = new Date().toISOString();
-    var startDate = order.date || localDate();
-    var endDate = order.delivery || '';
-    var defaultPhases = { order: { status: 'done', startDate: startDate, endDate: startDate }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, as: { status: 'waiting', startDate: '', endDate: '' } };
-    var phaseKeys = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'as'];
-    var phaseLabels = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
-    var milestones = phaseKeys.map(function (pk, idx) {
-      var label = phaseLabels[pk] ? phaseLabels[pk].label : pk;
-      return { id: 'ms-' + uuid(), name: label, startDate: '', endDate: '', status: 'waiting', order: idx };
-    });
-    var checklists = phaseKeys.map(function (pk) {
-      var items = (DEFAULT_CHECKLIST[pk] || []).map(function (text, idx) {
-        return { text: text, done: false, doneDate: null, doneBy: null, order: idx };
-      });
-      return { id: 'chk-' + uuid(), phase: pk, items: items };
-    });
-    var payload = {
-      id: projId, orderNo: order.orderNo, name: order.name || order.orderNo,
-      startDate: startDate, endDate: endDate, status: 'active', progress: 0,
-      estimatedHours: 0, assignees: order.manager ? [order.manager] : [],
-      dependencies: [], color: typeof COL !== 'undefined' ? COL[Math.floor(Math.random() * COL.length)] : '#3B82F6',
-      memo: '', currentPhase: 'design', phases: defaultPhases,
-      milestones: milestones, checklists: checklists
-    };
-    return apiFetch('/api/projects/full', { method: 'POST', body: JSON.stringify(payload) })
-      .then(function (r) { return toCamel(r.data); });
-  };
-
-  // ─── 진척률 히스토리 ───
-  getProgressHistory = function (pid) { return apiFetch('/api/progress?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
-  saveProgressSnapshot = function (pid, progress, actualHours) {
-    return apiFetch('/api/progress', { method: 'POST', body: JSON.stringify({ projectId: pid, date: localDate(), progress: progress, actualHours: actualHours }) });
-  };
-
-  // ─── 업무일지 아카이브 (weeks) ───
-  wkGetAll = function () { return apiFetch('/api/archives').then(function (r) { return toCamelArray(r.data); }); };
-  wkGet = function (id) { return apiFetch('/api/archives/' + encodeURIComponent(id)).then(function (r) { return toCamel(r.data); }); };
-  wkPut = function (data) { return apiFetch('/api/archives', { method: 'POST', body: JSON.stringify(data) }).then(function (r) { return toCamel(r.data); }); };
-  wkDel = function (id) { return apiFetch('/api/archives/' + encodeURIComponent(id), { method: 'DELETE' }); };
-
-  // ─── 업무일지 레코드 (서버 DB 전용) ───
-  // work records 전용 경량 변환 (JSONB 파싱 불필요, 단일 순회)
-  function toWrRecord(r) {
-    return {
-      id: r.id, date: r.date, name: r.name,
-      orderNo: r.order_no, hours: typeof r.hours === 'string' ? parseFloat(r.hours) || 0 : r.hours || 0,
-      taskType: r.task_type, abbr: r.abbr, content: r.content,
-      ocmt: r.ocmt, oclient: r.oclient, dept: r.dept, userId: r.user_id
-    };
-  }
-  wrGetAll = function () {
-    return apiFetch('/api/archives/records?limit=50000&all=true').then(function (r) {
-      return (r.data || []).map(toWrRecord);
-    });
-  };
-  wrCount = function () {
-    return apiFetch('/api/archives/records/count').then(function (r) { return r.data.count; });
-  };
-  wrBulkPut = function (records) {
-    return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) });
-  };
-  wrClear = function () {
-    return apiFetch('/api/archives/records', { method: 'DELETE' });
-  };
-  wrUpdateRecords = function (records) {
-    return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) });
-  };
-  wrDeleteRecords = function (remainingRecords, deletedIds) {
-    if (deletedIds && deletedIds.length) {
-      return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) });
-    }
-    return wrClear().then(function () { return wrBulkPut(remainingRecords); });
-  };
-
-  // ─── 문서 폴더 ───
-  folderGetAll = function () { return apiFetch('/api/docs/folders').then(function (r) { return toCamelArray(r.data); }); };
-  folderGet = function (id) { return apiFetch('/api/docs/folders').then(function (r) { var all = toCamelArray(r.data); return all.find(function (f) { return f.id === id; }) || null; }); };
-  folderGetByProject = function (pid) { return apiFetch('/api/docs/folders?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
-  folderPut = function (f) {
-    if (!f.id || f._isNew) {
-      delete f._isNew;
-      return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
-    }
-    return apiFetch('/api/docs/folders/' + f.id, { method: 'PUT', body: JSON.stringify(f) })
-      .then(function (r) { return toCamel(r.data); })
-      .catch(function (err) {
-        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-          return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
-        }
-        throw err;
-      });
-  };
-  folderDel = function (id) { return apiFetch('/api/docs/folders/' + id, { method: 'DELETE' }); };
-
-  // ─── 문서 파일 ───
-  fileGetAll = function () { return apiFetch('/api/docs/files').then(function (r) { return toCamelArray(r.data); }); };
-  fileGet = function (id) { return apiFetch('/api/docs/files').then(function (r) { var all = toCamelArray(r.data); return all.find(function (f) { return f.id === id; }) || null; }); };
-  fileGetByProject = function (pid) { return apiFetch('/api/docs/files?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); };
-  fileGetByFolder = function (fid) { return apiFetch('/api/docs/files?folderId=' + fid).then(function (r) { return toCamelArray(r.data); }); };
-  filePut = function (f) {
-    if (!f.id || f._isNew) {
-      delete f._isNew;
-      return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
-    }
-    return apiFetch('/api/docs/files/' + f.id, { method: 'PUT', body: JSON.stringify(f) })
-      .then(function (r) { return toCamel(r.data); })
-      .catch(function (err) {
-        if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-          return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
-        }
-        throw err;
-      });
-  };
-  fileDel = function (id) { return apiFetch('/api/docs/files/' + id, { method: 'DELETE' }); };
-
-  // ─── syncOrderMapToDB 서버 모드 오버라이드 ───
-  syncOrderMapToDB = function () {
-    if (typeof ORDER_MAP === 'undefined') return Promise.resolve();
-    var keys = Object.keys(ORDER_MAP);
-    if (keys.length === 0) return Promise.resolve();
-    var records = keys.map(function (k) {
-      var v = ORDER_MAP[k];
-      return {
-        orderNo: k,
-        date: (typeof v === 'object' ? v.date : '') || '',
-        client: (typeof v === 'object' ? v.client : '') || '',
-        name: (typeof v === 'object' ? v.name : v) || '',
-        amount: (typeof v === 'object' ? Number(v.amount) || 0 : 0),
-        manager: (typeof v === 'object' ? v.manager : '') || '',
-        delivery: (typeof v === 'object' ? v.delivery : '') || ''
-      };
-    });
-    return apiFetch('/api/orders/bulk', { method: 'POST', body: JSON.stringify({ records: records }) });
-  };
-
-  console.log('[API] 서버 모드 — IndexedDB CRUD → REST API 전환 완료');
-})();
