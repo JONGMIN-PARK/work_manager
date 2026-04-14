@@ -1,5 +1,15 @@
 # Work Manager — 변경 이력
 
+## v13.13 (2026-04-15) — 프로젝트 마일스톤 중복 방지 & 저장 로직 보완
+
+### 버그 수정
+- **마일스톤 리스트 중복 현상 수정** (`timeline.js`):
+  - **로드 시 중복 자동 정리**: 프로젝트 편집 모달 오픈 시 `(name|startDate|endDate)` 기준 중복 항목을 탐지해 DB에서 삭제하고 유니크 목록만 렌더 (`showProjectModal`).
+  - **저장 로직 destroy-recreate 제거**: 기존에는 저장 시 `msDelByProject`로 전체 삭제 후 재생성하여, DELETE가 부분 실패하거나 재생성이 중복 호출되면 중복이 누적. diff 기반 upsert로 변경 — 기존 id는 PUT, 신규 행은 POST, 제거된 행만 DELETE. 같은 모달 내 동일 키 행도 1회만 저장.
+  - `addMsRow` / `runSuggestMilestones`로 추가된 행은 `data-msid`가 없어 자연스럽게 신규로 처리됨.
+
+---
+
 ## v13.12 (2026-04-15) — 상세 테이블 표시 행 수 확대
 
 ### UI 개선

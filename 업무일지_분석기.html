@@ -2438,6 +2438,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.13',date:'2026-04-15',title:'프로젝트 마일스톤 중복 방지 & 저장 로직 보완',tag:'fix',items:[
+      '프로젝트 편집 모달 오픈 시 마일스톤 중복 자동 정리 (name+startDate+endDate 키)',
+      '저장 로직을 destroy-recreate → diff 기반 upsert로 변경 (PUT/POST/DELETE 분기)',
+      '같은 모달 내 중복 입력 행도 1회만 저장'
+    ]},
     {ver:'13.12',date:'2026-04-15',title:'상세 테이블 표시 행 수 확대',tag:'fix',items:[
       '팀관리 > 주간분석 > 상세 탭 뷰포트 높이 확대 (약 11행 → 25행)'
     ]},

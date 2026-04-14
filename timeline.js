@@ -535,8 +535,22 @@ async function showProjectModal(projId) {
   if (projId) {
     proj = await projGet(projId);
     projMs = await msGetByProject(projId);
-    projMs.sort(function (a, b) { return a.order - b.order; });
+    projMs.sort(function (a, b) { return (a.order - b.order) || (a.createdAt || '').localeCompare(b.createdAt || ''); });
+    // 중복 정리 — (name|startDate|endDate) 키로 먼저 등장한 것만 유지, 나머지는 DB에서 삭제
+    var seen = {};
+    var uniq = [];
+    var dupIds = [];
+    projMs.forEach(function (m) {
+      var key = (m.name || '').trim() + '|' + (m.startDate || '') + '|' + (m.endDate || '');
+      if (seen[key]) { dupIds.push(m.id); } else { seen[key] = true; uniq.push(m); }
+    });
+    if (dupIds.length) {
+      projMs = uniq;
+      Promise.all(dupIds.map(function (id) { return msDel(id).catch(function () {}); }))
+        .then(function () { if (typeof showToast === 'function') showToast('중복 마일스톤 ' + dupIds.length + '개 정리됨', 'warn'); });
+    }
   }
+  window._projMsOrigIds = projMs.map(function (m) { return m.id; });
 
   var modal = document.createElement('div');
   modal.id = 'projModal';
@@ -757,31 +771,41 @@ async function saveProjectUI(existingId) {
     if (existingId) {
       await updateProject(existingId, data);
       projId = existingId;
-      // 기존 마일스톤 삭제 후 새로 저장
-      await msDelByProject(existingId);
     } else {
       var p = await createProject(data);
       if (!p || !p.id) { showToast('프로젝트 저장 실패: DB 연결을 확인하세요.','warn'); return; }
       projId = p.id;
     }
 
-    // 마일스톤 병렬 저장
+    // 마일스톤 diff 기반 동기화 (destroy-recreate 제거 → 중복 방지)
     var msRows = document.querySelectorAll('#msRows .proj-ms-row');
+    var origIds = (existingId && Array.isArray(window._projMsOrigIds)) ? window._projMsOrigIds.slice() : [];
+    var keptIds = {};
+    var seenKeys = {};
     var msPromises = [];
     for (var i = 0; i < msRows.length; i++) {
       var row = msRows[i];
       var msName = row.querySelector('.ms-name').value.trim();
       if (!msName) continue;
-      msPromises.push(createMilestone({
-        projectId: projId,
-        name: msName,
-        startDate: row.querySelector('.ms-start').value,
-        endDate: row.querySelector('.ms-end').value,
-        status: row.querySelector('.ms-status').value,
-        order: i
-      }));
+      var msStart = row.querySelector('.ms-start').value;
+      var msEnd = row.querySelector('.ms-end').value;
+      var msStatus = row.querySelector('.ms-status').value;
+      // 같은 모달 내 중복 입력도 차단
+      var dupKey = msName + '|' + msStart + '|' + msEnd;
+      if (seenKeys[dupKey]) continue;
+      seenKeys[dupKey] = true;
+      var existingMsId = row.getAttribute('data-msid');
+      if (existingMsId && origIds.indexOf(existingMsId) >= 0) {
+        keptIds[existingMsId] = true;
+        msPromises.push(msPut({ id: existingMsId, projectId: projId, name: msName, startDate: msStart, endDate: msEnd, status: msStatus, order: i }));
+      } else {
+        msPromises.push(createMilestone({ projectId: projId, name: msName, startDate: msStart, endDate: msEnd, status: msStatus, order: i }));
+      }
     }
+    // 제거된 마일스톤 삭제
+    origIds.forEach(function (id) { if (!keptIds[id]) msPromises.push(msDel(id).catch(function () {})); });
     await Promise.all(msPromises);
+    window._projMsOrigIds = null;
 
     document.getElementById('projModal').remove();
     await renderTimeline();
