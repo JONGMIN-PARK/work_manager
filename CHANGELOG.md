@@ -1,5 +1,15 @@
 # Work Manager — 변경 이력
 
+## v13.9 (2026-04-14) — 프로젝트 저장 후 "Invalid time value" 에러 수정
+
+### 버그 수정
+- **renderTimeline에서 "Invalid time value" 예외**: 전체 프로젝트의 `startDate`/`endDate`가 모두 비어있거나(NULL) 형식이 깨진 경우 `new Date(undefined)` → Invalid Date → `getTimeUnits`의 `toISOString()`에서 RangeError. 저장 성공 후 재렌더링이 crash하여 사용자에겐 "프로젝트 저장 실패: Invalid time value" 토스트로 노출되던 현상.
+  - 유효한 `YYYY-MM-DD` 포맷만 범위 산출에 사용하도록 정규식 필터 추가
+  - 수집된 날짜가 없으면 오늘 기준 ±30일 폴백
+  - `calcCriticalPath`의 `new Date(...).toISOString()` 3곳에 `isNaN(getTime())` 가드 추가
+
+---
+
 ## v13.8 (2026-04-14) — 프로젝트 관리 리팩토링 (2/2): 로컬 모드 제거
 
 ### 리팩토링 — 로컬 IndexedDB 모드 제거

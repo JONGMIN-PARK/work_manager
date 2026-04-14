@@ -47,16 +47,30 @@ async function renderTimeline() {
   projects.forEach(function (p) { visibleProjIds[p.id] = true; });
   milestones = milestones.filter(function (m) { return visibleProjIds[m.projectId]; });
 
-  // 날짜 범위 결정
+  // 날짜 범위 결정 — 유효한 YYYY-MM-DD 값만 수집
+  var DATE_RX = /^\d{4}-\d{2}-\d{2}/;
   var allDates = [];
   projects.forEach(function (p) {
-    if (p.startDate) allDates.push(p.startDate);
-    if (p.endDate) allDates.push(p.endDate);
+    if (p.startDate && DATE_RX.test(p.startDate)) allDates.push(p.startDate.slice(0, 10));
+    if (p.endDate && DATE_RX.test(p.endDate)) allDates.push(p.endDate.slice(0, 10));
   });
   allDates.sort();
 
-  var rangeStart = new Date(allDates[0]);
-  var rangeEnd = new Date(allDates[allDates.length - 1]);
+  // 모든 프로젝트에 유효 날짜가 없으면 오늘 기준 ±30일 폴백
+  var rangeStart, rangeEnd;
+  if (allDates.length === 0) {
+    var _today = new Date();
+    rangeStart = new Date(_today); rangeStart.setDate(rangeStart.getDate() - 7);
+    rangeEnd = new Date(_today); rangeEnd.setDate(rangeEnd.getDate() + 30);
+  } else {
+    rangeStart = new Date(allDates[0]);
+    rangeEnd = new Date(allDates[allDates.length - 1]);
+    if (isNaN(rangeStart.getTime()) || isNaN(rangeEnd.getTime())) {
+      var _today2 = new Date();
+      rangeStart = new Date(_today2); rangeStart.setDate(rangeStart.getDate() - 7);
+      rangeEnd = new Date(_today2); rangeEnd.setDate(rangeEnd.getDate() + 30);
+    }
+  }
 
   // 여유 추가
   rangeStart.setDate(rangeStart.getDate() - 14);
@@ -1097,8 +1111,10 @@ function calcCriticalPath(projects) {
       // EF = 날짜 문자열로 계산
       if (p.startDate) {
         var esDate = new Date(p.startDate);
-        esDate.setDate(esDate.getDate() + dur);
-        ef[p.id] = esDate.toISOString().slice(0, 10);
+        if (!isNaN(esDate.getTime())) {
+          esDate.setDate(esDate.getDate() + dur);
+          ef[p.id] = esDate.toISOString().slice(0, 10);
+        } else { ef[p.id] = p.endDate || ''; }
       } else {
         ef[p.id] = p.endDate || '';
       }
@@ -1140,8 +1156,10 @@ function calcCriticalPath(projects) {
       // EF 재계산
       if (es[pid]) {
         var esDate = new Date(es[pid]);
-        esDate.setDate(esDate.getDate() + dur);
-        ef[pid] = esDate.toISOString().slice(0, 10);
+        if (!isNaN(esDate.getTime())) {
+          esDate.setDate(esDate.getDate() + dur);
+          ef[pid] = esDate.toISOString().slice(0, 10);
+        }
       }
     });
 
@@ -1174,8 +1192,10 @@ function calcCriticalPath(projects) {
       // LS = LF - duration
       if (lf[pid]) {
         var lfDate = new Date(lf[pid]);
-        lfDate.setDate(lfDate.getDate() - dur);
-        ls[pid] = lfDate.toISOString().slice(0, 10);
+        if (!isNaN(lfDate.getTime())) {
+          lfDate.setDate(lfDate.getDate() - dur);
+          ls[pid] = lfDate.toISOString().slice(0, 10);
+        }
       }
     });
 
