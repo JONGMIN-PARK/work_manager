@@ -155,11 +155,11 @@ async function upload(url, token, records) {
   return await resp.json();
 }
 
-function idKey(r) { return r.date + '|' + r.name + '|' + (r.orderNo || '') + '|' + (r.content || '').trim().substring(0,30); }
+function idKey(r) { return r.date + '|' + r.name + '|' + (r.orderNo || '') + '|' + (r.hours || '') + '|' + (r.content || '').trim(); }
 
 function merge(existing, newRecs) {
   var byId = new Map();
-  newRecs.forEach(function (r) { byId.set(idKey(r), r); });
+  newRecs.forEach(function (r) { var k = idKey(r); if (!byId.has(k)) byId.set(k, r); });
   var updated = 0, added = 0;
   var merged = existing.map(function (r) {
     var k = idKey(r);

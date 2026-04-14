@@ -139,11 +139,11 @@ async function getExistingRecords(token) {
 }
 
 // ── 중복 제거 & 병합 ──
-function wrIdKey(r) { return r.date + '|' + r.name + '|' + (r.orderNo || '') + '|' + (r.content || '').trim().substring(0,30); }
+function wrIdKey(r) { return r.date + '|' + r.name + '|' + (r.orderNo || '') + '|' + (r.hours || '') + '|' + (r.content || '').trim(); }
 
 function mergeRecords(existing, newRecs) {
   var newById = new Map();
-  newRecs.forEach(function (r) { newById.set(wrIdKey(r), r); });
+  newRecs.forEach(function (r) { var k = wrIdKey(r); if (!newById.has(k)) newById.set(k, r); });
   var updated = 0, added = 0;
   var merged = existing.map(function (r) {
     var ik = wrIdKey(r);

@@ -961,14 +961,14 @@ function openDB(){return Promise.resolve(null)}
 /* 완전 일치 키 (중복 제거용) */
 function wrKey(r){return r.date+'|'+r.name+'|'+r.orderNo+'|'+r.hours+'|'+(r.abbr||'')+'|'+(r.dept||'')+'|'+r.content}
 /* 식별 키 (같은 레코드 판별용 — 갱신 시 덮어쓰기) */
-function wrIdKey(r){return r.date+'|'+r.name+'|'+(r.orderNo||'')+'|'+(r.content||'').trim().substring(0,30)}
+function wrIdKey(r){return r.date+'|'+r.name+'|'+(r.orderNo||'')+'|'+(r.hours||'')+'|'+(r.content||'').trim()}
 function wrMerge(existing,newRecs){
   /* 기존 데이터 자체 중복 제거 */
   var seen=new Set();var deduped=[];
   existing.forEach(function(r){var k=wrKey(r);if(!seen.has(k)){seen.add(k);deduped.push(r)}});
-  /* 신규 데이터로 기존 데이터 덮어쓰기 (date+name+orderNo 기준) */
+  /* 신규 데이터로 기존 데이터 덮어쓰기 (완전 식별 키 기준 — 부분 매칭으로 인한 데이터 누락 방지) */
   var newById=new Map();
-  newRecs.forEach(function(r){newById.set(wrIdKey(r),r)});
+  newRecs.forEach(function(r){var k=wrIdKey(r);if(!newById.has(k))newById.set(k,r)});
   var updated=0,added=0;
   var merged=deduped.map(function(r){
     var ik=wrIdKey(r);
