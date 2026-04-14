@@ -1,5 +1,13 @@
 # Work Manager — 변경 이력
 
+## v13.7 (2026-04-14) — 프로젝트 관리 리팩토링 (1/2)
+
+### 리팩토링 — 파일 분리
+- **timeline.js 분할**: 2100+ 줄의 timeline.js에서 프로젝트 상세 패널 관련 로직(약 856줄)을 `project-detail.js`로 분리. `showProjectDetail` / `pdSwitchTab` / `pdLoadIssues` / `pdLoadWork` / `pdToggleCheck` / `pdDeleteCheck` / `pdEditCheckInline` / `pdAddCheck` / `pdShowPhase` / `pdAdvancePhase` / `renderOverviewChkListHtml` / `renderProgressHistoryChart` 등 `pd*` 일체. 동작 변경 없음, 파일 크기/가독성 개선.
+- 로드 순서: `timeline.js` → `project-detail.js` (전역 네임스페이스에 순서대로 정의).
+
+---
+
 ## v13.6 (2026-04-14) — 체크리스트 추가 시 패널 리로드 제거 (부분 갱신)
 
 ### UX 개선
