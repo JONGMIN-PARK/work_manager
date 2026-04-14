@@ -110,8 +110,18 @@ export default function IssuesPage() {
         .then(function() { closeModal(); loadIssues(); })
         .catch(function() {});
     } else {
-      apiFetch('/api/issues/' + modal.id, { method: 'PUT', body: JSON.stringify(form) })
-        .then(function() { closeModal(); loadIssues(); })
+      var editingId = modal.id;
+      apiFetch('/api/issues/' + editingId, { method: 'PUT', body: JSON.stringify(form) })
+        .then(function(res) {
+          closeModal();
+          if (res.data) {
+            setIssues(function (prev) {
+              return prev.map(function (x) { return x.id === editingId ? { ...x, ...res.data } : x; });
+            });
+          } else {
+            loadIssues();
+          }
+        })
         .catch(function() {});
     }
   }
@@ -125,7 +135,15 @@ export default function IssuesPage() {
 
   function changeStatus(issue, newStatus) {
     apiFetch('/api/issues/' + issue.id, { method: 'PUT', body: JSON.stringify({ status: newStatus }) })
-      .then(function() { loadIssues(); })
+      .then(function(res) {
+        if (res.data) {
+          setIssues(function (prev) {
+            return prev.map(function (x) { return x.id === issue.id ? { ...x, ...res.data } : x; });
+          });
+        } else {
+          loadIssues();
+        }
+      })
       .catch(function() {});
   }
 

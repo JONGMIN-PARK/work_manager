@@ -66,9 +66,15 @@ export default function ProjectsPage() {
     var url = editId ? '/api/projects/' + editId : '/api/projects';
     var method = editId ? 'PUT' : 'POST';
     apiFetch(url, { method: method, body: JSON.stringify(form) })
-      .then(function () {
+      .then(function (res) {
         setModalOpen(false);
-        loadProjects();
+        if (editId && res.data) {
+          setProjects(function (prev) {
+            return prev.map(function (p) { return p.id === editId ? { ...p, ...res.data } : p; });
+          });
+        } else {
+          loadProjects();
+        }
       })
       .catch(function (err) { alert('저장 실패: ' + err.message); });
   }

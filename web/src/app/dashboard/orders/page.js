@@ -54,7 +54,16 @@ export default function OrdersPage() {
     var method = editId ? 'PUT' : 'POST';
     var body = { ...form, amount: form.amount ? Number(form.amount) : 0 };
     apiFetch(url, { method: method, body: JSON.stringify(body) })
-      .then(function () { setModalOpen(false); loadOrders(); })
+      .then(function (res) {
+        setModalOpen(false);
+        if (editId && res.data) {
+          setOrders(function (prev) {
+            return prev.map(function (o) { return o.id === editId ? { ...o, ...res.data } : o; });
+          });
+        } else {
+          loadOrders();
+        }
+      })
       .catch(function (err) { alert('저장 실패: ' + err.message); });
   }
 

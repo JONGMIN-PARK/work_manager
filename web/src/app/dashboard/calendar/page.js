@@ -92,7 +92,16 @@ export default function CalendarPage() {
     var url = editId ? '/api/events/' + editId : '/api/events';
     var method = editId ? 'PUT' : 'POST';
     apiFetch(url, { method: method, body: JSON.stringify(form) })
-      .then(function () { setModalOpen(false); loadEvents(); })
+      .then(function (res) {
+        setModalOpen(false);
+        if (editId && res.data) {
+          setEvents(function (prev) {
+            return prev.map(function (ev) { return ev.id === editId ? { ...ev, ...res.data } : ev; });
+          });
+        } else {
+          loadEvents();
+        }
+      })
       .catch(function (err) { alert('저장 실패: ' + err.message); });
   }
 

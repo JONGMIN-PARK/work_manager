@@ -119,21 +119,23 @@ router.put('/:id', async function (req, res) {
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: result.row });
 
-    // 텔레그램 알림: 상태 변경
-    try {
-      if (clean.status && prev && clean.status !== prev.status) {
-        var targets = new Set();
-        if (prev.reporter_id) targets.add(prev.reporter_id);
-        var assignees = typeof prev.assignees === 'string' ? JSON.parse(prev.assignees) : (prev.assignees || []);
-        if (assignees.length > 0) {
-          var uR = await db.query("SELECT id FROM users WHERE name = ANY($1) AND status = 'active'", [assignees]);
-          uR.rows.forEach(function(u) { targets.add(u.id); });
-        }
-        notificationService.notify('issue_status_changed', {
-          title: prev.title, fromStatus: prev.status, toStatus: clean.status
-        }, Array.from(targets)).catch(function(e) { console.error('[noti]', e.message); });
-      }
-    } catch (_) { /* 알림 실패 무시 */ }
+    // 텔레그램 알림: 상태 변경 (완전 비동기 — 응답 차단 안 함)
+    if (clean.status && prev && clean.status !== prev.status) {
+      (async function () {
+        try {
+          var targets = new Set();
+          if (prev.reporter_id) targets.add(prev.reporter_id);
+          var assignees = typeof prev.assignees === 'string' ? JSON.parse(prev.assignees) : (prev.assignees || []);
+          if (assignees.length > 0) {
+            var uR = await db.query("SELECT id FROM users WHERE name = ANY($1) AND status = 'active'", [assignees]);
+            uR.rows.forEach(function(u) { targets.add(u.id); });
+          }
+          await notificationService.notify('issue_status_changed', {
+            title: prev.title, fromStatus: prev.status, toStatus: clean.status
+          }, Array.from(targets));
+        } catch (e) { console.error('[noti]', e.message); }
+      })();
+    }
   } catch (e) {
     console.error('[issues/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

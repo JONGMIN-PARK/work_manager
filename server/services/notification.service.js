@@ -144,106 +144,112 @@ async function notify(eventType, payload, targetUserIds) {
   }
 
   var text = template(payload);
+  var inAppTitle = EVENT_TITLES[eventType] || eventType;
+  var plainText = text.replace(/<[^>]+>/g, '');
+  var payloadStr = JSON.stringify(payload);
 
-  for (var i = 0; i < targetUserIds.length; i++) {
-    var userId = targetUserIds[i];
-    try {
-      // 인앱 알림 생성 (항상)
-      var inAppTitle = EVENT_TITLES[eventType] || eventType;
-      var plainText = text.replace(/<[^>]+>/g, '');
-      createInAppNotification(userId, eventType, inAppTitle, plainText, null, null);
+  // 인앱 + 이메일은 fire-and-forget (응답 차단 안 함)
+  targetUserIds.forEach(function (userId) {
+    createInAppNotification(userId, eventType, inAppTitle, plainText, null, null);
+    sendEmailNotification(userId, eventType, payload);
+  });
 
-      // 이메일 알림 (비동기)
-      sendEmailNotification(userId, eventType, payload);
+  // 텔레그램 미설정 시 스킵
+  if (!telegramService.isConfigured()) return;
 
-      // 텔레그램 알림 설정 확인
-      var prefR = await db.query(
-        'SELECT is_enabled FROM notification_prefs WHERE user_id = $1 AND channel = \'telegram\' AND event_type = $2',
-        [userId, eventType]
-      );
-      // 설정이 없으면 기본 발송, 있으면 is_enabled 확인
-      if (prefR.rows.length > 0 && !prefR.rows[0].is_enabled) continue;
+  // 배치 쿼리: 알림 설정 + 텔레그램 연동 + 중복 체크를 한 번에
+  try {
+    var prefR = await db.query(
+      'SELECT user_id, is_enabled FROM notification_prefs WHERE user_id = ANY($1) AND channel = \'telegram\' AND event_type = $2',
+      [targetUserIds, eventType]
+    );
+    var disabledSet = {};
+    prefR.rows.forEach(function (r) { if (!r.is_enabled) disabledSet[r.user_id] = true; });
 
-      // 텔레그램 미설정 시 스킵
-      if (!telegramService.isConfigured()) continue;
+    var linkR = await db.query(
+      'SELECT user_id, chat_id FROM telegram_links WHERE user_id = ANY($1) AND is_active = TRUE',
+      [targetUserIds]
+    );
+    var chatMap = {};
+    linkR.rows.forEach(function (r) { chatMap[r.user_id] = r.chat_id; });
 
-      // 텔레그램 연동 확인
-      var linkR = await db.query(
-        'SELECT chat_id FROM telegram_links WHERE user_id = $1 AND is_active = TRUE',
-        [userId]
-      );
-      if (linkR.rows.length === 0) continue;
+    var dupR = await db.query(
+      "SELECT user_id FROM notification_logs WHERE user_id = ANY($1) AND event_type = $2 AND payload = $3 AND status = 'sent' AND created_at > NOW() - INTERVAL '5 minutes'",
+      [targetUserIds, eventType, payloadStr]
+    );
+    var dupSet = {};
+    dupR.rows.forEach(function (r) { dupSet[r.user_id] = true; });
 
-      var chatId = linkR.rows[0].chat_id;
-
-      // 중복 발송 방지 (동일 이벤트 5분 이내)
-      var dupR = await db.query(
-        "SELECT id FROM notification_logs WHERE user_id = $1 AND event_type = $2 AND payload = $3 AND status = 'sent' AND created_at > NOW() - INTERVAL '5 minutes'",
-        [userId, eventType, JSON.stringify(payload)]
-      );
-      if (dupR.rows.length > 0) continue;
-
-      // 인라인 버튼 생성 (이벤트별)
-      var sendOpts = {};
-      if (eventType === 'issue_assigned' && payload.issueId) {
-        sendOpts.reply_markup = JSON.stringify({
-          inline_keyboard: [
-            [
-              { text: '🔵 대응 시작', callback_data: 'issue_start:' + payload.issueId },
-              { text: '✅ 해결 완료', callback_data: 'issue_resolve:' + payload.issueId }
-            ]
+    // 인라인 버튼 생성 (이벤트별)
+    var sendOpts = {};
+    if (eventType === 'issue_assigned' && payload.issueId) {
+      sendOpts.reply_markup = JSON.stringify({
+        inline_keyboard: [
+          [
+            { text: '🔵 대응 시작', callback_data: 'issue_start:' + payload.issueId },
+            { text: '✅ 해결 완료', callback_data: 'issue_resolve:' + payload.issueId }
           ]
-        });
-      }
-
-      if (eventType === 'user_pending' && payload.pendingUserId) {
-        sendOpts.reply_markup = JSON.stringify({
-          inline_keyboard: [
-            [
-              { text: '✅ 승인', callback_data: 'approve_user:' + payload.pendingUserId },
-              { text: '❌ 반려', callback_data: 'reject_user:' + payload.pendingUserId }
-            ]
-          ]
-        });
-      }
-
-      // 발송
-      var result = await telegramService.sendMessage(chatId, text, sendOpts);
-      var status = (result && result.ok) ? 'sent' : 'failed';
-      var errorDetail = (result && !result.ok) ? result.description : null;
-
-      // 403 (봇 차단) → 비활성화
-      if (result && result.error_code === 403) {
-        await db.query('UPDATE telegram_links SET is_active = FALSE WHERE chat_id = $1', [chatId]);
-        status = 'failed';
-        errorDetail = 'Bot blocked by user';
-      }
-
-      // 로그 기록
-      await db.query(
-        'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status, error_detail) VALUES ($1, $2, $3, $4, $5, $6)',
-        [userId, chatId, eventType, JSON.stringify(payload), status, errorDetail]
-      );
-
-      // 실패 시 1회 재시도
-      if (status === 'failed' && errorDetail !== 'Bot blocked by user') {
-        var retry = await telegramService.sendMessage(chatId, text);
-        if (retry && retry.ok) {
-          await db.query(
-            'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status) VALUES ($1, $2, $3, $4, \'sent\')',
-            [userId, chatId, eventType, JSON.stringify(payload)]
-          );
-        }
-      }
-    } catch (err) {
-      console.error('[Notification] Error sending to user', userId, err.message);
-      try {
-        await db.query(
-          'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status, error_detail) VALUES ($1, NULL, $2, $3, \'failed\', $4)',
-          [userId, eventType, JSON.stringify(payload), err.message]
-        );
-      } catch (_) { /* ignore log failure */ }
+        ]
+      });
     }
+    if (eventType === 'user_pending' && payload.pendingUserId) {
+      sendOpts.reply_markup = JSON.stringify({
+        inline_keyboard: [
+          [
+            { text: '✅ 승인', callback_data: 'approve_user:' + payload.pendingUserId },
+            { text: '❌ 반려', callback_data: 'reject_user:' + payload.pendingUserId }
+          ]
+        ]
+      });
+    }
+
+    // 병렬 발송
+    var sendPromises = targetUserIds.map(function (userId) {
+      if (disabledSet[userId]) return Promise.resolve();
+      var chatId = chatMap[userId];
+      if (!chatId) return Promise.resolve();
+      if (dupSet[userId]) return Promise.resolve();
+
+      return telegramService.sendMessage(chatId, text, sendOpts).then(function (result) {
+        var status = (result && result.ok) ? 'sent' : 'failed';
+        var errorDetail = (result && !result.ok) ? result.description : null;
+
+        // 403 (봇 차단) → 비활성화
+        if (result && result.error_code === 403) {
+          db.query('UPDATE telegram_links SET is_active = FALSE WHERE chat_id = $1', [chatId]);
+          status = 'failed';
+          errorDetail = 'Bot blocked by user';
+        }
+
+        // 로그 기록
+        db.query(
+          'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status, error_detail) VALUES ($1, $2, $3, $4, $5, $6)',
+          [userId, chatId, eventType, payloadStr, status, errorDetail]
+        );
+
+        // 실패 시 1회 재시도
+        if (status === 'failed' && errorDetail !== 'Bot blocked by user') {
+          return telegramService.sendMessage(chatId, text).then(function (retry) {
+            if (retry && retry.ok) {
+              db.query(
+                'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status) VALUES ($1, $2, $3, $4, \'sent\')',
+                [userId, chatId, eventType, payloadStr]
+              );
+            }
+          });
+        }
+      }).catch(function (err) {
+        console.error('[Notification] Error sending to user', userId, err.message);
+        db.query(
+          'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status, error_detail) VALUES ($1, NULL, $2, $3, \'failed\', $4)',
+          [userId, eventType, payloadStr, err.message]
+        ).catch(function () {});
+      });
+    });
+
+    await Promise.allSettled(sendPromises);
+  } catch (err) {
+    console.error('[Notification] Batch query error:', err.message);
   }
 }
 
