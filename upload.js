@@ -41,6 +41,28 @@ function initSettings() {
   process.exit(0);
 }
 
+function pNormDate(v) {
+  if (v === undefined || v === null) return null;
+  v = String(v).trim();
+  if (!v) return null;
+  if (/^\d{8}$/.test(v)) return v;
+  var m = v.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if (m) return m[1] + m[2].padStart(2, '0') + m[3].padStart(2, '0');
+  m = v.match(/^(\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if (m) {
+    var y = parseInt(m[1]);
+    y += (y < 70 ? 2000 : 1900);
+    return String(y) + m[2].padStart(2, '0') + m[3].padStart(2, '0');
+  }
+  var n = Number(v);
+  if (!isNaN(n) && n > 30000 && n < 70000) {
+    var d = new Date(Math.round((n - 25569) * 86400000));
+    if (d.getHours() > 20) d.setDate(d.getDate() + 1);
+    return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+  }
+  return null;
+}
+
 // ── 엑셀 파싱 ──
 function parseExcel(filePath) {
   var buf = fs.readFileSync(filePath);
@@ -49,16 +71,16 @@ function parseExcel(filePath) {
   var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
   if (rows.length < 2) return [];
 
-  var hdr = rows[0].map(function (c) { return String(c || '').trim().toLowerCase(); });
+  var hdr = rows[0].map(function (c) { return String(c || '').trim().toLowerCase().replace(/\s/g, ''); });
   var colMap = {};
   var aliases = {
-    date: ['날짜', '일자', 'date', '작성일'],
-    name: ['이름', '성명', '작성자', 'name', '사원명'],
-    orderNo: ['수주번호', '수주no', 'order', '수주'],
-    hours: ['시간', '공수', 'hours', '투입시간', 'h'],
+    date: ['날짜', '일자', 'date', '작성일', '일시'],
+    name: ['이름', '성명', '작성자', 'name', '사원명', '담당자'],
+    orderNo: ['수주번호', '수주no', 'order', '수주', '프로젝트'],
+    hours: ['시간', '공수', 'hours', '투입시간', 'h', '작업시간'],
     taskType: ['업무분장', '분장', '업무유형', 'task', '구분'],
     abbr: ['약자', '약어', 'abbr', '코드'],
-    content: ['업무내용', '내용', 'content', '비고', '상세']
+    content: ['업무내용', '내용', 'content', '비고', '상세', '작업내용']
   };
   Object.keys(aliases).forEach(function (key) {
     for (var ci = 0; ci < hdr.length; ci++) {
@@ -68,17 +90,29 @@ function parseExcel(filePath) {
     }
   });
   if (colMap.date === undefined || colMap.name === undefined) {
-    colMap = { date: 0, name: 1, orderNo: 2, hours: 3, taskType: 4, abbr: 5, content: rows[0].length - 1 };
+    // 날짜 컬럼 찾기 시도
+    for (var ci = 0; ci < rows[0].length; ci++) {
+      if (pNormDate(rows[1] && rows[1][ci])) { colMap.date = ci; break; }
+    }
+    if (colMap.date === undefined) colMap.date = 0;
+    if (colMap.name === undefined) colMap.name = 1;
+    if (colMap.orderNo === undefined) colMap.orderNo = 2;
+    if (colMap.hours === undefined) colMap.hours = 3;
+    if (colMap.content === undefined) colMap.content = rows[0].length - 1;
   }
 
   var records = [];
+  var lastDate = '', lastName = '';
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
-    var date = String(r[colMap.date] || '').replace(/[-\/\.]/g, '').trim();
-    var name = String(r[colMap.name] || '').trim();
-    if (!date || !name || date.length < 8) continue;
+    var dateRaw = r[colMap.date];
+    var date = pNormDate(dateRaw) || lastDate;
+    var name = String(r[colMap.name] || '').trim() || lastName;
+    if (!date || !name) continue;
+    lastDate = date; lastName = name;
+
     records.push({
-      date: date.slice(0, 8), name: name,
+      date: date, name: name,
       orderNo: colMap.orderNo !== undefined ? String(r[colMap.orderNo] || '').trim() : '',
       hours: parseFloat(r[colMap.hours]) || 0,
       taskType: colMap.taskType !== undefined ? String(r[colMap.taskType] || '').trim() : '',

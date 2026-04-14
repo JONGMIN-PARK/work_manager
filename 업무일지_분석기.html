@@ -787,25 +787,41 @@ function eH(s){const d=document.createElement('div');d.textContent=s;return d.in
 function eA(s){return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
 // HTML 테이블 파싱 (기존)
 function pNormDate(v){
+  if(v===undefined||v===null)return null;
   v=String(v).trim();
+  if(!v)return null;
   // YYYYMMDD
   if(/^\d{8}$/.test(v))return v;
-  // YYYY-MM-DD or YYYY/MM/DD
-  if(/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}/.test(v))return v.slice(0,10).replace(/[-\/]/g,'').replace(/^(\d{4})(\d{1,2})(\d{1,2})$/,function(m,y,mo,d){return y+mo.padStart(2,'0')+d.padStart(2,'0')});
+  // YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD (시간 정보 무시)
+  var m=v.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m)return m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0');
+  // YY-MM-DD, YY.MM.DD, YY/MM/DD
+  m=v.match(/^(\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m){
+    var y=parseInt(m[1]);
+    y+=(y<70?2000:1900);
+    return String(y)+m[2].padStart(2,'0')+m[3].padStart(2,'0');
+  }
   // Excel serial number
   var n=Number(v);
-  if(n>40000&&n<60000){var d=new Date((n-25569)*86400000);return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')}
+  if(!isNaN(n)&&n>30000&&n<70000){
+    // 30000=1982-02-18, 70000=2091-10-14
+    var d=new Date(Math.round((n-25569)*86400000));
+    // 타임존 보정 (UTC 기준 자정 부근 날짜 뒤틀림 방지)
+    if(d.getHours()>20)d.setDate(d.getDate()+1);
+    return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  }
   return null;
 }
 /* ═══ 컬럼 자동 감지 ═══ */
 var COL_PATTERNS={
-  date:/^(날짜|일자|일시|date|작업일)$/i,
-  name:/^(이름|성명|name|작업자|담당자|사원)$/i,
-  orderNo:/^(수주번호|수주|주문번호|order|프로젝트|project)$/i,
-  hours:/^(시간|공수|hours|투입시간|작업시간|h)$/i,
-  taskType:/^(업무분장|분장|업무유형|task|type|구분)$/i,
-  abbr:/^(약자|약어|abbr|코드|code)$/i,
-  content:/^(업무내용|내용|content|비고|작업내용|설명)$/i
+  date:/날짜|일자|일시|date|작업일/i,
+  name:/이름|성명|name|작성자|작업자|담당자|사원/i,
+  orderNo:/수주번호|수주|주문번호|order|프로젝트|project|pjt/i,
+  hours:/시간|공수|hours|투입시간|작업시간|h/i,
+  taskType:/업무분장|분장|업무유형|task|type|구분/i,
+  abbr:/약자|약어|abbr|코드|code/i,
+  content:/업무내용|내용|content|비고|작업내용|설명/i
 };
 // 필수 컬럼
 var COL_REQUIRED=['date','name'];
@@ -815,15 +831,16 @@ var COL_ALL=['date','name','orderNo','hours','taskType','abbr','content'];
 function pDetectColumns(headerCells){
   var map={};
   headerCells.forEach(function(cell,idx){
-    var v=String(cell).trim();
+    if(cell===undefined||cell===null)return;
+    var v=String(cell).replace(/\s/g,''); // 공백 제거 후 비교
     COL_ALL.forEach(function(key){
       if(!map[key]&&COL_PATTERNS[key].test(v))map[key]=idx;
     });
   });
-  // 날짜를 못 찾으면 첫 번째 셀이 날짜인지 값으로 판단
+  // 날짜를 못 찾으면 셀 값 자체가 날짜 형식인 것을 찾음
   if(map.date===undefined){
     for(var i=0;i<headerCells.length;i++){
-      if(pNormDate(String(headerCells[i]).trim())){map.date=i;break}
+      if(pNormDate(headerCells[i])){map.date=i;break}
     }
   }
   return map;
@@ -889,31 +906,42 @@ function pXLS(buf){
     const ws=wb.Sheets[wb.SheetNames[0]];
     const json=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
     if(!json.length)return[];
-    // 헤더 행 찾기
+    // 헤더 행 찾기 (상위 20행 검색)
     var colMap=null;var hIdx=-1;
-    for(var i=0;i<Math.min(10,json.length);i++){
-      var row=json[i].map(function(c){return String(c).trim()});
+    for(var i=0;i<Math.min(20,json.length);i++){
+      var row=json[i].map(function(c){return String(c||'').trim()});
       var detected=pDetectColumns(row);
       if(detected.date!==undefined&&detected.name!==undefined){colMap=detected;hIdx=i;break}
     }
-    // 헤더 못 찾으면 첫 행 데이터 기반 추정
+    // 헤더 못 찾으면 데이터 샘플링으로 추정
     if(!colMap){
-      for(var i=0;i<Math.min(5,json.length);i++){
-        var row=json[i];if(!row)continue;
-        var nonEmpty=row.filter(function(c){return c!==''}).length;
-        if(nonEmpty>=3&&pNormDate(String(row[0]).trim())){
-          colMap={date:0,name:1,orderNo:2,hours:3,taskType:row.length>=7?4:undefined,abbr:row.length>=7?5:undefined,content:row.length>=7?6:(row.length-1)};
-          hIdx=i-1;break;
+      for(var i=0;i<Math.min(10,json.length);i++){
+        var row=json[i];if(!row||row.length<2)continue;
+        // 행에서 처음으로 날짜 형식인 컬럼 찾기
+        var dIdx=-1;
+        for(var ci=0;ci<Math.min(row.length,5);ci++){if(pNormDate(row[ci])){dIdx=ci;break}}
+        if(dIdx!==-1){
+          // 날짜 컬럼을 기준으로 이름(다음 또는 이전), 수주번호 등 추정
+          var nIdx=row[dIdx+1]?dIdx+1:(dIdx>0?dIdx-1:undefined);
+          if(nIdx!==undefined){
+            colMap={date:dIdx,name:nIdx,orderNo:dIdx+2,hours:dIdx+3,taskType:row.length>=dIdx+7?dIdx+4:undefined,abbr:row.length>=dIdx+7?dIdx+5:undefined,content:row.length>=dIdx+7?dIdx+6:(row.length-1)};
+            hIdx=i-1;break;
+          }
         }
       }
     }
     if(!colMap)return[];
     _lastColMap=colMap;
     const r=[];
-    var lastDate=''; // 병합 셀 대응: 마지막 유효 날짜/이름 이어받기
+    var lastDate=''; // 병합 셀 대응
     var lastName='';
     for(var i=hIdx+1;i<json.length;i++){
-      var row=json[i];if(!row||row.length<3)continue;
+      var row=json[i];if(!row)continue;
+      // 유효 데이터 판단: 최소한 날짜 또는 이름 중 하나는 있거나, 병합 셀이어야 함
+      var hasDate=!!String(row[colMap.date]||'').trim();
+      var hasName=colMap.name!==undefined?!!String(row[colMap.name]||'').trim():false;
+      if(!hasDate&&!hasName&&!lastDate)continue;
+      
       var cloned=false;
       // 날짜 셀이 비어있으면 이전 날짜 사용 (병합 셀)
       var dateVal=String(row[colMap.date]||'').trim();
