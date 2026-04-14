@@ -1377,20 +1377,27 @@ function pdSaveCheckInline(span, projId, chkId, newText, oldText) {
 }
 
 function pdAddCheck(projId, phase) {
-  var inp = document.getElementById('pdNewChkText');
-  var inp2 = document.getElementById('pdOverviewNewChk');
+  // 활성 탭에 맞는 input 우선 사용 (감춰진 input에 남은 값이 엉뚱하게 쓰이지 않도록)
+  var lifecycleEl = document.getElementById('pdLifecycle');
+  var lifecycleVisible = lifecycleEl && lifecycleEl.style.display !== 'none';
+  var inpLifecycle = document.getElementById('pdNewChkText');
+  var inpOverview = document.getElementById('pdOverviewNewChk');
   var text = '';
-  if (inp && inp.value.trim()) { text = inp.value.trim(); inp.value = ''; }
-  else if (inp2 && inp2.value.trim()) { text = inp2.value.trim(); inp2.value = ''; }
+  var usedInput = null;
+  if (lifecycleVisible && inpLifecycle && inpLifecycle.value.trim()) { text = inpLifecycle.value.trim(); usedInput = inpLifecycle; }
+  else if (inpOverview && inpOverview.value.trim()) { text = inpOverview.value.trim(); usedInput = inpOverview; }
+  else if (inpLifecycle && inpLifecycle.value.trim()) { text = inpLifecycle.value.trim(); usedInput = inpLifecycle; }
   if (!text) return;
   chkGetByPhase(projId, phase).then(function (items) {
     return createCheckItem({ projectId: projId, phase: phase, text: text, order: items.length });
   }).then(function () {
+    if (usedInput) usedInput.value = '';
     // 패널 전체 새로고침 (새 항목 DOM 생성 필요)
     showProjectDetail(projId);
   }).catch(function (err) {
       console.error('[pdAddCheck]', err);
-      if (typeof showToast === 'function') showToast('추가 실패', 'error');
+      var msg = (err && err.message) ? err.message : '추가 실패';
+      if (typeof showToast === 'function') showToast('체크리스트 추가 실패: ' + msg, 'error');
   });
 }
 

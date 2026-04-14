@@ -1476,20 +1476,22 @@ function showToast(msg, type) {
 
   // 서버 모드: createCheckItem — 기존 phase row에 항목 추가
   createCheckItem = function (data) {
-    return chkGetByProject(data.projectId).then(function () {
-      // phase별 부모 row 찾기
-      return apiFetch('/api/checklists?projectId=' + data.projectId);
-    }).then(function (r) {
+    return apiFetch('/api/checklists?projectId=' + encodeURIComponent(data.projectId)).then(function (r) {
       var rows = r.data || [];
-      var parentRow = rows.find(function (row) { return (row.phase || row.phase) === data.phase; });
+      var parentRow = rows.find(function (row) { return row.phase === data.phase; });
+      var newItem = { text: data.text || '', done: false, doneDate: null, doneBy: null, dueDate: data.dueDate || '', order: 0 };
       if (parentRow) {
-        var items = typeof parentRow.items === 'string' ? JSON.parse(parentRow.items) : (parentRow.items || []);
-        items.push({ text: data.text || '', done: false, doneDate: null, doneBy: null, order: data.order || items.length });
+        var existing = parentRow.items;
+        if (typeof existing === 'string') { try { existing = JSON.parse(existing); } catch (e) { existing = []; } }
+        if (!Array.isArray(existing)) existing = [];
+        var items = existing.slice(); // 원본 mutation 방지
+        newItem.order = typeof data.order === 'number' ? data.order : items.length;
+        items.push(newItem);
         return apiFetch('/api/checklists/' + encodeURIComponent(parentRow.id), { method: 'PUT', body: JSON.stringify({ items: items }) });
       } else {
-        var items = [{ text: data.text || '', done: false, doneDate: null, doneBy: null, order: data.order || 0 }];
+        newItem.order = typeof data.order === 'number' ? data.order : 0;
         return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
-          id: 'chk-' + uuid(), projectId: data.projectId, phase: data.phase, items: items
+          id: 'chk-' + uuid(), projectId: data.projectId, phase: data.phase, items: [newItem]
         }) });
       }
     }).then(function (r) { return toCamel(r.data); });

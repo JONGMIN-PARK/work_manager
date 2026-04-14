@@ -1,5 +1,14 @@
 # Work Manager — 변경 이력
 
+## v13.5 (2026-04-14) — 프로젝트 개요 탭 체크리스트 추가 버그 수정
+
+### 버그 수정
+- **프로젝트 상세 패널 개요 탭에서 체크리스트 항목 추가가 동작하지 않던 문제**: `pdAddCheck`가 라이프사이클 탭의 input(`pdNewChkText`)을 먼저 확인하는 구조여서, 해당 탭이 감춰져 있더라도 DOM에 남은 잔여 값/포커스 문제로 개요 탭 input(`pdOverviewNewChk`) 값이 사용되지 않거나 엉뚱한 phase로 전송되던 케이스. **현재 보이는 탭의 input을 우선 사용**하도록 로직 변경 (`timeline.js`).
+- **서버 모드 `createCheckItem` 단순화**: 불필요한 선행 `chkGetByProject` 호출 제거 (3→2 API 호출), 응답의 `items` 배열을 slice하여 mutation 방지, `(row.phase || row.phase)` 중복 표현 정리, `dueDate`/`order` 필드 누락 방지 (`project-data.js`).
+- **에러 메시지 노출**: 추가 실패 시 서버 에러 메시지를 토스트에 표시하여 원인 파악이 가능하도록 개선.
+
+---
+
 ## v13.4 (2026-04-14) — 갱신 후 상세 탭 빈 표 문제 수정
 
 ### 버그 수정
