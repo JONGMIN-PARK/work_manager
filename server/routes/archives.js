@@ -40,6 +40,7 @@ router.get('/records', async function (req, res) {
     if (req.query.endDate) { where += ' AND date <= $' + idx++; params.push(req.query.endDate); }
     if (req.query.name) { where += ' AND name = $' + idx++; params.push(req.query.name); }
     if (req.query.orderNo) { where += ' AND order_no = $' + idx++; params.push(req.query.orderNo); }
+    if (req.query.milestoneId) { where += ' AND milestone_id = $' + idx++; params.push(req.query.milestoneId); }
 
     var pg = parsePagination(req.query, 200);
 
@@ -50,7 +51,7 @@ router.get('/records', async function (req, res) {
       total = parseInt(countR.rows[0].cnt, 10);
     }
 
-    var dataSql = 'SELECT id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient FROM work_records ' + where +
+    var dataSql = 'SELECT id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id FROM work_records ' + where +
       ' ORDER BY date DESC, name, order_no LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(dataSql, params);
@@ -122,10 +123,10 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
       var params = [];
       var idx = 1;
       chunk.forEach(function (r) {
-        values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
-        params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, userId, req.tenant.id);
+        values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
+        params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, r.milestoneId || r.milestone_id || null, userId, req.tenant.id);
       });
-      var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, user_id, tenant_id) VALUES ' + values.join(',');
+      var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, user_id, tenant_id) VALUES ' + values.join(',');
       await client.query(sql, params);
       totalInserted += chunk.length;
     }
@@ -162,8 +163,8 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
       var u = updates[i];
       if (!u.id) continue;
       promises.push(client.query(
-        'UPDATE work_records SET date=$1, name=$2, order_no=$3, hours=$4, task_type=$5, abbr=$6, content=$7, ocmt=$8, oclient=$9 WHERE id=$10 AND user_id=$11 AND tenant_id=$12',
-        [u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.id, req.user.sub, req.tenant.id]
+        'UPDATE work_records SET date=$1, name=$2, order_no=$3, hours=$4, task_type=$5, abbr=$6, content=$7, ocmt=$8, oclient=$9, milestone_id=$10 WHERE id=$11 AND user_id=$12 AND tenant_id=$13',
+        [u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.milestoneId !== undefined ? (u.milestoneId || null) : (u.milestone_id !== undefined ? (u.milestone_id || null) : null), u.id, req.user.sub, req.tenant.id]
       ));
       count++;
     }
@@ -185,8 +186,8 @@ router.post('/records', rbac.checkPermission('archive.manage'), async function (
     var r = req.body;
     if (!r.date || !r.name) return res.status(400).json({ error: 'INVALID', message: 'date, name 필수' });
     var result = await db.query(
-      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, user_id, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
-      [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, req.user.sub, req.tenant.id]
+      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, user_id, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',
+      [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, r.milestoneId || r.milestone_id || null, req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: result.rows[0] });
   } catch (e) {
@@ -208,6 +209,41 @@ router.delete('/records/batch', rbac.checkPermission('archive.manage'), async fu
   } catch (e) {
     console.error('[work-records/batch-delete]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST /api/archives/records/auto-tag-milestones — 프로젝트의 work_records를 마일스톤 날짜 구간으로 자동 태깅
+// body: { projectId, overwrite?: boolean }  (overwrite=false면 milestone_id 가 null인 것만 태깅)
+router.post('/records/auto-tag-milestones', rbac.checkPermission('archive.manage'), async function (req, res) {
+  try {
+    var projectId = req.body.projectId;
+    var overwrite = !!req.body.overwrite;
+    if (!projectId) return res.status(400).json({ error: 'INVALID', message: 'projectId 필수' });
+
+    // 프로젝트 orderNo + 마일스톤들 조회
+    var projR = await db.query('SELECT order_no FROM projects WHERE id = $1 AND tenant_id = $2', [projectId, req.tenant.id]);
+    if (!projR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트 없음' });
+    var orderNo = (projR.rows[0].order_no || '').trim();
+    if (!orderNo) return res.json({ data: { tagged: 0, reason: '프로젝트에 수주번호가 없습니다.' } });
+
+    var msR = await db.query('SELECT id, start_date, end_date FROM milestones WHERE project_id = $1 AND tenant_id = $2 ORDER BY sort_order', [projectId, req.tenant.id]);
+    var milestones = msR.rows.filter(function (m) { return m.start_date && m.end_date; });
+    if (!milestones.length) return res.json({ data: { tagged: 0, reason: '날짜가 설정된 마일스톤이 없습니다.' } });
+
+    var whereMs = overwrite ? '' : ' AND milestone_id IS NULL';
+    var tagged = 0;
+    for (var i = 0; i < milestones.length; i++) {
+      var ms = milestones[i];
+      var r = await db.query(
+        'UPDATE work_records SET milestone_id = $1 WHERE order_no = $2 AND date >= $3 AND date <= $4 AND tenant_id = $5' + whereMs,
+        [ms.id, orderNo, ms.start_date, ms.end_date, req.tenant.id]
+      );
+      tagged += r.rowCount || 0;
+    }
+    res.json({ data: { tagged: tagged, milestones: milestones.length } });
+  } catch (e) {
+    console.error('[work-records/auto-tag]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
   }
 });
 

@@ -1,5 +1,23 @@
 # Work Manager — 변경 이력
 
+## v13.11 (2026-04-14) — 업무일지 마일스톤 태깅 (투입실적 정확도 향상)
+
+### 기능 추가
+- **업무일지 레코드에 `milestone_id` 컬럼 추가** (migration `011_work_records_milestone_id.sql`). 투입실적 집계 시 명시적 태그가 있으면 태그 기반으로 우선 집계, 없으면 기존 날짜 구간 매칭 fallback.
+- 서버 엔드포인트 확장 (`archives.js`): GET/POST/PATCH/단건POST 모두 `milestoneId` 필드 accept/return. 신규 엔드포인트 `POST /api/archives/records/auto-tag-milestones` — 프로젝트의 마일스톤 날짜 구간으로 업무일지를 일괄 자동 태깅 (`overwrite` 옵션: 미태깅만 or 전체 덮어쓰기).
+- `calcHoursByMilestone` 3단 우선순위로 재작성:
+  1. `milestoneId` 태그 일치 → 정확 집계
+  2. 날짜 구간 매칭 → 미태깅 카운트 표기 (추정 집계)
+  3. 가장 가까운 마일스톤 → 추정 집계
+  반환값에 `_meta.untaggedCount`, 마일스톤별 `untagged` 카운트, `people` 맵 포함.
+- **투입실적 탭 UX** (`project-detail.js`): 우상단 "🏷 자동 태깅" 버튼, 마일스톤별 "~N" 미태깅 카운트, 헤더에 전체 미태깅 경고. 자동 태깅 후 아카이브 캐시 invalidate + 부분 갱신.
+- **인원별 투입** 섹션 이제 실제 데이터 표시 (v13.10 이전엔 `calcHoursByMilestone`이 `people`를 반환하지 않아 항상 비었음).
+
+### 남은 작업
+- 업무일지 편집 테이블에 마일스톤 선택 드롭다운 (수동 태깅 UI)은 다음 작업으로 분리.
+
+---
+
 ## v13.10 (2026-04-14) — 프로젝트 저장 후 "Invalid time value" 실제 원인 수정
 
 ### 버그 수정

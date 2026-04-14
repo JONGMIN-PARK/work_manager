@@ -306,7 +306,9 @@ function pdLoadWork(projId) {
 
     var totalH = 0;
     var personMap = {};
+    var untaggedCount = (msHours._meta && msHours._meta.untaggedCount) || 0;
     Object.keys(msHours).forEach(function (mid) {
+      if (mid === '_meta') return;
       var m = msHours[mid];
       totalH += m.hours || 0;
       if (m.people) {
@@ -349,14 +351,19 @@ function pdLoadWork(projId) {
 
     // 마일스톤별 투입
     if (milestones.length > 0) {
-      h += '<div style="font-size:10px;color:var(--t5);margin:12px 0 6px">마일스톤별 투입</div>';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 6px">';
+      h += '<span style="font-size:10px;color:var(--t5)">마일스톤별 투입' + (untaggedCount > 0 ? ' <span style="color:#F59E0B" title="마일스톤 태그 없이 날짜로 추정 집계된 레코드 수">⚠️ 미태깅 ' + untaggedCount + '건</span>' : '') + '</span>';
+      h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="pdAutoTagWork(\'' + projId + '\')" title="업무일지 레코드를 마일스톤 날짜 구간으로 자동 태깅">🏷 자동 태깅</button>';
+      h += '</div>';
       milestones.forEach(function (m) {
         var mH = msHours[m.id];
         var hrs = mH ? mH.hours : 0;
+        var ut = mH ? mH.untagged : 0;
         var mSt = (typeof PROJ_STATUS !== 'undefined' ? PROJ_STATUS[m.status] : null) || { icon: '⏳', label: m.status, color: '#94A3B8', bg: 'rgba(148,163,184,.15)' };
         h += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">';
         h += '<span style="font-size:10px">' + mSt.icon + '</span>';
         h += '<span style="flex:1;font-size:11px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(m.name) + '</span>';
+        if (ut > 0) h += '<span style="font-size:9px;color:#F59E0B" title="날짜 추정 집계">~' + ut + '</span>';
         h += '<span style="font-size:10px;color:var(--ac);font-weight:600">' + hrs + 'h</span>';
         h += '</div>';
       });
@@ -370,6 +377,25 @@ function pdLoadWork(projId) {
   }).catch(function (err) {
       console.error('[pdLoadWork]', err);
       if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  });
+}
+
+/* 업무일지 레코드를 프로젝트 마일스톤의 날짜 구간으로 자동 태깅 */
+function pdAutoTagWork(projId) {
+  if (typeof apiFetch !== 'function') return;
+  var overwrite = confirm('미태깅 레코드만 태깅합니다.\n확인: 미태깅만 태깅 / 취소: 기존 태그도 덮어쓰기\n\n[확인] 누를까요?');
+  apiFetch('/api/archives/records/auto-tag-milestones', {
+    method: 'POST',
+    body: JSON.stringify({ projectId: projId, overwrite: !overwrite })
+  }).then(function (r) {
+    var d = r && r.data ? r.data : {};
+    if (d.reason) { if (typeof showToast === 'function') showToast(d.reason, 'warn'); return; }
+    if (typeof showToast === 'function') showToast('자동 태깅 완료: ' + (d.tagged || 0) + '건');
+    if (typeof invalidateArchiveCache === 'function') invalidateArchiveCache();
+    pdLoadWork(projId);
+  }).catch(function (err) {
+    console.error('[pdAutoTagWork]', err);
+    if (typeof showToast === 'function') showToast('태깅 실패: ' + ((err && err.message) || '오류'), 'error');
   });
 }
 

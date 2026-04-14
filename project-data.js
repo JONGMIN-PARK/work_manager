@@ -947,24 +947,39 @@ function calcHoursByMilestone(projectId) {
       milestones.sort(function (a, b) { return (a.startDate || '') < (b.startDate || '') ? -1 : 1; });
       return readAllArchiveRecords().then(function (records) {
         var orderKey = proj.orderNo.trim();
+        var msIds = {};
+        milestones.forEach(function (ms) { msIds[ms.id] = true; });
         var result = {};
-        milestones.forEach(function (ms) { result[ms.id] = { hours: 0, records: 0, name: ms.name }; });
+        milestones.forEach(function (ms) { result[ms.id] = { hours: 0, records: 0, name: ms.name, people: {}, untagged: 0 }; });
+        var untagged = 0;
         records.forEach(function (r) {
           if (!r.orderNo || r.orderNo.trim() !== orderKey) return;
+          // 1순위: milestoneId 명시적 태깅
+          if (r.milestoneId && msIds[r.milestoneId]) {
+            result[r.milestoneId].hours += (r.hours || 0);
+            result[r.milestoneId].records += 1;
+            if (r.name) result[r.milestoneId].people[r.name] = (result[r.milestoneId].people[r.name] || 0) + (r.hours || 0);
+            return;
+          }
           if (!r.date) return;
           var recDate = r.date.length === 8
             ? r.date.slice(0, 4) + '-' + r.date.slice(4, 6) + '-' + r.date.slice(6, 8)
             : r.date;
+          // 2순위: 날짜 구간 매칭 (태깅 안 된 레코드용 fallback)
           var matched = false;
           for (var i = 0; i < milestones.length; i++) {
             var ms = milestones[i];
             if (ms.startDate && ms.endDate && recDate >= ms.startDate && recDate <= ms.endDate) {
               result[ms.id].hours += (r.hours || 0);
               result[ms.id].records += 1;
+              result[ms.id].untagged += 1;
+              if (r.name) result[ms.id].people[r.name] = (result[ms.id].people[r.name] || 0) + (r.hours || 0);
               matched = true;
+              untagged++;
               break;
             }
           }
+          // 3순위: 가장 가까운 마일스톤 (구간 밖 레코드)
           if (!matched && milestones.length) {
             var bestIdx = 0;
             var bestDist = Infinity;
@@ -976,11 +991,19 @@ function calcHoursByMilestone(projectId) {
             }
             result[milestones[bestIdx].id].hours += (r.hours || 0);
             result[milestones[bestIdx].id].records += 1;
+            result[milestones[bestIdx].id].untagged += 1;
+            if (r.name) result[milestones[bestIdx].id].people[r.name] = (result[milestones[bestIdx].id].people[r.name] || 0) + (r.hours || 0);
+            untagged++;
           }
         });
         Object.keys(result).forEach(function (k) {
           result[k].hours = Math.round(result[k].hours * 10) / 10;
+          Object.keys(result[k].people).forEach(function (p) {
+            result[k].people[p] = Math.round(result[k].people[p] * 10) / 10;
+          });
         });
+        // 전체 통계를 별도 key로 부착 (MS id와 충돌 방지 위해 _meta 사용)
+        result._meta = { untaggedCount: untagged };
         return result;
       });
     });
