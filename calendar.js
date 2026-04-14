@@ -23,6 +23,13 @@ async function renderCalendar() {
   var wrap = document.getElementById('calendarWrap');
   if (!wrap) return;
 
+  // initCalendar()가 먼저 호출되지 않았을 때 방어 — calYear/calMonth 미설정 시 오늘 기준 초기화
+  if (typeof calYear !== 'number' || isNaN(calYear) || typeof calMonth !== 'number' || isNaN(calMonth)) {
+    var _t0 = new Date();
+    calYear = _t0.getFullYear();
+    calMonth = _t0.getMonth();
+  }
+
   var _calData = await Promise.all([projGetAll(), evtGetAll(), msGetAll(), typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve(null)]);
   var projects = _calData[0];
   var rawEvents = _calData[1];

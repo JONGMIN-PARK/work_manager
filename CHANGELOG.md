@@ -1,5 +1,13 @@
 # Work Manager — 변경 이력
 
+## v13.10 (2026-04-14) — 프로젝트 저장 후 "Invalid time value" 실제 원인 수정
+
+### 버그 수정
+- **renderCalendar가 initCalendar보다 먼저 호출될 때 crash**: `calYear`/`calMonth` 전역이 미초기화된 상태에서 `new Date(undefined, NaN, 0).toISOString()` → "Invalid time value" RangeError. saveProjectUI가 저장 후 `if (typeof renderCalendar === 'function') await renderCalendar()`로 호출하는데, 사용자가 한 번도 달력 탭을 열지 않았다면 초기화가 안 됐음. renderCalendar 진입부에서 값이 없으면 오늘 기준으로 자기 초기화하도록 가드 추가 (`calendar.js`).
+- v13.9의 renderTimeline 폴백은 그대로 유지 (별개 방어 케이스).
+
+---
+
 ## v13.9 (2026-04-14) — 프로젝트 저장 후 "Invalid time value" 에러 수정
 
 ### 버그 수정
