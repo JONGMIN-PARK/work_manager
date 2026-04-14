@@ -139,7 +139,7 @@ async function getExistingRecords(token) {
 }
 
 // ── 중복 제거 & 병합 ──
-function wrIdKey(r) { return r.date + '|' + r.name + '|' + (r.orderNo || ''); }
+function wrIdKey(r) { return r.date + '|' + r.name + '|' + (r.orderNo || '') + '|' + (r.content || '').trim().substring(0,30); }
 
 function mergeRecords(existing, newRecs) {
   var newById = new Map();

@@ -155,7 +155,7 @@ async function upload(url, token, records) {
   return await resp.json();
 }
 
-function idKey(r) { return r.date + '|' + r.name + '|' + (r.orderNo || ''); }
+function idKey(r) { return r.date + '|' + r.name + '|' + (r.orderNo || '') + '|' + (r.content || '').trim().substring(0,30); }
 
 function merge(existing, newRecs) {
   var byId = new Map();
