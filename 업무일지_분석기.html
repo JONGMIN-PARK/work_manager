@@ -85,7 +85,7 @@ h1{font-size:18px;font-weight:700;color:var(--t1);letter-spacing:-.3px}h1 .ac{co
 .sub-tabs{margin-bottom:16px;border-radius:8px}
 .tab{padding:8px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--t5);font-family:inherit;transition:all .15s}
 .tab:hover{color:var(--t3);background:var(--bg-hv)}.tab.on{background:var(--ta-bg);color:var(--ac-t);box-shadow:inset 0 -2px 0 var(--ta-sh);font-weight:700}
-.tw{max-height:480px;overflow:auto}
+.tw{max-height:940px;overflow:auto}
 table{width:100%;border-collapse:separate;border-spacing:0}
 th{background:var(--th);color:var(--t4);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.8px;padding:10px 12px;text-align:left;position:sticky;top:0;z-index:2;border-bottom:2px solid var(--bd2)}
 td{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--tdb)}tr:nth-child(even) td{background:rgba(255,255,255,.015)}tr:hover td{background:var(--trh)}
@@ -2438,6 +2438,9 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.12',date:'2026-04-15',title:'상세 테이블 표시 행 수 확대',tag:'fix',items:[
+      '팀관리 > 주간분석 > 상세 탭 뷰포트 높이 확대 (약 11행 → 25행)'
+    ]},
     {ver:'13.0',date:'2026-04-08',title:'Phase 1~3 전체 완료 — 프로덕션 레디',tag:'feature',items:[
       'Phase 3 엔터프라이즈: SSO/SAML (Azure AD, Okta), 커스텀 필드(8유형), 워크플로우 빌더, 화이트라벨',
       '온프레미스 Docker Compose 원클릭 배포 + 설치 가이드 + 라이선스 키 시스템',
