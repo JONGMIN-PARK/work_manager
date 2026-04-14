@@ -1076,7 +1076,26 @@ function parseFileBuf(buf,enc){
 }
 
 function applyADToUI(){
-  aN=[...new Set(aD.map(r=>r.name))].sort();ldFvS();upFvB();if(fvO&&fvN.length>0)vN=aN.filter(n=>fvN.includes(n));else vN=[...aN];sN.clear();sO.clear();sT.clear();sDV.clear();cKw='';gfInvalidate();document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');document.getElementById('fileInfo').classList.remove('hidden');document.getElementById('rcDisp').textContent=aD.length;document.getElementById('uploadZone').classList.add('hidden');document.getElementById('mainArea').classList.remove('hidden');if(fvN.length>0){aN.forEach(n=>{if(fvN.includes(n))sN.add(n)});if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}}
+  /* 기존 필터 선택 보존 — 병합/갱신 시 사용자 뷰가 리셋되지 않도록 */
+  var prevSN=new Set(sN),prevSO=new Set(sO),prevST=new Set(sT),prevSDV=new Set(sDV),prevKw=cKw||'';
+  var aNSet=new Set(aD.map(r=>r.name));
+  var aOSet=new Set(aD.map(r=>r.orderNo).filter(Boolean));
+  var aTSet=new Set(aD.map(r=>r.abbr).filter(Boolean));
+  var aDVSet=new Set(aD.map(r=>r.dept).filter(Boolean));
+  aN=[...aNSet].sort();ldFvS();upFvB();if(fvO&&fvN.length>0)vN=aN.filter(n=>fvN.includes(n));else vN=[...aN];
+  sN.clear();sO.clear();sT.clear();sDV.clear();cKw='';gfInvalidate();
+  /* 이전 선택 중 현재 aD에도 존재하는 것만 복원 */
+  prevSN.forEach(function(n){if(aNSet.has(n))sN.add(n)});
+  prevSO.forEach(function(o){if(aOSet.has(o))sO.add(o)});
+  prevST.forEach(function(t){if(aTSet.has(t))sT.add(t)});
+  prevSDV.forEach(function(d){if(aDVSet.has(d))sDV.add(d)});
+  if(prevKw)cKw=prevKw;
+  document.getElementById('cSearch').value=cKw;
+  document.getElementById('sClear').classList.toggle('hidden',!cKw);
+  document.getElementById('fileInfo').classList.remove('hidden');document.getElementById('rcDisp').textContent=aD.length;document.getElementById('uploadZone').classList.add('hidden');document.getElementById('mainArea').classList.remove('hidden');
+  /* 이전 선택이 하나도 없었을 때만 즐겨찾기로 초기 선택 */
+  if(sN.size===0&&fvN.length>0){aN.forEach(n=>{if(fvN.includes(n))sN.add(n)});if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}}
+  if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}
   const dates=[...new Set(aD.map(r=>r.date))].sort();if(dates.length>0){const d=dates[0];const dt=new Date(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8));const wk=getISOWeek(dt);document.getElementById('weekLabel').value=d.slice(0,4)+'-W'+String(wk).padStart(2,'0');document.getElementById('weekAutoLabel').textContent=`(${fD(dates[0])} ~ ${fD(dates[dates.length-1])})`}
   initWeekSelector();syncCmpVisibility();rNC();rFL();upV();document.getElementById('sumOut').innerHTML='<div style="text-align:center;color:var(--t6);padding:30px;font-size:12px">위 "요약 생성" 버튼을 눌러주세요.</div>';
 }
