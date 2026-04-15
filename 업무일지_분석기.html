@@ -2442,6 +2442,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.20',date:'2026-04-15',title:'아카이브 초기 로드 페이지네이션 (최근 60일 우선)',tag:'feature',items:[
+      '1차: startDate=<60일 전>로 최근 데이터만 즉시 렌더',
+      '2차: 800ms 후 endDate 역조회로 과거 히스토리 백그라운드 병합 (id dedup)',
+      '최근 60일 데이터가 없으면 전체 로드로 폴백',
+      '첫 렌더 서버 페이로드·시간 대폭 감소'
+    ]},
     {ver:'13.19',date:'2026-04-15',title:'대시보드 위젯 렌더 파이프라인 최적화',tag:'feature',items:[
       'autoUpdateProgress를 fire-and-forget 백그라운드로 분리 (5분 throttle)',
       'calcTaskDistByOrder + msGetAll/evtGetAll 병렬 프리패치',
@@ -3793,25 +3799,58 @@ async function _postAuthInit(){
       return new Promise(function(res){try{var tx=db.transaction('workRecords','readonly');var req=tx.objectStore('workRecords').getAll();req.onsuccess=function(){res(req.result||[])};req.onerror=function(){res([])}}catch(e){res([])}});
     }catch(e){return Promise.resolve([])}
   })();
+  // 레코드 정규화 (camelCase + hours/date 타입)
+  var _normRec=function(r){
+    var c=_toCamel(r);
+    if(typeof c.hours==='string')c.hours=parseFloat(c.hours)||0;
+    if(c.date&&typeof c.date==='string'&&c.date.length>8)c.date=c.date.replace(/[-\/]/g,'').slice(0,8);
+    return c;
+  };
+  // 최근 60일 기준 YYYYMMDD
+  var _today60=new Date();_today60.setDate(_today60.getDate()-60);
+  var _cutoff60=_today60.getFullYear()+String(_today60.getMonth()+1).padStart(2,'0')+String(_today60.getDate()).padStart(2,'0');
   var _loadFromServer=async function(){
     try{
-      var _srvRes=await Promise.race([
-        apiFetch('/api/archives/records?limit=50000&all=true'),
+      // 1차: 최근 60일만 — 빠른 초기 렌더
+      var _srvFast=await Promise.race([
+        apiFetch('/api/archives/records?startDate='+_cutoff60+'&limit=50000&all=true'),
         new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},8000)})
       ]);
-      if(_srvRes&&_srvRes.data&&_srvRes.data.length>0){
-        aD=_srvRes.data.map(function(r){
-          var c=_toCamel(r);
-          if(typeof c.hours==='string')c.hours=parseFloat(c.hours)||0;
-          if(c.date&&typeof c.date==='string'&&c.date.length>8)c.date=c.date.replace(/[-\/]/g,'').slice(0,8);
-          return c;
-        });
+      if(_srvFast&&_srvFast.data&&_srvFast.data.length>0){
+        aD=_srvFast.data.map(_normRec);
         applyADToUI();
         _dataLoaded=true;
         var _iel=document.getElementById('initLoading');if(_iel)_iel.remove();
-        // 서버 연결 확인됨 — 그룹/별칭도 서버에서 동기화
         if(typeof syncSettingsFromServer==='function'){
           try{await syncSettingsFromServer()}catch(settEx){console.warn('settings sync:',settEx)}
+        }
+        // 2차 백그라운드: 나머지 히스토리 (60일 이전). 지연 트리거로 초기 렌더 방해 없음.
+        setTimeout(function(){
+          apiFetch('/api/archives/records?endDate='+_cutoff60+'&limit=50000&all=true').then(function(_srvFull){
+            if(!_srvFull||!_srvFull.data||!_srvFull.data.length)return;
+            var existingIds={};aD.forEach(function(r){if(r.id)existingIds[r.id]=true;});
+            var hist=_srvFull.data.map(_normRec);
+            var added=hist.filter(function(r){return r.id&&!existingIds[r.id];});
+            if(!added.length)return;
+            aD=aD.concat(added);
+            applyADToUI();
+            if(typeof console!=='undefined')console.info('[archive] 과거 '+added.length+'건 백그라운드 로드');
+          }).catch(function(e){console.warn('[archive bg]',e);});
+        },800);
+      }else{
+        // 최근 60일 데이터가 없음 — 전체 로드 (신규 유저/오래된 데이터만 있는 경우)
+        var _srvAll=await Promise.race([
+          apiFetch('/api/archives/records?limit=50000&all=true'),
+          new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},8000)})
+        ]);
+        if(_srvAll&&_srvAll.data&&_srvAll.data.length>0){
+          aD=_srvAll.data.map(_normRec);
+          applyADToUI();
+          _dataLoaded=true;
+          var _iel2=document.getElementById('initLoading');if(_iel2)_iel2.remove();
+          if(typeof syncSettingsFromServer==='function'){
+            try{await syncSettingsFromServer()}catch(settEx){console.warn('settings sync:',settEx)}
+          }
         }
       }
     }catch(ex){console.warn('auto-load server:',ex)}
