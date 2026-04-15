@@ -1,5 +1,20 @@
 # Work Manager — 변경 이력
 
+## v13.17 (2026-04-15) — 초기 로딩 성능 개선 (Phase 1)
+
+### 성능
+- **로컬 JS 스크립트 defer 적용** — `config.js`, `settings.js`, `auth.js`, `project-data.js`, `calendar.js`, `timeline.js`, `project-detail.js`, `dashboard.js`, `pipeline.js`, `order-view.js`, `issue-manager.js`, `document-manager.js` 모두 `defer` 추가. HTML 파싱과 JS 다운로드가 병렬 진행 → FCP 단축. 인라인 부트스트랩 IIFE는 `DOMContentLoaded` 시점으로 이동하여 defer 스크립트 실행 후 안전하게 시작.
+- **API TTL 캐시 (30s)** (`project-data.js`): `projGetAll` / `msGetAll` / `evtGetAll` 에 공통 `_pdCached` 훅 추가. 동일 페이지 초기 진입 시 대시보드/타임라인/파이프라인/달력이 각자 호출하던 3~5회 중복 요청을 1회로 감소. 진행 중 동일 요청(inflight)은 공유. 모든 쓰기 경로(`projPut`/`projDel`/`msPut`/`msDel`/`evtPut`/`evtDel`)에 `_pdInvalidate` 훅 — stale 데이터 방지.
+- **Google Fonts 최적화** — CSS `@import` 제거, `<link rel="preconnect">` + `<link rel="preload" as="style">` 조합으로 변경하여 폰트 요청을 HTML 파싱과 병렬화. Noto Sans KR + JetBrains Mono를 한 요청으로 결합.
+- **아카이브 초기 로드 타임아웃 20s → 8s** (`업무일지_분석기.html` `_postAuthInit`): 서버 지연 시 초기 UI 대기 시간 단축. 로컬 IndexedDB는 `_localPreload`로 **서버 요청과 병렬로 선로드**, 서버 실패 시 즉시 폴백 사용.
+
+### 기대 효과
+- 초기 중복 API 요청 50~70% 감소
+- 서버 지연 환경에서 데이터 표시 시간 최대 12초 단축
+- 재방문 시 defer+preload로 FCP 300~600ms 개선
+
+---
+
 ## v13.16 (2026-04-15) — 프로젝트 메모 입력 높이 확대
 
 ### UI 개선

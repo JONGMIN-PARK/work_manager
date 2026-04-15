@@ -284,10 +284,30 @@ function showToast(msg, type) {
  * 서버 모드 엔티티 CRUD (REST API)
  * ═══════════════════════════════════════════════════════════════════════ */
 
+/* ─── 읽기 캐시 (TTL) — 동일 페이지 내 다수 위젯이 같은 API를 호출하는 중복 요청 제거 ─── */
+var _PD_TTL = 30000;
+var _pdCache = { proj: null, ms: null, evt: null };
+var _pdCacheT = { proj: 0, ms: 0, evt: 0 };
+var _pdInflight = { proj: null, ms: null, evt: null };
+function _pdFresh(key) { return _pdCache[key] && (Date.now() - _pdCacheT[key] < _PD_TTL); }
+function _pdInvalidate(key) {
+  if (key) { _pdCache[key] = null; _pdCacheT[key] = 0; _pdInflight[key] = null; }
+  else { _pdCache = { proj: null, ms: null, evt: null }; _pdCacheT = { proj: 0, ms: 0, evt: 0 }; _pdInflight = { proj: null, ms: null, evt: null }; }
+}
+function _pdCached(key, loader) {
+  if (_pdFresh(key)) return Promise.resolve(_pdCache[key]);
+  if (_pdInflight[key]) return _pdInflight[key];
+  var p = loader().then(function (v) { _pdCache[key] = v; _pdCacheT[key] = Date.now(); _pdInflight[key] = null; return v; })
+                  .catch(function (err) { _pdInflight[key] = null; throw err; });
+  _pdInflight[key] = p;
+  return p;
+}
+
 /* ─── 프로젝트 ─── */
-function projGetAll() { return apiFetch('/api/projects').then(function (r) { return toCamelArray(r.data); }); }
+function projGetAll() { return _pdCached('proj', function () { return apiFetch('/api/projects').then(function (r) { return toCamelArray(r.data); }); }); }
 function projGet(id) { return apiFetch('/api/projects/' + id).then(function (r) { return toCamel(r.data); }); }
 function projPut(proj) {
+  _pdInvalidate('proj');
   if (!proj.id || proj._isNew) {
     delete proj._isNew;
     return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
@@ -301,7 +321,7 @@ function projPut(proj) {
       throw err;
     });
 }
-function projDel(id) { return apiFetch('/api/projects/' + id, { method: 'DELETE' }); }
+function projDel(id) { _pdInvalidate('proj'); return apiFetch('/api/projects/' + id, { method: 'DELETE' }); }
 
 function createProject(data) {
   var now = new Date().toISOString();
@@ -365,9 +385,10 @@ function _msDedupe(list) {
   }
   return uniq;
 }
-function msGetAll() { return apiFetch('/api/milestones').then(function (r) { return _msDedupe(toCamelArray(r.data)); }); }
+function msGetAll() { return _pdCached('ms', function () { return apiFetch('/api/milestones').then(function (r) { return _msDedupe(toCamelArray(r.data)); }); }); }
 function msGetByProject(pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return _msDedupe(toCamelArray(r.data)); }); }
 function msPut(ms) {
+  _pdInvalidate('ms');
   if (!ms.id || ms._isNew) {
     delete ms._isNew;
     return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
@@ -381,7 +402,7 @@ function msPut(ms) {
       throw err;
     });
 }
-function msDel(id) { return apiFetch('/api/milestones/' + id, { method: 'DELETE' }); }
+function msDel(id) { _pdInvalidate('ms'); return apiFetch('/api/milestones/' + id, { method: 'DELETE' }); }
 
 function msDelByProject(projectId) {
   return msGetByProject(projectId).then(function (list) {
@@ -405,9 +426,10 @@ function createMilestone(data) {
 }
 
 /* ─── 이벤트 ─── */
-function evtGetAll() { return apiFetch('/api/events').then(function (r) { return toCamelArray(r.data); }); }
+function evtGetAll() { return _pdCached('evt', function () { return apiFetch('/api/events').then(function (r) { return toCamelArray(r.data); }); }); }
 function evtGet(id) { return apiFetch('/api/events/' + id).then(function (r) { return toCamel(r.data); }); }
 function evtPut(evt) {
+  _pdInvalidate('evt');
   if (!evt.id || evt._isNew) {
     delete evt._isNew;
     return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
@@ -421,7 +443,7 @@ function evtPut(evt) {
       throw err;
     });
 }
-function evtDel(id) { return apiFetch('/api/events/' + id, { method: 'DELETE' }); }
+function evtDel(id) { _pdInvalidate('evt'); return apiFetch('/api/events/' + id, { method: 'DELETE' }); }
 
 function createEvent(data) {
   var now = new Date().toISOString();
