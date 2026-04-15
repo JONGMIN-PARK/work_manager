@@ -1264,17 +1264,25 @@ async function deduplicateRecords(){
   }
 }
 
-/* 전체 데이터 초기화 (서버 API) */
+/* 전체 데이터 초기화 (서버 API) — 서버에서 역할별 스코프로 삭제 */
 async function resetAllData(){
-  if(!confirm('⚠️ 내 업무일지 데이터를 전체 초기화하시겠습니까?\n\n내 계정의 업무일지 데이터만 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.'))return;
+  // 현재 보이는 건수로 사용자에게 실제 영향 범위 미리 표시
+  var visibleCount=(typeof aD!=='undefined'&&Array.isArray(aD))?aD.length:0;
+  var role=(typeof currentUser!=='undefined'&&currentUser&&currentUser.role)||'';
+  var scopeHint='';
+  if(role==='admin')scopeHint='⚠️ 관리자 권한 — 테넌트 전체 업무일지가 삭제됩니다.';
+  else if(role==='manager'||role==='executive')scopeHint='⚠️ 매니저/임원 권한 — 소속 부서 전체 업무일지가 삭제됩니다 (부서원 모두).';
+  else scopeHint='본인 계정의 업무일지 데이터만 삭제됩니다.';
+  var msg='⚠️ 업무일지 데이터를 전체 초기화하시겠습니까?\n\n'+scopeHint+'\n현재 화면 표시 '+visibleCount+'건.\n이 작업은 되돌릴 수 없습니다.';
+  if(!confirm(msg))return;
   if(!confirm('정말 초기화하시겠습니까?\n(한번 더 확인)'))return;
   try{
-    // 서버 데이터 삭제 (5xx 시 1회 재시도)
+    var _clearResult=null;
     if(typeof wrClear==='function'){
-      try{ await wrClear(); }catch(e1){
+      try{ _clearResult=await wrClear(); }catch(e1){
         if(e1.status>=500){
           await new Promise(function(r){setTimeout(r,2000)});
-          await wrClear();
+          _clearResult=await wrClear();
         }else throw e1;
       }
     }
@@ -1283,7 +1291,10 @@ async function resetAllData(){
     document.getElementById('uploadZone').classList.remove('hidden');
     document.getElementById('mainArea').classList.add('hidden');
     document.getElementById('fileInfo').classList.add('hidden');
-    showToast('🗑️ 내 업무일지 데이터가 초기화되었습니다.');
+    var deletedN=(_clearResult&&typeof _clearResult.deleted==='number')?_clearResult.deleted:null;
+    var scope=(_clearResult&&_clearResult.scope)||'';
+    var scopeLabel=scope==='tenant'?'테넌트 전체':(scope==='department'?'소속 부서':(scope==='self'?'본인':''));
+    showToast('🗑️ 업무일지 초기화 완료'+(deletedN!==null?(' — '+deletedN+'건 삭제'+(scopeLabel?(' ('+scopeLabel+')'):'')):''));
   }catch(ex){showToast('초기화 실패: '+ex.message,'error')}
 }
 function getISOWeek(d){const t=new Date(d.valueOf());const n=((d.getDay()+6)%7);t.setDate(t.getDate()-n+3);const f=t.valueOf();t.setMonth(0,1);if(t.getDay()!==4)t.setMonth(0,1+((4-t.getDay())+7)%7);return 1+Math.ceil((f-t)/604800000)}
@@ -2450,6 +2461,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.23',date:'2026-04-15',title:'"전체 데이터 초기화" 역할별 스코프 일치',tag:'fix',items:[
+      'DELETE /api/archives/records가 목록 GET과 같은 범위로 삭제 — admin/테넌트, manager·executive/부서, member/본인',
+      '확인 다이얼로그에 영향 범위 명시, 완료 토스트에 건수·스코프 표시',
+      '?scope=self 쿼리로 본인만 삭제 강제 가능'
+    ]},
     {ver:'13.22',date:'2026-04-15',title:'/api/bootstrap 번들 엔드포인트 (N×RTT → 1×RTT)',tag:'feature',items:[
       '신규 GET /api/bootstrap — projects/milestones/events/recent archives 단일 응답',
       '서버 Promise.all 병렬 실행, 4~5회 왕복을 1회로 압축',

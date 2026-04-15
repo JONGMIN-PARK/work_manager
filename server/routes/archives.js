@@ -251,7 +251,11 @@ router.post('/records/auto-tag-milestones', rbac.checkPermission('archive.manage
   }
 });
 
-// DELETE /api/archives/records — 전체 삭제 (해당 사용자 레코드만)
+// DELETE /api/archives/records — 역할별 스코프로 삭제
+// admin       : 테넌트 전체
+// manager/executive (부서 있음) : 소속 부서 전체 (본인 포함)
+// member 또는 부서 없음        : 본인 레코드만
+// query ?scope=self 면 강제로 본인만 삭제 (명시적 축소)
 router.delete('/records', rbac.checkPermission('archive.manage'), async function (req, res) {
   var client;
   try {
@@ -262,15 +266,34 @@ router.delete('/records', rbac.checkPermission('archive.manage'), async function
   }
   try {
     await client.query('SET statement_timeout = 25000');
-    // tenant_id 컬럼 존재 여부 확인 후 쿼리 분기
+    // tenant_id 컬럼 존재 여부 (구배포 호환)
     var colCheck = await client.query("SELECT 1 FROM information_schema.columns WHERE table_name='work_records' AND column_name='tenant_id'");
-    var result;
-    if (colCheck.rows.length > 0) {
-      result = await client.query('DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2', [req.user.sub, req.tenant.id]);
+    var hasTenant = colCheck.rows.length > 0;
+    var forceSelf = req.query.scope === 'self';
+    var role = req.user.role;
+    var deptId = req.user.departmentId || null;
+    var scope = 'self';
+    var sql, params;
+    if (!forceSelf && role === 'admin' && hasTenant) {
+      scope = 'tenant';
+      sql = 'DELETE FROM work_records WHERE tenant_id = $1';
+      params = [req.tenant.id];
+    } else if (!forceSelf && (role === 'manager' || role === 'executive') && deptId && hasTenant) {
+      scope = 'department';
+      sql = 'DELETE FROM work_records WHERE tenant_id = $1 AND user_id IN (SELECT id FROM users WHERE department_id = $2)';
+      params = [req.tenant.id, deptId];
     } else {
-      result = await client.query('DELETE FROM work_records WHERE user_id = $1', [req.user.sub]);
+      scope = 'self';
+      if (hasTenant) {
+        sql = 'DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2';
+        params = [req.user.sub, req.tenant.id];
+      } else {
+        sql = 'DELETE FROM work_records WHERE user_id = $1';
+        params = [req.user.sub];
+      }
     }
-    res.json({ message: '전체 삭제 완료', deleted: result.rowCount });
+    var result = await client.query(sql, params);
+    res.json({ message: '전체 삭제 완료', deleted: result.rowCount, scope: scope });
   } catch (e) {
     console.error('[work-records/clear]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
