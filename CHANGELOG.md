@@ -1,5 +1,15 @@
 # Work Manager — 변경 이력
 
+## v13.19 (2026-04-15) — 대시보드 위젯 렌더 파이프라인 최적화
+
+### 성능 (Phase 2, 1순위)
+- `renderDashboard` (dashboard.js) 크리티컬 패스 정리:
+  - `autoUpdateProgress`를 **fire-and-forget 백그라운드**로 분리. 기존엔 첫 렌더 전에 수~수십 개의 `updateProject` API를 순차 대기하여 초기 대시보드 표시가 느렸음. 이제 현재 저장된 progress로 즉시 렌더하고, 갱신이 완료되면 `_pdInvalidate('proj')`로 다음 호출 때 반영. 5분 throttle로 과호출 방지(`window._dashAutoProgAt`).
+  - `calcTaskDistByOrder`(아카이브 전체 스캔) + `msGetAll/evtGetAll`을 **병렬**로 시작. 기존엔 taskDist await 후 msEvt를 순차 호출.
+- 최초 대시보드 표시 시간 크게 단축. progress 수치는 약간 stale이지만 다음 30초 이내 재진입 시 자동 최신화(기존 API TTL 캐시 v13.17과 연계).
+
+---
+
 ## v13.18 (2026-04-15) — 초기 로딩 성능 개선 (Phase 2) — Stale-While-Revalidate
 
 ### 성능

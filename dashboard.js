@@ -9,11 +9,29 @@ async function renderDashboard(projects) {
 
   if (!projects) projects = await projGetAll();
 
-  // 진척률 자동 산출 (아카이브 연동)
-  var taskDist = {};
-  try { await autoUpdateProgress(); projects = await projGetAll(); } catch (e) { console.warn('[Dashboard]', e); }
-  // Integration 1: 업무유형 분포 데이터 로드
-  try { taskDist = await calcTaskDistByOrder(); } catch (e) { console.warn('[Dashboard]', e); }
+  // 병렬 데이터 프리패치 — 업무유형 분포 + 마일스톤/이벤트 동시 요청
+  var taskDistP = (typeof calcTaskDistByOrder === 'function'
+    ? calcTaskDistByOrder().catch(function (e) { console.warn('[Dashboard taskDist]', e); return {}; })
+    : Promise.resolve({}));
+
+  // 진척률 자동 산출은 무거우므로(수~수십 updateProject 호출) 백그라운드로 분리.
+  // 현재 렌더는 기존 progress 값 사용, 완료되면 캐시 무효화하여 다음 호출에 반영.
+  // 과호출 방지: 5분에 1회로 throttle.
+  try {
+    var _nowP = Date.now();
+    if (!window._dashAutoProgAt || _nowP - window._dashAutoProgAt > 300000) {
+      window._dashAutoProgAt = _nowP;
+      if (typeof autoUpdateProgress === 'function') {
+        autoUpdateProgress().then(function (n) {
+          if (n > 0 && typeof _pdInvalidate === 'function') _pdInvalidate('proj');
+        }).catch(function (e) { console.warn('[Dashboard autoProg]', e); });
+      }
+    }
+  } catch (e) { console.warn('[Dashboard autoProg schedule]', e); }
+
+  // 마일스톤/이벤트도 동시 시작 (taskDist와 병렬)
+  var _msEvtP = Promise.all([msGetAll(), evtGetAll()]);
+  var taskDist = await taskDistP;
 
   // 상태별 집계
   var counts = { total: projects.length, active: 0, delayed: 0, done: 0, waiting: 0, hold: 0 };
@@ -32,7 +50,7 @@ async function renderDashboard(projects) {
   var wsStr = weekStart.toISOString().slice(0, 10);
   var weStr = weekEnd.toISOString().slice(0, 10);
 
-  var _msEvtData = await Promise.all([msGetAll(), evtGetAll()]);
+  var _msEvtData = await _msEvtP;
   var milestones = _msEvtData[0];
   var events = _msEvtData[1];
   var _projMap = {};

@@ -2442,6 +2442,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.19',date:'2026-04-15',title:'대시보드 위젯 렌더 파이프라인 최적화',tag:'feature',items:[
+      'autoUpdateProgress를 fire-and-forget 백그라운드로 분리 (5분 throttle)',
+      'calcTaskDistByOrder + msGetAll/evtGetAll 병렬 프리패치',
+      '최초 대시보드 표시 시간 대폭 단축, progress는 완료 시 자동 반영'
+    ]},
     {ver:'13.18',date:'2026-04-15',title:'초기 로딩 성능 개선 (Phase 2 — SWR)',tag:'feature',items:[
       '아카이브 로드 Stale-While-Revalidate: 로컬 캐시로 150ms 내 즉시 렌더, 서버 응답 오면 덮어쓰기 갱신',
       '네트워크 지연 환경에서 초기 UI 표시 시간 대폭 단축'
