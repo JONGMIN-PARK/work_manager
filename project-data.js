@@ -303,6 +303,25 @@ function _pdCached(key, loader) {
   return p;
 }
 
+/* ─── 캐시 프라이밍 — /api/bootstrap 응답으로 프로젝트/마일스톤/이벤트 캐시 일괄 주입 ─── */
+function _pdPrimeCache(projectsRaw, milestonesRaw, eventsRaw) {
+  try {
+    var now = Date.now();
+    if (Array.isArray(projectsRaw)) {
+      _pdCache.proj = toCamelArray(projectsRaw);
+      _pdCacheT.proj = now;
+    }
+    if (Array.isArray(milestonesRaw)) {
+      _pdCache.ms = _msDedupe(toCamelArray(milestonesRaw));
+      _pdCacheT.ms = now;
+    }
+    if (Array.isArray(eventsRaw)) {
+      _pdCache.evt = toCamelArray(eventsRaw);
+      _pdCacheT.evt = now;
+    }
+  } catch (e) { console.warn('[pdPrimeCache]', e); }
+}
+
 /* ─── 프로젝트 ─── */
 function projGetAll() { return _pdCached('proj', function () { return apiFetch('/api/projects').then(function (r) { return toCamelArray(r.data); }); }); }
 function projGet(id) { return apiFetch('/api/projects/' + id).then(function (r) { return toCamel(r.data); }); }

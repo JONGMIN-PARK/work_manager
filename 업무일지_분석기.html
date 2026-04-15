@@ -2450,6 +2450,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.22',date:'2026-04-15',title:'/api/bootstrap 번들 엔드포인트 (N×RTT → 1×RTT)',tag:'feature',items:[
+      '신규 GET /api/bootstrap — projects/milestones/events/recent archives 단일 응답',
+      '서버 Promise.all 병렬 실행, 4~5회 왕복을 1회로 압축',
+      '클라이언트가 _pdPrimeCache로 캐시 주입 후 즉시 렌더, 실패 시 개별 API 폴백'
+    ]},
     {ver:'13.21',date:'2026-04-15',title:'서버 쿼리 최적화 (COUNT 제거 + 인덱스 추가)',tag:'feature',items:[
       '/api/archives/records all=true 벌크 로드에서 불필요한 COUNT(*) 제거',
       'work_records에 (tenant_id, date DESC), (tenant_id, user_id, date DESC) 복합 인덱스 추가',
@@ -3822,9 +3827,44 @@ async function _postAuthInit(){
   // 최근 60일 기준 YYYYMMDD
   var _today60=new Date();_today60.setDate(_today60.getDate()-60);
   var _cutoff60=_today60.getFullYear()+String(_today60.getMonth()+1).padStart(2,'0')+String(_today60.getDate()).padStart(2,'0');
-  var _loadFromServer=async function(){
+  // 0차 시도: /api/bootstrap — projects+milestones+events+recent archives 번들
+  var _tryBootstrap=async function(){
     try{
-      // 1차: 최근 60일만 — 빠른 초기 렌더
+      var _bs=await Promise.race([
+        apiFetch('/api/bootstrap?recentDays=60'),
+        new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},8000)})
+      ]);
+      if(!_bs||!_bs.archives||!Array.isArray(_bs.archives.data))return false;
+      // 프로젝트/마일스톤/이벤트 캐시 프라이밍 (개별 API 호출 생략 가능)
+      if(typeof _pdPrimeCache==='function')_pdPrimeCache(_bs.projects,_bs.milestones,_bs.events);
+      // 아카이브(최근 60일) UI 주입
+      aD=_bs.archives.data.map(_normRec);
+      applyADToUI();
+      _dataLoaded=true;
+      var _ielB=document.getElementById('initLoading');if(_ielB)_ielB.remove();
+      if(typeof syncSettingsFromServer==='function'){
+        try{await syncSettingsFromServer()}catch(settEx){console.warn('settings sync:',settEx)}
+      }
+      // 2차 백그라운드: 60일 이전 히스토리
+      setTimeout(function(){
+        apiFetch('/api/archives/records?endDate='+_cutoff60+'&limit=50000&all=true').then(function(_srvFull){
+          if(!_srvFull||!_srvFull.data||!_srvFull.data.length)return;
+          var existingIds={};aD.forEach(function(r){if(r.id)existingIds[r.id]=true;});
+          var hist=_srvFull.data.map(_normRec);
+          var added=hist.filter(function(r){return r.id&&!existingIds[r.id];});
+          if(!added.length)return;
+          aD=aD.concat(added);applyADToUI();
+          if(typeof console!=='undefined')console.info('[archive] 과거 '+added.length+'건 백그라운드 로드');
+        }).catch(function(e){console.warn('[archive bg]',e);});
+      },800);
+      return true;
+    }catch(ex){console.warn('[bootstrap] 실패, 개별 API 폴백:',ex&&ex.message);return false}
+  };
+  var _loadFromServer=async function(){
+    // /api/bootstrap 경로 우선 시도
+    if(await _tryBootstrap())return;
+    try{
+      // 1차: 최근 60일만 — 빠른 초기 렌더 (폴백)
       var _srvFast=await Promise.race([
         apiFetch('/api/archives/records?startDate='+_cutoff60+'&limit=50000&all=true'),
         new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'))},8000)})

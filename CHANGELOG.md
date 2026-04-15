@@ -1,5 +1,14 @@
 # Work Manager — 변경 이력
 
+## v13.22 (2026-04-15) — /api/bootstrap 번들 엔드포인트 (N×RTT → 1×RTT)
+
+### 성능
+- **신규 `GET /api/bootstrap?recentDays=60`** (`server/routes/bootstrap.js`): 초기 로드에 필요한 projects / milestones / events / recent archives를 **단일 응답**으로 반환. 서버에서 `Promise.all` 병렬 실행. 네트워크 왕복이 4~5회에서 1회로 줄어 고RTT 환경에서 로딩 체감 크게 개선.
+- **클라이언트 통합** (`업무일지_분석기.html` `_loadFromServer`): 먼저 `/api/bootstrap` 시도 → 성공 시 `_pdPrimeCache`로 프로젝트/마일스톤/이벤트 TTL 캐시 일괄 프라이밍, 아카이브는 `aD`에 주입해 즉시 렌더. 실패·404 시 기존 개별 API 플로우로 폴백(하위 호환).
+- **`_pdPrimeCache` 헬퍼** (`project-data.js`): snake→camel 변환 + 중복 제거 + 타임스탬프 갱신.
+
+---
+
 ## v13.21 (2026-04-15) — 서버 쿼리 최적화 (COUNT 제거 + 인덱스 추가)
 
 ### 성능 (서버 측)
