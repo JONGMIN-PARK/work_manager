@@ -748,13 +748,21 @@ if(typeof projGetAll==='undefined'){
   window.issueLogGetByIssue=function(){return Promise.resolve([])};window.issueLogPut=function(l){return Promise.resolve(l)};window.issueLogDel=function(){return Promise.resolve()};window.createIssueLog=function(){return Promise.resolve({})};
   console.warn('⚠️ project-data.js 로드 실패 → 스텁 폴백 사용');
 }
-if(typeof initCalendar==='undefined'){window.initCalendar=function(){};window.renderCalendar=function(){};window.showEventModal=function(){};console.warn('⚠️ calendar.js 로드 실패')}
-if(typeof initTimeline==='undefined'){window.initTimeline=function(){};window.renderTimeline=function(){};window.showProjectModal=function(){};window.showProjectDetail=function(){};console.warn('⚠️ timeline.js 로드 실패')}
-if(typeof renderDashboard==='undefined'){window.renderDashboard=function(){};console.warn('⚠️ dashboard.js 로드 실패')}
-if(typeof renderPipeline==='undefined'){window.renderPipeline=function(){};console.warn('⚠️ pipeline.js 로드 실패')}
-if(typeof renderOrders==='undefined'){window.renderOrders=function(){};window.showOrderModal=function(){};console.warn('⚠️ order-view.js 로드 실패')}
-if(typeof renderIssues==='undefined'){window.renderIssues=function(){};window.showIssueModal=function(){};window.showIssueDetail=function(){};console.warn('⚠️ issue-manager.js 로드 실패')}
-if(typeof renderDocManager==='undefined'){window.renderDocManager=function(){};console.warn('⚠️ document-manager.js 로드 실패')}
+// 렌더러는 defer 로드되므로 스텁 설치/경고는 DOMContentLoaded 시점으로 지연.
+// defer 실패한 경우에만 실제로 스텁이 설치됨.
+(function(){
+  function _checkRendererFallbacks(){
+    if(typeof initCalendar==='undefined'){window.initCalendar=function(){};window.renderCalendar=function(){};window.showEventModal=function(){};console.warn('⚠️ calendar.js 로드 실패')}
+    if(typeof initTimeline==='undefined'){window.initTimeline=function(){};window.renderTimeline=function(){};window.showProjectModal=function(){};window.showProjectDetail=function(){};console.warn('⚠️ timeline.js 로드 실패')}
+    if(typeof renderDashboard==='undefined'){window.renderDashboard=function(){};console.warn('⚠️ dashboard.js 로드 실패')}
+    if(typeof renderPipeline==='undefined'){window.renderPipeline=function(){};console.warn('⚠️ pipeline.js 로드 실패')}
+    if(typeof renderOrders==='undefined'){window.renderOrders=function(){};window.showOrderModal=function(){};console.warn('⚠️ order-view.js 로드 실패')}
+    if(typeof renderIssues==='undefined'){window.renderIssues=function(){};window.showIssueModal=function(){};window.showIssueDetail=function(){};console.warn('⚠️ issue-manager.js 로드 실패')}
+    if(typeof renderDocManager==='undefined'){window.renderDocManager=function(){};console.warn('⚠️ document-manager.js 로드 실패')}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_checkRendererFallbacks);
+  else _checkRendererFallbacks();
+})();
 
 /* ═══ THEME (TH → config.js) ═══ */
 let cTh='auto';
