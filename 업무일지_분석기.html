@@ -2438,6 +2438,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.15',date:'2026-04-15',title:'업무분장 휴가(V) 자동 보정',tag:'feature',items:[
+      '차트 탭 업무분장 집계에서 평일 8시간 미달분을 V(휴가)로 자동 반영',
+      '기록이 있는 월~금만 대상 · 주말/기록 없는 날 제외 · 원본 데이터 변경 없음',
+      '업체별 집계는 영향 없음'
+    ]},
     {ver:'13.14',date:'2026-04-15',title:'마일스톤 중복 자동 정리를 전 경로로 확대',tag:'fix',items:[
       'msGetAll/msGetByProject 공통 훅(_msDedupe) — 타임라인/달력/대시보드/파이프라인/상세 어디서 로드하든 중복 탐지 시 서버에서 자동 삭제',
       'projectId+name+startDate+endDate 키 매칭, sort_order/createdAt 빠른 것 우선 보존'
@@ -2703,12 +2708,32 @@ function rContentSum(){
   });
   el.innerHTML=html;
 }
-function rCht(f){if(!f.length)return;const tc=gTC();const tm={};Object.keys(AM).forEach(function(k){tm[k]=0});let tH=0;f.forEach(r=>{tm[r.abbr]=(tm[r.abbr]||0)+r.hours;tH+=r.hours});const ts=Object.entries(tm).map(([k,v])=>({a:k,n:AM[k]||k,v:Math.round(v*10)/10,p:tH>0?Math.round(v/tH*1000)/10:0})).sort((a,b)=>b.v-a.v);if(pC)pC.destroy();pC=new Chart(document.getElementById('pieC').getContext('2d'),{type:'doughnut',data:{labels:ts.map(s=>s.n),datasets:[{data:ts.map(s=>s.v),backgroundColor:ts.map(s=>getABR(s.a)),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed+' h'}}}}});document.getElementById('pieL').innerHTML=ts.map((s,i)=>'<div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:3px;background:'+getABR(s.a)+'"></span><span style="flex:1;font-size:12px;color:var(--t3)">'+s.n+'</span><span class="mono" style="color:var(--t4)">'+s.v+'h</span><span class="mono" style="color:var(--ac-t);width:44px;text-align:right">'+s.p+'%</span></div>').join('');
-const ps=document.getElementById('perS');ps.classList.remove('hidden');document.getElementById('pieS').style.gridColumn='';const pm={};f.forEach(r=>{if(!pm[r.name])pm[r.name]={t:0,a:{}};pm[r.name].t+=r.hours;pm[r.name].a[r.abbr]=(pm[r.name].a[r.abbr]||0)+r.hours});const pp=Object.entries(pm).map(([n,s])=>({n,...s})).sort((a,b)=>a.n.localeCompare(b.n,'ko'));
+/* 평일 8시간 미달분을 V(휴가)로 자동 보정 — 업무분장 집계용 합성 레코드 생성 */
+function _calcVacFill(rows){
+  const byPD={};
+  rows.forEach(r=>{
+    const d=r.date;if(!d||String(d).length<8)return;
+    const ds=String(d);
+    const y=+ds.slice(0,4),mo=+ds.slice(4,6)-1,dd=+ds.slice(6,8);
+    const dt=new Date(y,mo,dd);if(isNaN(dt.getTime()))return;
+    const wd=dt.getDay();if(wd===0||wd===6)return;
+    const k=(r.name||'')+'|'+ds;
+    if(!byPD[k])byPD[k]={name:r.name,date:ds,sum:0};
+    byPD[k].sum+=Number(r.hours)||0;
+  });
+  const out=[];
+  Object.keys(byPD).forEach(k=>{
+    const m=byPD[k];const gap=8-m.sum;
+    if(gap>0.05)out.push({name:m.name,date:m.date,orderNo:'',hours:Math.round(gap*10)/10,taskType:(typeof AM!=='undefined'&&AM.V)||'V(휴가)',abbr:'V',content:'[자동] 휴가 보정',_synth:true});
+  });
+  return out;
+}
+function rCht(f){if(!f.length)return;const tc=gTC();const _vac=_calcVacFill(f);const fA=_vac.length?f.concat(_vac):f;const tm={};Object.keys(AM).forEach(function(k){tm[k]=0});let tH=0;fA.forEach(r=>{tm[r.abbr]=(tm[r.abbr]||0)+r.hours;tH+=r.hours});const ts=Object.entries(tm).map(([k,v])=>({a:k,n:AM[k]||k,v:Math.round(v*10)/10,p:tH>0?Math.round(v/tH*1000)/10:0})).sort((a,b)=>b.v-a.v);if(pC)pC.destroy();pC=new Chart(document.getElementById('pieC').getContext('2d'),{type:'doughnut',data:{labels:ts.map(s=>s.n),datasets:[{data:ts.map(s=>s.v),backgroundColor:ts.map(s=>getABR(s.a)),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed+' h'}}}}});document.getElementById('pieL').innerHTML=ts.map((s,i)=>'<div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:3px;background:'+getABR(s.a)+'"></span><span style="flex:1;font-size:12px;color:var(--t3)">'+s.n+'</span><span class="mono" style="color:var(--t4)">'+s.v+'h</span><span class="mono" style="color:var(--ac-t);width:44px;text-align:right">'+s.p+'%</span></div>').join('');
+const ps=document.getElementById('perS');ps.classList.remove('hidden');document.getElementById('pieS').style.gridColumn='';const pm={};fA.forEach(r=>{if(!pm[r.name])pm[r.name]={t:0,a:{}};pm[r.name].t+=r.hours;pm[r.name].a[r.abbr]=(pm[r.name].a[r.abbr]||0)+r.hours});const pp=Object.entries(pm).map(([n,s])=>({n,...s})).sort((a,b)=>a.n.localeCompare(b.n,'ko'));
 // 1명: 제목을 "업무분장별 시간"으로, 다중: "인원별 분포"
 document.querySelector('#perS h3').textContent=sN.size>1?'인원별 분포':'업무분장별 시간';
 document.getElementById('perB').innerHTML=pp.map(p=>{const ni=aN.indexOf(p.n);const bars=Object.entries(p.a).sort(([a],[b])=>a.localeCompare(b)).map(([ab,hr])=>'<div style="width:'+hr/p.t*100+'%;background:'+(ABR[ab]||'#64748B')+'" title="'+(AM[ab]||ab)+': '+hr+'h"></div>').join('');return'<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><span style="font-size:11px;color:var(--t3);display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:'+COL[aN.indexOf(p.n)%COL.length]+'"></span>'+eH(p.n)+'</span><span class="mono" style="font-size:10px;color:var(--t4)">'+Math.round(p.t*10)/10+'h</span></div><div style="display:flex;height:7px;border-radius:3px;overflow:hidden;background:var(--pt)">'+bars+'</div></div>'}).join('');document.getElementById('abL').innerHTML=Object.keys(AM).map(a=>'<span style="font-size:9px;color:var(--t5);display:flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:2px;background:'+ABR[a]+'"></span>'+(AM[a]||a)+'</span>').join('')
-const dm={};f.forEach(r=>{if(!dm[r.date])dm[r.date]={};dm[r.date][r.abbr]=(dm[r.date][r.abbr]||0)+r.hours});const de=Object.entries(dm).sort(([a],[b])=>a.localeCompare(b));const ak=Object.keys(AM).sort();if(bC)bC.destroy();bC=new Chart(document.getElementById('barC').getContext('2d'),{type:'bar',data:{labels:de.map(([d])=>fD(d)),datasets:ak.map(k=>({label:AM[k]||k,data:de.map(([,v])=>v[k]||0),backgroundColor:ABR[k]||'#64748B',borderRadius:3,borderSkipped:'bottom'}))},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{stacked:true,ticks:{color:tc.t,font:{size:10},callback:v=>v+'h'},grid:{color:tc.g}}},plugins:{legend:{labels:{color:tc.l,font:{size:10}}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'h'}}}}})
+const dm={};fA.forEach(r=>{if(!dm[r.date])dm[r.date]={};dm[r.date][r.abbr]=(dm[r.date][r.abbr]||0)+r.hours});const de=Object.entries(dm).sort(([a],[b])=>a.localeCompare(b));const ak=Object.keys(AM).sort();if(bC)bC.destroy();bC=new Chart(document.getElementById('barC').getContext('2d'),{type:'bar',data:{labels:de.map(([d])=>fD(d)),datasets:ak.map(k=>({label:AM[k]||k,data:de.map(([,v])=>v[k]||0),backgroundColor:ABR[k]||'#64748B',borderRadius:3,borderSkipped:'bottom'}))},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{stacked:true,ticks:{color:tc.t,font:{size:10},callback:v=>v+'h'},grid:{color:tc.g}}},plugins:{legend:{labels:{color:tc.l,font:{size:10}}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'h'}}}}})
 /* ═══ 업체별 차트 ═══ */
 const hideUn=document.getElementById('hideUnassignedClient')&&document.getElementById('hideUnassignedClient').checked;
 const cm={};let cTH=0;f.forEach(r=>{
