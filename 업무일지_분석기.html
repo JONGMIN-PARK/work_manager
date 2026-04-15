@@ -2442,6 +2442,10 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.18',date:'2026-04-15',title:'초기 로딩 성능 개선 (Phase 2 — SWR)',tag:'feature',items:[
+      '아카이브 로드 Stale-While-Revalidate: 로컬 캐시로 150ms 내 즉시 렌더, 서버 응답 오면 덮어쓰기 갱신',
+      '네트워크 지연 환경에서 초기 UI 표시 시간 대폭 단축'
+    ]},
     {ver:'13.17',date:'2026-04-15',title:'초기 로딩 성능 개선 (Phase 1)',tag:'feature',items:[
       '로컬 JS 스크립트 일괄 defer 적용 → HTML 파싱과 병렬 다운로드',
       'projGetAll/msGetAll/evtGetAll TTL(30s) 캐시 + inflight 공유 → 중복 요청 3~5회 → 1회',
@@ -3807,27 +3811,45 @@ async function _postAuthInit(){
       }
     }catch(ex){console.warn('auto-load server:',ex)}
   };
+  // Stale-While-Revalidate: 로컬 데이터가 있으면 ~150ms 뒤 즉시 렌더,
+  // 서버 응답이 오면 조용히 덮어쓰기 갱신. 서버가 빠르면 로컬 렌더 스킵.
+  var _renderLocalSoon=function(){
+    if(_dataLoaded)return;
+    _localPreload.then(function(_wrAll){
+      if(_dataLoaded)return;
+      if(!_wrAll||!_wrAll.length)return;
+      aD=_wrAll.map(function(r){return Object.assign({},r)});
+      applyADToUI();
+      var _iel2=document.getElementById('initLoading');if(_iel2)_iel2.remove();
+      // _dataLoaded는 서버 성공 시에만 true — 로컬은 잠정 렌더로 취급하여
+      // 서버 응답이 오면 덮어쓰도록 함. 단 UI 표시는 이미 완료.
+    }).catch(function(){});
+  };
   // 1단계: 서버 API에서 전체 로드 (모든 기기에서 동일 데이터 보장)
   if(typeof apiFetch==='function'&&(typeof AUTH_SKIP==='undefined'||!AUTH_SKIP)&&_accessToken){
+    setTimeout(_renderLocalSoon,150);
     await _loadFromServer();
   }
   // 1-b: 인증 지연 대비 — _accessToken이 아직 없으면 최대 5초 대기 후 재시도
   if(!_dataLoaded&&typeof apiFetch==='function'&&(typeof AUTH_SKIP==='undefined'||!AUTH_SKIP)&&!_accessToken){
+    setTimeout(_renderLocalSoon,150);
     for(var _aw=0;_aw<10;_aw++){
       await new Promise(function(r){setTimeout(r,500)});
       if(_accessToken)break;
     }
     if(_accessToken)await _loadFromServer();
   }
-  // 2단계: 서버 실패/오프라인 시 로컬 IndexedDB 폴백 (이미 병렬 선로드된 결과 사용)
+  // 2단계: 서버 실패/오프라인 시 로컬 IndexedDB 폴백
   if(!_dataLoaded){
     try{
       var _wrAll=await _localPreload;
-      if(_wrAll&&_wrAll.length>0){
+      if(_wrAll&&_wrAll.length>0&&(!aD||!aD.length)){
         aD=_wrAll.map(function(r){return Object.assign({},r)});
         applyADToUI();
         _dataLoaded=true;
-        var _iel2=document.getElementById('initLoading');if(_iel2)_iel2.remove();
+        var _iel3=document.getElementById('initLoading');if(_iel3)_iel3.remove();
+      }else if(aD&&aD.length){
+        _dataLoaded=true;
       }
     }catch(ex){console.warn('auto-load local:',ex)}
   }
