@@ -631,7 +631,7 @@ async function showProjectModal(projId) {
         }).join('');
         return '<div><label class="fl">선행 프로젝트 (의존관계)</label><div style="display:flex;flex-wrap:wrap;gap:8px;max-height:80px;overflow:auto;padding:6px;background:var(--bg-i);border-radius:6px">' + depChecks + '</div></div>';
       })() +
-      '<div><label class="fl">메모</label><textarea class="si" id="projMemo" rows="2" style="padding-left:10px;resize:vertical">' + eH(proj ? proj.memo : '') + '</textarea></div>' +
+      '<div><label class="fl">메모</label><textarea class="si" id="projMemo" rows="15" style="padding-left:10px;resize:vertical;min-height:240px">' + eH(proj ? proj.memo : '') + '</textarea></div>' +
       // 마일스톤 섹션
       '<div style="padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:8px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
