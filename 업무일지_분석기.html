@@ -2450,6 +2450,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.21',date:'2026-04-15',title:'서버 쿼리 최적화 (COUNT 제거 + 인덱스 추가)',tag:'feature',items:[
+      '/api/archives/records all=true 벌크 로드에서 불필요한 COUNT(*) 제거',
+      'work_records에 (tenant_id, date DESC), (tenant_id, user_id, date DESC) 복합 인덱스 추가',
+      'ANALYZE로 플래너 통계 갱신'
+    ]},
     {ver:'13.20',date:'2026-04-15',title:'아카이브 초기 로드 페이지네이션 (최근 60일 우선)',tag:'feature',items:[
       '1차: startDate=<60일 전>로 최근 데이터만 즉시 렌더',
       '2차: 800ms 후 endDate 역조회로 과거 히스토리 백그라운드 병합 (id dedup)',

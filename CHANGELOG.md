@@ -1,5 +1,17 @@
 # Work Manager — 변경 이력
 
+## v13.21 (2026-04-15) — 서버 쿼리 최적화 (COUNT 제거 + 인덱스 추가)
+
+### 성능 (서버 측)
+- **`/api/archives/records` COUNT 제거** (`server/routes/archives.js`): `all=true` 벌크 로드 시 페이지네이션 `total`을 계산하지 않도록 변경. 클라이언트가 `total`을 사용하지 않음에도 매 초기 호출마다 `SELECT COUNT(*) FROM work_records WHERE tenant_id=...` 를 실행해 왔음 (많은 행에서 수 초 소요). `withTotal=true`를 명시할 때만 계산.
+- **복합 인덱스 추가** (`server/migrations/012_work_records_perf_indexes.sql`):
+  - `idx_wr_tenant_date_desc(tenant_id, date DESC)` — admin/광범위 조회 커버
+  - `idx_wr_tenant_user_date_desc(tenant_id, user_id, date DESC)` — 매니저/멤버 조회 커버
+  - `ANALYZE work_records` — 플래너 통계 갱신
+- 배포 후 자동 마이그레이션 실행되며 PostgreSQL 오토바큠 대기 후 쿼리 계획이 Index Scan으로 전환됨.
+
+---
+
 ## v13.20 (2026-04-15) — 아카이브 초기 로드 페이지네이션 (최근 60일 우선)
 
 ### 성능 (Phase 2, 2순위)

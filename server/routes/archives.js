@@ -44,9 +44,9 @@ router.get('/records', async function (req, res) {
 
     var pg = parsePagination(req.query, 200);
 
-    // total은 요청 시에만 계산 (성능)
+    // total은 실제로 필요한 경우에만 계산. 벌크 로드(all=true)는 total 불필요 → 불필요한 COUNT 제거.
     var total = 0;
-    if (req.query.withTotal === 'true' || pg.offset === 0) {
+    if (req.query.withTotal === 'true' || (pg.offset === 0 && req.query.all !== 'true')) {
       var countR = await db.query('SELECT COUNT(*) as cnt FROM work_records ' + where, params.slice(0, idx - 1));
       total = parseInt(countR.rows[0].cnt, 10);
     }
