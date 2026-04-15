@@ -13,10 +13,12 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>/* config.js 로드 실패 폴백 — file:// 프로토콜 CORS 대응 */</script>
 <script>var ORDER_MAP={};/* 수주맵: 엑셀 기반 — order.js 대체 */</script>
-<script defer src="config.js?v=5" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
-<script defer src="settings.js?v=5" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
-<script defer src="auth.js?v=5" onerror="console.warn('auth.js 로드 실패')"></script>
-<script defer src="project-data.js?v=5" onerror="console.warn('project-data.js 로드 실패')"></script>
+<!-- core (동기 로드 필수 — 인라인 폴백 typeof 체크가 파싱 중에 실행됨) -->
+<script src="config.js?v=5" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
+<script src="settings.js?v=5" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
+<script src="auth.js?v=5" onerror="console.warn('auth.js 로드 실패')"></script>
+<script src="project-data.js?v=5" onerror="console.warn('project-data.js 로드 실패')"></script>
+<!-- 렌더러 (defer — 초기 표시 이후 실행돼도 무방) -->
 <script defer src="calendar.js?v=5" onerror="console.warn('calendar.js 로드 실패')"></script>
 <script defer src="timeline.js?v=6" onerror="console.warn('timeline.js 로드 실패')"></script>
 <script defer src="project-detail.js?v=2" onerror="console.warn('project-detail.js 로드 실패')"></script>
