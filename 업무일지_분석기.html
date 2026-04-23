@@ -1892,18 +1892,25 @@ function gF(){
     return sCL.has(cl)
   });
   if(sDV.size>0)r=r.filter(x=>sDV.has(x.dept||'(미지정)'));
+  // 휴가 판정: abbr='V' 또는 taskType/content에 '휴가' 포함
+  const _isVac=function(x){
+    if(x.abbr==='V'||x.abbr==='v')return true;
+    var tt=String(x.taskType||'');
+    if(tt.indexOf('휴가')!==-1||tt.indexOf('연차')!==-1||tt.indexOf('반차')!==-1)return true;
+    return false;
+  };
   if(cKw){
     const k=cKw.toLowerCase();
     const includeV=sT.has('V'); // 사용자가 V를 명시 선택한 경우만 휴가 포함
     r=r.filter(x=>{
-      if(x.abbr==='V'&&!includeV)return false;
+      if(_isVac(x)&&!includeV)return false;
       const matchContent=x.content.toLowerCase().includes(k);
       const matchOcmt=(x.ocmt||getOCmt(x.orderNo)||'').toLowerCase().includes(k);
       const matchOcl=(x.oclient||getOClient(x.orderNo)||'').toLowerCase().includes(k);
       return matchContent||matchOcmt||matchOcl
     });
   }
-  if(excludeVac&&!sT.has('V'))r=r.filter(x=>x.abbr!=='V');
+  if(excludeVac&&!sT.has('V'))r=r.filter(x=>!_isVac(x));
   _gfCache=r.sort((a,b)=>{
     const n=a.name.localeCompare(b.name,'ko');
     return n!==0?n:a.date.localeCompare(b.date)
