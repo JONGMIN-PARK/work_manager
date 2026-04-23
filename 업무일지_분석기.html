@@ -2474,10 +2474,15 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.25',date:'2026-04-23',title:'필터 활성 시 차트 V(휴가) 자동 보정 비활성화',tag:'fix',items:[
+      '키워드/수주/수주명/거래처 필터 또는 "휴가 제외" 토글 활성 시 _calcVacFill 합성 V 추가 건너뜀',
+      '키워드 검색 결과 차트에서 실제 미근무 시간이 V(휴가)로 잘못 채워지던 문제 해결',
+      '업무분장 필터에서 V만 선택한 경우는 합성 영향 없음'
+    ]},
     {ver:'13.24',date:'2026-04-23',title:'업무내용 검색에서 휴가(V) 자동 제외 + 수동 토글',tag:'feature',items:[
       '상세 필터 "업무내용 검색"에 키워드 입력 시 V(휴가) 레코드 자동 제외 — 단, 업무분장 필터에서 V를 명시 선택한 경우는 포함',
       '업무분장 필터 헤더에 "휴가 제외" 체크박스 추가 — 키워드와 무관하게 V 전체 제외',
-      '체크 상태는 localStorage(wm_excludeVac)에 영구 저장'
+      '체크 상태는 localStorage(wm_excludeVac)에 영구 저장 · taskType에 휴가/연차/반차 포함된 레코드도 동일 처리'
     ]},
     {ver:'13.23',date:'2026-04-15',title:'"전체 데이터 초기화" 역할별 스코프 일치',tag:'fix',items:[
       'DELETE /api/archives/records가 목록 GET과 같은 범위로 삭제 — admin/테넌트, manager·executive/부서, member/본인',
@@ -2808,7 +2813,7 @@ function _calcVacFill(rows){
   });
   return out;
 }
-function rCht(f){if(!f.length)return;const tc=gTC();const _vac=_calcVacFill(f);const fA=_vac.length?f.concat(_vac):f;const tm={};Object.keys(AM).forEach(function(k){tm[k]=0});let tH=0;fA.forEach(r=>{tm[r.abbr]=(tm[r.abbr]||0)+r.hours;tH+=r.hours});const ts=Object.entries(tm).map(([k,v])=>({a:k,n:AM[k]||k,v:Math.round(v*10)/10,p:tH>0?Math.round(v/tH*1000)/10:0})).sort((a,b)=>b.v-a.v);if(pC)pC.destroy();pC=new Chart(document.getElementById('pieC').getContext('2d'),{type:'doughnut',data:{labels:ts.map(s=>s.n),datasets:[{data:ts.map(s=>s.v),backgroundColor:ts.map(s=>getABR(s.a)),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed+' h'}}}}});document.getElementById('pieL').innerHTML=ts.map((s,i)=>'<div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:3px;background:'+getABR(s.a)+'"></span><span style="flex:1;font-size:12px;color:var(--t3)">'+s.n+'</span><span class="mono" style="color:var(--t4)">'+s.v+'h</span><span class="mono" style="color:var(--ac-t);width:44px;text-align:right">'+s.p+'%</span></div>').join('');
+function rCht(f){if(!f.length)return;const tc=gTC();const _skipVac=!!cKw||!!excludeVac||sO.size>0||sON.size>0||sCL.size>0||(sT.size>0&&!sT.has('V'));const _vac=_skipVac?[]:_calcVacFill(f);const fA=_vac.length?f.concat(_vac):f;const tm={};Object.keys(AM).forEach(function(k){tm[k]=0});let tH=0;fA.forEach(r=>{tm[r.abbr]=(tm[r.abbr]||0)+r.hours;tH+=r.hours});const ts=Object.entries(tm).map(([k,v])=>({a:k,n:AM[k]||k,v:Math.round(v*10)/10,p:tH>0?Math.round(v/tH*1000)/10:0})).sort((a,b)=>b.v-a.v);if(pC)pC.destroy();pC=new Chart(document.getElementById('pieC').getContext('2d'),{type:'doughnut',data:{labels:ts.map(s=>s.n),datasets:[{data:ts.map(s=>s.v),backgroundColor:ts.map(s=>getABR(s.a)),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed+' h'}}}}});document.getElementById('pieL').innerHTML=ts.map((s,i)=>'<div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:3px;background:'+getABR(s.a)+'"></span><span style="flex:1;font-size:12px;color:var(--t3)">'+s.n+'</span><span class="mono" style="color:var(--t4)">'+s.v+'h</span><span class="mono" style="color:var(--ac-t);width:44px;text-align:right">'+s.p+'%</span></div>').join('');
 const ps=document.getElementById('perS');ps.classList.remove('hidden');document.getElementById('pieS').style.gridColumn='';const pm={};fA.forEach(r=>{if(!pm[r.name])pm[r.name]={t:0,a:{}};pm[r.name].t+=r.hours;pm[r.name].a[r.abbr]=(pm[r.name].a[r.abbr]||0)+r.hours});const pp=Object.entries(pm).map(([n,s])=>({n,...s})).sort((a,b)=>a.n.localeCompare(b.n,'ko'));
 // 1명: 제목을 "업무분장별 시간"으로, 다중: "인원별 분포"
 document.querySelector('#perS h3').textContent=sN.size>1?'인원별 분포':'업무분장별 시간';
