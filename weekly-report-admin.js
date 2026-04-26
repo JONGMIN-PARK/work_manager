@@ -127,6 +127,20 @@
       + '\n</body>\n</html>';
   }
 
+  // 프리뷰 HTML의 var(--xxx)를 실제 색상값으로 치환 — 외부 페이지 임베드용
+  function inlineThemeVars(html, theme) {
+    var v = THEME_VARS[theme === 'dark' ? 'dark' : 'light'];
+    return html
+      .replace(/var\(--bg-p\)/g, v.bgP)
+      .replace(/var\(--bg-i\)/g, v.bgI)
+      .replace(/var\(--bd\)/g, v.bd)
+      .replace(/var\(--ac\)/g, v.ac)
+      .replace(/var\(--t2\)/g, v.t2)
+      .replace(/var\(--t3\)/g, v.t3)
+      .replace(/var\(--t5\)/g, v.t5)
+      .replace(/var\(--t6\)/g, v.t6);
+  }
+
   // 파싱된 sections/items 배열을 보기용 HTML로 빌드
   function buildPreviewHTML(parsedPane) {
     if (!parsedPane || !parsedPane.sections || !parsedPane.sections.length) {
@@ -748,6 +762,9 @@
     box.querySelectorAll('[data-pv]').forEach(function (b) {
       b.addEventListener('click', function () { _authorState.previewPane = b.dataset.pv; renderAuthor(); });
     });
+    box.querySelectorAll('[data-pv-copy]').forEach(function (b) {
+      b.addEventListener('click', function () { copyPreviewInner(b.dataset.pvCopy, b.dataset.pvTheme); });
+    });
 
     bindAuthorEditor('wrAuEditorLast', 'last');
     bindAuthorEditor('wrAuEditorCur', 'cur');
@@ -836,6 +853,7 @@
         +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
         +     '<span style="font-size:11px;font-weight:700;color:' + color + ';background:rgba(58,106,176,.08);padding:2px 8px;border-radius:4px">' + title + '</span>'
         +     '<div style="font-size:11px;color:var(--t5)">👁 미리보기</div>'
+        +     previewCopyButtons(key)
         +   '</div>'
         +   '<div id="' + pvId + '" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;min-height:260px;max-height:560px;overflow:auto"></div>'
         + '</div>'
@@ -865,16 +883,42 @@
       +   '</div>'
       + '</div>'
       + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:10px;min-height:480px">'
-      +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px;flex-wrap:wrap">'
       +     '<div style="font-size:12px;font-weight:600;color:var(--t3)">👁 미리보기</div>'
-      +     '<div class="tabs sub-tabs" style="margin:0">'
-      +       '<button class="tab' + (_authorState.previewPane === 'last' ? ' on' : '') + '" data-pv="last">지난주</button>'
-      +       '<button class="tab' + (_authorState.previewPane === 'cur'  ? ' on' : '') + '" data-pv="cur">금주</button>'
+      +     '<div style="display:flex;align-items:center;gap:6px">'
+      +       previewCopyButtons(_authorState.previewPane)
+      +       '<div class="tabs sub-tabs" style="margin:0">'
+      +         '<button class="tab' + (_authorState.previewPane === 'last' ? ' on' : '') + '" data-pv="last">지난주</button>'
+      +         '<button class="tab' + (_authorState.previewPane === 'cur'  ? ' on' : '') + '" data-pv="cur">금주</button>'
+      +       '</div>'
       +     '</div>'
       +   '</div>'
       +   '<div id="wrAuPreview" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;min-height:380px;overflow:auto"></div>'
       + '</div>'
       + '</div>';
+  }
+
+  // 프리뷰 헤더에 들어가는 인라인 복사 버튼 (라이트/다크)
+  function previewCopyButtons(paneKey) {
+    return '<button class="tab" data-pv-copy="' + paneKey + '" data-pv-theme="light" title="라이트 테마 HTML 내용 복사" style="padding:3px 8px;font-size:10.5px">📋 라이트</button>'
+      + '<button class="tab" data-pv-copy="' + paneKey + '" data-pv-theme="dark" title="다크 테마 HTML 내용 복사" style="padding:3px 8px;font-size:10.5px">📋 다크</button>';
+  }
+
+  async function copyPreviewInner(paneKey, theme) {
+    syncAuthorEditorsToState();
+    var text = paneKey === 'last' ? _authorState.lastText : _authorState.curText;
+    if (!text || !text.trim()) {
+      alert('내용이 없습니다.');
+      return;
+    }
+    var raw = buildPreviewHTML(clientParseText(text));
+    var html = inlineThemeVars(raw, theme);
+    try {
+      await navigator.clipboard.writeText(html);
+      if (typeof showToast === 'function') showToast('미리보기 HTML 복사됨 (' + (paneKey === 'last' ? '지난주' : '금주') + ' · ' + theme + ')', 'ok');
+    } catch (e) {
+      alert('복사 실패: ' + (e.message || e));
+    }
   }
 
   // 모든 textarea 값을 state로 동기화 (모드 전환/탭 클릭 전 호출)
