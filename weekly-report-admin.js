@@ -77,6 +77,56 @@
     return out;
   }
 
+  // iframe 임베드용 자립 HTML — CSS 변수와 폰트를 인라인 포함
+  var THEME_VARS = {
+    light: { bgPage: '#F4F5FB', bgP: '#FFFFFF', bgI: '#E2E5F0', bd: '#C8CDE0', ac: '#5865F2', t2: '#2A3048', t3: '#424862', t5: '#8890A6', t6: '#B0B6C8' },
+    dark:  { bgPage: '#0B0E14', bgP: '#111620', bgI: '#0D1018', bd: '#222C44', ac: '#5B8DEF', t2: '#D8DEE8', t3: '#B8C0D4', t5: '#6070A0', t6: '#404C70' }
+  };
+  function buildStandaloneHTML(parsedPane, opts) {
+    opts = opts || {};
+    var theme = opts.theme === 'dark' ? 'dark' : 'light';
+    var v = THEME_VARS[theme];
+    var title = opts.title || '주간 업무 보고';
+    var headerHtml = '';
+    if (opts.headerLabel) {
+      headerHtml = '<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bd)">'
+        + '<div style="font-size:16px;font-weight:700;color:var(--t2)">' + esc(opts.headerLabel) + '</div>'
+        + (opts.headerSub ? '<div style="font-size:11.5px;color:var(--t5);margin-top:2px">' + esc(opts.headerSub) + '</div>' : '')
+        + '</div>';
+    }
+    var body = '';
+    if (Array.isArray(parsedPane)) {
+      // 둘 다 모드: 각 페인을 헤더 함께 출력
+      parsedPane.forEach(function (p, i) {
+        body += (i > 0 ? '<div style="margin:18px 0;border-top:1px dashed var(--bd)"></div>' : '')
+          + (p.label ? '<div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:10px">' + esc(p.label) + '</div>' : '')
+          + buildPreviewHTML(p.parsed);
+      });
+    } else {
+      body = buildPreviewHTML(parsedPane);
+    }
+    return ''
+      + '<!DOCTYPE html>\n'
+      + '<html lang="ko" data-theme="' + theme + '">\n'
+      + '<head>\n'
+      + '<meta charset="UTF-8">\n'
+      + '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+      + '<title>' + esc(title) + '</title>\n'
+      + '<style>\n'
+      + ':root{--bg:' + v.bgPage + ';--bg-p:' + v.bgP + ';--bg-i:' + v.bgI + ';--bd:' + v.bd + ';--ac:' + v.ac + ';--t2:' + v.t2 + ';--t3:' + v.t3 + ';--t5:' + v.t5 + ';--t6:' + v.t6 + '}\n'
+      + 'html,body{margin:0;padding:0;background:var(--bg);color:var(--t2);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}\n'
+      + 'body{padding:18px;box-sizing:border-box}\n'
+      + 'code{font-family:ui-monospace,Consolas,monospace;background:var(--bg-i);padding:1px 5px;border-radius:3px;font-size:11.5px}\n'
+      + 'strong{font-weight:700;color:var(--t2)}\n'
+      + 'svg{display:inline-block;vertical-align:middle}\n'
+      + '</style>\n'
+      + '</head>\n'
+      + '<body>\n'
+      + headerHtml
+      + body
+      + '\n</body>\n</html>';
+  }
+
   // 파싱된 sections/items 배열을 보기용 HTML로 빌드
   function buildPreviewHTML(parsedPane) {
     if (!parsedPane || !parsedPane.sections || !parsedPane.sections.length) {
@@ -656,9 +706,11 @@
       +     '</div>'
       +     '<div style="flex:1"></div>'
       +     '<span id="wrAuStatusBadge" style="font-size:11px;color:var(--t5)"></span>'
+      +     '<button id="wrAuExport" class="tab" style="padding:6px 12px" title="iframe 임베드용 HTML 복사/다운로드">📋 HTML</button>'
       +     '<button id="wrAuSave" class="tab on" style="padding:6px 14px">💾 저장 (R+1)</button>'
       +     '<button id="wrAuOverwrite" class="tab" style="padding:6px 12px;display:none">💾 덮어쓰기</button>'
       +   '</div>'
+      +   '<div id="wrAuExportPanel" style="display:none;margin-top:8px;padding:10px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px"></div>'
       +   '<div id="wrAuLoadDropdown" style="display:none;margin-top:8px"></div>'
       + '</div>'
       + (_authorState.viewMode === 'compare' ? renderAuthorCompare() : renderAuthorSingle())
@@ -711,6 +763,7 @@
     $('wrAuNew').addEventListener('click', authorNew);
     $('wrAuLoadList').addEventListener('click', toggleLoadDropdown);
     $('wrAuLoadPrev').addEventListener('click', authorLoadFromPrevWeek);
+    $('wrAuExport').addEventListener('click', toggleExportPanel);
     $('wrAuSave').addEventListener('click', function () { saveAuthor(true); });
     $('wrAuOverwrite').addEventListener('click', function () { saveAuthor(false); });
 
@@ -722,6 +775,7 @@
 
     updateAuthorPreview();
     updateAuthorStatusBadge();
+    autoLoadIfEmpty();
     if (!_authorState.workRecords.length && _authorState.weekStart && _authorState.weekEnd) loadWorkRecords();
     else renderSourcePanel();
   }
@@ -912,6 +966,7 @@
     _authorState.curText = '';
     _authorState.loadedId = null;
     _authorState.loadedName = '';
+    forgetLoaded();
     renderAuthor();
   }
 
@@ -951,7 +1006,10 @@
           }).join('')
         + '</div>';
       dd.querySelectorAll('[data-load-id]').forEach(function (b) {
-        b.addEventListener('click', function () { authorLoadById(b.dataset.loadId); $('wrAuLoadDropdown').style.display = 'none'; });
+        b.addEventListener('click', async function () {
+          try { await authorLoadById(b.dataset.loadId); $('wrAuLoadDropdown').style.display = 'none'; }
+          catch (e) { alert('불러오기 실패: ' + (e.message || e)); }
+        });
       });
     } catch (e) {
       dd.innerHTML = '<div style="color:#d03030;padding:6px;font-size:12px">조회 실패: ' + esc(e.message || e) + '</div>';
@@ -969,9 +1027,10 @@
       _authorState.weekEnd = d.week_end ? String(d.week_end).slice(0, 10) : _authorState.weekEnd;
       _authorState.lastText = d.last_text || '';
       _authorState.curText = d.cur_text || '';
+      rememberLoaded(d.id);
       renderAuthor();
     } catch (e) {
-      alert('불러오기 실패: ' + (e.message || e));
+      throw e;
     }
   }
 
@@ -1006,12 +1065,110 @@
       var saved = resp.data && resp.data[0];
       _authorState.loadedId = saved && saved.id;
       _authorState.loadedName = name;
+      rememberLoaded(_authorState.loadedId);
       if (typeof showToast === 'function') showToast('저장됨: ' + name, 'ok');
       else alert('저장됨: ' + name);
       updateAuthorStatusBadge();
     } catch (e) {
       alert('저장 실패: ' + (e.message || e));
     }
+  }
+
+  /* ─── HTML 복사 / 다운로드 (iframe 임베드용) ─── */
+  function toggleExportPanel() {
+    var p = $('wrAuExportPanel');
+    if (!p) return;
+    if (p.style.display === 'block') { p.style.display = 'none'; return; }
+    syncAuthorEditorsToState();
+    var hasLast = !!(_authorState.lastText && _authorState.lastText.trim());
+    var hasCur = !!(_authorState.curText && _authorState.curText.trim());
+    if (!hasLast && !hasCur) {
+      p.style.display = 'block';
+      p.innerHTML = '<div style="color:var(--t6);text-align:center;padding:8px">내용이 없습니다.</div>';
+      return;
+    }
+    p.style.display = 'block';
+    p.innerHTML = ''
+      + '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
+      +   '<span style="font-size:11.5px;color:var(--t5);margin-right:6px">테마</span>'
+      +   '<select id="wrAuExpTheme" style="padding:5px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-p);color:var(--t2);font-size:11.5px">'
+      +     '<option value="light">라이트</option>'
+      +     '<option value="dark">다크</option>'
+      +   '</select>'
+      +   '<span style="width:6px"></span>'
+      +   (hasCur  ? '<button class="tab" data-exp="cur"   data-act="copy" style="padding:5px 12px">📋 복사 (금주)</button>' : '')
+      +   (hasLast ? '<button class="tab" data-exp="last"  data-act="copy" style="padding:5px 12px">📋 복사 (지난주)</button>' : '')
+      +   ((hasCur && hasLast) ? '<button class="tab" data-exp="both" data-act="copy" style="padding:5px 12px">📋 복사 (둘 다)</button>' : '')
+      +   '<span style="width:6px"></span>'
+      +   (hasCur  ? '<button class="tab" data-exp="cur"   data-act="dl" style="padding:5px 12px">💾 다운로드 (금주)</button>' : '')
+      +   (hasLast ? '<button class="tab" data-exp="last"  data-act="dl" style="padding:5px 12px">💾 다운로드 (지난주)</button>' : '')
+      +   ((hasCur && hasLast) ? '<button class="tab" data-exp="both" data-act="dl" style="padding:5px 12px">💾 다운로드 (둘 다)</button>' : '')
+      + '</div>'
+      + '<div id="wrAuExpStatus" style="margin-top:6px;font-size:11.5px;color:var(--t5)"></div>';
+    p.querySelectorAll('[data-exp]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var theme = $('wrAuExpTheme').value;
+        runExport(b.dataset.exp, b.dataset.act, theme);
+      });
+    });
+  }
+
+  function buildExportFor(which, theme) {
+    var headerLabel = (_authorState.team || '주간업무') + ' · ' + (_authorState.weekStart || '') + ' ~ ' + (_authorState.weekEnd || '');
+    var headerSub = _authorState.loadedName || '';
+    if (which === 'both') {
+      var arr = [];
+      if (_authorState.lastText) arr.push({ label: '지난주', parsed: clientParseText(_authorState.lastText) });
+      if (_authorState.curText)  arr.push({ label: '금주',   parsed: clientParseText(_authorState.curText) });
+      return buildStandaloneHTML(arr, { theme: theme, title: headerLabel, headerLabel: headerLabel, headerSub: headerSub });
+    }
+    var text = which === 'last' ? _authorState.lastText : _authorState.curText;
+    var label = which === 'last' ? '지난주' : '금주';
+    return buildStandaloneHTML(clientParseText(text), { theme: theme, title: headerLabel + ' (' + label + ')', headerLabel: headerLabel + ' — ' + label, headerSub: headerSub });
+  }
+
+  async function runExport(which, action, theme) {
+    var html = buildExportFor(which, theme);
+    var status = $('wrAuExpStatus');
+    if (action === 'copy') {
+      try {
+        await navigator.clipboard.writeText(html);
+        if (status) status.innerHTML = '<span style="color:#1a8a40">✓ 복사됨 — ' + html.length.toLocaleString() + '자. iframe srcdoc 또는 .html로 붙여넣기 가능</span>';
+        if (typeof showToast === 'function') showToast('HTML 복사됨', 'ok');
+      } catch (e) {
+        if (status) status.innerHTML = '<span style="color:#d03030">복사 실패: ' + esc(e.message || e) + '</span>';
+      }
+    } else {
+      var fname = (_authorState.loadedName || ((_authorState.team || 'report') + '_' + (_authorState.weekStart || '')))
+        + (which === 'both' ? '' : ('_' + which)) + '.html';
+      var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = fname; document.body.appendChild(a); a.click();
+      setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+      if (status) status.innerHTML = '<span style="color:#1a8a40">✓ 다운로드: ' + esc(fname) + '</span>';
+    }
+  }
+
+  /* ─── 자동 마지막 작업 복원 ─── */
+  var LS_LAST_ID = 'wr-author-last-id';
+  function rememberLoaded(id) { try { if (id) localStorage.setItem(LS_LAST_ID, id); } catch (e) {} }
+  function forgetLoaded() { try { localStorage.removeItem(LS_LAST_ID); } catch (e) {} }
+
+  async function autoLoadIfEmpty() {
+    if (_authorState.loadedId || _authorState.lastText || _authorState.curText) return;
+    if (_authorState._autoLoadTried) return;
+    _authorState._autoLoadTried = true;
+    var stored = null;
+    try { stored = localStorage.getItem(LS_LAST_ID); } catch (e) {}
+    try {
+      if (stored) {
+        try { await authorLoadById(stored); return; }
+        catch (e) { forgetLoaded(); }
+      }
+      var r = await apiFetch('/api/weekly-reports?limit=1');
+      if (r.data && r.data.length) await authorLoadById(r.data[0].id);
+    } catch (e) { /* silent */ }
   }
 
   async function loadWorkRecords() {
