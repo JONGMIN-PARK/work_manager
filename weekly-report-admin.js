@@ -182,16 +182,23 @@
               }).join('')
             + '</ul>';
         }
+        var hasMeta = (it.members && it.members.length) || it.deadline || (pct !== null);
+        var metaHtml = '';
+        if (hasMeta) {
+          metaHtml = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">'
+            + members
+            + (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace">' + esc(it.deadline) + '</span>' : '')
+            + (pct !== null ? '<span style="font-size:11.5px;font-weight:700;color:' + cl.main + ';font-family:ui-monospace,monospace">' + pct + '%</span>' : '')
+            + (it.deadline ? ddayBadge(it.deadline) : '')
+            + '</div>';
+        }
         html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:6px;padding:8px 12px;margin-bottom:6px">'
-          + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+          + '<div style="display:flex;align-items:center;gap:6px">'
           +   '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;flex-shrink:0">' + esc(it.client || '') + '</span>'
           +   statusIcon(it.status)
-          +   '<span style="font-size:12.5px;color:var(--t2);flex:1;min-width:0">' + inlineMarkup(it.name || '') + '</span>'
-          +   members
-          +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace">' + esc(it.deadline) + '</span>' : '')
-          +   (pct !== null ? '<span style="font-size:11.5px;font-weight:700;color:' + cl.main + ';font-family:ui-monospace,monospace">' + pct + '%</span>' : '')
-          +   (it.deadline ? ddayBadge(it.deadline) : '')
+          +   '<span style="font-size:12.5px;color:var(--t2);flex:1;min-width:0;word-break:break-word">' + inlineMarkup(it.name || '') + '</span>'
           + '</div>'
+          + metaHtml
           + (pct !== null ? '<div style="height:4px;background:var(--bd);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + cl.bar + '"></div></div>' : '')
           + detailsHtml
           + '</div>';
