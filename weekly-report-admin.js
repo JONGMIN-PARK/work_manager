@@ -28,6 +28,12 @@
     if (st === 'in_progress') return '<span style="color:#d03030;background:rgba(208,48,48,.12);padding:1px 6px;border-radius:4px;font-size:11px">● 진행중</span>';
     return '';
   }
+  // 항목 헤더용 상태 아이콘 — #완료/#진행중 인라인 마크업과 동일한 비주얼
+  function statusIcon(st) {
+    if (st === 'done') return '<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;background:#1a8a40;border-radius:50%;vertical-align:middle;margin:0 2px;flex-shrink:0"><svg width="8" height="6" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
+    if (st === 'in_progress') return '<span style="display:inline-block;width:8px;height:8px;background:#d03030;border-radius:50%;box-shadow:0 0 0 2px rgba(208,48,48,.2);vertical-align:middle;margin:0 4px;flex-shrink:0"></span>';
+    return '';
+  }
 
   // D-day 계산 (deadline = "~05/29" 형식)
   function dday(deadline) {
@@ -179,6 +185,7 @@
         html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:6px;padding:8px 12px;margin-bottom:6px">'
           + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
           +   '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;flex-shrink:0">' + esc(it.client || '') + '</span>'
+          +   statusIcon(it.status)
           +   '<span style="font-size:12.5px;color:var(--t2);flex:1;min-width:0">' + inlineMarkup(it.name || '') + '</span>'
           +   members
           +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace">' + esc(it.deadline) + '</span>' : '')
