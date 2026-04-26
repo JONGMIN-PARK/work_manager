@@ -149,6 +149,7 @@ var whiteLabelRoutes = require('./routes/white-label');
 var licenseRoutes = require('./routes/license');
 var dataExportRoutes = require('./routes/data-export');
 var notificationRoutes = require('./routes/notifications');
+var weeklyReportRoutes = require('./routes/weekly-reports');
 var v1Router = require('./routes/v1');
 var apiDocsRoutes = require('./routes/api-docs');
 
@@ -183,6 +184,7 @@ app.use('/api/white-label', whiteLabelRoutes);
 app.use('/api/license', licenseRoutes);
 app.use('/api/data-export', dataExportRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/weekly-reports', weeklyReportRoutes);
 
 // ─── API v1 (버전 관리) ───
 app.use('/api/v1', v1Router);

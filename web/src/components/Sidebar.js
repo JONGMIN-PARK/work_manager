@@ -20,6 +20,7 @@ var ADMIN_ITEMS = [
   { icon: '🔐', label: 'SSO/SAML', href: '/dashboard/admin/sso' },
   { icon: '📝', label: '커스텀 필드', href: '/dashboard/admin/custom-fields' },
   { icon: '🔄', label: '워크플로우', href: '/dashboard/admin/workflows' },
+  { icon: '📅', label: '주간 업무', href: '/dashboard/admin/weekly-reports' },
 ];
 
 var styles = {
