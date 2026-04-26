@@ -7,6 +7,15 @@
   var SECTION_LABEL = { dev: '개발', setup: '셋업', cs: 'C/S', etc: '기타' };
   var STATE = { tab: 'upload', searchResults: null, stats: null, list: null };
 
+  // 섹션별 색상 — 원본 도구와 일관성 유지
+  var SEC_COLORS = {
+    dev:   { main: '#3a6ab0', bg: 'rgba(58,106,176,.12)', bar: 'linear-gradient(90deg,#3a6ab0,#7aaade)', num: '#3a6ab0' },
+    setup: { main: '#7030b0', bg: 'rgba(112,48,176,.12)', bar: 'linear-gradient(90deg,#7030b0,#a878d6)', num: '#7030b0' },
+    cs:    { main: '#c06000', bg: 'rgba(192,96,0,.12)',   bar: 'linear-gradient(90deg,#c06000,#e09850)', num: '#c06000' },
+    etc:   { main: '#506070', bg: 'rgba(80,96,112,.12)',  bar: 'linear-gradient(90deg,#506070,#80909a)', num: '#506070' }
+  };
+  var SEC_NUM = { dev: '01', setup: '02', cs: '03', etc: '04' };
+
   function $(id) { return document.getElementById(id); }
   function esc(s) {
     if (s == null) return '';
@@ -18,6 +27,107 @@
     if (st === 'done') return '<span style="color:#1a8a40;background:rgba(26,138,64,.12);padding:1px 6px;border-radius:4px;font-size:11px">● 완료</span>';
     if (st === 'in_progress') return '<span style="color:#d03030;background:rgba(208,48,48,.12);padding:1px 6px;border-radius:4px;font-size:11px">● 진행중</span>';
     return '';
+  }
+
+  // D-day 계산 (deadline = "~05/29" 형식)
+  function dday(deadline) {
+    if (!deadline) return null;
+    var m = String(deadline).match(/~?(\d{1,2})\/(\d{1,2})/);
+    if (!m) return null;
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var target = new Date(now.getFullYear(), parseInt(m[1], 10) - 1, parseInt(m[2], 10));
+    var diff = Math.round((target - today) / 86400000);
+    if (diff === 0) return { label: 'D-DAY', color: '#fff', bg: '#c05000' };
+    if (diff > 0) return {
+      label: 'D-' + diff,
+      color: diff <= 3 ? '#e03030' : (diff <= 7 ? '#c05000' : '#6070a0'),
+      bg:    diff <= 3 ? 'rgba(224,48,48,.22)' : (diff <= 7 ? 'rgba(192,80,0,.18)' : 'rgba(96,112,160,.10)')
+    };
+    return { label: 'D+' + Math.abs(diff), color: '#fff', bg: '#d03030' };
+  }
+  function ddayBadge(deadline) {
+    var d = dday(deadline);
+    if (!d) return '';
+    return '<span style="font-family:ui-monospace,monospace;font-size:9.5px;font-weight:700;color:' + d.color + ';background:' + d.bg + ';border-radius:4px;padding:1px 5px;white-space:nowrap;margin-left:4px">' + esc(d.label) + '</span>';
+  }
+
+  // 인라인 마크업 (=y{...}, **bold**, ~~strike~~, {bold})
+  function inlineMarkup(text) {
+    if (!text) return '';
+    var out = esc(text);
+    var hlBg = { y: 'rgba(255,224,80,.45)', r: 'rgba(255,140,140,.45)', g: 'rgba(140,220,160,.45)', b: '#d0e4ff', p: '#e8d8f8' };
+    out = out.replace(/=([yrgbp])\{([^}]*)\}/g, function (_, c, t) {
+      return '<span style="background:' + (hlBg[c] || hlBg.y) + ';padding:1px 4px;border-radius:3px">' + t + '</span>';
+    });
+    var fc = { r: '#d03030', g: '#1a8a40', b: '#2060c0', p: '#7030b0', o: '#c06000' };
+    out = out.replace(/#([rgbpo])\{([^}]*)\}/g, function (_, c, t) {
+      return '<span style="color:' + (fc[c] || fc.r) + '">' + t + '</span>';
+    });
+    out = out.replace(/\{([^}]*)\}/g, '<strong>$1</strong>');
+    out = out.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/~~(.*?)~~/g, '<del>$1</del>');
+    // #완료/#진행중 도형만 (원본 정책 — 라벨 제거)
+    out = out.replace(/#완료/g, '<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;background:#1a8a40;border-radius:50%;vertical-align:middle;margin:0 2px"><svg width="8" height="6" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>');
+    out = out.replace(/#진행중?/g, '<span style="display:inline-block;width:8px;height:8px;background:#d03030;border-radius:50%;box-shadow:0 0 0 2px rgba(208,48,48,.2);vertical-align:middle;margin:0 4px"></span>');
+    out = out.replace(/#%(\d+)/g, function (_, p) {
+      var v = Math.min(100, Math.max(0, parseInt(p, 10)));
+      return '<span style="display:inline-flex;align-items:center;gap:4px;padding:1px 5px;border:1px solid var(--bd);border-radius:10px;font-size:10px;color:var(--ac);vertical-align:middle;margin:0 3px"><span style="font-weight:700">' + v + '%</span><span style="width:14px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;width:' + v + '%;background:linear-gradient(90deg,var(--ac),#7aaade)"></span></span></span>';
+    });
+    return out;
+  }
+
+  // 파싱된 sections/items 배열을 보기용 HTML로 빌드
+  function buildPreviewHTML(parsedPane) {
+    if (!parsedPane || !parsedPane.sections || !parsedPane.sections.length) {
+      return '<div style="padding:24px;text-align:center;color:var(--t5)">내용 없음</div>';
+    }
+    var SEC_LABELS = { dev: '개발', setup: '셋업', cs: 'C/S', etc: '기타' };
+    var html = '';
+    parsedPane.sections.forEach(function (sec) {
+      var cl = SEC_COLORS[sec.type] || SEC_COLORS.dev;
+      html += '<div style="margin-bottom:18px">'
+        +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+        +     '<span style="background:' + cl.num + ';color:#fff;font-weight:700;font-size:11px;padding:2px 8px;border-radius:4px">' + (SEC_NUM[sec.type] || '') + '</span>'
+        +     '<span style="font-size:14px;font-weight:700;color:var(--t2)">' + esc(SEC_LABELS[sec.type] || sec.type) + '</span>'
+        +   '</div>';
+      sec.items.forEach(function (it) {
+        var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
+        var members = (it.members || []).map(function (m) {
+          return '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10.5px;background:var(--bg-i);color:var(--t5);margin:0 0 0 4px">@' + esc(m) + '</span>';
+        }).join('');
+        var detailsHtml = '';
+        if (it.details && it.details.length) {
+          detailsHtml = '<ul style="margin:6px 0 0;padding:0;list-style:none">'
+            + it.details.map(function (d) {
+                var dMembers = (d.members || []).map(function (m) {
+                  return '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10.5px;background:var(--bg-i);color:var(--t5);margin-left:4px">@' + esc(m) + '</span>';
+                }).join('');
+                // 텍스트에서 @멤버 제거 후 인라인 마크업
+                var dText = String(d.text || '').replace(/@[^\s@]+/g, '').trim();
+                return '<li style="display:flex;align-items:center;font-size:11.5px;color:var(--t3);padding:2px 0;line-height:1.7">'
+                  + '<span style="color:var(--t6);margin:0 6px 0 4px">–</span>'
+                  + '<span style="flex:1">' + inlineMarkup(dText) + '</span>'
+                  + dMembers + '</li>';
+              }).join('')
+            + '</ul>';
+        }
+        html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:6px;padding:8px 12px;margin-bottom:6px">'
+          + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+          +   '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;flex-shrink:0">' + esc(it.client || '') + '</span>'
+          +   '<span style="font-size:12.5px;color:var(--t2);flex:1;min-width:0">' + inlineMarkup(it.name || '') + '</span>'
+          +   members
+          +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace">' + esc(it.deadline) + '</span>' : '')
+          +   (pct !== null ? '<span style="font-size:11.5px;font-weight:700;color:' + cl.main + ';font-family:ui-monospace,monospace">' + pct + '%</span>' : '')
+          +   (it.deadline ? ddayBadge(it.deadline) : '')
+          + '</div>'
+          + (pct !== null ? '<div style="height:4px;background:var(--bd);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + cl.bar + '"></div></div>' : '')
+          + detailsHtml
+          + '</div>';
+      });
+      html += '</div>';
+    });
+    return html;
   }
 
   function shell() {
@@ -339,7 +449,8 @@
           + td(esc(it.week_start || '-') + ' ~ ' + esc(it.week_end || '-'))
           + td('<span style="color:#1a8a40">' + (bs.done || 0) + '</span> / <span style="color:#d03030">' + (bs.in_progress || 0) + '</span> / ' + (st.total || 0))
           + td('<span style="font-size:11px;color:var(--t6)">' + esc(it.saved_at ? new Date(it.saved_at).toLocaleString('ko-KR') : '-') + '</span>')
-          + td('<button class="tab" data-del="' + esc(it.id) + '" style="padding:4px 10px;font-size:11px;color:#d03030;border:1px solid #d03030;background:transparent">삭제</button>')
+          + td('<button class="tab" data-prev="' + esc(it.id) + '" style="padding:4px 10px;font-size:11px;color:var(--ac);border:1px solid var(--ac);background:transparent;margin-right:4px">미리보기</button>'
+              + '<button class="tab" data-del="' + esc(it.id) + '" style="padding:4px 10px;font-size:11px;color:#d03030;border:1px solid #d03030;background:transparent">삭제</button>')
           + '</tr>';
       }).join('');
       box.innerHTML = ''
@@ -354,9 +465,57 @@
       box.querySelectorAll('[data-del]').forEach(function (b) {
         b.addEventListener('click', function () { deleteReport(b.dataset.del); });
       });
+      box.querySelectorAll('[data-prev]').forEach(function (b) {
+        b.addEventListener('click', function () { renderPreview(b.dataset.prev); });
+      });
     } catch (e) {
       box.innerHTML = '<div style="padding:14px;color:#d03030;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">조회 실패: ' + esc(e.message || e) + '</div>';
     }
+  }
+
+  /* ─── 미리보기 ─── */
+  var _previewState = { id: null, pane: 'cur', data: null };
+  async function renderPreview(id) {
+    var box = $('wrPanel');
+    box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5)">⏳ 불러오는 중...</div>';
+    try {
+      var r = await apiFetch('/api/weekly-reports/' + encodeURIComponent(id));
+      _previewState.id = id;
+      _previewState.data = r.data;
+      _previewState.pane = 'cur';
+      drawPreview();
+    } catch (e) {
+      box.innerHTML = '<div style="padding:14px;color:#d03030;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">불러오기 실패: ' + esc(e.message || e) + '</div>';
+    }
+  }
+
+  function drawPreview() {
+    var box = $('wrPanel');
+    var d = _previewState.data;
+    if (!d) return;
+    var parsed = d.parsed || {};
+    var pane = _previewState.pane;
+    var paneData = parsed[pane];
+    var meta = parsed.meta || {};
+    box.innerHTML = ''
+      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+      +   '<button id="wrPrevBack" class="tab" style="padding:6px 12px">← 목록</button>'
+      +   '<div style="flex:1">'
+      +     '<div style="font-size:15px;font-weight:700">' + esc(meta.weekLabel || d.week_label || '-') + ' · ' + esc(meta.team || d.team || '') + '</div>'
+      +     '<div style="font-size:11px;color:var(--t5)">' + esc(d.name) + ' · ' + esc(d.week_start || '') + ' ~ ' + esc(d.week_end || '') + '</div>'
+      +   '</div>'
+      +   '<div class="tabs sub-tabs" style="margin:0">'
+      +     '<button class="tab' + (pane === 'last' ? ' on' : '') + '" data-pp="last">지난주</button>'
+      +     '<button class="tab' + (pane === 'cur'  ? ' on' : '') + '" data-pp="cur">금주</button>'
+      +   '</div>'
+      + '</div>'
+      + '<div id="wrPrevBody" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:16px">'
+      +   buildPreviewHTML(paneData)
+      + '</div>';
+    $('wrPrevBack').addEventListener('click', function () { renderList(); });
+    box.querySelectorAll('[data-pp]').forEach(function (b) {
+      b.addEventListener('click', function () { _previewState.pane = b.dataset.pp; drawPreview(); });
+    });
   }
 
   async function deleteReport(id) {
