@@ -611,6 +611,7 @@
     curText: '',
     editPane: 'cur',
     previewPane: 'cur',
+    viewMode: 'compare', // 'compare' = 지난주+금주 동시, 'single' = 토글
     loadedId: null,
     loadedName: '',
     workRecords: [],
@@ -649,6 +650,10 @@
       +     '<button id="wrAuLoadList" class="tab" style="padding:6px 12px">📂 불러오기</button>'
       +     '<button id="wrAuLoadPrev" class="tab" style="padding:6px 12px" title="가장 최근 주의 curText를 lastText로 복사">⬅ 지난주에서 가져오기</button>'
       +     '<button id="wrAuNew" class="tab" style="padding:6px 12px">📋 새로 만들기</button>'
+      +     '<div class="tabs sub-tabs" style="margin:0 0 0 8px" title="뷰 모드">'
+      +       '<button class="tab' + (_authorState.viewMode === 'compare' ? ' on' : '') + '" data-vm="compare">비교</button>'
+      +       '<button class="tab' + (_authorState.viewMode === 'single'  ? ' on' : '') + '" data-vm="single">단일</button>'
+      +     '</div>'
       +     '<div style="flex:1"></div>'
       +     '<span id="wrAuStatusBadge" style="font-size:11px;color:var(--t5)"></span>'
       +     '<button id="wrAuSave" class="tab on" style="padding:6px 14px">💾 저장 (R+1)</button>'
@@ -656,32 +661,7 @@
       +   '</div>'
       +   '<div id="wrAuLoadDropdown" style="display:none;margin-top:8px"></div>'
       + '</div>'
-      + '<div id="wrAuMain" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-      +   '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:10px;display:flex;flex-direction:column;min-height:480px">'
-      +     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
-      +       '<div style="font-size:12px;font-weight:600;color:var(--t3)">✏️ 편집</div>'
-      +       '<div class="tabs sub-tabs" style="margin:0">'
-      +         '<button class="tab' + (_authorState.editPane === 'last' ? ' on' : '') + '" data-ep="last">지난주</button>'
-      +         '<button class="tab' + (_authorState.editPane === 'cur'  ? ' on' : '') + '" data-ep="cur">금주</button>'
-      +       '</div>'
-      +     '</div>'
-      +     authorToolbar()
-      +     '<textarea id="wrAuEditor" spellcheck="false" placeholder="[개발]\n- [사이트] 업무명 ~MM/DD 50% @담당자\n  : 세부내용 #진행중\n\n[셋업]\n..." style="flex:1;width:100%;min-height:380px;padding:10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12.5px;font-family:ui-monospace,Consolas,monospace;line-height:1.6;resize:vertical"></textarea>'
-      +     '<div style="font-size:10.5px;color:var(--t6);margin-top:6px;line-height:1.5">'
-      +       '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 세부: <code>: 세부내용</code> · 태그: <code>#완료 #진행중 #%70 {bold} =y{형광}</code>'
-      +     '</div>'
-      +   '</div>'
-      +   '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:10px;min-height:480px">'
-      +     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
-      +       '<div style="font-size:12px;font-weight:600;color:var(--t3)">👁 미리보기</div>'
-      +       '<div class="tabs sub-tabs" style="margin:0">'
-      +         '<button class="tab' + (_authorState.previewPane === 'last' ? ' on' : '') + '" data-pv="last">지난주</button>'
-      +         '<button class="tab' + (_authorState.previewPane === 'cur'  ? ' on' : '') + '" data-pv="cur">금주</button>'
-      +       '</div>'
-      +     '</div>'
-      +     '<div id="wrAuPreview" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;min-height:380px;overflow:auto"></div>'
-      +   '</div>'
-      + '</div>'
+      + (_authorState.viewMode === 'compare' ? renderAuthorCompare() : renderAuthorSingle())
       + '<details id="wrAuSrc" open style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:10px">'
       +   '<summary style="cursor:pointer;font-size:13px;font-weight:600;padding:4px 0">📋 팀관리 데이터 — 선택 주차의 업무일지 <span id="wrAuSrcCount" style="color:var(--t5);font-weight:400"></span></summary>'
       +   '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:center">'
@@ -703,10 +683,12 @@
     $('wrAuStart').addEventListener('change', function (e) { _authorState.weekStart = e.target.value; loadWorkRecords(); });
     $('wrAuEnd').addEventListener('change', function (e) { _authorState.weekEnd = e.target.value; loadWorkRecords(); });
 
+    box.querySelectorAll('[data-vm]').forEach(function (b) {
+      b.addEventListener('click', function () { syncAuthorEditorsToState(); _authorState.viewMode = b.dataset.vm; renderAuthor(); });
+    });
     box.querySelectorAll('[data-ep]').forEach(function (b) {
       b.addEventListener('click', function () {
-        var ed = $('wrAuEditor');
-        _authorState[_authorState.editPane === 'last' ? 'lastText' : 'curText'] = ed.value;
+        syncAuthorEditorsToState();
         _authorState.editPane = b.dataset.ep;
         renderAuthor();
       });
@@ -715,20 +697,15 @@
       b.addEventListener('click', function () { _authorState.previewPane = b.dataset.pv; renderAuthor(); });
     });
 
-    var ed = $('wrAuEditor');
-    ed.value = _authorState.editPane === 'last' ? _authorState.lastText : _authorState.curText;
-    var debounceT = null;
-    ed.addEventListener('input', function () {
-      _authorState[_authorState.editPane === 'last' ? 'lastText' : 'curText'] = ed.value;
-      clearTimeout(debounceT);
-      debounceT = setTimeout(updateAuthorPreview, 200);
-    });
-    ed.addEventListener('keydown', function (e) {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveAuthor(false); }
-    });
+    bindAuthorEditor('wrAuEditorLast', 'last');
+    bindAuthorEditor('wrAuEditorCur', 'cur');
+    bindAuthorEditor('wrAuEditor', _authorState.editPane);
 
     box.querySelectorAll('[data-insert]').forEach(function (b) {
-      b.addEventListener('click', function () { insertAtCursor('wrAuEditor', b.dataset.insert); });
+      b.addEventListener('click', function () {
+        var targetId = b.dataset.target || pickInsertTarget();
+        insertAtCursor(targetId, b.dataset.insert);
+      });
     });
 
     $('wrAuNew').addEventListener('click', authorNew);
@@ -750,22 +727,23 @@
   }
 
   function applyResponsiveAuthor() {
-    var main = $('wrAuMain');
-    if (!main) return;
     function check() {
-      if (window.innerWidth < 1100) main.style.gridTemplateColumns = '1fr';
-      else main.style.gridTemplateColumns = '1fr 1fr';
+      var cols = window.innerWidth < 1100 ? '1fr' : '1fr 1fr';
+      ['wrAuMain', 'wrAuMainLast', 'wrAuMainCur'].forEach(function (id) {
+        var m = $(id); if (m) m.style.gridTemplateColumns = cols;
+      });
     }
     check();
     if (!window._wrAuRz) {
-      window.addEventListener('resize', function () { var m = $('wrAuMain'); if (m) check(); });
+      window.addEventListener('resize', check);
       window._wrAuRz = true;
     }
   }
 
-  function authorToolbar() {
+  function authorToolbar(targetId) {
+    var t = targetId ? ' data-target="' + targetId + '"' : '';
     function btn(label, insert, title) {
-      return '<button class="tab" data-insert="' + esc(insert) + '" title="' + esc(title || '') + '" style="padding:4px 8px;font-size:11px">' + esc(label) + '</button>';
+      return '<button class="tab"' + t + ' data-insert="' + esc(insert) + '" title="' + esc(title || '') + '" style="padding:4px 8px;font-size:11px">' + esc(label) + '</button>';
     }
     return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">'
       + btn('[개발]', '\n[개발]\n')
@@ -785,6 +763,105 @@
       + '</div>';
   }
 
+  // 비교 뷰: 위(지난주) / 아래(금주) 2행 × (편집 | 프리뷰) 2열
+  function renderAuthorCompare() {
+    function row(key, title) {
+      var edId = 'wrAuEditor' + (key === 'last' ? 'Last' : 'Cur');
+      var pvId = 'wrAuPreview' + (key === 'last' ? 'Last' : 'Cur');
+      var color = key === 'last' ? '#506070' : 'var(--ac)';
+      return '<div id="wrAuMain' + (key === 'last' ? 'Last' : 'Cur') + '" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+        + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + color + ';border-radius:8px;padding:10px;display:flex;flex-direction:column;min-height:340px">'
+        +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+        +     '<span style="font-size:11px;font-weight:700;color:' + color + ';background:rgba(58,106,176,.08);padding:2px 8px;border-radius:4px">' + title + '</span>'
+        +     '<div style="font-size:11px;color:var(--t5)">✏️ 편집</div>'
+        +   '</div>'
+        +   authorToolbar(edId)
+        +   '<textarea id="' + edId + '" data-pane="' + key + '" spellcheck="false" placeholder="[개발]\n- [사이트] 업무명 ~MM/DD 50% @담당자\n  : 세부내용 #진행중\n..." style="flex:1;width:100%;min-height:240px;padding:10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12.5px;font-family:ui-monospace,Consolas,monospace;line-height:1.6;resize:vertical"></textarea>'
+        + '</div>'
+        + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + color + ';border-radius:8px;padding:10px;min-height:340px">'
+        +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+        +     '<span style="font-size:11px;font-weight:700;color:' + color + ';background:rgba(58,106,176,.08);padding:2px 8px;border-radius:4px">' + title + '</span>'
+        +     '<div style="font-size:11px;color:var(--t5)">👁 미리보기</div>'
+        +   '</div>'
+        +   '<div id="' + pvId + '" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;min-height:260px;max-height:560px;overflow:auto"></div>'
+        + '</div>'
+        + '</div>';
+    }
+    return row('last', '지난주') + row('cur', '금주')
+      + '<div style="font-size:10.5px;color:var(--t6);margin:-4px 0 8px;line-height:1.5">'
+      +   '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 세부: <code>: 세부내용</code> · 태그: <code>#완료 #진행중 #%70 {bold} =y{형광}</code>'
+      + '</div>';
+  }
+
+  // 단일 뷰: 좌(편집) | 우(프리뷰), 각자 토글
+  function renderAuthorSingle() {
+    return '<div id="wrAuMain" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+      + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:10px;display:flex;flex-direction:column;min-height:480px">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      +     '<div style="font-size:12px;font-weight:600;color:var(--t3)">✏️ 편집</div>'
+      +     '<div class="tabs sub-tabs" style="margin:0">'
+      +       '<button class="tab' + (_authorState.editPane === 'last' ? ' on' : '') + '" data-ep="last">지난주</button>'
+      +       '<button class="tab' + (_authorState.editPane === 'cur'  ? ' on' : '') + '" data-ep="cur">금주</button>'
+      +     '</div>'
+      +   '</div>'
+      +   authorToolbar('wrAuEditor')
+      +   '<textarea id="wrAuEditor" data-pane="' + _authorState.editPane + '" spellcheck="false" placeholder="[개발]\n- [사이트] 업무명 ~MM/DD 50% @담당자\n..." style="flex:1;width:100%;min-height:380px;padding:10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12.5px;font-family:ui-monospace,Consolas,monospace;line-height:1.6;resize:vertical"></textarea>'
+      +   '<div style="font-size:10.5px;color:var(--t6);margin-top:6px;line-height:1.5">'
+      +     '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 태그: <code>#완료 #진행중 #%70 {bold} =y{형광}</code>'
+      +   '</div>'
+      + '</div>'
+      + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:10px;min-height:480px">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      +     '<div style="font-size:12px;font-weight:600;color:var(--t3)">👁 미리보기</div>'
+      +     '<div class="tabs sub-tabs" style="margin:0">'
+      +       '<button class="tab' + (_authorState.previewPane === 'last' ? ' on' : '') + '" data-pv="last">지난주</button>'
+      +       '<button class="tab' + (_authorState.previewPane === 'cur'  ? ' on' : '') + '" data-pv="cur">금주</button>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div id="wrAuPreview" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;min-height:380px;overflow:auto"></div>'
+      + '</div>'
+      + '</div>';
+  }
+
+  // 모든 textarea 값을 state로 동기화 (모드 전환/탭 클릭 전 호출)
+  function syncAuthorEditorsToState() {
+    var elL = $('wrAuEditorLast'); if (elL) _authorState.lastText = elL.value;
+    var elC = $('wrAuEditorCur'); if (elC) _authorState.curText = elC.value;
+    var ed = $('wrAuEditor'); if (ed) {
+      var p = ed.dataset.pane || _authorState.editPane;
+      _authorState[p === 'last' ? 'lastText' : 'curText'] = ed.value;
+    }
+  }
+
+  // 단일 뷰에서 툴바 버튼이 어느 textarea에 삽입할지 (단일 textarea면 그것, 비교 모드면 마지막 포커스/금주)
+  function pickInsertTarget() {
+    if (_authorState.viewMode === 'single') return 'wrAuEditor';
+    return _authorState.editPane === 'last' ? 'wrAuEditorLast' : 'wrAuEditorCur';
+  }
+
+  // 한 textarea에 입력/단축키/디바운스 프리뷰 바인딩
+  function bindAuthorEditor(id, paneKey) {
+    var ed = $(id);
+    if (!ed) return;
+    if (id === 'wrAuEditor') ed.value = _authorState.editPane === 'last' ? _authorState.lastText : _authorState.curText;
+    else ed.value = paneKey === 'last' ? _authorState.lastText : _authorState.curText;
+    var debounceT = null;
+    ed.addEventListener('input', function () {
+      var p = ed.dataset.pane || paneKey;
+      _authorState[p === 'last' ? 'lastText' : 'curText'] = ed.value;
+      _authorState.editPane = p; // 마지막 편집 페인 추적 (툴바 타겟 추정용)
+      clearTimeout(debounceT);
+      debounceT = setTimeout(function () { updateAuthorPreview(p); }, 200);
+    });
+    ed.addEventListener('focus', function () {
+      var p = ed.dataset.pane || paneKey;
+      _authorState.editPane = p;
+    });
+    ed.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveAuthor(false); }
+    });
+  }
+
   function insertAtCursor(taId, text) {
     var ta = $(taId);
     if (!ta) return;
@@ -796,16 +873,23 @@
     ta.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  function updateAuthorPreview() {
-    var pv = $('wrAuPreview');
-    if (!pv) return;
-    var text = _authorState.previewPane === 'last' ? _authorState.lastText : _authorState.curText;
-    if (!text || !text.trim()) {
-      pv.innerHTML = '<div style="color:var(--t6);text-align:center;padding:32px">내용을 입력하면 여기에 미리보기가 표시됩니다</div>';
-      return;
+  function updateAuthorPreview(paneKey) {
+    function fillOne(pvId, text) {
+      var pv = $(pvId);
+      if (!pv) return;
+      if (!text || !text.trim()) {
+        pv.innerHTML = '<div style="color:var(--t6);text-align:center;padding:32px">내용을 입력하면 여기에 미리보기가 표시됩니다</div>';
+      } else {
+        pv.innerHTML = buildPreviewHTML(clientParseText(text));
+      }
     }
-    var parsed = clientParseText(text);
-    pv.innerHTML = buildPreviewHTML(parsed);
+    if (_authorState.viewMode === 'compare') {
+      if (!paneKey || paneKey === 'last') fillOne('wrAuPreviewLast', _authorState.lastText);
+      if (!paneKey || paneKey === 'cur')  fillOne('wrAuPreviewCur',  _authorState.curText);
+    } else {
+      var text = _authorState.previewPane === 'last' ? _authorState.lastText : _authorState.curText;
+      fillOne('wrAuPreview', text);
+    }
   }
 
   function updateAuthorStatusBadge() {
@@ -894,8 +978,7 @@
   async function saveAuthor(asNewVersion) {
     if (!_authorState.team) { alert('팀명을 입력하세요.'); return; }
     if (!_authorState.weekStart || !_authorState.weekEnd) { alert('주차를 선택하세요.'); return; }
-    var ed = $('wrAuEditor');
-    if (ed) _authorState[_authorState.editPane === 'last' ? 'lastText' : 'curText'] = ed.value;
+    syncAuthorEditorsToState();
 
     var name;
     if (asNewVersion || !_authorState.loadedName) {
