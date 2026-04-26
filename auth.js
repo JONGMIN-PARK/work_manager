@@ -468,6 +468,10 @@ function updateAuthUI() {
   if (adminTab) {
     adminTab.style.display = currentUser.role === 'admin' ? '' : 'none';
   }
+  var wrTab = document.getElementById('tabWeeklyReport');
+  if (wrTab) {
+    wrTab.style.display = currentUser.role === 'admin' ? '' : 'none';
+  }
   // 애니웍스 버튼 — 모든 사용자에게 표시
   var awBtns = document.querySelectorAll('.awAdminBtn');
   for (var i = 0; i < awBtns.length; i++) {

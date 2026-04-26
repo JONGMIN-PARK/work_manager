@@ -17,6 +17,7 @@
 <script src="config.js?v=5" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="settings.js?v=5" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="auth.js?v=5" onerror="console.warn('auth.js 로드 실패')"></script>
+<script defer src="weekly-report-admin.js?v=1" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
 <script src="project-data.js?v=5" onerror="console.warn('project-data.js 로드 실패')"></script>
 <!-- 렌더러 (defer — 초기 표시 이후 실행돼도 무방) -->
 <script defer src="calendar.js?v=5" onerror="console.warn('calendar.js 로드 실패')"></script>
@@ -370,6 +371,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
     <button class="tab on" data-page="team" onclick="setPage('team')" role="tab" aria-selected="true" aria-controls="modeTabs">👥 팀 관리</button>
     <button class="tab" data-page="project" onclick="setPage('project')" role="tab" aria-selected="false" aria-controls="modeTabsProj">📁 프로젝트 관리</button>
     <button class="tab" data-page="useradmin" onclick="setPage('useradmin')" role="tab" aria-selected="false" id="tabUserAdmin" style="display:none">👤 사용자 관리</button>
+    <button class="tab" data-page="weekly_report" onclick="setPage('weekly_report')" role="tab" aria-selected="false" id="tabWeeklyReport" style="display:none">📅 주간 업무</button>
     <button class="tab" data-page="patchnotes" onclick="setPage('patchnotes')" role="tab" aria-selected="false">📋 패치노트</button>
   </div>
   <!-- 하위 모드 탭 -->
@@ -610,6 +612,8 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   <div id="mDocs" class="hidden"></div>
   <!-- 사용자 관리 (admin only) -->
   <div id="mUserAdmin" class="hidden"></div>
+  <!-- 주간 업무 보고 (admin only) -->
+  <div id="mWeeklyReport" class="hidden"></div>
   <!-- 패치노트 -->
   <div id="mPatchNotes" class="hidden"></div>
 
@@ -1003,13 +1007,18 @@ function setPage(page){
   document.getElementById('modeTabs').classList.toggle('hidden',page!=='team');
   document.getElementById('modeTabsProj').classList.toggle('hidden',page!=='project');
   // 모든 모드 숨기기
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mUserAdmin','mPatchNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mUserAdmin','mWeeklyReport','mPatchNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   // 해당 페이지의 첫 탭 활성화
   if(page==='useradmin'){
     document.getElementById('modeTabs').classList.add('hidden');
     document.getElementById('modeTabsProj').classList.add('hidden');
     var ua=document.getElementById('mUserAdmin');if(ua)ua.classList.remove('hidden');
     if(typeof renderUserAdmin==='function')renderUserAdmin();
+  }else if(page==='weekly_report'){
+    document.getElementById('modeTabs').classList.add('hidden');
+    document.getElementById('modeTabsProj').classList.add('hidden');
+    var wr=document.getElementById('mWeeklyReport');if(wr)wr.classList.remove('hidden');
+    if(typeof renderWeeklyReportPage==='function')renderWeeklyReportPage();
   }else if(page==='patchnotes'){
     document.getElementById('modeTabs').classList.add('hidden');
     document.getElementById('modeTabsProj').classList.add('hidden');
@@ -1031,7 +1040,7 @@ function setMode(m){curMode=m;
   var projModes=['pipeline','calendar','timeline','orders','issues','docs'];
   var tabBar=teamModes.includes(m)?'#modeTabs':'#modeTabsProj';
   document.querySelectorAll(tabBar+' .tab').forEach(function(t){var sel=t.dataset.m===m;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mUserAdmin','mPatchNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mUserAdmin','mWeeklyReport','mPatchNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',issues:'mIssues',docs:'mDocs'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
   if(m==='archive')renderArch();if(m==='trend')renderTrend();if(m==='pipeline'&&typeof renderPipeline==='function')renderPipeline();if(m==='calendar'&&typeof initCalendar==='function')initCalendar();if(m==='timeline'&&typeof initTimeline==='function')initTimeline();if(m==='orders'&&typeof renderOrders==='function')renderOrders();if(m==='issues'&&typeof renderIssues==='function')renderIssues();if(m==='docs'&&typeof renderDocManager==='function')renderDocManager()

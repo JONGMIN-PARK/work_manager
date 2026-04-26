@@ -1,0 +1,372 @@
+/* ═══ 주간 업무 보고 — 관리자 페이지 ═══
+ * 업로드/검색/통계/목록 4개 서브탭으로 /api/weekly-reports 호출
+ * apiFetch (auth.js) 사용 — 자동 JWT 첨부
+ */
+
+(function () {
+  var SECTION_LABEL = { dev: '개발', setup: '셋업', cs: 'C/S', etc: '기타' };
+  var STATE = { tab: 'upload', searchResults: null, stats: null, list: null };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function statusPill(st) {
+    if (st === 'done') return '<span style="color:#1a8a40;background:rgba(26,138,64,.12);padding:1px 6px;border-radius:4px;font-size:11px">● 완료</span>';
+    if (st === 'in_progress') return '<span style="color:#d03030;background:rgba(208,48,48,.12);padding:1px 6px;border-radius:4px;font-size:11px">● 진행중</span>';
+    return '';
+  }
+
+  function shell() {
+    return ''
+      + '<div style="margin-bottom:14px">'
+      +   '<h2 style="margin:0 0 4px;font-size:18px">📅 주간 업무 보고</h2>'
+      +   '<p class="sub" style="margin:0;font-size:12px;color:var(--t5)">JSON을 누적 적재하여 검색·통계로 활용합니다 (관리자 전용)</p>'
+      + '</div>'
+      + '<div class="tabs sub-tabs" id="wrSubTabs" role="tablist" style="margin-bottom:14px">'
+      +   '<button class="tab on" data-wt="upload" role="tab">📤 업로드</button>'
+      +   '<button class="tab" data-wt="search" role="tab">🔍 검색</button>'
+      +   '<button class="tab" data-wt="stats" role="tab">📊 통계</button>'
+      +   '<button class="tab" data-wt="list" role="tab">🗂️ 목록</button>'
+      + '</div>'
+      + '<div id="wrPanel"></div>';
+  }
+
+  function renderWeeklyReportPage() {
+    var root = $('mWeeklyReport');
+    if (!root) return;
+    if (!root.dataset.init) {
+      root.innerHTML = shell();
+      root.dataset.init = '1';
+      var bar = $('wrSubTabs');
+      bar.querySelectorAll('.tab').forEach(function (t) {
+        t.addEventListener('click', function () { setTab(t.dataset.wt); });
+      });
+    }
+    setTab(STATE.tab);
+  }
+  window.renderWeeklyReportPage = renderWeeklyReportPage;
+
+  function setTab(name) {
+    STATE.tab = name;
+    var bar = $('wrSubTabs'); if (!bar) return;
+    bar.querySelectorAll('.tab').forEach(function (t) {
+      t.classList.toggle('on', t.dataset.wt === name);
+      t.setAttribute('aria-selected', t.dataset.wt === name);
+    });
+    if (name === 'upload') renderUpload();
+    else if (name === 'search') renderSearch();
+    else if (name === 'stats') renderStats();
+    else if (name === 'list') renderList();
+  }
+
+  /* ─── 업로드 ─── */
+  function renderUpload() {
+    $('wrPanel').innerHTML = ''
+      + '<div id="wrDrop" style="border:2px dashed var(--bd);border-radius:10px;padding:32px;text-align:center;cursor:pointer;color:var(--t5);transition:all .15s">'
+      +   '<div style="font-size:36px;margin-bottom:8px">📄</div>'
+      +   '<div style="font-weight:700;color:var(--t2);margin-bottom:4px">JSON 파일을 드롭하거나 클릭하여 선택</div>'
+      +   '<div style="font-size:12px">여러 개 동시 선택 가능 · 같은 이름이면 덮어씀</div>'
+      +   '<input id="wrFileInput" type="file" accept=".json,application/json" multiple style="display:none">'
+      + '</div>'
+      + '<div id="wrUploadResult" style="margin-top:14px"></div>';
+
+    var dz = $('wrDrop');
+    var fi = $('wrFileInput');
+    dz.addEventListener('click', function () { fi.click(); });
+    fi.addEventListener('change', function (e) { handleFiles(e.target.files); fi.value = ''; });
+    dz.addEventListener('dragover', function (e) { e.preventDefault(); dz.style.borderColor = 'var(--ac)'; dz.style.background = 'var(--ac-bg)'; });
+    dz.addEventListener('dragleave', function () { dz.style.borderColor = 'var(--bd)'; dz.style.background = ''; });
+    dz.addEventListener('drop', function (e) {
+      e.preventDefault();
+      dz.style.borderColor = 'var(--bd)'; dz.style.background = '';
+      handleFiles(e.dataTransfer.files);
+    });
+  }
+
+  async function handleFiles(files) {
+    if (!files || !files.length) return;
+    var box = $('wrUploadResult');
+    box.innerHTML = '<div style="color:var(--t5);font-size:12px">⏳ 업로드 중... ' + files.length + '개</div>';
+    var ok = [], fail = [];
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      try {
+        var text = await f.text();
+        var json = JSON.parse(text);
+        var r = await apiFetch('/api/weekly-reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(json)
+        });
+        ok.push({ file: f.name, saved: r.data && r.data[0] });
+      } catch (e) {
+        fail.push({ file: f.name, error: (e && e.message) || String(e) });
+      }
+    }
+    var rows = ''
+      + ok.map(function (r) {
+          var wk = (r.saved && r.saved.week_label) || '-';
+          return '<tr><td style="padding:6px 8px;border-bottom:1px solid var(--bd)">' + esc(r.file) + '</td>'
+            + '<td style="padding:6px 8px;border-bottom:1px solid var(--bd)">' + esc(wk) + '</td>'
+            + '<td style="padding:6px 8px;border-bottom:1px solid var(--bd);color:#1a8a40">저장됨</td></tr>';
+        }).join('')
+      + fail.map(function (r) {
+          return '<tr><td style="padding:6px 8px;border-bottom:1px solid var(--bd)">' + esc(r.file) + '</td>'
+            + '<td style="padding:6px 8px;border-bottom:1px solid var(--bd)">-</td>'
+            + '<td style="padding:6px 8px;border-bottom:1px solid var(--bd);color:#d03030">실패: ' + esc(r.error) + '</td></tr>';
+        }).join('');
+    box.innerHTML = ''
+      + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px">'
+      +   '<div style="font-size:12px;margin-bottom:8px;color:var(--t3)">처리 결과 — 성공 ' + ok.length + ' / 실패 ' + fail.length + '</div>'
+      +   '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +     '<thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--t5);font-weight:600">파일</th>'
+      +     '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--t5);font-weight:600">주차</th>'
+      +     '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--t5);font-weight:600">상태</th></tr></thead>'
+      +     '<tbody>' + rows + '</tbody>'
+      +   '</table>'
+      + '</div>';
+    if (typeof showToast === 'function') {
+      showToast('업로드 완료 — 성공 ' + ok.length + ' / 실패 ' + fail.length, fail.length ? 'warn' : 'ok');
+    }
+  }
+
+  /* ─── 검색 ─── */
+  function renderSearch() {
+    $('wrPanel').innerHTML = ''
+      + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px">'
+      +   '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'
+      +     inputCell('wrSQ', 'text', '키워드 (이름/세부)')
+      +     inputCell('wrSAssignee', 'text', '담당자 (예: 박종민)')
+      +     inputCell('wrSClient', 'text', '사이트 (예: 디케이티)')
+      +     selectCell('wrSStatus', [['','상태 전체'],['done','완료'],['in_progress','진행중'],['none','미표시']])
+      +     selectCell('wrSSection', [['','섹션 전체'],['dev','개발'],['setup','셋업'],['cs','C/S'],['etc','기타']])
+      +     selectCell('wrSPane', [['cur','금주'],['last','지난주']])
+      +     inputCell('wrSFrom', 'date', '')
+      +     inputCell('wrSTo', 'date', '')
+      +   '</div>'
+      +   '<div style="margin-top:10px;display:flex;gap:8px;align-items:center">'
+      +     '<button id="wrSearchBtn" class="tab on" style="padding:7px 18px">검색</button>'
+      +     '<button id="wrSearchReset" class="tab" style="padding:7px 14px">초기화</button>'
+      +     '<span id="wrSearchCount" style="font-size:12px;color:var(--t5)"></span>'
+      +   '</div>'
+      + '</div>'
+      + '<div id="wrSearchResult"></div>';
+
+    $('wrSearchBtn').addEventListener('click', runSearch);
+    $('wrSearchReset').addEventListener('click', function () {
+      ['wrSQ','wrSAssignee','wrSClient','wrSStatus','wrSSection','wrSFrom','wrSTo'].forEach(function (k) { var el = $(k); if (el) el.value = ''; });
+      $('wrSPane').value = 'cur';
+      $('wrSearchResult').innerHTML = '';
+      $('wrSearchCount').textContent = '';
+    });
+    ['wrSQ','wrSAssignee','wrSClient'].forEach(function (k) {
+      $(k).addEventListener('keydown', function (e) { if (e.key === 'Enter') runSearch(); });
+    });
+  }
+
+  function inputCell(id, type, ph) {
+    return '<input id="' + id + '" type="' + type + '" placeholder="' + esc(ph) + '" '
+      + 'style="padding:7px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12px;font-family:inherit">';
+  }
+  function selectCell(id, opts) {
+    return '<select id="' + id + '" style="padding:7px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12px;font-family:inherit">'
+      + opts.map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join('')
+      + '</select>';
+  }
+
+  async function runSearch() {
+    var f = {
+      q: $('wrSQ').value.trim(),
+      assignee: $('wrSAssignee').value.trim(),
+      client: $('wrSClient').value.trim(),
+      status: $('wrSStatus').value,
+      section: $('wrSSection').value,
+      pane: $('wrSPane').value,
+      from: $('wrSFrom').value,
+      to: $('wrSTo').value
+    };
+    var qs = Object.keys(f).filter(function (k) { return f[k]; }).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(f[k]);
+    }).join('&');
+    var box = $('wrSearchResult');
+    box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5)">⏳ 검색 중...</div>';
+    try {
+      var r = await apiFetch('/api/weekly-reports/search?' + qs);
+      var rows = r.data || [];
+      $('wrSearchCount').textContent = rows.length + '건';
+      if (!rows.length) {
+        box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5);background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">결과 없음</div>';
+        return;
+      }
+      var html = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;overflow:auto">'
+        + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +   '<thead><tr>'
+        +     th('주차') + th('섹션') + th('사이트') + th('업무') + th('D-day') + th('%') + th('담당자') + th('상태')
+        +   '</tr></thead><tbody>'
+        + rows.map(function (m) {
+            var it = m.item || {};
+            var details = (it.details || []).map(function (d) {
+              return '<div style="color:var(--t5);font-size:11px;margin-top:2px">: ' + esc(d.text) + '</div>';
+            }).join('');
+            var members = (it.members || []).map(function (mm) {
+              return '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;background:var(--bg-i);color:var(--t5);margin:1px 2px 1px 0">@' + esc(mm) + '</span>';
+            }).join('');
+            return '<tr>'
+              + td('<div style="font-weight:600">' + esc(m.week_label || '-') + '</div><div style="font-size:10px;color:var(--t6)">' + esc(m.team || '') + '</div>')
+              + td(esc(SECTION_LABEL[it.section] || it.section || ''))
+              + td('<strong>' + esc(it.client || '') + '</strong>')
+              + td(esc(it.name || '') + details)
+              + td(esc(it.deadline || ''))
+              + td(it.pct >= 0 ? esc(it.pct + '%') : '')
+              + td(members)
+              + td(statusPill(it.status))
+              + '</tr>';
+          }).join('')
+        + '</tbody></table></div>';
+      box.innerHTML = html;
+    } catch (e) {
+      box.innerHTML = '<div style="padding:14px;color:#d03030;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">검색 실패: ' + esc(e.message || e) + '</div>';
+    }
+  }
+
+  function th(t) { return '<th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--bd);font-size:11px;color:var(--t5);font-weight:600;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">' + t + '</th>'; }
+  function td(html) { return '<td style="padding:8px 10px;border-bottom:1px solid var(--bd);vertical-align:top">' + html + '</td>'; }
+
+  /* ─── 통계 ─── */
+  function renderStats() {
+    $('wrPanel').innerHTML = ''
+      + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px">'
+      +   '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+      +     inputCell('wrStTeam', 'text', '팀 (예: 소프트웨어팀)')
+      +     inputCell('wrStFrom', 'date', '')
+      +     inputCell('wrStTo', 'date', '')
+      +     '<button id="wrStatsBtn" class="tab on" style="padding:7px 18px">조회</button>'
+      +   '</div>'
+      + '</div>'
+      + '<div id="wrStatsResult"></div>';
+    $('wrStatsBtn').addEventListener('click', runStats);
+    runStats();
+  }
+
+  async function runStats() {
+    var f = { team: $('wrStTeam').value.trim(), from: $('wrStFrom').value, to: $('wrStTo').value };
+    var qs = Object.keys(f).filter(function (k) { return f[k]; }).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(f[k]);
+    }).join('&');
+    var box = $('wrStatsResult');
+    box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5)">⏳ 조회 중...</div>';
+    try {
+      var r = await apiFetch('/api/weekly-reports/stats' + (qs ? '?' + qs : ''));
+      var d = r.data;
+      if (!d || !d.weekly || !d.weekly.length) {
+        box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5);background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">데이터 없음 — 먼저 업로드 탭에서 JSON을 올려주세요</div>';
+        return;
+      }
+      var totals = d.totals;
+      var stHtml = ''
+        + statCard('주차 수', totals.weeks)
+        + statCard('총 항목', totals.items)
+        + statCard('완료', totals.byStatus.done, '#1a8a40')
+        + statCard('진행중', totals.byStatus.in_progress, '#d03030')
+        + statCard('완료율', totals.completion_rate + '%');
+      var weeklyRows = d.weekly.map(function (w) {
+        return '<tr>'
+          + td('<strong>' + esc(w.week_label || '-') + '</strong> <span style="color:var(--t6);font-size:11px">' + esc(w.week_start || '') + '</span>')
+          + td(String(w.total))
+          + td('<span style="color:#1a8a40">' + w.done + '</span>')
+          + td('<span style="color:#d03030">' + w.in_progress + '</span>')
+          + td('<div>' + w.completion_rate + '%</div><div style="height:5px;background:var(--bd);border-radius:3px;margin-top:4px;overflow:hidden"><div style="height:100%;width:' + w.completion_rate + '%;background:linear-gradient(90deg,var(--ac),#7aaade)"></div></div>')
+          + td(w.avg_pct == null ? '-' : (w.avg_pct + '%'))
+          + '</tr>';
+      }).join('');
+      var memHtml = (d.byMember || []).slice(0, 15).map(function (m) {
+        return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd);font-size:12px"><span>@' + esc(m.key) + '</span><span style="color:var(--t5)">' + m.count + '건</span></div>';
+      }).join('');
+      var cliHtml = (d.byClient || []).slice(0, 15).map(function (c) {
+        return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd);font-size:12px"><span>' + esc(c.key) + '</span><span style="color:var(--t5)">' + c.count + '건</span></div>';
+      }).join('');
+      box.innerHTML = ''
+        + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">' + stHtml + '</div>'
+        + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px">'
+        +   '<div style="font-size:13px;font-weight:600;margin-bottom:10px">주차별 진행</div>'
+        +   '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +     '<thead><tr>' + th('주차') + th('총') + th('완료') + th('진행중') + th('완료율') + th('평균%') + '</tr></thead>'
+        +     '<tbody>' + weeklyRows + '</tbody>'
+        +   '</table>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">'
+        +   '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px">'
+        +     '<div style="font-size:13px;font-weight:600;margin-bottom:8px">담당자별 (상위 15)</div>' + memHtml
+        +   '</div>'
+        +   '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px">'
+        +     '<div style="font-size:13px;font-weight:600;margin-bottom:8px">사이트별 (상위 15)</div>' + cliHtml
+        +   '</div>'
+        + '</div>';
+    } catch (e) {
+      box.innerHTML = '<div style="padding:14px;color:#d03030;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">조회 실패: ' + esc(e.message || e) + '</div>';
+    }
+  }
+
+  function statCard(label, val, color) {
+    return '<div style="flex:1 1 140px;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px">'
+      +   '<div style="font-size:11px;color:var(--t6);text-transform:uppercase;letter-spacing:.5px">' + esc(label) + '</div>'
+      +   '<div style="font-size:22px;font-weight:700;margin-top:4px' + (color ? ';color:' + color : '') + '">' + esc(String(val)) + '</div>'
+      + '</div>';
+  }
+
+  /* ─── 목록 ─── */
+  async function renderList() {
+    var box = $('wrPanel');
+    box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5)">⏳ 불러오는 중...</div>';
+    try {
+      var r = await apiFetch('/api/weekly-reports');
+      var rows = r.data || [];
+      if (!rows.length) {
+        box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5);background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">업로드된 보고서가 없습니다</div>';
+        return;
+      }
+      var bodyRows = rows.map(function (it) {
+        var st = (it.stats && it.stats.cur) || {};
+        var bs = st.byStatus || {};
+        return '<tr>'
+          + td('<strong>' + esc(it.week_label || '-') + '</strong>')
+          + td(esc(it.team || '-'))
+          + td('<span style="font-size:11px;color:var(--t5)">' + esc(it.name) + '</span>')
+          + td(esc(it.week_start || '-') + ' ~ ' + esc(it.week_end || '-'))
+          + td('<span style="color:#1a8a40">' + (bs.done || 0) + '</span> / <span style="color:#d03030">' + (bs.in_progress || 0) + '</span> / ' + (st.total || 0))
+          + td('<span style="font-size:11px;color:var(--t6)">' + esc(it.saved_at ? new Date(it.saved_at).toLocaleString('ko-KR') : '-') + '</span>')
+          + td('<button class="tab" data-del="' + esc(it.id) + '" style="padding:4px 10px;font-size:11px;color:#d03030;border:1px solid #d03030;background:transparent">삭제</button>')
+          + '</tr>';
+      }).join('');
+      box.innerHTML = ''
+        + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;overflow:auto">'
+        +   '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +     '<thead><tr>'
+        +       th('주차') + th('팀') + th('이름') + th('기간') + th('완료/진행/총') + th('저장') + th('')
+        +     '</tr></thead>'
+        +     '<tbody>' + bodyRows + '</tbody>'
+        +   '</table>'
+        + '</div>';
+      box.querySelectorAll('[data-del]').forEach(function (b) {
+        b.addEventListener('click', function () { deleteReport(b.dataset.del); });
+      });
+    } catch (e) {
+      box.innerHTML = '<div style="padding:14px;color:#d03030;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">조회 실패: ' + esc(e.message || e) + '</div>';
+    }
+  }
+
+  async function deleteReport(id) {
+    if (!confirm('삭제하시겠습니까?')) return;
+    try {
+      await apiFetch('/api/weekly-reports/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (typeof showToast === 'function') showToast('삭제됨', 'ok');
+      renderList();
+    } catch (e) {
+      alert('삭제 실패: ' + (e.message || e));
+    }
+  }
+})();
