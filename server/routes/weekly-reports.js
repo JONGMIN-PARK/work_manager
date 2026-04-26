@@ -79,6 +79,54 @@ router.get('/', async function (req, res) {
   }
 });
 
+// ─── GET /api/weekly-reports/next-name — 팀/주차 기반 자동 파일명 (다음 R 버전) ───
+router.get('/next-name', async function (req, res) {
+  try {
+    var team = req.query.team || '';
+    var weekStart = req.query.weekStart;
+    var weekEnd = req.query.weekEnd;
+    if (!team || !weekStart || !weekEnd) {
+      return res.status(400).json({ error: 'VALIDATION', message: 'team/weekStart/weekEnd 필요' });
+    }
+    var ws = new Date(weekStart);
+    var we = new Date(weekEnd);
+    function pad(n) { return String(n).padStart(2, '0'); }
+    var yy = pad(ws.getFullYear() % 100);
+    // ISO 주차 계산 — 보고서 형식에서 쓰는 W 번호
+    var d = new Date(Date.UTC(ws.getFullYear(), ws.getMonth(), ws.getDate()));
+    var dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    var weekLabel = yy + 'W' + pad(weekNo);
+    var prefix = team + '_' + weekLabel + '_' + pad(ws.getMonth() + 1) + '/' + pad(ws.getDate()) + '~' + pad(we.getMonth() + 1) + '/' + pad(we.getDate());
+
+    var r = await db.query(
+      "SELECT name FROM weekly_reports WHERE tenant_id = $1 AND team = $2 AND week_start = $3",
+      [req.tenant.id, team, weekStart]
+    );
+    var maxR = 0;
+    r.rows.forEach(function (row) {
+      var m = String(row.name).match(/_R(\d+)\b/);
+      if (m) { var n = parseInt(m[1], 10); if (n > maxR) maxR = n; }
+    });
+    var nextR = maxR + 1;
+    res.json({
+      data: {
+        weekLabel: weekLabel,
+        prefix: prefix,
+        currentMaxR: maxR,
+        nextR: nextR,
+        nextName: prefix + '_R' + nextR,
+        existing: r.rows.map(function (x) { return x.name; })
+      }
+    });
+  } catch (e) {
+    console.error('[weekly-reports/next-name]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // ─── GET /api/weekly-reports/search — 항목 단위 검색 ───
 router.get('/search', async function (req, res) {
   try {
