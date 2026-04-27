@@ -2483,6 +2483,10 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.28',date:'2026-04-27',title:'주간 업무 미리보기 — 메타 줄 분리 조건 완화',tag:'feature',items:[
+      '납기/진행율이 있을 때만 2줄 분리 (담당자 외 정보가 길어 타이틀이 밀리는 케이스 방지)',
+      '담당자만 있는 줄은 기존처럼 타이틀과 같은 줄에 인라인 표시'
+    ]},
     {ver:'13.27',date:'2026-04-27',title:'주간 업무 미리보기 — 항목 헤더 2줄 레이아웃',tag:'feature',items:[
       '1줄: [업체] 상태아이콘 + 타이틀 (타이틀이 잘리지 않고 항상 보이도록)',
       '2줄: 담당자 · 납기 · 진행율 · D-DAY (자동 줄바꿈)',
