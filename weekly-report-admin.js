@@ -88,17 +88,17 @@
     var title = opts.title || '주간 업무 보고';
     var headerHtml = '';
     if (opts.headerLabel) {
-      headerHtml = '<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bd)">'
-        + '<div style="font-size:16px;font-weight:700;color:var(--t2)">' + esc(opts.headerLabel) + '</div>'
-        + (opts.headerSub ? '<div style="font-size:11.5px;color:var(--t5);margin-top:2px">' + esc(opts.headerSub) + '</div>' : '')
+      headerHtml = '<div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--bd)">'
+        + '<div style="font-size:14px;font-weight:700;color:var(--t2)">' + esc(opts.headerLabel) + '</div>'
+        + (opts.headerSub ? '<div style="font-size:11px;color:var(--t5);margin-top:2px">' + esc(opts.headerSub) + '</div>' : '')
         + '</div>';
     }
     var body = '';
     if (Array.isArray(parsedPane)) {
       // 둘 다 모드: 각 페인을 헤더 함께 출력
       parsedPane.forEach(function (p, i) {
-        body += (i > 0 ? '<div style="margin:18px 0;border-top:1px dashed var(--bd)"></div>' : '')
-          + (p.label ? '<div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:10px">' + esc(p.label) + '</div>' : '')
+        body += (i > 0 ? '<div style="margin:10px 0;border-top:1px dashed var(--bd)"></div>' : '')
+          + (p.label ? '<div style="font-size:12px;font-weight:700;color:var(--ac);margin-bottom:6px">' + esc(p.label) + '</div>' : '')
           + buildPreviewHTML(p.parsed);
       });
     } else {
@@ -114,7 +114,7 @@
       + '<style>\n'
       + ':root{--bg:' + v.bgPage + ';--bg-p:' + v.bgP + ';--bg-i:' + v.bgI + ';--bd:' + v.bd + ';--ac:' + v.ac + ';--t2:' + v.t2 + ';--t3:' + v.t3 + ';--t5:' + v.t5 + ';--t6:' + v.t6 + '}\n'
       + 'html,body{margin:0;padding:0;background:var(--bg);color:var(--t2);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}\n'
-      + 'body{padding:18px;box-sizing:border-box}\n'
+      + 'body{padding:10px;box-sizing:border-box}\n'
       + 'code{font-family:ui-monospace,Consolas,monospace;background:var(--bg-i);padding:1px 5px;border-radius:3px;font-size:11.5px}\n'
       + 'strong{font-weight:700;color:var(--t2)}\n'
       + 'svg{display:inline-block;vertical-align:middle}\n'
@@ -149,27 +149,27 @@
     var html = '';
     parsedPane.sections.forEach(function (sec) {
       var cl = SEC_COLORS[sec.type] || SEC_COLORS.dev;
-      html += '<div style="margin-bottom:18px">'
-        +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-        +     '<span style="background:' + cl.num + ';color:#fff;font-weight:700;font-size:11px;padding:2px 8px;border-radius:4px">' + (SEC_NUM[sec.type] || '') + '</span>'
-        +     '<span style="font-size:14px;font-weight:700;color:var(--t2)">' + esc(SEC_LABELS[sec.type] || sec.type) + '</span>'
+      html += '<div style="margin-bottom:10px">'
+        +   '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        +     '<span style="background:' + cl.num + ';color:#fff;font-weight:700;font-size:10.5px;padding:1px 6px;border-radius:3px">' + (SEC_NUM[sec.type] || '') + '</span>'
+        +     '<span style="font-size:13px;font-weight:700;color:var(--t2)">' + esc(SEC_LABELS[sec.type] || sec.type) + '</span>'
         +   '</div>';
       sec.items.forEach(function (it) {
         var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
         var members = (it.members || []).map(function (m) {
-          return '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10.5px;background:var(--bg-i);color:var(--t5);margin:0 0 0 4px">@' + esc(m) + '</span>';
+          return '<span style="display:inline-block;padding:0 5px;border-radius:3px;font-size:10px;background:var(--bg-i);color:var(--t5);margin:0 0 0 3px">@' + esc(m) + '</span>';
         }).join('');
         var detailsHtml = '';
         if (it.details && it.details.length) {
-          detailsHtml = '<ul style="margin:6px 0 0;padding:0;list-style:none">'
+          detailsHtml = '<ul style="margin:4px 0 0;padding:0;list-style:none">'
             + it.details.map(function (d) {
                 var dMembers = (d.members || []).map(function (m) {
-                  return '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10.5px;background:var(--bg-i);color:var(--t5);margin-left:4px">@' + esc(m) + '</span>';
+                  return '<span style="display:inline-block;padding:0 5px;border-radius:3px;font-size:10px;background:var(--bg-i);color:var(--t5);margin-left:3px">@' + esc(m) + '</span>';
                 }).join('');
                 // 텍스트에서 @멤버 제거 후 인라인 마크업
                 var dText = String(d.text || '').replace(/@[^\s@]+/g, '').trim();
-                return '<li style="display:flex;align-items:center;font-size:11.5px;color:var(--t3);padding:2px 0;line-height:1.7">'
-                  + '<span style="color:var(--t6);margin:0 6px 0 4px">–</span>'
+                return '<li style="display:flex;align-items:center;font-size:11px;color:var(--t3);padding:1px 0;line-height:1.5">'
+                  + '<span style="color:var(--t6);margin:0 5px 0 3px">–</span>'
                   + '<span style="flex:1">' + inlineMarkup(dText) + '</span>'
                   + dMembers + '</li>';
               }).join('')
@@ -180,25 +180,25 @@
         var hasHeavy = !!it.deadline || pct !== null;
         var titleInline = hasHeavy ? '' : members;
         var titleStyle = hasHeavy
-          ? 'font-size:12.5px;color:var(--t2);flex:1;min-width:0;word-break:break-word'
-          : 'font-size:11.5px;color:var(--t3);font-weight:400;flex:1;min-width:0;word-break:break-word';
+          ? 'font-size:12px;color:var(--t2);flex:1;min-width:0;word-break:break-word'
+          : 'font-size:11px;color:var(--t3);font-weight:400;flex:1;min-width:0;word-break:break-word';
         var metaHtml = '';
         if (hasHeavy) {
-          metaHtml = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">'
+          metaHtml = '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:3px">'
             + members
-            + (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace">' + esc(it.deadline) + '</span>' : '')
-            + (pct !== null ? '<span style="font-size:11.5px;font-weight:700;color:' + cl.main + ';font-family:ui-monospace,monospace">' + pct + '%</span>' : '')
+            + (it.deadline ? '<span style="font-size:10px;color:var(--t5);font-family:ui-monospace,monospace">' + esc(it.deadline) + '</span>' : '')
+            + (pct !== null ? '<span style="font-size:11px;font-weight:700;color:' + cl.main + ';font-family:ui-monospace,monospace">' + pct + '%</span>' : '')
             + (it.deadline ? ddayBadge(it.deadline) : '')
             + '</div>';
         }
-        html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:6px;padding:8px 12px;margin-bottom:6px">'
-          + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
-          +   '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;flex-shrink:0">' + esc(it.client || '') + '</span>'
+        html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:5px 9px;margin-bottom:3px">'
+          + '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">'
+          +   '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:3px;flex-shrink:0">' + esc(it.client || '') + '</span>'
           +   '<span style="' + titleStyle + '">' + inlineMarkup(it.name || '') + '</span>'
           +   titleInline
           + '</div>'
           + metaHtml
-          + (pct !== null ? '<div style="height:4px;background:var(--bd);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + cl.bar + '"></div></div>' : '')
+          + (pct !== null ? '<div style="height:3px;background:var(--bd);border-radius:2px;margin-top:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + cl.bar + '"></div></div>' : '')
           + detailsHtml
           + '</div>';
       });
