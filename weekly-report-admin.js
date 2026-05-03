@@ -179,6 +179,9 @@
         // 그 외(담당자만 있는 경우 등)는 기존대로 타이틀 줄에 같이 배치
         var hasHeavy = !!it.deadline || pct !== null;
         var titleInline = hasHeavy ? '' : members;
+        var titleStyle = hasHeavy
+          ? 'font-size:12.5px;color:var(--t2);flex:1;min-width:0;word-break:break-word'
+          : 'font-size:11.5px;color:var(--t3);font-weight:400;flex:1;min-width:0;word-break:break-word';
         var metaHtml = '';
         if (hasHeavy) {
           metaHtml = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">'
@@ -191,7 +194,7 @@
         html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:6px;padding:8px 12px;margin-bottom:6px">'
           + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
           +   '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;flex-shrink:0">' + esc(it.client || '') + '</span>'
-          +   '<span style="font-size:12.5px;color:var(--t2);flex:1;min-width:0;word-break:break-word">' + inlineMarkup(it.name || '') + '</span>'
+          +   '<span style="' + titleStyle + '">' + inlineMarkup(it.name || '') + '</span>'
           +   titleInline
           + '</div>'
           + metaHtml
