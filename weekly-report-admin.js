@@ -638,7 +638,7 @@
         var rest = im[2].trim();
         var dm = rest.match(/(~\d{2}\/\d{2})/);
         var pm = rest.match(/(\d+)%/) || rest.match(/#%(\d+)/);
-        var name = rest.replace(/@[^\s@]+/g, '').replace(/(~\d{2}\/\d{2})/g, '').replace(/\d+%/g, '').replace(/#%\d+/g, '').replace(/#완료|#진행중?/g, '').trim();
+        var name = rest.replace(/@[^\s@]+/g, '').replace(/(~\d{2}\/\d{2})/g, '').replace(/\d+%/g, '').replace(/#%\d+/g, '').replace(/\s+/g, ' ').trim();
         item = {
           section: cur.type,
           client: im[1].trim(),
