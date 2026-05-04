@@ -2996,7 +2996,7 @@ function mtrRun(){
       type:'bar',label:AM[c]||c,_code:c,
       data:flatLabels.map(function(_,i){return Math.round(data[personIdx[i]][c][ymList[monthIdx[i]]]*10)/10}),
       backgroundColor:col,borderColor:col,borderWidth:0,borderSkipped:'bottom',
-      maxBarThickness:42,categoryPercentage:.85,barPercentage:.9
+      barThickness:48,categoryPercentage:.5,barPercentage:.85
     };
   });
   if(showLine){
@@ -3108,7 +3108,7 @@ function mtrCRun(){
     type:'bar',label:AM[c]||c,_code:c,
     data:ymList.map(function(k){return Math.round(data[c][k]*10)/10}),
     backgroundColor:col,borderColor:col,borderWidth:0,borderRadius:0,borderSkipped:'bottom',
-    maxBarThickness:48,categoryPercentage:.7,barPercentage:.9
+    barThickness:55,categoryPercentage:.4,barPercentage:.85
   }});
   if(showLine){
     var totals=ymList.map(function(k){var s=0;codes.forEach(function(c){s+=data[c][k]});return Math.round(s*10)/10});
