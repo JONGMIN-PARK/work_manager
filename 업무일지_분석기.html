@@ -2974,34 +2974,41 @@ function mtrRun(){
     var h=parseFloat(r.hours);if(!isFinite(h))return;
     data[r.name][c][k]+=h
   });
-  // 차트: 월별로 인원 그룹 + 각 인원 막대는 코드별 ABR 스택
+  // 차트: 6슬롯 고정 (월별 그룹) + 각 인원 막대는 코드별 ABR 스택
   document.getElementById('mtrEmpty').classList.add('hidden');
-  document.getElementById('mtrChartWrap').classList.remove('hidden');
+  var chartWrap=document.getElementById('mtrChartWrap');
+  chartWrap.classList.remove('hidden');
+  var FULL_SLOTS=6;
+  var paddedYm=ymList.slice();while(paddedYm.length<FULL_SLOTS)paddedYm.push('');
+  var slotW=members.length>3?150:(members.length>1?115:90);
+  chartWrap.style.width=(FULL_SLOTS*slotW)+'px';chartWrap.style.maxWidth='100%';
+  var parent=chartWrap.parentNode;if(parent&&parent.style)parent.style.overflowX='auto';
   var tc=gTC();
   var showLine=!!(document.getElementById('mtrShowLine')&&document.getElementById('mtrShowLine').checked);
   if(mtrChart){try{mtrChart.destroy()}catch(e){}mtrChart=null}
   var ctx=document.getElementById('mtrChart').getContext('2d');
-  // 라벨: 월 × 인원 평탄화 (월 안에서 인원이 옆으로 나란히)
+  // 라벨: (6슬롯 × 인원) 평탄화 — 빈 슬롯은 데이터 null
   var flatLabels=[];var personIdx=[];var monthIdx=[];
-  ymList.forEach(function(k,mi){
+  paddedYm.forEach(function(k,mi){
     members.forEach(function(n,pi){
       var disp=typeof shortName==='function'?shortName(n):n;
-      flatLabels.push(members.length>1?(k+'\n'+disp):k);
+      flatLabels.push(k?(members.length>1?(k+'\n'+disp):k):'');
       personIdx.push(n);monthIdx.push(mi);
     });
   });
+  var barW=members.length>3?22:(members.length>1?32:42);
   var datasets=codes.map(function(c){
     var col=ABR[c]||'#64748B';
     return{
       type:'bar',label:AM[c]||c,_code:c,
-      data:flatLabels.map(function(_,i){return Math.round(data[personIdx[i]][c][ymList[monthIdx[i]]]*10)/10}),
+      data:flatLabels.map(function(_,i){var k=ymList[monthIdx[i]];if(!k)return null;return Math.round(data[personIdx[i]][c][k]*10)/10}),
       backgroundColor:col,borderColor:col,borderWidth:0,borderSkipped:'bottom',
-      barThickness:48,categoryPercentage:.5,barPercentage:.85
+      barThickness:barW
     };
   });
   if(showLine){
-    var totals=flatLabels.map(function(_,i){var s=0;codes.forEach(function(c){s+=data[personIdx[i]][c][ymList[monthIdx[i]]]});return Math.round(s*10)/10});
-    datasets.push({type:'line',label:'합계',data:totals,borderColor:'#E2E8F0',backgroundColor:'rgba(226,232,240,.2)',borderWidth:2,pointRadius:3,pointHoverRadius:5,tension:.25,fill:false,order:0});
+    var totals=flatLabels.map(function(_,i){var k=ymList[monthIdx[i]];if(!k)return null;var s=0;codes.forEach(function(c){s+=data[personIdx[i]][c][k]});return Math.round(s*10)/10});
+    datasets.push({type:'line',label:'합계',data:totals,borderColor:'#E2E8F0',backgroundColor:'rgba(226,232,240,.2)',borderWidth:2,pointRadius:3,pointHoverRadius:5,tension:.25,fill:false,order:0,spanGaps:false});
   }
   mtrChart=new Chart(ctx,{data:{labels:flatLabels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10},autoSkip:false,maxRotation:60,minRotation:members.length>1?40:0,callback:function(val,idx){var lab=this.getLabelForValue(val);return String(lab).split('\n')}},grid:{color:tc.g}},y:{stacked:true,beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
@@ -3099,22 +3106,27 @@ function mtrCRun(){
     data[c][k]+=(parseFloat(r.hours)||0)
   });
   document.getElementById('mtrCEmpty').classList.add('hidden');
-  document.getElementById('mtrCChartWrap').classList.remove('hidden');
+  var chartWrapC=document.getElementById('mtrCChartWrap');
+  chartWrapC.classList.remove('hidden');
+  var FULL_SLOTS_C=6,SLOT_WC=110;
+  chartWrapC.style.width=(FULL_SLOTS_C*SLOT_WC)+'px';chartWrapC.style.maxWidth='100%';
+  var parentC=chartWrapC.parentNode;if(parentC&&parentC.style)parentC.style.overflowX='auto';
+  var paddedYmC=ymList.slice();while(paddedYmC.length<FULL_SLOTS_C)paddedYmC.push('');
   var tc=gTC();
   var showLine=!!(document.getElementById('mtrCShowLine')&&document.getElementById('mtrCShowLine').checked);
   if(mtrCChart){try{mtrCChart.destroy()}catch(e){}mtrCChart=null}
   var ctx=document.getElementById('mtrCChart').getContext('2d');
   var datasets=codes.map(function(c){var col=ABR[c]||'#64748B';return{
     type:'bar',label:AM[c]||c,_code:c,
-    data:ymList.map(function(k){return Math.round(data[c][k]*10)/10}),
+    data:paddedYmC.map(function(k){if(!k)return null;return Math.round(data[c][k]*10)/10}),
     backgroundColor:col,borderColor:col,borderWidth:0,borderRadius:0,borderSkipped:'bottom',
-    barThickness:55,categoryPercentage:.4,barPercentage:.85
+    barThickness:55
   }});
   if(showLine){
-    var totals=ymList.map(function(k){var s=0;codes.forEach(function(c){s+=data[c][k]});return Math.round(s*10)/10});
-    datasets.push({type:'line',label:'월합계',data:totals,borderColor:'#E2E8F0',backgroundColor:'rgba(226,232,240,.2)',borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:.3,fill:false,order:0});
+    var totals=paddedYmC.map(function(k){if(!k)return null;var s=0;codes.forEach(function(c){s+=data[c][k]});return Math.round(s*10)/10});
+    datasets.push({type:'line',label:'월합계',data:totals,borderColor:'#E2E8F0',backgroundColor:'rgba(226,232,240,.2)',borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:.3,fill:false,order:0,spanGaps:false});
   }
-  mtrCChart=new Chart(ctx,{data:{labels:ymList,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+  mtrCChart=new Chart(ctx,{data:{labels:paddedYmC,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{stacked:true,beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
     plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true,pointStyle:'rect'}},
       tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+c.parsed.y+'h'}}}}}});
