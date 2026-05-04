@@ -2961,48 +2961,65 @@ function mtrRun(){
   if(!mtrSelMembers.size){showToast('팀원을 1명 이상 선택하세요.','warn');return}
   if(!mtrSelCodes.size){showToast('분장 코드를 1개 이상 선택하세요.','warn');return}
   var ymList=_mtrEnumerate(a,b);
+  var members=Array.from(mtrSelMembers).sort(function(x,y){return x.localeCompare(y,'ko')});
   var codes=Object.keys(AM).filter(function(c){return mtrSelCodes.has(c)});
-  // 집계: data[code][ymKey] = sum hours over selected members
-  var data={};codes.forEach(function(c){data[c]={};ymList.forEach(function(k){data[c][k]=0})});
+  // 집계: data[member][code][ymKey] = hours
+  var data={};
+  members.forEach(function(n){data[n]={};codes.forEach(function(c){data[n][c]={};ymList.forEach(function(k){data[n][c][k]=0})})});
   aD.forEach(function(r){
     if(!r||!mtrSelMembers.has(r.name))return;
     var c=r.abbr;if(!c||!mtrSelCodes.has(c))return;
     if(c!=='V'&&_mtrIsVac(r))return;
     var k=_mtrYM(r.date);if(!k||ymList.indexOf(k)===-1)return;
     var h=parseFloat(r.hours);if(!isFinite(h))return;
-    data[c][k]+=h
+    data[r.name][c][k]+=h
   });
-  // 일별 투입시간 차트와 동일한 스택 코드 막대 — 월별 1개 컬럼
+  // 차트: 월별로 인원 그룹 + 각 인원 막대는 코드별 ABR 스택
   document.getElementById('mtrEmpty').classList.add('hidden');
   document.getElementById('mtrChartWrap').classList.remove('hidden');
   var tc=gTC();
   var showLine=!!(document.getElementById('mtrShowLine')&&document.getElementById('mtrShowLine').checked);
   if(mtrChart){try{mtrChart.destroy()}catch(e){}mtrChart=null}
   var ctx=document.getElementById('mtrChart').getContext('2d');
-  var datasets=codes.map(function(c){var col=ABR[c]||'#64748B';return{
-    type:'bar',label:AM[c]||c,_code:c,
-    data:ymList.map(function(k){return Math.round(data[c][k]*10)/10}),
-    backgroundColor:col,borderColor:col,borderWidth:0,borderRadius:0,borderSkipped:'bottom'
-  }});
+  // 라벨: 월 × 인원 평탄화 (월 안에서 인원이 옆으로 나란히)
+  var flatLabels=[];var personIdx=[];var monthIdx=[];
+  ymList.forEach(function(k,mi){
+    members.forEach(function(n,pi){
+      var disp=typeof shortName==='function'?shortName(n):n;
+      flatLabels.push(members.length>1?(k+'\n'+disp):k);
+      personIdx.push(n);monthIdx.push(mi);
+    });
+  });
+  var datasets=codes.map(function(c){
+    var col=ABR[c]||'#64748B';
+    return{
+      type:'bar',label:AM[c]||c,_code:c,
+      data:flatLabels.map(function(_,i){return Math.round(data[personIdx[i]][c][ymList[monthIdx[i]]]*10)/10}),
+      backgroundColor:col,borderColor:col,borderWidth:0,borderSkipped:'bottom'
+    };
+  });
   if(showLine){
-    var totals=ymList.map(function(k){var s=0;codes.forEach(function(c){s+=data[c][k]});return Math.round(s*10)/10});
-    datasets.push({type:'line',label:'월합계',data:totals,borderColor:'#E2E8F0',backgroundColor:'rgba(226,232,240,.2)',borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:.3,fill:false,order:0});
+    var totals=flatLabels.map(function(_,i){var s=0;codes.forEach(function(c){s+=data[personIdx[i]][c][ymList[monthIdx[i]]]});return Math.round(s*10)/10});
+    datasets.push({type:'line',label:'합계',data:totals,borderColor:'#E2E8F0',backgroundColor:'rgba(226,232,240,.2)',borderWidth:2,pointRadius:3,pointHoverRadius:5,tension:.25,fill:false,order:0});
   }
-  mtrChart=new Chart(ctx,{data:{labels:ymList,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-    scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{stacked:true,beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
+  mtrChart=new Chart(ctx,{data:{labels:flatLabels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10},autoSkip:false,maxRotation:60,minRotation:members.length>1?40:0,callback:function(val,idx){var lab=this.getLabelForValue(val);return String(lab).split('\n')}},grid:{color:tc.g}},y:{stacked:true,beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
     plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true,pointStyle:'rect'}},
-      tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+c.parsed.y+'h'}}}}}});
-  // 표 — 코드별 월별
+      tooltip:{callbacks:{
+        title:function(items){if(!items.length)return '';var i=items[0].dataIndex;var disp=typeof shortName==='function'?shortName(personIdx[i]):personIdx[i];return ymList[monthIdx[i]]+' · '+disp},
+        label:function(c){return c.dataset.label+': '+c.parsed.y+'h'}
+      }}}}});
+  // 표 — 인원 × 월 매트릭스 (각 셀은 모든 선택 코드 합)
   var tw=document.getElementById('mtrTblWrap');tw.classList.remove('hidden');
-  var totals=ymList.map(function(){return 0});
-  var rows=codes.map(function(c){
-    var bg=ABG[c]||'#1A1F35',fg=AFG[c]||'#94A3B8';
-    var cells=ymList.map(function(k,i){var v=Math.round(data[c][k]*10)/10;totals[i]+=v;return '<td style="padding:5px 8px;text-align:right;color:var(--t3);font-variant-numeric:tabular-nums">'+v+'h</td>'}).join('');
-    var sum=ymList.reduce(function(s,k){return s+data[c][k]},0);
-    return '<tr><td style="padding:5px 8px;color:var(--t2);font-weight:600;white-space:nowrap"><span class="badge" style="background:'+bg+';color:'+fg+';padding:1px 5px;border-radius:3px;font-size:10px;margin-right:5px">'+c+'</span>'+eH(AM[c]||c)+'</td>'+cells+'<td style="padding:5px 8px;text-align:right;color:var(--ac-t);font-weight:600;font-variant-numeric:tabular-nums">'+(Math.round(sum*10)/10)+'h</td></tr>'
+  var colTotals=ymList.map(function(){return 0});
+  var rows=members.map(function(n){
+    var disp=typeof shortName==='function'?shortName(n):n;
+    var cells=ymList.map(function(k,i){var v=0;codes.forEach(function(c){v+=data[n][c][k]});v=Math.round(v*10)/10;colTotals[i]+=v;return '<td style="padding:5px 8px;text-align:right;color:var(--t3);font-variant-numeric:tabular-nums">'+v+'h</td>'}).join('');
+    var sum=ymList.reduce(function(s,k){var v=0;codes.forEach(function(c){v+=data[n][c][k]});return s+v},0);
+    return '<tr><td style="padding:5px 8px;color:var(--t2);font-weight:600;white-space:nowrap">'+eH(disp)+'</td>'+cells+'<td style="padding:5px 8px;text-align:right;color:var(--ac-t);font-weight:600;font-variant-numeric:tabular-nums">'+(Math.round(sum*10)/10)+'h</td></tr>'
   }).join('');
-  var totRow='<tr style="border-top:1px solid var(--bd)"><td style="padding:5px 8px;color:var(--t4);font-weight:600">월합계</td>'+totals.map(function(t){return '<td style="padding:5px 8px;text-align:right;color:var(--t4);font-variant-numeric:tabular-nums">'+(Math.round(t*10)/10)+'h</td>'}).join('')+'<td style="padding:5px 8px;text-align:right;color:var(--ac-t);font-weight:700;font-variant-numeric:tabular-nums">'+(Math.round(totals.reduce(function(s,t){return s+t},0)*10)/10)+'h</td></tr>';
-  tw.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--bg-i)"><th style="padding:6px 8px;text-align:left;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">분장</th>'+ymList.map(function(k){return '<th style="padding:6px 8px;text-align:right;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">'+k+'</th>'}).join('')+'<th style="padding:6px 8px;text-align:right;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">합계</th></tr></thead><tbody>'+rows+totRow+'</tbody></table>';
+  var totRow='<tr style="border-top:1px solid var(--bd)"><td style="padding:5px 8px;color:var(--t4);font-weight:600">월합계</td>'+colTotals.map(function(t){return '<td style="padding:5px 8px;text-align:right;color:var(--t4);font-variant-numeric:tabular-nums">'+(Math.round(t*10)/10)+'h</td>'}).join('')+'<td style="padding:5px 8px;text-align:right;color:var(--ac-t);font-weight:700;font-variant-numeric:tabular-nums">'+(Math.round(colTotals.reduce(function(s,t){return s+t},0)*10)/10)+'h</td></tr>';
+  tw.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--bg-i)"><th style="padding:6px 8px;text-align:left;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">팀원</th>'+ymList.map(function(k){return '<th style="padding:6px 8px;text-align:right;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">'+k+'</th>'}).join('')+'<th style="padding:6px 8px;text-align:right;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">합계</th></tr></thead><tbody>'+rows+totRow+'</tbody></table>';
 }
 
 /* ═══ 월별 비교 (업무분장 코드별 추이) — 2~6개월 범위, 코드 체크박스 ═══ */
