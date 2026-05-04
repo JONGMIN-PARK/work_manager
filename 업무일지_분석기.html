@@ -526,7 +526,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
           </div>
         </div>
         <!-- Chart -->
-        <div id="tCht" class="hidden"><div class="cg"><div class="sc cb" id="pieS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="pieS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">업무 분장 비율</h3><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="width:240px;height:240px"><canvas id="pieC"></canvas></div><div id="pieL" style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px"></div></div></div><div class="sc" id="perS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="perS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">인원별 분포</h3><div id="perB" style="display:flex;flex-direction:column;gap:8px;max-height:420px;overflow:auto"></div><div id="abL" style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap"></div></div><div class="sc cf cb" id="barCS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="barCS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">일별 투입시간</h3><div style="height:260px"><canvas id="barC"></canvas></div></div><div class="sc cb" id="clientPieS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="clientPieS"></div></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:13px;font-weight:600;color:var(--t4)">업체 대응 비율</h3><label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer"><input type="checkbox" id="hideUnassignedClient" onchange="rCht(gF())"> 미지정 숨기기</label></div><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="width:240px;height:240px"><canvas id="clientPieC"></canvas></div><div id="clientPieL" style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px"></div></div></div><div class="sc" id="clientBarS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="clientBarS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">업체 대응별 시간</h3><div id="clientBarB" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto"></div></div><div class="sc cf cb" id="clientDayCS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="clientDayCS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">일별 업체 투입시간</h3><div style="height:260px"><canvas id="clientDayC"></canvas></div></div><div class="sc cf cb" id="mtrS" style="position:relative"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="mtrS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:8px">📈 월별 비교 — 개인별 추이</h3><div style="font-size:10.5px;color:var(--t6);margin-bottom:10px">시작·종료 연도/월을 지정하고 인원을 선택하면 월별 투입시간 추이를 비교합니다 (최소 2개월 ~ 최대 6개월).</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:11px;color:var(--t4);font-weight:600">시작</span><select id="mtrFromYear" class="msel" style="min-width:80px" onchange="mtrUpdateInfo()"></select><select id="mtrFromMon" class="msel" style="min-width:70px" onchange="mtrUpdateInfo()"></select><span style="font-size:11px;color:var(--t5)">~</span><span style="font-size:11px;color:var(--t4);font-weight:600">종료</span><select id="mtrToYear" class="msel" style="min-width:80px" onchange="mtrUpdateInfo()"></select><select id="mtrToMon" class="msel" style="min-width:70px" onchange="mtrUpdateInfo()"></select><span id="mtrRangeInfo" style="font-size:10.5px;color:var(--t5)"></span></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:11px;color:var(--t4);font-weight:600">팀원</span><button class="btn btn-g btn-s" type="button" onclick="mtrUseSelected()" title="상단 팀원 선택과 동기화">↻ 선택 팀원 사용</button><button class="btn btn-g btn-s" type="button" onclick="mtrSelAll()">전체</button><button class="btn btn-g btn-s" type="button" onclick="mtrDeAll()">해제</button><span id="mtrMemCount" style="font-size:10.5px;color:var(--t5)"></span><span style="flex:1"></span><label style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--t4);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)" title="각 팀원의 막대 위에 추세선을 함께 표시"><input type="checkbox" id="mtrShowLine" onchange="mtrToggleLine()"> 추세선 표시</label><button class="btn btn-p btn-s" type="button" onclick="mtrRun()">📊 비교 분석</button></div><div id="mtrMembers" style="display:flex;gap:6px;flex-wrap:wrap;max-height:120px;overflow-y:auto;padding:6px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:6px;margin-bottom:10px"></div><div id="mtrEmpty" style="text-align:center;color:var(--t6);padding:24px;font-size:11.5px">기간과 인원을 선택한 뒤 "비교 분석"을 눌러주세요.</div><div id="mtrChartWrap" class="hidden" style="height:300px"><canvas id="mtrChart"></canvas></div><div id="mtrTblWrap" class="hidden" style="margin-top:12px;overflow:auto;font-size:11px"></div></div><div class="sc cf cb" id="mtrCS" style="position:relative"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="mtrCS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:8px">📈 월별 비교 — 업무분장 코드별 추이</h3><div style="font-size:10.5px;color:var(--t6);margin-bottom:10px">시작·종료 연도/월을 지정하고 분장 코드를 선택하면 월별 코드별 누적 투입시간 추이를 비교합니다 (최소 2개월 ~ 최대 6개월).</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:11px;color:var(--t4);font-weight:600">시작</span><select id="mtrCFromYear" class="msel" style="min-width:80px" onchange="mtrCUpdateInfo()"></select><select id="mtrCFromMon" class="msel" style="min-width:70px" onchange="mtrCUpdateInfo()"></select><span style="font-size:11px;color:var(--t5)">~</span><span style="font-size:11px;color:var(--t4);font-weight:600">종료</span><select id="mtrCToYear" class="msel" style="min-width:80px" onchange="mtrCUpdateInfo()"></select><select id="mtrCToMon" class="msel" style="min-width:70px" onchange="mtrCUpdateInfo()"></select><span id="mtrCRangeInfo" style="font-size:10.5px;color:var(--t5)"></span><button class="btn btn-g btn-s" type="button" onclick="mtrCSyncFromMtr()" title="개인별 추이의 기간을 그대로 가져옴">↻ 개인 기간 사용</button></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:11px;color:var(--t4);font-weight:600">분장 코드</span><button class="btn btn-g btn-s" type="button" onclick="mtrCSelAll()">전체</button><button class="btn btn-g btn-s" type="button" onclick="mtrCDeAll()">해제</button><button class="btn btn-g btn-s" type="button" onclick="mtrCSelNoVac()" title="휴가(V) 제외 전체 선택">전체(V 제외)</button><span id="mtrCCodeCount" style="font-size:10.5px;color:var(--t5)"></span><span style="flex:1"></span><label style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--t4);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)" title="각 코드의 막대 위에 추세선을 함께 표시"><input type="checkbox" id="mtrCShowLine" onchange="mtrCToggleLine()"> 추세선 표시</label><button class="btn btn-p btn-s" type="button" onclick="mtrCRun()">📊 비교 분석</button></div><div id="mtrCCodes" style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:6px;margin-bottom:10px"></div><div id="mtrCEmpty" style="text-align:center;color:var(--t6);padding:24px;font-size:11.5px">기간과 코드를 선택한 뒤 "비교 분석"을 눌러주세요.</div><div id="mtrCChartWrap" class="hidden" style="height:300px"><canvas id="mtrCChart"></canvas></div><div id="mtrCTblWrap" class="hidden" style="margin-top:12px;overflow:auto;font-size:11px"></div></div></div></div>
+        <div id="tCht" class="hidden"><div class="cg"><div class="sc cb" id="pieS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="pieS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">업무 분장 비율</h3><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="width:240px;height:240px"><canvas id="pieC"></canvas></div><div id="pieL" style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px"></div></div></div><div class="sc" id="perS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="perS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">인원별 분포</h3><div id="perB" style="display:flex;flex-direction:column;gap:8px;max-height:420px;overflow:auto"></div><div id="abL" style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap"></div></div><div class="sc cf cb" id="barCS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="barCS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">일별 투입시간</h3><div style="height:260px"><canvas id="barC"></canvas></div></div><div class="sc cb" id="clientPieS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="clientPieS"></div></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:13px;font-weight:600;color:var(--t4)">업체 대응 비율</h3><label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer"><input type="checkbox" id="hideUnassignedClient" onchange="rCht(gF())"> 미지정 숨기기</label></div><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="width:240px;height:240px"><canvas id="clientPieC"></canvas></div><div id="clientPieL" style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px"></div></div></div><div class="sc" id="clientBarS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="clientBarS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">업체 대응별 시간</h3><div id="clientBarB" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto"></div></div><div class="sc cf cb" id="clientDayCS"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="clientDayCS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:12px">일별 업체 투입시간</h3><div style="height:260px"><canvas id="clientDayC"></canvas></div></div><div class="sc cf cb" id="mtrS" style="position:relative"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="mtrS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:8px">📈 월별 비교 — 개인별 추이</h3><div style="font-size:10.5px;color:var(--t6);margin-bottom:10px">시작·종료 연도/월을 지정하고 인원을 선택하면 월별 투입시간 추이를 비교합니다 (최소 2개월 ~ 최대 6개월).</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:11px;color:var(--t4);font-weight:600">시작</span><select id="mtrFromYear" class="msel" style="min-width:80px" onchange="mtrUpdateInfo()"></select><select id="mtrFromMon" class="msel" style="min-width:70px" onchange="mtrUpdateInfo()"></select><span style="font-size:11px;color:var(--t5)">~</span><span style="font-size:11px;color:var(--t4);font-weight:600">종료</span><select id="mtrToYear" class="msel" style="min-width:80px" onchange="mtrUpdateInfo()"></select><select id="mtrToMon" class="msel" style="min-width:70px" onchange="mtrUpdateInfo()"></select><span id="mtrRangeInfo" style="font-size:10.5px;color:var(--t5)"></span></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:11px;color:var(--t4);font-weight:600">팀원</span><button class="btn btn-g btn-s" type="button" onclick="mtrUseSelected()" title="상단 팀원 선택과 동기화">↻ 선택 팀원 사용</button><button class="btn btn-g btn-s" type="button" onclick="mtrSelAll()">전체</button><button class="btn btn-g btn-s" type="button" onclick="mtrDeAll()">해제</button><span id="mtrMemCount" style="font-size:10.5px;color:var(--t5)"></span><span style="flex:1"></span><label style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--t4);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)" title="각 팀원의 막대 위에 추세선을 함께 표시"><input type="checkbox" id="mtrShowLine" onchange="mtrToggleLine()"> 추세선 표시</label><button class="btn btn-p btn-s" type="button" onclick="mtrRun()">📊 비교 분석</button></div><div id="mtrMembers" style="display:flex;gap:6px;flex-wrap:wrap;max-height:120px;overflow-y:auto;padding:6px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:6px;margin-bottom:8px"></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span style="font-size:11px;color:var(--t4);font-weight:600">분장 코드</span><button class="btn btn-g btn-s" type="button" onclick="mtrSelAllCodes()">전체</button><button class="btn btn-g btn-s" type="button" onclick="mtrDeAllCodes()">해제</button><button class="btn btn-g btn-s" type="button" onclick="mtrSelNoVacCodes()" title="휴가(V) 제외 전체 선택">전체(V 제외)</button><span id="mtrCodeCount" style="font-size:10.5px;color:var(--t5)"></span></div><div id="mtrCodes" style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:6px;margin-bottom:10px"></div><div id="mtrEmpty" style="text-align:center;color:var(--t6);padding:24px;font-size:11.5px">기간·인원·코드를 선택한 뒤 "비교 분석"을 눌러주세요.</div><div id="mtrChartWrap" class="hidden" style="height:320px"><canvas id="mtrChart"></canvas></div><div id="mtrTblWrap" class="hidden" style="margin-top:12px;overflow:auto;font-size:11px"></div></div><div class="sc cf cb" id="mtrCS" style="position:relative"><div class="cht-save-wrap"><button class="cht-save-btn" onclick="toggleChartMenu(this)">📷 저장</button><div class="cht-save-menu" data-target="mtrCS"></div></div><h3 style="font-size:13px;font-weight:600;color:var(--t4);margin-bottom:8px">📈 월별 비교 — 업무분장 코드별 추이</h3><div style="font-size:10.5px;color:var(--t6);margin-bottom:10px">시작·종료 연도/월을 지정하고 분장 코드를 선택하면 월별 코드별 누적 투입시간 추이를 비교합니다 (최소 2개월 ~ 최대 6개월).</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:11px;color:var(--t4);font-weight:600">시작</span><select id="mtrCFromYear" class="msel" style="min-width:80px" onchange="mtrCUpdateInfo()"></select><select id="mtrCFromMon" class="msel" style="min-width:70px" onchange="mtrCUpdateInfo()"></select><span style="font-size:11px;color:var(--t5)">~</span><span style="font-size:11px;color:var(--t4);font-weight:600">종료</span><select id="mtrCToYear" class="msel" style="min-width:80px" onchange="mtrCUpdateInfo()"></select><select id="mtrCToMon" class="msel" style="min-width:70px" onchange="mtrCUpdateInfo()"></select><span id="mtrCRangeInfo" style="font-size:10.5px;color:var(--t5)"></span><button class="btn btn-g btn-s" type="button" onclick="mtrCSyncFromMtr()" title="개인별 추이의 기간을 그대로 가져옴">↻ 개인 기간 사용</button></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:11px;color:var(--t4);font-weight:600">분장 코드</span><button class="btn btn-g btn-s" type="button" onclick="mtrCSelAll()">전체</button><button class="btn btn-g btn-s" type="button" onclick="mtrCDeAll()">해제</button><button class="btn btn-g btn-s" type="button" onclick="mtrCSelNoVac()" title="휴가(V) 제외 전체 선택">전체(V 제외)</button><span id="mtrCCodeCount" style="font-size:10.5px;color:var(--t5)"></span><span style="flex:1"></span><label style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--t4);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)" title="각 코드의 막대 위에 추세선을 함께 표시"><input type="checkbox" id="mtrCShowLine" onchange="mtrCToggleLine()"> 추세선 표시</label><button class="btn btn-p btn-s" type="button" onclick="mtrCRun()">📊 비교 분석</button></div><div id="mtrCCodes" style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:6px;margin-bottom:10px"></div><div id="mtrCEmpty" style="text-align:center;color:var(--t6);padding:24px;font-size:11.5px">기간과 코드를 선택한 뒤 "비교 분석"을 눌러주세요.</div><div id="mtrCChartWrap" class="hidden" style="height:320px"><canvas id="mtrCChart"></canvas></div><div id="mtrCTblWrap" class="hidden" style="margin-top:12px;overflow:auto;font-size:11px"></div></div></div></div>
         <!-- AI -->
         <div id="tAi" class="hidden"><div class="pnl">
           <div class="pnl-h"><h3 class="pnl-t">🤖 AI 요약 & 인사이트</h3><button class="btn btn-p btn-s" onclick="reqSum()" id="sumBtn">요약 생성</button></div>
@@ -784,8 +784,8 @@ let sN=new Set(),sO=new Set(),sT=new Set(),sON=new Set(),sCL=new Set(),sDV=new S
 let cKw='',cEnc='euc-kr',lBuf=null;
 let excludeVac=(function(){try{return localStorage.getItem('wm_excludeVac')==='1'}catch(e){return false}})();
 let selWeek=null; // 선택된 주차 {start:'YYYYMMDD', end:'YYYYMMDD', label:'...'} or null=전체
-let pC=null,bC=null,tC=null,clPieC=null,clDayC=null,mtrChart=null,mtrCChart=null;
-function destroyCharts(){[pC,bC,tC,clPieC,clDayC,mtrChart,mtrCChart].forEach(function(c){if(c){try{c.destroy()}catch(e){}}});pC=bC=tC=clPieC=clDayC=mtrChart=mtrCChart=null;cmpPieCharts.forEach(function(c){if(c){try{c.destroy()}catch(e){}}});cmpPieCharts=[];if(cmpBarChart){try{cmpBarChart.destroy()}catch(e){}}cmpBarChart=null;if(cmpLineChart){try{cmpLineChart.destroy()}catch(e){}}cmpLineChart=null}
+let pC=null,bC=null,tC=null,clPieC=null,clDayC=null,mtrChart=null,mtrCChart=null,mtrLineChart=null,mtrCLineChart=null;
+function destroyCharts(){[pC,bC,tC,clPieC,clDayC,mtrChart,mtrCChart,mtrLineChart,mtrCLineChart].forEach(function(c){if(c){try{c.destroy()}catch(e){}}});pC=bC=tC=clPieC=clDayC=mtrChart=mtrCChart=mtrLineChart=mtrCLineChart=null;cmpPieCharts.forEach(function(c){if(c){try{c.destroy()}catch(e){}}});cmpPieCharts=[];if(cmpBarChart){try{cmpBarChart.destroy()}catch(e){}}cmpBarChart=null;if(cmpLineChart){try{cmpLineChart.destroy()}catch(e){}}cmpLineChart=null}
 var _upVTimer;
 function upVD(){clearTimeout(_upVTimer);_upVTimer=setTimeout(upV,30)}
 let avO=[],avT=[],avON=[],avCL=[],avDV=[];
@@ -2866,8 +2866,9 @@ if(clDayC)clDayC.destroy();clDayC=new Chart(document.getElementById('clientDayC'
 
 function sTab(t){document.querySelectorAll('#statsS .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));document.getElementById('tTbl').classList.toggle('hidden',t!=='tbl');document.getElementById('tCht').classList.toggle('hidden',t!=='cht');document.getElementById('tAi').classList.toggle('hidden',t!=='ai');document.getElementById('tSum').classList.toggle('hidden',t!=='sum');if(t!=='cht')destroyCharts();if(t==='cht'){destroyCharts();const f=gF();if(f.length>0)rCht(f);mtrInit();mtrCInit()}if(t==='sum')rContentSum()}
 
-/* ═══ 월별 비교 (개인별 추이) — 2~6개월 범위, 인원 체크박스 ═══ */
+/* ═══ 월별 비교 (개인별 추이) — 2~6개월, 인원·코드 체크박스 ═══ */
 let mtrSelMembers=new Set();
+let mtrSelCodes=new Set();
 function _mtrYM(d){return d&&d.length>=6?d.slice(0,4)+'-'+d.slice(4,6):''}
 function _mtrParse(v){if(!v)return null;var p=v.split('-');return{y:+p[0],m:+p[1]}}
 function _mtrDiffMonths(a,b){if(!a||!b)return 0;return (b.y-a.y)*12+(b.m-a.m)+1}
@@ -2902,8 +2903,24 @@ function mtrInit(){
     // aN에 더 이상 존재하지 않는 이름은 제거
     var aNSet=new Set(aN||[]);Array.from(mtrSelMembers).forEach(function(n){if(!aNSet.has(n))mtrSelMembers.delete(n)});
   }
-  mtrRenderMembers();mtrUpdateInfo()
+  // 코드 체크박스 — 처음 진입 시 V 제외 전체 선택
+  if(mtrSelCodes.size===0){Object.keys(AM).forEach(function(c){if(c!=='V')mtrSelCodes.add(c)})}
+  mtrRenderMembers();mtrRenderCodes();mtrUpdateInfo()
 }
+function mtrRenderCodes(){
+  var box=document.getElementById('mtrCodes');if(!box)return;
+  var codes=Object.keys(AM);
+  box.innerHTML=codes.map(function(c){
+    var on=mtrSelCodes.has(c);
+    var bg=ABG[c]||'#1A1F35',fg=AFG[c]||'#94A3B8',line=ABR[c]||'#64748B';
+    return '<label class="mtr-code" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 8px;border-radius:14px;cursor:pointer;background:'+(on?'rgba(59,130,246,.15)':'var(--lb)')+';border:1px solid '+(on?'var(--ac)':'var(--bd)')+';color:var(--t3)"><input type="checkbox" '+(on?'checked':'')+' onchange="mtrTogCode(\''+c+'\')" style="margin:0;cursor:pointer"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'+line+'"></span><span class="badge" style="background:'+bg+';color:'+fg+';padding:1px 5px;border-radius:3px;font-size:10px;font-weight:600">'+c+'</span></label>'
+  }).join('');
+  document.getElementById('mtrCodeCount').textContent='· '+mtrSelCodes.size+'개 선택';
+}
+function mtrTogCode(c){if(mtrSelCodes.has(c))mtrSelCodes.delete(c);else mtrSelCodes.add(c);mtrRenderCodes();if(mtrChart&&mtrSelMembers.size>0&&mtrSelCodes.size>0)mtrRun()}
+function mtrSelAllCodes(){mtrSelCodes.clear();Object.keys(AM).forEach(function(c){mtrSelCodes.add(c)});mtrRenderCodes();if(mtrChart)mtrRun()}
+function mtrDeAllCodes(){mtrSelCodes.clear();mtrRenderCodes()}
+function mtrSelNoVacCodes(){mtrSelCodes.clear();Object.keys(AM).forEach(function(c){if(c!=='V')mtrSelCodes.add(c)});mtrRenderCodes();if(mtrChart)mtrRun()}
 function mtrRenderMembers(){
   var box=document.getElementById('mtrMembers');if(!box)return;
   var list=(typeof aN!=='undefined'&&aN)?aN:[];
@@ -2919,7 +2936,7 @@ function mtrTogMember(n){if(mtrSelMembers.has(n))mtrSelMembers.delete(n);else mt
 function mtrUseSelected(){mtrSelMembers.clear();if(typeof sN!=='undefined')sN.forEach(function(n){mtrSelMembers.add(n)});mtrRenderMembers();if(mtrChart&&mtrSelMembers.size>0)mtrRun();showToast('상단 선택 팀원 '+mtrSelMembers.size+'명을 적용했습니다.')}
 function mtrSelAll(){mtrSelMembers.clear();(aN||[]).forEach(function(n){mtrSelMembers.add(n)});mtrRenderMembers();if(mtrChart)mtrRun()}
 function mtrDeAll(){mtrSelMembers.clear();mtrRenderMembers()}
-function mtrToggleLine(){if(mtrChart&&mtrSelMembers.size>0)mtrRun()}
+function mtrToggleLine(){if(mtrChart&&mtrSelMembers.size>0&&mtrSelCodes.size>0)mtrRun()}
 function _mtrIsVac(r){if(!r)return false;if(r.abbr==='V'||r.abbr==='v')return true;var tt=String(r.taskType||'');return tt.indexOf('휴가')!==-1||tt.indexOf('연차')!==-1||tt.indexOf('반차')!==-1}
 function mtrUpdateInfo(){
   var info=document.getElementById('mtrRangeInfo');if(!info)return;
@@ -2942,49 +2959,50 @@ function mtrRun(){
   if(diff<2){showToast('최소 2개월 이상 선택하세요.','warn');return}
   if(diff>6){showToast('최대 6개월까지 선택할 수 있습니다.','warn');return}
   if(!mtrSelMembers.size){showToast('팀원을 1명 이상 선택하세요.','warn');return}
+  if(!mtrSelCodes.size){showToast('분장 코드를 1개 이상 선택하세요.','warn');return}
   var ymList=_mtrEnumerate(a,b);
-  var members=Array.from(mtrSelMembers).sort(function(x,y){return x.localeCompare(y,'ko')});
-  // 집계: 선택 인원·선택 월에 한해 휴가/연차/반차 제외 (gF의 _isVac과 동일)
-  var data={};members.forEach(function(n){data[n]={};ymList.forEach(function(k){data[n][k]=0})});
+  var codes=Object.keys(AM).filter(function(c){return mtrSelCodes.has(c)});
+  // 집계: data[code][ymKey] = sum hours over selected members
+  var data={};codes.forEach(function(c){data[c]={};ymList.forEach(function(k){data[c][k]=0})});
   aD.forEach(function(r){
     if(!r||!mtrSelMembers.has(r.name))return;
+    var c=r.abbr;if(!c||!mtrSelCodes.has(c))return;
+    if(c!=='V'&&_mtrIsVac(r))return;
     var k=_mtrYM(r.date);if(!k||ymList.indexOf(k)===-1)return;
-    if(_mtrIsVac(r))return;
     var h=parseFloat(r.hours);if(!isFinite(h))return;
-    data[r.name][k]+=h
+    data[c][k]+=h
   });
-  // 차트 렌더
+  // 일별 투입시간 차트와 동일한 스택 코드 막대 — 월별 1개 컬럼
   document.getElementById('mtrEmpty').classList.add('hidden');
   document.getElementById('mtrChartWrap').classList.remove('hidden');
   var tc=gTC();
   var showLine=!!(document.getElementById('mtrShowLine')&&document.getElementById('mtrShowLine').checked);
   if(mtrChart){try{mtrChart.destroy()}catch(e){}mtrChart=null}
   var ctx=document.getElementById('mtrChart').getContext('2d');
-  var palette=(typeof CMP_COL!=='undefined'&&CMP_COL.length)?CMP_COL:COL;
-  var datasets=[];
-  members.forEach(function(n,i){
-    var col=palette[i%palette.length];
-    var disp=typeof shortName==='function'?shortName(n):n;
-    var vals=ymList.map(function(k){return Math.round(data[n][k]*10)/10});
-    datasets.push({type:'bar',label:disp,data:vals,backgroundColor:col,borderColor:col,borderWidth:0,borderRadius:3,borderSkipped:'bottom',order:2});
-    if(showLine){
-      datasets.push({type:'line',label:disp+' (추세)',data:vals,borderColor:col,backgroundColor:col,borderWidth:2,pointRadius:3,pointHoverRadius:5,tension:.3,fill:false,order:1,_codeOverlay:true});
-    }
-  });
+  var datasets=codes.map(function(c){var col=ABR[c]||'#64748B';return{
+    type:'bar',label:AM[c]||c,_code:c,
+    data:ymList.map(function(k){return Math.round(data[c][k]*10)/10}),
+    backgroundColor:col,borderColor:col,borderWidth:0,borderRadius:0,borderSkipped:'bottom'
+  }});
+  if(showLine){
+    var totals=ymList.map(function(k){var s=0;codes.forEach(function(c){s+=data[c][k]});return Math.round(s*10)/10});
+    datasets.push({type:'line',label:'월합계',data:totals,borderColor:'#E2E8F0',backgroundColor:'rgba(226,232,240,.2)',borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:.3,fill:false,order:0});
+  }
   mtrChart=new Chart(ctx,{data:{labels:ymList,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-    scales:{x:{ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
-    plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true,pointStyle:'circle',filter:function(item){return item.text.indexOf('(추세)')===-1}}},tooltip:{callbacks:{label:function(c){if(c.dataset._codeOverlay)return null;return c.dataset.label+': '+c.parsed.y+'h'}}}}}});
-  // 표 렌더
+    scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{stacked:true,beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
+    plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true,pointStyle:'rect'}},
+      tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+c.parsed.y+'h'}}}}}});
+  // 표 — 코드별 월별
   var tw=document.getElementById('mtrTblWrap');tw.classList.remove('hidden');
   var totals=ymList.map(function(){return 0});
-  var rows=members.map(function(n){
-    var cells=ymList.map(function(k,i){var v=Math.round(data[n][k]*10)/10;totals[i]+=v;return '<td style="padding:5px 8px;text-align:right;color:var(--t3);font-variant-numeric:tabular-nums">'+v+'h</td>'}).join('');
-    var sum=ymList.reduce(function(s,k){return s+data[n][k]},0);
-    var disp=typeof shortName==='function'?shortName(n):n;
-    return '<tr><td style="padding:5px 8px;color:var(--t2);font-weight:600;white-space:nowrap">'+eH(disp)+'</td>'+cells+'<td style="padding:5px 8px;text-align:right;color:var(--ac-t);font-weight:600;font-variant-numeric:tabular-nums">'+(Math.round(sum*10)/10)+'h</td></tr>'
+  var rows=codes.map(function(c){
+    var bg=ABG[c]||'#1A1F35',fg=AFG[c]||'#94A3B8';
+    var cells=ymList.map(function(k,i){var v=Math.round(data[c][k]*10)/10;totals[i]+=v;return '<td style="padding:5px 8px;text-align:right;color:var(--t3);font-variant-numeric:tabular-nums">'+v+'h</td>'}).join('');
+    var sum=ymList.reduce(function(s,k){return s+data[c][k]},0);
+    return '<tr><td style="padding:5px 8px;color:var(--t2);font-weight:600;white-space:nowrap"><span class="badge" style="background:'+bg+';color:'+fg+';padding:1px 5px;border-radius:3px;font-size:10px;margin-right:5px">'+c+'</span>'+eH(AM[c]||c)+'</td>'+cells+'<td style="padding:5px 8px;text-align:right;color:var(--ac-t);font-weight:600;font-variant-numeric:tabular-nums">'+(Math.round(sum*10)/10)+'h</td></tr>'
   }).join('');
   var totRow='<tr style="border-top:1px solid var(--bd)"><td style="padding:5px 8px;color:var(--t4);font-weight:600">월합계</td>'+totals.map(function(t){return '<td style="padding:5px 8px;text-align:right;color:var(--t4);font-variant-numeric:tabular-nums">'+(Math.round(t*10)/10)+'h</td>'}).join('')+'<td style="padding:5px 8px;text-align:right;color:var(--ac-t);font-weight:700;font-variant-numeric:tabular-nums">'+(Math.round(totals.reduce(function(s,t){return s+t},0)*10)/10)+'h</td></tr>';
-  tw.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--bg-i)"><th style="padding:6px 8px;text-align:left;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">팀원</th>'+ymList.map(function(k){return '<th style="padding:6px 8px;text-align:right;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">'+k+'</th>'}).join('')+'<th style="padding:6px 8px;text-align:right;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">합계</th></tr></thead><tbody>'+rows+totRow+'</tbody></table>';
+  tw.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--bg-i)"><th style="padding:6px 8px;text-align:left;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">분장</th>'+ymList.map(function(k){return '<th style="padding:6px 8px;text-align:right;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">'+k+'</th>'}).join('')+'<th style="padding:6px 8px;text-align:right;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">합계</th></tr></thead><tbody>'+rows+totRow+'</tbody></table>';
 }
 
 /* ═══ 월별 비교 (업무분장 코드별 추이) — 2~6개월 범위, 코드 체크박스 ═══ */
@@ -3068,18 +3086,19 @@ function mtrCRun(){
   var showLine=!!(document.getElementById('mtrCShowLine')&&document.getElementById('mtrCShowLine').checked);
   if(mtrCChart){try{mtrCChart.destroy()}catch(e){}mtrCChart=null}
   var ctx=document.getElementById('mtrCChart').getContext('2d');
-  var datasets=[];
-  codes.forEach(function(c){
-    var col=ABR[c]||'#64748B';
-    var vals=ymList.map(function(k){return Math.round(data[c][k]*10)/10});
-    datasets.push({type:'bar',label:AM[c]||c,data:vals,backgroundColor:col,borderColor:col,borderWidth:0,borderRadius:3,borderSkipped:'bottom',order:2});
-    if(showLine){
-      datasets.push({type:'line',label:(AM[c]||c)+' (추세)',data:vals,borderColor:col,backgroundColor:col,borderWidth:2,pointRadius:3,pointHoverRadius:5,tension:.3,fill:false,order:1,_codeOverlay:true});
-    }
-  });
+  var datasets=codes.map(function(c){var col=ABR[c]||'#64748B';return{
+    type:'bar',label:AM[c]||c,_code:c,
+    data:ymList.map(function(k){return Math.round(data[c][k]*10)/10}),
+    backgroundColor:col,borderColor:col,borderWidth:0,borderRadius:0,borderSkipped:'bottom'
+  }});
+  if(showLine){
+    var totals=ymList.map(function(k){var s=0;codes.forEach(function(c){s+=data[c][k]});return Math.round(s*10)/10});
+    datasets.push({type:'line',label:'월합계',data:totals,borderColor:'#E2E8F0',backgroundColor:'rgba(226,232,240,.2)',borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:.3,fill:false,order:0});
+  }
   mtrCChart=new Chart(ctx,{data:{labels:ymList,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-    scales:{x:{ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
-    plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true,pointStyle:'circle',filter:function(item){return item.text.indexOf('(추세)')===-1}}},tooltip:{callbacks:{label:function(c){if(c.dataset._codeOverlay)return null;return c.dataset.label+': '+c.parsed.y+'h'}}}}}});
+    scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{stacked:true,beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
+    plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true,pointStyle:'rect'}},
+      tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+c.parsed.y+'h'}}}}}});
   // 표
   var tw=document.getElementById('mtrCTblWrap');tw.classList.remove('hidden');
   var totals=ymList.map(function(){return 0});
