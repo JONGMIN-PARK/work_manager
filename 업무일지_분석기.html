@@ -2867,6 +2867,33 @@ if(clDayC)clDayC.destroy();clDayC=new Chart(document.getElementById('clientDayC'
 function sTab(t){document.querySelectorAll('#statsS .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));document.getElementById('tTbl').classList.toggle('hidden',t!=='tbl');document.getElementById('tCht').classList.toggle('hidden',t!=='cht');document.getElementById('tAi').classList.toggle('hidden',t!=='ai');document.getElementById('tSum').classList.toggle('hidden',t!=='sum');if(t!=='cht')destroyCharts();if(t==='cht'){destroyCharts();const f=gF();if(f.length>0)rCht(f);mtrInit();mtrCInit()}if(t==='sum')rContentSum()}
 
 /* ═══ 월별 비교 (개인별 추이) — 2~6개월, 인원·코드 체크박스 ═══ */
+const _mtrTop2PctPlugin={
+  id:'mtrTop2Pct',
+  afterDatasetsDraw:function(chart){
+    var ctx=chart.ctx;var datasets=chart.data.datasets;var labels=chart.data.labels||[];
+    var barIdx=[];for(var i=0;i<datasets.length;i++){var ty=datasets[i].type||(chart.config&&chart.config.type);if(ty==='bar')barIdx.push(i)}
+    if(!barIdx.length)return;
+    for(var xi=0;xi<labels.length;xi++){
+      var items=[],total=0;
+      for(var k=0;k<barIdx.length;k++){var di=barIdx[k];var v=datasets[di].data[xi];if(v==null||!isFinite(v))continue;items.push({idx:di,val:v});total+=v}
+      if(total<=0)continue;
+      items.sort(function(a,b){return b.val-a.val});
+      var top=items.slice(0,2);
+      for(var t2=0;t2<top.length;t2++){
+        var it=top[t2];var pct=it.val/total*100;if(pct<5)continue;
+        var meta=chart.getDatasetMeta(it.idx);var bar=meta&&meta.data?meta.data[xi]:null;if(!bar)continue;
+        var props=bar.getProps?bar.getProps(['x','y','base'],true):{x:bar.x,y:bar.y,base:bar.base};
+        var cx=props.x,cy=(props.y+props.base)/2,h=Math.abs(props.base-props.y);
+        if(h<14)continue;
+        ctx.save();
+        ctx.fillStyle='#FFFFFF';ctx.font='bold 12px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.shadowColor='rgba(0,0,0,.55)';ctx.shadowBlur=2;
+        ctx.fillText(Math.round(pct)+'%',cx,cy);
+        ctx.restore();
+      }
+    }
+  }
+};
 let mtrSelMembers=new Set();
 let mtrSelCodes=new Set();
 function _mtrYM(d){return d&&d.length>=6?d.slice(0,4)+'-'+d.slice(4,6):''}
@@ -3010,8 +3037,8 @@ function mtrRun(){
     var totals=flatLabels.map(function(_,i){var k=ymList[monthIdx[i]];if(!k)return null;var s=0;codes.forEach(function(c){s+=data[personIdx[i]][c][k]});return Math.round(s*10)/10});
     datasets.push({type:'line',label:'합계',data:totals,borderColor:'#E2E8F0',backgroundColor:'rgba(226,232,240,.2)',borderWidth:2,pointRadius:3,pointHoverRadius:5,tension:.25,fill:false,order:0,spanGaps:false});
   }
-  mtrChart=new Chart(ctx,{data:{labels:flatLabels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-    scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10},autoSkip:false,maxRotation:60,minRotation:members.length>1?40:0,callback:function(val,idx){var lab=this.getLabelForValue(val);return String(lab).split('\n')}},grid:{color:tc.g}},y:{stacked:true,beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
+  mtrChart=new Chart(ctx,{data:{labels:flatLabels,datasets:datasets},plugins:[_mtrTop2PctPlugin],options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:15},autoSkip:false,maxRotation:60,minRotation:members.length>1?40:0,callback:function(val,idx){var lab=this.getLabelForValue(val);return String(lab).split('\n')}},grid:{color:tc.g}},y:{stacked:true,beginAtZero:true,ticks:{color:tc.t,font:{size:15},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
     plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true,pointStyle:'rect'}},
       tooltip:{callbacks:{
         title:function(items){if(!items.length)return '';var i=items[0].dataIndex;var disp=typeof shortName==='function'?shortName(personIdx[i]):personIdx[i];return ymList[monthIdx[i]]+' · '+disp},
@@ -3126,8 +3153,8 @@ function mtrCRun(){
     var totals=paddedYmC.map(function(k){if(!k)return null;var s=0;codes.forEach(function(c){s+=data[c][k]});return Math.round(s*10)/10});
     datasets.push({type:'line',label:'월합계',data:totals,borderColor:'#E2E8F0',backgroundColor:'rgba(226,232,240,.2)',borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:.3,fill:false,order:0,spanGaps:false});
   }
-  mtrCChart=new Chart(ctx,{data:{labels:paddedYmC,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-    scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:10}},grid:{color:tc.g}},y:{stacked:true,beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
+  mtrCChart=new Chart(ctx,{data:{labels:paddedYmC,datasets:datasets},plugins:[_mtrTop2PctPlugin],options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    scales:{x:{stacked:true,ticks:{color:tc.t,font:{size:15}},grid:{color:tc.g}},y:{stacked:true,beginAtZero:true,ticks:{color:tc.t,font:{size:15},callback:function(v){return v+'h'}},grid:{color:tc.g}}},
     plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true,pointStyle:'rect'}},
       tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+c.parsed.y+'h'}}}}}});
   // 표
