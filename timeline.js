@@ -576,11 +576,12 @@ async function showProjectModal(projId) {
   var msHtml = '';
   if (projMs.length) {
     msHtml = projMs.map(function (m, idx) {
-      return '<div class="proj-ms-row" data-msid="' + m.id + '" style="display:grid;grid-template-columns:1fr 110px 110px 90px 30px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)">' +
+      return '<div class="proj-ms-row" data-msid="' + m.id + '" style="display:grid;grid-template-columns:1fr 110px 110px 90px 30px 30px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)">' +
         '<input type="text" class="si ms-name" value="' + eH(m.name) + '" style="padding:4px 8px;font-size:11px;padding-left:8px">' +
         '<input type="date" class="si ms-start" value="' + m.startDate + '" style="padding:4px 6px;font-size:10px;padding-left:6px">' +
         '<input type="date" class="si ms-end" value="' + m.endDate + '" style="padding:4px 6px;font-size:10px;padding-left:6px">' +
         '<select class="si ms-status" style="padding:4px 6px;font-size:10px;padding-left:6px">' + Object.keys(PROJ_STATUS).map(function (k) { return '<option value="' + k + '"' + (m.status === k ? ' selected' : '') + '>' + PROJ_STATUS[k].label + '</option>'; }).join('') + '</select>' +
+        '<button class="btn btn-g btn-s" title="다른 프로젝트로 이관" onclick="showMilestoneTransferModal(\'' + m.id + '\')" style="padding:2px 4px;font-size:11px">↪</button>' +
         '<button class="btn btn-d btn-s" onclick="this.closest(\'.proj-ms-row\').remove()" style="padding:2px 6px">✕</button>' +
       '</div>';
     }).join('');
@@ -601,6 +602,20 @@ async function showProjectModal(projId) {
         '<div><label class="fl">시작일</label><input type="date" class="si" id="projStart" value="' + (proj ? proj.startDate : '') + '" style="padding-left:10px"></div>' +
         '<div><label class="fl">종료일</label><input type="date" class="si" id="projEnd" value="' + (proj ? proj.endDate : '') + '" style="padding-left:10px"></div>' +
         '<div><label class="fl">상태</label><select class="si" id="projStatus" style="padding-left:8px">' + statusOpts + '</select></div>' +
+      '</div>' +
+      // 가시성: 본인만(private) / 부서(dept) / 테넌트 전체(tenant)
+      '<div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;align-items:end">' +
+        '<div><label class="fl">가시성</label><select class="si" id="projVisibility" style="padding-left:8px;font-size:11px">' +
+          ['private','dept','tenant'].map(function (v) {
+            var labels = { 'private':'🔒 비공개 (본인+공유 사용자)', 'dept':'🏢 부서 공개', 'tenant':'🌐 전체 공개' };
+            var cur = proj && proj.visibility ? proj.visibility : 'private';
+            return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + labels[v] + '</option>';
+          }).join('') +
+        '</select></div>' +
+        (proj ? '<div style="display:flex;gap:6px;justify-content:flex-end">' +
+          '<button class="btn btn-g btn-s" style="font-size:10px" onclick="showProjectShareModal(\'' + proj.id + '\')">👥 공유 관리</button>' +
+          '<button class="btn btn-g btn-s" style="font-size:10px" onclick="showProjectTransferModal(\'' + proj.id + '\')">↪ 소유권 이관</button>' +
+        '</div>' : '<div style="font-size:10px;color:var(--t6);align-self:center">등록 후 공유 사용자 추가 가능</div>') +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
         '<div><label class="fl">예상 총 투입시간 (h)</label><input type="number" class="si" id="projEstHours" value="' + (proj ? proj.estimatedHours : '') + '" placeholder="0" style="padding-left:10px" min="0"></div>' +
@@ -754,6 +769,7 @@ async function saveProjectUI(existingId) {
   // 순환 의존 방지
   if (existingId && depIds.includes(existingId)) { showToast('자기 자신을 선행 프로젝트로 지정할 수 없습니다.','warn'); return; }
 
+  var visibilityEl = document.getElementById('projVisibility');
   var data = {
     orderNo: orderNo,
     name: name,
@@ -763,7 +779,8 @@ async function saveProjectUI(existingId) {
     estimatedHours: parseFloat(document.getElementById('projEstHours').value) || 0,
     assignees: assignees,
     dependencies: depIds,
-    memo: document.getElementById('projMemo').value.trim()
+    memo: document.getElementById('projMemo').value.trim(),
+    visibility: visibilityEl ? visibilityEl.value : 'private'
   };
 
   var projId;
@@ -820,6 +837,188 @@ async function saveProjectUI(existingId) {
     }
     var msg = detail || err.message || String(err);
     showToast('프로젝트 저장 실패: ' + msg + (err && err.status ? ' (HTTP ' + err.status + ')' : ''), 'error');
+  }
+}
+
+/* ═══ 프로젝트 공유 관리 모달 ═══ */
+async function showProjectShareModal(projId) {
+  var existing = document.getElementById('projShareModal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'projShareModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+  modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;width:520px;max-width:95%;max-height:80vh;overflow:auto">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+      '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">👥 공유 사용자 관리</h3>' +
+      '<button class="btn btn-g btn-s" onclick="document.getElementById(\'projShareModal\').remove()">✕</button>' +
+    '</div>' +
+    '<div id="projShareBody" style="font-size:11px;color:var(--t4)">로딩 중...</div>' +
+  '</div>';
+  document.body.appendChild(modal);
+
+  try {
+    var pair = await Promise.all([projMembersGet(projId), userLookup()]);
+    var members = pair[0], users = pair[1];
+    var memberSet = {};
+    members.forEach(function (m) { memberSet[m.userId] = m; });
+
+    var html = '<div style="margin-bottom:10px;padding:8px;background:var(--bg-i);border-radius:6px">' +
+      '<div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:6px">현재 공유 사용자 (' + members.length + ')</div>' +
+      (members.length ? members.map(function (m) {
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:11px">' +
+          '<span>' + eH(m.userName || m.displayName || m.email) + ' <span style="color:var(--t6);font-size:10px">(' + (m.role || 'assignee') + ')</span></span>' +
+          '<button class="btn btn-d btn-s" style="font-size:10px;padding:2px 6px" onclick="projShareRemoveUI(\'' + projId + '\',\'' + m.userId + '\')">제거</button>' +
+        '</div>';
+      }).join('') : '<div style="color:var(--t6);font-size:11px">공유된 사용자가 없습니다.</div>') +
+    '</div>';
+
+    var available = users.filter(function (u) { return !memberSet[u.id]; });
+    html += '<div style="display:flex;gap:6px;align-items:end">' +
+      '<div style="flex:1"><label class="fl">추가할 사용자</label>' +
+        '<select id="projShareUser" class="si" style="padding-left:8px;font-size:11px">' +
+          '<option value="">선택...</option>' +
+          available.map(function (u) { return '<option value="' + u.id + '">' + eH(u.displayName || u.name) + '</option>'; }).join('') +
+        '</select>' +
+      '</div>' +
+      '<div><label class="fl">역할</label><select id="projShareRole" class="si" style="padding-left:8px;font-size:11px">' +
+        '<option value="assignee">참여자</option><option value="pl">PL</option>' +
+      '</select></div>' +
+      '<button class="btn btn-p btn-s" onclick="projShareAddUI(\'' + projId + '\')">+ 추가</button>' +
+    '</div>';
+
+    document.getElementById('projShareBody').innerHTML = html;
+  } catch (err) {
+    document.getElementById('projShareBody').innerHTML = '<div style="color:#EF4444">로드 실패: ' + (err && err.message ? err.message : err) + '</div>';
+  }
+}
+
+async function projShareAddUI(projId) {
+  var sel = document.getElementById('projShareUser');
+  var roleSel = document.getElementById('projShareRole');
+  if (!sel || !sel.value) { showToast('사용자를 선택하세요.', 'warn'); return; }
+  try {
+    await projShareAdd(projId, sel.value, roleSel ? roleSel.value : 'assignee');
+    showToast('공유 사용자가 추가되었습니다');
+    showProjectShareModal(projId);
+  } catch (err) {
+    showToast('추가 실패: ' + (err && err.message ? err.message : err), 'error');
+  }
+}
+
+async function projShareRemoveUI(projId, userId) {
+  if (!confirm('이 사용자의 공유를 해제하시겠습니까?')) return;
+  try {
+    await projShareRemove(projId, userId);
+    showToast('공유가 해제되었습니다');
+    showProjectShareModal(projId);
+  } catch (err) {
+    showToast('해제 실패: ' + (err && err.message ? err.message : err), 'error');
+  }
+}
+
+/* ═══ 프로젝트 소유권 이관 모달 ═══ */
+async function showProjectTransferModal(projId) {
+  var existing = document.getElementById('projTransferModal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'projTransferModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+  modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;width:480px;max-width:95%">' +
+    '<h3 style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:12px">↪ 소유권 이관</h3>' +
+    '<div id="projTransferBody" style="font-size:11px;color:var(--t4)">로딩 중...</div>' +
+  '</div>';
+  document.body.appendChild(modal);
+
+  try {
+    var users = await userLookup();
+    var html =
+      '<div style="margin-bottom:10px;color:var(--t4);font-size:11px;line-height:1.55">' +
+        '· 소유자가 변경됩니다. 기존 소유자는 자동으로 공유 사용자(참여자)로 보존됩니다.<br>' +
+        '· 새 소유자가 공유 멤버였다면 공유 목록에서 제거되고 소유자로 승격됩니다.' +
+      '</div>' +
+      '<label class="fl">새 소유자</label>' +
+      '<select id="projTransferUser" class="si" style="padding-left:8px;font-size:11px">' +
+        '<option value="">선택...</option>' +
+        users.map(function (u) { return '<option value="' + u.id + '">' + eH(u.displayName || u.name) + '</option>'; }).join('') +
+      '</select>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t3);margin-top:10px;cursor:pointer">' +
+        '<input type="checkbox" id="projTransferKeep" checked> 기존 소유자를 공유 사용자로 유지' +
+      '</label>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">' +
+        '<button class="btn btn-g btn-s" onclick="document.getElementById(\'projTransferModal\').remove()">취소</button>' +
+        '<button class="btn btn-p btn-s" onclick="projTransferDoUI(\'' + projId + '\')">이관 실행</button>' +
+      '</div>';
+    document.getElementById('projTransferBody').innerHTML = html;
+  } catch (err) {
+    document.getElementById('projTransferBody').innerHTML = '<div style="color:#EF4444">로드 실패: ' + (err && err.message ? err.message : err) + '</div>';
+  }
+}
+
+async function projTransferDoUI(projId) {
+  var sel = document.getElementById('projTransferUser');
+  if (!sel || !sel.value) { showToast('새 소유자를 선택하세요.', 'warn'); return; }
+  var keep = document.getElementById('projTransferKeep').checked;
+  if (!confirm('정말 소유권을 이관하시겠습니까?')) return;
+  try {
+    await projTransfer(projId, sel.value, { keepPrevAsMember: keep });
+    showToast('소유권이 이관되었습니다');
+    document.getElementById('projTransferModal').remove();
+    var pm = document.getElementById('projModal'); if (pm) pm.remove();
+    if (typeof renderTimeline === 'function') await renderTimeline();
+  } catch (err) {
+    showToast('이관 실패: ' + (err && err.message ? err.message : err), 'error');
+  }
+}
+
+/* ═══ 마일스톤 이관 모달 ═══ */
+async function showMilestoneTransferModal(msId) {
+  var existing = document.getElementById('msTransferModal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'msTransferModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+  modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;width:480px;max-width:95%">' +
+    '<h3 style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:12px">↪ 마일스톤 이관</h3>' +
+    '<div id="msTransferBody" style="font-size:11px;color:var(--t4)">로딩 중...</div>' +
+  '</div>';
+  document.body.appendChild(modal);
+
+  try {
+    var projects = await projGetAll();
+    var html =
+      '<div style="margin-bottom:10px;color:var(--t4);font-size:11px">현재 마일스톤을 다른 프로젝트로 이동합니다. 양쪽 프로젝트에 쓰기 권한이 있어야 합니다.</div>' +
+      '<label class="fl">대상 프로젝트</label>' +
+      '<select id="msTransferProj" class="si" style="padding-left:8px;font-size:11px">' +
+        '<option value="">선택...</option>' +
+        (projects || []).map(function (p) { return '<option value="' + p.id + '">' + eH(p.name || p.orderNo) + '</option>'; }).join('') +
+      '</select>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">' +
+        '<button class="btn btn-g btn-s" onclick="document.getElementById(\'msTransferModal\').remove()">취소</button>' +
+        '<button class="btn btn-p btn-s" onclick="msTransferDoUI(\'' + msId + '\')">이관 실행</button>' +
+      '</div>';
+    document.getElementById('msTransferBody').innerHTML = html;
+  } catch (err) {
+    document.getElementById('msTransferBody').innerHTML = '<div style="color:#EF4444">로드 실패: ' + (err && err.message ? err.message : err) + '</div>';
+  }
+}
+
+async function msTransferDoUI(msId) {
+  var sel = document.getElementById('msTransferProj');
+  if (!sel || !sel.value) { showToast('대상 프로젝트를 선택하세요.', 'warn'); return; }
+  try {
+    await msTransfer(msId, sel.value);
+    showToast('마일스톤이 이관되었습니다');
+    document.getElementById('msTransferModal').remove();
+    var pm = document.getElementById('projModal'); if (pm) pm.remove();
+    if (typeof renderTimeline === 'function') await renderTimeline();
+  } catch (err) {
+    showToast('이관 실패: ' + (err && err.message ? err.message : err), 'error');
   }
 }
 

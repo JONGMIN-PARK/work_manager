@@ -39,6 +39,21 @@ router.get('/', async function (req, res) {
   }
 });
 
+// ─── GET /api/users/lookup ─── 공유/이관용 (id, name만 반환, 인증된 모든 사용자)
+router.get('/lookup', async function (req, res) {
+  try {
+    if (!req.tenant || !req.tenant.id) return res.json({ data: [] });
+    var r = await db.query(
+      "SELECT id, name, display_name FROM users WHERE tenant_id = $1 AND status = 'active' ORDER BY name",
+      [req.tenant.id]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[users/lookup]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // ─── GET /api/users/pending ─── (admin only)
 router.get('/pending', authMiddleware.requireRole('admin'), async function (req, res) {
   try {

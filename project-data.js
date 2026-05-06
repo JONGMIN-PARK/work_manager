@@ -342,6 +342,32 @@ function projPut(proj) {
 }
 function projDel(id) { _pdInvalidate('proj'); return apiFetch('/api/projects/' + id, { method: 'DELETE' }); }
 
+/* ─── 공유/이관 ─── */
+function userLookup() {
+  return apiFetch('/api/users/lookup').then(function (r) { return toCamelArray(r.data); });
+}
+function projMembersGet(id) {
+  return apiFetch('/api/projects/' + id + '/members').then(function (r) { return toCamelArray(r.data); });
+}
+function projShareAdd(id, userId, role) {
+  return apiFetch('/api/projects/' + id + '/members', { method: 'POST', body: JSON.stringify({ userId: userId, role: role || 'assignee' }) })
+    .then(function (r) { _pdInvalidate('proj'); return toCamel(r.data); });
+}
+function projShareRemove(id, userId) {
+  return apiFetch('/api/projects/' + id + '/members/' + userId, { method: 'DELETE' })
+    .then(function (r) { _pdInvalidate('proj'); return r; });
+}
+function projTransfer(id, newOwnerId, opts) {
+  var body = { newOwnerId: newOwnerId };
+  if (opts && opts.keepPrevAsMember === false) body.keepPrevAsMember = false;
+  return apiFetch('/api/projects/' + id + '/transfer', { method: 'POST', body: JSON.stringify(body) })
+    .then(function (r) { _pdInvalidate('proj'); return r.data; });
+}
+function msTransfer(id, targetProjectId) {
+  return apiFetch('/api/milestones/' + id + '/transfer', { method: 'POST', body: JSON.stringify({ targetProjectId: targetProjectId }) })
+    .then(function (r) { _pdInvalidate('proj'); return toCamel(r.data); });
+}
+
 function createProject(data) {
   var now = new Date().toISOString();
   var defaultPhases = { order: { status: 'waiting', startDate: '', endDate: '' }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, as: { status: 'waiting', startDate: '', endDate: '' } };

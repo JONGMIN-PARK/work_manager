@@ -81,6 +81,46 @@ router.put('/:id', async function (req, res) {
   }
 });
 
+// 프로젝트 쓰기 권한 체크 (owner / 활성 멤버 / admin·executive)
+async function _canEditProject(req, projectId) {
+  var role = req.user.role;
+  if (role === 'admin' || role === 'executive') return true;
+  var pr = await db.query('SELECT owner_id FROM projects WHERE id = $1 AND tenant_id = $2', [projectId, req.tenant.id]);
+  if (!pr.rows.length) return null; // 프로젝트 자체가 없음
+  if (pr.rows[0].owner_id === req.user.sub) return true;
+  var mr = await db.query('SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2 AND released_at IS NULL', [projectId, req.user.sub]);
+  return mr.rows.length > 0;
+}
+
+// POST /api/milestones/:id/transfer — 다른 프로젝트로 마일스톤 이관
+//  body: { targetProjectId }
+//  src · dst 양쪽에 쓰기 권한 필요
+router.post('/:id/transfer', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var targetProjectId = b.targetProjectId || b.target_project_id;
+    if (!targetProjectId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'targetProjectId 필수' });
+
+    var msr = await db.query('SELECT id, project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' });
+    var ms = msr.rows[0];
+    if (ms.project_id === targetProjectId) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: '동일 프로젝트로는 이관할 수 없습니다.' });
+    }
+
+    var canSrc = await _canEditProject(req, ms.project_id);
+    var canDst = await _canEditProject(req, targetProjectId);
+    if (canDst === null) return res.status(404).json({ error: 'NOT_FOUND', message: '대상 프로젝트를 찾을 수 없습니다.' });
+    if (!canSrc || !canDst) return res.status(403).json({ error: 'FORBIDDEN', message: '양쪽 프로젝트의 쓰기 권한이 필요합니다.' });
+
+    var ur = await db.query('UPDATE milestones SET project_id = $1 WHERE id = $2 AND tenant_id = $3 RETURNING *', [targetProjectId, ms.id, req.tenant.id]);
+    res.json({ data: ur.rows[0], message: '이관 완료' });
+  } catch (e) {
+    console.error('[milestones/transfer]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // DELETE /api/milestones/:id
 router.delete('/:id', async function (req, res) {
   try {
