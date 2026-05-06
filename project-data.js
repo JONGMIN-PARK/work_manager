@@ -368,6 +368,37 @@ function msTransfer(id, targetProjectId) {
     .then(function (r) { _pdInvalidate('proj'); return toCamel(r.data); });
 }
 
+// 담당자 이름(string[]) → users 매칭 후 project_members 에 active assignee 로 추가 (additive only)
+//  · 매칭 실패한 이름은 외부 인원으로 간주하고 무시
+//  · 같은 이름의 사용자가 여러 명이면 먼저 매칭된 한 명만 사용
+//  · 기존 멤버 자동 해제는 하지 않음 (의도치 않은 접근 손실 방지)
+function syncAssigneesToMembers(projectId, names) {
+  if (!projectId || !Array.isArray(names) || !names.length) return Promise.resolve([]);
+  return userLookup().then(function (users) {
+    var byName = {};
+    (users || []).forEach(function (u) {
+      [u.name, u.displayName].forEach(function (k) {
+        if (k && !byName[k]) byName[k] = u;
+      });
+    });
+    var ops = [];
+    var seen = {};
+    names.forEach(function (n) {
+      var nm = (n || '').trim();
+      if (!nm || seen[nm]) return;
+      seen[nm] = true;
+      var u = byName[nm];
+      if (u && u.id) {
+        ops.push(
+          projShareAdd(projectId, u.id, 'assignee')
+            .catch(function (e) { console.warn('[syncAssignee]', nm, e && e.message); })
+        );
+      }
+    });
+    return Promise.all(ops);
+  }).catch(function (e) { console.warn('[syncAssigneesToMembers]', e && e.message); return []; });
+}
+
 function createProject(data) {
   var now = new Date().toISOString();
   var defaultPhases = { order: { status: 'waiting', startDate: '', endDate: '' }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, as: { status: 'waiting', startDate: '', endDate: '' } };

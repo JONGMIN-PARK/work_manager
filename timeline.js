@@ -824,10 +824,20 @@ async function saveProjectUI(existingId) {
     await Promise.all(msPromises);
     window._projMsOrigIds = null;
 
+    // 담당자 이름 → project_members 자동 동기화 (additive, best-effort)
+    if (typeof syncAssigneesToMembers === 'function' && assignees.length) {
+      try { await syncAssigneesToMembers(projId, assignees); } catch (_) { /* ignore */ }
+    }
+
     document.getElementById('projModal').remove();
     await renderTimeline();
     if (typeof renderCalendar === 'function') await renderCalendar();
     showToast(existingId ? '프로젝트가 수정되었습니다' : '프로젝트가 등록되었습니다');
+
+    // 신규 등록 + 비공개 + 담당자 없음 → 동료가 못 보는 상태이므로 공유 모달 자동 오픈
+    if (!existingId && data.visibility === 'private' && (!assignees || !assignees.length)) {
+      setTimeout(function () { if (typeof showProjectShareModal === 'function') showProjectShareModal(projId); }, 200);
+    }
   } catch (err) {
     console.error('[saveProjectUI] 저장 실패:', err, err && err.data);
     var detail = '';
