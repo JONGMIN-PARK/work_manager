@@ -1,5 +1,69 @@
 # Work Manager — 변경 이력
 
+## v13.28 (2026-05-06) — 담당자→멤버 자동 동기화 + 비공개 신규시 공유 모달 자동 오픈
+
+### 기능
+- **`syncAssigneesToMembers(projectId, names)`** (`project-data.js`): 프로젝트 저장 후 담당자 이름 배열을 `users.name` / `users.display_name` 정확 일치로 매칭하여 `project_members`에 active `assignee` 로 자동 추가. 매칭 실패한 이름은 외부 인원으로 간주하고 무시. **자동 제거는 하지 않음** — 의도치 않은 접근 회수 방지를 위해 명시적 회수는 "공유 관리" 모달의 "제거" 버튼에서만 수행.
+- **`saveProjectUI`** (`timeline.js`): 저장(생성·편집) 직후 best-effort로 위 동기화 호출. 실패 시 토스트 무시.
+- **자동 공유 모달**: 신규 등록이고 `visibility='private'`이며 담당자도 비어 있으면 등록 직후 `showProjectShareModal(projId)`을 자동 오픈. 동료가 아무도 못 보는 사각지대 방지.
+
+### 알아둘 점
+- 동일 이름의 사용자가 둘 이상이면 `userLookup` 결과의 첫 매칭 한 명만 추가됨. 운영상 충돌이 잦아지면 매칭 키를 email 또는 사번으로 전환할 것.
+
+### 변경 파일
+- `project-data.js`, `timeline.js`
+
+---
+
+## v13.27 (2026-05-06) — 사용자 단위 프로젝트 소유권 + 가시성 + 공유/이관
+
+### 기능
+- **DB 스키마 (`migrations/006_project_visibility.sql`)**:
+  - `projects.owner_id UUID REFERENCES users(id)` — 현재 소유자
+  - `projects.visibility VARCHAR(20)` — `'private' | 'dept' | 'tenant'`, 기본 `'private'`
+  - 백필: `owner_id ← created_by`. `visibility`는 `department_id` 있으면 `'dept'`, 없으면 `'tenant'`로 채워 기존 가시성 보존 (신규 데이터만 `'private'` 기본).
+  - 인덱스: `idx_projects_owner`, `idx_projects_visibility`.
+- **`GET /api/projects` 가시성 단일 룰** (`server/routes/projects.js`):
+  - admin/executive: 테넌트 전체 가시
+  - 그 외: `owner_id = me OR project_members.user_id = me(active) OR visibility='tenant' OR (visibility='dept' AND department_id = my_dept)`
+  - 기존 `manager`/`member` 분기 제거 — visibility로 일원화.
+- **`GET /api/projects/:id` 권한 체크 강화**: 위 룰 위반 시 403. 기존엔 테넌트 스코프만 검사.
+- **`POST /api/projects` + `POST /api/projects/full`**: `owner_id`(미지정 시 `req.user.sub`), `visibility`(미지정 시 `'private'`) 수용.
+- **`PUT /api/projects/:id`**: `visibility` 변경 허용.
+- **신규 `POST /api/projects/:id/transfer`**: 소유자 또는 admin/executive만 호출 가능. 트랜잭션 내에서:
+  1. `projects.owner_id ← newOwnerId` (`updated_at`/`version` 갱신)
+  2. 신규 소유자가 멤버였다면 `released_at = now()` 처리
+  3. `keepPrevAsMember=true` (기본)이면 기존 소유자를 `assignee`로 active 멤버 보존 (`ON CONFLICT DO UPDATE`)
+- **신규 `POST /api/milestones/:id/transfer`** (`server/routes/milestones.js`): `{ targetProjectId }` 받아 `_canEditProject` 헬퍼로 src·dst 양쪽 권한 검사 후 `milestones.project_id` 갱신. 권한은 owner / 활성 member / admin·executive.
+- **신규 `GET /api/users/lookup`** (`server/routes/users.js`): 공유/이관 대상자 선택용 경량 엔드포인트. `id`, `name`, `display_name`만 반환. 모든 인증 사용자 호출 가능 (member 권한도 OK).
+
+### 프론트
+- **`project-data.js` 헬퍼**: `userLookup`, `projMembersGet`, `projShareAdd`, `projShareRemove`, `projTransfer(id, newOwnerId, { keepPrevAsMember })`, `msTransfer(id, targetProjectId)`.
+- **`timeline.js` 프로젝트 모달** (`showProjectModal`): 가시성 셀렉터 (🔒 비공개 / 🏢 부서 / 🌐 전체), 편집 시 "👥 공유 관리" / "↪ 소유권 이관" 버튼. 마일스톤 행에 `↪` 이관 버튼.
+- **신규 모달 3개**: `showProjectShareModal`, `showProjectTransferModal`, `showMilestoneTransferModal` — `userLookup`/`projGetAll` 비동기 로드 후 선택지 렌더.
+
+### 마이그레이션 절차
+- 배포 후 `migrations/006_project_visibility.sql` 자동 실행. 멱등(IF NOT EXISTS / DO $$ ... END $$). 기존 프로젝트는 `'dept'`/`'tenant'`로 백필되어 가시성 손실 없음.
+
+### 변경 파일
+- `migrations/006_project_visibility.sql` (신규)
+- `server/routes/projects.js`, `server/routes/milestones.js`, `server/routes/users.js`
+- `project-data.js`, `timeline.js`
+
+---
+
+## v13.26 (2026-05-06) — 월별 비교 차트 축 라벨 확대 + 막대 내 상위 2개 % 표시
+
+### 기능
+- **축 라벨 폰트 150% 확대** (`업무일지_분석기.html`): `mtrChart` (월별 비교 — 개인별 추이) 와 `mtrCChart` (월별 비교 — 업무분장 코드별 추이) 두 차트의 X축(년월) / Y축(시간 `h`) 틱 폰트를 `10` → `15`로 확대. PPT에 캡쳐 후 축소 시 가독성 확보. 범례는 `10` 유지.
+- **막대 내 상위 2개 % 라벨** (`_mtrTop2PctPlugin`): Chart.js `afterDatasetsDraw` 커스텀 플러그인으로, 각 X 위치에서 막대 세그먼트 합계를 구해 비율 1·2위 세그먼트 중앙에 흰색 굵은 글씨 + 그림자로 `XX%` 표시. 5% 미만이거나 세그먼트 높이 14px 미만이면 글자 깨짐 방지를 위해 생략.
+- 두 차트 생성 시 `plugins: [_mtrTop2PctPlugin]`로 등록 (전역 등록 X — 다른 차트엔 영향 없음).
+
+### 변경 파일
+- `업무일지_분석기.html`
+
+---
+
 ## v13.25 (2026-04-23) — 필터 활성 시 차트 V(휴가) 자동 보정 비활성화
 
 ### 버그 수정
