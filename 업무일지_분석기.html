@@ -343,7 +343,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.29</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.30</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -1355,7 +1355,8 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
       var result=wrApplyDecisions(newRecords, analysis, decision.decisions);
       // wrBulkPut은 로컬·서버 모두에서 사용자 레코드 전체 삭제 후 재삽입 의미 — replace/merge 두 모드 모두 단일 호출로 충분
       await wrBulkPut(result.merged);
-      aD=result.merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
+      // 서버에서 자동 생성된 신규 id로 aD를 리로드 — 이후 편집/PATCH 시 stale id로 인한 silent 실패 방지
+      try{aD=await wrGetAll()}catch(e){aD=result.merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o})}
       var parts=[];
       if(result.added)parts.push('추가 '+result.added);
       if(result.updated)parts.push('갱신 '+result.updated);
@@ -1366,13 +1367,13 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
       // 대체: 기존 삭제 후 새로 저장
       await wrClear();
       await wrBulkPut(newRecords);
-      aD=newRecords;
+      try{aD=await wrGetAll()}catch(e){aD=newRecords}
       showToast('📊 업무일지 새로 불러오기: '+newRecords.length+'건');
     }
   }else{
     // 기존 데이터 없음 → 바로 저장
     await wrBulkPut(newRecords);
-    aD=newRecords;
+    try{aD=await wrGetAll()}catch(e){aD=newRecords}
     showToast('📊 업무일지 저장: '+newRecords.length+'건');
   }
   applyADToUI();
@@ -1456,7 +1457,7 @@ function importWorkRecordsJSON(file){
           }
           var result=wrApplyDecisions(data.records, analysis, decision.decisions);
           await wrBulkPut(result.merged);
-          aD=result.merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o});
+          try{aD=await wrGetAll()}catch(e){aD=result.merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o})}
           var parts=[];
           if(result.added)parts.push('추가 '+result.added);
           if(result.updated)parts.push('갱신 '+result.updated);
@@ -1466,12 +1467,12 @@ function importWorkRecordsJSON(file){
         }else{
           await wrClear();
           await wrBulkPut(data.records);
-          aD=data.records;
+          try{aD=await wrGetAll()}catch(e){aD=data.records}
           showToast('📊 업무일지 불러오기: '+data.records.length+'건');
         }
       }else{
         await wrBulkPut(data.records);
-        aD=data.records;
+        try{aD=await wrGetAll()}catch(e){aD=data.records}
         showToast('📊 업무일지 불러오기: '+data.records.length+'건');
       }
       applyADToUI();
@@ -2318,7 +2319,7 @@ async function applyEdits(){
   /* 편집된 행의 수주번호 수집 (ocmt/oclient 변경 시 같은 수주번호의 미편집 행도 per-row 고정 필요) */
   const editedOrders=new Set();
   const editedIndices=new Set();
-  const changedRecords=[];
+  const recordsToSave=[]; // 변경 + cascade 픽스된 레코드 (PATCH /batch 대상)
   let count=0;
   for(const[idxStr,changes]of Object.entries(editMap)){
     const fRow=lastFiltered[+idxStr];if(!fRow)continue;
@@ -2332,22 +2333,38 @@ async function applyEdits(){
     for(const[field,val]of Object.entries(changes)){
       if(field!=='orderNo'){aD[origIdx][field]=val}
     }
-    changedRecords.push(aD[origIdx]);
+    recordsToSave.push(aD[origIdx]);
     count++;
   }
   /* ocmt/oclient가 수정된 수주번호에 속하는 미편집 행들:
-     현재 표시값(order-level fallback)을 per-row로 고정하여 일괄 반영 방지 */
+     현재 표시값(order-level fallback)을 per-row로 고정하여 일괄 반영 방지.
+     실제 값이 바뀐 경우에만 저장 대상에 추가. */
   if(editedOrders.size>0){
     aD.forEach(function(r,i){
       if(editedIndices.has(i))return;
       if(!editedOrders.has(r.orderNo))return;
-      if(!r.ocmt){var cm=getOCmt(r.orderNo);if(cm)r.ocmt=cm}
-      if(!r.oclient){var cl=getOClient(r.orderNo);if(cl)r.oclient=cl}
+      var changed=false;
+      if(!r.ocmt){var cm=getOCmt(r.orderNo);if(cm){r.ocmt=cm;changed=true}}
+      if(!r.oclient){var cl=getOClient(r.orderNo);if(cl){r.oclient=cl;changed=true}}
+      if(changed)recordsToSave.push(r);
     });
   }
-  // 전체 데이터 저장 (per-row ocmt/oclient 포함)
+  // 변경된 레코드만 부분 업데이트
+  // - 서버 모드(wrUpdateRecords 정의): PATCH /api/archives/records/batch — 사용자 스코프 안전, 중복 생성 방지
+  // - 로컬 모드(IndexedDB): wrUpdateRecords 미정의 → wrBulkPut(aD) 폴백 (단일 사용자 환경이라 안전)
   try{
-    await wrBulkPut(aD);
+    if(typeof wrUpdateRecords==='function'){
+      // ID 없는 레코드(import 직후 미동기화)는 PATCH로 갱신 불가 → 분리 처리
+      var withId=recordsToSave.filter(function(r){return r.id});
+      var withoutId=recordsToSave.filter(function(r){return !r.id});
+      if(withId.length)await wrUpdateRecords(withId);
+      if(withoutId.length){
+        console.warn('[applyEdits] ID 없는 레코드 '+withoutId.length+'건 — bulkPut 폴백 (import 직후 케이스)');
+        await wrBulkPut(aD);
+      }
+    }else{
+      await wrBulkPut(aD);
+    }
   }catch(dbErr){
     console.error('[applyEdits] DB 저장 실패:',dbErr);
     showToast('DB 저장 실패: '+(dbErr.message||'서버 오류')+' (메모리에는 반영됨)','error');
@@ -2708,6 +2725,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.30',date:'2026-05-07',title:'편집모드 수정 적용 시 항목 중복 생성 버그 수정',tag:'fix',items:[
+      '매니저/관리자가 편집모드로 수정 적용 시 본인 user_id 외 레코드(부서/테넌트의 다른 사용자)가 본인 소유로 복제 INSERT되어 중복 발생하던 버그 수정',
+      'applyEdits: wrBulkPut(aD) 전체 저장 → wrUpdateRecords(변경 행만) PATCH 방식으로 전환. cascade 픽스(같은 수주번호 미편집 행의 ocmt/oclient 고정)는 실제 값이 바뀐 행만 저장 대상에 포함',
+      'PATCH /api/archives/records/batch 핸들러: WHERE user_id=me 단일 스코프 → role 기반(member=본인, manager/executive=부서, admin=테넌트) 스코프로 확장 — GET /records와 정책 일치',
+      'DELETE /api/archives/records/batch도 동일 정책으로 확장',
+      'import 후 aD를 wrGetAll로 리로드 — 신규 INSERT된 레코드의 신규 id 반영해 후속 편집 PATCH가 stale id로 silent 실패하는 문제 차단'
+    ]},
     {ver:'13.29',date:'2026-05-07',title:'업무일지 가져오기 — 충돌 미리보기 + 컬럼 round-trip',tag:'feature',items:[
       '엑셀 저장(상세→📤 엑셀저장) ↔ 불러오기 round-trip 보장: 컬럼 자동감지에 수주명(ocmt)·거래처(oclient) 추가 — 저장한 파일을 다시 올렸을 때 편집값이 사라지지 않음',
       '"갱신" 선택 시 충돌 미리보기 모달 신설: (날짜+이름+수주번호) 기준 매칭하여 신규/자동 갱신/충돌 카운트와 충돌 행 표시',

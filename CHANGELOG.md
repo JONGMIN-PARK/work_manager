@@ -1,5 +1,32 @@
 # Work Manager — 변경 이력
 
+## v13.30 (2026-05-07) — 편집모드 수정 적용 시 항목 중복 생성 버그 수정
+
+### 배경
+사용자 보고: "필터 편집모드 수정 적용 시, 항목 중복 생성됨".
+
+### 원인 (데이터 흐름)
+- `GET /api/archives/records`: 매니저/임원은 부서 전체, 관리자는 테넌트 전체 레코드를 반환 → `aD`에 본인+타인 레코드 혼재
+- `POST /api/archives/records/bulk` (`wrBulkPut`): `WHERE user_id=me`로 본인 레코드만 DELETE 후 전체 페이로드 INSERT (`user_id=me`로 고정)
+- 기존 `applyEdits`: `wrBulkPut(aD)` 호출 → 타인 레코드는 원본 그대로 남고, 본인 user_id로 복사본까지 INSERT → **중복 생성**
+
+### 변경 (서버)
+- **`PATCH /api/archives/records/batch`** (`server/routes/archives.js`): WHERE 절을 role 기반 스코프로 확장 — `member`는 본인, `manager`/`executive`는 부서, `admin`은 테넌트. GET 정책과 일치. 매니저가 부원 레코드를 편집해도 silent 0-row update가 더 이상 발생하지 않음.
+- **`DELETE /api/archives/records/batch`**도 동일 정책으로 확장.
+
+### 변경 (클라이언트)
+- **`applyEdits`** (`업무일지_분석기.html`): `wrBulkPut(aD)` 전체 저장 → `wrUpdateRecords` PATCH로 전환. 변경된 행 + cascade 픽스(같은 수주번호의 미편집 행에서 실제로 ocmt/oclient가 채워진 경우)만 페이로드에 포함. 로컬(IndexedDB) 모드는 `wrUpdateRecords`가 정의되지 않으므로 기존 `wrBulkPut(aD)` 폴백 — 단일 사용자 환경이라 안전.
+- **import 후 aD 리로드**: `ldBuf` / `importWorkRecordsJSON` 모두 `wrBulkPut` 직후 `wrGetAll`로 다시 읽어 서버가 새로 부여한 id를 채움. 이게 빠지면 import 직후 편집 시 PATCH가 stale id 때문에 silent 실패.
+
+### 알아둘 점
+- 로컬 모드 `wrBulkPut`(IndexedDB `s.clear()` + put)은 그대로 — 단일 사용자 보장 환경.
+- 같은 수주번호의 다른 사용자 레코드(예: 부서원의 같은 프로젝트 작업)는 매니저/임원이 ocmt/oclient를 편집하면 함께 갱신됨 (의도된 동작 — order-level 메타는 부서 단위로 일관성 유지).
+
+### 변경 파일
+- `server/routes/archives.js`, `업무일지_분석기.html`
+
+---
+
 ## v13.29 (2026-05-07) — 업무일지 가져오기 충돌 미리보기 + 컬럼 round-trip
 
 ### 배경

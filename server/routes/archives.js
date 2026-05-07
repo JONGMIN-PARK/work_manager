@@ -159,6 +159,21 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
     var updates = req.body.updates || [];
     if (!updates.length) { client.release(); return res.json({ data: [], count: 0 }); }
 
+    // role별 스코프 결정 — GET /records와 동일 정책
+    var role = req.user.role;
+    var deptId = req.user.departmentId;
+    var scopeClause, scopeParams;
+    if ((role === 'manager' || role === 'executive') && deptId) {
+      scopeClause = 'AND tenant_id = $S1 AND user_id IN (SELECT id FROM users WHERE department_id = $S2)';
+      scopeParams = [req.tenant.id, deptId];
+    } else if (role === 'admin') {
+      scopeClause = 'AND tenant_id = $S1';
+      scopeParams = [req.tenant.id];
+    } else {
+      scopeClause = 'AND tenant_id = $S1 AND user_id = $S2';
+      scopeParams = [req.tenant.id, req.user.sub];
+    }
+
     await client.query('BEGIN');
     // 전체 필드를 명시적으로 SET (COALESCE 없이 직접 덮어쓰기)
     var promises = [];
@@ -166,10 +181,12 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
     for (var i = 0; i < updates.length; i++) {
       var u = updates[i];
       if (!u.id) continue;
-      promises.push(client.query(
-        'UPDATE work_records SET date=$1, name=$2, order_no=$3, hours=$4, task_type=$5, abbr=$6, content=$7, ocmt=$8, oclient=$9, milestone_id=$10 WHERE id=$11 AND user_id=$12 AND tenant_id=$13',
-        [u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.milestoneId !== undefined ? (u.milestoneId || null) : (u.milestone_id !== undefined ? (u.milestone_id || null) : null), u.id, req.user.sub, req.tenant.id]
-      ));
+      // 기본 SET 파라미터 + id + 스코프 파라미터
+      var rowParams = [u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.milestoneId !== undefined ? (u.milestoneId || null) : (u.milestone_id !== undefined ? (u.milestone_id || null) : null), u.id];
+      var sParamStart = rowParams.length + 1; // 12
+      var sql = 'UPDATE work_records SET date=$1, name=$2, order_no=$3, hours=$4, task_type=$5, abbr=$6, content=$7, ocmt=$8, oclient=$9, milestone_id=$10 WHERE id=$11 ' +
+        scopeClause.replace('$S1', '$' + sParamStart).replace('$S2', '$' + (sParamStart + 1));
+      promises.push(client.query(sql, rowParams.concat(scopeParams)));
       count++;
     }
     await Promise.all(promises);
@@ -200,15 +217,27 @@ router.post('/records', rbac.checkPermission('archive.manage'), async function (
   }
 });
 
-// DELETE /api/archives/records/batch — 선택 삭제 (ID 배열)
+// DELETE /api/archives/records/batch — 선택 삭제 (ID 배열) — role 스코프 적용
 router.delete('/records/batch', rbac.checkPermission('archive.manage'), async function (req, res) {
   try {
     var ids = req.body.ids || [];
     if (!ids.length) return res.json({ count: 0 });
+    var role = req.user.role;
+    var deptId = req.user.departmentId;
     var placeholders = ids.map(function (_, i) { return '$' + (i + 1); });
-    var userIdx = ids.length + 1;
-    var tenantIdx = ids.length + 2;
-    var result = await db.query('DELETE FROM work_records WHERE id IN (' + placeholders.join(',') + ') AND (user_id = $' + userIdx + ' OR user_id IS NULL) AND tenant_id = $' + tenantIdx, ids.concat([req.user.sub, req.tenant.id]));
+    var nextIdx = ids.length + 1;
+    var sql, params;
+    if ((role === 'manager' || role === 'executive') && deptId) {
+      sql = 'DELETE FROM work_records WHERE id IN (' + placeholders.join(',') + ') AND tenant_id = $' + nextIdx + ' AND user_id IN (SELECT id FROM users WHERE department_id = $' + (nextIdx + 1) + ')';
+      params = ids.concat([req.tenant.id, deptId]);
+    } else if (role === 'admin') {
+      sql = 'DELETE FROM work_records WHERE id IN (' + placeholders.join(',') + ') AND tenant_id = $' + nextIdx;
+      params = ids.concat([req.tenant.id]);
+    } else {
+      sql = 'DELETE FROM work_records WHERE id IN (' + placeholders.join(',') + ') AND tenant_id = $' + nextIdx + ' AND (user_id = $' + (nextIdx + 1) + ' OR user_id IS NULL)';
+      params = ids.concat([req.tenant.id, req.user.sub]);
+    }
+    var result = await db.query(sql, params);
     res.json({ count: result.rowCount });
   } catch (e) {
     console.error('[work-records/batch-delete]', e);
