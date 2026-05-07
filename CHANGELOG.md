@@ -1,5 +1,29 @@
 # Work Manager — 변경 이력
 
+## v13.29 (2026-05-07) — 업무일지 가져오기 충돌 미리보기 + 컬럼 round-trip
+
+### 배경
+사용자 보고: "상세 → 📤 엑셀저장"으로 저장한 파일을 다시 불러오면, 일반 업무일지 엑셀과 컬럼 수가 달라(9 vs 7) 수주명·거래처가 무시되고 편집값이 사라짐. 또한 기존 "갱신" 모드는 식별 키가 너무 엄격(`date+name+orderNo+hours+content`)해서 시간만 바뀐 동일 레코드도 새로 추가됨.
+
+### 기능
+- **컬럼 자동감지 확장 (`업무일지_분석기.html`)**: `COL_PATTERNS`에 `ocmt`(수주명·프로젝트명·사업명·건명), `oclient`(거래처·고객사·업체·발주처) 추가. `pMapRow`에서 cells 값이 비어있지 않을 때만 `rec.ocmt`/`rec.oclient`를 채워 ORDER_MAP 기본값을 가리지 않음. `COL_ALL` 순서를 구체적 패턴 우선으로 재배열 (수주명이 "수주"보다 먼저 매칭).
+- **`wrAnalyzeImport(existing, newRecs)`**: (날짜+이름+수주번호) 느슨한 키로 분류 — `identical`(완전 일치), `conflicts`(시간/내용 차이), `newRows`(후보 없음). existing 자체 dedup도 함께 수행. 같은 existing이 두 번 매칭되는 것 방지.
+- **`wrApplyDecisions(newRecs, analysis, decisions)`**: 행 단위 결정(`update`/`skip`/`add`)을 받아 최종 merged 배열 생성. `mode='replace_keep_matched'` 옵션은 매칭되지 않은 기존만 삭제.
+- **`showImportPreviewModal`**: 신규/자동 갱신/충돌 카운트 + 충돌 행 테이블 (날짜·이름·수주번호·시간 비교·내용 diff). 행마다 select로 처리 선택, "전체 갱신/무시/별개 추가" 일괄 버튼 제공.
+
+### 변경된 흐름
+- `ldBuf` (엑셀 업로드)와 `importWorkRecordsJSON` (JSON 가져오기) 모두 "갱신" 선택 시 미리보기 모달로 진행. 영향 없는 신규-only 케이스는 미리보기 생략.
+
+### 알아둘 점
+- 같은 `(date, name, orderNo)` 후보가 둘 이상이면 ⚠ 배지로 표시 — 사용자가 모호함을 인지한 상태에서 결정.
+- `wrBulkPut`는 로컬(IndexedDB)·서버(`/api/archives/records/bulk`) 양쪽 모두 "해당 사용자 레코드 전체 삭제 후 재삽입" 의미 — `merge`/`replace_keep_matched` 두 모드 모두 단일 `wrBulkPut(result.merged)` 호출로 일관 처리.
+- 영향 범위: 서버 `/bulk`는 `WHERE user_id = ?` 스코프이므로 본인 데이터에만 적용. 매니저/관리자가 다른 사용자 데이터를 함께 다루려면 별도 경로 필요.
+
+### 변경 파일
+- `업무일지_분석기.html`
+
+---
+
 ## v13.28 (2026-05-06) — 담당자→멤버 자동 동기화 + 비공개 신규시 공유 모달 자동 오픈
 
 ### 기능
