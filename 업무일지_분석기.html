@@ -2819,6 +2819,65 @@ function renderPatchNotes(){
     {ver:'13.12',date:'2026-04-15',title:'상세 테이블 표시 행 수 확대',tag:'fix',items:[
       '팀관리 > 주간분석 > 상세 탭 뷰포트 높이 확대 (약 11행 → 25행)'
     ]},
+    {ver:'13.11',date:'2026-04-14',title:'업무일지 마일스톤 태깅 (투입실적 정확도 향상)',tag:'feature',items:[
+      'work_records에 milestone_id 컬럼 추가 (migration 011) — 명시 태그가 있으면 태그 기반 우선 집계, 없으면 날짜 구간 매칭 fallback',
+      'POST /api/archives/records/auto-tag-milestones — 프로젝트 마일스톤 날짜 구간으로 일괄 자동 태깅 (overwrite 옵션)',
+      'calcHoursByMilestone 3단 우선순위로 재작성 (정확/추정/근접). _meta.untaggedCount + 마일스톤별 untagged + people 맵 반환',
+      '투입실적 탭: 🏷 자동 태깅 버튼, 마일스톤별 ~N 미태깅 카운트, 헤더 미태깅 경고',
+      '인원별 투입 섹션이 실제 데이터를 표시 (이전엔 people이 비어 있었음)'
+    ]},
+    {ver:'13.10',date:'2026-04-14',title:'프로젝트 저장 후 "Invalid time value" 실제 원인 수정',tag:'fix',items:[
+      'renderCalendar가 initCalendar보다 먼저 호출될 때 calYear/calMonth 미초기화 → new Date(undefined,NaN,0).toISOString()에서 RangeError',
+      '진입부에서 값 없으면 오늘 기준으로 자기 초기화하도록 가드 추가',
+      'v13.9의 renderTimeline 폴백은 별개 방어로 유지'
+    ]},
+    {ver:'13.9',date:'2026-04-14',title:'프로젝트 저장 후 "Invalid time value" 에러 수정',tag:'fix',items:[
+      '전체 프로젝트의 startDate/endDate 누락/형식 손상 시 getTimeUnits에서 toISOString() RangeError → 저장 후 재렌더링 crash',
+      '유효한 YYYY-MM-DD만 범위 산출에 사용. 수집 결과 없으면 오늘 ±30일 폴백',
+      'calcCriticalPath의 toISOString() 3곳에 isNaN(getTime()) 가드 추가'
+    ]},
+    {ver:'13.8',date:'2026-04-14',title:'프로젝트 관리 리팩토링 (2/2): 로컬 모드 제거',tag:'feature',items:[
+      'project-data.js 1653줄 → 1166줄 (≈30% 감소). 로컬(IndexedDB)+서버(REST) 듀얼 → 서버 전용',
+      'upgradeProjectDB / openDBv2 / db 전역 / dbPut/GetAll/Get/Del/GetByIndex 제거, AUTH_SKIP 가드/IIFE 래퍼 제거',
+      'IIFE 안 서버 오버라이드(toCamel/toSnake/엔티티 CRUD)를 top-level 선언으로 승격',
+      'readAllArchiveRecords/suggestMilestones/getWeeklyArchiveSummary/getRecentArchiveWeeks를 wrGetAll/wkGetAll 기반으로 재작성',
+      'apiFetch가 전역에 반드시 있어야 하며 없으면 런타임 오류 (의도된 동작)'
+    ]},
+    {ver:'13.7',date:'2026-04-14',title:'프로젝트 관리 리팩토링 (1/2)',tag:'feature',items:[
+      'timeline.js에서 프로젝트 상세 패널 관련 약 856줄을 project-detail.js로 분리',
+      'showProjectDetail / pdSwitchTab / pdLoadIssues / pdLoadWork / pd* 일체 이전. 동작 변경 없음',
+      '로드 순서 timeline.js → project-detail.js'
+    ]},
+    {ver:'13.6',date:'2026-04-14',title:'체크리스트 추가 시 패널 리로드 제거 (부분 갱신)',tag:'fix',items:[
+      'pdAddCheck 후 showProjectDetail로 패널 전체 재생성 → 깜빡임/스크롤·포커스 유실 발생',
+      '활성 탭 체크리스트 영역만 부분 갱신, 패널 유지. 입력창 포커스 복원으로 연속 입력 가능',
+      'renderOverviewChkListHtml/pdRefreshOverviewChk 헬퍼 추가 — 개요 탭 렌더 분리'
+    ]},
+    {ver:'13.5',date:'2026-04-14',title:'프로젝트 개요 탭 체크리스트 추가 버그 수정',tag:'fix',items:[
+      '개요 탭 input(pdOverviewNewChk) 값이 사용되지 않거나 엉뚱한 phase로 전송되는 케이스 → 현재 보이는 탭 input 우선 사용',
+      'createCheckItem 단순화 — 선행 chkGetByProject 제거(3→2 API), items slice로 mutation 방지, dueDate/order 누락 방지',
+      '추가 실패 시 서버 에러 메시지를 토스트에 노출'
+    ]},
+    {ver:'13.4',date:'2026-04-14',title:'갱신 후 상세 탭 빈 표 문제 수정',tag:'fix',items:[
+      'applyADToUI가 병합 후 sN/sO/sT/sDV/cKw 등 모든 필터 선택을 초기화 → gF()가 "선택 없음 → 빈 배열" 반환',
+      '기존 선택값 중 현재 데이터에 존재하는 항목만 보존하도록 변경 — 갱신 후에도 기존 뷰/필터 유지',
+      '신규 추가된 레코드도 해당 인원/필터 범위에서 즉시 노출'
+    ]},
+    {ver:'13.3',date:'2026-04-14',title:'다른파일 불러오기/갱신 시 데이터 누락 수정',tag:'fix',items:[
+      'wrIdKey/idKey가 content 앞 30자만 비교 → 앞부분 동일 + 뒷부분 다른 레코드 충돌 시 일부 소실. date+name+orderNo+hours+content(전체)로 변경',
+      '신규 배열 자체에 동일 키가 여러 개일 때 Map.set이 뒤가 앞을 덮어쓰던 문제 → 첫 번째 유지 가드 추가'
+    ]},
+    {ver:'13.2',date:'2026-04-14',title:'응답 속도 개선 + 낙관적 UI 업데이트',tag:'feature',items:[
+      '이슈 상태 변경 시 텔레그램/이메일/인앱 알림 발송을 완전 비동기화 — API 응답 블로킹 제거',
+      'notification.service.js 알림 배치 쿼리를 ANY($1) 단일 쿼리로 통합 — 다수 수신자 발송 시 응답 시간/처리량 개선',
+      '편집 후 목록 재조회 제거 — PUT 응답 데이터로 로컬 상태를 직접 병합 (projects/issues/orders/calendar)'
+    ]},
+    {ver:'13.1',date:'2026-04-14',title:'엑셀 파싱 및 UI 개선',tag:'fix',items:[
+      'pNormDate 강화 — 엑셀 일련번호 + YYYY.MM.DD/YY.MM.DD 등 다양한 포맷 인식',
+      '헤더/컬럼 감지 — 띄어쓰기 무시, 검색 범위 확대, 병합 셀 보강',
+      '식별 키(idKey/wrIdKey)에 content 추가 — 같은 날 같은 사람 같은 프로젝트의 다른 작업이 덮어쓰이는 문제 해결',
+      '분석기 테이블 table-layout: fixed, 이름·수주번호 word-break — 텍스트 잘림 방지'
+    ]},
     {ver:'13.0',date:'2026-04-08',title:'Phase 1~3 전체 완료 — 프로덕션 레디',tag:'feature',items:[
       'Phase 3 엔터프라이즈: SSO/SAML (Azure AD, Okta), 커스텀 필드(8유형), 워크플로우 빌더, 화이트라벨',
       '온프레미스 Docker Compose 원클릭 배포 + 설치 가이드 + 라이선스 키 시스템',
@@ -2829,6 +2888,15 @@ function renderPatchNotes(){
       'PWA 오프라인 데이터 캐싱 (Network First + 캐시 폴백) + 모바일 터치 최적화',
       'SaaS 랜딩 페이지 (Hero, 8개 기능, 가격표 4단, CTA)',
       '로그인 시도 횟수 제한 제거'
+    ]},
+    {ver:'12.0',date:'2026-04-08',title:'Phase 3 엔터프라이즈 완료',tag:'major',items:[
+      'SSO/SAML 2.0 IdP 연동 (Azure AD, Okta 호환) + JIT 프로비저닝 + SP 정보 자동 안내',
+      '커스텀 필드 정의/값 관리 (프로젝트·이슈·수주, 8유형) + 워크플로우 빌더 (상태/전이/검증)',
+      '화이트라벨 (로고/파비콘/색상/앱이름/도메인/CSS) — 테넌트 단위 브랜딩',
+      '온프레미스 Docker Compose 원클릭 배포 (PG+API+Web+Nginx) + INSTALL.md + 라이선스 키 시스템',
+      '감사 로그 대시보드(필터·검색·페이지네이션) + GDPR CSV/JSON 내보내기 + 접근 기록 리포트 + 데이터 보관 정책',
+      '신규 API: /api/sso, /custom-fields, /workflows, /white-label, /license, /data-export. migration 004_phase3.sql',
+      '총 API 엔드포인트 155+, DB 테이블 36+, 프론트 페이지 14개'
     ]},
     {ver:'10.2',date:'2026-04-07',title:'사업부/부서별 접근 제어',tag:'feature',items:[
       '프로젝트: 부서별 소속 프로젝트 자동 필터링 + 생성 시 부서 자동 배정',
