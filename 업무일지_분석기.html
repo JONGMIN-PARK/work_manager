@@ -343,7 +343,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.31</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.32</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2725,6 +2725,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.32',date:'2026-05-08',title:'프로젝트 RBAC 완화 — 가시성 정책에 정렬',tag:'fix',items:[
+      '"프로젝트 등록 시 이 작업에 대한 권한이 없습니다" 에러 수정 — RBAC가 manager 역할만 허용하던 것을 모든 인증 사용자로 완화',
+      'v13.31 가시성 정책(기본 비공개 + 명시 공유)이 도입된 이후 RBAC의 manager-only 제약은 의미 중복이자 충돌. 정책 의도(누구나 생성 가능, 가시성은 생성자가 설정)에 맞게 정리',
+      'project.create / edit / delete / read / assign 모두 인증 사용자 허용. 실질 접근 통제는 라우트 핸들러의 canAccessProject + owner_id 검사에서 수행',
+      'pl.assign(PL 지정)만 admin/manager 또는 해당 프로젝트 PL 본인으로 유지'
+    ]},
     {ver:'13.31',date:'2026-05-07',title:'프로젝트 가시성 엄격 적용 — 기본 비공개 + 명시 공유만',tag:'fix',items:[
       '정책 변경: 프로젝트는 기본 비공개. 생성자가 편집 모달에서 직접 공유 범위(private/dept/tenant) 선택. 공유 사용자는 "공유 관리"에서 추가',
       'GET /api/projects 와 GET /api/projects/:id 의 admin/executive 가시성 우회 제거 — admin도 owner거나 명시 공유받지 않으면 비공개 프로젝트는 안 보임',

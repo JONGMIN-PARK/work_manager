@@ -1,5 +1,28 @@
 # Work Manager — 변경 이력
 
+## v13.32 (2026-05-08) — 프로젝트 RBAC 완화 (가시성 정책에 정렬)
+
+### 배경
+사용자 보고: "프로젝트 등록시에 이 작업에 대한 권한이 없습니다 에러 발생".
+
+원인: `server/middleware/rbac.js:67`에서 `project.create` 권한이 `role === 'manager'` 만 허용. v13.31에서 가시성 정책을 엄격하게(기본 private + 명시 공유) 도입한 이후로는 RBAC의 manager-only 제약이 의미 중복이자 충돌 — 사용자의 명시적 정책("프로젝트 생성은 임의대로할 수 있지만, 보이는건 생성자가 설정할 수 있어야 함")과도 어긋남.
+
+### 변경 (`server/middleware/rbac.js`)
+- **`project.create`** : `manager` only → **모든 인증 사용자** 허용
+- **`project.edit`** / **`project.delete`** : `manager || pl` → 인증 사용자 허용. 실질 접근 통제는 v13.31에서 추가한 라우트 핸들러의 `canAccessProject` 사전 체크가 담당.
+- **`project.read`** : 모든 인증 사용자 허용. 가시성 룰은 GET 핸들러의 SQL where 절이 적용.
+- **`project.assign`** (멤버 추가/해제): 인증 사용자 허용. 라우트에서 owner/PL 검사 필요 시 후속 추가.
+- **`pl.assign`** (PL 지정): admin/manager 또는 해당 프로젝트의 기존 PL — 권한 분리 유지.
+
+### 영향
+- v13.31 이전부터 manager가 아닌 사용자(member, executive)는 프로젝트를 생성할 수 없었음. v13.32로 누구나 생성 가능. 만든 프로젝트는 기본 비공개라 다른 사용자에게 노출되지 않음.
+- 기존 manager에 의존하던 워크플로(예: 매니저 검토 후 프로젝트 등록)가 있다면 별도 정책으로 후속 결정 필요.
+
+### 변경 파일
+- `server/middleware/rbac.js`, `업무일지_분석기.html` (헤더 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.31 (2026-05-07) — 프로젝트 가시성 엄격 적용 (기본 비공개 + 명시 공유만)
 
 ### 배경

@@ -62,24 +62,26 @@ function checkPermission(action, getResourceId) {
     var allowed = false;
 
     switch (action) {
-      // 프로젝트
+      // 프로젝트 (v13.32~ 가시성 정책 도입 후 RBAC 완화)
+      // 생성은 모든 인증 사용자 허용. 편집/삭제/멤버 관리는 라우트 핸들러의
+      // canAccessProject + owner_id 검사가 실질 게이트 역할 — RBAC는 통과 허용.
       case 'project.create':
-        allowed = role === 'manager';
+        allowed = true;
         break;
       case 'project.edit':
-        allowed = role === 'manager' || pl;
+        allowed = true; // 라우트의 canAccessProject 사전 체크에 위임
         break;
       case 'project.delete':
-        allowed = role === 'manager';
+        allowed = true; // 라우트의 canAccessProject 사전 체크에 위임
         break;
       case 'project.read':
-        allowed = role === 'executive' || role === 'manager' || pl || member;
+        allowed = true; // 가시성 룰은 GET 핸들러 SQL에서 적용
         break;
       case 'project.assign':
-        allowed = role === 'manager' || pl;
+        allowed = true; // 멤버 관리 — 라우트에서 owner/PL 추가 검사 필요 시 분기
         break;
       case 'pl.assign':
-        allowed = role === 'manager';
+        allowed = role === 'admin' || role === 'manager' || pl;
         break;
 
       // 이슈
