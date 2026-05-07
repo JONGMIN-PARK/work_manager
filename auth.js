@@ -99,7 +99,8 @@ async function apiFetch(url, opts) {
 async function _tryRefresh() {
   try {
     var controller = new AbortController();
-    var timer = setTimeout(function () { controller.abort(); }, 8000);
+    // Render Free 플랜 콜드 스타트(30~60초) 대비 — 8s → 35s
+    var timer = setTimeout(function () { controller.abort(); }, 35000);
     var res = await fetch(API_BASE + '/api/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -112,6 +113,8 @@ async function _tryRefresh() {
     _accessToken = data.data.accessToken;
     _refreshToken = data.data.refreshToken;
     localStorage.setItem('wm_refresh', _refreshToken);
+    // 토큰이 늦게 도착해 부트스트랩 race가 이미 종료된 경우라도, 데이터 로드를 다시 시도할 수 있게 신호
+    try { window.dispatchEvent(new CustomEvent('wm:auth-ready')); } catch (_) {}
     return true;
   } catch (e) {
     return false;
@@ -141,6 +144,7 @@ async function authLogin(email, password, remember) {
     localStorage.removeItem('wm_refresh');
   }
 
+  try { window.dispatchEvent(new CustomEvent('wm:auth-ready')); } catch (_) {}
   return currentUser;
 }
 
@@ -216,6 +220,7 @@ async function authInit() {
       _accessToken = tokens.accessToken;
       _refreshToken = tokens.refreshToken;
       localStorage.setItem('wm_refresh', _refreshToken);
+      try { window.dispatchEvent(new CustomEvent('wm:auth-ready')); } catch (_) {}
       // URL에서 파라미터 제거
       history.replaceState(null, '', location.pathname);
       var user = await authFetchMe();

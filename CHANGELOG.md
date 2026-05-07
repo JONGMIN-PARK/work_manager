@@ -1,5 +1,37 @@
 # Work Manager — 변경 이력
 
+## v13.33 (2026-05-08) — 페이지 첫 로딩 시 업무일지 미표시 (콜드 스타트 race 수정)
+
+### 배경
+사용자 보고: "페이지 로딩시, db에 저장된 업무 내용들이 안보이고, 리프레쉬 해야지만 보이는 경우가 있는데."
+
+### 원인 (콜드 스타트와 토큰 갱신 타이밍 race)
+1. `업무일지_분석기.html:5464-5467`에서 `_bootstrap`이 `authInit()`을 10s 타임아웃으로 race.
+2. `authInit()` → `_tryRefresh()` 호출 (`auth.js:268`).
+3. `_tryRefresh()`의 자체 타임아웃이 **8초** (`auth.js:102`).
+4. **Render Free 플랜 콜드 스타트는 30~60초** 소요.
+5. 결과: `_tryRefresh` 8s에서 abort → `_accessToken` 미설정 → `authInit` false 반환.
+6. `_postAuthInit`이 1-b 단계에서 5초만 폴링 (`업무일지_분석기.html:4636-4642`) → 토큰 미도착 → 데이터 로드 포기.
+7. 사용자가 새로고침하면 서버가 warm해진 상태라 `_tryRefresh`가 1초 만에 성공 → 정상 로드.
+
+### 변경 (`auth.js`)
+- `_tryRefresh` 타임아웃 8s → **35s** (콜드 스타트 30~60s 커버).
+- `_tryRefresh` / `authLogin` / Google OAuth 콜백에서 `_accessToken` 설정 직후 `window.dispatchEvent(new CustomEvent('wm:auth-ready'))` 발행.
+
+### 변경 (`업무일지_분석기.html`)
+- `_postAuthInit`에서 `wm:auth-ready` 이벤트 리스너 등록. 부트스트랩 race가 종료된 뒤 토큰이 늦게 들어와도 `_loadFromServer`를 자동 재시도.
+- 1-b 폴링 대기 시간 5s → 30s (콜드 스타트 시간 커버).
+- `_authReadyHandled` 플래그 + `_dataLoaded` 체크로 동일 데이터 중복 로드 방지.
+
+### 영향
+- 첫 로딩에 빈 화면이 보이던 문제 해소. 토큰 갱신이 완료되는 즉시(혹은 polling이 잡을 때) 자동으로 데이터 표시.
+- 콜드 스타트 환경에서도 새로고침 없이 정상 동작. Local IndexedDB가 있는 환경에선 SWR 패턴으로 즉시 잠정 렌더 후 서버 응답으로 갱신(기존 동작 유지).
+
+### 변경 파일
+- `auth.js`, `업무일지_분석기.html` (헤더 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.32 (2026-05-08) — 프로젝트 RBAC 완화 (가시성 정책에 정렬)
 
 ### 배경

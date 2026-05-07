@@ -343,7 +343,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.32</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.33</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2725,6 +2725,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.33',date:'2026-05-08',title:'페이지 로딩 시 업무일지 미표시 — 콜드 스타트 race 수정',tag:'fix',items:[
+      'Render Free 플랜 콜드 스타트(30~60s)와 토큰 갱신 타이밍 race로 페이지 첫 로딩에 업무일지가 안 보이고 새로고침해야 보이던 문제 수정',
+      '_tryRefresh 타임아웃 8s → 35s — 콜드 스타트 동안 토큰 갱신이 abort되지 않도록',
+      '토큰이 늦게 들어와도 데이터 재로드 — auth.js가 _accessToken 설정 시 wm:auth-ready 이벤트 발행, _postAuthInit이 리스너로 받아 _loadFromServer 재시도',
+      '_postAuthInit 1-b 폴링 대기 5s → 30s (콜드 스타트 시간 커버)',
+      '중복 로드 방지: _authReadyHandled 플래그 + _dataLoaded 체크로 한 번만 실행'
+    ]},
     {ver:'13.32',date:'2026-05-08',title:'프로젝트 RBAC 완화 — 가시성 정책에 정렬',tag:'fix',items:[
       '"프로젝트 등록 시 이 작업에 대한 권한이 없습니다" 에러 수정 — RBAC가 manager 역할만 허용하던 것을 모든 인증 사용자로 완화',
       'v13.31 가시성 정책(기본 비공개 + 명시 공유)이 도입된 이후 RBAC의 manager-only 제약은 의미 중복이자 충돌. 정책 의도(누구나 생성 가능, 가시성은 생성자가 설정)에 맞게 정리',
@@ -4627,19 +4634,31 @@ async function _postAuthInit(){
       // 서버 응답이 오면 덮어쓰도록 함. 단 UI 표시는 이미 완료.
     }).catch(function(){});
   };
+  // 1-c: 토큰이 늦게 도착해도 데이터를 재시도 — Render Free 콜드 스타트 race 대비
+  // _tryRefresh가 부트스트랩 10s 타임아웃 이후 늦게 성공해도 wm:auth-ready 이벤트로 신호 받아 재시도.
+  // _loadFromServer는 _dataLoaded 체크로 중복 로드 안전.
+  var _authReadyHandled=false;
+  var _onAuthReady=function(){
+    if(_authReadyHandled)return; _authReadyHandled=true;
+    if(_dataLoaded)return;
+    if(_accessToken){_loadFromServer().catch(function(e){console.warn('[late auth load]',e)})}
+  };
+  try{window.addEventListener('wm:auth-ready',_onAuthReady)}catch(_){}
   // 1단계: 서버 API에서 전체 로드 (모든 기기에서 동일 데이터 보장)
   if(typeof apiFetch==='function'&&(typeof AUTH_SKIP==='undefined'||!AUTH_SKIP)&&_accessToken){
     setTimeout(_renderLocalSoon,150);
     await _loadFromServer();
   }
-  // 1-b: 인증 지연 대비 — _accessToken이 아직 없으면 최대 5초 대기 후 재시도
+  // 1-b: 인증 지연 대비 — _accessToken이 아직 없으면 최대 30초 대기 후 재시도
+  // (Render Free 플랜 콜드 스타트가 30~60s)
   if(!_dataLoaded&&typeof apiFetch==='function'&&(typeof AUTH_SKIP==='undefined'||!AUTH_SKIP)&&!_accessToken){
     setTimeout(_renderLocalSoon,150);
-    for(var _aw=0;_aw<10;_aw++){
+    for(var _aw=0;_aw<60;_aw++){
       await new Promise(function(r){setTimeout(r,500)});
       if(_accessToken)break;
+      if(_dataLoaded)break; // wm:auth-ready 리스너가 이미 로드 시작했으면 중단
     }
-    if(_accessToken)await _loadFromServer();
+    if(_accessToken&&!_dataLoaded){_authReadyHandled=true;await _loadFromServer()}
   }
   // 2단계: 서버 실패/오프라인 시 로컬 IndexedDB 폴백
   if(!_dataLoaded){
