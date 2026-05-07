@@ -28,31 +28,17 @@ router.get('/', async function (req, res) {
     var t = new Date(); t.setDate(t.getDate() - recentDays);
     var cutoff = t.getFullYear() + String(t.getMonth() + 1).padStart(2, '0') + String(t.getDate()).padStart(2, '0');
 
-    // ── projects (role-aware) ──
-    var projQ;
-    if (role === 'admin' || role === 'executive') {
-      projQ = db.query('SELECT * FROM projects WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 500', [tenantId]);
-    } else if (role === 'manager') {
-      var mgrWhere = deptId
-        ? '(p.department_id = $3 OR pm.user_id IS NOT NULL OR p.department_id IS NULL)'
-        : '(pm.user_id IS NOT NULL OR p.department_id IS NULL)';
-      var mgrParams = deptId ? [userId, tenantId, deptId] : [userId, tenantId];
-      projQ = db.query(
-        'SELECT DISTINCT p.* FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL ' +
-        'WHERE p.tenant_id = $2 AND ' + mgrWhere + ' ORDER BY p.created_at DESC LIMIT 500',
-        mgrParams
-      );
-    } else {
-      var memWhere = deptId
-        ? '(p.department_id = $3 OR pm.user_id IS NOT NULL)'
-        : '(pm.user_id IS NOT NULL OR p.department_id IS NULL)';
-      var memParams = deptId ? [userId, tenantId, deptId] : [userId, tenantId];
-      projQ = db.query(
-        'SELECT DISTINCT p.* FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL ' +
-        'WHERE p.tenant_id = $2 AND ' + memWhere + ' ORDER BY p.created_at DESC LIMIT 500',
-        memParams
-      );
-    }
+    // ── projects (가시성 정책 v13.31~ — 모든 role에 동일 룰 적용) ──
+    // owner / project_members(active) / visibility='tenant' / (visibility='dept' AND 부서 일치)
+    var projVis = "(p.owner_id = $1 OR pm.user_id IS NOT NULL OR p.visibility = 'tenant'"
+      + (deptId ? " OR (p.visibility = 'dept' AND p.department_id = $3)" : "")
+      + ")";
+    var projParams = deptId ? [userId, tenantId, deptId] : [userId, tenantId];
+    var projQ = db.query(
+      'SELECT DISTINCT p.* FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL ' +
+      'WHERE p.tenant_id = $2 AND ' + projVis + ' ORDER BY p.created_at DESC LIMIT 500',
+      projParams
+    );
 
     // ── milestones, events (tenant scope) ──
     var msQ = db.query('SELECT * FROM milestones WHERE tenant_id = $1 ORDER BY sort_order, start_date LIMIT 2000', [tenantId]);

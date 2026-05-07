@@ -11,34 +11,46 @@ var tenant = require('../middleware/tenant');
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
+// ─── 가시성 정책 (v13.31~) ───
+// 정책: 기본 비공개. 생성자(owner) + project_members(active) + visibility 일치(tenant/dept)만 노출.
+// admin/executive 역할도 동일 룰을 따름 — 우회 없음. (관리자는 명시 공유 또는 가시성 변경으로 접근권 획득)
+//
+// 단일 프로젝트 행에 대한 접근권 판정. 멤버 조회는 옵션(이미 캐시된 경우 전달).
+async function canAccessProject(req, project, opts) {
+  if (!project) return false;
+  var userId = req.user.sub;
+  var deptId = req.user.departmentId || null;
+  if (project.owner_id === userId) return true;
+  if (project.visibility === 'tenant') return true;
+  if (project.visibility === 'dept' && deptId && project.department_id === deptId) return true;
+  // project_members(active) 체크
+  if (opts && opts.isMember === true) return true;
+  if (opts && opts.isMember === false) return false; // 이미 부정 확인
+  var mr = await db.query('SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2 AND released_at IS NULL LIMIT 1', [project.id, userId]);
+  return mr.rows.length > 0;
+}
+
 // ─── GET /api/projects ───
 router.get('/', async function (req, res) {
   try {
-    var role = req.user.role;
     var userId = req.user.sub;
-    var pg = parsePagination(req.query, 100);
-    var r;
-
     var deptId = req.user.departmentId || null;
-    if (role === 'admin' || role === 'executive') {
-      // admin/executive: 전체 프로젝트
-      r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM projects WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [req.tenant.id, pg.limit, pg.offset]);
-    } else {
-      // 가시성 룰: owner 본인 / project_members(active) / visibility='tenant' / (visibility='dept' AND 부서 일치)
-      var visClause = "(p.owner_id = $1 OR pm.user_id IS NOT NULL OR p.visibility = 'tenant'"
-        + (deptId ? " OR (p.visibility = 'dept' AND p.department_id = $3)" : "")
-        + ")";
-      var params = deptId
-        ? [userId, req.tenant.id, deptId, pg.limit, pg.offset]
-        : [userId, req.tenant.id, pg.limit, pg.offset];
-      r = await db.query(
-        "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p "
-        + "LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL "
-        + "WHERE p.tenant_id = $2 AND " + visClause
-        + " ORDER BY p.created_at DESC LIMIT $" + (deptId ? 4 : 3) + " OFFSET $" + (deptId ? 5 : 4),
-        params
-      );
-    }
+    var pg = parsePagination(req.query, 100);
+
+    // 가시성 룰을 SQL에 인라인 — admin/executive 우회 없음.
+    var visClause = "(p.owner_id = $1 OR pm.user_id IS NOT NULL OR p.visibility = 'tenant'"
+      + (deptId ? " OR (p.visibility = 'dept' AND p.department_id = $3)" : "")
+      + ")";
+    var params = deptId
+      ? [userId, req.tenant.id, deptId, pg.limit, pg.offset]
+      : [userId, req.tenant.id, pg.limit, pg.offset];
+    var r = await db.query(
+      "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p "
+      + "LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL "
+      + "WHERE p.tenant_id = $2 AND " + visClause
+      + " ORDER BY p.created_at DESC LIMIT $" + (deptId ? 4 : 3) + " OFFSET $" + (deptId ? 5 : 4),
+      params
+    );
 
     var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
     r.rows.forEach(function(row) { delete row._total; });
@@ -55,15 +67,7 @@ router.get('/:id', async function (req, res) {
     var r = await db.query('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     var p = r.rows[0];
-    var role = req.user.role, userId = req.user.sub, deptId = req.user.departmentId || null;
-    var allowed = role === 'admin' || role === 'executive'
-      || p.owner_id === userId
-      || p.visibility === 'tenant'
-      || (p.visibility === 'dept' && deptId && p.department_id === deptId);
-    if (!allowed) {
-      var mr = await db.query('SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2 AND released_at IS NULL', [p.id, userId]);
-      if (mr.rows.length) allowed = true;
-    }
+    var allowed = await canAccessProject(req, p);
     if (!allowed) return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 접근 권한이 없습니다.' });
     res.json({ data: p });
   } catch (e) {
@@ -99,6 +103,11 @@ router.post('/', rbac.checkPermission('project.create'), async function (req, re
 // ─── PUT /api/projects/:id ───
 router.put('/:id', rbac.checkPermission('project.edit'), async function (req, res) {
   try {
+    // 가시성 사전 체크 — RBAC 권한이 있어도 보이지 않는 프로젝트는 편집 불가
+    var preR = await db.query('SELECT id, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!preR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
+    if (!await canAccessProject(req, preR.rows[0])) return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 접근 권한이 없습니다.' });
+
     var b = req.body;
     var updates = {
       order_no: b.orderNo !== undefined ? b.orderNo : b.order_no,
@@ -200,6 +209,11 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
 // ─── DELETE /api/projects/:id ───
 router.delete('/:id', rbac.checkPermission('project.delete'), async function (req, res) {
   try {
+    // 가시성 사전 체크 — RBAC 권한이 있어도 보이지 않는 프로젝트는 삭제 불가
+    var preR = await db.query('SELECT id, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!preR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
+    if (!await canAccessProject(req, preR.rows[0])) return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 접근 권한이 없습니다.' });
+
     var r = await db.query('DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     res.json({ message: '삭제 완료' });
@@ -264,14 +278,13 @@ router.post('/:id/transfer', async function (req, res) {
     if (!newOwnerId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'newOwnerId 필수' });
     var keepPrev = b.keepPrevAsMember !== false;
 
-    var pr = await db.query('SELECT id, owner_id, tenant_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var pr = await db.query('SELECT id, owner_id, tenant_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!pr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     var proj = pr.rows[0];
 
-    var role = req.user.role;
-    var isPriv = role === 'admin' || role === 'executive';
-    if (!isPriv && proj.owner_id !== req.user.sub) {
-      return res.status(403).json({ error: 'FORBIDDEN', message: '소유자 또는 관리자만 이관할 수 있습니다.' });
+    // 소유권 이관은 현재 owner만 가능 — admin/executive 우회 제거 (v13.31)
+    if (proj.owner_id !== req.user.sub) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: '현재 소유자만 이관할 수 있습니다.' });
     }
 
     // 신규 소유자가 같은 테넌트 사용자인지 확인

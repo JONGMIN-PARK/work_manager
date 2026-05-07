@@ -343,7 +343,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.30</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.31</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2725,6 +2725,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.31',date:'2026-05-07',title:'프로젝트 가시성 엄격 적용 — 기본 비공개 + 명시 공유만',tag:'fix',items:[
+      '정책 변경: 프로젝트는 기본 비공개. 생성자가 편집 모달에서 직접 공유 범위(private/dept/tenant) 선택. 공유 사용자는 "공유 관리"에서 추가',
+      'GET /api/projects 와 GET /api/projects/:id 의 admin/executive 가시성 우회 제거 — admin도 owner거나 명시 공유받지 않으면 비공개 프로젝트는 안 보임',
+      'PUT/DELETE 에 가시성 사전 체크 추가 — RBAC 권한이 있어도 보이지 않는 프로젝트는 편집·삭제 불가',
+      '소유권 이관(POST /:id/transfer)도 admin/executive 우회 제거 — 현재 owner만 이관 가능',
+      '/api/bootstrap 의 프로젝트 쿼리도 동일 가시성 룰로 통일 (이전엔 department_id 기반의 별도 정책 사용)',
+      'migration 014: 기존 \'dept\'/\'tenant\' 백필을 \'private\'로 일괄 리셋 — v13.27에서 호환성을 위해 광범위 가시성으로 백필됐던 기존 프로젝트를 비공개로 되돌림. 광범위 노출이 필요한 건은 소유자가 편집 모달에서 직접 변경'
+    ]},
     {ver:'13.30',date:'2026-05-07',title:'편집모드 수정 적용 시 항목 중복 생성 버그 수정',tag:'fix',items:[
       '매니저/관리자가 편집모드로 수정 적용 시 본인 user_id 외 레코드(부서/테넌트의 다른 사용자)가 본인 소유로 복제 INSERT되어 중복 발생하던 버그 수정',
       'applyEdits: wrBulkPut(aD) 전체 저장 → wrUpdateRecords(변경 행만) PATCH 방식으로 전환. cascade 픽스(같은 수주번호 미편집 행의 ocmt/oclient 고정)는 실제 값이 바뀐 행만 저장 대상에 포함',

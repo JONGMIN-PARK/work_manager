@@ -1,5 +1,43 @@
 # Work Manager — 변경 이력
 
+## v13.31 (2026-05-07) — 프로젝트 가시성 엄격 적용 (기본 비공개 + 명시 공유만)
+
+### 배경
+사용자 보고: "프로젝트 관리 개별 로그인 사용자 별 처리가 안되네? 기본적으로 다 보이게 되어있는데, 내가 허락한 사용자만 보여야 하는거 아냐?"
+
+원인 분석:
+1. **`server/routes/projects.js:23-25`**: `admin`/`executive` 역할이 가시성 필터를 **완전 우회** — `SELECT * FROM projects WHERE tenant_id = $1`. 본인이 만든 비공개 프로젝트도 다른 admin/executive에게 노출.
+2. **`migrations/006_project_visibility.sql:37-43`**: v13.27 도입 시 호환성을 위해 기존 프로젝트를 `'dept'`(부서 있음)/`'tenant'`(부서 없음)로 자동 백필 — 결과적으로 v13.27 이전 데이터는 광범위 노출 유지.
+3. **`server/routes/bootstrap.js:33-55`**: 별도 정책으로 `department_id` 기반 필터만 사용. `visibility` 컬럼 무시. 부트스트랩 응답에선 여전히 부서원 프로젝트가 모두 노출.
+
+### 정책 결정
+사용자 확인 결과 "엄격하게 (기본값 + 명시 공유만)" 선택 — 프로젝트는 기본 비공개, 생성자가 편집 모달에서 명시적으로 공개 범위를 변경하거나 공유 사용자를 추가해야 함. **admin/executive도 동일 룰 따름** (자기가 만든 게 아니거나 공유받지 않은 비공개 프로젝트는 보지 못함).
+
+### 변경 (서버)
+- **`server/routes/projects.js`**:
+  - `canAccessProject(req, project, opts)` 헬퍼 도입 — owner / member / visibility 체크를 한 곳에서 일관 처리.
+  - `GET /api/projects`: admin/executive 우회 제거. 모든 role에 동일한 SQL where 절 적용 — `(p.owner_id = me OR pm.user_id IS NOT NULL OR p.visibility = 'tenant' OR (visibility='dept' AND department_id = my_dept))`.
+  - `GET /api/projects/:id`: admin/executive 우회 제거. `canAccessProject`로 일관 검증.
+  - `PUT /api/projects/:id`: 가시성 사전 체크 추가 — RBAC 권한이 있어도 안 보이는 프로젝트는 편집 불가 (403).
+  - `DELETE /api/projects/:id`: 동일하게 가시성 사전 체크 추가.
+  - `POST /api/projects/:id/transfer`: admin/executive 우회 제거. 현재 owner만 이관 가능.
+
+- **`server/routes/bootstrap.js`**: 프로젝트 쿼리를 `projects.js`와 동일한 가시성 룰로 통일. `department_id` 기반의 별도 정책 제거.
+
+- **`server/migrations/014_project_visibility_strict.sql`** 신규:
+  - 자기완결: `owner_id`/`visibility` 컬럼이 없으면 추가 (구 환경 호환), 체크 제약·인덱스 idempotent 보장.
+  - `owner_id` 백필 (`created_by` → `owner_id`).
+  - **모든 `'dept'`/`'tenant'` visibility 를 `'private'` 로 리셋** — v13.27 호환성 백필을 되돌림.
+
+### 운영 가이드
+- 본 마이그레이션 적용 후, 광범위 가시성이 필요한 프로젝트는 각 소유자가 프로젝트 편집 모달에서 공개 범위를 `'dept'` 또는 `'tenant'`로 명시적으로 변경하거나, "👥 공유 관리"에서 사용자를 추가해야 합니다.
+- admin/executive도 본인이 만들지 않고 공유받지 않은 프로젝트는 보지 못합니다. 관리 목적의 접근이 필요하면 owner에게 공유 요청하거나 owner 이관을 요청해야 합니다.
+
+### 변경 파일
+- `server/routes/projects.js`, `server/routes/bootstrap.js`, `server/migrations/014_project_visibility_strict.sql`, `업무일지_분석기.html` (헤더 버전 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.30 (2026-05-07) — 편집모드 수정 적용 시 항목 중복 생성 버그 수정
 
 ### 배경
