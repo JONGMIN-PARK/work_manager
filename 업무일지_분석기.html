@@ -343,7 +343,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.37</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.38</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2725,6 +2725,16 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.38',date:'2026-05-08',title:'이슈 상태 변경 500 수정 + Quick Wins 7건',tag:'fix',items:[
+      '🔴 이슈 상태 변경 500 에러 수정 — issues 테이블에 updated_at 컬럼이 없어 optimistic-lock의 SET updated_at=now() 가 실패. server/migrations/015 로 issues/events/orders/milestones/checklists에 updated_at 컬럼 추가',
+      'Q1 달력 +N건 더보기 버튼 동작 — toggle 대상이 잘못된 부모(.cal-bars-limited)에 적용되던 것을 .cal-bars로 수정',
+      'Q2 달력 일정 충돌 confirm 다발을 한 번 토스트로 압축 — 저장 흐름 끊기지 않음',
+      'Q3 이슈 상세의 빠른상태변경 버튼 시각 개선 — 현재 상태에 ✓ + 굵은 외곽선/disabled, 미선택은 점선 + 호버 강조',
+      'Q4 이슈 대응이력 입력 폼을 이력 위쪽으로 이동 — 긴 이력 아래로 가려지던 문제 해결',
+      'Q5 수주 빈 상태 CTA 강화 — 📋 아이콘 + 엑셀 불러오기/신규 등록 버튼 강조',
+      'Q6 수주 정렬·거래처 필터 localStorage 보존 — 새로고침 시 초기화되지 않음',
+      'Q7 이슈 반복 감지 토스트 끄기 — 콘솔 issueRepeatDetectOff() / On() 으로 토글 (localStorage 영구 저장)'
+    ]},
     {ver:'13.37',date:'2026-05-08',title:'프로젝트 메모 — 다중 이미지 순서 보장 + 이미지 삭제 UX',tag:'feature',items:[
       '메모 에디터에 다중 이미지 추가 시 선택/붙여넣기/드래그 순서대로 삽입 보장 (Promise chain 직렬화 — 이전엔 FileReader 비동기로 순서 흔들림 가능)',
       '🗑 선택 이미지 삭제 버튼 추가 — 에디터 안 이미지 클릭 시 외곽선 강조 + 삭제 버튼 활성화',

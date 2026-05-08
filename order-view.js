@@ -3,9 +3,17 @@
  * 수주 목록 테이블, 등록/편집/삭제, 엑셀 연동
  */
 
-var orderSortKey = 'date';
-var orderSortAsc = false;
-var orderFilterClient = '';
+// v13.38: 수주 정렬·거래처 필터 localStorage 보존
+var orderSortKey = (function () { try { return localStorage.getItem('wm_orderSortKey') || 'date'; } catch (e) { return 'date'; } })();
+var orderSortAsc = (function () { try { return localStorage.getItem('wm_orderSortAsc') === '1'; } catch (e) { return false; } })();
+var orderFilterClient = (function () { try { return localStorage.getItem('wm_orderFilterClient') || ''; } catch (e) { return ''; } })();
+function _orderPersistFilters() {
+  try {
+    localStorage.setItem('wm_orderSortKey', orderSortKey || '');
+    localStorage.setItem('wm_orderSortAsc', orderSortAsc ? '1' : '0');
+    localStorage.setItem('wm_orderFilterClient', orderFilterClient || '');
+  } catch (e) {}
+}
 
 /* ═══ 수주 대장 렌더링 ═══ */
 function renderOrders() {
@@ -82,7 +90,7 @@ function renderOrders() {
     html += '<span style="font-size:13px;font-weight:700;color:var(--t2)">📋 수주 대장</span>';
     html += '<span style="font-size:11px;color:var(--t5)">' + orders.length + '건</span>';
     // 거래처 필터
-    html += '<select style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3)" onchange="orderFilterClient=this.value;renderOrders()">';
+    html += '<select style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3)" onchange="orderFilterClient=this.value;_orderPersistFilters();renderOrders()">';
     html += '<option value="">전체 거래처</option>';
     Object.keys(clients).sort().forEach(function (c) {
       html += '<option value="' + eH(c) + '"' + (orderFilterClient === c ? ' selected' : '') + '>' + eH(c) + '</option>';
@@ -131,7 +139,15 @@ function renderOrders() {
     html += '</tr></thead><tbody>';
 
     if (orders.length === 0) {
-      html += '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--t6)">등록된 수주가 없습니다. 엑셀 불러오기 또는 신규 등록을 이용하세요.</td></tr>';
+      html += '<tr><td colspan="10" style="padding:48px 20px;text-align:center;color:var(--t5)">' +
+        '<div style="font-size:32px;margin-bottom:10px">📋</div>' +
+        '<div style="font-size:13px;color:var(--t3);margin-bottom:6px;font-weight:600">등록된 수주가 없습니다</div>' +
+        '<div style="font-size:11px;color:var(--t6);margin-bottom:16px;line-height:1.6">엑셀 파일에서 일괄 등록하거나, 직접 신규 등록할 수 있습니다.</div>' +
+        '<div style="display:inline-flex;gap:8px;flex-wrap:wrap;justify-content:center">' +
+          '<button class="btn btn-p btn-s" onclick="importOrderExcel()" style="font-size:12px">📥 엑셀 불러오기</button>' +
+          '<button class="btn btn-g btn-s" onclick="showOrderModal()" style="font-size:12px">➕ 신규 등록</button>' +
+        '</div>' +
+      '</td></tr>';
     }
 
     orders.forEach(function (o) {
@@ -184,6 +200,7 @@ function renderOrders() {
 function orderSort(key) {
   if (orderSortKey === key) orderSortAsc = !orderSortAsc;
   else { orderSortKey = key; orderSortAsc = true; }
+  _orderPersistFilters();
   renderOrders();
 }
 

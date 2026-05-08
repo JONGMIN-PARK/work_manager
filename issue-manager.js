@@ -599,20 +599,52 @@ function showIssueDetail(id) {
     h += '</div></div>';
     h += '</div>';
 
-    // 빠른 상태 변경
+    // 빠른 상태 변경 — v13.38: 선택/미선택 시각 명확화 (현재 상태 ✓ + 굵은 외곽선, 미선택은 옅은 배경)
     h += '<div style="padding:10px 18px;border-bottom:1px solid var(--bd)">';
-    h += '<div style="font-size:10px;color:var(--t5);font-weight:600;margin-bottom:6px">상태 변경</div>';
-    h += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
+    h += '<div style="font-size:10px;color:var(--t5);font-weight:600;margin-bottom:6px">상태 변경 <span style="color:var(--t6);font-weight:400">(현재: ' + (statuses[iss.status] ? statuses[iss.status].label : iss.status) + ')</span></div>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
     Object.keys(statuses).forEach(function (sk) {
       var s = statuses[sk];
       var isCur = iss.status === sk;
-      h += '<button onclick="issueQuickStatus(\'' + safeId + '\',\'' + sk + '\')" style="font-size:10px;padding:3px 10px;border-radius:12px;border:1px solid ' + s.color + ';background:' + (isCur ? s.color : 'transparent') + ';color:' + (isCur ? '#fff' : s.color) + ';cursor:pointer;font-weight:' + (isCur ? '700' : '400') + '">' + s.label + '</button>';
+      var style = isCur
+        ? 'background:' + s.color + ';color:#fff;border:2px solid ' + s.color + ';font-weight:700;box-shadow:0 0 0 2px rgba(255,255,255,.15) inset;cursor:default'
+        : 'background:transparent;color:' + s.color + ';border:1px dashed ' + s.color + ';font-weight:500;cursor:pointer;opacity:.85';
+      var prefix = isCur ? '✓ ' : '';
+      h += '<button onclick="issueQuickStatus(\'' + safeId + '\',\'' + sk + '\')" '
+        + (isCur ? 'disabled title="현재 상태"' : 'title="' + s.label + '으로 변경"')
+        + ' onmouseenter="if(!this.disabled)this.style.opacity=1" onmouseleave="if(!this.disabled)this.style.opacity=.85"'
+        + ' style="font-size:11px;padding:4px 12px;border-radius:14px;transition:all .15s;' + style + '">' + prefix + s.label + '</button>';
     });
     h += '</div></div>';
 
-    // 대응 이력
+    // 대응 이력 — v13.38: 이력 추가 폼을 상단으로 이동 (긴 이력 아래로 가려지던 문제 해결)
     h += '<div style="padding:14px 18px">';
     h += '<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:10px">대응 이력 (' + logs.length + ')</div>';
+
+    // 이력 추가 폼 (상단)
+    h += '<div style="padding:12px;background:var(--bg-i);border-radius:8px;margin-bottom:14px;border:1px solid var(--bd)">';
+    h += '<div style="font-size:10px;font-weight:600;color:var(--t5);margin-bottom:8px">+ 기록 추가</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 80px 1fr 1fr;gap:6px;margin-bottom:6px">';
+    h += '<input type="date" id="issLogDate" value="' + localDate() + '" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
+    h += '<input type="time" id="issLogTime" value="' + new Date().toTimeString().slice(0, 5) + '" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
+    h += '<select id="issLogType" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
+    LOG_TYPES.forEach(function (t) {
+      h += '<option value="' + t + '">' + (LOG_TYPE_ICON[t] || '') + ' ' + t + '</option>';
+    });
+    h += '</select>';
+    h += '<select id="issLogDept" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
+    h += '<option value="">부서</option>';
+    Object.keys(depts).forEach(function (k) {
+      h += '<option value="' + k + '">' + depts[k].label + '</option>';
+    });
+    h += '</select>';
+    h += '</div>';
+    h += '<div style="display:grid;grid-template-columns:100px 1fr;gap:6px;margin-bottom:6px">';
+    h += '<input type="text" id="issLogAuthor" placeholder="작성자" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
+    h += '<input type="text" id="issLogContent" placeholder="대응 내용" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
+    h += '</div>';
+    h += '<button onclick="issueAddLog(\'' + safeId + '\')" style="padding:5px 14px;border:none;border-radius:4px;background:#6366F1;color:#fff;cursor:pointer;font-size:11px;font-weight:600">+ 추가</button>';
+    h += '</div>';
 
     if (logs.length === 0) {
       h += '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">아직 대응 이력이 없습니다.</div>';
@@ -636,31 +668,6 @@ function showIssueDetail(id) {
       });
       h += '</div>';
     }
-
-    // 이력 추가 폼
-    h += '<div style="margin-top:14px;padding:12px;background:var(--bg-i);border-radius:8px">';
-    h += '<div style="font-size:10px;font-weight:600;color:var(--t5);margin-bottom:8px">+ 기록 추가</div>';
-    h += '<div style="display:grid;grid-template-columns:1fr 80px 1fr 1fr;gap:6px;margin-bottom:6px">';
-    h += '<input type="date" id="issLogDate" value="' + localDate() + '" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
-    h += '<input type="time" id="issLogTime" value="' + new Date().toTimeString().slice(0, 5) + '" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
-    h += '<select id="issLogType" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
-    LOG_TYPES.forEach(function (t) {
-      h += '<option value="' + t + '">' + (LOG_TYPE_ICON[t] || '') + ' ' + t + '</option>';
-    });
-    h += '</select>';
-    h += '<select id="issLogDept" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
-    h += '<option value="">부서</option>';
-    Object.keys(depts).forEach(function (k) {
-      h += '<option value="' + k + '">' + depts[k].label + '</option>';
-    });
-    h += '</select>';
-    h += '</div>';
-    h += '<div style="display:grid;grid-template-columns:100px 1fr;gap:6px;margin-bottom:6px">';
-    h += '<input type="text" id="issLogAuthor" placeholder="작성자" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
-    h += '<input type="text" id="issLogContent" placeholder="대응 내용" style="padding:4px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t2);font-size:10px">';
-    h += '</div>';
-    h += '<button onclick="issueAddLog(\'' + safeId + '\')" style="padding:4px 12px;border:none;border-radius:4px;background:#6366F1;color:#fff;cursor:pointer;font-size:10px;font-weight:600">추가</button>';
-    h += '</div>';
 
     h += '</div>';
 
@@ -779,18 +786,32 @@ function detectRepeatIssue(newIssue) {
       var overlap = newWords.filter(function (w) { return oldWords.indexOf(w) >= 0; }).length;
       return overlap >= 2;
     });
+    // v13.38: 사용자 끄기 옵션 — localStorage(wm_issueRepeatDetect)='off' 면 토스트 생략
+    var off = false;
+    try { off = localStorage.getItem('wm_issueRepeatDetect') === 'off'; } catch (e) {}
+    if (off) return;
     if (similar.length > 0) {
       var msg = '⚠️ 반복 이슈 감지!\n동일 프로젝트+부서에서 유사한 이슈가 ' + similar.length + '건 있습니다:\n';
       similar.slice(0, 3).forEach(function (iss) {
         msg += '- ' + iss.title + ' (' + (iss.reportDate || '') + ')\n';
       });
-      msg += '\n근본 원인 분석이 필요할 수 있습니다.';
+      msg += '\n근본 원인 분석이 필요할 수 있습니다.\n\n[이 알림 끄기]는 콘솔에 issueRepeatDetectOff() 입력';
       showToast(msg,'warn');
     }
   }).catch(function (err) {
     console.error('[detectRepeatIssue]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+    // 오류 토스트 생략 — 보조 기능이므로 사용자 흐름 방해 안 함
   });
+}
+
+// 반복 이슈 감지 끄기/켜기 (콘솔에서 호출)
+function issueRepeatDetectOff() {
+  try { localStorage.setItem('wm_issueRepeatDetect', 'off'); } catch (e) {}
+  if (typeof showToast === 'function') showToast('반복 이슈 감지 알림이 꺼졌습니다. (켜기: issueRepeatDetectOn())');
+}
+function issueRepeatDetectOn() {
+  try { localStorage.removeItem('wm_issueRepeatDetect'); } catch (e) {}
+  if (typeof showToast === 'function') showToast('반복 이슈 감지 알림이 다시 켜졌습니다.');
 }
 
 /* ═══ 이슈 통계 ═══ */

@@ -228,7 +228,8 @@ function renderMonthView(wrap, projects, events, milestones, archiveSummaries) {
     var maxShow = 3;
     var visibleBars = barItems.slice(0, maxShow).join('');
     var hiddenCount = barItems.length - maxShow;
-    var moreBtn = hiddenCount > 0 ? '<div class="cal-more" onclick="event.stopPropagation();this.parentElement.classList.toggle(\'cal-bars-expand\')" style="font-size:9px;color:var(--ac-t);cursor:pointer;text-align:center;padding:1px 0;background:var(--ac-bg);border-radius:3px;margin-top:1px">+' + hiddenCount + '건 더보기</div>' : '';
+    // CSS: .cal-bars-expand 는 .cal-bars 에 적용되어야 함 (2단계 상위) — 1단계만 잡으면 매칭 안 됨
+    var moreBtn = hiddenCount > 0 ? '<div class="cal-more" onclick="event.stopPropagation();var b=this.closest(\'.cal-bars\');if(b)b.classList.toggle(\'cal-bars-expand\')" style="font-size:9px;color:var(--ac-t);cursor:pointer;text-align:center;padding:1px 0;background:var(--ac-bg);border-radius:3px;margin-top:1px">+' + hiddenCount + '건 더보기</div>' : '';
     var allBars = bars;
 
     html += '<div class="' + cls + '" data-date="' + dateStr + '" onclick="showEventModal(null,\'' + dateStr + '\')" ondragover="event.preventDefault();this.classList.add(\'cal-drop-over\')" ondragleave="this.classList.remove(\'cal-drop-over\')" ondrop="calDropEvt(event,\'' + dateStr + '\')">' +
@@ -495,14 +496,16 @@ async function saveEventUI(existingId) {
   var assigneesStr = document.getElementById('evtAssignees').value;
   var assignees = assigneesStr ? assigneesStr.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
 
-  // Integration 3: 충돌 감지
+  // Integration 3: 충돌 감지 — 다수 confirm 대신 한 번 요약 토스트 (저장은 진행)
   if (assignees.length) {
     var conflicts = await checkEventConflicts(assignees, evtStartVal, evtEndVal, existingId || null);
     if (conflicts.length) {
-      var msgs = conflicts.map(function (c) {
-        return c.name + ' 님이 해당 기간에 ' + c.count + '건의 프로젝트/일정이 있습니다.';
-      });
-      if (!confirm('⚠️ ' + msgs.join('\n') + '\n계속하시겠습니까?')) return;
+      var totalCnt = conflicts.reduce(function (s, c) { return s + c.count; }, 0);
+      var who = conflicts.slice(0, 3).map(function (c) { return c.name; }).join(', ');
+      if (conflicts.length > 3) who += ' 외 ' + (conflicts.length - 3);
+      if (typeof showToast === 'function') {
+        showToast('⚠️ 일정 충돌: ' + who + ' (총 ' + totalCnt + '건). 그래도 저장됨', 'warn');
+      }
     }
   }
 

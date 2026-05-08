@@ -1,5 +1,35 @@
 # Work Manager — 변경 이력
 
+## v13.38 (2026-05-08) — 이슈 상태 변경 500 수정 + Quick Wins 7건
+
+### 1. 🔴 이슈 상태 변경 500 에러 수정 (사용자 보고 핵심)
+**원인**: `middleware/optimistic-lock.js` 가 모든 UPDATE에 `SET ... updated_at = now()` 를 추가하지만, `issues` 테이블에는 `updated_at` 컬럼이 없음 (`migrations/002_data.sql:129-152` 확인 — `created_at`만 존재). 동일 이슈가 events/orders/milestones/checklists 에도 잠재. PostgreSQL이 `column updated_at does not exist`로 500 응답.
+
+**변경**: `server/migrations/015_add_updated_at_columns.sql` 신규 — `issues / events / orders / milestones / checklists` 다섯 테이블에 `updated_at TIMESTAMPTZ DEFAULT now()` 추가 (멱등 IF NOT EXISTS).
+
+### 2. Quick Win 7건
+
+| # | 항목 | 파일 |
+|---|---|---|
+| Q1 | 달력 "+N건 더보기" 토글이 작동 안 하던 버그 — `.cal-bars-expand` 가 `.cal-bars` 에 와야 하는데 한 단계 위(`.cal-bars-limited`)에 토글되어 CSS 매칭 실패. `closest('.cal-bars')` 로 수정 | `calendar.js:231` |
+| Q2 | 일정 저장 시 인원 충돌이 있으면 매번 confirm() — 한 번 요약 토스트로 압축, 저장은 차단 안 함 | `calendar.js:499-510` |
+| Q3 | 이슈 상세 빠른상태변경 버튼 — 현재 상태에 `✓` + 솔리드 컬러 + disabled, 미선택은 점선 외곽선 + 호버 강조 + 헤더에 "(현재: …)" 표시 | `issue-manager.js:602-619` |
+| Q4 | 이슈 대응이력 입력 폼이 이력 아래에 있어서 긴 이력에 가려짐 — 폼을 이력 위쪽(타이틀 바로 아래)으로 이동 | `issue-manager.js:620-672` |
+| Q5 | 수주대장 빈 상태 → 아이콘 + 두 줄 안내 + "📥 엑셀 불러오기" / "➕ 신규 등록" 버튼 | `order-view.js:133-147` |
+| Q6 | 수주 정렬 키/방향 + 거래처 필터를 localStorage에 보존 — `wm_orderSortKey` / `wm_orderSortAsc` / `wm_orderFilterClient`. 새로고침/재로그인 시 유지 | `order-view.js:6-15` |
+| Q7 | 이슈 등록 시 "반복 이슈 감지" 토스트가 사용자에 따라 거슬릴 수 있어 끄기 옵션 추가. 콘솔에서 `issueRepeatDetectOff()` / `issueRepeatDetectOn()` 호출 (localStorage 영구) | `issue-manager.js:777+` |
+
+### 영향 범위
+- DB 스키마: 5개 테이블에 `updated_at` 추가. 기존 데이터는 default `now()` 적용 — 백필 시 모든 행이 마이그레이션 시점 타임스탬프로 채워짐.
+- UX: 대부분 양성 변화. Q4의 폼 위치 변경은 기존 흐름과 다르므로 사용자가 잠시 적응 필요.
+
+### 변경 파일
+- `server/migrations/015_add_updated_at_columns.sql` (신규)
+- `calendar.js`, `issue-manager.js`, `order-view.js`
+- `업무일지_분석기.html` (헤더 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.37 (2026-05-08) — 프로젝트 메모: 다중 이미지 순서 보장 + 이미지 삭제 UX
 
 ### 배경
