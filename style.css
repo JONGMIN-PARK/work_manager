@@ -149,7 +149,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 /* ═══ 타임라인(간트) CSS ═══ */
 #timelineWrap{overflow:visible}
 .tl-container{border:1px solid var(--bd);border-radius:8px;overflow:hidden}
-.tl-scroll{overflow-x:auto;overflow-y:auto;max-height:600px}
+.tl-scroll{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 220px);min-height:400px}
 .tl-header-row{display:flex;position:sticky;top:0;z-index:3;background:var(--th);width:fit-content;min-width:100%}
 .tl-label-header{min-width:160px;padding:10px 12px;font-size:10px;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.5px;border-right:1px solid var(--bd);border-bottom:2px solid var(--bd2);position:sticky;left:0;z-index:4;background:var(--th);box-sizing:border-box;flex-shrink:0}
 .tl-header{display:flex;border-bottom:2px solid var(--bd2)}

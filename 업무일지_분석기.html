@@ -269,7 +269,8 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 /* ═══ 타임라인(간트) CSS ═══ */
 #timelineWrap{overflow:visible}
 .tl-container{border:1px solid var(--bd);border-radius:8px;overflow:hidden}
-.tl-scroll{overflow-x:auto;overflow-y:auto;max-height:600px}
+/* v13.41: 600px 캡 → 뷰포트 기반으로 — 큰 모니터에서 모든 프로젝트 한눈에. 작은 화면은 min 400px 보장 */
+.tl-scroll{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 220px);min-height:400px}
 .tl-header-row{display:flex;position:sticky;top:0;z-index:3;background:var(--th);width:fit-content;min-width:100%}
 .tl-label-header{min-width:160px;padding:10px 12px;font-size:10px;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.5px;border-right:1px solid var(--bd);border-bottom:2px solid var(--bd2);position:sticky;left:0;z-index:4;background:var(--th);box-sizing:border-box;flex-shrink:0}
 .tl-header{display:flex;border-bottom:2px solid var(--bd2)}
@@ -413,7 +414,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.40</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.41</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -704,7 +705,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
       <!-- 프로젝트 리스트 패널 -->
       <div class="pnl" id="tlListPanel" style="position:sticky;top:0">
         <div class="pnl-h" style="margin-bottom:8px"><h3 class="pnl-t">📋 프로젝트 목록</h3></div>
-        <div id="tlProjList" style="display:flex;flex-direction:column;gap:4px;max-height:540px;overflow-y:auto"></div>
+        <div id="tlProjList" style="display:flex;flex-direction:column;gap:4px;max-height:calc(100vh - 240px);min-height:360px;overflow-y:auto"></div>
       </div>
       <!-- 타임라인 패널 -->
       <div class="pnl" id="timelineWrap">
@@ -2795,6 +2796,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.41',date:'2026-05-08',title:'타임라인 — 뷰포트 기반 높이로 스크롤 최소화',tag:'fix',items:[
+      '타임라인 스크롤 영역(.tl-scroll) max-height 600px 고정 → calc(100vh - 220px) 로 뷰포트 기반. 큰 모니터에서 모든 프로젝트 한눈에 들어옴',
+      '좌측 프로젝트 목록(#tlProjList) max-height 540px → calc(100vh - 240px) 로 동일 동기화',
+      'min-height(타임라인 400 / 목록 360) 보장 — 작은 화면에서도 너무 좁아지지 않음',
+      'style.css 와 인라인 <style> 양쪽 동기화'
+    ]},
     {ver:'13.40',date:'2026-05-08',title:'L3 — 크로스탭 실시간 동기화 (wmDataBus 이벤트)',tag:'feature',items:[
       'window.wmDataBus pub/sub 도입 — on(type, fn) / emit(type, action, detail). 기본 type: project / milestone / event / order / issue / checklist / document. 와일드카드 * 지원',
       'project-data.js의 모든 mutator(projPut/Del · msPut/Del · evtPut/Del · orderPut/Del · issuePut/Del · chkPut · folderPut/Del · filePut/Del)에 emit 추가 — 캐시 invalidate와 함께 동기 신호',

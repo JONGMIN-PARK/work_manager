@@ -1,5 +1,27 @@
 # Work Manager — 변경 이력
 
+## v13.41 (2026-05-08) — 타임라인 뷰포트 기반 높이 (스크롤 최소화)
+
+### 배경
+사용자 보고: "프로젝트 관리 타임라인에 프로젝트 타임라인 스크롤 최소화 하도록 최대한 늘려서 처리 하자. 프로젝트들이 한눈에 안들어와".
+
+원인: `.tl-scroll` 의 `max-height: 600px` 고정 (`style.css:152`, 인라인 `<style>:272`) + `#tlProjList` `max-height: 540px` (HTML:707). 뷰포트 크기와 무관하게 캡되어 큰 모니터에서도 항상 스크롤 발생.
+
+### 변경
+- `.tl-scroll` `max-height: 600px` → **`calc(100vh - 220px)`**, `min-height: 400px`. 220px 는 헤더/탭/필터/패널 헤더 합산 여유분.
+- `#tlProjList` `max-height: 540px` → **`calc(100vh - 240px)`**, `min-height: 360px`. 좌측 목록도 동기화.
+- `style.css` 와 HTML 인라인 `<style>` 양쪽 동기화.
+
+### 효과
+- 1080p 화면(1080px 뷰포트): 타임라인 ~860px, 목록 ~840px → 거의 두 배 가시 영역
+- 1440p 화면(1440px 뷰포트): 타임라인 ~1220px → 매우 많은 프로젝트 한눈에
+- 작은 화면(800px 이하): min-height 400px / 360px 로 너무 좁아지지 않음
+
+### 변경 파일
+- `style.css`, `업무일지_분석기.html` (인라인 style + #tlProjList + 헤더 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.40 (2026-05-08) — L3: 크로스탭 실시간 동기화 (wmDataBus 이벤트 시스템)
 
 ### 배경
