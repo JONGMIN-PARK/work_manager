@@ -2,6 +2,64 @@
  * 업무일지 분석기 — 타임라인(간트) 뷰 모듈
  */
 
+/* ═══ 메모 HTML 헬퍼 (v13.35~) — timeline.js 와 project-detail.js 가 공유 ═══
+   주의: core-logic.js 는 현재 HTML 에서 로드되지 않으므로 여기에 정의. */
+function isHtmlMemo(memo) {
+  return /<(img|br|p|div|span|b|i|u|strong|em|a|ul|ol|li|h[1-6]|blockquote|code|pre)\b/i.test(memo || '');
+}
+function plainToHtml(text) {
+  if (!text) return '';
+  var d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML.replace(/\n/g, '<br>');
+}
+function sanitizeMemo(html) {
+  if (!html) return '';
+  var ALLOWED = { IMG:1, BR:1, P:1, DIV:1, SPAN:1, B:1, I:1, U:1, STRONG:1, EM:1, A:1, UL:1, OL:1, LI:1, H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, BLOCKQUOTE:1, CODE:1, PRE:1, HR:1 };
+  var SRC_OK = /^(https?:|data:image\/(png|jpe?g|gif|webp|svg\+xml|bmp);)/i;
+  var HREF_OK = /^(https?:|mailto:|tel:|#)/i;
+  var doc = new DOMParser().parseFromString('<div id="_root">' + html + '</div>', 'text/html');
+  var root = doc.getElementById('_root');
+  function walk(node) {
+    if (!node) return;
+    var children = Array.prototype.slice.call(node.childNodes);
+    children.forEach(function (c) { walk(c); });
+    if (node.nodeType !== 1 || node === root) return;
+    var tag = node.tagName;
+    if (!ALLOWED[tag]) {
+      var p = node.parentNode;
+      while (node.firstChild) p.insertBefore(node.firstChild, node);
+      p.removeChild(node);
+      return;
+    }
+    var attrs = Array.prototype.slice.call(node.attributes);
+    attrs.forEach(function (a) {
+      var n = a.name.toLowerCase();
+      var v = a.value;
+      if (n.indexOf('on') === 0) { node.removeAttribute(a.name); return; }
+      if (tag === 'IMG' && n === 'src') { if (!SRC_OK.test(v)) node.removeAttribute(a.name); return; }
+      if (tag === 'A' && n === 'href') { if (!HREF_OK.test(v)) node.removeAttribute(a.name); return; }
+      if (n === 'alt' || n === 'title') return;
+      if (n === 'style') {
+        var safe = String(v).replace(/javascript:|expression\s*\(|url\s*\(|@import/gi, '');
+        node.setAttribute('style', safe);
+        return;
+      }
+      if (n === 'class' || n === 'id' || n === 'target' || n === 'rel') return;
+      node.removeAttribute(a.name);
+    });
+    if (tag === 'A' && node.getAttribute('target') === '_blank') {
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+  }
+  walk(root);
+  return root.innerHTML;
+}
+function memoToHtml(memo) {
+  if (!memo) return '';
+  return isHtmlMemo(memo) ? sanitizeMemo(memo) : plainToHtml(memo);
+}
+
 var tlScale = 'day'; // day, week, month, quarter
 var tlScrollLeft = 0;
 var tlHideDone = false; // 완료 프로젝트 숨기기

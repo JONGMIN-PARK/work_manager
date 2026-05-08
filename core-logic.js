@@ -6,75 +6,8 @@ let selWeek=null;
 let _gfCache=null, _gfDirty=true;
 let _tmpOcmt={}, _tmpOclient={};
 
-/* ═══ 메모 HTML 헬퍼 (v13.35~ 메모 인라인 이미지 지원) ═══ */
-/* 메모가 HTML 마크업을 포함하는지 휴리스틱 감지 — 평문 메모와 HTML 메모를 구분해 적절히 렌더 */
-function isHtmlMemo(memo) {
-  return /<(img|br|p|div|span|b|i|u|strong|em|a|ul|ol|li|h[1-6]|blockquote|code|pre)\b/i.test(memo || '');
-}
-/* 평문 메모를 안전한 HTML로: HTML 이스케이프 후 줄바꿈을 <br> 로 */
-function plainToHtml(text) {
-  if (!text) return '';
-  var d = document.createElement('div');
-  d.textContent = text;
-  return d.innerHTML.replace(/\n/g, '<br>');
-}
-/* 메모 HTML 화이트리스트 sanitizer — XSS 방지
-   허용 태그: img/br/p/div/span/b/i/u/strong/em/a/ul/ol/li/h1~6/blockquote/code/pre
-   허용 src: http(s):, data:image/...;
-   허용 href: http(s):, mailto:, tel:, # */
-function sanitizeMemo(html) {
-  if (!html) return '';
-  var ALLOWED = { IMG:1, BR:1, P:1, DIV:1, SPAN:1, B:1, I:1, U:1, STRONG:1, EM:1, A:1, UL:1, OL:1, LI:1, H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, BLOCKQUOTE:1, CODE:1, PRE:1, HR:1 };
-  var SRC_OK = /^(https?:|data:image\/(png|jpe?g|gif|webp|svg\+xml|bmp);)/i;
-  var HREF_OK = /^(https?:|mailto:|tel:|#)/i;
-  var doc = new DOMParser().parseFromString('<div id="_root">' + html + '</div>', 'text/html');
-  var root = doc.getElementById('_root');
-  function walk(node) {
-    if (!node) return;
-    var children = Array.prototype.slice.call(node.childNodes);
-    children.forEach(function (c) { walk(c); });
-    if (node.nodeType !== 1 || node === root) return;
-    var tag = node.tagName;
-    if (!ALLOWED[tag]) {
-      // 허용 안 된 태그는 자식만 보존하고 제거
-      var p = node.parentNode;
-      while (node.firstChild) p.insertBefore(node.firstChild, node);
-      p.removeChild(node);
-      return;
-    }
-    // 속성 화이트리스트
-    var attrs = Array.prototype.slice.call(node.attributes);
-    attrs.forEach(function (a) {
-      var n = a.name.toLowerCase();
-      var v = a.value;
-      // 모든 이벤트 핸들러 제거
-      if (n.indexOf('on') === 0) { node.removeAttribute(a.name); return; }
-      if (tag === 'IMG' && n === 'src') { if (!SRC_OK.test(v)) node.removeAttribute(a.name); return; }
-      if (tag === 'A' && n === 'href') { if (!HREF_OK.test(v)) node.removeAttribute(a.name); return; }
-      if (n === 'alt' || n === 'title') return; // 안전
-      if (n === 'style') {
-        // 위험 패턴 제거 — javascript:, expression(, url(, @import
-        var safe = String(v).replace(/javascript:|expression\s*\(|url\s*\(|@import/gi, '');
-        node.setAttribute('style', safe);
-        return;
-      }
-      if (n === 'class' || n === 'id' || n === 'target' || n === 'rel') return;
-      // 그 외 속성 제거
-      node.removeAttribute(a.name);
-    });
-    // <a target="_blank">에 rel="noopener" 강제
-    if (tag === 'A' && node.getAttribute('target') === '_blank') {
-      node.setAttribute('rel', 'noopener noreferrer');
-    }
-  }
-  walk(root);
-  return root.innerHTML;
-}
-/* 메모를 표시용 HTML로 변환 — HTML이면 sanitize, 아니면 평문→HTML */
-function memoToHtml(memo) {
-  if (!memo) return '';
-  return isHtmlMemo(memo) ? sanitizeMemo(memo) : plainToHtml(memo);
-}
+// 주의: 본 파일은 현재 업무일지_분석기.html에서 <script>로 로드되지 않음 (orphan).
+// 메모 HTML 헬퍼(memoToHtml/sanitizeMemo/plainToHtml/isHtmlMemo)는 timeline.js 상단으로 이동했음.
 
 /* ═══ CONSTANTS (Fallbacks) ═══ */
 if(typeof ENC==='undefined') var ENC=['euc-kr','utf-8','cp949','shift_jis','iso-8859-1'];
