@@ -646,7 +646,20 @@ async function showProjectModal(projId) {
         }).join('');
         return '<div><label class="fl">선행 프로젝트 (의존관계)</label><div style="display:flex;flex-wrap:wrap;gap:8px;max-height:80px;overflow:auto;padding:6px;background:var(--bg-i);border-radius:6px">' + depChecks + '</div></div>';
       })() +
-      '<div><label class="fl">메모</label><textarea class="si" id="projMemo" rows="15" style="padding-left:10px;resize:vertical;min-height:240px">' + eH(proj ? proj.memo : '') + '</textarea></div>' +
+      // 메모 — contenteditable로 인라인 이미지 지원 (v13.35~)
+      '<div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+          '<label class="fl" style="margin:0">메모</label>' +
+          '<div style="display:flex;gap:4px">' +
+            '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:3px 8px" onclick="memoInsertImagePicker()" title="이미지 파일 선택">🖼 이미지 추가</button>' +
+            '<span style="font-size:9px;color:var(--t6);align-self:center" title="붙여넣기/드래그로도 가능. 이미지당 5MB 이하 권장">붙여넣기·드래그 가능</span>' +
+          '</div>' +
+        '</div>' +
+        '<div id="projMemo" contenteditable="true" class="si" ' +
+          'onpaste="memoPasteHandler(event)" ondragover="event.preventDefault();this.style.borderColor=\'var(--ac)\'" ondragleave="this.style.borderColor=\'\'" ondrop="memoDropHandler(event)" ' +
+          'style="padding:10px;resize:vertical;min-height:240px;max-height:500px;overflow:auto;white-space:pre-wrap;word-break:break-word"' +
+        '>' + (proj ? memoToHtml(proj.memo) : '') + '</div>' +
+      '</div>' +
       // 마일스톤 섹션
       '<div style="padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:8px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
@@ -779,7 +792,15 @@ async function saveProjectUI(existingId) {
     estimatedHours: parseFloat(document.getElementById('projEstHours').value) || 0,
     assignees: assignees,
     dependencies: depIds,
-    memo: document.getElementById('projMemo').value.trim(),
+    memo: (function () {
+      var el = document.getElementById('projMemo');
+      if (!el) return '';
+      // contenteditable의 innerHTML을 sanitize 후 저장. 비어있으면 빈 문자열.
+      var html = (el.innerHTML || '').trim();
+      // <br> 또는 빈 <div> 만 있는 경우 빈 문자열로 정규화
+      if (/^(<br\s*\/?>|<div><br\s*\/?><\/div>|&nbsp;|\s)*$/i.test(html)) return '';
+      return typeof sanitizeMemo === 'function' ? sanitizeMemo(html) : html;
+    })(),
     visibility: visibilityEl ? visibilityEl.value : 'private'
   };
 
@@ -1521,3 +1542,95 @@ function runSuggestMilestones(orderNo) {
       if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
+
+/* ═══ 메모 이미지 삽입 핸들러 (v13.35~) ═══ */
+var MEMO_IMG_MAX_BYTES = 5 * 1024 * 1024; // 5MB per image (base64 임베드)
+
+function _memoInsertHtmlAtCursor(html) {
+  var el = document.getElementById('projMemo');
+  if (!el) return;
+  el.focus();
+  var sel = window.getSelection && window.getSelection();
+  if (sel && sel.rangeCount && el.contains(sel.anchorNode)) {
+    var range = sel.getRangeAt(0);
+    range.deleteContents();
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    var frag = document.createDocumentFragment();
+    var lastNode;
+    while (tmp.firstChild) { lastNode = frag.appendChild(tmp.firstChild); }
+    range.insertNode(frag);
+    if (lastNode) {
+      range = range.cloneRange();
+      range.setStartAfter(lastNode);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  } else {
+    el.insertAdjacentHTML('beforeend', html);
+  }
+}
+
+function _memoInsertImageFromFile(file) {
+  if (!file || !/^image\//.test(file.type)) {
+    if (typeof showToast === 'function') showToast('이미지 파일이 아닙니다', 'warn');
+    return;
+  }
+  if (file.size > MEMO_IMG_MAX_BYTES) {
+    if (typeof showToast === 'function') showToast('이미지가 너무 큽니다 (' + Math.round(file.size / 1024 / 1024) + 'MB) — 5MB 이하 권장', 'warn');
+  }
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var dataUrl = e.target.result;
+    var alt = (file.name || 'image').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    _memoInsertHtmlAtCursor('<img src="' + dataUrl + '" alt="' + alt + '" style="max-width:100%;border-radius:4px;display:block;margin:6px 0">');
+  };
+  reader.onerror = function () {
+    if (typeof showToast === 'function') showToast('이미지 읽기 실패', 'error');
+  };
+  reader.readAsDataURL(file);
+}
+
+function memoInsertImagePicker() {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+  input.onchange = function (e) {
+    var files = e.target.files || [];
+    for (var i = 0; i < files.length; i++) _memoInsertImageFromFile(files[i]);
+  };
+  input.click();
+}
+
+function memoPasteHandler(e) {
+  var items = (e.clipboardData && e.clipboardData.items) || [];
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].type && items[i].type.indexOf('image/') === 0) {
+      var f = items[i].getAsFile();
+      if (f) {
+        e.preventDefault();
+        _memoInsertImageFromFile(f);
+        return;
+      }
+    }
+  }
+  // 텍스트 붙여넣기는 평문으로 정규화 — HTML/스타일 오염 방지
+  var text = e.clipboardData && e.clipboardData.getData('text/plain');
+  if (text !== undefined && text !== null && text !== '') {
+    e.preventDefault();
+    document.execCommand('insertText', false, text);
+  }
+}
+
+function memoDropHandler(e) {
+  e.preventDefault();
+  var el = document.getElementById('projMemo');
+  if (el) el.style.borderColor = '';
+  var files = (e.dataTransfer && e.dataTransfer.files) || [];
+  for (var i = 0; i < files.length; i++) {
+    if (/^image\//.test(files[i].type)) _memoInsertImageFromFile(files[i]);
+  }
+}
+

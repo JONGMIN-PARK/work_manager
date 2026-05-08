@@ -88,7 +88,9 @@ async function showProjectDetail(id) {
   }
 
   if (proj.memo) {
-    html += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:4px">메모</div><div style="font-size:11px;color:var(--t3);padding:8px;background:var(--bg-i);border-radius:6px;white-space:pre-wrap">' + eH(proj.memo) + '</div></div>';
+    // v13.35~ 메모는 HTML(이미지 인라인 가능). plain text 호환은 memoToHtml 헬퍼가 처리.
+    var _memoHtml = (typeof memoToHtml === 'function') ? memoToHtml(proj.memo) : eH(proj.memo);
+    html += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:4px">메모</div><div class="memo-body" style="font-size:11px;color:var(--t3);padding:8px;background:var(--bg-i);border-radius:6px;white-space:normal;word-break:break-word">' + _memoHtml + '</div></div>';
   }
 
   // 마일스톤 (기존)

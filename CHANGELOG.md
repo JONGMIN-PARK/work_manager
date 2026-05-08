@@ -1,5 +1,37 @@
 # Work Manager — 변경 이력
 
+## v13.35 (2026-05-08) — 프로젝트 메모 인라인 이미지 + 문서관리 빈 상태 처리
+
+### 1. 프로젝트 메모 인라인 이미지 (요청 기반 신규 기능)
+
+#### 변경
+- `업무일지_분석기.html` `core-logic.js`: `isHtmlMemo` / `plainToHtml` / `sanitizeMemo` / `memoToHtml` 헬퍼 신설.
+  - `sanitizeMemo` — DOMParser 기반 화이트리스트 sanitizer: 허용 태그 (img·br·p·div·span·b·i·u·strong·em·a·ul·ol·li·h1~6·blockquote·code·pre·hr), 허용 src (http(s):, `data:image/...`), 허용 href (http(s):, mailto:, tel:, #), 모든 `on*` 이벤트 핸들러 제거. `<a target="_blank">`에 `rel="noopener noreferrer"` 강제.
+  - 평문 메모는 escape + `<br>` 변환으로 안전하게 표시. HTML 메모는 sanitize.
+- `timeline.js` 프로젝트 편집 모달: 메모 입력을 `textarea` → `contenteditable div`로 업그레이드.
+  - 🖼 이미지 추가 버튼 (파일 선택, 다중 가능, 5MB 권장)
+  - 클립보드 붙여넣기 (이미지면 base64 임베드, 텍스트면 평문 정규화하여 HTML 오염 방지)
+  - 드래그 드롭 (이미지 파일만 처리)
+  - 저장 시 innerHTML을 `sanitizeMemo`로 정제한 뒤 메모 필드에 저장
+- `project-detail.js` 상세 패널: 메모 표시를 `eH(memo)` plain text → `memoToHtml(memo)` 자동 감지 렌더로 변경.
+
+#### 보안 노트
+- 이미지는 base64 data URL로 메모에 인라인 임베드 — 메모 텍스트 크기가 커질 수 있음. 운영상 메모당 누적 5~10MB 이상이 되면 별도 문서 업로드(문서관리)를 권장.
+- 화이트리스트 sanitizer가 모든 인라인 이벤트 핸들러·`javascript:` URL·`expression()` 등 위험 패턴을 차단.
+
+### 2. 문서관리 프로젝트 선택 핸들링 개선
+
+#### 변경 (`document-manager.js`)
+- 접근 가능한 프로젝트가 0개일 때: 명확한 빈 상태 + "프로젝트 등록" CTA + v13.31 정책 변경 안내.
+- 선택된 `docSelProject`가 가시성 필터로 사라진 경우(공유 회수·이관 등): 자동 초기화 + 첫 번째 자동 선택. 선택 폴더/파일 상태도 함께 리셋.
+- 드롭다운 옆에 "N개 접근 가능" 카운트 노출 — 사용자가 자기 가시 프로젝트 수를 즉시 파악 가능.
+- `<option value="' + p.id + '"`에 `eH()` 적용해 잠재적 따옴표 이슈 방지.
+
+### 변경 파일
+- `core-logic.js`, `timeline.js`, `project-detail.js`, `document-manager.js`, `업무일지_분석기.html` (헤더 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.34 (2026-05-08) — 프로젝트 관리 전 페이지에 가시성 정책 일관 적용
 
 ### 배경

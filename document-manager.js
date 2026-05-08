@@ -41,19 +41,30 @@ async function renderDocManager() {
 
   // 프로젝트 미선택 시 첫 번째 자동 선택
   if (!docSelProject && projects.length) docSelProject = projects[0].id;
+  // 선택된 docSelProject가 가시성 필터로 사라진 경우(공유 회수 등) — 초기화 후 첫 번째 자동 선택
+  if (docSelProject && !projects.find(function (p) { return p.id === docSelProject; })) {
+    docSelProject = projects.length ? projects[0].id : '';
+    docSelFolder = null; docSelFile = null; docFilePage = 1;
+  }
 
   var proj = projects.find(function (p) { return p.id === docSelProject; });
 
   var html = '<div class="pnl" style="padding:14px 18px">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
-  html += '<div style="display:flex;align-items:center;gap:10px">';
+  html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
   html += '<span style="font-size:15px;font-weight:700;color:var(--t1)">📂 문서 관리</span>';
-  html += '<select id="docProjSel" onchange="docSelectProject(this.value)" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:7px;padding:6px 10px;font-size:11px;color:var(--t2);font-family:inherit;outline:none;max-width:250px">';
-  html += '<option value="">프로젝트 선택...</option>';
-  projects.forEach(function (p) {
-    html += '<option value="' + p.id + '"' + (p.id === docSelProject ? ' selected' : '') + '>' + eH(p.name || p.orderNo || p.id) + '</option>';
-  });
-  html += '</select></div>';
+  if (projects.length) {
+    html += '<select id="docProjSel" onchange="docSelectProject(this.value)" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:7px;padding:6px 10px;font-size:11px;color:var(--t2);font-family:inherit;outline:none;max-width:250px">';
+    html += '<option value="">프로젝트 선택...</option>';
+    projects.forEach(function (p) {
+      html += '<option value="' + eH(p.id) + '"' + (p.id === docSelProject ? ' selected' : '') + '>' + eH(p.name || p.orderNo || p.id) + '</option>';
+    });
+    html += '</select>';
+    html += '<span style="font-size:10px;color:var(--t6)">' + projects.length + '개 접근 가능</span>';
+  } else {
+    html += '<span style="font-size:11px;color:var(--t5)">접근 가능한 프로젝트가 없습니다</span>';
+  }
+  html += '</div>';
 
   // 용량 표시
   if (proj) {
@@ -67,8 +78,23 @@ async function renderDocManager() {
   }
   html += '</div></div>';
 
+  // 빈 상태: 접근 가능한 프로젝트가 없음 — CTA 안내
+  if (!projects.length) {
+    html += '<div style="text-align:center;padding:60px 20px;color:var(--t5)">' +
+      '<div style="font-size:40px;margin-bottom:12px">📂</div>' +
+      '<div style="font-size:14px;color:var(--t3);margin-bottom:6px">접근 가능한 프로젝트가 없습니다</div>' +
+      '<div style="font-size:11px;color:var(--t6);margin-bottom:16px;line-height:1.6">v13.31~ 프로젝트는 기본 비공개 — 공유받았거나 본인이 만든 프로젝트만 보입니다.<br>아래 버튼으로 새 프로젝트를 만들거나, 동료에게 공유 요청해 주세요.</div>' +
+      '<button class="btn btn-p" onclick="if(typeof showProjectModal===\'function\')showProjectModal()" style="font-size:12px">➕ 프로젝트 등록</button>' +
+    '</div>';
+    wrap.innerHTML = html;
+    return;
+  }
+  // 프로젝트는 있으나 미선택 (드롭다운에서 첫번째 옵션 선택한 경우)
   if (!proj) {
-    html += '<div style="text-align:center;padding:60px;color:var(--t5)"><div style="font-size:40px;margin-bottom:12px">📂</div><div style="font-size:13px">프로젝트를 선택하세요</div></div>';
+    html += '<div style="text-align:center;padding:60px;color:var(--t5)">' +
+      '<div style="font-size:40px;margin-bottom:12px">📂</div>' +
+      '<div style="font-size:13px">위에서 프로젝트를 선택하세요</div>' +
+    '</div>';
     wrap.innerHTML = html;
     return;
   }
