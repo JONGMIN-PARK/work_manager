@@ -102,7 +102,8 @@ router.get('/files', async function (req, res) {
     var meIdx = idx++;
     params.push(req.user.sub);
     var sub = ps.accessibleProjectsSubquery(req, idx);
-    sql += ' AND ((project_id IS NULL AND created_by = $' + meIdx + ') OR project_id IN (' + sub.sql + '))';
+    // project_files의 작성자 컬럼은 uploaded_by (project_folders는 created_by — 주의)
+    sql += ' AND ((project_id IS NULL AND uploaded_by = $' + meIdx + ') OR project_id IN (' + sub.sql + '))';
     params = params.concat(sub.params);
     idx = sub.nextIdx;
 
