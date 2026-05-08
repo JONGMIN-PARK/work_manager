@@ -1,5 +1,29 @@
 # Work Manager — 변경 이력
 
+## v13.37 (2026-05-08) — 프로젝트 메모: 다중 이미지 순서 보장 + 이미지 삭제 UX
+
+### 배경
+사용자 요청: "이미지 등록한 것 삭제나, 여러개 이미지 등록 처리."
+
+v13.35에서 메모 인라인 이미지를 도입했으나 (1) 다중 파일 동시 선택 시 FileReader 비동기로 인해 삽입 순서가 흔들릴 수 있었고, (2) 삽입 후 이미지를 삭제할 명시적 UI가 없었음.
+
+### 변경 (`timeline.js`)
+- **다중 이미지 순서 보장**: `_memoInsertImageFromFile`을 Promise 반환 함수로 전환. `_memoInsertManyFiles` 헬퍼가 Promise chain으로 직렬 처리해 사용자가 고른 순서대로 삽입.
+- **이미지 클릭 → 선택 강조**: `memoEditorClickHandler`가 `<img>` 클릭 시 외곽선(3px solid var(--ac))으로 강조하고 선택 상태를 `_memoSelectedImg`에 저장. 다른 곳 클릭하면 선택 해제.
+- **🗑 선택 이미지 삭제 버튼**: 메모 헤더에 추가. 이미지 미선택 시 비활성. 클릭 시 `memoDeleteSelectedImage`가 DOM에서 제거 + 토스트 안내.
+- **키보드 지원**: `memoEditorKeyHandler`가 Delete/Backspace로 선택 이미지 삭제, Esc로 선택 해제.
+- **다중 삽입 토스트**: 2개 이상 일괄 삽입 시 "🖼 N개 이미지 추가" 안내.
+- **모달 재오픈 시 잔여 선택 정리**: `showProjectModal` 진입부에서 `_memoSelectedImg = null`.
+
+### 영향
+- 메모 데이터 구조는 변경 없음 — 단순히 입력 UX 개선. 기존 메모/이미지 그대로 동작.
+- 텍스트 영역 클릭 시에는 기존 contenteditable 동작(커서 위치 지정) 유지. 이미지 클릭만 별도 처리.
+
+### 변경 파일
+- `timeline.js`, `업무일지_분석기.html` (헤더 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.36 (2026-05-08) — 수주대장: 조회는 전체 공개, 수정은 관리 직급만
 
 ### 배경

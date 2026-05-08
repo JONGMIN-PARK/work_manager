@@ -586,6 +586,8 @@ function getBarStyle(startDate, endDate, rangeStart, units) {
 async function showProjectModal(projId) {
   var existing = document.getElementById('projModal');
   if (existing) existing.remove();
+  // 메모 이미지 선택 상태 초기화 (이전 모달 잔재 방지)
+  if (typeof _memoSelectedImg !== 'undefined') _memoSelectedImg = null;
 
   var proj = null;
   var projMs = [];
@@ -704,16 +706,18 @@ async function showProjectModal(projId) {
         }).join('');
         return '<div><label class="fl">선행 프로젝트 (의존관계)</label><div style="display:flex;flex-wrap:wrap;gap:8px;max-height:80px;overflow:auto;padding:6px;background:var(--bg-i);border-radius:6px">' + depChecks + '</div></div>';
       })() +
-      // 메모 — contenteditable로 인라인 이미지 지원 (v13.35~)
+      // 메모 — contenteditable로 인라인 이미지 지원 (v13.35~) + 다중 + 삭제 (v13.37~)
       '<div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:6px">' +
           '<label class="fl" style="margin:0">메모</label>' +
-          '<div style="display:flex;gap:4px">' +
-            '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:3px 8px" onclick="memoInsertImagePicker()" title="이미지 파일 선택">🖼 이미지 추가</button>' +
-            '<span style="font-size:9px;color:var(--t6);align-self:center" title="붙여넣기/드래그로도 가능. 이미지당 5MB 이하 권장">붙여넣기·드래그 가능</span>' +
+          '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">' +
+            '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:3px 8px" onclick="memoInsertImagePicker()" title="이미지 파일 선택 (여러 개 동시 가능)">🖼 이미지 추가</button>' +
+            '<button type="button" id="memoDelImgBtn" class="btn btn-d btn-s" style="font-size:10px;padding:3px 8px;opacity:.45;cursor:not-allowed" disabled onclick="memoDeleteSelectedImage()" title="에디터에서 이미지 클릭 후 이 버튼으로 삭제">🗑 선택 이미지 삭제</button>' +
+            '<span style="font-size:9px;color:var(--t6);align-self:center" title="여러 이미지 동시 선택/붙여넣기/드래그 가능. 5MB 이하 권장">다중·붙여넣기·드래그</span>' +
           '</div>' +
         '</div>' +
         '<div id="projMemo" contenteditable="true" class="si" ' +
+          'onclick="memoEditorClickHandler(event)" onkeydown="memoEditorKeyHandler(event)" ' +
           'onpaste="memoPasteHandler(event)" ondragover="event.preventDefault();this.style.borderColor=\'var(--ac)\'" ondragleave="this.style.borderColor=\'\'" ondrop="memoDropHandler(event)" ' +
           'style="padding:10px;resize:vertical;min-height:240px;max-height:500px;overflow:auto;white-space:pre-wrap;word-break:break-word"' +
         '>' + (proj ? memoToHtml(proj.memo) : '') + '</div>' +
@@ -1601,8 +1605,9 @@ function runSuggestMilestones(orderNo) {
   });
 }
 
-/* ═══ 메모 이미지 삽입 핸들러 (v13.35~) ═══ */
+/* ═══ 메모 이미지 삽입/선택/삭제 핸들러 (v13.35~, v13.37 다중 순서 + 삭제) ═══ */
 var MEMO_IMG_MAX_BYTES = 5 * 1024 * 1024; // 5MB per image (base64 임베드)
+var _memoSelectedImg = null; // 현재 선택된 이미지 element 참조
 
 function _memoInsertHtmlAtCursor(html) {
   var el = document.getElementById('projMemo');
@@ -1630,24 +1635,48 @@ function _memoInsertHtmlAtCursor(html) {
   }
 }
 
+/* FileReader → 단일 이미지 삽입 (Promise 기반 — 다중 삽입 시 순서 보장용) */
 function _memoInsertImageFromFile(file) {
-  if (!file || !/^image\//.test(file.type)) {
-    if (typeof showToast === 'function') showToast('이미지 파일이 아닙니다', 'warn');
-    return;
+  return new Promise(function (resolve) {
+    if (!file || !/^image\//.test(file.type)) {
+      if (typeof showToast === 'function') showToast('이미지 파일이 아닙니다', 'warn');
+      resolve(false); return;
+    }
+    if (file.size > MEMO_IMG_MAX_BYTES) {
+      if (typeof showToast === 'function') showToast('이미지가 너무 큽니다 (' + Math.round(file.size / 1024 / 1024) + 'MB) — 5MB 이하 권장', 'warn');
+      // 그래도 진행
+    }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var dataUrl = e.target.result;
+      var alt = (file.name || 'image').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      _memoInsertHtmlAtCursor('<img src="' + dataUrl + '" alt="' + alt + '" style="max-width:100%;border-radius:4px;display:block;margin:6px 0;cursor:pointer">');
+      resolve(true);
+    };
+    reader.onerror = function () {
+      if (typeof showToast === 'function') showToast('이미지 읽기 실패', 'error');
+      resolve(false);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* 다중 파일을 순서대로 삽입 — Promise chain */
+function _memoInsertManyFiles(files) {
+  var imgs = [];
+  for (var i = 0; i < files.length; i++) {
+    if (/^image\//.test(files[i].type)) imgs.push(files[i]);
   }
-  if (file.size > MEMO_IMG_MAX_BYTES) {
-    if (typeof showToast === 'function') showToast('이미지가 너무 큽니다 (' + Math.round(file.size / 1024 / 1024) + 'MB) — 5MB 이하 권장', 'warn');
-  }
-  var reader = new FileReader();
-  reader.onload = function (e) {
-    var dataUrl = e.target.result;
-    var alt = (file.name || 'image').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    _memoInsertHtmlAtCursor('<img src="' + dataUrl + '" alt="' + alt + '" style="max-width:100%;border-radius:4px;display:block;margin:6px 0">');
-  };
-  reader.onerror = function () {
-    if (typeof showToast === 'function') showToast('이미지 읽기 실패', 'error');
-  };
-  reader.readAsDataURL(file);
+  if (!imgs.length) return Promise.resolve(0);
+  var p = Promise.resolve();
+  var ok = 0;
+  imgs.forEach(function (f) {
+    p = p.then(function () { return _memoInsertImageFromFile(f); }).then(function (r) { if (r) ok++; });
+  });
+  return p.then(function () {
+    if (imgs.length > 1 && typeof showToast === 'function') showToast('🖼 ' + ok + '개 이미지 추가');
+    return ok;
+  });
 }
 
 function memoInsertImagePicker() {
@@ -1656,23 +1685,24 @@ function memoInsertImagePicker() {
   input.accept = 'image/*';
   input.multiple = true;
   input.onchange = function (e) {
-    var files = e.target.files || [];
-    for (var i = 0; i < files.length; i++) _memoInsertImageFromFile(files[i]);
+    _memoInsertManyFiles(e.target.files || []);
   };
   input.click();
 }
 
 function memoPasteHandler(e) {
   var items = (e.clipboardData && e.clipboardData.items) || [];
+  var imgFiles = [];
   for (var i = 0; i < items.length; i++) {
     if (items[i].type && items[i].type.indexOf('image/') === 0) {
       var f = items[i].getAsFile();
-      if (f) {
-        e.preventDefault();
-        _memoInsertImageFromFile(f);
-        return;
-      }
+      if (f) imgFiles.push(f);
     }
+  }
+  if (imgFiles.length) {
+    e.preventDefault();
+    _memoInsertManyFiles(imgFiles);
+    return;
   }
   // 텍스트 붙여넣기는 평문으로 정규화 — HTML/스타일 오염 방지
   var text = e.clipboardData && e.clipboardData.getData('text/plain');
@@ -1687,8 +1717,52 @@ function memoDropHandler(e) {
   var el = document.getElementById('projMemo');
   if (el) el.style.borderColor = '';
   var files = (e.dataTransfer && e.dataTransfer.files) || [];
-  for (var i = 0; i < files.length; i++) {
-    if (/^image\//.test(files[i].type)) _memoInsertImageFromFile(files[i]);
+  _memoInsertManyFiles(files);
+}
+
+/* 이미지 클릭 → 선택 상태로 표시 + 삭제 버튼 활성화 */
+function memoEditorClickHandler(e) {
+  var prev = _memoSelectedImg;
+  if (prev && prev !== e.target) {
+    prev.style.outline = '';
+    _memoSelectedImg = null;
   }
+  var t = e.target;
+  if (t && t.tagName === 'IMG' && t.closest && t.closest('#projMemo')) {
+    e.stopPropagation();
+    _memoSelectedImg = t;
+    t.style.outline = '3px solid var(--ac, #5B8DEF)';
+    t.style.outlineOffset = '2px';
+    var btn = document.getElementById('memoDelImgBtn');
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+  } else {
+    var btn2 = document.getElementById('memoDelImgBtn');
+    if (btn2) { btn2.disabled = true; btn2.style.opacity = '.45'; btn2.style.cursor = 'not-allowed'; }
+  }
+}
+
+/* Delete/Backspace로 선택된 이미지 삭제 */
+function memoEditorKeyHandler(e) {
+  if (!_memoSelectedImg) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault();
+    memoDeleteSelectedImage();
+  } else if (e.key === 'Escape') {
+    // 선택 해제만
+    if (_memoSelectedImg) _memoSelectedImg.style.outline = '';
+    _memoSelectedImg = null;
+    var btn = document.getElementById('memoDelImgBtn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed'; }
+  }
+}
+
+function memoDeleteSelectedImage() {
+  if (!_memoSelectedImg) return;
+  var img = _memoSelectedImg;
+  if (img.parentNode) img.parentNode.removeChild(img);
+  _memoSelectedImg = null;
+  var btn = document.getElementById('memoDelImgBtn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed'; }
+  if (typeof showToast === 'function') showToast('이미지 삭제됨');
 }
 

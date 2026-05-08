@@ -343,7 +343,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.36</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.37</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2725,6 +2725,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.37',date:'2026-05-08',title:'프로젝트 메모 — 다중 이미지 순서 보장 + 이미지 삭제 UX',tag:'feature',items:[
+      '메모 에디터에 다중 이미지 추가 시 선택/붙여넣기/드래그 순서대로 삽입 보장 (Promise chain 직렬화 — 이전엔 FileReader 비동기로 순서 흔들림 가능)',
+      '🗑 선택 이미지 삭제 버튼 추가 — 에디터 안 이미지 클릭 시 외곽선 강조 + 삭제 버튼 활성화',
+      'Delete/Backspace 키로도 선택된 이미지 삭제, Esc로 선택 해제',
+      '여러 이미지 일괄 삽입 후 토스트로 N개 추가 안내',
+      '모달 재오픈 시 잔여 선택 상태 초기화'
+    ]},
     {ver:'13.36',date:'2026-05-08',title:'수주대장 — 조회는 전체 공개, 수정은 관리 직급만',tag:'fix',items:[
       'GET /api/orders 가시성 필터 제거 — tenant 전체 공개로 환원. 누구나 수주대장 조회 가능 (사용자 명시 정책: "누구나 볼 수 있어야 하고")',
       'RBAC order.edit: 모든 인증 사용자 허용 → admin / manager / executive 만 허용. POST·PUT·DELETE·POST /bulk 모두 적용',
