@@ -4,25 +4,32 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var { parsePagination } = require('../middleware/pagination');
+var ps = require('../middleware/project-scope');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
 // ═══ 폴더 ═══
 
-// GET /api/folders?projectId=xxx
+// GET /api/folders?projectId=xxx — v13.34 가시성: 접근 가능한 프로젝트 + 본인이 만든 프로젝트-없는 폴더
 router.get('/folders', async function (req, res) {
   try {
     var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM project_folders WHERE tenant_id = $1';
     var params = [req.tenant.id];
+    var idx = 2;
     if (req.query.projectId) {
-      sql += ' AND project_id = $2';
+      sql += ' AND project_id = $' + idx++;
       params.push(req.query.projectId);
     }
+    var meIdx = idx++;
+    params.push(req.user.sub);
+    var sub = ps.accessibleProjectsSubquery(req, idx);
+    sql += ' AND ((project_id IS NULL AND created_by = $' + meIdx + ') OR project_id IN (' + sub.sql + '))';
+    params = params.concat(sub.params);
+    idx = sub.nextIdx;
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY name';
-    var idx = params.length + 1;
     sql += ' LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);
@@ -84,7 +91,7 @@ router.delete('/folders/:id', async function (req, res) {
 
 // ═══ 파일 (메타데이터) ═══
 
-// GET /api/files?projectId=xxx&folderId=yyy
+// GET /api/files?projectId=xxx&folderId=yyy — v13.34 가시성
 router.get('/files', async function (req, res) {
   try {
     var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM project_files WHERE tenant_id = $1';
@@ -92,6 +99,12 @@ router.get('/files', async function (req, res) {
     var idx = 2;
     if (req.query.projectId) { sql += ' AND project_id = $' + idx++; params.push(req.query.projectId); }
     if (req.query.folderId) { sql += ' AND folder_id = $' + idx++; params.push(req.query.folderId); }
+    var meIdx = idx++;
+    params.push(req.user.sub);
+    var sub = ps.accessibleProjectsSubquery(req, idx);
+    sql += ' AND ((project_id IS NULL AND created_by = $' + meIdx + ') OR project_id IN (' + sub.sql + '))';
+    params = params.concat(sub.params);
+    idx = sub.nextIdx;
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY created_at DESC LIMIT $' + idx++ + ' OFFSET $' + idx++;

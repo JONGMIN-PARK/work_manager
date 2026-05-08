@@ -5,23 +5,29 @@ var auth = require('../middleware/auth');
 var { parsePagination } = require('../middleware/pagination');
 var notificationService = require('../services/notification.service');
 var tenant = require('../middleware/tenant');
+var ps = require('../middleware/project-scope');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
-// GET /api/milestones?projectId=xxx
+// GET /api/milestones?projectId=xxx — v13.34 가시성 적용: 접근 가능한 프로젝트의 마일스톤만
 router.get('/', async function (req, res) {
   try {
     var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM milestones WHERE tenant_id = $1';
     var params = [req.tenant.id];
+    var idx = 2;
     if (req.query.projectId) {
-      sql += ' AND project_id = $2';
+      sql += ' AND project_id = $' + idx++;
       params.push(req.query.projectId);
     }
+    // 접근 가능한 프로젝트로 제한 (v13.34)
+    var sub = ps.accessibleProjectsSubquery(req, idx);
+    sql += ' AND project_id IN (' + sub.sql + ')';
+    params = params.concat(sub.params);
+    idx = sub.nextIdx;
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY sort_order, start_date';
-    var idx = params.length + 1;
     sql += ' LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
     var r = await db.query(sql, params);

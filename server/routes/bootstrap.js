@@ -12,6 +12,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var ps = require('../middleware/project-scope');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -40,9 +41,20 @@ router.get('/', async function (req, res) {
       projParams
     );
 
-    // ── milestones, events (tenant scope) ──
-    var msQ = db.query('SELECT * FROM milestones WHERE tenant_id = $1 ORDER BY sort_order, start_date LIMIT 2000', [tenantId]);
-    var evQ = db.query('SELECT * FROM events WHERE tenant_id = $1 ORDER BY start_date DESC LIMIT 2000', [tenantId]);
+    // ── milestones (v13.34 가시성: 접근 가능한 프로젝트만) ──
+    var msSub = ps.accessibleProjectsSubquery(req, 2);
+    var msQ = db.query(
+      'SELECT * FROM milestones WHERE tenant_id = $1 AND project_id IN (' + msSub.sql + ') ORDER BY sort_order, start_date LIMIT 2000',
+      [tenantId].concat(msSub.params)
+    );
+    // ── events (v13.34 가시성: project_ids에 접근 가능 항목 있거나 본인이 만든 개인 일정) ──
+    // params 구성: $1=tenantId, $2=userId, $3..=accessible subquery 파라미터
+    var evSub = ps.accessibleProjectsSubquery(req, 3);
+    var evSql = 'SELECT * FROM events WHERE tenant_id = $1 AND ('
+      + '(jsonb_array_length(COALESCE(project_ids, \'[]\'::jsonb)) = 0 AND created_by = $2)'
+      + ' OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(project_ids, \'[]\'::jsonb)) AS _pid WHERE _pid IN (' + evSub.sql + '))'
+      + ') ORDER BY start_date DESC LIMIT 2000';
+    var evQ = db.query(evSql, [tenantId, userId].concat(evSub.params));
 
     // ── recent archives (role-aware, date cutoff) ──
     var arWhere, arParams;

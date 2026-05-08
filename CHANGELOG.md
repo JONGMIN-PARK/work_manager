@@ -1,5 +1,41 @@
 # Work Manager — 변경 이력
 
+## v13.34 (2026-05-08) — 프로젝트 관리 전 페이지에 가시성 정책 일관 적용
+
+### 배경
+사용자 보고: "프로젝트 관리 > 파이프라인, 달력, 타임라인, 수주대장, 이슈관리, 문서관리 등 모두 권한이 없으면 안보이게 처리!"
+
+v13.31에서 프로젝트 자체에 가시성 정책(기본 비공개 + 명시 공유)을 도입했지만, 프로젝트에 종속된 데이터(마일스톤·일정·이슈·문서·체크리스트·수주)를 제공하는 라우트는 여전히 tenant 스코프만 적용 — 다른 사용자의 비공개 프로젝트 마일스톤/이슈/문서까지 모두 노출되던 정책 표류.
+
+### 변경 (서버 — 6개 라우트 + bootstrap)
+- **`server/middleware/project-scope.js`** (신규): `accessibleProjectsSubquery(req, startIdx)` / `accessibleOrderNosSubquery(req, startIdx)` 헬퍼. v13.31 가시성 룰(owner / project_members(active) / visibility=tenant / (visibility=dept AND 부서 일치))을 SQL 서브쿼리로 일원화. 향후 라우트 추가 시 정책 표류 방지.
+
+| 라우트 | 변경 |
+|---|---|
+| `milestones.js` GET / | `project_id IN (accessible)` 추가 |
+| `checklists.js` GET / | `project_id IN (accessible)` 추가 |
+| `issues.js` GET / | `(project_id IS NULL AND created_by=me) OR project_id IN (accessible)` |
+| `documents.js` GET /folders, /files | 동일 패턴 — 프로젝트 없는 폴더/파일은 작성자만 |
+| `events.js` GET / | `project_ids` JSONB 배열 — 비어있으면 작성자만, 배열에 접근 가능 ID 있으면 노출 |
+| `orders.js` GET / | `created_by=me OR order_no IN (accessible projects의 order_no들)` |
+| `bootstrap.js` | milestones / events 쿼리에 동일 룰 적용 — 첫 로드 응답도 일관 |
+
+### 정책 결정 노트
+- 프로젝트에 종속된 데이터는 그 프로젝트 가시성을 따른다.
+- `project_id`가 NULL인 일반 항목(개인 일정, 일반 이슈, 일반 폴더/파일)은 작성자 본인만 노출 — 익명 공개 의도가 없는 한 default-private.
+- `orders`는 `project_id` 컬럼이 없으므로 `order_no` 매칭으로 대신함. 본인이 생성한 수주는 항상 본인에게 노출.
+- admin/executive 우회 없음 — v13.31 정책과 동일.
+
+### 영향
+- 기존에 다른 사용자의 비공개 프로젝트 데이터를 볼 수 있던 사용자는 더 이상 노출되지 않음.
+- 새로 생성한 비공개 프로젝트의 마일스톤/이슈/문서 등은 owner와 project_members에게만 노출.
+- 메뉴/탭은 그대로 유지 — 사용자가 자기 데이터로 진입은 가능.
+
+### 변경 파일
+- `server/middleware/project-scope.js` (신규), `server/routes/{milestones,checklists,issues,documents,events,orders,bootstrap}.js`, `업무일지_분석기.html` (헤더 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.33 (2026-05-08) — 페이지 첫 로딩 시 업무일지 미표시 (콜드 스타트 race 수정)
 
 ### 배경

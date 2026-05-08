@@ -6,15 +6,28 @@ var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var tenant = require('../middleware/tenant');
+var ps = require('../middleware/project-scope');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
-// GET /api/orders
+// GET /api/orders — v13.34 가시성:
+//   본인이 생성한 수주 + 접근 가능한 프로젝트의 order_no 와 매칭되는 수주만
 router.get('/', async function (req, res) {
   try {
     var pg = parsePagination(req.query, 100);
-    var r = await db.query('SELECT *, COUNT(*) OVER() AS _total FROM orders WHERE tenant_id = $1 ORDER BY date DESC, order_no LIMIT $2 OFFSET $3', [req.tenant.id, pg.limit, pg.offset]);
+    var idx = 1;
+    var params = [req.tenant.id]; idx++;
+    var meIdx = idx++;
+    params.push(req.user.sub);
+    var sub = ps.accessibleOrderNosSubquery(req, idx);
+    params = params.concat(sub.params);
+    idx = sub.nextIdx;
+    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM orders WHERE tenant_id = $1 '
+      + 'AND (created_by = $' + meIdx + ' OR order_no IN (' + sub.sql + ')) '
+      + 'ORDER BY date DESC, order_no LIMIT $' + idx++ + ' OFFSET $' + idx++;
+    params.push(pg.limit, pg.offset);
+    var r = await db.query(sql, params);
     var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });

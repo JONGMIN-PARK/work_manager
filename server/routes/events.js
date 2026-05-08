@@ -5,18 +5,20 @@ var auth = require('../middleware/auth');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var tenant = require('../middleware/tenant');
+var ps = require('../middleware/project-scope');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
-// GET /api/events
+// GET /api/events — v13.34 가시성:
+//   project_ids 배열에 접근 가능한 프로젝트가 하나라도 있으면 노출,
+//   배열이 비어있으면(개인 일정) 작성자 본인만 노출
 router.get('/', async function (req, res) {
   try {
     var where = [];
     var params = [];
     var idx = 1;
 
-    // 테넌트 스코핑
     where.push('tenant_id = $' + idx++);
     params.push(req.tenant.id);
 
@@ -24,6 +26,19 @@ router.get('/', async function (req, res) {
       where.push('start_date <= $' + idx++ + ' AND end_date >= $' + idx++);
       params.push(req.query.to, req.query.from);
     }
+    // 가시성 절: JSONB 배열의 각 요소를 풀어 접근 가능 프로젝트와 매칭
+    var meIdx = idx++;
+    params.push(req.user.sub);
+    var sub = ps.accessibleProjectsSubquery(req, idx);
+    where.push(
+      '(' +
+        '(jsonb_array_length(COALESCE(project_ids, \'[]\'::jsonb)) = 0 AND created_by = $' + meIdx + ')' +
+        ' OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(project_ids, \'[]\'::jsonb)) AS _pid WHERE _pid IN (' + sub.sql + '))' +
+      ')'
+    );
+    params = params.concat(sub.params);
+    idx = sub.nextIdx;
+
     var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM events' + (where.length ? ' WHERE ' + where.join(' AND ') : '');
 
     var pg = parsePagination(req.query, 100);

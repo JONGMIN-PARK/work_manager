@@ -343,7 +343,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.33</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.34</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2725,6 +2725,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.34',date:'2026-05-08',title:'프로젝트 관리 전 페이지 가시성 정책 일관 적용',tag:'fix',items:[
+      '파이프라인/달력/타임라인/수주대장/이슈관리/문서관리 등 프로젝트 관리 카테고리 페이지의 데이터가 권한 무관 광범위 노출되던 문제 수정',
+      '서버 라우트 6개(milestones, events, issues, orders, documents, checklists) 모두 v13.31 가시성 룰(owner/project_members/visibility)을 적용 — 접근 가능한 프로젝트의 데이터만 응답',
+      'project_id 없는 항목(개인 일정 events, 일반 이슈, 일반 폴더/파일)은 작성자 본인만 노출',
+      'orders는 order_no가 접근 가능한 프로젝트와 매칭되거나 본인이 생성한 수주만 노출',
+      '/api/bootstrap 의 milestones/events 쿼리도 동일 룰 적용 — 첫 로드부터 일관된 가시성',
+      'server/middleware/project-scope.js 공유 헬퍼 신설 — accessibleProjectsSubquery / accessibleOrderNosSubquery로 향후 라우트 추가 시 정책 표류 방지'
+    ]},
     {ver:'13.33',date:'2026-05-08',title:'페이지 로딩 시 업무일지 미표시 — 콜드 스타트 race 수정',tag:'fix',items:[
       'Render Free 플랜 콜드 스타트(30~60s)와 토큰 갱신 타이밍 race로 페이지 첫 로딩에 업무일지가 안 보이고 새로고침해야 보이던 문제 수정',
       '_tryRefresh 타임아웃 8s → 35s — 콜드 스타트 동안 토큰 갱신이 abort되지 않도록',

@@ -7,27 +7,32 @@ var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var notificationService = require('../services/notification.service');
 var tenant = require('../middleware/tenant');
+var ps = require('../middleware/project-scope');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
-// GET /api/issues
+// GET /api/issues — v13.34 가시성: 접근 가능한 프로젝트의 이슈 + 본인이 만든 프로젝트-없는 이슈
 router.get('/', async function (req, res) {
   try {
     var q = req.query;
     var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM issues WHERE 1=1';
     var params = [];
     var idx = 1;
-
-    // 테넌트 스코핑
     sql += ' AND tenant_id = $' + idx++; params.push(req.tenant.id);
-
     if (q.projectId) { sql += ' AND project_id = $' + idx++; params.push(q.projectId); }
     if (q.orderNo) { sql += ' AND order_no = $' + idx++; params.push(q.orderNo); }
     if (q.status) { sql += ' AND status = $' + idx++; params.push(q.status); }
     if (q.urgency) { sql += ' AND urgency = $' + idx++; params.push(q.urgency); }
     if (q.phase) { sql += ' AND phase = $' + idx++; params.push(q.phase); }
     if (q.dept) { sql += ' AND dept = $' + idx++; params.push(q.dept); }
+    // 가시성: project_id 있는 이슈 → 접근 가능한 프로젝트만 / project_id NULL → 작성자만
+    var meIdx = idx++;
+    params.push(req.user.sub);
+    var sub = ps.accessibleProjectsSubquery(req, idx);
+    sql += ' AND ((project_id IS NULL AND created_by = $' + meIdx + ') OR project_id IN (' + sub.sql + '))';
+    params = params.concat(sub.params);
+    idx = sub.nextIdx;
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY created_at DESC LIMIT $' + idx++ + ' OFFSET $' + idx++;

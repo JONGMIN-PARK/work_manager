@@ -5,20 +5,25 @@ var auth = require('../middleware/auth');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var tenant = require('../middleware/tenant');
+var ps = require('../middleware/project-scope');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
-// GET /api/checklists?projectId=xxx&phase=yyy
+// GET /api/checklists?projectId=xxx&phase=yyy — v13.34 가시성 적용
 router.get('/', async function (req, res) {
   try {
     var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM checklists WHERE 1=1';
     var params = [];
     var idx = 1;
-    // 테넌트 스코핑
     sql += ' AND tenant_id = $' + idx++; params.push(req.tenant.id);
     if (req.query.projectId) { sql += ' AND project_id = $' + idx++; params.push(req.query.projectId); }
     if (req.query.phase) { sql += ' AND phase = $' + idx++; params.push(req.query.phase); }
+    // 접근 가능한 프로젝트로 제한 (v13.34)
+    var sub = ps.accessibleProjectsSubquery(req, idx);
+    sql += ' AND project_id IN (' + sub.sql + ')';
+    params = params.concat(sub.params);
+    idx = sub.nextIdx;
 
     var pg = parsePagination(req.query, 100);
     sql += ' ORDER BY created_at LIMIT $' + idx++ + ' OFFSET $' + idx++;
