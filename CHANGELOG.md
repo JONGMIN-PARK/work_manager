@@ -1,5 +1,19 @@
 # Work Manager — 변경 이력
 
+## v13.42 (2026-05-08) — 패치노트 항목 일부만 표시되던 버그 수정
+
+### 원인
+v13.41 패치 항목 중 `'style.css 와 인라인 <style> 양쪽 동기화'` 텍스트 안의 literal `<style>` 가 `el.innerHTML` 주입 시 브라우저에 의해 실제 `<style>` 태그로 해석. 그 뒤로 등장하는 패치 카드(13.40, 13.39…)들이 stylesheet 내용으로 빨려 들어가 화면에서 사라짐 → "마지막 것만 보임" 인상.
+
+### 수정
+- 해당 항목의 `<` `>` 를 `&lt;` `&gt;` entity로 교체.
+- **재발 방지**: `renderPatchNotes` 의 forEach에서 `p.title` 과 `p.items` 각 항목을 자동 escape — 이미 entity 형태인 `&lt;`/`&gt;`/`&amp;` 등은 두 번 escape 되지 않도록 negative lookahead 적용.
+
+### 변경 파일
+- `업무일지_분석기.html` (renderPatchNotes + 헤더 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.41 (2026-05-08) — 타임라인 뷰포트 기반 높이 (스크롤 최소화)
 
 ### 배경

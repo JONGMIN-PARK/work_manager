@@ -414,7 +414,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.41</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.42</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2796,11 +2796,16 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.42',date:'2026-05-08',title:'패치노트 항목이 일부만 표시되던 버그 수정',tag:'fix',items:[
+      'v13.41 항목 텍스트에 literal &lt;style&gt; 가 포함돼 el.innerHTML 주입 시 브라우저가 실제 &lt;style&gt; 태그로 해석 — 후속 패치 카드들이 stylesheet 내용으로 빨려 들어가 안 보이던 문제',
+      '즉시: 해당 항목의 <→&lt;, >→&gt; entity로 교체',
+      '재발 방지: renderPatchNotes의 forEach에서 title/items에 자동 escape (이미 entity 형태인 &lt;/&gt;/&amp; 등은 두 번 escape 안 함)'
+    ]},
     {ver:'13.41',date:'2026-05-08',title:'타임라인 — 뷰포트 기반 높이로 스크롤 최소화',tag:'fix',items:[
       '타임라인 스크롤 영역(.tl-scroll) max-height 600px 고정 → calc(100vh - 220px) 로 뷰포트 기반. 큰 모니터에서 모든 프로젝트 한눈에 들어옴',
       '좌측 프로젝트 목록(#tlProjList) max-height 540px → calc(100vh - 240px) 로 동일 동기화',
       'min-height(타임라인 400 / 목록 360) 보장 — 작은 화면에서도 너무 좁아지지 않음',
-      'style.css 와 인라인 <style> 양쪽 동기화'
+      'style.css 와 인라인 &lt;style&gt; 양쪽 동기화'
     ]},
     {ver:'13.40',date:'2026-05-08',title:'L3 — 크로스탭 실시간 동기화 (wmDataBus 이벤트)',tag:'feature',items:[
       'window.wmDataBus pub/sub 도입 — on(type, fn) / emit(type, action, detail). 기본 type: project / milestone / event / order / issue / checklist / document. 와일드카드 * 지원',
@@ -3193,12 +3198,20 @@ function renderPatchNotes(){
     if(isLatest)html+='<span style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;background:#10B981;color:#fff">Latest</span>';
     html+='<span style="font-size:11px;color:var(--t6);margin-left:auto">'+p.date+'</span>';
     html+='</div>';
-    // title
-    html+='<div style="font-size:14px;font-weight:600;color:var(--t3);margin-bottom:8px">'+p.title+'</div>';
+    // title — v13.42: 안전 escape (마찬가지로 < > 사고 방지)
+    var safeTitle = String(p.title || '')
+      .replace(/&(?!(amp|lt|gt|quot|#\d+|#x[0-9a-fA-F]+);)/g, '&amp;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    html+='<div style="font-size:14px;font-weight:600;color:var(--t3);margin-bottom:8px">'+safeTitle+'</div>';
     // items
     html+='<ul style="margin:0;padding-left:18px;list-style:none">';
     p.items.forEach(function(item){
-      html+='<li style="font-size:12px;color:var(--t4);line-height:1.8;position:relative;padding-left:4px"><span style="position:absolute;left:-14px;color:var(--ac)">›</span>'+item+'</li>';
+      // v13.42: 항목 텍스트 안의 < > 를 escape — 실수로 들어간 <style> 등이 실제 태그로 해석돼
+      // 후속 패치노트 카드가 사라지는 사고 방지. 이미 escape된 &lt;/&gt;는 두 번 escape 안 함.
+      var safe = String(item == null ? '' : item)
+        .replace(/&(?!(amp|lt|gt|quot|#\d+|#x[0-9a-fA-F]+);)/g, '&amp;')
+        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      html+='<li style="font-size:12px;color:var(--t4);line-height:1.8;position:relative;padding-left:4px"><span style="position:absolute;left:-14px;color:var(--ac)">›</span>'+safe+'</li>';
     });
     html+='</ul>';
     html+='</div></div>';
