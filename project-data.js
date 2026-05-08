@@ -286,6 +286,11 @@ function showToast(msg, type) {
 
 /* ─── 읽기 캐시 (TTL) — 동일 페이지 내 다수 위젯이 같은 API를 호출하는 중복 요청 제거 ─── */
 var _PD_TTL = 30000;
+/* wmDataBus emit 헬퍼 — 정의 안 됐으면 no-op (file:// 모드 등 호환) */
+function _emitBus(type, action, detail) {
+  try { if (typeof window !== 'undefined' && window.wmDataBus) window.wmDataBus.emit(type, action, detail || {}); } catch (e) { /* ignore */ }
+}
+
 var _pdCache = { proj: null, ms: null, evt: null };
 var _pdCacheT = { proj: 0, ms: 0, evt: 0 };
 var _pdInflight = { proj: null, ms: null, evt: null };
@@ -327,9 +332,11 @@ function projGetAll() { return _pdCached('proj', function () { return apiFetch('
 function projGet(id) { return apiFetch('/api/projects/' + id).then(function (r) { return toCamel(r.data); }); }
 function projPut(proj) {
   _pdInvalidate('proj');
-  if (!proj.id || proj._isNew) {
+  var isNew = !proj.id || proj._isNew;
+  if (isNew) {
     delete proj._isNew;
-    return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) })
+      .then(function (r) { var saved = toCamel(r.data); _emitBus('project', 'created', { id: saved && saved.id }); return saved; });
   }
   return apiFetch('/api/projects/' + proj.id, { method: 'PUT', body: JSON.stringify(proj) })
     .then(function (r) { return toCamel(r.data); })
@@ -338,9 +345,14 @@ function projPut(proj) {
         return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
       }
       throw err;
-    });
+    })
+    .then(function (saved) { _emitBus('project', 'updated', { id: saved && saved.id }); return saved; });
 }
-function projDel(id) { _pdInvalidate('proj'); return apiFetch('/api/projects/' + id, { method: 'DELETE' }); }
+function projDel(id) {
+  _pdInvalidate('proj');
+  return apiFetch('/api/projects/' + id, { method: 'DELETE' })
+    .then(function (r) { _emitBus('project', 'deleted', { id: id }); return r; });
+}
 
 /* ─── 공유/이관 ─── */
 function userLookup() {
@@ -465,9 +477,11 @@ function msGetAll() { return _pdCached('ms', function () { return apiFetch('/api
 function msGetByProject(pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return _msDedupe(toCamelArray(r.data)); }); }
 function msPut(ms) {
   _pdInvalidate('ms');
-  if (!ms.id || ms._isNew) {
+  var isNew = !ms.id || ms._isNew;
+  if (isNew) {
     delete ms._isNew;
-    return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('milestone', 'created', { id: s && s.id, projectId: s && s.projectId }); return s; });
   }
   return apiFetch('/api/milestones/' + ms.id, { method: 'PUT', body: JSON.stringify(ms) })
     .then(function (r) { return toCamel(r.data); })
@@ -476,9 +490,14 @@ function msPut(ms) {
         return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
       }
       throw err;
-    });
+    })
+    .then(function (s) { _emitBus('milestone', 'updated', { id: s && s.id, projectId: s && s.projectId }); return s; });
 }
-function msDel(id) { _pdInvalidate('ms'); return apiFetch('/api/milestones/' + id, { method: 'DELETE' }); }
+function msDel(id) {
+  _pdInvalidate('ms');
+  return apiFetch('/api/milestones/' + id, { method: 'DELETE' })
+    .then(function (r) { _emitBus('milestone', 'deleted', { id: id }); return r; });
+}
 
 function msDelByProject(projectId) {
   return msGetByProject(projectId).then(function (list) {
@@ -506,9 +525,11 @@ function evtGetAll() { return _pdCached('evt', function () { return apiFetch('/a
 function evtGet(id) { return apiFetch('/api/events/' + id).then(function (r) { return toCamel(r.data); }); }
 function evtPut(evt) {
   _pdInvalidate('evt');
-  if (!evt.id || evt._isNew) {
+  var isNew = !evt.id || evt._isNew;
+  if (isNew) {
     delete evt._isNew;
-    return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('event', 'created', { id: s && s.id }); return s; });
   }
   return apiFetch('/api/events/' + evt.id, { method: 'PUT', body: JSON.stringify(evt) })
     .then(function (r) { return toCamel(r.data); })
@@ -517,9 +538,14 @@ function evtPut(evt) {
         return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
       }
       throw err;
-    });
+    })
+    .then(function (s) { _emitBus('event', 'updated', { id: s && s.id }); return s; });
 }
-function evtDel(id) { _pdInvalidate('evt'); return apiFetch('/api/events/' + id, { method: 'DELETE' }); }
+function evtDel(id) {
+  _pdInvalidate('evt');
+  return apiFetch('/api/events/' + id, { method: 'DELETE' })
+    .then(function (r) { _emitBus('event', 'deleted', { id: id }); return r; });
+}
 
 function createEvent(data) {
   var now = new Date().toISOString();
@@ -590,9 +616,13 @@ function deleteProjectCascade(id) {
 function orderGetAll() { return apiFetch('/api/orders').then(function (r) { return toCamelArray(r.data); }); }
 function orderGet(orderNo) { return apiFetch('/api/orders/' + encodeURIComponent(orderNo)).then(function (r) { return toCamel(r.data); }); }
 function orderPut(order) {
-  return apiFetch('/api/orders', { method: 'POST', body: JSON.stringify(order) }).then(function (r) { return toCamel(r.data); });
+  return apiFetch('/api/orders', { method: 'POST', body: JSON.stringify(order) })
+    .then(function (r) { var s = toCamel(r.data); _emitBus('order', 'updated', { orderNo: s && s.orderNo }); return s; });
 }
-function orderDel(orderNo) { return apiFetch('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' }); }
+function orderDel(orderNo) {
+  return apiFetch('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' })
+    .then(function (r) { _emitBus('order', 'deleted', { orderNo: orderNo }); return r; });
+}
 
 function createOrder(data) {
   var now = new Date().toISOString();
@@ -683,9 +713,11 @@ function chkGetByProject(pid) {
   });
 }
 function chkPut(item) {
-  if (!item.id || item._isNew) {
+  var isNew = !item.id || item._isNew;
+  if (isNew) {
     delete item._isNew;
-    return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('checklist', 'created', { id: s && s.id, projectId: s && s.projectId }); return s; });
   }
   return apiFetch('/api/checklists/' + item.id, { method: 'PUT', body: JSON.stringify(item) })
     .then(function (r) { return toCamel(r.data); })
@@ -694,7 +726,8 @@ function chkPut(item) {
         return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
       }
       throw err;
-    });
+    })
+    .then(function (s) { _emitBus('checklist', 'updated', { id: s && s.id, projectId: s && s.projectId }); return s; });
 }
 function chkDel(id) {
   // flat id (chk-xxx::N) → 부모 row에서 해당 항목 제거
@@ -869,9 +902,11 @@ function createProjectFromOrder(order) {
 function issueGetAll() { return apiFetch('/api/issues').then(function (r) { return toCamelArray(r.data); }); }
 function issueGet(id) { return apiFetch('/api/issues/' + id).then(function (r) { return toCamel(r.data); }); }
 function issuePut(issue) {
-  if (!issue.id || issue._isNew) {
+  var isNew = !issue.id || issue._isNew;
+  if (isNew) {
     delete issue._isNew;
-    return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('issue', 'created', { id: s && s.id, projectId: s && s.projectId, orderNo: s && s.orderNo }); return s; });
   }
   return apiFetch('/api/issues/' + issue.id, { method: 'PUT', body: JSON.stringify(issue) })
     .then(function (r) { return toCamel(r.data); })
@@ -880,9 +915,13 @@ function issuePut(issue) {
         return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
       }
       throw err;
-    });
+    })
+    .then(function (s) { _emitBus('issue', 'updated', { id: s && s.id, projectId: s && s.projectId, orderNo: s && s.orderNo }); return s; });
 }
-function issueDel(id) { return apiFetch('/api/issues/' + id, { method: 'DELETE' }); }
+function issueDel(id) {
+  return apiFetch('/api/issues/' + id, { method: 'DELETE' })
+    .then(function (r) { _emitBus('issue', 'deleted', { id: id }); return r; });
+}
 function issueGetByProject(pid) { return apiFetch('/api/issues?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
 function issueGetByOrder(orderNo) { return apiFetch('/api/issues?orderNo=' + encodeURIComponent(orderNo)).then(function (r) { return toCamelArray(r.data); }); }
 
@@ -1243,9 +1282,11 @@ function folderGetAll() { return apiFetch('/api/docs/folders').then(function (r)
 function folderGet(id) { return apiFetch('/api/docs/folders').then(function (r) { var all = toCamelArray(r.data); return all.find(function (f) { return f.id === id; }) || null; }); }
 function folderGetByProject(pid) { return apiFetch('/api/docs/folders?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
 function folderPut(f) {
-  if (!f.id || f._isNew) {
+  var isNew = !f.id || f._isNew;
+  if (isNew) {
     delete f._isNew;
-    return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('document', 'created', { kind: 'folder', id: s && s.id, projectId: s && s.projectId }); return s; });
   }
   return apiFetch('/api/docs/folders/' + f.id, { method: 'PUT', body: JSON.stringify(f) })
     .then(function (r) { return toCamel(r.data); })
@@ -1254,9 +1295,13 @@ function folderPut(f) {
         return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
       }
       throw err;
-    });
+    })
+    .then(function (s) { _emitBus('document', 'updated', { kind: 'folder', id: s && s.id, projectId: s && s.projectId }); return s; });
 }
-function folderDel(id) { return apiFetch('/api/docs/folders/' + id, { method: 'DELETE' }); }
+function folderDel(id) {
+  return apiFetch('/api/docs/folders/' + id, { method: 'DELETE' })
+    .then(function (r) { _emitBus('document', 'deleted', { kind: 'folder', id: id }); return r; });
+}
 
 function createDefaultFolders(projectId) {
   var phaseLabels = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
@@ -1281,9 +1326,11 @@ function fileGet(id) { return apiFetch('/api/docs/files').then(function (r) { va
 function fileGetByProject(pid) { return apiFetch('/api/docs/files?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
 function fileGetByFolder(fid) { return apiFetch('/api/docs/files?folderId=' + fid).then(function (r) { return toCamelArray(r.data); }); }
 function filePut(f) {
-  if (!f.id || f._isNew) {
+  var isNew = !f.id || f._isNew;
+  if (isNew) {
     delete f._isNew;
-    return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
+    return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('document', 'created', { kind: 'file', id: s && s.id, projectId: s && s.projectId }); return s; });
   }
   return apiFetch('/api/docs/files/' + f.id, { method: 'PUT', body: JSON.stringify(f) })
     .then(function (r) { return toCamel(r.data); })
@@ -1292,9 +1339,13 @@ function filePut(f) {
         return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
       }
       throw err;
-    });
+    })
+    .then(function (s) { _emitBus('document', 'updated', { kind: 'file', id: s && s.id, projectId: s && s.projectId }); return s; });
 }
-function fileDel(id) { return apiFetch('/api/docs/files/' + id, { method: 'DELETE' }); }
+function fileDel(id) {
+  return apiFetch('/api/docs/files/' + id, { method: 'DELETE' })
+    .then(function (r) { _emitBus('document', 'deleted', { kind: 'file', id: id }); return r; });
+}
 
 function deleteProjectFiles(projectId) {
   return fileGetByProject(projectId).then(function (files) {

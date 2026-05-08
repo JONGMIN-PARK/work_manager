@@ -13,6 +13,76 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>/* config.js 로드 실패 폴백 — file:// 프로토콜 CORS 대응 */</script>
 <script>var ORDER_MAP={};/* 수주맵: 엑셀 기반 — order.js 대체 */</script>
+<script>
+/* ═══ wmDataBus — 크로스탭 이벤트 버스 (v13.40 L3) ═══
+   다른 모든 스크립트보다 먼저 정의되도록 인라인 동기 로드.
+   사용:
+     wmDataBus.on('project', function(e){ ... });   // type별 listener
+     wmDataBus.on('*', function(e){ ... });          // 와일드카드
+     wmDataBus.emit('project','updated',{id:'p1'});  // mutator에서 호출
+   payload: { type, action, detail }
+   action 권장값: 'created' | 'updated' | 'deleted' | 'bulk' */
+window.wmDataBus = (function () {
+  var listeners = {}; // type → [fn]
+  function on(type, fn) {
+    if (!type || typeof fn !== 'function') return function(){};
+    (listeners[type] = listeners[type] || []).push(fn);
+    return function off() { listeners[type] = (listeners[type] || []).filter(function (f) { return f !== fn; }); };
+  }
+  function emit(type, action, detail) {
+    var payload = { type: type, action: action, detail: detail || {} };
+    var arr = (listeners[type] || []).concat(listeners['*'] || []);
+    // 동기적으로 실행 (cache invalidate가 다음 read보다 먼저 일어나도록).
+    // 단, 무한 루프 방지를 위해 한 emit 사이클 안에서는 동일 type 재emit 차단.
+    if (emit._inflight && emit._inflight[type]) return;
+    emit._inflight = emit._inflight || {};
+    emit._inflight[type] = true;
+    try {
+      arr.forEach(function (fn) {
+        try { fn(payload); } catch (e) { console.warn('[wmDataBus]', type, action, e); }
+      });
+    } finally {
+      delete emit._inflight[type];
+    }
+  }
+  return { on: on, emit: emit };
+})();
+
+/* 활성 탭 자동 재렌더 — 어떤 데이터 변경이든 한 번 디바운스 후 현재 활성 모듈만 다시 그림.
+   각 탭이 의존하는 type 매핑으로 불필요한 재렌더 방지. */
+(function () {
+  var depMap = {
+    pipeline: { project:1, milestone:1, checklist:1, issue:1 },
+    calendar: { project:1, milestone:1, event:1 },
+    timeline: { project:1, milestone:1, checklist:1 },
+    orders:   { order:1, project:1, issue:1 },
+    issues:   { issue:1, project:1 },
+    docs:     { document:1, project:1 }
+  };
+  var renderMap = {
+    pipeline: function () { if (typeof renderPipeline === 'function') renderPipeline(); },
+    calendar: function () { if (typeof initCalendar === 'function') initCalendar(); },
+    timeline: function () { if (typeof renderTimeline === 'function') renderTimeline(); },
+    orders:   function () { if (typeof renderOrders === 'function') renderOrders(); },
+    issues:   function () { if (typeof renderIssues === 'function') renderIssues(); },
+    docs:     function () { if (typeof renderDocManager === 'function') renderDocManager(); }
+  };
+  var t = null;
+  window.wmDataBus.on('*', function (e) {
+    if (typeof curPage === 'undefined' || curPage !== 'project') return; // 프로젝트 카테고리만 자동 재렌더
+    if (typeof curMode === 'undefined') return;
+    var deps = depMap[curMode];
+    if (!deps || !deps[e.type]) return; // 현재 탭이 의존하지 않는 데이터면 skip
+    clearTimeout(t);
+    t = setTimeout(function () {
+      var fn = renderMap[curMode];
+      if (typeof fn === 'function') {
+        try { fn(); } catch (err) { console.warn('[wmDataBus rerender]', curMode, err); }
+      }
+    }, 100);
+  });
+})();
+</script>
 <!-- core (동기 로드 필수 — 인라인 폴백 typeof 체크가 파싱 중에 실행됨) -->
 <script src="config.js?v=5" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="settings.js?v=5" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
@@ -343,7 +413,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.39</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.40</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2725,6 +2795,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.40',date:'2026-05-08',title:'L3 — 크로스탭 실시간 동기화 (wmDataBus 이벤트)',tag:'feature',items:[
+      'window.wmDataBus pub/sub 도입 — on(type, fn) / emit(type, action, detail). 기본 type: project / milestone / event / order / issue / checklist / document. 와일드카드 * 지원',
+      'project-data.js의 모든 mutator(projPut/Del · msPut/Del · evtPut/Del · orderPut/Del · issuePut/Del · chkPut · folderPut/Del · filePut/Del)에 emit 추가 — 캐시 invalidate와 함께 동기 신호',
+      '활성 탭 자동 재렌더 — 탭별 의존 type 매핑(예: pipeline ← project/milestone/checklist/issue). 다른 탭에서 수정해도 현재 탭이 즉시 반영, 100ms 디바운스로 다중 emit 통합',
+      '무한 루프 방지: 동일 type emit 사이클 중 재emit 차단',
+      'L2 검토 결과(간트 차트): 라이브러리 도입 비추 — 현재 timeline.js가 이미 의존선/크리티컬패스/4단계줌/드래그이동/마일스톤마커 모두 보유. 점진 확장 권장 (오늘라인 → 진척률 오버레이 → 드래그 리사이즈 → 툴팁 → 계획 vs 실적). 별도 결정 필요'
+    ]},
     {ver:'13.39',date:'2026-05-08',title:'M1 — 수주대장 이슈 배지 클릭 → 이슈관리 탭 + 자동 필터',tag:'feature',items:[
       '수주대장에서 이슈 카운트 배지 클릭 시 단일 이슈 모달이 뜨던 동작을 → 이슈관리 탭으로 이동 + 해당 수주번호로 필터 자동 적용으로 변경 (크로스탭 도약 단절 해결)',
       'issue-manager.js에 issueFilterOrderNo 변수 + 필터 로직 추가, 활성 시 필터 바에 "📋 수주 [번호] ✕" 배지 표시',

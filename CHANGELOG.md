@@ -1,5 +1,58 @@
 # Work Manager — 변경 이력
 
+## v13.40 (2026-05-08) — L3: 크로스탭 실시간 동기화 (wmDataBus 이벤트 시스템)
+
+### 배경
+검토에서 식별된 L3: "크로스탭 실시간 동기화 — 한 탭에서 변경한 게 다른 탭에 안 나타나서 새로고침해야 하는 케이스 해결". 각 탭이 독립적으로 캐시(`_pdCache` 등)를 보유해, 예를 들어 타임라인에서 마일스톤 추가해도 파이프라인 탭이 stale 데이터를 보여주는 문제.
+
+### 변경
+
+**1) 이벤트 버스 도입 (`업무일지_분석기.html` 인라인 script, 모든 모듈보다 먼저 동기 로드)**
+- `window.wmDataBus` pub/sub: `on(type, fn)` / `emit(type, action, detail)`
+- 기본 type: `project` / `milestone` / `event` / `order` / `issue` / `checklist` / `document`
+- 와일드카드 `*` 지원 (모든 변경 listen)
+- payload: `{ type, action, detail }`. action: `created` / `updated` / `deleted` / `bulk`
+- 무한 루프 방지: 동일 type emit 사이클 중 재emit 차단
+
+**2) Mutator에 emit 추가 (`project-data.js`)**
+- `_emitBus(type, action, detail)` 헬퍼 — `wmDataBus` 미정의 시 no-op
+- 각 mutator의 성공 후 `.then()` 체인에 emit:
+  - `projPut` → project/created or updated, `projDel` → project/deleted
+  - `msPut/Del`, `evtPut/Del`, `orderPut/Del`, `issuePut/Del`
+  - `chkPut`, `folderPut/Del`, `filePut/Del`
+- 실패 시(throw) emit 안 함 — UI 상태 일관성 유지
+
+**3) 활성 탭 자동 재렌더 (`업무일지_분석기.html` 인라인)**
+- 탭별 의존 type 매핑:
+  - `pipeline` ← project, milestone, checklist, issue
+  - `calendar` ← project, milestone, event
+  - `timeline` ← project, milestone, checklist
+  - `orders` ← order, project, issue
+  - `issues` ← issue, project
+  - `docs` ← document, project
+- `wmDataBus.on('*', ...)` 단일 listener — 현재 활성 탭(`curPage === 'project' && curMode === X`)이 의존하는 type 변경만 재렌더
+- **100ms 디바운스** — 한 흐름에서 발생하는 다중 emit을 1회 재렌더로 통합
+
+### UX 효과
+- 타임라인에서 마일스톤 추가 → 같은 세션에서 파이프라인 탭 진입 시 즉시 반영 (이전: 새로고침 필요)
+- 이슈관리에서 이슈 등록 → 수주대장의 이슈 배지 카운트 자동 갱신
+- 캘린더에서 일정 추가/삭제 → 파이프라인의 일정 표시 즉시 동기화
+
+### L2 검토 결과 (구현 안 함, 결정 보류)
+사용자 명시: "지금 컨셉 최대 유지로 확장 가능 검토".
+- 현재 `timeline.js` 가 이미 의존선·크리티컬패스·4단계줌·드래그이동·마일스톤마커 보유 → 라이브러리 도입은 사실상 재작성, 디자인 일관성 손상.
+- 점진 확장 우선순위 (별도 결정):
+  1. 오늘 라인 (S, 1~2h)
+  2. 진척률 오버레이 (M, 반나절) — `proj.progress` 이미 있음
+  3. 드래그 리사이즈 핸들 (L, 1~2일)
+  4. 확장 툴팁 (M, 반나절)
+  5. 계획 vs 실적 더블 막대 (L, 1일+, 데이터 모델 변경 필요)
+
+### 변경 파일
+- `업무일지_분석기.html` (인라인 wmDataBus + 활성 탭 listener), `project-data.js` (mutator emit), `CHANGELOG.md`
+
+---
+
 ## v13.39 (2026-05-08) — M1: 수주대장 → 이슈관리 크로스탭 필터 연동
 
 ### 배경
