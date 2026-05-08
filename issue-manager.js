@@ -14,6 +14,7 @@ var issueFilterType = '';
 var issueFilterStatus = '';
 var issueFilterUrgency = '';
 var issueFilterProject = '';
+var issueFilterOrderNo = ''; // v13.39: 수주대장 → 이슈관리 크로스탭 필터
 var issueSearchKw = '';
 var issueShowStats = false;
 
@@ -52,6 +53,7 @@ function renderIssues() {
       if (issueFilterStatus && iss.status !== issueFilterStatus) return false;
       if (issueFilterUrgency && iss.urgency !== issueFilterUrgency) return false;
       if (issueFilterProject && iss.projectId !== issueFilterProject) return false;
+      if (issueFilterOrderNo && iss.orderNo !== issueFilterOrderNo) return false;
       if (issueSearchKw) {
         var kw = issueSearchKw.toLowerCase();
         if ((iss.title || '').toLowerCase().indexOf(kw) < 0 &&
@@ -121,7 +123,12 @@ function renderIssues() {
     html += '</select>';
     // 키워드 검색
     html += '<input type="text" placeholder="🔍 검색..." value="' + eH(issueSearchKw) + '" oninput="issueSearchKw=this.value;renderIssues()" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3);width:120px">';
-    if (issueFilterPhase || issueFilterDept || issueFilterType || issueFilterStatus || issueFilterUrgency || issueFilterProject || issueSearchKw) {
+    // 수주번호 활성 필터 배지 (크로스탭 진입 시 표시)
+    if (issueFilterOrderNo) {
+      var safeOrd = String(issueFilterOrderNo).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      html += '<span style="font-size:10px;padding:3px 8px;border:1px solid var(--ac);border-radius:4px;background:var(--ac-bg);color:var(--ac-t);display:inline-flex;align-items:center;gap:4px" title="이 수주의 이슈만 표시 중">📋 수주 ' + eH(issueFilterOrderNo) + ' <span style="cursor:pointer;font-weight:700;padding:0 2px" onclick="issueFilterOrderNo=\'\';renderIssues()" title="필터 해제">✕</span></span>';
+    }
+    if (issueFilterPhase || issueFilterDept || issueFilterType || issueFilterStatus || issueFilterUrgency || issueFilterProject || issueFilterOrderNo || issueSearchKw) {
       html += '<button onclick="issueClearFilters()" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t5);cursor:pointer">✕ 초기화</button>';
     }
     html += '</div></div>';
@@ -310,6 +317,7 @@ function issueClearFilters() {
   issueFilterStatus = '';
   issueFilterUrgency = '';
   issueFilterProject = '';
+  issueFilterOrderNo = '';
   issueSearchKw = '';
   renderIssues();
 }

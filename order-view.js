@@ -173,13 +173,13 @@ function renderOrders() {
       html += '<td style="padding:8px 6px;color:var(--t4)">' + eH(o.delivery) + '</td>';
       html += '<td style="padding:8px 6px">' + phase + '</td>';
 
-      // 이슈 배지
+      // 이슈 배지 — 클릭 시 이슈관리 탭으로 이동 + 수주번호 필터 (v13.39)
       var issueCnt = openIssuesByOrder[o.orderNo] || 0;
       var safeOrderNo = (o.orderNo || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       if (issueCnt > 0) {
-        html += '<td style="padding:8px 6px;text-align:center"><span onclick="issueFilterProject=\'\';issueFilterStatus=\'\';issueSearchKw=\'\';(function(){issueGetAll&&issueGetAll().then(function(all){var matched=all.filter(function(i){return i.orderNo===\'' + safeOrderNo + '\'&&i.status!==\'resolved\'&&i.status!==\'closed\'});if(matched.length&&typeof showIssueDetail===\'function\')showIssueDetail(matched[0].id)})})();event.stopPropagation()" style="cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;background:#EF444422;color:#EF4444;font-weight:700;border:1px solid #EF444440" title="미해결 이슈 ' + issueCnt + '건 클릭하면 첫 번째 이슈 확인">' + issueCnt + '</span></td>';
+        html += '<td style="padding:8px 6px;text-align:center"><span onclick="event.stopPropagation();gotoIssuesForOrder(\'' + safeOrderNo + '\')" style="cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;background:#EF444422;color:#EF4444;font-weight:700;border:1px solid #EF444440" title="이슈관리 탭으로 이동 — 이 수주(' + eH(o.orderNo) + ')의 이슈 ' + issueCnt + '건">' + issueCnt + ' →</span></td>';
       } else {
-        html += '<td style="padding:8px 6px;text-align:center"><span style="font-size:10px;color:var(--t6)">-</span></td>';
+        html += '<td style="padding:8px 6px;text-align:center"><span onclick="event.stopPropagation();gotoIssuesForOrder(\'' + safeOrderNo + '\')" style="cursor:pointer;font-size:10px;color:var(--t6)" title="이슈관리 탭으로 이동 (필터: 이 수주)">-</span></td>';
       }
 
       html += '<td style="padding:8px 6px;white-space:nowrap">';
@@ -362,4 +362,39 @@ if (typeof eH === 'undefined') {
 }
 if (typeof guessPhase === 'undefined') {
   function guessPhase(p) { return p.currentPhase || (p.status === 'done' ? 'as' : p.status === 'waiting' ? 'order' : 'manufacture'); }
+}
+
+/* ═══ 크로스탭 이동: 수주대장 → 이슈관리 (v13.39 M1) ═══
+   이슈 배지 클릭 시 이슈관리 탭으로 전환 + 해당 수주(orderNo)로 필터 자동 적용 */
+function gotoIssuesForOrder(orderNo) {
+  if (!orderNo) return;
+  // 다른 이슈 필터는 초기화하여 결과가 0건이 되지 않도록
+  if (typeof issueClearFilters === 'function') {
+    issueClearFilters();
+  } else {
+    // 폴백: 직접 리셋
+    if (typeof issueFilterPhase !== 'undefined') issueFilterPhase = '';
+    if (typeof issueFilterDept !== 'undefined') issueFilterDept = '';
+    if (typeof issueFilterType !== 'undefined') issueFilterType = '';
+    if (typeof issueFilterStatus !== 'undefined') issueFilterStatus = '';
+    if (typeof issueFilterUrgency !== 'undefined') issueFilterUrgency = '';
+    if (typeof issueFilterProject !== 'undefined') issueFilterProject = '';
+    if (typeof issueSearchKw !== 'undefined') issueSearchKw = '';
+  }
+  // 수주번호 필터 적용
+  if (typeof issueFilterOrderNo !== 'undefined') {
+    issueFilterOrderNo = orderNo;
+  } else {
+    window.issueFilterOrderNo = orderNo;
+  }
+  // 탭 전환 — setPage('project') + setMode('issues')
+  try {
+    if (typeof setPage === 'function') setPage('project');
+    if (typeof setMode === 'function') setMode('issues');
+  } catch (e) { console.warn('[gotoIssuesForOrder] tab switch err:', e); }
+  // setMode('issues') 가 renderIssues 를 호출하지만, 필터 변경이 적용된 상태로 다시 렌더 보장
+  setTimeout(function () {
+    if (typeof renderIssues === 'function') renderIssues();
+  }, 50);
+  if (typeof showToast === 'function') showToast('수주 ' + orderNo + ' 이슈만 표시 중', 'info');
 }

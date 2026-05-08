@@ -343,7 +343,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.38</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.39</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2725,6 +2725,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.39',date:'2026-05-08',title:'M1 — 수주대장 이슈 배지 클릭 → 이슈관리 탭 + 자동 필터',tag:'feature',items:[
+      '수주대장에서 이슈 카운트 배지 클릭 시 단일 이슈 모달이 뜨던 동작을 → 이슈관리 탭으로 이동 + 해당 수주번호로 필터 자동 적용으로 변경 (크로스탭 도약 단절 해결)',
+      'issue-manager.js에 issueFilterOrderNo 변수 + 필터 로직 추가, 활성 시 필터 바에 "📋 수주 [번호] ✕" 배지 표시',
+      'issueClearFilters에 orderNo 리셋 추가, 초기화 버튼 노출 조건에도 포함',
+      '이슈가 0건인 수주의 "-" 표시도 클릭 가능하게 — 빈 결과 화면으로 진입해 새 이슈 등록 가능',
+      'gotoIssuesForOrder(orderNo) 함수 신설 — 다른 이슈 필터 자동 초기화 + 탭 전환 + renderIssues + 토스트 안내'
+    ]},
     {ver:'13.38',date:'2026-05-08',title:'이슈 상태 변경 500 수정 + Quick Wins 7건',tag:'fix',items:[
       '🔴 이슈 상태 변경 500 에러 수정 — issues 테이블에 updated_at 컬럼이 없어 optimistic-lock의 SET updated_at=now() 가 실패. server/migrations/015 로 issues/events/orders/milestones/checklists에 updated_at 컬럼 추가',
       'Q1 달력 +N건 더보기 버튼 동작 — toggle 대상이 잘못된 부모(.cal-bars-limited)에 적용되던 것을 .cal-bars로 수정',

@@ -1,5 +1,32 @@
 # Work Manager — 변경 이력
 
+## v13.39 (2026-05-08) — M1: 수주대장 → 이슈관리 크로스탭 필터 연동
+
+### 배경
+검토에서 식별된 M1 이슈: "수주 이슈 배지 클릭 후 필터 상태 불일치 — 수주번호별 이슈 클릭해도 이슈탭 필터 미적용" (`order-view.js:162-164`).
+
+이전 동작은 단일 매칭 이슈 모달만 띄우고, 사용자가 그 수주의 다른 이슈를 보려면 이슈관리 탭으로 이동 후 수동으로 필터해야 했음 — 크로스탭 동선 끊김.
+
+### 변경
+- **`issue-manager.js`**:
+  - `issueFilterOrderNo` 변수 신설 (line 18)
+  - 필터 로직 (`renderIssues` 의 filter 콜백)에 `if (issueFilterOrderNo && iss.orderNo !== issueFilterOrderNo) return false;` 추가
+  - 필터 바에 활성 orderNo 배지 + 해제(✕) 버튼 표시 (`📋 수주 [번호]`)
+  - `issueClearFilters` 에 `issueFilterOrderNo = ''` 추가, 초기화 버튼 노출 조건에도 포함
+- **`order-view.js`**:
+  - 이슈 배지 onclick 을 인라인 코드 → `gotoIssuesForOrder(orderNo)` 함수로 단순화
+  - **`gotoIssuesForOrder(orderNo)`** 신규: (1) `issueClearFilters` 호출로 다른 필터 초기화 (빈 결과 방지) (2) `issueFilterOrderNo = orderNo` (3) `setPage('project')` + `setMode('issues')` 로 탭 전환 (4) `renderIssues()` 재호출 (5) 토스트 안내
+  - 이슈 0건인 수주의 "-" 표시도 클릭 가능 — 사용자가 새 이슈 등록 흐름으로 진입 가능
+
+### UX 효과
+- 수주대장에서 이슈 카운트 클릭 → 즉시 이슈관리 탭에서 그 수주의 모든 이슈를 컨텍스트 유지한 채 확인. 단일 모달 → 다중 이슈 목록으로 시야 확장.
+- 활성 필터가 명시적으로 표시돼 사용자가 "지금 무엇을 보고 있는지" 즉시 파악 가능. ✕ 클릭 한 번으로 전체 이슈로 복귀.
+
+### 변경 파일
+- `issue-manager.js`, `order-view.js`, `업무일지_분석기.html` (헤더 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.38 (2026-05-08) — 이슈 상태 변경 500 수정 + Quick Wins 7건
 
 ### 1. 🔴 이슈 상태 변경 500 에러 수정 (사용자 보고 핵심)
