@@ -218,6 +218,29 @@ async function renderTimeline() {
         '<span style="overflow:hidden;text-overflow:ellipsis">' + eH(_label) + '</span>' +
       '</div>';
     }
+    // 라이프사이클 5행 — v13.45: 6단계 미니 step-icon (수주/설계/제작/검수/납품/A/S)
+    var fifthLine = '';
+    if (typeof PROJ_PHASE !== 'undefined') {
+      var _phaseKeys = Object.keys(PROJ_PHASE).sort(function(a,b){
+        return (PROJ_PHASE[a].seq || 0) - (PROJ_PHASE[b].seq || 0);
+      });
+      var _curPhase = p.currentPhase || _phaseKeys[0];
+      var _curIdx = _phaseKeys.indexOf(_curPhase);
+      var _curLabel = (PROJ_PHASE[_curPhase] && PROJ_PHASE[_curPhase].label) || _curPhase;
+      var _stepIcons = _phaseKeys.map(function (pk, idx) {
+        var ph = PROJ_PHASE[pk];
+        var phStatus = (p.phases && p.phases[pk] && p.phases[pk].status) || '';
+        var isCurrent = pk === _curPhase;
+        var isDone = phStatus === 'done' || (idx < _curIdx);
+        var bg, fg, brd;
+        if (isCurrent)   { bg = ph.color + '33'; fg = ph.color; brd = '1.5px solid ' + ph.color; }
+        else if (isDone) { bg = ph.color;        fg = '#fff';   brd = '1px solid ' + ph.color; }
+        else             { bg = 'transparent';   fg = 'var(--t6)'; brd = '1px solid var(--bd)'; }
+        return '<span title="' + ph.label + (isCurrent ? ' (현재)' : isDone ? ' (완료)' : '') + '" '
+          + 'style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;font-size:8px;line-height:1;background:' + bg + ';color:' + fg + ';border:' + brd + ';box-sizing:border-box;flex-shrink:0">' + ph.icon + '</span>';
+      }).join('');
+      fifthLine = '<div style="display:flex;align-items:center;gap:3px;margin-top:3px;font-size:9px;color:var(--t5);white-space:nowrap" title="라이프사이클 — 현재: ' + _curLabel + '">' + _stepIcons + '</div>';
+    }
     rowsHtml += '<div class="tl-label" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px" onclick="showProjectDetail(\'' + p.id + '\')">' +
       '<div style="display:flex;align-items:center;gap:6px">' +
         '<span class="dot" style="background:' + p.color + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
@@ -229,6 +252,7 @@ async function renderTimeline() {
       '</div>' +
       thirdLine +
       fourthLine +
+      fifthLine +
     '</div>';
 
     // 바 영역
@@ -504,6 +528,12 @@ function calcLabelWidth(projects, milestones) {
       var lbl = sl.length <= 3 ? sl.join(', ') : (sl.slice(0,2).join(', ') + ' 외 ' + (sl.length-2) + '명');
       var aw = measureTextCached(ctx, '👤 ' + lbl) + 24;
       if (aw > maxW) maxW = aw;
+    }
+    // v13.45: 라이프사이클 step-icon 행 — 6 × 15px + gap(3px×5) + padding(24)
+    if (typeof PROJ_PHASE !== 'undefined') {
+      var stepCount = Object.keys(PROJ_PHASE).length;
+      var lcW = stepCount * 15 + (stepCount - 1) * 3 + 24;
+      if (lcW > maxW) maxW = lcW;
     }
   });
 

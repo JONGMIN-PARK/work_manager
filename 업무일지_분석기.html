@@ -414,7 +414,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.44</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.45</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2796,6 +2796,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.45',date:'2026-05-08',title:'타임라인 라벨 — 라이프사이클 6단계 미니 step-icon',tag:'feature',items:[
+      '타임라인 좌측 라벨 5행에 라이프사이클(수주/설계/제작/검수/납품/A/S) 6개 미니 step-icon 진행바 추가',
+      '완료 단계: 솔리드 컬러 + 흰 아이콘 / 현재 단계: 외곽선 강조 + 컬러 배경 / 미진행: 옅은 외곽선만',
+      'PROJ_PHASE의 seq 순서대로 정렬, p.phases[k].status==="done" + currentPhase 인덱스 보다 앞이면 완료로 간주',
+      '각 아이콘에 title hover로 단계명 + (현재)/(완료) 표시, 행 자체에도 "라이프사이클 — 현재: X" 툴팁',
+      'calcLabelWidth에 step-icon 폭 반영 (6×15 + gap 3×5 + padding = 약 117px)'
+    ]},
     {ver:'13.44',date:'2026-05-08',title:'타임라인 라벨 — 담당자 4행 추가',tag:'feature',items:[
       '타임라인 좌측 라벨 4행에 👤 담당자 표시 — 1~3명은 풀 이름, 4명 이상은 "홍길동, 김철수 외 N명" 콤팩트',
       'shortName 함수로 표시명 압축 (정의돼 있으면 사용)',
