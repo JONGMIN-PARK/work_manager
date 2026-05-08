@@ -414,7 +414,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.43</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.44</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2796,6 +2796,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.44',date:'2026-05-08',title:'타임라인 라벨 — 담당자 4행 추가',tag:'feature',items:[
+      '타임라인 좌측 라벨 4행에 👤 담당자 표시 — 1~3명은 풀 이름, 4명 이상은 "홍길동, 김철수 외 N명" 콤팩트',
+      'shortName 함수로 표시명 압축 (정의돼 있으면 사용)',
+      'title hover 시 전체 담당자 명단 표시',
+      'calcLabelWidth에 담당자 행 폭 반영 — 잘림 방지'
+    ]},
     {ver:'13.43',date:'2026-05-08',title:'타임라인 라벨 — 프로젝트 기간 + D-Day 표시',tag:'feature',items:[
       '타임라인 좌측 라벨에 진행상태/진척률 외에 셋째 줄로 기간(예: 5/8 ~ 8/15) + D-Day 표시',
       '같은 해는 월/일만, 다른 해는 \'YY.M/D 형식으로 자동 콤팩트',

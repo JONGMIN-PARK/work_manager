@@ -191,7 +191,7 @@ async function renderTimeline() {
     var barStyle = getBarStyle(p.startDate, p.endDate, rangeStart, units);
 
     rowsHtml += '<div class="tl-row" data-proj-id="' + p.id + '">';
-    // 레이블 — v13.43: 셋째 줄에 기간 + D-Day 추가
+    // 레이블 — v13.43: 기간+D-Day, v13.44: 담당자
     var _period = _tlFmtPeriod(p);
     var _dday = _tlFmtDday(p, st);
     var thirdLine = '';
@@ -199,6 +199,23 @@ async function renderTimeline() {
       thirdLine = '<div style="display:flex;align-items:center;gap:6px;margin-top:1px;font-size:9px;color:var(--t5);white-space:nowrap">' +
         (_period ? '<span title="시작일 ~ 종료일">' + _period + '</span>' : '') +
         (_dday ? '<span style="color:' + _dday.color + ';font-weight:600">' + _dday.label + '</span>' : '') +
+      '</div>';
+    }
+    // 담당자 4행 — 1~3명은 풀 표시, 4명 이상은 "이름 외 N명" + title hover
+    var fourthLine = '';
+    var _assignees = (p.assignees || []).filter(Boolean);
+    if (_assignees.length > 0) {
+      var _shortFn = (typeof shortName === 'function') ? shortName : function(n){return n;};
+      var _shortList = _assignees.map(_shortFn);
+      var _label, _full = _assignees.join(', ');
+      if (_shortList.length <= 3) {
+        _label = _shortList.join(', ');
+      } else {
+        _label = _shortList.slice(0, 2).join(', ') + ' 외 ' + (_shortList.length - 2) + '명';
+      }
+      fourthLine = '<div style="display:flex;align-items:center;gap:4px;margin-top:1px;font-size:9px;color:var(--t4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + eH(_full) + '">' +
+        '<span style="opacity:.7">👤</span>' +
+        '<span style="overflow:hidden;text-overflow:ellipsis">' + eH(_label) + '</span>' +
       '</div>';
     }
     rowsHtml += '<div class="tl-label" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px" onclick="showProjectDetail(\'' + p.id + '\')">' +
@@ -211,6 +228,7 @@ async function renderTimeline() {
         (p.progress ? '<span style="font-size:9px;color:var(--t5)">' + p.progress + '%</span>' : '') +
       '</div>' +
       thirdLine +
+      fourthLine +
     '</div>';
 
     // 바 영역
@@ -467,7 +485,9 @@ function calcLabelWidth(projects, milestones) {
     if (w > maxW) maxW = w;
   });
   // v13.43: 셋째 줄 — 기간 + D-Day 폭도 반영해 라벨 폭이 너무 좁아 잘리지 않도록
+  // v13.44: 넷째 줄 — 담당자 표시 (이름 외 N명 형태) 폭도 반영
   ctx.font = '400 9px "Noto Sans KR", sans-serif';
+  var _shortFn2 = (typeof shortName === 'function') ? shortName : function(n){return n;};
   projects.forEach(function (p) {
     var st = autoProjectStatus(p);
     var period = _tlFmtPeriod(p);
@@ -476,6 +496,14 @@ function calcLabelWidth(projects, milestones) {
     if (combined) {
       var w = measureTextCached(ctx, combined) + 24;
       if (w > maxW) maxW = w;
+    }
+    // 담당자 행 폭
+    var asg = (p.assignees || []).filter(Boolean);
+    if (asg.length > 0) {
+      var sl = asg.map(_shortFn2);
+      var lbl = sl.length <= 3 ? sl.join(', ') : (sl.slice(0,2).join(', ') + ' 외 ' + (sl.length-2) + '명');
+      var aw = measureTextCached(ctx, '👤 ' + lbl) + 24;
+      if (aw > maxW) maxW = aw;
     }
   });
 
