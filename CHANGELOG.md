@@ -1,5 +1,29 @@
 # Work Manager — 변경 이력
 
+## v13.36 (2026-05-08) — 수주대장: 조회는 전체 공개, 수정은 관리 직급만
+
+### 배경
+사용자 명시 정책: "프로젝트 관리에서 수주대장은 공유되고 있는거 맞지? 누구나 볼 수 있어야 하고, 수정은 관리자와 허락된 인원만 가능해야 함."
+
+v13.34에서 다른 프로젝트 데이터(milestones·issues·documents 등)와 함께 orders도 가시성 필터(`created_by=me OR order_no IN accessible projects`)를 적용했으나, 수주대장은 사내 공통 자산 성격이 강해 누구나 조회 가능해야 한다는 사용자 정책에 따라 환원.
+
+### 변경 (서버)
+- **`server/routes/orders.js` GET /**: 가시성 서브쿼리 제거. 단순히 `WHERE tenant_id = $1`로 환원 — tenant 전체 공개. `project-scope` import도 제거 (더 이상 필요 없음).
+- **`server/middleware/rbac.js`** `order.edit`: `allowed = true` → `allowed = role === 'manager' || role === 'executive'`. admin은 이미 상위에서 통과하므로 결과적으로 admin/manager/executive만 수정 가능. POST·PUT·DELETE·POST /bulk 모두 동일 RBAC 적용.
+
+### 영향
+- 일반 사용자(member): 조회만 가능. 수정 시 403 응답.
+- admin/manager/executive: 기존과 동일하게 모든 CRUD 가능.
+- 수주대장 행 자체는 변경 없음 — 정책만 환원.
+
+### 후속 작업 (TODO)
+- "허락된 인원"의 세밀한 권한 부여(특정 member에게 명시적 권한 grant)는 별도 UI/스토리지(예: `order_editors` 테이블)가 필요. 본 패치에는 미포함. 필요 시 분리하여 작업.
+
+### 변경 파일
+- `server/routes/orders.js`, `server/middleware/rbac.js`, `업무일지_분석기.html` (헤더 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.35 (2026-05-08) — 프로젝트 메모 인라인 이미지 + 문서관리 빈 상태 처리
 
 ### 1. 프로젝트 메모 인라인 이미지 (요청 기반 신규 기능)

@@ -95,9 +95,10 @@ function checkPermission(action, getResourceId) {
         allowed = role === 'manager';
         break;
 
-      // 수주
+      // 수주 (v13.36~ 정책: 조회는 누구나, 수정은 관리 직급만)
+      // — admin은 위에서 이미 통과. manager/executive 추가 허용.
       case 'order.edit':
-        allowed = true; // 모든 인증 사용자 허용
+        allowed = role === 'manager' || role === 'executive';
         break;
 
       // 이벤트

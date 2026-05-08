@@ -343,7 +343,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.35</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.36</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2725,6 +2725,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.36',date:'2026-05-08',title:'수주대장 — 조회는 전체 공개, 수정은 관리 직급만',tag:'fix',items:[
+      'GET /api/orders 가시성 필터 제거 — tenant 전체 공개로 환원. 누구나 수주대장 조회 가능 (사용자 명시 정책: "누구나 볼 수 있어야 하고")',
+      'RBAC order.edit: 모든 인증 사용자 허용 → admin / manager / executive 만 허용. POST·PUT·DELETE·POST /bulk 모두 적용',
+      'v13.34에서 잠시 좁혔던 수주 가시성(created_by 본인 + 접근 가능 프로젝트의 order_no)을 정책 정렬 위해 되돌림',
+      '향후 "허락된 인원" 세분화(특정 사용자 화이트리스트)는 후속 작업으로 분리'
+    ]},
     {ver:'13.35',date:'2026-05-08',title:'프로젝트 메모 인라인 이미지 + 문서관리 빈 상태 처리',tag:'feature',items:[
       '프로젝트 등록/편집 모달의 메모 영역에 인라인 이미지 삽입 — 🖼 이미지 추가 버튼 + 클립보드 붙여넣기 + 드래그 드롭 모두 지원 (base64 임베드, 5MB 제한 권장)',
       '메모 에디터를 textarea → contenteditable div로 업그레이드 — 줄바꿈/이미지 보존',
