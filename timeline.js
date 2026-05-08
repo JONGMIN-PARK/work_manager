@@ -191,7 +191,16 @@ async function renderTimeline() {
     var barStyle = getBarStyle(p.startDate, p.endDate, rangeStart, units);
 
     rowsHtml += '<div class="tl-row" data-proj-id="' + p.id + '">';
-    // 레이블
+    // 레이블 — v13.43: 셋째 줄에 기간 + D-Day 추가
+    var _period = _tlFmtPeriod(p);
+    var _dday = _tlFmtDday(p, st);
+    var thirdLine = '';
+    if (_period || _dday) {
+      thirdLine = '<div style="display:flex;align-items:center;gap:6px;margin-top:1px;font-size:9px;color:var(--t5);white-space:nowrap">' +
+        (_period ? '<span title="시작일 ~ 종료일">' + _period + '</span>' : '') +
+        (_dday ? '<span style="color:' + _dday.color + ';font-weight:600">' + _dday.label + '</span>' : '') +
+      '</div>';
+    }
     rowsHtml += '<div class="tl-label" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px" onclick="showProjectDetail(\'' + p.id + '\')">' +
       '<div style="display:flex;align-items:center;gap:6px">' +
         '<span class="dot" style="background:' + p.color + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
@@ -201,6 +210,7 @@ async function renderTimeline() {
         '<span class="badge" style="background:' + PROJ_STATUS[st].bg + ';color:' + PROJ_STATUS[st].color + '">' + PROJ_STATUS[st].icon + ' ' + PROJ_STATUS[st].label + '</span>' +
         (p.progress ? '<span style="font-size:9px;color:var(--t5)">' + p.progress + '%</span>' : '') +
       '</div>' +
+      thirdLine +
     '</div>';
 
     // 바 영역
@@ -396,6 +406,41 @@ function measureTextCached(ctx, text){
   _measureCache[key]=w;
   return w;
 }
+/* ═══ 라벨 셋째 줄용 — 기간/D-Day 포맷 헬퍼 (v13.43) ═══ */
+function _tlFmtPeriod(p) {
+  var s = p.startDate || '', e = p.endDate || '';
+  if (!s && !e) return '';
+  function md(d) {
+    if (!d || d.length < 10) return d || '';
+    return parseInt(d.slice(5,7),10) + '/' + parseInt(d.slice(8,10),10);
+  }
+  var thisYr = String(new Date().getFullYear()).slice(2);
+  var sy = s ? s.slice(2,4) : '', ey = e ? e.slice(2,4) : '';
+  var sameYear = (s && e) ? sy === ey : true;
+  function fmtOne(d, y) {
+    if (!d) return '';
+    if (sameYear && (y === thisYr || y === ey)) return md(d);
+    return "'" + y + '.' + md(d);
+  }
+  var sf = fmtOne(s, sy), ef = fmtOne(e, ey);
+  if (s && e) return sf + ' ~ ' + ef;
+  if (s) return sf + ' ~';
+  return '~ ' + ef;
+}
+function _tlFmtDday(p, st) {
+  if (!p.endDate || p.endDate.length < 10) return null;
+  if (st === 'done' || st === 'closed') return null;
+  var t = new Date(); t.setHours(0,0,0,0);
+  var ed = new Date(p.endDate); if (isNaN(ed.getTime())) return null;
+  var diff = Math.round((ed - t) / 86400000);
+  var label, color;
+  if (diff > 7) { label = 'D-' + diff; color = 'var(--t5)'; }
+  else if (diff > 0) { label = 'D-' + diff; color = '#F59E0B'; }
+  else if (diff === 0) { label = 'D-Day'; color = '#F59E0B'; }
+  else { label = 'D+' + Math.abs(diff); color = '#EF4444'; }
+  return { label: label, color: color };
+}
+
 function calcLabelWidth(projects, milestones) {
   // 숨겨진 캔버스로 텍스트 폭 측정
   var canvas = document.createElement('canvas');
@@ -420,6 +465,18 @@ function calcLabelWidth(projects, milestones) {
     var progW = p.progress ? measureTextCached(ctx, p.progress + '%') + 8 : 0;
     var w = badgeW + progW + 24; // padding
     if (w > maxW) maxW = w;
+  });
+  // v13.43: 셋째 줄 — 기간 + D-Day 폭도 반영해 라벨 폭이 너무 좁아 잘리지 않도록
+  ctx.font = '400 9px "Noto Sans KR", sans-serif';
+  projects.forEach(function (p) {
+    var st = autoProjectStatus(p);
+    var period = _tlFmtPeriod(p);
+    var dd = _tlFmtDday(p, st);
+    var combined = period + (dd ? '  ' + dd.label : '');
+    if (combined) {
+      var w = measureTextCached(ctx, combined) + 24;
+      if (w > maxW) maxW = w;
+    }
   });
 
   // 마일스톤: indent(24) + "└ " + 이름 + gap(4) + 뱃지 + padding(12)

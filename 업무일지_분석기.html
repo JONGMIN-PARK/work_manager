@@ -414,7 +414,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.42</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.43</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2796,6 +2796,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.43',date:'2026-05-08',title:'타임라인 라벨 — 프로젝트 기간 + D-Day 표시',tag:'feature',items:[
+      '타임라인 좌측 라벨에 진행상태/진척률 외에 셋째 줄로 기간(예: 5/8 ~ 8/15) + D-Day 표시',
+      '같은 해는 월/일만, 다른 해는 \'YY.M/D 형식으로 자동 콤팩트',
+      'D-Day 색상: 8일 이상은 회색, 7일 이내 주황(F59E0B), D-Day/지연(D+N)은 빨강(EF4444). 완료/종결 상태는 표시 생략',
+      'calcLabelWidth에 셋째 줄 폭도 반영 — 라벨이 좁아 잘리지 않게 자동 확장 (최대 400px)'
+    ]},
     {ver:'13.42',date:'2026-05-08',title:'패치노트 항목이 일부만 표시되던 버그 수정',tag:'fix',items:[
       'v13.41 항목 텍스트에 literal &lt;style&gt; 가 포함돼 el.innerHTML 주입 시 브라우저가 실제 &lt;style&gt; 태그로 해석 — 후속 패치 카드들이 stylesheet 내용으로 빨려 들어가 안 보이던 문제',
       '즉시: 해당 항목의 <→&lt;, >→&gt; entity로 교체',
