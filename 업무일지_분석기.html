@@ -417,7 +417,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.48</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.49</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2807,6 +2807,19 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.49',date:'2026-05-13',title:'🛠️ A/S — Phase 2 (부품·첨부·서명·CSAT·엑셀보고서·칸반·텔레그램)',tag:'feature',items:[
+      'PRD §13 Phase 2 핵심 6종 일괄 도입. v1(접수만)→v2(할당+처리)→v3에서 6단계 흐름 전 단계 풀구현. 시연 시나리오: 접수→할당→처리이력+부품+첨부→RCA→고객 서명+CSAT→엑셀 6시트 다운로드 + 텔레그램 알림',
+      'DB 마이그레이션 3건: 023_as_parts.sql(amount=qty*unit_price GENERATED 컬럼) · 024_as_attachments.sql · 025_as_signatures.sql(role UNIQUE로 UPSERT)',
+      '백엔드 nested CRUD 확장: /:id/parts GET·POST·PUT·DELETE · /:id/attachments GET·POST·DELETE · /:id/signatures GET·POST(UPSERT)·DELETE. GET 단건 ?expand=1 에 parts/attachments/signatures 자동 동봉',
+      '③처리 탭 확장 — 부서별 소요시간 카드 + 사용 부품/소모품 표(품목·수량·단가·금액·청구구분·교체 S/N) + 청구구분별 자동 집계(보증/유상/Goodwill 합계) + 첨부 그리드(사진 before/after/로그/측정데이터 카테고리). 로컬 이미지 4MB 이하면 FileReader로 data URL 자동 변환',
+      '⑤고객확인 탭 신설 — 캔버스 서명(터치+마우스 양쪽 지원, devicePixelRatio 보정으로 고해상도) 2개(현장 담당자·엔지니어) + CSAT 라디오 3종(응답속도·처리품질·전반만족도) + 고객 코멘트. 빈 캔버스 검증(픽셀 sampling). 기존 서명은 이미지 미리보기 + 다시그리기/이름만 갱신 분기',
+      '⑥보고서 탭 신설 — 발행 전 점검 체크리스트(접수/할당/처리/보고/고객서명 5단계 충족 여부) + SheetJS로 엑셀 6시트(표지요약·접수상세·처리이력·부품·최종결과·코드표) 클라이언트 자동 생성. 인쇄 미리보기는 새 창에 HTML 렌더 + window.print()',
+      'config.js: AS_BILLING(보증/유상/Goodwill/확인 4종) · AS_ATTACH_CATEGORY(6종) · AS_SIGN_ROLE(5종, isCustomer 플래그) · AS_CSAT(6종, score 1~5) enum 추가',
+      'project-data.js: asPartGetAll/Put/Del · asAttachmentGetAll/Put/Del · asSignaturePut(UPSERT)/Del. 각각 wmDataBus emit',
+      '🗂️ 칸반 보드 — 보기 모드에 추가(📋전체/🎯내큐/🗂️칸반 3종 토글). 6컬럼(접수→할당→처리→보고→고객확인→완료) HTML5 드래그앤드롭으로 카드 이동 시 자동 status PUT. approved는 customer_wait 컬럼에 합쳐 표시',
+      '텔레그램 알림: as_received(P1/P2 신규접수 → admin) · as_assigned(할당 → 담당자) 즉시 발사. as_sla_breach·as_customer_wait·as_report_issued 템플릿/타이틀 등록 (스케줄러 트리거는 다음 세션)',
+      '서명 시 status 자동 보조 전이 — customer_field 서명 INSERT 시 ticket.status가 reporting/approved이면 customer_wait로'
+    ]},
     {ver:'13.48',date:'2026-05-13',title:'🛠️ A/S — Phase 1 완료 (할당·처리이력·내 큐·이슈연계)',tag:'feature',items:[
       'PRD §13 Phase 1 잔여 전체 완수. 접수만 가능했던 v1에서 → ①접수 ②할당 ③처리 ④보고 6단계 흐름 풀구현 (⑤고객확인·⑥보고서는 Phase 2~3 placeholder). PPT 4-step + 엑셀 6시트 흐름을 한 화면에서 추적',
       'DB: 019_as_assignments.sql (부서×역할 unique, duration_h 컬럼) · 020_as_activity_logs.sql (활동로그 + assignment duration_h 자동 집계 트리거) · 021_as_tickets_linked_issue.sql · 022_as_tickets_closure.sql (rca/prevention/final_equip_status/monitoring/closure/closed_at/promised_*) — 총 4건',

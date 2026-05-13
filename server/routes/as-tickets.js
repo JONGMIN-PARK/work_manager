@@ -6,6 +6,7 @@ var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var tenant = require('../middleware/tenant');
+var notificationService = require('../services/notification.service');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -77,14 +78,23 @@ router.get('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     var data = r.rows[0];
     if (req.query.expand === '1' || req.query.expand === 'true') {
-      var [a, l] = await Promise.all([
+      var [a, l, p, att, sig] = await Promise.all([
         db.query('SELECT * FROM as_assignments WHERE ticket_id = $1 AND tenant_id = $2 ORDER BY role ASC, created_at ASC',
           [req.params.id, req.tenant.id]),
         db.query('SELECT * FROM as_activity_logs WHERE ticket_id = $1 AND tenant_id = $2 ORDER BY worked_at ASC, seq ASC',
+          [req.params.id, req.tenant.id]),
+        db.query('SELECT * FROM as_parts WHERE ticket_id = $1 AND tenant_id = $2 ORDER BY used_at ASC, created_at ASC',
+          [req.params.id, req.tenant.id]),
+        db.query('SELECT * FROM as_attachments WHERE ticket_id = $1 AND tenant_id = $2 ORDER BY uploaded_at DESC',
+          [req.params.id, req.tenant.id]),
+        db.query('SELECT * FROM as_signatures WHERE ticket_id = $1 AND tenant_id = $2 ORDER BY role ASC',
           [req.params.id, req.tenant.id])
       ]);
       data.assignments = a.rows;
       data.activityLogs = l.rows;
+      data.parts = p.rows;
+      data.attachments = att.rows;
+      data.signatures = sig.rows;
     }
     res.json({ data: data });
   } catch (e) {
@@ -147,6 +157,27 @@ router.post('/', async function (req, res) {
       ]
     );
     res.status(201).json({ data: r.rows[0] });
+
+    // 텔레그램: P1/P2 신규 접수 알림 — 관리자에게 (비동기, 실패 시 무시)
+    var created = r.rows[0];
+    if (created.priority === 'P1' || created.priority === 'P2') {
+      (async function () {
+        try {
+          var admR = await db.query("SELECT id FROM users WHERE role = 'admin' AND status = 'active' AND tenant_id = $1", [req.tenant.id]);
+          var targets = admR.rows.map(function (u) { return u.id; });
+          if (targets.length) {
+            notificationService.notify('as_received', {
+              ticketNo: created.ticket_no,
+              priority: created.priority,
+              customerName: created.customer_name,
+              equipmentModel: created.equipment_model,
+              category: created.category,
+              summary: created.issue_summary
+            }, targets).catch(function (e) { console.error('[as/noti]', e.message); });
+          }
+        } catch (e) { /* 무시 */ }
+      })();
+    }
   } catch (e) {
     console.error('[as-tickets/create]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -257,6 +288,22 @@ router.post('/:id/assignments', async function (req, res) {
     );
 
     res.status(201).json({ data: r.rows[0] });
+
+    // 텔레그램: 담당자에게 할당 알림
+    var asg = r.rows[0];
+    if (asg.assignee_id) {
+      (async function () {
+        try {
+          var tR = await db.query('SELECT ticket_no, priority, customer_name FROM as_tickets WHERE id = $1', [req.params.id]);
+          var t = tR.rows[0] || {};
+          notificationService.notify('as_assigned', {
+            ticketNo: t.ticket_no, priority: t.priority, customerName: t.customer_name,
+            assignee: asg.assignee_name || '-', dept: asg.dept,
+            promisedAt: asg.promised_at ? new Date(asg.promised_at).toISOString().replace('T', ' ').slice(0, 16) : null
+          }, [asg.assignee_id]).catch(function (e) { console.error('[as/noti]', e.message); });
+        } catch (e) { /* 무시 */ }
+      })();
+    }
   } catch (e) {
     if (e && e.code === '23505') {
       return res.status(409).json({ error: 'DUPLICATE', message: '이 부서는 이미 주관으로 등록되어 있습니다.' });
@@ -542,6 +589,237 @@ router.post('/:id/link-issue', async function (req, res) {
     res.json({ data: freshR.rows[0], issueId: issueId });
   } catch (e) {
     console.error('[as/link-issue]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// ── 사용 부품 (as_parts) ──
+// ────────────────────────────────────────────────────────────
+
+router.get('/:id/parts', async function (req, res) {
+  try {
+    var r = await db.query(
+      'SELECT * FROM as_parts WHERE ticket_id = $1 AND tenant_id = $2 ORDER BY used_at ASC, created_at ASC',
+      [req.params.id, req.tenant.id]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[as-parts/list]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+router.post('/:id/parts', async function (req, res) {
+  try {
+    var b = req.body || {};
+    if (!b.itemName && !b.item_name) return res.status(400).json({ error: 'VALIDATION', message: '품목명을 입력하세요.' });
+
+    var id = b.id || ('asp-' + require('crypto').randomUUID().slice(0, 12));
+    var r = await db.query(
+      'INSERT INTO as_parts ' +
+      '(id, ticket_id, tenant_id, used_at, item_name, part_no, qty, unit_price, ' +
+      ' replaced_sn, warranty, billing, note, created_by) ' +
+      'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *',
+      [id, req.params.id, req.tenant.id,
+       b.usedAt || b.used_at || null,
+       b.itemName || b.item_name,
+       b.partNo || b.part_no || null,
+       b.qty != null ? b.qty : 1,
+       b.unitPrice != null ? b.unitPrice : (b.unit_price != null ? b.unit_price : 0),
+       b.replacedSn || b.replaced_sn || null,
+       b.warranty != null ? !!b.warranty : null,
+       b.billing || 'warranty',
+       b.note || null,
+       req.user.sub]
+    );
+    res.status(201).json({ data: r.rows[0] });
+  } catch (e) {
+    console.error('[as-parts/create]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+router.put('/:id/parts/:pid', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var map = {
+      usedAt: 'used_at', used_at: 'used_at',
+      itemName: 'item_name', item_name: 'item_name',
+      partNo: 'part_no', part_no: 'part_no',
+      qty: 'qty',
+      unitPrice: 'unit_price', unit_price: 'unit_price',
+      replacedSn: 'replaced_sn', replaced_sn: 'replaced_sn',
+      warranty: 'warranty', billing: 'billing', note: 'note'
+    };
+    var fields = []; var params = []; var idx = 1;
+    Object.keys(map).forEach(function (k) {
+      if (b[k] === undefined) return;
+      var col = map[k];
+      if (fields.some(function (f) { return f.indexOf(col + ' =') === 0; })) return;
+      fields.push(col + ' = $' + idx++);
+      params.push(b[k]);
+    });
+    if (!fields.length) return res.status(400).json({ error: 'VALIDATION', message: '변경할 필드가 없습니다.' });
+    params.push(req.params.pid, req.params.id, req.tenant.id);
+    var sql = 'UPDATE as_parts SET ' + fields.join(', ') +
+      ' WHERE id = $' + idx++ + ' AND ticket_id = $' + idx++ + ' AND tenant_id = $' + idx++ + ' RETURNING *';
+    var r = await db.query(sql, params);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.json({ data: r.rows[0] });
+  } catch (e) {
+    console.error('[as-parts/update]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+router.delete('/:id/parts/:pid', async function (req, res) {
+  try {
+    var r = await db.query(
+      'DELETE FROM as_parts WHERE id = $1 AND ticket_id = $2 AND tenant_id = $3 RETURNING id',
+      [req.params.pid, req.params.id, req.tenant.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.json({ message: '삭제 완료' });
+  } catch (e) {
+    console.error('[as-parts/delete]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// ── 첨부 (as_attachments) ──
+// ────────────────────────────────────────────────────────────
+
+router.get('/:id/attachments', async function (req, res) {
+  try {
+    var r = await db.query(
+      'SELECT * FROM as_attachments WHERE ticket_id = $1 AND tenant_id = $2 ORDER BY uploaded_at DESC',
+      [req.params.id, req.tenant.id]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[as-attachments/list]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST — 메타데이터 등록. file_url은 외부 URL 또는 data URL 가정 (v1)
+router.post('/:id/attachments', async function (req, res) {
+  try {
+    var b = req.body || {};
+    if (!b.fileName && !b.file_name) return res.status(400).json({ error: 'VALIDATION', message: '파일 이름 필수' });
+    if (!b.fileUrl && !b.file_url) return res.status(400).json({ error: 'VALIDATION', message: '파일 URL 필수' });
+
+    var id = b.id || ('asa-' + require('crypto').randomUUID().slice(0, 12));
+    var r = await db.query(
+      'INSERT INTO as_attachments ' +
+      '(id, ticket_id, tenant_id, category, file_name, file_url, file_size, mime_type, note, uploaded_by) ' +
+      'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
+      [id, req.params.id, req.tenant.id,
+       b.category || 'etc',
+       b.fileName || b.file_name,
+       b.fileUrl || b.file_url,
+       b.fileSize != null ? b.fileSize : (b.file_size != null ? b.file_size : null),
+       b.mimeType || b.mime_type || null,
+       b.note || null,
+       req.user.sub]
+    );
+    res.status(201).json({ data: r.rows[0] });
+  } catch (e) {
+    console.error('[as-attachments/create]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+router.delete('/:id/attachments/:aid', async function (req, res) {
+  try {
+    var r = await db.query(
+      'DELETE FROM as_attachments WHERE id = $1 AND ticket_id = $2 AND tenant_id = $3 RETURNING id',
+      [req.params.aid, req.params.id, req.tenant.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.json({ message: '삭제 완료' });
+  } catch (e) {
+    console.error('[as-attachments/delete]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// ── 서명·CSAT (as_signatures) ──
+// ────────────────────────────────────────────────────────────
+
+router.get('/:id/signatures', async function (req, res) {
+  try {
+    var r = await db.query(
+      'SELECT * FROM as_signatures WHERE ticket_id = $1 AND tenant_id = $2 ORDER BY role ASC',
+      [req.params.id, req.tenant.id]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[as-signatures/list]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST — UPSERT (role 기준)
+router.post('/:id/signatures', async function (req, res) {
+  try {
+    var b = req.body || {};
+    if (!b.role) return res.status(400).json({ error: 'VALIDATION', message: '서명 역할 필수' });
+
+    var id = b.id || ('ass-' + require('crypto').randomUUID().slice(0, 12));
+    // UPSERT
+    var r = await db.query(
+      'INSERT INTO as_signatures ' +
+      '(id, ticket_id, tenant_id, role, signer_name, signer_id, signed_at, signature_url, ' +
+      ' csat_speed, csat_quality, csat_overall, comment, created_by) ' +
+      'VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7,NOW()),$8,$9,$10,$11,$12,$13) ' +
+      'ON CONFLICT (ticket_id, role) DO UPDATE SET ' +
+      '  signer_name = EXCLUDED.signer_name, signer_id = EXCLUDED.signer_id, ' +
+      '  signed_at = EXCLUDED.signed_at, signature_url = EXCLUDED.signature_url, ' +
+      '  csat_speed = EXCLUDED.csat_speed, csat_quality = EXCLUDED.csat_quality, ' +
+      '  csat_overall = EXCLUDED.csat_overall, comment = EXCLUDED.comment ' +
+      'RETURNING *',
+      [id, req.params.id, req.tenant.id, b.role,
+       b.signerName || b.signer_name || null,
+       b.signerId || b.signer_id || null,
+       b.signedAt || b.signed_at || null,
+       b.signatureUrl || b.signature_url || null,
+       b.csatSpeed || b.csat_speed || null,
+       b.csatQuality || b.csat_quality || null,
+       b.csatOverall || b.csat_overall || null,
+       b.comment || null,
+       req.user.sub]
+    );
+
+    // 고객 현장 서명이 들어오면 status를 customer_wait → approved → closed 보조 자동 전이
+    if (b.role === 'customer_field') {
+      await db.query(
+        "UPDATE as_tickets SET status = 'customer_wait', updated_at = NOW(), updated_by = $3 " +
+        "WHERE id = $1 AND tenant_id = $2 AND status IN ('reporting','approved')",
+        [req.params.id, req.tenant.id, req.user.sub]
+      );
+    }
+
+    res.status(201).json({ data: r.rows[0] });
+  } catch (e) {
+    console.error('[as-signatures/upsert]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+router.delete('/:id/signatures/:sid', async function (req, res) {
+  try {
+    var r = await db.query(
+      'DELETE FROM as_signatures WHERE id = $1 AND ticket_id = $2 AND tenant_id = $3 RETURNING id',
+      [req.params.sid, req.params.id, req.tenant.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.json({ message: '삭제 완료' });
+  } catch (e) {
+    console.error('[as-signatures/delete]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
   }
 });

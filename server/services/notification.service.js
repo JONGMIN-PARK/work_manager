@@ -68,6 +68,35 @@ var TEMPLATES = {
     return '📉 <b>진행률 경고</b>\n' +
       (p.orderNo ? '[' + p.orderNo + '] ' : '') + p.name + '\n' +
       '현재 ' + p.progress + '% (기대 ' + p.expected + '%)';
+  },
+  // ─── A/S 모듈 (v13.49) ───
+  as_received: function (p) {
+    var icon = p.priority === 'P1' ? '🚨' : p.priority === 'P2' ? '🔴' : '🟡';
+    return icon + ' <b>A/S 신규 접수</b>\n' +
+      '[' + p.ticketNo + '] ' + p.priority + ' · ' + (p.customerName || '') + '\n' +
+      (p.equipmentModel ? p.equipmentModel + '\n' : '') +
+      '카테고리: ' + (p.categoryLabel || p.category || '-') + '\n' +
+      '증상: ' + (p.summary || '').slice(0, 100);
+  },
+  as_assigned: function (p) {
+    return '📌 <b>A/S 할당</b>\n' +
+      '[' + p.ticketNo + '] ' + p.priority + ' · ' + (p.customerName || '') + '\n' +
+      '담당: ' + (p.assignee || '-') + ' (' + (p.deptLabel || p.dept || '') + ')' +
+      (p.promisedAt ? '\n약속: ' + p.promisedAt : '');
+  },
+  as_sla_breach: function (p) {
+    return '⏰ <b>A/S SLA 초과</b>\n' +
+      '[' + p.ticketNo + '] ' + p.priority + ' · ' + (p.customerName || '') + '\n' +
+      '경과 ' + p.elapsedH + 'h (' + p.priority + ' 목표 ' + p.slaH + 'h)';
+  },
+  as_customer_wait: function (p) {
+    return '📞 <b>A/S 고객 확인 D+3 미회신</b>\n' +
+      '[' + p.ticketNo + '] ' + (p.customerName || '');
+  },
+  as_report_issued: function (p) {
+    return '📄 <b>A/S 보고서 발행</b>\n' +
+      '[' + p.ticketNo + '] ' + (p.customerName || '') + '\n' +
+      '발행자: ' + (p.author || '-');
   }
 };
 
@@ -131,7 +160,12 @@ var EVENT_TITLES = {
   order_delivery_d7: '납품 D-7 알림',
   order_delivery_d3: '납품 D-3 알림',
   weekly_digest: '주간 다이제스트',
-  progress_warning: '진행률 경고'
+  progress_warning: '진행률 경고',
+  as_received: 'A/S 신규 접수',
+  as_assigned: 'A/S 할당',
+  as_sla_breach: 'A/S SLA 초과',
+  as_customer_wait: 'A/S 고객 확인 미회신',
+  as_report_issued: 'A/S 보고서 발행'
 };
 
 async function notify(eventType, payload, targetUserIds) {

@@ -1055,6 +1055,49 @@ function asLogDel(ticketId, lid) {
     .then(function (r) { _emitBus('as', 'updated', { id: ticketId, action: 'log-remove' }); return r; });
 }
 
+/* ─── A/S 부품 (as_parts) ─── */
+function asPartGetAll(ticketId) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/parts').then(function (r) { return toCamelArray(r.data); });
+}
+function asPartPut(ticketId, part) {
+  var isNew = !part.id || part._isNew;
+  if (isNew) {
+    delete part._isNew;
+    return apiFetch('/api/as-tickets/' + ticketId + '/parts', { method: 'POST', body: JSON.stringify(part) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('as', 'updated', { id: ticketId, action: 'part-add' }); return s; });
+  }
+  return apiFetch('/api/as-tickets/' + ticketId + '/parts/' + part.id, { method: 'PUT', body: JSON.stringify(part) })
+    .then(function (r) { return toCamel(r.data); })
+    .then(function (s) { _emitBus('as', 'updated', { id: ticketId, action: 'part-update' }); return s; });
+}
+function asPartDel(ticketId, pid) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/parts/' + pid, { method: 'DELETE' })
+    .then(function (r) { _emitBus('as', 'updated', { id: ticketId, action: 'part-remove' }); return r; });
+}
+
+/* ─── A/S 첨부 (as_attachments) ─── */
+function asAttachmentGetAll(ticketId) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/attachments').then(function (r) { return toCamelArray(r.data); });
+}
+function asAttachmentPut(ticketId, att) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/attachments', { method: 'POST', body: JSON.stringify(att) })
+    .then(function (r) { var s = toCamel(r.data); _emitBus('as', 'updated', { id: ticketId, action: 'attach-add' }); return s; });
+}
+function asAttachmentDel(ticketId, aid) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/attachments/' + aid, { method: 'DELETE' })
+    .then(function (r) { _emitBus('as', 'updated', { id: ticketId, action: 'attach-remove' }); return r; });
+}
+
+/* ─── A/S 서명·CSAT (as_signatures) UPSERT ─── */
+function asSignaturePut(ticketId, sig) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/signatures', { method: 'POST', body: JSON.stringify(sig) })
+    .then(function (r) { var s = toCamel(r.data); _emitBus('as', 'updated', { id: ticketId, action: 'sign-' + (sig.role || '') }); return s; });
+}
+function asSignatureDel(ticketId, sid) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/signatures/' + sid, { method: 'DELETE' })
+    .then(function (r) { _emitBus('as', 'updated', { id: ticketId, action: 'sign-remove' }); return r; });
+}
+
 /* ─── A/S → 이슈 양방향 연계 ─── */
 function asLinkIssue(ticketId, issueId) {
   var body = issueId ? { issueId: issueId } : {};

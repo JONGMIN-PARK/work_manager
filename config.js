@@ -291,6 +291,43 @@ var AS_LOG_STATUS = {
   cancelled:    { label: '취소',           color: '#64748B' }
 };
 
+/* ═══ A/S — 청구 구분 (Billing) ═══ */
+var AS_BILLING = {
+  warranty: { label: '보증 (무상)',   icon: '🛡️', color: '#10B981' },
+  paid:     { label: '보증외 (유상)', icon: '💰', color: '#F59E0B' },
+  goodwill: { label: 'Goodwill (무상)', icon: '🤝', color: '#3B82F6' },
+  check:    { label: '확인 필요',     icon: '❓', color: '#94A3B8' }
+};
+
+/* ═══ A/S — 첨부 카테고리 ═══ */
+var AS_ATTACH_CATEGORY = {
+  photo_before:  { label: '사진 (Before)', icon: '📷' },
+  photo_after:   { label: '사진 (After)',  icon: '📸' },
+  log:           { label: '로그 파일',     icon: '📜' },
+  measurement:   { label: '측정 데이터',   icon: '📊' },
+  doc:           { label: '문서',          icon: '📄' },
+  etc:           { label: '기타',          icon: '📎' }
+};
+
+/* ═══ A/S — 서명 역할 ═══ */
+var AS_SIGN_ROLE = {
+  customer_field: { label: '현장 담당자 (고객)', icon: '👤', isCustomer: true },
+  engineer:       { label: '담당 엔지니어',      icon: '🔧', isCustomer: false },
+  author:         { label: '작성자',             icon: '✍️', isCustomer: false },
+  reviewer:       { label: '검토자 (팀장)',      icon: '🔍', isCustomer: false },
+  approver:       { label: '승인자 (부서장)',    icon: '✅', isCustomer: false }
+};
+
+/* ═══ A/S — CSAT 만족도 ═══ */
+var AS_CSAT = {
+  very_satisfied: { label: '매우 만족', icon: '😄', score: 5 },
+  satisfied:      { label: '만족',      icon: '🙂', score: 4 },
+  neutral:        { label: '보통',      icon: '😐', score: 3 },
+  unsatisfied:    { label: '불만족',    icon: '🙁', score: 2 },
+  very_unsatisfied:{ label: '매우 불만족', icon: '😠', score: 1 },
+  na:             { label: 'N/A',       icon: '—',  score: null }
+};
+
 /* ═══ AI 프롬프트 프리셋 ═══ */
 /* ═══ 역할 ═══ */
 var ROLE_LABELS = {
