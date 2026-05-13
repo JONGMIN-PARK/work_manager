@@ -247,6 +247,50 @@ var AS_FREQUENCY = {
   count:      { label: '누적 횟수',    unit: '회' }
 };
 
+/* ═══ A/S — 부서 할당 역할 ═══ */
+var AS_ASSIGN_ROLE = {
+  primary:  { label: '주관', color: '#F59E0B', icon: '🎯' },
+  support:  { label: '보조', color: '#06B6D4', icon: '🤝' }
+};
+
+/* ═══ A/S — 부서 할당 상태 ═══ */
+var AS_ASSIGN_STATUS = {
+  pending:     { label: '대기',     color: '#94A3B8', icon: '⏳' },
+  in_progress: { label: '진행중',   color: '#3B82F6', icon: '🛠️' },
+  completed:   { label: '완료',     color: '#10B981', icon: '✅' },
+  handover:    { label: '이관',     color: '#8B5CF6', icon: '↔️' },
+  hold:        { label: '보류',     color: '#F59E0B', icon: '⏸️' }
+};
+
+/* ═══ A/S — 작업 유형 (Activity Log) ═══ */
+var AS_WORK_TYPE = {
+  inquiry:    { label: '고객문의응대', icon: '📞' },
+  remote:     { label: '원격분석',     icon: '🖥️' },
+  onsite:     { label: '현장출장',     icon: '🚗' },
+  loganal:    { label: '로그분석',     icon: '📜' },
+  retest:     { label: '재현테스트',   icon: '🔁' },
+  partrep:    { label: '부품교체',     icon: '🔩' },
+  swfix:      { label: 'SW 수정',      icon: '💻' },
+  paramset:   { label: '파라미터조정', icon: '🎛️' },
+  calib:      { label: '캘리브레이션', icon: '🔆' },
+  rca:        { label: 'RCA 분석',     icon: '🔍' },
+  qa:         { label: '검증/QA',      icon: '🧪' },
+  doc:        { label: '문서화',       icon: '📝' },
+  handover:   { label: '이관/협조',    icon: '↔️' },
+  etc:        { label: '기타',         icon: '📌' }
+};
+
+/* ═══ A/S — 작업 상태 (Activity Log) ═══ */
+var AS_LOG_STATUS = {
+  in_progress:  { label: '진행중',         color: '#3B82F6' },
+  completed:    { label: '완료',           color: '#10B981' },
+  wait_part:    { label: '대기(부품)',     color: '#F59E0B' },
+  wait_cust:    { label: '대기(고객확인)', color: '#EAB308' },
+  handover:     { label: '이관',           color: '#8B5CF6' },
+  hold:         { label: '보류',           color: '#94A3B8' },
+  cancelled:    { label: '취소',           color: '#64748B' }
+};
+
 /* ═══ AI 프롬프트 프리셋 ═══ */
 /* ═══ 역할 ═══ */
 var ROLE_LABELS = {

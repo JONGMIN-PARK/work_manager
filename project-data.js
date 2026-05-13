@@ -1012,6 +1012,60 @@ function asCategoryDel(id, hard) {
     .then(function (r) { _emitBus('asCategory', 'deleted', { id: id }); return r; });
 }
 
+/* ─── A/S 할당 (as_assignments) ─── */
+function asGetExpand(id) {
+  return apiFetch('/api/as-tickets/' + id + '?expand=1').then(function (r) { return toCamel(r.data); });
+}
+function asAssignmentGetAll(ticketId) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/assignments').then(function (r) { return toCamelArray(r.data); });
+}
+function asAssignmentPut(ticketId, asg) {
+  var isNew = !asg.id || asg._isNew;
+  if (isNew) {
+    delete asg._isNew;
+    return apiFetch('/api/as-tickets/' + ticketId + '/assignments', { method: 'POST', body: JSON.stringify(asg) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('as', 'updated', { id: ticketId, action: 'assign' }); return s; });
+  }
+  return apiFetch('/api/as-tickets/' + ticketId + '/assignments/' + asg.id, { method: 'PUT', body: JSON.stringify(asg) })
+    .then(function (r) { return toCamel(r.data); })
+    .then(function (s) { _emitBus('as', 'updated', { id: ticketId, action: 'assign-update' }); return s; });
+}
+function asAssignmentDel(ticketId, aid) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/assignments/' + aid, { method: 'DELETE' })
+    .then(function (r) { _emitBus('as', 'updated', { id: ticketId, action: 'assign-remove' }); return r; });
+}
+
+/* ─── A/S 활동로그 (as_activity_logs) ─── */
+function asLogGetAll(ticketId) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/logs').then(function (r) { return toCamelArray(r.data); });
+}
+function asLogPut(ticketId, log) {
+  var isNew = !log.id || log._isNew;
+  if (isNew) {
+    delete log._isNew;
+    return apiFetch('/api/as-tickets/' + ticketId + '/logs', { method: 'POST', body: JSON.stringify(log) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('as', 'updated', { id: ticketId, action: 'log-add' }); return s; });
+  }
+  return apiFetch('/api/as-tickets/' + ticketId + '/logs/' + log.id, { method: 'PUT', body: JSON.stringify(log) })
+    .then(function (r) { return toCamel(r.data); })
+    .then(function (s) { _emitBus('as', 'updated', { id: ticketId, action: 'log-update' }); return s; });
+}
+function asLogDel(ticketId, lid) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/logs/' + lid, { method: 'DELETE' })
+    .then(function (r) { _emitBus('as', 'updated', { id: ticketId, action: 'log-remove' }); return r; });
+}
+
+/* ─── A/S → 이슈 양방향 연계 ─── */
+function asLinkIssue(ticketId, issueId) {
+  var body = issueId ? { issueId: issueId } : {};
+  return apiFetch('/api/as-tickets/' + ticketId + '/link-issue', { method: 'POST', body: JSON.stringify(body) })
+    .then(function (r) {
+      _emitBus('as', 'updated', { id: ticketId, action: 'link-issue' });
+      if (r && r.issueId) _emitBus('issue', 'created', { id: r.issueId });
+      return { ticket: toCamel(r.data), issueId: r.issueId };
+    });
+}
+
 function createIssue(data) {
   var now = new Date().toISOString();
   var issue = {

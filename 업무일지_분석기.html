@@ -417,7 +417,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.47</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.48</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2807,6 +2807,18 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.48',date:'2026-05-13',title:'🛠️ A/S — Phase 1 완료 (할당·처리이력·내 큐·이슈연계)',tag:'feature',items:[
+      'PRD §13 Phase 1 잔여 전체 완수. 접수만 가능했던 v1에서 → ①접수 ②할당 ③처리 ④보고 6단계 흐름 풀구현 (⑤고객확인·⑥보고서는 Phase 2~3 placeholder). PPT 4-step + 엑셀 6시트 흐름을 한 화면에서 추적',
+      'DB: 019_as_assignments.sql (부서×역할 unique, duration_h 컬럼) · 020_as_activity_logs.sql (활동로그 + assignment duration_h 자동 집계 트리거) · 021_as_tickets_linked_issue.sql · 022_as_tickets_closure.sql (rca/prevention/final_equip_status/monitoring/closure/closed_at/promised_*) — 총 4건',
+      '백엔드: server/routes/as-tickets.js에 nested 라우트 — assignments GET/POST/PUT/DELETE · logs GET/POST/PUT/DELETE · link-issue POST. GET 단건 ?expand=1 시 자식 데이터 동봉. GET 목록 ?myQueue=1 옵션(본인에게 할당된 active 건만 EXISTS 서브쿼리)',
+      '상태 자동 전이 — 첫 할당 시 received→assigned · 첫 로그 시 assigned→in_progress · 모든 할당이 completed면 in_progress→reporting · 최종 종결 버튼 시 status=closed + closure 기록',
+      '이슈 양방향 연계 — POST /:id/link-issue 로 새 이슈 자동 생성(카테고리→issue type, 긴급도→urgency 매핑, tags에 [from-as, ticket_no]). as_tickets.linked_issue_id 자동 채움. 상세 헤더에 "🎫 이슈 연결됨" 배지',
+      'config.js: AS_ASSIGN_ROLE(주관/보조) · AS_ASSIGN_STATUS(pending~hold 5종) · AS_WORK_TYPE(14종, PPT 항목 그대로) · AS_LOG_STATUS(진행중/완료/대기-부품/대기-고객/이관/보류/취소 7종) enum 추가',
+      'project-data.js: asGetExpand · asAssignmentGetAll/Put/Del · asLogGetAll/Put/Del · asLinkIssue. wmDataBus "as" emit (action 세분화: assign/log-add 등) + 이슈 생성 시 "issue" emit 동시 발사',
+      'as-manager.js: 행 클릭 시 6-step 탭형 상세 패널 (920px 모달). ①접수 인포 블록 / ②할당 카드 리스트 + 부서 추가 모달 ("내가 담당" 체크박스로 자동 assignee_id 채움) + 완료/해제 버튼 / ③처리 부서별 소요시간 카드 + Activity Log 타임라인(부서 색 좌측 보더) + 추가 폼 (자동으로 동일 부서 active assignment에 연결) / ④보고 RCA·재발방지·최종상태·모니터링·완료분류 입력 + ✅ 최종 종결 버튼',
+      '"내 큐" 토글 — A/S 탭 상단에 📋 전체 / 🎯 내 큐 세그먼트 버튼. myQueue=1 서버 옵션으로 본인 할당 active 건만. 빈 상태일 때 친절한 안내 메시지',
+      '시연 시나리오: 접수 → ②할당에서 SW팀+공정팀 본인 추가 → 자동으로 받은 카드 옆에 🎯 내 큐 1건 → ③처리 탭에서 작업 한 줄씩 추가 → 부서별 소요시간 자동 합산 → ④보고에서 RCA 입력 → 종결 → 🎫 이슈로 등록 클릭 시 이슈관리에 자동 등록'
+    ]},
     {ver:'13.47',date:'2026-05-13',title:'A/S — 동적 카테고리 관리 + 발생빈도에 회수 입력',tag:'feature',items:[
       '🔆 Optic Cleaning 카테고리 기본 시드 추가 (sort_order=75, 소모품 교체 바로 뒤)',
       '카테고리 무한 확장 — 관리자 전용 ⚙️ 카테고리 관리 모달 추가 (A/S 탭 상단 버튼, role===admin 만 노출). 추가/라벨·아이콘·순서 변경/비활성화. 코드는 생성 후 변경 불가(기존 접수와 정합성 보호)',
