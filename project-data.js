@@ -925,6 +925,71 @@ function issueDel(id) {
 function issueGetByProject(pid) { return apiFetch('/api/issues?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
 function issueGetByOrder(orderNo) { return apiFetch('/api/issues?orderNo=' + encodeURIComponent(orderNo)).then(function (r) { return toCamelArray(r.data); }); }
 
+/* ─── A/S 접수 ─── */
+function asGetAll(params) {
+  var qs = '';
+  if (params && typeof params === 'object') {
+    var pairs = Object.keys(params).filter(function (k) { return params[k] != null && params[k] !== ''; })
+      .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); });
+    if (pairs.length) qs = '?' + pairs.join('&');
+  }
+  return apiFetch('/api/as-tickets' + qs).then(function (r) { return toCamelArray(r.data); });
+}
+function asGet(id) { return apiFetch('/api/as-tickets/' + id).then(function (r) { return toCamel(r.data); }); }
+function asPut(ticket) {
+  var isNew = !ticket.id || ticket._isNew;
+  if (isNew) {
+    delete ticket._isNew;
+    return apiFetch('/api/as-tickets', { method: 'POST', body: JSON.stringify(ticket) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('as', 'created', { id: s && s.id, ticketNo: s && s.ticketNo }); return s; });
+  }
+  return apiFetch('/api/as-tickets/' + ticket.id, { method: 'PUT', body: JSON.stringify(ticket) })
+    .then(function (r) { return toCamel(r.data); })
+    .then(function (s) { _emitBus('as', 'updated', { id: s && s.id, ticketNo: s && s.ticketNo }); return s; });
+}
+function asDel(id) {
+  return apiFetch('/api/as-tickets/' + id, { method: 'DELETE' })
+    .then(function (r) { _emitBus('as', 'deleted', { id: id }); return r; });
+}
+function createASTicket(data) {
+  var now = new Date().toISOString();
+  var ticket = {
+    id: 'as-' + uuid(),
+    customerName: data.customerName || '',
+    siteLine: data.siteLine || '',
+    customerContact: data.customerContact || '',
+    equipmentNo: data.equipmentNo || '',
+    equipmentModel: data.equipmentModel || '',
+    serialNo: data.serialNo || '',
+    installDate: data.installDate || null,
+    warrantyStatus: data.warrantyStatus || '',
+    receivedAt: data.receivedAt || now,
+    channel: data.channel || 'phone',
+    priority: data.priority || 'P3',
+    category: data.category || '',
+    method: data.method || '',
+    issueSummary: data.issueSummary || '',
+    reproduction: data.reproduction || '',
+    frequency: data.frequency || '',
+    impactScope: data.impactScope || '',
+    initialAnalysis: data.initialAnalysis || '',
+    status: 'received',
+    projectId: data.projectId || '',
+    orderNo: data.orderNo || '',
+    createdAt: now,
+    _isNew: true
+  };
+  return asPut(ticket);
+}
+function updateASTicket(id, updates) {
+  return asGet(id).then(function (t) {
+    if (!t) return null;
+    Object.assign(t, updates);
+    t.updatedAt = new Date().toISOString();
+    return asPut(t);
+  });
+}
+
 function createIssue(data) {
   var now = new Date().toISOString();
   var issue = {

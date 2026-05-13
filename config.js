@@ -172,6 +172,78 @@ var ISSUE_STATUS = {
   hold:       { label: '보류',   color: '#F59E0B' }
 };
 
+/* ═══ A/S — 라이프사이클 상태 ═══ */
+var AS_STATUS = {
+  received:      { label: '접수',         color: '#6366F1', seq: 1, icon: '📥' },
+  assigned:      { label: '할당',         color: '#0EA5E9', seq: 2, icon: '🎯' },
+  in_progress:   { label: '처리중',       color: '#3B82F6', seq: 3, icon: '🛠️' },
+  reporting:     { label: '보고작성',     color: '#8B5CF6', seq: 4, icon: '📝' },
+  approved:      { label: '결재완료',     color: '#A855F7', seq: 5, icon: '✅' },
+  customer_wait: { label: '고객확인 대기', color: '#F59E0B', seq: 6, icon: '📞' },
+  closed:        { label: '완료',         color: '#10B981', seq: 7, icon: '🏁' },
+  hold:          { label: '보류',         color: '#EAB308', seq: 8, icon: '⏸️' },
+  cancelled:     { label: '취소',         color: '#94A3B8', seq: 9, icon: '🚫' }
+};
+
+/* ═══ A/S — 긴급도 ═══ */
+var AS_PRIORITY = {
+  P1: { label: 'P1 긴급 (라인정지)',   color: '#EF4444', icon: '🔴', responseH: 1,   visitH: 24,  closeDays: 3 },
+  P2: { label: 'P2 높음 (생산영향)',   color: '#F97316', icon: '🟠', responseH: 4,   visitH: 72,  closeDays: 7 },
+  P3: { label: 'P3 보통',              color: '#F59E0B', icon: '🟡', responseH: 8,   visitH: 168, closeDays: 14 },
+  P4: { label: 'P4 낮음 (요청사항)',   color: '#10B981', icon: '🟢', responseH: 24,  visitH: null, closeDays: 30 }
+};
+
+/* ═══ A/S — 접수 카테고리 ═══ */
+var AS_CATEGORY = {
+  hw_fault:     { label: 'HW 고장',        icon: '🔴' },
+  sw_error:     { label: 'SW 오류',        icon: '💻' },
+  process:      { label: '공정 이슈',      icon: '⚙️' },
+  network:      { label: '통신/네트워크',  icon: '📡' },
+  sensor:       { label: '센서/비전',      icon: '👁️' },
+  motion:       { label: '모션/구동',      icon: '🔧' },
+  consumable:   { label: '소모품 교체',    icon: '🔩' },
+  misuse:       { label: '운영 미숙',      icon: '📚' },
+  install:      { label: '환경/설치',      icon: '🏗️' },
+  improve:      { label: '개선 요청',      icon: '💡' },
+  etc:          { label: '기타',           icon: '📌' }
+};
+
+/* ═══ A/S — 접수경로 ═══ */
+var AS_CHANNEL = {
+  phone:    { label: '전화',     icon: '📞' },
+  email:    { label: '이메일',   icon: '📧' },
+  messenger:{ label: '메신저',   icon: '💬' },
+  visit:    { label: '방문',     icon: '🚪' },
+  auto:     { label: '자동알람', icon: '🚨' },
+  etc:      { label: '기타',     icon: '📌' }
+};
+
+/* ═══ A/S — 처리방식 ═══ */
+var AS_METHOD = {
+  remote:   { label: '원격지원', icon: '🖥️' },
+  onsite:   { label: '출장',     icon: '🚗' },
+  rma:      { label: 'RMA',      icon: '📦' },
+  guide:    { label: '가이드 제공', icon: '📖' },
+  document: { label: '자료 송부',   icon: '📎' }
+};
+
+/* ═══ A/S — 재현여부 / 발생빈도 ═══ */
+var AS_REPRODUCTION = {
+  always:     { label: '100% 재현' },
+  intermittent:{ label: '간헐적' },
+  once:       { label: '1회성' },
+  none:       { label: '재현 불가' },
+  unknown:    { label: '미확인' }
+};
+var AS_FREQUENCY = {
+  hourly:     { label: '시간당' },
+  daily:      { label: '일당' },
+  weekly:     { label: '주당' },
+  monthly:    { label: '월당' },
+  irregular:  { label: '비정규적' },
+  count:      { label: '회' }
+};
+
 /* ═══ AI 프롬프트 프리셋 ═══ */
 /* ═══ 역할 ═══ */
 var ROLE_LABELS = {
