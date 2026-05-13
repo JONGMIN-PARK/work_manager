@@ -1012,12 +1012,34 @@ function asCategoryDel(id, hard) {
     .then(function (r) { _emitBus('asCategory', 'deleted', { id: id }); return r; });
 }
 
+/* ─── A/S 할당·로그·부품·첨부·서명 — 응답 정규화 헬퍼 ───
+ * toCamel은 최상위 키만 변환하고 NUMERIC을 문자열로 두기 때문에,
+ * A/S 자식 컬렉션과 ticket의 NUMERIC을 명시적으로 정규화한다. */
+function _asNum(o, keys) {
+  if (!o) return o;
+  keys.forEach(function (k) { if (typeof o[k] === 'string') o[k] = parseFloat(o[k]) || 0; });
+  return o;
+}
+function _asNormAsg(a)  { return _asNum(toCamel(a), ['durationH']); }
+function _asNormLog(l)  { return _asNum(toCamel(l), ['durationH']); }
+function _asNormPart(p) { return _asNum(toCamel(p), ['qty', 'unitPrice', 'amount']); }
+function _asNormTicket(t) {
+  if (!t) return t;
+  t = _asNum(t, ['frequencyCount']);
+  if (Array.isArray(t.assignments))    t.assignments    = t.assignments.map(_asNormAsg);
+  if (Array.isArray(t.activityLogs))   t.activityLogs   = t.activityLogs.map(_asNormLog);
+  if (Array.isArray(t.parts))          t.parts          = t.parts.map(_asNormPart);
+  if (Array.isArray(t.attachments))    t.attachments    = toCamelArray(t.attachments);
+  if (Array.isArray(t.signatures))     t.signatures     = toCamelArray(t.signatures);
+  return t;
+}
+
 /* ─── A/S 할당 (as_assignments) ─── */
 function asGetExpand(id) {
-  return apiFetch('/api/as-tickets/' + id + '?expand=1').then(function (r) { return toCamel(r.data); });
+  return apiFetch('/api/as-tickets/' + id + '?expand=1').then(function (r) { return _asNormTicket(toCamel(r.data)); });
 }
 function asAssignmentGetAll(ticketId) {
-  return apiFetch('/api/as-tickets/' + ticketId + '/assignments').then(function (r) { return toCamelArray(r.data); });
+  return apiFetch('/api/as-tickets/' + ticketId + '/assignments').then(function (r) { return (r.data || []).map(_asNormAsg); });
 }
 function asAssignmentPut(ticketId, asg) {
   var isNew = !asg.id || asg._isNew;
@@ -1037,7 +1059,7 @@ function asAssignmentDel(ticketId, aid) {
 
 /* ─── A/S 활동로그 (as_activity_logs) ─── */
 function asLogGetAll(ticketId) {
-  return apiFetch('/api/as-tickets/' + ticketId + '/logs').then(function (r) { return toCamelArray(r.data); });
+  return apiFetch('/api/as-tickets/' + ticketId + '/logs').then(function (r) { return (r.data || []).map(_asNormLog); });
 }
 function asLogPut(ticketId, log) {
   var isNew = !log.id || log._isNew;
@@ -1057,7 +1079,7 @@ function asLogDel(ticketId, lid) {
 
 /* ─── A/S 부품 (as_parts) ─── */
 function asPartGetAll(ticketId) {
-  return apiFetch('/api/as-tickets/' + ticketId + '/parts').then(function (r) { return toCamelArray(r.data); });
+  return apiFetch('/api/as-tickets/' + ticketId + '/parts').then(function (r) { return (r.data || []).map(_asNormPart); });
 }
 function asPartPut(ticketId, part) {
   var isNew = !part.id || part._isNew;

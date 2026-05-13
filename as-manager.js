@@ -697,11 +697,18 @@ function _asTabWork(t) {
     h += '</div>';
   }
 
-  // 추가 폼
+  // 추가 폼 (부서 default: 본인이 할당받은 active assignment의 부서, 없으면 첫 active 할당의 부서)
+  var meId = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null;
+  var defDept = '';
+  var asgs = t.assignments || [];
+  var myAsg = asgs.find(function (a) { return a.assigneeId === meId && a.status !== 'completed' && a.status !== 'cancelled'; });
+  if (myAsg) defDept = myAsg.dept;
+  else if (asgs.length) defDept = (asgs.find(function (a) { return a.status !== 'completed' && a.status !== 'cancelled'; }) || asgs[0]).dept;
+
   h += '<div style="background:var(--bg-i);border:1px dashed var(--bd);border-radius:8px;padding:12px;margin-bottom:14px">';
   h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">➕ 작업 기록 추가</div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1.4fr 1fr 0.8fr;gap:8px;margin-bottom:8px">';
-  h += _asField('부서 *', _asEnumSelect('asLogNew_dept', DEPT_MAP, '', true));
+  h += _asField('부서 *', _asEnumSelect('asLogNew_dept', DEPT_MAP, defDept, true));
   h += _asField('작업 유형 *', _asEnumSelect('asLogNew_workType', LOG_TYPE, '', true));
   h += _asField('소요(h)', '<input id="asLogNew_durationH" type="number" min="0" step="0.5" value="" placeholder="0.5" ' + _asInpStyle() + '>');
   h += _asField('상태', _asEnumSelect('asLogNew_status', LOG_STATUS, 'in_progress', false));
