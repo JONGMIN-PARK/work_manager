@@ -58,7 +58,7 @@ window.wmDataBus = (function () {
     orders:   { order:1, project:1, issue:1 },
     issues:   { issue:1, project:1 },
     docs:     { document:1, project:1 },
-    as:       { as:1, order:1, project:1 }
+    as:       { as:1, asCategory:1, order:1, project:1 }
   };
   var renderMap = {
     pipeline: function () { if (typeof renderPipeline === 'function') renderPipeline(); },
@@ -417,7 +417,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.46</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.47</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2807,6 +2807,18 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.47',date:'2026-05-13',title:'A/S — 동적 카테고리 관리 + 발생빈도에 회수 입력',tag:'feature',items:[
+      '🔆 Optic Cleaning 카테고리 기본 시드 추가 (sort_order=75, 소모품 교체 바로 뒤)',
+      '카테고리 무한 확장 — 관리자 전용 ⚙️ 카테고리 관리 모달 추가 (A/S 탭 상단 버튼, role===admin 만 노출). 추가/라벨·아이콘·순서 변경/비활성화. 코드는 생성 후 변경 불가(기존 접수와 정합성 보호)',
+      'DB: server/migrations/017_as_categories.sql — as_categories 테이블(테넌트별 UNIQUE(code), active=true 기본). 기존 11종 + Optic Cleaning seed 12종 ON CONFLICT DO NOTHING',
+      '백엔드: server/routes/as-categories.js — GET(active만 기본, ?all=1 비활성 포함) · POST/PUT/DELETE(관리자 only) · DELETE는 soft(active=false) 기본, ?hard=1 일 때 사용 중이면 409 거절',
+      '발생빈도 라벨 변경 — "시간당"→"시간당 회수", "일당"→"일당 회수" 등. 비정규적 외 모든 항목에 회수 인풋 동적 노출(0.5 단위), 표시 시 "시간당 2회" 형식으로 결합',
+      'DB: server/migrations/018_as_tickets_freq_count.sql — as_tickets에 frequency_count NUMERIC 컬럼 추가. as-tickets 라우트 INSERT/PUT 모두 frequencyCount 처리',
+      'as-manager.js: 카테고리 동적 캐시(_AS_CAT_CACHE) — 부팅 시 GET /api/as-categories, 캐시 미스 시 config.js AS_CATEGORY 폴백. 카테고리 변경 emit("asCategory") 수신 시 캐시 자동 무효화',
+      'project-data.js: asCategoryGetAll(includeInactive) / asCategoryPut / asCategoryDel(hard). wmDataBus "asCategory" emit',
+      'config.js: AS_CATEGORY 폴백에 optic_cleaning 추가. AS_FREQUENCY 라벨에 "회수" 표기 + unit 필드(회/h, 회/d 등)',
+      '업무일지_분석기.html: wmDataBus depMap.as에 asCategory 타입 추가 — 다른 탭에서 카테고리 변경해도 AS 탭 자동 재렌더'
+    ]},
     {ver:'13.46',date:'2026-05-13',title:'🛠️ A/S 관리 모듈 v1 (수직 슬라이스 — 접수 단계)',tag:'feature',items:[
       '프로젝트 관리 하위 탭에 🛠️ A/S 추가 (문서관리 뒤). 라이프사이클 6단계(수주→설계→제작→검수→납품→A/S) 마지막 단계인 A/S를 전용 모듈로 분리',
       'PRD docs/PRD_AS_접수보고서.md 기반. 사내 PPT 4-step 플로우 + AS_Report_Template_v1.xlsx 6시트 구조 종합. 6단계 흐름 정의: 접수→할당→처리→보고→결재→고객확인→완료',

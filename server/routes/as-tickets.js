@@ -95,10 +95,10 @@ router.post('/', async function (req, res) {
       '(id, ticket_no, tenant_id, customer_name, site_line, customer_contact, ' +
       ' equipment_no, equipment_model, serial_no, install_date, warranty_status, ' +
       ' received_at, received_by, channel, priority, category, method, ' +
-      ' issue_summary, reproduction, frequency, impact_scope, initial_analysis, ' +
+      ' issue_summary, reproduction, frequency, frequency_count, impact_scope, initial_analysis, ' +
       ' status, project_id, order_no, created_by, updated_by) ' +
       'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,' +
-      'COALESCE($12, NOW()),$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$26) ' +
+      'COALESCE($12, NOW()),$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27) ' +
       'RETURNING *',
       [
         id, ticketNo, req.tenant.id,
@@ -119,6 +119,7 @@ router.post('/', async function (req, res) {
         b.issueSummary || b.issue_summary,
         b.reproduction || null,
         b.frequency || null,
+        b.frequencyCount != null ? b.frequencyCount : (b.frequency_count != null ? b.frequency_count : null),
         b.impactScope || b.impact_scope || null,
         b.initialAnalysis || b.initial_analysis || null,
         b.status || 'received',
@@ -142,14 +143,15 @@ router.put('/:id', async function (req, res) {
       'customer_name', 'site_line', 'customer_contact',
       'equipment_no', 'equipment_model', 'serial_no', 'install_date', 'warranty_status',
       'channel', 'priority', 'category', 'method',
-      'issue_summary', 'reproduction', 'frequency', 'impact_scope', 'initial_analysis',
+      'issue_summary', 'reproduction', 'frequency', 'frequency_count', 'impact_scope', 'initial_analysis',
       'status', 'project_id', 'order_no'
     ];
     var camelMap = {
       customerName: 'customer_name', siteLine: 'site_line', customerContact: 'customer_contact',
       equipmentNo: 'equipment_no', equipmentModel: 'equipment_model', serialNo: 'serial_no',
       installDate: 'install_date', warrantyStatus: 'warranty_status',
-      issueSummary: 'issue_summary', impactScope: 'impact_scope', initialAnalysis: 'initial_analysis',
+      issueSummary: 'issue_summary', frequencyCount: 'frequency_count',
+      impactScope: 'impact_scope', initialAnalysis: 'initial_analysis',
       projectId: 'project_id', orderNo: 'order_no'
     };
     var clean = {};

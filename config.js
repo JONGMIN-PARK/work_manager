@@ -193,19 +193,22 @@ var AS_PRIORITY = {
   P4: { label: 'P4 낮음 (요청사항)',   color: '#10B981', icon: '🟢', responseH: 24,  visitH: null, closeDays: 30 }
 };
 
-/* ═══ A/S — 접수 카테고리 ═══ */
+/* ═══ A/S — 접수 카테고리 (fallback) ═══
+ * 실제 값은 DB의 as_categories 테이블에서 로드. 이 객체는 서버 통신 실패 시
+ * 부팅 시점의 폴백 + 정적 참조용. 관리자가 /api/as-categories 로 무한 확장 가능. */
 var AS_CATEGORY = {
-  hw_fault:     { label: 'HW 고장',        icon: '🔴' },
-  sw_error:     { label: 'SW 오류',        icon: '💻' },
-  process:      { label: '공정 이슈',      icon: '⚙️' },
-  network:      { label: '통신/네트워크',  icon: '📡' },
-  sensor:       { label: '센서/비전',      icon: '👁️' },
-  motion:       { label: '모션/구동',      icon: '🔧' },
-  consumable:   { label: '소모품 교체',    icon: '🔩' },
-  misuse:       { label: '운영 미숙',      icon: '📚' },
-  install:      { label: '환경/설치',      icon: '🏗️' },
-  improve:      { label: '개선 요청',      icon: '💡' },
-  etc:          { label: '기타',           icon: '📌' }
+  hw_fault:       { label: 'HW 고장',         icon: '🔴' },
+  sw_error:       { label: 'SW 오류',         icon: '💻' },
+  process:        { label: '공정 이슈',       icon: '⚙️' },
+  network:        { label: '통신/네트워크',   icon: '📡' },
+  sensor:         { label: '센서/비전',       icon: '👁️' },
+  motion:         { label: '모션/구동',       icon: '🔧' },
+  consumable:     { label: '소모품 교체',     icon: '🔩' },
+  optic_cleaning: { label: 'Optic Cleaning',  icon: '🔆' },
+  misuse:         { label: '운영 미숙',       icon: '📚' },
+  install:        { label: '환경/설치',       icon: '🏗️' },
+  improve:        { label: '개선 요청',       icon: '💡' },
+  etc:            { label: '기타',            icon: '📌' }
 };
 
 /* ═══ A/S — 접수경로 ═══ */
@@ -236,12 +239,12 @@ var AS_REPRODUCTION = {
   unknown:    { label: '미확인' }
 };
 var AS_FREQUENCY = {
-  hourly:     { label: '시간당' },
-  daily:      { label: '일당' },
-  weekly:     { label: '주당' },
-  monthly:    { label: '월당' },
-  irregular:  { label: '비정규적' },
-  count:      { label: '회' }
+  hourly:     { label: '시간당 회수',  unit: '회/h' },
+  daily:      { label: '일당 회수',    unit: '회/d' },
+  weekly:     { label: '주당 회수',    unit: '회/w' },
+  monthly:    { label: '월당 회수',    unit: '회/m' },
+  irregular:  { label: '비정규적',     unit: '' },
+  count:      { label: '누적 횟수',    unit: '회' }
 };
 
 /* ═══ AI 프롬프트 프리셋 ═══ */

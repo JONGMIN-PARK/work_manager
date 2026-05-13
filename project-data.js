@@ -990,6 +990,28 @@ function updateASTicket(id, updates) {
   });
 }
 
+/* ─── A/S 카테고리 마스터 (관리자 관리) ─── */
+function asCategoryGetAll(includeInactive) {
+  var qs = includeInactive ? '?all=1' : '';
+  return apiFetch('/api/as-categories' + qs).then(function (r) { return toCamelArray(r.data); });
+}
+function asCategoryPut(cat) {
+  var isNew = !cat.id || cat._isNew;
+  if (isNew) {
+    delete cat._isNew;
+    return apiFetch('/api/as-categories', { method: 'POST', body: JSON.stringify(cat) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('asCategory', 'created', { id: s && s.id, code: s && s.code }); return s; });
+  }
+  return apiFetch('/api/as-categories/' + cat.id, { method: 'PUT', body: JSON.stringify(cat) })
+    .then(function (r) { return toCamel(r.data); })
+    .then(function (s) { _emitBus('asCategory', 'updated', { id: s && s.id, code: s && s.code }); return s; });
+}
+function asCategoryDel(id, hard) {
+  var qs = hard ? '?hard=1' : '';
+  return apiFetch('/api/as-categories/' + id + qs, { method: 'DELETE' })
+    .then(function (r) { _emitBus('asCategory', 'deleted', { id: id }); return r; });
+}
+
 function createIssue(data) {
   var now = new Date().toISOString();
   var issue = {
