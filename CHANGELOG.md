@@ -1,5 +1,54 @@
 # Work Manager — 변경 이력
 
+## v13.66 (2026-05-14) — 화려한 진행 모달 (AI/PDF/메일/첨부 비동기 단계 표시)
+
+### 배경
+사용자: "버튼 실행 후 대기 메시지를 화려하게. 완료 시에만 업데이트가 뜨니 뭘 하고 있는지 모르겠다."
+
+### 신규 — `wmProgress` 전역 API + CSS
+
+**디자인:**
+- 듀얼 회전 링 (보라/파랑 + 시안/초록, 반대 방향)
+- 펄스 아이콘 중앙
+- 점멸 글로우 박스 (purple + blue 이중)
+- 점핑 닷 3개 + 흐르는 그라데이션 진행바
+- 큰 타이틀 + 부 설명 + 현재 단계 칩 + 운영 팁
+- backdrop blur 8px + 다크 그라데이션 카드
+
+**API:**
+```js
+wmProgress.show({ icon, title, sub, tip, cancelable, onCancel })
+wmProgress.update({ sub?, step?, icon?, title? })
+wmProgress.step(text)
+wmProgress.autoSteps([...], intervalMs)   // 단계 자동 시퀀스
+wmProgress.hide()
+wmProgress.run(opts, asyncFn)              // try/finally 자동 wrap
+```
+
+### 적용된 4곳
+
+| 작업 | 단계 시퀀스 |
+|---|---|
+| 🤖 A/S 모달 AI 분석 | 신고 검토 → 카테고리 매칭 → RCA 추론 → 재발방지 작성 → 결과 정리 |
+| 📄 보고서 PDF 미리보기 | 접수 로드 → 처리이력+부품 → 사진 임베드 → 서명·CSAT → html2canvas → jsPDF |
+| ✉️ 메일 작성기 열기 | PDF 다운로드 → 작성 창 열기 → 완료 |
+| 📎 다중 파일 첨부 | 파일 읽기(n/m) → 서버 업로드(n/m + 파일명) — 2개↑ 또는 2MB↑일 때만 |
+
+### 기타
+- 모달 띄운 동안 `body.overflow = hidden`으로 스크롤 잠금
+- 취소 버튼 옵션 (`cancelable: true`, `onCancel` 콜백)
+- 단계 칩에 pop 애니메이션 (재시작)
+
+### 변경 파일
+- `업무일지_분석기.html` (CSS + wmProgress API + 버전·패치노트)
+- `as-manager.js` (4곳 적용)
+- `CHANGELOG.md`
+
+### 효과
+사용자가 작업이 멈춘 게 아니라 진행 중임을 확실히 인지. AI 호출(5~15초), PDF 생성(2~5초), 첨부 업로드에서 가장 효과적.
+
+---
+
 ## v13.65 (2026-05-14) — Claude AI 통합: 1차 분석 자동 초안 + 유사 사례 + 통계 자연어 인사이트
 
 ### 배경

@@ -585,7 +585,24 @@ function _asAiAnalyzeClick() {
     status.innerHTML = '<span style="color:#EF4444">⚠ AI API 미연결 (project-data.js)</span>';
     return;
   }
-  status.innerHTML = '<span style="color:#8B5CF6">⏳ Claude가 분석 중… (대략 5~15초)</span>';
+  status.innerHTML = '<span style="color:#8B5CF6">⏳ Claude가 분석 중…</span>';
+
+  // 화려한 진행 모달 + 단계 메시지 시퀀스
+  if (window.wmProgress) {
+    wmProgress.show({
+      icon: '🤖',
+      title: 'Claude AI 분석 중',
+      sub: '신고 내용을 분석하고 카테고리·RCA·재발방지 초안을 작성합니다.',
+      tip: '평균 5~15초 소요됩니다. 모델: claude-opus-4-7 · adaptive thinking'
+    });
+    wmProgress.autoSteps([
+      '📝 신고 내용 검토',
+      '🏷️ 카테고리 후보 매칭',
+      '🔍 근본원인(RCA) 추론',
+      '🛡️ 재발방지 방안 작성',
+      '✅ 결과 정리'
+    ], 1800);
+  }
 
   var payload = {
     issueSummary: issue,
@@ -599,6 +616,7 @@ function _asAiAnalyzeClick() {
   };
 
   asAiAnalyze(payload).then(function (r) {
+    if (window.wmProgress) wmProgress.hide();
     var d = r && r.data;
     if (!d) { status.innerHTML = '<span style="color:#EF4444">⚠ AI 응답 비어 있음</span>'; return; }
 
@@ -636,6 +654,7 @@ function _asAiAnalyzeClick() {
       _asEsc(d.category || '-') + ' (신뢰도 ' + conf + ') · 긴급도 ' + _asEsc(d.priority || '-') +
       ' · 토큰 in=' + (usage.input_tokens || 0) + ' out=' + (usage.output_tokens || 0);
   }).catch(function (err) {
+    if (window.wmProgress) wmProgress.hide();
     var msg = (err && err.data && err.data.message) || (err && err.message) || '실패';
     status.innerHTML = '<span style="color:#EF4444">❌ ' + _asEsc(msg) + '</span>';
   });
@@ -741,27 +760,56 @@ function _asModalAttachPicked(ev, ticketId) {
 
   if (status) status.innerHTML = '<span style="color:var(--t5)">⏳ ' + files.length + '개 파일 처리 중…</span>';
 
-  Promise.all(readers).then(function (items) {
+  // 2개 이상 파일이거나 합계 2MB 초과면 진행 모달 표시
+  var totalBytes = files.reduce(function (s, f) { return s + f.size; }, 0);
+  var showProg = (files.length >= 2 || totalBytes >= 2 * 1024 * 1024) && window.wmProgress;
+  if (showProg) {
+    wmProgress.show({
+      icon: '📎',
+      title: ticketId ? files.length + '개 파일 업로드 중' : files.length + '개 파일 변환 중',
+      sub: '전체 ' + (totalBytes >= 1024 * 1024 ? (totalBytes / 1024 / 1024).toFixed(1) + ' MB' : Math.round(totalBytes / 1024) + ' KB'),
+      tip: ticketId ? '서버에 순차 업로드합니다. 큰 파일은 시간이 더 걸릴 수 있습니다.' : '접수 등록 시 서버에 일괄 업로드됩니다.'
+    });
+    wmProgress.step('📖 파일 읽기 중 (0/' + files.length + ')');
+  }
+
+  // FileReader 진행률 추적 — Promise.all에 카운터 wrapping
+  var readDone = 0;
+  var readersWrapped = readers.map(function (p) {
+    return p.then(function (v) {
+      readDone++;
+      if (showProg) wmProgress.step('📖 파일 읽기 (' + readDone + '/' + files.length + ')');
+      return v;
+    });
+  });
+
+  Promise.all(readersWrapped).then(function (items) {
     if (ticketId) {
       // 편집 모드 — 서버에 즉시 일괄 업로드
       if (typeof asAttachmentPut !== 'function') {
+        if (showProg) wmProgress.hide();
         if (status) status.innerHTML = '<span style="color:#EF4444">⚠ 첨부 API 미연결</span>';
         return;
       }
       var ok = 0, fail = 0;
       var seq = Promise.resolve();
-      items.forEach(function (it) {
+      items.forEach(function (it, idx) {
         seq = seq.then(function () {
+          if (showProg) wmProgress.update({
+            step: '☁️ 서버 업로드 (' + (idx + 1) + '/' + items.length + ') · ' + it.fileName.slice(0, 28)
+          });
           return asAttachmentPut(ticketId, it).then(function () { ok++; }, function () { fail++; });
         });
       });
       seq.then(function () {
+        if (showProg) wmProgress.hide();
         if (status) status.innerHTML = '<span style="color:' + (fail ? '#F59E0B' : '#10B981') + '">✅ ' + ok + '개 업로드' + (fail ? ' · ❌ ' + fail + '개 실패' : '') + '</span>';
         _asRefreshModalAttachGrid(ticketId);
         if (typeof showToast === 'function') showToast('📎 ' + ok + '개 첨부 업로드 완료');
       });
     } else {
       // 신규 모드 — 임시 큐에 누적
+      if (showProg) wmProgress.hide();
       window._asPendingAttachments = (window._asPendingAttachments || []).concat(items);
       if (status) status.innerHTML = '<span style="color:#F59E0B">⏳ ' + items.length + '개 추가됨 — 접수 등록 시 함께 업로드됩니다 (총 ' + window._asPendingAttachments.length + '개 대기)</span>';
       _asRefreshModalAttachGrid(null);
@@ -2479,12 +2527,29 @@ function _asBuildComposeUrl(provider, to, subject, body) {
 
 /* ⑥ 보고서 — PDF 미리보기 모달 진입점 */
 function asReportPdfPreview(ticketId) {
-  if (typeof showToast === 'function') showToast('📄 PDF 생성 중…');
+  if (window.wmProgress) {
+    wmProgress.show({
+      icon: '📄',
+      title: 'PDF 보고서 생성 중',
+      sub: '신고·처리이력·부품·서명·첨부 사진을 8개 섹션으로 묶고 있습니다.',
+      tip: '첨부 사진이 많거나 처리이력이 길면 더 오래 걸릴 수 있습니다.'
+    });
+    wmProgress.autoSteps([
+      '📥 접수 정보 로드',
+      '🛠️ 처리이력 + 부품 집계',
+      '🖼️ 첨부 사진 인라인 임베드',
+      '✍️ 서명·CSAT 렌더',
+      '📸 html2canvas 캡처',
+      '📄 jsPDF 생성 + 페이지 분할'
+    ], 1500);
+  }
   asGetExpand(ticketId).then(function (t) {
     return _asGeneratePdf(t).then(function (out) {
+      if (window.wmProgress) wmProgress.hide();
       _asRenderPdfPreviewModal(t, out);
     });
   }).catch(function (err) {
+    if (window.wmProgress) wmProgress.hide();
     console.error('[asReportPdfPreview]', err);
     if (typeof showToast === 'function') showToast('❌ PDF 생성 실패: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
@@ -2646,6 +2711,17 @@ function _asRenderPdfPreviewModal(t, out) {
     // 1) 선택 기억
     try { localStorage.setItem('as_mail_provider', provider); } catch (e) {}
 
+    // 진행 모달 (짧은 작업이지만 사용자가 "뭔가 일어났다"는 신호를 받도록)
+    if (window.wmProgress) {
+      wmProgress.show({
+        icon: '✉️',
+        title: '메일 작성기 준비 중',
+        sub: 'PDF를 다운로드하고 ' + ({gmail:'Gmail',outlook:'Outlook',naver:'네이버 메일','outlook-live':'Outlook.com',mailto:'기본 메일 앱'}[provider] || '메일') + ' 작성 창을 엽니다.',
+        tip: '팝업이 차단되면 주소창의 팝업 허용을 눌러 주세요.'
+      });
+      wmProgress.autoSteps(['📥 PDF 다운로드', '🔗 작성 창 열기', '✅ 완료'], 700);
+    }
+
     // 2) PDF 자동 다운로드 (사용자 제스처 활성 상태에서)
     try { out.pdf.save(out.fileName); }
     catch (e) {
@@ -2659,6 +2735,7 @@ function _asRenderPdfPreviewModal(t, out) {
 
     // 4) 새 탭에서 작성기 열기 (팝업 차단 회피 위해 같은 클릭 안에서)
     var win = window.open(composeUrl, '_blank');
+    setTimeout(function () { if (window.wmProgress) wmProgress.hide(); }, 1500);
     if (!win || win.closed || typeof win.closed === 'undefined') {
       status.innerHTML = '⚠ 팝업이 차단되었습니다. 주소창 우측의 "팝업 허용"을 누르고 다시 시도하거나 <a href="' + _asEsc(composeUrl) + '" target="_blank" style="color:#3B82F6">여기를 클릭</a>하세요.';
       status.style.color = '#F59E0B';
