@@ -1,5 +1,36 @@
 # Work Manager — 변경 이력
 
+## v13.52 (2026-05-14) — fix: PDF 미리보기 깨짐 + SMTP 에러 친화화
+
+### 버그 1 — PDF 미리보기가 빈 회색 화면으로 보임
+
+**원인:** `server/app.js`의 helmet CSP에 `frame-src` / `object-src` 디렉티브가 명시 안 됐고, 명시 없으면 `default-src 'self'`로 폴백되어 `<iframe src="blob:...">` 가 차단됨. `imgSrc`엔 `blob:` 가 허용돼 있었으나 `frameSrc`엔 없어 누락 케이스.
+
+**수정:**
+- `frameSrc: ["'self'", "blob:", "data:"]`, `objectSrc: ["'self'", "blob:", "data:"]` 추가.
+- 부가 보강:
+  - html2canvas 화면 밖 캡처 시 `holder` div에 `width:794px` 명시, html2canvas 옵션에 `width:794, windowWidth:794, allowTaint:true` 추가 — 폭 0 캡처 사고 방지.
+  - 미리보기 iframe에 `width:100% / height:100% / display:block` 명시, 부모는 `min-width:0` 으로 flex 수축 허용.
+  - **폴백:** 3초 안에 `iframe load`가 안 오면 자동으로 "브라우저 미리보기가 차단되었습니다 + [🔗 새 탭에서 열기]" 안내로 교체. CSP/구브라우저 어디서든 PDF 확인 가능.
+
+### 버그 2 — 메일 발송 시 "Missing credentials for PLAIN" 에러
+
+**원인:** nodemailer가 SMTP 자격증명(USER/PASS)이 비어 있는 상태에서 PLAIN 인증을 시도. 즉 환경변수 미설정 — 코드 버그 아님.
+
+**수정 (에러 메시지만 친화화):**
+- "Missing credentials" → `SMTP 자격증명 미설정 — SMTP_USER / SMTP_PASS 환경변수를 채운 뒤 서버 재시작. Gmail은 앱 비밀번호 필요`
+- "Invalid login / Username and Password not accepted" → `Gmail 앱 비밀번호 안내 + 발급 링크`
+- "ETIMEDOUT / ECONNREFUSED" → `SMTP 서버 연결 실패 — HOST/PORT/방화벽 확인`
+
+### 변경 파일
+- `server/app.js` (CSP)
+- `server/routes/as-tickets.js` (에러 메시지 분기)
+- `as-manager.js` (PDF 캡처 폭 / iframe / 폴백)
+- `업무일지_분석기.html` (v13.52 · 패치노트)
+- `CHANGELOG.md`
+
+---
+
 ## v13.51 (2026-05-14) — A/S 메일 발송 보안 보강 (권한·BCC·푸터·감사로그·Rate-limit)
 
 ### 배경

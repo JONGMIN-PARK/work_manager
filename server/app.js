@@ -24,6 +24,9 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:", "blob:"],
+      // PDF 미리보기(iframe blob:) 허용 — A/S 보고서 PDF
+      frameSrc: ["'self'", "blob:", "data:"],
+      objectSrc: ["'self'", "blob:", "data:"],
       connectSrc: ["'self'", "https://generativelanguage.googleapis.com", "https://api.anthropic.com", "https://api.telegram.org"]
     }
   },

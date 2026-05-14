@@ -418,7 +418,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.51</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.52</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2808,6 +2808,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.52',date:'2026-05-14',title:'fix(as): PDF 미리보기 깨짐 + SMTP 에러 메시지 친화화',tag:'fix',items:[
+      '🔧 PDF 미리보기 iframe이 비어 보이던 원인 — helmet CSP에 frame-src/object-src 미정의 → default-src "self"로 폴백되어 blob: iframe 차단. server/app.js 의 CSP directives에 frameSrc/objectSrc에 "self","blob:","data:" 추가',
+      '🔧 html2canvas 캡처 시 화면 밖 컨테이너 width가 0으로 측정되어 빈 PDF가 나오는 사고 대비 — holder div에 width:794px 명시, html2canvas 옵션에 width:794, windowWidth:794, allowTaint:true 추가',
+      '🔧 미리보기 iframe에 width:100%·height:100%·display:block 명시 (flex 자식 폭 0 사고 방지). 부모는 min-width:0 으로 flex 수축 허용',
+      '🆘 미리보기 로딩 폴백 — 3초 안에 iframe load 이벤트가 안 오면 "브라우저 미리보기가 차단되었습니다" 안내 + [🔗 새 탭에서 열기] 버튼 자동 표시. 어떤 CSP/구브라우저 환경에서도 PDF를 볼 수 있음',
+      '✉️ 메일 발송 에러 메시지 친화화 — "Missing credentials for PLAIN"→"SMTP 자격증명 미설정 (SMTP_USER/SMTP_PASS 환경변수 + Gmail은 앱 비밀번호)", "Invalid login"→"Gmail 앱 비밀번호 안내", "ETIMEDOUT/ECONNREFUSED"→"SMTP 서버 연결 실패" 분기. 사용자가 다음 조치를 바로 알 수 있게'
+    ]},
     {ver:'13.51',date:'2026-05-14',title:'🔒 A/S 메일 발송 — 4단 보안 보강 (권한·BCC·푸터·감사로그·Rate-limit)',tag:'security',items:[
       '회사 SMTP를 등록하면 누구나 임의 주소로 발송할 수 있다는 우려 해결. 단일 라우터에 4가지 게이트를 한 번에 추가',
       '① 권한 게이트 — POST /:id/email-report 에 진입 시 (a) admin 이거나 (b) 해당 ticket의 as_assignments에 본인이 있어야 함. 아니면 403 "이 접수의 담당자 또는 관리자만 메일을 발송할 수 있습니다"',

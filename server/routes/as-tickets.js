@@ -1008,9 +1008,20 @@ router.post('/:id/email-report', emailReportLimiter, async function (req, res) {
     });
   } catch (e) {
     console.error('[as-tickets/email-report]', e);
+    var raw = (e && e.message) || '';
     var msg = '메일 발송 실패';
-    if (e && /SMTP|connect|auth/i.test(e.message || '')) msg += ' (SMTP 설정을 확인하세요)';
-    res.status(500).json({ error: 'EMAIL_FAILED', message: msg + ': ' + (e && e.message || '') });
+    if (/Missing credentials/i.test(raw)) {
+      msg = 'SMTP 자격증명 미설정 — 서버의 SMTP_USER / SMTP_PASS 환경변수를 채운 뒤 서버를 재시작하세요. (Gmail은 앱 비밀번호 필요)';
+    } else if (/Invalid login|Username and Password not accepted/i.test(raw)) {
+      msg = 'SMTP 로그인 실패 — Gmail은 일반 비밀번호 대신 앱 비밀번호가 필요합니다. 2단계 인증 활성화 후 myaccount.google.com/apppasswords 에서 발급하세요.';
+    } else if (/ETIMEDOUT|ECONNREFUSED|connect/i.test(raw)) {
+      msg = 'SMTP 서버 연결 실패 — SMTP_HOST / SMTP_PORT 설정 또는 방화벽을 확인하세요.';
+    } else if (/SMTP|auth/i.test(raw)) {
+      msg = '메일 발송 실패 (SMTP 설정을 확인하세요): ' + raw;
+    } else {
+      msg = '메일 발송 실패: ' + raw;
+    }
+    res.status(500).json({ error: 'EMAIL_FAILED', message: msg });
   }
 });
 

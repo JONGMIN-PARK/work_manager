@@ -2016,14 +2016,14 @@ function _asGeneratePdf(t) {
       reject(new Error('PDF 라이브러리(jsPDF/html2canvas)가 로드되지 않았습니다. 페이지를 새로고침 후 다시 시도하세요.'));
       return;
     }
-    // 화면 밖 컨테이너에 HTML 렌더
+    // 화면 밖 컨테이너에 HTML 렌더 — 폭을 명시해서 html2canvas가 0폭으로 캡처하는 사고 방지
     var holder = document.createElement('div');
-    holder.style.cssText = 'position:fixed;left:-99999px;top:0;background:#fff;z-index:-1';
+    holder.style.cssText = 'position:fixed;left:-99999px;top:0;width:794px;background:#fff;z-index:-1';
     holder.innerHTML = _asReportHtmlForPdf(t);
     document.body.appendChild(holder);
     var root = holder.querySelector('#asPdfRoot');
 
-    window.html2canvas(root, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false }).then(function (canvas) {
+    window.html2canvas(root, { scale: 2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true, logging: false, width: 794, windowWidth: 794 }).then(function (canvas) {
       try {
         var jsPDF = window.jspdf.jsPDF;
         var pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
@@ -2101,8 +2101,10 @@ function _asRenderPdfPreviewModal(t, out) {
   h += '</div>';
 
   // 본문 — 좌측 iframe / 우측 액션
-  h += '<div style="display:flex;flex:1;overflow:hidden">';
-  h += '<iframe src="' + blobUrl + '" style="flex:1;border:none;background:#525659;min-height:520px" title="PDF 미리보기"></iframe>';
+  h += '<div style="display:flex;flex:1;overflow:hidden;min-height:520px">';
+  h += '<div id="asPdfPreviewArea" style="flex:1;display:flex;flex-direction:column;background:#525659;min-width:0">';
+  h += '<iframe id="asPdfPreviewFrame" src="' + blobUrl + '" style="width:100%;height:100%;border:none;background:#525659;display:block" title="PDF 미리보기"></iframe>';
+  h += '</div>';
 
   // 우측 액션 패널
   h += '<div style="width:280px;border-left:1px solid var(--bd);padding:14px 16px;overflow-y:auto;background:var(--bg-i)">';
@@ -2135,6 +2137,28 @@ function _asRenderPdfPreviewModal(t, out) {
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', function (e) { if (e.target === overlay) _asPdfPreviewClose(); });
+
+  // PDF iframe 로딩 실패/차단 감지 (CSP/구브라우저 폴백)
+  (function () {
+    var fr = document.getElementById('asPdfPreviewFrame');
+    var area = document.getElementById('asPdfPreviewArea');
+    if (!fr || !area) return;
+    var loaded = false;
+    fr.addEventListener('load', function () { loaded = true; });
+    setTimeout(function () {
+      if (loaded) return;
+      // 3초 안에 load 이벤트가 안 오면 폴백 UI
+      area.innerHTML =
+        '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#cbd5e1;padding:40px;text-align:center">' +
+        '<div style="font-size:60px;margin-bottom:14px">📄</div>' +
+        '<div style="font-size:13px;margin-bottom:8px">브라우저 미리보기가 차단되었습니다.</div>' +
+        '<div style="font-size:11px;color:#94a3b8;margin-bottom:18px">새 탭에서 PDF를 확인하거나, 우측 [PDF로 저장]을 사용하세요.</div>' +
+        '<button id="asPdfOpenNewTab" style="padding:9px 18px;border:none;border-radius:6px;background:#3B82F6;color:#fff;cursor:pointer;font-size:12px;font-weight:600">🔗 새 탭에서 열기</button>' +
+        '</div>';
+      var btn = document.getElementById('asPdfOpenNewTab');
+      if (btn) btn.onclick = function () { window.open(blobUrl, '_blank'); };
+    }, 3000);
+  })();
 
   // 액션 바인딩 — out을 클로저로 잡고 있어야 함
   document.getElementById('asPdfDownloadBtn').onclick = function () {
