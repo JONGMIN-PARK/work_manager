@@ -97,6 +97,9 @@ var TEMPLATES = {
     return '📄 <b>A/S 보고서 발행</b>\n' +
       '[' + p.ticketNo + '] ' + (p.customerName || '') + '\n' +
       '발행자: ' + (p.author || '-');
+  },
+  as_weekly_digest: function (p) {
+    return p.content || '📊 <b>A/S 주간 요약</b>';
   }
 };
 
@@ -165,7 +168,8 @@ var EVENT_TITLES = {
   as_assigned: 'A/S 할당',
   as_sla_breach: 'A/S SLA 초과',
   as_customer_wait: 'A/S 고객 확인 미회신',
-  as_report_issued: 'A/S 보고서 발행'
+  as_report_issued: 'A/S 보고서 발행',
+  as_weekly_digest: 'A/S 주간 요약'
 };
 
 async function notify(eventType, payload, targetUserIds) {

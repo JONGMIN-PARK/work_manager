@@ -102,6 +102,7 @@ window.wmDataBus = (function () {
 <script defer src="issue-manager.js?v=5" onerror="console.warn('issue-manager.js 로드 실패')"></script>
 <script defer src="document-manager.js?v=5" onerror="console.warn('document-manager.js 로드 실패')"></script>
 <script defer src="as-manager.js?v=1" onerror="console.warn('as-manager.js 로드 실패')"></script>
+<script defer src="as-stats.js?v=1" onerror="console.warn('as-stats.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" onerror="console.warn('pdf.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
@@ -418,7 +419,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.53</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.54</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2808,6 +2809,27 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.54',date:'2026-05-14',title:'📊 A/S 통계·트렌드 분석 풀세트 + 자동 인사이트 + 주간 텔레그램 요약',tag:'feature',items:[
+      'A/S 상단 토글에 [📊 통계] 추가 — 시안색(0EA5E9) 강조. 클릭 시 별도 모듈(as-stats.js)로 위임',
+      '백엔드: server/routes/as-stats.js 신설 — 단일 통합 엔드포인트 GET /api/as-stats?from=&to=&groupBy= 가 KPI 8종 + 추이 + 5종 분포(카테고리/긴급도/상태/보증/처리방식) + 부서부하 + SLA준수율 + Top10 고객·장비 + RCA 분포 + CSAT 추이 + 부품(청구구분·월별) + 자동 인사이트 한방 반환. 모든 쿼리 Promise.all 병렬 실행',
+      '기간 처리: from/to 미지정 시 최근 90일, groupBy 자동(31일↓=day, 120일↓=week, 그 외 month). 직전 동일 길이 기간(prev)도 자동 계산해 KPI 증감 비교용',
+      'SLA 정의: AS_PRIORITY.closeDays 기반 SQL CASE — P1>3일, P2>7일, P3>14일, P4>30일 + (closed면 closed_at-received_at, 진행 중이면 NOW()-received_at). 긴급도별 준수/위반 비율',
+      'CSAT 점수: very_satisfied=5, satisfied=4, neutral=3, unsatisfied=2, very_unsatisfied=1로 환산해 평균. 응답속도/처리품질/전반 3종 분리',
+      '자동 인사이트(buildInsights) — 규칙 기반 한국어 코멘트 자동 생성: 신규 ±20% 이상 변동/MTTR ±10% 변동/SLA위반율 10%↑/CSAT<3.5 또는 ≥4.5/단일 고객이 전체의 30%↑/단일 카테고리 30%↑/부서 부하 40h↑/P1·P2 미해결 3건↑ 감지. good/warn/critical/info 분류로 색상 분기',
+      'API: GET /api/as-stats/weekly-digest?send=1 — 주간 요약 텍스트 생성 + 텔레그램 발사. 신규/종결/MTTR/SLA위반/Top3 카테고리·고객 + P1·P2 미해결 Top5. send=1이면 admin들에게 notify("as_weekly_digest")',
+      'notification.service: TEMPLATES.as_weekly_digest + EVENT_TITLES.as_weekly_digest 추가. 외부 cron(예: cron-job.org)에서 시간당/주간 호출하면 자동화 가능',
+      '프론트: as-stats.js 신설 (~600줄) — Chart.js 13개 차트 그리드:',
+      '  KPI 8장 (신규/처리중/종결/P1·P2미해결/MTTR/SLA위반%/CSAT/부품비용) — 추세 화살표 ▲▼ + 의미 색상(개선=초록/악화=빨강) 자동',
+      '  📈 신규/종결 추이(Line 2시리즈) · 🏷️ 카테고리 분포(Donut) · 🚦 긴급도 분포(Bar, 색상 자동) · 📌 상태 분포(Donut) · ⏱️ SLA 준수율(Stacked Bar) · 👥 부서 부하(Horizontal Bar) · ⚡ MTTR 추이(Line) · 🎯 Top10 고객 Pareto · 🔧 Top10 장비 · 🔍 완료분류(Bar) · ⭐ CSAT 추이(Line 3시리즈, 1~5 고정) · 💰 부품 청구구분(Donut) · 💵 부품 월별 누적(Stacked Bar)',
+      '기간 프리셋: 7일 / 30일 / 90일 / 6개월 / 12개월 / 사용자 지정(date range). 프리셋·custom 입력은 즉시 재조회',
+      '💡 자동 인사이트 패널 — 응답의 insights 배열을 좌측 컬러바 카드(good=초록·warn=주황·critical=빨강·info=파랑)로 표시. 데이터 부족이면 안내 메시지',
+      '🔍 Drill-down — 카테고리/긴급도/상태/Top 고객 차트 클릭 → 해당 조건으로 asFilter* 자동 적용 + asViewMode="all"로 점프 + 토스트 알림',
+      '관리자 전용 [📨 주간 요약 발사] 버튼 — 컨펌 후 즉시 텔레그램 발송, 발송 인원수 토스트',
+      '데이터 부족 처리 — 선택 기간에 데이터 없으면 안내 화면(📊 큰 아이콘 + 예시 안내)',
+      'project-data.js: asStatsGet(params), asStatsWeeklyDigest(send) 헬퍼 추가',
+      '시인성: Chart.js Noto Sans KR + 일관 색상 팔레트(긴급도=AS_PRIORITY.color, 청구=AS_BILLING.color, 상태=내부 매핑). KPI는 큰 숫자(24px) + 추세 화살표 + 컬러 보더(3px)로 한눈 파악',
+      '서버 라우트 마운트: app.js 에 require + app.use("/api/as-stats", asStatsRoutes) 2줄 추가'
+    ]},
     {ver:'13.53',date:'2026-05-14',title:'✉️ A/S 보고서 메일 — 웹메일 작성기 콤보 방식으로 전환 (SMTP 불필요)',tag:'feature',items:[
       '서버 SMTP 설정·환경변수·IT 협조 일체 없이 메일 발송 가능. 본인 메일 명의로 발송되어 "보낸 편지함" 자동 보관 + 사칭 0',
       'PDF 미리보기 모달 우측 패널을 "웹메일 작성기 콤보"로 교체. [✉️ PDF 다운로드 + 작성기 열기] 한 번 클릭으로 (1) PDF 자동 다운로드 (2) 사용자가 선택한 웹메일 compose 새 탭 자동 오픈 (To·제목·본문 자동 입력) (3) 사용자는 PDF를 작성 창에 끌어다 놓고 발송',

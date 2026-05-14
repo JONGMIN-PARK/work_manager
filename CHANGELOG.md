@@ -1,5 +1,112 @@
 # Work Manager — 변경 이력
 
+## v13.54 (2026-05-14) — A/S 통계·트렌드 분석 풀세트 + 자동 인사이트 + 주간 텔레그램 요약
+
+### 배경
+사용자: "A/S 관련해서 트렌드 분석 및 통계 분석 기능 넣으면 좋을 거 같은데?" → 옵션 1~3 풀코스(MVP + 풀 슬라이스 + 주간 텔레그램). 요청: "시인성과 분석력에 확연히 도움이 되는 구성 및 기능으로".
+
+### 백엔드 — `server/routes/as-stats.js` 신설
+
+**단일 통합 엔드포인트 `GET /api/as-stats?from=&to=&groupBy=`** — 모든 차트 데이터 한방 반환:
+- `kpi`: 신규/처리중/종결/P1·P2미해결/MTTR/SLA위반%/CSAT/부품비용 (현재 + 이전 기간 + Δ%)
+- `trend.{labels,newCount,closedCount,mttrHours}`
+- `distribution.{category,priority,status,warranty,method}`
+- `deptLoad`, `sla.byPriority`, `topCustomers`, `topEquipment`, `rca`
+- `csat.{labels,overall,speed,quality}`
+- `parts.{byBilling, labels, warranty, paid, goodwill, check}`
+- `insights[]` — 규칙 기반 한국어 코멘트
+
+**자동 기간 처리:**
+- `from/to` 미지정 시 최근 90일.
+- `groupBy` 자동: 31일 이하 → `day`, 120일 이하 → `week`, 그 외 → `month`.
+- **직전 동일 길이 기간**을 자동 계산해서 KPI 증감 비교용으로 사용.
+
+**SLA 정의:** `AS_PRIORITY.closeDays` 기반.
+- P1 > 3일, P2 > 7일, P3 > 14일, P4 > 30일.
+- closed면 `closed_at - received_at`, 진행 중이면 `NOW() - received_at` 비교.
+
+**CSAT 점수화:** very_satisfied=5, satisfied=4, neutral=3, unsatisfied=2, very_unsatisfied=1 환산 후 AVG.
+
+**자동 인사이트(`buildInsights`)** — 규칙 기반:
+- 신규 접수 ±20% 변화
+- MTTR ±10% 변화
+- SLA 위반율 10% 이상
+- CSAT < 3.5 (critical) 또는 ≥ 4.5 (good)
+- 단일 고객/카테고리가 전체의 30% 이상
+- 부서 부하 40h 이상
+- P1·P2 미해결 3건 이상
+
+분류: `good` / `warn` / `critical` / `info` — 프론트에서 색상 분기.
+
+**주간 요약 `GET /api/as-stats/weekly-digest?send=1`:**
+- 신규/종결/MTTR/SLA위반 + Top3 카테고리·고객 + P1·P2 미해결 Top5 텍스트 생성.
+- `send=1`이면 admin들에게 `notify('as_weekly_digest')` 발사.
+- 외부 cron(예: cron-job.org)에서 주간 호출하면 자동화. 서버 자체 스케줄러 도입은 별도 필요.
+
+### 알림 — `server/services/notification.service.js`
+- `TEMPLATES.as_weekly_digest` + `EVENT_TITLES.as_weekly_digest` 추가.
+
+### 프론트엔드 — `as-stats.js` 신설 (≈ 600줄)
+
+**Chart.js 13개 차트 그리드** (모두 Noto Sans KR + 일관 색상 팔레트):
+
+| # | 차트 | 형식 | 비고 |
+|---|---|---|---|
+| 1 | 신규/종결 추이 | Line 2 시리즈 | 큰 셀 (280px) |
+| 2 | 카테고리 분포 | Donut | 클릭 시 drill-down |
+| 3 | 긴급도 분포 | Bar | 색상=AS_PRIORITY.color |
+| 4 | 상태 분포 | Donut | 클릭 시 drill-down |
+| 5 | SLA 준수율 (긴급도별) | Stacked Bar | 준수(초록) + 위반(빨강) |
+| 6 | 부서별 부하 | Horizontal Bar | 활동로그 누적 시간 |
+| 7 | MTTR 추이 | Line | 평균 처리시간 |
+| 8 | Top 10 고객 (Pareto) | Horizontal Bar | P1·P2 보유 시 빨간색 |
+| 9 | Top 10 장비 | Horizontal Bar | |
+| 10 | 완료분류 (RCA) | Bar | closure 분포 |
+| 11 | CSAT 추이 | Line 3 시리즈 | 1~5 고정 스케일 |
+| 12 | 부품 청구구분 | Donut | 색상=AS_BILLING.color |
+| 13 | 부품 월별 누적 | Stacked Bar | 보증/유상/Goodwill/확인 |
+
+**KPI 8장:**
+- 신규 접수 / 처리 중 / 종결 / P1·P2 미해결 / 평균 처리시간 / SLA 위반율 / CSAT 평균 / 부품 비용.
+- 추세 화살표 ▲▼ + **의미 색상 자동**(개선=초록, 악화=빨강 — invert 플래그로 신규/MTTR/위반율은 감소가 좋음, 종결/CSAT는 증가가 좋음).
+- 컬러 보더 3px로 한눈 식별. 큰 숫자(24px).
+
+**기간 프리셋:** 7일 / 30일 / 90일 / 6개월 / 12개월 / 사용자 지정(date range 입력). 즉시 재조회.
+
+**💡 자동 인사이트 패널** — 응답 `insights`를 좌측 컬러바 카드로:
+- good = 초록 / warn = 주황 / critical = 빨강 / info = 파랑.
+- 데이터 부족 시 안내 메시지.
+
+**🔍 Drill-down:** 카테고리·긴급도·상태·Top 고객 차트 클릭 → `asFilterCategory/Priority/Status/asSearchKw` 자동 설정 + `asViewMode='all'`로 점프 + 토스트.
+
+**관리자 전용** `[📨 주간 요약 발사]` 버튼 — 컨펌 → POST → 발송 인원수 토스트.
+
+**데이터 부족 처리:** 선택 기간에 KPI 합계 0이면 큰 📊 아이콘 + "기간을 더 길게 설정하거나 접수를 등록한 후 다시 확인" 안내.
+
+### `as-manager.js`
+- `asViewMode` 토글에 `'stats'` 추가. `renderAS` 진입 시 `stats`면 `renderASStats()`로 위임.
+- 상단 토글에 [📊 통계] 버튼 추가 (시안색 `#0EA5E9` 강조).
+
+### `project-data.js`
+- `asStatsGet(params)`, `asStatsWeeklyDigest(send)` 헬퍼 추가.
+
+### `업무일지_분석기.html`
+- `as-stats.js` 로드 추가.
+- v13.54 / 패치노트.
+
+### 효과
+- 매 회 보고서 뽑을 필요 없이 한 화면에서 현황·트렌드·이상치 파악.
+- 자동 인사이트가 "어디를 봐야 할지" 가이드.
+- 차트 클릭으로 바로 해당 케이스 조회.
+- 주간 텔레그램으로 관리자 자동 푸시.
+- 시인성: KPI 카드 색상·화살표 + 일관 차트 팔레트 + 인사이트 색상 분류.
+
+### 변경 파일
+- 신규: `server/routes/as-stats.js`, `as-stats.js`
+- 수정: `server/app.js`, `server/services/notification.service.js`, `project-data.js`, `as-manager.js`, `업무일지_분석기.html`, `CHANGELOG.md`
+
+---
+
 ## v13.53 (2026-05-14) — A/S 보고서 메일: 웹메일 작성기 콤보 (SMTP 불필요)
 
 ### 배경

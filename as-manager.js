@@ -9,7 +9,7 @@ var asFilterStatus = '';
 var asFilterPriority = '';
 var asFilterCategory = '';
 var asSearchKw = '';
-var asViewMode = 'all';  // 'all' | 'myqueue' | 'kanban' | 'trash'
+var asViewMode = 'all';  // 'all' | 'myqueue' | 'kanban' | 'trash' | 'stats'
 var _asTrashCount = 0;   // 휴지통 N개 배지용 (목록 응답 시 갱신)
 
 /* ═══ 카테고리 캐시 (DB의 as_categories 테이블에서 동적 로드) ═══
@@ -95,6 +95,16 @@ function renderAS() {
   var wrap = document.getElementById('asWrap');
   if (!wrap) return;
 
+  // 통계 모드는 별도 모듈에 위임
+  if (asViewMode === 'stats') {
+    if (typeof renderASStats === 'function') {
+      renderASStats();
+      return;
+    }
+    wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:#EF4444">as-stats.js 모듈 로드 실패</div>';
+    return;
+  }
+
   var STATUS = typeof AS_STATUS !== 'undefined' ? AS_STATUS : {};
   var PRIO   = typeof AS_PRIORITY !== 'undefined' ? AS_PRIORITY : {};
 
@@ -150,21 +160,24 @@ function renderAS() {
     html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
     html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
     html += '<span style="font-size:13px;font-weight:700;color:var(--t2)">🛠️ A/S 접수 관리</span>';
-    // 전체 / 내 큐 / 칸반 / 휴지통 토글
+    // 전체 / 내 큐 / 칸반 / 통계 / 휴지통 토글
     html += '<div style="display:inline-flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden">';
-    ['all', 'myqueue', 'kanban', 'trash'].forEach(function (mode) {
+    ['all', 'myqueue', 'kanban', 'stats', 'trash'].forEach(function (mode) {
       var labels = {
         all: '📋 전체',
         myqueue: '🎯 내 큐',
         kanban: '🗂️ 칸반',
+        stats: '📊 통계',
         trash: '🗑️ 휴지통' + (_asTrashCount > 0 ? ' (' + _asTrashCount + ')' : '')
       };
       var titles = {
         myqueue: '내게 할당된 처리 진행 중인 건만',
         kanban: '상태별 칸반 보드 (드래그로 이동)',
+        stats: '트렌드·KPI·SLA·부서부하·CSAT·부품 비용 분석',
         trash: '삭제(휴지통 이동)된 접수 — 복구 또는 완전 삭제'
       };
-      var activeBg = mode === 'trash' ? '#EF4444' : '#F59E0B';
+      var bgPerMode = { trash: '#EF4444', stats: '#0EA5E9' };
+      var activeBg = bgPerMode[mode] || '#F59E0B';
       var active = asViewMode === mode;
       html += '<button onclick="asViewMode=\'' + mode + '\';renderAS()" style="font-size:10px;padding:4px 10px;border:none;background:' + (active ? activeBg : 'var(--bg-i)') + ';color:' + (active ? '#fff' : 'var(--t4)') + ';cursor:pointer;font-weight:' + (active ? '700' : '500') + '"' + (titles[mode] ? ' title="' + titles[mode] + '"' : '') + '>' + labels[mode] + '</button>';
     });

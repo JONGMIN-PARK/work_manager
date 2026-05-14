@@ -965,6 +965,21 @@ function asEmailReport(ticketId, payload) {
     body: JSON.stringify(payload || {})
   });
 }
+
+/* ─── A/S 통계 ─── */
+function asStatsGet(params) {
+  var qs = '';
+  if (params && typeof params === 'object') {
+    var pairs = Object.keys(params).filter(function (k) { return params[k] != null && params[k] !== ''; })
+      .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); });
+    if (pairs.length) qs = '?' + pairs.join('&');
+  }
+  return apiFetch('/api/as-stats' + qs).then(function (r) { return r.data; });
+}
+function asStatsWeeklyDigest(send) {
+  var qs = send ? '?send=1' : '';
+  return apiFetch('/api/as-stats/weekly-digest' + qs).then(function (r) { return r.data; });
+}
 function createASTicket(data) {
   var now = new Date().toISOString();
   var ticket = {
