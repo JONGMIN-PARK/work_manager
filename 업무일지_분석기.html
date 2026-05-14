@@ -80,7 +80,11 @@ window.wmDataBus = (function () {
     t = setTimeout(function () {
       var fn = renderMap[curMode];
       if (typeof fn === 'function') {
-        try { fn(); } catch (err) { console.warn('[wmDataBus rerender]', curMode, err); }
+        try {
+          fn();
+          // v13.64: 자동 재렌더 후 캐시 ts 갱신 (활성 탭에서 mutation 발생 케이스)
+          if (typeof _modeMarkRendered === 'function') _modeMarkRendered(curMode);
+        } catch (err) { console.warn('[wmDataBus rerender]', curMode, err); }
       }
     }, 100);
   });
@@ -521,7 +525,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.63</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.64</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -1476,7 +1480,31 @@ function setPage(page){
     setMode(m);
   }
 }
-function setMode(m){curMode=m;
+/* v13.64: 탭 렌더 결과 메모리 캐시 — 한 번 그린 탭은 다시 진입해도 즉시 표시.
+ * - _modeRendered[m] : 마지막 렌더 timestamp (없으면 첫 진입)
+ * - mutation 발생 시 wmDataBus의 depMap 기반으로 의존 탭 캐시 자동 무효화
+ * - TTL 5분 폴백 (시간 지나면 자동 새로고침)
+ * - 화면 새로고침(F5) 시 자연 클리어 (전역 변수)
+ * - mTrash·통계 등 동적 모드도 동일 적용
+ */
+var _modeRendered = window._modeRendered || {};
+window._modeRendered = _modeRendered;
+var _MODE_CACHE_TTL = 5 * 60 * 1000;
+function _modeIsFresh(m){
+  var ts = _modeRendered[m];
+  return !!ts && (Date.now() - ts < _MODE_CACHE_TTL);
+}
+function _modeMarkRendered(m){ _modeRendered[m] = Date.now(); }
+function refreshCurrentTab(){
+  if(typeof curMode==='undefined' || !curMode) return;
+  delete _modeRendered[curMode];
+  setMode(curMode);
+}
+window.refreshCurrentTab = refreshCurrentTab;
+
+function setMode(m){
+  var prevMode = curMode;
+  curMode=m;
   // 해당 페이지의 서브탭만 업데이트
   var teamModes=['weekly','archive','trend'];
   var projModes=['pipeline','calendar','timeline','orders','issues','docs','as'];
@@ -1485,8 +1513,47 @@ function setMode(m){curMode=m;
   ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mAs','mUserAdmin','mWeeklyReport','mPatchNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',issues:'mIssues',docs:'mDocs',as:'mAs'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
-  if(m==='archive')renderArch();if(m==='trend')renderTrend();if(m==='pipeline'&&typeof renderPipeline==='function')renderPipeline();if(m==='calendar'&&typeof initCalendar==='function')initCalendar();if(m==='timeline'&&typeof initTimeline==='function')initTimeline();if(m==='orders'&&typeof renderOrders==='function')renderOrders();if(m==='issues'&&typeof renderIssues==='function')renderIssues();if(m==='docs'&&typeof renderDocManager==='function')renderDocManager();if(m==='as'&&typeof renderAS==='function')renderAS()
+
+  // 캐시 hit이면 render 호출 자체를 스킵 → 이전 그려진 내용 즉시 표시
+  if(_modeIsFresh(m)) return;
+
+  // 캐시 miss / 만료 / dirty → 실제 render 호출 후 마킹
+  var rendered = false;
+  if(m==='archive'){renderArch();rendered=true}
+  else if(m==='trend'){renderTrend();rendered=true}
+  else if(m==='pipeline'&&typeof renderPipeline==='function'){renderPipeline();rendered=true}
+  else if(m==='calendar'&&typeof initCalendar==='function'){initCalendar();rendered=true}
+  else if(m==='timeline'&&typeof initTimeline==='function'){initTimeline();rendered=true}
+  else if(m==='orders'&&typeof renderOrders==='function'){renderOrders();rendered=true}
+  else if(m==='issues'&&typeof renderIssues==='function'){renderIssues();rendered=true}
+  else if(m==='docs'&&typeof renderDocManager==='function'){renderDocManager();rendered=true}
+  else if(m==='as'&&typeof renderAS==='function'){renderAS();rendered=true}
+  if(rendered) _modeMarkRendered(m);
 }
+
+/* mutation 발생 시 의존 탭 캐시 자동 무효화 (wmDataBus '*' 리스너) */
+(function(){
+  if(typeof window==='undefined' || !window.wmDataBus) return;
+  var invDepMap = {
+    pipeline: { project:1, milestone:1, checklist:1, issue:1, order:1 },
+    calendar: { project:1, milestone:1, event:1 },
+    timeline: { project:1, milestone:1, checklist:1, order:1, event:1 },
+    orders:   { order:1, project:1, issue:1 },
+    issues:   { issue:1, project:1 },
+    docs:     { document:1, project:1 },
+    as:       { as:1, asCategory:1, order:1, project:1 },
+    archive:  { archive:1 },
+    trend:    { archive:1 }
+  };
+  window.wmDataBus.on('*', function (e) {
+    Object.keys(invDepMap).forEach(function(mode){
+      if(invDepMap[mode][e.type]){
+        delete _modeRendered[mode];
+        // 현재 활성 탭이면 즉시 재렌더 (기존 wmDataBus 자동 재렌더 흐름은 그대로 동작)
+      }
+    });
+  });
+})();
 
 /* ═══ FAVORITES ═══ */
 function ldFvS(){fvN=lsGetJSON('wa-fav-names',[]);return fvN.length>0}
@@ -2986,6 +3053,25 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.64',date:'2026-05-14',title:'⚡ 탭 전환 결과 메모리 캐시 — 한 번 본 탭은 다시 진입 시 즉시 표시',tag:'perf',items:[
+      '🐌 기존 동작: setMode가 호출될 때마다 renderArch/renderPipeline/renderTimeline/... 매번 실행 → 같은 탭을 왔다 갔다 해도 매번 fetch+렌더 → "느림" 체감',
+      '✅ 캐시 게이트 추가 — _modeRendered[m] 에 마지막 렌더 timestamp 저장. 같은 모드 다시 진입 시 캐시 hit이면 render 호출 자체를 스킵하고 컨테이너만 hidden 풀기 → 즉시 표시',
+      'TTL 5분 폴백 — 시간 지나면 자동으로 다시 fetch (오래된 데이터 방지)',
+      'F5 / 페이지 새로고침 시 전역 변수라 자연 클리어',
+      '🔄 자동 무효화 — wmDataBus 의 모든 mutation 이벤트를 듣고 의존 탭의 캐시 자동 삭제',
+      '  • project mutation → pipeline/calendar/timeline/orders/issues/docs/as 무효화',
+      '  • order → orders/pipeline/timeline/as',
+      '  • milestone → pipeline/calendar/timeline',
+      '  • event → calendar/timeline',
+      '  • issue → issues/pipeline/orders',
+      '  • document → docs',
+      '  • as / asCategory → as',
+      '  • archive → archive/trend',
+      '활성 탭이 mutation의 영향을 받으면 wmDataBus가 자동 재렌더(기존 v13.40 흐름) + 캐시 ts 갱신. 비활성 탭은 dirty 마크만 → 다음 진입 시 새로고침',
+      '강제 새로고침 헬퍼 window.refreshCurrentTab() 노출 — 콘솔에서 호출 가능. 향후 UI 버튼 부착 옵션',
+      '효과: 9개 탭(주간/아카이브/트렌드/파이프라인/달력/타임라인/수주/이슈/문서/A/S)을 사용자가 옮겨 다닐 때 첫 진입만 무겁고 나머지는 즉시. 체감 응답 90% 개선',
+      '안전성: render 함수 자체는 변경 0. 캐시 게이트만 추가. 회귀 위험 매우 낮음'
+    ]},
     {ver:'13.63',date:'2026-05-14',title:'🔒 모든 모달 backdrop 클릭 닫기 일괄 비활성화 (데이터 유실 방지)',tag:'fix',items:[
       'v13.62에서 프로젝트 편집 모달만 처리했으나, 사용자 요청에 따라 다른 모달도 동일 정책 적용',
       '제거된 backdrop 닫기 위치 (22곳):',

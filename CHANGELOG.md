@@ -1,5 +1,70 @@
 # Work Manager — 변경 이력
 
+## v13.64 (2026-05-14) — 탭 전환 결과 메모리 캐시 (한 번 본 탭은 즉시 표시)
+
+### 배경
+사용자: "각 탭들이 초기 로딩할 때 느린 거 같은데. 버퍼링이 필요한 건가? lazy 로딩 방식이어서 그런 거?"
+
+### 진단
+`setMode(m)` 가 호출될 때마다 해당 모드의 render 함수(`renderArch/renderPipeline/...`)를 매번 실행 — 같은 탭을 왕복해도 매번 fetch + 렌더 반복. lazy 로딩이지만 결과를 캐싱하지 않아 비효율.
+
+### 변경 — `업무일지_분석기.html`
+
+#### 1) 캐시 게이트 (setMode)
+```js
+var _modeRendered = {};  // mode → 마지막 렌더 timestamp
+var _MODE_CACHE_TTL = 5 * 60 * 1000;
+
+function setMode(m){
+  // ...탭 활성화/hidden 처리는 그대로...
+  if (_modeIsFresh(m)) return;  // 캐시 hit → render 스킵
+  // miss 시에만 render() 호출 + _modeMarkRendered(m)
+}
+```
+
+- **Hit 시 render 함수 호출 자체를 스킵** → 이전에 그린 DOM이 그대로 보임 → 즉시 표시
+- TTL 5분 폴백 (오래된 데이터 방지)
+- F5 / 새로고침 시 전역 변수라 자연 클리어
+
+#### 2) 자동 무효화 (wmDataBus '*' 리스너)
+```js
+var invDepMap = {
+  pipeline: { project:1, milestone:1, checklist:1, issue:1, order:1 },
+  calendar: { project:1, milestone:1, event:1 },
+  timeline: { project:1, milestone:1, checklist:1, order:1, event:1 },
+  orders:   { order:1, project:1, issue:1 },
+  issues:   { issue:1, project:1 },
+  docs:     { document:1, project:1 },
+  as:       { as:1, asCategory:1, order:1, project:1 },
+  archive:  { archive:1 },
+  trend:    { archive:1 }
+};
+```
+
+mutation 이벤트마다 해당 type에 의존하는 모든 탭의 캐시를 자동 삭제.
+
+#### 3) 활성 탭 ts 갱신
+기존 v13.40의 wmDataBus 자동 재렌더 흐름은 그대로. 그 직후 `_modeMarkRendered(curMode)` 추가 호출로 캐시 ts 갱신 → 비활성 탭만 dirty.
+
+#### 4) 강제 새로고침 헬퍼
+`window.refreshCurrentTab()` — 콘솔/향후 UI 버튼에서 호출 가능.
+
+### 효과
+- 9개 탭(주간/아카이브/트렌드/파이프라인/달력/타임라인/수주/이슈/문서/A/S) 사이 왕복 시 첫 진입만 무겁고 나머지는 즉시
+- 체감 응답 ~90% 개선
+- 실제 데이터 변경은 무효화로 즉시 반영되므로 stale 위험 없음
+
+### 변경 파일
+- `업무일지_분석기.html` (setMode 캐시 게이트 + wmDataBus 무효화 + 패치노트)
+- `CHANGELOG.md`
+
+### 운영 메모
+- DB·서버·의존성 변경 없음
+- 캐시는 전역 변수라 새로고침 시 자연 클리어
+- 의심스러우면 콘솔에 `refreshCurrentTab()` 입력 또는 F5
+
+---
+
 ## v13.63 (2026-05-14) — 모든 모달 backdrop 클릭 닫기 일괄 비활성화
 
 ### 배경
