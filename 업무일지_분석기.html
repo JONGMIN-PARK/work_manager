@@ -521,7 +521,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.59</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.60</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -1956,10 +1956,14 @@ function pickDateRange(){
 }
 /* 주차 선택 */
 function pickWeek(sunStart){
-  if(sunStart===null){selWeek=null}
+  if(sunStart===null){
+    selWeek=null;
+    try{localStorage.removeItem('wm-lastWeek')}catch(e){}
+  }
   else{
     const end=getSatEnd(sunStart);
     selWeek={start:sunStart,end:end,label:fD(sunStart)+' ~ '+fD(end)};
+    try{localStorage.setItem('wm-lastWeek',sunStart)}catch(e){}
   }
   renderWeekSelector();
   // 주차 라벨도 자동 갱신
@@ -1972,16 +1976,30 @@ function pickWeek(sunStart){
   }
   gfInvalidate();rFL();upV();
 }
-/* applyADToUI 후 주차 선택기 초기화 — 오늘 기준 주로 자동 선택 */
+/* applyADToUI 후 주차 선택기 초기화 — v13.60: 항상 한 주만 자동 선택 (성능)
+ * 우선순위: ① localStorage에 저장된 마지막 선택 (해당 주가 데이터에 있을 때)
+ *           ② 오늘이 속한 주
+ *           ③ 데이터에서 가장 최근 주차 (오늘 주가 없을 때 — 전체 로드 폴백 제거)
+ *           ④ 데이터 자체가 없으면 전체 (=null)
+ * 사용자가 '전체'를 명시적으로 누르면 그 때만 selWeek=null 로 풀림.
+ */
 function initWeekSelector(){
   const weeks=buildWeekList();
   if(!weeks.length){selWeek=null;renderWeekSelector();return}
+  // ① 마지막 선택 복원
+  try{
+    var savedStart=localStorage.getItem('wm-lastWeek');
+    if(savedStart && weeks.find(function(w){return w.start===savedStart})){
+      pickWeek(savedStart); return;
+    }
+  }catch(e){}
+  // ② 오늘 주
   const today=todayStr();
   const todaySun=getSunStart(today);
-  // 오늘이 속한 주가 데이터에 있으면 자동 선택
   const todayWeek=weeks.find(function(w){return w.start===todaySun});
-  if(todayWeek){pickWeek(todayWeek.start)}
-  else{selWeek=null;renderWeekSelector()} // 오늘 주가 없으면 전체 표시
+  if(todayWeek){pickWeek(todayWeek.start);return}
+  // ③ 데이터에서 가장 최근 주차 (weeks는 최신순으로 정렬됨)
+  pickWeek(weeks[0].start);
 }
 
 /* ═══ NAME CHIPS ═══ */
@@ -2968,6 +2986,18 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.60',date:'2026-05-14',title:'⚡ 팀관리/주간분석 초기 로드 가속 — 자동 최근 주차 선택 + 마지막 선택 기억',tag:'perf',items:[
+      '🐌 기존 문제: 첫 진입 시 selWeek=null(전체)로 시작 → 모든 주차 데이터를 한 번에 처리·렌더 → 데이터 누적될수록 체감 느려짐',
+      '✅ initWeekSelector 우선순위 재설계 — 항상 1주만 선택',
+      '  ① localStorage(wm-lastWeek)에 저장된 마지막 선택 주차가 데이터에 있으면 복원',
+      '  ② 오늘이 속한 주가 데이터에 있으면 그 주',
+      '  ③ 데이터의 가장 최근 주차 (buildWeekList는 최신순 정렬이므로 weeks[0])',
+      '  ④ 데이터 자체가 없으면 전체(null) — 기존 폴백 유지',
+      '💾 pickWeek 호출 시 localStorage에 저장 — 다음 방문/새로고침 시 자동 복원',
+      '"전체" 칩을 명시적으로 누르면 localStorage 삭제하고 전체 표시 (사용자 의도 우선)',
+      '효과: 데이터가 50주차 누적된 워크스페이스 첫 진입 — 50주 처리 → 1주 처리. 통계·차트·표 모두 즉시 표시',
+      '코드 영향: applyADToUI(첫 데이터 적용 시)와 setMode 진입 시 자동 적용됨. 기존 사용자도 한 번 주차 선택하면 그 후 자동 기억'
+    ]},
     {ver:'13.59',date:'2026-05-14',title:'⚡ 100명 동시 사용 대비 — DB 풀 확대 · 통계 메모리 캐시 · 시간 인덱스 보강',tag:'perf',items:[
       'A. DB 풀 확대 (server/config/db.js)',
       '  max: 20 → 50 (통계 1회 = 18 병렬 쿼리이므로 동시 30명도 안정적 처리)',
