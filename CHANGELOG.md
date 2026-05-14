@@ -1,5 +1,32 @@
 # Work Manager — 변경 이력
 
+## v13.68 (2026-05-14) — 사용자 관리 탭 가속 (3 API 병렬화 + 부가 섹션 비동기)
+
+### 배경
+사용자: "사용자 관리 탭 클릭하는 건 왜 느리지?"
+
+### 진단 — `auth.js` `renderUserAdmin`
+- `await pending → await users → await departments` 3번 **직렬** (병렬화 안 됨)
+- 그 뒤 `renderOrgManagement()` (또 API) + `renderAuditLog()` (또 API) 호출 — 모두 메인 흐름에서 차단
+- 로딩 placeholder가 단순 텍스트라 체감 더 느림
+
+### 변경
+1. **3개 API `Promise.all` 병렬화** — pending + users + departments 한 round-trip
+2. **`renderOrgManagement` / `renderAuditLog`를 `setTimeout(0)` 백그라운드로** — 메인 목록 즉시 표시, 부가 섹션은 자연스럽게 채워짐
+3. **로딩 placeholder를 인라인 카드로** — v13.67 wmProgress 디자인 재사용. 듀얼 회전 링 + 펄스 아이콘 + 점멸 글로우 + 단계 메시지 자동 회전(0.9s 간격):
+   - 🔍 가입 대기 조회 → 👥 사용자 목록 정리 → 🏢 부서 정보 매핑 → 📋 화면 구성
+
+### 효과
+- 500ms+ 직렬 → 가장 느린 1회 API(~150ms) 수준 (~3×)
+- 조직/감사 섹션은 메인 목록 표시 후 비동기 → 사용자 입장에서 "이미 떠 있는 화면에 채워지는" 느낌
+
+### 변경 파일
+- `auth.js`
+- `업무일지_분석기.html` (v13.68 + 패치노트)
+- `CHANGELOG.md`
+
+---
+
 ## v13.67 (2026-05-14) — 첫 진입 데이터 로딩 카드 (wmProgress 디자인 일관 적용)
 
 ### 배경

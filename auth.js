@@ -491,12 +491,44 @@ async function renderUserAdmin() {
   var container = document.getElementById('mUserAdmin');
   if (!container) return;
 
-  container.innerHTML = '<div style="padding:20px"><p style="color:var(--t5,#6070A0)">사용자 목록 로딩 중...</p></div>';
+  // v13.68: 화려한 인라인 로딩 카드 (wmProgress 디자인 일관) + 단계 메시지 회전
+  container.innerHTML =
+    '<div class="wm-init-load" style="padding:40px 20px">' +
+      '<div class="wm-init-card">' +
+        '<div class="wm-init-ring-wrap">' +
+          '<div class="wm-init-ring"></div>' +
+          '<div class="wm-init-ring2"></div>' +
+          '<div class="wm-init-ring-icon">👤</div>' +
+        '</div>' +
+        '<div class="wm-init-title">사용자 목록 불러오는 중<span class="wm-init-dots"><span></span><span></span><span></span></span></div>' +
+        '<div class="wm-init-step" id="uaLoadStep">🔍 가입 대기 조회</div>' +
+        '<div class="wm-init-bar"><div class="wm-init-bar-fill"></div></div>' +
+        '<div class="wm-init-tip">사용자·부서·감사 로그를 한 번에 가져옵니다.</div>' +
+      '</div>' +
+    '</div>';
+  // 단계 메시지 회전 (DOM이 사라지면 자체 종료)
+  (function () {
+    var steps = ['🔍 가입 대기 조회', '👥 사용자 목록 정리', '🏢 부서 정보 매핑', '📋 화면 구성'];
+    var i = 0;
+    function tick() {
+      var el = document.getElementById('uaLoadStep');
+      if (!el) return;
+      el.textContent = steps[i % steps.length];
+      el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+      i++;
+      setTimeout(tick, 900);
+    }
+    setTimeout(tick, 600);
+  })();
 
   try {
-    var pendingRes = await apiFetch('/api/users/pending');
-    var usersRes = await apiFetch('/api/users');
-    var deptRes = await apiFetch('/api/users/departments');
+    // 3개 API 병렬 호출 (직렬 3회 → 1회 round-trip)
+    var results = await Promise.all([
+      apiFetch('/api/users/pending'),
+      apiFetch('/api/users'),
+      apiFetch('/api/users/departments')
+    ]);
+    var pendingRes = results[0], usersRes = results[1], deptRes = results[2];
 
     var pending = (pendingRes && pendingRes.data) || [];
     var users = (usersRes && usersRes.data) || [];
@@ -552,10 +584,9 @@ async function renderUserAdmin() {
     html += '</div>';
     container.innerHTML = html;
 
-    // 조직 관리 섹션 추가 (admin only)
-    renderOrgManagement();
-    // 감사 로그 섹션 추가
-    renderAuditLog();
+    // v13.68: 조직 관리·감사 로그는 메인 렌더 차단 없이 비동기로 (체감 즉시)
+    setTimeout(function () { try { renderOrgManagement(); } catch (e) { console.warn('[orgMgmt]', e); } }, 0);
+    setTimeout(function () { try { renderAuditLog(); } catch (e) { console.warn('[auditLog]', e); } }, 0);
   } catch (e) {
     container.innerHTML = '<div style="padding:20px;color:#EF4444">사용자 목록 로드 실패: ' + eH(e.message) + '</div>';
   }

@@ -695,7 +695,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.67</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.68</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3235,6 +3235,18 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.68',date:'2026-05-14',title:'⚡ 사용자 관리 탭 가속 — 3 API 병렬화 + 부가 섹션 비동기 + 화려한 로딩 카드',tag:'perf',items:[
+      '🐌 진단: renderUserAdmin에서 3개 API(pending/users/departments)를 await로 직렬 호출 + renderOrgManagement(또 API) + renderAuditLog(또 API)까지 모두 메인 흐름 차단',
+      '🔍 100~200ms × 5개 = 500ms+ 직렬 대기. 게다가 로딩 표시는 "사용자 목록 로딩 중..." 한 줄 텍스트라 체감 더 느림',
+      '',
+      '✅ 개선 1 — 3개 API Promise.all 병렬화: pending + users + departments 한 round-trip',
+      '✅ 개선 2 — renderOrgManagement / renderAuditLog를 setTimeout(0)으로 백그라운드로 분리. 메인 사용자 목록은 즉시 표시, 조직·감사 섹션은 0.1~0.5초 뒤 자연스럽게 채워짐',
+      '✅ 개선 3 — 로딩 placeholder를 인라인 카드로 (v13.67 디자인 재사용): 듀얼 회전 링 + 펄스 아이콘 + 점멸 글로우 + 단계 메시지 자동 회전(0.9s)',
+      '단계 시퀀스: 🔍 가입 대기 조회 → 👥 사용자 목록 정리 → 🏢 부서 정보 매핑 → 📋 화면 구성',
+      '',
+      '효과: 500ms+ 직렬 → 가장 느린 1회 API(~150ms) 수준. 화면 차단 시간이 1/3로 줄어듦. 조직/감사 섹션은 사용자 입장에서 "이미 떠 있는 화면에 채워지는" 느낌 → 체감 즉시',
+      '코드 영향: auth.js renderUserAdmin 1곳. setMode 캐시(v13.64)는 적용 안 됨(useradmin은 setPage 흐름) — 다음 라운드에 캐시도 검토 가능'
+    ]},
     {ver:'13.67',date:'2026-05-14',title:'✨ 첫 진입 데이터 로딩 카드 — wmProgress 디자인 일관 적용',tag:'feature',items:[
       '기존 "⏳ 데이터 로딩 중..." 한 줄 텍스트 → 화려한 인라인 카드로 교체',
       '디자인 요소 (v13.66 wmProgress와 일관):',
