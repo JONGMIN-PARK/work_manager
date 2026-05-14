@@ -525,7 +525,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.64</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.65</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -1038,7 +1038,7 @@ function upVD(){clearTimeout(_upVTimer);_upVTimer=setTimeout(upV,30)}
 let avO=[],avT=[],avON=[],avCL=[],avDV=[];
 var DEPT_LIST=['장비사업부','기술연구소','모션사업부'];
 let fvN=[],fvO=false;
-let aiProv='gemini';
+let aiProv='anthropic'; // v13.65: 기본 Claude — 서버 응답으로 자동 갱신
 let archSel=null; // selected archive id for detail
 var weekYearFilter=""; // 주차 선택기 연도 필터
 var weekMonthFilter=""; // 주차 선택기 월 필터 (빈 문자열=전체)
@@ -3053,6 +3053,31 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.65',date:'2026-05-14',title:'🤖 Claude AI 통합 — 1차 분석 자동 초안 · 유사 사례 추천 · 통계 자연어 인사이트',tag:'feature',items:[
+      '기본 AI provider를 Gemini → Claude(Anthropic)로 전환. 환경변수 AI_PROVIDER=gemini 로 폴백 유지',
+      '기본 모델: claude-opus-4-7 (config.ai.anthropicModel · ANTHROPIC_MODEL 환경변수로 override)',
+      'server/package.json에 @anthropic-ai/sdk ^0.88.0 의존성 추가 — 공식 SDK 사용',
+      '',
+      'server/services/ai-claude.service.js 신설:',
+      '  • analyzeTicket(input) — 신고 내용 → 카테고리·RCA·재발방지 초안 (JSON schema 구조화 출력, adaptive thinking)',
+      '  • summarizeWeeklyStats(stats) — 주간 통계 → 자연어 헤드라인·분석·집중영역·액션',
+      '  • recommendSimilarCases(current, candidates) — SQL 후보를 받아 Top 3 점수·이유 부여',
+      '  SDK lazy-load, ANTHROPIC_API_KEY 없으면 isReady()=false로 폴백',
+      '',
+      'server/routes/as-ai.js 신설 — A/S AI 보조 라우터:',
+      '  POST /api/as-ai/analyze — 신고 → 1차 분석 초안 (테넌트 카테고리 목록 전달)',
+      '  POST /api/as-ai/similar/:ticketId — SQL 우선순위(serial > equipment > customer+cat > cat) 후보 10건 → Claude Top 3',
+      '  GET /api/as-ai/weekly-insight — 통계 → 자연어 코멘트 (테넌트별 1시간 캐시, AI 비용 절감)',
+      '  Rate-limit: 사용자당 시간당 30회, audit_logs에 as.ai_analyze/similar/weekly_insight 기록',
+      '',
+      '프론트 통합:',
+      '  • A/S 등록·편집 모달의 "1차 분석" 옆에 [🤖 AI 분석 (Claude)] 버튼 — 클릭 시 신고 내용 + 컨텍스트로 Claude 호출 → 카테고리·긴급도 빈 필드 자동 채움 + 1차 분석 textarea에 요약·RCA·재발방지·점검권장 추가',
+      '  • 통계 화면 상단(건강 점수 다음)에 🤖 Claude AI 인사이트 카드 — 헤드라인(굵게) + 자연어 분석 2~3문장 + 집중 관찰 + 다음 주 액션. 비동기 로드, 1시간 서버 캐시',
+      '  • 미설정(503) 시 카드 자연 숨김. 그 외 에러는 작은 안내',
+      '  • project-data.js: asAiAnalyze / asAiSimilar / asAiWeeklyInsight 헬퍼',
+      '',
+      '운영 반영: cd server && npm install (anthropic SDK), ANTHROPIC_API_KEY 환경변수 설정, 서버 재시작'
+    ]},
     {ver:'13.64',date:'2026-05-14',title:'⚡ 탭 전환 결과 메모리 캐시 — 한 번 본 탭은 다시 진입 시 즉시 표시',tag:'perf',items:[
       '🐌 기존 동작: setMode가 호출될 때마다 renderArch/renderPipeline/renderTimeline/... 매번 실행 → 같은 탭을 왔다 갔다 해도 매번 fetch+렌더 → "느림" 체감',
       '✅ 캐시 게이트 추가 — _modeRendered[m] 에 마지막 렌더 timestamp 저장. 같은 모드 다시 진입 시 캐시 hit이면 render 호출 자체를 스킵하고 컨테이너만 hidden 풀기 → 즉시 표시',

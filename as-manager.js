@@ -412,8 +412,12 @@ function showASModal(editId) {
     h += _asField('영향 범위', '<input id="asM_impactScope" type="text" value="' + _asEsc(existing && existing.impactScope || '') + '" placeholder="예: 라인 1개 / 전체" ' + _asInpStyle() + '>');
     h += '</div>';
     h += '<div style="margin-bottom:14px">';
-    h += '<label style="display:block;font-size:11px;color:var(--t4);margin-bottom:4px">1차 분석 (CS/공정 메모)</label>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+    h += '<label style="font-size:11px;color:var(--t4)">1차 분석 (CS/공정 메모)</label>';
+    h += '<button type="button" onclick="_asAiAnalyzeClick()" style="font-size:10px;padding:3px 10px;border:1px solid #8B5CF6;border-radius:4px;background:transparent;color:#8B5CF6;cursor:pointer;font-weight:600" title="Claude AI가 신고 내용으로 카테고리·RCA·재발방지 초안을 작성합니다">🤖 AI 분석 (Claude)</button>';
+    h += '</div>';
     h += '<textarea id="asM_initialAnalysis" rows="2" placeholder="첫 통화/원격 진단 결과를 메모 (선택)" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);font-size:11px;resize:vertical">' + _asEsc(existing && existing.initialAnalysis || '') + '</textarea>';
+    h += '<div id="asM_aiStatus" style="font-size:10px;color:var(--t5);margin-top:4px;min-height:14px"></div>';
     h += '</div>';
 
     // ④ 첨부 파일 (이미지·문서 다중 업로드 + 카드 그리드 + 클릭 미리보기)
@@ -561,6 +565,80 @@ function _asEquipLookup(serial) {
       showToast('🔧 장비 마스터에서 자동 채움: ' + (eqp.equipmentModel || serial), 'info');
     }
   }).catch(function () { /* 없으면 무시 */ });
+}
+
+/* ─── AI 분석 (Claude) — 신고 내용 → 카테고리·RCA·재발방지 초안 자동 채움 ───
+ * "1차 분석" 텍스트박스에 AI 요약 + checkPoints 표시
+ * 카테고리·긴급도 빈 필드는 AI 추정값으로 자동 채움 (이미 입력된 값은 보존)
+ * RCA·재발방지는 ④보고 탭(상세)에 들어가므로, 여기서는 1차 분석 영역에 요약 형태로 출력
+ */
+function _asAiAnalyzeClick() {
+  var status = document.getElementById('asM_aiStatus');
+  if (!status) return;
+  var v = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  var issue = v('asM_issueSummary');
+  if (!issue) {
+    status.innerHTML = '<span style="color:#EF4444">⚠ 신고 내용(증상)을 먼저 입력하세요.</span>';
+    return;
+  }
+  if (typeof asAiAnalyze !== 'function') {
+    status.innerHTML = '<span style="color:#EF4444">⚠ AI API 미연결 (project-data.js)</span>';
+    return;
+  }
+  status.innerHTML = '<span style="color:#8B5CF6">⏳ Claude가 분석 중… (대략 5~15초)</span>';
+
+  var payload = {
+    issueSummary: issue,
+    customerName: v('asM_customerName'),
+    equipmentModel: v('asM_equipmentModel'),
+    priority: v('asM_priority'),
+    reproduction: v('asM_reproduction'),
+    frequency: v('asM_frequency'),
+    frequencyCount: v('asM_frequencyCount') ? Number(v('asM_frequencyCount')) : null,
+    impactScope: v('asM_impactScope')
+  };
+
+  asAiAnalyze(payload).then(function (r) {
+    var d = r && r.data;
+    if (!d) { status.innerHTML = '<span style="color:#EF4444">⚠ AI 응답 비어 있음</span>'; return; }
+
+    // 빈 필드 자동 채움 (사용자 입력 우선)
+    var catSel = document.getElementById('asM_category');
+    if (catSel && !catSel.value && d.category) {
+      // 옵션에 해당 코드가 있는지 확인 후 적용
+      var opt = catSel.querySelector('option[value="' + d.category + '"]');
+      if (opt) catSel.value = d.category;
+    }
+    var prioSel = document.getElementById('asM_priority');
+    if (prioSel && d.priority && (!prioSel.value || prioSel.value === 'P3')) {
+      var pOpt = prioSel.querySelector('option[value="' + d.priority + '"]');
+      if (pOpt) prioSel.value = d.priority;
+    }
+
+    // 1차 분석 영역에 요약·RCA·재발방지 합쳐서 채움
+    var combined = '';
+    if (d.summary) combined += '【요약】 ' + d.summary + '\n\n';
+    if (d.rcaDraft) combined += '【추정 RCA】\n' + d.rcaDraft + '\n\n';
+    if (d.preventionDraft) combined += '【재발방지 초안】\n' + d.preventionDraft + '\n';
+    if (d.checkPoints && d.checkPoints.length) {
+      combined += '\n【현장 점검 권장】\n' + d.checkPoints.map(function (p, i) { return (i + 1) + '. ' + p; }).join('\n');
+    }
+    var ta = document.getElementById('asM_initialAnalysis');
+    if (ta) {
+      // 기존 내용이 있으면 줄바꿈 후 AI 결과 append
+      var prev = (ta.value || '').trim();
+      ta.value = prev ? (prev + '\n\n---\n[🤖 AI 분석]\n' + combined) : ('[🤖 AI 분석]\n' + combined);
+    }
+
+    var conf = d.categoryConfidence != null ? Math.round(d.categoryConfidence * 100) + '%' : '-';
+    var usage = r.usage || {};
+    status.innerHTML = '<span style="color:#10B981">✅ Claude 분석 완료</span> · 카테고리 ' +
+      _asEsc(d.category || '-') + ' (신뢰도 ' + conf + ') · 긴급도 ' + _asEsc(d.priority || '-') +
+      ' · 토큰 in=' + (usage.input_tokens || 0) + ' out=' + (usage.output_tokens || 0);
+  }).catch(function (err) {
+    var msg = (err && err.data && err.data.message) || (err && err.message) || '실패';
+    status.innerHTML = '<span style="color:#EF4444">❌ ' + _asEsc(msg) + '</span>';
+  });
 }
 
 /* ─── 모달 내 첨부 그리드 렌더 ───

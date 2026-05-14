@@ -62,11 +62,13 @@ var config = {
   },
 
   ai: {
-    provider: process.env.AI_PROVIDER || 'gemini',
+    // v13.65: 기본 provider를 Claude로 — Gemini는 AI_PROVIDER=gemini 로 폴백 가능
+    provider: process.env.AI_PROVIDER || 'anthropic',
     geminiKey: process.env.GEMINI_API_KEY || '',
     geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
     anthropicKey: process.env.ANTHROPIC_API_KEY || '',
-    anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'
+    // v13.65: 기본 모델을 최신 Opus 4.7로 — 환경변수로 모델 변경 가능
+    anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-opus-4-7'
   }
 };
 

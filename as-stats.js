@@ -267,7 +267,10 @@ function _asStatsRender() {
   var h = '';
   // 건강 점수 (큰 카드 — 가장 위에)
   h += _asStatsHtmlHealthScore(d.kpi.healthScore);
-  // 인사이트 패널
+  // 🤖 AI 자연어 코멘트 (Claude) — 컨테이너만 띄우고 비동기 로드
+  h += '<div id="asStatsAiCard" style="margin-bottom:12px"></div>';
+  setTimeout(function () { _asStatsLoadAiInsight(); }, 0);
+  // 인사이트 패널 (규칙 기반)
   h += _asStatsHtmlInsights(d.insights || []);
   // KPI
   h += _asStatsHtmlKpi(d.kpi);
@@ -306,6 +309,64 @@ function _asStatsRender() {
 
   // 모든 차트 인스턴스화
   _asStatsDrawAll(d);
+}
+
+/* v13.65: Claude 기반 자연어 인사이트 — 비동기 로드 + 1시간 캐시(서버) */
+function _asStatsLoadAiInsight() {
+  var card = document.getElementById('asStatsAiCard');
+  if (!card) return;
+  if (typeof asAiWeeklyInsight !== 'function') return;
+  card.innerHTML =
+    '<div class="pnl" style="padding:14px 18px;background:linear-gradient(135deg,#8B5CF61A,transparent);border-left:3px solid #8B5CF6">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center">' +
+    '<div style="font-size:11px;font-weight:700;color:#8B5CF6">🤖 Claude AI 인사이트</div>' +
+    '<div style="font-size:10px;color:var(--t5)">⏳ 분석 중…</div></div></div>';
+
+  asAiWeeklyInsight().then(function (r) {
+    var d = r && r.data;
+    if (!d) { card.innerHTML = ''; return; }
+    var html = '<div class="pnl" style="padding:16px 20px;background:linear-gradient(135deg,#8B5CF61A,transparent);border-left:3px solid #8B5CF6">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">';
+    html += '<div style="font-size:11px;font-weight:700;color:#8B5CF6">🤖 Claude AI 인사이트</div>';
+    html += '<div style="font-size:9px;color:var(--t6)">';
+    if (r.usage) html += '토큰 ' + (r.usage.input_tokens || 0) + '+' + (r.usage.output_tokens || 0) + ' · ';
+    html += '캐시 1h · 생성 ' + (r.generatedAt ? new Date(r.generatedAt).toLocaleTimeString('ko-KR') : '-');
+    html += '</div></div>';
+    // headline
+    html += '<div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">' + _asStatsEsc(d.headline || '') + '</div>';
+    // narrative
+    if (d.narrative) html += '<div style="font-size:12px;color:var(--t2);line-height:1.65;margin-bottom:10px;white-space:pre-wrap">' + _asStatsEsc(d.narrative) + '</div>';
+    // focus + actions
+    if ((d.focus && d.focus.length) || (d.actions && d.actions.length)) {
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:8px">';
+      if (d.focus && d.focus.length) {
+        html += '<div style="background:var(--bg-i);border-radius:6px;padding:8px 10px">';
+        html += '<div style="font-size:10px;font-weight:700;color:#F59E0B;margin-bottom:4px">🔎 집중 관찰</div>';
+        d.focus.forEach(function (f) {
+          html += '<div style="font-size:11px;color:var(--t3);padding:2px 0">• ' + _asStatsEsc(f) + '</div>';
+        });
+        html += '</div>';
+      }
+      if (d.actions && d.actions.length) {
+        html += '<div style="background:var(--bg-i);border-radius:6px;padding:8px 10px">';
+        html += '<div style="font-size:10px;font-weight:700;color:#10B981;margin-bottom:4px">✅ 다음 주 액션</div>';
+        d.actions.forEach(function (a) {
+          html += '<div style="font-size:11px;color:var(--t3);padding:2px 0">• ' + _asStatsEsc(a) + '</div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    card.innerHTML = html;
+  }).catch(function (err) {
+    var msg = (err && err.data && err.data.message) || (err && err.message) || '실패';
+    // 503(미설정)이면 부드럽게 숨김, 그 외엔 작은 안내
+    if (err && err.status === 503) { card.innerHTML = ''; return; }
+    card.innerHTML =
+      '<div class="pnl" style="padding:10px 14px;background:var(--bg-i);border-left:3px solid #94A3B8">' +
+      '<div style="font-size:11px;color:var(--t5)">🤖 AI 인사이트 생성 실패: ' + _asStatsEsc(msg) + '</div></div>';
+  });
 }
 
 function _asStatsHtmlHealthScore(hs) {

@@ -1,5 +1,82 @@
 # Work Manager — 변경 이력
 
+## v13.65 (2026-05-14) — Claude AI 통합: 1차 분석 자동 초안 + 유사 사례 + 통계 자연어 인사이트
+
+### 배경
+사용자: "AI 1차 분석만 진행 (옵션 A). 클로드가 더 좋아 — 클로드로 가자." 이어서 "페이지 내 AI 분석 기능 있는 곳들도 전부 Claude로?"
+
+### 변경 — 전역 기본 provider 전환
+- `config.ai.provider` 기본값 `gemini` → `anthropic` (환경변수 `AI_PROVIDER=gemini`로 폴백 유지)
+- `config.ai.anthropicModel` 기본값 `claude-sonnet-4-20250514` → `claude-opus-4-7` (`ANTHROPIC_MODEL`로 override)
+- 클라이언트 `aiProv` 변수 기본값도 `anthropic` (서버 응답 받기 전 placeholder)
+
+### 신규 의존성
+`server/package.json` 에 `@anthropic-ai/sdk ^0.88.0` — 공식 Anthropic SDK. 기존 raw HTTP 경로(`server/routes/ai.js`, `server/services/ai.service.js`)는 그대로 두고, 새 A/S AI 기능만 SDK 사용.
+
+### `server/services/ai-claude.service.js` 신설
+공식 SDK 기반. 모든 메서드는 사람이 검토할 **초안**을 반환 — 자동 적용 없음.
+
+- `analyzeTicket(input)` — 신고 내용 + 카테고리 후보 + 컨텍스트 → `{category, categoryConfidence, priority, summary, rcaDraft, preventionDraft, checkPoints[]}`
+- `summarizeWeeklyStats(stats)` — 주간 통계 JSON → `{headline, narrative, focus[], actions[]}`
+- `recommendSimilarCases(current, candidates)` — SQL 후보 10건 + 현재 신고 → `{top: [{ticketNo, score, reason}], summary}`
+
+**구현 디테일:**
+- SDK lazy-load: `ANTHROPIC_API_KEY` 없거나 SDK 미설치면 `isReady()=false` 반환 (서버 부팅 영향 없음)
+- 모델: `claude-opus-4-7` (config)
+- `thinking: {type: 'adaptive'}` — Claude가 thinking 깊이 자동 결정
+- `output_config.format.type: 'json_schema'` — 구조화 출력 보장 → JSON 파싱 안전
+- 모든 프롬프트는 한국어 산업 도메인 컨텍스트 (제조·반도체·자동화)
+
+### `server/routes/as-ai.js` 신설
+
+| 엔드포인트 | 동작 |
+|---|---|
+| `POST /api/as-ai/analyze` | body 검증 → 테넌트 활성 카테고리 30종 로드 → `analyzeTicket()` 호출 |
+| `POST /api/as-ai/similar/:ticketId` | SQL 우선순위(`serial > equipment_no > customer+cat > cat`)로 후보 10건 → `recommendSimilarCases()` |
+| `GET /api/as-ai/weekly-insight` | 주간 통계 SQL 5개 병렬 → `summarizeWeeklyStats()`. **테넌트별 1시간 캐시** (AI 비용 절감) |
+| `GET /api/as-ai/_status` | `{ready, model, cacheStats}` — 관리자 디버그 |
+
+**보안:**
+- Rate-limit 사용자당 시간당 30회 (express-rate-limit, keyGenerator=user.sub)
+- 모든 호출 `audit_logs`에 `as.ai_analyze/similar/weekly_insight` 기록 (usage 토큰 포함)
+- 503 응답: 미설정 시 명확한 에러 (`ANTHROPIC_API_KEY 미설정`)
+
+### 프론트 통합
+
+**A/S 등록·편집 모달 — `[🤖 AI 분석 (Claude)]` 버튼**
+- "1차 분석" 라벨 옆에 보라색 버튼
+- 클릭 시 신고 내용 + 컨텍스트(고객사/장비/긴급도/재현/빈도/영향범위) Claude 호출
+- 응답 도착 시:
+  - **빈 필드 자동 채움**: 카테고리(빈 상태일 때만), 긴급도(P3 기본일 때만)
+  - **1차 분석 textarea에 append**: `[🤖 AI 분석]` 헤더 + 요약 + 추정 RCA + 재발방지 초안 + 현장 점검 권장
+- 상태 표시: `✅ Claude 분석 완료 · 카테고리 hw_fault (신뢰도 75%) · 긴급도 P2 · 토큰 in=1230 out=420`
+
+**통계 화면 — Claude AI 인사이트 카드** (`as-stats.js`)
+- 건강 점수 카드 다음 위치, 비동기 로드
+- 보라색(`#8B5CF6`) 좌측 보더 + 그라데이션 배경
+- 구성:
+  - 헤드라인 1줄 (큰 글씨)
+  - 자연어 분석 2~3문장
+  - 우측 그리드: `🔎 집중 관찰` / `✅ 다음 주 액션`
+- 우상단: 토큰 사용량 + 캐시(1h) + 생성 시각
+- 503(미설정) 시 카드 자연 숨김
+
+**데이터 레이어** (`project-data.js`)
+- `asAiAnalyze(payload)`, `asAiSimilar(ticketId)`, `asAiWeeklyInsight()`
+
+### 운영 반영
+1. `cd server && npm install` — anthropic SDK 설치
+2. 환경변수 `ANTHROPIC_API_KEY=sk-ant-...` 설정
+3. (선택) `ANTHROPIC_MODEL=claude-opus-4-7` 또는 다른 모델로 override
+4. (선택) `AI_PROVIDER=gemini` 로 Gemini 폴백
+5. 서버 재시작
+
+### 변경 파일
+- 신규: `server/services/ai-claude.service.js`, `server/routes/as-ai.js`
+- 수정: `server/package.json`, `server/config/index.js`, `server/app.js`, `project-data.js`, `as-manager.js`, `as-stats.js`, `업무일지_분석기.html`, `CHANGELOG.md`
+
+---
+
 ## v13.64 (2026-05-14) — 탭 전환 결과 메모리 캐시 (한 번 본 탭은 즉시 표시)
 
 ### 배경
