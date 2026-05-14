@@ -521,7 +521,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.61</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.62</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2986,6 +2986,15 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.62',date:'2026-05-14',title:'🔒 프로젝트 편집 모달 — backdrop 클릭 닫기 비활성화 (데이터 유실 방지)',tag:'fix',items:[
+      '🐛 문제: 프로젝트 편집/등록 중 실수로 모달 바깥을 클릭하면 즉시 닫혀서 입력하던 내용 전부 유실',
+      '✅ 수정: timeline.js showProjectModal의 modal.onclick(target===modal이면 remove) 핸들러 제거',
+      '이제 모달 닫는 방법은 두 가지뿐:',
+      '  • 우상단 [✕ 닫기] 버튼',
+      '  • [💾 수정] / [➕ 등록] 버튼 (저장 성공 시 자동 닫힘)',
+      'ESC 키와 backdrop 클릭은 작업 중 데이터 보존을 위해 의도적으로 미작동',
+      '한 줄 변경(commit 1fd48c6 이후 timeline.js:733) — DB·의존성 무관'
+    ]},
     {ver:'13.61',date:'2026-05-14',title:'⚡ 타임라인 프로젝트 상세 패널 즉시 표시 — 중복 fetch 제거 + 비동기 시간 집계',tag:'perf',items:[
       '🐌 기존: 타임라인에서 프로젝트 클릭 시 패널이 늦게 열림. 원인은 calcHoursByMilestone이 await로 패널 첫 렌더를 차단 + 내부에서 projGet/msGetByProject를 다시 호출(중복 fetch)',
       '🔍 진단 결과: showProjectDetail 진입 시 projGet/msGetByProject/chkGetByProject 3종 fetch + calcHoursByMilestone 호출. 그 안에서 projGet/msGetByProject 또 호출 + readAllArchiveRecords. 같은 데이터 2~3번 + records×milestones 매칭 루프가 차단',

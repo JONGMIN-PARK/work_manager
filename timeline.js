@@ -730,7 +730,8 @@ async function showProjectModal(projId) {
   var modal = document.createElement('div');
   modal.id = 'projModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
-  modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+  // v13.62: backdrop 클릭으로 닫히지 않도록 — 편집 중 실수 클릭으로 데이터 유실 방지.
+  //         반드시 [✕ 닫기] 또는 [💾 등록/수정] 버튼으로만 닫힘.
 
   // order.js 수주번호 목록
   var orderOpts = '<option value="">직접 입력</option>';
