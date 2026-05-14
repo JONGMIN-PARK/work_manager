@@ -1,5 +1,54 @@
 # Work Manager — 변경 이력
 
+## v13.71 (2026-05-15) — AI 요약 라우터 견고성 + 진단 정보
+
+### 배경
+사용자: "팀관리 > 주간분석 > AI요약에서 요약 생성이 클로드와 연결 안 되었나?"
+
+### 진단
+코드상으론 v13.65부터 `config.ai.provider='anthropic'` 기본 + `claude-opus-4-7` 모델로 Claude API에 연결됨. 다만:
+1. `data.content[0].text` 단순 접근 — **adaptive thinking 활성화** 시 첫 블록이 `thinking` 타입이라 텍스트가 비어 보일 수 있음
+2. `/api/ai/status` 응답이 빈약 — 모델명·키 출처·hint가 없어 "왜 안 되는지" 확인 어려움
+
+### 변경 — `server/routes/ai.js`
+
+**`callAIWithPrompt` Claude 분기:**
+- 모델명 누락 시 `claude-opus-4-7` 폴백
+- 응답 파싱을 `content.filter(b => b.type === 'text')`로 안전화 → adaptive thinking 블록 무시
+- 에러 메시지 분기: `not_found_error` → 모델명 확인 / `authentication_error` → API 키 / `rate_limit_error` → 재시도 안내
+
+**`/api/ai/status` 진단 정보 풍부화:**
+```json
+{
+  "configured": true,
+  "provider": "Claude",
+  "providerCode": "anthropic",
+  "model": "claude-opus-4-7",
+  "keySource": "env",
+  "tenantKey": false,
+  "envKeys": { "anthropic": true, "gemini": false },
+  "quota": { "used": 12, "limit": 100, "plan": "pro" },
+  "hint": null
+}
+```
+
+### 변경 — `업무일지_분석기.html`
+AI 상태 카드에 **모델명 + 키 출처 + 쿼터** 함께 노출:
+- `✅ Claude 연결됨 · 모델 [claude-opus-4-7] · 12/100회`
+- 미설정 시 `⚠️ AI 미설정 — 환경변수 설정 후 재시작 필요`
+
+### 운영 점검 가이드
+1. 브라우저 콘솔에서 `fetch('/api/ai/status').then(r=>r.json()).then(console.log)` — 응답 확인
+2. `configured: false` + `envKeys.anthropic: false` → Render Environment에 `ANTHROPIC_API_KEY` 추가
+3. `configured: true` + 동작 안 함 → 브라우저 콘솔의 `/api/ai/summary` 응답 에러 확인 (404 → 모델명 / 401 → 키 / 429 → 플랜 한도)
+
+### 변경 파일
+- `server/routes/ai.js`
+- `업무일지_분석기.html` (AI 상태 카드 표시 강화 + 패치노트 + v13.71)
+- `CHANGELOG.md`
+
+---
+
 ## v13.70 (2026-05-15) — 트렌디 테마 3종 + 공용 시각 효과
 
 ### 배경

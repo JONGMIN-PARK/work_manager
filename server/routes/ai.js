@@ -49,15 +49,32 @@ async function callAIWithPrompt(prompt, tenantId) {
   if (!apiKey) return null;
 
   if (provider === 'anthropic') {
+    // v13.71: 모델명 검증 + adaptive thinking 활성화 시 text 블록 안전 추출
+    var safeModel = model || 'claude-opus-4-7';
     var res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: model, max_tokens: 4096, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({
+        model: safeModel,
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }]
+      })
     });
     var data = await res.json();
-    if (data.content && data.content[0]) return data.content[0].text;
-    if (data.error) throw new Error(data.error.message);
-    return null;
+    if (data.error) {
+      var em = (data.error && (data.error.message || data.error.type)) || 'Claude API 오류';
+      var hint = '';
+      if (/not_found|model/i.test(em)) hint = ' — 모델명 확인 (현재 "' + safeModel + '"). 권장: claude-opus-4-7';
+      else if (/authentication|invalid api key/i.test(em)) hint = ' — ANTHROPIC_API_KEY 확인';
+      else if (/rate_limit/i.test(em)) hint = ' — 잠시 후 재시도';
+      throw new Error(em + hint);
+    }
+    if (!data.content || !Array.isArray(data.content)) return null;
+    // content 배열에서 text 블록만 추출 (thinking 블록 등 무시)
+    var textParts = data.content
+      .filter(function (b) { return b && b.type === 'text' && typeof b.text === 'string'; })
+      .map(function (b) { return b.text; });
+    return textParts.length ? textParts.join('\n') : null;
   }
 
   // Gemini
@@ -165,14 +182,25 @@ router.post('/query', checkAIQuota, async function (req, res) {
 
 // ─── GET /api/ai/status — AI 상태 ───
 router.get('/status', async function (req, res) {
+  // v13.71: 진단 정보 풍부화 — 어떤 provider/model/key 출처가 사용되는지 명확히
   var provider = config.ai.provider || 'gemini';
   var configured = aiService.isConfigured();
+  var modelInUse = provider === 'anthropic' ? config.ai.anthropicModel : config.ai.geminiModel;
+  var keySource = 'env';
+  var globalAnthropicKeySet = !!config.ai.anthropicKey;
+  var globalGeminiKeySet = !!config.ai.geminiKey;
 
   // 테넌트 전용 키 확인
   var tenantKey = false;
   try {
-    var tr = await db.query('SELECT provider FROM tenant_ai_configs WHERE tenant_id = $1 AND api_key IS NOT NULL', [req.tenant.id]);
-    if (tr.rows.length) { tenantKey = true; provider = tr.rows[0].provider; configured = true; }
+    var tr = await db.query('SELECT provider, model FROM tenant_ai_configs WHERE tenant_id = $1 AND api_key IS NOT NULL', [req.tenant.id]);
+    if (tr.rows.length) {
+      tenantKey = true;
+      provider = tr.rows[0].provider;
+      if (tr.rows[0].model) modelInUse = tr.rows[0].model;
+      configured = true;
+      keySource = 'tenant';
+    }
   } catch (_) { }
 
   var usage = 0;
@@ -186,8 +214,14 @@ router.get('/status', async function (req, res) {
     data: {
       configured: configured,
       provider: configured ? (provider === 'anthropic' ? 'Claude' : 'Gemini') : null,
+      providerCode: provider,
+      model: modelInUse,
+      keySource: keySource,           // 'tenant' | 'env'
       tenantKey: tenantKey,
-      quota: { used: usage, limit: limit, plan: plan }
+      envKeys: { anthropic: globalAnthropicKeySet, gemini: globalGeminiKeySet },
+      quota: { used: usage, limit: limit, plan: plan },
+      hint: (!configured ? 'ANTHROPIC_API_KEY 또는 GEMINI_API_KEY 환경변수 설정 후 서버 재시작 필요' :
+            (limit === 0 ? 'Free 플랜은 AI 사용 불가 — Pro 이상 플랜 필요' : null))
     }
   });
 });
