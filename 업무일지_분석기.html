@@ -418,7 +418,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.50</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.51</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2808,6 +2808,18 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.51',date:'2026-05-14',title:'🔒 A/S 메일 발송 — 4단 보안 보강 (권한·BCC·푸터·감사로그·Rate-limit)',tag:'security',items:[
+      '회사 SMTP를 등록하면 누구나 임의 주소로 발송할 수 있다는 우려 해결. 단일 라우터에 4가지 게이트를 한 번에 추가',
+      '① 권한 게이트 — POST /:id/email-report 에 진입 시 (a) admin 이거나 (b) 해당 ticket의 as_assignments에 본인이 있어야 함. 아니면 403 "이 접수의 담당자 또는 관리자만 메일을 발송할 수 있습니다"',
+      '② 본문 푸터에 발신자 강제 표기 — 회사 명의 사칭 방지. "보낸 사람: 박종민 <jmpark@…>" / "발송 시각: 2026-05-14 14:23:01 (IP …)" / "본 메일은 회사 업무 관리자 시스템에서 위 담당자가 발송한 메일입니다" 자동 삽입',
+      '③ 자동 BCC — 발신자 본인 메일 + 같은 tenant의 active admin들에게 자동 BCC. 누가 어디로 보냈는지 메일함에 자연스럽게 보관됨. To와 중복되는 주소는 제외',
+      '④ 감사로그 — audit_logs에 action="as.email_report", target_type="as_ticket", target_id=ticket id, detail={ticketNo,to,bccCount,fileName,subject,pdfSize}, ip_address, user_agent 자동 기록. authService.auditLog 헬퍼 재사용',
+      '⑤ Rate-limit — 사용자당 시간당 20건. express-rate-limit(7.x) + keyGenerator=req.user.sub. 초과 시 429 + 한글 메시지',
+      '⑥ replyTo 자동 — 회신 주소를 발신자 본인 이메일로 설정. 받는 쪽이 답장하면 회사 SMTP가 아닌 담당자 개인 메일함으로 도착',
+      'email.service.sendMail에 bcc/cc/replyTo 옵션 추가 (기존 호출자 호환). 배열·문자열 모두 허용',
+      'soft-delete된 ticket(deleted_at IS NOT NULL)은 발송 불가 — WHERE 조건에 추가',
+      'PDF 미리보기 모달 우측 패널에 보안 정책 안내 박스 표시: "본인+관리자 자동 BCC · 발신자 자동 표기 · 감사로그 · 담당자만 시간당 20건". 사용자가 발송 전에 정책을 미리 인지'
+    ]},
     {ver:'13.50',date:'2026-05-14',title:'🛠️ A/S — 첨부 Preview · 2단계 삭제(휴지통) · 보고서 PDF 미리보기·메일 발송',tag:'feature',items:[
       '📎 첨부 — 이미지/캡처뿐 아니라 PDF·DOC·XLS·PPT·TXT·CSV·LOG·ZIP 등 모두 임베드 가능(10MB 이하, 4MB→10MB로 상향). 파일 선택 시 미니 프리뷰(이미지 썸네일/문서 아이콘+크기) + 카테고리 자동 추정(image→photo_before, pdf/doc/xls→doc, log→log). 그리드 카드도 이미지면 썸네일, 아니면 큰 아이콘으로 시각화',
       '🔍 첨부 Preview 모달 — 카드 클릭 시 인앱 라이트박스. 이미지는 max 78vh, PDF는 iframe 인라인, 텍스트(data URL)는 디코딩 후 <pre>, 외부 텍스트는 iframe. 미지원 형식은 안내 + 다운로드 버튼. ESC/배경 클릭으로 닫기, 우상단 ⬇ 다운로드 버튼 상시 제공',

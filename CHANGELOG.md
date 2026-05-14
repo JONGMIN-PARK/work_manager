@@ -1,5 +1,53 @@
 # Work Manager — 변경 이력
 
+## v13.51 (2026-05-14) — A/S 메일 발송 보안 보강 (권한·BCC·푸터·감사로그·Rate-limit)
+
+### 배경
+v13.50에서 회사 SMTP를 등록해 메일을 보낼 수 있게 한 직후 사용자 우려:
+> "회사 것 등록하면 아무나 보낼 수 있나? 개인 주소로...?"
+
+답: 그대로 두면 로그인 사용자 누구나 임의 주소(개인 Gmail 등)로 회사 명의 PDF를 외부 발송할 수 있고, 추적도 안 됨. 이 PR에서 4단 게이트를 한 번에 추가.
+
+### 변경 — `server/routes/as-tickets.js` `POST /:id/email-report`
+
+1) **권한 게이트** — admin 이거나, 해당 ticket의 `as_assignments`에 본인이 active로 등록돼 있어야 함. 아니면 `403 "이 접수의 담당자 또는 관리자만 메일을 발송할 수 있습니다"`.
+2) **본문 푸터에 발신자 강제 표기** — 회사 명의 사칭 방지.
+   ```
+   보낸 사람: 박종민 <jmpark@yourco.com>
+   발송 시각: 2026-05-14 14:23:01 (IP 1.2.3.4)
+   본 메일은 회사 업무 관리자 시스템에서 위 담당자가 발송한 메일입니다.
+   회신은 위 담당자 주소로 직접 부탁드립니다.
+   ```
+3) **자동 BCC** — 발신자 본인 + 같은 tenant의 active admin들에게 자동 BCC. To와 중복은 제거. 누가 어디로 보냈는지 메일함에 자연스럽게 보존.
+4) **`replyTo` 자동** — 받는 쪽 답장은 회사 SMTP가 아닌 담당자 개인 메일함으로 직행.
+5) **감사로그** — `authService.auditLog('as.email_report', 'as_ticket', ticketId, {ticketNo, to, bccCount, fileName, subject, pdfSize}, req)`. `audit_logs` 테이블에 IP·UA 포함 기록.
+6) **Rate-limit** — `express-rate-limit` (7.x), `keyGenerator=req.user.sub`, **시간당 20건**. 초과 시 `429 "시간당 메일 발송 한도(20건)를 초과했습니다"`.
+7) **soft-delete 보호** — `deleted_at IS NOT NULL` 인 휴지통 ticket은 발송 불가.
+
+### 변경 — `server/services/email.service.js`
+- `sendMail(to, subject, html, opts)`의 `opts`에 `bcc`/`cc`/`replyTo` 추가. 배열·문자열 모두 허용. 기존 호출자(가입 승인/거절/비번 초기화) 100% 호환.
+
+### 변경 — `as-manager.js` (PDF 미리보기 모달)
+- 우측 액션 패널 하단에 🔒 **보안 정책** 안내 박스 4줄 추가:
+  - 본인 메일 + 관리자에게 자동 BCC
+  - 본문 푸터에 발신자(이름/이메일/IP) 자동 표기
+  - 모든 발송은 감사로그에 기록
+  - 담당자 또는 관리자만 발송 가능 (시간당 20건)
+
+### 효과
+- 외부 유출/사칭 위험 차단: 본인 동의 없이 회사 명의로 외부 발송 불가, 발신자 책임 명확.
+- 사후 추적: 모든 발송이 audit_logs + admin BCC 메일함 둘 다에 남음.
+- 사용자 인지: 모달에서 정책을 미리 보고 발송하므로 "몰랐다"가 안 됨.
+
+### 변경 파일
+- `server/routes/as-tickets.js`
+- `server/services/email.service.js`
+- `as-manager.js` (모달 정책 박스)
+- `업무일지_분석기.html` (v13.51 / 패치노트)
+- `CHANGELOG.md`
+
+---
+
 ## v13.50 (2026-05-14) — A/S: 첨부 Preview · 2단계 삭제(휴지통) · 보고서 PDF·메일
 
 ### 배경

@@ -47,6 +47,15 @@ async function sendMail(to, subject, html, opts) {
   if (Array.isArray(opts.attachments) && opts.attachments.length) {
     msg.attachments = opts.attachments;
   }
+  if (opts.bcc) {
+    msg.bcc = Array.isArray(opts.bcc) ? opts.bcc.filter(Boolean).join(',') : opts.bcc;
+  }
+  if (opts.cc) {
+    msg.cc = Array.isArray(opts.cc) ? opts.cc.filter(Boolean).join(',') : opts.cc;
+  }
+  if (opts.replyTo) {
+    msg.replyTo = opts.replyTo;
+  }
 
   try {
     await t.sendMail(msg);

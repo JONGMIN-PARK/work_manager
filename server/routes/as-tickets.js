@@ -8,6 +8,18 @@ var { parsePagination } = require('../middleware/pagination');
 var tenant = require('../middleware/tenant');
 var notificationService = require('../services/notification.service');
 var emailService = require('../services/email.service');
+var authService = require('../services/auth.service');
+var rateLimit = require('express-rate-limit');
+
+// 보고서 메일 발송 — 사용자당 시간당 20건 제한 (스팸·오·악용 방지)
+var emailReportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyGenerator: function (req) { return (req.user && req.user.sub) || req.ip; },
+  message: { error: 'RATE_LIMIT', message: '시간당 메일 발송 한도(20건)를 초과했습니다. 잠시 후 다시 시도하세요.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -864,10 +876,13 @@ router.delete('/:id/signatures/:sid', async function (req, res) {
 });
 
 // ────────────────────────────────────────────────────────────
-// ── 보고서 메일 발송 (PDF 첨부) ──
-// 클라이언트가 jsPDF로 만든 PDF base64를 보내면 SMTP로 메일 발송
+// ── 보고서 메일 발송 (PDF 첨부) — 4단 보안 보강
+//   1) 권한: 해당 ticket의 담당자(assignment에 본인) 또는 admin만 발송 가능
+//   2) 본문 푸터에 발신자 강제 표기 (회사 명의 사칭 방지)
+//   3) 발신자 본인 + tenant admin 자동 BCC (추적성)
+//   4) audit_logs 기록 + 시간당 20건 rate-limit
 // ────────────────────────────────────────────────────────────
-router.post('/:id/email-report', async function (req, res) {
+router.post('/:id/email-report', emailReportLimiter, async function (req, res) {
   try {
     var b = req.body || {};
     var to = (b.to || '').trim();
@@ -883,15 +898,56 @@ router.post('/:id/email-report', async function (req, res) {
     if (!pdfBase64) return res.status(400).json({ error: 'VALIDATION', message: 'PDF 데이터가 비었습니다.' });
 
     // ticket 존재·테넌트 검증
-    var tR = await db.query('SELECT ticket_no, customer_name FROM as_tickets WHERE id = $1 AND tenant_id = $2',
+    var tR = await db.query('SELECT ticket_no, customer_name FROM as_tickets WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL',
       [req.params.id, req.tenant.id]);
     if (!tR.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     var t = tR.rows[0];
+
+    // ─── 권한 게이트 ───
+    var uR = await db.query("SELECT id, name, email, role FROM users WHERE id = $1 AND tenant_id = $2",
+      [req.user.sub, req.tenant.id]);
+    var me = uR.rows[0];
+    if (!me) return res.status(401).json({ error: 'UNAUTHORIZED' });
+
+    var isAdmin = (me.role === 'admin');
+    var canSend = isAdmin;
+    if (!canSend) {
+      // 이 ticket의 active assignment에 본인이 있는가?
+      var aR = await db.query(
+        "SELECT 1 FROM as_assignments WHERE ticket_id = $1 AND tenant_id = $2 AND assignee_id = $3 LIMIT 1",
+        [req.params.id, req.tenant.id, req.user.sub]
+      );
+      if (aR.rows.length) canSend = true;
+    }
+    if (!canSend) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: '이 접수의 담당자 또는 관리자만 메일을 발송할 수 있습니다.'
+      });
+    }
+
+    // ─── BCC: 발신자 본인 + tenant admin 메일 자동 추가 ───
+    var bccSet = {};
+    if (me.email) bccSet[me.email.toLowerCase()] = me.email;
+    var admR = await db.query(
+      "SELECT email FROM users WHERE tenant_id = $1 AND role = 'admin' AND status = 'active' AND email IS NOT NULL AND email <> ''",
+      [req.tenant.id]
+    );
+    admR.rows.forEach(function (u) { if (u.email) bccSet[u.email.toLowerCase()] = u.email; });
+    // To와 중복되면 제거
+    delete bccSet[(to || '').toLowerCase()];
+    var bccList = Object.keys(bccSet).map(function (k) { return bccSet[k]; });
 
     if (!subject) subject = 'A/S 작업 보고서 ' + t.ticket_no + ' — ' + (t.customer_name || '');
 
     var safeMessage = (message || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\r?\n/g, '<br>');
+    var senderName = (me.name || '').replace(/[<>"&]/g, '');
+    var senderEmail = (me.email || '').replace(/[<>"&]/g, '');
+    var ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+    var nowKst = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+
+    // ─── 본문 — 푸터에 발신자 강제 표기 ───
     var html =
       '<div style="font-family:Malgun Gothic,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1F2937">' +
       '<h2 style="color:#F59E0B;border-bottom:2px solid #F59E0B;padding-bottom:8px">🛠️ A/S 작업 보고서</h2>' +
@@ -901,8 +957,12 @@ router.post('/:id/email-report', async function (req, res) {
       '</p>' +
       (safeMessage ? '<div style="background:#F9FAFB;border-left:3px solid #F59E0B;padding:10px 14px;margin:14px 0;font-size:12px;white-space:pre-wrap">' + safeMessage + '</div>' : '') +
       '<p style="font-size:12px;color:#6B7280">상세 내용은 첨부 PDF를 확인하세요.</p>' +
-      '<hr style="border:none;border-top:1px solid #eee;margin:16px 0">' +
-      '<p style="font-size:11px;color:#9CA3AF">업무 관리자 — A/S 모듈</p>' +
+      '<hr style="border:none;border-top:1px solid #eee;margin:18px 0">' +
+      '<div style="font-size:11px;color:#6B7280;line-height:1.6">' +
+      '<strong>보낸 사람:</strong> ' + senderName + ' &lt;' + senderEmail + '&gt;<br>' +
+      '<strong>발송 시각:</strong> ' + nowKst + (ip ? ' (IP ' + ip + ')' : '') + '<br>' +
+      '<span style="color:#9CA3AF">본 메일은 회사 업무 관리자 시스템에서 위 담당자가 발송한 메일입니다. 회신은 위 담당자 주소로 직접 부탁드립니다.</span>' +
+      '</div>' +
       '</div>';
 
     // data URL이면 prefix 제거
@@ -910,6 +970,8 @@ router.post('/:id/email-report', async function (req, res) {
 
     await emailService.sendMail(to, subject, html, {
       subjectPrefix: '',  // 사용자가 제공한 subject 그대로
+      bcc: bccList,
+      replyTo: senderEmail || undefined,  // 회신은 발신자 본인에게
       attachments: [{
         filename: fileName,
         content: cleanB64,
@@ -918,7 +980,32 @@ router.post('/:id/email-report', async function (req, res) {
       }]
     });
 
-    res.json({ message: '메일이 발송되었습니다.', to: to });
+    // ─── audit log (실패해도 발송은 성공으로 응답) ───
+    try {
+      await authService.auditLog(
+        req.user.sub,
+        'as.email_report',
+        'as_ticket',
+        req.params.id,
+        {
+          ticketNo: t.ticket_no,
+          to: to,
+          bccCount: bccList.length,
+          fileName: fileName,
+          subject: subject.slice(0, 200),
+          pdfSize: Math.floor(cleanB64.length * 0.75)  // base64 → 대략 바이트
+        },
+        req
+      );
+    } catch (auditErr) {
+      console.warn('[as-tickets/email-report/audit]', auditErr.message);
+    }
+
+    res.json({
+      message: '메일이 발송되었습니다.',
+      to: to,
+      bccCount: bccList.length
+    });
   } catch (e) {
     console.error('[as-tickets/email-report]', e);
     var msg = '메일 발송 실패';

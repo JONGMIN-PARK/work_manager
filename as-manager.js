@@ -2122,7 +2122,13 @@ function _asRenderPdfPreviewModal(t, out) {
 
   h += '<button id="asPdfMailBtn" style="width:100%;padding:9px 12px;border:none;border-radius:6px;background:#3B82F6;color:#fff;cursor:pointer;font-size:11px;font-weight:600">✉️ 메일로 발송</button>';
   h += '<div id="asMail_status" style="margin-top:8px;font-size:10px;color:var(--t5);min-height:14px"></div>';
-  h += '<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--bd);font-size:9px;color:var(--t6);line-height:1.5">PDF는 클라이언트에서 직접 생성됩니다.<br>메일 발송은 서버 SMTP 설정이 필요합니다.</div>';
+  h += '<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--bd);font-size:9px;color:var(--t6);line-height:1.6">';
+  h += '🔒 <strong>보안 정책</strong><br>';
+  h += '• 본인 메일 + 관리자에게 자동 BCC<br>';
+  h += '• 본문 푸터에 발신자(이름/이메일/IP) 자동 표기<br>';
+  h += '• 모든 발송은 감사로그에 기록<br>';
+  h += '• 담당자 또는 관리자만 발송 가능 (시간당 20건)';
+  h += '</div>';
   h += '</div>';
   h += '</div></div>';
 
