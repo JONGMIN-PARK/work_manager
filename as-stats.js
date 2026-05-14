@@ -274,30 +274,30 @@ function _asStatsRender() {
   // 1행: 추이 (큰 라인)
   h += _asStatsHtmlChartCell('chart_trend', '📈 신규/종결 추이', '신규 접수와 종결 건수의 시간 흐름', null, 'large');
   // 2행: 카테고리 도넛 + 긴급도 + 상태
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px" id="asStatsRow2">';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px" id="asStatsRow2">';
   h += _asStatsHtmlChartCell('chart_category', '🏷️ 카테고리 분포', '발생 빈도가 높은 유형', null, 'small', true);
   h += _asStatsHtmlChartCell('chart_priority', '🚦 긴급도 분포', '', null, 'small', true);
   h += _asStatsHtmlChartCell('chart_status',   '📌 상태 분포', '', null, 'small', true);
   h += '</div>';
   // 3행: SLA 막대 + 부서 부하
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px">';
   h += _asStatsHtmlChartCell('chart_sla', '⏱️ SLA 준수율 (긴급도별)', '약속 시간 내 종결 비율', null, 'small');
   h += _asStatsHtmlChartCell('chart_dept', '👥 부서별 처리 부하', '활동로그 누적 소요시간 (시)', null, 'small');
   h += '</div>';
   // 4행: MTTR + Top 고객
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px">';
   h += _asStatsHtmlChartCell('chart_mttr', '⚡ MTTR 추이', '평균 처리 시간 (h)', null, 'small');
   h += _asStatsHtmlChartCell('chart_topCustomers', '🎯 Top 10 고객 (Pareto)', '발생 빈도 상위', null, 'small');
   h += '</div>';
   // 5행: Top 장비 + RCA
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px">';
   h += _asStatsHtmlChartCell('chart_topEquipment', '🔧 Top 10 장비모델', '', null, 'small');
   h += _asStatsHtmlChartCell('chart_rca', '🔍 완료분류 / RCA', '종결 케이스의 closure 분포', null, 'small');
   h += '</div>';
   // 6행: CSAT
   h += _asStatsHtmlChartCell('chart_csat', '⭐ CSAT 추이', '응답속도·처리품질·전반 만족도 (5점 척도)', null, 'small');
   // 7행: 부품 비용 (도넛 + 월별)
-  h += '<div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:12px">';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:12px">';
   h += _asStatsHtmlChartCell('chart_partsBilling', '💰 부품 비용 — 청구구분별', '', null, 'small', true);
   h += _asStatsHtmlChartCell('chart_partsMonth', '💵 부품 비용 — 월별 누적', '청구구분 색상별 스택', null, 'small');
   h += '</div>';
@@ -385,7 +385,7 @@ function _asStatsHtmlKpi(kpi) {
     { k: 'partsCost',    l: '부품 비용',     val: (kpi.partsCost.value || 0).toLocaleString(),                              unit: '원',  color: '#8B5CF6' }
   ];
 
-  var h = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">';
+  var h = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px">';
   cards.forEach(function (c) {
     var deltaTxt = '';
     if (c.delta != null && c.delta !== 0 && !isNaN(c.delta)) {

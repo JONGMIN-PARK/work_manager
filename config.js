@@ -24,15 +24,39 @@ var TH = [
   { id: 'highcontrast', l: '고대비',     c: 'linear-gradient(135deg,#000,#FFF)' }
 ];
 
-/* ═══ 글씨체 (Google Fonts 기반 — 부팅 시 동적 로드) ═══ */
+/* ═══ 글씨체 (Google Fonts 기반 — 부팅 시 동적 로드)
+ * group: 산세리프 | 세리프 | 표제 | 손글씨 | 코드  (메뉴 헤더용)
+ * url: 별도 CSS URL (Pretendard 같은 비-Google Fonts 호스트)
+ * fallback: 시스템 폰트로 자동 폴백
+ */
 var FONTS = [
-  { id: 'noto',       l: '노토 산스 (기본)', family: "'Noto Sans KR', sans-serif",          weight: '300;400;500;600;700' },
-  { id: 'pretendard', l: '프리텐다드 (모던)', family: "'Pretendard Variable','Pretendard',sans-serif", url: 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css' },
-  { id: 'plex',       l: 'IBM Plex (테크)',   family: "'IBM Plex Sans KR', sans-serif",      weight: '300;400;500;600;700' },
-  { id: 'spoqa',      l: '스포카 한 산스 (UI)', family: "'Gowun Dodum','Spoqa Han Sans Neo', sans-serif",  weight: '400' },
-  { id: 'nanumsq',    l: '나눔스퀘어 (가독)',  family: "'Nanum Gothic','NanumSquare', sans-serif",        weight: '400;700;800' },
-  { id: 'serif',      l: '본 명조 (격식)',     family: "'Noto Serif KR', serif",              weight: '400;500;700' },
-  { id: 'mono',       l: '젯브레인스 (코드)',  family: "'JetBrains Mono','Noto Sans KR', monospace", weight: '400;500' }
+  // ─── 산세리프 (UI · 본문) ───
+  { id: 'noto',        group: '산세리프', l: '노토 산스 (기본)',     family: "'Noto Sans KR',-apple-system,sans-serif", weight: '300;400;500;700;900' },
+  { id: 'pretendard',  group: '산세리프', l: '프리텐다드 (모던 추천)', family: "'Pretendard Variable','Pretendard',-apple-system,sans-serif", url: 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css' },
+  { id: 'plex',        group: '산세리프', l: 'IBM Plex (테크)',       family: "'IBM Plex Sans KR',sans-serif", weight: '300;400;500;600;700' },
+  { id: 'gowundodum',  group: '산세리프', l: '고운돋움 (정갈)',       family: "'Gowun Dodum',sans-serif",       weight: '400' },
+  { id: 'nanum',       group: '산세리프', l: '나눔 고딕 (가독)',       family: "'Nanum Gothic',sans-serif",      weight: '400;700;800' },
+  { id: 'sunflower',   group: '산세리프', l: '선플라워 (부드러움)',    family: "'Sunflower',sans-serif",         weight: '300;500;700' },
+
+  // ─── 세리프 (격식 · 명조) ───
+  { id: 'serifkr',     group: '세리프',   l: '본 명조 (격식)',         family: "'Noto Serif KR',serif",          weight: '400;500;600;700' },
+  { id: 'gowunbatang', group: '세리프',   l: '고운바탕 (깔끔 명조)',   family: "'Gowun Batang',serif",           weight: '400;700' },
+  { id: 'hahmlet',     group: '세리프',   l: '함렛 (모던 명조)',       family: "'Hahmlet',serif",                weight: '300;400;500;700' },
+  { id: 'songmyung',   group: '세리프',   l: '송명 (전통 명조)',       family: "'Song Myung',serif",             weight: '400' },
+  { id: 'nanummyeongjo',group: '세리프',  l: '나눔 명조',              family: "'Nanum Myeongjo',serif",         weight: '400;700;800' },
+
+  // ─── 표제 · 임팩트 ───
+  { id: 'blackhansans',group: '표제',     l: 'Black Han Sans (강조)',  family: "'Black Han Sans',sans-serif",    weight: '400' },
+  { id: 'dohyeon',     group: '표제',     l: '도현 (캐주얼)',          family: "'Do Hyeon',sans-serif",          weight: '400' },
+  { id: 'jua',         group: '표제',     l: '주아 (밝은)',            family: "'Jua',sans-serif",               weight: '400' },
+
+  // ─── 손글씨 · 캐주얼 ───
+  { id: 'nanumpen',    group: '손글씨',   l: '나눔 펜글씨',            family: "'Nanum Pen Script',cursive",     weight: '400' },
+  { id: 'gaegu',       group: '손글씨',   l: '개구 (둥근 손글씨)',     family: "'Gaegu',cursive",                weight: '300;400;700' },
+  { id: 'singleday',   group: '손글씨',   l: '싱글데이',               family: "'Single Day',cursive",           weight: '400' },
+
+  // ─── 코드 ───
+  { id: 'mono',        group: '코드',     l: 'JetBrains Mono',         family: "'JetBrains Mono','Noto Sans KR',monospace", weight: '400;500;700' }
 ];
 
 /* ═══ 인코딩 ═══ */

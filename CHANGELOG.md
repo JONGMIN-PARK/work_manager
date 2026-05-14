@@ -1,5 +1,88 @@
 # Work Manager — 변경 이력
 
+## v13.58 (2026-05-14) — 모바일(iPhone 17 Pro) 최적화 + 한국어 폰트 18종 그룹화 + 가독성
+
+### 배경
+사용자: "모바일(아이폰17프로) 사이즈에도 최적화. 폰트가 구글 폰트라든지 좋은게 더 많던데… 많이 추가. 모바일에서 최적화된 레이아웃·글씨 크기·줄바꿈."
+
+### 1) 한국어 Google Fonts 18종 + 그룹화
+
+`config.js` `FONTS` 배열 확장 — 메타에 `group` 필드 추가. 메뉴는 그룹 헤더(산세리프/세리프/표제/손글씨/코드)로 나뉘어 카테고리별로 표시.
+
+| 그룹 | 폰트 |
+|---|---|
+| 산세리프 (6) | 노토 산스(기본) · **프리텐다드** ⭐ · IBM Plex · 고운돋움 · 나눔 고딕 · 선플라워 |
+| 세리프 (5) | 본 명조 · 고운바탕 · 함렛 · 송명 · 나눔 명조 |
+| 표제 (3) | Black Han Sans · 도현 · 주아 |
+| 손글씨 (3) | 나눔 펜글씨 · 개구 · 싱글데이 |
+| 코드 (1) | JetBrains Mono |
+
+각 옵션은 해당 폰트로 미리 렌더되어 한눈에 비교 가능. 첫 선택 시 Google Fonts CDN에서 동적 `<link>` 로드, 이후 캐시.
+
+### 2) 모바일 가독성 기본값
+
+```css
+body {
+  line-height: 1.55;
+  word-break: keep-all;      /* 한국어 어절 단위 줄바꿈 */
+  overflow-wrap: break-word; /* 긴 단어는 분할 */
+}
+.brk-all, .email, .mono, code, a[href^="http"] {
+  word-break: break-all;     /* 영문 URL·이메일은 강제 분할 허용 */
+}
+```
+
+### 3) 모바일 미디어쿼리 3단계 강화
+
+**`@media (max-width: 768px)` 태블릿/소형**
+- `body` 14px / `line-height` 1.6
+- 헤더 `flex-wrap` 허용
+- A/S 모달 인라인 폭 (`width:760px`/`920px`/`720px`/`600px`/`520px`) 모두 `100%` 강제 override (attribute selector)
+- 첨부 그리드 `minmax(140px→110px,1fr)` 자동
+- **iOS Safari 자동 줌 방지** — input/textarea/select `font-size: 16px` 강제
+
+**`@media (max-width: 480px)` iPhone 17 Pro 핵심 구간** (393×852)
+- 헤더 패딩 `10px/12px`, 페이지 탭 **가로 스크롤** 허용 (스크롤바 숨김)
+- 통합 검색 `110px → 포커스 시 자동 확장`
+- 검색/알림 드롭다운 `width: calc(100vw - 20px)`, `max-height: 60vh`
+- 4열·3열 그리드 → 2열·1열 자동
+- 첨부 카드 최소 폭 `95~105px` (한 행에 3~4장)
+- A/S 통계 우측 액션 패널(`280~300px`) → 모바일은 아래로 (`flex-direction: column`)
+- 칸반 컬럼 `220px → 160px`, 테이블 가로 스크롤
+- **안전 영역** `env(safe-area-inset-top/bottom)` — 노치·홈인디케이터 회피
+
+**`@media (max-width: 380px)`** — iPhone SE 등 초소형
+- `body` 13px, 2열 그리드도 1열 강제
+
+### 4) 통계 화면 그리드 자동 적응
+
+`as-stats.js`의 그리드를 `auto-fit minmax`로 전환:
+- KPI 4열 → `repeat(auto-fit, minmax(160px, 1fr))`
+- 차트 3열 → `repeat(auto-fit, minmax(220px, 1fr))`
+- 차트 2열 → `repeat(auto-fit, minmax(280px, 1fr))`
+
+데스크톱은 그대로, 모바일은 자동 1열.
+
+### 5) 폰트 메뉴 모바일 대응
+- `max-height: 70vh` (스크롤)
+- `max-width: 90vw`, `min-width: 240px`
+- 모바일에서 오른쪽 가장자리에서 -8px 빼서 항상 보임
+
+### 효과
+- iPhone에서 **가로 스크롤 없이** 모든 화면이 화면 안에 들어옴
+- A/S 등록·편집 모달이 화면 폭에 꽉 차서 사용 가능
+- 한국어가 어절 단위로 깔끔히 줄바꿈 (영단어 한가운데서 안 끊김)
+- iOS Safari 입력 시 자동 줌 방지
+- 노치/홈인디케이터 침범 안 함
+
+### 변경 파일
+- `config.js` (FONTS 7→18 + group 메타)
+- `업무일지_분석기.html` (CSS 미디어쿼리 3단계, 폰트 메뉴 그룹화, v13.58)
+- `as-stats.js` (그리드 auto-fit minmax)
+- `CHANGELOG.md`
+
+---
+
 ## v13.57 (2026-05-14) — 사용자관리 테마 반영 + 시인성 강화 신규 테마 4종 + 글씨체 7종 선택기
 
 ### 배경
