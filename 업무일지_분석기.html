@@ -125,6 +125,52 @@ window.wmProgress = (function () {
   return { show: show, update: update, step: step, hide: hide, autoSteps: autoSteps, run: run };
 })();
 
+/* v13.69 — 주간 분석 시인성 보조
+ *  · 인원 칩 영역 접힘/펼침 (localStorage에 상태 저장)
+ *  · sticky KPI 카드가 스크롤에 의해 떠 있을 때 그림자 강조
+ */
+window.toggleNameChipsCollapse = function () {
+  var el = document.getElementById('nameChips');
+  var btn = document.getElementById('chipsToggle');
+  if (!el) return;
+  var collapsed = !el.classList.contains('chips-collapsed');
+  el.classList.toggle('chips-collapsed', collapsed);
+  if (btn) {
+    btn.innerHTML = (collapsed ? '▼ <span>펼치기</span>' : '▲ <span>접기</span>');
+    btn.title = collapsed ? '인원 칩 펼치기' : '인원 칩 접기';
+  }
+  try { localStorage.setItem('wm-chips-collapsed', collapsed ? '1' : '0'); } catch (e) {}
+};
+(function _initChipsCollapse() {
+  function apply() {
+    var saved = (function () { try { return localStorage.getItem('wm-chips-collapsed') === '1'; } catch (e) { return false; } })();
+    if (saved) {
+      var el = document.getElementById('nameChips');
+      var btn = document.getElementById('chipsToggle');
+      if (el) el.classList.add('chips-collapsed');
+      if (btn) btn.innerHTML = '▼ <span>펼치기</span>';
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+})();
+// sticky KPI 그림자 (스크롤에 의해 떠있는 상태 감지)
+(function _initStickyShadow() {
+  function bind() {
+    var s = document.getElementById('kpiSticky');
+    if (!s) return;
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        // intersectionRatio < 1 = sticky 상태로 떠 있음
+        s.classList.toggle('is-stuck', e.intersectionRatio < 1 && e.boundingClientRect.top <= 1);
+      });
+    }, { threshold: [1] });
+    obs.observe(s);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else setTimeout(bind, 0);
+})();
+
 /* v13.67: #initLoading 카드의 단계 메시지 자동 회전 — DOM에서 제거되면 자동 종료 */
 (function () {
   var steps = [
@@ -307,6 +353,19 @@ th{background:var(--th);color:var(--t4);font-weight:700;font-size:10px;text-tran
 td{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--tdb)}tr:nth-child(even) td{background:rgba(255,255,255,.015)}tr:hover td{background:var(--trh)}
 .badge{display:inline-block;padding:3px 9px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.2px}
 .cg{display:grid;grid-template-columns:1fr 1fr;gap:14px}.cf{grid-column:1/-1}.cb{min-height:280px}
+/* v13.69 — 주간 분석 시인성 개선
+ *  · 큰 화면에서 차트 3열
+ *  · KPI 카드 sticky (상단 고정)
+ *  · 인원 칩 접힘/펼침 + 페이드아웃 마스크
+ */
+@media(min-width:1500px){.cg{grid-template-columns:1fr 1fr 1fr}.cf{grid-column:1/-1}}
+.sg-sticky{position:sticky;top:0;z-index:50;background:linear-gradient(180deg,var(--bg) 60%,rgba(0,0,0,0));padding:8px 0 12px;margin-bottom:8px;backdrop-filter:blur(6px);border-bottom:1px solid var(--bd);transition:box-shadow .15s}
+.sg-sticky.is-stuck{box-shadow:0 4px 14px rgba(0,0,0,.18)}
+#nameChips.chips-collapsed{max-height:42px;overflow:hidden;position:relative;-webkit-mask-image:linear-gradient(to bottom,#000 50%,transparent);mask-image:linear-gradient(to bottom,#000 50%,transparent);transition:max-height .2s ease}
+#nameChips.chips-expanded{max-height:none}
+.chip-toggle{font-size:10px;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t4);cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:all .15s}
+.chip-toggle:hover{border-color:var(--ac);color:var(--ac-t)}
+.chip-toggle .ct-count{font-weight:600;color:var(--t3)}
 .fg{display:grid;grid-template-columns:1fr 1fr;gap:14px}.fc{display:flex;flex-direction:column}
 .fl{font-size:11px;font-weight:700;color:var(--t4);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
 .lb{background:var(--lb);border:1px solid var(--bd);border-radius:8px;max-height:160px;overflow-y:auto}
@@ -695,7 +754,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.68</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.69</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -827,6 +886,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
         <div class="pnl-h">
           <h3 class="pnl-t">👤 팀원 선택 <span style="color:var(--t5);font-weight:400" id="nameCount"></span></h3>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <button id="chipsToggle" class="chip-toggle" type="button" onclick="toggleNameChipsCollapse()" title="인원 칩 영역 접기/펼치기">▼ <span>접기</span></button>
             <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="multiSelTog" onchange="togMultiSel()"> 다중선택</label>
             <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:#FCD34D;cursor:pointer;background:rgba(245,158,11,.1);padding:3px 8px;border-radius:5px;border:1px solid rgba(245,158,11,.3)" id="cmpLabel" class="hidden"><input type="checkbox" id="cmpTog" onchange="togCompare()"> 🔀 인원비교</label>
             <button class="btn btn-w btn-s" onclick="saveFav()">⭐ 즐겨찾기 저장</button>
@@ -871,9 +931,9 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
         </div>
       </div>
 
-      <!-- Stats -->
+      <!-- Stats — v13.69 sticky KPI 카드 (상단 고정) -->
       <div id="statsS" class="hidden">
-        <div class="sg">
+        <div class="sg sg-sticky" id="kpiSticky">
           <div class="sc"><div class="sl">필터 결과</div><div class="sv" id="sC">0</div><div style="font-size:9px;color:var(--t6);margin-top:2px">건</div></div>
           <div class="sc"><div class="sl">총 투입시간</div><div class="sv bl" id="sH">0h</div></div>
           <div class="sc"><div class="sl">기간</div><div class="sv sm" id="sP">-</div></div>
@@ -3235,6 +3295,16 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.69',date:'2026-05-14',title:'👁️ 주간 분석 시인성 강화 — KPI sticky · 인원 칩 접힘 · 차트 3열(대형)',tag:'feature',items:[
+      'KPI 4카드(필터결과/총시간/기간/일평균)에 sg-sticky 적용 — 스크롤 시 상단에 고정. IntersectionObserver로 떠 있는 상태 감지하면 자동 그림자 강조 (.is-stuck)',
+      '배경에 그라데이션 페이드(60%부터) + backdrop-filter blur(6px) — 본문이 살짝 비치며 떠 있는 모던한 느낌',
+      '👤 팀원 선택 헤더에 [▼ 접기/펼치기] 토글 버튼 추가 — 인원 칩 영역(#nameChips)에 chips-collapsed 클래스 토글',
+      '접힌 상태: max-height 42px + 페이드아웃 마스크(linear-gradient mask). 첫 줄만 보이고 자연스럽게 사라짐',
+      'localStorage(wm-chips-collapsed)에 상태 저장 → 다음 방문 시 자동 복원',
+      '차트 그리드(.cg) 큰 화면(≥1500px)에서 2열 → 3열 자동 — 27인치 이상 모니터에서 한 화면에 차트 더 많이 보임 (1500px 미만은 기존 2열, 1024px 이하 1열 그대로)',
+      '효과: 스크롤하면서도 KPI 4지표가 항상 보이고, 인원 칩이 길어도 본문 공간 차지 안 함. 큰 화면 사용자는 차트 비교가 한 화면에서 가능',
+      '회귀 위험 낮음: position:sticky / display:grid / classList.toggle만 사용. 기존 함수·데이터 흐름 변경 0'
+    ]},
     {ver:'13.68',date:'2026-05-14',title:'⚡ 사용자 관리 탭 가속 — 3 API 병렬화 + 부가 섹션 비동기 + 화려한 로딩 카드',tag:'perf',items:[
       '🐌 진단: renderUserAdmin에서 3개 API(pending/users/departments)를 await로 직렬 호출 + renderOrgManagement(또 API) + renderAuditLog(또 API)까지 모두 메인 흐름 차단',
       '🔍 100~200ms × 5개 = 500ms+ 직렬 대기. 게다가 로딩 표시는 "사용자 목록 로딩 중..." 한 줄 텍스트라 체감 더 느림',
