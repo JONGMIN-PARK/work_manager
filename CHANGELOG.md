@@ -1,5 +1,59 @@
 # Work Manager — 변경 이력
 
+## v13.50 (2026-05-14) — A/S: 첨부 Preview · 2단계 삭제(휴지통) · 보고서 PDF·메일
+
+### 배경
+사용자 요청: "프로젝트 관리 > A/S 접수 편집에 이미지 리스트 넣을 수 있게, 사진/캡쳐 이미지 + 문서. 선택 시 PREVIEW. 접수 자체를 삭제하는 기능 없음(임시 삭제 후 완전 삭제 물어보고 처리). 보고서 탭에 보고서 PDF 생성·미리보기, 미리보기 후 메일 보내기 기능 추가."
+
+### 1) 첨부 — 이미지·문서 임베드 + 인앱 Preview (`as-manager.js`, `config.js`)
+- 첨부 추가 모달 file input의 `accept`를 `image/* + pdf/doc/docx/xls/xlsx/ppt/pptx/txt/csv/log/zip` 로 확장.
+- 자동 임베드 한도 4MB → **10MB**. data URL은 그대로 서버에 저장(외부 스토리지 옵션도 유지).
+- 파일 선택 시 즉시 미니 프리뷰: 이미지면 썸네일, PDF/문서면 아이콘 + 크기.
+- 카테고리 자동 추정: image → `photo_before`, pdf/doc/xls/ppt → `doc`, log → `log`.
+- 첨부 그리드 카드 — 이미지면 90px 썸네일, 아니면 큰 아이콘(📄/📎)로 시각화. 카드 hover시 보더 강조, 카드 클릭 → Preview 모달.
+- `asAttachPreview()` 모달:
+  - 이미지 → `<img>` (max-height 78vh, 검은 배경).
+  - PDF → `<iframe>` 인라인 렌더.
+  - 텍스트(data URL) → base64 디코드 후 `<pre>`.
+  - 기타 → "미리보기 미지원" 안내 + 다운로드 버튼.
+  - 우상단 [⬇ 다운로드] 항상 노출. ESC / 배경 클릭으로 닫힘.
+
+### 2) 접수 2단계 삭제 (`server/migrations/026`, `server/routes/as-tickets.js`, `as-manager.js`)
+- **마이그레이션 026** — `as_tickets.deleted_at TIMESTAMPTZ`, `deleted_by UUID` + 활성/휴지통용 부분 인덱스.
+- **라우터 변경**:
+  - `DELETE /api/as-tickets/:id` — soft delete (휴지통 이동, 누구나 가능).
+  - `DELETE /api/as-tickets/:id/hard` — 완전 삭제 (`rbac.checkPermission('issue.delete')`).
+  - `POST /api/as-tickets/:id/restore` — 휴지통에서 복구.
+  - `GET /api/as-tickets` — 기본은 `deleted_at IS NULL`, `?trashed=1` 이면 휴지통만 + `ORDER BY deleted_at DESC`.
+- **클라이언트**:
+  - A/S 상단 토글에 `🗑️ 휴지통 (N)` 추가. 휴지통 카운트는 별도 가벼운 조회로 항상 표시.
+  - 편집 모달 헤더 좌측에 `🗑️ 휴지통으로 이동` 버튼.
+  - 휴지통 모드 행은 [↻ 복구] [💥 완전삭제] 버튼.
+  - **완전삭제는 접수번호를 그대로 타이핑해야 진행** — 오삭제 방지 2차 확인. 권한 없으면 친절한 403 안내.
+
+### 3) 보고서 PDF — 인앱 미리보기 + 다운로드 + 메일 발송
+- jsPDF CDN(`2.5.1 UMD`) 추가 (`업무일지_분석기.html`). html2canvas는 기존 로드 유지.
+- `_asReportHtmlForPdf(t)` — A4 폭(794px) 기준 8섹션 HTML 빌드: 고객/장비 · 접수 · 신고 · 처리이력 · 부품 · RCA·재발방지·최종상태 · 첨부 · 서명+CSAT. 첨부 사진은 본문에 180×120 인라인.
+- `_asGeneratePdf(t)` — 화면 밖 영역에 HTML 렌더 → html2canvas로 캡처(scale 2) → jsPDF에 JPEG 임베드. **한글 깨짐 0**. 본문이 길면 페이지 자동 분할 (A4 portrait, 8mm 마진).
+- `asReportPdfPreview(id)` — ⑥ 탭 새 버튼 `📄 PDF 미리보기 / 메일` 진입점. 모달은 좌측 iframe 미리보기, 우측 액션 패널 [PDF로 저장][To/제목/메시지 + ✉️ 메일로 발송].
+- **메일 발송** — `POST /api/as-tickets/:id/email-report` (`server/routes/as-tickets.js`):
+  - body `{ to, subject, message, pdfBase64, fileName }`.
+  - to 형식 검증 (`^[^@\s]+@[^@\s]+\.[^@\s]+$`).
+  - 테넌트 검증 후 `emailService.sendMail()` 호출. SMTP 미설정 시 명확한 에러.
+  - `email.service.js` 의 `sendMail`이 `opts.attachments` / `opts.subjectPrefix` 지원하도록 확장(기존 호출자 호환).
+
+### 변경 파일
+- `server/migrations/026_as_tickets_soft_delete.sql` (신규)
+- `server/routes/as-tickets.js` (soft/hard/restore/email-report 추가, 목록 필터 변경)
+- `server/services/email.service.js` (attachments 옵션)
+- `project-data.js` (`asDel/asDelHard/asRestore/asEmailReport`)
+- `as-manager.js` (첨부 Preview · 휴지통 · PDF 미리보기·메일)
+- `config.js` (변경 없음 — 기존 AS_ATTACH_CATEGORY 그대로 사용)
+- `업무일지_분석기.html` (jsPDF CDN · 버전 v13.50 · 패치노트)
+- `CHANGELOG.md`
+
+---
+
 ## v13.45 (2026-05-08) — 타임라인 라벨에 라이프사이클 6단계 step-icon
 
 ### 배경

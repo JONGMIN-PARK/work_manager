@@ -7,6 +7,7 @@ var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var tenant = require('../middleware/tenant');
 var notificationService = require('../services/notification.service');
+var emailService = require('../services/email.service');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -30,10 +31,13 @@ async function nextTicketNo(tenantId) {
 }
 
 // GET /api/as-tickets — 목록
+// 기본: 활성(deleted_at IS NULL)만. ?trashed=1 이면 휴지통(deleted_at IS NOT NULL)만.
 router.get('/', async function (req, res) {
   try {
     var q = req.query;
+    var trashed = (q.trashed === '1' || q.trashed === 'true');
     var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM as_tickets WHERE tenant_id = $1';
+    sql += trashed ? ' AND deleted_at IS NOT NULL' : ' AND deleted_at IS NULL';
     var params = [req.tenant.id];
     var idx = 2;
     if (q.status)    { sql += ' AND status = $' + idx++;    params.push(q.status); }
@@ -57,7 +61,9 @@ router.get('/', async function (req, res) {
     }
 
     var pg = parsePagination(req.query, 100);
-    sql += ' ORDER BY received_at DESC LIMIT $' + idx++ + ' OFFSET $' + idx++;
+    sql += trashed
+      ? ' ORDER BY deleted_at DESC LIMIT $' + idx++ + ' OFFSET $' + idx++
+      : ' ORDER BY received_at DESC LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
 
     var r = await db.query(sql, params);
@@ -227,15 +233,48 @@ router.put('/:id', async function (req, res) {
   }
 });
 
-// DELETE /api/as-tickets/:id — 관리자 전용
-router.delete('/:id', rbac.checkPermission('issue.delete'), async function (req, res) {
+// DELETE /api/as-tickets/:id — soft delete (휴지통 이동)
+// 이미 휴지통이면 404. 완전삭제는 DELETE /:id/hard 별도 엔드포인트.
+router.delete('/:id', async function (req, res) {
   try {
-    var r = await db.query('DELETE FROM as_tickets WHERE id = $1 AND tenant_id = $2 RETURNING id',
-      [req.params.id, req.tenant.id]);
-    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
-    res.json({ message: '삭제 완료' });
+    var rs = await db.query(
+      'UPDATE as_tickets SET deleted_at = NOW(), deleted_by = $3, updated_at = NOW(), updated_by = $3 ' +
+      'WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL RETURNING id, ticket_no',
+      [req.params.id, req.tenant.id, req.user.sub]
+    );
+    if (!rs.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '대상이 없거나 이미 휴지통에 있습니다.' });
+    res.json({ message: '휴지통으로 이동되었습니다.', mode: 'soft', ticketNo: rs.rows[0].ticket_no });
   } catch (e) {
-    console.error('[as-tickets/delete]', e);
+    console.error('[as-tickets/delete-soft]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// DELETE /api/as-tickets/:id/hard — 완전 삭제 (자식 cascade). issue.delete 권한 필요.
+router.delete('/:id/hard', rbac.checkPermission('issue.delete'), async function (req, res) {
+  try {
+    var rh = await db.query('DELETE FROM as_tickets WHERE id = $1 AND tenant_id = $2 RETURNING id',
+      [req.params.id, req.tenant.id]);
+    if (!rh.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.json({ message: '완전 삭제 완료', mode: 'hard' });
+  } catch (e) {
+    console.error('[as-tickets/delete-hard]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST /api/as-tickets/:id/restore — 휴지통에서 복구
+router.post('/:id/restore', async function (req, res) {
+  try {
+    var r = await db.query(
+      'UPDATE as_tickets SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW(), updated_by = $3 ' +
+      'WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL RETURNING *',
+      [req.params.id, req.tenant.id, req.user.sub]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '대상이 없거나 휴지통에 없습니다.' });
+    res.json({ data: r.rows[0], message: '복구되었습니다.' });
+  } catch (e) {
+    console.error('[as-tickets/restore]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
   }
 });
@@ -821,6 +860,70 @@ router.delete('/:id/signatures/:sid', async function (req, res) {
   } catch (e) {
     console.error('[as-signatures/delete]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// ── 보고서 메일 발송 (PDF 첨부) ──
+// 클라이언트가 jsPDF로 만든 PDF base64를 보내면 SMTP로 메일 발송
+// ────────────────────────────────────────────────────────────
+router.post('/:id/email-report', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var to = (b.to || '').trim();
+    var subject = (b.subject || '').trim();
+    var message = (b.message || '').trim();
+    var pdfBase64 = b.pdfBase64 || '';
+    var fileName = (b.fileName || 'AS_Report.pdf').replace(/[\\/:*?"<>|]/g, '_');
+
+    if (!to) return res.status(400).json({ error: 'VALIDATION', message: '받는 사람을 입력하세요.' });
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+      return res.status(400).json({ error: 'VALIDATION', message: '올바른 이메일 형식이 아닙니다.' });
+    }
+    if (!pdfBase64) return res.status(400).json({ error: 'VALIDATION', message: 'PDF 데이터가 비었습니다.' });
+
+    // ticket 존재·테넌트 검증
+    var tR = await db.query('SELECT ticket_no, customer_name FROM as_tickets WHERE id = $1 AND tenant_id = $2',
+      [req.params.id, req.tenant.id]);
+    if (!tR.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    var t = tR.rows[0];
+
+    if (!subject) subject = 'A/S 작업 보고서 ' + t.ticket_no + ' — ' + (t.customer_name || '');
+
+    var safeMessage = (message || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\r?\n/g, '<br>');
+    var html =
+      '<div style="font-family:Malgun Gothic,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1F2937">' +
+      '<h2 style="color:#F59E0B;border-bottom:2px solid #F59E0B;padding-bottom:8px">🛠️ A/S 작업 보고서</h2>' +
+      '<p style="font-size:13px;line-height:1.7">' +
+      '<strong>접수번호:</strong> ' + t.ticket_no + '<br>' +
+      '<strong>고객사:</strong> ' + (t.customer_name || '-') + '<br>' +
+      '</p>' +
+      (safeMessage ? '<div style="background:#F9FAFB;border-left:3px solid #F59E0B;padding:10px 14px;margin:14px 0;font-size:12px;white-space:pre-wrap">' + safeMessage + '</div>' : '') +
+      '<p style="font-size:12px;color:#6B7280">상세 내용은 첨부 PDF를 확인하세요.</p>' +
+      '<hr style="border:none;border-top:1px solid #eee;margin:16px 0">' +
+      '<p style="font-size:11px;color:#9CA3AF">업무 관리자 — A/S 모듈</p>' +
+      '</div>';
+
+    // data URL이면 prefix 제거
+    var cleanB64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+
+    await emailService.sendMail(to, subject, html, {
+      subjectPrefix: '',  // 사용자가 제공한 subject 그대로
+      attachments: [{
+        filename: fileName,
+        content: cleanB64,
+        encoding: 'base64',
+        contentType: 'application/pdf'
+      }]
+    });
+
+    res.json({ message: '메일이 발송되었습니다.', to: to });
+  } catch (e) {
+    console.error('[as-tickets/email-report]', e);
+    var msg = '메일 발송 실패';
+    if (e && /SMTP|connect|auth/i.test(e.message || '')) msg += ' (SMTP 설정을 확인하세요)';
+    res.status(500).json({ error: 'EMAIL_FAILED', message: msg + ': ' + (e && e.message || '') });
   }
 });
 

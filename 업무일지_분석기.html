@@ -11,6 +11,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>/* config.js 로드 실패 폴백 — file:// 프로토콜 CORS 대응 */</script>
 <script>var ORDER_MAP={};/* 수주맵: 엑셀 기반 — order.js 대체 */</script>
 <script>
@@ -417,7 +418,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.49</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.50</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2807,6 +2808,19 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.50',date:'2026-05-14',title:'🛠️ A/S — 첨부 Preview · 2단계 삭제(휴지통) · 보고서 PDF 미리보기·메일 발송',tag:'feature',items:[
+      '📎 첨부 — 이미지/캡처뿐 아니라 PDF·DOC·XLS·PPT·TXT·CSV·LOG·ZIP 등 모두 임베드 가능(10MB 이하, 4MB→10MB로 상향). 파일 선택 시 미니 프리뷰(이미지 썸네일/문서 아이콘+크기) + 카테고리 자동 추정(image→photo_before, pdf/doc/xls→doc, log→log). 그리드 카드도 이미지면 썸네일, 아니면 큰 아이콘으로 시각화',
+      '🔍 첨부 Preview 모달 — 카드 클릭 시 인앱 라이트박스. 이미지는 max 78vh, PDF는 iframe 인라인, 텍스트(data URL)는 디코딩 후 <pre>, 외부 텍스트는 iframe. 미지원 형식은 안내 + 다운로드 버튼. ESC/배경 클릭으로 닫기, 우상단 ⬇ 다운로드 버튼 상시 제공',
+      '🗑️ 2단계 삭제 — 접수 자체를 삭제하는 기능 추가. 편집 모달 헤더에 "🗑️ 휴지통으로 이동" 버튼. soft delete(deleted_at 채움) → A/S 상단에 "🗑️ 휴지통 (N)" 토글 추가. 휴지통 행에는 [↻ 복구] [💥 완전삭제] 버튼',
+      '💥 완전삭제는 접수번호를 정확히 타이핑해야 진행 (오삭제 방지 2차 확인). issue.delete 권한이 있어야 함 — 권한 없으면 403',
+      'DB: server/migrations/026_as_tickets_soft_delete.sql — as_tickets에 deleted_at·deleted_by 컬럼 + 활성/휴지통용 부분 인덱스 2개. 기존 GET 목록은 deleted_at IS NULL 자동 필터, ?trashed=1 로 휴지통만 조회',
+      '백엔드: server/routes/as-tickets.js — DELETE /:id 는 이제 soft delete(휴지통 이동), DELETE /:id/hard 는 완전 삭제(자식 cascade, issue.delete 권한), POST /:id/restore 는 복구. project-data.js에 asDel/asDelHard/asRestore 분기 추가',
+      '📄 보고서 PDF 미리보기 — ⑥ 보고서 탭에 "📄 PDF 미리보기 / 메일" 버튼 추가. 클라이언트에서 jsPDF + html2canvas로 비트맵 임베드 PDF 생성(한글 깨짐 0) → 모달 iframe 인앱 미리보기. 8섹션(고객/장비·접수·신고·처리이력·부품·RCA·첨부·서명·CSAT) 포함, 첨부 사진은 본문에 작은 썸네일로 인라인',
+      '✉️ 보고서 메일 발송 — 미리보기 우측 패널에 To/제목/메시지 입력 + [✉️ 메일로 발송] 버튼. 서버 POST /api/as-tickets/:id/email-report 가 nodemailer로 PDF 첨부 메일 발송. SMTP 미설정 시 명확한 에러 메시지',
+      'email.service.js: sendMail에 opts.attachments / subjectPrefix 옵션 추가 (기존 호출자 호환). nodemailer에 base64 인코딩 PDF 첨부를 그대로 전달',
+      'jsPDF CDN 추가 (jspdf 2.5.1 UMD) — html2canvas는 v13.49에 이미 로드됨. 멀티페이지 자동 분할(A4 portrait, 8mm 마진) 처리',
+      '🗒️ 보기 모드 토글에 휴지통 추가 — 📋전체 / 🎯내큐 / 🗂️칸반 / 🗑️휴지통. 휴지통 N>0 이면 배지 표시. 휴지통 모드에서는 칸반·필터 그대로 적용, 행은 흐릿하게(opacity 0.7) 표시 + 삭제일시 노출'
+    ]},
     {ver:'13.49',date:'2026-05-13',title:'🛠️ A/S — Phase 2 (부품·첨부·서명·CSAT·엑셀보고서·칸반·텔레그램)',tag:'feature',items:[
       'PRD §13 Phase 2 핵심 6종 일괄 도입. v1(접수만)→v2(할당+처리)→v3에서 6단계 흐름 전 단계 풀구현. 시연 시나리오: 접수→할당→처리이력+부품+첨부→RCA→고객 서명+CSAT→엑셀 6시트 다운로드 + 텔레그램 알림',
       'DB 마이그레이션 3건: 023_as_parts.sql(amount=qty*unit_price GENERATED 컬럼) · 024_as_attachments.sql · 025_as_signatures.sql(role UNIQUE로 UPSERT)',

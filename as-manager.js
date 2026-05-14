@@ -9,7 +9,8 @@ var asFilterStatus = '';
 var asFilterPriority = '';
 var asFilterCategory = '';
 var asSearchKw = '';
-var asViewMode = 'all';  // 'all' | 'myqueue' | 'kanban'
+var asViewMode = 'all';  // 'all' | 'myqueue' | 'kanban' | 'trash'
+var _asTrashCount = 0;   // 휴지통 N개 배지용 (목록 응답 시 갱신)
 
 /* ═══ 카테고리 캐시 (DB의 as_categories 테이블에서 동적 로드) ═══
  * active=true 항목만 캐시. 관리자 화면에서는 별도로 includeInactive=true 로 다시 조회.
@@ -102,9 +103,16 @@ function renderAS() {
     return;
   }
 
-  var listParams = (asViewMode === 'myqueue') ? { myQueue: 1 } : null;
+  var listParams = null;
+  if (asViewMode === 'myqueue') listParams = { myQueue: 1 };
+  else if (asViewMode === 'trash') listParams = { trashed: 1 };
 
-  Promise.all([asGetAll(listParams), _asLoadCats()]).then(function (results) {
+  // 휴지통 카운트는 항상 별도 조회 (배지 표시용, 가벼움)
+  var pTrashCount = (asViewMode !== 'trash')
+    ? asGetAll({ trashed: 1 }).then(function (rows) { _asTrashCount = (rows || []).length; }).catch(function () { _asTrashCount = 0; })
+    : Promise.resolve();
+
+  Promise.all([asGetAll(listParams), _asLoadCats(), pTrashCount]).then(function (results) {
     var rows = results[0];
     var CAT = results[1] || {};
     var all = rows || [];
@@ -142,16 +150,27 @@ function renderAS() {
     html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
     html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
     html += '<span style="font-size:13px;font-weight:700;color:var(--t2)">🛠️ A/S 접수 관리</span>';
-    // 전체 / 내 큐 / 칸반 토글
+    // 전체 / 내 큐 / 칸반 / 휴지통 토글
     html += '<div style="display:inline-flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden">';
-    ['all', 'myqueue', 'kanban'].forEach(function (mode) {
-      var labels = { all: '📋 전체', myqueue: '🎯 내 큐', kanban: '🗂️ 칸반' };
-      var titles = { myqueue: '내게 할당된 처리 진행 중인 건만', kanban: '상태별 칸반 보드 (드래그로 이동)' };
+    ['all', 'myqueue', 'kanban', 'trash'].forEach(function (mode) {
+      var labels = {
+        all: '📋 전체',
+        myqueue: '🎯 내 큐',
+        kanban: '🗂️ 칸반',
+        trash: '🗑️ 휴지통' + (_asTrashCount > 0 ? ' (' + _asTrashCount + ')' : '')
+      };
+      var titles = {
+        myqueue: '내게 할당된 처리 진행 중인 건만',
+        kanban: '상태별 칸반 보드 (드래그로 이동)',
+        trash: '삭제(휴지통 이동)된 접수 — 복구 또는 완전 삭제'
+      };
+      var activeBg = mode === 'trash' ? '#EF4444' : '#F59E0B';
       var active = asViewMode === mode;
-      html += '<button onclick="asViewMode=\'' + mode + '\';renderAS()" style="font-size:10px;padding:4px 10px;border:none;background:' + (active ? '#F59E0B' : 'var(--bg-i)') + ';color:' + (active ? '#fff' : 'var(--t4)') + ';cursor:pointer;font-weight:' + (active ? '700' : '500') + '"' + (titles[mode] ? ' title="' + titles[mode] + '"' : '') + '>' + labels[mode] + '</button>';
+      html += '<button onclick="asViewMode=\'' + mode + '\';renderAS()" style="font-size:10px;padding:4px 10px;border:none;background:' + (active ? activeBg : 'var(--bg-i)') + ';color:' + (active ? '#fff' : 'var(--t4)') + ';cursor:pointer;font-weight:' + (active ? '700' : '500') + '"' + (titles[mode] ? ' title="' + titles[mode] + '"' : '') + '>' + labels[mode] + '</button>';
     });
     html += '</div>';
-    html += '<span style="font-size:11px;color:var(--t5)">' + (asViewMode === 'myqueue' ? '내 큐 ' : '전체 ') + all.length + '건' +
+    var modeLabel = { all: '전체 ', myqueue: '내 큐 ', kanban: '칸반 ', trash: '🗑️ 휴지통 ' }[asViewMode] || '';
+    html += '<span style="font-size:11px;color:var(--t5)">' + modeLabel + all.length + '건' +
       (filtered.length !== all.length ? ' (필터: ' + filtered.length + '건)' : '') + '</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:6px">';
@@ -182,7 +201,7 @@ function renderAS() {
     }
     html += '</div></div>';
 
-    // 칸반 모드일 때 다른 렌더로 분기
+    // 칸반 모드일 때 다른 렌더로 분기 (휴지통 모드에서는 칸반 비활성)
     if (asViewMode === 'kanban') {
       html += _asRenderKanban(filtered, CAT);
       wrap.innerHTML = html;
@@ -195,9 +214,13 @@ function renderAS() {
     if (!filtered.length) {
       html += '<div style="padding:40px 20px;text-align:center;color:var(--t5);font-size:12px">';
       if (all.length === 0) {
-        html += asViewMode === 'myqueue'
-          ? '🎯 내게 할당된 진행 중인 A/S가 없습니다.<br><span style="color:var(--t6);font-size:10px;margin-top:6px;display:inline-block">전체 보기로 전환하거나, 접수 상세 → ②할당에서 본인을 담당으로 추가하세요.</span>'
-          : '아직 접수된 A/S가 없습니다. <button onclick="showASModal()" style="border:none;background:none;color:#F59E0B;cursor:pointer;text-decoration:underline">첫 접수 등록</button>';
+        if (asViewMode === 'myqueue') {
+          html += '🎯 내게 할당된 진행 중인 A/S가 없습니다.<br><span style="color:var(--t6);font-size:10px;margin-top:6px;display:inline-block">전체 보기로 전환하거나, 접수 상세 → ②할당에서 본인을 담당으로 추가하세요.</span>';
+        } else if (asViewMode === 'trash') {
+          html += '🗑️ 휴지통이 비어 있습니다.<br><span style="color:var(--t6);font-size:10px;margin-top:6px;display:inline-block">삭제된 접수는 여기로 이동하며 [복구] 또는 [완전 삭제] 할 수 있습니다.</span>';
+        } else {
+          html += '아직 접수된 A/S가 없습니다. <button onclick="showASModal()" style="border:none;background:none;color:#F59E0B;cursor:pointer;text-decoration:underline">첫 접수 등록</button>';
+        }
       } else {
         html += '필터 조건에 맞는 A/S가 없습니다.';
       }
@@ -209,13 +232,16 @@ function renderAS() {
         html += '<th style="padding:8px 10px;text-align:left;font-weight:600;color:var(--t4);font-size:10px">' + h + '</th>';
       });
       html += '</tr></thead><tbody>';
+      var isTrashView = (asViewMode === 'trash');
       filtered.forEach(function (t) {
         var st = STATUS[t.status] || { label: t.status, color: '#94A3B8', icon: '' };
         var pr = PRIO[t.priority] || { label: t.priority, color: '#94A3B8', icon: '' };
         var ct = CAT[t.category] || { label: t.category || '-', icon: '' };
         var safeId = _asEsc(t.id);
-        html += '<tr style="border-bottom:1px solid var(--bd);cursor:pointer" onclick="showASDetail(\'' + safeId + '\')">';
-        html += '<td style="padding:8px 10px;font-family:monospace;font-weight:600;color:var(--t2)">' + _asEsc(t.ticketNo) + '</td>';
+        var rowStyle = 'border-bottom:1px solid var(--bd);cursor:pointer' + (isTrashView ? ';opacity:0.7' : '');
+        var rowClick = isTrashView ? '' : 'onclick="showASDetail(\'' + safeId + '\')"';
+        html += '<tr style="' + rowStyle + '" ' + rowClick + '>';
+        html += '<td style="padding:8px 10px;font-family:monospace;font-weight:600;color:var(--t2)">' + _asEsc(t.ticketNo) + (isTrashView ? ' <span style="font-size:9px;color:#EF4444">🗑️</span>' : '') + '</td>';
         html += '<td style="padding:8px 10px;color:var(--t2)"><div style="font-weight:600">' + _asEsc(t.customerName) + '</div>';
         html += '<div style="font-size:10px;color:var(--t5)">' + _asEsc(t.equipmentModel || '-') + (t.serialNo ? ' · ' + _asEsc(t.serialNo) : '') + '</div></td>';
         html += '<td style="padding:8px 10px;color:var(--t3)">' + (ct.icon || '') + ' ' + _asEsc(ct.label) + '</td>';
@@ -227,9 +253,19 @@ function renderAS() {
         html += '<td style="padding:8px 10px;color:var(--t3);max-width:280px">' + _asEsc(summary);
         if (freqTxt) html += '<div style="font-size:10px;color:var(--t5);margin-top:2px">📊 ' + _asEsc(freqTxt) + '</div>';
         html += '</td>';
-        html += '<td style="padding:8px 10px;color:var(--t5);font-size:10px">' + _asFmtDate(t.receivedAt) + '<br><span style="color:var(--t6)">' + _asElapsed(t.receivedAt) + '</span></td>';
-        html += '<td style="padding:8px 10px;text-align:right" onclick="event.stopPropagation()">';
-        html += '<button onclick="showASModal(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="편집">✏️</button>';
+        if (isTrashView) {
+          html += '<td style="padding:8px 10px;color:var(--t5);font-size:10px">🗑️ ' + _asFmtDT(t.deletedAt) + '<br><span style="color:var(--t6)">접수: ' + _asFmtDate(t.receivedAt) + '</span></td>';
+        } else {
+          html += '<td style="padding:8px 10px;color:var(--t5);font-size:10px">' + _asFmtDate(t.receivedAt) + '<br><span style="color:var(--t6)">' + _asElapsed(t.receivedAt) + '</span></td>';
+        }
+        html += '<td style="padding:8px 10px;text-align:right;white-space:nowrap" onclick="event.stopPropagation()">';
+        if (isTrashView) {
+          html += '<button onclick="asRestoreTicket(\'' + safeId + '\')" style="font-size:10px;padding:3px 8px;border:1px solid #10B981;border-radius:4px;background:transparent;color:#10B981;cursor:pointer;margin-right:4px" title="복구">↻ 복구</button>';
+          html += '<button onclick="asPurgeTicket(\'' + safeId + '\',\'' + _asEsc(t.ticketNo).replace(/\x27/g, "\\\x27") + '\')" style="font-size:10px;padding:3px 8px;border:1px solid #EF4444;border-radius:4px;background:transparent;color:#EF4444;cursor:pointer" title="완전 삭제">💥 완전삭제</button>';
+        } else {
+          html += '<button onclick="showASModal(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer;margin-right:4px" title="편집">✏️</button>';
+          html += '<button onclick="asSoftDeleteTicket(\'' + safeId + '\',\'' + _asEsc(t.ticketNo).replace(/\x27/g, "\\\x27") + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="휴지통으로 이동">🗑️</button>';
+        }
         html += '</td></tr>';
       });
       html += '</tbody></table>';
@@ -359,10 +395,15 @@ function showASModal(editId) {
     h += '</div>';
 
     // 액션
-    h += '<div style="display:flex;justify-content:flex-end;gap:8px;padding-top:14px;border-top:1px solid var(--bd)">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-top:14px;border-top:1px solid var(--bd)">';
+    h += '<div>';
+    if (isEdit) {
+      h += '<button onclick="asSoftDeleteTicket(\'' + _asEsc(editId).replace(/\x27/g, "\\\x27") + '\',\'' + _asEsc(existing.ticketNo).replace(/\x27/g, "\\\x27") + '\')" style="padding:8px 14px;border:1px solid #EF4444;border-radius:6px;background:transparent;color:#EF4444;cursor:pointer;font-size:11px" title="휴지통으로 이동 (복구 가능)">🗑️ 휴지통으로 이동</button>';
+    }
+    h += '</div><div style="display:flex;gap:8px">';
     h += '<button onclick="document.getElementById(\'asModalOverlay\').remove()" style="padding:8px 16px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:11px">취소</button>';
     h += '<button onclick="saveASModal(' + (isEdit ? 'true' : 'false') + ',\'' + (isEdit ? _asEsc(editId).replace(/'/g, "\\'") : '') + '\')" style="padding:8px 16px;border:none;border-radius:6px;background:#F59E0B;color:#fff;cursor:pointer;font-size:11px;font-weight:600">' + (isEdit ? '수정 저장' : '접수 등록') + '</button>';
-    h += '</div>';
+    h += '</div></div>';
     h += '</div>';
 
     overlay.innerHTML = h;
@@ -860,10 +901,14 @@ function _asSubBlockParts(t) {
   return h;
 }
 
-/* ─── ③처리 탭 — 첨부 서브블록 ─── */
+/* ─── ③처리 탭 — 첨부 서브블록 (이미지 썸네일 + 클릭 시 Preview) ─── */
 function _asSubBlockAttachments(t) {
   var CAT = typeof AS_ATTACH_CATEGORY !== 'undefined' ? AS_ATTACH_CATEGORY : {};
   var atts = t.attachments || [];
+
+  // window에 등록해 두면 Preview 함수가 인덱스로 빨리 가져갈 수 있음
+  window._asAttachIndex = window._asAttachIndex || {};
+  window._asAttachIndex[t.id] = atts;
 
   var h = '<div style="margin-top:14px;border:1px solid var(--bd);border-radius:8px;padding:12px 14px">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
@@ -871,23 +916,141 @@ function _asSubBlockAttachments(t) {
   h += '<button onclick="showASAttachAddForm(\'' + _asEsc(t.id) + '\')" style="font-size:10px;padding:4px 10px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3);cursor:pointer">+ 첨부 추가</button>';
   h += '</div>';
   if (!atts.length) {
-    h += '<div style="padding:12px;text-align:center;color:var(--t5);font-size:11px">사진·로그·측정데이터 등을 첨부할 수 있습니다.</div>';
+    h += '<div style="padding:12px;text-align:center;color:var(--t5);font-size:11px">사진·캡처·PDF·문서 등을 첨부할 수 있습니다.</div>';
   } else {
-    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px">';
     atts.forEach(function (a) {
       var c = CAT[a.category] || { label: a.category || '기타', icon: '📎' };
-      h += '<div style="border:1px solid var(--bd);border-radius:6px;padding:8px;background:var(--bg-i);position:relative">';
-      h += '<div style="font-size:10px;color:var(--t5);margin-bottom:3px">' + (c.icon || '') + ' ' + _asEsc(c.label) + '</div>';
-      h += '<a href="' + _asEsc(a.fileUrl) + '" target="_blank" rel="noopener" style="font-size:11px;color:var(--t2);font-weight:600;text-decoration:none;word-break:break-all">' + _asEsc(a.fileName) + '</a>';
+      var safeId = _asEsc(a.id);
+      var safeTid = _asEsc(t.id);
+      var isImg = _asAttIsImage(a);
+      var isPdf = _asAttIsPdf(a);
+      h += '<div style="border:1px solid var(--bd);border-radius:6px;padding:8px;background:var(--bg-i);position:relative;cursor:pointer;transition:border-color 0.15s" onmouseover="this.style.borderColor=\'#F59E0B\'" onmouseout="this.style.borderColor=\'\'" onclick="asAttachPreview(\'' + safeTid + '\',\'' + safeId + '\')">';
+      // 썸네일/아이콘 영역
+      if (isImg) {
+        h += '<div style="width:100%;height:90px;background:#0f172a center / contain no-repeat url(\'' + _asEsc(a.fileUrl) + '\');border-radius:4px;margin-bottom:6px"></div>';
+      } else {
+        var bigIcon = isPdf ? '📄' : (c.icon || '📎');
+        h += '<div style="width:100%;height:90px;display:flex;align-items:center;justify-content:center;font-size:42px;background:var(--bg);border-radius:4px;margin-bottom:6px">' + bigIcon + '</div>';
+      }
+      h += '<div style="font-size:10px;color:var(--t5);margin-bottom:2px">' + (c.icon || '') + ' ' + _asEsc(c.label) + '</div>';
+      h += '<div style="font-size:11px;color:var(--t2);font-weight:600;word-break:break-all;line-height:1.3">' + _asEsc(a.fileName) + '</div>';
       if (a.note) h += '<div style="font-size:10px;color:var(--t4);margin-top:3px">' + _asEsc(a.note) + '</div>';
       h += '<div style="font-size:9px;color:var(--t6);margin-top:4px">' + _asFmtDate(a.uploadedAt) + '</div>';
-      h += '<button onclick="asAttachRemove(\'' + _asEsc(t.id) + '\',\'' + _asEsc(a.id) + '\')" style="position:absolute;top:4px;right:4px;font-size:9px;padding:1px 5px;border:1px solid #EF4444;border-radius:3px;background:transparent;color:#EF4444;cursor:pointer">×</button>';
+      h += '<button onclick="event.stopPropagation();asAttachRemove(\'' + safeTid + '\',\'' + safeId + '\')" style="position:absolute;top:4px;right:4px;font-size:9px;padding:1px 5px;border:1px solid #EF4444;border-radius:3px;background:rgba(255,255,255,0.9);color:#EF4444;cursor:pointer" title="삭제">×</button>';
       h += '</div>';
     });
     h += '</div>';
   }
   h += '</div>';
   return h;
+}
+
+/* 첨부 타입 판별 — URL/mime/확장자로 추정 */
+function _asAttExtMime(a) {
+  var mt = (a.mimeType || a.mime_type || '').toLowerCase();
+  var url = (a.fileUrl || a.file_url || '');
+  // data URL이면 mime 추출
+  if (!mt && url.indexOf('data:') === 0) {
+    var m = url.match(/^data:([^;]+);/);
+    if (m) mt = m[1].toLowerCase();
+  }
+  var name = (a.fileName || a.file_name || '');
+  var ext = (name.split('.').pop() || '').toLowerCase();
+  return { mime: mt, ext: ext, url: url, name: name };
+}
+function _asAttIsImage(a) {
+  var info = _asAttExtMime(a);
+  if (info.mime.indexOf('image/') === 0) return true;
+  return ['jpg','jpeg','png','gif','webp','bmp','svg','ico'].indexOf(info.ext) >= 0;
+}
+function _asAttIsPdf(a) {
+  var info = _asAttExtMime(a);
+  if (info.mime === 'application/pdf') return true;
+  return info.ext === 'pdf';
+}
+function _asAttIsText(a) {
+  var info = _asAttExtMime(a);
+  if (info.mime.indexOf('text/') === 0) return true;
+  return ['txt','log','csv','md','json','xml','yml','yaml'].indexOf(info.ext) >= 0;
+}
+
+/* ─── 첨부 Preview 모달 ─── */
+function asAttachPreview(ticketId, attId) {
+  var atts = (window._asAttachIndex && window._asAttachIndex[ticketId]) || [];
+  var a = atts.find(function (x) { return x.id === attId; });
+  if (!a) {
+    // 캐시에 없으면 서버에서 다시 받기
+    if (typeof asAttachmentGetAll === 'function') {
+      asAttachmentGetAll(ticketId).then(function (rows) {
+        window._asAttachIndex[ticketId] = rows;
+        var found = (rows || []).find(function (x) { return x.id === attId; });
+        if (found) _asRenderAttachPreview(found);
+        else if (typeof showToast === 'function') showToast('첨부를 찾지 못했습니다.', 'error');
+      });
+    }
+    return;
+  }
+  _asRenderAttachPreview(a);
+}
+
+function _asRenderAttachPreview(a) {
+  document.querySelectorAll('#asAttachPreviewOverlay').forEach(function (el) { el.remove(); });
+  var overlay = document.createElement('div');
+  overlay.id = 'asAttachPreviewOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10003;display:flex;align-items:center;justify-content:center;padding:30px';
+
+  var CAT = typeof AS_ATTACH_CATEGORY !== 'undefined' ? AS_ATTACH_CATEGORY : {};
+  var c = CAT[a.category] || { label: a.category || '기타', icon: '📎' };
+
+  var h = '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;width:min(960px,98vw);max-height:96vh;display:flex;flex-direction:column;overflow:hidden;color:var(--t2);box-shadow:0 14px 50px rgba(0,0,0,0.6)">';
+  // 헤더
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid var(--bd);background:var(--bg-i)">';
+  h += '<div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:700;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (c.icon || '') + ' ' + _asEsc(a.fileName) + '</div>';
+  h += '<div style="font-size:10px;color:var(--t5);margin-top:2px">' + _asEsc(c.label) + (a.note ? ' · ' + _asEsc(a.note) : '') + ' · ' + _asFmtDate(a.uploadedAt) + '</div></div>';
+  h += '<div style="display:flex;gap:6px;margin-left:12px">';
+  h += '<a href="' + _asEsc(a.fileUrl) + '" download="' + _asEsc(a.fileName) + '" target="_blank" rel="noopener" style="font-size:11px;padding:6px 12px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--t3);cursor:pointer;text-decoration:none">⬇ 다운로드</a>';
+  h += '<button onclick="document.getElementById(\'asAttachPreviewOverlay\').remove()" style="font-size:16px;padding:4px 10px;border:none;background:none;color:var(--t5);cursor:pointer">✕</button>';
+  h += '</div></div>';
+
+  // 본문 (타입별)
+  h += '<div style="flex:1;overflow:auto;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:300px;padding:14px">';
+  if (_asAttIsImage(a)) {
+    h += '<img src="' + _asEsc(a.fileUrl) + '" alt="' + _asEsc(a.fileName) + '" style="max-width:100%;max-height:78vh;object-fit:contain;background:#fff;border-radius:4px">';
+  } else if (_asAttIsPdf(a)) {
+    h += '<iframe src="' + _asEsc(a.fileUrl) + '" style="width:100%;height:78vh;border:none;background:#fff;border-radius:4px" title="PDF 미리보기"></iframe>';
+  } else if (_asAttIsText(a) && a.fileUrl && a.fileUrl.indexOf('data:') === 0) {
+    // data URL 텍스트는 직접 디코딩
+    try {
+      var b64 = a.fileUrl.split(',')[1] || '';
+      var txt = decodeURIComponent(escape(atob(b64)));
+      h += '<pre style="background:#fff;color:#111;padding:14px;border-radius:4px;width:100%;max-height:78vh;overflow:auto;font-size:11px;font-family:JetBrains Mono,Consolas,monospace;white-space:pre-wrap">' + _asEsc(txt) + '</pre>';
+    } catch (e) {
+      h += '<div style="color:#FCA5A5;font-size:12px">텍스트 디코딩 실패</div>';
+    }
+  } else if (_asAttIsText(a)) {
+    // 외부 URL 텍스트는 iframe로
+    h += '<iframe src="' + _asEsc(a.fileUrl) + '" style="width:100%;height:78vh;border:none;background:#fff;border-radius:4px" title="텍스트 미리보기"></iframe>';
+  } else {
+    // 기타 — 미리보기 불가
+    h += '<div style="text-align:center;color:#cbd5e1;padding:40px">';
+    h += '<div style="font-size:64px;margin-bottom:14px">📎</div>';
+    h += '<div style="font-size:13px;margin-bottom:8px">이 형식은 미리보기를 지원하지 않습니다.</div>';
+    h += '<div style="font-size:11px;color:#94a3b8">상단의 [⬇ 다운로드] 버튼으로 받아 확인하세요.</div></div>';
+  }
+  h += '</div></div>';
+
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+  // ESC 키
+  function onKey(ev) {
+    if (ev.key === 'Escape') {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    }
+  }
+  document.addEventListener('keydown', onKey);
 }
 
 /* ─── ⑤ 고객 확인 + CSAT ─── */
@@ -1179,19 +1342,20 @@ function showASAttachAddForm(ticketId) {
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bd)">';
   h += '<div style="font-size:13px;font-weight:700">📎 첨부 추가</div>';
   h += '<button onclick="document.getElementById(\'asAttachAddOverlay\').remove()" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--t5)">✕</button></div>';
-  h += '<div style="font-size:10px;color:var(--t5);margin-bottom:10px">파일 업로드는 외부 스토리지(또는 문서관리)에 먼저 올린 뒤 URL을 등록하세요. 사진은 data URL도 가능합니다.</div>';
+  h += '<div style="font-size:10px;color:var(--t5);margin-bottom:10px">사진·캡처·PDF·문서 등을 첨부할 수 있습니다 (10MB 이하 자동 임베드).<br>큰 파일은 외부 스토리지(또는 문서관리)에 먼저 올린 뒤 URL만 등록하세요.</div>';
+  h += '<div style="margin-bottom:10px">';
+  h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">📁 파일 선택 (이미지·캡처·PDF·문서 등)</label>';
+  h += '<input id="asAttNew_file" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.log,.zip" onchange="_asAttachFilePicked(event)" style="font-size:11px;width:100%">';
+  h += '<div id="asAttNew_preview" style="margin-top:8px"></div>';
+  h += '</div>';
   h += '<div style="margin-bottom:10px">';
   h += _asField('카테고리', _asEnumSelect('asAttNew_category', CAT, 'photo_before', false));
   h += '</div>';
   h += '<div style="margin-bottom:10px">';
-  h += _asField('파일 이름 *', '<input id="asAttNew_fileName" type="text" placeholder="예: before.jpg" ' + _asInpStyle() + '>');
+  h += _asField('파일 이름 *', '<input id="asAttNew_fileName" type="text" placeholder="예: before.jpg / measurement.pdf" ' + _asInpStyle() + '>');
   h += '</div>';
   h += '<div style="margin-bottom:10px">';
-  h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">또는 로컬 이미지 선택 (data URL로 자동 변환)</label>';
-  h += '<input id="asAttNew_file" type="file" accept="image/*" onchange="_asAttachFilePicked(event)" style="font-size:11px">';
-  h += '</div>';
-  h += '<div style="margin-bottom:10px">';
-  h += _asField('파일 URL *', '<input id="asAttNew_fileUrl" type="text" placeholder="https://... 또는 data:image/png;base64,..." ' + _asInpStyle() + '>');
+  h += _asField('파일 URL *', '<input id="asAttNew_fileUrl" type="text" placeholder="https://... 또는 data:... (위에서 파일 선택 시 자동 채움)" ' + _asInpStyle() + '>');
   h += '</div>';
   h += '<div style="margin-bottom:14px">';
   h += _asField('메모', '<input id="asAttNew_note" type="text" placeholder="옵션" ' + _asInpStyle() + '>');
@@ -1208,16 +1372,47 @@ function showASAttachAddForm(ticketId) {
 function _asAttachFilePicked(ev) {
   var f = ev.target.files && ev.target.files[0];
   if (!f) return;
-  if (f.size > 4 * 1024 * 1024) {
-    if (typeof showToast === 'function') showToast('4MB 이하 이미지만 data URL로 직접 첨부 가능 (그 이상은 외부 URL 사용)', 'warn');
+  if (f.size > 10 * 1024 * 1024) {
+    if (typeof showToast === 'function') showToast('10MB 이하 파일만 직접 첨부 가능 (그 이상은 외부 URL 사용)', 'warn');
     return;
   }
   var reader = new FileReader();
   reader.onload = function (e) {
     var urlInp = document.getElementById('asAttNew_fileUrl');
     var nameInp = document.getElementById('asAttNew_fileName');
-    if (urlInp) urlInp.value = e.target.result;
+    var catSel  = document.getElementById('asAttNew_category');
+    var prev    = document.getElementById('asAttNew_preview');
+    var dataUrl = e.target.result;
+    if (urlInp) urlInp.value = dataUrl;
     if (nameInp && !nameInp.value) nameInp.value = f.name;
+
+    // 카테고리 자동 추정 (사용자가 이미 변경했으면 덮어쓰지 않음)
+    if (catSel && (catSel.value === 'photo_before' || !catSel.value)) {
+      var mt = (f.type || '').toLowerCase();
+      var ext = (f.name.split('.').pop() || '').toLowerCase();
+      var guess = 'etc';
+      if (mt.indexOf('image/') === 0) guess = 'photo_before';
+      else if (mt === 'application/pdf' || ext === 'pdf') guess = 'doc';
+      else if (['doc','docx','xls','xlsx','ppt','pptx','txt','csv'].indexOf(ext) >= 0) guess = 'doc';
+      else if (ext === 'log') guess = 'log';
+      // catSel 옵션에 있는 것만 적용
+      if (catSel.querySelector('option[value="' + guess + '"]')) catSel.value = guess;
+    }
+
+    // 미니 프리뷰
+    if (prev) {
+      var html = '';
+      var sizeKb = (f.size / 1024).toFixed(0);
+      if ((f.type || '').indexOf('image/') === 0) {
+        html += '<div style="display:flex;gap:8px;align-items:center"><img src="' + dataUrl + '" style="max-width:120px;max-height:80px;border:1px solid var(--bd);border-radius:4px">';
+        html += '<div style="font-size:10px;color:var(--t5)">' + _asEsc(f.name) + '<br>' + sizeKb + ' KB</div></div>';
+      } else if ((f.type || '').toLowerCase() === 'application/pdf') {
+        html += '<div style="font-size:11px;color:var(--t3)">📄 ' + _asEsc(f.name) + ' <span style="color:var(--t5)">(' + sizeKb + ' KB)</span></div>';
+      } else {
+        html += '<div style="font-size:11px;color:var(--t3)">📎 ' + _asEsc(f.name) + ' <span style="color:var(--t5)">(' + sizeKb + ' KB)</span></div>';
+      }
+      prev.innerHTML = html;
+    }
   };
   reader.readAsDataURL(f);
 }
@@ -1627,6 +1822,368 @@ function asPrintReport(ticketId) {
   });
 }
 
+/* ═══ ⑥ 보고서 — PDF 인앱 미리보기 + 다운로드 + 메일 발송 ═══
+ * 1) asReportPdfPreview(id): jsPDF/html2canvas로 PDF 생성 → 모달 iframe에 미리보기
+ * 2) 모달 안 버튼: 📥 다운로드 / ✉️ 메일 보내기
+ * 3) 메일은 to/subject/message 입력 → POST /api/as-tickets/:id/email-report
+ *
+ * PDF 한글: html2canvas로 비트맵 캡처 후 jsPDF에 이미지로 임베드 (폰트 임베드 우회) */
+
+function _asReportHtmlForPdf(t, opts) {
+  opts = opts || {};
+  // 인쇄용과 같은 HTML 구조를 재사용하되, 인쇄 버튼 등은 제거
+  var CAT = _asCats();
+  var DEPT_MAP = typeof DEPT !== 'undefined' ? DEPT : {};
+  var WT = typeof AS_WORK_TYPE !== 'undefined' ? AS_WORK_TYPE : {};
+  var BILL = typeof AS_BILLING !== 'undefined' ? AS_BILLING : {};
+  var CSAT = typeof AS_CSAT !== 'undefined' ? AS_CSAT : {};
+  var ATT_CAT = typeof AS_ATTACH_CATEGORY !== 'undefined' ? AS_ATTACH_CATEGORY : {};
+
+  var html = '';
+  html += '<div id="asPdfRoot" style="font-family:\'Malgun Gothic\',\'맑은 고딕\',sans-serif;font-size:11px;color:#1F2937;padding:24px;width:794px;background:#fff;line-height:1.55">';
+  html += '<h1 style="font-size:22px;border-bottom:2px solid #F59E0B;padding-bottom:8px;margin:0 0 12px 0">🛠️ A/S 작업 보고서</h1>';
+  html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:#6B7280;margin-bottom:14px">';
+  html += '<span>접수번호 <strong style="color:#1F2937">' + _asEsc(t.ticketNo) + '</strong></span>';
+  html += '<span>작성일 ' + _asFmtDate(new Date().toISOString()) + '</span>';
+  html += '</div>';
+
+  // ① 고객/장비
+  html += '<h2 style="font-size:14px;background:#F3F4F6;padding:6px 10px;margin:14px 0 6px 0;border-radius:3px">① 고객 및 장비</h2>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><tbody>';
+  [['고객사', t.customerName], ['사이트/라인', t.siteLine], ['장비모델', t.equipmentModel],
+   ['Serial No.', t.serialNo], ['장비번호', t.equipmentNo], ['수주번호', t.orderNo],
+   ['보증여부', t.warrantyStatus], ['설치일', _asFmtDate(t.installDate)]
+  ].forEach(function (r, i) {
+    if (i % 2 === 0) html += '<tr>';
+    html += '<th style="text-align:left;padding:5px 8px;background:#F9FAFB;width:14%;border:1px solid #E5E7EB;font-weight:600">' + _asEsc(r[0]) + '</th>';
+    html += '<td style="padding:5px 8px;border:1px solid #E5E7EB;width:36%">' + _asEsc(r[1] || '-') + '</td>';
+    if (i % 2 === 1) html += '</tr>';
+  });
+  html += '</tbody></table>';
+
+  // ② 접수
+  html += '<h2 style="font-size:14px;background:#F3F4F6;padding:6px 10px;margin:14px 0 6px 0;border-radius:3px">② 접수 정보</h2>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><tbody>';
+  [['접수일시', _asFmtDT(t.receivedAt)], ['긴급도', t.priority],
+   ['카테고리', (CAT[t.category] || {}).label || t.category || '-'],
+   ['재현', _asEnumLabel('AS_REPRODUCTION', t.reproduction)],
+   ['빈도', _asFreqDisplay(t.frequency, t.frequencyCount)],
+   ['영향범위', t.impactScope]
+  ].forEach(function (r, i) {
+    if (i % 2 === 0) html += '<tr>';
+    html += '<th style="text-align:left;padding:5px 8px;background:#F9FAFB;width:14%;border:1px solid #E5E7EB;font-weight:600">' + _asEsc(r[0]) + '</th>';
+    html += '<td style="padding:5px 8px;border:1px solid #E5E7EB;width:36%">' + _asEsc(r[1] || '-') + '</td>';
+    if (i % 2 === 1) html += '</tr>';
+  });
+  html += '</tbody></table>';
+
+  // ③ 신고
+  html += '<h2 style="font-size:14px;background:#F3F4F6;padding:6px 10px;margin:14px 0 6px 0;border-radius:3px">③ 고객 신고 내용</h2>';
+  html += '<div style="border:1px solid #E5E7EB;padding:10px;white-space:pre-wrap;background:#fff">' + _asEsc(t.issueSummary || '-') + '</div>';
+  if (t.initialAnalysis) {
+    html += '<div style="margin-top:6px;border:1px solid #E5E7EB;padding:8px;background:#FAFAFA;font-size:11px"><strong>1차 분석:</strong> ' + _asEsc(t.initialAnalysis) + '</div>';
+  }
+
+  // ④ 처리이력
+  if ((t.activityLogs || []).length) {
+    html += '<h2 style="font-size:14px;background:#F3F4F6;padding:6px 10px;margin:14px 0 6px 0;border-radius:3px">④ 처리 이력</h2>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr>';
+    ['#', '일자', '부서', '유형', '조치', '소요(h)'].forEach(function (c) {
+      html += '<th style="border:1px solid #E5E7EB;padding:5px 6px;background:#F9FAFB;text-align:left;font-weight:600">' + c + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    t.activityLogs.forEach(function (l) {
+      html += '<tr>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + l.seq + '</td>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + _asFmtDT(l.workedAt) + '</td>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + _asEsc((DEPT_MAP[l.dept] || {}).label || l.dept) + '</td>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + _asEsc((WT[l.workType] || {}).label || l.workType) + '</td>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + _asEsc(l.actionTaken || '') + '</td>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px;text-align:right">' + (l.durationH || 0) + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  // ⑤ 사용 부품
+  if ((t.parts || []).length) {
+    html += '<h2 style="font-size:14px;background:#F3F4F6;padding:6px 10px;margin:14px 0 6px 0;border-radius:3px">⑤ 사용 부품 / 소모품</h2>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr>';
+    ['품목', 'Part No', '수량', '단가', '금액', '청구'].forEach(function (c) {
+      html += '<th style="border:1px solid #E5E7EB;padding:5px 6px;background:#F9FAFB;text-align:left;font-weight:600">' + c + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    var grand = 0;
+    t.parts.forEach(function (p) {
+      var amt = Number(p.amount || (Number(p.qty || 0) * Number(p.unitPrice || 0)));
+      grand += amt;
+      html += '<tr>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + _asEsc(p.itemName) + '</td>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + _asEsc(p.partNo || '-') + '</td>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px;text-align:right">' + (p.qty || 0) + '</td>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px;text-align:right">' + Number(p.unitPrice || 0).toLocaleString() + '</td>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px;text-align:right">' + amt.toLocaleString() + '</td>';
+      html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + _asEsc((BILL[p.billing] || {}).label || p.billing) + '</td>';
+      html += '</tr>';
+    });
+    html += '<tr><th colspan="4" style="border:1px solid #E5E7EB;padding:5px 8px;text-align:right;background:#F9FAFB">합계</th>';
+    html += '<th style="border:1px solid #E5E7EB;padding:5px 8px;text-align:right;background:#F9FAFB">' + grand.toLocaleString() + '</th>';
+    html += '<th style="border:1px solid #E5E7EB;background:#F9FAFB"></th></tr>';
+    html += '</tbody></table>';
+  }
+
+  // ⑥ RCA / 재발방지
+  html += '<h2 style="font-size:14px;background:#F3F4F6;padding:6px 10px;margin:14px 0 6px 0;border-radius:3px">⑥ 근본원인 · 재발방지 · 최종 상태</h2>';
+  html += '<div style="border:1px solid #E5E7EB;padding:10px"><strong>근본원인 (RCA):</strong><div style="margin-top:4px;white-space:pre-wrap">' + _asEsc(t.rca || '-') + '</div></div>';
+  html += '<div style="border:1px solid #E5E7EB;padding:10px;margin-top:4px"><strong>재발방지 대책:</strong><div style="margin-top:4px;white-space:pre-wrap">' + _asEsc(t.prevention || '-') + '</div></div>';
+  html += '<div style="display:flex;gap:8px;margin-top:4px;font-size:11px">';
+  html += '<div style="flex:1;border:1px solid #E5E7EB;padding:8px"><strong>장비 최종 상태:</strong> ' + _asEsc(t.finalEquipStatus || '-') + '</div>';
+  html += '<div style="flex:1;border:1px solid #E5E7EB;padding:8px"><strong>모니터링:</strong> ' + _asEsc(t.monitoring || '-') + '</div>';
+  html += '<div style="flex:1;border:1px solid #E5E7EB;padding:8px"><strong>완료분류:</strong> ' + _asEsc(t.closure || '-') + '</div>';
+  html += '</div>';
+
+  // ⑦ 첨부 자료 (사진은 작게 임베드)
+  if ((t.attachments || []).length) {
+    html += '<h2 style="font-size:14px;background:#F3F4F6;padding:6px 10px;margin:14px 0 6px 0;border-radius:3px">⑦ 첨부 자료 (' + t.attachments.length + '개)</h2>';
+    var photos = t.attachments.filter(_asAttIsImage);
+    var others = t.attachments.filter(function (a) { return !_asAttIsImage(a); });
+    if (photos.length) {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
+      photos.forEach(function (a) {
+        var cat = (ATT_CAT[a.category] || {});
+        html += '<div style="width:180px;border:1px solid #E5E7EB;padding:4px;background:#fff">';
+        html += '<img src="' + _asEsc(a.fileUrl) + '" style="width:100%;height:120px;object-fit:contain;background:#fff;display:block">';
+        html += '<div style="font-size:9px;color:#6B7280;margin-top:3px">' + _asEsc((cat.icon || '') + ' ' + (cat.label || '')) + '</div>';
+        html += '<div style="font-size:10px;color:#1F2937;font-weight:600;word-break:break-all">' + _asEsc(a.fileName) + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    if (others.length) {
+      html += '<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr>';
+      ['구분', '파일명', '메모'].forEach(function (c) {
+        html += '<th style="border:1px solid #E5E7EB;padding:5px 6px;background:#F9FAFB;text-align:left;font-weight:600">' + c + '</th>';
+      });
+      html += '</tr></thead><tbody>';
+      others.forEach(function (a) {
+        var cat = (ATT_CAT[a.category] || {});
+        html += '<tr>';
+        html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + _asEsc((cat.icon || '') + ' ' + (cat.label || '')) + '</td>';
+        html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + _asEsc(a.fileName) + '</td>';
+        html += '<td style="border:1px solid #E5E7EB;padding:4px 6px">' + _asEsc(a.note || '-') + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+  }
+
+  // ⑧ 서명 + CSAT
+  var cust = (t.signatures || []).find(function (s) { return s.role === 'customer_field'; });
+  var eng = (t.signatures || []).find(function (s) { return s.role === 'engineer'; });
+  html += '<h2 style="font-size:14px;background:#F3F4F6;padding:6px 10px;margin:14px 0 6px 0;border-radius:3px">⑧ 고객 확인 · 서명</h2>';
+  html += '<div style="display:flex;gap:10px">';
+  [['현장 담당자 (고객)', cust], ['담당 엔지니어', eng]].forEach(function (pair) {
+    var s = pair[1];
+    html += '<div style="flex:1;border:1px solid #E5E7EB;padding:10px;text-align:center;min-height:110px">';
+    html += '<div style="font-size:10px;color:#6B7280;margin-bottom:4px">' + _asEsc(pair[0]) + '</div>';
+    html += (s && s.signatureUrl)
+      ? '<img src="' + _asEsc(s.signatureUrl) + '" style="max-height:60px">'
+      : '<div style="height:60px;color:#9CA3AF;font-size:10px;display:flex;align-items:center;justify-content:center">(미서명)</div>';
+    html += '<div style="margin-top:4px;font-weight:700;font-size:11px">' + _asEsc((s && s.signerName) || '-') + '</div>';
+    html += '<div style="font-size:9px;color:#6B7280">' + _asFmtDate(s && s.signedAt) + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  if (cust && (cust.csatSpeed || cust.csatQuality || cust.csatOverall || cust.comment)) {
+    html += '<div style="margin-top:6px;border:1px solid #E5E7EB;padding:8px;background:#FAFAFA;font-size:11px">';
+    html += '<strong>CSAT</strong> — ';
+    html += '응답: ' + _asEsc((CSAT[cust.csatSpeed] || {}).label || '-') + ' · ';
+    html += '품질: ' + _asEsc((CSAT[cust.csatQuality] || {}).label || '-') + ' · ';
+    html += '전반: ' + _asEsc((CSAT[cust.csatOverall] || {}).label || '-');
+    if (cust.comment) html += '<div style="margin-top:4px;color:#374151">"' + _asEsc(cust.comment) + '"</div>';
+    html += '</div>';
+  }
+
+  html += '<div style="margin-top:18px;padding-top:8px;border-top:1px solid #E5E7EB;font-size:9px;color:#9CA3AF;text-align:center">업무 관리자 — A/S 모듈</div>';
+  html += '</div>';
+  return html;
+}
+
+/* 보고서 PDF를 생성해서 Blob/Base64로 반환. 미리보기·다운로드·메일에 공통 사용 */
+function _asGeneratePdf(t) {
+  return new Promise(function (resolve, reject) {
+    if (!window.jspdf || !window.html2canvas) {
+      reject(new Error('PDF 라이브러리(jsPDF/html2canvas)가 로드되지 않았습니다. 페이지를 새로고침 후 다시 시도하세요.'));
+      return;
+    }
+    // 화면 밖 컨테이너에 HTML 렌더
+    var holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-99999px;top:0;background:#fff;z-index:-1';
+    holder.innerHTML = _asReportHtmlForPdf(t);
+    document.body.appendChild(holder);
+    var root = holder.querySelector('#asPdfRoot');
+
+    window.html2canvas(root, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false }).then(function (canvas) {
+      try {
+        var jsPDF = window.jspdf.jsPDF;
+        var pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+        var pageW = pdf.internal.pageSize.getWidth();   // 210
+        var pageH = pdf.internal.pageSize.getHeight();  // 297
+        var margin = 8;
+        var imgW = pageW - margin * 2;
+        // canvas → 비율 유지 + 페이지 분할
+        var imgH = canvas.height * imgW / canvas.width;
+        var imgData = canvas.toDataURL('image/jpeg', 0.92);
+        if (imgH <= pageH - margin * 2) {
+          pdf.addImage(imgData, 'JPEG', margin, margin, imgW, imgH);
+        } else {
+          // 다중 페이지 — canvas를 페이지 높이 단위로 잘라서 add
+          var pageContentH = pageH - margin * 2;          // mm
+          var pxPerMm = canvas.width / imgW;              // px / mm
+          var pageContentPx = Math.floor(pageContentH * pxPerMm);
+          var y = 0;
+          while (y < canvas.height) {
+            var sliceH = Math.min(pageContentPx, canvas.height - y);
+            var slice = document.createElement('canvas');
+            slice.width = canvas.width;
+            slice.height = sliceH;
+            slice.getContext('2d').drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+            var sliceImg = slice.toDataURL('image/jpeg', 0.92);
+            if (y > 0) pdf.addPage();
+            pdf.addImage(sliceImg, 'JPEG', margin, margin, imgW, sliceH / pxPerMm);
+            y += sliceH;
+          }
+        }
+        var fileName = (t.ticketNo || 'AS_Report') + '_' + _asFmtDate(new Date().toISOString()) + '.pdf';
+        var blob = pdf.output('blob');
+        var dataUrl = pdf.output('datauristring');
+        document.body.removeChild(holder);
+        resolve({ blob: blob, dataUrl: dataUrl, fileName: fileName, pdf: pdf });
+      } catch (e) {
+        try { document.body.removeChild(holder); } catch (_) {}
+        reject(e);
+      }
+    }).catch(function (e) {
+      try { document.body.removeChild(holder); } catch (_) {}
+      reject(e);
+    });
+  });
+}
+
+/* ⑥ 보고서 — PDF 미리보기 모달 진입점 */
+function asReportPdfPreview(ticketId) {
+  if (typeof showToast === 'function') showToast('📄 PDF 생성 중…');
+  asGetExpand(ticketId).then(function (t) {
+    return _asGeneratePdf(t).then(function (out) {
+      _asRenderPdfPreviewModal(t, out);
+    });
+  }).catch(function (err) {
+    console.error('[asReportPdfPreview]', err);
+    if (typeof showToast === 'function') showToast('❌ PDF 생성 실패: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  });
+}
+
+function _asRenderPdfPreviewModal(t, out) {
+  document.querySelectorAll('#asPdfPreviewOverlay').forEach(function (el) { el.remove(); });
+  var overlay = document.createElement('div');
+  overlay.id = 'asPdfPreviewOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10004;display:flex;align-items:center;justify-content:center;padding:24px';
+
+  var blobUrl = URL.createObjectURL(out.blob);
+
+  var h = '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;width:min(960px,98vw);max-height:96vh;display:flex;flex-direction:column;overflow:hidden;color:var(--t2);box-shadow:0 14px 50px rgba(0,0,0,0.6)">';
+
+  // 헤더
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid var(--bd);background:var(--bg-i)">';
+  h += '<div><div style="font-size:13px;font-weight:700">📄 A/S 보고서 PDF — ' + _asEsc(t.ticketNo) + '</div>';
+  h += '<div style="font-size:10px;color:var(--t5);margin-top:2px">' + _asEsc(t.customerName || '-') + ' · ' + _asEsc(t.equipmentModel || '-') + '</div></div>';
+  h += '<button onclick="_asPdfPreviewClose()" style="font-size:16px;padding:4px 10px;border:none;background:none;color:var(--t5);cursor:pointer">✕</button>';
+  h += '</div>';
+
+  // 본문 — 좌측 iframe / 우측 액션
+  h += '<div style="display:flex;flex:1;overflow:hidden">';
+  h += '<iframe src="' + blobUrl + '" style="flex:1;border:none;background:#525659;min-height:520px" title="PDF 미리보기"></iframe>';
+
+  // 우측 액션 패널
+  h += '<div style="width:280px;border-left:1px solid var(--bd);padding:14px 16px;overflow-y:auto;background:var(--bg-i)">';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">📥 다운로드</div>';
+  h += '<button id="asPdfDownloadBtn" style="width:100%;padding:9px 12px;border:none;border-radius:6px;background:#10B981;color:#fff;cursor:pointer;font-size:11px;font-weight:600;margin-bottom:14px">PDF로 저장</button>';
+
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">✉️ 메일 보내기</div>';
+  h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">받는 사람 (To) *</label>';
+  h += '<input id="asMail_to" type="email" placeholder="customer@example.com" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;box-sizing:border-box;margin-bottom:8px">';
+
+  h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">제목</label>';
+  var defaultSubj = 'A/S 작업 보고서 ' + (t.ticketNo || '') + ' — ' + (t.customerName || '');
+  h += '<input id="asMail_subject" type="text" value="' + _asEsc(defaultSubj) + '" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;box-sizing:border-box;margin-bottom:8px">';
+
+  h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">메시지 (선택)</label>';
+  h += '<textarea id="asMail_message" rows="4" placeholder="안녕하세요, A/S 작업 보고서를 전달드립니다." style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;resize:vertical;box-sizing:border-box;margin-bottom:10px"></textarea>';
+
+  h += '<button id="asPdfMailBtn" style="width:100%;padding:9px 12px;border:none;border-radius:6px;background:#3B82F6;color:#fff;cursor:pointer;font-size:11px;font-weight:600">✉️ 메일로 발송</button>';
+  h += '<div id="asMail_status" style="margin-top:8px;font-size:10px;color:var(--t5);min-height:14px"></div>';
+  h += '<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--bd);font-size:9px;color:var(--t6);line-height:1.5">PDF는 클라이언트에서 직접 생성됩니다.<br>메일 발송은 서버 SMTP 설정이 필요합니다.</div>';
+  h += '</div>';
+  h += '</div></div>';
+
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) _asPdfPreviewClose(); });
+
+  // 액션 바인딩 — out을 클로저로 잡고 있어야 함
+  document.getElementById('asPdfDownloadBtn').onclick = function () {
+    try { out.pdf.save(out.fileName); }
+    catch (e) {
+      // fallback: blob 직접 저장
+      var a = document.createElement('a');
+      a.href = blobUrl; a.download = out.fileName; document.body.appendChild(a); a.click(); a.remove();
+    }
+  };
+
+  document.getElementById('asPdfMailBtn').onclick = function () {
+    var to = (document.getElementById('asMail_to').value || '').trim();
+    var subject = (document.getElementById('asMail_subject').value || '').trim();
+    var message = (document.getElementById('asMail_message').value || '').trim();
+    var status = document.getElementById('asMail_status');
+    var btn = this;
+    if (!to) { status.textContent = '⚠ 받는 사람을 입력하세요.'; status.style.color = '#EF4444'; return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { status.textContent = '⚠ 올바른 이메일 형식이 아닙니다.'; status.style.color = '#EF4444'; return; }
+    if (typeof asEmailReport !== 'function') { status.textContent = '⚠ 메일 API 미연결'; status.style.color = '#EF4444'; return; }
+
+    btn.disabled = true; btn.textContent = '발송 중…';
+    status.textContent = '메일 전송 중…'; status.style.color = 'var(--t5)';
+    // datauristring 형태에서 base64만 추출
+    var b64 = (out.dataUrl || '').split(',')[1] || '';
+    asEmailReport(t.id, {
+      to: to,
+      subject: subject,
+      message: message,
+      pdfBase64: b64,
+      fileName: out.fileName
+    }).then(function () {
+      status.textContent = '✅ 메일이 발송되었습니다.';
+      status.style.color = '#10B981';
+      btn.textContent = '✉️ 메일로 발송';
+      btn.disabled = false;
+      if (typeof showToast === 'function') showToast('✉️ 메일이 발송되었습니다 (' + to + ')');
+    }).catch(function (err) {
+      var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
+      status.textContent = '❌ ' + msg;
+      status.style.color = '#EF4444';
+      btn.textContent = '✉️ 메일로 발송';
+      btn.disabled = false;
+    });
+  };
+
+  // 모달 닫을 때 blob URL 해제
+  window._asPdfPreviewClose = function () {
+    try { URL.revokeObjectURL(blobUrl); } catch (e) {}
+    var ov = document.getElementById('asPdfPreviewOverlay');
+    if (ov) ov.remove();
+    window._asPdfPreviewClose = null;
+  };
+}
+
 /* ─── ⑥ 보고서 발행 ─── */
 function _asTabReportDoc(t) {
   var h = '';
@@ -1652,11 +2209,11 @@ function _asTabReportDoc(t) {
   }
   h += '</div>';
 
-  // 다운로드 버튼
+  // 다운로드/미리보기/메일 버튼
   h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">';
+  h += '<button onclick="asReportPdfPreview(\'' + _asEsc(t.id) + '\')" style="padding:10px 18px;border:none;border-radius:6px;background:#EF4444;color:#fff;cursor:pointer;font-size:12px;font-weight:600">📄 PDF 미리보기 / 메일</button>';
   h += '<button onclick="asExportExcel(\'' + _asEsc(t.id) + '\')" style="padding:10px 18px;border:none;border-radius:6px;background:#10B981;color:#fff;cursor:pointer;font-size:12px;font-weight:600">📊 엑셀 6시트 다운로드</button>';
-  h += '<button onclick="asPrintReport(\'' + _asEsc(t.id) + '\')" style="padding:10px 18px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:12px">🖨️ 인쇄용 미리보기</button>';
-  h += '<span style="margin-left:auto;font-size:10px;color:var(--t5);align-self:center">PDF·이메일 자동 발송은 다음 슬라이스</span>';
+  h += '<button onclick="asPrintReport(\'' + _asEsc(t.id) + '\')" style="padding:10px 18px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:12px">🖨️ 인쇄 미리보기 (새 창)</button>';
   h += '</div>';
 
   // 보고서 미리보기 요약
@@ -1865,6 +2422,58 @@ function asReportSave(ticketId, finalize) {
   }).catch(function (err) {
     var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
     if (typeof showToast === 'function') showToast('❌ 실패: ' + msg, 'error');
+  });
+}
+
+/* ─── 휴지통 (soft → hard 2단계 삭제) ─── */
+function asSoftDeleteTicket(ticketId, ticketNo) {
+  if (!confirm('접수 ' + ticketNo + ' 을(를) 휴지통으로 이동하시겠습니까?\n\n• 휴지통에서 언제든 복구 가능\n• 완전 삭제는 휴지통에서 다시 한 번 더 확인 후 가능')) return;
+  if (typeof asDel !== 'function') {
+    if (typeof showToast === 'function') showToast('삭제 API 미연결', 'error');
+    return;
+  }
+  asDel(ticketId).then(function () {
+    // 상세 모달이 열려 있으면 닫고
+    var d = document.getElementById('asDetailOverlay'); if (d) d.remove();
+    var m = document.getElementById('asModalOverlay'); if (m) m.remove();
+    if (typeof showToast === 'function') showToast('🗑️ 휴지통으로 이동되었습니다.');
+    renderAS();
+  }).catch(function (err) {
+    var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
+    if (typeof showToast === 'function') showToast('❌ 삭제 실패: ' + msg, 'error');
+  });
+}
+
+function asRestoreTicket(ticketId) {
+  if (typeof asRestore !== 'function') return;
+  asRestore(ticketId).then(function () {
+    if (typeof showToast === 'function') showToast('↻ 접수가 복구되었습니다.');
+    renderAS();
+  }).catch(function (err) {
+    var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
+    if (typeof showToast === 'function') showToast('❌ 복구 실패: ' + msg, 'error');
+  });
+}
+
+function asPurgeTicket(ticketId, ticketNo) {
+  // 2단계 확인: 접수번호를 정확히 입력해야 진행
+  var typed = prompt('⚠ 완전 삭제\n\n접수 "' + ticketNo + '"를 완전히 삭제합니다.\n할당·처리이력·부품·첨부·서명까지 모두 영구 제거되며 복구할 수 없습니다.\n\n계속하려면 접수번호 "' + ticketNo + '"를 그대로 입력하세요.');
+  if (typed === null) return;
+  if (String(typed).trim() !== ticketNo) {
+    if (typeof showToast === 'function') showToast('접수번호가 일치하지 않습니다. 취소되었습니다.', 'warn');
+    return;
+  }
+  if (typeof asDelHard !== 'function') {
+    if (typeof showToast === 'function') showToast('완전 삭제 API 미연결', 'error');
+    return;
+  }
+  asDelHard(ticketId).then(function () {
+    if (typeof showToast === 'function') showToast('💥 완전 삭제되었습니다.');
+    renderAS();
+  }).catch(function (err) {
+    var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
+    if (err && err.status === 403) msg = '완전 삭제 권한이 없습니다 (관리자 권한 필요).';
+    if (typeof showToast === 'function') showToast('❌ 완전 삭제 실패: ' + msg, 'error');
   });
 }
 

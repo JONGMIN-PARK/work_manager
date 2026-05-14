@@ -27,25 +27,34 @@ function getTransporter() {
   }
 }
 
-async function sendMail(to, subject, html) {
+// opts: { attachments?: [{filename, content (Buffer|base64 string), encoding?, contentType?}], subjectPrefix?: string|null }
+async function sendMail(to, subject, html, opts) {
+  opts = opts || {};
   var t = getTransporter();
   if (!t) {
     console.log('[EMAIL] 전송 스킵 (SMTP 미설정):', to, subject);
     return false;
   }
 
+  var prefix = (opts.subjectPrefix === null || opts.subjectPrefix === '') ? '' :
+               (opts.subjectPrefix || '[업무 관리자] ');
+  var msg = {
+    from: config.smtp.from || config.smtp.user,
+    to: to,
+    subject: prefix + subject,
+    html: html
+  };
+  if (Array.isArray(opts.attachments) && opts.attachments.length) {
+    msg.attachments = opts.attachments;
+  }
+
   try {
-    await t.sendMail({
-      from: config.smtp.from || config.smtp.user,
-      to: to,
-      subject: '[업무 관리자] ' + subject,
-      html: html
-    });
+    await t.sendMail(msg);
     console.log('[EMAIL] 전송 완료:', to, subject);
     return true;
   } catch (e) {
     console.error('[EMAIL] 전송 실패:', e.message);
-    return false;
+    throw e;
   }
 }
 

@@ -949,7 +949,21 @@ function asPut(ticket) {
 }
 function asDel(id) {
   return apiFetch('/api/as-tickets/' + id, { method: 'DELETE' })
-    .then(function (r) { _emitBus('as', 'deleted', { id: id }); return r; });
+    .then(function (r) { _emitBus('as', 'deleted', { id: id, mode: 'soft' }); return r; });
+}
+function asDelHard(id) {
+  return apiFetch('/api/as-tickets/' + id + '/hard', { method: 'DELETE' })
+    .then(function (r) { _emitBus('as', 'deleted', { id: id, mode: 'hard' }); return r; });
+}
+function asRestore(id) {
+  return apiFetch('/api/as-tickets/' + id + '/restore', { method: 'POST' })
+    .then(function (r) { _emitBus('as', 'updated', { id: id, action: 'restore' }); return toCamel(r.data); });
+}
+function asEmailReport(ticketId, payload) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/email-report', {
+    method: 'POST',
+    body: JSON.stringify(payload || {})
+  });
 }
 function createASTicket(data) {
   var now = new Date().toISOString();
