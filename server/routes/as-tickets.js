@@ -10,6 +10,16 @@ var notificationService = require('../services/notification.service');
 var emailService = require('../services/email.service');
 var authService = require('../services/auth.service');
 var rateLimit = require('express-rate-limit');
+var asStatsRouter = require('./as-stats');  // invalidateStats 헬퍼
+
+// 헬퍼: 티켓 변경 시 통계 캐시 무효화 (실패해도 응답엔 영향 없음)
+function _invalidateStatsCache(tenantId) {
+  try {
+    if (asStatsRouter && typeof asStatsRouter.invalidateStats === 'function') {
+      asStatsRouter.invalidateStats(tenantId);
+    }
+  } catch (e) { /* 무시 */ }
+}
 
 // 보고서 메일 발송 — 사용자당 시간당 20건 제한 (스팸·오·악용 방지)
 var emailReportLimiter = rateLimit({
@@ -175,6 +185,7 @@ router.post('/', async function (req, res) {
       ]
     );
     res.status(201).json({ data: r.rows[0] });
+    _invalidateStatsCache(req.tenant.id);
 
     // 장비/컨택 마스터 자동 upsert (비동기, 실패 시 무시) — A1: 자연 누적
     var created = r.rows[0];
@@ -276,6 +287,7 @@ router.put('/:id', async function (req, res) {
     );
     if (result.conflict) return lock.sendConflict(res, result.latest, result.yourVersion);
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND' });
+    _invalidateStatsCache(req.tenant.id);
     res.json({ data: result.row });
   } catch (e) {
     console.error('[as-tickets/update]', e);
@@ -293,6 +305,7 @@ router.delete('/:id', async function (req, res) {
       [req.params.id, req.tenant.id, req.user.sub]
     );
     if (!rs.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '대상이 없거나 이미 휴지통에 있습니다.' });
+    _invalidateStatsCache(req.tenant.id);
     res.json({ message: '휴지통으로 이동되었습니다.', mode: 'soft', ticketNo: rs.rows[0].ticket_no });
   } catch (e) {
     console.error('[as-tickets/delete-soft]', e);
@@ -306,6 +319,7 @@ router.delete('/:id/hard', rbac.checkPermission('issue.delete'), async function 
     var rh = await db.query('DELETE FROM as_tickets WHERE id = $1 AND tenant_id = $2 RETURNING id',
       [req.params.id, req.tenant.id]);
     if (!rh.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    _invalidateStatsCache(req.tenant.id);
     res.json({ message: '완전 삭제 완료', mode: 'hard' });
   } catch (e) {
     console.error('[as-tickets/delete-hard]', e);
@@ -322,6 +336,7 @@ router.post('/:id/restore', async function (req, res) {
       [req.params.id, req.tenant.id, req.user.sub]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '대상이 없거나 휴지통에 없습니다.' });
+    _invalidateStatsCache(req.tenant.id);
     res.json({ data: r.rows[0], message: '복구되었습니다.' });
   } catch (e) {
     console.error('[as-tickets/restore]', e);

@@ -3,11 +3,17 @@ var path = require('path');
 var fs = require('fs');
 var config = require('./index');
 
+// v13.59: 100명 동시 사용 대비 풀 확대
+//   - max: 20 → 50 (통계 1회 = 18 병렬 쿼리이므로 동시 30명도 안정적 처리)
+//   - idleTimeout 30s → 45s (잦은 재연결 방지)
+//   - connectionTimeout 5s → 8s (피크 시 짧은 대기 허용)
+//   - 환경변수 DB_POOL_MAX 로 운영 중 튜닝 가능 (Render 등 Postgres 플랜 max 100 이하로 유지)
 var poolOpts = {
   connectionString: config.db.connectionString,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000
+  max: parseInt(process.env.DB_POOL_MAX, 10) || 50,
+  min: parseInt(process.env.DB_POOL_MIN, 10) || 2,
+  idleTimeoutMillis: parseInt(process.env.DB_IDLE_MS, 10) || 45000,
+  connectionTimeoutMillis: parseInt(process.env.DB_CONN_MS, 10) || 8000
 };
 
 // Supabase 등 외부 DB는 SSL 필요

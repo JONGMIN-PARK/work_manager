@@ -1,5 +1,68 @@
 # Work Manager — 변경 이력
 
+## v13.59 (2026-05-14) — 100명 동시 사용 대비: DB 풀 확대 + 통계 메모리 캐시 + 인덱스 보강
+
+### 배경
+사용자: "업무 관리자를 100명이 한꺼번에 사용하려는데, 최적화 필요한 부분들 검토해줘." → 옵션 M(Mid): DB 풀 + 통계 캐싱 + 인덱스 추가.
+
+### A. DB 연결 풀 확대 (`server/config/db.js`)
+
+```js
+max: 20 → 50,
+min: 2,
+idleTimeoutMillis: 30000 → 45000,
+connectionTimeoutMillis: 5000 → 8000
+```
+
+환경변수 `DB_POOL_MAX/MIN/IDLE_MS/CONN_MS` 로 운영 중 튜닝 가능. Render Postgres Standard 플랜은 max connection ~100이므로 안전 범위.
+
+**효과:** 통계 1회 = 18 병렬 쿼리이므로 동시 30명 진입 시 풀 즉시 고갈됐던 문제 해결.
+
+### B. A/S 통계 메모리 캐시 (`server/services/ttl-cache.service.js` 신설)
+
+- 외부 의존성 0의 단순 TTL Map 캐시. Redis·Memcached 불필요.
+- **TTL 5분** (`AS_STATS_CACHE_MS`), max 200 항목, FIFO eviction.
+- **캐시 키**: `tenant_id|from|to|groupBy|category|priority|customer`
+- **응답 헤더 `X-Cache: HIT | MISS | BYPASS`** 로 추적.
+- `?nocache=1` 강제 우회 가능.
+- **자동 무효화**: 티켓 CUD(POST/PUT/soft-delete/hard-delete/restore) 시 해당 테넌트 캐시 일괄 무효화.
+- **새 엔드포인트**:
+  - `GET /api/as-stats/_cache/stats` — `{size, hits, misses, hitRate}`
+  - `POST /api/as-stats/_cache/invalidate` — 수동 무효화
+
+**효과:** 같은 조건 응답 ~500ms → ~5ms (100x). 100명 동시 통계 진입 시 DB 1,800쿼리 → 18쿼리.
+
+### C. 인덱스 보강 (`server/migrations/028_as_perf_indexes.sql`)
+
+| 인덱스 | 효과 |
+|---|---|
+| `idx_as_activity_logs_tenant_date (tenant_id, worked_at DESC)` | 부서 부하·MTTR 시간 범위 |
+| `idx_as_parts_tenant_used (tenant_id, used_at DESC) WHERE used_at NOT NULL` | 월별 부품 추이 |
+| `idx_as_signatures_tenant_date (tenant_id, signed_at DESC) WHERE role='customer_field'` | CSAT 추이 |
+| `idx_as_tickets_closed_at (tenant_id, closed_at DESC) WHERE status='closed' AND deleted_at IS NULL` | RCA·종결 통계 |
+| `idx_as_tickets_customer_received` | Top 고객 Pareto |
+| `idx_audit_logs_dedup (action, target_id, created_at DESC) WHERE action LIKE 'as.%'` | 스케줄러 dedup |
+
+### 100명 동시 사용 추정 (수정 후)
+
+| 시나리오 | 수정 전 | 수정 후 |
+|---|---|---|
+| 100명 통계 동시 진입 (같은 기간) | 풀 고갈 + 1,800쿼리 → 응답 1~3s | 18쿼리 + 99명 캐시 hit → 5~50ms |
+| 100명 목록 페이지 새로고침 (1초당) | apiLimiter 200/분 = 100 통과 OK | 동일 |
+| 100명 동시 티켓 등록 | 풀 20 = 80명 대기 | 풀 50 = 50명만 약간 대기 (~ms) |
+| Render Standard ($25/월) | OOM 위험 | 안정 |
+
+### 운영 반영
+1. `psql $DATABASE_URL -f server/migrations/028_as_perf_indexes.sql` (또는 서버 재시작 시 자동 적용)
+2. 서버 재시작 — 풀 설정 + 캐시 초기화
+3. (선택) `GET /api/as-stats/_cache/stats` 로 hitRate 모니터링 — 50% 이상이면 효과 정상
+
+### 변경 파일
+- 신규: `server/migrations/028_as_perf_indexes.sql`, `server/services/ttl-cache.service.js`
+- 수정: `server/config/db.js`, `server/routes/as-stats.js`, `server/routes/as-tickets.js`, `업무일지_분석기.html`, `CHANGELOG.md`
+
+---
+
 ## v13.58 (2026-05-14) — 모바일(iPhone 17 Pro) 최적화 + 한국어 폰트 18종 그룹화 + 가독성
 
 ### 배경

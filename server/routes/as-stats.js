@@ -19,9 +19,27 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var notificationService = require('../services/notification.service');
+var ttlCache = require('../services/ttl-cache.service');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
+
+// v13.59: A/S 통계 응답 메모리 캐시 (5분 TTL, 테넌트+필터+기간 키)
+// 같은 조건으로 다수 사용자가 통계 화면을 보면 DB 쿼리 0회로 응답.
+// 티켓 mutation 발생 시 해당 테넌트 캐시 일괄 무효화 (라우터 외부에서 호출).
+var STATS_CACHE_TTL_MS = parseInt(process.env.AS_STATS_CACHE_MS, 10) || (5 * 60 * 1000);
+var statsCache = ttlCache.create({ ttlMs: STATS_CACHE_TTL_MS, max: 200 });
+
+function _cacheKey(tenantId, q) {
+  return tenantId + '|' + (q.from || '') + '|' + (q.to || '') + '|' + (q.groupBy || '') +
+         '|c=' + (q.category || '') + '|p=' + (q.priority || '') + '|cu=' + (q.customer || '');
+}
+
+// 외부에서 호출 가능 — 티켓 CUD 시 해당 테넌트 통계 무효화
+function invalidateStats(tenantId) {
+  return statsCache.invalidate(tenantId + '|');
+}
+router.invalidateStats = invalidateStats;
 
 // ─── SLA 정책 (config.js AS_PRIORITY와 동일) ───
 var SLA = {
@@ -69,6 +87,18 @@ router.get('/', async function (req, res) {
   try {
     var p = parsePeriod(req.query);
     var tid = req.tenant.id;
+
+    // 캐시 hit 체크 (?nocache=1 이면 우회)
+    var ck = _cacheKey(tid, req.query);
+    var bypass = (req.query.nocache === '1' || req.query.nocache === 'true');
+    if (!bypass) {
+      var cached = statsCache.get(ck);
+      if (cached) {
+        res.setHeader('X-Cache', 'HIT');
+        return res.json(cached);
+      }
+    }
+    res.setHeader('X-Cache', bypass ? 'BYPASS' : 'MISS');
 
     // 다중 필터 (v13.55 C) — category / priority / customer
     var extraWhere = '';
@@ -441,7 +471,7 @@ router.get('/', async function (req, res) {
       }
     };
 
-    res.json({
+    var payload = {
       data: {
         period: { from: p.from.toISOString(), to: p.to.toISOString(), groupBy: p.groupBy, days: p.days,
                   prevFrom: p.prevFrom.toISOString(), prevTo: p.prevTo.toISOString() },
@@ -458,13 +488,28 @@ router.get('/', async function (req, res) {
         rca: rca,
         csat: csat,
         parts: parts,
-        insights: insights
+        insights: insights,
+        cachedAt: new Date().toISOString()
       }
-    });
+    };
+    // 결과 캐시 (다음 5분간 같은 조건 호출은 DB 안 감)
+    if (!bypass) statsCache.set(ck, payload);
+    res.json(payload);
   } catch (e) {
     console.error('[as-stats]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '통계 조회 실패: ' + (e.message || '') });
   }
+});
+
+// 캐시 상태 조회 (admin 디버그용)
+router.get('/_cache/stats', function (req, res) {
+  res.json({ data: statsCache.stats(), ttlMs: STATS_CACHE_TTL_MS });
+});
+
+// 강제 무효화 (admin)
+router.post('/_cache/invalidate', function (req, res) {
+  var n = invalidateStats(req.tenant.id);
+  res.json({ message: '캐시 무효화 완료', removed: n });
 });
 
 // ────────────────────────────────────────────────────────────
