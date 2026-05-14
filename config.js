@@ -3,15 +3,36 @@
  * 테마, 색상, 인코딩, 업무분장 코드, AI 모델, 차트 스타일 등
  */
 
-/* ═══ 테마 ═══ */
+/* ═══ 테마 (시인성 강화 — 라이트/다크/하이콘트라스트/특수) ═══ */
 var TH = [
-  { id: 'auto',     l: '시스템',    c: 'linear-gradient(135deg,#F5F7FA 50%,#0C0F1A 50%)' },
-  { id: 'light',    l: '라이트',    c: '#F5F7FA' },
-  { id: 'midnight', l: '미드나잇',  c: '#0C0F1A' },
-  { id: 'forest',   l: '포레스트',  c: '#0B1410' },
-  { id: 'sand',     l: '웜샌드',    c: '#FAF7F2' },
-  { id: 'rose',     l: '로즈',      c: '#1A0A14' },
-  { id: 'slate',    l: '슬레이트',  c: '#1C1C1E' }
+  { id: 'auto',         l: '시스템',     c: 'linear-gradient(135deg,#F5F7FA 50%,#0C0F1A 50%)' },
+  // 라이트 계열
+  { id: 'light',        l: '라이트',     c: '#F5F7FA' },
+  { id: 'paper',        l: '페이퍼',     c: '#FAF6EE' },
+  { id: 'mint',         l: '민트',       c: '#EAF6F0' },
+  { id: 'sand',         l: '웜샌드',     c: '#FAF7F2' },
+  // 다크 계열
+  { id: 'midnight',     l: '미드나잇',   c: '#0C0F1A' },
+  { id: 'slate',        l: '슬레이트',   c: '#1C1C1E' },
+  { id: 'forest',       l: '포레스트',   c: '#0B1410' },
+  { id: 'ocean',        l: '오션',       c: '#08121A' },
+  { id: 'rose',         l: '로즈',       c: '#1A0A14' },
+  { id: 'amethyst',     l: '애머시스트', c: '#100C18' },
+  { id: 'sunset',       l: '선셋',       c: '#1A0F10' },
+  { id: 'nord',         l: '노르드',     c: '#2E3440' },
+  // 시인성 강화
+  { id: 'highcontrast', l: '고대비',     c: 'linear-gradient(135deg,#000,#FFF)' }
+];
+
+/* ═══ 글씨체 (Google Fonts 기반 — 부팅 시 동적 로드) ═══ */
+var FONTS = [
+  { id: 'noto',       l: '노토 산스 (기본)', family: "'Noto Sans KR', sans-serif",          weight: '300;400;500;600;700' },
+  { id: 'pretendard', l: '프리텐다드 (모던)', family: "'Pretendard Variable','Pretendard',sans-serif", url: 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css' },
+  { id: 'plex',       l: 'IBM Plex (테크)',   family: "'IBM Plex Sans KR', sans-serif",      weight: '300;400;500;600;700' },
+  { id: 'spoqa',      l: '스포카 한 산스 (UI)', family: "'Gowun Dodum','Spoqa Han Sans Neo', sans-serif",  weight: '400' },
+  { id: 'nanumsq',    l: '나눔스퀘어 (가독)',  family: "'Nanum Gothic','NanumSquare', sans-serif",        weight: '400;700;800' },
+  { id: 'serif',      l: '본 명조 (격식)',     family: "'Noto Serif KR', serif",              weight: '400;500;700' },
+  { id: 'mono',       l: '젯브레인스 (코드)',  family: "'JetBrains Mono','Noto Sans KR', monospace", weight: '400;500' }
 ];
 
 /* ═══ 인코딩 ═══ */

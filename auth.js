@@ -338,27 +338,27 @@ function hideLoginOverlay() {
 }
 
 function buildLoginHTML() {
-  return '<div style="background:var(--card,#1a1a2e);border-radius:16px;padding:40px;width:380px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.5);color:var(--text,#e0e0e0)">' +
+  return '<div style="background:var(--bg-p,#111620);border-radius:16px;padding:40px;width:380px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.5);color:var(--t2,#D8DEE8)">' +
     '<h2 style="margin:0 0 8px;text-align:center;font-size:22px">업무 관리자</h2>' +
-    '<p id="loginMsg" style="text-align:center;font-size:13px;color:var(--sub,#888);margin:0 0 24px">로그인하여 시작하세요</p>' +
+    '<p id="loginMsg" style="text-align:center;font-size:13px;color:var(--t5,#6070A0);margin:0 0 24px">로그인하여 시작하세요</p>' +
     '<div id="loginForm">' +
-      '<input id="loginEmail" type="email" placeholder="이메일" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px;box-sizing:border-box">' +
-      '<input id="loginPw" type="password" placeholder="비밀번호" style="width:100%;padding:10px 12px;margin-bottom:12px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px;box-sizing:border-box">' +
+      '<input id="loginEmail" type="email" placeholder="이메일" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
+      '<input id="loginPw" type="password" placeholder="비밀번호" style="width:100%;padding:10px 12px;margin-bottom:12px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
       '<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:16px;cursor:pointer"><input id="loginRemember" type="checkbox" checked> 로그인 유지</label>' +
       '<button onclick="handleLogin()" style="width:100%;padding:12px;border:none;border-radius:8px;background:#3B82F6;color:#fff;font-size:15px;font-weight:600;cursor:pointer">로그인</button>' +
-      '<div style="display:flex;align-items:center;gap:8px;margin:16px 0 12px"><hr style="flex:1;border:none;border-top:1px solid var(--border,#333)"><span style="font-size:12px;color:var(--sub,#888)">또는</span><hr style="flex:1;border:none;border-top:1px solid var(--border,#333)"></div>' +
-      '<button onclick="googleLogin()" style="width:100%;padding:10px;border:1px solid var(--border,#333);border-radius:8px;background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin:16px 0 12px"><hr style="flex:1;border:none;border-top:1px solid var(--bd,#222C44)"><span style="font-size:12px;color:var(--t5,#6070A0)">또는</span><hr style="flex:1;border:none;border-top:1px solid var(--bd,#222C44)"></div>' +
+      '<button onclick="googleLogin()" style="width:100%;padding:10px;border:1px solid var(--bd,#222C44);border-radius:8px;background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">' +
         '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
         'Google로 로그인</button>' +
       '<p style="text-align:center;margin:16px 0 0;font-size:13px"><a href="javascript:void(0)" onclick="showRegisterForm()" style="color:#3B82F6;text-decoration:none">가입 요청</a></p>' +
     '</div>' +
     '<div id="registerForm" style="display:none">' +
-      '<input id="regEmail" type="email" placeholder="이메일" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px;box-sizing:border-box">' +
-      '<input id="regName" type="text" placeholder="이름 (실명)" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px;box-sizing:border-box">' +
-      '<input id="regPw" type="password" placeholder="비밀번호 (8자 이상, 2종 조합)" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px;box-sizing:border-box">' +
-      '<input id="regPw2" type="password" placeholder="비밀번호 확인" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px;box-sizing:border-box">' +
-      '<input id="regPosition" type="text" placeholder="직급 (선택)" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px;box-sizing:border-box">' +
-      '<input id="regPhone" type="tel" placeholder="연락처 (선택)" style="width:100%;padding:10px 12px;margin-bottom:16px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px;box-sizing:border-box">' +
+      '<input id="regEmail" type="email" placeholder="이메일" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
+      '<input id="regName" type="text" placeholder="이름 (실명)" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
+      '<input id="regPw" type="password" placeholder="비밀번호 (8자 이상, 2종 조합)" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
+      '<input id="regPw2" type="password" placeholder="비밀번호 확인" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
+      '<input id="regPosition" type="text" placeholder="직급 (선택)" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
+      '<input id="regPhone" type="tel" placeholder="연락처 (선택)" style="width:100%;padding:10px 12px;margin-bottom:16px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
       '<button onclick="handleRegister()" style="width:100%;padding:12px;border:none;border-radius:8px;background:#10B981;color:#fff;font-size:15px;font-weight:600;cursor:pointer">가입 요청</button>' +
       '<p style="text-align:center;margin:16px 0 0;font-size:13px"><a href="javascript:void(0)" onclick="showLoginForm()" style="color:#3B82F6;text-decoration:none">로그인으로 돌아가기</a></p>' +
     '</div>' +
@@ -391,7 +391,7 @@ async function handleLogin() {
 
   try {
     msg.textContent = '로그인 중...';
-    msg.style.color = 'var(--sub,#888)';
+    msg.style.color = 'var(--t5,#6070A0)';
     await authLogin(email, pw, remember);
     hideLoginOverlay();
     updateAuthUI();
@@ -424,7 +424,7 @@ async function handleRegister() {
 
   try {
     msg.textContent = '요청 중...';
-    msg.style.color = 'var(--sub,#888)';
+    msg.style.color = 'var(--t5,#6070A0)';
     await authRegister(email, pw, name, position, phone);
     msg.textContent = '가입 요청 완료! 관리자 승인을 기다려 주세요.';
     msg.style.color = '#10B981';
@@ -464,8 +464,8 @@ function updateAuthUI() {
   var el = document.getElementById('authUserInfo');
   if (el) {
     el.innerHTML = '<span style="font-size:13px;opacity:.8">' + userName + ' · ' + roleLabel + '</span>' +
-      ' <button onclick="showProfileModal()" title="내 프로필" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text,#e0e0e0);padding:4px">&#x1F464;</button>' +
-      ' <button onclick="authLogout()" title="로그아웃" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text,#e0e0e0);padding:4px">&#x1F6AA;</button>';
+      ' <button onclick="showProfileModal()" title="내 프로필" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--t2,#D8DEE8);padding:4px">&#x1F464;</button>' +
+      ' <button onclick="authLogout()" title="로그아웃" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--t2,#D8DEE8);padding:4px">&#x1F6AA;</button>';
   }
 
   // 관리자 전용 탭 표시/숨김
@@ -491,7 +491,7 @@ async function renderUserAdmin() {
   var container = document.getElementById('mUserAdmin');
   if (!container) return;
 
-  container.innerHTML = '<div style="padding:20px"><p style="color:var(--sub,#888)">사용자 목록 로딩 중...</p></div>';
+  container.innerHTML = '<div style="padding:20px"><p style="color:var(--t5,#6070A0)">사용자 목록 로딩 중...</p></div>';
 
   try {
     var pendingRes = await apiFetch('/api/users/pending');
@@ -510,25 +510,25 @@ async function renderUserAdmin() {
 
     // 탭
     html += '<div style="display:flex;gap:8px;margin-bottom:16px">';
-    html += '<button class="uaTab" data-tab="pending" onclick="switchUserTab(\'pending\')" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border,#333);background:var(--accent,#3B82F6);color:#fff;cursor:pointer;font-size:13px">가입 대기 (' + pending.length + ')</button>';
-    html += '<button class="uaTab" data-tab="active" onclick="switchUserTab(\'active\')" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border,#333);background:var(--card,#1a1a2e);color:var(--text,#e0e0e0);cursor:pointer;font-size:13px">활성 (' + active.length + ')</button>';
-    html += '<button class="uaTab" data-tab="inactive" onclick="switchUserTab(\'inactive\')" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border,#333);background:var(--card,#1a1a2e);color:var(--text,#e0e0e0);cursor:pointer;font-size:13px">비활성 (' + inactive.length + ')</button>';
+    html += '<button class="uaTab" data-tab="pending" onclick="switchUserTab(\'pending\')" style="padding:8px 16px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--ac,#5B8DEF);color:#fff;cursor:pointer;font-size:13px">가입 대기 (' + pending.length + ')</button>';
+    html += '<button class="uaTab" data-tab="active" onclick="switchUserTab(\'active\')" style="padding:8px 16px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-p,#111620);color:var(--t2,#D8DEE8);cursor:pointer;font-size:13px">활성 (' + active.length + ')</button>';
+    html += '<button class="uaTab" data-tab="inactive" onclick="switchUserTab(\'inactive\')" style="padding:8px 16px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-p,#111620);color:var(--t2,#D8DEE8);cursor:pointer;font-size:13px">비활성 (' + inactive.length + ')</button>';
     html += '</div>';
 
     // 가입 대기 목록
     html += '<div id="uaTabPending">';
     if (pending.length === 0) {
-      html += '<p style="color:var(--sub,#888);font-size:13px">대기 중인 가입 요청이 없습니다.</p>';
+      html += '<p style="color:var(--t5,#6070A0);font-size:13px">대기 중인 가입 요청이 없습니다.</p>';
     } else {
       pending.forEach(function (u) {
-        html += '<div style="background:var(--card,#1a1a2e);border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid var(--border,#333)">';
+        html += '<div style="background:var(--bg-p,#111620);border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid var(--bd,#222C44)">';
         html += '<div style="font-size:14px;font-weight:600;margin-bottom:6px">' + eH(u.name) + ' &lt;' + eH(u.email) + '&gt;</div>';
-        html += '<div style="font-size:12px;color:var(--sub,#888);margin-bottom:12px">직급: ' + eH(u.position || '-') + ' · 연락처: ' + eH(u.phone || '-') + ' · 신청: ' + (u.created_at || '').slice(0, 10) + '</div>';
+        html += '<div style="font-size:12px;color:var(--t5,#6070A0);margin-bottom:12px">직급: ' + eH(u.position || '-') + ' · 연락처: ' + eH(u.phone || '-') + ' · 신청: ' + (u.created_at || '').slice(0, 10) + '</div>';
         html += '<div style="display:flex;gap:8px;align-items:center">';
-        html += '<select id="approveRole_' + u.id + '" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">';
+        html += '<select id="approveRole_' + u.id + '" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">';
         html += '<option value="member">팀원</option><option value="manager">팀장</option><option value="executive">임원</option><option value="admin">관리자</option>';
         html += '</select>';
-        html += '<select id="approveDept_' + u.id + '" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">';
+        html += '<select id="approveDept_' + u.id + '" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">';
         html += '<option value="">부서 없음</option>';
         depts.forEach(function (d) { html += '<option value="' + d.id + '">' + eH(d.name) + '</option>'; });
         html += '</select>';
@@ -563,23 +563,23 @@ async function renderUserAdmin() {
 
 function renderUserTable(users, depts, isActive) {
   if (users.length === 0) {
-    return '<p style="color:var(--sub,#888);font-size:13px">사용자가 없습니다.</p>';
+    return '<p style="color:var(--t5,#6070A0);font-size:13px">사용자가 없습니다.</p>';
   }
   var roleLabels = { admin: '관리자', executive: '임원', manager: '팀장', member: '팀원' };
   var deptMap = {};
   depts.forEach(function (d) { deptMap[d.id] = d.name; });
 
   var html = '<table style="width:100%;border-collapse:collapse;font-size:13px">';
-  html += '<tr style="border-bottom:1px solid var(--border,#333);color:var(--sub,#888)">';
+  html += '<tr style="border-bottom:1px solid var(--bd,#222C44);color:var(--t5,#6070A0)">';
   html += '<th style="padding:8px;text-align:left">이름</th><th style="padding:8px;text-align:left">이메일</th><th style="padding:8px">역할</th><th style="padding:8px">부서</th><th style="padding:8px">최근 로그인</th><th style="padding:8px">작업</th></tr>';
 
   users.forEach(function (u) {
-    html += '<tr style="border-bottom:1px solid var(--border,#333)">';
+    html += '<tr style="border-bottom:1px solid var(--bd,#222C44)">';
     html += '<td style="padding:8px">' + eH(u.name) + '</td>';
-    html += '<td style="padding:8px;color:var(--sub,#888)">' + eH(u.email) + '</td>';
+    html += '<td style="padding:8px;color:var(--t5,#6070A0)">' + eH(u.email) + '</td>';
     html += '<td style="padding:8px;text-align:center">' + (roleLabels[u.role] || u.role) + '</td>';
     html += '<td style="padding:8px;text-align:center">' + eH(deptMap[u.department_id] || '-') + '</td>';
-    html += '<td style="padding:8px;text-align:center;color:var(--sub,#888)">' + (u.last_login_at ? u.last_login_at.slice(0, 10) : '-') + '</td>';
+    html += '<td style="padding:8px;text-align:center;color:var(--t5,#6070A0)">' + (u.last_login_at ? u.last_login_at.slice(0, 10) : '-') + '</td>';
     html += '<td style="padding:8px;text-align:center">';
     if (isActive) {
       html += '<button onclick="changeUserRole(\'' + u.id + '\',\'' + u.role + '\')" title="역할 변경" style="background:none;border:none;cursor:pointer;font-size:14px">&#x270F;&#xFE0F;</button> ';
@@ -601,8 +601,8 @@ function switchUserTab(tab) {
     var panel = document.getElementById('uaTab' + t.charAt(0).toUpperCase() + t.slice(1));
     var btn = document.querySelector('.uaTab[data-tab="' + t + '"]');
     if (panel) panel.style.display = t === tab ? '' : 'none';
-    if (btn) btn.style.background = t === tab ? 'var(--accent,#3B82F6)' : 'var(--card,#1a1a2e)';
-    if (btn) btn.style.color = t === tab ? '#fff' : 'var(--text,#e0e0e0)';
+    if (btn) btn.style.background = t === tab ? 'var(--ac,#5B8DEF)' : 'var(--bg-p,#111620)';
+    if (btn) btn.style.color = t === tab ? '#fff' : 'var(--t2,#D8DEE8)';
   });
 }
 
@@ -707,27 +707,27 @@ async function showProfileModal() {
   var div = document.createElement('div');
   div.innerHTML =
     '<div style="display:grid;grid-template-columns:100px 1fr;gap:12px 16px;align-items:center;font-size:13px">' +
-      '<span style="color:var(--sub,#888)">이메일</span><span>' + eH(p.email) + '</span>' +
-      '<span style="color:var(--sub,#888)">역할</span><span>' + eH(roleLabels[p.role] || p.role) + '</span>' +
-      '<span style="color:var(--sub,#888)">부서</span><span>' + eH(p.department_name || '-') + '</span>' +
-      '<label style="color:var(--sub,#888)">이름</label><input id="profName" value="' + eH(p.name || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">' +
-      '<label style="color:var(--sub,#888)">표시명</label><input id="profDisplay" value="' + eH(p.display_name || '') + '" placeholder="별칭 (선택)" style="padding:8px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">' +
-      '<label style="color:var(--sub,#888)">직급</label><input id="profPosition" value="' + eH(p.position || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">' +
-      '<label style="color:var(--sub,#888)">연락처</label><input id="profPhone" value="' + eH(p.phone || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">' +
+      '<span style="color:var(--t5,#6070A0)">이메일</span><span>' + eH(p.email) + '</span>' +
+      '<span style="color:var(--t5,#6070A0)">역할</span><span>' + eH(roleLabels[p.role] || p.role) + '</span>' +
+      '<span style="color:var(--t5,#6070A0)">부서</span><span>' + eH(p.department_name || '-') + '</span>' +
+      '<label style="color:var(--t5,#6070A0)">이름</label><input id="profName" value="' + eH(p.name || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
+      '<label style="color:var(--t5,#6070A0)">표시명</label><input id="profDisplay" value="' + eH(p.display_name || '') + '" placeholder="별칭 (선택)" style="padding:8px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
+      '<label style="color:var(--t5,#6070A0)">직급</label><input id="profPosition" value="' + eH(p.position || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
+      '<label style="color:var(--t5,#6070A0)">연락처</label><input id="profPhone" value="' + eH(p.phone || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
     '</div>' +
     // ─── 텔레그램 연동 섹션 ───
-    '<div id="profTelegram" style="margin-top:20px;padding:16px;border-radius:10px;background:var(--bg,#0c0f1a);border:1px solid var(--border,#333)">' +
+    '<div id="profTelegram" style="margin-top:20px;padding:16px;border-radius:10px;background:var(--bg-i,#0D1018);border:1px solid var(--bd,#222C44)">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
         '<span style="font-size:18px">&#x2708;&#xFE0F;</span>' +
-        '<span style="font-size:13px;font-weight:600;color:var(--text,#e0e0e0)">텔레그램 알림</span>' +
+        '<span style="font-size:13px;font-weight:600;color:var(--t2,#D8DEE8)">텔레그램 알림</span>' +
         '<span id="tgStatus" style="font-size:11px;padding:2px 8px;border-radius:10px;margin-left:auto"></span>' +
       '</div>' +
-      '<div id="tgContent" style="text-align:center;font-size:12px;color:var(--sub,#888)">로딩 중...</div>' +
+      '<div id="tgContent" style="text-align:center;font-size:12px;color:var(--t5,#6070A0)">로딩 중...</div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">' +
       '<button id="profSave" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:#fff;cursor:pointer;font-size:13px">저장</button>' +
       '<button id="profChangePw" style="padding:8px 20px;border:none;border-radius:8px;background:#F59E0B;color:#fff;cursor:pointer;font-size:13px">비밀번호 변경</button>' +
-      '<button id="profCancel" style="padding:8px 20px;border:none;border-radius:8px;background:var(--card,#1a1a2e);border:1px solid var(--border,#333);color:var(--text,#e0e0e0);cursor:pointer;font-size:13px">닫기</button>' +
+      '<button id="profCancel" style="padding:8px 20px;border:none;border-radius:8px;background:var(--bg-p,#111620);border:1px solid var(--bd,#222C44);color:var(--t2,#D8DEE8);cursor:pointer;font-size:13px">닫기</button>' +
     '</div>';
 
   var modal = (typeof createModal === 'function')
@@ -740,7 +740,7 @@ async function showProfileModal() {
     overlay.id = 'profileOverlay';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999';
     var card = document.createElement('div');
-    card.style.cssText = 'background:var(--card,#1a1a2e);border-radius:16px;padding:32px;max-width:480px;width:90vw';
+    card.style.cssText = 'background:var(--bg-p,#111620);border-radius:16px;padding:32px;max-width:480px;width:90vw';
     card.innerHTML = '<h3 style="margin:0 0 16px">내 프로필</h3>';
     card.appendChild(div);
     overlay.appendChild(card);
@@ -800,7 +800,7 @@ async function loadTelegramStatus(container) {
       // 서버에 텔레그램 봇 토큰 미설정
       statusEl.textContent = '미설정';
       statusEl.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:10px;margin-left:auto;background:#374151;color:#9CA3AF';
-      contentEl.innerHTML = '<span style="font-size:12px;color:var(--sub,#888)">텔레그램 봇이 아직 설정되지 않았습니다.<br>관리자에게 TELEGRAM_BOT_TOKEN 환경변수 설정을 요청하세요.</span>';
+      contentEl.innerHTML = '<span style="font-size:12px;color:var(--t5,#6070A0)">텔레그램 봇이 아직 설정되지 않았습니다.<br>관리자에게 TELEGRAM_BOT_TOKEN 환경변수 설정을 요청하세요.</span>';
       return;
     }
 
@@ -811,9 +811,9 @@ async function loadTelegramStatus(container) {
 
       contentEl.innerHTML =
         '<div style="text-align:left">' +
-          '<div style="font-size:12px;color:var(--text,#e0e0e0);margin-bottom:8px">' +
+          '<div style="font-size:12px;color:var(--t2,#D8DEE8);margin-bottom:8px">' +
             (s.username ? '@' + s.username + ' ' : '') + '연동됨' +
-            '<span style="font-size:10px;color:var(--sub,#888);margin-left:8px">' + new Date(s.linkedAt).toLocaleDateString('ko') + '</span>' +
+            '<span style="font-size:10px;color:var(--t5,#6070A0);margin-left:8px">' + new Date(s.linkedAt).toLocaleDateString('ko') + '</span>' +
           '</div>' +
           '<div id="tgPrefsArea" style="margin-bottom:12px"></div>' +
           '<button id="tgUnlinkBtn" style="padding:6px 14px;border:none;border-radius:6px;background:#7F1D1D;color:#FCA5A5;cursor:pointer;font-size:11px">연동 해제</button>' +
@@ -838,13 +838,13 @@ async function loadTelegramStatus(container) {
       statusEl.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:10px;margin-left:auto;background:#78350F;color:#FDE68A';
 
       contentEl.innerHTML =
-        '<p style="font-size:12px;color:var(--sub,#888);margin-bottom:12px">QR코드를 스캔하여 텔레그램 봇과 연동하세요 (1회)</p>' +
+        '<p style="font-size:12px;color:var(--t5,#6070A0);margin-bottom:12px">QR코드를 스캔하여 텔레그램 봇과 연동하세요 (1회)</p>' +
         '<button id="tgGenQR" style="padding:8px 20px;border:none;border-radius:8px;background:#0088CC;color:#fff;cursor:pointer;font-size:12px">QR코드 생성</button>' +
         '<div id="tgQRArea" style="margin-top:12px"></div>' +
-        '<div style="margin-top:12px;border-top:1px solid var(--border,#333);padding-top:8px">' +
-          '<button id="tgDebugBtn" style="padding:4px 10px;border:none;border-radius:4px;background:var(--card,#1a1a2e);border:1px solid var(--border,#333);color:var(--sub,#888);cursor:pointer;font-size:10px">Webhook 진단</button> ' +
+        '<div style="margin-top:12px;border-top:1px solid var(--bd,#222C44);padding-top:8px">' +
+          '<button id="tgDebugBtn" style="padding:4px 10px;border:none;border-radius:4px;background:var(--bg-p,#111620);border:1px solid var(--bd,#222C44);color:var(--t5,#6070A0);cursor:pointer;font-size:10px">Webhook 진단</button> ' +
           '<button id="tgSetupBtn" style="padding:4px 10px;border:none;border-radius:4px;background:#065F46;color:#6EE7B7;cursor:pointer;font-size:10px">Webhook 등록</button>' +
-          '<pre id="tgDebugResult" style="display:none;margin-top:8px;font-size:10px;color:var(--sub,#888);background:var(--bg,#0c0f1a);padding:8px;border-radius:6px;overflow:auto;max-height:200px;white-space:pre-wrap"></pre>' +
+          '<pre id="tgDebugResult" style="display:none;margin-top:8px;font-size:10px;color:var(--t5,#6070A0);background:var(--bg-i,#0D1018);padding:8px;border-radius:6px;overflow:auto;max-height:200px;white-space:pre-wrap"></pre>' +
         '</div>';
 
       contentEl.querySelector('#tgGenQR').onclick = function () {
@@ -892,7 +892,7 @@ async function loadTelegramStatus(container) {
     }
     statusEl.textContent = '오류';
     statusEl.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:10px;margin-left:auto;background:#7F1D1D;color:#FCA5A5';
-    contentEl.innerHTML = '<span style="font-size:11px;color:var(--sub,#888)">' + errMsg + '</span>';
+    contentEl.innerHTML = '<span style="font-size:11px;color:var(--t5,#6070A0)">' + errMsg + '</span>';
   }
 }
 
@@ -918,8 +918,8 @@ async function generateTelegramQR(container) {
 
     qrArea.innerHTML =
       '<div id="tgQRCode" style="display:inline-block;padding:12px;background:#fff;border-radius:8px;margin-bottom:10px"></div>' +
-      '<div style="font-size:11px;color:var(--sub,#888);margin-top:8px">' +
-        '<div>인증코드: <b style="color:var(--text,#e0e0e0);font-family:monospace;letter-spacing:2px">' + info.code + '</b></div>' +
+      '<div style="font-size:11px;color:var(--t5,#6070A0);margin-top:8px">' +
+        '<div>인증코드: <b style="color:var(--t2,#D8DEE8);font-family:monospace;letter-spacing:2px">' + info.code + '</b></div>' +
         '<div style="margin-top:4px">유효시간: 5분</div>' +
       '</div>' +
       '<div style="margin-top:8px">' +
@@ -984,11 +984,11 @@ async function loadTelegramPrefs(container) {
     var data = await apiFetch('/api/telegram/prefs');
     var prefs = data.data || {};
 
-    var html = '<div style="font-size:11px;color:var(--sub,#888);margin-bottom:6px">알림 설정</div>';
+    var html = '<div style="font-size:11px;color:var(--t5,#6070A0);margin-bottom:6px">알림 설정</div>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">';
     Object.keys(eventLabels).forEach(function (evt) {
       var checked = prefs[evt] !== false; // 기본값 true
-      html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text,#e0e0e0);padding:3px 0;cursor:pointer">' +
+      html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t2,#D8DEE8);padding:3px 0;cursor:pointer">' +
         '<input type="checkbox" data-evt="' + evt + '" ' + (checked ? 'checked' : '') +
         ' style="width:14px;height:14px;accent-color:#0088CC;cursor:pointer">' +
         eventLabels[evt] + '</label>';
@@ -1011,7 +1011,7 @@ async function loadTelegramPrefs(container) {
       };
     });
   } catch (e) {
-    prefsArea.innerHTML = '<span style="font-size:11px;color:var(--sub,#888)">알림 설정을 불러올 수 없습니다.</span>';
+    prefsArea.innerHTML = '<span style="font-size:11px;color:var(--t5,#6070A0)">알림 설정을 불러올 수 없습니다.</span>';
   }
 }
 
@@ -1019,14 +1019,14 @@ function showChangePasswordModal() {
   var div = document.createElement('div');
   div.innerHTML =
     '<div style="display:grid;gap:12px;font-size:13px">' +
-      '<input id="cpCurrent" type="password" placeholder="현재 비밀번호" style="padding:10px 12px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px">' +
-      '<input id="cpNew" type="password" placeholder="새 비밀번호 (8자 이상, 2종 조합)" style="padding:10px 12px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px">' +
-      '<input id="cpNew2" type="password" placeholder="새 비밀번호 확인" style="padding:10px 12px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px">' +
-      '<p id="cpMsg" style="font-size:12px;color:var(--sub,#888);margin:0"></p>' +
+      '<input id="cpCurrent" type="password" placeholder="현재 비밀번호" style="padding:10px 12px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px">' +
+      '<input id="cpNew" type="password" placeholder="새 비밀번호 (8자 이상, 2종 조합)" style="padding:10px 12px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px">' +
+      '<input id="cpNew2" type="password" placeholder="새 비밀번호 확인" style="padding:10px 12px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px">' +
+      '<p id="cpMsg" style="font-size:12px;color:var(--t5,#6070A0);margin:0"></p>' +
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">' +
       '<button id="cpSave" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:#fff;cursor:pointer;font-size:13px">변경</button>' +
-      '<button id="cpCancel" style="padding:8px 20px;border:none;border-radius:8px;background:var(--card,#1a1a2e);border:1px solid var(--border,#333);color:var(--text,#e0e0e0);cursor:pointer;font-size:13px">취소</button>' +
+      '<button id="cpCancel" style="padding:8px 20px;border:none;border-radius:8px;background:var(--bg-p,#111620);border:1px solid var(--bd,#222C44);color:var(--t2,#D8DEE8);cursor:pointer;font-size:13px">취소</button>' +
     '</div>';
 
   var modal = (typeof createModal === 'function')
@@ -1037,7 +1037,7 @@ function showChangePasswordModal() {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999';
     var card = document.createElement('div');
-    card.style.cssText = 'background:var(--card,#1a1a2e);border-radius:16px;padding:32px;max-width:400px;width:90vw';
+    card.style.cssText = 'background:var(--bg-p,#111620);border-radius:16px;padding:32px;max-width:400px;width:90vw';
     card.innerHTML = '<h3 style="margin:0 0 16px">비밀번호 변경</h3>';
     card.appendChild(div);
     overlay.appendChild(card);
@@ -1055,7 +1055,7 @@ function showChangePasswordModal() {
     if (nw !== nw2) { msg.textContent = '새 비밀번호가 일치하지 않습니다.'; msg.style.color = '#EF4444'; return; }
 
     try {
-      msg.textContent = '변경 중...'; msg.style.color = 'var(--sub,#888)';
+      msg.textContent = '변경 중...'; msg.style.color = 'var(--t5,#6070A0)';
       await apiFetch('/api/auth/change-password', {
         method: 'PUT',
         body: JSON.stringify({ currentPassword: cur, newPassword: nw })
@@ -1088,7 +1088,7 @@ async function renderOrgManagement() {
 
   var div = document.createElement('div');
   div.innerHTML =
-    '<div style="background:var(--card,#1a1a2e);border-radius:12px;padding:16px;margin-top:16px;border:1px solid var(--border,#333)">' +
+    '<div style="background:var(--bg-p,#111620);border-radius:12px;padding:16px;margin-top:16px;border:1px solid var(--bd,#222C44)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
         '<h4 style="margin:0;font-size:15px">조직 관리</h4>' +
         '<button id="btnAddDept" style="padding:6px 14px;border:none;border-radius:6px;background:#3B82F6;color:#fff;cursor:pointer;font-size:12px">+ 부서 추가</button>' +
@@ -1117,7 +1117,7 @@ function renderDeptList(depts) {
   if (!list) return;
 
   if (depts.length === 0) {
-    list.innerHTML = '<p style="color:var(--sub,#888);font-size:13px">등록된 부서가 없습니다.</p>';
+    list.innerHTML = '<p style="color:var(--t5,#6070A0);font-size:13px">등록된 부서가 없습니다.</p>';
     return;
   }
 
@@ -1132,12 +1132,12 @@ function renderDeptList(depts) {
   });
 
   var html = '<table style="width:100%;border-collapse:collapse;font-size:13px">';
-  html += '<tr style="border-bottom:1px solid var(--border,#333);color:var(--sub,#888)"><th style="padding:8px;text-align:left">부서명</th><th style="padding:8px;text-align:center">정렬</th><th style="padding:8px;text-align:center">작업</th></tr>';
+  html += '<tr style="border-bottom:1px solid var(--bd,#222C44);color:var(--t5,#6070A0)"><th style="padding:8px;text-align:left">부서명</th><th style="padding:8px;text-align:center">정렬</th><th style="padding:8px;text-align:center">작업</th></tr>';
 
   function renderRow(dept, indent) {
-    html += '<tr style="border-bottom:1px solid var(--border,#333)">';
+    html += '<tr style="border-bottom:1px solid var(--bd,#222C44)">';
     html += '<td style="padding:8px;padding-left:' + (8 + indent * 20) + 'px">' + (indent > 0 ? '└ ' : '') + eH(dept.name) + '</td>';
-    html += '<td style="padding:8px;text-align:center;color:var(--sub,#888)">' + (dept.sort_order || 0) + '</td>';
+    html += '<td style="padding:8px;text-align:center;color:var(--t5,#6070A0)">' + (dept.sort_order || 0) + '</td>';
     html += '<td style="padding:8px;text-align:center">';
     html += '<button onclick="editDept(\'' + dept.id + '\')" title="수정" style="background:none;border:none;cursor:pointer;font-size:14px">&#x270F;&#xFE0F;</button> ';
     html += '<button onclick="deleteDept(\'' + dept.id + '\',\'' + eH(dept.name) + '\')" title="삭제" style="background:none;border:none;cursor:pointer;font-size:14px">&#x1F5D1;&#xFE0F;</button> ';
@@ -1157,18 +1157,18 @@ function showDeptForm(dept, allDepts) {
   var div = document.createElement('div');
   div.innerHTML =
     '<div style="display:grid;gap:12px;font-size:13px">' +
-      '<input id="deptName" value="' + eH(isEdit ? dept.name : '') + '" placeholder="부서명" style="padding:10px 12px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px">' +
-      '<select id="deptParent" style="padding:10px 12px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px">' +
+      '<input id="deptName" value="' + eH(isEdit ? dept.name : '') + '" placeholder="부서명" style="padding:10px 12px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px">' +
+      '<select id="deptParent" style="padding:10px 12px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px">' +
         '<option value="">상위 부서 없음 (최상위)</option>' +
         (allDepts || []).filter(function (d) { return !isEdit || d.id !== dept.id; }).map(function (d) {
           return '<option value="' + d.id + '"' + (isEdit && dept.parent_id === d.id ? ' selected' : '') + '>' + eH(d.name) + '</option>';
         }).join('') +
       '</select>' +
-      '<input id="deptSort" type="number" value="' + (isEdit ? (dept.sort_order || 0) : 0) + '" placeholder="정렬 순서" style="padding:10px 12px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:14px">' +
+      '<input id="deptSort" type="number" value="' + (isEdit ? (dept.sort_order || 0) : 0) + '" placeholder="정렬 순서" style="padding:10px 12px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px">' +
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">' +
       '<button id="deptSave" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:#fff;cursor:pointer;font-size:13px">' + (isEdit ? '수정' : '추가') + '</button>' +
-      '<button id="deptCancel" style="padding:8px 20px;border:none;border-radius:8px;background:var(--card,#1a1a2e);border:1px solid var(--border,#333);color:var(--text,#e0e0e0);cursor:pointer;font-size:13px">취소</button>' +
+      '<button id="deptCancel" style="padding:8px 20px;border:none;border-radius:8px;background:var(--bg-p,#111620);border:1px solid var(--bd,#222C44);color:var(--t2,#D8DEE8);cursor:pointer;font-size:13px">취소</button>' +
     '</div>';
 
   var modal = (typeof createModal === 'function')
@@ -1179,7 +1179,7 @@ function showDeptForm(dept, allDepts) {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999';
     var card = document.createElement('div');
-    card.style.cssText = 'background:var(--card,#1a1a2e);border-radius:16px;padding:32px;max-width:400px;width:90vw';
+    card.style.cssText = 'background:var(--bg-p,#111620);border-radius:16px;padding:32px;max-width:400px;width:90vw';
     card.innerHTML = '<h3 style="margin:0 0 16px">' + (isEdit ? '부서 수정' : '부서 추가') + '</h3>';
     card.appendChild(div);
     overlay.appendChild(card);
@@ -1251,14 +1251,14 @@ async function viewDeptMembers(deptId, deptName) {
   var roleLabels = { admin: '관리자', executive: '임원', manager: '팀장', member: '팀원' };
   var html = '';
   if (members.length === 0) {
-    html = '<p style="color:var(--sub,#888);font-size:13px">소속 인원이 없습니다.</p>';
+    html = '<p style="color:var(--t5,#6070A0);font-size:13px">소속 인원이 없습니다.</p>';
   } else {
     html = '<table style="width:100%;border-collapse:collapse;font-size:13px">';
-    html += '<tr style="border-bottom:1px solid var(--border,#333);color:var(--sub,#888)"><th style="padding:6px;text-align:left">이름</th><th style="padding:6px;text-align:left">이메일</th><th style="padding:6px;text-align:center">역할</th><th style="padding:6px;text-align:center">직급</th></tr>';
+    html += '<tr style="border-bottom:1px solid var(--bd,#222C44);color:var(--t5,#6070A0)"><th style="padding:6px;text-align:left">이름</th><th style="padding:6px;text-align:left">이메일</th><th style="padding:6px;text-align:center">역할</th><th style="padding:6px;text-align:center">직급</th></tr>';
     members.forEach(function (m) {
-      html += '<tr style="border-bottom:1px solid var(--border,#333)">';
+      html += '<tr style="border-bottom:1px solid var(--bd,#222C44)">';
       html += '<td style="padding:6px">' + eH(m.name) + '</td>';
-      html += '<td style="padding:6px;color:var(--sub,#888)">' + eH(m.email) + '</td>';
+      html += '<td style="padding:6px;color:var(--t5,#6070A0)">' + eH(m.email) + '</td>';
       html += '<td style="padding:6px;text-align:center">' + (roleLabels[m.role] || m.role) + '</td>';
       html += '<td style="padding:6px;text-align:center">' + eH(m.position || '-') + '</td>';
       html += '</tr>';
@@ -1299,12 +1299,12 @@ async function renderAuditLog() {
   };
 
   section.innerHTML =
-    '<div style="background:var(--card,#1a1a2e);border-radius:12px;padding:16px;margin-top:16px;border:1px solid var(--border,#333)">' +
+    '<div style="background:var(--bg-p,#111620);border-radius:12px;padding:16px;margin-top:16px;border:1px solid var(--bd,#222C44)">' +
       '<h4 style="margin:0 0 12px;font-size:15px">감사 로그</h4>' +
       '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
-        '<input id="auditSearch" placeholder="검색 (이름, 이메일, 액션)" style="flex:1;min-width:180px;padding:6px 10px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">' +
-        '<input id="auditFrom" type="date" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">' +
-        '<input id="auditTo" type="date" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);font-size:13px">' +
+        '<input id="auditSearch" placeholder="검색 (이름, 이메일, 액션)" style="flex:1;min-width:180px;padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
+        '<input id="auditFrom" type="date" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
+        '<input id="auditTo" type="date" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
         '<button id="auditSearchBtn" style="padding:6px 14px;border:none;border-radius:6px;background:#3B82F6;color:#fff;cursor:pointer;font-size:12px">조회</button>' +
       '</div>' +
       '<div id="auditLogList" style="max-height:400px;overflow-y:auto"></div>' +
@@ -1331,21 +1331,21 @@ async function renderAuditLog() {
 
       var list = document.getElementById('auditLogList');
       if (logs.length === 0) {
-        list.innerHTML = '<p style="color:var(--sub,#888);font-size:13px;text-align:center">로그가 없습니다.</p>';
+        list.innerHTML = '<p style="color:var(--t5,#6070A0);font-size:13px;text-align:center">로그가 없습니다.</p>';
       } else {
         var html = '<table style="width:100%;border-collapse:collapse;font-size:12px">';
-        html += '<tr style="border-bottom:1px solid var(--border,#333);color:var(--sub,#888)"><th style="padding:6px;text-align:left">시간</th><th style="padding:6px;text-align:left">사용자</th><th style="padding:6px;text-align:left">액션</th><th style="padding:6px;text-align:left">대상</th><th style="padding:6px;text-align:left">IP</th></tr>';
+        html += '<tr style="border-bottom:1px solid var(--bd,#222C44);color:var(--t5,#6070A0)"><th style="padding:6px;text-align:left">시간</th><th style="padding:6px;text-align:left">사용자</th><th style="padding:6px;text-align:left">액션</th><th style="padding:6px;text-align:left">대상</th><th style="padding:6px;text-align:left">IP</th></tr>';
         logs.forEach(function (log) {
           var time = log.created_at ? log.created_at.slice(0, 19).replace('T', ' ') : '';
           var user = log.user_name || log.user_email || '-';
           var action = actionLabels[log.action] || log.action;
           var target = (log.target_type || '') + (log.target_id ? ' #' + log.target_id.slice(0, 8) : '');
-          html += '<tr style="border-bottom:1px solid var(--border,#333)">';
-          html += '<td style="padding:6px;color:var(--sub,#888);white-space:nowrap">' + eH(time) + '</td>';
+          html += '<tr style="border-bottom:1px solid var(--bd,#222C44)">';
+          html += '<td style="padding:6px;color:var(--t5,#6070A0);white-space:nowrap">' + eH(time) + '</td>';
           html += '<td style="padding:6px">' + eH(user) + '</td>';
           html += '<td style="padding:6px">' + eH(action) + '</td>';
-          html += '<td style="padding:6px;color:var(--sub,#888)">' + eH(target) + '</td>';
-          html += '<td style="padding:6px;color:var(--sub,#888);font-size:11px">' + eH(log.ip_address || '') + '</td>';
+          html += '<td style="padding:6px;color:var(--t5,#6070A0)">' + eH(target) + '</td>';
+          html += '<td style="padding:6px;color:var(--t5,#6070A0);font-size:11px">' + eH(log.ip_address || '') + '</td>';
           html += '</tr>';
         });
         html += '</table>';
@@ -1358,9 +1358,9 @@ async function renderAuditLog() {
       var currentPage = Math.floor(_auditOffset / _auditLimit) + 1;
       if (totalPages > 1) {
         var ph = '';
-        if (currentPage > 1) ph += '<button class="auditPageBtn" data-offset="' + ((_auditOffset - _auditLimit)) + '" style="padding:4px 10px;border:1px solid var(--border,#333);border-radius:4px;background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);cursor:pointer;font-size:12px">&lt;</button>';
-        ph += '<span style="font-size:12px;color:var(--sub,#888);padding:4px 8px">' + currentPage + ' / ' + totalPages + ' (' + total + '건)</span>';
-        if (currentPage < totalPages) ph += '<button class="auditPageBtn" data-offset="' + ((_auditOffset + _auditLimit)) + '" style="padding:4px 10px;border:1px solid var(--border,#333);border-radius:4px;background:var(--bg,#0c0f1a);color:var(--text,#e0e0e0);cursor:pointer;font-size:12px">&gt;</button>';
+        if (currentPage > 1) ph += '<button class="auditPageBtn" data-offset="' + ((_auditOffset - _auditLimit)) + '" style="padding:4px 10px;border:1px solid var(--bd,#222C44);border-radius:4px;background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);cursor:pointer;font-size:12px">&lt;</button>';
+        ph += '<span style="font-size:12px;color:var(--t5,#6070A0);padding:4px 8px">' + currentPage + ' / ' + totalPages + ' (' + total + '건)</span>';
+        if (currentPage < totalPages) ph += '<button class="auditPageBtn" data-offset="' + ((_auditOffset + _auditLimit)) + '" style="padding:4px 10px;border:1px solid var(--bd,#222C44);border-radius:4px;background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);cursor:pointer;font-size:12px">&gt;</button>';
         paging.innerHTML = ph;
         paging.querySelectorAll('.auditPageBtn').forEach(function (btn) {
           btn.onclick = function () {
@@ -1369,7 +1369,7 @@ async function renderAuditLog() {
           };
         });
       } else {
-        paging.innerHTML = total > 0 ? '<span style="font-size:12px;color:var(--sub,#888)">' + total + '건</span>' : '';
+        paging.innerHTML = total > 0 ? '<span style="font-size:12px;color:var(--t5,#6070A0)">' + total + '건</span>' : '';
       }
     } catch (e) {
       document.getElementById('auditLogList').innerHTML = '<p style="color:#EF4444;font-size:13px">' + eH(e.message) + '</p>';
