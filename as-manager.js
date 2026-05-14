@@ -2070,6 +2070,32 @@ function _asGeneratePdf(t) {
   });
 }
 
+/* 메일 작성기 URL 빌더 — 사용자가 선택한 웹메일 서비스의 compose 화면을 직접 연다.
+ * 각 서비스의 URL 파라미터 규약은 공식문서/실측 기반.
+ * Naver는 body 파라미터를 일관되게 지원하지 않아 subject만 채움. */
+function _asBuildComposeUrl(provider, to, subject, body) {
+  var enc = encodeURIComponent;
+  to = to || ''; subject = subject || ''; body = body || '';
+  switch (provider) {
+    case 'gmail':
+      // Gmail 신규 작성: view=cm, fs=1(전체 작성창), to/su/body
+      return 'https://mail.google.com/mail/?view=cm&fs=1&to=' + enc(to) + '&su=' + enc(subject) + '&body=' + enc(body);
+    case 'outlook':
+      // Office 365 / Outlook on the web
+      return 'https://outlook.office.com/mail/deeplink/compose?to=' + enc(to) + '&subject=' + enc(subject) + '&body=' + enc(body);
+    case 'outlook-live':
+      // Outlook.com (개인) — Live/Hotmail 계정용
+      return 'https://outlook.live.com/owa/?path=/mail/action/compose&to=' + enc(to) + '&subject=' + enc(subject) + '&body=' + enc(body);
+    case 'naver':
+      // 네이버 메일 — 공식 compose URL은 to/subject 받음. body는 환경에 따라 다름
+      return 'https://mail.naver.com/write/popup/?to=' + enc(to) + '&subject=' + enc(subject) + '&body=' + enc(body);
+    case 'mailto':
+    default:
+      // PC 기본 메일 클라이언트 (Outlook 데스크톱/Thunderbird/Mail 등)
+      return 'mailto:' + enc(to) + '?subject=' + enc(subject) + '&body=' + enc(body);
+  }
+}
+
 /* ⑥ 보고서 — PDF 미리보기 모달 진입점 */
 function asReportPdfPreview(ticketId) {
   if (typeof showToast === 'function') showToast('📄 PDF 생성 중…');
@@ -2107,29 +2133,58 @@ function _asRenderPdfPreviewModal(t, out) {
   h += '</div>';
 
   // 우측 액션 패널
-  h += '<div style="width:280px;border-left:1px solid var(--bd);padding:14px 16px;overflow-y:auto;background:var(--bg-i)">';
-  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">📥 다운로드</div>';
-  h += '<button id="asPdfDownloadBtn" style="width:100%;padding:9px 12px;border:none;border-radius:6px;background:#10B981;color:#fff;cursor:pointer;font-size:11px;font-weight:600;margin-bottom:14px">PDF로 저장</button>';
+  var savedProvider = '';
+  try { savedProvider = localStorage.getItem('as_mail_provider') || 'gmail'; } catch (e) { savedProvider = 'gmail'; }
+  var defaultSubj = 'A/S 작업 보고서 ' + (t.ticketNo || '') + ' — ' + (t.customerName || '');
+  var defaultBody = '안녕하세요,\n\nA/S 작업 보고서를 전달드립니다.\n\n• 접수번호: ' + (t.ticketNo || '') +
+                    '\n• 고객사: ' + (t.customerName || '-') +
+                    (t.equipmentModel ? '\n• 장비: ' + t.equipmentModel : '') +
+                    '\n\n※ 첨부된 PDF 보고서를 확인 부탁드립니다.\n감사합니다.';
 
-  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">✉️ 메일 보내기</div>';
+  h += '<div style="width:300px;border-left:1px solid var(--bd);padding:14px 16px;overflow-y:auto;background:var(--bg-i)">';
+
+  // PDF 저장
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">📥 PDF 다운로드</div>';
+  h += '<button id="asPdfDownloadBtn" style="width:100%;padding:9px 12px;border:none;border-radius:6px;background:#10B981;color:#fff;cursor:pointer;font-size:11px;font-weight:600;margin-bottom:14px">📥 PDF로 저장</button>';
+
+  // 메일 작성기 콤보
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">✉️ 메일 작성기 열기</div>';
+
+  // 메일 서비스 선택
+  h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">사용할 메일 서비스</label>';
+  h += '<select id="asMail_provider" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;box-sizing:border-box;margin-bottom:8px">';
+  [
+    { v: 'gmail',        l: '📧 Gmail (웹)' },
+    { v: 'outlook',      l: '📨 Outlook / Office 365 (웹)' },
+    { v: 'outlook-live', l: '📨 Outlook.com / Hotmail (개인)' },
+    { v: 'naver',        l: '📬 네이버 메일 (웹)' },
+    { v: 'mailto',       l: '💻 PC 기본 메일 앱 (mailto:)' }
+  ].forEach(function (o) {
+    h += '<option value="' + o.v + '"' + (savedProvider === o.v ? ' selected' : '') + '>' + o.l + '</option>';
+  });
+  h += '</select>';
+
+  // To / 제목 / 본문
   h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">받는 사람 (To) *</label>';
   h += '<input id="asMail_to" type="email" placeholder="customer@example.com" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;box-sizing:border-box;margin-bottom:8px">';
 
   h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">제목</label>';
-  var defaultSubj = 'A/S 작업 보고서 ' + (t.ticketNo || '') + ' — ' + (t.customerName || '');
   h += '<input id="asMail_subject" type="text" value="' + _asEsc(defaultSubj) + '" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;box-sizing:border-box;margin-bottom:8px">';
 
-  h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">메시지 (선택)</label>';
-  h += '<textarea id="asMail_message" rows="4" placeholder="안녕하세요, A/S 작업 보고서를 전달드립니다." style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;resize:vertical;box-sizing:border-box;margin-bottom:10px"></textarea>';
+  h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">본문</label>';
+  h += '<textarea id="asMail_message" rows="6" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;resize:vertical;box-sizing:border-box;margin-bottom:10px">' + _asEsc(defaultBody) + '</textarea>';
 
-  h += '<button id="asPdfMailBtn" style="width:100%;padding:9px 12px;border:none;border-radius:6px;background:#3B82F6;color:#fff;cursor:pointer;font-size:11px;font-weight:600">✉️ 메일로 발송</button>';
-  h += '<div id="asMail_status" style="margin-top:8px;font-size:10px;color:var(--t5);min-height:14px"></div>';
+  h += '<button id="asPdfMailBtn" style="width:100%;padding:9px 12px;border:none;border-radius:6px;background:#3B82F6;color:#fff;cursor:pointer;font-size:11px;font-weight:600">✉️ PDF 다운로드 + 작성기 열기</button>';
+  h += '<div id="asMail_status" style="margin-top:8px;font-size:10px;color:var(--t5);min-height:14px;line-height:1.5"></div>';
+
+  // 안내
   h += '<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--bd);font-size:9px;color:var(--t6);line-height:1.6">';
-  h += '🔒 <strong>보안 정책</strong><br>';
-  h += '• 본인 메일 + 관리자에게 자동 BCC<br>';
-  h += '• 본문 푸터에 발신자(이름/이메일/IP) 자동 표기<br>';
-  h += '• 모든 발송은 감사로그에 기록<br>';
-  h += '• 담당자 또는 관리자만 발송 가능 (시간당 20건)';
+  h += '<strong>📋 작동 방식</strong><br>';
+  h += '1. 클릭 시 PDF가 자동 다운로드됩니다<br>';
+  h += '2. 선택한 메일 서비스의 작성 창이 새 탭으로 열립니다 (To·제목·본문 자동 입력)<br>';
+  h += '3. 다운로드된 PDF를 <strong>작성 창에 끌어다 놓고</strong> "보내기"를 누르세요<br>';
+  h += '<br><strong style="color:var(--t5)">✨ 장점</strong> — 본인 메일 명의로 발송되어 "보낸 편지함"에 자동 보관됩니다. 서버 SMTP 설정이 필요 없습니다.<br>';
+  h += '<br><span style="color:#F59E0B">⚠ 팝업이 차단되면 브라우저 주소창 우측의 "팝업 허용"을 클릭하세요.</span>';
   h += '</div>';
   h += '</div>';
   h += '</div></div>';
@@ -2174,35 +2229,40 @@ function _asRenderPdfPreviewModal(t, out) {
     var to = (document.getElementById('asMail_to').value || '').trim();
     var subject = (document.getElementById('asMail_subject').value || '').trim();
     var message = (document.getElementById('asMail_message').value || '').trim();
+    var provider = (document.getElementById('asMail_provider').value || 'gmail');
     var status = document.getElementById('asMail_status');
     var btn = this;
     if (!to) { status.textContent = '⚠ 받는 사람을 입력하세요.'; status.style.color = '#EF4444'; return; }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { status.textContent = '⚠ 올바른 이메일 형식이 아닙니다.'; status.style.color = '#EF4444'; return; }
-    if (typeof asEmailReport !== 'function') { status.textContent = '⚠ 메일 API 미연결'; status.style.color = '#EF4444'; return; }
 
-    btn.disabled = true; btn.textContent = '발송 중…';
-    status.textContent = '메일 전송 중…'; status.style.color = 'var(--t5)';
-    // datauristring 형태에서 base64만 추출
-    var b64 = (out.dataUrl || '').split(',')[1] || '';
-    asEmailReport(t.id, {
-      to: to,
-      subject: subject,
-      message: message,
-      pdfBase64: b64,
-      fileName: out.fileName
-    }).then(function () {
-      status.textContent = '✅ 메일이 발송되었습니다.';
-      status.style.color = '#10B981';
-      btn.textContent = '✉️ 메일로 발송';
-      btn.disabled = false;
-      if (typeof showToast === 'function') showToast('✉️ 메일이 발송되었습니다 (' + to + ')');
-    }).catch(function (err) {
-      var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
-      status.textContent = '❌ ' + msg;
-      status.style.color = '#EF4444';
-      btn.textContent = '✉️ 메일로 발송';
-      btn.disabled = false;
-    });
+    // 1) 선택 기억
+    try { localStorage.setItem('as_mail_provider', provider); } catch (e) {}
+
+    // 2) PDF 자동 다운로드 (사용자 제스처 활성 상태에서)
+    try { out.pdf.save(out.fileName); }
+    catch (e) {
+      var a = document.createElement('a');
+      a.href = blobUrl; a.download = out.fileName;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    // 3) 메일 작성기 URL 구성
+    var composeUrl = _asBuildComposeUrl(provider, to, subject, message);
+
+    // 4) 새 탭에서 작성기 열기 (팝업 차단 회피 위해 같은 클릭 안에서)
+    var win = window.open(composeUrl, '_blank');
+    if (!win || win.closed || typeof win.closed === 'undefined') {
+      status.innerHTML = '⚠ 팝업이 차단되었습니다. 주소창 우측의 "팝업 허용"을 누르고 다시 시도하거나 <a href="' + _asEsc(composeUrl) + '" target="_blank" style="color:#3B82F6">여기를 클릭</a>하세요.';
+      status.style.color = '#F59E0B';
+      return;
+    }
+
+    var label = {
+      gmail: 'Gmail', outlook: 'Outlook', 'outlook-live': 'Outlook.com', naver: '네이버 메일', mailto: 'PC 기본 메일 앱'
+    }[provider] || '메일 작성기';
+    status.innerHTML = '✅ PDF 다운로드 + ' + label + ' 작성기 열림.<br><strong style="color:#10B981">다운로드된 PDF를 작성 창에 끌어다 놓고 보내기를 누르세요.</strong>';
+    status.style.color = 'var(--t3)';
+    if (typeof showToast === 'function') showToast('📄 PDF 다운로드 + ' + label + ' 작성기 열림');
   };
 
   // 모달 닫을 때 blob URL 해제

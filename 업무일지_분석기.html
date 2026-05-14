@@ -418,7 +418,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.52</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.53</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2808,6 +2808,16 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.53',date:'2026-05-14',title:'✉️ A/S 보고서 메일 — 웹메일 작성기 콤보 방식으로 전환 (SMTP 불필요)',tag:'feature',items:[
+      '서버 SMTP 설정·환경변수·IT 협조 일체 없이 메일 발송 가능. 본인 메일 명의로 발송되어 "보낸 편지함" 자동 보관 + 사칭 0',
+      'PDF 미리보기 모달 우측 패널을 "웹메일 작성기 콤보"로 교체. [✉️ PDF 다운로드 + 작성기 열기] 한 번 클릭으로 (1) PDF 자동 다운로드 (2) 사용자가 선택한 웹메일 compose 새 탭 자동 오픈 (To·제목·본문 자동 입력) (3) 사용자는 PDF를 작성 창에 끌어다 놓고 발송',
+      '메일 서비스 선택 (드롭다운, localStorage에 마지막 선택 기억) — Gmail / Outlook(Office 365) / Outlook.com(개인) / 네이버 메일 / PC 기본 메일 앱(mailto:)',
+      'compose URL 규약: Gmail은 view=cm&fs=1, Outlook on the web은 deeplink/compose, Outlook.com은 owa/path=/mail/action/compose, 네이버는 write/popup, 그 외는 mailto:. encodeURIComponent로 To·제목·본문 안전 인코딩',
+      '본문 자동 생성 — 인사말 + 접수번호 + 고객사 + 장비모델 + PDF 첨부 안내. 사용자가 편집 가능',
+      '팝업 차단 감지 — window.open 반환값 검사하여 차단되면 status에 "팝업 허용 안내 + 직접 클릭 가능한 링크" 표시',
+      '서버 측 변경 없음 — POST /api/as-tickets/:id/email-report 라우터와 보안 보강(권한·BCC·푸터·감사로그·rate-limit)은 dead code로 보존. 향후 SMTP 활성화 필요 시 그대로 재사용 가능',
+      '효과: (a) 서버 SMTP_USER/SMTP_PASS 설정 부담 0 (b) Missing credentials / 앱 비밀번호 에러 0 (c) 보낸 사람이 본인 명의 → 추적 책임 명확 (d) 회사 SMTP에 외부 데이터 노출 0 (e) Render 등 서버리스 환경에서 메일 발송 호환성 100%'
+    ]},
     {ver:'13.52',date:'2026-05-14',title:'fix(as): PDF 미리보기 깨짐 + SMTP 에러 메시지 친화화',tag:'fix',items:[
       '🔧 PDF 미리보기 iframe이 비어 보이던 원인 — helmet CSP에 frame-src/object-src 미정의 → default-src "self"로 폴백되어 blob: iframe 차단. server/app.js 의 CSP directives에 frameSrc/objectSrc에 "self","blob:","data:" 추가',
       '🔧 html2canvas 캡처 시 화면 밖 컨테이너 width가 0으로 측정되어 빈 PDF가 나오는 사고 대비 — holder div에 width:794px 명시, html2canvas 옵션에 width:794, windowWidth:794, allowTaint:true 추가',

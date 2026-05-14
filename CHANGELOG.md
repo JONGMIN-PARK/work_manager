@@ -1,5 +1,50 @@
 # Work Manager — 변경 이력
 
+## v13.53 (2026-05-14) — A/S 보고서 메일: 웹메일 작성기 콤보 (SMTP 불필요)
+
+### 배경
+사용자: "웹메일 다른 방식으로는 보낼 수 없나?" — 서버 SMTP 설정(앱 비번 등)이 회사 환경에서 번거롭다는 피드백. 옵션 C(PDF 자동 다운로드 + 웹메일 작성기 콤보) 선택.
+
+### 변경 — `as-manager.js` PDF 미리보기 모달 우측 패널
+
+기존 [✉️ 메일로 발송] 버튼(SMTP API 호출) → **[✉️ PDF 다운로드 + 작성기 열기]** 한 번 클릭으로 다음을 수행:
+
+1. **PDF 자동 다운로드** — `out.pdf.save(fileName)` 즉시 트리거
+2. **메일 서비스 compose 새 탭 자동 오픈** — To/제목/본문이 자동 입력된 상태로
+3. **사용자는 작성 창에 PDF를 끌어다 놓고 발송 버튼만 클릭**
+
+### 메일 서비스 5종 지원 (드롭다운, 마지막 선택 `localStorage`에 기억)
+- **Gmail** (웹): `https://mail.google.com/mail/?view=cm&fs=1&to=&su=&body=`
+- **Outlook / Office 365** (회사 웹메일): `https://outlook.office.com/mail/deeplink/compose?to=&subject=&body=`
+- **Outlook.com / Hotmail** (개인): `https://outlook.live.com/owa/?path=/mail/action/compose&to=&subject=&body=`
+- **네이버 메일** (웹): `https://mail.naver.com/write/popup/?to=&subject=&body=`
+- **PC 기본 메일 앱**: `mailto:` (Outlook 데스크톱/Thunderbird/Mail.app 등)
+
+`_asBuildComposeUrl(provider, to, subject, body)` 헬퍼로 분리. `encodeURIComponent`로 한글 안전 인코딩.
+
+### UX 디테일
+- **본문 자동 생성**: `안녕하세요, A/S 작업 보고서를 전달드립니다. • 접수번호: AS-... • 고객사: ... • 장비: ... ※ 첨부 PDF 확인 부탁드립니다.` 사용자가 편집 가능.
+- **팝업 차단 감지**: `window.open` 반환값 검사 → 차단 시 "주소창 우측 팝업 허용 안내 + 직접 클릭할 수 있는 링크" 표시.
+- **안내 박스**: "1) PDF 자동 다운로드 2) 작성기 새 탭 오픈 3) PDF 끌어다 놓고 보내기 / 본인 명의로 발송되어 보낸편지함 자동 보관 / 팝업 차단 시 허용 안내"
+
+### 효과
+- ✅ 서버 SMTP 설정 부담 **0**
+- ✅ `Missing credentials` / Gmail 앱 비밀번호 발급 부담 **0**
+- ✅ 발신자 = 본인 계정 → 사후 추적 명확, 회사 명의 사칭 불가
+- ✅ Render 등 서버리스/제한 환경에서도 100% 동작
+- ✅ 회사 SMTP에 외부 고객 데이터 통과 시킬 필요 없음 (개인정보 처리 부담↓)
+
+### 서버 코드 보존
+- `POST /api/as-tickets/:id/email-report` 라우터와 4단 보안 보강(권한·BCC·푸터·감사로그·rate-limit)은 **dead code로 보존**. 향후 SMTP 활성화가 필요해지면 그대로 재사용 가능.
+- `project-data.js`의 `asEmailReport` 헬퍼도 보존.
+
+### 변경 파일
+- `as-manager.js` (우측 패널 + `_asBuildComposeUrl` 헬퍼 + 핸들러 교체)
+- `업무일지_분석기.html` (v13.53 · 패치노트)
+- `CHANGELOG.md`
+
+---
+
 ## v13.52 (2026-05-14) — fix: PDF 미리보기 깨짐 + SMTP 에러 친화화
 
 ### 버그 1 — PDF 미리보기가 빈 회색 화면으로 보임
