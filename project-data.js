@@ -1381,10 +1381,14 @@ function calcTaskDistByOrder() {
 }
 
 /* ═══ Integration 4: 마일스톤별 실적 시간 집계 ═══ */
-function calcHoursByMilestone(projectId) {
-  return projGet(projectId).then(function (proj) {
+/* v13.61: opts.proj / opts.milestones 전달 시 중복 fetch 생략 (네트워크 2× 절감) */
+function calcHoursByMilestone(projectId, opts) {
+  opts = opts || {};
+  var pProj = opts.proj ? Promise.resolve(opts.proj) : projGet(projectId);
+  return pProj.then(function (proj) {
     if (!proj || !proj.orderNo) return {};
-    return msGetByProject(projectId).then(function (milestones) {
+    var pMs = opts.milestones ? Promise.resolve(opts.milestones) : msGetByProject(projectId);
+    return pMs.then(function (milestones) {
       if (!milestones.length) return {};
       milestones.sort(function (a, b) { return (a.startDate || '') < (b.startDate || '') ? -1 : 1; });
       return readAllArchiveRecords().then(function (records) {

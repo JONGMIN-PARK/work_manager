@@ -1,5 +1,46 @@
 # Work Manager — 변경 이력
 
+## v13.61 (2026-05-14) — 타임라인 프로젝트 상세 패널 즉시 표시 (중복 fetch + await 차단 제거)
+
+### 배경
+사용자: "프로젝트 관리 > 타임라인 > 프로젝트 선택 시 옆에 뜨는 창 열리는 속도가 왜 느리지?"
+
+### 진단
+1. `showProjectDetail`이 `await calcHoursByMilestone(id)`로 패널 첫 렌더를 **차단**
+2. `calcHoursByMilestone` 내부에서 **이미 가진 `proj`/`milestones`를 다시 fetch** (네트워크 2× 낭비)
+3. `readAllArchiveRecords` 후 **records × milestones 매칭 루프** (1만 records × 10 마일스톤 = 10만 비교)가 차단
+
+결과: 패널이 클릭 후 수백ms ~ 1초+ 후에 열림.
+
+### 변경
+
+#### `project-data.js` — `calcHoursByMilestone(projectId, opts)`
+- `opts.proj` / `opts.milestones` 전달 시 내부 fetch 생략.
+- backward compatible — 기존 호출자는 `opts` 없이 호출하면 기존 동작.
+
+#### `project-detail.js` — `showProjectDetail`
+- **`await calcHoursByMilestone` 제거** → 패널이 즉시 그려짐.
+- 마일스톤 시간 정보는 `<span class="pd-ms-hours" data-msid="...">` 자리만 비워 두고,
+  `setTimeout(0)`로 백그라운드에서 `calcHoursByMilestone(id, { proj, milestones })` 호출 → 결과를 DOM에 후속 주입.
+- 사용자가 패널을 닫았으면 주입 안 함.
+
+#### `project-detail.js` — `pdLoadWork` (투입실적 탭)
+- `Promise.all([projGet, msGetByProject])` 먼저, 그 결과를 `calcHoursByMilestone(id, { proj, milestones })`에 전달.
+- 같은 데이터 5회 fetch → 2회 + 1회 계산.
+
+### 효과
+- **체감 응답 ~수백ms+ → 즉시**.
+- 시간 정보는 0.1~1초 후 자연스럽게 채워짐 (UX 자연스러움).
+- 아카이브 records가 많을수록 큰 효과.
+
+### 변경 파일
+- `project-data.js` (calcHoursByMilestone 시그니처 확장)
+- `project-detail.js` (await 제거, 백그라운드 시간 집계)
+- `업무일지_분석기.html` (v13.61 + 패치노트)
+- `CHANGELOG.md`
+
+---
+
 ## v13.60 (2026-05-14) — 팀관리/주간분석 초기 로드 가속 (자동 최근 주차 + 마지막 선택 기억)
 
 ### 배경

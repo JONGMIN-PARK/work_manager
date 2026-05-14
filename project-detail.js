@@ -93,23 +93,34 @@ async function showProjectDetail(id) {
     html += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:4px">메모</div><div class="memo-body" style="font-size:11px;color:var(--t3);padding:8px;background:var(--bg-i);border-radius:6px;white-space:normal;word-break:break-word">' + _memoHtml + '</div></div>';
   }
 
-  // 마일스톤 (기존)
-  var msHoursData = {};
-  if (projMs.length && typeof calcHoursByMilestone === 'function') {
-    try { msHoursData = await calcHoursByMilestone(id); } catch (e) { console.warn('[Timeline]', e); }
-  }
+  // 마일스톤 — v13.61: 패널 즉시 표시. 시간 집계는 백그라운드에서 채움 (await 제거)
   var msHtml = projMs.length ?
     projMs.map(function (m) {
       var mSt = PROJ_STATUS[m.status] || PROJ_STATUS.waiting;
-      var msH = msHoursData[m.id];
-      var hoursInfo = msH && msH.hours > 0 ? '<span style="font-size:9px;color:var(--ac-t);background:var(--ac-bg);padding:1px 5px;border-radius:3px;margin-left:4px">' + msH.hours + 'h</span>' : '';
       return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">' +
         '<span style="font-size:10px">' + mSt.icon + '</span>' +
-        '<span style="flex:1;font-size:11px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(m.name) + hoursInfo + '</span>' +
+        '<span style="flex:1;font-size:11px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(m.name) +
+          '<span class="pd-ms-hours" data-msid="' + eH(m.id) + '"></span>' +
+        '</span>' +
         '<span style="font-size:9px;color:var(--t6)">' + (m.endDate || '') + '</span>' +
         '<span class="badge" style="background:' + mSt.bg + ';color:' + mSt.color + ';font-size:8px;padding:1px 4px">' + mSt.label + '</span></div>';
     }).join('') : '<div style="font-size:11px;color:var(--t6)">마일스톤 없음</div>';
   html += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:6px">마일스톤 (' + projMs.length + ')</div>' + msHtml + '</div>';
+
+  // 백그라운드 시간 집계 → 채움 (패널 부착 후 setTimeout으로 비동기 실행)
+  if (projMs.length && typeof calcHoursByMilestone === 'function') {
+    setTimeout(function () {
+      calcHoursByMilestone(id, { proj: proj, milestones: projMs }).then(function (msHoursData) {
+        if (!document.getElementById('projDetailPanel')) return;  // 사용자가 패널 닫았으면 무시
+        Object.keys(msHoursData || {}).forEach(function (msid) {
+          var h = msHoursData[msid] && msHoursData[msid].hours;
+          if (!h || h <= 0) return;
+          var el = document.querySelector('.pd-ms-hours[data-msid="' + msid + '"]');
+          if (el) el.innerHTML = ' <span style="font-size:9px;color:var(--ac-t);background:var(--ac-bg);padding:1px 5px;border-radius:3px;margin-left:4px">' + h + 'h</span>';
+        });
+      }).catch(function (e) { console.warn('[Timeline/ms-hours]', e); });
+    }, 0);
+  }
 
   // 개요 탭: 현재 단계 체크리스트 (기본 표시)
   var overviewChkPhase = proj.currentPhase || 'order';
@@ -296,14 +307,20 @@ function pdLoadWork(projId) {
     wrap.innerHTML = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">투입실적 데이터를 가져올 수 없습니다.</div>';
     return;
   }
+  // v13.61: projGet/msGetByProject 결과를 calcHoursByMilestone에 전달 (중복 fetch 제거)
   Promise.all([
-    calcHoursByMilestone(projId),
     projGet(projId),
     msGetByProject(projId)
   ]).then(function (results) {
-    var msHours = results[0];
-    var proj = results[1];
-    var milestones = results[2];
+    var proj = results[0];
+    var milestones = results[1];
+    return calcHoursByMilestone(projId, { proj: proj, milestones: milestones }).then(function (msHours) {
+      return { proj: proj, milestones: milestones, msHours: msHours };
+    });
+  }).then(function (results) {
+    var msHours = results.msHours;
+    var proj = results.proj;
+    var milestones = results.milestones;
     milestones.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
 
     var totalH = 0;

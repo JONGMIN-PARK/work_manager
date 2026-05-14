@@ -521,7 +521,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.60</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.61</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2986,6 +2986,16 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.61',date:'2026-05-14',title:'⚡ 타임라인 프로젝트 상세 패널 즉시 표시 — 중복 fetch 제거 + 비동기 시간 집계',tag:'perf',items:[
+      '🐌 기존: 타임라인에서 프로젝트 클릭 시 패널이 늦게 열림. 원인은 calcHoursByMilestone이 await로 패널 첫 렌더를 차단 + 내부에서 projGet/msGetByProject를 다시 호출(중복 fetch)',
+      '🔍 진단 결과: showProjectDetail 진입 시 projGet/msGetByProject/chkGetByProject 3종 fetch + calcHoursByMilestone 호출. 그 안에서 projGet/msGetByProject 또 호출 + readAllArchiveRecords. 같은 데이터 2~3번 + records×milestones 매칭 루프가 차단',
+      '✅ 개선 1 — calcHoursByMilestone(projectId, opts) 시그니처 확장. opts.proj/opts.milestones 전달 시 중복 fetch 생략. backward compatible (opts 없으면 기존 동작)',
+      '✅ 개선 2 — showProjectDetail에서 마일스톤별 시간 표시를 백그라운드로. await 제거하고 패널 즉시 표시, setTimeout으로 시간 집계 비동기 실행 → 결과는 .pd-ms-hours[data-msid] DOM에 후속 채움. 사용자가 패널 닫으면 무시',
+      '✅ 개선 3 — pdLoadWork(투입실적 탭)도 같은 패턴: projGet/msGetByProject 결과를 calcHoursByMilestone에 전달. 5회 fetch → 2회 fetch + 1회 계산',
+      '효과: 첫 클릭 시 체감 응답 ~수백ms → 즉시. 시간 정보는 0.1~1초 후 자연스럽게 채워짐',
+      '아카이브 records가 1만 건 이상일 때 더 큰 효과 (records.forEach × milestones.forEach 중첩 루프가 패널 렌더를 차단 안 함)',
+      '코드 영향: project-detail.js의 await 위치 1곳 + pdLoadWork. project-data.js의 calcHoursByMilestone 시그니처. 외부 호출자 변경 없음(backward compatible)'
+    ]},
     {ver:'13.60',date:'2026-05-14',title:'⚡ 팀관리/주간분석 초기 로드 가속 — 자동 최근 주차 선택 + 마지막 선택 기억',tag:'perf',items:[
       '🐌 기존 문제: 첫 진입 시 selWeek=null(전체)로 시작 → 모든 주차 데이터를 한 번에 처리·렌더 → 데이터 누적될수록 체감 느려짐',
       '✅ initWeekSelector 우선순위 재설계 — 항상 1주만 선택',
