@@ -70,9 +70,31 @@ router.get('/', async function (req, res) {
     var p = parsePeriod(req.query);
     var tid = req.tenant.id;
 
-    var BASE_WHERE = "tenant_id = $1 AND deleted_at IS NULL";
+    // 다중 필터 (v13.55 C) — category / priority / customer
+    var extraWhere = '';
     var paramsFull = [tid, p.from.toISOString(), p.to.toISOString()];
     var paramsPrev = [tid, p.prevFrom.toISOString(), p.prevTo.toISOString()];
+    var idx = 4;
+    var addFilter = function (col, val, useLike) {
+      if (val == null || val === '') return;
+      var vals = String(val).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!vals.length) return;
+      if (useLike) {
+        extraWhere += " AND " + col + " ILIKE $" + idx;
+        paramsFull.push('%' + vals[0] + '%');
+        paramsPrev.push('%' + vals[0] + '%');
+        idx++;
+      } else {
+        var placeholders = vals.map(function () { return '$' + idx++; }).join(',');
+        extraWhere += " AND " + col + " IN (" + placeholders + ")";
+        vals.forEach(function (v) { paramsFull.push(v); paramsPrev.push(v); });
+      }
+    };
+    addFilter('category', req.query.category, false);
+    addFilter('priority', req.query.priority, false);
+    addFilter('customer_name', req.query.customer, true);
+
+    var BASE_WHERE = "tenant_id = $1 AND deleted_at IS NULL" + extraWhere;
 
     // SLA breach CASE 식 (priority별 closeDays)
     var SLA_BREACH_EXPR =
@@ -392,6 +414,32 @@ router.get('/', async function (req, res) {
 
     // ─── 자동 인사이트 ───
     var insights = buildInsights(kpi, { topCustomers: topCustomers, distCategory: distCategory, deptLoad: deptLoad, slaByPriority: slaByPriority });
+
+    // ─── 건강 점수 (Health Score) — 0~100 단일 KPI ───
+    // 가중치: SLA 50% + MTTR 25% + CSAT 25% (CSAT 데이터 없으면 SLA 70% + MTTR 30%)
+    var hasCsat = kpi.csatOverall.respCount >= 1;
+    var slaScore  = Math.max(0, 100 - (kpi.slaBreachPct.value || 0) * 4);            // 위반 0%=100점, 25%=0점
+    var mttrTarget = 24;  // 24시간 이내가 만점
+    var mttrScore = kpi.mttrHours.value > 0 ? Math.max(0, Math.min(100, 100 - (kpi.mttrHours.value - mttrTarget) * 2)) : 100;
+    var csatScore = hasCsat ? (kpi.csatOverall.value / 5) * 100 : 0;
+    var health;
+    if (hasCsat) {
+      health = Math.round(slaScore * 0.5 + mttrScore * 0.25 + csatScore * 0.25);
+    } else {
+      health = Math.round(slaScore * 0.7 + mttrScore * 0.3);
+    }
+    var healthGrade = health >= 90 ? 'A' : health >= 75 ? 'B' : health >= 60 ? 'C' : health >= 45 ? 'D' : 'E';
+    var healthColor = health >= 90 ? '#10B981' : health >= 75 ? '#3B82F6' : health >= 60 ? '#F59E0B' : health >= 45 ? '#F97316' : '#EF4444';
+    kpi.healthScore = {
+      value: health,
+      grade: healthGrade,
+      color: healthColor,
+      breakdown: {
+        sla: Math.round(slaScore),
+        mttr: Math.round(mttrScore),
+        csat: hasCsat ? Math.round(csatScore) : null
+      }
+    };
 
     res.json({
       data: {

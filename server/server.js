@@ -13,4 +13,11 @@ app.listen(PORT, '0.0.0.0', function () {
   console.log('[Server] 환경: ' + config.env);
   console.log('[Server] 포트: ' + PORT);
   console.log('[Server] http://localhost:' + PORT);
+
+  // A/S 자동화 스케줄러 시작 (SCHEDULER_DISABLED=1 이면 스킵)
+  try {
+    require('./services/scheduler.service').start();
+  } catch (e) {
+    console.warn('[Server] 스케줄러 시작 실패:', e.message);
+  }
 });

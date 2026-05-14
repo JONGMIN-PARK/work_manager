@@ -35,6 +35,7 @@ var _asStatsLoading = false;
 var _asStatsPreset = '90d';    // 7d|30d|90d|6m|12m|custom
 var _asStatsCustomFrom = '';
 var _asStatsCustomTo = '';
+var _asStatsFilter = { category: '', priority: '', customer: '' };  // 다중 필터
 
 function _asStatsDestroy() {
   _asStatsCharts.forEach(function (c) { try { c.destroy(); } catch (e) {} });
@@ -120,6 +121,38 @@ function _asStatsShellHtml() {
   }
   h += '</div></div>';
   h += '<div id="asStatsPeriodLabel" style="margin-top:6px;font-size:10px;color:var(--t5)"></div>';
+
+  // 다중 필터 (v13.55 C)
+  h += '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--bd);display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  h += '<span style="font-size:10px;color:var(--t5);font-weight:600">🔍 필터</span>';
+  // 카테고리
+  h += '<select id="asStatsFilterCat" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
+  h += '<option value="">전체 카테고리</option>';
+  var _CAT = typeof AS_CATEGORY !== 'undefined' ? AS_CATEGORY : {};
+  if (window._AS_CAT_CACHE && window._AS_CAT_CACHE.length) {
+    window._AS_CAT_CACHE.forEach(function (c) {
+      h += '<option value="' + c.code + '"' + (_asStatsFilter.category === c.code ? ' selected' : '') + '>' + (c.icon || '') + ' ' + c.label + '</option>';
+    });
+  } else {
+    Object.keys(_CAT).forEach(function (k) {
+      h += '<option value="' + k + '"' + (_asStatsFilter.category === k ? ' selected' : '') + '>' + (_CAT[k].icon || '') + ' ' + _CAT[k].label + '</option>';
+    });
+  }
+  h += '</select>';
+  // 긴급도
+  h += '<select id="asStatsFilterPrio" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
+  h += '<option value="">전체 긴급도</option>';
+  ['P1','P2','P3','P4'].forEach(function (p) {
+    h += '<option value="' + p + '"' + (_asStatsFilter.priority === p ? ' selected' : '') + '>' + p + '</option>';
+  });
+  h += '</select>';
+  // 고객 검색
+  h += '<input id="asStatsFilterCust" type="text" placeholder="고객사 검색" value="' + _asStatsEsc(_asStatsFilter.customer) + '" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3);min-width:140px">';
+  h += '<button id="asStatsFilterApply" style="font-size:10px;padding:3px 10px;border:none;border-radius:4px;background:#F59E0B;color:#fff;cursor:pointer;font-weight:600">적용</button>';
+  if (_asStatsFilter.category || _asStatsFilter.priority || _asStatsFilter.customer) {
+    h += '<button id="asStatsFilterClear" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t4);cursor:pointer">필터 해제</button>';
+  }
+  h += '</div>';
   h += '</div>';
 
   // 본문 (그리드 셸 — 차트들은 이 안에 채워짐)
@@ -144,6 +177,29 @@ function _asStatsBindControls() {
       _asStatsFetch();
     };
   }
+  var applyFilter = document.getElementById('asStatsFilterApply');
+  if (applyFilter) {
+    applyFilter.onclick = function () {
+      _asStatsFilter.category = document.getElementById('asStatsFilterCat').value;
+      _asStatsFilter.priority = document.getElementById('asStatsFilterPrio').value;
+      _asStatsFilter.customer = document.getElementById('asStatsFilterCust').value;
+      _asStatsFetch();
+    };
+  }
+  var clearFilter = document.getElementById('asStatsFilterClear');
+  if (clearFilter) {
+    clearFilter.onclick = function () {
+      _asStatsFilter = { category: '', priority: '', customer: '' };
+      renderASStats();
+    };
+  }
+  var custInput = document.getElementById('asStatsFilterCust');
+  if (custInput) {
+    custInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') applyFilter && applyFilter.click();
+    });
+  }
+
   var weeklyBtn = document.getElementById('asStatsWeeklyBtn');
   if (weeklyBtn) {
     weeklyBtn.onclick = function () {
@@ -175,7 +231,11 @@ function _asStatsFetch() {
   if (periodLabel) periodLabel.textContent = '🗓 ' + p.from + ' ~ ' + p.to;
   if (body) body.innerHTML = '<div class="pnl" style="padding:40px;text-align:center;color:var(--t5);font-size:12px">📊 통계 데이터를 불러오는 중…</div>';
 
-  asStatsGet({ from: p.from, to: p.to }).then(function (d) {
+  var qparams = { from: p.from, to: p.to };
+  if (_asStatsFilter.category) qparams.category = _asStatsFilter.category;
+  if (_asStatsFilter.priority) qparams.priority = _asStatsFilter.priority;
+  if (_asStatsFilter.customer) qparams.customer = _asStatsFilter.customer;
+  asStatsGet(qparams).then(function (d) {
     _asStatsLoading = false;
     _asStatsData = d;
     _asStatsRender();
@@ -205,6 +265,8 @@ function _asStatsRender() {
   }
 
   var h = '';
+  // 건강 점수 (큰 카드 — 가장 위에)
+  h += _asStatsHtmlHealthScore(d.kpi.healthScore);
   // 인사이트 패널
   h += _asStatsHtmlInsights(d.insights || []);
   // KPI
@@ -244,6 +306,45 @@ function _asStatsRender() {
 
   // 모든 차트 인스턴스화
   _asStatsDrawAll(d);
+}
+
+function _asStatsHtmlHealthScore(hs) {
+  if (!hs) return '';
+  var bd = hs.breakdown || {};
+  var h = '<div class="pnl" style="margin-bottom:12px;padding:18px 22px;background:linear-gradient(135deg,' + hs.color + '15,transparent);border-left:4px solid ' + hs.color + '">';
+  h += '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">';
+  // 큰 점수 + 등급
+  h += '<div style="display:flex;align-items:baseline;gap:12px">';
+  h += '<div>';
+  h += '<div style="font-size:10px;color:var(--t5);font-weight:600;margin-bottom:2px">A/S 건강 점수</div>';
+  h += '<div style="font-size:42px;font-weight:800;color:' + hs.color + ';line-height:1">' + hs.value + '<span style="font-size:18px;color:var(--t5);font-weight:500">/100</span></div>';
+  h += '</div>';
+  h += '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:60px;height:60px;border-radius:50%;background:' + hs.color + ';color:#fff;font-size:28px;font-weight:800">' + hs.grade + '</div>';
+  h += '</div>';
+  // 분석 막대 (SLA / MTTR / CSAT)
+  h += '<div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:6px">';
+  var parts = [
+    { l: 'SLA 준수', v: bd.sla, w: 50, c: '#3B82F6' },
+    { l: '응답 속도 (MTTR)', v: bd.mttr, w: bd.csat != null ? 25 : 30, c: '#F59E0B' }
+  ];
+  if (bd.csat != null) parts.push({ l: '고객 만족도 (CSAT)', v: bd.csat, w: 25, c: '#10B981' });
+  parts.forEach(function (p) {
+    if (p.v == null) return;
+    h += '<div>';
+    h += '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t4);margin-bottom:2px">';
+    h += '<span style="font-weight:600">' + p.l + ' <span style="color:var(--t6);font-weight:400">(가중치 ' + p.w + '%)</span></span>';
+    h += '<span style="font-weight:700;color:' + p.c + '">' + p.v + '점</span>';
+    h += '</div>';
+    h += '<div style="height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden">';
+    h += '<div style="height:100%;width:' + p.v + '%;background:' + p.c + ';transition:width 0.4s"></div>';
+    h += '</div></div>';
+  });
+  h += '</div>';
+  h += '<div style="font-size:10px;color:var(--t5);min-width:140px;line-height:1.5">';
+  h += '등급 기준:<br>A 90+ · B 75+ · C 60+ · D 45+ · E < 45';
+  h += '</div>';
+  h += '</div></div>';
+  return h;
 }
 
 function _asStatsHtmlInsights(list) {

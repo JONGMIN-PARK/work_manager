@@ -357,7 +357,8 @@ function showASModal(editId) {
     h += _asField('수주번호 연결', _asOrderSelect(orders, existing && existing.orderNo));
     h += _asField('장비모델', '<input id="asM_equipmentModel" type="text" value="' + _asEsc(existing && existing.equipmentModel || '') + '" placeholder="예: Laser Trimming System" ' + _asInpStyle() + '>');
     h += _asField('장비번호 (Prj No.)', '<input id="asM_equipmentNo" type="text" value="' + _asEsc(existing && existing.equipmentNo || '') + '" placeholder="예: A25065" ' + _asInpStyle() + '>');
-    h += _asField('Serial No.', '<input id="asM_serialNo" type="text" value="' + _asEsc(existing && existing.serialNo || '') + '" ' + _asInpStyle() + '>');
+    h += _asField('Serial No. <span style="color:var(--t6);font-size:9px">(입력 후 Tab — 마스터에서 자동 채움)</span>',
+      '<input id="asM_serialNo" type="text" value="' + _asEsc(existing && existing.serialNo || '') + '" onblur="_asEquipLookup(this.value)" ' + _asInpStyle() + '>');
     h += _asField('설치일', '<input id="asM_installDate" type="date" value="' + _asEsc(existing && existing.installDate ? String(existing.installDate).slice(0, 10) : '') + '" ' + _asInpStyle() + '>');
     h += '</div>';
 
@@ -470,6 +471,75 @@ function _asOrderSelect(orders, curOrderNo) {
   });
   h += '</select>';
   return h;
+}
+
+/* 재발 이력 사이드바 — 같은 Serial/장비번호의 과거 A/S 자동 로드 */
+function _asLoadRecurrences(ticketId) {
+  if (typeof asRecurrencesGet !== 'function') return;
+  asRecurrencesGet(ticketId).then(function (res) {
+    var list = res.data || [];
+    var listEl = document.getElementById('asRecurList');
+    var cntEl = document.getElementById('asRecurCount');
+    if (!listEl) return;
+    if (cntEl) cntEl.textContent = list.length ? list.length + '건 발견' : '없음 (첫 접수)';
+    if (!list.length) {
+      listEl.innerHTML = '<div style="padding:10px;color:var(--t5);font-size:11px">이 장비/Serial로 등록된 과거 A/S가 없습니다 — <strong>첫 접수</strong>입니다.</div>';
+      return;
+    }
+    var STATUS = typeof AS_STATUS !== 'undefined' ? AS_STATUS : {};
+    var PRIO = typeof AS_PRIORITY !== 'undefined' ? AS_PRIORITY : {};
+    var CAT = _asCats();
+    var html = '<div style="display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto">';
+    list.forEach(function (r) {
+      var st = STATUS[r.status] || { label: r.status, color: '#94A3B8' };
+      var pr = PRIO[r.priority] || { label: r.priority, color: '#94A3B8' };
+      var ct = CAT[r.category] || { label: r.category || '-' };
+      html += '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--bg);border-radius:4px;font-size:11px;cursor:pointer" onclick="showASDetail(\'' + _asEsc(r.id) + '\')" title="클릭하면 상세 열기">';
+      html += '<span style="font-family:monospace;font-weight:600;color:var(--t3);min-width:115px">' + _asEsc(r.ticketNo) + '</span>';
+      html += '<span style="color:var(--t5);font-size:10px;min-width:78px">' + _asFmtDate(r.receivedAt) + '</span>';
+      html += '<span style="padding:1px 5px;border-radius:6px;background:' + pr.color + ';color:#fff;font-size:9px;font-weight:600">' + _asEsc(r.priority) + '</span>';
+      html += '<span style="padding:1px 5px;border-radius:6px;background:' + st.color + '22;color:' + st.color + ';font-size:9px;font-weight:600">' + _asEsc(st.label) + '</span>';
+      html += '<span style="color:var(--t4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _asEsc(ct.label) + ' · ' + _asEsc((r.issueSummary || '').slice(0, 40)) + '</span>';
+      if (r.closure) html += '<span style="color:var(--t6);font-size:10px">' + _asEsc(r.closure) + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+    // 같은 증상 자동 감지: 카테고리가 같은 게 2건 이상이면 알림
+    var sameCatCount = {};
+    list.forEach(function (r) { if (r.category) sameCatCount[r.category] = (sameCatCount[r.category] || 0) + 1; });
+    var topCat = null, topCnt = 0;
+    Object.keys(sameCatCount).forEach(function (k) { if (sameCatCount[k] > topCnt) { topCnt = sameCatCount[k]; topCat = k; } });
+    if (topCnt >= 2) {
+      var catLabel = (CAT[topCat] || {}).label || topCat;
+      html = '<div style="background:#EF444415;border-left:3px solid #EF4444;padding:6px 10px;font-size:10px;color:#DC2626;margin-bottom:6px;font-weight:600">⚠ 동일 카테고리 "' + _asEsc(catLabel) + '" ' + topCnt + '번 재발 — RCA·재발방지 우선 검토</div>' + html;
+    }
+    listEl.innerHTML = html;
+  }).catch(function (err) {
+    var el = document.getElementById('asRecurList');
+    if (el) el.innerHTML = '<div style="color:#EF4444;font-size:10px">재발 이력 로드 실패: ' + _asEsc(err.message || '') + '</div>';
+  });
+}
+
+/* Serial No. 입력 → 장비 마스터 조회 → 모달 필드 자동 채움 (빈 필드만) */
+function _asEquipLookup(serial) {
+  serial = (serial || '').trim();
+  if (!serial || typeof asEquipmentBySerial !== 'function') return;
+  asEquipmentBySerial(serial).then(function (eqp) {
+    if (!eqp) return;
+    var fillIfEmpty = function (id, val) {
+      var el = document.getElementById(id);
+      if (el && !el.value && val != null && val !== '') el.value = val;
+    };
+    fillIfEmpty('asM_equipmentModel', eqp.equipmentModel);
+    fillIfEmpty('asM_equipmentNo', eqp.equipmentNo);
+    fillIfEmpty('asM_customerName', eqp.customerName);
+    fillIfEmpty('asM_siteLine', eqp.siteLine);
+    if (eqp.installDate) fillIfEmpty('asM_installDate', String(eqp.installDate).slice(0, 10));
+    fillIfEmpty('asM_warrantyStatus', eqp.warrantyStatus);
+    if (typeof showToast === 'function') {
+      showToast('🔧 장비 마스터에서 자동 채움: ' + (eqp.equipmentModel || serial), 'info');
+    }
+  }).catch(function () { /* 없으면 무시 */ });
 }
 
 function saveASModal(isEdit, editId) {
@@ -630,6 +700,20 @@ function _asRenderDetail(t, CAT) {
 /* ─── ① 접수 개요 탭 ─── */
 function _asTabOverview(t, CAT) {
   var h = '';
+
+  // 재발 이력 사이드바 (비동기 로딩) — Serial No. 또는 장비번호 기준 과거 A/S
+  if (t.serialNo || t.equipmentNo) {
+    h += '<div id="asRecurBox" style="margin-bottom:14px;border:1px solid var(--bd);border-radius:8px;padding:10px 12px;background:linear-gradient(135deg,#F59E0B11,transparent)">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t3)">🔁 이 장비의 과거 A/S 이력</div>';
+    h += '<div id="asRecurCount" style="font-size:10px;color:var(--t5)">조회 중…</div>';
+    h += '</div>';
+    h += '<div id="asRecurList" style="font-size:11px;color:var(--t5)">로딩…</div>';
+    h += '</div>';
+    // 비동기 로드
+    setTimeout(function () { _asLoadRecurrences(t.id); }, 0);
+  }
+
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
   h += _asInfoBlock('고객 / 장비', [
     ['고객사', t.customerName],
@@ -2178,8 +2262,9 @@ function _asRenderPdfPreviewModal(t, out) {
   h += '</select>';
 
   // To / 제목 / 본문
-  h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">받는 사람 (To) *</label>';
-  h += '<input id="asMail_to" type="email" placeholder="customer@example.com" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;box-sizing:border-box;margin-bottom:8px">';
+  h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">받는 사람 (To) * <span style="color:var(--t6);font-size:9px">— 컨택 마스터 자동완성</span></label>';
+  h += '<input id="asMail_to" type="email" list="asMail_contactList" placeholder="customer@example.com" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;box-sizing:border-box;margin-bottom:8px">';
+  h += '<datalist id="asMail_contactList"></datalist>';
 
   h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">제목</label>';
   h += '<input id="asMail_subject" type="text" value="' + _asEsc(defaultSubj) + '" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;box-sizing:border-box;margin-bottom:8px">';
@@ -2205,6 +2290,32 @@ function _asRenderPdfPreviewModal(t, out) {
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', function (e) { if (e.target === overlay) _asPdfPreviewClose(); });
+
+  // 컨택 마스터 자동완성 채우기 (이 ticket의 customer_name 우선)
+  if (typeof asContactsSearch === 'function') {
+    asContactsSearch({ customer: t.customerName || '' }).then(function (rows) {
+      var listEl = document.getElementById('asMail_contactList');
+      if (!listEl) return;
+      var html = '';
+      (rows || []).forEach(function (c) {
+        if (!c.email) return;
+        var label = c.email + ' — ' + (c.contactName || c.customerName || '') + (c.role ? ' (' + c.role + ')' : '');
+        html += '<option value="' + _asEsc(c.email) + '">' + _asEsc(label) + '</option>';
+      });
+      // 같은 고객사 컨택이 없으면 전체에서 상위 20
+      if (!html) {
+        return asContactsSearch({ limit: 20 }).then(function (all) {
+          var h2 = '';
+          (all || []).forEach(function (c) {
+            if (!c.email) return;
+            h2 += '<option value="' + _asEsc(c.email) + '">' + _asEsc(c.customerName) + ' / ' + _asEsc(c.contactName || '') + ' (' + _asEsc(c.email) + ')</option>';
+          });
+          listEl.innerHTML = h2;
+        });
+      }
+      listEl.innerHTML = html;
+    }).catch(function () { /* 무시 */ });
+  }
 
   // PDF iframe 로딩 실패/차단 감지 (CSP/구브라우저 폴백)
   (function () {

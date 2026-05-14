@@ -1,5 +1,91 @@
 # Work Manager — 변경 이력
 
+## v13.55 (2026-05-14) — A/S 풀코스 강화 (장비·컨택 마스터 + cron 자동화 + 통계 필터·건강점수)
+
+### 배경
+사용자: "개선할 부분이 더 있을까?" → 옵션 5(A+B+C 풀코스). A=장비·컨택 마스터 + 재발 이력, B=node-cron 자동화, C=통계 다중 필터+건강 점수.
+
+---
+
+### A. 운영 효율 마스터 + 재발 이력
+
+**`server/migrations/027_as_masters.sql`** — `as_equipment_master`(`serial_no` UNIQUE) + `as_customer_contacts`. 재발 검색용 부분 인덱스 2개 추가.
+
+**`server/routes/as-masters.js`** — `/api/as-masters/equipment`·`/contacts` CRUD. 비활성화는 soft (`active=false`).
+
+**자연 누적:** A/S 신규 접수 시 장비/컨택 마스터 자동 upsert (`customer_contact`에서 이메일 정규식 자동 추출). 사용자가 따로 마스터 관리 안 해도 시간이 지나면 자연히 쌓임.
+
+**프론트:**
+- 편집 모달 Serial No. `onblur` → `asEquipmentBySerial` → equipmentModel·equipmentNo·customerName·siteLine·installDate·warrantyStatus 빈 필드 자동 채움 + toast.
+- 상세 모달 ①접수 탭 상단에 **🔁 재발 이력 사이드바** — 같은 serial/equipment의 과거 ticket 최대 20건, 클릭 시 점프. **같은 카테고리 2건 이상 재발 시 빨간 경고 배너 자동 표시**.
+- 보고서 메일 모달 To 입력을 `<datalist>`로 — 컨택 마스터 자동완성 (해당 고객사 우선, 없으면 전체 상위 20).
+
+**라우터:**
+- `GET /api/as-tickets/:id/recurrences` — serial/equipment 기반 과거 A/S 조회 (deleted 제외, 20건).
+
+---
+
+### B. 자체 cron 자동화 (`node-cron`)
+
+**`server/package.json`** — `node-cron ^3.0.3` 추가.
+
+**`server/services/scheduler.service.js`** 신설 — TZ `Asia/Seoul` 고정, `server.js` 부팅 시 `start()`. `SCHEDULER_DISABLED=1` 환경변수로 끌 수 있음. node-cron 미설치 시 graceful 폴백.
+
+| # | 작업 | 시각 | 동작 |
+|---|---|---|---|
+| 1 | SLA 임박/위반 | 평일(월~금) 09~18 시 매시 5분 | P1 2.4일↑ / P2 5.6일↑ (closeDays 80%) 진행중 → 담당자+admin에게 `as_sla_breach`. 12h dedup |
+| 2 | 미회신 D+3 | 매일 09:10 | `customer_wait` 3일↑ → admin에게 `as_customer_wait`. 24h dedup |
+| 3 | 주간 요약 | 매주 월요일 08:30 | 모든 active 테넌트 admin에게 `as_weekly_digest` (신규/종결/MTTR/SLA + Top3 카테고리·고객 + P1·P2 미해결 Top5) |
+
+**dedup 키:** `audit_logs.action`에 `as.sla_alert` / `as.customer_wait_alert` 기록 후 시간 범위로 중복 알림 방지.
+
+---
+
+### C. 통계 다중 필터 + 건강 점수
+
+**`/api/as-stats`** 쿼리 파라미터 추가:
+- `category=hw_fault,sw_error` (콤마 분리 다중)
+- `priority=P1,P2`
+- `customer=코아` (ILIKE)
+
+이 필터는 `BASE_WHERE`에 누적되어 모든 차트에 일관 적용.
+
+**🏆 건강 점수 (Health Score):** 0~100 단일 KPI.
+```
+SLA 점수  = max(0, 100 - 위반율% × 4)         # 0% → 100점, 25% → 0점
+MTTR 점수 = max(0, min(100, 100 - (MTTR - 24) × 2))  # 24h가 만점
+CSAT 점수 = (CSAT 평균 / 5) × 100
+
+가중치 (CSAT 있음): SLA 50% + MTTR 25% + CSAT 25%
+가중치 (CSAT 없음): SLA 70% + MTTR 30%
+
+등급: A 90+ / B 75+ / C 60+ / D 45+ / E < 45
+```
+
+**프론트:**
+- 통계 화면 최상단에 큰 카드 — 42px 점수 + 원형 등급 배지 + SLA/MTTR/CSAT 분석 막대(가중치 표시).
+- 컨트롤 바 하단에 필터 UI — 카테고리 셀렉트 + 긴급도 셀렉트 + 고객사 텍스트 검색 + [적용]/[필터 해제].
+- 카테고리 옵션은 `_AS_CAT_CACHE` 우선, 폴백 `AS_CATEGORY`.
+
+---
+
+### `project-data.js`
+- `asEquipmentSearch(params)`, `asEquipmentBySerial(serial)`
+- `asContactsSearch(params)`, `asContactPut(contact)`
+- `asRecurrencesGet(ticketId)`
+
+### 운영 반영 (반드시)
+- `server/migrations/027_as_masters.sql` 1회 실행
+- `cd server && npm install` (node-cron)
+- 서버 재시작 — `app.use('/api/as-masters', ...)` 및 `scheduler.start()` 등록 시점
+- 스케줄러 비활성화: `SCHEDULER_DISABLED=1`
+
+### 변경 파일
+- 신규: `server/migrations/027_as_masters.sql`, `server/routes/as-masters.js`, `server/services/scheduler.service.js`
+- 수정: `server/app.js`, `server/server.js`, `server/routes/as-tickets.js`, `server/routes/as-stats.js`, `server/package.json`, `project-data.js`, `as-manager.js`, `as-stats.js`, `업무일지_분석기.html`, `CHANGELOG.md`
+
+---
+
 ## v13.54 (2026-05-14) — A/S 통계·트렌드 분석 풀세트 + 자동 인사이트 + 주간 텔레그램 요약
 
 ### 배경

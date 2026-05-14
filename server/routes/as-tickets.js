@@ -176,8 +176,46 @@ router.post('/', async function (req, res) {
     );
     res.status(201).json({ data: r.rows[0] });
 
-    // 텔레그램: P1/P2 신규 접수 알림 — 관리자에게 (비동기, 실패 시 무시)
+    // 장비/컨택 마스터 자동 upsert (비동기, 실패 시 무시) — A1: 자연 누적
     var created = r.rows[0];
+    (async function () {
+      try {
+        if (created.serial_no) {
+          await db.query(
+            "INSERT INTO as_equipment_master " +
+            "(id, tenant_id, serial_no, equipment_no, equipment_model, customer_name, site_line, install_date, warranty_status, created_by, updated_by) " +
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10) " +
+            "ON CONFLICT (tenant_id, serial_no) DO UPDATE SET " +
+            "  equipment_no = COALESCE(EXCLUDED.equipment_no, as_equipment_master.equipment_no), " +
+            "  equipment_model = COALESCE(EXCLUDED.equipment_model, as_equipment_master.equipment_model), " +
+            "  customer_name = COALESCE(EXCLUDED.customer_name, as_equipment_master.customer_name), " +
+            "  site_line = COALESCE(EXCLUDED.site_line, as_equipment_master.site_line), " +
+            "  install_date = COALESCE(EXCLUDED.install_date, as_equipment_master.install_date), " +
+            "  warranty_status = COALESCE(EXCLUDED.warranty_status, as_equipment_master.warranty_status), " +
+            "  updated_at = NOW(), updated_by = EXCLUDED.updated_by",
+            ['eqp-' + require('crypto').randomUUID().slice(0, 12),
+             req.tenant.id, created.serial_no, created.equipment_no, created.equipment_model,
+             created.customer_name, created.site_line, created.install_date, created.warranty_status,
+             req.user.sub]
+          );
+        }
+        // customer_contact 안에 이메일 포함됐을 수 있음 — 간단 추출
+        var contact = created.customer_contact || '';
+        var emailMatch = contact.match(/[\w._%+-]+@[\w.-]+\.[A-Za-z]{2,}/);
+        if (created.customer_name && emailMatch) {
+          await db.query(
+            "INSERT INTO as_customer_contacts " +
+            "(id, tenant_id, customer_name, contact_name, email, phone, created_by, updated_by) " +
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$7) " +
+            "ON CONFLICT DO NOTHING",
+            ['ctc-' + require('crypto').randomUUID().slice(0, 12),
+             req.tenant.id, created.customer_name, null, emailMatch[0], null, req.user.sub]
+          );
+        }
+      } catch (e) { console.warn('[as/master-upsert]', e.message); }
+    })();
+
+    // 텔레그램: P1/P2 신규 접수 알림 — 관리자에게 (비동기, 실패 시 무시)
     if (created.priority === 'P1' || created.priority === 'P2') {
       (async function () {
         try {
@@ -872,6 +910,49 @@ router.delete('/:id/signatures/:sid', async function (req, res) {
   } catch (e) {
     console.error('[as-signatures/delete]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// ── 재발 이력 (Serial No. / 장비번호 기준 과거 A/S) ──
+// 편집 모달 사이드바에서 "이 장비의 과거 A/S" 자동 표시용
+// ────────────────────────────────────────────────────────────
+router.get('/:id/recurrences', async function (req, res) {
+  try {
+    // 현재 ticket의 serial_no / equipment_no / customer_name 가져옴
+    var tR = await db.query(
+      "SELECT serial_no, equipment_no, equipment_model, customer_name FROM as_tickets WHERE id = $1 AND tenant_id = $2",
+      [req.params.id, req.tenant.id]
+    );
+    if (!tR.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    var cur = tR.rows[0];
+
+    // serial_no 또는 equipment_no가 일치하는 과거 A/S (현재 제외)
+    var clauses = [];
+    var params = [req.tenant.id, req.params.id];
+    var idx = 3;
+    if (cur.serial_no) {
+      clauses.push('serial_no = $' + idx++);
+      params.push(cur.serial_no);
+    }
+    if (cur.equipment_no) {
+      clauses.push('equipment_no = $' + idx++);
+      params.push(cur.equipment_no);
+    }
+    if (!clauses.length) return res.json({ data: [], context: cur });
+
+    var sql =
+      "SELECT id, ticket_no, received_at, status, priority, category, " +
+      "       issue_summary, rca, closure, closed_at, customer_name, equipment_model " +
+      "FROM as_tickets " +
+      "WHERE tenant_id = $1 AND id <> $2 AND deleted_at IS NULL " +
+      "  AND (" + clauses.join(' OR ') + ") " +
+      "ORDER BY received_at DESC LIMIT 20";
+    var r = await db.query(sql, params);
+    res.json({ data: r.rows, context: cur, total: r.rows.length });
+  } catch (e) {
+    console.error('[as-tickets/recurrences]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
   }
 });
 

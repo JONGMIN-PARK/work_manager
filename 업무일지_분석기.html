@@ -419,7 +419,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.54</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.55</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2809,6 +2809,33 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.55',date:'2026-05-14',title:'🚀 A/S 풀코스 강화 — 장비/컨택 마스터 + 재발 이력 + cron 자동화 + 통계 필터/건강점수',tag:'feature',items:[
+      'A. 운영 효율 마스터 데이터 ───────',
+      '027 마이그레이션 — as_equipment_master(serial_no UNIQUE) + as_customer_contacts (customer/contact_name/email/phone/role/is_primary). 재발 검색용 부분 인덱스 추가',
+      'server/routes/as-masters.js 신설 — GET·POST·PUT·DELETE /equipment, /equipment/by-serial/:serial, /contacts. 비활성화는 soft (active=false)',
+      'A/S 신규 접수 시 장비/컨택 마스터 자동 upsert (비동기, 실패 무시) — 사용자가 따로 마스터 관리 안 해도 자연 누적. customer_contact 필드에서 이메일 자동 추출',
+      '편집 모달 Serial No. onblur → asEquipmentBySerial 호출 → equipmentModel/No/customerName/siteLine/installDate/warrantyStatus 빈 필드 자동 채움 + toast 알림. "기존 장비 자동 인식"',
+      '상세 모달 ①접수 탭 상단에 🔁 재발 이력 사이드바 (serial_no 또는 equipment_no 일치하는 과거 ticket 최대 20건). 클릭 시 해당 ticket 점프. 같은 카테고리 2건↑ 재발이면 빨간 경고 배너 자동 표시',
+      '보고서 메일 작성기 모달의 To 입력을 datalist로 — 컨택 마스터에서 자동완성 (해당 고객사 우선, 없으면 전체 상위 20). 매번 손으로 안 쳐도 됨',
+      '/api/as-tickets/:id/recurrences 라우터 — 현재 ticket의 serial/equipment 기반 과거 A/S 조회 (deleted 제외)',
+      '',
+      'B. 자체 cron 자동화 ───────',
+      'node-cron 의존성 추가 (server/package.json). server/services/scheduler.service.js 신설',
+      'server.js 부팅 시 scheduler.start() — SCHEDULER_DISABLED=1 환경변수로 끌 수 있음. node-cron 미설치 시 graceful 폴백',
+      '1) SLA 임박/위반 — 평일(월~금) 09~18시 매 시간 정각 5분에 체크. P1 2.4일 초과 / P2 5.6일 초과 (closeDays의 80%) 진행중 ticket을 담당자+admin에게 as_sla_breach 발사. 12시간 dedup',
+      '2) 미회신 D+3 — 매일 09:10. customer_wait 상태로 3일 이상 머무른 ticket → admin에게 as_customer_wait 알림. 24시간 dedup',
+      '3) 주간 요약 — 매주 월요일 08:30. 모든 active 테넌트의 admin에게 as_weekly_digest 자동 발사. 신규/종결/MTTR/SLA위반 + Top3 카테고리·고객 + P1·P2 미해결 Top5 포함',
+      '시간대 Asia/Seoul 고정. audit_logs에 dedup 키(as.sla_alert / as.customer_wait_alert) 기록',
+      '',
+      'C. 통계 다중 필터 + 건강 점수 ───────',
+      '/api/as-stats?from=&to=&category=&priority=&customer= — 3종 다중 필터 지원. category·priority는 콤마 분리 다중값, customer는 ILIKE',
+      '🏆 건강 점수 (Health Score) — 0~100 단일 KPI. SLA 50% + MTTR 25% + CSAT 25% (CSAT 데이터 없으면 SLA 70%+MTTR 30%). 등급 A 90+/B 75+/C 60+/D 45+/E < 45 + 색상 자동',
+      '통계 화면 최상단에 큰 카드 — 큰 숫자(42px) + 원형 등급 배지 + SLA/MTTR/CSAT 분석 막대(가중치 표시) + 등급 기준 안내. 한눈에 "이번 기간 건강도"',
+      '필터 UI — 카테고리 드롭다운(_AS_CAT_CACHE 우선, 폴백 AS_CATEGORY) + 긴급도 P1~P4 + 고객사 텍스트 검색 + [적용]/[필터 해제] 버튼. Enter 키로 즉시 적용',
+      'project-data.js: asEquipmentSearch/BySerial, asContactsSearch/Put, asRecurrencesGet 헬퍼 추가',
+      '',
+      '⚠ 운영 반영: server/migrations/027_as_masters.sql 1회 실행 + npm install (node-cron) + 서버 재시작 필요. scheduler는 SCHEDULER_DISABLED=1 로 끌 수 있음'
+    ]},
     {ver:'13.54',date:'2026-05-14',title:'📊 A/S 통계·트렌드 분석 풀세트 + 자동 인사이트 + 주간 텔레그램 요약',tag:'feature',items:[
       'A/S 상단 토글에 [📊 통계] 추가 — 시안색(0EA5E9) 강조. 클릭 시 별도 모듈(as-stats.js)로 위임',
       '백엔드: server/routes/as-stats.js 신설 — 단일 통합 엔드포인트 GET /api/as-stats?from=&to=&groupBy= 가 KPI 8종 + 추이 + 5종 분포(카테고리/긴급도/상태/보증/처리방식) + 부서부하 + SLA준수율 + Top10 고객·장비 + RCA 분포 + CSAT 추이 + 부품(청구구분·월별) + 자동 인사이트 한방 반환. 모든 쿼리 Promise.all 병렬 실행',

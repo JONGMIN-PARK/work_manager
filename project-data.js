@@ -966,6 +966,48 @@ function asEmailReport(ticketId, payload) {
   });
 }
 
+/* ─── A/S 마스터 (장비/컨택) + 재발 이력 ─── */
+function asEquipmentSearch(params) {
+  var qs = '';
+  if (params && typeof params === 'object') {
+    var pairs = Object.keys(params).filter(function (k) { return params[k] != null && params[k] !== ''; })
+      .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); });
+    if (pairs.length) qs = '?' + pairs.join('&');
+  }
+  return apiFetch('/api/as-masters/equipment' + qs).then(function (r) { return toCamelArray(r.data); });
+}
+function asEquipmentBySerial(serial) {
+  return apiFetch('/api/as-masters/equipment/by-serial/' + encodeURIComponent(serial))
+    .then(function (r) { return toCamel(r.data); })
+    .catch(function (err) {
+      if (err && err.status === 404) return null;
+      throw err;
+    });
+}
+function asContactsSearch(params) {
+  var qs = '';
+  if (params && typeof params === 'object') {
+    var pairs = Object.keys(params).filter(function (k) { return params[k] != null && params[k] !== ''; })
+      .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); });
+    if (pairs.length) qs = '?' + pairs.join('&');
+  }
+  return apiFetch('/api/as-masters/contacts' + qs).then(function (r) { return toCamelArray(r.data); });
+}
+function asContactPut(contact) {
+  var isNew = !contact.id || contact._isNew;
+  if (isNew) {
+    delete contact._isNew;
+    return apiFetch('/api/as-masters/contacts', { method: 'POST', body: JSON.stringify(contact) })
+      .then(function (r) { return toCamel(r.data); });
+  }
+  return apiFetch('/api/as-masters/contacts/' + contact.id, { method: 'PUT', body: JSON.stringify(contact) })
+    .then(function (r) { return toCamel(r.data); });
+}
+function asRecurrencesGet(ticketId) {
+  return apiFetch('/api/as-tickets/' + ticketId + '/recurrences')
+    .then(function (r) { return { data: toCamelArray(r.data), context: toCamel(r.context), total: r.total }; });
+}
+
 /* ─── A/S 통계 ─── */
 function asStatsGet(params) {
   var qs = '';
