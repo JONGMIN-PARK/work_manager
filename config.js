@@ -20,6 +20,10 @@ var TH = [
   { id: 'amethyst',     l: '애머시스트', c: '#100C18' },
   { id: 'sunset',       l: '선셋',       c: '#1A0F10' },
   { id: 'nord',         l: '노르드',     c: '#2E3440' },
+  // v13.70 — 트렌디 신규
+  { id: 'aurora',       l: '오로라',     c: 'linear-gradient(135deg,#0B1626 35%,#0FBE9B 65%,#A78BFA 100%)' },
+  { id: 'cyber',        l: '사이버',     c: 'linear-gradient(135deg,#0A0014 40%,#FF2D95 70%,#00E5FF 100%)' },
+  { id: 'glass',        l: '글래스',     c: 'linear-gradient(135deg,#E8EEF8,#C7D5EC)' },
   // 시인성 강화
   { id: 'highcontrast', l: '고대비',     c: 'linear-gradient(135deg,#000,#FFF)' }
 ];
