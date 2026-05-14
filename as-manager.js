@@ -325,11 +325,19 @@ function showASModal(editId) {
   var pOrders = (typeof orderGetAll === 'function') ? orderGetAll() : Promise.resolve([]);
   var pExist  = editId ? asGet(editId) : Promise.resolve(null);
   var pCats   = _asLoadCats();
+  // 편집 모드면 첨부도 함께 로드
+  var pAtts   = (editId && typeof asAttachmentGetAll === 'function')
+                  ? asAttachmentGetAll(editId).catch(function () { return []; })
+                  : Promise.resolve([]);
 
-  Promise.all([pOrders, pExist, pCats]).then(function (results) {
+  // 신규 모달용 임시 첨부 큐 초기화
+  window._asPendingAttachments = [];
+
+  Promise.all([pOrders, pExist, pCats, pAtts]).then(function (results) {
     var orders = results[0] || [];
     var existing = results[1];
     var CAT = results[2] || {};
+    var existingAtts = results[3] || [];
     var isEdit = !!existing;
 
     document.querySelectorAll('#asModalOverlay').forEach(function (el) { el.remove(); });
@@ -406,6 +414,19 @@ function showASModal(editId) {
     h += '<div style="margin-bottom:14px">';
     h += '<label style="display:block;font-size:11px;color:var(--t4);margin-bottom:4px">1차 분석 (CS/공정 메모)</label>';
     h += '<textarea id="asM_initialAnalysis" rows="2" placeholder="첫 통화/원격 진단 결과를 메모 (선택)" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);font-size:11px;resize:vertical">' + _asEsc(existing && existing.initialAnalysis || '') + '</textarea>';
+    h += '</div>';
+
+    // ④ 첨부 파일 (이미지·문서 다중 업로드 + 카드 그리드 + 클릭 미리보기)
+    h += _asSection('④ 첨부 파일 ' + (isEdit ? '<span style="color:var(--t6);font-weight:400;font-size:10px">— 이미지·캡처·PDF·문서 (선택 즉시 업로드, 10MB 이하)</span>' : '<span style="color:var(--t6);font-weight:400;font-size:10px">— 접수 등록 후 일괄 업로드 (10MB 이하 다중 선택 가능)</span>'));
+    h += '<div style="margin-bottom:14px">';
+    h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
+    h += '<input id="asM_attachInput" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.log,.zip" onchange="_asModalAttachPicked(event,\'' + (isEdit ? _asEsc(editId).replace(/\x27/g, "\\\x27") : '') + '\')" style="font-size:11px;flex:1;min-width:240px">';
+    h += '<span style="font-size:9px;color:var(--t6)">여러 파일을 한 번에 선택 가능 (Ctrl/Shift)</span>';
+    h += '</div>';
+    h += '<div id="asM_attachGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;min-height:60px">';
+    h += _asRenderAttachGridHtml(existingAtts, isEdit ? editId : null, false);
+    h += '</div>';
+    h += '<div id="asM_attachStatus" style="font-size:10px;color:var(--t5);margin-top:6px;min-height:14px"></div>';
     h += '</div>';
 
     // 액션
@@ -542,6 +563,168 @@ function _asEquipLookup(serial) {
   }).catch(function () { /* 없으면 무시 */ });
 }
 
+/* ─── 모달 내 첨부 그리드 렌더 ───
+ * 편집: 서버에서 받은 attachments 배열을 카드로
+ * 신규: window._asPendingAttachments 임시 큐를 카드로 (id 없음, dataUrl만)
+ */
+function _asRenderAttachGridHtml(atts, ticketId, isPending) {
+  var CAT = typeof AS_ATTACH_CATEGORY !== 'undefined' ? AS_ATTACH_CATEGORY : {};
+  if (!atts || !atts.length) {
+    return '<div style="grid-column:1/-1;padding:18px;text-align:center;color:var(--t5);font-size:11px;border:1px dashed var(--bd);border-radius:6px;background:var(--bg-i)">📎 첨부된 파일이 없습니다. 위 [파일 선택]에서 사진·캡처·문서를 추가하세요.</div>';
+  }
+  // 글로벌 인덱스에도 등록해서 preview 함수가 찾을 수 있도록 (편집 모드)
+  if (ticketId) {
+    window._asAttachIndex = window._asAttachIndex || {};
+    window._asAttachIndex[ticketId] = atts;
+  }
+  var html = '';
+  atts.forEach(function (a, idx) {
+    var c = CAT[a.category] || { label: a.category || '기타', icon: '📎' };
+    var isImg = _asAttIsImage(a);
+    var isPdf = _asAttIsPdf(a);
+    var clickHandler;
+    var removeHandler;
+    if (isPending) {
+      clickHandler = '_asPendingAttachPreview(' + idx + ')';
+      removeHandler = '_asPendingAttachRemove(' + idx + ')';
+    } else {
+      clickHandler = 'asAttachPreview(\'' + _asEsc(ticketId) + '\',\'' + _asEsc(a.id) + '\')';
+      removeHandler = '_asModalAttachRemove(\'' + _asEsc(ticketId) + '\',\'' + _asEsc(a.id) + '\')';
+    }
+    html += '<div style="border:1px solid var(--bd);border-radius:6px;padding:6px;background:var(--bg-i);position:relative;cursor:pointer;transition:border-color 0.15s" onmouseover="this.style.borderColor=\'#F59E0B\'" onmouseout="this.style.borderColor=\'\'" onclick="' + clickHandler + '">';
+    if (isImg) {
+      html += '<div style="width:100%;height:70px;background:#0f172a center / contain no-repeat url(\'' + _asEsc(a.fileUrl) + '\');border-radius:3px;margin-bottom:4px"></div>';
+    } else {
+      html += '<div style="width:100%;height:70px;display:flex;align-items:center;justify-content:center;font-size:32px;background:var(--bg);border-radius:3px;margin-bottom:4px">' + (isPdf ? '📄' : (c.icon || '📎')) + '</div>';
+    }
+    html += '<div style="font-size:9px;color:var(--t5);margin-bottom:1px">' + (c.icon || '') + ' ' + _asEsc(c.label) + (isPending ? ' <span style="color:#F59E0B">⏳대기</span>' : '') + '</div>';
+    html += '<div style="font-size:10px;color:var(--t2);font-weight:600;word-break:break-all;line-height:1.25">' + _asEsc(a.fileName) + '</div>';
+    if (a.fileSize) {
+      var kb = Math.round(a.fileSize / 1024);
+      html += '<div style="font-size:9px;color:var(--t6);margin-top:1px">' + (kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB') + '</div>';
+    }
+    html += '<button onclick="event.stopPropagation();' + removeHandler + '" style="position:absolute;top:3px;right:3px;font-size:9px;padding:1px 5px;border:1px solid #EF4444;border-radius:3px;background:rgba(255,255,255,0.9);color:#EF4444;cursor:pointer" title="삭제">×</button>';
+    html += '</div>';
+  });
+  return html;
+}
+
+/* 모달 내 그리드 갱신 (편집 모드는 서버 재조회, 신규는 큐 기반) */
+function _asRefreshModalAttachGrid(ticketId) {
+  var grid = document.getElementById('asM_attachGrid');
+  if (!grid) return;
+  if (ticketId) {
+    if (typeof asAttachmentGetAll !== 'function') return;
+    asAttachmentGetAll(ticketId).then(function (atts) {
+      grid.innerHTML = _asRenderAttachGridHtml(atts, ticketId, false);
+    }).catch(function () { /* 무시 */ });
+  } else {
+    grid.innerHTML = _asRenderAttachGridHtml(window._asPendingAttachments || [], null, true);
+  }
+}
+
+/* 다중 파일 선택 핸들러 — 편집 모드: 즉시 업로드 / 신규 모드: 큐에 보관 */
+function _asModalAttachPicked(ev, ticketId) {
+  var files = ev.target.files ? Array.from(ev.target.files) : [];
+  if (!files.length) return;
+  ev.target.value = '';  // 같은 파일 다시 선택 가능하도록 reset
+
+  var status = document.getElementById('asM_attachStatus');
+  var oversized = files.filter(function (f) { return f.size > 10 * 1024 * 1024; });
+  if (oversized.length) {
+    if (status) status.innerHTML = '<span style="color:#EF4444">⚠ 10MB 초과 파일 ' + oversized.length + '개 제외됨: ' + _asEsc(oversized.map(function (f) { return f.name; }).join(', ')) + '</span>';
+    files = files.filter(function (f) { return f.size <= 10 * 1024 * 1024; });
+    if (!files.length) return;
+  }
+
+  // 파일 → dataURL + 카테고리 추정
+  var readers = files.map(function (f) {
+    return new Promise(function (resolve) {
+      var r = new FileReader();
+      r.onload = function (e) {
+        var mt = (f.type || '').toLowerCase();
+        var ext = (f.name.split('.').pop() || '').toLowerCase();
+        var cat = 'etc';
+        if (mt.indexOf('image/') === 0) cat = 'photo_before';
+        else if (mt === 'application/pdf' || ext === 'pdf') cat = 'doc';
+        else if (['doc','docx','xls','xlsx','ppt','pptx','txt','csv'].indexOf(ext) >= 0) cat = 'doc';
+        else if (ext === 'log') cat = 'log';
+        resolve({
+          category: cat,
+          fileName: f.name,
+          fileUrl: e.target.result,
+          fileSize: f.size,
+          mimeType: f.type || null
+        });
+      };
+      r.readAsDataURL(f);
+    });
+  });
+
+  if (status) status.innerHTML = '<span style="color:var(--t5)">⏳ ' + files.length + '개 파일 처리 중…</span>';
+
+  Promise.all(readers).then(function (items) {
+    if (ticketId) {
+      // 편집 모드 — 서버에 즉시 일괄 업로드
+      if (typeof asAttachmentPut !== 'function') {
+        if (status) status.innerHTML = '<span style="color:#EF4444">⚠ 첨부 API 미연결</span>';
+        return;
+      }
+      var ok = 0, fail = 0;
+      var seq = Promise.resolve();
+      items.forEach(function (it) {
+        seq = seq.then(function () {
+          return asAttachmentPut(ticketId, it).then(function () { ok++; }, function () { fail++; });
+        });
+      });
+      seq.then(function () {
+        if (status) status.innerHTML = '<span style="color:' + (fail ? '#F59E0B' : '#10B981') + '">✅ ' + ok + '개 업로드' + (fail ? ' · ❌ ' + fail + '개 실패' : '') + '</span>';
+        _asRefreshModalAttachGrid(ticketId);
+        if (typeof showToast === 'function') showToast('📎 ' + ok + '개 첨부 업로드 완료');
+      });
+    } else {
+      // 신규 모드 — 임시 큐에 누적
+      window._asPendingAttachments = (window._asPendingAttachments || []).concat(items);
+      if (status) status.innerHTML = '<span style="color:#F59E0B">⏳ ' + items.length + '개 추가됨 — 접수 등록 시 함께 업로드됩니다 (총 ' + window._asPendingAttachments.length + '개 대기)</span>';
+      _asRefreshModalAttachGrid(null);
+    }
+  });
+}
+
+/* 편집 모달에서 기존 첨부 삭제 — 서버 즉시 반영 */
+function _asModalAttachRemove(ticketId, aid) {
+  if (!confirm('이 첨부를 삭제하시겠습니까?')) return;
+  if (typeof asAttachmentDel !== 'function') return;
+  asAttachmentDel(ticketId, aid).then(function () {
+    if (typeof showToast === 'function') showToast('첨부가 삭제되었습니다.');
+    _asRefreshModalAttachGrid(ticketId);
+  }).catch(function (err) {
+    if (typeof showToast === 'function') showToast('❌ 삭제 실패: ' + ((err && err.message) || ''), 'error');
+  });
+}
+
+/* 신규 모달 — 임시 큐 항목 제거 / 미리보기 */
+function _asPendingAttachRemove(idx) {
+  if (!window._asPendingAttachments) return;
+  window._asPendingAttachments.splice(idx, 1);
+  _asRefreshModalAttachGrid(null);
+  var status = document.getElementById('asM_attachStatus');
+  if (status) status.innerHTML = '<span style="color:var(--t5)">대기 ' + window._asPendingAttachments.length + '개</span>';
+}
+function _asPendingAttachPreview(idx) {
+  var a = (window._asPendingAttachments || [])[idx];
+  if (!a) return;
+  // _asRenderAttachPreview 가 fileUrl/fileName/category/note/uploadedAt 등을 읽음
+  _asRenderAttachPreview({
+    fileName: a.fileName,
+    fileUrl: a.fileUrl,
+    category: a.category,
+    mimeType: a.mimeType,
+    note: '⏳ 등록 전 — 접수 저장 시 업로드됩니다',
+    uploadedAt: new Date().toISOString()
+  });
+}
+
 function saveASModal(isEdit, editId) {
   var v = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
   var data = {
@@ -578,12 +761,35 @@ function saveASModal(isEdit, editId) {
   var promise = (isEdit && editId) ? updateASTicket(editId, data) : createASTicket(data);
 
   promise.then(function (saved) {
-    var ov = document.getElementById('asModalOverlay');
-    if (ov) ov.remove();
-    if (typeof showToast === 'function') {
-      showToast(isEdit ? 'A/S가 수정되었습니다.' : 'A/S가 접수되었습니다. ' + (saved && saved.ticketNo ? '(' + saved.ticketNo + ')' : ''));
+    // 신규 등록 성공 + 임시 첨부 큐가 있으면 일괄 업로드
+    var pending = (!isEdit && saved && saved.id && Array.isArray(window._asPendingAttachments) && window._asPendingAttachments.length)
+      ? window._asPendingAttachments.slice() : [];
+    window._asPendingAttachments = [];
+
+    var afterAttach = Promise.resolve();
+    if (pending.length && typeof asAttachmentPut === 'function') {
+      if (typeof showToast === 'function') showToast('📎 ' + pending.length + '개 첨부 업로드 중…', 'info');
+      // 순차 업로드 (서버 부담 방지)
+      pending.forEach(function (att) {
+        afterAttach = afterAttach.then(function () {
+          return asAttachmentPut(saved.id, att).catch(function (e) {
+            console.warn('[attach upload]', att.fileName, e.message);
+          });
+        });
+      });
     }
-    renderAS();
+
+    afterAttach.then(function () {
+      var ov = document.getElementById('asModalOverlay');
+      if (ov) ov.remove();
+      if (typeof showToast === 'function') {
+        var attachMsg = pending.length ? ' · 📎 ' + pending.length + '개 첨부' : '';
+        showToast(isEdit
+          ? 'A/S가 수정되었습니다.'
+          : 'A/S가 접수되었습니다. ' + (saved && saved.ticketNo ? '(' + saved.ticketNo + ')' : '') + attachMsg);
+      }
+      renderAS();
+    });
   }).catch(function (err) {
     console.error('[saveASModal]', err);
     var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';

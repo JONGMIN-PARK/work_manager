@@ -419,7 +419,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.55</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.56</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2809,6 +2809,19 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.56',date:'2026-05-14',title:'📎 A/S 접수 등록·편집 모달에 다중 파일 첨부 + 카드 그리드 + 미리보기',tag:'feature',items:[
+      '편집 ✏️ 모달에 첨부 UI가 없어서 첨부 추가는 상세 모달 ③처리 탭에서만 가능하던 불편 해결',
+      '신규 등록 + 편집 모달 둘 다에 ④ 첨부 파일 섹션 추가 — 이미지/캡처/PDF/DOC/XLS/PPT/TXT/CSV/LOG/ZIP 다중 선택 (input multiple, Ctrl/Shift)',
+      '편집 모드: 파일 선택 → 즉시 서버 업로드(순차) → 진행상태/성공/실패 카운트 status에 표시 → 그리드 자동 갱신',
+      '신규 모드: ticketId가 아직 없으므로 window._asPendingAttachments 임시 큐에 보관 → 접수 등록 성공 후 saved.id로 일괄 자동 업로드 → 토스트에 "X건 첨부" 알림',
+      '카드 그리드 — auto-fill minmax(140px,1fr). 이미지는 70px 썸네일, 그 외는 큰 아이콘(📄/📎). 파일명·카테고리·크기(KB/MB) 표시. 카드 hover시 보더 강조',
+      '카드 클릭 → 인앱 미리보기 모달 (기존 asAttachPreview 재사용). 신규 모드의 대기 항목은 ⏳ 등록 전 안내 + 임시 dataUrl로 미리보기',
+      '× 버튼으로 즉시 제거 — 편집: 서버 삭제, 신규: 큐에서 제거',
+      '10MB 초과 파일은 자동 제외 + 경고 메시지. 카테고리 자동 추정(이미지→photo_before, pdf/doc/xls→doc, log→log)',
+      '같은 파일 다시 선택할 수 있게 input.value=\'\' reset (브라우저 기본은 같은 파일 onchange 발생 안 함)',
+      '미리보기는 기존 모달 그대로 활용 — 이미지는 라이트박스(78vh), PDF는 iframe, 텍스트는 디코드, 그 외 안내+다운로드',
+      '신규 모드에서 파일 추가 후 접수 등록 안 하고 모달 닫으면 큐는 자연 폐기 (다음 모달 열 때 _asPendingAttachments=[] 초기화)'
+    ]},
     {ver:'13.55',date:'2026-05-14',title:'🚀 A/S 풀코스 강화 — 장비/컨택 마스터 + 재발 이력 + cron 자동화 + 통계 필터/건강점수',tag:'feature',items:[
       'A. 운영 효율 마스터 데이터 ───────',
       '027 마이그레이션 — as_equipment_master(serial_no UNIQUE) + as_customer_contacts (customer/contact_name/email/phone/role/is_primary). 재발 검색용 부분 인덱스 추가',

@@ -1,5 +1,58 @@
 # Work Manager — 변경 이력
 
+## v13.56 (2026-05-14) — A/S 접수 등록·편집 모달에 다중 파일 첨부 + 카드 그리드 + 미리보기
+
+### 배경
+사용자: "a/s 접수 편집에서 등록/수정 시에 이미지 리스트 추가할 수 있는게 왜 없지? 다중 파일 리스트로 등록하고, 선택하면 볼 수 있게."
+
+기존 동작:
+- 접수 편집 ✏️ 모달엔 첨부 UI 없음
+- 첨부는 상세 모달의 ③ 처리 탭에 숨어 있어 흐름이 어색
+
+### 변경 — `as-manager.js`
+
+**모달 진입 시 데이터 동시 로드**: 편집 모드면 `asAttachmentGetAll(editId)`도 함께 불러옴. 신규 모드는 `window._asPendingAttachments = []` 초기화.
+
+**④ 첨부 파일 섹션** (`③ 1차 분석` 뒤에):
+- `<input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.log,.zip">` — Ctrl/Shift로 다중 선택.
+- 그리드: `grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))`. 이미지는 70px 썸네일, 그 외는 큰 아이콘.
+- 카드 hover 보더 강조, 클릭 시 인앱 미리보기.
+- `×` 버튼으로 즉시 제거.
+
+**`_asModalAttachPicked(ev, ticketId)`**:
+- 10MB 초과 자동 제외 + 경고
+- FileReader로 dataURL 변환 + 카테고리 자동 추정
+- **편집 모드**: `asAttachmentPut` 순차 호출(서버 부담 ↓) → 성공/실패 카운트 표시 → 그리드 자동 갱신
+- **신규 모드**: 큐(`window._asPendingAttachments`)에 누적 → `"⏳ X개 추가됨, 접수 등록 시 함께 업로드"` 안내
+
+**`saveASModal`**:
+- 신규 등록 성공 후 큐가 있으면 `saved.id`로 순차 일괄 업로드 → 토스트에 `"… · 📎 N개 첨부"` 알림.
+
+**`_asPendingAttachPreview(idx)`**: 큐 항목을 즉석 미리보기 — 기존 `_asRenderAttachPreview` 재사용. 미리보기 모달 노트에 `"⏳ 등록 전 — 접수 저장 시 업로드됩니다"` 자동 표시.
+
+**`_asRenderAttachGridHtml(atts, ticketId, isPending)`** — 그리드 HTML 빌더. 편집/신규 두 경로에서 재사용. 이미지·PDF·기타 분기, 파일명·카테고리·크기(KB/MB) 표시, 대기 항목엔 `⏳대기` 배지.
+
+### 미리보기
+기존 `asAttachPreview` 모달 그대로 활용:
+- 이미지 → `<img>` (max-height 78vh)
+- PDF → `<iframe>`
+- 텍스트(data URL) → base64 디코드 후 `<pre>`
+- 기타 → 안내 + 다운로드 버튼
+- ESC / 배경 클릭으로 닫힘
+
+### 효과
+- 접수 등록과 동시에 현장 사진을 한 번에 첨부 — 추가 단계 없음
+- 편집 시에도 모달 안에서 즉시 추가/삭제/미리보기
+- 다중 선택 → 일괄 업로드 — 한 장씩 안 올려도 됨
+- 시각적 카드 그리드로 한눈에 첨부 현황 파악
+
+### 변경 파일
+- `as-manager.js`
+- `업무일지_분석기.html` (v13.56 · 패치노트)
+- `CHANGELOG.md`
+
+---
+
 ## v13.55 (2026-05-14) — A/S 풀코스 강화 (장비·컨택 마스터 + cron 자동화 + 통계 필터·건강점수)
 
 ### 배경
