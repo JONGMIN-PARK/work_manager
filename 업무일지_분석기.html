@@ -125,6 +125,30 @@ window.wmProgress = (function () {
   return { show: show, update: update, step: step, hide: hide, autoSteps: autoSteps, run: run };
 })();
 
+/* v13.67: #initLoading 카드의 단계 메시지 자동 회전 — DOM에서 제거되면 자동 종료 */
+(function () {
+  var steps = [
+    '📂 캐시 확인',
+    '👥 팀원 정보 로드',
+    '📅 주차 데이터 정리',
+    '📊 통계 집계 준비',
+    '🔄 최근 주차 자동 선택',
+    '✨ 화면 준비'
+  ];
+  var i = 0;
+  function tick() {
+    var el = document.getElementById('wmInitStep');
+    if (!el) return; // DOM에서 제거됨 — 자체 종료
+    el.textContent = steps[i % steps.length];
+    // pop 애니메이션 재시작
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    i++;
+    setTimeout(tick, 1500);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(tick, 800); });
+  else setTimeout(tick, 800);
+})();
+
 window.wmDataBus = (function () {
   var listeners = {}; // type → [fn]
   function on(type, fn) {
@@ -346,6 +370,22 @@ td{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--tdb)}tr:nth-chi
 #wmProgOverlay .wm-prog-tip{font-size:10px;color:#7882A0;margin-top:14px;font-style:italic;line-height:1.5}
 #wmProgOverlay .wm-prog-cancel{margin-top:14px;font-size:10px;padding:5px 14px;border:1px solid rgba(255,255,255,.15);border-radius:6px;background:transparent;color:#A8B4D8;cursor:pointer;transition:all .15s}
 #wmProgOverlay .wm-prog-cancel:hover{background:rgba(255,255,255,.06);color:#fff;border-color:rgba(255,255,255,.3)}
+/* v13.67 — 인라인 데이터 로딩 카드 (팀 관리 첫 진입 등) */
+.wm-init-load{display:flex;align-items:center;justify-content:center;padding:50px 20px;animation:wmProgFade .3s ease}
+.wm-init-card{background:linear-gradient(135deg,var(--bg-p),var(--bg-c));border:1px solid var(--bd);border-radius:16px;padding:36px 44px;min-width:300px;max-width:460px;text-align:center;position:relative;box-shadow:0 4px 28px rgba(0,0,0,.18);animation:wmProgGlow 3s ease-in-out infinite}
+.wm-init-ring-wrap{position:relative;width:72px;height:72px;margin:0 auto 16px}
+.wm-init-ring{position:absolute;inset:0;border:3px solid transparent;border-top-color:#8B5CF6;border-right-color:#3B82F6;border-radius:50%;animation:wmProgRing 1.2s linear infinite}
+.wm-init-ring2{position:absolute;inset:8px;border:2px solid transparent;border-top-color:#06B6D4;border-left-color:#10B981;border-radius:50%;animation:wmProgRingRev 1.6s linear infinite}
+.wm-init-ring-icon{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:26px;animation:wmProgPulse 1.6s ease-in-out infinite}
+.wm-init-title{font-size:15px;font-weight:700;color:var(--t1);letter-spacing:-.2px}
+.wm-init-dots{display:inline-flex;gap:3px;margin-left:5px;vertical-align:middle}
+.wm-init-dots span{width:4px;height:4px;background:#8B5CF6;border-radius:50%;display:inline-block;animation:wmProgDot 1.4s ease-in-out infinite}
+.wm-init-dots span:nth-child(2){animation-delay:.16s}
+.wm-init-dots span:nth-child(3){animation-delay:.32s}
+.wm-init-step{font-size:11px;color:#C8B8FF;margin-top:14px;padding:5px 12px;background:rgba(139,92,246,.12);border-radius:6px;display:inline-block;animation:wmProgPop .35s ease;font-weight:500;min-height:14px}
+.wm-init-bar{margin-top:16px;height:3px;background:rgba(139,92,246,.1);border-radius:2px;overflow:hidden}
+.wm-init-bar-fill{height:100%;background:linear-gradient(90deg,#8B5CF6,#3B82F6,#06B6D4,#3B82F6,#8B5CF6);background-size:200% 100%;border-radius:2px;animation:wmProgBar 2.2s ease-in-out infinite}
+.wm-init-tip{font-size:10px;color:var(--t6);margin-top:12px;font-style:italic;line-height:1.5}
 /* Week card in archive */
 .wk{background:var(--bg-c);border:1px solid var(--bd2);border-radius:10px;padding:14px;transition:all .2s;cursor:pointer}
 .wk:hover{border-color:var(--ac);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
@@ -655,7 +695,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.66</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.67</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -723,7 +763,19 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
       </div>
       <div id="encUp" style="margin-top:12px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap"></div>
     </div>
-    <div id="initLoading" style="text-align:center;padding:60px 20px;color:var(--t5);font-size:13px">⏳ 데이터 로딩 중...</div>
+    <div id="initLoading" class="wm-init-load">
+      <div class="wm-init-card">
+        <div class="wm-init-ring-wrap">
+          <div class="wm-init-ring"></div>
+          <div class="wm-init-ring2"></div>
+          <div class="wm-init-ring-icon">⏳</div>
+        </div>
+        <div class="wm-init-title">데이터 불러오는 중<span class="wm-init-dots"><span></span><span></span><span></span></span></div>
+        <div class="wm-init-step" id="wmInitStep">📂 캐시 확인</div>
+        <div class="wm-init-bar"><div class="wm-init-bar-fill"></div></div>
+        <div class="wm-init-tip">처음 진입은 데이터 양에 따라 잠시 걸릴 수 있습니다.</div>
+      </div>
+    </div>
 
     <div id="mainArea" class="hidden">
       <!-- Encoding + Reupload -->
@@ -3183,6 +3235,19 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.67',date:'2026-05-14',title:'✨ 첫 진입 데이터 로딩 카드 — wmProgress 디자인 일관 적용',tag:'feature',items:[
+      '기존 "⏳ 데이터 로딩 중..." 한 줄 텍스트 → 화려한 인라인 카드로 교체',
+      '디자인 요소 (v13.66 wmProgress와 일관):',
+      '  • 듀얼 회전 링 (보라/파랑 + 시안/초록, 반대 방향)',
+      '  • 중앙 펄스 아이콘 ⏳',
+      '  • 점멸 글로우 박스 (3s 사이클)',
+      '  • 점핑 닷 3개 + 흐르는 그라데이션 진행바',
+      '  • 단계 메시지 칩 자동 회전 (1.5s 간격)',
+      '단계 시퀀스: 📂 캐시 확인 → 👥 팀원 정보 로드 → 📅 주차 데이터 정리 → 📊 통계 집계 준비 → 🔄 최근 주차 자동 선택 → ✨ 화면 준비',
+      '#wmInitStep DOM이 사라지면 setTimeout 자체 종료 (메모리 누수 없음)',
+      '카드 형태라 첫 진입의 빈 공간을 자연스럽게 채움. 데이터 도착하면 기존대로 element.remove() 호출 — 변경 불필요',
+      '효과: 처음 페이지 진입 시 "지금 로딩 중이구나"가 시각적으로 명확. 단계 메시지로 어디까지 왔는지 추정 가능'
+    ]},
     {ver:'13.66',date:'2026-05-14',title:'✨ 화려한 진행 모달 — AI/PDF/메일/첨부 비동기 작업 시 실시간 단계 표시',tag:'feature',items:[
       '🐌 기존: 버튼 클릭 후 완료까지 화면이 멈춘 듯 보이고, 작은 status 텍스트만 나와서 "뭘 하고 있는지" 알기 어려움',
       '✨ 글로벌 wmProgress API 신설 — 큰 진행 모달:',
