@@ -521,7 +521,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.62</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.63</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2986,6 +2986,21 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.63',date:'2026-05-14',title:'🔒 모든 모달 backdrop 클릭 닫기 일괄 비활성화 (데이터 유실 방지)',tag:'fix',items:[
+      'v13.62에서 프로젝트 편집 모달만 처리했으나, 사용자 요청에 따라 다른 모달도 동일 정책 적용',
+      '제거된 backdrop 닫기 위치 (22곳):',
+      '  • timeline.js: 마일스톤·공유·이관 모달 등 4곳 (v13.62 1곳 포함)',
+      '  • as-manager.js: A/S 등록·편집·상세·부품 추가·첨부 추가·카테고리 관리·할당 추가·PDF 미리보기 등 9곳',
+      '  • calendar.js: 이벤트 모달 2곳',
+      '  • dashboard.js: 보고서 모달 1곳',
+      '  • issue-manager.js: 이슈 모달 1곳',
+      '  • order-view.js: 수주 모달 1곳',
+      '  • settings.js: 별칭·옵션·즐겨찾기·기타 설정 모달 4곳',
+      'project-data.js 공통 모달 헬퍼 — closeOnOverlay 기본값을 true → false로 변경. 의도적으로 ":true" 명시한 호출자만 backdrop 클릭 허용',
+      '닫는 방법은 모든 모달에서 일관: 우상단 [✕ 닫기] 버튼 또는 저장 성공 시 자동',
+      '효과: 편집·등록·검토 중 실수 클릭으로 입력 내용 유실되는 사고 0',
+      '추가 의존성·DB·재시작 무관 — 프론트 단독 변경'
+    ]},
     {ver:'13.62',date:'2026-05-14',title:'🔒 프로젝트 편집 모달 — backdrop 클릭 닫기 비활성화 (데이터 유실 방지)',tag:'fix',items:[
       '🐛 문제: 프로젝트 편집/등록 중 실수로 모달 바깥을 클릭하면 즉시 닫혀서 입력하던 내용 전부 유실',
       '✅ 수정: timeline.js showProjectModal의 modal.onclick(target===modal이면 remove) 핸들러 제거',

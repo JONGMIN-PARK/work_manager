@@ -1057,7 +1057,7 @@ async function showProjectShareModal(projId) {
   var modal = document.createElement('div');
   modal.id = 'projShareModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
-  modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
   modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;width:520px;max-width:95%;max-height:80vh;overflow:auto">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
       '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">👥 공유 사용자 관리</h3>' +
@@ -1135,7 +1135,7 @@ async function showProjectTransferModal(projId) {
   var modal = document.createElement('div');
   modal.id = 'projTransferModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
-  modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
   modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;width:480px;max-width:95%">' +
     '<h3 style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:12px">↪ 소유권 이관</h3>' +
     '<div id="projTransferBody" style="font-size:11px;color:var(--t4)">로딩 중...</div>' +
@@ -1191,7 +1191,7 @@ async function showMilestoneTransferModal(msId) {
   var modal = document.createElement('div');
   modal.id = 'msTransferModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
-  modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
   modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;width:480px;max-width:95%">' +
     '<h3 style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:12px">↪ 마일스톤 이관</h3>' +
     '<div id="msTransferBody" style="font-size:11px;color:var(--t4)">로딩 중...</div>' +

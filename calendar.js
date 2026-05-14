@@ -373,7 +373,7 @@ async function showEventModal(evtId, defaultDate) {
   var modal = document.createElement('div');
   modal.id = 'evtModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
-  modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
   // 반복 인스턴스인 경우 원본 로드
   if (evt && evt._repeatInstance && evt._origId) {
@@ -562,7 +562,7 @@ function showGcalImportModal() {
   var modal = document.createElement('div');
   modal.id = 'gcalModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
-  modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
   modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:480px;width:90%;max-height:85vh;overflow:auto">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +

@@ -164,7 +164,7 @@ function renderAliasModal() {
   const modal = document.createElement('div');
   modal.id = 'aliasModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
-  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
   let rows = names.map(n => {
     const a = getAlias(n) || '';
@@ -224,7 +224,7 @@ function renderGroupModal() {
   const modal = document.createElement('div');
   modal.id = 'groupModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
-  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
   modal.innerHTML = `<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:560px;width:90%;max-height:80vh;overflow:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -407,7 +407,7 @@ function showBackupRestoreModal() {
   var overlay = document.createElement('div');
   overlay.id = 'backupOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)';
-  overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
+  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
   var dialog = document.createElement('div');
   dialog.style.cssText = 'background:var(--bg-p);border-radius:12px;padding:24px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)';
@@ -613,7 +613,7 @@ function renderAbbrColorModal() {
   var modal = document.createElement('div');
   modal.id = 'abbrColorModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
-  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
   var keys = Object.keys(AM);
   var rows = keys.map(function(k) {

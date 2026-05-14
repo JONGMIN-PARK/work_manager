@@ -443,7 +443,7 @@ function showASModal(editId) {
 
     overlay.innerHTML = h;
     document.body.appendChild(overlay);
-    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+    // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
   }).catch(function (err) {
     console.error('[showASModal]', err);
     if (typeof showToast === 'function') showToast('A/S 모달 로드 실패', 'error');
@@ -892,7 +892,7 @@ function _asRenderDetail(t, CAT) {
 
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+  // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
 
   // 캔버스 attach (⑤ 탭이면)
   if (_asDetailTab === 'customer') {
@@ -1345,7 +1345,7 @@ function _asRenderAttachPreview(a) {
 
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+  // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
   // ESC 키
   function onKey(ev) {
     if (ev.key === 'Escape') {
@@ -1595,7 +1595,7 @@ function showASPartAddForm(ticketId) {
   h += '</div></div>';
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+  // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
 }
 
 function asPartAdd(ticketId) {
@@ -1669,7 +1669,7 @@ function showASAttachAddForm(ticketId) {
   h += '</div></div>';
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+  // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
 }
 
 function _asAttachFilePicked(ev) {
@@ -2495,7 +2495,7 @@ function _asRenderPdfPreviewModal(t, out) {
 
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) _asPdfPreviewClose(); });
+  // v13.63: backdrop 클릭 닫기 비활성화 — 메일 입력 중 실수 클릭 방지 (✕ 버튼만 닫기)
 
   // 컨택 마스터 자동완성 채우기 (이 ticket의 customer_name 우선)
   if (typeof asContactsSearch === 'function') {
@@ -2712,7 +2712,7 @@ function showASAssignAddForm(ticketId) {
 
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+  // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
 }
 
 function _asAsgToggleMe() {
@@ -2984,7 +2984,7 @@ function showASCategoryAdmin() {
 
     overlay.innerHTML = h;
     document.body.appendChild(overlay);
-    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+    // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
   }).catch(function (err) {
     console.error('[showASCategoryAdmin]', err);
     if (typeof showToast === 'function') showToast('카테고리 로드 실패: ' + ((err && err.message) || '알 수 없는 오류'), 'error');

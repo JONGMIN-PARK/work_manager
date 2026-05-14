@@ -222,7 +222,7 @@ function showOrderModal(editOrderNo) {
     var modal = document.createElement('div');
     modal.id = 'orderModal';
     modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
-    modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+    // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
     var o = existing || {};
 

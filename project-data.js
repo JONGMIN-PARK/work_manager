@@ -259,7 +259,9 @@ function createModal(opts) {
   if (opts.html) { var body = document.createElement('div'); body.innerHTML = opts.html; box.appendChild(body); }
   if (opts.content) { box.appendChild(opts.content); }
   ov.appendChild(box);
-  if (opts.closeOnOverlay !== false) {
+  // v13.63: 기본값을 false로 변경 — backdrop 클릭 닫기는 명시적으로 opts.closeOnOverlay:true 일 때만.
+  //         편집 중 실수 클릭으로 데이터 유실되는 사고 방지.
+  if (opts.closeOnOverlay === true) {
     ov.addEventListener('click', function (e) { if (e.target === ov) { ov.remove(); if (opts.onClose) opts.onClose(); } });
   }
   document.body.appendChild(ov);

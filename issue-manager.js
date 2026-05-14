@@ -343,7 +343,7 @@ function showIssueModal(editId) {
     var overlay = document.createElement('div');
     overlay.id = 'issueModalOverlay';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)';
-    overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
+    // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
     var dialog = document.createElement('div');
     dialog.style.cssText = 'background:var(--bg-p);border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)';
