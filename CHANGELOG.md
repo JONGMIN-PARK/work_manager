@@ -1,5 +1,36 @@
 # Work Manager — 변경 이력
 
+## v13.73 (2026-05-15) — Anthropic 크레딧 부족 자동 감지 + Gemini 자동 폴백
+
+### 배경
+사용자: "AI 요약 실패: Your credit balance is too low to access the Anthropic API."
+
+코드 문제가 아니라 Anthropic 계정 크레딧 소진. 사용자에게 명확한 해결 안내 + 자동 폴백 제공.
+
+### 변경 — `server/routes/ai.js`
+`callAIWithPrompt` Claude 분기에 크레딧 패턴 감지:
+- `credit balance|insufficient credit|low balance` 정규식 매칭
+- `GEMINI_API_KEY` 설정돼 있으면 **즉시 Gemini로 폴백** (직접 fetch, 재귀 X). 응답 헤드에 `[ℹ️ Claude 크레딧 부족 — Gemini로 자동 폴백]` 안내 prepend
+- Gemini 키도 없으면 `CREDIT_LOW` 에러 + Anthropic Console URL
+
+`/api/ai/summary` 응답:
+- 402 Payment Required + `action: { label, url }` 객체
+
+### 변경 — `업무일지_분석기.html` `reqSum`
+크레딧 부족 시 에러 카드에 해결 방법 3가지 노출:
+- ① **Anthropic Console** 링크 (target="_blank")
+- ② **`GEMINI_API_KEY`** 설정으로 자동 폴백
+- ③ **`AI_PROVIDER=gemini`** 로 전환
+
+로컬 분석은 기존대로 자동 폴백되어 표시.
+
+### 변경 파일
+- `server/routes/ai.js`
+- `업무일지_분석기.html` (에러 카드 + 패치노트 + v13.73)
+- `CHANGELOG.md`
+
+---
+
 ## v13.72 (2026-05-15) — AI 호출 "signal is aborted" 수정 (apiFetch 타임아웃 옵션 + 진행 모달)
 
 ### 배경

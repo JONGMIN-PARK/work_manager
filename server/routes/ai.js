@@ -49,7 +49,7 @@ async function callAIWithPrompt(prompt, tenantId) {
   if (!apiKey) return null;
 
   if (provider === 'anthropic') {
-    // v13.71: 모델명 검증 + adaptive thinking 활성화 시 text 블록 안전 추출
+    // v13.71/72/73: 모델명 검증 + adaptive thinking text 추출 + 크레딧 부족 시 Gemini 자동 폴백
     var safeModel = model || 'claude-opus-4-7';
     var res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -63,6 +63,30 @@ async function callAIWithPrompt(prompt, tenantId) {
     var data = await res.json();
     if (data.error) {
       var em = (data.error && (data.error.message || data.error.type)) || 'Claude API 오류';
+      // v13.73: 크레딧 부족 자동 감지 → Gemini 키 있으면 폴백
+      if (/credit balance|insufficient.*credit|low.*balance/i.test(em)) {
+        if (config.ai.geminiKey) {
+          console.warn('[AI] Claude 크레딧 부족 → Gemini로 폴백');
+          // Gemini로 재시도 (재귀 대신 직접 호출)
+          var fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' +
+            (config.ai.geminiModel || 'gemini-2.5-flash') + ':generateContent?key=' + config.ai.geminiKey;
+          var fRes = await fetch(fallbackUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 8192, temperature: 0.3 } })
+          });
+          var fData = await fRes.json();
+          if (fData.candidates && fData.candidates[0] && fData.candidates[0].content) {
+            var text = fData.candidates[0].content.parts.map(function (p) { return p.text || ''; }).join('\n');
+            return '[ℹ️ Claude 크레딧 부족 — Gemini로 자동 폴백]\n\n' + text;
+          }
+        }
+        // Gemini도 없으면 친화적 에러
+        var bErr = new Error('Anthropic API 크레딧이 부족합니다. Console → Plans & Billing에서 크레딧을 충전하거나 Gemini로 폴백 가능합니다(GEMINI_API_KEY 설정).');
+        bErr.code = 'CREDIT_LOW';
+        bErr.action = 'https://console.anthropic.com/settings/plans';
+        throw bErr;
+      }
       var hint = '';
       if (/not_found|model/i.test(em)) hint = ' — 모델명 확인 (현재 "' + safeModel + '"). 권장: claude-opus-4-7';
       else if (/authentication|invalid api key/i.test(em)) hint = ' — ANTHROPIC_API_KEY 확인';
@@ -135,6 +159,14 @@ router.post('/summary', checkAIQuota, async function (req, res) {
     res.json({ data: { text: answer, provider: config.ai.provider, quota: { used: (quota.used || 0) + 1, limit: quota.limit } } });
   } catch (err) {
     console.error('[AI Route] summary error:', err.message);
+    // v13.73: 크레딧 부족은 402(Payment Required) + action URL
+    if (err.code === 'CREDIT_LOW') {
+      return res.status(402).json({
+        error: 'CREDIT_LOW',
+        message: err.message,
+        action: { label: 'Anthropic Console 열기', url: err.action }
+      });
+    }
     res.status(500).json({ error: 'AI_ERROR', message: 'AI 요약 실패: ' + err.message });
   }
 });
