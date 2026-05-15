@@ -101,19 +101,54 @@ async function callAIWithPrompt(prompt, tenantId) {
     return textParts.length ? textParts.join('\n') : null;
   }
 
-  // Gemini
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + (model || 'gemini-2.5-flash') + ':generateContent?key=' + apiKey;
-  var res2 = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 8192, temperature: 0.3 } })
-  });
-  var data2 = await res2.json();
-  if (data2.candidates && data2.candidates[0] && data2.candidates[0].content) {
-    return data2.candidates[0].content.parts.map(function (p) { return p.text || ''; }).join('\n');
+  // Gemini — v13.74: 과부하(503/overloaded) 자동 재시도 + 폴백 모델
+  var primaryModel = model || 'gemini-2.5-flash';
+  var fallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.0-flash';
+  var modelsToTry = primaryModel === fallbackModel ? [primaryModel] : [primaryModel, fallbackModel];
+  var lastErr = null;
+
+  for (var mi = 0; mi < modelsToTry.length; mi++) {
+    var currentModel = modelsToTry[mi];
+    // 같은 모델로 최대 3회 지수 백오프 재시도 (500ms → 1500ms → 4500ms)
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + currentModel + ':generateContent?key=' + apiKey;
+        var res2 = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 8192, temperature: 0.3 } })
+        });
+        var data2 = await res2.json();
+        if (data2.candidates && data2.candidates[0] && data2.candidates[0].content) {
+          var resultText = data2.candidates[0].content.parts.map(function (p) { return p.text || ''; }).join('\n');
+          // 폴백 모델로 성공한 경우 헤드에 안내 prepend
+          if (mi > 0) resultText = '[ℹ️ ' + primaryModel + ' 과부하 → ' + currentModel + '로 폴백]\n\n' + resultText;
+          return resultText;
+        }
+        var em = data2.error && (data2.error.message || data2.error.status) || 'Gemini 응답 없음';
+        var status = (data2.error && data2.error.code) || res2.status;
+        // 503 (UNAVAILABLE) / 429 (RESOURCE_EXHAUSTED) / "overloaded"|"high demand"|"unavailable" → 재시도
+        var retryable = status === 503 || status === 429 ||
+                        /overloaded|high demand|unavailable|rate.*limit|busy/i.test(em);
+        lastErr = new Error(em);
+        if (!retryable) throw lastErr;
+        if (attempt < 2) {
+          var delay = 500 * Math.pow(3, attempt); // 500ms, 1500ms
+          console.warn('[Gemini] ' + currentModel + ' 과부하/한도 — ' + delay + 'ms 후 재시도 (' + (attempt + 1) + '/3)');
+          await new Promise(function (r) { setTimeout(r, delay); });
+        }
+      } catch (e) {
+        lastErr = e;
+        if (!/overloaded|high demand|unavailable|rate.*limit|busy|fetch/i.test(e.message || '')) break;
+        if (attempt < 2) await new Promise(function (r) { setTimeout(r, 500 * Math.pow(3, attempt)); });
+      }
+    }
+    console.warn('[Gemini] ' + currentModel + ' 3회 재시도 모두 실패 — 다음 모델로');
   }
-  if (data2.error) throw new Error(data2.error.message);
-  return null;
+  // 최종 친화 에러
+  var finalErr = new Error('Gemini API 과부하 — 잠시 후 다시 시도하세요. (시도한 모델: ' + modelsToTry.join(', ') + ')');
+  finalErr.code = 'AI_OVERLOADED';
+  throw finalErr;
 }
 
 /** 쿼리 한도 체크 미들웨어 */
@@ -166,6 +201,10 @@ router.post('/summary', checkAIQuota, async function (req, res) {
         message: err.message,
         action: { label: 'Anthropic Console 열기', url: err.action }
       });
+    }
+    // v13.74: Gemini 과부하 503 (Service Unavailable)
+    if (err.code === 'AI_OVERLOADED') {
+      return res.status(503).json({ error: 'AI_OVERLOADED', message: err.message });
     }
     res.status(500).json({ error: 'AI_ERROR', message: 'AI 요약 실패: ' + err.message });
   }

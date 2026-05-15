@@ -774,7 +774,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.73</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.74</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3315,6 +3315,23 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.74',date:'2026-05-15',title:'🔄 Gemini 과부하 자동 재시도 + 폴백 모델 — "high demand" 자동 회복',tag:'fix',items:[
+      '사용자 보고: "This model is currently experiencing high demand. Spikes in demand are usually temporary."',
+      'Gemini 무료 티어 모델이 일시적 과부하(503/overloaded/RESOURCE_EXHAUSTED)일 때 발생. 보통 1~2분 내 해소되는 정상 현상',
+      '',
+      '✅ server/routes/ai.js Gemini 분기 견고화:',
+      '  · 같은 모델로 3회 지수 백오프 재시도 (500ms → 1500ms → 4500ms)',
+      '  · 그래도 실패하면 폴백 모델로 다시 3회 재시도 (기본: gemini-2.0-flash, GEMINI_FALLBACK_MODEL 환경변수로 변경 가능)',
+      '  · 재시도 패턴: 503/429/overloaded/high demand/unavailable/rate.*limit/busy 감지',
+      '  · 폴백 모델로 성공 시 응답 헤드에 "[ℹ️ {원래모델} 과부하 → {폴백모델}로 폴백]" prepend',
+      '  · 모든 시도 실패 시 AI_OVERLOADED 코드 + 503 Service Unavailable',
+      '',
+      '✅ 클라이언트 친화 메시지:',
+      '  · "🌐 AI 모델이 현재 과부하 — 1~2분 후 다시 시도. (서버에서 3회 자동 재시도 + 폴백 모델까지 시도)"',
+      '  · 대안 3가지 카드: 재시도 / GEMINI_FALLBACK_MODEL 설정 / 로컬 분석 활용',
+      '',
+      '효과: 일시적 과부하는 사용자가 알아채기 전에 자동 회복. 진짜 장기 과부하만 사용자에게 안내. Gemini 무료 티어의 흔한 과부하 현상에 안정적 대응'
+    ]},
     {ver:'13.73',date:'2026-05-15',title:'💳 Anthropic 크레딧 부족 자동 감지 — Gemini 폴백 + 친화 안내',tag:'fix',items:[
       '사용자 보고: "AI 요약 실패: Your credit balance is too low to access the Anthropic API"',
       '코드 문제가 아니라 Anthropic 계정 크레딧 소진 상태. 사용자에게 명확한 해결 안내가 필요',
@@ -4824,6 +4841,15 @@ async function reqSum(){
         <div>① <a href="${eH(url)}" target="_blank" style="color:var(--ac-t);text-decoration:underline">Anthropic Console → Plans &amp; Billing</a>에서 크레딧 충전</div>
         <div>② 서버에 <code style="background:var(--bg-p);padding:1px 5px;border-radius:3px;font-size:10px">GEMINI_API_KEY</code>를 설정하면 자동 폴백 (무료)</div>
         <div>③ 환경변수 <code style="background:var(--bg-p);padding:1px 5px;border-radius:3px;font-size:10px">AI_PROVIDER=gemini</code> 로 전환</div>
+      </div>`;
+    }
+    else if(errData.error==='AI_OVERLOADED' || /overloaded|high demand|unavailable/i.test(msg)){
+      msg='🌐 AI 모델이 현재 과부하 상태입니다. 1~2분 후 다시 시도하세요. (서버에서 3회 자동 재시도 + 폴백 모델까지 시도했습니다)';
+      actionHtml=`<div style="margin-top:8px;padding:10px 12px;background:var(--bg-i);border-radius:6px;font-size:11px;color:var(--t3);line-height:1.7">
+        <div style="font-weight:600;margin-bottom:6px">대안:</div>
+        <div>① 잠시 후 [요약 생성] 다시 클릭 — 과부하는 보통 1~2분 내 해소</div>
+        <div>② 환경변수 <code style="background:var(--bg-p);padding:1px 5px;border-radius:3px;font-size:10px">GEMINI_FALLBACK_MODEL</code>에 다른 모델 지정 (기본: gemini-2.0-flash)</div>
+        <div>③ 일단 아래 <b>로컬 분석 결과</b> 활용</div>
       </div>`;
     }
     else if(/aborted|timeout|signal/i.test(msg))msg='⏱️ 응답 타임아웃 — 모델이 응답에 시간이 더 필요합니다. 데이터를 줄이거나 다시 시도하세요.';

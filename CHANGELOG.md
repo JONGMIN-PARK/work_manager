@@ -1,5 +1,40 @@
 # Work Manager — 변경 이력
 
+## v13.74 (2026-05-15) — Gemini 과부하 자동 재시도 + 폴백 모델
+
+### 배경
+사용자: "AI 요약 실패: This model is currently experiencing high demand."
+
+Gemini 무료 티어 모델의 일시적 과부하(503/RESOURCE_EXHAUSTED). 보통 1~2분 내 해소되는 정상 현상이지만 사용자 입장에선 실패로 보임.
+
+### 변경 — `server/routes/ai.js` Gemini 분기
+
+**3단계 재시도 전략:**
+1. **같은 모델 3회 지수 백오프** — 500ms → 1500ms → 4500ms
+2. **폴백 모델 (`gemini-2.0-flash`)로 다시 3회 재시도**
+3. 모두 실패 시 `AI_OVERLOADED` 코드 + 503 응답
+
+**감지 패턴:** `status === 503 || 429 || /overloaded|high demand|unavailable|rate.*limit|busy/i`
+
+**환경변수:** `GEMINI_FALLBACK_MODEL` (기본 `gemini-2.0-flash`)
+
+폴백 모델로 성공 시 응답 헤드에 안내 prepend:
+```
+[ℹ️ gemini-2.5-flash 과부하 → gemini-2.0-flash로 폴백]
+...
+```
+
+### 클라이언트 친화 메시지
+- `🌐 AI 모델이 현재 과부하 상태입니다. 1~2분 후 다시 시도하세요. (서버에서 3회 자동 재시도 + 폴백 모델까지 시도했습니다)`
+- 대안 카드 3가지: 재시도 / `GEMINI_FALLBACK_MODEL` 변경 / 로컬 분석
+
+### 변경 파일
+- `server/routes/ai.js`
+- `업무일지_분석기.html` (에러 카드 + 패치노트 + v13.74)
+- `CHANGELOG.md`
+
+---
+
 ## v13.73 (2026-05-15) — Anthropic 크레딧 부족 자동 감지 + Gemini 자동 폴백
 
 ### 배경
