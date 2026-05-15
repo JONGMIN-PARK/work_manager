@@ -1,5 +1,47 @@
 # Work Manager — 변경 이력
 
+## v13.75 (2026-05-15) — ai_query_usage 테이블 누락 수정 + fail-safe
+
+### 배경
+사용자: "AI 요약 실패: relation \"ai_query_usage\" does not exist"
+
+`server/routes/ai.js`가 `ai_query_usage`(월별 사용량) + `tenant_ai_configs`(테넌트 전용 키) 테이블을 참조하는데 마이그레이션이 빠져 있었음.
+
+### 변경
+
+**`server/migrations/029_ai_query_usage.sql` 신설:**
+- `ai_query_usage(id, tenant_id, user_id, query_text, provider, created_at)`
+- `idx_ai_query_usage_tenant_date (tenant_id, created_at DESC)`
+- `idx_ai_query_usage_user_date` partial WHERE user_id IS NOT NULL
+- `tenant_ai_configs(tenant_id PK, provider, api_key, model, updated_at)` — 테넌트별 전용 키
+
+**`server/routes/ai.js` fail-safe:**
+```js
+async function getMonthlyUsage(tenantId) {
+  try { ... }
+  catch (e) {
+    if (/relation .* does not exist/i.test(e.message)) { return 0; }
+    throw e;
+  }
+}
+```
+- `logUsage` 도 동일 패턴 — 테이블 없어도 graceful return
+- 마이그레이션 적용 전에도 AI 호출 정상 동작 (사용량 추적만 비활성)
+
+**`AI_QUOTA_DISABLED` 환경변수 추가:**
+- `=1` 설정 시 한도 체크 자체 우회 → Free 플랜이라도 무제한 AI 호출
+- 단일 테넌트/관리자 환경 권장. 멀티테넌트 SaaS면 설정 안 함
+
+### 운영 반영
+1. 서버 재시작 → 029 자동 적용 (`runMigrations`)
+2. 단일 테넌트면 Render Environment에 `AI_QUOTA_DISABLED=1` 추가
+
+### 변경 파일
+- 신규: `server/migrations/029_ai_query_usage.sql`
+- 수정: `server/routes/ai.js`, `업무일지_분석기.html` (v13.75 + 패치노트), `CHANGELOG.md`
+
+---
+
 ## v13.74 (2026-05-15) — Gemini 과부하 자동 재시도 + 폴백 모델
 
 ### 배경

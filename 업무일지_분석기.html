@@ -774,7 +774,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.74</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.75</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3315,6 +3315,28 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.75',date:'2026-05-15',title:'🔧 ai_query_usage 테이블 누락 수정 — 마이그레이션 029 + fail-safe',tag:'fix',items:[
+      '사용자 보고: "AI 요약 실패: relation \\"ai_query_usage\\" does not exist"',
+      '원인: AI 라우터(server/routes/ai.js)가 ai_query_usage(월별 사용량) + tenant_ai_configs(테넌트 전용 키) 테이블을 사용하는데 마이그레이션이 빠져 있었음',
+      '',
+      '✅ 029_ai_query_usage.sql 신설 — 두 테이블 + 인덱스 2종:',
+      '  · ai_query_usage(id, tenant_id, user_id, query_text, provider, created_at)',
+      '  · idx_ai_query_usage_tenant_date (tenant_id, created_at DESC)',
+      '  · idx_ai_query_usage_user_date partial (user_id 있을 때만)',
+      '  · tenant_ai_configs(tenant_id PK, provider, api_key, model) — 테넌트별 전용 키 설정용',
+      '',
+      '✅ ai.js fail-safe: getMonthlyUsage / logUsage가 "relation does not exist" 패턴 감지 시 graceful return',
+      '  · 마이그레이션 적용 전에도 AI 호출은 동작',
+      '  · 사용량 추적만 비활성 (warn 로그)',
+      '',
+      '✅ AI_QUOTA_DISABLED 환경변수 추가 — 단일 테넌트/관리자 환경에선 한도 체크 자체 우회 가능',
+      '  · Free 플랜이라도 무제한 AI 호출 가능',
+      '  · 멀티테넌트 SaaS면 설정 안 함 (기존 동작 유지)',
+      '',
+      '⚠ 운영 반영: 서버 재시작 시 029 마이그레이션 자동 적용 (server/config/db.js의 runMigrations 흐름)',
+      '  · 즉시 효과: 에러 사라짐 + AI 호출 정상 동작',
+      '  · 단일 테넌트면 AI_QUOTA_DISABLED=1 환경변수도 같이 추가 권장'
+    ]},
     {ver:'13.74',date:'2026-05-15',title:'🔄 Gemini 과부하 자동 재시도 + 폴백 모델 — "high demand" 자동 회복',tag:'fix',items:[
       '사용자 보고: "This model is currently experiencing high demand. Spikes in demand are usually temporary."',
       'Gemini 무료 티어 모델이 일시적 과부하(503/overloaded/RESOURCE_EXHAUSTED)일 때 발생. 보통 1~2분 내 해소되는 정상 현상',

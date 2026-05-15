@@ -16,21 +16,34 @@ router.use(tenant.tenantScope);
 /** 플랜별 월간 AI 쿼리 한도 */
 var PLAN_LIMITS = { free: 0, pro: 100, business: 500, enterprise: 999999 };
 
-/** 이번 달 사용량 확인 */
+/** 이번 달 사용량 확인 — 테이블 없으면 0 반환 (v13.75 fail-safe) */
 async function getMonthlyUsage(tenantId) {
-  var r = await db.query(
-    "SELECT COUNT(*) as cnt FROM ai_query_usage WHERE tenant_id = $1 AND created_at >= date_trunc('month', now())",
-    [tenantId]
-  );
-  return parseInt(r.rows[0].cnt, 10);
+  try {
+    var r = await db.query(
+      "SELECT COUNT(*) as cnt FROM ai_query_usage WHERE tenant_id = $1 AND created_at >= date_trunc('month', now())",
+      [tenantId]
+    );
+    return parseInt(r.rows[0].cnt, 10);
+  } catch (e) {
+    if (/relation .* does not exist/i.test(e.message || '')) {
+      console.warn('[AI] ai_query_usage 테이블 미생성 — 029 마이그레이션 적용 필요. 사용량 추적 비활성');
+      return 0;
+    }
+    throw e;
+  }
 }
 
-/** 사용량 기록 */
+/** 사용량 기록 — 테이블 없으면 무시 (v13.75 fail-safe) */
 async function logUsage(tenantId, userId, queryText, provider) {
-  await db.query(
-    'INSERT INTO ai_query_usage (tenant_id, user_id, query_text, provider) VALUES ($1, $2, $3, $4)',
-    [tenantId, userId, (queryText || '').slice(0, 500), provider]
-  );
+  try {
+    await db.query(
+      'INSERT INTO ai_query_usage (tenant_id, user_id, query_text, provider) VALUES ($1, $2, $3, $4)',
+      [tenantId, userId, (queryText || '').slice(0, 500), provider]
+    );
+  } catch (e) {
+    if (/relation .* does not exist/i.test(e.message || '')) return; // 무시
+    console.warn('[AI] logUsage 실패:', e.message);
+  }
 }
 
 /** 테넌트 AI 키 또는 글로벌 키로 AI 호출 */
@@ -154,12 +167,20 @@ async function callAIWithPrompt(prompt, tenantId) {
 /** 쿼리 한도 체크 미들웨어 */
 async function checkAIQuota(req, res, next) {
   try {
+    // v13.75: 단일 테넌트/관리자 환경에선 한도 체크 우회 가능
+    if (process.env.AI_QUOTA_DISABLED === '1' || process.env.AI_QUOTA_DISABLED === 'true') {
+      req.aiQuota = { used: 0, limit: 999999, plan: 'unlimited' };
+      return next();
+    }
     var planR = await db.query('SELECT plan FROM tenants WHERE id = $1', [req.tenant.id]);
     var plan = planR.rows.length ? planR.rows[0].plan : 'free';
     var limit = PLAN_LIMITS[plan] || 0;
 
     if (limit === 0) {
-      return res.status(403).json({ error: 'PLAN_REQUIRED', message: 'AI 기능은 Pro 플랜 이상에서 사용할 수 있습니다.' });
+      return res.status(403).json({
+        error: 'PLAN_REQUIRED',
+        message: 'AI 기능은 Pro 플랜 이상에서 사용할 수 있습니다. (단일 테넌트 환경이면 서버에 AI_QUOTA_DISABLED=1 설정)'
+      });
     }
 
     var usage = await getMonthlyUsage(req.tenant.id);
