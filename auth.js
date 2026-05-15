@@ -37,9 +37,11 @@ async function apiFetch(url, opts) {
     opts.headers['Content-Type'] = 'application/json';
   }
 
-  // 모바일 네트워크 대비 타임아웃 (15초)
+  // v13.72: 타임아웃 커스터마이즈 가능 (AI 호출은 120s 등)
+  //   기본 15s · opts.timeoutMs로 호출자 override
+  var _timeoutMs = (typeof opts.timeoutMs === 'number' && opts.timeoutMs > 0) ? opts.timeoutMs : 15000;
   var _abortCtrl = new AbortController();
-  var _abortTimer = setTimeout(function () { _abortCtrl.abort(); }, 15000);
+  var _abortTimer = setTimeout(function () { _abortCtrl.abort(); }, _timeoutMs);
   if (!opts.signal) opts.signal = _abortCtrl.signal;
 
   var maxRetries = ((!opts.method || opts.method === 'GET') ? 2 : 0);

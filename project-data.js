@@ -1010,18 +1010,18 @@ function asRecurrencesGet(ticketId) {
     .then(function (r) { return { data: toCamelArray(r.data), context: toCamel(r.context), total: r.total }; });
 }
 
-/* ─── A/S AI 분석 (Claude) ─── */
+/* ─── A/S AI 분석 (Claude) — v13.72: 120s 타임아웃 (Claude opus-4-7 응답 시간 대응) ─── */
 function asAiAnalyze(payload) {
-  return apiFetch('/api/as-ai/analyze', { method: 'POST', body: JSON.stringify(payload || {}) })
-    .then(function (r) { return r; });  // { data, usage }
+  return apiFetch('/api/as-ai/analyze', { method: 'POST', body: JSON.stringify(payload || {}), timeoutMs: 120000 })
+    .then(function (r) { return r; });
 }
 function asAiSimilar(ticketId) {
-  return apiFetch('/api/as-ai/similar/' + ticketId, { method: 'POST', body: JSON.stringify({}) })
-    .then(function (r) { return r; });  // { data: {top, summary}, candidates, usage }
+  return apiFetch('/api/as-ai/similar/' + ticketId, { method: 'POST', body: JSON.stringify({}), timeoutMs: 120000 })
+    .then(function (r) { return r; });
 }
 function asAiWeeklyInsight() {
-  return apiFetch('/api/as-ai/weekly-insight')
-    .then(function (r) { return r; });  // { data: {headline, narrative, focus, actions}, stats, usage, generatedAt }
+  return apiFetch('/api/as-ai/weekly-insight', { timeoutMs: 120000 })
+    .then(function (r) { return r; });
 }
 
 /* ─── A/S 통계 ─── */

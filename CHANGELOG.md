@@ -1,5 +1,42 @@
 # Work Manager — 변경 이력
 
+## v13.72 (2026-05-15) — AI 호출 "signal is aborted" 수정 (apiFetch 타임아웃 옵션 + 진행 모달)
+
+### 배경
+사용자: "Claude 실패라고 나와, 업무 분석 AI 요약 & 인사이트에서 `signal is aborted without reason`."
+
+### 진단
+`auth.js` `apiFetch`가 **모든 요청에 15초 fixed AbortController 타임아웃**을 걸고 있었음. Claude opus-4-7이 긴 프롬프트(주간 분석 데이터 3500자+)에 응답을 마무리하는 데 10~30초가 걸릴 수 있어 15초 안에 못 받으면 abort.
+
+### 변경
+
+**`auth.js`** — apiFetch에 `opts.timeoutMs` 옵션:
+```js
+var _timeoutMs = (typeof opts.timeoutMs === 'number' && opts.timeoutMs > 0) ? opts.timeoutMs : 15000;
+```
+- 기본 15초 그대로 (모바일 네트워크 대비)
+- 호출자가 옵션으로 override
+
+**클라이언트 AI 호출에 120s 적용:**
+- `업무일지_분석기.html` `callAI` (`/api/ai/summary`)
+- `project-data.js` `asAiAnalyze`, `asAiSimilar`, `asAiWeeklyInsight`
+
+**진행 모달 추가** (`reqSum`):
+- 🤖 [모델명] AI 분석 중 + 5단계 자동 회전 (3s 간격)
+  - 📝 업무 분장 집계 → 👥 인원별 패턴 → 🎯 프로젝트별 리소스 → 💡 인사이트 도출 → ✅ 결과 정리
+- 모델명을 진행 모달 tip에 표시
+
+**타임아웃 에러 메시지 친화화:**
+- `signal is aborted` → `⏱️ 응답 타임아웃 — 모델이 응답에 시간이 더 필요합니다. 데이터를 줄이거나 다시 시도하세요.`
+
+### 변경 파일
+- `auth.js`
+- `업무일지_분석기.html` (callAI / reqSum + 패치노트 + v13.72)
+- `project-data.js` (asAi* 3종)
+- `CHANGELOG.md`
+
+---
+
 ## v13.71 (2026-05-15) — AI 요약 라우터 견고성 + 진단 정보
 
 ### 배경

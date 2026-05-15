@@ -774,7 +774,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.71</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.72</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3315,6 +3315,28 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.72',date:'2026-05-15',title:'🔧 AI 호출 "signal is aborted without reason" 수정 — apiFetch 타임아웃 옵션',tag:'fix',items:[
+      '사용자 보고: "AI 요약 클로드 실패 · signal is aborted without reason"',
+      '🔍 원인: auth.js apiFetch가 모든 요청에 15초 fixed AbortController 타임아웃을 걸고 있음. Claude opus-4-7은 긴 프롬프트(주간 분석 데이터 3500자+) 처리에 10~30초 걸릴 수 있어 15초 안에 응답 못 받으면 abort',
+      '',
+      '✅ 수정 1 — apiFetch에 opts.timeoutMs 옵션 추가',
+      '  · 기본 15초 그대로 (모바일 네트워크 대비)',
+      '  · 호출자가 옵션으로 override 가능 (AI는 120초)',
+      '',
+      '✅ 수정 2 — 모든 AI 호출에 120s 타임아웃 적용',
+      '  · /api/ai/summary (주간 분석 요약)',
+      '  · /api/as-ai/analyze, /api/as-ai/similar, /api/as-ai/weekly-insight (A/S AI)',
+      '',
+      '✅ 수정 3 — reqSum에 진행 모달 추가 (이전엔 작은 스피너만)',
+      '  · 🤖 [모델명] AI 분석 중 + 5단계 자동 회전(3s):',
+      '    📝 업무 분장 집계 → 👥 인원별 패턴 → 🎯 프로젝트별 리소스 → 💡 인사이트 도출 → ✅ 결과 정리',
+      '  · 모델명을 진행 모달 tip에 표시 (현재 사용 중 모델 가시화)',
+      '',
+      '✅ 수정 4 — 타임아웃 에러 메시지 친화화',
+      '  · "signal is aborted" → "⏱️ 응답 타임아웃 — 모델이 응답에 시간이 더 필요합니다. 데이터를 줄이거나 다시 시도하세요"',
+      '',
+      '효과: 긴 프롬프트도 안정적으로 처리. 응답 도중 끊김 없음. 사용자가 "지금 뭐 하고 있는지" 명확히 파악'
+    ]},
     {ver:'13.71',date:'2026-05-15',title:'🔧 AI 요약 라우터 견고성 + 진단 정보 — Claude 연결 확인 용이',tag:'fix',items:[
       '사용자 보고: "AI 요약이 클로드와 연결 안 되었나?"',
       '진단: 코드상으론 v13.65에서 Claude로 기본 연결됨(provider=anthropic, model=claude-opus-4-7). 다만 응답 파싱 약점 + 진단 정보 부족으로 "연결 안 됐는지" 확인이 어려웠음',
@@ -4745,7 +4767,8 @@ function buildPmt(f,extra){
 
 async function callAI(prompt){
   if(!_aiConfigured){return null}
-  const d=await apiFetch('/api/ai/summary',{method:'POST',body:JSON.stringify({prompt:prompt})});
+  // v13.72: AI 호출은 120초 타임아웃 (Claude opus-4-7 + 긴 프롬프트 대응)
+  const d=await apiFetch('/api/ai/summary',{method:'POST',body:JSON.stringify({prompt:prompt}),timeoutMs:120000});
   if(d&&d.data&&d.data.text)return d.data.text;
   return null;
 }
@@ -4757,8 +4780,22 @@ async function reqSum(){
   const pl=_aiProvider||'AI';
   btn.disabled=true;btn.textContent=pl+' 분석중...';
   el.innerHTML=`<div class="sld"><div class="sp"></div>${pl} 분석 중...</div>`;
-  try{const txt=await callAI(buildPmt(f));if(!txt)throw new Error('응답 없음');el.innerHTML=`<div style="font-size:10px;color:var(--t6);margin-bottom:6px">✨ ${pl} 응답</div>`+rMD(txt)}
-  catch(err){el.innerHTML=`<div style="padding:4px"><div style="padding:8px 12px;background:var(--d-bg);border:1px solid var(--d-bd);border-radius:7px;margin-bottom:12px"><p style="font-weight:600;color:var(--d-t);font-size:12px">⚠️ ${pl} 실패</p><p style="font-size:10px;color:var(--t5)">${eH(err.message)}</p></div>${genLocal(f)}</div>`}
+  // v13.72: 화려한 진행 모달 (AI는 응답까지 길 수 있어 명확한 피드백)
+  if(window.wmProgress){
+    wmProgress.show({icon:'🤖',title:pl+' AI 분석 중',sub:'주간 업무 데이터를 분석해 요약·인사이트를 작성합니다.',tip:'평균 10~30초 소요 · 모델: '+(document.getElementById('aiStatusText')?.innerText.match(/\[([^\]]+)\]/)?.[1] || 'claude-opus-4-7')});
+    wmProgress.autoSteps(['📝 업무 분장 집계','👥 인원별 패턴 분석','🎯 프로젝트별 리소스 배분','💡 인사이트 도출','✅ 결과 정리'],3000);
+  }
+  try{
+    const txt=await callAI(buildPmt(f));if(!txt)throw new Error('응답 없음');
+    el.innerHTML=`<div style="font-size:10px;color:var(--t6);margin-bottom:6px">✨ ${pl} 응답</div>`+rMD(txt);
+    if(window.wmProgress)wmProgress.hide();
+  }
+  catch(err){
+    if(window.wmProgress)wmProgress.hide();
+    var msg=err.message||'알 수 없는 오류';
+    if(/aborted|timeout|signal/i.test(msg))msg='⏱️ 응답 타임아웃 — 모델이 응답에 시간이 더 필요합니다. 데이터를 줄이거나 다시 시도하세요.';
+    el.innerHTML=`<div style="padding:4px"><div style="padding:8px 12px;background:var(--d-bg);border:1px solid var(--d-bd);border-radius:7px;margin-bottom:12px"><p style="font-weight:600;color:var(--d-t);font-size:12px">⚠️ ${pl} 실패</p><p style="font-size:10px;color:var(--t5)">${eH(msg)}</p></div>${genLocal(f)}</div>`;
+  }
   btn.disabled=false;btn.textContent='요약 생성';
   el.dataset.generated='1';
 }
