@@ -338,6 +338,8 @@ h1{font-size:18px;font-weight:700;color:var(--t1);letter-spacing:-.3px}h1 .ac{co
 .chip{display:inline-flex;align-items:center;padding:5px 12px;border-radius:7px;font-size:11px;cursor:pointer;transition:all .15s;border:1.5px solid transparent;user-select:none;font-weight:500}
 .chip:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.12)}.co{background:var(--c-bg);border-color:var(--c-bd);color:var(--c-t)}.cn{background:var(--ac-bg);border-color:var(--ac);color:var(--ac-t);box-shadow:0 0 14px var(--ac-g);font-weight:600}
 .chip .dot{width:7px;height:7px;border-radius:50%;margin-right:5px;flex-shrink:0}
+/* 팀원 칩 이름: 3글자 고정폭 — 길면 말줄임(실명은 title 툴팁 유지). 칩 폭 균일 → 레이아웃 안정 */
+.chip .chip-nm{display:inline-block;width:3.25em;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
 .sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px}
 .sc{background:var(--bg-c);border:1px solid var(--bd2);border-radius:10px;padding:16px 18px;transition:all .2s;position:relative;overflow:hidden}
 /* v13.70 — 통계 카드 상단 그라데이션 액센트 + 호버 lift */
@@ -779,7 +781,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.79</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.80</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2350,7 +2352,7 @@ function rNC(){
   }
   // 사업부별 그룹핑
   var dm=getDeptMembers();var deptKeys=Object.keys(dm).sort(function(a,b){return a.localeCompare(b,'ko')});
-  var chipFn=function(name){const i=aN.indexOf(name),on=sN.has(name),c=COL[i%COL.length],f=fvN.includes(name);const dn=typeof shortName==='function'?shortName(name):name;const hasAlias=typeof getAlias==='function'&&getAlias(name);return`<span class="chip ${on?'cn':'co'}" style="${on?'border-color:'+c:''}" onclick="togN(${i})" title="${eH(name)}"><span class="dot" style="background:${c}"></span>${f?'⭐':''}${hasAlias?eH(dn)+'<span style="font-size:9px;color:var(--t6);margin-left:2px">('+eH(name)+')</span>':eH(name)}</span>`};
+  var chipFn=function(name){const i=aN.indexOf(name),on=sN.has(name),c=COL[i%COL.length],f=fvN.includes(name);const dn=typeof shortName==='function'?shortName(name):name;const hasAlias=typeof getAlias==='function'&&getAlias(name);const nmText=hasAlias?dn:name;return`<span class="chip ${on?'cn':'co'}" style="${on?'border-color:'+c:''}" onclick="togN(${i})" title="${eH(name)}"><span class="dot" style="background:${c}"></span>${f?'⭐':''}<span class="chip-nm">${eH(nmText)}</span></span>`};
   var html='';
   if(deptKeys.length>=2){
     // 사업부가 2개 이상이면 그룹별로 표시
@@ -3320,6 +3322,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.80',date:'2026-05-19',title:'💅 팀원 선택 칩 — 이름 3글자 고정폭으로 레이아웃 정돈',tag:'fix',items:[
+      '팀원 선택 칩의 이름 표시 영역을 3글자 고정폭(.chip-nm width:3.25em)으로 통일 — 칩 너비 균일, 줄바꿈 레이아웃 안정',
+      '이름이 길면 말줄임(…) 처리, 전체 실명은 칩 hover 툴팁(title)에 그대로 유지',
+      '별칭 사용 시 칩에 붙던 "별칭(실명)" 긴 꼬리표 제거 — 레이아웃을 가장 크게 깨던 원인. 실명은 툴팁으로 확인',
+      '영향: 팀원 선택 칩만 (다른 .chip 요소는 .chip-nm 미사용으로 무변경)'
+    ]},
     {ver:'13.79',date:'2026-05-19',title:'🐛 글씨체 메뉴 z-order · 주간분석 상세 내부 스크롤 수정',tag:'fix',items:[
       '글씨체 선택 메뉴가 본문 패널 뒤로 숨던 현상 수정 — .hdr 가 backdrop-filter+z-index:0 로 낮은 쌓임 맥락을 만들어 메뉴(z-index:100)가 갇혀 있었음. .hdr z-index:900 으로 상향 + overflow:hidden 제거(드롭다운 잘림 해제). .hdr::after 반사는 inset:0 이라 시각 변화 없음',
       '글씨체 메뉴 z-index 100 → 1000 (헤더 내 형제 요소 위로 확실히)',
