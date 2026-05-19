@@ -315,7 +315,10 @@ window.wmDataBus = (function () {
 body{min-height:100vh;background:var(--bg);color:var(--t2);font-family:var(--app-font);transition:background .3s,color .3s;-webkit-font-smoothing:antialiased}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--sb-h);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:var(--ct)}
 .mono{font-family:'JetBrains Mono',monospace;font-size:12px}
-.hdr{background:var(--bg-h);border-bottom:1px solid var(--bd);padding:14px 28px;transition:background .3s;backdrop-filter:blur(12px);position:relative;z-index:0;overflow:hidden}
+/* z-index:900 — 헤더 쌓임 맥락을 본문 패널 위로(모달/토스트 9000+ 보다는 아래).
+   overflow 제거: 폰트/검색 드롭다운이 헤더 아래로 펼쳐질 때 잘리지 않도록.
+   (.hdr::after 반사는 inset:0 이라 헤더 영역을 벗어나지 않아 클리핑 불필요) */
+.hdr{background:var(--bg-h);border-bottom:1px solid var(--bd);padding:14px 28px;transition:background .3s;backdrop-filter:blur(12px);position:relative;z-index:900}
 /* v13.70 — 헤더 미세 반사 효과 (좌→우 흐름) */
 .hdr::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,var(--ac-g) 50%,transparent 100%);opacity:.35;pointer-events:none;mix-blend-mode:overlay}
 .hdr h1 .ac{background:linear-gradient(135deg,var(--ac),var(--ac-t));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800;text-shadow:0 0 18px var(--ac-g)}
@@ -367,7 +370,9 @@ h1{font-size:18px;font-weight:700;color:var(--t1);letter-spacing:-.3px}h1 .ac{co
 .sub-tabs{margin-bottom:16px;border-radius:8px}
 .tab{padding:8px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--t5);font-family:inherit;transition:all .15s}
 .tab:hover{color:var(--t3);background:var(--bg-hv)}.tab.on{background:var(--ta-bg);color:var(--ac-t);box-shadow:inset 0 -2px 0 var(--ta-sh);font-weight:700}
-.tw{max-height:940px;overflow:auto}
+/* 상세 리스트: 내부 세로 스크롤 제거 — 전체 행을 한 번에 출력하고 페이지 스크롤로 탐색.
+   가로 스크롤만 유지(테이블 min-width:700px, 좁은 화면 대비) */
+.tw{overflow-x:auto}
 table{width:100%;border-collapse:separate;border-spacing:0}
 th{background:var(--th);color:var(--t4);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.8px;padding:10px 12px;text-align:left;position:sticky;top:0;z-index:2;border-bottom:2px solid var(--bd2)}
 td{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--tdb)}tr:nth-child(even) td{background:rgba(255,255,255,.015)}tr:hover td{background:var(--trh)}
@@ -411,7 +416,7 @@ td{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--tdb)}tr:nth-chi
 .fnb{display:flex;gap:4px;align-items:center;position:relative}
 .fnb-tg{font-size:11px;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:all .15s}
 .fnb-tg:hover{border-color:var(--ac);color:var(--t2)}
-.fnb-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:4px;min-width:200px;max-height:70vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:100}
+.fnb-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:4px;min-width:200px;max-height:70vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:1000}
 .fnb.open .fnb-menu{display:block}
 .fnd-group{padding:8px 10px 3px;font-size:9px;font-weight:700;color:var(--t6);text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--bd);margin-top:2px}
 .fnd-group:first-child{border-top:none;margin-top:0}
@@ -612,7 +617,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   .page-tabs .tab{padding:10px 16px;font-size:12px}
   th{font-size:9px;padding:8px 8px}
   td{font-size:11px;padding:7px 8px}
-  .tw{max-height:400px}
+  .tw{max-height:none}
 }
 @media(max-width:480px){
   .hdr{padding:12px 14px}
@@ -634,7 +639,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   .tabs{gap:2px;padding:4px}.tab{padding:7px 12px;font-size:10px}
   .page-tabs{gap:3px}.page-tabs .tab{padding:8px 14px;font-size:11px}
   .dz{padding:24px 12px}
-  .tw{max-height:360px}
+  .tw{max-height:none}
   th{font-size:9px;padding:8px 6px;letter-spacing:.3px}
   td{font-size:11px;padding:6px 6px}
   .mob-sep{display:none}
@@ -774,7 +779,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.78</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.79</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3315,6 +3320,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.79',date:'2026-05-19',title:'🐛 글씨체 메뉴 z-order · 주간분석 상세 내부 스크롤 수정',tag:'fix',items:[
+      '글씨체 선택 메뉴가 본문 패널 뒤로 숨던 현상 수정 — .hdr 가 backdrop-filter+z-index:0 로 낮은 쌓임 맥락을 만들어 메뉴(z-index:100)가 갇혀 있었음. .hdr z-index:900 으로 상향 + overflow:hidden 제거(드롭다운 잘림 해제). .hdr::after 반사는 inset:0 이라 시각 변화 없음',
+      '글씨체 메뉴 z-index 100 → 1000 (헤더 내 형제 요소 위로 확실히)',
+      '주간 분석 > 상세: 리스트가 일부만 보이고 리스트 위에서 스크롤해야 나머지가 보이던 현상 수정 — .tw 의 max-height(데스크톱 940px·모바일 400/360px) + 내부 overflow 제거. 전체 행을 한 번에 출력하고 페이지 스크롤로 탐색. 가로 스크롤만 유지',
+      '영향: 클라이언트 CSS만 변경 (단일 HTML 단일 소스)'
+    ]},
     {ver:'13.78',date:'2026-05-19',title:'🔤 트렌디 폰트 7종 추가 — 원티드 산스 · 가속 · 베이글팻 · 동글 등',tag:'feature',items:[
       '산세리프: 원티드 산스(Wanted Sans, 2024~25 인기 모던 한글 — Pretendard와 동일 jsdelivr CDN 방식)',
       '표제: 가속(Gasoek One), 베이글팻(Bagel Fat One), Moirai One, 구기(Gugi 레트로)',
