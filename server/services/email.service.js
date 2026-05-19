@@ -27,39 +27,55 @@ function getTransporter() {
   }
 }
 
+// 헤더 인젝션 방지: 메일 헤더에 들어가는 값의 ASCII 제어문자(CR/LF/TAB 등
+// charCode < 0x20, 그리고 DEL 0x7F)를 공백으로 치환. 일반 문자·공백·하이픈은 보존.
+// (nodemailer도 일부 sanitize 하지만 사용자 입력 subject/filename 등은 명시적으로 방어)
+function sanitizeHeader(s) {
+  if (s == null) return '';
+  var str = String(s);
+  var out = '';
+  for (var i = 0; i < str.length; i++) {
+    var code = str.charCodeAt(i);
+    out += (code < 0x20 || code === 0x7F) ? ' ' : str.charAt(i);
+  }
+  return out.trim();
+}
+
 // opts: { attachments?: [{filename, content (Buffer|base64 string), encoding?, contentType?}], subjectPrefix?: string|null }
 async function sendMail(to, subject, html, opts) {
   opts = opts || {};
   var t = getTransporter();
   if (!t) {
-    console.log('[EMAIL] 전송 스킵 (SMTP 미설정):', to, subject);
+    console.log('[EMAIL] 전송 스킵 (SMTP 미설정):', to, sanitizeHeader(subject));
     return false;
   }
 
   var prefix = (opts.subjectPrefix === null || opts.subjectPrefix === '') ? '' :
                (opts.subjectPrefix || '[업무 관리자] ');
   var msg = {
-    from: config.smtp.from || config.smtp.user,
-    to: to,
-    subject: prefix + subject,
+    from: sanitizeHeader(config.smtp.from || config.smtp.user),
+    to: sanitizeHeader(to),
+    subject: sanitizeHeader(prefix + (subject || '')),
     html: html
   };
   if (Array.isArray(opts.attachments) && opts.attachments.length) {
-    msg.attachments = opts.attachments;
+    msg.attachments = opts.attachments.map(function (a) {
+      return a && a.filename ? Object.assign({}, a, { filename: sanitizeHeader(a.filename) }) : a;
+    });
   }
   if (opts.bcc) {
-    msg.bcc = Array.isArray(opts.bcc) ? opts.bcc.filter(Boolean).join(',') : opts.bcc;
+    msg.bcc = Array.isArray(opts.bcc) ? opts.bcc.filter(Boolean).map(sanitizeHeader).join(',') : sanitizeHeader(opts.bcc);
   }
   if (opts.cc) {
-    msg.cc = Array.isArray(opts.cc) ? opts.cc.filter(Boolean).join(',') : opts.cc;
+    msg.cc = Array.isArray(opts.cc) ? opts.cc.filter(Boolean).map(sanitizeHeader).join(',') : sanitizeHeader(opts.cc);
   }
   if (opts.replyTo) {
-    msg.replyTo = opts.replyTo;
+    msg.replyTo = sanitizeHeader(opts.replyTo);
   }
 
   try {
     await t.sendMail(msg);
-    console.log('[EMAIL] 전송 완료:', to, subject);
+    console.log('[EMAIL] 전송 완료:', to, sanitizeHeader(subject));
     return true;
   } catch (e) {
     console.error('[EMAIL] 전송 실패:', e.message);

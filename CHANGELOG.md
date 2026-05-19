@@ -1,5 +1,28 @@
 # Work Manager — 변경 이력
 
+## v13.77 (2026-05-19) — 백엔드 리팩토링 (보안·성능·구조)
+
+### 배경
+서브에이전트 코드 분석으로 도출한 리팩토링 항목 중, 회귀 위험이 낮고 효과가 확실한 서버 측 항목을 적용. 위험이 높거나 제품 정책 결정이 필요한 항목은 보류하고 사유를 기록.
+
+### 보안
+- `server/services/email.service.js`: 이메일 헤더 인젝션 방어 추가. `sanitizeHeader()`가 subject/from/to/cc/bcc/replyTo/첨부파일명의 ASCII 제어문자(0x00–0x1F, 0x7F — CR/LF 포함)를 공백으로 치환. 일반 문자·공백·하이픈은 보존. 모든 발송이 거치는 중앙 함수에 적용 (defense-in-depth).
+
+### 성능
+- `server/services/notification.service.js` `sendDailyBriefing()`: N+1 쿼리 제거. 사용자 무관 쿼리(오늘 일정/오늘 납기/알림설정)를 루프 밖에서 1회 실행, 긴급 이슈는 전체 1회 조회 후 사용자별 메모리 필터(`assignees::text LIKE '%name%'` 동등). 사용자 50명 기준 약 201 → 4 쿼리. 메시지 구조·순서·스킵 로직·폴백 동일.
+
+### 구조
+- `server/config/as-policy.js` 신설: A/S SLA 정책(P1–P4 response/visit/close)·STATUS/WARRANTY/METHOD 색상 상수를 `as-stats.js` 인라인에서 분리. 값·동작 동일, 단일 소비자.
+- `server/services/notification.service.js` `notify()` 117→약 70줄: `buildTelegramSendOpts()`(순수 함수)·`resolveTelegramTargets()`(배치 쿼리 → 맵) 추출. 동작 동일.
+
+### 검토 후 보류 (사유 기록)
+- escape 함수 통합(`_esc`/`_asEsc`/`_asStatsEsc`/`esc`): 이스케이프 범위(3자 vs 5자)·방식(DOM vs regex)·스코프(IIFE) 차이로 통합 시 XSS 이스케이프 동작이 변경되며 로드 순서 의존성 발생. 효과(약 15줄) 대비 회귀 위험 큼 → 런타임 검증 선행 필요.
+- 할당 수정 API(`as-tickets.js` PUT `/assignments/:aid`) RBAC: 라우터 전체가 `auth+tenantScope`만 사용하는 일관된 설계이며 `as.*` 권한 미정의. 단일 엔드포인트 강제 게이트는 정상 사용자 차단 가능한 제품 정책 결정 사안.
+- `as-stats.js` GET 핸들러(약 416줄) 분해: 공유 가변 파라미터 배열(`paramsFull/paramsPrev/idx`) 의존 + 테스트 부재로 분해 시 회귀 위험 큼. 가장 무거운 순수 로직(`buildInsights`)은 이미 별도 함수.
+
+### 검증
+- 변경 4개 파일 `node -c` 구문 검사 통과. `sanitizeHeader`·`buildTelegramSendOpts`·SLA 값은 격리 단위 테스트로 동작 동일 확인. (환경에 node_modules 없어 jest 스위트는 미실행)
+
 ## v13.76 (2026-05-19) — 주간 분석 내용요약 필터 결과 반영
 
 ### 배경

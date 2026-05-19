@@ -774,7 +774,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.76</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.77</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3315,6 +3315,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.77',date:'2026-05-19',title:'🛡️ 백엔드 리팩토링 — 메일 헤더 인젝션 차단 · 일일브리핑 N+1 제거 · SLA 정책 분리',tag:'fix',items:[
+      '보안: 이메일 발송(email.service.js)에 헤더 인젝션 방어 추가 — subject/from/to/cc/bcc/replyTo/첨부파일명의 ASCII 제어문자(CR/LF 등)를 공백으로 치환. 정상 문자·공백·하이픈은 보존',
+      '성능: 일일 브리핑(notification.service) N+1 쿼리 제거 — 사용자 무관 쿼리(오늘 일정/납기/알림설정)를 루프 밖 1회로, 긴급 이슈는 1회 조회 후 메모리 필터. 사용자 50명 기준 ~201 → 4 쿼리',
+      '구조: A/S SLA 정책·색상 상수를 server/config/as-policy.js 로 중앙화 — as-stats.js 인라인 제거 (값 동일, 동작 변화 없음)',
+      '구조: notification.service notify() 117→~70줄 — buildTelegramSendOpts(순수)·resolveTelegramTargets(배치쿼리) 추출 (동작 동일)',
+      '검토 후 보류: escape 함수 통합(이스케이프 의미 차이로 회귀 위험), 할당 API RBAC(라우터 전체 설계 일관성 — 제품 정책 사안), as-stats 416줄 분해(공유 가변 상태 + 테스트 부재). 보고서 기재',
+      '영향 범위: 서버 전용 변경 — 클라이언트(단일 HTML) 동작 변화 없음'
+    ]},
     {ver:'13.76',date:'2026-05-19',title:'🔧 주간 분석 내용요약 — 필터 결과 반영 (전체 데이터 → 필터 적용)',tag:'fix',items:[
       '사용자 보고: 팀관리 > 주간 분석 > 내용요약이 필터와 무관하게 선택 인원의 전체 데이터를 표시',
       '원인: rContentSum()이 중앙 필터 함수 gF() 대신 이름(sN)만으로 필터링한 aD 전체를 사용 → 수주·분장·검색어·주차·부서·휴가제외 필터가 무시됨',

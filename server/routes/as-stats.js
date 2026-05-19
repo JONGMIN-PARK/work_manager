@@ -20,6 +20,7 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var notificationService = require('../services/notification.service');
 var ttlCache = require('../services/ttl-cache.service');
+var asPolicy = require('../config/as-policy');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -41,20 +42,12 @@ function invalidateStats(tenantId) {
 }
 router.invalidateStats = invalidateStats;
 
-// ─── SLA 정책 (config.js AS_PRIORITY와 동일) ───
-var SLA = {
-  P1: { responseH: 1,  visitH: 24,  closeDays: 3,  color: '#EF4444', label: 'P1 긴급' },
-  P2: { responseH: 4,  visitH: 72,  closeDays: 7,  color: '#F97316', label: 'P2 높음' },
-  P3: { responseH: 8,  visitH: 168, closeDays: 14, color: '#F59E0B', label: 'P3 보통' },
-  P4: { responseH: 24, visitH: null, closeDays: 30, color: '#10B981', label: 'P4 낮음' }
-};
-var STATUS_COLORS = {
-  received: '#6366F1', assigned: '#0EA5E9', in_progress: '#3B82F6',
-  reporting: '#8B5CF6', approved: '#A855F7', customer_wait: '#F59E0B',
-  closed: '#10B981', hold: '#94A3B8', cancelled: '#64748B'
-};
-var WARRANTY_COLORS = { '보증 내': '#10B981', '보증 종료': '#EF4444', '확인 필요': '#94A3B8' };
-var METHOD_COLORS = { 원격지원: '#3B82F6', 출장: '#F59E0B', RMA: '#EF4444', 가이드제공: '#06B6D4', 자료송부: '#8B5CF6' };
+// ─── SLA 정책 / 색상 매핑 — server/config/as-policy.js 로 중앙화 ───
+// (정책 변경은 as-policy.js 한 곳에서. 프론트 config.js AS_PRIORITY 와 동일 값 유지)
+var SLA = asPolicy.SLA;
+var STATUS_COLORS = asPolicy.STATUS_COLORS;
+var WARRANTY_COLORS = asPolicy.WARRANTY_COLORS;
+var METHOD_COLORS = asPolicy.METHOD_COLORS;
 
 // ─── 헬퍼: 기간/이전 기간 ───
 function parsePeriod(q) {

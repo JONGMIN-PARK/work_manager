@@ -172,6 +172,58 @@ var EVENT_TITLES = {
   as_weekly_digest: 'A/S 주간 요약'
 };
 
+// 이벤트별 텔레그램 인라인 버튼 옵션 — 순수 함수 (side-effect 없음)
+function buildTelegramSendOpts(eventType, payload) {
+  var sendOpts = {};
+  if (eventType === 'issue_assigned' && payload.issueId) {
+    sendOpts.reply_markup = JSON.stringify({
+      inline_keyboard: [
+        [
+          { text: '🔵 대응 시작', callback_data: 'issue_start:' + payload.issueId },
+          { text: '✅ 해결 완료', callback_data: 'issue_resolve:' + payload.issueId }
+        ]
+      ]
+    });
+  }
+  if (eventType === 'user_pending' && payload.pendingUserId) {
+    sendOpts.reply_markup = JSON.stringify({
+      inline_keyboard: [
+        [
+          { text: '✅ 승인', callback_data: 'approve_user:' + payload.pendingUserId },
+          { text: '❌ 반려', callback_data: 'reject_user:' + payload.pendingUserId }
+        ]
+      ]
+    });
+  }
+  return sendOpts;
+}
+
+// 텔레그램 발송 대상 해석 — 알림설정/연동/중복 배치 조회 후 맵 반환
+async function resolveTelegramTargets(targetUserIds, eventType, payloadStr) {
+  var prefR = await db.query(
+    'SELECT user_id, is_enabled FROM notification_prefs WHERE user_id = ANY($1) AND channel = \'telegram\' AND event_type = $2',
+    [targetUserIds, eventType]
+  );
+  var disabledSet = {};
+  prefR.rows.forEach(function (r) { if (!r.is_enabled) disabledSet[r.user_id] = true; });
+
+  var linkR = await db.query(
+    'SELECT user_id, chat_id FROM telegram_links WHERE user_id = ANY($1) AND is_active = TRUE',
+    [targetUserIds]
+  );
+  var chatMap = {};
+  linkR.rows.forEach(function (r) { chatMap[r.user_id] = r.chat_id; });
+
+  var dupR = await db.query(
+    "SELECT user_id FROM notification_logs WHERE user_id = ANY($1) AND event_type = $2 AND payload = $3 AND status = 'sent' AND created_at > NOW() - INTERVAL '5 minutes'",
+    [targetUserIds, eventType, payloadStr]
+  );
+  var dupSet = {};
+  dupR.rows.forEach(function (r) { dupSet[r.user_id] = true; });
+
+  return { disabledSet: disabledSet, chatMap: chatMap, dupSet: dupSet };
+}
+
 async function notify(eventType, payload, targetUserIds) {
   if (!targetUserIds || targetUserIds.length === 0) return;
 
@@ -197,49 +249,13 @@ async function notify(eventType, payload, targetUserIds) {
 
   // 배치 쿼리: 알림 설정 + 텔레그램 연동 + 중복 체크를 한 번에
   try {
-    var prefR = await db.query(
-      'SELECT user_id, is_enabled FROM notification_prefs WHERE user_id = ANY($1) AND channel = \'telegram\' AND event_type = $2',
-      [targetUserIds, eventType]
-    );
-    var disabledSet = {};
-    prefR.rows.forEach(function (r) { if (!r.is_enabled) disabledSet[r.user_id] = true; });
-
-    var linkR = await db.query(
-      'SELECT user_id, chat_id FROM telegram_links WHERE user_id = ANY($1) AND is_active = TRUE',
-      [targetUserIds]
-    );
-    var chatMap = {};
-    linkR.rows.forEach(function (r) { chatMap[r.user_id] = r.chat_id; });
-
-    var dupR = await db.query(
-      "SELECT user_id FROM notification_logs WHERE user_id = ANY($1) AND event_type = $2 AND payload = $3 AND status = 'sent' AND created_at > NOW() - INTERVAL '5 minutes'",
-      [targetUserIds, eventType, payloadStr]
-    );
-    var dupSet = {};
-    dupR.rows.forEach(function (r) { dupSet[r.user_id] = true; });
+    var targets = await resolveTelegramTargets(targetUserIds, eventType, payloadStr);
+    var disabledSet = targets.disabledSet;
+    var chatMap = targets.chatMap;
+    var dupSet = targets.dupSet;
 
     // 인라인 버튼 생성 (이벤트별)
-    var sendOpts = {};
-    if (eventType === 'issue_assigned' && payload.issueId) {
-      sendOpts.reply_markup = JSON.stringify({
-        inline_keyboard: [
-          [
-            { text: '🔵 대응 시작', callback_data: 'issue_start:' + payload.issueId },
-            { text: '✅ 해결 완료', callback_data: 'issue_resolve:' + payload.issueId }
-          ]
-        ]
-      });
-    }
-    if (eventType === 'user_pending' && payload.pendingUserId) {
-      sendOpts.reply_markup = JSON.stringify({
-        inline_keyboard: [
-          [
-            { text: '✅ 승인', callback_data: 'approve_user:' + payload.pendingUserId },
-            { text: '❌ 반려', callback_data: 'reject_user:' + payload.pendingUserId }
-          ]
-        ]
-      });
-    }
+    var sendOpts = buildTelegramSendOpts(eventType, payload);
 
     // 병렬 발송
     var sendPromises = targetUserIds.map(function (userId) {
@@ -365,54 +381,73 @@ async function sendDailyBriefing() {
   var users = await db.query(
     "SELECT tl.chat_id, tl.user_id, u.name FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.is_active = TRUE AND u.status = 'active'"
   );
+  if (!users.rows.length) {
+    console.log('[Notification] Daily briefing — no active linked users');
+    return;
+  }
+
+  // ─── N+1 제거: 사용자 무관 쿼리는 루프 밖에서 1회만 실행 ───
+  // 1) 오늘 일정 / 오늘 납기는 모든 사용자에게 동일 → 1회 조회
+  var evtR = await db.query(
+    "SELECT title, type FROM events WHERE start_date <= $1 AND end_date >= $1 ORDER BY start_date LIMIT 5",
+    [today]
+  );
+  var dlR = await db.query(
+    "SELECT name, order_no FROM projects WHERE end_date = $1 AND status != 'done'",
+    [todayCompact]
+  );
+  // 2) 알림 설정: telegram/event_today 행을 한 번에 받아 user_id → is_enabled 맵
+  var prefRows = await db.query(
+    "SELECT user_id, is_enabled FROM notification_prefs WHERE channel = 'telegram' AND event_type = 'event_today'"
+  );
+  var prefMap = {};
+  prefRows.rows.forEach(function(p) { prefMap[p.user_id] = p.is_enabled; });
+  // 3) 긴급 미해결 이슈 전체를 1회 조회 후 사용자별 메모리 필터 (기존 assignees::text LIKE '%name%' 동등)
+  var allIssR = await db.query(
+    "SELECT title, assignees::text AS assignees_txt FROM issues WHERE status NOT IN ('resolved','closed') AND urgency = 'urgent'"
+  );
+  var allUrgentIssues = allIssR.rows;
+
+  // 공통 메시지 조각 — 일정/납기는 사용자 공통이므로 미리 조립
+  var typeIcons = { milestone:'◆', meeting:'🤝', deadline:'🏁', trip:'✈️', fieldService:'🔧', periodicChk:'🛠️', dayoff:'🌴', amoff:'🌅', pmoff:'🌇', etc:'📌' };
+  var evtBlock = '';
+  if (evtR.rows.length > 0) {
+    evtBlock += '📅 <b>오늘 일정</b>\n';
+    evtR.rows.forEach(function(e) {
+      evtBlock += '  ' + (typeIcons[e.type] || '📌') + ' ' + e.title + '\n';
+    });
+    evtBlock += '\n';
+  }
+  var dlBlock = '';
+  if (dlR.rows.length > 0) {
+    dlBlock += '🏁 <b>오늘 납기</b>\n';
+    dlR.rows.forEach(function(r) { dlBlock += '  · ' + (r.order_no || '') + ' ' + r.name + '\n'; });
+    dlBlock += '\n';
+  }
 
   for (var i = 0; i < users.rows.length; i++) {
     var usr = users.rows[i];
     try {
-      // 알림 설정 확인
-      var prefR = await db.query(
-        "SELECT is_enabled FROM notification_prefs WHERE user_id = $1 AND channel = 'telegram' AND event_type = 'event_today'",
-        [usr.user_id]
-      );
-      if (prefR.rows.length > 0 && !prefR.rows[0].is_enabled) continue;
+      // 알림 설정 확인 (행이 존재하고 비활성인 경우만 스킵 — 기존 동작 유지)
+      if (Object.prototype.hasOwnProperty.call(prefMap, usr.user_id) && !prefMap[usr.user_id]) continue;
 
       var msg = '';
 
-      // 오늘 일정
-      var evtR = await db.query(
-        "SELECT title, type FROM events WHERE start_date <= $1 AND end_date >= $1 ORDER BY start_date LIMIT 5",
-        [today]
-      );
-      var typeIcons = { milestone:'◆', meeting:'🤝', deadline:'🏁', trip:'✈️', fieldService:'🔧', periodicChk:'🛠️', dayoff:'🌴', amoff:'🌅', pmoff:'🌇', etc:'📌' };
-      if (evtR.rows.length > 0) {
-        msg += '📅 <b>오늘 일정</b>\n';
-        evtR.rows.forEach(function(e) {
-          msg += '  ' + (typeIcons[e.type] || '📌') + ' ' + e.title + '\n';
-        });
+      // 오늘 일정 (공통)
+      msg += evtBlock;
+
+      // 미해결 긴급 이슈 — 사용자별 메모리 필터 (assignees 텍스트에 이름 포함, 최대 3건)
+      var userIssues = allUrgentIssues.filter(function(r) {
+        return r.assignees_txt && r.assignees_txt.indexOf(usr.name) !== -1;
+      }).slice(0, 3);
+      if (userIssues.length > 0) {
+        msg += '🔴 <b>긴급 이슈 ' + userIssues.length + '건</b>\n';
+        userIssues.forEach(function(r) { msg += '  · ' + r.title + '\n'; });
         msg += '\n';
       }
 
-      // 미해결 이슈
-      var issR = await db.query(
-        "SELECT title, urgency FROM issues WHERE assignees::text LIKE $1 AND status NOT IN ('resolved','closed') AND urgency = 'urgent' LIMIT 3",
-        ['%' + usr.name + '%']
-      );
-      if (issR.rows.length > 0) {
-        msg += '🔴 <b>긴급 이슈 ' + issR.rows.length + '건</b>\n';
-        issR.rows.forEach(function(r) { msg += '  · ' + r.title + '\n'; });
-        msg += '\n';
-      }
-
-      // 오늘 납기
-      var dlR = await db.query(
-        "SELECT name, order_no FROM projects WHERE end_date = $1 AND status != 'done'",
-        [todayCompact]
-      );
-      if (dlR.rows.length > 0) {
-        msg += '🏁 <b>오늘 납기</b>\n';
-        dlR.rows.forEach(function(r) { msg += '  · ' + (r.order_no || '') + ' ' + r.name + '\n'; });
-        msg += '\n';
-      }
+      // 오늘 납기 (공통)
+      msg += dlBlock;
 
       if (!msg) {
         msg = '✨ 오늘은 특별한 일정이 없습니다. 좋은 하루 되세요!';
