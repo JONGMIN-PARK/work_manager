@@ -774,7 +774,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.75</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.76</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -971,7 +971,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
         <!-- Content Summary (separate tab, no filter) -->
         <div id="tSum" class="hidden">
           <div class="pnl" id="contentSummaryPanel">
-            <div class="pnl-h"><h3 class="pnl-t">📝 업무 내용 요약 <span style="font-size:10px;color:var(--t5);font-weight:400">(필터 무관 · 선택 인원 전체)</span></h3></div>
+            <div class="pnl-h"><h3 class="pnl-t">📝 업무 내용 요약 <span style="font-size:10px;color:var(--t5);font-weight:400">(필터 적용 결과 기준)</span></h3></div>
             <div id="contentSummary"></div>
           </div>
         </div>
@@ -3315,6 +3315,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.76',date:'2026-05-19',title:'🔧 주간 분석 내용요약 — 필터 결과 반영 (전체 데이터 → 필터 적용)',tag:'fix',items:[
+      '사용자 보고: 팀관리 > 주간 분석 > 내용요약이 필터와 무관하게 선택 인원의 전체 데이터를 표시',
+      '원인: rContentSum()이 중앙 필터 함수 gF() 대신 이름(sN)만으로 필터링한 aD 전체를 사용 → 수주·분장·검색어·주차·부서·휴가제외 필터가 무시됨',
+      '수정: rContentSum()이 gF()를 사용하도록 변경 — 다른 탭과 동일한 필터 기준 적용',
+      '필터 변경 시 upV()가 sum 탭 표시 중이면 rContentSum()을 재호출하므로 실시간 반영됨',
+      '패널 라벨 "(필터 무관 · 선택 인원 전체)" → "(필터 적용 결과 기준)" 으로 수정',
+      '빈 결과 안내문도 인원 미선택/필터 결과 없음을 구분해 표시'
+    ]},
     {ver:'13.75',date:'2026-05-15',title:'🔧 ai_query_usage 테이블 누락 수정 — 마이그레이션 029 + fail-safe',tag:'fix',items:[
       '사용자 보고: "AI 요약 실패: relation \\"ai_query_usage\\" does not exist"',
       '원인: AI 라우터(server/routes/ai.js)가 ai_query_usage(월별 사용량) + tenant_ai_configs(테넌트 전용 키) 테이블을 사용하는데 마이그레이션이 빠져 있었음',
@@ -4252,9 +4260,9 @@ function renderPatchNotes(){
 
 function rContentSum(){
   const el=document.getElementById('contentSummary');
-  // 필터 무관: 선택된 인원의 전체 데이터
-  const f=sN.size===0?[]:aD.filter(r=>sN.has(r.name));
-  if(!f.length){el.innerHTML='<div style="text-align:center;color:var(--t6);padding:30px;font-size:12px">팀원을 선택하면 전체 업무 내용 요약이 표시됩니다.</div>';return}
+  // 필터 반영: 현재 필터(수주/분장/검색/주차/부서/휴가제외 등)가 적용된 데이터 — gF()와 동일 기준
+  const f=gF();
+  if(!f.length){el.innerHTML='<div style="text-align:center;color:var(--t6);padding:30px;font-size:12px">'+(sN.size===0?'팀원을 선택하면':'필터 조건에 맞는')+' 업무 내용 요약이 표시됩니다.</div>';return}
   const byPerson={};
   f.forEach(r=>{
     if(!byPerson[r.name])byPerson[r.name]={h:0,byOrder:{},byAbbr:{},contents:[],orderSet:new Set()};
