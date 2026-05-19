@@ -310,6 +310,21 @@ window.wmDataBus = (function () {
 [data-theme="cyber"] h1 .ac,[data-theme="cyber"] .pnl-t{text-shadow:0 0 8px rgba(255,45,149,.3)}
 [data-theme="cyber"] .pnl{box-shadow:0 0 0 1px rgba(255,45,149,.06),0 4px 14px rgba(86,20,160,.18)}
 [data-theme="cyber"] button:hover:not(:disabled){box-shadow:0 0 12px rgba(255,45,149,.25)}
+/* v13.81 — Linear/Vercel 스타일: 근-블랙 중성 배경 · 헤어라인 · 채도 낮은 인디고 · 그림자 제거 */
+[data-theme="linear"]{--bg:#08090B;--bg-h:linear-gradient(135deg,#0C0D10,#101114);--bg-p:#0E0F12;--bg-c:#0E0F12;--bg-i:#0B0C0E;--bg-hv:#16171B;--bd:#1B1C20;--bd2:#26272C;--bd-i:#1B1C20;--t1:#F7F8F8;--t2:#E6E7EA;--t3:#C2C4CB;--t4:#9A9CA5;--t5:#70727B;--t6:#4A4C54;--ac:#5E6AD2;--ac-bg:#1A1B2B;--ac-t:#8D94E8;--ac-g:rgba(94,106,210,.12);--c-bg:#0E0F12;--c-bd:#1B1C20;--c-t:#9A9CA5;--ta-bg:#1A1B2B;--ta-sh:#5E6AD2;--th:#0C0D10;--trh:#16171B;--tdb:#101114;--lb:#0B0C0E;--lb-h:#16171B;--lb-c:rgba(94,106,210,.05);--cb:#4A4C54;--sb-t:#0E0F12;--sb-h:#26272C;--d-bd:#C03434;--d-t:#F08A8A;--d-bg:rgba(192,52,52,.16);--tg:#1A1B2B;--tg-bd:#2A2C44;--tg-t:#8D94E8;--mk:rgba(94,106,210,.20);--mk-t:#A8AEEC;--cg:#1B1C20;--ct:#70727B;--cl:#C2C4CB;--pt:#0E0F12;--stat-blue:#5E83F0;--stat-green:#3FB984;--stat-amber:#D6A23E;--stat-cyan:#3FAFC2;--stat-rose:#E0617A;--stat-purple:#8B7FE0}
+/* 컴포넌트 정제 — 그림자 X, 헤어라인, 여백↑, 타이포 대비. data-theme 스코프라 다른 테마/베이스 무영향 */
+[data-theme="linear"] .pnl{box-shadow:none;border-radius:10px;padding:20px}
+[data-theme="linear"] .pnl:hover{box-shadow:none;border-color:var(--bd2)}
+[data-theme="linear"] .sc{background:var(--bg-p);box-shadow:none;border-radius:10px}
+[data-theme="linear"] .sc::before{display:none}
+[data-theme="linear"] .sc:hover{transform:none;box-shadow:none;border-color:var(--bd2)}
+[data-theme="linear"] .hdr::after{opacity:.12}
+[data-theme="linear"] h1,[data-theme="linear"] .pnl-t,[data-theme="linear"] .sv{letter-spacing:-.02em}
+[data-theme="linear"] .sv{font-weight:600}
+[data-theme="linear"] .sl,[data-theme="linear"] th,[data-theme="linear"] .fnd-group{letter-spacing:.07em;color:var(--t5);font-weight:600}
+[data-theme="linear"] .cg{gap:16px}
+[data-theme="linear"] td{border-color:var(--bd)}
+[data-theme="linear"] .btn{border-radius:7px}
 :root{--app-font:'Noto Sans KR',-apple-system,sans-serif}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{min-height:100vh;background:var(--bg);color:var(--t2);font-family:var(--app-font);transition:background .3s,color .3s;-webkit-font-smoothing:antialiased}
@@ -781,7 +796,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.80</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.81</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -1144,7 +1159,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <script>
 /* ═══ config.js / settings.js 폴백 (file:// 프로토콜 등 외부 JS 로드 실패 대비) ═══ */
 if(typeof TH==='undefined'){
-  var TH=[{id:'auto',l:'시스템',c:'linear-gradient(135deg,#F4F5FB 50%,#0D1017 50%)'},{id:'light',l:'클라우드',c:'linear-gradient(135deg,#F4F5FB,#EBEEF6)'},{id:'midnight',l:'미드나잇',c:'linear-gradient(135deg,#0E1120,#141A3A)'},{id:'forest',l:'포레스트',c:'linear-gradient(135deg,#101C16,#182A22)'},{id:'sand',l:'웜샌드',c:'linear-gradient(135deg,#F6F2EA,#E8E0D2)'},{id:'rose',l:'로즈',c:'linear-gradient(135deg,#1C1018,#281422)'},{id:'slate',l:'슬레이트',c:'linear-gradient(135deg,#222428,#2A2C32)'},{id:'ocean',l:'오션',c:'linear-gradient(135deg,#0E1824,#102438)'},{id:'nord',l:'노르드',c:'linear-gradient(135deg,#353C4A,#434C5E)'},{id:'amethyst',l:'아메시스트',c:'linear-gradient(135deg,#161028,#201838)'}];
+  var TH=[{id:'auto',l:'시스템',c:'linear-gradient(135deg,#F4F5FB 50%,#0D1017 50%)'},{id:'light',l:'클라우드',c:'linear-gradient(135deg,#F4F5FB,#EBEEF6)'},{id:'midnight',l:'미드나잇',c:'linear-gradient(135deg,#0E1120,#141A3A)'},{id:'forest',l:'포레스트',c:'linear-gradient(135deg,#101C16,#182A22)'},{id:'sand',l:'웜샌드',c:'linear-gradient(135deg,#F6F2EA,#E8E0D2)'},{id:'rose',l:'로즈',c:'linear-gradient(135deg,#1C1018,#281422)'},{id:'slate',l:'슬레이트',c:'linear-gradient(135deg,#222428,#2A2C32)'},{id:'ocean',l:'오션',c:'linear-gradient(135deg,#0E1824,#102438)'},{id:'nord',l:'노르드',c:'linear-gradient(135deg,#353C4A,#434C5E)'},{id:'amethyst',l:'아메시스트',c:'linear-gradient(135deg,#161028,#201838)'},{id:'linear',l:'리니어',c:'linear-gradient(135deg,#08090B,#1A1B2B)'}];
 }
 if(typeof ENC==='undefined'){
   var ENC=['euc-kr','utf-8','cp949','shift_jis','iso-8859-1'];
@@ -3322,6 +3337,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.81',date:'2026-05-19',title:'🎨 Linear/Vercel 스타일 테마 추가 — 정제된 디자이너 룩',tag:'feature',items:[
+      '신규 테마 "리니어" — 근-블랙 중성 배경, 헤어라인(1px) 테두리, 채도 낮은 인디고 액센트, 그림자 제거, 여백·타이포 대비 강화',
+      '카드(.pnl/.sc): box-shadow 제거 + 상단 그라데이션 액센트/호버 lift 제거 → 평평하고 정제된 면. 헤더 반사 효과도 약하게(opacity .12)',
+      '타이포: 제목/통계값 자간 -.02em, 라벨은 대문자 트래킹 .07em·뮤트 컬러로 또렷하게. 카드 그리드 간격 16px',
+      '기존 20여 테마·베이스 스타일 전부 무변경 — [data-theme="linear"] 스코프라 선택 시에만 적용, 다른 테마로 바꾸면 즉시 원복',
+      '설정 > 테마(또는 상단 테마 바)에서 "리니어" 선택. config.js TH + 인라인 폴백 양쪽 등록, 토큰 51종 누락 0 검증'
+    ]},
     {ver:'13.80',date:'2026-05-19',title:'💅 팀원 선택 칩 — 이름 3글자 고정폭으로 레이아웃 정돈',tag:'fix',items:[
       '팀원 선택 칩의 이름 표시 영역을 3글자 고정폭(.chip-nm width:3.25em)으로 통일 — 칩 너비 균일, 줄바꿈 레이아웃 안정',
       '이름이 길면 말줄임(…) 처리, 전체 실명은 칩 hover 툴팁(title)에 그대로 유지',

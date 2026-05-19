@@ -1,5 +1,18 @@
 # Work Manager — 변경 이력
 
+## v13.81 (2026-05-19) — Linear/Vercel 스타일 테마 추가
+
+### 배경
+사용자: "카드 배치, 글자 간격 등 너무 AI가 작업한 티가 나는데, 스타일리쉬하게 테마 적용은 안 될까?" → 기존 20여 테마를 건드리지 않고 정제된 디자이너 테마를 opt-in 추가(가역적).
+
+### 변경
+- `[data-theme="linear"]` 토큰 세트 신설: 근-블랙 중성 배경(#08090B), 헤어라인 테두리(#1B1C20), 채도 낮은 인디고 액센트(#5E6AD2), 정제 stat 팔레트. slate 기준 45개 토큰 전부 포함 + stat 6개(누락 0 검증).
+- 스코프 컴포넌트 정제(`[data-theme="linear"]` 한정): `.pnl/.sc` box-shadow 제거, `.sc::before` 그라데이션 액센트·`.sc:hover` lift 제거, `.hdr::after` 반사 opacity .12, 제목/통계값 자간 -.02em, 라벨 트래킹 .07em·뮤트, `.cg` gap 16px, 카드 radius 10px·padding 20px.
+- 테마 등록: `config.js` `TH` + `업무일지_분석기.html` 인라인 폴백 양쪽에 `{id:'linear',l:'리니어'}` 추가.
+
+### 영향
+선택 시에만 적용되는 가역적 변경 — 베이스/기존 테마 CSS 무변경. 클라이언트 단일 HTML + config.js. config.js `node -c` 통과.
+
 ## v13.80 (2026-05-19) — 팀원 선택 칩 이름 3글자 고정폭
 
 ### 배경
