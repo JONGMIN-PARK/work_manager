@@ -37,6 +37,7 @@ var FONTS = [
   // ─── 산세리프 (UI · 본문) ───
   { id: 'noto',        group: '산세리프', l: '노토 산스 (기본)',     family: "'Noto Sans KR',-apple-system,sans-serif", weight: '300;400;500;700;900' },
   { id: 'pretendard',  group: '산세리프', l: '프리텐다드 (모던 추천)', family: "'Pretendard Variable','Pretendard',-apple-system,sans-serif", url: 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css' },
+  { id: 'wantedsans',  group: '산세리프', l: '원티드 산스 (트렌디)',  family: "'Wanted Sans Variable','Wanted Sans',-apple-system,sans-serif", url: 'https://cdn.jsdelivr.net/gh/wanteddev/wanted-sans@v1.0.3/packages/wanted-sans/fonts/webfonts/variable/split/WantedSansVariable.min.css' },
   { id: 'plex',        group: '산세리프', l: 'IBM Plex (테크)',       family: "'IBM Plex Sans KR',sans-serif", weight: '300;400;500;600;700' },
   { id: 'gowundodum',  group: '산세리프', l: '고운돋움 (정갈)',       family: "'Gowun Dodum',sans-serif",       weight: '400' },
   { id: 'nanum',       group: '산세리프', l: '나눔 고딕 (가독)',       family: "'Nanum Gothic',sans-serif",      weight: '400;700;800' },
@@ -53,11 +54,17 @@ var FONTS = [
   { id: 'blackhansans',group: '표제',     l: 'Black Han Sans (강조)',  family: "'Black Han Sans',sans-serif",    weight: '400' },
   { id: 'dohyeon',     group: '표제',     l: '도현 (캐주얼)',          family: "'Do Hyeon',sans-serif",          weight: '400' },
   { id: 'jua',         group: '표제',     l: '주아 (밝은)',            family: "'Jua',sans-serif",               weight: '400' },
+  { id: 'gasoekone',   group: '표제',     l: '가속 (트렌디 강조)',     family: "'Gasoek One',sans-serif",        weight: '400' },
+  { id: 'bagelfatone', group: '표제',     l: '베이글팻 (둥근 강조)',   family: "'Bagel Fat One',cursive",        weight: '400' },
+  { id: 'moiraione',   group: '표제',     l: 'Moirai One (개성)',      family: "'Moirai One',cursive",           weight: '400' },
+  { id: 'gugi',        group: '표제',     l: '구기 (레트로)',          family: "'Gugi',cursive",                 weight: '400' },
 
   // ─── 손글씨 · 캐주얼 ───
   { id: 'nanumpen',    group: '손글씨',   l: '나눔 펜글씨',            family: "'Nanum Pen Script',cursive",     weight: '400' },
   { id: 'gaegu',       group: '손글씨',   l: '개구 (둥근 손글씨)',     family: "'Gaegu',cursive",                weight: '300;400;700' },
   { id: 'singleday',   group: '손글씨',   l: '싱글데이',               family: "'Single Day',cursive",           weight: '400' },
+  { id: 'dongle',      group: '손글씨',   l: '동글 (말랑 트렌디)',     family: "'Dongle',sans-serif",            weight: '300;400;700' },
+  { id: 'yeonsung',    group: '손글씨',   l: '연성 (귀여움)',          family: "'Yeon Sung',cursive",            weight: '400' },
 
   // ─── 코드 ───
   { id: 'mono',        group: '코드',     l: 'JetBrains Mono',         family: "'JetBrains Mono','Noto Sans KR',monospace", weight: '400;500;700' }

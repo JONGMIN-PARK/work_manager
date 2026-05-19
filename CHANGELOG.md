@@ -1,5 +1,22 @@
 # Work Manager — 변경 이력
 
+## v13.78 (2026-05-19) — 트렌디 폰트 7종 추가
+
+### 배경
+사용자: "구글 폰트 등 이쁜것 많던데..." — 기존 폰트 선택기(18종)에 요즘 인기 폰트 보강.
+
+### 변경
+`config.js` `FONTS` 배열에 7종 추가 (로더·UI 코드 무변경 — `rFnt()`가 group별 자동 렌더):
+- **산세리프**: `wantedsans` 원티드 산스 (Wanted Sans Variable, jsdelivr CDN — Pretendard와 동일 url 방식)
+- **표제**: `gasoekone` 가속(Gasoek One), `bagelfatone` 베이글팻(Bagel Fat One), `moiraione` Moirai One, `gugi` 구기(Gugi)
+- **손글씨**: `dongle` 동글(Dongle), `yeonsung` 연성(Yeon Sung)
+
+### 검증
+- `node -c config.js` 통과
+- 로더 URL 생성 시뮬레이션 정상 (`family=...:wght@...&display=swap`)
+- 신규 CDN/Google Fonts URL 7개 모두 HTTP 200, Wanted Sans CSS `font-family:"Wanted Sans Variable"` 일치
+- `FONTS`는 단일 소스(서버 측 중복 없음) — 로컬/서버 양쪽 동일 반영
+
 ## v13.77 (2026-05-19) — 백엔드 리팩토링 (보안·성능·구조)
 
 ### 배경

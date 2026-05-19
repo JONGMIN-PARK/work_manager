@@ -774,7 +774,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.77</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.78</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3315,6 +3315,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.78',date:'2026-05-19',title:'🔤 트렌디 폰트 7종 추가 — 원티드 산스 · 가속 · 베이글팻 · 동글 등',tag:'feature',items:[
+      '산세리프: 원티드 산스(Wanted Sans, 2024~25 인기 모던 한글 — Pretendard와 동일 jsdelivr CDN 방식)',
+      '표제: 가속(Gasoek One), 베이글팻(Bagel Fat One), Moirai One, 구기(Gugi 레트로)',
+      '손글씨: 동글(Dongle 말랑), 연성(Yeon Sung 귀여움)',
+      '기존 폰트 선택기(설정 > 폰트)에 그룹별 자동 표시 — 선택값 localStorage 유지, Google Fonts/CDN 동적 로드',
+      '폰트 총 18 → 25종. config.js FONTS 배열에만 항목 추가(로더·UI 무변경), CDN URL 7개 200 확인'
+    ]},
     {ver:'13.77',date:'2026-05-19',title:'🛡️ 백엔드 리팩토링 — 메일 헤더 인젝션 차단 · 일일브리핑 N+1 제거 · SLA 정책 분리',tag:'fix',items:[
       '보안: 이메일 발송(email.service.js)에 헤더 인젝션 방어 추가 — subject/from/to/cc/bcc/replyTo/첨부파일명의 ASCII 제어문자(CR/LF 등)를 공백으로 치환. 정상 문자·공백·하이픈은 보존',
       '성능: 일일 브리핑(notification.service) N+1 쿼리 제거 — 사용자 무관 쿼리(오늘 일정/납기/알림설정)를 루프 밖 1회로, 긴급 이슈는 1회 조회 후 메모리 필터. 사용자 50명 기준 ~201 → 4 쿼리',
