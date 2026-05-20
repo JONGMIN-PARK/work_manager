@@ -90,3 +90,45 @@
 - [ ] API 엔드포인트 테스트 코드 작성
 - [ ] 에러 로깅 체계 (Sentry 등)
 - [ ] 사용자 가이드/매뉴얼
+
+---
+
+## 텔레그램 추가 기능 (2026-05-21 작업 예정)
+
+### 🔥 다음 라운드 우선 — 안전 3건 멀티에이전트 병렬
+- [ ] **/standup** — 매일 아침 봇이 "어제 한 일 / 오늘 할 일 / 블로커" 3 질문 → 답변을 standup_responses 테이블에 누적 + 팀 채팅에 요약 전송
+  - 새 마이그레이션: standup_questions(daily seed), standup_responses(user_id, date, q1/q2/q3)
+  - utility.js 또는 personal.js에 cmdStandup
+  - 대화 상태 보관: 사용자 응답 중간 메시지를 standup_sessions(chat_id, current_q)에 저장
+- [ ] **알림 DND** — `/mute 1h` / `/mute weekend` / `/mute 18-09` / `/unmute`. 긴급(P1) 예외 토글
+  - notification_prefs에 dnd_start/dnd_end/dnd_weekdays/allow_critical 컬럼 추가
+  - notification.service.resolveTelegramTargets에서 시간대 매칭으로 필터
+  - utility.js에 cmdMute / cmdUnmute
+- [ ] **/menu 인라인 메뉴** — 카테고리 버튼(내 일·일정·팀·분석·도구) 탭 트리. 명령어 외우기 부담 해소
+  - help.js 옆에 menu.js 신규
+  - inline_keyboard 콜백 데이터로 명령 분기
+  - "🔙 뒤로" 버튼으로 메뉴 탐색
+
+### 다음 라운드 — 그 다음 (가치 ↑)
+- [ ] **음성 메모 → 업무일지** — Telegram voice 메시지 → STT(Gemini/Whisper) → cmdLog 파이프
+- [ ] **2FA OTP 발송** — 로그인·중요 변경 시 텔레그램으로 6자리 OTP (telegram_links 이미 매핑됨)
+- [ ] **결재 인라인 버튼** — 휴가/외근 신청 → 팀장 텔레그램 [승인][반려][조건부] → audit_log
+
+### A/S·현장 워커 특화 (장비 보유 환경)
+- [ ] 위치 공유 → 반경 N km 내 진행중 A/S 자동 목록 + 거리/이동시간 기록
+- [ ] "현장 도착" / "복귀" 빠른 버튼 → 작업 시작/종료 자동 기록
+- [ ] QR/바코드 스캔 → 장비 즉시 호출 (사진 분석)
+- [ ] A/S 완료 시 고객 서명 링크 텔레그램 전송 → 모바일 서명 → 자동 첨부
+
+### 개인 생산성·분석 (낮은 우선순위)
+- [ ] `/note "내용"` 검색 가능한 개인 노트
+- [ ] `/timer start` / `stop` — 작업 타이머 → 자동 cmdLog
+- [ ] `/now` — 팀원별 현재 작업(최근 1시간 /log 기준) 한 화면
+- [ ] `/expert <키워드>` — 과거 이슈/문서에서 키워드 다룬 사람 검색
+- [ ] `/snapshot` — 현재 상태를 PNG/PDF 카드로 채팅 첨부
+- [ ] 매 알림에 "이 알림 그만 받기" 1탭 음소거 버튼
+
+### 큐 통합 (인프라는 v13.86에서 마련됨)
+- [ ] notification.service.notify() → queueService.publish('telegram_send', ...) enqueue 전환
+- [ ] QUEUE_ENABLED 환경변수 운영 활성화 결정
+- [ ] console.log 점진 교체 → logger
