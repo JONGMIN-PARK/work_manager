@@ -1,5 +1,97 @@
 # Work Manager — 변경 이력
 
+## v13.86 (2026-05-20) — 운영 인프라: winston 로깅 · pg-boss 큐 · 자동 DB 백업 cron
+
+### 배경
+100명 사내 도입을 위한 운영 안정성 보강. Redis·S3 의존 없이 코드+PostgreSQL만으로 가능한 3건을 병렬 처리.
+
+### 변경 — 신규 인프라
+
+**winston 로깅 (`server/lib/logger.js` 신규)**
+- 218라인. `info/warn/error/debug` + `child({label})` 인터페이스
+- 콘솔 + 일자 회전 파일 transport (`logs/app-YYYY-MM-DD.log`, 14일 보관, 20MB rotate, gzip)
+- 환경변수: `LOG_LEVEL` (기본 info) / `LOG_DIR` (기본 `server/logs/`) / `NODE_ENV=test`면 파일 transport 비활성
+- **이중 fallback**: `winston` 또는 `winston-daily-rotate-file` 미설치/초기화 실패 시 `console` 기반 더미 로거로 자동 전환 — 호출자 코드는 fallback 여부 무관 동일 작동
+- Asia/Seoul 타임스탬프
+
+**pg-boss 큐 (`server/services/queue.service.js` 신규)**
+- 337라인. `start/stop/publish/subscribe/isEnabled/getStats`
+- **활성 3중 게이트**: `QUEUE_ENABLED=1` AND `pg-boss` 로드 성공 AND `start()` 성공. 어느 단계든 실패 시 인라인 fallback
+- 인라인 fallback: 메모리 `_handlers` 맵 — `publish` 시 즉시 등록 핸들러 호출. 시그니처 동일하므로 호출자는 옵션 변경 없이 호환
+- pg-boss 옵션: schema=`pgboss`, retryLimit=3, retryDelay=60, retryBackoff=true
+- 10.x/9.x API 양쪽 호환(`send`/`work` 우선, `publish`/`subscribe` 폴백)
+- **`notification.service.js` enqueue 전환은 별도 라운드** — 본 라운드는 인프라만 마련
+
+**자동 DB 백업 cron**
+- `server/scripts/backup-db.js` 모듈화: `runBackup({outDir, retentionDays})` async export. `process.exit`는 `require.main === module` CLI 가드 안으로 분리. CLI 동작·출력·exit code 동등 유지
+- `server/services/scheduler.service.js`에 4번째 cron 추가: **매일 03:00 KST + 7일 보존**
+- 등록 메시지를 `_tasks.length`로 동적 계산
+- 백업 위치: `server/backups/backup_YYYY-MM-DDTHH-MM-SS.json` (JSON 16개 핵심 테이블, .gitignore 등록)
+
+### 변경 — 통합 (`server/app.js`)
+- 부팅 직후 logger·queueService·asScheduler 초기화 (express init 직전)
+- `queueService.start()` 실패는 warn 로그 + 인라인 모드 자동 폴백 (서버는 정상 기동)
+- `asScheduler.start()`로 SLA(평일 09~18시 매시)·미회신 D+3(09:10)·주간요약(월 08:30)·**DB 백업(매일 03:00)** 4개 cron 활성화
+
+### 변경 — 의존성
+- `server/package.json`: `pg-boss@^10.1.5`, `winston@^3.17.0`, `winston-daily-rotate-file@^5.0.0` 추가 — 운영 환경 `npm install` 시 자동 설치. 미설치 시에도 fallback으로 정상 부팅
+- `.gitignore`: `server/logs/` 추가
+
+### 영향
+- **호출자 코드 무영향**: 큐는 enqueue 통합 미적용, 로거는 신규 모듈 + 점진 교체 패턴
+- 5개 파일 `node -c` 통과, 멀티에이전트 3명 병렬 충돌 0건
+- 코드 변경만으로 운영 가시성·복구 안정성·확장성 인프라 마련
+
+### 잔여 (별도 의사결정)
+- notification.service.js 알림 발송을 `queueService.publish` enqueue로 통합 (큐 인프라는 마련됨, 트리거만 결정)
+- console.log → logger 점진 교체 (44회 호출, 단계적)
+- 외부 백업 보관(S3/R2/B2) — 보존 정책·비용 결정
+- 프론트엔드 번들링(esbuild/Vite), Node cluster, WebSocket/SSE, 테스트 확대
+
+## v13.85 (2026-05-20) — 100명 도입 P0/P1 잔건: 로그인 잠금 · 알림 escape · 첨부 검증 · LIKE 정규화
+
+### 배경
+100명 도입 검토 보고서의 텔레그램 외 P0/P1 5건을 멀티에이전트 병렬 처리. 인프라(번들/큐/백업)는 별도 라운드.
+
+### 변경
+**P0 — 로그인 잠금 호출 (`server/routes/auth.js`)**
+- L93~103: status 체크 직후 `authService.isLocked(user)` 가드 추가 — 잠긴 계정은 HTTP **423 LOCKED** + `lockedUntil` ISO 응답
+- L105~124: `verifyPassword` 실패 시 `incrementLoginFail(user.id)` 호출 + `attemptsRemaining` 응답. 마지막 시도에서 잠긴 경우 423 전환
+- 정책: `config.loginLock.{maxAttempts:5, lockMinutes:15}` 기반(이미 정의). 무차별 대입 차단.
+
+**P1 — 알림 템플릿 escape + 메모리 필터 제거 (`server/services/notification.service.js`)**
+- `TEMPLATES` 14개 함수 전체에 `escHtml()` 적용 — `p.title/customerName/summary/userName/department/milestoneName/orderNo/client/delivery/author/equipmentModel/categoryLabel/deptLabel/promisedAt/elapsedH/slaH/progress/expected` 등 사용자 발 필드. `p.content`(weekly_digest/event_today/as_weekly_digest)는 호출자가 직접 안전 HTML 조립함을 grep으로 확인 → 이중 escape 방지 위해 raw 유지
+- `sendDailyBriefing()` (L437~500): 전체 이슈 1회 조회 후 메모리 필터하던 패턴 제거 → `issue_assignees` JOIN으로 사용자×이슈 사전 매핑 1회 조회. user_id 정확 매칭 우선 + assignee_name 폴백
+- `r.title`에 `escHtml` 적용
+
+**P1 — projects LIKE → project_members 정규화 (`server/telegram/commands/personal.js`)**
+- `projects.assignees::text LIKE '%name%'` 3건(cmdMy L35-39 / cmdTasks L93-97 / cmdDone L140-144)을 다음으로 교체:
+  ```sql
+  EXISTS (
+    SELECT 1 FROM project_members pm
+    WHERE pm.project_id = projects.id
+      AND pm.tenant_id = projects.tenant_id
+      AND pm.user_id = $1
+      AND pm.released_at IS NULL
+  ) OR created_by = $1
+  ```
+- `idx_project_members_user_project` partial 인덱스 활용 가능 → 풀스캔 → 인덱스 검색
+- 동명이인 오매칭 + 부분일치 위양성 해소
+
+**P1 — A/S 첨부 입력 검증 (`server/routes/as-tickets.js`)**
+- 모듈 스코프 상수 추가: `ALLOWED_MIME`(이미지·PDF·Office), `DENY_EXT`(svg/html/js/mjs/jsx/ts/vbs/bat/sh/exe/dll/jar/com/cmd/ps1/psm1/app/deb/rpm/dmg/pkg), `MAX_FILE_BYTES = 10MB`
+- `POST /:id/attachments` (L828~889) 검증 6단계: 필수 → 확장자 차단(`UNSAFE_EXT` 400) → URL 스킴(`INVALID_URL` 400) → dataURL 헤더 파싱·MIME 검증·base64 길이로 바이트 추정·10MB 초과(`TOO_LARGE` 413) → 메타 MIME 화이트리스트(`UNSAFE_MIME` 400) → 메타 fileSize 한도 → INSERT
+- XSS(SVG/HTML), DoS(거대 dataURL), 스크립트 실행 위협 차단
+
+### 영향
+- 외부 export·응답 스키마·INSERT 컬럼 모두 무변경
+- 4개 파일 `node -c` 통과, 멀티에이전트 4명 병렬 충돌 0건
+- `incrementLoginFail`/`resetLoginFail`/`isLocked`는 v13.x 이전부터 존재했으나 라우트가 호출하지 않아 무력화 상태였음 — 본 변경으로 정책 실효화
+
+### 잔여
+- **인프라(별도 의사결정 필요)**: 프론트엔드 번들링 + 해시 캐싱 / BullMQ+Redis 또는 PG 큐 / 자동 백업 cron + S3·R2
+- 클러스터링·PM2, WebSocket/SSE, 운영 로깅(winston/pino), 테스트 커버리지 확대
+
 ## v13.84 (2026-05-20) — 텔레그램 P1 잔건: /closevote · /cancelremind + issues 정규화(공존)
 
 ### 배경

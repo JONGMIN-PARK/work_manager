@@ -5,100 +5,109 @@
 var db = require('../config/db');
 var telegramService = require('./telegram.service');
 var emailService = require('./email.service');
+var escHtml = require('../telegram/util/escape').escHtml;
 
-/** 이벤트 메시지 템플릿 */
+/** 이벤트 메시지 템플릿
+ *  사용자 발 필드는 모두 escHtml()로 감싸 텔레그램 HTML 파서가 깨지지 않도록 함.
+ *  단, p.content 류(event_today / weekly_digest / as_weekly_digest)는 호출자가 이미
+ *  <b>/<code> 등 마크업을 안전하게 조립한 HTML이므로 raw 유지(이중 escape 회피).
+ *  분기 비교용 enum(p.urgency, p.priority)도 raw 유지.
+ */
 var TEMPLATES = {
   issue_assigned: function (p) {
     var icon = p.urgency === 'urgent' ? '🔴' : p.urgency === 'normal' ? '🟡' : '🟢';
     return icon + ' <b>이슈 배정</b>\n' +
-      (p.projectName ? p.projectName + '\n' : '') +
-      '제목: ' + p.title + '\n' +
-      '담당: ' + (p.assignee || '-');
+      (p.projectName ? escHtml(p.projectName) + '\n' : '') +
+      '제목: ' + escHtml(p.title) + '\n' +
+      '담당: ' + (p.assignee ? escHtml(p.assignee) : '-');
   },
   issue_status_changed: function (p) {
     return '🔵 <b>이슈 상태 변경</b>\n' +
-      p.title + '\n' +
-      p.fromStatus + ' → ' + p.toStatus;
+      escHtml(p.title) + '\n' +
+      escHtml(p.fromStatus) + ' → ' + escHtml(p.toStatus);
   },
   project_delayed: function (p) {
     return '⚠️ <b>프로젝트 지연</b>\n' +
-      (p.orderNo ? '[' + p.orderNo + '] ' : '') + p.name + '\n' +
-      '예정 납기: ' + (p.endDate || '-');
+      (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.name) + '\n' +
+      '예정 납기: ' + (p.endDate ? escHtml(p.endDate) : '-');
   },
   deadline_d3: function (p) {
     return '⏰ <b>납기 D-3</b>\n' +
-      (p.orderNo ? '[' + p.orderNo + '] ' : '') + p.name + '\n' +
-      '납기일: ' + p.endDate;
+      (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.name) + '\n' +
+      '납기일: ' + escHtml(p.endDate);
   },
   deadline_d1: function (p) {
     return '🔔 <b>내일 납기!</b>\n' +
-      (p.orderNo ? '[' + p.orderNo + '] ' : '') + p.name + '\n' +
-      '납기일: ' + p.endDate;
+      (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.name) + '\n' +
+      '납기일: ' + escHtml(p.endDate);
   },
   deadline_today: function (p) {
     return '🏁 <b>오늘 납기일</b>\n' +
-      (p.orderNo ? '[' + p.orderNo + '] ' : '') + p.name;
+      (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.name);
   },
   user_pending: function (p) {
     return '👤 <b>신규 가입 승인 요청</b>\n' +
-      '이름: ' + p.userName + '\n' +
-      (p.department ? '부서: ' + p.department : '');
+      '이름: ' + escHtml(p.userName) + '\n' +
+      (p.department ? '부서: ' + escHtml(p.department) : '');
   },
   milestone_complete: function (p) {
     return '✅ <b>마일스톤 완료</b>\n' +
-      (p.orderNo ? '[' + p.orderNo + '] ' : '') + p.milestoneName;
+      (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.milestoneName);
   },
   event_today: function (p) {
-    return '☀️ <b>오늘 브리핑</b>\n\n' + p.content;
+    // p.content는 호출자가 조립한 사전-안전 HTML — raw 유지
+    return '☀️ <b>오늘 브리핑</b>\n\n' + (p.content || '');
   },
   order_delivery_d7: function (p) {
     return '📦 <b>납품 D-7</b>\n' +
-      (p.orderNo ? '[' + p.orderNo + '] ' : '') + (p.client || '') + '\n' +
-      '납품일: ' + p.delivery;
+      (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + (p.client ? escHtml(p.client) : '') + '\n' +
+      '납품일: ' + escHtml(p.delivery);
   },
   order_delivery_d3: function (p) {
     return '📦 <b>납품 D-3!</b>\n' +
-      (p.orderNo ? '[' + p.orderNo + '] ' : '') + (p.client || '') + '\n' +
-      '납품일: ' + p.delivery;
+      (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + (p.client ? escHtml(p.client) : '') + '\n' +
+      '납품일: ' + escHtml(p.delivery);
   },
   weekly_digest: function (p) {
-    return '📊 <b>주간 다이제스트</b>\n\n' + p.content;
+    // p.content는 호출자가 조립한 사전-안전 HTML — raw 유지
+    return '📊 <b>주간 다이제스트</b>\n\n' + (p.content || '');
   },
   progress_warning: function (p) {
     return '📉 <b>진행률 경고</b>\n' +
-      (p.orderNo ? '[' + p.orderNo + '] ' : '') + p.name + '\n' +
-      '현재 ' + p.progress + '% (기대 ' + p.expected + '%)';
+      (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.name) + '\n' +
+      '현재 ' + escHtml(p.progress) + '% (기대 ' + escHtml(p.expected) + '%)';
   },
   // ─── A/S 모듈 (v13.49) ───
   as_received: function (p) {
     var icon = p.priority === 'P1' ? '🚨' : p.priority === 'P2' ? '🔴' : '🟡';
     return icon + ' <b>A/S 신규 접수</b>\n' +
-      '[' + p.ticketNo + '] ' + p.priority + ' · ' + (p.customerName || '') + '\n' +
-      (p.equipmentModel ? p.equipmentModel + '\n' : '') +
-      '카테고리: ' + (p.categoryLabel || p.category || '-') + '\n' +
-      '증상: ' + (p.summary || '').slice(0, 100);
+      '[' + escHtml(p.ticketNo) + '] ' + escHtml(p.priority) + ' · ' + (p.customerName ? escHtml(p.customerName) : '') + '\n' +
+      (p.equipmentModel ? escHtml(p.equipmentModel) + '\n' : '') +
+      '카테고리: ' + (p.categoryLabel ? escHtml(p.categoryLabel) : (p.category ? escHtml(p.category) : '-')) + '\n' +
+      '증상: ' + escHtml((p.summary || '').slice(0, 100));
   },
   as_assigned: function (p) {
     return '📌 <b>A/S 할당</b>\n' +
-      '[' + p.ticketNo + '] ' + p.priority + ' · ' + (p.customerName || '') + '\n' +
-      '담당: ' + (p.assignee || '-') + ' (' + (p.deptLabel || p.dept || '') + ')' +
-      (p.promisedAt ? '\n약속: ' + p.promisedAt : '');
+      '[' + escHtml(p.ticketNo) + '] ' + escHtml(p.priority) + ' · ' + (p.customerName ? escHtml(p.customerName) : '') + '\n' +
+      '담당: ' + (p.assignee ? escHtml(p.assignee) : '-') + ' (' + (p.deptLabel ? escHtml(p.deptLabel) : (p.dept ? escHtml(p.dept) : '')) + ')' +
+      (p.promisedAt ? '\n약속: ' + escHtml(p.promisedAt) : '');
   },
   as_sla_breach: function (p) {
     return '⏰ <b>A/S SLA 초과</b>\n' +
-      '[' + p.ticketNo + '] ' + p.priority + ' · ' + (p.customerName || '') + '\n' +
-      '경과 ' + p.elapsedH + 'h (' + p.priority + ' 목표 ' + p.slaH + 'h)';
+      '[' + escHtml(p.ticketNo) + '] ' + escHtml(p.priority) + ' · ' + (p.customerName ? escHtml(p.customerName) : '') + '\n' +
+      '경과 ' + escHtml(p.elapsedH) + 'h (' + escHtml(p.priority) + ' 목표 ' + escHtml(p.slaH) + 'h)';
   },
   as_customer_wait: function (p) {
     return '📞 <b>A/S 고객 확인 D+3 미회신</b>\n' +
-      '[' + p.ticketNo + '] ' + (p.customerName || '');
+      '[' + escHtml(p.ticketNo) + '] ' + (p.customerName ? escHtml(p.customerName) : '');
   },
   as_report_issued: function (p) {
     return '📄 <b>A/S 보고서 발행</b>\n' +
-      '[' + p.ticketNo + '] ' + (p.customerName || '') + '\n' +
-      '발행자: ' + (p.author || '-');
+      '[' + escHtml(p.ticketNo) + '] ' + (p.customerName ? escHtml(p.customerName) : '') + '\n' +
+      '발행자: ' + (p.author ? escHtml(p.author) : '-');
   },
   as_weekly_digest: function (p) {
+    // p.content는 호출자가 조립한 사전-안전 HTML — raw 유지
     return p.content || '📊 <b>A/S 주간 요약</b>';
   }
 };
@@ -440,11 +449,37 @@ async function sendDailyBriefing() {
   );
   var prefMap = {};
   prefRows.rows.forEach(function(p) { prefMap[p.user_id] = p.is_enabled; });
-  // 3) 긴급 미해결 이슈 전체를 1회 조회 후 사용자별 메모리 필터 (기존 assignees::text LIKE '%name%' 동등)
-  var allIssR = await db.query(
-    "SELECT title, assignees::text AS assignees_txt FROM issues WHERE status NOT IN ('resolved','closed') AND urgency = 'urgent'"
+  // 3) 사용자별 긴급 미해결 이슈 매핑 — issue_assignees(매핑 테이블) 활용으로 N+1/메모리 필터 제거
+  //    user_id 매칭이 우선이고, 누락 시 assignee_name 폴백. 백필 누락 row는 결과 제외 (동명이인 제거).
+  var userIds = users.rows.map(function (u) { return u.user_id; });
+  var userNames = users.rows.map(function (u) { return u.name; });
+  var iaR = await db.query(
+    "SELECT i.id, i.title, ia.user_id, ia.assignee_name " +
+    "FROM issues i " +
+    "JOIN issue_assignees ia ON ia.issue_id = i.id AND ia.tenant_id = i.tenant_id " +
+    "WHERE i.status NOT IN ('resolved','closed') AND i.urgency = 'urgent' " +
+    "  AND (ia.user_id = ANY($1) OR ia.assignee_name = ANY($2))",
+    [userIds, userNames]
   );
-  var allUrgentIssues = allIssR.rows;
+  var urgentByUser = {}; // user_id → [{id, title}]
+  iaR.rows.forEach(function (r) {
+    // user_id 매칭이 정확 — 우선 그것으로 매핑
+    if (r.user_id) {
+      (urgentByUser[r.user_id] = urgentByUser[r.user_id] || []).push({ id: r.id, title: r.title });
+    }
+  });
+  // user_id 매핑이 없는 case는 assignee_name으로 폴백 매핑
+  var byName = {};
+  iaR.rows.forEach(function (r) {
+    if (!r.user_id && r.assignee_name) {
+      (byName[r.assignee_name] = byName[r.assignee_name] || []).push({ id: r.id, title: r.title });
+    }
+  });
+  users.rows.forEach(function (u) {
+    if ((!urgentByUser[u.user_id] || urgentByUser[u.user_id].length === 0) && byName[u.name]) {
+      urgentByUser[u.user_id] = byName[u.name];
+    }
+  });
 
   // 공통 메시지 조각 — 일정/납기는 사용자 공통이므로 미리 조립
   var typeIcons = { milestone:'◆', meeting:'🤝', deadline:'🏁', trip:'✈️', fieldService:'🔧', periodicChk:'🛠️', dayoff:'🌴', amoff:'🌅', pmoff:'🌇', etc:'📌' };
@@ -474,13 +509,11 @@ async function sendDailyBriefing() {
       // 오늘 일정 (공통)
       msg += evtBlock;
 
-      // 미해결 긴급 이슈 — 사용자별 메모리 필터 (assignees 텍스트에 이름 포함, 최대 3건)
-      var userIssues = allUrgentIssues.filter(function(r) {
-        return r.assignees_txt && r.assignees_txt.indexOf(usr.name) !== -1;
-      }).slice(0, 3);
+      // 미해결 긴급 이슈 — issue_assignees 기반 사전 매핑에서 직접 조회 (최대 3건)
+      var userIssues = (urgentByUser[usr.user_id] || []).slice(0, 3);
       if (userIssues.length > 0) {
         msg += '🔴 <b>긴급 이슈 ' + userIssues.length + '건</b>\n';
-        userIssues.forEach(function(r) { msg += '  · ' + r.title + '\n'; });
+        userIssues.forEach(function(r) { msg += '  · ' + escHtml(r.title) + '\n'; });
         msg += '\n';
       }
 

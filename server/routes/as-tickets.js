@@ -12,6 +12,22 @@ var authService = require('../services/auth.service');
 var rateLimit = require('express-rate-limit');
 var asStatsRouter = require('./as-stats');  // invalidateStats 헬퍼
 
+// ─── 첨부 검증 상수 (모듈 스코프) ───
+// A/S 티켓 첨부는 사진·문서·로그 위주 → 화이트리스트 기반 MIME 허용
+var ALLOWED_MIME = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf',
+  'text/plain', 'text/csv',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
+  'application/vnd.ms-excel', // xls
+  'application/msword' // doc
+];
+// 실행/스크립트/SVG·HTML(XSS 운반체) 등 위험 확장자 차단
+var DENY_EXT = /\.(svg|html?|js|mjs|jsx|ts|tsx|vbs|bat|sh|exe|dll|jar|com|cmd|ps1|psm1|app|deb|rpm|dmg|pkg)$/i;
+// 첨부 사이즈 상한 (10MB) — express.json limit과 정합
+var MAX_FILE_BYTES = 10 * 1024 * 1024;
+
 // 헬퍼: 티켓 변경 시 통계 캐시 무효화 (실패해도 응답엔 영향 없음)
 function _invalidateStatsCache(tenantId) {
   try {
@@ -812,8 +828,52 @@ router.get('/:id/attachments', async function (req, res) {
 router.post('/:id/attachments', async function (req, res) {
   try {
     var b = req.body || {};
-    if (!b.fileName && !b.file_name) return res.status(400).json({ error: 'VALIDATION', message: '파일 이름 필수' });
-    if (!b.fileUrl && !b.file_url) return res.status(400).json({ error: 'VALIDATION', message: '파일 URL 필수' });
+    var fileName = b.fileName || b.file_name;
+    var fileUrl = b.fileUrl || b.file_url;
+    var mimeType = b.mimeType || b.mime_type || null;
+    var fileSize = b.fileSize != null ? b.fileSize : (b.file_size != null ? b.file_size : null);
+
+    if (!fileName) return res.status(400).json({ error: 'VALIDATION', message: '파일 이름 필수' });
+    if (!fileUrl) return res.status(400).json({ error: 'VALIDATION', message: '파일 URL 필수' });
+
+    // 1) 위험 확장자 차단 (SVG/HTML/스크립트/실행파일)
+    if (DENY_EXT.test(fileName)) {
+      return res.status(400).json({ error: 'UNSAFE_EXT', message: '실행/스크립트 파일 확장자는 첨부할 수 없습니다.' });
+    }
+
+    // 2) URL 스킴 검증 — data: 또는 http(s):// 만 허용 (file:/javascript: 등 차단)
+    var isDataUrl = /^data:/i.test(fileUrl);
+    if (!isDataUrl) {
+      if (!/^https?:\/\//i.test(fileUrl)) {
+        return res.status(400).json({ error: 'INVALID_URL', message: '허용되지 않는 URL 스킴입니다.' });
+      }
+    } else {
+      // dataURL: 헤더에서 mime 파싱 + 사이즈 추정
+      var m = fileUrl.match(/^data:([^;,]+)[^,]*,(.*)$/i);
+      if (!m) return res.status(400).json({ error: 'INVALID_DATA_URL', message: 'data URL 형식 오류' });
+      var dataMime = m[1].toLowerCase();
+      if (!mimeType) mimeType = dataMime;
+      if (ALLOWED_MIME.indexOf(dataMime) < 0) {
+        return res.status(400).json({ error: 'UNSAFE_MIME', message: '허용되지 않는 MIME 타입입니다: ' + dataMime });
+      }
+      // base64 페이로드 길이 → 실제 바이트 추정 (대략 길이 * 3/4)
+      var payload = m[2] || '';
+      var estBytes = Math.floor(payload.length * 3 / 4);
+      if (fileSize == null) fileSize = estBytes;
+      if (estBytes > MAX_FILE_BYTES) {
+        return res.status(413).json({ error: 'TOO_LARGE', message: '파일 크기 한도(10MB) 초과' });
+      }
+    }
+
+    // 3) MIME 검증 (제공된 경우 화이트리스트 검사)
+    if (mimeType && ALLOWED_MIME.indexOf(mimeType) < 0) {
+      return res.status(400).json({ error: 'UNSAFE_MIME', message: '허용되지 않는 MIME 타입입니다: ' + mimeType });
+    }
+
+    // 4) 사이즈 검증 (제공된 경우)
+    if (fileSize != null && fileSize > MAX_FILE_BYTES) {
+      return res.status(413).json({ error: 'TOO_LARGE', message: '파일 크기 한도(10MB) 초과' });
+    }
 
     var id = b.id || ('asa-' + require('crypto').randomUUID().slice(0, 12));
     var r = await db.query(
@@ -822,10 +882,10 @@ router.post('/:id/attachments', async function (req, res) {
       'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
       [id, req.params.id, req.tenant.id,
        b.category || 'etc',
-       b.fileName || b.file_name,
-       b.fileUrl || b.file_url,
-       b.fileSize != null ? b.fileSize : (b.file_size != null ? b.file_size : null),
-       b.mimeType || b.mime_type || null,
+       fileName,
+       fileUrl,
+       fileSize,
+       mimeType,
        b.note || null,
        req.user.sub]
     );

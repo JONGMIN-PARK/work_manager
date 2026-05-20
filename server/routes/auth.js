@@ -91,12 +91,35 @@ router.post('/login', async function (req, res) {
       return res.status(403).json({ error: 'REJECTED', message: '가입이 거절된 계정입니다.' });
     }
 
+    // 계정 잠금 체크
+    if (authService.isLocked(user)) {
+      var lockedUntil = new Date(user.locked_until);
+      var remainSec = Math.max(1, Math.ceil((lockedUntil.getTime() - Date.now()) / 1000));
+      return res.status(423).json({
+        error: 'LOCKED',
+        message: '로그인 시도 횟수 초과로 계정이 잠겼습니다. ' + Math.ceil(remainSec / 60) + '분 후 다시 시도하세요.',
+        lockedUntil: lockedUntil.toISOString()
+      });
+    }
+
     // 비밀번호 확인
     var valid = await authService.verifyPassword(password, user.password_hash);
     if (!valid) {
+      var failCount = await authService.incrementLoginFail(user.id);
+      var maxAttempts = (require('../config').loginLock && require('../config').loginLock.maxAttempts) || 5;
+      var remaining = Math.max(0, maxAttempts - failCount);
+      var msg = '이메일 또는 비밀번호가 올바르지 않습니다.';
+      if (remaining > 0 && remaining <= 2) {
+        msg += ' (남은 시도: ' + remaining + '회)';
+      } else if (remaining === 0) {
+        // 마지막 시도였고 이번 호출에서 잠겼을 가능성
+        msg = '로그인 시도 횟수 초과로 계정이 잠겼습니다. 잠시 후 다시 시도하세요.';
+        return res.status(423).json({ error: 'LOCKED', message: msg });
+      }
       return res.status(401).json({
         error: 'AUTH_FAILED',
-        message: '이메일 또는 비밀번호가 올바르지 않습니다.'
+        message: msg,
+        attemptsRemaining: remaining
       });
     }
 

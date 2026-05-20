@@ -31,10 +31,10 @@ function create(sendMessage) {
       "SELECT title, urgency, status FROM issues WHERE EXISTS (SELECT 1 FROM issue_assignees ia WHERE ia.issue_id = issues.id AND ia.tenant_id = issues.tenant_id AND (ia.user_id = $1 OR ia.assignee_name = $2)) AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 5",
       [user.user_id, user.name]
     );
-    // 임박 납기 (7일 이내)
+    // 임박 납기 (7일 이내) — project_members 정규화 매핑 (활성 멤버) + created_by 폴백
     var deadlines = await db.query(
-      "SELECT name, order_no, end_date FROM projects WHERE (assignees::text LIKE $1 OR created_by = $2) AND end_date BETWEEN $3 AND ($3::date + INTERVAL '7 days')::text AND status != 'done' ORDER BY end_date LIMIT 5",
-      ['%' + user.name + '%', user.user_id, today]
+      "SELECT name, order_no, end_date FROM projects WHERE (EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = projects.id AND pm.tenant_id = projects.tenant_id AND pm.user_id = $1 AND pm.released_at IS NULL) OR created_by = $1) AND end_date BETWEEN $2 AND ($2::date + INTERVAL '7 days')::text AND status != 'done' ORDER BY end_date LIMIT 5",
+      [user.user_id, today]
     );
 
     var msg = '📋 <b>' + escHtml(user.name) + '님의 현황</b>\n\n';
@@ -89,9 +89,10 @@ function create(sendMessage) {
 
   /** 봇 명령어: /tasks — 미완료 작업 목록 */
   async function cmdTasks(chatId, user) {
+    // project_members 정규화 매핑 (활성 멤버) + created_by 폴백
     var checklistsR = await db.query(
-      'SELECT c.id, c.project_id, c.phase, c.items, p.name as project_name FROM checklists c LEFT JOIN projects p ON p.id = c.project_id WHERE p.assignees::text LIKE $1 OR c.created_by = $2 ORDER BY p.name',
-      ['%' + user.name + '%', user.user_id]
+      'SELECT c.id, c.project_id, c.phase, c.items, p.name as project_name FROM checklists c LEFT JOIN projects p ON p.id = c.project_id WHERE EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.tenant_id = p.tenant_id AND pm.user_id = $1 AND pm.released_at IS NULL) OR c.created_by = $1 ORDER BY p.name',
+      [user.user_id]
     );
 
     var taskNum = 0;
@@ -136,9 +137,10 @@ function create(sendMessage) {
       return sendMessage(chatId, '사용법: /done <번호>\n\n/tasks 에서 번호를 확인하세요.');
     }
 
+    // project_members 정규화 매핑 (활성 멤버) + created_by 폴백
     var checklistsR = await db.query(
-      'SELECT c.id, c.project_id, c.phase, c.items, p.name as project_name FROM checklists c LEFT JOIN projects p ON p.id = c.project_id WHERE p.assignees::text LIKE $1 OR c.created_by = $2 ORDER BY p.name',
-      ['%' + user.name + '%', user.user_id]
+      'SELECT c.id, c.project_id, c.phase, c.items, p.name as project_name FROM checklists c LEFT JOIN projects p ON p.id = c.project_id WHERE EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.tenant_id = p.tenant_id AND pm.user_id = $1 AND pm.released_at IS NULL) OR c.created_by = $1 ORDER BY p.name',
+      [user.user_id]
     );
 
     var taskNum = 0;

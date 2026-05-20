@@ -54,8 +54,25 @@ function start() {
     sendWeeklyDigests().catch(function (e) { console.error('[Scheduler/digest]', e.message); });
   }, { timezone: tz }));
 
+  // 4) DB 자동 백업 — 매일 03:00 KST (7일 보존)
+  var backupModule;
+  try {
+    backupModule = require('../scripts/backup-db');
+  } catch (e) {
+    console.warn('[Scheduler/backup] backup-db 모듈 로드 실패:', e.message);
+  }
+  if (backupModule && backupModule.runBackup) {
+    _tasks.push(cron.schedule('0 3 * * *', function () {
+      backupModule.runBackup({ retentionDays: 7 }).then(function (result) {
+        console.log('[Scheduler/backup] 완료: ' + result.filePath + ' (정리 ' + result.cleanedCount + '건)');
+      }).catch(function (e) {
+        console.error('[Scheduler/backup] 실패:', e.message);
+      });
+    }, { timezone: tz }));
+  }
+
   _started = true;
-  console.log('[Scheduler] 3개 작업 등록됨 (TZ=Asia/Seoul) — SLA(평일 09~18시), 미회신(매일 09:10), 주간(월 08:30)');
+  console.log('[Scheduler] ' + _tasks.length + '개 작업 등록됨 (TZ=Asia/Seoul) — SLA(평일 09~18시), 미회신(매일 09:10), 주간(월 08:30), 백업(매일 03:00)');
 }
 
 function stop() {

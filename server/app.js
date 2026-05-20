@@ -6,6 +6,19 @@ var rateLimit = require('express-rate-limit');
 var path = require('path');
 var config = require('./config');
 
+// 운영 로깅 (winston) — 모듈 부재 시 console fallback
+var logger = require('./lib/logger');
+
+// 큐 서비스 (pg-boss) — QUEUE_ENABLED=1 일 때만 활성, 아니면 인라인 fallback
+var queueService = require('./services/queue.service');
+queueService.start().catch(function (e) {
+  logger.warn('[queue] start failed, falling back to inline mode: ' + e.message);
+});
+
+// A/S 스케줄러 (SLA·미회신·주간요약·DB 자동 백업)
+var asScheduler = require('./services/scheduler.service');
+asScheduler.start();
+
 var app = express();
 
 // ─── 프록시 신뢰 (Render, Cloud Run 등 리버스 프록시 환경) ───
