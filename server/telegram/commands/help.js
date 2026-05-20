@@ -1,6 +1,7 @@
 /**
  * /help 명령어 모듈
  */
+var escHtml = require('../util/escape').escHtml;
 
 /** 명령어별 상세 도움말 */
 var CMD_HELP = {
@@ -166,7 +167,7 @@ function create(sendMessage) {
     if (arg) {
       var key = arg.replace(/^\//, '').toLowerCase().replace(/_/g, '-');
       var h = CMD_HELP[key];
-      if (!h) return sendMessage(chatId, '❓ "' + arg + '" 명령어를 찾을 수 없습니다.\n/help 로 전체 목록을 확인하세요.');
+      if (!h) return sendMessage(chatId, '❓ "' + escHtml(arg) + '" 명령어를 찾을 수 없습니다.\n/help 로 전체 목록을 확인하세요.');
 
       var msg = '📖 <b>' + h.title + '</b>\n\n';
       msg += '<b>사용법</b>\n<code>' + h.usage + '</code>\n\n';

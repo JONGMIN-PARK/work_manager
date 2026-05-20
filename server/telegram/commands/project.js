@@ -2,6 +2,7 @@
  * 프로젝트 명령어 모듈: /project, /checklist
  */
 var db = require('../../config/db');
+var escHtml = require('../util/escape').escHtml;
 
 /** 텍스트 바 차트 생성 */
 function textBar(value, max, width) {
@@ -24,8 +25,8 @@ function create(sendMessage) {
       listR.rows.forEach(function (r, i) {
         var statusIcon = r.status === 'delayed' ? '⚠️' : r.status === 'active' ? '🔵' : '⏳';
         var pct = r.progress || 0;
-        msg += statusIcon + ' ' + r.name;
-        if (r.order_no) msg += ' <code>[' + r.order_no + ']</code>';
+        msg += statusIcon + ' ' + escHtml(r.name);
+        if (r.order_no) msg += ' <code>[' + escHtml(r.order_no) + ']</code>';
         msg += '\n   <code>' + textBar(pct, 100, 10) + '</code> ' + pct + '%\n';
       });
       msg += '\n💡 /checklist 이름 체크리스트 · /overdue 지연 현황';
@@ -37,22 +38,22 @@ function create(sendMessage) {
       "SELECT * FROM projects WHERE name ILIKE $1 OR order_no ILIKE $1 LIMIT 1",
       ['%' + query + '%']
     );
-    if (pR.rows.length === 0) return sendMessage(chatId, '❌ "' + query + '" 프로젝트를 찾을 수 없습니다.');
+    if (pR.rows.length === 0) return sendMessage(chatId, '❌ "' + escHtml(query) + '" 프로젝트를 찾을 수 없습니다.');
 
     var p = pR.rows[0];
     var statusMap = { waiting: '⏳ 대기', active: '🔵 진행중', delayed: '⚠️ 지연', done: '✅ 완료', hold: '⏸ 보류' };
     var pct = p.progress || 0;
 
-    var msg = '📁 <b>' + p.name + '</b>\n\n';
-    if (p.order_no) msg += '📋 수주: <code>' + p.order_no + '</code>\n';
-    msg += '📊 상태: ' + (statusMap[p.status] || p.status) + '\n';
+    var msg = '📁 <b>' + escHtml(p.name) + '</b>\n\n';
+    if (p.order_no) msg += '📋 수주: <code>' + escHtml(p.order_no) + '</code>\n';
+    msg += '📊 상태: ' + (statusMap[p.status] || escHtml(p.status)) + '\n';
     msg += '📈 진행률: <code>' + textBar(pct, 100, 14) + '</code> <b>' + pct + '%</b>\n';
     if (p.start_date) msg += '📅 기간: ' + p.start_date + ' ~ ' + (p.end_date || '?') + '\n';
 
     // 담당자
     var assignees = [];
     try { assignees = typeof p.assignees === 'string' ? JSON.parse(p.assignees) : (p.assignees || []); } catch (_) {}
-    if (assignees.length > 0) msg += '👤 담당: ' + assignees.join(', ') + '\n';
+    if (assignees.length > 0) msg += '👤 담당: ' + escHtml(assignees.join(', ')) + '\n';
 
     // 투입시간
     if (p.order_no) {
@@ -82,13 +83,13 @@ function create(sendMessage) {
       msg += '\n<b>마일스톤</b>\n';
       msR.rows.forEach(function (m) {
         var icon = m.status === 'done' ? '✅' : m.status === 'active' ? '🔵' : '⬜';
-        msg += icon + ' ' + m.name;
+        msg += icon + ' ' + escHtml(m.name);
         if (m.end_date) msg += ' (~ ' + m.end_date + ')';
         msg += '\n';
       });
     }
 
-    if (p.memo) msg += '\n📝 ' + p.memo.slice(0, 200);
+    if (p.memo) msg += '\n📝 ' + escHtml(p.memo.slice(0, 200));
 
     return sendMessage(chatId, msg);
   }
@@ -105,7 +106,7 @@ function create(sendMessage) {
       }
       var msg = '📋 <b>체크리스트 프로젝트</b>\n\n';
       listR.rows.forEach(function (r, i) {
-        msg += (i + 1) + '. ' + (r.name || '(프로젝트 없음)') + ' (' + r.cl_count + '개)\n';
+        msg += (i + 1) + '. ' + escHtml(r.name || '(프로젝트 없음)') + ' (' + r.cl_count + '개)\n';
       });
       msg += '\n💡 상세: /checklist 프로젝트명';
       return sendMessage(chatId, msg);
@@ -117,10 +118,10 @@ function create(sendMessage) {
     );
 
     if (clR.rows.length === 0) {
-      return sendMessage(chatId, '❌ "' + query + '" 체크리스트를 찾을 수 없습니다.');
+      return sendMessage(chatId, '❌ "' + escHtml(query) + '" 체크리스트를 찾을 수 없습니다.');
     }
 
-    var msg = '📋 <b>' + (clR.rows[0].project_name || query) + ' 체크리스트</b>\n\n';
+    var msg = '📋 <b>' + escHtml(clR.rows[0].project_name || query) + ' 체크리스트</b>\n\n';
 
     clR.rows.forEach(function (cl) {
       var items = [];
@@ -129,10 +130,10 @@ function create(sendMessage) {
       var totalCount = items.length;
       var pct = totalCount > 0 ? Math.round(doneCount / totalCount * 100) : 0;
 
-      msg += '<b>' + (cl.phase || '기타') + '</b> (' + pct + '%)\n';
+      msg += '<b>' + escHtml(cl.phase || '기타') + '</b> (' + pct + '%)\n';
       items.forEach(function (item) {
         var icon = item.done === true ? '✅' : '⬜';
-        msg += icon + ' ' + (item.title || item.text || item.name || '(항목)') + '\n';
+        msg += icon + ' ' + escHtml(item.title || item.text || item.name || '(항목)') + '\n';
       });
       msg += '\n';
     });

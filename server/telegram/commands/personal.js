@@ -2,6 +2,7 @@
  * 개인 명령어 모듈: /my, /issues, /tasks, /done, /log, /my-stats
  */
 var db = require('../../config/db');
+var escHtml = require('../util/escape').escHtml;
 
 /** 업무분장 코드 매핑 */
 var AM = { A: 'A(CS현장)', B: 'B(수주)', D: 'D(개발)', G: 'G(공통)', M: 'M(양산)', R: 'R(제안)', S: 'S(영업지원)' };
@@ -25,10 +26,10 @@ function create(sendMessage) {
   /** 봇 명령어: /my — 오늘 할 일 요약 */
   async function cmdMy(chatId, user) {
     var today = new Date().toISOString().slice(0, 10);
-    // 미해결 이슈
+    // 미해결 이슈 (issue_assignees 정규화 매핑 — user_id 우선, 폴백 이름 정확매칭)
     var issues = await db.query(
-      "SELECT title, urgency, status FROM issues WHERE assignees::text LIKE $1 AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 5",
-      ['%' + user.name + '%']
+      "SELECT title, urgency, status FROM issues WHERE EXISTS (SELECT 1 FROM issue_assignees ia WHERE ia.issue_id = issues.id AND ia.tenant_id = issues.tenant_id AND (ia.user_id = $1 OR ia.assignee_name = $2)) AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 5",
+      [user.user_id, user.name]
     );
     // 임박 납기 (7일 이내)
     var deadlines = await db.query(
@@ -36,13 +37,13 @@ function create(sendMessage) {
       ['%' + user.name + '%', user.user_id, today]
     );
 
-    var msg = '📋 <b>' + user.name + '님의 현황</b>\n\n';
+    var msg = '📋 <b>' + escHtml(user.name) + '님의 현황</b>\n\n';
 
     if (issues.rows.length > 0) {
       msg += '🔴 <b>미해결 이슈</b>\n';
       issues.rows.forEach(function (r) {
         var icon = r.urgency === 'urgent' ? '🔴' : r.urgency === 'normal' ? '🟡' : '🟢';
-        msg += icon + ' ' + r.title + ' [' + r.status + ']\n';
+        msg += icon + ' ' + escHtml(r.title) + ' [' + r.status + ']\n';
       });
       msg += '\n';
     } else {
@@ -52,7 +53,7 @@ function create(sendMessage) {
     if (deadlines.rows.length > 0) {
       msg += '⏰ <b>임박 납기 (7일 이내)</b>\n';
       deadlines.rows.forEach(function (r) {
-        msg += '· ' + (r.order_no || '') + ' ' + r.name + ' → ' + r.end_date + '\n';
+        msg += '· ' + escHtml(r.order_no || '') + ' ' + escHtml(r.name) + ' → ' + r.end_date + '\n';
       });
     } else {
       msg += '📅 임박 납기 없음\n';
@@ -64,9 +65,10 @@ function create(sendMessage) {
 
   /** 봇 명령어: /issues — 미해결 이슈 목록 */
   async function cmdIssues(chatId, user) {
+    // issue_assignees 정규화 매핑 — user_id 우선, 폴백 이름 정확매칭
     var issues = await db.query(
-      "SELECT title, urgency, status, due_date FROM issues WHERE assignees::text LIKE $1 AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 10",
-      ['%' + user.name + '%']
+      "SELECT title, urgency, status, due_date FROM issues WHERE EXISTS (SELECT 1 FROM issue_assignees ia WHERE ia.issue_id = issues.id AND ia.tenant_id = issues.tenant_id AND (ia.user_id = $1 OR ia.assignee_name = $2)) AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 10",
+      [user.user_id, user.name]
     );
 
     if (issues.rows.length === 0) {
@@ -76,7 +78,7 @@ function create(sendMessage) {
     var msg = '📌 <b>미해결 이슈 (' + issues.rows.length + '건)</b>\n\n';
     issues.rows.forEach(function (r, i) {
       var icon = r.urgency === 'urgent' ? '🔴' : r.urgency === 'normal' ? '🟡' : '🟢';
-      msg += (i + 1) + '. ' + icon + ' ' + r.title;
+      msg += (i + 1) + '. ' + icon + ' ' + escHtml(r.title);
       if (r.due_date) msg += ' (~ ' + r.due_date + ')';
       msg += '\n';
     });
@@ -117,9 +119,9 @@ function create(sendMessage) {
     var msg = '📋 <b>미완료 작업 (' + taskNum + '건)</b>\n\n';
     var projNames = Object.keys(grouped);
     projNames.forEach(function (projName) {
-      msg += '<b>' + projName + '</b>\n';
+      msg += '<b>' + escHtml(projName) + '</b>\n';
       grouped[projName].forEach(function (t) {
-        msg += '⬜ ' + t.num + '. ' + t.title + '\n';
+        msg += '⬜ ' + t.num + '. ' + escHtml(t.title) + '\n';
       });
       msg += '\n';
     });
@@ -171,7 +173,7 @@ function create(sendMessage) {
       [JSON.stringify(items), targetCl.id]
     );
 
-    return sendMessage(chatId, '✅ 완료: ' + targetTitle);
+    return sendMessage(chatId, '✅ 완료: ' + escHtml(targetTitle));
   }
 
   /** 봇 명령어: /log — 업무일지 빠른 등록 */
@@ -199,8 +201,8 @@ function create(sendMessage) {
     var total = parseFloat(totalR.rows[0].total);
 
     var logMsg = '✅ 업무 등록 완료\n' +
-      user.name + ' | ' + dateDisplay + ' | ' + (AM[abbr] || abbr) + ' ' + hours + 'h\n' +
-      (orderNo ? orderNo + ' | ' : '') + content + '\n\n' +
+      escHtml(user.name) + ' | ' + dateDisplay + ' | ' + (AM[abbr] || escHtml(abbr)) + ' ' + hours + 'h\n' +
+      (orderNo ? escHtml(orderNo) + ' | ' : '') + escHtml(content) + '\n\n' +
       '📊 오늘 합계: ' + Math.round(total * 10) / 10 + 'h' +
       '\n💡 /summary 금주 합계 · /my-stats 월간 통계';
 
@@ -241,7 +243,7 @@ function create(sendMessage) {
     var orderCnt = parseInt(orderCntR.rows[0].cnt);
     var maxAbbr = abbrR.rows.length > 0 ? parseFloat(abbrR.rows[0].hours) : 1;
 
-    var msg = '📊 <b>' + user.name + '님 ' + m.label + ' 통계</b>\n\n';
+    var msg = '📊 <b>' + escHtml(user.name) + '님 ' + m.label + ' 통계</b>\n\n';
     msg += '⏱ 총 투입: <b>' + Math.round(totalHours * 10) / 10 + 'h</b>\n';
     msg += '📅 근무일: <b>' + workDays + '일</b>\n';
     msg += '📈 일평균: <b>' + dailyAvg + 'h</b>\n';
@@ -253,7 +255,7 @@ function create(sendMessage) {
       abbrR.rows.forEach(function (r) {
         var h = parseFloat(r.hours);
         var pct = totalHours > 0 ? Math.round(h / totalHours * 100) : 0;
-        msg += '<code>' + textBar(h, maxAbbr, 12) + '</code> ' + (AM[r.abbr] || r.abbr) + ' <b>' + Math.round(h * 10) / 10 + 'h</b> (' + pct + '%)\n';
+        msg += '<code>' + textBar(h, maxAbbr, 12) + '</code> ' + (AM[r.abbr] || escHtml(r.abbr)) + ' <b>' + Math.round(h * 10) / 10 + 'h</b> (' + pct + '%)\n';
       });
       msg += '\n';
     }

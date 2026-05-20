@@ -5,6 +5,7 @@
 var config = require('../config');
 var db = require('../config/db');
 var aiService = require('./ai.service');
+var escHtml = require('../telegram/util/escape').escHtml;
 
 var BASE = 'https://api.telegram.org/bot';
 
@@ -16,8 +17,8 @@ function isConfigured() {
   return !!config.telegram.botToken;
 }
 
-/** Telegram Bot API 호출 */
-async function callApi(method, body) {
+/** Telegram Bot API 호출 (429 retry-after / 5xx 백오프 1회 재시도) */
+async function callApi(method, body, _retry) {
   if (!isConfigured()) return null;
   var res = await fetch(getUrl(method), {
     method: 'POST',
@@ -26,7 +27,18 @@ async function callApi(method, body) {
   });
   var data = await res.json();
   if (!data.ok) {
-    console.error('[Telegram] API error:', method, data.description);
+    // 429 Too Many Requests — retry_after 만큼 대기 후 1회 재시도
+    if (res.status === 429 && data.parameters && data.parameters.retry_after && !_retry) {
+      var wait = Math.min(parseInt(data.parameters.retry_after) || 1, 30) * 1000;
+      await new Promise(function (r) { setTimeout(r, wait); });
+      return callApi(method, body, true);
+    }
+    // 5xx — 짧은 백오프 1회 재시도
+    if (res.status >= 500 && res.status < 600 && !_retry) {
+      await new Promise(function (r) { setTimeout(r, 500); });
+      return callApi(method, body, true);
+    }
+    console.error('[Telegram] API error:', method, data.description || ('HTTP ' + res.status));
   }
   return data;
 }
@@ -81,6 +93,8 @@ async function setMyCommands() {
     { command: 'docs', description: '문서 목록' },
     { command: 'search_doc', description: '문서 검색' },
     { command: 'help', description: '명령어 안내' },
+    { command: 'cancelremind', description: '리마인더 취소' },
+    { command: 'closevote', description: '투표 종료' },
     { command: 'unlink', description: '연동 해제' }
   ];
   var result = await callApi('setMyCommands', { commands: commands });
@@ -123,27 +137,31 @@ function generateAuthCode() {
   return code;
 }
 
-/** 인증코드 발급 → DB 저장 (5분 만료) */
+/** 인증코드 발급 → DB 저장 (5분 만료) — tenant_id 전파 */
 async function createAuthCode(userId) {
   // 기존 미사용 코드 삭제
   await db.query('DELETE FROM telegram_auth_codes WHERE user_id = $1 AND used = FALSE', [userId]);
+  // 멀티테넌트 격리: 사용자의 tenant_id 조회 후 함께 저장
+  var uR = await db.query('SELECT tenant_id FROM users WHERE id = $1', [userId]);
+  var tenantId = uR.rows.length ? uR.rows[0].tenant_id : null;
   var code = generateAuthCode();
   await db.query(
-    'INSERT INTO telegram_auth_codes (code, user_id, expires_at) VALUES ($1, $2, NOW() + INTERVAL \'5 minutes\')',
-    [code, userId]
+    "INSERT INTO telegram_auth_codes (code, user_id, tenant_id, expires_at) VALUES ($1, $2, $3, NOW() + INTERVAL '5 minutes')",
+    [code, userId, tenantId]
   );
   return code;
 }
 
-/** 인증코드 검증 + 계정 연동 */
+/** 인증코드 검증 + 계정 연동 — tenant_id 전파 */
 async function verifyAndLink(code, chatId, tgUsername) {
   var r = await db.query(
-    'SELECT user_id FROM telegram_auth_codes WHERE code = $1 AND used = FALSE AND expires_at > NOW()',
+    'SELECT user_id, tenant_id FROM telegram_auth_codes WHERE code = $1 AND used = FALSE AND expires_at > NOW()',
     [code]
   );
   if (r.rows.length === 0) return { ok: false, reason: 'invalid_or_expired' };
 
   var userId = r.rows[0].user_id;
+  var tenantId = r.rows[0].tenant_id;
 
   // 코드 사용 처리
   await db.query('UPDATE telegram_auth_codes SET used = TRUE WHERE code = $1', [code]);
@@ -151,18 +169,18 @@ async function verifyAndLink(code, chatId, tgUsername) {
   // 기존 연동 해제 (같은 user 또는 같은 chat_id)
   await db.query('DELETE FROM telegram_links WHERE user_id = $1 OR chat_id = $2', [userId, chatId]);
 
-  // 새 연동 저장
+  // 새 연동 저장 (tenant_id 포함)
   await db.query(
-    'INSERT INTO telegram_links (user_id, chat_id, username, is_active) VALUES ($1, $2, $3, TRUE)',
-    [userId, chatId, tgUsername || null]
+    'INSERT INTO telegram_links (user_id, chat_id, username, tenant_id, is_active) VALUES ($1, $2, $3, $4, TRUE)',
+    [userId, chatId, tgUsername || null, tenantId]
   );
 
-  // 기본 알림 설정 생성
+  // 기본 알림 설정 생성 (tenant_id 포함)
   var defaultEvents = ['issue_assigned', 'issue_status_changed', 'project_delayed', 'deadline_d3', 'deadline_d1', 'deadline_today', 'user_pending'];
   for (var i = 0; i < defaultEvents.length; i++) {
     await db.query(
-      'INSERT INTO notification_prefs (user_id, channel, event_type, is_enabled) VALUES ($1, \'telegram\', $2, TRUE) ON CONFLICT (user_id, channel, event_type) DO NOTHING',
-      [userId, defaultEvents[i]]
+      "INSERT INTO notification_prefs (user_id, tenant_id, channel, event_type, is_enabled) VALUES ($1, $2, 'telegram', $3, TRUE) ON CONFLICT (user_id, channel, event_type) DO NOTHING",
+      [userId, tenantId, defaultEvents[i]]
     );
   }
 
@@ -183,10 +201,10 @@ async function getLinkStatus(userId) {
   return r.rows[0] || null;
 }
 
-/** chat_id로 user_id 조회 */
+/** chat_id로 user_id 조회 — tenant_id 포함 반환 */
 async function getUserByChatId(chatId) {
   var r = await db.query(
-    'SELECT tl.user_id, u.name, u.role FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.chat_id = $1 AND tl.is_active = TRUE',
+    'SELECT tl.user_id, tl.tenant_id, u.name, u.role FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.chat_id = $1 AND tl.is_active = TRUE',
     [chatId]
   );
   return r.rows[0] || null;
@@ -210,16 +228,17 @@ async function handlePhotoIssue(chatId, user, msg) {
   var issueId = 'iss-' + crypto.randomUUID().slice(0, 12);
   var today = new Date().toISOString().slice(0, 10);
 
+  // 멀티테넌트 격리: 보고자 tenant_id 강제 포함
   await db.query(
-    "INSERT INTO issues (id, title, description, urgency, status, report_date, reporter, reporter_id, assignees, tags, created_by, updated_by) VALUES ($1, $2, $3, 'normal', 'open', $4, $5, $6, $7, $8, $6, $6)",
-    [issueId, caption, '텔레그램 사진 첨부 (file_id: ' + fileId + ')', today, user.name, user.user_id, JSON.stringify([user.name]), JSON.stringify(['telegram', 'photo'])]
+    "INSERT INTO issues (id, tenant_id, title, description, urgency, status, report_date, reporter, reporter_id, assignees, tags, created_by, updated_by) VALUES ($1, $2, $3, $4, 'normal', 'open', $5, $6, $7, $8, $9, $7, $7)",
+    [issueId, user.tenant_id, caption, '텔레그램 사진 첨부 (file_id: ' + fileId + ')', today, user.name, user.user_id, JSON.stringify([user.name]), JSON.stringify(['telegram', 'photo'])]
   );
 
   var response = '📸 <b>이슈 등록 완료</b>\n\n' +
-    '제목: ' + caption + '\n' +
+    '제목: ' + escHtml(caption) + '\n' +
     '상태: 접수 (open)\n' +
     '긴급도: 보통\n' +
-    '등록자: ' + user.name + '\n' +
+    '등록자: ' + escHtml(user.name) + '\n' +
     '날짜: ' + today;
 
   return sendMessage(chatId, response, {
@@ -262,8 +281,25 @@ async function handleUpdate(update) {
     if (parts.length < 2) {
       return sendMessage(chatId, '🔗 Work Manager 연동을 시작하려면 웹에서 QR코드를 스캔하거나 인증코드를 입력해주세요.\n\n사용법: /start <인증코드>');
     }
+    // 브루트포스 방어: 같은 chat_id가 최근 10분간 실패 5회 이상이면 거부
+    var attR = await db.query(
+      "SELECT COUNT(*)::int AS c FROM telegram_auth_attempts WHERE chat_id = $1 AND success = FALSE AND attempted_at > NOW() - INTERVAL '10 minutes'",
+      [chatId]
+    );
+    if (attR.rows[0].c >= 5) {
+      return sendMessage(chatId, '⏸ 잠시 후 다시 시도해주세요. (10분간 5회 실패)');
+    }
     var code = parts[1].toUpperCase();
     var result = await verifyAndLink(code, chatId, tgUsername);
+    // 시도 기록 (성공/실패 모두)
+    try {
+      await db.query(
+        'INSERT INTO telegram_auth_attempts (chat_id, code_input, success) VALUES ($1, $2, $3)',
+        [chatId, code, !!result.ok]
+      );
+    } catch (logErr) {
+      console.error('[Telegram] auth attempt log error:', logErr.message);
+    }
     if (result.ok) {
       return sendMessage(chatId, '✅ <b>연동 완료!</b>\n\n' +
         result.userName + '님, 환영합니다! 🎉\n\n' +
@@ -342,6 +378,14 @@ async function handleUpdate(update) {
   if (text.startsWith('/remind ')) {
     return utilityCmds.cmdRemind(chatId, user, text.replace(/^\/remind\s+/, ''));
   }
+  if (text.startsWith('/cancelremind')) {
+    var crArg = text.replace(/^\/cancelremind\s*/, '').trim();
+    return utilityCmds.cmdCancelRemind(chatId, user, crArg);
+  }
+  if (text.startsWith('/closevote')) {
+    var cvArg = text.replace(/^\/closevote\s*/, '').trim();
+    return utilityCmds.cmdCloseVote(chatId, user, cvArg);
+  }
   if (text.startsWith('/vote')) {
     var voteText = text.replace(/^\/vote\s*/, '').trim();
     return utilityCmds.cmdVote(chatId, user, voteText);
@@ -370,11 +414,22 @@ async function handleUpdate(update) {
     if (!lgType || !['project', 'team', 'announce'].includes(lgType)) {
       return sendMessage(chatId, '사용법: /linkgroup project &lt;프로젝트ID&gt;\n/linkgroup team &lt;부서ID&gt;\n/linkgroup announce');
     }
+    // 멀티테넌트 권한 검증: lgId 가 호출자 tenant 소속인지 확인
+    if (lgType === 'project') {
+      if (!lgId) return sendMessage(chatId, '❌ 프로젝트ID가 필요합니다.');
+      var ownR = await db.query('SELECT id FROM projects WHERE id = $1 AND tenant_id = $2', [lgId, user.tenant_id]);
+      if (ownR.rows.length === 0) return sendMessage(chatId, '❌ 해당 프로젝트에 대한 권한이 없습니다.');
+    } else if (lgType === 'team') {
+      if (!lgId) return sendMessage(chatId, '❌ 부서ID가 필요합니다.');
+      var deptR = await db.query('SELECT id FROM departments WHERE id = $1 AND tenant_id = $2', [lgId, user.tenant_id]);
+      if (deptR.rows.length === 0) return sendMessage(chatId, '❌ 해당 부서에 대한 권한이 없습니다.');
+    }
+    // 'announce' 는 lgId 불필요 — user.tenant_id 를 그대로 사용
     try {
       await db.query('DELETE FROM telegram_group_links WHERE chat_id = $1', [chatId]);
       await db.query(
-        'INSERT INTO telegram_group_links (chat_id, link_type, link_id, linked_by) VALUES ($1, $2, $3, $4)',
-        [chatId, lgType, lgId || null, user.user_id]
+        'INSERT INTO telegram_group_links (chat_id, tenant_id, link_type, link_id, linked_by) VALUES ($1, $2, $3, $4, $5)',
+        [chatId, user.tenant_id, lgType, lgId || null, user.user_id]
       );
       return sendMessage(chatId, '✅ 그룹 연동 완료! (' + lgType + (lgId ? ': ' + lgId : '') + ')');
     } catch (e) {
@@ -431,6 +486,59 @@ async function handleUpdate(update) {
   }
 }
 
+/* ── Metrics ── */
+
+/**
+ * 텔레그램 발송 메트릭 집계 (notification_logs 기반)
+ * @param {string} tenantId - 테넌트 ID (필수). null이면 전역 집계
+ * @returns {Promise<object>} { day1: {sent, failed, rate, byEvent}, day7: {...}, lastError }
+ */
+async function getMetrics(tenantId) {
+  var params = tenantId ? [tenantId] : [];
+  var tenantFilter = tenantId ? 'tenant_id = $1 AND ' : '';
+
+  // 24시간 / 7일 발송 카운트
+  var dayR = await db.query(
+    "SELECT " +
+      "COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day' AND status = 'sent')::int AS sent_1d, " +
+      "COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day' AND status = 'failed')::int AS failed_1d, " +
+      "COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days' AND status = 'sent')::int AS sent_7d, " +
+      "COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days' AND status = 'failed')::int AS failed_7d " +
+    "FROM notification_logs WHERE " + tenantFilter + "created_at > NOW() - INTERVAL '7 days'",
+    params
+  );
+  var d = dayR.rows[0];
+
+  // 이벤트별 1일 카운트
+  var evtR = await db.query(
+    "SELECT event_type, status, COUNT(*)::int AS c FROM notification_logs " +
+    "WHERE " + tenantFilter + "created_at > NOW() - INTERVAL '1 day' " +
+    "GROUP BY event_type, status ORDER BY c DESC LIMIT 20",
+    params
+  );
+  var byEvent = {};
+  evtR.rows.forEach(function (r) {
+    if (!byEvent[r.event_type]) byEvent[r.event_type] = { sent: 0, failed: 0 };
+    byEvent[r.event_type][r.status] = r.c;
+  });
+
+  // 최근 에러
+  var lastErrR = await db.query(
+    "SELECT event_type, error_detail, created_at FROM notification_logs " +
+    "WHERE " + tenantFilter + "status = 'failed' AND error_detail IS NOT NULL " +
+    "ORDER BY created_at DESC LIMIT 5",
+    params
+  );
+
+  function rate(s, f) { var tot = s + f; return tot ? Math.round(s * 1000 / tot) / 10 : null; }
+
+  return {
+    day1: { sent: d.sent_1d, failed: d.failed_1d, successRate: rate(d.sent_1d, d.failed_1d), byEvent: byEvent },
+    day7: { sent: d.sent_7d, failed: d.failed_7d, successRate: rate(d.sent_7d, d.failed_7d) },
+    lastErrors: lastErrR.rows
+  };
+}
+
 module.exports = {
   isConfigured: isConfigured,
   sendMessage: sendMessage,
@@ -457,5 +565,9 @@ module.exports = {
   cmdLog: function(chatId, user, t) { initCommands(); return personalCmds.cmdLog(chatId, user, t); },
   cmdRemind: function(chatId, user, t) { initCommands(); return utilityCmds.cmdRemind(chatId, user, t); },
   cmdVote: function(chatId, user, t) { initCommands(); return utilityCmds.cmdVote(chatId, user, t); },
-  cmdWeeklyReport: function(chatId, user) { initCommands(); return analysisCmds.cmdWeeklyReport(chatId, user); }
+  cmdCancelRemind: function(chatId, user, t) { initCommands(); return utilityCmds.cmdCancelRemind(chatId, user, t); },
+  cmdCloseVote: function(chatId, user, t) { initCommands(); return utilityCmds.cmdCloseVote(chatId, user, t); },
+  cmdWeeklyReport: function(chatId, user) { initCommands(); return analysisCmds.cmdWeeklyReport(chatId, user); },
+  callApi: callApi,
+  getMetrics: getMetrics
 };

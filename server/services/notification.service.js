@@ -123,13 +123,21 @@ async function createInAppNotification(userId, eventType, title, body, link, ten
 }
 
 /** 이메일 알림 발송 */
-async function sendEmailNotification(userId, eventType, payload) {
+async function sendEmailNotification(userId, eventType, payload, tenantId) {
   try {
-    // 이메일 알림 설정 확인
-    var prefR = await db.query(
-      "SELECT is_enabled FROM notification_prefs WHERE user_id = $1 AND channel = 'email' AND event_type = $2",
-      [userId, eventType]
-    );
+    // 이메일 알림 설정 확인 — tenant_id가 제공되면 격리 필터 추가
+    var prefR;
+    if (tenantId) {
+      prefR = await db.query(
+        "SELECT is_enabled FROM notification_prefs WHERE user_id = $1 AND channel = 'email' AND event_type = $2 AND tenant_id = $3",
+        [userId, eventType, tenantId]
+      );
+    } else {
+      prefR = await db.query(
+        "SELECT is_enabled FROM notification_prefs WHERE user_id = $1 AND channel = 'email' AND event_type = $2",
+        [userId, eventType]
+      );
+    }
     if (prefR.rows.length > 0 && !prefR.rows[0].is_enabled) return;
 
     var userR = await db.query('SELECT email, name FROM users WHERE id = $1', [userId]);
@@ -199,27 +207,47 @@ function buildTelegramSendOpts(eventType, payload) {
 }
 
 // 텔레그램 발송 대상 해석 — 알림설정/연동/중복 배치 조회 후 맵 반환
-async function resolveTelegramTargets(targetUserIds, eventType, payloadStr) {
+// userTenantMap: { [userId]: tenant_id } — 단일 테넌트면 SQL에 직접 강제 필터, 다중이면 user_id 기반 + 결과 검증
+async function resolveTelegramTargets(targetUserIds, eventType, payloadStr, userTenantMap) {
+  // user_id가 곧 tenant 결합 키이므로 user_id ANY 조회는 그 자체로 격리됨.
+  // 다만 방어적으로 결과 row의 tenant_id가 userTenantMap[user_id]와 일치하는지 검증.
+  function tenantOk(userId, rowTenantId) {
+    if (!userTenantMap) return true; // 레거시 호환
+    var expected = userTenantMap[userId];
+    if (!expected) return true; // 누락 사용자는 통과 (레거시 데이터)
+    if (!rowTenantId) return true; // 행에 tenant_id 미설정(레거시 row) → 통과
+    return rowTenantId === expected;
+  }
+
   var prefR = await db.query(
-    'SELECT user_id, is_enabled FROM notification_prefs WHERE user_id = ANY($1) AND channel = \'telegram\' AND event_type = $2',
+    'SELECT user_id, is_enabled, tenant_id FROM notification_prefs WHERE user_id = ANY($1) AND channel = \'telegram\' AND event_type = $2',
     [targetUserIds, eventType]
   );
   var disabledSet = {};
-  prefR.rows.forEach(function (r) { if (!r.is_enabled) disabledSet[r.user_id] = true; });
+  prefR.rows.forEach(function (r) {
+    if (!tenantOk(r.user_id, r.tenant_id)) return;
+    if (!r.is_enabled) disabledSet[r.user_id] = true;
+  });
 
   var linkR = await db.query(
-    'SELECT user_id, chat_id FROM telegram_links WHERE user_id = ANY($1) AND is_active = TRUE',
+    'SELECT user_id, chat_id, tenant_id FROM telegram_links WHERE user_id = ANY($1) AND is_active = TRUE',
     [targetUserIds]
   );
   var chatMap = {};
-  linkR.rows.forEach(function (r) { chatMap[r.user_id] = r.chat_id; });
+  linkR.rows.forEach(function (r) {
+    if (!tenantOk(r.user_id, r.tenant_id)) return;
+    chatMap[r.user_id] = r.chat_id;
+  });
 
   var dupR = await db.query(
-    "SELECT user_id FROM notification_logs WHERE user_id = ANY($1) AND event_type = $2 AND payload = $3 AND status = 'sent' AND created_at > NOW() - INTERVAL '5 minutes'",
+    "SELECT user_id, tenant_id FROM notification_logs WHERE user_id = ANY($1) AND event_type = $2 AND payload = $3 AND status = 'sent' AND created_at > NOW() - INTERVAL '5 minutes'",
     [targetUserIds, eventType, payloadStr]
   );
   var dupSet = {};
-  dupR.rows.forEach(function (r) { dupSet[r.user_id] = true; });
+  dupR.rows.forEach(function (r) {
+    if (!tenantOk(r.user_id, r.tenant_id)) return;
+    dupSet[r.user_id] = true;
+  });
 
   return { disabledSet: disabledSet, chatMap: chatMap, dupSet: dupSet };
 }
@@ -238,10 +266,20 @@ async function notify(eventType, payload, targetUserIds) {
   var plainText = text.replace(/<[^>]+>/g, '');
   var payloadStr = JSON.stringify(payload);
 
+  // ─── P0-1: 사용자별 tenant_id 매핑 1회 조회 (멀티테넌트 격리) ───
+  var userTenantMap = {};
+  try {
+    var uR = await db.query('SELECT id, tenant_id FROM users WHERE id = ANY($1)', [targetUserIds]);
+    uR.rows.forEach(function (r) { userTenantMap[r.id] = r.tenant_id; });
+  } catch (e) {
+    console.error('[Notification] tenant map query error:', e.message);
+  }
+
   // 인앱 + 이메일은 fire-and-forget (응답 차단 안 함)
   targetUserIds.forEach(function (userId) {
-    createInAppNotification(userId, eventType, inAppTitle, plainText, null, null);
-    sendEmailNotification(userId, eventType, payload);
+    var tId = userTenantMap[userId] || null;
+    createInAppNotification(userId, eventType, inAppTitle, plainText, null, tId);
+    sendEmailNotification(userId, eventType, payload, tId);
   });
 
   // 텔레그램 미설정 시 스킵
@@ -249,7 +287,7 @@ async function notify(eventType, payload, targetUserIds) {
 
   // 배치 쿼리: 알림 설정 + 텔레그램 연동 + 중복 체크를 한 번에
   try {
-    var targets = await resolveTelegramTargets(targetUserIds, eventType, payloadStr);
+    var targets = await resolveTelegramTargets(targetUserIds, eventType, payloadStr, userTenantMap);
     var disabledSet = targets.disabledSet;
     var chatMap = targets.chatMap;
     var dupSet = targets.dupSet;
@@ -263,6 +301,7 @@ async function notify(eventType, payload, targetUserIds) {
       var chatId = chatMap[userId];
       if (!chatId) return Promise.resolve();
       if (dupSet[userId]) return Promise.resolve();
+      var tId = userTenantMap[userId] || null;
 
       return telegramService.sendMessage(chatId, text, sendOpts).then(function (result) {
         var status = (result && result.ok) ? 'sent' : 'failed';
@@ -275,28 +314,19 @@ async function notify(eventType, payload, targetUserIds) {
           errorDetail = 'Bot blocked by user';
         }
 
-        // 로그 기록
+        // 로그 기록 (tenant_id 포함, 마이그레이션으로 nullable 컬럼 추가됨)
         db.query(
-          'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status, error_detail) VALUES ($1, $2, $3, $4, $5, $6)',
-          [userId, chatId, eventType, payloadStr, status, errorDetail]
+          'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status, error_detail, tenant_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [userId, chatId, eventType, payloadStr, status, errorDetail, tId]
         );
 
-        // 실패 시 1회 재시도
-        if (status === 'failed' && errorDetail !== 'Bot blocked by user') {
-          return telegramService.sendMessage(chatId, text).then(function (retry) {
-            if (retry && retry.ok) {
-              db.query(
-                'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status) VALUES ($1, $2, $3, $4, \'sent\')',
-                [userId, chatId, eventType, payloadStr]
-              );
-            }
-          });
-        }
+        // ─── P0-5: 실패는 telegram.service.callApi에서 429/5xx 1회 재시도까지 완료된 결과.
+        //         여기서 추가 재시도하지 않음 (큐/DLQ는 P1 작업).
       }).catch(function (err) {
         console.error('[Notification] Error sending to user', userId, err.message);
         db.query(
-          'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status, error_detail) VALUES ($1, NULL, $2, $3, \'failed\', $4)',
-          [userId, eventType, payloadStr, err.message]
+          'INSERT INTO notification_logs (user_id, chat_id, event_type, payload, status, error_detail, tenant_id) VALUES ($1, NULL, $2, $3, \'failed\', $4, $5)',
+          [userId, eventType, payloadStr, err.message, tId]
         ).catch(function () {});
       });
     });
@@ -330,11 +360,18 @@ async function notifyProjectStakeholders(eventType, payload, projectId) {
 
   await notify(eventType, payload, Array.from(ids));
 
-  // 프로젝트 그룹 채팅방에도 발송
+  // 프로젝트 그룹 채팅방에도 발송 (P0-1: tenant_id 격리 — 프로젝트 행의 tenant_id 사용)
   if (projectId) {
     var template = TEMPLATES[eventType];
     if (template) {
-      notifyGroup('project', projectId, template(payload)).catch(function (e) {
+      var projTenantId = null;
+      try {
+        var pTR = await db.query('SELECT tenant_id FROM projects WHERE id = $1', [projectId]);
+        projTenantId = pTR.rows.length ? pTR.rows[0].tenant_id : null;
+      } catch (e) {
+        console.error('[Notification] project tenant lookup error:', e.message);
+      }
+      notifyGroup('project', projectId, template(payload), projTenantId).catch(function (e) {
         console.error('[Notification] Group notify error:', e.message);
       });
     }
@@ -374,6 +411,7 @@ async function sendDeadlineReminders() {
 
 /** 일일 브리핑 (매일 08:30 KST 실행) */
 async function sendDailyBriefing() {
+  // tenant_id는 user_id 단위로 자연 격리됨 (users.tenant_id 결합). notification_prefs/telegram_links는 user_id로 필터.
   var today = new Date().toISOString().slice(0, 10);
   var todayCompact = today.replace(/-/g, '');
 
@@ -501,6 +539,7 @@ async function sendOrderDeliveryReminders() {
 
 /** 주간 다이제스트 (매주 월요일 실행) */
 async function sendWeeklyDigest() {
+  // tenant_id는 user_id 단위로 자연 격리됨 (users.tenant_id 결합).
   // 지난주 범위
   var now = new Date();
   var day = now.getDay();
@@ -626,12 +665,16 @@ async function sendOverloadWarnings() {
   console.log('[Notification] Overload warnings sent');
 }
 
-/** 그룹 채팅방에 알림 발송 */
-async function notifyGroup(linkType, linkId, text) {
+/** 그룹 채팅방에 알림 발송 — P0-1: tenantId 필수 (멀티테넌트 격리) */
+async function notifyGroup(linkType, linkId, text, tenantId) {
+  if (!tenantId) {
+    console.warn('[Notification] notifyGroup called without tenantId — skipped', linkType, linkId);
+    return;
+  }
   try {
     var r = await db.query(
-      'SELECT chat_id FROM telegram_group_links WHERE link_type = $1 AND link_id = $2 AND is_active = TRUE',
-      [linkType, linkId]
+      'SELECT chat_id FROM telegram_group_links WHERE link_type = $1 AND link_id = $2 AND tenant_id = $3 AND is_active = TRUE',
+      [linkType, linkId, tenantId]
     );
     for (var i = 0; i < r.rows.length; i++) {
       await telegramService.sendMessage(r.rows[i].chat_id, text);

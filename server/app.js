@@ -223,6 +223,36 @@ if (telegramService.isConfigured()) {
   scheduler.scheduleWeekly(1, 0, 30, function () { return notificationService.sendWeeklyDigest(); }, 'Weekly digest');
   scheduler.scheduleDaily(8, 0, function () { return notificationService.sendProgressWarnings(); }, 'Progress warning');
   scheduler.scheduleDaily(9, 0, function () { return notificationService.sendOverloadWarnings(); }, 'Overload warning');
+
+  // ─── 1분마다 리마인더 워커 (telegram_reminders) ───
+  // 서버 재시작 시 setTimeout 소실 문제를 DB 영속화 + 폴링 워커로 해소
+  var db = require('./config/db');
+  var escHtml = require('./telegram/util/escape').escHtml;
+  scheduler.scheduleEvery(1, async function () {
+    var dueR = await db.query(
+      "SELECT id, chat_id, message FROM telegram_reminders WHERE status = 'pending' AND fire_at <= NOW() ORDER BY fire_at LIMIT 50"
+    );
+    if (dueR.rows.length === 0) return;
+    for (var i = 0; i < dueR.rows.length; i++) {
+      var r = dueR.rows[i];
+      try {
+        var result = await telegramService.sendMessage(r.chat_id, '⏰ <b>리마인더</b>\n\n' + escHtml(r.message));
+        if (result && result.ok) {
+          await db.query("UPDATE telegram_reminders SET status='sent', sent_at=NOW() WHERE id=$1", [r.id]);
+        } else {
+          await db.query(
+            "UPDATE telegram_reminders SET status='failed', error_detail=$1 WHERE id=$2",
+            [(result && result.description) || 'unknown', r.id]
+          );
+        }
+      } catch (e) {
+        await db.query(
+          "UPDATE telegram_reminders SET status='failed', error_detail=$1 WHERE id=$2",
+          [e.message, r.id]
+        ).catch(function(){});
+      }
+    }
+  }, 'Reminder worker');
 }
 
 // ─── 헬스 체크 ───

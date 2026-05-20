@@ -2,6 +2,7 @@
  * 팀 명령어 모듈: /team
  */
 var db = require('../../config/db');
+var escHtml = require('../util/escape').escHtml;
 
 /** 텍스트 바 차트 생성 */
 function textBar(value, max, width) {
@@ -50,7 +51,7 @@ function create(sendMessage) {
       var h = parseFloat(row.hours);
       var avgD = row.days > 0 ? Math.round(h / row.days * 10) / 10 : 0;
       var warn = avgD > 9 ? ' ⚠️' : '';
-      msg += '<code>' + textBar(h, maxH, 10) + '</code> ' + row.name + ' <b>' + Math.round(h * 10) / 10 + 'h</b>';
+      msg += '<code>' + textBar(h, maxH, 10) + '</code> ' + escHtml(row.name) + ' <b>' + Math.round(h * 10) / 10 + 'h</b>';
       msg += ' (' + row.days + '일, 평균 ' + avgD + 'h)' + warn + '\n';
     });
 
@@ -59,10 +60,10 @@ function create(sendMessage) {
     var underload = r.rows.filter(function (row) { return row.days >= 3 && parseFloat(row.hours) / row.days < 4; });
 
     if (overload.length > 0) {
-      msg += '\n⚠️ <b>과부하 주의</b>: ' + overload.map(function (r) { return r.name; }).join(', ');
+      msg += '\n⚠️ <b>과부하 주의</b>: ' + escHtml(overload.map(function (r) { return r.name; }).join(', '));
     }
     if (underload.length > 0) {
-      msg += '\n💡 <b>저투입</b>: ' + underload.map(function (r) { return r.name; }).join(', ');
+      msg += '\n💡 <b>저투입</b>: ' + escHtml(underload.map(function (r) { return r.name; }).join(', '));
     }
 
     return sendMessage(chatId, msg);

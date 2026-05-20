@@ -2,6 +2,7 @@
  * 문서 명령어 모듈: /docs, /search-doc
  */
 var db = require('../../config/db');
+var escHtml = require('../util/escape').escHtml;
 
 function create(sendMessage) {
   /** 봇 명령어: /docs — 문서 목록 */
@@ -19,10 +20,10 @@ function create(sendMessage) {
     }
 
     if (docsR.rows.length === 0) {
-      return sendMessage(chatId, '📁 문서가 없습니다.' + (query ? ' (검색: ' + query + ')' : ''));
+      return sendMessage(chatId, '📁 문서가 없습니다.' + (query ? ' (검색: ' + escHtml(query) + ')' : ''));
     }
 
-    var msg = '📁 <b>문서 목록</b>' + (query ? ' — ' + query : '') + '\n\n';
+    var msg = '📁 <b>문서 목록</b>' + (query ? ' — ' + escHtml(query) : '') + '\n\n';
     docsR.rows.forEach(function (r, i) {
       var sizeStr = '';
       if (r.size) {
@@ -30,10 +31,10 @@ function create(sendMessage) {
         sizeStr = sizeKB >= 1024 ? (Math.round(sizeKB / 1024 * 10) / 10) + 'MB' : Math.round(sizeKB) + 'KB';
       }
       var dateStr = r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : '';
-      msg += (i + 1) + '. ' + r.name + (r.ext ? '.' + r.ext : '');
+      msg += (i + 1) + '. ' + escHtml(r.name) + (r.ext ? '.' + escHtml(r.ext) : '');
       if (sizeStr) msg += ' (' + sizeStr + ')';
       if (dateStr) msg += ' ' + dateStr;
-      if (r.project_name) msg += '\n   📁 ' + r.project_name;
+      if (r.project_name) msg += '\n   📁 ' + escHtml(r.project_name);
       msg += '\n';
     });
 
@@ -52,10 +53,10 @@ function create(sendMessage) {
     );
 
     if (docsR.rows.length === 0) {
-      return sendMessage(chatId, '📁 "' + query + '" 검색 결과가 없습니다.');
+      return sendMessage(chatId, '📁 "' + escHtml(query) + '" 검색 결과가 없습니다.');
     }
 
-    var msg = '🔍 <b>문서 검색: ' + query + '</b>\n\n';
+    var msg = '🔍 <b>문서 검색: ' + escHtml(query) + '</b>\n\n';
     docsR.rows.forEach(function (r, i) {
       var sizeStr = '';
       if (r.size) {
@@ -63,10 +64,10 @@ function create(sendMessage) {
         sizeStr = sizeKB >= 1024 ? (Math.round(sizeKB / 1024 * 10) / 10) + 'MB' : Math.round(sizeKB) + 'KB';
       }
       var dateStr = r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : '';
-      msg += (i + 1) + '. ' + r.name + (r.ext ? '.' + r.ext : '');
+      msg += (i + 1) + '. ' + escHtml(r.name) + (r.ext ? '.' + escHtml(r.ext) : '');
       if (sizeStr) msg += ' (' + sizeStr + ')';
       if (dateStr) msg += ' ' + dateStr;
-      if (r.project_name) msg += '\n   📁 ' + r.project_name;
+      if (r.project_name) msg += '\n   📁 ' + escHtml(r.project_name);
       msg += '\n';
     });
 

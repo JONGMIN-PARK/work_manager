@@ -46,7 +46,20 @@ function scheduleWeekly(dayOfWeek, utcHour, utcMinute, callback, label) {
   console.log('[Scheduler] ' + label + ' scheduled, next run in ' + Math.round(delay / 60000) + ' min');
 }
 
+/** N분마다 실행 (서버 시작 직후 1회 + 이후 주기적) */
+function scheduleEvery(intervalMinutes, callback, label) {
+  var run = function () {
+    callback().catch(function (e) {
+      console.error('[Scheduler] ' + label + ' error:', e.message);
+    });
+  };
+  setTimeout(run, 10000); // 시작 후 10초 뒤 첫 실행
+  setInterval(run, intervalMinutes * 60 * 1000);
+  console.log('[Scheduler] ' + label + ' scheduled every ' + intervalMinutes + ' min');
+}
+
 module.exports = {
   scheduleDaily: scheduleDaily,
-  scheduleWeekly: scheduleWeekly
+  scheduleWeekly: scheduleWeekly,
+  scheduleEvery: scheduleEvery
 };

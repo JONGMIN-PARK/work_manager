@@ -1,5 +1,137 @@
 # Work Manager — 변경 이력
 
+## v13.84 (2026-05-20) — 텔레그램 P1 잔건: /closevote · /cancelremind + issues 정규화(공존)
+
+### 배경
+v13.83에서 reminders/votes를 DB로 영속화했으나 종료/취소 수단이 없었음. 또한 `issues.assignees::text LIKE '%이름%'` 패턴이 동명이인·부분일치 오인식을 일으켜 텔레그램 명령(`/my`, `/issues`, `/today`, `/weekly_report`)이 잘못된 이슈를 보여줄 수 있었음. Redis 의존 없이 코드+SQL만으로 처리.
+
+### 변경 — 데이터 (`server/migrations/032_issue_assignees.sql` 신설)
+- `issue_assignees(id, issue_id, assignee_name, user_id, tenant_id, created_at)` + `UNIQUE(issue_id, assignee_name)` + `FK issue_id → issues.id ON DELETE CASCADE`
+- 인덱스: user_id partial / assignee_name / tenant_id / issue_id
+- **PL/pgSQL 트리거 `sync_issue_assignees()`**: issues INSERT 또는 UPDATE OF assignees 시 자동 DELETE+INSERT
+  - JSONB가 `["이름1","이름2"]`(문자열) 또는 `[{"name":"이름1"}]`(객체) 양쪽 모두 처리
+  - tenant 내 동일 이름 active 사용자 1건만 있을 때 `user_id` 자동 매핑 — 동명이인은 `user_id = NULL`로 안전 폴백
+- **백필**: 기존 issues 전체에 대해 한 번 채움 — JSONB가 손상된 row는 자연 스킵
+- **공존 모드**: `issues.assignees` JSONB는 그대로 유지 — 호출처 코드 변경 없이도 기존 동작 100% 유지
+
+### 변경 — 코드
+
+**보조 명령 2개 (`utility.js` + `telegram.service.js`)**
+- `cmdCancelRemind(chatId, user, arg)`:
+  - 인자 없음 → 호출자 chat의 pending 리마인더 20건 목록(이스케이프 적용)
+  - `all` → tenant·chat 격리 한 일괄 취소
+  - 숫자 ID → 해당 1건만 `status='cancelled'`
+- `cmdCloseVote(chatId, user, arg)`:
+  - 인자 없음 → 같은 chat의 가장 최근 활성 투표를 자동 선택
+  - 권한: `created_by = user.user_id` 또는 admin/manager만 종료 가능
+  - 집계 후 inline keyboard 제거(`editMessageReplyMarkup`, []) + 최종 결과 메시지(옵션·표·퍼센트·총표수)
+- `telegram.service.js`
+  - `handleUpdate`에 `/cancelremind`, `/closevote` 디스패치(정확 prefix 매칭)
+  - `setMyCommands` 배열에 두 명령 등록 (BotFather 자동완성)
+  - `module.exports`에 위임 함수 + `callApi` 노출(`utility.js`의 `editMessageReplyMarkup` 호출용, 지연 require로 순환참조 회피)
+
+**LIKE → EXISTS 조인 교체 (`personal.js` · `schedule.js` · `analysis.js`)**
+- `issues.assignees::text LIKE '%name%'` 4곳을 다음 패턴으로 교체:
+  ```sql
+  EXISTS (
+    SELECT 1 FROM issue_assignees ia
+    WHERE ia.issue_id = issues.id
+      AND ia.tenant_id = issues.tenant_id
+      AND (ia.user_id = $1 OR ia.assignee_name = $2)
+  )
+  ```
+  - user_id 정확 매칭 우선, 매핑 누락 시 정확 이름 폴백 → 동명이인 ambiguous + 부분일치 오인식 동시 해소
+  - `ia.tenant_id = issues.tenant_id` 이중 격리
+- 대상: `personal.cmdMy` / `personal.cmdIssues` / `schedule.cmdToday` / `analysis.cmdWeeklyReport`
+- `projects.assignees`·`checklists.p.assignees` LIKE는 이번 라운드 범위 밖 — 별도 정규화 라운드에서 처리
+
+### 영향
+- **호환성**: `issues.assignees` JSONB 유지 + 트리거 자동 동기화 → 클라이언트/UI/다른 라우트 코드 무영향
+- **회귀 위험**: 결과 건수가 미세하게 달라질 수 있으나 이는 의도된 개선(부분일치 → 정확매칭). 동명이인은 폴백 매칭으로 기존과 동등 이상
+- **검증**: 7개 파일 `node -c` 통과, 외부 export 시그니처 무변경, 멀티에이전트 2명 병렬 충돌 0건
+
+### 잔여 / 후속
+- **BullMQ + Redis**: 인프라 추가 필요 (REDIS_URL 환경변수 + Render Redis add-on)
+- **projects.assignees 정규화**: project_members가 일부 역할(PL) 의미로 사용 중이라 신중한 매핑 설계 필요
+- 트리거 함수가 issues.id 변경(거의 없음)을 처리하지 않음 — 필요 시 BEFORE DELETE 트리거나 ON UPDATE 처리 추가
+
+## v13.83 (2026-05-20) — 텔레그램 P1 후속: HTML 이스케이프 · 영속화 · 메트릭
+
+### 배경
+v13.82 P0 처리 후 후속으로 진행한 안전 3건. 인프라 의존(Redis) 없이 코드 변경만으로 운영 안정성·관측성·보안을 한 단계 더 끌어올림.
+
+### 변경 — 데이터 (`server/migrations/031_telegram_reminders_votes.sql` 신설)
+- `telegram_reminders(id, tenant_id, user_id, chat_id, message, fire_at, sent_at, status, error_detail, created_at)` — pending/sent/failed/cancelled. due 인덱스 + chat·tenant 인덱스.
+- `telegram_votes(id, tenant_id, chat_id, message_id, created_by, question, options(JSONB), is_closed, created_at)` — 인라인 키보드 갱신을 위해 message_id 저장.
+- `telegram_vote_responses(vote_id, user_id, user_name, option_index, voted_at)` + `UNIQUE(vote_id, user_id)` — 1인 1표(재투표 시 갱신).
+
+### 변경 — 코드
+
+**HTML 이스케이프 (P1-1)**
+- 신규 헬퍼 `server/telegram/util/escape.js` — `escHtml(value)`로 `&/<>` 변환. 미정의/숫자 안전.
+- 적용: `server/telegram/commands/` 7개 파일(docs, schedule, personal, analysis, team, project, help)에서 DB 자유 텍스트(프로젝트명·이슈 제목·문서명·메모·검색 쿼리·사용자명 등)를 모두 `escHtml()`로 감쌈. 마크업 태그·날짜·진행률·아이콘 등 검증된 값은 비대상. 변수명/메시지 구조/이모지/순서 그대로 유지.
+- `server/services/telegram.service.js` `handlePhotoIssue`: 텔레그램에서 받은 사진 캡션과 등록자 이름을 `escHtml`로 이스케이프 → `<` 포함 입력으로 인한 발송 거부 차단.
+
+**reminders / votes DB 영속화 (P1-2)**
+- `server/telegram/scheduler.js`에 `scheduleEvery(intervalMinutes, callback, label)` 추가 (시작 10초 후 첫 실행 + 이후 주기).
+- `server/telegram/commands/utility.js`
+  - `cmdRemind`: `setTimeout` 제거 → `telegram_reminders` INSERT. 서버 재시작에도 보존, 최대 7일 정책 유지.
+  - `cmdVote`: `telegram_votes` INSERT + 옵션 JSONB 저장. callback_data를 `vote:{voteId}:{optionIndex}`로 단순화. 발송 응답의 `message_id`를 UPDATE로 보존(이후 키보드 갱신용).
+- `server/app.js`: 1분 워커 등록 — `pending` + `fire_at <= NOW()` 50건씩 폴링 → `sendMessage` → 결과에 따라 status/error_detail 갱신.
+- `server/routes/telegram.js` vote 콜백 재작성: 테넌트 격리 SELECT → is_closed/범위 검증 → `ON CONFLICT (vote_id, user_id) DO UPDATE`로 1인 1표 갱신 → 응답 집계 후 `editMessageReplyMarkup`로 버튼 카운트 갱신(별도 메시지 발송 없음 → 채팅 스팸 방지) → `answerCallbackQuery` 토스트.
+
+**메트릭 집계 + /debug 노출 (P1-3)**
+- `server/services/telegram.service.js`에 `getMetrics(tenantId)` 추가 — `notification_logs` 1일/7일 sent·failed 카운트, 이벤트별 1일 분포 상위 20건, 최근 실패 5건, `successRate` 소수 1자리 산출. 테넌트 격리.
+- `server/routes/telegram.js` `/debug` 응답에 `metrics` 필드 추가 — 관리자만 접근, 운영 가시성 즉시 확보.
+
+### 영향
+- 외부 export 시그니처 무변경. 14개 파일 모두 `node -c` 구문 검사 통과.
+- 회귀 위험: 텔레그램 메시지 표시에서 사용자 입력이 보이는 모든 경로가 영향을 받지만, 변경은 "값 → escHtml(값)" 단일 패턴뿐이라 출력은 동일(특수 문자가 제대로 렌더되는 차이만).
+- 멀티에이전트 병렬: 파일 단위로 3 에이전트 동시 작업하여 작업 시간 단축. 충돌 0건.
+
+### 잔여 / 후속
+- BullMQ + Redis 큐(인프라 추가 필요) — `notify()` enqueue, DLQ, 백오프
+- `assignees::text LIKE` → `project_assignees` 또는 JSONB `?` 정규화 — 동명이인/부분일치 해소
+- /vote 종료/취소 명령(`/closevote`), 리마인더 취소(`/cancelremind`)
+
+## v13.82 (2026-05-20) — 텔레그램 연동 P0 보안 강화 (멀티테넌트 격리)
+
+### 배경
+사내 100명+ 도입 검토 중 발견된 P0 5건 일괄 처리. 텔레그램 관련 5개 테이블이 `tenant_id` 없이 운영되어 테넌트 간 채팅/알림 누설 가능, `/auth-code` 라우트의 `DROP TABLE CASCADE` 4건이 운영 중 실수로 4개 테이블을 동시 소실시킬 위험, `planGate('telegram')` 미적용으로 Pro 미만 요금제 우회, `/linkgroup` 명령이 타 테넌트 자원 ID로 알림 가로채기 가능, 텔레그램 429 응답을 무시한 즉시 재시도로 부하 폭증 — 모두 SaaS 운영 차단 수준.
+
+### 변경 — 데이터 (`server/migrations/030_telegram_tenant_isolation.sql` 신설)
+- `telegram_links`, `telegram_auth_codes`, `telegram_group_links`, `notification_prefs`, `notification_logs` 5개 테이블에 `tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE` 컬럼 추가 + `users`에서 백필 + 격리 인덱스
+- `telegram_auth_codes.attempts INT DEFAULT 0` 추가 (코드별 시도 카운터)
+- `telegram_auth_attempts(chat_id, code_input, success, attempted_at)` 신설 + chat 인덱스 — `/start` 브루트포스 방어용 시도 로그
+
+### 변경 — 코드
+- **`server/routes/telegram.js`** (P0-2/P0-3)
+  - `POST /auth-code` catch 블록의 `DROP TABLE ... CASCADE × 4` + 마이그레이션 재실행 코드 통째 제거 → 단순 `500 DB_ERROR` 응답으로 대체
+  - 7개 라우트(`/auth-code`, `/status`, `/unlink`, `/prefs` GET/PUT, `/debug`, `/setup-webhook`)에 `planGate('telegram')` 적용
+  - 콜백 핸들러 6개 액션(`issue_start/resolve/urgent`, `checklist_done`, `approve/reject_user`)의 모든 UPDATE/SELECT에 `AND tenant_id = $X` 가드 추가 — cross-tenant 변경 차단
+- **`server/services/telegram.service.js`** (P0-1/P0-4)
+  - `callApi`에 **429/5xx retry-after 처리**: `result.parameters.retry_after`(최대 30초) 대기 후 1회 재시도, 5xx는 500ms 백오프 1회 재시도 (P0-5)
+  - `createAuthCode` / `verifyAndLink` / `getUserByChatId` / `handlePhotoIssue`: `tenant_id` 컬럼 INSERT·SELECT 전파 — `getUserByChatId`는 이제 user 객체에 `tenant_id`도 반환
+  - `/start`: 최근 10분간 실패 5회 이상이면 즉시 거부, 모든 시도를 `telegram_auth_attempts`에 기록
+  - `/linkgroup`: `project`는 `projects.tenant_id`, `team`은 `departments.tenant_id` 일치 검증 후에만 연동. `announce`는 ID 없이 호출자 테넌트 컨텍스트만 사용. INSERT에 `tenant_id` 컬럼 포함 → cross-tenant 알림 가로채기 차단
+- **`server/services/notification.service.js`** (P0-1/P0-5)
+  - `notify()` 시작부에서 `userTenantMap` 1회 배치 조회 → 모든 in-app/email/telegram 로그 INSERT에 `tenant_id` 전파
+  - `resolveTelegramTargets`가 `notification_prefs`/`telegram_links`/`notification_logs` 조회에 `tenant_id`를 함께 SELECT한 뒤 사용자별 기대 테넌트와 불일치하는 행 폐기
+  - 무조건 즉시 재호출하던 "1회 재시도" 블록(이전 라인 285~294) **삭제** — 재시도 책임은 `callApi`에 일임 (P0-5)
+  - `notifyGroup(linkType, linkId, text, tenantId)`: `tenantId` 누락 시 발송 거부 + 쿼리에 `AND tenant_id = $3` 강제. `notifyProjectStakeholders`는 `projects.tenant_id` 조회 후 자동 전달
+
+### 영향
+- **데이터**: 030 마이그레이션 자동 실행(서버 첫 연결 시) — 컬럼은 nullable 추가 + users 조인 백필로 기존 데이터 안전
+- **시그니처 호환**: 외부 export 함수(`notify`, `notifyAdmins`, `notifyProjectStakeholders`, `notifyGroup`) 모두 유지. `notifyGroup`의 신규 4번째 인자(`tenantId`) 미전달 시 발송이 거부되도록 의도된 동작 — cross-tenant 누출 방지가 우선
+- **검증**: 3개 수정 파일 모두 `node -c` 구문 검사 통과
+
+### 잔여 / 후속 (P1)
+- BullMQ + Redis 큐로 `notify()` enqueue 전환, 백오프/DLQ
+- `reminders`/`votes` 테이블 영속화(setTimeout 제거)
+- assignees `LIKE` → 정규화 조인
+- HTML 이스케이프 헬퍼 도입 (photo caption, /vote 옵션 등)
+- 메트릭 집계 + `/debug`에 성공률/응답시간 노출
+
 ## v13.81 (2026-05-19) — Linear/Vercel 스타일 테마 추가
 
 ### 배경

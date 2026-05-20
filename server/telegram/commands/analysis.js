@@ -2,6 +2,7 @@
  * 분석 명령어 모듈: /summary, /report, /weekly-report, /overdue
  */
 var db = require('../../config/db');
+var escHtml = require('../util/escape').escHtml;
 
 /** 업무분장 코드 매핑 */
 var AM = { A: 'A(CS현장)', B: 'B(수주)', D: 'D(개발)', G: 'G(공통)', M: 'M(양산)', R: 'R(제안)', S: 'S(영업지원)' };
@@ -71,7 +72,7 @@ function create(sendMessage) {
       abbrR.rows.forEach(function (r) {
         var h = parseFloat(r.hours);
         var pct = totalHours > 0 ? Math.round(h / totalHours * 100) : 0;
-        msg += '<code>' + textBar(h, maxAbbr, 12) + '</code> ' + (AM[r.abbr] || r.abbr) + ' <b>' + Math.round(h * 10) / 10 + 'h</b> (' + pct + '%)\n';
+        msg += '<code>' + textBar(h, maxAbbr, 12) + '</code> ' + (AM[r.abbr] || escHtml(r.abbr)) + ' <b>' + Math.round(h * 10) / 10 + 'h</b> (' + pct + '%)\n';
       });
       msg += '\n';
     }
@@ -95,7 +96,7 @@ function create(sendMessage) {
     if (orderR.rows.length > 0) {
       msg += '<b>주요 수주 (Top5)</b>\n';
       orderR.rows.forEach(function (r, i) {
-        msg += (i + 1) + '. ' + (r.order_no || '(미지정)') + ' — <b>' + Math.round(parseFloat(r.hours) * 10) / 10 + 'h</b>\n';
+        msg += (i + 1) + '. ' + escHtml(r.order_no || '(미지정)') + ' — <b>' + Math.round(parseFloat(r.hours) * 10) / 10 + 'h</b>\n';
       });
     }
 
@@ -157,7 +158,7 @@ function create(sendMessage) {
       abbrR.rows.forEach(function (r) {
         var h = parseFloat(r.hours);
         var pct = totalHours > 0 ? Math.round(h / totalHours * 100) : 0;
-        msg += '<code>' + textBar(h, maxAbbr, 10) + '</code> ' + (AM[r.abbr] || r.abbr) + ' ' + Math.round(h * 10) / 10 + 'h (' + pct + '%)\n';
+        msg += '<code>' + textBar(h, maxAbbr, 10) + '</code> ' + (AM[r.abbr] || escHtml(r.abbr)) + ' ' + Math.round(h * 10) / 10 + 'h (' + pct + '%)\n';
       });
       msg += '\n';
     }
@@ -168,7 +169,7 @@ function create(sendMessage) {
       peopleR.rows.forEach(function (r, i) {
         var h = parseFloat(r.hours);
         var avgD = r.days > 0 ? Math.round(h / r.days * 10) / 10 : 0;
-        msg += '<code>' + textBar(h, maxPeople, 8) + '</code> ' + r.name + ' ' + Math.round(h * 10) / 10 + 'h (일평균 ' + avgD + 'h)\n';
+        msg += '<code>' + textBar(h, maxPeople, 8) + '</code> ' + escHtml(r.name) + ' ' + Math.round(h * 10) / 10 + 'h (일평균 ' + avgD + 'h)\n';
       });
       msg += '\n';
     }
@@ -178,7 +179,7 @@ function create(sendMessage) {
       var statusMap = { waiting: '⏳대기', active: '🔵진행', delayed: '⚠️지연', hold: '⏸보류' };
       msg += '<b>프로젝트 현황</b>\n';
       projR.rows.forEach(function (r) {
-        msg += (statusMap[r.status] || r.status) + ': <b>' + r.cnt + '</b>  ';
+        msg += (statusMap[r.status] || escHtml(r.status)) + ': <b>' + r.cnt + '</b>  ';
       });
       msg += '\n\n';
     }
@@ -188,7 +189,7 @@ function create(sendMessage) {
       var issueMap = { open: '🟠접수', inProgress: '🔵대응중', resolved: '✅해결', closed: '⬜종결', hold: '⏸보류' };
       msg += '<b>이슈 현황</b>\n';
       issueR.rows.forEach(function (r) {
-        msg += (issueMap[r.status] || r.status) + ': <b>' + r.cnt + '</b>  ';
+        msg += (issueMap[r.status] || escHtml(r.status)) + ': <b>' + r.cnt + '</b>  ';
       });
       msg += '\n';
     }
@@ -222,35 +223,36 @@ function create(sendMessage) {
       }
     });
 
+    // issue_assignees 정규화 매핑 — user_id 우선, 폴백 이름 정확매칭
     var issues = await db.query(
-      "SELECT title, status FROM issues WHERE assignees::text LIKE $1 AND status NOT IN ('resolved','closed') LIMIT 5",
-      ['%' + user.name + '%']
+      "SELECT title, status FROM issues WHERE EXISTS (SELECT 1 FROM issue_assignees ia WHERE ia.issue_id = issues.id AND ia.tenant_id = issues.tenant_id AND (ia.user_id = $1 OR ia.assignee_name = $2)) AND status NOT IN ('resolved','closed') LIMIT 5",
+      [user.user_id, user.name]
     );
 
     var wrMsg = '📝 <b>주간 업무 보고</b>\n';
     wrMsg += '<code>' + w.monStr + ' ~ ' + w.sunStr + '</code>\n';
-    wrMsg += '작성자: ' + user.name + '\n\n';
+    wrMsg += '작성자: ' + escHtml(user.name) + '\n\n';
 
     wrMsg += '<b>1. 금주 실적</b> (총 ' + Math.round(totalHours * 10) / 10 + 'h)\n';
     Object.keys(byAbbr).sort().forEach(function(a) {
       var info = byAbbr[a];
-      wrMsg += '\n<b>' + (AM[a] || a) + '</b> — ' + Math.round(info.hours * 10) / 10 + 'h\n';
+      wrMsg += '\n<b>' + (AM[a] || escHtml(a)) + '</b> — ' + Math.round(info.hours * 10) / 10 + 'h\n';
       info.items.slice(0, 5).forEach(function(item) {
-        wrMsg += '  · ' + item + '\n';
+        wrMsg += '  · ' + escHtml(item) + '\n';
       });
     });
 
     if (Object.keys(byOrder).length > 0) {
       wrMsg += '\n<b>2. 수주별 투입</b>\n';
       Object.entries(byOrder).sort(function(a, b) { return b[1] - a[1]; }).forEach(function(entry) {
-        wrMsg += '  · ' + entry[0] + ': ' + Math.round(entry[1] * 10) / 10 + 'h\n';
+        wrMsg += '  · ' + escHtml(entry[0]) + ': ' + Math.round(entry[1] * 10) / 10 + 'h\n';
       });
     }
 
     if (issues.rows.length > 0) {
       wrMsg += '\n<b>3. 진행중 이슈</b>\n';
       issues.rows.forEach(function(r) {
-        wrMsg += '  · ' + r.title + ' [' + r.status + ']\n';
+        wrMsg += '  · ' + escHtml(r.title) + ' [' + r.status + ']\n';
       });
     }
 
@@ -290,8 +292,8 @@ function create(sendMessage) {
       hasContent = true;
       msg += '⚠️ <b>지연 프로젝트 (' + delayedR.rows.length + ')</b>\n';
       delayedR.rows.forEach(function (r) {
-        msg += '· ' + r.name;
-        if (r.order_no) msg += ' [' + r.order_no + ']';
+        msg += '· ' + escHtml(r.name);
+        if (r.order_no) msg += ' [' + escHtml(r.order_no) + ']';
         msg += ' — ' + (r.progress || 0) + '%';
         if (r.end_date) msg += ', 납기 ' + r.end_date;
         msg += '\n';
@@ -306,8 +308,8 @@ function create(sendMessage) {
       overdueR.rows.forEach(function (r) {
         var endD = new Date(r.end_date.slice(0, 4) + '-' + r.end_date.slice(4, 6) + '-' + r.end_date.slice(6, 8));
         var diffDays = Math.floor((today - endD) / 86400000);
-        msg += '· ' + r.name;
-        if (r.order_no) msg += ' [' + r.order_no + ']';
+        msg += '· ' + escHtml(r.name);
+        if (r.order_no) msg += ' [' + escHtml(r.order_no) + ']';
         msg += ' — <b>+' + diffDays + '일</b> 초과\n';
       });
       msg += '\n';
@@ -319,9 +321,9 @@ function create(sendMessage) {
       urgentR.rows.forEach(function (r) {
         var assignees = [];
         try { assignees = typeof r.assignees === 'string' ? JSON.parse(r.assignees) : (r.assignees || []); } catch (_) {}
-        msg += '· ' + r.title;
+        msg += '· ' + escHtml(r.title);
         if (r.due_date) msg += ' (~ ' + r.due_date + ')';
-        if (assignees.length > 0) msg += ' 👤' + assignees.join(',');
+        if (assignees.length > 0) msg += ' 👤' + escHtml(assignees.join(','));
         msg += '\n';
       });
       msg += '\n';
@@ -331,7 +333,7 @@ function create(sendMessage) {
       hasContent = true;
       msg += '⏰ <b>기한 초과 이슈 (' + overIssueR.rows.length + ')</b>\n';
       overIssueR.rows.forEach(function (r) {
-        msg += '· ' + r.title + ' (기한 ' + r.due_date + ')\n';
+        msg += '· ' + escHtml(r.title) + ' (기한 ' + r.due_date + ')\n';
       });
     }
 

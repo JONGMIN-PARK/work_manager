@@ -2,6 +2,7 @@
  * 일정/수주 명령어 모듈: /calendar, /today, /orders, /order, /deliveries
  */
 var db = require('../../config/db');
+var escHtml = require('../util/escape').escHtml;
 
 function create(sendMessage) {
   /** 봇 명령어: /calendar — 일정 조회 */
@@ -52,7 +53,7 @@ function create(sendMessage) {
       msg += '<b>' + dateKey.slice(5) + ' (' + dayName + ')</b>\n';
       grouped[dateKey].forEach(function (ev) {
         var icon = typeIcons[ev.type] || '📌';
-        msg += icon + ' ' + ev.title + '\n';
+        msg += icon + ' ' + escHtml(ev.title) + '\n';
       });
       msg += '\n';
     });
@@ -72,10 +73,10 @@ function create(sendMessage) {
       [today]
     );
 
-    // 긴급 미해결 이슈
+    // 긴급 미해결 이슈 (issue_assignees 정규화 매핑 — user_id 우선, 폴백 이름 정확매칭)
     var issuesR = await db.query(
-      "SELECT title, urgency, status FROM issues WHERE assignees::text LIKE $1 AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 3",
-      ['%' + user.name + '%']
+      "SELECT title, urgency, status FROM issues WHERE EXISTS (SELECT 1 FROM issue_assignees ia WHERE ia.issue_id = issues.id AND ia.tenant_id = issues.tenant_id AND (ia.user_id = $1 OR ia.assignee_name = $2)) AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 3",
+      [user.user_id, user.name]
     );
 
     // 오늘 납기 프로젝트
@@ -96,13 +97,13 @@ function create(sendMessage) {
       amoff: '🌅', pmoff: '🌇', etc: '📌'
     };
 
-    var msg = '☀️ <b>' + user.name + '님, 오늘 브리핑</b>\n\n';
+    var msg = '☀️ <b>' + escHtml(user.name) + '님, 오늘 브리핑</b>\n\n';
 
     if (eventsR.rows.length > 0) {
       msg += '📅 <b>오늘 일정</b>\n';
       eventsR.rows.forEach(function (r) {
         var icon = typeIcons[r.type] || '📌';
-        msg += icon + ' ' + r.title + '\n';
+        msg += icon + ' ' + escHtml(r.title) + '\n';
       });
       msg += '\n';
     }
@@ -111,7 +112,7 @@ function create(sendMessage) {
       msg += '🔴 <b>긴급 이슈</b>\n';
       issuesR.rows.forEach(function (r) {
         var icon = r.urgency === 'urgent' ? '🔴' : r.urgency === 'normal' ? '🟡' : '🟢';
-        msg += icon + ' ' + r.title + ' [' + r.status + ']\n';
+        msg += icon + ' ' + escHtml(r.title) + ' [' + r.status + ']\n';
       });
       msg += '\n';
     }
@@ -119,7 +120,7 @@ function create(sendMessage) {
     if (deadlinesR.rows.length > 0) {
       msg += '🏁 <b>오늘 납기</b>\n';
       deadlinesR.rows.forEach(function (r) {
-        msg += '· ' + (r.order_no || '') + ' ' + r.name + '\n';
+        msg += '· ' + escHtml(r.order_no || '') + ' ' + escHtml(r.name) + '\n';
       });
     }
 
@@ -140,8 +141,8 @@ function create(sendMessage) {
     var msg = '📦 <b>수주 목록</b>\n\n';
     ordersR.rows.forEach(function (r, i) {
       msg += '<b>' + (i + 1) + '.</b> ';
-      if (r.order_no) msg += '<code>' + r.order_no + '</code> ';
-      msg += (r.name || r.client || '(미지정)');
+      if (r.order_no) msg += '<code>' + escHtml(r.order_no) + '</code> ';
+      msg += escHtml(r.name || r.client || '(미지정)');
       if (r.amount) {
         var amountStr = Number(r.amount).toLocaleString();
         msg += ' — ' + amountStr + '천원';
@@ -177,16 +178,16 @@ function create(sendMessage) {
 
     var o = orderR.rows[0];
     var msg = '📦 <b>수주 상세</b>\n\n';
-    if (o.order_no) msg += '📋 수주번호: <code>' + o.order_no + '</code>\n';
-    if (o.client) msg += '🏢 고객: ' + o.client + '\n';
-    if (o.name) msg += '📁 건명: ' + o.name + '\n';
+    if (o.order_no) msg += '📋 수주번호: <code>' + escHtml(o.order_no) + '</code>\n';
+    if (o.client) msg += '🏢 고객: ' + escHtml(o.client) + '\n';
+    if (o.name) msg += '📁 건명: ' + escHtml(o.name) + '\n';
     if (o.amount) {
       var amountStr = Number(o.amount).toLocaleString();
       msg += '💰 금액: ' + amountStr + '천원\n';
     }
-    if (o.manager) msg += '👤 담당: ' + o.manager + '\n';
+    if (o.manager) msg += '👤 담당: ' + escHtml(o.manager) + '\n';
     if (o.delivery) msg += '📅 납품: ' + o.delivery + '\n';
-    if (o.memo) msg += '📝 메모: ' + o.memo.slice(0, 200) + '\n';
+    if (o.memo) msg += '📝 메모: ' + escHtml(o.memo.slice(0, 200)) + '\n';
 
     // 투입 시간 조회
     if (o.order_no) {
@@ -226,8 +227,8 @@ function create(sendMessage) {
     var msg = '📦 <b>' + y + '년 ' + parseInt(m) + '월 납품 예정</b>\n\n';
     ordersR.rows.forEach(function (r, i) {
       msg += '<b>' + (i + 1) + '.</b> ';
-      if (r.order_no) msg += '<code>' + r.order_no + '</code> ';
-      msg += (r.name || r.client || '(미지정)');
+      if (r.order_no) msg += '<code>' + escHtml(r.order_no) + '</code> ';
+      msg += escHtml(r.name || r.client || '(미지정)');
       if (r.delivery) {
         msg += '\n   📅 ' + r.delivery;
         var delivDate = new Date(r.delivery.slice(0, 4) + '-' + r.delivery.slice(4, 6) + '-' + r.delivery.slice(6, 8));
@@ -243,7 +244,7 @@ function create(sendMessage) {
           msg += ' (D-' + diffDays + ')';
         }
       }
-      if (r.manager) msg += ' 👤' + r.manager;
+      if (r.manager) msg += ' 👤' + escHtml(r.manager);
       msg += '\n';
     });
 
