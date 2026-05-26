@@ -305,12 +305,8 @@ async function renderTimeline() {
       var msStInfo = PROJ_STATUS[msSt] || PROJ_STATUS.waiting;
       var msBarBg = msSt === 'done' ? '#10B98180' : msSt === 'delayed' ? '#EF444480' : msSt === 'active' ? p.color + '90' : p.color + '40';
       var msBarCls = 'tl-bar tl-bar-ms' + (msSt === 'delayed' ? ' tl-bar-delayed' : '') + (msSt === 'done' ? ' tl-bar-done' : '');
-      // 네이티브 title 폴백 — 커스텀 카드가 어떤 이유로든 안 떠도 이름·기간·일수는 항상 보이도록 (프로젝트 막대와 동일 방식)
-      var _msDays = (ms.startDate && ms.endDate && ms.startDate.length >= 10 && ms.endDate.length >= 10) ? (daysDiff(ms.startDate, ms.endDate) + 1) : null;
-      var msTipTitle = (ms.name || '') + ' (' + (ms.startDate || '?') + ' ~ ' + (ms.endDate || '?') + (_msDays != null ? ' · ' + _msDays + '일' : '') + ')';
       rowsHtml += '<div class="tl-row tl-row-sub" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '" ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)">';
       rowsHtml += '<div class="tl-label tl-label-sub" draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' +
-        ' title="' + eH(msTipTitle) + '"' +
         ' data-tip-name="' + eH(ms.name) + '" data-tip-start="' + (ms.startDate || '') + '" data-tip-end="' + (ms.endDate || '') + '" data-tip-status="' + msSt + '" data-tip-color="' + (p.color || 'var(--ac)') + '"' +
         ' onmouseenter="tlBarTipShow(event)" onmousemove="tlBarTipMove(event)" onmouseleave="tlBarTipHide()"' +
         ' style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;cursor:grab">' +
@@ -323,7 +319,6 @@ async function renderTimeline() {
       });
       var msEditCls = tlEditMode ? ' tl-bar-editable' : '';
       rowsHtml += '<div class="' + msBarCls + msEditCls + '" data-type="ms" data-id="' + ms.id + '"' +
-        ' title="' + eH(msTipTitle) + '"' +
         ' data-tip-name="' + eH(ms.name) + '" data-tip-start="' + (ms.startDate || '') + '" data-tip-end="' + (ms.endDate || '') + '" data-tip-status="' + msSt + '" data-tip-color="' + (p.color || 'var(--ac)') + '"' +
         ' onmouseenter="tlBarTipShow(event)" onmousemove="tlBarTipMove(event)" onmouseleave="tlBarTipHide()"' +
         ' style="' + msBarStyle + 'background:' + msBarBg + '">';

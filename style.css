@@ -194,7 +194,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-handle:hover{background:rgba(255,255,255,.7)}
 .tl-drag-tooltip{position:fixed;padding:4px 8px;background:var(--bg-p);border:1px solid var(--ac);border-radius:5px;font-size:10px;color:var(--ac-t);pointer-events:none;z-index:10000;white-space:nowrap;font-family:'JetBrains Mono',monospace}
 /* 막대 호버 툴팁 — 시작/종료/기간 카드 */
-.tl-bar-tip{position:fixed;z-index:10050;pointer-events:none;min-width:184px;max-width:300px;padding:10px 12px;background:var(--bg-p);background:color-mix(in srgb,var(--bg-p) 80%,transparent);-webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4);border:1px solid color-mix(in srgb,var(--bd) 70%,transparent);border-left:3px solid var(--ac);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.30);opacity:0;transform:translateY(5px);transition:opacity .13s ease,transform .13s ease}
+.tl-bar-tip{position:fixed;z-index:10050;pointer-events:none;min-width:184px;max-width:300px;padding:10px 12px;background:var(--bg-p);background:color-mix(in srgb,var(--bg-p) 88%,transparent);-webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4);border:1px solid color-mix(in srgb,var(--bd) 70%,transparent);border-left:3px solid var(--ac);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.30);opacity:0;transform:translateY(5px);transition:opacity .13s ease,transform .13s ease}
 .tl-bar-tip.show{opacity:1;transform:translateY(0)}
 .tl-bar-tip-head{display:flex;align-items:center;gap:6px;margin-bottom:7px;padding-bottom:7px;border-bottom:1px solid var(--bd)}
 .tl-bar-tip-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}

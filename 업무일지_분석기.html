@@ -796,7 +796,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.94</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.95</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3337,6 +3337,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.95',date:'2026-05-26',title:'🧹 마일스톤 호버 툴팁 1개로 정리 + 반투명 88%',tag:'fix',items:[
+      '호버 시 툴팁이 2개(브라우저 기본 title + 카드) 뜨던 문제 해결 — v13.93에서 폴백으로 넣었던 기본 title을 제거하고 반투명 카드만 남김',
+      '카드 배경 반투명도 80% → 88%로 또렷하게(=12% 투명)',
+      '영향: 클라이언트 timeline.js·style.css만 변경'
+    ]},
     {ver:'13.94',date:'2026-05-26',title:'✨ 마일스톤 호버 카드 반투명(프로스티드 글래스) 처리',tag:'feature',items:[
       '호버 툴팁 카드 배경을 반투명(80%) + 배경 블러(backdrop-filter)로 — 뒤 타임라인이 은은히 비치는 글래스 느낌',
       'color-mix로 테마 색을 그대로 반투명화 → 20여 개 테마 모두에서 자동 적용(테마별 하드코딩 없음)',
