@@ -305,10 +305,13 @@ async function renderTimeline() {
       var msStInfo = PROJ_STATUS[msSt] || PROJ_STATUS.waiting;
       var msBarBg = msSt === 'done' ? '#10B98180' : msSt === 'delayed' ? '#EF444480' : msSt === 'active' ? p.color + '90' : p.color + '40';
       var msBarCls = 'tl-bar tl-bar-ms' + (msSt === 'delayed' ? ' tl-bar-delayed' : '') + (msSt === 'done' ? ' tl-bar-done' : '');
+      // 한 줄 네이티브 툴팁 (프로젝트 막대와 동일 형태) — 이름 · 기간 · 일수 · D-day
+      var _msDays = (ms.startDate && ms.endDate && ms.startDate.length >= 10 && ms.endDate.length >= 10) ? (daysDiff(ms.startDate, ms.endDate) + 1) : null;
+      var _msDday = (typeof _tlFmtDday === 'function') ? _tlFmtDday({ endDate: ms.endDate }, msSt) : null;
+      var msTitle = (ms.name || '') + ' · ' + (ms.startDate || '?') + ' ~ ' + (ms.endDate || '?') + (_msDays != null ? ' · ' + _msDays + '일' : '') + (_msDday ? ' · ' + _msDday.label : '');
       rowsHtml += '<div class="tl-row tl-row-sub" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '" ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)">';
       rowsHtml += '<div class="tl-label tl-label-sub" draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' +
-        ' data-tip-name="' + eH(ms.name) + '" data-tip-start="' + (ms.startDate || '') + '" data-tip-end="' + (ms.endDate || '') + '" data-tip-status="' + msSt + '" data-tip-color="' + (p.color || 'var(--ac)') + '"' +
-        ' onmouseenter="tlBarTipShow(event)" onmousemove="tlBarTipMove(event)" onmouseleave="tlBarTipHide()"' +
+        ' title="' + eH(msTitle) + '"' +
         ' style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;cursor:grab">' +
         '<span style="color:var(--t5);font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap"><span class="tl-ms-grip" style="opacity:.45;cursor:grab">⠿</span>' + eH(ms.name) +
         ' <span class="badge" style="background:' + msStInfo.bg + ';color:' + msStInfo.color + ';font-size:8px;padding:1px 4px">' + msStInfo.label + '</span>' +
@@ -319,8 +322,7 @@ async function renderTimeline() {
       });
       var msEditCls = tlEditMode ? ' tl-bar-editable' : '';
       rowsHtml += '<div class="' + msBarCls + msEditCls + '" data-type="ms" data-id="' + ms.id + '"' +
-        ' data-tip-name="' + eH(ms.name) + '" data-tip-start="' + (ms.startDate || '') + '" data-tip-end="' + (ms.endDate || '') + '" data-tip-status="' + msSt + '" data-tip-color="' + (p.color || 'var(--ac)') + '"' +
-        ' onmouseenter="tlBarTipShow(event)" onmousemove="tlBarTipMove(event)" onmouseleave="tlBarTipHide()"' +
+        ' title="' + eH(msTitle) + '"' +
         ' style="' + msBarStyle + 'background:' + msBarBg + '">';
       if (tlEditMode) {
         rowsHtml += '<div class="tl-handle tl-handle-l" data-handle="left"></div>';
@@ -352,9 +354,7 @@ async function renderTimeline() {
     }
   }
 
-  // 재렌더로 막대 DOM이 교체되면 mouseleave가 안 올 수 있어 잔여 툴팁/드래그 상태 정리(self-heal)
-  _tlBarDragging = false;
-  if (typeof tlBarTipHide === 'function') tlBarTipHide();
+  // 재렌더 시 비정상 종료된 막대 드래그 툴팁 잔재 정리
   var _orphanDrag = document.querySelectorAll('.tl-drag-tooltip');
   for (var _od = 0; _od < _orphanDrag.length; _od++) _orphanDrag[_od].remove();
 
@@ -493,77 +493,6 @@ function _tlFmtDday(p, st) {
   else if (diff === 0) { label = 'D-Day'; color = '#F59E0B'; }
   else { label = 'D+' + Math.abs(diff); color = '#EF4444'; }
   return { label: label, color: color };
-}
-
-/* ═══ 타임라인 막대 호버 툴팁 — 시작·종료·기간 표시 ═══ */
-var _tlBarDragging = false;  // 막대 드래그(기간 편집) 중 여부 — 호버 툴팁 억제용 (DOM 조회 가드보다 견고)
-function _tlTipEl() {
-  var el = document.getElementById('tlBarTip');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'tlBarTip';
-    el.className = 'tl-bar-tip';
-    // CSS(style.css)가 어떤 이유로 미로드여도 커서 옆에 뜨도록 핵심 스타일은 인라인으로도 보장
-    el.style.position = 'fixed';
-    el.style.zIndex = '10050';
-    el.style.display = 'none';
-    document.body.appendChild(el);
-  }
-  return el;
-}
-function _tlTipFmtDate(d) {
-  if (!d || d.length < 10) return d || '—';
-  return d.slice(0, 4) + '.' + d.slice(5, 7) + '.' + d.slice(8, 10);
-}
-function tlBarTipShow(e) {
-  // 막대 드래그 중에는 드래그 툴팁이 우선 — 호버 툴팁은 표시하지 않음
-  if (_tlBarDragging) return;
-  var bar = e.currentTarget;
-  var name = bar.getAttribute('data-tip-name') || '';
-  var start = bar.getAttribute('data-tip-start') || '';
-  var end = bar.getAttribute('data-tip-end') || '';
-  var status = bar.getAttribute('data-tip-status') || 'waiting';
-  var color = bar.getAttribute('data-tip-color') || 'var(--ac)';
-  var stInfo = (typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[status]) || { icon: '', label: status, color: '#94A3B8', bg: 'rgba(148,163,184,.15)' };
-  var days = (start && end && start.length >= 10 && end.length >= 10) ? (daysDiff(start, end) + 1) : null;
-  var dday = (typeof _tlFmtDday === 'function') ? _tlFmtDday({ endDate: end }, status) : null;
-
-  var html = '<div class="tl-bar-tip-head">' +
-    '<span class="tl-bar-tip-dot" style="background:' + color + '"></span>' +
-    '<span class="tl-bar-tip-name">' + eH(name) + '</span>' +
-    '<span class="tl-bar-tip-badge" style="background:' + stInfo.bg + ';color:' + stInfo.color + '">' + (stInfo.icon ? stInfo.icon + ' ' : '') + eH(stInfo.label) + '</span>' +
-  '</div>';
-  html += '<div class="tl-bar-tip-row"><span class="tl-bar-tip-ic">📅</span><span>' + _tlTipFmtDate(start) + '</span><span class="tl-bar-tip-arrow">→</span><span>' + _tlTipFmtDate(end) + '</span></div>';
-  html += '<div class="tl-bar-tip-row"><span class="tl-bar-tip-ic">⏱️</span>' +
-    (days != null ? ('<span>기간 <b>' + days + '일</b></span>') : '<span>기간 —</span>') +
-    (dday ? '<span class="tl-bar-tip-dday" style="color:' + dday.color + '">· ' + dday.label + '</span>' : '') +
-  '</div>';
-
-  var el = _tlTipEl();
-  el.style.borderLeftColor = color;
-  el.innerHTML = html;
-  el.style.display = 'block';
-  // 다음 프레임에 show 클래스 — fade-in 트랜지션
-  requestAnimationFrame(function () { el.classList.add('show'); });
-  tlBarTipMove(e);
-}
-function tlBarTipMove(e) {
-  var el = document.getElementById('tlBarTip');
-  if (!el || el.style.display === 'none') return;
-  if (_tlBarDragging) { tlBarTipHide(); return; }
-  var pad = 14;
-  var w = el.offsetWidth, h = el.offsetHeight;
-  var x = e.clientX + pad;
-  var y = e.clientY - h - 12;            // 기본: 커서 위쪽
-  if (x + w > window.innerWidth - 8) x = e.clientX - w - pad;   // 오른쪽 넘치면 왼쪽
-  if (x < 8) x = 8;
-  if (y < 8) y = e.clientY + 20;          // 위 공간 없으면 아래쪽
-  el.style.left = x + 'px';
-  el.style.top = y + 'px';
-}
-function tlBarTipHide() {
-  var el = document.getElementById('tlBarTip');
-  if (el) { el.classList.remove('show'); el.style.display = 'none'; }
 }
 
 function calcLabelWidth(projects, milestones) {
@@ -1581,7 +1510,6 @@ function bindBarDrag() {
    (다른 프로젝트로 옮기려면 편집 모달의 ↪ 이관 버튼 사용) */
 var _tlMsDrag = null;
 function tlMsDragStart(e, msId, projId) {
-  if (typeof tlBarTipHide === 'function') tlBarTipHide();  // 순서 변경 드래그 시작 시 호버 툴팁 정리
   _tlMsDrag = { id: msId, projId: projId };
   e.dataTransfer.effectAllowed = 'move';
   try { e.dataTransfer.setData('text/plain', msId); } catch (_) {}
@@ -1739,8 +1667,6 @@ function drawDependencyArrows(projects, rangeStart, units, labelW) {
 }
 
 function startBarDrag(bar, mode, startEvt) {
-  _tlBarDragging = true;
-  if (typeof tlBarTipHide === 'function') tlBarTipHide();
   var type = bar.dataset.type; // 'proj' or 'ms'
   var id = bar.dataset.id;
   var scrollEl = document.getElementById('tlScroll');
@@ -1791,7 +1717,6 @@ function startBarDrag(bar, mode, startEvt) {
   function onUp(e) {
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
-    _tlBarDragging = false;
     tooltip.remove();
 
     var newStart = positionToDate(newLeft);

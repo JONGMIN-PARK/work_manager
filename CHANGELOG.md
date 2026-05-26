@@ -1,5 +1,18 @@
 # Work Manager — 변경 이력
 
+## v13.96 (2026-05-26) — 마일스톤 호버 툴팁 단일화: 한 줄 네이티브 박스(+D-day)
+
+### 배경
+v13.95로 카드만 남겼다고 했으나 사용자 환경에서 여전히 2개(기본 title + 카드)가 보였고, 사용자가 "프로젝트 막대처럼 한 줄 사각 박스 + D-day"로 단순화 요청. 커스텀 카드를 폐기하고 네이티브 title 단일 방식으로 전환 → 구조적으로 1개만 표시.
+
+### 변경 (`timeline.js`, `style.css`)
+- 마일스톤 막대(`.tl-bar-ms`)·이름 라벨(`.tl-label-sub`)에서 카드용 `data-tip-*` 속성과 `onmouseenter/move/leave` 핸들러 제거, 대신 네이티브 `title="이름 · 시작 ~ 종료 · N일 · D-7"` 부여(프로젝트 막대와 동일 형태, `_tlFmtDday`로 D-day 산출).
+- 커스텀 카드 코드 일괄 제거: `_tlTipEl`·`_tlTipFmtDate`·`tlBarTipShow/Move/Hide` 함수, `_tlBarDragging` 플래그 및 `startBarDrag`/`onUp`/`tlMsDragStart`/`renderTimeline`의 관련 배선. `startBarDrag`의 `.tl-drag-tooltip` 잔재 정리는 유지.
+- `style.css`의 `.tl-bar-tip*` 규칙 전부 제거.
+
+### 영향
+- 클라이언트 `timeline.js`·`style.css`만 변경. 이제 호버 시 한 줄 기본 박스 1개만 표시.
+
 ## v13.95 (2026-05-26) — 마일스톤 호버 툴팁 중복 제거(카드만) + 반투명 88%
 
 ### 배경
