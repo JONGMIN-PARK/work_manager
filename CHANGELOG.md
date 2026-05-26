@@ -1,5 +1,30 @@
 # Work Manager — 변경 이력
 
+## v13.90 (2026-05-26) — 투입실적 전면 개편: 담당자별 목표시간 대비 누적 실적
+
+### 배경
+투입실적 탭이 "시간을 기록한 사람"을 단순 나열만 하고 목표 개념이 없었음. 할당받은 담당자별로 **누적 실적 vs 목표시간**을 보고, 목표는 직접 입력해 관리하도록 구조 개편. (목표 단위: 인원×마일스톤별 / 입력 위치: 프로젝트 편집 모달 — 사용자 선택)
+
+### 데이터 모델
+- `milestones.assignee_targets` JSONB 신규 (`server/migrations/033_milestone_assignee_targets.sql`, 멱등 `ADD COLUMN IF NOT EXISTS`). `{ "이름": 목표h }` 맵 — 마일스톤별 인원 목표.
+- `toCamel`에 `assignee_targets` 파싱 추가 → 클라 `assigneeTargets`.
+- `createMilestone`/`msPut`가 `assigneeTargets` 전달, 서버 milestones POST/PUT가 저장(PUT은 `COALESCE($::jsonb, …)`로 미전달 시 보존).
+
+### 입력 UI (`timeline.js` 프로젝트 편집 모달)
+- 마일스톤 섹션에 **🎯 목표 배분** 버튼 → 매트릭스 모달(행=마일스톤 × 열=담당자) 목표시간 입력. 행/열/전체 합계 실시간 계산.
+- 행마다 `data-rowkey`(기존=msid, 신규=temp), 값은 `_msTargetStaging`에 스테이징 → 프로젝트 [수정/등록] 시 각 마일스톤 `assigneeTargets`로 저장.
+
+### 투입실적 탭 (`project-detail.js` pdLoadWork)
+- **담당자별 누적 실적 vs 목표**: 담당자(proj.assignees)별 실적(work_records 이름 집계) / 목표(Σ 마일스톤) 진행률 바, 달성%·잔여·초과(빨강) 표시. 0시간 담당자도 표시.
+- 요약 박스: 총 투입 + **목표 대비 %**(Σ목표) + 예상 대비 %(estimatedHours).
+- 마일스톤별 상세에 담당자별 실적/목표 동시 표기.
+- **할당 외 기록**: 담당자가 아닌데 시간 기록한 사람을 별도 섹션으로 분리(데이터 누락 방지).
+- 목표 미설정 시 안내 배너로 🎯 목표 배분 유도.
+
+### 영향
+- 변경 파일: `timeline.js`, `project-detail.js`, `project-data.js`, `server/routes/milestones.js`, `server/migrations/033_*.sql`, `업무일지_분석기.html`.
+- 마이그레이션은 서버 시작 시 멱등 적용. 클라+서버 동시 배포 필요(컬럼 의존). 배포 전엔 목표 미설정 상태로 graceful 동작.
+
 ## v13.89 (2026-05-26) — 문서 관리 폴더/메뉴 선택 속도 개선 (캐시 + 중복 fetch 제거)
 
 ### 배경

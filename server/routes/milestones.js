@@ -45,10 +45,11 @@ router.post('/', async function (req, res) {
   try {
     var b = req.body;
     var id = b.id || ('ms-' + require('crypto').randomUUID().slice(0, 12));
+    var atIns = b.assigneeTargets || b.assignee_targets || {};
     var r = await db.query(
-      "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
+      "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, assignee_targets, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
       [id, b.projectId || b.project_id, b.name || '', b.startDate || b.start_date || '',
-       b.endDate || b.end_date || '', b.status || 'waiting', b.order || b.sort_order || 0, req.user.sub, req.tenant.id]
+       b.endDate || b.end_date || '', b.status || 'waiting', b.order || b.sort_order || 0, JSON.stringify(atIns), req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
@@ -63,9 +64,12 @@ router.put('/:id', async function (req, res) {
     var b = req.body;
     // sort_order=0 도 유효한 값 → falsy(||) 대신 null 체크로 보존 (첫 번째 마일스톤 순서 저장 누락 방지)
     var sortOrder = (b.order != null) ? b.order : (b.sort_order != null ? b.sort_order : null);
+    // assignee_targets: 명시적으로 전달된 경우에만 갱신(미전달 시 COALESCE로 보존)
+    var atRaw = (b.assigneeTargets !== undefined) ? b.assigneeTargets : b.assignee_targets;
+    var atParam = (atRaw !== undefined) ? JSON.stringify(atRaw || {}) : null;
     var r = await db.query(
-      "UPDATE milestones SET name=COALESCE($1,name), start_date=COALESCE($2,start_date), end_date=COALESCE($3,end_date), status=COALESCE($4,status), sort_order=COALESCE($5,sort_order) WHERE id=$6 AND tenant_id=$7 RETURNING *",
-      [b.name, b.startDate || b.start_date, b.endDate || b.end_date, b.status, sortOrder, req.params.id, req.tenant.id]
+      "UPDATE milestones SET name=COALESCE($1,name), start_date=COALESCE($2,start_date), end_date=COALESCE($3,end_date), status=COALESCE($4,status), sort_order=COALESCE($5,sort_order), assignee_targets=COALESCE($8::jsonb,assignee_targets) WHERE id=$6 AND tenant_id=$7 RETURNING *",
+      [b.name, b.startDate || b.start_date, b.endDate || b.end_date, b.status, sortOrder, req.params.id, req.tenant.id, atParam]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });

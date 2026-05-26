@@ -726,6 +726,10 @@ async function showProjectModal(projId) {
     }
   }
   window._projMsOrigIds = projMs.map(function (m) { return m.id; });
+  // 마일스톤별 인원 목표시간 스테이징 초기화 (기존 마일스톤의 assigneeTargets 로드)
+  _msTargetStaging = {};
+  _msRowKeySeq = 0;
+  projMs.forEach(function (m) { _msTargetStaging[m.id] = Object.assign({}, m.assigneeTargets || {}); });
 
   var modal = document.createElement('div');
   modal.id = 'projModal';
@@ -752,7 +756,7 @@ async function showProjectModal(projId) {
   var msHtml = '';
   if (projMs.length) {
     msHtml = projMs.map(function (m, idx) {
-      return '<div class="proj-ms-row" data-msid="' + m.id + '" ondragover="msRowDragOver(event)" ondrop="msRowDrop(event)" style="display:grid;grid-template-columns:18px 1fr 110px 110px 90px 30px 30px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)">' +
+      return '<div class="proj-ms-row" data-msid="' + m.id + '" data-rowkey="' + m.id + '" ondragover="msRowDragOver(event)" ondrop="msRowDrop(event)" style="display:grid;grid-template-columns:18px 1fr 110px 110px 90px 30px 30px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)">' +
         '<span class="ms-drag-handle" draggable="true" ondragstart="msRowDragStart(event)" ondragend="msRowDragEnd(event)" title="드래그하여 순서 변경">⠿</span>' +
         '<input type="text" class="si ms-name" value="' + eH(m.name) + '" style="padding:4px 8px;font-size:11px;padding-left:8px">' +
         '<input type="date" class="si ms-start" value="' + m.startDate + '" style="padding:4px 6px;font-size:10px;padding-left:6px">' +
@@ -845,6 +849,7 @@ async function showProjectModal(projId) {
           '<span style="font-size:12px;font-weight:600;color:var(--t4)">◆ 마일스톤 (하위 단계)</span>' +
           '<div style="display:flex;gap:4px">' +
             (proj && proj.orderNo ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="runSuggestMilestones(\'' + eH(proj.orderNo) + '\')">🤖 마일스톤 제안</button>' : '') +
+            '<button class="btn btn-g btn-s" style="font-size:10px" onclick="editMsTargetsMatrix()" title="담당자별·마일스톤별 목표시간 배분">🎯 목표 배분</button>' +
             '<button class="btn btn-g btn-s" onclick="addMsRow()">+ 추가</button>' +
           '</div>' +
         '</div>' +
@@ -931,6 +936,7 @@ function addMsRow() {
 
   var row = document.createElement('div');
   row.className = 'proj-ms-row';
+  row.setAttribute('data-rowkey', 'new-' + (++_msRowKeySeq));
   row.setAttribute('ondragover', 'msRowDragOver(event)');
   row.setAttribute('ondrop', 'msRowDrop(event)');
   row.style.cssText = 'display:grid;grid-template-columns:18px 1fr 110px 110px 90px 30px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)';
@@ -948,6 +954,9 @@ function addMsRow() {
    saveProjectUI 가 #msRows 의 DOM 순서대로 order:i 를 저장하므로,
    여기서는 DOM 순서만 재배열하면 [저장] 시 자동 영속화된다. */
 var _msDragRow = null;
+// 마일스톤별 인원 목표시간 스테이징: { rowKey: { 이름: 목표h } }. 편집 모달 열 때 초기화.
+var _msTargetStaging = {};
+var _msRowKeySeq = 0;
 function msRowDragStart(e) {
   _msDragRow = e.target.closest('.proj-ms-row');
   if (!_msDragRow) return;
@@ -975,6 +984,115 @@ function msRowDrop(e) {
   e.preventDefault();
   if (_msDragRow) _msDragRow.style.opacity = '';
   _msDragRow = null;
+}
+
+/* ═══ 마일스톤 × 담당자 목표시간 배분 매트릭스 (편집 모달) ═══
+   담당자(#projAssignees)와 현재 마일스톤 행을 읽어 매트릭스 입력을 띄운다.
+   값은 _msTargetStaging[rowKey][name]에 스테이징되고, 프로젝트 저장 시 각 마일스톤에 반영된다. */
+function editMsTargetsMatrix() {
+  var aEl = document.getElementById('projAssignees');
+  var assignees = aEl ? aEl.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+  var seenA = {};
+  assignees = assignees.filter(function (n) { if (seenA[n]) return false; seenA[n] = true; return true; });
+  if (!assignees.length) { if (typeof showToast === 'function') showToast('담당자를 먼저 입력하세요.', 'warn'); return; }
+
+  var rows = [];
+  document.querySelectorAll('#msRows .proj-ms-row').forEach(function (r) {
+    var rk = r.getAttribute('data-rowkey');
+    var nmEl = r.querySelector('.ms-name');
+    var nm = (nmEl && nmEl.value.trim()) || '(이름 없음)';
+    if (rk) rows.push({ rk: rk, name: nm });
+  });
+  if (!rows.length) { if (typeof showToast === 'function') showToast('마일스톤을 먼저 추가하세요.', 'warn'); return; }
+
+  var existing = document.getElementById('msTargetsModal');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'msTargetsModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+
+  var th = '<th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--t4);position:sticky;left:0;background:var(--bg-p)">마일스톤 \\ 담당자</th>';
+  assignees.forEach(function (n) {
+    var dn = typeof shortName === 'function' ? shortName(n) : n;
+    th += '<th style="padding:6px 6px;font-size:10px;color:var(--t3);min-width:62px" title="' + eH(n) + '">' + eH(dn) + '</th>';
+  });
+  th += '<th style="padding:6px 8px;font-size:10px;color:var(--t4);text-align:right">합계</th>';
+
+  var body = '';
+  rows.forEach(function (row) {
+    var stg = _msTargetStaging[row.rk] || {};
+    body += '<tr>';
+    body += '<td style="padding:4px 8px;font-size:11px;color:var(--t2);white-space:nowrap;position:sticky;left:0;background:var(--bg-p);max-width:160px;overflow:hidden;text-overflow:ellipsis" title="' + eH(row.name) + '">' + eH(row.name) + '</td>';
+    assignees.forEach(function (n) {
+      var v = (stg[n] != null) ? stg[n] : '';
+      body += '<td style="padding:2px 4px;text-align:center"><input type="number" min="0" step="0.5" class="si msTgtCell" data-rk="' + eH(row.rk) + '" data-nm="' + eH(n) + '" value="' + v + '" style="width:54px;padding:4px 4px;font-size:11px;text-align:center" oninput="msTargetsRecalc()"></td>';
+    });
+    body += '<td class="msTgtRowSum" style="padding:4px 8px;font-size:11px;color:var(--ac);font-weight:600;text-align:right">0h</td>';
+    body += '</tr>';
+  });
+
+  modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:90%;max-height:88vh;overflow:auto">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+      '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">🎯 인원별 목표시간 배분</h3>' +
+      '<button class="btn btn-g btn-s" onclick="document.getElementById(\'msTargetsModal\').remove()">✕ 닫기</button>' +
+    '</div>' +
+    '<div style="font-size:10px;color:var(--t5);margin-bottom:10px;line-height:1.5">마일스톤 × 담당자별 목표시간(h)을 입력하세요. [배분 저장] 후 프로젝트 <b>[수정/등록]</b>을 눌러야 최종 반영됩니다. 투입실적 탭에서 "누적 실적 vs 목표"로 표시됩니다.</div>' +
+    '<div style="overflow:auto;max-height:60vh"><table style="border-collapse:collapse;width:100%">' +
+      '<thead><tr style="border-bottom:1px solid var(--bd)">' + th + '</tr></thead>' +
+      '<tbody>' + body + '</tbody>' +
+      '<tfoot><tr style="border-top:1px solid var(--bd)">' +
+        '<td style="padding:6px 8px;font-size:10px;color:var(--t4);position:sticky;left:0;background:var(--bg-p);font-weight:700">담당자 합계</td>' +
+        assignees.map(function () { return '<td class="msTgtColSum" style="padding:6px 6px;font-size:10px;color:var(--t3);text-align:center;font-weight:600">0h</td>'; }).join('') +
+        '<td class="msTgtGrand" style="padding:6px 8px;font-size:11px;color:var(--ac);font-weight:700;text-align:right">0h</td>' +
+      '</tr></tfoot>' +
+    '</table></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
+      '<button class="btn btn-g btn-s" onclick="document.getElementById(\'msTargetsModal\').remove()">취소</button>' +
+      '<button class="btn btn-p" onclick="saveMsTargetsMatrix()">💾 배분 저장</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(modal);
+  msTargetsRecalc();
+}
+
+function msTargetsRecalc() {
+  var modal = document.getElementById('msTargetsModal');
+  if (!modal) return;
+  var bodyRows = modal.querySelectorAll('tbody tr');
+  var colSums = [];
+  var grand = 0;
+  bodyRows.forEach(function (tr) {
+    var inputs = tr.querySelectorAll('.msTgtCell');
+    var rowSum = 0;
+    inputs.forEach(function (inp, ci) {
+      var v = parseFloat(inp.value) || 0;
+      rowSum += v;
+      colSums[ci] = (colSums[ci] || 0) + v;
+    });
+    var rs = tr.querySelector('.msTgtRowSum');
+    if (rs) rs.textContent = (Math.round(rowSum * 10) / 10) + 'h';
+    grand += rowSum;
+  });
+  var colCells = modal.querySelectorAll('.msTgtColSum');
+  colCells.forEach(function (c, i) { c.textContent = (Math.round((colSums[i] || 0) * 10) / 10) + 'h'; });
+  var g = modal.querySelector('.msTgtGrand');
+  if (g) g.textContent = (Math.round(grand * 10) / 10) + 'h';
+}
+
+function saveMsTargetsMatrix() {
+  var modal = document.getElementById('msTargetsModal');
+  if (!modal) return;
+  var cells = modal.querySelectorAll('.msTgtCell');
+  cells.forEach(function (c) {
+    var rk = c.getAttribute('data-rk');
+    var nm = c.getAttribute('data-nm');
+    var v = parseFloat(c.value) || 0;
+    if (!_msTargetStaging[rk]) _msTargetStaging[rk] = {};
+    if (v > 0) _msTargetStaging[rk][nm] = v;
+    else delete _msTargetStaging[rk][nm];
+  });
+  modal.remove();
+  if (typeof showToast === 'function') showToast('목표 배분 저장됨 — 프로젝트 [수정/등록]을 눌러 반영하세요');
 }
 
 async function saveProjectUI(existingId) {
@@ -1048,11 +1166,13 @@ async function saveProjectUI(existingId) {
       if (seenKeys[dupKey]) continue;
       seenKeys[dupKey] = true;
       var existingMsId = row.getAttribute('data-msid');
+      var rowKey = row.getAttribute('data-rowkey');
+      var msTargets = (rowKey && _msTargetStaging[rowKey]) || {};
       if (existingMsId && origIds.indexOf(existingMsId) >= 0) {
         keptIds[existingMsId] = true;
-        msPromises.push(msPut({ id: existingMsId, projectId: projId, name: msName, startDate: msStart, endDate: msEnd, status: msStatus, order: i }));
+        msPromises.push(msPut({ id: existingMsId, projectId: projId, name: msName, startDate: msStart, endDate: msEnd, status: msStatus, order: i, assigneeTargets: msTargets }));
       } else {
-        msPromises.push(createMilestone({ projectId: projId, name: msName, startDate: msStart, endDate: msEnd, status: msStatus, order: i }));
+        msPromises.push(createMilestone({ projectId: projId, name: msName, startDate: msStart, endDate: msEnd, status: msStatus, order: i, assigneeTargets: msTargets }));
       }
     }
     // 제거된 마일스톤 삭제

@@ -32,7 +32,7 @@ function toCamel(row) {
     var ck = k.replace(/_([a-z])/g, function (m, c) { return c.toUpperCase(); });
     var v = row[k];
     // JSONB 문자열 → 파싱
-    if (typeof v === 'string' && (k === 'assignees' || k === 'dependencies' || k === 'project_ids' || k === 'tags' || k === 'items' || k === 'phases' || k === 'data' || k === 'date_range' || k === 'selected_names' || k === 'summary_history' || k === 'version_history')) {
+    if (typeof v === 'string' && (k === 'assignees' || k === 'dependencies' || k === 'project_ids' || k === 'tags' || k === 'items' || k === 'phases' || k === 'data' || k === 'date_range' || k === 'selected_names' || k === 'summary_history' || k === 'version_history' || k === 'assignee_targets')) {
       try { v = JSON.parse(v); } catch (e) { /* keep string */ }
     }
     // NUMERIC 컬럼 → 숫자 변환 (node-postgres가 문자열로 반환)
@@ -524,6 +524,7 @@ function createMilestone(data) {
     endDate: data.endDate || '',
     status: data.status || 'waiting',
     order: data.order || 0,
+    assigneeTargets: data.assigneeTargets || {},
     createdAt: new Date().toISOString(),
     _isNew: true
   };

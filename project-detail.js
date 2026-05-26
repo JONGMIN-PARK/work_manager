@@ -337,58 +337,122 @@ function pdLoadWork(projId) {
       }
     });
 
+    // 인원별 누적 목표 (Σ 마일스톤 assigneeTargets)
+    var assignees = (proj && Array.isArray(proj.assignees)) ? proj.assignees.filter(Boolean) : [];
+    var targetMap = {};
+    milestones.forEach(function (m) {
+      var at = m.assigneeTargets || {};
+      Object.keys(at).forEach(function (nm) { targetMap[nm] = (targetMap[nm] || 0) + (Number(at[nm]) || 0); });
+    });
+    var totalTarget = 0; Object.keys(targetMap).forEach(function (n) { totalTarget += targetMap[n]; });
+    var rnd = function (x) { return Math.round((x || 0) * 10) / 10; };
+
+    // 담당자 1줄: 누적 실적 vs 목표 진행률 바
+    var personBar = function (name, actual, target) {
+      var dn = typeof shortName === 'function' ? shortName(name) : name;
+      actual = rnd(actual); target = rnd(target);
+      var pct = target > 0 ? Math.round(actual / target * 100) : (actual > 0 ? 100 : 0);
+      var barW = Math.min(pct, 100);
+      var over = target > 0 && actual > target;
+      var col = over ? '#EF4444' : (target > 0 && pct >= 80 ? '#F59E0B' : 'var(--ac)');
+      var right = target > 0 ? (actual + ' / ' + target + 'h') : (actual + 'h');
+      var sub = target > 0 ? (pct + '%' + (over ? ' · 초과 ' + rnd(actual - target) + 'h' : ' · 잔여 ' + rnd(target - actual) + 'h')) : '목표 미설정';
+      var s = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">';
+      s += '<span style="font-size:11px;color:var(--t3);min-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(name) + '">' + eH(dn) + '</span>';
+      s += '<div style="flex:1"><div style="height:7px;background:var(--bg-i);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + barW + '%;background:' + col + ';border-radius:4px;transition:width .2s"></div></div>';
+      s += '<div style="font-size:9px;color:var(--t6);margin-top:1px">' + sub + '</div></div>';
+      s += '<span style="font-size:11px;color:' + (over ? '#EF4444' : 'var(--t2)') + ';font-weight:600;min-width:66px;text-align:right">' + right + '</span>';
+      s += '</div>';
+      return s;
+    };
+
     var h = '';
-    // 총 투입시간
-    h += '<div style="display:flex;gap:8px;margin-bottom:12px">';
-    h += '<div style="flex:1;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center">';
-    h += '<div style="font-size:20px;font-weight:700;color:var(--ac)">' + totalH + '<span style="font-size:11px;color:var(--t5)">h</span></div>';
-    h += '<div style="font-size:10px;color:var(--t5)">총 투입시간</div></div>';
+    // ── 요약 박스 (총 투입 / 목표 대비 / 예상 대비) ──
+    h += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">';
+    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--ac)">' + rnd(totalH) + '<span style="font-size:11px;color:var(--t5)">h</span></div><div style="font-size:10px;color:var(--t5)">총 투입</div></div>';
+    if (totalTarget > 0) {
+      var tpct = Math.round(totalH / totalTarget * 100);
+      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:' + (tpct > 100 ? '#EF4444' : 'var(--t2)') + '">' + tpct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">목표 대비 (' + rnd(totalTarget) + 'h)</div></div>';
+    }
     if (proj && proj.estimatedHours) {
       var pct = totalH > 0 ? Math.round(totalH / proj.estimatedHours * 100) : 0;
-      h += '<div style="flex:1;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center">';
-      h += '<div style="font-size:20px;font-weight:700;color:' + (pct > 100 ? '#EF4444' : 'var(--t2)') + '">' + pct + '<span style="font-size:11px;color:var(--t5)">%</span></div>';
-      h += '<div style="font-size:10px;color:var(--t5)">예상 대비 (' + proj.estimatedHours + 'h)</div></div>';
+      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:' + (pct > 100 ? '#EF4444' : 'var(--t2)') + '">' + pct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">예상 대비 (' + proj.estimatedHours + 'h)</div></div>';
     }
     h += '</div>';
 
-    // 인원별 투입
-    var persons = Object.keys(personMap).sort(function (a, b) { return personMap[b] - personMap[a]; });
-    if (persons.length > 0) {
-      h += '<div style="font-size:10px;color:var(--t5);margin-bottom:6px">인원별 투입</div>';
-      var maxH = personMap[persons[0]] || 1;
-      persons.forEach(function (p) {
-        var pH = personMap[p];
-        var barW = Math.round(pH / maxH * 100);
-        var dn = typeof shortName === 'function' ? shortName(p) : p;
-        h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">';
-        h += '<span style="font-size:10px;color:var(--t3);min-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(dn) + '</span>';
-        h += '<div style="flex:1;height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + barW + '%;background:var(--ac);border-radius:3px"></div></div>';
-        h += '<span style="font-size:10px;color:var(--t5);min-width:30px;text-align:right">' + pH + 'h</span>';
+    // ── 담당자별 누적 실적 vs 목표 ──
+    var headPeople = assignees.slice();
+    Object.keys(targetMap).forEach(function (n) { if (headPeople.indexOf(n) < 0) headPeople.push(n); });
+    if (headPeople.length) {
+      headPeople.sort(function (a, b) { return (targetMap[b] || 0) - (targetMap[a] || 0) || (personMap[b] || 0) - (personMap[a] || 0); });
+      h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">👥 담당자별 누적 실적 vs 목표</div>';
+      if (totalTarget === 0) {
+        h += '<div style="font-size:10px;color:#F59E0B;margin-bottom:8px;padding:6px 8px;background:rgba(245,158,11,.12);border-radius:6px;line-height:1.5">🎯 아직 목표시간이 설정되지 않았습니다. 프로젝트 편집 → <b>🎯 목표 배분</b>에서 담당자·마일스톤별 목표를 입력하세요.</div>';
+      }
+      headPeople.forEach(function (n) { h += personBar(n, personMap[n] || 0, targetMap[n] || 0); });
+    }
+
+    // ── 할당 외 기록자 (담당자 아닌데 시간 기록) ──
+    var outsiders = Object.keys(personMap).filter(function (n) { return headPeople.indexOf(n) < 0 && (personMap[n] || 0) > 0; });
+    if (outsiders.length) {
+      outsiders.sort(function (a, b) { return personMap[b] - personMap[a]; });
+      h += '<div style="font-size:10px;color:var(--t5);margin:12px 0 6px" title="담당자로 등록되지 않았지만 이 프로젝트에 시간을 기록한 사람">⚠️ 할당 외 기록 (' + outsiders.length + '명)</div>';
+      outsiders.forEach(function (n) {
+        var dn = typeof shortName === 'function' ? shortName(n) : n;
+        h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+        h += '<span style="font-size:11px;color:var(--t4);min-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(n) + '">' + eH(dn) + '</span>';
+        h += '<div style="flex:1;height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:100%;background:var(--t6);border-radius:3px;opacity:.4"></div></div>';
+        h += '<span style="font-size:11px;color:var(--t4);min-width:66px;text-align:right">' + rnd(personMap[n]) + 'h</span>';
         h += '</div>';
       });
     }
 
-    // 마일스톤별 투입
+    // ── 마일스톤별 × 인원 상세 ──
     if (milestones.length > 0) {
-      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 6px">';
-      h += '<span style="font-size:10px;color:var(--t5)">마일스톤별 투입' + (untaggedCount > 0 ? ' <span style="color:#F59E0B" title="마일스톤 태그 없이 날짜로 추정 집계된 레코드 수">⚠️ 미태깅 ' + untaggedCount + '건</span>' : '') + '</span>';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 6px">';
+      h += '<span style="font-size:11px;font-weight:700;color:var(--t3)">◆ 마일스톤별 투입' + (untaggedCount > 0 ? ' <span style="font-size:9px;color:#F59E0B;font-weight:400" title="마일스톤 태그 없이 날짜로 추정 집계된 레코드 수">⚠️ 미태깅 ' + untaggedCount + '건</span>' : '') + '</span>';
       h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="pdAutoTagWork(\'' + projId + '\')" title="업무일지 레코드를 마일스톤 날짜 구간으로 자동 태깅">🏷 자동 태깅</button>';
       h += '</div>';
       milestones.forEach(function (m) {
         var mH = msHours[m.id];
-        var hrs = mH ? mH.hours : 0;
+        var hrs = mH ? rnd(mH.hours) : 0;
         var ut = mH ? mH.untagged : 0;
+        var at = m.assigneeTargets || {};
+        var msTarget = 0; Object.keys(at).forEach(function (k) { msTarget += (Number(at[k]) || 0); });
         var mSt = (typeof PROJ_STATUS !== 'undefined' ? PROJ_STATUS[m.status] : null) || { icon: '⏳', label: m.status, color: '#94A3B8', bg: 'rgba(148,163,184,.15)' };
-        h += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">';
+        h += '<div style="padding:6px 0;border-bottom:1px solid var(--bd)">';
+        h += '<div style="display:flex;align-items:center;gap:6px">';
         h += '<span style="font-size:10px">' + mSt.icon + '</span>';
         h += '<span style="flex:1;font-size:11px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(m.name) + '</span>';
         if (ut > 0) h += '<span style="font-size:9px;color:#F59E0B" title="날짜 추정 집계">~' + ut + '</span>';
-        h += '<span style="font-size:10px;color:var(--ac);font-weight:600">' + hrs + 'h</span>';
+        h += '<span style="font-size:10px;color:var(--ac);font-weight:600">' + hrs + (msTarget > 0 ? (' / ' + rnd(msTarget) + 'h') : 'h') + '</span>';
+        h += '</div>';
+        // 인원별 (목표 또는 실적 있는 사람만)
+        var pe = (mH && mH.people) || {};
+        var pplSet = {};
+        Object.keys(pe).forEach(function (k) { pplSet[k] = true; });
+        Object.keys(at).forEach(function (k) { pplSet[k] = true; });
+        var pplList = Object.keys(pplSet);
+        if (pplList.length) {
+          pplList.sort(function (a, b) { return (Number(at[b]) || 0) - (Number(at[a]) || 0) || (pe[b] || 0) - (pe[a] || 0); });
+          h += '<div style="padding:3px 0 1px 18px">';
+          pplList.forEach(function (n) {
+            var av = rnd(pe[n] || 0);
+            var tv = rnd(Number(at[n]) || 0);
+            var over = tv > 0 && av > tv;
+            var dn = typeof shortName === 'function' ? shortName(n) : n;
+            h += '<div style="display:flex;align-items:center;gap:6px;font-size:10px;margin-bottom:2px">';
+            h += '<span style="color:var(--t5);min-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(n) + '">' + eH(dn) + '</span>';
+            h += '<span style="color:' + (over ? '#EF4444' : 'var(--t4)') + '">' + av + (tv > 0 ? (' / ' + tv + 'h') : 'h') + '</span>';
+            h += '</div>';
+          });
+          h += '</div>';
+        }
         h += '</div>';
       });
     }
 
-    if (totalH === 0 && milestones.length === 0) {
+    if (totalH === 0 && totalTarget === 0 && milestones.length === 0) {
       h = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">투입실적 데이터가 없습니다.</div>';
     }
 

@@ -796,7 +796,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.89</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.90</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3337,6 +3337,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.90',date:'2026-05-26',title:'🎯 투입실적 전면 개편 — 담당자별 목표시간 대비 누적 실적',tag:'feature',items:[
+      '투입실적 탭을 "담당자별 누적 실적 vs 목표"로 재구성 — 기존엔 시간 기록한 사람을 그냥 나열했으나, 이제 할당받은 담당자별로 달성률·잔여시간·초과 여부를 진행률 바로 표시',
+      '인원×마일스톤별 목표시간 배분 추가 — 프로젝트 편집 → 🎯 목표 배분 매트릭스(마일스톤×담당자)에서 입력. 행/열/전체 합계 실시간 표시',
+      '요약 박스에 "목표 대비 %"(Σ목표 기준) 추가, 마일스톤별 상세에 담당자별 실적/목표 동시 표시',
+      '담당자가 아닌데 시간을 기록한 사람은 "할당 외 기록" 섹션으로 분리 — 데이터 누락 없이 구분',
+      '데이터: milestones.assignee_targets(JSONB) 신규 컬럼. 영향: timeline.js·project-detail.js·project-data.js + server(milestones 라우트·마이그레이션 033)'
+    ]},
     {ver:'13.89',date:'2026-05-26',title:'⚡ 문서 관리 폴더/메뉴 선택 속도 대폭 개선',tag:'fix',items:[
       '폴더·뷰(▦/☰)·검색·파일 선택 등 화면 전환이 느리던 문제 개선 — 클릭할 때마다 서버에서 폴더+전체 파일을 다시 받던 것을 캐시 재사용으로 전환(네트워크 0회)',
       '중복 조회 제거: 한 번 그릴 때 용량 계산용 1회 + 파일 목록용 1회로 같은 무거운 파일 페이로드를 2번 받던 것을 1번으로. 용량은 받아둔 목록으로 계산',
