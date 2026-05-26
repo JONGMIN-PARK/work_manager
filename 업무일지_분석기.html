@@ -796,7 +796,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.88</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.89</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3337,6 +3337,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.89',date:'2026-05-26',title:'⚡ 문서 관리 폴더/메뉴 선택 속도 대폭 개선',tag:'fix',items:[
+      '폴더·뷰(▦/☰)·검색·파일 선택 등 화면 전환이 느리던 문제 개선 — 클릭할 때마다 서버에서 폴더+전체 파일을 다시 받던 것을 캐시 재사용으로 전환(네트워크 0회)',
+      '중복 조회 제거: 한 번 그릴 때 용량 계산용 1회 + 파일 목록용 1회로 같은 무거운 파일 페이로드를 2번 받던 것을 1번으로. 용량은 받아둔 목록으로 계산',
+      '파일 선택/탭 전환 시 테넌트 전체 파일을 훑던 fileGet 호출 제거 — 현재 프로젝트 캐시에서 즉시 조회',
+      '업로드·삭제·이름변경·이동·메모 등 실제 데이터 변경 시에는 기존대로 최신 데이터를 다시 받아 캐시를 갱신(정합성 유지)',
+      '영향: 클라이언트 document-manager.js만 변경'
+    ]},
     {ver:'13.88',date:'2026-05-26',title:'🐛 타임라인 마일스톤 기간 막대 드래그 오류 수정',tag:'fix',items:[
       '프로젝트 타임라인에서 마일스톤 기간 막대를 드래그할 때 "Cannot read properties of null (reading \'transaction\')" 오류로 변경이 안 되던 문제 수정',
       '원인: startBarDrag의 마일스톤 분기에 과거 로컬(IndexedDB) 코드(db.transaction)가 남아 있었음 — 서버 모드 전용 전환 후 db가 null이라 크래시',

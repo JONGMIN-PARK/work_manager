@@ -1,5 +1,27 @@
 # Work Manager — 변경 이력
 
+## v13.89 (2026-05-26) — 문서 관리 폴더/메뉴 선택 속도 개선 (캐시 + 중복 fetch 제거)
+
+### 배경
+프로젝트 관리 > 문서 관리에서 폴더·뷰·검색·파일을 선택할 때마다 화면 갱신이 느림. 선택은 클라이언트 필터만 바꾸는데도 매번 서버를 다시 조회한 것이 원인.
+
+### 원인
+- `renderDocManager`가 모든 선택 동작(`docSelectFolder`/`docSetView`/`docClickFile`/`docSearchFiles`/`docToggleDeepSearch`)에서 전체 재실행되며 `folderGetByProject` + `fileGetByProject`를 매번 재조회.
+- **중복 fetch**: 한 번 그릴 때 `getProjectStorageSize()`가 `fileGetByProject`를 한 번 더 호출 → 같은 무거운 파일 페이로드(`text_cache`·`version_history` 포함)를 2번 다운로드.
+- 파일 선택/탭 전환 시 `fileGet`이 프로젝트 필터 없이 **테넌트 전체 파일**을 받아 `.find` 하던 비용.
+
+### 변경 (`document-manager.js`)
+- `_docDataCache = { projId, folders, allFiles }` 모듈 캐시 추가. `renderDocManager(opts)`에 `opts.useCache` 도입 — 같은 프로젝트면 직전에 받아둔 folders/allFiles 재사용(네트워크 0회).
+- 선택 핸들러 5종을 `renderDocManager({ useCache: true })`로 전환.
+- 용량 표시를 `getProjectStorageSize()` 재조회 대신 이미 받은 `allFiles`로 합산 → 중복 fetch 제거.
+- 파일 선택 복원·탭 전환의 `fileGet` 테넌트 전체 조회를 캐시 `.find`로 대체(미캐시 시에만 fileGet 폴백).
+- 변경(업로드/삭제/이름변경/이동/메모 등)은 기존대로 `renderDocManager()`(useCache 없음) 호출 → 최신 데이터 재조회 + 캐시 갱신으로 정합성 유지.
+
+### 영향
+- 클라이언트 `document-manager.js`만 변경. 서버 변경 없음.
+- 미리보기는 서버 레코드에 blob(`data`) 컬럼이 없어 기존과 동일 동작(회귀 없음).
+- 후속 옵션: 서버 `GET /docs/files`에 list용 `fields` 파라미터를 추가해 `text_cache`/`version_history`를 제외하면 초기 로드·프로젝트 전환도 더 빨라짐(별도 라운드, 배포 필요).
+
 ## v13.88 (2026-05-26) — 타임라인 마일스톤 기간 막대 드래그 오류 수정 (잔존 IndexedDB 제거)
 
 ### 배경

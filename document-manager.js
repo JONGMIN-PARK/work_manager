@@ -18,6 +18,12 @@ var docFilePage = 1;
 var docSearchKeyword = '';
 var _docBlobUrls = [];
 
+/* ═══ 폴더/파일 데이터 캐시 (성능) ═══
+   폴더·뷰·검색 등 "선택"은 클라이언트 필터만 바꾸므로 서버 재조회가 불필요하다.
+   현재 프로젝트의 folders/allFiles를 캐시해 두고, renderDocManager({useCache:true})로
+   재사용한다. 업로드·삭제·이름변경 등 "변경"은 renderDocManager()(useCache 없음)로 재조회. */
+var _docDataCache = { projId: null, folders: null, allFiles: null };
+
 /* ═══ Blob URL 관리 ═══ */
 function docRevokeBlobUrls() {
   _docBlobUrls.forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) {} });
@@ -31,7 +37,7 @@ function docCreateBlobUrl(data, type) {
 }
 
 /* ═══ 메인 렌더 ═══ */
-async function renderDocManager() {
+async function renderDocManager(opts) {
   var wrap = document.getElementById('mDocs');
   if (!wrap) return;
   docRevokeBlobUrls();
@@ -48,6 +54,29 @@ async function renderDocManager() {
   }
 
   var proj = projects.find(function (p) { return p.id === docSelProject; });
+
+  // 폴더 + 파일 로드 (캐시) — 폴더/메뉴 선택 시 매번 재조회하던 것이 느림의 핵심.
+  // opts.useCache && 같은 프로젝트면 직전에 받아둔 folders/allFiles를 그대로 재사용한다.
+  var folders = [], allFiles = [];
+  if (proj) {
+    var _useCache = opts && opts.useCache && _docDataCache.projId === docSelProject && _docDataCache.allFiles;
+    if (_useCache) {
+      folders = _docDataCache.folders;
+      allFiles = _docDataCache.allFiles;
+    } else {
+      folders = await folderGetByProject(docSelProject);
+      if (!folders.length) {
+        await createDefaultFolders(docSelProject);
+        folders = await folderGetByProject(docSelProject);
+      }
+      folders.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      allFiles = await fileGetByProject(docSelProject);
+      _docDataCache = { projId: docSelProject, folders: folders, allFiles: allFiles };
+    }
+  }
+  // 용량은 위에서 받은 allFiles로 계산 — 별도 getProjectStorageSize() 재조회(중복 fetch) 제거
+  var _storageTotal = 0;
+  allFiles.forEach(function (f) { _storageTotal += (f.size || 0); });
 
   var html = '<div class="pnl" style="padding:14px 18px">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
@@ -66,12 +95,11 @@ async function renderDocManager() {
   }
   html += '</div>';
 
-  // 용량 표시
+  // 용량 표시 (위에서 받은 allFiles로 계산 — 추가 네트워크 호출 없음)
   if (proj) {
-    var storage = await getProjectStorageSize(docSelProject);
-    var pct = Math.round(storage.total / DOC_MAX_PROJECT * 100);
+    var pct = Math.round(_storageTotal / DOC_MAX_PROJECT * 100);
     html += '<div style="display:flex;align-items:center;gap:8px;font-size:10px;color:var(--t4)">';
-    html += '<span>💾 ' + formatFileSize(storage.total) + ' / ' + formatFileSize(DOC_MAX_PROJECT) + '</span>';
+    html += '<span>💾 ' + formatFileSize(_storageTotal) + ' / ' + formatFileSize(DOC_MAX_PROJECT) + '</span>';
     html += '<div style="width:80px;height:5px;background:var(--pt);border-radius:3px"><div style="width:' + Math.min(pct, 100) + '%;height:100%;background:' + (pct > 80 ? '#EF4444' : 'var(--ac)') + ';border-radius:3px"></div></div>';
     html += '<button class="btn btn-g btn-s" onclick="docShowStorageDashboard()" style="font-size:9px;padding:2px 6px" title="용량 대시보드">📊</button>';
     html += '</div>';
@@ -99,17 +127,7 @@ async function renderDocManager() {
     return;
   }
 
-  // 폴더 + 파일 로드
-  var folders = await folderGetByProject(docSelProject);
-  if (!folders.length) {
-    await createDefaultFolders(docSelProject);
-    folders = await folderGetByProject(docSelProject);
-  }
-  folders.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
-
-  var allFiles = await fileGetByProject(docSelProject);
-
-  // 상단: 폴더 트리 + 파일 목록
+  // 상단: 폴더 트리 + 파일 목록 (folders/allFiles는 위에서 캐시 로드됨)
   html += '<div style="display:grid;grid-template-columns:200px 1fr;gap:12px" id="docPanels">';
   html += renderFolderTree(folders, allFiles);
   html += renderFileList(folders, allFiles);
@@ -121,9 +139,9 @@ async function renderDocManager() {
   html += '</div>';
   wrap.innerHTML = html;
 
-  // 파일 선택 상태 복원
+  // 파일 선택 상태 복원 (캐시된 allFiles에서 찾기 — 테넌트 전체 fileGet 재조회 제거)
   if (docSelFile) {
-    var f = await fileGet(docSelFile);
+    var f = allFiles.find(function (x) { return x.id === docSelFile; });
     if (f) showFilePreview(f);
   }
 }
@@ -185,7 +203,7 @@ function renderFolderTree(folders, allFiles) {
 function docSelectFolder(folderId) {
   docSelFolder = folderId;
   docFilePage = 1;
-  renderDocManager();
+  renderDocManager({ useCache: true });
 }
 
 /* ═══ 파일 목록 렌더 ═══ */
@@ -323,7 +341,7 @@ function renderPreviewPanel() {
 /* ═══ 뷰 모드 변경 ═══ */
 function docSetView(mode) {
   docViewMode = mode;
-  renderDocManager();
+  renderDocManager({ useCache: true });
 }
 
 function docSetPreviewTab(tab) {
@@ -334,11 +352,14 @@ function docSetPreviewTab(tab) {
     content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t5)"><div style="font-size:32px;margin-bottom:8px">📄</div><div style="font-size:11px">파일을 선택하세요</div></div>';
     return;
   }
-  fileGet(docSelFile).then(function (f) {
+  var _applyTab = function (f) {
     if (!f) return;
     if (tab === 'preview') showFilePreview(f);
     else showAISummaryPanel(f);
-  });
+  };
+  var _cachedFile = (_docDataCache.allFiles || []).find(function (x) { return x.id === docSelFile; });
+  if (_cachedFile) _applyTab(_cachedFile);
+  else fileGet(docSelFile).then(_applyTab);
   // 탭 버튼 상태 업데이트
   var tabs = document.querySelectorAll('#docPreviewPanel .tab');
   tabs.forEach(function (t) {
@@ -349,8 +370,8 @@ function docSetPreviewTab(tab) {
 /* ═══ 파일 선택 ═══ */
 function docClickFile(fileId) {
   docSelFile = fileId;
-  // 선택 하이라이트 업데이트
-  renderDocManager();
+  // 선택 하이라이트 업데이트 (데이터 변화 없음 → 캐시 재사용)
+  renderDocManager({ useCache: true });
 }
 
 /* ═══ 파일 업로드 ═══ */
@@ -912,7 +933,7 @@ function docSearchFiles(keyword) {
   _docSearchTimer = setTimeout(function () {
     docSearchKeyword = keyword.trim();
     docFilePage = 1;
-    renderDocManager();
+    renderDocManager({ useCache: true });
   }, 300);
 }
 
@@ -1093,7 +1114,7 @@ async function docEditFileMeta(fileId) {
 var docDeepSearch = false;
 function docToggleDeepSearch() {
   docDeepSearch = !docDeepSearch;
-  renderDocManager();
+  renderDocManager({ useCache: true });
 }
 
 /* ═══ Phase 3: 파일 버전 관리 ═══ */
