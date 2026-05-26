@@ -1,5 +1,19 @@
 # Work Manager — 변경 이력
 
+## v13.93 (2026-05-26) — 마일스톤 호버 정보 확실 표시: 네이티브 title 폴백 + 카드 견고화
+
+### 배경
+사용자가 v13.92(최신)에서도 기간 조정 막대 위 카드 툴팁이 안 뜬다고 보고. 격리(헤드리스) 테스트에선 정상이라 재현 불가 → 환경 특이 요인 추정. 추정 디버깅 대신 "정보는 무조건 표시"를 보장하고 카드의 취약 실패 모드를 제거.
+
+### 변경 (`timeline.js`)
+- **네이티브 title 폴백**: 마일스톤 막대(`.tl-bar-ms`)와 이름 라벨(`.tl-label-sub`)에 `title="이름 (시작 ~ 종료 · N일)"` 추가 — 프로젝트 막대와 동일하게 브라우저 기본 툴팁으로 항상 표시(페이지 렌더링/CSS 이슈와 무관).
+- **카드 위치 인라인 보장**: `_tlTipEl`에서 `position:fixed`·`z-index:10050`를 인라인 설정 → style.css 미로드 시에도 커서 옆에 표시(이전엔 CSS 클래스에만 의존 → 미로드 시 static로 문서 하단에 렌더될 위험).
+- **드래그 가드 견고화**: `tlBarTipShow/Move`의 억제 조건을 `document.querySelector('.tl-drag-tooltip')`(잔재 요소가 남으면 호버 영구 차단) → 불리언 `_tlBarDragging` 플래그로 교체. `startBarDrag` 시작 시 true, `onUp`에서 false.
+- **self-heal**: `renderTimeline`에서 `_tlBarDragging=false` + 잔여 `.tl-drag-tooltip` 제거 → 비정상 종료된 드래그 상태가 다음 렌더에 자동 복구.
+
+### 영향
+- 클라이언트 `timeline.js`만 변경. 카드 툴팁(v13.91~92)은 유지 + 네이티브 title 폴백 병행.
+
 ## v13.92 (2026-05-26) — 마일스톤 호버 툴팁 보강: 이름 라벨에도 표시
 
 ### 배경

@@ -796,7 +796,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.92</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.93</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3337,6 +3337,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.93',date:'2026-05-26',title:'🛟 마일스톤 호버 정보 확실히 표시 — 네이티브 title 폴백 + 카드 견고화',tag:'fix',items:[
+      'v13.92에서도 일부 환경에서 마일스톤 막대 카드 툴팁이 안 뜨는 문제 대응 — 막대·라벨에 네이티브 title(이름·기간·일수) 추가로 프로젝트 막대처럼 항상 표시 보장',
+      '카드 툴팁 견고화: 핵심 위치 스타일(position:fixed·z-index)을 인라인으로도 지정해 CSS 미로드 상황에서도 커서 옆 표시',
+      '드래그 억제 가드를 DOM 조회(.tl-drag-tooltip) → 플래그(_tlBarDragging) 방식으로 교체 — 드래그 툴팁 잔재가 호버를 영구 차단하던 실패 모드 제거',
+      '재렌더 시 드래그 상태·잔여 드래그 툴팁 자동 정리(self-heal)',
+      '영향: 클라이언트 timeline.js만 변경'
+    ]},
     {ver:'13.92',date:'2026-05-26',title:'🖱️ 마일스톤 호버 툴팁 — 이름 라벨에서도 표시(더 쉽게)',tag:'fix',items:[
       '마일스톤 막대가 얇아 호버가 어려운 점 보완 — 좌측 마일스톤 이름 라벨에 올려도 동일한 시작·종료·기간 카드 툴팁 표시',
       '순서 변경 드래그 시작 시 호버 툴팁 자동 정리',

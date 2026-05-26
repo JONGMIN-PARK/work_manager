@@ -305,8 +305,12 @@ async function renderTimeline() {
       var msStInfo = PROJ_STATUS[msSt] || PROJ_STATUS.waiting;
       var msBarBg = msSt === 'done' ? '#10B98180' : msSt === 'delayed' ? '#EF444480' : msSt === 'active' ? p.color + '90' : p.color + '40';
       var msBarCls = 'tl-bar tl-bar-ms' + (msSt === 'delayed' ? ' tl-bar-delayed' : '') + (msSt === 'done' ? ' tl-bar-done' : '');
+      // 네이티브 title 폴백 — 커스텀 카드가 어떤 이유로든 안 떠도 이름·기간·일수는 항상 보이도록 (프로젝트 막대와 동일 방식)
+      var _msDays = (ms.startDate && ms.endDate && ms.startDate.length >= 10 && ms.endDate.length >= 10) ? (daysDiff(ms.startDate, ms.endDate) + 1) : null;
+      var msTipTitle = (ms.name || '') + ' (' + (ms.startDate || '?') + ' ~ ' + (ms.endDate || '?') + (_msDays != null ? ' · ' + _msDays + '일' : '') + ')';
       rowsHtml += '<div class="tl-row tl-row-sub" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '" ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)">';
       rowsHtml += '<div class="tl-label tl-label-sub" draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' +
+        ' title="' + eH(msTipTitle) + '"' +
         ' data-tip-name="' + eH(ms.name) + '" data-tip-start="' + (ms.startDate || '') + '" data-tip-end="' + (ms.endDate || '') + '" data-tip-status="' + msSt + '" data-tip-color="' + (p.color || 'var(--ac)') + '"' +
         ' onmouseenter="tlBarTipShow(event)" onmousemove="tlBarTipMove(event)" onmouseleave="tlBarTipHide()"' +
         ' style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;cursor:grab">' +
@@ -319,6 +323,7 @@ async function renderTimeline() {
       });
       var msEditCls = tlEditMode ? ' tl-bar-editable' : '';
       rowsHtml += '<div class="' + msBarCls + msEditCls + '" data-type="ms" data-id="' + ms.id + '"' +
+        ' title="' + eH(msTipTitle) + '"' +
         ' data-tip-name="' + eH(ms.name) + '" data-tip-start="' + (ms.startDate || '') + '" data-tip-end="' + (ms.endDate || '') + '" data-tip-status="' + msSt + '" data-tip-color="' + (p.color || 'var(--ac)') + '"' +
         ' onmouseenter="tlBarTipShow(event)" onmousemove="tlBarTipMove(event)" onmouseleave="tlBarTipHide()"' +
         ' style="' + msBarStyle + 'background:' + msBarBg + '">';
@@ -352,8 +357,11 @@ async function renderTimeline() {
     }
   }
 
-  // 재렌더로 막대 DOM이 교체되면 mouseleave가 안 올 수 있어 잔여 툴팁 정리
+  // 재렌더로 막대 DOM이 교체되면 mouseleave가 안 올 수 있어 잔여 툴팁/드래그 상태 정리(self-heal)
+  _tlBarDragging = false;
   if (typeof tlBarTipHide === 'function') tlBarTipHide();
+  var _orphanDrag = document.querySelectorAll('.tl-drag-tooltip');
+  for (var _od = 0; _od < _orphanDrag.length; _od++) _orphanDrag[_od].remove();
 
   // 편집 모드일 때 드래그 이벤트 바인딩
   if (tlEditMode) {
@@ -493,12 +501,16 @@ function _tlFmtDday(p, st) {
 }
 
 /* ═══ 타임라인 막대 호버 툴팁 — 시작·종료·기간 표시 ═══ */
+var _tlBarDragging = false;  // 막대 드래그(기간 편집) 중 여부 — 호버 툴팁 억제용 (DOM 조회 가드보다 견고)
 function _tlTipEl() {
   var el = document.getElementById('tlBarTip');
   if (!el) {
     el = document.createElement('div');
     el.id = 'tlBarTip';
     el.className = 'tl-bar-tip';
+    // CSS(style.css)가 어떤 이유로 미로드여도 커서 옆에 뜨도록 핵심 스타일은 인라인으로도 보장
+    el.style.position = 'fixed';
+    el.style.zIndex = '10050';
     el.style.display = 'none';
     document.body.appendChild(el);
   }
@@ -510,7 +522,7 @@ function _tlTipFmtDate(d) {
 }
 function tlBarTipShow(e) {
   // 막대 드래그 중에는 드래그 툴팁이 우선 — 호버 툴팁은 표시하지 않음
-  if (document.querySelector('.tl-drag-tooltip')) return;
+  if (_tlBarDragging) return;
   var bar = e.currentTarget;
   var name = bar.getAttribute('data-tip-name') || '';
   var start = bar.getAttribute('data-tip-start') || '';
@@ -543,7 +555,7 @@ function tlBarTipShow(e) {
 function tlBarTipMove(e) {
   var el = document.getElementById('tlBarTip');
   if (!el || el.style.display === 'none') return;
-  if (document.querySelector('.tl-drag-tooltip')) { tlBarTipHide(); return; }
+  if (_tlBarDragging) { tlBarTipHide(); return; }
   var pad = 14;
   var w = el.offsetWidth, h = el.offsetHeight;
   var x = e.clientX + pad;
@@ -1732,6 +1744,8 @@ function drawDependencyArrows(projects, rangeStart, units, labelW) {
 }
 
 function startBarDrag(bar, mode, startEvt) {
+  _tlBarDragging = true;
+  if (typeof tlBarTipHide === 'function') tlBarTipHide();
   var type = bar.dataset.type; // 'proj' or 'ms'
   var id = bar.dataset.id;
   var scrollEl = document.getElementById('tlScroll');
@@ -1782,6 +1796,7 @@ function startBarDrag(bar, mode, startEvt) {
   function onUp(e) {
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
+    _tlBarDragging = false;
     tooltip.remove();
 
     var newStart = positionToDate(newLeft);
