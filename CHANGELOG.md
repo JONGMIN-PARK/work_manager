@@ -1,5 +1,15 @@
 # Work Manager — 변경 이력
 
+## v13.94 (2026-05-26) — 마일스톤 호버 카드 반투명(프로스티드 글래스)
+
+### 변경 (`style.css`)
+- `.tl-bar-tip` 배경을 `color-mix(in srgb, var(--bg-p) 80%, transparent)`로 반투명화 + `backdrop-filter: blur(10px) saturate(1.4)`로 뒤 배경 블러(프로스티드 글래스).
+- 테두리도 `color-mix(... var(--bd) 70%, transparent)`로 살짝 투명하게.
+- 폴백: `color-mix`/`backdrop-filter` 미지원 시 `background:var(--bg-p)`(불투명)로 자동 폴백 → 가독성 유지. 테마 색을 그대로 사용하므로 전 테마 호환.
+
+### 영향
+- 클라이언트 `style.css`만 변경.
+
 ## v13.93 (2026-05-26) — 마일스톤 호버 정보 확실 표시: 네이티브 title 폴백 + 카드 견고화
 
 ### 배경
