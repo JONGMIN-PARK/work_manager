@@ -305,9 +305,9 @@ async function renderTimeline() {
       var msStInfo = PROJ_STATUS[msSt] || PROJ_STATUS.waiting;
       var msBarBg = msSt === 'done' ? '#10B98180' : msSt === 'delayed' ? '#EF444480' : msSt === 'active' ? p.color + '90' : p.color + '40';
       var msBarCls = 'tl-bar tl-bar-ms' + (msSt === 'delayed' ? ' tl-bar-delayed' : '') + (msSt === 'done' ? ' tl-bar-done' : '');
-      rowsHtml += '<div class="tl-row tl-row-sub">';
-      rowsHtml += '<div class="tl-label tl-label-sub" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px">' +
-        '<span style="color:var(--t5);font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap">└ ' + eH(ms.name) +
+      rowsHtml += '<div class="tl-row tl-row-sub" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '" ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)">';
+      rowsHtml += '<div class="tl-label tl-label-sub" draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)" title="드래그하여 순서 변경" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;cursor:grab">' +
+        '<span style="color:var(--t5);font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap"><span class="tl-ms-grip" style="opacity:.45;cursor:grab">⠿</span>' + eH(ms.name) +
         ' <span class="badge" style="background:' + msStInfo.bg + ';color:' + msStInfo.color + ';font-size:8px;padding:1px 4px">' + msStInfo.label + '</span>' +
         '</span></div>';
       rowsHtml += '<div class="tl-bars" style="width:' + totalWidth + 'px">';
@@ -752,7 +752,8 @@ async function showProjectModal(projId) {
   var msHtml = '';
   if (projMs.length) {
     msHtml = projMs.map(function (m, idx) {
-      return '<div class="proj-ms-row" data-msid="' + m.id + '" style="display:grid;grid-template-columns:1fr 110px 110px 90px 30px 30px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)">' +
+      return '<div class="proj-ms-row" data-msid="' + m.id + '" ondragover="msRowDragOver(event)" ondrop="msRowDrop(event)" style="display:grid;grid-template-columns:18px 1fr 110px 110px 90px 30px 30px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)">' +
+        '<span class="ms-drag-handle" draggable="true" ondragstart="msRowDragStart(event)" ondragend="msRowDragEnd(event)" title="드래그하여 순서 변경">⠿</span>' +
         '<input type="text" class="si ms-name" value="' + eH(m.name) + '" style="padding:4px 8px;font-size:11px;padding-left:8px">' +
         '<input type="date" class="si ms-start" value="' + m.startDate + '" style="padding:4px 6px;font-size:10px;padding-left:6px">' +
         '<input type="date" class="si ms-end" value="' + m.endDate + '" style="padding:4px 6px;font-size:10px;padding-left:6px">' +
@@ -930,14 +931,50 @@ function addMsRow() {
 
   var row = document.createElement('div');
   row.className = 'proj-ms-row';
-  row.style.cssText = 'display:grid;grid-template-columns:1fr 110px 110px 90px 30px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)';
+  row.setAttribute('ondragover', 'msRowDragOver(event)');
+  row.setAttribute('ondrop', 'msRowDrop(event)');
+  row.style.cssText = 'display:grid;grid-template-columns:18px 1fr 110px 110px 90px 30px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)';
   row.innerHTML =
+    '<span class="ms-drag-handle" draggable="true" ondragstart="msRowDragStart(event)" ondragend="msRowDragEnd(event)" title="드래그하여 순서 변경">⠿</span>' +
     '<input type="text" class="si ms-name" value="" placeholder="단계명..." style="padding:4px 8px;font-size:11px;padding-left:8px">' +
     '<input type="date" class="si ms-start" value="" style="padding:4px 6px;font-size:10px;padding-left:6px">' +
     '<input type="date" class="si ms-end" value="" style="padding:4px 6px;font-size:10px;padding-left:6px">' +
     '<select class="si ms-status" style="padding:4px 6px;font-size:10px;padding-left:6px">' + statusOpts + '</select>' +
     '<button class="btn btn-d btn-s" onclick="this.closest(\'.proj-ms-row\').remove()" style="padding:2px 6px">✕</button>';
   container.appendChild(row);
+}
+
+/* ═══ 마일스톤 편집 행 드래그 순서 변경 (편집 모달) ═══
+   saveProjectUI 가 #msRows 의 DOM 순서대로 order:i 를 저장하므로,
+   여기서는 DOM 순서만 재배열하면 [저장] 시 자동 영속화된다. */
+var _msDragRow = null;
+function msRowDragStart(e) {
+  _msDragRow = e.target.closest('.proj-ms-row');
+  if (!_msDragRow) return;
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', _msDragRow.getAttribute('data-msid') || 'new'); } catch (_) {}
+  _msDragRow.style.opacity = '0.4';
+}
+function msRowDragEnd() {
+  if (_msDragRow) _msDragRow.style.opacity = '';
+  _msDragRow = null;
+}
+function msRowDragOver(e) {
+  if (!_msDragRow) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  var row = e.currentTarget;
+  if (row === _msDragRow) return;
+  var container = row.parentNode;
+  if (!container) return;
+  var rect = row.getBoundingClientRect();
+  var after = e.clientY > rect.top + rect.height / 2;
+  container.insertBefore(_msDragRow, after ? row.nextSibling : row);
+}
+function msRowDrop(e) {
+  e.preventDefault();
+  if (_msDragRow) _msDragRow.style.opacity = '';
+  _msDragRow = null;
 }
 
 async function saveProjectUI(existingId) {
@@ -1333,6 +1370,81 @@ function bindBarDrag() {
       e.preventDefault();
       startBarDrag(bar, 'move', e);
     });
+  });
+}
+
+/* ═══ 타임라인 마일스톤 하위 행 드래그 순서 변경 ═══
+   같은 프로젝트 내에서만 재배열 가능. order 재계산 → 변경분만 msPut → 재렌더.
+   (다른 프로젝트로 옮기려면 편집 모달의 ↪ 이관 버튼 사용) */
+var _tlMsDrag = null;
+function tlMsDragStart(e, msId, projId) {
+  _tlMsDrag = { id: msId, projId: projId };
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', msId); } catch (_) {}
+  var row = e.currentTarget.closest('.tl-row-sub');
+  if (row) row.style.opacity = '0.4';
+}
+function tlMsDragEnd(e) {
+  var row = e.currentTarget.closest('.tl-row-sub');
+  if (row) row.style.opacity = '';
+  var dz = document.querySelectorAll('.tl-row-sub.tl-ms-dropzone');
+  for (var i = 0; i < dz.length; i++) dz[i].classList.remove('tl-ms-dropzone');
+  _tlMsDrag = null;
+}
+function tlMsDragOver(e) {
+  if (!_tlMsDrag) return;
+  var row = e.currentTarget;
+  // 다른 프로젝트의 마일스톤 위로는 드롭 불가 (preventDefault 안 하면 drop 미발생)
+  if (row.getAttribute('data-proj-id') !== _tlMsDrag.projId) return;
+  if (row.getAttribute('data-ms-id') === _tlMsDrag.id) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  row.classList.add('tl-ms-dropzone');
+}
+function tlMsDragLeave(e) {
+  e.currentTarget.classList.remove('tl-ms-dropzone');
+}
+function tlMsDrop(e) {
+  if (!_tlMsDrag) return;
+  var row = e.currentTarget;
+  var projId = row.getAttribute('data-proj-id');
+  var targetId = row.getAttribute('data-ms-id');
+  if (projId !== _tlMsDrag.projId) return;
+  e.preventDefault();
+  row.classList.remove('tl-ms-dropzone');
+  var dragId = _tlMsDrag.id;
+  var rect = row.getBoundingClientRect();
+  var after = e.clientY > rect.top + rect.height / 2;
+  _tlMsDrag = null;
+  if (!dragId || dragId === targetId) return;
+  _tlReorderMs(projId, dragId, targetId, after);
+}
+function _tlReorderMs(projId, dragId, targetId, after) {
+  return msGetByProject(projId).then(function (list) {
+    list.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+    var fromIdx = -1, i;
+    for (i = 0; i < list.length; i++) { if (list[i].id === dragId) { fromIdx = i; break; } }
+    if (fromIdx < 0) return;
+    var moved = list.splice(fromIdx, 1)[0];
+    var insertIdx = list.length; // 타겟을 못 찾으면 맨 뒤
+    for (i = 0; i < list.length; i++) { if (list[i].id === targetId) { insertIdx = i; break; } }
+    if (after) insertIdx += 1;
+    list.splice(insertIdx, 0, moved);
+    var puts = [];
+    list.forEach(function (m, idx) {
+      if (m.order !== idx) {
+        m.order = idx;
+        puts.push(msPut({ id: m.id, projectId: projId, name: m.name, startDate: m.startDate, endDate: m.endDate, status: m.status, order: idx }));
+      }
+    });
+    return Promise.all(puts);
+  }).then(function () {
+    return renderTimeline();
+  }).then(function () {
+    if (typeof showToast === 'function') showToast('마일스톤 순서 변경됨');
+  }).catch(function (err) {
+    console.error('[tlMsDrop]', err);
+    if (typeof showToast === 'function') showToast('순서 변경 실패', 'error');
   });
 }
 

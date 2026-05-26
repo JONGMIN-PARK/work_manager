@@ -61,9 +61,11 @@ router.post('/', async function (req, res) {
 router.put('/:id', async function (req, res) {
   try {
     var b = req.body;
+    // sort_order=0 도 유효한 값 → falsy(||) 대신 null 체크로 보존 (첫 번째 마일스톤 순서 저장 누락 방지)
+    var sortOrder = (b.order != null) ? b.order : (b.sort_order != null ? b.sort_order : null);
     var r = await db.query(
       "UPDATE milestones SET name=COALESCE($1,name), start_date=COALESCE($2,start_date), end_date=COALESCE($3,end_date), status=COALESCE($4,status), sort_order=COALESCE($5,sort_order) WHERE id=$6 AND tenant_id=$7 RETURNING *",
-      [b.name, b.startDate || b.start_date, b.endDate || b.end_date, b.status, b.order || b.sort_order, req.params.id, req.tenant.id]
+      [b.name, b.startDate || b.start_date, b.endDate || b.end_date, b.status, sortOrder, req.params.id, req.tenant.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });

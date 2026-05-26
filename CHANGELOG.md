@@ -1,5 +1,25 @@
 # Work Manager — 변경 이력
 
+## v13.87 (2026-05-26) — 마일스톤 순서 드래그 변경 (편집 모달 · 타임라인) + 정렬 잠재버그 수정
+
+### 배경
+프로젝트 편집/등록 모달과 프로젝트 타임라인 양쪽에서 마일스톤(하위 단계)의 표시 순서를 드래그로 바꿀 수 있게 함. 작업 중 마일스톤 정렬이 사실상 동작하지 않던 잠재 버그 2건도 함께 수정.
+
+### 변경 — 기능
+- **편집 모달 (`timeline.js` showProjectModal·addMsRow)**: 마일스톤 행 앞에 드래그 핸들(⠿) 추가, HTML5 드래그로 행 재배열. `saveProjectUI`가 `#msRows`의 DOM 순서대로 `order:i`를 저장하므로 [저장] 시 자동 영속화. 신규(아직 미저장) 행도 동일하게 재배열 가능.
+- **타임라인 (`timeline.js` renderTimeline 하위 행 + `_tlReorderMs`)**: 마일스톤 하위 행 라벨을 드래그하여 **같은 프로젝트 내** 순서 변경. 드롭 시 order 재계산 → 변경분만 `msPut` → 재렌더. 다른 프로젝트의 행 위에는 드롭 불가(이관은 기존 ↪ 버튼 사용). 드롭존 하이라이트 표시.
+
+### 변경 — 정렬 잠재 버그 수정
+- **읽기 경로 (`project-data.js` `_msNorm`)**: 서버는 `sort_order` 컬럼을 반환 → `toCamel`이 `sortOrder`로 변환하는데 클라이언트 정렬은 `m.order`를 사용해 `undefined`가 되어 정렬이 무효였음(서버의 보조 `start_date` 정렬에만 의존). `msGetAll`·`msGetByProject` 결과를 `sortOrder→order`로 정규화.
+- **쓰기 경로 (`server/routes/milestones.js` PUT)**: `sort_order=COALESCE($5,...)`의 `$5`가 `b.order || b.sort_order`라 `order=0`(첫 항목)이 falsy로 무시돼 저장 누락. `!= null` 체크로 0도 보존하도록 수정.
+
+### 변경 — 스타일 (`style.css`)
+- `.ms-drag-handle`(편집 모달 핸들), `.tl-ms-grip`(타임라인 그립), `.tl-ms-dropzone`(드롭 위치 하이라이트), grab/grabbing 커서.
+
+### 영향
+- 서버 모드 전용 구조 기준 반영(로컬 IndexedDB 모드는 이전에 제거됨). 서버 PUT 변경은 배포 후 적용.
+- 변경 파일: `timeline.js`, `project-data.js`, `style.css`, `server/routes/milestones.js`, `업무일지_분석기.html`(버전/패치노트).
+
 ## v13.86 (2026-05-20) — 운영 인프라: winston 로깅 · pg-boss 큐 · 자동 DB 백업 cron
 
 ### 배경

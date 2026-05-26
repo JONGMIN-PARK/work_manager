@@ -475,8 +475,16 @@ function _msDedupe(list) {
   }
   return uniq;
 }
-function msGetAll() { return _pdCached('ms', function () { return apiFetch('/api/milestones').then(function (r) { return _msDedupe(toCamelArray(r.data)); }); }); }
-function msGetByProject(pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return _msDedupe(toCamelArray(r.data)); }); }
+// 서버는 sort_order 컬럼을 반환 → toCamel 이 sortOrder 로 변환하지만,
+// 클라이언트(타임라인·편집모달 정렬)는 m.order 를 사용한다. 둘을 일치시킨다.
+function _msNorm(list) {
+  (list || []).forEach(function (m) {
+    if (m.order == null) m.order = (m.sortOrder != null ? m.sortOrder : 0);
+  });
+  return list;
+}
+function msGetAll() { return _pdCached('ms', function () { return apiFetch('/api/milestones').then(function (r) { return _msDedupe(_msNorm(toCamelArray(r.data))); }); }); }
+function msGetByProject(pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return _msDedupe(_msNorm(toCamelArray(r.data))); }); }
 function msPut(ms) {
   _pdInvalidate('ms');
   var isNew = !ms.id || ms._isNew;

@@ -159,8 +159,18 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-row-sub{background:var(--bg-i)}
 .tl-label{min-width:160px;padding:10px 12px;border-right:1px solid var(--bd);cursor:pointer;transition:background .15s;position:sticky;left:0;z-index:2;background:var(--bg-p);box-sizing:border-box;flex-shrink:0}
 .tl-label:hover{background:var(--bg-hv)}
-.tl-label-sub{padding:6px 12px 6px 24px;background:var(--bg-i)}
+.tl-label-sub{padding:6px 12px 6px 16px;background:var(--bg-i)}
 .tl-row-sub .tl-label{background:var(--bg-i)}
+/* 마일스톤 순서 변경 드래그 */
+.tl-label-sub:active{cursor:grabbing}
+.tl-ms-grip{display:inline-block;line-height:1;letter-spacing:-1px;flex-shrink:0}
+.tl-label-sub:hover .tl-ms-grip{opacity:.85!important}
+.tl-row-sub.tl-ms-dropzone{box-shadow:inset 0 2px 0 0 var(--ac);background:var(--ac-g)}
+.tl-row-sub.tl-ms-dropzone .tl-label-sub,.tl-row-sub.tl-ms-dropzone .tl-bars{background:var(--ac-g)}
+/* 편집 모달 마일스톤 행 드래그 핸들 */
+.ms-drag-handle{cursor:grab;text-align:center;color:var(--t6);font-size:13px;line-height:1;user-select:none;letter-spacing:-1px}
+.ms-drag-handle:hover{color:var(--t3)}
+.ms-drag-handle:active{cursor:grabbing}
 .tl-bars{position:relative;min-height:44px;flex-shrink:0;flex:1}
 .tl-row-sub .tl-bars{min-height:28px}
 .tl-grid-line{position:absolute;top:0;bottom:0;border-right:1px solid var(--bd);opacity:.3}
