@@ -306,7 +306,10 @@ async function renderTimeline() {
       var msBarBg = msSt === 'done' ? '#10B98180' : msSt === 'delayed' ? '#EF444480' : msSt === 'active' ? p.color + '90' : p.color + '40';
       var msBarCls = 'tl-bar tl-bar-ms' + (msSt === 'delayed' ? ' tl-bar-delayed' : '') + (msSt === 'done' ? ' tl-bar-done' : '');
       rowsHtml += '<div class="tl-row tl-row-sub" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '" ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)">';
-      rowsHtml += '<div class="tl-label tl-label-sub" draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)" title="드래그하여 순서 변경" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;cursor:grab">' +
+      rowsHtml += '<div class="tl-label tl-label-sub" draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' +
+        ' data-tip-name="' + eH(ms.name) + '" data-tip-start="' + (ms.startDate || '') + '" data-tip-end="' + (ms.endDate || '') + '" data-tip-status="' + msSt + '" data-tip-color="' + (p.color || 'var(--ac)') + '"' +
+        ' onmouseenter="tlBarTipShow(event)" onmousemove="tlBarTipMove(event)" onmouseleave="tlBarTipHide()"' +
+        ' style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;cursor:grab">' +
         '<span style="color:var(--t5);font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap"><span class="tl-ms-grip" style="opacity:.45;cursor:grab">⠿</span>' + eH(ms.name) +
         ' <span class="badge" style="background:' + msStInfo.bg + ';color:' + msStInfo.color + ';font-size:8px;padding:1px 4px">' + msStInfo.label + '</span>' +
         '</span></div>';
@@ -1571,6 +1574,7 @@ function bindBarDrag() {
    (다른 프로젝트로 옮기려면 편집 모달의 ↪ 이관 버튼 사용) */
 var _tlMsDrag = null;
 function tlMsDragStart(e, msId, projId) {
+  if (typeof tlBarTipHide === 'function') tlBarTipHide();  // 순서 변경 드래그 시작 시 호버 툴팁 정리
   _tlMsDrag = { id: msId, projId: projId };
   e.dataTransfer.effectAllowed = 'move';
   try { e.dataTransfer.setData('text/plain', msId); } catch (_) {}
