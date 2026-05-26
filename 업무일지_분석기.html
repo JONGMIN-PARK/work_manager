@@ -796,7 +796,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.87</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.88</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3337,6 +3337,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.88',date:'2026-05-26',title:'🐛 타임라인 마일스톤 기간 막대 드래그 오류 수정',tag:'fix',items:[
+      '프로젝트 타임라인에서 마일스톤 기간 막대를 드래그할 때 "Cannot read properties of null (reading \'transaction\')" 오류로 변경이 안 되던 문제 수정',
+      '원인: startBarDrag의 마일스톤 분기에 과거 로컬(IndexedDB) 코드(db.transaction)가 남아 있었음 — 서버 모드 전용 전환 후 db가 null이라 크래시',
+      '조치: IndexedDB 조회 → 서버 모드 msGetAll()로 마일스톤을 찾아 날짜 갱신 후 msPut. 프로젝트 막대 드래그는 영향 없었음',
+      '영향: 클라이언트 timeline.js만 변경'
+    ]},
     {ver:'13.87',date:'2026-05-26',title:'🔀 마일스톤 순서 드래그 변경 — 편집 모달 · 타임라인 양쪽',tag:'feature',items:[
       '프로젝트 편집/등록 모달의 마일스톤 행을 드래그 핸들(⠿)로 위·아래 끌어 순서 변경 — [저장] 시 그 순서대로 영속화',
       '프로젝트 타임라인에서도 마일스톤 하위 행을 드래그하여 같은 프로젝트 내 순서 변경 (즉시 저장+재렌더). 다른 프로젝트로 옮기려면 기존 ↪ 이관 버튼 사용',

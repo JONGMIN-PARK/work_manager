@@ -1,5 +1,24 @@
 # Work Manager — 변경 이력
 
+## v13.88 (2026-05-26) — 타임라인 마일스톤 기간 막대 드래그 오류 수정 (잔존 IndexedDB 제거)
+
+### 배경
+프로젝트 타임라인에서 마일스톤 기간 막대를 드래그하면 `Cannot read properties of null (reading 'transaction')` 오류가 발생하며 기간이 변경되지 않던 문제.
+
+### 원인
+`timeline.js` `startBarDrag`의 마일스톤(`type==='ms'`) 분기에 과거 로컬 모드(IndexedDB) 코드 `db.transaction('milestones','readonly')`가 가드 없이 남아 있었음. 로컬 모드 제거 후 `db`가 null이라 막대 드래그 시 항상 크래시(프로젝트 막대는 `updateProject` 경유라 정상).
+
+### 변경
+- `timeline.js`: 마일스톤 막대 드래그 종료 핸들러를 IndexedDB 조회 → 서버 모드 `msGetAll()`로 대상 마일스톤을 찾아 `startDate`/`endDate` 갱신 후 `msPut`으로 변경. 이후 재렌더·캘린더 갱신·토스트는 기존과 동일.
+
+### 참고 — 같은 부류의 잔존 IndexedDB 코드 점검
+- `pipeline.js`(체크리스트 집계): `if (!db) res({})` 가드 있어 안전.
+- `project-detail.js`(체크리스트 완료일·인라인 수정의 `else` 분기): 서버 모드에선 chkId에 `::`가 항상 있어 서버 분기로만 진입 → IndexedDB 분기는 사실상 도달 불가(죽은 코드).
+- 이번 버그는 timeline.js 분기에만 가드가 없어 발생.
+
+### 영향
+- 클라이언트 `timeline.js`만 변경. 서버 변경 없음(이미 v13.87 PUT 수정 포함).
+
 ## v13.87 (2026-05-26) — 마일스톤 순서 드래그 변경 (편집 모달 · 타임라인) + 정렬 잠재버그 수정
 
 ### 배경

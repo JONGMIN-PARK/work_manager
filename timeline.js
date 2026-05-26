@@ -1602,13 +1602,10 @@ function startBarDrag(bar, mode, startEvt) {
           if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
       });
     } else if (type === 'ms') {
-      // 마일스톤: get → update → put
-      (new Promise(function (res, rej) {
-        var tx = db.transaction('milestones', 'readonly');
-        var req = tx.objectStore('milestones').get(id);
-        req.onsuccess = function () { res(req.result); };
-        req.onerror = function (e) { rej(e); };
-      })).then(function (ms) {
+      // 마일스톤: get → update → put (서버 모드 — 과거 IndexedDB db.transaction 잔존 코드 제거)
+      msGetAll().then(function (list) {
+        var ms = null;
+        for (var i = 0; i < (list || []).length; i++) { if (list[i].id === id) { ms = list[i]; break; } }
         if (!ms) return;
         ms.startDate = newStart;
         ms.endDate = newEnd;
