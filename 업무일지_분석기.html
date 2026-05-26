@@ -796,7 +796,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.90</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.91</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3337,6 +3337,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.91',date:'2026-05-26',title:'🖱️ 타임라인 마일스톤 막대 호버 툴팁 — 시작·종료·기간',tag:'feature',items:[
+      '프로젝트 타임라인에서 마일스톤 막대에 마우스를 올리면 멋진 카드 툴팁 표시 — 마일스톤명·상태 배지, 📅 시작→종료일, ⏱️ 기간(일수), D-Day',
+      '프로젝트 색상 강조(좌측 컬러 바·점), 페이드인 애니메이션, 커서 위치 따라 자동 배치(화면 가장자리 보정)',
+      '막대 드래그(기간 편집) 중에는 호버 툴팁을 숨겨 드래그 툴팁과 충돌 방지',
+      '영향: 클라이언트 timeline.js·style.css만 변경'
+    ]},
     {ver:'13.90',date:'2026-05-26',title:'🎯 투입실적 전면 개편 — 담당자별 목표시간 대비 누적 실적',tag:'feature',items:[
       '투입실적 탭을 "담당자별 누적 실적 vs 목표"로 재구성 — 기존엔 시간 기록한 사람을 그냥 나열했으나, 이제 할당받은 담당자별로 달성률·잔여시간·초과 여부를 진행률 바로 표시',
       '인원×마일스톤별 목표시간 배분 추가 — 프로젝트 편집 → 🎯 목표 배분 매트릭스(마일스톤×담당자)에서 입력. 행/열/전체 합계 실시간 표시',

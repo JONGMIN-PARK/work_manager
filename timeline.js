@@ -315,7 +315,10 @@ async function renderTimeline() {
         rowsHtml += '<div class="tl-grid-line" style="left:' + (idx * getUnitWidth()) + 'px;width:' + getUnitWidth() + 'px"></div>';
       });
       var msEditCls = tlEditMode ? ' tl-bar-editable' : '';
-      rowsHtml += '<div class="' + msBarCls + msEditCls + '" data-type="ms" data-id="' + ms.id + '" style="' + msBarStyle + 'background:' + msBarBg + '">';
+      rowsHtml += '<div class="' + msBarCls + msEditCls + '" data-type="ms" data-id="' + ms.id + '"' +
+        ' data-tip-name="' + eH(ms.name) + '" data-tip-start="' + (ms.startDate || '') + '" data-tip-end="' + (ms.endDate || '') + '" data-tip-status="' + msSt + '" data-tip-color="' + (p.color || 'var(--ac)') + '"' +
+        ' onmouseenter="tlBarTipShow(event)" onmousemove="tlBarTipMove(event)" onmouseleave="tlBarTipHide()"' +
+        ' style="' + msBarStyle + 'background:' + msBarBg + '">';
       if (tlEditMode) {
         rowsHtml += '<div class="tl-handle tl-handle-l" data-handle="left"></div>';
         rowsHtml += '<div class="tl-handle tl-handle-r" data-handle="right"></div>';
@@ -345,6 +348,9 @@ async function renderTimeline() {
       scrollEl.scrollLeft = todayPos - viewW / 2;
     }
   }
+
+  // 재렌더로 막대 DOM이 교체되면 mouseleave가 안 올 수 있어 잔여 툴팁 정리
+  if (typeof tlBarTipHide === 'function') tlBarTipHide();
 
   // 편집 모드일 때 드래그 이벤트 바인딩
   if (tlEditMode) {
@@ -481,6 +487,73 @@ function _tlFmtDday(p, st) {
   else if (diff === 0) { label = 'D-Day'; color = '#F59E0B'; }
   else { label = 'D+' + Math.abs(diff); color = '#EF4444'; }
   return { label: label, color: color };
+}
+
+/* ═══ 타임라인 막대 호버 툴팁 — 시작·종료·기간 표시 ═══ */
+function _tlTipEl() {
+  var el = document.getElementById('tlBarTip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'tlBarTip';
+    el.className = 'tl-bar-tip';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function _tlTipFmtDate(d) {
+  if (!d || d.length < 10) return d || '—';
+  return d.slice(0, 4) + '.' + d.slice(5, 7) + '.' + d.slice(8, 10);
+}
+function tlBarTipShow(e) {
+  // 막대 드래그 중에는 드래그 툴팁이 우선 — 호버 툴팁은 표시하지 않음
+  if (document.querySelector('.tl-drag-tooltip')) return;
+  var bar = e.currentTarget;
+  var name = bar.getAttribute('data-tip-name') || '';
+  var start = bar.getAttribute('data-tip-start') || '';
+  var end = bar.getAttribute('data-tip-end') || '';
+  var status = bar.getAttribute('data-tip-status') || 'waiting';
+  var color = bar.getAttribute('data-tip-color') || 'var(--ac)';
+  var stInfo = (typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[status]) || { icon: '', label: status, color: '#94A3B8', bg: 'rgba(148,163,184,.15)' };
+  var days = (start && end && start.length >= 10 && end.length >= 10) ? (daysDiff(start, end) + 1) : null;
+  var dday = (typeof _tlFmtDday === 'function') ? _tlFmtDday({ endDate: end }, status) : null;
+
+  var html = '<div class="tl-bar-tip-head">' +
+    '<span class="tl-bar-tip-dot" style="background:' + color + '"></span>' +
+    '<span class="tl-bar-tip-name">' + eH(name) + '</span>' +
+    '<span class="tl-bar-tip-badge" style="background:' + stInfo.bg + ';color:' + stInfo.color + '">' + (stInfo.icon ? stInfo.icon + ' ' : '') + eH(stInfo.label) + '</span>' +
+  '</div>';
+  html += '<div class="tl-bar-tip-row"><span class="tl-bar-tip-ic">📅</span><span>' + _tlTipFmtDate(start) + '</span><span class="tl-bar-tip-arrow">→</span><span>' + _tlTipFmtDate(end) + '</span></div>';
+  html += '<div class="tl-bar-tip-row"><span class="tl-bar-tip-ic">⏱️</span>' +
+    (days != null ? ('<span>기간 <b>' + days + '일</b></span>') : '<span>기간 —</span>') +
+    (dday ? '<span class="tl-bar-tip-dday" style="color:' + dday.color + '">· ' + dday.label + '</span>' : '') +
+  '</div>';
+
+  var el = _tlTipEl();
+  el.style.borderLeftColor = color;
+  el.innerHTML = html;
+  el.style.display = 'block';
+  // 다음 프레임에 show 클래스 — fade-in 트랜지션
+  requestAnimationFrame(function () { el.classList.add('show'); });
+  tlBarTipMove(e);
+}
+function tlBarTipMove(e) {
+  var el = document.getElementById('tlBarTip');
+  if (!el || el.style.display === 'none') return;
+  if (document.querySelector('.tl-drag-tooltip')) { tlBarTipHide(); return; }
+  var pad = 14;
+  var w = el.offsetWidth, h = el.offsetHeight;
+  var x = e.clientX + pad;
+  var y = e.clientY - h - 12;            // 기본: 커서 위쪽
+  if (x + w > window.innerWidth - 8) x = e.clientX - w - pad;   // 오른쪽 넘치면 왼쪽
+  if (x < 8) x = 8;
+  if (y < 8) y = e.clientY + 20;          // 위 공간 없으면 아래쪽
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+}
+function tlBarTipHide() {
+  var el = document.getElementById('tlBarTip');
+  if (el) { el.classList.remove('show'); el.style.display = 'none'; }
 }
 
 function calcLabelWidth(projects, milestones) {
