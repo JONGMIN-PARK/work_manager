@@ -762,6 +762,32 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
   [style*="grid-template-columns:1fr 1fr"]:not([data-keep]){grid-template-columns:1fr!important}
 }
 
+/* ═══ v13.99 — iPad 브리지 (769~1024) ═══ */
+/* 모던 iPad 세로 폭(820·834·1024)이 768px 쿼리 미적용 + desktop CSS 그대로 받는 문제 해결 */
+@media (min-width:769px) and (max-width:1024px){
+  /* 헤더 — 가로 여유 부족 시 줄바꿈 */
+  .hdr-in{flex-wrap:wrap;gap:8px;row-gap:10px}
+  /* 인풋 — 터치 친화적 폰트 (iPad는 16px 줌 방지 불필요하지만 가독성) */
+  input[type="text"],input[type="email"],input[type="tel"],input[type="password"],
+  input[type="number"],input[type="date"],input[type="datetime-local"],
+  textarea,select{font-size:14px}
+  /* 페이지 탭 — 가로 스크롤 */
+  .page-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .page-tabs::-webkit-scrollbar{display:none}
+  .page-tabs .tab{flex-shrink:0}
+  /* 인라인 grid 3열 → 2열 */
+  [style*="grid-template-columns:1fr 1fr 1fr"]{grid-template-columns:1fr 1fr!important}
+  [style*="grid-template-columns:repeat(3,1fr)"]{grid-template-columns:repeat(2,1fr)!important}
+  /* 모달 폭 — 데스크탑 고정 폭을 viewport 기반으로 */
+  [style*="max-width:760px"],[style*="max-width:800px"],[style*="max-width:880px"],[style*="max-width:920px"],[style*="max-width:1000px"]{max-width:94vw!important}
+  /* 패널 패딩 살짝 축소 */
+  .pnl{padding:14px}
+  /* 칸반 컬럼 폭 살짝 줄임 */
+  .asKanbanCol{min-width:200px!important}
+  /* 자동 그리드 카드 살짝 줄임 */
+  [style*="minmax(280px,1fr)"]{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))!important}
+}
+
 /* ═══ 통합 검색 ═══ */
 #globalSearchWrap{position:relative;flex-shrink:0}
 #globalSearchInput{background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:6px 10px 6px 28px;font-size:11px;color:var(--t2);font-family:inherit;outline:none;width:180px;transition:border-color .15s,width .25s,box-shadow .15s}
@@ -798,7 +824,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.98</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.99</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3339,6 +3365,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.99',date:'2026-05-28',title:'📱 반응형 정비 — iPad 브리지(769~1024) + 마일스톤 행/칸반/캘린더 모바일 최적화',tag:'style',items:[
+      'iPad 세로(820·834·1024 wide) 누락 해결 — 769~1024 구간이 사실상 데스크탑 CSS 그대로 받아 버튼·그리드 겹침 문제. 신규 미디어 쿼리 추가로 헤더 wrap, 인라인 3열→2열, 모달 폭 94vw, 페이지 탭 가로 스크롤, 인풋 14px(터치 친화) 일괄 적용',
+      '프로젝트 편집 모달의 마일스톤 행(7열 그리드) — 560px 이하에서 [⠿] [이름] / [시작][종료] / [상태] / [이관][삭제] 4행 재배치로 입력 영역 가독성 확보',
+      '파이프라인 칸반 — 900px 이하에서 가로 스크롤 보드로 전환(.pipeline-board 클래스), 레인 220px 고정 + scroll-snap',
+      '캘린더 — 480px 이하에서 7열 minmax(72px,1fr) + 부모 가로 스크롤. display:block 변경 없이 grid 구조 유지',
+      '공통 — .modal-actions/.modal-footer 클래스에 flex-wrap 안전망(향후 신규 모달에 사용)',
+      '영향: style.css, 업무일지_분석기.html(인라인 CSS·버전), pipeline.js(클래스 1줄 추가). 데스크탑(>1024) 동작은 변화 없음'
+    ]},
     {ver:'13.98',date:'2026-05-28',title:'✏️ 타임라인 좌측 라벨 프로젝트명도 완료 시 가운데 줄',tag:'style',items:[
       'v13.97 보완 — 간트 좌측 라벨 영역의 큰 글씨 프로젝트명(예: "한국비아테크 커팅")에도 완료 상태일 때 가운데 줄(취소선) 적용',
       '담당자·기간·라이프사이클 등 다른 정보 행은 영향 없음 → 가독성 유지',

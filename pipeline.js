@@ -57,7 +57,7 @@ function renderPipeline() {
     html += '</div></div>';
 
     // 칸반 보드
-    html += '<div style="display:grid;grid-template-columns:repeat(' + phaseKeys.length + ',1fr);gap:10px;min-height:400px">';
+    html += '<div class="pipeline-board" style="display:grid;grid-template-columns:repeat(' + phaseKeys.length + ',1fr);gap:10px;min-height:400px">';
 
     phaseKeys.forEach(function (k) {
       var ph = phases[k];

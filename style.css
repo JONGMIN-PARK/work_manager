@@ -206,6 +206,47 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 @media(max-width:768px){.cg,.fg{grid-template-columns:1fr}.sg{grid-template-columns:1fr 1fr}.hdr-in{flex-direction:column;align-items:flex-start}.cal-cell{min-height:60px}.tl-label,.tl-label-header{min-width:120px}#mTimeline>div{grid-template-columns:1fr!important}#tlListPanel{position:static!important}#docPanels{grid-template-columns:1fr!important}#docPreviewFlex,#docSumFlex{flex-direction:column!important}#docPreviewFlex>div:first-child,#docSumFlex>div:first-child{max-width:100%!important;border-right:none!important;border-bottom:1px solid var(--bd)!important;padding-right:0!important;padding-bottom:10px!important}}
 @media(max-width:480px){.hdr-in{padding:8px 12px}.con{padding:8px}h1{font-size:15px}.sub{font-size:9px}.sg{grid-template-columns:1fr 1fr}.sc{padding:10px 12px}.sv{font-size:18px}.sl{font-size:9px}.fg{grid-template-columns:1fr}.cg{grid-template-columns:1fr}.pnl{padding:12px}.tabs{gap:2px}.tab{padding:6px 10px;font-size:10px}.page-tabs .tab{padding:8px 14px;font-size:11px}.btn{padding:5px 10px;font-size:10px}.dz{padding:24px 12px}.tw{max-height:320px}th{font-size:9px;padding:7px 8px}td{font-size:11px;padding:6px 8px}}
 @media(max-width:1024px){.cg{grid-template-columns:1fr}.fg{grid-template-columns:1fr 1fr}}
+/* ═══ iPad bridge (769~1024) — v13.99: 모던 iPad 세로(820·834·1024 wide) 대응 ═══ */
+@media(min-width:769px) and (max-width:1024px){
+  .hdr-in{flex-wrap:wrap;gap:8px;row-gap:10px}
+  /* 인라인 3열 → 2열 */
+  [style*="grid-template-columns:1fr 1fr 1fr"]{grid-template-columns:1fr 1fr!important}
+  [style*="grid-template-columns:repeat(3,1fr)"]{grid-template-columns:repeat(2,1fr)!important}
+  /* 모달 width — 데스크탑 폭 고정값을 화면 폭으로 */
+  [style*="max-width:760px"],[style*="max-width:800px"],[style*="max-width:880px"],[style*="max-width:920px"],[style*="max-width:1000px"]{max-width:94vw!important}
+  /* 페이지 탭 가로 스크롤 */
+  .page-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .page-tabs::-webkit-scrollbar{display:none}
+  .page-tabs .tab{flex-shrink:0}
+  /* 패널 패딩 살짝 축소 */
+  .pnl{padding:14px}
+  /* 타이트한 자동 그리드 카드 — 살짝 줄임 */
+  [style*="minmax(280px,1fr)"]{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))!important}
+  [style*="minmax(240px,1fr)"]{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))!important}
+}
+/* ═══ 공통 — 모든 화면에서 모달 푸터 버튼바 자동 줄바꿈 안전망 (v13.99) ═══ */
+.modal-actions,.modal-footer,[data-modal-actions]{display:flex;flex-wrap:wrap;gap:8px;row-gap:8px;justify-content:flex-end}
+/* ═══ 파이프라인 칸반 — 모바일·iPad 가로 스크롤 (v13.99) ═══ */
+@media (max-width:900px){
+  .pipeline-board{display:flex!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:6px}
+  .pipeline-board>.pipeline-lane{flex:0 0 220px;scroll-snap-align:start}
+}
+/* 캘린더 — 모바일에서 7열 최소폭 유지 + 부모 가로 스크롤 (v13.99) */
+@media (max-width:480px){
+  #calGrid.cal-month-mode{grid-template-columns:repeat(7,minmax(72px,1fr))!important}
+  #calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
+/* ═══ 프로젝트 편집 모달의 마일스톤 행 — 모바일 재배치 (v13.99) ═══ */
+@media (max-width:560px){
+  .proj-ms-row{grid-template-columns:18px 1fr 1fr!important;row-gap:4px}
+  .proj-ms-row>.ms-drag-handle{grid-row:1 / span 4;align-self:start;padding-top:6px}
+  .proj-ms-row>.ms-name{grid-column:2 / -1;grid-row:1}
+  .proj-ms-row>.ms-start{grid-column:2;grid-row:2}
+  .proj-ms-row>.ms-end{grid-column:3;grid-row:2}
+  .proj-ms-row>.ms-status{grid-column:2 / -1;grid-row:3}
+  /* 액션 버튼(이관·삭제)은 자동으로 행4로 이동 */
+  .proj-ms-row>button{grid-row:4;justify-self:end}
+}
 /* ═══ 통합 검색 ═══ */
 #globalSearchWrap{position:relative;flex-shrink:0}
 #globalSearchInput{background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:6px 10px 6px 28px;font-size:11px;color:var(--t2);font-family:inherit;outline:none;width:180px;transition:border-color .15s,width .25s,box-shadow .15s}

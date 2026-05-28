@@ -1,5 +1,37 @@
 # Work Manager — 변경 이력
 
+## v13.99 (2026-05-28) — 반응형 정비 (iPad 브리지 + 마일스톤 행/칸반/캘린더 모바일)
+
+### 배경
+사용자가 모바일·iPad에서 "버튼이 겹치고 글자가 잘 안 보인다" 보고. 감사 결과 핵심 갭은 두 가지:
+1. **iPad 갭 (769~1024px)**: 모던 iPad 세로 폭(820·834·1024)이 768px 미디어 쿼리에 걸리지 않아 데스크탑 CSS 그대로 받음. style.css의 `@media(max-width:1024px)`는 `.cg/.fg` 그리드만 처리하던 사실상 빈 쿼리.
+2. **인라인 그리드 고정**: `grid-template-columns:1fr 1fr 1fr` 같은 인라인 값이 미디어 쿼리 영향을 받지 않아 좁은 폭에서도 3열 유지.
+
+### 변경
+
+**`style.css` — 신규 iPad 브리지 + 컴포넌트별 모바일 룰**
+- `@media (min-width:769px) and (max-width:1024px)` 신설: `.hdr-in` wrap, 인라인 3열→2열(`[style*="grid-template-columns:1fr 1fr 1fr"]`), 모달 max-width 94vw로 강제(`max-width:760/800/880/920/1000` 패턴), `.page-tabs` 가로 스크롤, `.pnl` padding 14px, 자동 그리드 카드 minmax 220px.
+- `.pipeline-board` 신설 + `@media(max-width:900px)`: 그리드 → 가로 flex 스크롤, 레인 `flex:0 0 220px`, `scroll-snap-align:start`.
+- `@media(max-width:480px) #calGrid.cal-month-mode`: `grid-template-columns:repeat(7,minmax(72px,1fr))`로 변경(이전 `display:block` 시도는 행 구조 깨져 폐기), `#calendarWrap`에 `overflow-x:auto`.
+- `@media(max-width:560px) .proj-ms-row`: 7열을 3열로 재구성 + 자식별 `grid-column/grid-row` 명시 → [⠿스팬] [이름풀폭] / [시작][종료] / [상태풀폭] / [버튼들] 4행 배치.
+- `.modal-actions, .modal-footer, [data-modal-actions]` 공통 클래스: `display:flex;flex-wrap:wrap;gap:8px;row-gap:8px;justify-content:flex-end` (신규 모달용 안전망).
+
+**`업무일지_분석기.html` — 인라인 CSS에도 iPad 브리지 + 버전·패치노트**
+- HTML 인라인 CSS 블록에 동일한 iPad 브리지 추가. 인풋 14px(터치 친화, iPad는 iOS 자동줌 방지 불필요해서 16px까지 안 키움), 칸반·자동 그리드 카드 폭 축소.
+- 헤더 버전 표시 v13.98 → v13.99.
+- 패치노트 PATCHES 배열 최상단에 v13.99 항목 추가.
+
+**`pipeline.js`**
+- 칸반 보드 컨테이너에 `class="pipeline-board"` 추가(한 줄). CSS에서 해당 클래스로 모바일 가로 스크롤 적용.
+
+### 회귀 위험·검증
+- 데스크탑(>1024px)에 영향 없음(신규 룰 전부 max-width:1024 이하 범위).
+- 인라인 `grid-template-columns:1fr 1fr 1fr` attribute selector — 매칭이 정확해야 효과 발생. 따옴표/공백 변형(`grid-template-columns: 1fr 1fr 1fr` 등)은 매치 안 됨. 향후 신규 그리드 작성 시 공백 패턴 일관성 필요.
+- `.proj-ms-row` 모바일 재배치 — `addMsRow`로 새로 추가된 행(6자식)도 동일 클래스라 적용됨. 4번째 자식 이후 버튼은 grid-row:4로 명시되어 자동 배치.
+
+### 영향
+- 클라이언트 `style.css`, `업무일지_분석기.html`, `pipeline.js`만 변경. JS·서버·DB 로직 변경 없음.
+
 ## v13.98 (2026-05-28) — 타임라인 좌측 라벨 프로젝트명도 완료 시 가운데 줄 (v13.97 보완)
 
 ### 배경
