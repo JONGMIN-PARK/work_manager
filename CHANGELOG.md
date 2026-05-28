@@ -1,5 +1,29 @@
 # Work Manager — 변경 이력
 
+## v13.103 (2026-05-28) — iPad 미디어 쿼리 any-pointer:coarse 전환 (Magic Keyboard 케이스)
+
+### 배경
+v13.102 배포 후 사용자: "버전 v13.102 맞고 새로고침해도 여전히 똑같음". style.css는 정상 로드되었으나 iPad에서 4행 스택 등이 여전히 미적용.
+
+### 진단
+- `(pointer:coarse)`는 **primary** input 정밀도만 평가.
+- iPad Pro에 Magic Keyboard/트랙패드가 붙으면 primary가 `fine`으로 보고되어 `pointer:coarse` false.
+- 사용자 환경이 이 케이스로 추정 (iPad 가로 1180~1366px 사용).
+
+### 변경 (`style.css`)
+- `.proj-ms-row` 마일스톤 4행 스택: `@media (max-width:768px), (pointer:coarse)` → `(max-width:768px), (any-pointer:coarse), (max-width:1366px) and (hover:none)`
+- `.pm-modal` 모달 920px 확장: `(pointer:coarse)` → `(any-pointer:coarse), (max-width:1366px) and (hover:none)`
+- `.pm-vis-row` 가시성 행 1열 collapse: 동일 패턴 적용
+- `.pipeline-board` 칸반 가로 스크롤: `(max-width:900px)` → `(max-width:900px), (any-pointer:coarse) and (max-width:1366px)`
+
+### 미디어 쿼리 의미
+- `any-pointer:coarse`: 어느 입력 장치 중 하나라도 coarse가 존재. 터치 스크린이 항상 있는 iPad는 트랙패드 연결과 무관하게 매칭 ✓
+- `(max-width:1366px) and (hover:none)`: hover 불가능한 디바이스(키오스크·터치 전용) 폴백
+- 일반 데스크탑 마우스(>1366 또는 pointer:fine + hover:hover)는 매칭 안 됨 → 회귀 없음
+
+### 영향
+- 클라이언트 `style.css`만 변경 (media query 조건 확장). 콘텐츠 로직 변화 없음.
+
 ## v13.102 (2026-05-28) — style.css 외부 시트 활성화 (근본 원인) + 완료 라벨 희미 처리
 
 ### 배경 — 근본 원인 발견

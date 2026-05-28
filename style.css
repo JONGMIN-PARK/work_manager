@@ -226,8 +226,8 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 }
 /* ═══ 공통 — 모든 화면에서 모달 푸터 버튼바 자동 줄바꿈 안전망 (v13.99) ═══ */
 .modal-actions,.modal-footer,[data-modal-actions]{display:flex;flex-wrap:wrap;gap:8px;row-gap:8px;justify-content:flex-end}
-/* ═══ 파이프라인 칸반 — 모바일·iPad 가로 스크롤 (v13.99) ═══ */
-@media (max-width:900px){
+/* ═══ 파이프라인 칸반 — 모바일·iPad 가로 스크롤 (v13.99→v13.103) ═══ */
+@media (max-width:900px), (any-pointer:coarse) and (max-width:1366px){
   .pipeline-board{display:flex!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:6px}
   .pipeline-board>.pipeline-lane{flex:0 0 220px;scroll-snap-align:start}
 }
@@ -236,15 +236,15 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   #calGrid.cal-month-mode{grid-template-columns:repeat(7,minmax(72px,1fr))!important}
   #calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 }
-/* ═══ 프로젝트 편집 모달 — 모바일·태블릿 정비 (v13.100) ═══ */
-/* 가시성 행(1fr 2fr) — 768px 이하에서 1열로 스택 */
-@media (max-width:768px){
+/* ═══ 프로젝트 편집 모달 — 모바일·태블릿 정비 (v13.100→v13.103) ═══ */
+/* 가시성 행(1fr 2fr) — 좁은 viewport·터치 디바이스에서 1열로 스택 */
+@media (max-width:768px), (any-pointer:coarse), (max-width:1366px) and (hover:none){
   .pm-vis-row{grid-template-columns:1fr!important}
 }
-/* 마일스톤 행 — 모바일·iPad(터치 디바이스)에서 4행 재배치 (v13.100→v13.101) */
-/* 데스크탑 7열은 좁은 모달 폭과 iOS 네이티브 date 인풋(한국어 로케일은 "2026. 3. 2." 너비 큼)이
-   겹쳐 시각적·실측적 영역 침범 발생. 터치 디바이스는 무조건 4행 스택, 비터치는 768px 이하만. */
-@media (max-width:768px), (pointer:coarse){
+/* 마일스톤 행 — 모바일·iPad(터치 디바이스)에서 4행 재배치 (v13.100→v13.101→v13.103) */
+/* v13.103: pointer:coarse가 iPad+Magic Keyboard/트랙패드 조합에서 false로 보고되는 케이스 발견.
+   any-pointer:coarse(touch가 어느 한 input mechanism으로 존재) + viewport 폴백으로 교체. */
+@media (max-width:768px), (any-pointer:coarse), (max-width:1366px) and (hover:none){
   .proj-ms-row{grid-template-columns:18px 1fr 1fr!important;row-gap:6px;column-gap:8px;padding:8px 0!important}
   .proj-ms-row>.ms-drag-handle{grid-row:1 / span 4;align-self:start;padding-top:6px}
   .proj-ms-row>.ms-name{grid-column:2 / -1;grid-row:1}
@@ -258,8 +258,8 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   /* 인풋·셀렉트 폰트 살짝 키워 가독성 (iPad 터치 친화) */
   .proj-ms-row .ms-name,.proj-ms-row .ms-start,.proj-ms-row .ms-end,.proj-ms-row .ms-status{font-size:12px!important;padding:6px 8px!important}
 }
-/* 프로젝트 모달 — 터치 디바이스(iPad 포함, 가로/세로 모두)에서 더 넓게 */
-@media (pointer:coarse){
+/* 프로젝트 모달 — 터치 디바이스(iPad 포함, 가로/세로 모두)에서 더 넓게 (v13.103) */
+@media (any-pointer:coarse), (max-width:1366px) and (hover:none){
   .pm-modal{max-width:min(96vw, 920px)!important}
 }
 /* ═══ 통합 검색 ═══ */
