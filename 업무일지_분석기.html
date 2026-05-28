@@ -798,7 +798,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.97</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.98</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3339,6 +3339,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.98',date:'2026-05-28',title:'✏️ 타임라인 좌측 라벨 프로젝트명도 완료 시 가운데 줄',tag:'style',items:[
+      'v13.97 보완 — 간트 좌측 라벨 영역의 큰 글씨 프로젝트명(예: "한국비아테크 커팅")에도 완료 상태일 때 가운데 줄(취소선) 적용',
+      '담당자·기간·라이프사이클 등 다른 정보 행은 영향 없음 → 가독성 유지',
+      '영향: 클라이언트 timeline.js만 변경'
+    ]},
     {ver:'13.97',date:'2026-05-28',title:'✏️ 타임라인 완료 항목 가운데 줄 처리 — 사이드바·프로젝트 막대 타이틀',tag:'style',items:[
       '프로젝트 관리 > 타임라인 좌측 프로젝트 목록(사이드바): 완료 항목에 옅음(50%) 외에 가운데 줄(취소선) 추가 — 상태 뱃지는 줄에서 제외',
       '간트 프로젝트 막대 타이틀(.tl-bar-text): 완료된 막대의 텍스트에 흰색 가운데 줄 추가 — 색 막대 위에서도 또렷',

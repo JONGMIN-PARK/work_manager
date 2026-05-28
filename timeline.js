@@ -244,7 +244,7 @@ async function renderTimeline() {
     rowsHtml += '<div class="tl-label" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px" onclick="showProjectDetail(\'' + p.id + '\')">' +
       '<div style="display:flex;align-items:center;gap:6px">' +
         '<span class="dot" style="background:' + p.color + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
-        '<span style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap">' + eH(p.name || p.orderNo) + '</span>' +
+        '<span style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap' + (st === 'done' ? ';text-decoration:line-through;text-decoration-thickness:1px;text-decoration-color:var(--t5)' : '') + '">' + eH(p.name || p.orderNo) + '</span>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:4px;margin-top:2px">' +
         '<span class="badge" style="background:' + PROJ_STATUS[st].bg + ';color:' + PROJ_STATUS[st].color + '">' + PROJ_STATUS[st].icon + ' ' + PROJ_STATUS[st].label + '</span>' +
