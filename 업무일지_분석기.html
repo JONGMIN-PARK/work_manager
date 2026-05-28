@@ -824,7 +824,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.99</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.100</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3365,6 +3365,16 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.100',date:'2026-05-28',title:'🛠️ 프로젝트 편집 모달 — iPad 영역 침범 해결 (모달 880px·헤더 wrap·가시성 행 collapse)',tag:'fix',items:[
+      '사용자 보고 — iPad 가로(1180px)에서 모달이 640px로 너무 좁아 가시성 select·공유/이관 버튼·마일스톤 섹션 헤더·마일스톤 행이 서로 영역 침범',
+      '모달 max-width 640 → 880px 확대 (인라인 + .pm-modal CSS): 데스크탑은 그대로 880px, iPad 가로(1180)는 880px(75%) 폭으로 컨트롤 여유 확보',
+      '터치 디바이스(@media pointer:coarse)는 max-width min(96vw, 920px)로 한 단계 더 확대 — iPad 가로/세로 모두 적용',
+      '마일스톤 섹션 헤더(◆ 마일스톤 + 3버튼) — flex-wrap:wrap + row-gap:8px 추가로 좁아지면 자연스레 2행 분리',
+      '가시성 행(1fr 2fr) — 768px 이하에서 1열 스택으로 collapse (가시성 select와 공유/이관 버튼이 한 줄에 안 끼게)',
+      '공유/이관 버튼 그룹·모달 푸터(저장/삭제) — flex-wrap:wrap 안전망 추가',
+      '마일스톤 행 모바일 재배치 기존 560px → 768px로 확대 적용: iPad 세로에서도 4행 배치 효과',
+      '영향: timeline.js(showProjectModal 인라인 클래스 5개 추가), style.css, 업무일지_분석기.html(버전·패치노트)'
+    ]},
     {ver:'13.99',date:'2026-05-28',title:'📱 반응형 정비 — iPad 브리지(769~1024) + 마일스톤 행/칸반/캘린더 모바일 최적화',tag:'style',items:[
       'iPad 세로(820·834·1024 wide) 누락 해결 — 769~1024 구간이 사실상 데스크탑 CSS 그대로 받아 버튼·그리드 겹침 문제. 신규 미디어 쿼리 추가로 헤더 wrap, 인라인 3열→2열, 모달 폭 94vw, 페이지 탭 가로 스크롤, 인풋 14px(터치 친화) 일괄 적용',
       '프로젝트 편집 모달의 마일스톤 행(7열 그리드) — 560px 이하에서 [⠿] [이름] / [시작][종료] / [상태] / [이관][삭제] 4행 재배치로 입력 영역 가독성 확보',

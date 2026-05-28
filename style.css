@@ -236,8 +236,13 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   #calGrid.cal-month-mode{grid-template-columns:repeat(7,minmax(72px,1fr))!important}
   #calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 }
-/* ═══ 프로젝트 편집 모달의 마일스톤 행 — 모바일 재배치 (v13.99) ═══ */
-@media (max-width:560px){
+/* ═══ 프로젝트 편집 모달 — 모바일·태블릿 정비 (v13.100) ═══ */
+/* 가시성 행(1fr 2fr) — 768px 이하에서 1열로 스택 */
+@media (max-width:768px){
+  .pm-vis-row{grid-template-columns:1fr!important}
+}
+/* 마일스톤 행 모바일 재배치 — 768px 이하 (이전 560 → 확대) */
+@media (max-width:768px){
   .proj-ms-row{grid-template-columns:18px 1fr 1fr!important;row-gap:4px}
   .proj-ms-row>.ms-drag-handle{grid-row:1 / span 4;align-self:start;padding-top:6px}
   .proj-ms-row>.ms-name{grid-column:2 / -1;grid-row:1}
@@ -246,6 +251,10 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
   .proj-ms-row>.ms-status{grid-column:2 / -1;grid-row:3}
   /* 액션 버튼(이관·삭제)은 자동으로 행4로 이동 */
   .proj-ms-row>button{grid-row:4;justify-self:end}
+}
+/* 프로젝트 모달 — 터치 디바이스(iPad 포함, 가로/세로 모두)에서 더 넓게 */
+@media (pointer:coarse){
+  .pm-modal{max-width:min(96vw, 920px)!important}
 }
 /* ═══ 통합 검색 ═══ */
 #globalSearchWrap{position:relative;flex-shrink:0}

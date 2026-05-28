@@ -780,7 +780,7 @@ async function showProjectModal(projId) {
     }).join('');
   }
 
-  modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:640px;width:95%;max-height:90vh;overflow:auto">' +
+  modal.innerHTML = '<div class="pm-modal" style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:880px;width:95%;max-height:90vh;overflow:auto">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
       '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">' + (proj ? '📝 프로젝트 편집' : '➕ 프로젝트 등록') + '</h3>' +
       '<button class="btn btn-g btn-s" onclick="document.getElementById(\'projModal\').remove()">✕ 닫기</button>' +
@@ -797,7 +797,7 @@ async function showProjectModal(projId) {
         '<div><label class="fl">상태</label><select class="si" id="projStatus" style="padding-left:8px">' + statusOpts + '</select></div>' +
       '</div>' +
       // 가시성: 본인만(private) / 부서(dept) / 테넌트 전체(tenant)
-      '<div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;align-items:end">' +
+      '<div class="pm-vis-row" style="display:grid;grid-template-columns:1fr 2fr;gap:10px;align-items:end">' +
         '<div><label class="fl">가시성</label><select class="si" id="projVisibility" style="padding-left:8px;font-size:11px">' +
           ['private','dept','tenant'].map(function (v) {
             var labels = { 'private':'🔒 비공개 (본인+공유 사용자)', 'dept':'🏢 부서 공개', 'tenant':'🌐 전체 공개' };
@@ -805,7 +805,7 @@ async function showProjectModal(projId) {
             return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + labels[v] + '</option>';
           }).join('') +
         '</select></div>' +
-        (proj ? '<div style="display:flex;gap:6px;justify-content:flex-end">' +
+        (proj ? '<div class="pm-share-btns" style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">' +
           '<button class="btn btn-g btn-s" style="font-size:10px" onclick="showProjectShareModal(\'' + proj.id + '\')">👥 공유 관리</button>' +
           '<button class="btn btn-g btn-s" style="font-size:10px" onclick="showProjectTransferModal(\'' + proj.id + '\')">↪ 소유권 이관</button>' +
         '</div>' : '<div style="font-size:10px;color:var(--t6);align-self:center">등록 후 공유 사용자 추가 가능</div>') +
@@ -857,9 +857,9 @@ async function showProjectModal(projId) {
       '</div>' +
       // 마일스톤 섹션
       '<div style="padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:8px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<div class="pm-ms-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;row-gap:8px;margin-bottom:8px">' +
           '<span style="font-size:12px;font-weight:600;color:var(--t4)">◆ 마일스톤 (하위 단계)</span>' +
-          '<div style="display:flex;gap:4px">' +
+          '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">' +
             (proj && proj.orderNo ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="runSuggestMilestones(\'' + eH(proj.orderNo) + '\')">🤖 마일스톤 제안</button>' : '') +
             '<button class="btn btn-g btn-s" style="font-size:10px" onclick="editMsTargetsMatrix()" title="담당자별·마일스톤별 목표시간 배분">🎯 목표 배분</button>' +
             '<button class="btn btn-g btn-s" onclick="addMsRow()">+ 추가</button>' +
@@ -868,7 +868,7 @@ async function showProjectModal(projId) {
         '<div id="msRows">' + msHtml + '</div>' +
       '</div>' +
     '</div>' +
-    '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">' +
+    '<div class="pm-footer" style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap">' +
       (proj ? '<button class="btn btn-d btn-s" onclick="deleteProjectUI(\'' + proj.id + '\')">🗑 삭제</button>' : '') +
       '<button class="btn btn-p" onclick="saveProjectUI(\'' + (proj ? proj.id : '') + '\')">' + (proj ? '💾 수정' : '➕ 등록') + '</button>' +
     '</div>' +

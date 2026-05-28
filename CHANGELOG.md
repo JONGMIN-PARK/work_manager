@@ -1,5 +1,34 @@
 # Work Manager — 변경 이력
 
+## v13.100 (2026-05-28) — 프로젝트 편집 모달 영역 침범 해결 (iPad)
+
+### 배경
+v13.99 직후 사용자가 "프로젝트 편집 창 내의 버튼·컨트롤들이 서로 영역 침범"한다고 보고 — iPad 가로(1024~1180px)에서 특히. 핵심 원인:
+1. 모달 max-width:640px로 iPad에서 콘텐츠 영역이 600px 밖에 안 됨 → 가시성 select 라벨(예: "🔒 비공개 (본인+공유 사용자)") 잘림 + 마일스톤 7열 행 1fr 부족
+2. 마일스톤 섹션 헤더(◆ 마일스톤 + 3버튼)에 `flex-wrap` 부재 → 좁으면 충돌
+3. 가시성 행 `grid-template-columns:1fr 2fr` — 좁아져도 그대로 2열 유지
+
+### 변경
+
+**`timeline.js` — showProjectModal 인라인 5개 클래스 추가 + 인라인 안전망**
+- 모달 컨테이너 `class="pm-modal"` + `max-width:640px → 880px`
+- 가시성 행 `class="pm-vis-row"`
+- 마일스톤 섹션 헤더 `class="pm-ms-header"` + 인라인에 `flex-wrap:wrap;gap:6px;row-gap:8px` 추가, 내부 버튼 그룹에도 `flex-wrap:wrap;justify-content:flex-end`
+- 공유/이관 버튼 그룹 `class="pm-share-btns"` + `flex-wrap:wrap`
+- 모달 푸터(저장/삭제) `class="pm-footer"` + `flex-wrap:wrap`
+
+**`style.css` — 신규 룰**
+- `@media (max-width:768px) .pm-vis-row{grid-template-columns:1fr!important}` — 가시성 select와 공유 버튼이 1열로 스택
+- `@media (max-width:768px) .proj-ms-row{...}` — v13.99의 560px 적용 폭을 768px로 확대 (iPad 세로도 모바일 4행 배치)
+- `@media (pointer:coarse) .pm-modal{max-width:min(96vw, 920px)!important}` — 터치 디바이스(iPad 가로 포함)에서 모달 920px까지 확대
+
+### 회귀 위험
+- 데스크탑(>768px non-touch): 모달 폭만 640→880으로 확장. 다른 인라인 그리드 변화 없음. 콘텐츠가 더 넓어져 가독성 향상.
+- iPad/터치 디바이스: pm-modal 920px(약 78~96vw)로 더 확장. v13.99의 iPad 브리지(1024 이하)와 별개 룰 — pointer:coarse 기반이라 마우스 노트북에 영향 없음.
+
+### 영향
+- 클라이언트 `timeline.js`, `style.css`, `업무일지_분석기.html`만 변경.
+
 ## v13.99 (2026-05-28) — 반응형 정비 (iPad 브리지 + 마일스톤 행/칸반/캘린더 모바일)
 
 ### 배경
