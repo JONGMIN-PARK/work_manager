@@ -1,5 +1,24 @@
 # Work Manager — 변경 이력
 
+## v13.101 (2026-05-28) — 마일스톤 행 iPad 영역 침범 해결 (4행 스택 자동 전환)
+
+### 배경
+v13.100 직후 사용자가 d:\6.png 스크린샷으로 iPad 가로(1180px)에서 마일스톤 행의 날짜·완료 select 등 컬럼들이 서로 침범한다고 보고. 모달 폭이 920px로 넓어졌어도 7열 dense 레이아웃에서 iOS 네이티브 `<input type="date">`의 한국어 로케일 표시("2026. 3. 2.")가 110px 컬럼을 넘겨 옆 status select와 겹침.
+
+### 변경 (`style.css`)
+- v13.99/v13.100의 `.proj-ms-row` 모바일 재배치 미디어 쿼리를 `@media (max-width:768px), (pointer:coarse)`로 확장 — 터치 디바이스(iPad 가로/세로 포함)에서 자동 4행 스택 전환.
+- 4행 배치: [⠿(스팬)][이름풀폭] / [시작][종료] / [상태풀폭] / [이관][삭제]
+- column-gap 6→8px, row-gap 6px, padding 8px 0으로 시각적 간격 확보.
+- 입력 폰트 12px / padding 6/8px로 터치 친화.
+- 액션 버튼 명시 배치: `:last-child{grid-column:3}` (삭제), `:nth-last-child(2){grid-column:2}` (이관). addMsRow가 만든 6자식 행(이관 버튼 없음)에서도 삭제만 col3에 안정 배치.
+
+### 회귀
+- 데스크탑 마우스(`pointer:fine` 또는 viewport >768px non-touch): 기존 7열 dense 레이아웃 유지. 변화 없음.
+- 가로 모드 Windows 터치 노트북: pointer:coarse라 4행 레이아웃 적용됨 — 터치 친화이므로 의도된 동작.
+
+### 영향
+- 클라이언트 `style.css`만 변경 (.proj-ms-row 규칙 확장).
+
 ## v13.100 (2026-05-28) — 프로젝트 편집 모달 영역 침범 해결 (iPad)
 
 ### 배경

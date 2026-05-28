@@ -824,7 +824,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.100</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.101</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3365,6 +3365,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.101',date:'2026-05-28',title:'🛠️ 마일스톤 행 — iPad에서 컬럼 영역 침범 해결 (4행 스택 자동 전환)',tag:'fix',items:[
+      'v13.100 후속 — iPad 가로(1180px)에서 모달 920px여도 7열 마일스톤 행(드래그·이름·시작일·종료일·상태·이관·삭제)이 시각적으로 빡빡하고, iOS 네이티브 date 인풋의 한국어 표시("2026. 3. 2.")가 110px 컬럼을 넘겨 status 셀렉트와 겹치는 문제',
+      '터치 디바이스(@media pointer:coarse) 또는 768px 이하에서 마일스톤 행을 자동으로 4행 스택 레이아웃 전환: [⠿이름] / [시작][종료] / [상태] / [이관][삭제]',
+      'gap 6→8px, padding 살짝 확대로 시각적 간격 확보. 입력 폰트 12px·padding 6/8px로 터치 친화',
+      '버튼 위치 안정화 — :last-child(삭제)는 col3, :nth-last-child(2)(이관)는 col2 명시. addMsRow로 추가한 새 행(이관 버튼 없음, 6자식)에서도 정상 배치',
+      '데스크탑 마우스(>768 + pointer:fine)는 기존 7열 dense 레이아웃 유지 — 회귀 없음',
+      '영향: style.css만 변경 (v13.99 .proj-ms-row 규칙 확장)'
+    ]},
     {ver:'13.100',date:'2026-05-28',title:'🛠️ 프로젝트 편집 모달 — iPad 영역 침범 해결 (모달 880px·헤더 wrap·가시성 행 collapse)',tag:'fix',items:[
       '사용자 보고 — iPad 가로(1180px)에서 모달이 640px로 너무 좁아 가시성 select·공유/이관 버튼·마일스톤 섹션 헤더·마일스톤 행이 서로 영역 침범',
       '모달 max-width 640 → 880px 확대 (인라인 + .pm-modal CSS): 데스크탑은 그대로 880px, iPad 가로(1180)는 880px(75%) 폭으로 컨트롤 여유 확보',
