@@ -1,5 +1,37 @@
 # Work Manager — 변경 이력
 
+## v13.102 (2026-05-28) — style.css 외부 시트 활성화 (근본 원인) + 완료 라벨 희미 처리
+
+### 배경 — 근본 원인 발견
+사용자가 v13.101 직후 "거의 같은 화면, 변화 없음"이라고 보고. 조사 결과:
+- `style.css`가 `업무일지_분석기.html`에서 한 번도 `<link>`되지 않은 **dead file** 상태였음.
+- HTML head에는 `<link rel="stylesheet" href="https://fonts.googleapis.com/...">` (구글 폰트)만 있고, 정작 프로젝트의 `style.css` 링크는 없음. git 히스토리에서도 추가/제거 흔적 없음 — 항상 누락된 채로 운영.
+- 결과: v13.99/v13.100/v13.101에서 추가한 `.proj-ms-row` 4행 재배치·`.pm-modal` 920px 확장·`.pipeline-board` 가로 스크롤·`#calGrid` 7열 minmax 등 **CSS 변경이 전혀 적용되지 않음**.
+- v13.97/v13.98 등 일부 변경은 HTML 인라인 `<style>` 블록에도 함께 적용해 결과적으로 작동했지만, v13.99 이후엔 style.css만 편집하는 경우가 늘면서 누락.
+
+### 변경
+
+**`업무일지_분석기.html` — 외부 스타일시트 링크 추가**
+- `<script>` 묶음 직후, 인라인 `<style>` 블록 직전에 `<link rel="stylesheet" href="style.css?v=1">` 추가.
+- 위치: 인라인 `<style>`보다 source order 앞에 두어, 인라인이 충돌 시 override할 수 있도록.
+- `?v=1` 쿼리는 서버의 정규식 `?v=\d+[a-f0-9]*"` 자동 치환 대상 — 배포마다 BUILD_VERSION으로 갱신되어 캐시 자동 무효화.
+- 효과: v13.99/v13.100/v13.101의 모든 누락됐던 CSS 룰이 이제 활성화. iPad 모달 4행 스택, 모달 920px 확장, 칸반 가로 스크롤 등 모두 동작 시작.
+
+**`timeline.js` — 완료 프로젝트 좌측 라벨 희미 처리 (사용자 신규 요청)**
+- 좌측 라벨 `<div class="tl-label" ...>` 인라인 스타일에 `st === 'done'` 시 `;opacity:.5` 추가 (line 244).
+- 사이드바 프로젝트 목록의 `.tl-list-item.tl-list-done{opacity:.5}`와 동일한 시각 효과 — 완료된 프로젝트의 좌측 라벨 전체(이름·뱃지·기간·담당자·라이프사이클 아이콘 포함)가 50% 투명도로 흐려짐.
+- 기존 line-through(v13.98)와 함께 작동 — 줄도 그어지고 색도 희미해짐.
+
+### 회귀 검증
+- 외부 style.css 링크 추가로 인한 부작용:
+  - HTML 인라인 `<style>`이 source order에서 뒤에 있어 충돌하는 selector는 인라인이 승리. 즉 기존 화면 동작은 변함 없음.
+  - 인라인에 없는 새 selector만 style.css에서 와서 적용됨 (.proj-ms-row 모바일, .pm-modal 등).
+- 데스크탑 마우스(>1024px non-touch): style.css의 모든 새 룰은 max-width 제한 또는 pointer:coarse 조건이 있어 매칭 안 됨. 변화 없음.
+- iPad: 비로소 .pm-modal 920px + .proj-ms-row 4행 스택 등이 실제 적용됨.
+
+### 영향
+- 클라이언트 `업무일지_분석기.html`(link 추가·버전·패치노트), `timeline.js`(라벨 opacity 1줄)만 변경.
+
 ## v13.101 (2026-05-28) — 마일스톤 행 iPad 영역 침범 해결 (4행 스택 자동 전환)
 
 ### 배경

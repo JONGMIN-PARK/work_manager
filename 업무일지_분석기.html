@@ -282,6 +282,8 @@ window.wmDataBus = (function () {
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" onerror="console.warn('pdf.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
+<!-- 외부 스타일시트 (v13.102~ 활성화) — 인라인 <style> 가 source order로 override 가능 -->
+<link rel="stylesheet" href="style.css?v=1">
 <style>
 :root{--bg:#0B0E14;--bg-h:linear-gradient(135deg,#101828,#162040);--bg-p:#111620;--bg-c:linear-gradient(135deg,#141A28,#181F30);--bg-i:#0D1018;--bg-hv:#1A2030;--bd:#222C44;--bd2:#2C3858;--bd-i:#222C44;--t1:#F0F2F8;--t2:#D8DEE8;--t3:#B8C0D4;--t4:#8894B0;--t5:#6070A0;--t6:#404C70;--ac:#5B8DEF;--ac-bg:#162850;--ac-t:#7BABFF;--ac-g:rgba(91,141,239,.15);--c-bg:#161C30;--c-bd:#2C3858;--c-t:#8894B0;--ta-bg:#1A2848;--ta-sh:#5B8DEF;--th:#10141E;--trh:#1A2030;--tdb:#181F30;--lb:#0D1018;--lb-h:#1A2030;--lb-c:rgba(91,141,239,.06);--cb:#404C70;--sb-t:#161C30;--sb-h:#404C70;--d-bd:#D93B3B;--d-t:#FF8A8A;--d-bg:rgba(217,59,59,.15);--tg:#1A2848;--tg-bd:#2C4068;--tg-t:#7BABFF;--mk:rgba(250,200,50,.22);--mk-t:#FBBF24;--cg:#222C44;--ct:#6070A0;--cl:#8894B0;--pt:#161C30;--stat-blue:#3B82F6;--stat-green:#10B981;--stat-amber:#F59E0B;--stat-cyan:#06B6D4;--stat-rose:#F43F5E;--stat-purple:#8B5CF6}
 [data-theme="light"]{--bg:#EBEEF6;--bg-h:linear-gradient(135deg,#F4F5FB,#E6E9F4);--bg-p:#F4F5FB;--bg-c:linear-gradient(135deg,#F2F3FA,#EBEEF6);--bg-i:#E2E5F0;--bg-hv:#DCDFE8;--bd:#C8CDE0;--bd2:#B8BED5;--bd-i:#B8BED5;--t1:#1A1E30;--t2:#2A3048;--t3:#424862;--t4:#5E6580;--t5:#8890A6;--t6:#B0B6C8;--ac:#5865F2;--ac-bg:#E5E7FD;--ac-t:#4150E0;--ac-g:rgba(88,101,242,.1);--c-bg:#E6E9F4;--c-bd:#C8CDE0;--c-t:#5E6580;--ta-bg:#ECECFE;--ta-sh:#5865F2;--th:#EEF0F8;--trh:#E6E9F4;--tdb:#E2E5F0;--lb:#F0F1F8;--lb-h:#E6E9F4;--lb-c:rgba(88,101,242,.05);--cb:#B0B6C8;--sb-t:#E6E9F4;--sb-h:#B0B6C8;--d-bd:#F87171;--d-t:#DC2626;--d-bg:rgba(248,113,113,.1);--tg:#ECECFE;--tg-bd:#C7CCFE;--tg-t:#4150E0;--mk:rgba(245,158,11,.1);--mk-t:#B45309;--cg:#C8CDE0;--ct:#8890A6;--cl:#5E6580;--pt:#E6E9F4}
@@ -824,7 +826,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.101</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.102</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3365,6 +3367,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.102',date:'2026-05-28',title:'🔌 style.css 외부 시트 활성화 + 완료 프로젝트 좌측 라벨 희미 처리',tag:'fix',items:[
+      '근본 원인 발견 — style.css가 HTML에서 <link>되지 않아 v13.99/v13.100/v13.101의 .proj-ms-row·.pm-modal·.pipeline-board 등 CSS 변경이 실제 앱에 전혀 적용되지 않고 있었음. 사용자가 "변화 없음" 보고한 이유',
+      '<link rel="stylesheet" href="style.css?v=1"> 추가 (인라인 <style> 보다 앞에 두어 인라인이 source order로 override 가능) → 누락됐던 모든 반응형 룰이 이제 적용',
+      '서버의 ?v= 캐시버스팅 정규식이 BUILD_VERSION으로 자동 치환 → 매 배포마다 신선한 CSS',
+      '신규 — 프로젝트 타임라인 좌측 라벨도 완료 상태 시 opacity:0.5 적용 (사이드바 프로젝트 목록과 동일한 희미 처리). 기존 line-through(v13.98)와 함께 작동',
+      '영향: 업무일지_분석기.html(<link> 추가·버전·패치노트), timeline.js(라벨 인라인 opacity 1줄)'
+    ]},
     {ver:'13.101',date:'2026-05-28',title:'🛠️ 마일스톤 행 — iPad에서 컬럼 영역 침범 해결 (4행 스택 자동 전환)',tag:'fix',items:[
       'v13.100 후속 — iPad 가로(1180px)에서 모달 920px여도 7열 마일스톤 행(드래그·이름·시작일·종료일·상태·이관·삭제)이 시각적으로 빡빡하고, iOS 네이티브 date 인풋의 한국어 표시("2026. 3. 2.")가 110px 컬럼을 넘겨 status 셀렉트와 겹치는 문제',
       '터치 디바이스(@media pointer:coarse) 또는 768px 이하에서 마일스톤 행을 자동으로 4행 스택 레이아웃 전환: [⠿이름] / [시작][종료] / [상태] / [이관][삭제]',
