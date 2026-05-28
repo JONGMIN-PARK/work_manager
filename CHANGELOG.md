@@ -1,5 +1,17 @@
 # Work Manager — 변경 이력
 
+## v13.97 (2026-05-28) — 타임라인 완료 항목 가운데 줄 처리 (사이드바·프로젝트 막대 타이틀)
+
+### 배경
+완료 프로젝트는 기존에 opacity 0.5로 옅게만 표시되어 "완료됨"이 한눈에 덜 명확. 사용자가 사이드바 목록과 프로젝트 막대 타이틀에 취소선(가운데 줄)도 함께 적용 요청.
+
+### 변경 (`style.css`, `업무일지_분석기.html` 인라인 CSS)
+- `.tl-list-item.tl-list-done`: `text-decoration: line-through; text-decoration-thickness:1px; text-decoration-color: var(--t5)` 추가 (기존 `opacity:.5` 유지). 단, `.tl-list-item.tl-list-done .badge { text-decoration:none }` 로 상태 뱃지 라벨에는 줄이 그어지지 않도록 제외.
+- `.tl-bar-done .tl-bar-text`: `text-decoration: line-through; text-decoration-thickness:1.5px; text-decoration-color: rgba(255,255,255,.85)` 추가. 색 막대 위에서도 또렷하게 보이도록 흰색 + 두께 1.5px. 마일스톤 막대(.tl-bar-ms)는 텍스트가 없어 영향 없음.
+
+### 영향
+- 클라이언트 `style.css`·`업무일지_분석기.html` 인라인 CSS만 변경. JS·서버·DB 변경 없음.
+
 ## v13.96 (2026-05-26) — 마일스톤 호버 툴팁 단일화: 한 줄 네이티브 박스(+D-day)
 
 ### 배경
