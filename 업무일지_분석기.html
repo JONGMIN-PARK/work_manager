@@ -826,7 +826,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.106</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.107</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3367,6 +3367,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.107',date:'2026-06-10',title:'📝 마일스톤 업데이트에 투입시간(보고 투입) 입력 + 모달 재진입 방지',tag:'feat',items:[
+      '마일스톤 진척률 업데이트(🖉) 모달에 투입시간(h) 입력칸 추가 — 작업 내용·진척률과 함께 "몇 시간 작업했다"를 직접 기록',
+      '입력한 시간은 "보고 투입"으로 별도 집계(업무일지 투입과 분리). 업무일지 일괄 업로드의 레코드 전량 교체와 충돌·삭제 없음, 이중집계 없음',
+      '투입실적 요약에 "📝 보고 투입" 카드, 마일스톤 행·이력 타임라인에 보고 투입시간 표시',
+      '신규 마이그레이션 035: milestone_progress_logs.hours, milestones.reported_hours(로그 합 denormalize). 이력 추가/삭제 시 자동 재동기화',
+      '모달 재진입 방지 — 버튼을 빠르게 여러 번 눌러도 창이 완전히 열릴 때까지 다음 이벤트 무시(다중 팝업 방지). 창이 안 뜨면 5초 타임아웃 후 에러 표시',
+      '영향: server/migrations/035, server/routes/milestones.js, project-data.js, project-detail.js, 업무일지_분석기.html. 서버 변경 포함 — git push → Render 배포 후 적용'
+    ]},
     {ver:'13.106',date:'2026-06-09',title:'🗑 마일스톤 진척률 이력 전체/부분 삭제',tag:'feat',items:[
       '투입실적 탭 → 마일스톤 이력(🕘)에서 진척률 업데이트 내역을 부분(개별 🗑) / 전체(🗑 이력 전체 삭제) 삭제 가능',
       '삭제 시 마일스톤 진척률을 남은 최신 로그 기준으로 재동기화(남은 로그 없으면 0으로 초기화) + 프로젝트 진척률 가중평균 롤업 자동 갱신',

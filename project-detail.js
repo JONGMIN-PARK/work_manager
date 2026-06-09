@@ -365,12 +365,13 @@ function pdLoadWork(projId) {
     var today = (typeof localDate === 'function') ? localDate() : '';
 
     // 프로젝트 보고 진척률 = 마일스톤 보고 진척률의 목표시간 가중평균
-    var rpWsum = 0, rpPsum = 0, rpSimple = 0, rpCnt = 0, rpAny = false;
+    var rpWsum = 0, rpPsum = 0, rpSimple = 0, rpCnt = 0, rpAny = false, reportedHoursTotal = 0;
     milestones.forEach(function (m) {
       var mat = m.assigneeTargets || {};
       var w = 0; Object.keys(mat).forEach(function (k) { w += Number(mat[k]) || 0; });
       var prog = Number(m.progress) || 0;
       rpWsum += w; rpPsum += prog * w; rpSimple += prog; rpCnt++;
+      reportedHoursTotal += Number(m.reportedHours) || 0;
       if (m.progressUpdatedAt) rpAny = true;
     });
     var reportedPct = rpCnt ? (rpWsum > 0 ? Math.round(rpPsum / rpWsum) : Math.round(rpSimple / rpCnt)) : 0;
@@ -399,7 +400,10 @@ function pdLoadWork(projId) {
     var h = '';
     // ── 요약 박스 (총 투입 / 목표 대비 / 예상 대비) ──
     h += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">';
-    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--ac)">' + rnd(totalH) + '<span style="font-size:11px;color:var(--t5)">h</span></div><div style="font-size:10px;color:var(--t5)">총 투입</div></div>';
+    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--ac)">' + rnd(totalH) + '<span style="font-size:11px;color:var(--t5)">h</span></div><div style="font-size:10px;color:var(--t5)">업무일지 투입</div></div>';
+    if (reportedHoursTotal > 0) {
+      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:#8B5CF6">' + rnd(reportedHoursTotal) + '<span style="font-size:11px;color:var(--t5)">h</span></div><div style="font-size:10px;color:var(--t5)" title="마일스톤 업데이트에서 직접 보고한 투입시간 (업무일지와 별도)">📝 보고 투입</div></div>';
+    }
     if (totalTarget > 0) {
       var tpct = Math.round(totalH / totalTarget * 100);
       h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:' + (tpct > 100 ? '#EF4444' : 'var(--t2)') + '">' + tpct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">목표 대비 (' + rnd(totalTarget) + 'h)</div></div>';
@@ -458,13 +462,15 @@ function pdLoadWork(projId) {
         var msTarget = 0; Object.keys(at).forEach(function (k) { msTarget += (Number(at[k]) || 0); });
         var mSt = (typeof PROJ_STATUS !== 'undefined' ? PROJ_STATUS[m.status] : null) || { icon: '⏳', label: m.status, color: '#94A3B8', bg: 'rgba(148,163,184,.15)' };
         var prog = Number(m.progress) || 0;
+        var repH = Number(m.reportedHours) || 0;
         h += '<div style="padding:7px 0;border-bottom:1px solid var(--bd)">';
         // 상단: 상태·이름·투입/목표
         h += '<div style="display:flex;align-items:center;gap:6px">';
         h += '<span style="font-size:10px">' + mSt.icon + '</span>';
         h += '<span style="flex:1;font-size:11px;font-weight:600;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(m.name) + '</span>';
         if (ut > 0) h += '<span style="font-size:9px;color:#F59E0B" title="날짜 추정 집계">~' + ut + '</span>';
-        h += '<span style="font-size:10px;color:var(--ac);font-weight:600">' + hrs + (msTarget > 0 ? (' / ' + rnd(msTarget) + 'h') : 'h') + '</span>';
+        if (repH > 0) h += '<span style="font-size:10px;color:#8B5CF6;font-weight:600" title="보고 투입">📝' + rnd(repH) + 'h</span>';
+        h += '<span style="font-size:10px;color:var(--ac);font-weight:600" title="업무일지 투입">' + hrs + (msTarget > 0 ? (' / ' + rnd(msTarget) + 'h') : 'h') + '</span>';
         h += '</div>';
         // 진척률 바 + 업데이트/이력 버튼
         h += '<div style="display:flex;align-items:center;gap:8px;margin:6px 0 0 18px">';
@@ -567,9 +573,11 @@ function pdMsLogToggle(mid, projId, canDelete) {
     s += '<div style="border-left:2px solid var(--bd);padding-left:8px;margin:2px 0 4px">';
     logs.forEach(function (lg) {
       var p = Number(lg.progress) || 0;
+      var lh = Number(lg.hours) || 0;
       s += '<div style="margin-bottom:7px">';
       s += '<div style="display:flex;align-items:center;gap:6px;font-size:10px">';
       s += '<span style="font-weight:700;color:' + (p >= 100 ? '#10B981' : 'var(--ac)') + '">' + p + '%</span>';
+      if (lh > 0) s += '<span style="color:#8B5CF6;font-weight:600" title="보고 투입">📝' + (Math.round(lh * 10) / 10) + 'h</span>';
       s += '<span style="color:var(--t5)">' + eH(lg.authorName || '') + '</span>';
       s += '<span style="color:var(--t6);margin-left:auto">' + _pdRelTime(lg.createdAt) + '</span>';
       if (canDelete) s += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" title="이 이력 삭제" onclick="pdMsLogDelete(\'' + mid + '\',\'' + lg.id + '\',\'' + projId + '\')">🗑</button>';
@@ -612,8 +620,37 @@ function pdMsLogClear(mid, projId) {
   });
 }
 
-/* 마일스톤 진척률 + 작업 노트 업데이트 모달 */
-function pdMsProgressUpdate(mid, projId, curProg) {
+/* 요소가 DOM에 나타날 때까지 대기 (타임아웃) — 모달 열림 확인용 */
+function _pdWaitForEl(id, timeoutMs) {
+  return new Promise(function (resolve, reject) {
+    if (document.getElementById(id)) return resolve();
+    var start = Date.now();
+    (function poll() {
+      if (document.getElementById(id)) return resolve();
+      if (Date.now() - start > timeoutMs) return reject(new Error('창이 열리지 않았습니다 (시간 초과)'));
+      requestAnimationFrame(poll);
+    })();
+  });
+}
+
+/* 마일스톤 진척률 + 작업 노트 업데이트 모달 (재진입 방지 + 열림 대기/타임아웃/에러) */
+var _pdProgModalBusy = false;
+async function pdMsProgressUpdate(mid, projId, curProg) {
+  if (_pdProgModalBusy) return;            // 창이 열리는 중 → 다음 클릭 이벤트 무시 (다중 팝업 방지)
+  _pdProgModalBusy = true;
+  try {
+    _pdBuildProgressModal(mid, projId, curProg);     // 모달 생성
+    await _pdWaitForEl('pdMsProgModal', 5000);        // 창이 완전히 열릴 때까지 대기 (타임아웃 5초)
+    var t = document.getElementById('pdProgNote'); if (t) t.focus();
+  } catch (err) {
+    var ex = document.getElementById('pdMsProgModal'); if (ex) ex.remove();
+    if (typeof showToast === 'function') showToast('❌ 창을 여는 중 오류: ' + ((err && err.message) || err), 'error');
+  } finally {
+    _pdProgModalBusy = false;
+  }
+}
+
+function _pdBuildProgressModal(mid, projId, curProg) {
   curProg = Number(curProg) || 0;
   var ex = document.getElementById('pdMsProgModal'); if (ex) ex.remove();
   var modal = document.createElement('div');
@@ -634,6 +671,8 @@ function pdMsProgressUpdate(mid, projId, curProg) {
         '<input id="pdProgNum" type="number" min="0" max="100" value="' + curProg + '" style="width:64px;font-size:12px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2)" oninput="var v=Math.max(0,Math.min(100,parseInt(this.value,10)||0));document.getElementById(\'pdProgRange\').value=v;document.getElementById(\'pdProgVal\').textContent=v+\'%\'">' +
         '<div style="display:flex;gap:4px;flex:1">' + quick + '</div>' +
       '</div>' +
+      '<label class="fl" style="font-size:11px;color:var(--t4)">투입시간 (h) <span style="color:var(--t6)">— 이번 작업에 투입한 시간 (보고 투입, 업무일지와 별도)</span></label>' +
+      '<input id="pdProgHours" type="number" min="0" step="0.5" placeholder="예: 3.5" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);margin:6px 0 14px">' +
       '<label class="fl" style="font-size:11px;color:var(--t4)">작업 노트 <span style="color:var(--t6)">(처리 결과·진행 상황)</span></label>' +
       '<textarea id="pdProgNote" rows="4" placeholder="이번 업데이트의 작업 내용·처리 결과를 적어주세요" style="width:100%;box-sizing:border-box;font-size:12px;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);margin-top:6px;resize:vertical"></textarea>' +
       '<div style="display:flex;gap:8px;margin-top:16px">' +
@@ -648,11 +687,13 @@ function pdMsProgressUpdate(mid, projId, curProg) {
     if (isNaN(progress)) progress = 0;
     progress = Math.max(0, Math.min(100, progress));
     var note = document.getElementById('pdProgNote').value || '';
+    var hours = parseFloat(document.getElementById('pdProgHours').value);
+    if (isNaN(hours) || hours < 0) hours = 0;
     if (typeof msLogAdd !== 'function') { if (typeof showToast === 'function') showToast('❌ 업데이트 기능을 사용할 수 없습니다.', 'error'); return; }
     saveBtn.disabled = true; saveBtn.textContent = '저장 중...';
-    msLogAdd(mid, { progress: progress, note: note }).then(function () {
+    msLogAdd(mid, { progress: progress, note: note, hours: hours }).then(function () {
       modal.remove();
-      if (typeof showToast === 'function') showToast('진척률 업데이트 완료 (' + progress + '%)');
+      if (typeof showToast === 'function') showToast('진척률 업데이트 완료 (' + progress + '%' + (hours > 0 ? ' · 투입 ' + hours + 'h' : '') + ')');
       if (typeof pdLoadWork === 'function') pdLoadWork(projId);
     }).catch(function (err) {
       saveBtn.disabled = false; saveBtn.textContent = '저장';
@@ -662,7 +703,6 @@ function pdMsProgressUpdate(mid, projId, curProg) {
       if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
     });
   };
-  setTimeout(function () { var t = document.getElementById('pdProgNote'); if (t) t.focus(); }, 50);
 }
 
 /* 업무일지 레코드를 프로젝트 마일스톤의 날짜 구간으로 자동 태깅 */

@@ -537,7 +537,7 @@ function msLogAdd(mid, data) {
   _pdInvalidate('ms');   // 마일스톤 progress 갱신 → 캐시 무효화
   return apiFetch('/api/milestones/' + mid + '/logs', {
     method: 'POST',
-    body: JSON.stringify({ progress: data.progress, note: data.note || '' })
+    body: JSON.stringify({ progress: data.progress, note: data.note || '', hours: data.hours || 0 })
   }).then(function (r) {
     var s = toCamel(r.data);
     _emitBus('milestone', 'updated', { id: mid, projectId: s && s.projectId });

@@ -131,7 +131,7 @@ async function _rollupProjectProgress(projectId, tenantId) {
 router.get('/:id/logs', async function (req, res) {
   try {
     var r = await db.query(
-      'SELECT id, milestone_id, project_id, author_id, author_name, progress, note, created_at ' +
+      'SELECT id, milestone_id, project_id, author_id, author_name, progress, note, hours, created_at ' +
       'FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 ORDER BY created_at DESC LIMIT 100',
       [req.params.id, req.tenant.id]
     );
@@ -150,6 +150,8 @@ router.post('/:id/logs', async function (req, res) {
     if (isNaN(progress)) progress = 0;
     progress = Math.max(0, Math.min(100, progress));
     var note = (b.note != null) ? String(b.note) : '';
+    var hours = parseFloat(b.hours);
+    if (isNaN(hours) || hours < 0) hours = 0;
 
     var msr = await db.query('SELECT id, project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' });
@@ -168,27 +170,28 @@ router.post('/:id/logs', async function (req, res) {
 
     var logId = 'mpl-' + require('crypto').randomUUID().slice(0, 12);
     await db.query(
-      'INSERT INTO milestone_progress_logs (id, milestone_id, project_id, tenant_id, author_id, author_name, progress, note) ' +
-      'VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [logId, ms.id, ms.project_id, req.tenant.id, req.user.sub, authorName, progress, note]
+      'INSERT INTO milestone_progress_logs (id, milestone_id, project_id, tenant_id, author_id, author_name, progress, note, hours) ' +
+      'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [logId, ms.id, ms.project_id, req.tenant.id, req.user.sub, authorName, progress, note, hours]
     );
-    // 마일스톤 최신값 denormalize
-    await db.query(
-      'UPDATE milestones SET progress = $1, progress_note = $2, progress_updated_at = now(), progress_updated_by = $3 WHERE id = $4 AND tenant_id = $5',
-      [progress, note, authorName, ms.id, req.tenant.id]
-    );
-    // 프로젝트 진척률 롤업 (목표시간 가중평균)
+    // 마일스톤 denormalize 재동기화 (최신 진척률 + 보고 투입시간 합) + 프로젝트 진척률 롤업
+    await _resyncMilestoneProgress(ms.id, req.tenant.id);
     await _rollupProjectProgress(ms.project_id, req.tenant.id);
 
-    res.status(201).json({ data: { id: logId, milestoneId: ms.id, projectId: ms.project_id, authorName: authorName, progress: progress, note: note } });
+    res.status(201).json({ data: { id: logId, milestoneId: ms.id, projectId: ms.project_id, authorName: authorName, progress: progress, note: note, hours: hours } });
   } catch (e) {
     console.error('[milestones/log-add]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
   }
 });
 
-// 마일스톤 progress denormalize 재동기화 — 남은 최신 로그 기준(없으면 초기화)
+// 마일스톤 denormalize 재동기화 — 최신 진척률(로그) + 보고 투입시간 합(reported_hours). 로그 없으면 초기화.
 async function _resyncMilestoneProgress(mid, tenantId) {
+  var agg = await db.query(
+    'SELECT COALESCE(SUM(hours),0) AS sum_h FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2',
+    [mid, tenantId]
+  );
+  var sumH = Number(agg.rows[0].sum_h) || 0;
   var lr = await db.query(
     'SELECT progress, note, author_name, created_at FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 ORDER BY created_at DESC LIMIT 1',
     [mid, tenantId]
@@ -196,12 +199,12 @@ async function _resyncMilestoneProgress(mid, tenantId) {
   if (lr.rows.length) {
     var l = lr.rows[0];
     await db.query(
-      'UPDATE milestones SET progress = $1, progress_note = $2, progress_updated_at = $3, progress_updated_by = $4 WHERE id = $5 AND tenant_id = $6',
-      [l.progress, l.note, l.created_at, l.author_name, mid, tenantId]
+      'UPDATE milestones SET progress = $1, progress_note = $2, progress_updated_at = $3, progress_updated_by = $4, reported_hours = $5 WHERE id = $6 AND tenant_id = $7',
+      [l.progress, l.note, l.created_at, l.author_name, sumH, mid, tenantId]
     );
   } else {
     await db.query(
-      'UPDATE milestones SET progress = 0, progress_note = NULL, progress_updated_at = NULL, progress_updated_by = NULL WHERE id = $1 AND tenant_id = $2',
+      'UPDATE milestones SET progress = 0, progress_note = NULL, progress_updated_at = NULL, progress_updated_by = NULL, reported_hours = 0 WHERE id = $1 AND tenant_id = $2',
       [mid, tenantId]
     );
   }
