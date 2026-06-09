@@ -826,7 +826,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.105</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.106</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3367,6 +3367,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.106',date:'2026-06-09',title:'🗑 마일스톤 진척률 이력 전체/부분 삭제',tag:'feat',items:[
+      '투입실적 탭 → 마일스톤 이력(🕘)에서 진척률 업데이트 내역을 부분(개별 🗑) / 전체(🗑 이력 전체 삭제) 삭제 가능',
+      '삭제 시 마일스톤 진척률을 남은 최신 로그 기준으로 재동기화(남은 로그 없으면 0으로 초기화) + 프로젝트 진척률 가중평균 롤업 자동 갱신',
+      '권한: 작성과 동일하게 프로젝트 활성 멤버(PL 포함). 비멤버는 삭제 버튼 미노출 + 서버 403',
+      '신규 서버 API: DELETE /api/milestones/:id/logs/:logId(부분), DELETE /api/milestones/:id/logs(전체)',
+      '영향: server/routes/milestones.js, project-data.js(msLogDel/msLogClear), project-detail.js(이력 삭제 UI). 서버 변경 포함 — git push → Render 배포 후 적용'
+    ]},
     {ver:'13.105',date:'2026-06-09',title:'🖉 마일스톤 작업 노트 + 보고 진척률 → 투입실적 반영 (초과 체크 포함)',tag:'feat',items:[
       '할당된 인원이 투입실적 탭에서 마일스톤별로 [진척률 + 작업 노트]를 직접 업데이트 → 이력으로 남고 프로젝트 진척률·투입실적에 반영',
       '프로젝트 진척률 = 마일스톤 보고 진척률의 목표시간(assignee_targets) 가중평균. 기존 시간기반 자동산출은 보고 이력이 없는 프로젝트의 폴백으로만 유지',

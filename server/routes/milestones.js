@@ -187,6 +187,66 @@ router.post('/:id/logs', async function (req, res) {
   }
 });
 
+// 마일스톤 progress denormalize 재동기화 — 남은 최신 로그 기준(없으면 초기화)
+async function _resyncMilestoneProgress(mid, tenantId) {
+  var lr = await db.query(
+    'SELECT progress, note, author_name, created_at FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 ORDER BY created_at DESC LIMIT 1',
+    [mid, tenantId]
+  );
+  if (lr.rows.length) {
+    var l = lr.rows[0];
+    await db.query(
+      'UPDATE milestones SET progress = $1, progress_note = $2, progress_updated_at = $3, progress_updated_by = $4 WHERE id = $5 AND tenant_id = $6',
+      [l.progress, l.note, l.created_at, l.author_name, mid, tenantId]
+    );
+  } else {
+    await db.query(
+      'UPDATE milestones SET progress = 0, progress_note = NULL, progress_updated_at = NULL, progress_updated_by = NULL WHERE id = $1 AND tenant_id = $2',
+      [mid, tenantId]
+    );
+  }
+}
+
+// DELETE /api/milestones/:id/logs/:logId — 진척률 이력 1건 삭제 (부분)
+router.delete('/:id/logs/:logId', async function (req, res) {
+  try {
+    var msr = await db.query('SELECT id, project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' });
+    var ms = msr.rows[0];
+    var can = await _canEditProject(req, ms.project_id);
+    if (!can) return res.status(403).json({ error: 'FORBIDDEN', message: '프로젝트 멤버만 삭제할 수 있습니다.' });
+    var dr = await db.query(
+      'DELETE FROM milestone_progress_logs WHERE id = $1 AND milestone_id = $2 AND tenant_id = $3 RETURNING id',
+      [req.params.logId, ms.id, req.tenant.id]
+    );
+    if (!dr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '이력을 찾을 수 없습니다.' });
+    await _resyncMilestoneProgress(ms.id, req.tenant.id);
+    await _rollupProjectProgress(ms.project_id, req.tenant.id);
+    res.json({ message: '삭제 완료' });
+  } catch (e) {
+    console.error('[milestones/log-del]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// DELETE /api/milestones/:id/logs — 진척률 이력 전체 삭제
+router.delete('/:id/logs', async function (req, res) {
+  try {
+    var msr = await db.query('SELECT id, project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' });
+    var ms = msr.rows[0];
+    var can = await _canEditProject(req, ms.project_id);
+    if (!can) return res.status(403).json({ error: 'FORBIDDEN', message: '프로젝트 멤버만 삭제할 수 있습니다.' });
+    var dr = await db.query('DELETE FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 RETURNING id', [ms.id, req.tenant.id]);
+    await _resyncMilestoneProgress(ms.id, req.tenant.id);
+    await _rollupProjectProgress(ms.project_id, req.tenant.id);
+    res.json({ message: '전체 삭제 완료', deleted: dr.rows.length });
+  } catch (e) {
+    console.error('[milestones/logs-clear]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // POST /api/milestones/:id/transfer — 다른 프로젝트로 마일스톤 이관
 //  body: { targetProjectId }
 //  src · dst 양쪽에 쓰기 권한 필요

@@ -544,6 +544,16 @@ function msLogAdd(mid, data) {
     return s;
   });
 }
+function msLogDel(mid, logId) {
+  _pdInvalidate('ms');   // 삭제 후 progress 재동기화 → 캐시 무효화
+  return apiFetch('/api/milestones/' + mid + '/logs/' + logId, { method: 'DELETE' })
+    .then(function (r) { _emitBus('milestone', 'updated', { id: mid }); return r; });
+}
+function msLogClear(mid) {
+  _pdInvalidate('ms');
+  return apiFetch('/api/milestones/' + mid + '/logs', { method: 'DELETE' })
+    .then(function (r) { _emitBus('milestone', 'updated', { id: mid }); return r; });
+}
 
 function createMilestone(data) {
   var ms = {

@@ -471,7 +471,7 @@ function pdLoadWork(projId) {
         h += '<div style="flex:1;height:6px;background:var(--bg-i);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + prog + '%;background:' + progColOf(prog) + ';border-radius:4px;transition:width .3s"></div></div>';
         h += '<span style="font-size:10px;font-weight:700;color:' + progColOf(prog) + ';min-width:30px;text-align:right">' + prog + '%</span>';
         if (canUpdate) h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 7px" onclick="pdMsProgressUpdate(\'' + m.id + '\',\'' + projId + '\',' + prog + ')" title="진척률·작업 노트 업데이트">🖉 업데이트</button>';
-        h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="pdMsLogToggle(\'' + m.id + '\')" title="작업 노트 이력 보기">🕘</button>';
+        h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="pdMsLogToggle(\'' + m.id + '\',\'' + projId + '\',' + (canUpdate ? 'true' : 'false') + ')" title="작업 노트 이력 보기">🕘</button>';
         h += '</div>';
         // 초과 배지 (공수초과 / 일정지연 / 효율주의)
         var badges = '';
@@ -550,8 +550,8 @@ function _pdRelTime(iso) {
   } catch (e) { return ''; }
 }
 
-/* 마일스톤 작업 노트 이력 토글 */
-function pdMsLogToggle(mid) {
+/* 마일스톤 작업 노트 이력 토글 (canDelete: 멤버면 삭제 버튼 노출) */
+function pdMsLogToggle(mid, projId, canDelete) {
   var el = document.getElementById('pdMsLog-' + mid);
   if (!el) return;
   if (el.style.display !== 'none') { el.style.display = 'none'; return; }
@@ -560,7 +560,11 @@ function pdMsLogToggle(mid) {
   if (typeof msLogsGet !== 'function') { el.innerHTML = '<div style="font-size:10px;color:var(--t6)">이력 기능을 사용할 수 없습니다.</div>'; return; }
   msLogsGet(mid).then(function (logs) {
     if (!logs || !logs.length) { el.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:4px 0">기록된 작업 노트가 없습니다.</div>'; return; }
-    var s = '<div style="border-left:2px solid var(--bd);padding-left:8px;margin:2px 0 4px">';
+    var s = '';
+    if (canDelete) {
+      s += '<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button class="btn btn-d btn-s" style="font-size:9px;padding:2px 7px" onclick="pdMsLogClear(\'' + mid + '\',\'' + projId + '\')" title="이 마일스톤 진척률 이력 전체 삭제">🗑 이력 전체 삭제</button></div>';
+    }
+    s += '<div style="border-left:2px solid var(--bd);padding-left:8px;margin:2px 0 4px">';
     logs.forEach(function (lg) {
       var p = Number(lg.progress) || 0;
       s += '<div style="margin-bottom:7px">';
@@ -568,6 +572,7 @@ function pdMsLogToggle(mid) {
       s += '<span style="font-weight:700;color:' + (p >= 100 ? '#10B981' : 'var(--ac)') + '">' + p + '%</span>';
       s += '<span style="color:var(--t5)">' + eH(lg.authorName || '') + '</span>';
       s += '<span style="color:var(--t6);margin-left:auto">' + _pdRelTime(lg.createdAt) + '</span>';
+      if (canDelete) s += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" title="이 이력 삭제" onclick="pdMsLogDelete(\'' + mid + '\',\'' + lg.id + '\',\'' + projId + '\')">🗑</button>';
       s += '</div>';
       if (lg.note) s += '<div style="font-size:10px;color:var(--t4);line-height:1.45;margin-top:1px">' + eH(lg.note) + '</div>';
       s += '</div>';
@@ -575,6 +580,36 @@ function pdMsLogToggle(mid) {
     s += '</div>';
     el.innerHTML = s;
   }).catch(function () { el.innerHTML = '<div style="font-size:10px;color:#EF4444;padding:4px 0">이력 로딩 실패</div>'; });
+}
+
+/* 진척률 이력 1건 삭제 (부분) */
+function pdMsLogDelete(mid, logId, projId) {
+  if (!confirm('이 진척률 이력 1건을 삭제할까요?')) return;
+  if (typeof msLogDel !== 'function') return;
+  msLogDel(mid, logId).then(function () {
+    if (typeof showToast === 'function') showToast('이력 삭제 완료');
+    if (typeof pdLoadWork === 'function') pdLoadWork(projId);
+  }).catch(function (err) {
+    var msg = (err && err.status === 403) ? '프로젝트 멤버만 삭제할 수 있습니다.'
+      : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.'
+      : ((err && err.message) || '삭제 실패');
+    if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
+  });
+}
+
+/* 진척률 이력 전체 삭제 */
+function pdMsLogClear(mid, projId) {
+  if (!confirm('이 마일스톤의 진척률 이력을 전체 삭제할까요?\n(되돌릴 수 없습니다)')) return;
+  if (typeof msLogClear !== 'function') return;
+  msLogClear(mid).then(function () {
+    if (typeof showToast === 'function') showToast('이력 전체 삭제 완료');
+    if (typeof pdLoadWork === 'function') pdLoadWork(projId);
+  }).catch(function (err) {
+    var msg = (err && err.status === 403) ? '프로젝트 멤버만 삭제할 수 있습니다.'
+      : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.'
+      : ((err && err.message) || '삭제 실패');
+    if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
+  });
 }
 
 /* 마일스톤 진척률 + 작업 노트 업데이트 모달 */
