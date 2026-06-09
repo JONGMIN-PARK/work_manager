@@ -310,21 +310,27 @@ function pdLoadWork(projId) {
   // v13.61: projGet/msGetByProject 결과를 calcHoursByMilestone에 전달 (중복 fetch 제거)
   Promise.all([
     projGet(projId),
-    msGetByProject(projId)
+    msGetByProject(projId),
+    (typeof projMembersGet === 'function'
+      ? projMembersGet(projId).then(function (ms) { return ms.map(function (m) { return m.userName; }).filter(Boolean); }).catch(function () { return []; })
+      : Promise.resolve([]))
   ]).then(function (results) {
     var proj = results[0];
     var milestones = results[1];
-    return calcHoursByMilestone(projId, { proj: proj, milestones: milestones }).then(function (msHours) {
-      return { proj: proj, milestones: milestones, msHours: msHours };
+    var memberNames = results[2];
+    return calcHoursByMilestone(projId, { proj: proj, milestones: milestones, memberNames: memberNames }).then(function (msHours) {
+      return { proj: proj, milestones: milestones, msHours: msHours, memberNames: memberNames };
     });
   }).then(function (results) {
     var msHours = results.msHours;
     var proj = results.proj;
     var milestones = results.milestones;
+    var memberNames = results.memberNames || [];
     milestones.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
 
     var totalH = 0;
     var personMap = {};
+    var outsiderMap = {};   // 등록 인원이 아닌 기록자 (공식 지표 제외, 별도 표시)
     var untaggedCount = (msHours._meta && msHours._meta.untaggedCount) || 0;
     Object.keys(msHours).forEach(function (mid) {
       if (mid === '_meta') return;
@@ -333,6 +339,11 @@ function pdLoadWork(projId) {
       if (m.people) {
         Object.keys(m.people).forEach(function (p) {
           personMap[p] = (personMap[p] || 0) + m.people[p];
+        });
+      }
+      if (m.outPeople) {
+        Object.keys(m.outPeople).forEach(function (p) {
+          outsiderMap[p] = (outsiderMap[p] || 0) + m.outPeople[p];
         });
       }
     });
@@ -382,6 +393,7 @@ function pdLoadWork(projId) {
 
     // ── 담당자별 누적 실적 vs 목표 ──
     var headPeople = assignees.slice();
+    memberNames.forEach(function (n) { if (headPeople.indexOf(n) < 0) headPeople.push(n); });
     Object.keys(targetMap).forEach(function (n) { if (headPeople.indexOf(n) < 0) headPeople.push(n); });
     if (headPeople.length) {
       headPeople.sort(function (a, b) { return (targetMap[b] || 0) - (targetMap[a] || 0) || (personMap[b] || 0) - (personMap[a] || 0); });
@@ -392,17 +404,18 @@ function pdLoadWork(projId) {
       headPeople.forEach(function (n) { h += personBar(n, personMap[n] || 0, targetMap[n] || 0); });
     }
 
-    // ── 할당 외 기록자 (담당자 아닌데 시간 기록) ──
-    var outsiders = Object.keys(personMap).filter(function (n) { return headPeople.indexOf(n) < 0 && (personMap[n] || 0) > 0; });
+    // ── 할당 외 기록자 (프로젝트 등록 인원 아닌데 시간 기록 — 공식 지표 제외) ──
+    var outsiders = Object.keys(outsiderMap).filter(function (n) { return (outsiderMap[n] || 0) > 0; });
     if (outsiders.length) {
-      outsiders.sort(function (a, b) { return personMap[b] - personMap[a]; });
-      h += '<div style="font-size:10px;color:var(--t5);margin:12px 0 6px" title="담당자로 등록되지 않았지만 이 프로젝트에 시간을 기록한 사람">⚠️ 할당 외 기록 (' + outsiders.length + '명)</div>';
+      var outTotal = 0; outsiders.forEach(function (n) { outTotal += outsiderMap[n]; });
+      outsiders.sort(function (a, b) { return outsiderMap[b] - outsiderMap[a]; });
+      h += '<div style="font-size:10px;color:var(--t5);margin:12px 0 6px" title="프로젝트 등록 인원이 아니어서 투입실적·목표 대비 집계에서 제외된 기록">⚠️ 할당 외 기록 (' + outsiders.length + '명 · ' + rnd(outTotal) + 'h, 집계 제외)</div>';
       outsiders.forEach(function (n) {
         var dn = typeof shortName === 'function' ? shortName(n) : n;
         h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
         h += '<span style="font-size:11px;color:var(--t4);min-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(n) + '">' + eH(dn) + '</span>';
         h += '<div style="flex:1;height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:100%;background:var(--t6);border-radius:3px;opacity:.4"></div></div>';
-        h += '<span style="font-size:11px;color:var(--t4);min-width:66px;text-align:right">' + rnd(personMap[n]) + 'h</span>';
+        h += '<span style="font-size:11px;color:var(--t4);min-width:66px;text-align:right">' + rnd(outsiderMap[n]) + 'h</span>';
         h += '</div>';
       });
     }

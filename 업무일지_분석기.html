@@ -826,7 +826,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.103</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.104</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3367,6 +3367,16 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.104',date:'2026-06-09',title:'📊 투입실적·진척률을 프로젝트 등록 인원(활성 멤버)만 집계 + style.css 배포 누락 수정',tag:'fix',items:[
+      '문제 1 — 투입실적/목표 대비 %/진척률 히스토리가 프로젝트에 등록되지 않은 사람의 업무일지까지 집계해 지표가 부풀려짐. 마일스톤 목표 배분(assignee_targets) 대비 달성도가 부정확',
+      '수정 — 활성 프로젝트 멤버(project_members.released_at IS NULL, PL 포함)의 이름 기준으로만 공식 지표 집계. 업무일지는 user_id를 반환하지 않아 이름(name) 매칭 사용',
+      'calcHoursByMilestone: 멤버/비멤버 분리 집계 → hours·people(공식)과 outHours·outPeople(할당 외) 분리. 투입실적 탭의 "할당 외 기록"은 집계 제외임을 명시하고 별도 표시 유지',
+      'calcProgressFromArchive/autoUpdateProgress: 수주번호×담당자 단위로 집계 후 멤버만 합산 → progress_history.actual_hours도 멤버 기준으로 저장. 멤버 미등록 프로젝트는 전체 집계 폴백',
+      '신규 서버 API GET /api/projects/members/all — 테넌트 전체 활성 멤버를 1회 조회(진척률 일괄 산출 시 프로젝트별 N회 요청 방지)',
+      '문제 2(배포 버그) — Dockerfile의 COPY가 *.html *.js만 복사하고 *.css를 누락. style.css가 이미지에 포함되지 않아 /style.css 요청에 SPA 폴백 HTML이 반환되고, MIME 불일치로 브라우저가 스타일시트를 거부. v13.99~v13.103의 반응형 CSS가 프로덕션에 전혀 적용되지 않던 진짜 원인',
+      '수정 — COPY *.html *.js *.css ./ 로 변경. 다음 배포부터 style.css 정상 서빙',
+      '영향: project-data.js, project-detail.js, server/routes/projects.js, Dockerfile, 업무일지_분석기.html(버전·패치노트). 서버 변경 포함 — git push → Render 배포 후 적용'
+    ]},
     {ver:'13.103',date:'2026-05-28',title:'🛠️ iPad 미디어 쿼리 — pointer:coarse → any-pointer:coarse 전환 (Magic Keyboard 케이스)',tag:'fix',items:[
       'v13.102 배포 후 사용자가 "버전 v13.102 맞고 새로고침해도 여전히 똑같음" 보고',
       '진단 — pointer:coarse는 PRIMARY input의 정밀도만 본다. iPad Pro에 Magic Keyboard/트랙패드가 연결되면 primary가 fine으로 보고되어 매칭 실패. 사용자 환경이 이 케이스',

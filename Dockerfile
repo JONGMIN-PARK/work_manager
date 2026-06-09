@@ -20,8 +20,8 @@ RUN cd server && npm install --production
 COPY server/ server/
 COPY migrations/ migrations/
 
-# 프론트엔드 정적 파일
-COPY *.html *.js ./
+# 프론트엔드 정적 파일 (*.css 포함 — 누락 시 style.css 미배포로 반응형 CSS 미적용)
+COPY *.html *.js *.css ./
 
 EXPOSE 3000
 

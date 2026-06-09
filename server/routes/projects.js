@@ -61,6 +61,24 @@ router.get('/', async function (req, res) {
   }
 });
 
+// ─── GET /api/projects/members/all — 테넌트 전체 활성 멤버 (project_id, user_name) 일괄 조회 ───
+//  (반드시 /:id 보다 먼저 정의 — 경로 충돌 방지)
+router.get('/members/all', async function (req, res) {
+  try {
+    var r = await db.query(
+      "SELECT pm.project_id, u.name AS user_name FROM project_members pm " +
+      "JOIN users u ON pm.user_id = u.id " +
+      "JOIN projects p ON pm.project_id = p.id " +
+      "WHERE p.tenant_id = $1 AND pm.released_at IS NULL",
+      [req.tenant.id]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[projects/members/all]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // ─── GET /api/projects/:id ───
 router.get('/:id', async function (req, res) {
   try {

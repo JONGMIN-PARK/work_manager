@@ -363,6 +363,20 @@ function userLookup() {
 function projMembersGet(id) {
   return apiFetch('/api/projects/' + id + '/members').then(function (r) { return toCamelArray(r.data); });
 }
+/* 테넌트 전체 활성 멤버를 1회 조회 → { projectId: { 이름: true } } 맵 (진척률 일괄 산출용) */
+function projMembersAll() {
+  return apiFetch('/api/projects/members/all').then(function (r) {
+    var map = {};
+    (r.data || []).forEach(function (row) {
+      var pid = row.project_id || row.projectId;
+      var nm = row.user_name || row.userName;
+      if (!pid || !nm) return;
+      if (!map[pid]) map[pid] = {};
+      map[pid][nm] = true;
+    });
+    return map;
+  });
+}
 function projShareAdd(id, userId, role) {
   return apiFetch('/api/projects/' + id + '/members', { method: 'POST', body: JSON.stringify({ userId: userId, role: role || 'assignee' }) })
     .then(function (r) { _pdInvalidate('proj'); return toCamel(r.data); });
@@ -1355,24 +1369,41 @@ function readAllArchiveRecords() {
 /* ═══ 진척률 자동 산출 (아카이브 연동) ═══ */
 function calcProgressFromArchive() {
   return readAllArchiveRecords().then(function (records) {
-    var hoursByOrder = {};
+    // 수주번호 × 담당자명 별 시간 (멤버 필터는 autoUpdateProgress에서 적용)
+    var byOrderName = {};
     records.forEach(function (r) {
       if (!r.orderNo) return;
       var key = r.orderNo.trim();
-      hoursByOrder[key] = (hoursByOrder[key] || 0) + (r.hours || 0);
+      var nm = r.name || '';
+      if (!byOrderName[key]) byOrderName[key] = {};
+      byOrderName[key][nm] = (byOrderName[key][nm] || 0) + (r.hours || 0);
     });
-    return hoursByOrder;
+    return byOrderName;
   });
 }
 
 function autoUpdateProgress() {
-  return calcProgressFromArchive().then(function (hoursByOrder) {
+  return Promise.all([
+    calcProgressFromArchive(),
+    (typeof projMembersAll === 'function' ? projMembersAll().catch(function () { return {}; }) : Promise.resolve({}))
+  ]).then(function (arr) {
+    var byOrderName = arr[0];
+    var membersByProj = arr[1] || {};
     return projGetAll().then(function (projects) {
       var updates = [];
       projects.forEach(function (p) {
         if (!p.orderNo || !p.estimatedHours || p.estimatedHours <= 0) return;
         var key = p.orderNo.trim();
-        var actual = hoursByOrder[key] || 0;
+        var byName = byOrderName[key];
+        if (!byName) return;
+        // 투입실적은 프로젝트 등록 인원(활성 멤버)만 집계. 멤버 미등록 프로젝트는 전체 집계(폴백).
+        var memberSet = membersByProj[p.id];
+        var hasMembers = memberSet && Object.keys(memberSet).length > 0;
+        var actual = 0;
+        Object.keys(byName).forEach(function (nm) {
+          if (hasMembers && !memberSet[nm]) return;
+          actual += byName[nm];
+        });
         if (actual <= 0) return;
         var progress = Math.min(Math.round((actual / p.estimatedHours) * 100), PROGRESS_MAX);
         if (progress !== p.progress) {
@@ -1413,7 +1444,17 @@ function calcHoursByMilestone(projectId, opts) {
   return pProj.then(function (proj) {
     if (!proj || !proj.orderNo) return {};
     var pMs = opts.milestones ? Promise.resolve(opts.milestones) : msGetByProject(projectId);
-    return pMs.then(function (milestones) {
+    // 투입실적은 프로젝트 등록 인원(활성 멤버)만 집계. 비멤버 기록은 outHours/outPeople로 분리.
+    var pMem = opts.memberNames
+      ? Promise.resolve(opts.memberNames)
+      : (typeof projMembersGet === 'function'
+          ? projMembersGet(projectId).then(function (ms) { return ms.map(function (m) { return m.userName; }).filter(Boolean); }).catch(function () { return []; })
+          : Promise.resolve([]));
+    return Promise.all([pMs, pMem]).then(function (msMem) {
+      var milestones = msMem[0];
+      var memberSet = {};
+      (msMem[1] || []).forEach(function (n) { memberSet[n] = true; });
+      var hasMembers = Object.keys(memberSet).length > 0;
       if (!milestones.length) return {};
       milestones.sort(function (a, b) { return (a.startDate || '') < (b.startDate || '') ? -1 : 1; });
       return readAllArchiveRecords().then(function (records) {
@@ -1421,15 +1462,29 @@ function calcHoursByMilestone(projectId, opts) {
         var msIds = {};
         milestones.forEach(function (ms) { msIds[ms.id] = true; });
         var result = {};
-        milestones.forEach(function (ms) { result[ms.id] = { hours: 0, records: 0, name: ms.name, people: {}, untagged: 0 }; });
+        milestones.forEach(function (ms) { result[ms.id] = { hours: 0, records: 0, name: ms.name, people: {}, untagged: 0, outHours: 0, outPeople: {} }; });
         var untagged = 0;
+        function addRec(mid, r, isUntagged) {
+          var hrs = r.hours || 0;
+          var nm = r.name;
+          var isMember = !hasMembers || (nm && !!memberSet[nm]);
+          var bucket = result[mid];
+          if (isMember) {
+            bucket.hours += hrs;
+            bucket.records += 1;
+            if (isUntagged) { bucket.untagged += 1; untagged++; }
+            if (nm) bucket.people[nm] = (bucket.people[nm] || 0) + hrs;
+          } else {
+            // 등록 인원이 아닌 기록 — 공식 지표 제외, '할당 외'로 분리 표시
+            bucket.outHours += hrs;
+            if (nm) bucket.outPeople[nm] = (bucket.outPeople[nm] || 0) + hrs;
+          }
+        }
         records.forEach(function (r) {
           if (!r.orderNo || r.orderNo.trim() !== orderKey) return;
           // 1순위: milestoneId 명시적 태깅
           if (r.milestoneId && msIds[r.milestoneId]) {
-            result[r.milestoneId].hours += (r.hours || 0);
-            result[r.milestoneId].records += 1;
-            if (r.name) result[r.milestoneId].people[r.name] = (result[r.milestoneId].people[r.name] || 0) + (r.hours || 0);
+            addRec(r.milestoneId, r, false);
             return;
           }
           if (!r.date) return;
@@ -1441,12 +1496,8 @@ function calcHoursByMilestone(projectId, opts) {
           for (var i = 0; i < milestones.length; i++) {
             var ms = milestones[i];
             if (ms.startDate && ms.endDate && recDate >= ms.startDate && recDate <= ms.endDate) {
-              result[ms.id].hours += (r.hours || 0);
-              result[ms.id].records += 1;
-              result[ms.id].untagged += 1;
-              if (r.name) result[ms.id].people[r.name] = (result[ms.id].people[r.name] || 0) + (r.hours || 0);
+              addRec(ms.id, r, true);
               matched = true;
-              untagged++;
               break;
             }
           }
@@ -1460,17 +1511,17 @@ function calcHoursByMilestone(projectId, opts) {
               var d = Math.abs(daysDiff(recDate, msEnd));
               if (d < bestDist) { bestDist = d; bestIdx = j; }
             }
-            result[milestones[bestIdx].id].hours += (r.hours || 0);
-            result[milestones[bestIdx].id].records += 1;
-            result[milestones[bestIdx].id].untagged += 1;
-            if (r.name) result[milestones[bestIdx].id].people[r.name] = (result[milestones[bestIdx].id].people[r.name] || 0) + (r.hours || 0);
-            untagged++;
+            addRec(milestones[bestIdx].id, r, true);
           }
         });
         Object.keys(result).forEach(function (k) {
           result[k].hours = Math.round(result[k].hours * 10) / 10;
+          result[k].outHours = Math.round((result[k].outHours || 0) * 10) / 10;
           Object.keys(result[k].people).forEach(function (p) {
             result[k].people[p] = Math.round(result[k].people[p] * 10) / 10;
+          });
+          Object.keys(result[k].outPeople).forEach(function (p) {
+            result[k].outPeople[p] = Math.round(result[k].outPeople[p] * 10) / 10;
           });
         });
         // 전체 통계를 별도 key로 부착 (MS id와 충돌 방지 위해 _meta 사용)
