@@ -622,37 +622,54 @@ function pdMsLogClear(mid, projId) {
   });
 }
 
-/* 요소가 DOM에 나타날 때까지 대기 (타임아웃) — 모달 열림 확인용 */
-function _pdWaitForEl(id, timeoutMs) {
+/* ═══════════════════════════════════════════════════════════════════
+   표준 모달 가드 — 별도 창(모달)을 여는 모든 핸들러는 반드시 이걸 사용한다.
+   재진입 방지(busy-lock) + 창 열림 대기 + 타임아웃 + 에러 처리.
+     wmGuardedModal(key, builderFn, checkElId, { timeoutMs, onOpen })
+   · key        : 같은 창에 대한 고유 키 (여는 중 같은 키 호출은 무시 → 다중 팝업 방지)
+   · builderFn  : 실제 DOM 모달을 생성하는 함수 (동기/비동기 모두 가능)
+   · checkElId  : 생성된 모달의 element id (이게 DOM에 나타나야 '열림'으로 간주)
+   · onOpen     : 창이 완전히 열린 뒤 1회 실행 (예: 인풋 focus)
+   창이 timeoutMs(기본 5초) 내 안 뜨면 정리 후 에러 토스트.
+   ═══════════════════════════════════════════════════════════════════ */
+function wmWaitForEl(id, timeoutMs) {
   return new Promise(function (resolve, reject) {
     if (document.getElementById(id)) return resolve();
     var start = Date.now();
     (function poll() {
       if (document.getElementById(id)) return resolve();
-      if (Date.now() - start > timeoutMs) return reject(new Error('창이 열리지 않았습니다 (시간 초과)'));
+      if (Date.now() - start > (timeoutMs || 5000)) return reject(new Error('창이 열리지 않았습니다 (시간 초과)'));
       requestAnimationFrame(poll);
     })();
   });
 }
-
-/* 마일스톤 진척률 + 작업 노트 업데이트 모달 (재진입 방지 + 열림 대기/타임아웃/에러) */
-var _pdProgModalBusy = false;
-async function pdMsProgressUpdate(mid, projId, curProg) {
-  if (_pdProgModalBusy) return;            // 창이 열리는 중 → 다음 클릭 이벤트 무시 (다중 팝업 방지)
-  _pdProgModalBusy = true;
-  try {
-    _pdBuildProgressModal(mid, projId, curProg);     // 모달 생성
-    await _pdWaitForEl('pdMsProgModal', 5000);        // 창이 완전히 열릴 때까지 대기 (타임아웃 5초)
-    var t = document.getElementById('pdProgNote'); if (t) t.focus();
-  } catch (err) {
-    var ex = document.getElementById('pdMsProgModal'); if (ex) ex.remove();
-    if (typeof showToast === 'function') showToast('❌ 창을 여는 중 오류: ' + ((err && err.message) || err), 'error');
-  } finally {
-    _pdProgModalBusy = false;
-  }
+var _wmModalBusy = {};
+function wmGuardedModal(key, builderFn, checkElId, opts) {
+  opts = opts || {};
+  if (_wmModalBusy[key]) return Promise.resolve(false);   // 여는 중 → 다음 이벤트 무시
+  _wmModalBusy[key] = true;
+  return Promise.resolve()
+    .then(function () { return builderFn(); })             // 창 생성
+    .then(function () { return wmWaitForEl(checkElId, opts.timeoutMs || 5000); })  // 완전히 열릴 때까지 대기
+    .then(function () { if (typeof opts.onOpen === 'function') opts.onOpen(); return true; })
+    .catch(function (err) {
+      var ex = document.getElementById(checkElId); if (ex) ex.remove();
+      if (typeof showToast === 'function') showToast('❌ 창을 여는 중 오류: ' + ((err && err.message) || err), 'error');
+      return false;
+    })
+    .then(function (ok) { _wmModalBusy[key] = false; return ok; });
 }
 
-function _pdBuildProgressModal(mid, projId, curProg) {
+/* 마일스톤 진척률 + 작업 노트 업데이트 모달 — 표준 가드 사용 */
+function pdMsProgressUpdate(mid, projId, curProg, opts) {
+  return wmGuardedModal('pdMsProg',
+    function () { _pdBuildProgressModal(mid, projId, curProg, opts); },
+    'pdMsProgModal',
+    { onOpen: function () { var t = document.getElementById('pdProgNote'); if (t) t.focus(); } }
+  );
+}
+
+function _pdBuildProgressModal(mid, projId, curProg, opts) {
   curProg = Number(curProg) || 0;
   var ex = document.getElementById('pdMsProgModal'); if (ex) ex.remove();
   var modal = document.createElement('div');
@@ -696,7 +713,8 @@ function _pdBuildProgressModal(mid, projId, curProg) {
     msLogAdd(mid, { progress: progress, note: note, hours: hours }).then(function () {
       modal.remove();
       if (typeof showToast === 'function') showToast('진척률 업데이트 완료 (' + progress + '%' + (hours > 0 ? ' · 투입 ' + hours + 'h' : '') + ')');
-      if (typeof pdLoadWork === 'function') pdLoadWork(projId);
+      if (opts && typeof opts.onSaved === 'function') opts.onSaved();
+      else if (typeof pdLoadWork === 'function') pdLoadWork(projId);
     }).catch(function (err) {
       saveBtn.disabled = false; saveBtn.textContent = '저장';
       var msg = (err && err.status === 403) ? '프로젝트 멤버만 업데이트할 수 있습니다.'

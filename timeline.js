@@ -148,7 +148,7 @@ async function renderTimeline() {
   var totalWidth = units.length * getUnitWidth();
 
   // 레이블 최대 폭 계산: 프로젝트명 + 마일스톤명 전부 측정
-  var labelW = calcLabelWidth(projects, milestones);
+  var labelW = calcLabelWidth(projects, milestones, msWorkH);
 
   // 드래그용 렌더 컨텍스트 저장
   tlRangeStart = rangeStart;
@@ -321,12 +321,15 @@ async function renderTimeline() {
       var _msAct = Math.round(((msWorkH[ms.id] || 0) + (Number(ms.reportedHours) || 0)) * 10) / 10;
       var _msPerf = ' · 실적 ' + _msAct + 'h' + (_msTgt > 0 ? '/' + _msTgt + 'h (' + Math.round(_msAct / _msTgt * 100) + '%)' : '');
       var msTitle = (ms.name || '') + ' · ' + (ms.startDate || '?') + ' ~ ' + (ms.endDate || '?') + (_msDays != null ? ' · ' + _msDays + '일' : '') + (_msDday ? ' · ' + _msDday.label : '') + _msPerf;
+      var _perf = (typeof _tlMsPerf === 'function') ? _tlMsPerf(ms, msWorkH) : { text: '', html: '' };
+      var _msProg = Number(ms.progress) || 0;
       rowsHtml += '<div class="tl-row tl-row-sub" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '" ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)">';
       rowsHtml += '<div class="tl-label tl-label-sub" draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' +
-        ' title="' + eH(msTitle) + '"' +
-        ' style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;cursor:grab">' +
-        '<span style="color:var(--t5);font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap"><span class="tl-ms-grip" style="opacity:.45;cursor:grab">⠿</span>' + eH(ms.name) +
-        ' <span class="badge" style="background:' + msStInfo.bg + ';color:' + msStInfo.color + ';font-size:8px;padding:1px 4px">' + msStInfo.label + '</span>' +
+        ' title="' + eH(msTitle) + ' — 클릭: 진척률·작업노트 업데이트"' +
+        ' onclick="tlMsOpenUpdate(event,\'' + ms.id + '\',\'' + p.id + '\',' + _msProg + ')"' +
+        ' style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;cursor:pointer">' +
+        '<span style="color:var(--t5);font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap"><span class="tl-ms-grip" style="opacity:.45;cursor:grab" title="드래그하여 순서 변경">⠿</span>' + eH(ms.name) +
+        ' <span class="badge" style="background:' + msStInfo.bg + ';color:' + msStInfo.color + ';font-size:8px;padding:1px 4px">' + msStInfo.label + '</span>' + _perf.html +
         '</span></div>';
       rowsHtml += '<div class="tl-bars" style="width:' + totalWidth + 'px">';
       units.forEach(function (u, idx) {
@@ -334,8 +337,9 @@ async function renderTimeline() {
       });
       var msEditCls = tlEditMode ? ' tl-bar-editable' : '';
       rowsHtml += '<div class="' + msBarCls + msEditCls + '" data-type="ms" data-id="' + ms.id + '"' +
-        ' title="' + eH(msTitle) + '"' +
-        ' style="' + msBarStyle + 'background:' + msBarBg + '">';
+        ' title="' + eH(msTitle) + (tlEditMode ? '' : ' — 클릭: 업데이트') + '"' +
+        (tlEditMode ? '' : ' onclick="tlMsOpenUpdate(event,\'' + ms.id + '\',\'' + p.id + '\',' + _msProg + ')"') +
+        ' style="' + msBarStyle + 'background:' + msBarBg + (tlEditMode ? '' : ';cursor:pointer') + '">';
       if (tlEditMode) {
         rowsHtml += '<div class="tl-handle tl-handle-l" data-handle="left"></div>';
         rowsHtml += '<div class="tl-handle tl-handle-r" data-handle="right"></div>';
@@ -507,7 +511,40 @@ function _tlFmtDday(p, st) {
   return { label: label, color: color };
 }
 
-function calcLabelWidth(projects, milestones) {
+/* 마일스톤 라벨용 실적 표시 — 실작업/예상h · 진척률% (text=폭측정용, html=렌더용) */
+function _tlMsPerf(ms, msWorkH) {
+  var prog = Number(ms.progress) || 0;
+  var tgt = 0; var mat = ms.assigneeTargets || {};
+  Object.keys(mat).forEach(function (k) { tgt += Number(mat[k]) || 0; });
+  tgt = Math.round(tgt * 10) / 10;
+  var act = Math.round((((msWorkH && msWorkH[ms.id]) || 0) + (Number(ms.reportedHours) || 0)) * 10) / 10;
+  var hoursTxt = (act > 0 || tgt > 0) ? (act + (tgt > 0 ? '/' + tgt : '') + 'h') : '';
+  var progTxt = (prog > 0 || ms.progressUpdatedAt) ? (prog + '%') : '';
+  if (!hoursTxt && !progTxt) return { text: '', html: '' };
+  var text = [hoursTxt, progTxt].filter(Boolean).join(' · ');
+  var col = prog >= 100 ? '#10B981' : (prog >= 50 ? '#8B5CF6' : (prog > 0 ? '#F59E0B' : 'var(--t6)'));
+  var html = ' <span style="font-size:8px;font-weight:600;white-space:nowrap">' +
+    (hoursTxt ? '<span style="color:var(--t6)">' + hoursTxt + '</span>' : '') +
+    (hoursTxt && progTxt ? '<span style="color:var(--t6)"> · </span>' : '') +
+    (progTxt ? '<span style="color:' + col + '">' + progTxt + '</span>' : '') +
+    '</span>';
+  return { text: text, html: html };
+}
+
+/* 타임라인 마일스톤 클릭 → 진척률·작업노트 업데이트 모달 (표준 가드된 pdMsProgressUpdate 재사용) */
+function tlMsOpenUpdate(ev, msId, projId, prog) {
+  if (tlEditMode) return;   // 기간 조정(편집) 모드에선 드래그/리사이즈 우선
+  if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+  if (typeof pdMsProgressUpdate !== 'function') {
+    if (typeof showToast === 'function') showToast('업데이트 기능을 사용할 수 없습니다.', 'error');
+    return;
+  }
+  pdMsProgressUpdate(msId, projId, Number(prog) || 0, {
+    onSaved: function () { if (typeof renderTimeline === 'function') renderTimeline(); }
+  });
+}
+
+function calcLabelWidth(projects, milestones, msWorkH) {
   // 숨겨진 캔버스로 텍스트 폭 측정
   var canvas = document.createElement('canvas');
   var ctx = canvas.getContext('2d');
@@ -569,8 +606,10 @@ function calcLabelWidth(projects, milestones) {
     var msStInfo = PROJ_STATUS[msSt] || PROJ_STATUS.waiting;
     ctx.font = '600 8px "Noto Sans KR", sans-serif';
     var badgeW = measureTextCached(ctx, msStInfo.label) + 10; // badge padding
+    var perf = (typeof _tlMsPerf === 'function') ? _tlMsPerf(ms, msWorkH) : { text: '' };
+    var perfW = perf.text ? measureTextCached(ctx, perf.text) + 10 : 0;
     ctx.font = '400 11px "Noto Sans KR", sans-serif';
-    var w = 24 + nameW + 4 + badgeW + 12;
+    var w = 24 + nameW + 4 + badgeW + perfW + 12;
     if (w > maxW) maxW = w;
   });
 
