@@ -79,9 +79,16 @@ async function renderTimeline() {
   var wrap = document.getElementById('timelineWrap');
   if (!wrap) return;
 
-  var _tlData = await Promise.all([projGetAll(), msGetAll()]);
+  var _tlData = await Promise.all([
+    projGetAll(),
+    msGetAll(),
+    (typeof readAllArchiveRecords === 'function' ? readAllArchiveRecords().catch(function () { return []; }) : Promise.resolve([]))
+  ]);
   var allProjects = _tlData[0];
   var milestones = _tlData[1];
+  // 마일스톤별 업무일지 투입시간(태깅 기준) 집계 — 툴팁 실적 표시용
+  var msWorkH = {};
+  (_tlData[2] || []).forEach(function (r) { if (r.milestoneId) msWorkH[r.milestoneId] = (msWorkH[r.milestoneId] || 0) + (r.hours || 0); });
 
   // 프로젝트 리스트 패널 렌더
   renderTlProjectList(allProjects);
@@ -308,7 +315,12 @@ async function renderTimeline() {
       // 한 줄 네이티브 툴팁 (프로젝트 막대와 동일 형태) — 이름 · 기간 · 일수 · D-day
       var _msDays = (ms.startDate && ms.endDate && ms.startDate.length >= 10 && ms.endDate.length >= 10) ? (daysDiff(ms.startDate, ms.endDate) + 1) : null;
       var _msDday = (typeof _tlFmtDday === 'function') ? _tlFmtDday({ endDate: ms.endDate }, msSt) : null;
-      var msTitle = (ms.name || '') + ' · ' + (ms.startDate || '?') + ' ~ ' + (ms.endDate || '?') + (_msDays != null ? ' · ' + _msDays + '일' : '') + (_msDday ? ' · ' + _msDday.label : '');
+      // 실적 — 실 작업시간(업무일지 태깅 + 보고) / 예상(목표시간 Σ) + %
+      var _msTgt = 0; var _mat = ms.assigneeTargets || {}; Object.keys(_mat).forEach(function (k) { _msTgt += Number(_mat[k]) || 0; });
+      _msTgt = Math.round(_msTgt * 10) / 10;
+      var _msAct = Math.round(((msWorkH[ms.id] || 0) + (Number(ms.reportedHours) || 0)) * 10) / 10;
+      var _msPerf = ' · 실적 ' + _msAct + 'h' + (_msTgt > 0 ? '/' + _msTgt + 'h (' + Math.round(_msAct / _msTgt * 100) + '%)' : '');
+      var msTitle = (ms.name || '') + ' · ' + (ms.startDate || '?') + ' ~ ' + (ms.endDate || '?') + (_msDays != null ? ' · ' + _msDays + '일' : '') + (_msDday ? ' · ' + _msDday.label : '') + _msPerf;
       rowsHtml += '<div class="tl-row tl-row-sub" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '" ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)">';
       rowsHtml += '<div class="tl-label tl-label-sub" draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' +
         ' title="' + eH(msTitle) + '"' +

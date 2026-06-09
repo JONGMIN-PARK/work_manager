@@ -375,6 +375,7 @@ function pdLoadWork(projId) {
       if (m.progressUpdatedAt) rpAny = true;
     });
     var reportedPct = rpCnt ? (rpWsum > 0 ? Math.round(rpPsum / rpWsum) : Math.round(rpSimple / rpCnt)) : 0;
+    var effH = totalH + reportedHoursTotal;   // 총 투입 = 업무일지 + 보고 (대비·초과 계산 기준)
     var progColOf = function (p) { return p >= 100 ? '#10B981' : (p >= 50 ? 'var(--ac)' : (p > 0 ? '#F59E0B' : 'var(--t6)')); };
     var ovBadge = function (text, color, bg) { return '<span style="font-size:9px;font-weight:600;color:' + color + ';background:' + bg + ';padding:1px 6px;border-radius:4px;white-space:nowrap">' + text + '</span>'; };
 
@@ -405,13 +406,13 @@ function pdLoadWork(projId) {
       h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:#8B5CF6">' + rnd(reportedHoursTotal) + '<span style="font-size:11px;color:var(--t5)">h</span></div><div style="font-size:10px;color:var(--t5)" title="마일스톤 업데이트에서 직접 보고한 투입시간 (업무일지와 별도)">📝 보고 투입</div></div>';
     }
     if (totalTarget > 0) {
-      var tpct = Math.round(totalH / totalTarget * 100);
-      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:' + (tpct > 100 ? '#EF4444' : 'var(--t2)') + '">' + tpct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">목표 대비 (' + rnd(totalTarget) + 'h)</div></div>';
+      var tpct = Math.round(effH / totalTarget * 100);
+      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="총 투입 ' + rnd(effH) + 'h(업무일지 ' + rnd(totalH) + 'h + 보고 ' + rnd(reportedHoursTotal) + 'h) ÷ 목표 ' + rnd(totalTarget) + 'h"><div style="font-size:20px;font-weight:700;color:' + (tpct > 100 ? '#EF4444' : 'var(--t2)') + '">' + tpct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">목표 대비 (' + rnd(totalTarget) + 'h)</div></div>';
     }
     if (proj && proj.estimatedHours) {
-      var pct = totalH > 0 ? Math.round(totalH / proj.estimatedHours * 100) : 0;
+      var pct = effH > 0 ? Math.round(effH / proj.estimatedHours * 100) : 0;
       var estOver = pct > 100;
-      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:' + (estOver ? '#EF4444' : 'var(--t2)') + '">' + pct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">예상 대비 (' + proj.estimatedHours + 'h)' + (estOver ? ' <span style="color:#EF4444;font-weight:700">🔴초과</span>' : '') + '</div></div>';
+      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="총 투입 ' + rnd(effH) + 'h(업무일지 ' + rnd(totalH) + 'h + 보고 ' + rnd(reportedHoursTotal) + 'h) ÷ 예상 ' + proj.estimatedHours + 'h"><div style="font-size:20px;font-weight:700;color:' + (estOver ? '#EF4444' : 'var(--t2)') + '">' + pct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">예상 대비 (' + proj.estimatedHours + 'h)' + (estOver ? ' <span style="color:#EF4444;font-weight:700">🔴초과</span>' : '') + '</div></div>';
     }
     // 보고 진척률 (마일스톤 가중평균)
     if (milestones.length > 0) {
@@ -463,6 +464,7 @@ function pdLoadWork(projId) {
         var mSt = (typeof PROJ_STATUS !== 'undefined' ? PROJ_STATUS[m.status] : null) || { icon: '⏳', label: m.status, color: '#94A3B8', bg: 'rgba(148,163,184,.15)' };
         var prog = Number(m.progress) || 0;
         var repH = Number(m.reportedHours) || 0;
+        var effMs = rnd(hrs + repH);   // 마일스톤 총 투입 = 업무일지 + 보고
         h += '<div style="padding:7px 0;border-bottom:1px solid var(--bd)">';
         // 상단: 상태·이름·투입/목표
         h += '<div style="display:flex;align-items:center;gap:6px">';
@@ -470,7 +472,7 @@ function pdLoadWork(projId) {
         h += '<span style="flex:1;font-size:11px;font-weight:600;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(m.name) + '</span>';
         if (ut > 0) h += '<span style="font-size:9px;color:#F59E0B" title="날짜 추정 집계">~' + ut + '</span>';
         if (repH > 0) h += '<span style="font-size:10px;color:#8B5CF6;font-weight:600" title="보고 투입">📝' + rnd(repH) + 'h</span>';
-        h += '<span style="font-size:10px;color:var(--ac);font-weight:600" title="업무일지 투입">' + hrs + (msTarget > 0 ? (' / ' + rnd(msTarget) + 'h') : 'h') + '</span>';
+        h += '<span style="font-size:10px;color:var(--ac);font-weight:600" title="총 투입(업무일지 ' + hrs + 'h + 보고 ' + rnd(repH) + 'h)">' + effMs + (msTarget > 0 ? (' / ' + rnd(msTarget) + 'h') : 'h') + '</span>';
         h += '</div>';
         // 진척률 바 + 업데이트/이력 버튼
         h += '<div style="display:flex;align-items:center;gap:8px;margin:6px 0 0 18px">';
@@ -481,12 +483,12 @@ function pdLoadWork(projId) {
         h += '</div>';
         // 초과 배지 (공수초과 / 일정지연 / 효율주의)
         var badges = '';
-        if (msTarget > 0 && hrs > msTarget) badges += ovBadge('🔴 공수초과 +' + rnd(hrs - msTarget) + 'h', '#EF4444', 'rgba(239,68,68,.12)');
+        if (msTarget > 0 && effMs > msTarget) badges += ovBadge('🔴 공수초과 +' + rnd(effMs - msTarget) + 'h', '#EF4444', 'rgba(239,68,68,.12)');
         if (m.endDate && today && today > m.endDate && prog < 100) {
           var late = (typeof daysDiff === 'function') ? Math.abs(Math.round(daysDiff(m.endDate, today))) : null;
           badges += ovBadge('🟠 지연' + (late != null ? ' ' + late + '일' : ''), '#F59E0B', 'rgba(245,158,11,.12)');
         }
-        if (msTarget > 0 && (hrs / msTarget) - (prog / 100) >= 0.3) badges += ovBadge('⚠️ 효율주의', '#F59E0B', 'rgba(245,158,11,.12)');
+        if (msTarget > 0 && (effMs / msTarget) - (prog / 100) >= 0.3) badges += ovBadge('⚠️ 효율주의', '#F59E0B', 'rgba(245,158,11,.12)');
         if (badges) h += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:5px 0 0 18px">' + badges + '</div>';
         // 최신 작업 노트
         if (m.progressNote) {

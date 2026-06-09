@@ -826,7 +826,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.107</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.108</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3367,6 +3367,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.108',date:'2026-06-10',title:'📊 목표/예상 대비를 총 투입(업무일지+보고) 기준으로 보정 + 타임라인 마일스톤 툴팁 실적 표시',tag:'fix',items:[
+      '목표 대비·예상 대비·공수초과·효율주의 계산을 "총 투입 = 업무일지 투입 + 보고 투입" 기준으로 보정 — 보고 투입만 써도 지표가 정확히 반영됨 (기존엔 업무일지 투입만 계산)',
+      '마일스톤 행 투입 표시도 총 투입(업무일지+보고)/목표로 변경, 📝 보고 투입 분리 배지 유지. 요약 카드 툴팁에 산식(업무일지+보고÷목표) 노출',
+      '타임라인(간트) 마일스톤 마우스 오버 툴팁에 실적 추가 — 기존 이름·기간·일수·D-day에 "실적 실작업h/예상h (%)" 표시 (실작업=업무일지 태깅+보고, 예상=목표시간 Σ)',
+      '참고: 담당자별 실적 vs 목표 바는 업무일지 기준 유지(보고 투입은 담당자별 미세분 — 프로젝트 합계에만 반영)',
+      '영향: project-detail.js, timeline.js, 업무일지_분석기.html. 클라이언트 전용 — 새로고침 즉시 반영'
+    ]},
     {ver:'13.107',date:'2026-06-10',title:'📝 마일스톤 업데이트에 투입시간(보고 투입) 입력 + 모달 재진입 방지',tag:'feat',items:[
       '마일스톤 진척률 업데이트(🖉) 모달에 투입시간(h) 입력칸 추가 — 작업 내용·진척률과 함께 "몇 시간 작업했다"를 직접 기록',
       '입력한 시간은 "보고 투입"으로 별도 집계(업무일지 투입과 분리). 업무일지 일괄 업로드의 레코드 전량 교체와 충돌·삭제 없음, 이중집계 없음',
