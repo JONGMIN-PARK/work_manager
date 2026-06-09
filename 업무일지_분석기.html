@@ -826,7 +826,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.104</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.105</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3367,6 +3367,16 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.105',date:'2026-06-09',title:'🖉 마일스톤 작업 노트 + 보고 진척률 → 투입실적 반영 (초과 체크 포함)',tag:'feat',items:[
+      '할당된 인원이 투입실적 탭에서 마일스톤별로 [진척률 + 작업 노트]를 직접 업데이트 → 이력으로 남고 프로젝트 진척률·투입실적에 반영',
+      '프로젝트 진척률 = 마일스톤 보고 진척률의 목표시간(assignee_targets) 가중평균. 기존 시간기반 자동산출은 보고 이력이 없는 프로젝트의 폴백으로만 유지',
+      '처리 시간은 별도 입력 없이 업무일지 투입시간(멤버 한정) 그대로 사용',
+      '작성 권한: 프로젝트 활성 멤버 전체(PL 포함). 비멤버는 업데이트 버튼 미노출 + 서버 403',
+      '초과(오버) 체크 4종 배지 — ①공수초과(투입>목표) ②일정지연(기한 경과 & 진척<100) ③예상공수초과(총투입>예상) ④효율주의(진척 대비 공수 과다)',
+      '마일스톤 진척률 바·최신 작업 노트·이력 타임라인(🕘)·진척률 슬라이더 모달(🖉) UI 추가',
+      '신규: 마이그레이션 034(milestones.progress 컬럼 + milestone_progress_logs 테이블), 서버 GET/POST /api/milestones/:id/logs + 프로젝트 진척률 롤업',
+      '영향: server/migrations/034, server/routes/milestones.js, project-data.js(msLogsGet/msLogAdd·autoUpdateProgress), project-detail.js, 업무일지_분석기.html. 서버 변경 포함 — git push → Render 배포 후 적용'
+    ]},
     {ver:'13.104',date:'2026-06-09',title:'📊 투입실적·진척률을 프로젝트 등록 인원(활성 멤버)만 집계 + style.css 배포 누락 수정',tag:'fix',items:[
       '문제 1 — 투입실적/목표 대비 %/진척률 히스토리가 프로젝트에 등록되지 않은 사람의 업무일지까지 집계해 지표가 부풀려짐. 마일스톤 목표 배분(assignee_targets) 대비 달성도가 부정확',
       '수정 — 활성 프로젝트 멤버(project_members.released_at IS NULL, PL 포함)의 이름 기준으로만 공식 지표 집계. 업무일지는 user_id를 반환하지 않아 이름(name) 매칭 사용',

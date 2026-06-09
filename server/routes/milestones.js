@@ -104,6 +104,89 @@ async function _canEditProject(req, projectId) {
   return mr.rows.length > 0;
 }
 
+// 프로젝트 진척률 롤업 — 마일스톤 보고 진척률을 목표시간(assignee_targets) 가중평균.
+// 보고 이력이 하나도 없으면 손대지 않음(시간기반 자동 진척률 폴백 유지).
+async function _rollupProjectProgress(projectId, tenantId) {
+  var mr = await db.query(
+    'SELECT progress, assignee_targets, progress_updated_at FROM milestones WHERE project_id = $1 AND tenant_id = $2',
+    [projectId, tenantId]
+  );
+  if (!mr.rows.length) return;
+  var anyReported = mr.rows.some(function (m) { return m.progress_updated_at != null; });
+  if (!anyReported) return;
+  var wsum = 0, psum = 0, psimple = 0, cnt = 0;
+  mr.rows.forEach(function (m) {
+    var at = m.assignee_targets || {};
+    var w = 0;
+    Object.keys(at).forEach(function (k) { w += Number(at[k]) || 0; });
+    var prog = Number(m.progress) || 0;
+    wsum += w; psum += prog * w; psimple += prog; cnt++;
+  });
+  var proj = wsum > 0 ? Math.round(psum / wsum) : Math.round(psimple / Math.max(cnt, 1));
+  proj = Math.max(0, Math.min(100, proj));
+  await db.query('UPDATE projects SET progress = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3', [proj, projectId, tenantId]);
+}
+
+// GET /api/milestones/:id/logs — 마일스톤 작업 노트 + 진척률 이력 (최신순)
+router.get('/:id/logs', async function (req, res) {
+  try {
+    var r = await db.query(
+      'SELECT id, milestone_id, project_id, author_id, author_name, progress, note, created_at ' +
+      'FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 ORDER BY created_at DESC LIMIT 100',
+      [req.params.id, req.tenant.id]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[milestones/logs]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST /api/milestones/:id/logs — 진척률 + 작업 노트 업데이트 (활성 멤버만)
+router.post('/:id/logs', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var progress = parseInt(b.progress, 10);
+    if (isNaN(progress)) progress = 0;
+    progress = Math.max(0, Math.min(100, progress));
+    var note = (b.note != null) ? String(b.note) : '';
+
+    var msr = await db.query('SELECT id, project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' });
+    var ms = msr.rows[0];
+
+    // 권한: 프로젝트 활성 멤버 (owner/admin/executive 포함)
+    var can = await _canEditProject(req, ms.project_id);
+    if (!can) return res.status(403).json({ error: 'FORBIDDEN', message: '프로젝트 멤버만 진척률을 업데이트할 수 있습니다.' });
+
+    // 작성자명 조회
+    var authorName = '';
+    try {
+      var ur = await db.query('SELECT name FROM users WHERE id = $1', [req.user.sub]);
+      if (ur.rows.length) authorName = ur.rows[0].name || '';
+    } catch (_) { /* ignore */ }
+
+    var logId = 'mpl-' + require('crypto').randomUUID().slice(0, 12);
+    await db.query(
+      'INSERT INTO milestone_progress_logs (id, milestone_id, project_id, tenant_id, author_id, author_name, progress, note) ' +
+      'VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [logId, ms.id, ms.project_id, req.tenant.id, req.user.sub, authorName, progress, note]
+    );
+    // 마일스톤 최신값 denormalize
+    await db.query(
+      'UPDATE milestones SET progress = $1, progress_note = $2, progress_updated_at = now(), progress_updated_by = $3 WHERE id = $4 AND tenant_id = $5',
+      [progress, note, authorName, ms.id, req.tenant.id]
+    );
+    // 프로젝트 진척률 롤업 (목표시간 가중평균)
+    await _rollupProjectProgress(ms.project_id, req.tenant.id);
+
+    res.status(201).json({ data: { id: logId, milestoneId: ms.id, projectId: ms.project_id, authorName: authorName, progress: progress, note: note } });
+  } catch (e) {
+    console.error('[milestones/log-add]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // POST /api/milestones/:id/transfer — 다른 프로젝트로 마일스톤 이관
 //  body: { targetProjectId }
 //  src · dst 양쪽에 쓰기 권한 필요

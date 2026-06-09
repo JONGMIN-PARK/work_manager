@@ -529,6 +529,22 @@ function msDelByProject(projectId) {
   });
 }
 
+/* ─── 마일스톤 작업 노트 + 보고 진척률 이력 ─── */
+function msLogsGet(mid) {
+  return apiFetch('/api/milestones/' + mid + '/logs').then(function (r) { return toCamelArray(r.data); });
+}
+function msLogAdd(mid, data) {
+  _pdInvalidate('ms');   // 마일스톤 progress 갱신 → 캐시 무효화
+  return apiFetch('/api/milestones/' + mid + '/logs', {
+    method: 'POST',
+    body: JSON.stringify({ progress: data.progress, note: data.note || '' })
+  }).then(function (r) {
+    var s = toCamel(r.data);
+    _emitBus('milestone', 'updated', { id: mid, projectId: s && s.projectId });
+    return s;
+  });
+}
+
 function createMilestone(data) {
   var ms = {
     id: 'ms-' + uuid(),
@@ -1382,33 +1398,68 @@ function calcProgressFromArchive() {
   });
 }
 
+// 마일스톤 보고 진척률(가중평균)을 프로젝트 진척률로 사용. 보고 이력 없으면 시간기반 폴백.
+// 투입시간(actual_hours)은 항상 멤버 한정으로 집계.
 function autoUpdateProgress() {
   return Promise.all([
     calcProgressFromArchive(),
-    (typeof projMembersAll === 'function' ? projMembersAll().catch(function () { return {}; }) : Promise.resolve({}))
+    (typeof projMembersAll === 'function' ? projMembersAll().catch(function () { return {}; }) : Promise.resolve({})),
+    (typeof msGetAll === 'function' ? msGetAll().catch(function () { return []; }) : Promise.resolve([]))
   ]).then(function (arr) {
     var byOrderName = arr[0];
     var membersByProj = arr[1] || {};
+    var allMs = arr[2] || [];
+    // 프로젝트별 마일스톤 그룹
+    var msByProj = {};
+    allMs.forEach(function (m) {
+      if (!m.projectId) return;
+      (msByProj[m.projectId] = msByProj[m.projectId] || []).push(m);
+    });
+    // 마일스톤 보고 진척률 가중평균 (서버 롤업과 동일). 보고 이력 없으면 null.
+    function reportedProgress(pid) {
+      var list = msByProj[pid] || [];
+      if (!list.length || !list.some(function (m) { return m.progressUpdatedAt != null; })) return null;
+      var wsum = 0, psum = 0, psimple = 0, cnt = 0;
+      list.forEach(function (m) {
+        var at = m.assigneeTargets || {};
+        var w = 0; Object.keys(at).forEach(function (k) { w += Number(at[k]) || 0; });
+        var prog = Number(m.progress) || 0;
+        wsum += w; psum += prog * w; psimple += prog; cnt++;
+      });
+      var v = wsum > 0 ? Math.round(psum / wsum) : Math.round(psimple / Math.max(cnt, 1));
+      return Math.max(0, Math.min(100, v));
+    }
     return projGetAll().then(function (projects) {
       var updates = [];
       projects.forEach(function (p) {
-        if (!p.orderNo || !p.estimatedHours || p.estimatedHours <= 0) return;
-        var key = p.orderNo.trim();
-        var byName = byOrderName[key];
-        if (!byName) return;
-        // 투입실적은 프로젝트 등록 인원(활성 멤버)만 집계. 멤버 미등록 프로젝트는 전체 집계(폴백).
-        var memberSet = membersByProj[p.id];
-        var hasMembers = memberSet && Object.keys(memberSet).length > 0;
+        // 멤버 한정 투입시간 집계
         var actual = 0;
-        Object.keys(byName).forEach(function (nm) {
-          if (hasMembers && !memberSet[nm]) return;
-          actual += byName[nm];
-        });
-        if (actual <= 0) return;
-        var progress = Math.min(Math.round((actual / p.estimatedHours) * 100), PROGRESS_MAX);
-        if (progress !== p.progress) {
-          updates.push({ id: p.id, progress: progress, actualHours: Math.round(actual * 10) / 10 });
+        if (p.orderNo) {
+          var byName = byOrderName[p.orderNo.trim()];
+          if (byName) {
+            var memberSet = membersByProj[p.id];
+            var hasMembers = memberSet && Object.keys(memberSet).length > 0;
+            Object.keys(byName).forEach(function (nm) {
+              if (hasMembers && !memberSet[nm]) return;
+              actual += byName[nm];
+            });
+          }
         }
+        actual = Math.round(actual * 10) / 10;
+        // 진척률: 보고값 우선, 없으면 시간기반 폴백
+        var reported = reportedProgress(p.id);
+        var progress;
+        if (reported != null) {
+          progress = reported;
+        } else if (p.estimatedHours && p.estimatedHours > 0 && actual > 0) {
+          progress = Math.min(Math.round((actual / p.estimatedHours) * 100), PROGRESS_MAX);
+        } else {
+          progress = p.progress;   // 변경 없음
+        }
+        var progChanged = (progress != null && progress !== p.progress);
+        var hoursChanged = (actual > 0 && Math.round((p.actualHours || 0) * 10) / 10 !== actual);
+        if (!progChanged && !hoursChanged) return;
+        updates.push({ id: p.id, progress: progress, actualHours: actual });
       });
       return Promise.all(updates.map(function (u) {
         return updateProject(u.id, { progress: u.progress, actualHours: u.actualHours });
