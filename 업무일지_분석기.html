@@ -829,7 +829,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.118</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.119</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3381,6 +3381,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.119',date:'2026-06-10',title:'🩹 운영자 분석/트렌드 — 위험 프로젝트만 보이던 것을 전체 프로젝트 표시로 수정',tag:'fix',items:[
+      'v13.118 후속 — 분석·트렌드 리스트가 위험 프로젝트가 있을 때 위험만 보여주던 문제 수정',
+      '전체 프로젝트를 항상 표시(위험 점수 내림차순 정렬 → 위험 프로젝트 먼저, 위험엔 배지·나머진 투입 요약). 헤더에 전체 N · 위험 M 표기, 길면 스크롤',
+      '영향: operator-analytics.js. 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.118',date:'2026-06-10',title:'💬 관리자 코멘트·피드백(메일·텔레그램) + 운영자 분석/트렌드 뷰 (Phase 1)',tag:'feat',items:[
       '관리자/운영자/PL가 마일스톤·프로젝트에 💬 코멘트(피드백)를 남기면 담당자에게 메일+텔레그램으로 전달되고 인앱 스레드로 남음 (마일스톤 행·프로젝트 상세에 표시)',
       '주요 이벤트(프로젝트 등록/수정, 마일스톤 진척/작업노트 업데이트, 코멘트)를 메일·텔레그램으로 알리고 활동 로그(audit_logs)에 기록',

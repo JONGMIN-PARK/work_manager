@@ -468,21 +468,21 @@ function _oaRenderOverview(rows) {
 
 function _oaRenderRiskList(rows) {
   var risky = rows.filter(function (r) { return r.risks.length > 0; });
+  // 전체 프로젝트를 위험 점수 내림차순으로(위험한 것 먼저), 동점은 이름/수주번호순
+  var sorted = rows.slice().sort(function (a, b) {
+    if ((b.riskScore || 0) !== (a.riskScore || 0)) return (b.riskScore || 0) - (a.riskScore || 0);
+    return (a.orderNo || a.name || '') < (b.orderNo || b.name || '') ? -1 : 1;
+  });
   var h = '<div class="pnl" style="padding:14px 16px;margin-bottom:4px">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">';
-  h += '<div style="font-size:11px;font-weight:700;color:var(--t3)">🚨 위험 프로젝트 ' + (risky.length ? '(' + risky.length + ')' : '') + '</div>';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3)">📁 전체 프로젝트 (' + rows.length + ')' + (risky.length ? ' · <span style="color:#EF4444">🚨 위험 ' + risky.length + '</span>' : '') + '</div>';
   h += '<div style="font-size:9px;color:var(--t6)">🔴 공수초과 · 🟠 일정지연 · ⚠️ 정체/효율 — 행 클릭 시 하단 상세 분석</div>';
   h += '</div>';
 
-  if (!risky.length) {
-    h += '<div style="padding:24px;text-align:center;color:var(--t5);font-size:12px">✅ 현재 위험 신호가 감지된 프로젝트가 없습니다.</div>';
-    // 위험이 없어도 전체 목록을 선택용으로 노출
-    h += '<div style="border-top:1px dashed var(--bd);margin-top:6px;padding-top:8px">';
-    h += '<div style="font-size:10px;color:var(--t6);margin-bottom:6px">전체 프로젝트 (클릭하여 분석)</div>';
-    h += _oaRiskRows(rows.slice().sort(function (a, b) { return (a.orderNo || '') < (b.orderNo || '') ? -1 : 1; }), false);
-    h += '</div>';
+  if (!rows.length) {
+    h += '<div style="padding:24px;text-align:center;color:var(--t5);font-size:12px">표시할 프로젝트가 없습니다. (🛡️ 가시성·접근 관리에서 숨김을 해제하세요)</div>';
   } else {
-    h += _oaRiskRows(risky, true);
+    h += '<div style="max-height:60vh;overflow:auto">' + _oaRiskRows(sorted, true) + '</div>';
   }
   h += '</div>';
   return h;
