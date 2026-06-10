@@ -77,6 +77,7 @@ var tlFilterAssignee = 'all'; // 'all' | 담당자 이름
 var tlSort = 'default'; // 'default' | 'name' | 'deadline' | 'progress' | 'status'
 var tlCollapsed = new Set(); // 접힌 프로젝트 ID 모음
 var tlDayOffset = (localStorage.getItem('tlDayOffset') === 'true'); // D-Day 배지 표시 토글
+var _tlMsWorkH = null, _tlMsWorkHSrc = null; // v13.137 마일스톤 투입시간 집계 메모(archive 캐시 참조 기준)
 
 /* 현재 렌더 범위 안이면 가로 스크롤만 즉시 이동(세로 위치 유지·재렌더 없음). 범위 밖이면 false. */
 function _tlScrollToDate(dateStr) {
@@ -180,8 +181,16 @@ async function renderTimeline() {
   var allProjects = _tlData[0];
   var milestones = _tlData[1];
   // 마일스톤별 업무일지 투입시간(태깅 기준) 집계 — 툴팁 실적 표시용
-  var msWorkH = {};
-  (_tlData[2] || []).forEach(function (r) { if (r.milestoneId) msWorkH[r.milestoneId] = (msWorkH[r.milestoneId] || 0) + (r.hours || 0); });
+  // v13.137 archive 캐시 배열 참조가 동일하면(뷰 전용 재렌더) 집계 재사용 — O(records) 루프 생략
+  var _arch = _tlData[2] || [];
+  var msWorkH;
+  if (_arch === _tlMsWorkHSrc && _tlMsWorkH) {
+    msWorkH = _tlMsWorkH;
+  } else {
+    msWorkH = {};
+    _arch.forEach(function (r) { if (r.milestoneId) msWorkH[r.milestoneId] = (msWorkH[r.milestoneId] || 0) + (r.hours || 0); });
+    _tlMsWorkH = msWorkH; _tlMsWorkHSrc = _arch;
+  }
 
   // 프로젝트 리스트 패널 렌더
   renderTlProjectList(allProjects);
@@ -362,6 +371,23 @@ async function renderTimeline() {
   // Today line 위치
   var todayPos = getTodayPosition(rangeStart, units);
 
+  // v13.137 그리드/음영을 .tl-bars 배경 그라디언트로 1회 처리 (행×단위 div 제거) — CSS 변수로 주입
+  var _uw = getUnitWidth();
+  var _tlPastW; // 과거(오늘 이전) 음영 폭 — 오늘이 속한 단위 시작점까지
+  if (todayPos >= 0) {
+    _tlPastW = Math.floor((todayPos + 0.5) / _uw) * _uw;
+  } else {
+    var _lastU = units[units.length - 1];
+    var _lastEnd = _lastU ? (_lastU.endDate || _lastU.date || '') : '';
+    _tlPastW = (_lastEnd && todayStr > _lastEnd) ? (units.length * _uw) : 0; // 오늘이 범위 뒤면 전체 과거
+  }
+  var _dow0 = (units[0] && units[0].date) ? new Date(units[0].date + 'T00:00:00').getDay() : 0;
+  var _satX = ((6 - _dow0 + 7) % 7) * _uw; // 첫 토요일 x (일 스케일)
+  var _sunX = ((7 - _dow0) % 7) * _uw;     // 첫 일요일 x (일 스케일)
+  var _isDayScale = (tlScale === 'day');
+  var _tlBarsVars = '--tl-uw:' + _uw + 'px;--tl-pastw:' + _tlPastW + 'px;' +
+    (_isDayScale ? ('--tl-sat:' + _satX + 'px;--tl-sun:' + _sunX + 'px;--tl-wkw:' + _uw + 'px;') : '--tl-wkw:0px;');
+
   // Feature 8: 크리티컬 패스 계산
   var criticalPathIds = {};
   if (showCriticalPath) {
@@ -446,21 +472,8 @@ async function renderTimeline() {
       '</div>' +
     '</div>';
 
-    // 바 영역
+    // 바 영역 (그리드/주말·과거 음영은 .tl-bars 배경 그라디언트로 처리 — v13.137 DOM 절감)
     rowsHtml += '<div class="tl-bars" style="width:' + totalWidth + 'px">';
-    // 그리드 라인 (v13.133 주말/과거 음영)
-    units.forEach(function (u, idx) {
-      var gridClasses = 'tl-grid-line';
-      if (tlScale === 'day' && u.date) {
-        var unitDate = new Date(u.date + 'T00:00:00');
-        var dow = unitDate.getDay();
-        if (dow === 0 || dow === 6) gridClasses += ' tl-grid-weekend';
-        if (u.date < todayStr) gridClasses += ' tl-grid-past';
-      } else if (tlScale !== 'day') {
-        if (u.endDate && u.endDate < todayStr) gridClasses += ' tl-grid-past';
-      }
-      rowsHtml += '<div class="' + gridClasses + '" style="left:' + (idx * getUnitWidth()) + 'px;width:' + getUnitWidth() + 'px"></div>';
-    });
 
     // 프로젝트 바
     var barCls = 'tl-bar' + (st === 'delayed' ? ' tl-bar-delayed' : '') + (st === 'done' ? ' tl-bar-done' : '') + (tlEditMode ? ' tl-bar-editable' : '');
@@ -543,18 +556,6 @@ async function renderTimeline() {
         ' <span class="badge" style="background:' + msStInfo.bg + ';color:' + msStInfo.color + ';font-size:8px;padding:1px 4px">' + msStInfo.label + '</span>' + _perf.html +
         '</span></div>';
       rowsHtml += '<div class="tl-bars" style="width:' + totalWidth + 'px">';
-      units.forEach(function (u, idx) {
-        var gridClasses = 'tl-grid-line';
-        if (tlScale === 'day' && u.date) {
-          var unitDate = new Date(u.date + 'T00:00:00');
-          var dow = unitDate.getDay();
-          if (dow === 0 || dow === 6) gridClasses += ' tl-grid-weekend';
-          if (u.date < todayStr) gridClasses += ' tl-grid-past';
-        } else if (tlScale !== 'day') {
-          if (u.endDate && u.endDate < todayStr) gridClasses += ' tl-grid-past';
-        }
-        rowsHtml += '<div class="' + gridClasses + '" style="left:' + (idx * getUnitWidth()) + 'px;width:' + getUnitWidth() + 'px"></div>';
-      });
       var msEditCls = tlEditMode ? ' tl-bar-editable' : '';
       rowsHtml += '<div class="' + msBarCls + msEditCls + '" data-type="ms" data-id="' + ms.id + '"' +
         ' title="' + eH(msTitle) + (tlEditMode ? '' : ' — 클릭: 업데이트') + '"' +
@@ -592,7 +593,7 @@ async function renderTimeline() {
   var _tlPrevScroll = _tlPrevScrollEl ? { left: _tlPrevScrollEl.scrollLeft, top: _tlPrevScrollEl.scrollTop } : null;
 
   content.innerHTML =
-    '<div class="tl-container' + (tlDensity === 'compact' ? ' tl-compact' : '') + '" style="position:relative">' +
+    '<div class="tl-container' + (tlDensity === 'compact' ? ' tl-compact' : '') + '" style="position:relative;' + _tlBarsVars + '">' +
       '<div class="tl-scroll" id="tlScroll">' +
         '<div class="tl-header-row">' +
           '<div class="tl-label-header" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px">프로젝트</div>' +
@@ -800,10 +801,11 @@ function tlMsOpenUpdate(ev, msId, projId, prog) {
   });
 }
 
+var _tlMeasureCanvas = null;
 function calcLabelWidth(projects, milestones, msWorkH) {
-  // 숨겨진 캔버스로 텍스트 폭 측정
-  var canvas = document.createElement('canvas');
-  var ctx = canvas.getContext('2d');
+  // 숨겨진 캔버스로 텍스트 폭 측정 (v13.137 모듈 레벨 캔버스 재사용)
+  if (!_tlMeasureCanvas) _tlMeasureCanvas = document.createElement('canvas');
+  var ctx = _tlMeasureCanvas.getContext('2d');
 
   var maxW = 0;
 
@@ -946,18 +948,28 @@ function getUnitWidth() {
 }
 
 function getDatePosition(dateStr, rangeStart, units) {
+  if (!units || !units.length) return -1;
   var w = getUnitWidth();
-  for (var i = 0; i < units.length; i++) {
-    if (units[i].contains && units[i].contains(dateStr)) {
-      // 단위 내 비율
-      var uStart = units[i].startDate || units[i].date;
-      var uEnd = units[i].endDate || units[i].date;
-      var total = daysDiff(uStart, uEnd) || 1;
-      var offset = daysDiff(uStart, dateStr);
-      return i * w + (offset / total) * w;
-    }
+  // 일 스케일: 균등 1일 단위 → 산술 O(1)
+  if (units[0].date) {
+    var idx = daysDiff(units[0].date, dateStr);
+    if (idx < 0 || idx >= units.length) return -1;
+    return idx * w;
   }
-  return -1;
+  // 주/월/분기: startDate 기준 이진 탐색 O(log n)
+  var lo = 0, hi = units.length - 1, found = -1;
+  while (lo <= hi) {
+    var mid = (lo + hi) >> 1;
+    var u = units[mid];
+    if (dateStr < u.startDate) hi = mid - 1;
+    else if (dateStr > u.endDate) lo = mid + 1;
+    else { found = mid; break; }
+  }
+  if (found < 0) return -1;
+  var uf = units[found];
+  var total = daysDiff(uf.startDate, uf.endDate) || 1;
+  var offset = daysDiff(uf.startDate, dateStr);
+  return found * w + (offset / total) * w;
 }
 
 function getTodayPosition(rangeStart, units) {

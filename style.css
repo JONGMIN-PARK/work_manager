@@ -166,12 +166,13 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-ms-grip{display:inline-block;line-height:1;letter-spacing:-1px;flex-shrink:0}
 .tl-label-sub:hover .tl-ms-grip{opacity:.85!important}
 .tl-row-sub.tl-ms-dropzone{box-shadow:inset 0 2px 0 0 var(--ac);background:var(--ac-g)}
-.tl-row-sub.tl-ms-dropzone .tl-label-sub,.tl-row-sub.tl-ms-dropzone .tl-bars{background:var(--ac-g)}
+.tl-row-sub.tl-ms-dropzone .tl-label-sub,.tl-row-sub.tl-ms-dropzone .tl-bars{background-color:var(--ac-g)}
 /* 편집 모달 마일스톤 행 드래그 핸들 */
 .ms-drag-handle{cursor:grab;text-align:center;color:var(--t6);font-size:13px;line-height:1;user-select:none;letter-spacing:-1px}
 .ms-drag-handle:hover{color:var(--t3)}
 .ms-drag-handle:active{cursor:grabbing}
-.tl-bars{position:relative;min-height:44px;flex-shrink:0;flex:1}
+/* v13.137 그리드 라인 + 주말/과거 음영을 행마다 div로 찍지 않고 .tl-bars 배경 그라디언트 1장으로 처리 (행×단위 DOM 제거). 단위폭/오프셋은 .tl-container 의 CSS 변수로 렌더당 1회 주입 */
+.tl-bars{position:relative;min-height:44px;flex-shrink:0;flex:1;--tl-grid:rgba(128,128,128,.16);--tl-weekend:rgba(108,140,255,.055);--tl-past:rgba(128,128,128,.035);background-repeat:no-repeat;background-image:repeating-linear-gradient(to right,transparent 0,transparent calc(var(--tl-uw,32px) - 1px),var(--tl-grid) calc(var(--tl-uw,32px) - 1px),var(--tl-grid) var(--tl-uw,32px)),linear-gradient(to right,var(--tl-past) 0,var(--tl-past) var(--tl-pastw,0px),transparent var(--tl-pastw,0px)),repeating-linear-gradient(to right,transparent 0,transparent var(--tl-sat,0px),var(--tl-weekend) var(--tl-sat,0px),var(--tl-weekend) calc(var(--tl-sat,0px) + var(--tl-wkw,0px)),transparent calc(var(--tl-sat,0px) + var(--tl-wkw,0px)),transparent calc(var(--tl-uw,32px) * 7)),repeating-linear-gradient(to right,transparent 0,transparent var(--tl-sun,0px),var(--tl-weekend) var(--tl-sun,0px),var(--tl-weekend) calc(var(--tl-sun,0px) + var(--tl-wkw,0px)),transparent calc(var(--tl-sun,0px) + var(--tl-wkw,0px)),transparent calc(var(--tl-uw,32px) * 7))}
 .tl-row-sub .tl-bars{min-height:28px}
 .tl-grid-line{position:absolute;top:0;bottom:0;border-right:1px solid var(--bd);opacity:.3}
 .tl-bar{position:absolute;top:8px;height:28px;border-radius:5px;opacity:.85;cursor:pointer;display:flex;align-items:center;overflow:hidden;transition:opacity .15s}
@@ -186,14 +187,14 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-today-line{position:absolute;top:0;bottom:0;width:2px;background:#EF4444;z-index:2;pointer-events:none;box-shadow:0 0 4px rgba(239,68,68,.45)}
 .tl-today-line::before{content:'';position:absolute;top:50%;left:2px;transform:translateY(-50%);width:0;height:0;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid #EF4444;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
 /* v13.132 타임라인 시인성 */
-.tl-row:hover>.tl-bars,.tl-row:hover>.tl-label{background:var(--bg-hv)}
+.tl-row:hover>.tl-bars,.tl-row:hover>.tl-label{background-color:var(--bg-hv)}
 .tl-row-proj{border-top:2px solid var(--bd2)}
 .tl-label,.tl-label-header{box-shadow:3px 0 5px -3px rgba(0,0,0,.18)}
 .tl-row-delayed>.tl-label{box-shadow:inset 4px 0 0 0 #EF4444,3px 0 5px -3px rgba(0,0,0,.18)}
 .tl-ms-marker{filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.5));font-size:13px}
 /* v13.133 타임라인 관리/측정 */
 /* 그룹 지브라 스트라이프 */
-.tl-proj-alt > .tl-bars{background:rgba(127,127,127,.045)}
+.tl-proj-alt > .tl-bars{background-color:rgba(127,127,127,.045)}
 /* 밀도 토글 — 컴팩트 모드 */
 .tl-compact .tl-bars{min-height:26px}
 .tl-compact .tl-row-sub .tl-bars{min-height:16px}
