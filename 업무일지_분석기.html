@@ -829,7 +829,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.127</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.128</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3381,6 +3381,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.128',date:'2026-06-10',title:'🔔 알림 설정에 프로젝트/마일스톤/코멘트 이벤트 추가 (확인·토글 가능)',tag:'fix',items:[
+      '프로필 알림 설정 목록에 프로젝트 생성/수정·마일스톤 진척 보고·코멘트/피드백 추가 — 이제 켜짐/꺼짐 확인·토글 가능(기본값 ON)',
+      '진단: 프로젝트 변경 알림이 텔레그램으로 안 오면 ① 알림 설정에서 해당 항목 ON 확인 ② 인앱 종 아이콘에 뜨는지 확인(인앱은 오는데 텔레그램만 안 오면 설정/중복, 인앱도 없으면 훅 미동작) ③ 같은 내용 5분 내 반복은 중복으로 1회만 발송',
+      '영향: auth.js. 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.127',date:'2026-06-10',title:'📣 프로젝트 변경 텔레그램 알림 — 수신 대상 확대 + 사람이 읽는 변경 요약',tag:'fix',items:[
       'notifyProjectStakeholders 대상을 PL뿐 아니라 활성 멤버 전체 + 프로젝트 소유자 + 관리자 + 그룹챗으로 확대',
       '프로젝트 수정 알림 요약을 "변경 필드: status,..." → "상태 진행중→완료 · 진척률 80% · 일정 변경"처럼 사람이 읽기 쉽게 개선',
