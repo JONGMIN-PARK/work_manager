@@ -656,9 +656,12 @@ function renderTlProjectList(allProjects) {
     var st = autoProjectStatus(p);
     var stInfo = PROJ_STATUS[st] || PROJ_STATUS.waiting;
     var isDone = st === 'done';
-    html += '<div class="tl-list-item' + (isDone ? ' tl-list-done' : '') + '" onclick="tlScrollToProject(\'' + p.id + '\')" title="' + eH(p.startDate + ' ~ ' + p.endDate) + '">' +
+    var _pr = Number(p.progress) || 0;
+    var _prc = _pr >= 100 ? '#10B981' : _pr >= 50 ? 'var(--ac)' : _pr > 0 ? '#F59E0B' : 'var(--t6)';
+    html += '<div class="tl-list-item' + (isDone ? ' tl-list-done' : '') + '" onclick="tlScrollToProject(\'' + p.id + '\')" title="' + eH(p.startDate + ' ~ ' + p.endDate) + ' · 진행률 ' + _pr + '%">' +
       '<span class="tl-list-dot" style="background:' + p.color + '"></span>' +
       '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(p.name || p.orderNo) + '</span>' +
+      '<span style="font-size:9px;font-weight:700;color:' + _prc + ';flex-shrink:0;min-width:26px;text-align:right">' + _pr + '%</span>' +
       '<span class="badge" style="background:' + stInfo.bg + ';color:' + stInfo.color + ';font-size:8px;padding:1px 5px;flex-shrink:0">' + stInfo.label + '</span>' +
     '</div>';
   });

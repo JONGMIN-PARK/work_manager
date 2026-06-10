@@ -520,7 +520,7 @@ function pdLoadWork(projId) {
         h += '<span style="font-size:10px;font-weight:700;color:' + progColOf(prog) + ';min-width:30px;text-align:right">' + prog + '%</span>';
         if (canUpdate) h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 7px" onclick="pdMsProgressUpdate(\'' + m.id + '\',\'' + projId + '\',' + prog + ')" title="진척률·작업 노트 업데이트">🖉 업데이트</button>';
         h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="pdMsLogToggle(\'' + m.id + '\',\'' + projId + '\',' + (canUpdate ? 'true' : 'false') + ')" title="작업 노트 이력 보기">🕘</button>';
-        if (canUpdate && typeof openCommentModal === 'function') h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="openCommentModal(\'milestone\',\'' + m.id + '\',{projectId:\'' + projId + '\'})" title="담당자에게 피드백(메일·텔레그램)">💬</button>';
+        if ((canUpdate || (typeof isOperator === 'function' && isOperator())) && typeof openCommentModal === 'function') h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="openCommentModal(\'milestone\',\'' + m.id + '\',{projectId:\'' + projId + '\'})" title="마일스톤 첨언/피드백(메일·텔레그램)">💬 첨언</button>';
         h += '</div>';
         // 초과 배지 (공수초과 / 일정지연 / 효율주의)
         var badges = '';
@@ -740,6 +740,7 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
         '<button class="btn btn-p" id="pdProgSave" style="flex:2">저장</button>' +
       '</div>' +
       '<div id="pdProgHist" style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"><div style="font-size:10px;color:var(--t6)">이력 로딩 중...</div></div>' +
+      '<div id="pdMsCommentSection" style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"></div>' +
     '</div>';
   document.body.appendChild(modal);
   // 이력 컨텍스트(삭제 후 재렌더·하위뷰 갱신용) + 이력 로드
@@ -748,6 +749,8 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
     refresh: (opts && typeof opts.onSaved === 'function') ? opts.onSaved : function () { if (typeof pdLoadWork === 'function') pdLoadWork(projId); }
   };
   _pdRenderProgHist();
+  // 마일스톤 첨언(코멘트) 스레드 — 관리자/운영자/멤버가 피드백 작성·열람 (서버에서 권한 검증)
+  if (typeof renderCommentThread === 'function') renderCommentThread('milestone', mid, 'pdMsCommentSection');
   var saveBtn = document.getElementById('pdProgSave');
   saveBtn.onclick = function () {
     var progress = parseInt(document.getElementById('pdProgNum').value, 10);
