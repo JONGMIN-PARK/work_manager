@@ -22,6 +22,7 @@ var _oaData = null;            // 마지막 집계 결과 (프로젝트별 분�
 var _oaSelectedProjectId = null;
 var _oaDetailContainerId = 'oaDetail';   // renderOperatorAnalytics 가 만드는 상세 영역 id
 var _OA_STALE_DAYS = 14;       // 진척 정체 임계 (PRD: 기본 14일)
+var _oaFilterName = '';        // 담당자(등록 인원) 필터 — '' 이면 전체
 
 /* ───────── 유틸 ───────── */
 function _oaEsc(s) {
@@ -148,6 +149,42 @@ function _oaError(container, msg) {
 }
 
 var _OA_PALETTE = ['#3B82F6', '#EF4444', '#F59E0B', '#10B981', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#64748B', '#A855F7', '#14B8A6'];
+
+/* ───────── 담당자(등록 인원) 필터 ───────── */
+// 프로젝트 행의 "등록 인원" 집합 = 지정 담당자(assignees) ∪ 마일스톤 목표 대상 ∪ 멤버한정 투입자
+function _oaRowPersons(row) {
+  var set = {};
+  var p = (row && row.project) || {};
+  (Array.isArray(p.assignees) ? p.assignees : []).forEach(function (n) { if (n) set[n] = true; });
+  (row.milestones || []).forEach(function (m) {
+    var at = (m && m.assigneeTargets) || {};
+    Object.keys(at).forEach(function (n) { if (n) set[n] = true; });
+  });
+  var people = (row.sumCalc && row.sumCalc.people) || {};
+  Object.keys(people).forEach(function (n) { if (n) set[n] = true; });
+  return set;
+}
+function _oaFilterRows(rows) {
+  if (!_oaFilterName) return rows || [];
+  return (rows || []).filter(function (r) { return _oaRowPersons(r)[_oaFilterName]; });
+}
+// 전체 rows에서 등록 인원 이름 목록(정렬)
+function _oaAllPersons(rows) {
+  var set = {};
+  (rows || []).forEach(function (r) { var ps = _oaRowPersons(r); Object.keys(ps).forEach(function (n) { set[n] = true; }); });
+  return Object.keys(set).sort(function (a, b) { return a.localeCompare(b); });
+}
+// 필터 변경 → 개요 재렌더 + 상세 자동 선택 갱신 (재집계 없음)
+function _oaSetFilter(name) {
+  _oaFilterName = name || '';
+  if (!_oaData) return;
+  _oaRenderOverview(_oaData);
+  var filtered = _oaFilterRows(_oaData);
+  var auto = _oaPickAutoSelect(filtered);
+  var det = document.getElementById(_oaDetailContainerId);
+  if (auto) { _oaSelectedProjectId = auto.id; renderProjectAnalytics(auto.id, _oaDetailContainerId); }
+  else if (det) { det.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:var(--t5);font-size:12px">선택된 담당자의 프로젝트가 없습니다.</div>'; }
+}
 
 /* ════════════════════════════════════════════════════════
  * 1) 전사 개요 — renderOperatorAnalytics
@@ -345,6 +382,28 @@ function _oaRenderOverview(rows) {
   _oaApplyChartDefaults();
   _oaDestroy(_oaCharts);
 
+  // ── 담당자(등록 인원) 필터 바 ──
+  var allRows = rows;
+  var personNames = _oaAllPersons(allRows);
+  if (_oaFilterName && personNames.indexOf(_oaFilterName) < 0) _oaFilterName = '';  // stale 필터 정리
+  var filtered = _oaFilterRows(allRows);
+  var filterBar = '';
+  if (personNames.length) {
+    filterBar = '<div class="pnl" style="padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+      '<span style="font-size:11px;color:var(--t4);font-weight:600">👤 담당자(등록 인원) 필터</span>' +
+      '<select onchange="_oaSetFilter(this.value)" style="font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2)">' +
+        '<option value="">전체 (' + allRows.length + '개)</option>' +
+        personNames.map(function (nm) { return '<option value="' + _oaEsc(nm) + '"' + (nm === _oaFilterName ? ' selected' : '') + '>' + _oaEsc(nm) + '</option>'; }).join('') +
+      '</select>' +
+      (_oaFilterName ? '<span style="font-size:10px;color:var(--t6)">' + _oaEsc(_oaFilterName) + ' 등록 ' + filtered.length + '개 프로젝트</span>' : '') +
+    '</div>';
+  }
+  rows = filtered;   // 이하 집계는 필터된 집합 기준
+  if (!rows.length) {
+    box.innerHTML = filterBar + '<div class="pnl" style="padding:30px;text-align:center;color:var(--t5);font-size:12px">선택한 담당자가 등록된 프로젝트가 없습니다.</div>';
+    return;
+  }
+
   // ── KPI 집계 ──
   var n = rows.length;
   var avgProg = _oaRnd(rows.reduce(function (s, r) { return s + r.progress; }, 0) / n);
@@ -362,7 +421,7 @@ function _oaRenderOverview(rows) {
   var phaseCount = {};
   rows.forEach(function (r) { var ph = r.phase || '_none'; phaseCount[ph] = (phaseCount[ph] || 0) + 1; });
 
-  var h = '';
+  var h = filterBar;
 
   // KPI 카드
   var cards = [
@@ -903,4 +962,5 @@ if (typeof window !== 'undefined') {
   window.renderOperatorAnalytics = renderOperatorAnalytics;
   window.renderProjectAnalytics = renderProjectAnalytics;
   window._oaSelectProject = _oaSelectProject;
+  window._oaSetFilter = _oaSetFilter;
 }
