@@ -181,9 +181,12 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
     var clean = {};
     for (var k in updates) { if (updates[k] !== undefined) clean[k] = updates[k]; }
 
-    // 상태 변경 추적을 위해 이전 상태 조회
-    var prevR = clean.status ? await db.query('SELECT status, name, order_no, end_date FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]) : null;
-    var prev = prevR && prevR.rows[0] ? prevR.rows[0] : null;
+    // 변경 비교용 이전 값 조회 (실제 변경된 필드만 알림 → 무의미 중복 방지)
+    var prev = null;
+    try {
+      var prevR = await db.query('SELECT status, name, order_no, end_date, start_date, progress, estimated_hours, current_phase, visibility, assignees, memo FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+      prev = prevR.rows[0] || null;
+    } catch (e) { /* ignore */ }
 
     var result = await lock.optimisticUpdate(db, 'projects', 'id', req.params.id, b.version, clean, req.user.sub, { clause: 'AND tenant_id = $NEXT1', values: [req.tenant.id] });
 
@@ -201,27 +204,34 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
       }
     } catch (_) { /* 알림 실패 무시 */ }
 
-    // 감사 로그 + 수정 알림 (best-effort)
-    try {
-      authService.auditLog(req.user.sub, 'project.update', 'project', req.params.id, { fields: Object.keys(clean) }, req).catch(function () {});
-    } catch (_) {}
+    // 실제 변경된 필드만 추려 감사 로그 + 수정 알림 (best-effort, 무의미 중복 방지)
     try {
       var updRow = result.row || {};
-      // 사람이 읽기 쉬운 변경 요약
-      var _sum = [];
-      if (clean.status) _sum.push('상태 ' + (prev && prev.status && prev.status !== clean.status ? prev.status + '→' : '') + clean.status);
-      if (clean.progress != null) _sum.push('진척률 ' + clean.progress + '%');
-      if (clean.current_phase) _sum.push('단계 ' + clean.current_phase);
-      if (clean.start_date != null || clean.end_date != null) _sum.push('일정 변경');
-      if (clean.estimated_hours != null) _sum.push('예상 ' + clean.estimated_hours + 'h');
-      if (clean.assignees != null) _sum.push('담당자 변경');
-      if (clean.visibility) _sum.push('가시성 ' + clean.visibility);
-      if (clean.name) _sum.push('이름 변경');
-      if (clean.memo != null) _sum.push('메모 변경');
-      var _summary = _sum.length ? _sum.join(' · ') : '내용 수정';
-      notificationService.notifyProjectStakeholders('project_updated', {
-        projectName: updRow.name, orderNo: updRow.order_no, summary: _summary
-      }, req.params.id).catch(function (e) { console.error('[noti]', e.message); });
+      var _labels = { status: '상태', progress: '진척률', start_date: '시작일', end_date: '종료일', estimated_hours: '예상시간', current_phase: '단계', name: '이름', visibility: '가시성', order_no: '수주번호' };
+      var _changes = [];
+      if (prev) {
+        Object.keys(_labels).forEach(function (k) {
+          if (clean[k] === undefined) return;
+          var nv = (clean[k] == null ? '' : String(clean[k]));
+          var ov = (prev[k] == null ? '' : String(prev[k]));
+          if (nv !== ov) _changes.push(_labels[k] + ' ' + (ov ? ov + '→' : '') + nv);
+        });
+        if (clean.assignees !== undefined) {
+          var _nA = clean.assignees;  // 이미 JSON.stringify 됨
+          var _oA = prev.assignees == null ? '[]' : (typeof prev.assignees === 'string' ? prev.assignees : JSON.stringify(prev.assignees));
+          if (_nA !== _oA) _changes.push('담당자 변경');
+        }
+        if (clean.memo !== undefined && String(clean.memo || '') !== String(prev.memo || '')) _changes.push('메모 변경');
+      } else {
+        _changes = Object.keys(clean).map(function (k) { return _labels[k] || k; });
+      }
+      // 실제 변경이 있을 때만 로그·알림 (no-op 저장은 스킵)
+      if (_changes.length) {
+        try { authService.auditLog(req.user.sub, 'project.update', 'project', req.params.id, { changes: _changes }, req).catch(function () {}); } catch (_e) {}
+        notificationService.notifyProjectStakeholders('project_updated', {
+          projectName: updRow.name, orderNo: updRow.order_no, summary: _changes.join(' · ')
+        }, req.params.id).catch(function (e) { console.error('[noti]', e.message); });
+      }
     } catch (_) {}
   } catch (e) {
     console.error('[projects/update]', e);

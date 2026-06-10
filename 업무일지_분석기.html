@@ -829,7 +829,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.128</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.129</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3381,6 +3381,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.129',date:'2026-06-10',title:'🛠️ 프로젝트 수정 알림이 안 오던 근본 원인 수정 — 실제 변경 필드만 비교',tag:'fix',items:[
+      '원인: 저장 시 모든 필드를 전송 → 서버가 "전체 변경"으로 처리 → 알림 요약·payload가 매번 동일 → 5분 중복억제에 걸려 첫 1회 외 발송 안 됨',
+      '수정: PUT에서 이전 값과 비교해 "실제로 바뀐 필드만" 추출 → 변경 있을 때만 알림(서로 다른 payload라 중복억제 회피). 요약도 "상태 진행중→완료 · 진척률 80%"처럼 실제 변경 내용으로',
+      '변경 없는 재저장(no-op)은 알림·로그 스킵. 영향: server/routes/projects.js. 서버 포함 — git push 배포 후 적용',
+      '참고: 메인 앱엔 인앱 알림 종 UI가 없어 알림은 텔레그램 채널로 전달됩니다(알림 설정 ON·봇 연동 필요)'
+    ]},
     {ver:'13.128',date:'2026-06-10',title:'🔔 알림 설정에 프로젝트/마일스톤/코멘트 이벤트 추가 (확인·토글 가능)',tag:'fix',items:[
       '프로필 알림 설정 목록에 프로젝트 생성/수정·마일스톤 진척 보고·코멘트/피드백 추가 — 이제 켜짐/꺼짐 확인·토글 가능(기본값 ON)',
       '진단: 프로젝트 변경 알림이 텔레그램으로 안 오면 ① 알림 설정에서 해당 항목 ON 확인 ② 인앱 종 아이콘에 뜨는지 확인(인앱은 오는데 텔레그램만 안 오면 설정/중복, 인앱도 없으면 훅 미동작) ③ 같은 내용 5분 내 반복은 중복으로 1회만 발송',
