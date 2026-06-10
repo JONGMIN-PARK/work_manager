@@ -324,21 +324,27 @@ function pdLoadWork(projId) {
     var milestones = results[1];
     var memberNames = results[2];
     return calcHoursByMilestone(projId, { proj: proj, milestones: milestones, memberNames: memberNames }).then(function (msHours) {
-      // 담당자별 "보고 투입"(누적) — 마일스톤 작업노트 로그를 작성자별로 합산
+      // 담당자별 "보고 투입"(누적) — 마일스톤 작업노트 로그를 작성자별로 합산 (업무일지는 연동 안 함, 참고용)
       var pLogs = (typeof msLogsGet === 'function')
         ? Promise.all(milestones.map(function (m) {
-            return msLogsGet(m.id).then(function (logs) { return logs || []; }).catch(function () { return []; });
+            return msLogsGet(m.id).then(function (logs) { return { mid: m.id, logs: logs || [] }; }).catch(function () { return { mid: m.id, logs: [] }; });
           }))
         : Promise.resolve([]);
       return pLogs.then(function (logSets) {
-        var reportedByPerson = {};
-        logSets.forEach(function (logs) {
-          logs.forEach(function (l) {
+        var reportedByPerson = {};       // 프로젝트 전체 작성자별 합
+        var reportedByMsPerson = {};     // 마일스톤별 작성자별 합
+        logSets.forEach(function (ls) {
+          reportedByMsPerson[ls.mid] = reportedByMsPerson[ls.mid] || {};
+          ls.logs.forEach(function (l) {
             var nm = l.authorName || '';
-            if (nm) reportedByPerson[nm] = (reportedByPerson[nm] || 0) + (Number(l.hours) || 0);
+            var hh = Number(l.hours) || 0;
+            if (nm) {
+              reportedByPerson[nm] = (reportedByPerson[nm] || 0) + hh;
+              reportedByMsPerson[ls.mid][nm] = (reportedByMsPerson[ls.mid][nm] || 0) + hh;
+            }
           });
         });
-        return { proj: proj, milestones: milestones, msHours: msHours, memberNames: memberNames, reportedByPerson: reportedByPerson };
+        return { proj: proj, milestones: milestones, msHours: msHours, memberNames: memberNames, reportedByPerson: reportedByPerson, reportedByMsPerson: reportedByMsPerson };
       });
     });
   }).then(function (results) {
@@ -347,6 +353,7 @@ function pdLoadWork(projId) {
     var milestones = results.milestones;
     var memberNames = results.memberNames || [];
     var reportedByPerson = results.reportedByPerson || {};
+    var reportedByMsPerson = results.reportedByMsPerson || {};
     milestones.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
 
     var totalH = 0;
@@ -534,8 +541,8 @@ function pdLoadWork(projId) {
         }
         // 작업 노트 이력 컨테이너 (토글 시 채움)
         h += '<div id="pdMsLog-' + m.id + '" style="display:none;margin:5px 0 0 18px"></div>';
-        // 인원별 (목표 또는 실적 있는 사람만)
-        var pe = (mH && mH.people) || {};
+        // 인원별 (목표 또는 보고 실적 있는 사람만) — 보고 투입 기준 (업무일지는 연동 안 함, 참고용)
+        var pe = reportedByMsPerson[m.id] || {};
         var pplSet = {};
         Object.keys(pe).forEach(function (k) { pplSet[k] = true; });
         Object.keys(at).forEach(function (k) { pplSet[k] = true; });
