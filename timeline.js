@@ -69,6 +69,13 @@ var tlUnits = null; // 현재 렌더 units (드래그용)
 var tlLabelW = 0; // 현재 렌더 labelW (드래그용)
 var showCriticalPath = false; // Feature 8: 크리티컬 패스 토글
 var _tlJumpDate = null; // 다음 렌더에서 이 날짜를 중앙으로 (오늘/날짜 이동). 범위에 포함시켜 재렌더
+// ─── v13.133 타임라인 관리/측정 상태변수 ───
+var tlDensity = localStorage.getItem('tlDensity') || 'comfortable'; // 'comfortable' | 'compact'
+var tlFilterStatus = 'all'; // 'all' | 'waiting' | 'active' | 'delayed' | 'done' | 'hold'
+var tlFilterAssignee = 'all'; // 'all' | 담당자 이름
+var tlSort = 'default'; // 'default' | 'name' | 'deadline' | 'progress' | 'status'
+var tlCollapsed = new Set(); // 접힌 프로젝트 ID 모음
+var tlDayOffset = (localStorage.getItem('tlDayOffset') === 'true'); // D-Day 배지 표시 토글
 
 /* 현재 렌더 범위 안이면 가로 스크롤만 즉시 이동(세로 위치 유지·재렌더 없음). 범위 밖이면 false. */
 function _tlScrollToDate(dateStr) {
@@ -99,6 +106,61 @@ function tlGoToDate(dateStr) {
   renderTimeline();
 }
 
+/* ═══ v13.133 타임라인 관리/측정 헬퍼 ═══ */
+// 밀도 토글
+function tlSetDensity(isCompact) {
+  tlDensity = isCompact ? 'compact' : 'comfortable';
+  localStorage.setItem('tlDensity', tlDensity);
+}
+// 상태/담당자/정렬 setter
+function tlSetFilterStatus(status) {
+  tlFilterStatus = status;
+  var el = document.getElementById('tlFilterStatus');
+  if (el) el.value = status;
+  renderTimeline();
+}
+function tlSetFilterAssignee(assignee) {
+  tlFilterAssignee = assignee;
+  var el = document.getElementById('tlFilterAssignee');
+  if (el) el.value = assignee;
+  renderTimeline();
+}
+function tlSetSort(sortMode) {
+  tlSort = sortMode;
+  var el = document.getElementById('tlSortBy');
+  if (el) el.value = sortMode;
+  renderTimeline();
+}
+// 마일스톤 접기/펼치기
+function tlToggleCollapse(projId) {
+  if (tlCollapsed.has(projId)) {
+    tlCollapsed.delete(projId);
+  } else {
+    tlCollapsed.add(projId);
+  }
+  renderTimeline();
+}
+function tlCollapseAll() {
+  var visibleProjects = document.querySelectorAll('[data-proj-id]');
+  visibleProjects.forEach(function (row) {
+    var projId = row.getAttribute('data-proj-id');
+    if (projId && row.querySelectorAll('.tl-row-sub').length > 0) {
+      tlCollapsed.add(projId);
+    }
+  });
+  renderTimeline();
+}
+function tlExpandAll() {
+  tlCollapsed.clear();
+  renderTimeline();
+}
+// D-Day 배지 토글
+function tlToggleDayOffset(val) {
+  tlDayOffset = val;
+  localStorage.setItem('tlDayOffset', tlDayOffset ? 'true' : 'false');
+  renderTimeline();
+}
+
 /* ═══ 초기화 ═══ */
 function initTimeline() {
   renderTimeline();
@@ -123,8 +185,58 @@ async function renderTimeline() {
   // 프로젝트 리스트 패널 렌더
   renderTlProjectList(allProjects);
 
+  // 담당자 합집합 (담당자 필터 드롭다운용)
+  var _allAssignees = {};
+  allProjects.forEach(function (p) {
+    (p.assignees || []).forEach(function (a) { if (a) _allAssignees[a] = true; });
+  });
+  var assigneeList = Object.keys(_allAssignees).sort();
+
   // 완료 숨기기 필터 적용
   var projects = tlHideDone ? allProjects.filter(function (p) { return autoProjectStatus(p) !== 'done'; }) : allProjects;
+
+  // v13.133 상태 필터 적용
+  if (tlFilterStatus !== 'all') {
+    projects = projects.filter(function (p) { return autoProjectStatus(p) === tlFilterStatus; });
+  }
+  // v13.133 담당자 필터 적용
+  if (tlFilterAssignee !== 'all') {
+    projects = projects.filter(function (p) {
+      var asg = p.assignees || [];
+      return asg.indexOf(tlFilterAssignee) >= 0;
+    });
+  }
+  // v13.133 정렬 적용
+  if (tlSort !== 'default') {
+    var sortedProjects = projects.slice();
+    if (tlSort === 'name') {
+      sortedProjects.sort(function (a, b) {
+        var nameA = (a.name || a.orderNo || '').toLowerCase();
+        var nameB = (b.name || b.orderNo || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    } else if (tlSort === 'deadline') {
+      sortedProjects.sort(function (a, b) {
+        var endA = a.endDate || '9999-12-31';
+        var endB = b.endDate || '9999-12-31';
+        return endA.localeCompare(endB);
+      });
+    } else if (tlSort === 'progress') {
+      sortedProjects.sort(function (a, b) {
+        var progA = Number(a.progress) || 0;
+        var progB = Number(b.progress) || 0;
+        return progB - progA;
+      });
+    } else if (tlSort === 'status') {
+      var statusOrder = { delayed: 0, active: 1, waiting: 2, hold: 3, done: 4 };
+      sortedProjects.sort(function (a, b) {
+        var sa = statusOrder[autoProjectStatus(a)]; if (sa === undefined) sa = 9;
+        var sb = statusOrder[autoProjectStatus(b)]; if (sb === undefined) sb = 9;
+        return sa - sb;
+      });
+    }
+    projects = sortedProjects;
+  }
 
   // 프로젝트가 없으면 빈 상태
   var content = document.getElementById('tlContent');
@@ -204,6 +316,35 @@ async function renderTimeline() {
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlEditMode ? '#FCD34D' : 'var(--t5)') + ';cursor:pointer;background:' + (tlEditMode ? 'rgba(245,158,11,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlEditMode ? 'rgba(245,158,11,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlEditModeTog" onchange="tlEditMode=this.checked;renderTimeline()"' + (tlEditMode ? ' checked' : '') + '> ✏️ 기간 조정</label>' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlHideDoneTog" onchange="tlHideDone=this.checked;renderTimeline()"' + (tlHideDone ? ' checked' : '') + '> 완료 숨기기</label>' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (showCriticalPath ? '#EF4444' : 'var(--t5)') + ';cursor:pointer;background:' + (showCriticalPath ? 'rgba(239,68,68,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (showCriticalPath ? 'rgba(239,68,68,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlCriticalPathTog" onchange="showCriticalPath=this.checked;renderTimeline()"' + (showCriticalPath ? ' checked' : '') + '> 🔴 크리티컬 패스</label>' +
+    // v13.133 컴팩트 밀도 토글
+    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlDensityTog" onchange="tlSetDensity(this.checked);renderTimeline()"' + (tlDensity === 'compact' ? ' checked' : '') + '> 🔳 컴팩트</label>' +
+    // v13.133 D-Day 표시 토글
+    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlDayOffset ? '#10B981' : 'var(--t5)') + ';cursor:pointer;background:' + (tlDayOffset ? 'rgba(16,185,129,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlDayOffset ? 'rgba(16,185,129,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlDayOffsetTog" onchange="tlToggleDayOffset(this.checked)"' + (tlDayOffset ? ' checked' : '') + '> 📏 D-Day 표시</label>' +
+    // v13.133 마일스톤 모두접기/펼치기
+    '<button class="btn btn-g btn-s" onclick="tlCollapseAll()" title="모든 프로젝트의 마일스톤 접기">⊟ 모두접기</button>' +
+    '<button class="btn btn-g btn-s" onclick="tlExpandAll()" title="모든 프로젝트의 마일스톤 펼치기">⊞ 모두펼치기</button>' +
+    // v13.133 상태/담당자 필터 + 정렬
+    '<div style="display:flex;gap:4px;align-items:center">' +
+      '<select class="si" id="tlFilterStatus" onchange="tlFilterStatus=this.value;renderTimeline()" style="max-width:140px;padding:4px 6px;font-size:10px">' +
+        '<option value="all"' + (tlFilterStatus === 'all' ? ' selected' : '') + '>모든 상태</option>' +
+        '<option value="waiting"' + (tlFilterStatus === 'waiting' ? ' selected' : '') + '>대기</option>' +
+        '<option value="active"' + (tlFilterStatus === 'active' ? ' selected' : '') + '>진행중</option>' +
+        '<option value="delayed"' + (tlFilterStatus === 'delayed' ? ' selected' : '') + '>지연</option>' +
+        '<option value="done"' + (tlFilterStatus === 'done' ? ' selected' : '') + '>완료</option>' +
+        '<option value="hold"' + (tlFilterStatus === 'hold' ? ' selected' : '') + '>보류</option>' +
+      '</select>' +
+      '<select class="si" id="tlFilterAssignee" onchange="tlFilterAssignee=this.value;renderTimeline()" style="max-width:140px;padding:4px 6px;font-size:10px">' +
+        '<option value="all"' + (tlFilterAssignee === 'all' ? ' selected' : '') + '>모든 담당자</option>' +
+        assigneeList.map(function (a) { return '<option value="' + eH(a) + '"' + (tlFilterAssignee === a ? ' selected' : '') + '>' + eH(a) + '</option>'; }).join('') +
+      '</select>' +
+      '<select class="si" id="tlSortBy" onchange="tlSort=this.value;renderTimeline()" style="max-width:140px;padding:4px 6px;font-size:10px">' +
+        '<option value="default"' + (tlSort === 'default' ? ' selected' : '') + '>기본 순서</option>' +
+        '<option value="name"' + (tlSort === 'name' ? ' selected' : '') + '>이름순</option>' +
+        '<option value="deadline"' + (tlSort === 'deadline' ? ' selected' : '') + '>마감임박순</option>' +
+        '<option value="progress"' + (tlSort === 'progress' ? ' selected' : '') + '>진척률 높은순</option>' +
+        '<option value="status"' + (tlSort === 'status' ? ' selected' : '') + '>상태순</option>' +
+      '</select>' +
+    '</div>' +
     '<button class="btn btn-g btn-s" onclick="exportProjectsJSON()">📥 내보내기</button>';
 
   // 헤더 (기간 표시)
@@ -226,14 +367,14 @@ async function renderTimeline() {
 
   // 프로젝트 행
   var rowsHtml = '';
-  projects.forEach(function (p) {
+  projects.forEach(function (p, _pi) {
     var st = autoProjectStatus(p);
     var pMs = milestones.filter(function (m) { return m.projectId === p.id; }).sort(function (a, b) { return a.order - b.order; });
 
     // 프로젝트 바 위치
     var barStyle = getBarStyle(p.startDate, p.endDate, rangeStart, units);
 
-    rowsHtml += '<div class="tl-row tl-row-proj' + (st === 'delayed' ? ' tl-row-delayed' : '') + '" data-proj-id="' + p.id + '">';
+    rowsHtml += '<div class="tl-row tl-row-proj' + (st === 'delayed' ? ' tl-row-delayed' : '') + (_pi % 2 === 1 ? ' tl-proj-alt' : '') + '" data-proj-id="' + p.id + '">';
     // 레이블 — v13.43: 기간+D-Day, v13.44: 담당자
     var _period = _tlFmtPeriod(p);
     var _dday = _tlFmtDday(p, st);
@@ -289,6 +430,7 @@ async function renderTimeline() {
       '<div' + (st === 'done' ? ' style="opacity:.5"' : '') + '>' +
       '<div style="display:flex;align-items:center;gap:6px">' +
         '<span class="dot" style="background:' + p.color + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
+        (pMs.length > 0 ? '<button class="tl-collapse-toggle" onclick="event.stopPropagation();tlToggleCollapse(\'' + p.id + '\')" style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;color:var(--t4);width:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="마일스톤 ' + (tlCollapsed.has(p.id) ? '펼치기' : '접기') + '">' + (tlCollapsed.has(p.id) ? '▸' : '▾') + '</button>' : '<span style="width:16px;flex-shrink:0"></span>') +
         '<span style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap' + (st === 'done' ? ';text-decoration:line-through;text-decoration-thickness:1px;text-decoration-color:var(--t5)' : '') + '">' + eH(p.name || p.orderNo) + '</span>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:4px;margin-top:2px">' +
@@ -303,9 +445,18 @@ async function renderTimeline() {
 
     // 바 영역
     rowsHtml += '<div class="tl-bars" style="width:' + totalWidth + 'px">';
-    // 그리드 라인
+    // 그리드 라인 (v13.133 주말/과거 음영)
     units.forEach(function (u, idx) {
-      rowsHtml += '<div class="tl-grid-line" style="left:' + (idx * getUnitWidth()) + 'px;width:' + getUnitWidth() + 'px"></div>';
+      var gridClasses = 'tl-grid-line';
+      if (tlScale === 'day' && u.date) {
+        var unitDate = new Date(u.date + 'T00:00:00');
+        var dow = unitDate.getDay();
+        if (dow === 0 || dow === 6) gridClasses += ' tl-grid-weekend';
+        if (u.date < todayStr) gridClasses += ' tl-grid-past';
+      } else if (tlScale !== 'day') {
+        if (u.endDate && u.endDate < todayStr) gridClasses += ' tl-grid-past';
+      }
+      rowsHtml += '<div class="' + gridClasses + '" style="left:' + (idx * getUnitWidth()) + 'px;width:' + getUnitWidth() + 'px"></div>';
     });
 
     // 프로젝트 바
@@ -317,13 +468,29 @@ async function renderTimeline() {
       rowsHtml += buildPhaseBands(p, rangeStart, units);
     }
     if (p.progress > 0) {
-      rowsHtml += '<div class="tl-bar-progress" style="width:' + Math.min(p.progress, 100) + '%;background:' + p.color + ';filter:brightness(1.3)"></div>';
+      var prominentCls = (p.progress > 30) ? ' prominent' : '';
+      rowsHtml += '<div class="tl-bar-progress' + prominentCls + '" style="width:' + Math.min(p.progress, 100) + '%;background:' + p.color + '"></div>';
     }
     if (tlEditMode) {
       rowsHtml += '<div class="tl-handle tl-handle-l" data-handle="left"></div>';
       rowsHtml += '<div class="tl-handle tl-handle-r" data-handle="right"></div>';
     }
-    rowsHtml += '<span class="tl-bar-text">' + eH(p.name) + '</span></div>';
+    // v13.133 진척률 % 표시
+    var pctSpan = (p.progress > 0) ? ' <span class="tl-bar-pct">' + Math.round(p.progress) + '%</span>' : '';
+    rowsHtml += '<span class="tl-bar-text">' + eH(p.name) + pctSpan + '</span>';
+    // v13.133 D-Day 배지 (막대 클릭 가로채지 않음 — pointer-events:none)
+    if (tlDayOffset) {
+      var _refDate = p.endDate || p.startDate;
+      if (_refDate && _refDate.length >= 10) {
+        var _daysTo = daysDiff(todayStr, _refDate);
+        var _ddayLabel, _ddayClass;
+        if (_daysTo === 0) { _ddayLabel = 'D-day'; _ddayClass = 'tl-dday-now'; }
+        else if (_daysTo > 0) { _ddayLabel = '+' + _daysTo + ' days'; _ddayClass = 'tl-dday-future'; }
+        else { _ddayLabel = _daysTo + ' days'; _ddayClass = 'tl-dday-past'; }
+        rowsHtml += '<div class="tl-dday-badge ' + _ddayClass + '" title="오늘로부터 ' + _daysTo + '일">' + _ddayLabel + '</div>';
+      }
+    }
+    rowsHtml += '</div>';
 
     // 마일스톤 마커
     pMs.forEach(function (ms) {
@@ -344,11 +511,12 @@ async function renderTimeline() {
     rowsHtml += '</div>'; // tl-bars
     rowsHtml += '</div>'; // tl-row
 
-    // 마일스톤 하위 행
-    pMs.forEach(function (ms) {
-      var msBarStyle = getBarStyle(ms.startDate, ms.endDate, rangeStart, units);
-      var msSt = ms.status || 'waiting';
-      var msStInfo = PROJ_STATUS[msSt] || PROJ_STATUS.waiting;
+    // 마일스톤 하위 행 (v13.133 접기 시 생략)
+    if (!tlCollapsed.has(p.id)) {
+      pMs.forEach(function (ms) {
+        var msBarStyle = getBarStyle(ms.startDate, ms.endDate, rangeStart, units);
+        var msSt = ms.status || 'waiting';
+        var msStInfo = PROJ_STATUS[msSt] || PROJ_STATUS.waiting;
       var msBarBg = msSt === 'done' ? '#10B98180' : msSt === 'delayed' ? '#EF444480' : msSt === 'active' ? p.color + '90' : p.color + '40';
       var msBarCls = 'tl-bar tl-bar-ms' + (msSt === 'delayed' ? ' tl-bar-delayed' : '') + (msSt === 'done' ? ' tl-bar-done' : '');
       // 한 줄 네이티브 툴팁 (프로젝트 막대와 동일 형태) — 이름 · 기간 · 일수 · D-day
@@ -363,7 +531,7 @@ async function renderTimeline() {
       var msTitle = (ms.name || '') + ' · ' + (ms.startDate || '?') + ' ~ ' + (ms.endDate || '?') + (_msDays != null ? ' · ' + _msDays + '일' : '') + (_msDday ? ' · ' + _msDday.label : '') + _msPerf;
       var _perf = (typeof _tlMsPerf === 'function') ? _tlMsPerf(ms, msWorkH) : { text: '', html: '' };
       var _msProg = Number(ms.progress) || 0;
-      rowsHtml += '<div class="tl-row tl-row-sub" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '" ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)">';
+      rowsHtml += '<div class="tl-row tl-row-sub' + (_pi % 2 === 1 ? ' tl-proj-alt' : '') + '" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '" ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)">';
       rowsHtml += '<div class="tl-label tl-label-sub" draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' +
         ' title="' + eH(msTitle) + ' — 클릭: 진척률·작업노트 업데이트"' +
         ' onclick="tlMsOpenUpdate(event,\'' + ms.id + '\',\'' + p.id + '\',' + _msProg + ')"' +
@@ -373,7 +541,16 @@ async function renderTimeline() {
         '</span></div>';
       rowsHtml += '<div class="tl-bars" style="width:' + totalWidth + 'px">';
       units.forEach(function (u, idx) {
-        rowsHtml += '<div class="tl-grid-line" style="left:' + (idx * getUnitWidth()) + 'px;width:' + getUnitWidth() + 'px"></div>';
+        var gridClasses = 'tl-grid-line';
+        if (tlScale === 'day' && u.date) {
+          var unitDate = new Date(u.date + 'T00:00:00');
+          var dow = unitDate.getDay();
+          if (dow === 0 || dow === 6) gridClasses += ' tl-grid-weekend';
+          if (u.date < todayStr) gridClasses += ' tl-grid-past';
+        } else if (tlScale !== 'day') {
+          if (u.endDate && u.endDate < todayStr) gridClasses += ' tl-grid-past';
+        }
+        rowsHtml += '<div class="' + gridClasses + '" style="left:' + (idx * getUnitWidth()) + 'px;width:' + getUnitWidth() + 'px"></div>';
       });
       var msEditCls = tlEditMode ? ' tl-bar-editable' : '';
       rowsHtml += '<div class="' + msBarCls + msEditCls + '" data-type="ms" data-id="' + ms.id + '"' +
@@ -384,10 +561,27 @@ async function renderTimeline() {
         rowsHtml += '<div class="tl-handle tl-handle-l" data-handle="left"></div>';
         rowsHtml += '<div class="tl-handle tl-handle-r" data-handle="right"></div>';
       }
+      // v13.133 마일스톤 진척률 % 표시
+      if (_msProg > 0) {
+        rowsHtml += '<span class="tl-bar-pct small">' + Math.round(_msProg) + '%</span>';
+      }
+      // v13.133 마일스톤 D-Day 배지 (막대 클릭 가로채지 않음 — pointer-events:none)
+      if (tlDayOffset) {
+        var _msRefDate = ms.endDate || ms.startDate;
+        if (_msRefDate && _msRefDate.length >= 10) {
+          var _msDaysTo = daysDiff(todayStr, _msRefDate);
+          var _msDdayLabel, _msDdayClass;
+          if (_msDaysTo === 0) { _msDdayLabel = 'D-day'; _msDdayClass = 'tl-dday-now'; }
+          else if (_msDaysTo > 0) { _msDdayLabel = '+' + _msDaysTo + ' days'; _msDdayClass = 'tl-dday-future'; }
+          else { _msDdayLabel = _msDaysTo + ' days'; _msDdayClass = 'tl-dday-past'; }
+          rowsHtml += '<div class="tl-dday-badge ' + _msDdayClass + '" title="오늘로부터 ' + _msDaysTo + '일">' + _msDdayLabel + '</div>';
+        }
+      }
       rowsHtml += '</div>';
       if (todayPos >= 0) rowsHtml += '<div class="tl-today-line" style="left:' + todayPos + 'px"></div>';
       rowsHtml += '</div></div>';
-    });
+      });
+    }
   });
 
   // 재렌더 시 스크롤 위치 보존 (마일스톤 업데이트 후 등) — 기존 #tlScroll 위치 캡처
@@ -395,7 +589,7 @@ async function renderTimeline() {
   var _tlPrevScroll = _tlPrevScrollEl ? { left: _tlPrevScrollEl.scrollLeft, top: _tlPrevScrollEl.scrollTop } : null;
 
   content.innerHTML =
-    '<div class="tl-container" style="position:relative">' +
+    '<div class="tl-container' + (tlDensity === 'compact' ? ' tl-compact' : '') + '" style="position:relative">' +
       '<div class="tl-scroll" id="tlScroll">' +
         '<div class="tl-header-row">' +
           '<div class="tl-label-header" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px">프로젝트</div>' +
