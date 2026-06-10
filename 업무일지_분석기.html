@@ -829,7 +829,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.122</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.123</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3381,6 +3381,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.123',date:'2026-06-10',title:'🧾 운영자 탭에 활동 로그 추가 + 마일스톤 변경 감사 기록',tag:'feat',items:[
+      '운영자 탭에 "🧾 활동 로그" 탭 추가(관리자 전용) — 프로젝트 등록/수정·마일스톤 등록/수정/삭제/진척·코멘트 등 변경 이력을 시간순 추적. "프로젝트 관련만" 필터 + 검색 + 새로고침',
+      '마일스톤 생성/수정/삭제도 audit_logs에 기록(기존 프로젝트 등록/수정·마일스톤 진척·코멘트에 더해)',
+      '프로젝트 수정 시 텔레그램 알림은 v13.118의 project_updated로 유지(마일스톤 변경은 스팸 방지로 로그만)',
+      '활동 로그는 admin 전용 /api/audit 재사용. 영향: operator-mode.js, server/routes/milestones.js. 서버 포함 — git push 배포 후 적용'
+    ]},
     {ver:'13.122',date:'2026-06-10',title:'📝 투입실적 누적=보고 투입만(업무일지는 참고 표시) + 타임라인 오늘/날짜 이동 가로 스크롤만',tag:'fix',items:[
       '투입실적: 누적/대비(목표·예상)·공수초과·담당자별 실적을 "보고 투입(실제 업데이트된 항목)"만으로 계산. 업무일지 투입은 📋 참고로 표시만(누적 미포함) — 추후 필요 시 연동',
       '담당자별 누적 실적(보고)은 마일스톤 작업노트 로그를 작성자별로 합산. 업무일지 투입은 각 줄에 "(참고)"로 병기',

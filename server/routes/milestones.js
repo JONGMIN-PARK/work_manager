@@ -56,6 +56,7 @@ router.post('/', async function (req, res) {
        b.endDate || b.end_date || '', b.status || 'waiting', b.order || b.sort_order || 0, JSON.stringify(atIns), req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
+    try { authService.auditLog(req.user.sub, 'milestone.create', 'milestone', id, { name: r.rows[0] && r.rows[0].name, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
   } catch (e) {
     console.error('[milestones/create]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -77,6 +78,7 @@ router.put('/:id', async function (req, res) {
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
+    try { authService.auditLog(req.user.sub, 'milestone.update', 'milestone', req.params.id, { name: r.rows[0] && r.rows[0].name, status: r.rows[0] && r.rows[0].status, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
 
     // 텔레그램 알림: 마일스톤 완료
     try {
@@ -314,9 +316,10 @@ router.post('/:id/transfer', async function (req, res) {
 // DELETE /api/milestones/:id
 router.delete('/:id', async function (req, res) {
   try {
-    var r = await db.query('DELETE FROM milestones WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
+    var r = await db.query('DELETE FROM milestones WHERE id = $1 AND tenant_id = $2 RETURNING id, project_id, name', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
+    try { authService.auditLog(req.user.sub, 'milestone.delete', 'milestone', req.params.id, { name: r.rows[0] && r.rows[0].name, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
   } catch (e) {
     console.error('[milestones/delete]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
