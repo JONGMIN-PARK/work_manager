@@ -381,15 +381,21 @@ async function notifyAdmins(eventType, payload) {
   return notify(eventType, payload, ids);
 }
 
-/** 프로젝트 PL + 관리자에게 알림 */
+/** 프로젝트 이해관계자(활성 멤버 전체 + 소유자) + 관리자에게 알림 */
 async function notifyProjectStakeholders(eventType, payload, projectId) {
   var ids = new Set();
-  // PL 조회
-  var plR = await db.query(
-    "SELECT user_id FROM project_members WHERE project_id = $1 AND role = 'pl' AND released_at IS NULL",
+  // 활성 프로젝트 멤버 전체 (PL·assignee 포함)
+  var memR = await db.query(
+    "SELECT user_id FROM project_members WHERE project_id = $1 AND released_at IS NULL",
     [projectId]
   );
-  plR.rows.forEach(function (r) { ids.add(r.user_id); });
+  memR.rows.forEach(function (r) { ids.add(r.user_id); });
+
+  // 프로젝트 소유자
+  try {
+    var ownR = await db.query('SELECT owner_id FROM projects WHERE id = $1', [projectId]);
+    if (ownR.rows[0] && ownR.rows[0].owner_id) ids.add(ownR.rows[0].owner_id);
+  } catch (e) { /* owner_id 없을 수 있음 */ }
 
   // 관리자
   var adminR = await db.query("SELECT id FROM users WHERE role = 'admin' AND status = 'active'");

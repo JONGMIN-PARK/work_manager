@@ -829,7 +829,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.126</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.127</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3381,6 +3381,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.127',date:'2026-06-10',title:'📣 프로젝트 변경 텔레그램 알림 — 수신 대상 확대 + 사람이 읽는 변경 요약',tag:'fix',items:[
+      'notifyProjectStakeholders 대상을 PL뿐 아니라 활성 멤버 전체 + 프로젝트 소유자 + 관리자 + 그룹챗으로 확대',
+      '프로젝트 수정 알림 요약을 "변경 필드: status,..." → "상태 진행중→완료 · 진척률 80% · 일정 변경"처럼 사람이 읽기 쉽게 개선',
+      '⚠️ 텔레그램이 안 오는 경우 점검: ① 서버 배포 완료 ② TELEGRAM_BOT_TOKEN 환경변수 설정 ③ 수신자가 봇과 1:1 연동(telegram_links) ④ 알림 수신 설정 ON. 미설정 시 인앱 알림만 생성됨',
+      '영향: server/services/notification.service.js, server/routes/projects.js. 서버 포함 — git push 배포 후 적용'
+    ]},
     {ver:'13.126',date:'2026-06-10',title:'🔁 실적=보고 투입을 전 영역에 일관 적용 (타임라인 마일스톤 타이틀/툴팁·분석 뷰)',tag:'fix',items:[
       '타임라인 마일스톤 라벨/툴팁 실적이 "업무일지+보고" 합산이던 것을 보고 투입만으로 수정(업무일지는 툴팁에 참고로만)',
       '분석·트렌드: 총 투입·위험 식별·대비·마일스톤 표·담당자별 바를 모두 보고 투입 기준으로 변경(담당자별은 상세에서 로그 작성자별 집계)',

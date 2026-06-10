@@ -207,8 +207,20 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
     } catch (_) {}
     try {
       var updRow = result.row || {};
+      // 사람이 읽기 쉬운 변경 요약
+      var _sum = [];
+      if (clean.status) _sum.push('상태 ' + (prev && prev.status && prev.status !== clean.status ? prev.status + '→' : '') + clean.status);
+      if (clean.progress != null) _sum.push('진척률 ' + clean.progress + '%');
+      if (clean.current_phase) _sum.push('단계 ' + clean.current_phase);
+      if (clean.start_date != null || clean.end_date != null) _sum.push('일정 변경');
+      if (clean.estimated_hours != null) _sum.push('예상 ' + clean.estimated_hours + 'h');
+      if (clean.assignees != null) _sum.push('담당자 변경');
+      if (clean.visibility) _sum.push('가시성 ' + clean.visibility);
+      if (clean.name) _sum.push('이름 변경');
+      if (clean.memo != null) _sum.push('메모 변경');
+      var _summary = _sum.length ? _sum.join(' · ') : '내용 수정';
       notificationService.notifyProjectStakeholders('project_updated', {
-        projectName: updRow.name, orderNo: updRow.order_no, summary: '변경 필드: ' + Object.keys(clean).join(', ')
+        projectName: updRow.name, orderNo: updRow.order_no, summary: _summary
       }, req.params.id).catch(function (e) { console.error('[noti]', e.message); });
     } catch (_) {}
   } catch (e) {
