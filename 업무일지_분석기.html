@@ -826,7 +826,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.109</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.110</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3367,6 +3367,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.110',date:'2026-06-10',title:'📜 진척률 업데이트 모달에서 이력 보기 + 부분/전체 삭제',tag:'feat',items:[
+      '진척률·작업노트 업데이트 모달(🖉)에 "업데이트 이력" 섹션 추가 — 과거 진척률·보고 투입·작성자·시간·노트를 한 화면에서 확인',
+      '모달 내에서 이력 부분 삭제(🗑) / 전체 삭제 가능 → 삭제 시 마일스톤·프로젝트 진척률 재계산 + 하위 뷰(타임라인/투입실적) 자동 갱신',
+      '타임라인에서 마일스톤 클릭으로 열어도 이력 관리까지 완결 (투입실적 탭 없이도)',
+      '영향: project-detail.js, 업무일지_분석기.html. 클라이언트 전용 — 새로고침 즉시 반영(삭제 API는 서버 배포 후 동작)'
+    ]},
     {ver:'13.109',date:'2026-06-10',title:'🖱️ 타임라인 마일스톤 라벨에 진척률·실적 표시 + 클릭하여 업데이트 + 표준 모달 가드',tag:'feat',items:[
       '타임라인 마일스톤 개별 라벨에 "실작업/예상h · 진척률%" 표시 (진척률 색상 구분). 라벨 폭 자동 보정으로 잘림 없음',
       '타임라인에서 마일스톤(라벨/막대) 클릭 → 진척률·작업노트·투입시간 업데이트 모달 오픈 → 저장 시 타임라인 자동 새로고침 (편집 모드에선 드래그 우선)',

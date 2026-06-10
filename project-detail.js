@@ -679,7 +679,7 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
     return '<button class="btn btn-g btn-s" style="flex:1;font-size:10px;padding:4px 0" onclick="document.getElementById(\'pdProgRange\').value=' + q + ';document.getElementById(\'pdProgNum\').value=' + q + ';document.getElementById(\'pdProgVal\').textContent=\'' + q + '%\'">' + q + '</button>';
   }).join('');
   modal.innerHTML =
-    '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;width:400px;max-width:94%">' +
+    '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;width:400px;max-width:94%;max-height:90vh;overflow:auto">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
         '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">🖉 진척률 · 작업 노트</h3>' +
         '<button class="btn btn-g btn-s" onclick="document.getElementById(\'pdMsProgModal\').remove()">✕</button>' +
@@ -698,8 +698,15 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
         '<button class="btn btn-g" style="flex:1" onclick="document.getElementById(\'pdMsProgModal\').remove()">취소</button>' +
         '<button class="btn btn-p" id="pdProgSave" style="flex:2">저장</button>' +
       '</div>' +
+      '<div id="pdProgHist" style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"><div style="font-size:10px;color:var(--t6)">이력 로딩 중...</div></div>' +
     '</div>';
   document.body.appendChild(modal);
+  // 이력 컨텍스트(삭제 후 재렌더·하위뷰 갱신용) + 이력 로드
+  _pdProgCtx = {
+    mid: mid, projId: projId,
+    refresh: (opts && typeof opts.onSaved === 'function') ? opts.onSaved : function () { if (typeof pdLoadWork === 'function') pdLoadWork(projId); }
+  };
+  _pdRenderProgHist();
   var saveBtn = document.getElementById('pdProgSave');
   saveBtn.onclick = function () {
     var progress = parseInt(document.getElementById('pdProgNum').value, 10);
@@ -723,6 +730,74 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
       if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
     });
   };
+}
+
+/* 진척률 업데이트 모달 내 이력 — 현재 열린 모달의 컨텍스트 */
+var _pdProgCtx = null;
+
+/* 모달 내 이력 렌더 (부분/전체 삭제 버튼 포함) */
+function _pdRenderProgHist() {
+  var el = document.getElementById('pdProgHist');
+  if (!el || !_pdProgCtx) return;
+  if (typeof msLogsGet !== 'function') { el.innerHTML = '<div style="font-size:10px;color:var(--t6)">이력 기능을 사용할 수 없습니다.</div>'; return; }
+  el.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:2px 0">이력 로딩 중...</div>';
+  msLogsGet(_pdProgCtx.mid).then(function (logs) {
+    logs = logs || [];
+    var s = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+      '<span style="font-size:11px;font-weight:700;color:var(--t3)">📜 업데이트 이력 (' + logs.length + ')</span>' +
+      (logs.length ? '<button class="btn btn-d btn-s" style="font-size:9px;padding:2px 7px" onclick="pdProgHistClear()" title="이 마일스톤 진척률 이력 전체 삭제">🗑 전체 삭제</button>' : '') +
+      '</div>';
+    if (!logs.length) { s += '<div style="font-size:10px;color:var(--t6);padding:4px 0">아직 기록이 없습니다.</div>'; el.innerHTML = s; return; }
+    s += '<div style="border-left:2px solid var(--bd);padding-left:8px">';
+    logs.forEach(function (lg) {
+      var p = Number(lg.progress) || 0;
+      var lh = Number(lg.hours) || 0;
+      s += '<div style="margin-bottom:7px">';
+      s += '<div style="display:flex;align-items:center;gap:6px;font-size:10px">';
+      s += '<span style="font-weight:700;color:' + (p >= 100 ? '#10B981' : 'var(--ac)') + '">' + p + '%</span>';
+      if (lh > 0) s += '<span style="color:#8B5CF6;font-weight:600" title="보고 투입">📝' + (Math.round(lh * 10) / 10) + 'h</span>';
+      s += '<span style="color:var(--t5)">' + eH(lg.authorName || '') + '</span>';
+      s += '<span style="color:var(--t6);margin-left:auto">' + (typeof _pdRelTime === 'function' ? _pdRelTime(lg.createdAt) : '') + '</span>';
+      s += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" title="이 이력 삭제" onclick="pdProgHistDel(\'' + lg.id + '\')">🗑</button>';
+      s += '</div>';
+      if (lg.note) s += '<div style="font-size:10px;color:var(--t4);line-height:1.45;margin-top:1px">' + eH(lg.note) + '</div>';
+      s += '</div>';
+    });
+    s += '</div>';
+    el.innerHTML = s;
+  }).catch(function () { el.innerHTML = '<div style="font-size:10px;color:#EF4444;padding:4px 0">이력 로딩 실패</div>'; });
+}
+
+/* 모달 내 이력 1건 삭제 → 이력 재렌더 + 하위 뷰 갱신 */
+function pdProgHistDel(logId) {
+  if (!_pdProgCtx || typeof msLogDel !== 'function') return;
+  if (!confirm('이 이력 1건을 삭제할까요?')) return;
+  msLogDel(_pdProgCtx.mid, logId).then(function () {
+    if (typeof showToast === 'function') showToast('이력 삭제 완료');
+    _pdRenderProgHist();
+    if (_pdProgCtx && typeof _pdProgCtx.refresh === 'function') _pdProgCtx.refresh();
+  }).catch(function (err) {
+    var msg = (err && err.status === 403) ? '프로젝트 멤버만 삭제할 수 있습니다.'
+      : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.'
+      : ((err && err.message) || '삭제 실패');
+    if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
+  });
+}
+
+/* 모달 내 이력 전체 삭제 → 이력 재렌더 + 하위 뷰 갱신 */
+function pdProgHistClear() {
+  if (!_pdProgCtx || typeof msLogClear !== 'function') return;
+  if (!confirm('이 마일스톤의 진척률 이력을 전체 삭제할까요?\n(되돌릴 수 없습니다)')) return;
+  msLogClear(_pdProgCtx.mid).then(function () {
+    if (typeof showToast === 'function') showToast('이력 전체 삭제 완료');
+    _pdRenderProgHist();
+    if (_pdProgCtx && typeof _pdProgCtx.refresh === 'function') _pdProgCtx.refresh();
+  }).catch(function (err) {
+    var msg = (err && err.status === 403) ? '프로젝트 멤버만 삭제할 수 있습니다.'
+      : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.'
+      : ((err && err.message) || '삭제 실패');
+    if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
+  });
 }
 
 /* 업무일지 레코드를 프로젝트 마일스톤의 날짜 구간으로 자동 태깅 */
