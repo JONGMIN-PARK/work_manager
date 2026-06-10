@@ -68,6 +68,15 @@ var tlRangeStart = null; // 현재 렌더 기준 rangeStart (드래그용)
 var tlUnits = null; // 현재 렌더 units (드래그용)
 var tlLabelW = 0; // 현재 렌더 labelW (드래그용)
 var showCriticalPath = false; // Feature 8: 크리티컬 패스 토글
+var _tlJumpDate = null; // 다음 렌더에서 이 날짜를 중앙으로 (오늘/날짜 이동). 범위에 포함시켜 재렌더
+
+/* 오늘로 이동 / 지정 날짜로 이동 — 해당 날짜를 범위에 포함시켜 재렌더 후 중앙 배치 */
+function tlGoToday() { tlGoToDate(typeof localDate === 'function' ? localDate() : ''); }
+function tlGoToDate(dateStr) {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return;
+  _tlJumpDate = dateStr.slice(0, 10);
+  renderTimeline();
+}
 
 /* ═══ 초기화 ═══ */
 function initTimeline() {
@@ -119,6 +128,8 @@ async function renderTimeline() {
     if (p.startDate && DATE_RX.test(p.startDate)) allDates.push(p.startDate.slice(0, 10));
     if (p.endDate && DATE_RX.test(p.endDate)) allDates.push(p.endDate.slice(0, 10));
   });
+  // 날짜 이동 대상이 범위 밖이어도 보이도록 범위에 포함
+  if (_tlJumpDate && DATE_RX.test(_tlJumpDate)) allDates.push(_tlJumpDate);
   allDates.sort();
 
   // 모든 프로젝트에 유효 날짜가 없으면 오늘 기준 ±30일 폴백
@@ -164,6 +175,10 @@ async function renderTimeline() {
         var labels = { day: '일', week: '주', month: '월', quarter: '분기' };
         return '<button class="btn btn-s ' + (tlScale === s ? 'btn-p' : 'btn-g') + '" onclick="tlScale=\'' + s + '\';renderTimeline()">' + labels[s] + '</button>';
       }).join('') +
+    '</div>' +
+    '<div style="display:flex;gap:4px;align-items:center">' +
+      '<button class="btn btn-g btn-s" onclick="tlGoToday()" title="오늘 날짜를 중앙으로">📍 오늘</button>' +
+      '<input type="date" onchange="if(this.value)tlGoToDate(this.value)" title="지정 날짜로 이동" style="font-size:10px;padding:2px 5px;border:1px solid var(--bd-i);border-radius:5px;background:var(--bg-i);color:var(--t3)">' +
     '</div>' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlEditMode ? '#FCD34D' : 'var(--t5)') + ';cursor:pointer;background:' + (tlEditMode ? 'rgba(245,158,11,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlEditMode ? 'rgba(245,158,11,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlEditModeTog" onchange="tlEditMode=this.checked;renderTimeline()"' + (tlEditMode ? ' checked' : '') + '> ✏️ 기간 조정</label>' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlHideDoneTog" onchange="tlHideDone=this.checked;renderTimeline()"' + (tlHideDone ? ' checked' : '') + '> 완료 숨기기</label>' +
@@ -368,10 +383,19 @@ async function renderTimeline() {
       '</div>' +
     '</div>';
 
-  // 재렌더면 이전 스크롤 위치 복원, 첫 렌더면 오늘 날짜를 중앙에 배치
+  // 날짜 이동(오늘/지정)이 있으면 그 날짜를 중앙으로, 아니면 재렌더는 이전 위치 복원, 첫 렌더는 오늘 중앙
   var scrollEl = document.getElementById('tlScroll');
   if (scrollEl) {
-    if (_tlPrevScroll) {
+    if (_tlJumpDate) {
+      var jpos = getDatePosition(_tlJumpDate, rangeStart, units);
+      _tlJumpDate = null;
+      if (jpos >= 0) {
+        var jview = scrollEl.clientWidth - labelW;
+        scrollEl.scrollLeft = Math.max(0, jpos - jview / 2);
+      } else if (_tlPrevScroll) {
+        scrollEl.scrollLeft = _tlPrevScroll.left; scrollEl.scrollTop = _tlPrevScroll.top;
+      }
+    } else if (_tlPrevScroll) {
       scrollEl.scrollLeft = _tlPrevScroll.left;
       scrollEl.scrollTop = _tlPrevScroll.top;
     } else if (todayPos >= 0) {

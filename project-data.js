@@ -1476,8 +1476,12 @@ function autoUpdateProgress() {
         if (p.orderNo) {
           var byName = byOrderName[p.orderNo.trim()];
           if (byName) {
-            var memberSet = membersByProj[p.id];
-            var hasMembers = memberSet && Object.keys(memberSet).length > 0;
+            // 등록 인원 = 활성 멤버 ∪ 지정 담당자(assignees). 수주번호만 같은 비등록자는 제외.
+            var memberSet = {};
+            var _msrc = membersByProj[p.id];
+            if (_msrc) Object.keys(_msrc).forEach(function (n) { memberSet[n] = true; });
+            if (Array.isArray(p.assignees)) p.assignees.forEach(function (n) { if (n) memberSet[n] = true; });
+            var hasMembers = Object.keys(memberSet).length > 0;
             Object.keys(byName).forEach(function (nm) {
               if (hasMembers && !memberSet[nm]) return;
               actual += byName[nm];
@@ -1544,6 +1548,8 @@ function calcHoursByMilestone(projectId, opts) {
       var milestones = msMem[0];
       var memberSet = {};
       (msMem[1] || []).forEach(function (n) { memberSet[n] = true; });
+      // 프로젝트 등록 인원 = 활성 멤버 ∪ 프로젝트 지정 담당자(assignees). 수주번호만 같은 비등록자는 집계 제외.
+      if (proj && Array.isArray(proj.assignees)) proj.assignees.forEach(function (n) { if (n) memberSet[n] = true; });
       var hasMembers = Object.keys(memberSet).length > 0;
       if (!milestones.length) return {};
       milestones.sort(function (a, b) { return (a.startDate || '') < (b.startDate || '') ? -1 : 1; });
