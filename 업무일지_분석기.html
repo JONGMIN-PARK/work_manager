@@ -578,7 +578,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-unit-now{background:var(--ac-g);color:var(--ac-t)}
 .tl-row{display:flex;border-bottom:1px solid var(--bd);width:fit-content;min-width:100%}
 .tl-row-sub{background:var(--bg-i)}
-.tl-label{min-width:160px;padding:10px 12px;border-right:1px solid var(--bd);cursor:pointer;transition:background .15s;position:sticky;left:0;z-index:2;background:var(--bg-p);box-sizing:border-box;flex-shrink:0}
+.tl-label{min-width:160px;padding:10px 12px;border-right:1px solid var(--bd);cursor:pointer;transition:background .15s;position:sticky;left:0;z-index:3;background:var(--bg-p);box-sizing:border-box;flex-shrink:0}
 .tl-label:hover{background:var(--bg-hv)}
 .tl-label-sub{padding:6px 12px 6px 24px;background:var(--bg-i)}
 .tl-row-sub .tl-label{background:var(--bg-i)}
@@ -827,7 +827,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.112</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.113</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3379,6 +3379,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.113',date:'2026-06-10',title:'🔑 관리자 전체 접근/수정 + 타임라인 상세창·오늘선/날짜선 겹침 수정',tag:'fix',items:[
+      '관리자(admin)가 전체 프로젝트를 접근·수정할 수 있도록 서버 권한 보정 — canAccessProject admin 우회 + GET /api/projects 목록 admin 전체 반환. 부여된 운영자는 전체 읽기 접근',
+      '타임라인에서 프로젝트 선택 시 상세창(개요·라이프사이클·이슈·투입실적)이 안 뜨던 문제 해결 — 원인은 admin/운영자가 전체보기로 본 프로젝트의 projGet이 403(접근 거부)나던 것. 위 권한 보정으로 해결',
+      '간트 차트 횡스크롤 시 오늘 날짜선·날짜 구분선이 좌측 타이틀(프로젝트명·마일스톤 라벨)을 덮던 문제 수정 — 스티키 라벨 z-index를 라인보다 위(3)로 올려 라인이 날짜 영역 안에서만 보이도록',
+      '영향: server/routes/projects.js, style.css + 업무일지_분석기.html(인라인 CSS). 권한 변경은 서버 포함 — git push → Render 배포 후 적용. CSS는 새로고침 즉시'
+    ]},
     {ver:'13.112',date:'2026-06-10',title:'🛡️ 운영자 모드 — 전체 프로젝트 가시성·선택 숨김(전역 연동) + 접근 관리 (Phase 1)',tag:'feat',items:[
       '프로젝트 관리 탭에 🛡️ 운영자 서브탭 신설 (admin 자동 + 관리자가 허용한 사용자만 노출·접근)',
       '운영자는 전체 프로젝트(가시성 우회)를 보고, 보고 싶은 것만 남기도록 선택 숨김 → 타임라인·파이프라인·달력·문서관리에 전역 적용. user_settings에 저장돼 새로고침·기기 간 유지',

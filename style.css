@@ -157,7 +157,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-unit-now{background:var(--ac-g);color:var(--ac-t)}
 .tl-row{display:flex;border-bottom:1px solid var(--bd);width:fit-content;min-width:100%}
 .tl-row-sub{background:var(--bg-i)}
-.tl-label{min-width:160px;padding:10px 12px;border-right:1px solid var(--bd);cursor:pointer;transition:background .15s;position:sticky;left:0;z-index:2;background:var(--bg-p);box-sizing:border-box;flex-shrink:0}
+.tl-label{min-width:160px;padding:10px 12px;border-right:1px solid var(--bd);cursor:pointer;transition:background .15s;position:sticky;left:0;z-index:3;background:var(--bg-p);box-sizing:border-box;flex-shrink:0}
 .tl-label:hover{background:var(--bg-hv)}
 .tl-label-sub{padding:6px 12px 6px 16px;background:var(--bg-i)}
 .tl-row-sub .tl-label{background:var(--bg-i)}

@@ -19,6 +19,7 @@ router.use(tenant.tenantScope);
 // 단일 프로젝트 행에 대한 접근권 판정. 멤버 조회는 옵션(이미 캐시된 경우 전달).
 async function canAccessProject(req, project, opts) {
   if (!project) return false;
+  if (req.user.role === 'admin') return true;   // 관리자: 전체 프로젝트 접근/수정
   var userId = req.user.sub;
   var deptId = req.user.departmentId || null;
   if (project.owner_id === userId) return true;
@@ -26,6 +27,8 @@ async function canAccessProject(req, project, opts) {
   if (project.visibility === 'dept' && deptId && project.department_id === deptId) return true;
   // project_members(active) 체크
   if (opts && opts.isMember === true) return true;
+  // 부여된 운영자: 읽기 접근 허용 (멤버 아님 확정 전에 체크)
+  try { if (operator && operator.isOperator && await operator.isOperator(req)) return true; } catch (_) {}
   if (opts && opts.isMember === false) return false; // 이미 부정 확인
   var mr = await db.query('SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2 AND released_at IS NULL LIMIT 1', [project.id, userId]);
   return mr.rows.length > 0;
@@ -38,10 +41,12 @@ router.get('/', async function (req, res) {
     var deptId = req.user.departmentId || null;
     var pg = parsePagination(req.query, 100);
 
-    // 가시성 룰을 SQL에 인라인 — admin/executive 우회 없음.
-    var visClause = "(p.owner_id = $1 OR pm.user_id IS NOT NULL OR p.visibility = 'tenant'"
-      + (deptId ? " OR (p.visibility = 'dept' AND p.department_id = $3)" : "")
-      + ")";
+    // 가시성 룰을 SQL에 인라인. 관리자(admin)는 테넌트 전체 접근.
+    var visClause = (req.user.role === 'admin')
+      ? "TRUE"
+      : ("(p.owner_id = $1 OR pm.user_id IS NOT NULL OR p.visibility = 'tenant'"
+        + (deptId ? " OR (p.visibility = 'dept' AND p.department_id = $3)" : "")
+        + ")");
     var params = deptId
       ? [userId, req.tenant.id, deptId, pg.limit, pg.offset]
       : [userId, req.tenant.id, pg.limit, pg.offset];
