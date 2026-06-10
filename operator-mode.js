@@ -13,8 +13,20 @@ function renderOperator() {
     wrap.innerHTML = '<div style="text-align:center;color:var(--t6);font-size:12px;padding:30px">운영자 권한이 필요합니다.</div>';
     return;
   }
-  wrap.innerHTML = '<div style="font-size:12px;color:var(--t6);padding:20px">로딩 중...</div>';
   var isAdmin = currentUser && currentUser.role === 'admin';
+  var _view = (typeof window !== 'undefined' && window._opView) || 'manage';
+  var toggle = '<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">' +
+    '<button class="btn btn-s ' + (_view === 'manage' ? 'btn-p' : 'btn-g') + '" onclick="opSetView(\'manage\')">🗂 가시성·접근 관리</button>' +
+    '<button class="btn btn-s ' + (_view === 'analytics' ? 'btn-p' : 'btn-g') + '" onclick="opSetView(\'analytics\')">📊 분석·트렌드</button>' +
+  '</div>';
+  // 분석·트렌드 뷰
+  if (_view === 'analytics') {
+    wrap.innerHTML = toggle + '<div id="opAnalyticsBody"><div style="font-size:12px;color:var(--t6);padding:20px">로딩 중...</div></div>';
+    if (typeof renderOperatorAnalytics === 'function') renderOperatorAnalytics('opAnalyticsBody');
+    else { var ab = document.getElementById('opAnalyticsBody'); if (ab) ab.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:20px">분석 모듈을 불러올 수 없습니다.</div>'; }
+    return;
+  }
+  wrap.innerHTML = '<div style="font-size:12px;color:var(--t6);padding:20px">로딩 중...</div>';
 
   var pAll = (typeof projGetAllOperator === 'function') ? projGetAllOperator().catch(function () { return []; }) : Promise.resolve([]);
   var pUsers = isAdmin ? apiFetch('/api/users/operator-list').then(function (r) { return r.data || []; }).catch(function () { return []; }) : Promise.resolve(null);
@@ -25,7 +37,7 @@ function renderOperator() {
     projects.sort(function (a, b) { return (a.name || a.orderNo || '').localeCompare(b.name || b.orderNo || ''); });
     var hiddenCount = projects.filter(function (p) { return pmIsHidden(p.id); }).length;
 
-    var h = '';
+    var h = toggle;
     h += '<div style="margin-bottom:16px"><h3 style="font-size:15px;font-weight:700;color:var(--t1);margin-bottom:4px">🛡️ 운영자 모드</h3>';
     h += '<div style="font-size:11px;color:var(--t5);line-height:1.6">전체 프로젝트를 보고, 보고 싶은 것만 남기도록 숨길 수 있습니다. 숨김은 <b>타임라인·파이프라인·달력·문서관리</b>에 전역 적용되며 새로고침·기기 간 유지됩니다.</div></div>';
 
@@ -75,6 +87,12 @@ function renderOperator() {
   }).catch(function (e) {
     wrap.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:20px">로드 실패: ' + ((e && e.message) || e) + (e && e.status === 404 ? ' (서버 배포 후 동작)' : '') + '</div>';
   });
+}
+
+/* 운영자 탭 뷰 전환 (관리 / 분석·트렌드) */
+function opSetView(v) {
+  try { window._opView = v; } catch (_) {}
+  if (typeof renderOperator === 'function') renderOperator();
 }
 
 /* 포커스 변경 → 4개 뷰 캐시 무효화 (다음 진입 시 재렌더) */

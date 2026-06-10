@@ -207,13 +207,18 @@ async function showProjectDetail(id) {
     '<button class="btn btn-g btn-s" onclick="pdGenerateChecklists(\'' + id + '\')">📋 체크리스트 생성</button>' +
     '<button class="btn btn-d btn-s" onclick="document.getElementById(\'projDetailPanel\').remove();var bd=document.getElementById(\'projDetailBackdrop\');if(bd)bd.remove();deleteProjectUI(\'' + id + '\')">🗑 삭제</button>' +
   '</div>' +
-  '<div id="progressHistorySection" style="margin-top:16px"></div>';
+  '<div id="progressHistorySection" style="margin-top:16px"></div>' +
+  '<div id="pdCommentsSection" style="margin-top:16px"></div>';
 
   panel.innerHTML = html;
   document.body.appendChild(panel);
 
   if (typeof getProgressHistory === 'function') {
     renderProgressHistoryChart(id, proj);
+  }
+  // 프로젝트 코멘트/피드백 스레드 (메일·텔레그램 연동)
+  if (typeof renderCommentThread === 'function') {
+    renderCommentThread('project', id, 'pdCommentsSection');
   }
 
   var backdrop = document.createElement('div');
@@ -480,6 +485,7 @@ function pdLoadWork(projId) {
         h += '<span style="font-size:10px;font-weight:700;color:' + progColOf(prog) + ';min-width:30px;text-align:right">' + prog + '%</span>';
         if (canUpdate) h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 7px" onclick="pdMsProgressUpdate(\'' + m.id + '\',\'' + projId + '\',' + prog + ')" title="진척률·작업 노트 업데이트">🖉 업데이트</button>';
         h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="pdMsLogToggle(\'' + m.id + '\',\'' + projId + '\',' + (canUpdate ? 'true' : 'false') + ')" title="작업 노트 이력 보기">🕘</button>';
+        if (canUpdate && typeof openCommentModal === 'function') h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="openCommentModal(\'milestone\',\'' + m.id + '\',{projectId:\'' + projId + '\'})" title="담당자에게 피드백(메일·텔레그램)">💬</button>';
         h += '</div>';
         // 초과 배지 (공수초과 / 일정지연 / 효율주의)
         var badges = '';

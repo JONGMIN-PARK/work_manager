@@ -109,6 +109,30 @@ var TEMPLATES = {
   as_weekly_digest: function (p) {
     // p.content는 호출자가 조립한 사전-안전 HTML — raw 유지
     return p.content || '📊 <b>A/S 주간 요약</b>';
+  },
+  // ─── 코멘트/프로젝트 이벤트 (v13.x) ───
+  comment_added: function (p) {
+    return '💬 <b>새 피드백</b>\n' +
+      (p.targetName ? escHtml(p.targetName) + '\n' : '') +
+      (p.authorName ? '작성: ' + escHtml(p.authorName) + '\n' : '') +
+      escHtml((p.body || '').slice(0, 300));
+  },
+  project_created: function (p) {
+    return '🆕 <b>프로젝트 생성</b>\n' +
+      (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.projectName || p.name);
+  },
+  project_updated: function (p) {
+    return '✏️ <b>프로젝트 수정</b>\n' +
+      (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.projectName || p.name) +
+      (p.summary ? '\n' + escHtml(p.summary) : '');
+  },
+  milestone_progress: function (p) {
+    return '📈 <b>마일스톤 진척 보고</b>\n' +
+      (p.projectName ? escHtml(p.projectName) + '\n' : '') +
+      (p.milestoneName ? escHtml(p.milestoneName) + '\n' : '') +
+      '진척률: ' + escHtml(p.progress) + '%' +
+      (p.hours ? ' · 투입 ' + escHtml(p.hours) + 'h' : '') +
+      (p.authorName ? '\n보고: ' + escHtml(p.authorName) : '');
   }
 };
 
@@ -186,7 +210,11 @@ var EVENT_TITLES = {
   as_sla_breach: 'A/S SLA 초과',
   as_customer_wait: 'A/S 고객 확인 미회신',
   as_report_issued: 'A/S 보고서 발행',
-  as_weekly_digest: 'A/S 주간 요약'
+  as_weekly_digest: 'A/S 주간 요약',
+  comment_added: '새 피드백이 등록되었습니다',
+  project_created: '프로젝트가 생성되었습니다',
+  project_updated: '프로젝트가 수정되었습니다',
+  milestone_progress: '마일스톤 진척이 보고되었습니다'
 };
 
 // 이벤트별 텔레그램 인라인 버튼 옵션 — 순수 함수 (side-effect 없음)

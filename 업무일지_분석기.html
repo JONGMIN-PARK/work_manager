@@ -280,6 +280,8 @@ window.wmDataBus = (function () {
 <script defer src="as-manager.js?v=1" onerror="console.warn('as-manager.js 로드 실패')"></script>
 <script defer src="as-stats.js?v=1" onerror="console.warn('as-stats.js 로드 실패')"></script>
 <script defer src="operator-mode.js?v=1" onerror="console.warn('operator-mode.js 로드 실패')"></script>
+<script defer src="operator-analytics.js?v=1" onerror="console.warn('operator-analytics.js 로드 실패')"></script>
+<script defer src="comments-ui.js?v=1" onerror="console.warn('comments-ui.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" onerror="console.warn('pdf.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
@@ -827,7 +829,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.117</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.118</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3379,6 +3381,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.118',date:'2026-06-10',title:'💬 관리자 코멘트·피드백(메일·텔레그램) + 운영자 분석/트렌드 뷰 (Phase 1)',tag:'feat',items:[
+      '관리자/운영자/PL가 마일스톤·프로젝트에 💬 코멘트(피드백)를 남기면 담당자에게 메일+텔레그램으로 전달되고 인앱 스레드로 남음 (마일스톤 행·프로젝트 상세에 표시)',
+      '주요 이벤트(프로젝트 등록/수정, 마일스톤 진척/작업노트 업데이트, 코멘트)를 메일·텔레그램으로 알리고 활동 로그(audit_logs)에 기록',
+      '🛡️ 운영자 탭에 "📊 분석·트렌드" 토글 추가 — 전사 KPI·상태/단계 분포·위험 프로젝트(공수초과/지연/정체) 자동 식별 + 프로젝트별 진척 추세선·담당자/마일스톤 투입·작업노트 타임라인',
+      '신규: 마이그레이션 036(comments), 서버 /api/comments(POST/GET/DELETE) + 이벤트 알림/감사 훅, notification 이벤트 4종(comment_added·project_created·project_updated·milestone_progress)',
+      '신규 클라: operator-analytics.js(분석), comments-ui.js(코멘트 모달·스레드, 표준 모달 가드 사용)',
+      '영향: 서버(comments.js·app.js·notification/auth.service·projects/milestones) + operator-mode.js·project-detail.js·신규 2파일·HTML. 서버 포함 — git push → Render 배포 후 적용'
+    ]},
     {ver:'13.117',date:'2026-06-10',title:'👁️ admin/운영자 전체 마일스톤 표시 + 프로젝트 수정 시 가시성(visibility) 유지',tag:'fix',items:[
       '다른 사용자가 등록한 프로젝트의 마일스톤이 안 보이던 문제 수정 — accessibleProjectsSubquery에 admin/운영자 우회 추가 → 전체보기로 보이는 프로젝트의 마일스톤도 함께 표시',
       '프로젝트 수정 시 가시성이 자동으로 private로 바뀌던 문제 방지 — 가시성 셀렉트 미발견 시 visibility를 전송하지 않아 서버가 기존 값을 보존(undefined→COALESCE 유지)',

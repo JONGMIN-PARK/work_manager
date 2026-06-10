@@ -6,6 +6,7 @@ var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var notificationService = require('../services/notification.service');
+var authService = require('../services/auth.service');
 var tenant = require('../middleware/tenant');
 var operator = require('../middleware/operator');
 
@@ -130,6 +131,16 @@ router.post('/', rbac.checkPermission('project.create'), async function (req, re
        JSON.stringify(b.phases || {}), req.user.sub, deptId, req.tenant.id, ownerId, visibility]
     );
     res.status(201).json({ data: r.rows[0] });
+
+    // 감사 로그 + 이해관계자 알림 (best-effort)
+    try {
+      authService.auditLog(req.user.sub, 'project.create', 'project', r.rows[0].id, { name: r.rows[0].name }, req).catch(function () {});
+    } catch (_) {}
+    try {
+      notificationService.notifyProjectStakeholders('project_created', {
+        projectName: r.rows[0].name, orderNo: r.rows[0].order_no
+      }, r.rows[0].id).catch(function (e) { console.error('[noti]', e.message); });
+    } catch (_) {}
   } catch (e) {
     console.error('[projects/create]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -189,6 +200,17 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
         }, req.params.id).catch(function(e) { console.error('[noti]', e.message); });
       }
     } catch (_) { /* 알림 실패 무시 */ }
+
+    // 감사 로그 + 수정 알림 (best-effort)
+    try {
+      authService.auditLog(req.user.sub, 'project.update', 'project', req.params.id, { fields: Object.keys(clean) }, req).catch(function () {});
+    } catch (_) {}
+    try {
+      var updRow = result.row || {};
+      notificationService.notifyProjectStakeholders('project_updated', {
+        projectName: updRow.name, orderNo: updRow.order_no, summary: '변경 필드: ' + Object.keys(clean).join(', ')
+      }, req.params.id).catch(function (e) { console.error('[noti]', e.message); });
+    } catch (_) {}
   } catch (e) {
     console.error('[projects/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
