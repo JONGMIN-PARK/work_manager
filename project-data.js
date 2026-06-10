@@ -319,7 +319,9 @@ function _pdPrimeCache(projectsRaw, milestonesRaw, eventsRaw) {
       _pdCacheT.proj = now;
     }
     if (Array.isArray(milestonesRaw)) {
-      _pdCache.ms = _msDedupe(toCamelArray(milestonesRaw));
+      // _msNorm 필수 — msGetAll 과 동일 파이프라인. 누락 시 order=undefined 가 되어
+      // _msDedupe 가 createdAt 순으로 정렬 → 타임라인이 저장된 sort_order 를 무시(순서 유실)
+      _pdCache.ms = _msDedupe(_msNorm(toCamelArray(milestonesRaw)));
       _pdCacheT.ms = now;
     }
     if (Array.isArray(eventsRaw)) {

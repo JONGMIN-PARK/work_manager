@@ -398,7 +398,8 @@ async function renderTimeline() {
   var rowsHtml = '';
   projects.forEach(function (p, _pi) {
     var st = autoProjectStatus(p);
-    var pMs = milestones.filter(function (m) { return m.projectId === p.id; }).sort(function (a, b) { return a.order - b.order; });
+    // 편집 모달과 동일 비교자 — order 우선, 동률이면 createdAt (양쪽 표시 순서 일치 보장)
+    var pMs = milestones.filter(function (m) { return m.projectId === p.id; }).sort(function (a, b) { return ((a.order || 0) - (b.order || 0)) || (a.createdAt || '').localeCompare(b.createdAt || ''); });
 
     // 프로젝트 바 위치
     var barStyle = getBarStyle(p.startDate, p.endDate, rangeStart, units);

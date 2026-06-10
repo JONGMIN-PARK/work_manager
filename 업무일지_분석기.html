@@ -881,7 +881,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.137</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.138</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3433,6 +3433,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.138',date:'2026-06-11',title:'🔧 마일스톤 순서 유실 수정 — 타임라인 ↔ 프로젝트 편집 순서 일치',tag:'fix',items:[
+      '근본 원인: 부트스트랩 캐시 주입(_pdPrimeCache)이 msGetAll과 달리 _msNorm을 건너뛰어, 캐시 마일스톤의 order가 undefined → _msDedupe가 createdAt 순으로 정렬 → 타임라인이 저장된 sort_order를 무시(생성일 순 표시). 편집 모달은 정상 → 양쪽 순서 불일치 + 재정렬이 "유지 안 됨"으로 보임',
+      '_pdPrimeCache도 _msDedupe(_msNorm(...))로 msGetAll과 동일 파이프라인 적용 — order 항상 채워짐',
+      '타임라인 뷰 마일스톤 정렬을 편집 모달과 동일 비교자(order 우선, 동률 시 createdAt)로 통일',
+      '효과: 타임라인 드래그·편집 모달 어느 쪽에서 바꿔도 양쪽이 동일 순서로 싱크되고 새로고침 후에도 유지. 영향: project-data.js, timeline.js. 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.137',date:'2026-06-11',title:'⚡ 타임라인 성능 개선 — 그리드 DOM 대폭 절감 + 위치계산 최적화',tag:'perf',items:[
       '그리드 라인·주말·과거 음영을 행마다 div(행×시간단위, 수만 개)로 찍던 것을 .tl-bars CSS 배경 그라디언트 1장으로 대체 → 그리드 DOM 0개. 재렌더·스크롤 반응속도 대폭 향상',
       '단위 폭/주말 오프셋/과거 폭을 .tl-container의 CSS 변수로 렌더당 1회 주입(--tl-uw/--tl-sat/--tl-sun/--tl-pastw 등)',
