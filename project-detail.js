@@ -1241,9 +1241,10 @@ function renderProgressHistoryChart(projectId, proj) {
     var progressData = history.map(function (h) { return h.progress; });
     var hoursData = history.map(function (h) { return h.actualHours || 0; });
 
+    // 캔버스는 고정 높이 relative 래퍼 안에 — responsive+maintainAspectRatio:false 무한 성장 방지
     section.innerHTML = '<div style="padding:10px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:6px">' +
       '<div style="font-size:10px;font-weight:600;color:var(--t4);margin-bottom:6px">📈 진척률 히스토리 (' + history.length + '개 기록)</div>' +
-      '<canvas id="progressHistoryCanvas" width="340" height="160" style="max-width:100%"></canvas>' +
+      '<div style="position:relative;height:180px;width:100%"><canvas id="progressHistoryCanvas"></canvas></div>' +
     '</div>';
 
     // Chart.js가 로드되었는지 확인

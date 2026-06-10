@@ -827,7 +827,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.114</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.115</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3379,6 +3379,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.115',date:'2026-06-10',title:'🩹 진척률 히스토리 차트 무한 성장(세로로 끝없이 늘어남) 수정',tag:'fix',items:[
+      '프로젝트 상세 → 진척률 히스토리 차트가 화면 세로로 무한히 늘어나던 문제 수정',
+      '원인 — Chart.js responsive:true + maintainAspectRatio:false인데 캔버스 부모에 고정 높이가 없어 리사이즈 피드백 루프 발생',
+      '수정 — 캔버스를 고정 높이(180px) position:relative 래퍼로 감싸는 표준 패턴 적용',
+      '영향: project-detail.js. 클라이언트 전용 — 새로고침 즉시 반영'
+    ]},
     {ver:'13.114',date:'2026-06-10',title:'🩹 완료 프로젝트 라벨 — 오늘선/날짜선 비침(겹침) 마저 수정',tag:'fix',items:[
       'v13.113 후속 — 완료(done) 프로젝트는 라벨 컨테이너에 opacity:.5가 걸려 배경까지 반투명 → z-index가 위여도 뒤의 빨간 오늘선·날짜 구분선이 비쳐 보이던 문제',
       'dim(흐리게)을 라벨 내부 콘텐츠에만 적용하고 라벨 배경은 불투명 유지 → 완료 프로젝트도 라인이 날짜 영역 안에서만 보임',
