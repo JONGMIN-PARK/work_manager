@@ -185,6 +185,12 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-ms-marker{position:absolute;top:2px;font-size:12px;z-index:1;cursor:default}
 .tl-today-line{position:absolute;top:0;bottom:0;width:2px;background:#EF4444;z-index:2;pointer-events:none;box-shadow:0 0 4px rgba(239,68,68,.45)}
 .tl-today-line::before{content:'';position:absolute;top:50%;left:2px;transform:translateY(-50%);width:0;height:0;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid #EF4444;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
+/* v13.132 타임라인 시인성 */
+.tl-row:hover>.tl-bars,.tl-row:hover>.tl-label{background:var(--bg-hv)}
+.tl-row-proj{border-top:2px solid var(--bd2)}
+.tl-label,.tl-label-header{box-shadow:3px 0 5px -3px rgba(0,0,0,.18)}
+.tl-row-delayed>.tl-label{box-shadow:inset 4px 0 0 0 #EF4444,3px 0 5px -3px rgba(0,0,0,.18)}
+.tl-ms-marker{filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.5));font-size:13px}
 /* 드래그 편집 */
 .tl-bar-editable{cursor:grab;user-select:none}
 .tl-bar-editable:active{cursor:grabbing}

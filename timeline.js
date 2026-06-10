@@ -233,7 +233,7 @@ async function renderTimeline() {
     // 프로젝트 바 위치
     var barStyle = getBarStyle(p.startDate, p.endDate, rangeStart, units);
 
-    rowsHtml += '<div class="tl-row" data-proj-id="' + p.id + '">';
+    rowsHtml += '<div class="tl-row tl-row-proj' + (st === 'delayed' ? ' tl-row-delayed' : '') + '" data-proj-id="' + p.id + '">';
     // 레이블 — v13.43: 기간+D-Day, v13.44: 담당자
     var _period = _tlFmtPeriod(p);
     var _dday = _tlFmtDday(p, st);

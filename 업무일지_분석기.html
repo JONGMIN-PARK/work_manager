@@ -598,6 +598,12 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-ms-marker{position:absolute;top:2px;font-size:12px;z-index:1;cursor:default}
 .tl-today-line{position:absolute;top:0;bottom:0;width:2px;background:#EF4444;z-index:2;pointer-events:none;box-shadow:0 0 4px rgba(239,68,68,.45)}
 .tl-today-line::before{content:'';position:absolute;top:50%;left:2px;transform:translateY(-50%);width:0;height:0;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid #EF4444;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
+/* v13.132 타임라인 시인성 */
+.tl-row:hover>.tl-bars,.tl-row:hover>.tl-label{background:var(--bg-hv)}
+.tl-row-proj{border-top:2px solid var(--bd2)}
+.tl-label,.tl-label-header{box-shadow:3px 0 5px -3px rgba(0,0,0,.18)}
+.tl-row-delayed>.tl-label{box-shadow:inset 4px 0 0 0 #EF4444,3px 0 5px -3px rgba(0,0,0,.18)}
+.tl-ms-marker{filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.5));font-size:13px}
 /* 드래그 편집 */
 .tl-bar-editable{cursor:grab;user-select:none}
 .tl-bar-editable:active{cursor:grabbing}
@@ -829,7 +835,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.131</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.132</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3381,6 +3387,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.132',date:'2026-06-10',title:'🎨 프로젝트 타임라인 시인성 개선 — 행 하이라이트·그룹 구분·지연 강조',tag:'style',items:[
+      '행 전체 호버 하이라이트 — 마우스 올린 프로젝트/마일스톤 행을 가로로 끝까지 강조해 추적 쉬움',
+      '프로젝트 그룹 구분선 — 각 프로젝트(+하위 마일스톤) 묶음 위에 굵은 경계선으로 시각적 그룹화',
+      '지연 프로젝트 강조 — 라벨 좌측에 빨간 액센트 바',
+      '고정 라벨열 그림자 — 가로 스크롤 시 좌측 고정 열과 막대 영역 구분 명확',
+      '마일스톤 마커(◆) 살짝 키우고 그림자로 시인성 향상. 영향: timeline.js + CSS(2곳). 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.131',date:'2026-06-10',title:'📍 타임라인 오늘선 마커 개선 — 아래 세모(▼) → 우측 화살표(▶) + 라인 글로우',tag:'style',items:[
       '오늘(현재 날짜) 빨간 세로줄의 행마다 표시되던 ▼(아래 세모)를 오른쪽을 가리키는 화살표(CSS 삼각형)로 교체 — 라인에 잘 맞춰 정렬',
       '시인성 향상: 화살표 드롭섀도 + 빨간 세로줄에 은은한 글로우(box-shadow) 추가',
