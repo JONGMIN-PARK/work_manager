@@ -354,11 +354,12 @@ async function renderTimeline() {
       // 한 줄 네이티브 툴팁 (프로젝트 막대와 동일 형태) — 이름 · 기간 · 일수 · D-day
       var _msDays = (ms.startDate && ms.endDate && ms.startDate.length >= 10 && ms.endDate.length >= 10) ? (daysDiff(ms.startDate, ms.endDate) + 1) : null;
       var _msDday = (typeof _tlFmtDday === 'function') ? _tlFmtDday({ endDate: ms.endDate }, msSt) : null;
-      // 실적 — 실 작업시간(업무일지 태깅 + 보고) / 예상(목표시간 Σ) + %
+      // 실적 — 보고 투입 / 목표(목표시간 Σ) + %. 업무일지는 연동 안 함(참고).
       var _msTgt = 0; var _mat = ms.assigneeTargets || {}; Object.keys(_mat).forEach(function (k) { _msTgt += Number(_mat[k]) || 0; });
       _msTgt = Math.round(_msTgt * 10) / 10;
-      var _msAct = Math.round(((msWorkH[ms.id] || 0) + (Number(ms.reportedHours) || 0)) * 10) / 10;
-      var _msPerf = ' · 실적 ' + _msAct + 'h' + (_msTgt > 0 ? '/' + _msTgt + 'h (' + Math.round(_msAct / _msTgt * 100) + '%)' : '');
+      var _msAct = Math.round((Number(ms.reportedHours) || 0) * 10) / 10;        // 보고 투입(누적)
+      var _msWork = Math.round(((msWorkH[ms.id] || 0)) * 10) / 10;               // 업무일지(참고)
+      var _msPerf = ' · 실적 ' + _msAct + 'h' + (_msTgt > 0 ? '/' + _msTgt + 'h (' + Math.round(_msAct / _msTgt * 100) + '%)' : '') + (_msWork > 0 ? ' · 업무일지 ' + _msWork + 'h(참고)' : '');
       var msTitle = (ms.name || '') + ' · ' + (ms.startDate || '?') + ' ~ ' + (ms.endDate || '?') + (_msDays != null ? ' · ' + _msDays + '일' : '') + (_msDday ? ' · ' + _msDday.label : '') + _msPerf;
       var _perf = (typeof _tlMsPerf === 'function') ? _tlMsPerf(ms, msWorkH) : { text: '', html: '' };
       var _msProg = Number(ms.progress) || 0;
@@ -566,13 +567,13 @@ function _tlFmtDday(p, st) {
   return { label: label, color: color };
 }
 
-/* 마일스톤 라벨용 실적 표시 — 실작업/예상h · 진척률% (text=폭측정용, html=렌더용) */
+/* 마일스톤 라벨용 실적 표시 — 보고 투입/목표h · 진척률% (업무일지는 연동 안 함). text=폭측정용, html=렌더용 */
 function _tlMsPerf(ms, msWorkH) {
   var prog = Number(ms.progress) || 0;
   var tgt = 0; var mat = ms.assigneeTargets || {};
   Object.keys(mat).forEach(function (k) { tgt += Number(mat[k]) || 0; });
   tgt = Math.round(tgt * 10) / 10;
-  var act = Math.round((((msWorkH && msWorkH[ms.id]) || 0) + (Number(ms.reportedHours) || 0)) * 10) / 10;
+  var act = Math.round((Number(ms.reportedHours) || 0) * 10) / 10;   // 보고 투입만
   var hoursTxt = (act > 0 || tgt > 0) ? (act + (tgt > 0 ? '/' + tgt : '') + 'h') : '';
   var progTxt = (prog > 0 || ms.progressUpdatedAt) ? (prog + '%') : '';
   if (!hoursTxt && !progTxt) return { text: '', html: '' };

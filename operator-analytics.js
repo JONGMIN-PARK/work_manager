@@ -284,7 +284,7 @@ function _oaAnalyze(p, milestones, history, calc) {
   var sumCalc = _oaSumCalc(calc);
   var reported = _oaSumReported(milestones);
   var targets = _oaSumTargets(milestones);
-  var totalInput = _oaRnd(sumCalc.workHours + reported);   // 총 투입 = 업무일지(멤버한정) + 보고
+  var totalInput = _oaRnd(reported);   // 총 투입 = 보고만 (업무일지는 연동 안 함, 참고)
   var estimated = Number(p.estimatedHours) || 0;
 
   // 위험 플래그
@@ -622,7 +622,17 @@ function renderProjectAnalytics(projectId, containerId) {
 
   pRow.then(function (row) {
     if (!row) { _oaError(box, '프로젝트를 찾을 수 없습니다.'); return; }
-    _oaRenderProjectDetail(box, row);
+    // 담당자별 보고 투입(작업노트 로그 작성자별) — 상세에서만 집계 (업무일지 연동 안 함)
+    var ms = row.milestones || [];
+    var pLogs = (typeof msLogsGet === 'function')
+      ? Promise.all(ms.map(function (m) { return msLogsGet(m.id).then(function (l) { return l || []; }).catch(function () { return []; }); }))
+      : Promise.resolve([]);
+    return pLogs.then(function (logSets) {
+      var rp = {};
+      logSets.forEach(function (logs) { logs.forEach(function (l) { var nm = l.authorName || ''; if (nm) rp[nm] = (rp[nm] || 0) + (Number(l.hours) || 0); }); });
+      row.reportedByPerson = rp;
+      _oaRenderProjectDetail(box, row);
+    });
   }).catch(function (err) {
     _oaError(box, '상세 분석 로드 실패: ' + ((err && err.message) || '알 수 없는 오류'));
   });
@@ -787,8 +797,8 @@ function _oaDrawAssignee(row) {
     var at = (m && m.assigneeTargets) || {};
     Object.keys(at).forEach(function (nm) { targetByName[nm] = (targetByName[nm] || 0) + (Number(at[nm]) || 0); });
   });
-  // 투입(업무일지 멤버한정 합) per 담당자
-  var inputByName = (row.sumCalc && row.sumCalc.people) || {};
+  // 투입(보고 — 작업노트 로그 작성자별 합) per 담당자. 업무일지는 연동 안 함.
+  var inputByName = row.reportedByPerson || {};
 
   var names = {};
   Object.keys(targetByName).forEach(function (n) { names[n] = true; });
@@ -808,7 +818,7 @@ function _oaDrawAssignee(row) {
     data: {
       labels: nameList,
       datasets: [
-        { label: '투입(h)', data: nameList.map(function (n) { return _oaRnd(inputByName[n] || 0); }), backgroundColor: '#8B5CF6', borderWidth: 0, borderRadius: 3 },
+        { label: '보고 투입(h)', data: nameList.map(function (n) { return _oaRnd(inputByName[n] || 0); }), backgroundColor: '#8B5CF6', borderWidth: 0, borderRadius: 3 },
         { label: '목표(h)', data: nameList.map(function (n) { return _oaRnd(targetByName[n] || 0); }), backgroundColor: '#3B82F644', borderColor: '#3B82F6', borderWidth: 1, borderRadius: 3 }
       ]
     },
@@ -854,9 +864,9 @@ function _oaRenderMsTable(row) {
 
   ms.forEach(function (m) {
     var b = calc[m.id] || {};
-    var work = _oaRnd(Number(b.hours) || 0);
+    var work = _oaRnd(Number(b.hours) || 0);   // 업무일지(참고)
     var reported = Number(m.reportedHours) || 0;
-    var input = _oaRnd(work + reported);
+    var input = _oaRnd(reported);   // 투입 = 보고만 (업무일지 연동 안 함)
     var tgt = 0; var at = m.assigneeTargets || {};
     Object.keys(at).forEach(function (k) { tgt += Number(at[k]) || 0; });
     tgt = _oaRnd(tgt);

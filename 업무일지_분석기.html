@@ -829,7 +829,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.125</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.126</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3381,6 +3381,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.126',date:'2026-06-10',title:'🔁 실적=보고 투입을 전 영역에 일관 적용 (타임라인 마일스톤 타이틀/툴팁·분석 뷰)',tag:'fix',items:[
+      '타임라인 마일스톤 라벨/툴팁 실적이 "업무일지+보고" 합산이던 것을 보고 투입만으로 수정(업무일지는 툴팁에 참고로만)',
+      '분석·트렌드: 총 투입·위험 식별·대비·마일스톤 표·담당자별 바를 모두 보고 투입 기준으로 변경(담당자별은 상세에서 로그 작성자별 집계)',
+      '업무일지(work_records)는 어디서도 실적에 합산하지 않고 참고 표시만. 영향: timeline.js, operator-analytics.js. 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.125',date:'2026-06-10',title:'🐛 마일스톤 인원별 상세도 보고 기준으로 — 업무일지(참고)가 실적으로 섞여 보이던 문제 수정',tag:'fix',items:[
       '증상: 4h/4h(0.5d/0.5d) 목표인데 인원별 상세 실적이 5.88d(47h) 등 엉뚱하게 표시 — 마일스톤 인원별 상세가 업무일지(work_records) 기준이었음',
       '수정: 마일스톤 인원별 상세 실적을 보고 투입(작업노트 로그 작성자별)으로 변경. 업무일지는 연동하지 않고 마일스톤 헤더에 📋(참고)로만 표시',
