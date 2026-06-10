@@ -827,7 +827,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.113</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.114</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3379,6 +3379,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.114',date:'2026-06-10',title:'🩹 완료 프로젝트 라벨 — 오늘선/날짜선 비침(겹침) 마저 수정',tag:'fix',items:[
+      'v13.113 후속 — 완료(done) 프로젝트는 라벨 컨테이너에 opacity:.5가 걸려 배경까지 반투명 → z-index가 위여도 뒤의 빨간 오늘선·날짜 구분선이 비쳐 보이던 문제',
+      'dim(흐리게)을 라벨 내부 콘텐츠에만 적용하고 라벨 배경은 불투명 유지 → 완료 프로젝트도 라인이 날짜 영역 안에서만 보임',
+      '영향: timeline.js. 클라이언트 전용 — 새로고침 즉시 반영'
+    ]},
     {ver:'13.113',date:'2026-06-10',title:'🔑 관리자 전체 접근/수정 + 타임라인 상세창·오늘선/날짜선 겹침 수정',tag:'fix',items:[
       '관리자(admin)가 전체 프로젝트를 접근·수정할 수 있도록 서버 권한 보정 — canAccessProject admin 우회 + GET /api/projects 목록 admin 전체 반환. 부여된 운영자는 전체 읽기 접근',
       '타임라인에서 프로젝트 선택 시 상세창(개요·라이프사이클·이슈·투입실적)이 안 뜨던 문제 해결 — 원인은 admin/운영자가 전체보기로 본 프로젝트의 projGet이 403(접근 거부)나던 것. 위 권한 보정으로 해결',
