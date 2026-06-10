@@ -1051,9 +1051,11 @@ function addMsRow() {
    saveProjectUI 가 #msRows 의 DOM 순서대로 order:i 를 저장하므로,
    여기서는 DOM 순서만 재배열하면 [저장] 시 자동 영속화된다. */
 var _msDragRow = null;
-// 마일스톤별 인원 목표시간 스테이징: { rowKey: { 이름: 목표h } }. 편집 모달 열 때 초기화.
+// 마일스톤별 인원 목표시간 스테이징: { rowKey: { 이름: 목표h } }. 편집 모달 열 때 초기화. (저장은 항상 시간 단위)
 var _msTargetStaging = {};
 var _msRowKeySeq = 0;
+var MS_HOURS_PER_DAY = 8;       // 일 단위 입력 시 1일 = 8시간(실작업) 환산
+var _msTargetUnit = 'h';        // 목표 배분 매트릭스 입력 단위 ('h' 시간 | 'd' 일)
 function msRowDragStart(e) {
   _msDragRow = e.target.closest('.proj-ms-row');
   if (!_msDragRow) return;
@@ -1087,6 +1089,7 @@ function msRowDrop(e) {
    담당자(#projAssignees)와 현재 마일스톤 행을 읽어 매트릭스 입력을 띄운다.
    값은 _msTargetStaging[rowKey][name]에 스테이징되고, 프로젝트 저장 시 각 마일스톤에 반영된다. */
 function editMsTargetsMatrix() {
+  _msTargetUnit = 'h';   // 열 때마다 시간 단위로 시작 (저장값=시간 그대로 표시)
   var aEl = document.getElementById('projAssignees');
   var assignees = aEl ? aEl.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
   var seenA = {};
@@ -1133,7 +1136,12 @@ function editMsTargetsMatrix() {
       '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">🎯 인원별 목표시간 배분</h3>' +
       '<button class="btn btn-g btn-s" onclick="document.getElementById(\'msTargetsModal\').remove()">✕ 닫기</button>' +
     '</div>' +
-    '<div style="font-size:10px;color:var(--t5);margin-bottom:10px;line-height:1.5">마일스톤 × 담당자별 목표시간(h)을 입력하세요. [배분 저장] 후 프로젝트 <b>[수정/등록]</b>을 눌러야 최종 반영됩니다. 투입실적 탭에서 "누적 실적 vs 목표"로 표시됩니다.</div>' +
+    '<div style="font-size:10px;color:var(--t5);margin-bottom:8px;line-height:1.5">마일스톤 × 담당자별 목표를 <b>시간(h)</b> 또는 <b>일(d)</b> 단위로 입력하세요. 일 단위는 <b>1일=8시간</b>으로 자동 환산되어 저장됩니다(합계는 시간 기준). [배분 저장] 후 프로젝트 <b>[수정/등록]</b>을 눌러야 최종 반영됩니다.</div>' +
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">' +
+      '<span style="font-size:11px;color:var(--t4);font-weight:600">입력 단위</span>' +
+      '<button type="button" id="msUnitH" class="btn btn-s btn-p" style="font-size:11px" onclick="msTargetsSetUnit(\'h\')">시간(h)</button>' +
+      '<button type="button" id="msUnitD" class="btn btn-s btn-g" style="font-size:11px" onclick="msTargetsSetUnit(\'d\')">일(d) ×8h</button>' +
+    '</div>' +
     '<div style="overflow:auto;max-height:60vh"><table style="border-collapse:collapse;width:100%">' +
       '<thead><tr style="border-bottom:1px solid var(--bd)">' + th + '</tr></thead>' +
       '<tbody>' + body + '</tbody>' +
@@ -1152,9 +1160,30 @@ function editMsTargetsMatrix() {
   msTargetsRecalc();
 }
 
+/* 입력 단위 전환 (시간 ↔ 일). 셀 값을 변환하고 합계 재계산. 저장은 항상 시간. */
+function msTargetsSetUnit(unit) {
+  var modal = document.getElementById('msTargetsModal');
+  if (!modal || (unit !== 'h' && unit !== 'd') || unit === _msTargetUnit) return;
+  var oldToHours = (_msTargetUnit === 'd') ? MS_HOURS_PER_DAY : 1;   // 현재 표시값 → 시간
+  modal.querySelectorAll('.msTgtCell').forEach(function (inp) {
+    if (inp.value === '') return;
+    var raw = parseFloat(inp.value);
+    if (isNaN(raw)) return;
+    var hours = raw * oldToHours;
+    var nv = (unit === 'd') ? (hours / MS_HOURS_PER_DAY) : hours;
+    inp.value = (nv === 0) ? '' : String(Math.round(nv * 100) / 100);
+  });
+  _msTargetUnit = unit;
+  var bh = document.getElementById('msUnitH'), bd = document.getElementById('msUnitD');
+  if (bh) bh.className = 'btn btn-s ' + (unit === 'h' ? 'btn-p' : 'btn-g');
+  if (bd) bd.className = 'btn btn-s ' + (unit === 'd' ? 'btn-p' : 'btn-g');
+  msTargetsRecalc();
+}
+
 function msTargetsRecalc() {
   var modal = document.getElementById('msTargetsModal');
   if (!modal) return;
+  var factor = (_msTargetUnit === 'd') ? MS_HOURS_PER_DAY : 1;   // 표시값 → 시간
   var bodyRows = modal.querySelectorAll('tbody tr');
   var colSums = [];
   var grand = 0;
@@ -1162,7 +1191,7 @@ function msTargetsRecalc() {
     var inputs = tr.querySelectorAll('.msTgtCell');
     var rowSum = 0;
     inputs.forEach(function (inp, ci) {
-      var v = parseFloat(inp.value) || 0;
+      var v = (parseFloat(inp.value) || 0) * factor;
       rowSum += v;
       colSums[ci] = (colSums[ci] || 0) + v;
     });
@@ -1180,10 +1209,12 @@ function saveMsTargetsMatrix() {
   var modal = document.getElementById('msTargetsModal');
   if (!modal) return;
   var cells = modal.querySelectorAll('.msTgtCell');
+  var factor = (_msTargetUnit === 'd') ? MS_HOURS_PER_DAY : 1;   // 일 입력이면 시간으로 환산
   cells.forEach(function (c) {
     var rk = c.getAttribute('data-rk');
     var nm = c.getAttribute('data-nm');
-    var v = parseFloat(c.value) || 0;
+    var v = (parseFloat(c.value) || 0) * factor;
+    v = Math.round(v * 100) / 100;
     if (!_msTargetStaging[rk]) _msTargetStaging[rk] = {};
     if (v > 0) _msTargetStaging[rk][nm] = v;
     else delete _msTargetStaging[rk][nm];

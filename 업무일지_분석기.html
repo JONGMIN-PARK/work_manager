@@ -829,7 +829,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.120</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.121</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3381,6 +3381,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.121',date:'2026-06-10',title:'🎯 목표 배분 — 시간/일 단위 둘 다 지원 (일 입력 시 ×8h 자동 환산)',tag:'feat',items:[
+      '프로젝트 편집 → 🎯 목표 배분 매트릭스에 "입력 단위" 토글 [시간(h) / 일(d)] 추가',
+      '일(d) 단위 입력 시 1일=8시간(실작업)으로 자동 환산되어 저장. 합계는 항상 시간(h) 기준 표시',
+      '단위 전환 시 입력값도 즉시 환산(시간↔일). 저장 포맷은 시간 그대로 유지 → 투입실적·진척률 등 다운스트림 변경 없음',
+      '영향: timeline.js. 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.120',date:'2026-06-10',title:'👤 운영자 분석/트렌드에 담당자(등록 인원) 필터 추가',tag:'feat',items:[
       '분석·트렌드 상단에 "담당자(등록 인원) 필터" 드롭다운 추가 — 특정 인원이 등록된 프로젝트만 골라서 분석 가능 (예: 소프트웨어 담당자만)',
       '등록 인원 = 프로젝트 지정 담당자(assignees) ∪ 마일스톤 목표 대상 ∪ 멤버한정 투입자. 필터 선택 시 KPI·상태/단계 분포·프로젝트 리스트·상세가 모두 해당 인원 프로젝트로 한정',
