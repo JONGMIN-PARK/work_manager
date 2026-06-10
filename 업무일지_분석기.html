@@ -829,7 +829,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.121</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.122</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3381,6 +3381,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.122',date:'2026-06-10',title:'📝 투입실적 누적=보고 투입만(업무일지는 참고 표시) + 타임라인 오늘/날짜 이동 가로 스크롤만',tag:'fix',items:[
+      '투입실적: 누적/대비(목표·예상)·공수초과·담당자별 실적을 "보고 투입(실제 업데이트된 항목)"만으로 계산. 업무일지 투입은 📋 참고로 표시만(누적 미포함) — 추후 필요 시 연동',
+      '담당자별 누적 실적(보고)은 마일스톤 작업노트 로그를 작성자별로 합산. 업무일지 투입은 각 줄에 "(참고)"로 병기',
+      '타임라인 "📍 오늘"/날짜 이동: 전체 재렌더 대신 현재 범위 안이면 가로 스크롤만 즉시 이동 → 바로 반응하고 세로 스크롤 위치 유지(맨 위로 튐 방지). 범위 밖 날짜만 재렌더(범위 확장)',
+      '영향: project-detail.js, timeline.js. 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.121',date:'2026-06-10',title:'🎯 목표 배분 — 시간/일 단위 둘 다 지원 (일 입력 시 ×8h 자동 환산)',tag:'feat',items:[
       '프로젝트 편집 → 🎯 목표 배분 매트릭스에 "입력 단위" 토글 [시간(h) / 일(d)] 추가',
       '일(d) 단위 입력 시 1일=8시간(실작업)으로 자동 환산되어 저장. 합계는 항상 시간(h) 기준 표시',

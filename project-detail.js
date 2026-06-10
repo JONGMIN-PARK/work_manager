@@ -324,13 +324,29 @@ function pdLoadWork(projId) {
     var milestones = results[1];
     var memberNames = results[2];
     return calcHoursByMilestone(projId, { proj: proj, milestones: milestones, memberNames: memberNames }).then(function (msHours) {
-      return { proj: proj, milestones: milestones, msHours: msHours, memberNames: memberNames };
+      // 담당자별 "보고 투입"(누적) — 마일스톤 작업노트 로그를 작성자별로 합산
+      var pLogs = (typeof msLogsGet === 'function')
+        ? Promise.all(milestones.map(function (m) {
+            return msLogsGet(m.id).then(function (logs) { return logs || []; }).catch(function () { return []; });
+          }))
+        : Promise.resolve([]);
+      return pLogs.then(function (logSets) {
+        var reportedByPerson = {};
+        logSets.forEach(function (logs) {
+          logs.forEach(function (l) {
+            var nm = l.authorName || '';
+            if (nm) reportedByPerson[nm] = (reportedByPerson[nm] || 0) + (Number(l.hours) || 0);
+          });
+        });
+        return { proj: proj, milestones: milestones, msHours: msHours, memberNames: memberNames, reportedByPerson: reportedByPerson };
+      });
     });
   }).then(function (results) {
     var msHours = results.msHours;
     var proj = results.proj;
     var milestones = results.milestones;
     var memberNames = results.memberNames || [];
+    var reportedByPerson = results.reportedByPerson || {};
     milestones.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
 
     var totalH = 0;
@@ -380,20 +396,21 @@ function pdLoadWork(projId) {
       if (m.progressUpdatedAt) rpAny = true;
     });
     var reportedPct = rpCnt ? (rpWsum > 0 ? Math.round(rpPsum / rpWsum) : Math.round(rpSimple / rpCnt)) : 0;
-    var effH = totalH + reportedHoursTotal;   // 총 투입 = 업무일지 + 보고 (대비·초과 계산 기준)
+    // 누적/대비 기준 = "보고 투입"(실제 업데이트된 항목)만. 업무일지(totalH)는 표시(참고)만.
+    var effH = reportedHoursTotal;
     var progColOf = function (p) { return p >= 100 ? '#10B981' : (p >= 50 ? 'var(--ac)' : (p > 0 ? '#F59E0B' : 'var(--t6)')); };
     var ovBadge = function (text, color, bg) { return '<span style="font-size:9px;font-weight:600;color:' + color + ';background:' + bg + ';padding:1px 6px;border-radius:4px;white-space:nowrap">' + text + '</span>'; };
 
-    // 담당자 1줄: 누적 실적 vs 목표 진행률 바
-    var personBar = function (name, actual, target) {
+    // 담당자 1줄: 누적 실적(보고) vs 목표 진행률 바. refHours = 업무일지(참고).
+    var personBar = function (name, actual, target, refHours) {
       var dn = typeof shortName === 'function' ? shortName(name) : name;
-      actual = rnd(actual); target = rnd(target);
+      actual = rnd(actual); target = rnd(target); refHours = rnd(refHours || 0);
       var pct = target > 0 ? Math.round(actual / target * 100) : (actual > 0 ? 100 : 0);
       var barW = Math.min(pct, 100);
       var over = target > 0 && actual > target;
       var col = over ? '#EF4444' : (target > 0 && pct >= 80 ? '#F59E0B' : 'var(--ac)');
       var right = target > 0 ? (actual + ' / ' + target + 'h') : (actual + 'h');
-      var sub = target > 0 ? (pct + '%' + (over ? ' · 초과 ' + rnd(actual - target) + 'h' : ' · 잔여 ' + rnd(target - actual) + 'h')) : '목표 미설정';
+      var sub = (target > 0 ? (pct + '%' + (over ? ' · 초과 ' + rnd(actual - target) + 'h' : ' · 잔여 ' + rnd(target - actual) + 'h')) : '목표 미설정') + (refHours > 0 ? ' · 업무일지 ' + refHours + 'h(참고)' : '');
       var s = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">';
       s += '<span style="font-size:11px;color:var(--t3);min-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(name) + '">' + eH(dn) + '</span>';
       s += '<div style="flex:1"><div style="height:7px;background:var(--bg-i);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + barW + '%;background:' + col + ';border-radius:4px;transition:width .2s"></div></div>';
@@ -406,18 +423,18 @@ function pdLoadWork(projId) {
     var h = '';
     // ── 요약 박스 (총 투입 / 목표 대비 / 예상 대비) ──
     h += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">';
-    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--ac)">' + rnd(totalH) + '<span style="font-size:11px;color:var(--t5)">h</span></div><div style="font-size:10px;color:var(--t5)">업무일지 투입</div></div>';
-    if (reportedHoursTotal > 0) {
-      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:#8B5CF6">' + rnd(reportedHoursTotal) + '<span style="font-size:11px;color:var(--t5)">h</span></div><div style="font-size:10px;color:var(--t5)" title="마일스톤 업데이트에서 직접 보고한 투입시간 (업무일지와 별도)">📝 보고 투입</div></div>';
-    }
+    // 누적 투입(보고) — 대비 계산의 기준
+    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="마일스톤 업데이트에서 보고된 투입시간 — 누적/대비 계산 기준"><div style="font-size:20px;font-weight:700;color:#8B5CF6">' + rnd(reportedHoursTotal) + '<span style="font-size:11px;color:var(--t5)">h</span></div><div style="font-size:10px;color:var(--t5)">📝 누적 투입(보고)</div></div>';
+    // 업무일지 투입 — 참고(표시만, 누적 미포함)
+    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center;opacity:.85" title="업무일지(work_records) 집계 — 참고용, 누적/대비에는 미포함 (추후 연동 예정)"><div style="font-size:20px;font-weight:700;color:var(--t4)">' + rnd(totalH) + '<span style="font-size:11px;color:var(--t5)">h</span></div><div style="font-size:10px;color:var(--t5)">📋 업무일지 (참고)</div></div>';
     if (totalTarget > 0) {
       var tpct = Math.round(effH / totalTarget * 100);
-      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="총 투입 ' + rnd(effH) + 'h(업무일지 ' + rnd(totalH) + 'h + 보고 ' + rnd(reportedHoursTotal) + 'h) ÷ 목표 ' + rnd(totalTarget) + 'h"><div style="font-size:20px;font-weight:700;color:' + (tpct > 100 ? '#EF4444' : 'var(--t2)') + '">' + tpct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">목표 대비 (' + rnd(totalTarget) + 'h)</div></div>';
+      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="누적 투입(보고) ' + rnd(effH) + 'h ÷ 목표 ' + rnd(totalTarget) + 'h"><div style="font-size:20px;font-weight:700;color:' + (tpct > 100 ? '#EF4444' : 'var(--t2)') + '">' + tpct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">목표 대비 (' + rnd(totalTarget) + 'h)</div></div>';
     }
     if (proj && proj.estimatedHours) {
       var pct = effH > 0 ? Math.round(effH / proj.estimatedHours * 100) : 0;
       var estOver = pct > 100;
-      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="총 투입 ' + rnd(effH) + 'h(업무일지 ' + rnd(totalH) + 'h + 보고 ' + rnd(reportedHoursTotal) + 'h) ÷ 예상 ' + proj.estimatedHours + 'h"><div style="font-size:20px;font-weight:700;color:' + (estOver ? '#EF4444' : 'var(--t2)') + '">' + pct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">예상 대비 (' + proj.estimatedHours + 'h)' + (estOver ? ' <span style="color:#EF4444;font-weight:700">🔴초과</span>' : '') + '</div></div>';
+      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="누적 투입(보고) ' + rnd(effH) + 'h ÷ 예상 ' + proj.estimatedHours + 'h"><div style="font-size:20px;font-weight:700;color:' + (estOver ? '#EF4444' : 'var(--t2)') + '">' + pct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">예상 대비 (' + proj.estimatedHours + 'h)' + (estOver ? ' <span style="color:#EF4444;font-weight:700">🔴초과</span>' : '') + '</div></div>';
     }
     // 보고 진척률 (마일스톤 가중평균)
     if (milestones.length > 0) {
@@ -430,12 +447,12 @@ function pdLoadWork(projId) {
     memberNames.forEach(function (n) { if (headPeople.indexOf(n) < 0) headPeople.push(n); });
     Object.keys(targetMap).forEach(function (n) { if (headPeople.indexOf(n) < 0) headPeople.push(n); });
     if (headPeople.length) {
-      headPeople.sort(function (a, b) { return (targetMap[b] || 0) - (targetMap[a] || 0) || (personMap[b] || 0) - (personMap[a] || 0); });
-      h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">👥 담당자별 누적 실적 vs 목표</div>';
+      headPeople.sort(function (a, b) { return (targetMap[b] || 0) - (targetMap[a] || 0) || (reportedByPerson[b] || 0) - (reportedByPerson[a] || 0); });
+      h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">👥 담당자별 누적 실적(보고) vs 목표</div>';
       if (totalTarget === 0) {
         h += '<div style="font-size:10px;color:#F59E0B;margin-bottom:8px;padding:6px 8px;background:rgba(245,158,11,.12);border-radius:6px;line-height:1.5">🎯 아직 목표시간이 설정되지 않았습니다. 프로젝트 편집 → <b>🎯 목표 배분</b>에서 담당자·마일스톤별 목표를 입력하세요.</div>';
       }
-      headPeople.forEach(function (n) { h += personBar(n, personMap[n] || 0, targetMap[n] || 0); });
+      headPeople.forEach(function (n) { h += personBar(n, reportedByPerson[n] || 0, targetMap[n] || 0, personMap[n] || 0); });
     }
 
     // ── 할당 외 기록자 (프로젝트 등록 인원 아닌데 시간 기록 — 공식 지표 제외) ──
@@ -469,15 +486,15 @@ function pdLoadWork(projId) {
         var mSt = (typeof PROJ_STATUS !== 'undefined' ? PROJ_STATUS[m.status] : null) || { icon: '⏳', label: m.status, color: '#94A3B8', bg: 'rgba(148,163,184,.15)' };
         var prog = Number(m.progress) || 0;
         var repH = Number(m.reportedHours) || 0;
-        var effMs = rnd(hrs + repH);   // 마일스톤 총 투입 = 업무일지 + 보고
+        var effMs = rnd(repH);   // 마일스톤 누적 투입 = 보고만 (업무일지는 참고 표시)
         h += '<div style="padding:7px 0;border-bottom:1px solid var(--bd)">';
         // 상단: 상태·이름·투입/목표
         h += '<div style="display:flex;align-items:center;gap:6px">';
         h += '<span style="font-size:10px">' + mSt.icon + '</span>';
         h += '<span style="flex:1;font-size:11px;font-weight:600;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(m.name) + '</span>';
         if (ut > 0) h += '<span style="font-size:9px;color:#F59E0B" title="날짜 추정 집계">~' + ut + '</span>';
-        if (repH > 0) h += '<span style="font-size:10px;color:#8B5CF6;font-weight:600" title="보고 투입">📝' + rnd(repH) + 'h</span>';
-        h += '<span style="font-size:10px;color:var(--ac);font-weight:600" title="총 투입(업무일지 ' + hrs + 'h + 보고 ' + rnd(repH) + 'h)">' + effMs + (msTarget > 0 ? (' / ' + rnd(msTarget) + 'h') : 'h') + '</span>';
+        if (hrs > 0) h += '<span style="font-size:10px;color:var(--t6);font-weight:500" title="업무일지 투입(참고, 누적 미포함)">📋' + hrs + 'h</span>';
+        h += '<span style="font-size:10px;color:var(--ac);font-weight:600" title="보고 투입(누적)">' + effMs + (msTarget > 0 ? (' / ' + rnd(msTarget) + 'h') : 'h') + '</span>';
         h += '</div>';
         // 진척률 바 + 업데이트/이력 버튼
         h += '<div style="display:flex;align-items:center;gap:8px;margin:6px 0 0 18px">';

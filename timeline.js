@@ -70,11 +70,32 @@ var tlLabelW = 0; // 현재 렌더 labelW (드래그용)
 var showCriticalPath = false; // Feature 8: 크리티컬 패스 토글
 var _tlJumpDate = null; // 다음 렌더에서 이 날짜를 중앙으로 (오늘/날짜 이동). 범위에 포함시켜 재렌더
 
-/* 오늘로 이동 / 지정 날짜로 이동 — 해당 날짜를 범위에 포함시켜 재렌더 후 중앙 배치 */
-function tlGoToday() { tlGoToDate(typeof localDate === 'function' ? localDate() : ''); }
+/* 현재 렌더 범위 안이면 가로 스크롤만 즉시 이동(세로 위치 유지·재렌더 없음). 범위 밖이면 false. */
+function _tlScrollToDate(dateStr) {
+  var scrollEl = document.getElementById('tlScroll');
+  if (!scrollEl || !tlUnits || tlRangeStart == null || typeof getDatePosition !== 'function') return false;
+  var pos = getDatePosition(dateStr, tlRangeStart, tlUnits);
+  if (pos < 0) return false;   // 현재 범위 밖
+  var viewW = scrollEl.clientWidth - (tlLabelW || 0);
+  var left = Math.max(0, pos - viewW / 2);
+  // 가로만 이동 — 현재 scrollTop 유지(맨 위로 튐 방지)
+  if (scrollEl.scrollTo) scrollEl.scrollTo({ left: left, top: scrollEl.scrollTop, behavior: 'smooth' });
+  else scrollEl.scrollLeft = left;
+  return true;
+}
+
+/* 오늘로 이동 — 범위 안이면 가로 스크롤만 즉시, 범위 밖이면 재렌더로 처리 */
+function tlGoToday() {
+  var d = (typeof localDate === 'function') ? localDate() : '';
+  if (_tlScrollToDate(d)) return;
+  tlGoToDate(d);
+}
+/* 지정 날짜로 이동 — 범위 안이면 가로 스크롤만(세로 유지), 범위 밖이면 범위 확장 후 재렌더 */
 function tlGoToDate(dateStr) {
   if (!dateStr || !/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return;
-  _tlJumpDate = dateStr.slice(0, 10);
+  dateStr = dateStr.slice(0, 10);
+  if (_tlScrollToDate(dateStr)) return;   // 현재 범위 안 → 즉시 가로 스크롤
+  _tlJumpDate = dateStr;                   // 범위 밖 → 재렌더(범위 확장 후 중앙)
   renderTimeline();
 }
 
