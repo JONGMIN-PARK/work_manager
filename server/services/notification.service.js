@@ -132,7 +132,8 @@ var TEMPLATES = {
       (p.milestoneName ? escHtml(p.milestoneName) + '\n' : '') +
       '진척률: ' + escHtml(p.progress) + '%' +
       (p.hours ? ' · 투입 ' + escHtml(p.hours) + 'h' : '') +
-      (p.authorName ? '\n보고: ' + escHtml(p.authorName) : '');
+      (p.authorName ? '\n보고: ' + escHtml(p.authorName) : '') +
+      (p.note ? '\n📝 ' + escHtml(p.note) : '');
   }
 };
 

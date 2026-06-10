@@ -191,27 +191,16 @@ router.post('/:id/logs', async function (req, res) {
       authService.auditLog(req.user.sub, 'milestone.progress', 'milestone', ms.id, { progress: progress, hours: hours }, req).catch(function () {});
     } catch (_) {}
 
-    // 마일스톤 담당자에게 진척 보고 알림 (best-effort)
+    // 마일스톤 진척 보고 알림 — 관리자에게만 발송 (추적용)
     try {
-      var fullMs = await db.query('SELECT name, assignee_targets FROM milestones WHERE id = $1 AND tenant_id = $2', [ms.id, req.tenant.id]);
+      var fullMs = await db.query('SELECT name FROM milestones WHERE id = $1 AND tenant_id = $2', [ms.id, req.tenant.id]);
       var msName = fullMs.rows.length ? (fullMs.rows[0].name || '') : '';
-      var at = (fullMs.rows.length && fullMs.rows[0].assignee_targets) || {};
-      var names = Object.keys(at);
       var projR2 = await db.query('SELECT name FROM projects WHERE id = $1 AND tenant_id = $2', [ms.project_id, req.tenant.id]);
       var projName2 = projR2.rows.length ? (projR2.rows[0].name || '') : '';
-      var targetIds = [];
-      if (names.length > 0) {
-        var ur2 = await db.query(
-          'SELECT id FROM users WHERE tenant_id = $1 AND (name = ANY($2) OR display_name = ANY($2))',
-          [req.tenant.id, names]
-        );
-        targetIds = ur2.rows.map(function (u) { return u.id; }).filter(function (uid) { return uid && uid !== req.user.sub; });
-      }
-      if (targetIds.length > 0) {
-        notificationService.notify('milestone_progress', {
-          projectName: projName2, milestoneName: msName, progress: progress, hours: hours, authorName: authorName
-        }, targetIds).catch(function (e) { console.error('[noti]', e.message); });
-      }
+      notificationService.notifyAdmins('milestone_progress', {
+        projectName: projName2, milestoneName: msName, progress: progress, hours: hours, authorName: authorName,
+        note: (note || '').slice(0, 200)
+      }).catch(function (e) { console.error('[noti]', e.message); });
     } catch (_) { /* 알림 실패 무시 */ }
   } catch (e) {
     console.error('[milestones/log-add]', e);

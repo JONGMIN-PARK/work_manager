@@ -137,9 +137,9 @@ router.post('/', rbac.checkPermission('project.create'), async function (req, re
       authService.auditLog(req.user.sub, 'project.create', 'project', r.rows[0].id, { name: r.rows[0].name }, req).catch(function () {});
     } catch (_) {}
     try {
-      notificationService.notifyProjectStakeholders('project_created', {
+      notificationService.notifyAdmins('project_created', {
         projectName: r.rows[0].name, orderNo: r.rows[0].order_no
-      }, r.rows[0].id).catch(function (e) { console.error('[noti]', e.message); });
+      }).catch(function (e) { console.error('[noti]', e.message); });
     } catch (_) {}
   } catch (e) {
     console.error('[projects/create]', e);
@@ -228,9 +228,9 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
       // 실제 변경이 있을 때만 로그·알림 (no-op 저장은 스킵)
       if (_changes.length) {
         try { authService.auditLog(req.user.sub, 'project.update', 'project', req.params.id, { changes: _changes }, req).catch(function () {}); } catch (_e) {}
-        notificationService.notifyProjectStakeholders('project_updated', {
+        notificationService.notifyAdmins('project_updated', {
           projectName: updRow.name, orderNo: updRow.order_no, summary: _changes.join(' · ')
-        }, req.params.id).catch(function (e) { console.error('[noti]', e.message); });
+        }).catch(function (e) { console.error('[noti]', e.message); });
       }
     } catch (_) {}
   } catch (e) {
