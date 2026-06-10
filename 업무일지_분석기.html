@@ -880,7 +880,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.135</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.136</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3432,6 +3432,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.136',date:'2026-06-11',title:'↕️ 프로젝트 타임라인 마일스톤 순서 변경 모드 — 평상시 순서 고정',tag:'feat',items:[
+      '프로젝트 타임라인 컨트롤 바에 "↕️ 순서 변경" 체크박스 추가. 체크했을 때만 마일스톤을 드래그하여 순서를 바꿀 수 있음',
+      '체크 해제(기본값) 및 평상시에는 드래그 비활성화 + 그립(⠿) 숨김 → 작업 중 실수 클릭/드래그로 순서가 뒤섞이지 않음',
+      '드래그 시작 핸들러에 가드 추가 — 모드 OFF 상태에선 어떤 경로로도 order가 변경되지 않도록 방어',
+      '영향: timeline.js. 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.135',date:'2026-06-10',title:'💬 마일스톤 첨언 강화 + 📋 프로젝트 목록 타이틀에 진행률 표기',tag:'feat',items:[
       '마일스톤 진척률·작업노트 업데이트 모달 안에 첨언(코멘트) 스레드 추가 — 열 때마다 피드백 열람·작성 가능(관리자/운영자/멤버, 메일·텔레그램 연동). 서버에서 권한 검증',
       '투입실적 마일스톤 행의 💬 버튼을 운영자도 보이도록 권한 확장 + 라벨 "💬 첨언"으로 명확화',

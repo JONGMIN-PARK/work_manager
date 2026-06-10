@@ -64,6 +64,7 @@ var tlScale = 'day'; // day, week, month, quarter
 var tlScrollLeft = 0;
 var tlHideDone = false; // 완료 프로젝트 숨기기
 var tlEditMode = false; // 기간 조정/이동 모드
+var tlMsReorder = false; // v13.136: 마일스톤 순서 변경 모드 — 체크 시에만 드래그 재배열 허용(평상시 순서 고정)
 var tlRangeStart = null; // 현재 렌더 기준 rangeStart (드래그용)
 var tlUnits = null; // 현재 렌더 units (드래그용)
 var tlLabelW = 0; // 현재 렌더 labelW (드래그용)
@@ -314,6 +315,8 @@ async function renderTimeline() {
       '<input type="date" onchange="if(this.value)tlGoToDate(this.value)" title="지정 날짜로 이동" style="font-size:10px;padding:2px 5px;border:1px solid var(--bd-i);border-radius:5px;background:var(--bg-i);color:var(--t3)">' +
     '</div>' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlEditMode ? '#FCD34D' : 'var(--t5)') + ';cursor:pointer;background:' + (tlEditMode ? 'rgba(245,158,11,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlEditMode ? 'rgba(245,158,11,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlEditModeTog" onchange="tlEditMode=this.checked;renderTimeline()"' + (tlEditMode ? ' checked' : '') + '> ✏️ 기간 조정</label>' +
+    // v13.136 마일스톤 순서 변경 모드 — 체크 시에만 드래그 재배열 허용
+    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlMsReorder ? '#A78BFA' : 'var(--t5)') + ';cursor:pointer;background:' + (tlMsReorder ? 'rgba(139,92,246,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlMsReorder ? 'rgba(139,92,246,.4)' : 'var(--bd-i)') + '" title="체크 시에만 마일스톤을 드래그하여 순서를 바꿀 수 있습니다 (평상시엔 순서 고정)"><input type="checkbox" id="tlMsReorderTog" onchange="tlMsReorder=this.checked;renderTimeline()"' + (tlMsReorder ? ' checked' : '') + '> ↕️ 순서 변경</label>' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlHideDoneTog" onchange="tlHideDone=this.checked;renderTimeline()"' + (tlHideDone ? ' checked' : '') + '> 완료 숨기기</label>' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (showCriticalPath ? '#EF4444' : 'var(--t5)') + ';cursor:pointer;background:' + (showCriticalPath ? 'rgba(239,68,68,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (showCriticalPath ? 'rgba(239,68,68,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlCriticalPathTog" onchange="showCriticalPath=this.checked;renderTimeline()"' + (showCriticalPath ? ' checked' : '') + '> 🔴 크리티컬 패스</label>' +
     // v13.133 컴팩트 밀도 토글
@@ -531,12 +534,12 @@ async function renderTimeline() {
       var msTitle = (ms.name || '') + ' · ' + (ms.startDate || '?') + ' ~ ' + (ms.endDate || '?') + (_msDays != null ? ' · ' + _msDays + '일' : '') + (_msDday ? ' · ' + _msDday.label : '') + _msPerf;
       var _perf = (typeof _tlMsPerf === 'function') ? _tlMsPerf(ms, msWorkH) : { text: '', html: '' };
       var _msProg = Number(ms.progress) || 0;
-      rowsHtml += '<div class="tl-row tl-row-sub' + (_pi % 2 === 1 ? ' tl-proj-alt' : '') + '" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '" ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)">';
-      rowsHtml += '<div class="tl-label tl-label-sub" draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' +
+      rowsHtml += '<div class="tl-row tl-row-sub' + (_pi % 2 === 1 ? ' tl-proj-alt' : '') + '" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '"' + (tlMsReorder ? ' ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)"' : '') + '>';
+      rowsHtml += '<div class="tl-label tl-label-sub"' + (tlMsReorder ? ' draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' : '') +
         ' title="' + eH(msTitle) + ' — 클릭: 진척률·작업노트 업데이트"' +
         ' onclick="tlMsOpenUpdate(event,\'' + ms.id + '\',\'' + p.id + '\',' + _msProg + ')"' +
         ' style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;cursor:pointer">' +
-        '<span style="color:var(--t5);font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap"><span class="tl-ms-grip" style="opacity:.45;cursor:grab" title="드래그하여 순서 변경">⠿</span>' + eH(ms.name) +
+        '<span style="color:var(--t5);font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap">' + (tlMsReorder ? '<span class="tl-ms-grip" style="opacity:.6;cursor:grab" title="드래그하여 순서 변경">⠿</span>' : '') + eH(ms.name) +
         ' <span class="badge" style="background:' + msStInfo.bg + ';color:' + msStInfo.color + ';font-size:8px;padding:1px 4px">' + msStInfo.label + '</span>' + _perf.html +
         '</span></div>';
       rowsHtml += '<div class="tl-bars" style="width:' + totalWidth + 'px">';
@@ -1850,6 +1853,7 @@ function bindBarDrag() {
    (다른 프로젝트로 옮기려면 편집 모달의 ↪ 이관 버튼 사용) */
 var _tlMsDrag = null;
 function tlMsDragStart(e, msId, projId) {
+  if (!tlMsReorder) { try { e.preventDefault(); } catch (_) {} return; } // 순서 변경 모드 OFF: 드래그 차단
   _tlMsDrag = { id: msId, projId: projId };
   e.dataTransfer.effectAllowed = 'move';
   try { e.dataTransfer.setData('text/plain', msId); } catch (_) {}
