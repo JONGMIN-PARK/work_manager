@@ -332,8 +332,37 @@ function _pdPrimeCache(projectsRaw, milestonesRaw, eventsRaw) {
 /* ─── 프로젝트 ─── */
 function projGetAll() { return _pdCached('proj', function () { return apiFetch('/api/projects').then(function (r) { return toCamelArray(r.data); }); }); }
 function projGet(id) { return apiFetch('/api/projects/' + id).then(function (r) { return toCamel(r.data); }); }
+/* 운영자 전용 — 테넌트 전체 프로젝트(가시성 우회) */
+function projGetAllOperator() { return _pdCached('projAll', function () { return apiFetch('/api/projects/all').then(function (r) { return toCamelArray(r.data); }); }); }
+
+/* ─── 운영자 포커스 셋(숨김 프로젝트) — user_settings 'project_focus' 저장, 모든 뷰 전역 적용 ─── */
+var pmHidden = (typeof window !== 'undefined' && window.pmHidden) ? window.pmHidden : {};   // { projId: true }
+function pmLoadFocus() {
+  return apiFetch('/api/settings/project_focus').then(function (r) {
+    pmHidden = {};
+    var hid = (r && r.data && Array.isArray(r.data.hidden)) ? r.data.hidden : [];
+    hid.forEach(function (id) { pmHidden[id] = true; });
+    if (typeof window !== 'undefined') window.pmHidden = pmHidden;
+    return pmHidden;
+  }).catch(function () { return pmHidden; });
+}
+function pmSaveFocus() {
+  var hidden = Object.keys(pmHidden).filter(function (id) { return pmHidden[id]; });
+  return apiFetch('/api/settings/project_focus', { method: 'PUT', body: JSON.stringify({ value: { hidden: hidden } }) });
+}
+function pmIsHidden(id) { return !!pmHidden[id]; }
+function pmSetHidden(id, hidden) { if (hidden) pmHidden[id] = true; else delete pmHidden[id]; if (typeof window !== 'undefined') window.pmHidden = pmHidden; }
+/* 표시용 프로젝트 소스 — 운영자는 전체, 그 외 접근가능 집합. 숨김 제외. (모든 뷰가 이걸 사용) */
+function pmGetProjects() {
+  var base = (typeof isOperator === 'function' && isOperator())
+    ? projGetAllOperator().catch(function () { return projGetAll(); })
+    : projGetAll();
+  return Promise.resolve(base).then(function (list) {
+    return (list || []).filter(function (p) { return !pmHidden[p.id]; });
+  });
+}
 function projPut(proj) {
-  _pdInvalidate('proj');
+  _pdInvalidate('proj'); _pdInvalidate('projAll');
   var isNew = !proj.id || proj._isNew;
   if (isNew) {
     delete proj._isNew;
@@ -351,7 +380,7 @@ function projPut(proj) {
     .then(function (saved) { _emitBus('project', 'updated', { id: saved && saved.id }); return saved; });
 }
 function projDel(id) {
-  _pdInvalidate('proj');
+  _pdInvalidate('proj'); _pdInvalidate('projAll');
   return apiFetch('/api/projects/' + id, { method: 'DELETE' })
     .then(function (r) { _emitBus('project', 'deleted', { id: id }); return r; });
 }

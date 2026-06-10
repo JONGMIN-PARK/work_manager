@@ -67,6 +67,42 @@ router.get('/pending', authMiddleware.requireRole('admin'), async function (req,
   }
 });
 
+// ─── GET /api/users/operator-list ─── 운영자 부여 현황 (admin only)
+router.get('/operator-list', authMiddleware.requireRole('admin'), async function (req, res) {
+  try {
+    var tenantFilter = req.tenant ? " AND u.tenant_id = '" + req.tenant.id + "'" : "";
+    var r = await db.query(
+      "SELECT u.id, u.name, u.display_name, u.email, u.role, u.status, " +
+      "COALESCE((s.value->>'enabled')::boolean, false) AS operator_enabled " +
+      "FROM users u LEFT JOIN user_settings s ON s.user_id = u.id AND s.key = 'operator_mode' " +
+      "WHERE u.status = 'active'" + tenantFilter + " ORDER BY u.role, u.name"
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[users/operator-list]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// ─── PUT /api/users/:id/operator-mode ─── 운영자 모드 부여/회수 (admin only)
+router.put('/:id/operator-mode', authMiddleware.requireRole('admin'), async function (req, res) {
+  try {
+    var enabled = !!(req.body && req.body.enabled);
+    var ur = await db.query('SELECT id, tenant_id FROM users WHERE id = $1', [req.params.id]);
+    if (!ur.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '사용자를 찾을 수 없습니다.' });
+    var tid = ur.rows[0].tenant_id || '00000000-0000-0000-0000-000000000001';
+    await db.query(
+      "INSERT INTO user_settings (user_id, key, value, updated_at, tenant_id) VALUES ($1, 'operator_mode', $2, NOW(), $3) " +
+      "ON CONFLICT (user_id, key) DO UPDATE SET value = $2, updated_at = NOW()",
+      [req.params.id, JSON.stringify({ enabled: enabled }), tid]
+    );
+    res.json({ data: { userId: req.params.id, enabled: enabled } });
+  } catch (e) {
+    console.error('[users/operator-mode]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // ─── PUT /api/users/:id/approve ─── (admin only)
 router.put('/:id/approve', authMiddleware.requireRole('admin'), async function (req, res) {
   try {

@@ -30,7 +30,7 @@ async function renderCalendar() {
     calMonth = _t0.getMonth();
   }
 
-  var _calData = await Promise.all([projGetAll(), evtGetAll(), msGetAll(), typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve(null)]);
+  var _calData = await Promise.all([(typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()), evtGetAll(), msGetAll(), typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve(null)]);
   var projects = _calData[0];
   var rawEvents = _calData[1];
   var milestones = _calData[2];

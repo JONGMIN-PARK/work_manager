@@ -7,6 +7,7 @@ var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var notificationService = require('../services/notification.service');
 var tenant = require('../middleware/tenant');
+var operator = require('../middleware/operator');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -57,6 +58,18 @@ router.get('/', async function (req, res) {
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
     console.error('[projects/list]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// ─── GET /api/projects/all — 운영자 전용 전체 프로젝트 (가시성 우회) ───
+//  (반드시 /:id 보다 먼저 정의 — /all 이 /:id 로 매칭되지 않도록)
+router.get('/all', operator.requireOperator, async function (req, res) {
+  try {
+    var r = await db.query('SELECT * FROM projects WHERE tenant_id = $1 ORDER BY created_at DESC', [req.tenant.id]);
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[projects/all]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
   }
 });

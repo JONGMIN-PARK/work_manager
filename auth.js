@@ -138,6 +138,8 @@ async function authLogin(email, password, remember) {
   _accessToken = data.data.accessToken;
   _refreshToken = data.data.refreshToken;
   currentUser = data.data.user;
+  // 전체 프로필(operatorMode·plProjects) + 포커스 셋 동기화
+  try { await authFetchMe(); } catch (_) {}
 
   if (remember) {
     localStorage.setItem('wm_refresh', _refreshToken);
@@ -199,6 +201,7 @@ async function authFetchMe() {
     var data = await apiFetch('/api/auth/me');
     if (data && data.data) {
       currentUser = data.data;
+      if (typeof pmLoadFocus === 'function') { try { pmLoadFocus(); } catch (_) {} }  // 운영자 포커스 셋 로드
       return currentUser;
     }
   } catch (e) { /* ignore */ }
@@ -293,6 +296,11 @@ async function authInit() {
 /* ═══ 권한 헬퍼 ═══ */
 function isPL(projectId) {
   return currentUser && (currentUser.plProjects || []).indexOf(projectId) >= 0;
+}
+
+/* 운영자 모드 여부 — admin 자동 또는 관리자가 부여한 사용자(operatorMode) */
+function isOperator() {
+  return !!(currentUser && (currentUser.role === 'admin' || currentUser.operatorMode));
 }
 
 function can(action, resource) {

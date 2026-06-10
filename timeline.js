@@ -80,7 +80,7 @@ async function renderTimeline() {
   if (!wrap) return;
 
   var _tlData = await Promise.all([
-    projGetAll(),
+    (typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()),
     msGetAll(),
     (typeof readAllArchiveRecords === 'function' ? readAllArchiveRecords().catch(function () { return []; }) : Promise.resolve([]))
   ]);

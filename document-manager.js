@@ -42,7 +42,7 @@ async function renderDocManager(opts) {
   if (!wrap) return;
   docRevokeBlobUrls();
 
-  var projects = await projGetAll();
+  var projects = await (typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll());
   projects.sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
   // 프로젝트 미선택 시 첫 번째 자동 선택

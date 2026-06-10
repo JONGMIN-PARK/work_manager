@@ -10,7 +10,7 @@ function renderPipeline() {
 
   var chkAllPromise = typeof pipelineLoadAllChecklists === 'function' ? pipelineLoadAllChecklists() : Promise.resolve({});
   var issAllPromise = typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve([]);
-  Promise.all([projGetAll(), msGetAll(), orderGetAll(), chkAllPromise, issAllPromise]).then(function (results) {
+  Promise.all([(typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()), msGetAll(), orderGetAll(), chkAllPromise, issAllPromise]).then(function (results) {
     var projects = results[0] || [];
     var milestones = results[1] || [];
     var orders = results[2] || [];

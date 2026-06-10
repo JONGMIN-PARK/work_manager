@@ -231,6 +231,16 @@ router.get('/me', authMiddleware.authenticate, async function (req, res) {
     var sanitized = authService.sanitizeUser(user);
     sanitized.plProjects = plProjects;
 
+    // 운영자 모드 여부 (admin 자동 또는 user_settings 'operator_mode' 부여)
+    var operatorMode = (user.role === 'admin');
+    if (!operatorMode) {
+      try {
+        var opRes = await db.query("SELECT value FROM user_settings WHERE user_id = $1 AND key = 'operator_mode'", [user.id]);
+        operatorMode = !!(opRes.rows.length && opRes.rows[0].value && opRes.rows[0].value.enabled);
+      } catch (e) { /* user_settings 없을 수 있음 */ }
+    }
+    sanitized.operatorMode = operatorMode;
+
     res.json({ data: sanitized });
   } catch (e) {
     console.error('[auth/me]', e);
