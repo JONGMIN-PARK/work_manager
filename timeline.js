@@ -1231,7 +1231,8 @@ async function saveProjectUI(existingId) {
       if (/^(<br\s*\/?>|<div><br\s*\/?><\/div>|&nbsp;|\s)*$/i.test(html)) return '';
       return typeof sanitizeMemo === 'function' ? sanitizeMemo(html) : html;
     })(),
-    visibility: visibilityEl ? visibilityEl.value : 'private'
+    // 셀렉트가 없으면 visibility 미전송 → 서버가 기존 값 보존 (수정 시 private 리셋 방지)
+    visibility: visibilityEl ? visibilityEl.value : undefined
   };
 
   var projId;

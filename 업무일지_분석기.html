@@ -827,7 +827,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.116</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.117</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3379,6 +3379,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.117',date:'2026-06-10',title:'👁️ admin/운영자 전체 마일스톤 표시 + 프로젝트 수정 시 가시성(visibility) 유지',tag:'fix',items:[
+      '다른 사용자가 등록한 프로젝트의 마일스톤이 안 보이던 문제 수정 — accessibleProjectsSubquery에 admin/운영자 우회 추가 → 전체보기로 보이는 프로젝트의 마일스톤도 함께 표시',
+      '프로젝트 수정 시 가시성이 자동으로 private로 바뀌던 문제 방지 — 가시성 셀렉트 미발견 시 visibility를 전송하지 않아 서버가 기존 값을 보존(undefined→COALESCE 유지)',
+      '영향: server/middleware/project-scope.js, server/routes/milestones.js, timeline.js, 업무일지_분석기.html. 서버 포함 — git push → Render 배포 후 적용',
+      '참고: admin은 v13.113부터 개별 프로젝트 접근/수정 가능. 이번엔 마일스톤 등 하위 항목 가시성까지 확장'
+    ]},
     {ver:'13.116',date:'2026-06-10',title:'📍 타임라인 오늘/날짜 이동 + 진척률 비등록자 집계 오류 수정',tag:'feat',items:[
       '타임라인 컨트롤에 "📍 오늘" 버튼 추가 — 오늘 날짜를 화면 중앙으로 스크롤',
       '날짜 선택(년월일) 입력 추가 — 지정 날짜로 이동(범위 밖이어도 범위를 확장해 표시)',

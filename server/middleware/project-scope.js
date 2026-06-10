@@ -28,6 +28,11 @@ function accessibleProjectsSubquery(req, startIdx) {
   var tenantId = req.tenant.id;
   var deptId = req.user.departmentId || null;
   var idx = startIdx;
+  // admin 또는 운영자(전체보기): 가시성 우회 — 테넌트 전체 프로젝트
+  if (req.user.role === 'admin' || req._operatorAll === true) {
+    var tAll = '$' + (idx++);
+    return { sql: "SELECT p.id FROM projects p WHERE p.tenant_id = " + tAll, params: [tenantId], nextIdx: idx };
+  }
   var u = '$' + (idx++);
   var t = '$' + (idx++);
   var d = deptId ? '$' + (idx++) : null;
@@ -52,6 +57,11 @@ function accessibleOrderNosSubquery(req, startIdx) {
   var tenantId = req.tenant.id;
   var deptId = req.user.departmentId || null;
   var idx = startIdx;
+  // admin 또는 운영자(전체보기): 가시성 우회 — 테넌트 전체 수주번호
+  if (req.user.role === 'admin' || req._operatorAll === true) {
+    var tAll = '$' + (idx++);
+    return { sql: "SELECT DISTINCT p.order_no FROM projects p WHERE p.tenant_id = " + tAll + " AND p.order_no IS NOT NULL AND p.order_no <> ''", params: [tenantId], nextIdx: idx };
+  }
   var u = '$' + (idx++);
   var t = '$' + (idx++);
   var d = deptId ? '$' + (idx++) : null;

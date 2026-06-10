@@ -6,6 +6,7 @@ var { parsePagination } = require('../middleware/pagination');
 var notificationService = require('../services/notification.service');
 var tenant = require('../middleware/tenant');
 var ps = require('../middleware/project-scope');
+var operator = require('../middleware/operator');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -20,7 +21,9 @@ router.get('/', async function (req, res) {
       sql += ' AND project_id = $' + idx++;
       params.push(req.query.projectId);
     }
-    // 접근 가능한 프로젝트로 제한 (v13.34)
+    // 운영자(전체보기)는 가시성 우회 — 전체 마일스톤 표시
+    if (req.user.role !== 'admin') { try { if (await operator.isOperator(req)) req._operatorAll = true; } catch (_) {} }
+    // 접근 가능한 프로젝트로 제한 (v13.34, admin/운영자는 전체)
     var sub = ps.accessibleProjectsSubquery(req, idx);
     sql += ' AND project_id IN (' + sub.sql + ')';
     params = params.concat(sub.params);
