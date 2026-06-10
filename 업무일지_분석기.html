@@ -826,7 +826,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.110</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.111</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3367,6 +3367,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.111',date:'2026-06-10',title:'🩹 타임라인 재렌더 시 스크롤 위치 보존 (맨 위로 튐 방지)',tag:'fix',items:[
+      '마일스톤 클릭→진척률 업데이트 후 창을 닫으면 타임라인이 재렌더되며 스크롤이 맨 위(+오늘 날짜 중앙)로 튀던 문제 수정',
+      'renderTimeline에서 기존 #tlScroll의 스크롤 위치(가로·세로)를 캡처 후 복원 → 보던 위치 그대로 유지. 첫 렌더에서만 오늘 날짜 중앙 배치',
+      '편집 모드·완료 숨기기 토글 등 다른 재렌더에서도 스크롤 위치 유지(부수 개선)',
+      '영향: timeline.js, 업무일지_분석기.html. 클라이언트 전용 — 새로고침 즉시 반영'
+    ]},
     {ver:'13.110',date:'2026-06-10',title:'📜 진척률 업데이트 모달에서 이력 보기 + 부분/전체 삭제',tag:'feat',items:[
       '진척률·작업노트 업데이트 모달(🖉)에 "업데이트 이력" 섹션 추가 — 과거 진척률·보고 투입·작성자·시간·노트를 한 화면에서 확인',
       '모달 내에서 이력 부분 삭제(🗑) / 전체 삭제 가능 → 삭제 시 마일스톤·프로젝트 진척률 재계산 + 하위 뷰(타임라인/투입실적) 자동 갱신',

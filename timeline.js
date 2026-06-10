@@ -350,6 +350,10 @@ async function renderTimeline() {
     });
   });
 
+  // 재렌더 시 스크롤 위치 보존 (마일스톤 업데이트 후 등) — 기존 #tlScroll 위치 캡처
+  var _tlPrevScrollEl = document.getElementById('tlScroll');
+  var _tlPrevScroll = _tlPrevScrollEl ? { left: _tlPrevScrollEl.scrollLeft, top: _tlPrevScrollEl.scrollTop } : null;
+
   content.innerHTML =
     '<div class="tl-container" style="position:relative">' +
       '<div class="tl-scroll" id="tlScroll">' +
@@ -361,10 +365,13 @@ async function renderTimeline() {
       '</div>' +
     '</div>';
 
-  // 오늘 날짜를 스크롤 영역 중앙에 배치
-  if (todayPos >= 0) {
-    var scrollEl = document.getElementById('tlScroll');
-    if (scrollEl) {
+  // 재렌더면 이전 스크롤 위치 복원, 첫 렌더면 오늘 날짜를 중앙에 배치
+  var scrollEl = document.getElementById('tlScroll');
+  if (scrollEl) {
+    if (_tlPrevScroll) {
+      scrollEl.scrollLeft = _tlPrevScroll.left;
+      scrollEl.scrollTop = _tlPrevScroll.top;
+    } else if (todayPos >= 0) {
       var viewW = scrollEl.clientWidth - labelW;
       scrollEl.scrollLeft = todayPos - viewW / 2;
     }
