@@ -829,7 +829,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.123</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.124</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3381,6 +3381,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.124',date:'2026-06-10',title:'⏱️ 시간/일 단위 보기 — 목표 배분 합계 연동 + 투입실적 단위 토글',tag:'feat',items:[
+      '목표 배분 매트릭스: 입력 단위(시간/일) 변경 시 행·열·총 합계도 같은 단위(d/h)로 표시(연동)',
+      '투입실적 탭에 "보기 단위 [시간(h)/일(d)]" 토글 추가 — 누적 투입·목표/예상 대비·담당자별·마일스톤별·할당 외 등 모든 시간 표기를 1일=8h 기준으로 일(d) 또는 시간(h)으로 선택 표시',
+      '대비 %·진척률은 그대로, 시간 수치만 단위 변환. 영향: timeline.js, project-detail.js. 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.123',date:'2026-06-10',title:'🧾 운영자 탭에 활동 로그 추가 + 마일스톤 변경 감사 기록',tag:'feat',items:[
       '운영자 탭에 "🧾 활동 로그" 탭 추가(관리자 전용) — 프로젝트 등록/수정·마일스톤 등록/수정/삭제/진척·코멘트 등 변경 이력을 시간순 추적. "프로젝트 관련만" 필터 + 검색 + 새로고침',
       '마일스톤 생성/수정/삭제도 audit_logs에 기록(기존 프로젝트 등록/수정·마일스톤 진척·코멘트에 더해)',

@@ -1205,6 +1205,10 @@ function msTargetsRecalc() {
   var modal = document.getElementById('msTargetsModal');
   if (!modal) return;
   var factor = (_msTargetUnit === 'd') ? MS_HOURS_PER_DAY : 1;   // 표시값 → 시간
+  // 합계도 현재 입력 단위로 표시 (일이면 d, 시간이면 h)
+  var fmtSum = function (hours) {
+    return (_msTargetUnit === 'd') ? (Math.round((hours / MS_HOURS_PER_DAY) * 100) / 100) + 'd' : (Math.round(hours * 10) / 10) + 'h';
+  };
   var bodyRows = modal.querySelectorAll('tbody tr');
   var colSums = [];
   var grand = 0;
@@ -1217,13 +1221,13 @@ function msTargetsRecalc() {
       colSums[ci] = (colSums[ci] || 0) + v;
     });
     var rs = tr.querySelector('.msTgtRowSum');
-    if (rs) rs.textContent = (Math.round(rowSum * 10) / 10) + 'h';
+    if (rs) rs.textContent = fmtSum(rowSum);
     grand += rowSum;
   });
   var colCells = modal.querySelectorAll('.msTgtColSum');
-  colCells.forEach(function (c, i) { c.textContent = (Math.round((colSums[i] || 0) * 10) / 10) + 'h'; });
+  colCells.forEach(function (c, i) { c.textContent = fmtSum(colSums[i] || 0); });
   var g = modal.querySelector('.msTgtGrand');
-  if (g) g.textContent = (Math.round(grand * 10) / 10) + 'h';
+  if (g) g.textContent = fmtSum(grand);
 }
 
 function saveMsTargetsMatrix() {
