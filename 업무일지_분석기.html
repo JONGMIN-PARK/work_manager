@@ -880,7 +880,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.133</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.134</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3432,6 +3432,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.134',date:'2026-06-10',title:'📅 달력 필터 강화 — 다중 프로젝트 선택 + 항목 유형(프로젝트/마일스톤/일정) 표시 토글',tag:'feat',items:[
+      '프로젝트 필터를 단일 → 다중 선택(체크박스 드롭다운)으로 개선. 전체선택/해제 + 선택 개수 표시 + ✕ 초기화. 비우면 전체',
+      '항목 유형 표시 토글 칩 추가: ▭ 프로젝트 / ◆ 마일스톤 / 🗓 일정 — 마일스톤 등 항목이 많을 때 끄고 보고 싶은 것만',
+      '다중 프로젝트 필터는 프로젝트 바·마일스톤·연결 일정 모두에 적용. 영향: calendar.js. 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.133',date:'2026-06-10',title:'🛠️ 타임라인 관리/시인성 7종 — 필터·정렬·밀도·접기·진척%·주말음영·D-Day 배지',tag:'feat',items:[
       '상태/담당자 필터 + 정렬(이름·마감임박·진척·상태) — 보고 싶은 프로젝트만 골라보기',
       '밀도 토글(🔳 컴팩트) — 한 화면에 더 많이. 설정 유지(localStorage)',

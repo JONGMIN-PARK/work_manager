@@ -6,6 +6,10 @@
 var calYear, calMonth, calViewMode = 'month';
 var calWeekStart = null; // 주간 뷰 시작일
 var calFilterProj = '', calFilterAssignee = '', calFilterType = '';
+var calFilterProjs = new Set();        // 다중 프로젝트 필터 (비어있으면 전체)
+var _calProjPanelOpen = false;         // 프로젝트 선택 패널 열림 여부
+var _calAllProjects = [];              // 최근 렌더된 전체 프로젝트(전체선택/해제용)
+var calShowMs = true, calShowProj = true, calShowEvt = true;  // 항목 유형 표시 토글
 var calDragEvtId = null; // 드래그 중인 이벤트 ID
 var _calRenderTimer;
 function renderCalendarDebounced(){clearTimeout(_calRenderTimer);_calRenderTimer=setTimeout(renderCalendar,80)}
@@ -83,20 +87,24 @@ async function renderCalendar() {
   renderCalFilter(wrap, projects);
 
   // 필터 적용
-  if (calFilterProj) {
-    projects = projects.filter(function (p) { return p.id === calFilterProj; });
-    events = events.filter(function (e) { return e.projectIds && e.projectIds.includes(calFilterProj); });
-    milestones = milestones.filter(function (m) {
-      return projects.some(function (p) { return p.id === m.projectId; });
-    });
+  // 다중 프로젝트 필터 (비어있으면 전체)
+  if (calFilterProjs.size > 0) {
+    projects = projects.filter(function (p) { return calFilterProjs.has(p.id); });
+    events = events.filter(function (e) { return e.projectIds && e.projectIds.some(function (id) { return calFilterProjs.has(id); }); });
+    milestones = milestones.filter(function (m) { return calFilterProjs.has(m.projectId); });
   }
   if (calFilterAssignee) {
     projects = projects.filter(function (p) { return p.assignees && p.assignees.includes(calFilterAssignee); });
     events = events.filter(function (e) { return e.assignees && e.assignees.includes(calFilterAssignee); });
+    milestones = milestones.filter(function (m) { return projects.some(function (p) { return p.id === m.projectId; }); });
   }
   if (calFilterType) {
     events = events.filter(function (e) { return e.type === calFilterType; });
   }
+  // 항목 유형 표시 토글 (체크 해제 시 해당 항목 숨김)
+  if (!calShowProj) projects = [];
+  if (!calShowMs) milestones = [];
+  if (!calShowEvt) events = [];
 
   // Integration 9: 아카이브 요약 로드
   var archiveSummaries = [];
@@ -115,13 +123,28 @@ async function renderCalendar() {
 function renderCalFilter(wrap, allProjects) {
   var fb = document.getElementById('calFilterBar');
   if (!fb) return;
+  _calAllProjects = allProjects || [];
 
-  // 프로젝트 옵션
-  var projOpts = '<option value="">전체 프로젝트</option>';
-  allProjects.forEach(function (p) {
-    var sel = calFilterProj === p.id ? ' selected' : '';
-    projOpts += '<option value="' + p.id + '"' + sel + '>' + eH(p.name || p.orderNo) + '</option>';
-  });
+  // 프로젝트 다중 선택 패널 (체크박스 드롭다운)
+  var selCount = calFilterProjs.size;
+  var projBtnLabel = selCount === 0 ? '📁 전체 프로젝트' : '📁 프로젝트 ' + selCount + '개';
+  var projPanel = '';
+  if (_calProjPanelOpen) {
+    var items = allProjects.map(function (p) {
+      var ck = calFilterProjs.has(p.id) ? ' checked' : '';
+      return '<label style="display:flex;align-items:center;gap:6px;padding:4px 6px;font-size:11px;cursor:pointer;white-space:nowrap;border-radius:5px"' +
+        ' onmouseover="this.style.background=\'var(--bg-hv)\'" onmouseout="this.style.background=\'\'">' +
+        '<input type="checkbox"' + ck + ' onchange="calToggleProj(\'' + p.id + '\',this.checked)" style="cursor:pointer">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';flex-shrink:0"></span>' +
+        '<span style="overflow:hidden;text-overflow:ellipsis;max-width:200px">' + eH(p.name || p.orderNo) + '</span></label>';
+    }).join('') || '<div style="padding:8px;font-size:11px;color:var(--t6)">프로젝트가 없습니다</div>';
+    projPanel = '<div style="position:absolute;top:100%;left:0;margin-top:4px;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:6px;max-height:340px;overflow:auto;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.35);min-width:220px">' +
+      '<div style="display:flex;gap:4px;padding:0 2px 6px;border-bottom:1px solid var(--bd);margin-bottom:4px">' +
+        '<button class="btn btn-g btn-s" style="font-size:10px;flex:1" onclick="calSelectAllProj(true)">전체 선택</button>' +
+        '<button class="btn btn-g btn-s" style="font-size:10px;flex:1" onclick="calSelectAllProj(false)">전체 해제</button>' +
+        '<button class="btn btn-p btn-s" style="font-size:10px" onclick="_calProjPanelOpen=false;renderCalendarDebounced()">닫기</button>' +
+      '</div>' + items + '</div>';
+  }
 
   // 담당자 옵션
   var assigneeSet = {};
@@ -139,15 +162,43 @@ function renderCalFilter(wrap, allProjects) {
     typeOpts += '<option value="' + k + '"' + sel + '>' + EVT_TYPE[k].icon + ' ' + EVT_TYPE[k].label + '</option>';
   });
 
+  // 항목 유형 표시 토글 칩
+  var chip = function (on, label, kind) {
+    return '<label style="display:flex;align-items:center;gap:4px;font-size:10px;cursor:pointer;padding:3px 8px;border-radius:12px;border:1px solid ' + (on ? 'var(--ac)' : 'var(--bd-i)') + ';background:' + (on ? 'var(--ac-g)' : 'var(--bg-i)') + ';color:' + (on ? 'var(--ac-t)' : 'var(--t5)') + '">' +
+      '<input type="checkbox"' + (on ? ' checked' : '') + ' onchange="calToggleItem(\'' + kind + '\',this.checked)" style="cursor:pointer;width:12px;height:12px;margin:0">' + label + '</label>';
+  };
+
   fb.innerHTML =
-    '<select class="si" style="padding-left:8px;max-width:180px;font-size:11px" onchange="calFilterProj=this.value;renderCalendarDebounced()">' + projOpts + '</select>' +
+    '<div style="position:relative">' +
+      '<button class="btn ' + (selCount ? 'btn-p' : 'btn-g') + ' btn-s" style="font-size:11px" onclick="_calProjPanelOpen=!_calProjPanelOpen;renderCalendarDebounced()">' + projBtnLabel + ' ▾</button>' +
+      projPanel +
+    '</div>' +
+    (selCount ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="calFilterProjs.clear();renderCalendarDebounced()" title="프로젝트 필터 해제">✕</button>' : '') +
     '<select class="si" style="padding-left:8px;max-width:140px;font-size:11px" onchange="calFilterAssignee=this.value;renderCalendarDebounced()">' + assOpts + '</select>' +
     '<select class="si" style="padding-left:8px;max-width:140px;font-size:11px" onchange="calFilterType=this.value;renderCalendarDebounced()">' + typeOpts + '</select>' +
+    '<div style="display:flex;gap:4px;align-items:center" title="달력에 표시할 항목 유형">' + chip(calShowProj, '▭ 프로젝트', 'proj') + chip(calShowMs, '◆ 마일스톤', 'ms') + chip(calShowEvt, '🗓 일정', 'evt') + '</div>' +
     '<div style="display:flex;gap:3px">' +
       '<button class="btn btn-s ' + (calViewMode === 'month' ? 'btn-p' : 'btn-g') + '" onclick="calViewMode=\'month\';renderCalendar()">월간</button>' +
       '<button class="btn btn-s ' + (calViewMode === 'week' ? 'btn-p' : 'btn-g') + '" onclick="calViewMode=\'week\';renderCalendar()">주간</button>' +
     '</div>' +
     '<button class="btn btn-g btn-s" onclick="showGcalImportModal()" title="Google Calendar / ICS 가져오기">📅 가져오기</button>';
+}
+
+/* 프로젝트 다중 선택/항목 토글 핸들러 */
+function calToggleProj(id, on) {
+  if (on) calFilterProjs.add(id); else calFilterProjs.delete(id);
+  renderCalendarDebounced();
+}
+function calSelectAllProj(on) {
+  if (on) _calAllProjects.forEach(function (p) { calFilterProjs.add(p.id); });
+  else calFilterProjs.clear();
+  renderCalendarDebounced();
+}
+function calToggleItem(kind, on) {
+  if (kind === 'ms') calShowMs = on;
+  else if (kind === 'proj') calShowProj = on;
+  else if (kind === 'evt') calShowEvt = on;
+  renderCalendarDebounced();
 }
 
 /* ═══ 월간 뷰 ═══ */
