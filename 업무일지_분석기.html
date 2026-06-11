@@ -883,7 +883,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.143</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.144</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3442,6 +3442,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.144',date:'2026-06-11',title:'🔓 프로젝트 가시성(공개) 저장 버그 수정 — 신규 생성 시 항상 비공개로 저장되던 문제',tag:'fix',items:[
+      '근본 원인: createProject가 프로젝트 객체에 visibility를 누락 → 모달에서 "🌐 전체 공개/🏢 부서 공개"를 골라도 서버가 항상 private(비공개)로 저장. 그래서 공개로 설정한 듯해도 비공개가 되고, 신규 가입자에게 보이지 않았음',
+      'createProject가 모달 선택값(private/dept/tenant)을 그대로 전달하도록 수정',
+      '참고: "🌐 전체 공개(tenant)"는 같은 조직 모든 사용자(신규 가입자 포함)에게 보임. "🏢 부서 공개(dept)"는 같은 부서원에게만 보이므로, 부서가 아직 지정 안 된 신규 가입자는 전체 공개를 사용하세요',
+      '이미 잘못 저장된 기존 프로젝트는 편집에서 가시성을 다시 선택·저장하면 정상 반영됩니다. 영향: project-data.js. 클라이언트 전용 — 새로고침 즉시'
+    ]},
     {ver:'13.143',date:'2026-06-11',title:'⏱️ 타임라인 마일스톤 실적에 일(d) 환산 병기 (8h=1일)',tag:'feat',items:[
       '프로젝트 타임라인 마일스톤 타이틀(라벨)의 실적이 시간(h)으로만 표시되던 것에 일(d) 환산을 병기 — 예: 12/40h (1.5/5d)',
       '환산 기준 1일=8시간(목표 배분 매트릭스와 동일 MS_HOURS_PER_DAY). 막대 호버 툴팁에도 "(…d, 8h=1일)" 병기',

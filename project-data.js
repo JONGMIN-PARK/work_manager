@@ -476,6 +476,9 @@ function createProject(data) {
     memo: data.memo || '',
     currentPhase: data.currentPhase || 'order',
     phases: data.phases || defaultPhases,
+    // v13.144 버그수정: 신규 생성 시 가시성 누락 → 서버가 항상 'private'로 저장되던 문제.
+    // 모달 선택값('private'|'dept'|'tenant')을 그대로 전달(미지정 시에만 private).
+    visibility: data.visibility || 'private',
     createdAt: now,
     updatedAt: now,
     _isNew: true
