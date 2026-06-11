@@ -282,6 +282,7 @@ window.wmDataBus = (function () {
 <script defer src="operator-mode.js?v=1" onerror="console.warn('operator-mode.js 로드 실패')"></script>
 <script defer src="operator-analytics.js?v=1" onerror="console.warn('operator-analytics.js 로드 실패')"></script>
 <script defer src="comments-ui.js?v=1" onerror="console.warn('comments-ui.js 로드 실패')"></script>
+<script defer src="messages-ui.js?v=1" onerror="console.warn('messages-ui.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" onerror="console.warn('pdf.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
@@ -882,7 +883,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.141</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.142</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -916,6 +917,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
     <button class="tab" data-page="project" onclick="setPage('project')" role="tab" aria-selected="false" aria-controls="modeTabsProj">📁 프로젝트 관리</button>
     <button class="tab" data-page="useradmin" onclick="setPage('useradmin')" role="tab" aria-selected="false" id="tabUserAdmin" style="display:none">👤 사용자 관리</button>
     <button class="tab" data-page="weekly_report" onclick="setPage('weekly_report')" role="tab" aria-selected="false" id="tabWeeklyReport" style="display:none">📅 주간 업무</button>
+    <button class="tab" data-page="messages" onclick="setPage('messages')" role="tab" aria-selected="false" style="position:relative">✉️ 메시지<span id="msgBadge" style="display:none;background:#EF4444;color:#fff;font-size:9px;font-weight:700;border-radius:9px;min-width:15px;height:15px;align-items:center;justify-content:center;padding:0 3px;position:absolute;top:-4px;right:-4px;pointer-events:none">0</span></button>
     <button class="tab" data-page="patchnotes" onclick="setPage('patchnotes')" role="tab" aria-selected="false">📋 패치노트</button>
   </div>
   <!-- 하위 모드 탭 -->
@@ -1186,6 +1188,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
   <div id="mWeeklyReport" class="hidden"></div>
   <!-- 패치노트 -->
   <div id="mPatchNotes" class="hidden"></div>
+  <div id="mMessages" class="hidden"></div>
 
   <div id="mCalendar" class="hidden">
     <div id="dashCards" style="margin-bottom:16px"></div>
@@ -1832,7 +1835,7 @@ function setPage(page){
   var _opTab=document.querySelector('#modeTabsProj .tab[data-m="operator"]');
   if(_opTab)_opTab.classList.toggle('hidden',!(typeof isOperator==='function'&&isOperator()));
   // 모든 모드 숨기기
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   // 해당 페이지의 첫 탭 활성화
   if(page==='useradmin'){
     document.getElementById('modeTabs').classList.add('hidden');
@@ -1849,6 +1852,11 @@ function setPage(page){
     document.getElementById('modeTabsProj').classList.add('hidden');
     var pn=document.getElementById('mPatchNotes');if(pn)pn.classList.remove('hidden');
     renderPatchNotes();
+  }else if(page==='messages'){
+    document.getElementById('modeTabs').classList.add('hidden');
+    document.getElementById('modeTabsProj').classList.add('hidden');
+    var mm=document.getElementById('mMessages');if(mm)mm.classList.remove('hidden');
+    if(typeof renderMessages==='function')renderMessages();
   }else if(page==='team'){
     var activeTab=document.querySelector('#modeTabs .tab.on');
     var m=activeTab?activeTab.dataset.m:'weekly';
@@ -1890,7 +1898,7 @@ function setMode(m){
   var projModes=['pipeline','calendar','timeline','orders','issues','docs','as','operator'];
   var tabBar=teamModes.includes(m)?'#modeTabs':'#modeTabsProj';
   document.querySelectorAll(tabBar+' .tab').forEach(function(t){var sel=t.dataset.m===m;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
 
@@ -3434,6 +3442,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.142',date:'2026-06-11',title:'✉️ 사용자 간 메시지(쪽지) 메뉴 신설',tag:'feat',items:[
+      '상단에 "✉️ 메시지" 최상위 메뉴 추가 — 같은 조직 사용자끼리 1:1 메시지 주고받기(인수인계 맥락 전달·개인 알림 채널)',
+      '대화 목록(상대별 최신 메시지·미읽음 수) + 말풍선 스레드 + 입력(Enter 전송). 받은 메시지는 열람 시 자동 읽음 처리',
+      '새 메시지 수신 시 텔레그램·인앱·메일 알림 발송, 메뉴에 미읽음 뱃지 표시(주기 갱신)',
+      '신규: server/migrations/038(messages 테이블), server/routes/messages.js, messages-ui.js. 서버 배포(자동 마이그레이션) 후 사용 가능'
+    ]},
     {ver:'13.141',date:'2026-06-11',title:'🔁 마일스톤 담당 이관 — 변경(교체)·대체(임시)·원복 + 인수인계 메모',tag:'feat',items:[
       '마일스톤별 담당 배정을 user_id 기반으로 관리(이름맵 assignee_targets는 폴백 유지). 진척률·작업노트 모달에 "👥 담당 배정" 패널 추가',
       '정/부(주담당·부담당) 역할, [변경](영구 교체) / [대체](기간 한정 임시, 종료 시 자동 원복) / [원복] / [해제] 지원. 과거 이력(작성자명·업무일지·작업노트)은 보존',
@@ -6266,6 +6280,7 @@ async function _postAuthInit(){
   ldFvS();upFvB();
   // 알림 뱃지 초기화
   setTimeout(refreshNotifBadge, 800);
+  setTimeout(function(){if(typeof refreshMsgBadge==='function')refreshMsgBadge();}, 900);
   var _fo=lsGet('wa-fav-only');if(_fo==='1'&&fvN.length>0){fvO=true;document.getElementById('favOnlyTog').checked=true}
   initAk();rEC();
   // DB에 저장된 업무일지 자동 로드 — 서버 DB 우선, 로컬 IndexedDB 폴백

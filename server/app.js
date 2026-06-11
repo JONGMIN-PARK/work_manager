@@ -172,6 +172,7 @@ var dataExportRoutes = require('./routes/data-export');
 var notificationRoutes = require('./routes/notifications');
 var weeklyReportRoutes = require('./routes/weekly-reports');
 var commentRoutes = require('./routes/comments');
+var messageRoutes = require('./routes/messages');
 var v1Router = require('./routes/v1');
 var apiDocsRoutes = require('./routes/api-docs');
 
@@ -213,6 +214,7 @@ app.use('/api/data-export', dataExportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/weekly-reports', weeklyReportRoutes);
 app.use('/api/comments', commentRoutes);
+app.use('/api/messages', messageRoutes);
 
 // ─── API v1 (버전 관리) ───
 app.use('/api/v1', v1Router);

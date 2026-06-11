@@ -117,6 +117,11 @@ var TEMPLATES = {
       (p.authorName ? '작성: ' + escHtml(p.authorName) + '\n' : '') +
       escHtml((p.body || '').slice(0, 300));
   },
+  message_received: function (p) {
+    return '✉️ <b>새 메시지</b>\n' +
+      (p.fromName ? escHtml(p.fromName) + ' 님\n' : '') +
+      escHtml((p.body || '').slice(0, 300));
+  },
   project_created: function (p) {
     return '🆕 <b>프로젝트 생성</b>\n' +
       (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.projectName || p.name);
@@ -194,6 +199,7 @@ async function sendEmailNotification(userId, eventType, payload, tenantId) {
 
 /** 이벤트별 제목 (이메일/인앱용) */
 var EVENT_TITLES = {
+  message_received: '새 메시지가 도착했습니다',
   issue_assigned: '이슈가 배정되었습니다',
   issue_status_changed: '이슈 상태가 변경되었습니다',
   project_delayed: '프로젝트가 지연되고 있습니다',
