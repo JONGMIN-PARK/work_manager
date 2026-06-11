@@ -883,7 +883,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.144</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.145</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3442,6 +3442,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.145',date:'2026-06-11',title:'🔐 프로젝트 편집/삭제 권한 강화 — 생성자·참여자·관리자만',tag:'fix',items:[
+      '보안 수정: 기존엔 편집/삭제 권한을 "보기 권한(canAccessProject)"으로 판정해, 🌐 전체 공개(tenant)·🏢 부서 공개(dept) 프로젝트를 같은 조직/부서 아무나 편집·삭제할 수 있었음',
+      '편집 전용 권한 게이트(canEditProject) 추가 — 생성자(owner)·참여자(활성 멤버)·관리자(admin/executive)만 허용. 가시성(공개)만으로는 편집권 없음(보기는 그대로 가능)',
+      'PUT/DELETE /api/projects/:id 에 적용. 비권한자는 "생성자·참여자·관리자만 편집할 수 있습니다" 안내',
+      '영향: server/routes/projects.js. 서버 배포 후 적용'
+    ]},
     {ver:'13.144',date:'2026-06-11',title:'🔓 프로젝트 가시성(공개) 저장 버그 수정 — 신규 생성 시 항상 비공개로 저장되던 문제',tag:'fix',items:[
       '근본 원인: createProject가 프로젝트 객체에 visibility를 누락 → 모달에서 "🌐 전체 공개/🏢 부서 공개"를 골라도 서버가 항상 private(비공개)로 저장. 그래서 공개로 설정한 듯해도 비공개가 되고, 신규 가입자에게 보이지 않았음',
       'createProject가 모달 선택값(private/dept/tenant)을 그대로 전달하도록 수정',

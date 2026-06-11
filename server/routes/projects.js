@@ -35,6 +35,19 @@ async function canAccessProject(req, project, opts) {
   return mr.rows.length > 0;
 }
 
+// ─── 편집/삭제 권한 (v13.145) ───
+// 읽기(canAccessProject)는 가시성(공개)으로도 허용되지만, **편집/삭제는** 가시성만으로는 불가.
+// 생성자(owner) · 참여자(project_members active) · 관리자(admin/executive)만 허용.
+// (운영자·전체공개·부서공개 가시성은 편집권 부여 안 함 — 보기는 가능, 수정은 불가)
+async function canEditProject(req, project) {
+  if (!project) return false;
+  var role = req.user.role;
+  if (role === 'admin' || role === 'executive') return true;   // 관리자 계층
+  if (project.owner_id === req.user.sub) return true;          // 생성자
+  var mr = await db.query('SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2 AND released_at IS NULL LIMIT 1', [project.id, req.user.sub]);
+  return mr.rows.length > 0;                                    // 활성 참여자
+}
+
 // ─── GET /api/projects ───
 router.get('/', async function (req, res) {
   try {
@@ -153,7 +166,7 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
     // 가시성 사전 체크 — RBAC 권한이 있어도 보이지 않는 프로젝트는 편집 불가
     var preR = await db.query('SELECT id, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!preR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
-    if (!await canAccessProject(req, preR.rows[0])) return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 접근 권한이 없습니다.' });
+    if (!await canEditProject(req, preR.rows[0])) return res.status(403).json({ error: 'FORBIDDEN', message: '생성자·참여자·관리자만 프로젝트를 편집할 수 있습니다.' });
 
     var b = req.body;
     var updates = {
@@ -292,7 +305,7 @@ router.delete('/:id', rbac.checkPermission('project.delete'), async function (re
     // 가시성 사전 체크 — RBAC 권한이 있어도 보이지 않는 프로젝트는 삭제 불가
     var preR = await db.query('SELECT id, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!preR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
-    if (!await canAccessProject(req, preR.rows[0])) return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 접근 권한이 없습니다.' });
+    if (!await canEditProject(req, preR.rows[0])) return res.status(403).json({ error: 'FORBIDDEN', message: '생성자·참여자·관리자만 프로젝트를 삭제할 수 있습니다.' });
 
     var r = await db.query('DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
