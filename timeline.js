@@ -419,6 +419,15 @@ async function renderTimeline() {
     // 레이블 — v13.43: 기간+D-Day, v13.44: 담당자
     var _period = _tlFmtPeriod(p);
     var _dday = _tlFmtDday(p, st);
+    // v13.147 호버 프리뷰용 개요 맵
+    if (window._tlOv) window._tlOv[p.id] = {
+      name: p.name || p.orderNo || '',
+      color: p.color,
+      statusLabel: (PROJ_STATUS[st] ? PROJ_STATUS[st].icon + ' ' + PROJ_STATUS[st].label : ''),
+      period: _period || '',
+      progress: (p.progress != null ? Math.round(p.progress) : null),
+      assignees: (p.assignees || []).join(', ')
+    };
     var thirdLine = '';
     if (_period || _dday) {
       thirdLine = '<div style="display:flex;align-items:center;gap:6px;margin-top:1px;font-size:9px;color:var(--t5);white-space:nowrap">' +
@@ -490,7 +499,7 @@ async function renderTimeline() {
     // 프로젝트 바
     var barCls = 'tl-bar' + (st === 'delayed' ? ' tl-bar-delayed' : '') + (st === 'done' ? ' tl-bar-done' : '') + (tlEditMode ? ' tl-bar-editable' : '');
     var criticalStyle = (showCriticalPath && criticalPathIds[p.id]) ? 'box-shadow:0 0 0 2px #EF4444,0 0 8px rgba(239,68,68,.5);z-index:3;' : '';
-    rowsHtml += '<div class="' + barCls + '" data-type="proj" data-id="' + p.id + '" style="' + barStyle + 'background:' + p.color + ';' + criticalStyle + '" title="' + eH(p.name) + ' (' + p.startDate + ' ~ ' + p.endDate + ')"' + (showCriticalPath && criticalPathIds[p.id] ? ' data-critical="1"' : '') + '>';
+    rowsHtml += '<div class="' + barCls + '" data-type="proj" data-id="' + p.id + '" style="' + barStyle + 'background:' + p.color + ';' + criticalStyle + '" title="' + eH(p.name) + ' (' + p.startDate + ' ~ ' + p.endDate + ')"' + (showCriticalPath && criticalPathIds[p.id] ? ' data-critical="1"' : '') + ' onmouseenter="if(typeof pimgHover===\'function\')pimgHover(event,\'' + p.id + '\')" onmouseleave="if(typeof pimgHoverOut===\'function\')pimgHoverOut()">';
     // 단계 밴드 오버레이
     if (p.phases && p.startDate && p.endDate) {
       rowsHtml += buildPhaseBands(p, rangeStart, units);
@@ -1227,6 +1236,8 @@ async function showProjectModal(projId) {
           'style="padding:10px;resize:vertical;min-height:240px;max-height:500px;overflow:auto;white-space:pre-wrap;word-break:break-word"' +
         '>' + (proj ? memoToHtml(proj.memo) : '') + '</div>' +
       '</div>' +
+      // v13.147 참고 이미지(장비 사진 등) 섹션
+      '<div id="projImagesSection" style="padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:8px"></div>' +
       // 마일스톤 섹션
       '<div style="padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:8px">' +
         '<div class="pm-ms-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;row-gap:8px;margin-bottom:8px">' +
@@ -1252,6 +1263,9 @@ async function showProjectModal(projId) {
   if (proj && proj.assignees && proj.assignees.length) {
     renderAssigneeWorkload(proj.id);
   }
+  // v13.147 참고 이미지 섹션 — 신규 등록 시 이전 스테이징 초기화
+  if (!proj && typeof pimgResetStaging === 'function') pimgResetStaging();
+  if (typeof renderProjImages === 'function') renderProjImages(proj ? proj.id : '');
 }
 
 /* ═══ Integration 2: 담당자 부하 경고 ═══ */
@@ -1566,6 +1580,8 @@ async function saveProjectUI(existingId) {
       var p = await createProject(data);
       if (!p || !p.id) { showToast('프로젝트 저장 실패: DB 연결을 확인하세요.','warn'); return; }
       projId = p.id;
+      // 신규 등록 시 스테이징된 참고 이미지 업로드 (best-effort)
+      if (typeof pimgFlushStaging === 'function') { try { await pimgFlushStaging(projId); } catch (_) {} }
     }
 
     // 마일스톤 diff 기반 동기화 (destroy-recreate 제거 → 중복 방지)

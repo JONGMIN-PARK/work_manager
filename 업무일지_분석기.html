@@ -283,6 +283,7 @@ window.wmDataBus = (function () {
 <script defer src="operator-analytics.js?v=1" onerror="console.warn('operator-analytics.js 로드 실패')"></script>
 <script defer src="comments-ui.js?v=1" onerror="console.warn('comments-ui.js 로드 실패')"></script>
 <script defer src="messages-ui.js?v=1" onerror="console.warn('messages-ui.js 로드 실패')"></script>
+<script defer src="project-images.js?v=1" onerror="console.warn('project-images.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" onerror="console.warn('pdf.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
@@ -883,7 +884,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.146</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.147</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3442,6 +3443,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.147',date:'2026-06-11',title:'📷 프로젝트 참고 이미지(장비 사진) + 타임라인 호버 프리뷰',tag:'feat',items:[
+      '프로젝트 등록/편집 모달에 "📷 참고 이미지" 섹션 추가 — 여러 장 업로드(자동 다운스케일), 썸네일 관리·삭제',
+      '썸네일 클릭 시 라이트박스로 한 장씩 크게 보기 + ◀▶(키보드 ←→)로 돌아가며 열람',
+      '타임라인 프로젝트 막대에 마우스 오버 시 프리뷰 팝오버 — 개요(이름·상태·기간·진척·담당) + 대표 이미지(여러 장이면 ◀▶), 클릭 시 라이트박스',
+      '사본 복사 시 참고 이미지도 함께 복제. 신규: server/migrations/039(project_images), projects.js 이미지 API, project-images.js. 서버 배포 후 사용 가능'
+    ]},
     {ver:'13.146',date:'2026-06-11',title:'📋 프로젝트 사본(복사) 기능 — 내용·인원·마일스톤 동일 복제',tag:'feat',items:[
       '프로젝트 편집 모달에 "📋 복사" 버튼 추가 → 새 이름(+수주번호) 입력 후 사본 생성',
       '복사 항목: 프로젝트 내용(기간·상태·예상시간·담당자·의존·색·메모·단계·가시성) + 활성 멤버(인원 할당) + 마일스톤(목표시간 포함) + 마일스톤 담당 배정(정/부)',

@@ -475,12 +475,93 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
       }
     } catch (e2) { console.warn('[projects/copy] 담당배정 복사 건너뜀:', e2.message); }
 
+    // 5) 참고 이미지 복사 — best-effort(039 미배포 환경 호환)
+    try {
+      var imgs = await db.query('SELECT src, caption, sort_order FROM project_images WHERE project_id = $1 AND tenant_id = $2 ORDER BY sort_order, created_at', [src.id, req.tenant.id]);
+      for (var ii = 0; ii < imgs.rows.length; ii++) {
+        var im = imgs.rows[ii];
+        await db.query(
+          'INSERT INTO project_images (id, tenant_id, project_id, src, caption, sort_order, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+          ['pimg-' + require('crypto').randomUUID().slice(0, 12), req.tenant.id, copyResult.newId, im.src, im.caption, im.sort_order || ii, meId]
+        );
+      }
+    } catch (e3) { console.warn('[projects/copy] 이미지 복사 건너뜀:', e3.message); }
+
     var nr = await db.query('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2', [copyResult.newId, req.tenant.id]);
     res.status(201).json({ data: nr.rows[0] });
     try { authService.auditLog(req.user.sub, 'project.copy', 'project', copyResult.newId, { from: src.id, name: newName }, req); } catch (_) {}
   } catch (e) {
     console.error('[projects/copy]', e);
     if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   프로젝트 참고 이미지 (v13.147) — 장비 사진 등. 별도 테이블 project_images.
+   읽기: canAccessProject(가시성 포함) / 쓰기: canEditProject(생성자·멤버·관리자)
+   ═══════════════════════════════════════════════════════════════════════ */
+var _IMG_MAX = 4 * 1024 * 1024; // src 1장 최대 4MB(다운스케일 후 data URI 기준)
+
+async function _imgGate(req, res, needEdit) {
+  var pr = await db.query('SELECT id, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+  if (!pr.rows.length) { res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' }); return null; }
+  var ok = needEdit ? await canEditProject(req, pr.rows[0]) : await canAccessProject(req, pr.rows[0]);
+  if (!ok) { res.status(403).json({ error: 'FORBIDDEN', message: needEdit ? '생성자·참여자·관리자만 이미지를 변경할 수 있습니다.' : '접근 권한이 없습니다.' }); return null; }
+  return pr.rows[0];
+}
+
+// GET /api/projects/:id/images — 참고 이미지 목록(순서대로)
+router.get('/:id/images', async function (req, res) {
+  try {
+    if (await _imgGate(req, res, false) === null) return;
+    var r = await db.query('SELECT id, project_id, src, caption, sort_order, created_at FROM project_images WHERE project_id = $1 AND tenant_id = $2 ORDER BY sort_order, created_at', [req.params.id, req.tenant.id]);
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[projects/images/list]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST /api/projects/:id/images — 이미지 추가(여러 장). body: { images:[{src, caption?}] }
+router.post('/:id/images', async function (req, res) {
+  try {
+    if (await _imgGate(req, res, true) === null) return;
+    var b = req.body || {};
+    var arr = Array.isArray(b.images) ? b.images : (b.src ? [{ src: b.src, caption: b.caption }] : []);
+    if (!arr.length) return res.status(400).json({ error: 'BAD_REQUEST', message: '이미지가 없습니다.' });
+    // 현재 최대 sort_order
+    var mr = await db.query('SELECT COALESCE(MAX(sort_order), -1) AS mx FROM project_images WHERE project_id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var ord = (mr.rows[0] && mr.rows[0].mx != null) ? (parseInt(mr.rows[0].mx, 10) + 1) : 0;
+    var crypto = require('crypto');
+    var saved = [];
+    for (var i = 0; i < arr.length; i++) {
+      var src = arr[i] && arr[i].src ? String(arr[i].src) : '';
+      if (!src) continue;
+      if (src.length > _IMG_MAX) return res.status(413).json({ error: 'TOO_LARGE', message: '이미지가 너무 큽니다(1장 4MB 이하).' });
+      var id = 'pimg-' + crypto.randomUUID().slice(0, 12);
+      var ir = await db.query(
+        'INSERT INTO project_images (id, tenant_id, project_id, src, caption, sort_order, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, project_id, caption, sort_order, created_at',
+        [id, req.tenant.id, req.params.id, src, (arr[i].caption || null), ord++, req.user.sub]
+      );
+      saved.push(ir.rows[0]);
+    }
+    res.status(201).json({ data: saved });
+    try { authService.auditLog(req.user.sub, 'project.image.add', 'project', req.params.id, { count: saved.length }, req); } catch (_) {}
+  } catch (e) {
+    console.error('[projects/images/add]', e);
+    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// DELETE /api/projects/:id/images/:imgId
+router.delete('/:id/images/:imgId', async function (req, res) {
+  try {
+    if (await _imgGate(req, res, true) === null) return;
+    await db.query('DELETE FROM project_images WHERE id = $1 AND project_id = $2 AND tenant_id = $3', [req.params.imgId, req.params.id, req.tenant.id]);
+    res.json({ message: '삭제 완료' });
+  } catch (e) {
+    console.error('[projects/images/del]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
   }
 });
 
