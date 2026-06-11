@@ -882,7 +882,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.140</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.141</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3434,6 +3434,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.141',date:'2026-06-11',title:'🔁 마일스톤 담당 이관 — 변경(교체)·대체(임시)·원복 + 인수인계 메모',tag:'feat',items:[
+      '마일스톤별 담당 배정을 user_id 기반으로 관리(이름맵 assignee_targets는 폴백 유지). 진척률·작업노트 모달에 "👥 담당 배정" 패널 추가',
+      '정/부(주담당·부담당) 역할, [변경](영구 교체) / [대체](기간 한정 임시, 종료 시 자동 원복) / [원복] / [해제] 지원. 과거 이력(작성자명·업무일지·작업노트)은 보존',
+      '인수인계 메모: 변경·대체 시 새 담당에게 관련 내용을 메일·텔레그램·코멘트로 전달(기존 코멘트/알림 인프라 재사용)',
+      '이관 이력 보기 + 교체 원복(이전 담당 복귀). 신규 테이블 milestone_assignments + project_members 확장(정/부·기간) — 멱등 마이그레이션',
+      '영향: server/migrations/037, server/routes/milestones.js, project-data.js, project-detail.js. 서버 배포(자동 마이그레이션) 후 사용 가능'
+    ]},
     {ver:'13.140',date:'2026-06-11',title:'🕐 타임라인 시간 스케일 + 📊 달성률 시각화 + 💬 작업노트 Q&A 대댓글',tag:'feat',items:[
       '타임라인 스케일에 "시간" 추가 — 일↔시간 전환으로 세밀하게 보기(자정 경계 정렬, 6시간 간격 라벨). 단기 구간에 적합',
       '달성률 시각화 강화: 마일스톤 막대에도 진척률 채움 바 추가(기존엔 % 텍스트만), 100% 달성 시 ✓ 표기(프로젝트·마일스톤 공통)',

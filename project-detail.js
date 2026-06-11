@@ -739,10 +739,13 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
         '<button class="btn btn-g" style="flex:1" onclick="document.getElementById(\'pdMsProgModal\').remove()">취소</button>' +
         '<button class="btn btn-p" id="pdProgSave" style="flex:2">저장</button>' +
       '</div>' +
+      '<div id="pdMsAssignSection" style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"></div>' +
       '<div id="pdProgHist" style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"><div style="font-size:10px;color:var(--t6)">이력 로딩 중...</div></div>' +
       '<div id="pdMsCommentSection" style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"></div>' +
     '</div>';
   document.body.appendChild(modal);
+  // 마일스톤 담당 배정(변경/대체/원복) 패널
+  if (typeof renderMsAssignments === 'function') renderMsAssignments(mid, projId, 'pdMsAssignSection');
   // 이력 컨텍스트(삭제 후 재렌더·하위뷰 갱신용) + 이력 로드
   _pdProgCtx = {
     mid: mid, projId: projId,
@@ -774,6 +777,171 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
       if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
     });
   };
+}
+
+/* ═══ 마일스톤 담당 배정 — 변경(교체)/대체(임시)/원복 UX (v13.141) ═══
+   user_id 기반. 과거 이력 보존. 서버: /api/milestones/:id/assignments[/handover|/restore] */
+function renderMsAssignments(mid, projId, containerId) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  if (typeof msAssignmentsGet !== 'function') { el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--t3)">👥 담당 배정</div><div style="font-size:10px;color:var(--t6);padding:3px 0">로딩 중...</div>';
+  msAssignmentsGet(mid).then(function (list) {
+    list = list || [];
+    var head = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+      '<span style="font-size:11px;font-weight:700;color:var(--t3)">👥 담당 배정 (' + list.length + ')</span>' +
+      '<span style="display:flex;gap:4px">' +
+        '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 7px" onclick="_pdAssignAction(\'add\',\'' + mid + '\',\'' + projId + '\')">+ 담당</button>' +
+        '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 7px" onclick="_pdAssignToggleHistory(\'' + mid + '\',\'' + projId + '\',\'' + containerId + '\')" title="이관 이력·원복">🕘 이관이력</button>' +
+      '</span></div>';
+    var body;
+    if (!list.length) {
+      body = '<div style="font-size:10px;color:var(--t6);padding:2px 0">배정된 담당이 없습니다. (목표시간은 기존 이름 기반 표기 유지 — [+ 담당]으로 user 기반 배정 시작)</div>';
+    } else {
+      body = list.map(function (a) {
+        var nm = a.userDisplay || a.userName || '?';
+        var isPrimary = a.role === 'primary';
+        var roleBadge = '<span style="font-size:8px;padding:1px 5px;border-radius:8px;font-weight:700;background:' + (isPrimary ? 'rgba(99,102,241,.18);color:#A5B4FC' : 'rgba(245,158,11,.18);color:#FCD34D') + '">' + (isPrimary ? '정' : '부') + '</span>';
+        var th = (a.targetHours != null && a.targetHours !== '') ? ' · ' + Number(a.targetHours) + 'h' : '';
+        var coverTxt = a.coversUserId ? (' <span style="font-size:9px;color:#F59E0B">🔄 ' + eH(a.coversName || '') + ' 대체' + (a.validUntil ? (' (~' + String(a.validUntil).slice(0, 10) + ')') : '') + '</span>') : '';
+        var acts = '';
+        if (a.coversUserId) {
+          acts += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" onclick="pdAssignCoverEnd(\'' + mid + '\',\'' + projId + '\',\'' + a.id + '\')" title="대체 종료(원복)">↩ 원복</button>';
+        } else if (isPrimary) {
+          acts += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" onclick="_pdAssignAction(\'replace\',\'' + mid + '\',\'' + projId + '\',\'' + a.userId + '\')" title="다른 사람으로 변경(교체) — 이력 보존">변경</button>';
+          acts += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" onclick="_pdAssignAction(\'cover\',\'' + mid + '\',\'' + projId + '\',\'' + a.userId + '\')" title="기간 한정 임시 대체">대체</button>';
+        }
+        acts += '<button class="btn btn-d btn-s" style="font-size:9px;padding:1px 5px" onclick="pdAssignRelease(\'' + mid + '\',\'' + projId + '\',\'' + a.id + '\')" title="배정 해제(이력 보존)">✕</button>';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">' +
+          '<span style="font-size:11px;color:var(--t2)">' + roleBadge + ' ' + eH(nm) + '<span style="color:var(--t6)">' + th + '</span>' + coverTxt + '</span>' +
+          '<span style="display:flex;gap:3px;flex-shrink:0">' + acts + '</span>' +
+        '</div>';
+      }).join('');
+    }
+    el.innerHTML = head + body + '<div id="' + containerId + '_hist"></div>';
+  }).catch(function (err) {
+    el.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:4px">👥 담당 배정</div>' +
+      '<div style="font-size:10px;color:var(--t6)">' + ((err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.' : '담당 배정을 불러오지 못했습니다.') + '</div>';
+  });
+}
+
+var _pdAssignCtx = null;
+// 인수인계 메모 — 변경/대체 시 새 담당에게 관련 내용 전달(메일·텔레그램). 기존 코멘트 인프라 재사용.
+function _pdAssignNoteField() {
+  return '<label class="fl" style="font-size:11px">인수인계 메모(선택 — 새 담당에게 메일·텔레그램·코멘트로 전달)</label>' +
+    '<textarea id="pdAsgNote" rows="3" class="si" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:4px" placeholder="관련 진행 상황·맥락·전달 사항을 적으면 새 담당에게 전달됩니다"></textarea>';
+}
+function _pdAssignAction(kind, mid, projId, fromUserId) {
+  if (typeof userLookup !== 'function') { if (typeof showToast === 'function') showToast('사용자 목록을 불러올 수 없습니다.', 'error'); return; }
+  _pdAssignCtx = { kind: kind, mid: mid, projId: projId, fromUserId: fromUserId || '' };
+  userLookup().then(function (users) {
+    users = (users || []).filter(function (u) { return kind === 'add' || u.id !== fromUserId; });
+    var opts = users.map(function (u) { return '<option value="' + u.id + '">' + eH(u.displayName || u.name || u.id) + '</option>'; }).join('');
+    var ex = document.getElementById('pdAssignModal'); if (ex) ex.remove();
+    var titleMap = { add: '담당 추가', replace: '담당 변경(교체)', cover: '임시 대체' };
+    var extra;
+    if (kind === 'add') {
+      extra = '<label class="fl" style="font-size:11px">역할</label><select id="pdAsgRole" class="si" style="width:100%;margin-bottom:8px"><option value="primary">정(주담당)</option><option value="deputy">부(부담당)</option></select>' +
+        '<label class="fl" style="font-size:11px">목표시간(h, 선택)</label><input id="pdAsgHours" type="number" min="0" step="0.5" class="si" style="width:100%;margin-bottom:8px">';
+    } else if (kind === 'replace') {
+      extra = '<label class="fl" style="font-size:11px">목표시간(h, 선택 — 비우면 기존 승계)</label><input id="pdAsgHours" type="number" min="0" step="0.5" class="si" style="width:100%;margin-bottom:8px"><div style="font-size:10px;color:var(--t6);margin-bottom:4px">기존 담당은 해제되고 이력은 보존됩니다.</div>' + _pdAssignNoteField();
+    } else {
+      extra = '<label class="fl" style="font-size:11px">대체 종료일(선택)</label><input id="pdAsgUntil" type="date" class="si" style="width:100%;margin-bottom:8px"><div style="font-size:10px;color:var(--t6);margin-bottom:4px">기간 동안만 부담당으로 대체하고 종료 후 자동 원복됩니다. 원담당은 유지됩니다.</div>' + _pdAssignNoteField();
+    }
+    var m = document.createElement('div'); m.id = 'pdAssignModal';
+    m.style.cssText = 'position:fixed;inset:0;z-index:10002;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(3px)';
+    m.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:12px;padding:18px;width:340px;max-width:94%">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:13px;font-weight:700;color:var(--t1)">' + titleMap[kind] + '</h3><button class="btn btn-g btn-s" onclick="document.getElementById(\'pdAssignModal\').remove()">✕</button></div>' +
+      '<label class="fl" style="font-size:11px">' + (kind === 'add' ? '담당자' : '새 담당자') + '</label>' +
+      '<select id="pdAsgUser" class="si" style="width:100%;margin-bottom:8px">' + (opts || '<option value="">선택 가능한 사용자 없음</option>') + '</select>' +
+      extra +
+      '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-g" style="flex:1" onclick="document.getElementById(\'pdAssignModal\').remove()">취소</button><button class="btn btn-p" style="flex:1" id="pdAsgOk">확인</button></div>' +
+    '</div>';
+    document.body.appendChild(m);
+    document.getElementById('pdAsgOk').onclick = function () { _pdAssignSubmit(); };
+  }).catch(function () { if (typeof showToast === 'function') showToast('사용자 목록 로드 실패', 'error'); });
+}
+
+function _pdAssignSubmit() {
+  var c = _pdAssignCtx; if (!c) return;
+  var userEl = document.getElementById('pdAsgUser');
+  var toUser = userEl ? userEl.value : '';
+  if (!toUser) { if (typeof showToast === 'function') showToast('담당자를 선택하세요', 'warn'); return; }
+  var noteEl = document.getElementById('pdAsgNote');
+  var handoverNote = noteEl ? (noteEl.value || '').trim() : '';
+  var btn = document.getElementById('pdAsgOk'); if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
+  var p;
+  if (c.kind === 'add') {
+    var role = document.getElementById('pdAsgRole').value;
+    var h = parseFloat(document.getElementById('pdAsgHours').value);
+    p = msAssignmentAdd(c.mid, { userId: toUser, role: role, targetHours: isNaN(h) ? undefined : h });
+  } else if (c.kind === 'replace') {
+    var h2 = parseFloat(document.getElementById('pdAsgHours').value);
+    p = msAssignmentHandover(c.mid, { mode: 'replace', fromUserId: c.fromUserId, toUserId: toUser, targetHours: isNaN(h2) ? undefined : h2 });
+  } else {
+    var until = document.getElementById('pdAsgUntil').value;
+    p = msAssignmentHandover(c.mid, { mode: 'cover', fromUserId: c.fromUserId, toUserId: toUser, validUntil: until || undefined });
+  }
+  p.then(function () {
+    // 인수인계 메모 → 새 담당에게 전달(코멘트+메일·텔레그램). 실패해도 배정은 성공 처리.
+    if (handoverNote && (c.kind === 'replace' || c.kind === 'cover') && typeof commentAdd === 'function') {
+      try { commentAdd('milestone', c.mid, { body: '[담당 인수인계] ' + handoverNote, recipientIds: [toUser] }); } catch (_) {}
+    }
+    var md = document.getElementById('pdAssignModal'); if (md) md.remove();
+    if (typeof showToast === 'function') showToast(handoverNote ? '담당 배정 반영 + 인수인계 메모 전달됨' : '담당 배정 반영됨');
+    renderMsAssignments(c.mid, c.projId, 'pdMsAssignSection');
+  }).catch(function (err) {
+    if (btn) { btn.disabled = false; btn.textContent = '확인'; }
+    var msg = (err && err.status === 403) ? '권한이 없습니다.' : (err && err.status === 404) ? '서버 배포 후 사용 가능합니다.' : ((err && err.message) || '실패');
+    if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
+  });
+}
+
+function pdAssignCoverEnd(mid, projId, assignmentId) {
+  if (!confirm('이 대체를 종료(원복)할까요? 원담당으로 복귀합니다.')) return;
+  msAssignmentRestore(mid, { assignmentId: assignmentId }).then(function () {
+    if (typeof showToast === 'function') showToast('대체 종료(원복)됨');
+    renderMsAssignments(mid, projId, 'pdMsAssignSection');
+  }).catch(function (err) { if (typeof showToast === 'function') showToast('❌ ' + ((err && err.message) || '원복 실패'), 'error'); });
+}
+
+function pdAssignRelease(mid, projId, assignmentId) {
+  if (!confirm('이 담당 배정을 해제할까요? (이력은 보존)')) return;
+  msAssignmentRelease(mid, assignmentId).then(function () {
+    if (typeof showToast === 'function') showToast('배정 해제됨');
+    renderMsAssignments(mid, projId, 'pdMsAssignSection');
+  }).catch(function (err) { if (typeof showToast === 'function') showToast('❌ ' + ((err && err.message) || '해제 실패'), 'error'); });
+}
+
+function _pdAssignToggleHistory(mid, projId, containerId) {
+  var hist = document.getElementById(containerId + '_hist');
+  if (!hist) return;
+  if (hist.getAttribute('data-open') === '1') { hist.innerHTML = ''; hist.removeAttribute('data-open'); return; }
+  hist.setAttribute('data-open', '1');
+  hist.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:4px 0">이관 이력 로딩 중...</div>';
+  Promise.all([msAssignmentsGet(mid, true), msAssignmentsGet(mid, false)]).then(function (res) {
+    var all = res[0] || [], eff = res[1] || [];
+    var released = all.filter(function (a) { return a.releasedAt; });
+    var curPrimary = eff.filter(function (a) { return a.role === 'primary' && !a.coversUserId; })[0];
+    if (!released.length) { hist.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:4px 0">이관 이력 없음</div>'; return; }
+    var rows = released.map(function (a) {
+      var nm = a.userDisplay || a.userName || '?';
+      var when = a.releasedAt ? String(a.releasedAt).slice(0, 10) : '';
+      var undoBtn = '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 6px" onclick="pdAssignReplaceUndo(\'' + mid + '\',\'' + projId + '\',\'' + (curPrimary ? curPrimary.id : '') + '\',\'' + a.userId + '\')" title="이 담당으로 복귀(교체 원복)">↩ 복귀</button>';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:3px 0;opacity:.8"><span style="font-size:10px;color:var(--t5)">' + eH(nm) + ' <span style="color:var(--t6)">해제 ' + when + '</span></span>' + undoBtn + '</div>';
+    }).join('');
+    hist.innerHTML = '<div style="margin-top:6px;border-top:1px dashed var(--bd);padding-top:6px"><div style="font-size:10px;font-weight:600;color:var(--t5);margin-bottom:4px">🕘 이관 이력</div>' + rows + '</div>';
+  }).catch(function () { hist.innerHTML = '<div style="font-size:10px;color:var(--t6)">이력 로드 실패</div>'; });
+}
+
+function pdAssignReplaceUndo(mid, projId, currentPrimaryId, restoreUserId) {
+  if (!confirm('이 담당으로 복귀할까요? 현재 주담당은 해제됩니다.')) return;
+  var body = { restoreUserId: restoreUserId };
+  if (currentPrimaryId) body.assignmentId = currentPrimaryId;
+  msAssignmentRestore(mid, body).then(function () {
+    if (typeof showToast === 'function') showToast('담당 복귀(원복)됨');
+    renderMsAssignments(mid, projId, 'pdMsAssignSection');
+  }).catch(function (err) { if (typeof showToast === 'function') showToast('❌ ' + ((err && err.message) || '원복 실패'), 'error'); });
 }
 
 /* 진척률 업데이트 모달 내 이력 — 현재 열린 모달의 컨텍스트 */

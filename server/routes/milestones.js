@@ -315,4 +315,169 @@ router.delete('/:id', async function (req, res) {
   }
 });
 
+/* ═══════════════════════════════════════════════════════════════════════
+   마일스톤 담당 배정(assignment) — 변경(교체)/대체(임시)/원복  (037 migration)
+   사람은 user_id로 묶음(이관 안전). 과거 이력(author_name 등)은 보존.
+   "오늘 유효" 필터: released_at NULL + valid_from/until 윈도우 내.
+   ═══════════════════════════════════════════════════════════════════════ */
+// valid_from/until 은 'YYYY-MM-DD' 텍스트 → 사전식 비교가 곧 시간순(텍스트 to_char(CURRENT_DATE))
+var _TODAY_TXT = "to_char(CURRENT_DATE,'YYYY-MM-DD')";
+
+function _assignToday() { return new Date().toISOString().slice(0, 10); }
+
+// 마일스톤 → project_id 확인 + 쓰기 권한 게이트. 반환: projectId 또는 null(권한/부재)
+async function _msEditGate(req, res) {
+  var msr = await db.query('SELECT project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+  if (!msr.rows.length) { res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' }); return null; }
+  var projectId = msr.rows[0].project_id;
+  if (!await _canEditProject(req, projectId)) { res.status(403).json({ error: 'FORBIDDEN', message: '담당 배정 권한이 없습니다.' }); return null; }
+  return projectId;
+}
+
+// GET /api/milestones/:id/assignments[?all=1] — 유효 배정(기본) 또는 전체(이력 포함)
+router.get('/:id/assignments', async function (req, res) {
+  try {
+    var projectId = await _msEditGate(req, res);
+    if (projectId === null) return;
+    var where = (req.query.all === '1') ? '' :
+      " AND a.released_at IS NULL AND (a.valid_from IS NULL OR a.valid_from <= " + _TODAY_TXT + ") AND (a.valid_until IS NULL OR a.valid_until >= " + _TODAY_TXT + ")";
+    var r = await db.query(
+      'SELECT a.*, u.name AS user_name, u.display_name AS user_display, c.name AS covers_name ' +
+      'FROM milestone_assignments a JOIN users u ON a.user_id = u.id ' +
+      'LEFT JOIN users c ON a.covers_user_id = c.id ' +
+      'WHERE a.milestone_id = $1 AND a.tenant_id = $2' + where +
+      " ORDER BY (a.role='primary') DESC, a.created_at",
+      [req.params.id, req.tenant.id]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[ms/assign/list]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST /api/milestones/:id/assignments — 배정 추가 {userId, role, targetHours, validFrom, validUntil, coversUserId}
+router.post('/:id/assignments', async function (req, res) {
+  try {
+    var b = req.body || {};
+    if (!b.userId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'userId 필수' });
+    var projectId = await _msEditGate(req, res);
+    if (projectId === null) return;
+    var role = (b.role === 'deputy') ? 'deputy' : 'primary';
+    var id = 'msa-' + require('crypto').randomUUID().slice(0, 12);
+    var r = await db.query(
+      'INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id, role, target_hours, valid_from, valid_until, covers_user_id, created_by) ' +
+      'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+      [id, req.tenant.id, req.params.id, projectId, b.userId, role,
+       (b.targetHours != null ? b.targetHours : null), b.validFrom || null, b.validUntil || null, b.coversUserId || null, req.user.sub]
+    );
+    res.status(201).json({ data: r.rows[0] });
+    try { authService.auditLog(req.user.sub, 'assignment.add', 'milestone', req.params.id, { userId: b.userId, role: role }, req); } catch (_) {}
+  } catch (e) {
+    console.error('[ms/assign/add]', e);
+    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST /api/milestones/:id/assignments/handover — 변경(교체)/대체
+//  body: { mode:'replace'|'cover', fromUserId?, toUserId, targetHours?, validFrom?, validUntil?, role? }
+router.post('/:id/assignments/handover', async function (req, res) {
+  try {
+    var b = req.body || {};
+    if (!b.toUserId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'toUserId 필수' });
+    var mode = (b.mode === 'cover') ? 'cover' : 'replace';
+    var projectId = await _msEditGate(req, res);
+    if (projectId === null) return;
+    var crypto = require('crypto');
+
+    if (mode === 'replace') {
+      // 구 담당(fromUserId) 활성 배정 해제(이력 보존) + 신 담당 primary 생성(목표시간 승계)
+      var oldTargets = null, oldRole = 'primary';
+      if (b.fromUserId) {
+        var ar = await db.query(
+          'SELECT target_hours, role FROM milestone_assignments WHERE milestone_id=$1 AND tenant_id=$2 AND user_id=$3 AND released_at IS NULL ORDER BY created_at DESC LIMIT 1',
+          [req.params.id, req.tenant.id, b.fromUserId]
+        );
+        if (ar.rows.length) { oldTargets = ar.rows[0].target_hours; oldRole = ar.rows[0].role; }
+        await db.query(
+          'UPDATE milestone_assignments SET released_at=now() WHERE milestone_id=$1 AND tenant_id=$2 AND user_id=$3 AND released_at IS NULL',
+          [req.params.id, req.tenant.id, b.fromUserId]
+        );
+      }
+      var th = (b.targetHours != null) ? b.targetHours : oldTargets;
+      var nid = 'msa-' + crypto.randomUUID().slice(0, 12);
+      var nr = await db.query(
+        'INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id, role, target_hours, created_by) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+        [nid, req.tenant.id, req.params.id, projectId, b.toUserId, (b.role === 'deputy' ? 'deputy' : oldRole), th, req.user.sub]
+      );
+      res.status(201).json({ data: nr.rows[0] });
+    } else {
+      // 임시대체 — deputy 배정 + 기간 + covers_user_id(원담당은 그대로)
+      var vf = b.validFrom || _assignToday();
+      var nid2 = 'msa-' + crypto.randomUUID().slice(0, 12);
+      var nr2 = await db.query(
+        'INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id, role, target_hours, valid_from, valid_until, covers_user_id, created_by) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+        [nid2, req.tenant.id, req.params.id, projectId, b.toUserId, 'deputy',
+         (b.targetHours != null ? b.targetHours : null), vf, b.validUntil || null, b.fromUserId || null, req.user.sub]
+      );
+      res.status(201).json({ data: nr2.rows[0] });
+    }
+    try { authService.auditLog(req.user.sub, 'assignment.handover', 'milestone', req.params.id, { mode: mode, from: b.fromUserId, to: b.toUserId }, req); } catch (_) {}
+  } catch (e) {
+    console.error('[ms/assign/handover]', e);
+    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST /api/milestones/:id/assignments/restore — 원복
+//  body: { assignmentId, restoreUserId? }
+//   - 대체 원복: assignmentId(대체배정) 해제 → 원담당 자동 복귀
+//   - 교체 원복: assignmentId(신 담당) 해제 + restoreUserId(구 담당) 가장 최근 해제 배정 되살림
+router.post('/:id/assignments/restore', async function (req, res) {
+  try {
+    var b = req.body || {};
+    if (!b.assignmentId && !b.restoreUserId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'assignmentId 또는 restoreUserId 필요' });
+    var projectId = await _msEditGate(req, res);
+    if (projectId === null) return;
+    if (b.assignmentId) {
+      await db.query(
+        'UPDATE milestone_assignments SET released_at=now() WHERE id=$1 AND milestone_id=$2 AND tenant_id=$3 AND released_at IS NULL',
+        [b.assignmentId, req.params.id, req.tenant.id]
+      );
+    }
+    if (b.restoreUserId) {
+      await db.query(
+        'UPDATE milestone_assignments SET released_at=NULL WHERE id=(' +
+        'SELECT id FROM milestone_assignments WHERE milestone_id=$1 AND tenant_id=$2 AND user_id=$3 AND released_at IS NOT NULL ' +
+        'ORDER BY released_at DESC LIMIT 1)',
+        [req.params.id, req.tenant.id, b.restoreUserId]
+      );
+    }
+    res.json({ message: '원복 완료' });
+    try { authService.auditLog(req.user.sub, 'assignment.restore', 'milestone', req.params.id, { assignmentId: b.assignmentId, restoreUserId: b.restoreUserId }, req); } catch (_) {}
+  } catch (e) {
+    console.error('[ms/assign/restore]', e);
+    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// DELETE /api/milestones/:id/assignments/:aid — 배정 해제(소프트, 이력 보존)
+router.delete('/:id/assignments/:aid', async function (req, res) {
+  try {
+    var projectId = await _msEditGate(req, res);
+    if (projectId === null) return;
+    await db.query(
+      'UPDATE milestone_assignments SET released_at=now() WHERE id=$1 AND milestone_id=$2 AND tenant_id=$3 AND released_at IS NULL',
+      [req.params.aid, req.params.id, req.tenant.id]
+    );
+    res.json({ message: '해제 완료' });
+    try { authService.auditLog(req.user.sub, 'assignment.release', 'milestone', req.params.id, { assignmentId: req.params.aid }, req); } catch (_) {}
+  } catch (e) {
+    console.error('[ms/assign/del]', e);
+    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 module.exports = router;

@@ -560,6 +560,29 @@ function msDelByProject(projectId) {
   });
 }
 
+/* ─── 마일스톤 담당 배정(assignment) — 변경(교체)/대체(임시)/원복 (v13.141) ───
+   사람은 user_id 기반. 과거 이력은 보존. msPut 와 달리 캐시 무효화 불필요(별도 테이블). */
+function msAssignmentsGet(mid, includeAll) {
+  return apiFetch('/api/milestones/' + mid + '/assignments' + (includeAll ? '?all=1' : ''))
+    .then(function (r) { return toCamelArray(r.data); });
+}
+function msAssignmentAdd(mid, data) {
+  return apiFetch('/api/milestones/' + mid + '/assignments', { method: 'POST', body: JSON.stringify(data || {}) })
+    .then(function (r) { return toCamel(r.data); });
+}
+// data: { mode:'replace'|'cover', fromUserId?, toUserId, targetHours?, validFrom?, validUntil?, role? }
+function msAssignmentHandover(mid, data) {
+  return apiFetch('/api/milestones/' + mid + '/assignments/handover', { method: 'POST', body: JSON.stringify(data || {}) })
+    .then(function (r) { return (r && r.data) ? toCamel(r.data) : r; });
+}
+// data: { assignmentId, restoreUserId? }
+function msAssignmentRestore(mid, data) {
+  return apiFetch('/api/milestones/' + mid + '/assignments/restore', { method: 'POST', body: JSON.stringify(data || {}) });
+}
+function msAssignmentRelease(mid, aid) {
+  return apiFetch('/api/milestones/' + mid + '/assignments/' + aid, { method: 'DELETE' });
+}
+
 /* ─── 마일스톤 작업 노트 + 보고 진척률 이력 ─── */
 function msLogsGet(mid) {
   return apiFetch('/api/milestones/' + mid + '/logs').then(function (r) { return toCamelArray(r.data); });
