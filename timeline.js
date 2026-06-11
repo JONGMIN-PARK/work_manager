@@ -133,28 +133,39 @@ function tlSetSort(sortMode) {
   if (el) el.value = sortMode;
   renderTimeline();
 }
-// 마일스톤 접기/펼치기
+// 마일스톤 접기/펼치기 — v13.139 전체 재렌더 없이 해당 하위 행만 즉시 show/hide (체감 지연 제거)
+function _tlSelEsc(s) { return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/"/g, '\\"'); }
+// 한 프로젝트의 하위 행 표시/숨김 + 토글 버튼 아이콘·타이틀 갱신 (DOM만 조작)
+function _tlApplyCollapse(projId, collapsed) {
+  var sel = '.tl-row-sub[data-proj-id="' + _tlSelEsc(projId) + '"]';
+  var rows = document.querySelectorAll(sel);
+  for (var i = 0; i < rows.length; i++) rows[i].classList.toggle('tl-row-collapsed', collapsed);
+  var btn = document.querySelector('.tl-collapse-toggle[data-collapse-proj="' + _tlSelEsc(projId) + '"]');
+  if (btn) { btn.textContent = collapsed ? '▸' : '▾'; btn.title = '마일스톤 ' + (collapsed ? '펼치기' : '접기'); }
+  return rows.length;
+}
 function tlToggleCollapse(projId) {
-  if (tlCollapsed.has(projId)) {
-    tlCollapsed.delete(projId);
-  } else {
-    tlCollapsed.add(projId);
-  }
-  renderTimeline();
+  var collapsed = !tlCollapsed.has(projId);
+  if (collapsed) tlCollapsed.add(projId); else tlCollapsed.delete(projId);
+  _tlApplyCollapse(projId, collapsed);
 }
 function tlCollapseAll() {
-  var visibleProjects = document.querySelectorAll('[data-proj-id]');
-  visibleProjects.forEach(function (row) {
+  // 하위 행이 실제로 존재하는(마일스톤 보유) 프로젝트만 접기
+  var projRows = document.querySelectorAll('.tl-row-proj[data-proj-id]');
+  projRows.forEach(function (row) {
     var projId = row.getAttribute('data-proj-id');
-    if (projId && row.querySelectorAll('.tl-row-sub').length > 0) {
+    if (!projId || tlCollapsed.has(projId)) return;
+    if (document.querySelector('.tl-row-sub[data-proj-id="' + _tlSelEsc(projId) + '"]')) {
       tlCollapsed.add(projId);
+      _tlApplyCollapse(projId, true);
     }
   });
-  renderTimeline();
 }
 function tlExpandAll() {
+  var ids = [];
+  tlCollapsed.forEach(function (id) { ids.push(id); });
   tlCollapsed.clear();
-  renderTimeline();
+  ids.forEach(function (id) { _tlApplyCollapse(id, false); });
 }
 // D-Day 배지 토글
 function tlToggleDayOffset(val) {
@@ -314,8 +325,8 @@ async function renderTimeline() {
     '<button class="btn btn-p btn-s" onclick="showProjectModal()">➕ 프로젝트</button>' +
     '<div style="display:flex;gap:3px;align-items:center">' +
       '<span style="font-size:11px;color:var(--t4);margin-right:4px">스케일:</span>' +
-      ['day','week','month','quarter'].map(function (s) {
-        var labels = { day: '일', week: '주', month: '월', quarter: '분기' };
+      ['hour','day','week','month','quarter'].map(function (s) {
+        var labels = { hour: '시간', day: '일', week: '주', month: '월', quarter: '분기' };
         return '<button class="btn btn-s ' + (tlScale === s ? 'btn-p' : 'btn-g') + '" onclick="tlScale=\'' + s + '\';renderTimeline()">' + labels[s] + '</button>';
       }).join('') +
     '</div>' +
@@ -460,7 +471,7 @@ async function renderTimeline() {
       '<div' + (st === 'done' ? ' style="opacity:.5"' : '') + '>' +
       '<div style="display:flex;align-items:center;gap:6px">' +
         '<span class="dot" style="background:' + p.color + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
-        (pMs.length > 0 ? '<button class="tl-collapse-toggle" onclick="event.stopPropagation();tlToggleCollapse(\'' + p.id + '\')" style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;color:var(--t4);width:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="마일스톤 ' + (tlCollapsed.has(p.id) ? '펼치기' : '접기') + '">' + (tlCollapsed.has(p.id) ? '▸' : '▾') + '</button>' : '<span style="width:16px;flex-shrink:0"></span>') +
+        (pMs.length > 0 ? '<button class="tl-collapse-toggle" data-collapse-proj="' + p.id + '" onclick="event.stopPropagation();tlToggleCollapse(\'' + p.id + '\')" style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;color:var(--t4);width:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="마일스톤 ' + (tlCollapsed.has(p.id) ? '펼치기' : '접기') + '">' + (tlCollapsed.has(p.id) ? '▸' : '▾') + '</button>' : '<span style="width:16px;flex-shrink:0"></span>') +
         '<span style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap' + (st === 'done' ? ';text-decoration:line-through;text-decoration-thickness:1px;text-decoration-color:var(--t5)' : '') + '">' + eH(p.name || p.orderNo) + '</span>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:4px;margin-top:2px">' +
@@ -492,8 +503,8 @@ async function renderTimeline() {
       rowsHtml += '<div class="tl-handle tl-handle-l" data-handle="left"></div>';
       rowsHtml += '<div class="tl-handle tl-handle-r" data-handle="right"></div>';
     }
-    // v13.133 진척률 % 표시
-    var pctSpan = (p.progress > 0) ? ' <span class="tl-bar-pct">' + Math.round(p.progress) + '%</span>' : '';
+    // v13.133 진척률 % 표시 (v13.140 100%는 ✓)
+    var pctSpan = (p.progress > 0) ? ' <span class="tl-bar-pct">' + (p.progress >= 100 ? '✓' : Math.round(p.progress) + '%') + '</span>' : '';
     rowsHtml += '<span class="tl-bar-text">' + eH(p.name) + pctSpan + '</span>';
     // v13.133 D-Day 배지 (막대 클릭 가로채지 않음 — pointer-events:none)
     if (tlDayOffset) {
@@ -528,8 +539,9 @@ async function renderTimeline() {
     rowsHtml += '</div>'; // tl-bars
     rowsHtml += '</div>'; // tl-row
 
-    // 마일스톤 하위 행 (v13.133 접기 시 생략)
-    if (!tlCollapsed.has(p.id)) {
+    // 마일스톤 하위 행 — 항상 렌더하되 접힘 시 .tl-row-collapsed(display:none)로 토글 (v13.139 즉시 반응)
+    var _msRowCollapsed = tlCollapsed.has(p.id) ? ' tl-row-collapsed' : '';
+    {
       pMs.forEach(function (ms) {
         var msBarStyle = getBarStyle(ms.startDate, ms.endDate, rangeStart, units);
         var msSt = ms.status || 'waiting';
@@ -548,7 +560,7 @@ async function renderTimeline() {
       var msTitle = (ms.name || '') + ' · ' + (ms.startDate || '?') + ' ~ ' + (ms.endDate || '?') + (_msDays != null ? ' · ' + _msDays + '일' : '') + (_msDday ? ' · ' + _msDday.label : '') + _msPerf;
       var _perf = (typeof _tlMsPerf === 'function') ? _tlMsPerf(ms, msWorkH) : { text: '', html: '' };
       var _msProg = Number(ms.progress) || 0;
-      rowsHtml += '<div class="tl-row tl-row-sub' + (_pi % 2 === 1 ? ' tl-proj-alt' : '') + '" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '"' + (tlMsReorder ? ' ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)"' : '') + '>';
+      rowsHtml += '<div class="tl-row tl-row-sub' + (_pi % 2 === 1 ? ' tl-proj-alt' : '') + _msRowCollapsed + '" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '"' + (tlMsReorder ? ' ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)"' : '') + '>';
       rowsHtml += '<div class="tl-label tl-label-sub"' + (tlMsReorder ? ' draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' : '') +
         ' title="' + eH(msTitle) + ' — 클릭: 진척률·작업노트 업데이트"' +
         ' onclick="tlMsOpenUpdate(event,\'' + ms.id + '\',\'' + p.id + '\',' + _msProg + ')"' +
@@ -562,13 +574,18 @@ async function renderTimeline() {
         ' title="' + eH(msTitle) + (tlEditMode ? '' : ' — 클릭: 업데이트') + '"' +
         (tlEditMode ? '' : ' onclick="tlMsOpenUpdate(event,\'' + ms.id + '\',\'' + p.id + '\',' + _msProg + ')"') +
         ' style="' + msBarStyle + 'background:' + msBarBg + (tlEditMode ? '' : ';cursor:pointer') + '">';
+      // v13.140 마일스톤 달성률 시각화 — 진척률 채움 바(프로젝트 막대와 동일 패턴) + 완료 시 ✓
+      if (_msProg > 0) {
+        var _msFillCol = _msProg >= 100 ? '#10B981' : p.color;
+        rowsHtml += '<div class="tl-bar-progress' + (_msProg > 30 ? ' prominent' : '') + '" style="width:' + Math.min(_msProg, 100) + '%;background:' + _msFillCol + '"></div>';
+      }
       if (tlEditMode) {
         rowsHtml += '<div class="tl-handle tl-handle-l" data-handle="left"></div>';
         rowsHtml += '<div class="tl-handle tl-handle-r" data-handle="right"></div>';
       }
-      // v13.133 마일스톤 진척률 % 표시
+      // v13.133 마일스톤 진척률 % 표시 (v13.140 100%는 ✓)
       if (_msProg > 0) {
-        rowsHtml += '<span class="tl-bar-pct small">' + Math.round(_msProg) + '%</span>';
+        rowsHtml += '<span class="tl-bar-pct small">' + (_msProg >= 100 ? '✓' : Math.round(_msProg) + '%') + '</span>';
       }
       // v13.133 마일스톤 D-Day 배지 (막대 클릭 가로채지 않음 — pointer-events:none)
       if (tlDayOffset) {
@@ -881,7 +898,20 @@ function getTimeUnits(start, end, scale) {
   var units = [];
   var d = new Date(start);
 
-  if (scale === 'day') {
+  if (scale === 'hour') {
+    // 시간 단위 — 프로젝트/마일스톤 데이터는 날짜 단위라 막대는 자정 경계에 정렬됨.
+    // 라벨은 과밀 방지: 자정=날짜(M/D), 그 외엔 6시간 간격(6/12/18시)만 표기.
+    d.setHours(0, 0, 0, 0); // 로컬 자정에 정렬 — 날짜 경계가 0시 컬럼에 오도록
+    while (d <= end) {
+      var hh = d.getHours();
+      var hds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      var hlabel = (hh === 0) ? ((d.getMonth() + 1) + '/' + d.getDate()) : (hh % 6 === 0 ? (hh + '시') : '');
+      (function (hds2, hh2) {
+        units.push({ label: hlabel, date: hds2, hour: hh2, contains: function (dt) { return dt === hds2 && hh2 === 0; } });
+      })(hds, hh);
+      d.setHours(d.getHours() + 1);
+    }
+  } else if (scale === 'day') {
     while (d <= end) {
       var ds = d.toISOString().slice(0, 10);
       (function (ds2) {
@@ -942,6 +972,7 @@ function getTimeUnits(start, end, scale) {
 }
 
 function getUnitWidth() {
+  if (tlScale === 'hour') return 18;
   if (tlScale === 'day') return 32;
   if (tlScale === 'week') return 60;
   if (tlScale === 'month') return 120;
@@ -951,6 +982,13 @@ function getUnitWidth() {
 function getDatePosition(dateStr, rangeStart, units) {
   if (!units || !units.length) return -1;
   var w = getUnitWidth();
+  // 시간 스케일: 날짜 단위 데이터는 자정(hour 0)에 정렬 → 시 단위 인덱스 산술 O(1)
+  if (tlScale === 'hour') {
+    if (!units[0].date) return -1;
+    var hIdx = daysDiff(units[0].date, String(dateStr).slice(0, 10)) * 24 - (units[0].hour || 0);
+    if (hIdx < 0 || hIdx >= units.length) return -1;
+    return hIdx * w;
+  }
   // 일 스케일: 균등 1일 단위 → 산술 O(1)
   if (units[0].date) {
     var idx = daysDiff(units[0].date, dateStr);

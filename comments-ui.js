@@ -69,6 +69,7 @@ async function commentAdd(targetType, targetId, data) {
     sendTelegram: data.sendTelegram !== false
   };
   if (data.recipientIds) payload.recipientIds = data.recipientIds;
+  if (data.parentId) payload.parentId = data.parentId; // 대댓글(답글) — 서버가 parent_id로 저장
   var r = await apiFetch('/api/comments', {
     method: 'POST',
     body: JSON.stringify(payload)
@@ -102,13 +103,18 @@ function openCommentModal(targetType, targetId, opts) {
 function _cmBuildCommentModal(targetType, targetId, opts) {
   var ex = document.getElementById('commentModal'); if (ex) ex.remove();
 
-  var title = opts.title || (targetType === 'milestone' ? '마일스톤 피드백' : '프로젝트 피드백');
+  var isReply = !!opts.parentId;
+  var title = opts.title || (isReply ? '답글 작성' : (targetType === 'milestone' ? '마일스톤 피드백' : '프로젝트 피드백'));
   // 전송 성공 후 스레드 갱신용 컨텍스트 — 콜백 인자를 안전하게 넘기기 위해 전역 보관
   _cmModalCtx = {
     targetType: targetType,
     targetId: targetId,
-    containerId: opts.containerId || ''
+    containerId: opts.containerId || '',
+    parentId: opts.parentId || ''
   };
+  var replyNote = isReply
+    ? '<div style="font-size:11px;color:var(--ac);margin-bottom:8px;line-height:1.5">↩ <b>' + _cmEsc(opts.replyTo || '') + '</b> 님의 코멘트에 답글을 작성합니다.</div>'
+    : '';
 
   var modal = document.createElement('div');
   modal.id = 'commentModal';
@@ -121,8 +127,9 @@ function _cmBuildCommentModal(targetType, targetId, opts) {
         '<h3 style="font-size:14px;font-weight:700;color:var(--t1);margin:0">💬 ' + _cmEsc(title) + '</h3>' +
         '<button class="btn btn-g btn-s" onclick="closeCommentModal()" aria-label="닫기">✕</button>' +
       '</div>' +
+      replyNote +
       '<div style="font-size:11px;color:var(--t5);margin-bottom:8px;line-height:1.5">담당자에게 전송됩니다.</div>' +
-      '<textarea id="commentBody" placeholder="피드백 내용을 입력하세요..." ' +
+      '<textarea id="commentBody" placeholder="' + (isReply ? '답글 내용을 입력하세요...' : '피드백 내용을 입력하세요...') + '" ' +
         'style="width:100%;min-height:120px;resize:vertical;box-sizing:border-box;padding:10px;font-size:13px;line-height:1.5;' +
         'color:var(--t2);background:var(--bg-i);border:1px solid var(--bd);border-radius:8px"></textarea>' +
       '<div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">' +
@@ -169,10 +176,11 @@ async function commentSendUI() {
     await commentAdd(ctx.targetType, ctx.targetId, {
       body: body,
       sendEmail: emailEl ? emailEl.checked : true,
-      sendTelegram: tgEl ? tgEl.checked : true
+      sendTelegram: tgEl ? tgEl.checked : true,
+      parentId: ctx.parentId || undefined
     });
     closeCommentModal();
-    _cmToast('피드백 전송됨');
+    _cmToast(ctx.parentId ? '답글 등록됨' : '피드백 전송됨');
     // 같은 화면에 스레드가 있으면 갱신
     if (ctx.containerId && document.getElementById(ctx.containerId)) {
       renderCommentThread(ctx.targetType, ctx.targetId, ctx.containerId);
@@ -219,29 +227,51 @@ async function renderCommentThread(targetType, targetId, containerId) {
   var meId = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null;
   var iAmAdmin = (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin');
 
-  var rows = list.map(function (c) {
+  // 스레드 트리 구성 — parent_id 기준. 최상위(질문)는 최신순(list가 DESC), 답글은 시간순(오래된→최신)
+  var byId = {};
+  list.forEach(function (c) { byId[c.id] = c; });
+  var kids = {};
+  var roots = [];
+  list.forEach(function (c) {
+    var pid = c.parentId || c.parent_id || null;
+    if (pid && byId[pid]) { (kids[pid] = kids[pid] || []).push(c); }
+    else { roots.push(c); }
+  });
+  Object.keys(kids).forEach(function (k) {
+    kids[k].sort(function (a, b) { return (a.createdAt || '').localeCompare(b.createdAt || ''); });
+  });
+
+  function renderOne(c, depth) {
     var author = c.authorName || c.authorId || '알 수 없음';
     var when = _cmRelTime(c.createdAt);
     var canDel = iAmAdmin || (meId != null && c.authorId === meId);
     var delBtn = canDel
-      ? '<button class="btn btn-d btn-s" style="font-size:10px;padding:2px 6px" title="삭제" ' +
+      ? '<button class="btn btn-d btn-s" style="font-size:10px;padding:1px 5px" title="삭제" ' +
           'onclick="commentDelUI(\'' + _cmEsc(c.id) + '\',\'' + _cmEsc(targetType) + '\',\'' +
           _cmEsc(targetId) + '\',\'' + _cmEsc(containerId) + '\')">🗑</button>'
       : '';
-    // 본문: 이스케이프 후 줄바꿈 보존
+    // 답글(대댓글) — 로그인 당사자 명으로 작성됨(서버가 인증 사용자로 author 설정)
+    var replyBtn = '<button class="btn btn-g btn-s" style="font-size:10px;padding:1px 5px" title="답글" ' +
+        'onclick="openCommentModal(\'' + _cmEsc(targetType) + '\',\'' + _cmEsc(targetId) + '\',' +
+        '{containerId:\'' + _cmEsc(containerId) + '\',parentId:\'' + _cmEsc(c.id) + '\',replyTo:\'' + _cmEsc(author) + '\'})">↩ 답글</button>';
     var bodyHtml = _cmEsc(c.body).replace(/\n/g, '<br>');
-    return '<div style="padding:8px 10px;margin-bottom:6px;background:var(--bg-i);border:1px solid var(--bd);border-radius:8px">' +
+    var indent = depth > 0 ? ('margin-left:' + Math.min(depth, 4) * 16 + 'px;') : '';
+    var accent = depth > 0 ? 'border-left:2px solid var(--ac);' : '';
+    var html = '<div style="' + indent + 'padding:8px 10px;margin-bottom:6px;background:var(--bg-i);border:1px solid var(--bd);' + accent + 'border-radius:8px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">' +
-          '<span style="font-size:11px;font-weight:600;color:var(--t2)">' + _cmEsc(author) + '</span>' +
+          '<span style="font-size:11px;font-weight:600;color:var(--t2)">' + (depth > 0 ? '↳ ' : '') + _cmEsc(author) + '</span>' +
           '<span style="display:flex;align-items:center;gap:6px">' +
             '<span style="font-size:10px;color:var(--t6)">' + _cmEsc(when) + '</span>' +
-            delBtn +
+            replyBtn + delBtn +
           '</span>' +
         '</div>' +
         '<div style="font-size:12px;color:var(--t3);line-height:1.5;word-break:break-word">' + bodyHtml + '</div>' +
       '</div>';
-  }).join('');
+    (kids[c.id] || []).forEach(function (ch) { html += renderOne(ch, depth + 1); });
+    return html;
+  }
 
+  var rows = roots.map(function (c) { return renderOne(c, 0); }).join('');
   el.innerHTML = addBtn + rows;
 }
 
