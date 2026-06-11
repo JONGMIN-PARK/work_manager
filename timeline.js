@@ -1178,8 +1178,9 @@ async function showProjectModal(projId) {
         '</select></div>' +
         (proj ? '<div class="pm-share-btns" style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">' +
           '<button class="btn btn-g btn-s" style="font-size:10px" onclick="showProjectShareModal(\'' + proj.id + '\')">👥 공유 관리</button>' +
+          '<button class="btn btn-g btn-s" style="font-size:10px" onclick="showProjectCopyModal(\'' + proj.id + '\')" title="이 프로젝트를 다른 이름으로 복사(내용·인원·마일스톤 동일)">📋 복사</button>' +
           '<button class="btn btn-g btn-s" style="font-size:10px" onclick="showProjectTransferModal(\'' + proj.id + '\')">↪ 소유권 이관</button>' +
-        '</div>' : '<div style="font-size:10px;color:var(--t6);align-self:center">등록 후 공유 사용자 추가 가능</div>') +
+        '</div>' : '<div style="font-size:10px;color:var(--t6);align-self:center">등록 후 공유 사용자 추가·복사 가능</div>') +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
         '<div><label class="fl">예상 총 투입시간 (h)</label><input type="number" class="si" id="projEstHours" value="' + (proj ? proj.estimatedHours : '') + '" placeholder="0" style="padding-left:10px" min="0"></div>' +
@@ -1623,6 +1624,45 @@ async function saveProjectUI(existingId) {
     var msg = detail || err.message || String(err);
     showToast('프로젝트 저장 실패: ' + msg + (err && err.status ? ' (HTTP ' + err.status + ')' : ''), 'error');
   }
+}
+
+/* ═══ 프로젝트 사본(복사) 모달 — 내용·인원·마일스톤 동일 복사 (v13.146) ═══ */
+function showProjectCopyModal(projId) {
+  if (typeof projCopy !== 'function' || typeof projGet !== 'function') { if (typeof showToast === 'function') showToast('복사 기능을 사용할 수 없습니다.', 'error'); return; }
+  projGet(projId).then(function (p) {
+    var base = (p && (p.name || p.orderNo)) || '프로젝트';
+    var ex = document.getElementById('projCopyModal'); if (ex) ex.remove();
+    var m = document.createElement('div'); m.id = 'projCopyModal';
+    m.style.cssText = 'position:fixed;inset:0;z-index:10002;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(3px)';
+    m.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:12px;padding:18px;width:360px;max-width:94%">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:13px;font-weight:700;color:var(--t1)">📋 프로젝트 사본 만들기</h3><button class="btn btn-g btn-s" onclick="document.getElementById(\'projCopyModal\').remove()">✕</button></div>' +
+      '<div style="font-size:10px;color:var(--t6);margin-bottom:10px;line-height:1.6">원본: <b>' + eH(base) + '</b><br>내용·인원 할당·마일스톤·담당(정/부)을 동일하게 복사합니다. (진척률·보고시간 등 실적은 초기화)</div>' +
+      '<label class="fl" style="font-size:11px">새 프로젝트 이름</label><input id="projCopyName" class="si" style="width:100%;box-sizing:border-box;margin-bottom:8px" value="' + eH(base + ' (사본)') + '">' +
+      '<label class="fl" style="font-size:11px">수주번호(선택)</label><input id="projCopyOrder" class="si" style="width:100%;box-sizing:border-box;margin-bottom:12px" placeholder="비우면 빈 값">' +
+      '<div style="display:flex;gap:8px"><button class="btn btn-g" style="flex:1" onclick="document.getElementById(\'projCopyModal\').remove()">취소</button><button class="btn btn-p" style="flex:1" id="projCopyOk" onclick="submitProjectCopy(\'' + projId + '\')">사본 생성</button></div>' +
+    '</div>';
+    document.body.appendChild(m);
+    var ni = document.getElementById('projCopyName'); if (ni) { ni.focus(); ni.select(); }
+  }).catch(function () { if (typeof showToast === 'function') showToast('원본 정보를 불러오지 못했습니다.', 'error'); });
+}
+function submitProjectCopy(projId) {
+  var nameEl = document.getElementById('projCopyName');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) { if (typeof showToast === 'function') showToast('새 프로젝트 이름을 입력하세요', 'warn'); if (nameEl) nameEl.focus(); return; }
+  var orderEl = document.getElementById('projCopyOrder');
+  var orderNo = orderEl ? (orderEl.value || '').trim() : '';
+  var btn = document.getElementById('projCopyOk'); if (btn) { btn.disabled = true; btn.textContent = '생성 중...'; }
+  projCopy(projId, { name: name, orderNo: orderNo }).then(function () {
+    var cm = document.getElementById('projCopyModal'); if (cm) cm.remove();
+    var pm = document.getElementById('projModal'); if (pm) pm.remove();
+    if (typeof showToast === 'function') showToast('사본 생성됨: ' + name);
+    if (typeof renderTimeline === 'function') renderTimeline();
+    if (typeof renderCalendar === 'function') renderCalendar();
+  }).catch(function (err) {
+    if (btn) { btn.disabled = false; btn.textContent = '사본 생성'; }
+    var msg = (err && err.status === 403) ? '복사 권한이 없습니다.' : (err && err.status === 404) ? '서버 배포 후 사용 가능합니다.' : ((err && err.data && err.data.message) || (err && err.message) || '복사 실패');
+    if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
+  });
 }
 
 /* ═══ 프로젝트 공유 관리 모달 ═══ */

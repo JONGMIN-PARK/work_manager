@@ -404,4 +404,84 @@ router.post('/:id/transfer', async function (req, res) {
   }
 });
 
+// ─── POST /api/projects/:id/copy — 프로젝트 사본 생성 (v13.146) ───
+//  body: { name(필수), orderNo? }
+//  내용·인원(활성 멤버)·마일스톤·목표시간·담당배정(정/부)을 동일하게 복사.
+//  실행 실적(진척률/보고시간/이력/코멘트)은 초기화 — 새 진행을 위한 깨끗한 사본.
+//  복사자가 새 프로젝트의 owner. 원본은 읽기 권한만 있으면 복사 가능.
+router.post('/:id/copy', rbac.checkPermission('project.create'), async function (req, res) {
+  try {
+    var b = req.body || {};
+    var newName = (b.name != null) ? String(b.name).trim() : '';
+    if (!newName) return res.status(400).json({ error: 'BAD_REQUEST', message: '새 프로젝트 이름이 필요합니다.' });
+
+    var srcR = await db.query('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!srcR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '원본 프로젝트를 찾을 수 없습니다.' });
+    var src = srcR.rows[0];
+    if (!await canAccessProject(req, src)) return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 접근 권한이 없습니다.' });
+
+    var crypto = require('crypto');
+    var newId = 'proj-' + crypto.randomUUID().slice(0, 12);
+    var meId = req.user.sub;
+    var deptId = req.user.departmentId || src.department_id || null;
+
+    var copyResult = await db.transaction(async function (client) {
+      // 1) 프로젝트 행 — 진척률은 0으로 초기화, 나머지 내용 동일. owner/생성자 = 복사자.
+      await client.query(
+        "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id, tenant_id, owner_id, visibility) " +
+        "VALUES ($1,$2,$3,$4,$5,$6,0,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16,$14,$17)",
+        [newId, (b.orderNo != null ? String(b.orderNo) : ''), newName, src.start_date, src.end_date, src.status || 'active', src.estimated_hours || 0,
+         JSON.stringify(src.assignees || []), JSON.stringify(src.dependencies || []), src.color || '#3B82F6', src.memo || '', src.current_phase || 'order',
+         JSON.stringify(src.phases || {}), meId, deptId, req.tenant.id, src.visibility || 'private']
+      );
+      // 2) 활성 멤버(인원 할당) 복사
+      var mem = await client.query('SELECT user_id, role FROM project_members WHERE project_id = $1 AND released_at IS NULL', [src.id]);
+      for (var i = 0; i < mem.rows.length; i++) {
+        await client.query(
+          "INSERT INTO project_members (project_id, user_id, role, assigned_by) VALUES ($1,$2,$3,$4) ON CONFLICT (project_id, user_id) DO NOTHING",
+          [newId, mem.rows[i].user_id, mem.rows[i].role || 'assignee', meId]
+        );
+      }
+      // 3) 마일스톤 복사(진척 초기화) — old→new id 매핑
+      var ms = await client.query('SELECT * FROM milestones WHERE project_id = $1 AND tenant_id = $2 ORDER BY sort_order', [src.id, req.tenant.id]);
+      var idMap = {};
+      for (var j = 0; j < ms.rows.length; j++) {
+        var m = ms.rows[j];
+        var nmid = 'ms-' + crypto.randomUUID().slice(0, 12);
+        idMap[m.id] = nmid;
+        await client.query(
+          "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, assignee_targets, created_by, tenant_id) " +
+          "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+          [nmid, newId, m.name, m.start_date, m.end_date, m.status || 'waiting', m.sort_order || 0, JSON.stringify(m.assignee_targets || {}), meId, req.tenant.id]
+        );
+      }
+      return { newId: newId, idMap: idMap };
+    });
+
+    // 4) 마일스톤 담당 배정(정/부) 복사 — best-effort(037 미배포 환경 호환). 임시대체(기간/covers)는 제외.
+    try {
+      var asg = await db.query(
+        "SELECT milestone_id, user_id, role, target_hours FROM milestone_assignments WHERE project_id = $1 AND tenant_id = $2 AND released_at IS NULL AND covers_user_id IS NULL",
+        [src.id, req.tenant.id]
+      );
+      for (var k = 0; k < asg.rows.length; k++) {
+        var a = asg.rows[k];
+        var nm = copyResult.idMap[a.milestone_id];
+        if (!nm) continue;
+        await db.query(
+          "INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id, role, target_hours, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+          ['msa-' + require('crypto').randomUUID().slice(0, 12), req.tenant.id, nm, copyResult.newId, a.user_id, a.role || 'primary', a.target_hours, meId]
+        );
+      }
+    } catch (e2) { console.warn('[projects/copy] 담당배정 복사 건너뜀:', e2.message); }
+
+    var nr = await db.query('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2', [copyResult.newId, req.tenant.id]);
+    res.status(201).json({ data: nr.rows[0] });
+    try { authService.auditLog(req.user.sub, 'project.copy', 'project', copyResult.newId, { from: src.id, name: newName }, req); } catch (_) {}
+  } catch (e) {
+    console.error('[projects/copy]', e);
+    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 module.exports = router;

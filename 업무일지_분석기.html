@@ -883,7 +883,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.145</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.146</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3442,6 +3442,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.146',date:'2026-06-11',title:'📋 프로젝트 사본(복사) 기능 — 내용·인원·마일스톤 동일 복제',tag:'feat',items:[
+      '프로젝트 편집 모달에 "📋 복사" 버튼 추가 → 새 이름(+수주번호) 입력 후 사본 생성',
+      '복사 항목: 프로젝트 내용(기간·상태·예상시간·담당자·의존·색·메모·단계·가시성) + 활성 멤버(인원 할당) + 마일스톤(목표시간 포함) + 마일스톤 담당 배정(정/부)',
+      '실행 실적(진척률·보고시간·작업노트 이력·코멘트)은 초기화 — 새 진행을 위한 깨끗한 사본. 복사한 사람이 새 프로젝트 소유자',
+      '서버 트랜잭션으로 원자적 복사(POST /api/projects/:id/copy). 영향: server/routes/projects.js, project-data.js, timeline.js. 서버 배포 후 사용 가능'
+    ]},
     {ver:'13.145',date:'2026-06-11',title:'🔐 프로젝트 편집/삭제 권한 강화 — 생성자·참여자·관리자만',tag:'fix',items:[
       '보안 수정: 기존엔 편집/삭제 권한을 "보기 권한(canAccessProject)"으로 판정해, 🌐 전체 공개(tenant)·🏢 부서 공개(dept) 프로젝트를 같은 조직/부서 아무나 편집·삭제할 수 있었음',
       '편집 전용 권한 게이트(canEditProject) 추가 — 생성자(owner)·참여자(활성 멤버)·관리자(admin/executive)만 허용. 가시성(공개)만으로는 편집권 없음(보기는 그대로 가능)',

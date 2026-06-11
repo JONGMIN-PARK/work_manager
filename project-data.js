@@ -426,6 +426,11 @@ function msTransfer(id, targetProjectId) {
   return apiFetch('/api/milestones/' + id + '/transfer', { method: 'POST', body: JSON.stringify({ targetProjectId: targetProjectId }) })
     .then(function (r) { _pdInvalidate('proj'); return toCamel(r.data); });
 }
+// 프로젝트 사본 생성 — data: { name(필수), orderNo? }. 내용·인원·마일스톤·담당배정 복사(실적은 초기화)
+function projCopy(id, data) {
+  return apiFetch('/api/projects/' + id + '/copy', { method: 'POST', body: JSON.stringify(data || {}) })
+    .then(function (r) { _pdInvalidate('proj'); _pdInvalidate('ms'); return toCamel(r.data); });
+}
 
 // 담당자 이름(string[]) → users 매칭 후 project_members 에 active assignee 로 추가 (additive only)
 //  · 매칭 실패한 이름은 외부 인원으로 간주하고 무시
