@@ -85,6 +85,7 @@ function _tlThumbColW() { return tlShowThumb ? (tlThumbSize + 8) : 0; } // 라�
 var tlCollapsed = new Set(); // 접힌 프로젝트 ID 모음
 var tlDayOffset = (localStorage.getItem('tlDayOffset') === 'true'); // D-Day 배지 표시 토글
 var _tlMsWorkH = null, _tlMsWorkHSrc = null; // v13.137 마일스톤 투입시간 집계 메모(archive 캐시 참조 기준)
+var _tlArchiveData = null; // v13.162 마지막으로 받은 업무일지(archive) — 재렌더가 재조회를 기다리지 않도록
 
 /* 현재 렌더 범위 안이면 가로 스크롤만 즉시 이동(세로 위치 유지·재렌더 없음). 범위 밖이면 false. */
 function _tlScrollToDate(dateStr) {
@@ -198,16 +199,25 @@ async function renderTimeline() {
   var wrap = document.getElementById('timelineWrap');
   if (!wrap) return;
 
+  // v13.162 업무일지(archive)는 마일스톤 툴팁 실적(참고)에만 쓰임 → 렌더를 막지 않음.
+  //   ARCHIVE_CACHE_TTL(5s) 만료 시 readAllArchiveRecords 가 전체(최대 5만건) 재조회하며 버튼 재렌더가 5초+ 지연되던 문제.
+  //   첫 로드만 await, 이후 렌더는 마지막으로 받은 archive 재사용 + 백그라운드 갱신(다음 렌더에 반영).
   var _tlData = await Promise.all([
     (typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()),
-    msGetAll(),
-    (typeof readAllArchiveRecords === 'function' ? readAllArchiveRecords().catch(function () { return []; }) : Promise.resolve([]))
+    msGetAll()
   ]);
   var allProjects = _tlData[0];
   var milestones = _tlData[1];
+  var _arch;
+  if (_tlArchiveData) {
+    _arch = _tlArchiveData; // 즉시(재렌더 비차단)
+    if (typeof readAllArchiveRecords === 'function') readAllArchiveRecords().then(function (r) { _tlArchiveData = r || []; }).catch(function () {});
+  } else if (typeof readAllArchiveRecords === 'function') {
+    _arch = await readAllArchiveRecords().catch(function () { return []; }); // 최초 1회만 대기
+    _tlArchiveData = _arch;
+  } else { _arch = []; }
   // 마일스톤별 업무일지 투입시간(태깅 기준) 집계 — 툴팁 실적 표시용
   // v13.137 archive 캐시 배열 참조가 동일하면(뷰 전용 재렌더) 집계 재사용 — O(records) 루프 생략
-  var _arch = _tlData[2] || [];
   var msWorkH;
   if (_arch === _tlMsWorkHSrc && _tlMsWorkH) {
     msWorkH = _tlMsWorkH;

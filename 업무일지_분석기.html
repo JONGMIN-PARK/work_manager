@@ -902,7 +902,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.161</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.162</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3461,6 +3461,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.162',date:'2026-06-12',title:'🚀 타임라인 버튼 5초 지연 해결 — 업무일지 재조회가 렌더 차단하던 문제',tag:'perf',items:[
+      '근본 원인: 업무일지(archive) 캐시가 5초로 짧아, 버튼을 5초 넘겨 누를 때마다 타임라인이 업무일지 전체(최대 5만 건)를 다시 받아오며 렌더를 막아 5초+ 지연됐음. 이 데이터는 마일스톤 툴팁 실적(참고)에만 사용',
+      '타임라인이 업무일지 조회를 더 이상 기다리지 않도록 변경 — 첫 진입만 1회 대기, 이후 버튼/토글 재렌더는 마지막 데이터 즉시 사용 + 백그라운드 갱신(다음 렌더에 반영). 프로젝트·마일스톤은 기존 30초 캐시 그대로',
+      '영향: timeline.js. 클라이언트 전용 — 배포 후 새로고침'
+    ]},
     {ver:'13.161',date:'2026-06-12',title:'⚡ 타임라인 버튼 갱신 속도 개선(썸네일 디코드 비차단)',tag:'perf',items:[
       '타임라인 토글/정렬 버튼을 누를 때마다 느리던 원인 — 매 재렌더 시 라벨 썸네일(특히 큰 크기) 이미지를 모두 즉시 디코드하며 화면이 끊김. 썸네일 이미지를 비차단(decoding=async)·지연(loading=lazy) 디코드로 전환 → 화면 밖 썸네일은 디코드 보류, 클릭 반응 즉시',
       '"🔳 컴팩트"는 데이터 변화가 없어 전체 재렌더 대신 컨테이너 클래스만 전환(즉시 적용)',
