@@ -74,8 +74,9 @@ var _tlJumpDate = null; // 다음 렌더에서 이 날짜를 중앙으로 (오�
 var tlDensity = localStorage.getItem('tlDensity') || 'comfortable'; // 'comfortable' | 'compact'
 var tlFilterStatus = 'all'; // 'all' | 'waiting' | 'active' | 'delayed' | 'done' | 'hold'
 var tlFilterAssignee = 'all'; // 'all' | 담당자 이름
-var tlSort = 'default'; // v13.151: default | name | name_desc | created | created_desc | deadline | progress | status
-var tlGroupBy = 'none'; // v13.151: none | status (상태별 그룹 묶기 — 목록·타임라인 공통)
+// v13.154: 정렬/그룹 선택을 localStorage에 저장 → 새로고침 후에도 유지
+var tlSort = (typeof lsGet === 'function') ? lsGet('tlSort', 'default') : 'default'; // default|name|name_desc|created|created_desc|deadline|progress|status
+var tlGroupBy = (typeof lsGet === 'function') ? lsGet('tlGroupBy', 'none') : 'none'; // none|status
 var tlCollapsed = new Set(); // 접힌 프로젝트 ID 모음
 var tlDayOffset = (localStorage.getItem('tlDayOffset') === 'true'); // D-Day 배지 표시 토글
 var _tlMsWorkH = null, _tlMsWorkHSrc = null; // v13.137 마일스톤 투입시간 집계 메모(archive 캐시 참조 기준)
@@ -339,7 +340,7 @@ async function renderTimeline() {
         '<option value="all"' + (tlFilterAssignee === 'all' ? ' selected' : '') + '>모든 담당자</option>' +
         assigneeList.map(function (a) { return '<option value="' + eH(a) + '"' + (tlFilterAssignee === a ? ' selected' : '') + '>' + eH(a) + '</option>'; }).join('') +
       '</select>' +
-      '<select class="si" id="tlSortBy" onchange="tlSort=this.value;renderTimeline()" style="max-width:150px;padding:4px 6px;font-size:10px" title="정렬 기준 (좌측 목록·타임라인 공통)">' +
+      '<select class="si" id="tlSortBy" onchange="tlSort=this.value;if(typeof lsSet===\'function\')lsSet(\'tlSort\',this.value);renderTimeline()" style="max-width:150px;padding:4px 6px;font-size:10px" title="정렬 기준 (좌측 목록·타임라인 공통, 선택은 새로고침 후에도 유지)">' +
         '<option value="default"' + (tlSort === 'default' ? ' selected' : '') + '>기본 순서</option>' +
         '<option value="name"' + (tlSort === 'name' ? ' selected' : '') + '>이름순 가나다 ↑</option>' +
         '<option value="name_desc"' + (tlSort === 'name_desc' ? ' selected' : '') + '>이름순 가나다 ↓</option>' +
@@ -349,7 +350,7 @@ async function renderTimeline() {
         '<option value="progress"' + (tlSort === 'progress' ? ' selected' : '') + '>진척률 높은순</option>' +
         '<option value="status"' + (tlSort === 'status' ? ' selected' : '') + '>상태순</option>' +
       '</select>' +
-      '<select class="si" id="tlGroupBy" onchange="tlGroupBy=this.value;renderTimeline()" style="max-width:120px;padding:4px 6px;font-size:10px" title="그룹으로 묶기 — 묶은 그룹 안에서 위 정렬 기준 적용">' +
+      '<select class="si" id="tlGroupBy" onchange="tlGroupBy=this.value;if(typeof lsSet===\'function\')lsSet(\'tlGroupBy\',this.value);renderTimeline()" style="max-width:120px;padding:4px 6px;font-size:10px" title="그룹으로 묶기 — 묶은 그룹 안에서 위 정렬 기준 적용 (선택은 유지)">' +
         '<option value="none"' + (tlGroupBy === 'none' ? ' selected' : '') + '>그룹 없음</option>' +
         '<option value="status"' + (tlGroupBy === 'status' ? ' selected' : '') + '>상태별 묶기</option>' +
       '</select>' +
