@@ -419,14 +419,15 @@ async function renderTimeline() {
     // 레이블 — v13.43: 기간+D-Day, v13.44: 담당자
     var _period = _tlFmtPeriod(p);
     var _dday = _tlFmtDday(p, st);
-    // v13.147 호버 프리뷰용 개요 맵
+    // v13.147 호버 프리뷰용 개요 맵 (v13.149 메모 내 이미지도 프리뷰에 노출)
     if (window._tlOv) window._tlOv[p.id] = {
       name: p.name || p.orderNo || '',
       color: p.color,
       statusLabel: (PROJ_STATUS[st] ? PROJ_STATUS[st].icon + ' ' + PROJ_STATUS[st].label : ''),
       period: _period || '',
       progress: (p.progress != null ? Math.round(p.progress) : null),
-      assignees: (p.assignees || []).join(', ')
+      assignees: (p.assignees || []).join(', '),
+      memoImgs: _tlMemoImgs(p.memo)
     };
     var thirdLine = '';
     if (_period || _dday) {
@@ -765,6 +766,14 @@ function measureTextCached(ctx, text){
   _measureCache[key]=w;
   return w;
 }
+/* 메모 HTML에서 이미지 src 추출 — 호버 프리뷰 폴백용 (v13.149). 최대 12장 */
+function _tlMemoImgs(memo) {
+  if (!memo || typeof memo !== 'string' || memo.indexOf('<img') < 0) return [];
+  var out = [], re = /<img[^>]+src\s*=\s*"([^"]+)"/gi, m, n = 0;
+  while ((m = re.exec(memo)) && n < 12) { out.push(m[1]); n++; }
+  return out;
+}
+
 /* ═══ 라벨 셋째 줄용 — 기간/D-Day 포맷 헬퍼 (v13.43) ═══ */
 function _tlFmtPeriod(p) {
   var s = p.startDate || '', e = p.endDate || '';
@@ -2456,30 +2465,39 @@ function _memoInsertHtmlAtCursor(html) {
   }
 }
 
-/* FileReader → 단일 이미지 삽입 (Promise 기반 — 다중 삽입 시 순서 보장용) */
+/* FileReader → 단일 이미지 삽입 (Promise 기반 — 다중 삽입 시 순서 보장용)
+   v13.149: 원본 그대로 넣지 않고 다운스케일(압축) + 메모에선 작게 auto-size 표시.
+   - 저장 용량/크롬 OOM 크래시 방지(원본 대용량 임베드 제거)
+   - 표시는 max 240×200 auto-size 썸네일(클릭하면 라이트박스 확대) */
+var MEMO_IMG_DISPLAY = 'max-width:240px;max-height:200px;width:auto;height:auto;border-radius:6px;display:block;margin:6px 0;cursor:zoom-in;border:1px solid var(--bd)';
 function _memoInsertImageFromFile(file) {
   return new Promise(function (resolve) {
     if (!file || !/^image\//.test(file.type)) {
       if (typeof showToast === 'function') showToast('이미지 파일이 아닙니다', 'warn');
       resolve(false); return;
     }
-    if (file.size > MEMO_IMG_MAX_BYTES) {
-      if (typeof showToast === 'function') showToast('이미지가 너무 큽니다 (' + Math.round(file.size / 1024 / 1024) + 'MB) — 5MB 이하 권장', 'warn');
-      // 그래도 진행
-    }
-    var reader = new FileReader();
-    reader.onload = function (e) {
-      var dataUrl = e.target.result;
-      var alt = (file.name || 'image').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-      _memoInsertHtmlAtCursor('<img src="' + dataUrl + '" alt="' + alt + '" style="max-width:100%;border-radius:4px;display:block;margin:6px 0;cursor:pointer">');
+    var alt = (file.name || 'image').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    function insert(dataUrl) {
+      _memoInsertHtmlAtCursor('<img src="' + dataUrl + '" alt="' + alt + '" style="' + MEMO_IMG_DISPLAY + '">');
       resolve(true);
-    };
-    reader.onerror = function () {
-      if (typeof showToast === 'function') showToast('이미지 읽기 실패', 'error');
-      resolve(false);
-    };
-    reader.readAsDataURL(file);
+    }
+    // 압축 우선 — project-images.js 의 다운스케일(최대 1280px JPEG) 재사용
+    if (typeof pimgDownscale === 'function') {
+      pimgDownscale(file, 1280, 0.8).then(insert).catch(function () { _memoRawInsert(file, insert, resolve); });
+    } else {
+      _memoRawInsert(file, insert, resolve);
+    }
   });
+}
+/* 압축 불가 시 원본 폴백(단, 과대 파일은 경고) */
+function _memoRawInsert(file, insert, resolve) {
+  if (file.size > MEMO_IMG_MAX_BYTES && typeof showToast === 'function') {
+    showToast('이미지가 너무 큽니다 (' + Math.round(file.size / 1024 / 1024) + 'MB) — 5MB 이하 권장', 'warn');
+  }
+  var reader = new FileReader();
+  reader.onload = function (e) { insert(e.target.result); };
+  reader.onerror = function () { if (typeof showToast === 'function') showToast('이미지 읽기 실패', 'error'); resolve(false); };
+  reader.readAsDataURL(file);
 }
 
 /* 다중 파일을 순서대로 삽입 — Promise chain */

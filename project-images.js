@@ -43,7 +43,10 @@ function _pimgDownscale(file, maxDim, quality) {
           var nw = Math.max(1, Math.round(w * scale)), nh = Math.max(1, Math.round(h * scale));
           var c = document.createElement('canvas'); c.width = nw; c.height = nh;
           c.getContext('2d').drawImage(img, 0, 0, nw, nh);
-          resolve(c.toDataURL('image/jpeg', quality));
+          var out = c.toDataURL('image/jpeg', quality);
+          c.width = c.height = 0; // 캔버스 즉시 해제(메모리 회수 — 대용량 다중 처리 시 OOM 방지)
+          if (img.src && img.src.indexOf('data:') === 0) img.src = '';
+          resolve(out && out.length > 8 ? out : fr.result);
         } catch (e) { resolve(fr.result); }
       };
       img.onerror = function () { resolve(fr.result); };
@@ -88,23 +91,29 @@ function pimgOnPick(input, projId) {
   var files = Array.prototype.slice.call(input.files || []);
   input.value = '';
   if (!files.length) return;
-  _pimgToast(files.length + '장 처리 중...', 'info');
-  Promise.all(files.map(function (f) { return _pimgDownscale(f).then(function (src) { return { src: src }; }).catch(function () { return null; }); }))
-    .then(function (items) {
-      items = items.filter(Boolean);
-      if (!items.length) { _pimgToast('이미지 처리 실패', 'error'); return; }
-      if (!projId) {  // 신규 생성 — 스테이징
-        window._pimgStaging = (window._pimgStaging || []).concat(items);
-        _pimgRenderGrid('');
-        _pimgToast(items.length + '장 추가됨 (프로젝트 등록 시 저장)');
-        return;
-      }
-      projImagesAdd(projId, items).then(function () { _pimgRenderGrid(projId); _pimgToast(items.length + '장 등록됨'); })
-        .catch(function (err) {
-          var msg = (err && err.status === 413) ? '이미지가 너무 큽니다.' : (err && err.status === 403) ? '권한이 없습니다.' : (err && err.status === 404) ? '서버 배포 후 사용 가능' : '업로드 실패';
-          _pimgToast('❌ ' + msg, 'error');
-        });
+  _pimgToast(files.length + '장 압축 처리 중...', 'info');
+  // 순차 처리 — 대용량 이미지 여러 장 동시 디코드 시 브라우저 메모리 폭증(크래시) 방지
+  var items = [];
+  var chain = Promise.resolve();
+  files.forEach(function (f) {
+    chain = chain.then(function () {
+      return _pimgDownscale(f).then(function (src) { if (src) items.push({ src: src }); }).catch(function () {});
     });
+  });
+  chain.then(function () {
+    if (!items.length) { _pimgToast('이미지 처리 실패', 'error'); return; }
+    if (!projId) {  // 신규 생성 — 스테이징
+      window._pimgStaging = (window._pimgStaging || []).concat(items);
+      _pimgRenderGrid('');
+      _pimgToast(items.length + '장 추가됨 (프로젝트 등록 시 저장)');
+      return;
+    }
+    projImagesAdd(projId, items).then(function () { _pimgCache[projId] = null; _pimgRenderGrid(projId); _pimgToast(items.length + '장 등록됨'); })
+      .catch(function (err) {
+        var msg = (err && err.status === 413) ? '이미지가 너무 큽니다.' : (err && err.status === 403) ? '권한이 없습니다.' : (err && err.status === 404) ? '서버 배포 후 사용 가능' : '업로드 실패';
+        _pimgToast('❌ ' + msg, 'error');
+      });
+  });
 }
 
 function pimgRemove(projId, key) {
@@ -215,30 +224,38 @@ function _pimgRenderPreview(projId) {
       (ov.progress != null ? ' · ' + ov.progress + '%' : '') +
       (ov.assignees ? '<br>👤 ' + _pimgEsc(ov.assignees) : '') +
     '</div>';
-  var imgBox = '<div id="pimgPreviewImg" style="width:100%;height:150px;border-radius:6px;background:var(--bg-i);display:flex;align-items:center;justify-content:center;color:var(--t6);font-size:10px;overflow:hidden">사진 로딩...</div>';
+  var memoList = (ov.memoImgs || []).map(function (s) { return { src: s }; });
+  var imgBox = '<div id="pimgPreviewImg" style="width:100%;height:158px;border-radius:8px;background:#0d0d10;display:flex;align-items:center;justify-content:center;color:var(--t6);font-size:10px;overflow:hidden;position:relative">' + (memoList.length ? '' : '사진 로딩...') + '</div>';
   card.innerHTML = head + imgBox;
-  var list = _pimgCache[projId];
-  if (list) { _pimgPreviewImg(projId, list); }
-  else {
-    projImagesGet(projId).then(function (l) { _pimgCache[projId] = l; _pimgPreviewImg(projId, l); })
-      .catch(function () { var b = document.getElementById('pimgPreviewImg'); if (b) b.innerHTML = '<span style="color:var(--t6)">사진 없음</span>'; });
-  }
+  // 메모 내 이미지가 있으면 즉시 표시(서버 참고이미지가 없을 때의 폴백 + 즉시성)
+  if (memoList.length) _pimgPreviewImg(projId, memoList);
+  var cached = _pimgCache[projId];
+  if (cached) { _pimgPreviewImg(projId, cached.length ? cached : memoList); return; }
+  projImagesGet(projId).then(function (l) {
+    _pimgCache[projId] = l;
+    if (_pimgHoverProj === projId) _pimgPreviewImg(projId, (l && l.length) ? l : memoList);
+  }).catch(function () {
+    if (_pimgHoverProj === projId && !memoList.length) { var b = document.getElementById('pimgPreviewImg'); if (b) b.innerHTML = '<span style="color:var(--t6)">사진 없음</span>'; }
+  });
 }
+var _pimgPreviewCur = null; // 현재 프리뷰에 표시 중인 이미지 리스트(서버 또는 메모)
 function _pimgPreviewImg(projId, list) {
   var b = document.getElementById('pimgPreviewImg'); if (!b || _pimgHoverProj !== projId) return;
   if (!list || !list.length) { b.innerHTML = '<span style="color:var(--t6)">등록된 사진 없음</span>'; return; }
+  _pimgPreviewCur = list;
   var idx = Math.max(0, Math.min(_pimgHoverIdx, list.length - 1));
   var multi = list.length > 1;
-  b.style.position = 'relative'; b.style.cursor = 'pointer';
+  b.style.cursor = 'zoom-in';
   b.onclick = function () { pimgOpenViewer(list, idx); };
-  b.innerHTML = '<img src="' + list[idx].src + '" style="width:100%;height:100%;object-fit:cover">' +
-    (multi ? '<div style="position:absolute;right:6px;bottom:4px;background:rgba(0,0,0,.6);color:#fff;font-size:9px;padding:1px 6px;border-radius:8px">' + (idx + 1) + '/' + list.length + ' · 클릭</div>' +
-      '<button onclick="event.stopPropagation();pimgPreviewNav(\'' + projId + '\',-1)" style="position:absolute;left:2px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);color:#fff;border:none;width:22px;height:34px;border-radius:5px;cursor:pointer">‹</button>' +
-      '<button onclick="event.stopPropagation();pimgPreviewNav(\'' + projId + '\',1)" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);color:#fff;border:none;width:22px;height:34px;border-radius:5px;cursor:pointer">›</button>'
-      : '<div style="position:absolute;right:6px;bottom:4px;background:rgba(0,0,0,.6);color:#fff;font-size:9px;padding:1px 6px;border-radius:8px">클릭</div>');
+  b.innerHTML = '<img src="' + list[idx].src + '" style="width:100%;height:100%;object-fit:contain;background:#0d0d10">' +
+    '<div style="position:absolute;right:6px;bottom:5px;background:rgba(0,0,0,.62);color:#fff;font-size:9px;padding:2px 7px;border-radius:9px;backdrop-filter:blur(2px)">' + (multi ? (idx + 1) + '/' + list.length + ' · ' : '') + '🔍 클릭</div>' +
+    (multi ?
+      '<button onclick="event.stopPropagation();pimgPreviewNav(\'' + projId + '\',-1)" style="position:absolute;left:3px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;width:24px;height:38px;border-radius:6px;cursor:pointer;font-size:15px">‹</button>' +
+      '<button onclick="event.stopPropagation();pimgPreviewNav(\'' + projId + '\',1)" style="position:absolute;right:3px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;width:24px;height:38px;border-radius:6px;cursor:pointer;font-size:15px">›</button>'
+      : '');
 }
 function pimgPreviewNav(projId, d) {
-  var list = _pimgCache[projId]; if (!list || !list.length) return;
+  var list = _pimgPreviewCur; if (!list || !list.length) return;
   _pimgHoverIdx = (_pimgHoverIdx + d + list.length) % list.length;
   _pimgPreviewImg(projId, list);
 }
@@ -257,4 +274,5 @@ if (typeof window !== 'undefined') {
   window.pimgFlushStaging = pimgFlushStaging; window.pimgResetStaging = pimgResetStaging;
   window.pimgViewerFor = pimgViewerFor; window.pimgOpenViewer = pimgOpenViewer; window.pimgViewerNav = pimgViewerNav; window.pimgViewerClose = pimgViewerClose;
   window.pimgHover = pimgHover; window.pimgHoverOut = pimgHoverOut; window.pimgPreviewNav = pimgPreviewNav;
+  window.pimgDownscale = _pimgDownscale; // 메모 이미지 등 다른 모듈에서 압축 재사용
 }

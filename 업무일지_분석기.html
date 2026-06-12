@@ -884,7 +884,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.148</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.149</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3443,6 +3443,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.149',date:'2026-06-12',title:'🖼️ 이미지 처리 개선 — 메모 이미지 압축·작게 표시 + 크롬 크래시 방지 + 호버에 메모 이미지 노출',tag:'fix',items:[
+      '메모 이미지: 원본 그대로 임베드하던 것을 다운스케일(최대 1280px JPEG 압축) 후 삽입, 표시는 작게 auto-size(최대 240×200, 클릭 시 확대). 대용량 원본 임베드로 인한 Chrome 메모리 크래시·저장 용량 폭증 해결',
+      '참고 이미지 업로드: 여러 장을 동시 디코드하던 것을 순차 처리 + 캔버스 즉시 메모리 해제 → 등록 시 브라우저 꺼짐 현상 방지',
+      '타임라인 프로젝트 막대 호버 프리뷰: 서버 참고이미지가 없으면 메모에 넣은 이미지를 폴백으로 표시(이전엔 메모 이미지가 호버에 안 보였음) + 표시 품질 개선(contain·카운트칩·🔍클릭 확대)',
+      '영향: project-images.js, timeline.js. 클라이언트 전용 — 배포 후 새로고침'
+    ]},
     {ver:'13.148',date:'2026-06-12',title:'🛠️ 배포 파이프라인 복구 — CI npm ci 실패(락파일 불일치) 수정',tag:'fix',items:[
       '근본 원인: server/package.json은 v13.85에서 의존성 추가(@anthropic-ai/sdk·pg-boss·node-cron·winston-daily-rotate-file)됐는데 package-lock.json이 갱신되지 않아, GitHub Actions CI의 "npm ci" 단계가 매번 실패 → 테스트·배포 훅까지 스킵되어 자동 배포가 막혀 있었음(v13.85부터)',
       'package-lock.json을 package.json과 일치하도록 재생성(누락 의존성 트리 복구) → npm ci 정상화 → CI 통과 시 Render 배포 훅 동작',
