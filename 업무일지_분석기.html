@@ -902,7 +902,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.159</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.160</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3461,6 +3461,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.160',date:'2026-06-12',title:'📋 프로젝트 사양 정리 표(설계·제어전장·SW·공정) + 협업',tag:'feat',items:[
+      '프로젝트 상세 패널에 "사양" 탭 추가 — 설계/제어·전장/소프트웨어/공정 4개 분류 × 항목·내용·비고 표. 분류별 [📋 템플릿]으로 표준 사양 항목(축별 정밀도·전기 사양·기능/준수사항 등) 빠르게 채움',
+      '편집 권한: 프로젝트 생성자와 관리자만 작성·수정 가능(참여자 포함 그 외는 읽기 전용, 서버에서 강제). "최종 수정: 이름·시각" 표기',
+      '협업: 사양 탭 하단에 코멘트 스레드(메일·텔레그램 연동)로 사양 합의·질의. 프로젝트 보고서 엑셀에 "사양정리" 시트 추가',
+      '신규: server/migrations/041(projects.specs JSONB), PUT /api/projects/:id/specs. 영향: projects.js, project-data.js, project-detail.js, pipeline.js. 서버 배포 후 사용 가능'
+    ]},
     {ver:'13.159',date:'2026-06-12',title:'⚡ 프로젝트 상세 패널 속도 개선 + 중복 창 방지',tag:'perf',items:[
       '프로젝트 타이틀 클릭 시 상세 패널이 느리게 뜨던 문제 — 프로젝트·마일스톤을 매번 새로 조회하던 것을 캐시에서 즉시 사용(네트워크 왕복 3회→1회). 체감 즉시 표시',
       '연타 시 창이 2~3개 뜨던 문제 — 중복 오픈 가드(_pdDetailBusy) 추가로 1개만 열림. 여는 중 추가 클릭은 무시',

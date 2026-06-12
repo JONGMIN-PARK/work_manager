@@ -30,6 +30,7 @@ async function showProjectDetail(id) {
   if (!proj) { _pdDetailBusy = false; return; }
   if (!projMs.length) { try { projMs = await msGetByProject(id); } catch (e) {} }
   projMs.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+  window._pdProj = proj; // 사양 탭 등에서 현재 프로젝트 참조
   var st = autoProjectStatus(proj);
   var stInfo = PROJ_STATUS[st] || PROJ_STATUS.waiting;
   var phaseProgress = {};
@@ -65,6 +66,7 @@ async function showProjectDetail(id) {
     '<button class="btn" id="pdTabLifecycle" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'lifecycle\')">라이프사이클</button>' +
     '<button class="btn" id="pdTabIssues" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'issues\',\'' + id + '\')">이슈</button>' +
     '<button class="btn" id="pdTabWork" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'work\',\'' + id + '\')">투입실적</button>' +
+    '<button class="btn" id="pdTabSpec" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'spec\',\'' + id + '\')">사양</button>' +
   '</div>';
 
   // ── 개요 탭 ──
@@ -214,6 +216,7 @@ async function showProjectDetail(id) {
 
   // ── 투입실적 탭 ──
   html += '<div id="pdWork" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
+  html += '<div id="pdSpec" style="display:none"></div>';
 
   // 하단 버튼
   html += '<div style="display:flex;gap:8px;margin-top:16px">' +
@@ -245,9 +248,9 @@ async function showProjectDetail(id) {
 
 /* ═══ 프로젝트 상세 패널: 탭 전환 ═══ */
 function pdSwitchTab(tab, projId) {
-  var tabs = ['overview', 'lifecycle', 'issues', 'work'];
-  var ids = { overview: 'pdOverview', lifecycle: 'pdLifecycle', issues: 'pdIssues', work: 'pdWork' };
-  var btnIds = { overview: 'pdTabOverview', lifecycle: 'pdTabLifecycle', issues: 'pdTabIssues', work: 'pdTabWork' };
+  var tabs = ['overview', 'lifecycle', 'issues', 'work', 'spec'];
+  var ids = { overview: 'pdOverview', lifecycle: 'pdLifecycle', issues: 'pdIssues', work: 'pdWork', spec: 'pdSpec' };
+  var btnIds = { overview: 'pdTabOverview', lifecycle: 'pdTabLifecycle', issues: 'pdTabIssues', work: 'pdTabWork', spec: 'pdTabSpec' };
   tabs.forEach(function (t) {
     var el = document.getElementById(ids[t]);
     var btn = document.getElementById(btnIds[t]);
@@ -262,6 +265,122 @@ function pdSwitchTab(tab, projId) {
   if (tab === 'issues' && projId) pdLoadIssues(projId);
   // 투입실적 탭 로딩
   if (tab === 'work' && projId) pdLoadWork(projId);
+  // 사양 탭 로딩 (한 번만 빌드 — 편집 상태 보존)
+  if (tab === 'spec' && projId) pdRenderSpec(projId);
+}
+
+/* ═══ 프로젝트 사양 정리 표 (v13.160) — 설계/제어전장/소프트웨어/공정 ═══ */
+var PROJ_SPEC_CATS = [
+  { key: 'design', label: '🛠 설계' },
+  { key: 'control', label: '⚡ 제어·전장' },
+  { key: 'software', label: '💻 소프트웨어' },
+  { key: 'process', label: '🏭 공정' }
+];
+var PROJ_SPEC_TEMPLATES = {
+  design: ['외형 치수(W×D×H)', '총 중량', '주요 재질', '구성 축(Axis)', '축별 반복 정밀도', '축별 위치 정밀도', '스트로크/속도/가속도', '가반하중/정격하중', '구동 방식', '안전율/내구수명'],
+  control: ['입력 전원', '정격 전류/소비전력', '메인 차단기 용량', '제어기(PLC)', 'I/O 점수(DI/DO/AI/AO)', '서보 드라이브', '통신 사양', 'HMI/터치패널', '안전회로', '보호등급(IP)'],
+  software: ['주요 기능', '운전 모드/레시피', '상위 연동(MES/SCADA)', '통신 프로토콜', '데이터 로깅/이력', '알람/경보 관리', '트레이서빌리티', '사용자 권한/보안', '준수 규격/인증', 'OS/개발환경'],
+  process: ['사이클 타임', '택트 타임', '시간당 생산량(UPH)', '목표 수율', '불량률(PPM)', '가동률(OEE)', '자동화율', '작업 인원', '공정 단계 수', '검사 항목/기준']
+};
+function _pdSpecRowHtml(row, canEdit) {
+  row = row || {};
+  if (canEdit === false) { // 읽기 전용
+    return '<div class="spec-row" style="display:grid;grid-template-columns:130px 1fr 110px;gap:5px;padding:3px 0;font-size:11px;border-bottom:1px solid var(--bd)">' +
+      '<span style="font-weight:600;color:var(--t2)">' + eH(row.item || '') + '</span>' +
+      '<span style="color:var(--t3);word-break:break-word">' + eH(row.value || '') + '</span>' +
+      '<span style="color:var(--t5)">' + eH(row.remark || '') + '</span>' +
+    '</div>';
+  }
+  return '<div class="spec-row" data-id="' + eH(row.id || '') + '" style="display:grid;grid-template-columns:130px 1fr 110px 24px;gap:5px;align-items:center;padding:3px 0">' +
+    '<input class="si spec-item" value="' + eH(row.item || '') + '" placeholder="항목" style="font-size:11px;padding:3px 6px">' +
+    '<input class="si spec-value" value="' + eH(row.value || '') + '" placeholder="내용" style="font-size:11px;padding:3px 6px">' +
+    '<input class="si spec-remark" value="' + eH(row.remark || '') + '" placeholder="비고" style="font-size:11px;padding:3px 6px">' +
+    '<button class="btn btn-d btn-s" title="행 삭제" onclick="this.closest(\'.spec-row\').remove()" style="padding:1px 5px;font-size:10px">✕</button>' +
+  '</div>';
+}
+function pdRenderSpec(projId) {
+  var el = document.getElementById('pdSpec'); if (!el) return;
+  if (el.getAttribute('data-rendered') === '1') return; // 한 번만 빌드(편집 보존)
+  el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">로딩 중...</div>';
+  var srcP = (typeof pmGetProjects === 'function') ? pmGetProjects() : (typeof projGetAll === 'function' ? projGetAll() : Promise.resolve([]));
+  Promise.resolve(srcP).then(function (list) {
+    var proj = (list || []).filter(function (p) { return p.id === projId; })[0] || window._pdProj || {};
+    var specs = proj.specs || {};
+    // 편집 권한: 생성자(owner) + 관리자(admin/executive)만. 그 외 멤버/열람자는 읽기 전용.
+    var me = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.sub || currentUser.id) : null;
+    var isAdmin = (typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'executive'));
+    var canEdit = !!(isAdmin || (me != null && proj.ownerId === me));
+    el.setAttribute('data-rendered', '1');
+    var meta = (proj.specsUpdatedBy || proj.specsUpdatedAt) ? ('최종 수정: ' + eH(proj.specsUpdatedBy || '') + (proj.specsUpdatedAt ? ' · ' + String(proj.specsUpdatedAt).slice(0, 16).replace('T', ' ') : '')) : (canEdit ? '아직 저장된 사양이 없습니다.' : '등록된 사양이 없습니다.');
+    var blocks = PROJ_SPEC_CATS.map(function (c) {
+      var rows = (specs[c.key] || []);
+      var rowsHtml = rows.length ? rows.map(function (r) { return _pdSpecRowHtml(r, canEdit); }).join('') : (canEdit ? '' : '<div style="font-size:10px;color:var(--t6);padding:4px 0">—</div>');
+      return '<div style="margin-bottom:12px;border:1px solid var(--bd);border-radius:8px;overflow:hidden">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-i);padding:6px 10px">' +
+          '<span style="font-size:12px;font-weight:700;color:var(--t2)">' + c.label + '</span>' +
+          (canEdit ? '<span style="display:flex;gap:4px">' +
+            '<button class="btn btn-g btn-s" style="font-size:10px;padding:2px 7px" onclick="pdSpecLoadTemplate(\'' + c.key + '\')" title="표준 항목 채우기">📋 템플릿</button>' +
+            '<button class="btn btn-g btn-s" style="font-size:10px;padding:2px 7px" onclick="pdSpecAddRow(\'' + c.key + '\')">+ 행</button>' +
+          '</span>' : '') +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:130px 1fr 110px' + (canEdit ? ' 24px' : '') + ';gap:5px;padding:5px 10px 0;font-size:9px;color:var(--t6)"><span>항목</span><span>내용</span><span>비고</span>' + (canEdit ? '<span></span>' : '') + '</div>' +
+        '<div id="spec-rows-' + c.key + '" data-cat="' + c.key + '" style="padding:2px 10px 8px">' + rowsHtml + '</div>' +
+      '</div>';
+    }).join('');
+    el.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<span id="pdSpecMeta" style="font-size:10px;color:var(--t6)">' + meta + '</span>' +
+        (canEdit ? '<button class="btn btn-p btn-s" id="pdSpecSaveBtn" onclick="pdSpecSave(\'' + projId + '\')">💾 저장</button>' : '<span style="font-size:9px;color:var(--t6)">읽기 전용 (생성자·관리자만 편집)</span>') +
+      '</div>' +
+      blocks +
+      '<div style="font-size:10px;color:var(--t6);margin:6px 0 10px">사양 관련 협업 메모는 아래 코멘트에 남기세요(메일·텔레그램 연동).</div>' +
+      '<div id="pdSpecComments"></div>';
+    if (typeof renderCommentThread === 'function') renderCommentThread('project', projId, 'pdSpecComments');
+  }).catch(function () { el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">사양을 불러오지 못했습니다.</div>'; });
+}
+function pdSpecAddRow(cat) {
+  var cont = document.getElementById('spec-rows-' + cat); if (!cont) return;
+  cont.insertAdjacentHTML('beforeend', _pdSpecRowHtml({}));
+}
+function pdSpecLoadTemplate(cat) {
+  var cont = document.getElementById('spec-rows-' + cat); if (!cont) return;
+  var tpl = PROJ_SPEC_TEMPLATES[cat] || [];
+  // 이미 있는 항목명은 건너뛰고 추가
+  var have = {};
+  cont.querySelectorAll('.spec-item').forEach(function (i) { have[(i.value || '').trim()] = true; });
+  var added = 0;
+  tpl.forEach(function (item) { if (!have[item]) { cont.insertAdjacentHTML('beforeend', _pdSpecRowHtml({ item: item })); added++; } });
+  if (typeof showToast === 'function') showToast(added ? (added + '개 표준 항목 추가됨') : '이미 모두 있습니다.');
+}
+function pdSpecCollect() {
+  var specs = {};
+  PROJ_SPEC_CATS.forEach(function (c) {
+    var cont = document.getElementById('spec-rows-' + c.key);
+    var rows = [];
+    if (cont) cont.querySelectorAll('.spec-row').forEach(function (r) {
+      var item = (r.querySelector('.spec-item').value || '').trim();
+      var value = (r.querySelector('.spec-value').value || '').trim();
+      var remark = (r.querySelector('.spec-remark').value || '').trim();
+      if (item || value || remark) rows.push({ id: r.getAttribute('data-id') || ('sp-' + Math.random().toString(36).slice(2, 10)), item: item, value: value, remark: remark });
+    });
+    specs[c.key] = rows;
+  });
+  return specs;
+}
+function pdSpecSave(projId) {
+  if (typeof projSpecsPut !== 'function') { if (typeof showToast === 'function') showToast('저장 기능을 사용할 수 없습니다.', 'error'); return; }
+  var specs = pdSpecCollect();
+  var btn = document.getElementById('pdSpecSaveBtn'); if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+  projSpecsPut(projId, specs).then(function (d) {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 저장'; }
+    if (typeof showToast === 'function') showToast('사양이 저장되었습니다.');
+    var meta = document.getElementById('pdSpecMeta');
+    if (meta && d) meta.textContent = '최종 수정: ' + (d.specsUpdatedBy || '') + (d.specsUpdatedAt ? ' · ' + String(d.specsUpdatedAt).slice(0, 16).replace('T', ' ') : '');
+  }).catch(function (err) {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 저장'; }
+    var msg = (err && err.status === 403) ? '생성자·참여자·관리자만 수정할 수 있습니다.' : (err && err.status === 404) ? '서버 배포 후 사용 가능합니다.' : '저장 실패';
+    if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
+  });
 }
 
 /* ═══ 프로젝트 상세: 이슈 목록 로딩 ═══ */

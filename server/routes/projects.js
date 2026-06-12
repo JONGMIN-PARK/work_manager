@@ -136,12 +136,12 @@ router.post('/', rbac.checkPermission('project.create'), async function (req, re
     if (['private','dept','tenant'].indexOf(visibility) === -1) visibility = 'private';
     var ownerId = b.ownerId || b.owner_id || req.user.sub;
     var r = await db.query(
-      "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id, tenant_id, owner_id, visibility) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16,$17,$18,$19) RETURNING *",
+      "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id, tenant_id, owner_id, visibility, specs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16,$17,$18,$19,$20) RETURNING *",
       [id, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
        b.status || 'active', b.progress || 0, b.estimatedHours || b.estimated_hours || 0,
        JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
        b.color || '#3B82F6', b.memo || '', b.currentPhase || b.current_phase || 'order',
-       JSON.stringify(b.phases || {}), req.user.sub, deptId, req.tenant.id, ownerId, visibility]
+       JSON.stringify(b.phases || {}), req.user.sub, deptId, req.tenant.id, ownerId, visibility, JSON.stringify(b.specs || {})]
     );
     res.status(201).json({ data: r.rows[0] });
 
@@ -184,6 +184,7 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
       memo: b.memo,
       current_phase: b.currentPhase !== undefined ? b.currentPhase : b.current_phase,
       phases: b.phases !== undefined ? JSON.stringify(b.phases) : undefined,
+      specs: b.specs !== undefined ? JSON.stringify(b.specs) : undefined,
       visibility: (function () {
         var v = b.visibility;
         if (v === undefined) return undefined;
@@ -492,6 +493,33 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
     try { authService.auditLog(req.user.sub, 'project.copy', 'project', copyResult.newId, { from: src.id, name: newName }, req); } catch (_) {}
   } catch (e) {
     console.error('[projects/copy]', e);
+    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// ─── PUT /api/projects/:id/specs — 사양 정리 표 저장 (v13.160) ───
+//  body: { specs }. 생성자·참여자·관리자만(canEditProject). 최종 수정자/시각 기록.
+router.put('/:id/specs', async function (req, res) {
+  try {
+    var pr = await db.query('SELECT id, owner_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!pr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
+    // 사양은 생성자(owner) + 관리자(admin/executive)만 — 참여자(멤버) 제외
+    var _isAdminTier = (req.user.role === 'admin' || req.user.role === 'executive');
+    if (!(_isAdminTier || pr.rows[0].owner_id === req.user.sub)) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: '프로젝트 생성자와 관리자만 사양을 수정할 수 있습니다.' });
+    }
+    var specs = (req.body && req.body.specs) || {};
+    // 수정자명
+    var byName = req.user.name || '';
+    try { var ar = await db.query('SELECT name, display_name FROM users WHERE id = $1', [req.user.sub]); if (ar.rows.length) byName = ar.rows[0].display_name || ar.rows[0].name || byName; } catch (_) {}
+    var r = await db.query(
+      'UPDATE projects SET specs = $1, specs_updated_by = $2, specs_updated_at = now(), updated_at = now() WHERE id = $3 AND tenant_id = $4 RETURNING specs, specs_updated_by, specs_updated_at',
+      [JSON.stringify(specs), byName, req.params.id, req.tenant.id]
+    );
+    res.json({ data: r.rows[0], message: '사양이 저장되었습니다.' });
+    try { authService.auditLog(req.user.sub, 'project.specs.update', 'project', req.params.id, {}, req); } catch (_) {}
+  } catch (e) {
+    console.error('[projects/specs/update]', e);
     if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
   }
 });

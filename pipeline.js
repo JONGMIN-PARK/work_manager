@@ -440,6 +440,23 @@ function exportProjectReport() {
       XLSX.utils.book_append_sheet(wb, ws3, '마일스톤');
     }
 
+    // Sheet 4: 사양 정리 (v13.160) — 프로젝트 / 분류 / 항목 / 내용 / 비고
+    var SPEC_CAT_LBL = { design: '설계', control: '제어·전장', software: '소프트웨어', process: '공정' };
+    var specRows = [['프로젝트', '분류', '항목', '내용', '비고']];
+    projects.forEach(function (p) {
+      var specs = p.specs || {};
+      Object.keys(SPEC_CAT_LBL).forEach(function (ck) {
+        (specs[ck] || []).forEach(function (s) {
+          if (!s) return;
+          specRows.push([p.name || '', SPEC_CAT_LBL[ck], s.item || '', s.value || '', s.remark || '']);
+        });
+      });
+    });
+    if (specRows.length > 1) {
+      var ws4 = XLSX.utils.aoa_to_sheet(specRows);
+      XLSX.utils.book_append_sheet(wb, ws4, '사양정리');
+    }
+
     XLSX.writeFile(wb, '프로젝트_보고서_' + localDate() + '.xlsx');
     showToast('프로젝트 보고서를 엑셀로 저장했습니다.');
   });

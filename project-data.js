@@ -386,6 +386,11 @@ function projDel(id) {
   return apiFetch('/api/projects/' + id, { method: 'DELETE' })
     .then(function (r) { _emitBus('project', 'deleted', { id: id }); return r; });
 }
+// 프로젝트 사양 정리 표 저장 — specs: {design:[],control:[],software:[],process:[]}
+function projSpecsPut(id, specs) {
+  return apiFetch('/api/projects/' + id + '/specs', { method: 'PUT', body: JSON.stringify({ specs: specs || {} }) })
+    .then(function (r) { _pdInvalidate('proj'); _pdInvalidate('projAll'); return (r && r.data) ? toCamel(r.data) : r; });
+}
 // 프로젝트 표시 순서 일괄 갱신 (파이프라인 카드 재배열 등) — items: [{id, sortOrder}]
 function projReorder(items) {
   return apiFetch('/api/projects/reorder', { method: 'POST', body: JSON.stringify({ items: items || [] }) })
