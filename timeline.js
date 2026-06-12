@@ -79,7 +79,7 @@ var tlSort = (typeof lsGet === 'function') ? lsGet('tlSort', 'default') : 'defau
 var tlGroupBy = (typeof lsGet === 'function') ? lsGet('tlGroupBy', 'none') : 'none'; // none|status
 // v13.156 프로젝트 라벨에 대표 이미지 썸네일 상시 표시(기본 on)
 var tlShowThumb = (typeof lsGet === 'function') ? (lsGet('tlShowThumb', '1') !== '0') : true;
-var TL_THUMB_W = 44; // 썸네일 컬럼 폭(이미지38 + gap)
+var TL_THUMB_W = 116; // v13.157 썸네일 컬럼 폭(이미지108 + gap)
 var tlCollapsed = new Set(); // 접힌 프로젝트 ID 모음
 var tlDayOffset = (localStorage.getItem('tlDayOffset') === 'true'); // D-Day 배지 표시 토글
 var _tlMsWorkH = null, _tlMsWorkHSrc = null; // v13.137 마일스톤 투입시간 집계 메모(archive 캐시 참조 기준)
