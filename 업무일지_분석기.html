@@ -604,6 +604,11 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .pipeline-card.pipe-drop-after::after{content:'';position:absolute;left:-2px;right:-2px;height:4px;border-radius:3px;background:var(--ac);box-shadow:0 0 8px 1px var(--ac);z-index:6;pointer-events:none}
 .pipeline-card.pipe-drop-before::before{top:-6px}
 .pipeline-card.pipe-drop-after::after{bottom:-6px}
+/* v13.156 프로젝트 라벨 대표 이미지 썸네일 */
+.tl-thumb{width:38px;height:38px;min-width:38px;border-radius:6px;overflow:hidden;background:var(--bg-i);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;cursor:zoom-in;flex-shrink:0}
+.tl-thumb:empty::after{content:'📷';font-size:13px;opacity:.3}
+.tl-thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.tl-compact .tl-thumb{width:30px;height:30px;min-width:30px}
 .tl-grid-line{position:absolute;top:0;bottom:0;border-right:1px solid var(--bd);opacity:.3}
 .tl-bar{position:absolute;top:8px;height:28px;border-radius:5px;opacity:.85;cursor:pointer;display:flex;align-items:center;overflow:hidden;transition:opacity .15s}
 .tl-bar:hover{opacity:1;z-index:1}
@@ -898,7 +903,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.155</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.156</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3457,6 +3462,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.156',date:'2026-06-12',title:'🖼 타임라인 프로젝트 라벨에 대표 이미지 썸네일 상시 표시',tag:'feat',items:[
+      '프로젝트명·기간·D-Day·담당자가 나오는 라벨 영역에 대표 이미지 썸네일 컬럼을 추가, 마우스 오버 없이 상시 표시(클릭 시 라이트박스로 크게 보기)',
+      '메모에 넣은 이미지는 즉시, 📷 참고 이미지(서버)는 행별 지연 로드(캐시). 이미지 없으면 📷 플레이스홀더',
+      '상단 "🖼 썸네일" 토글로 on/off(기본 on, 선택 유지). 컴팩트 모드에선 더 작게',
+      '영향: timeline.js, style.css. 클라이언트 전용 — 배포 후 새로고침'
+    ]},
     {ver:'13.155',date:'2026-06-12',title:'🔗 프로젝트 순서 통일 — 파이프라인 드래그 = 타임라인·목록 순서',tag:'feat',items:[
       '파이프라인에서 드래그로 지정한 순서를 전역 sort_order로 저장 → 타임라인·좌측 목록의 "사용자 지정 순서(기본)"가 같은 순서를 사용. 한 곳에서 정렬하면 모든 뷰에 동일 반영',
       '서버 프로젝트 조회 기본 정렬을 sort_order 우선(미지정은 등록 최신순 폴백)으로 변경 → 모든 화면 기본 순서 통일',

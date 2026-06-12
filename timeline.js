@@ -77,6 +77,9 @@ var tlFilterAssignee = 'all'; // 'all' | 담당자 이름
 // v13.154: 정렬/그룹 선택을 localStorage에 저장 → 새로고침 후에도 유지
 var tlSort = (typeof lsGet === 'function') ? lsGet('tlSort', 'default') : 'default'; // default|name|name_desc|created|created_desc|deadline|progress|status
 var tlGroupBy = (typeof lsGet === 'function') ? lsGet('tlGroupBy', 'none') : 'none'; // none|status
+// v13.156 프로젝트 라벨에 대표 이미지 썸네일 상시 표시(기본 on)
+var tlShowThumb = (typeof lsGet === 'function') ? (lsGet('tlShowThumb', '1') !== '0') : true;
+var TL_THUMB_W = 44; // 썸네일 컬럼 폭(이미지38 + gap)
 var tlCollapsed = new Set(); // 접힌 프로젝트 ID 모음
 var tlDayOffset = (localStorage.getItem('tlDayOffset') === 'true'); // D-Day 배지 표시 토글
 var _tlMsWorkH = null, _tlMsWorkHSrc = null; // v13.137 마일스톤 투입시간 집계 메모(archive 캐시 참조 기준)
@@ -321,6 +324,8 @@ async function renderTimeline() {
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (showCriticalPath ? '#EF4444' : 'var(--t5)') + ';cursor:pointer;background:' + (showCriticalPath ? 'rgba(239,68,68,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (showCriticalPath ? 'rgba(239,68,68,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlCriticalPathTog" onchange="showCriticalPath=this.checked;renderTimeline()"' + (showCriticalPath ? ' checked' : '') + '> 🔴 크리티컬 패스</label>' +
     // v13.133 컴팩트 밀도 토글
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlDensityTog" onchange="tlSetDensity(this.checked);renderTimeline()"' + (tlDensity === 'compact' ? ' checked' : '') + '> 🔳 컴팩트</label>' +
+    // v13.156 라벨 대표 이미지 썸네일 상시 표시 토글
+    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlShowThumb ? '#22D3EE' : 'var(--t5)') + ';cursor:pointer;background:' + (tlShowThumb ? 'rgba(34,211,238,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlShowThumb ? 'rgba(34,211,238,.4)' : 'var(--bd-i)') + '" title="프로젝트 라벨에 대표 이미지 썸네일 상시 표시"><input type="checkbox" id="tlThumbTog" onchange="tlShowThumb=this.checked;if(typeof lsSet===\'function\')lsSet(\'tlShowThumb\',this.checked?\'1\':\'0\');renderTimeline()"' + (tlShowThumb ? ' checked' : '') + '> 🖼 썸네일</label>' +
     // v13.133 D-Day 표시 토글
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlDayOffset ? '#10B981' : 'var(--t5)') + ';cursor:pointer;background:' + (tlDayOffset ? 'rgba(16,185,129,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlDayOffset ? 'rgba(16,185,129,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlDayOffsetTog" onchange="tlToggleDayOffset(this.checked)"' + (tlDayOffset ? ' checked' : '') + '> 📏 D-Day 표시</label>' +
     // v13.133 마일스톤 모두접기/펼치기
@@ -476,8 +481,9 @@ async function renderTimeline() {
       fifthLine = '<div style="display:flex;align-items:center;gap:3px;margin-top:3px;font-size:9px;color:var(--t5);white-space:nowrap" title="라이프사이클 — 현재: ' + _curLabel + '">' + _stepIcons + '</div>';
     }
     // 완료(done) dim은 내부 콘텐츠에만 적용 — 라벨 배경은 불투명 유지(뒤의 오늘선/날짜선 비침 방지)
-    rowsHtml += '<div class="tl-label" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px" onclick="showProjectDetail(\'' + p.id + '\')">' +
-      '<div' + (st === 'done' ? ' style="opacity:.5"' : '') + '>' +
+    rowsHtml += '<div class="tl-label" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px' + (tlShowThumb ? ';display:flex;align-items:center;gap:7px' : '') + '" onclick="showProjectDetail(\'' + p.id + '\')">' +
+      (tlShowThumb ? _tlLabelThumb(p) : '') +
+      '<div style="' + (tlShowThumb ? 'flex:1;min-width:0;' : '') + (st === 'done' ? 'opacity:.5' : '') + '">' +
       '<div style="display:flex;align-items:center;gap:6px">' +
         '<span class="dot" style="background:' + p.color + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
         (pMs.length > 0 ? '<button class="tl-collapse-toggle" data-collapse-proj="' + p.id + '" onclick="event.stopPropagation();tlToggleCollapse(\'' + p.id + '\')" style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;color:var(--t4);width:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="마일스톤 ' + (tlCollapsed.has(p.id) ? '펼치기' : '접기') + '">' + (tlCollapsed.has(p.id) ? '▸' : '▾') + '</button>' : '<span style="width:16px;flex-shrink:0"></span>') +
@@ -634,6 +640,9 @@ async function renderTimeline() {
         rowsHtml +
       '</div>' +
     '</div>';
+
+  // v13.156 라벨 썸네일 — 메모 이미지 없는 행은 참고이미지 커버 지연 로드
+  if (tlShowThumb) tlFillThumbs();
 
   // 날짜 이동(오늘/지정)이 있으면 그 날짜를 중앙으로, 아니면 재렌더는 이전 위치 복원, 첫 렌더는 오늘 중앙
   var scrollEl = document.getElementById('tlScroll');
@@ -815,6 +824,42 @@ function _tlMemoImgs(memo) {
   return out;
 }
 
+/* ═══ 프로젝트 라벨 대표 이미지 썸네일 (v13.156) — 메모 이미지 즉시, 참고이미지 지연 로드 ═══ */
+var _tlThumbCache = {}; // pid → 첫 이미지 src 또는 false(없음)
+function _tlLabelThumb(p) {
+  var memo = (window._tlOv && window._tlOv[p.id] && window._tlOv[p.id].memoImgs) || _tlMemoImgs(p.memo);
+  var inner = (memo && memo.length) ? ('<img src="' + memo[0] + '" alt="" style="width:100%;height:100%;object-fit:cover">') : '';
+  return '<div class="tl-thumb" data-proj-thumb="' + p.id + '" onclick="event.stopPropagation();tlThumbClick(\'' + p.id + '\')" title="대표 이미지 — 클릭하여 크게 보기">' + inner + '</div>';
+}
+function tlThumbClick(pid) {
+  var memo = (window._tlOv && window._tlOv[pid] && window._tlOv[pid].memoImgs) || [];
+  function openMemo() {
+    if (memo.length && typeof pimgOpenViewer === 'function') pimgOpenViewer(memo.map(function (s) { return { src: s }; }), 0);
+    else if (typeof showToast === 'function') showToast('등록된 이미지가 없습니다.');
+  }
+  if (typeof projImagesGet === 'function') {
+    projImagesGet(pid).then(function (list) { if (list && list.length && typeof pimgOpenViewer === 'function') pimgOpenViewer(list, 0); else openMemo(); }).catch(openMemo);
+  } else openMemo();
+}
+// 렌더 후: 메모 이미지가 없는 행은 참고이미지(project_images) 커버를 지연 로드(캐시)
+function tlFillThumbs() {
+  if (!tlShowThumb || typeof projImagesGet !== 'function') return;
+  var boxes = document.querySelectorAll('.tl-thumb[data-proj-thumb]');
+  for (var i = 0; i < boxes.length; i++) {
+    var box = boxes[i];
+    if (box.querySelector('img')) continue;                 // 메모 이미지 이미 표시됨
+    var pid = box.getAttribute('data-proj-thumb');
+    if (_tlThumbCache[pid] === false) continue;             // 이미지 없음 확인됨
+    if (_tlThumbCache[pid]) { box.innerHTML = '<img src="' + _tlThumbCache[pid] + '" alt="" style="width:100%;height:100%;object-fit:cover">'; continue; }
+    (function (box2, pid2) {
+      projImagesGet(pid2).then(function (list) {
+        if (list && list.length) { _tlThumbCache[pid2] = list[0].src; box2.innerHTML = '<img src="' + list[0].src + '" alt="" style="width:100%;height:100%;object-fit:cover">'; }
+        else { _tlThumbCache[pid2] = false; }
+      }).catch(function () {});
+    })(box, pid);
+  }
+}
+
 /* ═══ 라벨 셋째 줄용 — 기간/D-Day 포맷 헬퍼 (v13.43) ═══ */
 function _tlFmtPeriod(p) {
   var s = p.startDate || '', e = p.endDate || '';
@@ -961,8 +1006,10 @@ function calcLabelWidth(projects, milestones, msWorkH) {
     if (w > maxW) maxW = w;
   });
 
-  // 최소 160px, 최대 400px
-  return Math.max(160, Math.min(Math.ceil(maxW), 400));
+  // 최소 160px, 최대 400px (+ 썸네일 컬럼)
+  var base = Math.max(160, Math.min(Math.ceil(maxW), 400));
+  if (tlShowThumb) base += TL_THUMB_W;
+  return base;
 }
 
 /* ═══ 스케일별 단위 생성 ═══ */

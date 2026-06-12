@@ -189,6 +189,11 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .pipeline-card.pipe-drop-after::after{content:'';position:absolute;left:-2px;right:-2px;height:4px;border-radius:3px;background:var(--ac);box-shadow:0 0 8px 1px var(--ac);z-index:6;pointer-events:none}
 .pipeline-card.pipe-drop-before::before{top:-6px}
 .pipeline-card.pipe-drop-after::after{bottom:-6px}
+/* v13.156 프로젝트 라벨 대표 이미지 썸네일 */
+.tl-thumb{width:38px;height:38px;min-width:38px;border-radius:6px;overflow:hidden;background:var(--bg-i);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;cursor:zoom-in;flex-shrink:0}
+.tl-thumb:empty::after{content:'📷';font-size:13px;opacity:.3}
+.tl-thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.tl-compact .tl-thumb{width:30px;height:30px;min-width:30px}
 .tl-grid-line{position:absolute;top:0;bottom:0;border-right:1px solid var(--bd);opacity:.3}
 .tl-bar{position:absolute;top:8px;height:28px;border-radius:5px;opacity:.85;cursor:pointer;display:flex;align-items:center;overflow:hidden;transition:opacity .15s}
 .tl-bar:hover{opacity:1;z-index:1}
