@@ -898,7 +898,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.154</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.155</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3457,6 +3457,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.155',date:'2026-06-12',title:'🔗 프로젝트 순서 통일 — 파이프라인 드래그 = 타임라인·목록 순서',tag:'feat',items:[
+      '파이프라인에서 드래그로 지정한 순서를 전역 sort_order로 저장 → 타임라인·좌측 목록의 "사용자 지정 순서(기본)"가 같은 순서를 사용. 한 곳에서 정렬하면 모든 뷰에 동일 반영',
+      '서버 프로젝트 조회 기본 정렬을 sort_order 우선(미지정은 등록 최신순 폴백)으로 변경 → 모든 화면 기본 순서 통일',
+      '파이프라인 같은 단계 내 재배열 시 전체 프로젝트 순서를 재번호하여 전역 일관성 유지',
+      '영향: server/routes/projects.js·bootstrap.js, pipeline.js, timeline.js. 서버 배포 후 적용'
+    ]},
     {ver:'13.154',date:'2026-06-12',title:'💾 타임라인 정렬·그룹 선택 유지(새로고침 후에도)',tag:'feat',items:[
       '타임라인 정렬(가나다/등록순 등)·그룹(상태별 묶기) 선택을 localStorage에 저장 → 새로고침·재접속 후에도 마지막 선택 유지(이전엔 매번 기본으로 초기화됨)',
       '참고: 파이프라인에서 드래그로 지정한 프로젝트 순서는 서버(projects.sort_order)에 저장되어 유지됨(단계별). 타임라인은 날짜 기반 간트라 그 순서를 그대로 쓰지 않고, 위 정렬 기준으로 표시',

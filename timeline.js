@@ -341,7 +341,7 @@ async function renderTimeline() {
         assigneeList.map(function (a) { return '<option value="' + eH(a) + '"' + (tlFilterAssignee === a ? ' selected' : '') + '>' + eH(a) + '</option>'; }).join('') +
       '</select>' +
       '<select class="si" id="tlSortBy" onchange="tlSort=this.value;if(typeof lsSet===\'function\')lsSet(\'tlSort\',this.value);renderTimeline()" style="max-width:150px;padding:4px 6px;font-size:10px" title="정렬 기준 (좌측 목록·타임라인 공통, 선택은 새로고침 후에도 유지)">' +
-        '<option value="default"' + (tlSort === 'default' ? ' selected' : '') + '>기본 순서</option>' +
+        '<option value="default"' + (tlSort === 'default' ? ' selected' : '') + '>사용자 지정 순서(파이프라인 연동)</option>' +
         '<option value="name"' + (tlSort === 'name' ? ' selected' : '') + '>이름순 가나다 ↑</option>' +
         '<option value="name_desc"' + (tlSort === 'name_desc' ? ' selected' : '') + '>이름순 가나다 ↓</option>' +
         '<option value="created"' + (tlSort === 'created' ? ' selected' : '') + '>최초등록 오래된순 ↑</option>' +
@@ -686,7 +686,13 @@ function _tlProjCmp(a, b) {
       var sb = so[autoProjectStatus(b)]; if (sb == null) sb = 9;
       return (sa - sb) || an.localeCompare(bn, 'ko');
     }
-    default: return 0; // 기본 = 서버 순서(등록 최신순) 유지
+    default: { // 사용자 지정 순서(전역 sort_order) — 파이프라인 드래그와 통일. 미지정은 뒤(최신 등록 먼저)
+      var oa = a.sortOrder, ob = b.sortOrder, noa = (oa == null), nob = (ob == null);
+      if (noa && nob) return (b.createdAt || '').localeCompare(a.createdAt || '');
+      if (noa) return 1;
+      if (nob) return -1;
+      return oa - ob;
+    }
   }
 }
 // 반환: [{ key, label, color, bg, items[] }]. 그룹 모드 아니면 단일 그룹(label 빈값).

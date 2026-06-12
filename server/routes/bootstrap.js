@@ -37,7 +37,7 @@ router.get('/', async function (req, res) {
     var projParams = deptId ? [userId, tenantId, deptId] : [userId, tenantId];
     var projQ = db.query(
       'SELECT DISTINCT p.* FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL ' +
-      'WHERE p.tenant_id = $2 AND ' + projVis + ' ORDER BY p.created_at DESC LIMIT 500',
+      'WHERE p.tenant_id = $2 AND ' + projVis + ' ORDER BY p.sort_order ASC NULLS LAST, p.created_at DESC LIMIT 500',
       projParams
     );
 

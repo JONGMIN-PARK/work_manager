@@ -68,7 +68,7 @@ router.get('/', async function (req, res) {
       "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p "
       + "LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL "
       + "WHERE p.tenant_id = $2 AND " + visClause
-      + " ORDER BY p.created_at DESC LIMIT $" + (deptId ? 4 : 3) + " OFFSET $" + (deptId ? 5 : 4),
+      + " ORDER BY p.sort_order ASC NULLS LAST, p.created_at DESC LIMIT $" + (deptId ? 4 : 3) + " OFFSET $" + (deptId ? 5 : 4),
       params
     );
 
@@ -85,7 +85,7 @@ router.get('/', async function (req, res) {
 //  (반드시 /:id 보다 먼저 정의 — /all 이 /:id 로 매칭되지 않도록)
 router.get('/all', operator.requireOperator, async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM projects WHERE tenant_id = $1 ORDER BY created_at DESC', [req.tenant.id]);
+    var r = await db.query('SELECT * FROM projects WHERE tenant_id = $1 ORDER BY sort_order ASC NULLS LAST, created_at DESC', [req.tenant.id]);
     res.json({ data: r.rows });
   } catch (e) {
     console.error('[projects/all]', e);

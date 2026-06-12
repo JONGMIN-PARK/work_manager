@@ -236,17 +236,20 @@ function pipelineReorder(dragId, targetId, targetPhase, after) {
       }
       return;
     }
-    // 같은 단계 내 순서 변경 — 버킷 재배열 후 sort_order 일괄 갱신
-    var bucket = list.filter(function (p) { return (p.currentPhase || guessPhase(p)) === targetPhase && p.id !== dragId; });
-    bucket.sort(_pipeOrderCmp);
+    // v13.155 같은 단계 내 순서 변경 → 전역 순서(sort_order) 통일.
+    //  list 는 이미 전역 정렬 순서(서버 sort_order 우선)로 옴 → 드래그 항목을 타겟 위치로 옮기고 전체 재번호.
+    var arr = list.slice();
+    var dragIdx = -1;
+    for (var di = 0; di < arr.length; di++) { if (arr[di].id === dragId) { dragIdx = di; break; } }
+    if (dragIdx >= 0) arr.splice(dragIdx, 1);
     var ti = -1;
-    for (var i = 0; i < bucket.length; i++) { if (bucket[i].id === targetId) { ti = i; break; } }
-    var insertIdx = (ti < 0) ? bucket.length : (after ? ti + 1 : ti);
-    bucket.splice(insertIdx, 0, dragProj);
-    var items = bucket.map(function (p, idx) { return { id: p.id, sortOrder: idx }; });
+    for (var i = 0; i < arr.length; i++) { if (arr[i].id === targetId) { ti = i; break; } }
+    var insertIdx = (ti < 0) ? arr.length : (after ? ti + 1 : ti);
+    arr.splice(insertIdx, 0, dragProj);
+    var items = arr.map(function (p, idx) { return { id: p.id, sortOrder: idx }; });
     if (typeof projReorder !== 'function') { if (typeof showToast === 'function') showToast('순서 변경 기능을 사용할 수 없습니다.', 'error'); return; }
     projReorder(items).then(function () {
-      if (typeof showToast === 'function') showToast('순서가 변경되었습니다.');
+      if (typeof showToast === 'function') showToast('순서가 변경되었습니다 (타임라인·목록 공통).');
       renderPipeline();
     }).catch(function (err) {
       if (typeof showToast === 'function') showToast('순서 변경 실패' + ((err && err.status === 404) ? ' — 서버 배포 후 사용 가능' : ''), 'error');
