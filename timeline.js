@@ -368,7 +368,8 @@ async function renderTimeline() {
         '<option value="status"' + (tlSort === 'status' ? ' selected' : '') + '>상태순</option>' +
       '</select>' +
     '</div>' +
-    '<button class="btn btn-g btn-s" onclick="exportProjectsJSON()">📥 내보내기</button>';
+    '<button class="btn btn-g btn-s" onclick="exportProjectsJSON()">📥 내보내기</button>' +
+    '<button class="btn btn-g btn-s" onclick="tlCompressAllMemoImages()" title="모든 프로젝트의 메모에 들어간 큰 이미지를 일괄 압축·축소(편집 권한 있는 프로젝트만)">🗜 메모이미지 일괄압축</button>';
 
   // 헤더 (기간 표시)
   var headerHtml = '<div class="tl-header" style="width:' + totalWidth + 'px">';
@@ -1235,6 +1236,7 @@ async function showProjectModal(projId) {
           '<label class="fl" style="margin:0">메모</label>' +
           '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">' +
             '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:3px 8px" onclick="memoInsertImagePicker()" title="이미지 파일 선택 (여러 개 동시 가능)">🖼 이미지 추가</button>' +
+            '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:3px 8px" onclick="memoCompressImages()" title="이 메모에 이미 넣은 큰 이미지들을 압축·축소">🗜 이미지 압축</button>' +
             '<button type="button" id="memoDelImgBtn" class="btn btn-d btn-s" style="font-size:10px;padding:3px 8px;opacity:.45;cursor:not-allowed" disabled onclick="memoDeleteSelectedImage()" title="에디터에서 이미지 클릭 후 이 버튼으로 삭제">🗑 선택 이미지 삭제</button>' +
             '<span style="font-size:9px;color:var(--t6);align-self:center" title="여러 이미지 동시 선택/붙여넣기/드래그 가능. 5MB 이하 권장">다중·붙여넣기·드래그</span>' +
           '</div>' +
@@ -2516,6 +2518,53 @@ function _memoInsertManyFiles(files) {
     if (imgs.length > 1 && typeof showToast === 'function') showToast('🖼 ' + ok + '개 이미지 추가');
     return ok;
   });
+}
+
+/* 현재 메모(#projMemo)의 이미 삽입된 큰 이미지들을 압축·축소 (저장 눌러야 영속) — v13.150 */
+function memoCompressImages() {
+  var el = document.getElementById('projMemo');
+  if (!el) return;
+  if (typeof pimgCompressMemoHtml !== 'function') { if (typeof showToast === 'function') showToast('압축 기능을 사용할 수 없습니다(새로고침 후 재시도).', 'error'); return; }
+  var html = el.innerHTML || '';
+  if (html.indexOf('<img') < 0 || html.indexOf('data:image') < 0) { if (typeof showToast === 'function') showToast('압축할 임베드 이미지가 없습니다.'); return; }
+  if (typeof showToast === 'function') showToast('🗜 이미지 압축 중...');
+  pimgCompressMemoHtml(html).then(function (r) {
+    if (r.changed || r.after < r.before) {
+      el.innerHTML = r.html;
+      if (typeof showToast === 'function') showToast('압축 완료 — ' + Math.round(r.before / 1024) + 'KB → ' + Math.round(r.after / 1024) + 'KB. [수정/등록]을 눌러 저장하세요.', 'success');
+    } else if (typeof showToast === 'function') showToast('이미 충분히 작거나 더 줄일 수 없습니다.');
+  });
+}
+
+/* 모든 프로젝트의 메모 이미지를 일괄 압축·축소 후 저장 (편집 권한 있는 것만) — v13.150 */
+function tlCompressAllMemoImages() {
+  if (typeof projGetAll !== 'function' || typeof pimgCompressMemoHtml !== 'function' || typeof updateProject !== 'function') {
+    if (typeof showToast === 'function') showToast('압축 기능을 사용할 수 없습니다.', 'error'); return;
+  }
+  if (!confirm('모든 프로젝트의 메모에 들어간 큰 이미지를 압축·축소하고 저장합니다.\n(편집 권한이 있는 프로젝트만 반영, 시간이 걸릴 수 있음)\n\n진행할까요?')) return;
+  projGetAll().then(function (list) {
+    var targets = (list || []).filter(function (p) { return p.memo && typeof p.memo === 'string' && p.memo.indexOf('data:image') >= 0; });
+    if (!targets.length) { if (typeof showToast === 'function') showToast('압축할 메모 이미지가 있는 프로젝트가 없습니다.'); return; }
+    if (typeof showToast === 'function') showToast('🗜 ' + targets.length + '개 프로젝트 압축 시작...');
+    var done = 0, saved = 0, savedBytes = 0, fail = 0;
+    var chain = Promise.resolve();
+    targets.forEach(function (p) {
+      chain = chain.then(function () {
+        return pimgCompressMemoHtml(p.memo).then(function (r) {
+          done++;
+          if (typeof showToast === 'function' && (done % 3 === 0 || done === targets.length)) showToast('압축 중... ' + done + '/' + targets.length);
+          if (!r.changed && r.after >= r.before) return;
+          return updateProject(p.id, { memo: r.html })
+            .then(function () { saved++; savedBytes += Math.max(0, r.before - r.after); })
+            .catch(function () { fail++; });
+        }).catch(function () { fail++; });
+      });
+    });
+    chain.then(function () {
+      if (typeof showToast === 'function') showToast('완료 — ' + saved + '개 프로젝트 압축, 약 ' + Math.round(savedBytes / 1024) + 'KB 절감' + (fail ? (' / 권한·실패 ' + fail + '건') : ''), saved ? 'success' : 'info');
+      if (typeof renderTimeline === 'function') renderTimeline();
+    });
+  }).catch(function () { if (typeof showToast === 'function') showToast('프로젝트 목록 로드 실패', 'error'); });
 }
 
 function memoInsertImagePicker() {

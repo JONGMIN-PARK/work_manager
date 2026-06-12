@@ -57,6 +57,61 @@ function _pimgDownscale(file, maxDim, quality) {
   });
 }
 
+/* ── 기존 data URI 이미지 소급 압축(메모 등) ─────────────────────────── */
+// data URI → 다운스케일된 data URI. 더 작아진 경우에만 교체, 아니면 원본 반환.
+function pimgDownscaleDataUrl(dataUrl, maxDim, quality) {
+  maxDim = maxDim || 1280; quality = quality || 0.8;
+  return new Promise(function (resolve) {
+    if (!dataUrl || dataUrl.indexOf('data:image') !== 0) { resolve(dataUrl); return; }
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var w = img.width, h = img.height;
+        var scale = Math.min(1, maxDim / Math.max(w, h));
+        var nw = Math.max(1, Math.round(w * scale)), nh = Math.max(1, Math.round(h * scale));
+        var c = document.createElement('canvas'); c.width = nw; c.height = nh;
+        c.getContext('2d').drawImage(img, 0, 0, nw, nh);
+        var out = c.toDataURL('image/jpeg', quality);
+        c.width = c.height = 0;
+        resolve((out && out.length < dataUrl.length) ? out : dataUrl);
+      } catch (e) { resolve(dataUrl); }
+    };
+    img.onerror = function () { resolve(dataUrl); };
+    img.src = dataUrl;
+  });
+}
+
+// 메모 HTML 내 data URI 이미지들을 순차 압축 + 작게 auto-size 스타일 적용.
+// 반환: { html, changed, before, after, count }
+function pimgCompressMemoHtml(html, opts) {
+  opts = opts || {};
+  var smallStyle = opts.smallStyle || 'max-width:240px;max-height:200px;width:auto;height:auto;border-radius:6px;display:block;margin:6px 0;cursor:zoom-in';
+  return new Promise(function (resolve) {
+    var before = html ? html.length : 0;
+    if (!html || html.indexOf('<img') < 0) { resolve({ html: html, changed: false, before: before, after: before, count: 0 }); return; }
+    var doc = new DOMParser().parseFromString('<div id="_pcr">' + html + '</div>', 'text/html');
+    var root = doc.getElementById('_pcr');
+    var imgs = Array.prototype.slice.call(root.querySelectorAll('img'));
+    var count = 0, i = 0;
+    function next() {
+      if (i >= imgs.length) {
+        var outHtml = root.innerHTML;
+        resolve({ html: outHtml, changed: count > 0, before: before, after: outHtml.length, count: count });
+        return;
+      }
+      var img = imgs[i++];
+      var src = img.getAttribute('src') || '';
+      if (src.indexOf('data:image') !== 0) { next(); return; }
+      pimgDownscaleDataUrl(src, opts.maxDim || 1280, opts.quality || 0.8).then(function (nsrc) {
+        if (nsrc && nsrc !== src) { img.setAttribute('src', nsrc); count++; }
+        img.setAttribute('style', smallStyle); // 표시도 작게(원본 풀사이즈 → 썸네일)
+        next();
+      });
+    }
+    next();
+  });
+}
+
 /* ── 모달 내 이미지 관리 섹션 렌더 ───────────────────────────────────── */
 function renderProjImages(projId) {
   var el = document.getElementById(_PIMG_CONTAINER); if (!el) return;
@@ -275,4 +330,6 @@ if (typeof window !== 'undefined') {
   window.pimgViewerFor = pimgViewerFor; window.pimgOpenViewer = pimgOpenViewer; window.pimgViewerNav = pimgViewerNav; window.pimgViewerClose = pimgViewerClose;
   window.pimgHover = pimgHover; window.pimgHoverOut = pimgHoverOut; window.pimgPreviewNav = pimgPreviewNav;
   window.pimgDownscale = _pimgDownscale; // 메모 이미지 등 다른 모듈에서 압축 재사용
+  window.pimgDownscaleDataUrl = pimgDownscaleDataUrl;
+  window.pimgCompressMemoHtml = pimgCompressMemoHtml;
 }
