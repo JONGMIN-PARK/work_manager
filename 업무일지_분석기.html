@@ -902,7 +902,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.158</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.159</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3461,6 +3461,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.159',date:'2026-06-12',title:'⚡ 프로젝트 상세 패널 속도 개선 + 중복 창 방지',tag:'perf',items:[
+      '프로젝트 타이틀 클릭 시 상세 패널이 느리게 뜨던 문제 — 프로젝트·마일스톤을 매번 새로 조회하던 것을 캐시에서 즉시 사용(네트워크 왕복 3회→1회). 체감 즉시 표시',
+      '연타 시 창이 2~3개 뜨던 문제 — 중복 오픈 가드(_pdDetailBusy) 추가로 1개만 열림. 여는 중 추가 클릭은 무시',
+      '영향: project-detail.js. 클라이언트 전용 — 배포 후 새로고침'
+    ]},
     {ver:'13.158',date:'2026-06-12',title:'🎚 라벨 썸네일 크기 선택(작게~아주크게)',tag:'feat',items:[
       '썸네일 크기를 직접 고를 수 있게 선택 메뉴 추가 — 작게(56)/보통(84)/크게(108)/아주크게(140)px. 선택은 새로고침 후에도 유지',
       'CSS 변수(--tl-thumb-sz)로 즉시 반영, 라벨 폭도 크기에 맞춰 자동 조정. 영향: timeline.js, style.css. 클라이언트 전용 — 배포 후 새로고침'

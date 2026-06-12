@@ -3,19 +3,33 @@
  * (timeline.js에서 분리 — 렌더링/체크리스트/이슈/투입실적/진척 차트)
  */
 
+var _pdDetailBusy = false; // v13.159 중복 오픈 가드 — 연타 시 패널 다중 생성 방지
 async function showProjectDetail(id) {
+  if (_pdDetailBusy) return;        // 이미 여는 중이면 무시(연타 방지)
+  _pdDetailBusy = true;
+  try {
   var existing = document.getElementById('projDetailPanel');
   if (existing) existing.remove();
   var existingBd = document.getElementById('projDetailBackdrop');
   if (existingBd) existingBd.remove();
 
-  var [proj, projMs, allChk] = await Promise.all([
-    projGet(id),
-    msGetByProject(id),
-    typeof chkGetByProject === 'function' ? chkGetByProject(id) : Promise.resolve([])
-  ]);
-  if (!proj) return;
-  projMs.sort(function (a, b) { return a.order - b.order; });
+  // v13.159 속도 개선 — 프로젝트/마일스톤은 캐시(_pdCached)에서 즉시 사용(네트워크 왕복 제거).
+  // 체크리스트만 프로젝트별 조회. 캐시에 없으면 개별 fetch 폴백.
+  var proj = null, projMs = [], allChk = [];
+  try {
+    var _r = await Promise.all([
+      (typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()),
+      msGetAll(),
+      (typeof chkGetByProject === 'function' ? chkGetByProject(id) : Promise.resolve([]))
+    ]);
+    proj = (_r[0] || []).filter(function (p) { return p.id === id; })[0] || null;
+    projMs = (_r[1] || []).filter(function (m) { return m.projectId === id; });
+    allChk = _r[2] || [];
+  } catch (_) {}
+  if (!proj) { try { proj = await projGet(id); } catch (e) {} }
+  if (!proj) { _pdDetailBusy = false; return; }
+  if (!projMs.length) { try { projMs = await msGetByProject(id); } catch (e) {} }
+  projMs.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
   var st = autoProjectStatus(proj);
   var stInfo = PROJ_STATUS[st] || PROJ_STATUS.waiting;
   var phaseProgress = {};
@@ -226,6 +240,7 @@ async function showProjectDetail(id) {
   backdrop.style.cssText = 'position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,.3)';
   backdrop.onclick = function () { panel.remove(); backdrop.remove(); };
   document.body.appendChild(backdrop);
+  } finally { _pdDetailBusy = false; }
 }
 
 /* ═══ 프로젝트 상세 패널: 탭 전환 ═══ */
