@@ -386,6 +386,11 @@ function projDel(id) {
   return apiFetch('/api/projects/' + id, { method: 'DELETE' })
     .then(function (r) { _emitBus('project', 'deleted', { id: id }); return r; });
 }
+// 프로젝트 표시 순서 일괄 갱신 (파이프라인 카드 재배열 등) — items: [{id, sortOrder}]
+function projReorder(items) {
+  return apiFetch('/api/projects/reorder', { method: 'POST', body: JSON.stringify({ items: items || [] }) })
+    .then(function (r) { _pdInvalidate('proj'); _pdInvalidate('projAll'); return r; });
+}
 
 /* ─── 공유/이관 ─── */
 function userLookup() {

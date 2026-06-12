@@ -183,6 +183,9 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-list-group:first-child{margin-top:0}
 .tl-list-group-n{font-size:9px;color:var(--t6);font-weight:700;background:var(--bg-p);padding:1px 7px;border-radius:9px}
 .tl-list-grouped{margin-left:6px}
+/* v13.152 파이프라인 카드 순서변경 드롭 위치 표시 */
+.pipeline-card.pipe-drop-before{box-shadow:inset 0 3px 0 0 var(--ac)!important}
+.pipeline-card.pipe-drop-after{box-shadow:inset 0 -3px 0 0 var(--ac)!important}
 .tl-grid-line{position:absolute;top:0;bottom:0;border-right:1px solid var(--bd);opacity:.3}
 .tl-bar{position:absolute;top:8px;height:28px;border-radius:5px;opacity:.85;cursor:pointer;display:flex;align-items:center;overflow:hidden;transition:opacity .15s}
 .tl-bar:hover{opacity:1;z-index:1}

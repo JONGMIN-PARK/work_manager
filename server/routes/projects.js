@@ -496,6 +496,33 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
   }
 });
 
+// ─── POST /api/projects/reorder — 표시 순서 일괄 갱신 (v13.152) ───
+//  body: { items: [{ id, sortOrder }] }. 편집 권한(생성자·멤버·admin/executive) 있는 행만 반영(WHERE 인라인 enforce).
+router.post('/reorder', async function (req, res) {
+  try {
+    var items = (req.body && req.body.items) || [];
+    if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'BAD_REQUEST', message: 'items 필수' });
+    var isAdmin = (req.user.role === 'admin' || req.user.role === 'executive');
+    var n = 0;
+    await db.transaction(async function (client) {
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (!it || !it.id) continue;
+        var r = await client.query(
+          "UPDATE projects SET sort_order = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 " +
+          "AND ($4 OR owner_id = $5 OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = $2 AND pm.user_id = $5 AND pm.released_at IS NULL))",
+          [(it.sortOrder != null ? it.sortOrder : 0), it.id, req.tenant.id, isAdmin, req.user.sub]
+        );
+        n += r.rowCount || 0;
+      }
+    });
+    res.json({ updated: n });
+  } catch (e) {
+    console.error('[projects/reorder]', e);
+    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 /* ═══════════════════════════════════════════════════════════════════════
    프로젝트 참고 이미지 (v13.147) — 장비 사진 등. 별도 테이블 project_images.
    읽기: canAccessProject(가시성 포함) / 쓰기: canEditProject(생성자·멤버·관리자)

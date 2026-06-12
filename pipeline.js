@@ -36,6 +36,8 @@ function renderPipeline() {
       if (!buckets[phase]) phase = phaseKeys[0];
       buckets[phase].push(p);
     });
+    // v13.152 레인 내 카드 순서: sort_order 우선(미지정은 뒤, 기존 등록순 유지)
+    phaseKeys.forEach(function (k) { buckets[k].sort(_pipeOrderCmp); });
 
     // 수주 대장에 있지만 프로젝트가 없는 수주 → '수주' 레인에 표시
     var projOrderNos = {};
@@ -89,7 +91,7 @@ function renderPipeline() {
         var chkDone = chkInfo ? chkInfo.done : 0;
         var chkPct = chkTotal > 0 ? Math.round(chkDone / chkTotal * 100) : -1;
 
-        html += '<div class="pipeline-card" draggable="true" ondragstart="pipelineDragStart(event,\'' + p.id + '\')" style="background:var(--bg-p);border:' + borderStyle + ';border-radius:8px;padding:10px 12px;cursor:pointer;transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 3px 8px rgba(0,0,0,.1)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'\'" onclick="pipelineCardClick(\'' + p.id + '\')" title="' + eH(p.name) + '">';
+        html += '<div class="pipeline-card" draggable="true" data-pid="' + p.id + '" data-phase="' + k + '" ondragstart="pipelineDragStart(event,\'' + p.id + '\')" ondragend="pipelineDragEnd(event)" ondragover="pipelineCardDragOver(event)" ondragleave="pipelineCardDragLeave(event)" ondrop="pipelineCardDrop(event,\'' + p.id + '\',\'' + k + '\')" style="background:var(--bg-p);border:' + borderStyle + ';border-radius:8px;padding:10px 12px;cursor:grab;transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 3px 8px rgba(0,0,0,.1)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'\'" onclick="pipelineCardClick(\'' + p.id + '\')" title="' + eH(p.name) + ' — 드래그: 단계 이동(레인) / 같은 단계 카드 위로: 순서 변경">';
 
         // 프로젝트명
         html += '<div style="font-size:12px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(p.name) + '</div>';
@@ -185,6 +187,71 @@ function pipelineDragStart(e, projId) {
 function pipelineDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
+}
+
+/* v13.152 레인 내 프로젝트 순서 변경 (카드 위로 드롭) */
+function _pipeOrderCmp(a, b) {
+  var sa = a.sortOrder, sb = b.sortOrder;
+  var na = (sa == null), nb = (sb == null);
+  if (na && nb) return 0;
+  if (na) return 1;       // 미지정은 뒤로
+  if (nb) return -1;
+  return sa - sb;
+}
+function pipelineDragEnd(e) { if (e && e.target) e.target.style.opacity = ''; var c = document.querySelectorAll('.pipeline-card.pipe-drop-before,.pipeline-card.pipe-drop-after'); for (var i = 0; i < c.length; i++) c[i].classList.remove('pipe-drop-before', 'pipe-drop-after'); }
+function pipelineCardDragOver(e) {
+  e.preventDefault(); e.stopPropagation();
+  e.dataTransfer.dropEffect = 'move';
+  var card = e.currentTarget; if (!card) return;
+  var rect = card.getBoundingClientRect();
+  var after = e.clientY > rect.top + rect.height / 2;
+  card.classList.toggle('pipe-drop-after', after);
+  card.classList.toggle('pipe-drop-before', !after);
+}
+function pipelineCardDragLeave(e) { var card = e.currentTarget; if (card) card.classList.remove('pipe-drop-before', 'pipe-drop-after'); }
+function pipelineCardDrop(e, targetId, targetPhase) {
+  e.preventDefault(); e.stopPropagation();
+  var card = e.currentTarget; if (card) card.classList.remove('pipe-drop-before', 'pipe-drop-after');
+  var dragId = pipelineDragId || e.dataTransfer.getData('text/plain');
+  if (!dragId || dragId === targetId) { pipelineDragId = ''; return; }
+  pipelineDragId = '';
+  var rect = card ? card.getBoundingClientRect() : null;
+  var after = rect ? (e.clientY > rect.top + rect.height / 2) : false;
+  pipelineReorder(dragId, targetId, targetPhase, after);
+}
+function pipelineReorder(dragId, targetId, targetPhase, after) {
+  if (typeof projGetAll !== 'function') return;
+  projGetAll().then(function (list) {
+    var dragProj = null;
+    list.forEach(function (p) { if (p.id === dragId) dragProj = p; });
+    if (!dragProj) return;
+    var dragPhase = dragProj.currentPhase || guessPhase(dragProj);
+    // 다른 단계 카드 위로 드롭 → 단계 변경(기존 전환 로직 재사용)
+    if (dragPhase !== targetPhase) {
+      if (typeof executePhaseTransition === 'function') {
+        executePhaseTransition(dragId, targetPhase).then(function () {
+          if (typeof showToast === 'function') showToast(getPhaseName(targetPhase) + ' 단계로 이동했습니다.');
+          renderPipeline();
+        });
+      }
+      return;
+    }
+    // 같은 단계 내 순서 변경 — 버킷 재배열 후 sort_order 일괄 갱신
+    var bucket = list.filter(function (p) { return (p.currentPhase || guessPhase(p)) === targetPhase && p.id !== dragId; });
+    bucket.sort(_pipeOrderCmp);
+    var ti = -1;
+    for (var i = 0; i < bucket.length; i++) { if (bucket[i].id === targetId) { ti = i; break; } }
+    var insertIdx = (ti < 0) ? bucket.length : (after ? ti + 1 : ti);
+    bucket.splice(insertIdx, 0, dragProj);
+    var items = bucket.map(function (p, idx) { return { id: p.id, sortOrder: idx }; });
+    if (typeof projReorder !== 'function') { if (typeof showToast === 'function') showToast('순서 변경 기능을 사용할 수 없습니다.', 'error'); return; }
+    projReorder(items).then(function () {
+      if (typeof showToast === 'function') showToast('순서가 변경되었습니다.');
+      renderPipeline();
+    }).catch(function (err) {
+      if (typeof showToast === 'function') showToast('순서 변경 실패' + ((err && err.status === 404) ? ' — 서버 배포 후 사용 가능' : ''), 'error');
+    });
+  });
 }
 
 function pipelineDragEnter(e) {
