@@ -74,7 +74,8 @@ var _tlJumpDate = null; // 다음 렌더에서 이 날짜를 중앙으로 (오�
 var tlDensity = localStorage.getItem('tlDensity') || 'comfortable'; // 'comfortable' | 'compact'
 var tlFilterStatus = 'all'; // 'all' | 'waiting' | 'active' | 'delayed' | 'done' | 'hold'
 var tlFilterAssignee = 'all'; // 'all' | 담당자 이름
-var tlSort = 'default'; // 'default' | 'name' | 'deadline' | 'progress' | 'status'
+var tlSort = 'default'; // v13.151: default | name | name_desc | created | created_desc | deadline | progress | status
+var tlGroupBy = 'none'; // v13.151: none | status (상태별 그룹 묶기 — 목록·타임라인 공통)
 var tlCollapsed = new Set(); // 접힌 프로젝트 ID 모음
 var tlDayOffset = (localStorage.getItem('tlDayOffset') === 'true'); // D-Day 배지 표시 토글
 var _tlMsWorkH = null, _tlMsWorkHSrc = null; // v13.137 마일스톤 투입시간 집계 메모(archive 캐시 참조 기준)
@@ -227,37 +228,15 @@ async function renderTimeline() {
       return asg.indexOf(tlFilterAssignee) >= 0;
     });
   }
-  // v13.133 정렬 적용
-  if (tlSort !== 'default') {
-    var sortedProjects = projects.slice();
-    if (tlSort === 'name') {
-      sortedProjects.sort(function (a, b) {
-        var nameA = (a.name || a.orderNo || '').toLowerCase();
-        var nameB = (b.name || b.orderNo || '').toLowerCase();
-        return nameA.localeCompare(nameB);
-      });
-    } else if (tlSort === 'deadline') {
-      sortedProjects.sort(function (a, b) {
-        var endA = a.endDate || '9999-12-31';
-        var endB = b.endDate || '9999-12-31';
-        return endA.localeCompare(endB);
-      });
-    } else if (tlSort === 'progress') {
-      sortedProjects.sort(function (a, b) {
-        var progA = Number(a.progress) || 0;
-        var progB = Number(b.progress) || 0;
-        return progB - progA;
-      });
-    } else if (tlSort === 'status') {
-      var statusOrder = { delayed: 0, active: 1, waiting: 2, hold: 3, done: 4 };
-      sortedProjects.sort(function (a, b) {
-        var sa = statusOrder[autoProjectStatus(a)]; if (sa === undefined) sa = 9;
-        var sb = statusOrder[autoProjectStatus(b)]; if (sb === undefined) sb = 9;
-        return sa - sb;
-      });
-    }
-    projects = sortedProjects;
-  }
+  // v13.151 정렬 + 그룹화 (좌측 목록과 동일한 _tlGroupProjects 사용 → 일치)
+  var _tlGroups = _tlGroupProjects(projects);
+  var _tlGroupHeads = {};   // 각 그룹의 첫 프로젝트 id → 그룹 메타(상태 그룹 모드일 때만 헤더 렌더)
+  var _flat = [];
+  _tlGroups.forEach(function (g) {
+    if (tlGroupBy === 'status' && g.items.length) _tlGroupHeads[g.items[0].id] = g;
+    g.items.forEach(function (p) { _flat.push(p); });
+  });
+  projects = _flat;
 
   // 프로젝트가 없으면 빈 상태
   var content = document.getElementById('tlContent');
@@ -360,12 +339,19 @@ async function renderTimeline() {
         '<option value="all"' + (tlFilterAssignee === 'all' ? ' selected' : '') + '>모든 담당자</option>' +
         assigneeList.map(function (a) { return '<option value="' + eH(a) + '"' + (tlFilterAssignee === a ? ' selected' : '') + '>' + eH(a) + '</option>'; }).join('') +
       '</select>' +
-      '<select class="si" id="tlSortBy" onchange="tlSort=this.value;renderTimeline()" style="max-width:140px;padding:4px 6px;font-size:10px">' +
+      '<select class="si" id="tlSortBy" onchange="tlSort=this.value;renderTimeline()" style="max-width:150px;padding:4px 6px;font-size:10px" title="정렬 기준 (좌측 목록·타임라인 공통)">' +
         '<option value="default"' + (tlSort === 'default' ? ' selected' : '') + '>기본 순서</option>' +
-        '<option value="name"' + (tlSort === 'name' ? ' selected' : '') + '>이름순</option>' +
+        '<option value="name"' + (tlSort === 'name' ? ' selected' : '') + '>이름순 가나다 ↑</option>' +
+        '<option value="name_desc"' + (tlSort === 'name_desc' ? ' selected' : '') + '>이름순 가나다 ↓</option>' +
+        '<option value="created"' + (tlSort === 'created' ? ' selected' : '') + '>최초등록 오래된순 ↑</option>' +
+        '<option value="created_desc"' + (tlSort === 'created_desc' ? ' selected' : '') + '>최초등록 최신순 ↓</option>' +
         '<option value="deadline"' + (tlSort === 'deadline' ? ' selected' : '') + '>마감임박순</option>' +
         '<option value="progress"' + (tlSort === 'progress' ? ' selected' : '') + '>진척률 높은순</option>' +
         '<option value="status"' + (tlSort === 'status' ? ' selected' : '') + '>상태순</option>' +
+      '</select>' +
+      '<select class="si" id="tlGroupBy" onchange="tlGroupBy=this.value;renderTimeline()" style="max-width:120px;padding:4px 6px;font-size:10px" title="그룹으로 묶기 — 묶은 그룹 안에서 위 정렬 기준 적용">' +
+        '<option value="none"' + (tlGroupBy === 'none' ? ' selected' : '') + '>그룹 없음</option>' +
+        '<option value="status"' + (tlGroupBy === 'status' ? ' selected' : '') + '>상태별 묶기</option>' +
       '</select>' +
     '</div>' +
     '<button class="btn btn-g btn-s" onclick="exportProjectsJSON()">📥 내보내기</button>' +
@@ -409,6 +395,17 @@ async function renderTimeline() {
   // 프로젝트 행
   var rowsHtml = '';
   projects.forEach(function (p, _pi) {
+    // v13.151 상태 그룹 헤더 행 (그룹의 첫 프로젝트 앞에 삽입)
+    if (_tlGroupHeads[p.id]) {
+      var _gh = _tlGroupHeads[p.id];
+      rowsHtml += '<div class="tl-row tl-group-row">' +
+        '<div class="tl-label tl-group-label" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;border-left:3px solid ' + (_gh.color || 'var(--ac)') + '">' +
+          '<span style="font-size:11px;font-weight:800;color:' + (_gh.color || 'var(--t2)') + '">' + _gh.label + '</span>' +
+          '<span style="font-size:9px;color:var(--t6);margin-left:6px;font-weight:700">' + _gh.items.length + '</span>' +
+        '</div>' +
+        '<div class="tl-bars" style="width:' + totalWidth + 'px"></div>' +
+      '</div>';
+    }
     var st = autoProjectStatus(p);
     // 편집 모달과 동일 비교자 — order 우선, 동률이면 createdAt (양쪽 표시 순서 일치 보장)
     var pMs = milestones.filter(function (m) { return m.projectId === p.id; }).sort(function (a, b) { return ((a.order || 0) - (b.order || 0)) || (a.createdAt || '').localeCompare(b.createdAt || ''); });
@@ -671,6 +668,40 @@ async function renderTimeline() {
   drawDependencyArrows(projects, rangeStart, units, labelW);
 }
 
+/* ═══ 정렬/그룹 공통 (v13.151) — 좌측 목록과 타임라인 행을 동일 순서로 일치화 ═══ */
+var TL_STATUS_GROUP_ORDER = ['delayed', 'active', 'waiting', 'hold', 'done'];
+function _tlProjCmp(a, b) {
+  var an = (a.name || a.orderNo || ''), bn = (b.name || b.orderNo || '');
+  switch (tlSort) {
+    case 'name': return an.localeCompare(bn, 'ko');            // 가나다·abc 정순
+    case 'name_desc': return bn.localeCompare(an, 'ko');       // 역순
+    case 'created': return (a.createdAt || '').localeCompare(b.createdAt || '');       // 최초등록 오래된순
+    case 'created_desc': return (b.createdAt || '').localeCompare(a.createdAt || '');  // 최신순
+    case 'deadline': return (a.endDate || '9999-12-31').localeCompare(b.endDate || '9999-12-31');
+    case 'progress': return (Number(b.progress) || 0) - (Number(a.progress) || 0);
+    case 'status': {
+      var so = { delayed: 0, active: 1, waiting: 2, hold: 3, done: 4 };
+      var sa = so[autoProjectStatus(a)]; if (sa == null) sa = 9;
+      var sb = so[autoProjectStatus(b)]; if (sb == null) sb = 9;
+      return (sa - sb) || an.localeCompare(bn, 'ko');
+    }
+    default: return 0; // 기본 = 서버 순서(등록 최신순) 유지
+  }
+}
+// 반환: [{ key, label, color, bg, items[] }]. 그룹 모드 아니면 단일 그룹(label 빈값).
+function _tlGroupProjects(list) {
+  var arr = (list || []).slice();
+  if (tlGroupBy !== 'status') { arr.sort(_tlProjCmp); return [{ key: '', label: '', items: arr }]; }
+  var groups = {};
+  arr.forEach(function (p) { var k = autoProjectStatus(p); (groups[k] = groups[k] || []).push(p); });
+  var keys = TL_STATUS_GROUP_ORDER.filter(function (k) { return groups[k]; })
+    .concat(Object.keys(groups).filter(function (k) { return TL_STATUS_GROUP_ORDER.indexOf(k) < 0; }));
+  return keys.map(function (k) {
+    var info = (typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[k]) || (typeof PROJ_STATUS !== 'undefined' ? PROJ_STATUS.waiting : { icon: '', label: k, color: 'var(--t3)', bg: 'var(--bg-i)' });
+    return { key: k, label: info.icon + ' ' + info.label, color: info.color, bg: info.bg, items: groups[k].sort(_tlProjCmp) };
+  });
+}
+
 /* ═══ 프로젝트 리스트 패널 ═══ */
 function renderTlProjectList(allProjects) {
   var el = document.getElementById('tlProjList');
@@ -681,27 +712,29 @@ function renderTlProjectList(allProjects) {
     return;
   }
 
-  // 상태별 정렬: 지연 > 진행중 > 대기 > 보류 > 완료
-  var statusOrder = { delayed: 0, active: 1, waiting: 2, hold: 3, done: 4 };
-  var sorted = allProjects.slice().sort(function (a, b) {
-    var sa = statusOrder[autoProjectStatus(a)] || 9;
-    var sb = statusOrder[autoProjectStatus(b)] || 9;
-    return sa - sb;
-  });
-
-  var html = '';
-  sorted.forEach(function (p) {
+  // v13.151 타임라인과 동일한 정렬/그룹(_tlGroupProjects) 적용 → 좌측 목록·타임라인 순서 일치
+  var groups = _tlGroupProjects(allProjects);
+  var grouped = (tlGroupBy === 'status');
+  function itemHtml(p) {
     var st = autoProjectStatus(p);
     var stInfo = PROJ_STATUS[st] || PROJ_STATUS.waiting;
     var isDone = st === 'done';
     var _pr = Number(p.progress) || 0;
     var _prc = _pr >= 100 ? '#10B981' : _pr >= 50 ? 'var(--ac)' : _pr > 0 ? '#F59E0B' : 'var(--t6)';
-    html += '<div class="tl-list-item' + (isDone ? ' tl-list-done' : '') + '" onclick="tlScrollToProject(\'' + p.id + '\')" title="' + eH(p.startDate + ' ~ ' + p.endDate) + ' · 진행률 ' + _pr + '%">' +
+    return '<div class="tl-list-item' + (isDone ? ' tl-list-done' : '') + (grouped ? ' tl-list-grouped' : '') + '" onclick="tlScrollToProject(\'' + p.id + '\')" title="' + eH((p.startDate || '') + ' ~ ' + (p.endDate || '')) + ' · 진행률 ' + _pr + '%">' +
       '<span class="tl-list-dot" style="background:' + p.color + '"></span>' +
       '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(p.name || p.orderNo) + '</span>' +
       '<span style="font-size:9px;font-weight:700;color:' + _prc + ';flex-shrink:0;min-width:26px;text-align:right">' + _pr + '%</span>' +
-      '<span class="badge" style="background:' + stInfo.bg + ';color:' + stInfo.color + ';font-size:8px;padding:1px 5px;flex-shrink:0">' + stInfo.label + '</span>' +
+      (grouped ? '' : '<span class="badge" style="background:' + stInfo.bg + ';color:' + stInfo.color + ';font-size:8px;padding:1px 5px;flex-shrink:0">' + stInfo.label + '</span>') +
     '</div>';
+  }
+  var html = '';
+  groups.forEach(function (g) {
+    if (grouped && g.label) {
+      html += '<div class="tl-list-group" style="border-left:3px solid ' + (g.color || 'var(--ac)') + ';color:' + (g.color || 'var(--t3)') + '">' +
+        '<span>' + g.label + '</span><span class="tl-list-group-n">' + g.items.length + '</span></div>';
+    }
+    g.items.forEach(function (p) { html += itemHtml(p); });
   });
 
   el.innerHTML = html;
