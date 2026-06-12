@@ -902,7 +902,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.160</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.161</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3461,6 +3461,11 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.161',date:'2026-06-12',title:'⚡ 타임라인 버튼 갱신 속도 개선(썸네일 디코드 비차단)',tag:'perf',items:[
+      '타임라인 토글/정렬 버튼을 누를 때마다 느리던 원인 — 매 재렌더 시 라벨 썸네일(특히 큰 크기) 이미지를 모두 즉시 디코드하며 화면이 끊김. 썸네일 이미지를 비차단(decoding=async)·지연(loading=lazy) 디코드로 전환 → 화면 밖 썸네일은 디코드 보류, 클릭 반응 즉시',
+      '"🔳 컴팩트"는 데이터 변화가 없어 전체 재렌더 대신 컨테이너 클래스만 전환(즉시 적용)',
+      '영향: timeline.js. 클라이언트 전용 — 배포 후 새로고침. (썸네일이 느린 환경은 크기를 "작게"로 낮추면 추가 개선)'
+    ]},
     {ver:'13.160',date:'2026-06-12',title:'📋 프로젝트 사양 정리 표(설계·제어전장·SW·공정) + 협업',tag:'feat',items:[
       '프로젝트 상세 패널에 "사양" 탭 추가 — 설계/제어·전장/소프트웨어/공정 4개 분류 × 항목·내용·비고 표. 분류별 [📋 템플릿]으로 표준 사양 항목(축별 정밀도·전기 사양·기능/준수사항 등) 빠르게 채움',
       '편집 권한: 프로젝트 생성자와 관리자만 작성·수정 가능(참여자 포함 그 외는 읽기 전용, 서버에서 강제). "최종 수정: 이름·시각" 표기',

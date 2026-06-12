@@ -121,6 +121,13 @@ function tlSetDensity(isCompact) {
   tlDensity = isCompact ? 'compact' : 'comfortable';
   localStorage.setItem('tlDensity', tlDensity);
 }
+// v13.161 컴팩트는 데이터 변화 없음 → 전체 재렌더 대신 컨테이너 클래스만 토글(즉시)
+function tlToggleDensityFast(isCompact) {
+  tlSetDensity(isCompact);
+  var c = document.querySelector('.tl-container');
+  if (c) c.classList.toggle('tl-compact', isCompact);
+  else renderTimeline();
+}
 // 상태/담당자/정렬 setter
 function tlSetFilterStatus(status) {
   tlFilterStatus = status;
@@ -325,7 +332,7 @@ async function renderTimeline() {
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlHideDoneTog" onchange="tlHideDone=this.checked;renderTimeline()"' + (tlHideDone ? ' checked' : '') + '> 완료 숨기기</label>' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (showCriticalPath ? '#EF4444' : 'var(--t5)') + ';cursor:pointer;background:' + (showCriticalPath ? 'rgba(239,68,68,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (showCriticalPath ? 'rgba(239,68,68,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlCriticalPathTog" onchange="showCriticalPath=this.checked;renderTimeline()"' + (showCriticalPath ? ' checked' : '') + '> 🔴 크리티컬 패스</label>' +
     // v13.133 컴팩트 밀도 토글
-    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlDensityTog" onchange="tlSetDensity(this.checked);renderTimeline()"' + (tlDensity === 'compact' ? ' checked' : '') + '> 🔳 컴팩트</label>' +
+    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlDensityTog" onchange="tlToggleDensityFast(this.checked)"' + (tlDensity === 'compact' ? ' checked' : '') + '> 🔳 컴팩트</label>' +
     // v13.156 라벨 대표 이미지 썸네일 상시 표시 토글
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlShowThumb ? '#22D3EE' : 'var(--t5)') + ';cursor:pointer;background:' + (tlShowThumb ? 'rgba(34,211,238,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlShowThumb ? 'rgba(34,211,238,.4)' : 'var(--bd-i)') + '" title="프로젝트 라벨에 대표 이미지 썸네일 상시 표시"><input type="checkbox" id="tlThumbTog" onchange="tlShowThumb=this.checked;if(typeof lsSet===\'function\')lsSet(\'tlShowThumb\',this.checked?\'1\':\'0\');renderTimeline()"' + (tlShowThumb ? ' checked' : '') + '> 🖼 썸네일</label>' +
     (tlShowThumb ? '<select class="si" id="tlThumbSizeSel" onchange="tlThumbSize=parseInt(this.value,10)||108;if(typeof lsSet===\'function\')lsSet(\'tlThumbSize\',String(tlThumbSize));renderTimeline()" style="max-width:96px;padding:3px 5px;font-size:10px" title="썸네일 크기">' +
@@ -833,7 +840,7 @@ function _tlMemoImgs(memo) {
 var _tlThumbCache = {}; // pid → 첫 이미지 src 또는 false(없음)
 function _tlLabelThumb(p) {
   var memo = (window._tlOv && window._tlOv[p.id] && window._tlOv[p.id].memoImgs) || _tlMemoImgs(p.memo);
-  var inner = (memo && memo.length) ? ('<img src="' + memo[0] + '" alt="" style="width:100%;height:100%;object-fit:cover">') : '';
+  var inner = (memo && memo.length) ? ('<img src="' + memo[0] + '" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">') : '';
   return '<div class="tl-thumb" data-proj-thumb="' + p.id + '" onclick="event.stopPropagation();tlThumbClick(\'' + p.id + '\')" title="대표 이미지 — 클릭하여 크게 보기">' + inner + '</div>';
 }
 function tlThumbClick(pid) {
@@ -855,10 +862,10 @@ function tlFillThumbs() {
     if (box.querySelector('img')) continue;                 // 메모 이미지 이미 표시됨
     var pid = box.getAttribute('data-proj-thumb');
     if (_tlThumbCache[pid] === false) continue;             // 이미지 없음 확인됨
-    if (_tlThumbCache[pid]) { box.innerHTML = '<img src="' + _tlThumbCache[pid] + '" alt="" style="width:100%;height:100%;object-fit:cover">'; continue; }
+    if (_tlThumbCache[pid]) { box.innerHTML = '<img src="' + _tlThumbCache[pid] + '" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">'; continue; }
     (function (box2, pid2) {
       projImagesGet(pid2).then(function (list) {
-        if (list && list.length) { _tlThumbCache[pid2] = list[0].src; box2.innerHTML = '<img src="' + list[0].src + '" alt="" style="width:100%;height:100%;object-fit:cover">'; }
+        if (list && list.length) { _tlThumbCache[pid2] = list[0].src; box2.innerHTML = '<img src="' + list[0].src + '" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">'; }
         else { _tlThumbCache[pid2] = false; }
       }).catch(function () {});
     })(box, pid);
