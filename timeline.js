@@ -79,7 +79,9 @@ var tlSort = (typeof lsGet === 'function') ? lsGet('tlSort', 'default') : 'defau
 var tlGroupBy = (typeof lsGet === 'function') ? lsGet('tlGroupBy', 'none') : 'none'; // none|status
 // v13.156 프로젝트 라벨에 대표 이미지 썸네일 상시 표시(기본 on)
 var tlShowThumb = (typeof lsGet === 'function') ? (lsGet('tlShowThumb', '1') !== '0') : true;
-var TL_THUMB_W = 116; // v13.157 썸네일 컬럼 폭(이미지108 + gap)
+// v13.158 썸네일 크기 선택(px) — 56|84|108|140
+var tlThumbSize = (typeof lsGet === 'function') ? (parseInt(lsGet('tlThumbSize', '108'), 10) || 108) : 108;
+function _tlThumbColW() { return tlShowThumb ? (tlThumbSize + 8) : 0; } // 라벨 예약폭 = 썸네일 + gap
 var tlCollapsed = new Set(); // 접힌 프로젝트 ID 모음
 var tlDayOffset = (localStorage.getItem('tlDayOffset') === 'true'); // D-Day 배지 표시 토글
 var _tlMsWorkH = null, _tlMsWorkHSrc = null; // v13.137 마일스톤 투입시간 집계 메모(archive 캐시 참조 기준)
@@ -326,6 +328,9 @@ async function renderTimeline() {
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlDensityTog" onchange="tlSetDensity(this.checked);renderTimeline()"' + (tlDensity === 'compact' ? ' checked' : '') + '> 🔳 컴팩트</label>' +
     // v13.156 라벨 대표 이미지 썸네일 상시 표시 토글
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlShowThumb ? '#22D3EE' : 'var(--t5)') + ';cursor:pointer;background:' + (tlShowThumb ? 'rgba(34,211,238,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlShowThumb ? 'rgba(34,211,238,.4)' : 'var(--bd-i)') + '" title="프로젝트 라벨에 대표 이미지 썸네일 상시 표시"><input type="checkbox" id="tlThumbTog" onchange="tlShowThumb=this.checked;if(typeof lsSet===\'function\')lsSet(\'tlShowThumb\',this.checked?\'1\':\'0\');renderTimeline()"' + (tlShowThumb ? ' checked' : '') + '> 🖼 썸네일</label>' +
+    (tlShowThumb ? '<select class="si" id="tlThumbSizeSel" onchange="tlThumbSize=parseInt(this.value,10)||108;if(typeof lsSet===\'function\')lsSet(\'tlThumbSize\',String(tlThumbSize));renderTimeline()" style="max-width:96px;padding:3px 5px;font-size:10px" title="썸네일 크기">' +
+      [['56','작게'],['84','보통'],['108','크게'],['140','아주크게']].map(function(o){ return '<option value="' + o[0] + '"' + (tlThumbSize === parseInt(o[0],10) ? ' selected' : '') + '>🖼 ' + o[1] + '</option>'; }).join('') +
+    '</select>' : '') +
     // v13.133 D-Day 표시 토글
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlDayOffset ? '#10B981' : 'var(--t5)') + ';cursor:pointer;background:' + (tlDayOffset ? 'rgba(16,185,129,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlDayOffset ? 'rgba(16,185,129,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlDayOffsetTog" onchange="tlToggleDayOffset(this.checked)"' + (tlDayOffset ? ' checked' : '') + '> 📏 D-Day 표시</label>' +
     // v13.133 마일스톤 모두접기/펼치기
@@ -631,7 +636,7 @@ async function renderTimeline() {
   var _tlPrevScroll = _tlPrevScrollEl ? { left: _tlPrevScrollEl.scrollLeft, top: _tlPrevScrollEl.scrollTop } : null;
 
   content.innerHTML =
-    '<div class="tl-container' + (tlDensity === 'compact' ? ' tl-compact' : '') + '" style="position:relative;' + _tlBarsVars + '">' +
+    '<div class="tl-container' + (tlDensity === 'compact' ? ' tl-compact' : '') + '" style="position:relative;--tl-thumb-sz:' + tlThumbSize + 'px;' + _tlBarsVars + '">' +
       '<div class="tl-scroll" id="tlScroll">' +
         '<div class="tl-header-row">' +
           '<div class="tl-label-header" style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px">프로젝트</div>' +
@@ -1008,7 +1013,7 @@ function calcLabelWidth(projects, milestones, msWorkH) {
 
   // 최소 160px, 최대 400px (+ 썸네일 컬럼)
   var base = Math.max(160, Math.min(Math.ceil(maxW), 400));
-  if (tlShowThumb) base += TL_THUMB_W;
+  base += _tlThumbColW();
   return base;
 }
 
