@@ -1,5 +1,53 @@
 # Work Manager — 변경 이력
 
+## v13.168 (2026-06-24) — 텔레그램 메시지 서식 정리 (AI 마크다운 "태그" 제거)
+
+### 배경
+텔레그램 AI 자연어 답변이 마크다운(`## 제목`, `**굵게**`, ```` ``` ```` 코드블록)을 그대로 `parse_mode=HTML`로 보내, `#` 등이 "태그"처럼 글자에 붙고 읽기 어려웠음.
+
+### 변경
+- `ai.service.js`: `formatForTelegram()` 추가 — 제목(#) 제거→굵게, `**`→`<b>`, `` `코드` ``→`<code>`, 코드펜스→`<pre>`, 글머리표→•, 인용(>)·수평선(---) 제거, `<>&` escape. `answerQuestion` 반환 전 적용.
+- AI 시스템 프롬프트에 "마크다운 제목·표·코드블록 금지, 깔끔하게" 서식 규칙 추가.
+- `notification.service.js`: `noteToTgHtml()` 추가 — 마일스톤 진척 알림의 작업 노트를 웹과 동일 규칙으로 렌더(체크박스 ☐/☑, **굵게**, ~~취소선~~→`<s>`, [중요]→【중요】).
+
+### 영향
+- `server/services/ai.service.js`, `server/services/notification.service.js`. **서버 변경** — 배포 후 적용.
+
+## v13.167 (2026-06-24) — 작업 노트 경량 서식 (굵게·체크박스 토글·중요도 배지)
+
+### 배경
+작업 노트가 평문이라 중요도·할일 진행을 한눈에 보기 어려웠음. 아이콘·체크박스·강조 요청.
+
+### 변경 (저장은 plain text 유지, 표시만 변환 — XSS 안전)
+- `project-detail.js` `wmRichNote(text, ic)`: `eH()` escape 후 화이트리스트 토큰만 치환.
+  - `**굵게**` `~~취소선~~` `==형광==` `` `코드` `` · `[중요][긴급][주의][완료][진행]` 컬러 배지 · `- ` 글머리표(•).
+  - 체크박스 `- [ ]`/`- [x]` → ☐/☑. 활성 로그면 **클릭 토글+저장**(서버 카운트와 동일 순서), 휴지통은 표시 전용.
+- 진척률 모달 입력칸 위 **서식 툴바**(B/취소선/형광/코드/체크/목록/중요/긴급) + 이모지 빠른삽입(`_pdNoteFmt`/`_pdNoteEmoji`).
+- 최신 노트·이력(목록 `pdMsLogToggle`·모달 `_pdRenderProgHist`)·휴지통 모든 표시에 동일 렌더 적용.
+- **서버**: `POST /api/milestones/:id/logs/:logId/toggle-check` — 노트의 N번째 체크박스 토글 저장 + 재동기화(프로젝트 멤버 권한). `project-data.js` `msLogToggleCheck` 추가.
+- 이미지 첨부는 다음 단계로 보류.
+
+### 영향
+- `project-detail.js`, `project-data.js`, `server/routes/milestones.js`, `style.css`, `업무일지_분석기.html`. 서버 변경 포함 — 배포 후 체크박스 토글 동작.
+
+## v13.166 (2026-06-24) — 투입실적 이력 2단계 삭제 (휴지통 + 관리자 복구)
+
+### 배경
+투입실적(마일스톤 진척률·작업노트) 이력 삭제가 즉시 영구 삭제(hard delete)라, 실수로 지우면 복구가 불가능했음. "삭제하더라도 관리자가 복구할 수 있게 영구 보관" 요구.
+
+### 변경 (A/S 접수 소프트 삭제 패턴 026 mirror)
+- **DB**: `042_milestone_logs_soft_delete.sql` — `milestone_progress_logs`에 `deleted_at`, `deleted_by` 컬럼 + 활성/휴지통 부분 인덱스.
+- **서버** (`routes/milestones.js`):
+  - `DELETE /:id/logs/:logId`, `DELETE /:id/logs` → hard → **soft delete**(`deleted_at` 표시, 휴지통 이동). 권한은 기존(멤버) 유지.
+  - `GET /:id/logs`, `_resyncMilestoneProgress` → `deleted_at IS NULL` 필터 (화면·집계에서 삭제분 제외).
+  - 신규(관리자 전용): `GET /:id/logs/trash`(목록), `POST /:id/logs/:logId/restore`(복구), `DELETE /:id/logs/:logId/hard`(완전삭제), `DELETE /:id/logs/trash/empty`(휴지통 비우기).
+  - 복구·완전삭제 권한: `admin`/`executive`만. 보관: **영구**(자동삭제 없음).
+- **클라이언트**: `project-data.js`에 `msLogsTrashGet`/`msLogRestore`/`msLogHardDel`/`msLogTrashEmpty`. `project-detail.js` 이력 보기 2곳(모달·🕘 토글)에 관리자용 "🗑 휴지통" 토글 + ↩ 복구 / ❌ 완전삭제 / 휴지통 비우기.
+
+### 영향
+- `server/migrations/042_milestone_logs_soft_delete.sql`(신규), `server/routes/milestones.js`, `project-data.js`, `project-detail.js`, `업무일지_분석기.html`(버전·패치노트).
+- **서버 변경 포함** — git push → Render 배포 시 마이그레이션 자동 적용 후 동작. (신규 npm 의존성 없음)
+
 ## v13.165 (2026-06-24) — 진척률 모달 담당자별 실작업/할당 시간(%) + 라벨 정리
 
 ### 배경

@@ -363,3 +363,7 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .notif-msg{font-size:12px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .notif-date{font-size:10px;color:var(--t5);margin-top:2px}
 .notif-empty{padding:18px 12px;font-size:12px;color:var(--t5);text-align:center}
+
+/* 작업 노트 클릭 체크박스 (wmRichNote) */
+.wm-chk{transition:opacity .12s}
+.wm-chk:hover{opacity:.6}

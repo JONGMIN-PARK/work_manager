@@ -110,6 +110,12 @@ async function _canEditProject(req, projectId) {
   return mr.rows.length > 0;
 }
 
+// 휴지통 복구·완전삭제는 관리자(admin/executive) 전용
+function _isAdminRole(req) {
+  var r = req.user && req.user.role;
+  return r === 'admin' || r === 'executive';
+}
+
 // 프로젝트 진척률 롤업 — 마일스톤 보고 진척률을 목표시간(assignee_targets) 가중평균.
 // 보고 이력이 하나도 없으면 손대지 않음(시간기반 자동 진척률 폴백 유지).
 async function _rollupProjectProgress(projectId, tenantId) {
@@ -138,7 +144,7 @@ router.get('/:id/logs', async function (req, res) {
   try {
     var r = await db.query(
       'SELECT id, milestone_id, project_id, author_id, author_name, progress, note, hours, created_at ' +
-      'FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 ORDER BY created_at DESC LIMIT 100',
+      'FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100',
       [req.params.id, req.tenant.id]
     );
     res.json({ data: r.rows });
@@ -211,12 +217,12 @@ router.post('/:id/logs', async function (req, res) {
 // 마일스톤 denormalize 재동기화 — 최신 진척률(로그) + 보고 투입시간 합(reported_hours). 로그 없으면 초기화.
 async function _resyncMilestoneProgress(mid, tenantId) {
   var agg = await db.query(
-    'SELECT COALESCE(SUM(hours),0) AS sum_h FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2',
+    'SELECT COALESCE(SUM(hours),0) AS sum_h FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 AND deleted_at IS NULL',
     [mid, tenantId]
   );
   var sumH = Number(agg.rows[0].sum_h) || 0;
   var lr = await db.query(
-    'SELECT progress, note, author_name, created_at FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 ORDER BY created_at DESC LIMIT 1',
+    'SELECT progress, note, author_name, created_at FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1',
     [mid, tenantId]
   );
   if (lr.rows.length) {
@@ -241,14 +247,16 @@ router.delete('/:id/logs/:logId', async function (req, res) {
     var ms = msr.rows[0];
     var can = await _canEditProject(req, ms.project_id);
     if (!can) return res.status(403).json({ error: 'FORBIDDEN', message: '프로젝트 멤버만 삭제할 수 있습니다.' });
+    // soft delete: 휴지통으로 이동(deleted_at 표시). 영구 보관 — 관리자가 복구/완전삭제 가능.
     var dr = await db.query(
-      'DELETE FROM milestone_progress_logs WHERE id = $1 AND milestone_id = $2 AND tenant_id = $3 RETURNING id',
-      [req.params.logId, ms.id, req.tenant.id]
+      'UPDATE milestone_progress_logs SET deleted_at = NOW(), deleted_by = $4 ' +
+      'WHERE id = $1 AND milestone_id = $2 AND tenant_id = $3 AND deleted_at IS NULL RETURNING id',
+      [req.params.logId, ms.id, req.tenant.id, req.user.sub]
     );
-    if (!dr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '이력을 찾을 수 없습니다.' });
+    if (!dr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '이력이 없거나 이미 휴지통에 있습니다.' });
     await _resyncMilestoneProgress(ms.id, req.tenant.id);
     await _rollupProjectProgress(ms.project_id, req.tenant.id);
-    res.json({ message: '삭제 완료' });
+    res.json({ message: '휴지통으로 이동되었습니다.', mode: 'soft' });
   } catch (e) {
     console.error('[milestones/log-del]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -263,12 +271,129 @@ router.delete('/:id/logs', async function (req, res) {
     var ms = msr.rows[0];
     var can = await _canEditProject(req, ms.project_id);
     if (!can) return res.status(403).json({ error: 'FORBIDDEN', message: '프로젝트 멤버만 삭제할 수 있습니다.' });
-    var dr = await db.query('DELETE FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 RETURNING id', [ms.id, req.tenant.id]);
+    // soft delete: 활성 이력 일괄 휴지통 이동 (영구 보관)
+    var dr = await db.query(
+      'UPDATE milestone_progress_logs SET deleted_at = NOW(), deleted_by = $3 ' +
+      'WHERE milestone_id = $1 AND tenant_id = $2 AND deleted_at IS NULL RETURNING id',
+      [ms.id, req.tenant.id, req.user.sub]
+    );
     await _resyncMilestoneProgress(ms.id, req.tenant.id);
     await _rollupProjectProgress(ms.project_id, req.tenant.id);
-    res.json({ message: '전체 삭제 완료', deleted: dr.rows.length });
+    res.json({ message: '전체 휴지통으로 이동되었습니다.', mode: 'soft', deleted: dr.rows.length });
   } catch (e) {
     console.error('[milestones/logs-clear]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// GET /api/milestones/:id/logs/trash — 휴지통(삭제된 투입실적 이력) 목록. 관리자 전용.
+router.get('/:id/logs/trash', async function (req, res) {
+  try {
+    if (!_isAdminRole(req)) return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 휴지통을 볼 수 있습니다.' });
+    var r = await db.query(
+      'SELECT l.id, l.milestone_id, l.project_id, l.author_id, l.author_name, l.progress, l.note, l.hours, l.created_at, l.deleted_at, l.deleted_by, u.name AS deleted_by_name ' +
+      'FROM milestone_progress_logs l LEFT JOIN users u ON u.id = l.deleted_by ' +
+      'WHERE l.milestone_id = $1 AND l.tenant_id = $2 AND l.deleted_at IS NOT NULL ORDER BY l.deleted_at DESC LIMIT 200',
+      [req.params.id, req.tenant.id]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[milestones/logs-trash]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST /api/milestones/:id/logs/:logId/restore — 휴지통에서 복구. 관리자 전용.
+router.post('/:id/logs/:logId/restore', async function (req, res) {
+  try {
+    if (!_isAdminRole(req)) return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 복구할 수 있습니다.' });
+    var msr = await db.query('SELECT id, project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' });
+    var ms = msr.rows[0];
+    var dr = await db.query(
+      'UPDATE milestone_progress_logs SET deleted_at = NULL, deleted_by = NULL ' +
+      'WHERE id = $1 AND milestone_id = $2 AND tenant_id = $3 AND deleted_at IS NOT NULL RETURNING id',
+      [req.params.logId, ms.id, req.tenant.id]
+    );
+    if (!dr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '대상이 없거나 휴지통에 없습니다.' });
+    await _resyncMilestoneProgress(ms.id, req.tenant.id);
+    await _rollupProjectProgress(ms.project_id, req.tenant.id);
+    res.json({ message: '복구되었습니다.', mode: 'restore' });
+    try { authService.auditLog(req.user.sub, 'milestone.log.restore', 'milestone', ms.id, { logId: req.params.logId }, req).catch(function () {}); } catch (_) {}
+  } catch (e) {
+    console.error('[milestones/log-restore]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// DELETE /api/milestones/:id/logs/:logId/hard — 완전 삭제(복구 불가). 관리자 전용. 휴지통에 있는 것만.
+router.delete('/:id/logs/:logId/hard', async function (req, res) {
+  try {
+    if (!_isAdminRole(req)) return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 완전 삭제할 수 있습니다.' });
+    var msr = await db.query('SELECT id, project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' });
+    var ms = msr.rows[0];
+    var dr = await db.query(
+      'DELETE FROM milestone_progress_logs WHERE id = $1 AND milestone_id = $2 AND tenant_id = $3 AND deleted_at IS NOT NULL RETURNING id',
+      [req.params.logId, ms.id, req.tenant.id]
+    );
+    if (!dr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '대상이 없거나 휴지통에 없습니다. (완전삭제는 휴지통 항목만 가능)' });
+    res.json({ message: '완전 삭제 완료', mode: 'hard' });
+    try { authService.auditLog(req.user.sub, 'milestone.log.purge', 'milestone', ms.id, { logId: req.params.logId }, req).catch(function () {}); } catch (_) {}
+  } catch (e) {
+    console.error('[milestones/log-hard-del]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// DELETE /api/milestones/:id/logs/trash/empty — 휴지통 비우기(일괄 완전삭제). 관리자 전용.
+router.delete('/:id/logs/trash/empty', async function (req, res) {
+  try {
+    if (!_isAdminRole(req)) return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 휴지통을 비울 수 있습니다.' });
+    var msr = await db.query('SELECT id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' });
+    var dr = await db.query(
+      'DELETE FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL RETURNING id',
+      [req.params.id, req.tenant.id]
+    );
+    res.json({ message: '휴지통을 비웠습니다.', mode: 'hard', deleted: dr.rows.length });
+    try { authService.auditLog(req.user.sub, 'milestone.log.trash-empty', 'milestone', req.params.id, { deleted: dr.rows.length }, req).catch(function () {}); } catch (_) {}
+  } catch (e) {
+    console.error('[milestones/log-trash-empty]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST /api/milestones/:id/logs/:logId/toggle-check — 작업노트 N번째 체크박스 토글(저장).
+//  body: { index } (0-based, source order). 프로젝트 멤버 가능. 최신 로그면 progress_note 동기화.
+router.post('/:id/logs/:logId/toggle-check', async function (req, res) {
+  try {
+    var idx = parseInt((req.body || {}).index, 10);
+    if (isNaN(idx) || idx < 0) return res.status(400).json({ error: 'BAD_REQUEST', message: 'index 필수' });
+    var msr = await db.query('SELECT id, project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' });
+    var ms = msr.rows[0];
+    var can = await _canEditProject(req, ms.project_id);
+    if (!can) return res.status(403).json({ error: 'FORBIDDEN', message: '프로젝트 멤버만 가능합니다.' });
+    var lr = await db.query(
+      'SELECT note FROM milestone_progress_logs WHERE id = $1 AND milestone_id = $2 AND tenant_id = $3 AND deleted_at IS NULL',
+      [req.params.logId, ms.id, req.tenant.id]
+    );
+    if (!lr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '이력을 찾을 수 없습니다.' });
+    var note = lr.rows[0].note || '';
+    // 클라이언트와 동일한 순서로 줄 시작 체크박스(- [ ] / - [x])를 세어 idx번째를 토글
+    var n = -1, toggled = false;
+    var newNote = note.replace(/(^|\n)(\s*[-*]\s)\[( |x|X)\]/g, function (full, pre, bullet, mark) {
+      n++;
+      if (n === idx) { toggled = true; return pre + bullet + '[' + (mark.toLowerCase() === 'x' ? ' ' : 'x') + ']'; }
+      return full;
+    });
+    if (!toggled) return res.status(400).json({ error: 'BAD_REQUEST', message: '체크박스를 찾을 수 없습니다.' });
+    await db.query('UPDATE milestone_progress_logs SET note = $1 WHERE id = $2 AND tenant_id = $3', [newNote, req.params.logId, req.tenant.id]);
+    await _resyncMilestoneProgress(ms.id, req.tenant.id);   // 최신 로그면 progress_note 갱신
+    res.json({ data: { id: req.params.logId, note: newNote } });
+  } catch (e) {
+    console.error('[milestones/log-toggle-check]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
   }
 });

@@ -902,7 +902,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.165</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.168</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3461,6 +3461,27 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.168',date:'2026-06-24',title:'📨 텔레그램 메시지 서식 정리 — AI 응답 마크다운(#·**·```) → 깔끔한 HTML, "태그" 제거',tag:'fix',items:[
+      '텔레그램 AI 자연어 답변이 마크다운(제목 #, **굵게**, 코드블록)을 그대로 보내 글자에 # 같은 "태그"가 붙고 읽기 어렵던 문제 수정',
+      'AI 응답을 텔레그램 HTML로 정리: 제목(#) 제거→굵게, **굵게**→<b>, `코드`→<code>, 글머리표→•, 인용(>)·수평선(---) 제거, 특수문자 escape',
+      'AI 프롬프트도 "마크다운 제목·표·코드블록 금지, 깔끔하게" 지시 추가',
+      '마일스톤 진척 보고 알림의 작업 노트도 서식 반영(체크박스 ☐/☑, 굵게, 배지 【중요】 등)',
+      '영향: server/services/ai.service.js, notification.service.js. 서버 변경 — 배포 후 적용'
+    ]},
+    {ver:'13.167',date:'2026-06-24',title:'📝 작업 노트 서식 — 굵게·취소선·형광·체크박스(클릭 토글)·중요도 배지·이모지',tag:'feat',items:[
+      '작업 노트에 경량 서식 지원(저장은 텍스트 그대로, 표시만 변환 — 안전): **굵게** ~~취소선~~ ==형광== `코드` [중요][긴급] 배지',
+      '체크박스: "- [ ] 할일" 입력 → ☐/☑ 표시. 저장 후 클릭하면 토글되어 저장됨(진척 추적). 휴지통 항목은 표시 전용',
+      '진척률 모달 작업 노트 입력칸 위에 서식 툴바(B/취소선/형광/코드/체크/목록/중요/긴급) + 이모지 빠른삽입',
+      '최신 노트·이력(목록/모달)·휴지통 모든 표시에 동일 렌더 적용. 이미지 첨부는 다음 단계',
+      '서버: 체크박스 토글 저장 엔드포인트(POST /logs/:logId/toggle-check). 영향: project-detail.js, project-data.js, server/routes/milestones.js, style.css'
+    ]},
+    {ver:'13.166',date:'2026-06-24',title:'🗑 투입실적 이력 2단계 삭제 — 휴지통(영구 보관) + 관리자 복구/완전삭제',tag:'feat',items:[
+      '투입실적(진척률·작업노트) 이력 삭제가 즉시 영구 삭제 → 휴지통(소프트 삭제)으로 변경. 화면에선 사라지지만 DB에 deleted_at만 표시되어 영구 보관됨',
+      '관리자(admin/executive)만: 이력 보기의 "🗑 휴지통"에서 삭제분을 ↩ 복구하거나 ❌ 완전삭제(복구 불가), 휴지통 비우기 가능',
+      '복구 시 진척률·누적 투입시간 재집계에 자동 반영. 삭제분은 집계에서 제외',
+      '서버: milestone_progress_logs.deleted_at/deleted_by 컬럼(042 migration), DELETE는 soft, /logs/trash·/restore·/hard·/trash/empty 엔드포인트 추가',
+      '영향: server/migrations/042, server/routes/milestones.js, project-data.js, project-detail.js, 업무일지_분석기.html. 서버 변경 포함 — git push → Render 배포(자동 마이그레이션) 후 적용'
+    ]},
     {ver:'13.165',date:'2026-06-24',title:'👥 진척률 모달 — 담당자별 실작업/할당 시간(달성률%) 표 + 투입시간 라벨 정리',tag:'feat',items:[
       '진척률·작업 노트 모달의 시간 정보를 합계 한 줄에서 담당자별 표로 확장 — 각 담당자의 "실작업 / 할당 (달성률%)"과 맨 아래 합계 표시. 할당 초과 시 빨간색',
       '할당시간 = 마일스톤 목표시간(assigneeTargets[이름]), 실작업시간 = 작업노트 로그(hours)를 작성자별로 합산',

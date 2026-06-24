@@ -7,6 +7,26 @@ var telegramService = require('./telegram.service');
 var emailService = require('./email.service');
 var escHtml = require('../telegram/util/escape').escHtml;
 
+/* 작업 노트 경량 서식(마크다운 일부) → 텔레그램 HTML. 웹 표시(wmRichNote)와 동일 규칙.
+   체크박스 ☐/☑, **굵게**, ~~취소선~~, ==형광==(텍스트), [중요]등 배지(텍스트), 글머리표 •. */
+function noteToTgHtml(note) {
+  if (note == null) return '';
+  var lines = escHtml(String(note)).split('\n');
+  var out = lines.map(function (ln) {
+    var cm = ln.match(/^(\s*)[-*]\s\[( |x|X)\]\s?(.*)$/);
+    if (cm) return (cm[2].toLowerCase() === 'x' ? '☑ ' : '☐ ') + cm[3];
+    var lm = ln.match(/^(\s*)[-*]\s+(.*)$/);
+    if (lm) return lm[1] + '• ' + lm[2];
+    return ln;
+  });
+  return out.join('\n')
+    .replace(/\*\*([^\n*]+)\*\*/g, '<b>$1</b>')
+    .replace(/~~([^\n~]+)~~/g, '<s>$1</s>')
+    .replace(/==([^\n=]+)==/g, '$1')
+    .replace(/`([^\n`]+)`/g, '<code>$1</code>')
+    .replace(/\[(중요|긴급|주의|완료|진행)\]/g, '【$1】');
+}
+
 /** 이벤트 메시지 템플릿
  *  사용자 발 필드는 모두 escHtml()로 감싸 텔레그램 HTML 파서가 깨지지 않도록 함.
  *  단, p.content 류(event_today / weekly_digest / as_weekly_digest)는 호출자가 이미
@@ -138,7 +158,7 @@ var TEMPLATES = {
       '진척률: ' + escHtml(p.progress) + '%' +
       (p.hours ? ' · 투입 ' + escHtml(p.hours) + 'h' : '') +
       (p.authorName ? '\n보고: ' + escHtml(p.authorName) : '') +
-      (p.note ? '\n📝 ' + escHtml(p.note) : '');
+      (p.note ? '\n📝 ' + noteToTgHtml(p.note) : '');
   }
 };
 

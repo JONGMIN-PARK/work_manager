@@ -467,8 +467,10 @@ function pdLoadWork(projId) {
       return pLogs.then(function (logSets) {
         var reportedByPerson = {};       // 프로젝트 전체 작성자별 합
         var reportedByMsPerson = {};     // 마일스톤별 작성자별 합
+        var latestLogByMs = {};          // 마일스톤별 최신 활성 로그 id (최신 노트 체크박스 토글용)
         logSets.forEach(function (ls) {
           reportedByMsPerson[ls.mid] = reportedByMsPerson[ls.mid] || {};
+          if (ls.logs && ls.logs.length) latestLogByMs[ls.mid] = ls.logs[0].id;   // msLogsGet은 최신순
           ls.logs.forEach(function (l) {
             var nm = l.authorName || '';
             var hh = Number(l.hours) || 0;
@@ -478,7 +480,7 @@ function pdLoadWork(projId) {
             }
           });
         });
-        return { proj: proj, milestones: milestones, msHours: msHours, memberNames: memberNames, reportedByPerson: reportedByPerson, reportedByMsPerson: reportedByMsPerson };
+        return { proj: proj, milestones: milestones, msHours: msHours, memberNames: memberNames, reportedByPerson: reportedByPerson, reportedByMsPerson: reportedByMsPerson, latestLogByMs: latestLogByMs };
       });
     });
   }).then(function (results) {
@@ -488,6 +490,7 @@ function pdLoadWork(projId) {
     var memberNames = results.memberNames || [];
     var reportedByPerson = results.reportedByPerson || {};
     var reportedByMsPerson = results.reportedByMsPerson || {};
+    var latestLogByMs = results.latestLogByMs || {};
     milestones.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
 
     var totalH = 0;
@@ -667,7 +670,7 @@ function pdLoadWork(projId) {
         if (badges) h += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:5px 0 0 18px">' + badges + '</div>';
         // 최신 작업 노트
         if (m.progressNote) {
-          h += '<div style="margin:5px 0 0 18px;font-size:10px;color:var(--t4);line-height:1.45;white-space:pre-wrap;word-break:break-word">📝 ' + eH(m.progressNote);
+          h += '<div style="margin:5px 0 0 18px;font-size:10px;color:var(--t4);line-height:1.45;white-space:pre-wrap;word-break:break-word">📝 ' + wmRichNote(m.progressNote, latestLogByMs[m.id] ? { mid: m.id, projId: projId, logId: latestLogByMs[m.id], ctx: 'work' } : null);
           if (m.progressUpdatedBy || m.progressUpdatedAt) {
             h += ' <span style="color:var(--t6)">— ' + eH(m.progressUpdatedBy || '') + (m.progressUpdatedAt && typeof _pdRelTime === 'function' ? ' · ' + _pdRelTime(m.progressUpdatedAt) : '') + '</span>';
           }
@@ -733,6 +736,98 @@ function _pdRelTime(iso) {
   } catch (e) { return ''; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   작업 노트 경량 서식 렌더 — 저장은 plain text, 표시만 변환.
+   안전: 먼저 eH()로 HTML escape → 화이트리스트 토큰만 치환(XSS 없음).
+   ic: null(정적) 또는 {mid,projId,logId,ctx} → 체크박스 클릭 토글 활성.
+   지원: **굵게**  ~~취소선~~  ==형광==  `코드`  [중요/긴급/주의/완료/진행] 배지
+        줄머리 "- [ ]"/"- [x]" 체크박스, "- " 글머리표(•)
+   ═══════════════════════════════════════════════════════════════════ */
+function wmRichNote(text, ic) {
+  var raw = String(text == null ? '' : text);
+  if (typeof eH !== 'function') return raw;
+  var lines = eH(raw).split('\n');
+  var ci = 0;   // 체크박스 인덱스 (source order — 서버 카운트와 일치)
+  var out = lines.map(function (ln) {
+    var cm = ln.match(/^(\s*)[-*]\s\[( |x|X)\]\s?(.*)$/);
+    if (cm) {
+      var checked = cm[2].toLowerCase() === 'x';
+      var idx = ci++;
+      var glyph = checked ? '☑' : '☐';
+      var box = (ic && ic.logId)
+        ? '<span class="wm-chk" title="클릭하여 체크 토글" onclick="pdNoteToggleCheck(\'' + ic.mid + '\',\'' + ic.logId + '\',' + idx + ',\'' + ic.projId + '\',\'' + ic.ctx + '\')" style="cursor:pointer;user-select:none;color:' + (checked ? '#10B981' : 'var(--t4)') + '">' + glyph + '</span>'
+        : '<span style="user-select:none;color:' + (checked ? '#10B981' : 'var(--t4)') + '">' + glyph + '</span>';
+      var cstyle = checked ? 'text-decoration:line-through;color:var(--t6)' : '';
+      return '<span style="display:inline-flex;gap:5px;align-items:baseline">' + box + '<span style="' + cstyle + '">' + cm[3] + '</span></span>';
+    }
+    var lm = ln.match(/^(\s*)[-*]\s+(.*)$/);
+    if (lm) return lm[1] + '<span style="color:var(--t5)">•</span> ' + lm[2];
+    return ln;
+  });
+  var html = out.join('\n');
+  html = html
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~([^~\n]+)~~/g, '<span style="text-decoration:line-through;color:var(--t6)">$1</span>')
+    .replace(/==([^=\n]+)==/g, '<mark style="background:#FDE68A;color:#111;padding:0 2px;border-radius:2px">$1</mark>')
+    .replace(/`([^`\n]+)`/g, '<code style="background:var(--bg-i);padding:0 3px;border-radius:3px;font-size:.92em">$1</code>')
+    .replace(/\[(중요|긴급|주의|완료|진행)\]/g, function (_m, w) {
+      var c = { '중요': '#EF4444', '긴급': '#DC2626', '주의': '#F59E0B', '완료': '#10B981', '진행': '#6366F1' }[w];
+      return '<span style="display:inline-block;font-size:.82em;font-weight:700;color:#fff;background:' + c + ';padding:0 6px;border-radius:9px;vertical-align:1px">' + w + '</span>';
+    });
+  return html;
+}
+
+/* 작업노트 체크박스 클릭 → 서버 토글 저장 후 해당 뷰 재렌더 */
+function pdNoteToggleCheck(mid, logId, idx, projId, ctx) {
+  if (typeof msLogToggleCheck !== 'function') return;
+  msLogToggleCheck(mid, logId, idx).then(function () {
+    if (ctx === 'modal') {
+      if (typeof _pdRenderProgHist === 'function') _pdRenderProgHist();
+      if (_pdProgCtx && typeof _pdProgCtx.refresh === 'function') _pdProgCtx.refresh();
+    } else {
+      if (typeof pdLoadWork === 'function') pdLoadWork(projId);
+    }
+  }).catch(function (err) {
+    var msg = (err && err.status === 403) ? '권한이 없습니다.'
+      : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.'
+      : ((err && err.message) || '토글 실패');
+    if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
+  });
+}
+
+/* 작업노트 입력칸 서식 툴바 — 커서 위치에 마크다운 삽입 */
+function _pdNoteFmt(kind) {
+  var ta = document.getElementById('pdProgNote');
+  if (!ta) return;
+  var s = ta.selectionStart, e = ta.selectionEnd, val = ta.value, sel = val.slice(s, e);
+  var atLineStart = (s === 0 || val[s - 1] === '\n');
+  var ins;
+  switch (kind) {
+    case 'bold': ins = '**' + (sel || '굵게') + '**'; break;
+    case 'strike': ins = '~~' + (sel || '취소선') + '~~'; break;
+    case 'mark': ins = '==' + (sel || '강조') + '=='; break;
+    case 'code': ins = '`' + (sel || '코드') + '`'; break;
+    case 'check': ins = (atLineStart ? '' : '\n') + '- [ ] ' + sel; break;
+    case 'list': ins = (atLineStart ? '' : '\n') + '- ' + sel; break;
+    case 'important': ins = '[중요] ' + sel; break;
+    case 'urgent': ins = '[긴급] ' + sel; break;
+    default: ins = sel;
+  }
+  ta.value = val.slice(0, s) + ins + val.slice(e);
+  var pos = s + ins.length;
+  ta.focus(); ta.setSelectionRange(pos, pos);
+}
+
+/* 작업노트 입력칸 이모지 빠른 삽입 */
+function _pdNoteEmoji(em) {
+  var ta = document.getElementById('pdProgNote');
+  if (!ta) return;
+  var s = ta.selectionStart, e = ta.selectionEnd, val = ta.value;
+  ta.value = val.slice(0, s) + em + val.slice(e);
+  var pos = s + em.length;
+  ta.focus(); ta.setSelectionRange(pos, pos);
+}
+
 /* 마일스톤 작업 노트 이력 토글 (canDelete: 멤버면 삭제 버튼 노출) */
 function pdMsLogToggle(mid, projId, canDelete) {
   var el = document.getElementById('pdMsLog-' + mid);
@@ -742,10 +837,18 @@ function pdMsLogToggle(mid, projId, canDelete) {
   el.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:4px 0">이력 로딩 중...</div>';
   if (typeof msLogsGet !== 'function') { el.innerHTML = '<div style="font-size:10px;color:var(--t6)">이력 기능을 사용할 수 없습니다.</div>'; return; }
   msLogsGet(mid).then(function (logs) {
-    if (!logs || !logs.length) { el.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:4px 0">기록된 작업 노트가 없습니다.</div>'; return; }
+    logs = logs || [];
+    // 관리자: 삭제된 이력 복구용 휴지통 토글
+    var trashHtml = _pdIsAdmin()
+      ? '<div style="margin-top:6px;border-top:1px dashed var(--bd);padding-top:6px">' +
+          '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 8px" onclick="pdMsTrashToggle(\'' + mid + '\',\'' + projId + '\')" title="삭제된 투입실적 이력 복구·완전삭제 (관리자)">🗑 휴지통</button>' +
+          '<div id="pdMsTrash-' + mid + '" style="display:none;margin-top:6px"></div>' +
+        '</div>'
+      : '';
+    if (!logs.length) { el.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:4px 0">기록된 작업 노트가 없습니다.</div>' + trashHtml; return; }
     var s = '';
     if (canDelete) {
-      s += '<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button class="btn btn-d btn-s" style="font-size:9px;padding:2px 7px" onclick="pdMsLogClear(\'' + mid + '\',\'' + projId + '\')" title="이 마일스톤 진척률 이력 전체 삭제">🗑 이력 전체 삭제</button></div>';
+      s += '<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button class="btn btn-d btn-s" style="font-size:9px;padding:2px 7px" onclick="pdMsLogClear(\'' + mid + '\',\'' + projId + '\')" title="이 마일스톤 진척률 이력 전체 삭제(휴지통 이동)">🗑 이력 전체 삭제</button></div>';
     }
     s += '<div style="border-left:2px solid var(--bd);padding-left:8px;margin:2px 0 4px">';
     logs.forEach(function (lg) {
@@ -759,12 +862,118 @@ function pdMsLogToggle(mid, projId, canDelete) {
       s += '<span style="color:var(--t6);margin-left:auto">' + _pdRelTime(lg.createdAt) + '</span>';
       if (canDelete) s += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" title="이 이력 삭제" onclick="pdMsLogDelete(\'' + mid + '\',\'' + lg.id + '\',\'' + projId + '\')">🗑</button>';
       s += '</div>';
-      if (lg.note) s += '<div style="font-size:10px;color:var(--t4);line-height:1.45;margin-top:1px;white-space:pre-wrap;word-break:break-word">' + eH(lg.note) + '</div>';
+      if (lg.note) s += '<div style="font-size:10px;color:var(--t4);line-height:1.45;margin-top:1px;white-space:pre-wrap;word-break:break-word">' + wmRichNote(lg.note, { mid: mid, projId: projId, logId: lg.id, ctx: 'toggle' }) + '</div>';
+      s += '</div>';
+    });
+    s += '</div>' + trashHtml;
+    el.innerHTML = s;
+  }).catch(function () { el.innerHTML = '<div style="font-size:10px;color:#EF4444;padding:4px 0">이력 로딩 실패</div>'; });
+}
+
+/* ═══ 투입실적 휴지통(소프트 삭제 복구) — 관리자(admin/executive) 전용 ═══ */
+function _pdIsAdmin() {
+  return !!(typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'executive'));
+}
+var _pdTrashRefresh = {};   // containerId → 복구/삭제 후 부모 뷰 갱신 콜백
+
+/* 휴지통 목록 렌더 (containerId 컨테이너에) */
+function _pdRenderTrashList(mid, projId, containerId) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  if (typeof msLogsTrashGet !== 'function') { el.innerHTML = '<div style="font-size:10px;color:var(--t6)">휴지통 기능을 사용할 수 없습니다.</div>'; return; }
+  el.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:4px 0">휴지통 로딩 중...</div>';
+  msLogsTrashGet(mid).then(function (logs) {
+    logs = logs || [];
+    el = document.getElementById(containerId);
+    if (!el) return;
+    var s = '<div style="display:flex;justify-content:space-between;align-items:center;margin:2px 0 4px">' +
+      '<span style="font-size:10px;font-weight:700;color:var(--t4)">🗑 휴지통 (' + logs.length + ')</span>' +
+      (logs.length ? '<button class="btn btn-d btn-s" style="font-size:9px;padding:2px 7px" onclick="pdTrashEmpty(\'' + mid + '\',\'' + projId + '\',\'' + containerId + '\')" title="휴지통의 모든 이력을 완전 삭제(복구 불가)">휴지통 비우기</button>' : '') +
+      '</div>';
+    if (!logs.length) { s += '<div style="font-size:10px;color:var(--t6);padding:2px 0">휴지통이 비어 있습니다.</div>'; el.innerHTML = s; return; }
+    s += '<div style="border-left:2px solid #EF4444;padding-left:8px">';
+    logs.forEach(function (lg) {
+      var p = Number(lg.progress) || 0;
+      var lh = Number(lg.hours) || 0;
+      s += '<div style="margin-bottom:8px;opacity:.85">';
+      s += '<div style="display:flex;align-items:center;gap:6px;font-size:10px">';
+      s += '<span style="font-weight:700;color:var(--t5)">' + p + '%</span>';
+      if (lh > 0) s += '<span style="color:#8B5CF6;font-weight:600">📝' + (Math.round(lh * 10) / 10) + 'h</span>';
+      s += '<span style="color:var(--t5)">' + eH(lg.authorName || '') + '</span>';
+      s += '<span style="color:var(--t6);margin-left:auto">삭제 ' + (typeof _pdRelTime === 'function' ? _pdRelTime(lg.deletedAt) : '') + (lg.deletedByName ? ' · ' + eH(lg.deletedByName) : '') + '</span>';
+      s += '</div>';
+      if (lg.note) s += '<div style="font-size:10px;color:var(--t5);line-height:1.45;margin-top:1px;white-space:pre-wrap;word-break:break-word">' + wmRichNote(lg.note, null) + '</div>';
+      s += '<div style="display:flex;gap:4px;margin-top:3px">';
+      s += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 7px" onclick="pdTrashRestore(\'' + mid + '\',\'' + lg.id + '\',\'' + projId + '\',\'' + containerId + '\')" title="이 이력을 복구">↩ 복구</button>';
+      s += '<button class="btn btn-d btn-s" style="font-size:9px;padding:1px 7px" onclick="pdTrashHardDel(\'' + mid + '\',\'' + lg.id + '\',\'' + projId + '\',\'' + containerId + '\')" title="완전 삭제(복구 불가)">❌ 완전삭제</button>';
+      s += '</div>';
       s += '</div>';
     });
     s += '</div>';
     el.innerHTML = s;
-  }).catch(function () { el.innerHTML = '<div style="font-size:10px;color:#EF4444;padding:4px 0">이력 로딩 실패</div>'; });
+  }).catch(function (err) {
+    if (el) el.innerHTML = '<div style="font-size:10px;color:#EF4444;padding:4px 0">' + ((err && err.status === 403) ? '관리자만 휴지통을 볼 수 있습니다.' : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.' : '휴지통 로딩 실패') + '</div>';
+  });
+}
+
+/* 모달 내 휴지통 토글 */
+function pdProgTrashToggle() {
+  var el = document.getElementById('pdProgTrash');
+  if (!el || !_pdProgCtx) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  _pdTrashRefresh['pdProgTrash'] = function () {
+    _pdRenderProgHist();
+    if (_pdProgCtx && typeof _pdProgCtx.refresh === 'function') _pdProgCtx.refresh();
+  };
+  _pdRenderTrashList(_pdProgCtx.mid, _pdProgCtx.projId, 'pdProgTrash');
+}
+
+/* 투입실적 탭 이력 내 휴지통 토글 */
+function pdMsTrashToggle(mid, projId) {
+  var el = document.getElementById('pdMsTrash-' + mid);
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  _pdTrashRefresh['pdMsTrash-' + mid] = function () { if (typeof pdLoadWork === 'function') pdLoadWork(projId); };
+  _pdRenderTrashList(mid, projId, 'pdMsTrash-' + mid);
+}
+
+function _pdTrashErr(err) {
+  var msg = (err && err.status === 403) ? '관리자만 가능합니다.'
+    : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.'
+    : ((err && err.message) || '처리 실패');
+  if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
+}
+
+/* 휴지통 → 복구 (진척률·투입시간 재집계 → 부모 뷰 갱신) */
+function pdTrashRestore(mid, logId, projId, containerId) {
+  if (typeof msLogRestore !== 'function') return;
+  msLogRestore(mid, logId).then(function () {
+    if (typeof showToast === 'function') showToast('복구되었습니다.');
+    _pdRenderTrashList(mid, projId, containerId);
+    if (typeof _pdTrashRefresh[containerId] === 'function') _pdTrashRefresh[containerId]();
+  }).catch(_pdTrashErr);
+}
+
+/* 휴지통 → 완전 삭제 (복구 불가) */
+function pdTrashHardDel(mid, logId, projId, containerId) {
+  if (!confirm('이 이력을 완전 삭제할까요?\n복구할 수 없습니다.')) return;
+  if (typeof msLogHardDel !== 'function') return;
+  msLogHardDel(mid, logId).then(function () {
+    if (typeof showToast === 'function') showToast('완전 삭제되었습니다.');
+    _pdRenderTrashList(mid, projId, containerId);
+  }).catch(_pdTrashErr);
+}
+
+/* 휴지통 비우기 (일괄 완전삭제) */
+function pdTrashEmpty(mid, projId, containerId) {
+  if (!confirm('휴지통을 비울까요?\n모든 삭제 이력이 완전 삭제되어 복구할 수 없습니다.')) return;
+  if (typeof msLogTrashEmpty !== 'function') return;
+  msLogTrashEmpty(mid).then(function () {
+    if (typeof showToast === 'function') showToast('휴지통을 비웠습니다.');
+    _pdRenderTrashList(mid, projId, containerId);
+  }).catch(_pdTrashErr);
 }
 
 /* 진척률 이력 1건 삭제 (부분) */
@@ -934,7 +1143,22 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
       '<input id="pdProgHours" type="number" min="0" step="0.5" placeholder="예: 3.5" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);margin:6px 0 8px">' +
       '<div id="pdProgAlloc" style="margin:0 0 14px"><div style="font-size:10px;color:var(--t6);padding:2px 0">담당자별 할당/실적 로딩 중...</div></div>' +
       '<label class="fl" style="font-size:11px;color:var(--t4)">작업 노트 <span style="color:var(--t6)">(처리 결과·진행 상황)</span></label>' +
-      '<textarea id="pdProgNote" rows="4" placeholder="이번 업데이트의 작업 내용·처리 결과를 적어주세요" style="width:100%;box-sizing:border-box;font-size:12px;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);margin-top:6px;resize:vertical"></textarea>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:3px;margin:6px 0 0">' +
+        '<button type="button" class="btn btn-g btn-s" style="font-size:11px;padding:2px 7px;font-weight:700" title="굵게" onclick="_pdNoteFmt(\'bold\')">B</button>' +
+        '<button type="button" class="btn btn-g btn-s" style="font-size:11px;padding:2px 7px;text-decoration:line-through" title="취소선" onclick="_pdNoteFmt(\'strike\')">S</button>' +
+        '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:2px 6px" title="형광 강조" onclick="_pdNoteFmt(\'mark\')"><span style="background:#FDE68A;color:#111;padding:0 2px;border-radius:2px">형광</span></button>' +
+        '<button type="button" class="btn btn-g btn-s" style="font-size:11px;padding:2px 7px" title="코드" onclick="_pdNoteFmt(\'code\')">&lt;/&gt;</button>' +
+        '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:2px 6px" title="체크박스" onclick="_pdNoteFmt(\'check\')">☐ 체크</button>' +
+        '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:2px 6px" title="글머리표" onclick="_pdNoteFmt(\'list\')">• 목록</button>' +
+        '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:2px 6px" title="중요 배지" onclick="_pdNoteFmt(\'important\')">🔴 중요</button>' +
+        '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:2px 6px" title="긴급 배지" onclick="_pdNoteFmt(\'urgent\')">🚨 긴급</button>' +
+        '<span style="width:1px;background:var(--bd);margin:0 2px"></span>' +
+        ['✅','⚠️','🔴','🟢','📌','🔧','💡','❗','👍','🕒'].map(function (em) {
+          return '<button type="button" class="btn btn-g btn-s" style="font-size:12px;padding:2px 5px" title="이모지 삽입" onclick="_pdNoteEmoji(\'' + em + '\')">' + em + '</button>';
+        }).join('') +
+      '</div>' +
+      '<textarea id="pdProgNote" rows="4" placeholder="이번 업데이트의 작업 내용·처리 결과를 적어주세요  (예: - [ ] 배선 점검  **완료**)" style="width:100%;box-sizing:border-box;font-size:12px;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);margin-top:6px;resize:vertical"></textarea>' +
+      '<div style="font-size:9px;color:var(--t6);margin-top:3px;line-height:1.4">서식: **굵게** ~~취소선~~ ==형광== `코드` · 줄머리 "- [ ] 할일" 체크박스 · [중요][긴급][주의][완료][진행] 배지 · 체크박스는 저장 후 클릭으로 토글</div>' +
       '<div style="display:flex;gap:8px;margin-top:16px">' +
         '<button class="btn btn-g" style="flex:1" onclick="document.getElementById(\'pdMsProgModal\').remove()">취소</button>' +
         '<button class="btn btn-p" id="pdProgSave" style="flex:2">저장</button>' +
@@ -1157,11 +1381,18 @@ function _pdRenderProgHist() {
   el.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:2px 0">이력 로딩 중...</div>';
   msLogsGet(_pdProgCtx.mid).then(function (logs) {
     logs = logs || [];
+    // 관리자: 삭제된 이력 복구용 휴지통 토글
+    var trashHtml = _pdIsAdmin()
+      ? '<div style="margin-top:8px;border-top:1px dashed var(--bd);padding-top:6px">' +
+          '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 8px" onclick="pdProgTrashToggle()" title="삭제된 투입실적 이력 복구·완전삭제 (관리자)">🗑 휴지통</button>' +
+          '<div id="pdProgTrash" style="display:none;margin-top:6px"></div>' +
+        '</div>'
+      : '';
     var s = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
       '<span style="font-size:11px;font-weight:700;color:var(--t3)">📜 업데이트 이력 (' + logs.length + ')</span>' +
-      (logs.length ? '<button class="btn btn-d btn-s" style="font-size:9px;padding:2px 7px" onclick="pdProgHistClear()" title="이 마일스톤 진척률 이력 전체 삭제">🗑 전체 삭제</button>' : '') +
+      (logs.length ? '<button class="btn btn-d btn-s" style="font-size:9px;padding:2px 7px" onclick="pdProgHistClear()" title="이 마일스톤 진척률 이력 전체 삭제(휴지통 이동)">🗑 전체 삭제</button>' : '') +
       '</div>';
-    if (!logs.length) { s += '<div style="font-size:10px;color:var(--t6);padding:4px 0">아직 기록이 없습니다.</div>'; el.innerHTML = s; return; }
+    if (!logs.length) { s += '<div style="font-size:10px;color:var(--t6);padding:4px 0">아직 기록이 없습니다.</div>' + trashHtml; el.innerHTML = s; return; }
     s += '<div style="border-left:2px solid var(--bd);padding-left:8px">';
     logs.forEach(function (lg) {
       var p = Number(lg.progress) || 0;
@@ -1172,12 +1403,12 @@ function _pdRenderProgHist() {
       if (lh > 0) s += '<span style="color:#8B5CF6;font-weight:600" title="보고 투입">📝' + (Math.round(lh * 10) / 10) + 'h</span>';
       s += '<span style="color:var(--t5)">' + eH(lg.authorName || '') + '</span>';
       s += '<span style="color:var(--t6);margin-left:auto">' + (typeof _pdRelTime === 'function' ? _pdRelTime(lg.createdAt) : '') + '</span>';
-      s += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" title="이 이력 삭제" onclick="pdProgHistDel(\'' + lg.id + '\')">🗑</button>';
+      s += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" title="이 이력 삭제(휴지통 이동)" onclick="pdProgHistDel(\'' + lg.id + '\')">🗑</button>';
       s += '</div>';
-      if (lg.note) s += '<div style="font-size:10px;color:var(--t4);line-height:1.45;margin-top:1px;white-space:pre-wrap;word-break:break-word">' + eH(lg.note) + '</div>';
+      if (lg.note) s += '<div style="font-size:10px;color:var(--t4);line-height:1.45;margin-top:1px;white-space:pre-wrap;word-break:break-word">' + wmRichNote(lg.note, { mid: _pdProgCtx.mid, projId: _pdProgCtx.projId, logId: lg.id, ctx: 'modal' }) + '</div>';
       s += '</div>';
     });
-    s += '</div>';
+    s += '</div>' + trashHtml;
     el.innerHTML = s;
   }).catch(function () { el.innerHTML = '<div style="font-size:10px;color:#EF4444;padding:4px 0">이력 로딩 실패</div>'; });
 }

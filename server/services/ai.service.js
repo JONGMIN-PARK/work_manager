@@ -241,7 +241,8 @@ async function answerQuestion(question, userName) {
   var systemPrompt = '당신은 "Work Manager"라는 업무 관리 시스템의 AI 어시스턴트입니다.\n' +
     '아래 실제 데이터를 기반으로 사용자의 질문에 한국어로 간결하게 답변하세요.\n' +
     '텔레그램 메시지이므로 300자 이내로 핵심만 답하세요.\n' +
-    'HTML 태그(<b>, <i>, <code>)를 사용할 수 있습니다.\n' +
+    '서식 규칙: 마크다운 제목(#), 표(|), 코드블록(```)은 절대 쓰지 마세요. ' +
+    '강조가 필요하면 **굵게**만, 목록은 "- "로 시작, 구분은 이모지·줄바꿈으로 하세요. 깔끔하게 정리해서 답하세요.\n' +
     '데이터에 없는 내용은 추측하지 말고 "해당 데이터가 없습니다"라고 답하세요.\n\n' +
     '질문자: ' + userName + '\n\n';
 
@@ -257,12 +258,41 @@ async function answerQuestion(question, userName) {
   var answer = await callAI(systemPrompt);
   if (!answer) return '🤖 AI 응답을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.';
 
+  // 5. 텔레그램 HTML로 정리 (마크다운 제목(#)·표·코드펜스 등 "태그" 제거, **굵게**→<b> 등)
+  answer = formatForTelegram(answer);
+
   // 텔레그램 메시지 길이 제한
   if (answer.length > 3800) {
     answer = answer.slice(0, 3800) + '\n\n... (응답이 길어 생략됨)';
   }
 
   return '🤖 ' + answer;
+}
+
+/* AI 마크다운 응답 → 깔끔한 텔레그램 HTML 변환
+   (parse_mode=HTML 기준. AI는 마크다운만 출력하도록 지시 → raw 태그 없음 가정하여 escape 우선) */
+function formatForTelegram(md) {
+  if (md == null) return '';
+  var s = String(md).replace(/\r\n/g, '\n');
+  // 1) HTML 특수문자 escape (메시지 거부/오렌더 방지)
+  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // 2) 코드펜스 ```...``` → <pre>
+  s = s.replace(/```[a-zA-Z0-9]*\n?([\s\S]*?)```/g, function (_m, c) { return '<pre>' + c.replace(/\n+$/, '') + '</pre>'; });
+  // 3) 마크다운 제목(#~######) → 굵게 (해시 "태그" 제거)
+  s = s.replace(/^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t]*#*$/gm, '<b>$1</b>');
+  // 4) 굵게 **x** / __x__
+  s = s.replace(/\*\*([^\n*]+)\*\*/g, '<b>$1</b>').replace(/__([^\n_]+)__/g, '<b>$1</b>');
+  // 5) 인라인 코드 `x`
+  s = s.replace(/`([^\n`]+)`/g, '<code>$1</code>');
+  // 6) 링크 [텍스트](url)
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>');
+  // 7) 글머리표 -,*,+ → •
+  s = s.replace(/^[ \t]*[-*+][ \t]+/gm, '• ');
+  // 8) 인용(> → escape 후 &gt;)·수평선(---) 제거
+  s = s.replace(/^[ \t]*(?:&gt;|>)[ \t]?/gm, '').replace(/^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/gm, '');
+  // 9) 과도한 빈 줄 축소
+  s = s.replace(/\n{3,}/g, '\n\n');
+  return s.trim();
 }
 
 module.exports = {

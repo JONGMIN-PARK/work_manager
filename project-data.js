@@ -626,6 +626,31 @@ function msLogClear(mid) {
   return apiFetch('/api/milestones/' + mid + '/logs', { method: 'DELETE' })
     .then(function (r) { _emitBus('milestone', 'updated', { id: mid }); return r; });
 }
+/* 휴지통(삭제된 투입실적 이력) 목록 — 관리자 전용 */
+function msLogsTrashGet(mid) {
+  return apiFetch('/api/milestones/' + mid + '/logs/trash').then(function (r) { return toCamelArray(r.data); });
+}
+/* 휴지통에서 복구 — 관리자 전용 */
+function msLogRestore(mid, logId) {
+  _pdInvalidate('ms');   // 복구 시 진척률·투입시간 재집계 → 캐시 무효화
+  return apiFetch('/api/milestones/' + mid + '/logs/' + logId + '/restore', { method: 'POST' })
+    .then(function (r) { _emitBus('milestone', 'updated', { id: mid }); return r; });
+}
+/* 완전 삭제(복구 불가) — 관리자 전용. 휴지통 항목만. */
+function msLogHardDel(mid, logId) {
+  return apiFetch('/api/milestones/' + mid + '/logs/' + logId + '/hard', { method: 'DELETE' });
+}
+/* 휴지통 비우기(일괄 완전삭제) — 관리자 전용 */
+function msLogTrashEmpty(mid) {
+  return apiFetch('/api/milestones/' + mid + '/logs/trash/empty', { method: 'DELETE' });
+}
+/* 작업노트 N번째 체크박스 토글(저장) — 프로젝트 멤버 */
+function msLogToggleCheck(mid, logId, index) {
+  _pdInvalidate('ms');   // 최신 로그면 progress_note 변경 → 캐시 무효화
+  return apiFetch('/api/milestones/' + mid + '/logs/' + logId + '/toggle-check', {
+    method: 'POST', body: JSON.stringify({ index: index })
+  }).then(function (r) { _emitBus('milestone', 'updated', { id: mid }); return toCamel(r.data); });
+}
 
 function createMilestone(data) {
   var ms = {
