@@ -403,6 +403,7 @@ async function docHandleFiles(fileList) {
       }
 
       var ext = (file.name.split('.').pop() || '').toLowerCase();
+      var mime = file.type || 'application/octet-stream';
       var buf = await readFileAsArrayBuffer(file);
 
       var record = {
@@ -410,10 +411,11 @@ async function docHandleFiles(fileList) {
         projectId: docSelProject,
         folderId: targetFolder,
         name: file.name,
-        type: file.type || 'application/octet-stream',
+        type: mime,
+        mimeType: mime,
         ext: ext,
         size: file.size,
-        data: buf,
+        data: buf,            // 텍스트 추출용(아래에서 서버 전송 전 제거)
         textCache: '',
         memo: '',
         tags: [],
@@ -423,9 +425,21 @@ async function docHandleFiles(fileList) {
         _isNew: true
       };
 
-      // 텍스트 캐시 추출
+      // 텍스트 캐시 추출 (검색·AI용 — 원본과 별개로 DB에 보관)
       record.textCache = await extractTextFromFile(record);
 
+      // ── 원본 바이너리를 GCS에 직접 업로드 (서명 URL) ──
+      try {
+        record.storageKey = await docUploadBinary(file, mime, ext);
+      } catch (upErr) {
+        console.error('[docUpload] GCS', file.name, upErr);
+        var msg = (upErr && upErr.data && upErr.data.error === 'STORAGE_DISABLED')
+          ? '스토리지 미설정' : ((upErr && upErr.message) || '업로드 실패');
+        errors.push(file.name + ' (' + msg + ')');
+        continue;
+      }
+
+      delete record.data;   // 원본은 GCS에 있으므로 메타데이터만 서버 저장
       await filePut(record);
       count++;
     }
@@ -447,6 +461,22 @@ function readFileAsArrayBuffer(file) {
     reader.onerror = function () { res(new ArrayBuffer(0)); };
     reader.readAsArrayBuffer(file);
   });
+}
+
+// 원본 바이너리를 GCS에 직접 업로드(서명 URL)하고 storageKey 반환
+async function docUploadBinary(file, mime, ext) {
+  var sign = await apiFetch('/api/docs/files/upload-url', {
+    method: 'POST',
+    body: JSON.stringify({ name: file.name, mimeType: mime, ext: ext })
+  });
+  var up = sign.data;
+  var putRes = await fetch(up.uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': mime },
+    body: file
+  });
+  if (!putRes.ok) throw new Error('스토리지 업로드 실패 (' + putRes.status + ')');
+  return up.storageKey;
 }
 
 /* ═══ 텍스트 추출 ═══ */
@@ -542,8 +572,20 @@ async function showFilePreview(fileRecord) {
   infoHtml += '<button class="btn btn-d btn-s" onclick="docDeleteFile(\'' + fileRecord.id + '\')">🗑️ 삭제</button>';
   infoHtml += '</div></div>';
 
+  // 서버에서 불러온 파일은 data가 없음 → GCS에서 원본 바이너리를 가져온다
+  if (!data && fileRecord.storageKey) {
+    try {
+      var dl = await apiFetch('/api/docs/files/' + fileRecord.id + '/download-url');
+      if (dl && dl.data && dl.data.downloadUrl) {
+        var resp = await fetch(dl.data.downloadUrl);
+        if (resp.ok) data = await resp.arrayBuffer();
+      }
+    } catch (e) { console.warn('[docPreview] GCS fetch failed', e); }
+  }
+
   if (!data) {
-    content.innerHTML = '<div style="display:flex;gap:14px">' + infoHtml + '<div style="flex:1;text-align:center;padding:20px;color:var(--t5)">파일 데이터 없음</div></div>';
+    var noData = fileRecord.storageKey ? '미리보기를 불러오지 못했습니다' : '원본 파일이 저장되어 있지 않습니다 (이전 버전 업로드)';
+    content.innerHTML = '<div style="display:flex;gap:14px">' + infoHtml + '<div style="flex:1;text-align:center;padding:20px;color:var(--t5)">' + noData + '</div></div>';
     return;
   }
 
@@ -820,15 +862,34 @@ async function docSaveSummary(fileId) {
 /* ═══ 파일 다운로드 ═══ */
 async function docDownloadFile(fileId) {
   try {
-    var f = await fileGet(fileId);
-    if (!f || !f.data) { showToast('파일 데이터 없음', 'error'); return; }
+    // 1순위: GCS 서명 URL로 원본 다운로드
+    try {
+      var r = await apiFetch('/api/docs/files/' + fileId + '/download-url');
+      if (r && r.data && r.data.downloadUrl) {
+        var a = document.createElement('a');
+        a.href = r.data.downloadUrl;
+        a.download = r.data.name || '';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast('💾 ' + (r.data.name || '파일') + ' 다운로드');
+        return;
+      }
+    } catch (sErr) {
+      // NO_BINARY(원본 없음, 구버전 업로드 파일) 또는 STORAGE_DISABLED → 메모리 폴백 시도
+      if (sErr && sErr.status && sErr.status !== 404 && sErr.status !== 503) throw sErr;
+    }
 
-    var url = docCreateBlobUrl(f.data, f.type);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = f.name;
-    a.click();
-    showToast('💾 ' + f.name + ' 다운로드');
+    // 폴백: 이번 세션에서 막 올려 메모리에 data가 남아있는 경우
+    var f = await fileGet(fileId);
+    if (f && f.data) {
+      var url = docCreateBlobUrl(f.data, f.type);
+      var a2 = document.createElement('a');
+      a2.href = url; a2.download = f.name; a2.click();
+      showToast('💾 ' + f.name + ' 다운로드');
+      return;
+    }
+    showToast('원본 파일이 저장되어 있지 않습니다 (이전 버전 업로드 파일)', 'warn');
   } catch (err) {
     console.error('[docDownloadFile]', err);
     showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
@@ -1155,12 +1216,14 @@ async function docUploadWithVersion(fileList) {
         await filePut(existing);
       }
 
+      var mime = file.type || 'application/octet-stream';
       var record = {
         id: 'file-' + uuid(),
         projectId: docSelProject,
         folderId: targetFolder,
         name: file.name,
-        type: file.type || 'application/octet-stream',
+        type: mime,
+        mimeType: mime,
         ext: ext,
         size: file.size,
         data: buf,
@@ -1173,6 +1236,14 @@ async function docUploadWithVersion(fileList) {
         _isNew: true
       };
       record.textCache = await extractTextFromFile(record);
+      try {
+        record.storageKey = await docUploadBinary(file, mime, ext);
+      } catch (upErr) {
+        console.error('[docUploadVersion] GCS', file.name, upErr);
+        showToast('❌ ' + file.name + ' 업로드 실패: ' + ((upErr && upErr.message) || ''), 'error');
+        continue;
+      }
+      delete record.data;
       await filePut(record);
       count++;
     }

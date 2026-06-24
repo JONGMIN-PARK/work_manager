@@ -3,6 +3,9 @@ services:
     name: work-manager
     runtime: docker
     plan: free
+    # DB(Neon)가 ap-southeast-1(싱가포르)에 있어 같은 리전으로 정렬 — 쿼리 왕복 지연 제거
+    # 주의: 기존 서비스는 리전 변경 불가. 싱가포르 서비스를 새로 생성해야 적용됨(URL 변경 동반)
+    region: singapore
     dockerfilePath: ./Dockerfile
     envVars:
       - key: NODE_ENV

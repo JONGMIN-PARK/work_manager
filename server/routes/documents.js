@@ -1,6 +1,7 @@
 var express = require('express');
 var router = express.Router();
 var db = require('../config/db');
+var gcs = require('../services/gcs.service');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var { parsePagination } = require('../middleware/pagination');
@@ -142,6 +143,51 @@ router.post('/files', async function (req, res) {
   }
 });
 
+// POST /api/docs/files/upload-url — 원본 업로드용 GCS 서명 URL 발급
+// body: { name, mimeType, ext } → { uploadUrl, storageKey }
+// 프론트는 uploadUrl로 파일을 직접 PUT한 뒤, storageKey를 POST /files 메타데이터에 넣는다.
+router.post('/files/upload-url', async function (req, res) {
+  try {
+    if (!gcs.isEnabled()) {
+      return res.status(503).json({ error: 'STORAGE_DISABLED', message: '파일 스토리지(GCS)가 설정되지 않았습니다.' });
+    }
+    var b = req.body || {};
+    var mime = b.mimeType || b.mime_type || 'application/octet-stream';
+    var ext = (b.ext || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+    // 테넌트별 격리 + 충돌 없는 키. 원본 파일명은 DB(name)에 보관하므로 키는 불투명해도 됨.
+    var uid = require('crypto').randomUUID();
+    var key = 'tenants/' + req.tenant.id + '/docs/' + uid + (ext ? '.' + ext : '');
+    var uploadUrl = await gcs.signUploadUrl(key, mime);
+    res.json({ data: { uploadUrl: uploadUrl, storageKey: key, mimeType: mime } });
+  } catch (e) {
+    console.error('[files/upload-url]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '업로드 URL 발급 실패' });
+  }
+});
+
+// GET /api/docs/files/:id/download-url — 원본 다운로드용 GCS 서명 URL 발급
+router.get('/files/:id/download-url', async function (req, res) {
+  try {
+    var r = await db.query(
+      'SELECT id, name, storage_key FROM project_files WHERE id = $1 AND tenant_id = $2',
+      [req.params.id, req.tenant.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    var row = r.rows[0];
+    if (!row.storage_key) {
+      return res.status(404).json({ error: 'NO_BINARY', message: '이 파일은 원본이 저장되어 있지 않습니다.' });
+    }
+    if (!gcs.isEnabled()) {
+      return res.status(503).json({ error: 'STORAGE_DISABLED', message: '파일 스토리지(GCS)가 설정되지 않았습니다.' });
+    }
+    var url = await gcs.signDownloadUrl(row.storage_key, row.name);
+    res.json({ data: { downloadUrl: url, name: row.name } });
+  } catch (e) {
+    console.error('[files/download-url]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '다운로드 URL 발급 실패' });
+  }
+});
+
 // PUT /api/files/:id
 router.put('/files/:id', async function (req, res) {
   try {
@@ -179,8 +225,12 @@ router.delete('/files/:id', async function (req, res) {
   try {
     var r = await db.query('DELETE FROM project_files WHERE id = $1 AND tenant_id = $2 RETURNING id, storage_key', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
-    // TODO: GCS에서 실제 파일 삭제 (Phase 3+)
-    res.json({ message: '삭제 완료', storageKey: r.rows[0].storage_key });
+    // GCS 원본도 삭제 (실패해도 메타데이터 삭제는 성공 처리 — 고아 객체는 추후 정리)
+    var sk = r.rows[0].storage_key;
+    if (sk && gcs.isEnabled()) {
+      gcs.deleteObject(sk).catch(function (e) { console.warn('[files/delete] GCS delete failed:', e.message); });
+    }
+    res.json({ message: '삭제 완료', storageKey: sk });
   } catch (e) {
     console.error('[files/delete]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

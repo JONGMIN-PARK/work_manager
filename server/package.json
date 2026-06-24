@@ -17,6 +17,8 @@
     "supertest": "^6.3.4"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
+    "@google-cloud/storage": "^7.21.0",
     "bcryptjs": "^2.4.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
@@ -25,7 +27,6 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
-    "@anthropic-ai/sdk": "^0.88.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.16",
     "pg": "^8.13.1",

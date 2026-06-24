@@ -902,7 +902,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.162</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.164</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3461,6 +3461,19 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.164',date:'2026-06-24',title:'📝 투입실적 작업 노트 줄바꿈 표시 + 진척률 모달에 작업/할당 시간(%) 표시',tag:'feat',items:[
+      '작업 노트가 줄바꿈 없이 한 줄로 뭉쳐 보이던 문제 수정 — 투입실적 최신 노트·작업 노트 이력(목록/모달) 모두 입력한 줄바꿈 그대로 표시(white-space:pre-wrap)',
+      '진척률·작업 노트 업데이트 모달의 "투입시간 (h)" 옆에 누적 작업시간/할당시간 및 달성률(%) 표시 — 예: "작업 12h / 할당 20h (60%)". 할당 초과 시 빨간색 강조',
+      '할당시간 = 마일스톤 목표시간(assigneeTargets) 합, 작업시간 = 누적 보고 투입(reportedHours) 기준',
+      '영향: project-detail.js, 업무일지_분석기.html(버전·패치노트). 클라이언트 전용 — 배포 후 새로고침'
+    ]},
+    {ver:'13.163',date:'2026-06-20',title:'📎 문서관리 파일 원본 저장 복구 — GCS(Google Cloud Storage) 연동',tag:'fix',items:[
+      '근본 원인: 로컬→서버 모드 전환 때 문서관리 업로드가 회귀(regression)되어, 파일 "원본 바이너리"가 어디에도 저장되지 않고 메타데이터+추출텍스트만 DB에 남았음. 그래서 새로고침/다른 기기에서 다운로드 시 "파일 데이터 없음"이 떴음',
+      '해결: 원본을 Google Cloud Storage에 직접 업로드(서명 URL 방식, 브라우저↔GCS 직결)하고 DB(project_files.storage_key)에는 위치만 저장. DB(Neon) 용량을 먹지 않음',
+      '서버: services/gcs.service.js 추가, /api/docs/files/upload-url(업로드 서명) · /:id/download-url(다운로드 서명) 엔드포인트, 삭제 시 GCS 원본 동반 삭제. 의존성 @google-cloud/storage 추가',
+      '프론트: document-manager.js 업로드/다운로드/미리보기를 GCS 경유로 교체(일반·버전 업로드 모두). 이전 버전에 올린 파일은 원본이 없으므로 다운로드 시 안내 표시',
+      '환경변수 필요(Render): GCS_PROJECT_ID, GCS_BUCKET, GCS_SA_KEY(서비스계정 JSON base64). 버킷 CORS에 PUT/GET 허용 필요'
+    ]},
     {ver:'13.162',date:'2026-06-12',title:'🚀 타임라인 버튼 5초 지연 해결 — 업무일지 재조회가 렌더 차단하던 문제',tag:'perf',items:[
       '근본 원인: 업무일지(archive) 캐시가 5초로 짧아, 버튼을 5초 넘겨 누를 때마다 타임라인이 업무일지 전체(최대 5만 건)를 다시 받아오며 렌더를 막아 5초+ 지연됐음. 이 데이터는 마일스톤 툴팁 실적(참고)에만 사용',
       '타임라인이 업무일지 조회를 더 이상 기다리지 않도록 변경 — 첫 진입만 1회 대기, 이후 버튼/토글 재렌더는 마지막 데이터 즉시 사용 + 백그라운드 갱신(다음 렌더에 반영). 프로젝트·마일스톤은 기존 30초 캐시 그대로',

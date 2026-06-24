@@ -1,5 +1,36 @@
 # Work Manager — 변경 이력
 
+## v13.164 (2026-06-24) — 작업 노트 줄바꿈 표시 + 진척률 모달 작업/할당 시간(%)
+
+### 배경
+투입실적/진척률 업데이트의 작업 노트가 줄바꿈 없이 한 줄로 뭉쳐 보였고, 진척률 모달에서 누적 작업 대비 할당 시간을 한눈에 볼 수 없었음.
+
+### 변경
+- 작업 노트 줄바꿈 표시: 투입실적 최신 노트(`m.progressNote`), 작업 노트 이력(목록 `pdMsLogToggle`·모달 `_pdRenderProgHist`)에 `white-space:pre-wrap;word-break:break-word` 적용 → 입력한 줄바꿈 그대로 렌더.
+- 진척률·작업 노트 모달의 "투입시간 (h)" 옆에 `작업시간 / 할당시간 (달성률%)` 표시(`_pdFillAllocInfo`). 작업시간 = 누적 보고 투입(`reportedHours`), 할당시간 = 마일스톤 목표시간(`assigneeTargets`) 합. 할당 초과 시 빨간색.
+
+### 영향
+- `project-detail.js`, `업무일지_분석기.html`(버전·패치노트). 클라이언트 전용 — 배포 후 새로고침.
+
+## v13.163 (2026-06-20) — 문서관리 파일 원본 저장 복구 (GCS 연동)
+
+### 배경
+실서버 DB가 Neon 무료 플랜 컴퓨트 할당량 소진으로 다운 → Launch 업그레이드로 복구. 점검 중 문서관리 파일이 원본 바이너리를 저장하지 않는 회귀를 발견.
+
+### 진단
+- 로컬(IndexedDB)→서버 모드 전환 시 `filePut`이 메타데이터만 POST하고, `data`(ArrayBuffer)는 `JSON.stringify`에서 `{}`로 소실.
+- `project_files`에 바이너리 컬럼 없음(`storage_key`만), 프론트에 GCS 업로드 코드 부재 → 원본이 어디에도 저장 안 됨. 다운로드 시 "파일 데이터 없음".
+
+### 변경
+- 서버: `services/gcs.service.js` 신규(서명 URL 발급·삭제), `routes/documents.js`에 `POST /files/upload-url`, `GET /files/:id/download-url` 추가, DELETE 시 GCS 원본 동반 삭제. `@google-cloud/storage` 의존성 추가(+ package-lock.json).
+- 프론트: `document-manager.js` 업로드(일반·버전)·다운로드·미리보기를 GCS 서명 URL 경유로 교체. `docUploadBinary` 헬퍼로 공통화.
+- DB(Neon)에는 `storage_key`만 저장 → DB 용량 영향 없음. 원본은 GCS 버킷에 보관.
+
+### 배포 필요 작업
+- Render 환경변수: `GCS_PROJECT_ID`, `GCS_BUCKET`, `GCS_SA_KEY`(서비스계정 JSON을 base64).
+- GCS 버킷 CORS에 브라우저 Origin의 PUT/GET 허용.
+- 이전 버전에 올린 파일은 원본이 없어 다운로드 불가(안내 표시) — 신규 업로드부터 정상.
+
 ## v13.103 (2026-05-28) — iPad 미디어 쿼리 any-pointer:coarse 전환 (Magic Keyboard 케이스)
 
 ### 배경

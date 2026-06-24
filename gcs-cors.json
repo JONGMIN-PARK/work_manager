@@ -1,0 +1,12 @@
+[
+  {
+    "origin": [
+      "https://work-manager-ws3t.onrender.com",
+      "https://jongmin-park.github.io",
+      "http://localhost:8080"
+    ],
+    "method": ["GET", "PUT"],
+    "responseHeader": ["Content-Type"],
+    "maxAgeSeconds": 3600
+  }
+]
