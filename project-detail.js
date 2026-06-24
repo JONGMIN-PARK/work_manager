@@ -844,23 +844,66 @@ function pdMsProgressUpdate(mid, projId, curProg, opts) {
   );
 }
 
-/* 진척률 모달 — 투입시간 옆 누적 작업/할당 시간 표시
-   작업시간(누적 보고 투입) / 할당시간(마일스톤 목표시간 Σ) 및 달성률(%) */
+/* 진척률 모달 — 담당자별 할당시간 vs 실 작업시간(달성률%) 표
+   할당시간 = 마일스톤 목표시간(assigneeTargets[이름]),
+   실 작업시간 = 작업노트 로그(hours)를 작성자별로 합산. */
 function _pdFillAllocInfo(mid, projId) {
-  var el = document.getElementById('pdProgAlloc');
-  if (!el || typeof msGetByProject !== 'function') return;
-  msGetByProject(projId).then(function (list) {
-    var m = (list || []).filter(function (x) { return String(x.id) === String(mid); })[0];
-    el = document.getElementById('pdProgAlloc');   // 재조회(모달 재오픈 대비)
-    if (!m || !el) return;
-    var worked = Math.round((Number(m.reportedHours) || 0) * 10) / 10;
-    var alloc = 0; var at = m.assigneeTargets || {};
-    Object.keys(at).forEach(function (k) { alloc += Number(at[k]) || 0; });
-    alloc = Math.round(alloc * 10) / 10;
-    var over = alloc > 0 && worked > alloc;
-    el.textContent = '작업 ' + worked + 'h' + (alloc > 0 ? ' / 할당 ' + alloc + 'h (' + Math.round(worked / alloc * 100) + '%)' : ' / 할당 미설정');
-    el.style.color = over ? '#EF4444' : 'var(--ac)';
-    el.title = '누적 작업시간(보고 투입) / 할당시간(마일스톤 목표시간 합) 및 달성률';
+  if (!document.getElementById('pdProgAlloc')) return;
+  if (typeof msGetByProject !== 'function' || typeof msLogsGet !== 'function') return;
+  Promise.all([
+    msGetByProject(projId).catch(function () { return []; }),
+    msLogsGet(mid).catch(function () { return []; })
+  ]).then(function (res) {
+    var box = document.getElementById('pdProgAlloc');
+    if (!box) return;   // 모달이 닫혔으면 무시
+    var m = (res[0] || []).filter(function (x) { return String(x.id) === String(mid); })[0];
+    var at = (m && m.assigneeTargets) || {};
+    // 담당자별 실 작업시간 (작업노트 로그 hours를 작성자별 합산)
+    var workedBy = {};
+    (res[1] || []).forEach(function (lg) {
+      var nm = lg.authorName || '';
+      if (nm) workedBy[nm] = (workedBy[nm] || 0) + (Number(lg.hours) || 0);
+    });
+    // 이름 합집합 (할당 또는 실작업 있는 사람)
+    var nameSet = {};
+    Object.keys(at).forEach(function (k) { nameSet[k] = true; });
+    Object.keys(workedBy).forEach(function (k) { nameSet[k] = true; });
+    var names = Object.keys(nameSet);
+    var rnd = function (x) { return Math.round((Number(x) || 0) * 10) / 10; };
+    names.sort(function (a, b) {
+      return (Number(at[b]) || 0) - (Number(at[a]) || 0) || (workedBy[b] || 0) - (workedBy[a] || 0);
+    });
+    var totalW = 0, totalA = 0;
+    names.forEach(function (n) { totalW += Number(workedBy[n]) || 0; totalA += Number(at[n]) || 0; });
+
+    var h = '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:6px 8px">';
+    h += '<div style="font-size:10px;font-weight:700;color:var(--t4);margin-bottom:3px">👥 담당자별 실작업 / 할당 (달성률)</div>';
+    if (!names.length) {
+      h += '<div style="font-size:10px;color:var(--t6);padding:1px 0">담당자별 할당·실적 정보가 없습니다.</div>';
+    } else {
+      names.forEach(function (n) {
+        var w = rnd(workedBy[n]), a = rnd(at[n]);
+        var over = a > 0 && w > a;
+        var pct = a > 0 ? Math.round(w / a * 100) : null;
+        var dn = (typeof shortName === 'function') ? shortName(n) : n;
+        h += '<div style="display:flex;align-items:center;font-size:10px;padding:2px 0">' +
+          '<span style="flex:1;color:var(--t4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(n) + '">' + eH(dn) + '</span>' +
+          '<span style="flex-shrink:0;text-align:right;color:' + (over ? '#EF4444' : 'var(--t3)') + '">' +
+            w + 'h / ' + (a > 0 ? a + 'h' : '–') + (pct != null ? ' <span style="color:' + (over ? '#EF4444' : 'var(--t6)') + '">(' + pct + '%)</span>' : '') +
+          '</span></div>';
+      });
+      // 합계
+      var tw = rnd(totalW), ta = rnd(totalA);
+      var tover = ta > 0 && tw > ta;
+      var tpct = ta > 0 ? Math.round(tw / ta * 100) : null;
+      h += '<div style="display:flex;align-items:center;font-size:10px;padding:3px 0 0;margin-top:2px;border-top:1px solid var(--bd);font-weight:700">' +
+        '<span style="flex:1;color:var(--t3)">합계</span>' +
+        '<span style="flex-shrink:0;text-align:right;color:' + (tover ? '#EF4444' : 'var(--ac)') + '">' +
+          tw + 'h / ' + (ta > 0 ? ta + 'h' : '–') + (tpct != null ? ' (' + tpct + '%)' : '') +
+        '</span></div>';
+    }
+    h += '</div>';
+    box.innerHTML = h;
   }).catch(function () {});
 }
 
@@ -885,8 +928,11 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
         '<input id="pdProgNum" type="number" min="0" max="100" value="' + curProg + '" style="width:64px;font-size:12px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2)" oninput="var v=Math.max(0,Math.min(100,parseInt(this.value,10)||0));document.getElementById(\'pdProgRange\').value=v;document.getElementById(\'pdProgVal\').textContent=v+\'%\'">' +
         '<div style="display:flex;gap:4px;flex:1">' + quick + '</div>' +
       '</div>' +
-      '<label class="fl" style="font-size:11px;color:var(--t4)">투입시간 (h) <span id="pdProgAlloc" style="font-weight:600"></span> <span style="color:var(--t6)">— 이번 작업에 투입한 시간 (보고 투입, 업무일지와 별도)</span></label>' +
-      '<input id="pdProgHours" type="number" min="0" step="0.5" placeholder="예: 3.5" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);margin:6px 0 14px">' +
+      '<label class="fl" style="font-size:11px;color:var(--t4);display:block">투입시간 (h)' +
+        '<span style="display:block;color:var(--t6);font-size:10px;font-weight:400;margin-top:2px;line-height:1.4">이번 작업에 투입한 시간<br>(보고 투입, 업무일지와 별도)</span>' +
+      '</label>' +
+      '<input id="pdProgHours" type="number" min="0" step="0.5" placeholder="예: 3.5" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);margin:6px 0 8px">' +
+      '<div id="pdProgAlloc" style="margin:0 0 14px"><div style="font-size:10px;color:var(--t6);padding:2px 0">담당자별 할당/실적 로딩 중...</div></div>' +
       '<label class="fl" style="font-size:11px;color:var(--t4)">작업 노트 <span style="color:var(--t6)">(처리 결과·진행 상황)</span></label>' +
       '<textarea id="pdProgNote" rows="4" placeholder="이번 업데이트의 작업 내용·처리 결과를 적어주세요" style="width:100%;box-sizing:border-box;font-size:12px;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);margin-top:6px;resize:vertical"></textarea>' +
       '<div style="display:flex;gap:8px;margin-top:16px">' +

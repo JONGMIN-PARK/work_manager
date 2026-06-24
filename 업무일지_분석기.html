@@ -902,7 +902,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.164</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.165</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3461,6 +3461,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.165',date:'2026-06-24',title:'👥 진척률 모달 — 담당자별 실작업/할당 시간(달성률%) 표 + 투입시간 라벨 정리',tag:'feat',items:[
+      '진척률·작업 노트 모달의 시간 정보를 합계 한 줄에서 담당자별 표로 확장 — 각 담당자의 "실작업 / 할당 (달성률%)"과 맨 아래 합계 표시. 할당 초과 시 빨간색',
+      '할당시간 = 마일스톤 목표시간(assigneeTargets[이름]), 실작업시간 = 작업노트 로그(hours)를 작성자별로 합산',
+      '"투입시간 (h)" 라벨/설명을 두 줄로 정리하고 담당자별 표를 입력칸 아래 별도 블록으로 배치 (가독성 개선)',
+      '영향: project-detail.js, 업무일지_분석기.html(버전·패치노트). 클라이언트 전용 — 배포 후 새로고침'
+    ]},
     {ver:'13.164',date:'2026-06-24',title:'📝 투입실적 작업 노트 줄바꿈 표시 + 진척률 모달에 작업/할당 시간(%) 표시',tag:'feat',items:[
       '작업 노트가 줄바꿈 없이 한 줄로 뭉쳐 보이던 문제 수정 — 투입실적 최신 노트·작업 노트 이력(목록/모달) 모두 입력한 줄바꿈 그대로 표시(white-space:pre-wrap)',
       '진척률·작업 노트 업데이트 모달의 "투입시간 (h)" 옆에 누적 작업시간/할당시간 및 달성률(%) 표시 — 예: "작업 12h / 할당 20h (60%)". 할당 초과 시 빨간색 강조',
