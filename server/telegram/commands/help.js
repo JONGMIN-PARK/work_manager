@@ -68,6 +68,34 @@ var CMD_HELP = {
     examples: [],
     tip: '매주 금요일에 사용하면 편리합니다!'
   },
+  wr: {
+    title: '/wr — 주간업무보고 (팀)',
+    usage: '/wr\n/wr {팀명}',
+    format: '웹에 적재된 팀 주간업무보고를 조회.\n팀명 없으면 최신 주차 팀별 요약, 있으면 섹션별 상세',
+    examples: ['/wr', '/wr 소프트웨어팀', '/wr 영업'],
+    tip: '/wr-stats 추이 · /wr-me 내 항목'
+  },
+  'wr-stats': {
+    title: '/wr-stats — 주간업무보고 추이',
+    usage: '/wr-stats 또는 /wr_stats',
+    format: '최근 주차별 완료율 + 인원별 항목 수',
+    examples: [],
+    tip: '/wr 로 팀별 현황 확인'
+  },
+  'wr-me': {
+    title: '/wr-me — 내 주간업무보고 항목',
+    usage: '/wr-me 또는 /wr_me',
+    format: '최신 주차 보고서에서 내 이름이 담당으로 포함된 항목',
+    examples: [],
+    tip: '@이름 으로 담당이 지정된 항목만 표시'
+  },
+  progress: {
+    title: '/progress — 프로젝트 진척률',
+    usage: '/progress\n/progress {프로젝트명}',
+    format: '마일스톤별 진행률 + 담당자별 실작업/할당 달성률(%)',
+    examples: ['/progress', '/progress SK하이닉스', '/progress B2024-001'],
+    tip: '할당시간 초과 시 ⚠️ 표시. /project 로 전체 현황'
+  },
   'my-stats': {
     title: '/my-stats — 내 월간 통계',
     usage: '/my-stats 또는 /my_stats',
@@ -193,10 +221,15 @@ function create(sendMessage) {
       '<b>📊 분석</b>\n' +
       '/summary — 금주 업무시간 요약\n' +
       '/report — 월간 리포트\n' +
-      '/weekly-report — 주간보고 생성\n' +
+      '/weekly-report — 주간보고 생성(개인)\n' +
       '/overdue — 지연/긴급 현황\n' +
       '/project &lt;이름&gt; — 프로젝트 현황\n' +
+      '/progress &lt;이름&gt; — 진척률/달성률\n' +
       '/checklist &lt;이름&gt; — 체크리스트\n\n' +
+      '<b>📋 주간업무보고 (팀)</b>\n' +
+      '/wr &lt;팀명&gt; — 팀 주간보고 조회\n' +
+      '/wr-stats — 주차별 완료율 추이\n' +
+      '/wr-me — 내 담당 항목\n\n' +
       '<b>📅 일정/수주</b>\n' +
       '/calendar — 이번 주 일정\n' +
       '/orders — 수주 목록\n' +

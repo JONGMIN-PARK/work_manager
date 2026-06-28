@@ -53,7 +53,7 @@ async function sendMessage(chatId, text, opts) {
 }
 
 /* ── Command modules (lazy-initialized) ── */
-var personalCmds, analysisCmds, scheduleCmds, projectCmds, docsCmds, teamCmds, utilityCmds, helpCmds;
+var personalCmds, analysisCmds, scheduleCmds, projectCmds, docsCmds, teamCmds, utilityCmds, helpCmds, weeklyCmds;
 
 function initCommands() {
   if (personalCmds) return;
@@ -65,6 +65,7 @@ function initCommands() {
   teamCmds     = require('../telegram/commands/team').create(sendMessage);
   utilityCmds  = require('../telegram/commands/utility').create(sendMessage);
   helpCmds     = require('../telegram/commands/help').create(sendMessage);
+  weeklyCmds   = require('../telegram/commands/weekly').create(sendMessage);
 }
 
 /** 봇 명령어 자동완성 등록 (BotFather 대체) */
@@ -78,7 +79,11 @@ async function setMyCommands() {
     { command: 'log', description: '업무일지 빠른 등록' },
     { command: 'summary', description: '금주 업무시간 요약' },
     { command: 'report', description: '월간 리포트' },
-    { command: 'weekly_report', description: '주간보고 생성' },
+    { command: 'weekly_report', description: '주간보고 생성(개인)' },
+    { command: 'wr', description: '주간업무보고(팀)' },
+    { command: 'wr_stats', description: '주간보고 추이' },
+    { command: 'wr_me', description: '내 주간보고 항목' },
+    { command: 'progress', description: '프로젝트 진척률' },
     { command: 'my_stats', description: '내 월간 통계' },
     { command: 'overdue', description: '지연/긴급 현황' },
     { command: 'project', description: '프로젝트 현황' },
@@ -176,7 +181,7 @@ async function verifyAndLink(code, chatId, tgUsername) {
   );
 
   // 기본 알림 설정 생성 (tenant_id 포함)
-  var defaultEvents = ['issue_assigned', 'issue_status_changed', 'project_delayed', 'deadline_d3', 'deadline_d1', 'deadline_today', 'user_pending'];
+  var defaultEvents = ['issue_assigned', 'issue_status_changed', 'project_delayed', 'deadline_d3', 'deadline_d1', 'deadline_today', 'user_pending', 'weekly_report_uploaded', 'milestone_progress'];
   for (var i = 0; i < defaultEvents.length; i++) {
     await db.query(
       "INSERT INTO notification_prefs (user_id, tenant_id, channel, event_type, is_enabled) VALUES ($1, $2, 'telegram', $3, TRUE) ON CONFLICT (user_id, channel, event_type) DO NOTHING",
@@ -393,6 +398,22 @@ async function handleUpdate(update) {
   if (text === '/weekly-report' || text === '/weeklyreport' || text === '/weekly_report') {
     return analysisCmds.cmdWeeklyReport(chatId, user);
   }
+  // 주간업무보고(팀) — weekly_reports 테이블 기반
+  if (text === '/wr-stats' || text === '/wr_stats' || text === '/wrstats') {
+    return weeklyCmds.cmdWeeklyStats(chatId, user);
+  }
+  if (text === '/wr-me' || text === '/wr_me' || text === '/wrme') {
+    return weeklyCmds.cmdWeeklyMine(chatId, user);
+  }
+  if (text === '/wr' || text.startsWith('/wr ') || text === '/주간업무보고' || text.startsWith('/주간업무보고 ')) {
+    var wrArg = text.replace(/^\/(wr|주간업무보고)\s*/, '').trim();
+    return weeklyCmds.cmdWeekly(chatId, user, wrArg || null);
+  }
+  // 프로젝트 진척률 (마일스톤 달성률)
+  if (text === '/progress' || text.startsWith('/progress ')) {
+    var progArg = text.replace(/^\/progress\s*/, '').trim();
+    return projectCmds.cmdProgress(chatId, user, progArg || null);
+  }
   if (text === '/help' || text.startsWith('/help ')) {
     var helpArg = text.replace(/^\/help\s*/, '').trim();
     return helpCmds.cmdHelp(chatId, helpArg || null);
@@ -456,7 +477,10 @@ async function handleUpdate(update) {
     { patterns: [/이번\s*주\s*일정/, /주간\s*일정/, /캘린더/], cmd: function() { return scheduleCmds.cmdCalendar(chatId, user, 7); } },
     { patterns: [/수주\s*목록/, /수주\s*현황/, /수주\s*보여/], cmd: function() { return scheduleCmds.cmdOrders(chatId, user); } },
     { patterns: [/납품\s*예정/, /납품\s*일정/], cmd: function() { return scheduleCmds.cmdDeliveries(chatId, user); } },
+    { patterns: [/주간업무보고/, /팀\s*보고/, /팀\s*주간/], cmd: function() { return weeklyCmds.cmdWeekly(chatId, user, null); } },
+    { patterns: [/내\s*주간보고/, /내\s*보고\s*항목/], cmd: function() { return weeklyCmds.cmdWeeklyMine(chatId, user); } },
     { patterns: [/주간\s*보고/, /주간\s*리포트/], cmd: function() { return analysisCmds.cmdWeeklyReport(chatId, user); } },
+    { patterns: [/진척률/, /진행\s*현황/, /마일스톤\s*현황/], cmd: function() { return projectCmds.cmdProgress(chatId, user, null); } },
     { patterns: [/월간\s*보고/, /월간\s*리포트/, /월간\s*통계/], cmd: function() { return analysisCmds.cmdReport(chatId, user); } },
     { patterns: [/내\s*통계/, /나\s*통계/, /개인\s*통계/], cmd: function() { return personalCmds.cmdMyStats(chatId, user); } },
     { patterns: [/지연/, /긴급\s*현황/, /오버듀/], cmd: function() { return analysisCmds.cmdOverdue(chatId, user); } },
@@ -568,6 +592,10 @@ module.exports = {
   cmdCancelRemind: function(chatId, user, t) { initCommands(); return utilityCmds.cmdCancelRemind(chatId, user, t); },
   cmdCloseVote: function(chatId, user, t) { initCommands(); return utilityCmds.cmdCloseVote(chatId, user, t); },
   cmdWeeklyReport: function(chatId, user) { initCommands(); return analysisCmds.cmdWeeklyReport(chatId, user); },
+  cmdWeekly: function(chatId, user, arg) { initCommands(); return weeklyCmds.cmdWeekly(chatId, user, arg); },
+  cmdWeeklyStats: function(chatId, user) { initCommands(); return weeklyCmds.cmdWeeklyStats(chatId, user); },
+  cmdWeeklyMine: function(chatId, user) { initCommands(); return weeklyCmds.cmdWeeklyMine(chatId, user); },
+  cmdProgress: function(chatId, user, arg) { initCommands(); return projectCmds.cmdProgress(chatId, user, arg); },
   callApi: callApi,
   getMetrics: getMetrics
 };

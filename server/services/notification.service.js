@@ -74,6 +74,14 @@ var TEMPLATES = {
     return '✅ <b>마일스톤 완료</b>\n' +
       (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.milestoneName);
   },
+  weekly_report_uploaded: function (p) {
+    return '📋 <b>주간업무보고 등록</b>\n' +
+      escHtml(p.team || '(팀 미지정)') + (p.weekLabel ? ' <code>' + escHtml(p.weekLabel) + '</code>' : '') + '\n' +
+      '총 ' + escHtml(p.count) + '건' +
+      (p.done != null ? ' (완료 ' + escHtml(p.done) + ')' : '') +
+      (p.uploader ? ' · 작성 ' + escHtml(p.uploader) : '') + '\n' +
+      '💡 /wr 로 확인';
+  },
   event_today: function (p) {
     // p.content는 호출자가 조립한 사전-안전 HTML — raw 유지
     return '☀️ <b>오늘 브리핑</b>\n\n' + (p.content || '');
@@ -228,6 +236,7 @@ var EVENT_TITLES = {
   deadline_today: '오늘 납기일입니다',
   user_pending: '신규 가입 승인 요청',
   milestone_complete: '마일스톤이 완료되었습니다',
+  weekly_report_uploaded: '주간업무보고가 등록되었습니다',
   order_delivery_d7: '납품 D-7 알림',
   order_delivery_d3: '납품 D-3 알림',
   weekly_digest: '주간 다이제스트',

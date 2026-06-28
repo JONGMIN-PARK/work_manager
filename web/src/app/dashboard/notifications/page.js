@@ -11,6 +11,8 @@ var EVENT_LABELS = {
   deadline_today: '납기 D-Day',
   user_pending: '가입 승인 요청',
   milestone_complete: '마일스톤 완료',
+  milestone_progress: '마일스톤 진척 보고',
+  weekly_report_uploaded: '주간업무보고 등록',
   order_delivery_d7: '납품 D-7',
   order_delivery_d3: '납품 D-3',
   weekly_digest: '주간 다이제스트',
@@ -21,6 +23,7 @@ var EVENT_ICONS = {
   issue_assigned: '🎫', issue_status_changed: '🔵', project_delayed: '⚠️',
   deadline_d3: '⏰', deadline_d1: '🔔', deadline_today: '🏁',
   user_pending: '👤', milestone_complete: '✅',
+  milestone_progress: '📈', weekly_report_uploaded: '📋',
   order_delivery_d7: '📦', order_delivery_d3: '📦',
   weekly_digest: '📊', progress_warning: '📉',
 };

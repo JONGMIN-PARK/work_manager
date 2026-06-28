@@ -1,5 +1,24 @@
 # Work Manager — 변경 이력
 
+## v13.169 (2026-06-28) — 텔레그램 연동 확장 (주간업무보고 + 마일스톤 진척률)
+
+### 배경
+주간업무보고(weekly_reports)는 웹 admin 업로드/검색만 가능했고, 최근 추가된 마일스톤 진척률·담당자별 달성률(v13.164~165)도 텔레그램으로 볼 수 없었음. "웹 접속 없이 핵심 업무 파악" 목표(PRD_텔레그램_확장)에 맞춰 봇 명령어·알림을 확장.
+
+### 변경
+- **신규 봇 명령어 (주간업무보고/팀)** — `server/telegram/commands/weekly.js`:
+  - `/wr` — 최신 주차 팀별 요약(완료율 바차트), `/wr <팀명>` — 섹션별 항목 상세.
+  - `/wr-stats` — 최근 주차별 완료율 추이 + 인원별 항목 수.
+  - `/wr-me` — 최신 주차에서 내 이름(@담당)이 포함된 항목.
+  - 모두 `weekly_reports.parsed`(JSONB) 기반, `tenant_id` 격리.
+- **신규 봇 명령어 (진척률)** — `commands/project.js` `cmdProgress`:
+  - `/progress` 목록 / `/progress <프로젝트>` — 마일스톤별 진행률 + 담당자별 `실작업/할당(달성률%)`. 할당 초과 ⚠️. (`milestone_progress_logs` 실작업 합 vs `assignee_targets` 할당)
+- **신규 알림** `weekly_report_uploaded` — 보고서 업로드 시 테넌트 관리자/팀장 + 보고서에 언급된 멤버에게 발송(`routes/weekly-reports.js`, 응답 후 fire-and-forget). 텔레그램/이메일/인앱 + 설정 UI 토글.
+- **연동 배선**: `telegram.service.js` 디스패처/`setMyCommands` 자동완성/자연어 매핑/기본 수신 이벤트, `help.js` 도움말, `web/.../notifications/page.js` 설정 토글(주간업무보고 등록·마일스톤 진척 보고).
+
+### 영향
+- `server/telegram/commands/weekly.js`(신규), `server/telegram/commands/project.js`, `server/telegram/commands/help.js`, `server/services/telegram.service.js`, `server/services/notification.service.js`, `server/routes/weekly-reports.js`, `web/src/app/dashboard/notifications/page.js`. **서버 변경** — 배포 후 적용(신규 npm 의존성·마이그레이션 없음).
+
 ## v13.168 (2026-06-24) — 텔레그램 메시지 서식 정리 (AI 마크다운 "태그" 제거)
 
 ### 배경

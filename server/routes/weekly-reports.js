@@ -4,6 +4,51 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var parser = require('../services/weekly-report-parser');
+var notificationService = require('../services/notification.service');
+
+/**
+ * 주간업무보고 업로드 알림 — 테넌트 관리자/팀장 + 보고서에 언급된 멤버에게 발송.
+ * 응답을 막지 않도록 fire-and-forget. (테넌트 격리: 수신자 모두 같은 tenant)
+ */
+async function notifyWeeklyReportUploads(tenantId, savedReports, uploaderName) {
+  try {
+    // 테넌트 활성 사용자 이름→id 맵 (멤버 매칭) + 관리자/팀장 id
+    var uR = await db.query(
+      "SELECT id, name, role FROM users WHERE tenant_id = $1 AND status = 'active'",
+      [tenantId]
+    );
+    var nameToId = {};
+    var adminIds = [];
+    uR.rows.forEach(function (u) {
+      if (u.name) nameToId[u.name] = u.id;
+      if (u.role === 'admin' || u.role === 'manager' || u.role === 'executive') adminIds.push(u.id);
+    });
+
+    for (var i = 0; i < savedReports.length; i++) {
+      var rep = savedReports[i];
+      var parsed = rep.parsed || {};
+      var stats = (parsed.stats && parsed.stats.cur) || {};
+      var byStatus = stats.byStatus || {};
+      var memberNames = Object.keys((stats.byMember) || {});
+
+      var recipients = {};
+      adminIds.forEach(function (id) { recipients[id] = true; });
+      memberNames.forEach(function (nm) { if (nameToId[nm]) recipients[nameToId[nm]] = true; });
+      var ids = Object.keys(recipients);
+      if (!ids.length) continue;
+
+      await notificationService.notify('weekly_report_uploaded', {
+        team: (parsed.meta && parsed.meta.team) || rep.team || null,
+        weekLabel: (parsed.meta && parsed.meta.weekLabel) || rep.week_label || null,
+        count: stats.total || 0,
+        done: byStatus.done != null ? byStatus.done : null,
+        uploader: uploaderName || null
+      }, ids);
+    }
+  } catch (e) {
+    console.error('[weekly-reports/notify]', e.message);
+  }
+}
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -14,6 +59,7 @@ router.post('/', async function (req, res) {
   try {
     var payloads = Array.isArray(req.body) ? req.body : [req.body];
     var saved = [];
+    var savedForNotify = [];
     for (var i = 0; i < payloads.length; i++) {
       var p = payloads[i];
       if (!p || !p.name) {
@@ -46,8 +92,17 @@ router.post('/', async function (req, res) {
         ]
       );
       saved.push(r.rows[0]);
+      savedForNotify.push({
+        team: r.rows[0].team || meta.team || null,
+        week_label: r.rows[0].week_label || meta.weekLabel || null,
+        parsed: parsed
+      });
     }
     res.status(201).json({ data: saved, count: saved.length });
+
+    // 업로드 알림 (응답 후 fire-and-forget)
+    notifyWeeklyReportUploads(req.tenant.id, savedForNotify, req.user && req.user.name)
+      .catch(function (e) { console.error('[weekly-reports/notify]', e.message); });
   } catch (e) {
     console.error('[weekly-reports/upload]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });

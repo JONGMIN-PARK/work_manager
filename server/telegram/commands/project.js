@@ -141,9 +141,118 @@ function create(sendMessage) {
     return sendMessage(chatId, msg);
   }
 
+  /** 봇 명령어: /progress <프로젝트> — 마일스톤 진척률 + 담당자별 실작업/할당 달성률 (v13.164~165 연동) */
+  async function cmdProgress(chatId, user, query) {
+    if (!query) {
+      // 진척 보고가 있는 진행중 프로젝트 목록 (reported_hours 또는 progress 보유)
+      var listR = await db.query(
+        "SELECT p.name, p.order_no, p.progress, " +
+        "  COALESCE(SUM(m.reported_hours),0) AS reported " +
+        "FROM projects p JOIN milestones m ON m.project_id = p.id AND m.tenant_id = p.tenant_id " +
+        "WHERE p.tenant_id = $1 AND p.status NOT IN ('done') " +
+        "GROUP BY p.id, p.name, p.order_no, p.progress " +
+        "ORDER BY reported DESC, p.progress DESC LIMIT 12",
+        [user.tenant_id]
+      );
+      if (listR.rows.length === 0) return sendMessage(chatId, '📈 진척 보고가 있는 프로젝트가 없습니다.');
+
+      var msg = '📈 <b>프로젝트 진척률</b>\n\n';
+      listR.rows.forEach(function (r) {
+        var pct = r.progress || 0;
+        msg += escHtml(r.name);
+        if (r.order_no) msg += ' <code>[' + escHtml(r.order_no) + ']</code>';
+        msg += '\n   <code>' + textBar(pct, 100, 10) + '</code> ' + pct + '%';
+        if (parseFloat(r.reported) > 0) msg += ' · 실작업 ' + Math.round(parseFloat(r.reported) * 10) / 10 + 'h';
+        msg += '\n';
+      });
+      msg += '\n💡 상세: <code>/progress 프로젝트명</code>';
+      return sendMessage(chatId, msg);
+    }
+
+    var pR = await db.query(
+      "SELECT id, name, order_no, progress FROM projects WHERE tenant_id = $1 AND (name ILIKE $2 OR order_no ILIKE $2) ORDER BY (status='done') LIMIT 1",
+      [user.tenant_id, '%' + query + '%']
+    );
+    if (pR.rows.length === 0) return sendMessage(chatId, '❌ "' + escHtml(query) + '" 프로젝트를 찾을 수 없습니다.');
+    var p = pR.rows[0];
+
+    // 마일스톤 + 담당자 할당시간(assignee_targets)
+    var msR = await db.query(
+      "SELECT id, name, status, progress, reported_hours, assignee_targets, end_date " +
+      "FROM milestones WHERE project_id = $1 AND tenant_id = $2 ORDER BY sort_order, end_date",
+      [p.id, user.tenant_id]
+    );
+    if (msR.rows.length === 0) return sendMessage(chatId, '📈 "' + escHtml(p.name) + '" 프로젝트에 마일스톤이 없습니다.');
+
+    // 담당자별 실작업시간(로그 hours 합) — 마일스톤별
+    var logR = await db.query(
+      "SELECT milestone_id, author_name, COALESCE(SUM(hours),0) AS h " +
+      "FROM milestone_progress_logs WHERE project_id = $1 AND tenant_id = $2 AND deleted_at IS NULL " +
+      "GROUP BY milestone_id, author_name",
+      [p.id, user.tenant_id]
+    );
+    var actualByMs = {}; // ms_id → { name: hours }
+    logR.rows.forEach(function (r) {
+      if (!actualByMs[r.milestone_id]) actualByMs[r.milestone_id] = {};
+      if (r.author_name) actualByMs[r.milestone_id][r.author_name] = parseFloat(r.h);
+    });
+
+    function statusIcon(st) { return st === 'done' ? '✅' : st === 'active' ? '🔵' : '⬜'; }
+    function parseTargets(v) { try { return typeof v === 'string' ? JSON.parse(v) : (v || {}); } catch (_) { return {}; } }
+
+    var totalReported = 0, totalTarget = 0;
+    var pct = p.progress || 0;
+    var body = '';
+
+    msR.rows.forEach(function (m) {
+      var targets = parseTargets(m.assignee_targets);
+      var actual = actualByMs[m.id] || {};
+      var msTarget = Object.keys(targets).reduce(function (s, k) { return s + (parseFloat(targets[k]) || 0); }, 0);
+      var msReported = parseFloat(m.reported_hours) || 0;
+      totalReported += msReported;
+      totalTarget += msTarget;
+      var msRate = msTarget > 0 ? Math.round(msReported / msTarget * 1000) / 10 : null;
+
+      body += '\n' + statusIcon(m.status) + ' <b>' + escHtml(m.name) + '</b> ' + (m.progress || 0) + '%';
+      if (m.end_date) body += ' (~ ' + escHtml(m.end_date) + ')';
+      body += '\n';
+      body += '   실작업 ' + (Math.round(msReported * 10) / 10) + 'h';
+      if (msTarget > 0) body += ' / 할당 ' + (Math.round(msTarget * 10) / 10) + 'h' + (msRate != null ? ' (' + msRate + '%)' : '');
+      body += '\n';
+
+      // 담당자별 (할당 또는 실작업이 있는 사람)
+      var names = {};
+      Object.keys(targets).forEach(function (k) { names[k] = true; });
+      Object.keys(actual).forEach(function (k) { names[k] = true; });
+      var nameList = Object.keys(names);
+      if (nameList.length > 0) {
+        var perLines = nameList.map(function (nm) {
+          var a = actual[nm] || 0;
+          var tg = parseFloat(targets[nm]) || 0;
+          var over = tg > 0 && a > tg;
+          var seg = escHtml(nm) + ' ' + (Math.round(a * 10) / 10) + (tg > 0 ? '/' + (Math.round(tg * 10) / 10) : '') + 'h';
+          return over ? '⚠️' + seg : seg;
+        });
+        body += '   <code>' + perLines.join(' · ') + '</code>\n';
+      }
+    });
+
+    var totalRate = totalTarget > 0 ? Math.round(totalReported / totalTarget * 1000) / 10 : null;
+    var msg = '📈 <b>' + escHtml(p.name) + ' 진척률</b>\n';
+    if (p.order_no) msg += '<code>[' + escHtml(p.order_no) + ']</code>\n';
+    msg += '전체: <code>' + textBar(pct, 100, 12) + '</code> <b>' + pct + '%</b>\n';
+    msg += '투입 실작업 ' + (Math.round(totalReported * 10) / 10) + 'h';
+    if (totalTarget > 0) msg += ' / 할당 ' + (Math.round(totalTarget * 10) / 10) + 'h' + (totalRate != null ? ' (' + totalRate + '%)' : '');
+    msg += '\n' + body;
+
+    if (msg.length > 3900) msg = msg.slice(0, 3850) + '\n…(생략) — 웹에서 전체 확인';
+    return sendMessage(chatId, msg);
+  }
+
   return {
     cmdProject: cmdProject,
-    cmdChecklist: cmdChecklist
+    cmdChecklist: cmdChecklist,
+    cmdProgress: cmdProgress
   };
 }
 
