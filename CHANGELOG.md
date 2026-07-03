@@ -1,5 +1,39 @@
 # Work Manager — 변경 이력
 
+## v13.170 (2026-07-03) — 문서관리 미리보기 개선 (Word/PPT/PDF/텍스트) + txt 업로드 확인
+
+### 배경
+사용자: "프로젝트 관리 > 문서관리에 txt 파일 업로드가 안 되고, pdf·ppt·word·txt 등 미리보기가 되도록 개선해달라."
+
+### 진단
+- **txt 업로드**: 현재 코드는 이미 업로드 `accept`(`.txt` 포함)·텍스트 추출·미리보기 모두 txt를 지원. 클라이언트가 서명 요청 `mimeType`과 GCS PUT `Content-Type`를 동일 값으로 보내 서명 불일치도 없음 → 코드상 정상. 미반영은 정적 호스팅(github.io)의 **캐시된 옛 `document-manager.js?v=5`** 가능성이 큼.
+- **미리보기**: PDF(iframe)·엑셀(XLSX)·텍스트는 정상이나, **Word(docx)는 조잡한 정규식 텍스트 추출**, **PPT/DOC(구버전 바이너리)는 미지원**이었음.
+
+### 변경 (`document-manager.js`, `업무일지_분석기.html`)
+- **Word(docx)**: `mammoth.js`(신규 CDN, 클라이언트 사이드·외부 전송 없음)로 서식 포함 HTML 렌더. 실패 시 기존 텍스트 추출 폴백.
+- **PowerPoint(pptx)**: 슬라이드별 텍스트 카드로 정리 + (서버 저장 파일 한정) Office 뷰어 버튼.
+- **구버전 PPT/DOC**: 클라이언트 렌더 불가 → 다운로드 안내 + Office Online 뷰어(opt-in, 외부 서비스) 버튼. 서명 다운로드 URL(15분) 재사용.
+- **PDF**: iframe 유지 + "🔗 새 탭에서 열기" 폴백 링크.
+- **Markdown(.md)**: 원문 `<pre>` 대신 `rMD()` 마크다운 렌더.
+- **캐시 버스트**: `document-manager.js?v=5 → v6` (정적 호스팅 옛 스크립트 강제 갱신 → txt 업로드 UI 최신화).
+
+### 미리보기 지원 현황(개선 후)
+| 형식 | 방식 | 위치 |
+| --- | --- | --- |
+| 이미지(png/jpg/gif/svg/bmp) | Blob `<img>` | 클라이언트 |
+| PDF | iframe(내장 뷰어) + 새 탭 폴백 | 클라이언트 |
+| 엑셀(xlsx/xls) | XLSX → 시트 탭 HTML | 클라이언트 |
+| 텍스트(txt/csv/log/json/xml) | `<pre>` 원문 | 클라이언트 |
+| Markdown(md) | `rMD()` 렌더 | 클라이언트 |
+| Word(docx) | mammoth → 서식 HTML | 클라이언트 |
+| PPT(pptx) | 슬라이드별 텍스트 + Office 뷰어(선택) | 클라이언트/외부 |
+| 구버전 ppt·doc | Office Online 뷰어(선택) | 외부 |
+
+### 영향
+- 클라이언트 전용 변경(`document-manager.js`, `업무일지_분석기.html`). 서버·DB·마이그레이션 변화 없음.
+- Office 뷰어는 사용자가 직접 클릭하는 opt-in 방식(원본이 Microsoft로 전송됨을 안내). docx는 mammoth로 로컬 렌더가 기본이라 외부 전송 없음.
+- 만약 txt 업로드가 하드 리프레시(캐시 삭제) 후에도 실패하면 GCS 환경변수/버킷 CORS 문제이므로 별도 점검 필요.
+
 ## v13.169 (2026-06-28) — 텔레그램 연동 확장 (주간업무보고 + 마일스톤 진척률)
 
 ### 배경

@@ -573,10 +573,13 @@ async function showFilePreview(fileRecord) {
   infoHtml += '</div></div>';
 
   // 서버에서 불러온 파일은 data가 없음 → GCS에서 원본 바이너리를 가져온다
+  // signedDownloadUrl: 공개 접근 가능한 서명 URL(15분). Office/PPT 등 외부 뷰어 폴백에 재사용.
+  var signedDownloadUrl = null;
   if (!data && fileRecord.storageKey) {
     try {
       var dl = await apiFetch('/api/docs/files/' + fileRecord.id + '/download-url');
       if (dl && dl.data && dl.data.downloadUrl) {
+        signedDownloadUrl = dl.data.downloadUrl;
         var resp = await fetch(dl.data.downloadUrl);
         if (resp.ok) data = await resp.arrayBuffer();
       }
@@ -600,7 +603,8 @@ async function showFilePreview(fileRecord) {
     // PDF
     else if (ext === 'pdf') {
       var url = docCreateBlobUrl(data, 'application/pdf');
-      previewHtml = '<iframe src="' + url + '" style="width:100%;height:420px;border:1px solid var(--bd);border-radius:6px;background:#fff"></iframe>';
+      previewHtml = '<iframe src="' + url + '" style="width:100%;height:460px;border:1px solid var(--bd);border-radius:6px;background:#fff"></iframe>';
+      previewHtml += '<div style="margin-top:6px;text-align:right"><a href="' + url + '" target="_blank" rel="noopener" style="font-size:10px;color:var(--ac)">🔗 새 탭에서 열기</a></div>';
     }
     // 엑셀
     else if (['xlsx', 'xls'].indexOf(ext) >= 0 && typeof XLSX !== 'undefined') {
@@ -615,23 +619,57 @@ async function showFilePreview(fileRecord) {
         previewHtml += '<div class="doc-sheet tw" data-sheet-idx="' + idx + '" style="' + (idx > 0 ? 'display:none;' : '') + 'font-size:10px;max-height:380px;overflow:auto">' + sheetHtml + '</div>';
       });
     }
-    // 텍스트
+    // 텍스트 (.md 는 마크다운 렌더, 그 외는 원문 그대로)
     else if (['txt', 'csv', 'md', 'json', 'xml', 'log'].indexOf(ext) >= 0) {
       var text = new TextDecoder('utf-8', { fatal: false }).decode(data);
-      previewHtml = '<pre style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;font-family:\'JetBrains Mono\',monospace;max-height:420px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--t2)">' + eH(text.slice(0, 30000)) + '</pre>';
-    }
-    // PPTX/DOCX (텍스트 추출)
-    else if (['pptx', 'docx'].indexOf(ext) >= 0) {
-      var text = fileRecord.textCache || await extractTextFromFile(fileRecord);
-      if (text) {
-        previewHtml = '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;max-height:420px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--t2);line-height:1.6">' + eH(text.slice(0, 20000)) + '</div>';
+      if (ext === 'md' && typeof rMD === 'function') {
+        previewHtml = '<div class="doc-md" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:14px;font-size:12px;max-height:460px;overflow:auto;color:var(--t2);line-height:1.7">' + rMD(text.slice(0, 30000)) + '</div>';
       } else {
-        previewHtml = '<div style="text-align:center;padding:30px;color:var(--t5)"><div style="font-size:24px;margin-bottom:8px">📄</div><div style="font-size:11px">텍스트 추출 불가 — 다운로드하여 확인하세요</div></div>';
+        previewHtml = '<pre style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;font-family:\'JetBrains Mono\',monospace;max-height:460px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--t2)">' + eH(text.slice(0, 30000)) + '</pre>';
       }
+    }
+    // Word — DOCX 는 mammoth 로 서식 포함 렌더(클라이언트 사이드), 실패 시 텍스트 추출 폴백
+    else if (ext === 'docx') {
+      var html = '';
+      if (typeof mammoth !== 'undefined') {
+        try {
+          var conv = await mammoth.convertToHtml({ arrayBuffer: data });
+          html = conv && conv.value ? conv.value : '';
+        } catch (mErr) { console.warn('[docPreview] mammoth', mErr); }
+      }
+      if (html) {
+        previewHtml = '<div class="doc-word" style="background:#fff;color:#111;border:1px solid var(--bd);border-radius:6px;padding:20px 24px;font-size:12.5px;line-height:1.7;max-height:460px;overflow:auto">' + html + '</div>';
+      } else {
+        var wtext = fileRecord.textCache || await extractTextFromFile(fileRecord);
+        previewHtml = wtext
+          ? '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;max-height:460px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--t2);line-height:1.6">' + eH(wtext.slice(0, 20000)) + '</div>'
+          : docPreviewFallbackHtml(icon, signedDownloadUrl);
+      }
+    }
+    // PowerPoint — PPTX 는 슬라이드별 텍스트 카드, 원본 서식은 Office 뷰어(선택)로
+    else if (ext === 'pptx') {
+      var ptext = fileRecord.textCache || await extractTextFromFile(fileRecord);
+      if (ptext) {
+        var slides = ptext.split(/---\s*Slide\s*\d+\s*---/).map(function (s) { return s.trim(); }).filter(Boolean);
+        var body = slides.length
+          ? slides.map(function (s, i) {
+              return '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:10px 12px;margin-bottom:8px">' +
+                '<div style="font-size:9px;font-weight:700;color:var(--t5);margin-bottom:4px">슬라이드 ' + (i + 1) + '</div>' +
+                '<div style="font-size:11px;color:var(--t2);line-height:1.6;white-space:pre-wrap;word-break:break-all">' + eH(s.slice(0, 4000)) + '</div></div>';
+            }).join('')
+          : '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;color:var(--t2);white-space:pre-wrap">' + eH(ptext.slice(0, 20000)) + '</div>';
+        previewHtml = '<div style="max-height:460px;overflow:auto">' + body + '</div>' + docOfficeViewerBtn(signedDownloadUrl);
+      } else {
+        previewHtml = docPreviewFallbackHtml(icon, signedDownloadUrl);
+      }
+    }
+    // 구버전 PPT / DOC (바이너리) — 클라이언트 렌더 불가 → Office 뷰어(선택) 안내
+    else if (['ppt', 'doc'].indexOf(ext) >= 0) {
+      previewHtml = docPreviewFallbackHtml(icon, signedDownloadUrl);
     }
     // 기타
     else {
-      previewHtml = '<div style="text-align:center;padding:30px;color:var(--t5)"><div style="font-size:24px;margin-bottom:8px">' + icon.icon + '</div><div style="font-size:11px">미리보기를 지원하지 않는 파일 형식입니다<br>다운로드하여 확인하세요</div></div>';
+      previewHtml = docPreviewFallbackHtml(icon, signedDownloadUrl);
     }
   } catch (e) {
     console.warn('[DocManager] preview error', e);
@@ -639,6 +677,23 @@ async function showFilePreview(fileRecord) {
   }
 
   content.innerHTML = '<div style="display:flex;gap:14px" id="docPreviewFlex">' + infoHtml + '<div style="flex:1;min-width:0">' + previewHtml + '</div></div>';
+}
+
+/* Office Online 뷰어 버튼 — 서명 URL이 있을 때만. 외부(Microsoft) 서비스로 원본을 전송하므로 사용자가 직접 클릭해 여는 opt-in 방식 */
+function docOfficeViewerBtn(signedUrl) {
+  if (!signedUrl) return '';
+  var viewer = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(signedUrl);
+  return '<div style="margin-top:8px;text-align:center">' +
+    '<a href="' + viewer + '" target="_blank" rel="noopener" class="btn btn-g btn-s" style="text-decoration:none">🌐 Office 뷰어로 원본 서식 보기 (외부 서비스)</a>' +
+    '<div style="font-size:9px;color:var(--t5);margin-top:4px">원본이 Microsoft Office Online으로 전송됩니다</div></div>';
+}
+
+/* 클라이언트 렌더 불가 형식의 폴백 — 안내 + (가능하면) Office 뷰어 버튼 */
+function docPreviewFallbackHtml(icon, signedUrl) {
+  var html = '<div style="text-align:center;padding:30px 20px;color:var(--t5)">' +
+    '<div style="font-size:24px;margin-bottom:8px">' + (icon && icon.icon ? icon.icon : '📎') + '</div>' +
+    '<div style="font-size:11px">브라우저에서 직접 미리보기가 어려운 형식입니다.<br>다운로드하거나 아래 Office 뷰어로 확인하세요.</div></div>';
+  return html + docOfficeViewerBtn(signedUrl);
 }
 
 /* 엑셀 시트 탭 전환 */
