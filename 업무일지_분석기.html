@@ -903,7 +903,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.168</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.170</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3462,6 +3462,14 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.170',date:'2026-07-03',title:'📄 문서관리 미리보기 개선 — Word(서식 렌더)·PPT·PDF·Markdown + txt 업로드 캐시 갱신',tag:'feat',items:[
+      'Word(docx): 기존 정규식 텍스트 추출 → mammoth.js로 서식 포함 HTML 미리보기(굵게·표·목록 등). 브라우저 안에서 처리되어 원본이 외부로 나가지 않음',
+      'PowerPoint(pptx): 슬라이드별 텍스트 카드로 정리. 구버전 ppt·doc은 브라우저 렌더가 불가능해 "Office 뷰어로 원본 서식 보기"(선택) 버튼 제공 — 클릭 시에만 외부(Microsoft) 뷰어로 열림',
+      'PDF: 내장 미리보기 + "🔗 새 탭에서 열기" 폴백 링크 추가',
+      'Markdown(.md): 원문 대신 서식 렌더로 표시',
+      'txt 업로드: 최신 코드는 이미 지원(선택 목록·업로드·미리보기 모두 txt 포함). 정적 호스팅 캐시로 옛 화면이 남던 경우를 위해 document-manager.js 버전 갱신(?v=5→v6) — 하드 새로고침(Ctrl+Shift+R) 후 반영',
+      '영향: document-manager.js, 업무일지_분석기.html(mammoth CDN·버전·패치노트). 클라이언트 전용 — 새로고침 후 적용'
+    ]},
     {ver:'13.168',date:'2026-06-24',title:'📨 텔레그램 메시지 서식 정리 — AI 응답 마크다운(#·**·```) → 깔끔한 HTML, "태그" 제거',tag:'fix',items:[
       '텔레그램 AI 자연어 답변이 마크다운(제목 #, **굵게**, 코드블록)을 그대로 보내 글자에 # 같은 "태그"가 붙고 읽기 어렵던 문제 수정',
       'AI 응답을 텔레그램 HTML로 정리: 제목(#) 제거→굵게, **굵게**→<b>, `코드`→<code>, 글머리표→•, 인용(>)·수평선(---) 제거, 특수문자 escape',
