@@ -103,12 +103,12 @@ var CMD_HELP = {
     examples: [],
     tip: '배정 알림의 [진행 시작] 버튼으로 바로 진행 처리'
   },
-  reviews: {
-    title: '/reviews — 검토 현황',
-    usage: '/reviews',
-    format: '검토 체크리스트 진행률·결과(보완필요 우선)',
-    examples: [],
-    tip: '웹 프로젝트 상세 → 검토 탭에서 항목 관리'
+  prestudy: {
+    title: '/prestudy — 사전검토 현황',
+    usage: '/prestudy\n/prestudy {업체명}',
+    format: '프로젝트 이전 단계(문의·기술검토·개선제안·아이디어) 진행 건.\n업체명을 주면 해당 업체 건만 조회',
+    examples: ['/prestudy', '/prestudy SK하이닉스'],
+    tip: '웹 → 프로젝트 관리 → 사전검토 탭에서 등록·전환'
   },
   actions: {
     title: '/actions — 내 액션아이템',
@@ -262,7 +262,7 @@ function create(sendMessage) {
       '/progress &lt;이름&gt; — 진척률/달성률\n' +
       '/devitems — 내 개발 아이템\n' +
       '/actions — 내 액션아이템\n' +
-      '/reviews — 검토 현황\n' +
+      '/prestudy &lt;업체&gt; — 사전검토\n' +
       '/meeting &lt;이름&gt; — 회의 조회\n\n' +
       '<b>📅 일정/수주</b>\n' +
       '/calendar — 이번 주 일정\n' +

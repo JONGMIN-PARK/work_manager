@@ -30,6 +30,12 @@ async function resolveTarget(req, targetType, targetId) {
     if (!pr.rows.length) return { exists: false };
     return { exists: true, projectId: targetId };
   }
+  if (targetType === 'prestudy') {
+    // 사전검토는 프로젝트 이전 단계 — project_id 없음. 테넌트 구성원이 공유.
+    var sr = await db.query('SELECT id FROM prestudies WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [targetId, req.tenant.id]);
+    if (!sr.rows.length) return { exists: false };
+    return { exists: true, projectId: null, isPrestudy: true };
+  }
   // milestone
   var mr = await db.query('SELECT project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [targetId, req.tenant.id]);
   if (!mr.rows.length) return { exists: false };
@@ -60,6 +66,20 @@ async function resolveRecipients(req, targetType, targetId, projectId, recipient
       [recipientIds, req.tenant.id]
     );
     rows = ur.rows;
+  } else if (targetType === 'prestudy') {
+    // 사전검토 — 담당(owner) + 참여자(이름) 매칭
+    var psr = await db.query('SELECT owner_id, participants FROM prestudies WHERE id = $1 AND tenant_id = $2', [targetId, req.tenant.id]);
+    if (psr.rows.length) {
+      var ps = psr.rows[0];
+      var pNames = ps.participants;
+      if (typeof pNames === 'string') { try { pNames = JSON.parse(pNames); } catch (_) { pNames = []; } }
+      if (!Array.isArray(pNames)) pNames = [];
+      var byOwner = ps.owner_id ? await db.query('SELECT id, name, display_name, email FROM users WHERE id = $1 AND tenant_id = $2', [ps.owner_id, req.tenant.id]) : { rows: [] };
+      var byNames = pNames.length
+        ? await db.query('SELECT id, name, display_name, email FROM users WHERE tenant_id = $1 AND (name = ANY($2) OR display_name = ANY($2))', [req.tenant.id, pNames])
+        : { rows: [] };
+      rows = byOwner.rows.concat(byNames.rows);
+    }
   } else if (targetType === 'milestone') {
     // 마일스톤 assignee_targets 키(이름)들을 users.name/display_name로 매칭
     var msr = await db.query('SELECT assignee_targets FROM milestones WHERE id = $1 AND tenant_id = $2', [targetId, req.tenant.id]);
@@ -102,8 +122,8 @@ router.post('/', async function (req, res) {
     var targetType = b.targetType || b.target_type;
     var targetId = b.targetId || b.target_id;
     var body = (b.body != null) ? String(b.body).trim() : '';
-    if (['project', 'milestone'].indexOf(targetType) === -1) {
-      return res.status(400).json({ error: 'BAD_REQUEST', message: "targetType은 'project' 또는 'milestone'이어야 합니다." });
+    if (['project', 'milestone', 'prestudy'].indexOf(targetType) === -1) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: "targetType은 'project', 'milestone', 'prestudy' 중 하나여야 합니다." });
     }
     if (!targetId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'targetId 필수' });
     if (!body) return res.status(400).json({ error: 'BAD_REQUEST', message: '본문은 비어 있을 수 없습니다.' });
@@ -112,7 +132,7 @@ router.post('/', async function (req, res) {
     if (!tgt.exists) return res.status(404).json({ error: 'NOT_FOUND', message: '대상을 찾을 수 없습니다.' });
     var projectId = tgt.projectId;
 
-    if (!await canAccessProject(req, projectId)) {
+    if (!tgt.isPrestudy && !await canAccessProject(req, projectId)) {
       return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 코멘트 권한이 없습니다.' });
     }
 
@@ -145,22 +165,31 @@ router.post('/', async function (req, res) {
     var targetName = '';
     var orderNo = '';
     try {
-      var pr = await db.query('SELECT name, order_no FROM projects WHERE id = $1 AND tenant_id = $2', [projectId, req.tenant.id]);
-      var projName = pr.rows.length ? (pr.rows[0].name || '') : '';
-      orderNo = pr.rows.length ? (pr.rows[0].order_no || '') : '';
-      if (targetType === 'milestone') {
-        var mnr = await db.query('SELECT name FROM milestones WHERE id = $1 AND tenant_id = $2', [targetId, req.tenant.id]);
-        var msName = mnr.rows.length ? (mnr.rows[0].name || '') : '';
-        targetName = (projName ? projName + ' / ' : '') + msName;
+      if (targetType === 'prestudy') {
+        // 사전검토는 프로젝트가 없음 — 검토 건 제목(업체)을 대상명으로 사용
+        var psn = await db.query('SELECT title, client FROM prestudies WHERE id = $1 AND tenant_id = $2', [targetId, req.tenant.id]);
+        if (psn.rows.length) {
+          targetName = (psn.rows[0].client ? psn.rows[0].client + ' / ' : '') + (psn.rows[0].title || '');
+        }
       } else {
-        targetName = projName;
+        var pr = await db.query('SELECT name, order_no FROM projects WHERE id = $1 AND tenant_id = $2', [projectId, req.tenant.id]);
+        var projName = pr.rows.length ? (pr.rows[0].name || '') : '';
+        orderNo = pr.rows.length ? (pr.rows[0].order_no || '') : '';
+        if (targetType === 'milestone') {
+          var mnr = await db.query('SELECT name FROM milestones WHERE id = $1 AND tenant_id = $2', [targetId, req.tenant.id]);
+          var msName = mnr.rows.length ? (mnr.rows[0].name || '') : '';
+          targetName = (projName ? projName + ' / ' : '') + msName;
+        } else {
+          targetName = projName;
+        }
       }
     } catch (_) {}
 
     // ─── 이메일 발송 (best-effort) ───
     if (sendEmail) {
       try {
-        var subject = (targetName || (targetType === 'milestone' ? '마일스톤' : '프로젝트')) + ' 피드백';
+        var typeLabel = targetType === 'milestone' ? '마일스톤' : (targetType === 'prestudy' ? '사전검토' : '프로젝트');
+        var subject = (targetName || typeLabel) + ' 피드백';
         var html = '<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:20px">' +
           '<h2 style="color:#3B82F6;margin:0 0 12px">새 피드백</h2>' +
           '<p style="margin:4px 0"><strong>대상:</strong> ' + esc(targetName) + '</p>' +
@@ -210,14 +239,14 @@ router.get('/', async function (req, res) {
   try {
     var targetType = req.query.targetType || req.query.target_type;
     var targetId = req.query.targetId || req.query.target_id;
-    if (['project', 'milestone'].indexOf(targetType) === -1) {
-      return res.status(400).json({ error: 'BAD_REQUEST', message: "targetType은 'project' 또는 'milestone'이어야 합니다." });
+    if (['project', 'milestone', 'prestudy'].indexOf(targetType) === -1) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: "targetType은 'project', 'milestone', 'prestudy' 중 하나여야 합니다." });
     }
     if (!targetId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'targetId 필수' });
 
     var tgt = await resolveTarget(req, targetType, targetId);
     if (!tgt.exists) return res.status(404).json({ error: 'NOT_FOUND', message: '대상을 찾을 수 없습니다.' });
-    if (!await canAccessProject(req, tgt.projectId)) {
+    if (!tgt.isPrestudy && !await canAccessProject(req, tgt.projectId)) {
       return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 접근 권한이 없습니다.' });
     }
 

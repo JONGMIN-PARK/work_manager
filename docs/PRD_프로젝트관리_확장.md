@@ -1,6 +1,6 @@
-# PRD: 프로젝트 관리 확장 (검토 체크리스트 · 회의 · 개발 백로그)
+# PRD: 프로젝트 관리 확장 (사전검토 · 회의 · 개발 백로그)
 
-> **Version**: 1.0
+> **Version**: 1.1 (사전검토 모듈 반영)
 > **Date**: 2026-06-28
 > **Status**: Draft
 > **관련 문서**: [PRD_프로젝트_달력_타임라인.md](../PRD_프로젝트_달력_타임라인.md), [PRD_텔레그램_확장.md](./PRD_텔레그램_확장.md)
@@ -32,52 +32,49 @@
 
 ---
 
-## 2. 모듈 A — 검토 체크리스트 (간단형)
+## 2. 모듈 A — 사전검토 (Pre-study) ✅ 구현됨 (v13.174)
 
-단계 전환·출하 전 "확인해야 할 항목"을 프로젝트에 붙이는 **가벼운 검토 목록**. 판정/전자서명 같은 무거운 게이트는 두지 않고, 체크·검토자 메모·완료율만 관리한다.
+> **변경 이력**: 최초 초안은 "프로젝트 하위 검토 체크리스트"였으나, 실제 요구는
+> *프로젝트가 되기 이전 단계*를 다루는 **독립 모듈**이었다. v13.171의 프로젝트 하위
+> 「검토」 탭(`project_reviews`)은 폐기하고 아래 모듈로 대체함.
 
-### 2.1 데이터 모델
+프로젝트와 무관하게, 특정 업체와의 업무 검토·기술 검토·개선 제안·아이디어(브레인스토밍)를
+관리하다가 확정되면 프로젝트/수주로 넘긴다. 프로젝트 관리의 독립 모드(`setMode('prestudy')`).
 
-기존 `checklists` 패턴을 그대로 따르되 용도를 `kind='review'` 로 구분(또는 신규 테이블). 신규 테이블 안:
+### 2.1 상태 흐름
 
-```sql
-CREATE TABLE IF NOT EXISTS project_reviews (
-  id          VARCHAR(100) PRIMARY KEY,
-  tenant_id   UUID NOT NULL REFERENCES tenants(id) DEFAULT '00000000-0000-0000-0000-000000000001',
-  project_id  VARCHAR(100) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  phase       VARCHAR(20),                 -- order/design/manufacture/inspect/deliver (선택)
-  title       VARCHAR(255) NOT NULL,        -- 예: "출하 전 검토", "설계 검토"
-  items       JSONB DEFAULT '[]',           -- [{ text, done, checker, checked_at, note }]
-  reviewer_id UUID REFERENCES users(id),    -- 검토 담당(팀장) — config reviewer 역할 재사용
-  note        TEXT,                          -- 종합 검토 의견
-  result      VARCHAR(20) DEFAULT 'open',    -- open | ok | issue (가벼운 3단계, 판정 아님)
-  version     INT NOT NULL DEFAULT 1,
-  created_by  UUID REFERENCES users(id),
-  created_at  TIMESTAMPTZ DEFAULT now(),
-  updated_at  TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_project_reviews_proj ON project_reviews(tenant_id, project_id);
+```
+💡 아이디어 → 🔍 검토중 → 🤝 업체협의 → 📄 견적/제안 → ✅ 확정(→ 프로젝트/수주 전환)
+                                                        ⏸ 보류   ❌ 드롭
 ```
 
-`items` 각 항목: `{ text, done(bool), checker(name), checked_at, note }`.
+### 2.2 데이터 모델 (`047_prestudies.sql`)
 
-### 2.2 UI
+`prestudies` — title, client(업체), category(inquiry/tech/improve/idea/quote),
+status, priority, owner_id, participants, background, **notes(브레인스토밍)**,
+conclusion, due_date(회신기한), tags, **linked_project_id / linked_order_no**,
+soft delete + version.
 
-- 프로젝트 상세 새 섹션 **「검토」** — 체크리스트 UI 재사용(항목 토글=완료 처리, 완료율 바).
-- 항목 추가/삭제, 검토자 지정, 종합 의견(`note`), 결과 배지(`⬜검토중 / ✅확인 / ⚠️보완필요`).
-- 프로젝트 편집 시 **템플릿**에서 기본 검토 항목 자동 생성(단계별 프리셋).
+### 2.3 기능
 
-### 2.3 API (`routes/project-reviews.js`)
+| 기능 | 설명 |
+|------|------|
+| 3가지 보기 | 칸반(상태별) · **업체별**(특정 업체 검토 이력) · 목록 |
+| 필터 | 검색(제목·업체·내용) · 업체 · 내 담당 |
+| 전환 | 프로젝트(담당자 → PL 자동 등록) 또는 수주 생성 후 원본에 링크 |
+| 코멘트 | `comments` 모듈 재사용(`target_type='prestudy'`) — 메일·텔레그램 알림 |
+| 알림 | `prestudy_assigned` · `prestudy_due`(D-1) · `prestudy_won` |
+| 텔레그램 | `/prestudy`, `/prestudy <업체명>` |
+
+### 2.4 API (`routes/prestudies.js`)
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
-| GET | `/api/projects/:pid/reviews` | 프로젝트 검토 목록 |
-| POST | `/api/projects/:pid/reviews` | 검토 생성(템플릿 지정 가능) |
-| PUT | `/api/reviews/:id` | 제목·검토자·의견·결과 수정 |
-| PUT | `/api/reviews/:id/items/:idx/toggle` | 항목 완료 토글(체커·시각 기록) |
-| DELETE | `/api/reviews/:id` | 소프트 삭제 |
-
----
+| GET | `/api/prestudies?status=&client=&category=&mine=&q=` | 목록 |
+| GET | `/api/prestudies/clients` | 업체별 집계 |
+| POST/PUT/DELETE | `/api/prestudies[/:id]` | 등록·수정·소프트삭제 |
+| PUT | `/api/prestudies/:id/move` | 칸반 이동 |
+| POST | `/api/prestudies/:id/convert` | 프로젝트/수주 전환 |
 
 ## 3. 모듈 B — 회의 관리 (Meeting)
 
@@ -214,17 +211,16 @@ CREATE INDEX IF NOT EXISTS idx_dev_items_board ON project_dev_items(tenant_id, p
 
 ## 7. 단계별 로드맵
 
-### Phase 1 — 개발 백로그 + 검토 체크리스트 (기반, 독립적)
-- [ ] `project_dev_items` 마이그레이션 + CRUD API + 칸반 UI
-- [ ] `project_reviews` 마이그레이션 + CRUD API + 검토 섹션 UI(체크리스트 재사용)
-- [ ] 단계별 검토 항목 **템플릿** 프리셋
+### Phase 1 — 개발 백로그 ✅ 완료 (v13.171)
+- [x] `project_dev_items` 마이그레이션 + CRUD API + 칸반 UI
+- [x] ~~`project_reviews`~~ → 폐기(046), **사전검토 모듈로 대체** ✅ (v13.174)
 
-### Phase 2 — 회의 관리 + 일정 통합
+### Phase 2 — 회의 관리 + 일정 통합 ✅ 완료 (v13.172)
 - [ ] `meetings` / `meeting_action_items` 마이그레이션 + API
 - [ ] 회의 생성 → `events(type=meeting)` 자동 발행, `EVT_TYPE.review` 추가
 - [ ] 회의록 UI + 액션아이템 표 + 이슈/개발아이템 전환
 
-### Phase 3 — 텔레그램 연동 + 자동화
+### Phase 3 — 텔레그램 연동 + 자동화 ✅ 완료 (v13.173~174)
 - [ ] `/reviews` `/meeting` `/actions` `/devitems` 명령어(+자동완성·자연어·help)
 - [ ] `review_completed` `action_item_assigned` `dev_item_assigned` 알림 + 설정 UI 토글
 - [ ] 액션아이템 기한 D-1 스케줄러(`scheduler.service` 크론)

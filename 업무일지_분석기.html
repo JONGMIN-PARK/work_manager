@@ -229,6 +229,7 @@ window.wmDataBus = (function () {
     calendar: { project:1, milestone:1, event:1 },
     timeline: { project:1, milestone:1, checklist:1 },
     orders:   { order:1, project:1, issue:1 },
+    prestudy: { prestudy:1 },
     issues:   { issue:1, project:1 },
     docs:     { document:1, project:1 },
     as:       { as:1, asCategory:1, order:1, project:1 }
@@ -238,6 +239,7 @@ window.wmDataBus = (function () {
     calendar: function () { if (typeof initCalendar === 'function') initCalendar(); },
     timeline: function () { if (typeof renderTimeline === 'function') renderTimeline(); },
     orders:   function () { if (typeof renderOrders === 'function') renderOrders(); },
+    prestudy: function () { if (typeof renderPrestudy === 'function') renderPrestudy(); },
     issues:   function () { if (typeof renderIssues === 'function') renderIssues(); },
     docs:     function () { if (typeof renderDocManager === 'function') renderDocManager(); },
     as:       function () { if (typeof renderAS === 'function') renderAS(); }
@@ -274,6 +276,7 @@ window.wmDataBus = (function () {
 <script defer src="project-detail.js?v=2" onerror="console.warn('project-detail.js 로드 실패')"></script>
 <script defer src="dashboard.js?v=5" onerror="console.warn('dashboard.js 로드 실패')"></script>
 <script defer src="pipeline.js?v=5" onerror="console.warn('pipeline.js 로드 실패')"></script>
+<script defer src="prestudy.js?v=1" onerror="console.warn('prestudy.js 로드 실패')"></script>
 <script defer src="order-view.js?v=5" onerror="console.warn('order-view.js 로드 실패')"></script>
 <script defer src="issue-manager.js?v=5" onerror="console.warn('issue-manager.js 로드 실패')"></script>
 <script defer src="document-manager.js?v=6" onerror="console.warn('document-manager.js 로드 실패')"></script>
@@ -903,7 +906,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.173</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.174</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -951,6 +954,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
     <button class="tab" data-m="calendar" onclick="setMode('calendar')" role="tab" aria-selected="false">📅 달력</button>
     <button class="tab" data-m="timeline" onclick="setMode('timeline')" role="tab" aria-selected="false">📊 타임라인</button>
     <button class="tab" data-m="orders" onclick="setMode('orders')" role="tab" aria-selected="false">📋 수주대장</button>
+    <button class="tab" data-m="prestudy" onclick="setMode('prestudy')" role="tab" aria-selected="false" title="프로젝트 이전 단계 — 업체 문의·기술검토·아이디어">🔍 사전검토</button>
     <button class="tab" data-m="issues" onclick="setMode('issues')" role="tab" aria-selected="false">🎫 이슈관리</button>
     <button class="tab" data-m="docs" onclick="setMode('docs')" role="tab" aria-selected="false">📂 문서관리</button>
     <button class="tab" data-m="as" onclick="setMode('as')" role="tab" aria-selected="false">🛠️ A/S</button>
@@ -1183,6 +1187,11 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
   <!-- ═══ ORDERS MODE ═══ -->
   <div id="mOrders" class="hidden">
     <div id="ordersWrap"></div>
+  </div>
+
+  <!-- ═══ PRE-STUDY MODE (사전검토 — 프로젝트 이전 단계) ═══ -->
+  <div id="mPrestudy" class="hidden">
+    <div id="prestudyWrap"></div>
   </div>
 
   <!-- ═══ ISSUES MODE ═══ -->
@@ -1855,7 +1864,7 @@ function setPage(page){
   var _opTab=document.querySelector('#modeTabsProj .tab[data-m="operator"]');
   if(_opTab)_opTab.classList.toggle('hidden',!(typeof isOperator==='function'&&isOperator()));
   // 모든 모드 숨기기
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   // 해당 페이지의 첫 탭 활성화
   if(page==='useradmin'){
     document.getElementById('modeTabs').classList.add('hidden');
@@ -1915,11 +1924,11 @@ function setMode(m){
   curMode=m;
   // 해당 페이지의 서브탭만 업데이트
   var teamModes=['weekly','archive','trend'];
-  var projModes=['pipeline','calendar','timeline','orders','issues','docs','as','operator'];
+  var projModes=['pipeline','calendar','timeline','orders','prestudy','issues','docs','as','operator'];
   var tabBar=teamModes.includes(m)?'#modeTabs':'#modeTabsProj';
   document.querySelectorAll(tabBar+' .tab').forEach(function(t){var sel=t.dataset.m===m;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
-  var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
 
   // 캐시 hit이면 render 호출 자체를 스킵 → 이전 그려진 내용 즉시 표시
@@ -1933,6 +1942,7 @@ function setMode(m){
   else if(m==='calendar'&&typeof initCalendar==='function'){initCalendar();rendered=true}
   else if(m==='timeline'&&typeof initTimeline==='function'){initTimeline();rendered=true}
   else if(m==='orders'&&typeof renderOrders==='function'){renderOrders();rendered=true}
+  else if(m==='prestudy'&&typeof renderPrestudy==='function'){renderPrestudy();rendered=true}
   else if(m==='issues'&&typeof renderIssues==='function'){renderIssues();rendered=true}
   else if(m==='docs'&&typeof renderDocManager==='function'){renderDocManager();rendered=true}
   else if(m==='as'&&typeof renderAS==='function'){renderAS();rendered=true}
@@ -1948,6 +1958,7 @@ function setMode(m){
     calendar: { project:1, milestone:1, event:1 },
     timeline: { project:1, milestone:1, checklist:1, order:1, event:1 },
     orders:   { order:1, project:1, issue:1 },
+    prestudy: { prestudy:1 },
     issues:   { issue:1, project:1 },
     docs:     { document:1, project:1 },
     as:       { as:1, asCategory:1, order:1, project:1 },
@@ -3462,6 +3473,16 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.174',date:'2026-08-01',title:'🔍 사전검토 신규 모듈 — 프로젝트 이전 단계(업체 문의·기술검토·브레인스토밍) + 프로젝트/수주 전환',tag:'feat',items:[
+      '프로젝트 관리에 「🔍 사전검토」 탭 신설. 프로젝트가 되기 전 단계를 독립적으로 관리 — 특정 업체와의 업무 검토, 기술 검토, 개선 제안, 아이디어를 자유롭게 등록',
+      '3가지 보기: 칸반(아이디어→검토중→업체협의→견적/제안→확정) · 업체별(특정 업체와의 검토 이력 묶어보기) · 목록',
+      '브레인스토밍 노트 + 배경/요구사항 + 결론 기록, 회신기한·우선순위·유형(문의/기술검토/개선제안/아이디어/견적) 관리',
+      '확정되면 클릭 한 번으로 프로젝트 또는 수주로 전환 (담당자는 PL로 자동 등록, 원본에 전환 링크 표시)',
+      '검토 건별 코멘트 스레드(메일·텔레그램 알림) 지원, 담당 배정·회신기한 D-1·확정 알림',
+      '텔레그램: /prestudy (진행중 사전검토), /prestudy 업체명 (업체별 조회)',
+      '※ 이전 버전에서 프로젝트 상세에 있던 「검토」 탭은 제거되었습니다(용도가 달라 사전검토 모듈로 대체)',
+      '영향: prestudy.js(신규), server/migrations/046·047, server/routes/prestudies.js(신규)·comments.js, project-data.js, project-detail.js, 업무일지_분석기.html. 서버 변경 포함 — 배포 후 마이그레이션 자동 적용'
+    ]},
     {ver:'13.173',date:'2026-08-01',title:'📲 프로젝트 관리 텔레그램 연동 — /devitems·/reviews·/actions·/meeting + 배정 알림 (PRD Phase 3)',tag:'feat',items:[
       '텔레그램 봇 명령어 추가: /devitems(내 개발 아이템), /actions(내 액션아이템), /reviews(검토 현황), /meeting <프로젝트>(회의록+액션)',
       '배정 알림: 개발 아이템·회의 액션아이템 배정 시, 검토 결과(확인/보완필요) 확정 시 담당자·PL·관리자에게 텔레그램/이메일/인앱 알림',

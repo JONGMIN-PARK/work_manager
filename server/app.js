@@ -172,8 +172,8 @@ var dataExportRoutes = require('./routes/data-export');
 var notificationRoutes = require('./routes/notifications');
 var weeklyReportRoutes = require('./routes/weekly-reports');
 var devItemRoutes = require('./routes/dev-items');
-var projectReviewRoutes = require('./routes/project-reviews');
 var meetingRoutes = require('./routes/meetings');
+var prestudyRoutes = require('./routes/prestudies');
 var commentRoutes = require('./routes/comments');
 var messageRoutes = require('./routes/messages');
 var v1Router = require('./routes/v1');
@@ -217,8 +217,8 @@ app.use('/api/data-export', dataExportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/weekly-reports', weeklyReportRoutes);
 app.use('/api/dev-items', devItemRoutes);
-app.use('/api/project-reviews', projectReviewRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/prestudies', prestudyRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 
@@ -247,6 +247,7 @@ if (telegramService.isConfigured()) {
   scheduler.scheduleDaily(8, 0, function () { return notificationService.sendProgressWarnings(); }, 'Progress warning');
   scheduler.scheduleDaily(9, 0, function () { return notificationService.sendOverloadWarnings(); }, 'Overload warning');
   scheduler.scheduleDaily(0, 5, function () { return notificationService.sendActionItemReminders(); }, 'Action item D-1 reminder');
+  scheduler.scheduleDaily(0, 7, function () { return notificationService.sendPrestudyReminders(); }, 'Prestudy D-1 reminder');
 
   // ─── 1분마다 리마인더 워커 (telegram_reminders) ───
   // 서버 재시작 시 setTimeout 소실 문제를 DB 영속화 + 폴링 워커로 해소

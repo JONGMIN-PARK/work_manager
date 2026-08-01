@@ -981,29 +981,48 @@ function devItemDel(id) {
   return apiFetch('/api/dev-items/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
 }
 
-/* ═══ 검토 체크리스트 (project_reviews, 간단형) — PRD Phase 1 ═══ */
-function reviewsByProject(pid) {
-  return apiFetch('/api/project-reviews?projectId=' + encodeURIComponent(pid))
+/* ═══ 사전검토 (prestudies) — 프로젝트 이전 단계 독립 모듈 ═══ */
+function prestudyGetAll(params) {
+  var qs = [];
+  if (params) {
+    Object.keys(params).forEach(function (k) {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== '') qs.push(k + '=' + encodeURIComponent(params[k]));
+    });
+  }
+  return apiFetch('/api/prestudies' + (qs.length ? '?' + qs.join('&') : ''))
     .then(function (r) { return toCamelArray(r.data); })
     .catch(function () { return []; });
 }
-function reviewTemplates() {
-  return apiFetch('/api/project-reviews/templates').then(function (r) { return r.data || {}; }).catch(function () { return {}; });
+function prestudyGet(id) {
+  return apiFetch('/api/prestudies/' + encodeURIComponent(id)).then(function (r) { return toCamel(r.data); });
 }
-function reviewCreate(item) {
-  return apiFetch('/api/project-reviews', { method: 'POST', body: JSON.stringify(item) })
-    .then(function (r) { return toCamel(r.data); });
+function prestudyPut(item) {
+  if (item.id) {
+    return apiFetch('/api/prestudies/' + encodeURIComponent(item.id), { method: 'PUT', body: JSON.stringify(item) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('prestudy', 'updated', { id: s && s.id }); return s; });
+  }
+  return apiFetch('/api/prestudies', { method: 'POST', body: JSON.stringify(item) })
+    .then(function (r) { var s = toCamel(r.data); _emitBus('prestudy', 'created', { id: s && s.id }); return s; });
 }
-function reviewUpdate(id, patch) {
-  return apiFetch('/api/project-reviews/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(patch) })
-    .then(function (r) { return toCamel(r.data); });
+function prestudyMove(id, status, sortOrder) {
+  return apiFetch('/api/prestudies/' + encodeURIComponent(id) + '/move', { method: 'PUT', body: JSON.stringify({ status: status, sortOrder: sortOrder || 0 }) })
+    .then(function (r) { var s = toCamel(r.data); _emitBus('prestudy', 'updated', { id: id }); return s; });
 }
-function reviewToggleItem(id, idx) {
-  return apiFetch('/api/project-reviews/' + encodeURIComponent(id) + '/items/' + idx + '/toggle', { method: 'PUT' })
-    .then(function (r) { return toCamel(r.data); });
+function prestudyConvert(id, target, orderNo) {
+  var body = { target: target };
+  if (target === 'order' && orderNo) body.orderNo = orderNo;
+  return apiFetch('/api/prestudies/' + encodeURIComponent(id) + '/convert', { method: 'POST', body: JSON.stringify(body) })
+    .then(function (r) {
+      _emitBus('prestudy', 'updated', { id: id });
+      // 전환 결과가 프로젝트/수주이므로 해당 탭 캐시도 무효화
+      _emitBus(target === 'order' ? 'order' : 'project', 'created', { id: id });
+      return r.data;
+    });
 }
-function reviewDel(id) {
-  return apiFetch('/api/project-reviews/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
+function prestudyDel(id) {
+  return apiFetch('/api/prestudies/' + encodeURIComponent(id), { method: 'DELETE' })
+    .then(function () { _emitBus('prestudy', 'deleted', { id: id }); })
+    .catch(function () { return null; });
 }
 
 /* ═══ 회의 관리 (meetings + action_items) — PRD Phase 2 ═══ */

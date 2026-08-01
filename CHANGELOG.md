@@ -1,5 +1,27 @@
 # Work Manager — 변경 이력
 
+## v13.174 (2026-08-01) — 사전검토(Pre-study) 신규 모듈 + 프로젝트 상세 「검토」 탭 제거
+
+### 배경
+v13.171에서 추가한 「검토」는 *진행중 프로젝트의 하위 탭*이었으나, 실제로 필요한 것은 **프로젝트가 되기 이전 단계**를 다루는 독립 항목이었다. 특정 업체와의 업무 검토·기술 검토·개선 제안·아이디어(브레인스토밍)를 프로젝트와 무관하게 관리하고, 확정되면 프로젝트/수주로 넘기는 흐름이 필요.
+
+### 변경
+- **제거**: 프로젝트 상세의 「검토」 탭 + `project_reviews` 테이블·API (046 마이그레이션에서 DROP).
+- **신규 모듈 «사전검토»** — 프로젝트 관리의 독립 모드(수주·이슈·A/S와 동급, `setMode('prestudy')`).
+  - `047_prestudies.sql` — 제목·업체·유형(문의/기술검토/개선제안/아이디어/견적)·상태·우선순위·담당·배경·브레인스토밍 노트·결론·회신기한·전환링크. 테넌트 격리 + 낙관적 락 + 소프트 삭제.
+  - `routes/prestudies.js` — CRUD + `/move`(칸반) + `/convert`(프로젝트·수주 전환) + `/clients`(업체별 집계).
+  - **전환**: 확정 시 프로젝트(담당자를 PL로 자동 등록) 또는 수주 생성 후 원본에 링크.
+  - `prestudy.js`(신규 프론트) — 칸반 / 업체별 / 목록 3가지 보기, 검색·업체·내 담당 필터, 상세 모달.
+  - **코멘트 스레드**: `comments`가 `target_type='prestudy'`를 지원하도록 확장(수신자 = 담당 + 참여자, 프로젝트 권한 게이트 우회).
+- **알림**: `prestudy_assigned`(담당 배정) · `prestudy_due`(회신기한 D-1 스케줄러) · `prestudy_won`(확정 → 담당+관리자). 설정 UI 토글·기본 수신 이벤트 포함.
+- **텔레그램**: `/prestudy`, `/prestudy <업체명>` (기존 `/reviews` 대체), 자동완성·자연어·`/help` 반영.
+
+### 영향
+- 신규: `prestudy.js`, `server/routes/prestudies.js`, `server/migrations/046·047`.
+- 삭제: `server/routes/project-reviews.js`, `server/migrations/044`.
+- 수정: `server/app.js`, `server/routes/comments.js`, `server/services/notification.service.js·telegram.service.js`, `server/telegram/commands/pmext.js·help.js`, `project-data.js`, `project-detail.js`, `web/.../notifications/page.js`, `업무일지_분석기.html`.
+- **서버 변경 포함** — 배포 후 마이그레이션 자동 적용(046이 기존 project_reviews를 정리).
+
 ## v13.173 (2026-08-01) — 프로젝트 관리 텔레그램 연동 + 배정 알림 (PRD Phase 3)
 
 ### 배경

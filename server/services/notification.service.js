@@ -97,11 +97,20 @@ var TEMPLATES = {
       (p.meetingTitle ? '[' + escHtml(p.meetingTitle) + '] ' : '') + escHtml(p.title) +
       '\n기한: ' + escHtml(p.dueDate);
   },
-  review_completed: function (p) {
-    var r = p.result === 'ok' ? '✅ 확인' : (p.result === 'issue' ? '⚠️ 보완필요' : '검토중');
-    return '🔍 <b>검토 완료</b>\n' +
-      (p.projectName ? escHtml(p.projectName) + '\n' : '') +
-      escHtml(p.title) + '\n결과: ' + r;
+  prestudy_assigned: function (p) {
+    return '🔍 <b>사전검토 배정</b>\n' +
+      (p.client ? '[' + escHtml(p.client) + '] ' : '') + escHtml(p.title) +
+      (p.dueDate ? '\n회신기한: ' + escHtml(p.dueDate) : '');
+  },
+  prestudy_due: function (p) {
+    return '⏰ <b>사전검토 회신기한 D-1</b>\n' +
+      (p.client ? '[' + escHtml(p.client) + '] ' : '') + escHtml(p.title) +
+      '\n기한: ' + escHtml(p.dueDate);
+  },
+  prestudy_won: function (p) {
+    return '🎉 <b>사전검토 확정</b>\n' +
+      (p.client ? '[' + escHtml(p.client) + '] ' : '') + escHtml(p.title) +
+      '\n프로젝트/수주로 전환되었습니다.';
   },
   event_today: function (p) {
     // p.content는 호출자가 조립한 사전-안전 HTML — raw 유지
@@ -261,7 +270,9 @@ var EVENT_TITLES = {
   dev_item_assigned: '개발 아이템이 배정되었습니다',
   action_item_assigned: '액션아이템이 배정되었습니다',
   action_item_due: '액션아이템 기한이 임박했습니다',
-  review_completed: '검토가 완료되었습니다',
+  prestudy_assigned: '사전검토가 배정되었습니다',
+  prestudy_due: '사전검토 회신기한이 임박했습니다',
+  prestudy_won: '사전검토가 확정되었습니다',
   order_delivery_d7: '납품 D-7 알림',
   order_delivery_d3: '납품 D-3 알림',
   weekly_digest: '주간 다이제스트',
@@ -828,6 +839,29 @@ async function sendActionItemReminders() {
   console.log('[Notification] Action item D-1 reminders checked:', r.rows.length);
 }
 
+/** 사전검토 회신기한 D-1 리마인더 (매일 실행) */
+async function sendPrestudyReminders() {
+  var tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  var dateStr = tomorrow.toISOString().slice(0, 10);
+
+  var r = await db.query(
+    "SELECT id, title, client, owner_id, due_date FROM prestudies " +
+    "WHERE deleted_at IS NULL AND owner_id IS NOT NULL AND due_date = $1 " +
+    "  AND status NOT IN ('won','dropped')",
+    [dateStr]
+  );
+  for (var i = 0; i < r.rows.length; i++) {
+    var p = r.rows[i];
+    try {
+      await notify('prestudy_due', { prestudyId: p.id, title: p.title, client: p.client, dueDate: p.due_date }, [p.owner_id]);
+    } catch (e) {
+      console.error('[PrestudyReminder]', p.id, e.message);
+    }
+  }
+  console.log('[Notification] Prestudy D-1 reminders checked:', r.rows.length);
+}
+
 /** 그룹 채팅방에 알림 발송 — P0-1: tenantId 필수 (멀티테넌트 격리) */
 async function notifyGroup(linkType, linkId, text, tenantId) {
   if (!tenantId) {
@@ -859,5 +893,6 @@ module.exports = {
   sendProgressWarnings: sendProgressWarnings,
   sendOverloadWarnings: sendOverloadWarnings,
   sendActionItemReminders: sendActionItemReminders,
+  sendPrestudyReminders: sendPrestudyReminders,
   TEMPLATES: TEMPLATES
 };
