@@ -26,7 +26,12 @@ async function createTestTenant(slug) {
  */
 async function createTestUser(opts) {
   opts = opts || {};
-  var email = opts.email || ('test-' + Date.now() + '@test.com');
+  // 이메일은 회원가입 라우트와 동일하게 정규화한다.
+  // /api/auth/register 는 trim().toLowerCase() 후 저장하고 /api/auth/login 도
+  // 같은 정규화 후 `WHERE email = $1` 로 조회한다. 여기서 대문자를 그대로 넣으면
+  // (예: iso-adminA@test.com) 사용자는 만들어지지만 로그인이 401 이 되어
+  // token 이 null 이 되고, 이후 모든 요청이 'Bearer null' 로 401 이 된다.
+  var email = (opts.email || ('test-' + Date.now() + '@test.com')).trim().toLowerCase();
   var name = opts.name || 'TestUser';
   var role = opts.role || 'member';
   var tenantId = opts.tenantId || TEST_TENANT_ID;
