@@ -336,6 +336,7 @@ function _psBuildModal(id, members) {
             '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psConvert(\'' + _psEsc(p.id) + '\',\'order\')">📋 수주로</button>' +
           '</div>') +
     '</div>';
+    html += '<div id="psmTech" style="margin-top:12px"></div>';
     html += '<div id="psmComments" style="margin-top:12px"></div>';
   }
 
@@ -346,9 +347,10 @@ function _psBuildModal(id, members) {
 
   if (typeof createModal !== 'function') { _psToast('모달을 열 수 없습니다.', 'error'); return; }
   _psModal = createModal({ title: isNew ? '새 사전검토' : '사전검토 상세', html: html, width: '640px' });
-  // 코멘트 스레드 (기존 모듈 재사용)
-  if (!isNew && typeof renderCommentThread === 'function') {
-    renderCommentThread('prestudy', p.id, 'psmComments');
+  // 관련 요소기술 + 코멘트 스레드
+  if (!isNew) {
+    psLoadTech(p.id);
+    if (typeof renderCommentThread === 'function') renderCommentThread('prestudy', p.id, 'psmComments');
   }
 }
 
@@ -424,4 +426,70 @@ function psConvert(id, target) {
   }).catch(function (e) {
     _psToast('전환 실패: ' + ((e && e.message) || ''), 'error');
   });
+}
+
+/* ═══ 관련 요소기술 (요소기술 Phase 2 연동) ═══
+   기술검토 단계에서 "이거 우리 보유기술로 됩니다" 판단을 기록으로 남긴다. */
+function psLoadTech(prestudyId) {
+  var box = document.getElementById('psmTech');
+  if (!box) return;
+  if (typeof techByTarget !== 'function') { box.innerHTML = ''; return; }   // 요소기술 모듈 미로드 시 숨김
+  Promise.all([techByTarget('prestudy', prestudyId), (typeof techGetAll === 'function' ? techGetAll({}) : Promise.resolve([]))])
+    .then(function (r) { _psRenderTech(prestudyId, r[0] || [], r[1] || []); })
+    .catch(function () { box.innerHTML = ''; });
+}
+
+function _psRenderTech(prestudyId, linked, allTech) {
+  var box = document.getElementById('psmTech');
+  if (!box) return;
+  var TS = { research: '🔬', developing: '🛠', verifying: '🧪', available: '✅', deprecated: '⚠️' };
+
+  var html = '<div style="border-top:1px solid var(--bd);padding-top:10px">' +
+    '<div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">🧪 관련 요소기술 <span style="color:var(--t6);font-weight:400">(' + linked.length + ')</span></div>';
+
+  if (!linked.length) {
+    html += '<div style="font-size:11px;color:var(--t6);margin-bottom:6px">연결된 보유기술이 없습니다. 검토에 활용할 기술을 연결해두면 판단 근거가 남습니다.</div>';
+  } else {
+    linked.forEach(function (t) {
+      html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--bd);font-size:11px">' +
+        '<span>' + (TS[t.status] || '📌') + '</span>' +
+        '<span style="flex:1;color:var(--t2);word-break:break-word">' +
+          (t.techCode ? '<code style="color:var(--t6)">' + _psEsc(t.techCode) + '</code> ' : '') + _psEsc(t.techName) +
+          (t.techVersion ? ' <span style="color:var(--t5)">' + _psEsc(t.techVersion) + '</span>' : '') +
+          (t.note ? '<span style="color:var(--t5)"> — ' + _psEsc(t.note) + '</span>' : '') +
+        '</span>' +
+        '<button class="btn btn-d btn-s" style="font-size:8px;padding:0 4px" onclick="psTechUnlink(\'' + _psEsc(t.techId) + '\',\'' + _psEsc(t.id) + '\',\'' + _psEsc(prestudyId) + '\')">✕</button>' +
+      '</div>';
+    });
+  }
+
+  var usedIds = {};
+  linked.forEach(function (t) { usedIds[t.techId] = true; });
+  var opts = ['<option value="">보유기술 연결…</option>'].concat(
+    (allTech || []).filter(function (t) { return !usedIds[t.id]; }).map(function (t) {
+      return '<option value="' + _psEsc(t.id) + '">' + (TS[t.status] || '') + ' ' + _psEsc((t.code ? '[' + t.code + '] ' : '') + t.name) + '</option>';
+    })
+  ).join('');
+
+  html += '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">' +
+    '<select id="psTechSel" class="si" style="flex:1;min-width:160px;font-size:10px;padding:3px">' + opts + '</select>' +
+    '<input id="psTechNote" placeholder="적용 방식(선택)" style="flex:1;min-width:110px;font-size:10px;padding:3px 5px">' +
+    '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psTechLink(\'' + _psEsc(prestudyId) + '\')">+ 연결</button>' +
+  '</div></div>';
+  box.innerHTML = html;
+}
+
+function psTechLink(prestudyId) {
+  var sel = document.getElementById('psTechSel');
+  var techId = sel ? sel.value : '';
+  if (!techId) { _psToast('연결할 기술을 선택하세요.', 'warn'); return; }
+  var note = (document.getElementById('psTechNote') || {}).value || '';
+  techUsageAdd(techId, 'prestudy', prestudyId, note.trim() || null)
+    .then(function () { _psToast('요소기술이 연결되었습니다.', 'success'); psLoadTech(prestudyId); })
+    .catch(function () { _psToast('연결 실패', 'error'); });
+}
+
+function psTechUnlink(techId, usageId, prestudyId) {
+  if (!confirm('이 요소기술 연결을 해제할까요?')) return;
+  techUsageDel(techId, usageId).then(function () { psLoadTech(prestudyId); });
 }

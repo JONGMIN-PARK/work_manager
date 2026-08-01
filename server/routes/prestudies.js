@@ -290,6 +290,20 @@ router.post('/:id/convert', async function (req, res) {
       }
       await db.query("UPDATE prestudies SET linked_project_id = $1, status = 'won', updated_by = $2, updated_at = now(), version = version + 1 WHERE id = $3 AND tenant_id = $4",
         [projId, req.user.sub, ps.id, req.tenant.id]);
+      // 사전검토에 연결돼 있던 요소기술 적용 이력을 새 프로젝트로 이관(복제)
+      // — 검토 단계에서 "이 기술로 된다"고 판단한 근거가 프로젝트에도 남는다.
+      try {
+        await db.query(
+          "INSERT INTO tech_usages (id, tenant_id, tech_id, target_type, target_id, note, created_by) " +
+          "SELECT 'tuse-' || substr(md5(random()::text || u.tech_id), 1, 12), u.tenant_id, u.tech_id, 'project', $1, u.note, $2 " +
+          "FROM tech_usages u WHERE u.tenant_id = $3 AND u.target_type = 'prestudy' AND u.target_id = $4 " +
+          "ON CONFLICT (tech_id, target_type, target_id) DO NOTHING",
+          [projId, req.user.sub, req.tenant.id, ps.id]
+        );
+      } catch (e) {
+        // 요소기술 모듈 미적용(테이블 없음) 등은 전환을 막지 않음
+        if (e.code !== '42P01') console.error('[prestudies/convert/tech]', e.message);
+      }
     }
     res.status(201).json({ data: { target: target, created: created } });
     notifyWon(ps, req.tenant.id, req.user.sub);

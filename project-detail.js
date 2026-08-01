@@ -125,6 +125,9 @@ async function showProjectDetail(id) {
     }).join('') : '<div style="font-size:11px;color:var(--t6)">마일스톤 없음</div>';
   html += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:6px">마일스톤 (' + projMs.length + ')</div>' + msHtml + '</div>';
 
+  // 적용 요소기술 (요소기술 Phase 2 연동) — 비동기로 채움
+  html += '<div id="pdTechUsed" style="margin-bottom:12px"></div>';
+
   // 백그라운드 시간 집계 → 채움 (패널 부착 후 setTimeout으로 비동기 실행)
   if (projMs.length && typeof calcHoursByMilestone === 'function') {
     setTimeout(function () {
@@ -240,6 +243,8 @@ async function showProjectDetail(id) {
   if (typeof getProgressHistory === 'function') {
     renderProgressHistoryChart(id, proj);
   }
+  // 적용 요소기술 (요소기술 모듈이 로드된 경우에만)
+  pdLoadTechUsed(id);
   // 프로젝트 코멘트/피드백 스레드 (메일·텔레그램 연동)
   if (typeof renderCommentThread === 'function') {
     renderCommentThread('project', id, 'pdCommentsSection');
@@ -251,6 +256,30 @@ async function showProjectDetail(id) {
   backdrop.onclick = function () { panel.remove(); backdrop.remove(); };
   document.body.appendChild(backdrop);
   } finally { _pdDetailBusy = false; }
+}
+
+/* ═══ 적용 요소기술 (요소기술 Phase 2) ═══
+   이 프로젝트에 어떤 기반기술이 쓰였는지 — 역방향 조회. */
+function pdLoadTechUsed(projId) {
+  var box = document.getElementById('pdTechUsed');
+  if (!box) return;
+  if (typeof techByTarget !== 'function') return;   // 요소기술 모듈 미로드 시 조용히 스킵
+  techByTarget('project', projId).then(function (list) {
+    if (!document.getElementById('pdTechUsed')) return;   // 패널이 닫혔으면 무시
+    if (!list || !list.length) { box.innerHTML = ''; return; }
+    var TS = { research: '🔬', developing: '🛠', verifying: '🧪', available: '✅', deprecated: '⚠️' };
+    var h = '<div style="font-size:10px;color:var(--t5);margin-bottom:4px">적용 요소기술 (' + list.length + ')</div>';
+    list.forEach(function (t) {
+      h += '<div style="display:flex;align-items:center;gap:5px;padding:2px 0;font-size:11px;color:var(--t2)">' +
+        '<span>' + (TS[t.status] || '📌') + '</span>' +
+        '<span style="flex:1;word-break:break-word">' +
+          (t.techCode ? '<code style="color:var(--t6)">' + eH(t.techCode) + '</code> ' : '') + eH(t.techName) +
+          (t.techVersion ? ' <span style="color:var(--t5)">' + eH(t.techVersion) + '</span>' : '') +
+        '</span>' +
+      '</div>';
+    });
+    box.innerHTML = h;
+  }).catch(function () { /* 조용히 무시 */ });
 }
 
 /* ═══ 프로젝트 상세 패널: 탭 전환 ═══ */

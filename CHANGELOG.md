@@ -1,5 +1,27 @@
 # Work Manager — 변경 이력
 
+## v13.177 (2026-08-01) — 요소기술 Phase 2 (적용 이력 · 사전검토/프로젝트 연동 · 코멘트)
+
+### 배경
+[PRD_요소기술_개발관리](docs/PRD_요소기술_개발관리.md) Phase 2. Phase 1(카탈로그·개발일지)은 기술을 *기록*했지만, "그래서 어디에 썼나 / 이 검토에 쓸 기술이 있나"가 빠져 있었다. 이 모듈의 핵심 가치가 여기에 있다.
+
+### 변경
+- **DB** `050_tech_usages.sql` — `tech_usages`(tech_id · target_type(project|prestudy) · target_id · note). 대상 종류가 둘이라 FK를 걸지 않고, 대상 삭제 시에도 이력을 보존한다(조회 시 LEFT JOIN으로 소실 표시).
+- **API** `routes/tech.js`
+  - `GET /api/tech/usages?targetType=&targetId=` — **역방향**(프로젝트·사전검토 → 기술)
+  - `GET/POST/DELETE /api/tech/:id/usages[/:usageId]` — 기술별 적용 이력. 추가 시 대상이 같은 테넌트에 실재하는지 검증, 중복은 `ON CONFLICT`로 note 갱신.
+- **코멘트** `routes/comments.js` — `target_type='tech'` 지원(수신자 = 담당 + 참여자). 프로젝트 권한 게이트를 건너뛰는 플래그를 `isPrestudy` → **`tenantShared`**로 정리(사전검토·요소기술 공용이라 이름이 오해를 줬음).
+- **전환 이관** `routes/prestudies.js` — 사전검토 → 프로젝트 전환 시 연결된 요소기술 usage를 프로젝트로 복제. 요소기술 테이블 부재(42P01)는 전환을 막지 않음.
+- **UI**
+  - `tech.js` — 상세에 「적용 이력」(대상 선택 드롭다운·비고·삭제) + 코멘트 스레드.
+  - `prestudy.js` — 상세에 「관련 요소기술」 연결/해제.
+  - `project-detail.js` — 개요에 「적용 요소기술」 표시(요소기술 모듈 미로드 시 조용히 스킵).
+
+### 영향
+- 신규: `server/migrations/050_tech_usages.sql`.
+- 수정: `server/routes/tech.js·comments.js·prestudies.js`, `tech.js`, `prestudy.js`, `project-detail.js`, `project-data.js`, `업무일지_분석기.html`.
+- **서버 변경 포함** — 배포 후 마이그레이션 자동 적용. 텔레그램 `/tech`·알림은 Phase 3, GitHub 연동은 선택 항목.
+
 ## v13.176 (2026-08-01) — 요소기술 모듈 Phase 1 (카탈로그 · 개발일지 · 기술스택)
 
 ### 배경

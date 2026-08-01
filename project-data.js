@@ -1126,6 +1126,29 @@ function techLogDel(techId, logId) {
     .catch(function () { return null; });
 }
 
+/* 요소기술 적용 이력 (Phase 2) */
+function techUsagesGet(techId) {
+  return apiFetch('/api/tech/' + encodeURIComponent(techId) + '/usages')
+    .then(function (r) { return toCamelArray(r.data); })
+    .catch(function () { return []; });
+}
+function techUsageAdd(techId, targetType, targetId, note) {
+  return apiFetch('/api/tech/' + encodeURIComponent(techId) + '/usages', {
+    method: 'POST', body: JSON.stringify({ targetType: targetType, targetId: targetId, note: note || null })
+  }).then(function (r) { _emitBus('tech', 'updated', { id: techId }); return toCamel(r.data); });
+}
+function techUsageDel(techId, usageId) {
+  return apiFetch('/api/tech/' + encodeURIComponent(techId) + '/usages/' + encodeURIComponent(usageId), { method: 'DELETE' })
+    .then(function () { _emitBus('tech', 'updated', { id: techId }); })
+    .catch(function () { return null; });
+}
+/* 역방향 — 이 프로젝트/사전검토에 적용된 요소기술 */
+function techByTarget(targetType, targetId) {
+  return apiFetch('/api/tech/usages?targetType=' + encodeURIComponent(targetType) + '&targetId=' + encodeURIComponent(targetId))
+    .then(function (r) { return toCamelArray(r.data); })
+    .catch(function () { return []; });
+}
+
 /* 단계별 완료율 계산 */
 function calcPhaseProgress(projectId, phase) {
   return chkGetByPhase(projectId, phase).then(function (items) {

@@ -330,7 +330,9 @@ function _techBuildModal(id, members) {
     '<datalist id="tmStackNames">' + _techStacks.map(function (s) { return '<option value="' + _tEsc(s.name) + '">'; }).join('') + '</datalist>';
 
   if (!isNew) {
+    html += '<div id="tmUsages" style="margin-top:12px"><div style="font-size:11px;color:var(--t6)">적용 이력 로딩 중...</div></div>';
     html += '<div id="tmLogs" style="margin-top:12px"><div style="font-size:11px;color:var(--t6)">개발일지 로딩 중...</div></div>';
+    html += '<div id="tmComments" style="margin-top:12px"></div>';
   }
 
   html += '<div style="display:flex;gap:6px;margin-top:14px">' +
@@ -341,7 +343,11 @@ function _techBuildModal(id, members) {
   if (typeof createModal !== 'function') { _tToast('모달을 열 수 없습니다.', 'error'); return; }
   _techModal = createModal({ title: isNew ? '새 요소기술' : '요소기술 상세', html: html, width: '720px' });
 
-  if (!isNew) techLoadLogs(t.id);
+  if (!isNew) {
+    techLoadUsages(t.id);
+    techLoadLogs(t.id);
+    if (typeof renderCommentThread === 'function') renderCommentThread('tech', t.id, 'tmComments');
+  }
 }
 
 function _techStackRowHtml(s) {
@@ -406,6 +412,89 @@ function techSave(id) {
 function techDelete(id) {
   if (!confirm('이 요소기술을 삭제할까요? (개발일지도 함께 숨겨집니다)')) return;
   techDel(id).then(function () { _tCloseModal(); renderTech(); });
+}
+
+/* ═══ 적용 이력 (Phase 2) ═══ */
+var _techUsageTargets = null;   // {projects:[], prestudies:[]} 캐시
+
+function techLoadUsages(techId) {
+  var box = document.getElementById('tmUsages');
+  if (!box) return;
+  techUsagesGet(techId).then(function (list) { _techRenderUsages(techId, list || []); });
+}
+
+/** 적용 대상 선택지(프로젝트·사전검토)를 1회 로드 */
+function _techLoadTargets() {
+  if (_techUsageTargets) return Promise.resolve(_techUsageTargets);
+  var pP = (typeof pmGetProjects === 'function') ? pmGetProjects() : (typeof projGetAll === 'function' ? projGetAll() : Promise.resolve([]));
+  var sP = (typeof prestudyGetAll === 'function') ? prestudyGetAll({}) : Promise.resolve([]);
+  return Promise.all([pP, sP]).then(function (r) {
+    _techUsageTargets = { projects: r[0] || [], prestudies: r[1] || [] };
+    return _techUsageTargets;
+  }).catch(function () { return { projects: [], prestudies: [] }; });
+}
+
+function _techRenderUsages(techId, list) {
+  var box = document.getElementById('tmUsages');
+  if (!box) return;
+  var html = '<div style="border-top:1px solid var(--bd);padding-top:10px">' +
+    '<div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">🔗 적용 이력 <span style="color:var(--t6);font-weight:400">(' + list.length + ')</span></div>';
+
+  if (!list.length) {
+    html += '<div style="font-size:11px;color:var(--t6);margin-bottom:6px">아직 적용된 프로젝트·사전검토가 없습니다.</div>';
+  } else {
+    list.forEach(function (u) {
+      var isProj = u.targetType === 'project';
+      var name = u.targetName || '(삭제된 대상)';
+      html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--bd);font-size:11px">' +
+        '<span>' + (isProj ? '📁' : '🔍') + '</span>' +
+        '<span style="flex:1;color:' + (u.targetName ? 'var(--t2)' : 'var(--t6)') + ';word-break:break-word">' +
+          _tEsc(name) + (u.targetClient ? ' <span style="color:var(--t5)">· ' + _tEsc(u.targetClient) + '</span>' : '') +
+          (u.note ? '<span style="color:var(--t5)"> — ' + _tEsc(u.note) + '</span>' : '') +
+        '</span>' +
+        '<button class="btn btn-d btn-s" style="font-size:8px;padding:0 4px" onclick="techUsageRemove(\'' + _tEsc(techId) + '\',\'' + _tEsc(u.id) + '\')">✕</button>' +
+      '</div>';
+    });
+  }
+  // 추가 폼 (대상 선택지는 비동기 로드 후 채움)
+  html += '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">' +
+    '<select id="tuTarget" class="si" style="flex:1;min-width:160px;font-size:10px;padding:3px"><option value="">로딩 중...</option></select>' +
+    '<input id="tuNote" placeholder="적용 방식(선택)" style="flex:1;min-width:110px;font-size:10px;padding:3px 5px">' +
+    '<button class="btn btn-g btn-s" style="font-size:10px" onclick="techUsageAddFromForm(\'' + _tEsc(techId) + '\')">+ 적용</button>' +
+  '</div>';
+  html += '</div>';
+  box.innerHTML = html;
+
+  _techLoadTargets().then(function (t) {
+    var sel = document.getElementById('tuTarget');
+    if (!sel) return;
+    var used = {};
+    list.forEach(function (u) { used[u.targetType + ':' + u.targetId] = true; });
+    var opts = ['<option value="">적용 대상 선택…</option>'];
+    var projOpts = (t.projects || []).filter(function (p) { return !used['project:' + p.id]; })
+      .map(function (p) { return '<option value="project:' + _tEsc(p.id) + '">📁 ' + _tEsc(p.name) + '</option>'; });
+    var psOpts = (t.prestudies || []).filter(function (p) { return !used['prestudy:' + p.id]; })
+      .map(function (p) { return '<option value="prestudy:' + _tEsc(p.id) + '">🔍 ' + _tEsc((p.client ? p.client + ' / ' : '') + p.title) + '</option>'; });
+    if (projOpts.length) opts.push('<optgroup label="프로젝트">' + projOpts.join('') + '</optgroup>');
+    if (psOpts.length) opts.push('<optgroup label="사전검토">' + psOpts.join('') + '</optgroup>');
+    sel.innerHTML = opts.join('');
+  });
+}
+
+function techUsageAddFromForm(techId) {
+  var sel = document.getElementById('tuTarget');
+  var val = sel ? sel.value : '';
+  if (!val) { _tToast('적용 대상을 선택하세요.', 'warn'); return; }
+  var parts = val.split(':');
+  var note = (document.getElementById('tuNote') || {}).value || '';
+  techUsageAdd(techId, parts[0], parts.slice(1).join(':'), note.trim() || null)
+    .then(function () { _tToast('적용 이력이 추가되었습니다.', 'success'); techLoadUsages(techId); })
+    .catch(function () { _tToast('추가 실패', 'error'); });
+}
+
+function techUsageRemove(techId, usageId) {
+  if (!confirm('이 적용 이력을 삭제할까요?')) return;
+  techUsageDel(techId, usageId).then(function () { techLoadUsages(techId); });
 }
 
 /* ═══ 개발일지 ═══ */

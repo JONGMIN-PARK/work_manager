@@ -137,6 +137,30 @@ router.get('/members', async function (req, res) {
   }
 });
 
+// GET /api/tech/usages?targetType=&targetId= — 역방향 조회
+// 특정 프로젝트/사전검토에 적용된 요소기술 목록 (프로젝트·사전검토 화면에서 사용)
+router.get('/usages', async function (req, res) {
+  try {
+    var targetType = req.query.targetType || req.query.target_type;
+    var targetId = req.query.targetId || req.query.target_id;
+    if (['project', 'prestudy'].indexOf(targetType) === -1 || !targetId) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: "targetType('project'|'prestudy')·targetId 필수" });
+    }
+    var r = await db.query(
+      'SELECT u.id, u.tech_id, u.note, u.created_at, ' +
+      '  t.name AS tech_name, t.code AS tech_code, t.category, t.status, t.trl, t.tech_version ' +
+      'FROM tech_usages u JOIN tech_assets t ON t.id = u.tech_id AND t.tenant_id = u.tenant_id ' +
+      'WHERE u.tenant_id = $1 AND u.target_type = $2 AND u.target_id = $3 AND t.deleted_at IS NULL ' +
+      'ORDER BY t.name',
+      [req.tenant.id, targetType, targetId]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[tech/usages/byTarget]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // GET /api/tech/:id
 router.get('/:id', async function (req, res) {
   try {
@@ -352,6 +376,74 @@ router.delete('/:id/logs/:logId', async function (req, res) {
     res.json({ message: '삭제 완료' });
   } catch (e) {
     console.error('[tech/logs/delete]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+/* ── 적용 이력 (Phase 2) ── */
+
+// GET /api/tech/:id/usages — 이 기술이 쓰인 프로젝트/사전검토
+// 대상이 삭제된 경우 target_name 이 null 로 와서 화면에서 "(삭제된 대상)"으로 표시된다.
+router.get('/:id/usages', async function (req, res) {
+  try {
+    var r = await db.query(
+      'SELECT u.*, COALESCE(p.name, ps.title) AS target_name, ps.client AS target_client ' +
+      'FROM tech_usages u ' +
+      "LEFT JOIN projects p ON u.target_type = 'project' AND p.id = u.target_id AND p.tenant_id = u.tenant_id " +
+      "LEFT JOIN prestudies ps ON u.target_type = 'prestudy' AND ps.id = u.target_id AND ps.tenant_id = u.tenant_id " +
+      'WHERE u.tech_id = $1 AND u.tenant_id = $2 ORDER BY u.created_at DESC',
+      [req.params.id, req.tenant.id]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[tech/usages/list]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// POST /api/tech/:id/usages — 적용 이력 추가
+router.post('/:id/usages', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var targetType = b.targetType || b.target_type;
+    var targetId = b.targetId || b.target_id;
+    if (['project', 'prestudy'].indexOf(targetType) === -1 || !targetId) {
+      return res.status(400).json({ error: 'VALIDATION', message: "targetType('project'|'prestudy')·targetId 필수" });
+    }
+    var tR = await db.query('SELECT id FROM tech_assets WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [req.params.id, req.tenant.id]);
+    if (!tR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '기술을 찾을 수 없습니다.' });
+
+    // 대상이 같은 테넌트에 실재하는지 확인
+    var okR = targetType === 'project'
+      ? await db.query('SELECT id FROM projects WHERE id = $1 AND tenant_id = $2', [targetId, req.tenant.id])
+      : await db.query('SELECT id FROM prestudies WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [targetId, req.tenant.id]);
+    if (!okR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '대상을 찾을 수 없습니다.' });
+
+    var id = genId('tuse');
+    var r = await db.query(
+      'INSERT INTO tech_usages (id, tenant_id, tech_id, target_type, target_id, note, created_by) ' +
+      'VALUES ($1,$2,$3,$4,$5,$6,$7) ' +
+      'ON CONFLICT (tech_id, target_type, target_id) DO UPDATE SET note = EXCLUDED.note RETURNING *',
+      [id, req.tenant.id, req.params.id, targetType, targetId, b.note || null, req.user.sub]
+    );
+    res.status(201).json({ data: r.rows[0] });
+  } catch (e) {
+    console.error('[tech/usages/create]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
+// DELETE /api/tech/:id/usages/:usageId
+router.delete('/:id/usages/:usageId', async function (req, res) {
+  try {
+    var r = await db.query(
+      'DELETE FROM tech_usages WHERE id = $1 AND tech_id = $2 AND tenant_id = $3 RETURNING id',
+      [req.params.usageId, req.params.id, req.tenant.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.json({ message: '삭제 완료' });
+  } catch (e) {
+    console.error('[tech/usages/delete]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
   }
 });
