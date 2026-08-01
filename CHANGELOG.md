@@ -1,5 +1,31 @@
 # Work Manager — 변경 이력
 
+## v13.176 (2026-08-01) — 요소기술 모듈 Phase 1 (카탈로그 · 개발일지 · 기술스택)
+
+### 배경
+[PRD_요소기술_개발관리](docs/PRD_요소기술_개발관리.md) Phase 1. 개발이 프로젝트 단위로만 관리돼, 여러 프로젝트에 재사용되는 기반기술이 프로젝트 안에 흩어져 있었다 → 보유 기술 파악 불가·중복 개발·개발 경위 유실.
+
+### 변경
+- **DB** `049_tech_assets.sql`
+  - `tech_assets` — 코드·분류·상태·**TRL(1~9)**·버전·담당·참여자·**stack(JSONB)**·태그·저장소/문서 링크 + denormalize(progress·total_hours). 테넌트 격리·낙관적 락·소프트 삭제.
+  - `tech_logs` — 개발일지(날짜·유형·진척률·투입시간·본문). `milestone_progress_logs` 패턴.
+- **API** `routes/tech.js` — CRUD + `/stacks`(스택 집계) + `/members` + 개발일지 CRUD.
+  - `resyncTech()` — 일지 작성·수정·삭제 시 기술의 진척률(최신 일지)·누적 투입시간 재동기화.
+  - 수정 권한: 담당자·참여자(이름 매칭)·관리자.
+- **프론트** `tech.js`(신규) — 카탈로그/분류별/**기술스택**/목록 4보기, 상세 모달(개요·스택 행편집·개발일지 타임라인). 스택 이름은 기존 값 `datalist` 자동완성으로 표기 흔들림 억제.
+- **배선** `app.js`(`/api/tech`), `project-data.js`(API 클라이언트), HTML 모드 탭 `setMode('tech')`.
+
+### 범위 밖 (계획대로 후속)
+- 적용 이력(`tech_usages`)·사전검토/프로젝트 연동·코멘트 → Phase 2
+- 텔레그램 `/tech`·알림 → Phase 3
+- GitHub 연동(languages→스택 자동채움 등) → PRD 9장, Phase 2 이후 선택
+- 기술코드는 자유 입력(`TECH-{분류}-{번호}` 제안만), 업무시간은 개발일지 `hours` 기준 — 사내 규칙 확정 시 조정
+
+### 영향
+- 신규: `server/migrations/049_tech_assets.sql`, `server/routes/tech.js`, `tech.js`.
+- 수정: `server/app.js`, `project-data.js`, `업무일지_분석기.html`.
+- **서버 변경 포함** — 배포 후 마이그레이션 자동 적용.
+
 ## v13.175 (2026-08-01) — 사전검토 보완 (담당자 지정 · 노트 서식 · 드래그 이동 · 캘린더 연동)
 
 ### 배경

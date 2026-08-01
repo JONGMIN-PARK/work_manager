@@ -230,6 +230,7 @@ window.wmDataBus = (function () {
     timeline: { project:1, milestone:1, checklist:1 },
     orders:   { order:1, project:1, issue:1 },
     prestudy: { prestudy:1 },
+    tech:     { tech:1 },
     issues:   { issue:1, project:1 },
     docs:     { document:1, project:1 },
     as:       { as:1, asCategory:1, order:1, project:1 }
@@ -240,6 +241,7 @@ window.wmDataBus = (function () {
     timeline: function () { if (typeof renderTimeline === 'function') renderTimeline(); },
     orders:   function () { if (typeof renderOrders === 'function') renderOrders(); },
     prestudy: function () { if (typeof renderPrestudy === 'function') renderPrestudy(); },
+    tech:     function () { if (typeof renderTech === 'function') renderTech(); },
     issues:   function () { if (typeof renderIssues === 'function') renderIssues(); },
     docs:     function () { if (typeof renderDocManager === 'function') renderDocManager(); },
     as:       function () { if (typeof renderAS === 'function') renderAS(); }
@@ -277,6 +279,7 @@ window.wmDataBus = (function () {
 <script defer src="dashboard.js?v=5" onerror="console.warn('dashboard.js 로드 실패')"></script>
 <script defer src="pipeline.js?v=5" onerror="console.warn('pipeline.js 로드 실패')"></script>
 <script defer src="prestudy.js?v=2" onerror="console.warn('prestudy.js 로드 실패')"></script>
+<script defer src="tech.js?v=1" onerror="console.warn('tech.js 로드 실패')"></script>
 <script defer src="order-view.js?v=5" onerror="console.warn('order-view.js 로드 실패')"></script>
 <script defer src="issue-manager.js?v=5" onerror="console.warn('issue-manager.js 로드 실패')"></script>
 <script defer src="document-manager.js?v=6" onerror="console.warn('document-manager.js 로드 실패')"></script>
@@ -906,7 +909,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.175</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.176</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -955,6 +958,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
     <button class="tab" data-m="timeline" onclick="setMode('timeline')" role="tab" aria-selected="false">📊 타임라인</button>
     <button class="tab" data-m="orders" onclick="setMode('orders')" role="tab" aria-selected="false">📋 수주대장</button>
     <button class="tab" data-m="prestudy" onclick="setMode('prestudy')" role="tab" aria-selected="false" title="프로젝트 이전 단계 — 업체 문의·기술검토·아이디어">🔍 사전검토</button>
+    <button class="tab" data-m="tech" onclick="setMode('tech')" role="tab" aria-selected="false" title="프로젝트 무관 재사용 기반기술 — 카탈로그·개발일지">🧪 요소기술</button>
     <button class="tab" data-m="issues" onclick="setMode('issues')" role="tab" aria-selected="false">🎫 이슈관리</button>
     <button class="tab" data-m="docs" onclick="setMode('docs')" role="tab" aria-selected="false">📂 문서관리</button>
     <button class="tab" data-m="as" onclick="setMode('as')" role="tab" aria-selected="false">🛠️ A/S</button>
@@ -1192,6 +1196,11 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
   <!-- ═══ PRE-STUDY MODE (사전검토 — 프로젝트 이전 단계) ═══ -->
   <div id="mPrestudy" class="hidden">
     <div id="prestudyWrap"></div>
+  </div>
+
+  <!-- ═══ TECH MODE (요소기술 — 프로젝트 무관 기반기술 자산) ═══ -->
+  <div id="mTech" class="hidden">
+    <div id="techWrap"></div>
   </div>
 
   <!-- ═══ ISSUES MODE ═══ -->
@@ -1864,7 +1873,7 @@ function setPage(page){
   var _opTab=document.querySelector('#modeTabsProj .tab[data-m="operator"]');
   if(_opTab)_opTab.classList.toggle('hidden',!(typeof isOperator==='function'&&isOperator()));
   // 모든 모드 숨기기
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   // 해당 페이지의 첫 탭 활성화
   if(page==='useradmin'){
     document.getElementById('modeTabs').classList.add('hidden');
@@ -1924,11 +1933,11 @@ function setMode(m){
   curMode=m;
   // 해당 페이지의 서브탭만 업데이트
   var teamModes=['weekly','archive','trend'];
-  var projModes=['pipeline','calendar','timeline','orders','prestudy','issues','docs','as','operator'];
+  var projModes=['pipeline','calendar','timeline','orders','prestudy','tech','issues','docs','as','operator'];
   var tabBar=teamModes.includes(m)?'#modeTabs':'#modeTabsProj';
   document.querySelectorAll(tabBar+' .tab').forEach(function(t){var sel=t.dataset.m===m;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
-  var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',tech:'mTech',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
 
   // 캐시 hit이면 render 호출 자체를 스킵 → 이전 그려진 내용 즉시 표시
@@ -1943,6 +1952,7 @@ function setMode(m){
   else if(m==='timeline'&&typeof initTimeline==='function'){initTimeline();rendered=true}
   else if(m==='orders'&&typeof renderOrders==='function'){renderOrders();rendered=true}
   else if(m==='prestudy'&&typeof renderPrestudy==='function'){renderPrestudy();rendered=true}
+  else if(m==='tech'&&typeof renderTech==='function'){renderTech();rendered=true}
   else if(m==='issues'&&typeof renderIssues==='function'){renderIssues();rendered=true}
   else if(m==='docs'&&typeof renderDocManager==='function'){renderDocManager();rendered=true}
   else if(m==='as'&&typeof renderAS==='function'){renderAS();rendered=true}
@@ -1959,6 +1969,7 @@ function setMode(m){
     timeline: { project:1, milestone:1, checklist:1, order:1, event:1 },
     orders:   { order:1, project:1, issue:1 },
     prestudy: { prestudy:1 },
+    tech:     { tech:1 },
     issues:   { issue:1, project:1 },
     docs:     { document:1, project:1 },
     as:       { as:1, asCategory:1, order:1, project:1 },
@@ -3473,6 +3484,15 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.176',date:'2026-08-01',title:'🧪 요소기술 신규 모듈 — 기반기술 카탈로그 + 개발일지 + 기술스택 추적',tag:'feat',items:[
+      '프로젝트 관리에 「🧪 요소기술」 탭 신설. 프로젝트에 종속되지 않고 여러 프로젝트에서 재사용되는 기반기술(비전 알고리즘·모션 모듈·통신 래퍼 등)을 조직 자산으로 축적',
+      '4가지 보기: 카탈로그(카드) · 분류별(비전/모션/제어/SW/AI/통신/기구) · 기술스택 · 목록',
+      '개발일지 — 날짜·유형(개발/테스트/이슈/문서/리뷰/아이디어)·진척률·투입시간·본문. 작성하면 기술의 진척률·누적 투입시간이 자동 갱신되고, **굵게**·체크박스 서식이 렌더됩니다',
+      '기술스택 추적 — 언어/프레임워크/라이브러리/HW/도구/프로토콜을 버전과 함께 등록. 「기술스택」 보기에서 조직 전체 사용 분포(예: OpenCV 8건)와 버전이 한눈에 보이고, 클릭하면 해당 스택을 쓰는 기술만 필터',
+      '기술성숙도(TRL 1~9)를 상태와 별도로 관리 — 상태는 진행 단계, TRL은 신뢰 수준(🔴초기/🟡검증중/🟢실전)',
+      '수정 권한은 담당자·참여자·관리자. 삭제는 소프트 삭제라 이력이 보존됩니다',
+      '영향: server/migrations/049, server/routes/tech.js(신규), tech.js(신규), project-data.js, server/app.js, 업무일지_분석기.html. 서버 변경 포함 — 배포 후 마이그레이션 자동 적용'
+    ]},
     {ver:'13.175',date:'2026-08-01',title:'🔧 사전검토 보완 — 담당자·참여자 지정, 노트 서식 미리보기, 드래그 이동, 회신기한 캘린더 연동',tag:'feat',items:[
       '담당자·참여자·태그 지정 UI 추가. 이전에는 담당자를 바꿀 수 없어 배정 알림이 사실상 동작하지 않던 문제 해결',
       '브레인스토밍 노트에 「👁 미리보기」 추가 — **굵게** ~~취소선~~ `코드` ☐체크박스 서식이 실제로 렌더됩니다(안내만 있고 렌더가 없던 문제 수정)',

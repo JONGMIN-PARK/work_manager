@@ -249,11 +249,11 @@ TRL은 1~9 단순 척도로 두되, UI에는 3구간으로 요약 표시한다.
 
 ## 7. 단계별 로드맵
 
-### Phase 1 — 카탈로그 + 개발일지 (핵심)
-- [ ] `tech_assets` · `tech_logs` 마이그레이션
-- [ ] `routes/tech.js` CRUD + 일지 API + 진척률/시간 재동기화
-- [ ] `tech.js` 프론트 — 카탈로그/분류별/목록 보기 + 상세 모달(개요·스택·개발일지)
-- [ ] 모드 탭 「🧪 요소기술」 등록 (`setMode('tech')`)
+### Phase 1 — 카탈로그 + 개발일지 (핵심) ✅ 완료 (v13.176)
+- [x] `tech_assets` · `tech_logs` 마이그레이션 (049)
+- [x] `routes/tech.js` CRUD + 일지 API + 진척률/시간 재동기화(`resyncTech`)
+- [x] `tech.js` 프론트 — 카탈로그/분류별/**기술스택**/목록 + 상세 모달(개요·스택·개발일지)
+- [x] 모드 탭 「🧪 요소기술」 등록 (`setMode('tech')`)
 
 ### Phase 2 — 스택 추적 + 연동
 - [ ] `tech_usages` 마이그레이션 + 적용 이력 UI

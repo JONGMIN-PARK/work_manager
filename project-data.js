@@ -1072,6 +1072,60 @@ function meetingActionConvert(mid, aid, target) {
     .then(function (r) { return r.data; });
 }
 
+/* ═══ 요소기술 (tech_assets + tech_logs) — 기반기술 자산 ═══ */
+function techGetAll(params) {
+  var qs = [];
+  if (params) {
+    Object.keys(params).forEach(function (k) {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== '') qs.push(k + '=' + encodeURIComponent(params[k]));
+    });
+  }
+  return apiFetch('/api/tech' + (qs.length ? '?' + qs.join('&') : ''))
+    .then(function (r) { return toCamelArray(r.data); })
+    .catch(function () { return []; });
+}
+function techGet(id) {
+  return apiFetch('/api/tech/' + encodeURIComponent(id)).then(function (r) { return toCamel(r.data); });
+}
+function techStacks() {
+  return apiFetch('/api/tech/stacks').then(function (r) { return r.data || []; }).catch(function () { return []; });
+}
+var _techMembersCache = null;
+function techMembers() {
+  if (_techMembersCache) return Promise.resolve(_techMembersCache);
+  return apiFetch('/api/tech/members')
+    .then(function (r) { _techMembersCache = r.data || []; return _techMembersCache; })
+    .catch(function () { return []; });
+}
+function techPut(item) {
+  if (item.id) {
+    return apiFetch('/api/tech/' + encodeURIComponent(item.id), { method: 'PUT', body: JSON.stringify(item) })
+      .then(function (r) { var s = toCamel(r.data); _emitBus('tech', 'updated', { id: s && s.id }); return s; });
+  }
+  return apiFetch('/api/tech', { method: 'POST', body: JSON.stringify(item) })
+    .then(function (r) { var s = toCamel(r.data); _emitBus('tech', 'created', { id: s && s.id }); return s; });
+}
+function techDel(id) {
+  return apiFetch('/api/tech/' + encodeURIComponent(id), { method: 'DELETE' })
+    .then(function () { _emitBus('tech', 'deleted', { id: id }); })
+    .catch(function () { return null; });
+}
+/* 개발일지 */
+function techLogsGet(techId) {
+  return apiFetch('/api/tech/' + encodeURIComponent(techId) + '/logs')
+    .then(function (r) { return toCamelArray(r.data); })
+    .catch(function () { return []; });
+}
+function techLogAdd(techId, log) {
+  return apiFetch('/api/tech/' + encodeURIComponent(techId) + '/logs', { method: 'POST', body: JSON.stringify(log) })
+    .then(function (r) { _emitBus('tech', 'updated', { id: techId }); return toCamel(r.data); });
+}
+function techLogDel(techId, logId) {
+  return apiFetch('/api/tech/' + encodeURIComponent(techId) + '/logs/' + encodeURIComponent(logId), { method: 'DELETE' })
+    .then(function () { _emitBus('tech', 'updated', { id: techId }); })
+    .catch(function () { return null; });
+}
+
 /* 단계별 완료율 계산 */
 function calcPhaseProgress(projectId, phase) {
   return chkGetByPhase(projectId, phase).then(function (items) {

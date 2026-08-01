@@ -174,6 +174,7 @@ var weeklyReportRoutes = require('./routes/weekly-reports');
 var devItemRoutes = require('./routes/dev-items');
 var meetingRoutes = require('./routes/meetings');
 var prestudyRoutes = require('./routes/prestudies');
+var techRoutes = require('./routes/tech');
 var commentRoutes = require('./routes/comments');
 var messageRoutes = require('./routes/messages');
 var v1Router = require('./routes/v1');
@@ -219,6 +220,7 @@ app.use('/api/weekly-reports', weeklyReportRoutes);
 app.use('/api/dev-items', devItemRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/prestudies', prestudyRoutes);
+app.use('/api/tech', techRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 
