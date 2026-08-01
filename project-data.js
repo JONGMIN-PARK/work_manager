@@ -996,6 +996,14 @@ function prestudyGetAll(params) {
 function prestudyGet(id) {
   return apiFetch('/api/prestudies/' + encodeURIComponent(id)).then(function (r) { return toCamel(r.data); });
 }
+/* 담당자·참여자 선택용 테넌트 활성 사용자 [{id, name}] — 1회 조회 후 캐시 */
+var _prestudyMembersCache = null;
+function prestudyMembers() {
+  if (_prestudyMembersCache) return Promise.resolve(_prestudyMembersCache);
+  return apiFetch('/api/prestudies/members')
+    .then(function (r) { _prestudyMembersCache = r.data || []; return _prestudyMembersCache; })
+    .catch(function () { return []; });
+}
 function prestudyPut(item) {
   if (item.id) {
     return apiFetch('/api/prestudies/' + encodeURIComponent(item.id), { method: 'PUT', body: JSON.stringify(item) })

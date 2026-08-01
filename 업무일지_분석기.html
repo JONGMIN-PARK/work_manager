@@ -276,7 +276,7 @@ window.wmDataBus = (function () {
 <script defer src="project-detail.js?v=2" onerror="console.warn('project-detail.js 로드 실패')"></script>
 <script defer src="dashboard.js?v=5" onerror="console.warn('dashboard.js 로드 실패')"></script>
 <script defer src="pipeline.js?v=5" onerror="console.warn('pipeline.js 로드 실패')"></script>
-<script defer src="prestudy.js?v=1" onerror="console.warn('prestudy.js 로드 실패')"></script>
+<script defer src="prestudy.js?v=2" onerror="console.warn('prestudy.js 로드 실패')"></script>
 <script defer src="order-view.js?v=5" onerror="console.warn('order-view.js 로드 실패')"></script>
 <script defer src="issue-manager.js?v=5" onerror="console.warn('issue-manager.js 로드 실패')"></script>
 <script defer src="document-manager.js?v=6" onerror="console.warn('document-manager.js 로드 실패')"></script>
@@ -906,7 +906,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.174</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.175</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3473,6 +3473,15 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.175',date:'2026-08-01',title:'🔧 사전검토 보완 — 담당자·참여자 지정, 노트 서식 미리보기, 드래그 이동, 회신기한 캘린더 연동',tag:'feat',items:[
+      '담당자·참여자·태그 지정 UI 추가. 이전에는 담당자를 바꿀 수 없어 배정 알림이 사실상 동작하지 않던 문제 해결',
+      '브레인스토밍 노트에 「👁 미리보기」 추가 — **굵게** ~~취소선~~ `코드` ☐체크박스 서식이 실제로 렌더됩니다(안내만 있고 렌더가 없던 문제 수정)',
+      '칸반에서 카드를 끌어다 놓아 상태 변경(드래그앤드롭). 기존 드롭다운도 그대로 사용 가능',
+      '회신기한을 넣으면 캘린더에 검토 일정(🔍)이 자동 등록·동기화되고, 기한/검토 삭제 시 함께 정리됩니다 → /calendar·/today 에도 노출',
+      '칸반·목록에 담당자 표시, 기한 초과 건은 빨간색 ⚠️ 강조',
+      '프로젝트/수주로 전환할 때 브레인스토밍 노트도 메모에 함께 옮겨집니다(이전에는 배경·결론만 복사되어 노트가 유실)',
+      '영향: server/migrations/048, server/routes/prestudies.js, prestudy.js, project-data.js, 업무일지_분석기.html. 서버 변경 포함 — 배포 후 마이그레이션 자동 적용'
+    ]},
     {ver:'13.174',date:'2026-08-01',title:'🔍 사전검토 신규 모듈 — 프로젝트 이전 단계(업체 문의·기술검토·브레인스토밍) + 프로젝트/수주 전환',tag:'feat',items:[
       '프로젝트 관리에 「🔍 사전검토」 탭 신설. 프로젝트가 되기 전 단계를 독립적으로 관리 — 특정 업체와의 업무 검토, 기술 검토, 개선 제안, 아이디어를 자유롭게 등록',
       '3가지 보기: 칸반(아이디어→검토중→업체협의→견적/제안→확정) · 업체별(특정 업체와의 검토 이력 묶어보기) · 목록',

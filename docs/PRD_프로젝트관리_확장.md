@@ -13,7 +13,7 @@
 
 | 빈 곳 | 설명 |
 |-------|------|
-| **검토** | 단계 전환·산출물 확인용 "검토 항목"을 체계적으로 담을 곳이 없음 (체크리스트는 작업 진행용) |
+| **사전검토** | 프로젝트가 되기 *이전* 단계(업체 문의·기술검토·아이디어)를 담을 곳이 없음 |
 | **회의** | `events(type=meeting)` 는 제목·날짜만 — 안건/회의록/액션아이템 없음 |
 | **개발 백로그** | 계획된 개발 작업을 담는 칸반이 없음 (이슈는 사후 발생 장애 중심) |
 
@@ -21,7 +21,7 @@
 
 | 목표 | 측정 |
 |------|------|
-| 프로젝트 산출물 검토 누락 방지 | 검토 체크리스트 완료율 |
+| 사전검토 → 수주 전환 가시화 | 확정(won) 건수 / 전체 검토 건수 |
 | 회의 → 실행 전환 | 액션아이템 완료율 / 기한 준수율 |
 | 계획 개발 작업 가시화 | 개발 아이템 상태별 처리 리드타임 |
 
@@ -177,8 +177,10 @@ CREATE INDEX IF NOT EXISTS idx_dev_items_board ON project_dev_items(tenant_id, p
 
 ## 5. 일정 통합
 
-- 검토·회의는 `events` 로 자동 발행. 회의는 `type=meeting`(기존), 검토는 신규 `type=review`(`EVT_TYPE`에 `review: { label:'검토', icon:'🔍' }` 추가).
-- 기존 캘린더/타임라인/일일 브리핑/`/calendar`·`/today` 가 **수정 없이** 자동 노출.
+- **회의**: `meetings.meet_date` → `events(type='meeting')` 자동 발행/동기화(`meetings.event_id`).
+- **사전검토**: `prestudies.due_date`(회신기한) → `events(type='review')` 자동 발행/동기화(`prestudies.event_id`, 048).
+  `EVT_TYPE.review = { label:'검토', icon:'🔍' }` 추가됨.
+- 기한/일정 삭제·변경 시 연결 일정도 함께 정리. 기존 캘린더/타임라인/일일 브리핑/`/calendar`·`/today` 가 **수정 없이** 자동 노출.
 
 ---
 
@@ -188,7 +190,7 @@ CREATE INDEX IF NOT EXISTS idx_dev_items_board ON project_dev_items(tenant_id, p
 
 | 명령어 | 기능 |
 |--------|------|
-| `/reviews` | 내 프로젝트 검토 현황(미완료 항목·결과) |
+| `/prestudy` / `/prestudy <업체명>` | 사전검토 현황(진행중 우선, 업체별) |
 | `/meeting <프로젝트>` | 최근 회의록 요약 + 미완료 액션아이템 |
 | `/actions` | 내게 배정된 미완료 액션아이템 |
 | `/devitems` / `/dev <프로젝트>` | 개발 아이템(상태별) |
@@ -197,7 +199,9 @@ CREATE INDEX IF NOT EXISTS idx_dev_items_board ON project_dev_items(tenant_id, p
 
 | event_type | 트리거 | 수신 |
 |------------|--------|------|
-| `review_completed` | 검토 결과 확정(ok/issue) | PL + 관리자 |
+| `prestudy_assigned` | 사전검토 담당 배정 | 담당자 |
+| `prestudy_due` | 회신기한 D-1 | 담당자 (스케줄러) |
+| `prestudy_won` | 사전검토 확정 | 담당자 + 관리자 |
 | `action_item_assigned` | 액션아이템 배정 | 담당자 |
 | `action_item_due` | 액션아이템 기한 D-1 | 담당자 (스케줄러) |
 | `dev_item_assigned` | 개발 아이템 배정 | 담당자 |
@@ -216,14 +220,14 @@ CREATE INDEX IF NOT EXISTS idx_dev_items_board ON project_dev_items(tenant_id, p
 - [x] ~~`project_reviews`~~ → 폐기(046), **사전검토 모듈로 대체** ✅ (v13.174)
 
 ### Phase 2 — 회의 관리 + 일정 통합 ✅ 완료 (v13.172)
-- [ ] `meetings` / `meeting_action_items` 마이그레이션 + API
-- [ ] 회의 생성 → `events(type=meeting)` 자동 발행, `EVT_TYPE.review` 추가
-- [ ] 회의록 UI + 액션아이템 표 + 이슈/개발아이템 전환
+- [x] `meetings` / `meeting_action_items` 마이그레이션 + API
+- [x] 회의 생성 → `events(type=meeting)` 자동 발행, `EVT_TYPE.review` 추가
+- [x] 회의록 UI + 액션아이템 표 + 이슈/개발아이템 전환
 
 ### Phase 3 — 텔레그램 연동 + 자동화 ✅ 완료 (v13.173~174)
-- [ ] `/reviews` `/meeting` `/actions` `/devitems` 명령어(+자동완성·자연어·help)
-- [ ] `review_completed` `action_item_assigned` `dev_item_assigned` 알림 + 설정 UI 토글
-- [ ] 액션아이템 기한 D-1 스케줄러(`scheduler.service` 크론)
+- [x] `/prestudy` `/meeting` `/actions` `/devitems` 명령어(+자동완성·자연어·help)
+- [x] `prestudy_*` `action_item_*` `dev_item_assigned` 알림 + 설정 UI 토글
+- [x] 액션아이템·사전검토 기한 D-1 스케줄러
 - [ ] 인라인 버튼(액션 완료 / 개발 진행 시작)
 - [ ] 주간보고(`/wr`)·주간 다이제스트에 검토·개발·액션 현황 포함
 

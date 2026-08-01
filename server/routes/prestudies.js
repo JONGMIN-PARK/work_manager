@@ -25,6 +25,36 @@ function genId(prefix) { return prefix + '-' + crypto.randomUUID().slice(0, 12);
 function clampEnum(v, allowed, fallback) { return allowed.indexOf(v) >= 0 ? v : fallback; }
 function today() { return new Date().toISOString().slice(0, 10); }
 
+/**
+ * 회신기한 → events(type='review') 발행/동기화. 회의(meetings)와 동일한 패턴.
+ * 기한이 없어지면 연결 일정을 제거한다. 반환: event_id | null
+ */
+async function syncPrestudyEvent(row, tenantId, userId) {
+  var title = (row.client ? '[' + row.client + '] ' : '') + row.title;
+  // 기한 없음 → 기존 일정 제거
+  if (!row.due_date) {
+    if (row.event_id) {
+      await db.query('DELETE FROM events WHERE id = $1 AND tenant_id = $2', [row.event_id, tenantId]);
+      await db.query('UPDATE prestudies SET event_id = NULL WHERE id = $1 AND tenant_id = $2', [row.id, tenantId]);
+    }
+    return null;
+  }
+  if (row.event_id) {
+    await db.query(
+      "UPDATE events SET title = $1, start_date = $2, end_date = $2 WHERE id = $3 AND tenant_id = $4",
+      [title, row.due_date, row.event_id, tenantId]
+    );
+    return row.event_id;
+  }
+  var evId = genId('evt');
+  await db.query(
+    "INSERT INTO events (id, title, type, start_date, end_date, created_by, tenant_id) VALUES ($1,$2,'review',$3,$3,$4,$5)",
+    [evId, title, row.due_date, userId, tenantId]
+  );
+  await db.query('UPDATE prestudies SET event_id = $1 WHERE id = $2 AND tenant_id = $3', [evId, row.id, tenantId]);
+  return evId;
+}
+
 /** 담당 배정 알림 (fire-and-forget, 본인 제외) */
 async function notifyOwner(row, actorId) {
   try {
@@ -52,18 +82,19 @@ async function notifyWon(row, tenantId, actorId) {
 // GET /api/prestudies?status=&client=&category=&mine=true&q=
 router.get('/', async function (req, res) {
   try {
-    var sql = 'SELECT * FROM prestudies WHERE deleted_at IS NULL AND tenant_id = $1';
+    var sql = 'SELECT p.*, u.name AS owner_name FROM prestudies p LEFT JOIN users u ON u.id = p.owner_id ' +
+      'WHERE p.deleted_at IS NULL AND p.tenant_id = $1';
     var params = [req.tenant.id];
     var idx = 2;
-    if (req.query.status) { sql += ' AND status = $' + idx++; params.push(req.query.status); }
-    if (req.query.client) { sql += ' AND client ILIKE $' + idx++; params.push('%' + req.query.client + '%'); }
-    if (req.query.category) { sql += ' AND category = $' + idx++; params.push(req.query.category); }
-    if (req.query.mine === 'true') { sql += ' AND owner_id = $' + idx++; params.push(req.user.sub); }
+    if (req.query.status) { sql += ' AND p.status = $' + idx++; params.push(req.query.status); }
+    if (req.query.client) { sql += ' AND p.client ILIKE $' + idx++; params.push('%' + req.query.client + '%'); }
+    if (req.query.category) { sql += ' AND p.category = $' + idx++; params.push(req.query.category); }
+    if (req.query.mine === 'true') { sql += ' AND p.owner_id = $' + idx++; params.push(req.user.sub); }
     if (req.query.q) {
-      sql += ' AND (title ILIKE $' + idx + ' OR client ILIKE $' + idx + ' OR background ILIKE $' + idx + ' OR notes ILIKE $' + idx + ')';
+      sql += ' AND (p.title ILIKE $' + idx + ' OR p.client ILIKE $' + idx + ' OR p.background ILIKE $' + idx + ' OR p.notes ILIKE $' + idx + ')';
       params.push('%' + req.query.q + '%'); idx++;
     }
-    sql += ' ORDER BY sort_order, updated_at DESC';
+    sql += ' ORDER BY p.sort_order, p.updated_at DESC';
     var r = await db.query(sql, params);
     res.json({ data: r.rows, total: r.rows.length });
   } catch (e) {
@@ -89,10 +120,29 @@ router.get('/clients', async function (req, res) {
   }
 });
 
+// GET /api/prestudies/members — 담당자/참여자 선택용 경량 목록 (테넌트 활성 사용자)
+// 이름은 이미 앱 전반(팀 현황·담당자 등)에서 노출되므로 id·name만 반환한다.
+router.get('/members', async function (req, res) {
+  try {
+    var r = await db.query(
+      "SELECT id, COALESCE(NULLIF(display_name,''), name) AS name FROM users " +
+      "WHERE tenant_id = $1 AND status = 'active' ORDER BY name",
+      [req.tenant.id]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error('[prestudies/members]', e);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+  }
+});
+
 // GET /api/prestudies/:id
 router.get('/:id', async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM prestudies WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [req.params.id, req.tenant.id]);
+    var r = await db.query(
+      'SELECT p.*, u.name AS owner_name FROM prestudies p LEFT JOIN users u ON u.id = p.owner_id ' +
+      'WHERE p.id = $1 AND p.tenant_id = $2 AND p.deleted_at IS NULL',
+      [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
@@ -127,6 +177,7 @@ router.post('/', async function (req, res) {
     );
     res.status(201).json({ data: r.rows[0] });
     notifyOwner(r.rows[0], req.user.sub);
+    syncPrestudyEvent(r.rows[0], req.tenant.id, req.user.sub).catch(function (e) { console.error('[prestudies/event]', e.message); });
   } catch (e) {
     console.error('[prestudies/create]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -169,6 +220,7 @@ router.put('/:id', async function (req, res) {
     res.json({ data: r.rows[0] });
     if (b.ownerId || b.owner_id) notifyOwner(r.rows[0], req.user.sub);
     if (b.status === 'won') notifyWon(r.rows[0], req.tenant.id, req.user.sub);
+    syncPrestudyEvent(r.rows[0], req.tenant.id, req.user.sub).catch(function (e) { console.error('[prestudies/event]', e.message); });
   } catch (e) {
     console.error('[prestudies/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -212,7 +264,7 @@ router.post('/:id/convert', async function (req, res) {
       if (dupR.rows.length) return res.status(409).json({ error: 'CONFLICT', message: '이미 존재하는 수주번호입니다.' });
       var oR = await db.query(
         "INSERT INTO orders (order_no, date, client, name, memo, created_by, updated_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$6,$7) RETURNING *",
-        [orderNo, today(), ps.client || null, ps.title, ps.conclusion || ps.background || null, req.user.sub, req.tenant.id]
+        [orderNo, today(), ps.client || null, ps.title, [ps.background, ps.notes, ps.conclusion].filter(Boolean).join('\n\n') || null, req.user.sub, req.tenant.id]
       );
       created = oR.rows[0];
       await db.query("UPDATE prestudies SET linked_order_no = $1, status = 'won', updated_by = $2, updated_at = now(), version = version + 1 WHERE id = $3 AND tenant_id = $4",
@@ -220,7 +272,7 @@ router.post('/:id/convert', async function (req, res) {
     } else {
       if (ps.linked_project_id) return res.status(409).json({ error: 'CONFLICT', message: '이미 프로젝트로 전환되었습니다.' });
       var projId = genId('proj');
-      var memo = [ps.background, ps.conclusion].filter(Boolean).join('\n\n');
+      var memo = [ps.background, ps.notes, ps.conclusion].filter(Boolean).join('\n\n');
       var prR = await db.query(
         "INSERT INTO projects (id, name, status, start_date, memo, created_by, updated_by, tenant_id, owner_id) " +
         "VALUES ($1,$2,'waiting',$3,$4,$5,$5,$6,$5) RETURNING *",
@@ -251,10 +303,14 @@ router.post('/:id/convert', async function (req, res) {
 router.delete('/:id', async function (req, res) {
   try {
     var r = await db.query(
-      'UPDATE prestudies SET deleted_at = now(), deleted_by = $1 WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL RETURNING id',
+      'UPDATE prestudies SET deleted_at = now(), deleted_by = $1 WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL RETURNING id, event_id',
       [req.user.sub, req.params.id, req.tenant.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    // 연결된 캘린더 일정도 함께 제거
+    if (r.rows[0].event_id) {
+      await db.query('DELETE FROM events WHERE id = $1 AND tenant_id = $2', [r.rows[0].event_id, req.tenant.id]);
+    }
     res.json({ message: '삭제 완료' });
   } catch (e) {
     console.error('[prestudies/delete]', e);

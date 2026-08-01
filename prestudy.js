@@ -113,7 +113,8 @@ function _psBoardHtml(items) {
   var html = '<div class="pipeline-board" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px">';
   PS_STATUS.forEach(function (col) {
     var colItems = items.filter(function (p) { return p.status === col.key; });
-    html += '<div style="flex:0 0 190px;min-width:190px">';
+    html += '<div data-ps-lane="' + col.key + '" ondragover="psDragOver(event)" ondragleave="psDragLeave(event)" ondrop="psDrop(event,\'' + col.key + '\')"' +
+      ' style="flex:0 0 190px;min-width:190px;border-radius:8px;transition:background .15s">';
     html += '<div style="font-size:11px;font-weight:700;color:' + col.color + ';padding:4px 6px;border-bottom:2px solid ' + col.color + '33;margin-bottom:6px">' +
       col.icon + ' ' + col.label + ' <span style="color:var(--t6)">(' + colItems.length + ')</span></div>';
     if (!colItems.length) {
@@ -125,13 +126,16 @@ function _psBoardHtml(items) {
         var selOpts = moveOpts.map(function (s) {
           return '<option value="' + s.key + '"' + (s.key === p.status ? ' selected' : '') + '>' + s.label + '</option>';
         }).join('');
-        html += '<div style="border:1px solid var(--bd);border-radius:6px;padding:7px;margin-bottom:6px;background:var(--bg-i)">' +
+        var overdue = p.dueDate && p.dueDate < _psToday();
+        html += '<div draggable="true" ondragstart="psDragStart(event,\'' + _psEsc(p.id) + '\')" ondragend="psDragEnd(event)"' +
+          ' style="border:1px solid var(--bd);border-radius:6px;padding:7px;margin-bottom:6px;background:var(--bg-i);cursor:grab" title="드래그해서 상태 이동">' +
           '<div style="font-size:11px;font-weight:600;color:var(--t2);cursor:pointer;word-break:break-word;margin-bottom:3px" onclick="psOpenModal(\'' + _psEsc(p.id) + '\')">' + _psEsc(p.title) + '</div>' +
           (p.client ? '<div style="font-size:10px;color:var(--t4);margin-bottom:3px">🏢 ' + _psEsc(p.client) + '</div>' : '') +
           '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">' +
             '<span class="badge" style="background:' + cat.color + '22;color:' + cat.color + ';font-size:8px;padding:1px 4px">' + cat.label + '</span>' +
             '<span style="font-size:9px;color:' + prio.color + '">●</span>' +
-            (p.dueDate ? '<span style="font-size:9px;color:var(--t5)">~' + _psEsc(p.dueDate) + '</span>' : '') +
+            (p.ownerName ? '<span style="font-size:9px;color:var(--t5)">@' + _psEsc(p.ownerName) + '</span>' : '') +
+            (p.dueDate ? '<span style="font-size:9px;color:' + (overdue ? '#EF4444' : 'var(--t5)') + '">' + (overdue ? '⚠️' : '~') + _psEsc(p.dueDate) + '</span>' : '') +
           '</div>' +
           '<select class="si" style="font-size:9px;padding:1px 2px;margin-top:4px;width:100%" onchange="psMove(\'' + _psEsc(p.id) + '\',this.value)">' + selOpts + '</select>' +
         '</div>';
@@ -185,7 +189,7 @@ function _psListHtml(items) {
   var html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">' +
     '<thead><tr style="color:var(--t5);font-size:10px;text-align:left">' +
     '<th style="padding:5px">상태</th><th style="padding:5px">업체</th><th style="padding:5px">제목</th>' +
-    '<th style="padding:5px">유형</th><th style="padding:5px">기한</th><th style="padding:5px">전환</th></tr></thead><tbody>';
+    '<th style="padding:5px">유형</th><th style="padding:5px">담당</th><th style="padding:5px">기한</th><th style="padding:5px">전환</th></tr></thead><tbody>';
   items.forEach(function (p) {
     var st = _psInfo(p.status);
     var cat = PS_CAT[p.category] || PS_CAT.inquiry;
@@ -195,7 +199,8 @@ function _psListHtml(items) {
       '<td style="padding:5px;color:var(--t3)">' + _psEsc(p.client || '-') + '</td>' +
       '<td style="padding:5px;color:var(--t2);cursor:pointer" onclick="psOpenModal(\'' + _psEsc(p.id) + '\')">' + _psEsc(p.title) + '</td>' +
       '<td style="padding:5px;color:' + cat.color + '">' + cat.label + '</td>' +
-      '<td style="padding:5px;color:var(--t5)">' + _psEsc(p.dueDate || '-') + '</td>' +
+      '<td style="padding:5px;color:var(--t4)">' + _psEsc(p.ownerName || '-') + '</td>' +
+      '<td style="padding:5px;color:' + (p.dueDate && p.dueDate < _psToday() ? '#EF4444' : 'var(--t5)') + '">' + _psEsc(p.dueDate || '-') + '</td>' +
       '<td style="padding:5px;color:var(--t5)">' + linked + '</td>' +
     '</tr>';
   });
@@ -204,6 +209,41 @@ function _psListHtml(items) {
 }
 
 /* ═══ 필터/뷰 ═══ */
+function _psToday() { return new Date().toISOString().slice(0, 10); }
+
+/* ═══ 칸반 드래그앤드롭 ═══ */
+var _psDragId = null;
+function psDragStart(ev, id) {
+  _psDragId = id;
+  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', id); } catch (_) {}
+}
+function psDragEnd(ev) {
+  _psDragId = null;
+  document.querySelectorAll('[data-ps-lane]').forEach(function (el) { el.style.background = ''; });
+}
+function psDragOver(ev) {
+  ev.preventDefault();
+  try { ev.dataTransfer.dropEffect = 'move'; } catch (_) {}
+  var lane = ev.currentTarget;
+  if (lane) lane.style.background = 'var(--bg-i)';
+}
+function psDragLeave(ev) {
+  var lane = ev.currentTarget;
+  if (lane) lane.style.background = '';
+}
+function psDrop(ev, status) {
+  ev.preventDefault();
+  var lane = ev.currentTarget;
+  if (lane) lane.style.background = '';
+  var id = _psDragId;
+  try { id = ev.dataTransfer.getData('text/plain') || id; } catch (_) {}
+  _psDragId = null;
+  if (!id) return;
+  var cur = _psList.filter(function (x) { return x.id === id; })[0];
+  if (cur && cur.status === status) return;   // 같은 레인 → 변경 없음
+  psMove(id, status);
+}
+
 function psSetView(v) { _psView = v; _psRender(); }
 function psSetClient(c) { _psFilter.client = c; _psRender(); }
 function psSetMine(b) { _psFilter.mine = !!b; _psRender(); }
@@ -220,9 +260,18 @@ function psSetQ(v) {
 
 /* ═══ 상세/편집 모달 ═══ */
 function psOpenModal(id) {
+  // 담당자·참여자 선택지를 먼저 확보한 뒤 모달을 그린다(캐시되므로 2회차부터 즉시).
+  prestudyMembers().then(function (members) { _psBuildModal(id, members || []); });
+}
+
+function _psBuildModal(id, members) {
   var p = id ? _psList.filter(function (x) { return x.id === id; })[0] : null;
   var isNew = !p;
-  p = p || { title: '', client: '', category: 'inquiry', status: 'idea', priority: 'normal', background: '', notes: '', conclusion: '', dueDate: '' };
+  p = p || { title: '', client: '', category: 'inquiry', status: 'idea', priority: 'normal', background: '', notes: '', conclusion: '', dueDate: '', participants: [], tags: [] };
+  var me = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.sub || currentUser.id) : null;
+  var ownerId = p.ownerId || (isNew ? me : null);
+  var parts = Array.isArray(p.participants) ? p.participants : [];
+  var tags = Array.isArray(p.tags) ? p.tags : [];
 
   var catOpts = Object.keys(PS_CAT).map(function (k) {
     return '<option value="' + k + '"' + (p.category === k ? ' selected' : '') + '>' + PS_CAT[k].label + '</option>';
@@ -233,6 +282,20 @@ function psOpenModal(id) {
   var prioOpts = Object.keys(PS_PRIO).map(function (k) {
     return '<option value="' + k + '"' + (p.priority === k ? ' selected' : '') + '>' + PS_PRIO[k].label + '</option>';
   }).join('');
+
+  var ownerOpts = ['<option value="">(미지정)</option>'].concat(members.map(function (m) {
+    return '<option value="' + _psEsc(m.id) + '"' + (m.id === ownerId ? ' selected' : '') + '>' + _psEsc(m.name) + '</option>';
+  })).join('');
+  // 참여자는 이름 기반(앱 전반 규약과 동일) — 체크박스 다중 선택
+  var partHtml = members.length
+    ? '<div style="display:flex;flex-wrap:wrap;gap:6px;max-height:88px;overflow-y:auto;padding:5px;border:1px solid var(--bd);border-radius:6px">' +
+        members.map(function (m) {
+          var on = parts.indexOf(m.name) >= 0;
+          return '<label style="font-size:11px;color:var(--t3);display:flex;align-items:center;gap:3px">' +
+            '<input type="checkbox" class="psm-part" value="' + _psEsc(m.name) + '"' + (on ? ' checked' : '') + '>' + _psEsc(m.name) + '</label>';
+        }).join('') +
+      '</div>'
+    : '<div style="font-size:10px;color:var(--t6)">선택 가능한 구성원이 없습니다.</div>';
 
   var lbl = 'font-size:10px;color:var(--t5);margin:8px 0 2px';
   var inp = 'width:100%;font-size:12px;padding:5px 7px';
@@ -246,8 +309,20 @@ function psOpenModal(id) {
       '<div><div style="' + lbl + '">우선순위</div><select id="psmPrio" class="si" style="' + inp + '">' + prioOpts + '</select></div>' +
       '<div><div style="' + lbl + '">회신기한</div><input id="psmDue" type="date" value="' + _psEsc(p.dueDate || '') + '" style="' + inp + '"></div>' +
     '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+      '<div><div style="' + lbl + '">담당자</div><select id="psmOwner" class="si" style="' + inp + '">' + ownerOpts + '</select></div>' +
+      '<div><div style="' + lbl + '">태그 <span style="color:var(--t6)">(쉼표 구분)</span></div><input id="psmTags" value="' + _psEsc(tags.join(', ')) + '" style="' + inp + '" placeholder="예: 신규장비, 검토중"></div>' +
+    '</div>' +
+    '<div><div style="' + lbl + '">참여자</div>' + partHtml + '</div>' +
     '<div><div style="' + lbl + '">배경 / 요구사항</div><textarea id="psmBg" style="' + inp + ';min-height:52px;resize:vertical">' + _psEsc(p.background) + '</textarea></div>' +
-    '<div><div style="' + lbl + '">브레인스토밍 노트</div><textarea id="psmNotes" style="' + inp + ';min-height:88px;resize:vertical" placeholder="자유롭게 아이디어·검토 내용을 적어두세요. **굵게** - [ ] 체크박스 지원">' + _psEsc(p.notes) + '</textarea></div>' +
+    '<div>' +
+      '<div style="' + lbl + ';display:flex;align-items:center;gap:6px">브레인스토밍 노트' +
+        '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 6px" onclick="psToggleNotePreview()">👁 미리보기</button>' +
+        '<span style="color:var(--t6)">**굵게** ~~취소선~~ `코드` - [ ] 체크박스</span>' +
+      '</div>' +
+      '<textarea id="psmNotes" style="' + inp + ';min-height:88px;resize:vertical" placeholder="자유롭게 아이디어·검토 내용을 적어두세요.">' + _psEsc(p.notes) + '</textarea>' +
+      '<div id="psmNotePrev" style="display:none;font-size:11px;color:var(--t3);padding:8px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;white-space:pre-wrap;word-break:break-word"></div>' +
+    '</div>' +
     '<div><div style="' + lbl + '">결론</div><textarea id="psmConc" style="' + inp + ';min-height:44px;resize:vertical">' + _psEsc(p.conclusion) + '</textarea></div>';
 
   if (!isNew) {
@@ -281,11 +356,17 @@ function psSave(id) {
   var g = function (i) { var el = document.getElementById(i); return el ? el.value : ''; };
   var title = (g('psmTitle') || '').trim();
   if (!title) { _psToast('제목을 입력하세요.', 'warn'); return; }
+  var parts = [];
+  document.querySelectorAll('.psm-part:checked').forEach(function (el) { parts.push(el.value); });
+  var tags = (g('psmTags') || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
   var payload = {
     title: title,
     client: (g('psmClient') || '').trim(),
     category: g('psmCat'), status: g('psmStatus'), priority: g('psmPrio'),
     dueDate: g('psmDue') || null,
+    ownerId: g('psmOwner') || null,
+    participants: parts,
+    tags: tags,
     background: g('psmBg'), notes: g('psmNotes'), conclusion: g('psmConc')
   };
   if (id) payload.id = id;
@@ -294,6 +375,24 @@ function psSave(id) {
     _psCloseModal();
     renderPrestudy();
   }).catch(function () { _psToast('저장 실패', 'error'); });
+}
+
+/** 노트 미리보기 토글 — project-detail.js의 wmRichNote 서식 렌더 재사용 */
+function psToggleNotePreview() {
+  var ta = document.getElementById('psmNotes');
+  var pv = document.getElementById('psmNotePrev');
+  if (!ta || !pv) return;
+  var showing = pv.style.display !== 'none';
+  if (showing) {
+    pv.style.display = 'none';
+    ta.style.display = '';
+  } else {
+    pv.innerHTML = (typeof wmRichNote === 'function')
+      ? wmRichNote(ta.value)
+      : _psEsc(ta.value);
+    pv.style.display = '';
+    ta.style.display = 'none';
+  }
 }
 
 function psMove(id, status) {
