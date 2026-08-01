@@ -69,6 +69,7 @@ async function showProjectDetail(id) {
     '<button class="btn" id="pdTabSpec" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'spec\',\'' + id + '\')">사양</button>' +
     '<button class="btn" id="pdTabDev" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'dev\',\'' + id + '\')">개발</button>' +
     '<button class="btn" id="pdTabReview" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'review\',\'' + id + '\')">검토</button>' +
+    '<button class="btn" id="pdTabMeeting" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'meeting\',\'' + id + '\')">회의</button>' +
   '</div>';
 
   // ── 개요 탭 ──
@@ -224,6 +225,8 @@ async function showProjectDetail(id) {
   html += '<div id="pdDev" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
   // ── 검토 탭 ──
   html += '<div id="pdReview" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
+  // ── 회의 탭 ──
+  html += '<div id="pdMeeting" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
 
   // 하단 버튼
   html += '<div style="display:flex;gap:8px;margin-top:16px">' +
@@ -255,9 +258,9 @@ async function showProjectDetail(id) {
 
 /* ═══ 프로젝트 상세 패널: 탭 전환 ═══ */
 function pdSwitchTab(tab, projId) {
-  var tabs = ['overview', 'lifecycle', 'issues', 'work', 'spec', 'dev', 'review'];
-  var ids = { overview: 'pdOverview', lifecycle: 'pdLifecycle', issues: 'pdIssues', work: 'pdWork', spec: 'pdSpec', dev: 'pdDev', review: 'pdReview' };
-  var btnIds = { overview: 'pdTabOverview', lifecycle: 'pdTabLifecycle', issues: 'pdTabIssues', work: 'pdTabWork', spec: 'pdTabSpec', dev: 'pdTabDev', review: 'pdTabReview' };
+  var tabs = ['overview', 'lifecycle', 'issues', 'work', 'spec', 'dev', 'review', 'meeting'];
+  var ids = { overview: 'pdOverview', lifecycle: 'pdLifecycle', issues: 'pdIssues', work: 'pdWork', spec: 'pdSpec', dev: 'pdDev', review: 'pdReview', meeting: 'pdMeeting' };
+  var btnIds = { overview: 'pdTabOverview', lifecycle: 'pdTabLifecycle', issues: 'pdTabIssues', work: 'pdTabWork', spec: 'pdTabSpec', dev: 'pdTabDev', review: 'pdTabReview', meeting: 'pdTabMeeting' };
   tabs.forEach(function (t) {
     var el = document.getElementById(ids[t]);
     var btn = document.getElementById(btnIds[t]);
@@ -278,6 +281,8 @@ function pdSwitchTab(tab, projId) {
   if (tab === 'dev' && projId) pdLoadDev(projId);
   // 검토 탭
   if (tab === 'review' && projId) pdLoadReview(projId);
+  // 회의 탭
+  if (tab === 'meeting' && projId) pdLoadMeetings(projId);
 }
 
 /* ═══ 개발 백로그 (칸반) — PRD Phase 1 UI ═══ */
@@ -491,6 +496,119 @@ function pdReviewSaveNote(id) {
 function pdReviewDel(id) {
   if (!confirm('이 검토를 삭제할까요?')) return;
   reviewDel(id).then(function () { pdLoadReview(_pdReviewProj); });
+}
+
+/* ═══ 회의 관리 — PRD Phase 2 UI ═══ */
+var _pdMtgProj = null;
+var _pdMtgList = [];
+
+function pdLoadMeetings(projId) {
+  _pdMtgProj = projId;
+  var el = document.getElementById('pdMeeting'); if (!el) return;
+  el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">로딩 중...</div>';
+  meetingsByProject(projId).then(function (list) { _pdMtgList = list || []; pdRenderMeetings(); })
+    .catch(function () { el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">회의 목록을 불러오지 못했습니다.</div>'; });
+}
+
+function pdRenderMeetings() {
+  var el = document.getElementById('pdMeeting'); if (!el) return;
+
+  // 회의 생성 폼
+  var html = '<div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap">' +
+    '<input id="pdMtgTitle" placeholder="회의 제목" style="flex:1;min-width:120px;font-size:11px;padding:5px 8px" onkeydown="if(event.key===\'Enter\')pdMtgAdd()">' +
+    '<input id="pdMtgDate" type="date" class="si" style="font-size:11px;padding:4px">' +
+    '<button class="btn btn-p btn-s" style="font-size:11px" onclick="pdMtgAdd()">+ 회의</button>' +
+  '</div>';
+  html += '<div style="font-size:9px;color:var(--t6);margin-bottom:8px">💡 날짜를 넣으면 캘린더에 회의 일정이 자동 등록됩니다.</div>';
+
+  if (!_pdMtgList.length) {
+    html += '<div style="font-size:11px;color:var(--t6);padding:8px 0">등록된 회의가 없습니다.</div>';
+    el.innerHTML = html;
+    return;
+  }
+
+  _pdMtgList.forEach(function (m) {
+    var acts = m.actionItems || [];
+    var openCnt = acts.filter(function (a) { return a.status !== 'done'; }).length;
+    html += '<div style="border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:10px">';
+    // 헤더
+    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">' +
+      '<span style="flex:1;font-size:12px;font-weight:700;color:var(--t2);word-break:break-word">🤝 ' + eH(m.title) + '</span>' +
+      (m.meetDate ? '<span style="font-size:9px;color:var(--t5)">' + eH(m.meetDate) + '</span>' : '') +
+      '<button class="btn btn-d btn-s" style="font-size:9px;padding:1px 5px" title="회의 삭제" onclick="pdMtgDel(\'' + eH(m.id) + '\')">✕</button>' +
+    '</div>';
+    // 회의록
+    html += '<textarea id="pdMtgMin-' + eH(m.id) + '" placeholder="회의록" style="width:100%;font-size:10px;padding:5px 6px;min-height:44px;resize:vertical">' + eH(m.minutes || '') + '</textarea>' +
+      '<button class="btn btn-g btn-s" style="font-size:10px;margin:3px 0 8px" onclick="pdMtgSaveMinutes(\'' + eH(m.id) + '\')">회의록 저장</button>';
+    // 액션아이템
+    html += '<div style="font-size:10px;font-weight:700;color:var(--t3);margin-bottom:3px">액션아이템 <span style="color:var(--t6)">(미완료 ' + openCnt + ')</span></div>';
+    acts.forEach(function (a) {
+      var doneStyle = a.status === 'done' ? ';text-decoration:line-through;color:var(--t5)' : '';
+      var linked = a.linkedIssueId ? ' <span style="font-size:8px;color:#06B6D4">→이슈</span>' : (a.linkedDevItemId ? ' <span style="font-size:8px;color:#10B981">→개발</span>' : '');
+      html += '<div style="display:flex;align-items:center;gap:5px;padding:2px 0;font-size:10px">' +
+        '<span style="cursor:pointer" onclick="pdMtgActToggle(\'' + eH(m.id) + '\',\'' + eH(a.id) + '\',\'' + (a.status === 'done' ? 'open' : 'done') + '\')">' + (a.status === 'done' ? '☑' : '☐') + '</span>' +
+        '<span style="flex:1;color:var(--t2);word-break:break-word' + doneStyle + '">' + eH(a.title) +
+          (a.assigneeName ? ' <span style="color:var(--t5)">@' + eH(a.assigneeName) + '</span>' : '') +
+          (a.dueDate ? ' <span style="color:var(--t6)">~' + eH(a.dueDate) + '</span>' : '') + linked +
+        '</span>' +
+        (a.linkedIssueId || a.linkedDevItemId ? '' :
+          '<button class="btn btn-g btn-s" style="font-size:8px;padding:1px 4px" title="이슈로 전환" onclick="pdMtgActConvert(\'' + eH(m.id) + '\',\'' + eH(a.id) + '\',\'issue\')">이슈</button>' +
+          '<button class="btn btn-g btn-s" style="font-size:8px;padding:1px 4px" title="개발 아이템으로 전환" onclick="pdMtgActConvert(\'' + eH(m.id) + '\',\'' + eH(a.id) + '\',\'dev\')">개발</button>') +
+        '<button class="btn btn-d btn-s" style="font-size:8px;padding:1px 4px" onclick="pdMtgActDel(\'' + eH(m.id) + '\',\'' + eH(a.id) + '\')">✕</button>' +
+      '</div>';
+    });
+    // 액션아이템 추가 (제목 / 담당 / 기한)
+    html += '<div style="display:flex;gap:3px;margin-top:5px;flex-wrap:wrap">' +
+      '<input id="pdActT-' + eH(m.id) + '" placeholder="액션 제목" style="flex:1;min-width:90px;font-size:10px;padding:3px 5px" onkeydown="if(event.key===\'Enter\')pdMtgActAdd(\'' + eH(m.id) + '\')">' +
+      '<input id="pdActA-' + eH(m.id) + '" placeholder="담당(이름)" style="width:70px;font-size:10px;padding:3px 5px">' +
+      '<input id="pdActD-' + eH(m.id) + '" type="date" class="si" style="font-size:10px;padding:2px">' +
+      '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pdMtgActAdd(\'' + eH(m.id) + '\')">+</button>' +
+    '</div>';
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
+function pdMtgAdd() {
+  if (!_pdMtgProj) return;
+  var ti = document.getElementById('pdMtgTitle');
+  var title = ti ? ti.value.trim() : '';
+  if (!title) { if (typeof showToast === 'function') showToast('회의 제목을 입력하세요.', 'warn'); return; }
+  var date = (document.getElementById('pdMtgDate') || {}).value || null;
+  meetingCreate({ projectId: _pdMtgProj, title: title, meetDate: date })
+    .then(function () { if (typeof showToast === 'function') showToast('회의 등록됨' + (date ? ' · 일정 발행' : ''), 'success'); pdLoadMeetings(_pdMtgProj); })
+    .catch(function () { if (typeof showToast === 'function') showToast('등록 실패', 'error'); });
+}
+function pdMtgDel(id) {
+  if (!confirm('이 회의를 삭제할까요? (연결된 일정도 삭제됩니다)')) return;
+  meetingDel(id).then(function () { pdLoadMeetings(_pdMtgProj); });
+}
+function pdMtgSaveMinutes(id) {
+  var ta = document.getElementById('pdMtgMin-' + id);
+  meetingUpdate(id, { minutes: ta ? ta.value : '' }).then(function () { if (typeof showToast === 'function') showToast('회의록 저장됨', 'success'); });
+}
+function pdMtgActAdd(mid) {
+  var t = (document.getElementById('pdActT-' + mid) || {}).value;
+  t = t ? t.trim() : '';
+  if (!t) return;
+  var a = (document.getElementById('pdActA-' + mid) || {}).value || '';
+  var d = (document.getElementById('pdActD-' + mid) || {}).value || null;
+  meetingActionAdd(mid, { title: t, assigneeName: a.trim() || null, dueDate: d }).then(function () { pdLoadMeetings(_pdMtgProj); });
+}
+function pdMtgActToggle(mid, aid, status) {
+  meetingActionUpdate(mid, aid, { status: status }).then(function () { pdLoadMeetings(_pdMtgProj); });
+}
+function pdMtgActDel(mid, aid) {
+  meetingActionDel(mid, aid).then(function () { pdLoadMeetings(_pdMtgProj); });
+}
+function pdMtgActConvert(mid, aid, target) {
+  var label = target === 'dev' ? '개발 아이템' : '이슈';
+  if (!confirm('이 액션아이템을 ' + label + '(으)로 전환할까요?')) return;
+  meetingActionConvert(mid, aid, target).then(function () {
+    if (typeof showToast === 'function') showToast(label + '(으)로 전환됨', 'success');
+    pdLoadMeetings(_pdMtgProj);
+  }).catch(function () { if (typeof showToast === 'function') showToast('전환 실패', 'error'); });
 }
 
 /* ═══ 프로젝트 사양 정리 표 (v13.160) — 설계/제어전장/소프트웨어/공정 ═══ */

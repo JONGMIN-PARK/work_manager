@@ -1006,6 +1006,45 @@ function reviewDel(id) {
   return apiFetch('/api/project-reviews/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
 }
 
+/* ═══ 회의 관리 (meetings + action_items) — PRD Phase 2 ═══ */
+function meetingsByProject(pid) {
+  return apiFetch('/api/meetings?projectId=' + encodeURIComponent(pid))
+    .then(function (r) {
+      return (r.data || []).map(function (m) {
+        var c = toCamel(m);
+        c.actionItems = (m.action_items || []).map(toCamel);
+        return c;
+      });
+    })
+    .catch(function () { return []; });
+}
+function meetingCreate(item) {
+  return apiFetch('/api/meetings', { method: 'POST', body: JSON.stringify(item) })
+    .then(function (r) { return toCamel(r.data); });
+}
+function meetingUpdate(id, patch) {
+  return apiFetch('/api/meetings/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(patch) })
+    .then(function (r) { return toCamel(r.data); });
+}
+function meetingDel(id) {
+  return apiFetch('/api/meetings/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
+}
+function meetingActionAdd(mid, item) {
+  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions', { method: 'POST', body: JSON.stringify(item) })
+    .then(function (r) { return toCamel(r.data); });
+}
+function meetingActionUpdate(mid, aid, patch) {
+  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions/' + encodeURIComponent(aid), { method: 'PUT', body: JSON.stringify(patch) })
+    .then(function (r) { return toCamel(r.data); });
+}
+function meetingActionDel(mid, aid) {
+  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions/' + encodeURIComponent(aid), { method: 'DELETE' }).catch(function () { return null; });
+}
+function meetingActionConvert(mid, aid, target) {
+  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions/' + encodeURIComponent(aid) + '/convert', { method: 'POST', body: JSON.stringify({ target: target }) })
+    .then(function (r) { return r.data; });
+}
+
 /* 단계별 완료율 계산 */
 function calcPhaseProgress(projectId, phase) {
   return chkGetByPhase(projectId, phase).then(function (items) {

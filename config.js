@@ -172,6 +172,7 @@ var PROJ_STATUS = {
 var EVT_TYPE = {
   milestone:    { label: '마일스톤', color: '#8B5CF6', icon: '◆' },
   meeting:      { label: '회의',     color: '#06B6D4', icon: '🤝' },
+  review:       { label: '검토',     color: '#0EA5E9', icon: '🔍' },
   deadline:     { label: '납기',     color: '#EF4444', icon: '🏁' },
   trip:         { label: '출장',     color: '#F97316', icon: '✈️' },
   fieldService: { label: '현장출동', color: '#DC2626', icon: '🔧' },

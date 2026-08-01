@@ -903,7 +903,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.171</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.172</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3462,6 +3462,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.172',date:'2026-08-01',title:'🤝 프로젝트 관리 확장 — 회의 관리(안건·회의록·액션아이템) + 일정 자동발행 (PRD Phase 2)',tag:'feat',items:[
+      '프로젝트 상세 패널에 「회의」 탭 추가: 회의 등록(제목·날짜), 회의록 작성/저장, 액션아이템(담당·기한·완료 토글)',
+      '회의에 날짜를 넣으면 캘린더에 회의 일정(events, type=meeting)이 자동 등록·동기화되고, 회의 삭제 시 함께 제거됨',
+      '액션아이템 → 클릭 한 번으로 이슈 또는 개발 아이템으로 전환(담당자 이름 자동 매칭, 원본에 전환 표시)',
+      '서버: meetings·meeting_action_items 테이블(045 마이그레이션), /api/meetings API(+액션아이템 CRUD·전환), events 자동발행 연동',
+      '영향: server/migrations/045, server/routes/meetings.js, server/app.js, config.js(일정유형 검토 추가), project-data.js, project-detail.js, 업무일지_분석기.html. 서버 변경 포함 — 배포 후 마이그레이션 자동 적용'
+    ]},
     {ver:'13.171',date:'2026-08-01',title:'🧩 프로젝트 관리 확장 — 개발 백로그(칸반)·검토 체크리스트 탭 추가',tag:'feat',items:[
       '프로젝트 상세 패널에 「개발」 탭 추가: 계획된 개발 작업을 상태별(백로그/할 일/진행/검토/완료)로 관리. 제목·분류(신규/개선/설계변경 등)·우선순위로 등록, 카드에서 상태 이동·삭제',
       '프로젝트 상세 패널에 「검토」 탭 추가: 단계별 템플릿(수주/설계DR/제작/검수/출하 전)으로 검토 체크리스트 생성, 항목 체크(검토자·시각 기록)·완료율 바·결과(검토중/확인/보완필요)·종합 의견',

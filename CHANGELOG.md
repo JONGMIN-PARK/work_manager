@@ -1,5 +1,25 @@
 # Work Manager — 변경 이력
 
+## v13.172 (2026-08-01) — 프로젝트 관리 확장: 회의 관리 + 일정 자동발행 + 액션아이템 전환 (PRD Phase 2)
+
+### 배경
+[PRD_프로젝트관리_확장](docs/PRD_프로젝트관리_확장.md) Phase 2. 회의(`events`의 type=meeting)는 제목·날짜만 있고 안건·회의록·액션아이템이 없어, 회의에서 나온 실행 항목이 흩어지던 문제를 보완.
+
+### 변경
+- **서버**
+  - `045_meetings.sql` — `meetings`(안건·회의록·참석·event 연동) + `meeting_action_items`(담당·기한·상태·전환링크) 테이블. 테넌트 격리.
+  - `routes/meetings.js` — 회의 CRUD + 액션아이템 CRUD + **이슈/개발아이템 전환**(`/actions/:aid/convert`). 담당자 이름 → user_id 자동 해석.
+  - **일정 자동발행**: 회의에 날짜가 있으면 `events(type=meeting)` 자동 생성/동기화(`event_id` 연동), 회의 삭제 시 일정 동반 삭제 → 캘린더·타임라인·텔레그램 `/calendar`·`/today`에 노출.
+  - `app.js` — `/api/meetings` 마운트. `config.js` — 일정 유형에 `review`(검토) 추가.
+- **클라이언트**
+  - `project-data.js` — `meeting*` API 클라이언트(회의·액션아이템·전환).
+  - `project-detail.js` — 프로젝트 상세에 「회의」 탭. 회의 등록/회의록 저장/액션아이템(완료 토글·이슈/개발 전환).
+
+### 영향
+- 신규: `server/migrations/045`, `server/routes/meetings.js`.
+- 수정: `server/app.js`, `config.js`, `project-data.js`, `project-detail.js`, `업무일지_분석기.html`(버전·패치노트).
+- **서버 변경 포함** — 배포 후 마이그레이션 자동 적용. 텔레그램 명령/알림 연동은 Phase 3.
+
 ## v13.171 (2026-08-01) — 프로젝트 관리 확장: 개발 백로그(칸반) · 검토 체크리스트 (PRD Phase 1)
 
 ### 배경
