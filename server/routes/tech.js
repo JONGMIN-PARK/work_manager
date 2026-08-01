@@ -13,6 +13,7 @@ var db = require('../config/db');
 var crypto = require('crypto');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var notificationService = require('../services/notification.service');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -51,6 +52,35 @@ async function resyncTech(techId, tenantId) {
     'UPDATE tech_assets SET progress = $1, total_hours = $2, updated_at = now() WHERE id = $3 AND tenant_id = $4',
     [prog || 0, sumH, techId, tenantId]
   );
+}
+
+var STATUS_LABEL = {
+  research: '연구', developing: '개발', verifying: '검증', available: '사용가능', deprecated: '폐기예정'
+};
+
+/** 담당(owner) + 참여자(이름) → user_id 목록. actorId 는 제외. */
+async function techAudience(row, tenantId, actorId) {
+  var ids = {};
+  if (row.owner_id) ids[row.owner_id] = true;
+  var names = row.participants;
+  if (typeof names === 'string') { try { names = JSON.parse(names); } catch (_) { names = []; } }
+  if (Array.isArray(names) && names.length) {
+    var nr = await db.query(
+      "SELECT id FROM users WHERE tenant_id = $1 AND status = 'active' AND (name = ANY($2) OR display_name = ANY($2))",
+      [tenantId, names]
+    );
+    nr.rows.forEach(function (u) { ids[u.id] = true; });
+  }
+  if (actorId) delete ids[actorId];
+  return Object.keys(ids);
+}
+
+/** 담당 배정 알림 (fire-and-forget) */
+async function notifyTechAssigned(row, actorId) {
+  try {
+    if (!row || !row.owner_id || row.owner_id === actorId) return;
+    await notificationService.notify('tech_assigned', { code: row.code, name: row.name }, [row.owner_id]);
+  } catch (e) { console.error('[tech/notifyAssigned]', e.message); }
 }
 
 /** 수정 권한: 담당자 · 참여자(이름) · 관리자/임원 */
@@ -204,6 +234,7 @@ router.post('/', async function (req, res) {
       ]
     );
     res.status(201).json({ data: r.rows[0] });
+    notifyTechAssigned(r.rows[0], req.user.sub);
   } catch (e) {
     console.error('[tech/create]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -216,6 +247,9 @@ router.put('/:id', async function (req, res) {
     if (!await canEdit(req, req.params.id)) {
       return res.status(403).json({ error: 'FORBIDDEN', message: '담당자·참여자·관리자만 수정할 수 있습니다.' });
     }
+    // 상태 변경 알림 판단용 이전 값
+    var prevR = await db.query('SELECT status FROM tech_assets WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var prevStatus = prevR.rows.length ? prevR.rows[0].status : null;
     var b = req.body || {};
     var sets = [];
     var params = [];
@@ -248,6 +282,29 @@ router.put('/:id', async function (req, res) {
     var r = await db.query(sql, params);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
+    var updated = r.rows[0];
+    if (b.ownerId || b.owner_id) notifyTechAssigned(updated, req.user.sub);
+    // 상태가 실제로 바뀐 경우에만 알림 → 담당·참여자 + 관리자
+    if (b.status !== undefined && prevStatus && updated.status !== prevStatus) {
+      (async function () {
+        try {
+          var ids = await techAudience(updated, req.tenant.id, req.user.sub);
+          var admR = await db.query("SELECT id FROM users WHERE tenant_id = $1 AND role = 'admin' AND status = 'active'", [req.tenant.id]);
+          var set = {};
+          ids.forEach(function (i) { set[i] = true; });
+          admR.rows.forEach(function (u) { set[u.id] = true; });
+          delete set[req.user.sub];
+          var list = Object.keys(set);
+          if (!list.length) return;
+          await notificationService.notify('tech_status_changed', {
+            code: updated.code, name: updated.name,
+            fromLabel: STATUS_LABEL[prevStatus] || prevStatus,
+            toLabel: STATUS_LABEL[updated.status] || updated.status,
+            trl: updated.trl
+          }, list);
+        } catch (e) { console.error('[tech/notifyStatus]', e.message); }
+      })();
+    }
   } catch (e) {
     console.error('[tech/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -318,6 +375,19 @@ router.post('/:id/logs', async function (req, res) {
     );
     await resyncTech(req.params.id, req.tenant.id);
     res.status(201).json({ data: r.rows[0] });
+    // 개발일지 알림 → 담당·참여자 (작성자 제외)
+    (async function () {
+      try {
+        var techR = await db.query('SELECT id, code, name, owner_id, participants FROM tech_assets WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+        if (!techR.rows.length) return;
+        var ids = await techAudience(techR.rows[0], req.tenant.id, req.user.sub);
+        if (!ids.length) return;
+        await notificationService.notify('tech_log_added', {
+          code: techR.rows[0].code, name: techR.rows[0].name,
+          authorName: authorName, progress: r.rows[0].progress, content: r.rows[0].content
+        }, ids);
+      } catch (e) { console.error('[tech/notifyLog]', e.message); }
+    })();
   } catch (e) {
     console.error('[tech/logs/create]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

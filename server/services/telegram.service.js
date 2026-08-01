@@ -53,7 +53,7 @@ async function sendMessage(chatId, text, opts) {
 }
 
 /* ── Command modules (lazy-initialized) ── */
-var personalCmds, analysisCmds, scheduleCmds, projectCmds, docsCmds, teamCmds, utilityCmds, helpCmds, weeklyCmds, pmextCmds;
+var personalCmds, analysisCmds, scheduleCmds, projectCmds, docsCmds, teamCmds, utilityCmds, helpCmds, weeklyCmds, pmextCmds, techCmds;
 
 function initCommands() {
   if (personalCmds) return;
@@ -67,6 +67,7 @@ function initCommands() {
   helpCmds     = require('../telegram/commands/help').create(sendMessage);
   weeklyCmds   = require('../telegram/commands/weekly').create(sendMessage);
   pmextCmds    = require('../telegram/commands/pmext').create(sendMessage);
+  techCmds     = require('../telegram/commands/tech').create(sendMessage);
 }
 
 /** 봇 명령어 자동완성 등록 (BotFather 대체) */
@@ -89,6 +90,9 @@ async function setMyCommands() {
     { command: 'prestudy', description: '사전검토 현황' },
     { command: 'actions', description: '내 액션아이템' },
     { command: 'meeting', description: '회의 조회' },
+    { command: 'tech', description: '요소기술 카탈로그' },
+    { command: 'techlog', description: '요소기술 개발일지' },
+    { command: 'mytech', description: '내 요소기술' },
     { command: 'my_stats', description: '내 월간 통계' },
     { command: 'overdue', description: '지연/긴급 현황' },
     { command: 'project', description: '프로젝트 현황' },
@@ -186,7 +190,7 @@ async function verifyAndLink(code, chatId, tgUsername) {
   );
 
   // 기본 알림 설정 생성 (tenant_id 포함)
-  var defaultEvents = ['issue_assigned', 'issue_status_changed', 'project_delayed', 'deadline_d3', 'deadline_d1', 'deadline_today', 'user_pending', 'weekly_report_uploaded', 'milestone_progress', 'dev_item_assigned', 'action_item_assigned', 'action_item_due', 'prestudy_assigned', 'prestudy_due', 'prestudy_won'];
+  var defaultEvents = ['issue_assigned', 'issue_status_changed', 'project_delayed', 'deadline_d3', 'deadline_d1', 'deadline_today', 'user_pending', 'weekly_report_uploaded', 'milestone_progress', 'dev_item_assigned', 'action_item_assigned', 'action_item_due', 'prestudy_assigned', 'prestudy_due', 'prestudy_won', 'tech_assigned', 'tech_log_added', 'tech_status_changed', 'tech_stale'];
   for (var i = 0; i < defaultEvents.length; i++) {
     await db.query(
       "INSERT INTO notification_prefs (user_id, tenant_id, channel, event_type, is_enabled) VALUES ($1, $2, 'telegram', $3, TRUE) ON CONFLICT (user_id, channel, event_type) DO NOTHING",
@@ -430,6 +434,14 @@ async function handleUpdate(update) {
     var mtgArg = text.replace(/^\/meetings?\s*/, '').trim();
     return pmextCmds.cmdMeeting(chatId, user, mtgArg || null);
   }
+  // 요소기술 — /mytech·/techlog 를 /tech 보다 먼저 매칭(접두어 충돌 방지)
+  if (text === '/mytech' || text === '/my-tech' || text === '/my_tech') return techCmds.cmdMyTech(chatId, user);
+  if (text === '/techlog' || text.startsWith('/techlog ')) {
+    return techCmds.cmdTechLog(chatId, user, text.replace(/^\/techlog\s*/, '').trim() || null);
+  }
+  if (text === '/tech' || text.startsWith('/tech ')) {
+    return techCmds.cmdTech(chatId, user, text.replace(/^\/tech\s*/, '').trim() || null);
+  }
   if (text === '/help' || text.startsWith('/help ')) {
     var helpArg = text.replace(/^\/help\s*/, '').trim();
     return helpCmds.cmdHelp(chatId, helpArg || null);
@@ -501,6 +513,8 @@ async function handleUpdate(update) {
     { patterns: [/액션\s*아이템/, /내\s*액션/, /할당된\s*액션/], cmd: function() { return pmextCmds.cmdActions(chatId, user); } },
     { patterns: [/사전\s*검토/, /검토\s*현황/, /검토\s*목록/, /\ubb38\uc758\s*\ud604\ud669/], cmd: function() { return pmextCmds.cmdPrestudy(chatId, user, null); } },
     { patterns: [/회의\s*록/, /회의\s*목록/, /최근\s*회의/], cmd: function() { return pmextCmds.cmdMeeting(chatId, user, null); } },
+    { patterns: [/요소\s*기술/, /보유\s*기술/, /기반\s*기술/, /기술\s*카탈로그/, /기술\s*스택/], cmd: function() { return techCmds.cmdTech(chatId, user, null); } },
+    { patterns: [/내\s*기술/, /담당\s*기술/], cmd: function() { return techCmds.cmdMyTech(chatId, user); } },
     { patterns: [/월간\s*보고/, /월간\s*리포트/, /월간\s*통계/], cmd: function() { return analysisCmds.cmdReport(chatId, user); } },
     { patterns: [/내\s*통계/, /나\s*통계/, /개인\s*통계/], cmd: function() { return personalCmds.cmdMyStats(chatId, user); } },
     { patterns: [/지연/, /긴급\s*현황/, /오버듀/], cmd: function() { return analysisCmds.cmdOverdue(chatId, user); } },

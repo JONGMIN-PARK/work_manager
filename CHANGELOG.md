@@ -1,5 +1,28 @@
 # Work Manager — 변경 이력
 
+## v13.178 (2026-08-01) — 요소기술 Phase 3 (텔레그램 · 알림 · 리마인더)
+
+### 배경
+[PRD_요소기술_개발관리](docs/PRD_요소기술_개발관리.md) Phase 3. 카탈로그·적용이력이 웹에만 있어, 현장/외부에서 "이 기술 있나?"를 확인할 수 없었다.
+
+### 변경
+- **봇 명령어** `server/telegram/commands/tech.js`(신규)
+  - `/tech` — 상태별 기술 카탈로그(폐기 제외), `/tech <키워드>` — 이름·코드·요약·**스택(JSONB) 전반 검색**
+  - `/techlog <기술명>` — 최근 개발일지 8건 + 진척률·누적 투입시간
+  - `/mytech` — 내 담당 기술 + 진척률·최근 일지일(`일지 없음` 표시)
+  - 자동완성·자연어("요소기술"·"보유기술"·"내 기술")·`/help` 반영. 디스패처는 `/mytech`·`/techlog`를 `/tech`보다 먼저 매칭(접두어 충돌 방지).
+- **알림** (`notification.service.js` + `routes/tech.js` 트리거)
+  - `tech_assigned`(담당 배정) · `tech_log_added`(일지 등록 → 담당+참여자, 작성자 제외) · `tech_status_changed`(상태가 **실제로 바뀐 경우만** → 담당·참여자+관리자)
+  - `techAudience()` — 담당(owner_id) + 참여자(이름 → user_id 해석) 수신자 계산
+- **리마인더** `sendTechStaleReminders()` — `developing`/`verifying` 상태인데 30일 이상 일지 없음 → 담당자. 주 1회(월요일) 스케줄.
+- **주간 다이제스트** — 지난주 요소기술 활동(진행 기술 수·일지 건수·투입시간) 추가. 테이블 부재(42P01)는 조용히 스킵.
+- **설정 UI** — 요소기술 이벤트 4종 토글 + 신규 연동 사용자 기본 수신 이벤트 포함.
+
+### 영향
+- 신규: `server/telegram/commands/tech.js`.
+- 수정: `server/routes/tech.js`, `server/services/notification.service.js·telegram.service.js`, `server/telegram/commands/help.js`, `server/app.js`, `web/src/app/dashboard/notifications/page.js`, `업무일지_분석기.html`.
+- **서버 변경** — 배포 후 적용(신규 마이그레이션·의존성 없음). 이로써 요소기술 PRD Phase 1~3 완료.
+
 ## v13.177 (2026-08-01) — 요소기술 Phase 2 (적용 이력 · 사전검토/프로젝트 연동 · 코멘트)
 
 ### 배경

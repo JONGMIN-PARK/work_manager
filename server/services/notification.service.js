@@ -112,6 +112,28 @@ var TEMPLATES = {
       (p.client ? '[' + escHtml(p.client) + '] ' : '') + escHtml(p.title) +
       '\n프로젝트/수주로 전환되었습니다.';
   },
+  tech_assigned: function (p) {
+    return '🧪 <b>요소기술 담당 배정</b>\n' +
+      (p.code ? '<code>' + escHtml(p.code) + '</code> ' : '') + escHtml(p.name);
+  },
+  tech_log_added: function (p) {
+    return '📓 <b>요소기술 개발일지</b>\n' +
+      (p.code ? '<code>' + escHtml(p.code) + '</code> ' : '') + escHtml(p.name) + '\n' +
+      (p.authorName ? '작성: ' + escHtml(p.authorName) : '') +
+      (p.progress != null ? ' · 진척 ' + escHtml(p.progress) + '%' : '') +
+      (p.content ? '\n📝 ' + noteToTgHtml(String(p.content).slice(0, 300)) : '');
+  },
+  tech_status_changed: function (p) {
+    return '🔄 <b>요소기술 상태 변경</b>\n' +
+      (p.code ? '<code>' + escHtml(p.code) + '</code> ' : '') + escHtml(p.name) + '\n' +
+      escHtml(p.fromLabel) + ' → <b>' + escHtml(p.toLabel) + '</b>' +
+      (p.trl != null ? ' (TRL ' + escHtml(p.trl) + ')' : '');
+  },
+  tech_stale: function (p) {
+    return '🕸 <b>요소기술 일지 미작성</b>\n' +
+      (p.code ? '<code>' + escHtml(p.code) + '</code> ' : '') + escHtml(p.name) + '\n' +
+      escHtml(p.days) + '일간 개발일지가 없습니다.';
+  },
   event_today: function (p) {
     // p.content는 호출자가 조립한 사전-안전 HTML — raw 유지
     return '☀️ <b>오늘 브리핑</b>\n\n' + (p.content || '');
@@ -273,6 +295,10 @@ var EVENT_TITLES = {
   prestudy_assigned: '사전검토가 배정되었습니다',
   prestudy_due: '사전검토 회신기한이 임박했습니다',
   prestudy_won: '사전검토가 확정되었습니다',
+  tech_assigned: '요소기술 담당으로 배정되었습니다',
+  tech_log_added: '요소기술 개발일지가 등록되었습니다',
+  tech_status_changed: '요소기술 상태가 변경되었습니다',
+  tech_stale: '요소기술 개발일지가 오래 비어 있습니다',
   order_delivery_d7: '납품 D-7 알림',
   order_delivery_d3: '납품 D-3 알림',
   weekly_digest: '주간 다이제스트',
@@ -715,7 +741,25 @@ async function sendWeeklyDigest() {
   // 지연 프로젝트
   var delayed = await db.query("SELECT COUNT(*) as cnt FROM projects WHERE status = 'delayed'");
 
+  // 요소기술 — 지난주 개발일지 활동 (모듈 미적용 시 조용히 스킵)
+  var techLine = '';
+  try {
+    var techR = await db.query(
+      "SELECT COUNT(DISTINCT tech_id)::int AS techs, COUNT(*)::int AS logs, COALESCE(SUM(hours),0) AS hours " +
+      "FROM tech_logs WHERE deleted_at IS NULL AND created_at >= $1::date AND created_at < ($1::date + INTERVAL '7 days')",
+      [lastMon.toISOString().slice(0, 10)]
+    );
+    var tg = techR.rows[0];
+    if (tg && tg.logs > 0) {
+      techLine = '🧪 요소기술: <b>' + tg.techs + '건</b> 진행 (일지 ' + tg.logs + '건 · ' +
+        Math.round(parseFloat(tg.hours) * 10) / 10 + 'h)\n';
+    }
+  } catch (e) {
+    if (e.code !== '42P01') console.error('[WeeklyDigest/tech]', e.message);
+  }
+
   var content = '⏱ 팀 총 투입: <b>' + Math.round(parseFloat(t.hours) * 10) / 10 + 'h</b> (' + t.people + '명)\n';
+  content += techLine;
   content += '✅ 해결 이슈: <b>' + resolvedIssues.rows[0].cnt + '건</b>\n';
   content += '🔴 신규 이슈: <b>' + newIssues.rows[0].cnt + '건</b>\n';
   if (parseInt(delayed.rows[0].cnt) > 0) {
@@ -862,6 +906,34 @@ async function sendPrestudyReminders() {
   console.log('[Notification] Prestudy D-1 reminders checked:', r.rows.length);
 }
 
+/**
+ * 요소기술 일지 미작성 리마인더 (주 1회 실행)
+ * 진행중(developing/verifying)인데 STALE_DAYS 이상 개발일지가 없는 기술 → 담당자.
+ * 일지가 한 건도 없으면 기술 생성일 기준으로 판단한다.
+ */
+async function sendTechStaleReminders() {
+  var STALE_DAYS = 30;
+  var r = await db.query(
+    "SELECT t.id, t.code, t.name, t.owner_id, " +
+    "  GREATEST(0, EXTRACT(DAY FROM (NOW() - COALESCE(l.last_at, t.created_at)))::int) AS days " +
+    "FROM tech_assets t " +
+    "LEFT JOIN (SELECT tech_id, MAX(created_at) AS last_at FROM tech_logs WHERE deleted_at IS NULL GROUP BY tech_id) l " +
+    "  ON l.tech_id = t.id " +
+    "WHERE t.deleted_at IS NULL AND t.owner_id IS NOT NULL " +
+    "  AND t.status IN ('developing','verifying') " +
+    "  AND COALESCE(l.last_at, t.created_at) < NOW() - INTERVAL '" + STALE_DAYS + " days'"
+  );
+  for (var i = 0; i < r.rows.length; i++) {
+    var t = r.rows[i];
+    try {
+      await notify('tech_stale', { code: t.code, name: t.name, days: t.days }, [t.owner_id]);
+    } catch (e) {
+      console.error('[TechStale]', t.id, e.message);
+    }
+  }
+  console.log('[Notification] Tech stale reminders checked:', r.rows.length);
+}
+
 /** 그룹 채팅방에 알림 발송 — P0-1: tenantId 필수 (멀티테넌트 격리) */
 async function notifyGroup(linkType, linkId, text, tenantId) {
   if (!tenantId) {
@@ -894,5 +966,6 @@ module.exports = {
   sendOverloadWarnings: sendOverloadWarnings,
   sendActionItemReminders: sendActionItemReminders,
   sendPrestudyReminders: sendPrestudyReminders,
+  sendTechStaleReminders: sendTechStaleReminders,
   TEMPLATES: TEMPLATES
 };

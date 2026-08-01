@@ -19,6 +19,10 @@ var EVENT_LABELS = {
   prestudy_assigned: '사전검토 배정',
   prestudy_due: '사전검토 기한 D-1',
   prestudy_won: '사전검토 확정',
+  tech_assigned: '요소기술 담당 배정',
+  tech_log_added: '요소기술 개발일지',
+  tech_status_changed: '요소기술 상태 변경',
+  tech_stale: '요소기술 일지 미작성',
   order_delivery_d7: '납품 D-7',
   order_delivery_d3: '납품 D-3',
   weekly_digest: '주간 다이제스트',
@@ -33,6 +37,7 @@ var EVENT_ICONS = {
   dev_item_assigned: '🧩', action_item_assigned: '📌',
   action_item_due: '⏰',
   prestudy_assigned: '🔍', prestudy_due: '⏰', prestudy_won: '🎉',
+  tech_assigned: '🧪', tech_log_added: '📓', tech_status_changed: '🔄', tech_stale: '🕸',
   order_delivery_d7: '📦', order_delivery_d3: '📦',
   weekly_digest: '📊', progress_warning: '📉',
 };

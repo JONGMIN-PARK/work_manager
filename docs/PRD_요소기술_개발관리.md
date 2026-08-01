@@ -1,8 +1,8 @@
 # PRD: 요소기술 개발 관리 (Element Technology / 기반기술 자산)
 
-> **Version**: 1.1 (GitHub 연동 검토 추가)
+> **Version**: 1.2 (Phase 1~3 완료 반영)
 > **Date**: 2026-08-01
-> **Status**: 기획 (Draft) — 구현 착수 전
+> **Status**: Phase 1~3 구현 완료 (v13.176~178). GitHub 연동(9장)은 선택 항목으로 미착수.
 > **관련 문서**: [PRD_프로젝트관리_확장.md](./PRD_프로젝트관리_확장.md), [PRD_텔레그램_확장.md](./PRD_텔레그램_확장.md)
 
 ---
@@ -264,11 +264,11 @@ TRL은 1~9 단순 척도로 두되, UI에는 3구간으로 요약 표시한다.
 
 > **GitHub 연동**은 9장 참조 — Phase 2 이후 **선택** 항목이며, Phase 1은 GitHub 없이 완결된다.
 
-### Phase 3 — 텔레그램 + 자동화
-- [ ] `/tech` `/techlog` `/mytech` 명령어
-- [ ] `tech_log_added` · `tech_status_changed` · `tech_assigned` 알림 + 설정 UI
-- [ ] 일지 미작성 기술 리마인더(예: 진행중인데 30일 이상 일지 없음)
-- [ ] 주간 다이제스트에 요소기술 진척 포함
+### Phase 3 — 텔레그램 + 자동화 ✅ 완료 (v13.178)
+- [x] `/tech` `/techlog` `/mytech` 명령어 (+자동완성·자연어·help)
+- [x] `tech_log_added` · `tech_status_changed` · `tech_assigned` 알림 + 설정 UI
+- [x] 일지 미작성 리마인더 — `tech_stale`(개발·검증 중 30일+, 주 1회)
+- [x] 주간 다이제스트에 요소기술 진척 포함
 
 ---
 

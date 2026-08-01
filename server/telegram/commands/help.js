@@ -124,6 +124,27 @@ var CMD_HELP = {
     examples: ['/meeting', '/meeting SK하이닉스'],
     tip: '웹 프로젝트 상세 → 회의 탭에서 작성'
   },
+  tech: {
+    title: '/tech — 요소기술 카탈로그',
+    usage: '/tech\n/tech {키워드}',
+    format: '프로젝트 무관 재사용 기반기술 목록(상태별).\n키워드를 주면 기술명·코드·스택으로 검색',
+    examples: ['/tech', '/tech opencv', '/tech 캘리브레이션'],
+    tip: '"opencv 쓰는 기술 뭐 있지?" 같은 스택 검색에 유용합니다'
+  },
+  techlog: {
+    title: '/techlog — 요소기술 개발일지',
+    usage: '/techlog {기술명}',
+    format: '해당 기술의 최근 개발일지 8건 + 진척률·누적 투입시간',
+    examples: ['/techlog 캘리브레이션', '/techlog TECH-VIS-001'],
+    tip: '웹 → 프로젝트 관리 → 요소기술에서 일지 작성'
+  },
+  mytech: {
+    title: '/mytech — 내 요소기술',
+    usage: '/mytech',
+    format: '내가 담당인 기술 + 진척률·최근 일지일',
+    examples: [],
+    tip: '일지가 오래 비면 주 1회 리마인더가 옵니다'
+  },
   'my-stats': {
     title: '/my-stats — 내 월간 통계',
     usage: '/my-stats 또는 /my_stats',
@@ -264,6 +285,10 @@ function create(sendMessage) {
       '/actions — 내 액션아이템\n' +
       '/prestudy &lt;업체&gt; — 사전검토\n' +
       '/meeting &lt;이름&gt; — 회의 조회\n\n' +
+      '<b>🧪 요소기술</b>\n' +
+      '/tech &lt;키워드&gt; — 기술 카탈로그·스택 검색\n' +
+      '/techlog &lt;기술명&gt; — 개발일지\n' +
+      '/mytech — 내 담당 기술\n\n' +
       '<b>📅 일정/수주</b>\n' +
       '/calendar — 이번 주 일정\n' +
       '/orders — 수주 목록\n' +

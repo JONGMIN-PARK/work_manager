@@ -250,6 +250,8 @@ if (telegramService.isConfigured()) {
   scheduler.scheduleDaily(9, 0, function () { return notificationService.sendOverloadWarnings(); }, 'Overload warning');
   scheduler.scheduleDaily(0, 5, function () { return notificationService.sendActionItemReminders(); }, 'Action item D-1 reminder');
   scheduler.scheduleDaily(0, 7, function () { return notificationService.sendPrestudyReminders(); }, 'Prestudy D-1 reminder');
+  // 요소기술 일지 미작성(30일+) — 매주 월요일 (KST 화 01:00 = UTC 월 16:00)
+  scheduler.scheduleWeekly(1, 16, 0, function () { return notificationService.sendTechStaleReminders(); }, 'Tech stale reminder');
 
   // ─── 1분마다 리마인더 워커 (telegram_reminders) ───
   // 서버 재시작 시 setTimeout 소실 문제를 DB 영속화 + 폴링 워커로 해소
