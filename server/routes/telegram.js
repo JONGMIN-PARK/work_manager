@@ -12,6 +12,7 @@ var db = require('../config/db');
 var { authenticate } = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var planGate = require('../middleware/plan-gate');
+var escHtmlTg = require('../telegram/util/escape').escHtml;
 
 /** 인라인 버튼 콜백 처리 */
 async function handleCallbackQuery(query) {
@@ -82,6 +83,28 @@ async function handleCallbackQuery(query) {
       var rejectedName = rejectedUser.rows[0] ? rejectedUser.rows[0].name : '?';
       await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '❌ ' + rejectedName + ' 반려' });
       await telegramService.sendMessage(chatId, '❌ <b>' + rejectedName + '</b>님의 가입이 반려되었습니다.');
+    }
+    else if (action === 'dev_start') {
+      // 개발 아이템 → 진행(doing) (테넌트 격리)
+      var devId = parts[1];
+      var dR = await db.query("UPDATE project_dev_items SET status = 'doing', updated_by = $1, updated_at = NOW(), version = version + 1 WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL RETURNING title", [user.user_id, devId, user.tenant_id]);
+      if (dR.rows.length) {
+        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '🔵 진행 시작!' });
+        await telegramService.sendMessage(chatId, '🔵 <b>' + escHtmlTg(dR.rows[0].title) + '</b> — 진행중으로 변경');
+      } else {
+        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '항목을 찾을 수 없습니다.' });
+      }
+    }
+    else if (action === 'action_done') {
+      // 회의 액션아이템 → 완료 (테넌트 격리)
+      var actId = parts[1];
+      var aR = await db.query("UPDATE meeting_action_items SET status = 'done' WHERE id = $1 AND tenant_id = $2 RETURNING title", [actId, user.tenant_id]);
+      if (aR.rows.length) {
+        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ 완료!' });
+        await telegramService.sendMessage(chatId, '✅ <b>' + escHtmlTg(aR.rows[0].title) + '</b> — 완료 처리됨');
+      } else {
+        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '항목을 찾을 수 없습니다.' });
+      }
     }
     else if (action === 'issue_urgent') {
       var urgentIssueId = parts[1];

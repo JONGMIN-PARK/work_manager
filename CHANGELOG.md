@@ -1,5 +1,22 @@
 # Work Manager — 변경 이력
 
+## v13.173 (2026-08-01) — 프로젝트 관리 텔레그램 연동 + 배정 알림 (PRD Phase 3)
+
+### 배경
+[PRD_프로젝트관리_확장](docs/PRD_프로젝트관리_확장.md) Phase 3. Phase 1~2에서 만든 개발 백로그·검토·회의를 텔레그램으로 조회/알림하고, 배정·기한을 자동 통지.
+
+### 변경
+- **봇 명령어** (`server/telegram/commands/pmext.js` 신규): `/devitems`(내 개발 아이템), `/actions`(내 액션아이템, 기한순·초과 ⚠️), `/reviews`(검토 현황, 보완필요 우선), `/meeting <프로젝트>`(회의록 + 액션아이템). 자동완성·자연어·`/help` 연동, 모두 테넌트 격리.
+- **알림** (`notification.service.js`): `dev_item_assigned`·`action_item_assigned`·`action_item_due`·`review_completed` 템플릿 + 제목. 라우트 트리거 — 개발/액션 배정 시(dev-items·meetings), 검토 결과 ok/issue 확정 시(project-reviews → PL·관리자). 배정자 본인 제외.
+- **인라인 버튼**: 개발 아이템 알림 `[🔵 진행 시작]`(→doing), 액션아이템 알림 `[✅ 완료]`(→done). 콜백 핸들러(`routes/telegram.js`) 테넌트 가드.
+- **스케줄러**: 회의 액션아이템 기한 D-1 리마인더 매일 발송(`sendActionItemReminders`, `app.js` 등록).
+- **알림 설정 UI**(web): 신규 이벤트 4종 텔레그램/이메일 토글 추가. 신규 연동 사용자 기본 수신 이벤트에 포함.
+
+### 영향
+- 신규: `server/telegram/commands/pmext.js`.
+- 수정: `server/services/notification.service.js`, `server/services/telegram.service.js`, `server/routes/telegram.js·dev-items.js·meetings.js·project-reviews.js`, `server/telegram/commands/help.js`, `server/app.js`, `web/src/app/dashboard/notifications/page.js`, `업무일지_분석기.html`(버전·패치노트).
+- **서버 변경** — 배포 후 적용(신규 마이그레이션·의존성 없음). 이로써 PRD Phase 1~3 완료.
+
 ## v13.172 (2026-08-01) — 프로젝트 관리 확장: 회의 관리 + 일정 자동발행 + 액션아이템 전환 (PRD Phase 2)
 
 ### 배경

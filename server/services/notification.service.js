@@ -82,6 +82,27 @@ var TEMPLATES = {
       (p.uploader ? ' · 작성 ' + escHtml(p.uploader) : '') + '\n' +
       '💡 /wr 로 확인';
   },
+  dev_item_assigned: function (p) {
+    return '🧩 <b>개발 아이템 배정</b>\n' +
+      (p.projectName ? escHtml(p.projectName) + '\n' : '') +
+      escHtml(p.title);
+  },
+  action_item_assigned: function (p) {
+    return '📌 <b>액션아이템 배정</b>\n' +
+      (p.meetingTitle ? '[' + escHtml(p.meetingTitle) + '] ' : '') + escHtml(p.title) +
+      (p.dueDate ? '\n기한: ' + escHtml(p.dueDate) : '');
+  },
+  action_item_due: function (p) {
+    return '⏰ <b>액션아이템 기한 D-1</b>\n' +
+      (p.meetingTitle ? '[' + escHtml(p.meetingTitle) + '] ' : '') + escHtml(p.title) +
+      '\n기한: ' + escHtml(p.dueDate);
+  },
+  review_completed: function (p) {
+    var r = p.result === 'ok' ? '✅ 확인' : (p.result === 'issue' ? '⚠️ 보완필요' : '검토중');
+    return '🔍 <b>검토 완료</b>\n' +
+      (p.projectName ? escHtml(p.projectName) + '\n' : '') +
+      escHtml(p.title) + '\n결과: ' + r;
+  },
   event_today: function (p) {
     // p.content는 호출자가 조립한 사전-안전 HTML — raw 유지
     return '☀️ <b>오늘 브리핑</b>\n\n' + (p.content || '');
@@ -237,6 +258,10 @@ var EVENT_TITLES = {
   user_pending: '신규 가입 승인 요청',
   milestone_complete: '마일스톤이 완료되었습니다',
   weekly_report_uploaded: '주간업무보고가 등록되었습니다',
+  dev_item_assigned: '개발 아이템이 배정되었습니다',
+  action_item_assigned: '액션아이템이 배정되었습니다',
+  action_item_due: '액션아이템 기한이 임박했습니다',
+  review_completed: '검토가 완료되었습니다',
   order_delivery_d7: '납품 D-7 알림',
   order_delivery_d3: '납품 D-3 알림',
   weekly_digest: '주간 다이제스트',
@@ -264,6 +289,16 @@ function buildTelegramSendOpts(eventType, payload) {
           { text: '✅ 해결 완료', callback_data: 'issue_resolve:' + payload.issueId }
         ]
       ]
+    });
+  }
+  if (eventType === 'dev_item_assigned' && payload.devItemId) {
+    sendOpts.reply_markup = JSON.stringify({
+      inline_keyboard: [[{ text: '🔵 진행 시작', callback_data: 'dev_start:' + payload.devItemId }]]
+    });
+  }
+  if ((eventType === 'action_item_assigned' || eventType === 'action_item_due') && payload.actionId) {
+    sendOpts.reply_markup = JSON.stringify({
+      inline_keyboard: [[{ text: '✅ 완료', callback_data: 'action_done:' + payload.actionId }]]
     });
   }
   if (eventType === 'user_pending' && payload.pendingUserId) {
@@ -768,6 +803,31 @@ async function sendOverloadWarnings() {
   console.log('[Notification] Overload warnings sent');
 }
 
+/** 회의 액션아이템 기한 D-1 리마인더 (매일 실행) */
+async function sendActionItemReminders() {
+  var tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  var dateStr = tomorrow.toISOString().slice(0, 10);
+
+  var r = await db.query(
+    "SELECT a.id, a.title, a.assignee_id, a.due_date, m.title AS meeting_title " +
+    "FROM meeting_action_items a JOIN meetings m ON m.id = a.meeting_id AND m.tenant_id = a.tenant_id " +
+    "WHERE a.status <> 'done' AND a.assignee_id IS NOT NULL AND a.due_date = $1",
+    [dateStr]
+  );
+  for (var i = 0; i < r.rows.length; i++) {
+    var a = r.rows[i];
+    try {
+      await notify('action_item_due', {
+        actionId: a.id, title: a.title, meetingTitle: a.meeting_title, dueDate: a.due_date
+      }, [a.assignee_id]);
+    } catch (e) {
+      console.error('[ActionReminder]', a.id, e.message);
+    }
+  }
+  console.log('[Notification] Action item D-1 reminders checked:', r.rows.length);
+}
+
 /** 그룹 채팅방에 알림 발송 — P0-1: tenantId 필수 (멀티테넌트 격리) */
 async function notifyGroup(linkType, linkId, text, tenantId) {
   if (!tenantId) {
@@ -798,5 +858,6 @@ module.exports = {
   sendWeeklyDigest: sendWeeklyDigest,
   sendProgressWarnings: sendProgressWarnings,
   sendOverloadWarnings: sendOverloadWarnings,
+  sendActionItemReminders: sendActionItemReminders,
   TEMPLATES: TEMPLATES
 };

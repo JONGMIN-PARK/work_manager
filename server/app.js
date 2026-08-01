@@ -246,6 +246,7 @@ if (telegramService.isConfigured()) {
   scheduler.scheduleWeekly(1, 0, 30, function () { return notificationService.sendWeeklyDigest(); }, 'Weekly digest');
   scheduler.scheduleDaily(8, 0, function () { return notificationService.sendProgressWarnings(); }, 'Progress warning');
   scheduler.scheduleDaily(9, 0, function () { return notificationService.sendOverloadWarnings(); }, 'Overload warning');
+  scheduler.scheduleDaily(0, 5, function () { return notificationService.sendActionItemReminders(); }, 'Action item D-1 reminder');
 
   // ─── 1분마다 리마인더 워커 (telegram_reminders) ───
   // 서버 재시작 시 setTimeout 소실 문제를 DB 영속화 + 폴링 워커로 해소

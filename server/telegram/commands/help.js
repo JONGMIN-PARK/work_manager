@@ -96,6 +96,34 @@ var CMD_HELP = {
     examples: ['/progress', '/progress SK하이닉스', '/progress B2024-001'],
     tip: '할당시간 초과 시 ⚠️ 표시. /project 로 전체 현황'
   },
+  devitems: {
+    title: '/devitems — 내 개발 아이템',
+    usage: '/devitems',
+    format: '나에게 배정된 미완료 개발 아이템(상태별)',
+    examples: [],
+    tip: '배정 알림의 [진행 시작] 버튼으로 바로 진행 처리'
+  },
+  reviews: {
+    title: '/reviews — 검토 현황',
+    usage: '/reviews',
+    format: '검토 체크리스트 진행률·결과(보완필요 우선)',
+    examples: [],
+    tip: '웹 프로젝트 상세 → 검토 탭에서 항목 관리'
+  },
+  actions: {
+    title: '/actions — 내 액션아이템',
+    usage: '/actions',
+    format: '회의 액션아이템 중 미완료(기한순, 초과 ⚠️)',
+    examples: [],
+    tip: '알림의 [완료] 버튼으로 바로 완료 처리'
+  },
+  meeting: {
+    title: '/meeting — 회의 조회',
+    usage: '/meeting\n/meeting {프로젝트명}',
+    format: '이름 없으면 최근 회의, 있으면 회의록 + 액션아이템',
+    examples: ['/meeting', '/meeting SK하이닉스'],
+    tip: '웹 프로젝트 상세 → 회의 탭에서 작성'
+  },
   'my-stats': {
     title: '/my-stats — 내 월간 통계',
     usage: '/my-stats 또는 /my_stats',
@@ -230,6 +258,12 @@ function create(sendMessage) {
       '/wr &lt;팀명&gt; — 팀 주간보고 조회\n' +
       '/wr-stats — 주차별 완료율 추이\n' +
       '/wr-me — 내 담당 항목\n\n' +
+      '<b>🧩 프로젝트 관리</b>\n' +
+      '/progress &lt;이름&gt; — 진척률/달성률\n' +
+      '/devitems — 내 개발 아이템\n' +
+      '/actions — 내 액션아이템\n' +
+      '/reviews — 검토 현황\n' +
+      '/meeting &lt;이름&gt; — 회의 조회\n\n' +
       '<b>📅 일정/수주</b>\n' +
       '/calendar — 이번 주 일정\n' +
       '/orders — 수주 목록\n' +

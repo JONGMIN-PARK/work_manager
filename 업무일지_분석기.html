@@ -903,7 +903,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.172</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.173</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3462,6 +3462,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.173',date:'2026-08-01',title:'📲 프로젝트 관리 텔레그램 연동 — /devitems·/reviews·/actions·/meeting + 배정 알림 (PRD Phase 3)',tag:'feat',items:[
+      '텔레그램 봇 명령어 추가: /devitems(내 개발 아이템), /actions(내 액션아이템), /reviews(검토 현황), /meeting <프로젝트>(회의록+액션)',
+      '배정 알림: 개발 아이템·회의 액션아이템 배정 시, 검토 결과(확인/보완필요) 확정 시 담당자·PL·관리자에게 텔레그램/이메일/인앱 알림',
+      '인라인 버튼: 개발 아이템 알림 [🔵 진행 시작], 액션아이템 알림 [✅ 완료] — 텔레그램에서 바로 상태 변경',
+      '액션아이템 기한 D-1 리마인더(매일 자동 발송) + 알림 설정 UI에 신규 이벤트 4종 토글 추가',
+      '영향: server/services/notification.service.js, server/routes/(telegram·dev-items·meetings·project-reviews).js, server/telegram/commands/pmext.js(신규)·help.js, telegram.service.js, app.js, web 알림설정. 서버 변경 — 배포 후 적용'
+    ]},
     {ver:'13.172',date:'2026-08-01',title:'🤝 프로젝트 관리 확장 — 회의 관리(안건·회의록·액션아이템) + 일정 자동발행 (PRD Phase 2)',tag:'feat',items:[
       '프로젝트 상세 패널에 「회의」 탭 추가: 회의 등록(제목·날짜), 회의록 작성/저장, 액션아이템(담당·기한·완료 토글)',
       '회의에 날짜를 넣으면 캘린더에 회의 일정(events, type=meeting)이 자동 등록·동기화되고, 회의 삭제 시 함께 제거됨',

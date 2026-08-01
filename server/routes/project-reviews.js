@@ -9,9 +9,31 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var ps = require('../middleware/project-scope');
+var notificationService = require('../services/notification.service');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
+
+/** 검토 완료(ok/issue) 알림 → 프로젝트 PL + 테넌트 관리자 (fire-and-forget, 본인 제외) */
+async function notifyReviewCompleted(review, tenantId, actorId) {
+  try {
+    if (!review || (review.result !== 'ok' && review.result !== 'issue')) return;
+    var ids = {};
+    var pn = null;
+    try {
+      var p = await db.query('SELECT name FROM projects WHERE id = $1 AND tenant_id = $2', [review.project_id, tenantId]);
+      pn = p.rows.length ? p.rows[0].name : null;
+    } catch (_) {}
+    var plR = await db.query("SELECT user_id FROM project_members WHERE project_id = $1 AND role = 'pl' AND released_at IS NULL", [review.project_id]);
+    plR.rows.forEach(function (r) { ids[r.user_id] = true; });
+    var admR = await db.query("SELECT id FROM users WHERE tenant_id = $1 AND role = 'admin' AND status = 'active'", [tenantId]);
+    admR.rows.forEach(function (r) { ids[r.id] = true; });
+    delete ids[actorId];
+    var list = Object.keys(ids);
+    if (!list.length) return;
+    await notificationService.notify('review_completed', { title: review.title, projectName: pn, result: review.result }, list);
+  } catch (e) { console.error('[project-reviews/notify]', e.message); }
+}
 
 var RESULTS = ['open', 'ok', 'issue'];
 function genId() { return 'rev-' + require('crypto').randomUUID().slice(0, 12); }
@@ -131,6 +153,8 @@ router.put('/:id', async function (req, res) {
     var r = await db.query(sql, params);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
+    // 결과를 ok/issue로 설정한 경우 검토 완료 알림
+    if (b.result === 'ok' || b.result === 'issue') notifyReviewCompleted(r.rows[0], req.tenant.id, req.user.sub);
   } catch (e) {
     console.error('[project-reviews/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

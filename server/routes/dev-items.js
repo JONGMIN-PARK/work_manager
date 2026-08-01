@@ -9,9 +9,20 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var ps = require('../middleware/project-scope');
+var notificationService = require('../services/notification.service');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
+
+/** 개발 아이템 배정 알림 (응답 후 fire-and-forget) — 배정자 본인 제외 */
+async function notifyDevAssigned(item, tenantId, actorId) {
+  try {
+    if (!item || !item.assignee_id || item.assignee_id === actorId) return;
+    var pn = null;
+    try { var p = await db.query('SELECT name FROM projects WHERE id = $1 AND tenant_id = $2', [item.project_id, tenantId]); pn = p.rows.length ? p.rows[0].name : null; } catch (_) {}
+    await notificationService.notify('dev_item_assigned', { devItemId: item.id, title: item.title, projectName: pn }, [item.assignee_id]);
+  } catch (e) { console.error('[dev-items/notify]', e.message); }
+}
 
 var CATEGORIES = ['feature', 'improve', 'change', 'refactor', 'chore'];
 var STATUSES = ['backlog', 'todo', 'doing', 'review', 'done'];
@@ -89,6 +100,7 @@ router.post('/', async function (req, res) {
       ]
     );
     res.status(201).json({ data: r.rows[0] });
+    notifyDevAssigned(r.rows[0], req.tenant.id, req.user.sub);
   } catch (e) {
     console.error('[dev-items/create]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -126,6 +138,8 @@ router.put('/:id', async function (req, res) {
     var r = await db.query(sql, params);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
+    // 이번 요청에서 담당자를 명시적으로 지정한 경우에만 배정 알림
+    if (b.assigneeId || b.assignee_id) notifyDevAssigned(r.rows[0], req.tenant.id, req.user.sub);
   } catch (e) {
     console.error('[dev-items/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });

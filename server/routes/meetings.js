@@ -11,9 +11,20 @@ var crypto = require('crypto');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var ps = require('../middleware/project-scope');
+var notificationService = require('../services/notification.service');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
+
+/** 액션아이템 배정 알림 (fire-and-forget) — 배정자 본인 제외 */
+async function notifyActionAssigned(action, meetingTitle, actorId) {
+  try {
+    if (!action || !action.assignee_id || action.assignee_id === actorId) return;
+    await notificationService.notify('action_item_assigned', {
+      actionId: action.id, title: action.title, meetingTitle: meetingTitle, dueDate: action.due_date
+    }, [action.assignee_id]);
+  } catch (e) { console.error('[meetings/notify]', e.message); }
+}
 
 function genId(prefix) { return prefix + '-' + crypto.randomUUID().slice(0, 12); }
 function today() { return new Date().toISOString().slice(0, 10); }
@@ -188,7 +199,7 @@ router.delete('/:id', async function (req, res) {
 // POST /api/meetings/:id/actions
 router.post('/:id/actions', async function (req, res) {
   try {
-    var mR = await db.query('SELECT id FROM meetings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var mR = await db.query('SELECT id, title FROM meetings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!mR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '회의를 찾을 수 없습니다.' });
     var b = req.body;
     if (!b.title) return res.status(400).json({ error: 'VALIDATION', message: 'title 필수' });
@@ -201,6 +212,7 @@ router.post('/:id/actions', async function (req, res) {
       [id, req.tenant.id, req.params.id, b.title, assigneeName, assigneeId, b.dueDate || b.due_date || null, parseInt(b.sortOrder || b.sort_order, 10) || 0]
     );
     res.status(201).json({ data: r.rows[0] });
+    notifyActionAssigned(r.rows[0], mR.rows[0].title, req.user.sub);
   } catch (e) {
     console.error('[meetings/action/create]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
@@ -233,6 +245,12 @@ router.put('/:id/actions/:aid', async function (req, res) {
     var r = await db.query(sql, params);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
+    // 담당자를 명시적으로 (재)지정한 경우 배정 알림
+    if ((b.assigneeName !== undefined || b.assignee_name !== undefined) && r.rows[0].assignee_id) {
+      db.query('SELECT title FROM meetings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id])
+        .then(function (mr) { notifyActionAssigned(r.rows[0], mr.rows.length ? mr.rows[0].title : null, req.user.sub); })
+        .catch(function () {});
+    }
   } catch (e) {
     console.error('[meetings/action/update]', e);
     res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
