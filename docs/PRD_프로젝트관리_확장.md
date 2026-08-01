@@ -1,0 +1,255 @@
+# PRD: 프로젝트 관리 확장 (검토 체크리스트 · 회의 · 개발 백로그)
+
+> **Version**: 1.0
+> **Date**: 2026-06-28
+> **Status**: Draft
+> **관련 문서**: [PRD_프로젝트_달력_타임라인.md](../PRD_프로젝트_달력_타임라인.md), [PRD_텔레그램_확장.md](./PRD_텔레그램_확장.md)
+
+---
+
+## 1. 배경 & 목표
+
+현재 프로젝트 관리는 **마일스톤(진척률·달성률)**, **단계별 체크리스트**, **이슈(사후 장애·CS)**, **일정(events)** 을 갖추고 있으나, 다음 세 영역이 비어 있다.
+
+| 빈 곳 | 설명 |
+|-------|------|
+| **검토** | 단계 전환·산출물 확인용 "검토 항목"을 체계적으로 담을 곳이 없음 (체크리스트는 작업 진행용) |
+| **회의** | `events(type=meeting)` 는 제목·날짜만 — 안건/회의록/액션아이템 없음 |
+| **개발 백로그** | 계획된 개발 작업을 담는 칸반이 없음 (이슈는 사후 발생 장애 중심) |
+
+### 목표
+
+| 목표 | 측정 |
+|------|------|
+| 프로젝트 산출물 검토 누락 방지 | 검토 체크리스트 완료율 |
+| 회의 → 실행 전환 | 액션아이템 완료율 / 기한 준수율 |
+| 계획 개발 작업 가시화 | 개발 아이템 상태별 처리 리드타임 |
+
+### 설계 원칙
+
+- 기존 자산 **재사용** — `checklists`(JSONB items), `pipeline` 칸반 UI, `events` 일정, `milestones` 진척률, 텔레그램 명령/알림 패턴.
+- **멀티테넌트 격리**(`tenant_id`), **낙관적 락**(`version`), **소프트 삭제**(A/S 026 패턴) 등 기존 규약 준수.
+
+---
+
+## 2. 모듈 A — 검토 체크리스트 (간단형)
+
+단계 전환·출하 전 "확인해야 할 항목"을 프로젝트에 붙이는 **가벼운 검토 목록**. 판정/전자서명 같은 무거운 게이트는 두지 않고, 체크·검토자 메모·완료율만 관리한다.
+
+### 2.1 데이터 모델
+
+기존 `checklists` 패턴을 그대로 따르되 용도를 `kind='review'` 로 구분(또는 신규 테이블). 신규 테이블 안:
+
+```sql
+CREATE TABLE IF NOT EXISTS project_reviews (
+  id          VARCHAR(100) PRIMARY KEY,
+  tenant_id   UUID NOT NULL REFERENCES tenants(id) DEFAULT '00000000-0000-0000-0000-000000000001',
+  project_id  VARCHAR(100) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  phase       VARCHAR(20),                 -- order/design/manufacture/inspect/deliver (선택)
+  title       VARCHAR(255) NOT NULL,        -- 예: "출하 전 검토", "설계 검토"
+  items       JSONB DEFAULT '[]',           -- [{ text, done, checker, checked_at, note }]
+  reviewer_id UUID REFERENCES users(id),    -- 검토 담당(팀장) — config reviewer 역할 재사용
+  note        TEXT,                          -- 종합 검토 의견
+  result      VARCHAR(20) DEFAULT 'open',    -- open | ok | issue (가벼운 3단계, 판정 아님)
+  version     INT NOT NULL DEFAULT 1,
+  created_by  UUID REFERENCES users(id),
+  created_at  TIMESTAMPTZ DEFAULT now(),
+  updated_at  TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_project_reviews_proj ON project_reviews(tenant_id, project_id);
+```
+
+`items` 각 항목: `{ text, done(bool), checker(name), checked_at, note }`.
+
+### 2.2 UI
+
+- 프로젝트 상세 새 섹션 **「검토」** — 체크리스트 UI 재사용(항목 토글=완료 처리, 완료율 바).
+- 항목 추가/삭제, 검토자 지정, 종합 의견(`note`), 결과 배지(`⬜검토중 / ✅확인 / ⚠️보완필요`).
+- 프로젝트 편집 시 **템플릿**에서 기본 검토 항목 자동 생성(단계별 프리셋).
+
+### 2.3 API (`routes/project-reviews.js`)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/projects/:pid/reviews` | 프로젝트 검토 목록 |
+| POST | `/api/projects/:pid/reviews` | 검토 생성(템플릿 지정 가능) |
+| PUT | `/api/reviews/:id` | 제목·검토자·의견·결과 수정 |
+| PUT | `/api/reviews/:id/items/:idx/toggle` | 항목 완료 토글(체커·시각 기록) |
+| DELETE | `/api/reviews/:id` | 소프트 삭제 |
+
+---
+
+## 3. 모듈 B — 회의 관리 (Meeting)
+
+`events(type=meeting)` 를 확장해 **안건·회의록·참석·액션아이템**을 담고, 액션아이템을 실행(이슈/개발아이템)으로 잇는다.
+
+### 3.1 데이터 모델
+
+```sql
+CREATE TABLE IF NOT EXISTS meetings (
+  id          VARCHAR(100) PRIMARY KEY,
+  tenant_id   UUID NOT NULL REFERENCES tenants(id) DEFAULT '00000000-0000-0000-0000-000000000001',
+  project_id  VARCHAR(100) REFERENCES projects(id) ON DELETE SET NULL,
+  event_id    VARCHAR(100) REFERENCES events(id) ON DELETE SET NULL,  -- 일정 연동
+  title       VARCHAR(255) NOT NULL,
+  meet_date   VARCHAR(10),
+  agenda      JSONB DEFAULT '[]',           -- [{ topic, owner }]
+  minutes     TEXT,                          -- 회의록(경량 서식 재사용)
+  attendees   JSONB DEFAULT '[]',           -- [user_id | name]
+  version     INT NOT NULL DEFAULT 1,
+  created_by  UUID REFERENCES users(id),
+  created_at  TIMESTAMPTZ DEFAULT now(),
+  updated_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS meeting_action_items (
+  id            VARCHAR(100) PRIMARY KEY,
+  tenant_id     UUID NOT NULL REFERENCES tenants(id) DEFAULT '00000000-0000-0000-0000-000000000001',
+  meeting_id    VARCHAR(100) NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+  title         VARCHAR(500) NOT NULL,
+  assignee_id   UUID REFERENCES users(id),
+  due_date      VARCHAR(10),
+  status        VARCHAR(20) DEFAULT 'open',   -- open | done
+  linked_issue_id    VARCHAR(100),
+  linked_dev_item_id VARCHAR(100),
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### 3.2 핵심 흐름
+
+1. 회의 생성 → `events`(type=`meeting`) **자동 발행** → 캘린더·타임라인·텔레그램 `/calendar`·`/today` 노출.
+2. 회의록 작성 + 액션아이템 입력(담당·기한).
+3. 액션아이템 → **이슈 또는 개발 아이템으로 전환**(한 번의 클릭, `linked_*` 연결).
+4. 담당자에게 텔레그램 `action_item_assigned` 알림.
+
+### 3.3 UI
+
+- 프로젝트 상세 **「회의」** 섹션 + 전역 캘린더에서 회의 클릭 시 상세.
+- 회의록 경량 서식(체크박스·굵게 — `wmRichNote` 재사용).
+- 액션아이템 표: 담당·기한·상태·[이슈로] [개발로] 전환 버튼.
+
+---
+
+## 4. 모듈 C — 개발 백로그 (Dev Items, 칸반)
+
+계획된 개발 작업을 담는 **별도 칸반 백로그**. 이슈(사후 발생 장애·CS)와 명확히 분리.
+
+### 4.1 데이터 모델
+
+```sql
+CREATE TABLE IF NOT EXISTS project_dev_items (
+  id           VARCHAR(100) PRIMARY KEY,
+  tenant_id    UUID NOT NULL REFERENCES tenants(id) DEFAULT '00000000-0000-0000-0000-000000000001',
+  project_id   VARCHAR(100) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  milestone_id VARCHAR(100) REFERENCES milestones(id) ON DELETE SET NULL,
+  title        VARCHAR(500) NOT NULL,
+  description  TEXT,
+  category     VARCHAR(20) DEFAULT 'feature', -- feature(신규)|improve(개선)|change(설계변경)|refactor|chore
+  status       VARCHAR(20) DEFAULT 'backlog', -- backlog|todo|doing|review|done
+  priority     VARCHAR(10) DEFAULT 'normal',  -- high|normal|low
+  assignee_id  UUID REFERENCES users(id),
+  estimate_h   NUMERIC(10,1) DEFAULT 0,
+  actual_h     NUMERIC(10,1) DEFAULT 0,
+  sort_order   INT DEFAULT 0,
+  deleted_at   TIMESTAMPTZ,                    -- 소프트 삭제
+  version      INT NOT NULL DEFAULT 1,
+  created_by   UUID REFERENCES users(id),
+  created_at   TIMESTAMPTZ DEFAULT now(),
+  updated_at   TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_dev_items_board ON project_dev_items(tenant_id, project_id, status, sort_order) WHERE deleted_at IS NULL;
+```
+
+### 4.2 UI
+
+- 프로젝트 상세 **「개발」** 탭 — 칸반 보드(기존 `pipeline.js` 보드 패턴 재사용, 5열: 백로그/할 일/진행/검토/완료).
+- 카드: 제목·카테고리 배지·담당·우선순위·예상시간. 드래그로 상태 이동.
+- 마일스톤 태그 → **진척률 자동 반영**(마일스톤 내 개발아이템 done 비율을 진척 산정에 반영, 선택).
+
+### 4.3 이슈와의 구분
+
+| | 개발 아이템 | 이슈 |
+|--|-----------|------|
+| 성격 | **계획된** 개발 작업 | **사후 발생** 장애·불량·CS |
+| 시작 상태 | backlog | open(접수) |
+| 흐름 | 칸반(백로그→완료) | 접수→대응→해결→종결 |
+| 전환 | 회의 액션아이템에서 생성 | 현장/고객 제보 |
+
+---
+
+## 5. 일정 통합
+
+- 검토·회의는 `events` 로 자동 발행. 회의는 `type=meeting`(기존), 검토는 신규 `type=review`(`EVT_TYPE`에 `review: { label:'검토', icon:'🔍' }` 추가).
+- 기존 캘린더/타임라인/일일 브리핑/`/calendar`·`/today` 가 **수정 없이** 자동 노출.
+
+---
+
+## 6. 텔레그램 연동 (기존 패턴 확장)
+
+### 6.1 신규 명령어
+
+| 명령어 | 기능 |
+|--------|------|
+| `/reviews` | 내 프로젝트 검토 현황(미완료 항목·결과) |
+| `/meeting <프로젝트>` | 최근 회의록 요약 + 미완료 액션아이템 |
+| `/actions` | 내게 배정된 미완료 액션아이템 |
+| `/devitems` / `/dev <프로젝트>` | 개발 아이템(상태별) |
+
+### 6.2 신규 알림 (notification.service.js TEMPLATES + EVENT_TITLES + 설정 UI 토글)
+
+| event_type | 트리거 | 수신 |
+|------------|--------|------|
+| `review_completed` | 검토 결과 확정(ok/issue) | PL + 관리자 |
+| `action_item_assigned` | 액션아이템 배정 | 담당자 |
+| `action_item_due` | 액션아이템 기한 D-1 | 담당자 (스케줄러) |
+| `dev_item_assigned` | 개발 아이템 배정 | 담당자 |
+
+### 6.3 인라인 버튼
+
+- 액션아이템 알림 → `[완료 ✓]` 버튼(콜백 `action_done:<id>`).
+- 개발 아이템 알림 → `[진행 시작]` 버튼(status→doing).
+
+---
+
+## 7. 단계별 로드맵
+
+### Phase 1 — 개발 백로그 + 검토 체크리스트 (기반, 독립적)
+- [ ] `project_dev_items` 마이그레이션 + CRUD API + 칸반 UI
+- [ ] `project_reviews` 마이그레이션 + CRUD API + 검토 섹션 UI(체크리스트 재사용)
+- [ ] 단계별 검토 항목 **템플릿** 프리셋
+
+### Phase 2 — 회의 관리 + 일정 통합
+- [ ] `meetings` / `meeting_action_items` 마이그레이션 + API
+- [ ] 회의 생성 → `events(type=meeting)` 자동 발행, `EVT_TYPE.review` 추가
+- [ ] 회의록 UI + 액션아이템 표 + 이슈/개발아이템 전환
+
+### Phase 3 — 텔레그램 연동 + 자동화
+- [ ] `/reviews` `/meeting` `/actions` `/devitems` 명령어(+자동완성·자연어·help)
+- [ ] `review_completed` `action_item_assigned` `dev_item_assigned` 알림 + 설정 UI 토글
+- [ ] 액션아이템 기한 D-1 스케줄러(`scheduler.service` 크론)
+- [ ] 인라인 버튼(액션 완료 / 개발 진행 시작)
+- [ ] 주간보고(`/wr`)·주간 다이제스트에 검토·개발·액션 현황 포함
+
+---
+
+## 8. 기술 고려사항
+
+| 항목 | 대응 |
+|------|------|
+| 멀티테넌트 | 모든 신규 테이블 `tenant_id` + 쿼리 격리(텔레그램 콜백/알림 포함) |
+| 소프트 삭제 | 개발 아이템·검토는 `deleted_at` (A/S 026 패턴) |
+| 진척률 결합 | 개발아이템 done 비율의 마일스톤 진척 반영은 **옵션 플래그**로(기존 보고 진척률과 충돌 방지) |
+| 권한 | 생성/이동: 프로젝트 멤버 / 검토자 지정·결과 확정: PL·관리자 |
+| 성능 | 칸반 보드 인덱스(`project_id,status,sort_order`), 액션아이템 담당자 인덱스 |
+
+---
+
+## 9. 성공 지표
+
+| 지표 | 목표 |
+|------|------|
+| 출하 전 검토 완료율 | 95%+ |
+| 회의 액션아이템 기한 준수 | 80%+ |
+| 개발 아이템 평균 리드타임(todo→done) | 기준선 대비 20%↓ |
+| 텔레그램 액션 완료 처리 비율 | 40%+ |
