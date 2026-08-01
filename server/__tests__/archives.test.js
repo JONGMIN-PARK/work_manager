@@ -34,7 +34,9 @@ describe('Work Records API', () => {
     expect(res.body.data.date).toBe('20260401');
     expect(res.body.data.name).toBe('홍길동');
     expect(res.body.data.order_no).toBe('ORD-001');
-    expect(res.body.data.hours).toBe(8);
+    // hours 는 NUMERIC(5,1) — pg 드라이버가 정밀도 보존을 위해 "8.0" 문자열로 반환한다.
+    // 프런트(_toWrRecord)도 parseFloat 로 받는 게 기존 계약이므로 값으로 비교한다.
+    expect(Number(res.body.data.hours)).toBe(8);
     expect(res.body.data.task_type).toBe('개발');
     expect(res.body.data.abbr).toBe('DEV');
     expect(res.body.data.content).toBe('테스트 작업 내용');

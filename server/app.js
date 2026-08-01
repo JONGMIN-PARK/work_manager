@@ -55,12 +55,18 @@ app.use(cors({
 }));
 
 // ─── Rate Limiting (before body parsing) ───
+// 테스트에서는 건너뛴다. 통합 테스트는 한 프로세스에서 같은 IP로 수십 번 로그인하므로
+// 분당 10회 제한에 걸려 로그인이 429를 반환하고, 그 뒤 모든 인증 요청이 401로 무너진다.
+// (운영/개발 동작은 그대로 유지)
+function skipInTest() { return config.env === 'test'; }
+
 var loginLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 10,
   message: { error: 'RATE_LIMIT', message: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.' },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: skipInTest
 });
 
 var apiLimiter = rateLimit({
@@ -68,7 +74,8 @@ var apiLimiter = rateLimit({
   max: 200,
   message: { error: 'RATE_LIMIT', message: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.' },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: skipInTest
 });
 
 app.use('/api/auth/login', loginLimiter);

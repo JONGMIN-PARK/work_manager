@@ -55,7 +55,11 @@ function verifyAccessToken(token) {
 }
 
 function signRefreshToken(user) {
-  var payload = { sub: user.id, type: 'refresh' };
+  // jti(고유 nonce) 필수 — 없으면 payload 가 {sub, type, iat} 뿐이라
+  // 같은 사용자가 같은 '초' 안에 두 번 발급받으면 완전히 동일한 토큰이 나온다.
+  // 그 결과 ① /refresh 의 토큰 로테이션이 무력화되고
+  //        ② 두 기기가 같은 token_hash 를 공유해 한쪽 로그아웃이 다른 쪽까지 끊는다.
+  var payload = { sub: user.id, type: 'refresh', jti: crypto.randomUUID() };
   return jwt.sign(payload, config.jwt.refreshSecret, { expiresIn: config.jwt.refreshExpiresIn });
 }
 
