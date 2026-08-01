@@ -38,7 +38,7 @@ var TECH_LOG_KIND = {
 
 var _techList = [];
 var _techView = 'catalog';   // catalog | category | stack | list
-var _techFilter = { q: '', category: '', status: '', mine: false };
+var _techFilter = { q: '', category: '', status: '', mine: false, stack: '' };
 var _techModal = null;
 var _techStacks = [];
 
@@ -63,6 +63,7 @@ function renderTech() {
   var wrap = document.getElementById('techWrap');
   if (!wrap) return;
   wrap.innerHTML = '<div style="padding:20px;color:var(--t6);font-size:12px">로딩 중...</div>';
+  _techFilter.stack = '';   // 전체 조회이므로 스택 필터 배지도 해제
   Promise.all([techGetAll({}), techStacks()]).then(function (r) {
     _techList = r[0] || [];
     _techStacks = r[1] || [];
@@ -124,6 +125,10 @@ function _techRender() {
     '<label style="font-size:11px;color:var(--t4);display:flex;align-items:center;gap:4px">' +
       '<input type="checkbox"' + (_techFilter.mine ? ' checked' : '') + ' onchange="techSetMine(this.checked)"> 내 담당' +
     '</label>' +
+    (_techFilter.stack
+      ? '<span class="badge" style="background:var(--ac);color:#fff;font-size:10px;padding:2px 6px;cursor:pointer" ' +
+        'onclick="techClearStack()" title="스택 필터 해제">🔧 ' + _tEsc(_techFilter.stack) + ' ✕</span>'
+      : '') +
   '</div>';
 
   if (_techView === 'catalog') html += _techCatalogHtml(items);
@@ -245,10 +250,27 @@ function _techListHtml(items) {
 
 /* ═══ 필터 ═══ */
 function techSetView(v) { _techView = v; _techRender(); }
+// 주의: category·status·mine·q 는 클라이언트 필터, stack 만 서버 조회
 function techSetCat(v) { _techFilter.category = v; _techRender(); }
 function techSetStatus(v) { _techFilter.status = v; _techRender(); }
 function techSetMine(b) { _techFilter.mine = !!b; _techRender(); }
-function techFilterByStack(name) { _techFilter.q = name; _techView = 'catalog'; _techRender(); }
+function techFilterByStack(name) {
+  // 서버의 stack 필터(정확 일치, 대소문자 무시)를 사용 — q 검색은 부분일치라 오탐이 섞였음
+  _techFilter.stack = name;
+  _techFilter.q = '';
+  _techView = 'catalog';
+  var wrap = document.getElementById('techWrap');
+  if (wrap) wrap.innerHTML = '<div style="padding:20px;color:var(--t6);font-size:12px">로딩 중...</div>';
+  techGetAll({ stack: name }).then(function (list) {
+    _techList = list || [];
+    _techRender();
+  });
+}
+/** 스택 필터 해제 → 전체 재조회 */
+function techClearStack() {
+  _techFilter.stack = '';
+  _techRefreshList();
+}
 var _techQTimer = null;
 function techSetQ(v) {
   _techFilter.q = v;
@@ -414,6 +436,15 @@ function techDelete(id) {
   techDel(id).then(function () { _tCloseModal(); renderTech(); });
 }
 
+/** 목록 데이터 재조회 후 화면 갱신 — 모달 뒤 카탈로그의 진척률·투입시간 반영 */
+function _techRefreshList() {
+  return Promise.all([techGetAll({}), techStacks()]).then(function (r) {
+    _techList = r[0] || [];
+    _techStacks = r[1] || [];
+    if (document.getElementById('techWrap')) _techRender();
+  }).catch(function () { /* 조용히 무시 */ });
+}
+
 /* ═══ 적용 이력 (Phase 2) ═══ */
 var _techUsageTargets = null;   // {projects:[], prestudies:[]} 캐시
 
@@ -520,7 +551,7 @@ function _techRenderLogs(techId, logs) {
     '<div style="display:grid;grid-template-columns:120px 100px 80px 80px;gap:5px;margin-bottom:5px">' +
       '<input id="tlDate" type="date" class="si" value="' + todayStr + '" style="font-size:11px;padding:3px">' +
       '<select id="tlKind" class="si" style="font-size:11px;padding:3px">' + kindOpts + '</select>' +
-      '<input id="tlProgress" type="number" min="0" max="100" placeholder="진척%" class="si" style="font-size:11px;padding:3px">' +
+      '<input id="tlProgress" type="number" min="0" max="100" placeholder="진척%(선택)" title="비워두면 기존 진척률이 유지됩니다" class="si" style="font-size:11px;padding:3px">' +
       '<input id="tlHours" type="number" min="0" step="0.5" placeholder="시간" class="si" style="font-size:11px;padding:3px">' +
     '</div>' +
     '<textarea id="tlContent" placeholder="무엇을 했고, 무엇을 알게 됐는지. **굵게** ~~취소선~~ `코드` - [ ] 체크박스" style="width:100%;font-size:11px;padding:5px;min-height:52px;resize:vertical"></textarea>' +
@@ -538,7 +569,7 @@ function _techRenderLogs(techId, logs) {
           '<span>' + k.icon + ' ' + k.label + '</span>' +
           '<span>' + _tEsc(lg.logDate || '') + '</span>' +
           (lg.authorName ? '<span>· ' + _tEsc(lg.authorName) + '</span>' : '') +
-          (lg.progress ? '<span style="color:var(--ac)">· ' + lg.progress + '%</span>' : '') +
+          (lg.progress != null ? '<span style="color:var(--ac)">· ' + lg.progress + '%</span>' : '') +
           (parseFloat(lg.hours) > 0 ? '<span>· ' + (Math.round(parseFloat(lg.hours) * 10) / 10) + 'h</span>' : '') +
           '<span style="flex:1"></span>' +
           '<button class="btn btn-d btn-s" style="font-size:8px;padding:0 4px" onclick="techLogDelete(\'' + _tEsc(techId) + '\',\'' + _tEsc(lg.id) + '\')">✕</button>' +
@@ -558,14 +589,14 @@ function techLogSave(techId) {
   techLogAdd(techId, {
     logDate: g('tlDate') || null,
     kind: g('tlKind') || 'dev',
-    progress: parseInt(g('tlProgress'), 10) || 0,
+    // 비워두면 null — 진척률과 무관한 일지(문서·아이디어)가 기술 진척률을 덮어쓰지 않도록
+    progress: (g('tlProgress') === '' ? null : parseInt(g('tlProgress'), 10)),
     hours: parseFloat(g('tlHours')) || 0,
     content: content
   }).then(function () {
     _tToast('개발일지가 등록되었습니다.', 'success');
     techLoadLogs(techId);
-    // 목록의 진척률·투입시간이 바뀌므로 백그라운드 갱신
-    techGetAll({}).then(function (list) { _techList = list || []; });
+    _techRefreshList();   // 진척률·투입시간이 바뀌므로 카탈로그도 갱신
   }).catch(function () { _tToast('일지 등록 실패', 'error'); });
 }
 
@@ -573,6 +604,6 @@ function techLogDelete(techId, logId) {
   if (!confirm('이 개발일지를 삭제할까요?')) return;
   techLogDel(techId, logId).then(function () {
     techLoadLogs(techId);
-    techGetAll({}).then(function (list) { _techList = list || []; });
+    _techRefreshList();
   });
 }

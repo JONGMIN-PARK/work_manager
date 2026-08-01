@@ -279,7 +279,7 @@ window.wmDataBus = (function () {
 <script defer src="dashboard.js?v=5" onerror="console.warn('dashboard.js 로드 실패')"></script>
 <script defer src="pipeline.js?v=5" onerror="console.warn('pipeline.js 로드 실패')"></script>
 <script defer src="prestudy.js?v=3" onerror="console.warn('prestudy.js 로드 실패')"></script>
-<script defer src="tech.js?v=2" onerror="console.warn('tech.js 로드 실패')"></script>
+<script defer src="tech.js?v=3" onerror="console.warn('tech.js 로드 실패')"></script>
 <script defer src="order-view.js?v=5" onerror="console.warn('order-view.js 로드 실패')"></script>
 <script defer src="issue-manager.js?v=5" onerror="console.warn('issue-manager.js 로드 실패')"></script>
 <script defer src="document-manager.js?v=6" onerror="console.warn('document-manager.js 로드 실패')"></script>
@@ -909,7 +909,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.178</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.179</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3484,6 +3484,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.179',date:'2026-08-01',title:'🐛 요소기술 결함 수정 — 진척률 리셋·화면 미갱신·검색 오탐',tag:'fix',items:[
+      '⚠️ 진척률이 0%로 리셋되던 문제 수정 — 진척률을 비워둔 채 "문서"·"아이디어" 일지를 쓰면 기술 진척률이 0으로 떨어졌습니다. 이제 진척% 를 비우면 기존 진척률이 그대로 유지되고, 0을 직접 입력한 경우만 0으로 반영됩니다',
+      '개발일지 등록·삭제 후 카탈로그의 진척률·투입시간이 즉시 갱신되도록 수정 (이전에는 탭을 옮겨야 반영)',
+      '검색 오탐 수정 — 스택을 JSON 통째로 검색해 "version"·"kind" 같은 단어에 모든 기술이 걸리던 문제. 이제 스택 "이름"만 검색합니다',
+      '「기술스택」 보기에서 항목 클릭 시 서버 필터(정확 일치)를 사용하도록 개선 + 적용된 필터를 배지로 표시하고 클릭해 해제',
+      '영향: server/routes/tech.js, tech.js. 서버 변경 포함 — 배포 후 적용(마이그레이션 없음)'
+    ]},
     {ver:'13.178',date:'2026-08-01',title:'📲 요소기술 텔레그램 연동 — /tech·/techlog·/mytech + 개발일지 알림 (Phase 3)',tag:'feat',items:[
       '텔레그램 명령어: /tech(기술 카탈로그), /tech 키워드(기술명·코드·스택 검색 — "opencv 쓰는 기술 뭐 있지?"), /techlog 기술명(개발일지), /mytech(내 담당 기술)',
       '알림: 담당 배정 · 개발일지 등록(담당·참여자) · 상태 변경(담당·참여자+관리자)',

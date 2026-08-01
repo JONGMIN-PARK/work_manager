@@ -30,6 +30,15 @@ function clampInt(v, min, max, fallback) {
   return Math.max(min, Math.min(max, n));
 }
 function toHours(v) { var n = parseFloat(v); return (isNaN(n) || n < 0) ? 0 : n; }
+/**
+ * 진척률 정규화. 미입력(undefined/null/'')은 NULL 로 남긴다.
+ * 0 과 "미입력"을 구분해야, 진척률과 무관한 일지(문서·아이디어)를 써도
+ * 기술의 진척률이 0으로 리셋되지 않는다.
+ */
+function toProgress(v) {
+  if (v === undefined || v === null || v === '') return null;
+  return clampInt(v, 0, 100, null);
+}
 
 /**
  * 개발일지 → tech_assets 재동기화.
@@ -41,9 +50,11 @@ async function resyncTech(techId, tenantId) {
     'SELECT COALESCE(SUM(hours),0) AS sum_h FROM tech_logs WHERE tech_id = $1 AND tenant_id = $2 AND deleted_at IS NULL',
     [techId, tenantId]
   );
+  // 진척률이 실제로 기록된(NULL 아닌) 최신 일지만 반영 —
+  // 문서·아이디어 일지처럼 진척률을 비워둔 기록이 기존 진척률을 덮어쓰지 않도록 한다.
   var latestR = await db.query(
     'SELECT progress FROM tech_logs WHERE tech_id = $1 AND tenant_id = $2 AND deleted_at IS NULL ' +
-    'ORDER BY log_date DESC NULLS LAST, created_at DESC LIMIT 1',
+    'AND progress IS NOT NULL ORDER BY log_date DESC NULLS LAST, created_at DESC LIMIT 1',
     [techId, tenantId]
   );
   var sumH = sumR.rows.length ? sumR.rows[0].sum_h : 0;
@@ -113,8 +124,11 @@ router.get('/', async function (req, res) {
       params.push(req.query.stack); idx++;
     }
     if (req.query.q) {
+      // 스택은 JSON 전체(::text)가 아니라 name 값만 검색 — 'kind'·'version' 같은
+      // JSON 키에 매칭돼 전부 걸리던 오탐 방지
       sql += ' AND (t.name ILIKE $' + idx + ' OR t.code ILIKE $' + idx + ' OR t.summary ILIKE $' + idx +
-        ' OR t.description ILIKE $' + idx + ' OR t.stack::text ILIKE $' + idx + ')';
+        ' OR t.description ILIKE $' + idx +
+        " OR EXISTS (SELECT 1 FROM jsonb_array_elements(t.stack) se WHERE se->>'name' ILIKE $" + idx + '))';
       params.push('%' + req.query.q + '%'); idx++;
     }
     sql += ' ORDER BY t.status, t.name';
@@ -368,7 +382,7 @@ router.post('/:id/logs', async function (req, res) {
         b.logDate || b.log_date || new Date().toISOString().slice(0, 10),
         clampEnum(b.kind, LOG_KINDS, 'dev'),
         req.user.sub, authorName,
-        clampInt(b.progress, 0, 100, 0),
+        toProgress(b.progress),
         toHours(b.hours),
         b.content || null
       ]
@@ -411,7 +425,7 @@ router.put('/:id/logs/:logId', async function (req, res) {
     function set(col, val) { sets.push(col + ' = $' + idx++); params.push(val); }
     if (b.logDate !== undefined || b.log_date !== undefined) set('log_date', b.logDate || b.log_date || null);
     if (b.kind !== undefined) set('kind', clampEnum(b.kind, LOG_KINDS, 'dev'));
-    if (b.progress !== undefined) set('progress', clampInt(b.progress, 0, 100, 0));
+    if (b.progress !== undefined) set('progress', toProgress(b.progress));
     if (b.hours !== undefined) set('hours', toHours(b.hours));
     if (b.content !== undefined) set('content', b.content || null);
     if (!sets.length) return res.status(400).json({ error: 'BAD_REQUEST', message: '수정할 항목이 없습니다.' });
