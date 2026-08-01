@@ -41,13 +41,31 @@ jobs:
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/work_manager_test
         run: |
-          cd server
-          for f in ../migrations/*.sql; do
-            psql "$DATABASE_URL" -f "$f" 2>/dev/null || true
+          set -e
+          # psql 이 없으면 마이그레이션이 통째로 스킵되고, 이전에는 그 사실이
+          # 2>/dev/null || true 에 묻혀 "성공"으로 보였다. 없으면 설치한다.
+          if ! command -v psql >/dev/null 2>&1; then
+            echo "psql 없음 — postgresql-client 설치"
+            sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          fi
+          # 루트 migrations/ 는 앱이 자동 적용하지 않으므로(server/migrations 만 자동)
+          # CI 에서는 반드시 여기서 적용해야 한다.
+          for f in migrations/*.sql server/migrations/*.sql; do
+            echo "--- $f"
+            # 개별 파일 실패는 허용(재실행 가능성)하되, 오류는 로그에 남긴다.
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -f "$f" 2>&1 | grep -Ei '^(psql:)?.*(ERROR|FATAL)' || true
           done
-          for f in migrations/*.sql; do
-            psql "$DATABASE_URL" -f "$f" 2>/dev/null || true
+          # 필수 테이블 검증 — 조용한 스킵을 막는다.
+          missing=""
+          for t in users tenants projects audit_logs in_app_notifications; do
+            got=$(psql "$DATABASE_URL" -tAc "SELECT to_regclass('public.$t')")
+            [ "$got" = "$t" ] || missing="$missing $t"
           done
+          if [ -n "$missing" ]; then
+            echo "::error::마이그레이션 후 필수 테이블 누락:$missing"
+            exit 1
+          fi
+          echo "필수 테이블 확인 완료"
 
       - name: Run tests
         env:

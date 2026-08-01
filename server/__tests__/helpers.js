@@ -58,23 +58,40 @@ async function createTestUser(opts) {
  * 테스트 데이터 정리
  */
 async function cleanup() {
-  try {
-    await db.query("DELETE FROM work_records WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM issues WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM events WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM orders WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM project_members WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM milestones WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM checklists WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM projects WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM user_settings WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM audit_logs WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE tenant_id = $1)", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM users WHERE tenant_id = $1", [TEST_TENANT_ID]);
-    await db.query("DELETE FROM tenants WHERE id = $1", [TEST_TENANT_ID]);
-  } catch (e) {
-    console.warn('[cleanup]', e.message);
+  // 각 문장을 개별 격리 실행한다.
+  //  - 테이블이 없는 환경(구버전 DB)에서도 나머지 정리가 계속되도록
+  //  - 한 건 실패가 뒤따르는 users/tenants 삭제를 막지 않도록
+  async function tryDel(sql) {
+    try { await db.query(sql, [TEST_TENANT_ID]); }
+    catch (e) { if (e.code !== '42P01') console.warn('[cleanup]', e.message); }  // 42P01 = 테이블 없음
   }
+
+  // 1) 테넌트 스코프 자식 데이터
+  var byTenant = [
+    'work_records', 'issues', 'events', 'orders', 'project_members',
+    'milestones', 'checklists', 'user_settings',
+    // 이번 확장에서 추가된 테이블들 — users 를 참조하므로 users 삭제 전에 비워야 함
+    'tech_logs', 'tech_usages', 'tech_assets',
+    'meeting_action_items', 'meetings', 'project_dev_items', 'prestudies', 'comments'
+  ];
+  for (var i = 0; i < byTenant.length; i++) {
+    await tryDel('DELETE FROM ' + byTenant[i] + ' WHERE tenant_id = $1');
+  }
+  await tryDel('DELETE FROM projects WHERE tenant_id = $1');
+
+  // 2) users 를 FK로 참조하는 로그성 테이블 —
+  //    tenant_id 가 NULL이거나 다른 값인 행이 남아 users 삭제를 막던 원인.
+  //    tenant_id 조건이 아니라 user_id 로 지운다.
+  var byUser = ['audit_logs', 'refresh_tokens', 'in_app_notifications', 'notification_logs', 'notification_prefs'];
+  for (var j = 0; j < byUser.length; j++) {
+    await tryDel('DELETE FROM ' + byUser[j] + ' WHERE user_id IN (SELECT id FROM users WHERE tenant_id = $1)');
+  }
+  await tryDel('DELETE FROM audit_logs WHERE tenant_id = $1');
+
+  // 3) 마지막에 users → tenants
+  await tryDel('DELETE FROM users WHERE tenant_id = $1');
+  try { await db.query('DELETE FROM tenants WHERE id = $1', [TEST_TENANT_ID]); }
+  catch (e) { console.warn('[cleanup/tenants]', e.message); }
 }
 
 module.exports = {
