@@ -67,6 +67,8 @@ async function showProjectDetail(id) {
     '<button class="btn" id="pdTabIssues" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'issues\',\'' + id + '\')">이슈</button>' +
     '<button class="btn" id="pdTabWork" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'work\',\'' + id + '\')">투입실적</button>' +
     '<button class="btn" id="pdTabSpec" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'spec\',\'' + id + '\')">사양</button>' +
+    '<button class="btn" id="pdTabDev" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'dev\',\'' + id + '\')">개발</button>' +
+    '<button class="btn" id="pdTabReview" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'review\',\'' + id + '\')">검토</button>' +
   '</div>';
 
   // ── 개요 탭 ──
@@ -218,6 +220,11 @@ async function showProjectDetail(id) {
   html += '<div id="pdWork" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
   html += '<div id="pdSpec" style="display:none"></div>';
 
+  // ── 개발 백로그 탭 ──
+  html += '<div id="pdDev" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
+  // ── 검토 탭 ──
+  html += '<div id="pdReview" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
+
   // 하단 버튼
   html += '<div style="display:flex;gap:8px;margin-top:16px">' +
     '<button class="btn btn-p btn-s" onclick="document.getElementById(\'projDetailPanel\').remove();var bd=document.getElementById(\'projDetailBackdrop\');if(bd)bd.remove();showProjectModal(\'' + id + '\')">✏️ 편집</button>' +
@@ -248,9 +255,9 @@ async function showProjectDetail(id) {
 
 /* ═══ 프로젝트 상세 패널: 탭 전환 ═══ */
 function pdSwitchTab(tab, projId) {
-  var tabs = ['overview', 'lifecycle', 'issues', 'work', 'spec'];
-  var ids = { overview: 'pdOverview', lifecycle: 'pdLifecycle', issues: 'pdIssues', work: 'pdWork', spec: 'pdSpec' };
-  var btnIds = { overview: 'pdTabOverview', lifecycle: 'pdTabLifecycle', issues: 'pdTabIssues', work: 'pdTabWork', spec: 'pdTabSpec' };
+  var tabs = ['overview', 'lifecycle', 'issues', 'work', 'spec', 'dev', 'review'];
+  var ids = { overview: 'pdOverview', lifecycle: 'pdLifecycle', issues: 'pdIssues', work: 'pdWork', spec: 'pdSpec', dev: 'pdDev', review: 'pdReview' };
+  var btnIds = { overview: 'pdTabOverview', lifecycle: 'pdTabLifecycle', issues: 'pdTabIssues', work: 'pdTabWork', spec: 'pdTabSpec', dev: 'pdTabDev', review: 'pdTabReview' };
   tabs.forEach(function (t) {
     var el = document.getElementById(ids[t]);
     var btn = document.getElementById(btnIds[t]);
@@ -267,6 +274,223 @@ function pdSwitchTab(tab, projId) {
   if (tab === 'work' && projId) pdLoadWork(projId);
   // 사양 탭 로딩 (한 번만 빌드 — 편집 상태 보존)
   if (tab === 'spec' && projId) pdRenderSpec(projId);
+  // 개발 백로그 탭
+  if (tab === 'dev' && projId) pdLoadDev(projId);
+  // 검토 탭
+  if (tab === 'review' && projId) pdLoadReview(projId);
+}
+
+/* ═══ 개발 백로그 (칸반) — PRD Phase 1 UI ═══ */
+var PD_DEV_STATUS = [
+  { key: 'backlog', label: '백로그', icon: '📋' },
+  { key: 'todo', label: '할 일', icon: '📝' },
+  { key: 'doing', label: '진행', icon: '🔵' },
+  { key: 'review', label: '검토', icon: '🔍' },
+  { key: 'done', label: '완료', icon: '✅' }
+];
+var PD_DEV_CAT = { feature: { l: '신규', c: '#10B981' }, improve: { l: '개선', c: '#3B82F6' }, change: { l: '설계변경', c: '#F59E0B' }, refactor: { l: '리팩토링', c: '#8B5CF6' }, chore: { l: '기타', c: '#64748B' } };
+var PD_DEV_PRIO = { high: { l: '높음', c: '#EF4444' }, normal: { l: '보통', c: '#F59E0B' }, low: { l: '낮음', c: '#94A3B8' } };
+var _pdDevProj = null;
+
+function pdLoadDev(projId) {
+  _pdDevProj = projId;
+  var el = document.getElementById('pdDev'); if (!el) return;
+  el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">로딩 중...</div>';
+  devItemsByProject(projId).then(function (items) { pdRenderDev(items); })
+    .catch(function () { el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">개발 백로그를 불러오지 못했습니다.</div>'; });
+}
+
+function pdRenderDev(items) {
+  var el = document.getElementById('pdDev'); if (!el) return;
+  items = items || [];
+
+  // 추가 폼
+  var catOpts = Object.keys(PD_DEV_CAT).map(function (k) { return '<option value="' + k + '">' + PD_DEV_CAT[k].l + '</option>'; }).join('');
+  var prioOpts = Object.keys(PD_DEV_PRIO).map(function (k) { return '<option value="' + k + '"' + (k === 'normal' ? ' selected' : '') + '>' + PD_DEV_PRIO[k].l + '</option>'; }).join('');
+  var html = '<div style="display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap">' +
+    '<input id="pdDevTitle" placeholder="개발 아이템 제목" style="flex:1;min-width:140px;font-size:11px;padding:5px 8px" onkeydown="if(event.key===\'Enter\')pdDevAdd()">' +
+    '<select id="pdDevCat" class="si" style="font-size:11px;padding:4px">' + catOpts + '</select>' +
+    '<select id="pdDevPrio" class="si" style="font-size:11px;padding:4px">' + prioOpts + '</select>' +
+    '<button class="btn btn-p btn-s" style="font-size:11px" onclick="pdDevAdd()">+ 추가</button>' +
+  '</div>';
+
+  var total = items.length;
+  var doneCnt = items.filter(function (it) { return it.status === 'done'; }).length;
+  html += '<div style="font-size:10px;color:var(--t5);margin-bottom:8px">총 ' + total + '건 · 완료 ' + doneCnt + '</div>';
+
+  var moveOpts = PD_DEV_STATUS.map(function (s) { return s; });
+
+  PD_DEV_STATUS.forEach(function (col) {
+    var colItems = items.filter(function (it) { return it.status === col.key; });
+    html += '<div style="margin-bottom:12px">';
+    html += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:4px">' + col.icon + ' ' + col.label + ' <span style="color:var(--t6)">(' + colItems.length + ')</span></div>';
+    if (!colItems.length) {
+      html += '<div style="font-size:10px;color:var(--t6);padding:2px 0 6px 4px">—</div>';
+    } else {
+      colItems.forEach(function (it) {
+        var cat = PD_DEV_CAT[it.category] || PD_DEV_CAT.chore;
+        var prio = PD_DEV_PRIO[it.priority] || PD_DEV_PRIO.normal;
+        var estH = parseFloat(it.estimateH || it.estimate_h) || 0;
+        var selOpts = moveOpts.map(function (s) { return '<option value="' + s.key + '"' + (s.key === it.status ? ' selected' : '') + '>' + s.label + '</option>'; }).join('');
+        html += '<div style="border:1px solid var(--bd);border-radius:6px;padding:6px 8px;margin-bottom:5px;background:var(--bg-i)">' +
+          '<div style="font-size:11px;color:var(--t2);font-weight:600;word-break:break-word;margin-bottom:3px">' + eH(it.title) + '</div>' +
+          '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">' +
+            '<span class="badge" style="background:' + cat.c + '22;color:' + cat.c + ';font-size:8px;padding:1px 5px">' + cat.l + '</span>' +
+            '<span style="font-size:9px;color:' + prio.c + '">● ' + prio.l + '</span>' +
+            (estH > 0 ? '<span style="font-size:9px;color:var(--t5)">⏱ ' + estH + 'h</span>' : '') +
+            '<span style="flex:1"></span>' +
+            '<select class="si" style="font-size:9px;padding:1px 3px" onchange="pdDevMove(\'' + eH(it.id) + '\',this.value)">' + selOpts + '</select>' +
+            '<button class="btn btn-d btn-s" style="font-size:9px;padding:1px 5px" title="삭제" onclick="pdDevDel(\'' + eH(it.id) + '\')">✕</button>' +
+          '</div>' +
+        '</div>';
+      });
+    }
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
+function pdDevAdd() {
+  if (!_pdDevProj) return;
+  var ti = document.getElementById('pdDevTitle');
+  var title = ti ? ti.value.trim() : '';
+  if (!title) { if (typeof showToast === 'function') showToast('제목을 입력하세요.', 'warn'); return; }
+  var cat = (document.getElementById('pdDevCat') || {}).value || 'feature';
+  var prio = (document.getElementById('pdDevPrio') || {}).value || 'normal';
+  devItemCreate({ projectId: _pdDevProj, title: title, category: cat, priority: prio })
+    .then(function () { if (typeof showToast === 'function') showToast('개발 아이템 추가됨', 'success'); pdLoadDev(_pdDevProj); })
+    .catch(function () { if (typeof showToast === 'function') showToast('추가 실패', 'error'); });
+}
+function pdDevMove(id, status) {
+  devItemMove(id, status).then(function () { pdLoadDev(_pdDevProj); })
+    .catch(function () { if (typeof showToast === 'function') showToast('이동 실패', 'error'); });
+}
+function pdDevDel(id) {
+  if (!confirm('이 개발 아이템을 삭제할까요?')) return;
+  devItemDel(id).then(function () { pdLoadDev(_pdDevProj); });
+}
+
+/* ═══ 검토 체크리스트 — PRD Phase 1 UI ═══ */
+var PD_REVIEW_RESULT = { open: { l: '검토중', c: '#94A3B8', i: '⬜' }, ok: { l: '확인', c: '#10B981', i: '✅' }, issue: { l: '보완필요', c: '#EF4444', i: '⚠️' } };
+var _pdReviewProj = null;
+var _pdReviewList = [];
+var _pdReviewTemplates = {};
+
+function pdLoadReview(projId) {
+  _pdReviewProj = projId;
+  var el = document.getElementById('pdReview'); if (!el) return;
+  el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">로딩 중...</div>';
+  Promise.all([reviewsByProject(projId), reviewTemplates()]).then(function (r) {
+    _pdReviewList = r[0] || [];
+    _pdReviewTemplates = r[1] || {};
+    pdRenderReview();
+  }).catch(function () { el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">검토 목록을 불러오지 못했습니다.</div>'; });
+}
+
+function pdRenderReview() {
+  var el = document.getElementById('pdReview'); if (!el) return;
+
+  // 상단: 템플릿 생성
+  var tplKeys = Object.keys(_pdReviewTemplates);
+  var tplOpts = tplKeys.map(function (k) { return '<option value="' + k + '">' + eH(_pdReviewTemplates[k].title || k) + '</option>'; }).join('');
+  var html = '<div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap">' +
+    (tplKeys.length ? '<select id="pdReviewTpl" class="si" style="flex:1;min-width:120px;font-size:11px;padding:4px">' + tplOpts + '</select>' +
+      '<button class="btn btn-p btn-s" style="font-size:11px" onclick="pdReviewCreateFromTpl()">템플릿으로 생성</button>' : '') +
+    '<button class="btn btn-g btn-s" style="font-size:11px" onclick="pdReviewCreateEmpty()">+ 빈 검토</button>' +
+  '</div>';
+
+  if (!_pdReviewList.length) {
+    html += '<div style="font-size:11px;color:var(--t6);padding:10px 0">등록된 검토가 없습니다. 템플릿으로 시작해보세요.</div>';
+    el.innerHTML = html;
+    return;
+  }
+
+  _pdReviewList.forEach(function (rv) {
+    var items = Array.isArray(rv.items) ? rv.items : [];
+    var done = items.filter(function (x) { return x.done; }).length;
+    var pct = items.length ? Math.round(done / items.length * 100) : 0;
+    var res = PD_REVIEW_RESULT[rv.result] || PD_REVIEW_RESULT.open;
+    var resOpts = Object.keys(PD_REVIEW_RESULT).map(function (k) { return '<option value="' + k + '"' + (k === rv.result ? ' selected' : '') + '>' + PD_REVIEW_RESULT[k].i + ' ' + PD_REVIEW_RESULT[k].l + '</option>'; }).join('');
+
+    html += '<div style="border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:10px">';
+    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
+      '<span style="flex:1;font-size:12px;font-weight:700;color:var(--t2);word-break:break-word">' + eH(rv.title) + '</span>' +
+      '<select class="si" style="font-size:10px;padding:1px 3px" onchange="pdReviewSetResult(\'' + eH(rv.id) + '\',this.value)">' + resOpts + '</select>' +
+      '<button class="btn btn-d btn-s" style="font-size:9px;padding:1px 5px" title="검토 삭제" onclick="pdReviewDel(\'' + eH(rv.id) + '\')">✕</button>' +
+    '</div>';
+    // 완료율 바
+    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
+      '<div style="flex:1;height:5px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + res.c + '"></div></div>' +
+      '<span style="font-size:9px;color:var(--t5)">' + done + '/' + items.length + ' (' + pct + '%)</span>' +
+    '</div>';
+    // 항목
+    items.forEach(function (it, idx) {
+      html += '<div style="display:flex;align-items:flex-start;gap:6px;padding:2px 0">' +
+        '<span style="cursor:pointer;font-size:12px" onclick="pdReviewToggle(\'' + eH(rv.id) + '\',' + idx + ')">' + (it.done ? '☑' : '☐') + '</span>' +
+        '<span style="flex:1;font-size:11px;color:' + (it.done ? 'var(--t5)' : 'var(--t2)') + ';word-break:break-word' + (it.done ? ';text-decoration:line-through' : '') + '">' + eH(it.text || '') +
+          (it.done && it.checker ? ' <span style="font-size:8px;color:var(--t6)">— ' + eH(it.checker) + '</span>' : '') +
+        '</span>' +
+      '</div>';
+    });
+    // 항목 추가
+    html += '<div style="display:flex;gap:4px;margin-top:6px">' +
+      '<input id="pdRvItem-' + eH(rv.id) + '" placeholder="검토 항목 추가" style="flex:1;font-size:10px;padding:4px 6px" onkeydown="if(event.key===\'Enter\')pdReviewAddItem(\'' + eH(rv.id) + '\')">' +
+      '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pdReviewAddItem(\'' + eH(rv.id) + '\')">+ 항목</button>' +
+    '</div>';
+    // 종합 의견
+    html += '<div style="margin-top:6px">' +
+      '<textarea id="pdRvNote-' + eH(rv.id) + '" placeholder="종합 검토 의견" style="width:100%;font-size:10px;padding:5px 6px;min-height:38px;resize:vertical">' + eH(rv.note || '') + '</textarea>' +
+      '<button class="btn btn-g btn-s" style="font-size:10px;margin-top:3px" onclick="pdReviewSaveNote(\'' + eH(rv.id) + '\')">의견 저장</button>' +
+    '</div>';
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
+function _pdReviewFind(id) { return _pdReviewList.filter(function (r) { return r.id === id; })[0]; }
+
+function pdReviewCreateFromTpl() {
+  if (!_pdReviewProj) return;
+  var sel = document.getElementById('pdReviewTpl');
+  var key = sel ? sel.value : null;
+  if (!key) return;
+  reviewCreate({ projectId: _pdReviewProj, template: key })
+    .then(function () { if (typeof showToast === 'function') showToast('검토 생성됨', 'success'); pdLoadReview(_pdReviewProj); })
+    .catch(function () { if (typeof showToast === 'function') showToast('생성 실패', 'error'); });
+}
+function pdReviewCreateEmpty() {
+  if (!_pdReviewProj) return;
+  var title = prompt('검토 제목을 입력하세요.');
+  if (!title || !title.trim()) return;
+  reviewCreate({ projectId: _pdReviewProj, title: title.trim() })
+    .then(function () { pdLoadReview(_pdReviewProj); })
+    .catch(function () { if (typeof showToast === 'function') showToast('생성 실패', 'error'); });
+}
+function pdReviewToggle(id, idx) {
+  reviewToggleItem(id, idx).then(function () { pdLoadReview(_pdReviewProj); });
+}
+function pdReviewAddItem(id) {
+  var inp = document.getElementById('pdRvItem-' + id);
+  var text = inp ? inp.value.trim() : '';
+  if (!text) return;
+  var rv = _pdReviewFind(id); if (!rv) return;
+  var items = (Array.isArray(rv.items) ? rv.items : []).slice();
+  items.push({ text: text, done: false });
+  reviewUpdate(id, { items: items }).then(function () { pdLoadReview(_pdReviewProj); });
+}
+function pdReviewSetResult(id, result) {
+  reviewUpdate(id, { result: result }).then(function () { pdLoadReview(_pdReviewProj); });
+}
+function pdReviewSaveNote(id) {
+  var ta = document.getElementById('pdRvNote-' + id);
+  var note = ta ? ta.value : '';
+  reviewUpdate(id, { note: note }).then(function () { if (typeof showToast === 'function') showToast('의견 저장됨', 'success'); });
+}
+function pdReviewDel(id) {
+  if (!confirm('이 검토를 삭제할까요?')) return;
+  reviewDel(id).then(function () { pdLoadReview(_pdReviewProj); });
 }
 
 /* ═══ 프로젝트 사양 정리 표 (v13.160) — 설계/제어전장/소프트웨어/공정 ═══ */

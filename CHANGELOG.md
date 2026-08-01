@@ -1,5 +1,27 @@
 # Work Manager — 변경 이력
 
+## v13.171 (2026-08-01) — 프로젝트 관리 확장: 개발 백로그(칸반) · 검토 체크리스트 (PRD Phase 1)
+
+### 배경
+[PRD_프로젝트관리_확장](docs/PRD_프로젝트관리_확장.md) Phase 1 착수. 프로젝트 관리에 ① 계획된 개발 작업을 담는 개발 백로그와 ② 단계 전환/출하 전 검토 체크리스트가 없어, 이슈(사후 장애)와 섞이거나 산출물 검토가 누락되던 문제를 보완.
+
+### 변경
+- **서버**
+  - `043_project_dev_items.sql` — 개발 백로그(칸반) 테이블. status(backlog/todo/doing/review/done)·category·priority·assignee·estimate/actual_h. 테넌트 격리 + 낙관적 락 + 소프트 삭제.
+  - `044_project_reviews.sql` — 간단 검토 체크리스트 테이블. items(JSONB)·reviewer·note·result(open/ok/issue).
+  - `routes/dev-items.js` — CRUD + `/move`(칸반 이동), 접근가능 프로젝트 제한.
+  - `routes/project-reviews.js` — CRUD + 항목 토글 + 단계별 템플릿 프리셋(수주/설계DR/제작/검수/출하).
+  - `app.js` — `/api/dev-items`, `/api/project-reviews` 마운트.
+  - 마이그레이션 러너의 `;` 분리에 안전한 순수 DDL(dollar-quote 회피).
+- **클라이언트**
+  - `project-data.js` — dev/review API 클라이언트 함수(`devItems*`, `review*`).
+  - `project-detail.js` — 프로젝트 상세 패널에 「개발」·「검토」 탭 추가. 개발은 상태별 그룹 + 이동 select, 검토는 템플릿 생성·항목 토글·완료율·결과·의견.
+
+### 영향
+- 신규: `server/migrations/043·044`, `server/routes/dev-items.js·project-reviews.js`.
+- 수정: `server/app.js`, `project-data.js`, `project-detail.js`, `업무일지_분석기.html`(버전·패치노트).
+- **서버 변경 포함** — 배포 후 마이그레이션 자동 적용. UI·텔레그램 알림 연동은 Phase 2~3에서 진행.
+
 ## v13.170 (2026-07-03) — 문서관리 미리보기 개선 (Word/PPT/PDF/텍스트) + txt 업로드 확인
 
 ### 배경

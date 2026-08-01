@@ -903,7 +903,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.170</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.171</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3462,6 +3462,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.171',date:'2026-08-01',title:'🧩 프로젝트 관리 확장 — 개발 백로그(칸반)·검토 체크리스트 탭 추가',tag:'feat',items:[
+      '프로젝트 상세 패널에 「개발」 탭 추가: 계획된 개발 작업을 상태별(백로그/할 일/진행/검토/완료)로 관리. 제목·분류(신규/개선/설계변경 등)·우선순위로 등록, 카드에서 상태 이동·삭제',
+      '프로젝트 상세 패널에 「검토」 탭 추가: 단계별 템플릿(수주/설계DR/제작/검수/출하 전)으로 검토 체크리스트 생성, 항목 체크(검토자·시각 기록)·완료율 바·결과(검토중/확인/보완필요)·종합 의견',
+      '이슈(사후 발생 장애·CS)와 개발 아이템(계획된 작업)을 명확히 분리',
+      '서버: project_dev_items·project_reviews 테이블(043·044 마이그레이션, 테넌트 격리·소프트 삭제·낙관적 락), /api/dev-items·/api/project-reviews API',
+      '영향: server/migrations/043·044, server/routes/dev-items.js·project-reviews.js, server/app.js, project-data.js, project-detail.js, 업무일지_분석기.html(버전·패치노트). 서버 변경 포함 — 배포 후 마이그레이션 자동 적용'
+    ]},
     {ver:'13.170',date:'2026-07-03',title:'📄 문서관리 미리보기 개선 — Word(서식 렌더)·PPT·PDF·Markdown + txt 업로드 캐시 갱신',tag:'feat',items:[
       'Word(docx): 기존 정규식 텍스트 추출 → mammoth.js로 서식 포함 HTML 미리보기(굵게·표·목록 등). 브라우저 안에서 처리되어 원본이 외부로 나가지 않음',
       'PowerPoint(pptx): 슬라이드별 텍스트 카드로 정리. 구버전 ppt·doc은 브라우저 렌더가 불가능해 "Office 뷰어로 원본 서식 보기"(선택) 버튼 제공 — 클릭 시에만 외부(Microsoft) 뷰어로 열림',

@@ -959,6 +959,53 @@ function createDefaultChecklists(projectId) {
   return Promise.all(promises);
 }
 
+/* ═══ 개발 백로그 (project_dev_items, 칸반) — PRD Phase 1 ═══ */
+function devItemsByProject(pid) {
+  return apiFetch('/api/dev-items?projectId=' + encodeURIComponent(pid))
+    .then(function (r) { return toCamelArray(r.data); })
+    .catch(function () { return []; });
+}
+function devItemCreate(item) {
+  return apiFetch('/api/dev-items', { method: 'POST', body: JSON.stringify(item) })
+    .then(function (r) { return toCamel(r.data); });
+}
+function devItemUpdate(id, patch) {
+  return apiFetch('/api/dev-items/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(patch) })
+    .then(function (r) { return toCamel(r.data); });
+}
+function devItemMove(id, status, sortOrder) {
+  return apiFetch('/api/dev-items/' + encodeURIComponent(id) + '/move', { method: 'PUT', body: JSON.stringify({ status: status, sortOrder: sortOrder || 0 }) })
+    .then(function (r) { return toCamel(r.data); });
+}
+function devItemDel(id) {
+  return apiFetch('/api/dev-items/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
+}
+
+/* ═══ 검토 체크리스트 (project_reviews, 간단형) — PRD Phase 1 ═══ */
+function reviewsByProject(pid) {
+  return apiFetch('/api/project-reviews?projectId=' + encodeURIComponent(pid))
+    .then(function (r) { return toCamelArray(r.data); })
+    .catch(function () { return []; });
+}
+function reviewTemplates() {
+  return apiFetch('/api/project-reviews/templates').then(function (r) { return r.data || {}; }).catch(function () { return {}; });
+}
+function reviewCreate(item) {
+  return apiFetch('/api/project-reviews', { method: 'POST', body: JSON.stringify(item) })
+    .then(function (r) { return toCamel(r.data); });
+}
+function reviewUpdate(id, patch) {
+  return apiFetch('/api/project-reviews/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(patch) })
+    .then(function (r) { return toCamel(r.data); });
+}
+function reviewToggleItem(id, idx) {
+  return apiFetch('/api/project-reviews/' + encodeURIComponent(id) + '/items/' + idx + '/toggle', { method: 'PUT' })
+    .then(function (r) { return toCamel(r.data); });
+}
+function reviewDel(id) {
+  return apiFetch('/api/project-reviews/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
+}
+
 /* 단계별 완료율 계산 */
 function calcPhaseProgress(projectId, phase) {
   return chkGetByPhase(projectId, phase).then(function (items) {
