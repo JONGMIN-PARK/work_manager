@@ -1,6 +1,6 @@
 # PRD: 요소기술 개발 관리 (Element Technology / 기반기술 자산)
 
-> **Version**: 1.0
+> **Version**: 1.1 (GitHub 연동 검토 추가)
 > **Date**: 2026-08-01
 > **Status**: 기획 (Draft) — 구현 착수 전
 > **관련 문서**: [PRD_프로젝트관리_확장.md](./PRD_프로젝트관리_확장.md), [PRD_텔레그램_확장.md](./PRD_텔레그램_확장.md)
@@ -262,6 +262,8 @@ TRL은 1~9 단순 척도로 두되, UI에는 3구간으로 요약 표시한다.
 - [ ] 프로젝트 상세 「적용 기술」 표시
 - [ ] 코멘트 스레드(`target_type='tech'`)
 
+> **GitHub 연동**은 9장 참조 — Phase 2 이후 **선택** 항목이며, Phase 1은 GitHub 없이 완결된다.
+
 ### Phase 3 — 텔레그램 + 자동화
 - [ ] `/tech` `/techlog` `/mytech` 명령어
 - [ ] `tech_log_added` · `tech_status_changed` · `tech_assigned` 알림 + 설정 UI
@@ -283,7 +285,112 @@ TRL은 1~9 단순 척도로 두되, UI에는 3구간으로 요약 표시한다.
 
 ---
 
-## 9. 성공 지표
+## 9. GitHub 연동 (선택 기능)
+
+> **결론: 가능하다.** 기존 외부 연동(GCS·텔레그램·AI)과 동일하게
+> `services/github.service.js` + 환경변수 + `isEnabled()` 패턴으로 붙인다.
+> 미설정이면 관련 UI가 숨겨지고 나머지 기능은 그대로 동작한다(GCS와 같은 방식).
+
+### 9.1 무엇을 가져오나 — **읽기 전용**
+
+저장소가 진실 소스(source of truth), 앱은 **메타데이터·링크만** 보관한다. 소스를 미러링하지 않는다.
+
+| 대상 | GitHub REST API | 요소기술에서의 쓸모 |
+|------|-----------------|-------------------|
+| 언어 구성 | `GET /repos/{o}/{r}/languages` | **기술스택 `language` 자동 채움** (수기 입력 흔들림 제거) |
+| 최신 릴리스 | `GET /repos/{o}/{r}/releases/latest` | `tech_version` 자동 갱신 |
+| 최근 커밋 | `GET /repos/{o}/{r}/commits?per_page=10` | 개발일지 보조 — 활동 여부 확인, "30일간 일지 없음" 판단 보정 |
+| README | `GET /repos/{o}/{r}/readme` | 기술 설명·사용법 렌더 |
+| 예제 파일 | `GET /repos/{o}/{r}/contents/{path}` | **예제 코드 목록·본문** (9.2) |
+
+`stack` 자동 채움은 **language 항목만** 덮어쓰고, 수기로 넣은 `library`·`hw`·`tool`은 보존한다.
+
+### 9.2 예제(Sample) 관리
+
+두 경로를 모두 지원해, GitHub 없이도 쓸 수 있게 한다.
+
+- **저장소 연동 시** — `tech_assets.example_path`(기본 `examples/`)의 파일 목록을 상세에 표시,
+  클릭하면 본문을 코드블록으로 렌더. 파일은 API로 그때그때 조회(캐시).
+- **저장소 없이** — `tech_examples` 테이블에 직접 등록(제목·언어·코드·설명).
+  사내 비공개 코드나 짧은 스니펫에 적합.
+
+```sql
+CREATE TABLE IF NOT EXISTS tech_examples (
+  id         VARCHAR(100) PRIMARY KEY,
+  tenant_id  UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES tenants(id),
+  tech_id    VARCHAR(100) NOT NULL REFERENCES tech_assets(id) ON DELETE CASCADE,
+  title      VARCHAR(255) NOT NULL,
+  lang       VARCHAR(30),               -- python|cpp|csharp|...
+  code       TEXT,
+  note       TEXT,
+  source_url TEXT,                      -- GitHub 파일 permalink (연동 시)
+  sort_order INT DEFAULT 0,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### 9.3 복합프로젝트 / 다중 저장소
+
+"복합"은 세 층위로 나뉘며, 각각 다른 구조로 푼다.
+
+| 층위 | 상황 | 해법 |
+|------|------|------|
+| **기술 1 : 저장소 N** | 한 요소기술이 여러 repo에 걸침, 또는 모노레포의 하위 경로 | `repo_url`(단일) → **`repos JSONB`** 배열로 확장: `[{name, url, path}]`. `path`로 모노레포 하위 디렉토리 지정 |
+| **기술 : 기술** | A 기술이 B·C를 조합한 상위(복합) 기술 | **`tech_deps`** 신설 — 의존 트리로 표현. 카탈로그에서 "구성 기술" 표시 |
+| **프로젝트 : 기술 N** | 한 프로젝트가 여러 요소기술 조합 | **이미 `tech_usages`가 표현** (3.3) — 추가 구조 불필요 |
+
+```sql
+CREATE TABLE IF NOT EXISTS tech_deps (
+  id          VARCHAR(100) PRIMARY KEY,
+  tenant_id   UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES tenants(id),
+  tech_id     VARCHAR(100) NOT NULL REFERENCES tech_assets(id) ON DELETE CASCADE,  -- 상위(복합) 기술
+  depends_on  VARCHAR(100) NOT NULL REFERENCES tech_assets(id) ON DELETE CASCADE,  -- 구성 기술
+  note        TEXT,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tech_dep ON tech_deps (tech_id, depends_on);
+```
+
+> 순환 참조(A→B→A)는 저장 시 서버에서 차단한다. 트리 깊이는 화면상 3단계까지만 펼침.
+
+### 9.4 동기화 방식
+
+1. **수동 「🔄 GitHub 동기화」 버튼**(1차) — 사용자가 누를 때만 호출. 가장 단순하고 안전.
+2. **캐시** — 응답을 `ttl-cache.service.js`(기존)로 보관(예: 1시간). rate limit·지연 방지.
+3. **일 1회 스케줄러**(2차) — 등록된 저장소의 languages·release만 갱신.
+4. webhook(push → 개발일지 자동 생성)은 **하지 않는다**(3차 검토) — 초기엔 과하고 노이즈가 크다.
+
+Rate limit: 토큰 인증 시 5,000 req/h. 저장소 수가 수십 개여도 캐시가 있으면 충분하다.
+
+### 9.5 인증·보안
+
+| 단계 | 방식 |
+|------|------|
+| 1차 | 서버 전역 `GITHUB_TOKEN`(**읽기 전용** PAT, `repo` 최소 범위) — 단일 조직 전제. GCS와 동일하게 env 미설정 시 비활성화 |
+| 2차(멀티테넌트) | 테넌트별 토큰이 필요 → **`tenant_integrations`** 테이블 신설 + 토큰 암호화 저장. 현재는 `user_settings`만 있어 저장 위치가 없음 |
+
+- private 저장소는 토큰 권한 범위 내에서만 조회된다.
+- 토큰은 **절대 클라이언트로 내려보내지 않는다** — 모든 GitHub 호출은 서버 경유(GCS 서명 URL과 동일 원칙).
+
+### 9.6 하지 않을 것 (초기 범위 밖)
+
+- **앱 → GitHub 쓰기**(이슈 생성·커밋·PR) — 권한 위험 대비 이득이 작다.
+- **소스 전체 미러링** — 저장소가 진실 소스. 앱은 메타·링크·예제 스니펫만.
+- **커밋 자동 → 개발일지** — 일지는 "왜/무엇을 배웠나"를 남기는 곳이라 커밋 로그로 대체되지 않는다.
+
+### 9.7 로드맵 반영
+
+GitHub 연동은 **Phase 2 이후 선택 항목**으로 둔다. Phase 1(카탈로그·개발일지)은 GitHub 없이 완결되어야 한다.
+
+- [ ] (Phase 2+) `github.service.js` + `GITHUB_TOKEN` + `isEnabled()`
+- [ ] (Phase 2+) languages → 스택 자동 채움, releases → 버전, README·예제 렌더
+- [ ] (Phase 2+) `repos JSONB` 확장 · `tech_deps`(복합기술) · `tech_examples`
+- [ ] (Phase 3+) 일 1회 동기화 스케줄러
+
+---
+
+## 10. 성공 지표
 
 | 지표 | 목표 |
 |------|------|
