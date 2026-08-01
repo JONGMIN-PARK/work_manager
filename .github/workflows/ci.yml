@@ -50,10 +50,23 @@ jobs:
           fi
           # 루트 migrations/ 는 앱이 자동 적용하지 않으므로(server/migrations 만 자동)
           # CI 에서는 반드시 여기서 적용해야 한다.
-          for f in migrations/*.sql server/migrations/*.sql; do
-            echo "--- $f"
-            # 개별 파일 실패는 허용(재실행 가능성)하되, 오류는 로그에 남긴다.
-            psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -f "$f" 2>&1 | grep -Ei '^(psql:)?.*(ERROR|FATAL)' || true
+          #
+          # 2-pass 로 도는 이유: 두 디렉토리 사이에 순환 의존이 있다.
+          #   루트 004~006 은 tenants·projects.department_id 를 참조하는데,
+          #   그것들은 뒤에 실행되는 server/migrations/008·009 가 만든다.
+          #   1회차에서 실패한 문장이 2회차에는 선행 테이블이 생긴 뒤라 성공한다.
+          #   대부분 IF NOT EXISTS 라 재실행이 안전하다.
+          for pass in 1 2; do
+            echo "=== 마이그레이션 pass $pass ==="
+            for f in migrations/*.sql server/migrations/*.sql; do
+              # 개별 파일 실패는 허용(순서 의존)하되, 최종 pass 의 오류만 로그에 남긴다.
+              if [ "$pass" = "2" ]; then
+                out=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -f "$f" 2>&1 | grep -Ei 'ERROR|FATAL' || true)
+                [ -n "$out" ] && { echo "--- $f"; echo "$out"; } || true
+              else
+                psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -f "$f" >/dev/null 2>&1 || true
+              fi
+            done
           done
           # 필수 테이블 검증 — 조용한 스킵을 막는다.
           missing=""
