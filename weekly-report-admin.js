@@ -4,17 +4,26 @@
  */
 
 (function () {
-  var SECTION_LABEL = { dev: '개발', setup: '셋업', cs: 'C/S', etc: '기타' };
-  var STATE = { tab: 'author', searchResults: null, stats: null, list: null };
-
-  // 섹션별 색상 — 원본 도구와 일관성 유지
-  var SEC_COLORS = {
-    dev:   { main: '#3a6ab0', bg: 'rgba(58,106,176,.12)', bar: 'linear-gradient(90deg,#3a6ab0,#7aaade)', num: '#3a6ab0' },
-    setup: { main: '#7030b0', bg: 'rgba(112,48,176,.12)', bar: 'linear-gradient(90deg,#7030b0,#a878d6)', num: '#7030b0' },
-    cs:    { main: '#c06000', bg: 'rgba(192,96,0,.12)',   bar: 'linear-gradient(90deg,#c06000,#e09850)', num: '#c06000' },
-    etc:   { main: '#506070', bg: 'rgba(80,96,112,.12)',  bar: 'linear-gradient(90deg,#506070,#80909a)', num: '#506070' }
+  // ── 섹션 설정: 라벨/번호/색상/파싱 별칭의 단일 소스 ──
+  var SECTIONS = {
+    dev:   { label: '개발', num: '01', main: '#3a6ab0', bg: 'rgba(58,106,176,.12)', bar: 'linear-gradient(90deg,#3a6ab0,#7aaade)' },
+    setup: { label: '셋업', num: '02', main: '#7030b0', bg: 'rgba(112,48,176,.12)', bar: 'linear-gradient(90deg,#7030b0,#a878d6)' },
+    cs:    { label: 'C/S',  num: '03', main: '#c06000', bg: 'rgba(192,96,0,.12)',   bar: 'linear-gradient(90deg,#c06000,#e09850)' },
+    etc:   { label: '기타', num: '04', main: '#506070', bg: 'rgba(80,96,112,.12)',  bar: 'linear-gradient(90deg,#506070,#80909a)' }
   };
-  var SEC_NUM = { dev: '01', setup: '02', cs: '03', etc: '04' };
+  var SECTION_KEYS = ['dev', 'setup', 'cs', 'etc'];
+  var SECTION_ALIAS = { 'CS': 'cs' }; // 라벨→key (파싱용). 나머지는 SECTIONS에서 파생
+  SECTION_KEYS.forEach(function (k) { SECTION_ALIAS[SECTIONS[k].label] = k; });
+  function secOf(t) { return SECTIONS[t] || SECTIONS.dev; }
+  function secLabel(t) { return (SECTIONS[t] || {}).label || t; }
+
+  // ── 상태/진행률 상수 (색·크기·임계값 단일 소스) ──
+  var STATUS_COLORS = { planned: '#4f74c9', in_progress: '#d03030', done: '#1a8a40' };
+  var ICON_PX = 12; // 상태 아이콘 지름(px)
+  var HEAT = { midAt: 30, highAt: 70, low: '#d21f1f', mid: '#c8730a', high: '#1a8a40' };
+  function heatColor(p) { return p >= HEAT.highAt ? HEAT.high : (p >= HEAT.midAt ? HEAT.mid : HEAT.low); }
+
+  var STATE = { tab: 'author', searchResults: null, stats: null, list: null };
 
   function $(id) { return document.getElementById(id); }
   function esc(s) {
@@ -145,7 +154,6 @@
     if (!parsedPane || !parsedPane.sections || !parsedPane.sections.length) {
       return '<div style="padding:24px;text-align:center;color:var(--t5)">내용 없음</div>';
     }
-    var SEC_LABELS = { dev: '개발', setup: '셋업', cs: 'C/S', etc: '기타' };
     var html = '';
     // 한 줄짜리(세부 없는) 항목들의 사이트명 최대 폭 → 배지 폭·이름 시작 위치 통일
     function siteWidth(s) {
@@ -166,11 +174,11 @@
     var uniformSiteW = maxSiteW ? Math.ceil(maxSiteW) + 14 : 0; // 좌우 패딩 12 + 여유 2 (전 섹션 통일)
     var ICON_SLOT = 12; // 상태 아이콘(12px) 고정 슬롯 → 이름/세부 시작 위치 정렬(간격은 flex gap로)
     parsedPane.sections.forEach(function (sec) {
-      var cl = SEC_COLORS[sec.type] || SEC_COLORS.dev;
+      var cl = secOf(sec.type);
       html += '<div style="margin-bottom:9px">'
         +   '<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">'
-        +     '<span style="background:' + cl.num + ';color:#fff;font-weight:800;font-size:10px;padding:2px 6px;border-radius:4px;font-family:ui-monospace,monospace">' + (SEC_NUM[sec.type] || '') + '</span>'
-        +     '<span style="font-size:13px;font-weight:800;color:var(--t2)">' + esc(SEC_LABELS[sec.type] || sec.type) + '</span>'
+        +     '<span style="background:' + cl.main + ';color:#fff;font-weight:800;font-size:10px;padding:2px 6px;border-radius:4px;font-family:ui-monospace,monospace">' + cl.num + '</span>'
+        +     '<span style="font-size:13px;font-weight:800;color:var(--t2)">' + esc(secLabel(sec.type)) + '</span>'
         +   '</div>';
       sec.items.forEach(function (it) {
         var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
@@ -358,7 +366,7 @@
       +     inputCell('wrSAssignee', 'text', '담당자 (예: 박종민)')
       +     inputCell('wrSClient', 'text', '사이트 (예: 디케이티)')
       +     selectCell('wrSStatus', [['','상태 전체'],['done','완료'],['in_progress','진행중'],['none','미표시']])
-      +     selectCell('wrSSection', [['','섹션 전체'],['dev','개발'],['setup','셋업'],['cs','C/S'],['etc','기타']])
+      +     selectCell('wrSSection', [['', '섹션 전체']].concat(SECTION_KEYS.map(function (k) { return [k, SECTIONS[k].label]; })))
       +     selectCell('wrSPane', [['cur','금주'],['last','지난주']])
       +     inputCell('wrSFrom', 'date', '')
       +     inputCell('wrSTo', 'date', '')
@@ -432,7 +440,7 @@
             }).join('');
             return '<tr>'
               + td('<div style="font-weight:600">' + esc(m.week_label || '-') + '</div><div style="font-size:10px;color:var(--t6)">' + esc(m.team || '') + '</div>')
-              + td(esc(SECTION_LABEL[it.section] || it.section || ''))
+              + td(esc(secLabel(it.section) || ''))
               + td('<strong>' + esc(it.client || '') + '</strong>')
               + td(esc(it.name || '') + details)
               + td(esc(it.deadline || ''))
@@ -640,7 +648,7 @@
 
   // 클라이언트 사이드 텍스트 파서 (서버와 동일 로직)
   function clientParseText(text) {
-    var SEC_MAP = { '개발': 'dev', '셋업': 'setup', 'C/S': 'cs', 'CS': 'cs', '기타': 'etc' };
+    var SEC_MAP = SECTION_ALIAS;
     if (!text) return { sections: [] };
     var sections = [], cur = null, item = null;
     var lines = text.split('\n');
