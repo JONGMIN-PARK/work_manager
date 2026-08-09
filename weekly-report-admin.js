@@ -23,6 +23,16 @@
   var HEAT = { midAt: 30, highAt: 70, low: '#d21f1f', mid: '#c8730a', high: '#1a8a40' };
   function heatColor(p) { return p >= HEAT.highAt ? HEAT.high : (p >= HEAT.midAt ? HEAT.mid : HEAT.low); }
 
+  // ── D-day 임계값·색 (기한 임박도) ──
+  var DDAY = {
+    soonAt: 3, nearAt: 7,
+    dday: { color: '#fff', bg: '#c05000' },
+    soon: { color: '#e03030', bg: 'rgba(224,48,48,.22)' },
+    near: { color: '#c05000', bg: 'rgba(192,80,0,.18)' },
+    far:  { color: '#6070a0', bg: 'rgba(96,112,160,.10)' },
+    over: { color: '#fff', bg: '#d03030' }
+  };
+
   var STATE = { tab: 'author', searchResults: null, stats: null, list: null };
 
   function $(id) { return document.getElementById(id); }
@@ -46,13 +56,12 @@
     var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     var target = new Date(now.getFullYear(), parseInt(m[1], 10) - 1, parseInt(m[2], 10));
     var diff = Math.round((target - today) / 86400000);
-    if (diff === 0) return { label: 'D-DAY', color: '#fff', bg: '#c05000' };
-    if (diff > 0) return {
-      label: 'D-' + diff,
-      color: diff <= 3 ? '#e03030' : (diff <= 7 ? '#c05000' : '#6070a0'),
-      bg:    diff <= 3 ? 'rgba(224,48,48,.22)' : (diff <= 7 ? 'rgba(192,80,0,.18)' : 'rgba(96,112,160,.10)')
-    };
-    return { label: 'D+' + Math.abs(diff), color: '#fff', bg: '#d03030' };
+    if (diff === 0) return { label: 'D-DAY', color: DDAY.dday.color, bg: DDAY.dday.bg };
+    if (diff > 0) {
+      var t = diff <= DDAY.soonAt ? DDAY.soon : (diff <= DDAY.nearAt ? DDAY.near : DDAY.far);
+      return { label: 'D-' + diff, color: t.color, bg: t.bg };
+    }
+    return { label: 'D+' + Math.abs(diff), color: DDAY.over.color, bg: DDAY.over.bg };
   }
   function ddayBadge(deadline) {
     var d = dday(deadline);
@@ -184,12 +193,12 @@
         var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
         // 담당자는 라인에서 제거하고 사이트 배지 title(hover)로만 표시 — 공간 확보(2~3명 대응)
         var memberTip = (it.members || []).map(function (m) { return '@' + m; }).join(', ');
-        // 상태 아이콘(도형) — 예정=파랑 빈 원, 진행중=빨간 원, 완료=녹색 체크. 3종 모두 12px 원으로 크기·위치 통일
-        var ICON_BASE = 'display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;box-sizing:border-box';
+        // 상태 아이콘(도형) — 예정=파랑 빈 원, 진행중=빨간 원, 완료=녹색 체크. 3종 모두 동일 크기 원으로 통일
+        var ICON_BASE = 'display:inline-flex;align-items:center;justify-content:center;width:' + ICON_PX + 'px;height:' + ICON_PX + 'px;border-radius:50%;box-sizing:border-box';
         var statusIcon = function (st) {
-          if (st === 'done') return '<span style="' + ICON_BASE + ';background:#1a8a40"><svg width="7" height="5.5" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
-          if (st === 'in_progress') return '<span style="' + ICON_BASE + ';background:#d03030"></span>';
-          if (st === 'planned') return '<span style="' + ICON_BASE + ';border:2px solid #4f74c9"></span>';
+          if (st === 'done') return '<span style="' + ICON_BASE + ';background:' + STATUS_COLORS.done + '"><svg width="7" height="5.5" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
+          if (st === 'in_progress') return '<span style="' + ICON_BASE + ';background:' + STATUS_COLORS.in_progress + '"></span>';
+          if (st === 'planned') return '<span style="' + ICON_BASE + ';border:2px solid ' + STATUS_COLORS.planned + '"></span>';
           return '';
         };
         // 상태/마커를 고정폭 슬롯에 담아 뒤 텍스트 시작 위치를 통일
@@ -213,7 +222,7 @@
             }).join('');
         }
         // 완료율: 세로 바(아래→위로 채움) + % 숫자. 구간별 히트색(빨강<30·주황<70·초록≥70)으로 대비 강화
-        var heat = pct === null ? '' : (pct >= 70 ? '#1a8a40' : (pct >= 30 ? '#c8730a' : '#d21f1f'));
+        var heat = pct === null ? '' : heatColor(pct);
         var pctInline = pct !== null
           ? '<span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0">'
             + '<span style="width:5px;height:15px;background:var(--bd);border-radius:2px;overflow:hidden;display:inline-flex;align-items:flex-end"><span style="display:block;width:100%;height:' + pct + '%;background:' + heat + '"></span></span>'
