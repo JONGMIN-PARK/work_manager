@@ -218,7 +218,7 @@
     var hasDetails = !!(it.details && it.details.length);
     var detailsHtml = hasDetails ? it.details.map(function (d, di) { return renderDetail(d, di, it.status); }).join('') : '';
     // 사이트 배지 폭을 전 섹션 최대치로 통일 → 모든 항목 이름 시작 위치 정렬(시인성)
-    var badgeStyle = 'background:' + cl.bg + ';color:' + cl.main + ';font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0';
+    var badgeStyle = 'background:' + cl.bg + ';color:' + cl.main + ';font-size:13px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0';
     if (uniformSiteW) badgeStyle += ';box-sizing:border-box;width:' + uniformSiteW + 'px;text-align:left;white-space:nowrap;overflow:hidden';
     return '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:3px 8px;margin-bottom:2px">'
       + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
@@ -230,12 +230,12 @@
       + detailsHtml
       + '</div>';
   }
-  // 사이트명 표시 폭 근사(한글/전각 ≈ 10px, 그 외 ≈ 6.2px) — 배지 폭 통일용
+  // 사이트명 표시 폭 근사(배지 폰트 13px/800 기준 — 한글/전각 ≈ 13px, 그 외 ≈ 8px) — 배지 폭 통일용
   function siteWidth(s) {
     var w = 0; s = String(s || '');
     for (var i = 0; i < s.length; i++) {
       var c = s.charCodeAt(i);
-      w += ((c >= 0x1100 && c <= 0x11FF) || (c >= 0x2E80 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFF00 && c <= 0xFFEF)) ? 10 : 6.2;
+      w += ((c >= 0x1100 && c <= 0x11FF) || (c >= 0x2E80 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFF00 && c <= 0xFFEF)) ? 13 : 8;
     }
     return w;
   }
