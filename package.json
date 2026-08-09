@@ -1,0 +1,8 @@
+{
+  "name": "work_manager",
+  "private": true,
+  "description": "루트 스크립트 (클라이언트 자산 테스트). 서버는 server/ 참조.",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}
