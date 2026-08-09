@@ -99,6 +99,11 @@
     light: { bgPage: '#F4F5FB', bgP: '#FFFFFF', bgI: '#E2E5F0', bd: '#C8CDE0', ac: '#5865F2', t2: '#2A3048', t3: '#424862', t5: '#8890A6', t6: '#B0B6C8' },
     dark:  { bgPage: '#0B0E14', bgP: '#111620', bgI: '#0D1018', bd: '#222C44', ac: '#5B8DEF', t2: '#D8DEE8', t3: '#B8C0D4', t5: '#6070A0', t6: '#404C70' }
   };
+  // CSS 변수명 ↔ THEME_VARS 키 매핑 (단일 소스). :root 생성·치환 모두 여기서 파생
+  var CSS_VARS = { '--bg': 'bgPage', '--bg-p': 'bgP', '--bg-i': 'bgI', '--bd': 'bd', '--ac': 'ac', '--t2': 't2', '--t3': 't3', '--t5': 't5', '--t6': 't6' };
+  function themeRootCss(v) {
+    return ':root{' + Object.keys(CSS_VARS).map(function (n) { return n + ':' + v[CSS_VARS[n]]; }).join(';') + '}';
+  }
   function buildStandaloneHTML(parsedPane, opts) {
     opts = opts || {};
     var theme = opts.theme === 'dark' ? 'dark' : 'light';
@@ -130,7 +135,7 @@
       + '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
       + '<title>' + esc(title) + '</title>\n'
       + '<style>\n'
-      + ':root{--bg:' + v.bgPage + ';--bg-p:' + v.bgP + ';--bg-i:' + v.bgI + ';--bd:' + v.bd + ';--ac:' + v.ac + ';--t2:' + v.t2 + ';--t3:' + v.t3 + ';--t5:' + v.t5 + ';--t6:' + v.t6 + '}\n'
+      + themeRootCss(v) + '\n'
       + 'html,body{margin:0;padding:0;background:var(--bg);color:var(--t2);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}\n'
       + 'body{padding:10px;box-sizing:border-box}\n'
       + 'code{font-family:ui-monospace,Consolas,monospace;background:var(--bg-i);padding:1px 5px;border-radius:3px;font-size:11.5px}\n'
@@ -147,15 +152,10 @@
   // 프리뷰 HTML의 var(--xxx)를 실제 색상값으로 치환 — 외부 페이지 임베드용
   function inlineThemeVars(html, theme) {
     var v = THEME_VARS[theme === 'dark' ? 'dark' : 'light'];
-    return html
-      .replace(/var\(--bg-p\)/g, v.bgP)
-      .replace(/var\(--bg-i\)/g, v.bgI)
-      .replace(/var\(--bd\)/g, v.bd)
-      .replace(/var\(--ac\)/g, v.ac)
-      .replace(/var\(--t2\)/g, v.t2)
-      .replace(/var\(--t3\)/g, v.t3)
-      .replace(/var\(--t5\)/g, v.t5)
-      .replace(/var\(--t6\)/g, v.t6);
+    Object.keys(CSS_VARS).forEach(function (n) {
+      html = html.replace(new RegExp('var\\(' + n + '\\)', 'g'), v[CSS_VARS[n]]);
+    });
+    return html;
   }
 
   // 파싱된 sections/items 배열을 보기용 HTML로 빌드
