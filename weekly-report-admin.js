@@ -181,10 +181,8 @@
         +   '</div>';
       sec.items.forEach(function (it) {
         var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
-        var memberChip = function (m, ml) {
-          return '<span style="font-size:10px;font-weight:600;background:var(--bg-i);color:var(--t3);padding:0 5px;border-radius:9px;flex-shrink:0' + (ml ? ';margin-left:3px' : '') + '">@' + esc(m) + '</span>';
-        };
-        var members = (it.members || []).map(function (m) { return memberChip(m, false); }).join('');
+        // 담당자는 라인에서 제거하고 사이트 배지 title(hover)로만 표시 — 공간 확보(2~3명 대응)
+        var memberTip = (it.members || []).map(function (m) { return '@' + m; }).join(', ');
         // 상태 아이콘(도형) — 진행중=빨간 원, 완료=녹색 체크. 마진 없는 순수 도형(고정 슬롯에 담아 정렬)
         var statusIcon = function (st) {
           if (st === 'done') return '<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;background:#1a8a40;border-radius:50%"><svg width="8" height="6" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
@@ -200,7 +198,6 @@
         var detailsHtml = '';
         if (hasDetails) {
           detailsHtml = it.details.map(function (d, di) {
-              var dMembers = (d.members || []).map(function (m) { return memberChip(m, true); }).join('');
               var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
               // 세부 자체 상태 우선, 없으면 첫 줄에 항목 상태를 반영
               var lineSt = (d.status && d.status !== 'none') ? d.status : (di === 0 ? it.status : 'none');
@@ -208,7 +205,7 @@
               return '<div style="display:flex;align-items:center;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 2px">'
                 + iconSlot(inner)
                 + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + inlineMarkup(dText) + '</span>'
-                + dMembers + '</div>';
+                + '</div>';
             }).join('');
         }
         // 완료율: 세로 바(아래→위로 채움) + % 숫자. 구간별 히트색(빨강<30·주황<70·초록≥70)으로 대비 강화
@@ -225,10 +222,9 @@
         if (uniformSiteW) badgeStyle += ';box-sizing:border-box;width:' + uniformSiteW + 'px;text-align:left;white-space:nowrap;overflow:hidden';
         html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:3px 8px;margin-bottom:2px">'
           + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
-          +   '<span style="' + badgeStyle + '">' + esc(it.client || '') + '</span>'
+          +   '<span style="' + badgeStyle + ';cursor:default"' + (memberTip ? ' title="담당자: ' + esc(memberTip) + '"' : '') + '>' + esc(it.client || '') + '</span>'
           +   (hasDetails ? '' : iconSlot(statusIcon(it.status)))
           +   '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
-          +   members
           +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
           +   pctInline
           +   (it.deadline ? ddayBadge(it.deadline) : '')
