@@ -155,8 +155,8 @@
       var pctList = itemsArr.filter(function (x) { return typeof x.pct === 'number' && x.pct >= 0; });
       var avgPct = pctList.length ? Math.round(pctList.reduce(function (a, x) { return a + x.pct; }, 0) / pctList.length) : null;
       var summary = doneCnt + '/' + itemsArr.length + ' 완료' + (avgPct !== null ? ' · 평균 ' + avgPct + '%' : '');
-      html += '<div style="margin-bottom:12px">'
-        +   '<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">'
+      html += '<div style="margin-bottom:9px">'
+        +   '<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">'
         +     '<span style="background:' + cl.num + ';color:#fff;font-weight:800;font-size:10px;padding:2px 6px;border-radius:4px;font-family:ui-monospace,monospace">' + (SEC_NUM[sec.type] || '') + '</span>'
         +     '<span style="font-size:13px;font-weight:800;color:var(--t2)">' + esc(SEC_LABELS[sec.type] || sec.type) + '</span>'
         +     '<span style="margin-left:auto;font-size:10.5px;color:var(--t5);font-weight:600">' + esc(summary) + '</span>'
@@ -164,51 +164,47 @@
       sec.items.forEach(function (it) {
         var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
         var memberChip = function (m, ml) {
-          return '<span style="font-size:10px;font-weight:600;background:var(--bg-i);color:var(--t3);padding:1px 6px;border-radius:10px' + (ml ? ';margin-left:3px' : '') + '">@' + esc(m) + '</span>';
+          return '<span style="font-size:10px;font-weight:600;background:var(--bg-i);color:var(--t3);padding:0 5px;border-radius:9px;flex-shrink:0' + (ml ? ';margin-left:3px' : '') + '">@' + esc(m) + '</span>';
         };
         var members = (it.members || []).map(function (m) { return memberChip(m, false); }).join('');
+        // 세부: 압축 한 줄(말줄임)로 옅게 — 밀도 유지하며 한 페이지에 담기
         var detailsHtml = '';
         if (it.details && it.details.length) {
-          detailsHtml = '<ul style="margin:4px 0 0;padding:4px 0 0;list-style:none;border-top:1px dashed var(--bd)">'
-            + it.details.map(function (d) {
-                var dMembers = (d.members || []).map(function (m) { return memberChip(m, true); }).join('');
-                // 텍스트에서 @멤버 제거 후 인라인 마크업
-                var dText = String(d.text || '').replace(/@[^\s@]+/g, '').trim();
-                return '<li style="display:flex;align-items:flex-start;font-size:13px;color:var(--t3);padding:1px 0;line-height:1.45">'
-                  + '<span style="color:var(--t6);margin:0 5px 0 2px">–</span>'
-                  + '<span style="flex:1;min-width:0">' + inlineMarkup(dText) + '</span>'
-                  + dMembers + '</li>';
-              }).join('')
-            + '</ul>';
+          detailsHtml = it.details.map(function (d) {
+              var dMembers = (d.members || []).map(function (m) { return memberChip(m, true); }).join('');
+              var dText = String(d.text || '').replace(/@[^\s@]+/g, '').trim();
+              return '<div style="display:flex;align-items:center;font-size:11.5px;color:var(--t5);line-height:1.4;padding:0 0 0 2px">'
+                + '<span style="color:var(--t6);margin-right:5px;flex-shrink:0">└</span>'
+                + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + inlineMarkup(dText) + '</span>'
+                + dMembers + '</div>';
+            }).join('');
         }
         // 상태 배지 — 진행중=주황, 완료=초록 (급한 D-day의 빨강과 색으로 구분)
         var statusBadge = '';
         if (it.status === 'done') {
-          statusBadge = '<span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;white-space:nowrap;color:#1a8a40;background:rgba(26,138,64,.15)">● 완료</span>';
+          statusBadge = '<span style="font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:20px;white-space:nowrap;flex-shrink:0;color:#1a8a40;background:rgba(26,138,64,.15)">완료</span>';
         } else if (it.status === 'in_progress') {
-          statusBadge = '<span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;white-space:nowrap;color:#c8730a;background:rgba(200,115,10,.16)">● 진행중</span>';
+          statusBadge = '<span style="font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:20px;white-space:nowrap;flex-shrink:0;color:#c8730a;background:rgba(200,115,10,.16)">진행중</span>';
         }
-        // 우측 레일: 상태 · 완료율 · 진행바 · D-day를 세로 정렬 → 행 간 스캔 용이
-        var railParts = statusBadge;
-        if (pct !== null) {
-          railParts += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;width:100%">'
-            + '<span style="font-size:13px;font-weight:800;font-family:ui-monospace,monospace;line-height:1;color:' + cl.main + '">' + pct + '%</span>'
-            + '<span style="width:100%;height:5px;background:var(--bg-i);border-radius:3px;overflow:hidden;display:block"><span style="display:block;height:100%;width:' + pct + '%;background:' + cl.bar + '"></span></span>'
-            + '</div>';
-        }
-        if (it.deadline) railParts += ddayBadge(it.deadline);
-        var rail = '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' + railParts + '</div>';
-        // 이름은 한 줄 말줄임(…) — 레일/메타 분리로 이름 줄에 여백이 넉넉하므로 잘림 최소화
-        html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:4px solid ' + cl.main + ';border-radius:7px;padding:7px 10px;margin-bottom:6px;display:grid;grid-template-columns:1fr 104px;column-gap:10px;align-items:start">'
-          + '<div style="min-width:0">'
-          +   '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
-          +     '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0">' + esc(it.client || '') + '</span>'
-          +     '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
-          +   '</div>'
-          +   (members || it.deadline ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">' + members + (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace">' + esc(it.deadline) + '</span>' : '') + '</div>' : '')
-          +   detailsHtml
+        // 완료율: 미니 진행바 + % 인라인
+        var pctInline = pct !== null
+          ? '<span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0">'
+            + '<span style="width:38px;height:5px;background:var(--bg-i);border-radius:3px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;width:' + pct + '%;background:' + cl.bar + '"></span></span>'
+            + '<span style="font-size:11px;font-weight:700;font-family:ui-monospace,monospace;color:' + cl.main + '">' + pct + '%</span>'
+            + '</span>'
+          : '';
+        // 한 줄 메인: [사이트] 이름 … @담당자 · 기한 · 진행바% · D-day · 상태
+        html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:3px 8px;margin-bottom:2px">'
+          + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
+          +   '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0">' + esc(it.client || '') + '</span>'
+          +   '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
+          +   members
+          +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
+          +   pctInline
+          +   (it.deadline ? ddayBadge(it.deadline) : '')
+          +   statusBadge
           + '</div>'
-          + rail
+          + detailsHtml
           + '</div>';
       });
       html += '</div>';
