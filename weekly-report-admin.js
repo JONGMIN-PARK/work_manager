@@ -147,6 +147,24 @@
     }
     var SEC_LABELS = { dev: '개발', setup: '셋업', cs: 'C/S', etc: '기타' };
     var html = '';
+    // 한 줄짜리(세부 없는) 항목들의 사이트명 최대 폭 → 배지 폭·이름 시작 위치 통일
+    function siteWidth(s) {
+      var w = 0; s = String(s || '');
+      for (var i = 0; i < s.length; i++) {
+        var c = s.charCodeAt(i);
+        // 한글/전각 ≈ 10px, 그 외 ≈ 6.2px (배지 폰트 10px/800 기준 근사)
+        w += ((c >= 0x1100 && c <= 0x11FF) || (c >= 0x2E80 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFF00 && c <= 0xFFEF)) ? 10 : 6.2;
+      }
+      return w;
+    }
+    var oneLineSiteW = 0;
+    parsedPane.sections.forEach(function (sec) {
+      (sec.items || []).forEach(function (it) {
+        if (!(it.details && it.details.length)) oneLineSiteW = Math.max(oneLineSiteW, siteWidth(it.client));
+      });
+    });
+    var uniformSiteW = oneLineSiteW ? Math.ceil(oneLineSiteW) + 14 : 0; // 좌우 패딩 12 + 여유 2
+    var ICON_SLOT = 18; // 상태 아이콘 고정 슬롯 → 이름/세부 시작 위치 정렬
     parsedPane.sections.forEach(function (sec) {
       var cl = SEC_COLORS[sec.type] || SEC_COLORS.dev;
       // 섹션 요약(완료 n/전체 · 평균 진행률) — 한눈에 진척 파악
@@ -167,14 +185,18 @@
           return '<span style="font-size:10px;font-weight:600;background:var(--bg-i);color:var(--t3);padding:0 5px;border-radius:9px;flex-shrink:0' + (ml ? ';margin-left:3px' : '') + '">@' + esc(m) + '</span>';
         };
         var members = (it.members || []).map(function (m) { return memberChip(m, false); }).join('');
-        // 상태 아이콘 — 진행중=빨간 원, 완료=녹색 체크. 글자 대신 도형으로, 작업 내용 제일 앞에 표시
+        // 상태 아이콘(도형) — 진행중=빨간 원, 완료=녹색 체크. 마진 없는 순수 도형(고정 슬롯에 담아 정렬)
         var statusIcon = function (st) {
-          if (st === 'done') return '<span style="flex-shrink:0;margin-right:5px;display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;background:#1a8a40;border-radius:50%"><svg width="8" height="6" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
-          if (st === 'in_progress') return '<span style="flex-shrink:0;margin-right:6px;margin-left:1px;display:inline-block;width:8px;height:8px;background:#d03030;border-radius:50%;box-shadow:0 0 0 2px rgba(208,48,48,.2)"></span>';
+          if (st === 'done') return '<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;background:#1a8a40;border-radius:50%"><svg width="8" height="6" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
+          if (st === 'in_progress') return '<span style="display:inline-block;width:8px;height:8px;background:#d03030;border-radius:50%;box-shadow:0 0 0 2px rgba(208,48,48,.2)"></span>';
           return '';
         };
+        // 상태/마커를 고정폭 슬롯에 담아 뒤 텍스트 시작 위치를 통일
+        var iconSlot = function (inner) {
+          return '<span style="flex-shrink:0;width:' + ICON_SLOT + 'px;display:inline-flex;align-items:center;justify-content:flex-start">' + inner + '</span>';
+        };
         var hasDetails = !!(it.details && it.details.length);
-        // 세부: 압축 한 줄(말줄임) — 각 세부 줄 제일 앞에 상태 아이콘(없으면 └ 마커)
+        // 세부: 압축 한 줄(말줄임) — 각 줄 앞에 고정폭 슬롯(상태 아이콘 또는 └) → 세부 텍스트 시작 위치 일괄 정렬
         var detailsHtml = '';
         if (hasDetails) {
           detailsHtml = it.details.map(function (d, di) {
@@ -182,9 +204,9 @@
               var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
               // 세부 자체 상태 우선, 없으면 첫 줄에 항목 상태를 반영
               var lineSt = (d.status && d.status !== 'none') ? d.status : (di === 0 ? it.status : 'none');
-              var lead = statusIcon(lineSt) || '<span style="color:var(--t6);margin-right:5px;flex-shrink:0">└</span>';
+              var inner = statusIcon(lineSt) || '<span style="color:var(--t6)">└</span>';
               return '<div style="display:flex;align-items:center;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 2px">'
-                + lead
+                + iconSlot(inner)
                 + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + inlineMarkup(dText) + '</span>'
                 + dMembers + '</div>';
             }).join('');
@@ -198,10 +220,13 @@
             + '</span>'
           : '';
         // 한 줄 메인: [사이트] 이름 … @담당자 · 기한 · 진행바% · D-day · 상태
+        // 한 줄짜리 항목: 사이트 배지 폭을 최대치로 통일 + 상태 아이콘 고정 슬롯 → 이름 시작 위치 정렬
+        var badgeStyle = 'background:' + cl.bg + ';color:' + cl.main + ';font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0';
+        if (!hasDetails && uniformSiteW) badgeStyle += ';box-sizing:border-box;width:' + uniformSiteW + 'px;text-align:left;white-space:nowrap;overflow:hidden';
         html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:3px 8px;margin-bottom:2px">'
           + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
-          +   '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0">' + esc(it.client || '') + '</span>'
-          +   (hasDetails ? '' : statusIcon(it.status))
+          +   '<span style="' + badgeStyle + '">' + esc(it.client || '') + '</span>'
+          +   (hasDetails ? '' : iconSlot(statusIcon(it.status)))
           +   '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
           +   members
           +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
