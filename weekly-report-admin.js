@@ -179,13 +179,6 @@
                 + dMembers + '</div>';
             }).join('');
         }
-        // 상태 배지 — 진행중=주황, 완료=초록 (급한 D-day의 빨강과 색으로 구분)
-        var statusBadge = '';
-        if (it.status === 'done') {
-          statusBadge = '<span style="font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:20px;white-space:nowrap;flex-shrink:0;color:#1a8a40;background:rgba(26,138,64,.15)">완료</span>';
-        } else if (it.status === 'in_progress') {
-          statusBadge = '<span style="font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:20px;white-space:nowrap;flex-shrink:0;color:#c8730a;background:rgba(200,115,10,.16)">진행중</span>';
-        }
         // 완료율: 세로 바(아래→위로 채움) + % 숫자. 구간별 히트색(빨강<30·주황<70·초록≥70)으로 대비 강화
         var heat = pct === null ? '' : (pct >= 70 ? '#1a8a40' : (pct >= 30 ? '#c8730a' : '#d21f1f'));
         var pctInline = pct !== null
@@ -203,7 +196,6 @@
           +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
           +   pctInline
           +   (it.deadline ? ddayBadge(it.deadline) : '')
-          +   statusBadge
           + '</div>'
           + detailsHtml
           + '</div>';
