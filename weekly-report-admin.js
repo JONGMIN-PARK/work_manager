@@ -182,6 +182,15 @@
       + '<span style="font-size:11.5px;font-weight:800;font-family:ui-monospace,monospace;color:' + heat + '">' + pct + '%</span>'
       + '</span>';
   }
+  // 우측 메타 3열(날짜·진행률·D-day) 고정폭 — 행 간 오와열 정렬. 하나라도 있으면 3열 모두 예약
+  var META_W = { date: 48, pct: 54, dday: 46 };
+  function metaCols(it, pct) {
+    if (!it.deadline && pct === null) return '';
+    var dateCell = '<span style="width:' + META_W.date + 'px;flex-shrink:0;text-align:right;font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace">' + (it.deadline ? esc(it.deadline) : '') + '</span>';
+    var pctCell = '<span style="width:' + META_W.pct + 'px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:flex-end">' + pctBadge(pct) + '</span>';
+    var ddayCell = '<span style="width:' + META_W.dday + 'px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:flex-end">' + (it.deadline ? ddayBadge(it.deadline) : '') + '</span>';
+    return '<span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0">' + dateCell + pctCell + ddayCell + '</span>';
+  }
   // 세부 한 줄: 앞에 고정폭 슬롯(상태 아이콘/└), 텍스트 말줄임. 첫 줄엔 항목 상태(무태그=예정) 반영
   function renderDetail(d, di, itemStatus) {
     var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
@@ -215,9 +224,7 @@
       +   '<span style="' + badgeStyle + ';cursor:default"' + (memberTip ? ' title="담당자: ' + esc(memberTip) + '"' : '') + '>' + esc(it.client || '') + '</span>'
       +   (hasDetails ? '' : iconSlot(statusIcon(it.status === 'none' ? 'planned' : it.status)))
       +   '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
-      +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
-      +   pctBadge(pct)
-      +   (it.deadline ? ddayBadge(it.deadline) : '')
+      +   metaCols(it, pct)
       + '</div>'
       + detailsHtml
       + '</div>';
