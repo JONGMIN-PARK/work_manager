@@ -185,6 +185,7 @@
           +   (it.deadline ? '<span style="font-size:10px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
           +   (pct !== null ? '<span style="font-size:11px;font-weight:700;color:' + cl.main + ';font-family:ui-monospace,monospace;flex-shrink:0">' + pct + '%</span>' : '')
           +   (it.deadline ? ddayBadge(it.deadline) : '')
+          +   (it.status && it.status !== 'none' ? '<span style="flex-shrink:0;display:inline-flex;margin-left:2px">' + statusPill(it.status) + '</span>' : '')
           + '</div>'
           + (pct !== null ? '<div style="height:3px;background:var(--bd);border-radius:2px;margin-top:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + cl.bar + '"></div></div>' : '')
           + detailsHtml
@@ -629,7 +630,9 @@
         var rest = im[2].trim();
         var dm = rest.match(/(~\d{2}\/\d{2})/);
         var pm = rest.match(/(\d+)%/) || rest.match(/#%(\d+)/);
-        var name = rest.replace(/@[^\s@]+/g, '').replace(/(~\d{2}\/\d{2})/g, '').replace(/\d+%/g, '').replace(/#%\d+/g, '').replace(/\s+/g, ' ').trim();
+        // 상태 태그(#완료/#진행중)는 이름에서 제거 — 상태는 줄 끝 배지로 항상 표시하고,
+        // 이름이 말줄임될 때 태그가 잘려 사라지는 것을 방지
+        var name = rest.replace(/@[^\s@]+/g, '').replace(/(~\d{2}\/\d{2})/g, '').replace(/\d+%/g, '').replace(/#%\d+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').replace(/\s+/g, ' ').trim();
         item = {
           section: cur.type,
           client: im[1].trim(),
