@@ -167,25 +167,26 @@
           return '<span style="font-size:10px;font-weight:600;background:var(--bg-i);color:var(--t3);padding:0 5px;border-radius:9px;flex-shrink:0' + (ml ? ';margin-left:3px' : '') + '">@' + esc(m) + '</span>';
         };
         var members = (it.members || []).map(function (m) { return memberChip(m, false); }).join('');
-        // 상태 배지 — 진행중=주황, 완료=초록. 타이틀 줄이 아니라 실제 작업 내용(세부) 줄에 표시
-        var statusBadge = '';
-        if (it.status === 'done') {
-          statusBadge = '<span style="font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:20px;white-space:nowrap;flex-shrink:0;margin-left:2px;color:#1a8a40;background:rgba(26,138,64,.15)">완료</span>';
-        } else if (it.status === 'in_progress') {
-          statusBadge = '<span style="font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:20px;white-space:nowrap;flex-shrink:0;margin-left:2px;color:#c8730a;background:rgba(200,115,10,.16)">진행중</span>';
-        }
+        // 상태 아이콘 — 진행중=빨간 원, 완료=녹색 체크. 글자 대신 도형으로, 작업 내용 제일 앞에 표시
+        var statusIcon = function (st) {
+          if (st === 'done') return '<span style="flex-shrink:0;margin-right:5px;display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;background:#1a8a40;border-radius:50%"><svg width="8" height="6" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
+          if (st === 'in_progress') return '<span style="flex-shrink:0;margin-right:6px;margin-left:1px;display:inline-block;width:8px;height:8px;background:#d03030;border-radius:50%;box-shadow:0 0 0 2px rgba(208,48,48,.2)"></span>';
+          return '';
+        };
         var hasDetails = !!(it.details && it.details.length);
-        // 세부: 압축 한 줄(말줄임) — 첫 세부 줄 끝에 상태 배지 부착
+        // 세부: 압축 한 줄(말줄임) — 각 세부 줄 제일 앞에 상태 아이콘(없으면 └ 마커)
         var detailsHtml = '';
         if (hasDetails) {
           detailsHtml = it.details.map(function (d, di) {
               var dMembers = (d.members || []).map(function (m) { return memberChip(m, true); }).join('');
-              var dText = String(d.text || '').replace(/@[^\s@]+/g, '').trim();
+              var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
+              // 세부 자체 상태 우선, 없으면 첫 줄에 항목 상태를 반영
+              var lineSt = (d.status && d.status !== 'none') ? d.status : (di === 0 ? it.status : 'none');
+              var lead = statusIcon(lineSt) || '<span style="color:var(--t6);margin-right:5px;flex-shrink:0">└</span>';
               return '<div style="display:flex;align-items:center;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 2px">'
-                + '<span style="color:var(--t6);margin-right:5px;flex-shrink:0">└</span>'
+                + lead
                 + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + inlineMarkup(dText) + '</span>'
-                + dMembers
-                + (di === 0 ? statusBadge : '') + '</div>';
+                + dMembers + '</div>';
             }).join('');
         }
         // 완료율: 세로 바(아래→위로 채움) + % 숫자. 구간별 히트색(빨강<30·주황<70·초록≥70)으로 대비 강화
@@ -200,12 +201,12 @@
         html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:3px 8px;margin-bottom:2px">'
           + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
           +   '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0">' + esc(it.client || '') + '</span>'
+          +   (hasDetails ? '' : statusIcon(it.status))
           +   '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
           +   members
           +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
           +   pctInline
           +   (it.deadline ? ddayBadge(it.deadline) : '')
-          +   (hasDetails ? '' : statusBadge)
           + '</div>'
           + detailsHtml
           + '</div>';
