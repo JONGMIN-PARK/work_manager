@@ -186,10 +186,10 @@
         } else if (it.status === 'in_progress') {
           statusBadge = '<span style="font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:20px;white-space:nowrap;flex-shrink:0;color:#c8730a;background:rgba(200,115,10,.16)">진행중</span>';
         }
-        // 완료율: 미니 진행바 + % 인라인
+        // 완료율: 폰트 높이만큼의 세로 바(아래→위로 채움) + % 숫자 — 가로 공간 절약
         var pctInline = pct !== null
           ? '<span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0">'
-            + '<span style="width:38px;height:5px;background:var(--bg-i);border-radius:3px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;width:' + pct + '%;background:' + cl.bar + '"></span></span>'
+            + '<span style="width:4px;height:14px;background:var(--bg-i);border-radius:2px;overflow:hidden;display:inline-flex;align-items:flex-end"><span style="display:block;width:100%;height:' + pct + '%;background:' + cl.main + '"></span></span>'
             + '<span style="font-size:11px;font-weight:700;font-family:ui-monospace,monospace;color:' + cl.main + '">' + pct + '%</span>'
             + '</span>'
           : '';
