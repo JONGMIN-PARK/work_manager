@@ -157,7 +157,7 @@
       sec.items.forEach(function (it) {
         var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
         var members = (it.members || []).map(function (m) {
-          return '<span style="display:inline-block;padding:0 5px;border-radius:3px;font-size:10px;background:var(--bg-i);color:var(--t5);margin:0 0 0 3px">@' + esc(m) + '</span>';
+          return '<span style="display:inline-block;padding:0 5px;border-radius:3px;font-size:10px;background:var(--bg-i);color:var(--t5);flex-shrink:0">@' + esc(m) + '</span>';
         }).join('');
         var detailsHtml = '';
         if (it.details && it.details.length) {
@@ -175,29 +175,17 @@
               }).join('')
             + '</ul>';
         }
-        // 납기/진행율이 있으면 메타를 별도 줄로 분리(타이틀 가독성 보호),
-        // 그 외(담당자만 있는 경우 등)는 기존대로 타이틀 줄에 같이 배치
-        var hasHeavy = !!it.deadline || pct !== null;
-        var titleInline = hasHeavy ? '' : members;
-        var titleStyle = hasHeavy
-          ? 'font-size:12px;color:var(--t2);flex:1;min-width:0;word-break:break-word'
-          : 'font-size:11px;color:var(--t3);font-weight:400;flex:1;min-width:0;word-break:break-word';
-        var metaHtml = '';
-        if (hasHeavy) {
-          metaHtml = '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:3px">'
-            + members
-            + (it.deadline ? '<span style="font-size:10px;color:var(--t5);font-family:ui-monospace,monospace">' + esc(it.deadline) + '</span>' : '')
-            + (pct !== null ? '<span style="font-size:11px;font-weight:700;color:' + cl.main + ';font-family:ui-monospace,monospace">' + pct + '%</span>' : '')
-            + (it.deadline ? ddayBadge(it.deadline) : '')
-            + '</div>';
-        }
+        // 프로젝트명·담당자·기한·완료율·D-day를 한 줄로 압축 배치.
+        // 이름이 길면 말줄임(…)으로 줄여 메타(담당자/기한/%/D-day)를 항상 같은 줄에 유지.
         html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:5px 9px;margin-bottom:3px">'
-          + '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">'
+          + '<div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;min-width:0">'
           +   '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:3px;flex-shrink:0">' + esc(it.client || '') + '</span>'
-          +   '<span style="' + titleStyle + '">' + inlineMarkup(it.name || '') + '</span>'
-          +   titleInline
+          +   '<span style="font-size:12px;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
+          +   members
+          +   (it.deadline ? '<span style="font-size:10px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
+          +   (pct !== null ? '<span style="font-size:11px;font-weight:700;color:' + cl.main + ';font-family:ui-monospace,monospace;flex-shrink:0">' + pct + '%</span>' : '')
+          +   (it.deadline ? ddayBadge(it.deadline) : '')
           + '</div>'
-          + metaHtml
           + (pct !== null ? '<div style="height:3px;background:var(--bd);border-radius:2px;margin-top:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + cl.bar + '"></div></div>' : '')
           + detailsHtml
           + '</div>';
