@@ -663,9 +663,11 @@
     if (!text) return { sections: [] };
     var sections = [], cur = null, item = null;
     var lines = text.split('\n');
+    // 서버(weekly-report-parser.js)와 동일 로직 유지 — parity 테스트로 강제
     function detectStatus(t) {
       if (/#완료/.test(t)) return 'done';
       if (/#진행중?/.test(t)) return 'in_progress';
+      if (/완료/.test(t)) return 'done'; // 태그 없는 '완료'도 완료로 (서버와 동일)
       return 'none';
     }
     function members(t) {

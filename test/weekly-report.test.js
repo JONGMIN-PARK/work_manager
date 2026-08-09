@@ -137,18 +137,25 @@ function clientItems(parsed) {
   return parsed.sections.reduce((acc, s) => acc.concat(s.items), []);
 }
 
-test('parity: 태그 기반 입력은 클라이언트/서버 파서 핵심필드 동일', () => {
-  const c = coreItems(clientItems(client.clientParseText(SAMPLE)));
-  const s = coreItems(server.parseText(SAMPLE).items);
-  assert.deepStrictEqual(plain(c), plain(s));
+// 여러 fixture로 클라이언트↔서버 파서 핵심필드 완전 일치 강제 (④ 통일 보장)
+const PARITY_FIXTURES = [
+  SAMPLE,
+  '[개발]\n- [A사] 프로젝트X ~09/16 70% @박 @김 #진행중\n  : 세부1 #완료\n  : 세부2\n- [B사] 완료건 @이\n[C/S]\n- [C사] 작업 완료 @최\n- [D사] 미완료 검토 30% @정\n[기타]\n- [E사] 예정건 @한',
+  '잡음줄\n[CS]\n- [Z] zz @q #진행중\n  : dd',
+];
+test('parity: 클라이언트/서버 파서 핵심필드 완전 일치', () => {
+  for (const f of PARITY_FIXTURES) {
+    const c = coreItems(clientItems(client.clientParseText(f)));
+    const s = coreItems(server.parseText(f).items);
+    assert.deepStrictEqual(plain(c), plain(s));
+  }
 });
 
-// 알려진 divergence: 서버는 태그 없는 "완료"도 done, 클라이언트는 none.
-// ④(파서 단일화)에서 통일되면 이 테스트를 동일성으로 바꿀 것.
-test('divergence(문서화): 태그 없는 "완료" 처리 차이', () => {
+// ④ 통일: 태그 없는 "완료"도 양쪽 모두 done
+test('통일: 태그 없는 "완료"도 클라이언트/서버 모두 done', () => {
   const input = '[개발]\n- [x] 작업 완료 @김';
   const c = clientItems(client.clientParseText(input))[0].status;
   const s = server.parseText(input).items[0].status;
-  assert.strictEqual(c, 'none');   // 클라이언트: #완료만 인식
-  assert.strictEqual(s, 'done');   // 서버: 바 "완료"도 done
+  assert.strictEqual(c, 'done');
+  assert.strictEqual(s, 'done');
 });
