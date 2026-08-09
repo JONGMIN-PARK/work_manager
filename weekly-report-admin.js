@@ -135,8 +135,9 @@
       + '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
       + '<title>' + esc(title) + '</title>\n'
       + '<style>\n'
+      + "@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendard-dynamic-subset.min.css');\n"
       + themeRootCss(v) + '\n'
-      + 'html,body{margin:0;padding:0;background:var(--bg);color:var(--t2);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}\n'
+      + 'html,body{margin:0;padding:0;background:var(--bg);color:var(--t2);font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR","Malgun Gothic",sans-serif;font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}\n'
       + 'body{padding:10px;box-sizing:border-box}\n'
       + 'code{font-family:ui-monospace,Consolas,monospace;background:var(--bg-i);padding:1px 5px;border-radius:3px;font-size:11.5px}\n'
       + 'strong{font-weight:700;color:var(--t2)}\n'
