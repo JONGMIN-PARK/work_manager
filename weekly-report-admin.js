@@ -183,10 +183,11 @@
         var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
         // 담당자는 라인에서 제거하고 사이트 배지 title(hover)로만 표시 — 공간 확보(2~3명 대응)
         var memberTip = (it.members || []).map(function (m) { return '@' + m; }).join(', ');
-        // 상태 아이콘(도형) — 진행중=빨간 원, 완료=녹색 체크. 마진 없는 순수 도형(고정 슬롯에 담아 정렬)
+        // 상태 아이콘(도형) — 예정=파랑 빈 원, 진행중=빨간 원, 완료=녹색 체크. 3색 신호. 마진 없는 순수 도형
         var statusIcon = function (st) {
           if (st === 'done') return '<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;background:#1a8a40;border-radius:50%"><svg width="8" height="6" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
           if (st === 'in_progress') return '<span style="display:inline-block;width:8px;height:8px;background:#d03030;border-radius:50%;box-shadow:0 0 0 2px rgba(208,48,48,.2)"></span>';
+          if (st === 'planned') return '<span style="display:inline-block;width:11px;height:11px;border:2px solid #4f74c9;border-radius:50%;box-sizing:border-box"></span>';
           return '';
         };
         // 상태/마커를 고정폭 슬롯에 담아 뒤 텍스트 시작 위치를 통일
@@ -199,8 +200,9 @@
         if (hasDetails) {
           detailsHtml = it.details.map(function (d, di) {
               var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
-              // 세부 자체 상태 우선, 없으면 첫 줄에 항목 상태를 반영
-              var lineSt = (d.status && d.status !== 'none') ? d.status : (di === 0 ? it.status : 'none');
+              // 세부 자체 상태 우선. 첫 줄엔 항목 상태(무태그=예정) 반영, 하위 불릿은 중립(└)
+              var own = (d.status && d.status !== 'none') ? d.status : null;
+              var lineSt = own || (di === 0 ? (it.status === 'none' ? 'planned' : it.status) : 'none');
               var inner = statusIcon(lineSt) || '<span style="color:var(--t6)">└</span>';
               return '<div style="display:flex;align-items:center;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 2px">'
                 + iconSlot(inner)
@@ -223,7 +225,7 @@
         html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:3px 8px;margin-bottom:2px">'
           + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
           +   '<span style="' + badgeStyle + ';cursor:default"' + (memberTip ? ' title="담당자: ' + esc(memberTip) + '"' : '') + '>' + esc(it.client || '') + '</span>'
-          +   (hasDetails ? '' : iconSlot(statusIcon(it.status)))
+          +   (hasDetails ? '' : iconSlot(statusIcon(it.status === 'none' ? 'planned' : it.status)))
           +   '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
           +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
           +   pctInline
