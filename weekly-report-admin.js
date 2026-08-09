@@ -164,7 +164,7 @@
       });
     });
     var uniformSiteW = maxSiteW ? Math.ceil(maxSiteW) + 14 : 0; // 좌우 패딩 12 + 여유 2 (전 섹션 통일)
-    var ICON_SLOT = 18; // 상태 아이콘 고정 슬롯 → 이름/세부 시작 위치 정렬
+    var ICON_SLOT = 12; // 상태 아이콘(12px) 고정 슬롯 → 이름/세부 시작 위치 정렬(간격은 flex gap로)
     parsedPane.sections.forEach(function (sec) {
       var cl = SEC_COLORS[sec.type] || SEC_COLORS.dev;
       // 섹션 요약(완료 n/전체 · 평균 진행률) — 한눈에 진척 파악
@@ -183,11 +183,12 @@
         var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
         // 담당자는 라인에서 제거하고 사이트 배지 title(hover)로만 표시 — 공간 확보(2~3명 대응)
         var memberTip = (it.members || []).map(function (m) { return '@' + m; }).join(', ');
-        // 상태 아이콘(도형) — 예정=파랑 빈 원, 진행중=빨간 원, 완료=녹색 체크. 3색 신호. 마진 없는 순수 도형
+        // 상태 아이콘(도형) — 예정=파랑 빈 원, 진행중=빨간 원, 완료=녹색 체크. 3종 모두 12px 원으로 크기·위치 통일
+        var ICON_BASE = 'display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;box-sizing:border-box';
         var statusIcon = function (st) {
-          if (st === 'done') return '<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;background:#1a8a40;border-radius:50%"><svg width="8" height="6" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
-          if (st === 'in_progress') return '<span style="display:inline-block;width:8px;height:8px;background:#d03030;border-radius:50%;box-shadow:0 0 0 2px rgba(208,48,48,.2)"></span>';
-          if (st === 'planned') return '<span style="display:inline-block;width:11px;height:11px;border:2px solid #4f74c9;border-radius:50%;box-sizing:border-box"></span>';
+          if (st === 'done') return '<span style="' + ICON_BASE + ';background:#1a8a40"><svg width="7" height="5.5" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
+          if (st === 'in_progress') return '<span style="' + ICON_BASE + ';background:#d03030"></span>';
+          if (st === 'planned') return '<span style="' + ICON_BASE + ';border:2px solid #4f74c9"></span>';
           return '';
         };
         // 상태/마커를 고정폭 슬롯에 담아 뒤 텍스트 시작 위치를 통일
@@ -204,7 +205,7 @@
               var own = (d.status && d.status !== 'none') ? d.status : null;
               var lineSt = own || (di === 0 ? (it.status === 'none' ? 'planned' : it.status) : 'none');
               var inner = statusIcon(lineSt) || '<span style="color:var(--t6)">└</span>';
-              return '<div style="display:flex;align-items:center;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 2px">'
+              return '<div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 2px">'
                 + iconSlot(inner)
                 + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + inlineMarkup(dText) + '</span>'
                 + '</div>';
