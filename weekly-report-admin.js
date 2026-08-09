@@ -174,7 +174,7 @@
                 var dMembers = (d.members || []).map(function (m) { return memberChip(m, true); }).join('');
                 // 텍스트에서 @멤버 제거 후 인라인 마크업
                 var dText = String(d.text || '').replace(/@[^\s@]+/g, '').trim();
-                return '<li style="display:flex;align-items:flex-start;font-size:11px;color:var(--t3);padding:1px 0;line-height:1.5">'
+                return '<li style="display:flex;align-items:flex-start;font-size:13px;color:var(--t3);padding:1px 0;line-height:1.45">'
                   + '<span style="color:var(--t6);margin:0 5px 0 2px">–</span>'
                   + '<span style="flex:1;min-width:0">' + inlineMarkup(dText) + '</span>'
                   + dMembers + '</li>';
@@ -203,7 +203,7 @@
           + '<div style="min-width:0">'
           +   '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
           +     '<span style="background:' + cl.bg + ';color:' + cl.main + ';font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0">' + esc(it.client || '') + '</span>'
-          +     '<span style="font-size:13px;font-weight:700;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
+          +     '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
           +   '</div>'
           +   (members || it.deadline ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">' + members + (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace">' + esc(it.deadline) + '</span>' : '') + '</div>' : '')
           +   detailsHtml
