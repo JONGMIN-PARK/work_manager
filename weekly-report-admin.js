@@ -173,7 +173,7 @@
           detailsHtml = it.details.map(function (d) {
               var dMembers = (d.members || []).map(function (m) { return memberChip(m, true); }).join('');
               var dText = String(d.text || '').replace(/@[^\s@]+/g, '').trim();
-              return '<div style="display:flex;align-items:center;font-size:11.5px;color:var(--t5);line-height:1.4;padding:0 0 0 2px">'
+              return '<div style="display:flex;align-items:center;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 2px">'
                 + '<span style="color:var(--t6);margin-right:5px;flex-shrink:0">└</span>'
                 + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + inlineMarkup(dText) + '</span>'
                 + dMembers + '</div>';
