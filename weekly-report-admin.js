@@ -167,17 +167,10 @@
     var ICON_SLOT = 12; // 상태 아이콘(12px) 고정 슬롯 → 이름/세부 시작 위치 정렬(간격은 flex gap로)
     parsedPane.sections.forEach(function (sec) {
       var cl = SEC_COLORS[sec.type] || SEC_COLORS.dev;
-      // 섹션 요약(완료 n/전체 · 평균 진행률) — 한눈에 진척 파악
-      var itemsArr = sec.items || [];
-      var doneCnt = itemsArr.filter(function (x) { return x.status === 'done'; }).length;
-      var pctList = itemsArr.filter(function (x) { return typeof x.pct === 'number' && x.pct >= 0; });
-      var avgPct = pctList.length ? Math.round(pctList.reduce(function (a, x) { return a + x.pct; }, 0) / pctList.length) : null;
-      var summary = doneCnt + '/' + itemsArr.length + ' 완료' + (avgPct !== null ? ' · 평균 ' + avgPct + '%' : '');
       html += '<div style="margin-bottom:9px">'
         +   '<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">'
         +     '<span style="background:' + cl.num + ';color:#fff;font-weight:800;font-size:10px;padding:2px 6px;border-radius:4px;font-family:ui-monospace,monospace">' + (SEC_NUM[sec.type] || '') + '</span>'
         +     '<span style="font-size:13px;font-weight:800;color:var(--t2)">' + esc(SEC_LABELS[sec.type] || sec.type) + '</span>'
-        +     '<span style="margin-left:auto;font-size:10.5px;color:var(--t5);font-weight:600">' + esc(summary) + '</span>'
         +   '</div>';
       sec.items.forEach(function (it) {
         var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
