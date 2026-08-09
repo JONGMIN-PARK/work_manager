@@ -158,96 +158,98 @@
     return html;
   }
 
+  // ── 미리보기 렌더 헬퍼 (buildPreviewHTML 구성요소) ──
+  var ICON_SLOT = 12; // 상태 아이콘 고정 슬롯(px) — 이름/세부 시작 위치 정렬
+
+  // 상태 아이콘(도형): 예정=파랑 빈 원, 진행중=빨간 원, 완료=녹색 체크. 3종 동일 크기 원
+  function statusIcon(st) {
+    var base = 'display:inline-flex;align-items:center;justify-content:center;width:' + ICON_PX + 'px;height:' + ICON_PX + 'px;border-radius:50%;box-sizing:border-box';
+    if (st === 'done') return '<span style="' + base + ';background:' + STATUS_COLORS.done + '"><svg width="7" height="5.5" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
+    if (st === 'in_progress') return '<span style="' + base + ';background:' + STATUS_COLORS.in_progress + '"></span>';
+    if (st === 'planned') return '<span style="' + base + ';border:2px solid ' + STATUS_COLORS.planned + '"></span>';
+    return '';
+  }
+  // 상태/마커를 고정폭 슬롯에 담아 뒤 텍스트 시작 위치를 통일
+  function iconSlot(inner) {
+    return '<span style="flex-shrink:0;width:' + ICON_SLOT + 'px;display:inline-flex;align-items:center;justify-content:flex-start">' + inner + '</span>';
+  }
+  // 완료율: 세로 바(아래→위로 채움) + % 숫자. 구간별 히트색으로 대비 강화
+  function pctBadge(pct) {
+    if (pct === null) return '';
+    var heat = heatColor(pct);
+    return '<span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0">'
+      + '<span style="width:5px;height:15px;background:var(--bd);border-radius:2px;overflow:hidden;display:inline-flex;align-items:flex-end"><span style="display:block;width:100%;height:' + pct + '%;background:' + heat + '"></span></span>'
+      + '<span style="font-size:11.5px;font-weight:800;font-family:ui-monospace,monospace;color:' + heat + '">' + pct + '%</span>'
+      + '</span>';
+  }
+  // 세부 한 줄: 앞에 고정폭 슬롯(상태 아이콘/└), 텍스트 말줄임. 첫 줄엔 항목 상태(무태그=예정) 반영
+  function renderDetail(d, di, itemStatus) {
+    var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
+    var own = (d.status && d.status !== 'none') ? d.status : null;
+    var lineSt = own || (di === 0 ? (itemStatus === 'none' ? 'planned' : itemStatus) : 'none');
+    var inner = statusIcon(lineSt) || '<span style="color:var(--t6)">└</span>';
+    return '<div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 2px">'
+      + iconSlot(inner)
+      + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + inlineMarkup(dText) + '</span>'
+      + '</div>';
+  }
+  // 섹션 헤더: 번호 배지 + 라벨
+  function renderSectionHeader(sec) {
+    var cl = secOf(sec.type);
+    return '<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">'
+      + '<span style="background:' + cl.main + ';color:#fff;font-weight:800;font-size:10px;padding:2px 6px;border-radius:4px;font-family:ui-monospace,monospace">' + cl.num + '</span>'
+      + '<span style="font-size:13px;font-weight:800;color:var(--t2)">' + esc(secLabel(sec.type)) + '</span>'
+      + '</div>';
+  }
+  // 항목 한 줄: [사이트] 이름 … 기한 · 진행바% · D-day (+ 세부). 담당자는 배지 hover 툴팁
+  function renderItemRow(it, cl, uniformSiteW) {
+    var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
+    var memberTip = (it.members || []).map(function (m) { return '@' + m; }).join(', ');
+    var hasDetails = !!(it.details && it.details.length);
+    var detailsHtml = hasDetails ? it.details.map(function (d, di) { return renderDetail(d, di, it.status); }).join('') : '';
+    // 사이트 배지 폭을 전 섹션 최대치로 통일 → 모든 항목 이름 시작 위치 정렬(시인성)
+    var badgeStyle = 'background:' + cl.bg + ';color:' + cl.main + ';font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0';
+    if (uniformSiteW) badgeStyle += ';box-sizing:border-box;width:' + uniformSiteW + 'px;text-align:left;white-space:nowrap;overflow:hidden';
+    return '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:3px 8px;margin-bottom:2px">'
+      + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
+      +   '<span style="' + badgeStyle + ';cursor:default"' + (memberTip ? ' title="담당자: ' + esc(memberTip) + '"' : '') + '>' + esc(it.client || '') + '</span>'
+      +   (hasDetails ? '' : iconSlot(statusIcon(it.status === 'none' ? 'planned' : it.status)))
+      +   '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
+      +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
+      +   pctBadge(pct)
+      +   (it.deadline ? ddayBadge(it.deadline) : '')
+      + '</div>'
+      + detailsHtml
+      + '</div>';
+  }
+  // 사이트명 표시 폭 근사(한글/전각 ≈ 10px, 그 외 ≈ 6.2px) — 배지 폭 통일용
+  function siteWidth(s) {
+    var w = 0; s = String(s || '');
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      w += ((c >= 0x1100 && c <= 0x11FF) || (c >= 0x2E80 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFF00 && c <= 0xFFEF)) ? 10 : 6.2;
+    }
+    return w;
+  }
+
   // 파싱된 sections/items 배열을 보기용 HTML로 빌드
   function buildPreviewHTML(parsedPane) {
     if (!parsedPane || !parsedPane.sections || !parsedPane.sections.length) {
       return '<div style="padding:24px;text-align:center;color:var(--t5)">내용 없음</div>';
     }
-    var html = '';
-    // 한 줄짜리(세부 없는) 항목들의 사이트명 최대 폭 → 배지 폭·이름 시작 위치 통일
-    function siteWidth(s) {
-      var w = 0; s = String(s || '');
-      for (var i = 0; i < s.length; i++) {
-        var c = s.charCodeAt(i);
-        // 한글/전각 ≈ 10px, 그 외 ≈ 6.2px (배지 폰트 10px/800 기준 근사)
-        w += ((c >= 0x1100 && c <= 0x11FF) || (c >= 0x2E80 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFF00 && c <= 0xFFEF)) ? 10 : 6.2;
-      }
-      return w;
-    }
+    // 전 섹션에서 사이트명 최대 폭 → 배지 폭 통일(이름 시작 위치 정렬)
     var maxSiteW = 0;
     parsedPane.sections.forEach(function (sec) {
-      (sec.items || []).forEach(function (it) {
-        maxSiteW = Math.max(maxSiteW, siteWidth(it.client));
-      });
+      (sec.items || []).forEach(function (it) { maxSiteW = Math.max(maxSiteW, siteWidth(it.client)); });
     });
-    var uniformSiteW = maxSiteW ? Math.ceil(maxSiteW) + 14 : 0; // 좌우 패딩 12 + 여유 2 (전 섹션 통일)
-    var ICON_SLOT = 12; // 상태 아이콘(12px) 고정 슬롯 → 이름/세부 시작 위치 정렬(간격은 flex gap로)
-    parsedPane.sections.forEach(function (sec) {
+    var uniformSiteW = maxSiteW ? Math.ceil(maxSiteW) + 14 : 0; // 좌우 패딩 12 + 여유 2
+    return parsedPane.sections.map(function (sec) {
       var cl = secOf(sec.type);
-      html += '<div style="margin-bottom:9px">'
-        +   '<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">'
-        +     '<span style="background:' + cl.main + ';color:#fff;font-weight:800;font-size:10px;padding:2px 6px;border-radius:4px;font-family:ui-monospace,monospace">' + cl.num + '</span>'
-        +     '<span style="font-size:13px;font-weight:800;color:var(--t2)">' + esc(secLabel(sec.type)) + '</span>'
-        +   '</div>';
-      sec.items.forEach(function (it) {
-        var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
-        // 담당자는 라인에서 제거하고 사이트 배지 title(hover)로만 표시 — 공간 확보(2~3명 대응)
-        var memberTip = (it.members || []).map(function (m) { return '@' + m; }).join(', ');
-        // 상태 아이콘(도형) — 예정=파랑 빈 원, 진행중=빨간 원, 완료=녹색 체크. 3종 모두 동일 크기 원으로 통일
-        var ICON_BASE = 'display:inline-flex;align-items:center;justify-content:center;width:' + ICON_PX + 'px;height:' + ICON_PX + 'px;border-radius:50%;box-sizing:border-box';
-        var statusIcon = function (st) {
-          if (st === 'done') return '<span style="' + ICON_BASE + ';background:' + STATUS_COLORS.done + '"><svg width="7" height="5.5" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
-          if (st === 'in_progress') return '<span style="' + ICON_BASE + ';background:' + STATUS_COLORS.in_progress + '"></span>';
-          if (st === 'planned') return '<span style="' + ICON_BASE + ';border:2px solid ' + STATUS_COLORS.planned + '"></span>';
-          return '';
-        };
-        // 상태/마커를 고정폭 슬롯에 담아 뒤 텍스트 시작 위치를 통일
-        var iconSlot = function (inner) {
-          return '<span style="flex-shrink:0;width:' + ICON_SLOT + 'px;display:inline-flex;align-items:center;justify-content:flex-start">' + inner + '</span>';
-        };
-        var hasDetails = !!(it.details && it.details.length);
-        // 세부: 압축 한 줄(말줄임) — 각 줄 앞에 고정폭 슬롯(상태 아이콘 또는 └) → 세부 텍스트 시작 위치 일괄 정렬
-        var detailsHtml = '';
-        if (hasDetails) {
-          detailsHtml = it.details.map(function (d, di) {
-              var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
-              // 세부 자체 상태 우선. 첫 줄엔 항목 상태(무태그=예정) 반영, 하위 불릿은 중립(└)
-              var own = (d.status && d.status !== 'none') ? d.status : null;
-              var lineSt = own || (di === 0 ? (it.status === 'none' ? 'planned' : it.status) : 'none');
-              var inner = statusIcon(lineSt) || '<span style="color:var(--t6)">└</span>';
-              return '<div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 2px">'
-                + iconSlot(inner)
-                + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + inlineMarkup(dText) + '</span>'
-                + '</div>';
-            }).join('');
-        }
-        // 완료율: 세로 바(아래→위로 채움) + % 숫자. 구간별 히트색(빨강<30·주황<70·초록≥70)으로 대비 강화
-        var heat = pct === null ? '' : heatColor(pct);
-        var pctInline = pct !== null
-          ? '<span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0">'
-            + '<span style="width:5px;height:15px;background:var(--bd);border-radius:2px;overflow:hidden;display:inline-flex;align-items:flex-end"><span style="display:block;width:100%;height:' + pct + '%;background:' + heat + '"></span></span>'
-            + '<span style="font-size:11.5px;font-weight:800;font-family:ui-monospace,monospace;color:' + heat + '">' + pct + '%</span>'
-            + '</span>'
-          : '';
-        // 한 줄 메인: [사이트] 이름 … @담당자 · 기한 · 진행바% · D-day · 상태
-        // 사이트 배지 폭을 전 섹션 최대치로 통일 → 모든 항목 이름 시작 위치 정렬(시인성)
-        var badgeStyle = 'background:' + cl.bg + ';color:' + cl.main + ';font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0';
-        if (uniformSiteW) badgeStyle += ';box-sizing:border-box;width:' + uniformSiteW + 'px;text-align:left;white-space:nowrap;overflow:hidden';
-        html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:3px 8px;margin-bottom:2px">'
-          + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
-          +   '<span style="' + badgeStyle + ';cursor:default"' + (memberTip ? ' title="담당자: ' + esc(memberTip) + '"' : '') + '>' + esc(it.client || '') + '</span>'
-          +   (hasDetails ? '' : iconSlot(statusIcon(it.status === 'none' ? 'planned' : it.status)))
-          +   '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
-          +   (it.deadline ? '<span style="font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;flex-shrink:0">' + esc(it.deadline) + '</span>' : '')
-          +   pctInline
-          +   (it.deadline ? ddayBadge(it.deadline) : '')
-          + '</div>'
-          + detailsHtml
-          + '</div>';
-      });
-      html += '</div>';
-    });
-    return html;
+      return '<div style="margin-bottom:9px">'
+        + renderSectionHeader(sec)
+        + (sec.items || []).map(function (it) { return renderItemRow(it, cl, uniformSiteW); }).join('')
+        + '</div>';
+    }).join('');
   }
 
   function shell() {
