@@ -157,13 +157,13 @@
       }
       return w;
     }
-    var oneLineSiteW = 0;
+    var maxSiteW = 0;
     parsedPane.sections.forEach(function (sec) {
       (sec.items || []).forEach(function (it) {
-        if (!(it.details && it.details.length)) oneLineSiteW = Math.max(oneLineSiteW, siteWidth(it.client));
+        maxSiteW = Math.max(maxSiteW, siteWidth(it.client));
       });
     });
-    var uniformSiteW = oneLineSiteW ? Math.ceil(oneLineSiteW) + 14 : 0; // 좌우 패딩 12 + 여유 2
+    var uniformSiteW = maxSiteW ? Math.ceil(maxSiteW) + 14 : 0; // 좌우 패딩 12 + 여유 2 (전 섹션 통일)
     var ICON_SLOT = 18; // 상태 아이콘 고정 슬롯 → 이름/세부 시작 위치 정렬
     parsedPane.sections.forEach(function (sec) {
       var cl = SEC_COLORS[sec.type] || SEC_COLORS.dev;
@@ -220,9 +220,9 @@
             + '</span>'
           : '';
         // 한 줄 메인: [사이트] 이름 … @담당자 · 기한 · 진행바% · D-day · 상태
-        // 한 줄짜리 항목: 사이트 배지 폭을 최대치로 통일 + 상태 아이콘 고정 슬롯 → 이름 시작 위치 정렬
+        // 사이트 배지 폭을 전 섹션 최대치로 통일 → 모든 항목 이름 시작 위치 정렬(시인성)
         var badgeStyle = 'background:' + cl.bg + ';color:' + cl.main + ';font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0';
-        if (!hasDetails && uniformSiteW) badgeStyle += ';box-sizing:border-box;width:' + uniformSiteW + 'px;text-align:left;white-space:nowrap;overflow:hidden';
+        if (uniformSiteW) badgeStyle += ';box-sizing:border-box;width:' + uniformSiteW + 'px;text-align:left;white-space:nowrap;overflow:hidden';
         html += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:3px 8px;margin-bottom:2px">'
           + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
           +   '<span style="' + badgeStyle + '">' + esc(it.client || '') + '</span>'
