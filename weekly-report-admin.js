@@ -17,6 +17,16 @@
   function secOf(t) { return SECTIONS[t] || SECTIONS.dev; }
   function secLabel(t) { return (SECTIONS[t] || {}).label || t; }
 
+  // ── 줄머리 기본 도형 (서버 weekly-report-parser.js와 동일 유지 — parity 테스트로 강제) ──
+  // 항목 줄: (도형 생략 가능) [사이트] 업무명 …
+  var ITEM_LINE_RE = /^(?:[-–—*+·•∙◦○●◯□■▪▫▶►◆◇>＞]\s*)?\[([^\]]+)\]\s*(.*)$/;
+  // 세부 줄: ':' '-.' 또는 각종 기본 도형·하위 도형(└ ↳ → 등)
+  var DETAIL_LINE_RE = /^(?::|[-–—]\.|[-–—*+·•∙◦○●◯□■▪▫▶►◆◇>＞]|[└┗┕ㄴ↳➔→⇒])\s*(.*)$/;
+  // 하위 세부 줄: └ ↳ → 로 시작하거나 4칸(탭 2회) 이상 들여쓴 줄
+  function isSubLine(raw, line) {
+    return /^[└┗┕ㄴ↳➔→⇒]/.test(line) || /^(?: {4,}|\t{2,})/.test(raw);
+  }
+
   // ── 상태/진행률 상수 (색·크기·임계값 단일 소스) ──
   var STATUS_COLORS = { planned: '#4f74c9', in_progress: '#d03030', done: '#1a8a40' };
   var ICON_PX = 12; // 상태 아이콘 지름(px)
@@ -192,13 +202,15 @@
     var ddayCell = '<span style="width:' + META_W.dday + 'px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:flex-end">' + (it.deadline ? ddayBadge(it.deadline) : '') + '</span>';
     return '<span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0">' + dateCell + pctCell + ddayCell + '</span>';
   }
-  // 세부 한 줄: 앞에 고정폭 슬롯(상태 아이콘/└), 텍스트 말줄임. 첫 줄엔 항목 상태(무태그=예정) 반영
+  // 세부 한 줄: 앞에 고정폭 슬롯(상태 아이콘/└), 텍스트 말줄임.
+  // 기본 도형(무태그=항목 상태, 없으면 예정)은 첫 줄뿐 아니라 모든 세부 줄에 적용.
+  // 하위 줄(└ ↳ → 또는 4칸 이상 들여쓰기)만 계층 마커 └ 로 표시 — 자체 태그가 있으면 그 도형 우선.
   function renderDetail(d, di, itemStatus) {
     var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
     var own = (d.status && d.status !== 'none') ? d.status : null;
-    var lineSt = own || (di === 0 ? (itemStatus === 'none' ? 'planned' : itemStatus) : 'none');
+    var lineSt = own || (d.sub ? 'none' : (itemStatus === 'none' ? 'planned' : itemStatus));
     var inner = statusIcon(lineSt) || '<span style="color:var(--t6)">└</span>';
-    return '<div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 2px">'
+    return '<div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 ' + (d.sub ? '14' : '2') + 'px">'
       + iconSlot(inner)
       + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + inlineMarkup(dText) + '</span>'
       + '</div>';
@@ -691,7 +703,9 @@
         if (k) { cur = { type: SEC_MAP[k], label: sm[1], items: [] }; sections.push(cur); item = null; continue; }
       }
       if (!cur) continue;
-      var im = line.match(/^-\s+\[([^\]]+)\]\s*(.*)/);
+      // 알 수 없는 [xxx] 단독 줄(섹션 오타 등)은 항목으로 오인하지 않고 건너뜀
+      if (sm) continue;
+      var im = line.match(ITEM_LINE_RE);
       if (im) {
         var rest = im[2].trim();
         var dm = rest.match(/(~\d{2}\/\d{2})/);
@@ -712,13 +726,13 @@
         cur.items.push(item);
         continue;
       }
-      if (item && !/^-\s*\[/.test(line)) {
-        var c = line.match(/^:\s*(.+)/);
-        var d = line.match(/^[-–]\.\s*(.+)/);
-        var dt = c ? c[1].trim() : (d ? d[1].trim() : null);
+      if (item) {
+        // 세부 줄: 도형(:, -., -, ·, •, ○, └ …) 또는 들여쓴 맨텍스트 모두 허용
+        var dmk = line.match(DETAIL_LINE_RE);
+        var dt = dmk ? dmk[1].trim() : (/^\s/.test(raw) ? line : null);
         if (dt) {
           var dMembers = members(dt);
-          item.details.push({ text: dt, members: dMembers, status: detectStatus(dt) });
+          item.details.push({ text: dt, members: dMembers, status: detectStatus(dt), sub: isSubLine(raw, line) });
           dMembers.forEach(function (m) { if (item.members.indexOf(m) < 0) item.members.push(m); });
         }
       }

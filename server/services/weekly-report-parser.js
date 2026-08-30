@@ -3,6 +3,24 @@
 
 var SECTION_MAP = { '개발': 'dev', '셋업': 'setup', 'C/S': 'cs', 'CS': 'cs', '기타': 'etc' };
 
+// 줄머리 기본 도형 — weekly-report-admin.js(클라 프리뷰)와 동일 유지 (parity 테스트로 강제)
+var ITEM_LINE_RE = /^(?:[-–—*+·•∙◦○●◯□■▪▫▶►◆◇>＞]\s*)?\[([^\]]+)\]\s*(.*)$/;
+var DETAIL_LINE_RE = /^(?::|[-–—]\.|[-–—*+·•∙◦○●◯□■▪▫▶►◆◇>＞]|[└┗┕ㄴ↳➔→⇒])\s*(.*)$/;
+
+// 하위 세부 줄: └ ↳ → 로 시작하거나 4칸(탭 2회) 이상 들여쓴 줄
+function isSubLine(raw, line) {
+  return /^[└┗┕ㄴ↳➔→⇒]/.test(line) || /^(?: {4,}|\t{2,})/.test(raw);
+}
+
+// 줄머리 기본 도형 — weekly-report-admin.js(클라 프리뷰)와 반드시 동일하게 유지
+var ITEM_LINE_RE = /^(?:[-–—*+·•∙◦○●◯□■▪▫▶►◆◇>＞]\s*)?\[([^\]]+)\]\s*(.*)$/;
+var DETAIL_LINE_RE = /^(?::|[-–—]\.|[-–—*+·•∙◦○●◯□■▪▫▶►◆◇>＞]|[└┗┕ㄴ↳➔→⇒])\s*(.*)$/;
+
+// 하위 세부 줄: └ ↳ → 로 시작하거나 4칸(탭 2회) 이상 들여쓴 줄
+function isSubLine(raw, line) {
+  return /^[└┗┕ㄴ↳➔→⇒]/.test(line) || /^(?: {4,}|\t{2,})/.test(raw);
+}
+
 function extractMembers(text) {
   var tags = text.match(/@([^\s@]+)/g) || [];
   return tags.map(function (t) { return t.slice(1); });
@@ -39,8 +57,10 @@ function parseText(text) {
       }
     }
     if (!cur) continue;
+    // 알 수 없는 [xxx] 단독 줄(섹션 오타 등)은 항목으로 오인하지 않고 건너뜀
+    if (sm) continue;
 
-    var im = line.match(/^-\s+\[([^\]]+)\]\s*(.*)/);
+    var im = line.match(ITEM_LINE_RE);
     if (im) {
       var rest = im[2].trim();
       var dm = rest.match(/(~\d{2}\/\d{2})/);
@@ -70,16 +90,17 @@ function parseText(text) {
       continue;
     }
 
-    if (item && !/^-\s*\[/.test(line)) {
-      var c = line.match(/^:\s*(.+)/);
-      var d = line.match(/^[-–]\.\s*(.+)/);
-      var detailText = c ? c[1].trim() : (d ? d[1].trim() : null);
+    if (item) {
+      // 세부 줄: 도형(:, -., -, ·, •, ○, └ …) 또는 들여쓴 맨텍스트 모두 허용
+      var dmk = line.match(DETAIL_LINE_RE);
+      var detailText = dmk ? dmk[1].trim() : (/^\s/.test(raw) ? line : null);
       if (detailText) {
         var detMembers = extractMembers(detailText);
         item.details.push({
           text: detailText,
           members: detMembers,
           status: detectStatus(detailText),
+          sub: isSubLine(raw, line),
         });
         if (detMembers.length) {
           for (var k = 0; k < detMembers.length; k++) {
