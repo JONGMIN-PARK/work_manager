@@ -761,7 +761,40 @@ function deleteProjectCascade(id) {
 }
 
 /* ─── 수주 대장 ─── */
-function orderGetAll() { return apiFetch('/api/orders').then(function (r) { return toCamelArray(r.data); }); }
+
+/* 엑셀 날짜 셀 정규화 → 'YYYY-MM-DD'
+   XLSX 를 raw 로 읽으면 셀 서식에 따라 값이 제각각이다:
+     - 날짜 서식 셀 : 45815 (엑셀 시리얼)
+     - 텍스트 셀    : '2026-03-03 00:00:00', '2026.3.3', '2026/3/3'
+   orders.date / delivery 는 VARCHAR(10) 이라 10자를 넘기면 INSERT 가 22001 로 실패하고
+   그 배치 전체가 롤백된다 → 서버로 보내기 전에 여기서 맞춘다.
+   서버(server/routes/orders.js normDate)에도 같은 규칙이 있다 — 양쪽 모두 방어. */
+function wmNormOrderDate(v) {
+  if (v === null || v === undefined) return '';
+  var s = String(v).trim();
+  if (!s) return '';
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    var serial = parseFloat(s);
+    // 20000 = 1954-10-03, 80000 = 2119-01-24 — 밖의 숫자는 날짜로 보지 않는다
+    if (serial >= 20000 && serial <= 80000) {
+      var d = new Date(Math.round((serial - 25569) * 86400 * 1000));
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+    return '';
+  }
+  var m = /^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/.exec(s);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  return s.length > 10 ? '' : s;
+}
+
+function wmNormOrderAmount(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  var n = Number(String(v).replace(/[^0-9.\-]/g, ''));
+  return isFinite(n) ? n : 0;
+}
+
+// 기본 limit 은 100 이라 수주가 100건을 넘으면 최신 100건만 내려온다 → 대장 전체를 받는다.
+function orderGetAll() { return apiFetch('/api/orders?all=true&limit=2000').then(function (r) { return toCamelArray(r.data); }); }
 function orderGet(orderNo) { return apiFetch('/api/orders/' + encodeURIComponent(orderNo)).then(function (r) { return toCamel(r.data); }); }
 function orderPut(order) {
   return apiFetch('/api/orders', { method: 'POST', body: JSON.stringify(order) })
@@ -798,24 +831,85 @@ function deleteOrder(orderNo) {
   return orderDel(orderNo);
 }
 
-/* 엑셀 → orders 일괄 동기화 (서버 bulk API) */
+/* 엑셀 → orders 일괄 동기화 (서버 bulk API)
+   v13.182 — "같은 수주번호인데 수주일·거래처·프로젝트명이 안 바뀐다" 수정:
+     · 날짜/금액을 보내기 전에 정규화 (VARCHAR(10) 초과로 배치 전체가 죽던 문제)
+     · 200건씩 끊어 전송 (한 번에 다 보내면 한 행의 오류가 전부를 되돌린다)
+     · 실제 반영 건수를 집계해 반환 — 호출부가 성공/실패를 구분할 수 있게 한다 */
+var ORDER_BULK_CHUNK = 200;
 function syncOrderMapToDB() {
-  if (typeof ORDER_MAP === 'undefined') return Promise.resolve();
+  var empty = { count: 0, inserted: 0, updated: 0, skipped: 0, duplicates: [], total: 0 };
+  if (typeof ORDER_MAP === 'undefined') return Promise.resolve(empty);
   var keys = Object.keys(ORDER_MAP);
-  if (keys.length === 0) return Promise.resolve();
+  if (keys.length === 0) return Promise.resolve(empty);
   var records = keys.map(function (k) {
     var v = ORDER_MAP[k];
+    var isObj = (typeof v === 'object' && v !== null);
     return {
-      orderNo: k,
-      date: (typeof v === 'object' ? v.date : '') || '',
-      client: (typeof v === 'object' ? v.client : '') || '',
-      name: (typeof v === 'object' ? v.name : v) || '',
-      amount: (typeof v === 'object' ? Number(v.amount) || 0 : 0),
-      manager: (typeof v === 'object' ? v.manager : '') || '',
-      delivery: (typeof v === 'object' ? v.delivery : '') || ''
+      orderNo: String(k).trim(),
+      date: wmNormOrderDate(isObj ? v.date : ''),
+      client: (isObj ? v.client : '') || '',
+      name: (isObj ? v.name : v) || '',
+      amount: wmNormOrderAmount(isObj ? v.amount : 0),
+      manager: (isObj ? v.manager : '') || '',
+      delivery: wmNormOrderDate(isObj ? v.delivery : '')
     };
   });
-  return apiFetch('/api/orders/bulk', { method: 'POST', body: JSON.stringify({ records: records }) });
+
+  var chunks = [];
+  for (var i = 0; i < records.length; i += ORDER_BULK_CHUNK) chunks.push(records.slice(i, i + ORDER_BULK_CHUNK));
+
+  var agg = { count: 0, inserted: 0, updated: 0, skipped: 0, duplicates: [], total: records.length };
+  return chunks.reduce(function (chain, chunk) {
+    return chain.then(function () {
+      return apiFetch('/api/orders/bulk', { method: 'POST', body: JSON.stringify({ records: chunk }) })
+        .then(function (r) {
+          agg.count += r.count || 0;
+          agg.inserted += r.inserted || 0;
+          agg.updated += r.updated || 0;
+          agg.skipped += r.skipped || 0;
+          (r.duplicates || []).forEach(function (d) { if (agg.duplicates.indexOf(d) < 0) agg.duplicates.push(d); });
+        });
+    });
+  }, Promise.resolve()).then(function () {
+    _emitBus('order', 'bulk-synced', { count: agg.count });
+    return agg;
+  });
+}
+
+/* ─── 수주번호 변경 (renumber) ─── */
+
+/* 이 수주번호를 참조하는 레코드 건수 — 변경 전 영향 범위 미리보기 */
+function orderReferences(orderNo) {
+  return apiFetch('/api/orders/' + encodeURIComponent(orderNo) + '/references').then(function (r) { return r.data; });
+}
+
+/* 번호 변경 이력 (누가·언제·왜) */
+function orderRenumberHistory(orderNo) {
+  return apiFetch('/api/orders/' + encodeURIComponent(orderNo) + '/history').then(function (r) { return r.data || []; });
+}
+
+/* 수주번호 변경 — 서버가 orders + 참조 5개 테이블을 한 트랜잭션으로 갱신하고 감사 로그를 남긴다.
+   성공 시 클라이언트 쪽 캐시(ORDER_MAP / wa-oc-*)의 옛 키도 함께 정리한다. */
+function orderRenumber(orderNo, newOrderNo, reason, version) {
+  var body = { newOrderNo: newOrderNo, reason: reason };
+  if (version !== undefined && version !== null) body.version = version;
+  return apiFetch('/api/orders/' + encodeURIComponent(orderNo) + '/renumber', {
+    method: 'POST', body: JSON.stringify(body)
+  }).then(function (r) {
+    if (typeof ORDER_MAP !== 'undefined') {
+      var info = ORDER_MAP[orderNo];
+      if (info !== undefined) { ORDER_MAP[newOrderNo] = info; delete ORDER_MAP[orderNo]; }
+    }
+    var cached = lsGet('wa-oc-' + orderNo);
+    lsRemove('wa-oc-' + orderNo);
+    if (cached) lsSet('wa-oc-' + newOrderNo, cached);
+    // 참조 테이블이 통째로 바뀌었으므로 프로젝트/마일스톤 캐시도 버린다
+    _pdInvalidate();
+    _pdInvalidate('projAll');
+    _emitBus('order', 'renumbered', { from: orderNo, to: newOrderNo });
+    return r;
+  });
 }
 
 /* orders DB → ORDER_MAP 동기화 (앱 시작 시) */

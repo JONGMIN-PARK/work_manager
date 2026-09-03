@@ -147,10 +147,11 @@ function opGrant(userId, enabled, el) {
 var _opLogCache = null;
 var _opLogSearch = '';
 var _opLogProjectOnly = true;
-var _OP_LOG_PROJECT_ACTIONS = ['project.create', 'project.update', 'milestone.create', 'milestone.update', 'milestone.delete', 'milestone.progress', 'comment.create'];
+var _OP_LOG_PROJECT_ACTIONS = ['project.create', 'project.update', 'order.renumber', 'milestone.create', 'milestone.update', 'milestone.delete', 'milestone.progress', 'comment.create'];
 var _OP_LOG_LABELS = {
   'project.create': { icon: '📁', label: '프로젝트 등록', color: '#10B981' },
   'project.update': { icon: '✏️', label: '프로젝트 수정', color: '#3B82F6' },
+  'order.renumber': { icon: '🔢', label: '수주번호 변경', color: '#F59E0B' },
   'milestone.create': { icon: '◆', label: '마일스톤 등록', color: '#10B981' },
   'milestone.update': { icon: '◆', label: '마일스톤 수정', color: '#3B82F6' },
   'milestone.delete': { icon: '🗑', label: '마일스톤 삭제', color: '#EF4444' },
@@ -169,6 +170,10 @@ function _opLogDetail(a) {
   if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { return _opEsc(d); } }
   if (typeof d !== 'object') return _opEsc(String(d));
   var parts = [];
+  // 수주번호 변경: 무엇이 어떻게·왜 바뀌었는지가 핵심
+  if (d.from && d.to) parts.push(_opEsc(d.from) + ' → ' + _opEsc(d.to));
+  if (d.reason) parts.push('사유:' + _opEsc(d.reason));
+  if (d.affectedTotal != null) parts.push('연결 ' + _opEsc(d.affectedTotal) + '건 갱신');
   if (d.name) parts.push(_opEsc(d.name));
   if (d.status) parts.push('상태:' + _opEsc(d.status));
   if (d.progress != null) parts.push('진척:' + _opEsc(d.progress) + '%');

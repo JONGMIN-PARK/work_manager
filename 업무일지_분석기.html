@@ -909,7 +909,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.179</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.182</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2772,22 +2772,47 @@ function handleOrderExcel(input){
       console.log('[수주맵] 컬럼 매핑:', JSON.stringify(colMap));
       var count=0;
       ORDER_MAP={};
+      var dupNos=[];
+      /* 날짜 정규화 — 엑셀 날짜 서식 셀은 raw 로 읽으면 시리얼(45815)로 들어오고,
+         텍스트 셀은 '2026-03-03 00:00:00' 처럼 10자를 넘겨 서버 VARCHAR(10) 저장에 실패한다.
+         project-data.js 의 wmNormOrderDate 를 쓰고, 로드 실패 시엔 원본을 그대로 둔다. */
+      var normD=(typeof wmNormOrderDate==='function')?wmNormOrderDate:function(v){return String(v==null?'':v).trim()};
       for(var i=1;i<rows.length;i++){
         var r=rows[i];
         var no=String(r[colMap.orderNo]||'').trim();
         if(!no)continue;
+        if(ORDER_MAP[no]!==undefined&&dupNos.indexOf(no)<0)dupNos.push(no);
         var info={name:'',date:'',client:'',amount:'',manager:'',delivery:''};
         ORDER_FIELD_KEYS.forEach(function(key){
           if(key==='orderNo'||colMap[key]===undefined)return;
-          info[key]=String(r[colMap[key]]||'').trim();
+          var raw=String(r[colMap[key]]||'').trim();
+          info[key]=(key==='date'||key==='delivery')?normD(raw):raw;
         });
-        ORDER_MAP[no]=info;
+        ORDER_MAP[no]=info;   /* 같은 번호가 여러 줄이면 마지막 줄이 이긴다 */
         /* localStorage 캐시 제거됨 — ORDER_MAP에만 저장 */
         count++;
       }
       gfInvalidate();rFL();rOL();upOP();upV();
-      if(typeof syncOrderMapToDB==='function')syncOrderMapToDB().then(function(){if(typeof renderOrders==='function')renderOrders()});
-      showToast('✅ 수주맵 '+count+'건 불러오기 완료','success');
+      var uniq=Object.keys(ORDER_MAP).length;
+      var dupMsg=dupNos.length?' · 중복 '+dupNos.length+'건은 마지막 줄 기준으로 반영('+dupNos.slice(0,3).join(', ')+(dupNos.length>3?' 외':'')+')':'';
+      if(typeof syncOrderMapToDB==='function'){
+        showToast('⏳ 수주맵 '+uniq+'건 서버 반영 중...','info');
+        syncOrderMapToDB().then(function(res){
+          if(typeof renderOrders==='function')renderOrders();
+          res=res||{};
+          /* 여기까지 와야 "갱신 완료"다. 예전에는 서버 저장 결과와 무관하게
+             성공 토스트를 띄워, 배치가 통째로 실패해도 사용자는 반영된 줄 알았다. */
+          var msg='✅ 수주맵 '+uniq+'건 반영 완료 (신규 '+(res.inserted||0)+' · 갱신 '+(res.updated||0)+')';
+          if(res.skipped)msg+=' · 건너뜀 '+res.skipped;
+          showToast(msg+dupMsg,'success');
+        }).catch(function(err){
+          console.error('[수주맵] 서버 반영 실패:',err);
+          var m=(err&&err.data&&err.data.message)||(err&&err.message)||'서버 오류';
+          showToast('❌ 화면에는 '+uniq+'건 반영됐지만 서버 저장에 실패했습니다: '+m,'error');
+        });
+      }else{
+        showToast('✅ 수주맵 '+uniq+'건 불러오기 완료'+dupMsg,'success');
+      }
     }catch(err){
       console.error('수주맵 엑셀 파싱 실패:',err);
       showToast('⚠️ '+err.message,'error');
@@ -3484,6 +3509,16 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.182',date:'2026-09-03',title:'🔢 수주번호 변경 기능 + 엑셀 불러오기 갱신 실패 수정',tag:'feature',items:[
+      '✨ 수주대장 편집 팝업에 "🔢 번호 변경" 추가 — 수주번호를 바꾸면 연결된 프로젝트·이슈·업무일지·A/S 접수·사전검토가 한 번에 따라옵니다. 이전에는 번호 입력칸이 읽기전용이라 아예 바꿀 수 없었고, DB에서 직접 고치면 FK가 없어 연결이 조용히 끊겼습니다',
+      '변경 전 "함께 갱신되는 항목" 건수를 먼저 보여주고, 변경 사유를 필수로 받습니다 — 누가·언제·무엇을·왜 바꿨는지 감사 로그(운영자 모드 활동 로그 / 관리자 감사 로그)에 남고, 팝업에서 바로 이력을 볼 수 있습니다',
+      '전파는 한 트랜잭션 — 중간에 실패하면 아무것도 바뀌지 않습니다. 이미 쓰는 번호로는 바꿀 수 없고(409), 동시 편집 시 낙관적 잠금이 걸립니다',
+      '⚠️ 엑셀 불러오기에서 같은 수주번호의 수주일·거래처·프로젝트명이 바뀌어도 갱신되지 않던 문제 수정 — 원인은 두 가지였습니다. ① 엑셀에 같은 수주번호가 두 줄 있으면 PostgreSQL 이 배치 전체를 되돌려(21000) 중복과 무관한 줄까지 하나도 반영되지 않았고, ② 날짜 셀이 시리얼(45815)이나 "2026-03-03 00:00:00" 로 들어오면 10자 제한을 넘겨(22001) 역시 배치 전체가 실패했습니다',
+      '이제 날짜 셀을 YYYY-MM-DD 로 정규화하고(시리얼·점표기·타임스탬프 모두), 중복 수주번호는 마지막 줄 기준으로 정리한 뒤 200건씩 나눠 보냅니다. 금액의 쉼표도 숫자로 인식합니다',
+      '⚠️ 불러오기 성공 토스트가 서버 저장 결과와 무관하게 떠서, 배치가 통째로 실패해도 반영된 줄 알았습니다 — 이제 "신규 N · 갱신 N" 실제 반영 건수를 보여주고 실패 시 오류를 표시합니다',
+      '수주대장이 최신 100건만 내려오던 제한 해제 (대장 전체 로드)',
+      '영향: order-view.js, project-data.js, operator-mode.js, auth.js, server/routes/orders.js, server/migrations/051_order_renumber_audit.sql(신규), server/__tests__/orders.test.js(신규 13건). 서버 변경 포함 — 배포 후 적용'
+    ]},
     {ver:'13.181',date:'2026-08-30',title:'🐛 주간 업무 보고 — 두 번째 줄 기본 도형 처리 수정',tag:'fix',items:[
       '⚠️ 미리보기에서 기본 도형(○ 예정)이 첫 세부 줄에만 붙고 두 번째 줄부터는 사라지던 문제 수정 — 이제 무태그 세부 줄은 모두 항목 상태(무상태=예정) 도형으로 표시하고, 하위 줄(└·↳·→ 또는 4칸 들여쓰기)만 └ 마커 + 들여쓰기로 구분합니다',
       '⚠️ 두 번째 줄(세부 내용)에 `-`, `·`, `•`, `○`, `*`, `└` 같은 기본 도형을 쓰면 그 줄이 통째로 사라지던 문제 수정 — 이전에는 `:` 와 `-.` 두 가지만 인식했습니다',

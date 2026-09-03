@@ -12,15 +12,6 @@ function isSubLine(raw, line) {
   return /^[└┗┕ㄴ↳➔→⇒]/.test(line) || /^(?: {4,}|\t{2,})/.test(raw);
 }
 
-// 줄머리 기본 도형 — weekly-report-admin.js(클라 프리뷰)와 반드시 동일하게 유지
-var ITEM_LINE_RE = /^(?:[-–—*+·•∙◦○●◯□■▪▫▶►◆◇>＞]\s*)?\[([^\]]+)\]\s*(.*)$/;
-var DETAIL_LINE_RE = /^(?::|[-–—]\.|[-–—*+·•∙◦○●◯□■▪▫▶►◆◇>＞]|[└┗┕ㄴ↳➔→⇒])\s*(.*)$/;
-
-// 하위 세부 줄: └ ↳ → 로 시작하거나 4칸(탭 2회) 이상 들여쓴 줄
-function isSubLine(raw, line) {
-  return /^[└┗┕ㄴ↳➔→⇒]/.test(line) || /^(?: {4,}|\t{2,})/.test(raw);
-}
-
 function extractMembers(text) {
   var tags = text.match(/@([^\s@]+)/g) || [];
   return tags.map(function (t) { return t.slice(1); });

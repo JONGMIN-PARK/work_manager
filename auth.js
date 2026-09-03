@@ -1340,7 +1340,8 @@ async function renderAuditLog() {
     approve_user: '가입 승인', reject_user: '가입 거절', change_role: '역할 변경',
     change_status: '상태 변경', change_department: '부서 변경', reset_password: '비밀번호 초기화',
     change_password: '비밀번호 변경', update_profile: '프로필 수정',
-    create_department: '부서 생성', delete_department: '부서 삭제'
+    create_department: '부서 생성', delete_department: '부서 삭제',
+    'order.renumber': '수주번호 변경'
   };
 
   section.innerHTML =

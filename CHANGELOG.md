@@ -1,5 +1,66 @@
 # Work Manager — 변경 이력
 
+## v13.182 (2026-09-03) — 수주번호 변경 기능 + 엑셀 불러오기 갱신 실패 수정
+
+### 1. 수주번호 변경 (신규)
+
+수주번호(`order_no`)는 FK 없는 문자열 키로 5개 테이블에 흩어져 있다. 편집 팝업의 번호 입력칸은 `readonly`,
+서버 `PUT /api/orders/:orderNo` 는 `order_no` 를 화이트리스트에서 빼고 **조용히 200** 을 돌려주고 있어
+번호 변경이 사실상 불가능했다. DB에서 직접 고치면 FK가 없어 연결이 에러 없이 끊긴다.
+
+**`POST /api/orders/:orderNo/renumber`** — 한 트랜잭션으로 처리:
+
+| 단계 | 내용 |
+|---|---|
+| 검증 | 새 번호 형식(`[\w.-/가-힣]`, 40자 이내 — `as_tickets.order_no` 가 VARCHAR(40)), 사유 2~500자 필수, 낙관적 잠금(`version`), 중복 번호 409 |
+| 전파 | `projects` · `issues` · `work_records` · `as_tickets` · `prestudies(linked_order_no)` 일괄 UPDATE |
+| 기록 | `audit_logs` 에 `order.renumber` — `{from, to, reason, name, client, affected, affectedTotal}` |
+
+- 사유는 **필수**다. 누가·언제·무엇을·왜 바꿨는지가 남지 않으면 번호 변경은 추적 불가능한 파괴적 작업이 된다.
+- `authService.auditLog()` 는 `tenant_id` 를 채우지 않아 `/api/audit` 의 테넌트 필터에서 누락된다 → 여기서는 직접 INSERT.
+- 보조 API: `GET /:orderNo/references`(영향 건수 미리보기), `GET /:orderNo/history`(A→B→C 체인 추적 이력).
+- `PUT /api/orders/:orderNo` 로 번호를 바꾸려 하면 이제 **400 `ORDER_NO_IMMUTABLE`** — 조용한 무시 제거.
+
+**UI (수주대장 편집 팝업)** — 번호 칸 옆 `🔢 번호 변경` → 전용 모달에서 ① 함께 갱신될 건수 미리보기 ② 새 번호 + 사유 입력 ③ 확인 후 적용, 하단에 번호 변경 이력 표시.
+운영자 모드 활동 로그와 관리자 감사 로그에 `수주번호 변경` 라벨(`🔢`)과 `A → B · 사유:… · 연결 N건 갱신` 요약을 추가.
+
+### 2. 엑셀 불러오기 — "같은 수주번호인데 수주일·거래처·프로젝트명이 안 바뀐다"
+
+`ON CONFLICT (order_no) DO UPDATE` 자체는 정상이었다. 배치가 **통째로 롤백**되고 있었다:
+
+| 원인 | 증상 |
+|---|---|
+| 엑셀에 같은 수주번호가 두 줄 이상 | `ON CONFLICT DO UPDATE command cannot affect row a second time`(21000) → **중복과 무관한 줄까지 하나도 반영 안 됨** |
+| 날짜 셀이 시리얼(`45815`)·타임스탬프(`2026-03-03 00:00:00`) | `value too long for character varying(10)`(22001) → 역시 배치 전체 실패 |
+| `syncOrderMapToDB()` 에 `.catch` 없음 | 서버 저장이 실패해도 `✅ 불러오기 완료` 토스트가 떴다 |
+| `renderOrders()` 는 DB 행을 우선 | 화면은 옛 값을 계속 보여줘 "갱신이 안 된다"로 보였다 |
+
+- 날짜 정규화 `wmNormOrderDate` / 서버 `normDate` — 엑셀 시리얼(20000~80000), `YYYY.M.D`, `YYYY/M/D`, 타임스탬프를 `YYYY-MM-DD` 로. 해석 불가는 `''`(한 행 때문에 배치가 죽지 않도록).
+- 금액의 쉼표 제거(`1,200` → `1200`).
+- 서버·클라 양쪽에서 `order_no` 중복 제거(마지막 줄이 이김) + 200건 청크 전송.
+- bulk 응답에 `inserted/updated/skipped/duplicates` 추가 → 토스트가 **실제 반영 건수**를 보고하고 실패 시 오류를 띄운다.
+- bulk/POST 의 `DO UPDATE` 에 `WHERE orders.tenant_id = EXCLUDED.tenant_id` 추가 — `orders` PK가 `order_no` 전역이라 다른 테넌트의 동명 수주를 덮어쓰던 문제.
+- `orderGetAll()` 이 기본 limit 100 에 걸려 수주 100건 초과분이 아예 내려오지 않던 것도 해제.
+
+### 3. 곁다리 수정
+
+- `server/services/weekly-report-parser.js` — v13.181 에서 `ITEM_LINE_RE`/`DETAIL_LINE_RE`/`isSubLine` 블록이 통째로 중복 선언돼 있었다. Node(sloppy mode)는 실행되지만 **jest(strict)는 SyntaxError** 로 서버 테스트 4개 스위트가 전부 로드 실패했다 → 중복 제거.
+- 편집 팝업 수주번호 입력칸의 `style` 속성 중복(뒤 `style` 이 무시돼 readonly 배경이 안 먹던 것) 정리.
+- `handleOrderExcel` 래퍼가 500ms 뒤 `syncOrderMapToDB()` 를 한 번 더 부르던 중복 호출 제거.
+
+### 테스트
+
+`server/__tests__/orders.test.js`(신규 13건) — bulk 갱신/중복/날짜정규화/금액, renumber 전파·감사로그·사유필수·중복409·낙관적잠금·형식검증·권한403, references/history, PUT 400.
+서버 전체 `npm test` 40건 통과(이전에는 위 중복 선언 탓에 0건 실행). 루트 `npm test` 21건 통과.
+로컬 PostgreSQL 16 + Chromium 으로 수주대장 편집 → 번호 변경 → 전파·이력 표시, 엑셀 동기화 갱신까지 실제 화면에서 확인.
+
+### 영향
+
+- 수정: `order-view.js`, `project-data.js`, `operator-mode.js`, `auth.js`, `업무일지_분석기.html`, `server/routes/orders.js`, `server/services/weekly-report-parser.js`
+- 신규: `server/migrations/051_order_renumber_audit.sql`, `server/__tests__/orders.test.js`
+- **서버 변경 + 마이그레이션 포함** — 배포 후 적용. 051은 `audit_logs` 부분 인덱스 추가뿐이라 무중단.
+- 남은 과제: `orders` PK를 `(tenant_id, order_no)` 복합키로 이관, `web/`(Next.js) 수주 페이지의 `o.id` 참조 버그(수정/삭제 동작 안 함, 번호 변경 시 중복 생성).
+
 ## v13.181 (2026-08-30) — 주간 업무 보고: 두 번째 줄 기본 도형 처리 수정
 
 ### 문제
