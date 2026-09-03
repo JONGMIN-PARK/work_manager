@@ -42,24 +42,45 @@
 - bulk/POST 의 `DO UPDATE` 에 `WHERE orders.tenant_id = EXCLUDED.tenant_id` 추가 — `orders` PK가 `order_no` 전역이라 다른 테넌트의 동명 수주를 덮어쓰던 문제.
 - `orderGetAll()` 이 기본 limit 100 에 걸려 수주 100건 초과분이 아예 내려오지 않던 것도 해제.
 
-### 3. 곁다리 수정
+### 3. `web/` (Next.js) 수주 페이지
+
+이 페이지는 `orders` 에 존재하지도 않는 `id` 컬럼을 편집 키로 쓰고 있었다:
+
+| 증상 | 원인 |
+|---|---|
+| 수정이 항상 신규 생성으로 흐름 (번호를 바꾸면 수주가 하나 더 생김) | `setEditId(o.id)` → `undefined` → `editId ? PUT : POST` 가 언제나 POST |
+| 수정 모달 제목이 편집 중에도 "새 수주" | 같은 원인 |
+| 삭제가 항상 실패 | `DELETE /api/orders/undefined` → 404 |
+| 상태(진행 중/납품 완료/지연)가 저장되지 않고 항상 '진행 중' | `orders` 에 `status` 컬럼이 없다 |
+| React key 경고 | `key={o.id}` |
+
+- 전 구간을 `order_no` 기준으로 교체(수정·삭제·`key`), 수정은 `version` 을 실어 낙관적 잠금(409 안내)까지 적용.
+- 없는 `status` 필드를 제거하고, 메인 앱 수주대장과 같은 **연결 프로젝트의 "현재 단계"** 로 대체(`PROJ_PHASE` 와 동일 표기). 통계도 `전체 / 프로젝트 연결 / 미연결 / 총 수주액` 으로 정정.
+- 수주번호 칸은 편집 시 readonly + `🔢 번호 변경` → 메인 앱과 같은 renumber 모달(영향 건수 미리보기 · 사유 필수 · 변경 이력).
+- 목록도 `?all=true&limit=2000` 으로 전체 로드. 폼에 메모 필드 추가.
+
+### 4. 곁다리 수정
 
 - `server/services/weekly-report-parser.js` — v13.181 에서 `ITEM_LINE_RE`/`DETAIL_LINE_RE`/`isSubLine` 블록이 통째로 중복 선언돼 있었다. Node(sloppy mode)는 실행되지만 **jest(strict)는 SyntaxError** 로 서버 테스트 4개 스위트가 전부 로드 실패했다 → 중복 제거.
 - 편집 팝업 수주번호 입력칸의 `style` 속성 중복(뒤 `style` 이 무시돼 readonly 배경이 안 먹던 것) 정리.
 - `handleOrderExcel` 래퍼가 500ms 뒤 `syncOrderMapToDB()` 를 한 번 더 부르던 중복 호출 제거.
+- `tenant-isolation.test.js` 의 tenant B 정리가 `audit_logs` 를 `tenant_id` 로만 지워, `authService.auditLog()` 가
+  `tenant_id` 를 안 채우는 탓에 로그가 남고 → `users` 삭제가 FK 로 막히고(경고만 남고 삼켜짐) → **다음 실행에서
+  이메일 중복으로 6건 실패**했다. `user_id` 기준 삭제를 추가해 재실행 가능하게 수정.
 
 ### 테스트
 
 `server/__tests__/orders.test.js`(신규 13건) — bulk 갱신/중복/날짜정규화/금액, renumber 전파·감사로그·사유필수·중복409·낙관적잠금·형식검증·권한403, references/history, PUT 400.
-서버 전체 `npm test` 40건 통과(이전에는 위 중복 선언 탓에 0건 실행). 루트 `npm test` 21건 통과.
-로컬 PostgreSQL 16 + Chromium 으로 수주대장 편집 → 번호 변경 → 전파·이력 표시, 엑셀 동기화 갱신까지 실제 화면에서 확인.
+서버 전체 `npm test` 40건 통과(이전에는 위 중복 선언 탓에 0건 실행), 연속 2회 실행에서도 동일. 루트 `npm test` 21건 통과.
+로컬 PostgreSQL 16 + Chromium 으로 실제 화면에서 확인 — 메인 앱(수주대장 편집 → 번호 변경 → 전파·이력 표시, 엑셀 동기화 갱신)과
+`web/`(수정 저장·삭제·번호 변경 `A25030 → A25031` + 연결 3건 전파 + 감사 로그 체인). `next build` 통과.
 
 ### 영향
 
-- 수정: `order-view.js`, `project-data.js`, `operator-mode.js`, `auth.js`, `업무일지_분석기.html`, `server/routes/orders.js`, `server/services/weekly-report-parser.js`
+- 수정: `order-view.js`, `project-data.js`, `operator-mode.js`, `auth.js`, `업무일지_분석기.html`, `server/routes/orders.js`, `server/services/weekly-report-parser.js`, `web/src/app/dashboard/orders/page.js`, `server/__tests__/tenant-isolation.test.js`
 - 신규: `server/migrations/051_order_renumber_audit.sql`, `server/__tests__/orders.test.js`
 - **서버 변경 + 마이그레이션 포함** — 배포 후 적용. 051은 `audit_logs` 부분 인덱스 추가뿐이라 무중단.
-- 남은 과제: `orders` PK를 `(tenant_id, order_no)` 복합키로 이관, `web/`(Next.js) 수주 페이지의 `o.id` 참조 버그(수정/삭제 동작 안 함, 번호 변경 시 중복 생성).
+- 남은 과제: `orders` PK를 `(tenant_id, order_no)` 복합키로 이관.
 
 ## v13.181 (2026-08-30) — 주간 업무 보고: 두 번째 줄 기본 도형 처리 수정
 

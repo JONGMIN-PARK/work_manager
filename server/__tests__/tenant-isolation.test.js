@@ -30,7 +30,10 @@ async function cleanupTenantB() {
     await h.db.query("DELETE FROM checklists WHERE tenant_id = $1", [TENANT_B_ID]);
     await h.db.query("DELETE FROM projects WHERE tenant_id = $1", [TENANT_B_ID]);
     await h.db.query("DELETE FROM user_settings WHERE tenant_id = $1", [TENANT_B_ID]);
-    await h.db.query("DELETE FROM audit_logs WHERE tenant_id = $1", [TENANT_B_ID]);
+    // audit_logs 는 tenant_id 로만 지우면 남는다 — authService.auditLog() 가 tenant_id 를
+    // 채우지 않아 tenant B 사용자의 로그인 로그가 default tenant 로 들어가기 때문.
+    // 남으면 users 삭제가 FK 로 막히고(경고만 남고 삼켜짐) 다음 실행에서 이메일 중복으로 실패한다.
+    await h.db.query("DELETE FROM audit_logs WHERE tenant_id = $1 OR user_id IN (SELECT id FROM users WHERE tenant_id = $1)", [TENANT_B_ID]);
     await h.db.query("DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE tenant_id = $1)", [TENANT_B_ID]);
     await h.db.query("DELETE FROM users WHERE tenant_id = $1", [TENANT_B_ID]);
     await h.db.query("DELETE FROM tenants WHERE id = $1", [TENANT_B_ID]);
