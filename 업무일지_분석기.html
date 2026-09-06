@@ -909,7 +909,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.183</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.184</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3509,6 +3509,12 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.184',date:'2026-09-06',title:'💅 주간 업무 보고 — 기한 있는 항목 제목 굵게',tag:'feature',items:[
+      '기한(~MM/DD)이 적힌 항목은 제목을 굵게 표시합니다 — 날짜가 걸린 일이 목록에서 먼저 눈에 들어옵니다',
+      '기한 없이 진행률만 있거나 아무 메타도 없는 항목은 기존 굵기 그대로 — 굵은 줄 = 일정이 있는 줄로 읽힙니다',
+      '미리보기·비교 보기·HTML 내보내기(라이트/다크)가 모두 같은 렌더러를 쓰므로 한 번에 적용됩니다',
+      '영향: weekly-report-admin.js. 클라이언트 전용 — 서버 배포 불필요'
+    ]},
     {ver:'13.183',date:'2026-09-05',title:'💅 주간 분석 결과 표 — 시간 줄바꿈 해소 + 수주명 폭 2배',tag:'fix',items:[
       '⚠️ 필터 결과 표의 "시간"이 두 줄로 접히던 문제 수정 — 컬럼 폭이 40px인데 좌우 여백만 24px라 숫자에 16px밖에 남지 않았습니다(box-sizing: border-box). 78px로 넓히고 줄바꿈을 막았습니다',
       '수주명 폭을 12% → 24%로 2배 확대하고 글자도 10px → 11px(본문과 동일)로 키웠습니다 — 긴 수주명이 잘리지 않고 그대로 보입니다',

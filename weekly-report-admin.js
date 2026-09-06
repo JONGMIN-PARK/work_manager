@@ -232,11 +232,14 @@
     // 사이트 배지 폭을 전 섹션 최대치로 통일 → 모든 항목 이름 시작 위치 정렬(시인성)
     var badgeStyle = 'background:' + cl.bg + ';color:' + cl.main + ';font-size:13px;font-weight:800;padding:1px 6px;border-radius:4px;flex-shrink:0';
     if (uniformSiteW) badgeStyle += ';box-sizing:border-box;width:' + uniformSiteW + 'px;text-align:left;white-space:nowrap;overflow:hidden';
+    // 기한(=D-day)이 박힌 항목은 제목을 굵게 — 날짜가 걸린 일이 목록에서 먼저 눈에 띄도록.
+    // deadline 은 파서가 항목에만 붙인다(세부 줄에는 없음) → 항목 제목만 대상.
+    var titleWeight = it.deadline ? '700' : '400';
     return '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + cl.main + ';border-radius:4px;padding:3px 8px;margin-bottom:2px">'
       + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
       +   '<span style="' + badgeStyle + ';cursor:default"' + (memberTip ? ' title="담당자: ' + esc(memberTip) + '"' : '') + '>' + esc(it.client || '') + '</span>'
       +   (hasDetails ? '' : iconSlot(statusIcon(it.status === 'none' ? 'planned' : it.status)))
-      +   '<span style="font-size:13px;font-weight:400;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
+      +   '<span style="font-size:13px;font-weight:' + titleWeight + ';color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
       +   metaCols(it, pct)
       + '</div>'
       + detailsHtml
