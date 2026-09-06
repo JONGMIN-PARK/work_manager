@@ -355,6 +355,9 @@ body{min-height:100vh;background:var(--bg);color:var(--t2);font-family:var(--app
 h1{font-size:18px;font-weight:700;color:var(--t1);letter-spacing:-.3px}h1 .ac{color:var(--ac)}
 .sub{font-size:10px;color:var(--t5);margin-top:3px;letter-spacing:.2px}
 .con{max-width:1400px;margin:0 auto;padding:20px 28px}
+/* 간트 차트는 폭이 곧 정보량 — 타임라인 탭에서만 1400px 캡을 풀어 창 너비만큼 늘린다.
+   헤더(.hdr-in)도 같이 풀어야 본문과 좌우가 어긋나지 않는다. */
+body.wide-mode .con,body.wide-mode .hdr-in{max-width:none}
 .dz{border:2px dashed var(--bd2);border-radius:16px;padding:48px 24px;text-align:center;transition:all .25s;cursor:pointer;background:var(--bg-p)}
 .dz:hover,.dz.active{border-color:var(--ac);background:var(--ac-g);box-shadow:0 0 20px var(--ac-g)}
 .pnl{background:var(--bg-p);border:1px solid var(--bd);border-radius:12px;padding:18px;margin-bottom:14px;transition:background .3s,border-color .25s,box-shadow .25s,transform .15s;box-shadow:0 2px 8px rgba(0,0,0,.12)}
@@ -909,7 +912,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.184</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.185</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -1874,6 +1877,7 @@ function setPage(page){
   if(_opTab)_opTab.classList.toggle('hidden',!(typeof isOperator==='function'&&isOperator()));
   // 모든 모드 숨기기
   ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  if(typeof _applyWideMode==='function')_applyWideMode(false);  // 타임라인 외 페이지는 기본 폭
   // 해당 페이지의 첫 탭 활성화
   if(page==='useradmin'){
     document.getElementById('modeTabs').classList.add('hidden');
@@ -1928,6 +1932,10 @@ function refreshCurrentTab(){
 }
 window.refreshCurrentTab = refreshCurrentTab;
 
+function _applyWideMode(on){
+  try{ document.body.classList.toggle('wide-mode', !!on); }catch(e){}
+}
+
 function setMode(m){
   var prevMode = curMode;
   curMode=m;
@@ -1939,6 +1947,7 @@ function setMode(m){
   ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',tech:'mTech',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
+  _applyWideMode(m==='timeline');
 
   // 캐시 hit이면 render 호출 자체를 스킵 → 이전 그려진 내용 즉시 표시
   if(_modeIsFresh(m)) return;
@@ -3509,6 +3518,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.185',date:'2026-09-06',title:'📐 주간보고 제목 잘림 해소 + 타임라인 전체 폭 사용',tag:'fix',items:[
+      '⚠️ 주간 업무 보고에서 항목 제목이 "SP3965-E…" 처럼 잘리던 문제 완화 — 우측 메타 3열(기한·진행률·D-day)이 실제 필요보다 넓게 잡혀 있었습니다. 160px → 132px 로 줄여 제목에 28px 를 돌려줬습니다',
+      '폭은 실측 기준입니다 — 기한 "~09/15" 38px · 진행률 "100%"+바 37px · D-day "D-365"/"D+123" 43px. 여유 2px 만 두고 맞췄고, 기한 칸은 줄바꿈을 막아 폭이 모자라도 행 높이가 튀지 않습니다',
+      '✨ 프로젝트 타임라인(간트)이 창 너비를 그대로 씁니다 — 전체 화면 폭 제한(1400px)을 타임라인 탭에서만 해제했습니다. 창을 넓힐수록 한 번에 보이는 날짜가 늘어납니다',
+      '타임라인을 벗어나면 기존 1400px 로 자동 복귀합니다. 헤더도 함께 늘어나 좌우 정렬이 어긋나지 않습니다',
+      '영향: weekly-report-admin.js, 업무일지_분석기.html. 클라이언트 전용 — 서버 배포 불필요'
+    ]},
     {ver:'13.184',date:'2026-09-06',title:'💅 주간 업무 보고 — 기한 있는 항목 제목 굵게',tag:'feature',items:[
       '기한(~MM/DD)이 적힌 항목은 제목을 굵게 표시합니다 — 날짜가 걸린 일이 목록에서 먼저 눈에 들어옵니다',
       '기한 없이 진행률만 있거나 아무 메타도 없는 항목은 기존 굵기 그대로 — 굵은 줄 = 일정이 있는 줄로 읽힙니다',

@@ -194,13 +194,15 @@
       + '</span>';
   }
   // 우측 메타 3열(날짜·진행률·D-day) 고정폭 — 행 간 오와열 정렬. 하나라도 있으면 3열 모두 예약
-  var META_W = { date: 48, pct: 54, dday: 46 };
+  // 실측 기준 최소 폭(+여유 2px): 날짜 '~09/15' 38px · 진행률 '100%'+바 37px · D-day 'D-365'/'D+123' 43px.
+  // 이보다 좁히면 날짜가 두 줄로 접혀 행 높이가 튄다.
+  var META_W = { date: 40, pct: 40, dday: 44, gap: 4 };
   function metaCols(it, pct) {
     if (!it.deadline && pct === null) return '';
-    var dateCell = '<span style="width:' + META_W.date + 'px;flex-shrink:0;text-align:right;font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace">' + (it.deadline ? esc(it.deadline) : '') + '</span>';
+    var dateCell = '<span style="width:' + META_W.date + 'px;flex-shrink:0;text-align:right;font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;white-space:nowrap">' + (it.deadline ? esc(it.deadline) : '') + '</span>';
     var pctCell = '<span style="width:' + META_W.pct + 'px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:flex-end">' + pctBadge(pct) + '</span>';
     var ddayCell = '<span style="width:' + META_W.dday + 'px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:flex-end">' + (it.deadline ? ddayBadge(it.deadline) : '') + '</span>';
-    return '<span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0">' + dateCell + pctCell + ddayCell + '</span>';
+    return '<span style="display:inline-flex;align-items:center;gap:' + META_W.gap + 'px;flex-shrink:0">' + dateCell + pctCell + ddayCell + '</span>';
   }
   // 세부 한 줄: 앞에 고정폭 슬롯(상태 아이콘/└), 텍스트 말줄임.
   // 기본 도형(무태그=항목 상태, 없으면 예정)은 첫 줄뿐 아니라 모든 세부 줄에 적용.
