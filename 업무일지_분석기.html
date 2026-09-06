@@ -912,7 +912,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.185</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.186</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3518,6 +3518,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.186',date:'2026-09-06',title:'📄 주간보고 — 긴 업무 내용이 두 줄까지 표시',tag:'fix',items:[
+      '⚠️ 업무 내용이 한 줄을 넘으면 무조건 "…" 로 잘리던 것을 두 줄까지 표시하도록 바꿨습니다 — 기한 없는 일반 업무(기타·C/S 등)에서 특히 많이 잘렸습니다',
+      '대부분의 항목은 여전히 한 줄로 끝나 기존 밀도형 레이아웃이 유지되고, 긴 것만 두 줄로 펼쳐집니다. 기한·진행률·D-day 는 첫 줄 기준으로 그대로 정렬됩니다',
+      '세부 줄에도 툴팁을 추가했습니다 — 두 줄을 넘겨 잘리는 아주 긴 내용도 마우스를 올리면 전체를 볼 수 있습니다(이전에는 항목 제목에만 있었습니다)',
+      '미리보기·비교 보기·HTML 내보내기에 동일 적용',
+      '영향: weekly-report-admin.js. 클라이언트 전용 — 서버 배포 불필요'
+    ]},
     {ver:'13.185',date:'2026-09-06',title:'📐 주간보고 제목 잘림 해소 + 타임라인 전체 폭 사용',tag:'fix',items:[
       '⚠️ 주간 업무 보고에서 항목 제목이 "SP3965-E…" 처럼 잘리던 문제 완화 — 우측 메타 3열(기한·진행률·D-day)이 실제 필요보다 넓게 잡혀 있었습니다. 160px → 132px 로 줄여 제목에 28px 를 돌려줬습니다',
       '폭은 실측 기준입니다 — 기한 "~09/15" 38px · 진행률 "100%"+바 37px · D-day "D-365"/"D+123" 43px. 여유 2px 만 두고 맞췄고, 기한 칸은 줄바꿈을 막아 폭이 모자라도 행 높이가 튀지 않습니다',

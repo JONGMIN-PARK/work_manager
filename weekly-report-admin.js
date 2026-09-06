@@ -214,7 +214,7 @@
     var inner = statusIcon(lineSt) || '<span style="color:var(--t6)">└</span>';
     return '<div style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 ' + (d.sub ? '14' : '2') + 'px">'
       + iconSlot(inner)
-      + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + inlineMarkup(dText) + '</span>'
+      + '<span style="flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word" title="' + esc(dText) + '">' + inlineMarkup(dText) + '</span>'
       + '</div>';
   }
   // 섹션 헤더: 번호 배지 + 라벨
@@ -241,7 +241,7 @@
       + '<div style="display:flex;align-items:center;gap:6px;min-width:0">'
       +   '<span style="' + badgeStyle + ';cursor:default"' + (memberTip ? ' title="담당자: ' + esc(memberTip) + '"' : '') + '>' + esc(it.client || '') + '</span>'
       +   (hasDetails ? '' : iconSlot(statusIcon(it.status === 'none' ? 'planned' : it.status)))
-      +   '<span style="font-size:13px;font-weight:' + titleWeight + ';color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
+      +   '<span style="font-size:13px;font-weight:' + titleWeight + ';color:var(--t2);line-height:1.35;flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
       +   metaCols(it, pct)
       + '</div>'
       + detailsHtml
