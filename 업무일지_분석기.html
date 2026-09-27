@@ -283,7 +283,13 @@ window.wmDataBus = (function () {
 <script defer src="order-view.js?v=5" onerror="console.warn('order-view.js 로드 실패')"></script>
 <script defer src="issue-manager.js?v=5" onerror="console.warn('issue-manager.js 로드 실패')"></script>
 <script defer src="document-manager.js?v=6" onerror="console.warn('document-manager.js 로드 실패')"></script>
-<script defer src="as-manager.js?v=1" onerror="console.warn('as-manager.js 로드 실패')"></script>
+<script defer src="as-core.js?v=5" onerror="console.warn('as-core.js 로드 실패')"></script>
+<script defer src="as-list.js?v=5" onerror="console.warn('as-list.js 로드 실패')"></script>
+<script defer src="as-form.js?v=5" onerror="console.warn('as-form.js 로드 실패')"></script>
+<script defer src="as-detail.js?v=5" onerror="console.warn('as-detail.js 로드 실패')"></script>
+<script defer src="as-detail-actions.js?v=5" onerror="console.warn('as-detail-actions.js 로드 실패')"></script>
+<script defer src="as-report.js?v=5" onerror="console.warn('as-report.js 로드 실패')"></script>
+<script defer src="as-category-admin.js?v=5" onerror="console.warn('as-category-admin.js 로드 실패')"></script>
 <script defer src="as-stats.js?v=1" onerror="console.warn('as-stats.js 로드 실패')"></script>
 <script defer src="operator-mode.js?v=1" onerror="console.warn('operator-mode.js 로드 실패')"></script>
 <script defer src="operator-analytics.js?v=1" onerror="console.warn('operator-analytics.js 로드 실패')"></script>
@@ -301,7 +307,7 @@ window.wmDataBus = (function () {
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.189</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.190</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -734,6 +740,7 @@ if(typeof PROJ_STATUS==='undefined'){
   var PROJ_STATUS={waiting:{label:'대기',color:'#94A3B8',bg:'rgba(148,163,184,.15)',icon:'⏳'},active:{label:'진행중',color:'#3B82F6',bg:'rgba(59,130,246,.15)',icon:'🔄'},delayed:{label:'지연',color:'#EF4444',bg:'rgba(239,68,68,.15)',icon:'⚠️'},done:{label:'완료',color:'#10B981',bg:'rgba(16,185,129,.15)',icon:'✅'},hold:{label:'보류',color:'#F59E0B',bg:'rgba(245,158,11,.15)',icon:'⏸️'}};
   var EVT_TYPE={milestone:{label:'마일스톤',color:'#8B5CF6',icon:'◆'},meeting:{label:'회의',color:'#06B6D4',icon:'🤝'},deadline:{label:'납기',color:'#EF4444',icon:'🏁'},trip:{label:'출장',color:'#F97316',icon:'✈️'},dayoff:{label:'연차',color:'#10B981',icon:'🌴'},amoff:{label:'오전반차',color:'#14B8A6',icon:'🌅'},pmoff:{label:'오후반차',color:'#0D9488',icon:'🌇'},etc:{label:'기타',color:'#64748B',icon:'📌'}};
 }
+if(typeof SEM_COLOR==='undefined'){var SEM_COLOR={danger:'#EF4444',warn:'#F59E0B',ok:'#10B981',info:'#3B82F6',muted:'#94A3B8',purple:'#8B5CF6'};var stColor=function(st){return(PROJ_STATUS[st]||PROJ_STATUS.waiting).color};var stBg=function(st){return(PROJ_STATUS[st]||PROJ_STATUS.waiting).bg}}
 if(typeof openDBv2==='undefined'){window.openDBv2=function(){return Promise.resolve(null)}}
 if(typeof projGetAll==='undefined'){
   window.projGetAll=function(){return Promise.resolve([])};window.projGet=function(){return Promise.resolve(null)};window.projPut=function(p){return Promise.resolve(p)};window.projDel=function(){return Promise.resolve()};
@@ -766,7 +773,7 @@ if(typeof projGetAll==='undefined'){
     if(typeof renderOrders==='undefined'){window.renderOrders=function(){};window.showOrderModal=function(){};console.warn('⚠️ order-view.js 로드 실패')}
     if(typeof renderIssues==='undefined'){window.renderIssues=function(){};window.showIssueModal=function(){};window.showIssueDetail=function(){};console.warn('⚠️ issue-manager.js 로드 실패')}
     if(typeof renderDocManager==='undefined'){window.renderDocManager=function(){};console.warn('⚠️ document-manager.js 로드 실패')}
-    if(typeof renderAS==='undefined'){window.renderAS=function(){};window.showASModal=function(){};console.warn('⚠️ as-manager.js 로드 실패')}
+    if(typeof renderAS==='undefined'){window.renderAS=function(){};window.showASModal=function(){};console.warn('⚠️ A/S 모듈(as-list.js 등) 로드 실패')}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_checkRendererFallbacks);
   else _checkRendererFallbacks();
@@ -1170,9 +1177,8 @@ function showImportPreviewModal(analysis,opts){
   opts=opts||{};
   return new Promise(function(resolve){
     var nIdent=analysis.identical.length,nConf=analysis.conflicts.length,nNew=analysis.newRows.length;
-    var ov=document.createElement('div');ov.id='wrPreviewOverlay';
-    ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)';
-    var dlg=document.createElement('div');
+    var ov=createModal({id:'wrPreviewOverlay'}).overlay;  /* v13.190 공통 모달(z 자동 스택·id 중복 제거) */
+    var dlg=ov.querySelector('.wa-modal-box');
     dlg.style.cssText='background:var(--bg-p);border-radius:12px;padding:0;max-width:880px;width:94%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4);border:1px solid var(--bd)';
 
     var head='<div style="padding:18px 22px 12px;border-bottom:1px solid var(--bd)">'+
@@ -1523,9 +1529,8 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
 /* 업무일지 갱신/대체 선택 모달 */
 function showWorkRecordChoiceModal(existCount, newCount){
   return new Promise(function(resolve){
-    var ov=document.createElement('div');ov.id='wrChoiceOverlay';
-    ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)';
-    var dlg=document.createElement('div');
+    var ov=createModal({id:'wrChoiceOverlay'}).overlay;  /* v13.190 공통 모달(z 자동 스택·id 중복 제거) */
+    var dlg=ov.querySelector('.wa-modal-box');
     dlg.style.cssText='background:var(--bg-p);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)';
     dlg.innerHTML='<div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:12px">📊 업무일지 데이터 처리</div>'+
       '<p style="font-size:12px;color:var(--t3);margin-bottom:16px">기존 DB에 <b style="color:var(--ac-t)">'+existCount+'건</b>의 데이터가 있습니다.<br>새 파일에서 <b style="color:var(--ac-t)">'+newCount+'건</b>을 읽었습니다.</p>'+
@@ -1681,8 +1686,8 @@ function detectDept(fileName){
 }
 function showDeptSelectModal(){
   return new Promise(function(resolve){
-    var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)';
-    var dlg=document.createElement('div');
+    var ov=createModal({}).overlay;  /* v13.190 공통 모달(z 자동 스택·id 중복 제거) */
+    var dlg=ov.querySelector('.wa-modal-box');
     dlg.style.cssText='background:var(--bg-p);border-radius:12px;padding:24px;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)';
     dlg.innerHTML='<div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:8px">🏢 사업부 선택</div>'+
       '<p style="font-size:11px;color:var(--t5);margin-bottom:14px">파일명에서 사업부를 감지하지 못했습니다. 선택해주세요.</p>'+
@@ -2585,9 +2590,7 @@ function openManualInput(){
     var oks=Object.keys(ORDER_MAP).sort();
     orderOpts=oks.map(function(k){var info=ORDER_MAP[k];var label=typeof info==='object'&&info?info.name||'':'';return'<option value="'+eH(k)+'">'+(label?eH(k)+' ('+eH(label)+')':eH(k))+'</option>'}).join('');
   }
-  var ov=document.createElement('div');
-  ov.id='manualInputOverlay';
-  ov.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)';
+  var ov=createModal({id:'manualInputOverlay'}).overlay;  /* v13.190 공통 모달(z 자동 스택·id 중복 제거) */
   ov.onclick=function(e){if(e.target===ov)ov.remove()};
   ov.innerHTML=`<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:24px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
@@ -2909,6 +2912,19 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.190',date:'2026-09-27',title:'🧹 리팩토링 2단계 — 큰 함수 분해 · A/S 모듈 분할 · 공통 모달 · 색상 단일화',tag:'refactor',items:[
+      '화면·동작 변화 없음(순수 리팩토링). 바꾸기 전 출력을 기록해 두고, 바꾼 뒤 HTML 이 한 글자도 다르지 않은지 테스트로 확인했습니다',
+      '타임라인: 504줄짜리 그리기 함수를 데이터 로드·필터/정렬·기간 계산·헤더·행·마운트 후처리로 분해(74줄). 프로젝트 등록/편집 창(178→26줄)과 저장(113→39줄)도 분해. 중복되던 D-Day 표시 코드 하나로',
+      '프로젝트 상세: 상세 패널(254→29줄)과 작업 탭(275→14줄)을 탭별·영역별 함수로 분해하고, 집계 계산을 화면과 분리',
+      'A/S: 3,200줄 파일을 7개(core·list·form·detail·detail-actions·report·category-admin)로 분할 — 함수 90개·변수 14개·원본 3,013줄이 빠짐없이 한 번씩 옮겨졌음을 기계적으로 확인',
+      '공통 모달: createModal 에 id(같은 창 중복 방지)·z 자동 스택(창 위의 창이 항상 위)·Esc 옵션 추가. 타임라인 6개·상세 2개·달력 2개·대시보드 1개·업무일지 6개 창을 이 한 곳으로 통일',
+      '🐞 일정 창을 두 번 열면 같은 창이 겹쳐 쌓이던 문제 해결(같은 id 는 교체)',
+      '🐞 문서관리에서 저장 후 창을 닫을 때, 다른 창이 먼저 열려 있으면 그 창을 닫아 버릴 수 있던 문제 해결(맨 위 창만 닫음)',
+      '색상: 지연·주의·완료 등 의미 색 hex 값 100여 곳을 config.js 의 SEM_COLOR / stColor() 한 곳에서 가져오도록',
+      'style.css: 같은 선택자에서 뒤 규칙이 덮어쓰던 앞 선언 183개·빈 규칙 58개 정리(계산된 스타일 70,888개 요소 전후 동일 확인)',
+      '테스트 34 → 79개',
+      '영향: 클라이언트 전용 — 서버 변경 없음'
+    ]},
     {ver:'13.189',date:'2026-09-27',title:'🗓 달력 개편 + 프로젝트 관리 전 탭 넓은 화면 + 보안·안정성 정비',tag:'feat',items:[
       '📐 프로젝트 관리의 모든 탭(파이프라인·달력·타임라인·수주대장·사전검토·요소기술·이슈·문서·A/S·운영자)이 창 너비를 다 씁니다. 넓어진 화면에 맞춰 카드·칸반·표·차트 배치를 반응형으로 조정',
       '🗓 달력 — 그날 챙길 것이 먼저 보이게: 주 단위 그리드, 여러 날 일정은 가로 막대, 하루짜리는 우선순위 칩(지연 → 납기 → 마일스톤 → 이슈 기한 → 일정 → 착수, 완료는 흐리게). 앞뒤 달 날짜도 표시',
@@ -6537,9 +6553,7 @@ async function openAnyworksModal() {
   var old = document.getElementById('anyworksOverlay');
   if (old) old.remove();
 
-  var ov = document.createElement('div');
-  ov.id = 'anyworksOverlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)';
+  var ov=createModal({id:'anyworksOverlay'}).overlay;  /* v13.190 공통 모달(z 자동 스택·id 중복 제거) */
 
   ov.innerHTML =
     '<div style="background:var(--bg-p);border-radius:14px;padding:24px;max-width:420px;width:92%;box-shadow:0 24px 80px rgba(0,0,0,.4)">'+
@@ -6598,9 +6612,7 @@ async function openAnyworksModal() {
       '<input type="checkbox" name="aw_team" value="'+t+'"'+checked+'> '+t+'</label>';
   }).join('');
 
-  var ov = document.createElement('div');
-  ov.id = 'anyworksOverlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)';
+  var ov=createModal({id:'anyworksOverlay'}).overlay;  /* v13.190 공통 모달(z 자동 스택·id 중복 제거) */
 
   ov.innerHTML =
     '<div style="background:var(--bg-p);border-radius:14px;padding:0;max-width:560px;width:94%;box-shadow:0 24px 80px rgba(0,0,0,.4);max-height:90vh;display:flex;flex-direction:column;overflow:hidden">'+

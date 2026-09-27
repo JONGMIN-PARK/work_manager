@@ -148,7 +148,7 @@ function _calBuildItems(projects, events, milestones, issues, projMap) {
   var items = [];
   projects.forEach(function (p) {
     var st = autoProjectStatus(p);
-    var base = { proj: p, projectId: p.id, color: p.color || '#3B82F6', assignees: p.assignees || [], done: p.status === 'done' };
+    var base = { proj: p, projectId: p.id, color: p.color || SEM_COLOR.info, assignees: p.assignees || [], done: p.status === 'done' };
     if (p.endDate) items.push(Object.assign({ kind: 'pend', id: 'pe_' + p.id, date: p.endDate, end: p.endDate, title: _calPname(p), overdue: st === 'delayed' }, base));
     if (p.startDate) items.push(Object.assign({ kind: 'pstart', id: 'ps_' + p.id, date: p.startDate, end: p.startDate, title: _calPname(p), overdue: false }, base));
     if (p.startDate && p.endDate && p.endDate > p.startDate) items.push(Object.assign({ kind: 'pspan', id: 'pp_' + p.id, date: p.startDate, end: p.endDate, title: _calPname(p), overdue: st === 'delayed' }, base));
@@ -158,10 +158,10 @@ function _calBuildItems(projects, events, milestones, issues, projMap) {
     var p = projMap[ms.projectId];
     var done = ms.status === 'done';
     items.push({ kind: 'ms', id: 'ms_' + ms.id, ref: ms, date: ms.endDate, end: ms.endDate, title: ms.name || '(이름 없음)', proj: p, projectId: ms.projectId,
-      color: (p && p.color) || '#8B5CF6', done: done, overdue: !done && ms.endDate < today, assignees: ms.assignees || (p && p.assignees) || [] });
+      color: (p && p.color) || SEM_COLOR.purple, done: done, overdue: !done && ms.endDate < today, assignees: ms.assignees || (p && p.assignees) || [] });
   });
   issues.forEach(function (iss) {
-    var urg = iss.urgency === 'urgent' ? '#EF4444' : iss.urgency === 'normal' ? '#F59E0B' : '#64748B';
+    var urg = iss.urgency === 'urgent' ? SEM_COLOR.danger : iss.urgency === 'normal' ? SEM_COLOR.warn : '#64748B';
     items.push({ kind: 'issue', id: 'is_' + iss.id, ref: iss, date: iss.dueDate, end: iss.dueDate, title: iss.title || '(제목 없음)', proj: projMap[iss.projectId], projectId: iss.projectId,
       color: urg, done: false, overdue: iss.dueDate < today, assignees: iss.assignees || [] });
   });
@@ -465,10 +465,10 @@ function renderCalSide() {
   function cnt(f) { return inPeriod.filter(f).length; }
   var msAll = cnt(function (it) { return it.kind === 'ms'; }), msDone = cnt(function (it) { return it.kind === 'ms' && it.done; });
   var tiles = [
-    { k: 'overdue', label: '지연', val: cnt(function (it) { return it.overdue; }), color: '#EF4444' },
+    { k: 'overdue', label: '지연', val: cnt(function (it) { return it.overdue; }), color: SEM_COLOR.danger },
     { k: 'pend', label: '납기', val: cnt(function (it) { return it.kind === 'pend'; }), color: '#F97316' },
-    { k: 'ms', label: '마일스톤', val: msDone + '/' + msAll, color: '#8B5CF6', sub: '완료/전체' },
-    { k: 'issue', label: '이슈 기한', val: cnt(function (it) { return it.kind === 'issue'; }), color: '#F59E0B' },
+    { k: 'ms', label: '마일스톤', val: msDone + '/' + msAll, color: SEM_COLOR.purple, sub: '완료/전체' },
+    { k: 'issue', label: '이슈 기한', val: cnt(function (it) { return it.kind === 'issue'; }), color: SEM_COLOR.warn },
     { k: 'evt', label: '일정', val: cnt(function (it) { return it.kind === 'evt'; }), color: '#06B6D4' }
   ];
   var periodLabel = calViewMode === 'month' ? (calMonth + 1) + '월' : '이번 주';
@@ -597,9 +597,6 @@ async function showEventModal(evtId, defaultDate) {
 
   var projects = await projGetAll();
 
-  var modal = document.createElement('div');
-  modal.id = 'evtModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
   // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
   // 반복 인스턴스인 경우 원본 로드
@@ -633,7 +630,7 @@ async function showEventModal(evtId, defaultDate) {
   // 담당자 입력
   var assVal = selAssignees.join(', ');
 
-  modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:480px;width:90%;max-height:85vh;overflow:auto">' +
+  var modal = createModal({ id: 'evtModal', width: '480px', boxStyle: 'padding:20px;width:90%;max-height:85vh;overflow:auto', html: '' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
       '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">' + (evt ? '📝 일정 편집' : '➕ 일정 등록') + '</h3>' +
       '<button class="btn btn-g btn-s" onclick="document.getElementById(\'evtModal\').remove()">✕ 닫기</button>' +
@@ -660,9 +657,7 @@ async function showEventModal(evtId, defaultDate) {
       (evt ? '<button class="btn btn-d btn-s" onclick="deleteEventUI(\'' + evt.id + '\')">🗑 삭제</button>' : '') +
       '<button class="btn btn-p" onclick="saveEventUI(\'' + (evt ? evt.id : '') + '\')">' + (evt ? '💾 수정' : '➕ 등록') + '</button>' +
     '</div>' +
-  '</div>';
-
-  document.body.appendChild(modal);
+  '' }).overlay;
 }
 
 /* ═══ Integration 3: 이벤트-업무 충돌 감지 ═══ */
@@ -786,12 +781,9 @@ function showGcalImportModal() {
   var existing = document.getElementById('gcalModal');
   if (existing) existing.remove();
 
-  var modal = document.createElement('div');
-  modal.id = 'gcalModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
   // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
-  modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:480px;width:90%;max-height:85vh;overflow:auto">' +
+  var modal = createModal({ id: 'gcalModal', width: '480px', boxStyle: 'padding:20px;width:90%;max-height:85vh;overflow:auto', html: '' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
       '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">📅 Google Calendar 가져오기</h3>' +
       '<button class="btn btn-g btn-s" onclick="document.getElementById(\'gcalModal\').remove()">✕</button>' +
@@ -813,9 +805,7 @@ function showGcalImportModal() {
       // 가져오기 결과
       '<div id="gcalImportResult" style="font-size:11px;color:var(--t5)"></div>' +
     '</div>' +
-  '</div>';
-
-  document.body.appendChild(modal);
+  '' }).overlay;
 }
 
 async function importICSFile(file) {

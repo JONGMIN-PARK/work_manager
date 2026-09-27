@@ -86,9 +86,9 @@ function renderPipeline() {
         html += '<div style="text-align:center;color:var(--t6);font-size:10px;padding:20px 0">—</div>';
       }
       items.forEach(function (p) {
-        var st = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[p.status] ? PROJ_STATUS[p.status] : { label: p.status, color: '#94A3B8', icon: '' };
+        var st = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[p.status] ? PROJ_STATUS[p.status] : { label: p.status, color: SEM_COLOR.muted, icon: '' };
         var isDelayed = p.status === 'delayed' || (p.endDate && p.endDate < localDate() && p.status !== 'done');
-        var borderColor = isDelayed ? '#EF4444' : 'var(--bd)';
+        var borderColor = isDelayed ? SEM_COLOR.danger : 'var(--bd)';
         var borderStyle = isDelayed ? '2px solid ' + borderColor : '1px solid ' + borderColor;
         var progress = p.progress || 0;
 
@@ -124,12 +124,12 @@ function renderPipeline() {
 
         // 진척률 바
         html += '<div style="margin-top:4px;height:3px;background:var(--bd);border-radius:2px;overflow:hidden">';
-        html += '<div style="height:100%;width:' + progress + '%;background:' + (p.color || '#3B82F6') + ';border-radius:2px"></div>';
+        html += '<div style="height:100%;width:' + progress + '%;background:' + (p.color || SEM_COLOR.info) + ';border-radius:2px"></div>';
         html += '</div>';
 
         // 체크리스트 완료율
         if (chkPct >= 0) {
-          var chkColor = chkPct === 100 ? '#10B981' : chkPct >= 50 ? '#F59E0B' : '#94A3B8';
+          var chkColor = chkPct === 100 ? SEM_COLOR.ok : chkPct >= 50 ? SEM_COLOR.warn : SEM_COLOR.muted;
           html += '<div style="display:flex;align-items:center;gap:4px;margin-top:4px">';
           html += '<span style="font-size:9px;color:' + chkColor + '">☑ ' + chkDone + '/' + chkTotal + '</span>';
           html += '<div style="flex:1;height:2px;background:var(--bd);border-radius:1px;overflow:hidden"><div style="height:100%;width:' + chkPct + '%;background:' + chkColor + '"></div></div>';

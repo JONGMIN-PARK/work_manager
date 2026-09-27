@@ -183,6 +183,19 @@ var EVT_TYPE = {
   etc:          { label: '기타',     color: '#64748B', icon: '📌' }
 };
 
+/* ═══ 의미 색상 (v13.190) — 상태·경고 색을 코드 곳곳에 hex 로 박지 말고 여기서 ═══
+ * PROJ_STATUS 와 같은 팔레트. 상태가 있으면 stColor(st)/stBg(st), 상태와 무관한 의미색은 SEM_COLOR */
+var SEM_COLOR = {
+  danger: '#EF4444',   // 지연·오류·긴급
+  warn:   '#F59E0B',   // 주의·보류·임박
+  ok:     '#10B981',   // 완료·정상
+  info:   '#3B82F6',   // 진행·기본 강조
+  muted:  '#94A3B8',   // 대기·비활성
+  purple: '#8B5CF6'    // 마일스톤
+};
+function stColor(st) { return (PROJ_STATUS[st] || PROJ_STATUS.waiting).color; }
+function stBg(st) { return (PROJ_STATUS[st] || PROJ_STATUS.waiting).bg; }
+
 /* ═══ 프로젝트 라이프사이클 단계 ═══ */
 var PROJ_PHASE = {
   order:       { label: '수주',   icon: '📋', color: '#6366F1', seq: 1 },

@@ -1,5 +1,48 @@
 # Work Manager — 변경 이력
 
+## v13.190 (2026-09-27) — 리팩토링 2단계 (v13.189 에서 보류한 항목 전부)
+
+순수 리팩토링. 모든 분해는 **바꾸기 전 원본 코드의 출력을 픽스처로 기록 → 분해 → 바이트 동일 비교** 순서로 했다.
+
+### 큰 함수 분해
+| 함수 | 전 | 후 | 분해 |
+|---|---|---|---|
+| `renderTimeline` | 504 | 74 | `_tlLoadData` · `_tlFilterSort`(순수) · `_tlComputeRange`(순수) · `_tlBarsVars` · `_tlRenderControls` · `_tlRenderHeader` · `_tlRenderRows`(+ 라벨/담당자/단계/막대/마일스톤/D-Day 빌더) · `_tlAfterMount` |
+| `showProjectModal` | 178 | 26 | `_projModalLoad` · `_projModalResetStaging` · `_projMsEditRowsHtml` · `_projModalFormHtml`(+4) |
+| `saveProjectUI` | 113 | 39 | `_projFormRead` · `_projMemoRead` · `_projSyncMilestones` · `_projSaveErrMsg`(순수) |
+| `showProjectDetail` | 254 | 29 | `_pdFetchDetailData` · 헤더/탭바/개요/라이프사이클/지연로드 탭/푸터 빌더 · `_pdAttachDetailPanel` |
+| `pdLoadWork` | 275 | 14 | `_pdFetchWorkData` · `_pdAggregateReported`/`_pdAggregateWork`(순수) · 요약/인원/외부/마일스톤 렌더러 |
+
+- 정렬 비교자 `_tlProjCmpBy(sort)`, 단위 폭 `_tlUnitWidthFor(scale)` 를 순수 함수로 분리. 공개 전역 이름·시그니처 변경 없음.
+- 검증: 타임라인 17개 렌더 시나리오(모든 스케일·편집/재정렬·주요경로·그룹·정렬·필터·스크롤 복원·의존 화살표) + 모달 6종 + 저장 9케이스,
+  상세 패널/작업 탭 11개 스냅샷 — 모두 원본과 바이트 동일. 헤드리스 스크린샷 픽셀 동일.
+
+### as-manager.js 분할 (3,217줄 → 7개 파일)
+`as-core.js`(105) · `as-list.js`(358) · `as-form.js`(616) · `as-detail.js`(715) · `as-detail-actions.js`(555) · `as-report.js`(800) · `as-category-admin.js`(157).
+로드 시점 실행문은 끝의 wmDataBus IIFE 하나뿐 → 마지막 파일에. 기계 검증: 함수 90/90 · 변수 14/14 · 원본 비공백 3,013줄 누락 0, 분할 전후 DOM 텍스트·API 호출 순서 동일.
+
+### 공통 모달
+- `createModal` 확장: `id`(같은 id 먼저 제거) · `z`(기본 `MODAL_Z + 열린 모달 수`) · `boxStyle`/`overlayStyle` · `titleText`(이스케이프) · `closeOnEsc`(맨 위만).
+- 이관: timeline 6(projModal·msTargets·projCopy·projShare·projTransfer·msTransfer, 원래 z·스타일 유지) · project-detail 2(진척·배정) · calendar 2(evt·gcal) · dashboard 1(report) · HTML 인라인 6(업무일지 미리보기·선택·사업부·수동입력·애니웍스×2).
+  상세 슬라이드 패널, 대시보드 전체화면 보고서는 모달 형태가 아니라 유지.
+- 버그: `evtModal` 중복 생성(기존 창 제거 없음) → id 교체로 해결. document-manager 가 `querySelector('.wa-modal-overlay')`(첫 번째)를 닫아 다른 창을 닫을 수 있던 것 → `_docCloseTopModal()`(마지막).
+
+### 색상 단일화
+`config.js` 에 `SEM_COLOR`(danger/warn/ok/info/muted/purple)·`stColor(st)`·`stBg(st)` (+ HTML 폴백). 의미 색 hex 리터럴 교체: timeline 25 · project-detail 40 · dashboard 27 · pipeline 6 · calendar 7. 장식용 팔레트는 유지.
+
+### style.css 정리
+같은 선택자·같은 @media 문맥에서 뒤 규칙이 덮는 앞 선언만 제거(뒤가 일반인데 앞이 `!important` 면 유지): 선언 183개, 빈 규칙 58개. 82,089 → 77,493B.
+검증: 동결 사본에서 6화면 × 4테마 × 2폭, 70,888개 요소 계산 스타일 해시 전후 동일(0 diff). 검증기 민감도 확인 — 한 줄 고의 변경 시 90건 검출.
+
+### 테스트
+34 → 79. `timeline-render`(스냅샷)·`timeline-pure`(26)·`project-detail-snapshot`(11)·`project-detail-aggregate`(6)·`as-split`(4) + 픽스처(`test/fixtures/`, `UPDATE_SNAPSHOTS=1` 로 재기록).
+
+### 발견했지만 이번엔 고치지 않은 기존 동작 (순수 리팩토링 범위 밖, 테스트가 현재 동작을 고정)
+- `drawDependencyArrows`: 마일스톤이 있는 프로젝트는 행 맵이 마일스톤 행으로 덮여 의존 화살표가 그려지지 않음.
+- `calcCriticalPath`: 단순 체인에서 마지막 프로젝트만 주요 경로로 표시되는 off-by-one.
+
+클라이언트 전용 — 서버 변경·마이그레이션 없음.
+
 ## v13.189 (2026-09-27) — 달력 개편 · 프로젝트 관리 전 탭 wide · 보안/안정성 · 리팩토링 1단계
 
 프로젝트 관리 영역을 세 갈래(수주/사전검토/요소기술/이슈 · 문서/A·S/운영자 · 공통 코어)로 리뷰한 뒤,

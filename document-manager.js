@@ -1172,6 +1172,13 @@ async function docEditFolderMemo(folderId) {
   }
 }
 
+/* 저장 후 방금 쓴 모달 닫기 — 첫 번째가 아니라 맨 위(마지막) .wa-modal-overlay.
+   다른 화면의 createModal 창이 먼저 열려 있으면 그걸 닫아 버리던 문제 방지 */
+function _docCloseTopModal() {
+  var all = document.querySelectorAll('.wa-modal-overlay');
+  if (all.length) all[all.length - 1].remove();
+}
+
 async function docSaveFolderMemo(folderId) {
   try {
     var folder = await folderGet(folderId);
@@ -1181,8 +1188,7 @@ async function docSaveFolderMemo(folderId) {
     folder.memo = el.value.trim();
     folder.updatedAt = new Date().toISOString();
     await folderPut(folder);
-    var overlay = document.querySelector('.wa-modal-overlay');
-    if (overlay) overlay.remove();
+    _docCloseTopModal();
     showToast('📝 폴더 메모 저장됨');
     renderDocManager();
   } catch (err) {
@@ -1199,8 +1205,7 @@ async function docClearFolderMemo(folderId) {
     folder.memo = '';
     folder.updatedAt = new Date().toISOString();
     await folderPut(folder);
-    var overlay = document.querySelector('.wa-modal-overlay');
-    if (overlay) overlay.remove();
+    _docCloseTopModal();
     showToast('🗑️ 폴더 메모 삭제됨');
     renderDocManager();
   } catch (err) {
@@ -1243,8 +1248,7 @@ async function docExecMoveFile(fileId, targetFolderId) {
     f.updatedAt = new Date().toISOString();
     await filePut(f);
     // 모달 닫기
-    var overlay = document.querySelector('.wa-modal-overlay');
-    if (overlay) overlay.remove();
+    _docCloseTopModal();
     showToast('📁 파일 이동 완료');
     renderDocManager();
   } catch (err) {
@@ -1504,8 +1508,7 @@ async function docSaveFileMeta(fileId) {
     f.updatedAt = new Date().toISOString();
     await filePut(f);
 
-    var overlay = document.querySelector('.wa-modal-overlay');
-    if (overlay) overlay.remove();
+    _docCloseTopModal();
     showToast('💾 파일 정보 저장됨');
     renderDocManager();
   } catch (err) {

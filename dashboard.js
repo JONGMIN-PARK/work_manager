@@ -103,7 +103,7 @@ async function renderDashboard(projects) {
       '</div>' +
       // 지연 경고
       '<div data-drill="delayedProjects" style="padding:12px;background:' + (delayedProjects.length ? 'rgba(239,68,68,.08)' : 'var(--bg-i)') + ';border:1px solid ' + (delayedProjects.length ? 'rgba(239,68,68,.3)' : 'var(--bd-i)') + ';border-radius:8px' + (delayedProjects.length ? ';cursor:pointer' : '') + '" onclick="if(typeof dashDrill===\'function\')dashDrill(\'delayedProjects\')" title="클릭: 지연 프로젝트 목록 보기">' +
-        '<div style="font-size:11px;font-weight:700;color:' + (delayedProjects.length ? '#EF4444' : 'var(--t4)') + ';margin-bottom:8px">⚠️ 지연 프로젝트</div>' +
+        '<div style="font-size:11px;font-weight:700;color:' + (delayedProjects.length ? SEM_COLOR.danger : 'var(--t4)') + ';margin-bottom:8px">⚠️ 지연 프로젝트</div>' +
         (delayedProjects.length ?
           delayedProjects.map(function (p) {
             var overDays = daysDiff(p.endDate, today);
@@ -142,7 +142,7 @@ async function renderDashboard(projects) {
           var mProj = _projMap[m.projectId];
           var mSt = PROJ_STATUS[m.status] || PROJ_STATUS.waiting;
           var isOverdue = m.endDate && m.endDate < today && m.status !== 'hold';
-          var borderColor = isOverdue ? '#EF4444' : mSt.color;
+          var borderColor = isOverdue ? SEM_COLOR.danger : mSt.color;
           var bgColor = isOverdue ? 'rgba(239,68,68,.06)' : mSt.bg;
           return '<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:' + bgColor + ';border-left:3px solid ' + borderColor + ';border-radius:4px;font-size:11px">' +
             '<span style="font-size:12px">' + mSt.icon + '</span>' +
@@ -231,7 +231,7 @@ function buildResourceMap(projects) {
     var count = projs.length;
     // 히트맵 강도: 3개 이상이면 과부하
     var intensity = count <= 1 ? 'rgba(16,185,129,.15)' : count <= 2 ? 'rgba(59,130,246,.15)' : count <= 3 ? 'rgba(245,158,11,.15)' : 'rgba(239,68,68,.15)';
-    var borderColor = count <= 1 ? '#10B981' : count <= 2 ? '#3B82F6' : count <= 3 ? '#F59E0B' : '#EF4444';
+    var borderColor = count <= 1 ? SEM_COLOR.ok : count <= 2 ? SEM_COLOR.info : count <= 3 ? SEM_COLOR.warn : SEM_COLOR.danger;
     var loadLabel = count <= 1 ? '여유' : count <= 2 ? '적정' : count <= 3 ? '다소 많음' : '과부하';
     var loadColor = borderColor;
     var displayName = typeof shortName === 'function' ? shortName(a) : a;
@@ -437,7 +437,7 @@ function buildTaskDistSection(projects, taskDist) {
   if (!projsWithDist.length) return;
 
   // ABR 색상 참조
-  var abrColors = (typeof ABR !== 'undefined') ? ABR : { A: '#EF4444', B: '#3B82F6', D: '#10B981', G: '#8B5CF6', S: '#F59E0B', M: '#64748B' };
+  var abrColors = (typeof ABR !== 'undefined') ? ABR : { A: SEM_COLOR.danger, B: SEM_COLOR.info, D: SEM_COLOR.ok, G: SEM_COLOR.purple, S: SEM_COLOR.warn, M: '#64748B' };
   var amLabels = (typeof AM !== 'undefined') ? AM : {};
 
   var html = '<div style="padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:8px;margin-top:10px">' +
@@ -782,7 +782,7 @@ function buildBottleneckWidget(projects) {
       var stayDays = daysDiff(cur.startDate, today);
       if (stayDays >= 14) {
         var phLabel = phases[p.currentPhase] ? phases[p.currentPhase].label : p.currentPhase;
-        var phColor = phases[p.currentPhase] ? phases[p.currentPhase].color : '#94A3B8';
+        var phColor = phases[p.currentPhase] ? phases[p.currentPhase].color : SEM_COLOR.muted;
         bottlenecks.push({ name: p.name, phase: phLabel, days: stayDays, color: phColor });
       }
     }
@@ -1030,8 +1030,8 @@ async function showPersonReport(name) {
     html += '<div style="font-size:11px;font-weight:700;color:var(--t4);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--bd)">🎫 담당 이슈 (미해결 ' + myIssues.length + '건)</div>';
     if (myIssues.length) {
       myIssues.slice(0, 8).forEach(function (iss) {
-        var urg = urgencies[iss.urgency] || { label: iss.urgency, color: '#94A3B8', icon: '' };
-        var ist = issueStatuses[iss.status] || { label: iss.status, color: '#94A3B8' };
+        var urg = urgencies[iss.urgency] || { label: iss.urgency, color: SEM_COLOR.muted, icon: '' };
+        var ist = issueStatuses[iss.status] || { label: iss.status, color: SEM_COLOR.muted };
         var isUrgent = iss.urgency === 'urgent';
         html += '<div style="padding:5px 8px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--bd)">';
         if (isUrgent) html += '<span style="font-size:10px;flex-shrink:0">🔴</span>';
@@ -1057,7 +1057,7 @@ async function showPersonReport(name) {
       html += '<div style="display:flex;align-items:flex-end;gap:6px;height:60px;margin-bottom:4px">';
       weeklyHours.forEach(function (w) {
         var pct = Math.max(w.hours / maxHours * 100, w.hours > 0 ? 6 : 2);
-        var barColor = w.hours >= 40 ? '#EF4444' : w.hours >= 20 ? '#F59E0B' : '#10B981';
+        var barColor = w.hours >= 40 ? SEM_COLOR.danger : w.hours >= 20 ? SEM_COLOR.warn : SEM_COLOR.ok;
         html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">';
         html += '<span style="font-size:9px;font-weight:700;color:' + barColor + '">' + w.hours + 'h</span>';
         html += '<div style="width:100%;height:' + pct + '%;min-height:2px;background:' + barColor + ';border-radius:3px 3px 0 0"></div>';
@@ -1175,11 +1175,11 @@ async function buildHealthScorecard(projects) {
 
     // 등급
     var grade, gradeColor;
-    if (score >= 80) { grade = 'A'; gradeColor = '#10B981'; }
-    else if (score >= 60) { grade = 'B'; gradeColor = '#3B82F6'; }
-    else if (score >= 40) { grade = 'C'; gradeColor = '#F59E0B'; }
+    if (score >= 80) { grade = 'A'; gradeColor = SEM_COLOR.ok; }
+    else if (score >= 60) { grade = 'B'; gradeColor = SEM_COLOR.info; }
+    else if (score >= 40) { grade = 'C'; gradeColor = SEM_COLOR.warn; }
     else if (score >= 20) { grade = 'D'; gradeColor = '#F97316'; }
-    else { grade = 'E'; gradeColor = '#EF4444'; }
+    else { grade = 'E'; gradeColor = SEM_COLOR.danger; }
 
     var issueResolved = projIssues.filter(function (iss) { return iss.status === 'resolved' || iss.status === 'closed'; }).length;
     var chkDone = curPhaseItems.filter(function (c) { return c.done; }).length;
@@ -1236,12 +1236,9 @@ function showReportModal() {
   var existing = document.getElementById('reportModal');
   if (existing) existing.remove();
 
-  var modal = document.createElement('div');
-  modal.id = 'reportModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
   // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
-  modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:420px;width:95%">' +
+  var modal = createModal({ id: 'reportModal', width: '420px', boxStyle: 'padding:20px;width:95%', html: '' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
       '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">📊 보고서 생성</h3>' +
       '<button class="btn btn-g btn-s" onclick="document.getElementById(\'reportModal\').remove()">✕</button>' +
@@ -1266,9 +1263,7 @@ function showReportModal() {
       '<button class="btn btn-g btn-s" onclick="document.getElementById(\'reportModal\').remove()">취소</button>' +
       '<button class="btn btn-p" onclick="generateReport()">📊 보고서 생성</button>' +
     '</div>' +
-  '</div>';
-
-  document.body.appendChild(modal);
+  '' }).overlay;
 }
 
 async function generateReport() {
@@ -1352,8 +1347,8 @@ async function generateReport() {
     if (openIssues.length) {
       rptHtml += '<table><thead><tr><th>제목</th><th>긴급도</th><th>상태</th><th>프로젝트</th><th>등록일</th></tr></thead><tbody>';
       openIssues.slice(0, 20).forEach(function (iss) {
-        var urg = urgencies[iss.urgency] || { label: iss.urgency, color: '#94A3B8' };
-        var ist = issStatuses[iss.status] || { label: iss.status, color: '#94A3B8' };
+        var urg = urgencies[iss.urgency] || { label: iss.urgency, color: SEM_COLOR.muted };
+        var ist = issStatuses[iss.status] || { label: iss.status, color: SEM_COLOR.muted };
         var proj = _rptProjMap[iss.projectId];
         rptHtml += '<tr>' +
           '<td>' + eH(iss.title) + '</td>' +
@@ -1418,11 +1413,11 @@ async function generateReport() {
         var stInfo = PROJ_STATUS[st] || PROJ_STATUS.waiting;
         var score = p.progress || 0;
         var grade, gradeColor;
-        if (score >= 80) { grade = 'A'; gradeColor = '#10B981'; }
-        else if (score >= 60) { grade = 'B'; gradeColor = '#3B82F6'; }
-        else if (score >= 40) { grade = 'C'; gradeColor = '#F59E0B'; }
+        if (score >= 80) { grade = 'A'; gradeColor = SEM_COLOR.ok; }
+        else if (score >= 60) { grade = 'B'; gradeColor = SEM_COLOR.info; }
+        else if (score >= 40) { grade = 'C'; gradeColor = SEM_COLOR.warn; }
         else if (score >= 20) { grade = 'D'; gradeColor = '#F97316'; }
-        else { grade = 'E'; gradeColor = '#EF4444'; }
+        else { grade = 'E'; gradeColor = SEM_COLOR.danger; }
         rptHtml += '<tr>' +
           '<td style="font-weight:600">' + eH(p.name || p.orderNo) + '</td>' +
           '<td><span class="grade" style="color:' + gradeColor + '">' + grade + '</span></td>' +

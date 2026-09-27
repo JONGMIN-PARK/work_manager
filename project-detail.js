@@ -4,6 +4,11 @@
  */
 
 var _pdDetailBusy = false; // v13.159 중복 오픈 가드 — 연타 시 패널 다중 생성 방지
+// 패널+백드롭 닫기 (인라인 onclick 용 JS 문자열)
+var _PD_CLOSE_JS = 'document.getElementById(\'projDetailPanel\').remove();var bd=document.getElementById(\'projDetailBackdrop\');if(bd)bd.remove()';
+// 지연 로딩 탭 공통 "로딩 중" 자리표시
+var _PD_LOADING_HTML = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div>';
+
 async function showProjectDetail(id) {
   if (_pdDetailBusy) return;        // 이미 여는 중이면 무시(연타 방지)
   _pdDetailBusy = true;
@@ -13,8 +18,30 @@ async function showProjectDetail(id) {
   var existingBd = document.getElementById('projDetailBackdrop');
   if (existingBd) existingBd.remove();
 
-  // v13.159 속도 개선 — 프로젝트/마일스톤은 캐시(_pdCached)에서 즉시 사용(네트워크 왕복 제거).
-  // 체크리스트만 프로젝트별 조회. 캐시에 없으면 개별 fetch 폴백.
+  var data = await _pdFetchDetailData(id);
+  if (!data) { _pdDetailBusy = false; return; }
+  var proj = data.proj, projMs = data.projMs, allChk = data.allChk;
+  window._pdProj = proj; // 사양 탭 등에서 현재 프로젝트 참조
+  var st = autoProjectStatus(proj);
+  var stInfo = PROJ_STATUS[st] || PROJ_STATUS.waiting;
+  var ph = _pdPhaseInfo(allChk);
+
+  var html = _pdDetailHeaderHtml(proj, stInfo) +
+    _pdDetailTabBarHtml(id) +
+    _pdDetailOverviewHtml(id, proj, projMs, allChk, ph.phases);
+  // 백그라운드 시간 집계 → 채움 (패널 부착 후 setTimeout으로 비동기 실행)
+  _pdScheduleMsHours(id, proj, projMs);
+  html += _pdDetailLifecycleHtml(id, proj, allChk, ph) +
+    _pdDetailLazyTabsHtml() +
+    _pdDetailFooterHtml(id);
+
+  _pdAttachDetailPanel(id, proj, html);
+  } finally { _pdDetailBusy = false; }
+}
+
+/* 상세 패널 데이터 — v13.159 속도 개선: 프로젝트/마일스톤은 캐시(_pdCached)에서 즉시 사용(네트워크 왕복 제거).
+   체크리스트만 프로젝트별 조회. 캐시에 없으면 개별 fetch 폴백. 프로젝트 없으면 null. */
+async function _pdFetchDetailData(id) {
   var proj = null, projMs = [], allChk = [];
   try {
     var _r = await Promise.all([
@@ -27,12 +54,14 @@ async function showProjectDetail(id) {
     allChk = _r[2] || [];
   } catch (_) {}
   if (!proj) { try { proj = await projGet(id); } catch (e) {} }
-  if (!proj) { _pdDetailBusy = false; return; }
+  if (!proj) return null;
   if (!projMs.length) { try { projMs = await msGetByProject(id); } catch (e) {} }
   projMs.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
-  window._pdProj = proj; // 사양 탭 등에서 현재 프로젝트 참조
-  var st = autoProjectStatus(proj);
-  var stInfo = PROJ_STATUS[st] || PROJ_STATUS.waiting;
+  return { proj: proj, projMs: projMs, allChk: allChk };
+}
+
+/* 라이프사이클 단계 정의(seq 정렬) + 단계별 체크리스트 진행률 */
+function _pdPhaseInfo(allChk) {
   var phaseProgress = {};
   var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
   var phaseKeys = Object.keys(phases).sort(function (a, b) { return (phases[a].seq || 0) - (phases[b].seq || 0); });
@@ -41,15 +70,14 @@ async function showProjectDetail(id) {
     var done = items.filter(function (c) { return c.done; }).length;
     phaseProgress[pk] = { total: items.length, done: done, pct: items.length ? Math.round(done / items.length * 100) : 0 };
   });
+  return { phases: phases, phaseKeys: phaseKeys, phaseProgress: phaseProgress };
+}
 
-  var panel = document.createElement('div');
-  panel.id = 'projDetailPanel';
-  panel.style.cssText = 'position:fixed;top:0;right:0;bottom:0;width:420px;max-width:92vw;background:var(--bg-p);border-left:1px solid var(--bd);z-index:9998;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);padding:20px;animation:slideIn .2s ease';
-
-  // 헤더
+/* 헤더(이름·닫기) + 상태 배지 */
+function _pdDetailHeaderHtml(proj, stInfo) {
   var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
     '<h3 style="font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="background:' + proj.color + ';width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0"></span>' + eH(proj.name) + '</h3>' +
-    '<button class="btn btn-g btn-s" onclick="document.getElementById(\'projDetailPanel\').remove();var bd=document.getElementById(\'projDetailBackdrop\');if(bd)bd.remove()">✕</button>' +
+    '<button class="btn btn-g btn-s" onclick="' + _PD_CLOSE_JS + '">✕</button>' +
   '</div>';
 
   // 상태 배지
@@ -57,11 +85,14 @@ async function showProjectDetail(id) {
     '<span class="badge" style="background:' + stInfo.bg + ';color:' + stInfo.color + '">' + stInfo.icon + ' ' + stInfo.label + '</span>' +
     (proj.orderNo ? '<span class="badge" style="background:var(--bg-i);color:var(--t4)">' + eH(proj.orderNo) + '</span>' : '') +
   '</div>';
+  return html;
+}
 
-  // 탭 (개요 / 라이프사이클 / 이슈 / 투입실적)
+/* 탭 바 (개요 / 라이프사이클 / 이슈 / 투입실적 / 사양 / 개발 / 회의) */
+function _pdDetailTabBarHtml(id) {
   var pdTabStyle = 'padding:6px 10px;font-size:11px;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--t5);font-weight:600;background:none;cursor:pointer';
   var pdTabActiveStyle = 'padding:6px 10px;font-size:11px;border:none;border-bottom:2px solid var(--ac);margin-bottom:-2px;color:var(--ac);font-weight:700;background:none;cursor:pointer';
-  html += '<div style="display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid var(--bd)">' +
+  return '<div style="display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid var(--bd)">' +
     '<button class="btn" id="pdTabOverview" style="' + pdTabActiveStyle + '" onclick="pdSwitchTab(\'overview\')">개요</button>' +
     '<button class="btn" id="pdTabLifecycle" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'lifecycle\')">라이프사이클</button>' +
     '<button class="btn" id="pdTabIssues" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'issues\',\'' + id + '\')">이슈</button>' +
@@ -70,9 +101,11 @@ async function showProjectDetail(id) {
     '<button class="btn" id="pdTabDev" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'dev\',\'' + id + '\')">개발</button>' +
     '<button class="btn" id="pdTabMeeting" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'meeting\',\'' + id + '\')">회의</button>' +
   '</div>';
+}
 
-  // ── 개요 탭 ──
-  html += '<div id="pdOverview">';
+/* ── 개요 탭 ── 기간·진척·담당자·수주·메모·마일스톤·요소기술·현재 단계 체크리스트 */
+function _pdDetailOverviewHtml(id, proj, projMs, allChk, phases) {
+  var html = '<div id="pdOverview">';
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">' +
     '<div style="font-size:10px;color:var(--t5)">시작일<div style="font-size:12px;color:var(--t2);font-weight:600;margin-top:2px">' + (proj.startDate || '-') + '</div></div>' +
     '<div style="font-size:10px;color:var(--t5)">종료일<div style="font-size:12px;color:var(--t2);font-weight:600;margin-top:2px">' + (proj.endDate || '-') + '</div></div>' +
@@ -91,7 +124,28 @@ async function showProjectDetail(id) {
     }).join(' ') : '<span style="font-size:11px;color:var(--t6)">미지정</span>';
   html += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:4px">담당자</div>' + assigneeHtml + '</div>';
 
-  // 수주 정보 (orderNo가 있는 경우)
+  html += _pdOrderInfoHtml(proj);
+
+  if (proj.memo) {
+    // v13.35~ 메모는 HTML(이미지 인라인 가능). plain text 호환은 memoToHtml 헬퍼가 처리.
+    var _memoHtml = (typeof memoToHtml === 'function') ? memoToHtml(proj.memo) : eH(proj.memo);
+    html += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:4px">메모</div><div class="memo-body" style="font-size:11px;color:var(--t3);padding:8px;background:var(--bg-i);border-radius:6px;white-space:normal;word-break:break-word">' + _memoHtml + '</div></div>';
+  }
+
+  html += _pdOverviewMsListHtml(projMs);
+
+  // 적용 요소기술 (요소기술 Phase 2 연동) — 비동기로 채움
+  html += '<div id="pdTechUsed" style="margin-bottom:12px"></div>';
+
+  html += _pdOverviewChecklistHtml(id, proj, allChk, phases);
+
+  html += '</div>'; // end pdOverview
+  return html;
+}
+
+/* 수주 정보 (orderNo가 있는 경우) */
+function _pdOrderInfoHtml(proj) {
+  var html = '';
   if (proj.orderNo && typeof getOrderInfo === 'function') {
     var orderInfo = getOrderInfo(proj.orderNo);
     if (orderInfo) {
@@ -104,14 +158,11 @@ async function showProjectDetail(id) {
       html += '</div></div>';
     }
   }
+  return html;
+}
 
-  if (proj.memo) {
-    // v13.35~ 메모는 HTML(이미지 인라인 가능). plain text 호환은 memoToHtml 헬퍼가 처리.
-    var _memoHtml = (typeof memoToHtml === 'function') ? memoToHtml(proj.memo) : eH(proj.memo);
-    html += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:4px">메모</div><div class="memo-body" style="font-size:11px;color:var(--t3);padding:8px;background:var(--bg-i);border-radius:6px;white-space:normal;word-break:break-word">' + _memoHtml + '</div></div>';
-  }
-
-  // 마일스톤 — v13.61: 패널 즉시 표시. 시간 집계는 백그라운드에서 채움 (await 제거)
+/* 개요 탭 마일스톤 목록 — v13.61: 패널 즉시 표시. 시간(.pd-ms-hours)은 _pdScheduleMsHours가 백그라운드로 채움 */
+function _pdOverviewMsListHtml(projMs) {
   var msHtml = projMs.length ?
     projMs.map(function (m) {
       var mSt = PROJ_STATUS[m.status] || PROJ_STATUS.waiting;
@@ -123,12 +174,11 @@ async function showProjectDetail(id) {
         '<span style="font-size:9px;color:var(--t6)">' + (m.endDate || '') + '</span>' +
         '<span class="badge" style="background:' + mSt.bg + ';color:' + mSt.color + ';font-size:8px;padding:1px 4px">' + mSt.label + '</span></div>';
     }).join('') : '<div style="font-size:11px;color:var(--t6)">마일스톤 없음</div>';
-  html += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:6px">마일스톤 (' + projMs.length + ')</div>' + msHtml + '</div>';
+  return '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:6px">마일스톤 (' + projMs.length + ')</div>' + msHtml + '</div>';
+}
 
-  // 적용 요소기술 (요소기술 Phase 2 연동) — 비동기로 채움
-  html += '<div id="pdTechUsed" style="margin-bottom:12px"></div>';
-
-  // 백그라운드 시간 집계 → 채움 (패널 부착 후 setTimeout으로 비동기 실행)
+/* 마일스톤별 시간 집계 → .pd-ms-hours 채움 (setTimeout 0 — 패널 부착 후 비동기 실행) */
+function _pdScheduleMsHours(id, proj, projMs) {
   if (projMs.length && typeof calcHoursByMilestone === 'function') {
     setTimeout(function () {
       calcHoursByMilestone(id, { proj: proj, milestones: projMs }).then(function (msHoursData) {
@@ -142,16 +192,18 @@ async function showProjectDetail(id) {
       }).catch(function (e) { console.warn('[Timeline/ms-hours]', e); });
     }, 0);
   }
+}
 
-  // 개요 탭: 현재 단계 체크리스트 (기본 표시)
+/* 개요 탭: 현재 단계 체크리스트 (기본 표시) + 항목 추가 input */
+function _pdOverviewChecklistHtml(id, proj, allChk, phases) {
   var overviewChkPhase = proj.currentPhase || 'order';
-  var overviewChkPh = phases[overviewChkPhase] || { label: overviewChkPhase, icon: '', color: '#94A3B8' };
+  var overviewChkPh = phases[overviewChkPhase] || { label: overviewChkPhase, icon: '', color: SEM_COLOR.muted };
   var overviewChkItems = allChk.filter(function (c) { return c.phase === overviewChkPhase; });
   overviewChkItems.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
   var overviewChkDone = overviewChkItems.filter(function (c) { return c.done; }).length;
   var overviewChkPct = overviewChkItems.length ? Math.round(overviewChkDone / overviewChkItems.length * 100) : 0;
 
-  html += '<div style="margin-bottom:12px" data-overview-chk-phase="' + overviewChkPhase + '">';
+  var html = '<div style="margin-bottom:12px" data-overview-chk-phase="' + overviewChkPhase + '">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
   html += '<span style="font-size:10px;color:var(--t5)">체크리스트 — ' + overviewChkPh.icon + ' ' + overviewChkPh.label + '</span>';
   html += '<span id="pdOverviewChkStat" style="font-size:10px;color:' + overviewChkPh.color + ';font-weight:600' + (overviewChkItems.length > 0 ? '' : ';display:none') + '">' + overviewChkDone + '/' + overviewChkItems.length + ' (' + overviewChkPct + '%)</span>';
@@ -163,11 +215,13 @@ async function showProjectDetail(id) {
   html += '<button class="btn btn-g btn-s" style="font-size:10px;padding:4px 8px" onclick="pdAddCheck(\'' + id + '\',\'' + overviewChkPhase + '\')">추가</button>';
   html += '</div>';
   html += '</div>';
+  return html;
+}
 
-  html += '</div>'; // end pdOverview
-
-  // ── 라이프사이클 탭 ──
-  html += '<div id="pdLifecycle" style="display:none">';
+/* ── 라이프사이클 탭 ── 단계 진행 바 · 단계 전환 · 현재 단계 체크리스트. ph = _pdPhaseInfo() */
+function _pdDetailLifecycleHtml(id, proj, allChk, ph) {
+  var phases = ph.phases, phaseKeys = ph.phaseKeys, phaseProgress = ph.phaseProgress;
+  var html = '<div id="pdLifecycle" style="display:none">';
 
   // 단계 진행 바
   var curPhase = proj.currentPhase || 'order';
@@ -215,28 +269,34 @@ async function showProjectDetail(id) {
   html += '</div>';
 
   html += '</div>'; // end pdLifecycle
+  return html;
+}
 
-  // ── 이슈 탭 ──
-  html += '<div id="pdIssues" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
+/* 지연 로딩 탭 컨테이너 — 이슈 / 투입실적 / 사양 / 개발 백로그 / 회의 (pdSwitchTab 시 채움) */
+function _pdDetailLazyTabsHtml() {
+  return '<div id="pdIssues" style="display:none">' + _PD_LOADING_HTML + '</div>' +
+    '<div id="pdWork" style="display:none">' + _PD_LOADING_HTML + '</div>' +
+    '<div id="pdSpec" style="display:none"></div>' +
+    '<div id="pdDev" style="display:none">' + _PD_LOADING_HTML + '</div>' +
+    '<div id="pdMeeting" style="display:none">' + _PD_LOADING_HTML + '</div>';
+}
 
-  // ── 투입실적 탭 ──
-  html += '<div id="pdWork" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
-  html += '<div id="pdSpec" style="display:none"></div>';
-
-  // ── 개발 백로그 탭 ──
-  html += '<div id="pdDev" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
-  // ── 회의 탭 ──
-  html += '<div id="pdMeeting" style="display:none"><div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div></div>';
-
-  // 하단 버튼
-  html += '<div style="display:flex;gap:8px;margin-top:16px">' +
-    '<button class="btn btn-p btn-s" onclick="document.getElementById(\'projDetailPanel\').remove();var bd=document.getElementById(\'projDetailBackdrop\');if(bd)bd.remove();showProjectModal(\'' + id + '\')">✏️ 편집</button>' +
+/* 하단 버튼(편집/체크리스트 생성/삭제) + 진척 히스토리·코멘트 섹션 */
+function _pdDetailFooterHtml(id) {
+  return '<div style="display:flex;gap:8px;margin-top:16px">' +
+    '<button class="btn btn-p btn-s" onclick="' + _PD_CLOSE_JS + ';showProjectModal(\'' + id + '\')">✏️ 편집</button>' +
     '<button class="btn btn-g btn-s" onclick="pdGenerateChecklists(\'' + id + '\')">📋 체크리스트 생성</button>' +
-    '<button class="btn btn-d btn-s" onclick="document.getElementById(\'projDetailPanel\').remove();var bd=document.getElementById(\'projDetailBackdrop\');if(bd)bd.remove();deleteProjectUI(\'' + id + '\')">🗑 삭제</button>' +
+    '<button class="btn btn-d btn-s" onclick="' + _PD_CLOSE_JS + ';deleteProjectUI(\'' + id + '\')">🗑 삭제</button>' +
   '</div>' +
   '<div id="progressHistorySection" style="margin-top:16px"></div>' +
   '<div id="pdCommentsSection" style="margin-top:16px"></div>';
+}
 
+/* 우측 슬라이드 패널 + 백드롭 부착, 비동기 섹션(진척 히스토리·요소기술·코멘트) 로드 */
+function _pdAttachDetailPanel(id, proj, html) {
+  var panel = document.createElement('div');
+  panel.id = 'projDetailPanel';
+  panel.style.cssText = 'position:fixed;top:0;right:0;bottom:0;width:420px;max-width:92vw;background:var(--bg-p);border-left:1px solid var(--bd);z-index:9998;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);padding:20px;animation:slideIn .2s ease';
   panel.innerHTML = html;
   document.body.appendChild(panel);
 
@@ -255,7 +315,6 @@ async function showProjectDetail(id) {
   backdrop.style.cssText = 'position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,.3)';
   backdrop.onclick = function () { panel.remove(); backdrop.remove(); };
   document.body.appendChild(backdrop);
-  } finally { _pdDetailBusy = false; }
 }
 
 /* ═══ 적용 요소기술 (요소기술 Phase 2) ═══
@@ -318,7 +377,7 @@ var PD_DEV_STATUS = [
   { key: 'done', label: '완료', icon: '✅' }
 ];
 var PD_DEV_CAT = { feature: { l: '신규', c: '#10B981' }, improve: { l: '개선', c: '#3B82F6' }, change: { l: '설계변경', c: '#F59E0B' }, refactor: { l: '리팩토링', c: '#8B5CF6' }, chore: { l: '기타', c: '#64748B' } };
-var PD_DEV_PRIO = { high: { l: '높음', c: '#EF4444' }, normal: { l: '보통', c: '#F59E0B' }, low: { l: '낮음', c: '#94A3B8' } };
+var PD_DEV_PRIO = { high: { l: '높음', c: SEM_COLOR.danger }, normal: { l: '보통', c: SEM_COLOR.warn }, low: { l: '낮음', c: SEM_COLOR.muted } };
 var _pdDevProj = null;
 
 function pdLoadDev(projId) {
@@ -650,8 +709,8 @@ function pdLoadIssues(projId) {
     var urgent = issues.filter(function (i) { return i.urgency === 'urgent' && i.status !== 'resolved' && i.status !== 'closed'; }).length;
     var h = '<div style="display:flex;gap:6px;margin-bottom:10px">' +
       '<span class="badge" style="background:var(--bg-i);color:var(--t3);font-size:10px">전체 ' + issues.length + '</span>' +
-      '<span class="badge" style="background:rgba(59,130,246,.15);color:#3B82F6;font-size:10px">미해결 ' + open + '</span>' +
-      (urgent > 0 ? '<span class="badge" style="background:rgba(239,68,68,.15);color:#EF4444;font-size:10px">긴급 ' + urgent + '</span>' : '') +
+      '<span class="badge" style="background:rgba(59,130,246,.15);color:' + SEM_COLOR.info + ';font-size:10px">미해결 ' + open + '</span>' +
+      (urgent > 0 ? '<span class="badge" style="background:rgba(239,68,68,.15);color:' + SEM_COLOR.danger + ';font-size:10px">긴급 ' + urgent + '</span>' : '') +
     '</div>';
 
     // 이슈 목록
@@ -663,14 +722,14 @@ function pdLoadIssues(projId) {
       return (sOrd[a.status] || 0) - (sOrd[b.status] || 0);
     });
     issues.forEach(function (iss) {
-      var st = statuses[iss.status] || { label: iss.status, color: '#94A3B8' };
-      var urg = urgencies[iss.urgency] || { label: '', icon: '', color: '#94A3B8' };
+      var st = statuses[iss.status] || { label: iss.status, color: SEM_COLOR.muted };
+      var urg = urgencies[iss.urgency] || { label: '', icon: '', color: SEM_COLOR.muted };
       var tp = types[iss.type] || { label: '', icon: '', color: '#64748B' };
       var resolved = iss.status === 'resolved' || iss.status === 'closed';
       h += '<div style="padding:6px 0;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:6px;' + (resolved ? 'opacity:.5' : '') + ';cursor:pointer" onclick="if(typeof showIssueDetail===\'function\')showIssueDetail(\'' + iss.id + '\')">';
       h += '<span style="font-size:11px" title="' + tp.label + '">' + (tp.icon || '') + '</span>';
       h += '<span style="flex:1;font-size:11px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(iss.title) + '</span>';
-      if (iss.urgency === 'urgent') h += '<span style="font-size:9px;color:#EF4444">🔴</span>';
+      if (iss.urgency === 'urgent') h += '<span style="font-size:9px;color:' + SEM_COLOR.danger + '">🔴</span>';
       h += '<span class="badge" style="background:' + st.color + '22;color:' + st.color + ';font-size:8px;padding:1px 4px">' + st.label + '</span>';
       h += '</div>';
     });
@@ -690,8 +749,19 @@ function pdLoadWork(projId) {
     wrap.innerHTML = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">투입실적 데이터를 가져올 수 없습니다.</div>';
     return;
   }
-  // v13.61: projGet/msGetByProject 결과를 calcHoursByMilestone에 전달 (중복 fetch 제거)
-  Promise.all([
+  _pdFetchWorkData(projId).then(function (results) {
+    wrap.innerHTML = _pdRenderWorkHtml(projId, results);
+  }).catch(function (err) {
+      console.error('[pdLoadWork]', err);
+      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  });
+}
+
+/* 투입실적 데이터 조회 — 프로젝트·마일스톤·멤버 → calcHoursByMilestone → 마일스톤 작업노트 로그
+   v13.61: projGet/msGetByProject 결과를 calcHoursByMilestone에 전달 (중복 fetch 제거)
+   → { proj, milestones, msHours, memberNames, reportedByPerson, reportedByMsPerson, latestLogByMs } */
+function _pdFetchWorkData(projId) {
+  return Promise.all([
     projGet(projId),
     msGetByProject(projId),
     (typeof projMembersGet === 'function'
@@ -709,253 +779,326 @@ function pdLoadWork(projId) {
           }))
         : Promise.resolve([]);
       return pLogs.then(function (logSets) {
-        var reportedByPerson = {};       // 프로젝트 전체 작성자별 합
-        var reportedByMsPerson = {};     // 마일스톤별 작성자별 합
-        var latestLogByMs = {};          // 마일스톤별 최신 활성 로그 id (최신 노트 체크박스 토글용)
-        logSets.forEach(function (ls) {
-          reportedByMsPerson[ls.mid] = reportedByMsPerson[ls.mid] || {};
-          if (ls.logs && ls.logs.length) latestLogByMs[ls.mid] = ls.logs[0].id;   // msLogsGet은 최신순
-          ls.logs.forEach(function (l) {
-            var nm = l.authorName || '';
-            var hh = Number(l.hours) || 0;
-            if (nm) {
-              reportedByPerson[nm] = (reportedByPerson[nm] || 0) + hh;
-              reportedByMsPerson[ls.mid][nm] = (reportedByMsPerson[ls.mid][nm] || 0) + hh;
-            }
-          });
-        });
-        return { proj: proj, milestones: milestones, msHours: msHours, memberNames: memberNames, reportedByPerson: reportedByPerson, reportedByMsPerson: reportedByMsPerson, latestLogByMs: latestLogByMs };
+        var rep = _pdAggregateReported(logSets);
+        return { proj: proj, milestones: milestones, msHours: msHours, memberNames: memberNames, reportedByPerson: rep.reportedByPerson, reportedByMsPerson: rep.reportedByMsPerson, latestLogByMs: rep.latestLogByMs };
       });
     });
-  }).then(function (results) {
-    var msHours = results.msHours;
-    var proj = results.proj;
-    var milestones = results.milestones;
-    var memberNames = results.memberNames || [];
-    var reportedByPerson = results.reportedByPerson || {};
-    var reportedByMsPerson = results.reportedByMsPerson || {};
-    var latestLogByMs = results.latestLogByMs || {};
-    milestones.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+  });
+}
 
-    var totalH = 0;
-    var personMap = {};
-    var outsiderMap = {};   // 등록 인원이 아닌 기록자 (공식 지표 제외, 별도 표시)
-    var untaggedCount = (msHours._meta && msHours._meta.untaggedCount) || 0;
-    Object.keys(msHours).forEach(function (mid) {
-      if (mid === '_meta') return;
-      var m = msHours[mid];
-      totalH += m.hours || 0;
-      if (m.people) {
-        Object.keys(m.people).forEach(function (p) {
-          personMap[p] = (personMap[p] || 0) + m.people[p];
-        });
-      }
-      if (m.outPeople) {
-        Object.keys(m.outPeople).forEach(function (p) {
-          outsiderMap[p] = (outsiderMap[p] || 0) + m.outPeople[p];
-        });
+/* [순수] 마일스톤 작업노트 로그 → 작성자별 보고 투입 합계
+   logSets: [{ mid, logs:[{id, authorName, hours}] }] (logs는 msLogsGet 순서 = 최신순)
+   → { reportedByPerson: {이름:h}, reportedByMsPerson: {mid:{이름:h}}, latestLogByMs: {mid: 최신 로그 id} }
+   작성자 이름 없는 로그는 합계에서 제외(최신 로그 id 판정에는 포함). */
+function _pdAggregateReported(logSets) {
+  var reportedByPerson = {};       // 프로젝트 전체 작성자별 합
+  var reportedByMsPerson = {};     // 마일스톤별 작성자별 합
+  var latestLogByMs = {};          // 마일스톤별 최신 활성 로그 id (최신 노트 체크박스 토글용)
+  (logSets || []).forEach(function (ls) {
+    reportedByMsPerson[ls.mid] = reportedByMsPerson[ls.mid] || {};
+    if (ls.logs && ls.logs.length) latestLogByMs[ls.mid] = ls.logs[0].id;   // msLogsGet은 최신순
+    ls.logs.forEach(function (l) {
+      var nm = l.authorName || '';
+      var hh = Number(l.hours) || 0;
+      if (nm) {
+        reportedByPerson[nm] = (reportedByPerson[nm] || 0) + hh;
+        reportedByMsPerson[ls.mid][nm] = (reportedByMsPerson[ls.mid][nm] || 0) + hh;
       }
     });
+  });
+  return { reportedByPerson: reportedByPerson, reportedByMsPerson: reportedByMsPerson, latestLogByMs: latestLogByMs };
+}
 
-    // 인원별 누적 목표 (Σ 마일스톤 assigneeTargets)
-    var assignees = (proj && Array.isArray(proj.assignees)) ? proj.assignees.filter(Boolean) : [];
-    var targetMap = {};
-    milestones.forEach(function (m) {
-      var at = m.assigneeTargets || {};
-      Object.keys(at).forEach(function (nm) { targetMap[nm] = (targetMap[nm] || 0) + (Number(at[nm]) || 0); });
-    });
-    var totalTarget = 0; Object.keys(targetMap).forEach(function (n) { totalTarget += targetMap[n]; });
-    var rnd = function (x) { return Math.round((x || 0) * 10) / 10; };
-    // 표시 단위 (시간 h / 일 d, 1일=8h) — 선택 가능. hv=숫자, hf=숫자+단위, uSuf=단위
-    var pdUnit = (typeof window !== 'undefined' && window.pdUnit === 'd') ? 'd' : 'h';
-    var uSuf = (pdUnit === 'd') ? 'd' : 'h';
-    var hv = function (hours) { var v = (Number(hours) || 0) / (pdUnit === 'd' ? 8 : 1); return pdUnit === 'd' ? Math.round(v * 100) / 100 : Math.round(v * 10) / 10; };
-    var hf = function (hours) { return hv(hours) + uSuf; };
-
-    // 현재 사용자 · 작성 권한 (활성 멤버 또는 admin/executive)
-    var meNames = (typeof currentUser !== 'undefined' && currentUser) ? [currentUser.name, currentUser.display_name].filter(Boolean) : [];
-    var canUpdate = meNames.some(function (n) { return memberNames.indexOf(n) >= 0; }) ||
-      (typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'executive'));
-    var today = (typeof localDate === 'function') ? localDate() : '';
-
-    // 프로젝트 보고 진척률 = 마일스톤 보고 진척률의 목표시간 가중평균
-    var rpWsum = 0, rpPsum = 0, rpSimple = 0, rpCnt = 0, rpAny = false, reportedHoursTotal = 0;
-    milestones.forEach(function (m) {
-      var mat = m.assigneeTargets || {};
-      var w = 0; Object.keys(mat).forEach(function (k) { w += Number(mat[k]) || 0; });
-      var prog = Number(m.progress) || 0;
-      rpWsum += w; rpPsum += prog * w; rpSimple += prog; rpCnt++;
-      reportedHoursTotal += Number(m.reportedHours) || 0;
-      if (m.progressUpdatedAt) rpAny = true;
-    });
-    var reportedPct = rpCnt ? (rpWsum > 0 ? Math.round(rpPsum / rpWsum) : Math.round(rpSimple / rpCnt)) : 0;
-    // 누적/대비 기준 = "보고 투입"(실제 업데이트된 항목)만. 업무일지(totalH)는 표시(참고)만.
-    var effH = reportedHoursTotal;
-    var progColOf = function (p) { return p >= 100 ? '#10B981' : (p >= 50 ? 'var(--ac)' : (p > 0 ? '#F59E0B' : 'var(--t6)')); };
-    var ovBadge = function (text, color, bg) { return '<span style="font-size:9px;font-weight:600;color:' + color + ';background:' + bg + ';padding:1px 6px;border-radius:4px;white-space:nowrap">' + text + '</span>'; };
-
-    // 담당자 1줄: 누적 실적(보고) vs 목표 진행률 바. refHours = 업무일지(참고).
-    var personBar = function (name, actual, target, refHours) {
-      var dn = typeof shortName === 'function' ? shortName(name) : name;
-      actual = Number(actual) || 0; target = Number(target) || 0; refHours = Number(refHours) || 0;
-      var pct = target > 0 ? Math.round(actual / target * 100) : (actual > 0 ? 100 : 0);
-      var barW = Math.min(pct, 100);
-      var over = target > 0 && actual > target;
-      var col = over ? '#EF4444' : (target > 0 && pct >= 80 ? '#F59E0B' : 'var(--ac)');
-      var right = target > 0 ? (hf(actual) + ' / ' + hf(target)) : hf(actual);
-      var sub = (target > 0 ? (pct + '%' + (over ? ' · 초과 ' + hf(actual - target) : ' · 잔여 ' + hf(target - actual))) : '목표 미설정') + (refHours > 0 ? ' · 업무일지 ' + hf(refHours) + '(참고)' : '');
-      var s = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">';
-      s += '<span style="font-size:11px;color:var(--t3);min-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(name) + '">' + eH(dn) + '</span>';
-      s += '<div style="flex:1"><div style="height:7px;background:var(--bg-i);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + barW + '%;background:' + col + ';border-radius:4px;transition:width .2s"></div></div>';
-      s += '<div style="font-size:9px;color:var(--t6);margin-top:1px">' + sub + '</div></div>';
-      s += '<span style="font-size:11px;color:' + (over ? '#EF4444' : 'var(--t2)') + ';font-weight:600;min-width:66px;text-align:right">' + right + '</span>';
-      s += '</div>';
-      return s;
-    };
-
-    var h = '';
-    // 표시 단위 토글 (시간/일, 1일=8h)
-    h += '<div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-bottom:8px">' +
-      '<span style="font-size:10px;color:var(--t5);margin-right:2px">보기 단위</span>' +
-      '<button class="btn btn-s ' + (pdUnit === 'h' ? 'btn-p' : 'btn-g') + '" style="font-size:9px;padding:2px 7px" onclick="pdSetUnit(\'h\',\'' + projId + '\')">시간(h)</button>' +
-      '<button class="btn btn-s ' + (pdUnit === 'd' ? 'btn-p' : 'btn-g') + '" style="font-size:9px;padding:2px 7px" onclick="pdSetUnit(\'d\',\'' + projId + '\')">일(d)</button>' +
-    '</div>';
-    // ── 요약 박스 (총 투입 / 목표 대비 / 예상 대비) ──
-    h += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">';
-    // 누적 투입(보고) — 대비 계산의 기준
-    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="마일스톤 업데이트에서 보고된 투입시간 — 누적/대비 계산 기준"><div style="font-size:20px;font-weight:700;color:#8B5CF6">' + hv(reportedHoursTotal) + '<span style="font-size:11px;color:var(--t5)">' + uSuf + '</span></div><div style="font-size:10px;color:var(--t5)">📝 누적 투입(보고)</div></div>';
-    // 업무일지 투입 — 참고(표시만, 누적 미포함)
-    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center;opacity:.85" title="업무일지(work_records) 집계 — 참고용, 누적/대비에는 미포함 (추후 연동 예정)"><div style="font-size:20px;font-weight:700;color:var(--t4)">' + hv(totalH) + '<span style="font-size:11px;color:var(--t5)">' + uSuf + '</span></div><div style="font-size:10px;color:var(--t5)">📋 업무일지 (참고)</div></div>';
-    if (totalTarget > 0) {
-      var tpct = Math.round(effH / totalTarget * 100);
-      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="누적 투입(보고) ' + hf(effH) + ' ÷ 목표 ' + hf(totalTarget) + '"><div style="font-size:20px;font-weight:700;color:' + (tpct > 100 ? '#EF4444' : 'var(--t2)') + '">' + tpct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">목표 대비 (' + hf(totalTarget) + ')</div></div>';
+/* [순수] 투입실적 지표 집계 — 업무일지(msHours) 합계·인원별·할당 외, 목표(assigneeTargets) 합계, 보고 진척률
+   milestones 는 정렬된 배열을 넘길 것 (합산만 하므로 순서 무관) */
+function _pdAggregateWork(proj, milestones, msHours) {
+  var totalH = 0;
+  var personMap = {};
+  var outsiderMap = {};   // 등록 인원이 아닌 기록자 (공식 지표 제외, 별도 표시)
+  var untaggedCount = (msHours._meta && msHours._meta.untaggedCount) || 0;
+  Object.keys(msHours).forEach(function (mid) {
+    if (mid === '_meta') return;
+    var m = msHours[mid];
+    totalH += m.hours || 0;
+    if (m.people) {
+      Object.keys(m.people).forEach(function (p) {
+        personMap[p] = (personMap[p] || 0) + m.people[p];
+      });
     }
-    if (proj && proj.estimatedHours) {
-      var pct = effH > 0 ? Math.round(effH / proj.estimatedHours * 100) : 0;
-      var estOver = pct > 100;
-      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="누적 투입(보고) ' + hf(effH) + ' ÷ 예상 ' + hf(proj.estimatedHours) + '"><div style="font-size:20px;font-weight:700;color:' + (estOver ? '#EF4444' : 'var(--t2)') + '">' + pct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">예상 대비 (' + hf(proj.estimatedHours) + ')' + (estOver ? ' <span style="color:#EF4444;font-weight:700">🔴초과</span>' : '') + '</div></div>';
+    if (m.outPeople) {
+      Object.keys(m.outPeople).forEach(function (p) {
+        outsiderMap[p] = (outsiderMap[p] || 0) + m.outPeople[p];
+      });
     }
-    // 보고 진척률 (마일스톤 가중평균)
-    if (milestones.length > 0) {
-      h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:' + progColOf(reportedPct) + '">' + reportedPct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">보고 진척률' + (rpAny ? '' : ' <span style="color:var(--t6)">(미보고)</span>') + '</div></div>';
+  });
+
+  // 인원별 누적 목표 (Σ 마일스톤 assigneeTargets)
+  var assignees = (proj && Array.isArray(proj.assignees)) ? proj.assignees.filter(Boolean) : [];
+  var targetMap = {};
+  milestones.forEach(function (m) {
+    var at = m.assigneeTargets || {};
+    Object.keys(at).forEach(function (nm) { targetMap[nm] = (targetMap[nm] || 0) + (Number(at[nm]) || 0); });
+  });
+  var totalTarget = 0; Object.keys(targetMap).forEach(function (n) { totalTarget += targetMap[n]; });
+
+  // 프로젝트 보고 진척률 = 마일스톤 보고 진척률의 목표시간 가중평균
+  var rpWsum = 0, rpPsum = 0, rpSimple = 0, rpCnt = 0, rpAny = false, reportedHoursTotal = 0;
+  milestones.forEach(function (m) {
+    var mat = m.assigneeTargets || {};
+    var w = 0; Object.keys(mat).forEach(function (k) { w += Number(mat[k]) || 0; });
+    var prog = Number(m.progress) || 0;
+    rpWsum += w; rpPsum += prog * w; rpSimple += prog; rpCnt++;
+    reportedHoursTotal += Number(m.reportedHours) || 0;
+    if (m.progressUpdatedAt) rpAny = true;
+  });
+  var reportedPct = rpCnt ? (rpWsum > 0 ? Math.round(rpPsum / rpWsum) : Math.round(rpSimple / rpCnt)) : 0;
+  return {
+    totalH: totalH, personMap: personMap, outsiderMap: outsiderMap, untaggedCount: untaggedCount,
+    assignees: assignees, targetMap: targetMap, totalTarget: totalTarget,
+    reportedPct: reportedPct, rpAny: rpAny, reportedHoursTotal: reportedHoursTotal
+  };
+}
+
+/* 표시 단위 (시간 h / 일 d, 1일=8h) 포맷터 — hv=숫자, hf=숫자+단위, uSuf=단위 */
+function _pdWorkUnitFmt(unit) {
+  var pdUnit = (unit === 'd') ? 'd' : 'h';
+  var uSuf = (pdUnit === 'd') ? 'd' : 'h';
+  var hv = function (hours) { var v = (Number(hours) || 0) / (pdUnit === 'd' ? 8 : 1); return pdUnit === 'd' ? Math.round(v * 100) / 100 : Math.round(v * 10) / 10; };
+  var hf = function (hours) { return hv(hours) + uSuf; };
+  return { unit: pdUnit, uSuf: uSuf, hv: hv, hf: hf };
+}
+
+function _pdRnd1(x) { return Math.round((x || 0) * 10) / 10; }
+/* 진척률 색 (100 완료 / 50↑ 강조 / 0 초과 주의 / 0 흐림) */
+function _pdProgColor(p) { return p >= 100 ? SEM_COLOR.ok : (p >= 50 ? 'var(--ac)' : (p > 0 ? SEM_COLOR.warn : 'var(--t6)')); }
+function _pdOvBadge(text, color, bg) { return '<span style="font-size:9px;font-weight:600;color:' + color + ';background:' + bg + ';padding:1px 6px;border-radius:4px;white-space:nowrap">' + text + '</span>'; }
+
+/* 현재 사용자 작성 권한 (활성 멤버 또는 admin/executive) */
+function _pdCanUpdateWork(memberNames) {
+  var meNames = (typeof currentUser !== 'undefined' && currentUser) ? [currentUser.name, currentUser.display_name].filter(Boolean) : [];
+  return meNames.some(function (n) { return memberNames.indexOf(n) >= 0; }) ||
+    (typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'executive'));
+}
+
+/* 투입실적 탭 전체 HTML (results = _pdFetchWorkData 결과) */
+function _pdRenderWorkHtml(projId, results) {
+  var msHours = results.msHours;
+  var proj = results.proj;
+  var milestones = results.milestones;
+  var memberNames = results.memberNames || [];
+  var reportedByPerson = results.reportedByPerson || {};
+  var reportedByMsPerson = results.reportedByMsPerson || {};
+  var latestLogByMs = results.latestLogByMs || {};
+  milestones.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+
+  var agg = _pdAggregateWork(proj, milestones, msHours);
+  var fmt = _pdWorkUnitFmt((typeof window !== 'undefined') ? window.pdUnit : null);
+  var ctx = {
+    projId: projId, proj: proj, milestones: milestones, msHours: msHours, fmt: fmt, agg: agg,
+    reportedByMsPerson: reportedByMsPerson, latestLogByMs: latestLogByMs,
+    canUpdate: _pdCanUpdateWork(memberNames),
+    today: (typeof localDate === 'function') ? localDate() : ''
+  };
+
+  var h = _pdWorkUnitToggleHtml(projId, fmt.unit);
+  h += _pdWorkSummaryHtml(proj, milestones, agg, fmt);
+  h += _pdWorkPersonHtml(agg, memberNames, reportedByPerson, fmt);
+  h += _pdWorkOutsiderHtml(agg.outsiderMap, fmt);
+  h += _pdWorkMilestonesHtml(ctx);
+
+  if (agg.totalH === 0 && agg.totalTarget === 0 && milestones.length === 0) {
+    h = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">투입실적 데이터가 없습니다.</div>';
+  }
+  return h;
+}
+
+/* 표시 단위 토글 (시간/일, 1일=8h) */
+function _pdWorkUnitToggleHtml(projId, pdUnit) {
+  return '<div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-bottom:8px">' +
+    '<span style="font-size:10px;color:var(--t5);margin-right:2px">보기 단위</span>' +
+    '<button class="btn btn-s ' + (pdUnit === 'h' ? 'btn-p' : 'btn-g') + '" style="font-size:9px;padding:2px 7px" onclick="pdSetUnit(\'h\',\'' + projId + '\')">시간(h)</button>' +
+    '<button class="btn btn-s ' + (pdUnit === 'd' ? 'btn-p' : 'btn-g') + '" style="font-size:9px;padding:2px 7px" onclick="pdSetUnit(\'d\',\'' + projId + '\')">일(d)</button>' +
+  '</div>';
+}
+
+/* ── 요약 박스 (누적 투입 / 업무일지 / 목표 대비 / 예상 대비 / 보고 진척률) ──
+   누적/대비 기준 = "보고 투입"(실제 업데이트된 항목)만. 업무일지(totalH)는 표시(참고)만. */
+function _pdWorkSummaryHtml(proj, milestones, agg, fmt) {
+  var hv = fmt.hv, hf = fmt.hf, uSuf = fmt.uSuf;
+  var effH = agg.reportedHoursTotal;
+  var totalTarget = agg.totalTarget;
+  var h = '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">';
+  // 누적 투입(보고) — 대비 계산의 기준
+  h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="마일스톤 업데이트에서 보고된 투입시간 — 누적/대비 계산 기준"><div style="font-size:20px;font-weight:700;color:' + SEM_COLOR.purple + '">' + hv(agg.reportedHoursTotal) + '<span style="font-size:11px;color:var(--t5)">' + uSuf + '</span></div><div style="font-size:10px;color:var(--t5)">📝 누적 투입(보고)</div></div>';
+  // 업무일지 투입 — 참고(표시만, 누적 미포함)
+  h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center;opacity:.85" title="업무일지(work_records) 집계 — 참고용, 누적/대비에는 미포함 (추후 연동 예정)"><div style="font-size:20px;font-weight:700;color:var(--t4)">' + hv(agg.totalH) + '<span style="font-size:11px;color:var(--t5)">' + uSuf + '</span></div><div style="font-size:10px;color:var(--t5)">📋 업무일지 (참고)</div></div>';
+  if (totalTarget > 0) {
+    var tpct = Math.round(effH / totalTarget * 100);
+    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="누적 투입(보고) ' + hf(effH) + ' ÷ 목표 ' + hf(totalTarget) + '"><div style="font-size:20px;font-weight:700;color:' + (tpct > 100 ? SEM_COLOR.danger : 'var(--t2)') + '">' + tpct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">목표 대비 (' + hf(totalTarget) + ')</div></div>';
+  }
+  if (proj && proj.estimatedHours) {
+    var pct = effH > 0 ? Math.round(effH / proj.estimatedHours * 100) : 0;
+    var estOver = pct > 100;
+    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center" title="누적 투입(보고) ' + hf(effH) + ' ÷ 예상 ' + hf(proj.estimatedHours) + '"><div style="font-size:20px;font-weight:700;color:' + (estOver ? SEM_COLOR.danger : 'var(--t2)') + '">' + pct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">예상 대비 (' + hf(proj.estimatedHours) + ')' + (estOver ? ' <span style="color:' + SEM_COLOR.danger + ';font-weight:700">🔴초과</span>' : '') + '</div></div>';
+  }
+  // 보고 진척률 (마일스톤 가중평균)
+  if (milestones.length > 0) {
+    h += '<div style="flex:1;min-width:88px;padding:10px;background:var(--bg-i);border-radius:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:' + _pdProgColor(agg.reportedPct) + '">' + agg.reportedPct + '<span style="font-size:11px;color:var(--t5)">%</span></div><div style="font-size:10px;color:var(--t5)">보고 진척률' + (agg.rpAny ? '' : ' <span style="color:var(--t6)">(미보고)</span>') + '</div></div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+/* 담당자 1줄: 누적 실적(보고) vs 목표 진행률 바. refHours = 업무일지(참고). */
+function _pdPersonBarHtml(name, actual, target, refHours, fmt) {
+  var hf = fmt.hf;
+  var dn = typeof shortName === 'function' ? shortName(name) : name;
+  actual = Number(actual) || 0; target = Number(target) || 0; refHours = Number(refHours) || 0;
+  var pct = target > 0 ? Math.round(actual / target * 100) : (actual > 0 ? 100 : 0);
+  var barW = Math.min(pct, 100);
+  var over = target > 0 && actual > target;
+  var col = over ? SEM_COLOR.danger : (target > 0 && pct >= 80 ? SEM_COLOR.warn : 'var(--ac)');
+  var right = target > 0 ? (hf(actual) + ' / ' + hf(target)) : hf(actual);
+  var sub = (target > 0 ? (pct + '%' + (over ? ' · 초과 ' + hf(actual - target) : ' · 잔여 ' + hf(target - actual))) : '목표 미설정') + (refHours > 0 ? ' · 업무일지 ' + hf(refHours) + '(참고)' : '');
+  var s = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">';
+  s += '<span style="font-size:11px;color:var(--t3);min-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(name) + '">' + eH(dn) + '</span>';
+  s += '<div style="flex:1"><div style="height:7px;background:var(--bg-i);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + barW + '%;background:' + col + ';border-radius:4px;transition:width .2s"></div></div>';
+  s += '<div style="font-size:9px;color:var(--t6);margin-top:1px">' + sub + '</div></div>';
+  s += '<span style="font-size:11px;color:' + (over ? SEM_COLOR.danger : 'var(--t2)') + ';font-weight:600;min-width:66px;text-align:right">' + right + '</span>';
+  s += '</div>';
+  return s;
+}
+
+/* ── 담당자별 누적 실적 vs 목표 ── (담당자 ∪ 멤버 ∪ 목표 보유자) */
+function _pdWorkPersonHtml(agg, memberNames, reportedByPerson, fmt) {
+  var targetMap = agg.targetMap;
+  var h = '';
+  var headPeople = agg.assignees.slice();
+  memberNames.forEach(function (n) { if (headPeople.indexOf(n) < 0) headPeople.push(n); });
+  Object.keys(targetMap).forEach(function (n) { if (headPeople.indexOf(n) < 0) headPeople.push(n); });
+  if (headPeople.length) {
+    headPeople.sort(function (a, b) { return (targetMap[b] || 0) - (targetMap[a] || 0) || (reportedByPerson[b] || 0) - (reportedByPerson[a] || 0); });
+    h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">👥 담당자별 누적 실적(보고) vs 목표</div>';
+    if (agg.totalTarget === 0) {
+      h += '<div style="font-size:10px;color:' + SEM_COLOR.warn + ';margin-bottom:8px;padding:6px 8px;background:rgba(245,158,11,.12);border-radius:6px;line-height:1.5">🎯 아직 목표시간이 설정되지 않았습니다. 프로젝트 편집 → <b>🎯 목표 배분</b>에서 담당자·마일스톤별 목표를 입력하세요.</div>';
+    }
+    headPeople.forEach(function (n) { h += _pdPersonBarHtml(n, reportedByPerson[n] || 0, targetMap[n] || 0, agg.personMap[n] || 0, fmt); });
+  }
+  return h;
+}
+
+/* ── 할당 외 기록자 (프로젝트 등록 인원 아닌데 시간 기록 — 공식 지표 제외) ── */
+function _pdWorkOutsiderHtml(outsiderMap, fmt) {
+  var hf = fmt.hf;
+  var h = '';
+  var outsiders = Object.keys(outsiderMap).filter(function (n) { return (outsiderMap[n] || 0) > 0; });
+  if (outsiders.length) {
+    var outTotal = 0; outsiders.forEach(function (n) { outTotal += outsiderMap[n]; });
+    outsiders.sort(function (a, b) { return outsiderMap[b] - outsiderMap[a]; });
+    h += '<div style="font-size:10px;color:var(--t5);margin:12px 0 6px" title="프로젝트 등록 인원이 아니어서 투입실적·목표 대비 집계에서 제외된 기록">⚠️ 할당 외 기록 (' + outsiders.length + '명 · ' + hf(outTotal) + ', 집계 제외)</div>';
+    outsiders.forEach(function (n) {
+      var dn = typeof shortName === 'function' ? shortName(n) : n;
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+      h += '<span style="font-size:11px;color:var(--t4);min-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(n) + '">' + eH(dn) + '</span>';
+      h += '<div style="flex:1;height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:100%;background:var(--t6);border-radius:3px;opacity:.4"></div></div>';
+      h += '<span style="font-size:11px;color:var(--t4);min-width:66px;text-align:right">' + hf(outsiderMap[n]) + '</span>';
+      h += '</div>';
+    });
+  }
+  return h;
+}
+
+/* ── 마일스톤별 × 인원 상세 ── (ctx = _pdRenderWorkHtml 컨텍스트) */
+function _pdWorkMilestonesHtml(ctx) {
+  var h = '';
+  if (ctx.milestones.length > 0) {
+    var untaggedCount = ctx.agg.untaggedCount;
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 6px">';
+    h += '<span style="font-size:11px;font-weight:700;color:var(--t3)">◆ 마일스톤별 투입' + (untaggedCount > 0 ? ' <span style="font-size:9px;color:' + SEM_COLOR.warn + ';font-weight:400" title="마일스톤 태그 없이 날짜로 추정 집계된 레코드 수">⚠️ 미태깅 ' + untaggedCount + '건</span>' : '') + '</span>';
+    h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="pdAutoTagWork(\'' + ctx.projId + '\')" title="업무일지 레코드를 마일스톤 날짜 구간으로 자동 태깅">🏷 자동 태깅</button>';
+    h += '</div>';
+    ctx.milestones.forEach(function (m) { h += _pdWorkMilestoneRowHtml(m, ctx); });
+  }
+  return h;
+}
+
+/* 마일스톤 1행: 상태·이름·투입/목표 · 진척률 바+버튼 · 초과 배지 · 최신 노트 · 이력 컨테이너 · 인원별 */
+function _pdWorkMilestoneRowHtml(m, ctx) {
+  var hf = ctx.fmt.hf, projId = ctx.projId, canUpdate = ctx.canUpdate, today = ctx.today;
+  var mH = ctx.msHours[m.id];
+  var hrs = mH ? _pdRnd1(mH.hours) : 0;
+  var ut = mH ? mH.untagged : 0;
+  var at = m.assigneeTargets || {};
+  var msTarget = 0; Object.keys(at).forEach(function (k) { msTarget += (Number(at[k]) || 0); });
+  var mSt = (typeof PROJ_STATUS !== 'undefined' ? PROJ_STATUS[m.status] : null) || { icon: '⏳', label: m.status, color: SEM_COLOR.muted, bg: 'rgba(148,163,184,.15)' };
+  var prog = Number(m.progress) || 0;
+  var repH = Number(m.reportedHours) || 0;
+  var effMs = _pdRnd1(repH);   // 마일스톤 누적 투입 = 보고만 (업무일지는 참고 표시)
+  var h = '<div style="padding:7px 0;border-bottom:1px solid var(--bd)">';
+  // 상단: 상태·이름·투입/목표
+  h += '<div style="display:flex;align-items:center;gap:6px">';
+  h += '<span style="font-size:10px">' + mSt.icon + '</span>';
+  h += '<span style="flex:1;font-size:11px;font-weight:600;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(m.name) + '</span>';
+  if (ut > 0) h += '<span style="font-size:9px;color:' + SEM_COLOR.warn + '" title="날짜 추정 집계">~' + ut + '</span>';
+  if (hrs > 0) h += '<span style="font-size:10px;color:var(--t6);font-weight:500" title="업무일지 투입(참고, 누적 미포함)">📋' + hf(hrs) + '</span>';
+  h += '<span style="font-size:10px;color:var(--ac);font-weight:600" title="보고 투입(누적)">' + hf(effMs) + (msTarget > 0 ? (' / ' + hf(msTarget)) : '') + '</span>';
+  h += '</div>';
+  // 진척률 바 + 업데이트/이력 버튼
+  h += '<div style="display:flex;align-items:center;gap:8px;margin:6px 0 0 18px">';
+  h += '<div style="flex:1;height:6px;background:var(--bg-i);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + prog + '%;background:' + _pdProgColor(prog) + ';border-radius:4px;transition:width .3s"></div></div>';
+  h += '<span style="font-size:10px;font-weight:700;color:' + _pdProgColor(prog) + ';min-width:30px;text-align:right">' + prog + '%</span>';
+  if (canUpdate) h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 7px" onclick="pdMsProgressUpdate(\'' + m.id + '\',\'' + projId + '\',' + prog + ')" title="진척률·작업 노트 업데이트">🖉 업데이트</button>';
+  h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="pdMsLogToggle(\'' + m.id + '\',\'' + projId + '\',' + (canUpdate ? 'true' : 'false') + ')" title="작업 노트 이력 보기">🕘</button>';
+  if ((canUpdate || (typeof isOperator === 'function' && isOperator())) && typeof openCommentModal === 'function') h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="openCommentModal(\'milestone\',\'' + m.id + '\',{projectId:\'' + projId + '\'})" title="마일스톤 첨언/피드백(메일·텔레그램)">💬 첨언</button>';
+  h += '</div>';
+  // 초과 배지 (공수초과 / 일정지연 / 효율주의)
+  var badges = '';
+  if (msTarget > 0 && effMs > msTarget) badges += _pdOvBadge('🔴 공수초과 +' + hf(effMs - msTarget), SEM_COLOR.danger, 'rgba(239,68,68,.12)');
+  if (m.endDate && today && today > m.endDate && prog < 100) {
+    var late = (typeof daysDiff === 'function') ? Math.abs(Math.round(daysDiff(m.endDate, today))) : null;
+    badges += _pdOvBadge('🟠 지연' + (late != null ? ' ' + late + '일' : ''), SEM_COLOR.warn, 'rgba(245,158,11,.12)');
+  }
+  if (msTarget > 0 && (effMs / msTarget) - (prog / 100) >= 0.3) badges += _pdOvBadge('⚠️ 효율주의', SEM_COLOR.warn, 'rgba(245,158,11,.12)');
+  if (badges) h += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:5px 0 0 18px">' + badges + '</div>';
+  // 최신 작업 노트
+  if (m.progressNote) {
+    var latestLogId = ctx.latestLogByMs[m.id];
+    h += '<div style="margin:5px 0 0 18px;font-size:10px;color:var(--t4);line-height:1.45;white-space:pre-wrap;word-break:break-word">📝 ' + wmRichNote(m.progressNote, latestLogId ? { mid: m.id, projId: projId, logId: latestLogId, ctx: 'work' } : null);
+    if (m.progressUpdatedBy || m.progressUpdatedAt) {
+      h += ' <span style="color:var(--t6)">— ' + eH(m.progressUpdatedBy || '') + (m.progressUpdatedAt && typeof _pdRelTime === 'function' ? ' · ' + _pdRelTime(m.progressUpdatedAt) : '') + '</span>';
     }
     h += '</div>';
+  }
+  // 작업 노트 이력 컨테이너 (토글 시 채움)
+  h += '<div id="pdMsLog-' + m.id + '" style="display:none;margin:5px 0 0 18px"></div>';
+  h += _pdWorkMsPeopleHtml(ctx.reportedByMsPerson[m.id] || {}, at, hf);
+  h += '</div>';
+  return h;
+}
 
-    // ── 담당자별 누적 실적 vs 목표 ──
-    var headPeople = assignees.slice();
-    memberNames.forEach(function (n) { if (headPeople.indexOf(n) < 0) headPeople.push(n); });
-    Object.keys(targetMap).forEach(function (n) { if (headPeople.indexOf(n) < 0) headPeople.push(n); });
-    if (headPeople.length) {
-      headPeople.sort(function (a, b) { return (targetMap[b] || 0) - (targetMap[a] || 0) || (reportedByPerson[b] || 0) - (reportedByPerson[a] || 0); });
-      h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">👥 담당자별 누적 실적(보고) vs 목표</div>';
-      if (totalTarget === 0) {
-        h += '<div style="font-size:10px;color:#F59E0B;margin-bottom:8px;padding:6px 8px;background:rgba(245,158,11,.12);border-radius:6px;line-height:1.5">🎯 아직 목표시간이 설정되지 않았습니다. 프로젝트 편집 → <b>🎯 목표 배분</b>에서 담당자·마일스톤별 목표를 입력하세요.</div>';
-      }
-      headPeople.forEach(function (n) { h += personBar(n, reportedByPerson[n] || 0, targetMap[n] || 0, personMap[n] || 0); });
-    }
-
-    // ── 할당 외 기록자 (프로젝트 등록 인원 아닌데 시간 기록 — 공식 지표 제외) ──
-    var outsiders = Object.keys(outsiderMap).filter(function (n) { return (outsiderMap[n] || 0) > 0; });
-    if (outsiders.length) {
-      var outTotal = 0; outsiders.forEach(function (n) { outTotal += outsiderMap[n]; });
-      outsiders.sort(function (a, b) { return outsiderMap[b] - outsiderMap[a]; });
-      h += '<div style="font-size:10px;color:var(--t5);margin:12px 0 6px" title="프로젝트 등록 인원이 아니어서 투입실적·목표 대비 집계에서 제외된 기록">⚠️ 할당 외 기록 (' + outsiders.length + '명 · ' + hf(outTotal) + ', 집계 제외)</div>';
-      outsiders.forEach(function (n) {
-        var dn = typeof shortName === 'function' ? shortName(n) : n;
-        h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
-        h += '<span style="font-size:11px;color:var(--t4);min-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(n) + '">' + eH(dn) + '</span>';
-        h += '<div style="flex:1;height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:100%;background:var(--t6);border-radius:3px;opacity:.4"></div></div>';
-        h += '<span style="font-size:11px;color:var(--t4);min-width:66px;text-align:right">' + hf(outsiderMap[n]) + '</span>';
-        h += '</div>';
-      });
-    }
-
-    // ── 마일스톤별 × 인원 상세 ──
-    if (milestones.length > 0) {
-      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 6px">';
-      h += '<span style="font-size:11px;font-weight:700;color:var(--t3)">◆ 마일스톤별 투입' + (untaggedCount > 0 ? ' <span style="font-size:9px;color:#F59E0B;font-weight:400" title="마일스톤 태그 없이 날짜로 추정 집계된 레코드 수">⚠️ 미태깅 ' + untaggedCount + '건</span>' : '') + '</span>';
-      h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="pdAutoTagWork(\'' + projId + '\')" title="업무일지 레코드를 마일스톤 날짜 구간으로 자동 태깅">🏷 자동 태깅</button>';
+/* 마일스톤 인원별 (목표 또는 보고 실적 있는 사람만) — 보고 투입 기준 (업무일지는 연동 안 함, 참고용) */
+function _pdWorkMsPeopleHtml(pe, at, hf) {
+  var h = '';
+  var pplSet = {};
+  Object.keys(pe).forEach(function (k) { pplSet[k] = true; });
+  Object.keys(at).forEach(function (k) { pplSet[k] = true; });
+  var pplList = Object.keys(pplSet);
+  if (pplList.length) {
+    pplList.sort(function (a, b) { return (Number(at[b]) || 0) - (Number(at[a]) || 0) || (pe[b] || 0) - (pe[a] || 0); });
+    h += '<div style="padding:3px 0 1px 18px">';
+    pplList.forEach(function (n) {
+      var av = _pdRnd1(pe[n] || 0);
+      var tv = _pdRnd1(Number(at[n]) || 0);
+      var over = tv > 0 && av > tv;
+      var dn = typeof shortName === 'function' ? shortName(n) : n;
+      h += '<div style="display:flex;align-items:center;gap:6px;font-size:10px;margin-bottom:2px">';
+      h += '<span style="color:var(--t5);min-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(n) + '">' + eH(dn) + '</span>';
+      h += '<span style="color:' + (over ? SEM_COLOR.danger : 'var(--t4)') + '">' + hf(av) + (tv > 0 ? (' / ' + hf(tv)) : '') + '</span>';
       h += '</div>';
-      milestones.forEach(function (m) {
-        var mH = msHours[m.id];
-        var hrs = mH ? rnd(mH.hours) : 0;
-        var ut = mH ? mH.untagged : 0;
-        var at = m.assigneeTargets || {};
-        var msTarget = 0; Object.keys(at).forEach(function (k) { msTarget += (Number(at[k]) || 0); });
-        var mSt = (typeof PROJ_STATUS !== 'undefined' ? PROJ_STATUS[m.status] : null) || { icon: '⏳', label: m.status, color: '#94A3B8', bg: 'rgba(148,163,184,.15)' };
-        var prog = Number(m.progress) || 0;
-        var repH = Number(m.reportedHours) || 0;
-        var effMs = rnd(repH);   // 마일스톤 누적 투입 = 보고만 (업무일지는 참고 표시)
-        h += '<div style="padding:7px 0;border-bottom:1px solid var(--bd)">';
-        // 상단: 상태·이름·투입/목표
-        h += '<div style="display:flex;align-items:center;gap:6px">';
-        h += '<span style="font-size:10px">' + mSt.icon + '</span>';
-        h += '<span style="flex:1;font-size:11px;font-weight:600;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(m.name) + '</span>';
-        if (ut > 0) h += '<span style="font-size:9px;color:#F59E0B" title="날짜 추정 집계">~' + ut + '</span>';
-        if (hrs > 0) h += '<span style="font-size:10px;color:var(--t6);font-weight:500" title="업무일지 투입(참고, 누적 미포함)">📋' + hf(hrs) + '</span>';
-        h += '<span style="font-size:10px;color:var(--ac);font-weight:600" title="보고 투입(누적)">' + hf(effMs) + (msTarget > 0 ? (' / ' + hf(msTarget)) : '') + '</span>';
-        h += '</div>';
-        // 진척률 바 + 업데이트/이력 버튼
-        h += '<div style="display:flex;align-items:center;gap:8px;margin:6px 0 0 18px">';
-        h += '<div style="flex:1;height:6px;background:var(--bg-i);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + prog + '%;background:' + progColOf(prog) + ';border-radius:4px;transition:width .3s"></div></div>';
-        h += '<span style="font-size:10px;font-weight:700;color:' + progColOf(prog) + ';min-width:30px;text-align:right">' + prog + '%</span>';
-        if (canUpdate) h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 7px" onclick="pdMsProgressUpdate(\'' + m.id + '\',\'' + projId + '\',' + prog + ')" title="진척률·작업 노트 업데이트">🖉 업데이트</button>';
-        h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="pdMsLogToggle(\'' + m.id + '\',\'' + projId + '\',' + (canUpdate ? 'true' : 'false') + ')" title="작업 노트 이력 보기">🕘</button>';
-        if ((canUpdate || (typeof isOperator === 'function' && isOperator())) && typeof openCommentModal === 'function') h += '<button class="btn btn-g btn-s" style="font-size:9px;padding:2px 6px" onclick="openCommentModal(\'milestone\',\'' + m.id + '\',{projectId:\'' + projId + '\'})" title="마일스톤 첨언/피드백(메일·텔레그램)">💬 첨언</button>';
-        h += '</div>';
-        // 초과 배지 (공수초과 / 일정지연 / 효율주의)
-        var badges = '';
-        if (msTarget > 0 && effMs > msTarget) badges += ovBadge('🔴 공수초과 +' + hf(effMs - msTarget), '#EF4444', 'rgba(239,68,68,.12)');
-        if (m.endDate && today && today > m.endDate && prog < 100) {
-          var late = (typeof daysDiff === 'function') ? Math.abs(Math.round(daysDiff(m.endDate, today))) : null;
-          badges += ovBadge('🟠 지연' + (late != null ? ' ' + late + '일' : ''), '#F59E0B', 'rgba(245,158,11,.12)');
-        }
-        if (msTarget > 0 && (effMs / msTarget) - (prog / 100) >= 0.3) badges += ovBadge('⚠️ 효율주의', '#F59E0B', 'rgba(245,158,11,.12)');
-        if (badges) h += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:5px 0 0 18px">' + badges + '</div>';
-        // 최신 작업 노트
-        if (m.progressNote) {
-          h += '<div style="margin:5px 0 0 18px;font-size:10px;color:var(--t4);line-height:1.45;white-space:pre-wrap;word-break:break-word">📝 ' + wmRichNote(m.progressNote, latestLogByMs[m.id] ? { mid: m.id, projId: projId, logId: latestLogByMs[m.id], ctx: 'work' } : null);
-          if (m.progressUpdatedBy || m.progressUpdatedAt) {
-            h += ' <span style="color:var(--t6)">— ' + eH(m.progressUpdatedBy || '') + (m.progressUpdatedAt && typeof _pdRelTime === 'function' ? ' · ' + _pdRelTime(m.progressUpdatedAt) : '') + '</span>';
-          }
-          h += '</div>';
-        }
-        // 작업 노트 이력 컨테이너 (토글 시 채움)
-        h += '<div id="pdMsLog-' + m.id + '" style="display:none;margin:5px 0 0 18px"></div>';
-        // 인원별 (목표 또는 보고 실적 있는 사람만) — 보고 투입 기준 (업무일지는 연동 안 함, 참고용)
-        var pe = reportedByMsPerson[m.id] || {};
-        var pplSet = {};
-        Object.keys(pe).forEach(function (k) { pplSet[k] = true; });
-        Object.keys(at).forEach(function (k) { pplSet[k] = true; });
-        var pplList = Object.keys(pplSet);
-        if (pplList.length) {
-          pplList.sort(function (a, b) { return (Number(at[b]) || 0) - (Number(at[a]) || 0) || (pe[b] || 0) - (pe[a] || 0); });
-          h += '<div style="padding:3px 0 1px 18px">';
-          pplList.forEach(function (n) {
-            var av = rnd(pe[n] || 0);
-            var tv = rnd(Number(at[n]) || 0);
-            var over = tv > 0 && av > tv;
-            var dn = typeof shortName === 'function' ? shortName(n) : n;
-            h += '<div style="display:flex;align-items:center;gap:6px;font-size:10px;margin-bottom:2px">';
-            h += '<span style="color:var(--t5);min-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(n) + '">' + eH(dn) + '</span>';
-            h += '<span style="color:' + (over ? '#EF4444' : 'var(--t4)') + '">' + hf(av) + (tv > 0 ? (' / ' + hf(tv)) : '') + '</span>';
-            h += '</div>';
-          });
-          h += '</div>';
-        }
-        h += '</div>';
-      });
-    }
-
-    if (totalH === 0 && totalTarget === 0 && milestones.length === 0) {
-      h = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">투입실적 데이터가 없습니다.</div>';
-    }
-
-    wrap.innerHTML = h;
-  }).catch(function (err) {
-      console.error('[pdLoadWork]', err);
-      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
-  });
+    });
+    h += '</div>';
+  }
+  return h;
 }
 
 /* 현재 로그인 사용자 표시명 */
@@ -999,8 +1142,8 @@ function wmRichNote(text, ic) {
       var idx = ci++;
       var glyph = checked ? '☑' : '☐';
       var box = (ic && ic.logId)
-        ? '<span class="wm-chk" title="클릭하여 체크 토글" onclick="pdNoteToggleCheck(\'' + ic.mid + '\',\'' + ic.logId + '\',' + idx + ',\'' + ic.projId + '\',\'' + ic.ctx + '\')" style="cursor:pointer;user-select:none;color:' + (checked ? '#10B981' : 'var(--t4)') + '">' + glyph + '</span>'
-        : '<span style="user-select:none;color:' + (checked ? '#10B981' : 'var(--t4)') + '">' + glyph + '</span>';
+        ? '<span class="wm-chk" title="클릭하여 체크 토글" onclick="pdNoteToggleCheck(\'' + ic.mid + '\',\'' + ic.logId + '\',' + idx + ',\'' + ic.projId + '\',\'' + ic.ctx + '\')" style="cursor:pointer;user-select:none;color:' + (checked ? SEM_COLOR.ok : 'var(--t4)') + '">' + glyph + '</span>'
+        : '<span style="user-select:none;color:' + (checked ? SEM_COLOR.ok : 'var(--t4)') + '">' + glyph + '</span>';
       var cstyle = checked ? 'text-decoration:line-through;color:var(--t6)' : '';
       return '<span style="display:inline-flex;gap:5px;align-items:baseline">' + box + '<span style="' + cstyle + '">' + cm[3] + '</span></span>';
     }
@@ -1015,7 +1158,7 @@ function wmRichNote(text, ic) {
     .replace(/==([^=\n]+)==/g, '<mark style="background:#FDE68A;color:#111;padding:0 2px;border-radius:2px">$1</mark>')
     .replace(/`([^`\n]+)`/g, '<code style="background:var(--bg-i);padding:0 3px;border-radius:3px;font-size:.92em">$1</code>')
     .replace(/\[(중요|긴급|주의|완료|진행)\]/g, function (_m, w) {
-      var c = { '중요': '#EF4444', '긴급': '#DC2626', '주의': '#F59E0B', '완료': '#10B981', '진행': '#6366F1' }[w];
+      var c = { '중요': SEM_COLOR.danger, '긴급': '#DC2626', '주의': SEM_COLOR.warn, '완료': SEM_COLOR.ok, '진행': '#6366F1' }[w];
       return '<span style="display:inline-block;font-size:.82em;font-weight:700;color:#fff;background:' + c + ';padding:0 6px;border-radius:9px;vertical-align:1px">' + w + '</span>';
     });
   return html;
@@ -1100,8 +1243,8 @@ function pdMsLogToggle(mid, projId, canDelete) {
       var lh = Number(lg.hours) || 0;
       s += '<div style="margin-bottom:7px">';
       s += '<div style="display:flex;align-items:center;gap:6px;font-size:10px">';
-      s += '<span style="font-weight:700;color:' + (p >= 100 ? '#10B981' : 'var(--ac)') + '">' + p + '%</span>';
-      if (lh > 0) s += '<span style="color:#8B5CF6;font-weight:600" title="보고 투입">📝' + (Math.round(lh * 10) / 10) + 'h</span>';
+      s += '<span style="font-weight:700;color:' + (p >= 100 ? SEM_COLOR.ok : 'var(--ac)') + '">' + p + '%</span>';
+      if (lh > 0) s += '<span style="color:' + SEM_COLOR.purple + ';font-weight:600" title="보고 투입">📝' + (Math.round(lh * 10) / 10) + 'h</span>';
       s += '<span style="color:var(--t5)">' + eH(lg.authorName || '') + '</span>';
       s += '<span style="color:var(--t6);margin-left:auto">' + _pdRelTime(lg.createdAt) + '</span>';
       if (canDelete) s += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" title="이 이력 삭제" onclick="pdMsLogDelete(\'' + mid + '\',\'' + lg.id + '\',\'' + projId + '\')">🗑</button>';
@@ -1111,7 +1254,7 @@ function pdMsLogToggle(mid, projId, canDelete) {
     });
     s += '</div>' + trashHtml;
     el.innerHTML = s;
-  }).catch(function () { el.innerHTML = '<div style="font-size:10px;color:#EF4444;padding:4px 0">이력 로딩 실패</div>'; });
+  }).catch(function () { el.innerHTML = '<div style="font-size:10px;color:' + SEM_COLOR.danger + ';padding:4px 0">이력 로딩 실패</div>'; });
 }
 
 /* ═══ 투입실적 휴지통(소프트 삭제 복구) — 관리자(admin/executive) 전용 ═══ */
@@ -1135,14 +1278,14 @@ function _pdRenderTrashList(mid, projId, containerId) {
       (logs.length ? '<button class="btn btn-d btn-s" style="font-size:9px;padding:2px 7px" onclick="pdTrashEmpty(\'' + mid + '\',\'' + projId + '\',\'' + containerId + '\')" title="휴지통의 모든 이력을 완전 삭제(복구 불가)">휴지통 비우기</button>' : '') +
       '</div>';
     if (!logs.length) { s += '<div style="font-size:10px;color:var(--t6);padding:2px 0">휴지통이 비어 있습니다.</div>'; el.innerHTML = s; return; }
-    s += '<div style="border-left:2px solid #EF4444;padding-left:8px">';
+    s += '<div style="border-left:2px solid ' + SEM_COLOR.danger + ';padding-left:8px">';
     logs.forEach(function (lg) {
       var p = Number(lg.progress) || 0;
       var lh = Number(lg.hours) || 0;
       s += '<div style="margin-bottom:8px;opacity:.85">';
       s += '<div style="display:flex;align-items:center;gap:6px;font-size:10px">';
       s += '<span style="font-weight:700;color:var(--t5)">' + p + '%</span>';
-      if (lh > 0) s += '<span style="color:#8B5CF6;font-weight:600">📝' + (Math.round(lh * 10) / 10) + 'h</span>';
+      if (lh > 0) s += '<span style="color:' + SEM_COLOR.purple + ';font-weight:600">📝' + (Math.round(lh * 10) / 10) + 'h</span>';
       s += '<span style="color:var(--t5)">' + eH(lg.authorName || '') + '</span>';
       s += '<span style="color:var(--t6);margin-left:auto">삭제 ' + (typeof _pdRelTime === 'function' ? _pdRelTime(lg.deletedAt) : '') + (lg.deletedByName ? ' · ' + eH(lg.deletedByName) : '') + '</span>';
       s += '</div>';
@@ -1156,7 +1299,7 @@ function _pdRenderTrashList(mid, projId, containerId) {
     s += '</div>';
     el.innerHTML = s;
   }).catch(function (err) {
-    if (el) el.innerHTML = '<div style="font-size:10px;color:#EF4444;padding:4px 0">' + ((err && err.status === 403) ? '관리자만 휴지통을 볼 수 있습니다.' : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.' : '휴지통 로딩 실패') + '</div>';
+    if (el) el.innerHTML = '<div style="font-size:10px;color:' + SEM_COLOR.danger + ';padding:4px 0">' + ((err && err.status === 403) ? '관리자만 휴지통을 볼 수 있습니다.' : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.' : '휴지통 로딩 실패') + '</div>';
   });
 }
 
@@ -1341,8 +1484,8 @@ function _pdFillAllocInfo(mid, projId) {
         var dn = (typeof shortName === 'function') ? shortName(n) : n;
         h += '<div style="display:flex;align-items:center;font-size:10px;padding:2px 0">' +
           '<span style="flex:1;color:var(--t4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(n) + '">' + eH(dn) + '</span>' +
-          '<span style="flex-shrink:0;text-align:right;color:' + (over ? '#EF4444' : 'var(--t3)') + '">' +
-            w + 'h / ' + (a > 0 ? a + 'h' : '–') + (pct != null ? ' <span style="color:' + (over ? '#EF4444' : 'var(--t6)') + '">(' + pct + '%)</span>' : '') +
+          '<span style="flex-shrink:0;text-align:right;color:' + (over ? SEM_COLOR.danger : 'var(--t3)') + '">' +
+            w + 'h / ' + (a > 0 ? a + 'h' : '–') + (pct != null ? ' <span style="color:' + (over ? SEM_COLOR.danger : 'var(--t6)') + '">(' + pct + '%)</span>' : '') +
           '</span></div>';
       });
       // 합계
@@ -1351,7 +1494,7 @@ function _pdFillAllocInfo(mid, projId) {
       var tpct = ta > 0 ? Math.round(tw / ta * 100) : null;
       h += '<div style="display:flex;align-items:center;font-size:10px;padding:3px 0 0;margin-top:2px;border-top:1px solid var(--bd);font-weight:700">' +
         '<span style="flex:1;color:var(--t3)">합계</span>' +
-        '<span style="flex-shrink:0;text-align:right;color:' + (tover ? '#EF4444' : 'var(--ac)') + '">' +
+        '<span style="flex-shrink:0;text-align:right;color:' + (tover ? SEM_COLOR.danger : 'var(--ac)') + '">' +
           tw + 'h / ' + (ta > 0 ? ta + 'h' : '–') + (tpct != null ? ' (' + tpct + '%)' : '') +
         '</span></div>';
     }
@@ -1362,15 +1505,10 @@ function _pdFillAllocInfo(mid, projId) {
 
 function _pdBuildProgressModal(mid, projId, curProg, opts) {
   curProg = Number(curProg) || 0;
-  var ex = document.getElementById('pdMsProgModal'); if (ex) ex.remove();
-  var modal = document.createElement('div');
-  modal.id = 'pdMsProgModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
   var quick = [0, 25, 50, 75, 100].map(function (q) {
     return '<button class="btn btn-g btn-s" style="flex:1;font-size:10px;padding:4px 0" onclick="document.getElementById(\'pdProgRange\').value=' + q + ';document.getElementById(\'pdProgNum\').value=' + q + ';document.getElementById(\'pdProgVal\').textContent=\'' + q + '%\'">' + q + '</button>';
   }).join('');
-  modal.innerHTML =
-    '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;width:400px;max-width:94%;max-height:90vh;overflow:auto">' +
+  var inner =
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
         '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">🖉 진척률 · 작업 노트</h3>' +
         '<button class="btn btn-g btn-s" onclick="document.getElementById(\'pdMsProgModal\').remove()">✕</button>' +
@@ -1409,9 +1547,13 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
       '</div>' +
       '<div id="pdMsAssignSection" style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"></div>' +
       '<div id="pdProgHist" style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"><div style="font-size:10px;color:var(--t6)">이력 로딩 중...</div></div>' +
-      '<div id="pdMsCommentSection" style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"></div>' +
-    '</div>';
-  document.body.appendChild(modal);
+      '<div id="pdMsCommentSection" style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"></div>';
+  // 공통 createModal — 기존 모양 유지(z 10001·배경 .6·여백 0, 박스 400px/90vh·그림자 없음). id 는 wmGuardedModal 대기·인라인 닫기 버튼이 사용
+  var modal = createModal({
+    id: 'pdMsProgModal', z: 10001, html: inner, width: '94%',
+    overlayStyle: 'background:rgba(0,0,0,.6);padding:0',
+    boxStyle: 'padding:20px;width:400px;max-height:90vh;overflow:auto;box-shadow:none;color:inherit'
+  }).overlay;
   // 투입시간 옆 누적 작업/할당 시간(작업시간/할당시간 및 %) 채우기
   _pdFillAllocInfo(mid, projId);
   // 마일스톤 담당 배정(변경/대체/원복) 패널
@@ -1473,7 +1615,7 @@ function renderMsAssignments(mid, projId, containerId) {
         var isPrimary = a.role === 'primary';
         var roleBadge = '<span style="font-size:8px;padding:1px 5px;border-radius:8px;font-weight:700;background:' + (isPrimary ? 'rgba(99,102,241,.18);color:#A5B4FC' : 'rgba(245,158,11,.18);color:#FCD34D') + '">' + (isPrimary ? '정' : '부') + '</span>';
         var th = (a.targetHours != null && a.targetHours !== '') ? ' · ' + Number(a.targetHours) + 'h' : '';
-        var coverTxt = a.coversUserId ? (' <span style="font-size:9px;color:#F59E0B">🔄 ' + eH(a.coversName || '') + ' 대체' + (a.validUntil ? (' (~' + String(a.validUntil).slice(0, 10) + ')') : '') + '</span>') : '';
+        var coverTxt = a.coversUserId ? (' <span style="font-size:9px;color:' + SEM_COLOR.warn + '">🔄 ' + eH(a.coversName || '') + ' 대체' + (a.validUntil ? (' (~' + String(a.validUntil).slice(0, 10) + ')') : '') + '</span>') : '';
         var acts = '';
         if (a.coversUserId) {
           acts += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" onclick="pdAssignCoverEnd(\'' + mid + '\',\'' + projId + '\',\'' + a.id + '\')" title="대체 종료(원복)">↩ 원복</button>';
@@ -1507,7 +1649,6 @@ function _pdAssignAction(kind, mid, projId, fromUserId) {
   userLookup().then(function (users) {
     users = (users || []).filter(function (u) { return kind === 'add' || u.id !== fromUserId; });
     var opts = users.map(function (u) { return '<option value="' + u.id + '">' + eH(u.displayName || u.name || u.id) + '</option>'; }).join('');
-    var ex = document.getElementById('pdAssignModal'); if (ex) ex.remove();
     var titleMap = { add: '담당 추가', replace: '담당 변경(교체)', cover: '임시 대체' };
     var extra;
     if (kind === 'add') {
@@ -1518,16 +1659,17 @@ function _pdAssignAction(kind, mid, projId, fromUserId) {
     } else {
       extra = '<label class="fl" style="font-size:11px">대체 종료일(선택)</label><input id="pdAsgUntil" type="date" class="si" style="width:100%;margin-bottom:8px"><div style="font-size:10px;color:var(--t6);margin-bottom:4px">기간 동안만 부담당으로 대체하고 종료 후 자동 원복됩니다. 원담당은 유지됩니다.</div>' + _pdAssignNoteField();
     }
-    var m = document.createElement('div'); m.id = 'pdAssignModal';
-    m.style.cssText = 'position:fixed;inset:0;z-index:10002;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(3px)';
-    m.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:12px;padding:18px;width:340px;max-width:94%">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:13px;font-weight:700;color:var(--t1)">' + titleMap[kind] + '</h3><button class="btn btn-g btn-s" onclick="document.getElementById(\'pdAssignModal\').remove()">✕</button></div>' +
+    var inner = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:13px;font-weight:700;color:var(--t1)">' + titleMap[kind] + '</h3><button class="btn btn-g btn-s" onclick="document.getElementById(\'pdAssignModal\').remove()">✕</button></div>' +
       '<label class="fl" style="font-size:11px">' + (kind === 'add' ? '담당자' : '새 담당자') + '</label>' +
       '<select id="pdAsgUser" class="si" style="width:100%;margin-bottom:8px">' + (opts || '<option value="">선택 가능한 사용자 없음</option>') + '</select>' +
       extra +
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-g" style="flex:1" onclick="document.getElementById(\'pdAssignModal\').remove()">취소</button><button class="btn btn-p" style="flex:1" id="pdAsgOk">확인</button></div>' +
-    '</div>';
-    document.body.appendChild(m);
+      '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-g" style="flex:1" onclick="document.getElementById(\'pdAssignModal\').remove()">취소</button><button class="btn btn-p" style="flex:1" id="pdAsgOk">확인</button></div>';
+    // 공통 createModal — 기존 모양 유지(진척률 모달 위 z 10002·blur 3px, 박스 340px·높이 제한/그림자 없음)
+    createModal({
+      id: 'pdAssignModal', z: 10002, html: inner, width: '94%',
+      overlayStyle: 'backdrop-filter:blur(3px);padding:0',
+      boxStyle: 'border-radius:12px;padding:18px;width:340px;max-height:none;overflow-y:visible;box-shadow:none;color:inherit'
+    });
     document.getElementById('pdAsgOk').onclick = function () { _pdAssignSubmit(); };
   }).catch(function () { if (typeof showToast === 'function') showToast('사용자 목록 로드 실패', 'error'); });
 }
@@ -1643,8 +1785,8 @@ function _pdRenderProgHist() {
       var lh = Number(lg.hours) || 0;
       s += '<div style="margin-bottom:7px">';
       s += '<div style="display:flex;align-items:center;gap:6px;font-size:10px">';
-      s += '<span style="font-weight:700;color:' + (p >= 100 ? '#10B981' : 'var(--ac)') + '">' + p + '%</span>';
-      if (lh > 0) s += '<span style="color:#8B5CF6;font-weight:600" title="보고 투입">📝' + (Math.round(lh * 10) / 10) + 'h</span>';
+      s += '<span style="font-weight:700;color:' + (p >= 100 ? SEM_COLOR.ok : 'var(--ac)') + '">' + p + '%</span>';
+      if (lh > 0) s += '<span style="color:' + SEM_COLOR.purple + ';font-weight:600" title="보고 투입">📝' + (Math.round(lh * 10) / 10) + 'h</span>';
       s += '<span style="color:var(--t5)">' + eH(lg.authorName || '') + '</span>';
       s += '<span style="color:var(--t6);margin-left:auto">' + (typeof _pdRelTime === 'function' ? _pdRelTime(lg.createdAt) : '') + '</span>';
       s += '<button class="btn btn-g btn-s" style="font-size:9px;padding:1px 5px" title="이 이력 삭제(휴지통 이동)" onclick="pdProgHistDel(\'' + lg.id + '\')">🗑</button>';
@@ -1654,7 +1796,7 @@ function _pdRenderProgHist() {
     });
     s += '</div>' + trashHtml;
     el.innerHTML = s;
-  }).catch(function () { el.innerHTML = '<div style="font-size:10px;color:#EF4444;padding:4px 0">이력 로딩 실패</div>'; });
+  }).catch(function () { el.innerHTML = '<div style="font-size:10px;color:' + SEM_COLOR.danger + ';padding:4px 0">이력 로딩 실패</div>'; });
 }
 
 /* 모달 내 이력 1건 삭제 → 이력 재렌더 + 하위 뷰 갱신 */
@@ -1716,7 +1858,7 @@ function pdAutoTagWork(projId) {
 
 /* ═══ 단계별 체크리스트 HTML 빌드 ═══ */
 function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
-  var ph = phases && phases[phase] ? phases[phase] : { label: phase, icon: '', color: '#94A3B8' };
+  var ph = phases && phases[phase] ? phases[phase] : { label: phase, icon: '', color: SEM_COLOR.muted };
   var items = allChk.filter(function (c) { return c.phase === phase; });
   items.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
   var done = items.filter(function (c) { return c.done; }).length;
@@ -1749,7 +1891,7 @@ function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
       h += '<input type="date" value="' + (item.doneDate || localDate()) + '" onchange="pdChangeDoneDate(\'' + projId + '\',\'' + item.id + '\',this.value)" style="font-size:9px;padding:1px 2px;border:1px solid var(--bd);border-radius:3px;background:var(--bg-i);color:var(--t6);width:auto;' + (item.done ? '' : 'visibility:hidden;width:0;padding:0;border:0;') + '" title="완료 날짜">';
       if (item.dueDate && !item.done) {
         var overdue = item.dueDate < localDate();
-        h += '<span style="font-size:9px;color:' + (overdue ? '#EF4444' : 'var(--t6)') + ';white-space:nowrap">' + (overdue ? '⚠️' : '') + item.dueDate + '</span>';
+        h += '<span style="font-size:9px;color:' + (overdue ? SEM_COLOR.danger : 'var(--t6)') + ';white-space:nowrap">' + (overdue ? '⚠️' : '') + item.dueDate + '</span>';
       }
       h += '<button style="background:none;border:none;color:var(--t6);cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0" onclick="pdDeleteCheck(\'' + projId + '\',\'' + item.id + '\',this)" title="삭제">✕</button>';
       h += '</div>';
@@ -1938,7 +2080,7 @@ function pdRefreshOverviewChk(projId, phase) {
   var listEl = document.getElementById('pdOverviewChkList');
   if (!listEl || typeof chkGetByPhase !== 'function') return Promise.resolve();
   var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
-  var phMeta = phases[phase] || { label: phase, icon: '', color: '#94A3B8' };
+  var phMeta = phases[phase] || { label: phase, icon: '', color: SEM_COLOR.muted };
   return chkGetByPhase(projId, phase).then(function (items) {
     items.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
     listEl.innerHTML = renderOverviewChkListHtml(projId, phase, phMeta, items);

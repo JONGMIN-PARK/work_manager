@@ -236,23 +236,44 @@ function renderPagination(containerId, pageInfo, onPageChange) {
 }
 
 /* ═══ 공용 모달 프레임 ═══ */
+/**
+ * 공통 모달. opts:
+ *   title (HTML) | titleText (문자열 — 이스케이프됨), html | content, width(기본 600px), onClose
+ *   id          — overlay id. 같은 id 가 이미 있으면 먼저 제거(중복 창 방지)
+ *   z           — z-index (기본: MODAL_Z + 열린 모달 수 → 모달 위 모달이 자동으로 위에)
+ *   boxStyle    — 박스 스타일 덧붙임 (예: 'padding:0;max-height:90vh')
+ *   overlayStyle— 오버레이 스타일 덧붙임
+ *   closeOnOverlay — 배경 클릭 닫기 (기본 false, v13.63)
+ *   closeOnEsc  — Esc 닫기 (기본 false)
+ */
 function createModal(opts) {
+  opts = opts || {};
+  if (opts.id) { var prev = document.getElementById(opts.id); if (prev) prev.remove(); }
+  var z = opts.z || (MODAL_Z + document.querySelectorAll('.wa-modal-overlay').length);
   var ov = document.createElement('div');
   ov.className = 'wa-modal-overlay';
-  ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.55);z-index:' + MODAL_Z + ';display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+  if (opts.id) ov.id = opts.id;
+  ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.55);z-index:' + z + ';display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)' + (opts.overlayStyle ? ';' + opts.overlayStyle : '');
   var box = document.createElement('div');
   box.className = 'wa-modal-box';
-  box.style.cssText = 'background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:24px;max-width:' + (opts.width || '600px') + ';width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.3);color:var(--t2)';
-  if (opts.title) {
+  box.style.cssText = 'background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:24px;max-width:' + (opts.width || '600px') + ';width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.3);color:var(--t2)' + (opts.boxStyle ? ';' + opts.boxStyle : '');
+  var _escH = null;
+  function _close() {
+    ov.remove();
+    if (_escH) document.removeEventListener('keydown', _escH);
+    if (opts.onClose) opts.onClose();
+  }
+  var titleHtml = opts.titleText != null ? eH(opts.titleText) : opts.title;
+  if (titleHtml) {
     var hdr = document.createElement('div');
     hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px';
-    hdr.innerHTML = '<span style="font-size:15px;font-weight:700;color:var(--t1)">' + opts.title + '</span>';
+    hdr.innerHTML = '<span style="font-size:15px;font-weight:700;color:var(--t1)">' + titleHtml + '</span>';
     var closeBtn = document.createElement('span');
     closeBtn.textContent = '\u2715';
     closeBtn.style.cssText = 'cursor:pointer;color:var(--t5);font-size:16px;padding:4px 8px;border-radius:6px;transition:all .15s';
     closeBtn.onmouseover = function () { this.style.color = 'var(--d-t)'; this.style.background = 'var(--d-bg)'; };
     closeBtn.onmouseout = function () { this.style.color = 'var(--t5)'; this.style.background = 'none'; };
-    closeBtn.onclick = function () { ov.remove(); if (opts.onClose) opts.onClose(); };
+    closeBtn.onclick = _close;
     hdr.appendChild(closeBtn);
     box.appendChild(hdr);
   }
@@ -262,10 +283,19 @@ function createModal(opts) {
   // v13.63: 기본값을 false로 변경 — backdrop 클릭 닫기는 명시적으로 opts.closeOnOverlay:true 일 때만.
   //         편집 중 실수 클릭으로 데이터 유실되는 사고 방지.
   if (opts.closeOnOverlay === true) {
-    ov.addEventListener('click', function (e) { if (e.target === ov) { ov.remove(); if (opts.onClose) opts.onClose(); } });
+    ov.addEventListener('click', function (e) { if (e.target === ov) _close(); });
+  }
+  if (opts.closeOnEsc === true) {
+    _escH = function (e) {
+      if (e.key !== 'Escape' || !ov.isConnected) return;
+      // 가장 위 모달만 닫는다
+      var all = document.querySelectorAll('.wa-modal-overlay');
+      if (all[all.length - 1] === ov) _close();
+    };
+    document.addEventListener('keydown', _escH);
   }
   document.body.appendChild(ov);
-  return { overlay: ov, box: box, close: function () { ov.remove(); if (opts.onClose) opts.onClose(); } };
+  return { overlay: ov, box: box, close: _close };
 }
 
 /* ═══ 토스트 알림 ═══ */
