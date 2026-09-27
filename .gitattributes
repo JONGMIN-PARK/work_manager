@@ -1,2 +1,3 @@
 # 스냅샷 픽스처는 바이트 비교 — Windows(core.autocrlf)에서도 LF 로 체크아웃되게 고정
 test/fixtures/** text eol=lf
+server/__tests__/*.snapshot.txt text eol=lf
