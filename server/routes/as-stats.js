@@ -490,7 +490,7 @@ router.get('/', async function (req, res) {
     res.json(payload);
   } catch (e) {
     console.error('[as-stats]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '통계 조회 실패: ' + (e.message || '') });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '통계 조회 실패' });
   }
 });
 
@@ -708,7 +708,7 @@ router.get('/weekly-digest', async function (req, res) {
     });
   } catch (e) {
     console.error('[as-stats/weekly-digest]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 

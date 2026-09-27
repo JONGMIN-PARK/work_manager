@@ -123,14 +123,33 @@ function dateToStr(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
+/* 'YYYY-MM-DD' ± n일 — 로컬 달력 기준 (toISOString 은 UTC 라 KST 09시 전에 하루 밀린다) */
+function ymdAddDays(ymd, n) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ymd || ''));
+  if (!m) return ymd;
+  return dateToStr(new Date(+m[1], +m[2] - 1, +m[3] + (n || 0)));
+}
+
+/* 해당 월 말일 'YYYY-MM-DD' — m 은 1~12 (범위 밖이면 연도 이월) */
+function monthEndYmd(y, m) {
+  return dateToStr(new Date(y, m, 0));
+}
+
+/* refYmd 가 속한 주 { start, end } — startDow: 주 시작 요일 (0=일, 1=월 …, 기본 0) */
+function weekRangeYmd(refYmd, startDow) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(refYmd || ''));
+  if (!m) return { start: '', end: '' };
+  var sd = ((startDow || 0) % 7 + 7) % 7;
+  var dow = new Date(+m[1], +m[2] - 1, +m[3]).getDay();
+  var start = ymdAddDays(refYmd, -((dow - sd + 7) % 7));
+  return { start: start, end: ymdAddDays(start, 6) };
+}
+
 function datesBetween(start, end) {
   var arr = [];
-  var d = new Date(start);
-  var e = new Date(end);
-  while (d <= e) {
-    arr.push(d.toISOString().slice(0, 10));
-    d.setDate(d.getDate() + 1);
-  }
+  var s = typeof start === 'string' ? start.slice(0, 10) : dateToStr(new Date(start));
+  var e = typeof end === 'string' ? end.slice(0, 10) : dateToStr(new Date(end));
+  for (var d = s, guard = 0; d && d <= e && guard < 36600; d = ymdAddDays(d, 1), guard++) arr.push(d);
   return arr;
 }
 
@@ -138,7 +157,7 @@ function daysDiff(start, end) {
   return Math.round((new Date(end) - new Date(start)) / 86400000);
 }
 
-function localDate() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function localDate() { return dateToStr(new Date()); }
 
 /* ═══ 반복 일정 인스턴스 확장 ═══ */
 function expandRepeatingEvents(events, viewStart, viewEnd) {
@@ -182,27 +201,6 @@ function autoProjectStatus(proj) {
   if (proj.endDate && proj.endDate < today) return 'delayed';
   if (proj.startDate && proj.startDate <= today) return 'active';
   return 'waiting';
-}
-
-/* ═══ 업무일지 레코드 중복 키 / 병합 ═══ */
-function wrRecordKey(r) {
-  return (r.date || '') + '|' + (r.name || '') + '|' + (r.orderNo || '') + '|' + (r.content || '');
-}
-
-function wrMerge(existingRecords, newRecords) {
-  var keySet = {};
-  existingRecords.forEach(function (r) { keySet[wrRecordKey(r)] = true; });
-  var added = 0;
-  var toAdd = [];
-  newRecords.forEach(function (r) {
-    var k = wrRecordKey(r);
-    if (!keySet[k]) {
-      keySet[k] = true;
-      toAdd.push(r);
-      added++;
-    }
-  });
-  return { toAdd: toAdd, added: added };
 }
 
 /* ═══ 페이지네이션 유틸리티 ═══ */
@@ -1037,6 +1035,21 @@ function chkGetByPhase(projectId, phase) {
 }
 
 /* 토글 (서버 모드: 부모 row의 items 배열 갱신) */
+/* 체크리스트 항목(flat id 'rowId::idx') 필드 일부 수정 — 서버 PUT 은 phase/items 만 받으므로
+   부모 row 의 items 배열을 고쳐 통째로 보낸다. '::' 없는 id 는 서버에서 개별 수정할 방법이 없어 거부. */
+function chkPatchItem(id, patch) {
+  var sep = String(id || '').indexOf('::');
+  if (sep < 0) return Promise.reject(new Error('수정할 수 없는 체크리스트 항목입니다: ' + id));
+  var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
+  return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
+    var row = r.data || {};
+    var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+    if (!(idx >= 0 && idx < items.length)) throw new Error('체크리스트 항목을 찾을 수 없습니다: ' + id);
+    Object.keys(patch || {}).forEach(function (k) { items[idx][k] = patch[k]; });
+    return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
+  });
+}
+
 function toggleCheckItem(id, doneBy, doneDate) {
   var sep = id.indexOf('::');
   if (sep < 0) return Promise.resolve(null);
@@ -1102,10 +1115,6 @@ function devItemCreate(item) {
   return apiFetch('/api/dev-items', { method: 'POST', body: JSON.stringify(item) })
     .then(function (r) { return toCamel(r.data); });
 }
-function devItemUpdate(id, patch) {
-  return apiFetch('/api/dev-items/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(patch) })
-    .then(function (r) { return toCamel(r.data); });
-}
 function devItemMove(id, status, sortOrder) {
   return apiFetch('/api/dev-items/' + encodeURIComponent(id) + '/move', { method: 'PUT', body: JSON.stringify({ status: status, sortOrder: sortOrder || 0 }) })
     .then(function (r) { return toCamel(r.data); });
@@ -1125,9 +1134,6 @@ function prestudyGetAll(params) {
   return apiFetch('/api/prestudies' + (qs.length ? '?' + qs.join('&') : ''))
     .then(function (r) { return toCamelArray(r.data); })
     .catch(function () { return []; });
-}
-function prestudyGet(id) {
-  return apiFetch('/api/prestudies/' + encodeURIComponent(id)).then(function (r) { return toCamel(r.data); });
 }
 /* 담당자·참여자 선택용 테넌트 활성 사용자 [{id, name}] — 1회 조회 후 캐시 */
 var _prestudyMembersCache = null;
@@ -1217,9 +1223,6 @@ function techGetAll(params) {
     .then(function (r) { return toCamelArray(r.data); })
     .catch(function () { return []; });
 }
-function techGet(id) {
-  return apiFetch('/api/tech/' + encodeURIComponent(id)).then(function (r) { return toCamel(r.data); });
-}
 function techStacks() {
   return apiFetch('/api/tech/stacks').then(function (r) { return r.data || []; }).catch(function () { return []; });
 }
@@ -1288,20 +1291,6 @@ function calcPhaseProgress(projectId, phase) {
     if (!items.length) return { total: 0, done: 0, pct: 0 };
     var done = items.filter(function (i) { return i.done; }).length;
     return { total: items.length, done: done, pct: Math.round(done / items.length * 100) };
-  });
-}
-
-/* 전 단계 완료율 한 번에 계산 */
-function calcAllPhaseProgress(projectId) {
-  return chkGetByProject(projectId).then(function (items) {
-    var result = {};
-    var phases = typeof PROJ_PHASE !== 'undefined' ? Object.keys(PROJ_PHASE) : [];
-    phases.forEach(function (ph) {
-      var phItems = items.filter(function (i) { return i.phase === ph; });
-      var done = phItems.filter(function (i) { return i.done; }).length;
-      result[ph] = { total: phItems.length, done: done, pct: phItems.length ? Math.round(done / phItems.length * 100) : 0 };
-    });
-    return result;
   });
 }
 
@@ -1430,13 +1419,6 @@ function asRestore(id) {
   return apiFetch('/api/as-tickets/' + id + '/restore', { method: 'POST' })
     .then(function (r) { _emitBus('as', 'updated', { id: id, action: 'restore' }); return toCamel(r.data); });
 }
-function asEmailReport(ticketId, payload) {
-  return apiFetch('/api/as-tickets/' + ticketId + '/email-report', {
-    method: 'POST',
-    body: JSON.stringify(payload || {})
-  });
-}
-
 /* ─── A/S 마스터 (장비/컨택) + 재발 이력 ─── */
 function asEquipmentSearch(params) {
   var qs = '';
@@ -1463,16 +1445,6 @@ function asContactsSearch(params) {
     if (pairs.length) qs = '?' + pairs.join('&');
   }
   return apiFetch('/api/as-masters/contacts' + qs).then(function (r) { return toCamelArray(r.data); });
-}
-function asContactPut(contact) {
-  var isNew = !contact.id || contact._isNew;
-  if (isNew) {
-    delete contact._isNew;
-    return apiFetch('/api/as-masters/contacts', { method: 'POST', body: JSON.stringify(contact) })
-      .then(function (r) { return toCamel(r.data); });
-  }
-  return apiFetch('/api/as-masters/contacts/' + contact.id, { method: 'PUT', body: JSON.stringify(contact) })
-    .then(function (r) { return toCamel(r.data); });
 }
 function asRecurrencesGet(ticketId) {
   return apiFetch('/api/as-tickets/' + ticketId + '/recurrences')

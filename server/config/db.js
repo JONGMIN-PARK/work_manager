@@ -137,10 +137,17 @@ async function runMigrations() {
       var sql = fs.readFileSync(filePath, 'utf8');
       // BEGIN/COMMIT 트랜잭션이 있는 파일은 통째로 실행
       if (/^\s*BEGIN\s*;/im.test(sql)) {
+        // 전용 클라이언트로 실행한다. 다중 문장 안의 BEGIN 이후 오류가 나면 그 세션은
+        // "aborted transaction" 상태로 남는데, pool.query 로 실행하면 그 연결이 그대로
+        // 풀에 반납되어 다음 사용자의 쿼리가 25P02 로 실패한다. 실패 시 ROLLBACK 필수.
+        var mc = await pool.connect();
         try {
-          await pool.query(sql);
+          await mc.query(sql);
         } catch (e) {
+          await mc.query('ROLLBACK').catch(function () {});
           console.warn('[DB] Migration ' + files[i] + ' (transaction) failed:', e.message);
+        } finally {
+          mc.release();
         }
       } else {
         // 트랜잭션 없는 파일은 문장별 개별 실행 (부분 실패 허용)
@@ -161,13 +168,19 @@ async function runMigrations() {
   }
 }
 
-// 풀 준비 시 마이그레이션 실행
+// 마이그레이션은 프로세스(풀)당 한 번만 실행하고, 그 완료 시점을 promise 로 노출한다.
+// 테스트는 이것을 기다린 뒤 시작해야 한다 — 기다리지 않으면 마이그레이션(예: 032 의
+// DROP/CREATE TRIGGER ON issues)이 테스트 쿼리와 동시에 돌며 교착(deadlock)이 나고,
+// PostgreSQL 이 테스트 쪽을 희생시키면 테스트가 간헐적으로 실패한다.
+var _migrationsPromise = null;
+function migrationsReady() {
+  if (!_migrationsPromise) _migrationsPromise = runMigrations();
+  return _migrationsPromise;
+}
+
+// 풀 준비 시 마이그레이션 실행 (첫 연결 시 한 번만)
 pool.on('connect', function () {
-  // 첫 연결 시 한 번만 실행
-  if (!runMigrations._ran) {
-    runMigrations._ran = true;
-    runMigrations();
-  }
+  migrationsReady();
 });
 
-module.exports = { pool: pool, query: query, transaction: transaction };
+module.exports = { pool: pool, query: query, transaction: transaction, migrationsReady: migrationsReady };

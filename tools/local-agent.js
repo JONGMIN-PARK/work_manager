@@ -1,14 +1,14 @@
 /**
  * 애니웍스 로컬 에이전트 — 사내 PC에서 실행
  *
- * 사용법: node local-agent.js
+ * 사용법: node tools/local-agent.js
  *
  * 웹 앱에서 localhost:5050으로 다운로드 요청을 보내면
  * 사내 네트워크에서 애니웍스에 접속하여 엑셀을 다운로드합니다.
  */
 var express = require('express');
 var cors = require('cors');
-var engine = require('./server/services/anyworks-engine');
+var engine = require('../server/services/anyworks-engine');
 
 var PORT = process.env.LOCAL_AGENT_PORT || 5050;
 var app = express();

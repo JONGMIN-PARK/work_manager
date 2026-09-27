@@ -101,9 +101,20 @@ try {
 console.log('[Server] Build version:', BUILD_VERSION);
 
 // ─── 정적 파일 서빙 (프론트엔드) ───
-app.use(express.static(path.join(__dirname, '..'), {
-  index: false, // HTML은 별도 미들웨어에서 처리
-  extensions: ['html'],
+// 저장소 루트를 통째로 서빙하면 /server/routes/auth.js, /server/package.json, /migrations/*.sql
+// 등 서버 소스와 설정이 그대로 다운로드된다. SPA 가 실제로 쓰는 것만 허용한다:
+//   - 루트 바로 아래(디렉토리 없음)의 *.js / *.css — 업무일지_분석기.html 의 <script src>/<link href>
+//   - 단, 루트에 남아 있는 비(非)클라이언트 파일은 명시 차단(STATIC_DENY)
+// HTML 은 아래 '/' 라우트와 SPA 폴백이 ?v= 치환 후 내려주므로 정적 서빙하지 않는다.
+// 이미지·폰트·manifest 는 HTML 이 참조하지 않는다(폰트는 Google Fonts CDN). 필요해지면 여기 추가.
+var STATIC_ALLOW = /^\/[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*\.(?:js|css)$/;
+var STATIC_DENY = {
+  '/order.js': true // 구 수주맵(자동 생성 데이터). HTML 이 더 이상 로드하지 않음 — 거래처/수주명 노출 방지
+};
+var serveStatic = express.static(path.join(__dirname, '..'), {
+  index: false,
+  dotfiles: 'deny',
+  fallthrough: true,
   etag: true,
   lastModified: true,
   setHeaders: function (res, filePath) {
@@ -115,7 +126,15 @@ app.use(express.static(path.join(__dirname, '..'), {
       res.setHeader('Cache-Control', 'public, max-age=2592000');
     }
   }
-}));
+});
+app.use(function (req, res, next) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (!STATIC_ALLOW.test(req.path) || STATIC_DENY[req.path]) return next();
+  return serveStatic(req, res, next);
+});
+// 파일처럼 보이는 경로(확장자 있음)는 SPA 폴백으로 HTML 을 주지 않고 404 — 스캐너/잘못된 링크에
+// 200 HTML 을 돌려주면 "파일이 존재한다"로 오인되고, 차단된 파일 확인도 어렵다.
+var FILE_LIKE = /\/[^/]*\.[A-Za-z0-9]{1,10}$/;
 
 // ─── HTML: 요청마다 읽어서 ?v= 치환 (배포 즉시 반영) ───
 var fs = require('fs');
@@ -311,6 +330,10 @@ app.get('/health', async function (req, res) {
 app.get('*', function (req, res) {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'NOT_FOUND', message: '존재하지 않는 API입니다.' });
+  }
+  // 업무일지_분석기.html 직접 링크는 HTML 로 응답 (예전 extensions:['html'] 동작 유지)
+  if (FILE_LIKE.test(req.path) && !/\.html?$/i.test(req.path)) {
+    return res.status(404).type('text/plain').send('Not Found');
   }
   if (!cachedHtml) return res.status(500).send('HTML 로드 실패');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

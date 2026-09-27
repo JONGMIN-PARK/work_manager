@@ -1,5 +1,42 @@
 # Work Manager — 변경 이력
 
+## v13.193 (2026-09-27) — 보안(테넌트 격리·정적 노출) · 버그 · 메인 페이지 분리 · CI 교착 수정
+
+### 보안 (서버) — 신규 교차 테넌트 테스트 12개가 수정 전 코드에서 실패함을 확인한 뒤 수정
+- **정적 노출**: `express.static(repo root)` 가 `server/`, `migrations/*.sql`, `package.json` 등 전부 서빙(운영에서 실제 확인) →
+  `server/app.js` 허용 목록: 루트의 `*.js`/`*.css` 만(디렉토리 없는 경로, `/order.js` 제외), dotfiles deny, 파일처럼 생긴 경로는 SPA 폴백 대신 404.
+  `static-files.test.js`: 금지 경로 404 · 인코딩 우회 · HTML 이 참조하는 모든 로컬 스크립트/스타일 200. `.dockerignore` 추가.
+- **users.js**: 목록·/pending·운영자·승인·거절·역할·상태·부서·비밀번호 초기화·/departments 전부 `callerTenant(req)` 로 한정. 문자열 연결 SQL 파라미터화. 타 테넌트 부서 id 거부.
+- **optimistic-lock**: 409 응답용 재조회에 테넌트 조건.
+- **upsert 가드** `WHERE t.tenant_id = EXCLUDED.tenant_id`: archives(409), progress(409), A/S 서명(티켓 소유 확인, 404), **locks**(409).
+- **프로젝트 멤버**: 같은 테넌트 + PUT/DELETE 와 같은 편집 규칙, 추가 대상도 같은 테넌트, `tenant_id` 저장.
+- **알림**: `notifyAdmins(event, payload, tenantId)` 테넌트 한정. 일일 브리핑·주간 요약·과부하 경고·수주 리마인더·이슈 담당자 조회의 교차 테넌트 누출도 수정.
+- **오류 노출**: 내부/DB 오류를 그대로 내보내던 33곳 → 일반 메시지 + 서버 로그. 의도된 검증 메시지는 유지.
+- 보류: RBAC `issue.edit`/`event.edit` 가 정의만 되고 미사용 — 그대로 적용하면 본인이 등록한 이슈·본인 연차 일정도 못 고치게 되어 "작성자 본인" 규칙이 필요(정책 결정).
+
+### CI 간헐 실패의 원인 (서버 버그)
+`config/db.js` 가 첫 연결 때 마이그레이션을 백그라운드로 돌려, jest 파일마다 테스트와 동시 실행 → `032_issue_assignees` 와 이슈 INSERT 트리거가 교착(23회 중 1회 실패, 매 회 PG 로그에 deadlock 1~2건).
+또 `BEGIN;…` 마이그레이션 실패 시 연결이 aborted 트랜잭션 상태로 풀에 반환(다음 쿼리 25P02 — 운영에서도 가능).
+→ 트랜잭션 마이그레이션은 전용 연결 + 실패 시 ROLLBACK, `migrationsReady()` 공개, `jest.setup.js` 에서 대기, `jest.config.js` 오타 키(`setupFilesAfterSetup`) 수정. 30회 연속 통과·deadlock 0.
+
+### 클라이언트 버그
+- 백업/복원: 없는 IndexedDB(`openDBv2` 스텁 → null) 를 써서 복원이 멈춤 → 서버 데이터 스냅샷 내보내기(v9) + `wa-*` 설정·별칭·그룹 복원, v8 호환, 오류 토스트.
+- 날짜: `ymdAddDays`/`monthEndYmd`/`weekRangeYmd`(project-data.js) 추가, 로컬 Date→`toISOString().slice(0,10)` 22곳 교체.
+  대시보드 금월 납기 말일 누락·주간 범위, 타임라인 월/분기 칸이 KST 에서 하루 일찍 끝나던 문제(말일 = 어느 칸에도 안 걸림), A/S datetime-local 이 저장마다 9시간 밀림.
+- 체크리스트 `db.transaction`(항상 null) 분기 → `chkPatchItem` 서버 경로.
+- 데이터 버스: 재렌더 맵과 캐시 무효화 맵이 어긋나 있던 것을 `WM_TAB_DEPS` 하나로(합집합) — 타임라인·파이프라인이 수주·일정 변경에 다시 그려짐.
+
+### 메인 페이지 분리
+`업무일지_분석기.html` 563,843 → 52,558B. 인라인 스크립트 → `core-bus.js`·`wm-fallbacks.js`·`wm-state.js`·`wr-import.js`·`mode.js`·`wr-filters.js`·`order-map.js`·`wr-view.js`·`manual-input.js`·`wr-charts.js`·`archive-trend.js`·`search-notif.js`·`anyworks-import.js`·`app-init.js`
+(같은 위치에 동기 `<script src>` — 실행 순서 보존. 순수 분할 단계에서 비공백 6,370줄·최상위 이름 335개 전후 동일 기계 검증, 25개 흐름 화면 텍스트 동일).
+패치노트 데이터 → `patch-notes.js`(`WM_PATCHES`, 패치노트 탭 첫 진입 때 지연 로드), 버전은 HTML 의 `WM_VERSION` 한 곳(테스트가 `WM_PATCHES[0].ver` 와 일치 확인).
+애니웍스 서버 API 호출을 인증 포함 `apiFetch` 로(예전 raw fetch 는 401) — 실서버 미검증.
+
+### 정리
+죽은 코드 삭제(참조 0 확인): 타임라인 정렬/필터 옛 함수, project-data 미사용 7개·그림자 `wrMerge`, auth 편집 잠금 세트, AI 키 스텁, 애니웍스 미사용 함수, IndexedDB 잔재, `order.js`. CLI 도구 `upload.js`·`local-agent.js`·`local-auto.js` → `tools/`.
+
+테스트: 화면 81 → 107, 서버 87(통합 트리에서 CI 절차로 3회 연속 통과). 서버 변경 포함 — 마이그레이션 없음.
+
 ## v13.192 (2026-09-27) — 프로젝트 상세 패널 폭·배치 개선
 
 - 폭: `width:420px` 고정 → `.pd-panel{width:max(420px, var(--pd-frac)*100vw)}`, 기본 `--pd-frac:.34`(≈1/3). 700px 이하 전체 폭.

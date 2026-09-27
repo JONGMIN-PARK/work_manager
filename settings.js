@@ -418,7 +418,7 @@ function showBackupRestoreModal() {
   h += '</div>';
 
   h += '<div style="margin-bottom:16px">';
-  h += '<p style="font-size:11px;color:var(--t3);margin-bottom:12px">전체 데이터(업무일지, 프로젝트, 마일스톤, 일정, 수주, 체크리스트, 이슈, 이슈이력, 진척이력)를 JSON 파일로 백업하고 복원합니다.</p>';
+  h += '<p style="font-size:11px;color:var(--t3);margin-bottom:12px">서버 데이터(프로젝트, 마일스톤, 일정, 수주, 이슈, 업무일지, 문서)와 이 브라우저의 환경설정을 JSON 파일로 백업합니다. 복원은 환경설정만 적용합니다 — 서버 데이터는 서버 DB 백업으로 복원하세요.</p>';
 
   h += '<button onclick="exportBackupJSON()" style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t2);cursor:pointer;font-size:12px;font-weight:600;margin-bottom:8px">📥 전체 백업 다운로드</button>';
 
@@ -436,42 +436,100 @@ function showBackupRestoreModal() {
   document.body.appendChild(overlay);
 }
 
-function exportBackupJSON() {
-  var stores = ['projects', 'milestones', 'events', 'progressHistory', 'orders', 'checklists', 'issues', 'issueLogs', 'workRecords', 'projectFolders', 'projectFiles'];
-  var backup = { version: 8, exportDate: new Date().toISOString(), stores: {} };
+/* 백업 형식 (version 9)
+   { version, exportDate, source: 'server', stores: { 이름: [행...] }, localStorage: { 'wa-…': 문자열 }, errors: [이름...] }
+   - stores: 서버 데이터 스냅샷 (읽기 전용 보관용). IndexedDB 는 없어졌고 서버 DB 가 원본이다.
+     복원 시 서버에 되쓰지 않는다 — 여러 사용자가 공유하는 DB 를 파일 한 장으로 덮어쓰면 위험하고,
+     서버 DB 복원은 server/scripts/backup-db.js 로 한다.
+   - localStorage: 이 브라우저의 환경설정(LS_PREFIX 키). 복원 대상.
+     서버 동기화되는 설정(별칭·그룹·색상)은 복원 시 서버에도 저장 — 안 하면 다음 로드 때 서버 값이 덮어쓴다. */
+var BACKUP_VERSION = 9;
+var BACKUP_SERVER_SOURCES = [
+  ['projects', 'projGetAll'], ['milestones', 'msGetAll'], ['events', 'evtGetAll'], ['orders', 'orderGetAll'],
+  ['issues', 'issueGetAll'], ['workRecords', 'wrGetAll'], ['projectFolders', 'folderGetAll'], ['projectFiles', 'fileGetAll']
+];
+var BACKUP_SERVER_PREFS = ['aliases', 'groups', 'abbrColors'];
 
-  var promises = stores.map(function (storeName) {
-    return new Promise(function (resolve) {
-      try {
-        openDBv2().then(function (db) {
-          if (!db.objectStoreNames.contains(storeName)) { resolve(); return; }
-          var tx = db.transaction(storeName, 'readonly');
-          var st = tx.objectStore(storeName);
-          var req = st.getAll();
-          req.onsuccess = function () {
-            backup.stores[storeName] = req.result || [];
-            resolve();
-          };
-          req.onerror = function () { resolve(); };
-        }).catch(function () { resolve(); });
-      } catch (e) { resolve(); }
+function _backupStorage(ls) {
+  if (ls) return ls;
+  try { return localStorage; } catch (e) { return null; }
+}
+
+/* [순수] LS_PREFIX 키만 모은다 (토큰 등 다른 키는 제외) */
+function backupCollectPrefs(ls) {
+  var out = {};
+  ls = _backupStorage(ls);
+  if (!ls) return out;
+  for (var i = 0; i < ls.length; i++) {
+    var key = ls.key(i);
+    if (key && key.indexOf(LS_PREFIX) === 0) out[key] = ls.getItem(key);
+  }
+  return out;
+}
+
+/* 백업 객체 생성 — getters: { 함수이름: fn } (기본: 전역 데이터 함수). 실패한 스토어는 errors 에 이름을 남긴다 */
+function buildBackupData(opts) {
+  opts = opts || {};
+  var getters = opts.getters || (typeof window !== 'undefined' ? window : {});
+  var backup = { version: BACKUP_VERSION, exportDate: new Date().toISOString(), source: 'server', stores: {}, localStorage: backupCollectPrefs(opts.storage), errors: [] };
+  return Promise.all(BACKUP_SERVER_SOURCES.map(function (src) {
+    var fn = getters[src[1]];
+    if (typeof fn !== 'function') { backup.errors.push(src[0]); return null; }
+    return Promise.resolve().then(function () { return fn(); }).then(function (rows) {
+      backup.stores[src[0]] = Array.isArray(rows) ? rows : [];
+    }).catch(function (err) {
+      console.warn('[Backup] ' + src[0], err);
+      backup.errors.push(src[0]);
     });
+  })).then(function () { return backup; });
+}
+
+function _backupCount(backup) {
+  var n = 0;
+  Object.keys((backup && backup.stores) || {}).forEach(function (k) { n += ((backup.stores[k]) || []).length; });
+  return n;
+}
+
+/* [순수] 백업 파일 검증 — 옛(v8, IndexedDB 시절) 파일도 localStorage 가 있으면 복원 가능 */
+function parseBackupText(text) {
+  var backup = JSON.parse(text);
+  if (!backup || typeof backup !== 'object' || (!backup.localStorage && !backup.stores)) throw new Error('유효하지 않은 백업 파일입니다.');
+  return backup;
+}
+
+/* 환경설정 복원 — LS_PREFIX 키만. 서버 동기화 설정은 서버에도 저장. { restored, serverSynced, failed } */
+function applyBackupPrefs(backup, opts) {
+  opts = opts || {};
+  var ls = _backupStorage(opts.storage);
+  var put = opts.serverPut || (typeof _serverSettingsPut === 'function' ? _serverSettingsPut : null);
+  var prefs = (backup && backup.localStorage) || {};
+  var res = { restored: 0, serverSynced: 0, failed: [] };
+  Object.keys(prefs).forEach(function (key) {
+    if (key.indexOf(LS_PREFIX) !== 0 || typeof prefs[key] !== 'string') return;
+    try { ls.setItem(key, prefs[key]); res.restored++; } catch (e) { console.warn('[Backup]', key, e); res.failed.push(key); }
   });
+  var jobs = BACKUP_SERVER_PREFS.map(function (name) {
+    var raw = prefs[LS_PREFIX + name];
+    if (typeof raw !== 'string' || !put) return null;
+    var val;
+    try { val = JSON.parse(raw); } catch (e) { res.failed.push(LS_PREFIX + name); return null; }
+    return Promise.resolve(put(name, val)).then(function (ok) {
+      // _serverSettingsPut 은 서버를 못 쓰는 상태(로그인 전·file://)면 false — 로컬 복원만 된 것
+      if (ok) res.serverSynced++;
+    }).catch(function () { res.failed.push(LS_PREFIX + name); });
+  });
+  return Promise.all(jobs).then(function () { return res; });
+}
 
-  backup.localStorage = {};
-  try {
-    for (var i = 0; i < localStorage.length; i++) {
-      var key = localStorage.key(i);
-      if (key && key.indexOf(LS_PREFIX) === 0) {
-        backup.localStorage[key] = localStorage.getItem(key);
-      }
-    }
-  } catch (e) { console.warn('[Settings]', e); }
+function _backupStatus(html) {
+  var status = document.getElementById('backupStatus');
+  if (status) status.innerHTML = html;
+}
 
-  Promise.all(promises).then(function () {
-    var totalItems = 0;
-    Object.keys(backup.stores).forEach(function (k) { totalItems += (backup.stores[k] || []).length; });
-
+function exportBackupJSON() {
+  _backupStatus('<span style="color:#F59E0B">백업 중...</span>');
+  return buildBackupData().then(function (backup) {
+    var totalItems = _backupCount(backup);
     var json = JSON.stringify(backup, null, 2);
     var blob = new Blob([json], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -483,73 +541,63 @@ function exportBackupJSON() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    var status = document.getElementById('backupStatus');
-    if (status) status.innerHTML = '<span style="color:#10B981">✅ 백업 완료 — ' + totalItems + '건 데이터 내보내기</span>';
-    if (typeof showToast === 'function') showToast('💾 백업 파일 다운로드 완료 (' + totalItems + '건)');
+    var prefCount = Object.keys(backup.localStorage).length;
+    var msg = '백업 완료 — 서버 데이터 ' + totalItems + '건, 환경설정 ' + prefCount + '개';
+    if (backup.errors.length) {
+      _backupStatus('<span style="color:#F59E0B">⚠️ ' + eH(msg) + ' (실패: ' + eH(backup.errors.join(', ')) + ')</span>');
+      if (typeof showToast === 'function') showToast('⚠️ 일부 데이터를 가져오지 못했습니다: ' + backup.errors.join(', '), 'error');
+    } else {
+      _backupStatus('<span style="color:#10B981">✅ ' + eH(msg) + '</span>');
+      if (typeof showToast === 'function') showToast('💾 백업 파일 다운로드 완료 (' + totalItems + '건)');
+    }
+    return backup;
+  }).catch(function (err) {
+    console.error('[Backup export]', err);
+    _backupStatus('<span style="color:#EF4444">❌ 백업 실패</span>');
+    if (typeof showToast === 'function') showToast('백업 실패: ' + (err && err.message || err), 'error');
   });
 }
 
 function importBackupJSON(file) {
   if (!file) return;
-  var status = document.getElementById('backupStatus');
-
   var reader = new FileReader();
+  reader.onerror = function () {
+    if (typeof showToast === 'function') showToast('파일을 읽지 못했습니다.', 'error');
+  };
   reader.onload = function (e) {
-    try {
-      var backup = JSON.parse(e.target.result);
-      if (!backup.stores) { showToast('유효하지 않은 백업 파일입니다.','error'); return; }
-
-      var storeNames = Object.keys(backup.stores);
-      var totalItems = 0;
-      storeNames.forEach(function (k) { totalItems += (backup.stores[k] || []).length; });
-
-      if (!confirm('백업 데이터를 복원하시겠습니까?\n\n' +
-        '복원 대상: ' + storeNames.join(', ') + '\n' +
-        '총 ' + totalItems + '건\n' +
-        '백업일: ' + (backup.exportDate || '알 수 없음') + '\n\n' +
-        '⚠️ 기존 데이터가 덮어쓰기됩니다.')) return;
-
-      if (status) status.innerHTML = '<span style="color:#F59E0B">복원 중...</span>';
-
-      openDBv2().then(function (db) {
-        var validStores = storeNames.filter(function (s) { return db.objectStoreNames.contains(s); });
-        if (validStores.length === 0) { showToast('복원할 수 있는 스토어가 없습니다.','error'); return; }
-
-        var tx = db.transaction(validStores, 'readwrite');
-        var clearPromises = validStores.map(function (storeName) {
-          return new Promise(function (resolve) {
-            var st = tx.objectStore(storeName);
-            var clearReq = st.clear();
-            clearReq.onsuccess = function () {
-              var items = backup.stores[storeName] || [];
-              var putPromises = items.map(function (item) {
-                return new Promise(function (res) {
-                  var putReq = st.put(item);
-                  putReq.onsuccess = function () { res(); };
-                  putReq.onerror = function () { res(); };
-                });
-              });
-              Promise.all(putPromises).then(resolve);
-            };
-            clearReq.onerror = function () { resolve(); };
-          });
-        });
-
-        if (backup.localStorage) {
-          Object.keys(backup.localStorage).forEach(function (key) {
-            try { localStorage.setItem(key, backup.localStorage[key]); } catch (e) { console.warn('[Settings]', e); }
-          });
-        }
-
-        Promise.all(clearPromises).then(function () {
-          if (status) status.innerHTML = '<span style="color:#10B981">✅ 복원 완료 — ' + totalItems + '건</span>';
-          if (typeof showToast === 'function') showToast('✅ 데이터 복원 완료 (' + totalItems + '건)', 'success');
-          setTimeout(function () { location.reload(); }, 1000);
-        });
-      });
-    } catch (err) {
-      showToast('파일 파싱 실패: ' + err.message,'error');
+    var backup;
+    try { backup = parseBackupText(e.target.result); } catch (err) {
+      if (typeof showToast === 'function') showToast('파일 파싱 실패: ' + err.message, 'error');
+      return;
     }
+    var prefKeys = Object.keys(backup.localStorage || {}).filter(function (k) { return k.indexOf(LS_PREFIX) === 0; });
+    var storeNames = Object.keys(backup.stores || {});
+    if (!prefKeys.length) {
+      if (typeof showToast === 'function') showToast('복원할 환경설정이 없는 백업 파일입니다. 서버 데이터는 서버 DB 백업으로 복원하세요.', 'error');
+      return;
+    }
+    if (!confirm('환경설정을 복원하시겠습니까?\n\n' +
+      '복원 대상: 환경설정 ' + prefKeys.length + '개 (별칭·그룹·색상은 서버에도 저장)\n' +
+      '백업일: ' + (backup.exportDate || '알 수 없음') + '\n' +
+      (storeNames.length ? '※ 파일 안의 서버 데이터(' + _backupCount(backup) + '건)는 복원하지 않습니다 — 서버 DB 가 원본입니다.\n' : '') +
+      '\n⚠️ 이 브라우저의 기존 환경설정이 덮어쓰기됩니다.')) return;
+
+    _backupStatus('<span style="color:#F59E0B">복원 중...</span>');
+    applyBackupPrefs(backup).then(function (res) {
+      var msg = '환경설정 ' + res.restored + '개 복원' + (res.serverSynced ? ' (서버 동기화 ' + res.serverSynced + '개)' : '');
+      if (res.failed.length) {
+        _backupStatus('<span style="color:#F59E0B">⚠️ ' + eH(msg) + ' — 실패: ' + eH(res.failed.join(', ')) + '</span>');
+        if (typeof showToast === 'function') showToast('⚠️ 일부 설정 복원 실패: ' + res.failed.join(', '), 'error');
+        return;
+      }
+      _backupStatus('<span style="color:#10B981">✅ ' + eH(msg) + '</span>');
+      if (typeof showToast === 'function') showToast('✅ ' + msg, 'success');
+      setTimeout(function () { location.reload(); }, 1000);
+    }).catch(function (err) {
+      console.error('[Backup import]', err);
+      _backupStatus('<span style="color:#EF4444">❌ 복원 실패</span>');
+      if (typeof showToast === 'function') showToast('복원 실패: ' + (err && err.message || err), 'error');
+    });
   };
   reader.readAsText(file);
 }

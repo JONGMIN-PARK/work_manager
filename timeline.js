@@ -130,24 +130,6 @@ function tlToggleDensityFast(isCompact) {
   else renderTimeline();
 }
 // 상태/담당자/정렬 setter
-function tlSetFilterStatus(status) {
-  tlFilterStatus = status;
-  var el = document.getElementById('tlFilterStatus');
-  if (el) el.value = status;
-  renderTimeline();
-}
-function tlSetFilterAssignee(assignee) {
-  tlFilterAssignee = assignee;
-  var el = document.getElementById('tlFilterAssignee');
-  if (el) el.value = assignee;
-  renderTimeline();
-}
-function tlSetSort(sortMode) {
-  tlSort = sortMode;
-  var el = document.getElementById('tlSortBy');
-  if (el) el.value = sortMode;
-  renderTimeline();
-}
 // 마일스톤 접기/펼치기 — v13.139 전체 재렌더 없이 해당 하위 행만 즉시 show/hide (체감 지연 제거)
 function _tlSelEsc(s) { return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/"/g, '\\"'); }
 // 한 프로젝트의 하위 행 표시/숨김 + 토글 버튼 아이콘·타이틀 갱신 (DOM만 조작)
@@ -741,7 +723,6 @@ function _tlAfterMount(ctx, prevScroll) {
 
 /* ═══ 정렬/그룹 공통 (v13.151) — 좌측 목록과 타임라인 행을 동일 순서로 일치화 ═══ */
 var TL_STATUS_GROUP_ORDER = ['delayed', 'active', 'waiting', 'hold', 'done'];
-function _tlProjCmp(a, b) { return _tlProjCmpBy(tlSort)(a, b); }
 // [순수] 정렬 모드별 비교자
 function _tlProjCmpBy(sort) {
   return function (a, b) {
@@ -1100,20 +1081,19 @@ function getTimeUnits(start, end, scale) {
       d.setHours(d.getHours() + 1);
     }
   } else if (scale === 'day') {
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate()); // 로컬 자정 — 날짜 문자열은 dateToStr(로컬)로
     while (d <= end) {
-      var ds = d.toISOString().slice(0, 10);
+      var ds = dateToStr(d);
       (function (ds2) {
         units.push({ label: (d.getMonth() + 1) + '/' + d.getDate(), date: ds2, contains: function (dt) { return dt === ds2; } });
       })(ds);
       d.setDate(d.getDate() + 1);
     }
   } else if (scale === 'week') {
-    d.setDate(d.getDate() - d.getDay()); // 일요일 시작
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay()); // 일요일 시작 (로컬 자정)
     while (d <= end) {
-      var ws = d.toISOString().slice(0, 10);
-      var we = new Date(d);
-      we.setDate(we.getDate() + 6);
-      var weStr = we.toISOString().slice(0, 10);
+      var ws = dateToStr(d);
+      var weStr = ymdAddDays(ws, 6);
       (function (ws2, we2) {
         units.push({
           label: (d.getMonth() + 1) + '/' + d.getDate(),
@@ -1124,11 +1104,10 @@ function getTimeUnits(start, end, scale) {
       d.setDate(d.getDate() + 7);
     }
   } else if (scale === 'month') {
-    d.setDate(1);
+    d = new Date(d.getFullYear(), d.getMonth(), 1);
     while (d <= end) {
-      var ms = d.toISOString().slice(0, 10);
-      var ml = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      var mlStr = ml.toISOString().slice(0, 10);
+      var ms = dateToStr(d);
+      var mlStr = monthEndYmd(d.getFullYear(), d.getMonth() + 1);
       (function (ms2, ml2) {
         units.push({
           label: d.getFullYear() + '.' + (d.getMonth() + 1),
@@ -1139,13 +1118,11 @@ function getTimeUnits(start, end, scale) {
       d.setMonth(d.getMonth() + 1);
     }
   } else { // quarter
-    d.setMonth(Math.floor(d.getMonth() / 3) * 3);
-    d.setDate(1);
+    d = new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1);
     while (d <= end) {
-      var qs = d.toISOString().slice(0, 10);
+      var qs = dateToStr(d);
       var q = Math.floor(d.getMonth() / 3) + 1;
-      var qe = new Date(d.getFullYear(), d.getMonth() + 3, 0);
-      var qeStr = qe.toISOString().slice(0, 10);
+      var qeStr = monthEndYmd(d.getFullYear(), d.getMonth() + 3);
       (function (qs2, qe2) {
         units.push({
           label: d.getFullYear() + ' Q' + q,
@@ -1213,9 +1190,7 @@ function buildPhaseBands(proj, rangeStart, units) {
 
   // 프로젝트 바의 left/width 계산
   var barLeft = getDatePosition(proj.startDate, rangeStart, units);
-  var nextDay = new Date(proj.endDate);
-  nextDay.setDate(nextDay.getDate() + 1);
-  var barRight = getDatePosition(nextDay.toISOString().slice(0, 10), rangeStart, units);
+  var barRight = getDatePosition(ymdAddDays(proj.endDate, 1), rangeStart, units);
   if (barLeft < 0) barLeft = 0;
   if (barRight < 0) return '';
   var barWidth = Math.max(barRight - barLeft, 20);
@@ -1230,9 +1205,7 @@ function buildPhaseBands(proj, rangeStart, units) {
     if (!phStart || !phEnd) return;
 
     var pLeft = getDatePosition(phStart, rangeStart, units);
-    var pNextDay = new Date(phEnd);
-    pNextDay.setDate(pNextDay.getDate() + 1);
-    var pRight = getDatePosition(pNextDay.toISOString().slice(0, 10), rangeStart, units);
+    var pRight = getDatePosition(ymdAddDays(phEnd, 1), rangeStart, units);
 
     // 바 내부 상대 위치 (%)
     var relLeft = Math.max(0, (pLeft - barLeft) / barWidth * 100);
@@ -1248,9 +1221,7 @@ function getBarStyle(startDate, endDate, rangeStart, units) {
   if (!startDate || !endDate) return 'display:none;';
   var left = getDatePosition(startDate, rangeStart, units);
   // 종료일의 끝 지점: 종료일 다음날 위치를 구해서 종료일 하루 전체를 포함
-  var nextDay = new Date(endDate);
-  nextDay.setDate(nextDay.getDate() + 1);
-  var right = getDatePosition(nextDay.toISOString().slice(0, 10), rangeStart, units);
+  var right = getDatePosition(ymdAddDays(endDate, 1), rangeStart, units);
   if (left < 0) left = 0;
   if (right < 0) right = left + getUnitWidth();
   var width = Math.max(right - left, 20);
@@ -2135,9 +2106,7 @@ function positionToDate(px) {
   var totalDays = daysDiff(uStart, uEnd) || 1;
   var frac = (px - idx * w) / w;
   var dayOffset = Math.round(frac * totalDays);
-  var d = new Date(uStart);
-  d.setDate(d.getDate() + dayOffset);
-  return d.toISOString().slice(0, 10);
+  return ymdAddDays(uStart, dayOffset);
 }
 
 /* ═══ 바 드래그 바인딩 ═══ */
@@ -2459,10 +2428,8 @@ function calcCriticalPath(projects) {
       var dur = (p.startDate && p.endDate) ? daysDiff(p.startDate, p.endDate) : 0;
       // EF = 날짜 문자열로 계산
       if (p.startDate) {
-        var esDate = new Date(p.startDate);
-        if (!isNaN(esDate.getTime())) {
-          esDate.setDate(esDate.getDate() + dur);
-          ef[p.id] = esDate.toISOString().slice(0, 10);
+        if (!isNaN(new Date(p.startDate).getTime())) {
+          ef[p.id] = _cpAddDays(p.startDate, dur);
         } else { ef[p.id] = p.endDate || ''; }
       } else {
         ef[p.id] = p.endDate || '';
@@ -2506,13 +2473,7 @@ function calcCriticalPath(projects) {
         es[pid] = latestPreEF;
       }
       // EF 재계산
-      if (es[pid]) {
-        var esDate = new Date(es[pid]);
-        if (!isNaN(esDate.getTime())) {
-          esDate.setDate(esDate.getDate() + dur);
-          ef[pid] = esDate.toISOString().slice(0, 10);
-        }
-      }
+      if (es[pid] && !isNaN(new Date(es[pid]).getTime())) ef[pid] = _cpAddDays(es[pid], dur);
     });
 
     // 최대 EF 찾기 (프로젝트 종단)
@@ -2542,13 +2503,7 @@ function calcCriticalPath(projects) {
       });
       if (minSuccLS) lf[pid] = _cpAddDays(minSuccLS, -1);
       // LS = LF - duration
-      if (lf[pid]) {
-        var lfDate = new Date(lf[pid]);
-        if (!isNaN(lfDate.getTime())) {
-          lfDate.setDate(lfDate.getDate() - dur);
-          ls[pid] = lfDate.toISOString().slice(0, 10);
-        }
-      }
+      if (lf[pid] && !isNaN(new Date(lf[pid]).getTime())) ls[pid] = _cpAddDays(lf[pid], -dur);
     });
 
     // 크리티컬: ES == LS (여유시간 0)

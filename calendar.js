@@ -37,7 +37,7 @@ var CAL_KIND = {
 };
 function renderCalendarDebounced(){clearTimeout(_calRenderTimer);_calRenderTimer=setTimeout(renderCalendar,80)}
 
-function _calAddDays(ymd, n) { var d = new Date(ymd + 'T00:00:00'); d.setDate(d.getDate() + n); return dateToStr(d); }
+function _calAddDays(ymd, n) { return ymdAddDays(ymd, n); }
 function _calDow(ymd) { return new Date(ymd + 'T00:00:00').getDay(); }
 function _calMd(ymd) { return ymd ? (+ymd.slice(5, 7)) + '/' + (+ymd.slice(8, 10)) : ''; }
 function _calPname(p) { return p ? (p.name || p.orderNo || '') : ''; }

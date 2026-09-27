@@ -40,7 +40,7 @@ router.get('/equipment', async function (req, res) {
     res.json({ data: r.rows });
   } catch (e) {
     console.error('[as-equipment/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -55,7 +55,7 @@ router.get('/equipment/by-serial/:serial', async function (req, res) {
     res.json({ data: r.rows[0] });
   } catch (e) {
     console.error('[as-equipment/by-serial]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -98,7 +98,7 @@ router.post('/equipment', async function (req, res) {
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
     console.error('[as-equipment/upsert]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -137,7 +137,7 @@ router.put('/equipment/:id', async function (req, res) {
     res.json({ data: r.rows[0] });
   } catch (e) {
     console.error('[as-equipment/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -151,7 +151,7 @@ router.delete('/equipment/:id', async function (req, res) {
     res.json({ message: '비활성화 완료' });
   } catch (e) {
     console.error('[as-equipment/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -178,7 +178,7 @@ router.get('/contacts', async function (req, res) {
     res.json({ data: r.rows });
   } catch (e) {
     console.error('[as-contacts/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -206,7 +206,7 @@ router.post('/contacts', async function (req, res) {
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
     console.error('[as-contacts/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -241,7 +241,7 @@ router.put('/contacts/:id', async function (req, res) {
     res.json({ data: r.rows[0] });
   } catch (e) {
     console.error('[as-contacts/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -255,7 +255,7 @@ router.delete('/contacts/:id', async function (req, res) {
     res.json({ message: '비활성화 완료' });
   } catch (e) {
     console.error('[as-contacts/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 

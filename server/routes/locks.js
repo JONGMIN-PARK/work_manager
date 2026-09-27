@@ -42,9 +42,11 @@ router.patch('/', async function (req, res) {
     var expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5분
 
     var r = await db.query(
-      "INSERT INTO edit_locks (resource_type, resource_id, user_id, user_name, expires_at, tenant_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (resource_type, resource_id) DO UPDATE SET user_id=$3, user_name=$4, locked_at=now(), expires_at=$5 RETURNING *",
+      "INSERT INTO edit_locks (resource_type, resource_id, user_id, user_name, expires_at, tenant_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (resource_type, resource_id) DO UPDATE SET user_id=$3, user_name=$4, locked_at=now(), expires_at=$5 WHERE edit_locks.tenant_id = EXCLUDED.tenant_id RETURNING *",
       [type, id, req.user.sub, req.user.name || '', expiresAt, req.tenant.id]
     );
+    // 다른 테넌트의 같은 리소스 키 잠금은 덮어쓰지 않는다 (충돌 키에 tenant 가 없어서 예전엔 탈취 가능)
+    if (!r.rows.length) return res.status(409).json({ error: 'LOCK_CONFLICT', message: '다른 사용자가 편집 중입니다.' });
 
     res.json({ data: r.rows[0] });
   } catch (e) {

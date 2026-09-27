@@ -140,7 +140,7 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (rbErr) { console.error('[ROLLBACK failed]', rbErr); }
     console.error('[work-records/bulk]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   } finally {
     if (client) client.release();
   }
@@ -195,7 +195,7 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (rbErr) { console.error('[ROLLBACK failed]', rbErr); }
     console.error('[work-records/batch-update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   } finally {
     if (client) client.release();
   }
@@ -213,7 +213,7 @@ router.post('/records', rbac.checkPermission('archive.manage'), async function (
     res.status(201).json({ data: result.rows[0] });
   } catch (e) {
     console.error('[work-records/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -276,7 +276,7 @@ router.post('/records/auto-tag-milestones', rbac.checkPermission('archive.manage
     res.json({ data: { tagged: tagged, milestones: milestones.length } });
   } catch (e) {
     console.error('[work-records/auto-tag]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -325,7 +325,7 @@ router.delete('/records', rbac.checkPermission('archive.manage'), async function
     res.json({ message: '전체 삭제 완료', deleted: result.rowCount, scope: scope });
   } catch (e) {
     console.error('[work-records/clear]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   } finally {
     if (client) client.release();
   }
@@ -364,7 +364,7 @@ router.post('/', rbac.checkPermission('archive.manage'), async function (req, re
   try {
     var b = req.body;
     var r = await db.query(
-      "INSERT INTO work_archives (id, label, date_range, selected_names, total_hours, data, saved_at, uploaded_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO UPDATE SET label=$2, date_range=$3, selected_names=$4, total_hours=$5, data=$6, saved_at=$7 RETURNING *",
+      "INSERT INTO work_archives (id, label, date_range, selected_names, total_hours, data, saved_at, uploaded_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO UPDATE SET label=$2, date_range=$3, selected_names=$4, total_hours=$5, data=$6, saved_at=$7 WHERE work_archives.tenant_id = EXCLUDED.tenant_id RETURNING *",
       [b.id, b.label || '', JSON.stringify(b.dateRange || b.date_range || []),
        JSON.stringify(b.selectedNames || b.selected_names || []),
        b.totalHours || b.total_hours || 0,
@@ -372,6 +372,8 @@ router.post('/', rbac.checkPermission('archive.manage'), async function (req, re
        b.savedAt || b.saved_at || new Date().toISOString(),
        req.user.sub, req.tenant.id]
     );
+    // id 가 다른 테넌트 행과 충돌하면 DO UPDATE 가드에 걸려 0행 — 덮어쓰지 않고 거절
+    if (!r.rows.length) return res.status(409).json({ error: 'CONFLICT', message: '이미 사용 중인 ID입니다.' });
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
     console.error('[archives/create]', e);

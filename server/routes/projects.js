@@ -152,7 +152,7 @@ router.post('/', rbac.checkPermission('project.create'), async function (req, re
     try {
       notificationService.notifyAdmins('project_created', {
         projectName: r.rows[0].name, orderNo: r.rows[0].order_no
-      }).catch(function (e) { console.error('[noti]', e.message); });
+      }, req.tenant.id).catch(function (e) { console.error('[noti]', e.message); });
     } catch (_) {}
   } catch (e) {
     console.error('[projects/create]', e);
@@ -244,7 +244,7 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
         try { authService.auditLog(req.user.sub, 'project.update', 'project', req.params.id, { changes: _changes }, req).catch(function () {}); } catch (_e) {}
         notificationService.notifyAdmins('project_updated', {
           projectName: updRow.name, orderNo: updRow.order_no, summary: _changes.join(' · ')
-        }).catch(function (e) { console.error('[noti]', e.message); });
+        }, req.tenant.id).catch(function (e) { console.error('[noti]', e.message); });
       }
     } catch (_) {}
   } catch (e) {
@@ -322,6 +322,9 @@ router.delete('/:id', rbac.checkPermission('project.delete'), async function (re
 // GET /api/projects/:id/members
 router.get('/:id/members', async function (req, res) {
   try {
+    // 테넌트 소속 확인 — 다른 테넌트 프로젝트의 멤버 목록(이메일 포함) 노출 차단
+    var own = await db.query('SELECT 1 FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!own.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     var r = await db.query(
       "SELECT pm.*, u.name as user_name, u.email, u.role as system_role FROM project_members pm JOIN users u ON pm.user_id = u.id WHERE pm.project_id = $1 AND pm.released_at IS NULL ORDER BY pm.role DESC, u.name",
       [req.params.id]
@@ -334,12 +337,26 @@ router.get('/:id/members', async function (req, res) {
 });
 
 // POST /api/projects/:id/members — 멤버 추가
+// 멤버 추가/해제 공통 게이트: 같은 테넌트 프로젝트 + 편집권(생성자·참여자·admin/executive).
+// PUT/DELETE /:id 와 동일한 canEditProject 규칙을 따른다. 통과 시 project 행 반환, 실패 시 응답 후 null.
+async function _memberGate(req, res) {
+  var preR = await db.query('SELECT id, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+  if (!preR.rows.length) { res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' }); return null; }
+  if (!await canEditProject(req, preR.rows[0])) { res.status(403).json({ error: 'FORBIDDEN', message: '생성자·참여자·관리자만 멤버를 관리할 수 있습니다.' }); return null; }
+  return preR.rows[0];
+}
+
 router.post('/:id/members', rbac.checkPermission('project.assign'), async function (req, res) {
   try {
-    var b = req.body;
+    var b = req.body || {};
+    if (!b.userId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'userId 필수' });
+    if (!await _memberGate(req, res)) return;
+    // 추가 대상도 같은 테넌트 사용자여야 한다
+    var ur = await db.query('SELECT id FROM users WHERE id = $1 AND tenant_id = $2', [b.userId, req.tenant.id]);
+    if (!ur.rows.length) return res.status(400).json({ error: 'BAD_REQUEST', message: '대상 사용자가 없습니다.' });
     var r = await db.query(
-      "INSERT INTO project_members (project_id, user_id, role, assigned_by) VALUES ($1, $2, $3, $4) ON CONFLICT (project_id, user_id) DO UPDATE SET role = $3, released_at = NULL, assigned_by = $4, assigned_at = now() RETURNING *",
-      [req.params.id, b.userId, b.role || 'assignee', req.user.sub]
+      "INSERT INTO project_members (project_id, user_id, role, assigned_by, tenant_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (project_id, user_id) DO UPDATE SET role = $3, released_at = NULL, assigned_by = $4, assigned_at = now() RETURNING *",
+      [req.params.id, b.userId, b.role || 'assignee', req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
@@ -351,6 +368,7 @@ router.post('/:id/members', rbac.checkPermission('project.assign'), async functi
 // DELETE /api/projects/:id/members/:userId — 멤버 해제
 router.delete('/:id/members/:userId', rbac.checkPermission('project.assign'), async function (req, res) {
   try {
+    if (!await _memberGate(req, res)) return;
     await db.query(
       "UPDATE project_members SET released_at = now() WHERE project_id = $1 AND user_id = $2 AND released_at IS NULL",
       [req.params.id, req.params.userId]

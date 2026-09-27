@@ -287,6 +287,7 @@ router.get('/prefs', authenticate, tenant.tenantScope, planGate('telegram'), asy
     r.rows.forEach(function (row) { prefs[row.event_type] = row.is_enabled; });
     res.json({ data: prefs });
   } catch (err) {
+    console.error('[telegram]', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: '설정 조회 실패' });
   }
 });
@@ -312,6 +313,7 @@ router.put('/prefs', authenticate, tenant.tenantScope, planGate('telegram'), asy
 
     res.json({ message: '설정이 변경되었습니다.', data: { event_type: eventType, is_enabled: isEnabled } });
   } catch (err) {
+    console.error('[telegram]', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: '설정 변경 실패' });
   }
 });
@@ -381,19 +383,20 @@ router.get('/debug', authenticate, tenant.tenantScope, planGate('telegram'), asy
       await db.query('SELECT 1 FROM telegram_links WHERE tenant_id = $1 LIMIT 0', [req.tenant.id]);
       result.tables = 'OK';
     } catch (e) {
-      result.tables = 'ERROR: ' + e.message;
+      console.error('[telegram/status/tables]', e); result.tables = 'ERROR';
     }
 
     // 발송 메트릭 (notification_logs 기반 — 테넌트 격리)
     try {
       result.metrics = await telegramService.getMetrics(req.tenant.id);
     } catch (e) {
-      result.metrics = { error: e.message };
+      console.error('[telegram/status/metrics]', e); result.metrics = { error: 'unavailable' };
     }
 
     res.json({ data: result });
   } catch (err) {
-    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+    console.error('[telegram]', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -409,7 +412,8 @@ router.post('/setup-webhook', authenticate, tenant.tenantScope, planGate('telegr
     var result = await telegramService.setWebhook();
     res.json({ data: result });
   } catch (err) {
-    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+    console.error('[telegram]', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 

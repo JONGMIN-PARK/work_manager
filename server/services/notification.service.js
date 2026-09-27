@@ -482,9 +482,15 @@ async function notify(eventType, payload, targetUserIds) {
   }
 }
 
-/** 관리자 전원에게 알림 */
-async function notifyAdmins(eventType, payload) {
-  var r = await db.query("SELECT id FROM users WHERE role = 'admin' AND status = 'active'");
+/** 관리자 전원에게 알림 — 해당 테넌트의 관리자만 (tenantId 필수) */
+async function notifyAdmins(eventType, payload, tenantId) {
+  if (!tenantId) {
+    // 테넌트를 모르면 보내지 않는다. 예전에는 모든 테넌트 관리자에게 발송되어
+    // 다른 회사의 프로젝트명·가입자명 등이 새어 나갔다.
+    console.warn('[Notification] notifyAdmins called without tenantId — skipped (' + eventType + ')');
+    return;
+  }
+  var r = await db.query("SELECT id FROM users WHERE role = 'admin' AND status = 'active' AND tenant_id = $1", [tenantId]);
   var ids = r.rows.map(function (row) { return row.id; });
   return notify(eventType, payload, ids);
 }
@@ -505,8 +511,12 @@ async function notifyProjectStakeholders(eventType, payload, projectId) {
     if (ownR.rows[0] && ownR.rows[0].owner_id) ids.add(ownR.rows[0].owner_id);
   } catch (e) { /* owner_id 없을 수 있음 */ }
 
-  // 관리자
-  var adminR = await db.query("SELECT id FROM users WHERE role = 'admin' AND status = 'active'");
+  // 관리자 — 프로젝트와 같은 테넌트의 관리자만
+  var adminR = await db.query(
+    "SELECT u.id FROM users u JOIN projects p ON p.tenant_id = u.tenant_id " +
+    "WHERE p.id = $1 AND u.role = 'admin' AND u.status = 'active'",
+    [projectId]
+  );
   adminR.rows.forEach(function (r) { ids.add(r.id); });
 
   await notify(eventType, payload, Array.from(ids));
@@ -568,7 +578,7 @@ async function sendDailyBriefing() {
 
   // 연동된 활성 사용자 조회
   var users = await db.query(
-    "SELECT tl.chat_id, tl.user_id, u.name FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.is_active = TRUE AND u.status = 'active'"
+    "SELECT tl.chat_id, tl.user_id, u.name, u.tenant_id FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.is_active = TRUE AND u.status = 'active'"
   );
   if (!users.rows.length) {
     console.log('[Notification] Daily briefing — no active linked users');
@@ -576,13 +586,17 @@ async function sendDailyBriefing() {
   }
 
   // ─── N+1 제거: 사용자 무관 쿼리는 루프 밖에서 1회만 실행 ───
-  // 1) 오늘 일정 / 오늘 납기는 모든 사용자에게 동일 → 1회 조회
+  // 1) 오늘 일정 / 오늘 납기는 같은 테넌트 사용자에게 동일 → 1회 조회 후 tenant_id 로 분리
+  //    (예전에는 모든 테넌트의 일정·납기가 모든 사용자에게 발송됐다)
   var evtR = await db.query(
-    "SELECT title, type FROM events WHERE start_date <= $1 AND end_date >= $1 ORDER BY start_date LIMIT 5",
+    "SELECT tenant_id, title, type FROM (" +
+    "  SELECT tenant_id, title, type, start_date, ROW_NUMBER() OVER (PARTITION BY tenant_id ORDER BY start_date) AS rn " +
+    "  FROM events WHERE start_date <= $1 AND end_date >= $1" +
+    ") x WHERE rn <= 5 ORDER BY tenant_id, start_date",
     [today]
   );
   var dlR = await db.query(
-    "SELECT name, order_no FROM projects WHERE end_date = $1 AND status != 'done'",
+    "SELECT tenant_id, name, order_no FROM projects WHERE end_date = $1 AND status != 'done'",
     [todayCompact]
   );
   // 2) 알림 설정: telegram/event_today 행을 한 번에 받아 user_id → is_enabled 맵
@@ -596,7 +610,7 @@ async function sendDailyBriefing() {
   var userIds = users.rows.map(function (u) { return u.user_id; });
   var userNames = users.rows.map(function (u) { return u.name; });
   var iaR = await db.query(
-    "SELECT i.id, i.title, ia.user_id, ia.assignee_name " +
+    "SELECT i.id, i.title, i.tenant_id, ia.user_id, ia.assignee_name " +
     "FROM issues i " +
     "JOIN issue_assignees ia ON ia.issue_id = i.id AND ia.tenant_id = i.tenant_id " +
     "WHERE i.status NOT IN ('resolved','closed') AND i.urgency = 'urgent' " +
@@ -614,30 +628,38 @@ async function sendDailyBriefing() {
   var byName = {};
   iaR.rows.forEach(function (r) {
     if (!r.user_id && r.assignee_name) {
-      (byName[r.assignee_name] = byName[r.assignee_name] || []).push({ id: r.id, title: r.title });
+      // 이름 폴백은 같은 테넌트 안에서만 (다른 회사의 동명이인에게 이슈 제목이 가지 않도록)
+      var nk = r.tenant_id + '|' + r.assignee_name;
+      (byName[nk] = byName[nk] || []).push({ id: r.id, title: r.title });
     }
   });
   users.rows.forEach(function (u) {
-    if ((!urgentByUser[u.user_id] || urgentByUser[u.user_id].length === 0) && byName[u.name]) {
-      urgentByUser[u.user_id] = byName[u.name];
+    var uk = u.tenant_id + '|' + u.name;
+    if ((!urgentByUser[u.user_id] || urgentByUser[u.user_id].length === 0) && byName[uk]) {
+      urgentByUser[u.user_id] = byName[uk];
     }
   });
 
-  // 공통 메시지 조각 — 일정/납기는 사용자 공통이므로 미리 조립
+  // 공통 메시지 조각 — 일정/납기는 같은 테넌트 사용자 공통이므로 테넌트별로 미리 조립
   var typeIcons = { milestone:'◆', meeting:'🤝', deadline:'🏁', trip:'✈️', fieldService:'🔧', periodicChk:'🛠️', dayoff:'🌴', amoff:'🌅', pmoff:'🌇', etc:'📌' };
-  var evtBlock = '';
-  if (evtR.rows.length > 0) {
-    evtBlock += '📅 <b>오늘 일정</b>\n';
-    evtR.rows.forEach(function(e) {
-      evtBlock += '  ' + (typeIcons[e.type] || '📌') + ' ' + e.title + '\n';
+  var evtByTenant = {}, dlByTenant = {};
+  evtR.rows.forEach(function (e) { (evtByTenant[e.tenant_id] = evtByTenant[e.tenant_id] || []).push(e); });
+  dlR.rows.forEach(function (r) { (dlByTenant[r.tenant_id] = dlByTenant[r.tenant_id] || []).push(r); });
+  function evtBlockFor(tid) {
+    var rows = evtByTenant[tid] || [];
+    if (!tid || !rows.length) return '';
+    var b = '📅 <b>오늘 일정</b>\n';
+    rows.forEach(function(e) {
+      b += '  ' + (typeIcons[e.type] || '📌') + ' ' + e.title + '\n';
     });
-    evtBlock += '\n';
+    return b + '\n';
   }
-  var dlBlock = '';
-  if (dlR.rows.length > 0) {
-    dlBlock += '🏁 <b>오늘 납기</b>\n';
-    dlR.rows.forEach(function(r) { dlBlock += '  · ' + (r.order_no || '') + ' ' + r.name + '\n'; });
-    dlBlock += '\n';
+  function dlBlockFor(tid) {
+    var rows = dlByTenant[tid] || [];
+    if (!tid || !rows.length) return '';
+    var b = '🏁 <b>오늘 납기</b>\n';
+    rows.forEach(function(r) { b += '  · ' + (r.order_no || '') + ' ' + r.name + '\n'; });
+    return b + '\n';
   }
 
   for (var i = 0; i < users.rows.length; i++) {
@@ -649,7 +671,7 @@ async function sendDailyBriefing() {
       var msg = '';
 
       // 오늘 일정 (공통)
-      msg += evtBlock;
+      msg += evtBlockFor(usr.tenant_id);
 
       // 미해결 긴급 이슈 — issue_assignees 기반 사전 매핑에서 직접 조회 (최대 3건)
       var userIssues = (urgentByUser[usr.user_id] || []).slice(0, 3);
@@ -660,7 +682,7 @@ async function sendDailyBriefing() {
       }
 
       // 오늘 납기 (공통)
-      msg += dlBlock;
+      msg += dlBlockFor(usr.tenant_id);
 
       if (!msg) {
         msg = '✨ 오늘은 특별한 일정이 없습니다. 좋은 하루 되세요!';
@@ -692,7 +714,7 @@ async function sendOrderDeliveryReminders() {
     var dateCompact = dateISO.replace(/-/g, '');
 
     var orders = await db.query(
-      "SELECT order_no, client, name, delivery, manager FROM orders WHERE delivery = $1 OR delivery = $2",
+      "SELECT order_no, client, name, delivery, manager, tenant_id FROM orders WHERE delivery = $1 OR delivery = $2",
       [dateISO, dateCompact]
     );
 
@@ -700,12 +722,12 @@ async function sendOrderDeliveryReminders() {
       var o = orders.rows[j];
       // manager가 있으면 해당 사용자에게, 없으면 관리자에게
       if (o.manager) {
-        var uR = await db.query("SELECT id FROM users WHERE name = $1 AND status = 'active'", [o.manager]);
+        var uR = await db.query("SELECT id FROM users WHERE name = $1 AND status = 'active' AND tenant_id = $2", [o.manager, o.tenant_id]);
         if (uR.rows.length > 0) {
           await notify(c.event, { orderNo: o.order_no, client: o.client || o.name, delivery: o.delivery }, [uR.rows[0].id]);
         }
       } else {
-        await notifyAdmins(c.event, { orderNo: o.order_no, client: o.client || o.name, delivery: o.delivery });
+        await notifyAdmins(c.event, { orderNo: o.order_no, client: o.client || o.name, delivery: o.delivery }, o.tenant_id);
       }
     }
   }
@@ -727,48 +749,53 @@ async function sendWeeklyDigest() {
   var start = fmt(lastMon);
   var end = fmt(lastSun);
 
-  // 팀 통계
-  var totalR = await db.query(
-    'SELECT COALESCE(SUM(hours),0) as hours, COUNT(DISTINCT name) as people FROM work_records WHERE date >= $1 AND date <= $2',
-    [start, end]
-  );
-  var t = totalR.rows[0];
-
-  // 이슈 통계
-  var newIssues = await db.query("SELECT COUNT(*) as cnt FROM issues WHERE created_at >= $1::date AND created_at < ($1::date + INTERVAL '7 days')", [lastMon.toISOString().slice(0,10)]);
-  var resolvedIssues = await db.query("SELECT COUNT(*) as cnt FROM issues WHERE resolved_date >= $1 AND resolved_date <= $2", [start, end]);
-
-  // 지연 프로젝트
-  var delayed = await db.query("SELECT COUNT(*) as cnt FROM projects WHERE status = 'delayed'");
-
-  // 요소기술 — 지난주 개발일지 활동 (모듈 미적용 시 조용히 스킵)
-  var techLine = '';
-  try {
-    var techR = await db.query(
-      "SELECT COUNT(DISTINCT tech_id)::int AS techs, COUNT(*)::int AS logs, COALESCE(SUM(hours),0) AS hours " +
-      "FROM tech_logs WHERE deleted_at IS NULL AND created_at >= $1::date AND created_at < ($1::date + INTERVAL '7 days')",
-      [lastMon.toISOString().slice(0, 10)]
+  // 테넌트별 통계 — 예전에는 전 테넌트 합산치가 모든 사용자에게 발송됐다
+  async function buildDigest(tid) {
+    // 팀 통계
+    var totalR = await db.query(
+      'SELECT COALESCE(SUM(hours),0) as hours, COUNT(DISTINCT name) as people FROM work_records WHERE date >= $1 AND date <= $2 AND tenant_id = $3',
+      [start, end, tid]
     );
-    var tg = techR.rows[0];
-    if (tg && tg.logs > 0) {
-      techLine = '🧪 요소기술: <b>' + tg.techs + '건</b> 진행 (일지 ' + tg.logs + '건 · ' +
-        Math.round(parseFloat(tg.hours) * 10) / 10 + 'h)\n';
-    }
-  } catch (e) {
-    if (e.code !== '42P01') console.error('[WeeklyDigest/tech]', e.message);
-  }
+    var t = totalR.rows[0];
 
-  var content = '⏱ 팀 총 투입: <b>' + Math.round(parseFloat(t.hours) * 10) / 10 + 'h</b> (' + t.people + '명)\n';
-  content += techLine;
-  content += '✅ 해결 이슈: <b>' + resolvedIssues.rows[0].cnt + '건</b>\n';
-  content += '🔴 신규 이슈: <b>' + newIssues.rows[0].cnt + '건</b>\n';
-  if (parseInt(delayed.rows[0].cnt) > 0) {
-    content += '⚠️ 지연 프로젝트: <b>' + delayed.rows[0].cnt + '건</b>\n';
+    // 이슈 통계
+    var newIssues = await db.query("SELECT COUNT(*) as cnt FROM issues WHERE created_at >= $1::date AND created_at < ($1::date + INTERVAL '7 days') AND tenant_id = $2", [lastMon.toISOString().slice(0,10), tid]);
+    var resolvedIssues = await db.query("SELECT COUNT(*) as cnt FROM issues WHERE resolved_date >= $1 AND resolved_date <= $2 AND tenant_id = $3", [start, end, tid]);
+
+    // 지연 프로젝트
+    var delayed = await db.query("SELECT COUNT(*) as cnt FROM projects WHERE status = 'delayed' AND tenant_id = $1", [tid]);
+
+    // 요소기술 — 지난주 개발일지 활동 (모듈 미적용 시 조용히 스킵)
+    var techLine = '';
+    try {
+      var techR = await db.query(
+        "SELECT COUNT(DISTINCT tech_id)::int AS techs, COUNT(*)::int AS logs, COALESCE(SUM(hours),0) AS hours " +
+        "FROM tech_logs WHERE deleted_at IS NULL AND created_at >= $1::date AND created_at < ($1::date + INTERVAL '7 days') AND tenant_id = $2",
+        [lastMon.toISOString().slice(0, 10), tid]
+      );
+      var tg = techR.rows[0];
+      if (tg && tg.logs > 0) {
+        techLine = '🧪 요소기술: <b>' + tg.techs + '건</b> 진행 (일지 ' + tg.logs + '건 · ' +
+          Math.round(parseFloat(tg.hours) * 10) / 10 + 'h)\n';
+      }
+    } catch (e) {
+      if (e.code !== '42P01') console.error('[WeeklyDigest/tech]', e.message);
+    }
+
+    var content = '⏱ 팀 총 투입: <b>' + Math.round(parseFloat(t.hours) * 10) / 10 + 'h</b> (' + t.people + '명)\n';
+    content += techLine;
+    content += '✅ 해결 이슈: <b>' + resolvedIssues.rows[0].cnt + '건</b>\n';
+    content += '🔴 신규 이슈: <b>' + newIssues.rows[0].cnt + '건</b>\n';
+    if (parseInt(delayed.rows[0].cnt) > 0) {
+      content += '⚠️ 지연 프로젝트: <b>' + delayed.rows[0].cnt + '건</b>\n';
+    }
+    return content;
   }
+  var digestCache = {};
 
   // 모든 연동 사용자에게 발송
   var users = await db.query(
-    "SELECT tl.chat_id, tl.user_id, u.name FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.is_active = TRUE AND u.status = 'active'"
+    "SELECT tl.chat_id, tl.user_id, u.name, u.tenant_id FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.is_active = TRUE AND u.status = 'active'"
   );
 
   for (var i = 0; i < users.rows.length; i++) {
@@ -779,6 +806,9 @@ async function sendWeeklyDigest() {
         [usr.user_id]
       );
       if (prefR.rows.length > 0 && !prefR.rows[0].is_enabled) continue;
+      if (!usr.tenant_id) continue;
+      if (!digestCache[usr.tenant_id]) digestCache[usr.tenant_id] = await buildDigest(usr.tenant_id);
+      var content = digestCache[usr.tenant_id];
 
       var msg = '📊 <b>주간 다이제스트</b>\n' +
         '<code>' + lastMon.toLocaleDateString('ko') + ' ~ ' + lastSun.toLocaleDateString('ko') + '</code>\n\n' + content;
@@ -828,24 +858,30 @@ async function sendOverloadWarnings() {
   var start = fmt(mon);
   var end = fmt(now);
 
+  // 테넌트별로 집계·발송한다 — 다른 테넌트 관리자에게 이름/근무시간이 새지 않도록
   var r = await db.query(
-    'SELECT name, COALESCE(SUM(hours),0) as hours, COUNT(DISTINCT date) as days FROM work_records WHERE date >= $1 AND date <= $2 GROUP BY name HAVING COUNT(DISTINCT date) >= 3',
+    'SELECT tenant_id, name, COALESCE(SUM(hours),0) as hours, COUNT(DISTINCT date) as days FROM work_records WHERE date >= $1 AND date <= $2 GROUP BY tenant_id, name HAVING COUNT(DISTINCT date) >= 3',
     [start, end]
   );
 
-  var overloaded = r.rows.filter(function (row) {
-    return row.days > 0 && parseFloat(row.hours) / row.days > 9;
+  var byTenant = {};
+  r.rows.forEach(function (row) {
+    if (!row.tenant_id) return;  // 테넌트 없는 레코드는 수신 대상을 특정할 수 없음
+    if (!(row.days > 0 && parseFloat(row.hours) / row.days > 9)) return;
+    (byTenant[row.tenant_id] = byTenant[row.tenant_id] || []).push(row);
   });
 
-  if (overloaded.length > 0) {
+  var tenantKeys = Object.keys(byTenant);
+  for (var t = 0; t < tenantKeys.length; t++) {
+    var overloaded = byTenant[tenantKeys[t]];
     var msg = '⚠️ <b>과부하 경고</b>\n\n';
     overloaded.forEach(function (row) {
       var avg = Math.round(parseFloat(row.hours) / row.days * 10) / 10;
       msg += '· ' + row.name + ' — 일평균 <b>' + avg + 'h</b> (' + row.days + '일간 ' + Math.round(parseFloat(row.hours) * 10) / 10 + 'h)\n';
     });
 
-    // 관리자에게 알림
-    var admins = await db.query("SELECT id FROM users WHERE role IN ('admin','manager') AND status = 'active'");
+    // 같은 테넌트 관리자에게 알림
+    var admins = await db.query("SELECT id FROM users WHERE role IN ('admin','manager') AND status = 'active' AND tenant_id = $1", [tenantKeys[t]]);
     var adminIds = admins.rows.map(function (a) { return a.id; });
 
     for (var i = 0; i < adminIds.length; i++) {

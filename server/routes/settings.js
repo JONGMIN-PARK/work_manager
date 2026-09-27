@@ -35,7 +35,7 @@ router.get('/:key', async function (req, res) {
     } catch (e) {
       console.error('[settings/get-key] attempt', attempt + 1, e.message);
       if (attempt < 2) await new Promise(function (r) { setTimeout(r, 1000); });
-      else return res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+      else return res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
     }
   }
 });
@@ -53,7 +53,7 @@ router.put('/:key', async function (req, res) {
     } catch (e) {
       console.error('[settings/put] attempt', attempt + 1, e.message);
       if (attempt < 2) await new Promise(function (r) { setTimeout(r, 1000); });
-      else return res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+      else return res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
     }
   }
 });

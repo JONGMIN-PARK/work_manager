@@ -2,13 +2,13 @@
  * 애니웍스 주간일지 자동 다운로드 & 서버 업로드
  *
  * 사용법:
- *   node local-auto.js                          (이번 주, 전체 사업부)
- *   node local-auto.js 20260406 20260412         (날짜 지정)
- *   node local-auto.js 20260406 20260412 기술연구소  (날짜 + 사업부 지정)
+ *   node tools/local-auto.js                          (이번 주, 전체 사업부)
+ *   node tools/local-auto.js 20260406 20260412         (날짜 지정)
+ *   node tools/local-auto.js 20260406 20260412 기술연구소  (날짜 + 사업부 지정)
  *
  * Windows 작업 스케줄러로 매주 자동 실행:
  *   프로그램: node
- *   인수: D:\ai\work\work_manager\local-auto.js
+ *   인수: D:\ai\work\work_manager\tools\local-auto.js
  *   시작 위치: D:\ai\work\work_manager
  */
 var path = require('path');
@@ -16,10 +16,11 @@ var fs = require('fs');
 var XLSX;
 try { XLSX = require('xlsx'); } catch (e) { XLSX = null; }
 
-var engine = require('./server/services/anyworks-engine');
+var engine = require('../server/services/anyworks-engine');
 
 // ── 설정 ──
-var SETTINGS_FILE = path.join(__dirname, 'local-auto-settings.json');
+// 설정 파일은 기존과 같이 저장소 루트에 둔다(tools/ 로 옮기기 전 위치 — 기존 설정 호환)
+var SETTINGS_FILE = path.join(__dirname, '..', 'local-auto-settings.json');
 var SERVER_URL = process.env.SERVER_URL || 'https://work-manager-i97q.onrender.com';
 var TEAMS_DEFAULT = ['기술연구소', '장비사업부', '모션사업부'];
 

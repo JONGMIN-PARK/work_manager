@@ -34,10 +34,12 @@ router.post('/register', async function (req, res) {
     var hash = await authService.hashPassword(password);
 
     var result = await db.query(
-      'INSERT INTO users (email, password_hash, name, position, phone) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role, status, created_at',
+      'INSERT INTO users (email, password_hash, name, position, phone) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role, status, created_at, tenant_id',
       [email, hash, name, position || null, phone || null]
     );
     var user = result.rows[0];
+    var newUserTenantId = user.tenant_id;
+    delete user.tenant_id;  // 응답 형태는 기존과 동일하게 유지
 
     // 비밀번호 이력 저장
     await db.query(
@@ -51,7 +53,7 @@ router.post('/register', async function (req, res) {
     notificationService.notifyAdmins('user_pending', {
       userName: name,
       pendingUserId: user.id
-    }).catch(function(e) { console.error('[noti]', e.message); });
+    }, newUserTenantId).catch(function(e) { console.error('[noti]', e.message); });
 
     res.status(201).json({
       data: user,

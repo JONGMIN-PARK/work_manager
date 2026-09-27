@@ -533,14 +533,6 @@ function syncOrdersToDB() {
    handleOrderExcel(업무일지_분석기.html) 이 이미 동기화·재렌더·오류 토스트까지 하므로
    중복 호출은 같은 배치를 두 번 밀어넣어 결과 보고만 어긋나게 만든다 → 제거. */
 
-/* ═══ eH / guessPhase 폴백 ═══ */
-if (typeof eH === 'undefined') {
-  function eH(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-}
-if (typeof guessPhase === 'undefined') {
-  function guessPhase(p) { return p.currentPhase || (p.status === 'done' ? 'as' : p.status === 'waiting' ? 'order' : 'manufacture'); }
-}
-
 /* ═══ 크로스탭 이동: 수주대장 → 이슈관리 (v13.39 M1) ═══
    이슈 배지 클릭 시 이슈관리 탭으로 전환 + 해당 수주(orderNo)로 필터 자동 적용 */
 function gotoIssuesForOrder(orderNo) {

@@ -71,7 +71,16 @@ async function optimisticUpdate(client, table, idCol, idVal, clientVersion, upda
   }
 
   // version 불일치 → 최신 데이터 조회
-  var latestRes = await client.query('SELECT * FROM ' + table + ' WHERE ' + idCol + ' = $1', [idVal]);
+  // extraWhere(테넌트 조건 등)를 반드시 같이 건다. 빠지면 다른 테넌트의 같은 id 행이
+  // 409 응답의 latest 로 그대로 노출된다.
+  var latestExtra = extraClause;
+  for (var ei3 = 0; ei3 < extraValues.length; ei3++) {
+    latestExtra = latestExtra.replace('$NEXT' + (ei3 + 1), '$' + (ei3 + 2));
+  }
+  var latestRes = await client.query(
+    'SELECT * FROM ' + table + ' WHERE ' + idCol + ' = $1' + latestExtra,
+    [idVal].concat(extraValues)
+  );
   var latest = latestRes.rows[0] || null;
 
   if (!latest) {

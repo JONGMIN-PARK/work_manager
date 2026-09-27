@@ -933,6 +933,10 @@ router.post('/:id/signatures', async function (req, res) {
     var b = req.body || {};
     if (!b.role) return res.status(400).json({ error: 'VALIDATION', message: '서명 역할 필수' });
 
+    // 티켓이 이 테넌트 소속인지 먼저 확인 — 다른 테넌트 티켓에 서명을 붙이지 못하게
+    var own = await db.query('SELECT 1 FROM as_tickets WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!own.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+
     var id = b.id || ('ass-' + require('crypto').randomUUID().slice(0, 12));
     // UPSERT
     var r = await db.query(
@@ -945,6 +949,8 @@ router.post('/:id/signatures', async function (req, res) {
       '  signed_at = EXCLUDED.signed_at, signature_url = EXCLUDED.signature_url, ' +
       '  csat_speed = EXCLUDED.csat_speed, csat_quality = EXCLUDED.csat_quality, ' +
       '  csat_overall = EXCLUDED.csat_overall, comment = EXCLUDED.comment ' +
+      // 다른 테넌트의 (ticket_id, role) 행을 덮어쓰지 않도록 가드
+      'WHERE as_signatures.tenant_id = EXCLUDED.tenant_id ' +
       'RETURNING *',
       [id, req.params.id, req.tenant.id, b.role,
        b.signerName || b.signer_name || null,
@@ -957,6 +963,7 @@ router.post('/:id/signatures', async function (req, res) {
        b.comment || null,
        req.user.sub]
     );
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
 
     // 고객 현장 서명이 들어오면 status를 customer_wait → approved → closed 보조 자동 전이
     if (b.role === 'customer_field') {
@@ -1027,7 +1034,7 @@ router.get('/:id/recurrences', async function (req, res) {
     res.json({ data: r.rows, context: cur, total: r.rows.length });
   } catch (e) {
     console.error('[as-tickets/recurrences]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -1175,7 +1182,7 @@ router.post('/:id/email-report', emailReportLimiter, async function (req, res) {
     } else if (/SMTP|auth/i.test(raw)) {
       msg = '메일 발송 실패 (SMTP 설정을 확인하세요): ' + raw;
     } else {
-      msg = '메일 발송 실패: ' + raw;
+      msg = '메일 발송 실패';
     }
     res.status(500).json({ error: 'EMAIL_FAILED', message: msg });
   }

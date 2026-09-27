@@ -11,22 +11,35 @@ var tenant = require('../middleware/tenant');
 router.use(authMiddleware.authenticate);
 router.use(tenant.tenantScopeOptional);
 
+// 호출자 테넌트 ID. 테넌트가 없는 계정은 어떤 행과도 매칭되지 않는 nil UUID 를 쓴다
+// (tenantScope 와 동일한 규칙). 이 라우터의 모든 by-id 조회/변경은 이 값으로 스코프한다 —
+// 플랫폼 수준(테넌트 횡단) 관리자 역할은 존재하지 않으며 'admin' 은 테넌트 관리자다.
+var NIL_TENANT = '00000000-0000-0000-0000-000000000000';
+function callerTenant(req) { return (req.tenant && req.tenant.id) || NIL_TENANT; }
+
+// 부서 ID 가 호출자 테넌트 소속인지 (null/빈 값은 '부서 없음'으로 허용)
+async function deptInTenant(req, departmentId) {
+  if (!departmentId) return true;
+  var r = await db.query('SELECT 1 FROM departments WHERE id = $1 AND tenant_id = $2', [departmentId, callerTenant(req)]);
+  return r.rows.length > 0;
+}
+
 // ─── GET /api/users ───
 router.get('/', async function (req, res) {
   try {
     var role = req.user.role;
     var sql, params;
-    var tenantFilter = req.tenant ? " AND tenant_id = '" + req.tenant.id + "'" : "";
+    var tid = callerTenant(req);
 
     if (role === 'admin') {
-      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE 1=1" + tenantFilter + " ORDER BY created_at DESC";
-      params = [];
+      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE tenant_id = $1 ORDER BY created_at DESC";
+      params = [tid];
     } else if (role === 'manager') {
-      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE department_id = $1" + tenantFilter + " ORDER BY name";
-      params = [req.user.departmentId];
+      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE department_id = $1 AND tenant_id = $2 ORDER BY name";
+      params = [req.user.departmentId, tid];
     } else if (role === 'executive') {
-      sql = "SELECT id, email, name, display_name, role, department_id, position, status, created_at FROM users WHERE status = 'active'" + tenantFilter + " ORDER BY name";
-      params = [];
+      sql = "SELECT id, email, name, display_name, role, department_id, position, status, created_at FROM users WHERE status = 'active' AND tenant_id = $1 ORDER BY name";
+      params = [tid];
     } else {
       return res.status(403).json({ error: 'FORBIDDEN', message: '권한이 없습니다.' });
     }
@@ -58,7 +71,8 @@ router.get('/lookup', async function (req, res) {
 router.get('/pending', authMiddleware.requireRole('admin'), async function (req, res) {
   try {
     var result = await db.query(
-      "SELECT id, email, name, position, phone, created_at FROM users WHERE status = 'pending' ORDER BY created_at ASC"
+      "SELECT id, email, name, position, phone, created_at FROM users WHERE status = 'pending' AND tenant_id = $1 ORDER BY created_at ASC",
+      [callerTenant(req)]
     );
     res.json({ data: result.rows });
   } catch (e) {
@@ -70,12 +84,12 @@ router.get('/pending', authMiddleware.requireRole('admin'), async function (req,
 // ─── GET /api/users/operator-list ─── 운영자 부여 현황 (admin only)
 router.get('/operator-list', authMiddleware.requireRole('admin'), async function (req, res) {
   try {
-    var tenantFilter = req.tenant ? " AND u.tenant_id = '" + req.tenant.id + "'" : "";
     var r = await db.query(
       "SELECT u.id, u.name, u.display_name, u.email, u.role, u.status, " +
       "COALESCE((s.value->>'enabled')::boolean, false) AS operator_enabled " +
       "FROM users u LEFT JOIN user_settings s ON s.user_id = u.id AND s.key = 'operator_mode' " +
-      "WHERE u.status = 'active'" + tenantFilter + " ORDER BY u.role, u.name"
+      "WHERE u.status = 'active' AND u.tenant_id = $1 ORDER BY u.role, u.name",
+      [callerTenant(req)]
     );
     res.json({ data: r.rows });
   } catch (e) {
@@ -88,7 +102,7 @@ router.get('/operator-list', authMiddleware.requireRole('admin'), async function
 router.put('/:id/operator-mode', authMiddleware.requireRole('admin'), async function (req, res) {
   try {
     var enabled = !!(req.body && req.body.enabled);
-    var ur = await db.query('SELECT id, tenant_id FROM users WHERE id = $1', [req.params.id]);
+    var ur = await db.query('SELECT id, tenant_id FROM users WHERE id = $1 AND tenant_id = $2', [req.params.id, callerTenant(req)]);
     if (!ur.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '사용자를 찾을 수 없습니다.' });
     var tid = ur.rows[0].tenant_id || '00000000-0000-0000-0000-000000000001';
     await db.query(
@@ -115,10 +129,13 @@ router.put('/:id/approve', authMiddleware.requireRole('admin'), async function (
     if (validRoles.indexOf(role) < 0) {
       return res.status(400).json({ error: 'VALIDATION', message: '유효하지 않은 역할입니다.' });
     }
+    if (!await deptInTenant(req, departmentId)) {
+      return res.status(400).json({ error: 'VALIDATION', message: '유효하지 않은 부서입니다.' });
+    }
 
     var result = await db.query(
-      "UPDATE users SET status = 'active', role = $1, department_id = $2, approved_by = $3, approved_at = now(), updated_at = now() WHERE id = $4 AND status = 'pending' RETURNING id, email, name, role, status",
-      [role, departmentId, req.user.sub, userId]
+      "UPDATE users SET status = 'active', role = $1, department_id = $2, approved_by = $3, approved_at = now(), updated_at = now() WHERE id = $4 AND status = 'pending' AND tenant_id = $5 RETURNING id, email, name, role, status",
+      [role, departmentId, req.user.sub, userId, callerTenant(req)]
     );
 
     if (result.rows.length === 0) {
@@ -146,8 +163,8 @@ router.put('/:id/reject', authMiddleware.requireRole('admin'), async function (r
     var reason = (req.body.reason || '').trim();
 
     var result = await db.query(
-      "UPDATE users SET status = 'rejected', reject_reason = $1, approved_by = $2, approved_at = now(), updated_at = now() WHERE id = $3 AND status = 'pending' RETURNING id, email, name, status",
-      [reason || null, req.user.sub, userId]
+      "UPDATE users SET status = 'rejected', reject_reason = $1, approved_by = $2, approved_at = now(), updated_at = now() WHERE id = $3 AND status = 'pending' AND tenant_id = $4 RETURNING id, email, name, status",
+      [reason || null, req.user.sub, userId, callerTenant(req)]
     );
 
     if (result.rows.length === 0) {
@@ -185,8 +202,8 @@ router.put('/:id/role', authMiddleware.requireRole('admin'), async function (req
     }
 
     var result = await db.query(
-      "UPDATE users SET role = $1, updated_at = now() WHERE id = $2 AND status = 'active' RETURNING id, email, name, role",
-      [role, userId]
+      "UPDATE users SET role = $1, updated_at = now() WHERE id = $2 AND status = 'active' AND tenant_id = $3 RETURNING id, email, name, role",
+      [role, userId, callerTenant(req)]
     );
 
     if (result.rows.length === 0) {
@@ -217,8 +234,8 @@ router.put('/:id/status', authMiddleware.requireRole('admin'), async function (r
     }
 
     var result = await db.query(
-      'UPDATE users SET status = $1, updated_at = now() WHERE id = $2 RETURNING id, email, name, status',
-      [status, userId]
+      'UPDATE users SET status = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 RETURNING id, email, name, status',
+      [status, userId, callerTenant(req)]
     );
 
     if (result.rows.length === 0) {
@@ -244,10 +261,13 @@ router.put('/:id/department', authMiddleware.requireRole('admin'), async functio
   try {
     var userId = req.params.id;
     var departmentId = req.body.departmentId || null;
+    if (!await deptInTenant(req, departmentId)) {
+      return res.status(400).json({ error: 'VALIDATION', message: '유효하지 않은 부서입니다.' });
+    }
 
     var result = await db.query(
-      'UPDATE users SET department_id = $1, updated_at = now() WHERE id = $2 RETURNING id, email, name, department_id',
-      [departmentId, userId]
+      'UPDATE users SET department_id = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 RETURNING id, email, name, department_id',
+      [departmentId, userId, callerTenant(req)]
     );
 
     if (result.rows.length === 0) {
@@ -267,14 +287,17 @@ router.put('/:id/department', authMiddleware.requireRole('admin'), async functio
 router.post('/:id/reset-password', authMiddleware.requireRole('admin'), async function (req, res) {
   try {
     var userId = req.params.id;
+    // 대상이 호출자 테넌트 소속인지 먼저 확인 — 해시 계산 전에 거르고, UPDATE 에도 조건을 건다
+    var tgt = await db.query('SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2', [userId, callerTenant(req)]);
+    if (!tgt.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '사용자를 찾을 수 없습니다.' });
     // 임시 비밀번호 생성 (8자 랜덤)
     var crypto = require('crypto');
     var tempPw = crypto.randomBytes(4).toString('hex') + '!A1';
 
     var hash = await authService.hashPassword(tempPw);
     var result = await db.query(
-      'UPDATE users SET password_hash = $1, password_changed_at = now(), updated_at = now() WHERE id = $2 RETURNING id, email, name',
-      [hash, userId]
+      'UPDATE users SET password_hash = $1, password_changed_at = now(), updated_at = now() WHERE id = $2 AND tenant_id = $3 RETURNING id, email, name',
+      [hash, userId, callerTenant(req)]
     );
 
     if (result.rows.length === 0) {
@@ -310,7 +333,8 @@ router.post('/:id/reset-password', authMiddleware.requireRole('admin'), async fu
 router.get('/departments', async function (req, res) {
   try {
     var result = await db.query(
-      'SELECT id, name, parent_id, sort_order FROM departments ORDER BY sort_order, name'
+      'SELECT id, name, parent_id, sort_order FROM departments WHERE tenant_id = $1 ORDER BY sort_order, name',
+      [callerTenant(req)]
     );
     res.json({ data: result.rows });
   } catch (e) {

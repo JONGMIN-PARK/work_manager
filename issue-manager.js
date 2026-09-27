@@ -1168,7 +1168,3 @@ function daysBetween(d1, d2) {
   return Math.max(0, Math.round((b - a) / 86400000));
 }
 
-/* ═══ eH 폴백 ═══ (localDate·daysDiff 는 project-data.js 가 항상 먼저 정의) */
-if (typeof eH === 'undefined') {
-  function eH(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-}

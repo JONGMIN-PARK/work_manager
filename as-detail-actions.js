@@ -140,7 +140,7 @@ function showASPartAddForm(ticketId) {
   overlay.id = 'asPartAddOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px';
 
-  var today = new Date().toISOString().slice(0, 10);
+  var today = localDate();
   var h = '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;width:600px;max-width:100%;padding:20px 22px;color:var(--t2)">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bd)">';
   h += '<div style="font-size:13px;font-weight:700">🔩 사용 부품 추가</div>';

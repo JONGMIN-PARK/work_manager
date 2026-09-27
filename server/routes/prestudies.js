@@ -309,7 +309,7 @@ router.post('/:id/convert', async function (req, res) {
     notifyWon(ps, req.tenant.id, req.user.sub);
   } catch (e) {
     console.error('[prestudies/convert]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 

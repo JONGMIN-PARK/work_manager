@@ -227,7 +227,7 @@ router.post('/summary', checkAIQuota, async function (req, res) {
     if (err.code === 'AI_OVERLOADED') {
       return res.status(503).json({ error: 'AI_OVERLOADED', message: err.message });
     }
-    res.status(500).json({ error: 'AI_ERROR', message: 'AI 요약 실패: ' + err.message });
+    res.status(500).json({ error: 'AI_ERROR', message: 'AI 요약 실패' + (err && !err.severity && err.message ? ': ' + err.message : '') });
   }
 });
 
@@ -268,7 +268,7 @@ router.post('/query', checkAIQuota, async function (req, res) {
     });
   } catch (err) {
     console.error('[AI Route] query error:', err.message);
-    res.status(500).json({ error: 'AI_ERROR', message: 'AI 질의 실패: ' + err.message });
+    res.status(500).json({ error: 'AI_ERROR', message: 'AI 질의 실패' + (err && !err.severity && err.message ? ': ' + err.message : '') });
   }
 });
 

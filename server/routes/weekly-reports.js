@@ -105,7 +105,7 @@ router.post('/', async function (req, res) {
       .catch(function (e) { console.error('[weekly-reports/notify]', e.message); });
   } catch (e) {
     console.error('[weekly-reports/upload]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 

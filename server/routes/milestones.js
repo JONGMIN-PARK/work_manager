@@ -206,7 +206,7 @@ router.post('/:id/logs', async function (req, res) {
       notificationService.notifyAdmins('milestone_progress', {
         projectName: projName2, milestoneName: msName, progress: progress, hours: hours, authorName: authorName,
         note: (note || '').slice(0, 200)
-      }).catch(function (e) { console.error('[noti]', e.message); });
+      }, req.tenant.id).catch(function (e) { console.error('[noti]', e.message); });
     } catch (_) { /* 알림 실패 무시 */ }
   } catch (e) {
     console.error('[milestones/log-add]', e);

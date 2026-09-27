@@ -82,7 +82,7 @@ router.post('/', rbac.checkPermission('issue.create'), async function (req, res)
     try {
       var assigneeNames = b.assignees || [];
       if (assigneeNames.length > 0) {
-        var uR = await db.query("SELECT id FROM users WHERE name = ANY($1) AND status = 'active'", [assigneeNames]);
+        var uR = await db.query("SELECT id FROM users WHERE name = ANY($1) AND status = 'active' AND tenant_id = $2", [assigneeNames, req.tenant.id]);
         var targetIds = uR.rows.map(function(u) { return u.id; });
         notificationService.notify('issue_assigned', {
           title: b.title, urgency: b.urgency || 'normal',
@@ -132,7 +132,7 @@ router.put('/:id', async function (req, res) {
           if (prev.reporter_id) targets.add(prev.reporter_id);
           var assignees = typeof prev.assignees === 'string' ? JSON.parse(prev.assignees) : (prev.assignees || []);
           if (assignees.length > 0) {
-            var uR = await db.query("SELECT id FROM users WHERE name = ANY($1) AND status = 'active'", [assignees]);
+            var uR = await db.query("SELECT id FROM users WHERE name = ANY($1) AND status = 'active' AND tenant_id = $2", [assignees, req.tenant.id]);
             uR.rows.forEach(function(u) { targets.add(u.id); });
           }
           await notificationService.notify('issue_status_changed', {

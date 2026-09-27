@@ -2,6 +2,14 @@
  * 업무 관리자 — 대시보드 위젯 모듈
  */
 
+/* [순수] 기준일(로컬 'YYYY-MM-DD') → 금주(일~토)·금월 범위. 예전엔 toISOString(UTC)이라
+   KST 09시 전엔 주가 하루 밀리고, 로컬 자정 Date 인 말일은 전날로 잘려 금월 납기에서 빠졌다. */
+function _dashDateRanges(todayYmd) {
+  var wk = weekRangeYmd(todayYmd, 0);
+  var y = parseInt(todayYmd.slice(0, 4), 10), m = parseInt(todayYmd.slice(5, 7), 10);
+  return { weekStart: wk.start, weekEnd: wk.end, monthStart: todayYmd.slice(0, 7) + '-01', monthEnd: monthEndYmd(y, m) };
+}
+
 /* ═══ 대시보드 렌더 ═══ */
 async function renderDashboard(projects) {
   var el = document.getElementById('dashCards');
@@ -43,12 +51,9 @@ async function renderDashboard(projects) {
   });
 
   // 금주 마일스톤
-  var weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  var weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  var wsStr = weekStart.toISOString().slice(0, 10);
-  var weStr = weekEnd.toISOString().slice(0, 10);
+  var _rng = _dashDateRanges(today);
+  var wsStr = _rng.weekStart;
+  var weStr = _rng.weekEnd;
 
   var _msEvtData = await _msEvtP;
   var milestones = _msEvtData[0];
@@ -67,9 +72,8 @@ async function renderDashboard(projects) {
   });
 
   // 금월 납기
-  var monthStart = today.slice(0, 7) + '-01';
-  var monthEndDate = new Date(parseInt(today.slice(0, 4)), parseInt(today.slice(5, 7)), 0);
-  var monthEnd = monthEndDate.toISOString().slice(0, 10);
+  var monthStart = _rng.monthStart;
+  var monthEnd = _rng.monthEnd;
   var monthDeadlines = events.filter(function (e) {
     return e.type === 'deadline' && e.startDate >= monthStart && e.startDate <= monthEnd;
   });

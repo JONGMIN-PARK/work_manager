@@ -2,9 +2,9 @@
  * 엑셀 파일 → 서버 업로드 스크립트
  *
  * 사용법:
- *   node upload.js D:\다운로드\주간일지폴더
- *   node upload.js D:\다운로드\주간일지폴더\파일.xls
- *   node upload.js .    (현재 폴더의 모든 엑셀)
+ *   node tools/upload.js D:\다운로드\주간일지폴더
+ *   node tools/upload.js D:\다운로드\주간일지폴더\파일.xls
+ *   node tools/upload.js .    (현재 폴더의 모든 엑셀)
  */
 var path = require('path');
 var fs = require('fs');
@@ -15,7 +15,8 @@ try { XLSX = require('xlsx'); } catch (e) {
 }
 
 // ── 설정 ──
-var SETTINGS_FILE = path.join(__dirname, 'upload-settings.json');
+// 설정 파일은 기존과 같이 저장소 루트에 둔다(tools/ 로 옮기기 전 위치 — 기존 설정 호환)
+var SETTINGS_FILE = path.join(__dirname, '..', 'upload-settings.json');
 
 function loadSettings() {
   try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch (e) { return {}; }
@@ -175,12 +176,12 @@ async function main() {
   var target = process.argv[2];
   if (!target) {
     console.log('');
-    console.log('  사용법: node upload.js <폴더경로 또는 파일경로>');
+    console.log('  사용법: node tools/upload.js <폴더경로 또는 파일경로>');
     console.log('');
     console.log('  예시:');
-    console.log('    node upload.js D:\\다운로드\\주간일지');
-    console.log('    node upload.js D:\\다운로드\\주간일지_기술연구소.xls');
-    console.log('    node upload.js .   (현재 폴더)');
+    console.log('    node tools/upload.js D:\\다운로드\\주간일지');
+    console.log('    node tools/upload.js D:\\다운로드\\주간일지_기술연구소.xls');
+    console.log('    node tools/upload.js .   (현재 폴더)');
     console.log('');
     return;
   }

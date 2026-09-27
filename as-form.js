@@ -65,7 +65,9 @@ function showASModal(editId) {
     h += _asSection('② 접수 정보');
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">';
     var nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    var recVal = existing && existing.receivedAt ? new Date(existing.receivedAt).toISOString().slice(0, 16) : nowLocal;
+    // datetime-local 은 로컬 시각을 받는다 — 저장된 UTC 타임스탬프를 로컬로 바꿔 넣어야 편집·저장 때마다 9시간씩 밀리지 않는다
+    var _recD = existing && existing.receivedAt ? new Date(existing.receivedAt) : null;
+    var recVal = _recD && !isNaN(_recD.getTime()) ? new Date(_recD.getTime() - _recD.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : nowLocal;
     h += _asField('접수일시 *', '<input id="asM_receivedAt" type="datetime-local" value="' + _asEsc(recVal) + '" ' + _asInpStyle() + '>');
     h += _asField('접수경로', _asEnumSelect('asM_channel', CHAN, existing && existing.channel || 'phone'));
     h += _asField('긴급도 *', _asEnumSelect('asM_priority', PRIO, existing && existing.priority || 'P3'));

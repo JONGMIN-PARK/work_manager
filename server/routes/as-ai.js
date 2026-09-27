@@ -79,7 +79,7 @@ router.post('/analyze', aiLimiter, async function (req, res) {
     res.json({ data: result.data, usage: result.usage });
   } catch (e) {
     console.error('[as-ai/analyze]', e);
-    res.status(500).json({ error: 'AI_FAILED', message: 'AI 분석 실패: ' + (e.message || '') });
+    res.status(500).json({ error: 'AI_FAILED', message: 'AI 분석 실패' + (e && !e.severity && e.message ? ': ' + e.message : '') });
   }
 });
 
@@ -148,7 +148,7 @@ router.post('/similar/:ticketId', aiLimiter, async function (req, res) {
     res.json({ data: result.data, candidates: candR.rows.length, usage: result.usage });
   } catch (e) {
     console.error('[as-ai/similar]', e);
-    res.status(500).json({ error: 'AI_FAILED', message: 'AI 유사 사례 분석 실패: ' + (e.message || '') });
+    res.status(500).json({ error: 'AI_FAILED', message: 'AI 유사 사례 분석 실패' + (e && !e.severity && e.message ? ': ' + e.message : '') });
   }
 });
 
@@ -208,7 +208,7 @@ router.get('/weekly-insight', aiLimiter, async function (req, res) {
     res.json(payload);
   } catch (e) {
     console.error('[as-ai/weekly-insight]', e);
-    res.status(500).json({ error: 'AI_FAILED', message: 'AI 코멘트 생성 실패: ' + (e.message || '') });
+    res.status(500).json({ error: 'AI_FAILED', message: 'AI 코멘트 생성 실패' + (e && !e.severity && e.message ? ': ' + e.message : '') });
   }
 });
 

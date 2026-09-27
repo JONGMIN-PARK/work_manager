@@ -45,7 +45,7 @@ function sendErr(res, e, tag) {
     return res.status(e.httpStatus).json(body);
   }
   console.error(tag, e);
-  return res.status(500).json({ error: 'SERVER_ERROR', message: (e && e.message) || '서버 오류' });
+  return res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
 }
 
 /**
@@ -178,7 +178,7 @@ router.post('/bulk', rbac.checkPermission('order.edit'), async function (req, re
     });
   } catch (e) {
     console.error('[orders/bulk]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: e.message || '서버 오류' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
   }
 });
 

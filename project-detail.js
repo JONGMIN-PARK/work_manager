@@ -2022,25 +2022,11 @@ function pdDeleteCheck(projId, chkId, btn) {
 
 /* 완료 날짜 변경 */
 function pdChangeDoneDate(projId, chkId, newDate) {
-  var sep = chkId.indexOf('::');
-  if (sep >= 0 && typeof apiFetch === 'function' && (typeof AUTH_SKIP === 'undefined' || !AUTH_SKIP)) {
-    var parentId = chkId.slice(0, sep), idx = parseInt(chkId.slice(sep + 2), 10);
-    apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
-      var row = r.data;
-      var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
-      if (idx >= 0 && idx < items.length) {
-        items[idx].doneDate = newDate;
-        return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
-      }
-    }).catch(function (err) { console.warn('[pdChangeDoneDate]', err); });
-  } else {
-    var store = db.transaction('checklists', 'readwrite').objectStore('checklists');
-    var req = store.get(chkId);
-    req.onsuccess = function () {
-      var item = req.result;
-      if (item) { item.doneDate = newDate; store.put(item); }
-    };
-  }
+  // 서버 전용 — 예전 IndexedDB 분기(db.transaction)는 db 가 항상 null 이라 TypeError 로 죽었다
+  return chkPatchItem(chkId, { doneDate: newDate }).catch(function (err) {
+    console.warn('[pdChangeDoneDate]', err);
+    if (typeof showToast === 'function') showToast('완료일 변경 실패', 'error');
+  });
 }
 
 /* 체크리스트 진행률 카운터 인라인 갱신 */
@@ -2095,30 +2081,11 @@ function pdSaveCheckInline(span, projId, chkId, newText, oldText) {
   span.textContent = newText || oldText;
   if (!newText || newText === oldText) return;
 
-  var sep = chkId.indexOf('::');
-  if (sep >= 0 && typeof apiFetch === 'function' && (typeof AUTH_SKIP === 'undefined' || !AUTH_SKIP)) {
-    var parentId = chkId.slice(0, sep);
-    var idx = parseInt(chkId.slice(sep + 2), 10);
-    apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
-      var row = r.data;
-      var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
-      if (idx >= 0 && idx < items.length) {
-        items[idx].text = newText;
-        return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
-      }
-    }).catch(function (err) {
-      console.error('[pdSaveCheckInline]', err);
-      span.textContent = oldText;
-      if (typeof showToast === 'function') showToast('수정 실패', 'error');
-    });
-  } else {
-    var store = db.transaction('checklists', 'readwrite').objectStore('checklists');
-    var req = store.get(chkId);
-    req.onsuccess = function () {
-      var item = req.result;
-      if (item) { item.text = newText; store.put(item); }
-    };
-  }
+  return chkPatchItem(chkId, { text: newText }).catch(function (err) {
+    console.error('[pdSaveCheckInline]', err);
+    span.textContent = oldText;
+    if (typeof showToast === 'function') showToast('수정 실패', 'error');
+  });
 }
 
 /* 개요 탭 체크리스트 목록 HTML 생성 (추가/삭제/토글 시 부분 갱신용) */

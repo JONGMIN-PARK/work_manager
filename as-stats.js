@@ -60,8 +60,10 @@ function _asStatsResolvePeriod() {
     default: from = new Date(now.getTime() - 90 * 86400000);
   }
   return {
-    from: from.toISOString().slice(0, 10),
-    to:   to.toISOString().slice(0, 10)
+    // 로컬 날짜로 — toISOString(UTC)은 KST 09시 전에 하루 이른 날짜가 된다.
+    // 사용자 지정 시작일은 입력 문자열 그대로 (new Date('YYYY-MM-DD') 는 UTC 자정이라 로컬 변환 금지)
+    from: (_asStatsPreset === 'custom' && _asStatsCustomFrom) ? String(_asStatsCustomFrom).slice(0, 10) : dateToStr(from),
+    to:   dateToStr(to)
   };
 }
 

@@ -1,0 +1,38 @@
+# 이미지에 필요한 것: server/ (소스·package.json·migrations), migrations/, 루트 *.html *.js *.css
+# (Dockerfile COPY 참조). 나머지는 빌드 컨텍스트에서 제외한다.
+
+# VCS / 에디터 / CI
+.git
+.gitattributes
+.gitignore
+.github
+.claude
+.DS_Store
+
+# 비밀 / 로컬 설정
+.env
+.env.*
+**/.env
+**/.env.*
+*-settings.json
+
+# 의존성 · 빌드 산출물 (이미지 안에서 npm install)
+**/node_modules
+web/.next
+
+# 서버 런타임 산출물
+server/backups
+server/logs
+*.log
+
+# 테스트 · 문서 · 로컬 도구 · 별도 앱
+test
+server/__tests__
+server/jest.config.js
+server/jest.setup.js
+docs
+dailylog
+tools
+web
+*.md
+*.py
