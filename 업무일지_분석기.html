@@ -307,7 +307,7 @@ window.wmDataBus = (function () {
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.191</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.192</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -2912,6 +2912,13 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.192',date:'2026-09-27',title:'🗂 프로젝트 상세 패널 — 화면 1/3 폭 + 폭 조절 + 2열 배치',tag:'feat',items:[
+      '프로젝트를 누르면 열리는 오른쪽 상세 패널이 420px 고정 → 기본 화면의 1/3 로 넓어졌습니다',
+      '패널 위 [1/3 · 1/2 · 2/3] 버튼으로 바로 바꾸거나, 패널 왼쪽 경계를 드래그해 원하는 폭으로(더블클릭 = 1/3). 마지막 폭을 기억합니다',
+      '패널이 넓으면 개요 탭이 2열로 — 왼쪽 일정·진척·담당자·메모·마일스톤, 오른쪽 체크리스트',
+      '스크롤해도 제목과 탭이 위에 고정. Esc 로 닫기',
+      '영향: project-detail.js, style.css. 클라이언트 전용'
+    ]},
     {ver:'13.191',date:'2026-09-27',title:'📊 타임라인 — 의존 화살표·크리티컬 패스 수정, 기간 막대 사진 미리보기 제거',tag:'fix',items:[
       '기간 막대에 마우스를 올리면 뜨던 장비 사진 미리보기를 없앴습니다 — 막대 위에서 작업할 때 화면을 가렸습니다. (왼쪽 목록의 썸네일은 그대로)',
       '🐞 의존관계 화살표가 마일스톤이 있는 프로젝트에는 그려지지 않던 문제 수정 — 마일스톤 행이 프로젝트 행 위치를 덮어쓰고 있었습니다',

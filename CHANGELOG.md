@@ -1,5 +1,14 @@
 # Work Manager — 변경 이력
 
+## v13.192 (2026-09-27) — 프로젝트 상세 패널 폭·배치 개선
+
+- 폭: `width:420px` 고정 → `.pd-panel{width:max(420px, var(--pd-frac)*100vw)}`, 기본 `--pd-frac:.34`(≈1/3). 700px 이하 전체 폭.
+- 조절: 헤더 `1/3 · 1/2 · 2/3` 프리셋(`pdSetPanelSize`), 왼쪽 경계 드래그(`.pd-resizer`, 더블클릭 = 기본). 비율을 localStorage `pd-panel-frac` 에 저장.
+- 2열: 패널에 `container-type:inline-size` — 콘텐츠 폭 ≥600px 이면 개요를 `.pd-ov-main`(일정·진척·담당자·수주·메모·마일스톤·요소기술) | `.pd-ov-side`(체크리스트) 그리드로.
+  탭 전환의 `style.display=''/'none'` 과 충돌 없음(인라인 none 우선).
+- 제목·탭 `.pd-sticky` 고정, Esc 닫기(`pdCloseDetail`, 위에 모달이 있으면 무시).
+- 검증: 1920에서 기본 653px(2열 320/267), 1/2 → 960px, 드래그 800px 저장·재오픈 유지, Esc 로 패널·배경 제거, 다른 탭 전환 정상. 스냅샷 재기록(차이 = 패널 스타일·헤더 버튼·sticky·개요 래퍼뿐).
+
 ## v13.191 (2026-09-27) — 타임라인: 의존 화살표 · 크리티컬 패스 수정, 막대 hover 사진 제거
 
 ### 기간 막대 hover 사진 미리보기 제거

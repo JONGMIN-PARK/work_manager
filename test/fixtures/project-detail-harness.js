@@ -21,7 +21,7 @@ function makeDom() {
   function mkEl(tag) {
     const e = {
       tagName: String(tag).toUpperCase(), id: '', className: '', textContent: '', _html: '',
-      style: { cssText: '' }, children: [], parentNode: null, _listeners: {},
+      style: { cssText: '', setProperty(k, v) { this[k] = String(v); }, getPropertyValue(k) { return this[k] || ''; } }, children: [], parentNode: null, _listeners: {},
       get innerHTML() { return this._html; },
       set innerHTML(v) { this._html = String(v); this.children = []; },
       appendChild(c) { if (c.parentNode) c.remove(); this.children.push(c); c.parentNode = this; return c; },

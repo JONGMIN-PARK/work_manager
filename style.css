@@ -790,3 +790,21 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 .notif-msg{font-size:12px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .notif-date{font-size:10px;color:var(--t5);margin-top:2px}
 .notif-empty{padding:18px 12px;font-size:12px;color:var(--t5);text-align:center}
+
+/* v13.192 project detail side panel: width ~1/3 of screen (presets, drag), sticky header, 2 columns when wide */
+.pd-panel{--pd-frac:.34;width:max(420px,calc(var(--pd-frac) * 100vw));max-width:96vw;container-type:inline-size;container-name:pd}
+@media(max-width:700px){.pd-panel{width:100vw;max-width:100vw}}
+.pd-resizer{position:fixed;top:0;bottom:0;width:8px;right:calc(min(96vw,max(420px,calc(var(--pd-frac) * 100vw))) - 4px);cursor:col-resize;z-index:9999}
+@media(max-width:700px){.pd-resizer{display:none}}
+.pd-resizer::after{content:"";position:absolute;left:3px;top:0;bottom:0;width:2px;background:transparent;transition:background .15s}
+.pd-resizer:hover::after,.pd-resizer.drag::after{background:var(--ac)}
+.pd-sticky{position:sticky;top:-20px;z-index:3;background:var(--bg-p);margin:-20px -20px 0;padding:20px 20px 0}
+.pd-size{display:inline-flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden}
+.pd-size button{border:0;background:var(--bg-i);color:var(--t5);font:inherit;font-size:11px;padding:3px 8px;cursor:pointer}
+.pd-size button+button{border-left:1px solid var(--bd)}
+.pd-size button:hover{color:var(--ac)}
+.pd-size button.on{background:var(--ac);color:#fff}
+@container pd (min-width: 600px){
+  .pd-ov{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:0 24px;align-items:start}
+  .pd-ov-side{border-left:1px solid var(--bd);padding-left:20px}
+}

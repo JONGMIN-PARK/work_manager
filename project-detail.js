@@ -26,8 +26,8 @@ async function showProjectDetail(id) {
   var stInfo = PROJ_STATUS[st] || PROJ_STATUS.waiting;
   var ph = _pdPhaseInfo(allChk);
 
-  var html = _pdDetailHeaderHtml(proj, stInfo) +
-    _pdDetailTabBarHtml(id) +
+  // 제목·탭은 스크롤해도 위에 고정
+  var html = '<div class="pd-sticky">' + _pdDetailHeaderHtml(proj, stInfo) + _pdDetailTabBarHtml(id) + '</div>' +
     _pdDetailOverviewHtml(id, proj, projMs, allChk, ph.phases);
   // 백그라운드 시간 집계 → 채움 (패널 부착 후 setTimeout으로 비동기 실행)
   _pdScheduleMsHours(id, proj, projMs);
@@ -77,7 +77,14 @@ function _pdPhaseInfo(allChk) {
 function _pdDetailHeaderHtml(proj, stInfo) {
   var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
     '<h3 style="font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="background:' + proj.color + ';width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0"></span>' + eH(proj.name) + '</h3>' +
-    '<button class="btn btn-g btn-s" onclick="' + _PD_CLOSE_JS + '">✕</button>' +
+    '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+      '<div class="pd-size" title="패널 폭">' +
+        '<button data-pd-size="0.34" onclick="pdSetPanelSize(0.34)">1/3</button>' +
+        '<button data-pd-size="0.5" onclick="pdSetPanelSize(0.5)">1/2</button>' +
+        '<button data-pd-size="0.67" onclick="pdSetPanelSize(0.67)">2/3</button>' +
+      '</div>' +
+      '<button class="btn btn-g btn-s" onclick="' + _PD_CLOSE_JS + '" title="닫기 (Esc)">✕</button>' +
+    '</div>' +
   '</div>';
 
   // 상태 배지
@@ -105,7 +112,8 @@ function _pdDetailTabBarHtml(id) {
 
 /* ── 개요 탭 ── 기간·진척·담당자·수주·메모·마일스톤·요소기술·현재 단계 체크리스트 */
 function _pdDetailOverviewHtml(id, proj, projMs, allChk, phases) {
-  var html = '<div id="pdOverview">';
+  // 패널이 넓으면(컨테이너 쿼리) 기본 정보·마일스톤 | 체크리스트 2열
+  var html = '<div id="pdOverview" class="pd-ov"><div class="pd-ov-main">';
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">' +
     '<div style="font-size:10px;color:var(--t5)">시작일<div style="font-size:12px;color:var(--t2);font-weight:600;margin-top:2px">' + (proj.startDate || '-') + '</div></div>' +
     '<div style="font-size:10px;color:var(--t5)">종료일<div style="font-size:12px;color:var(--t2);font-weight:600;margin-top:2px">' + (proj.endDate || '-') + '</div></div>' +
@@ -137,9 +145,10 @@ function _pdDetailOverviewHtml(id, proj, projMs, allChk, phases) {
   // 적용 요소기술 (요소기술 Phase 2 연동) — 비동기로 채움
   html += '<div id="pdTechUsed" style="margin-bottom:12px"></div>';
 
+  html += '</div><div class="pd-ov-side">';
   html += _pdOverviewChecklistHtml(id, proj, allChk, phases);
 
-  html += '</div>'; // end pdOverview
+  html += '</div></div>'; // end pd-ov-side, pdOverview
   return html;
 }
 
@@ -293,11 +302,70 @@ function _pdDetailFooterHtml(id) {
 }
 
 /* 우측 슬라이드 패널 + 백드롭 부착, 비동기 섹션(진척 히스토리·요소기술·코멘트) 로드 */
+/* ═══ 상세 패널 폭 (v13.192) — 기본 화면의 1/3, ⅓·½·⅔ 프리셋 + 왼쪽 경계 드래그, 비율로 기억 ═══ */
+var PD_PANEL_FRAC_DEFAULT = 0.34, PD_PANEL_MIN_PX = 420;
+function _pdPanelFrac() {
+  var v = NaN;
+  try { v = parseFloat(localStorage.getItem('pd-panel-frac')); } catch (e) {}
+  return (v >= 0.2 && v <= 0.9) ? v : PD_PANEL_FRAC_DEFAULT;
+}
+function _pdApplyPanelFrac(panel, frac) {
+  panel.style.setProperty('--pd-frac', frac);
+  var btns = panel.querySelectorAll('[data-pd-size]');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', Math.abs(parseFloat(btns[i].dataset.pdSize) - frac) < 0.02);
+}
+function pdSetPanelSize(frac) {
+  frac = Math.max(0.2, Math.min(0.9, frac));
+  try { localStorage.setItem('pd-panel-frac', String(frac)); } catch (e) {}
+  var panel = document.getElementById('projDetailPanel');
+  if (panel) _pdApplyPanelFrac(panel, frac);
+}
+function pdCloseDetail() {
+  var p = document.getElementById('projDetailPanel'); if (p) p.remove();
+  var bd = document.getElementById('projDetailBackdrop'); if (bd) bd.remove();
+}
+function _pdBindPanelResize(panel) {
+  var h = document.createElement('div');
+  h.className = 'pd-resizer';
+  h.title = '드래그: 폭 조절 · 더블클릭: 기본(1/3)';
+  panel.appendChild(h);
+  h.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    h.classList.add('drag');
+    document.body.style.userSelect = 'none';
+    function mv(ev) {
+      var px = Math.max(PD_PANEL_MIN_PX, window.innerWidth - ev.clientX);
+      _pdApplyPanelFrac(panel, Math.max(0.2, Math.min(0.9, px / window.innerWidth)));
+    }
+    function up() {
+      h.classList.remove('drag');
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', mv);
+      document.removeEventListener('mouseup', up);
+      pdSetPanelSize(parseFloat(panel.style.getPropertyValue('--pd-frac')) || PD_PANEL_FRAC_DEFAULT);
+    }
+    document.addEventListener('mousemove', mv);
+    document.addEventListener('mouseup', up);
+  });
+  h.addEventListener('dblclick', function () { pdSetPanelSize(PD_PANEL_FRAC_DEFAULT); });
+}
+// Esc = 상세 패널 닫기 (위에 모달이 떠 있으면 모달 쪽이 먼저)
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !document.getElementById('projDetailPanel')) return;
+    if (document.querySelector('.wa-modal-overlay')) return;
+    pdCloseDetail();
+  });
+}
+
 function _pdAttachDetailPanel(id, proj, html) {
   var panel = document.createElement('div');
   panel.id = 'projDetailPanel';
-  panel.style.cssText = 'position:fixed;top:0;right:0;bottom:0;width:420px;max-width:92vw;background:var(--bg-p);border-left:1px solid var(--bd);z-index:9998;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);padding:20px;animation:slideIn .2s ease';
+  panel.className = 'pd-panel';
+  panel.style.cssText = 'position:fixed;top:0;right:0;bottom:0;background:var(--bg-p);border-left:1px solid var(--bd);z-index:9998;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);padding:20px;animation:slideIn .2s ease';
   panel.innerHTML = html;
+  _pdApplyPanelFrac(panel, _pdPanelFrac());
+  _pdBindPanelResize(panel);
   document.body.appendChild(panel);
 
   if (typeof getProgressHistory === 'function') {
