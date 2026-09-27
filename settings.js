@@ -477,7 +477,7 @@ function exportBackupJSON() {
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'work-manager-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.download = 'work-manager-backup-' + localDate() + '.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

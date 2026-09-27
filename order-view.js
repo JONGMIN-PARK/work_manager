@@ -15,12 +15,26 @@ function _orderPersistFilters() {
   } catch (e) {}
 }
 
+// 텍스트 검색 (수주번호·프로젝트명·거래처) — 디바운스 + 포커스/캐럿 복원
+var orderSearchKw = '';
+var _orderQTimer = null;
+function orderSetQ(v) {
+  orderSearchKw = v || '';
+  clearTimeout(_orderQTimer);
+  _orderQTimer = setTimeout(function () {
+    renderOrders(function () {
+      var el = document.getElementById('orderQ');
+      if (el) { el.focus(); var n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} }
+    });
+  }, 250);
+}
+
 /* ═══ 수주 대장 렌더링 ═══ */
-function renderOrders() {
+function renderOrders(afterRender) {
   var wrap = document.getElementById('ordersWrap');
   if (!wrap) return;
 
-  Promise.all([orderGetAll(), projGetAll(), typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve([])]).then(function (results) {
+  return Promise.all([orderGetAll(), projGetAll(), typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve([])]).then(function (results) {
     var orders = results[0] || [];
     var projects = results[1] || [];
     var allIssues = results[2] || [];
@@ -63,10 +77,29 @@ function renderOrders() {
       }
     });
 
+    // 거래처 목록 (필터용) — ORDER_MAP 보충분 포함
+    var clients = {};
+    orders.forEach(function (o) { if (o.client) clients[o.client] = true; });
+
+    // 저장된 거래처 필터가 더 이상 존재하지 않으면 초기화 (빈 목록 + 선택 불가 상태 방지)
+    if (orderFilterClient && !clients[orderFilterClient]) {
+      orderFilterClient = '';
+      _orderPersistFilters();
+    }
+    var totalCnt = orders.length;
+
     // 거래처 필터
     if (orderFilterClient) {
       orders = orders.filter(function (o) { return o.client === orderFilterClient; });
     }
+    // 텍스트 검색
+    if (orderSearchKw) {
+      var kw = orderSearchKw.toLowerCase();
+      orders = orders.filter(function (o) {
+        return ((o.orderNo || '') + ' ' + (o.name || '') + ' ' + (o.client || '')).toLowerCase().indexOf(kw) >= 0;
+      });
+    }
+    var filterActive = !!(orderFilterClient || orderSearchKw);
 
     // 정렬
     orders.sort(function (a, b) {
@@ -77,18 +110,14 @@ function renderOrders() {
       return orderSortAsc ? cmp : -cmp;
     });
 
-    // 거래처 목록 (필터용)
-    var clients = {};
-    (results[0] || []).forEach(function (o) { if (o.client) clients[o.client] = true; });
-
     var html = '';
 
     // 상단 컨트롤
     html += '<div class="pnl" style="margin-bottom:14px;padding:14px 18px">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">';
-    html += '<div style="display:flex;align-items:center;gap:10px">';
+    html += '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;flex-wrap:wrap">';
     html += '<span style="font-size:13px;font-weight:700;color:var(--t2)">📋 수주 대장</span>';
-    html += '<span style="font-size:11px;color:var(--t5)">' + orders.length + '건</span>';
+    html += '<span style="font-size:11px;color:var(--t5)">' + orders.length + '건' + (filterActive ? ' / 전체 ' + totalCnt + '건' : '') + '</span>';
     // 거래처 필터
     html += '<select style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3)" onchange="orderFilterClient=this.value;_orderPersistFilters();renderOrders()">';
     html += '<option value="">전체 거래처</option>';
@@ -96,6 +125,8 @@ function renderOrders() {
       html += '<option value="' + eH(c) + '"' + (orderFilterClient === c ? ' selected' : '') + '>' + eH(c) + '</option>';
     });
     html += '</select>';
+    // 텍스트 검색
+    html += '<input type="text" id="orderQ" placeholder="🔍 수주번호·프로젝트명·거래처" value="' + eH(orderSearchKw) + '" oninput="orderSetQ(this.value)" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);flex:1;min-width:160px;max-width:360px">';
     html += '</div>';
     html += '<div style="display:flex;gap:6px">';
     html += '<button class="btn btn-p btn-s" onclick="showOrderModal()">+ 신규 수주</button>';
@@ -115,19 +146,20 @@ function renderOrders() {
 
     // 테이블
     html += '<div class="pnl" style="overflow-x:auto">';
-    html += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    // v13.189 wide-mode: 고정 레이아웃 — 고정 폭 컬럼은 th width, 프로젝트명만 가변(말줄임)
+    html += '<table style="width:100%;min-width:980px;table-layout:fixed;border-collapse:collapse;font-size:11px">';
     html += '<thead><tr style="border-bottom:2px solid var(--bd)">';
     var cols = [
       { key: 'orderNo', label: '수주번호', w: '100px' },
       { key: 'date', label: '수주일', w: '90px' },
-      { key: 'client', label: '거래처', w: '120px' },
+      { key: 'client', label: '거래처', w: '180px' },
       { key: 'name', label: '프로젝트명', w: '' },
       { key: 'amount', label: '수주액', w: '100px' },
-      { key: 'manager', label: '담당자', w: '80px' },
+      { key: 'manager', label: '담당자', w: '90px' },
       { key: 'delivery', label: '납품예정', w: '90px' },
-      { key: '_phase', label: '현재 단계', w: '90px' },
-      { key: '_issues', label: '이슈', w: '55px' },
-      { key: '_actions', label: '', w: '70px' }
+      { key: '_phase', label: '현재 단계', w: '110px' },
+      { key: '_issues', label: '이슈', w: '60px' },
+      { key: '_actions', label: '', w: '90px' }
     ];
     cols.forEach(function (c) {
       var sortable = c.key && c.key[0] !== '_';
@@ -138,7 +170,13 @@ function renderOrders() {
     });
     html += '</tr></thead><tbody>';
 
-    if (orders.length === 0) {
+    if (orders.length === 0 && filterActive && totalCnt > 0) {
+      html += '<tr><td colspan="10" style="padding:40px 20px;text-align:center;color:var(--t5)">' +
+        '<div style="font-size:13px;color:var(--t3);margin-bottom:8px;font-weight:600">필터 결과 없음</div>' +
+        '<div style="font-size:11px;color:var(--t6);margin-bottom:12px">현재 거래처/검색 조건에 맞는 수주가 없습니다. (전체 ' + totalCnt + '건)</div>' +
+        '<button class="btn btn-g btn-s" onclick="orderClearFilters()" style="font-size:12px">✕ 필터 초기화</button>' +
+      '</td></tr>';
+    } else if (orders.length === 0) {
       html += '<tr><td colspan="10" style="padding:48px 20px;text-align:center;color:var(--t5)">' +
         '<div style="font-size:32px;margin-bottom:10px">📋</div>' +
         '<div style="font-size:13px;color:var(--t3);margin-bottom:6px;font-weight:600">등록된 수주가 없습니다</div>' +
@@ -164,18 +202,19 @@ function renderOrders() {
       }
 
       html += '<tr style="border-bottom:1px solid var(--bd);transition:background .1s" onmouseover="this.style.background=\'var(--bg-i)\'" onmouseout="this.style.background=\'\'">';
-      html += '<td style="padding:8px 6px;font-weight:600;color:var(--t2)">' + eH(o.orderNo) + '</td>';
-      html += '<td style="padding:8px 6px;color:var(--t4)">' + eH(o.date) + '</td>';
-      html += '<td style="padding:8px 6px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">' + eH(o.client) + '</td>';
-      html += '<td style="padding:8px 6px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px" title="' + eH(o.name) + '">' + eH(o.name) + '</td>';
-      html += '<td style="padding:8px 6px;color:var(--t3);text-align:right">' + (o.amount ? formatAmount(o.amount) : '-') + '</td>';
-      html += '<td style="padding:8px 6px;color:var(--t4)">' + eH(o.manager) + '</td>';
-      html += '<td style="padding:8px 6px;color:var(--t4)">' + eH(o.delivery) + '</td>';
-      html += '<td style="padding:8px 6px">' + phase + '</td>';
+      var ell = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      html += '<td style="padding:8px 6px;font-weight:600;color:var(--t2);' + ell + '" title="' + eH(o.orderNo) + '">' + eH(o.orderNo) + '</td>';
+      html += '<td style="padding:8px 6px;color:var(--t4);' + ell + '">' + eH(o.date) + '</td>';
+      html += '<td style="padding:8px 6px;color:var(--t3);' + ell + '" title="' + eH(o.client) + '">' + eH(o.client) + '</td>';
+      html += '<td style="padding:8px 6px;color:var(--t2);' + ell + '" title="' + eH(o.name) + '">' + eH(o.name) + '</td>';
+      html += '<td style="padding:8px 6px;color:var(--t3);text-align:right;' + ell + '">' + (o.amount ? formatAmount(o.amount) : '-') + '</td>';
+      html += '<td style="padding:8px 6px;color:var(--t4);' + ell + '" title="' + eH(o.manager) + '">' + eH(o.manager) + '</td>';
+      html += '<td style="padding:8px 6px;color:var(--t4);' + ell + '">' + eH(o.delivery) + '</td>';
+      html += '<td style="padding:8px 6px;' + ell + '">' + phase + '</td>';
 
       // 이슈 배지 — 클릭 시 이슈관리 탭으로 이동 + 수주번호 필터 (v13.39)
       var issueCnt = openIssuesByOrder[o.orderNo] || 0;
-      var safeOrderNo = (o.orderNo || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      var safeOrderNo = _orderJsStr(o.orderNo);
       if (issueCnt > 0) {
         html += '<td style="padding:8px 6px;text-align:center"><span onclick="event.stopPropagation();gotoIssuesForOrder(\'' + safeOrderNo + '\')" style="cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;background:#EF444422;color:#EF4444;font-weight:700;border:1px solid #EF444440" title="이슈관리 탭으로 이동 — 이 수주(' + eH(o.orderNo) + ')의 이슈 ' + issueCnt + '건">' + issueCnt + ' →</span></td>';
       } else {
@@ -183,7 +222,7 @@ function renderOrders() {
       }
 
       html += '<td style="padding:8px 6px;white-space:nowrap">';
-      var safeNo = (o.orderNo || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      var safeNo = safeOrderNo;
       html += '<button class="btn btn-g" style="padding:2px 6px;font-size:9px;margin-right:3px" onclick="showOrderModal(\'' + safeNo + '\')">편집</button>';
       html += '<button class="btn btn-d" style="padding:2px 6px;font-size:9px" onclick="confirmDeleteOrder(\'' + safeNo + '\')">삭제</button>';
       html += '</td>';
@@ -193,7 +232,20 @@ function renderOrders() {
     html += '</tbody></table></div>';
 
     wrap.innerHTML = html;
+    if (typeof afterRender === 'function') afterRender();
+  }).catch(function (err) {
+    console.error('[renderOrders]', err);
+    var msg = (err && err.message) || '알 수 없는 오류';
+    wrap.innerHTML = '<div class="pnl" style="padding:32px 20px;text-align:center;color:var(--t5);font-size:12px">수주 대장을 불러오지 못했습니다. <button class="btn btn-g btn-s" onclick="renderOrders()" style="margin-left:6px">다시 시도</button></div>';
+    if (typeof showToast === 'function') showToast('❌ 수주 대장 로드 실패: ' + msg, 'error');
   });
+}
+
+function orderClearFilters() {
+  orderFilterClient = '';
+  orderSearchKw = '';
+  _orderPersistFilters();
+  renderOrders();
 }
 
 /* ═══ 정렬 ═══ */
@@ -483,7 +535,7 @@ function syncOrdersToDB() {
 
 /* ═══ eH / guessPhase 폴백 ═══ */
 if (typeof eH === 'undefined') {
-  function eH(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  function eH(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 }
 if (typeof guessPhase === 'undefined') {
   function guessPhase(p) { return p.currentPhase || (p.status === 'done' ? 'as' : p.status === 'waiting' ? 'order' : 'manufacture'); }
@@ -493,33 +545,28 @@ if (typeof guessPhase === 'undefined') {
    이슈 배지 클릭 시 이슈관리 탭으로 전환 + 해당 수주(orderNo)로 필터 자동 적용 */
 function gotoIssuesForOrder(orderNo) {
   if (!orderNo) return;
-  // 다른 이슈 필터는 초기화하여 결과가 0건이 되지 않도록
-  if (typeof issueClearFilters === 'function') {
-    issueClearFilters();
-  } else {
-    // 폴백: 직접 리셋
-    if (typeof issueFilterPhase !== 'undefined') issueFilterPhase = '';
-    if (typeof issueFilterDept !== 'undefined') issueFilterDept = '';
-    if (typeof issueFilterType !== 'undefined') issueFilterType = '';
-    if (typeof issueFilterStatus !== 'undefined') issueFilterStatus = '';
-    if (typeof issueFilterUrgency !== 'undefined') issueFilterUrgency = '';
-    if (typeof issueFilterProject !== 'undefined') issueFilterProject = '';
-    if (typeof issueSearchKw !== 'undefined') issueSearchKw = '';
-  }
+  // 다른 이슈 필터는 초기화하여 결과가 0건이 되지 않도록 — issueClearFilters() 는 즉시 렌더하므로
+  // 호출하지 않고 변수만 직접 리셋한 뒤, 탭 전환 시 한 번만 렌더한다.
+  if (typeof issueFilterPhase !== 'undefined') issueFilterPhase = '';
+  if (typeof issueFilterDept !== 'undefined') issueFilterDept = '';
+  if (typeof issueFilterType !== 'undefined') issueFilterType = '';
+  if (typeof issueFilterStatus !== 'undefined') issueFilterStatus = '';
+  if (typeof issueFilterUrgency !== 'undefined') issueFilterUrgency = '';
+  if (typeof issueFilterProject !== 'undefined') issueFilterProject = '';
+  if (typeof issueSearchKw !== 'undefined') issueSearchKw = '';
   // 수주번호 필터 적용
   if (typeof issueFilterOrderNo !== 'undefined') {
     issueFilterOrderNo = orderNo;
   } else {
     window.issueFilterOrderNo = orderNo;
   }
-  // 탭 전환 — setPage('project') + setMode('issues')
+  // 탭 캐시 무효화 → setMode('issues') 가 새 필터로 정확히 1회 렌더
+  if (window._modeRendered) delete window._modeRendered.issues;
+  var switched = false;
   try {
-    if (typeof setPage === 'function') setPage('project');
-    if (typeof setMode === 'function') setMode('issues');
+    if (typeof setPage === 'function' && (typeof curPage === 'undefined' || curPage !== 'project')) setPage('project');
+    if (typeof setMode === 'function') { setMode('issues'); switched = true; }
   } catch (e) { console.warn('[gotoIssuesForOrder] tab switch err:', e); }
-  // setMode('issues') 가 renderIssues 를 호출하지만, 필터 변경이 적용된 상태로 다시 렌더 보장
-  setTimeout(function () {
-    if (typeof renderIssues === 'function') renderIssues();
-  }, 50);
+  if (!switched && typeof renderIssues === 'function') renderIssues();
   if (typeof showToast === 'function') showToast('수주 ' + orderNo + ' 이슈만 표시 중', 'info');
 }

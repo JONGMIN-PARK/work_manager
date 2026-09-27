@@ -40,13 +40,25 @@ async function apiFetch(url, opts) {
   // v13.72: 타임아웃 커스터마이즈 가능 (AI 호출은 120s 등)
   //   기본 15s · opts.timeoutMs로 호출자 override
   var _timeoutMs = (typeof opts.timeoutMs === 'number' && opts.timeoutMs > 0) ? opts.timeoutMs : 15000;
-  var _abortCtrl = new AbortController();
-  var _abortTimer = setTimeout(function () { _abortCtrl.abort(); }, _timeoutMs);
-  if (!opts.signal) opts.signal = _abortCtrl.signal;
+  // v13.189: 타이머·AbortController 를 시도마다 새로 — 예전엔 첫 실패 때 타이머를 지운 뒤 같은 signal 로 재시도해
+  //   (a) 타임아웃 후 재시도가 이미 abort 된 signal 로 즉시 실패하거나 (b) 네트워크 오류 재시도가 타임아웃 없이 무한 대기했다
+  var _userSignal = opts.signal || null;
+  var _abortCtrl, _abortTimer;
+  function _arm() {
+    _abortCtrl = new AbortController();
+    clearTimeout(_abortTimer);
+    _abortTimer = setTimeout(function () { _abortCtrl.abort(); }, _timeoutMs);
+    if (_userSignal) {
+      if (_userSignal.aborted) _abortCtrl.abort();
+      else _userSignal.addEventListener('abort', function () { _abortCtrl.abort(); }, { once: true });
+    }
+    opts.signal = _abortCtrl.signal;
+  }
 
   var maxRetries = ((!opts.method || opts.method === 'GET') ? 2 : 0);
   var lastErr;
   for (var attempt = 0; attempt <= maxRetries; attempt++) {
+    _arm();
     try {
       var res = await fetch(API_BASE + url, opts);
 
@@ -61,6 +73,7 @@ async function apiFetch(url, opts) {
         var refreshed = await _tryRefresh();
         if (refreshed) {
           opts.headers['Authorization'] = 'Bearer ' + _accessToken;
+          _arm();
           res = await fetch(API_BASE + url, opts);
         } else {
           authLogout();
@@ -88,8 +101,8 @@ async function apiFetch(url, opts) {
     } catch (e) {
       clearTimeout(_abortTimer);
       lastErr = e;
-      // 네트워크 오류만 재시도 (4xx 등 응답 에러는 재시도하지 않음)
-      if (!e.status && attempt < maxRetries) {
+      // 네트워크 오류만 재시도 (4xx 등 응답 에러·타임아웃/취소(AbortError)는 재시도하지 않음)
+      if (!e.status && e.name !== 'AbortError' && attempt < maxRetries) {
         await new Promise(function(r) { setTimeout(r, 500 * (attempt + 1)); });
         continue;
       }
@@ -1433,8 +1446,7 @@ async function renderAuditLog() {
 /* ═══ eH 폴백 (HTML 이스케이프) ═══ */
 if (typeof eH === 'undefined') {
   var eH = function (s) {
-    if (!s) return '';
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   };
 }
 

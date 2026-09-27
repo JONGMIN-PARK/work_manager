@@ -55,6 +55,9 @@ function _trlInfo(n) {
   return { label: '초기', color: '#EF4444', dot: '🔴' };
 }
 function _tEsc(v) { return (typeof eH === 'function') ? eH(v == null ? '' : v) : String(v == null ? '' : v); }
+/** onclick="fn('여기')" 자리 값: ① JS 문자열 이스케이프(\, ') → ② HTML 속성 이스케이프 (order-view.js _orderJsStr 와 동일 규약) */
+function _tJsStr(v) { return _tEsc(String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'")); }
+function _tErrMsg(e) { return (e && e.message) || '권한 또는 서버 오류'; }
 function _tToast(m, t) { if (typeof showToast === 'function') showToast(m, t); }
 function _tCloseModal() { if (_techModal && _techModal.close) { _techModal.close(); _techModal = null; } }
 
@@ -64,6 +67,7 @@ function renderTech() {
   if (!wrap) return;
   wrap.innerHTML = '<div style="padding:20px;color:var(--t6);font-size:12px">로딩 중...</div>';
   _techFilter.stack = '';   // 전체 조회이므로 스택 필터 배지도 해제
+  _techUsageTargets = null; // 적용 대상(프로젝트·사전검토) 캐시도 새로 받도록
   Promise.all([techGetAll({}), techStacks()]).then(function (r) {
     _techList = r[0] || [];
     _techStacks = r[1] || [];
@@ -120,8 +124,8 @@ function _techRender() {
 
   html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
     '<input id="techQ" placeholder="기술명·코드·설명·스택 검색" value="' + _tEsc(_techFilter.q) + '" style="flex:1;min-width:150px;font-size:11px;padding:5px 8px" oninput="techSetQ(this.value)">' +
-    '<select class="si" style="font-size:11px;padding:4px" onchange="techSetCat(this.value)">' + catOpts + '</select>' +
-    '<select class="si" style="font-size:11px;padding:4px" onchange="techSetStatus(this.value)">' + stOpts + '</select>' +
+    '<select class="si" style="font-size:11px;padding:4px;width:auto;flex:0 0 auto" onchange="techSetCat(this.value)">' + catOpts + '</select>' +
+    '<select class="si" style="font-size:11px;padding:4px;width:auto;flex:0 0 auto" onchange="techSetStatus(this.value)">' + stOpts + '</select>' +
     '<label style="font-size:11px;color:var(--t4);display:flex;align-items:center;gap:4px">' +
       '<input type="checkbox"' + (_techFilter.mine ? ' checked' : '') + ' onchange="techSetMine(this.checked)"> 내 담당' +
     '</label>' +
@@ -203,14 +207,16 @@ function _techStackHtml() {
   _techStacks.forEach(function (s) { (byKind[s.kind || 'etc'] = byKind[s.kind || 'etc'] || []).push(s); });
   var maxCnt = _techStacks.reduce(function (m, s) { return Math.max(m, s.cnt); }, 1);
   var html = '<div style="font-size:10px;color:var(--t5);margin-bottom:8px">항목을 클릭하면 해당 스택을 쓰는 기술만 필터됩니다.</div>';
+  // wide-mode: 종류별 블록을 반응형 그리드로 배치
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:12px 20px;align-items:start">';
   Object.keys(TECH_STACK_KIND).forEach(function (k) {
     var list = byKind[k];
     if (!list || !list.length) return;
-    html += '<div style="margin-bottom:12px">' +
+    html += '<div style="min-width:0">' +
       '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px">' + TECH_STACK_KIND[k] + '</div>';
     list.forEach(function (s) {
       var pct = Math.round(s.cnt / maxCnt * 100);
-      html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer" onclick="techFilterByStack(\'' + _tEsc(s.name) + '\')">' +
+      html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer" onclick="techFilterByStack(\'' + _tJsStr(s.name) + '\')">' +
         '<span style="width:130px;font-size:11px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _tEsc(s.name) + '</span>' +
         '<div style="flex:1;height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:var(--ac)"></div></div>' +
         '<span style="font-size:10px;color:var(--t5);width:36px;text-align:right">' + s.cnt + '건</span>' +
@@ -219,6 +225,7 @@ function _techStackHtml() {
     });
     html += '</div>';
   });
+  html += '</div>';
   return html;
 }
 
@@ -264,6 +271,9 @@ function techFilterByStack(name) {
   techGetAll({ stack: name }).then(function (list) {
     _techList = list || [];
     _techRender();
+  }).catch(function (e) {
+    if (wrap) wrap.innerHTML = '<div style="padding:20px;color:var(--t6);font-size:12px">스택 필터 조회에 실패했습니다. <button class="btn btn-g btn-s" onclick="techClearStack()">필터 해제</button></div>';
+    _tToast('스택 필터 조회 실패: ' + _tErrMsg(e), 'error');
   });
 }
 /** 스택 필터 해제 → 전체 재조회 */
@@ -433,7 +443,8 @@ function techSave(id) {
 
 function techDelete(id) {
   if (!confirm('이 요소기술을 삭제할까요? (개발일지도 함께 숨겨집니다)')) return;
-  techDel(id).then(function () { _tCloseModal(); renderTech(); });
+  techDel(id).then(function () { _tCloseModal(); renderTech(); })
+    .catch(function (e) { _tToast('삭제 실패: ' + _tErrMsg(e), 'error'); });
 }
 
 /** 목록 데이터 재조회 후 화면 갱신 — 모달 뒤 카탈로그의 진척률·투입시간 반영 */
@@ -451,7 +462,8 @@ var _techUsageTargets = null;   // {projects:[], prestudies:[]} 캐시
 function techLoadUsages(techId) {
   var box = document.getElementById('tmUsages');
   if (!box) return;
-  techUsagesGet(techId).then(function (list) { _techRenderUsages(techId, list || []); });
+  techUsagesGet(techId).then(function (list) { _techRenderUsages(techId, list || []); })
+    .catch(function () { var b = document.getElementById('tmUsages'); if (b) b.innerHTML = '<div style="font-size:11px;color:var(--t6)">적용 이력을 불러오지 못했습니다.</div>'; });
 }
 
 /** 적용 대상 선택지(프로젝트·사전검토)를 1회 로드 */
@@ -525,14 +537,16 @@ function techUsageAddFromForm(techId) {
 
 function techUsageRemove(techId, usageId) {
   if (!confirm('이 적용 이력을 삭제할까요?')) return;
-  techUsageDel(techId, usageId).then(function () { techLoadUsages(techId); });
+  techUsageDel(techId, usageId).then(function () { techLoadUsages(techId); })
+    .catch(function (e) { _tToast('적용 이력 삭제 실패: ' + _tErrMsg(e), 'error'); });
 }
 
 /* ═══ 개발일지 ═══ */
 function techLoadLogs(techId) {
   var box = document.getElementById('tmLogs');
   if (!box) return;
-  techLogsGet(techId).then(function (logs) { _techRenderLogs(techId, logs || []); });
+  techLogsGet(techId).then(function (logs) { _techRenderLogs(techId, logs || []); })
+    .catch(function () { var b = document.getElementById('tmLogs'); if (b) b.innerHTML = '<div style="font-size:11px;color:var(--t6)">개발일지를 불러오지 못했습니다.</div>'; });
 }
 
 function _techRenderLogs(techId, logs) {
@@ -541,7 +555,9 @@ function _techRenderLogs(techId, logs) {
   var kindOpts = Object.keys(TECH_LOG_KIND).map(function (k) {
     return '<option value="' + k + '">' + TECH_LOG_KIND[k].icon + ' ' + TECH_LOG_KIND[k].label + '</option>';
   }).join('');
-  var todayStr = new Date().toISOString().slice(0, 10);
+  // 로컬 날짜 (toISOString 은 UTC → KST 09:00 이전엔 전날로 기본값이 잡힘)
+  var todayStr = (typeof localDate === 'function') ? localDate()
+    : (function (d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })(new Date());
 
   var html = '<div style="border-top:1px solid var(--bd);padding-top:10px">' +
     '<div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">📓 개발일지 <span style="color:var(--t6);font-weight:400">(' + logs.length + ')</span></div>';
@@ -605,5 +621,5 @@ function techLogDelete(techId, logId) {
   techLogDel(techId, logId).then(function () {
     techLoadLogs(techId);
     _techRefreshList();
-  });
+  }).catch(function (e) { _tToast('일지 삭제 실패: ' + _tErrMsg(e), 'error'); });
 }

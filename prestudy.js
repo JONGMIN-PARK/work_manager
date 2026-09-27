@@ -94,7 +94,7 @@ function _psRender() {
 
   html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
     '<input id="psQ" placeholder="제목·업체·내용 검색" value="' + _psEsc(_psFilter.q) + '" style="flex:1;min-width:140px;font-size:11px;padding:5px 8px" oninput="psSetQ(this.value)">' +
-    '<select class="si" style="font-size:11px;padding:4px" onchange="psSetClient(this.value)">' + clientOpts + '</select>' +
+    '<select class="si" style="font-size:11px;padding:4px;width:auto;flex:0 0 auto" onchange="psSetClient(this.value)">' + clientOpts + '</select>' +
     '<label style="font-size:11px;color:var(--t4);display:flex;align-items:center;gap:4px">' +
       '<input type="checkbox"' + (_psFilter.mine ? ' checked' : '') + ' onchange="psSetMine(this.checked)"> 내 담당' +
     '</label>' +
@@ -114,7 +114,7 @@ function _psBoardHtml(items) {
   PS_STATUS.forEach(function (col) {
     var colItems = items.filter(function (p) { return p.status === col.key; });
     html += '<div data-ps-lane="' + col.key + '" ondragover="psDragOver(event)" ondragleave="psDragLeave(event)" ondrop="psDrop(event,\'' + col.key + '\')"' +
-      ' style="flex:0 0 190px;min-width:190px;border-radius:8px;transition:background .15s">';
+      ' style="flex:1 1 190px;min-width:190px;max-width:380px;border-radius:8px;transition:background .15s">';
     html += '<div style="font-size:11px;font-weight:700;color:' + col.color + ';padding:4px 6px;border-bottom:2px solid ' + col.color + '33;margin-bottom:6px">' +
       col.icon + ' ' + col.label + ' <span style="color:var(--t6)">(' + colItems.length + ')</span></div>';
     if (!colItems.length) {
@@ -157,12 +157,13 @@ function _psClientHtml(items) {
   var keys = Object.keys(byClient).sort(function (a, b) { return byClient[b].length - byClient[a].length; });
   if (!keys.length) return '<div style="font-size:12px;color:var(--t6);padding:16px">해당 조건의 검토 건이 없습니다.</div>';
 
-  var html = '';
+  // wide-mode: 업체 카드를 반응형 그리드로 배치
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px;align-items:start">';
   keys.forEach(function (c) {
     var list = byClient[c];
     var openCnt = list.filter(function (p) { return p.status !== 'won' && p.status !== 'dropped'; }).length;
     var wonCnt = list.filter(function (p) { return p.status === 'won'; }).length;
-    html += '<div style="border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:10px">' +
+    html += '<div style="border:1px solid var(--bd);border-radius:8px;padding:10px;min-width:0">' +
       '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
         '<span style="font-size:13px;font-weight:700;color:var(--t1)">🏢 ' + _psEsc(c) + '</span>' +
         '<span style="font-size:10px;color:var(--t5)">진행 ' + openCnt + ' · 확정 ' + wonCnt + ' / 전체 ' + list.length + '</span>' +
@@ -180,6 +181,7 @@ function _psClientHtml(items) {
     });
     html += '</div>';
   });
+  html += '</div>';
   return html;
 }
 
@@ -209,7 +211,12 @@ function _psListHtml(items) {
 }
 
 /* ═══ 필터/뷰 ═══ */
-function _psToday() { return new Date().toISOString().slice(0, 10); }
+// 로컬 날짜 기준 (toISOString 은 UTC → KST 09:00 이전엔 하루 전 날짜가 됨)
+function _psToday() {
+  if (typeof localDate === 'function') return localDate();
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 
 /* ═══ 칸반 드래그앤드롭 ═══ */
 var _psDragId = null;
@@ -407,7 +414,7 @@ function psDelete(id) {
   prestudyDel(id).then(function () {
     _psCloseModal();
     renderPrestudy();
-  });
+  }).catch(function (e) { _psToast('삭제 실패: ' + ((e && e.message) || '권한 또는 서버 오류'), 'error'); });
 }
 
 function psConvert(id, target) {
@@ -491,5 +498,6 @@ function psTechLink(prestudyId) {
 
 function psTechUnlink(techId, usageId, prestudyId) {
   if (!confirm('이 요소기술 연결을 해제할까요?')) return;
-  techUsageDel(techId, usageId).then(function () { psLoadTech(prestudyId); });
+  techUsageDel(techId, usageId).then(function () { psLoadTech(prestudyId); })
+    .catch(function (e) { _psToast('연결 해제 실패: ' + ((e && e.message) || '권한 또는 서버 오류'), 'error'); });
 }

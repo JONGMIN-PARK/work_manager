@@ -17,6 +17,33 @@ var issueFilterProject = '';
 var issueFilterOrderNo = ''; // v13.39: 수주대장 → 이슈관리 크로스탭 필터
 var issueSearchKw = '';
 var issueShowStats = false;
+var _issueQTimer = null;
+
+/* 검색 입력 — 디바운스 후 1회 렌더, 렌더 뒤 포커스·캐럿 복원 (IME 조합 중 재렌더로 입력이 끊기던 문제) */
+function issueSetQ(v) {
+  issueSearchKw = v || '';
+  clearTimeout(_issueQTimer);
+  _issueQTimer = setTimeout(function () {
+    renderIssues(function () {
+      var el = document.getElementById('issueQ');
+      if (el) { el.focus(); var n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} }
+    });
+  }, 250);
+}
+
+/* 요약 카드 클릭 → 상태/긴급도 필터 토글 */
+function issueCardFilter(kind) {
+  if (kind === 'urgent') {
+    var onU = issueFilterUrgency === 'urgent' && !issueFilterStatus;
+    issueFilterUrgency = onU ? '' : 'urgent';
+    issueFilterStatus = '';
+  } else {
+    var onS = issueFilterStatus === kind && !issueFilterUrgency;
+    issueFilterStatus = onS ? '' : kind;
+    issueFilterUrgency = '';
+  }
+  renderIssues();
+}
 
 /* 대응 이력 유형 아이콘 */
 var LOG_TYPE_ICON = {
@@ -26,7 +53,7 @@ var LOG_TYPE_ICON = {
 var LOG_TYPES = ['접수', '원인분석', '원격대응', '현장출동', '부품교체', '설계변경', '협의', '완료', '기타'];
 
 /* ═══ 메인 렌더링 ═══ */
-function renderIssues() {
+function renderIssues(afterRender) {
   var wrap = document.getElementById('issuesWrap');
   if (!wrap) return;
 
@@ -36,10 +63,9 @@ function renderIssues() {
   var statuses = typeof ISSUE_STATUS !== 'undefined' ? ISSUE_STATUS : {};
   var urgencies = typeof ISSUE_URGENCY !== 'undefined' ? ISSUE_URGENCY : {};
 
-  Promise.all([issueGetAll(), projGetAll(), orderGetAll()]).then(function (results) {
+  return Promise.all([issueGetAll(), projGetAll()]).then(function (results) {
     var allIssues = results[0] || [];
     var projects = results[1] || [];
-    var orders = results[2] || [];
 
     // 프로젝트 맵
     var projMap = {};
@@ -56,11 +82,18 @@ function renderIssues() {
       if (issueFilterOrderNo && iss.orderNo !== issueFilterOrderNo) return false;
       if (issueSearchKw) {
         var kw = issueSearchKw.toLowerCase();
-        if ((iss.title || '').toLowerCase().indexOf(kw) < 0 &&
-            (iss.description || '').toLowerCase().indexOf(kw) < 0) return false;
+        var pj = projMap[iss.projectId];
+        var hay = [iss.title, iss.description, iss.orderNo, pj ? pj.name : '', pj ? pj.orderNo : '',
+          (iss.assignees || []).join(' '), iss.reporter].join(' ').toLowerCase();
+        if (hay.indexOf(kw) < 0) return false;
       }
       return true;
     });
+
+    // 일괄 선택 정리 — 현재 필터 결과에 없는(숨겨진·삭제된) 이슈는 선택 해제 → 보이지 않는 이슈 일괄 삭제 방지
+    var visibleIds = {};
+    issues.forEach(function (iss) { visibleIds[iss.id] = true; });
+    Object.keys(issueBulkSelected).forEach(function (id) { if (!visibleIds[id]) delete issueBulkSelected[id]; });
 
     // 정렬
     issues.sort(function (a, b) {
@@ -99,10 +132,10 @@ function renderIssues() {
     html += '</div></div></div>';
 
     // ─── 요약 카드 ───
-    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">';
-    html += issueStatCard('접수', openCnt, '#6366F1');
-    html += issueStatCard('긴급', urgentCnt, '#EF4444');
-    html += issueStatCard('대응중', inProgCnt, '#3B82F6');
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,240px));gap:10px;margin-bottom:12px">';
+    html += issueStatCard('접수', openCnt, '#6366F1', 'open', issueFilterStatus === 'open' && !issueFilterUrgency);
+    html += issueStatCard('긴급', urgentCnt, '#EF4444', 'urgent', issueFilterUrgency === 'urgent' && !issueFilterStatus);
+    html += issueStatCard('대응중', inProgCnt, '#3B82F6', 'inProgress', issueFilterStatus === 'inProgress' && !issueFilterUrgency);
     html += issueStatCard('해결/종결', resolvedCnt, '#10B981');
     html += '</div>';
 
@@ -122,10 +155,9 @@ function renderIssues() {
     });
     html += '</select>';
     // 키워드 검색
-    html += '<input type="text" placeholder="🔍 검색..." value="' + eH(issueSearchKw) + '" oninput="issueSearchKw=this.value;renderIssues()" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3);width:120px">';
+    html += '<input type="text" id="issueQ" placeholder="🔍 제목·내용·수주번호·프로젝트·담당자" value="' + eH(issueSearchKw) + '" oninput="issueSetQ(this.value)" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3);flex:1;min-width:160px;max-width:360px">';
     // 수주번호 활성 필터 배지 (크로스탭 진입 시 표시)
     if (issueFilterOrderNo) {
-      var safeOrd = String(issueFilterOrderNo).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       html += '<span style="font-size:10px;padding:3px 8px;border:1px solid var(--ac);border-radius:4px;background:var(--ac-bg);color:var(--ac-t);display:inline-flex;align-items:center;gap:4px" title="이 수주의 이슈만 표시 중">📋 수주 ' + eH(issueFilterOrderNo) + ' <span style="cursor:pointer;font-weight:700;padding:0 2px" onclick="issueFilterOrderNo=\'\';renderIssues()" title="필터 해제">✕</span></span>';
     }
     if (issueFilterPhase || issueFilterDept || issueFilterType || issueFilterStatus || issueFilterUrgency || issueFilterProject || issueFilterOrderNo || issueSearchKw) {
@@ -135,18 +167,19 @@ function renderIssues() {
 
     // ─── 테이블 ───
     html += '<div class="pnl" style="padding:0;overflow-x:auto">';
-    html += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    // v13.189 wide-mode: 고정 레이아웃 — 고정 폭 컬럼은 th width, 제목만 가변(말줄임)
+    html += '<table style="width:100%;min-width:1000px;table-layout:fixed;border-collapse:collapse;font-size:11px">';
     html += '<thead><tr style="background:var(--bg-i);border-bottom:2px solid var(--bd)">';
     html += '<th style="padding:8px 6px;width:32px"><input type="checkbox" id="issueBulkAll" onclick="issueToggleAllBulk()" title="전체 선택"></th>';
     var cols = [
       { key: 'seq', label: '#', w: '40px' },
-      { key: 'reportDate', label: '등록일', w: '75px' },
-      { key: 'project', label: '프로젝트', w: '120px' },
-      { key: 'phase', label: '단계', w: '60px' },
-      { key: 'dept', label: '부서', w: '70px' },
-      { key: 'type', label: '유형', w: '70px' },
-      { key: 'urgency', label: '긴급도', w: '55px' },
-      { key: 'status', label: '상태', w: '60px' },
+      { key: 'reportDate', label: '등록일', w: '90px' },
+      { key: 'project', label: '프로젝트', w: '180px' },
+      { key: 'phase', label: '단계', w: '80px' },
+      { key: 'dept', label: '부서', w: '80px' },
+      { key: 'type', label: '유형', w: '80px' },
+      { key: 'urgency', label: '긴급도', w: '70px' },
+      { key: 'status', label: '상태', w: '70px' },
       { key: 'title', label: '제목', w: '' },
       { key: 'actions', label: '', w: '60px' }
     ];
@@ -161,7 +194,7 @@ function renderIssues() {
 
     if (issues.length === 0) {
       html += '<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--t6)">';
-      html += allIssues.length === 0 ? '등록된 이슈가 없습니다. <button onclick="showIssueModal()" style="border:none;background:none;color:#6366F1;cursor:pointer;text-decoration:underline">첫 이슈 등록</button>' : '필터 조건에 맞는 이슈가 없습니다.';
+      html += allIssues.length === 0 ? '등록된 이슈가 없습니다. <button onclick="showIssueModal()" style="border:none;background:none;color:#6366F1;cursor:pointer;text-decoration:underline">첫 이슈 등록</button>' : '<div style="font-weight:600;color:var(--t3);margin-bottom:6px">필터 결과 없음</div>필터 조건에 맞는 이슈가 없습니다. (전체 ' + allIssues.length + '건) <button onclick="issueClearFilters()" style="border:none;background:none;color:#6366F1;cursor:pointer;text-decoration:underline">필터 초기화</button>';
       html += '</td></tr>';
     }
 
@@ -181,14 +214,15 @@ function renderIssues() {
       html += '<tr style="border-bottom:1px solid var(--bd);background:' + rowBg + ';cursor:pointer" onclick="showIssueDetail(\'' + safeId + '\')" title="' + eH(iss.title) + '">';
       html += '<td style="padding:6px" onclick="event.stopPropagation()"><input type="checkbox" data-bulk-id="' + eH(iss.id) + '" onclick="issueToggleBulk(\'' + safeId + '\')" ' + isChecked + '></td>';
       html += '<td style="padding:6px;color:var(--t5);font-size:10px">' + (idx + 1) + '</td>';
-      html += '<td style="padding:6px;color:var(--t3);white-space:nowrap">' + (iss.reportDate || '').slice(5) + '</td>';
-      html += '<td style="padding:6px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">' + eH(projName) + '</td>';
-      html += '<td style="padding:6px"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + ph.color + '22;color:' + ph.color + ';white-space:nowrap">' + ph.icon + ' ' + ph.label + '</span></td>';
-      html += '<td style="padding:6px"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + dp.color + '22;color:' + dp.color + ';white-space:nowrap">' + dp.icon + ' ' + dp.label + '</span></td>';
-      html += '<td style="padding:6px"><span style="font-size:10px;white-space:nowrap">' + tp.icon + ' ' + tp.label + '</span></td>';
-      html += '<td style="padding:6px"><span style="font-size:10px;white-space:nowrap">' + ug.icon + ' ' + ug.label + '</span></td>';
-      html += '<td style="padding:6px"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + st.color + '22;color:' + st.color + ';font-weight:600;white-space:nowrap">' + st.label + '</span></td>';
-      html += '<td style="padding:6px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t1);font-weight:500">' + eH(iss.title) + '</td>';
+      var ell = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      html += '<td style="padding:6px;color:var(--t3);' + ell + '">' + eH((iss.reportDate || '').slice(0, 10)) + '</td>';
+      html += '<td style="padding:6px;' + ell + 'color:var(--t2)" title="' + eH(projName) + '">' + eH(projName) + '</td>';
+      html += '<td style="padding:6px;' + ell + '"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + ph.color + '22;color:' + ph.color + ';white-space:nowrap">' + ph.icon + ' ' + ph.label + '</span></td>';
+      html += '<td style="padding:6px;' + ell + '"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + dp.color + '22;color:' + dp.color + ';white-space:nowrap">' + dp.icon + ' ' + dp.label + '</span></td>';
+      html += '<td style="padding:6px;' + ell + '"><span style="font-size:10px;white-space:nowrap">' + tp.icon + ' ' + tp.label + '</span></td>';
+      html += '<td style="padding:6px;' + ell + '"><span style="font-size:10px;white-space:nowrap">' + ug.icon + ' ' + ug.label + '</span></td>';
+      html += '<td style="padding:6px;' + ell + '"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + st.color + '22;color:' + st.color + ';font-weight:600;white-space:nowrap">' + st.label + '</span></td>';
+      html += '<td style="padding:6px;' + ell + 'color:var(--t1);font-weight:500">' + eH(iss.title) + '</td>';
       html += '<td style="padding:6px;white-space:nowrap" onclick="event.stopPropagation()">';
       html += '<button onclick="showIssueModal(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="편집">✏️</button>';
       html += '<button onclick="confirmDeleteIssue(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="삭제">🗑️</button>';
@@ -200,19 +234,26 @@ function renderIssues() {
     // ─── 통계 패널 ───
     if (issueShowStats) {
       html += buildIssueStats(allIssues, projMap, phases, depts, types, statuses, urgencies);
-      html += '<div class="pnl" style="margin-top:12px;padding:18px"><div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:12px">📈 월별 이슈 트렌드 (최근 6개월)</div><canvas id="issueTrendCanvas" height="80"></canvas></div>';
+      html += '<div class="pnl" style="margin-top:12px;padding:18px"><div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:12px">📈 월별 이슈 트렌드 (최근 6개월)</div><div style="position:relative;height:260px"><canvas id="issueTrendCanvas"></canvas></div></div>';
     }
 
     wrap.innerHTML = html;
 
-    // ─── 일괄 작업 바 렌더 ───
+    // ─── 일괄 작업 바 렌더 + 전체선택 체크박스 동기화 ───
     renderIssueBulkBar();
+    var _allChk = document.getElementById('issueBulkAll');
+    if (_allChk) {
+      var _selCnt = Object.keys(issueBulkSelected).length;
+      _allChk.checked = issues.length > 0 && _selCnt === issues.length;
+      _allChk.indeterminate = _selCnt > 0 && _selCnt < issues.length;
+    }
 
     // ─── 트렌드 차트 렌더 ───
     if (issueShowStats && typeof Chart !== 'undefined') {
       if (_issueTrendChart) { _issueTrendChart.destroy(); _issueTrendChart = null; }
       renderIssueTrendChart(allIssues);
     }
+    if (typeof afterRender === 'function') afterRender();
   }).catch(function (err) {
     console.error('[renderIssues]', err);
     showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
@@ -274,6 +315,7 @@ function renderIssueTrendChart(issues) {
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: { labels: { font: { size: 11 }, color: '#94A3B8' } }
       },
@@ -286,8 +328,11 @@ function renderIssueTrendChart(issues) {
 }
 
 /* ═══ 유틸 함수 ═══ */
-function issueStatCard(label, count, color) {
-  return '<div class="pnl" style="padding:12px;text-align:center">' +
+function issueStatCard(label, count, color, filterKey, active) {
+  var attrs = filterKey
+    ? ' onclick="issueCardFilter(\'' + filterKey + '\')" title="클릭하여 ' + label + ' 필터 ' + (active ? '해제' : '적용') + '" style="padding:12px;text-align:center;cursor:pointer' + (active ? ';outline:2px solid ' + color + ';outline-offset:-2px' : '') + '"'
+    : ' style="padding:12px;text-align:center"';
+  return '<div class="pnl"' + attrs + '>' +
     '<div style="font-size:22px;font-weight:700;color:' + color + '">' + count + '</div>' +
     '<div style="font-size:10px;color:var(--t5);margin-top:2px">' + label + '</div></div>';
 }
@@ -511,6 +556,7 @@ function saveIssueModal(isEdit, editId) {
 function confirmDeleteIssue(id) {
   if (!confirm('이 이슈와 모든 대응 이력을 삭제하시겠습니까?')) return;
   deleteIssueCascade(id).then(function () {
+    delete issueBulkSelected[id];
     showToast('이슈가 삭제되었습니다.');
     // 상세 패널도 닫기
     var panel = document.getElementById('issueDetailPanel');
@@ -826,6 +872,8 @@ function issueRepeatDetectOn() {
 function buildIssueStats(issues, projMap, phases, depts, types, statuses, urgencies) {
   var h = '<div class="pnl" style="margin-top:12px;padding:18px">';
   h += '<div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:14px">📊 이슈 통계</div>';
+  // wide-mode: 섹션을 가로로 배치 (좁은 화면에서는 자동으로 1열)
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:16px 24px;align-items:start">';
 
   // 1. 부서 × 상태 히트맵
   var deptKeys = Object.keys(depts);
@@ -841,7 +889,7 @@ function buildIssueStats(issues, projMap, phases, depts, types, statuses, urgenc
     }
   });
 
-  h += '<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:8px">부서 x 상태</div>';
+  h += '<div style="min-width:0"><div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:8px">부서 x 상태</div>';
   h += '<table style="width:100%;border-collapse:collapse;font-size:10px">';
   h += '<thead><tr><th style="padding:4px 6px;text-align:left;color:var(--t5)">부서</th>';
   statusKeys.forEach(function (sk) {
@@ -871,7 +919,7 @@ function buildIssueStats(issues, projMap, phases, depts, types, statuses, urgenc
   phaseKeys.forEach(function (k) { phaseCounts[k] = 0; });
   issues.forEach(function (iss) { if (phaseCounts[iss.phase] !== undefined) { phaseCounts[iss.phase]++; if (phaseCounts[iss.phase] > maxPhaseCnt) maxPhaseCnt = phaseCounts[iss.phase]; } });
 
-  h += '<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:8px">단계별 이슈 분포</div>';
+  h += '<div style="min-width:0"><div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:8px">단계별 이슈 분포</div>';
   phaseKeys.forEach(function (k) {
     var cnt = phaseCounts[k];
     var pct = Math.round(cnt / maxPhaseCnt * 100);
@@ -897,7 +945,7 @@ function buildIssueStats(issues, projMap, phases, depts, types, statuses, urgenc
   }).sort(function (a, b) { return b.count - a.count; }).slice(0, 5);
 
   if (projRank.length > 0) {
-    h += '<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:8px">프로젝트별 이슈 빈도 TOP5</div>';
+    h += '<div style="min-width:0"><div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:8px">프로젝트별 이슈 빈도 TOP5</div>';
     projRank.forEach(function (r, i) {
       h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:10px">';
       h += '<span style="width:16px;color:var(--t5);text-align:right">' + (i + 1) + '.</span>';
@@ -937,7 +985,7 @@ function buildIssueStats(issues, projMap, phases, depts, types, statuses, urgenc
     h += '</div></div>';
   }
 
-  h += '</div>';
+  h += '</div></div>';
   return h;
 }
 
@@ -1120,13 +1168,7 @@ function daysBetween(d1, d2) {
   return Math.max(0, Math.round((b - a) / 86400000));
 }
 
-/* ═══ eH / localDate / daysDiff 폴백 ═══ */
+/* ═══ eH 폴백 ═══ (localDate·daysDiff 는 project-data.js 가 항상 먼저 정의) */
 if (typeof eH === 'undefined') {
-  function eH(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-}
-if (typeof localDate === 'undefined') {
-  function localDate() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
-}
-if (typeof daysDiff === 'undefined') {
-  function daysDiff(d1, d2) { return Math.max(0, Math.round((new Date(d2) - new Date(d1)) / 86400000)); }
+  function eH(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 }

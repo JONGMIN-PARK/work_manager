@@ -32,6 +32,7 @@
 var _asStatsData = null;       // 마지막 응답 (drill-down 시 컨텍스트)
 var _asStatsCharts = [];       // Chart 인스턴스 (destroy 보관)
 var _asStatsLoading = false;
+var _asStatsSeq = 0;           // 요청 순번 — 이전 기간/필터 응답이 새 결과를 덮어쓰지 않도록
 var _asStatsPreset = '90d';    // 7d|30d|90d|6m|12m|custom
 var _asStatsCustomFrom = '';
 var _asStatsCustomTo = '';
@@ -109,9 +110,9 @@ function _asStatsShellHtml() {
   h += '</div>';
   // custom 기간 입력
   h += '<span id="asStatsCustomRange" style="display:' + (_asStatsPreset === 'custom' ? 'inline-flex' : 'none') + ';gap:4px;align-items:center">';
-  h += '<input type="date" id="asStatsFrom" value="' + _asStatsCustomFrom + '" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
+  h += '<input type="date" id="asStatsFrom" value="' + _asStatsEsc(_asStatsCustomFrom) + '" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
   h += '<span style="color:var(--t5)">~</span>';
-  h += '<input type="date" id="asStatsTo" value="' + _asStatsCustomTo + '" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
+  h += '<input type="date" id="asStatsTo" value="' + _asStatsEsc(_asStatsCustomTo) + '" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
   h += '<button id="asStatsApplyCustom" style="font-size:10px;padding:3px 8px;border:none;border-radius:4px;background:#F59E0B;color:#fff;cursor:pointer">적용</button>';
   h += '</span>';
   // 주간 발사
@@ -131,11 +132,11 @@ function _asStatsShellHtml() {
   var _CAT = typeof AS_CATEGORY !== 'undefined' ? AS_CATEGORY : {};
   if (window._AS_CAT_CACHE && window._AS_CAT_CACHE.length) {
     window._AS_CAT_CACHE.forEach(function (c) {
-      h += '<option value="' + c.code + '"' + (_asStatsFilter.category === c.code ? ' selected' : '') + '>' + (c.icon || '') + ' ' + c.label + '</option>';
+      h += '<option value="' + _asStatsEsc(c.code) + '"' + (_asStatsFilter.category === c.code ? ' selected' : '') + '>' + _asStatsEsc(c.icon || '') + ' ' + _asStatsEsc(c.label) + '</option>';
     });
   } else {
     Object.keys(_CAT).forEach(function (k) {
-      h += '<option value="' + k + '"' + (_asStatsFilter.category === k ? ' selected' : '') + '>' + (_CAT[k].icon || '') + ' ' + _CAT[k].label + '</option>';
+      h += '<option value="' + _asStatsEsc(k) + '"' + (_asStatsFilter.category === k ? ' selected' : '') + '>' + _asStatsEsc(_CAT[k].icon || '') + ' ' + _asStatsEsc(_CAT[k].label) + '</option>';
     });
   }
   h += '</select>';
@@ -222,7 +223,9 @@ function _asStatsBindControls() {
 }
 
 function _asStatsFetch() {
-  if (_asStatsLoading) return;
+  // 이전: 로딩 중이면 early-return → 로딩 중 기간을 바꾸면 새 요청이 무시되고 옛 기간 결과가 표시됨.
+  // 이제: 매 요청마다 순번을 올리고, 응답 시 최신 순번이 아니면 버린다.
+  var seq = ++_asStatsSeq;
   _asStatsLoading = true;
   _asStatsDestroy();
   var p = _asStatsResolvePeriod();
@@ -236,12 +239,15 @@ function _asStatsFetch() {
   if (_asStatsFilter.priority) qparams.priority = _asStatsFilter.priority;
   if (_asStatsFilter.customer) qparams.customer = _asStatsFilter.customer;
   asStatsGet(qparams).then(function (d) {
+    if (seq !== _asStatsSeq) return;
     _asStatsLoading = false;
     _asStatsData = d;
     _asStatsRender();
   }).catch(function (err) {
+    if (seq !== _asStatsSeq) return;
     _asStatsLoading = false;
-    if (body) body.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:#EF4444">통계 로드 실패: ' + ((err && err.message) || '알 수 없는 오류') + '</div>';
+    var b = document.getElementById('asStatsBody');
+    if (b) b.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:#EF4444">통계 로드 실패: ' + _asStatsEsc((err && err.message) || '알 수 없는 오류') + '</div>';
   });
 }
 
@@ -264,9 +270,13 @@ function _asStatsRender() {
     return;
   }
 
+  _asStatsInjectStyle();
   var h = '';
-  // 건강 점수 (큰 카드 — 가장 위에)
+  // 1행: 추이 (큰 라인) + 건강 점수 — 넓은 화면에선 나란히, 좁으면 세로 스택 (#asStatsTop 미디어쿼리)
+  h += '<div id="asStatsTop">';
+  h += _asStatsHtmlChartCell('chart_trend', '📈 신규/종결 추이', '신규 접수와 종결 건수의 시간 흐름', null, 'large');
   h += _asStatsHtmlHealthScore(d.kpi.healthScore);
+  h += '</div>';
   // 🤖 AI 자연어 코멘트 (Claude) — 컨테이너만 띄우고 비동기 로드
   h += '<div id="asStatsAiCard" style="margin-bottom:12px"></div>';
   setTimeout(function () { _asStatsLoadAiInsight(); }, 0);
@@ -274,33 +284,18 @@ function _asStatsRender() {
   h += _asStatsHtmlInsights(d.insights || []);
   // KPI
   h += _asStatsHtmlKpi(d.kpi);
-  // 1행: 추이 (큰 라인)
-  h += _asStatsHtmlChartCell('chart_trend', '📈 신규/종결 추이', '신규 접수와 종결 건수의 시간 흐름', null, 'large');
-  // 2행: 카테고리 도넛 + 긴급도 + 상태
-  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px" id="asStatsRow2">';
+  // 소형 차트 — 하나의 auto-fill 그리드 (화면 폭에 따라 열 수 자동)
+  h += '<div id="asStatsGrid">';
   h += _asStatsHtmlChartCell('chart_category', '🏷️ 카테고리 분포', '발생 빈도가 높은 유형', null, 'small', true);
   h += _asStatsHtmlChartCell('chart_priority', '🚦 긴급도 분포', '', null, 'small', true);
   h += _asStatsHtmlChartCell('chart_status',   '📌 상태 분포', '', null, 'small', true);
-  h += '</div>';
-  // 3행: SLA 막대 + 부서 부하
-  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px">';
   h += _asStatsHtmlChartCell('chart_sla', '⏱️ SLA 준수율 (긴급도별)', '약속 시간 내 종결 비율', null, 'small');
   h += _asStatsHtmlChartCell('chart_dept', '👥 부서별 처리 부하', '활동로그 누적 소요시간 (시)', null, 'small');
-  h += '</div>';
-  // 4행: MTTR + Top 고객
-  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px">';
   h += _asStatsHtmlChartCell('chart_mttr', '⚡ MTTR 추이', '평균 처리 시간 (h)', null, 'small');
   h += _asStatsHtmlChartCell('chart_topCustomers', '🎯 Top 10 고객 (Pareto)', '발생 빈도 상위', null, 'small');
-  h += '</div>';
-  // 5행: Top 장비 + RCA
-  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px">';
   h += _asStatsHtmlChartCell('chart_topEquipment', '🔧 Top 10 장비모델', '', null, 'small');
   h += _asStatsHtmlChartCell('chart_rca', '🔍 완료분류 / RCA', '종결 케이스의 closure 분포', null, 'small');
-  h += '</div>';
-  // 6행: CSAT
   h += _asStatsHtmlChartCell('chart_csat', '⭐ CSAT 추이', '응답속도·처리품질·전반 만족도 (5점 척도)', null, 'small');
-  // 7행: 부품 비용 (도넛 + 월별)
-  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:12px">';
   h += _asStatsHtmlChartCell('chart_partsBilling', '💰 부품 비용 — 청구구분별', '', null, 'small', true);
   h += _asStatsHtmlChartCell('chart_partsMonth', '💵 부품 비용 — 월별 누적', '청구구분 색상별 스택', null, 'small');
   h += '</div>';
@@ -482,7 +477,23 @@ function _asStatsHtmlChartCell(canvasId, title, sub, drillKey, size, isDoughnut)
 
 function _asStatsEsc(s) {
   if (s == null) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* 와이드 레이아웃 스타일 (1회 주입) */
+function _asStatsInjectStyle() {
+  if (document.getElementById('asStatsWideStyle')) return;
+  var st = document.createElement('style');
+  st.id = 'asStatsWideStyle';
+  st.textContent =
+    '#asStatsTop{display:grid;grid-template-columns:minmax(0,2fr) minmax(360px,1fr);gap:12px;margin-bottom:12px;align-items:stretch}' +
+    '#asStatsTop>.pnl{margin-bottom:0!important}' +
+    '#asStatsGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(440px,100%),1fr));gap:12px;margin-bottom:12px}' +
+    '#asStatsGrid>.pnl{margin-bottom:0}' +
+    '@media(max-width:1100px){#asStatsTop{grid-template-columns:minmax(0,1fr)}}';
+  document.head.appendChild(st);
 }
 
 function _asStatsFmtBucket(iso, groupBy) {
@@ -497,7 +508,6 @@ function _asStatsFmtBucket(iso, groupBy) {
 
 /* ─── 차트 그리기 ─── */
 function _asStatsDrawAll(d) {
-  var grid = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   var gridColor = 'rgba(148,163,184,0.15)';
   var tickColor = 'rgba(148,163,184,0.85)';
   Chart.defaults.font.family = 'Noto Sans KR, Malgun Gothic, sans-serif';

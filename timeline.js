@@ -3,7 +3,7 @@
  */
 
 /* ═══ 메모 HTML 헬퍼 (v13.35~) — timeline.js 와 project-detail.js 가 공유 ═══
-   주의: core-logic.js 는 현재 HTML 에서 로드되지 않으므로 여기에 정의. */
+   (예전 core-logic.js 에 있던 것 — 그 파일은 로드된 적이 없어 v13.189 에 삭제) */
 function isHtmlMemo(memo) {
   return /<(img|br|p|div|span|b|i|u|strong|em|a|ul|ol|li|h[1-6]|blockquote|code|pre)\b/i.test(memo || '');
 }
@@ -2011,7 +2011,7 @@ async function exportProjectsJSON() {
   var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'project-data-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.download = 'project-data-' + localDate() + '.json';
   a.click();
 }
 

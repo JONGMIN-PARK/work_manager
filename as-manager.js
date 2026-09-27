@@ -64,8 +64,15 @@ function _asAdminOnly() {
 /* ═══ 헬퍼 ═══ */
 function _asEsc(s) {
   if (s == null) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+/* onclick="fn('...')" 안의 JS 문자열 인자용 — JS 이스케이프(\, ') 후 HTML 이스케이프.
+   (_asEsc 가 ' → &#39; 로 바꾸므로 기존 _asEsc(x).replace(/'/g, "\\'") 는 동작하지 않았음) */
+function _asJsArg(s) {
+  if (s == null) return '';
+  return _asEsc(String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 }
 function _asFmtDate(iso) {
   if (!iso) return '-';
@@ -90,13 +97,18 @@ function _asElapsed(iso) {
   return Math.floor(h / 24) + '일 전';
 }
 
-/* ═══ 메인 렌더링 ═══ */
-function renderAS() {
+/* ═══ 메인 렌더링 ═══
+ * opts.useCache: 검색·필터 변경처럼 클라이언트 필터만 바뀌는 경우 직전 조회 결과(같은 보기 모드)를 재사용.
+ * 변경(저장·삭제·상태이동) 후에는 renderAS()로 재조회. */
+var _asListCache = null;   // { key: asViewMode, rows: [...] }
+var _asRenderSeq = 0;      // 느린 이전 응답이 새 렌더를 덮어쓰지 않도록
+function renderAS(opts) {
   var wrap = document.getElementById('asWrap');
-  if (!wrap) return;
+  if (!wrap) return Promise.resolve();
 
   // 통계 모드는 별도 모듈에 위임
   if (asViewMode === 'stats') {
+    ++_asRenderSeq;   // 진행 중인 목록 조회가 통계 화면을 덮어쓰지 않도록
     if (typeof renderASStats === 'function') {
       renderASStats();
       return;
@@ -117,12 +129,24 @@ function renderAS() {
   if (asViewMode === 'myqueue') listParams = { myQueue: 1 };
   else if (asViewMode === 'trash') listParams = { trashed: 1 };
 
-  // 휴지통 카운트는 항상 별도 조회 (배지 표시용, 가벼움)
-  var pTrashCount = (asViewMode !== 'trash')
-    ? asGetAll({ trashed: 1 }).then(function (rows) { _asTrashCount = (rows || []).length; }).catch(function () { _asTrashCount = 0; })
-    : Promise.resolve();
+  var seq = ++_asRenderSeq;
+  var cacheKey = asViewMode;
+  var pData;
+  if (opts && opts.useCache && _asListCache && _asListCache.key === cacheKey) {
+    pData = Promise.all([_asListCache.rows, _asLoadCats()]);
+  } else {
+    // 휴지통 카운트는 항상 별도 조회 (배지 표시용, 가벼움)
+    var pTrashCount = (asViewMode !== 'trash')
+      ? asGetAll({ trashed: 1 }).then(function (rows) { _asTrashCount = (rows || []).length; }).catch(function () { _asTrashCount = 0; })
+      : Promise.resolve();
+    pData = Promise.all([asGetAll(listParams), _asLoadCats(), pTrashCount]).then(function (r) {
+      if (seq === _asRenderSeq) _asListCache = { key: cacheKey, rows: r[0] || [] };
+      return r;
+    });
+  }
 
-  Promise.all([asGetAll(listParams), _asLoadCats(), pTrashCount]).then(function (results) {
+  return pData.then(function (results) {
+    if (seq !== _asRenderSeq) return;   // 더 최근 renderAS 가 진행 중 — 이 응답은 버림
     var rows = results[0];
     var CAT = results[1] || {};
     var all = rows || [];
@@ -194,7 +218,7 @@ function renderAS() {
     html += '</div></div></div>';
 
     // 요약 카드
-    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,260px));justify-content:start;gap:10px;margin-bottom:12px">';
     html += _asStatCard('대기/할당', cnt.received, '#6366F1');
     html += _asStatCard('P1·P2 긴급', cnt.urgent, '#EF4444');
     html += _asStatCard('처리중', cnt.in_progress, '#3B82F6');
@@ -208,7 +232,7 @@ function renderAS() {
     html += _asFilterSelect('긴급도', 'asFilterPriority', asFilterPriority, PRIO);
     html += _asFilterSelect('카테고리', 'asFilterCategory', asFilterCategory, CAT);
     html += '<input type="text" placeholder="🔍 접수번호·고객사·증상" value="' + _asEsc(asSearchKw) +
-      '" oninput="asSearchKw=this.value;renderAS()" style="font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t2);min-width:180px">';
+      '" id="asSearchInput" oninput="asOnSearchInput(this.value)" style="font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t2);min-width:180px">';
     if (asFilterStatus || asFilterPriority || asFilterCategory || asSearchKw) {
       html += '<button onclick="asClearFilters()" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t4);cursor:pointer">필터 해제</button>';
     }
@@ -260,10 +284,10 @@ function renderAS() {
         html += '<td style="padding:8px 10px;color:var(--t3)">' + (ct.icon || '') + ' ' + _asEsc(ct.label) + '</td>';
         html += '<td style="padding:8px 10px"><span style="display:inline-block;padding:2px 8px;border-radius:10px;background:' + pr.color + ';color:#fff;font-size:10px;font-weight:600">' + (pr.icon || '') + ' ' + _asEsc(t.priority) + '</span></td>';
         html += '<td style="padding:8px 10px"><span style="display:inline-block;padding:2px 8px;border-radius:10px;background:' + st.color + '22;color:' + st.color + ';font-size:10px;font-weight:600">' + (st.icon || '') + ' ' + _asEsc(st.label) + '</span></td>';
-        var summary = (t.issueSummary || '').slice(0, 50);
-        if ((t.issueSummary || '').length > 50) summary += '…';
+        // 신고 내용: 잘라내지 않고 남는 폭을 모두 쓰는 말줄임 셀 (전체 내용은 title)
+        var summary = String(t.issueSummary || '').replace(/\s+/g, ' ').trim();
         var freqTxt = t.frequency ? _asFreqDisplay(t.frequency, t.frequencyCount) : '';
-        html += '<td style="padding:8px 10px;color:var(--t3);max-width:280px">' + _asEsc(summary);
+        html += '<td style="padding:8px 10px;color:var(--t3);width:45%;max-width:0"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + _asEsc(summary) + '">' + _asEsc(summary) + '</div>';
         if (freqTxt) html += '<div style="font-size:10px;color:var(--t5);margin-top:2px">📊 ' + _asEsc(freqTxt) + '</div>';
         html += '</td>';
         if (isTrashView) {
@@ -274,10 +298,10 @@ function renderAS() {
         html += '<td style="padding:8px 10px;text-align:right;white-space:nowrap" onclick="event.stopPropagation()">';
         if (isTrashView) {
           html += '<button onclick="asRestoreTicket(\'' + safeId + '\')" style="font-size:10px;padding:3px 8px;border:1px solid #10B981;border-radius:4px;background:transparent;color:#10B981;cursor:pointer;margin-right:4px" title="복구">↻ 복구</button>';
-          html += '<button onclick="asPurgeTicket(\'' + safeId + '\',\'' + _asEsc(t.ticketNo).replace(/\x27/g, "\\\x27") + '\')" style="font-size:10px;padding:3px 8px;border:1px solid #EF4444;border-radius:4px;background:transparent;color:#EF4444;cursor:pointer" title="완전 삭제">💥 완전삭제</button>';
+          html += '<button onclick="asPurgeTicket(\'' + safeId + '\',\'' + _asJsArg(t.ticketNo) + '\')" style="font-size:10px;padding:3px 8px;border:1px solid #EF4444;border-radius:4px;background:transparent;color:#EF4444;cursor:pointer" title="완전 삭제">💥 완전삭제</button>';
         } else {
           html += '<button onclick="showASModal(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer;margin-right:4px" title="편집">✏️</button>';
-          html += '<button onclick="asSoftDeleteTicket(\'' + safeId + '\',\'' + _asEsc(t.ticketNo).replace(/\x27/g, "\\\x27") + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="휴지통으로 이동">🗑️</button>';
+          html += '<button onclick="asSoftDeleteTicket(\'' + safeId + '\',\'' + _asJsArg(t.ticketNo) + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="휴지통으로 이동">🗑️</button>';
         }
         html += '</td></tr>';
       });
@@ -287,6 +311,7 @@ function renderAS() {
 
     wrap.innerHTML = html;
   }).catch(function (err) {
+    if (seq !== _asRenderSeq) return;
     console.error('[renderAS]', err);
     wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:#EF4444">A/S 목록 조회 실패: ' + _asEsc((err && err.message) || '알 수 없는 오류') + '</div>';
   });
@@ -299,11 +324,11 @@ function _asStatCard(label, count, color) {
 }
 
 function _asFilterSelect(label, varName, curVal, options) {
-  var h = '<select onchange="' + varName + '=this.value;renderAS()" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
+  var h = '<select onchange="' + varName + '=this.value;renderAS({useCache:true})" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
   h += '<option value="">전체 ' + label + '</option>';
   Object.keys(options).forEach(function (k) {
     var o = options[k];
-    h += '<option value="' + k + '"' + (curVal === k ? ' selected' : '') + '>' + (o.icon || '') + ' ' + o.label + '</option>';
+    h += '<option value="' + _asEsc(k) + '"' + (curVal === k ? ' selected' : '') + '>' + _asEsc(o.icon || '') + ' ' + _asEsc(o.label) + '</option>';
   });
   h += '</select>';
   return h;
@@ -311,7 +336,28 @@ function _asFilterSelect(label, varName, curVal, options) {
 
 function asClearFilters() {
   asFilterStatus = ''; asFilterPriority = ''; asFilterCategory = ''; asSearchKw = '';
-  renderAS();
+  renderAS({ useCache: true });
+}
+
+/* 검색 입력 — 디바운스 + 캐시 목록 클라이언트 필터 + 재렌더 후 포커스/커서 복원 */
+var _asSearchTimer = null;
+function asOnSearchInput(val) {
+  asSearchKw = val;
+  clearTimeout(_asSearchTimer);
+  _asSearchTimer = setTimeout(function () {
+    var el = document.getElementById('asSearchInput');
+    var hadFocus = el && document.activeElement === el;
+    var caret = hadFocus ? el.selectionStart : null;
+    Promise.resolve(renderAS({ useCache: true })).then(function () {
+      if (!hadFocus) return;
+      var ne = document.getElementById('asSearchInput');
+      if (!ne) return;
+      ne.focus();
+      var v = ne.value || '';
+      var pos = Math.min(caret == null ? v.length : caret, v.length);
+      try { ne.setSelectionRange(pos, pos); } catch (e) {}
+    });
+  }, 250);
 }
 
 /* ═══ 접수 등록/편집 모달 ═══ */
@@ -424,7 +470,7 @@ function showASModal(editId) {
     h += _asSection('④ 첨부 파일 ' + (isEdit ? '<span style="color:var(--t6);font-weight:400;font-size:10px">— 이미지·캡처·PDF·문서 (선택 즉시 업로드, 10MB 이하)</span>' : '<span style="color:var(--t6);font-weight:400;font-size:10px">— 접수 등록 후 일괄 업로드 (10MB 이하 다중 선택 가능)</span>'));
     h += '<div style="margin-bottom:14px">';
     h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
-    h += '<input id="asM_attachInput" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.log,.zip" onchange="_asModalAttachPicked(event,\'' + (isEdit ? _asEsc(editId).replace(/\x27/g, "\\\x27") : '') + '\')" style="font-size:11px;flex:1;min-width:240px">';
+    h += '<input id="asM_attachInput" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.log,.zip" onchange="_asModalAttachPicked(event,\'' + (isEdit ? _asJsArg(editId) : '') + '\')" style="font-size:11px;flex:1;min-width:240px">';
     h += '<span style="font-size:9px;color:var(--t6)">여러 파일을 한 번에 선택 가능 (Ctrl/Shift)</span>';
     h += '</div>';
     h += '<div id="asM_attachGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;min-height:60px">';
@@ -437,11 +483,11 @@ function showASModal(editId) {
     h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-top:14px;border-top:1px solid var(--bd)">';
     h += '<div>';
     if (isEdit) {
-      h += '<button onclick="asSoftDeleteTicket(\'' + _asEsc(editId).replace(/\x27/g, "\\\x27") + '\',\'' + _asEsc(existing.ticketNo).replace(/\x27/g, "\\\x27") + '\')" style="padding:8px 14px;border:1px solid #EF4444;border-radius:6px;background:transparent;color:#EF4444;cursor:pointer;font-size:11px" title="휴지통으로 이동 (복구 가능)">🗑️ 휴지통으로 이동</button>';
+      h += '<button onclick="asSoftDeleteTicket(\'' + _asJsArg(editId) + '\',\'' + _asJsArg(existing.ticketNo) + '\')" style="padding:8px 14px;border:1px solid #EF4444;border-radius:6px;background:transparent;color:#EF4444;cursor:pointer;font-size:11px" title="휴지통으로 이동 (복구 가능)">🗑️ 휴지통으로 이동</button>';
     }
     h += '</div><div style="display:flex;gap:8px">';
     h += '<button onclick="document.getElementById(\'asModalOverlay\').remove()" style="padding:8px 16px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:11px">취소</button>';
-    h += '<button onclick="saveASModal(' + (isEdit ? 'true' : 'false') + ',\'' + (isEdit ? _asEsc(editId).replace(/'/g, "\\'") : '') + '\')" style="padding:8px 16px;border:none;border-radius:6px;background:#F59E0B;color:#fff;cursor:pointer;font-size:11px;font-weight:600">' + (isEdit ? '수정 저장' : '접수 등록') + '</button>';
+    h += '<button onclick="saveASModal(' + (isEdit ? 'true' : 'false') + ',\'' + (isEdit ? _asJsArg(editId) : '') + '\')" style="padding:8px 16px;border:none;border-radius:6px;background:#F59E0B;color:#fff;cursor:pointer;font-size:11px;font-weight:600">' + (isEdit ? '수정 저장' : '접수 등록') + '</button>';
     h += '</div></div>';
     h += '</div>';
 
@@ -468,7 +514,7 @@ function _asEnumSelect(id, options, curVal, allowEmpty) {
   if (allowEmpty) h += '<option value=""' + (!curVal ? ' selected' : '') + '>선택</option>';
   Object.keys(options).forEach(function (k) {
     var o = options[k];
-    h += '<option value="' + k + '"' + (curVal === k ? ' selected' : '') + '>' + (o.icon || '') + ' ' + o.label + '</option>';
+    h += '<option value="' + _asEsc(k) + '"' + (curVal === k ? ' selected' : '') + '>' + _asEsc(o.icon || '') + ' ' + _asEsc(o.label) + '</option>';
   });
   h += '</select>';
   return h;
@@ -960,7 +1006,7 @@ function _asRenderDetail(t, CAT) {
   var ct = CAT[t.category] || { label: t.category || '-', icon: '' };
 
   var h = '';
-  h += '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:12px;width:920px;max-width:100%;color:var(--t2);box-shadow:0 14px 50px rgba(0,0,0,0.5);overflow:hidden">';
+  h += '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:12px;width:min(1200px,94vw);max-width:100%;color:var(--t2);box-shadow:0 14px 50px rgba(0,0,0,0.5);overflow:hidden">';
 
   // 헤더
   h += '<div style="padding:16px 22px;border-bottom:1px solid var(--bd);background:linear-gradient(135deg,' + pr.color + '15,' + st.color + '15)">';
@@ -1899,9 +1945,9 @@ function _asRenderKanban(tickets, CAT) {
   });
 
   var h = '<div class="pnl" style="padding:14px;overflow-x:auto">';
-  h += '<div style="display:flex;gap:10px;min-width:fit-content">';
+  h += '<div style="display:flex;gap:10px">';
   cols.forEach(function (c) {
-    h += '<div style="flex:0 0 220px;display:flex;flex-direction:column">';
+    h += '<div style="flex:1 1 240px;min-width:220px;display:flex;flex-direction:column">';
     h += '<div style="padding:8px 10px;background:' + c.color + '15;border-radius:6px;margin-bottom:8px;border-top:3px solid ' + c.color + '">';
     h += '<div style="font-size:11px;font-weight:700;color:' + c.color + '">' + c.label + ' <span style="color:var(--t5);font-weight:500">(' + grouped[c.key].length + ')</span></div>';
     h += '</div>';
@@ -1947,11 +1993,11 @@ function _asAttachKanbanDnD() {
       col.style.background = 'var(--bg)';
     });
     col.addEventListener('dragleave', function () {
-      col.style.background = '';
+      col.style.background = 'var(--bg-i)';   // 레인 기본 배경 복원 ('' 로 지우면 인라인 배경이 사라짐)
     });
     col.addEventListener('drop', function (e) {
       e.preventDefault();
-      col.style.background = '';
+      col.style.background = 'var(--bg-i)';
       if (!draggingId) return;
       var newStatus = col.dataset.status;
       updateASTicket(draggingId, { status: newStatus }).then(function () {

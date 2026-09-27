@@ -1,5 +1,53 @@
 # Work Manager — 변경 이력
 
+## v13.189 (2026-09-27) — 달력 개편 · 프로젝트 관리 전 탭 wide · 보안/안정성 · 리팩토링 1단계
+
+프로젝트 관리 영역을 세 갈래(수주/사전검토/요소기술/이슈 · 문서/A·S/운영자 · 공통 코어)로 리뷰한 뒤,
+확인된 버그와 넓은 화면 대응, 저위험 리팩토링을 반영했다.
+
+### 넓은 화면
+- `setMode()` — `_applyWideMode(projModes.includes(m))`: v13.185 타임라인 전용이던 `body.wide-mode` 를 프로젝트 관리 10개 탭 전체로.
+- 탭별 조정: 이슈 요약 카드 `auto-fit`, 통계 섹션 그리드, 트렌드 차트 고정 높이(`maintainAspectRatio:false`), 수주/이슈 표 `table-layout:fixed`,
+  사전검토·A/S 칸반 레인 `flex:1 1 …`, 업체별·기술스택 `auto-fill` 그리드, A/S 통계 차트 그리드·상세 모달 `min(1200px,94vw)`,
+  문서관리 ≥1600px 3열(미리보기 sticky), 운영자 가시성 목록 다열·분석 ≥1800px master/detail.
+
+### 달력 (calendar.js 상단 재작성)
+- 월간: 주(행)마다 CSS grid — 1행 날짜, 기간 레인(최대 3, 초과는 "기간 +N"), 하루짜리 칩(칸당 4, 초과 "+N건" → 선택).
+- 항목 통합 `_calBuildItems` — 납기(pend)/착수(pstart)/기간(pspan)/마일스톤/이슈 기한/일정. 정렬 `_calItemCmp`: 완료는 뒤, 지연 먼저, 그다음 종류 순.
+- 프로젝트 기간 막대 기본 끔(`calShowSpans`), 완료 숨김(`calHideDone`).
+- 오른쪽 패널 `renderCalSide`: 요약 타일(클릭 = `cal-focus-*` 로 나머지 흐림), 선택일 목록, 처리 필요(지연 전체 + 7일 내), 담당자별 부하.
+- 이벤트 위임 `_calBindGrid`: 클릭 = 선택, 더블클릭 = 새 일정, 항목 클릭 = 종류별 상세, 드롭 = 일정 이동. 마일스톤 `calMsDone` → `msPut({status:'done'})`.
+- 날짜 계산을 `dateToStr`/`_calAddDays`(로컬)로 — `toISOString()` 은 KST 00~09시에 전날을 돌려줘 주간 보기가 하루 밀리고 월말(`viewEnd`)이 하루 빠졌다.
+
+### 보안
+- `eH` 를 5문자 정규식 이스케이프로(`& < > " '`). 예전 `textContent→innerHTML` 방식은 따옴표를 남겨 `title="…"` 등 속성에서 저장형 XSS 가능(속성 사용처 50여 곳).
+  폴백 사본(pipeline/auth/order-view/issue-manager)과 파일별 헬퍼(`_asEsc`, `_asStatsEsc`, `_oaEsc`, `_opEsc`)도 동일하게.
+- `eA` 에 `"`→`&quot;`·개행 처리. `dashboard.js` iframe `srcdoc` 은 `eA`(JS 이스케이프) → `eH` 로(백슬래시가 두 배로 들어가던 문제 포함).
+- 문서관리 `rMD` 입력 이스케이프(`_docMD`), `createModal` 제목·확장자 이스케이프. A/S onclick 인자 `_asJsArg`, 요소기술 `_tJsStr`, 수주 `_orderJsStr`.
+
+### 버그
+- 이슈 일괄 선택이 필터 변경 후에도 남아 숨은 이슈까지 삭제될 수 있음 → 렌더 시 목록 밖 선택 제거, 단건 삭제 시 선택 해제.
+- 문서 목록 30개 이후 접근 불가(`#docPagination` 미렌더) → `renderPagination` 연결.
+- 검색창 매 입력 전체 재렌더(포커스·IME 깨짐, 재요청) → 디바운스 + 포커스/캐럿 복원(이슈·A/S·수주·문서). A/S 는 목록 캐시로 재요청 0.
+- 문서 미리보기 경쟁, A/S 통계·운영자 분석의 로딩 플래그 → 시퀀스 토큰.
+- 저장된 거래처 필터가 사라진 값이면 빈 목록 → 초기화. `_techUsageTargets` 캐시 미초기화. A/S 칸반 드래그 후 배경 소실. 사전검토/요소기술 "오늘" UTC.
+- `apiFetch`: 첫 실패 때 타이머를 지우고 같은 signal 로 재시도 → 타임아웃 후엔 즉시 실패, 네트워크 오류 재시도는 무기한 대기. 시도마다 새 AbortController·타이머, AbortError 는 재시도 안 함.
+- `_pdCached`: 무효화 전에 출발한 조회가 늦게 도착해 옛 데이터를 30초 캐시 → 키별 세대 카운터. `_emitBus`(쓰기 성공) 에서 해당 캐시 재무효화. `projAll` 키 초기화 누락.
+
+### 리팩토링 1단계
+- **CSS 단일화**: HTML 인라인 `<style>`(72KB, style.css 와 61% 중복)을 style.css 끝으로 그대로 옮긴 뒤, 최상위 규칙 중 완전히 같은 것의 **앞쪽** 사본만 삭제(392개, 39KB).
+  뒤 사본이 이기므로 캐스케이드 불변. 검증: 6개 화면 × 4개 테마 × 2개 폭(1440/700)에서 모든 요소의 계산된 스타일 해시 비교 — 70,584개 중 차이 0.
+  앞으로 스타일은 style.css 한 곳만 수정.
+- 한 번도 로드되지 않던 `core-logic.js`, `ui-components.js` 삭제. 중복 `localDate`/`daysDiff` 폴백(issue-manager, 0 으로 클램프되는 다른 동작) 삭제.
+- 테스트 추가: `test/api-fetch.test.js`(재시도·타임아웃·취소), `test/project-data-cache.test.js`(in-flight 공유·세대·버스 무효화), `test/calendar.test.js`(KST 범위·항목 정렬). 34/34.
+
+### 다음 단계(보류 — 테스트 선행 필요)
+- `renderTimeline`(504줄)·`pdLoadWork`(274)·`showProjectDetail`(253) 분해, as-manager.js(3.2k줄) 6개 파일 분할.
+- 손으로 만든 모달 ~20곳을 `createModal`(id·z 옵션 추가)로 통일, 상태 색상 하드코딩 ~80곳을 config.js 로.
+- style.css 안에서 서로 다른 선언을 가진 같은 선택자 28개 정리.
+
+클라이언트 전용 — 서버 변경·마이그레이션 없음.
+
 ## v13.188 (2026-09-27) — 파이프라인: 카드 접기/펼치기 + 레인 세로 확장
 
 ### 변경

@@ -1449,7 +1449,7 @@ async function generateReport() {
       '<button onclick="window.print()" style="padding:6px 16px;background:#3B82F6;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">🖨 인쇄</button>' +
       '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="padding:6px 16px;background:#94A3B8;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">✕ 닫기</button>' +
     '</div>' +
-    '<iframe srcdoc="' + eA(rptHtml) + '" style="width:100%;height:calc(100vh - 80px);border:none"></iframe>';
+    '<iframe srcdoc="' + eH(rptHtml) + '" style="width:100%;height:calc(100vh - 80px);border:none"></iframe>';
     document.body.appendChild(rptModal);
   }
 }

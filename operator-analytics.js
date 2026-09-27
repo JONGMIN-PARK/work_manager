@@ -18,6 +18,8 @@
 var _oaCharts = [];            // 전사 개요 Chart 인스턴스 (destroy 보관)
 var _oaProjCharts = [];        // 프로젝트 상세 Chart 인스턴스 (destroy 보관)
 var _oaLoading = false;
+var _oaSeq = 0;                // 개요 집계 요청 순번 — 탭 전환 중 이전 응답 폐기 (이전: _oaLoading early-return 으로 '로딩 중…' 고착)
+var _oaDetailSeq = 0;          // 상세 분석 요청 순번 — 빠르게 다른 프로젝트 클릭 시 이전 응답 폐기
 var _oaData = null;            // 마지막 집계 결과 (프로젝트별 분석 캐시)
 var _oaSelectedProjectId = null;
 var _oaDetailContainerId = 'oaDetail';   // renderOperatorAnalytics 가 만드는 상세 영역 id
@@ -26,9 +28,26 @@ var _oaFilterName = '';        // 담당자(등록 인원) 필터 — '' 이면 
 
 /* ───────── 유틸 ───────── */
 function _oaEsc(s) {
-  if (typeof eH === 'function') return eH(s == null ? '' : String(s));
   if (s == null) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+/* 와이드 레이아웃 (1회 주입): ≥1800px 에서 개요(목록) | 상세 마스터/디테일 분할, 상세는 sticky */
+function _oaInjectStyle() {
+  if (document.getElementById('oaWideStyle')) return;
+  var st = document.createElement('style');
+  st.id = 'oaWideStyle';
+  st.textContent =
+    '.oa-split>.oa-detail{margin-top:14px}' +
+    '@media(min-width:1800px){' +
+      '.oa-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:14px;align-items:start}' +
+      '.oa-split>.oa-detail{margin-top:0;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}' +
+    '}';
+  document.head.appendChild(st);
+}
+function _oaIsSplit() {
+  try { return window.matchMedia && window.matchMedia('(min-width:1800px)').matches; } catch (e) { return false; }
 }
 function _oaToday() {
   if (typeof localDate === 'function') return localDate();
@@ -201,16 +220,21 @@ function renderOperatorAnalytics(containerId) {
     _oaError(wrap, 'Chart.js 로드 실패 — 페이지 새로고침 후 다시 시도하세요');
     return;
   }
-  if (_oaLoading) return;
-
+  var seq = ++_oaSeq;
+  _oaDetailSeq++;   // 진행 중이던 상세 로드도 무효화
   _oaLoading = true;
   _oaDestroy(_oaCharts);
+  _oaDestroy(_oaProjCharts);
+  _oaInjectStyle();
 
   wrap.innerHTML =
-    '<div id="oaOverview"><div class="pnl" style="padding:46px 20px;text-align:center;color:var(--t5);font-size:12px">📊 프로젝트 분석 데이터를 집계하는 중…</div></div>' +
-    '<div id="' + _oaDetailContainerId + '" style="margin-top:14px"></div>';
+    '<div class="oa-split">' +
+    '<div id="oaOverview" style="min-width:0"><div class="pnl" style="padding:46px 20px;text-align:center;color:var(--t5);font-size:12px">📊 프로젝트 분석 데이터를 집계하는 중…</div></div>' +
+    '<div id="' + _oaDetailContainerId + '" class="oa-detail" style="min-width:0"></div>' +
+    '</div>';
 
   _oaCollect().then(function (rows) {
+    if (seq !== _oaSeq) return;   // 더 최근 요청이 있음 — 폐기
     _oaLoading = false;
     _oaData = rows;
     _oaRenderOverview(rows);
@@ -226,6 +250,7 @@ function renderOperatorAnalytics(containerId) {
       }
     }
   }).catch(function (err) {
+    if (seq !== _oaSeq) return;
     _oaLoading = false;
     _oaError(document.getElementById('oaOverview') || wrap, '분석 데이터 로드 실패: ' + ((err && err.message) || '알 수 없는 오류'));
   });
@@ -552,7 +577,7 @@ function _oaRiskRows(list, showBadges) {
   list.forEach(function (r) {
     var sm = _oaStatusMeta(r.status);
     var sel = (r.id === _oaSelectedProjectId);
-    h += '<div onclick="_oaSelectProject(\'' + _oaEsc(r.id) + '\')" ' +
+    h += '<div class="oa-row" data-oa-id="' + _oaEsc(r.id) + '" onclick="_oaSelectProject(this.getAttribute(\'data-oa-id\'))" ' +
          'style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;' +
          'background:' + (sel ? 'var(--bg-p)' : 'var(--bg-i)') + ';border:1px solid ' + (sel ? 'var(--ac,#6366F1)' : 'var(--bd)') + '" ' +
          'onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">';
@@ -590,12 +615,21 @@ function _oaRiskRows(list, showBadges) {
 // 위험/목록 행 클릭 핸들러 (전역 — onclick 에서 호출)
 function _oaSelectProject(projectId) {
   _oaSelectedProjectId = projectId;
-  // 선택 강조 갱신을 위해 리스트만 다시 그림 (전체 재집계 불필요)
-  if (_oaData) _oaRenderOverview(_oaData);
+  // 선택 강조만 이동 (개요 차트·리스트 전체 재그리기 없음 — 스크롤 위치 유지)
+  var rowsEl = document.querySelectorAll('#oaOverview .oa-row');
+  if (rowsEl.length) {
+    rowsEl.forEach(function (el) {
+      var on = el.getAttribute('data-oa-id') === projectId;
+      el.style.background = on ? 'var(--bg-p)' : 'var(--bg-i)';
+      el.style.borderColor = on ? 'var(--ac,#6366F1)' : 'var(--bd)';
+    });
+  } else if (_oaData) {
+    _oaRenderOverview(_oaData);
+  }
   renderProjectAnalytics(projectId, _oaDetailContainerId);
-  // 상세 영역으로 스크롤
+  // 상세 영역으로 스크롤 (분할 레이아웃에선 상세가 옆에 sticky 로 보이므로 생략)
   var det = document.getElementById(_oaDetailContainerId);
-  if (det && det.scrollIntoView) { try { det.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
+  if (det && det.scrollIntoView && !_oaIsSplit()) { try { det.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
 }
 
 /* ════════════════════════════════════════════════════════
@@ -606,6 +640,8 @@ function renderProjectAnalytics(projectId, containerId) {
   if (!box) return;
   if (typeof Chart === 'undefined') { _oaError(box, 'Chart.js 로드 실패'); return; }
 
+  var tok = ++_oaDetailSeq;
+  var _stale = function () { return tok !== _oaDetailSeq || !box.isConnected; };
   _oaDestroy(_oaProjCharts);
   box.innerHTML = '<div class="pnl" style="padding:40px;text-align:center;color:var(--t5);font-size:12px">📈 프로젝트 상세 분석을 불러오는 중…</div>';
 
@@ -621,6 +657,7 @@ function renderProjectAnalytics(projectId, containerId) {
   }
 
   pRow.then(function (row) {
+    if (_stale()) return;
     if (!row) { _oaError(box, '프로젝트를 찾을 수 없습니다.'); return; }
     // 담당자별 보고 투입(작업노트 로그 작성자별) — 상세에서만 집계 (업무일지 연동 안 함)
     var ms = row.milestones || [];
@@ -628,12 +665,14 @@ function renderProjectAnalytics(projectId, containerId) {
       ? Promise.all(ms.map(function (m) { return msLogsGet(m.id).then(function (l) { return l || []; }).catch(function () { return []; }); }))
       : Promise.resolve([]);
     return pLogs.then(function (logSets) {
+      if (_stale()) return;
       var rp = {};
       logSets.forEach(function (logs) { logs.forEach(function (l) { var nm = l.authorName || ''; if (nm) rp[nm] = (rp[nm] || 0) + (Number(l.hours) || 0); }); });
       row.reportedByPerson = rp;
       _oaRenderProjectDetail(box, row);
     });
   }).catch(function (err) {
+    if (_stale()) return;
     _oaError(box, '상세 분석 로드 실패: ' + ((err && err.message) || '알 수 없는 오류'));
   });
 }
@@ -890,7 +929,7 @@ function _oaRenderMsTable(row) {
     var untag = Number(b.untagged) || 0;
 
     h += '<tr style="border-bottom:1px solid var(--bd)">';
-    h += '<td style="padding:7px 6px;color:var(--t2);max-width:160px"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _oaEsc(m.name || '(이름 없음)') + '</div></td>';
+    h += '<td style="padding:7px 6px;color:var(--t2);width:45%;max-width:0"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + _oaEsc(m.name || '') + '">' + _oaEsc(m.name || '(이름 없음)') + '</div></td>';
     // 진척
     h += '<td style="padding:7px 6px;text-align:right"><span style="font-weight:700;color:' + (prog >= 100 ? '#10B981' : 'var(--t3)') + '">' + prog + '%</span></td>';
     // 투입/목표
@@ -928,6 +967,7 @@ function _oaRenderLogs(row) {
       return (logs || []).map(function (l) { l._msName = m.name || ''; return l; });
     }).catch(function () { return []; });
   })).then(function (lists) {
+    if (!box.isConnected) return;   // 그 사이 다른 프로젝트 상세로 교체됨
     var all = [];
     lists.forEach(function (arr) { all = all.concat(arr); });
     all.sort(function (a, b) { return (b.createdAt || '') < (a.createdAt || '') ? -1 : 1; });
@@ -953,6 +993,7 @@ function _oaRenderLogs(row) {
     h += '</div>';
     box.innerHTML = h;
   }).catch(function () {
+    if (!box.isConnected) return;
     box.innerHTML = '<div style="padding:14px;text-align:center;color:var(--t6);font-size:11px">작업 노트를 불러오지 못했습니다.</div>';
   });
 }

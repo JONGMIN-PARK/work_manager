@@ -17,6 +17,40 @@ var docPreviewTab = 'preview'; // 'preview' | 'summary'
 var docFilePage = 1;
 var docSearchKeyword = '';
 var _docBlobUrls = [];
+var _docPageInfo = null; // renderFileList가 계산한 페이지 정보 (마운트 후 renderPagination에 사용)
+
+/* ═══ 안전한 마크다운 렌더 ═══
+   rMD(HTML 전역)는 입력을 이스케이프하지 않으므로 업로드 .md·메모·AI 결과를 그대로 넣으면 저장형 XSS.
+   rMD가 매칭하는 문법(##, ###, **, "- ", 줄바꿈)은 & < > " ' 를 쓰지 않으므로
+   먼저 이스케이프한 뒤 rMD를 적용해도 마크다운 렌더 결과는 동일하다. */
+function _docEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function _docMD(t) {
+  var safe = _docEsc(t);
+  return typeof rMD === 'function' ? rMD(safe) : safe.replace(/\n/g, '<br>');
+}
+
+/* ═══ 와이드 레이아웃 스타일 (1회 주입) ═══
+   <1600px: 폴더트리+파일목록 2열, 미리보기는 아래 전체폭(기존과 동일)
+   ≥1600px: 폴더트리 | 파일목록 | 미리보기 3열, 미리보기는 화면 높이에 맞춤 */
+function _docInjectStyle() {
+  if (document.getElementById('docWideStyle')) return;
+  var st = document.createElement('style');
+  st.id = 'docWideStyle';
+  st.textContent =
+    '#docPanels{display:grid;grid-template-columns:200px minmax(0,1fr);gap:12px;align-items:start}' +
+    '#docPanels>#docPreviewPanel{grid-column:1/-1}' +
+    '@media(min-width:1600px){' +
+      '#docPanels{grid-template-columns:200px minmax(0,1fr) minmax(520px,1.2fr)}' +
+      '#docPanels>#docPreviewPanel{grid-column:auto;position:sticky;top:12px}' +
+      '#docPreviewContent{max-height:calc(100vh - 220px)!important}' +
+      '#docPreviewContent iframe{height:calc(100vh - 320px)!important;min-height:460px}' +
+    '}';
+  document.head.appendChild(st);
+}
 
 /* ═══ 폴더/파일 데이터 캐시 (성능) ═══
    폴더·뷰·검색 등 "선택"은 클라이언트 필터만 바꾸므로 서버 재조회가 불필요하다.
@@ -128,21 +162,32 @@ async function renderDocManager(opts) {
   }
 
   // 상단: 폴더 트리 + 파일 목록 (folders/allFiles는 위에서 캐시 로드됨)
-  html += '<div style="display:grid;grid-template-columns:200px 1fr;gap:12px" id="docPanels">';
+  // 미리보기 패널도 #docPanels 그리드 안에 둔다 — 좁은 화면에선 grid-column:1/-1 로 아래 전체폭,
+  // ≥1600px 에선 세 번째 열 (스타일은 _docInjectStyle)
+  _docInjectStyle();
+  html += '<div id="docPanels">';
   html += renderFolderTree(folders, allFiles);
   html += renderFileList(folders, allFiles);
-  html += '</div>';
 
-  // 하단: 미리보기 / AI 요약
+  // 미리보기 / AI 요약
   html += '<div class="pnl" style="padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:200px" id="docPreviewPanel">';
   html += renderPreviewPanel();
   html += '</div>';
+  html += '</div>';
   wrap.innerHTML = html;
+
+  // 페이지네이션 (renderPagination 콜백은 문자열화되어 onclick에 들어가므로 전역만 사용)
+  if (_docPageInfo && _docPageInfo.totalPages > 1 && typeof renderPagination === 'function') {
+    renderPagination('docPagination', _docPageInfo, function (p) { docFilePage = p; renderDocManager({ useCache: true }); });
+  }
 
   // 파일 선택 상태 복원 (캐시된 allFiles에서 찾기 — 테넌트 전체 fileGet 재조회 제거)
   if (docSelFile) {
     var f = allFiles.find(function (x) { return x.id === docSelFile; });
-    if (f) showFilePreview(f);
+    if (f) {
+      if (docPreviewTab === 'summary') showAISummaryPanel(f);
+      else showFilePreview(f);
+    }
   }
 }
 
@@ -208,6 +253,7 @@ function docSelectFolder(folderId) {
 
 /* ═══ 파일 목록 렌더 ═══ */
 function renderFileList(folders, allFiles) {
+  _docPageInfo = null;
   var files = docSelFolder === null
     ? allFiles
     : allFiles.filter(function (f) { return f.folderId === docSelFolder; });
@@ -252,7 +298,7 @@ function renderFileList(folders, allFiles) {
 
   // 검색바
   html += '<div style="margin-bottom:8px"><div style="display:flex;gap:4px;align-items:center"><div class="sw" style="flex:1"><span class="sic">🔍</span>';
-  html += '<input class="si" style="padding-left:28px;font-size:11px;height:32px" placeholder="파일명, 메모, 태그' + (docDeepSearch ? ', 본문' : '') + ' 검색..." value="' + eH(docSearchKeyword) + '" oninput="docSearchFiles(this.value)">';
+  html += '<input class="si" style="padding-left:28px;font-size:11px;height:32px" placeholder="파일명, 메모, 태그' + (docDeepSearch ? ', 본문' : '') + ' 검색..." value="' + eH(docSearchKeyword) + '" id="docSearchInput" oninput="docSearchFiles(this.value)">';
   html += '</div>';
   html += '<button class="btn btn-s ' + (docDeepSearch ? 'btn-p' : 'btn-g') + '" onclick="docToggleDeepSearch()" title="본문 포함 전문 검색" style="font-size:9px;white-space:nowrap;height:32px">📖 전문</button>';
   html += '</div></div>';
@@ -275,6 +321,8 @@ function renderFileList(folders, allFiles) {
 
     // 파일 카드 / 리스트
     var pageInfo = paginate(files, docFilePage, 30);
+    _docPageInfo = pageInfo;
+    docFilePage = pageInfo.page;
 
     if (docViewMode === 'card') {
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">';
@@ -298,7 +346,7 @@ function renderFileList(folders, allFiles) {
         if (f.tags && f.tags.length) html += ' <span style="font-size:9px;color:var(--tg-t)">' + f.tags.map(function(t){return '#'+eH(t)}).join(' ') + '</span>';
         html += '</td>';
         html += '<td class="mono">' + formatFileSize(f.size) + '</td>';
-        html += '<td>' + (f.ext || '').toUpperCase() + '</td>';
+        html += '<td>' + eH((f.ext || '').toUpperCase()) + '</td>';
         html += '<td style="font-size:10px">' + (f.createdAt ? new Date(f.createdAt).toLocaleDateString('ko') : '') + '</td>';
         html += '<td style="white-space:nowrap">';
         html += '<span onclick="event.stopPropagation();docMoveFile(\'' + f.id + '\')" style="cursor:pointer;color:var(--t5);font-size:12px;margin-right:4px" title="이동">📁</span>';
@@ -541,9 +589,15 @@ async function extractTextFromFile(fileRecord) {
 }
 
 /* ═══ 미리보기 렌더 ═══ */
+var _docPreviewSeq = 0; // 미리보기/AI요약 렌더 경합 방지 토큰
 async function showFilePreview(fileRecord) {
   var content = document.getElementById('docPreviewContent');
   if (!content) return;
+  var seq = ++_docPreviewSeq;
+  // 비동기 로드 도중 다른 파일/탭이 선택되었거나 패널이 다시 그려졌으면 결과를 버린다
+  var _stale = function () {
+    return seq !== _docPreviewSeq || docSelFile !== fileRecord.id || !content.isConnected;
+  };
 
   var ext = fileRecord.ext;
   var data = fileRecord.data;
@@ -554,7 +608,7 @@ async function showFilePreview(fileRecord) {
   infoHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
   infoHtml += '<span style="font-size:22px">' + icon.icon + '</span>';
   infoHtml += '<div><div style="font-size:12px;font-weight:700;color:var(--t1);word-break:break-all">' + eH(fileRecord.name) + '</div>';
-  infoHtml += '<div style="font-size:10px;color:var(--t4)">' + formatFileSize(fileRecord.size) + ' · ' + (ext || '').toUpperCase() + ' · ' + (fileRecord.createdAt ? new Date(fileRecord.createdAt).toLocaleDateString('ko') : '') + '</div></div></div>';
+  infoHtml += '<div style="font-size:10px;color:var(--t4)">' + formatFileSize(fileRecord.size) + ' · ' + eH((ext || '').toUpperCase()) + ' · ' + (fileRecord.createdAt ? new Date(fileRecord.createdAt).toLocaleDateString('ko') : '') + '</div></div></div>';
   if (fileRecord.tags && fileRecord.tags.length) {
     infoHtml += '<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:3px">';
     fileRecord.tags.forEach(function (t) {
@@ -581,9 +635,11 @@ async function showFilePreview(fileRecord) {
       if (dl && dl.data && dl.data.downloadUrl) {
         signedDownloadUrl = dl.data.downloadUrl;
         var resp = await fetch(dl.data.downloadUrl);
+        if (_stale()) return;
         if (resp.ok) data = await resp.arrayBuffer();
       }
     } catch (e) { console.warn('[docPreview] GCS fetch failed', e); }
+    if (_stale()) return;
   }
 
   if (!data) {
@@ -623,7 +679,7 @@ async function showFilePreview(fileRecord) {
     else if (['txt', 'csv', 'md', 'json', 'xml', 'log'].indexOf(ext) >= 0) {
       var text = new TextDecoder('utf-8', { fatal: false }).decode(data);
       if (ext === 'md' && typeof rMD === 'function') {
-        previewHtml = '<div class="doc-md" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:14px;font-size:12px;max-height:460px;overflow:auto;color:var(--t2);line-height:1.7">' + rMD(text.slice(0, 30000)) + '</div>';
+        previewHtml = '<div class="doc-md" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:14px;font-size:12px;max-height:460px;overflow:auto;color:var(--t2);line-height:1.7">' + _docMD(text.slice(0, 30000)) + '</div>';
       } else {
         previewHtml = '<pre style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;font-family:\'JetBrains Mono\',monospace;max-height:460px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--t2)">' + eH(text.slice(0, 30000)) + '</pre>';
       }
@@ -634,6 +690,7 @@ async function showFilePreview(fileRecord) {
       if (typeof mammoth !== 'undefined') {
         try {
           var conv = await mammoth.convertToHtml({ arrayBuffer: data });
+          if (_stale()) return;
           html = conv && conv.value ? conv.value : '';
         } catch (mErr) { console.warn('[docPreview] mammoth', mErr); }
       }
@@ -641,6 +698,7 @@ async function showFilePreview(fileRecord) {
         previewHtml = '<div class="doc-word" style="background:#fff;color:#111;border:1px solid var(--bd);border-radius:6px;padding:20px 24px;font-size:12.5px;line-height:1.7;max-height:460px;overflow:auto">' + html + '</div>';
       } else {
         var wtext = fileRecord.textCache || await extractTextFromFile(fileRecord);
+        if (_stale()) return;
         previewHtml = wtext
           ? '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;max-height:460px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--t2);line-height:1.6">' + eH(wtext.slice(0, 20000)) + '</div>'
           : docPreviewFallbackHtml(icon, signedDownloadUrl);
@@ -649,6 +707,7 @@ async function showFilePreview(fileRecord) {
     // PowerPoint — PPTX 는 슬라이드별 텍스트 카드, 원본 서식은 Office 뷰어(선택)로
     else if (ext === 'pptx') {
       var ptext = fileRecord.textCache || await extractTextFromFile(fileRecord);
+      if (_stale()) return;
       if (ptext) {
         var slides = ptext.split(/---\s*Slide\s*\d+\s*---/).map(function (s) { return s.trim(); }).filter(Boolean);
         var body = slides.length
@@ -676,6 +735,7 @@ async function showFilePreview(fileRecord) {
     previewHtml = '<div style="text-align:center;padding:20px;color:var(--d-t)">미리보기 오류: ' + eH(e.message || '') + '</div>';
   }
 
+  if (_stale()) return;
   content.innerHTML = '<div style="display:flex;gap:14px" id="docPreviewFlex">' + infoHtml + '<div style="flex:1;min-width:0">' + previewHtml + '</div></div>';
 }
 
@@ -712,8 +772,10 @@ async function showAISummaryPanel(fileRecord) {
   var content = document.getElementById('docPreviewContent');
   if (!content) return;
 
+  var seq = ++_docPreviewSeq;
   var icon = getDocIcon(fileRecord.ext);
   var proj = await projGet(docSelProject);
+  if (seq !== _docPreviewSeq || docSelFile !== fileRecord.id || !content.isConnected) return;
   var projName = proj ? (proj.name || proj.orderNo || '') : '';
   var orderNo = proj ? (proj.orderNo || '') : '';
 
@@ -764,7 +826,7 @@ async function showAISummaryPanel(fileRecord) {
   rightHtml += '<div id="docSumResult">';
   if (fileRecord.memo) {
     rightHtml += '<div style="font-size:10px;font-weight:700;color:var(--t4);margin-bottom:6px">📝 이전 요약</div>';
-    rightHtml += '<div style="font-size:11px;color:var(--t2);line-height:1.6;background:var(--bg-i);border-radius:6px;padding:10px;max-height:360px;overflow-y:auto">' + (typeof rMD === 'function' ? rMD(fileRecord.memo) : eH(fileRecord.memo)) + '</div>';
+    rightHtml += '<div style="font-size:11px;color:var(--t2);line-height:1.6;background:var(--bg-i);border-radius:6px;padding:10px;max-height:360px;overflow-y:auto">' + _docMD(fileRecord.memo) + '</div>';
   } else {
     rightHtml += '<div style="text-align:center;padding:40px;color:var(--t5)"><div style="font-size:28px;margin-bottom:8px">🤖</div><div style="font-size:11px">요약 유형을 선택하거나<br>자유 입력으로 분석을 실행하세요</div></div>';
   }
@@ -863,7 +925,7 @@ async function docRunSummary(fileId, presetId) {
       await filePut(f);
 
       var resHtml = '<div style="font-size:10px;font-weight:700;color:var(--t4);margin-bottom:6px">🤖 분석 결과</div>';
-      resHtml += '<div id="docSumText" style="font-size:11px;color:var(--t2);line-height:1.7;background:var(--bg-i);border-radius:6px;padding:12px;max-height:280px;overflow-y:auto">' + (typeof rMD === 'function' ? rMD(aiResult) : eH(aiResult)) + '</div>';
+      resHtml += '<div id="docSumText" style="font-size:11px;color:var(--t2);line-height:1.7;background:var(--bg-i);border-radius:6px;padding:12px;max-height:280px;overflow-y:auto">' + _docMD(aiResult) + '</div>';
       resHtml += '<div style="display:flex;gap:4px;margin-top:8px">';
       resHtml += '<button class="btn btn-g btn-s" onclick="docCopySummary()">📋 복사</button>';
       resHtml += '<button class="btn btn-p btn-s" onclick="docSaveSummary(\'' + fileId + '\')">💾 메모 저장</button>';
@@ -1047,9 +1109,21 @@ var _docSearchTimer = null;
 function docSearchFiles(keyword) {
   clearTimeout(_docSearchTimer);
   _docSearchTimer = setTimeout(function () {
+    var el = document.getElementById('docSearchInput');
+    var hadFocus = el && document.activeElement === el;
+    var caret = hadFocus ? el.selectionStart : null;
     docSearchKeyword = keyword.trim();
     docFilePage = 1;
-    renderDocManager({ useCache: true });
+    // 재렌더 후 검색창 포커스·커서 복원 (입력값은 trim 전 원문 유지)
+    Promise.resolve(renderDocManager({ useCache: true })).then(function () {
+      if (!hadFocus) return;
+      var ne = document.getElementById('docSearchInput');
+      if (!ne) return;
+      ne.value = keyword;
+      ne.focus();
+      var pos = Math.min(caret == null ? keyword.length : caret, keyword.length);
+      try { ne.setSelectionRange(pos, pos); } catch (e) {}
+    });
   }, 300);
 }
 
@@ -1091,7 +1165,7 @@ async function docEditFolderMemo(folderId) {
       + (folder.memo ? '<button class="btn btn-d" onclick="docClearFolderMemo(\'' + folderId + '\')" style="justify-content:center">🗑️ 삭제</button>' : '')
       + '</div>';
 
-    createModal({ title: '📝 폴더 메모 — ' + folder.name, content: div, width: '460px' });
+    createModal({ title: '📝 폴더 메모 — ' + eH(folder.name), content: div, width: '460px' });
   } catch (err) {
     console.error('[docEditFolderMemo]', err);
     showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
@@ -1153,7 +1227,7 @@ async function docMoveFile(fileId) {
     });
     html += '</div>';
 
-    createModal({ title: '📁 파일 이동: ' + f.name, html: html, width: '360px' });
+    createModal({ title: '📁 파일 이동: ' + eH(f.name), html: html, width: '360px' });
   } catch (err) {
     console.error('[docMoveFile]', err);
     showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
@@ -1327,20 +1401,20 @@ async function docShowSummaryHistory(fileId) {
     if (f.memo) {
       html += '<div style="margin-bottom:12px;padding:10px;background:var(--bg-i);border-radius:6px;border-left:3px solid var(--ac)">';
       html += '<div style="font-size:10px;font-weight:700;color:var(--t4);margin-bottom:4px">📝 현재 메모</div>';
-      html += '<div style="font-size:11px;color:var(--t2);line-height:1.6">' + (typeof rMD === 'function' ? rMD(f.memo) : eH(f.memo)) + '</div>';
+      html += '<div style="font-size:11px;color:var(--t2);line-height:1.6">' + _docMD(f.memo) + '</div>';
       html += '</div>';
     }
     history.forEach(function (h, idx) {
       html += '<div style="margin-bottom:10px;padding:10px;background:var(--bg-i);border-radius:6px">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
-      html += '<span style="font-size:10px;font-weight:700;color:var(--t4)">' + (h.preset || '자유입력') + '</span>';
-      html += '<span style="font-size:9px;color:var(--t5)">' + (h.date || '') + '</span></div>';
-      html += '<div style="font-size:11px;color:var(--t2);line-height:1.6;max-height:150px;overflow-y:auto">' + (typeof rMD === 'function' ? rMD(h.text) : eH(h.text)) + '</div>';
+      html += '<span style="font-size:10px;font-weight:700;color:var(--t4)">' + eH(h.preset || '자유입력') + '</span>';
+      html += '<span style="font-size:9px;color:var(--t5)">' + eH(h.date || '') + '</span></div>';
+      html += '<div style="font-size:11px;color:var(--t2);line-height:1.6;max-height:150px;overflow-y:auto">' + _docMD(h.text) + '</div>';
       html += '</div>';
     });
     html += '</div>';
 
-    createModal({ title: '📜 요약 이력: ' + f.name, html: html, width: '500px' });
+    createModal({ title: '📜 요약 이력: ' + eH(f.name), html: html, width: '500px' });
   } catch (err) {
     console.error('[docShowSummaryHistory]', err);
     showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
@@ -1398,7 +1472,7 @@ async function docShowStorageDashboard() {
       var info = entry[1];
       var icon = getDocIcon(ext);
       html += '<div style="padding:6px 10px;background:var(--bg-i);border-radius:6px;font-size:10px;color:var(--t3)">';
-      html += icon.icon + ' .' + ext.toUpperCase() + ' <b>' + info.count + '</b>개 · ' + formatFileSize(info.size);
+      html += icon.icon + ' .' + eH(ext.toUpperCase()) + ' <b>' + info.count + '</b>개 · ' + formatFileSize(info.size);
       html += '</div>';
     });
     html += '</div>';

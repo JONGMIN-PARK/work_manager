@@ -1,18 +1,46 @@
 /**
  * 업무 관리자 — 달력 뷰 모듈
  * 월간/주간 달력, 일정 등록/편집, 필터링, 드래그 이동
+ *
+ * v13.189 개편 — "그날 챙겨야 할 것"이 보이는 달력
+ *  · 월간: 주(행) 단위 그리드. 여러 날 일정은 가로 막대(레인), 하루짜리(마일스톤·납기·이슈 기한·일정)는
+ *    우선순위 칩(지연 → 납기 → 마일스톤 → 이슈 → 일정 → 착수, 완료는 뒤·흐리게). 앞뒤 달 날짜도 표시
+ *  · 프로젝트 기간 막대는 기본 끔(매일 칸을 채워 정작 마감이 가려짐) — [기간 막대]로 켬
+ *  · 오른쪽 패널: 기간 요약 타일(클릭 = 해당 종류만 강조) / 선택일 일정 / 처리 필요(지연·7일 내) / 담당자별 부하
+ *  · 날짜 클릭 = 선택(패널에 그날 목록), 더블클릭 = 새 일정. 마일스톤은 패널에서 바로 [완료] 처리
+ *  · 날짜 계산은 로컬 기준(dateToStr) — toISOString(UTC) 로 KST 오전에 하루 밀리던 문제 수정
  */
 
 var calYear, calMonth, calViewMode = 'month';
-var calWeekStart = null; // 주간 뷰 시작일
+var calWeekStart = null; // 주간 뷰 시작일 (일요일, 로컬 자정)
 var calFilterProj = '', calFilterAssignee = '', calFilterType = '';
 var calFilterProjs = new Set();        // 다중 프로젝트 필터 (비어있으면 전체)
 var _calProjPanelOpen = false;         // 프로젝트 선택 패널 열림 여부
 var _calAllProjects = [];              // 최근 렌더된 전체 프로젝트(전체선택/해제용)
 var calShowMs = true, calShowProj = true, calShowEvt = true;  // 항목 유형 표시 토글
+var calShowSpans = false;              // 프로젝트 기간 막대 (기본 끔)
+var calHideDone = false;               // 완료 항목 숨김
+var calFocus = '';                     // 요약 타일 강조: '' | overdue | pend | ms | issue | evt
+var calSelDate = '';                   // 선택한 날짜 (오른쪽 패널 일정 목록)
 var calDragEvtId = null; // 드래그 중인 이벤트 ID
 var _calRenderTimer;
+var _calView = null;                   // 마지막 렌더 결과 (패널·액션용)
+var CAL_DAY_MAX = 4;                   // 월간 칸당 칩 최대 개수
+var CAL_SPAN_LANES = 3;                // 월간 주(행)당 기간 막대 최대 줄 수
+var CAL_KIND = {
+  pend:   { label: '납기',     icon: '🏁', ord: 1 },
+  ms:     { label: '마일스톤', icon: '◆',  ord: 2 },
+  issue:  { label: '이슈 기한', icon: '🎫', ord: 3 },
+  evt:    { label: '일정',     icon: '🗓',  ord: 4 },
+  pstart: { label: '착수',     icon: '▶',  ord: 5 },
+  pspan:  { label: '기간',     icon: '▭',  ord: 6 }
+};
 function renderCalendarDebounced(){clearTimeout(_calRenderTimer);_calRenderTimer=setTimeout(renderCalendar,80)}
+
+function _calAddDays(ymd, n) { var d = new Date(ymd + 'T00:00:00'); d.setDate(d.getDate() + n); return dateToStr(d); }
+function _calDow(ymd) { return new Date(ymd + 'T00:00:00').getDay(); }
+function _calMd(ymd) { return ymd ? (+ymd.slice(5, 7)) + '/' + (+ymd.slice(8, 10)) : ''; }
+function _calPname(p) { return p ? (p.name || p.orderNo || '') : ''; }
 
 /* ═══ 초기화 ═══ */
 function initCalendar() {
@@ -20,6 +48,18 @@ function initCalendar() {
   calYear = today.getFullYear();
   calMonth = today.getMonth();
   renderCalendar();
+}
+
+/* 현재 보이는 범위 — 월간은 앞뒤 달을 포함한 6주 이내 그리드 전체 */
+function _calViewRange() {
+  if (calViewMode === 'month') {
+    var first = dateToStr(new Date(calYear, calMonth, 1));
+    var last = dateToStr(new Date(calYear, calMonth + 1, 0));
+    return { start: _calAddDays(first, -_calDow(first)), end: _calAddDays(last, 6 - _calDow(last)), monthStart: first, monthEnd: last };
+  }
+  if (!calWeekStart) { var t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() - t.getDay()); calWeekStart = t; }
+  var ws = dateToStr(calWeekStart);
+  return { start: ws, end: _calAddDays(ws, 6), monthStart: ws, monthEnd: _calAddDays(ws, 6) };
 }
 
 /* ═══ 메인 렌더 ═══ */
@@ -35,50 +75,13 @@ async function renderCalendar() {
   }
 
   var _calData = await Promise.all([(typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()), evtGetAll(), msGetAll(), typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve(null)]);
-  var projects = _calData[0];
-  var rawEvents = _calData[1];
-  var milestones = _calData[2];
-  var _prefetchedIssues = _calData[3];
+  var projects = _calData[0] || [];
+  var rawEvents = _calData[1] || [];
+  var milestones = _calData[2] || [];
+  var issues = (_calData[3] || []).filter(function (iss) { return iss.dueDate && iss.status !== 'resolved' && iss.status !== 'closed'; });
 
-  // 반복 일정 확장 (현재 보이는 범위 기준)
-  var viewStart, viewEnd;
-  if (calViewMode === 'month') {
-    viewStart = calYear + '-' + String(calMonth + 1).padStart(2, '0') + '-01';
-    var mEnd = new Date(calYear, calMonth + 1, 0);
-    viewEnd = mEnd.toISOString().slice(0, 10);
-  } else {
-    var ws = calWeekStart || new Date();
-    if (!calWeekStart) { ws = new Date(); ws.setDate(ws.getDate() - ws.getDay()); }
-    viewStart = ws.toISOString().slice(0, 10);
-    var we = new Date(ws); we.setDate(we.getDate() + 6);
-    viewEnd = we.toISOString().slice(0, 10);
-  }
-  var events = expandRepeatingEvents(rawEvents, viewStart, viewEnd);
-
-  // 이슈 기한을 가상 이벤트로 추가
-  if (_prefetchedIssues) {
-    try {
-      var allIssues = _prefetchedIssues;
-      allIssues.forEach(function (iss) {
-        if (iss.dueDate && iss.status !== 'resolved' && iss.status !== 'closed') {
-          var urgColor = iss.urgency === 'urgent' ? '#EF4444' : iss.urgency === 'normal' ? '#F59E0B' : '#64748B';
-          events.push({
-            id: '_issDue_' + iss.id,
-            title: '🎫 ' + iss.title,
-            type: 'deadline',
-            startDate: iss.dueDate,
-            endDate: iss.dueDate,
-            projectIds: iss.projectId ? [iss.projectId] : [],
-            assignees: iss.assignees || [],
-            memo: '이슈 대응기한',
-            _issueId: iss.id,
-            _virtual: true,
-            _color: urgColor
-          });
-        }
-      });
-    } catch (e) { console.warn('[Calendar]', e); }
-  }
+  var rg = _calViewRange();
+  var events = expandRepeatingEvents(rawEvents, rg.start, rg.end);
 
   // 대시보드 렌더
   renderDashboard(projects);
@@ -86,25 +89,29 @@ async function renderCalendar() {
   // 필터 바
   renderCalFilter(wrap, projects);
 
-  // 필터 적용
-  // 다중 프로젝트 필터 (비어있으면 전체)
+  // 필터 적용 — 다중 프로젝트 (비어있으면 전체)
   if (calFilterProjs.size > 0) {
     projects = projects.filter(function (p) { return calFilterProjs.has(p.id); });
     events = events.filter(function (e) { return e.projectIds && e.projectIds.some(function (id) { return calFilterProjs.has(id); }); });
     milestones = milestones.filter(function (m) { return calFilterProjs.has(m.projectId); });
+    issues = issues.filter(function (i) { return i.projectId && calFilterProjs.has(i.projectId); });
   }
   if (calFilterAssignee) {
-    projects = projects.filter(function (p) { return p.assignees && p.assignees.includes(calFilterAssignee); });
-    events = events.filter(function (e) { return e.assignees && e.assignees.includes(calFilterAssignee); });
-    milestones = milestones.filter(function (m) { return projects.some(function (p) { return p.id === m.projectId; }); });
+    var a = calFilterAssignee;
+    var projIn = {};
+    projects.forEach(function (p) { if (p.assignees && p.assignees.includes(a)) projIn[p.id] = 1; });
+    milestones = milestones.filter(function (m) { return (m.assignees && m.assignees.includes(a)) || projIn[m.projectId]; });
+    projects = projects.filter(function (p) { return projIn[p.id]; });
+    events = events.filter(function (e) { return e.assignees && e.assignees.includes(a); });
+    issues = issues.filter(function (i) { return i.assignees && i.assignees.includes(a); });
   }
   if (calFilterType) {
     events = events.filter(function (e) { return e.type === calFilterType; });
   }
-  // 항목 유형 표시 토글 (체크 해제 시 해당 항목 숨김)
-  if (!calShowProj) projects = [];
-  if (!calShowMs) milestones = [];
-  if (!calShowEvt) events = [];
+
+  var projMap = {};
+  (_calData[0] || []).forEach(function (p) { projMap[p.id] = p; });
+  var all = _calBuildItems(projects, events, milestones, issues, projMap);
 
   // Integration 9: 아카이브 요약 로드
   var archiveSummaries = [];
@@ -112,12 +119,70 @@ async function renderCalendar() {
     try { archiveSummaries = await getWeeklyArchiveSummary(); } catch (e) { console.warn('[Calendar]', e); }
   }
 
-  if (calViewMode === 'month') {
-    renderMonthView(wrap, projects, events, milestones, archiveSummaries);
-  } else {
-    renderWeekView(wrap, projects, events, milestones, archiveSummaries);
+  // 보이는 범위와 겹치는 항목 (+ 표시 토글·완료 숨김)
+  var visible = all.filter(function (it) {
+    if (it.end < rg.start || it.date > rg.end) return false;
+    if (it.kind === 'pspan') return calShowSpans && calShowProj;
+    if ((it.kind === 'pend' || it.kind === 'pstart') && !calShowProj) return false;
+    if (it.kind === 'ms' && !calShowMs) return false;
+    if ((it.kind === 'evt' || it.kind === 'issue') && !calShowEvt) return false;
+    if (calHideDone && it.done) return false;
+    return true;
+  });
+  visible.sort(_calItemCmp);
+
+  var today = localDate();
+  if (!calSelDate || calSelDate < rg.start || calSelDate > rg.end) {
+    calSelDate = (today >= rg.monthStart && today <= rg.monthEnd) ? today : rg.monthStart;
   }
+  _calView = { range: rg, all: all, visible: visible, projMap: projMap, today: today, archive: archiveSummaries };
+
+  if (calViewMode === 'month') renderMonthView(visible, rg, archiveSummaries);
+  else renderWeekView(visible, rg, archiveSummaries);
+  renderCalSide();
 }
+
+/* 달력에 올릴 항목 통합 — { kind, id, date, end, title, proj, color, done, overdue, assignees, ... } */
+function _calBuildItems(projects, events, milestones, issues, projMap) {
+  var today = localDate();
+  var items = [];
+  projects.forEach(function (p) {
+    var st = autoProjectStatus(p);
+    var base = { proj: p, projectId: p.id, color: p.color || '#3B82F6', assignees: p.assignees || [], done: p.status === 'done' };
+    if (p.endDate) items.push(Object.assign({ kind: 'pend', id: 'pe_' + p.id, date: p.endDate, end: p.endDate, title: _calPname(p), overdue: st === 'delayed' }, base));
+    if (p.startDate) items.push(Object.assign({ kind: 'pstart', id: 'ps_' + p.id, date: p.startDate, end: p.startDate, title: _calPname(p), overdue: false }, base));
+    if (p.startDate && p.endDate && p.endDate > p.startDate) items.push(Object.assign({ kind: 'pspan', id: 'pp_' + p.id, date: p.startDate, end: p.endDate, title: _calPname(p), overdue: st === 'delayed' }, base));
+  });
+  milestones.forEach(function (ms) {
+    if (!ms.endDate) return;
+    var p = projMap[ms.projectId];
+    var done = ms.status === 'done';
+    items.push({ kind: 'ms', id: 'ms_' + ms.id, ref: ms, date: ms.endDate, end: ms.endDate, title: ms.name || '(이름 없음)', proj: p, projectId: ms.projectId,
+      color: (p && p.color) || '#8B5CF6', done: done, overdue: !done && ms.endDate < today, assignees: ms.assignees || (p && p.assignees) || [] });
+  });
+  issues.forEach(function (iss) {
+    var urg = iss.urgency === 'urgent' ? '#EF4444' : iss.urgency === 'normal' ? '#F59E0B' : '#64748B';
+    items.push({ kind: 'issue', id: 'is_' + iss.id, ref: iss, date: iss.dueDate, end: iss.dueDate, title: iss.title || '(제목 없음)', proj: projMap[iss.projectId], projectId: iss.projectId,
+      color: urg, done: false, overdue: iss.dueDate < today, assignees: iss.assignees || [] });
+  });
+  events.forEach(function (ev) {
+    if (!ev.startDate) return;
+    var t = EVT_TYPE[ev.type] || EVT_TYPE.etc;
+    var pid = ev.projectIds && ev.projectIds[0];
+    items.push({ kind: 'evt', id: 'ev_' + (ev._origId || ev.id) + '_' + ev.startDate, ref: ev, evtId: ev._origId || ev.id, date: ev.startDate, end: ev.endDate || ev.startDate,
+      title: ev.title || t.label, icon: t.icon, typeLabel: t.label, repeat: !!(ev.repeat || ev._repeatInstance), proj: projMap[pid], projectId: pid,
+      color: ev.color || t.color, done: false, overdue: false, assignees: ev.assignees || [] });
+  });
+  return items;
+}
+function _calItemCmp(a, b) {
+  if (a.done !== b.done) return a.done ? 1 : -1;
+  if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+  var ka = CAL_KIND[a.kind].ord, kb = CAL_KIND[b.kind].ord;
+  if (ka !== kb) return ka - kb;
+  return a.title < b.title ? -1 : a.title > b.title ? 1 : 0;
+}
+function _calIcon(it) { return it.kind === 'evt' ? it.icon : CAL_KIND[it.kind].icon; }
 
 /* ═══ 필터 바 ═══ */
 function renderCalFilter(wrap, allProjects) {
@@ -136,7 +201,7 @@ function renderCalFilter(wrap, allProjects) {
         ' onmouseover="this.style.background=\'var(--bg-hv)\'" onmouseout="this.style.background=\'\'">' +
         '<input type="checkbox"' + ck + ' onchange="calToggleProj(\'' + p.id + '\',this.checked)" style="cursor:pointer">' +
         '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';flex-shrink:0"></span>' +
-        '<span style="overflow:hidden;text-overflow:ellipsis;max-width:200px">' + eH(p.name || p.orderNo) + '</span></label>';
+        '<span style="overflow:hidden;text-overflow:ellipsis;max-width:260px">' + eH(p.name || p.orderNo) + '</span></label>';
     }).join('') || '<div style="padding:8px;font-size:11px;color:var(--t6)">프로젝트가 없습니다</div>';
     projPanel = '<div style="position:absolute;top:100%;left:0;margin-top:4px;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:6px;max-height:340px;overflow:auto;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.35);min-width:220px">' +
       '<div style="display:flex;gap:4px;padding:0 2px 6px;border-bottom:1px solid var(--bd);margin-bottom:4px">' +
@@ -149,6 +214,7 @@ function renderCalFilter(wrap, allProjects) {
   // 담당자 옵션
   var assigneeSet = {};
   allProjects.forEach(function (p) { (p.assignees || []).forEach(function (a) { assigneeSet[a] = 1; }); });
+  if (calFilterAssignee) assigneeSet[calFilterAssignee] = 1;
   var assOpts = '<option value="">전체 담당자</option>';
   Object.keys(assigneeSet).sort().forEach(function (a) {
     var sel = calFilterAssignee === a ? ' selected' : '';
@@ -163,8 +229,8 @@ function renderCalFilter(wrap, allProjects) {
   });
 
   // 항목 유형 표시 토글 칩
-  var chip = function (on, label, kind) {
-    return '<label style="display:flex;align-items:center;gap:4px;font-size:10px;cursor:pointer;padding:3px 8px;border-radius:12px;border:1px solid ' + (on ? 'var(--ac)' : 'var(--bd-i)') + ';background:' + (on ? 'var(--ac-g)' : 'var(--bg-i)') + ';color:' + (on ? 'var(--ac-t)' : 'var(--t5)') + '">' +
+  var chip = function (on, label, kind, title) {
+    return '<label title="' + (title || '') + '" style="display:flex;align-items:center;gap:4px;font-size:10px;cursor:pointer;padding:3px 8px;border-radius:12px;border:1px solid ' + (on ? 'var(--ac)' : 'var(--bd-i)') + ';background:' + (on ? 'var(--ac-g)' : 'var(--bg-i)') + ';color:' + (on ? 'var(--ac-t)' : 'var(--t5)') + '">' +
       '<input type="checkbox"' + (on ? ' checked' : '') + ' onchange="calToggleItem(\'' + kind + '\',this.checked)" style="cursor:pointer;width:12px;height:12px;margin:0">' + label + '</label>';
   };
 
@@ -176,7 +242,13 @@ function renderCalFilter(wrap, allProjects) {
     (selCount ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="calFilterProjs.clear();renderCalendarDebounced()" title="프로젝트 필터 해제">✕</button>' : '') +
     '<select class="si" style="padding-left:8px;max-width:140px;font-size:11px" onchange="calFilterAssignee=this.value;renderCalendarDebounced()">' + assOpts + '</select>' +
     '<select class="si" style="padding-left:8px;max-width:140px;font-size:11px" onchange="calFilterType=this.value;renderCalendarDebounced()">' + typeOpts + '</select>' +
-    '<div style="display:flex;gap:4px;align-items:center" title="달력에 표시할 항목 유형">' + chip(calShowProj, '▭ 프로젝트', 'proj') + chip(calShowMs, '◆ 마일스톤', 'ms') + chip(calShowEvt, '🗓 일정', 'evt') + '</div>' +
+    '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap" title="달력에 표시할 항목 유형">' +
+      chip(calShowProj, '🏁 납기·착수', 'proj', '프로젝트 납기일·착수일') +
+      chip(calShowMs, '◆ 마일스톤', 'ms') +
+      chip(calShowEvt, '🗓 일정·이슈', 'evt', '등록 일정 + 미해결 이슈 대응기한') +
+      chip(calShowSpans, '▭ 기간 막대', 'span', '프로젝트 진행 기간을 가로 막대로 (많으면 복잡해짐)') +
+      chip(calHideDone, '완료 숨김', 'done') +
+    '</div>' +
     '<div style="display:flex;gap:3px">' +
       '<button class="btn btn-s ' + (calViewMode === 'month' ? 'btn-p' : 'btn-g') + '" onclick="calViewMode=\'month\';renderCalendar()">월간</button>' +
       '<button class="btn btn-s ' + (calViewMode === 'week' ? 'btn-p' : 'btn-g') + '" onclick="calViewMode=\'week\';renderCalendar()">주간</button>' +
@@ -198,216 +270,320 @@ function calToggleItem(kind, on) {
   if (kind === 'ms') calShowMs = on;
   else if (kind === 'proj') calShowProj = on;
   else if (kind === 'evt') calShowEvt = on;
+  else if (kind === 'span') calShowSpans = on;
+  else if (kind === 'done') calHideDone = on;
   renderCalendarDebounced();
 }
 
+/* 칩 하나 — 월간/주간/패널 공용 */
+function _calChipHtml(it, opt) {
+  opt = opt || {};
+  var cls = 'calm-chip k-' + it.kind + (it.overdue ? ' is-overdue' : '') + (it.done ? ' is-done' : '');
+  var drag = it.kind === 'evt' ? ' draggable="true" data-evt-id="' + eH(it.evtId) + '"' : '';
+  var sub = it.proj && it.kind !== 'pend' && it.kind !== 'pstart' && it.kind !== 'pspan' ? ' [' + _calPname(it.proj) + ']' : '';
+  var tip = CAL_KIND[it.kind].label + (it.kind === 'evt' ? '·' + it.typeLabel : '') + ' — ' + it.title + sub
+    + (it.end !== it.date ? ' (' + _calMd(it.date) + '~' + _calMd(it.end) + ')' : '')
+    + (it.overdue ? ' · 지연' : '') + (it.done ? ' · 완료' : '');
+  var style = it.kind === 'evt' || it.kind === 'issue'
+    ? 'color:' + it.color + ';background:' + it.color + '1f;border-left-color:' + it.color
+    : 'border-left-color:' + it.color;
+  return '<div class="' + cls + '"' + drag + ' data-cal-item="' + eH(it.id) + '" style="' + style + '" title="' + eH(tip) + '">'
+    + '<span class="calm-ic">' + _calIcon(it) + '</span>'
+    + (it.repeat ? '<span class="calm-ic">🔁</span>' : '')
+    + '<span class="calm-tx">' + eH(it.title) + (opt.withProj && sub ? '<span class="calm-sub">' + eH(sub) + '</span>' : '') + '</span></div>';
+}
+
 /* ═══ 월간 뷰 ═══ */
-function renderMonthView(wrap, projects, events, milestones, archiveSummaries) {
+function renderMonthView(items, rg, archiveSummaries) {
   var grid = document.getElementById('calGrid');
   if (!grid) return;
-  grid.className = 'cal-month-mode';
-  var _calProjMap = {};
-  projects.forEach(function (p) { _calProjMap[p.id] = p; });
+  grid.className = 'calm' + (calFocus ? ' cal-focus-' + calFocus : '');
+  grid.style.position = '';
+  var today = localDate();
 
-  var todayStr = localDate();
-  var firstDay = new Date(calYear, calMonth, 1);
-  var lastDay = new Date(calYear, calMonth + 1, 0);
-  var startDow = firstDay.getDay(); // 0=일
-  var totalDays = lastDay.getDate();
-
-  // 네비게이션
   document.getElementById('calNav').innerHTML =
     '<button class="btn btn-g btn-s" onclick="calMonth--;if(calMonth<0){calMonth=11;calYear--}renderCalendar()">◀</button>' +
     '<span style="font-size:16px;font-weight:700;color:var(--t1);min-width:140px;text-align:center">' + calYear + '년 ' + (calMonth + 1) + '월</span>' +
     '<button class="btn btn-g btn-s" onclick="calMonth++;if(calMonth>11){calMonth=0;calYear++}renderCalendar()">▶</button>' +
-    '<button class="btn btn-g btn-s" style="margin-left:8px" onclick="var t=new Date();calYear=t.getFullYear();calMonth=t.getMonth();renderCalendar()">오늘</button>';
+    '<button class="btn btn-g btn-s" style="margin-left:8px" onclick="var t=new Date();calYear=t.getFullYear();calMonth=t.getMonth();calSelDate=\'\';renderCalendar()">오늘</button>';
 
-  // 요일 헤더
-  var html = '<div class="cal-dow">일</div><div class="cal-dow">월</div><div class="cal-dow">화</div><div class="cal-dow">수</div><div class="cal-dow">목</div><div class="cal-dow">금</div><div class="cal-dow">토</div>';
+  var dows = ['일', '월', '화', '수', '목', '금', '토'];
+  var html = '<div class="calm-dows">' + dows.map(function (d, i) { return '<div class="calm-dow' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '') + '">' + d + '</div>'; }).join('') + '</div>';
 
-  // 빈 셀
-  for (var b = 0; b < startDow; b++) html += '<div class="cal-cell cal-empty"></div>';
+  var spans = items.filter(function (it) { return it.end > it.date; });
+  var singles = items.filter(function (it) { return it.end === it.date; });
 
-  // 날짜 셀
-  for (var d = 1; d <= totalDays; d++) {
-    var dateStr = calYear + '-' + String(calMonth + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-    var isToday = dateStr === todayStr;
-    var cls = 'cal-cell' + (isToday ? ' cal-today' : '');
+  for (var ws = rg.start; ws <= rg.end; ws = _calAddDays(ws, 7)) {
+    var we = _calAddDays(ws, 6);
+    var days = [];
+    for (var i = 0; i < 7; i++) days.push(_calAddDays(ws, i));
 
-    // 해당 날짜의 프로젝트 바
-    var bars = '';
-    projects.forEach(function (p) {
-      if (p.startDate <= dateStr && p.endDate >= dateStr) {
-        var isStart = p.startDate === dateStr;
-        var isEnd = p.endDate === dateStr;
-        var st = autoProjectStatus(p);
-        var barCls = 'cal-bar' + (isStart ? ' cal-bar-start' : '') + (isEnd ? ' cal-bar-end' : '') + (st === 'delayed' ? ' cal-bar-delayed' : '');
-        bars += '<div class="' + barCls + '" style="background:' + p.color + '" onclick="event.stopPropagation();showProjectDetail(\'' + p.id + '\')" title="' + eH(p.name) + '">' + (isStart ? eH(p.name) : '') + '</div>';
+    // 기간 막대: 이 주와 겹치는 것 → 레인 배정 (먼저 시작·긴 것 우선)
+    var wk = spans.filter(function (it) { return it.date <= we && it.end >= ws; })
+      .sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (b.end > a.end ? 1 : -1); });
+    var lanes = [], placed = [], hiddenSpans = 0;
+    wk.forEach(function (it) {
+      var s = it.date < ws ? 0 : _calDow(it.date), e = it.end > we ? 6 : _calDow(it.end);
+      for (var l = 0; l < CAL_SPAN_LANES; l++) {
+        lanes[l] = lanes[l] || [];
+        if (!lanes[l].some(function (x) { return !(e < x[0] || s > x[1]); })) { lanes[l].push([s, e]); placed.push({ it: it, s: s, e: e, lane: l, cont: it.date < ws, more: it.end > we }); return; }
       }
+      hiddenSpans++;
     });
+    var nLanes = Math.max(0, lanes.filter(function (l) { return l && l.length; }).length);
 
-    // 해당 날짜의 이벤트
-    events.forEach(function (ev) {
-      if (ev.startDate <= dateStr && ev.endDate >= dateStr) {
-        var t = EVT_TYPE[ev.type] || EVT_TYPE.etc;
-        bars += '<div class="cal-evt" draggable="true" data-evt-id="' + ev.id + '" style="background:' + ev.color + '20;color:' + ev.color + ';border-left:2px solid ' + ev.color + '" onclick="event.stopPropagation();showEventModal(\'' + (ev._origId || ev.id) + '\')">' + t.icon + (ev.repeat || ev._repeatInstance ? ' 🔁' : '') + ' ' + eH(ev.title) + '</div>';
-      }
-    });
-
-    // 마일스톤 마커
-    milestones.forEach(function (ms) {
-      if (ms.endDate === dateStr) {
-        var msProj = _calProjMap[ms.projectId];
-        var msSt = PROJ_STATUS[ms.status] || PROJ_STATUS.waiting;
-        var msLabel = ms.name + (msProj ? ' [' + (msProj.name || msProj.orderNo) + ']' : '');
-        bars += '<div class="cal-ms" style="color:' + msSt.color + '" title="' + eH(ms.name) + (msProj ? ' (' + eH(msProj.name || msProj.orderNo) + ')' : '') + ' — ' + msSt.label + '">' + msSt.icon + ' ' + eH(msLabel) + '</div>';
-      }
-    });
-
-    // Integration 9: 아카이브 주간 요약 뱃지 (해당 날짜가 아카이브 시작일과 일치하거나 아카이브 주의 월요일이면 표시)
-    var archBadge = '';
-    if (archiveSummaries && archiveSummaries.length) {
-      archiveSummaries.forEach(function (as) {
-        if (dateStr === as.startDate || (dateStr >= as.startDate && dateStr <= as.endDate && new Date(dateStr).getDay() === 1)) {
-          archBadge += '<div style="font-size:8px;padding:1px 4px;background:rgba(59,130,246,.12);color:#3B82F6;border-radius:3px;text-align:center;margin-top:1px;white-space:nowrap" title="' + eH(as.label) + '">&#128202; ' + Math.round(as.totalHours) + 'h/' + as.memberCount + '명</div>';
-        }
+    html += '<div class="calm-week" style="grid-template-rows:24px' + (nLanes ? ' repeat(' + nLanes + ',19px)' : '') + ' minmax(' + (CAL_DAY_MAX * 19 + 4) + 'px,auto)">';
+    days.forEach(function (d, i) {
+      var inMonth = d >= rg.monthStart && d <= rg.monthEnd;
+      var dayItems = singles.filter(function (it) { return it.date === d; });
+      var od = dayItems.filter(function (it) { return it.overdue; }).length;
+      var arch = '';
+      (archiveSummaries || []).forEach(function (as) {
+        if (d === as.startDate || (d >= as.startDate && d <= as.endDate && i === 1)) arch = '<span class="calm-arch" title="' + eH(as.label || '') + '">📊 ' + Math.round(as.totalHours) + 'h/' + as.memberCount + '명</span>';
       });
-    }
-
-    // 더보기 처리: 최대 3개 표시
-    var barItems = bars.split('</div>').filter(function (b) { return b.trim(); }).map(function (b) { return b + '</div>'; });
-    var maxShow = 3;
-    var visibleBars = barItems.slice(0, maxShow).join('');
-    var hiddenCount = barItems.length - maxShow;
-    // CSS: .cal-bars-expand 는 .cal-bars 에 적용되어야 함 (2단계 상위) — 1단계만 잡으면 매칭 안 됨
-    var moreBtn = hiddenCount > 0 ? '<div class="cal-more" onclick="event.stopPropagation();var b=this.closest(\'.cal-bars\');if(b)b.classList.toggle(\'cal-bars-expand\')" style="font-size:9px;color:var(--ac-t);cursor:pointer;text-align:center;padding:1px 0;background:var(--ac-bg);border-radius:3px;margin-top:1px">+' + hiddenCount + '건 더보기</div>' : '';
-    var allBars = bars;
-
-    html += '<div class="' + cls + '" data-date="' + dateStr + '" onclick="showEventModal(null,\'' + dateStr + '\')" ondragover="event.preventDefault();this.classList.add(\'cal-drop-over\')" ondragleave="this.classList.remove(\'cal-drop-over\')" ondrop="calDropEvt(event,\'' + dateStr + '\')">' +
-      '<div class="cal-date">' + d + '</div>' +
-      '<div class="cal-bars">' + (hiddenCount > 0 ? '<div class="cal-bars-limited">' + visibleBars + moreBtn + '</div><div class="cal-bars-all" style="display:none">' + allBars + '</div>' : bars) + '</div>' +
-      archBadge +
-    '</div>';
+      html += '<div class="calm-day' + (inMonth ? '' : ' out') + (d === today ? ' today' : '') + (d === calSelDate ? ' sel' : '') + (i === 0 || i === 6 ? ' wkend' : '') + '" data-date="' + d + '" style="grid-column:' + (i + 1) + ';grid-row:1/-1">'
+        + '<div class="calm-dhead"><span class="calm-dnum">' + (+d.slice(8)) + '</span>'
+        + (od ? '<span class="calm-od" title="지연 ' + od + '건">⚠' + od + '</span>' : '')
+        + arch
+        + (dayItems.length ? '<span class="calm-cnt">' + dayItems.length + '</span>' : '')
+        + '</div></div>';
+    });
+    placed.forEach(function (p) {
+      var it = p.it;
+      var cls = 'calm-span k-' + it.kind + (it.overdue ? ' is-overdue' : '') + (it.done ? ' is-done' : '') + (p.cont ? ' cont-l' : '') + (p.more ? ' cont-r' : '');
+      var drag = it.kind === 'evt' ? ' draggable="true" data-evt-id="' + eH(it.evtId) + '"' : '';
+      var bg = it.kind === 'pspan' ? it.color + '55' : it.color;
+      html += '<div class="' + cls + '"' + drag + ' data-cal-item="' + eH(it.id) + '" style="grid-column:' + (p.s + 1) + '/' + (p.e + 2) + ';grid-row:' + (p.lane + 2) + ';background:' + bg + '" title="' + eH(_calIcon(it) + ' ' + it.title + ' (' + _calMd(it.date) + '~' + _calMd(it.end) + ')') + '">'
+        + (p.cont ? '◂ ' : '') + _calIcon(it) + ' ' + eH(it.title) + '</div>';
+    });
+    days.forEach(function (d, i) {
+      var dayItems = singles.filter(function (it) { return it.date === d; });
+      var show = dayItems.slice(0, CAL_DAY_MAX);
+      var rest = dayItems.length - show.length;
+      html += '<div class="calm-chips" data-date="' + d + '" style="grid-column:' + (i + 1) + ';grid-row:' + (nLanes + 2) + '">'
+        + show.map(function (it) { return _calChipHtml(it); }).join('')
+        + (rest > 0 ? '<div class="calm-more" data-cal-more="' + d + '">+' + rest + '건</div>' : '')
+        + (i === 6 && hiddenSpans ? '<div class="calm-more" title="표시 줄 수를 넘은 기간 일정">기간 +' + hiddenSpans + '</div>' : '')
+        + '</div>';
+    });
+    html += '</div>';
   }
-
-  // 나머지 빈 셀
-  var remain = (7 - (startDow + totalDays) % 7) % 7;
-  for (var r = 0; r < remain; r++) html += '<div class="cal-cell cal-empty"></div>';
 
   grid.innerHTML = html;
-
-  // 빈 상태 안내
-  var hasContent = projects.length || events.length || milestones.length;
-  if (!hasContent) {
-    grid.innerHTML += '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--t6);font-size:13px;pointer-events:auto;z-index:1">등록된 일정이 없습니다.<br><button class=\"btn btn-p\" style=\"margin-top:10px\" onclick=\"showEventModal()\">➕ 첫 일정 등록</button><br><button class=\"btn btn-g btn-s\" style=\"margin-top:6px\" onclick=\"setPage(\'project\');setMode(\'timeline\');showProjectModal()\">➕ 프로젝트 등록</button></div>';
-    grid.style.position = 'relative';
-  }
-
+  _calBindGrid(grid);
   bindCalDrag(grid);
 }
 
+/* 그리드 이벤트 위임 — 날짜 클릭 = 선택, 더블클릭 = 새 일정, 항목 클릭 = 열기, 드롭 = 일정 이동 */
+function _calBindGrid(grid) {
+  if (grid._calBound) return;
+  grid._calBound = true;
+  grid.addEventListener('click', function (e) {
+    var itEl = e.target.closest('[data-cal-item]');
+    if (itEl) { e.stopPropagation(); calOpenItem(itEl.dataset.calItem); return; }
+    var more = e.target.closest('[data-cal-more]');
+    var dEl = more || e.target.closest('[data-date]');
+    if (dEl) calSelectDay(more ? more.dataset.calMore : dEl.dataset.date);
+  });
+  grid.addEventListener('dblclick', function (e) {
+    if (e.target.closest('[data-cal-item]')) return;
+    var dEl = e.target.closest('[data-date]');
+    if (dEl) showEventModal(null, dEl.dataset.date);
+  });
+  grid.addEventListener('dragover', function (e) {
+    var dEl = e.target.closest('[data-date]');
+    if (!dEl || !calDragEvtId) return;
+    e.preventDefault();
+    grid.querySelectorAll('.cal-drop-over').forEach(function (c) { if (c !== dEl) c.classList.remove('cal-drop-over'); });
+    dEl.classList.add('cal-drop-over');
+  });
+  grid.addEventListener('drop', function (e) {
+    var dEl = e.target.closest('[data-date]');
+    if (!dEl) return;
+    calDropEvt({ preventDefault: function () { e.preventDefault(); }, stopPropagation: function () { e.stopPropagation(); }, currentTarget: dEl, dataTransfer: e.dataTransfer }, dEl.dataset.date);
+  });
+}
+
+function calSelectDay(d) {
+  calSelDate = d;
+  var grid = document.getElementById('calGrid');
+  if (grid) grid.querySelectorAll('.calm-day.sel,.cal-week-cell.sel').forEach(function (c) { c.classList.remove('sel'); });
+  if (grid) grid.querySelectorAll('.calm-day[data-date="' + d + '"],.cal-week-cell[data-date="' + d + '"]').forEach(function (c) { c.classList.add('sel'); });
+  renderCalSide();
+}
+
+function _calFindItem(id) {
+  if (!_calView) return null;
+  for (var i = 0; i < _calView.all.length; i++) if (_calView.all[i].id === id) return _calView.all[i];
+  return null;
+}
+/* 항목 열기 — 종류별 상세 */
+function calOpenItem(id) {
+  var it = _calFindItem(id);
+  if (!it) return;
+  if (it.kind === 'evt') return showEventModal(it.evtId);
+  if (it.kind === 'issue') {
+    if (typeof showIssueDetail === 'function') return showIssueDetail(it.ref.id);
+    return setMode('issues');
+  }
+  if (it.projectId && typeof showProjectDetail === 'function') return showProjectDetail(it.projectId);
+}
+/* 마일스톤 완료 처리 (패널에서) */
+async function calMsDone(id) {
+  var it = _calFindItem(id);
+  if (!it || it.kind !== 'ms') return;
+  if (!confirm('마일스톤 "' + it.title + '" 을(를) 완료 처리할까요?')) return;
+  try {
+    var ms = Object.assign({}, it.ref, { status: 'done' });
+    await msPut(ms);
+    if (typeof showToast === 'function') showToast('✅ 완료 처리: ' + it.title);
+    await renderCalendar();
+  } catch (err) {
+    console.error('[calMsDone]', err);
+    if (typeof showToast === 'function') showToast('❌ 완료 처리 실패: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  }
+}
+function calSetFocus(k) {
+  calFocus = calFocus === k ? '' : k;
+  var grid = document.getElementById('calGrid');
+  if (grid) {
+    grid.className = grid.className.replace(/\s*cal-focus-\w+/g, '') + (calFocus ? ' cal-focus-' + calFocus : '');
+  }
+  renderCalSide();
+}
+function calSetAssignee(a) {
+  calFilterAssignee = calFilterAssignee === a ? '' : a;
+  renderCalendarDebounced();
+}
+
+/* ═══ 오른쪽 패널 — 요약 / 선택일 / 처리 필요 / 담당자별 ═══ */
+function renderCalSide() {
+  var side = document.getElementById('calSide');
+  if (!side || !_calView) return;
+  var v = _calView, rg = v.range, today = v.today;
+  var inPeriod = v.visible.filter(function (it) { return it.kind !== 'pspan' && it.date >= rg.monthStart && it.date <= rg.monthEnd; });
+  function cnt(f) { return inPeriod.filter(f).length; }
+  var msAll = cnt(function (it) { return it.kind === 'ms'; }), msDone = cnt(function (it) { return it.kind === 'ms' && it.done; });
+  var tiles = [
+    { k: 'overdue', label: '지연', val: cnt(function (it) { return it.overdue; }), color: '#EF4444' },
+    { k: 'pend', label: '납기', val: cnt(function (it) { return it.kind === 'pend'; }), color: '#F97316' },
+    { k: 'ms', label: '마일스톤', val: msDone + '/' + msAll, color: '#8B5CF6', sub: '완료/전체' },
+    { k: 'issue', label: '이슈 기한', val: cnt(function (it) { return it.kind === 'issue'; }), color: '#F59E0B' },
+    { k: 'evt', label: '일정', val: cnt(function (it) { return it.kind === 'evt'; }), color: '#06B6D4' }
+  ];
+  var periodLabel = calViewMode === 'month' ? (calMonth + 1) + '월' : '이번 주';
+  var h = '<div class="cal-side-sec"><div class="cal-side-h">📊 ' + periodLabel + ' 요약 <span class="cal-side-hint">타일 클릭 = 달력에서 강조</span></div>'
+    + '<div class="cal-tiles">' + tiles.map(function (t) {
+        return '<button class="cal-tile' + (calFocus === t.k ? ' on' : '') + '" onclick="calSetFocus(\'' + t.k + '\')" style="--tc:' + t.color + '">'
+          + '<span class="cal-tile-v">' + t.val + '</span><span class="cal-tile-l">' + t.label + '</span></button>';
+      }).join('') + '</div></div>';
+
+  // 선택일
+  var sel = calSelDate;
+  var onDay = v.visible.filter(function (it) { return it.date <= sel && it.end >= sel; });
+  // 진행 중 프로젝트 기간 막대는 목록을 덮으므로 건수만
+  var running = onDay.filter(function (it) { return it.kind === 'pspan'; }).length;
+  var dayItems = onDay.filter(function (it) { return it.kind !== 'pspan'; });
+  var dw = ['일', '월', '화', '수', '목', '금', '토'][_calDow(sel)];
+  h += '<div class="cal-side-sec"><div class="cal-side-h">📅 ' + _calMd(sel) + ' (' + dw + ')' + (sel === today ? ' <span class="cal-side-today">오늘</span>' : '')
+    + '<span style="flex:1"></span><button class="btn btn-p btn-s" style="font-size:10px" onclick="showEventModal(null,\'' + sel + '\')">＋ 일정</button></div>'
+    + (dayItems.length ? dayItems.map(function (it) { return _calRowHtml(it, false); }).join('') : '<div class="cal-side-empty">이 날 항목이 없습니다</div>')
+    + (running ? '<div class="cal-side-hint" style="margin-top:4px">▭ 진행 중 프로젝트 ' + running + '건</div>' : '')
+    + '</div>';
+
+  // 처리 필요 — 지연(기간 무관) + 7일 내 임박. 완료·일정·착수는 제외
+  var soonEnd = _calAddDays(today, 7);
+  var act = v.all.filter(function (it) {
+    if (it.done || it.kind === 'pspan' || it.kind === 'pstart' || it.kind === 'evt') return false;
+    return it.overdue || (it.date >= today && it.date <= soonEnd);
+  }).sort(function (a, b) { return a.overdue !== b.overdue ? (a.overdue ? -1 : 1) : (a.date < b.date ? -1 : a.date > b.date ? 1 : 0); });
+  var nOver = act.filter(function (it) { return it.overdue; }).length;
+  h += '<div class="cal-side-sec"><div class="cal-side-h">⚠️ 처리 필요 <span class="cal-side-hint">지연 ' + nOver + ' · 7일 내 ' + (act.length - nOver) + '</span></div>'
+    + (act.length ? '<div class="cal-side-list">' + act.slice(0, 40).map(function (it) { return _calRowHtml(it, true); }).join('') + (act.length > 40 ? '<div class="cal-side-empty">… 외 ' + (act.length - 40) + '건</div>' : '') + '</div>'
+      : '<div class="cal-side-empty">지연되거나 임박한 항목이 없습니다 👍</div>')
+    + '</div>';
+
+  // 담당자별 부하 (기간 내 납기·마일스톤·이슈·일정 건수)
+  var load = {};
+  inPeriod.forEach(function (it) {
+    if (it.done || it.kind === 'pstart') return;
+    (it.assignees || []).forEach(function (a) {
+      var o = load[a] = load[a] || { n: 0, od: 0 };
+      o.n++; if (it.overdue) o.od++;
+    });
+  });
+  var people = Object.keys(load).sort(function (a, b) { return load[b].n - load[a].n; });
+  var mx = people.length ? load[people[0]].n : 1;
+  h += '<div class="cal-side-sec"><div class="cal-side-h">👥 담당자별 ' + periodLabel + ' <span class="cal-side-hint">클릭 = 담당자 필터</span></div>'
+    + (people.length ? people.slice(0, 15).map(function (a) {
+        var o = load[a];
+        return '<button class="cal-load' + (calFilterAssignee === a ? ' on' : '') + '" data-a="' + eH(a) + '" onclick="calSetAssignee(this.dataset.a)">'
+          + '<span class="cal-load-n">' + eH(typeof shortName === 'function' ? shortName(a) : a) + '</span>'
+          + '<span class="cal-load-bar"><i style="width:' + Math.round(o.n / mx * 100) + '%"></i></span>'
+          + '<span class="cal-load-c">' + o.n + (o.od ? ' <b>⚠' + o.od + '</b>' : '') + '</span></button>';
+      }).join('') : '<div class="cal-side-empty">담당자 지정 항목 없음</div>')
+    + '</div>';
+
+  side.innerHTML = h;
+}
+
+function _calRowHtml(it, withDate) {
+  var dd = it.overdue && it.date < _calView.today ? daysDiff(it.date, _calView.today) : 0;
+  var when = withDate ? '<span class="cal-row-d' + (it.overdue ? ' od' : '') + '">' + (dd ? 'D+' + dd : it.date === _calView.today ? '오늘' : _calMd(it.date)) + '</span>' : '';
+  var sub = it.proj && it.kind !== 'pend' && it.kind !== 'pstart' && it.kind !== 'pspan' ? _calPname(it.proj) : (it.kind === 'pend' ? '납기' : it.kind === 'pstart' ? '착수' : it.kind === 'pspan' ? _calMd(it.date) + '~' + _calMd(it.end) : '');
+  if (it.kind === 'evt') sub = it.typeLabel + (it.end !== it.date ? ' · ' + _calMd(it.date) + '~' + _calMd(it.end) : '') + (it.proj ? ' · ' + _calPname(it.proj) : '');
+  var who = (it.assignees || []).slice(0, 3).map(function (a) { return typeof shortName === 'function' ? shortName(a) : a; }).join(', ');
+  return '<div class="cal-row k-' + it.kind + (it.overdue ? ' is-overdue' : '') + (it.done ? ' is-done' : '') + '" style="--rc:' + it.color + '">'
+    + when
+    + '<span class="cal-row-ic">' + _calIcon(it) + '</span>'
+    + '<span class="cal-row-main" data-id="' + eH(it.id) + '" onclick="calOpenItem(this.dataset.id)" title="열기"><span class="cal-row-t">' + eH(it.title) + '</span>'
+    + '<span class="cal-row-s">' + eH(sub) + (who ? ' · 👤 ' + eH(who) : '') + '</span></span>'
+    + (it.kind === 'ms' && !it.done ? '<button class="cal-row-btn" data-id="' + eH(it.id) + '" onclick="calMsDone(this.dataset.id)" title="완료 처리">✓ 완료</button>' : '')
+    + '</div>';
+}
+
 /* ═══ 주간 뷰 ═══ */
-function renderWeekView(wrap, projects, events, milestones, archiveSummaries) {
+function renderWeekView(items, rg, archiveSummaries) {
   var grid = document.getElementById('calGrid');
   if (!grid) return;
-  grid.className = '';
-  var _calWkProjMap = {};
-  projects.forEach(function (p) { _calWkProjMap[p.id] = p; });
-
-  if (!calWeekStart) {
-    var t = new Date();
-    var dow = t.getDay();
-    calWeekStart = new Date(t);
-    calWeekStart.setDate(t.getDate() - dow);
-  }
-
+  grid.className = 'calw' + (calFocus ? ' cal-focus-' + calFocus : '');
+  grid.style.position = '';
   var todayStr = localDate();
   var days = [];
-  for (var i = 0; i < 7; i++) {
-    var dd = new Date(calWeekStart);
-    dd.setDate(calWeekStart.getDate() + i);
-    days.push(dd.toISOString().slice(0, 10));
-  }
-
-  var weekEnd = new Date(calWeekStart);
-  weekEnd.setDate(calWeekStart.getDate() + 6);
+  for (var i = 0; i < 7; i++) days.push(_calAddDays(rg.start, i));
 
   document.getElementById('calNav').innerHTML =
     '<button class="btn btn-g btn-s" onclick="calWeekStart.setDate(calWeekStart.getDate()-7);renderCalendar()">◀</button>' +
     '<span style="font-size:14px;font-weight:700;color:var(--t1);min-width:200px;text-align:center">' +
-      calWeekStart.toLocaleDateString('ko') + ' ~ ' + weekEnd.toLocaleDateString('ko') +
+      rg.start.replace(/-/g, '. ') + ' ~ ' + _calMd(rg.end) +
     '</span>' +
     '<button class="btn btn-g btn-s" onclick="calWeekStart.setDate(calWeekStart.getDate()+7);renderCalendar()">▶</button>' +
-    '<button class="btn btn-g btn-s" style="margin-left:8px" onclick="calWeekStart=null;renderCalendar()">이번주</button>';
+    '<button class="btn btn-g btn-s" style="margin-left:8px" onclick="calWeekStart=null;calSelDate=\'\';renderCalendar()">이번주</button>';
 
   var dowNames = ['일', '월', '화', '수', '목', '금', '토'];
   var html = '';
-
   days.forEach(function (dateStr, idx) {
-    var isToday = dateStr === todayStr;
-    var cls = 'cal-week-cell' + (isToday ? ' cal-today' : '');
-    var dd = new Date(dateStr);
-
-    var items = '';
-
-    // 프로젝트
-    projects.forEach(function (p) {
-      if (p.startDate <= dateStr && p.endDate >= dateStr) {
-        var st = autoProjectStatus(p);
-        items += '<div class="cal-week-item" style="border-left:3px solid ' + p.color + ';background:' + p.color + '15" onclick="showProjectDetail(\'' + p.id + '\')">' +
-          '<span style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis">' + eH(p.name) + '</span>' +
-          '<span class="badge" style="background:' + (PROJ_STATUS[st] || {}).bg + ';color:' + (PROJ_STATUS[st] || {}).color + '">' + (PROJ_STATUS[st] || {}).label + '</span>' +
-        '</div>';
-      }
-    });
-
-    // 이벤트
-    events.forEach(function (ev) {
-      if (ev.startDate <= dateStr && ev.endDate >= dateStr) {
-        var t = EVT_TYPE[ev.type] || EVT_TYPE.etc;
-        items += '<div class="cal-week-item" draggable="true" data-evt-id="' + (ev._origId || ev.id) + '" style="border-left:3px solid ' + ev.color + ';background:' + ev.color + '15" onclick="showEventModal(\'' + (ev._origId || ev.id) + '\')">' +
-          t.icon + (ev.repeat || ev._repeatInstance ? ' 🔁' : '') + ' ' + eH(ev.title) +
-        '</div>';
-      }
-    });
-
-    // 마일스톤
-    milestones.forEach(function (ms) {
-      if (ms.endDate === dateStr) {
-        var msProj = _calWkProjMap[ms.projectId];
-        var msSt = PROJ_STATUS[ms.status] || PROJ_STATUS.waiting;
-        items += '<div class="cal-week-item" style="border-left:3px solid ' + msSt.color + ';background:' + msSt.bg + '">' +
-          msSt.icon + ' ' + eH(ms.name) +
-          (msProj ? ' <span style="color:var(--t6);font-size:10px">[' + eH(msProj.name || msProj.orderNo) + ']</span>' : '') +
-          ' <span class="badge" style="background:' + msSt.bg + ';color:' + msSt.color + ';font-size:9px;padding:1px 4px">' + msSt.label + '</span>' +
-        '</div>';
-      }
-    });
-
-    html += '<div class="' + cls + '" data-date="' + dateStr + '" onclick="showEventModal(null,\'' + dateStr + '\')" ondragover="event.preventDefault();this.classList.add(\'cal-drop-over\')" ondragleave="this.classList.remove(\'cal-drop-over\')" ondrop="calDropEvt(event,\'' + dateStr + '\')">' +
-      '<div class="cal-week-hdr"><span class="cal-week-dow">' + dowNames[idx] + '</span><span class="cal-date">' + (dd.getMonth() + 1) + '/' + dd.getDate() + '</span></div>' +
-      '<div class="cal-week-items">' + items + '</div>' +
+    var cls = 'cal-week-cell' + (dateStr === todayStr ? ' cal-today' : '') + (dateStr === calSelDate ? ' sel' : '');
+    var dayItems = items.filter(function (it) { return it.date <= dateStr && it.end >= dateStr; });
+    html += '<div class="' + cls + '" data-date="' + dateStr + '">' +
+      '<div class="cal-week-hdr"><span class="cal-week-dow">' + dowNames[idx] + '</span><span class="cal-date">' + _calMd(dateStr) + '</span></div>' +
+      '<div class="cal-week-items">' + dayItems.map(function (it) { return _calChipHtml(it, { withProj: true }); }).join('') + '</div>' +
     '</div>';
   });
 
   // Integration 9: 주간 뷰 상단 아카이브 요약 바
   var archWeekBar = '';
-  if (archiveSummaries && archiveSummaries.length && days.length) {
-    var weekStartStr = days[0];
-    var weekEndStr = days[days.length - 1];
-    archiveSummaries.forEach(function (as) {
-      // 아카이브 기간이 현재 주간과 겹치면 표시
-      if (as.startDate <= weekEndStr && as.endDate >= weekStartStr) {
-        archWeekBar += '<div style="padding:4px 10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:6px;font-size:11px;color:#3B82F6;display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
-          '<span>&#128202;</span> <span style="font-weight:600">아카이브:</span> ' + Math.round(as.totalHours) + 'h / ' + as.memberCount + '명' +
-          (as.label ? ' <span style="color:var(--t5);font-size:10px">(' + eH(as.label) + ')</span>' : '') +
-        '</div>';
-      }
-    });
-  }
+  (archiveSummaries || []).forEach(function (as) {
+    if (as.startDate <= rg.end && as.endDate >= rg.start) {
+      archWeekBar += '<div style="padding:4px 10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:6px;font-size:11px;color:#3B82F6;display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
+        '<span>&#128202;</span> <span style="font-weight:600">아카이브:</span> ' + Math.round(as.totalHours) + 'h / ' + as.memberCount + '명' +
+        (as.label ? ' <span style="color:var(--t5);font-size:10px">(' + eH(as.label) + ')</span>' : '') +
+      '</div>';
+    }
+  });
 
-  var weekHtml = archWeekBar + '<div class="cal-week-scroll"><div class="cal-week-grid">' + html + '</div></div>';
-  grid.innerHTML = weekHtml;
+  grid.innerHTML = archWeekBar + '<div class="cal-week-scroll"><div class="cal-week-grid">' + html + '</div></div>';
+  _calBindGrid(grid);
   bindCalDrag(grid);
 }
 
@@ -435,7 +611,7 @@ async function showEventModal(evtId, defaultDate) {
 
   var title = evt ? evt.title : '';
   var type = evt ? evt.type : 'etc';
-  var start = evt ? evt.startDate : (defaultDate || new Date().toISOString().slice(0, 10));
+  var start = evt ? evt.startDate : (defaultDate || localDate());
   var end = evt ? evt.endDate : start;
   var memo = evt ? evt.memo : '';
   var repeatVal = evt ? (evt.repeat || '') : '';
@@ -693,9 +869,7 @@ function parseICS(text) {
       ev.endDate = endMatch[1] + '-' + endMatch[2] + '-' + endMatch[3];
       // 종일 이벤트: DTEND는 exclusive이므로 하루 빼기
       if (!endMatch[4]) {
-        var d = new Date(ev.endDate);
-        d.setDate(d.getDate() - 1);
-        ev.endDate = d.toISOString().slice(0, 10);
+        ev.endDate = _calAddDays(ev.endDate, -1);
       }
     } else {
       ev.endDate = ev.startDate;
@@ -781,9 +955,7 @@ async function calDropEvt(e, targetDate) {
     // 날짜 차이 계산하여 시작일/종료일 동시 이동
     var duration = daysDiff(evt.startDate, evt.endDate) || 0;
     var newStart = targetDate;
-    var nd = new Date(targetDate);
-    nd.setDate(nd.getDate() + duration);
-    var newEnd = nd.toISOString().slice(0, 10);
+    var newEnd = _calAddDays(targetDate, duration);
 
     await updateEvent(evtId, { startDate: newStart, endDate: newEnd });
     showToast('일정을 ' + targetDate + '로 이동했습니다');

@@ -507,5 +507,5 @@ function exportProjectReport() {
 
 /* ═══ eH 폴백 (HTML 이스케이프) ═══ */
 if (typeof eH === 'undefined') {
-  function eH(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  function eH(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 }

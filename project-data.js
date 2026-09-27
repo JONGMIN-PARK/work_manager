@@ -289,23 +289,32 @@ function showToast(msg, type) {
 /* ─── 읽기 캐시 (TTL) — 동일 페이지 내 다수 위젯이 같은 API를 호출하는 중복 요청 제거 ─── */
 var _PD_TTL = 30000;
 /* wmDataBus emit 헬퍼 — 정의 안 됐으면 no-op (file:// 모드 등 호환) */
+// 쓰기 성공 이벤트 → 해당 읽기 캐시 무효화. 쓰기 "시작" 때만 지우면, 쓰기가 끝나기 전에 시작된 조회가
+// 옛 데이터를 다시 30초 캐시한다(저장 직후 재렌더가 변경 전 마일스톤을 보여주던 문제)
+var _PD_BUS_KEYS = { project: ['proj', 'projAll'], milestone: ['ms'], event: ['evt'] };
 function _emitBus(type, action, detail) {
+  (_PD_BUS_KEYS[type] || []).forEach(function (k) { _pdInvalidate(k); });
   try { if (typeof window !== 'undefined' && window.wmDataBus) window.wmDataBus.emit(type, action, detail || {}); } catch (e) { /* ignore */ }
 }
 
-var _pdCache = { proj: null, ms: null, evt: null };
-var _pdCacheT = { proj: 0, ms: 0, evt: 0 };
-var _pdInflight = { proj: null, ms: null, evt: null };
+var _pdCache = { proj: null, projAll: null, ms: null, evt: null };
+var _pdCacheT = { proj: 0, projAll: 0, ms: 0, evt: 0 };
+var _pdInflight = { proj: null, projAll: null, ms: null, evt: null };
+var _pdGen = { proj: 0, projAll: 0, ms: 0, evt: 0 };   // 무효화 세대 — 무효화 전에 시작된 조회 결과는 버린다
 function _pdFresh(key) { return _pdCache[key] && (Date.now() - _pdCacheT[key] < _PD_TTL); }
 function _pdInvalidate(key) {
-  if (key) { _pdCache[key] = null; _pdCacheT[key] = 0; _pdInflight[key] = null; }
-  else { _pdCache = { proj: null, ms: null, evt: null }; _pdCacheT = { proj: 0, ms: 0, evt: 0 }; _pdInflight = { proj: null, ms: null, evt: null }; }
+  var keys = key ? [key] : Object.keys(_pdCache);
+  keys.forEach(function (k) { _pdCache[k] = null; _pdCacheT[k] = 0; _pdInflight[k] = null; _pdGen[k] = (_pdGen[k] || 0) + 1; });
 }
 function _pdCached(key, loader) {
   if (_pdFresh(key)) return Promise.resolve(_pdCache[key]);
   if (_pdInflight[key]) return _pdInflight[key];
-  var p = loader().then(function (v) { _pdCache[key] = v; _pdCacheT[key] = Date.now(); _pdInflight[key] = null; return v; })
-                  .catch(function (err) { _pdInflight[key] = null; throw err; });
+  var gen = _pdGen[key] || 0;
+  var p = loader().then(function (v) {
+    if ((_pdGen[key] || 0) === gen) { _pdCache[key] = v; _pdCacheT[key] = Date.now(); }
+    if (_pdInflight[key] === p) _pdInflight[key] = null;
+    return v;
+  }, function (err) { if (_pdInflight[key] === p) _pdInflight[key] = null; throw err; });
   _pdInflight[key] = p;
   return p;
 }

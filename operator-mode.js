@@ -6,9 +6,11 @@
    의존(전역): isOperator, currentUser, projGetAllOperator, pmIsHidden/pmSetHidden/pmSaveFocus,
               apiFetch, showToast, eH, PROJ_STATUS, autoProjectStatus, _modeRendered
    ═══════════════════════════════════════════════════════════════════ */
+var _opRenderSeq = 0;   // 뷰 전환 중 늦게 도착한 관리 화면 응답이 다른 뷰를 덮어쓰지 않도록
 function renderOperator() {
   var wrap = document.getElementById('operatorWrap');
   if (!wrap) return;
+  var seq = ++_opRenderSeq;
   if (!(typeof isOperator === 'function' && isOperator())) {
     wrap.innerHTML = '<div style="text-align:center;color:var(--t6);font-size:12px;padding:30px">운영자 권한이 필요합니다.</div>';
     return;
@@ -39,38 +41,42 @@ function renderOperator() {
   var pUsers = isAdmin ? apiFetch('/api/users/operator-list').then(function (r) { return r.data || []; }).catch(function () { return []; }) : Promise.resolve(null);
 
   Promise.all([pAll, pUsers]).then(function (res) {
+    if (seq !== _opRenderSeq) return;
     var projects = res[0] || [];
     var users = res[1];
     projects.sort(function (a, b) { return (a.name || a.orderNo || '').localeCompare(b.name || b.orderNo || ''); });
     var hiddenCount = projects.filter(function (p) { return pmIsHidden(p.id); }).length;
 
+    _opInjectStyle();
     var h = toggle;
     h += '<div style="margin-bottom:16px"><h3 style="font-size:15px;font-weight:700;color:var(--t1);margin-bottom:4px">🛡️ 운영자 모드</h3>';
     h += '<div style="font-size:11px;color:var(--t5);line-height:1.6">전체 프로젝트를 보고, 보고 싶은 것만 남기도록 숨길 수 있습니다. 숨김은 <b>타임라인·파이프라인·달력·문서관리</b>에 전역 적용되며 새로고침·기기 간 유지됩니다.</div></div>';
 
+    // ── 가시성 + 접근 관리 — 넓은 화면(≥1600px)에선 나란히 (#opManageGrid 미디어쿼리)
+    h += '<div id="opManageGrid" class="' + (isAdmin && users ? 'op-two' : '') + '">';
     // ── 프로젝트 가시성 관리 ──
-    h += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:16px">';
+    h += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;padding:14px;min-width:0">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">';
-    h += '<span style="font-size:12px;font-weight:700;color:var(--t2)">📋 프로젝트 가시성 (' + projects.length + ') · <span style="color:#EF4444">숨김 ' + hiddenCount + '</span></span>';
+    h += '<span style="font-size:12px;font-weight:700;color:var(--t2)">📋 프로젝트 가시성 (' + projects.length + ') · <span style="color:#EF4444">숨김 <span id="opHiddenCount">' + hiddenCount + '</span></span></span>';
     h += '<span style="display:flex;gap:6px"><button class="btn btn-g btn-s" style="font-size:10px" onclick="opShowAll()">전체 표시</button><button class="btn btn-g btn-s" style="font-size:10px" onclick="opHideAll()">전체 숨김</button></span>';
     h += '</div>';
-    h += '<div style="max-height:50vh;overflow:auto">';
+    h += '<div id="opVisList" style="max-height:60vh;overflow:auto">';
     if (!projects.length) h += '<div style="font-size:11px;color:var(--t6);padding:10px">표시할 프로젝트가 없습니다.</div>';
     projects.forEach(function (p) {
       var hid = pmIsHidden(p.id);
       var st = (typeof autoProjectStatus === 'function') ? autoProjectStatus(p) : (p.status || 'waiting');
       var stInfo = (typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[st]) || { label: st, color: '#94A3B8', bg: 'rgba(148,163,184,.15)', icon: '•' };
-      h += '<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--bd);cursor:pointer;opacity:' + (hid ? '.5' : '1') + '">';
-      h += '<input type="checkbox" ' + (hid ? '' : 'checked') + ' onchange="opToggle(\'' + p.id + '\', !this.checked)">';
+      h += '<label data-op-proj="' + _opEsc(p.id) + '" style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--bd);cursor:pointer;min-width:0;opacity:' + (hid ? '.5' : '1') + '">';
+      h += '<input type="checkbox" ' + (hid ? '' : 'checked') + ' onchange="opToggle(this.parentNode.getAttribute(\'data-op-proj\'), !this.checked, this)">';
       h += '<span style="flex:1;font-size:11px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(p.name || p.orderNo || p.id) + (p.orderNo ? ' <span style="color:var(--t6);font-size:10px">' + eH(p.orderNo) + '</span>' : '') + '</span>';
-      h += '<span class="badge" style="background:' + stInfo.bg + ';color:' + stInfo.color + ';font-size:9px;flex-shrink:0">' + (stInfo.icon || '') + ' ' + stInfo.label + '</span>';
+      h += '<span class="badge" style="background:' + stInfo.bg + ';color:' + stInfo.color + ';font-size:9px;flex-shrink:0">' + (stInfo.icon || '') + ' ' + _opEsc(stInfo.label) + '</span>';
       h += '</label>';
     });
     h += '</div></div>';
 
     // ── 운영자 접근 관리 (admin only) ──
     if (isAdmin && users) {
-      h += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;padding:14px">';
+      h += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;padding:14px;min-width:0">';
       h += '<div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:4px">👥 운영자 접근 관리</div>';
       h += '<div style="font-size:10px;color:var(--t6);margin-bottom:10px">허용된 사용자만 운영자 모드에 접근할 수 있습니다. (admin은 항상 접근)</div>';
       h += '<div style="max-height:40vh;overflow:auto">';
@@ -89,10 +95,12 @@ function renderOperator() {
       });
       h += '</div></div>';
     }
+    h += '</div>';   // #opManageGrid
 
     wrap.innerHTML = h;
   }).catch(function (e) {
-    wrap.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:20px">로드 실패: ' + ((e && e.message) || e) + (e && e.status === 404 ? ' (서버 배포 후 동작)' : '') + '</div>';
+    if (seq !== _opRenderSeq) return;
+    wrap.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:20px">로드 실패: ' + _opEsc((e && e.message) || e) + (e && e.status === 404 ? ' (서버 배포 후 동작)' : '') + '</div>';
   });
 }
 
@@ -115,9 +123,33 @@ function _opSaveFocusDebounced() {
     });
   }, 400);
 }
-function opToggle(projId, hidden) {
+function opToggle(projId, hidden, el) {
   if (typeof pmSetHidden === 'function') pmSetHidden(projId, hidden);
-  _opInvalidateViews(); _opSaveFocusDebounced(); renderOperator();
+  _opInvalidateViews(); _opSaveFocusDebounced();
+  // 전체 재조회·재렌더 대신 해당 행과 숨김 카운트만 갱신 (스크롤 위치 유지)
+  var row = el && el.parentNode;
+  var cnt = document.getElementById('opHiddenCount');
+  var list = document.getElementById('opVisList');
+  if (!row || !cnt || !list) { renderOperator(); return; }
+  row.style.opacity = hidden ? '.5' : '1';
+  var n = 0;
+  list.querySelectorAll('label[data-op-proj]').forEach(function (lb) {
+    var id = lb.getAttribute('data-op-proj');
+    if (typeof pmIsHidden === 'function' ? pmIsHidden(id) : lb.style.opacity === '0.5') n++;
+  });
+  cnt.textContent = n;
+}
+
+/* 와이드 레이아웃 스타일 (1회 주입) */
+function _opInjectStyle() {
+  if (document.getElementById('opWideStyle')) return;
+  var st = document.createElement('style');
+  st.id = 'opWideStyle';
+  st.textContent =
+    '#opManageGrid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}' +
+    '#opVisList{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));column-gap:18px;align-content:start}' +
+    '@media(min-width:1600px){#opManageGrid.op-two{grid-template-columns:minmax(0,2.4fr) minmax(360px,1fr)}}';
+  document.head.appendChild(st);
 }
 function opShowAll() {
   if (typeof projGetAllOperator !== 'function') return;
@@ -159,7 +191,12 @@ var _OP_LOG_LABELS = {
   'comment.create': { icon: '💬', label: '코멘트/피드백', color: '#EC4899' },
   'approve_user': { icon: '👤', label: '사용자 승인', color: '#6366F1' }
 };
-function _opEsc(s) { return (typeof eH === 'function') ? eH(s == null ? '' : String(s)) : String(s == null ? '' : s); }
+function _opEsc(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
 function _opLogTime(iso) {
   if (typeof _pdRelTime === 'function') { var r = _pdRelTime(iso); if (r) return r; }
   try { var d = new Date(iso); if (isNaN(d.getTime())) return ''; return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); } catch (e) { return ''; }
