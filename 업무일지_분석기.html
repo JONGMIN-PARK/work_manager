@@ -912,7 +912,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.186</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.187</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3518,6 +3518,17 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.187',date:'2026-09-27',title:'✍️ 주간업무 작성 — 지난주 업무일지 사이드 패널 (팀·팀원 검색 + 요약 삽입)',tag:'feat',items:[
+      '작성 탭 오른쪽에 📋 업무일지 패널이 붙습니다 — 편집하면서 지난주 기록을 옆에 두고 볼 수 있습니다. 스크롤해도 따라오고, ⟩ 로 접으면 편집 영역이 전체 폭을 씁니다',
+      '기간: 기본은 작성 주차의 전주(월~일). [작성 주차]·[직접] 지정도 가능',
+      '팀: 설정 > 팀원 그룹을 그대로 씁니다. 작성 팀명과 같은 이름의 그룹이 있으면 자동 선택. 팀원 칩으로 사람별 on/off (Ctrl+클릭 = 그 사람만), 키워드 검색(내용·사이트·수주)',
+      '요약: 같은 수주의 여러 날 기록을 한 항목으로 묶어 담당자·합계 시간·기간·대표 세부(시간 많은 순 4개)를 보여줍니다. 수주별/담당자별 전환. 업무분장 D→[개발] · M→[셋업] · A→[C/S] · 나머지→[기타], V(휴가)는 제외',
+      '＋ 삽입: 항목·묶음·전체를 지난주/금주 편집창의 해당 섹션 끝에 넣습니다. 섹션이 없으면 개발→셋업→C/S→기타 순서 자리에 새로 만듭니다',
+      '🤖 AI 초안: 보이는 기록을 주간보고 문법으로 정리한 초안을 받아, 패널에서 고친 뒤 삽입합니다',
+      '폭 넓게: 작성 탭에서는 화면 1400px 제한을 풀고, 패널 왼쪽 경계를 드래그해 폭 조절(320~960px, 더블클릭 = 기본). 👁 미리보기 버튼으로 미리보기를 숨기면 편집창이 넓어집니다. 폭·접힘·미리보기 설정은 기억됩니다',
+      '🐞 기존 하단 업무일지 목록의 [+ 추가]가 기본 화면(비교 보기)에서 아무 동작도 하지 않던 문제 해결 — 패널로 대체',
+      '영향: weekly-report-admin.js. 클라이언트 전용 — 서버 배포 불필요'
+    ]},
     {ver:'13.186',date:'2026-09-06',title:'📄 주간보고 — 긴 업무 내용이 두 줄까지 표시',tag:'fix',items:[
       '⚠️ 업무 내용이 한 줄을 넘으면 무조건 "…" 로 잘리던 것을 두 줄까지 표시하도록 바꿨습니다 — 기한 없는 일반 업무(기타·C/S 등)에서 특히 많이 잘렸습니다',
       '대부분의 항목은 여전히 한 줄로 끝나 기존 밀도형 레이아웃이 유지되고, 긴 것만 두 줄로 펼쳐집니다. 기한·진행률·D-day 는 첫 줄 기준으로 그대로 정렬됩니다',
