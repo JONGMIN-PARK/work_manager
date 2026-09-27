@@ -190,6 +190,21 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .pipeline-card.pipe-drop-after::after{content:'';position:absolute;left:-2px;right:-2px;height:4px;border-radius:3px;background:var(--ac);box-shadow:0 0 8px 1px var(--ac);z-index:6;pointer-events:none}
 .pipeline-card.pipe-drop-before::before{top:-6px}
 .pipeline-card.pipe-drop-after::after{bottom:-6px}
+/* v13.188 파이프라인 카드 접기 — 기본은 제목 한 줄, 클릭한 카드만 상세 펼침 */
+.pipeline-card:not(.open){padding:7px 10px!important}
+.pipeline-card .pipe-title{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--t1);min-width:0}
+.pipeline-card .pipe-caret{font-size:9px;color:var(--t5);flex-shrink:0;transition:transform .15s}
+.pipeline-card.open .pipe-caret{transform:rotate(90deg)}
+.pipeline-card .pipe-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pipeline-card.open .pipe-name{white-space:normal;word-break:break-word}
+.pipeline-card .pipe-det{display:none;margin-top:2px}
+.pipeline-card.open .pipe-det{display:block}
+.pipe-open-btn{display:block;width:100%;margin-top:8px;font-size:10px;padding:3px 0;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer}
+.pipe-open-btn:hover{border-color:var(--ac);color:var(--ac)}
+.pipe-tool-btn{font-size:10px;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer}
+.pipe-tool-btn:hover{border-color:var(--ac);color:var(--ac)}
+.pipe-lane-tgl{font-size:10px;padding:0 6px;margin-left:4px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t4);cursor:pointer;line-height:1.5}
+.pipe-lane-tgl:hover{border-color:var(--ac);color:var(--ac)}
 /* v13.156 프로젝트 라벨 대표 이미지 썸네일 */
 .tl-thumb{width:var(--tl-thumb-sz,108px);height:var(--tl-thumb-sz,108px);min-width:var(--tl-thumb-sz,108px);border-radius:8px;overflow:hidden;background:var(--bg-i);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;cursor:zoom-in;flex-shrink:0}
 .tl-thumb:empty::after{content:'📷';font-size:calc(var(--tl-thumb-sz,108px) * .28);opacity:.28}

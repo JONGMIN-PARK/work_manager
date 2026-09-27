@@ -614,6 +614,21 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .pipeline-card.pipe-drop-after::after{content:'';position:absolute;left:-2px;right:-2px;height:4px;border-radius:3px;background:var(--ac);box-shadow:0 0 8px 1px var(--ac);z-index:6;pointer-events:none}
 .pipeline-card.pipe-drop-before::before{top:-6px}
 .pipeline-card.pipe-drop-after::after{bottom:-6px}
+/* v13.188 파이프라인 카드 접기 — 기본은 제목 한 줄, 클릭한 카드만 상세 펼침 */
+.pipeline-card:not(.open){padding:7px 10px!important}
+.pipeline-card .pipe-title{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--t1);min-width:0}
+.pipeline-card .pipe-caret{font-size:9px;color:var(--t5);flex-shrink:0;transition:transform .15s}
+.pipeline-card.open .pipe-caret{transform:rotate(90deg)}
+.pipeline-card .pipe-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pipeline-card.open .pipe-name{white-space:normal;word-break:break-word}
+.pipeline-card .pipe-det{display:none;margin-top:2px}
+.pipeline-card.open .pipe-det{display:block}
+.pipe-open-btn{display:block;width:100%;margin-top:8px;font-size:10px;padding:3px 0;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer}
+.pipe-open-btn:hover{border-color:var(--ac);color:var(--ac)}
+.pipe-tool-btn{font-size:10px;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer}
+.pipe-tool-btn:hover{border-color:var(--ac);color:var(--ac)}
+.pipe-lane-tgl{font-size:10px;padding:0 6px;margin-left:4px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-p);color:var(--t4);cursor:pointer;line-height:1.5}
+.pipe-lane-tgl:hover{border-color:var(--ac);color:var(--ac)}
 /* v13.156 프로젝트 라벨 대표 이미지 썸네일 */
 .tl-thumb{width:var(--tl-thumb-sz,108px);height:var(--tl-thumb-sz,108px);min-width:var(--tl-thumb-sz,108px);border-radius:8px;overflow:hidden;background:var(--bg-i);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;cursor:zoom-in;flex-shrink:0}
 .tl-thumb:empty::after{content:'📷';font-size:calc(var(--tl-thumb-sz,108px) * .28);opacity:.28}
@@ -912,7 +927,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.187</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기">v13.188</span></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -3518,6 +3533,15 @@ function downloadCanvas(canvas,filename){
 function renderPatchNotes(){
   var el=document.getElementById('mPatchNotes');if(!el)return;
   var PATCHES=[
+    {ver:'13.188',date:'2026-09-27',title:'🔀 파이프라인 — 카드 제목만 보기 + 클릭 펼치기 + 전체 펼치기/접기',tag:'feat',items:[
+      '각 단계 레인이 내부 스크롤(500px) 없이 세로로 끝까지 늘어납니다 — 카드가 많아도 페이지 스크롤로 한 번에 봅니다',
+      '카드는 기본으로 제목 한 줄만 보입니다. 클릭하면 그 카드만 펼쳐져 수주번호·상태·진척률·체크리스트·이슈·담당자·지연이 보이고, 다시 클릭하면 접힙니다',
+      '프로젝트 상세는 펼친 카드의 [🔍 상세 보기] 또는 카드 더블클릭으로 엽니다',
+      '상단 [⊞ 전체 펼치기] [⊟ 전체 접기], 레인 헤더 ⇕ 버튼으로 그 단계만 펼치기/접기',
+      '펼친 카드는 기억됩니다(새로고침·재방문 후에도 유지). 지연 카드는 접혀 있어도 빨간 테두리로 구분',
+      '긴 프로젝트명 때문에 레인 폭이 들쭉날쭉하던 것도 균등 폭으로 고정',
+      '영향: pipeline.js, style.css. 클라이언트 전용 — 서버 배포 불필요'
+    ]},
     {ver:'13.187',date:'2026-09-27',title:'✍️ 주간업무 작성 — 지난주 업무일지 사이드 패널 (팀·팀원 검색 + 요약 삽입)',tag:'feat',items:[
       '작성 탭 오른쪽에 📋 업무일지 패널이 붙습니다 — 편집하면서 지난주 기록을 옆에 두고 볼 수 있습니다. 스크롤해도 따라오고, ⟩ 로 접으면 편집 영역이 전체 폭을 씁니다',
       '기간: 기본은 작성 주차의 전주(월~일). [작성 주차]·[직접] 지정도 가능',

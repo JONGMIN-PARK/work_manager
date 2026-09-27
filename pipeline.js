@@ -44,13 +44,18 @@ function renderPipeline() {
     projects.forEach(function (p) { if (p.orderNo) projOrderNos[p.orderNo] = true; });
 
     var html = '';
+    var liveIds = {};
 
     // 상단 요약 카드
     html += '<div class="pnl" style="margin-bottom:14px;padding:14px 18px">';
     html += '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">';
     html += '<span style="font-size:13px;font-weight:700;color:var(--t2)">🔀 파이프라인</span>';
     html += '<span style="font-size:11px;color:var(--t5)">전체 ' + projects.length + '건</span>';
-    html += '<button onclick="exportProjectReport()" style="font-size:10px;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;margin-left:auto">📊 보고서</button>';
+    html += '<span style="margin-left:auto;display:flex;gap:6px">';
+    html += '<button class="pipe-tool-btn" onclick="pipelineSetAll(true)" title="모든 카드 펼치기">⊞ 전체 펼치기</button>';
+    html += '<button class="pipe-tool-btn" onclick="pipelineSetAll(false)" title="모든 카드를 제목만 보이게 접기">⊟ 전체 접기</button>';
+    html += '<button class="pipe-tool-btn" onclick="exportProjectReport()">📊 보고서</button>';
+    html += '</span>';
     phaseKeys.forEach(function (k) {
       var ph = phases[k];
       var cnt = buckets[k].length;
@@ -59,22 +64,24 @@ function renderPipeline() {
     html += '</div></div>';
 
     // 칸반 보드
-    html += '<div class="pipeline-board" style="display:grid;grid-template-columns:repeat(' + phaseKeys.length + ',1fr);gap:10px;min-height:400px">';
+    html += '<div class="pipeline-board" style="display:grid;grid-template-columns:repeat(' + phaseKeys.length + ',minmax(0,1fr));gap:10px;min-height:400px">';
 
     phaseKeys.forEach(function (k) {
       var ph = phases[k];
       var items = buckets[k];
 
-      html += '<div class="pipeline-lane" data-phase="' + k + '" ondragover="pipelineDragOver(event)" ondrop="pipelineDrop(event,\'' + k + '\')" ondragenter="pipelineDragEnter(event)" ondragleave="pipelineDragLeave(event)" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:10px;padding:12px;display:flex;flex-direction:column;transition:border-color .2s">';
+      html += '<div class="pipeline-lane" data-phase="' + k + '" ondragover="pipelineDragOver(event)" ondrop="pipelineDrop(event,\'' + k + '\')" ondragenter="pipelineDragEnter(event)" ondragleave="pipelineDragLeave(event)" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:10px;padding:12px;display:flex;flex-direction:column;min-width:0;transition:border-color .2s">';
       // 레인 헤더
       html += '<div style="text-align:center;margin-bottom:10px;padding-bottom:10px;border-bottom:2px solid ' + ph.color + '">';
       html += '<div style="font-size:20px;margin-bottom:4px">' + ph.icon + '</div>';
       html += '<div style="font-size:11px;font-weight:700;color:' + ph.color + ';letter-spacing:-.2px">' + ph.label + '</div>';
-      html += '<div style="font-size:10px;color:var(--t5);margin-top:3px;font-weight:600">' + items.length + '건</div>';
+      html += '<div style="font-size:10px;color:var(--t5);margin-top:3px;font-weight:600">' + items.length + '건'
+        + (items.length ? ' <button class="pipe-lane-tgl" onclick="pipelineLaneToggle(\'' + k + '\')" title="이 단계 카드 전체 펼치기/접기">⇕</button>' : '')
+        + '</div>';
       html += '</div>';
 
-      // 카드들
-      html += '<div style="display:flex;flex-direction:column;gap:8px;flex:1;overflow-y:auto;max-height:500px">';
+      // 카드들 — 레인 안 스크롤 없이 세로로 끝까지 (접힌 카드는 제목 한 줄)
+      html += '<div style="display:flex;flex-direction:column;gap:6px;flex:1">';
       if (items.length === 0) {
         html += '<div style="text-align:center;color:var(--t6);font-size:10px;padding:20px 0">—</div>';
       }
@@ -91,10 +98,13 @@ function renderPipeline() {
         var chkDone = chkInfo ? chkInfo.done : 0;
         var chkPct = chkTotal > 0 ? Math.round(chkDone / chkTotal * 100) : -1;
 
-        html += '<div class="pipeline-card" draggable="true" data-pid="' + p.id + '" data-phase="' + k + '" ondragstart="pipelineDragStart(event,\'' + p.id + '\')" ondragend="pipelineDragEnd(event)" ondragover="pipelineCardDragOver(event)" ondragleave="pipelineCardDragLeave(event)" ondrop="pipelineCardDrop(event,\'' + p.id + '\',\'' + k + '\')" style="background:var(--bg-p);border:' + borderStyle + ';border-radius:8px;padding:10px 12px;cursor:grab;transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 3px 8px rgba(0,0,0,.1)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'\'" onclick="pipelineCardClick(\'' + p.id + '\')" title="' + eH(p.name) + ' — 드래그: 단계 이동(레인) / 같은 단계 카드 위로: 순서 변경">';
+        var isOpen = !!_pipeOpen[p.id];
+        liveIds[p.id] = 1;
+        html += '<div class="pipeline-card' + (isOpen ? ' open' : '') + '" draggable="true" data-pid="' + p.id + '" data-phase="' + k + '" ondragstart="pipelineDragStart(event,\'' + p.id + '\')" ondragend="pipelineDragEnd(event)" ondragover="pipelineCardDragOver(event)" ondragleave="pipelineCardDragLeave(event)" ondrop="pipelineCardDrop(event,\'' + p.id + '\',\'' + k + '\')" style="background:var(--bg-p);border:' + borderStyle + ';border-radius:8px;padding:10px 12px;cursor:grab;transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 3px 8px rgba(0,0,0,.1)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'\'" onclick="pipelineCardToggle(event,\'' + p.id + '\')" ondblclick="pipelineCardClick(\'' + p.id + '\')" title="' + eH(p.name) + ' — 클릭: 펼치기/접기 · 더블클릭: 상세 · 드래그: 단계 이동(레인) / 같은 단계 카드 위로: 순서 변경">';
 
-        // 프로젝트명
-        html += '<div style="font-size:12px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(p.name) + '</div>';
+        // 프로젝트명 (접힌 상태에서는 이 줄만 보임)
+        html += '<div class="pipe-title"><span class="pipe-caret">▸</span><span class="pipe-name">' + eH(p.name) + '</span></div>';
+        html += '<div class="pipe-det">';
 
         // 수주번호 + 거래처
         if (p.orderNo) {
@@ -144,6 +154,8 @@ function renderPipeline() {
           html += '<div style="font-size:9px;color:#EF4444;font-weight:600;margin-top:3px">⚠️ ' + overDays + '일 초과</div>';
         }
 
+        html += '<button class="pipe-open-btn" onclick="event.stopPropagation();pipelineCardClick(\'' + p.id + '\')">🔍 상세 보기</button>';
+        html += '</div>'; // pipe-det end
         html += '</div>'; // card end
       });
       html += '</div>'; // cards container end
@@ -153,6 +165,9 @@ function renderPipeline() {
     html += '</div>'; // grid end
 
     wrap.innerHTML = html;
+    // 삭제된 프로젝트의 펼침 기록 정리
+    Object.keys(_pipeOpen).forEach(function (id) { if (!liveIds[id]) delete _pipeOpen[id]; });
+    _pipeSaveOpen();
   });
 }
 
@@ -164,6 +179,34 @@ function guessPhase(proj) {
   if (s === 'waiting') return 'order';
   // 진행중/지연/보류 → 중간 단계로 추정
   return 'manufacture';
+}
+
+/* ═══ 카드 펼치기/접기 — 기본은 제목만, 펼친 카드 id 는 localStorage 에 기억 ═══ */
+var _pipeOpen = (function () {
+  try { return JSON.parse(localStorage.getItem('pipe-open') || '{}') || {}; } catch (e) { return {}; }
+})();
+function _pipeSaveOpen() { try { localStorage.setItem('pipe-open', JSON.stringify(_pipeOpen)); } catch (e) {} }
+function _pipeSetCard(card, on) {
+  card.classList.toggle('open', on);
+  if (on) _pipeOpen[card.dataset.pid] = 1; else delete _pipeOpen[card.dataset.pid];
+}
+/* 카드 클릭 → 펼치기/접기 (DOM 만 토글, 재렌더 없음) */
+function pipelineCardToggle(e, projId) {
+  var card = e && e.currentTarget;
+  if (!card || (e.target && e.target.closest && e.target.closest('button,a,input'))) return;
+  _pipeSetCard(card, !card.classList.contains('open'));
+  _pipeSaveOpen();
+}
+/* 전체(또는 한 단계) 펼치기/접기 */
+function pipelineSetAll(on, phase) {
+  var cards = document.querySelectorAll('#pipelineWrap .pipeline-card' + (phase ? '[data-phase="' + phase + '"]' : ''));
+  for (var i = 0; i < cards.length; i++) _pipeSetCard(cards[i], on);
+  _pipeSaveOpen();
+}
+/* 레인 헤더 ⇕ — 하나라도 접혀 있으면 모두 펼치고, 다 펼쳐져 있으면 모두 접기 */
+function pipelineLaneToggle(phase) {
+  var closed = document.querySelectorAll('#pipelineWrap .pipeline-card[data-phase="' + phase + '"]:not(.open)').length;
+  pipelineSetAll(closed > 0, phase);
 }
 
 /* 파이프라인 카드 클릭 → 프로젝트 상세 */
