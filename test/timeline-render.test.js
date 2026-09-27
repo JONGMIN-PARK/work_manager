@@ -73,6 +73,7 @@ function serNS(n) {
 }
 
 // tlScroll 안의 .tl-row[data-proj-id] 행을 HTML 에서 흉내 (offsetTop/바 위치)
+const FAKE_LABEL_W = 240;
 function fakeRows(html) {
   const rows = [];
   const re = /<div class="tl-row ([^"]*)"( data-ms-id="[^"]*")? data-proj-id="([^"]*)"/g;
@@ -87,7 +88,10 @@ function fakeRows(html) {
       const bm = bre.exec(html);
       const st = bm ? bm[1] : '';
       const l = /left:([\d.]+)px/.exec(st), w = /width:([\d.]+)px/.exec(st);
-      bar = { offsetLeft: l ? +l[1] : 0, offsetWidth: w ? +w[1] : 0 };
+      const L = l ? +l[1] : 0, W = w ? +w[1] : 0, T = idx * 40 + 10;
+      // 막대 영역은 라벨 열(FAKE_LABEL_W) 뒤에서 시작 — 스크롤 박스는 (0,0), 스크롤 0
+      bar = { offsetLeft: L, offsetWidth: W,
+        getBoundingClientRect: () => ({ left: FAKE_LABEL_W + L, right: FAKE_LABEL_W + L + W, top: T, bottom: T + 20, width: W, height: 20 }) };
     }
     rows.push({ dataset: { projId: pid }, offsetTop: idx * 40, offsetHeight: 40, querySelector: () => bar });
   }
@@ -113,6 +117,7 @@ function load(opts) {
     sc._rows = [];
     sc.querySelectorAll = (sel) => (sel === '.tl-row[data-proj-id]' ? sc._rows : []);
     sc.appendChild = (c) => { sc.children.push(c); st.svg = serNS(c); return c; };
+    sc.getBoundingClientRect = () => ({ left: 0, top: 0, right: 1200, bottom: 900, width: 1200, height: 900 });
     return sc;
   }
   ['timelineWrap', 'tlContent', 'tlControls', 'tlProjList'].forEach((id) => { els[id] = fakeEl('div', id); });
@@ -168,6 +173,7 @@ function load(opts) {
     eH: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'),
     shortName: (n) => String(n).slice(1),
     requestAnimationFrame() {},
+    getComputedStyle: (el) => ({ position: (el && el.style && el.style.position) || 'static' }),
   };
   vm.createContext(sandbox);
   for (const f of ['config.js', 'project-data.js', 'timeline.js']) {

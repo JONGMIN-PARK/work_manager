@@ -209,7 +209,7 @@ test('renderAssigneeWorkload: 배정 건수별 의미색 (여유/적정/주의/�
 /* ── 크리티컬 패스 ── */
 const cp = (s, list) => plain(s.calcCriticalPath(list));
 
-test('calcCriticalPath: 직렬 체인 — 여유 0 인 끝 노드만 (종료일=EF 기준이라 하루 여유가 생김)', () => {
+test('calcCriticalPath: 직렬 체인 — 여유 없이 이어지면 체인 전체가 크리티컬 (v13.191 off-by-one 수정)', () => {
   const s = load();
   const list = [
     { id: 'a', startDate: '2026-09-01', endDate: '2026-09-10' },
@@ -217,7 +217,27 @@ test('calcCriticalPath: 직렬 체인 — 여유 0 인 끝 노드만 (종료일=
     { id: 'c', startDate: '2026-09-21', endDate: '2026-09-30', dependencies: ['b'] },
     { id: 'd', startDate: '2026-09-01', endDate: '2026-09-03' },
   ];
-  assert.deepStrictEqual(cp(s, list), { c: true });
+  assert.deepStrictEqual(cp(s, list), { a: true, b: true, c: true });
+});
+
+test('calcCriticalPath: 병렬 가지 — 여유 있는 짧은 가지는 크리티컬 아님', () => {
+  const s = load();
+  const list = [
+    { id: 'a', startDate: '2026-09-01', endDate: '2026-09-05' },
+    { id: 'long', startDate: '2026-09-06', endDate: '2026-09-20', dependencies: ['a'] },
+    { id: 'short', startDate: '2026-09-06', endDate: '2026-09-08', dependencies: ['a'] },
+    { id: 'z', startDate: '2026-09-21', endDate: '2026-09-25', dependencies: ['long', 'short'] },
+  ];
+  assert.deepStrictEqual(cp(s, list), { a: true, long: true, z: true });
+});
+
+test('calcCriticalPath: 계획상 하루 틈이 있으면 그 선행은 여유 1일 → 크리티컬 아님', () => {
+  const s = load();
+  const list = [
+    { id: 'a', startDate: '2026-09-01', endDate: '2026-09-09' },
+    { id: 'b', startDate: '2026-09-11', endDate: '2026-09-20', dependencies: ['a'] },
+  ];
+  assert.deepStrictEqual(cp(s, list), { b: true });
 });
 
 test('calcCriticalPath: 선행 종료가 후행 시작보다 늦으면 ES 밀림 → 둘 다 크리티컬', () => {

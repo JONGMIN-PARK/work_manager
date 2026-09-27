@@ -1,5 +1,28 @@
 # Work Manager — 변경 이력
 
+## v13.191 (2026-09-27) — 타임라인: 의존 화살표 · 크리티컬 패스 수정, 막대 hover 사진 제거
+
+### 기간 막대 hover 사진 미리보기 제거
+프로젝트 기간 막대(`.tl-bar[data-type="proj"]`)의 `onmouseenter/onmouseleave → pimgHover/pimgHoverOut` 제거.
+막대 위에서 드래그·클릭할 때 미리보기 카드가 가렸다. `pimgHover` 호출처는 이곳뿐이었고, 왼쪽 목록 썸네일(`--tl-thumb-sz`)은 별개 기능이라 유지.
+
+### 의존 화살표 (`drawDependencyArrows`)
+1. **마일스톤 있는 프로젝트에 화살표 없음** — 마일스톤 행도 `data-proj-id` 를 가져 `projRows[pid]` 를 마지막 마일스톤 행이 덮어씀 →
+   그 행엔 `.tl-bar[data-type="proj"]` 가 없어 건너뜀. 프로젝트 막대가 있는 첫 행만 매핑.
+2. **가로 스크롤만큼 어긋남** — SVG(`position:absolute`)의 기준 상자가 `#tlScroll`(static)이 아니라 바깥 `.tl-container` 여서
+   스크롤해도 따라오지 않고 `scrollLeft` 만큼 밀림(실측: 경로 x 1044 vs 막대 끝 362, 차이 = scrollLeft 682).
+   `#tlScroll` 을 `position:relative` 로(안의 다른 absolute 요소는 모두 `.tl-bars` 기준이라 영향 없음 — 실측 확인),
+   좌표는 `getBoundingClientRect` + 스크롤 오프셋으로 계산(offsetParent·라벨 폭 가정 제거). 실측 시작·끝 오차 0px.
+
+### 크리티컬 패스 (`calcCriticalPath`)
+날짜는 포함 구간(종료일까지 작업)인데 전진 계산에서 `ES = 선행 EF`(같은 날), 후진 계산에서 `LF = 후행 LS`(같은 날)로 둬
+선행마다 가짜 여유 1일이 생김 → 단순 체인에서 끝 노드만 크리티컬. `ES = EF + 1일`, `LF = LS − 1일`(`_cpAddDays`, UTC 기준)로 수정.
+테스트: 체인 전체 크리티컬 / 병렬 가지 중 여유 있는 짧은 가지 제외 / 계획상 하루 틈이 있으면 선행은 여유 1일.
+
+### 스냅샷
+`timeline-render.html` 재기록 — 차이는 hover 핸들러 제거와 화살표 경로(새로 그려진 것 + 좌표 기준 변경)뿐임을 단어 단위 diff 로 확인.
+하네스에 `getBoundingClientRect`(막대·스크롤 박스)·`getComputedStyle` 추가. 81/81.
+
 ## v13.190 (2026-09-27) — 리팩토링 2단계 (v13.189 에서 보류한 항목 전부)
 
 순수 리팩토링. 모든 분해는 **바꾸기 전 원본 코드의 출력을 픽스처로 기록 → 분해 → 바이트 동일 비교** 순서로 했다.

@@ -600,7 +600,7 @@ function _tlProjBarsHtml(p, st, pMs, ctx) {
   var isCritical = showCriticalPath && ctx.criticalPathIds[p.id];
   var barCls = 'tl-bar' + (st === 'delayed' ? ' tl-bar-delayed' : '') + (st === 'done' ? ' tl-bar-done' : '') + (tlEditMode ? ' tl-bar-editable' : '');
   var criticalStyle = isCritical ? 'box-shadow:0 0 0 2px ' + SEM_COLOR.danger + ',0 0 8px rgba(239,68,68,.5);z-index:3;' : '';
-  h += '<div class="' + barCls + '" data-type="proj" data-id="' + p.id + '" style="' + barStyle + 'background:' + p.color + ';' + criticalStyle + '" title="' + eH(p.name) + ' (' + p.startDate + ' ~ ' + p.endDate + ')"' + (isCritical ? ' data-critical="1"' : '') + ' onmouseenter="if(typeof pimgHover===\'function\')pimgHover(event,\'' + p.id + '\')" onmouseleave="if(typeof pimgHoverOut===\'function\')pimgHoverOut()">';
+  h += '<div class="' + barCls + '" data-type="proj" data-id="' + p.id + '" style="' + barStyle + 'background:' + p.color + ';' + criticalStyle + '" title="' + eH(p.name) + ' (' + p.startDate + ' ~ ' + p.endDate + ')"' + (isCritical ? ' data-critical="1"' : '') + '>';  // v13.191: 기간 막대 hover 장비 사진 미리보기 제거 (막대 위에서 작업할 때 가림)
   // 단계 밴드 오버레이
   if (p.phases && p.startDate && p.endDate) {
     h += buildPhaseBands(p, ctx.rangeStart, ctx.units);
@@ -2256,12 +2256,13 @@ function drawDependencyArrows(projects, rangeStart, units, labelW) {
   projects.forEach(function (p) { _depProjMap[p.id] = p; if (p.dependencies && p.dependencies.length) hasDeps = true; });
   if (!hasDeps) return;
 
-  // 프로젝트 행 위치 맵핑
+  // 프로젝트 행 위치 맵핑 — 프로젝트 막대가 있는 행만. 마일스톤 행도 data-proj-id 를 가지므로
+  // 예전엔 마지막 마일스톤 행이 프로젝트 행을 덮어써, 마일스톤 있는 프로젝트는 화살표가 안 그려졌다
   var projRows = {};
   var rows = scrollEl.querySelectorAll('.tl-row[data-proj-id]');
   rows.forEach(function (row) {
     var pid = row.dataset.projId;
-    projRows[pid] = row;
+    if (!projRows[pid] && row.querySelector('.tl-bar[data-type="proj"]')) projRows[pid] = row;
   });
 
   // SVG 생성
@@ -2272,6 +2273,10 @@ function drawDependencyArrows(projects, rangeStart, units, labelW) {
   svg.setAttribute('width', scrollW);
   svg.setAttribute('height', scrollH);
   svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:5;overflow:visible';
+  // SVG 가 스크롤 콘텐츠와 함께 움직이도록 스크롤 박스를 기준 상자로 — 예전엔 바깥 .tl-container 기준이라
+  // 가로 스크롤한 만큼(scrollLeft) 화살표가 막대에서 어긋났다. tlScroll 안의 다른 absolute 요소는 모두 .tl-bars 기준이라 영향 없음
+  if (getComputedStyle(scrollEl).position === 'static') scrollEl.style.position = 'relative';
+  var _scR = scrollEl.getBoundingClientRect();
 
   // 화살표 마커 정의
   var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
@@ -2305,10 +2310,12 @@ function drawDependencyArrows(projects, rangeStart, units, labelW) {
       var toBar = toRow.querySelector('.tl-bar[data-type="proj"]');
       if (!fromBar || !toBar) return;
 
-      var fromX = fromBar.offsetLeft + fromBar.offsetWidth + labelW;
-      var fromY = fromRow.offsetTop + fromRow.offsetHeight / 2;
-      var toX = toBar.offsetLeft + labelW;
-      var toY = toRow.offsetTop + toRow.offsetHeight / 2;
+      // 좌표는 스크롤 콘텐츠 기준(getBoundingClientRect + scroll 오프셋) — offsetParent/라벨 폭 가정에 의존하지 않음
+      var fr = fromBar.getBoundingClientRect(), tr = toBar.getBoundingClientRect();
+      var fromX = fr.right - _scR.left + scrollEl.scrollLeft;
+      var fromY = fr.top + fr.height / 2 - _scR.top + scrollEl.scrollTop;
+      var toX = tr.left - _scR.left + scrollEl.scrollLeft;
+      var toY = tr.top + tr.height / 2 - _scR.top + scrollEl.scrollTop;
 
       // 곡선 경로
       var midX = fromX + (toX - fromX) / 2;
@@ -2419,6 +2426,14 @@ function startBarDrag(bar, mode, startEvt) {
 }
 
 /* ═══ Feature 8: 크리티컬 패스 계산 ═══ */
+/* YYYY-MM-DD ± n일 (UTC 기준 — 이 함수 안의 다른 날짜 계산과 같은 기준) */
+function _cpAddDays(ymd, n) {
+  var d = new Date(ymd + 'T00:00:00Z');
+  if (isNaN(d.getTime())) return ymd;
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 function calcCriticalPath(projects) {
   // 프로젝트 맵
   var projMap = {};
@@ -2477,13 +2492,16 @@ function calcCriticalPath(projects) {
       var p = projMap[pid];
       if (!p) return;
       var dur = (p.startDate && p.endDate) ? daysDiff(p.startDate, p.endDate) : 0;
-      // 선행 프로젝트들의 EF 중 최대값이 이 프로젝트의 ES
+      // 선행 프로젝트들의 EF 중 최대값 "다음 날"이 이 프로젝트의 ES
+      // (날짜는 포함 구간 — 종료일까지 일하므로 후행은 그 다음 날 시작. 예전엔 같은 날로 봐서
+      //  선행마다 하루 여유가 생겨, 단순 체인에서 마지막 프로젝트만 크리티컬로 잡혔다)
       var latestPreEF = '';
       (p.dependencies || []).forEach(function (depId) {
         if (ef[depId] && (!latestPreEF || ef[depId] > latestPreEF)) {
           latestPreEF = ef[depId];
         }
       });
+      if (latestPreEF) latestPreEF = _cpAddDays(latestPreEF, 1);
       if (latestPreEF && (!es[pid] || latestPreEF > es[pid])) {
         es[pid] = latestPreEF;
       }
@@ -2515,14 +2533,14 @@ function calcCriticalPath(projects) {
       var p = projMap[pid];
       if (!p) return;
       var dur = (p.startDate && p.endDate) ? daysDiff(p.startDate, p.endDate) : 0;
-      // 이 프로젝트를 선행으로 가지는 프로젝트들의 LS
+      // 이 프로젝트를 선행으로 가지는 프로젝트들의 LS 중 최소값 "전날"이 LF (위 ES 와 대칭)
       var minSuccLS = '';
       projects.forEach(function (succ) {
         if ((succ.dependencies || []).indexOf(pid) >= 0 && ls[succ.id]) {
           if (!minSuccLS || ls[succ.id] < minSuccLS) minSuccLS = ls[succ.id];
         }
       });
-      if (minSuccLS) lf[pid] = minSuccLS;
+      if (minSuccLS) lf[pid] = _cpAddDays(minSuccLS, -1);
       // LS = LF - duration
       if (lf[pid]) {
         var lfDate = new Date(lf[pid]);
