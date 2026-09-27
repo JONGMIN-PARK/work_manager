@@ -24,10 +24,7 @@ function issueSetQ(v) {
   issueSearchKw = v || '';
   clearTimeout(_issueQTimer);
   _issueQTimer = setTimeout(function () {
-    renderIssues(function () {
-      var el = document.getElementById('issueQ');
-      if (el) { el.focus(); var n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} }
-    });
+    renderIssues(function () { wmRestoreFocus('issueQ'); });
   }, 250);
 }
 
@@ -134,9 +131,9 @@ function renderIssues(afterRender) {
     // ─── 요약 카드 ───
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,240px));gap:10px;margin-bottom:12px">';
     html += issueStatCard('접수', openCnt, '#6366F1', 'open', issueFilterStatus === 'open' && !issueFilterUrgency);
-    html += issueStatCard('긴급', urgentCnt, '#EF4444', 'urgent', issueFilterUrgency === 'urgent' && !issueFilterStatus);
-    html += issueStatCard('대응중', inProgCnt, '#3B82F6', 'inProgress', issueFilterStatus === 'inProgress' && !issueFilterUrgency);
-    html += issueStatCard('해결/종결', resolvedCnt, '#10B981');
+    html += issueStatCard('긴급', urgentCnt, SEM_COLOR.danger, 'urgent', issueFilterUrgency === 'urgent' && !issueFilterStatus);
+    html += issueStatCard('대응중', inProgCnt, SEM_COLOR.info, 'inProgress', issueFilterStatus === 'inProgress' && !issueFilterUrgency);
+    html += issueStatCard('해결/종결', resolvedCnt, SEM_COLOR.ok);
     html += '</div>';
 
     // ─── 필터 바 ───
@@ -201,11 +198,11 @@ function renderIssues(afterRender) {
     issues.forEach(function (iss, idx) {
       var proj = projMap[iss.projectId];
       var projName = proj ? proj.name : (iss.orderNo || '-');
-      var ph = phases[iss.phase] || { label: iss.phase, icon: '', color: '#94A3B8' };
-      var dp = depts[iss.dept] || { label: iss.dept, icon: '', color: '#94A3B8' };
-      var tp = types[iss.type] || { label: iss.type, icon: '', color: '#94A3B8' };
-      var ug = urgencies[iss.urgency] || { label: iss.urgency, icon: '', color: '#94A3B8' };
-      var st = statuses[iss.status] || { label: iss.status, color: '#94A3B8' };
+      var ph = phases[iss.phase] || { label: iss.phase, icon: '', color: SEM_COLOR.muted };
+      var dp = depts[iss.dept] || { label: iss.dept, icon: '', color: SEM_COLOR.muted };
+      var tp = types[iss.type] || { label: iss.type, icon: '', color: SEM_COLOR.muted };
+      var ug = urgencies[iss.urgency] || { label: iss.urgency, icon: '', color: SEM_COLOR.muted };
+      var st = statuses[iss.status] || { label: iss.status, color: SEM_COLOR.muted };
       var isUrgent = iss.urgency === 'urgent' && iss.status !== 'closed' && iss.status !== 'resolved';
       var rowBg = isUrgent ? 'rgba(239,68,68,.05)' : 'transparent';
       var safeId = iss.id.replace(/'/g, "\\'");
@@ -305,7 +302,7 @@ function renderIssueTrendChart(issues) {
         {
           label: '해결',
           data: closeData,
-          borderColor: '#10B981',
+          borderColor: SEM_COLOR.ok,
           backgroundColor: 'rgba(16,185,129,0.1)',
           tension: 0.3,
           fill: true,
@@ -317,11 +314,11 @@ function renderIssueTrendChart(issues) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { font: { size: 11 }, color: '#94A3B8' } }
+        legend: { labels: { font: { size: 11 }, color: SEM_COLOR.muted } }
       },
       scales: {
-        x: { ticks: { font: { size: 10 }, color: '#94A3B8' }, grid: { color: 'rgba(148,163,184,0.15)' } },
-        y: { beginAtZero: true, ticks: { font: { size: 10 }, color: '#94A3B8', stepSize: 1 }, grid: { color: 'rgba(148,163,184,0.15)' } }
+        x: { ticks: { font: { size: 10 }, color: SEM_COLOR.muted }, grid: { color: 'rgba(148,163,184,0.15)' } },
+        y: { beginAtZero: true, ticks: { font: { size: 10 }, color: SEM_COLOR.muted, stepSize: 1 }, grid: { color: 'rgba(148,163,184,0.15)' } }
       }
     }
   });
@@ -384,14 +381,6 @@ function showIssueModal(editId) {
     var existing = results[1];
     var isEdit = !!existing;
     var iss = existing || {};
-
-    var overlay = document.createElement('div');
-    overlay.id = 'issueModalOverlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)';
-    // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
-
-    var dialog = document.createElement('div');
-    dialog.style.cssText = 'background:var(--bg-p);border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)';
 
     var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
     h += '<span style="font-size:14px;font-weight:700;color:var(--t1)">' + (isEdit ? '이슈 편집' : '이슈 등록') + '</span>';
@@ -477,9 +466,10 @@ function showIssueModal(editId) {
     h += '<button onclick="saveIssueModal(' + (isEdit ? 'true' : 'false') + ',\'' + (isEdit ? editId.replace(/'/g, "\\'") : '') + '\')" style="padding:8px 16px;border:none;border-radius:6px;background:#6366F1;color:#fff;cursor:pointer;font-size:11px;font-weight:600">' + (isEdit ? '수정' : '등록') + '</button>';
     h += '</div>';
 
+    // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기) = createModal 기본값
+    var dialog = createModal({ id: 'issueModalOverlay', z: MODAL_Z, overlayStyle: 'padding:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px)' }).box;
+    dialog.style.cssText = 'background:var(--bg-p);border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)';
     dialog.innerHTML = h;
-    overlay.appendChild(dialog);
-    document.body.appendChild(overlay);
   }).catch(function (err) {
     console.error('[showIssueModal]', err);
     showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
@@ -587,11 +577,11 @@ function showIssueDetail(id) {
     var proj = projMap[iss.projectId];
     var projName = proj ? proj.name : (iss.orderNo || '-');
 
-    var ph = phases[iss.phase] || { label: iss.phase, icon: '', color: '#94A3B8' };
-    var dp = depts[iss.dept] || { label: iss.dept, icon: '', color: '#94A3B8' };
-    var tp = types[iss.type] || { label: iss.type, icon: '', color: '#94A3B8' };
-    var ug = urgencies[iss.urgency] || { label: iss.urgency, icon: '', color: '#94A3B8' };
-    var st = statuses[iss.status] || { label: iss.status, color: '#94A3B8' };
+    var ph = phases[iss.phase] || { label: iss.phase, icon: '', color: SEM_COLOR.muted };
+    var dp = depts[iss.dept] || { label: iss.dept, icon: '', color: SEM_COLOR.muted };
+    var tp = types[iss.type] || { label: iss.type, icon: '', color: SEM_COLOR.muted };
+    var ug = urgencies[iss.urgency] || { label: iss.urgency, icon: '', color: SEM_COLOR.muted };
+    var st = statuses[iss.status] || { label: iss.status, color: SEM_COLOR.muted };
 
     // 기존 패널 제거
     var old = document.getElementById('issueDetailPanel');
@@ -599,7 +589,7 @@ function showIssueDetail(id) {
 
     var panel = document.createElement('div');
     panel.id = 'issueDetailPanel';
-    panel.style.cssText = 'position:fixed;right:0;top:0;height:100vh;width:520px;max-width:95vw;background:var(--bg-p);border-left:1px solid var(--bd);z-index:9998;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);animation:slideIn .2s ease';
+    panel.style.cssText = 'position:fixed;right:0;top:0;height:100vh;width:520px;max-width:95vw;background:var(--bg-p);border-left:1px solid var(--bd);z-index:' + (MODAL_Z - 1) + ';overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);animation:slideIn .2s ease';
 
     var safeId = id.replace(/'/g, "\\'");
     var h = '';
@@ -629,7 +619,7 @@ function showIssueDetail(id) {
     h += issueDetailField('등록일', iss.reportDate || '-');
     if (iss.dueDate) {
       var overdue = iss.dueDate < localDate() && iss.status !== 'resolved' && iss.status !== 'closed';
-      h += issueDetailField('대응기한', '<span style="color:' + (overdue ? '#EF4444;font-weight:700' : 'var(--t2)') + '">' + (overdue ? '⚠️ ' : '') + iss.dueDate + '</span>');
+      h += issueDetailField('대응기한', '<span style="color:' + (overdue ? SEM_COLOR.danger + ';font-weight:700' : 'var(--t2)') + '">' + (overdue ? '⚠️ ' : '') + iss.dueDate + '</span>');
     }
     if (iss.reporter) h += issueDetailField('보고자', eH(iss.reporter));
     if (iss.assignees && iss.assignees.length) h += issueDetailField('담당자', iss.assignees.map(function (a) { return eH(a); }).join(', '));
@@ -649,7 +639,7 @@ function showIssueDetail(id) {
     h += '<div style="margin-top:10px"><span style="font-size:10px;color:var(--t5)">조치 결과</span>';
     h += '<div style="display:flex;gap:4px;margin-top:4px">';
     h += '<input type="text" id="issResolution" value="' + eH(iss.resolution || '') + '" placeholder="조치 결과 요약 입력..." style="flex:1;padding:5px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t2);font-size:10px">';
-    h += '<button onclick="issueSaveResolution(\'' + safeId + '\')" style="font-size:10px;padding:4px 10px;border:none;border-radius:4px;background:#10B981;color:#fff;cursor:pointer">저장</button>';
+    h += '<button onclick="issueSaveResolution(\'' + safeId + '\')" style="font-size:10px;padding:4px 10px;border:none;border-radius:4px;background:' + SEM_COLOR.ok + ';color:#fff;cursor:pointer">저장</button>';
     h += '</div></div>';
     h += '</div>';
 
@@ -705,7 +695,7 @@ function showIssueDetail(id) {
     } else {
       h += '<div style="border-left:2px solid var(--bd);margin-left:8px;padding-left:14px">';
       logs.forEach(function (log) {
-        var logDp = depts[log.dept] || { label: log.dept || '', icon: '', color: '#94A3B8' };
+        var logDp = depts[log.dept] || { label: log.dept || '', icon: '', color: SEM_COLOR.muted };
         var icon = LOG_TYPE_ICON[log.type] || '📝';
         var safeLogId = log.id.replace(/'/g, "\\'");
         h += '<div style="position:relative;margin-bottom:12px">';
@@ -1079,7 +1069,7 @@ function renderIssueBulkBar() {
   var statuses = typeof ISSUE_STATUS !== 'undefined' ? ISSUE_STATUS : {};
   var bar = document.createElement('div');
   bar.id = 'issueBulkBar';
-  bar.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9990;background:var(--bg-p);border:1px solid var(--bd);border-radius:12px;padding:10px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.25);font-size:11px';
+  bar.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:' + (MODAL_Z - 9) + ';background:var(--bg-p);border:1px solid var(--bd);border-radius:12px;padding:10px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.25);font-size:11px';
 
   var statusOpts = '<option value="">상태 선택</option>';
   Object.keys(statuses).forEach(function (k) {
@@ -1091,8 +1081,8 @@ function renderIssueBulkBar() {
     '<select id="bulkStatusSel" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">' + statusOpts + '</select>' +
     '<button onclick="issueBulkAction(\'status\')" style="font-size:10px;padding:3px 10px;border:none;border-radius:4px;background:#6366F1;color:#fff;cursor:pointer">상태 변경</button>' +
     '<input type="text" id="bulkAssigneeInput" placeholder="담당자 일괄 지정" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t2);width:110px">' +
-    '<button onclick="issueBulkAction(\'assignee\')" style="font-size:10px;padding:3px 10px;border:none;border-radius:4px;background:#3B82F6;color:#fff;cursor:pointer">담당자 지정</button>' +
-    '<button onclick="issueBulkAction(\'delete\')" style="font-size:10px;padding:3px 10px;border:none;border-radius:4px;background:#EF4444;color:#fff;cursor:pointer">🗑 삭제</button>' +
+    '<button onclick="issueBulkAction(\'assignee\')" style="font-size:10px;padding:3px 10px;border:none;border-radius:4px;background:' + SEM_COLOR.info + ';color:#fff;cursor:pointer">담당자 지정</button>' +
+    '<button onclick="issueBulkAction(\'delete\')" style="font-size:10px;padding:3px 10px;border:none;border-radius:4px;background:' + SEM_COLOR.danger + ';color:#fff;cursor:pointer">🗑 삭제</button>' +
     '<button onclick="issueBulkSelected={};renderIssues()" style="font-size:10px;padding:3px 10px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t5);cursor:pointer">취소</button>';
 
   document.body.appendChild(bar);

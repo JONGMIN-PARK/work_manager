@@ -157,7 +157,7 @@ async function openAnyworksModal() {
       '</div>'+
 
       '<div style="padding:14px 24px 20px;flex-shrink:0;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--bd)">'+
-        '<button id="awCancelBtn" onclick="cancelAnyworksJob()" style="display:none;padding:8px 20px;border:1px solid #EF4444;border-radius:8px;background:rgba(239,68,68,.12);color:#F87171;cursor:pointer;font-size:12px;font-weight:600">취소</button>'+
+        '<button id="awCancelBtn" onclick="cancelAnyworksJob()" style="display:none;padding:8px 20px;border:1px solid '+SEM_COLOR.danger+';border-radius:8px;background:rgba(239,68,68,.12);color:#F87171;cursor:pointer;font-size:12px;font-weight:600">취소</button>'+
         '<button onclick="closeAnyworksModal()" style="padding:8px 20px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t4);cursor:pointer;font-size:12px">닫기</button>'+
         '<button id="awStartBtn" onclick="startAnyworksDownload()" style="padding:8px 24px;border:none;border-radius:8px;background:linear-gradient(135deg,#06B6D4,#0891B2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">가져오기 시작</button>'+
       '</div>'+
@@ -198,14 +198,14 @@ async function awCheckConnection() {
     if (localOk) {
       _awActiveBase = _awLocalBase;
       el.textContent = '사내PC 연결됨';
-      el.style.background = '#10B98122'; el.style.color = '#10B981';
+      el.style.background = SEM_COLOR.ok + '22'; el.style.color = SEM_COLOR.ok;
     } else if (serverOk) {
       _awActiveBase = awGetServerBase();
       el.textContent = '클라우드 연결됨';
-      el.style.background = '#3B82F622'; el.style.color = '#3B82F6';
+      el.style.background = SEM_COLOR.info + '22'; el.style.color = SEM_COLOR.info;
     } else {
       _awActiveBase = '';
-      el.style.background = '#EF444422'; el.style.color = '#EF4444';
+      el.style.background = SEM_COLOR.danger + '22'; el.style.color = SEM_COLOR.danger;
       if (location.protocol === 'https:') {
         el.textContent = '연결 없음 (HTTPS 차단 가능)';
         awShowMixedContentTip();
@@ -217,9 +217,9 @@ async function awCheckConnection() {
     _awActiveBase = _awLocalBase;
     if (localOk) {
       el.textContent = '사내PC 연결됨';
-      el.style.background = '#10B98122'; el.style.color = '#10B981';
+      el.style.background = SEM_COLOR.ok + '22'; el.style.color = SEM_COLOR.ok;
     } else {
-      el.style.background = '#EF444422'; el.style.color = '#EF4444';
+      el.style.background = SEM_COLOR.danger + '22'; el.style.color = SEM_COLOR.danger;
       if (location.protocol === 'https:') {
         el.textContent = '사내PC 미연결 (HTTPS 차단)';
         awShowMixedContentTip();
@@ -230,8 +230,8 @@ async function awCheckConnection() {
   } else {
     _awActiveBase = awGetServerBase();
     el.textContent = serverOk ? '클라우드 연결됨' : '클라우드 미연결';
-    el.style.background = serverOk ? '#3B82F622' : '#EF444422';
-    el.style.color = serverOk ? '#3B82F6' : '#EF4444';
+    el.style.background = (serverOk ? SEM_COLOR.info : SEM_COLOR.danger) + '22';
+    el.style.color = serverOk ? SEM_COLOR.info : SEM_COLOR.danger;
   }
 }
 
@@ -267,7 +267,7 @@ function awToggleAll(check) {
 function awSetStatus(status, text) {
   var badge = document.getElementById('awStatusBadge');
   if (!badge) return;
-  var colors = { queued:'#F59E0B', running:'#3B82F6', done:'#10B981', error:'#EF4444' };
+  var colors = { queued:SEM_COLOR.warn, running:SEM_COLOR.info, done:SEM_COLOR.ok, error:SEM_COLOR.danger };
   var labels = { queued:'대기중', running:'실행중...', done:'완료', error:'오류' };
   badge.style.background = (colors[status]||'#64748B') + '22';
   badge.style.color = colors[status]||'#64748B';
@@ -277,7 +277,7 @@ function awSetStatus(status, text) {
 function awAppendLog(msg, level) {
   var box = document.getElementById('awLogBox');
   if (!box) return;
-  var color = level==='ERROR' ? '#EF4444' : level==='WARN' ? '#F59E0B' : 'var(--t4)';
+  var color = level==='ERROR' ? SEM_COLOR.danger : level==='WARN' ? SEM_COLOR.warn : 'var(--t4)';
   box.innerHTML += '<div style="color:'+color+'">'+msg.replace(/</g,'&lt;')+'</div>';
   box.scrollTop = box.scrollHeight;
 }
@@ -502,7 +502,7 @@ function showAnyworksResultPopup(results, job) {
     if (isOk) okCount++; else failCount++;
     var icon = isOk ? '✅' : '❌';
     var bg = isOk ? 'rgba(16,185,129,.1)' : 'rgba(239,68,68,.1)';
-    var tc = isOk ? '#10B981' : '#EF4444';
+    var tc = isOk ? SEM_COLOR.ok : SEM_COLOR.danger;
     rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:'+bg+';border-radius:6px;margin-bottom:4px">'+
       '<span style="font-size:12px;color:var(--t2);font-weight:600">'+icon+' '+team+'</span>'+
       '<span style="font-size:11px;color:'+tc+';font-weight:600">'+r+'</span></div>';
@@ -519,9 +519,9 @@ function showAnyworksResultPopup(results, job) {
         '<button onclick="document.getElementById(\'awResultPopup\').remove()" style="background:none;border:none;color:var(--t5);font-size:16px;cursor:pointer">✕</button>'+
       '</div>'+
       '<div style="display:flex;gap:12px;margin-bottom:12px">'+
-        '<div style="flex:1;text-align:center;padding:8px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:20px;font-weight:800;color:#10B981">'+okCount+'</div><div style="font-size:9px;color:var(--t5)">성공</div></div>'+
-        '<div style="flex:1;text-align:center;padding:8px;background:rgba(239,68,68,.08);border-radius:8px"><div style="font-size:20px;font-weight:800;color:#EF4444">'+failCount+'</div><div style="font-size:9px;color:var(--t5)">실패</div></div>'+
-        '<div style="flex:1;text-align:center;padding:8px;background:rgba(59,130,246,.08);border-radius:8px"><div style="font-size:14px;font-weight:800;color:#3B82F6;margin-top:3px">'+elapsed+'</div><div style="font-size:9px;color:var(--t5)">소요시간</div></div>'+
+        '<div style="flex:1;text-align:center;padding:8px;background:rgba(16,185,129,.08);border-radius:8px"><div style="font-size:20px;font-weight:800;color:'+SEM_COLOR.ok+'">'+okCount+'</div><div style="font-size:9px;color:var(--t5)">성공</div></div>'+
+        '<div style="flex:1;text-align:center;padding:8px;background:rgba(239,68,68,.08);border-radius:8px"><div style="font-size:20px;font-weight:800;color:'+SEM_COLOR.danger+'">'+failCount+'</div><div style="font-size:9px;color:var(--t5)">실패</div></div>'+
+        '<div style="flex:1;text-align:center;padding:8px;background:rgba(59,130,246,.08);border-radius:8px"><div style="font-size:14px;font-weight:800;color:'+SEM_COLOR.info+';margin-top:3px">'+elapsed+'</div><div style="font-size:9px;color:var(--t5)">소요시간</div></div>'+
       '</div>'+
     '</div>'+
     '<div style="padding:0 18px 16px;max-height:240px;overflow-y:auto">'+rows+'</div>';

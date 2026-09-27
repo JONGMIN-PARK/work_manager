@@ -597,9 +597,6 @@ function asReportPdfPreview(ticketId) {
 
 function _asRenderPdfPreviewModal(t, out) {
   document.querySelectorAll('#asPdfPreviewOverlay').forEach(function (el) { el.remove(); });
-  var overlay = document.createElement('div');
-  overlay.id = 'asPdfPreviewOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10004;display:flex;align-items:center;justify-content:center;padding:24px';
 
   var blobUrl = URL.createObjectURL(out.blob);
 
@@ -671,13 +668,13 @@ function _asRenderPdfPreviewModal(t, out) {
   h += '2. 선택한 메일 서비스의 작성 창이 새 탭으로 열립니다 (To·제목·본문 자동 입력)<br>';
   h += '3. 다운로드된 PDF를 <strong>작성 창에 끌어다 놓고</strong> "보내기"를 누르세요<br>';
   h += '<br><strong style="color:var(--t5)">✨ 장점</strong> — 본인 메일 명의로 발송되어 "보낸 편지함"에 자동 보관됩니다. 서버 SMTP 설정이 필요 없습니다.<br>';
-  h += '<br><span style="color:#F59E0B">⚠ 팝업이 차단되면 브라우저 주소창 우측의 "팝업 허용"을 클릭하세요.</span>';
+  h += '<br><span style="color:' + SEM_COLOR.warn + '">⚠ 팝업이 차단되면 브라우저 주소창 우측의 "팝업 허용"을 클릭하세요.</span>';
   h += '</div>';
   h += '</div>';
   h += '</div></div>';
 
+  var overlay = _asOverlay('asPdfPreviewOverlay', 10004, 'background:rgba(0,0,0,0.75);padding:24px');
   overlay.innerHTML = h;
-  document.body.appendChild(overlay);
   // v13.63: backdrop 클릭 닫기 비활성화 — 메일 입력 중 실수 클릭 방지 (✕ 버튼만 닫기)
 
   // 컨택 마스터 자동완성 채우기 (이 ticket의 customer_name 우선)
@@ -745,8 +742,8 @@ function _asRenderPdfPreviewModal(t, out) {
     var provider = (document.getElementById('asMail_provider').value || 'gmail');
     var status = document.getElementById('asMail_status');
     var btn = this;
-    if (!to) { status.textContent = '⚠ 받는 사람을 입력하세요.'; status.style.color = '#EF4444'; return; }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { status.textContent = '⚠ 올바른 이메일 형식이 아닙니다.'; status.style.color = '#EF4444'; return; }
+    if (!to) { status.textContent = '⚠ 받는 사람을 입력하세요.'; status.style.color = SEM_COLOR.danger; return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { status.textContent = '⚠ 올바른 이메일 형식이 아닙니다.'; status.style.color = SEM_COLOR.danger; return; }
 
     // 1) 선택 기억
     try { localStorage.setItem('as_mail_provider', provider); } catch (e) {}
@@ -778,14 +775,14 @@ function _asRenderPdfPreviewModal(t, out) {
     setTimeout(function () { if (window.wmProgress) wmProgress.hide(); }, 1500);
     if (!win || win.closed || typeof win.closed === 'undefined') {
       status.innerHTML = '⚠ 팝업이 차단되었습니다. 주소창 우측의 "팝업 허용"을 누르고 다시 시도하거나 <a href="' + _asEsc(composeUrl) + '" target="_blank" style="color:#3B82F6">여기를 클릭</a>하세요.';
-      status.style.color = '#F59E0B';
+      status.style.color = SEM_COLOR.warn;
       return;
     }
 
     var label = {
       gmail: 'Gmail', outlook: 'Outlook', 'outlook-live': 'Outlook.com', naver: '네이버 메일', mailto: 'PC 기본 메일 앱'
     }[provider] || '메일 작성기';
-    status.innerHTML = '✅ PDF 다운로드 + ' + label + ' 작성기 열림.<br><strong style="color:#10B981">다운로드된 PDF를 작성 창에 끌어다 놓고 보내기를 누르세요.</strong>';
+    status.innerHTML = '✅ PDF 다운로드 + ' + label + ' 작성기 열림.<br><strong style="color:' + SEM_COLOR.ok + '">다운로드된 PDF를 작성 창에 끌어다 놓고 보내기를 누르세요.</strong>';
     status.style.color = 'var(--t3)';
     if (typeof showToast === 'function') showToast('📄 PDF 다운로드 + ' + label + ' 작성기 열림');
   };

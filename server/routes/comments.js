@@ -51,19 +51,9 @@ async function resolveTarget(req, targetType, targetId) {
 }
 
 // 프로젝트에 대한 코멘트 접근/작성 권한 (admin · 운영자 · owner/PL/활성멤버)
-async function canAccessProject(req, projectId) {
-  if (!projectId) return false;
-  if (req.user.role === 'admin') return true;
-  try { if (await operator.isOperator(req)) return true; } catch (_) {}
-  var pr = await db.query('SELECT owner_id FROM projects WHERE id = $1 AND tenant_id = $2', [projectId, req.tenant.id]);
-  if (!pr.rows.length) return false;
-  if (pr.rows[0].owner_id === req.user.sub) return true;
-  var mr = await db.query(
-    'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2 AND released_at IS NULL LIMIT 1',
-    [projectId, req.user.sub]
-  );
-  return mr.rows.length > 0;
-}
+// — lib/project-access.canComment. 가시성(tenant/dept 공개)만으로는 허용하지 않는 "협업" 규칙.
+var canAccessProject = require('../lib/project-access').canComment;
+var httpErr = require('../lib/http-errors');
 
 // 자동 수신자 결정 (작성자 본인 제외) → [{userId, name, email}]
 async function resolveRecipients(req, targetType, targetId, projectId, recipientIds) {
@@ -256,8 +246,7 @@ router.post('/', async function (req, res) {
       ).catch(function () {});
     } catch (_) {}
   } catch (e) {
-    console.error('[comments/create]', e);
-    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[comments/create]', e);
   }
 });
 
@@ -283,8 +272,7 @@ router.get('/', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[comments/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[comments/list]', e);
   }
 });
 
@@ -299,8 +287,7 @@ router.delete('/:id', async function (req, res) {
     await db.query('DELETE FROM comments WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[comments/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[comments/delete]', e);
   }
 });
 

@@ -17,11 +17,11 @@ var TECH_CAT = {
   etc:     { label: '기타',      icon: '📌', color: '#64748B' }
 };
 var TECH_STATUS = [
-  { key: 'research',   label: '연구',     icon: '🔬', color: '#8B5CF6' },
-  { key: 'developing', label: '개발',     icon: '🛠', color: '#3B82F6' },
-  { key: 'verifying',  label: '검증',     icon: '🧪', color: '#F59E0B' },
-  { key: 'available',  label: '사용가능', icon: '✅', color: '#10B981' },
-  { key: 'deprecated', label: '폐기예정', icon: '⚠️', color: '#94A3B8' }
+  { key: 'research',   label: '연구',     icon: '🔬', color: SEM_COLOR.purple },
+  { key: 'developing', label: '개발',     icon: '🛠', color: SEM_COLOR.info },
+  { key: 'verifying',  label: '검증',     icon: '🧪', color: SEM_COLOR.warn },
+  { key: 'available',  label: '사용가능', icon: '✅', color: SEM_COLOR.ok },
+  { key: 'deprecated', label: '폐기예정', icon: '⚠️', color: SEM_COLOR.muted }
 ];
 var TECH_STACK_KIND = {
   language:  '언어', framework: '프레임워크', library: '라이브러리',
@@ -50,9 +50,9 @@ function _tsInfo(k) {
 /** TRL 1~9 → 3구간 요약 (PRD 4.2) */
 function _trlInfo(n) {
   var t = parseInt(n, 10) || 1;
-  if (t >= 7) return { label: '실전', color: '#10B981', dot: '🟢' };
-  if (t >= 4) return { label: '검증중', color: '#F59E0B', dot: '🟡' };
-  return { label: '초기', color: '#EF4444', dot: '🔴' };
+  if (t >= 7) return { label: '실전', color: SEM_COLOR.ok, dot: '🟢' };
+  if (t >= 4) return { label: '검증중', color: SEM_COLOR.warn, dot: '🟡' };
+  return { label: '초기', color: SEM_COLOR.danger, dot: '🔴' };
 }
 function _tEsc(v) { return (typeof eH === 'function') ? eH(v == null ? '' : v) : String(v == null ? '' : v); }
 /** onclick="fn('여기')" 자리 값: ① JS 문자열 이스케이프(\, ') → ② HTML 속성 이스케이프 (order-view.js _orderJsStr 와 동일 규약) */
@@ -287,8 +287,7 @@ function techSetQ(v) {
   clearTimeout(_techQTimer);
   _techQTimer = setTimeout(function () {
     _techRender();
-    var el = document.getElementById('techQ');
-    if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    wmRestoreFocus('techQ');
   }, 250);
 }
 

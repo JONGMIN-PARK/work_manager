@@ -5,7 +5,8 @@ var gcs = require('../services/gcs.service');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var { parsePagination } = require('../middleware/pagination');
-var ps = require('../middleware/project-scope');
+var ps = require('../lib/project-access');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -38,8 +39,7 @@ router.get('/folders', async function (req, res) {
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
-    console.error('[folders/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[folders/list]', e);
   }
 });
 
@@ -54,8 +54,7 @@ router.post('/folders', async function (req, res) {
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[folders/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[folders/create]', e);
   }
 });
 
@@ -70,8 +69,7 @@ router.put('/folders/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[folders/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[folders/update]', e);
   }
 });
 
@@ -85,8 +83,7 @@ router.delete('/folders/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[folders/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[folders/delete]', e);
   }
 });
 
@@ -116,8 +113,7 @@ router.get('/files', async function (req, res) {
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
-    console.error('[files/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[files/list]', e);
   }
 });
 
@@ -138,8 +134,7 @@ router.post('/files', async function (req, res) {
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[files/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[files/create]', e);
   }
 });
 
@@ -160,8 +155,7 @@ router.post('/files/upload-url', async function (req, res) {
     var uploadUrl = await gcs.signUploadUrl(key, mime);
     res.json({ data: { uploadUrl: uploadUrl, storageKey: key, mimeType: mime } });
   } catch (e) {
-    console.error('[files/upload-url]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '업로드 URL 발급 실패' });
+    httpErr.serverError(res, '[files/upload-url]', e, '업로드 URL 발급 실패');
   }
 });
 
@@ -183,8 +177,7 @@ router.get('/files/:id/download-url', async function (req, res) {
     var url = await gcs.signDownloadUrl(row.storage_key, row.name);
     res.json({ data: { downloadUrl: url, name: row.name } });
   } catch (e) {
-    console.error('[files/download-url]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '다운로드 URL 발급 실패' });
+    httpErr.serverError(res, '[files/download-url]', e, '다운로드 URL 발급 실패');
   }
 });
 
@@ -215,8 +208,7 @@ router.put('/files/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[files/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[files/update]', e);
   }
 });
 
@@ -232,8 +224,7 @@ router.delete('/files/:id', async function (req, res) {
     }
     res.json({ message: '삭제 완료', storageKey: sk });
   } catch (e) {
-    console.error('[files/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[files/delete]', e);
   }
 });
 

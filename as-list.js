@@ -21,7 +21,7 @@ function renderAS(opts) {
       renderASStats();
       return;
     }
-    wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:#EF4444">as-stats.js 모듈 로드 실패</div>';
+    wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:' + SEM_COLOR.danger + '">as-stats.js 모듈 로드 실패</div>';
     return;
   }
 
@@ -108,7 +108,7 @@ function renderAS(opts) {
         stats: '트렌드·KPI·SLA·부서부하·CSAT·부품 비용 분석',
         trash: '삭제(휴지통 이동)된 접수 — 복구 또는 완전 삭제'
       };
-      var bgPerMode = { trash: '#EF4444', stats: '#0EA5E9' };
+      var bgPerMode = { trash: SEM_COLOR.danger, stats: '#0EA5E9' };
       var activeBg = bgPerMode[mode] || '#F59E0B';
       var active = asViewMode === mode;
       html += '<button onclick="asViewMode=\'' + mode + '\';renderAS()" style="font-size:10px;padding:4px 10px;border:none;background:' + (active ? activeBg : 'var(--bg-i)') + ';color:' + (active ? '#fff' : 'var(--t4)') + ';cursor:pointer;font-weight:' + (active ? '700' : '500') + '"' + (titles[mode] ? ' title="' + titles[mode] + '"' : '') + '>' + labels[mode] + '</button>';
@@ -128,9 +128,9 @@ function renderAS(opts) {
     // 요약 카드
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,260px));justify-content:start;gap:10px;margin-bottom:12px">';
     html += _asStatCard('대기/할당', cnt.received, '#6366F1');
-    html += _asStatCard('P1·P2 긴급', cnt.urgent, '#EF4444');
-    html += _asStatCard('처리중', cnt.in_progress, '#3B82F6');
-    html += _asStatCard('완료', cnt.closed, '#10B981');
+    html += _asStatCard('P1·P2 긴급', cnt.urgent, SEM_COLOR.danger);
+    html += _asStatCard('처리중', cnt.in_progress, SEM_COLOR.info);
+    html += _asStatCard('완료', cnt.closed, SEM_COLOR.ok);
     html += '</div>';
 
     // 필터 바
@@ -179,14 +179,14 @@ function renderAS(opts) {
       html += '</tr></thead><tbody>';
       var isTrashView = (asViewMode === 'trash');
       filtered.forEach(function (t) {
-        var st = STATUS[t.status] || { label: t.status, color: '#94A3B8', icon: '' };
-        var pr = PRIO[t.priority] || { label: t.priority, color: '#94A3B8', icon: '' };
+        var st = STATUS[t.status] || { label: t.status, color: SEM_COLOR.muted, icon: '' };
+        var pr = PRIO[t.priority] || { label: t.priority, color: SEM_COLOR.muted, icon: '' };
         var ct = CAT[t.category] || { label: t.category || '-', icon: '' };
         var safeId = _asEsc(t.id);
         var rowStyle = 'border-bottom:1px solid var(--bd);cursor:pointer' + (isTrashView ? ';opacity:0.7' : '');
         var rowClick = isTrashView ? '' : 'onclick="showASDetail(\'' + safeId + '\')"';
         html += '<tr style="' + rowStyle + '" ' + rowClick + '>';
-        html += '<td style="padding:8px 10px;font-family:monospace;font-weight:600;color:var(--t2)">' + _asEsc(t.ticketNo) + (isTrashView ? ' <span style="font-size:9px;color:#EF4444">🗑️</span>' : '') + '</td>';
+        html += '<td style="padding:8px 10px;font-family:monospace;font-weight:600;color:var(--t2)">' + _asEsc(t.ticketNo) + (isTrashView ? ' <span style="font-size:9px;color:' + SEM_COLOR.danger + '">🗑️</span>' : '') + '</td>';
         html += '<td style="padding:8px 10px;color:var(--t2)"><div style="font-weight:600">' + _asEsc(t.customerName) + '</div>';
         html += '<div style="font-size:10px;color:var(--t5)">' + _asEsc(t.equipmentModel || '-') + (t.serialNo ? ' · ' + _asEsc(t.serialNo) : '') + '</div></td>';
         html += '<td style="padding:8px 10px;color:var(--t3)">' + (ct.icon || '') + ' ' + _asEsc(ct.label) + '</td>';
@@ -205,8 +205,8 @@ function renderAS(opts) {
         }
         html += '<td style="padding:8px 10px;text-align:right;white-space:nowrap" onclick="event.stopPropagation()">';
         if (isTrashView) {
-          html += '<button onclick="asRestoreTicket(\'' + safeId + '\')" style="font-size:10px;padding:3px 8px;border:1px solid #10B981;border-radius:4px;background:transparent;color:#10B981;cursor:pointer;margin-right:4px" title="복구">↻ 복구</button>';
-          html += '<button onclick="asPurgeTicket(\'' + safeId + '\',\'' + _asJsArg(t.ticketNo) + '\')" style="font-size:10px;padding:3px 8px;border:1px solid #EF4444;border-radius:4px;background:transparent;color:#EF4444;cursor:pointer" title="완전 삭제">💥 완전삭제</button>';
+          html += '<button onclick="asRestoreTicket(\'' + safeId + '\')" style="font-size:10px;padding:3px 8px;border:1px solid ' + SEM_COLOR.ok + ';border-radius:4px;background:transparent;color:' + SEM_COLOR.ok + ';cursor:pointer;margin-right:4px" title="복구">↻ 복구</button>';
+          html += '<button onclick="asPurgeTicket(\'' + safeId + '\',\'' + _asJsArg(t.ticketNo) + '\')" style="font-size:10px;padding:3px 8px;border:1px solid ' + SEM_COLOR.danger + ';border-radius:4px;background:transparent;color:' + SEM_COLOR.danger + ';cursor:pointer" title="완전 삭제">💥 완전삭제</button>';
         } else {
           html += '<button onclick="showASModal(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer;margin-right:4px" title="편집">✏️</button>';
           html += '<button onclick="asSoftDeleteTicket(\'' + safeId + '\',\'' + _asJsArg(t.ticketNo) + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="휴지통으로 이동">🗑️</button>';
@@ -221,7 +221,7 @@ function renderAS(opts) {
   }).catch(function (err) {
     if (seq !== _asRenderSeq) return;
     console.error('[renderAS]', err);
-    wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:#EF4444">A/S 목록 조회 실패: ' + _asEsc((err && err.message) || '알 수 없는 오류') + '</div>';
+    wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:' + SEM_COLOR.danger + '">A/S 목록 조회 실패: ' + _asEsc((err && err.message) || '알 수 없는 오류') + '</div>';
   });
 }
 
@@ -276,10 +276,10 @@ function _asRenderKanban(tickets, CAT) {
   var cols = [
     { key: 'received', label: '① 접수', color: '#6366F1' },
     { key: 'assigned', label: '② 할당', color: '#0EA5E9' },
-    { key: 'in_progress', label: '③ 처리중', color: '#3B82F6' },
+    { key: 'in_progress', label: '③ 처리중', color: SEM_COLOR.info },
     { key: 'reporting', label: '④ 보고작성', color: '#8B5CF6' },
-    { key: 'customer_wait', label: '⑤ 고객확인', color: '#F59E0B' },
-    { key: 'closed', label: '⑥ 완료', color: '#10B981' }
+    { key: 'customer_wait', label: '⑤ 고객확인', color: SEM_COLOR.warn },
+    { key: 'closed', label: '⑥ 완료', color: SEM_COLOR.ok }
   ];
   // status별 그룹
   var grouped = {};
@@ -299,7 +299,7 @@ function _asRenderKanban(tickets, CAT) {
     h += '</div>';
     h += '<div class="asKanbanCol" data-status="' + c.key + '" style="flex:1;min-height:200px;background:var(--bg-i);border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:6px">';
     grouped[c.key].forEach(function (t) {
-      var pr = PRIO[t.priority] || { color: '#94A3B8', icon: '' };
+      var pr = PRIO[t.priority] || { color: SEM_COLOR.muted, icon: '' };
       var ct = CAT[t.category] || { label: t.category || '-', icon: '' };
       h += '<div class="asKanbanCard" draggable="true" data-ticket-id="' + _asEsc(t.id) + '" style="background:var(--bg);border:1px solid var(--bd);border-left:3px solid ' + pr.color + ';border-radius:5px;padding:8px 10px;cursor:grab;font-size:11px" onclick="showASDetail(\'' + _asEsc(t.id) + '\')">';
       h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">';

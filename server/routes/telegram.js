@@ -13,6 +13,7 @@ var { authenticate } = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var planGate = require('../middleware/plan-gate');
 var escHtmlTg = require('../telegram/util/escape').escHtml;
+var httpErr = require('../lib/http-errors');
 
 /** 인라인 버튼 콜백 처리 */
 async function handleCallbackQuery(query) {
@@ -254,8 +255,7 @@ router.get('/status', authenticate, tenant.tenantScope, planGate('telegram'), as
       }
     });
   } catch (err) {
-    console.error('[Telegram] status error:', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '상태 조회 실패' });
+    httpErr.serverError(res, '[Telegram] status error:', err, '상태 조회 실패');
   }
 });
 
@@ -268,8 +268,7 @@ router.delete('/unlink', authenticate, tenant.tenantScope, planGate('telegram'),
     await telegramService.unlink(req.user.sub);
     res.json({ message: '텔레그램 연동이 해제되었습니다.' });
   } catch (err) {
-    console.error('[Telegram] unlink error:', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '연동 해제 실패' });
+    httpErr.serverError(res, '[Telegram] unlink error:', err, '연동 해제 실패');
   }
 });
 
@@ -287,8 +286,7 @@ router.get('/prefs', authenticate, tenant.tenantScope, planGate('telegram'), asy
     r.rows.forEach(function (row) { prefs[row.event_type] = row.is_enabled; });
     res.json({ data: prefs });
   } catch (err) {
-    console.error('[telegram]', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '설정 조회 실패' });
+    httpErr.serverError(res, '[telegram]', err, '설정 조회 실패');
   }
 });
 
@@ -313,8 +311,7 @@ router.put('/prefs', authenticate, tenant.tenantScope, planGate('telegram'), asy
 
     res.json({ message: '설정이 변경되었습니다.', data: { event_type: eventType, is_enabled: isEnabled } });
   } catch (err) {
-    console.error('[telegram]', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '설정 변경 실패' });
+    httpErr.serverError(res, '[telegram]', err, '설정 변경 실패');
   }
 });
 
@@ -395,8 +392,7 @@ router.get('/debug', authenticate, tenant.tenantScope, planGate('telegram'), asy
 
     res.json({ data: result });
   } catch (err) {
-    console.error('[telegram]', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[telegram]', err, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -412,8 +408,7 @@ router.post('/setup-webhook', authenticate, tenant.tenantScope, planGate('telegr
     var result = await telegramService.setWebhook();
     res.json({ data: result });
   } catch (err) {
-    console.error('[telegram]', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[telegram]', err, '서버 오류가 발생했습니다.');
   }
 });
 

@@ -6,6 +6,7 @@ var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var tenant = require('../middleware/tenant');
+var httpErrors = require('../lib/http-errors');   // (이 파일의 httpErr() 는 throw 용 오류 객체 생성기)
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -100,8 +101,7 @@ router.get('/', async function (req, res) {
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
-    console.error('[orders/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErrors.serverError(res, '[orders/list]', e);
   }
 });
 
@@ -177,8 +177,7 @@ router.post('/bulk', rbac.checkPermission('order.edit'), async function (req, re
       duplicates: duplicates
     });
   } catch (e) {
-    console.error('[orders/bulk]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErrors.serverError(res, '[orders/bulk]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -189,8 +188,7 @@ router.get('/:orderNo', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[orders/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErrors.serverError(res, '[orders/get]', e);
   }
 });
 
@@ -211,8 +209,7 @@ router.get('/:orderNo/references', async function (req, res) {
     }
     res.json({ data: { orderNo: req.params.orderNo, counts: counts, total: total } });
   } catch (e) {
-    console.error('[orders/references]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErrors.serverError(res, '[orders/references]', e);
   }
 });
 
@@ -251,8 +248,7 @@ router.get('/:orderNo/history', async function (req, res) {
     picked.sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
     res.json({ data: picked });
   } catch (e) {
-    console.error('[orders/history]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErrors.serverError(res, '[orders/history]', e);
   }
 });
 
@@ -269,8 +265,7 @@ router.post('/', rbac.checkPermission('order.edit'), async function (req, res) {
     }
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[orders/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErrors.serverError(res, '[orders/create]', e);
   }
 });
 
@@ -400,8 +395,7 @@ router.put('/:orderNo', rbac.checkPermission('order.edit'), async function (req,
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: result.row });
   } catch (e) {
-    console.error('[orders/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErrors.serverError(res, '[orders/update]', e);
   }
 });
 
@@ -412,8 +406,7 @@ router.delete('/:orderNo', rbac.checkPermission('order.edit'), async function (r
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[orders/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErrors.serverError(res, '[orders/delete]', e);
   }
 });
 

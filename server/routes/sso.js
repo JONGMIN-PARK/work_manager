@@ -6,6 +6,7 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var planGate = require('../middleware/plan-gate');
 var authService = require('../services/auth.service');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -19,8 +20,7 @@ router.get('/config', auth.requireRole('admin'), async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[sso/config]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[sso/config]', e);
   }
 });
 
@@ -48,8 +48,7 @@ router.post('/config', auth.requireRole('admin'), planGate('sso'), async functio
     await authService.auditLog(req.user.sub, 'sso_config_update', 'sso_config', r.rows[0].id, { provider: b.provider }, req);
     res.json({ data: r.rows[0], message: 'SSO 설정이 저장되었습니다.' });
   } catch (e) {
-    console.error('[sso/config/save]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[sso/config/save]', e);
   }
 });
 
@@ -63,8 +62,7 @@ router.delete('/config/:id', auth.requireRole('admin'), async function (req, res
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: 'SSO 설정이 삭제되었습니다.' });
   } catch (e) {
-    console.error('[sso/config/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[sso/config/delete]', e);
   }
 });
 
@@ -104,8 +102,7 @@ router.post('/saml/login', async function (req, res) {
       }
     });
   } catch (e) {
-    console.error('[sso/saml/login]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[sso/saml/login]', e);
   }
 });
 
@@ -178,8 +175,7 @@ router.post('/saml/callback', async function (req, res) {
       refreshToken: refreshToken
     })));
   } catch (e) {
-    console.error('[sso/saml/callback]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[sso/saml/callback]', e);
   }
 });
 

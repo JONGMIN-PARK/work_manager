@@ -4,6 +4,7 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var { parsePagination } = require('../middleware/pagination');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -28,8 +29,7 @@ router.get('/', async function (req, res) {
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
-    console.error('[progress/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[progress/list]', e);
   }
 });
 
@@ -46,8 +46,7 @@ router.post('/', async function (req, res) {
     if (!r.rows.length) return res.status(409).json({ error: 'CONFLICT', message: '이미 사용 중인 ID입니다.' });
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[progress/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[progress/create]', e);
   }
 });
 

@@ -64,6 +64,13 @@ function _asFreqDisplay(freqCode, count) {
   return base + ' ' + Number(count) + '회';
 }
 
+/* A/S 모달 오버레이 — createModal(project-data.js) 위에 기존 모양을 그대로 유지.
+ * z 는 고정값(기존 스택 순서 유지), 블러 없음, backdrop 클릭 닫기 없음(v13.63).
+ * 호출 측은 반환된 overlay 에 innerHTML 로 기존 박스 마크업을 넣는다. */
+function _asOverlay(id, z, overlayStyle) {
+  return createModal({ id: id, z: z, overlayStyle: 'backdrop-filter:none' + (overlayStyle ? ';' + overlayStyle : '') }).overlay;
+}
+
 function _asAdminOnly() {
   return typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin';
 }

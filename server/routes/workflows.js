@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -25,8 +26,7 @@ router.get('/', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[workflows/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[workflows/list]', e);
   }
 });
 
@@ -72,8 +72,7 @@ router.post('/', auth.requireRole('admin'), async function (req, res) {
 
     res.status(201).json({ data: r.rows[0], message: '워크플로우가 생성되었습니다.' });
   } catch (e) {
-    console.error('[workflows/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[workflows/create]', e);
   }
 });
 
@@ -116,8 +115,7 @@ router.put('/:id', auth.requireRole('admin'), async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0], message: '워크플로우가 수정되었습니다.' });
   } catch (e) {
-    console.error('[workflows/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[workflows/update]', e);
   }
 });
 
@@ -131,8 +129,7 @@ router.delete('/:id', auth.requireRole('admin'), async function (req, res) {
     if (!r.rows.length) return res.status(400).json({ error: 'CANNOT_DELETE', message: '기본 워크플로우는 삭제할 수 없습니다.' });
     res.json({ message: '워크플로우가 삭제되었습니다.' });
   } catch (e) {
-    console.error('[workflows/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[workflows/delete]', e);
   }
 });
 
@@ -157,8 +154,7 @@ router.post('/:id/validate', async function (req, res) {
 
     res.json({ data: { valid: valid, from: b.from, to: b.to } });
   } catch (e) {
-    console.error('[workflows/validate]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[workflows/validate]', e);
   }
 });
 

@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -23,8 +24,7 @@ router.get('/', async function (req, res) {
     );
     res.json({ data: r.rows[0] || null });
   } catch (e) {
-    console.error('[locks/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[locks/get]', e);
   }
 });
 
@@ -50,8 +50,7 @@ router.patch('/', async function (req, res) {
 
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[locks/set]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[locks/set]', e);
   }
 });
 
@@ -73,8 +72,7 @@ router.delete('/', async function (req, res) {
 
     res.json({ message: '잠금 해제 완료' });
   } catch (e) {
-    console.error('[locks/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[locks/delete]', e);
   }
 });
 

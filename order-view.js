@@ -22,10 +22,7 @@ function orderSetQ(v) {
   orderSearchKw = v || '';
   clearTimeout(_orderQTimer);
   _orderQTimer = setTimeout(function () {
-    renderOrders(function () {
-      var el = document.getElementById('orderQ');
-      if (el) { el.focus(); var n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} }
-    });
+    renderOrders(function () { wmRestoreFocus('orderQ'); });
   }, 250);
 }
 
@@ -271,9 +268,7 @@ function showOrderModal(editOrderNo) {
   var isEdit = false;
 
   var doShow = function () {
-    var modal = document.createElement('div');
-    modal.id = 'orderModal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+    var modal = createModal({ id: 'orderModal', z: MODAL_Z, overlayStyle: 'padding:0;background:rgba(0,0,0,.6)' }).overlay;
     // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
     var o = existing || {};
@@ -311,7 +306,6 @@ function showOrderModal(editOrderNo) {
       '<button class="btn btn-p" onclick="saveOrderModal(' + (isEdit ? 'true' : 'false') + ')">저장</button>' +
       '</div></div></div>';
 
-    document.body.appendChild(modal);
     if (!isEdit) document.getElementById('omOrderNo').focus();
   };
 
@@ -420,12 +414,7 @@ function _renumberRefsHTML(refs) {
 }
 
 function showRenumberModal(orderNo, version) {
-  var existing = document.getElementById('renumberModal');
-  if (existing) existing.remove();
-
-  var modal = document.createElement('div');
-  modal.id = 'renumberModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+  var modal = createModal({ id: 'renumberModal', z: MODAL_Z + 1, overlayStyle: 'padding:0;background:rgba(0,0,0,.6)' }).overlay;
   modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:520px;width:95%;max-height:90vh;overflow:auto">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
     '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">🔢 수주번호 변경</h3>' +
@@ -452,7 +441,6 @@ function showRenumberModal(orderNo, version) {
     '<button class="btn btn-p" id="rnSubmit" onclick="submitRenumber(\'' + _orderJsStr(orderNo) + '\', ' + (version === undefined || version === null ? 'null' : Number(version)) + ')">번호 변경 적용</button>' +
     '</div></div></div>';
 
-  document.body.appendChild(modal);
   var noEl = document.getElementById('rnNewNo');
   if (noEl) noEl.focus();
 

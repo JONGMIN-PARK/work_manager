@@ -5,7 +5,8 @@ var auth = require('../middleware/auth');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var tenant = require('../middleware/tenant');
-var ps = require('../middleware/project-scope');
+var ps = require('../lib/project-access');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -50,8 +51,7 @@ router.get('/', async function (req, res) {
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
-    console.error('[events/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[events/list]', e);
   }
 });
 
@@ -62,8 +62,7 @@ router.get('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[events/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[events/get]', e);
   }
 });
 
@@ -81,8 +80,7 @@ router.post('/', async function (req, res) {
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[events/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[events/create]', e);
   }
 });
 
@@ -107,8 +105,7 @@ router.put('/:id', async function (req, res) {
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: result.row });
   } catch (e) {
-    console.error('[events/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[events/update]', e);
   }
 });
 
@@ -119,8 +116,7 @@ router.delete('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[events/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[events/delete]', e);
   }
 });
 

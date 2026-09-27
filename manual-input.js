@@ -95,7 +95,7 @@ async function saveManualInput(keepOpen){
   var taskType=document.getElementById('mi_taskType').value.trim();
   var content=document.getElementById('mi_content').value.trim();
   var status=document.getElementById('mi_status');
-  if(!date||!name){status.textContent='⚠️ 날짜와 이름은 필수입니다.';status.style.color='#EF4444';return}
+  if(!date||!name){status.textContent='⚠️ 날짜와 이름은 필수입니다.';status.style.color=SEM_COLOR.danger;return}
   // YYYY-MM-DD → YYYYMMDD 변환
   var normDate=date.replace(/[-\/]/g,'');
   var record={date:normDate,name:name,orderNo:orderNo,hours:hours,ocmt:ocmt||null,oclient:oclient||null,abbr:abbr,taskType:taskType||AM[abbr]||'',content:content};
@@ -119,7 +119,7 @@ async function saveManualInput(keepOpen){
     var newRec=saved||record;
     aD.push(newRec);
     // 서버 DB에 이미 저장됨 — 별도 동기화 불필요
-    status.textContent='✅ 저장 완료! (서버 DB 반영됨)';status.style.color='#10B981';
+    status.textContent='✅ 저장 완료! (서버 DB 반영됨)';status.style.color=SEM_COLOR.ok;
     // UI 갱신 — 날짜순 정렬 + 필터/리스트 전체 갱신
     aD.sort(function(a,b){var n=a.name.localeCompare(b.name,'ko');return n!==0?n:a.date.localeCompare(b.date)});
     gfInvalidate();
@@ -138,7 +138,7 @@ async function saveManualInput(keepOpen){
     }
   }catch(err){
     console.error('[saveManualInput]',err);
-    status.textContent='❌ 저장 실패: '+(err.message||'서버 오류');status.style.color='#EF4444';
+    status.textContent='❌ 저장 실패: '+(err.message||'서버 오류');status.style.color=SEM_COLOR.danger;
   }finally{
     document.getElementById('mi_saveBtn').disabled=false;
     document.getElementById('mi_saveMoreBtn').disabled=false;

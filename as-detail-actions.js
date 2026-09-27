@@ -136,9 +136,6 @@ function asCSATSave(ticketId) {
 function showASPartAddForm(ticketId) {
   var BILL = typeof AS_BILLING !== 'undefined' ? AS_BILLING : {};
   document.querySelectorAll('#asPartAddOverlay').forEach(function (el) { el.remove(); });
-  var overlay = document.createElement('div');
-  overlay.id = 'asPartAddOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px';
 
   var today = localDate();
   var h = '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;width:600px;max-width:100%;padding:20px 22px;color:var(--t2)">';
@@ -163,8 +160,8 @@ function showASPartAddForm(ticketId) {
   h += '<button onclick="document.getElementById(\'asPartAddOverlay\').remove()" style="padding:7px 14px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:11px">취소</button>';
   h += '<button onclick="asPartAdd(\'' + _asEsc(ticketId) + '\')" style="padding:7px 14px;border:none;border-radius:6px;background:#10B981;color:#fff;cursor:pointer;font-size:11px;font-weight:600">+ 부품 추가</button>';
   h += '</div></div>';
+  var overlay = _asOverlay('asPartAddOverlay', 10001);
   overlay.innerHTML = h;
-  document.body.appendChild(overlay);
   // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
 }
 
@@ -207,9 +204,6 @@ function asPartRemove(ticketId, pid) {
 function showASAttachAddForm(ticketId) {
   var CAT = typeof AS_ATTACH_CATEGORY !== 'undefined' ? AS_ATTACH_CATEGORY : {};
   document.querySelectorAll('#asAttachAddOverlay').forEach(function (el) { el.remove(); });
-  var overlay = document.createElement('div');
-  overlay.id = 'asAttachAddOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px';
 
   var h = '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;width:520px;max-width:100%;padding:20px 22px;color:var(--t2)">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bd)">';
@@ -237,8 +231,8 @@ function showASAttachAddForm(ticketId) {
   h += '<button onclick="document.getElementById(\'asAttachAddOverlay\').remove()" style="padding:7px 14px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:11px">취소</button>';
   h += '<button onclick="asAttachAdd(\'' + _asEsc(ticketId) + '\')" style="padding:7px 14px;border:none;border-radius:6px;background:#10B981;color:#fff;cursor:pointer;font-size:11px;font-weight:600">+ 추가</button>';
   h += '</div></div>';
+  var overlay = _asOverlay('asAttachAddOverlay', 10001);
   overlay.innerHTML = h;
-  document.body.appendChild(overlay);
   // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
 }
 
@@ -327,9 +321,6 @@ function showASAssignAddForm(ticketId) {
   var ROLE     = typeof AS_ASSIGN_ROLE !== 'undefined' ? AS_ASSIGN_ROLE : {};
 
   document.querySelectorAll('#asAssignAddOverlay').forEach(function (el) { el.remove(); });
-  var overlay = document.createElement('div');
-  overlay.id = 'asAssignAddOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
 
   var h = '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;width:520px;max-width:100%;padding:20px 22px;color:var(--t2)">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bd)">';
@@ -354,8 +345,8 @@ function showASAssignAddForm(ticketId) {
   h += '<button onclick="asAssignmentAdd(\'' + _asEsc(ticketId) + '\')" style="padding:7px 14px;border:none;border-radius:6px;background:#06B6D4;color:#fff;cursor:pointer;font-size:11px;font-weight:600">+ 할당</button>';
   h += '</div></div>';
 
+  var overlay = _asOverlay('asAssignAddOverlay', 10000);
   overlay.innerHTML = h;
-  document.body.appendChild(overlay);
   // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
 }
 

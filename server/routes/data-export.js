@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -54,8 +55,7 @@ router.get('/audit', async function (req, res) {
     res.setHeader('Content-Disposition', 'attachment; filename="audit_logs_' + new Date().toISOString().slice(0, 10) + '.csv"');
     res.send('\uFEFF' + header + csv); // BOM for Excel
   } catch (e) {
-    console.error('[data-export/audit]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[data-export/audit]', e);
   }
 });
 
@@ -71,8 +71,7 @@ router.get('/users', async function (req, res) {
     res.setHeader('Content-Disposition', 'attachment; filename="users_' + new Date().toISOString().slice(0, 10) + '.json"');
     res.json({ data: r.rows, exported_at: new Date().toISOString(), tenant_id: req.tenant.id });
   } catch (e) {
-    console.error('[data-export/users]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[data-export/users]', e);
   }
 });
 
@@ -101,8 +100,7 @@ router.get('/full', async function (req, res) {
     res.setHeader('Content-Disposition', 'attachment; filename="full_export_' + new Date().toISOString().slice(0, 10) + '.json"');
     res.json(exportData);
   } catch (e) {
-    console.error('[data-export/full]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[data-export/full]', e);
   }
 });
 
@@ -126,8 +124,7 @@ router.get('/access-report', async function (req, res) {
 
     res.json({ data: r.rows, period_days: days });
   } catch (e) {
-    console.error('[data-export/access-report]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[data-export/access-report]', e);
   }
 });
 
@@ -144,8 +141,7 @@ router.get('/retention', async function (req, res) {
       }
     });
   } catch (e) {
-    console.error('[data-export/retention]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[data-export/retention]', e);
   }
 });
 
@@ -170,8 +166,7 @@ router.put('/retention', async function (req, res) {
 
     res.json({ data: r.rows[0], message: '데이터 보관 정책이 저장되었습니다.' });
   } catch (e) {
-    console.error('[data-export/retention]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[data-export/retention]', e);
   }
 });
 

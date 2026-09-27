@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -47,8 +48,7 @@ router.get('/summary', async function (req, res) {
       people: peopleR.rows
     });
   } catch (e) {
-    console.error('[stats/summary]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[stats/summary]', e);
   }
 });
 
@@ -85,8 +85,7 @@ router.get('/weekly', async function (req, res) {
       daily: dailyR.rows
     });
   } catch (e) {
-    console.error('[stats/weekly]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[stats/weekly]', e);
   }
 });
 
@@ -110,8 +109,7 @@ router.get('/by-team', async function (req, res) {
 
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[stats/by-team]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[stats/by-team]', e);
   }
 });
 
@@ -139,8 +137,7 @@ router.get('/by-order', async function (req, res) {
 
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[stats/by-order]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[stats/by-order]', e);
   }
 });
 

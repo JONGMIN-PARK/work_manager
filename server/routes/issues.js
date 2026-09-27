@@ -7,7 +7,8 @@ var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
 var notificationService = require('../services/notification.service');
 var tenant = require('../middleware/tenant');
-var ps = require('../middleware/project-scope');
+var ps = require('../lib/project-access');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -42,8 +43,7 @@ router.get('/', async function (req, res) {
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
-    console.error('[issues/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[issues/list]', e);
   }
 });
 
@@ -54,8 +54,7 @@ router.get('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[issues/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[issues/get]', e);
   }
 });
 
@@ -92,8 +91,7 @@ router.post('/', rbac.checkPermission('issue.create'), async function (req, res)
       }
     } catch (_) { /* 알림 실패해도 이슈 생성은 성공 */ }
   } catch (e) {
-    console.error('[issues/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[issues/create]', e);
   }
 });
 
@@ -142,8 +140,7 @@ router.put('/:id', async function (req, res) {
       })();
     }
   } catch (e) {
-    console.error('[issues/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[issues/update]', e);
   }
 });
 
@@ -154,8 +151,7 @@ router.delete('/:id', rbac.checkPermission('issue.delete'), async function (req,
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[issues/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[issues/delete]', e);
   }
 });
 
@@ -167,8 +163,7 @@ router.get('/:id/logs', async function (req, res) {
     var r = await db.query('SELECT * FROM issue_logs WHERE issue_id = $1 AND tenant_id = $2 ORDER BY date DESC, created_at DESC', [req.params.id, req.tenant.id]);
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[issues/logs]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[issues/logs]', e);
   }
 });
 
@@ -183,8 +178,7 @@ router.post('/:id/logs', async function (req, res) {
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[issues/logs/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[issues/logs/create]', e);
   }
 });
 
@@ -195,8 +189,7 @@ router.delete('/:id/logs/:logId', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[issues/logs/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[issues/logs/delete]', e);
   }
 });
 

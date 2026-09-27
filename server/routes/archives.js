@@ -5,6 +5,8 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var rbac = require('../middleware/rbac');
 var { parsePagination } = require('../middleware/pagination');
+var { recordScope } = require('../lib/record-scope');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -15,26 +17,11 @@ router.use(tenant.tenantScope);
 // GET /api/archives/records
 router.get('/records', async function (req, res) {
   try {
-    var role = req.user.role;
-    var deptId = req.user.departmentId;
-    var where, params, idx;
-
-    if ((role === 'manager' || role === 'executive') && deptId) {
-      // 팀장/임원: 소속 부서 전체 업무일지 조회
-      where = 'WHERE tenant_id = $1 AND user_id IN (SELECT id FROM users WHERE department_id = $2)';
-      params = [req.tenant.id, deptId];
-      idx = 3;
-    } else if (role === 'admin') {
-      // 관리자: 전체
-      where = 'WHERE tenant_id = $1';
-      params = [req.tenant.id];
-      idx = 2;
-    } else {
-      // member: 본인만
-      where = 'WHERE tenant_id = $1 AND user_id = $2';
-      params = [req.tenant.id, req.user.sub];
-      idx = 3;
-    }
+    // 역할별 범위: admin=테넌트 / manager·executive(부서)=부서 / 그 외=본인 (lib/record-scope)
+    var sc = recordScope(req);
+    var where = 'WHERE ' + sc.where;
+    var params = sc.params;
+    var idx = sc.nextIdx;
     if (req.query.date) { where += ' AND date = $' + idx++; params.push(req.query.date); }
     if (req.query.startDate) { where += ' AND date >= $' + idx++; params.push(req.query.startDate); }
     if (req.query.endDate) { where += ' AND date <= $' + idx++; params.push(req.query.endDate); }
@@ -70,32 +57,18 @@ router.get('/records', async function (req, res) {
 
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
-    console.error('[work-records/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[work-records/list]', e);
   }
 });
 
 // GET /api/archives/records/count
 router.get('/records/count', async function (req, res) {
   try {
-    var role = req.user.role;
-    var deptId = req.user.departmentId;
-    var sql, params;
-    if ((role === 'manager' || role === 'executive') && deptId) {
-      sql = 'SELECT COUNT(*) as cnt FROM work_records WHERE tenant_id = $1 AND user_id IN (SELECT id FROM users WHERE department_id = $2)';
-      params = [req.tenant.id, deptId];
-    } else if (role === 'admin') {
-      sql = 'SELECT COUNT(*) as cnt FROM work_records WHERE tenant_id = $1';
-      params = [req.tenant.id];
-    } else {
-      sql = 'SELECT COUNT(*) as cnt FROM work_records WHERE tenant_id = $1 AND user_id = $2';
-      params = [req.tenant.id, req.user.sub];
-    }
-    var r = await db.query(sql, params);
+    var sc = recordScope(req);
+    var r = await db.query('SELECT COUNT(*) as cnt FROM work_records WHERE ' + sc.where, sc.params);
     res.json({ data: { count: parseInt(r.rows[0].cnt, 10) } });
   } catch (e) {
-    console.error('[work-records/count]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[work-records/count]', e);
   }
 });
 
@@ -111,7 +84,7 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
   try {
     var records = req.body.records || [];
     var userId = req.user.sub;
-    if (!records.length) { client.release(); return res.json({ data: [], count: 0 }); }
+    if (!records.length) return res.json({ data: [], count: 0 });   // release 는 finally 에서 1회만
 
     await client.query('BEGIN');
 
@@ -139,8 +112,7 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
     res.status(201).json({ data: [], count: totalInserted });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (rbErr) { console.error('[ROLLBACK failed]', rbErr); }
-    console.error('[work-records/bulk]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[work-records/bulk]', e, '서버 오류가 발생했습니다.');
   } finally {
     if (client) client.release();
   }
@@ -157,45 +129,47 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
   }
   try {
     var updates = req.body.updates || [];
-    if (!updates.length) { client.release(); return res.json({ data: [], count: 0 }); }
+    if (!updates.length) return res.json({ data: [], count: 0 });   // release 는 finally 에서 1회만
 
-    // role별 스코프 결정 — GET /records와 동일 정책
-    var role = req.user.role;
-    var deptId = req.user.departmentId;
-    var scopeClause, scopeParams;
-    if ((role === 'manager' || role === 'executive') && deptId) {
-      scopeClause = 'AND tenant_id = $S1 AND user_id IN (SELECT id FROM users WHERE department_id = $S2)';
-      scopeParams = [req.tenant.id, deptId];
-    } else if (role === 'admin') {
-      scopeClause = 'AND tenant_id = $S1';
-      scopeParams = [req.tenant.id];
-    } else {
-      scopeClause = 'AND tenant_id = $S1 AND user_id = $S2';
-      scopeParams = [req.tenant.id, req.user.sub];
-    }
-
-    await client.query('BEGIN');
-    // 전체 필드를 명시적으로 SET (COALESCE 없이 직접 덮어쓰기)
-    var promises = [];
+    // 전체 필드를 명시적으로 SET (COALESCE 없이 직접 덮어쓰기).
+    // 행마다 UPDATE 하던 N회 왕복 → unnest 배열로 단일 UPDATE ... FROM (1회 왕복).
+    //  - 같은 id 가 여러 번 오면 예전처럼 "마지막 값이 이김" 이 되도록 JS 에서 마지막 것만 남긴다
+    //    (UPDATE ... FROM 은 중복 조인 행 중 임의의 것을 고르므로).
+    //  - 응답 count 는 예전과 같이 "id 가 있는 요청 항목 수" (실제 갱신 행 수 아님).
     var count = 0;
+    var byId = new Map();
     for (var i = 0; i < updates.length; i++) {
       var u = updates[i];
       if (!u.id) continue;
-      // 기본 SET 파라미터 + id + 스코프 파라미터
-      var rowParams = [u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.milestoneId !== undefined ? (u.milestoneId || null) : (u.milestone_id !== undefined ? (u.milestone_id || null) : null), u.id];
-      var sParamStart = rowParams.length + 1; // 12
-      var sql = 'UPDATE work_records SET date=$1, name=$2, order_no=$3, hours=$4, task_type=$5, abbr=$6, content=$7, ocmt=$8, oclient=$9, milestone_id=$10 WHERE id=$11 ' +
-        scopeClause.replace('$S1', '$' + sParamStart).replace('$S2', '$' + (sParamStart + 1));
-      promises.push(client.query(sql, rowParams.concat(scopeParams)));
       count++;
+      byId.set(String(u.id), [
+        u.id, u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0,
+        u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null,
+        u.milestoneId !== undefined ? (u.milestoneId || null) : (u.milestone_id !== undefined ? (u.milestone_id || null) : null)
+      ]);
     }
-    await Promise.all(promises);
+    var cols = [[], [], [], [], [], [], [], [], [], [], []];
+    byId.forEach(function (row) { for (var c = 0; c < row.length; c++) cols[c].push(row[c] == null ? null : String(row[c])); });
+
+    // role별 스코프 — GET /records와 동일 정책 (lib/record-scope). 배열 11개 뒤($12~)에 붙는다.
+    var sc = recordScope(req, { alias: 'w', startIdx: 12 });
+
+    await client.query('BEGIN');
+    if (byId.size) {
+      await client.query(
+        'UPDATE work_records w SET date=u.date, name=u.name, order_no=u.order_no, hours=u.hours::numeric, task_type=u.task_type, ' +
+        'abbr=u.abbr, content=u.content, ocmt=u.ocmt, oclient=u.oclient, milestone_id=u.milestone_id ' +
+        'FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[], $11::text[]) ' +
+        'AS u(id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id) ' +
+        'WHERE w.id = u.id::integer AND ' + sc.where,
+        cols.concat(sc.params)
+      );
+    }
     await client.query('COMMIT');
     res.json({ data: [], count: count });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (rbErr) { console.error('[ROLLBACK failed]', rbErr); }
-    console.error('[work-records/batch-update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[work-records/batch-update]', e, '서버 오류가 발생했습니다.');
   } finally {
     if (client) client.release();
   }
@@ -212,8 +186,7 @@ router.post('/records', rbac.checkPermission('archive.manage'), async function (
     );
     res.status(201).json({ data: result.rows[0] });
   } catch (e) {
-    console.error('[work-records/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[work-records/create]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -222,26 +195,16 @@ router.delete('/records/batch', rbac.checkPermission('archive.manage'), async fu
   try {
     var ids = req.body.ids || [];
     if (!ids.length) return res.json({ count: 0 });
-    var role = req.user.role;
-    var deptId = req.user.departmentId;
-    var placeholders = ids.map(function (_, i) { return '$' + (i + 1); });
-    var nextIdx = ids.length + 1;
-    var sql, params;
-    if ((role === 'manager' || role === 'executive') && deptId) {
-      sql = 'DELETE FROM work_records WHERE id IN (' + placeholders.join(',') + ') AND tenant_id = $' + nextIdx + ' AND user_id IN (SELECT id FROM users WHERE department_id = $' + (nextIdx + 1) + ')';
-      params = ids.concat([req.tenant.id, deptId]);
-    } else if (role === 'admin') {
-      sql = 'DELETE FROM work_records WHERE id IN (' + placeholders.join(',') + ') AND tenant_id = $' + nextIdx;
-      params = ids.concat([req.tenant.id]);
-    } else {
-      sql = 'DELETE FROM work_records WHERE id IN (' + placeholders.join(',') + ') AND tenant_id = $' + nextIdx + ' AND (user_id = $' + (nextIdx + 1) + ' OR user_id IS NULL)';
-      params = ids.concat([req.tenant.id, req.user.sub]);
-    }
-    var result = await db.query(sql, params);
+    // 범위는 GET/PATCH 와 동일 (lib/record-scope). 예전 member 분기의 `OR user_id IS NULL`
+    // (조회·수정 불가한 주인 없는 레코드까지 삭제 허용하던 잔재)은 제거됨 — record-scope.js 주석 참고.
+    var sc = recordScope(req, { startIdx: 2 });
+    var result = await db.query(
+      'DELETE FROM work_records WHERE id = ANY($1::int[]) AND ' + sc.where,
+      [ids.map(function (v) { return v == null ? null : String(v); })].concat(sc.params)
+    );
     res.json({ count: result.rowCount });
   } catch (e) {
-    console.error('[work-records/batch-delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[work-records/batch-delete]', e);
   }
 });
 
@@ -263,20 +226,30 @@ router.post('/records/auto-tag-milestones', rbac.checkPermission('archive.manage
     var milestones = msR.rows.filter(function (m) { return m.start_date && m.end_date; });
     if (!milestones.length) return res.json({ data: { tagged: 0, reason: '날짜가 설정된 마일스톤이 없습니다.' } });
 
-    var whereMs = overwrite ? '' : ' AND milestone_id IS NULL';
-    var tagged = 0;
-    for (var i = 0; i < milestones.length; i++) {
-      var ms = milestones[i];
-      var r = await db.query(
-        'UPDATE work_records SET milestone_id = $1 WHERE order_no = $2 AND date >= $3 AND date <= $4 AND tenant_id = $5' + whereMs,
-        [ms.id, orderNo, ms.start_date, ms.end_date, req.tenant.id]
-      );
-      tagged += r.rowCount || 0;
-    }
+    // 마일스톤마다 UPDATE 하던 N회 왕복 → 단일 UPDATE. 예전 순차 루프와 같은 결과가 되도록:
+    //  - overwrite=false: 루프에서는 먼저(sort_order 앞) 태깅한 마일스톤이 milestone_id 를 채우면
+    //    뒤 마일스톤은 IS NULL 조건에 걸려 건너뛰었다 → 겹치는 구간은 "첫 마일스톤" 이 이긴다.
+    //  - overwrite=true : 매번 덮어써 "마지막 마일스톤" 이 이긴다.
+    //  - tagged 는 루프의 rowCount 합계 — overwrite 일 때 겹친 행은 덮어쓴 횟수만큼 셌으므로 hits 합.
+    var ids = [], starts = [], ends = [], ords = [];
+    milestones.forEach(function (m, i) { ids.push(m.id); starts.push(m.start_date); ends.push(m.end_date); ords.push(i); });
+    var r = await db.query(
+      'WITH ms AS (SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::int[]) AS t(id, s, e, ord)), ' +
+      'pick AS (' +
+      '  SELECT DISTINCT ON (wr.id) wr.id AS wr_id, ms.id AS ms_id, COUNT(*) OVER (PARTITION BY wr.id) AS hits ' +
+      '  FROM work_records wr JOIN ms ON wr.date >= ms.s AND wr.date <= ms.e ' +
+      '  WHERE wr.order_no = $5 AND wr.tenant_id = $6' + (overwrite ? '' : ' AND wr.milestone_id IS NULL') +
+      '  ORDER BY wr.id, ms.ord ' + (overwrite ? 'DESC' : 'ASC') +
+      ') ' +
+      'UPDATE work_records w SET milestone_id = pick.ms_id FROM pick WHERE w.id = pick.wr_id RETURNING pick.hits',
+      [ids, starts, ends, ords, orderNo, req.tenant.id]
+    );
+    var tagged = overwrite
+      ? r.rows.reduce(function (s, row) { return s + (parseInt(row.hits, 10) || 0); }, 0)
+      : (r.rowCount || 0);
     res.json({ data: { tagged: tagged, milestones: milestones.length } });
   } catch (e) {
-    console.error('[work-records/auto-tag]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[work-records/auto-tag]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -298,34 +271,12 @@ router.delete('/records', rbac.checkPermission('archive.manage'), async function
     // tenant_id 컬럼 존재 여부 (구배포 호환)
     var colCheck = await client.query("SELECT 1 FROM information_schema.columns WHERE table_name='work_records' AND column_name='tenant_id'");
     var hasTenant = colCheck.rows.length > 0;
-    var forceSelf = req.query.scope === 'self';
-    var role = req.user.role;
-    var deptId = req.user.departmentId || null;
-    var scope = 'self';
-    var sql, params;
-    if (!forceSelf && role === 'admin' && hasTenant) {
-      scope = 'tenant';
-      sql = 'DELETE FROM work_records WHERE tenant_id = $1';
-      params = [req.tenant.id];
-    } else if (!forceSelf && (role === 'manager' || role === 'executive') && deptId && hasTenant) {
-      scope = 'department';
-      sql = 'DELETE FROM work_records WHERE tenant_id = $1 AND user_id IN (SELECT id FROM users WHERE department_id = $2)';
-      params = [req.tenant.id, deptId];
-    } else {
-      scope = 'self';
-      if (hasTenant) {
-        sql = 'DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2';
-        params = [req.user.sub, req.tenant.id];
-      } else {
-        sql = 'DELETE FROM work_records WHERE user_id = $1';
-        params = [req.user.sub];
-      }
-    }
-    var result = await client.query(sql, params);
-    res.json({ message: '전체 삭제 완료', deleted: result.rowCount, scope: scope });
+    // ?scope=self → 본인으로 축소, tenant_id 없는 구배포 → 본인만(tenant 조건 없이)
+    var sc = recordScope(req, { forceSelf: req.query.scope === 'self', hasTenantColumn: hasTenant });
+    var result = await client.query('DELETE FROM work_records WHERE ' + sc.where, sc.params);
+    res.json({ message: '전체 삭제 완료', deleted: result.rowCount, scope: sc.scope });
   } catch (e) {
-    console.error('[work-records/clear]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[work-records/clear]', e, '서버 오류가 발생했습니다.');
   } finally {
     if (client) client.release();
   }
@@ -342,8 +293,7 @@ router.get('/', async function (req, res) {
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
-    console.error('[archives/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[archives/list]', e);
   }
 });
 
@@ -354,8 +304,7 @@ router.get('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[archives/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[archives/get]', e);
   }
 });
 
@@ -376,8 +325,7 @@ router.post('/', rbac.checkPermission('archive.manage'), async function (req, re
     if (!r.rows.length) return res.status(409).json({ error: 'CONFLICT', message: '이미 사용 중인 ID입니다.' });
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[archives/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[archives/create]', e);
   }
 });
 
@@ -388,8 +336,7 @@ router.delete('/:id', rbac.checkPermission('archive.manage'), async function (re
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[archives/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[archives/delete]', e);
   }
 });
 

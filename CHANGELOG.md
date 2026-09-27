@@ -1,5 +1,39 @@
 # Work Manager — 변경 이력
 
+## v13.194 (2026-09-28) — 리팩토링 3단계 + 알림 날짜·권한 버그
+
+### 버그 (서버)
+- **알림 날짜**: `projects.start_date/end_date` 는 `VARCHAR(10)` 'YYYY-MM-DD'. 일일 브리핑은 오늘 납기를 'YYYYMMDD' 로만 비교(한 번도 안 잡힘),
+  진행률 경고는 'YYYYMMDD' 로 가정해 잘라 Invalid Date(한 번도 발송 안 됨). 또 스케줄이 UTC 기준이라 브리핑(23:30 UTC = KST 08:30)이 UTC 날짜 = 어제를 사용.
+  → `jobs.js` `_kstYmd(n)`(KST 날짜)·`_parseYmd`(두 형식 허용), 브리핑은 두 형식 모두 매칭. `notification-dates.test.js`.
+- 마일스톤 이관: admin/executive 가 존재하지 않거나 **다른 테넌트** 프로젝트로 이관 가능 → 404.
+- `DELETE /archives/records/batch`: 멤버가 소유자 없는(`user_id IS NULL`) 행 삭제 가능(읽기/수정 경로에선 675e804 에서 제거됐던 잔재) → 제거.
+- 프로젝트 복사·소유권 이전의 `project_members` 가 `tenant_id` 없이 기본 테넌트로 기록 → 수정 + 마이그레이션 백필.
+- archives bulk/batch 조기 반환 시 DB 클라이언트 이중 release(unhandled rejection) → 수정.
+- bootstrap 프로젝트 목록에 admin 우회가 없어 `/api/projects` 와 달랐음 → 일치(새 노출 없음).
+
+### 서버 리팩토링
+- `lib/record-scope.js`(`recordScope`) — archives 5곳·bootstrap 의 역할→WHERE 복제 통합(드리프트 옵션은 명시적 옵션으로).
+- `lib/project-access.js`(`visibleProjectsSql`·`canRead`·`canEdit`·`canComment`…) — 4가지로 흩어진 공개 범위 규칙 통합(8개 라우트), `middleware/project-scope.js` 는 호환 shim.
+- `lib/http-errors.js`(`sendError`/`serverError`) — 동일한 500 블록 ~270곳 기계적 치환, 오류 코드·메시지 불변.
+- N+1 제거: archives 일괄 PATCH(`unnest` 1쿼리)·자동 태그(CTE 1쿼리, 기존 루프와 결과 동일), projects 재정렬·복사, 알림 대상 일괄 해석(`resolveStakeholders`).
+- 마이그레이션 `052_scope_indexes_pm_tenant_backfill.sql`: `idx_wr_tenant_order_date`, `idx_projects_end_date_status`, `project_members.tenant_id` 백필(`IS DISTINCT FROM`). 재실행 안전.
+- 분할: `as-tickets.js` 1,191 → 28(마운트만) + `_shared`/`core`/`assignments`/`logs`/`parts`/`attachments`/`reports`,
+  `notification.service.js` 1,007 → 32(재수출) + `templates`/`dispatch`/`jobs`/`groups`.
+- 라우트 인벤토리 스냅샷 테스트: 452개 경로·등록 순서 전후 동일. `issue.edit`/`event.edit` 는 TODO(정책 결정 대기).
+
+### 클라이언트 리팩토링
+- 공통 모달 이관: A/S 8(`_asOverlay`, 원래 z 명시), 코멘트·메시지·수주 2·사진 뷰어·이슈·설정 4 = 10, auth.js 의 죽은 폴백 3개 제거.
+  이관된 창은 `.wa-modal-overlay` 를 가져 Esc/최상위 닫기/z 자동 스택에 참여. 같은 id 재오픈 시 교체.
+- 의미 색: A/S 100 · 기타 탭 130 · 분리 파일 53 → `SEM_COLOR.*`. 남은 z-index 리터럴 → `MODAL_Z ± n`(같은 값).
+- `_asStatsDrawAll`(377줄) → `_AS_STATS_CHARTS` 13개 `{canvasId, build}` + `_asChart` (Chart.js 설정 전후 동일).
+- `globalSearch` → `GS_MATCHERS` 8개 레지스트리, `_postAuthInit` → 이름 붙은 단계(순서·타이밍 동일).
+- `ui-helpers.js` `wmRestoreFocus` — 검색창 포커스 복원 5곳 통합.
+- 죽은 코드: `wrMerge`, `COL_REQUIRED`. style.css 절대 매칭 불가 선택자 46개/규칙 45개(옛 달력 클래스 등) 제거 — 동적 접두사('k-', 'cal-focus-' 등)로 만드는 클래스는 보존, 계산 스타일 71,752개 요소 전후 동일.
+
+### 검증
+화면 126/126, 서버 177/177 × 3(통합 트리, CI 절차). 에이전트별 전후 DOM·계산 스타일·Chart 설정 비교 동일(의도한 래퍼 차이만).
+
 ## v13.193 (2026-09-27) — 보안(테넌트 격리·정적 노출) · 버그 · 메인 페이지 분리 · CI 교착 수정
 
 ### 보안 (서버) — 신규 교차 테넌트 테스트 12개가 수정 전 코드에서 실패함을 확인한 뒤 수정

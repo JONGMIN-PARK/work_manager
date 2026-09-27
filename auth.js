@@ -258,7 +258,7 @@ async function authInit() {
     showLoginOverlay();
     setTimeout(function () {
       var msg = document.getElementById('loginMsg');
-      if (msg) { msg.textContent = 'Google 계정으로 가입 요청이 접수되었습니다. 관리자 승인을 기다려 주세요.'; msg.style.color = '#10B981'; }
+      if (msg) { msg.textContent = 'Google 계정으로 가입 요청이 접수되었습니다. 관리자 승인을 기다려 주세요.'; msg.style.color = SEM_COLOR.ok; }
     }, 100);
     return false;
   }
@@ -275,7 +275,7 @@ async function authInit() {
         google_inactive: '비활성화된 계정입니다. 관리자에게 문의하세요.',
         google_server_error: '서버 오류가 발생했습니다.'
       };
-      if (msg) { msg.textContent = errMsgs[errorParam] || 'Google 로그인 실패'; msg.style.color = '#EF4444'; }
+      if (msg) { msg.textContent = errMsgs[errorParam] || 'Google 로그인 실패'; msg.style.color = SEM_COLOR.danger; }
     }, 100);
     return false;
   }
@@ -368,12 +368,12 @@ function buildLoginHTML() {
       '<input id="loginEmail" type="email" placeholder="이메일" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
       '<input id="loginPw" type="password" placeholder="비밀번호" style="width:100%;padding:10px 12px;margin-bottom:12px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
       '<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:16px;cursor:pointer"><input id="loginRemember" type="checkbox" checked> 로그인 유지</label>' +
-      '<button onclick="handleLogin()" style="width:100%;padding:12px;border:none;border-radius:8px;background:#3B82F6;color:#fff;font-size:15px;font-weight:600;cursor:pointer">로그인</button>' +
+      '<button onclick="handleLogin()" style="width:100%;padding:12px;border:none;border-radius:8px;background:' + SEM_COLOR.info + ';color:#fff;font-size:15px;font-weight:600;cursor:pointer">로그인</button>' +
       '<div style="display:flex;align-items:center;gap:8px;margin:16px 0 12px"><hr style="flex:1;border:none;border-top:1px solid var(--bd,#222C44)"><span style="font-size:12px;color:var(--t5,#6070A0)">또는</span><hr style="flex:1;border:none;border-top:1px solid var(--bd,#222C44)"></div>' +
       '<button onclick="googleLogin()" style="width:100%;padding:10px;border:1px solid var(--bd,#222C44);border-radius:8px;background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">' +
         '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
         'Google로 로그인</button>' +
-      '<p style="text-align:center;margin:16px 0 0;font-size:13px"><a href="javascript:void(0)" onclick="showRegisterForm()" style="color:#3B82F6;text-decoration:none">가입 요청</a></p>' +
+      '<p style="text-align:center;margin:16px 0 0;font-size:13px"><a href="javascript:void(0)" onclick="showRegisterForm()" style="color:' + SEM_COLOR.info + ';text-decoration:none">가입 요청</a></p>' +
     '</div>' +
     '<div id="registerForm" style="display:none">' +
       '<input id="regEmail" type="email" placeholder="이메일" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
@@ -382,8 +382,8 @@ function buildLoginHTML() {
       '<input id="regPw2" type="password" placeholder="비밀번호 확인" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
       '<input id="regPosition" type="text" placeholder="직급 (선택)" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
       '<input id="regPhone" type="tel" placeholder="연락처 (선택)" style="width:100%;padding:10px 12px;margin-bottom:16px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
-      '<button onclick="handleRegister()" style="width:100%;padding:12px;border:none;border-radius:8px;background:#10B981;color:#fff;font-size:15px;font-weight:600;cursor:pointer">가입 요청</button>' +
-      '<p style="text-align:center;margin:16px 0 0;font-size:13px"><a href="javascript:void(0)" onclick="showLoginForm()" style="color:#3B82F6;text-decoration:none">로그인으로 돌아가기</a></p>' +
+      '<button onclick="handleRegister()" style="width:100%;padding:12px;border:none;border-radius:8px;background:' + SEM_COLOR.ok + ';color:#fff;font-size:15px;font-weight:600;cursor:pointer">가입 요청</button>' +
+      '<p style="text-align:center;margin:16px 0 0;font-size:13px"><a href="javascript:void(0)" onclick="showLoginForm()" style="color:' + SEM_COLOR.info + ';text-decoration:none">로그인으로 돌아가기</a></p>' +
     '</div>' +
   '</div>';
 }
@@ -408,7 +408,7 @@ async function handleLogin() {
 
   if (!email || !pw) {
     msg.textContent = '이메일과 비밀번호를 입력하세요.';
-    msg.style.color = '#EF4444';
+    msg.style.color = SEM_COLOR.danger;
     return;
   }
 
@@ -421,7 +421,7 @@ async function handleLogin() {
     if (typeof onAuthReady === 'function') onAuthReady();
   } catch (e) {
     msg.textContent = e.message;
-    msg.style.color = '#EF4444';
+    msg.style.color = SEM_COLOR.danger;
   }
 }
 
@@ -436,12 +436,12 @@ async function handleRegister() {
 
   if (!email || !name || !pw) {
     msg.textContent = '이메일, 이름, 비밀번호는 필수입니다.';
-    msg.style.color = '#EF4444';
+    msg.style.color = SEM_COLOR.danger;
     return;
   }
   if (pw !== pw2) {
     msg.textContent = '비밀번호가 일치하지 않습니다.';
-    msg.style.color = '#EF4444';
+    msg.style.color = SEM_COLOR.danger;
     return;
   }
 
@@ -450,11 +450,11 @@ async function handleRegister() {
     msg.style.color = 'var(--t5,#6070A0)';
     await authRegister(email, pw, name, position, phone);
     msg.textContent = '가입 요청 완료! 관리자 승인을 기다려 주세요.';
-    msg.style.color = '#10B981';
+    msg.style.color = SEM_COLOR.ok;
     setTimeout(showLoginForm, 3000);
   } catch (e) {
     msg.textContent = e.message;
-    msg.style.color = '#EF4444';
+    msg.style.color = SEM_COLOR.danger;
   }
 }
 
@@ -587,8 +587,8 @@ async function renderUserAdmin() {
         html += '<option value="">부서 없음</option>';
         depts.forEach(function (d) { html += '<option value="' + d.id + '">' + eH(d.name) + '</option>'; });
         html += '</select>';
-        html += '<button onclick="approveUser(\'' + u.id + '\')" style="padding:6px 16px;border:none;border-radius:6px;background:#10B981;color:#fff;cursor:pointer;font-size:13px">승인</button>';
-        html += '<button onclick="rejectUser(\'' + u.id + '\')" style="padding:6px 16px;border:none;border-radius:6px;background:#EF4444;color:#fff;cursor:pointer;font-size:13px">거절</button>';
+        html += '<button onclick="approveUser(\'' + u.id + '\')" style="padding:6px 16px;border:none;border-radius:6px;background:' + SEM_COLOR.ok + ';color:#fff;cursor:pointer;font-size:13px">승인</button>';
+        html += '<button onclick="rejectUser(\'' + u.id + '\')" style="padding:6px 16px;border:none;border-radius:6px;background:' + SEM_COLOR.danger + ';color:#fff;cursor:pointer;font-size:13px">거절</button>';
         html += '</div></div>';
       });
     }
@@ -611,7 +611,7 @@ async function renderUserAdmin() {
     setTimeout(function () { try { renderOrgManagement(); } catch (e) { console.warn('[orgMgmt]', e); } }, 0);
     setTimeout(function () { try { renderAuditLog(); } catch (e) { console.warn('[auditLog]', e); } }, 0);
   } catch (e) {
-    container.innerHTML = '<div style="padding:20px;color:#EF4444">사용자 목록 로드 실패: ' + eH(e.message) + '</div>';
+    container.innerHTML = '<div style="padding:20px;color:' + SEM_COLOR.danger + '">사용자 목록 로드 실패: ' + eH(e.message) + '</div>';
   }
 }
 
@@ -779,28 +779,13 @@ async function showProfileModal() {
       '<div id="tgContent" style="text-align:center;font-size:12px;color:var(--t5,#6070A0)">로딩 중...</div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">' +
-      '<button id="profSave" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:#fff;cursor:pointer;font-size:13px">저장</button>' +
-      '<button id="profChangePw" style="padding:8px 20px;border:none;border-radius:8px;background:#F59E0B;color:#fff;cursor:pointer;font-size:13px">비밀번호 변경</button>' +
+      '<button id="profSave" style="padding:8px 20px;border:none;border-radius:8px;background:' + SEM_COLOR.info + ';color:#fff;cursor:pointer;font-size:13px">저장</button>' +
+      '<button id="profChangePw" style="padding:8px 20px;border:none;border-radius:8px;background:' + SEM_COLOR.warn + ';color:#fff;cursor:pointer;font-size:13px">비밀번호 변경</button>' +
       '<button id="profCancel" style="padding:8px 20px;border:none;border-radius:8px;background:var(--bg-p,#111620);border:1px solid var(--bd,#222C44);color:var(--t2,#D8DEE8);cursor:pointer;font-size:13px">닫기</button>' +
     '</div>';
 
-  var modal = (typeof createModal === 'function')
-    ? createModal({ title: '내 프로필', content: div, width: '480px' })
-    : null;
-
-  if (!modal) {
-    // createModal 없으면 간이 오버레이
-    var overlay = document.createElement('div');
-    overlay.id = 'profileOverlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999';
-    var card = document.createElement('div');
-    card.style.cssText = 'background:var(--bg-p,#111620);border-radius:16px;padding:32px;max-width:480px;width:90vw';
-    card.innerHTML = '<h3 style="margin:0 0 16px">내 프로필</h3>';
-    card.appendChild(div);
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-    modal = { close: function () { overlay.remove(); } };
-  }
+  // createModal 은 project-data.js(동기 로드)가 항상 제공 — 예전 간이 오버레이 폴백은 제거
+  var modal = createModal({ title: '내 프로필', content: div, width: '480px' });
 
   div.querySelector('#profSave').onclick = async function () {
     try {
@@ -964,7 +949,7 @@ async function generateTelegramQR(container) {
     var info = data.data;
 
     if (!info.deepLink) {
-      qrArea.innerHTML = '<p style="color:#EF4444;font-size:12px">봇이 설정되지 않았습니다. 관리자에게 문의하세요.</p>';
+      qrArea.innerHTML = '<p style="color:' + SEM_COLOR.danger + ';font-size:12px">봇이 설정되지 않았습니다. 관리자에게 문의하세요.</p>';
       genBtn.disabled = false;
       genBtn.textContent = 'QR코드 생성';
       return;
@@ -1002,12 +987,12 @@ async function generateTelegramQR(container) {
     // 5분 후 만료 표시
     setTimeout(function () {
       if (qrArea && qrArea.parentNode) {
-        qrArea.innerHTML = '<p style="color:#F59E0B;font-size:12px">인증코드가 만료되었습니다. 새 코드를 생성해주세요.</p>';
+        qrArea.innerHTML = '<p style="color:' + SEM_COLOR.warn + ';font-size:12px">인증코드가 만료되었습니다. 새 코드를 생성해주세요.</p>';
       }
     }, 300000);
 
   } catch (e) {
-    qrArea.innerHTML = '<p style="color:#EF4444;font-size:12px">' + (e.message || 'QR코드 생성 실패') + '</p>';
+    qrArea.innerHTML = '<p style="color:' + SEM_COLOR.danger + ';font-size:12px">' + (e.message || 'QR코드 생성 실패') + '</p>';
     genBtn.disabled = false;
     genBtn.textContent = 'QR코드 생성';
   }
@@ -1083,25 +1068,11 @@ function showChangePasswordModal() {
       '<p id="cpMsg" style="font-size:12px;color:var(--t5,#6070A0);margin:0"></p>' +
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">' +
-      '<button id="cpSave" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:#fff;cursor:pointer;font-size:13px">변경</button>' +
+      '<button id="cpSave" style="padding:8px 20px;border:none;border-radius:8px;background:' + SEM_COLOR.info + ';color:#fff;cursor:pointer;font-size:13px">변경</button>' +
       '<button id="cpCancel" style="padding:8px 20px;border:none;border-radius:8px;background:var(--bg-p,#111620);border:1px solid var(--bd,#222C44);color:var(--t2,#D8DEE8);cursor:pointer;font-size:13px">취소</button>' +
     '</div>';
 
-  var modal = (typeof createModal === 'function')
-    ? createModal({ title: '비밀번호 변경', content: div, width: '400px' })
-    : null;
-
-  if (!modal) {
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999';
-    var card = document.createElement('div');
-    card.style.cssText = 'background:var(--bg-p,#111620);border-radius:16px;padding:32px;max-width:400px;width:90vw';
-    card.innerHTML = '<h3 style="margin:0 0 16px">비밀번호 변경</h3>';
-    card.appendChild(div);
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-    modal = { close: function () { overlay.remove(); } };
-  }
+  var modal = createModal({ title: '비밀번호 변경', content: div, width: '400px' });
 
   div.querySelector('#cpSave').onclick = async function () {
     var cur = document.getElementById('cpCurrent').value;
@@ -1109,8 +1080,8 @@ function showChangePasswordModal() {
     var nw2 = document.getElementById('cpNew2').value;
     var msg = document.getElementById('cpMsg');
 
-    if (!cur || !nw) { msg.textContent = '모든 항목을 입력하세요.'; msg.style.color = '#EF4444'; return; }
-    if (nw !== nw2) { msg.textContent = '새 비밀번호가 일치하지 않습니다.'; msg.style.color = '#EF4444'; return; }
+    if (!cur || !nw) { msg.textContent = '모든 항목을 입력하세요.'; msg.style.color = SEM_COLOR.danger; return; }
+    if (nw !== nw2) { msg.textContent = '새 비밀번호가 일치하지 않습니다.'; msg.style.color = SEM_COLOR.danger; return; }
 
     try {
       msg.textContent = '변경 중...'; msg.style.color = 'var(--t5,#6070A0)';
@@ -1122,7 +1093,7 @@ function showChangePasswordModal() {
       modal.close();
       authLogout();
     } catch (e) {
-      msg.textContent = e.message; msg.style.color = '#EF4444';
+      msg.textContent = e.message; msg.style.color = SEM_COLOR.danger;
     }
   };
 
@@ -1149,7 +1120,7 @@ async function renderOrgManagement() {
     '<div style="background:var(--bg-p,#111620);border-radius:12px;padding:16px;margin-top:16px;border:1px solid var(--bd,#222C44)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
         '<h4 style="margin:0;font-size:15px">조직 관리</h4>' +
-        '<button id="btnAddDept" style="padding:6px 14px;border:none;border-radius:6px;background:#3B82F6;color:#fff;cursor:pointer;font-size:12px">+ 부서 추가</button>' +
+        '<button id="btnAddDept" style="padding:6px 14px;border:none;border-radius:6px;background:' + SEM_COLOR.info + ';color:#fff;cursor:pointer;font-size:12px">+ 부서 추가</button>' +
       '</div>' +
       '<div id="orgDeptList"></div>' +
     '</div>';
@@ -1225,25 +1196,11 @@ function showDeptForm(dept, allDepts) {
       '<input id="deptSort" type="number" value="' + (isEdit ? (dept.sort_order || 0) : 0) + '" placeholder="정렬 순서" style="padding:10px 12px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px">' +
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">' +
-      '<button id="deptSave" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:#fff;cursor:pointer;font-size:13px">' + (isEdit ? '수정' : '추가') + '</button>' +
+      '<button id="deptSave" style="padding:8px 20px;border:none;border-radius:8px;background:' + SEM_COLOR.info + ';color:#fff;cursor:pointer;font-size:13px">' + (isEdit ? '수정' : '추가') + '</button>' +
       '<button id="deptCancel" style="padding:8px 20px;border:none;border-radius:8px;background:var(--bg-p,#111620);border:1px solid var(--bd,#222C44);color:var(--t2,#D8DEE8);cursor:pointer;font-size:13px">취소</button>' +
     '</div>';
 
-  var modal = (typeof createModal === 'function')
-    ? createModal({ title: isEdit ? '부서 수정' : '부서 추가', content: div, width: '400px' })
-    : null;
-
-  if (!modal) {
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999';
-    var card = document.createElement('div');
-    card.style.cssText = 'background:var(--bg-p,#111620);border-radius:16px;padding:32px;max-width:400px;width:90vw';
-    card.innerHTML = '<h3 style="margin:0 0 16px">' + (isEdit ? '부서 수정' : '부서 추가') + '</h3>';
-    card.appendChild(div);
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-    modal = { close: function () { overlay.remove(); } };
-  }
+  var modal = createModal({ title: isEdit ? '부서 수정' : '부서 추가', content: div, width: '400px' });
 
   div.querySelector('#deptSave').onclick = async function () {
     var name = document.getElementById('deptName').value.trim();
@@ -1364,7 +1321,7 @@ async function renderAuditLog() {
         '<input id="auditSearch" placeholder="검색 (이름, 이메일, 액션)" style="flex:1;min-width:180px;padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
         '<input id="auditFrom" type="date" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
         '<input id="auditTo" type="date" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
-        '<button id="auditSearchBtn" style="padding:6px 14px;border:none;border-radius:6px;background:#3B82F6;color:#fff;cursor:pointer;font-size:12px">조회</button>' +
+        '<button id="auditSearchBtn" style="padding:6px 14px;border:none;border-radius:6px;background:' + SEM_COLOR.info + ';color:#fff;cursor:pointer;font-size:12px">조회</button>' +
       '</div>' +
       '<div id="auditLogList" style="max-height:400px;overflow-y:auto"></div>' +
       '<div id="auditPaging" style="display:flex;gap:8px;margin-top:8px;justify-content:center"></div>' +
@@ -1431,7 +1388,7 @@ async function renderAuditLog() {
         paging.innerHTML = total > 0 ? '<span style="font-size:12px;color:var(--t5,#6070A0)">' + total + '건</span>' : '';
       }
     } catch (e) {
-      document.getElementById('auditLogList').innerHTML = '<p style="color:#EF4444;font-size:13px">' + eH(e.message) + '</p>';
+      document.getElementById('auditLogList').innerHTML = '<p style="color:' + SEM_COLOR.danger + ';font-size:13px">' + eH(e.message) + '</p>';
     }
   }
 

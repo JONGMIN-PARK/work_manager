@@ -9,6 +9,7 @@ var aiService = require('../services/ai.service');
 var { authenticate } = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var planGate = require('../middleware/plan-gate');
+var httpErr = require('../lib/http-errors');
 
 router.use(authenticate);
 router.use(tenant.tenantScope);
@@ -339,8 +340,7 @@ router.put('/config', require('../middleware/auth').requireRole('admin'), async 
     );
     res.json({ data: r.rows[0], message: 'AI 설정이 저장되었습니다.' });
   } catch (e) {
-    console.error('[ai/config]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[ai/config]', e);
   }
 });
 

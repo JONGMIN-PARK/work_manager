@@ -4,6 +4,7 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var authService = require('../services/auth.service');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScopeOptional);
@@ -23,8 +24,7 @@ router.get('/', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[profile/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[profile/get]', e);
   }
 });
 
@@ -63,8 +63,7 @@ router.put('/', async function (req, res) {
     await authService.auditLog(req.user.sub, 'update_profile', 'user', req.user.sub, b, req);
     res.json({ data: r.rows[0], message: '프로필이 수정되었습니다.' });
   } catch (e) {
-    console.error('[profile/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[profile/update]', e);
   }
 });
 
@@ -83,8 +82,7 @@ router.get('/password-status', async function (req, res) {
 
     res.json({ data: { passwordChangedAt: changedAt, daysSinceChange: daysSince, needsChange: needsChange } });
   } catch (e) {
-    console.error('[profile/password-status]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[profile/password-status]', e);
   }
 });
 

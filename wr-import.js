@@ -14,8 +14,6 @@ var COL_PATTERNS={
   abbr:/약자|약어|abbr|코드|code/i,
   content:/업무내용|내용|content|비고|작업내용|설명/i
 };
-// 필수 컬럼
-var COL_REQUIRED=['date','name'];
 // 전체 필드 (감지 우선순위 — 구체적인 패턴을 앞에)
 var COL_ALL=['date','ocmt','oclient','name','orderNo','hours','taskType','abbr','content'];
 
@@ -166,24 +164,6 @@ let db=null;  // IndexedDB 시절 잔재 — 할당되는 곳 없음(항상 null
 function wrKey(r){return r.date+'|'+r.name+'|'+r.orderNo+'|'+r.hours+'|'+(r.abbr||'')+'|'+(r.dept||'')+'|'+r.content}
 /* 식별 키 (같은 레코드 판별용 — 갱신 시 덮어쓰기) */
 function wrIdKey(r){return r.date+'|'+r.name+'|'+(r.orderNo||'')+'|'+(r.hours||'')+'|'+(r.content||'').trim()}
-function wrMerge(existing,newRecs){
-  /* 기존 데이터 자체 중복 제거 */
-  var seen=new Set();var deduped=[];
-  existing.forEach(function(r){var k=wrKey(r);if(!seen.has(k)){seen.add(k);deduped.push(r)}});
-  /* 신규 데이터로 기존 데이터 덮어쓰기 (완전 식별 키 기준 — 부분 매칭으로 인한 데이터 누락 방지) */
-  var newById=new Map();
-  newRecs.forEach(function(r){var k=wrIdKey(r);if(!newById.has(k))newById.set(k,r)});
-  var updated=0,added=0;
-  var merged=deduped.map(function(r){
-    var ik=wrIdKey(r);
-    if(newById.has(ik)){var nr=newById.get(ik);newById.delete(ik);updated++;return Object.assign({},r,nr)}
-    return r;
-  });
-  /* 기존에 없는 완전 신규 레코드 추가 */
-  newById.forEach(function(r){merged.push(r);added++});
-  return{merged:merged,added:added,updated:updated,removedDups:existing.length-deduped.length}
-}
-
 /* 느슨한 매칭 키 (날짜+이름+수주번호) — 충돌 미리보기용 */
 function wrLooseKey(r){return r.date+'|'+r.name+'|'+(r.orderNo||'')}
 
@@ -288,9 +268,9 @@ function showImportPreviewModal(analysis,opts){
       '<div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">📊 업무일지 가져오기 미리보기</div>'+
       '<div style="font-size:11px;color:var(--t4)">DB 기존 <b style="color:var(--t2)">'+(opts.existCount||0)+'건</b> · 새 파일 <b style="color:var(--t2)">'+(opts.newCount||0)+'건</b></div>'+
       '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+
-        '<span class="badge" style="background:rgba(16,185,129,.15);color:#10B981;font-size:11px;padding:4px 10px;border-radius:6px;font-weight:600">🆕 신규 '+nNew+'</span>'+
-        '<span class="badge" style="background:rgba(59,130,246,.15);color:#3B82F6;font-size:11px;padding:4px 10px;border-radius:6px;font-weight:600">✓ 자동 갱신 '+nIdent+'</span>'+
-        '<span class="badge" style="background:rgba(245,158,11,.15);color:#F59E0B;font-size:11px;padding:4px 10px;border-radius:6px;font-weight:600">⚠️ 충돌 '+nConf+'</span>'+
+        '<span class="badge" style="background:rgba(16,185,129,.15);color:'+SEM_COLOR.ok+';font-size:11px;padding:4px 10px;border-radius:6px;font-weight:600">🆕 신규 '+nNew+'</span>'+
+        '<span class="badge" style="background:rgba(59,130,246,.15);color:'+SEM_COLOR.info+';font-size:11px;padding:4px 10px;border-radius:6px;font-weight:600">✓ 자동 갱신 '+nIdent+'</span>'+
+        '<span class="badge" style="background:rgba(245,158,11,.15);color:'+SEM_COLOR.warn+';font-size:11px;padding:4px 10px;border-radius:6px;font-weight:600">⚠️ 충돌 '+nConf+'</span>'+
       '</div>'+
     '</div>';
 
@@ -315,16 +295,16 @@ function showImportPreviewModal(analysis,opts){
         var diffC=String(ex.content||'')!==String(c.newRec.content||'');
         var contentCell='';
         if(diffC){
-          contentCell='<span style="color:var(--t6)">'+eH(String(ex.content||'').slice(0,40))+'</span> → <span style="color:#F59E0B">'+eH(String(c.newRec.content||'').slice(0,40))+'</span>';
+          contentCell='<span style="color:var(--t6)">'+eH(String(ex.content||'').slice(0,40))+'</span> → <span style="color:'+SEM_COLOR.warn+'">'+eH(String(c.newRec.content||'').slice(0,40))+'</span>';
         }else{
           contentCell='<span style="color:var(--t6)">'+eH(String(ex.content||'').slice(0,60))+'</span>';
         }
         conflictsHtml+='<tr data-newidx="'+c.newIdx+'" style="border-bottom:1px solid var(--bd)'+(ambiguous?';background:rgba(239,68,68,.06)':'')+'">'+
-          '<td style="padding:5px 6px;color:var(--t3)">'+fD(c.newRec.date)+(ambiguous?'<span title="동일 키 후보 '+c.candidates.length+'건" style="color:#EF4444;margin-left:4px">⚠'+c.candidates.length+'</span>':'')+'</td>'+
+          '<td style="padding:5px 6px;color:var(--t3)">'+fD(c.newRec.date)+(ambiguous?'<span title="동일 키 후보 '+c.candidates.length+'건" style="color:'+SEM_COLOR.danger+';margin-left:4px">⚠'+c.candidates.length+'</span>':'')+'</td>'+
           '<td style="padding:5px 6px;color:var(--t3)">'+eH(c.newRec.name||'')+'</td>'+
           '<td style="padding:5px 6px;color:var(--t3)">'+eH(c.newRec.orderNo||'')+'</td>'+
           '<td style="padding:5px 6px;text-align:right;color:'+(diffH?'var(--t6)':'var(--t3)')+'">'+(ex.hours||0)+'</td>'+
-          '<td style="padding:5px 6px;text-align:right;color:'+(diffH?'#F59E0B':'var(--t3)')+';font-weight:'+(diffH?'600':'400')+'">'+(c.newRec.hours||0)+'</td>'+
+          '<td style="padding:5px 6px;text-align:right;color:'+(diffH?SEM_COLOR.warn:'var(--t3)')+';font-weight:'+(diffH?'600':'400')+'">'+(c.newRec.hours||0)+'</td>'+
           '<td style="padding:5px 6px">'+contentCell+'</td>'+
           '<td style="padding:5px 6px;text-align:center"><select class="wrConfSel" data-newidx="'+c.newIdx+'" style="font-size:10px;padding:2px 4px;background:var(--bg-i);color:var(--t2);border:1px solid var(--bd);border-radius:4px">'+
             '<option value="skip">기존 유지</option>'+
@@ -500,7 +480,7 @@ function showWorkRecordChoiceModal(existCount, newCount){
       '<p style="font-size:12px;color:var(--t3);margin-bottom:16px">기존 DB에 <b style="color:var(--ac-t)">'+existCount+'건</b>의 데이터가 있습니다.<br>새 파일에서 <b style="color:var(--ac-t)">'+newCount+'건</b>을 읽었습니다.</p>'+
       '<div style="display:flex;flex-direction:column;gap:8px">'+
       '<button id="wrMergeBtn" style="width:100%;padding:10px;border:1px solid var(--ac);border-radius:8px;background:var(--ac-bg);color:var(--ac-t);cursor:pointer;font-size:12px;font-weight:600">🔄 갱신 (기존 데이터에 추가, 중복 제외)</button>'+
-      '<button id="wrReplaceBtn" style="width:100%;padding:10px;border:1px solid #F59E0B;border-radius:8px;background:rgba(245,158,11,.12);color:#FCD34D;cursor:pointer;font-size:12px;font-weight:600">🔃 새로 불러오기 (기존 데이터 대체)</button>'+
+      '<button id="wrReplaceBtn" style="width:100%;padding:10px;border:1px solid '+SEM_COLOR.warn+';border-radius:8px;background:rgba(245,158,11,.12);color:#FCD34D;cursor:pointer;font-size:12px;font-weight:600">🔃 새로 불러오기 (기존 데이터 대체)</button>'+
       '<button id="wrCancelBtn" style="width:100%;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t5);cursor:pointer;font-size:11px">취소</button>'+
       '</div>';
     ov.appendChild(dlg);document.body.appendChild(ov);

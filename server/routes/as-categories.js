@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -26,8 +27,7 @@ router.get('/', async function (req, res) {
     var r = await db.query(sql, params);
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[as-categories/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[as-categories/list]', e);
   }
 });
 
@@ -56,8 +56,7 @@ router.post('/', requireAdmin, async function (req, res) {
     if (e && e.code === '23505') {
       return res.status(409).json({ error: 'DUPLICATE', message: '이미 같은 코드의 카테고리가 있습니다.' });
     }
-    console.error('[as-categories/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[as-categories/create]', e);
   }
 });
 
@@ -89,8 +88,7 @@ router.put('/:id', requireAdmin, async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[as-categories/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[as-categories/update]', e);
   }
 });
 
@@ -117,8 +115,7 @@ router.delete('/:id', requireAdmin, async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0], message: '비활성화되었습니다.' });
   } catch (e) {
-    console.error('[as-categories/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[as-categories/delete]', e);
   }
 });
 

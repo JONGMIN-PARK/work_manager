@@ -123,11 +123,11 @@ function rContentSum(){
 
     // 2) 업무 분산도
     let spreadLevel,spreadColor;
-    if(abbrCount>=4){spreadLevel='높음 (다방면)';spreadColor='#10B981'}
+    if(abbrCount>=4){spreadLevel='높음 (다방면)';spreadColor=SEM_COLOR.ok}
     else if(abbrCount>=2){
-      if(topRatio>70){spreadLevel='편중 ('+focusAbbr+' 집중)';spreadColor='#F59E0B'}
+      if(topRatio>70){spreadLevel='편중 ('+focusAbbr+' 집중)';spreadColor=SEM_COLOR.warn}
       else{spreadLevel='보통';spreadColor='var(--ac-t)'}
-    }else{spreadLevel='단일 업무 집중';spreadColor='#EF4444'}
+    }else{spreadLevel='단일 업무 집중';spreadColor=SEM_COLOR.danger}
     const orderCnt=info.orderSet.size;
     const spreadLine=`📊 분산도: <b style="color:${spreadColor}">${spreadLevel}</b> — ${abbrCount}개 분장, ${orderCnt}개 수주 투입`;
 
@@ -325,9 +325,9 @@ function mtrUpdateInfo(){
   if(!fy||!fm||!ty||!tm){info.textContent='';return}
   var a={y:+fy,m:+fm},b={y:+ty,m:+tm};
   var diff=_mtrDiffMonths(a,b);
-  if(diff<=0){info.textContent='⚠ 시작이 종료보다 이후입니다';info.style.color='#EF4444';return}
-  if(diff<2){info.textContent='⚠ 최소 2개월 이상 필요 ('+diff+'개월)';info.style.color='#F59E0B';return}
-  if(diff>6){info.textContent='⚠ 최대 6개월까지 가능 ('+diff+'개월)';info.style.color='#F59E0B';return}
+  if(diff<=0){info.textContent='⚠ 시작이 종료보다 이후입니다';info.style.color=SEM_COLOR.danger;return}
+  if(diff<2){info.textContent='⚠ 최소 2개월 이상 필요 ('+diff+'개월)';info.style.color=SEM_COLOR.warn;return}
+  if(diff>6){info.textContent='⚠ 최대 6개월까지 가능 ('+diff+'개월)';info.style.color=SEM_COLOR.warn;return}
   info.textContent='= '+diff+'개월';info.style.color='var(--ac-t)'
 }
 function mtrRun(){
@@ -462,9 +462,9 @@ function mtrCUpdateInfo(){
   if(!fy||!fm||!ty||!tm){info.textContent='';return}
   var a={y:+fy,m:+fm},b={y:+ty,m:+tm};
   var diff=_mtrDiffMonths(a,b);
-  if(diff<=0){info.textContent='⚠ 시작이 종료보다 이후입니다';info.style.color='#EF4444';return}
-  if(diff<2){info.textContent='⚠ 최소 2개월 이상 필요 ('+diff+'개월)';info.style.color='#F59E0B';return}
-  if(diff>6){info.textContent='⚠ 최대 6개월까지 가능 ('+diff+'개월)';info.style.color='#F59E0B';return}
+  if(diff<=0){info.textContent='⚠ 시작이 종료보다 이후입니다';info.style.color=SEM_COLOR.danger;return}
+  if(diff<2){info.textContent='⚠ 최소 2개월 이상 필요 ('+diff+'개월)';info.style.color=SEM_COLOR.warn;return}
+  if(diff>6){info.textContent='⚠ 최대 6개월까지 가능 ('+diff+'개월)';info.style.color=SEM_COLOR.warn;return}
   info.textContent='= '+diff+'개월';info.style.color='var(--ac-t)'
 }
 function mtrCRun(){
@@ -548,7 +548,7 @@ function rCmp(f){
     const p=pm[name]||{h:0,a:{},dates:new Set(),rows:0};const c=pCol[name];
     const topAbbr=Object.entries(p.a).sort(([,a],[,b])=>b-a)[0];
     const avgD=p.dates.size>0?Math.round(p.h/p.dates.size*10)/10:0;
-    return'<div class="sc" style="border-left:3px solid '+c+'"><div style="font-size:13px;font-weight:700;color:'+c+';margin-bottom:6px">'+eH(name)+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;color:var(--t4)"><div>총시간 <b style="color:var(--ac-t)">'+Math.round(p.h*10)/10+'h</b></div><div>건수 <b>'+p.rows+'</b></div><div>일수 <b>'+p.dates.size+'</b></div><div>일평균 <b style="color:'+(avgD>9?'var(--d-t)':'#10B981')+'">'+avgD+'h</b></div><div>주력 <b>'+(topAbbr?AM[topAbbr[0]]||topAbbr[0]:'-')+'</b></div></div></div>';
+    return'<div class="sc" style="border-left:3px solid '+c+'"><div style="font-size:13px;font-weight:700;color:'+c+';margin-bottom:6px">'+eH(name)+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;color:var(--t4)"><div>총시간 <b style="color:var(--ac-t)">'+Math.round(p.h*10)/10+'h</b></div><div>건수 <b>'+p.rows+'</b></div><div>일수 <b>'+p.dates.size+'</b></div><div>일평균 <b style="color:'+(avgD>9?'var(--d-t)':SEM_COLOR.ok)+'">'+avgD+'h</b></div><div>주력 <b>'+(topAbbr?AM[topAbbr[0]]||topAbbr[0]:'-')+'</b></div></div></div>';
   }).join('');
 
   // Comparison table

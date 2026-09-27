@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -37,8 +38,7 @@ router.get('/', async function (req, res) {
       unread: parseInt(countR.rows[0].unread, 10)
     });
   } catch (e) {
-    console.error('[notifications/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[notifications/list]', e);
   }
 });
 
@@ -127,8 +127,7 @@ router.put('/preferences', async function (req, res) {
 
     res.json({ message: '알림 설정이 저장되었습니다.' });
   } catch (e) {
-    console.error('[notifications/preferences]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[notifications/preferences]', e);
   }
 });
 

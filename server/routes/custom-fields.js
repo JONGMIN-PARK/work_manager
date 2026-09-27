@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -25,8 +26,7 @@ router.get('/definitions', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[custom-fields/definitions]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[custom-fields/definitions]', e);
   }
 });
 
@@ -58,8 +58,7 @@ router.post('/definitions', auth.requireRole('admin'), async function (req, res)
     if (e.code === '23505') {
       return res.status(409).json({ error: 'CONFLICT', message: '이미 존재하는 field_key입니다.' });
     }
-    console.error('[custom-fields/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[custom-fields/create]', e);
   }
 });
 
@@ -90,8 +89,7 @@ router.put('/definitions/:id', auth.requireRole('admin'), async function (req, r
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0], message: '커스텀 필드가 수정되었습니다.' });
   } catch (e) {
-    console.error('[custom-fields/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[custom-fields/update]', e);
   }
 });
 
@@ -105,8 +103,7 @@ router.delete('/definitions/:id', auth.requireRole('admin'), async function (req
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '커스텀 필드가 삭제되었습니다.' });
   } catch (e) {
-    console.error('[custom-fields/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[custom-fields/delete]', e);
   }
 });
 
@@ -121,8 +118,7 @@ router.get('/values/:entityType/:entityId', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[custom-fields/values/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[custom-fields/values/get]', e);
   }
 });
 
@@ -148,8 +144,7 @@ router.put('/values/:entityType/:entityId', async function (req, res) {
 
     res.json({ data: results, message: '커스텀 필드 값이 저장되었습니다.' });
   } catch (e) {
-    console.error('[custom-fields/values/save]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[custom-fields/values/save]', e);
   }
 });
 

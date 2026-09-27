@@ -32,12 +32,9 @@ function _asRenderDetail(t, CAT) {
   var PRIO   = typeof AS_PRIORITY !== 'undefined' ? AS_PRIORITY : {};
 
   document.querySelectorAll('#asDetailOverlay').forEach(function (el) { el.remove(); });
-  var overlay = document.createElement('div');
-  overlay.id = 'asDetailOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9990;display:flex;align-items:flex-start;justify-content:center;padding:30px 20px;overflow-y:auto';
 
-  var st = STATUS[t.status] || { label: t.status, color: '#94A3B8', icon: '' };
-  var pr = PRIO[t.priority] || { label: t.priority, color: '#94A3B8', icon: '' };
+  var st = STATUS[t.status] || { label: t.status, color: SEM_COLOR.muted, icon: '' };
+  var pr = PRIO[t.priority] || { label: t.priority, color: SEM_COLOR.muted, icon: '' };
   var ct = CAT[t.category] || { label: t.category || '-', icon: '' };
 
   var h = '';
@@ -97,8 +94,8 @@ function _asRenderDetail(t, CAT) {
 
   h += '</div>';
 
+  var overlay = _asOverlay('asDetailOverlay', 9990, 'background:rgba(0,0,0,0.6);align-items:flex-start;padding:30px 20px;overflow-y:auto');
   overlay.innerHTML = h;
-  document.body.appendChild(overlay);
   // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
 
   // 캔버스 attach (⑤ 탭이면)
@@ -184,8 +181,8 @@ function _asTabAssign(t) {
 
   h += '<div style="display:flex;flex-direction:column;gap:8px">';
   asgs.forEach(function (a) {
-    var role = ASG_ROLE[a.role] || { label: a.role, color: '#94A3B8', icon: '' };
-    var ast  = ASG_STATUS[a.status] || { label: a.status, color: '#94A3B8', icon: '' };
+    var role = ASG_ROLE[a.role] || { label: a.role, color: SEM_COLOR.muted, icon: '' };
+    var ast  = ASG_STATUS[a.status] || { label: a.status, color: SEM_COLOR.muted, icon: '' };
     var dept = DEPT_MAP[a.dept] || { label: a.dept, color: '#64748B', icon: '' };
     var meth = METH[a.method] || { label: a.method || '-', icon: '' };
     h += '<div style="border:1px solid var(--bd);border-radius:8px;padding:12px 14px;background:var(--bg-i)">';
@@ -208,9 +205,9 @@ function _asTabAssign(t) {
     h += '<span style="padding:2px 8px;border-radius:10px;background:' + ast.color + '22;color:' + ast.color + ';font-size:10px;font-weight:700">' + (ast.icon || '') + ' ' + _asEsc(ast.label) + '</span>';
     h += '<div style="display:flex;gap:3px">';
     if (a.status !== 'completed') {
-      h += '<button onclick="asAssignmentChangeStatus(\'' + _asEsc(t.id) + '\',\'' + _asEsc(a.id) + '\',\'completed\')" style="font-size:9px;padding:3px 6px;border:1px solid #10B981;border-radius:4px;background:transparent;color:#10B981;cursor:pointer" title="완료 처리">✅ 완료</button>';
+      h += '<button onclick="asAssignmentChangeStatus(\'' + _asEsc(t.id) + '\',\'' + _asEsc(a.id) + '\',\'completed\')" style="font-size:9px;padding:3px 6px;border:1px solid ' + SEM_COLOR.ok + ';border-radius:4px;background:transparent;color:' + SEM_COLOR.ok + ';cursor:pointer" title="완료 처리">✅ 완료</button>';
     }
-    h += '<button onclick="asAssignmentRemove(\'' + _asEsc(t.id) + '\',\'' + _asEsc(a.id) + '\')" style="font-size:9px;padding:3px 6px;border:1px solid #EF4444;border-radius:4px;background:transparent;color:#EF4444;cursor:pointer" title="할당 해제">🗑️</button>';
+    h += '<button onclick="asAssignmentRemove(\'' + _asEsc(t.id) + '\',\'' + _asEsc(a.id) + '\')" style="font-size:9px;padding:3px 6px;border:1px solid ' + SEM_COLOR.danger + ';border-radius:4px;background:transparent;color:' + SEM_COLOR.danger + ';cursor:pointer" title="할당 해제">🗑️</button>';
     h += '</div>';
     h += '</div>';
     h += '</div></div>';
@@ -285,7 +282,7 @@ function _asTabWork(t) {
   logs.forEach(function (l) {
     var d = DEPT_MAP[l.dept] || { label: l.dept, color: '#64748B', icon: '' };
     var wt = LOG_TYPE[l.workType] || { label: l.workType, icon: '' };
-    var ls = LOG_STATUS[l.status] || { label: l.status, color: '#94A3B8' };
+    var ls = LOG_STATUS[l.status] || { label: l.status, color: SEM_COLOR.muted };
     h += '<div style="border-left:3px solid ' + d.color + ';padding:8px 12px;background:var(--bg-i);border-radius:0 6px 6px 0">';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">';
     h += '<div style="flex:1">';
@@ -302,7 +299,7 @@ function _asTabWork(t) {
     h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">';
     h += '<span style="padding:2px 8px;border-radius:10px;background:' + ls.color + '22;color:' + ls.color + ';font-size:9px;font-weight:600">' + _asEsc(ls.label) + '</span>';
     h += '<span style="font-size:10px;color:var(--t4);font-weight:600">' + (l.durationH || 0) + 'h</span>';
-    h += '<button onclick="asLogRemove(\'' + _asEsc(t.id) + '\',\'' + _asEsc(l.id) + '\')" style="font-size:9px;padding:2px 6px;border:1px solid #EF4444;border-radius:3px;background:transparent;color:#EF4444;cursor:pointer">🗑️</button>';
+    h += '<button onclick="asLogRemove(\'' + _asEsc(t.id) + '\',\'' + _asEsc(l.id) + '\')" style="font-size:9px;padding:2px 6px;border:1px solid ' + SEM_COLOR.danger + ';border-radius:3px;background:transparent;color:' + SEM_COLOR.danger + ';cursor:pointer">🗑️</button>';
     h += '</div></div></div>';
   });
   h += '</div>';
@@ -344,7 +341,7 @@ function _asTabReport(t) {
   if (t.status !== 'closed') {
     h += '<button onclick="asReportSave(\'' + _asEsc(t.id) + '\', true)" style="font-size:11px;padding:6px 14px;border:none;border-radius:6px;background:#10B981;color:#fff;cursor:pointer;font-weight:600">✅ 최종 종결</button>';
   } else {
-    h += '<span style="font-size:11px;padding:6px 14px;border-radius:6px;background:#10B98122;color:#10B981;font-weight:600">🏁 종결됨 ' + _asFmtDate(t.closedAt) + '</span>';
+    h += '<span style="font-size:11px;padding:6px 14px;border-radius:6px;background:' + SEM_COLOR.ok + '22;color:' + SEM_COLOR.ok + ';font-weight:600">🏁 종결됨 ' + _asFmtDate(t.closedAt) + '</span>';
   }
   h += '</div></div>';
 
@@ -382,7 +379,7 @@ function _asSubBlockParts(t) {
     });
     h += '</tr></thead><tbody>';
     parts.forEach(function (p) {
-      var bill = BILL[p.billing] || { label: p.billing, color: '#94A3B8', icon: '' };
+      var bill = BILL[p.billing] || { label: p.billing, color: SEM_COLOR.muted, icon: '' };
       var amt = Number(p.amount || (Number(p.qty || 0) * Number(p.unitPrice || 0)));
       h += '<tr style="border-bottom:1px dotted var(--bd)">';
       h += '<td style="padding:5px 6px;color:var(--t4);font-size:10px">' + _asFmtDate(p.usedAt) + '</td>';
@@ -393,7 +390,7 @@ function _asSubBlockParts(t) {
       h += '<td style="padding:5px 6px;color:var(--t2);text-align:right;font-weight:600">' + amt.toLocaleString() + '</td>';
       h += '<td style="padding:5px 6px"><span style="padding:1px 6px;border-radius:8px;background:' + bill.color + '22;color:' + bill.color + ';font-size:9px;font-weight:600;white-space:nowrap">' + (bill.icon || '') + ' ' + _asEsc(bill.label) + '</span></td>';
       h += '<td style="padding:5px 6px;color:var(--t5);font-family:monospace;font-size:10px">' + _asEsc(p.replacedSn || '-') + '</td>';
-      h += '<td style="padding:5px 6px;text-align:right"><button onclick="asPartRemove(\'' + _asEsc(t.id) + '\',\'' + _asEsc(p.id) + '\')" style="font-size:9px;padding:2px 5px;border:1px solid #EF4444;border-radius:3px;background:transparent;color:#EF4444;cursor:pointer">🗑️</button></td>';
+      h += '<td style="padding:5px 6px;text-align:right"><button onclick="asPartRemove(\'' + _asEsc(t.id) + '\',\'' + _asEsc(p.id) + '\')" style="font-size:9px;padding:2px 5px;border:1px solid ' + SEM_COLOR.danger + ';border-radius:3px;background:transparent;color:' + SEM_COLOR.danger + ';cursor:pointer">🗑️</button></td>';
       h += '</tr>';
     });
     h += '</tbody></table>';
@@ -401,7 +398,7 @@ function _asSubBlockParts(t) {
     // 청구구분별 집계
     h += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding-top:8px;border-top:1px solid var(--bd);font-size:10px">';
     Object.keys(totals).forEach(function (k) {
-      var b = BILL[k] || { label: k, color: '#94A3B8', icon: '' };
+      var b = BILL[k] || { label: k, color: SEM_COLOR.muted, icon: '' };
       h += '<span style="padding:3px 8px;border-radius:6px;background:' + b.color + '22;color:' + b.color + ';font-weight:600">' + (b.icon || '') + ' ' + _asEsc(b.label) + ' ' + totals[k].toLocaleString() + '원</span>';
     });
     h += '<span style="margin-left:auto;padding:3px 10px;border-radius:6px;background:#F59E0B;color:#fff;font-weight:700">합계 ' + grandTotal.toLocaleString() + '원</span>';
@@ -447,7 +444,7 @@ function _asSubBlockAttachments(t) {
       h += '<div style="font-size:11px;color:var(--t2);font-weight:600;word-break:break-all;line-height:1.3">' + _asEsc(a.fileName) + '</div>';
       if (a.note) h += '<div style="font-size:10px;color:var(--t4);margin-top:3px">' + _asEsc(a.note) + '</div>';
       h += '<div style="font-size:9px;color:var(--t6);margin-top:4px">' + _asFmtDate(a.uploadedAt) + '</div>';
-      h += '<button onclick="event.stopPropagation();asAttachRemove(\'' + safeTid + '\',\'' + safeId + '\')" style="position:absolute;top:4px;right:4px;font-size:9px;padding:1px 5px;border:1px solid #EF4444;border-radius:3px;background:rgba(255,255,255,0.9);color:#EF4444;cursor:pointer" title="삭제">×</button>';
+      h += '<button onclick="event.stopPropagation();asAttachRemove(\'' + safeTid + '\',\'' + safeId + '\')" style="position:absolute;top:4px;right:4px;font-size:9px;padding:1px 5px;border:1px solid ' + SEM_COLOR.danger + ';border-radius:3px;background:rgba(255,255,255,0.9);color:' + SEM_COLOR.danger + ';cursor:pointer" title="삭제">×</button>';
       h += '</div>';
     });
     h += '</div>';
@@ -506,9 +503,6 @@ function asAttachPreview(ticketId, attId) {
 
 function _asRenderAttachPreview(a) {
   document.querySelectorAll('#asAttachPreviewOverlay').forEach(function (el) { el.remove(); });
-  var overlay = document.createElement('div');
-  overlay.id = 'asAttachPreviewOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10003;display:flex;align-items:center;justify-content:center;padding:30px';
 
   var CAT = typeof AS_ATTACH_CATEGORY !== 'undefined' ? AS_ATTACH_CATEGORY : {};
   var c = CAT[a.category] || { label: a.category || '기타', icon: '📎' };
@@ -550,8 +544,8 @@ function _asRenderAttachPreview(a) {
   }
   h += '</div></div>';
 
+  var overlay = _asOverlay('asAttachPreviewOverlay', 10003, 'background:rgba(0,0,0,0.75);padding:30px');
   overlay.innerHTML = h;
-  document.body.appendChild(overlay);
   // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
   // ESC 키
   function onKey(ev) {
@@ -620,7 +614,7 @@ function _asSignCard(ticketId, role, title, sig, defaultName) {
   var h = '<div style="border:1px solid var(--bd);border-radius:8px;padding:12px;background:var(--bg-i)">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
   h += '<div style="font-size:11px;font-weight:700;color:var(--t3)">✍️ ' + _asEsc(title) + '</div>';
-  if (sig) h += '<span style="font-size:9px;color:#10B981;font-weight:600">✓ 서명됨 ' + _asFmtDate(sig.signedAt) + '</span>';
+  if (sig) h += '<span style="font-size:9px;color:' + SEM_COLOR.ok + ';font-weight:600">✓ 서명됨 ' + _asFmtDate(sig.signedAt) + '</span>';
   h += '</div>';
   var nm = sig ? (sig.signerName || defaultName || '') : (defaultName || '');
   h += '<input id="asSign_' + role + '_name" type="text" value="' + _asEsc(nm) + '" placeholder="서명자 이름" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--t2);font-size:11px;margin-bottom:6px">';
@@ -659,7 +653,7 @@ function _asTabReportDoc(t) {
   h += '<div style="border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px;background:var(--bg-i)">';
   h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">📋 발행 전 점검</div>';
   checks.forEach(function (c) {
-    h += '<div style="font-size:11px;color:' + (c.ok ? '#10B981' : 'var(--t5)') + ';padding:3px 0">' + (c.ok ? '✅' : '⬜') + ' ' + _asEsc(c.label) + '</div>';
+    h += '<div style="font-size:11px;color:' + (c.ok ? SEM_COLOR.ok : 'var(--t5)') + ';padding:3px 0">' + (c.ok ? '✅' : '⬜') + ' ' + _asEsc(c.label) + '</div>';
   });
   var allOk = checks.every(function (c) { return c.ok; });
   if (!allOk) {

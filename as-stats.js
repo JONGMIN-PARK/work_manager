@@ -72,11 +72,11 @@ function renderASStats() {
   var wrap = document.getElementById('asWrap');
   if (!wrap) return;
   if (typeof asStatsGet !== 'function') {
-    wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:#EF4444">통계 API 미연결 (project-data.js)</div>';
+    wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:' + SEM_COLOR.danger + '">통계 API 미연결 (project-data.js)</div>';
     return;
   }
   if (typeof Chart === 'undefined') {
-    wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:#EF4444">Chart.js 로드 실패 — 페이지 새로고침 후 다시 시도하세요</div>';
+    wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:' + SEM_COLOR.danger + '">Chart.js 로드 실패 — 페이지 새로고침 후 다시 시도하세요</div>';
     return;
   }
 
@@ -249,7 +249,7 @@ function _asStatsFetch() {
     if (seq !== _asStatsSeq) return;
     _asStatsLoading = false;
     var b = document.getElementById('asStatsBody');
-    if (b) b.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:#EF4444">통계 로드 실패: ' + _asStatsEsc((err && err.message) || '알 수 없는 오류') + '</div>';
+    if (b) b.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:' + SEM_COLOR.danger + '">통계 로드 실패: ' + _asStatsEsc((err && err.message) || '알 수 없는 오류') + '</div>';
   });
 }
 
@@ -338,7 +338,7 @@ function _asStatsLoadAiInsight() {
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:8px">';
       if (d.focus && d.focus.length) {
         html += '<div style="background:var(--bg-i);border-radius:6px;padding:8px 10px">';
-        html += '<div style="font-size:10px;font-weight:700;color:#F59E0B;margin-bottom:4px">🔎 집중 관찰</div>';
+        html += '<div style="font-size:10px;font-weight:700;color:' + SEM_COLOR.warn + ';margin-bottom:4px">🔎 집중 관찰</div>';
         d.focus.forEach(function (f) {
           html += '<div style="font-size:11px;color:var(--t3);padding:2px 0">• ' + _asStatsEsc(f) + '</div>';
         });
@@ -346,7 +346,7 @@ function _asStatsLoadAiInsight() {
       }
       if (d.actions && d.actions.length) {
         html += '<div style="background:var(--bg-i);border-radius:6px;padding:8px 10px">';
-        html += '<div style="font-size:10px;font-weight:700;color:#10B981;margin-bottom:4px">✅ 다음 주 액션</div>';
+        html += '<div style="font-size:10px;font-weight:700;color:' + SEM_COLOR.ok + ';margin-bottom:4px">✅ 다음 주 액션</div>';
         d.actions.forEach(function (a) {
           html += '<div style="font-size:11px;color:var(--t3);padding:2px 0">• ' + _asStatsEsc(a) + '</div>';
         });
@@ -361,7 +361,7 @@ function _asStatsLoadAiInsight() {
     // 503(미설정)이면 부드럽게 숨김, 그 외엔 작은 안내
     if (err && err.status === 503) { card.innerHTML = ''; return; }
     card.innerHTML =
-      '<div class="pnl" style="padding:10px 14px;background:var(--bg-i);border-left:3px solid #94A3B8">' +
+      '<div class="pnl" style="padding:10px 14px;background:var(--bg-i);border-left:3px solid ' + SEM_COLOR.muted + '">' +
       '<div style="font-size:11px;color:var(--t5)">🤖 AI 인사이트 생성 실패: ' + _asStatsEsc(msg) + '</div></div>';
   });
 }
@@ -407,7 +407,7 @@ function _asStatsHtmlHealthScore(hs) {
 
 function _asStatsHtmlInsights(list) {
   if (!list || !list.length) {
-    return '<div class="pnl" style="margin-bottom:12px;padding:14px 18px;background:linear-gradient(135deg,#F59E0B11,#F59E0B05);border-left:3px solid #F59E0B">' +
+    return '<div class="pnl" style="margin-bottom:12px;padding:14px 18px;background:linear-gradient(135deg,' + SEM_COLOR.warn + '11,' + SEM_COLOR.warn + '05);border-left:3px solid ' + SEM_COLOR.warn + '">' +
       '<div style="font-size:11px;color:var(--t4)">💡 자동 인사이트는 데이터가 더 쌓이면 표시됩니다.</div></div>';
   }
   var h = '<div class="pnl" style="margin-bottom:12px;padding:14px 18px">';
@@ -416,11 +416,11 @@ function _asStatsHtmlInsights(list) {
   list.forEach(function (ins) {
     var bg, fg, bd;
     switch (ins.kind) {
-      case 'good':     bg = '#10B98115'; fg = '#059669'; bd = '#10B981'; break;
-      case 'warn':     bg = '#F59E0B15'; fg = '#D97706'; bd = '#F59E0B'; break;
-      case 'critical': bg = '#EF444415'; fg = '#DC2626'; bd = '#EF4444'; break;
+      case 'good':     bg = SEM_COLOR.ok + '15'; fg = '#059669'; bd = SEM_COLOR.ok; break;
+      case 'warn':     bg = SEM_COLOR.warn + '15'; fg = '#D97706'; bd = SEM_COLOR.warn; break;
+      case 'critical': bg = SEM_COLOR.danger + '15'; fg = '#DC2626'; bd = SEM_COLOR.danger; break;
       case 'info':
-      default:         bg = '#3B82F615'; fg = '#2563EB'; bd = '#3B82F6';
+      default:         bg = SEM_COLOR.info + '15'; fg = '#2563EB'; bd = SEM_COLOR.info;
     }
     h += '<div style="display:flex;gap:8px;padding:8px 12px;background:' + bg + ';border-left:3px solid ' + bd + ';border-radius:0 4px 4px 0;font-size:11px;line-height:1.5;color:' + fg + '">';
     h += '<span style="font-size:14px">' + (ins.icon || '•') + '</span>';
@@ -434,12 +434,12 @@ function _asStatsHtmlInsights(list) {
 function _asStatsHtmlKpi(kpi) {
   var cards = [
     { k: 'newCount',     l: '신규 접수',     val: kpi.newCount.value,        delta: kpi.newCount.deltaPct,    invert: true,  unit: '건',  color: '#6366F1' },
-    { k: 'inProgress',   l: '처리 중',       val: kpi.inProgress.value,                                                       unit: '건',  color: '#3B82F6' },
-    { k: 'closedCount',  l: '종결',          val: kpi.closedCount.value,     delta: kpi.closedCount.deltaPct, invert: false, unit: '건',  color: '#10B981' },
-    { k: 'openCritical', l: 'P1·P2 미해결',  val: kpi.openCritical.value,                                                     unit: '건',  color: kpi.openCritical.value > 0 ? '#EF4444' : '#10B981' },
+    { k: 'inProgress',   l: '처리 중',       val: kpi.inProgress.value,                                                       unit: '건',  color: SEM_COLOR.info },
+    { k: 'closedCount',  l: '종결',          val: kpi.closedCount.value,     delta: kpi.closedCount.deltaPct, invert: false, unit: '건',  color: SEM_COLOR.ok },
+    { k: 'openCritical', l: 'P1·P2 미해결',  val: kpi.openCritical.value,                                                     unit: '건',  color: kpi.openCritical.value > 0 ? SEM_COLOR.danger : SEM_COLOR.ok },
     { k: 'mttrHours',    l: '평균 처리시간', val: (kpi.mttrHours.value || 0).toFixed(1), delta: kpi.mttrHours.deltaPct, invert: true, unit: 'h', color: '#F59E0B' },
-    { k: 'slaBreach',    l: 'SLA 위반율',    val: (kpi.slaBreachPct.value || 0).toFixed(1), delta: kpi.slaBreachPct.deltaPct, invert: true, unit: '%', color: kpi.slaBreachPct.value >= 10 ? '#EF4444' : (kpi.slaBreachPct.value > 0 ? '#F59E0B' : '#10B981') },
-    { k: 'csatOverall',  l: 'CSAT 평균',     val: (kpi.csatOverall.value || 0).toFixed(1), delta: kpi.csatOverall.deltaPct, invert: false, unit: '/ 5', sub: '응답 ' + (kpi.csatOverall.respCount || 0) + '건', color: kpi.csatOverall.value >= 4 ? '#10B981' : (kpi.csatOverall.value >= 3 ? '#F59E0B' : '#EF4444') },
+    { k: 'slaBreach',    l: 'SLA 위반율',    val: (kpi.slaBreachPct.value || 0).toFixed(1), delta: kpi.slaBreachPct.deltaPct, invert: true, unit: '%', color: kpi.slaBreachPct.value >= 10 ? SEM_COLOR.danger : (kpi.slaBreachPct.value > 0 ? SEM_COLOR.warn : SEM_COLOR.ok) },
+    { k: 'csatOverall',  l: 'CSAT 평균',     val: (kpi.csatOverall.value || 0).toFixed(1), delta: kpi.csatOverall.deltaPct, invert: false, unit: '/ 5', sub: '응답 ' + (kpi.csatOverall.respCount || 0) + '건', color: kpi.csatOverall.value >= 4 ? SEM_COLOR.ok : (kpi.csatOverall.value >= 3 ? SEM_COLOR.warn : SEM_COLOR.danger) },
     { k: 'partsCost',    l: '부품 비용',     val: (kpi.partsCost.value || 0).toLocaleString(),                              unit: '원',  color: '#8B5CF6' }
   ];
 
@@ -449,7 +449,7 @@ function _asStatsHtmlKpi(kpi) {
     if (c.delta != null && c.delta !== 0 && !isNaN(c.delta)) {
       var goodDir = c.invert ? (c.delta < 0) : (c.delta > 0);
       var arrow = c.delta > 0 ? '▲' : '▼';
-      var deltaColor = goodDir ? '#10B981' : '#EF4444';
+      var deltaColor = goodDir ? SEM_COLOR.ok : SEM_COLOR.danger;
       deltaTxt = '<span style="margin-left:6px;font-size:11px;font-weight:700;color:' + deltaColor + '">' +
                  arrow + ' ' + Math.abs(c.delta).toFixed(1) + '%</span>';
     }
@@ -508,54 +508,44 @@ function _asStatsFmtBucket(iso, groupBy) {
   return String(y).slice(2) + '.' + m;  // month
 }
 
-/* ─── 차트 그리기 ─── */
-function _asStatsDrawAll(d) {
-  var gridColor = 'rgba(148,163,184,0.15)';
-  var tickColor = 'rgba(148,163,184,0.85)';
-  Chart.defaults.font.family = 'Noto Sans KR, Malgun Gothic, sans-serif';
-  Chart.defaults.font.size = 11;
-  Chart.defaults.color = tickColor;
+/* ─── 차트 그리기 ───
+ * _AS_STATS_CHARTS: 차트 1개 = { canvasId, build(d, env) } (그리는 순서 = 배열 순서)
+ *   build 는 Chart.js config 를 반환, 데이터가 없으면 null (→ 그 차트는 건너뜀).
+ *   env = { gridColor, commonOpts, deepMerge, groupBy } — commonOpts 는 한 번 그릴 때 모든 차트가 같은 객체를 공유.
+ * _asChart: 캔버스가 있을 때만 build 를 호출하고, 인스턴스를 _asStatsCharts 에 보관(destroy 용). */
+function _asChart(spec, d, env) {
+  var ctx = document.getElementById(spec.canvasId);
+  if (!ctx) return null;
+  var config = spec.build(d, env);
+  if (!config) return null;
+  var c = new Chart(ctx, config);
+  _asStatsCharts.push(c);
+  return c;
+}
 
-  var commonOpts = {
-    maintainAspectRatio: false,
-    responsive: true,
-    plugins: {
-      legend: { labels: { boxWidth: 10, padding: 8, font: { size: 10 } } },
-      tooltip: { titleFont: { size: 11 }, bodyFont: { size: 11 } }
-    },
-    scales: {
-      x: { grid: { color: gridColor }, ticks: { font: { size: 10 } } },
-      y: { grid: { color: gridColor }, ticks: { font: { size: 10 }, beginAtZero: true } }
-    }
-  };
-  function deepMerge(a, b) { return Object.assign({}, a, b); }
-
-  var groupBy = (d.period && d.period.groupBy) || 'month';
-
+var _AS_STATS_CHARTS = [
   // 1) 신규/종결 추이
-  (function () {
-    var ctx = document.getElementById('chart_trend');
-    if (!ctx || !d.trend.labels.length) return;
-    var c = new Chart(ctx, {
+  { canvasId: 'chart_trend', build: function (d, env) {
+    if (!d.trend.labels.length) return null;
+    var groupBy = env.groupBy;
+    return {
       type: 'line',
       data: {
         labels: d.trend.labels.map(function (b) { return _asStatsFmtBucket(b, groupBy); }),
         datasets: [
           { label: '신규 접수', data: d.trend.newCount, borderColor: '#6366F1', backgroundColor: '#6366F133', tension: 0.3, fill: true, borderWidth: 2 },
-          { label: '종결', data: d.trend.closedCount, borderColor: '#10B981', backgroundColor: '#10B98133', tension: 0.3, fill: true, borderWidth: 2 }
+          { label: '종결', data: d.trend.closedCount, borderColor: SEM_COLOR.ok, backgroundColor: SEM_COLOR.ok + '33', tension: 0.3, fill: true, borderWidth: 2 }
         ]
       },
-      options: commonOpts
-    });
-    _asStatsCharts.push(c);
-  })();
+      options: env.commonOpts
+    };
+  } },
 
   // 2) 카테고리 도넛
-  (function () {
-    var ctx = document.getElementById('chart_category');
-    if (!ctx || !d.distribution.category.length) return;
+  { canvasId: 'chart_category', build: function (d) {
+    if (!d.distribution.category.length) return null;
     var palette = ['#3B82F6', '#EF4444', '#F59E0B', '#10B981', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#64748B', '#A855F7', '#14B8A6'];
-    var c = new Chart(ctx, {
+    return {
       type: 'doughnut',
       data: {
         labels: d.distribution.category.map(function (x) { return (x.icon || '') + ' ' + x.label; }),
@@ -586,15 +576,13 @@ function _asStatsDrawAll(d) {
         var code = d.distribution.category[idx].code;
         _asStatsDrillDown({ category: code });
       }
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } },
 
   // 3) 긴급도 분포 (Bar, 색상 코딩)
-  (function () {
-    var ctx = document.getElementById('chart_priority');
-    if (!ctx || !d.distribution.priority.length) return;
-    var c = new Chart(ctx, {
+  { canvasId: 'chart_priority', build: function (d, env) {
+    if (!d.distribution.priority.length) return null;
+    return {
       type: 'bar',
       data: {
         labels: d.distribution.priority.map(function (x) { return x.code; }),
@@ -606,21 +594,19 @@ function _asStatsDrawAll(d) {
           borderRadius: 4
         }]
       },
-      options: deepMerge(commonOpts, { plugins: { legend: { display: false } } }),
+      options: env.deepMerge(env.commonOpts, { plugins: { legend: { display: false } } }),
       onClick: function (evt, els) {
         if (!els || !els.length) return;
         _asStatsDrillDown({ priority: d.distribution.priority[els[0].index].code });
       }
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } },
 
   // 4) 상태 분포 (도넛)
-  (function () {
-    var ctx = document.getElementById('chart_status');
-    if (!ctx || !d.distribution.status.length) return;
+  { canvasId: 'chart_status', build: function (d) {
+    if (!d.distribution.status.length) return null;
     var labelMap = (typeof AS_STATUS !== 'undefined') ? AS_STATUS : {};
-    var c = new Chart(ctx, {
+    return {
       type: 'doughnut',
       data: {
         labels: d.distribution.status.map(function (x) { return (labelMap[x.code] || {}).label || x.code; }),
@@ -638,22 +624,21 @@ function _asStatsDrawAll(d) {
         if (!els || !els.length) return;
         _asStatsDrillDown({ status: d.distribution.status[els[0].index].code });
       }
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } },
 
   // 5) SLA 준수율 (Stacked Bar)
-  (function () {
-    var ctx = document.getElementById('chart_sla');
-    if (!ctx || !d.sla.byPriority.length) return;
+  { canvasId: 'chart_sla', build: function (d, env) {
+    if (!d.sla.byPriority.length) return null;
+    var gridColor = env.gridColor;
     var labels = d.sla.byPriority.map(function (x) { return x.priority; });
-    var c = new Chart(ctx, {
+    return {
       type: 'bar',
       data: {
         labels: labels,
         datasets: [
-          { label: 'SLA 준수', data: d.sla.byPriority.map(function (x) { return x.withinSla; }), backgroundColor: '#10B981', borderWidth: 0, stack: 'sla' },
-          { label: 'SLA 위반', data: d.sla.byPriority.map(function (x) { return x.breached; }), backgroundColor: '#EF4444', borderWidth: 0, stack: 'sla' }
+          { label: 'SLA 준수', data: d.sla.byPriority.map(function (x) { return x.withinSla; }), backgroundColor: SEM_COLOR.ok, borderWidth: 0, stack: 'sla' },
+          { label: 'SLA 위반', data: d.sla.byPriority.map(function (x) { return x.breached; }), backgroundColor: SEM_COLOR.danger, borderWidth: 0, stack: 'sla' }
         ]
       },
       options: {
@@ -671,17 +656,16 @@ function _asStatsDrawAll(d) {
         },
         scales: { x: { stacked: true, grid: { color: gridColor } }, y: { stacked: true, grid: { color: gridColor }, beginAtZero: true } }
       }
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } },
 
   // 6) 부서별 부하 (Horizontal Bar)
-  (function () {
-    var ctx = document.getElementById('chart_dept');
-    if (!ctx || !d.deptLoad.length) return;
+  { canvasId: 'chart_dept', build: function (d, env) {
+    if (!d.deptLoad.length) return null;
+    var gridColor = env.gridColor;
     var DEPT_MAP = typeof DEPT !== 'undefined' ? DEPT : {};
     var palette = ['#3B82F6', '#EF4444', '#F59E0B', '#10B981', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
-    var c = new Chart(ctx, {
+    return {
       type: 'bar',
       data: {
         labels: d.deptLoad.map(function (x) { return (DEPT_MAP[x.dept] || {}).label || x.dept; }),
@@ -704,15 +688,14 @@ function _asStatsDrawAll(d) {
         },
         scales: { x: { grid: { color: gridColor }, beginAtZero: true }, y: { grid: { display: false } } }
       }
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } },
 
   // 7) MTTR 추이
-  (function () {
-    var ctx = document.getElementById('chart_mttr');
-    if (!ctx || !d.trend.labels.length) return;
-    var c = new Chart(ctx, {
+  { canvasId: 'chart_mttr', build: function (d, env) {
+    if (!d.trend.labels.length) return null;
+    var groupBy = env.groupBy;
+    return {
       type: 'line',
       data: {
         labels: d.trend.labels.map(function (b) { return _asStatsFmtBucket(b, groupBy); }),
@@ -723,28 +706,27 @@ function _asStatsDrawAll(d) {
           pointRadius: 3, pointBackgroundColor: '#F59E0B'
         }]
       },
-      options: deepMerge(commonOpts, {
+      options: env.deepMerge(env.commonOpts, {
         plugins: {
           legend: { display: false },
           tooltip: { callbacks: { label: function (ctx) { return '평균 ' + Number(ctx.parsed.y).toFixed(1) + 'h'; } } }
         }
       })
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } },
 
   // 8) Top 고객 (Horizontal Bar, Pareto)
-  (function () {
-    var ctx = document.getElementById('chart_topCustomers');
-    if (!ctx || !d.topCustomers.length) return;
-    var c = new Chart(ctx, {
+  { canvasId: 'chart_topCustomers', build: function (d, env) {
+    if (!d.topCustomers.length) return null;
+    var gridColor = env.gridColor;
+    return {
       type: 'bar',
       data: {
         labels: d.topCustomers.map(function (x) { return x.name; }),
         datasets: [{
           label: '건수',
           data: d.topCustomers.map(function (x) { return x.value; }),
-          backgroundColor: d.topCustomers.map(function (x) { return x.urgentCount > 0 ? '#EF4444' : '#6366F1'; }),
+          backgroundColor: d.topCustomers.map(function (x) { return x.urgentCount > 0 ? SEM_COLOR.danger : '#6366F1'; }),
           borderWidth: 0, borderRadius: 4
         }]
       },
@@ -767,15 +749,14 @@ function _asStatsDrawAll(d) {
         if (!els || !els.length) return;
         _asStatsDrillDown({ customer: d.topCustomers[els[0].index].name });
       }
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } },
 
   // 9) Top 장비
-  (function () {
-    var ctx = document.getElementById('chart_topEquipment');
-    if (!ctx || !d.topEquipment.length) return;
-    var c = new Chart(ctx, {
+  { canvasId: 'chart_topEquipment', build: function (d, env) {
+    if (!d.topEquipment.length) return null;
+    var gridColor = env.gridColor;
+    return {
       type: 'bar',
       data: {
         labels: d.topEquipment.map(function (x) { return x.name; }),
@@ -786,30 +767,27 @@ function _asStatsDrawAll(d) {
         plugins: { legend: { display: false } },
         scales: { x: { grid: { color: gridColor }, beginAtZero: true }, y: { grid: { display: false } } }
       }
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } },
 
   // 10) RCA·완료분류
-  (function () {
-    var ctx = document.getElementById('chart_rca');
-    if (!ctx || !d.rca.length) return;
-    var c = new Chart(ctx, {
+  { canvasId: 'chart_rca', build: function (d, env) {
+    if (!d.rca.length) return null;
+    return {
       type: 'bar',
       data: {
         labels: d.rca.map(function (x) { return x.code; }),
         datasets: [{ label: '건수', data: d.rca.map(function (x) { return x.value; }), backgroundColor: '#8B5CF6', borderWidth: 0, borderRadius: 4 }]
       },
-      options: deepMerge(commonOpts, { plugins: { legend: { display: false } } })
-    });
-    _asStatsCharts.push(c);
-  })();
+      options: env.deepMerge(env.commonOpts, { plugins: { legend: { display: false } } })
+    };
+  } },
 
   // 11) CSAT 추이
-  (function () {
-    var ctx = document.getElementById('chart_csat');
-    if (!ctx || !d.csat.labels.length) return;
-    var c = new Chart(ctx, {
+  { canvasId: 'chart_csat', build: function (d, env) {
+    if (!d.csat.labels.length) return null;
+    var gridColor = env.gridColor, groupBy = env.groupBy;
+    return {
       type: 'line',
       data: {
         labels: d.csat.labels.map(function (b) { return _asStatsFmtBucket(b, groupBy); }),
@@ -819,25 +797,23 @@ function _asStatsDrawAll(d) {
           { label: '처리 품질',   data: d.csat.quality, borderColor: '#F59E0B', backgroundColor: '#F59E0B22', tension: 0.3, borderWidth: 1.5, pointRadius: 2, borderDash: [4, 3] }
         ]
       },
-      options: deepMerge(commonOpts, {
+      options: env.deepMerge(env.commonOpts, {
         scales: { x: { grid: { color: gridColor } }, y: { grid: { color: gridColor }, min: 1, max: 5 } }
       })
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } },
 
   // 12) 부품 청구구분 도넛
-  (function () {
-    var ctx = document.getElementById('chart_partsBilling');
-    if (!ctx || !d.parts.byBilling.length) return;
+  { canvasId: 'chart_partsBilling', build: function (d) {
+    if (!d.parts.byBilling.length) return null;
     var BILL = typeof AS_BILLING !== 'undefined' ? AS_BILLING : {};
-    var c = new Chart(ctx, {
+    return {
       type: 'doughnut',
       data: {
         labels: d.parts.byBilling.map(function (x) { return (BILL[x.billing] || {}).label || x.billing; }),
         datasets: [{
           data: d.parts.byBilling.map(function (x) { return x.total; }),
-          backgroundColor: d.parts.byBilling.map(function (x) { return (BILL[x.billing] || {}).color || '#94A3B8'; }),
+          backgroundColor: d.parts.byBilling.map(function (x) { return (BILL[x.billing] || {}).color || SEM_COLOR.muted; }),
           borderWidth: 0
         }]
       },
@@ -852,16 +828,15 @@ function _asStatsDrawAll(d) {
           }
         }
       }
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } },
 
   // 13) 부품 월별 누적 (Stacked Bar)
-  (function () {
-    var ctx = document.getElementById('chart_partsMonth');
-    if (!ctx || !d.parts.labels.length) return;
+  { canvasId: 'chart_partsMonth', build: function (d, env) {
+    if (!d.parts.labels.length) return null;
+    var gridColor = env.gridColor, groupBy = env.groupBy;
     var BILL = typeof AS_BILLING !== 'undefined' ? AS_BILLING : {};
-    var c = new Chart(ctx, {
+    return {
       type: 'bar',
       data: {
         labels: d.parts.labels.map(function (b) { return _asStatsFmtBucket(b, groupBy); }),
@@ -882,9 +857,36 @@ function _asStatsDrawAll(d) {
         },
         scales: { x: { stacked: true, grid: { color: gridColor } }, y: { stacked: true, grid: { color: gridColor }, beginAtZero: true } }
       }
-    });
-    _asStatsCharts.push(c);
-  })();
+    };
+  } }
+];
+
+function _asStatsDrawAll(d) {
+  var gridColor = 'rgba(148,163,184,0.15)';
+  var tickColor = 'rgba(148,163,184,0.85)';
+  Chart.defaults.font.family = 'Noto Sans KR, Malgun Gothic, sans-serif';
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = tickColor;
+
+  var env = {
+    gridColor: gridColor,
+    commonOpts: {
+      maintainAspectRatio: false,
+      responsive: true,
+      plugins: {
+        legend: { labels: { boxWidth: 10, padding: 8, font: { size: 10 } } },
+        tooltip: { titleFont: { size: 11 }, bodyFont: { size: 11 } }
+      },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { font: { size: 10 } } },
+        y: { grid: { color: gridColor }, ticks: { font: { size: 10 }, beginAtZero: true } }
+      }
+    },
+    deepMerge: function (a, b) { return Object.assign({}, a, b); },
+    groupBy: (d.period && d.period.groupBy) || 'month'
+  };
+
+  _AS_STATS_CHARTS.forEach(function (spec) { _asChart(spec, d, env); });
 }
 
 /* ─── Drill-down: 차트 클릭 → A/S 목록 필터로 점프 ─── */

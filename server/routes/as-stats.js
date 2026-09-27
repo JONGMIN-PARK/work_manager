@@ -21,6 +21,7 @@ var tenant = require('../middleware/tenant');
 var notificationService = require('../services/notification.service');
 var ttlCache = require('../services/ttl-cache.service');
 var asPolicy = require('../config/as-policy');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -489,8 +490,7 @@ router.get('/', async function (req, res) {
     if (!bypass) statsCache.set(ck, payload);
     res.json(payload);
   } catch (e) {
-    console.error('[as-stats]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '통계 조회 실패' });
+    httpErr.serverError(res, '[as-stats]', e, '통계 조회 실패');
   }
 });
 
@@ -707,8 +707,7 @@ router.get('/weekly-digest', async function (req, res) {
       message: send ? '주간 요약을 ' + sentTo + '명에게 발송했습니다.' : '주간 요약 텍스트 생성됨 (send=1 옵션으로 텔레그램 발송 가능)'
     });
   } catch (e) {
-    console.error('[as-stats/weekly-digest]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[as-stats/weekly-digest]', e, '서버 오류가 발생했습니다.');
   }
 });
 

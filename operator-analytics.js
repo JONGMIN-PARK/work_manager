@@ -66,11 +66,11 @@ function _oaStatusOf(p) {
 }
 function _oaStatusMeta(code) {
   var M = (typeof PROJ_STATUS !== 'undefined') ? PROJ_STATUS : {};
-  return M[code] || { label: code || '-', color: '#94A3B8', bg: 'rgba(148,163,184,.15)', icon: '•' };
+  return M[code] || { label: code || '-', color: SEM_COLOR.muted, bg: 'rgba(148,163,184,.15)', icon: '•' };
 }
 function _oaPhaseMeta(code) {
   var M = (typeof PROJ_PHASE !== 'undefined') ? PROJ_PHASE : {};
-  return M[code] || { label: code || '기타', icon: '•', color: '#94A3B8', seq: 99 };
+  return M[code] || { label: code || '기타', icon: '•', color: SEM_COLOR.muted, seq: 99 };
 }
 function _oaSumTargets(milestones) {
   var sum = 0;
@@ -164,7 +164,7 @@ function _oaEmpty(container, icon, title, msg) {
 }
 function _oaError(container, msg) {
   if (!container) return;
-  container.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:#EF4444;font-size:12px">' + _oaEsc(msg) + '</div>';
+  container.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:' + SEM_COLOR.danger + ';font-size:12px">' + _oaEsc(msg) + '</div>';
 }
 
 var _OA_PALETTE = ['#3B82F6', '#EF4444', '#F59E0B', '#10B981', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#64748B', '#A855F7', '#14B8A6'];
@@ -319,7 +319,7 @@ function _oaAnalyze(p, milestones, history, calc) {
   var overHours = (capBasis > 0 && totalInput > capBasis);
   if (overHours) {
     var pct = capBasis > 0 ? Math.round((totalInput / capBasis) * 100) : 0;
-    risks.push({ kind: 'over', icon: '🔴', label: '공수초과 ' + pct + '%', color: '#EF4444' });
+    risks.push({ kind: 'over', icon: '🔴', label: '공수초과 ' + pct + '%', color: SEM_COLOR.danger });
   }
   // 🟠 일정지연: today > endDate & progress < 100
   var dPlus = 0;
@@ -327,17 +327,17 @@ function _oaAnalyze(p, milestones, history, calc) {
   if (p.endDate && p.endDate < today && progress < 100) {
     delayed = true;
     dPlus = Math.max(0, _oaDaysDiff(p.endDate, today));
-    risks.push({ kind: 'delay', icon: '🟠', label: 'D+' + dPlus, color: '#F59E0B' });
+    risks.push({ kind: 'delay', icon: '🟠', label: 'D+' + dPlus, color: SEM_COLOR.warn });
   } else if (status === 'delayed') {
     delayed = true;
-    risks.push({ kind: 'delay', icon: '🟠', label: '지연', color: '#F59E0B' });
+    risks.push({ kind: 'delay', icon: '🟠', label: '지연', color: SEM_COLOR.warn });
   }
   // ⚠️ 진척 정체: 최근 N일 변화 ≈ 0 (완료 제외)
   var delta = _oaRecentProgressDelta(history, _OA_STALE_DAYS);
   var stale = false;
   if (status !== 'done' && progress < 100 && delta != null && delta <= 0.5) {
     stale = true;
-    risks.push({ kind: 'stale', icon: '⚠️', label: '정체 ' + _OA_STALE_DAYS + '일', color: '#8B5CF6' });
+    risks.push({ kind: 'stale', icon: '⚠️', label: '정체 ' + _OA_STALE_DAYS + '일', color: SEM_COLOR.purple });
   }
   // ⚠️ 효율주의: (투입/목표) - (progress/100) >= 0.3
   var effWarn = false;
@@ -451,13 +451,13 @@ function _oaRenderOverview(rows) {
   // KPI 카드
   var cards = [
     { l: '프로젝트', val: n, unit: '개', color: '#6366F1' },
-    { l: '평균 진척률', val: avgProg, unit: '%', color: '#3B82F6' },
+    { l: '평균 진척률', val: avgProg, unit: '%', color: SEM_COLOR.info },
     { l: '총 투입', val: totalInput.toLocaleString(), unit: 'h',
       sub: (totalTargets > 0 ? '목표 대비 ' + Math.round(totalInput / totalTargets * 100) + '%' : (totalEst > 0 ? '예상 대비 ' + Math.round(totalInput / totalEst * 100) + '%' : '')),
-      color: '#8B5CF6' },
-    { l: '일정 지연', val: delayedN, unit: '개', color: delayedN > 0 ? '#F59E0B' : '#10B981' },
-    { l: '공수 초과', val: overN, unit: '개', color: overN > 0 ? '#EF4444' : '#10B981' },
-    { l: '진척 정체', val: staleN, unit: '개', sub: '최근 ' + _OA_STALE_DAYS + '일', color: staleN > 0 ? '#EC4899' : '#10B981' }
+      color: SEM_COLOR.purple },
+    { l: '일정 지연', val: delayedN, unit: '개', color: delayedN > 0 ? SEM_COLOR.warn : SEM_COLOR.ok },
+    { l: '공수 초과', val: overN, unit: '개', color: overN > 0 ? SEM_COLOR.danger : SEM_COLOR.ok },
+    { l: '진척 정체', val: staleN, unit: '개', sub: '최근 ' + _OA_STALE_DAYS + '일', color: staleN > 0 ? '#EC4899' : SEM_COLOR.ok }
   ];
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">';
   cards.forEach(function (c) {
@@ -536,7 +536,7 @@ function _oaRenderOverview(rows) {
         datasets: [{
           label: '프로젝트',
           data: keys.map(function (k) { return phaseCount[k]; }),
-          backgroundColor: keys.map(function (k) { return k === '_none' ? '#94A3B8' : _oaPhaseMeta(k).color; }),
+          backgroundColor: keys.map(function (k) { return k === '_none' ? SEM_COLOR.muted : _oaPhaseMeta(k).color; }),
           borderWidth: 0, borderRadius: 4
         }]
       },
@@ -559,7 +559,7 @@ function _oaRenderRiskList(rows) {
   });
   var h = '<div class="pnl" style="padding:14px 16px;margin-bottom:4px">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">';
-  h += '<div style="font-size:11px;font-weight:700;color:var(--t3)">📁 전체 프로젝트 (' + rows.length + ')' + (risky.length ? ' · <span style="color:#EF4444">🚨 위험 ' + risky.length + '</span>' : '') + '</div>';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--t3)">📁 전체 프로젝트 (' + rows.length + ')' + (risky.length ? ' · <span style="color:' + SEM_COLOR.danger + '">🚨 위험 ' + risky.length + '</span>' : '') + '</div>';
   h += '<div style="font-size:9px;color:var(--t6)">🔴 공수초과 · 🟠 일정지연 · ⚠️ 정체/효율 — 행 클릭 시 하단 상세 분석</div>';
   h += '</div>';
 
@@ -725,9 +725,9 @@ function _oaRenderProjectDetail(box, row) {
   // 미니 KPI
   h += '<div style="display:flex;gap:14px;flex-wrap:wrap">';
   h += _oaMiniStat('진척률', row.progress + '%', sm.color);
-  h += _oaMiniStat('총 투입', row.totalInput + 'h', '#8B5CF6');
-  if (row.targets > 0) h += _oaMiniStat('목표', row.targets + 'h', '#3B82F6');
-  else if (row.estimated > 0) h += _oaMiniStat('예상', row.estimated + 'h', '#3B82F6');
+  h += _oaMiniStat('총 투입', row.totalInput + 'h', SEM_COLOR.purple);
+  if (row.targets > 0) h += _oaMiniStat('목표', row.targets + 'h', SEM_COLOR.info);
+  else if (row.estimated > 0) h += _oaMiniStat('예상', row.estimated + 'h', SEM_COLOR.info);
   if (row.reported > 0) h += _oaMiniStat('보고 투입', row.reported + 'h', '#EC4899');
   h += '</div>';
   h += '</div>';
@@ -793,14 +793,14 @@ function _oaDrawTrend(row) {
 
   var datasets = [{
     label: '진척률(%)', data: progressData, yAxisID: 'y',
-    borderColor: '#3B82F6', backgroundColor: '#3B82F622', tension: 0.3, fill: true, borderWidth: 2,
-    pointRadius: 2, pointBackgroundColor: '#3B82F6'
+    borderColor: SEM_COLOR.info, backgroundColor: '#3B82F622', tension: 0.3, fill: true, borderWidth: 2,
+    pointRadius: 2, pointBackgroundColor: SEM_COLOR.info
   }];
   if (hasHours) {
     datasets.push({
       label: '누적 투입(h)', data: hoursData, yAxisID: 'y1',
-      borderColor: '#F59E0B', backgroundColor: '#F59E0B11', tension: 0.3, fill: false, borderWidth: 2,
-      pointRadius: 2, pointBackgroundColor: '#F59E0B', borderDash: [4, 3]
+      borderColor: SEM_COLOR.warn, backgroundColor: '#F59E0B11', tension: 0.3, fill: false, borderWidth: 2,
+      pointRadius: 2, pointBackgroundColor: SEM_COLOR.warn, borderDash: [4, 3]
     });
   }
 
@@ -857,8 +857,8 @@ function _oaDrawAssignee(row) {
     data: {
       labels: nameList,
       datasets: [
-        { label: '보고 투입(h)', data: nameList.map(function (n) { return _oaRnd(inputByName[n] || 0); }), backgroundColor: '#8B5CF6', borderWidth: 0, borderRadius: 3 },
-        { label: '목표(h)', data: nameList.map(function (n) { return _oaRnd(targetByName[n] || 0); }), backgroundColor: '#3B82F644', borderColor: '#3B82F6', borderWidth: 1, borderRadius: 3 }
+        { label: '보고 투입(h)', data: nameList.map(function (n) { return _oaRnd(inputByName[n] || 0); }), backgroundColor: SEM_COLOR.purple, borderWidth: 0, borderRadius: 3 },
+        { label: '목표(h)', data: nameList.map(function (n) { return _oaRnd(targetByName[n] || 0); }), backgroundColor: '#3B82F644', borderColor: SEM_COLOR.info, borderWidth: 1, borderRadius: 3 }
       ]
     },
     options: {
@@ -918,12 +918,12 @@ function _oaRenderMsTable(row) {
     if (m.endDate) {
       if (m.endDate < today && prog < 100) {
         var dp = Math.max(0, _oaDaysDiff(m.endDate, today));
-        sched = '🟠 D+' + dp; schedColor = '#F59E0B';
+        sched = '🟠 D+' + dp; schedColor = SEM_COLOR.warn;
       } else if (m.endDate >= today) {
         var rem = Math.max(0, _oaDaysDiff(today, m.endDate));
         sched = '잔여 ' + rem + 'd'; schedColor = 'var(--t4)';
       } else {
-        sched = '완료기한'; schedColor = '#10B981';
+        sched = '완료기한'; schedColor = SEM_COLOR.ok;
       }
     }
     var untag = Number(b.untagged) || 0;
@@ -931,13 +931,13 @@ function _oaRenderMsTable(row) {
     h += '<tr style="border-bottom:1px solid var(--bd)">';
     h += '<td style="padding:7px 6px;color:var(--t2);width:45%;max-width:0"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + _oaEsc(m.name || '') + '">' + _oaEsc(m.name || '(이름 없음)') + '</div></td>';
     // 진척
-    h += '<td style="padding:7px 6px;text-align:right"><span style="font-weight:700;color:' + (prog >= 100 ? '#10B981' : 'var(--t3)') + '">' + prog + '%</span></td>';
+    h += '<td style="padding:7px 6px;text-align:right"><span style="font-weight:700;color:' + (prog >= 100 ? SEM_COLOR.ok : 'var(--t3)') + '">' + prog + '%</span></td>';
     // 투입/목표
-    h += '<td style="padding:7px 6px;text-align:right;color:' + (over ? '#EF4444' : 'var(--t3)') + ';font-weight:' + (over ? '700' : '500') + '">' + input + (tgt > 0 ? ' / ' + tgt : '') + 'h' + (over ? ' ⚠' : '') + '</td>';
+    h += '<td style="padding:7px 6px;text-align:right;color:' + (over ? SEM_COLOR.danger : 'var(--t3)') + ';font-weight:' + (over ? '700' : '500') + '">' + input + (tgt > 0 ? ' / ' + tgt : '') + 'h' + (over ? ' ⚠' : '') + '</td>';
     // 일정
     h += '<td style="padding:7px 6px;text-align:right;color:' + schedColor + ';white-space:nowrap">' + sched + '</td>';
     // 미태깅
-    h += '<td style="padding:7px 6px;text-align:right;color:' + (untag > 0 ? '#F59E0B' : 'var(--t6)') + '">' + (untag > 0 ? untag + '건' : '-') + '</td>';
+    h += '<td style="padding:7px 6px;text-align:right;color:' + (untag > 0 ? SEM_COLOR.warn : 'var(--t6)') + '">' + (untag > 0 ? untag + '건' : '-') + '</td>';
     h += '</tr>';
   });
   h += '</tbody></table></div>';
@@ -979,11 +979,11 @@ function _oaRenderLogs(row) {
     var h = '<div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto">';
     top.forEach(function (l) {
       var when = l.createdAt ? _oaFmtDateTime(l.createdAt) : '';
-      h += '<div style="display:flex;gap:8px;padding:8px 10px;background:var(--bg-i);border-radius:6px;border-left:3px solid #8B5CF6">';
+      h += '<div style="display:flex;gap:8px;padding:8px 10px;background:var(--bg-i);border-radius:6px;border-left:3px solid ' + SEM_COLOR.purple + '">';
       h += '<div style="flex:1;min-width:0">';
       h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">';
-      if (l.progress != null) h += '<span style="font-size:10px;font-weight:700;color:#3B82F6">진척 ' + (Number(l.progress) || 0) + '%</span>';
-      if (l.hours) h += '<span style="font-size:10px;font-weight:600;color:#F59E0B">+' + _oaRnd(l.hours) + 'h</span>';
+      if (l.progress != null) h += '<span style="font-size:10px;font-weight:700;color:' + SEM_COLOR.info + '">진척 ' + (Number(l.progress) || 0) + '%</span>';
+      if (l.hours) h += '<span style="font-size:10px;font-weight:600;color:' + SEM_COLOR.warn + '">+' + _oaRnd(l.hours) + 'h</span>';
       if (l._msName) h += '<span style="font-size:9px;color:var(--t6)">· ' + _oaEsc(l._msName) + '</span>';
       h += '</div>';
       if (l.note) h += '<div style="font-size:11px;color:var(--t3);line-height:1.5;white-space:pre-wrap">' + _oaEsc(l.note) + '</div>';

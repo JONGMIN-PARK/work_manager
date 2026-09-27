@@ -10,8 +10,9 @@ var db = require('../config/db');
 var crypto = require('crypto');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
-var ps = require('../middleware/project-scope');
+var ps = require('../lib/project-access');
 var notificationService = require('../services/notification.service');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -88,8 +89,7 @@ router.get('/', async function (req, res) {
     await attachActions(r.rows, req.tenant.id);
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[meetings/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[meetings/list]', e);
   }
 });
 
@@ -101,8 +101,7 @@ router.get('/:id', async function (req, res) {
     await attachActions(r.rows, req.tenant.id);
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[meetings/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[meetings/get]', e);
   }
 });
 
@@ -136,8 +135,7 @@ router.post('/', async function (req, res) {
     meeting.action_items = [];
     res.status(201).json({ data: meeting });
   } catch (e) {
-    console.error('[meetings/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[meetings/create]', e);
   }
 });
 
@@ -174,8 +172,7 @@ router.put('/:id', async function (req, res) {
     await attachActions([meeting], req.tenant.id);
     res.json({ data: meeting });
   } catch (e) {
-    console.error('[meetings/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[meetings/update]', e);
   }
 });
 
@@ -189,8 +186,7 @@ router.delete('/:id', async function (req, res) {
     if (eventId) await db.query('DELETE FROM events WHERE id = $1 AND tenant_id = $2', [eventId, req.tenant.id]);
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[meetings/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[meetings/delete]', e);
   }
 });
 
@@ -214,8 +210,7 @@ router.post('/:id/actions', async function (req, res) {
     res.status(201).json({ data: r.rows[0] });
     notifyActionAssigned(r.rows[0], mR.rows[0].title, req.user.sub);
   } catch (e) {
-    console.error('[meetings/action/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[meetings/action/create]', e);
   }
 });
 
@@ -252,8 +247,7 @@ router.put('/:id/actions/:aid', async function (req, res) {
         .catch(function () {});
     }
   } catch (e) {
-    console.error('[meetings/action/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[meetings/action/update]', e);
   }
 });
 
@@ -264,8 +258,7 @@ router.delete('/:id/actions/:aid', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[meetings/action/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[meetings/action/delete]', e);
   }
 });
 
@@ -307,8 +300,7 @@ router.post('/:id/actions/:aid/convert', async function (req, res) {
     }
     res.status(201).json({ data: { target: target, created: created } });
   } catch (e) {
-    console.error('[meetings/action/convert]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[meetings/action/convert]', e);
   }
 });
 

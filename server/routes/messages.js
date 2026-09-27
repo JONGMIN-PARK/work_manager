@@ -6,6 +6,7 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var authService = require('../services/auth.service');
 var notificationService = require('../services/notification.service');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -26,8 +27,7 @@ router.get('/unread-count', async function (req, res) {
     );
     res.json({ count: (r.rows[0] && r.rows[0].n) || 0 });
   } catch (e) {
-    console.error('[messages/unread]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[messages/unread]', e);
   }
 });
 
@@ -47,8 +47,7 @@ router.get('/threads', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[messages/threads]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[messages/threads]', e);
   }
 });
 
@@ -71,8 +70,7 @@ router.get('/', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[messages/thread]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[messages/thread]', e);
   }
 });
 
@@ -110,8 +108,7 @@ router.post('/', async function (req, res) {
     } catch (_) {}
     try { authService.auditLog(req.user.sub, 'message.send', 'user', toUserId, { len: body.length }, req); } catch (_) {}
   } catch (e) {
-    console.error('[messages/send]', e);
-    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[messages/send]', e);
   }
 });
 
@@ -127,8 +124,7 @@ router.post('/read', async function (req, res) {
     );
     res.json({ message: '읽음 처리 완료' });
   } catch (e) {
-    console.error('[messages/read]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[messages/read]', e);
   }
 });
 

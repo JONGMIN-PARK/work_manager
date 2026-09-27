@@ -201,9 +201,7 @@ function pimgViewerFor(projId, index) {
 function pimgOpenViewer(list, index) {
   if (!list || !list.length) return;
   _pimgViewer = { list: list, idx: Math.max(0, Math.min(index || 0, list.length - 1)) };
-  var ex = document.getElementById('pimgViewer'); if (ex) ex.remove();
-  var ov = document.createElement('div'); ov.id = 'pimgViewer';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.86)';
+  var ov = createModal({ id: 'pimgViewer', z: MODAL_Z + 51, overlayStyle: 'padding:0;background:rgba(0,0,0,.86);backdrop-filter:none' }).overlay;
   ov.onclick = function (e) { if (e.target === ov) pimgViewerClose(); };
   ov.innerHTML =
     '<button onclick="pimgViewerClose()" style="position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:26px;cursor:pointer">✕</button>' +
@@ -213,7 +211,6 @@ function pimgOpenViewer(list, index) {
       '<div id="pimgViewerCap" style="color:#eee;font-size:12px;text-align:center"></div>' +
     '</div>' +
     '<button onclick="pimgViewerNav(1)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:none;color:#fff;font-size:26px;width:48px;height:64px;border-radius:8px;cursor:pointer">›</button>';
-  document.body.appendChild(ov);
   _pimgViewerPaint();
   document.addEventListener('keydown', _pimgViewerKey);
 }
@@ -253,7 +250,7 @@ function pimgHover(ev, projId) {
   var card = document.getElementById('pimgPreview');
   if (!card) {
     card = document.createElement('div'); card.id = 'pimgPreview';
-    card.style.cssText = 'position:fixed;z-index:10040;width:280px;background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:10px;font-size:11px;color:var(--t2);pointer-events:auto';
+    card.style.cssText = 'position:fixed;z-index:' + (MODAL_Z + 41) + ';width:280px;background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:10px;font-size:11px;color:var(--t2);pointer-events:auto';
     card.onmouseenter = function () { if (_pimgHoverTimer) { clearTimeout(_pimgHoverTimer); _pimgHoverTimer = null; } };
     card.onmouseleave = function () { pimgHoverOut(); };
     document.body.appendChild(card);

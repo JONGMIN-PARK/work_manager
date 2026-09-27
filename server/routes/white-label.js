@@ -4,6 +4,7 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var planGate = require('../middleware/plan-gate');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -17,8 +18,7 @@ router.get('/', async function (req, res) {
     );
     res.json({ data: r.rows[0] || null });
   } catch (e) {
-    console.error('[white-label/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[white-label/get]', e);
   }
 });
 
@@ -43,8 +43,7 @@ router.put('/', auth.requireRole('admin'), planGate('white_label'), async functi
 
     res.json({ data: r.rows[0], message: '화이트라벨 설정이 저장되었습니다.' });
   } catch (e) {
-    console.error('[white-label/save]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[white-label/save]', e);
   }
 });
 

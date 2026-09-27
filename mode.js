@@ -173,7 +173,7 @@ function renderPatchNotes(){
     html+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">';
     html+='<span style="font-size:18px;font-weight:700;color:var(--t2)">v'+p.ver+'</span>';
     html+='<span style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;'+_patchTagStyle(p.tag)+'">'+_patchTagLabel(p.tag)+'</span>';
-    if(isLatest)html+='<span style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;background:#10B981;color:#fff">Latest</span>';
+    if(isLatest)html+='<span style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;background:'+SEM_COLOR.ok+';color:#fff">Latest</span>';
     html+='<span style="font-size:11px;color:var(--t6);margin-left:auto">'+p.date+'</span>';
     html+='</div>';
     // title — v13.42: 안전 escape (마찬가지로 < > 사고 방지)

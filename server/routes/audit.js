@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScopeOptional);
@@ -54,8 +55,7 @@ router.get('/', async function (req, res) {
       offset: offset
     });
   } catch (e) {
-    console.error('[audit/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[audit/list]', e);
   }
 });
 

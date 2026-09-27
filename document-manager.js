@@ -134,7 +134,7 @@ async function renderDocManager(opts) {
     var pct = Math.round(_storageTotal / DOC_MAX_PROJECT * 100);
     html += '<div style="display:flex;align-items:center;gap:8px;font-size:10px;color:var(--t4)">';
     html += '<span>💾 ' + formatFileSize(_storageTotal) + ' / ' + formatFileSize(DOC_MAX_PROJECT) + '</span>';
-    html += '<div style="width:80px;height:5px;background:var(--pt);border-radius:3px"><div style="width:' + Math.min(pct, 100) + '%;height:100%;background:' + (pct > 80 ? '#EF4444' : 'var(--ac)') + ';border-radius:3px"></div></div>';
+    html += '<div style="width:80px;height:5px;background:var(--pt);border-radius:3px"><div style="width:' + Math.min(pct, 100) + '%;height:100%;background:' + (pct > 80 ? SEM_COLOR.danger : 'var(--ac)') + ';border-radius:3px"></div></div>';
     html += '<button class="btn btn-g btn-s" onclick="docShowStorageDashboard()" style="font-size:9px;padding:2px 6px" title="용량 대시보드">📊</button>';
     html += '</div>';
   }
@@ -1120,9 +1120,7 @@ function docSearchFiles(keyword) {
       var ne = document.getElementById('docSearchInput');
       if (!ne) return;
       ne.value = keyword;
-      ne.focus();
-      var pos = Math.min(caret == null ? keyword.length : caret, keyword.length);
-      try { ne.setSelectionRange(pos, pos); } catch (e) {}
+      wmRestoreFocus('docSearchInput', caret);
     });
   }, 300);
 }

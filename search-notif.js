@@ -34,7 +34,189 @@ var GS_FIELD_LABELS = {
   resolution: '해결내용', startDate: '시작일', endDate: '종료일'
 };
 
+/* 목록에서 fields 중 하나라도 kl 을 포함하는 항목 → [{d, f(매칭 필드)}] */
+function gsFieldHits(list, fields, kl) {
+  var out = [];
+  list.forEach(function(d) {
+    var f = gsMatchField(d, fields, kl);
+    if (f) out.push({ d: d, f: f });
+  });
+  return out;
+}
+
+/* 이름/제목이 아닌 필드로 걸렸을 때 붙는 [필드명] 힌트 */
+function gsFieldHint(f) {
+  return f && GS_FIELD_LABELS[f] && f !== 'name' && f !== 'title' ? '<span style="font-size:9px;color:var(--t6);margin-left:4px">[' + GS_FIELD_LABELS[f] + ']</span>' : '';
+}
+
+/* ═══ 통합 검색 카테고리 레지스트리 — 배열 순서 = 결과 표시 순서 ═══
+ *  key   : 카테고리 식별자 (globalSearchNav 의 type 과 같음)
+ *  label : 그룹 헤더 (뒤에 " (건수)" 가 붙음)
+ *  limit : 카테고리별 최대 표시 건수
+ *  match(kl, data) → 결과 배열 (kl = 소문자 검색어, data = gsCollectData 결과). 상한은 호출부가 자름
+ *  render(hit, kw, data) → 결과 한 줄 HTML (kw = 원래 검색어, 하이라이트용) */
+var GS_MATCHERS = [
+  {
+    key: 'project', label: '📁 프로젝트', limit: 5,
+    match: function(kl, data) { return gsFieldHits(data.projects, ['name','orderNo','memo','assignees'], kl); },
+    render: function(h, kw) {
+      var p = h.d; var st = typeof autoProjectStatus === 'function' ? autoProjectStatus(p) : p.status;
+      var stInfo = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[st] ? PROJ_STATUS[st] : null;
+      return '<div class="gs-item" onclick="globalSearchNav(\'project\',\'' + p.id + '\')">' +
+        '<span class="gs-icon" style="color:' + (p.color || 'var(--ac)') + '">●</span>' +
+        '<span class="gs-name">' + gsHighlight(p.name, kw) + gsFieldHint(h.f) + '</span>' +
+        '<span class="gs-sub">' + (stInfo ? '<span style="color:' + stInfo.color + '">' + stInfo.icon + '</span> ' : '') + eH(p.orderNo || '') + '</span></div>';
+    }
+  },
+  {
+    key: 'milestone', label: '◆ 마일스톤', limit: 4,
+    match: function(kl, data) { return gsFieldHits(data.milestones, ['name'], kl); },
+    render: function(h, kw, data) {
+      var m = h.d; var proj = data.projects.find(function(p) { return p.id === m.projectId; });
+      return '<div class="gs-item" onclick="globalSearchNav(\'milestone\',\'' + m.projectId + '\')">' +
+        '<span class="gs-icon" style="color:' + SEM_COLOR.purple + '">◆</span>' +
+        '<span class="gs-name">' + gsHighlight(m.name, kw) + '</span>' +
+        '<span class="gs-sub">' + eH(proj ? (proj.name || proj.orderNo) : '') + '</span></div>';
+    }
+  },
+  {
+    key: 'issue', label: '🎫 이슈', limit: 5,
+    match: function(kl, data) { return gsFieldHits(data.issues, ['title','description','tags','reporter','assignees','resolution'], kl); },
+    render: function(h, kw) {
+      var i = h.d;
+      var urgColor = i.urgency === 'urgent' ? SEM_COLOR.danger : i.urgency === 'normal' ? SEM_COLOR.warn : 'var(--t5)';
+      return '<div class="gs-item" onclick="globalSearchNav(\'issue\',\'' + i.id + '\')">' +
+        '<span class="gs-icon" style="color:' + urgColor + '">🎫</span>' +
+        '<span class="gs-name">' + gsHighlight(i.title, kw) + gsFieldHint(h.f) + '</span>' +
+        '<span class="gs-sub" style="color:' + urgColor + '">' + eH(i.status || '') + '</span></div>';
+    }
+  },
+  {
+    key: 'order', label: '📋 수주', limit: 5,
+    match: function(kl, data) { return gsFieldHits(data.orders, ['orderNo','name','client','manager','memo'], kl); },
+    render: function(h, kw) {
+      var o = h.d;
+      return '<div class="gs-item" onclick="globalSearchNav(\'order\',\'' + (o.orderNo || o.id || '') + '\')">' +
+        '<span class="gs-icon">📋</span>' +
+        '<span class="gs-name">' + gsHighlight(o.name || o.orderNo || '', kw) + gsFieldHint(h.f) + '</span>' +
+        '<span class="gs-sub">' + eH(o.client || o.orderNo || '') + '</span></div>';
+    }
+  },
+  {
+    key: 'event', label: '📅 일정', limit: 4,
+    match: function(kl, data) { return gsFieldHits(data.events, ['title','memo','assignees'], kl); },
+    render: function(h, kw) {
+      var e = h.d; var t = typeof EVT_TYPE !== 'undefined' && EVT_TYPE[e.type] ? EVT_TYPE[e.type] : { icon: '📌' };
+      return '<div class="gs-item" onclick="globalSearchNav(\'event\',\'' + e.id + '\')">' +
+        '<span class="gs-icon">' + t.icon + '</span>' +
+        '<span class="gs-name">' + gsHighlight(e.title, kw) + gsFieldHint(h.f) + '</span>' +
+        '<span class="gs-sub">' + eH(e.startDate || '') + '</span></div>';
+    }
+  },
+  {
+    key: 'archive', label: '🗄️ 아카이브', limit: 3,
+    match: function(kl, data) {
+      var hits = []; if (Array.isArray(data.weeks)) data.weeks.forEach(function(w) {
+        if (w.label && w.label.toLowerCase().includes(kl)) hits.push({ d: w, f: 'label' });
+        else if (w.fileName && w.fileName.toLowerCase().includes(kl)) hits.push({ d: w, f: 'fileName' });
+        else if (w.selectedNames && w.selectedNames.some(function(n) { return n.toLowerCase().includes(kl); })) hits.push({ d: w, f: 'selectedNames' });
+      });
+      return hits;
+    },
+    render: function(h, kw) {
+      var w = h.d;
+      return '<div class="gs-item" onclick="globalSearchNav(\'archive\',\'' + eH(w.id) + '\')">' +
+        '<span class="gs-icon">🗄️</span>' +
+        '<span class="gs-name">' + gsHighlight(w.label || w.id, kw) + '</span>' +
+        '<span class="gs-sub">' + (w.totalHours ? Math.round(w.totalHours) + 'h' : '') + '</span></div>';
+    }
+  },
+  {
+    key: 'member', label: '👤 팀원', limit: 4,
+    match: function(kl, data) {
+      var members = [];
+      if (typeof data.aliasMap === 'object') {
+        Object.keys(data.aliasMap).forEach(function(realName) {
+          if (realName.toLowerCase().includes(kl) || (data.aliasMap[realName] && data.aliasMap[realName].toLowerCase().includes(kl))) {
+            members.push({ realName: realName, alias: data.aliasMap[realName] });
+          }
+        });
+      }
+      return members;
+    },
+    render: function(m, kw) {
+      return '<div class="gs-item" onclick="globalSearchNav(\'member\',\'' + eH(m.realName) + '\')">' +
+        '<span class="gs-icon">👤</span>' +
+        '<span class="gs-name">' + gsHighlight(m.realName, kw) + (m.alias ? ' <span style="color:var(--t5)">(' + gsHighlight(m.alias, kw) + ')</span>' : '') + '</span>' +
+        '<span class="gs-sub">팀원</span></div>';
+    }
+  },
+  {
+    key: 'group', label: '👥 그룹', limit: 3,
+    match: function(kl, data) {
+      var groups = [];
+      if (Array.isArray(data.memberGroups)) {
+        data.memberGroups.forEach(function(g) {
+          if (g.name && g.name.toLowerCase().includes(kl)) {
+            groups.push(g);
+          } else if (g.members && g.members.some(function(m) { return m.toLowerCase().includes(kl); })) {
+            groups.push(g);
+          }
+        });
+      }
+      return groups;
+    },
+    render: function(g, kw) {
+      return '<div class="gs-item" onclick="globalSearchNav(\'group\',\'' + eH(g.id) + '\')">' +
+        '<span class="gs-icon" style="color:' + (g.color || 'var(--ac)') + '">●</span>' +
+        '<span class="gs-name">' + gsHighlight(g.name, kw) + '</span>' +
+        '<span class="gs-sub">' + (g.members ? g.members.length + '명' : '') + '</span></div>';
+    }
+  }
+];
+
+/* 레지스트리 전체를 돌려 카테고리별 결과(상한 적용) → [{m: 매처, hits: [...]}] */
+function gsRunMatchers(kl, data) {
+  return GS_MATCHERS.map(function(m) { return { m: m, hits: m.match(kl, data).slice(0, m.limit) }; });
+}
+
+/* 결과 → 드롭다운 HTML (0건이면 빈 결과 문구) */
+function gsRenderResults(results, kw, data) {
+  var total = results.reduce(function(s, r) { return s + r.hits.length; }, 0);
+  if (total === 0) return '<div class="gs-empty">검색 결과 없음</div>';
+  var html = '<div style="padding:6px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd)"><span style="font-size:10px;color:var(--t5);font-weight:600">' + total + '건 발견</span><span style="font-size:9px;color:var(--t6)">↑↓ 이동 · Enter 선택 · Esc 닫기</span></div>';
+  results.forEach(function(r) {
+    if (!r.hits.length) return;
+    html += '<div class="gs-group">' + r.m.label + ' (' + r.hits.length + ')</div>';
+    r.hits.forEach(function(h) { html += r.m.render(h, kw, data); });
+  });
+  return html;
+}
+
 var _gsCache=null,_gsCacheTime=0;
+/* 검색 대상 데이터 → data 객체. 캐시(5초)가 비었거나 지났으면 먼저 await gsRefreshCache() */
+function gsCacheStale() { return !_gsCache || (Date.now() - _gsCacheTime) > 5000; }
+async function gsRefreshCache() {
+  var _gsNow=Date.now();
+  _gsCache=await Promise.all([
+    typeof projGetAll === 'function' ? projGetAll() : Promise.resolve([]),
+    typeof msGetAll === 'function' ? msGetAll() : Promise.resolve([]),
+    typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve([]),
+    typeof orderGetAll === 'function' ? orderGetAll() : Promise.resolve([]),
+    typeof evtGetAll === 'function' ? evtGetAll() : Promise.resolve([]),
+    Promise.resolve([])  // 주간 아카이브(weeks): 과거 IndexedDB 전용 경로라 항상 빈 배열이었음 — 동작 동일
+  ]);
+  _gsCacheTime=_gsNow;
+}
+function gsCollectData() {
+  const [projects, milestones, issues, orders, events, weeks] = _gsCache;
+  return {
+    projects: projects, milestones: milestones, issues: issues, orders: orders, events: events, weeks: weeks,
+    aliasMap: typeof aliasMap === 'object' ? aliasMap : undefined,  // 팀원 별칭 (settings.js)
+    memberGroups: memberGroups                                       // 팀원 그룹 (settings.js)
+  };
+}
+
 async function globalSearch(kw) {
   const dd = document.getElementById('globalSearchDropdown');
   if (!dd) return;
@@ -42,177 +224,9 @@ async function globalSearch(kw) {
   if (kw.length < 1) { dd.style.display = 'none'; return; }
   const kl = kw.toLowerCase();
   _gsActiveIdx = -1;
-
-  // gather all data in parallel (cached for 5s)
-  var _gsNow=Date.now();
-  if(!_gsCache||(_gsNow-_gsCacheTime)>5000){
-    _gsCache=await Promise.all([
-      typeof projGetAll === 'function' ? projGetAll() : Promise.resolve([]),
-      typeof msGetAll === 'function' ? msGetAll() : Promise.resolve([]),
-      typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve([]),
-      typeof orderGetAll === 'function' ? orderGetAll() : Promise.resolve([]),
-      typeof evtGetAll === 'function' ? evtGetAll() : Promise.resolve([]),
-      Promise.resolve([])  // 주간 아카이브(weeks): 과거 IndexedDB 전용 경로라 항상 빈 배열이었음 — 동작 동일
-    ]);
-    _gsCacheTime=_gsNow;
-  }
-  const [projects, milestones, issues, orders, events, weeks] = _gsCache;
-
-  // team members from aliases and groups
-  var members = [];
-  if (typeof aliasMap === 'object') {
-    Object.keys(aliasMap).forEach(function(realName) {
-      if (realName.toLowerCase().includes(kl) || (aliasMap[realName] && aliasMap[realName].toLowerCase().includes(kl))) {
-        members.push({ realName: realName, alias: aliasMap[realName] });
-      }
-    });
-  }
-  var groups = [];
-  if (Array.isArray(memberGroups)) {
-    memberGroups.forEach(function(g) {
-      if (g.name && g.name.toLowerCase().includes(kl)) {
-        groups.push(g);
-      } else if (g.members && g.members.some(function(m) { return m.toLowerCase().includes(kl); })) {
-        groups.push(g);
-      }
-    });
-  }
-
-  // search with field tracking
-  var pHits = []; projects.forEach(function(p) {
-    var f = gsMatchField(p, ['name','orderNo','memo','assignees'], kl);
-    if (f) pHits.push({ d: p, f: f });
-  });
-  var msHits = []; milestones.forEach(function(m) {
-    var f = gsMatchField(m, ['name'], kl);
-    if (f) msHits.push({ d: m, f: f });
-  });
-  var iHits = []; issues.forEach(function(i) {
-    var f = gsMatchField(i, ['title','description','tags','reporter','assignees','resolution'], kl);
-    if (f) iHits.push({ d: i, f: f });
-  });
-  var oHits = []; orders.forEach(function(o) {
-    var f = gsMatchField(o, ['orderNo','name','client','manager','memo'], kl);
-    if (f) oHits.push({ d: o, f: f });
-  });
-  var eHits = []; events.forEach(function(e) {
-    var f = gsMatchField(e, ['title','memo','assignees'], kl);
-    if (f) eHits.push({ d: e, f: f });
-  });
-  var wHits = []; if (Array.isArray(weeks)) weeks.forEach(function(w) {
-    if (w.label && w.label.toLowerCase().includes(kl)) wHits.push({ d: w, f: 'label' });
-    else if (w.fileName && w.fileName.toLowerCase().includes(kl)) wHits.push({ d: w, f: 'fileName' });
-    else if (w.selectedNames && w.selectedNames.some(function(n) { return n.toLowerCase().includes(kl); })) wHits.push({ d: w, f: 'selectedNames' });
-  });
-
-  // limit results per category
-  pHits = pHits.slice(0, 5); msHits = msHits.slice(0, 4); iHits = iHits.slice(0, 5);
-  oHits = oHits.slice(0, 5); eHits = eHits.slice(0, 4); wHits = wHits.slice(0, 3);
-  members = members.slice(0, 4); groups = groups.slice(0, 3);
-
-  var total = pHits.length + msHits.length + iHits.length + oHits.length + eHits.length + wHits.length + members.length + groups.length;
-  if (total === 0) {
-    dd.innerHTML = '<div class="gs-empty">검색 결과 없음</div>';
-    dd.style.display = 'block';
-    return;
-  }
-
-  var html = '<div style="padding:6px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd)"><span style="font-size:10px;color:var(--t5);font-weight:600">' + total + '건 발견</span><span style="font-size:9px;color:var(--t6)">↑↓ 이동 · Enter 선택 · Esc 닫기</span></div>';
-
-  function fieldHint(f) {
-    return f && GS_FIELD_LABELS[f] && f !== 'name' && f !== 'title' ? '<span style="font-size:9px;color:var(--t6);margin-left:4px">[' + GS_FIELD_LABELS[f] + ']</span>' : '';
-  }
-
-  // projects
-  if (pHits.length) {
-    html += '<div class="gs-group">📁 프로젝트 (' + pHits.length + ')</div>';
-    pHits.forEach(function(h) {
-      var p = h.d; var st = typeof autoProjectStatus === 'function' ? autoProjectStatus(p) : p.status;
-      var stInfo = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[st] ? PROJ_STATUS[st] : null;
-      html += '<div class="gs-item" onclick="globalSearchNav(\'project\',\'' + p.id + '\')">' +
-        '<span class="gs-icon" style="color:' + (p.color || 'var(--ac)') + '">●</span>' +
-        '<span class="gs-name">' + gsHighlight(p.name, kw) + fieldHint(h.f) + '</span>' +
-        '<span class="gs-sub">' + (stInfo ? '<span style="color:' + stInfo.color + '">' + stInfo.icon + '</span> ' : '') + eH(p.orderNo || '') + '</span></div>';
-    });
-  }
-  // milestones
-  if (msHits.length) {
-    html += '<div class="gs-group">◆ 마일스톤 (' + msHits.length + ')</div>';
-    msHits.forEach(function(h) {
-      var m = h.d; var proj = projects.find(function(p) { return p.id === m.projectId; });
-      html += '<div class="gs-item" onclick="globalSearchNav(\'milestone\',\'' + m.projectId + '\')">' +
-        '<span class="gs-icon" style="color:#8B5CF6">◆</span>' +
-        '<span class="gs-name">' + gsHighlight(m.name, kw) + '</span>' +
-        '<span class="gs-sub">' + eH(proj ? (proj.name || proj.orderNo) : '') + '</span></div>';
-    });
-  }
-  // issues
-  if (iHits.length) {
-    html += '<div class="gs-group">🎫 이슈 (' + iHits.length + ')</div>';
-    iHits.forEach(function(h) {
-      var i = h.d;
-      var urgColor = i.urgency === 'urgent' ? '#EF4444' : i.urgency === 'normal' ? '#F59E0B' : 'var(--t5)';
-      html += '<div class="gs-item" onclick="globalSearchNav(\'issue\',\'' + i.id + '\')">' +
-        '<span class="gs-icon" style="color:' + urgColor + '">🎫</span>' +
-        '<span class="gs-name">' + gsHighlight(i.title, kw) + fieldHint(h.f) + '</span>' +
-        '<span class="gs-sub" style="color:' + urgColor + '">' + eH(i.status || '') + '</span></div>';
-    });
-  }
-  // orders
-  if (oHits.length) {
-    html += '<div class="gs-group">📋 수주 (' + oHits.length + ')</div>';
-    oHits.forEach(function(h) {
-      var o = h.d;
-      html += '<div class="gs-item" onclick="globalSearchNav(\'order\',\'' + (o.orderNo || o.id || '') + '\')">' +
-        '<span class="gs-icon">📋</span>' +
-        '<span class="gs-name">' + gsHighlight(o.name || o.orderNo || '', kw) + fieldHint(h.f) + '</span>' +
-        '<span class="gs-sub">' + eH(o.client || o.orderNo || '') + '</span></div>';
-    });
-  }
-  // events
-  if (eHits.length) {
-    html += '<div class="gs-group">📅 일정 (' + eHits.length + ')</div>';
-    eHits.forEach(function(h) {
-      var e = h.d; var t = typeof EVT_TYPE !== 'undefined' && EVT_TYPE[e.type] ? EVT_TYPE[e.type] : { icon: '📌' };
-      html += '<div class="gs-item" onclick="globalSearchNav(\'event\',\'' + e.id + '\')">' +
-        '<span class="gs-icon">' + t.icon + '</span>' +
-        '<span class="gs-name">' + gsHighlight(e.title, kw) + fieldHint(h.f) + '</span>' +
-        '<span class="gs-sub">' + eH(e.startDate || '') + '</span></div>';
-    });
-  }
-  // archived weeks
-  if (wHits.length) {
-    html += '<div class="gs-group">🗄️ 아카이브 (' + wHits.length + ')</div>';
-    wHits.forEach(function(h) {
-      var w = h.d;
-      html += '<div class="gs-item" onclick="globalSearchNav(\'archive\',\'' + eH(w.id) + '\')">' +
-        '<span class="gs-icon">🗄️</span>' +
-        '<span class="gs-name">' + gsHighlight(w.label || w.id, kw) + '</span>' +
-        '<span class="gs-sub">' + (w.totalHours ? Math.round(w.totalHours) + 'h' : '') + '</span></div>';
-    });
-  }
-  // team members
-  if (members.length) {
-    html += '<div class="gs-group">👤 팀원 (' + members.length + ')</div>';
-    members.forEach(function(m) {
-      html += '<div class="gs-item" onclick="globalSearchNav(\'member\',\'' + eH(m.realName) + '\')">' +
-        '<span class="gs-icon">👤</span>' +
-        '<span class="gs-name">' + gsHighlight(m.realName, kw) + (m.alias ? ' <span style="color:var(--t5)">(' + gsHighlight(m.alias, kw) + ')</span>' : '') + '</span>' +
-        '<span class="gs-sub">팀원</span></div>';
-    });
-  }
-  // groups
-  if (groups.length) {
-    html += '<div class="gs-group">👥 그룹 (' + groups.length + ')</div>';
-    groups.forEach(function(g) {
-      html += '<div class="gs-item" onclick="globalSearchNav(\'group\',\'' + eH(g.id) + '\')">' +
-        '<span class="gs-icon" style="color:' + (g.color || 'var(--ac)') + '">●</span>' +
-        '<span class="gs-name">' + gsHighlight(g.name, kw) + '</span>' +
-        '<span class="gs-sub">' + (g.members ? g.members.length + '명' : '') + '</span></div>';
-    });
-  }
-
-  dd.innerHTML = html;
+  if (gsCacheStale()) await gsRefreshCache();  // 캐시 hit 이면 await 없이 동기 렌더 (예전과 같은 타이밍)
+  var data = gsCollectData();
+  dd.innerHTML = gsRenderResults(gsRunMatchers(kl, data), kw, data);
   dd.style.display = 'block';
 }
 

@@ -3,6 +3,7 @@ var router = express.Router();
 var crypto = require('crypto');
 var db = require('../config/db');
 var auth = require('../middleware/auth');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 
@@ -64,8 +65,7 @@ router.post('/', async function (req, res) {
 
     res.status(201).json({ data: result });
   } catch (e) {
-    console.error('[tenants/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tenants/create]', e);
   }
 });
 
@@ -81,8 +81,7 @@ router.get('/me', async function (req, res) {
     }
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[tenants/me]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tenants/me]', e);
   }
 });
 
@@ -116,8 +115,7 @@ router.put('/me', auth.requireRole('admin'), async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0], message: '테넌트 정보가 수정되었습니다.' });
   } catch (e) {
-    console.error('[tenants/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tenants/update]', e);
   }
 });
 
@@ -143,8 +141,7 @@ router.post('/invite', auth.requireRole('admin', 'manager'), async function (req
     var inviteUrl = '/api/tenants/join/' + token;
     res.status(201).json({ data: { token: token, inviteUrl: inviteUrl, expiresAt: expiresAt } });
   } catch (e) {
-    console.error('[tenants/invite]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tenants/invite]', e);
   }
 });
 
@@ -191,8 +188,7 @@ router.post('/join/:token', async function (req, res) {
 
     res.json({ data: { tenantId: invite.tenant_id }, message: '테넌트에 참여했습니다.' });
   } catch (e) {
-    console.error('[tenants/join]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tenants/join]', e);
   }
 });
 

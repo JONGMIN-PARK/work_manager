@@ -8,12 +8,12 @@
  */
 
 var PS_STATUS = [
-  { key: 'idea',       label: '아이디어',  icon: '💡', color: '#8B5CF6' },
-  { key: 'reviewing',  label: '검토중',    icon: '🔍', color: '#3B82F6' },
+  { key: 'idea',       label: '아이디어',  icon: '💡', color: SEM_COLOR.purple },
+  { key: 'reviewing',  label: '검토중',    icon: '🔍', color: SEM_COLOR.info },
   { key: 'discussing', label: '업체협의',  icon: '🤝', color: '#06B6D4' },
-  { key: 'proposed',   label: '견적/제안', icon: '📄', color: '#F59E0B' },
-  { key: 'won',        label: '확정',      icon: '✅', color: '#10B981' },
-  { key: 'hold',       label: '보류',      icon: '⏸',  color: '#94A3B8' },
+  { key: 'proposed',   label: '견적/제안', icon: '📄', color: SEM_COLOR.warn },
+  { key: 'won',        label: '확정',      icon: '✅', color: SEM_COLOR.ok },
+  { key: 'hold',       label: '보류',      icon: '⏸',  color: SEM_COLOR.muted },
   { key: 'dropped',    label: '드롭',      icon: '❌', color: '#64748B' }
 ];
 var PS_CAT = {
@@ -23,7 +23,7 @@ var PS_CAT = {
   idea:    { label: '아이디어', color: '#F59E0B' },
   quote:   { label: '견적',     color: '#EC4899' }
 };
-var PS_PRIO = { high: { label: '높음', color: '#EF4444' }, normal: { label: '보통', color: '#F59E0B' }, low: { label: '낮음', color: '#94A3B8' } };
+var PS_PRIO = { high: { label: '높음', color: SEM_COLOR.danger }, normal: { label: '보통', color: SEM_COLOR.warn }, low: { label: '낮음', color: SEM_COLOR.muted } };
 
 var _psList = [];
 var _psView = 'board';   // board | client | list
@@ -135,7 +135,7 @@ function _psBoardHtml(items) {
             '<span class="badge" style="background:' + cat.color + '22;color:' + cat.color + ';font-size:8px;padding:1px 4px">' + cat.label + '</span>' +
             '<span style="font-size:9px;color:' + prio.color + '">●</span>' +
             (p.ownerName ? '<span style="font-size:9px;color:var(--t5)">@' + _psEsc(p.ownerName) + '</span>' : '') +
-            (p.dueDate ? '<span style="font-size:9px;color:' + (overdue ? '#EF4444' : 'var(--t5)') + '">' + (overdue ? '⚠️' : '~') + _psEsc(p.dueDate) + '</span>' : '') +
+            (p.dueDate ? '<span style="font-size:9px;color:' + (overdue ? SEM_COLOR.danger : 'var(--t5)') + '">' + (overdue ? '⚠️' : '~') + _psEsc(p.dueDate) + '</span>' : '') +
           '</div>' +
           '<select class="si" style="font-size:9px;padding:1px 2px;margin-top:4px;width:100%" onchange="psMove(\'' + _psEsc(p.id) + '\',this.value)">' + selOpts + '</select>' +
         '</div>';
@@ -202,7 +202,7 @@ function _psListHtml(items) {
       '<td style="padding:5px;color:var(--t2);cursor:pointer" onclick="psOpenModal(\'' + _psEsc(p.id) + '\')">' + _psEsc(p.title) + '</td>' +
       '<td style="padding:5px;color:' + cat.color + '">' + cat.label + '</td>' +
       '<td style="padding:5px;color:var(--t4)">' + _psEsc(p.ownerName || '-') + '</td>' +
-      '<td style="padding:5px;color:' + (p.dueDate && p.dueDate < _psToday() ? '#EF4444' : 'var(--t5)') + '">' + _psEsc(p.dueDate || '-') + '</td>' +
+      '<td style="padding:5px;color:' + (p.dueDate && p.dueDate < _psToday() ? SEM_COLOR.danger : 'var(--t5)') + '">' + _psEsc(p.dueDate || '-') + '</td>' +
       '<td style="padding:5px;color:var(--t5)">' + linked + '</td>' +
     '</tr>';
   });
@@ -260,8 +260,7 @@ function psSetQ(v) {
   clearTimeout(_psQTimer);
   _psQTimer = setTimeout(function () {
     _psRender();
-    var el = document.getElementById('psQ');
-    if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    wmRestoreFocus('psQ');
   }, 250);
 }
 
@@ -336,7 +335,7 @@ function _psBuildModal(id, members) {
     var linkInfo = p.linkedProjectId ? '✅ 프로젝트로 전환됨' : (p.linkedOrderNo ? '✅ 수주(' + _psEsc(p.linkedOrderNo) + ')로 전환됨' : '');
     html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bd)">' +
       (linkInfo
-        ? '<div style="font-size:11px;color:#10B981">' + linkInfo + '</div>'
+        ? '<div style="font-size:11px;color:' + SEM_COLOR.ok + '">' + linkInfo + '</div>'
         : '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">' +
             '<span style="font-size:10px;color:var(--t5)">확정되면 전환:</span>' +
             '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psConvert(\'' + _psEsc(p.id) + '\',\'project\')">📁 프로젝트로</button>' +

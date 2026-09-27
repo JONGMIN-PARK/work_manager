@@ -161,9 +161,7 @@ function renderAliasModal() {
   const names = typeof aN !== 'undefined' ? aN : [];
   if (!names.length) { showToast('먼저 데이터를 업로드하세요.','warn'); return; }
 
-  const modal = document.createElement('div');
-  modal.id = 'aliasModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+  const modal = createModal({ id: 'aliasModal', z: MODAL_Z, overlayStyle: 'padding:0;background:rgba(0,0,0,.6)' }).overlay;
   // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
   let rows = names.map(n => {
@@ -187,8 +185,6 @@ function renderAliasModal() {
       <button class="btn btn-p" onclick="applyAliasModal()">💾 저장</button>
     </div>
   </div>`;
-
-  document.body.appendChild(modal);
 }
 
 async function applyAliasModal() {
@@ -221,9 +217,7 @@ function renderGroupModal() {
   let existing = document.getElementById('groupModal');
   if (existing) { existing.remove(); return; }
 
-  const modal = document.createElement('div');
-  modal.id = 'groupModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+  const modal = createModal({ id: 'groupModal', z: MODAL_Z, overlayStyle: 'padding:0;background:rgba(0,0,0,.6)' }).overlay;
   // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
   modal.innerHTML = `<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:560px;width:90%;max-height:80vh;overflow:auto">
@@ -248,7 +242,6 @@ function renderGroupModal() {
     <div id="groupListArea"></div>
   </div>`;
 
-  document.body.appendChild(modal);
   renderGroupList();
 }
 
@@ -298,10 +291,10 @@ async function createGroupFromUI() {
   var ok = await saveGroupsToServer();
 
   if (ok) {
-    if (status) { status.textContent = '✅ 서버 저장 완료'; status.style.color = '#10B981'; }
+    if (status) { status.textContent = '✅ 서버 저장 완료'; status.style.color = SEM_COLOR.ok; }
     showToast(`"${name}" 그룹 생성 (${members.length}명)`);
   } else {
-    if (status) { status.textContent = '⚠️ 로컬 저장됨 (서버 저장 실패)'; status.style.color = '#F59E0B'; }
+    if (status) { status.textContent = '⚠️ 로컬 저장됨 (서버 저장 실패)'; status.style.color = SEM_COLOR.warn; }
     showToast(`"${name}" 그룹 생성 (로컬만)`, 'warn');
   }
 
@@ -404,14 +397,6 @@ function updateGroupButtons() {
    데이터 백업 / 복원
    ═══════════════════════════════════════ */
 function showBackupRestoreModal() {
-  var overlay = document.createElement('div');
-  overlay.id = 'backupOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)';
-  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
-
-  var dialog = document.createElement('div');
-  dialog.style.cssText = 'background:var(--bg-p);border-radius:12px;padding:24px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)';
-
   var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
   h += '<span style="font-size:14px;font-weight:700;color:var(--t1)">💾 데이터 백업 / 복원</span>';
   h += '<button onclick="document.getElementById(\'backupOverlay\').remove()" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--t5)">✕</button>';
@@ -431,9 +416,10 @@ function showBackupRestoreModal() {
   h += '<div id="backupStatus" style="font-size:10px;color:var(--t5)"></div>';
   h += '</div>';
 
+  // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기) = createModal 기본값
+  var dialog = createModal({ id: 'backupOverlay', z: MODAL_Z, overlayStyle: 'padding:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px)' }).box;
+  dialog.style.cssText = 'background:var(--bg-p);border-radius:12px;padding:24px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)';
   dialog.innerHTML = h;
-  overlay.appendChild(dialog);
-  document.body.appendChild(overlay);
 }
 
 /* 백업 형식 (version 9)
@@ -527,7 +513,7 @@ function _backupStatus(html) {
 }
 
 function exportBackupJSON() {
-  _backupStatus('<span style="color:#F59E0B">백업 중...</span>');
+  _backupStatus('<span style="color:' + SEM_COLOR.warn + '">백업 중...</span>');
   return buildBackupData().then(function (backup) {
     var totalItems = _backupCount(backup);
     var json = JSON.stringify(backup, null, 2);
@@ -544,16 +530,16 @@ function exportBackupJSON() {
     var prefCount = Object.keys(backup.localStorage).length;
     var msg = '백업 완료 — 서버 데이터 ' + totalItems + '건, 환경설정 ' + prefCount + '개';
     if (backup.errors.length) {
-      _backupStatus('<span style="color:#F59E0B">⚠️ ' + eH(msg) + ' (실패: ' + eH(backup.errors.join(', ')) + ')</span>');
+      _backupStatus('<span style="color:' + SEM_COLOR.warn + '">⚠️ ' + eH(msg) + ' (실패: ' + eH(backup.errors.join(', ')) + ')</span>');
       if (typeof showToast === 'function') showToast('⚠️ 일부 데이터를 가져오지 못했습니다: ' + backup.errors.join(', '), 'error');
     } else {
-      _backupStatus('<span style="color:#10B981">✅ ' + eH(msg) + '</span>');
+      _backupStatus('<span style="color:' + SEM_COLOR.ok + '">✅ ' + eH(msg) + '</span>');
       if (typeof showToast === 'function') showToast('💾 백업 파일 다운로드 완료 (' + totalItems + '건)');
     }
     return backup;
   }).catch(function (err) {
     console.error('[Backup export]', err);
-    _backupStatus('<span style="color:#EF4444">❌ 백업 실패</span>');
+    _backupStatus('<span style="color:' + SEM_COLOR.danger + '">❌ 백업 실패</span>');
     if (typeof showToast === 'function') showToast('백업 실패: ' + (err && err.message || err), 'error');
   });
 }
@@ -582,20 +568,20 @@ function importBackupJSON(file) {
       (storeNames.length ? '※ 파일 안의 서버 데이터(' + _backupCount(backup) + '건)는 복원하지 않습니다 — 서버 DB 가 원본입니다.\n' : '') +
       '\n⚠️ 이 브라우저의 기존 환경설정이 덮어쓰기됩니다.')) return;
 
-    _backupStatus('<span style="color:#F59E0B">복원 중...</span>');
+    _backupStatus('<span style="color:' + SEM_COLOR.warn + '">복원 중...</span>');
     applyBackupPrefs(backup).then(function (res) {
       var msg = '환경설정 ' + res.restored + '개 복원' + (res.serverSynced ? ' (서버 동기화 ' + res.serverSynced + '개)' : '');
       if (res.failed.length) {
-        _backupStatus('<span style="color:#F59E0B">⚠️ ' + eH(msg) + ' — 실패: ' + eH(res.failed.join(', ')) + '</span>');
+        _backupStatus('<span style="color:' + SEM_COLOR.warn + '">⚠️ ' + eH(msg) + ' — 실패: ' + eH(res.failed.join(', ')) + '</span>');
         if (typeof showToast === 'function') showToast('⚠️ 일부 설정 복원 실패: ' + res.failed.join(', '), 'error');
         return;
       }
-      _backupStatus('<span style="color:#10B981">✅ ' + eH(msg) + '</span>');
+      _backupStatus('<span style="color:' + SEM_COLOR.ok + '">✅ ' + eH(msg) + '</span>');
       if (typeof showToast === 'function') showToast('✅ ' + msg, 'success');
       setTimeout(function () { location.reload(); }, 1000);
     }).catch(function (err) {
       console.error('[Backup import]', err);
-      _backupStatus('<span style="color:#EF4444">❌ 복원 실패</span>');
+      _backupStatus('<span style="color:' + SEM_COLOR.danger + '">❌ 복원 실패</span>');
       if (typeof showToast === 'function') showToast('복원 실패: ' + (err && err.message || err), 'error');
     });
   };
@@ -658,9 +644,7 @@ function renderAbbrColorModal() {
   var existing = document.getElementById('abbrColorModal');
   if (existing) { existing.remove(); return; }
 
-  var modal = document.createElement('div');
-  modal.id = 'abbrColorModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+  var modal = createModal({ id: 'abbrColorModal', z: MODAL_Z, overlayStyle: 'padding:0;background:rgba(0,0,0,.6)' }).overlay;
   // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
 
   var keys = Object.keys(AM);
@@ -694,7 +678,6 @@ function renderAbbrColorModal() {
     '</div>' +
   '</div>';
 
-  document.body.appendChild(modal);
 
   // color input 실시간 미리보기
   document.querySelectorAll('#abbrColorModal .abbrColorInput').forEach(function(inp) {

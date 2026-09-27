@@ -79,10 +79,10 @@ function renderWeekSelector(){
   filtered.forEach(function(w){
     const isSel=selWeek&&(selWeek.start===w.start||(w.start>=selWeek.start&&w.start<=selWeek.end));
     const isToday=w.start===todaySun;
-    const badge=isToday?' <span style="font-size:9px;color:#10B981">●오늘</span>':'';
+    const badge=isToday?' <span style="font-size:9px;color:'+SEM_COLOR.ok+'">●오늘</span>':'';
     var chipStyle='padding:4px 10px;font-size:11px';
     if(isSel)chipStyle+=';border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)';
-    else if(isToday)chipStyle+=';border-color:#10B981';
+    else if(isToday)chipStyle+=';border-color:'+SEM_COLOR.ok;
     html+='<span class="chip '+(isSel?'cn':'co')+'" style="'+chipStyle
       +'" onclick="pickWeek(\''+w.start+'\')" title="'+w.count+'건">'+w.label+badge+' <span style="font-size:9px;color:var(--t6)">('+w.count+')</span></span>';
   });

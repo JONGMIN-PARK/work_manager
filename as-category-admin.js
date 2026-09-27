@@ -20,9 +20,6 @@ function showASCategoryAdmin() {
 
   asCategoryGetAll(true).then(function (rows) {
     document.querySelectorAll('#asCatAdminOverlay').forEach(function (el) { el.remove(); });
-    var overlay = document.createElement('div');
-    overlay.id = 'asCatAdminOverlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto';
 
     var h = '';
     h += '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;width:720px;max-width:100%;padding:20px 24px;color:var(--t2);box-shadow:0 10px 40px rgba(0,0,0,0.4)">';
@@ -66,7 +63,7 @@ function showASCategoryAdmin() {
         h += '<td style="padding:6px 10px"><label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input id="asCatEd_active_' + sid + '" type="checkbox"' + (c.active !== false ? ' checked' : '') + '><span style="font-size:10px;color:var(--t5)">' + (c.active !== false ? '활성' : '비활성') + '</span></label></td>';
         h += '<td style="padding:6px 10px;text-align:right;white-space:nowrap">';
         h += '<button onclick="saveASCategoryEdit(\'' + sid + '\')" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3);cursor:pointer;margin-right:4px" title="이 행 저장">💾</button>';
-        h += '<button onclick="deleteASCategory(\'' + sid + '\',\'' + _asEsc(c.code) + '\')" style="font-size:10px;padding:3px 8px;border:1px solid #EF4444;border-radius:4px;background:transparent;color:#EF4444;cursor:pointer" title="비활성화 (사용 중이면 hard-delete 거절)">🗑️</button>';
+        h += '<button onclick="deleteASCategory(\'' + sid + '\',\'' + _asEsc(c.code) + '\')" style="font-size:10px;padding:3px 8px;border:1px solid ' + SEM_COLOR.danger + ';border-radius:4px;background:transparent;color:' + SEM_COLOR.danger + ';cursor:pointer" title="비활성화 (사용 중이면 hard-delete 거절)">🗑️</button>';
         h += '</td></tr>';
       });
     }
@@ -77,8 +74,8 @@ function showASCategoryAdmin() {
     h += '</div>';
     h += '</div>';
 
+    var overlay = _asOverlay('asCatAdminOverlay', 10000, 'align-items:flex-start;padding:40px 20px;overflow-y:auto');
     overlay.innerHTML = h;
-    document.body.appendChild(overlay);
     // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
   }).catch(function (err) {
     console.error('[showASCategoryAdmin]', err);

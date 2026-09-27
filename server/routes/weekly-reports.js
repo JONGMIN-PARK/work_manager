@@ -5,6 +5,7 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var parser = require('../services/weekly-report-parser');
 var notificationService = require('../services/notification.service');
+var httpErr = require('../lib/http-errors');
 
 /**
  * 주간업무보고 업로드 알림 — 테넌트 관리자/팀장 + 보고서에 언급된 멤버에게 발송.
@@ -104,8 +105,7 @@ router.post('/', async function (req, res) {
     notifyWeeklyReportUploads(req.tenant.id, savedForNotify, req.user && req.user.name)
       .catch(function (e) { console.error('[weekly-reports/notify]', e.message); });
   } catch (e) {
-    console.error('[weekly-reports/upload]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[weekly-reports/upload]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -129,8 +129,7 @@ router.get('/', async function (req, res) {
     var r = await db.query(sql, params);
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[weekly-reports/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[weekly-reports/list]', e);
   }
 });
 
@@ -177,8 +176,7 @@ router.get('/next-name', async function (req, res) {
       }
     });
   } catch (e) {
-    console.error('[weekly-reports/next-name]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[weekly-reports/next-name]', e);
   }
 });
 
@@ -241,8 +239,7 @@ router.get('/search', async function (req, res) {
     }
     res.json({ data: matches, total: matches.length });
   } catch (e) {
-    console.error('[weekly-reports/search]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[weekly-reports/search]', e);
   }
 });
 
@@ -316,8 +313,7 @@ router.get('/stats', async function (req, res) {
       }
     });
   } catch (e) {
-    console.error('[weekly-reports/stats]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[weekly-reports/stats]', e);
   }
 });
 
@@ -331,8 +327,7 @@ router.get('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '없습니다.' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[weekly-reports/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[weekly-reports/get]', e);
   }
 });
 
@@ -346,8 +341,7 @@ router.delete('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '없습니다.' });
     res.json({ data: { id: r.rows[0].id }, message: '삭제되었습니다.' });
   } catch (e) {
-    console.error('[weekly-reports/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[weekly-reports/delete]', e);
   }
 });
 

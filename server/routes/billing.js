@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var config = require('../config');
+var httpErr = require('../lib/http-errors');
 
 // Stripe — optional dependency
 var stripe;
@@ -186,8 +187,7 @@ router.post('/checkout', async function (req, res) {
 
     res.json({ data: { sessionId: session.id, url: session.url } });
   } catch (e) {
-    console.error('[billing/checkout]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '결제 세션 생성 실패' });
+    httpErr.serverError(res, '[billing/checkout]', e, '결제 세션 생성 실패');
   }
 });
 
@@ -208,8 +208,7 @@ router.post('/portal', async function (req, res) {
 
     res.json({ data: { url: session.url } });
   } catch (e) {
-    console.error('[billing/portal]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '포탈 세션 생성 실패' });
+    httpErr.serverError(res, '[billing/portal]', e, '포탈 세션 생성 실패');
   }
 });
 
@@ -244,8 +243,7 @@ router.get('/status', async function (req, res) {
 
     res.json({ data: data });
   } catch (e) {
-    console.error('[billing/status]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '구독 상태 조회 실패' });
+    httpErr.serverError(res, '[billing/status]', e, '구독 상태 조회 실패');
   }
 });
 

@@ -89,8 +89,8 @@ async function renderDashboard(projects) {
     '<div class="sg" style="margin-bottom:0">' +
       '<div class="sc"><div class="sl">전체 프로젝트</div><div class="sv">' + counts.total + '</div></div>' +
       '<div class="sc"><div class="sl" style="color:var(--ac-t)">진행중</div><div class="sv bl">' + counts.active + '</div></div>' +
-      '<div class="sc" data-drill="delayedProjects" style="cursor:pointer;' + (counts.delayed ? 'border-color:rgba(239,68,68,.4)' : '') + '" onclick="if(typeof dashDrill===\'function\')dashDrill(\'delayedProjects\')" title="클릭: 지연 프로젝트 보기"><div class="sl" style="color:#EF4444">지연</div><div class="sv" style="color:#FCA5A5">' + counts.delayed + '</div></div>' +
-      '<div class="sc"><div class="sl" style="color:#10B981">완료</div><div class="sv gr">' + counts.done + '</div></div>' +
+      '<div class="sc" data-drill="delayedProjects" style="cursor:pointer;' + (counts.delayed ? 'border-color:rgba(239,68,68,.4)' : '') + '" onclick="if(typeof dashDrill===\'function\')dashDrill(\'delayedProjects\')" title="클릭: 지연 프로젝트 보기"><div class="sl" style="color:' + SEM_COLOR.danger + '">지연</div><div class="sv" style="color:#FCA5A5">' + counts.delayed + '</div></div>' +
+      '<div class="sc"><div class="sl" style="color:' + SEM_COLOR.ok + '">완료</div><div class="sv gr">' + counts.done + '</div></div>' +
     '</div>' +
 
     // 하단 정보
@@ -155,7 +155,7 @@ async function renderDashboard(projects) {
               '<div style="display:flex;align-items:center;gap:6px;margin-top:1px">' +
                 (mProj ? '<span style="color:var(--t5);font-size:10px"><span class="dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + (mProj.color || '#888') + ';margin-right:2px;vertical-align:middle"></span>' + eH(mProj.name || mProj.orderNo) + '</span>' : '') +
                 '<span style="color:var(--t6);font-size:10px">' + (m.endDate || '기한없음') + '</span>' +
-                (isOverdue ? '<span style="color:#EF4444;font-size:9px;font-weight:600">' + daysDiff(m.endDate, today) + '일 초과</span>' : '') +
+                (isOverdue ? '<span style="color:' + SEM_COLOR.danger + ';font-size:9px;font-weight:600">' + daysDiff(m.endDate, today) + '일 초과</span>' : '') +
               '</div>' +
             '</div>' +
             '<span class="badge" style="background:' + mSt.bg + ';color:' + mSt.color + ';font-size:9px;padding:1px 5px;border-radius:3px;white-space:nowrap">' + mSt.label + '</span>' +
@@ -297,7 +297,7 @@ async function runAiInsight() {
     var txt = await callAI(prompt);
     resultEl.innerHTML = '<div style="font-size:10px;color:var(--t6);margin-bottom:4px">✨ AI 응답</div>' + (typeof rMD === 'function' ? rMD(txt) : '<pre style="white-space:pre-wrap;font-size:11px">' + eH(txt) + '</pre>');
   } catch (err) {
-    resultEl.innerHTML = '<div style="color:#EF4444;font-size:11px">⚠️ AI 호출 실패: ' + eH(err.message) + '</div>' + await buildLocalInsight();
+    resultEl.innerHTML = '<div style="color:' + SEM_COLOR.danger + ';font-size:11px">⚠️ AI 호출 실패: ' + eH(err.message) + '</div>' + await buildLocalInsight();
   }
   btn.disabled = false;
   btn.textContent = '분석 실행';
@@ -540,7 +540,7 @@ async function buildLocalInsight() {
   html += '<div style="margin-top:6px"><strong style="color:var(--t2)">🔥 과부하 경고</strong>';
   if (overloaded.length) {
     html += '<ul style="margin:4px 0;padding-left:16px">';
-    overloaded.forEach(function (o) { html += '<li style="color:#EF4444;padding:1px 0">' + eH(o) + '</li>'; });
+    overloaded.forEach(function (o) { html += '<li style="color:' + SEM_COLOR.danger + ';padding:1px 0">' + eH(o) + '</li>'; });
     html += '</ul>';
   } else {
     html += '<div style="color:var(--t6);padding:2px 0">과부하 없음</div>';
@@ -571,7 +571,7 @@ async function buildLocalInsight() {
   html += '<div style="margin-top:6px"><strong style="color:var(--t2)">📊 지연 위험</strong>';
   if (risks.length) {
     html += '<ul style="margin:4px 0;padding-left:16px">';
-    risks.forEach(function (r) { html += '<li style="color:#F59E0B;padding:1px 0">' + eH(r) + '</li>'; });
+    risks.forEach(function (r) { html += '<li style="color:' + SEM_COLOR.warn + ';padding:1px 0">' + eH(r) + '</li>'; });
     html += '</ul>';
   } else {
     html += '<div style="color:var(--t6);padding:2px 0">위험 없음</div>';
@@ -595,7 +595,7 @@ async function buildLocalInsight() {
   html += '<div style="margin-top:6px"><strong style="color:var(--t2)">🔀 단계 병목</strong>';
   if (bottlenecks.length) {
     html += '<ul style="margin:4px 0;padding-left:16px">';
-    bottlenecks.forEach(function (b) { html += '<li style="color:#F59E0B;padding:1px 0">' + eH(b) + '</li>'; });
+    bottlenecks.forEach(function (b) { html += '<li style="color:' + SEM_COLOR.warn + ';padding:1px 0">' + eH(b) + '</li>'; });
     html += '</ul>';
   } else {
     html += '<div style="color:var(--t6);padding:2px 0">병목 없음</div>';
@@ -801,7 +801,7 @@ function buildBottleneckWidget(projects) {
     html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px">';
     html += '<span style="color:var(--t2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px">' + eH(b.name) + '</span>';
     html += '<span style="padding:1px 6px;border-radius:8px;background:' + b.color + '22;color:' + b.color + ';font-size:10px">' + b.phase + '</span>';
-    html += '<span style="font-size:10px;color:#F59E0B;font-weight:700;margin-left:auto">' + b.days + '일</span>';
+    html += '<span style="font-size:10px;color:' + SEM_COLOR.warn + ';font-weight:700;margin-left:auto">' + b.days + '일</span>';
     html += '</div>';
   });
   html += '</div>';
@@ -908,8 +908,8 @@ function buildIssueSummary() {
     // 요약 수치
     html += '<div style="display:flex;gap:12px;margin-bottom:10px">';
     html += '<div style="text-align:center;cursor:pointer" onclick="if(typeof dashDrill===\'function\')dashDrill(\'openIssues\')" title="클릭: 접수 이슈 보기"><div style="font-size:16px;font-weight:700;color:#6366F1">' + openCnt + '</div><div style="font-size:9px;color:var(--t5)">접수</div></div>';
-    html += '<div style="text-align:center;cursor:pointer" onclick="if(typeof dashDrill===\'function\')dashDrill(\'urgentIssues\')" title="클릭: 긴급 이슈 보기"><div style="font-size:16px;font-weight:700;color:#EF4444">' + urgentCnt + '</div><div style="font-size:9px;color:var(--t5)">긴급</div></div>';
-    html += '<div style="text-align:center;cursor:pointer" onclick="if(typeof dashDrill===\'function\')dashDrill(\'inProgressIssues\')" title="클릭: 대응중 이슈 보기"><div style="font-size:16px;font-weight:700;color:#3B82F6">' + inProgCnt + '</div><div style="font-size:9px;color:var(--t5)">대응중</div></div>';
+    html += '<div style="text-align:center;cursor:pointer" onclick="if(typeof dashDrill===\'function\')dashDrill(\'urgentIssues\')" title="클릭: 긴급 이슈 보기"><div style="font-size:16px;font-weight:700;color:' + SEM_COLOR.danger + '">' + urgentCnt + '</div><div style="font-size:9px;color:var(--t5)">긴급</div></div>';
+    html += '<div style="text-align:center;cursor:pointer" onclick="if(typeof dashDrill===\'function\')dashDrill(\'inProgressIssues\')" title="클릭: 대응중 이슈 보기"><div style="font-size:16px;font-weight:700;color:' + SEM_COLOR.info + '">' + inProgCnt + '</div><div style="font-size:9px;color:var(--t5)">대응중</div></div>';
     html += '</div>';
 
     // 부서별 미해결
@@ -940,13 +940,13 @@ async function showPersonReport(name) {
 
   var panel = document.createElement('div');
   panel.id = 'personReportPanel';
-  panel.style.cssText = 'position:fixed;top:0;right:0;bottom:0;width:420px;max-width:92vw;background:var(--bg-p);border-left:1px solid var(--bd);z-index:9998;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);padding:20px;animation:slideIn .2s ease';
+  panel.style.cssText = 'position:fixed;top:0;right:0;bottom:0;width:420px;max-width:92vw;background:var(--bg-p);border-left:1px solid var(--bd);z-index:' + (MODAL_Z - 1) + ';overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);padding:20px;animation:slideIn .2s ease';
   panel.innerHTML = '<div style="text-align:center;color:var(--t6);font-size:12px;padding:40px 0">로딩 중...</div>';
   document.body.appendChild(panel);
 
   var backdrop = document.createElement('div');
   backdrop.id = 'personReportBackdrop';
-  backdrop.style.cssText = 'position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,.3)';
+  backdrop.style.cssText = 'position:fixed;inset:0;z-index:' + (MODAL_Z - 2) + ';background:rgba(0,0,0,.3)';
   backdrop.onclick = function () { panel.remove(); backdrop.remove(); };
   document.body.appendChild(backdrop);
 
@@ -1094,7 +1094,7 @@ async function showPersonReport(name) {
 
     panel.innerHTML = html;
   } catch (err) {
-    panel.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:20px">오류: ' + eH(err.message || String(err)) + '</div>';
+    panel.innerHTML = '<div style="color:' + SEM_COLOR.danger + ';font-size:12px;padding:20px">오류: ' + eH(err.message || String(err)) + '</div>';
   }
 }
 
@@ -1443,7 +1443,7 @@ async function generateReport() {
   } else {
     // 팝업 차단 시 모달로 표시
     var rptModal = document.createElement('div');
-    rptModal.style.cssText = 'position:fixed;inset:0;z-index:10000;background:#fff;overflow:auto;padding:20px';
+    rptModal.style.cssText = 'position:fixed;inset:0;z-index:' + (MODAL_Z + 1) + ';background:#fff;overflow:auto;padding:20px';
     rptModal.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:12px;position:sticky;top:0;background:#fff;padding:8px 0;border-bottom:1px solid #e2e8f0;z-index:1" class="no-print">' +
       '<button onclick="window.print()" style="padding:6px 16px;background:#3B82F6;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">🖨 인쇄</button>' +
       '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="padding:6px 16px;background:#94A3B8;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">✕ 닫기</button>' +

@@ -84,7 +84,7 @@ function _msgRenderThreadList() {
       return '<div onclick="msgOpenThread(\'' + t.peer + '\',\'' + _mqJs(nm) + '\')" style="padding:10px 12px;border-bottom:1px solid var(--bd);cursor:pointer;' + (active ? 'background:var(--bg-hv)' : '') + '">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px">' +
           '<span style="font-size:12px;font-weight:600;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _mqEsc(nm) + '</span>' +
-          (unread > 0 ? '<span style="background:#EF4444;color:#fff;font-size:9px;font-weight:700;border-radius:9px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;flex-shrink:0">' + (unread > 99 ? '99+' : unread) + '</span>' : '') +
+          (unread > 0 ? '<span style="background:' + SEM_COLOR.danger + ';color:#fff;font-size:9px;font-weight:700;border-radius:9px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;flex-shrink:0">' + (unread > 99 ? '99+' : unread) + '</span>' : '') +
         '</div>' +
         '<div style="font-size:10px;color:var(--t6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">' + _mqEsc(last.slice(0, 40)) + '</div>' +
       '</div>';
@@ -169,16 +169,13 @@ function msgNewMessage() {
     var me = _mqMe();
     users = (users || []).filter(function (u) { return u.id !== me; });
     var opts = users.map(function (u) { return '<option value="' + u.id + '">' + _mqEsc(u.displayName || u.name || u.id) + '</option>'; }).join('');
-    var ex = document.getElementById('msgNewModal'); if (ex) ex.remove();
-    var m = document.createElement('div'); m.id = 'msgNewModal';
-    m.style.cssText = 'position:fixed;inset:0;z-index:10002;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(3px)';
+    var m = createModal({ id: 'msgNewModal', z: MODAL_Z + 3, overlayStyle: 'padding:0;backdrop-filter:blur(3px)' }).overlay;
     m.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:12px;padding:18px;width:340px;max-width:94%">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:13px;font-weight:700;color:var(--t1)">✏️ 새 메시지</h3><button class="btn btn-g btn-s" onclick="document.getElementById(\'msgNewModal\').remove()">✕</button></div>' +
       '<label class="fl" style="font-size:11px">받는 사람</label>' +
       '<select id="msgNewUser" class="si" style="width:100%;margin-bottom:10px">' + (opts || '<option value="">사용자 없음</option>') + '</select>' +
       '<div style="display:flex;gap:8px"><button class="btn btn-g" style="flex:1" onclick="document.getElementById(\'msgNewModal\').remove()">취소</button><button class="btn btn-p" style="flex:1" onclick="msgNewStart()">대화 열기</button></div>' +
     '</div>';
-    document.body.appendChild(m);
   }).catch(function () { _mqToast('사용자 목록 로드 실패', 'error'); });
 }
 

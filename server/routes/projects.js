@@ -9,75 +9,37 @@ var notificationService = require('../services/notification.service');
 var authService = require('../services/auth.service');
 var tenant = require('../middleware/tenant');
 var operator = require('../middleware/operator');
+var pa = require('../lib/project-access');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
-// ─── 가시성 정책 (v13.31~) ───
-// 정책: 기본 비공개. 생성자(owner) + project_members(active) + visibility 일치(tenant/dept)만 노출.
-// admin/executive 역할도 동일 룰을 따름 — 우회 없음. (관리자는 명시 공유 또는 가시성 변경으로 접근권 획득)
-//
-// 단일 프로젝트 행에 대한 접근권 판정. 멤버 조회는 옵션(이미 캐시된 경우 전달).
-async function canAccessProject(req, project, opts) {
-  if (!project) return false;
-  if (req.user.role === 'admin') return true;   // 관리자: 전체 프로젝트 접근/수정
-  var userId = req.user.sub;
-  var deptId = req.user.departmentId || null;
-  if (project.owner_id === userId) return true;
-  if (project.visibility === 'tenant') return true;
-  if (project.visibility === 'dept' && deptId && project.department_id === deptId) return true;
-  // project_members(active) 체크
-  if (opts && opts.isMember === true) return true;
-  // 부여된 운영자: 읽기 접근 허용 (멤버 아님 확정 전에 체크)
-  try { if (operator && operator.isOperator && await operator.isOperator(req)) return true; } catch (_) {}
-  if (opts && opts.isMember === false) return false; // 이미 부정 확인
-  var mr = await db.query('SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2 AND released_at IS NULL LIMIT 1', [project.id, userId]);
-  return mr.rows.length > 0;
-}
-
-// ─── 편집/삭제 권한 (v13.145) ───
-// 읽기(canAccessProject)는 가시성(공개)으로도 허용되지만, **편집/삭제는** 가시성만으로는 불가.
-// 생성자(owner) · 참여자(project_members active) · 관리자(admin/executive)만 허용.
-// (운영자·전체공개·부서공개 가시성은 편집권 부여 안 함 — 보기는 가능, 수정은 불가)
-async function canEditProject(req, project) {
-  if (!project) return false;
-  var role = req.user.role;
-  if (role === 'admin' || role === 'executive') return true;   // 관리자 계층
-  if (project.owner_id === req.user.sub) return true;          // 생성자
-  var mr = await db.query('SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2 AND released_at IS NULL LIMIT 1', [project.id, req.user.sub]);
-  return mr.rows.length > 0;                                    // 활성 참여자
-}
+// ─── 가시성·편집 정책 — lib/project-access 에 단일 정의 ───
+// 읽기(canAccessProject = pa.canRead): admin 전체 / owner · 활성 멤버 · visibility tenant·dept 일치 / 운영자
+// 편집(canEditProject = pa.canEdit, v13.145): admin·executive · owner · 활성 멤버 (가시성만으로는 불가)
+var canAccessProject = pa.canRead;
+var canEditProject = pa.canEdit;
 
 // ─── GET /api/projects ───
 router.get('/', async function (req, res) {
   try {
-    var userId = req.user.sub;
-    var deptId = req.user.departmentId || null;
     var pg = parsePagination(req.query, 100);
 
-    // 가시성 룰을 SQL에 인라인. 관리자(admin)는 테넌트 전체 접근.
-    var visClause = (req.user.role === 'admin')
-      ? "TRUE"
-      : ("(p.owner_id = $1 OR pm.user_id IS NOT NULL OR p.visibility = 'tenant'"
-        + (deptId ? " OR (p.visibility = 'dept' AND p.department_id = $3)" : "")
-        + ")");
-    var params = deptId
-      ? [userId, req.tenant.id, deptId, pg.limit, pg.offset]
-      : [userId, req.tenant.id, pg.limit, pg.offset];
+    // 가시성 룰 (lib/project-access). 관리자(admin)는 테넌트 전체 접근.
+    var vis = pa.visibleProjectsSql(req, 'p', 2);
     var r = await db.query(
-      "SELECT DISTINCT p.*, COUNT(*) OVER() AS _total FROM projects p "
-      + "LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1 AND pm.released_at IS NULL "
-      + "WHERE p.tenant_id = $2 AND " + visClause
-      + " ORDER BY p.sort_order ASC NULLS LAST, p.created_at DESC LIMIT $" + (deptId ? 4 : 3) + " OFFSET $" + (deptId ? 5 : 4),
-      params
+      "SELECT p.*, COUNT(*) OVER() AS _total FROM projects p "
+      + "WHERE p.tenant_id = $1 AND " + vis.sql
+      + " ORDER BY p.sort_order ASC NULLS LAST, p.created_at DESC LIMIT $" + vis.nextIdx + " OFFSET $" + (vis.nextIdx + 1),
+      [req.tenant.id].concat(vis.params, [pg.limit, pg.offset])
     );
 
     var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
-    console.error('[projects/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/list]', e);
   }
 });
 
@@ -88,8 +50,7 @@ router.get('/all', operator.requireOperator, async function (req, res) {
     var r = await db.query('SELECT * FROM projects WHERE tenant_id = $1 ORDER BY sort_order ASC NULLS LAST, created_at DESC', [req.tenant.id]);
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[projects/all]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/all]', e);
   }
 });
 
@@ -106,8 +67,7 @@ router.get('/members/all', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[projects/members/all]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/members/all]', e);
   }
 });
 
@@ -121,8 +81,7 @@ router.get('/:id', async function (req, res) {
     if (!allowed) return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 접근 권한이 없습니다.' });
     res.json({ data: p });
   } catch (e) {
-    console.error('[projects/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/get]', e);
   }
 });
 
@@ -155,8 +114,7 @@ router.post('/', rbac.checkPermission('project.create'), async function (req, re
       }, req.tenant.id).catch(function (e) { console.error('[noti]', e.message); });
     } catch (_) {}
   } catch (e) {
-    console.error('[projects/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/create]', e);
   }
 });
 
@@ -248,8 +206,7 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
       }
     } catch (_) {}
   } catch (e) {
-    console.error('[projects/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/update]', e);
   }
 });
 
@@ -295,8 +252,7 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
     });
     res.status(201).json({ data: result });
   } catch (e) {
-    console.error('[projects/full]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/full]', e);
   }
 });
 
@@ -312,8 +268,7 @@ router.delete('/:id', rbac.checkPermission('project.delete'), async function (re
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[projects/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/delete]', e);
   }
 });
 
@@ -331,8 +286,7 @@ router.get('/:id/members', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[projects/members]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/members]', e);
   }
 });
 
@@ -360,8 +314,7 @@ router.post('/:id/members', rbac.checkPermission('project.assign'), async functi
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[projects/members/add]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/members/add]', e);
   }
 });
 
@@ -375,8 +328,7 @@ router.delete('/:id/members/:userId', rbac.checkPermission('project.assign'), as
     );
     res.json({ message: '멤버 해제 완료' });
   } catch (e) {
-    console.error('[projects/members/remove]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/members/remove]', e);
   }
 });
 
@@ -411,15 +363,14 @@ router.post('/:id/transfer', async function (req, res) {
       // 기존 소유자를 assignee 멤버로 보존(옵션)
       if (keepPrev && prevOwner && prevOwner !== newOwnerId) {
         await client.query(
-          "INSERT INTO project_members (project_id, user_id, role, assigned_by) VALUES ($1, $2, 'assignee', $3) ON CONFLICT (project_id, user_id) DO UPDATE SET role = 'assignee', released_at = NULL, assigned_by = $3, assigned_at = now()",
-          [proj.id, prevOwner, req.user.sub]
+          "INSERT INTO project_members (project_id, user_id, role, assigned_by, tenant_id) VALUES ($1, $2, 'assignee', $3, $4) ON CONFLICT (project_id, user_id) DO UPDATE SET role = 'assignee', released_at = NULL, assigned_by = $3, assigned_at = now(), tenant_id = EXCLUDED.tenant_id",
+          [proj.id, prevOwner, req.user.sub, req.tenant.id]
         );
       }
     });
     res.json({ message: '이관 완료', data: { id: proj.id, ownerId: newOwnerId, prevOwnerId: prevOwner } });
   } catch (e) {
-    console.error('[projects/transfer]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/transfer]', e);
   }
 });
 
@@ -454,24 +405,31 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
          JSON.stringify(src.phases || {}), meId, deptId, req.tenant.id, src.visibility || 'private']
       );
       // 2) 활성 멤버(인원 할당) 복사
-      var mem = await client.query('SELECT user_id, role FROM project_members WHERE project_id = $1 AND released_at IS NULL', [src.id]);
-      for (var i = 0; i < mem.rows.length; i++) {
-        await client.query(
-          "INSERT INTO project_members (project_id, user_id, role, assigned_by) VALUES ($1,$2,$3,$4) ON CONFLICT (project_id, user_id) DO NOTHING",
-          [newId, mem.rows[i].user_id, mem.rows[i].role || 'assignee', meId]
-        );
-      }
+      //    행마다 INSERT 하던 루프 → INSERT ... SELECT 한 번. tenant_id 도 기록(예전엔 누락되어 DEFAULT 테넌트로 들어감).
+      await client.query(
+        "INSERT INTO project_members (project_id, user_id, role, assigned_by, tenant_id) " +
+        "SELECT $1, user_id, COALESCE(NULLIF(role, ''), 'assignee'), $2, $3 FROM project_members WHERE project_id = $4 AND released_at IS NULL " +
+        "ON CONFLICT (project_id, user_id) DO NOTHING",
+        [newId, meId, req.tenant.id, src.id]
+      );
       // 3) 마일스톤 복사(진척 초기화) — old→new id 매핑
+      //    마일스톤별 INSERT 루프 → unnest 다중 행 INSERT 한 번 (새 id 는 JS 에서 생성해 매핑 유지)
       var ms = await client.query('SELECT * FROM milestones WHERE project_id = $1 AND tenant_id = $2 ORDER BY sort_order', [src.id, req.tenant.id]);
       var idMap = {};
+      var mIds = [], mNames = [], mStarts = [], mEnds = [], mStatus = [], mSort = [], mTargets = [];
       for (var j = 0; j < ms.rows.length; j++) {
         var m = ms.rows[j];
         var nmid = 'ms-' + crypto.randomUUID().slice(0, 12);
         idMap[m.id] = nmid;
+        mIds.push(nmid); mNames.push(m.name); mStarts.push(m.start_date); mEnds.push(m.end_date);
+        mStatus.push(m.status || 'waiting'); mSort.push(m.sort_order || 0); mTargets.push(JSON.stringify(m.assignee_targets || {}));
+      }
+      if (mIds.length) {
         await client.query(
           "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, assignee_targets, created_by, tenant_id) " +
-          "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
-          [nmid, newId, m.name, m.start_date, m.end_date, m.status || 'waiting', m.sort_order || 0, JSON.stringify(m.assignee_targets || {}), meId, req.tenant.id]
+          "SELECT t.id, $8, t.name, t.s, t.e, t.status, t.ord, t.at::jsonb, $9, $10 " +
+          "FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::int[], $7::text[]) WITH ORDINALITY AS t(id, name, s, e, status, ord, at, n) ORDER BY t.n",
+          [mIds, mNames, mStarts, mEnds, mStatus, mSort, mTargets, newId, meId, req.tenant.id]
         );
       }
       return { newId: newId, idMap: idMap };
@@ -483,13 +441,20 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
         "SELECT milestone_id, user_id, role, target_hours FROM milestone_assignments WHERE project_id = $1 AND tenant_id = $2 AND released_at IS NULL AND covers_user_id IS NULL",
         [src.id, req.tenant.id]
       );
+      // 행마다 INSERT 하던 루프 → unnest 다중 행 INSERT 한 번
+      var aIds = [], aMs = [], aUsers = [], aRoles = [], aHours = [];
       for (var k = 0; k < asg.rows.length; k++) {
         var a = asg.rows[k];
         var nm = copyResult.idMap[a.milestone_id];
         if (!nm) continue;
+        aIds.push('msa-' + require('crypto').randomUUID().slice(0, 12)); aMs.push(nm); aUsers.push(a.user_id);
+        aRoles.push(a.role || 'primary'); aHours.push(a.target_hours == null ? null : String(a.target_hours));
+      }
+      if (aIds.length) {
         await db.query(
-          "INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id, role, target_hours, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-          ['msa-' + require('crypto').randomUUID().slice(0, 12), req.tenant.id, nm, copyResult.newId, a.user_id, a.role || 'primary', a.target_hours, meId]
+          "INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id, role, target_hours, created_by) " +
+          "SELECT t.id, $6, t.ms, $7, t.uid, t.role, t.hrs::numeric, $8 FROM unnest($1::text[], $2::text[], $3::uuid[], $4::text[], $5::text[]) AS t(id, ms, uid, role, hrs)",
+          [aIds, aMs, aUsers, aRoles, aHours, req.tenant.id, copyResult.newId, meId]
         );
       }
     } catch (e2) { console.warn('[projects/copy] 담당배정 복사 건너뜀:', e2.message); }
@@ -497,11 +462,17 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
     // 5) 참고 이미지 복사 — best-effort(039 미배포 환경 호환)
     try {
       var imgs = await db.query('SELECT src, caption, sort_order FROM project_images WHERE project_id = $1 AND tenant_id = $2 ORDER BY sort_order, created_at', [src.id, req.tenant.id]);
+      // 행마다 INSERT 하던 루프 → unnest 다중 행 INSERT 한 번
+      var iIds = [], iSrc = [], iCap = [], iOrd = [];
       for (var ii = 0; ii < imgs.rows.length; ii++) {
         var im = imgs.rows[ii];
+        iIds.push('pimg-' + require('crypto').randomUUID().slice(0, 12)); iSrc.push(im.src); iCap.push(im.caption); iOrd.push(im.sort_order || ii);
+      }
+      if (iIds.length) {
         await db.query(
-          'INSERT INTO project_images (id, tenant_id, project_id, src, caption, sort_order, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-          ['pimg-' + require('crypto').randomUUID().slice(0, 12), req.tenant.id, copyResult.newId, im.src, im.caption, im.sort_order || ii, meId]
+          'INSERT INTO project_images (id, tenant_id, project_id, src, caption, sort_order, created_by) ' +
+          'SELECT t.id, $5, $6, t.src, t.cap, t.ord, $7 FROM unnest($1::text[], $2::text[], $3::text[], $4::int[]) AS t(id, src, cap, ord)',
+          [iIds, iSrc, iCap, iOrd, req.tenant.id, copyResult.newId, meId]
         );
       }
     } catch (e3) { console.warn('[projects/copy] 이미지 복사 건너뜀:', e3.message); }
@@ -510,8 +481,7 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
     res.status(201).json({ data: nr.rows[0] });
     try { authService.auditLog(req.user.sub, 'project.copy', 'project', copyResult.newId, { from: src.id, name: newName }, req); } catch (_) {}
   } catch (e) {
-    console.error('[projects/copy]', e);
-    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/copy]', e);
   }
 });
 
@@ -537,8 +507,7 @@ router.put('/:id/specs', async function (req, res) {
     res.json({ data: r.rows[0], message: '사양이 저장되었습니다.' });
     try { authService.auditLog(req.user.sub, 'project.specs.update', 'project', req.params.id, {}, req); } catch (_) {}
   } catch (e) {
-    console.error('[projects/specs/update]', e);
-    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/specs/update]', e);
   }
 });
 
@@ -548,24 +517,37 @@ router.post('/reorder', async function (req, res) {
   try {
     var items = (req.body && req.body.items) || [];
     if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'BAD_REQUEST', message: 'items 필수' });
-    var isAdmin = (req.user.role === 'admin' || req.user.role === 'executive');
+    // 항목마다 UPDATE 하던 루프 → unnest 로 단일 UPDATE ... FROM (트랜잭션 유지).
+    // 같은 id 가 여러 번 오면 예전 순차 루프처럼 마지막 값이 이기도록 JS 에서 마지막 것만 남긴다.
+    // updated 는 예전처럼 "갱신된 행 수의 합" — 중복 id 는 루프에서 매번 셌으므로 등장 횟수만큼 더한다.
+    var last = new Map();
+    var times = new Map();
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (!it || !it.id) continue;
+      var key = String(it.id);
+      last.set(key, it.sortOrder != null ? it.sortOrder : 0);
+      times.set(key, (times.get(key) || 0) + 1);
+    }
+    var ids = Array.from(last.keys());
+    var orders = ids.map(function (k) { return String(last.get(k)); });
     var n = 0;
-    await db.transaction(async function (client) {
-      for (var i = 0; i < items.length; i++) {
-        var it = items[i];
-        if (!it || !it.id) continue;
+    if (ids.length) {
+      // 편집 권한(생성자·멤버·admin/executive) 있는 행만 반영 — lib/project-access.editableProjectsSql
+      var ed = pa.editableProjectsSql(req, 'p', 4);
+      await db.transaction(async function (client) {
         var r = await client.query(
-          "UPDATE projects SET sort_order = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 " +
-          "AND ($4 OR owner_id = $5 OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = $2 AND pm.user_id = $5 AND pm.released_at IS NULL))",
-          [(it.sortOrder != null ? it.sortOrder : 0), it.id, req.tenant.id, isAdmin, req.user.sub]
+          "UPDATE projects p SET sort_order = u.ord::int, updated_at = now() " +
+          "FROM unnest($1::text[], $2::text[]) AS u(id, ord) " +
+          "WHERE p.id = u.id AND p.tenant_id = $3 AND " + ed.sql + " RETURNING p.id",
+          [ids, orders, req.tenant.id].concat(ed.params)
         );
-        n += r.rowCount || 0;
-      }
-    });
+        r.rows.forEach(function (row) { n += times.get(String(row.id)) || 1; });
+      });
+    }
     res.json({ updated: n });
   } catch (e) {
-    console.error('[projects/reorder]', e);
-    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/reorder]', e);
   }
 });
 
@@ -590,8 +572,7 @@ router.get('/:id/images', async function (req, res) {
     var r = await db.query('SELECT id, project_id, src, caption, sort_order, created_at FROM project_images WHERE project_id = $1 AND tenant_id = $2 ORDER BY sort_order, created_at', [req.params.id, req.tenant.id]);
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[projects/images/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/images/list]', e);
   }
 });
 
@@ -621,8 +602,7 @@ router.post('/:id/images', async function (req, res) {
     res.status(201).json({ data: saved });
     try { authService.auditLog(req.user.sub, 'project.image.add', 'project', req.params.id, { count: saved.length }, req); } catch (_) {}
   } catch (e) {
-    console.error('[projects/images/add]', e);
-    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/images/add]', e);
   }
 });
 
@@ -633,8 +613,7 @@ router.delete('/:id/images/:imgId', async function (req, res) {
     await db.query('DELETE FROM project_images WHERE id = $1 AND project_id = $2 AND tenant_id = $3', [req.params.imgId, req.params.id, req.tenant.id]);
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[projects/images/del]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[projects/images/del]', e);
   }
 });
 

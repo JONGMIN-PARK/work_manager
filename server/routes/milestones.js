@@ -6,8 +6,9 @@ var { parsePagination } = require('../middleware/pagination');
 var notificationService = require('../services/notification.service');
 var authService = require('../services/auth.service');
 var tenant = require('../middleware/tenant');
-var ps = require('../middleware/project-scope');
+var ps = require('../lib/project-access');
 var operator = require('../middleware/operator');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -39,8 +40,7 @@ router.get('/', async function (req, res) {
     r.rows.forEach(function(row) { delete row._total; });
     res.json({ data: r.rows, total: total, limit: pg.limit, offset: pg.offset });
   } catch (e) {
-    console.error('[milestones/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/list]', e);
   }
 });
 
@@ -58,8 +58,7 @@ router.post('/', async function (req, res) {
     res.status(201).json({ data: r.rows[0] });
     try { authService.auditLog(req.user.sub, 'milestone.create', 'milestone', id, { name: r.rows[0] && r.rows[0].name, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
   } catch (e) {
-    console.error('[milestones/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/create]', e);
   }
 });
 
@@ -94,21 +93,14 @@ router.put('/:id', async function (req, res) {
       }
     } catch (_) { /* 알림 실패 무시 */ }
   } catch (e) {
-    console.error('[milestones/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/update]', e);
   }
 });
 
-// 프로젝트 쓰기 권한 체크 (owner / 활성 멤버 / admin·executive)
-async function _canEditProject(req, projectId) {
-  var role = req.user.role;
-  if (role === 'admin' || role === 'executive') return true;
-  var pr = await db.query('SELECT owner_id FROM projects WHERE id = $1 AND tenant_id = $2', [projectId, req.tenant.id]);
-  if (!pr.rows.length) return null; // 프로젝트 자체가 없음
-  if (pr.rows[0].owner_id === req.user.sub) return true;
-  var mr = await db.query('SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2 AND released_at IS NULL', [projectId, req.user.sub]);
-  return mr.rows.length > 0;
-}
+// 프로젝트 쓰기 권한 체크 (owner / 활성 멤버 / admin·executive) — lib/project-access.canEditById
+// 반환 true / false / null(이 테넌트에 프로젝트 없음). 예전과 달리 admin/executive 도 존재 확인을 먼저 한다
+// — 존재하지 않거나 다른 테넌트의 projectId 로 /:id/transfer 되던 문제 차단.
+var _canEditProject = ps.canEditById;
 
 // 휴지통 복구·완전삭제는 관리자(admin/executive) 전용
 function _isAdminRole(req) {
@@ -149,8 +141,7 @@ router.get('/:id/logs', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[milestones/logs]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/logs]', e);
   }
 });
 
@@ -209,8 +200,7 @@ router.post('/:id/logs', async function (req, res) {
       }, req.tenant.id).catch(function (e) { console.error('[noti]', e.message); });
     } catch (_) { /* 알림 실패 무시 */ }
   } catch (e) {
-    console.error('[milestones/log-add]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/log-add]', e);
   }
 });
 
@@ -258,8 +248,7 @@ router.delete('/:id/logs/:logId', async function (req, res) {
     await _rollupProjectProgress(ms.project_id, req.tenant.id);
     res.json({ message: '휴지통으로 이동되었습니다.', mode: 'soft' });
   } catch (e) {
-    console.error('[milestones/log-del]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/log-del]', e);
   }
 });
 
@@ -281,8 +270,7 @@ router.delete('/:id/logs', async function (req, res) {
     await _rollupProjectProgress(ms.project_id, req.tenant.id);
     res.json({ message: '전체 휴지통으로 이동되었습니다.', mode: 'soft', deleted: dr.rows.length });
   } catch (e) {
-    console.error('[milestones/logs-clear]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/logs-clear]', e);
   }
 });
 
@@ -298,8 +286,7 @@ router.get('/:id/logs/trash', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[milestones/logs-trash]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/logs-trash]', e);
   }
 });
 
@@ -321,8 +308,7 @@ router.post('/:id/logs/:logId/restore', async function (req, res) {
     res.json({ message: '복구되었습니다.', mode: 'restore' });
     try { authService.auditLog(req.user.sub, 'milestone.log.restore', 'milestone', ms.id, { logId: req.params.logId }, req).catch(function () {}); } catch (_) {}
   } catch (e) {
-    console.error('[milestones/log-restore]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/log-restore]', e);
   }
 });
 
@@ -341,8 +327,7 @@ router.delete('/:id/logs/:logId/hard', async function (req, res) {
     res.json({ message: '완전 삭제 완료', mode: 'hard' });
     try { authService.auditLog(req.user.sub, 'milestone.log.purge', 'milestone', ms.id, { logId: req.params.logId }, req).catch(function () {}); } catch (_) {}
   } catch (e) {
-    console.error('[milestones/log-hard-del]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/log-hard-del]', e);
   }
 });
 
@@ -359,8 +344,7 @@ router.delete('/:id/logs/trash/empty', async function (req, res) {
     res.json({ message: '휴지통을 비웠습니다.', mode: 'hard', deleted: dr.rows.length });
     try { authService.auditLog(req.user.sub, 'milestone.log.trash-empty', 'milestone', req.params.id, { deleted: dr.rows.length }, req).catch(function () {}); } catch (_) {}
   } catch (e) {
-    console.error('[milestones/log-trash-empty]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/log-trash-empty]', e);
   }
 });
 
@@ -393,8 +377,7 @@ router.post('/:id/logs/:logId/toggle-check', async function (req, res) {
     await _resyncMilestoneProgress(ms.id, req.tenant.id);   // 최신 로그면 progress_note 갱신
     res.json({ data: { id: req.params.logId, note: newNote } });
   } catch (e) {
-    console.error('[milestones/log-toggle-check]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/log-toggle-check]', e);
   }
 });
 
@@ -422,8 +405,7 @@ router.post('/:id/transfer', async function (req, res) {
     var ur = await db.query('UPDATE milestones SET project_id = $1 WHERE id = $2 AND tenant_id = $3 RETURNING *', [targetProjectId, ms.id, req.tenant.id]);
     res.json({ data: ur.rows[0], message: '이관 완료' });
   } catch (e) {
-    console.error('[milestones/transfer]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/transfer]', e);
   }
 });
 
@@ -435,8 +417,7 @@ router.delete('/:id', async function (req, res) {
     res.json({ message: '삭제 완료' });
     try { authService.auditLog(req.user.sub, 'milestone.delete', 'milestone', req.params.id, { name: r.rows[0] && r.rows[0].name, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
   } catch (e) {
-    console.error('[milestones/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[milestones/delete]', e);
   }
 });
 
@@ -476,8 +457,7 @@ router.get('/:id/assignments', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[ms/assign/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[ms/assign/list]', e);
   }
 });
 
@@ -499,8 +479,7 @@ router.post('/:id/assignments', async function (req, res) {
     res.status(201).json({ data: r.rows[0] });
     try { authService.auditLog(req.user.sub, 'assignment.add', 'milestone', req.params.id, { userId: b.userId, role: role }, req); } catch (_) {}
   } catch (e) {
-    console.error('[ms/assign/add]', e);
-    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[ms/assign/add]', e);
   }
 });
 
@@ -551,8 +530,7 @@ router.post('/:id/assignments/handover', async function (req, res) {
     }
     try { authService.auditLog(req.user.sub, 'assignment.handover', 'milestone', req.params.id, { mode: mode, from: b.fromUserId, to: b.toUserId }, req); } catch (_) {}
   } catch (e) {
-    console.error('[ms/assign/handover]', e);
-    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[ms/assign/handover]', e);
   }
 });
 
@@ -583,8 +561,7 @@ router.post('/:id/assignments/restore', async function (req, res) {
     res.json({ message: '원복 완료' });
     try { authService.auditLog(req.user.sub, 'assignment.restore', 'milestone', req.params.id, { assignmentId: b.assignmentId, restoreUserId: b.restoreUserId }, req); } catch (_) {}
   } catch (e) {
-    console.error('[ms/assign/restore]', e);
-    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[ms/assign/restore]', e);
   }
 });
 
@@ -600,8 +577,7 @@ router.delete('/:id/assignments/:aid', async function (req, res) {
     res.json({ message: '해제 완료' });
     try { authService.auditLog(req.user.sub, 'assignment.release', 'milestone', req.params.id, { assignmentId: req.params.aid }, req); } catch (_) {}
   } catch (e) {
-    console.error('[ms/assign/del]', e);
-    if (!res.headersSent) res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[ms/assign/del]', e);
   }
 });
 

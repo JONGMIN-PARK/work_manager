@@ -32,9 +32,6 @@ function showASModal(editId) {
     var isEdit = !!existing;
 
     document.querySelectorAll('#asModalOverlay').forEach(function (el) { el.remove(); });
-    var overlay = document.createElement('div');
-    overlay.id = 'asModalOverlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto';
 
     var h = '';
     h += '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;width:760px;max-width:100%;padding:20px 24px;color:var(--t2);box-shadow:0 10px 40px rgba(0,0,0,0.4)">';
@@ -130,7 +127,7 @@ function showASModal(editId) {
     h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-top:14px;border-top:1px solid var(--bd)">';
     h += '<div>';
     if (isEdit) {
-      h += '<button onclick="asSoftDeleteTicket(\'' + _asJsArg(editId) + '\',\'' + _asJsArg(existing.ticketNo) + '\')" style="padding:8px 14px;border:1px solid #EF4444;border-radius:6px;background:transparent;color:#EF4444;cursor:pointer;font-size:11px" title="휴지통으로 이동 (복구 가능)">🗑️ 휴지통으로 이동</button>';
+      h += '<button onclick="asSoftDeleteTicket(\'' + _asJsArg(editId) + '\',\'' + _asJsArg(existing.ticketNo) + '\')" style="padding:8px 14px;border:1px solid ' + SEM_COLOR.danger + ';border-radius:6px;background:transparent;color:' + SEM_COLOR.danger + ';cursor:pointer;font-size:11px" title="휴지통으로 이동 (복구 가능)">🗑️ 휴지통으로 이동</button>';
     }
     h += '</div><div style="display:flex;gap:8px">';
     h += '<button onclick="document.getElementById(\'asModalOverlay\').remove()" style="padding:8px 16px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:11px">취소</button>';
@@ -138,8 +135,8 @@ function showASModal(editId) {
     h += '</div></div>';
     h += '</div>';
 
+    var overlay = _asOverlay('asModalOverlay', 9999, 'align-items:flex-start;padding:40px 20px;overflow-y:auto');
     overlay.innerHTML = h;
-    document.body.appendChild(overlay);
     // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
   }).catch(function (err) {
     console.error('[showASModal]', err);
@@ -209,8 +206,8 @@ function _asLoadRecurrences(ticketId) {
     var CAT = _asCats();
     var html = '<div style="display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto">';
     list.forEach(function (r) {
-      var st = STATUS[r.status] || { label: r.status, color: '#94A3B8' };
-      var pr = PRIO[r.priority] || { label: r.priority, color: '#94A3B8' };
+      var st = STATUS[r.status] || { label: r.status, color: SEM_COLOR.muted };
+      var pr = PRIO[r.priority] || { label: r.priority, color: SEM_COLOR.muted };
       var ct = CAT[r.category] || { label: r.category || '-' };
       html += '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--bg);border-radius:4px;font-size:11px;cursor:pointer" onclick="showASDetail(\'' + _asEsc(r.id) + '\')" title="클릭하면 상세 열기">';
       html += '<span style="font-family:monospace;font-weight:600;color:var(--t3);min-width:115px">' + _asEsc(r.ticketNo) + '</span>';
@@ -229,12 +226,12 @@ function _asLoadRecurrences(ticketId) {
     Object.keys(sameCatCount).forEach(function (k) { if (sameCatCount[k] > topCnt) { topCnt = sameCatCount[k]; topCat = k; } });
     if (topCnt >= 2) {
       var catLabel = (CAT[topCat] || {}).label || topCat;
-      html = '<div style="background:#EF444415;border-left:3px solid #EF4444;padding:6px 10px;font-size:10px;color:#DC2626;margin-bottom:6px;font-weight:600">⚠ 동일 카테고리 "' + _asEsc(catLabel) + '" ' + topCnt + '번 재발 — RCA·재발방지 우선 검토</div>' + html;
+      html = '<div style="background:' + SEM_COLOR.danger + '15;border-left:3px solid ' + SEM_COLOR.danger + ';padding:6px 10px;font-size:10px;color:#DC2626;margin-bottom:6px;font-weight:600">⚠ 동일 카테고리 "' + _asEsc(catLabel) + '" ' + topCnt + '번 재발 — RCA·재발방지 우선 검토</div>' + html;
     }
     listEl.innerHTML = html;
   }).catch(function (err) {
     var el = document.getElementById('asRecurList');
-    if (el) el.innerHTML = '<div style="color:#EF4444;font-size:10px">재발 이력 로드 실패: ' + _asEsc(err.message || '') + '</div>';
+    if (el) el.innerHTML = '<div style="color:' + SEM_COLOR.danger + ';font-size:10px">재발 이력 로드 실패: ' + _asEsc(err.message || '') + '</div>';
   });
 }
 
@@ -271,11 +268,11 @@ function _asAiAnalyzeClick() {
   var v = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
   var issue = v('asM_issueSummary');
   if (!issue) {
-    status.innerHTML = '<span style="color:#EF4444">⚠ 신고 내용(증상)을 먼저 입력하세요.</span>';
+    status.innerHTML = '<span style="color:' + SEM_COLOR.danger + '">⚠ 신고 내용(증상)을 먼저 입력하세요.</span>';
     return;
   }
   if (typeof asAiAnalyze !== 'function') {
-    status.innerHTML = '<span style="color:#EF4444">⚠ AI API 미연결 (project-data.js)</span>';
+    status.innerHTML = '<span style="color:' + SEM_COLOR.danger + '">⚠ AI API 미연결 (project-data.js)</span>';
     return;
   }
   status.innerHTML = '<span style="color:#8B5CF6">⏳ Claude가 분석 중…</span>';
@@ -311,7 +308,7 @@ function _asAiAnalyzeClick() {
   asAiAnalyze(payload).then(function (r) {
     if (window.wmProgress) wmProgress.hide();
     var d = r && r.data;
-    if (!d) { status.innerHTML = '<span style="color:#EF4444">⚠ AI 응답 비어 있음</span>'; return; }
+    if (!d) { status.innerHTML = '<span style="color:' + SEM_COLOR.danger + '">⚠ AI 응답 비어 있음</span>'; return; }
 
     // 빈 필드 자동 채움 (사용자 입력 우선)
     var catSel = document.getElementById('asM_category');
@@ -343,13 +340,13 @@ function _asAiAnalyzeClick() {
 
     var conf = d.categoryConfidence != null ? Math.round(d.categoryConfidence * 100) + '%' : '-';
     var usage = r.usage || {};
-    status.innerHTML = '<span style="color:#10B981">✅ Claude 분석 완료</span> · 카테고리 ' +
+    status.innerHTML = '<span style="color:' + SEM_COLOR.ok + '">✅ Claude 분석 완료</span> · 카테고리 ' +
       _asEsc(d.category || '-') + ' (신뢰도 ' + conf + ') · 긴급도 ' + _asEsc(d.priority || '-') +
       ' · 토큰 in=' + (usage.input_tokens || 0) + ' out=' + (usage.output_tokens || 0);
   }).catch(function (err) {
     if (window.wmProgress) wmProgress.hide();
     var msg = (err && err.data && err.data.message) || (err && err.message) || '실패';
-    status.innerHTML = '<span style="color:#EF4444">❌ ' + _asEsc(msg) + '</span>';
+    status.innerHTML = '<span style="color:' + SEM_COLOR.danger + '">❌ ' + _asEsc(msg) + '</span>';
   });
 }
 
@@ -387,13 +384,13 @@ function _asRenderAttachGridHtml(atts, ticketId, isPending) {
     } else {
       html += '<div style="width:100%;height:70px;display:flex;align-items:center;justify-content:center;font-size:32px;background:var(--bg);border-radius:3px;margin-bottom:4px">' + (isPdf ? '📄' : (c.icon || '📎')) + '</div>';
     }
-    html += '<div style="font-size:9px;color:var(--t5);margin-bottom:1px">' + (c.icon || '') + ' ' + _asEsc(c.label) + (isPending ? ' <span style="color:#F59E0B">⏳대기</span>' : '') + '</div>';
+    html += '<div style="font-size:9px;color:var(--t5);margin-bottom:1px">' + (c.icon || '') + ' ' + _asEsc(c.label) + (isPending ? ' <span style="color:' + SEM_COLOR.warn + '">⏳대기</span>' : '') + '</div>';
     html += '<div style="font-size:10px;color:var(--t2);font-weight:600;word-break:break-all;line-height:1.25">' + _asEsc(a.fileName) + '</div>';
     if (a.fileSize) {
       var kb = Math.round(a.fileSize / 1024);
       html += '<div style="font-size:9px;color:var(--t6);margin-top:1px">' + (kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB') + '</div>';
     }
-    html += '<button onclick="event.stopPropagation();' + removeHandler + '" style="position:absolute;top:3px;right:3px;font-size:9px;padding:1px 5px;border:1px solid #EF4444;border-radius:3px;background:rgba(255,255,255,0.9);color:#EF4444;cursor:pointer" title="삭제">×</button>';
+    html += '<button onclick="event.stopPropagation();' + removeHandler + '" style="position:absolute;top:3px;right:3px;font-size:9px;padding:1px 5px;border:1px solid ' + SEM_COLOR.danger + ';border-radius:3px;background:rgba(255,255,255,0.9);color:' + SEM_COLOR.danger + ';cursor:pointer" title="삭제">×</button>';
     html += '</div>';
   });
   return html;
@@ -422,7 +419,7 @@ function _asModalAttachPicked(ev, ticketId) {
   var status = document.getElementById('asM_attachStatus');
   var oversized = files.filter(function (f) { return f.size > 10 * 1024 * 1024; });
   if (oversized.length) {
-    if (status) status.innerHTML = '<span style="color:#EF4444">⚠ 10MB 초과 파일 ' + oversized.length + '개 제외됨: ' + _asEsc(oversized.map(function (f) { return f.name; }).join(', ')) + '</span>';
+    if (status) status.innerHTML = '<span style="color:' + SEM_COLOR.danger + '">⚠ 10MB 초과 파일 ' + oversized.length + '개 제외됨: ' + _asEsc(oversized.map(function (f) { return f.name; }).join(', ')) + '</span>';
     files = files.filter(function (f) { return f.size <= 10 * 1024 * 1024; });
     if (!files.length) return;
   }
@@ -481,7 +478,7 @@ function _asModalAttachPicked(ev, ticketId) {
       // 편집 모드 — 서버에 즉시 일괄 업로드
       if (typeof asAttachmentPut !== 'function') {
         if (showProg) wmProgress.hide();
-        if (status) status.innerHTML = '<span style="color:#EF4444">⚠ 첨부 API 미연결</span>';
+        if (status) status.innerHTML = '<span style="color:' + SEM_COLOR.danger + '">⚠ 첨부 API 미연결</span>';
         return;
       }
       var ok = 0, fail = 0;
@@ -496,7 +493,7 @@ function _asModalAttachPicked(ev, ticketId) {
       });
       seq.then(function () {
         if (showProg) wmProgress.hide();
-        if (status) status.innerHTML = '<span style="color:' + (fail ? '#F59E0B' : '#10B981') + '">✅ ' + ok + '개 업로드' + (fail ? ' · ❌ ' + fail + '개 실패' : '') + '</span>';
+        if (status) status.innerHTML = '<span style="color:' + (fail ? SEM_COLOR.warn : SEM_COLOR.ok) + '">✅ ' + ok + '개 업로드' + (fail ? ' · ❌ ' + fail + '개 실패' : '') + '</span>';
         _asRefreshModalAttachGrid(ticketId);
         if (typeof showToast === 'function') showToast('📎 ' + ok + '개 첨부 업로드 완료');
       });
@@ -504,7 +501,7 @@ function _asModalAttachPicked(ev, ticketId) {
       // 신규 모드 — 임시 큐에 누적
       if (showProg) wmProgress.hide();
       window._asPendingAttachments = (window._asPendingAttachments || []).concat(items);
-      if (status) status.innerHTML = '<span style="color:#F59E0B">⏳ ' + items.length + '개 추가됨 — 접수 등록 시 함께 업로드됩니다 (총 ' + window._asPendingAttachments.length + '개 대기)</span>';
+      if (status) status.innerHTML = '<span style="color:' + SEM_COLOR.warn + '">⏳ ' + items.length + '개 추가됨 — 접수 등록 시 함께 업로드됩니다 (총 ' + window._asPendingAttachments.length + '개 대기)</span>';
       _asRefreshModalAttachGrid(null);
     }
   });

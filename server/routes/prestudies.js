@@ -13,6 +13,7 @@ var crypto = require('crypto');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var notificationService = require('../services/notification.service');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -98,8 +99,7 @@ router.get('/', async function (req, res) {
     var r = await db.query(sql, params);
     res.json({ data: r.rows, total: r.rows.length });
   } catch (e) {
-    console.error('[prestudies/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[prestudies/list]', e);
   }
 });
 
@@ -115,8 +115,7 @@ router.get('/clients', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[prestudies/clients]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[prestudies/clients]', e);
   }
 });
 
@@ -131,8 +130,7 @@ router.get('/members', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[prestudies/members]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[prestudies/members]', e);
   }
 });
 
@@ -146,8 +144,7 @@ router.get('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[prestudies/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[prestudies/get]', e);
   }
 });
 
@@ -179,8 +176,7 @@ router.post('/', async function (req, res) {
     notifyOwner(r.rows[0], req.user.sub);
     syncPrestudyEvent(r.rows[0], req.tenant.id, req.user.sub).catch(function (e) { console.error('[prestudies/event]', e.message); });
   } catch (e) {
-    console.error('[prestudies/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[prestudies/create]', e);
   }
 });
 
@@ -222,8 +218,7 @@ router.put('/:id', async function (req, res) {
     if (b.status === 'won') notifyWon(r.rows[0], req.tenant.id, req.user.sub);
     syncPrestudyEvent(r.rows[0], req.tenant.id, req.user.sub).catch(function (e) { console.error('[prestudies/event]', e.message); });
   } catch (e) {
-    console.error('[prestudies/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[prestudies/update]', e);
   }
 });
 
@@ -242,8 +237,7 @@ router.put('/:id/move', async function (req, res) {
     res.json({ data: r.rows[0] });
     if (status === 'won') notifyWon(r.rows[0], req.tenant.id, req.user.sub);
   } catch (e) {
-    console.error('[prestudies/move]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[prestudies/move]', e);
   }
 });
 
@@ -308,8 +302,7 @@ router.post('/:id/convert', async function (req, res) {
     res.status(201).json({ data: { target: target, created: created } });
     notifyWon(ps, req.tenant.id, req.user.sub);
   } catch (e) {
-    console.error('[prestudies/convert]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[prestudies/convert]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -327,8 +320,7 @@ router.delete('/:id', async function (req, res) {
     }
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[prestudies/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[prestudies/delete]', e);
   }
 });
 

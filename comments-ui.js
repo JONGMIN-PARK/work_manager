@@ -101,8 +101,6 @@ function openCommentModal(targetType, targetId, opts) {
 }
 
 function _cmBuildCommentModal(targetType, targetId, opts) {
-  var ex = document.getElementById('commentModal'); if (ex) ex.remove();
-
   var isReply = !!opts.parentId;
   var title = opts.title || (isReply ? '답글 작성' : (targetType === 'milestone' ? '마일스톤 피드백' : '프로젝트 피드백'));
   // 전송 성공 후 스레드 갱신용 컨텍스트 — 콜백 인자를 안전하게 넘기기 위해 전역 보관
@@ -116,9 +114,7 @@ function _cmBuildCommentModal(targetType, targetId, opts) {
     ? '<div style="font-size:11px;color:var(--ac);margin-bottom:8px;line-height:1.5">↩ <b>' + _cmEsc(opts.replyTo || '') + '</b> 님의 코멘트에 답글을 작성합니다.</div>'
     : '';
 
-  var modal = document.createElement('div');
-  modal.id = 'commentModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+  var modal = createModal({ id: 'commentModal', z: MODAL_Z + 2, overlayStyle: 'padding:0;background:rgba(0,0,0,.6)' }).overlay;
   // backdrop 클릭 닫기 비활성화 — 작성 중 데이터 유실 방지 (취소/✕ 버튼만 닫기)
 
   modal.innerHTML =
@@ -145,8 +141,6 @@ function _cmBuildCommentModal(targetType, targetId, opts) {
         '<button class="btn btn-p btn-s" id="commentSendBtn" onclick="commentSendUI()">전송</button>' +
       '</div>' +
     '</div>';
-
-  document.body.appendChild(modal);
 }
 
 function closeCommentModal() {

@@ -6,6 +6,7 @@ var authMiddleware = require('../middleware/auth');
 var emailService = require('../services/email.service');
 
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 // 모든 라우트에 인증 필요
 router.use(authMiddleware.authenticate);
@@ -47,8 +48,7 @@ router.get('/', async function (req, res) {
     var result = await db.query(sql, params);
     res.json({ data: result.rows });
   } catch (e) {
-    console.error('[users/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[users/list]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -62,8 +62,7 @@ router.get('/lookup', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[users/lookup]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[users/lookup]', e);
   }
 });
 
@@ -76,8 +75,7 @@ router.get('/pending', authMiddleware.requireRole('admin'), async function (req,
     );
     res.json({ data: result.rows });
   } catch (e) {
-    console.error('[users/pending]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[users/pending]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -93,8 +91,7 @@ router.get('/operator-list', authMiddleware.requireRole('admin'), async function
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[users/operator-list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[users/operator-list]', e);
   }
 });
 
@@ -112,8 +109,7 @@ router.put('/:id/operator-mode', authMiddleware.requireRole('admin'), async func
     );
     res.json({ data: { userId: req.params.id, enabled: enabled } });
   } catch (e) {
-    console.error('[users/operator-mode]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[users/operator-mode]', e);
   }
 });
 
@@ -151,8 +147,7 @@ router.put('/:id/approve', authMiddleware.requireRole('admin'), async function (
 
     res.json({ data: approved, message: '사용자가 승인되었습니다.' });
   } catch (e) {
-    console.error('[users/approve]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[users/approve]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -180,8 +175,7 @@ router.put('/:id/reject', authMiddleware.requireRole('admin'), async function (r
 
     res.json({ data: rejected, message: '가입이 거절되었습니다.' });
   } catch (e) {
-    console.error('[users/reject]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[users/reject]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -214,8 +208,7 @@ router.put('/:id/role', authMiddleware.requireRole('admin'), async function (req
 
     res.json({ data: result.rows[0], message: '역할이 변경되었습니다.' });
   } catch (e) {
-    console.error('[users/role]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[users/role]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -251,8 +244,7 @@ router.put('/:id/status', authMiddleware.requireRole('admin'), async function (r
 
     res.json({ data: result.rows[0], message: '상태가 변경되었습니다.' });
   } catch (e) {
-    console.error('[users/status]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[users/status]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -278,8 +270,7 @@ router.put('/:id/department', authMiddleware.requireRole('admin'), async functio
 
     res.json({ data: result.rows[0], message: '부서가 변경되었습니다.' });
   } catch (e) {
-    console.error('[users/department]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[users/department]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -324,8 +315,7 @@ router.post('/:id/reset-password', authMiddleware.requireRole('admin'), async fu
       message: '비밀번호가 초기화되었습니다. 임시 비밀번호를 사용자에게 전달하세요.'
     });
   } catch (e) {
-    console.error('[users/reset-password]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[users/reset-password]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -338,8 +328,7 @@ router.get('/departments', async function (req, res) {
     );
     res.json({ data: result.rows });
   } catch (e) {
-    console.error('[users/departments]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[users/departments]', e, '서버 오류가 발생했습니다.');
   }
 });
 

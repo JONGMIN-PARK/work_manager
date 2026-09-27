@@ -8,8 +8,9 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
-var ps = require('../middleware/project-scope');
+var ps = require('../lib/project-access');
 var notificationService = require('../services/notification.service');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -55,8 +56,7 @@ router.get('/', async function (req, res) {
     r.rows.forEach(function (row) { delete row._total; });
     res.json({ data: r.rows, total: total });
   } catch (e) {
-    console.error('[dev-items/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[dev-items/list]', e);
   }
 });
 
@@ -67,8 +67,7 @@ router.get('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[dev-items/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[dev-items/get]', e);
   }
 });
 
@@ -102,8 +101,7 @@ router.post('/', async function (req, res) {
     res.status(201).json({ data: r.rows[0] });
     notifyDevAssigned(r.rows[0], req.tenant.id, req.user.sub);
   } catch (e) {
-    console.error('[dev-items/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[dev-items/create]', e);
   }
 });
 
@@ -141,8 +139,7 @@ router.put('/:id', async function (req, res) {
     // 이번 요청에서 담당자를 명시적으로 지정한 경우에만 배정 알림
     if (b.assigneeId || b.assignee_id) notifyDevAssigned(r.rows[0], req.tenant.id, req.user.sub);
   } catch (e) {
-    console.error('[dev-items/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[dev-items/update]', e);
   }
 });
 
@@ -160,8 +157,7 @@ router.put('/:id/move', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[dev-items/move]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[dev-items/move]', e);
   }
 });
 
@@ -175,8 +171,7 @@ router.delete('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[dev-items/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[dev-items/delete]', e);
   }
 });
 

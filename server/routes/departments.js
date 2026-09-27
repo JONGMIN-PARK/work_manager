@@ -4,6 +4,7 @@ var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var authService = require('../services/auth.service');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -14,8 +15,7 @@ router.get('/', async function (req, res) {
     var r = await db.query('SELECT * FROM departments WHERE tenant_id = $1 ORDER BY sort_order, name', [req.tenant.id]);
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[departments/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[departments/list]', e);
   }
 });
 
@@ -30,8 +30,7 @@ router.post('/', auth.requireRole('admin'), async function (req, res) {
     await authService.auditLog(req.user.sub, 'create_department', 'department', r.rows[0].id, { name: b.name }, req);
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[departments/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[departments/create]', e);
   }
 });
 
@@ -46,8 +45,7 @@ router.put('/:id', auth.requireRole('admin'), async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[departments/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[departments/update]', e);
   }
 });
 
@@ -63,8 +61,7 @@ router.delete('/:id', auth.requireRole('admin'), async function (req, res) {
     await authService.auditLog(req.user.sub, 'delete_department', 'department', req.params.id, null, req);
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[departments/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[departments/delete]', e);
   }
 });
 
@@ -77,8 +74,7 @@ router.get('/:id/members', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[departments/members]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[departments/members]', e);
   }
 });
 

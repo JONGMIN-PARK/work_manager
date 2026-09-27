@@ -26,7 +26,7 @@ function renderOperator() {
   if (_view === 'analytics') {
     wrap.innerHTML = toggle + '<div id="opAnalyticsBody"><div style="font-size:12px;color:var(--t6);padding:20px">로딩 중...</div></div>';
     if (typeof renderOperatorAnalytics === 'function') renderOperatorAnalytics('opAnalyticsBody');
-    else { var ab = document.getElementById('opAnalyticsBody'); if (ab) ab.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:20px">분석 모듈을 불러올 수 없습니다.</div>'; }
+    else { var ab = document.getElementById('opAnalyticsBody'); if (ab) ab.innerHTML = '<div style="color:' + SEM_COLOR.danger + ';font-size:12px;padding:20px">분석 모듈을 불러올 수 없습니다.</div>'; }
     return;
   }
   // 활동 로그 뷰 (admin 전용)
@@ -57,7 +57,7 @@ function renderOperator() {
     // ── 프로젝트 가시성 관리 ──
     h += '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;padding:14px;min-width:0">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">';
-    h += '<span style="font-size:12px;font-weight:700;color:var(--t2)">📋 프로젝트 가시성 (' + projects.length + ') · <span style="color:#EF4444">숨김 <span id="opHiddenCount">' + hiddenCount + '</span></span></span>';
+    h += '<span style="font-size:12px;font-weight:700;color:var(--t2)">📋 프로젝트 가시성 (' + projects.length + ') · <span style="color:' + SEM_COLOR.danger + '">숨김 <span id="opHiddenCount">' + hiddenCount + '</span></span></span>';
     h += '<span style="display:flex;gap:6px"><button class="btn btn-g btn-s" style="font-size:10px" onclick="opShowAll()">전체 표시</button><button class="btn btn-g btn-s" style="font-size:10px" onclick="opHideAll()">전체 숨김</button></span>';
     h += '</div>';
     h += '<div id="opVisList" style="max-height:60vh;overflow:auto">';
@@ -65,7 +65,7 @@ function renderOperator() {
     projects.forEach(function (p) {
       var hid = pmIsHidden(p.id);
       var st = (typeof autoProjectStatus === 'function') ? autoProjectStatus(p) : (p.status || 'waiting');
-      var stInfo = (typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[st]) || { label: st, color: '#94A3B8', bg: 'rgba(148,163,184,.15)', icon: '•' };
+      var stInfo = (typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[st]) || { label: st, color: SEM_COLOR.muted, bg: 'rgba(148,163,184,.15)', icon: '•' };
       h += '<label data-op-proj="' + _opEsc(p.id) + '" style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--bd);cursor:pointer;min-width:0;opacity:' + (hid ? '.5' : '1') + '">';
       h += '<input type="checkbox" ' + (hid ? '' : 'checked') + ' onchange="opToggle(this.parentNode.getAttribute(\'data-op-proj\'), !this.checked, this)">';
       h += '<span style="flex:1;font-size:11px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(p.name || p.orderNo || p.id) + (p.orderNo ? ' <span style="color:var(--t6);font-size:10px">' + eH(p.orderNo) + '</span>' : '') + '</span>';
@@ -87,9 +87,9 @@ function renderOperator() {
         h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--bd)">';
         h += '<span style="flex:1;font-size:11px;color:var(--t2)">' + eH(nm) + ' <span style="color:var(--t6);font-size:10px">(' + eH(u.role) + ')</span></span>';
         if (admin) {
-          h += '<span style="font-size:10px;color:#10B981;font-weight:600">관리자 · 항상 ON</span>';
+          h += '<span style="font-size:10px;color:' + SEM_COLOR.ok + ';font-weight:600">관리자 · 항상 ON</span>';
         } else {
-          h += '<label style="cursor:pointer;font-size:10px;color:' + (on ? '#10B981' : 'var(--t5)') + '"><input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="opGrant(\'' + u.id + '\', this.checked, this)"> ' + (on ? '허용' : '차단') + '</label>';
+          h += '<label style="cursor:pointer;font-size:10px;color:' + (on ? SEM_COLOR.ok : 'var(--t5)') + '"><input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="opGrant(\'' + u.id + '\', this.checked, this)"> ' + (on ? '허용' : '차단') + '</label>';
         }
         h += '</div>';
       });
@@ -100,7 +100,7 @@ function renderOperator() {
     wrap.innerHTML = h;
   }).catch(function (e) {
     if (seq !== _opRenderSeq) return;
-    wrap.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:20px">로드 실패: ' + _opEsc((e && e.message) || e) + (e && e.status === 404 ? ' (서버 배포 후 동작)' : '') + '</div>';
+    wrap.innerHTML = '<div style="color:' + SEM_COLOR.danger + ';font-size:12px;padding:20px">로드 실패: ' + _opEsc((e && e.message) || e) + (e && e.status === 404 ? ' (서버 배포 후 동작)' : '') + '</div>';
   });
 }
 
@@ -181,13 +181,13 @@ var _opLogSearch = '';
 var _opLogProjectOnly = true;
 var _OP_LOG_PROJECT_ACTIONS = ['project.create', 'project.update', 'order.renumber', 'milestone.create', 'milestone.update', 'milestone.delete', 'milestone.progress', 'comment.create'];
 var _OP_LOG_LABELS = {
-  'project.create': { icon: '📁', label: '프로젝트 등록', color: '#10B981' },
-  'project.update': { icon: '✏️', label: '프로젝트 수정', color: '#3B82F6' },
-  'order.renumber': { icon: '🔢', label: '수주번호 변경', color: '#F59E0B' },
-  'milestone.create': { icon: '◆', label: '마일스톤 등록', color: '#10B981' },
-  'milestone.update': { icon: '◆', label: '마일스톤 수정', color: '#3B82F6' },
-  'milestone.delete': { icon: '🗑', label: '마일스톤 삭제', color: '#EF4444' },
-  'milestone.progress': { icon: '🖉', label: '마일스톤 진척 업데이트', color: '#8B5CF6' },
+  'project.create': { icon: '📁', label: '프로젝트 등록', color: SEM_COLOR.ok },
+  'project.update': { icon: '✏️', label: '프로젝트 수정', color: SEM_COLOR.info },
+  'order.renumber': { icon: '🔢', label: '수주번호 변경', color: SEM_COLOR.warn },
+  'milestone.create': { icon: '◆', label: '마일스톤 등록', color: SEM_COLOR.ok },
+  'milestone.update': { icon: '◆', label: '마일스톤 수정', color: SEM_COLOR.info },
+  'milestone.delete': { icon: '🗑', label: '마일스톤 삭제', color: SEM_COLOR.danger },
+  'milestone.progress': { icon: '🖉', label: '마일스톤 진척 업데이트', color: SEM_COLOR.purple },
   'comment.create': { icon: '💬', label: '코멘트/피드백', color: '#EC4899' },
   'approve_user': { icon: '👤', label: '사용자 승인', color: '#6366F1' }
 };
@@ -228,7 +228,7 @@ function renderOperatorLog(containerId) {
     _opRenderLogList();
   }).catch(function (err) {
     var msg = (err && err.status === 403) ? '관리자만 조회할 수 있습니다.' : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.' : ((err && err.message) || '로드 실패');
-    box.innerHTML = '<div style="color:#EF4444;font-size:12px;padding:20px">활동 로그 ' + _opEsc(msg) + '</div>';
+    box.innerHTML = '<div style="color:' + SEM_COLOR.danger + ';font-size:12px;padding:20px">활동 로그 ' + _opEsc(msg) + '</div>';
   });
 }
 function _opRenderLogShell(box) {

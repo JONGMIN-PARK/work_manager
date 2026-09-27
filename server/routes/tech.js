@@ -14,6 +14,7 @@ var crypto = require('crypto');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var notificationService = require('../services/notification.service');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -135,8 +136,7 @@ router.get('/', async function (req, res) {
     var r = await db.query(sql, params);
     res.json({ data: r.rows, total: r.rows.length });
   } catch (e) {
-    console.error('[tech/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/list]', e);
   }
 });
 
@@ -161,8 +161,7 @@ router.get('/stacks', async function (req, res) {
     });
     res.json({ data: rows });
   } catch (e) {
-    console.error('[tech/stacks]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/stacks]', e);
   }
 });
 
@@ -176,8 +175,7 @@ router.get('/members', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[tech/members]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/members]', e);
   }
 });
 
@@ -200,8 +198,7 @@ router.get('/usages', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[tech/usages/byTarget]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/usages/byTarget]', e);
   }
 });
 
@@ -216,8 +213,7 @@ router.get('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[tech/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/get]', e);
   }
 });
 
@@ -250,8 +246,7 @@ router.post('/', async function (req, res) {
     res.status(201).json({ data: r.rows[0] });
     notifyTechAssigned(r.rows[0], req.user.sub);
   } catch (e) {
-    console.error('[tech/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/create]', e);
   }
 });
 
@@ -320,8 +315,7 @@ router.put('/:id', async function (req, res) {
       })();
     }
   } catch (e) {
-    console.error('[tech/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/update]', e);
   }
 });
 
@@ -338,8 +332,7 @@ router.delete('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[tech/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/delete]', e);
   }
 });
 
@@ -355,8 +348,7 @@ router.get('/:id/logs', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[tech/logs/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/logs/list]', e);
   }
 });
 
@@ -403,8 +395,7 @@ router.post('/:id/logs', async function (req, res) {
       } catch (e) { console.error('[tech/notifyLog]', e.message); }
     })();
   } catch (e) {
-    console.error('[tech/logs/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/logs/create]', e);
   }
 });
 
@@ -439,8 +430,7 @@ router.put('/:id/logs/:logId', async function (req, res) {
     await resyncTech(req.params.id, req.tenant.id);
     res.json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[tech/logs/update]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/logs/update]', e);
   }
 });
 
@@ -459,8 +449,7 @@ router.delete('/:id/logs/:logId', async function (req, res) {
     await resyncTech(req.params.id, req.tenant.id);
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[tech/logs/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/logs/delete]', e);
   }
 });
 
@@ -480,8 +469,7 @@ router.get('/:id/usages', async function (req, res) {
     );
     res.json({ data: r.rows });
   } catch (e) {
-    console.error('[tech/usages/list]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/usages/list]', e);
   }
 });
 
@@ -512,8 +500,7 @@ router.post('/:id/usages', async function (req, res) {
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
-    console.error('[tech/usages/create]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/usages/create]', e);
   }
 });
 
@@ -527,8 +514,7 @@ router.delete('/:id/usages/:usageId', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
-    console.error('[tech/usages/delete]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[tech/usages/delete]', e);
   }
 });
 

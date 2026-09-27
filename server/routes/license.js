@@ -4,6 +4,7 @@ var crypto = require('crypto');
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 // ─── POST /api/license/activate — 라이선스 키 활성화 ───
 router.post('/activate', auth.authenticate, tenant.tenantScope, auth.requireRole('admin'), async function (req, res) {
@@ -57,8 +58,7 @@ router.post('/activate', auth.authenticate, tenant.tenantScope, auth.requireRole
       message: '라이선스가 활성화되었습니다.'
     });
   } catch (e) {
-    console.error('[license/activate]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[license/activate]', e);
   }
 });
 
@@ -90,8 +90,7 @@ router.get('/status', auth.authenticate, tenant.tenantScope, async function (req
       }
     });
   } catch (e) {
-    console.error('[license/status]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[license/status]', e);
   }
 });
 
@@ -115,8 +114,7 @@ router.post('/generate', auth.authenticate, auth.requireRole('admin'), async fun
 
     res.status(201).json({ data: r.rows[0], message: '라이선스 키가 생성되었습니다.' });
   } catch (e) {
-    console.error('[license/generate]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[license/generate]', e);
   }
 });
 

@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
+var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -18,8 +19,7 @@ router.get('/', async function (req, res) {
     r.rows.forEach(function (row) { settings[row.key] = row.value; });
     res.json({ data: settings });
   } catch (e) {
-    console.error('[settings/get]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류' });
+    httpErr.serverError(res, '[settings/get]', e);
   }
 });
 

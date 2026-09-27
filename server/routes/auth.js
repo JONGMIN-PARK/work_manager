@@ -5,6 +5,7 @@ var authService = require('../services/auth.service');
 var authMiddleware = require('../middleware/auth');
 var config = require('../config');
 var notificationService = require('../services/notification.service');
+var httpErr = require('../lib/http-errors');
 
 // ─── POST /api/auth/register ───
 router.post('/register', async function (req, res) {
@@ -60,8 +61,7 @@ router.post('/register', async function (req, res) {
       message: '가입 요청이 접수되었습니다. 관리자 승인을 기다려 주세요.'
     });
   } catch (e) {
-    console.error('[auth/register]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[auth/register]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -143,8 +143,7 @@ router.post('/login', async function (req, res) {
       message: '로그인 성공'
     });
   } catch (e) {
-    console.error('[auth/login]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[auth/login]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -190,8 +189,7 @@ router.post('/refresh', async function (req, res) {
       }
     });
   } catch (e) {
-    console.error('[auth/refresh]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[auth/refresh]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -205,8 +203,7 @@ router.post('/logout', authMiddleware.authenticate, async function (req, res) {
     await authService.auditLog(req.user.sub, 'logout', 'user', req.user.sub, null, req);
     res.json({ message: '로그아웃 되었습니다.' });
   } catch (e) {
-    console.error('[auth/logout]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[auth/logout]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -245,8 +242,7 @@ router.get('/me', authMiddleware.authenticate, async function (req, res) {
 
     res.json({ data: sanitized });
   } catch (e) {
-    console.error('[auth/me]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[auth/me]', e, '서버 오류가 발생했습니다.');
   }
 });
 
@@ -303,8 +299,7 @@ router.put('/change-password', authMiddleware.authenticate, async function (req,
 
     res.json({ message: '비밀번호가 변경되었습니다. 다시 로그인해 주세요.' });
   } catch (e) {
-    console.error('[auth/change-password]', e);
-    res.status(500).json({ error: 'SERVER_ERROR', message: '서버 오류가 발생했습니다.' });
+    httpErr.serverError(res, '[auth/change-password]', e, '서버 오류가 발생했습니다.');
   }
 });
 

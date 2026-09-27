@@ -88,6 +88,9 @@ function checkPermission(action, getResourceId) {
       case 'issue.create':
         allowed = true; // 모든 인증 사용자
         break;
+      // TODO(policy): 'issue.edit' 은 정의만 되어 있고 어떤 라우트도 checkPermission('issue.edit') 을
+      //   쓰지 않는다 (PUT /api/issues/:id 는 현재 인증+테넌트만 검사). 켜면 member 의 이슈 수정이
+      //   막히므로 적용 여부는 사용자 정책 결정 필요 — 결정 전까지 강제하지 말 것.
       case 'issue.edit':
         allowed = role === 'manager' || pl;
         break;
@@ -102,6 +105,9 @@ function checkPermission(action, getResourceId) {
         break;
 
       // 이벤트
+      // TODO(policy): 'event.edit' 도 미사용 (routes/events.js 는 checkPermission 을 쓰지 않음).
+      //   적용 시 member 의 일정 수정이 막힌다 — 사용자 정책 결정 전까지 강제하지 말 것.
+      //   (참고: 'file.delete', 'pl.assign' 도 현재 어떤 라우트에서도 쓰이지 않는다.)
       case 'event.edit':
         allowed = role === 'manager' || role === 'executive' || pl;
         break;
