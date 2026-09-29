@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.203 (2026-09-29) — 회의 모듈 정리
+
+- project-meetings: `_pmtFormPatch`(양식 → PUT 본문)를 저장·작성 완료가 같이 사용, 작성 완료는 PUT 1번. `_pmtRender(mid, opts)` 로 /render 호출 4곳 통일, 문서 보기는 `_pmt.docLoading` 으로 같은 key 중복 요청 방지·옛 응답 버림. `_pmtSummaryHtml` 로 요약 줄 한 벌. `PMT_FIELDS`(미사용) → `PMT_FORM_KEYS`, `_pmtPeopleDatalist` 제거, pmtCreate 는 `_pmtMe()`.
+- routes/meetings: `_emailsByName`(참석자 → 메일)·`_markMailed`(공유 기록) 로 중복 제거.
+- test/meeting-form-keys.test.js: 화면 PMT_FORM_KEYS = 서버 FORM_KEYS − completedAt/By.
+
 ## v13.202 (2026-09-29) — 회의 권한 · 동시 편집 보호
 
 - routes/meetings: `_meetingGate(req, res, needEdit)` — 프로젝트 회의 읽기 canRead · 쓰기 canEdit, 일반 회의 작성자만. GET/:id·PUT·DELETE·액션 CRUD·전환·POST(프로젝트 canEditById) 모두 적용, `_meetingForDoc` 도 이것을 사용.

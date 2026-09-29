@@ -43,7 +43,7 @@ function _pmtRefetch(mid) {
 function pdLoadMeetings(projId) {
   var el = document.getElementById('pdMeeting'); if (!el) return;
   var keep = (_pmt && _pmt.projId === projId) ? _pmt : null;   // 같은 프로젝트면 펼침·초안 유지
-  _pmt = keep || { projId: projId, list: [], open: {}, drafts: {}, filter: 'all', showActs: false, adding: false, editing: {}, docs: {}, firstOpenDone: false };
+  _pmt = keep || { projId: projId, list: [], open: {}, drafts: {}, filter: 'all', showActs: false, adding: false, editing: {}, docs: {}, docLoading: {}, firstOpenDone: false };
   el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">로딩 중...</div>';
   apiFetch('/api/meetings?projectId=' + encodeURIComponent(projId)).then(function (r) {
     if (!_pmt || _pmt.projId !== projId) return;
@@ -78,8 +78,7 @@ function pdRenderMeetings() {
   var h = _pmtPeopleDatalistTop();
   // 요약 + 새 회의
   h += '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px">' +
-    '<span id="pmtSummary" style="font-size:11px;color:var(--t4)"><b style="color:var(--t2)">회의 ' + all.length + '</b> · 미완료 액션 <b style="color:var(--t2)">' + acts.length + '</b>' +
-      (overdue ? ' · <b style="color:' + SEM_COLOR.danger + '">기한 지남 ' + overdue + '</b>' : '') + '</span>' +
+    '<span id="pmtSummary" style="font-size:11px;color:var(--t4)">' + _pmtSummaryHtml(all.length, acts.length, overdue) + '</span>' +
     '<span style="display:flex;gap:4px">' +
       (acts.length ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtToggleActs()">' + (_pmt.showActs ? '▾' : '▸') + ' 미완료 액션 모아보기</button>' : '') +
       '<button class="btn btn-p btn-s" style="font-size:10px" onclick="pmtToggleAdd()">+ 새 회의</button>' +
@@ -107,7 +106,6 @@ function _pmtAddFormHtml() {
       '<input id="pmtNewDate" type="date" class="si" value="' + _pmtToday() + '" style="flex:0 0 auto;width:auto;font-size:11px;padding:4px">' +
     '</div>' +
     '<input id="pmtNewAtt" class="si" list="pmtPeople" placeholder="참석자 (쉼표로 구분, 선택)" style="width:100%;box-sizing:border-box;font-size:11px;padding:5px 8px;margin-top:4px">' +
-    _pmtPeopleDatalist() +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">' +
       '<span style="font-size:9.5px;color:var(--t6)">날짜를 넣으면 캘린더에 회의 일정이 자동 등록됩니다.</span>' +
       '<span style="display:flex;gap:4px"><button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtToggleAdd()">취소</button><button class="btn btn-p btn-s" style="font-size:10px" onclick="pmtCreate()">등록</button></span>' +
@@ -120,8 +118,7 @@ function _pmtPeople() {
   (_pmt.list || []).forEach(function (m) { (m.attendees || []).forEach(function (n) { if (names.indexOf(n) < 0) names.push(n); }); });
   return names.filter(Boolean);
 }
-/* datalist 는 탭 맨 위에 한 번만 (카드를 다시 그려도 남도록) — 카드 쪽 호출은 빈 문자열 */
-function _pmtPeopleDatalist() { return ''; }
+/* datalist 는 탭 맨 위에 한 번만 (카드를 다시 그려도 남도록) */
 function _pmtPeopleDatalistTop() {
   return '<datalist id="pmtPeople">' + _pmtPeople().map(function (n) { return '<option value="' + _pmtEsc(n) + '">'; }).join('') + '</datalist>';
 }
@@ -145,7 +142,9 @@ function _pmtAllActsHtml(acts, t) {
    → 3 결정 사항 → 4 액션 아이템 → 5 다음 회의
    양식 칸은 입력하면 _pmt.drafts[mid] 에 두고 "저장"으로 한 번에 보낸다. 안건 추가·체크·삭제와 액션은 바로 저장된다.
    drafts.agenda = 안건 배열의 JSON (안건별 논의·결과 초안) */
-var PMT_FIELDS = ['title', 'meetDate', 'timeStart', 'timeEnd', 'place', 'writer', 'attendees', 'purpose', 'agenda', 'minutes', 'decisions', 'nextDate', 'nextNote'];
+/* form(jsonb) 에 담는 양식 칸 — 서버 routes/meetings.js FORM_KEYS 와 같아야 한다(작성 완료 표시 completedAt·completedBy 는 따로).
+   test/meeting-form-keys.test.js 가 두 목록을 비교한다 */
+var PMT_FORM_KEYS = ['timeStart', 'timeEnd', 'place', 'writer', 'purpose', 'decisions', 'nextDate', 'nextNote'];
 function _pmtSaved(m, k) {
   if (k === 'title' || k === 'meetDate' || k === 'minutes') return m[k] || '';
   if (k === 'attendees') return m.attendees.join(', ');
@@ -369,34 +368,42 @@ function _pmtDocViewHtml(m) {
   return bar + '<div style="background:#e5e7eb;padding:10px;overflow-x:auto"><div id="pmtDoc-' + _pmtEsc(m.id) + '" class="pmt-doc" style="background:#fff;min-width:560px;max-width:794px;margin:0 auto;padding:18px 20px;box-shadow:0 1px 6px rgba(0,0,0,.15);color:#0f172a">' +
     (fresh ? doc.html : '<div style="font-size:11px;color:#64748b;padding:20px;text-align:center">회의록 문서를 불러오는 중...</div>') + '</div></div>';
 }
+/* 서버가 만든 회의록 문서 한 벌 — opts: { sign?, message? } → { subject, html, docNo, mailedAt, … } */
+function _pmtRender(mid, opts) {
+  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/render', { method: 'POST', body: JSON.stringify(opts || {}) }).then(function (r) { return r.data; });
+}
+/* 카드 안 문서 보기 — 같은 내용(key)을 받는 중이면 다시 요청하지 않고, 늦게 온 옛 문서는 버린다 */
 function _pmtLoadDoc(mid) {
   var m = _pmtFind(mid); if (!m) return;
   var key = _pmtDocKey(m);
-  apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/render', { method: 'POST', body: '{}' }).then(function (r) {
-    _pmt.docs = _pmt.docs || {};
-    _pmt.docs[mid] = { key: key, html: r.data.html };
+  if (_pmt.docLoading[mid] === key) return;
+  _pmt.docLoading[mid] = key;
+  _pmtRender(mid).then(function (doc) {
+    if (_pmt.docLoading[mid] === key) delete _pmt.docLoading[mid];
+    var cur = _pmtFind(mid);
+    if (!cur || _pmtDocKey(cur) !== key) return;   // 그사이 내용이 바뀜 — 새 요청이 그린다
+    _pmt.docs[mid] = { key: key, html: doc.html };
     var box = document.getElementById('pmtDoc-' + mid);
-    if (box) box.innerHTML = r.data.html;
+    if (box) box.innerHTML = doc.html;
   }).catch(function (e) {
+    if (_pmt.docLoading[mid] === key) delete _pmt.docLoading[mid];
     var box = document.getElementById('pmtDoc-' + mid);
     if (box) box.innerHTML = '<div style="font-size:11px;color:#64748b;padding:20px;text-align:center">문서를 불러오지 못했습니다. ' + _pmtEsc(_pmtErr(e, '')) + '</div>';
   });
 }
 function _pmtMe() { return (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.displayName || currentUser.name || '') : ''; }
-/* 작성 완료 — 저장하고 완료 표시 → 문서 보기 */
+/* 작성 완료 — 양식 저장과 완료 표시를 한 번에 → 문서 보기 */
 function pmtComplete(mid) {
   var m = _pmtFind(mid); if (!m) return;
-  if (!String(_pmtVal(m, 'title')).trim()) { _pmtToast('회의명을 입력하세요.', 'warn'); return; }
-  pmtSaveForm(mid, true).then(function (ok) {
+  var patch = _pmtFormPatch(m); if (!patch) return;
+  patch.form.completedAt = new Date().toISOString();
+  patch.form.completedBy = _pmtMe();
+  _pmtUpdate(mid, patch).then(function (ok) {
     if (!ok) return;
-    var cur = _pmtFind(mid);
-    var form = Object.assign({}, cur.form, { completedAt: new Date().toISOString(), completedBy: _pmtMe() });
-    return _pmtUpdate(mid, { form: form }).then(function (ok2) {
-      if (!ok2) return;
-      _pmt.editing[mid] = false;
-      _pmtPaintCard(mid);
-      _pmtToast('✔ 회의록 작성 완료 — 완성된 문서로 표시합니다.', 'success');
-    });
+    delete _pmt.drafts[mid];
+    _pmt.editing[mid] = false;
+    _pmtPaintCard(mid);
+    _pmtToast('✔ 회의록 작성 완료 — 완성된 문서로 표시합니다.', 'success');
   });
 }
 function pmtUncomplete(mid) {
@@ -450,7 +457,7 @@ function pmtCreate() {
   var date = (document.getElementById('pmtNewDate') || {}).value || null;
   var att = _pmtSplit((document.getElementById('pmtNewAtt') || {}).value);
   var projId = _pmt.projId;
-  var me = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.displayName || currentUser.name || '') : '';
+  var me = _pmtMe();
   apiFetch('/api/meetings', { method: 'POST', body: JSON.stringify({ projectId: projId, title: title, meetDate: date, attendees: att, form: me ? { writer: me } : {} }) }).then(function (r) {
     if (!_pmt || _pmt.projId !== projId) return;
     var m = _pmtNorm(r.data);
@@ -470,16 +477,21 @@ function pmtFormInput(el) {
   _pmtMarkDirty(mid);
 }
 /* 양식 저장 — 제목·일시·참석자·논의 내용·양식 칸을 한 번에. 성공 여부 */
+/* 양식(초안 + 저장된 값) → PUT 본문. 완료 표시는 그대로 유지. 회의명이 비었으면 null */
+function _pmtFormPatch(m) {
+  var title = String(_pmtVal(m, 'title')).trim();
+  if (!title) { _pmtToast('회의명을 입력하세요.', 'warn'); return null; }
+  var form = {};
+  PMT_FORM_KEYS.forEach(function (k) { form[k] = _pmtVal(m, k); });
+  if (m.form.completedAt) { form.completedAt = m.form.completedAt; form.completedBy = m.form.completedBy || ''; }
+  var patch = { title: title, meetDate: _pmtVal(m, 'meetDate') || null, attendees: _pmtSplit(_pmtVal(m, 'attendees')), minutes: _pmtVal(m, 'minutes'), form: form };
+  if (_pmt.drafts[m.id] && _pmt.drafts[m.id].agenda != null) patch.agenda = _pmtAgendaOf(m);
+  return patch;
+}
 function pmtSaveForm(mid, quiet) {
   var m = _pmtFind(mid); if (!m) return Promise.resolve(false);
   if (!_pmtDirty(mid)) { if (!quiet) _pmtToast('바뀐 내용이 없습니다.'); return Promise.resolve(true); }
-  var title = String(_pmtVal(m, 'title')).trim();
-  if (!title) { _pmtToast('회의명을 입력하세요.', 'warn'); return Promise.resolve(false); }
-  var form = {};
-  ['timeStart', 'timeEnd', 'place', 'writer', 'purpose', 'decisions', 'nextDate', 'nextNote'].forEach(function (k) { form[k] = _pmtVal(m, k); });
-  if (m.form.completedAt) { form.completedAt = m.form.completedAt; form.completedBy = m.form.completedBy || ''; }
-  var patch = { title: title, meetDate: _pmtVal(m, 'meetDate') || null, attendees: _pmtSplit(_pmtVal(m, 'attendees')), minutes: _pmtVal(m, 'minutes'), form: form };
-  if (_pmt.drafts[mid] && _pmt.drafts[mid].agenda != null) patch.agenda = _pmtAgendaOf(m);
+  var patch = _pmtFormPatch(m); if (!patch) return Promise.resolve(false);
   return _pmtUpdate(mid, patch).then(function (ok) {
     if (!ok) return false;
     delete _pmt.drafts[mid];
@@ -526,10 +538,10 @@ function pmtPreview(mid, focusMail) {
     return pmtSaveForm(mid, true).then(function (ok) {
       if (!ok) throw new Error('회의록을 저장하지 못해 미리 볼 수 없습니다.');
       return Promise.all([
-        apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/render', { method: 'POST', body: JSON.stringify({ sign: _pmtSignOn() }) }),
+        _pmtRender(mid, { sign: _pmtSignOn() }),
         apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/mail-recipients').catch(function () { return { data: [] }; })
       ]);
-    }).then(function (res) { _pmtBuildPreview(mid, res[0].data, res[1].data || [], focusMail); });
+    }).then(function (res) { _pmtBuildPreview(mid, res[0], res[1].data || [], focusMail); });
   }, 'pmtPreviewModal', { timeoutMs: 15000 });
 }
 function _pmtBuildPreview(mid, doc, recips, focusMail) {
@@ -583,8 +595,7 @@ function _pmtPickedEmails() {
 }
 /* 머리말을 넣은 문서 — 서버가 만든 한 벌 그대로 */
 function _pmtDocWithMessage(mid) {
-  var msg = (document.getElementById('pmtMailMsg') || {}).value || '';
-  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/render', { method: 'POST', body: JSON.stringify({ message: msg }) }).then(function (r) { return r.data; });
+  return _pmtRender(mid, { message: (document.getElementById('pmtMailMsg') || {}).value || '' });
 }
 function _pmtMailLog(mid, to, method) {
   return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/mail-log', { method: 'POST', body: JSON.stringify({ to: to, method: method }) }).then(function (r) {
@@ -680,8 +691,8 @@ function _pmtPaintFrame(doc) {
 function _pmtSignOn() { try { return localStorage.getItem('pmtSign') === '1'; } catch (e) { return false; } }
 function pmtToggleSign(mid, on) {
   try { localStorage.setItem('pmtSign', on ? '1' : '0'); } catch (e) { /* 무시 */ }
-  apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/render', { method: 'POST', body: JSON.stringify({ sign: on }) })
-    .then(function (r) { window._pmtDoc = r.data; _pmtPaintFrame(r.data); })
+  _pmtRender(mid, { sign: on })
+    .then(function (doc) { window._pmtDoc = doc; _pmtPaintFrame(doc); })
     .catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '미리 보기 실패'), 'error'); });
 }
 function pmtPrint() {
@@ -745,7 +756,11 @@ function _pmtPaintSummary() {
   var span = document.getElementById('pmtSummary'); if (!span) return;
   var t = _pmtToday(), n = 0, late = 0;
   _pmt.list.forEach(function (m) { (m.actionItems || []).forEach(function (a) { if (a.status !== 'done') { n++; if (a.dueDate && a.dueDate < t) late++; } }); });
-  span.innerHTML = '<b style="color:var(--t2)">회의 ' + _pmt.list.length + '</b> · 미완료 액션 <b style="color:var(--t2)">' + n + '</b>' + (late ? ' · <b style="color:' + SEM_COLOR.danger + '">기한 지남 ' + late + '</b>' : '');
+  span.innerHTML = _pmtSummaryHtml(_pmt.list.length, n, late);
+}
+function _pmtSummaryHtml(meetings, open, late) {
+  return '<b style="color:var(--t2)">회의 ' + meetings + '</b> · 미완료 액션 <b style="color:var(--t2)">' + open + '</b>' +
+    (late ? ' · <b style="color:' + SEM_COLOR.danger + '">기한 지남 ' + late + '</b>' : '');
 }
 function pmtActAdd(mid) {
   var t = ((document.getElementById('pmtActT-' + mid) || {}).value || '').trim();

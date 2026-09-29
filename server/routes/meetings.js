@@ -27,7 +27,7 @@ async function notifyActionAssigned(action, meetingTitle, actorId) {
   } catch (e) { console.error('[meetings/notify]', e.message); }
 }
 
-/** 회의록 양식 칸 (v13.198) — 알려진 키만, 빈 값 제외, 각 4000자 */
+/** 회의록 양식 칸 (v13.198) — 알려진 키만, 빈 값 제외, 각 4000자. 화면 PMT_FORM_KEYS 와 맞춘다(test/meeting-form-keys.test.js) */
 var FORM_KEYS = ['timeStart', 'timeEnd', 'place', 'writer', 'purpose', 'decisions', 'nextDate', 'nextNote', 'completedAt', 'completedBy'];
 function _formOf(f) {
   var out = {};
@@ -233,6 +233,18 @@ async function _meetingForDoc(req, res) {
   await attachActions([x.m], req.tenant.id);
   return x;
 }
+/** 참석자 이름(name·display_name) → 계정 메일. 이름 → 주소 (처음 찾은 것) */
+async function _emailsByName(tenantId, names) {
+  var found = {};
+  if (!names.length) return found;
+  var u = await db.query("SELECT name, display_name, email FROM users WHERE tenant_id = $1 AND status = 'active' AND (name = ANY($2) OR display_name = ANY($2)) AND email IS NOT NULL", [tenantId, names]);
+  u.rows.forEach(function (row) { [row.name, row.display_name].forEach(function (n) { if (n && names.indexOf(n) >= 0 && !found[n]) found[n] = row.email; }); });
+  return found;
+}
+/** 공유(발송) 기록 — 서버 발송·메일 앱·Outlook 초안 공통 */
+function _markMailed(req, byName, to) {
+  return db.query('UPDATE meetings SET mailed_at = now(), mailed_by_name = $1, mailed_to = $2 WHERE id = $3 AND tenant_id = $4', [byName, JSON.stringify(to), req.params.id, req.tenant.id]);
+}
 async function _senderName(req) {
   try { var u = await db.query('SELECT name, display_name, email FROM users WHERE id = $1', [req.user.sub]); if (u.rows.length) return u.rows[0]; } catch (_) {}
   return { name: req.user.name || '', email: null };
@@ -257,11 +269,7 @@ router.get('/:id/mail-recipients', async function (req, res) {
   try {
     var x = await _meetingForDoc(req, res); if (!x) return;
     var names = (Array.isArray(x.m.attendees) ? x.m.attendees : []).filter(Boolean).map(String);
-    var found = {};
-    if (names.length) {
-      var u = await db.query("SELECT name, display_name, email FROM users WHERE tenant_id = $1 AND status = 'active' AND (name = ANY($2) OR display_name = ANY($2)) AND email IS NOT NULL", [req.tenant.id, names]);
-      u.rows.forEach(function (row) { [row.name, row.display_name].forEach(function (n) { if (n && names.indexOf(n) >= 0 && !found[n]) found[n] = row.email; }); });
-    }
+    var found = await _emailsByName(req.tenant.id, names);
     function mask(e) { var p = String(e).split('@'); return (p[0].length <= 2 ? p[0][0] + '*' : p[0].slice(0, 2) + '***') + '@' + p[1]; }
     res.json({ data: names.map(function (n) { return { name: n, hasEmail: !!found[n], masked: found[n] ? mask(found[n]) : null, email: found[n] || null }; }) });
   } catch (e) {
@@ -279,11 +287,8 @@ router.post('/:id/mail', async function (req, res) {
     var extra = (Array.isArray(b.emails) ? b.emails : []).map(function (e) { return String(e).trim(); }).filter(Boolean);
     var bad = extra.filter(function (e) { return !minutesDoc.isEmail(e); });
     if (bad.length) return res.status(400).json({ error: 'VALIDATION', message: '메일 주소 형식 오류: ' + bad.slice(0, 3).join(', ') });
-    var to = [];
-    if (pickNames.length) {
-      var u = await db.query("SELECT name, display_name, email FROM users WHERE tenant_id = $1 AND status = 'active' AND (name = ANY($2) OR display_name = ANY($2)) AND email IS NOT NULL", [req.tenant.id, pickNames]);
-      u.rows.forEach(function (row) { if (minutesDoc.isEmail(row.email)) to.push(row.email); });
-    }
+    var byName = await _emailsByName(req.tenant.id, pickNames);
+    var to = pickNames.map(function (n) { return byName[n]; }).filter(minutesDoc.isEmail);
     extra.forEach(function (e) { to.push(e); });
     var seen = {}; to = to.filter(function (e) { var k = e.toLowerCase(); if (seen[k]) return false; seen[k] = true; return true; });
     if (!to.length) return res.status(400).json({ error: 'VALIDATION', message: '받는 사람이 없습니다.' });
@@ -303,7 +308,7 @@ router.post('/:id/mail', async function (req, res) {
     try { sent = await emailService.sendMail(primary, doc.subject, doc.html, opts); }
     catch (se) { return res.status(502).json({ error: 'MAIL_FAILED', message: '메일 전송에 실패했습니다: ' + se.message }); }
     if (sent === false) return res.status(503).json({ error: 'MAIL_DISABLED', message: '메일 서버(SMTP)가 설정되지 않아 보낼 수 없습니다.' });
-    await db.query('UPDATE meetings SET mailed_at = now(), mailed_by_name = $1, mailed_to = $2 WHERE id = $3 AND tenant_id = $4', [sender, JSON.stringify(to), req.params.id, req.tenant.id]);
+    await _markMailed(req, sender, to);
     res.json({ data: { sent: to.length, mailedAt: new Date().toISOString() }, message: to.length + '명에게 보냈습니다.' });
   } catch (e) {
     httpErr.serverError(res, '[meetings/mail]', e);
@@ -318,7 +323,7 @@ router.post('/:id/mail-log', async function (req, res) {
     var to = (Array.isArray(req.body && req.body.to) ? req.body.to : []).map(function (e) { return String(e).trim(); }).filter(minutesDoc.isEmail).slice(0, 50);
     var me = await _senderName(req);
     var by = (me.display_name || me.name || '') + ((req.body && req.body.method) === 'eml' ? ' (Outlook 초안)' : ' (메일 앱)');
-    await db.query('UPDATE meetings SET mailed_at = now(), mailed_by_name = $1, mailed_to = $2 WHERE id = $3 AND tenant_id = $4', [by, JSON.stringify(to), req.params.id, req.tenant.id]);
+    await _markMailed(req, by, to);
     res.json({ data: { mailedAt: new Date().toISOString() } });
   } catch (e) {
     httpErr.serverError(res, '[meetings/mail-log]', e);
