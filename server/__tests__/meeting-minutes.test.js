@@ -134,6 +134,11 @@ describe('회의록 API', function () {
     expect((await del(admin, '/api/meetings/' + mid + '/actions/' + aid)).status).toBe(200);
     expect((await as(admin).get('/api/meetings/' + mid)).body.data.title).toBe('킥오프');
     expect((await as(admin).get('/api/meetings/nope')).status).toBe(404);
+    // 목록은 편집 가능 여부를 함께 알려 준다 (v13.204)
+    expect((await as(admin).get('/api/meetings?projectId=' + projId)).body.canEdit).toBe(true);
+    var ol = await as(outsider).get('/api/meetings?projectId=' + projId);
+    expect(ol.body.canEdit).toBe(false);
+    expect(ol.body.data).toEqual([]);
   });
 
   test('동시 편집 — version 이 어긋나면 409 + 최신 회의, 안 보내면 예전처럼 저장', async function () {

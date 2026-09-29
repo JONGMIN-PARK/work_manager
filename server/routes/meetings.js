@@ -112,7 +112,10 @@ router.get('/', async function (req, res) {
     sql += ' ORDER BY meet_date DESC NULLS LAST, created_at DESC';
     var r = await db.query(sql, params);
     await attachActions(r.rows, req.tenant.id);
-    res.json({ data: r.rows });
+    // 프로젝트 회의 목록이면 이 사용자가 회의를 등록·수정할 수 있는지 함께 (화면이 편집 버튼을 숨기는 데 사용, v13.204)
+    var out = { data: r.rows };
+    if (req.query.projectId) out.canEdit = (await ps.canEditById(req, req.query.projectId)) === true;
+    res.json(out);
   } catch (e) {
     httpErr.serverError(res, '[meetings/list]', e);
   }

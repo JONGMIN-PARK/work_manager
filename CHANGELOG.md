@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.204 (2026-09-29) — 회의 보기 전용 · 스타일 정리
+
+- GET /api/meetings?projectId= 응답에 `canEdit`(ps.canEditById). 화면 `_pmt.canEdit` 가 false 면 모든 카드를 문서 보기로, 새 회의·편집·작성 중으로·모아보기 액션 체크 숨김, 상단 `.pmt-readonly` 안내. 문서 보기 줄은 작성 중인 회의에 "작성 중" 표시.
+- project-meetings 인라인 스타일 140 → 65: 구조·글꼴은 style.css `.pmt-*`, SEM_COLOR 등 상태 색만 인라인. 화면 상태 7가지의 계산된 스타일을 전후 비교해 같음 확인(안건 추가 입력 min-width 만 auto → 0).
+- 테스트: 목록 canEdit(관리자 true · 비참여자 false).
+
 ## v13.203 (2026-09-29) — 회의 모듈 정리
 
 - project-meetings: `_pmtFormPatch`(양식 → PUT 본문)를 저장·작성 완료가 같이 사용, 작성 완료는 PUT 1번. `_pmtRender(mid, opts)` 로 /render 호출 4곳 통일, 문서 보기는 `_pmt.docLoading` 으로 같은 key 중복 요청 방지·옛 응답 버림. `_pmtSummaryHtml` 로 요약 줄 한 벌. `PMT_FIELDS`(미사용) → `PMT_FORM_KEYS`, `_pmtPeopleDatalist` 제거, pmtCreate 는 `_pmtMe()`.

@@ -4,6 +4,8 @@
    · 요약: 회의 수 · 미완료 액션 · 기한 지난 액션 + 미완료 액션 모아보기(전체 회의)
    · 회의 카드 = 회의록 양식: 기본 정보 · 안건(체크) · 논의 내용 · 결정 사항 · 액션 아이템 · 다음 회의
    · 미리 보기(서버가 만든 회의록 문서) → 인쇄/PDF · 메일 보내기(참석자 계정 메일 + 직접 입력)
+   · 편집 권한이 없으면(목록 응답 canEdit=false) 보기 전용 — 모든 회의를 문서로만 (v13.204)
+   · 스타일은 style.css 의 .pmt-* (v13.204), 상태에 따라 바뀌는 색만 인라인
    · 변경은 그 회의 카드만 다시 그린다 — 다른 회의에 쓰던 회의록 초안이 지워지지 않게(초안은 _pmt.drafts)
    서버: /api/meetings (title, meetDate, agenda[], attendees[], minutes / actions: title, assigneeName, dueDate, status)
    전역 의존: apiFetch, toCamel, eH, showToast, localDate, window._pdProj(담당자 추천)
@@ -43,11 +45,12 @@ function _pmtRefetch(mid) {
 function pdLoadMeetings(projId) {
   var el = document.getElementById('pdMeeting'); if (!el) return;
   var keep = (_pmt && _pmt.projId === projId) ? _pmt : null;   // 같은 프로젝트면 펼침·초안 유지
-  _pmt = keep || { projId: projId, list: [], open: {}, drafts: {}, filter: 'all', showActs: false, adding: false, editing: {}, docs: {}, docLoading: {}, firstOpenDone: false };
-  el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">로딩 중...</div>';
+  _pmt = keep || { projId: projId, list: [], open: {}, drafts: {}, filter: 'all', showActs: false, adding: false, editing: {}, docs: {}, docLoading: {}, canEdit: true, firstOpenDone: false };
+  el.innerHTML = '<div class="pmt-note">로딩 중...</div>';
   apiFetch('/api/meetings?projectId=' + encodeURIComponent(projId)).then(function (r) {
     if (!_pmt || _pmt.projId !== projId) return;
     _pmt.list = ((r && r.data) || []).map(_pmtNorm);
+    _pmt.canEdit = r.canEdit !== false;   // 서버가 알려 준 편집 권한 (v13.204) — 없으면 보기 전용: 회의를 문서로만 표시
     if (!_pmt.firstOpenDone) {   // 처음 열 때: 오늘 이후 가장 가까운 회의, 없으면 가장 최근 회의 하나만 펼침
       var t = _pmtToday();
       var next = _pmt.list.filter(function (m) { return m.meetDate && m.meetDate >= t; }).sort(function (a, b) { return a.meetDate.localeCompare(b.meetDate); })[0];
@@ -57,7 +60,7 @@ function pdLoadMeetings(projId) {
     }
     pdRenderMeetings();
   }).catch(function (e) {
-    el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">회의 목록을 불러오지 못했습니다. <button class="btn btn-g btn-s" style="font-size:10px" onclick="pdLoadMeetings(\'' + _pmtJs(projId) + '\')">다시 시도</button></div>';
+    el.innerHTML = '<div class="pmt-note">회의 목록을 불러오지 못했습니다. <button class="btn btn-g btn-s pmt-btn" onclick="pdLoadMeetings(\'' + _pmtJs(projId) + '\')">다시 시도</button></div>';
     console.warn('[pdLoadMeetings]', e);
   });
 }
@@ -77,38 +80,38 @@ function pdRenderMeetings() {
   });
   var h = _pmtPeopleDatalistTop();
   // 요약 + 새 회의
-  h += '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px">' +
-    '<span id="pmtSummary" style="font-size:11px;color:var(--t4)">' + _pmtSummaryHtml(all.length, acts.length, overdue) + '</span>' +
-    '<span style="display:flex;gap:4px">' +
-      (acts.length ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtToggleActs()">' + (_pmt.showActs ? '▾' : '▸') + ' 미완료 액션 모아보기</button>' : '') +
-      '<button class="btn btn-p btn-s" style="font-size:10px" onclick="pmtToggleAdd()">+ 새 회의</button>' +
+  h += '<div class="pmt-top">' +
+    '<span id="pmtSummary" class="pmt-summary">' + _pmtSummaryHtml(all.length, acts.length, overdue) + '</span>' +
+    '<span class="pmt-row">' +
+      (acts.length ? '<button class="btn btn-g btn-s pmt-btn" onclick="pmtToggleActs()">' + (_pmt.showActs ? '▾' : '▸') + ' 미완료 액션 모아보기</button>' : '') +
+      (_pmt.canEdit ? '<button class="btn btn-p btn-s pmt-btn" onclick="pmtToggleAdd()">+ 새 회의</button>' : '') +
     '</span></div>';
-  if (_pmt.adding) h += _pmtAddFormHtml();
+  if (!_pmt.canEdit) h += '<div class="pmt-readonly">👁 보기 전용 — 회의 등록·수정은 프로젝트 생성자·참여자·관리자만 할 수 있습니다.</div>';
+  if (_pmt.adding && _pmt.canEdit) h += _pmtAddFormHtml();
   if (_pmt.showActs && acts.length) h += _pmtAllActsHtml(acts, t);
   // 필터
   if (all.length) {
-    h += '<div style="display:flex;gap:4px;margin:4px 0 8px">' + [['all', '전체'], ['upcoming', '예정'], ['past', '지난 회의']].map(function (f) {
-      var on = _pmt.filter === f[0];
-      return '<button class="btn btn-s" onclick="pmtSetFilter(\'' + f[0] + '\')" style="font-size:10px;padding:2px 9px;border:1px solid ' + (on ? 'var(--ac)' : 'var(--bd)') + ';background:' + (on ? 'var(--ac-bg, var(--bg-i))' : 'transparent') + ';color:' + (on ? 'var(--t1)' : 'var(--t4)') + ';font-weight:' + (on ? 700 : 400) + '">' + f[1] + '</button>';
+    h += '<div class="pmt-filters">' + [['all', '전체'], ['upcoming', '예정'], ['past', '지난 회의']].map(function (f) {
+      return '<button class="btn btn-s pmt-filter' + (_pmt.filter === f[0] ? ' on' : '') + '" onclick="pmtSetFilter(\'' + f[0] + '\')">' + f[1] + '</button>';
     }).join('') + '</div>';
   }
-  if (!all.length) h += '<div style="font-size:11px;color:var(--t6);padding:14px 0;text-align:center">등록된 회의가 없습니다. "+ 새 회의"로 추가하세요. 날짜를 넣으면 캘린더에도 일정이 등록됩니다.</div>';
-  else if (!list.length) h += '<div style="font-size:11px;color:var(--t6);padding:8px 0">해당하는 회의가 없습니다.</div>';
+  if (!all.length) h += '<div class="pmt-empty">' + (_pmt.canEdit ? '등록된 회의가 없습니다. "+ 새 회의"로 추가하세요. 날짜를 넣으면 캘린더에도 일정이 등록됩니다.' : '등록된 회의가 없습니다.') + '</div>';
+  else if (!list.length) h += '<div class="pmt-empty short">해당하는 회의가 없습니다.</div>';
   h += list.map(function (m) { return '<div id="pmt-card-' + _pmtEsc(m.id) + '">' + _pmtCardHtml(m, t) + '</div>'; }).join('');
   el.innerHTML = h;
   if (_pmt.adding) { var ti = document.getElementById('pmtNewTitle'); if (ti) ti.focus(); }
 }
 
 function _pmtAddFormHtml() {
-  return '<div style="border:1px dashed var(--ac);border-radius:8px;padding:8px 10px;margin-bottom:10px">' +
-    '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
+  return '<div class="pmt-add">' +
+    '<div class="pmt-wrap">' +
       '<input id="pmtNewTitle" class="si" placeholder="회의 제목 (예: 설계 검토 회의)" style="flex:2 1 160px;font-size:11px;padding:5px 8px" onkeydown="if(event.key===\'Enter\')pmtCreate();if(event.key===\'Escape\')pmtToggleAdd()">' +
       '<input id="pmtNewDate" type="date" class="si" value="' + _pmtToday() + '" style="flex:0 0 auto;width:auto;font-size:11px;padding:4px">' +
     '</div>' +
     '<input id="pmtNewAtt" class="si" list="pmtPeople" placeholder="참석자 (쉼표로 구분, 선택)" style="width:100%;box-sizing:border-box;font-size:11px;padding:5px 8px;margin-top:4px">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">' +
       '<span style="font-size:9.5px;color:var(--t6)">날짜를 넣으면 캘린더에 회의 일정이 자동 등록됩니다.</span>' +
-      '<span style="display:flex;gap:4px"><button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtToggleAdd()">취소</button><button class="btn btn-p btn-s" style="font-size:10px" onclick="pmtCreate()">등록</button></span>' +
+      '<span class="pmt-row"><button class="btn btn-g btn-s pmt-btn" onclick="pmtToggleAdd()">취소</button><button class="btn btn-p btn-s pmt-btn" onclick="pmtCreate()">등록</button></span>' +
     '</div></div>';
 }
 /* 담당자·참석자 입력 추천 — 프로젝트 담당자 */
@@ -125,11 +128,11 @@ function _pmtPeopleDatalistTop() {
 
 function _pmtAllActsHtml(acts, t) {
   acts.sort(function (x, y) { return (x.a.dueDate || '9999').localeCompare(y.a.dueDate || '9999'); });
-  return '<div style="border:1px solid var(--bd);border-radius:8px;padding:6px 10px;margin-bottom:10px;background:var(--bg-i)">' +
+  return '<div class="pmt-allacts">' +
     acts.map(function (x) {
       var late = x.a.dueDate && x.a.dueDate < t;
-      return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:10.5px;border-bottom:1px solid var(--bd)">' +
-        '<span style="cursor:pointer" title="완료로 표시" onclick="pmtActToggle(\'' + _pmtJs(x.m.id) + '\',\'' + _pmtJs(x.a.id) + '\',\'done\')">☐</span>' +
+      return '<div class="pmt-allact">' +
+        (_pmt.canEdit ? '<span style="cursor:pointer" title="완료로 표시" onclick="pmtActToggle(\'' + _pmtJs(x.m.id) + '\',\'' + _pmtJs(x.a.id) + '\',\'done\')">☐</span>' : '<span>☐</span>') +
         '<span style="flex:1;color:var(--t2);word-break:break-word">' + _pmtEsc(x.a.title) + (x.a.assigneeName ? ' <span style="color:var(--t5)">@' + _pmtEsc(x.a.assigneeName) + '</span>' : '') + '</span>' +
         (x.a.dueDate ? '<span style="white-space:nowrap;color:' + (late ? SEM_COLOR.danger : 'var(--t5)') + ';font-weight:' + (late ? 700 : 400) + '">' + _pmtEsc(x.a.dueDate) + (late ? ' 지남' : '') + '</span>' : '') +
         '<span onclick="pmtOpenCard(\'' + _pmtJs(x.m.id) + '\')" title="회의로 이동" style="cursor:pointer;white-space:nowrap;color:var(--t6);font-size:9.5px;max-width:110px;overflow:hidden;text-overflow:ellipsis">🤝 ' + _pmtEsc(x.m.title) + '</span>' +
@@ -168,24 +171,24 @@ function _pmtCardHtml(m, t) {
   var openCnt = acts.filter(function (a) { return a.status !== 'done'; }).length;
   var upcoming = m.meetDate && m.meetDate >= t;
   var badge = !m.meetDate ? '<span style="font-size:9px;color:var(--t6)">날짜 없음</span>'
-    : m.meetDate === t ? '<span style="font-size:9px;font-weight:700;color:#fff;background:' + SEM_COLOR.info + ';border-radius:8px;padding:0 6px">오늘</span>'
-    : upcoming ? '<span style="font-size:9px;font-weight:700;color:' + SEM_COLOR.info + ';border:1px solid ' + SEM_COLOR.info + ';border-radius:8px;padding:0 6px">예정</span>' : '';
+    : m.meetDate === t ? '<span class="pmt-pill" style="color:#fff;background:' + SEM_COLOR.info + '">오늘</span>'
+    : upcoming ? '<span class="pmt-pill" style="color:' + SEM_COLOR.info + ';border:1px solid ' + SEM_COLOR.info + '">예정</span>' : '';
   var dirty = _pmtDirty(m.id);
-  var h = '<div style="border:1px solid var(--bd);border-left:3px solid ' + (upcoming ? SEM_COLOR.info : 'var(--bd)') + ';border-radius:8px;margin-bottom:8px;overflow:hidden">';
-  h += '<div onclick="pmtToggleCard(\'' + mid + '\')" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--bg-i)">' +
+  var h = '<div class="pmt-card"' + (upcoming ? ' style="border-left-color:' + SEM_COLOR.info + '"' : '') + '>';
+  h += '<div class="pmt-card-hd" onclick="pmtToggleCard(\'' + mid + '\')">' +
     '<span style="font-size:10px;color:var(--t5)">' + (open ? '▾' : '▸') + '</span>' +
-    '<span style="flex:1;min-width:0;font-size:12px;font-weight:700;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + _pmtEsc(m.title) + '">' + _pmtEsc(m.title) + '</span>' +
-    (_pmtDone(m) ? '<span style="font-size:9px;font-weight:700;color:#fff;background:' + SEM_COLOR.ok + ';border-radius:8px;padding:0 6px" title="' + _pmtEsc('작성 완료 · ' + _pmtFmtWhen(m.form.completedAt) + ' · ' + (m.form.completedBy || '')) + '">✔ 완료</span>' : '<span style="font-size:9px;color:var(--t6);border:1px solid var(--bd);border-radius:8px;padding:0 6px">작성 중</span>') +
+    '<span class="pmt-card-title" title="' + _pmtEsc(m.title) + '">' + _pmtEsc(m.title) + '</span>' +
+    (_pmtDone(m) ? '<span class="pmt-pill" style="color:#fff;background:' + SEM_COLOR.ok + '" title="' + _pmtEsc('작성 완료 · ' + _pmtFmtWhen(m.form.completedAt) + ' · ' + (m.form.completedBy || '')) + '">✔ 완료</span>' : '<span class="pmt-pill ghost">작성 중</span>') +
     badge +
-    (m.meetDate ? '<span style="font-size:10px;color:var(--t5);white-space:nowrap">' + _pmtEsc(m.meetDate) + '</span>' : '') +
-    (m.attendees.length ? '<span style="font-size:10px;color:var(--t5);white-space:nowrap" title="' + _pmtEsc(m.attendees.join(', ')) + '">👥 ' + m.attendees.length + '</span>' : '') +
+    (m.meetDate ? '<span class="pmt-meta">' + _pmtEsc(m.meetDate) + '</span>' : '') +
+    (m.attendees.length ? '<span class="pmt-meta" title="' + _pmtEsc(m.attendees.join(', ')) + '">👥 ' + m.attendees.length + '</span>' : '') +
     (acts.length ? '<span style="font-size:10px;white-space:nowrap;color:' + (openCnt ? SEM_COLOR.warn : SEM_COLOR.ok) + '" title="완료 / 전체 액션">✔ ' + (acts.length - openCnt) + '/' + acts.length + '</span>' : '') +
     (m.mailedAt ? '<span style="font-size:10px;color:var(--t5)" title="' + _pmtEsc('메일 발송 ' + _pmtFmtWhen(m.mailedAt) + ' · ' + (m.mailedByName || '')) + '">✉</span>' : '') +
     '<span id="pmtDirtyDot-' + _pmtEsc(m.id) + '" style="font-size:9.5px;color:' + SEM_COLOR.warn + ';display:' + (dirty ? 'inline' : 'none') + '" title="저장하지 않은 내용">●</span>' +
   '</div>';
   if (!open) return h + '</div>';
-  if (_pmtDone(m) && !_pmt.editing[m.id]) return h + _pmtDocViewHtml(m) + '</div>';
-  h += '<div style="padding:8px 10px">';
+  if (!_pmt.canEdit || (_pmtDone(m) && !_pmt.editing[m.id])) return h + _pmtDocViewHtml(m) + '</div>';
+  h += '<div class="pmt-body">';
   if (_pmtDone(m)) {
     h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 9px;margin-bottom:6px;border:1px solid ' + SEM_COLOR.warn + ';background:' + SEM_COLOR.warn + '14;border-radius:6px;font-size:10.5px;color:var(--t2)">' +
       '<span>✏️ <b>완료된 회의록을 수정하는 중</b> — 저장하면 문서에 반영됩니다.' +
@@ -197,30 +200,30 @@ function _pmtCardHtml(m, t) {
   h += _pmtFormInfoHtml(m);
   h += _pmtSectionTitle('2. 안건 및 논의', agNow.length ? '완료 ' + agNow.filter(function (g) { return g.done; }).length + '/' + agNow.length : '');
   h += _pmtAgendaHtml(m);
-  h += '<div style="font-size:10px;font-weight:600;color:var(--t5);margin:8px 0 3px">기타 논의</div>';
+  h += '<div class="pmt-sub">기타 논의</div>';
   h += _pmtTextarea(m, 'minutes', '안건 밖에서 논의한 내용·메모 (Ctrl+S 저장)', 52);
   h += _pmtSectionTitle('3. 결정 사항', '');
   h += _pmtTextarea(m, 'decisions', '확정된 결정·합의 사항', 52);
   h += _pmtSectionTitle('4. 액션 아이템', acts.length ? '미완료 ' + openCnt + ' / ' + acts.length : '');
   h += _pmtActsHtml(m, t);
   h += _pmtSectionTitle('5. 다음 회의', '');
-  h += '<div style="display:flex;gap:4px;flex-wrap:wrap">' + _pmtInput(m, 'nextDate', '', 'date', 'flex:0 0 auto') + _pmtInput(m, 'nextNote', '다음 회의 안건·메모', 'text', 'flex:1 1 160px') + '</div>';
+  h += '<div class="pmt-wrap">' + _pmtInput(m, 'nextDate', '', 'date', 'flex:0 0 auto') + _pmtInput(m, 'nextNote', '다음 회의 안건·메모', 'text', 'flex:1 1 160px') + '</div>';
   // 하단 버튼
-  h += '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;margin-top:12px;padding-top:8px;border-top:1px solid var(--bd)">' +
-    '<button class="btn btn-d btn-s" style="font-size:10px" onclick="pmtDelete(\'' + mid + '\')">회의 삭제</button>' +
-    '<span style="display:flex;gap:4px;align-items:center">' +
+  h += '<div class="pmt-foot">' +
+    '<button class="btn btn-d btn-s pmt-btn" onclick="pmtDelete(\'' + mid + '\')">회의 삭제</button>' +
+    '<span class="pmt-row mid">' +
       '<span id="pmtDirtyTxt-' + _pmtEsc(m.id) + '" style="font-size:9.5px;color:' + SEM_COLOR.warn + ';display:' + (dirty ? 'inline' : 'none') + '">● 저장 안 됨</span>' +
-      '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtPreview(\'' + mid + '\')" title="회의록 양식으로 보기 · 인쇄(PDF) · 메일">🖨 출력 미리보기</button>' +
+      '<button class="btn btn-g btn-s pmt-btn" onclick="pmtPreview(\'' + mid + '\')" title="회의록 양식으로 보기 · 인쇄(PDF) · 메일">🖨 출력 미리보기</button>' +
       (_pmtDone(m)
-        ? '<button class="btn btn-p btn-s" style="font-size:10px" onclick="pmtSaveAndView(\'' + mid + '\')">💾 저장 후 문서 보기</button>'
-        : '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtSaveForm(\'' + mid + '\')">💾 저장</button>' +
-          '<button class="btn btn-p btn-s" style="font-size:10px" onclick="pmtComplete(\'' + mid + '\')" title="저장하고 완성된 회의록 문서로 표시합니다">✔ 작성 완료</button>') +
+        ? '<button class="btn btn-p btn-s pmt-btn" onclick="pmtSaveAndView(\'' + mid + '\')">💾 저장 후 문서 보기</button>'
+        : '<button class="btn btn-g btn-s pmt-btn" onclick="pmtSaveForm(\'' + mid + '\')">💾 저장</button>' +
+          '<button class="btn btn-p btn-s pmt-btn" onclick="pmtComplete(\'' + mid + '\')" title="저장하고 완성된 회의록 문서로 표시합니다">✔ 작성 완료</button>') +
     '</span></div>';
   h += '</div></div>';
   return h;
 }
 function _pmtSectionTitle(label, extra) {
-  return '<div style="font-size:11px;font-weight:800;color:var(--t2);margin:14px 0 5px;padding-left:6px;border-left:3px solid var(--ac)">' + label + (extra ? ' <span style="font-weight:400;color:var(--t6)">' + _pmtEsc(extra) + '</span>' : '') + '</div>';
+  return '<div class="pmt-sec">' + label + (extra ? ' <span class="pmt-dim">' + _pmtEsc(extra) + '</span>' : '') + '</div>';
 }
 function _pmtFieldAttrs(m, k) {
   var mid = _pmtJs(m.id);
@@ -228,38 +231,37 @@ function _pmtFieldAttrs(m, k) {
 }
 function _pmtInput(m, k, ph, type, style, list) {
   if (type === 'date' || type === 'time') style = 'width:auto;' + (style || '');   // .si 의 width:100% 를 풀어 한 줄에
-  return '<input class="si" type="' + (type || 'text') + '" ' + _pmtFieldAttrs(m, k) + (list ? ' list="' + list + '"' : '') + ' value="' + _pmtEsc(_pmtVal(m, k)) + '" placeholder="' + _pmtEsc(ph || '') + '" style="font-size:11px;padding:4px 7px;box-sizing:border-box;min-width:0;' + (style || '') + '">';
+  return '<input class="si pmt-in" type="' + (type || 'text') + '" ' + _pmtFieldAttrs(m, k) + (list ? ' list="' + list + '"' : '') + ' value="' + _pmtEsc(_pmtVal(m, k)) + '" placeholder="' + _pmtEsc(ph || '') + '"' + (style ? ' style="' + style + '"' : '') + '>';
 }
 function _pmtTextarea(m, k, ph, minH) {
   var v = _pmtVal(m, k);
-  return '<textarea class="si" ' + _pmtFieldAttrs(m, k) + ' placeholder="' + _pmtEsc(ph) + '" style="width:100%;box-sizing:border-box;font-size:11px;padding:6px 8px;min-height:' + (v ? Math.max(minH, 90) : minH) + 'px;resize:vertical;line-height:1.5">' + _pmtEsc(v) + '</textarea>';
+  return '<textarea class="si pmt-ta" ' + _pmtFieldAttrs(m, k) + ' placeholder="' + _pmtEsc(ph) + '" style="min-height:' + (v ? Math.max(minH, 90) : minH) + 'px">' + _pmtEsc(v) + '</textarea>';
 }
 /* 1. 회의 개요 — 양식 표처럼 라벨 | 칸 */
 function _pmtFormInfoHtml(m) {
-  var lbl = 'font-size:10px;color:var(--t5);font-weight:600;white-space:nowrap';
   var att = _pmtSplit(_pmtVal(m, 'attendees'));
-  return '<div style="display:grid;grid-template-columns:56px 1fr;gap:5px 8px;align-items:center">' +
-    '<span style="' + lbl + '">회의명</span>' + _pmtInput(m, 'title', '회의 제목', 'text', 'width:100%') +
-    '<span style="' + lbl + '">일시</span><span style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">' +
+  return '<div class="pmt-info">' +
+    '<span class="pmt-lbl">회의명</span>' + _pmtInput(m, 'title', '회의 제목', 'text', 'width:100%') +
+    '<span class="pmt-lbl">일시</span><span class="pmt-wrap mid">' +
       _pmtInput(m, 'meetDate', '', 'date', 'flex:0 0 auto') + _pmtInput(m, 'timeStart', '', 'time', 'flex:0 0 auto') +
       '<span style="color:var(--t6);font-size:10px">~</span>' + _pmtInput(m, 'timeEnd', '', 'time', 'flex:0 0 auto') + '</span>' +
-    '<span style="' + lbl + '">장소</span>' + _pmtInput(m, 'place', '회의실·온라인 링크 등', 'text', 'width:100%') +
-    '<span style="' + lbl + '">작성자</span>' + _pmtInput(m, 'writer', '', 'text', 'width:100%', 'pmtPeople') +
-    '<span style="' + lbl + ';align-self:start;padding-top:5px">참석자<br><span style="font-weight:400;color:var(--t6)" id="pmtAttN-' + _pmtEsc(m.id) + '">' + att.length + '명</span></span>' +
+    '<span class="pmt-lbl">장소</span>' + _pmtInput(m, 'place', '회의실·온라인 링크 등', 'text', 'width:100%') +
+    '<span class="pmt-lbl">작성자</span>' + _pmtInput(m, 'writer', '', 'text', 'width:100%', 'pmtPeople') +
+    '<span class="pmt-lbl top">참석자<br><span class="pmt-dim" id="pmtAttN-' + _pmtEsc(m.id) + '">' + att.length + '명</span></span>' +
       '<div id="pmtAtt-' + _pmtEsc(m.id) + '">' + _pmtAttendeesHtml(m) + '</div>' +
-    '<span style="' + lbl + ';align-self:start;padding-top:5px">회의 목적</span>' + _pmtTextareaSm(m, 'purpose', '이 회의에서 정하려는 것') +
+    '<span class="pmt-lbl top">회의 목적</span>' + _pmtTextareaSm(m, 'purpose', '이 회의에서 정하려는 것') +
   '</div>';
 }
 /* 참석자 칩 — 이름 하나는 끊지 않고, 많아지면 칩 단위로 다음 줄로. Enter·쉼표로 추가, ✕ 로 빼기 */
 function _pmtAttendeesHtml(m) {
   var mid = _pmtJs(m.id), att = _pmtSplit(_pmtVal(m, 'attendees'));
-  return '<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;border:1px solid var(--bd);border-radius:6px;padding:3px 5px;background:var(--bg-i)">' +
+  return '<div class="pmt-chips">' +
     att.map(function (n, i) {
-      return '<span style="display:inline-flex;align-items:center;gap:3px;white-space:nowrap;font-size:10.5px;background:var(--bg-p,var(--bg));border:1px solid var(--bd);border-radius:10px;padding:1px 4px 1px 8px;color:var(--t2)">' + _pmtEsc(n) +
-        '<button onclick="pmtAttDel(\'' + mid + '\',' + i + ')" title="빼기" style="border:none;background:none;color:var(--t6);cursor:pointer;font-size:10px;padding:0 2px">✕</button></span>';
+      return '<span class="pmt-chip">' + _pmtEsc(n) +
+        '<button onclick="pmtAttDel(\'' + mid + '\',' + i + ')" title="빼기">✕</button></span>';
     }).join('') +
     '<input id="pmtAttIn-' + _pmtEsc(m.id) + '" list="pmtPeople" placeholder="' + (att.length ? '+ 추가' : '이름 입력 후 Enter (쉼표로 여러 명)') + '" onkeydown="if(event.key===\'Enter\'||event.key===\',\'){event.preventDefault();pmtAttAdd(\'' + mid + '\')}" onchange="pmtAttAdd(\'' + mid + '\')" ' +
-      'style="flex:1 1 90px;min-width:80px;border:none;background:transparent;outline:none;font-size:10.5px;padding:2px 3px;color:var(--t2)">' +
+      'class="pmt-chip-in">' +
   '</div>';
 }
 function _pmtSetAttendees(mid, list) {
@@ -285,26 +287,25 @@ function pmtAttDel(mid, i) {
 }
 function _pmtTextareaSm(m, k, ph) {
   var v = _pmtVal(m, k);
-  return '<textarea class="si" rows="' + Math.min(4, Math.max(1, String(v).split('\n').length)) + '" ' + _pmtFieldAttrs(m, k) + ' placeholder="' + _pmtEsc(ph) + '" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 7px;resize:vertical;line-height:1.5">' + _pmtEsc(v) + '</textarea>';
+  return '<textarea class="si pmt-ta sm" rows="' + Math.min(4, Math.max(1, String(v).split('\n').length)) + '" ' + _pmtFieldAttrs(m, k) + ' placeholder="' + _pmtEsc(ph) + '">' + _pmtEsc(v) + '</textarea>';
 }
 
 function _pmtAgendaHtml(m) {
   var mid = _pmtJs(m.id), ag = _pmtAgendaOf(m);
-  var cell = 'width:100%;box-sizing:border-box;font-size:10.5px;padding:3px 6px;resize:vertical;line-height:1.5;min-width:0';
   return ag.map(function (g, i) {
-    return '<div style="border:1px solid var(--bd);border-radius:6px;padding:5px 7px;margin-bottom:5px">' +
-      '<div style="display:flex;align-items:center;gap:6px;font-size:11px">' +
+    return '<div class="pmt-ag">' +
+      '<div class="pmt-ag-hd">' +
         '<span style="cursor:pointer" title="완료 표시" onclick="pmtAgendaToggle(\'' + mid + '\',' + i + ')">' + (g.done ? '☑' : '☐') + '</span>' +
         '<span style="flex:1;min-width:0;font-weight:600;word-break:keep-all;color:' + (g.done ? 'var(--t5);text-decoration:line-through' : 'var(--t2)') + '">' + (i + 1) + '. ' + _pmtEsc(g.text) + '</span>' +
         '<button class="btn btn-g btn-s" style="font-size:9px;padding:0 5px" title="안건 삭제" onclick="pmtAgendaDel(\'' + mid + '\',' + i + ')">✕</button>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:4px;margin-top:4px">' +
-        '<textarea class="si" rows="' + Math.min(4, Math.max(1, String(g.note || '').split('\n').length)) + '" placeholder="논의 내용" oninput="pmtAgendaNote(\'' + mid + '\',' + i + ',\'note\',this.value)" style="' + cell + '">' + _pmtEsc(g.note || '') + '</textarea>' +
-        '<textarea class="si" rows="' + Math.min(4, Math.max(1, String(g.result || '').split('\n').length)) + '" placeholder="결과" oninput="pmtAgendaNote(\'' + mid + '\',' + i + ',\'result\',this.value)" style="' + cell + '">' + _pmtEsc(g.result || '') + '</textarea>' +
+      '<div class="pmt-ag-grid">' +
+        '<textarea class="si pmt-cell" rows="' + Math.min(4, Math.max(1, String(g.note || '').split('\n').length)) + '" placeholder="논의 내용" oninput="pmtAgendaNote(\'' + mid + '\',' + i + ',\'note\',this.value)">' + _pmtEsc(g.note || '') + '</textarea>' +
+        '<textarea class="si pmt-cell" rows="' + Math.min(4, Math.max(1, String(g.result || '').split('\n').length)) + '" placeholder="결과" oninput="pmtAgendaNote(\'' + mid + '\',' + i + ',\'result\',this.value)">' + _pmtEsc(g.result || '') + '</textarea>' +
       '</div></div>';
   }).join('') +
-  '<div style="display:flex;gap:3px;margin-top:3px"><input id="pmtAg-' + _pmtEsc(m.id) + '" class="si" placeholder="안건 추가 후 Enter" style="flex:1;font-size:10.5px;padding:3px 6px" onkeydown="if(event.key===\'Enter\')pmtAgendaAdd(\'' + mid + '\')">' +
-  '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtAgendaAdd(\'' + mid + '\')">+</button></div>';
+  '<div class="pmt-ag-add"><input id="pmtAg-' + _pmtEsc(m.id) + '" class="si pmt-mini" placeholder="안건 추가 후 Enter" style="flex:1" onkeydown="if(event.key===\'Enter\')pmtAgendaAdd(\'' + mid + '\')">' +
+  '<button class="btn btn-g btn-s pmt-btn" onclick="pmtAgendaAdd(\'' + mid + '\')">+</button></div>';
 }
 function pmtAgendaNote(mid, i, field, v) {
   var m = _pmtFind(mid); if (!m) return;
@@ -319,25 +320,25 @@ function _pmtActsHtml(m, t) {
   var mid = _pmtJs(m.id);
   var acts = (m.actionItems || []).slice().sort(function (x, y) { return (x.status === 'done') - (y.status === 'done'); });
   // 줄바꿈 없이 한 줄 — 내용은 남는 폭을 모두 쓰고 넘치면 말줄임(마우스를 올리면 전체), 담당·기한은 필요한 폭만
-  var h = acts.length ? '<div style="border:1px solid var(--bd);border-radius:6px;overflow:hidden">' + acts.map(function (a, i) {
+  var h = acts.length ? '<div class="pmt-acts">' + acts.map(function (a) {
     var aid = _pmtJs(a.id), done = a.status === 'done', late = !done && a.dueDate && a.dueDate < t;
     var linked = a.linkedIssueId ? '<span style="font-size:9px;color:#06B6D4;white-space:nowrap">→ 이슈</span>' : (a.linkedDevItemId ? '<span style="font-size:9px;color:' + SEM_COLOR.ok + ';white-space:nowrap">→ 개발</span>' : '');
     var full = a.title + (a.assigneeName ? ' · 담당 ' + a.assigneeName : '') + (a.dueDate ? ' · 기한 ' + a.dueDate : '');
-    return '<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;font-size:10.5px;white-space:nowrap;' + (i ? 'border-top:1px solid var(--bd);' : '') + (done ? 'opacity:.6' : '') + '">' +
+    return '<div class="pmt-act' + (done ? ' done' : '') + '">' +
       '<span style="cursor:pointer;flex:0 0 auto" onclick="pmtActToggle(\'' + mid + '\',\'' + aid + '\',\'' + (done ? 'open' : 'done') + '\')">' + (done ? '☑' : '☐') + '</span>' +
       '<span title="' + _pmtEsc(full) + '" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;color:' + (done ? 'var(--t5);text-decoration:line-through' : 'var(--t2)') + '">' + _pmtEsc(a.title) + '</span>' +
       (a.assigneeName ? '<span style="flex:0 0 auto;max-width:120px;overflow:hidden;text-overflow:ellipsis;font-size:10px;background:var(--bg-i);border:1px solid var(--bd);border-radius:9px;padding:0 7px;color:var(--t3)" title="' + _pmtEsc(a.assigneeName) + '">' + _pmtEsc(a.assigneeName) + '</span>' : '') +
       (a.dueDate ? '<span style="flex:0 0 auto;font-size:10px;color:' + (late ? SEM_COLOR.danger : 'var(--t6)') + ';font-weight:' + (late ? 700 : 400) + '">' + _pmtEsc(a.dueDate.slice(5)) + (late ? ' 지남' : '') + '</span>' : '') +
       linked +
       (a.linkedIssueId || a.linkedDevItemId || done ? '' :
-        '<button class="btn btn-g btn-s" style="flex:0 0 auto;font-size:9px;padding:0 4px" title="이슈로 전환" onclick="pmtActConvert(\'' + mid + '\',\'' + aid + '\',\'issue\')">이슈</button>' +
-        '<button class="btn btn-g btn-s" style="flex:0 0 auto;font-size:9px;padding:0 4px" title="개발 아이템으로 전환" onclick="pmtActConvert(\'' + mid + '\',\'' + aid + '\',\'dev\')">개발</button>') +
-      '<button class="btn btn-g btn-s" style="flex:0 0 auto;font-size:9px;padding:0 4px" title="삭제" onclick="pmtActDel(\'' + mid + '\',\'' + aid + '\')">✕</button>' +
+        '<button class="btn btn-g btn-s pmt-btn-xs" title="이슈로 전환" onclick="pmtActConvert(\'' + mid + '\',\'' + aid + '\',\'issue\')">이슈</button>' +
+        '<button class="btn btn-g btn-s pmt-btn-xs" title="개발 아이템으로 전환" onclick="pmtActConvert(\'' + mid + '\',\'' + aid + '\',\'dev\')">개발</button>') +
+      '<button class="btn btn-g btn-s pmt-btn-xs" title="삭제" onclick="pmtActDel(\'' + mid + '\',\'' + aid + '\')">✕</button>' +
     '</div>';
   }).join('') + '</div>' : '';
-  h += '<div style="display:grid;grid-template-columns:minmax(0,1fr) 96px auto auto;gap:3px;margin-top:5px">' +
-    '<input id="pmtActT-' + _pmtEsc(m.id) + '" class="si" placeholder="할 일 (Enter 로 추가)" style="min-width:0;font-size:10.5px;padding:3px 6px" onkeydown="if(event.key===\'Enter\')pmtActAdd(\'' + mid + '\')">' +
-    '<input id="pmtActA-' + _pmtEsc(m.id) + '" class="si" list="pmtPeople" placeholder="담당" style="min-width:0;font-size:10.5px;padding:3px 6px" onkeydown="if(event.key===\'Enter\')pmtActAdd(\'' + mid + '\')">' +
+  h += '<div class="pmt-act-add">' +
+    '<input id="pmtActT-' + _pmtEsc(m.id) + '" class="si pmt-mini" placeholder="할 일 (Enter 로 추가)" onkeydown="if(event.key===\'Enter\')pmtActAdd(\'' + mid + '\')">' +
+    '<input id="pmtActA-' + _pmtEsc(m.id) + '" class="si pmt-mini" list="pmtPeople" placeholder="담당" onkeydown="if(event.key===\'Enter\')pmtActAdd(\'' + mid + '\')">' +
     '<input id="pmtActD-' + _pmtEsc(m.id) + '" type="date" class="si" style="width:auto;font-size:10.5px;padding:2px">' +
     '<button class="btn btn-g btn-s" style="font-size:10px;white-space:nowrap" onclick="pmtActAdd(\'' + mid + '\')">+ 추가</button></div>';
   return h;
@@ -352,21 +353,23 @@ function _pmtDone(m) { return !!(m && m.form && m.form.completedAt); }
 function _pmtFmtWhen(t) { if (!t) return ''; var d = new Date(t); return isNaN(d) ? String(t) : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function _pmtDocViewHtml(m) {
   var mid = _pmtJs(m.id);
-  var bar = '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid var(--bd)">' +
-    '<span style="font-size:10.5px;color:var(--t4)">✔ <b style="color:' + SEM_COLOR.ok + '">작성 완료</b> · ' + _pmtEsc(_pmtFmtWhen(m.form.completedAt)) + (m.form.completedBy ? ' · ' + _pmtEsc(m.form.completedBy) : '') +
+  var bar = '<div class="pmt-docbar">' +
+    '<span style="font-size:10.5px;color:var(--t4)">' + (_pmtDone(m)
+      ? '✔ <b style="color:' + SEM_COLOR.ok + '">작성 완료</b> · ' + _pmtEsc(_pmtFmtWhen(m.form.completedAt)) + (m.form.completedBy ? ' · ' + _pmtEsc(m.form.completedBy) : '')
+      : '<b>작성 중</b> · 아직 완료되지 않은 회의록') +   // 보기 전용 사용자는 작성 중인 회의도 문서로 본다
       (m.mailedAt ? ' · ✉ ' + _pmtEsc(_pmtFmtWhen(m.mailedAt)) + ' 공유' : '') + '</span>' +
-    '<span style="display:flex;gap:4px;flex-wrap:wrap">' +
-      '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtEdit(\'' + mid + '\')" title="양식으로 바꿔 내용을 고칩니다">✏️ 편집</button>' +
-      '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtPreview(\'' + mid + '\')" title="A4 출력 · PDF 저장">🖨 출력 미리보기</button>' +
-      '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtPreview(\'' + mid + '\',true)">✉ 메일</button>' +
-      '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pmtUncomplete(\'' + mid + '\')" title="완료 표시를 풀고 작성 중으로">작성 중으로</button>' +
+    '<span class="pmt-wrap">' +
+      (_pmt.canEdit ? '<button class="btn btn-g btn-s pmt-btn" onclick="pmtEdit(\'' + mid + '\')" title="양식으로 바꿔 내용을 고칩니다">✏️ 편집</button>' : '') +
+      '<button class="btn btn-g btn-s pmt-btn" onclick="pmtPreview(\'' + mid + '\')" title="A4 출력 · PDF 저장">🖨 출력 미리보기</button>' +
+      '<button class="btn btn-g btn-s pmt-btn" onclick="pmtPreview(\'' + mid + '\',true)">✉ 메일</button>' +
+      (_pmt.canEdit ? '<button class="btn btn-g btn-s pmt-btn" onclick="pmtUncomplete(\'' + mid + '\')" title="완료 표시를 풀고 작성 중으로">작성 중으로</button>' : '') +
     '</span></div>';
   var doc = _pmt.docs && _pmt.docs[m.id];
   var fresh = doc && doc.key === _pmtDocKey(m);
   if (!fresh) setTimeout(function () { _pmtLoadDoc(m.id); }, 0);
   // 문서는 종이처럼 흰 바탕 — 다크 모드에서도 출력물과 같은 모습
-  return bar + '<div style="background:#e5e7eb;padding:10px;overflow-x:auto"><div id="pmtDoc-' + _pmtEsc(m.id) + '" class="pmt-doc" style="background:#fff;min-width:560px;max-width:794px;margin:0 auto;padding:18px 20px;box-shadow:0 1px 6px rgba(0,0,0,.15);color:#0f172a">' +
-    (fresh ? doc.html : '<div style="font-size:11px;color:#64748b;padding:20px;text-align:center">회의록 문서를 불러오는 중...</div>') + '</div></div>';
+  return bar + '<div class="pmt-paper-bg"><div id="pmtDoc-' + _pmtEsc(m.id) + '" class="pmt-doc pmt-paper">' +
+    (fresh ? doc.html : '<div class="pmt-paper-msg">회의록 문서를 불러오는 중...</div>') + '</div></div>';
 }
 /* 서버가 만든 회의록 문서 한 벌 — opts: { sign?, message? } → { subject, html, docNo, mailedAt, … } */
 function _pmtRender(mid, opts) {
@@ -388,7 +391,7 @@ function _pmtLoadDoc(mid) {
   }).catch(function (e) {
     if (_pmt.docLoading[mid] === key) delete _pmt.docLoading[mid];
     var box = document.getElementById('pmtDoc-' + mid);
-    if (box) box.innerHTML = '<div style="font-size:11px;color:#64748b;padding:20px;text-align:center">문서를 불러오지 못했습니다. ' + _pmtEsc(_pmtErr(e, '')) + '</div>';
+    if (box) box.innerHTML = '<div class="pmt-paper-msg">문서를 불러오지 못했습니다. ' + _pmtEsc(_pmtErr(e, '')) + '</div>';
   });
 }
 function _pmtMe() { return (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.displayName || currentUser.name || '') : ''; }

@@ -771,3 +771,59 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 /* v13.201 회의 탭 안의 회의록 문서 — 앱 표 스타일(th 대문자·자간 등)이 출력물 모양을 바꾸지 않게 */
 .pmt-doc th,.pmt-doc td{text-transform:none;letter-spacing:normal}
 .pmt-doc table{margin:0}
+/* v13.204 회의 탭 (project-meetings.js) — 인라인 스타일에서 옮김. 상태에 따라 바뀌는 색(SEM_COLOR)만 인라인에 남김 */
+.pmt-btn{font-size:10px}
+.pmt-btn-xs{flex:0 0 auto;font-size:9px;padding:0 4px}
+.pmt-note{color:var(--t6);font-size:11px;padding:10px 0}
+.pmt-empty{font-size:11px;color:var(--t6);padding:14px 0;text-align:center}
+.pmt-empty.short{padding:8px 0;text-align:start}
+.pmt-dim{font-weight:400;color:var(--t6)}
+.pmt-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px}
+.pmt-summary{font-size:11px;color:var(--t4)}
+.pmt-row{display:flex;gap:4px}
+.pmt-wrap{display:flex;gap:4px;flex-wrap:wrap}
+.pmt-row.mid,.pmt-wrap.mid{align-items:center}
+.pmt-filters{display:flex;gap:4px;margin:4px 0 8px}
+.pmt-filter{font-size:10px;padding:2px 9px;border:1px solid var(--bd);background:transparent;color:var(--t4);font-weight:400}
+.pmt-filter.on{border-color:var(--ac);background:var(--ac-bg,var(--bg-i));color:var(--t1);font-weight:700}
+.pmt-add{border:1px dashed var(--ac);border-radius:8px;padding:8px 10px;margin-bottom:10px}
+.pmt-allacts{border:1px solid var(--bd);border-radius:8px;padding:6px 10px;margin-bottom:10px;background:var(--bg-i)}
+.pmt-allact{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:10.5px;border-bottom:1px solid var(--bd)}
+.pmt-card{border:1px solid var(--bd);border-left:3px solid var(--bd);border-radius:8px;margin-bottom:8px;overflow:hidden}
+.pmt-card-hd{cursor:pointer;display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--bg-i)}
+.pmt-card-title{flex:1;min-width:0;font-size:12px;font-weight:700;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pmt-pill{font-size:9px;font-weight:700;border-radius:8px;padding:0 6px}
+.pmt-pill.ghost{font-weight:400;color:var(--t6);border:1px solid var(--bd)}
+.pmt-meta{font-size:10px;color:var(--t5);white-space:nowrap}
+.pmt-body{padding:8px 10px}
+.pmt-sec{font-size:11px;font-weight:800;color:var(--t2);margin:14px 0 5px;padding-left:6px;border-left:3px solid var(--ac)}
+.pmt-sub{font-size:10px;font-weight:600;color:var(--t5);margin:8px 0 3px}
+.pmt-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;margin-top:12px;padding-top:8px;border-top:1px solid var(--bd)}
+.pmt-info{display:grid;grid-template-columns:56px 1fr;gap:5px 8px;align-items:center}
+.pmt-lbl{font-size:10px;color:var(--t5);font-weight:600;white-space:nowrap}
+.pmt-lbl.top{align-self:start;padding-top:5px}
+.pmt-in{font-size:11px;padding:4px 7px;box-sizing:border-box;min-width:0}
+.pmt-ta{width:100%;box-sizing:border-box;font-size:11px;padding:6px 8px;resize:vertical;line-height:1.5}
+.pmt-ta.sm{padding:4px 7px}
+.pmt-mini{font-size:10.5px;padding:3px 6px;min-width:0}
+.pmt-chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center;border:1px solid var(--bd);border-radius:6px;padding:3px 5px;background:var(--bg-i)}
+.pmt-chip{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;font-size:10.5px;background:var(--bg-p,var(--bg));border:1px solid var(--bd);border-radius:10px;padding:1px 4px 1px 8px;color:var(--t2)}
+.pmt-chip button{border:none;background:none;color:var(--t6);cursor:pointer;font-size:10px;padding:0 2px}
+.pmt-chip-in{flex:1 1 90px;min-width:80px;border:none;background:transparent;outline:none;font-size:10.5px;padding:2px 3px;color:var(--t2)}
+.pmt-ag{border:1px solid var(--bd);border-radius:6px;padding:5px 7px;margin-bottom:5px}
+.pmt-ag-hd{display:flex;align-items:center;gap:6px;font-size:11px}
+.pmt-ag-grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:4px;margin-top:4px}
+.pmt-ag-add{display:flex;gap:3px;margin-top:3px}
+.pmt-cell{width:100%;box-sizing:border-box;font-size:10.5px;padding:3px 6px;resize:vertical;line-height:1.5;min-width:0}
+.pmt-acts{border:1px solid var(--bd);border-radius:6px;overflow:hidden}
+.pmt-act{display:flex;align-items:center;gap:6px;padding:4px 7px;font-size:10.5px;white-space:nowrap}
+.pmt-act+.pmt-act{border-top:1px solid var(--bd)}
+.pmt-act.done{opacity:.6}
+.pmt-act-add{display:grid;grid-template-columns:minmax(0,1fr) 96px auto auto;gap:3px;margin-top:5px}
+.pmt-docbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid var(--bd)}
+/* 문서는 종이처럼 흰 바탕 — 다크 모드에서도 출력물과 같은 모습 */
+.pmt-paper-bg{background:#e5e7eb;padding:10px;overflow-x:auto}
+.pmt-paper{background:#fff;min-width:560px;max-width:794px;margin:0 auto;padding:18px 20px;box-shadow:0 1px 6px rgba(0,0,0,.15);color:#0f172a}
+.pmt-paper-msg{font-size:11px;color:#64748b;padding:20px;text-align:center}
+.pmt-readonly{font-size:10.5px;color:var(--t5);background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:5px 9px;margin-bottom:8px}
+.pmt-readonly{font-size:10.5px;color:var(--t5);background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:5px 9px;margin-bottom:8px}
