@@ -445,41 +445,142 @@ function _specWrap(text, n, maxLines) {
 function _specXml(s) { return _specStr(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function _specBoxById(L, id) { for (var i = 0; i < L.boxes.length; i++) if (L.boxes[i].id === id) return L.boxes[i]; return null; }
 
-/* 직각 연결선 — 출발 상자 오른쪽 가운데 → 두 열 사이 세로선 → 도착 상자 왼쪽 가운데 */
-function _specEdgePath(a, b) {
-  var x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
-  if (a.kind === 'ipc') y1 = Math.max(a.y + 12, Math.min(a.y + a.h - 12, y2));
-  var mx = x2 - 20;
-  if (Math.abs(y1 - y2) < 1) return 'M' + x1 + ' ' + y1 + 'H' + (x2 - 1);
-  return 'M' + x1 + ' ' + y1 + 'H' + mx + 'V' + y2 + 'H' + (x2 - 1);
+/* ── 구성도 편집 (v13.200) — 자동 배치 위에 사용자가 고친 것을 얹는다 ─────────────
+   sheet.diagram = {
+     pos:  { boxId|laneN: {x, y} }          옮긴 위치
+     text: { boxId|laneN: {title?, sub?} }  고친 이름·부제
+     add:  [{ id, x, y, w, h, title, sub }] 사용자가 추가한 상자
+     links:[{ id, from, to, label? }]       사용자가 이은 화살표
+     hideBox:  { boxId: true }              숨긴 자동 상자
+     hideEdge: { 'from>to': true }          지운 자동 화살표
+     edgeLabel:{ 'from>to': '라벨' }         자동 화살표 라벨
+     flip:     { 'from>to': true }          자동 화살표 방향 바꿈
+   }
+   사양 값이 바뀌면 자동 상자는 새로 계산되고(id 기준으로 위치·이름 유지), 없어진 장치의 상자는 빠진다. */
+function specDiagramEmpty(dg) {
+  if (!dg) return true;
+  return !['pos', 'text', 'hideBox', 'hideEdge', 'edgeLabel', 'flip'].some(function (k) { return dg[k] && Object.keys(dg[k]).length; }) &&
+    !((dg.add || []).length || (dg.links || []).length);
+}
+function specDiagramNorm(dg) {
+  dg = dg && typeof dg === 'object' ? JSON.parse(JSON.stringify(dg)) : {};
+  ['pos', 'text', 'hideBox', 'hideEdge', 'edgeLabel', 'flip'].forEach(function (k) { if (!dg[k] || typeof dg[k] !== 'object' || Array.isArray(dg[k])) dg[k] = {}; });
+  ['add', 'links'].forEach(function (k) { if (!Array.isArray(dg[k])) dg[k] = []; });
+  return dg;
+}
+function specDiagramMerge(L, dg) {
+  dg = specDiagramNorm(dg);
+  var moved = Object.keys(dg.pos).length > 0;
+  function over(o, id) {
+    var p = dg.pos[id], t = dg.text[id];
+    if (p) { if (isFinite(p.x)) o.x = Math.max(0, Number(p.x)); if (isFinite(p.y)) o.y = Math.max(0, Number(p.y)); }
+    if (t) { if (t.title != null) o.title = String(t.title); if (t.sub != null) o.sub = String(t.sub); }
+    return o;
+  }
+  var boxes = L.boxes.filter(function (b) { return !dg.hideBox[b.id]; }).map(function (b) { return over(Object.assign({}, b), b.id); });
+  dg.add.forEach(function (u) {
+    if (!u || !u.id) return;
+    boxes.push(over({ id: u.id, x: Number(u.x) || 0, y: Number(u.y) || 0, w: Number(u.w) || 160, h: Number(u.h) || 44, title: String(u.title || '새 상자'), sub: String(u.sub || ''), kind: 'user' }, u.id));
+  });
+  var has = {}; boxes.forEach(function (b) { has[b.id] = true; });
+  var lanes = L.lanes.map(function (ln, i) { var o = over({ id: 'lane' + i, x: ln.x, y: ln.y, title: ln.title }, 'lane' + i); return o; });
+  var edges = [];
+  L.edges.forEach(function (e) {
+    var k = e.from + '>' + e.to;
+    if (dg.hideEdge[k] || !has[e.from] || !has[e.to]) return;
+    var f = !!dg.flip[k];
+    edges.push({ key: 'a:' + k, from: f ? e.to : e.from, to: f ? e.from : e.to, label: dg.edgeLabel[k] || '' });
+  });
+  dg.links.forEach(function (l) {
+    if (l && l.id && has[l.from] && has[l.to] && l.from !== l.to) edges.push({ key: 'u:' + l.id, from: l.from, to: l.to, label: String(l.label || ''), user: true });
+  });
+  var w = L.width, h = L.height;
+  boxes.forEach(function (b) { w = Math.max(w, b.x + b.w + 24); h = Math.max(h, b.y + b.h + 24); });
+  lanes.forEach(function (ln) { h = Math.max(h, ln.y + 16); });
+  return { width: w, height: h, boxes: boxes, edges: edges, lanes: lanes, brackets: moved ? [] : (L.brackets || []), customized: !specDiagramEmpty(dg) };
+}
+/* 직각 연결선 — 상대 위치에 따라 좌→우 / 우→좌 / 위→아래 / 아래→위. 점 배열 */
+function specEdgeRoute(a, b) {
+  var acx = a.x + a.w / 2, acy = a.y + a.h / 2, bcx = b.x + b.w / 2, bcy = b.y + b.h / 2;
+  var tall = a.kind === 'ipc' || a.h > b.h * 2;
+  function clampY(y) { return Math.max(a.y + 12, Math.min(a.y + a.h - 12, y)); }
+  var x1, y1, x2, y2, m;
+  if (b.x >= a.x + a.w + 12) {
+    x1 = a.x + a.w; y1 = tall ? clampY(bcy) : acy; x2 = b.x; y2 = bcy;
+    if (Math.abs(y1 - y2) < 1) return [[x1, y1], [x2, y2]];
+    m = Math.max(x1 + 10, x2 - 20);
+    return [[x1, y1], [m, y1], [m, y2], [x2, y2]];
+  }
+  if (b.x + b.w <= a.x - 12) {
+    x1 = a.x; y1 = tall ? clampY(bcy) : acy; x2 = b.x + b.w; y2 = bcy;
+    if (Math.abs(y1 - y2) < 1) return [[x1, y1], [x2, y2]];
+    m = Math.min(x1 - 10, x2 + 20);
+    return [[x1, y1], [m, y1], [m, y2], [x2, y2]];
+  }
+  if (b.y >= a.y + a.h) {
+    x1 = acx; y1 = a.y + a.h; x2 = bcx; y2 = b.y;
+    if (Math.abs(x1 - x2) < 1) return [[x1, y1], [x2, y2]];
+    m = Math.max(y1 + 10, y2 - 16);
+    return [[x1, y1], [x1, m], [x2, m], [x2, y2]];
+  }
+  x1 = acx; y1 = a.y; x2 = bcx; y2 = b.y + b.h;
+  if (Math.abs(x1 - x2) < 1) return [[x1, y1], [x2, y2]];
+  m = Math.min(y1 - 10, y2 + 16);
+  return [[x1, y1], [x1, m], [x2, m], [x2, y2]];
+}
+function _specRoutePath(pts) {
+  var last = pts[pts.length - 1], prev = pts[pts.length - 2];
+  var dx = Math.sign(last[0] - prev[0]), dy = Math.sign(last[1] - prev[1]);
+  var end = [last[0] - dx, last[1] - dy];   // 화살촉이 테두리를 덮지 않게 1px 앞에서
+  return 'M' + pts.slice(0, -1).concat([end]).map(function (p) { return p[0] + ' ' + p[1]; }).join('L');
+}
+function _specRouteMid(pts) {
+  var i = Math.floor((pts.length - 1) / 2), a = pts[i], b = pts[i + 1];
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 }
 
-/* SVG 문자열 — 앱 CSS 변수로 색을 잡아 다크 모드에서도 읽힌다. 문자열은 모두 이스케이프. */
+/* SVG 문자열 — 앱 CSS 변수로 색을 잡아 다크 모드에서도 읽힌다. 문자열은 모두 이스케이프.
+   opts.interactive: 편집용 표시(data-box / data-edge, 굵은 클릭 영역), opts.selected: 'box:id' | 'edge:key', opts.source: 화살표 시작 상자 */
 function specDiagramSvg(L, opts) {
   opts = opts || {};
   var edge = opts.edge || 'var(--t6)', ink = opts.ink || 'var(--t1)', quiet = opts.quiet || 'var(--t5)', line = opts.line || 'var(--bd)';
   var accent = opts.accent || '#3B82F6', warn = opts.warn || '#F59E0B';
   var p = [];
   p.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + L.width + ' ' + L.height + '" width="100%" style="max-width:' + L.width + 'px;font-family:inherit" role="img" aria-label="하드웨어 구성도">');
-  p.push('<defs><marker id="psArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="' + edge + '"/></marker></defs>');
-  L.lanes.forEach(function (ln) { p.push('<text x="' + ln.x + '" y="' + ln.y + '" font-size="11" font-weight="700" fill="' + quiet + '">' + _specXml(ln.title) + '</text>'); });
-  p.push('<g fill="none" stroke="' + edge + '" stroke-width="1.2">');
+  p.push('<defs><marker id="psArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="' + edge + '"/></marker>' +
+    '<marker id="psArrowOn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="' + accent + '"/></marker></defs>');
+  var I = !!opts.interactive, sel = opts.selected || '';
+  L.lanes.forEach(function (ln, i) {
+    var id = ln.id || ('lane' + i), on = sel === 'box:' + id;
+    p.push('<text' + (I ? ' data-box="' + _specXml(id) + '" style="cursor:move"' : '') + ' x="' + ln.x + '" y="' + ln.y + '" font-size="11" font-weight="700" fill="' + (on ? accent : quiet) + '"' + (on ? ' text-decoration="underline"' : '') + '>' + _specXml(ln.title) + '</text>');
+  });
   L.edges.forEach(function (e) {
     var a = _specBoxById(L, e.from), b = _specBoxById(L, e.to);
-    if (a && b) p.push('<path d="' + _specEdgePath(a, b) + '" marker-end="url(#psArrow)"/>');
+    if (!a || !b) return;
+    var pts = specEdgeRoute(a, b), d = _specRoutePath(pts), on = sel === 'edge:' + e.key;
+    var col = on ? accent : edge;
+    p.push('<g' + (I && e.key ? ' data-edge="' + _specXml(e.key) + '" style="cursor:pointer"' : '') + '>');
+    if (I) p.push('<path d="' + d + '" fill="none" stroke="transparent" stroke-width="10"/>');   // 클릭하기 쉽게
+    p.push('<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="' + (on ? 2.2 : 1.2) + '" marker-end="url(#' + (on ? 'psArrowOn' : 'psArrow') + ')"' + (e.user ? ' stroke-dasharray="' + (opts.userDash || '0') + '"' : '') + '/>');
+    if (e.label) {
+      var mid = _specRouteMid(pts), tw = Math.min(160, _specStr(e.label).length * 6.4 + 10);
+      p.push('<rect x="' + (mid[0] - tw / 2) + '" y="' + (mid[1] - 9) + '" width="' + tw + '" height="16" rx="4" fill="' + (opts.labelBg || 'var(--bg)') + '" stroke="' + col + '" stroke-width="0.8"/>' +
+        '<text x="' + mid[0] + '" y="' + (mid[1] + 3) + '" text-anchor="middle" font-size="10" fill="' + ink + '">' + _specXml(_specTrunc(e.label, 24)) + '</text>');
+    }
+    p.push('</g>');
   });
-  p.push('</g>');
   (L.brackets || []).forEach(function (k) {
     p.push('<path d="M' + (k.x - 4) + ' ' + k.y1 + 'H' + k.x + 'V' + k.y2 + 'H' + (k.x - 4) + 'M' + k.x + ' ' + k.midY + 'H' + k.toX + '" fill="none" stroke="' + warn + '" stroke-width="1.2"/>');
   });
   L.boxes.forEach(function (b) {
-    var isIpc = b.kind === 'ipc', isWarn = b.kind === 'warn';
-    var stroke = isIpc ? accent : isWarn ? warn : line;
-    var fill = isIpc ? accent : isWarn ? warn : 'none';
+    var isIpc = b.kind === 'ipc', isWarn = b.kind === 'warn', isUser = b.kind === 'user';
+    var on = sel === 'box:' + b.id, src = opts.source === b.id;
+    var stroke = (on || src) ? accent : isIpc ? accent : isWarn ? warn : line;
+    var fill = isIpc ? accent : isWarn ? warn : ((I || L.customized) ? (opts.boxBg || 'var(--bg)') : 'none');   // 편집한 배치는 겹쳐도 깔끔하게 불투명
     var cx = b.x + b.w / 2, cy = b.y + b.h / 2;
     var chars = Math.floor((b.w - 16) / 7.2);
-    p.push('<g><title>' + _specXml(b.title + (b.sub ? ' — ' + b.sub : '')) + '</title>');
-    p.push('<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8" fill="' + fill + '" fill-opacity="' + (fill === 'none' ? 1 : 0.1) + '" stroke="' + stroke + '" stroke-width="' + (isIpc || isWarn ? 1.8 : 1.2) + '"/>');
+    p.push('<g' + (I ? ' data-box="' + _specXml(b.id) + '" style="cursor:move"' : '') + '><title>' + _specXml(b.title + (b.sub ? ' — ' + b.sub : '')) + '</title>');
+    p.push('<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8" fill="' + fill + '" fill-opacity="' + (isIpc || isWarn ? 0.1 : 1) + '" stroke="' + stroke + '" stroke-width="' + ((on || src) ? 2.4 : (isIpc || isWarn ? 1.8 : 1.2)) + '"' + (isUser ? ' stroke-dasharray="5 3"' : '') + '/>');
     if (isWarn) {
       p.push('<text x="' + (b.x + 10) + '" y="' + (b.y + 20) + '" font-size="12" font-weight="700" fill="' + ink + '">' + _specXml(b.title) + '</text>');
       var lines = _specWrap(b.sub, Math.floor((b.w - 20) / 7), 4);
@@ -504,17 +605,18 @@ function specDiagramSvg(L, opts) {
 function specDiagramDrawioXml(L) {
   var c = ['<mxCell id="0"/>', '<mxCell id="1" parent="0"/>'];
   L.lanes.forEach(function (ln, i) {
-    c.push('<mxCell id="lane' + i + '" value="' + _specXml(ln.title) + '" style="text;html=1;fontStyle=1;fontSize=11;fontColor=#64748B;align=left;verticalAlign=middle;" vertex="1" parent="1"><mxGeometry x="' + ln.x + '" y="' + (ln.y - 14) + '" width="200" height="20" as="geometry"/></mxCell>');
+    c.push('<mxCell id="lanet' + i + '" value="' + _specXml(ln.title) + '" style="text;html=1;fontStyle=1;fontSize=11;fontColor=#64748B;align=left;verticalAlign=middle;" vertex="1" parent="1"><mxGeometry x="' + ln.x + '" y="' + (ln.y - 14) + '" width="200" height="20" as="geometry"/></mxCell>');
   });
   L.boxes.forEach(function (b) {
     var style = b.kind === 'ipc' ? 'rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#3B82F6;fontStyle=1;'
       : b.kind === 'warn' ? 'rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#F59E0B;align=left;spacingLeft=8;'
+      : b.kind === 'user' ? 'rounded=1;whiteSpace=wrap;html=1;dashed=1;'
       : 'rounded=1;whiteSpace=wrap;html=1;';
     var val = _specXml(_specXml(b.title)) + (b.sub ? '&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#64748B&quot;&gt;' + _specXml(_specXml(b.sub)) + '&lt;/font&gt;' : '');
     c.push('<mxCell id="' + b.id + '" value="' + val + '" style="' + style + '" vertex="1" parent="1"><mxGeometry x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" as="geometry"/></mxCell>');
   });
   L.edges.forEach(function (e, i) {
-    c.push('<mxCell id="e' + i + '" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#94A3B8;" edge="1" parent="1" source="' + e.from + '" target="' + e.to + '"><mxGeometry relative="1" as="geometry"/></mxCell>');
+    c.push('<mxCell id="e' + i + '"' + (e.label ? ' value="' + _specXml(e.label) + '"' : '') + ' style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#94A3B8;fontSize=10;" edge="1" parent="1" source="' + e.from + '" target="' + e.to + '"><mxGeometry relative="1" as="geometry"/></mxCell>');
   });
   return '<mxfile><diagram name="구성도"><mxGraphModel dx="' + L.width + '" dy="' + L.height + '" grid="1" gridSize="8" page="0"><root>' + c.join('') + '</root></mxGraphModel></diagram></mxfile>';
 }
@@ -583,6 +685,7 @@ function specDiff(base, next, schema) {
       if (!_specSame(b, n)) out.push({ path: [root, k], from: _specBlank(b) ? '' : b, to: _specBlank(n) ? '' : n, label: lbl(k, root === 'status' ? '상태' : '비고') });
     });
   });
+  if (!_specSame(base.diagram || null, next.diagram || null)) out.push({ path: ['diagram'], from: base.diagram || null, to: next.diagram || null, label: '하드웨어 구성도 편집' });
   SPEC_DISCIPLINE_KEYS.forEach(function (d) {
     var b = (base.extra || {})[d] || [], n = (next.extra || {})[d] || [];
     if (!_specSame(b, n)) out.push({ path: ['extra', d], from: b, to: n, label: '기타 사양 › ' + specDisciplineLabel(d) });
@@ -655,6 +758,6 @@ if (typeof module !== 'undefined' && module.exports) {
     specValidateSchema: specValidateSchema, specBuildDiagram: specBuildDiagram, specChecks: specChecks,
     specSheetRows: specSheetRows, specItemIndex: specItemIndex, specDisciplineLabel: specDisciplineLabel,
     specDiagramLayout: specDiagramLayout, specDiagramSvg: specDiagramSvg, specDiagramDrawioXml: specDiagramDrawioXml,
-    specDiff: specDiff, specBom: specBom, specStatusOf: specStatusOf, specNextStatus: specNextStatus, specSectionStatus: specSectionStatus, SPEC_STATUS: SPEC_STATUS
+    specDiff: specDiff, specDiagramMerge: specDiagramMerge, specDiagramNorm: specDiagramNorm, specDiagramEmpty: specDiagramEmpty, specEdgeRoute: specEdgeRoute, specBom: specBom, specStatusOf: specStatusOf, specNextStatus: specNextStatus, specSectionStatus: specSectionStatus, SPEC_STATUS: SPEC_STATUS
   };
 }

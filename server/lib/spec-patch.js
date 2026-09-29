@@ -15,8 +15,9 @@
  *   ['values', itemKey, rowId, colKey]  표 칸 — 같은 표의 다른 칸은 서로 독립적으로 병합된다
  *   ['remarks', itemKey] | ['status', itemKey]
  *   ['extra', discipline]               기타 사양(분야별 목록 통째)
+ *   ['diagram']                         하드웨어 구성도 편집(위치·이름·화살표) 통째 (v13.200)
  */
-var ROOTS = { templateId: 1, templateVersion: 1, values: 1, remarks: 1, status: 1, extra: 1 };
+var ROOTS = { templateId: 1, templateVersion: 1, values: 1, remarks: 1, status: 1, extra: 1, diagram: 1 };
 var MAX_CHANGES = 2000;
 
 function _isBlank(v) { return v === undefined || v === null || v === ''; }
@@ -76,7 +77,8 @@ function validate(changes) {
     if (!ROOTS[c.path[0]]) return '경로 오류: ' + c.path[0];
     for (var j = 0; j < c.path.length; j++) if (typeof c.path[j] !== 'string' || !c.path[j] || c.path[j].length > 80 || c.path[j] === '__proto__' || c.path[j] === 'constructor' || c.path[j] === 'prototype') return '경로 오류';
     if (c.path.length > 2 && c.path[0] !== 'values') return '경로 오류';
-    if (c.path.length === 1 && c.path[0] !== 'templateId' && c.path[0] !== 'templateVersion') return '경로 오류';
+    if (c.path[0] === 'diagram' && c.path.length !== 1) return '경로 오류';   // 구성도는 통째로만
+    if (c.path.length === 1 && c.path[0] !== 'templateId' && c.path[0] !== 'templateVersion' && c.path[0] !== 'diagram') return '경로 오류';
   }
   return null;
 }

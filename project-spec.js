@@ -204,12 +204,258 @@ function _psToolbarHtml() {
 
 function _psNarrow() { var el = document.getElementById('pdSpec'); return !!(el && el.clientWidth && el.clientWidth < 720); }
 
+/* ═══ 하드웨어 구성도 편집 (v13.200) ═══════════════════════════════════════
+   자동 계통도 위에 사용자가 옮기기·이름 고치기·화살표 잇기/지우기/뒤집기·상자 추가/숨기기를 얹는다.
+   편집 내용은 _ps.sheet.diagram (spec-schema.js specDiagramMerge 규칙) → 사양서와 함께 PATCH 저장.
+   _ps.dg = { edit, arrow, source, sel:'box:id'|'edge:key', drag } */
+var PS_DG_GRID = 8;
+function _psDgState() { if (!_ps.dg) _ps.dg = { edit: false, arrow: false, source: null, sel: '', drag: null }; return _ps.dg; }
+function _psDgDoc() { _ps.sheet.diagram = specDiagramNorm(_ps.sheet.diagram); return _ps.sheet.diagram; }
+/* 지금 사양 값으로 계산한 자동 배치 + 편집 내용 = 화면에 그릴 배치 */
+function _psDgLayout(sheet) {
+  sheet = sheet || _psCollect(true);
+  var model = specBuildDiagram(sheet), checks = specChecks(sheet);
+  var hasUser = sheet.diagram && ((sheet.diagram.add || []).length);
+  if (model.empty && !hasUser) return { empty: true, checks: checks };
+  var L = specDiagramMerge(specDiagramLayout(model, checks), sheet.diagram);
+  L.checks = checks;
+  return L;
+}
+function _psDgSvg(L) {
+  var st = _psDgState();
+  return specDiagramSvg(L, { accent: SEM_COLOR.info, warn: SEM_COLOR.warn, interactive: st.edit, selected: st.sel, source: st.source, userDash: '5 3' });
+}
+function _psDgToolbarHtml() {
+  if (!_ps.canEdit) return '';
+  var st = _psDgState();
+  if (!st.edit) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:4px">' +
+      '<span style="font-size:10px;color:var(--t6)">자동 계통도 — 축 구성·모션 컨트롤러·IO·외부장치·확장 모듈 값으로 그립니다.' + (_ps.sheet.diagram && !specDiagramEmpty(_ps.sheet.diagram) ? ' <b style="color:var(--t4)">(편집한 배치 적용 중)</b>' : '') + '</span>' +
+      '<button class="btn btn-g btn-s" style="font-size:10px;white-space:nowrap" onclick="psDgEdit(true)" title="상자 옮기기·이름 고치기·화살표 잇기">✏️ 구성도 편집</button></div>';
+  }
+  var b = function (label, fn, title, on) { return '<button class="btn btn-' + (on ? 'p' : 'g') + ' btn-s" style="font-size:10px;white-space:nowrap" onclick="' + fn + '" title="' + title + '">' + label + '</button>'; };
+  return '<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:4px;padding:5px 6px;border:1px solid ' + SEM_COLOR.info + ';border-radius:6px;background:' + SEM_COLOR.info + '10">' +
+    '<b style="font-size:10.5px;color:var(--t2);margin-right:4px">✏️ 편집 중</b>' +
+    b('+ 상자', 'psDgAddBox()', '새 상자를 추가합니다') +
+    b(st.arrow ? '↗ 화살표 잇는 중 (끄기)' : '↗ 화살표 잇기', 'psDgArrowMode()', '시작 상자 → 도착 상자 순서로 누르세요', st.arrow) +
+    b('⊞ 격자 맞춤', 'psDgSnapAll()', '모든 상자를 격자에 맞춰 가지런히') +
+    b('⟲ 자동 배치로 정리', 'psDgAutoArrange()', '이름·추가한 상자·화살표는 두고 위치만 자동 배치로') +
+    b('초기화', 'psDgReset()', '편집한 내용을 모두 지우고 자동 계통도로') +
+    '<span style="flex:1"></span>' + b('완료', 'psDgEdit(false)', '편집 마치기 (💾 저장을 눌러 사양서와 함께 저장)', true) +
+    '<div style="flex-basis:100%;font-size:9.5px;color:var(--t6)">' + (st.arrow ? (st.source ? '도착 상자를 누르세요 (Esc: 취소)' : '시작 상자를 누르세요') : '상자·제목을 끌어서 옮기기 · 누르면 오른쪽에서 이름·삭제 · 화살표를 누르면 라벨·방향·삭제 · Delete 키로 삭제') + '</div>' +
+  '</div>';
+}
+function _psDgPanelHtml(L) {
+  var st = _psDgState(); if (!st.edit || !st.sel) return '';
+  var kind = st.sel.slice(0, st.sel.indexOf(':')), id = st.sel.slice(st.sel.indexOf(':') + 1);
+  var inp = 'width:100%;box-sizing:border-box;font-size:11px;padding:4px 7px;margin-bottom:4px';
+  var h = '<div style="border:1px solid var(--bd);border-radius:6px;padding:7px 9px;margin-top:6px;background:var(--bg-i)">';
+  if (kind === 'box') {
+    var bx = (L.boxes || []).filter(function (x) { return x.id === id; })[0];
+    var ln = (L.lanes || []).filter(function (x) { return x.id === id; })[0];
+    var o = bx || ln; if (!o) return '';
+    var isUser = bx && bx.kind === 'user';
+    h += '<div style="font-size:10.5px;font-weight:700;color:var(--t3);margin-bottom:5px">' + (ln ? '계통 제목' : isUser ? '추가한 상자' : '상자') + '</div>' +
+      '<input class="si" value="' + _psEsc(o.title) + '" placeholder="이름" oninput="psDgText(\'' + _psJs(id) + '\',\'title\',this.value)" style="' + inp + '">' +
+      (bx && bx.kind !== 'warn' ? '<input class="si" value="' + _psEsc(o.sub || '') + '" placeholder="부제 (선택)" oninput="psDgText(\'' + _psJs(id) + '\',\'sub\',this.value)" style="' + inp + '">' : '') +
+      '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
+        (!isUser ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psDgRestore(\'' + _psJs(id) + '\')" title="이름·위치를 자동 값으로">원래대로</button>' : '') +
+        (bx ? '<button class="btn btn-d btn-s" style="font-size:10px" onclick="psDgDelete()">' + (isUser ? '삭제' : '숨기기') + '</button>' : '') +
+      '</div>';
+  } else {
+    var e = (L.edges || []).filter(function (x) { return x.key === id; })[0]; if (!e) return '';
+    var nm = function (bid) { var x = (L.boxes || []).filter(function (y) { return y.id === bid; })[0]; return x ? x.title : bid; };
+    h += '<div style="font-size:10.5px;font-weight:700;color:var(--t3);margin-bottom:5px">화살표 · ' + _psEsc(nm(e.from)) + ' → ' + _psEsc(nm(e.to)) + '</div>' +
+      '<input class="si" value="' + _psEsc(e.label || '') + '" placeholder="라벨 (예: RS-232C, 24V, CH0)" oninput="psDgEdgeLabel(this.value)" style="' + inp + '">' +
+      '<div style="display:flex;gap:4px"><button class="btn btn-g btn-s" style="font-size:10px" onclick="psDgFlip()">⇄ 방향 바꾸기</button><button class="btn btn-d btn-s" style="font-size:10px" onclick="psDgDelete()">삭제</button></div>';
+  }
+  return h + '</div>';
+}
+/* 구성도만 다시 그림 (드래그 중에는 계산해 둔 자동 배치를 재사용) */
+function _psDgPaint(L) {
+  var box = document.getElementById('psDiagram'); if (!box) return;
+  var st = _psDgState();
+  L = L || _psDgLayout();
+  var tb = document.getElementById('psDgTools'); if (tb) tb.innerHTML = _psDgToolbarHtml();
+  box.style.cursor = st.edit ? 'default' : 'zoom-in';
+  box.title = st.edit ? '' : '눌러서 크게 보기';
+  box.innerHTML = L.empty
+    ? '<div style="font-size:11px;color:var(--t6);padding:14px;text-align:center">모션 컨트롤러·축 구성·외부장치 목록을 채우면 계통도가 그려집니다.' + (st.edit ? ' 또는 "+ 상자"로 직접 그리세요.' : '') + '</div>'
+    : '<div style="min-width:640px">' + _psDgSvg(L) + '</div>';   // 좁은 패널에서는 가로 스크롤(글자가 읽히는 크기 유지)
+  var pn = document.getElementById('psDgPanel'); if (pn) pn.innerHTML = L.empty ? '' : _psDgPanelHtml(L);
+  _psDgBind(box);
+}
+function psDgEdit(on) {
+  if (!_ps) return;
+  var st = _psDgState();
+  st.edit = !!on; st.arrow = false; st.source = null; st.sel = '';
+  _psDgPaint();
+}
+function _psDgChanged(L) { _psMarkDirty(); _psDgPaint(L); }
+
+/* ── 포인터: 끌기 · 선택 · 화살표 잇기 (구성도 상자 div 에 한 번만 묶는다) ── */
+function _psDgPoint(svg, ev) {
+  var pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  var m = svg.getScreenCTM(); return m ? pt.matrixTransform(m.inverse()) : { x: 0, y: 0 };
+}
+function _psDgBind(box) {
+  if (box._psDgBound) return;
+  box._psDgBound = true;
+  box.addEventListener('click', function () { if (!_psDgState().edit) psDiagramZoom(); });
+  box.addEventListener('pointerdown', function (ev) {
+    var st = _psDgState(); if (!st.edit) return;
+    var svg = box.querySelector('svg'); if (!svg) return;
+    var gBox = ev.target.closest && ev.target.closest('[data-box]'), gEdge = ev.target.closest && ev.target.closest('[data-edge]');
+    if (gBox) {
+      var id = gBox.getAttribute('data-box');
+      if (st.arrow) { _psDgArrowClick(id); return; }
+      var peek = _psCollect(true), L = _psDgLayout(peek), o = (L.boxes.concat(L.lanes)).filter(function (x) { return x.id === id; })[0]; if (!o) return;
+      var p = _psDgPoint(svg, ev);
+      // 자동 배치는 끄는 동안 바뀌지 않으므로 한 번만 계산해 둔다 (저장 전 입력값 포함)
+      var base = specDiagramLayout(specBuildDiagram(peek), L.checks || []);
+      st.drag = { id: id, base: base, checks: L.checks, dx: p.x - o.x, dy: p.y - o.y, x0: ev.clientX, y0: ev.clientY, moved: false };
+      box.setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+    } else if (gEdge) {
+      st.sel = 'edge:' + gEdge.getAttribute('data-edge'); _psDgPaint();
+    } else if (st.sel) { st.sel = ''; _psDgPaint(); }
+  });
+  box.addEventListener('pointermove', function (ev) {
+    var st = _psDgState(), d = st.drag; if (!d) return;
+    if (!d.moved && Math.abs(ev.clientX - d.x0) + Math.abs(ev.clientY - d.y0) < 4) return;
+    d.moved = true;
+    var svg = box.querySelector('svg'); if (!svg) return;
+    var p = _psDgPoint(svg, ev);
+    var x = Math.max(0, Math.round((p.x - d.dx) / PS_DG_GRID) * PS_DG_GRID), y = Math.max(0, Math.round((p.y - d.dy) / PS_DG_GRID) * PS_DG_GRID);
+    var dg = _psDgDoc(); dg.pos[d.id] = { x: x, y: y };
+    if (!d.raf) d.raf = requestAnimationFrame(function () {
+      d.raf = null;
+      var L = specDiagramMerge(d.base, _ps.sheet.diagram); L.checks = d.checks;
+      var inner = box.querySelector('div'); if (inner) inner.innerHTML = _psDgSvg(L);
+    });
+  });
+  function end(ev) {
+    var st = _psDgState(), d = st.drag; if (!d) return;
+    st.drag = null;
+    try { box.releasePointerCapture(ev.pointerId); } catch (e) { /* 무시 */ }
+    if (d.moved) { _psDgChanged(); return; }
+    st.sel = 'box:' + d.id; _psDgPaint();
+  }
+  box.addEventListener('pointerup', end);
+  box.addEventListener('pointercancel', end);
+}
+function _psDgArrowClick(id) {
+  var st = _psDgState();
+  if (/^lane/.test(id)) return;
+  if (!st.source) { st.source = id; _psDgPaint(); return; }
+  if (st.source === id) { st.source = null; _psDgPaint(); return; }
+  var dg = _psDgDoc(), from = st.source;
+  var exists = dg.links.some(function (l) { return l.from === from && l.to === id; });
+  if (!exists) dg.links.push({ id: specNewId('ln'), from: from, to: id, label: '' });
+  st.source = null;
+  _psDgChanged();
+}
+function psDgArrowMode() { var st = _psDgState(); st.arrow = !st.arrow; st.source = null; st.sel = ''; _psDgPaint(); }
+
+/* ── 패널 동작 ─────────────────────────────────────────────────────────── */
+function _psDgSel() { var st = _psDgState(), i = st.sel.indexOf(':'); return { kind: st.sel.slice(0, i), id: st.sel.slice(i + 1) }; }
+function psDgText(id, field, v) {
+  var dg = _psDgDoc();
+  var u = dg.add.filter(function (x) { return x.id === id; })[0];
+  if (u) u[field] = v; else { dg.text[id] = dg.text[id] || {}; dg.text[id][field] = v; }
+  _psMarkDirty();
+  var box = document.getElementById('psDiagram'), inner = box && box.querySelector('div');
+  if (inner) inner.innerHTML = _psDgSvg(_psDgLayout());   // 패널 입력칸은 그대로 두고 그림만
+}
+function psDgEdgeLabel(v) {
+  var s = _psDgSel(), dg = _psDgDoc();
+  if (s.id.indexOf('u:') === 0) { var l = dg.links.filter(function (x) { return 'u:' + x.id === s.id; })[0]; if (l) l.label = v; }
+  else { var k = s.id.slice(2); if (v) dg.edgeLabel[k] = v; else delete dg.edgeLabel[k]; }
+  _psMarkDirty();
+  var box = document.getElementById('psDiagram'), inner = box && box.querySelector('div');
+  if (inner) inner.innerHTML = _psDgSvg(_psDgLayout());
+}
+function psDgFlip() {
+  var s = _psDgSel(), dg = _psDgDoc();
+  if (s.id.indexOf('u:') === 0) {
+    var l = dg.links.filter(function (x) { return 'u:' + x.id === s.id; })[0];
+    if (l) { var t = l.from; l.from = l.to; l.to = t; }
+  } else { var k = s.id.slice(2); if (dg.flip[k]) delete dg.flip[k]; else dg.flip[k] = true; }
+  _psDgChanged();
+}
+function psDgDelete() {
+  var st = _psDgState(), s = _psDgSel(), dg = _psDgDoc();
+  if (!st.sel) return;
+  if (s.kind === 'edge') {
+    if (s.id.indexOf('u:') === 0) dg.links = dg.links.filter(function (x) { return 'u:' + x.id !== s.id; });
+    else dg.hideEdge[s.id.slice(2)] = true;
+  } else {
+    if (/^lane/.test(s.id)) return;
+    var isUser = dg.add.some(function (x) { return x.id === s.id; });
+    if (isUser) dg.add = dg.add.filter(function (x) { return x.id !== s.id; });
+    else dg.hideBox[s.id] = true;
+    dg.links = dg.links.filter(function (l) { return l.from !== s.id && l.to !== s.id; });
+    delete dg.pos[s.id]; delete dg.text[s.id];
+  }
+  st.sel = '';
+  _psDgChanged();
+}
+function psDgRestore(id) {
+  var dg = _psDgDoc(); delete dg.pos[id]; delete dg.text[id];
+  _psDgChanged();
+}
+function psDgAddBox() {
+  var L = _psDgLayout(), dg = _psDgDoc(), st = _psDgState();
+  var y = 16; (L.boxes || []).forEach(function (b) { if (b.x + b.w > (L.width || 796) - 200) y = Math.max(y, b.y + b.h + 16); });
+  var id = specNewId('bx');
+  dg.add.push({ id: id, x: Math.max(16, (L.width || 796) - 200), y: y, w: 168, h: 44, title: '새 상자', sub: '' });
+  st.sel = 'box:' + id;
+  _psDgChanged();
+}
+function psDgSnapAll() {
+  var L = _psDgLayout(); if (L.empty) return;
+  var dg = _psDgDoc(), g = PS_DG_GRID * 2;
+  L.boxes.concat(L.lanes).forEach(function (b) {
+    var x = Math.round(b.x / g) * g, y = Math.round(b.y / g) * g;
+    var u = dg.add.filter(function (a) { return a.id === b.id; })[0];
+    if (u) { u.x = x; u.y = y; delete dg.pos[b.id]; } else dg.pos[b.id] = { x: x, y: y };
+  });
+  _psDgChanged();
+  _psToast('격자에 맞췄습니다.');
+}
+function psDgAutoArrange() {
+  var dg = _psDgDoc(), n = 0;
+  Object.keys(dg.pos).forEach(function (k) { if (!dg.add.some(function (a) { return a.id === k; })) { delete dg.pos[k]; n++; } });
+  // 추가한 상자는 자동 배치 오른쪽에 한 줄로
+  var L0 = specDiagramLayout(specBuildDiagram(_psCollect(true)), []), x = (L0.width || 796) - 184, y = 16;
+  dg.add.forEach(function (a) { a.x = x; a.y = y; y += (a.h || 44) + 16; delete dg.pos[a.id]; });
+  _psDgChanged();
+  _psToast('자동 배치로 정리했습니다' + (dg.add.length ? ' (추가한 상자는 오른쪽에 정렬)' : '') + '.');
+}
+function psDgReset() {
+  if (!confirm('구성도에서 옮기고 고친 내용·추가한 상자·화살표를 모두 지우고 자동 계통도로 되돌릴까요?')) return;
+  _ps.sheet.diagram = null;
+  var st = _psDgState(); st.sel = ''; st.source = null;
+  _psDgChanged();
+}
+/* 키보드 — 편집 중 Delete: 선택 삭제, Esc: 화살표 잇기 취소·선택 해제 */
+if (typeof document !== 'undefined' && !window._psDgKeyBound) {
+  window._psDgKeyBound = true;
+  document.addEventListener('keydown', function (e) {
+    if (!_ps || !_ps.dg || !_ps.dg.edit || !document.getElementById('psDiagram')) return;
+    var t = e.target && e.target.tagName;
+    if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+    if (e.key === 'Delete' || e.key === 'Backspace') { if (_ps.dg.sel) { e.preventDefault(); psDgDelete(); } }
+    else if (e.key === 'Escape') { _ps.dg.source = null; _ps.dg.sel = ''; _psDgPaint(); }
+  });
+}
+
 /* 구성도 크게 보기 */
 function psDiagramZoom() {
   if (!_ps) return;
-  var sheet = _psCollect(true), model = specBuildDiagram(sheet);
-  if (model.empty) return;
-  var svg = specDiagramSvg(specDiagramLayout(model, specChecks(sheet)), { accent: SEM_COLOR.info, warn: SEM_COLOR.warn });
+  var L = _psDgLayout();
+  if (L.empty) return;
+  var svg = specDiagramSvg(L, { accent: SEM_COLOR.info, warn: SEM_COLOR.warn });
   createModal({ id: 'psDiagramZoom', titleText: '🔌 하드웨어 구성도 — ' + (_ps.proj.name || ''), html: '<div style="overflow:auto;max-height:78vh;background:var(--bg);border-radius:8px;padding:10px">' + svg + '</div>', width: '1000px', closeOnEsc: true, closeOnOverlay: true });
 }
 
@@ -314,11 +560,12 @@ function _psHwCardHtml() {
     '</div>' +
     '<div style="padding:8px 10px;display:' + (collapsed ? 'none' : 'block') + '">' +
       '<div id="psChecks"></div>' +
-      '<div style="font-size:10px;color:var(--t6);margin-bottom:4px">자동 계통도 — 축 구성·모션 컨트롤러·IO·외부장치·확장 모듈 값으로 그립니다. 값을 고치면 바로 바뀝니다.</div>' +
-      '<div id="psDiagram" onclick="psDiagramZoom()" title="눌러서 크게 보기" style="overflow-x:auto;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:8px;cursor:zoom-in"></div>' +
+      '<div id="psDgTools"></div>' +
+      '<div id="psDiagram" style="overflow-x:auto;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:8px;cursor:zoom-in;touch-action:none;user-select:none"></div>' +
+      '<div id="psDgPanel"></div>' +
       '<div id="psBom" style="margin-top:8px"></div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 4px">' +
-        (_ps.canEdit ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psDrawioFromAuto()" title="자동 계통도를 draw.io 도면으로 가져와 상세하게 편집">✏️ 자동 구성도로 draw.io 도면 만들기</button>' + _psAttachBtnsHtml(PS_HW_SECTION, false) : '') +
+        (_ps.canEdit ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psDrawioFromAuto()" title="지금 구성도(편집한 배치 포함)를 draw.io 도면으로 가져와 상세하게 그립니다">✏️ 구성도를 draw.io 도면으로 내보내기</button>' + _psAttachBtnsHtml(PS_HW_SECTION, false) : '') +
       '</div>' +
       _psFilesBlockHtml(PS_HW_SECTION) +
     '</div></div>';
@@ -328,10 +575,9 @@ function _psRefreshDiagram() {
   if (!_ps || !_ps.schema) return;
   var box = document.getElementById('psDiagram'); if (!box) return;
   var sheet = _psCollect(true);
-  var model = specBuildDiagram(sheet), checks = specChecks(sheet);
-  box.innerHTML = model.empty
-    ? '<div style="font-size:11px;color:var(--t6);padding:14px;text-align:center">모션 컨트롤러·축 구성·외부장치 목록을 채우면 계통도가 그려집니다.</div>'
-    : '<div style="min-width:640px">' + specDiagramSvg(specDiagramLayout(model, checks), { accent: SEM_COLOR.info, warn: SEM_COLOR.warn }) + '</div>';   // 좁은 패널에서는 가로 스크롤(글자가 읽히는 크기 유지)
+  var L = _psDgLayout(sheet), checks = L.checks || specChecks(sheet);
+  if (_psDgState().drag) return;   // 끄는 중에는 그림을 새로 그리지 않는다
+  _psDgPaint(L);
   var ck = document.getElementById('psChecks');
   if (ck) ck.innerHTML = checks.length
     ? '<div style="border:1px solid ' + SEM_COLOR.warn + ';background:' + SEM_COLOR.warn + '14;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--t2)">' +
@@ -896,11 +1142,11 @@ function psDrawioNew(secKey) {
 }
 function psDrawioFromAuto() {
   if (!_ps) return;
-  var sheet = _psCollect(true), model = specBuildDiagram(sheet);
-  if (model.empty) { _psToast('모션 컨트롤러·축 구성·외부장치 값을 먼저 채우세요.', 'warn'); return; }
+  var L = _psDgLayout();
+  if (L.empty) { _psToast('모션 컨트롤러·축 구성·외부장치 값을 먼저 채우세요.', 'warn'); return; }
   var nm = prompt('도면 이름', '하드웨어 구조도');
   if (nm == null) return;
-  return psDrawioOpen({ secKey: PS_HW_SECTION, name: nm.trim() || '하드웨어 구조도', xml: specDiagramDrawioXml(specDiagramLayout(model, specChecks(sheet))) });
+  return psDrawioOpen({ secKey: PS_HW_SECTION, name: nm.trim() || '하드웨어 구조도', xml: specDiagramDrawioXml(L) });
 }
 function psDrawioEdit(fid) {
   if (!_ps) return;

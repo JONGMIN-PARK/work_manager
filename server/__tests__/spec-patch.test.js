@@ -88,3 +88,15 @@ describe('spec-patch', function () {
     expect(sp.validate('x')).not.toBeNull();
   });
 });
+
+describe('spec-patch — 구성도 편집 (v13.200)', function () {
+  test('diagram 통째 교체·충돌', function () {
+    var d = doc();
+    var r = sp.applyChanges(d, [{ path: ['diagram'], from: null, to: { pos: { mc: { x: 1, y: 2 } } } }]);
+    expect(r.doc.diagram).toEqual({ pos: { mc: { x: 1, y: 2 } } });
+    var c = sp.applyChanges(r.doc, [{ path: ['diagram'], from: null, to: { pos: {} } }]);
+    expect(c.conflicts.length).toBe(1);
+    expect(sp.validate([{ path: ['diagram'], from: null, to: {} }])).toBeNull();
+    expect(sp.validate([{ path: ['diagram', 'pos'] }])).not.toBeNull();
+  });
+});

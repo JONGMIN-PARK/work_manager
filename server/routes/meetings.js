@@ -28,7 +28,7 @@ async function notifyActionAssigned(action, meetingTitle, actorId) {
 }
 
 /** 회의록 양식 칸 (v13.198) — 알려진 키만, 빈 값 제외, 각 4000자 */
-var FORM_KEYS = ['timeStart', 'timeEnd', 'place', 'writer', 'decisions', 'nextDate', 'nextNote'];
+var FORM_KEYS = ['timeStart', 'timeEnd', 'place', 'writer', 'purpose', 'decisions', 'nextDate', 'nextNote'];
 function _formOf(f) {
   var out = {};
   FORM_KEYS.forEach(function (k) { if (f && f[k] != null && String(f[k]).trim() !== '') out[k] = String(f[k]).slice(0, 4000); });
@@ -227,9 +227,9 @@ async function _senderName(req) {
 router.post('/:id/render', async function (req, res) {
   try {
     var x = await _meetingForDoc(req, res); if (!x) return;
-    var doc = minutesDoc.renderMinutes(x.m, { projectName: x.proj && x.proj.name, orderNo: x.proj && x.proj.order_no, message: (req.body && req.body.message) || '' });
+    var doc = minutesDoc.renderMinutes(x.m, { projectName: x.proj && x.proj.name, orderNo: x.proj && x.proj.order_no, message: (req.body && req.body.message) || '', sign: !!(req.body && req.body.sign) });
     var smtpCfg = require('../config').smtp || {};
-    res.json({ data: { subject: doc.subject, html: doc.html, mailedAt: x.m.mailed_at, mailedByName: x.m.mailed_by_name, mailedTo: x.m.mailed_to || [], smtp: !!(smtpCfg.user && smtpCfg.pass) } });
+    res.json({ data: { subject: doc.subject, html: doc.html, docNo: doc.docNo, mailedAt: x.m.mailed_at, mailedByName: x.m.mailed_by_name, mailedTo: x.m.mailed_to || [], smtp: !!(smtpCfg.user && smtpCfg.pass) } });
   } catch (e) {
     httpErr.serverError(res, '[meetings/render]', e);
   }

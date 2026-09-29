@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.200 (2026-09-29) — 회의록 양식 개선 · 하드웨어 구성도 직접 편집
+
+- 회의록 문서(lib/meeting-minutes): 문서번호·작성일·결재란(opt.sign), 5개 절, 고정 표 레이아웃·keep-all·nowrap(담당·기한·상태·번호), 참석자 칩, 안건별 논의·결과 표, 기타 논의. form.purpose 추가.
+- 회의 탭: 참석자 칩 편집기, 안건별 논의·결과 입력(drafts.agenda), 액션 한 줄 표시, 미리 보기 A4 종이·자동 높이·인쇄 설정·결재란 토글.
+- 구성도 편집: sheet.diagram(pos·text·add·links·hideBox·hideEdge·edgeLabel·flip), specDiagramMerge·specEdgeRoute(상하좌우 직각), 편집 모드(끌기·선택 패널·화살표 잇기·격자·자동 정리·초기화, Delete/Esc). spec-patch 에 ['diagram'] 경로(통째로만).
+
 ## v13.199 (2026-09-29) — 회의록 메일: 메일 서버 없이 보내기
 
 - 미리 보기 메일 영역: ① 메일 앱으로 보내기(서식 HTML 을 클립보드에 + mailto 로 받는 사람·제목) ② Outlook 초안 .eml(UTF-8 제목, HTML 본문 base64, X-Unsent: 1) ③ 서버 발송은 SMTP 설정 시에만.

@@ -19,11 +19,24 @@ describe('회의록 문서 (lib/meeting-minutes)', function () {
     expect(doc.html).toContain('2026-09-30 10:00 ~ 11:30');
     expect(doc.html).toContain('3층 회의실');
     expect(doc.html).toContain('1줄<br>2줄');
-    expect(doc.html).toContain('축 구성 확정 <span style="color:#10b981">(완료)</span>');
+    expect(doc.html).toContain('축 구성 확정 <span style="color:#10b981;white-space:nowrap;font-weight:400">(완료)</span>');
     expect(doc.html).toContain('레거시 문자열 안건');
     expect(doc.html).toContain('드라이브 선정');
-    expect(doc.html).toContain('광 정렬기 #3 (A-31)');
+    expect(doc.html).toContain('광 정렬기 #3 <span style="color:#64748b;white-space:nowrap">(A-31)</span>');
+    // v13.200 양식: 절 제목, 참석자 칩, 액션 담당·기한·상태는 줄바꿈 없음
+    ['1. 회의 개요', '2. 안건 및 논의', '3. 결정 사항', '4. 액션 아이템', '5. 다음 회의', '기타 논의', '참석 인원'].forEach(function (t) { expect(doc.html).toContain(t); });
+    expect(doc.html).toMatch(/white-space:nowrap">김전장<\/td>/);
+    expect(doc.docNo).toMatch(/^MTG-20260930-/);
     expect(doc.html).toContain('공유드립니다');
+  });
+  test('안건별 논의·결과가 있으면 표, 결재란은 선택', function () {
+    var d = minutes.renderMinutes({ id: 'mtg-abcd1234', title: 'T', meet_date: '2026-09-30', agenda: [{ text: 'A', note: '논의1', result: '결과1' }, { text: 'B' }] }, { sign: true });
+    expect(d.html).toContain('<th style="background:#f1f5f9;color:#334155;padding:6px 8px;border:1px solid #cbd5e1;text-align:left;white-space:nowrap;font-weight:700">논의 내용</th>');
+    expect(d.html).toContain('논의1');
+    expect(d.html).toContain('결과1');
+    expect(d.html).toContain('>승인</th>');
+    expect(d.docNo).toBe('MTG-20260930-1234');
+    expect(minutes.renderMinutes({ title: 'T' }, {}).html).not.toContain('승인');
   });
   test('메일 주소 검사', function () {
     expect(minutes.isEmail('a.b@c.co.kr')).toBe(true);

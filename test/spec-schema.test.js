@@ -197,3 +197,71 @@ test('PCI: 선택지 포함, CPU·메모리 분리, 슬롯 초과 검사 (PCI �
   assert.ok(!S.specChecks(sheet(Object.assign({}, base, { ipc_pci: '' }))).some((x) => x.key === 'slot_pci'));
   assert.deepStrictEqual(S.specValidateSchema(schema), []);
 });
+
+test('구성도 편집: 옮김·이름·숨김·추가 상자·화살표(추가·지움·뒤집기·라벨) 병합', () => {
+  const sheet = sampleSheet();
+  const L = S.specDiagramLayout(S.specBuildDiagram(sheet), S.specChecks(sheet));
+  const hubKey = 'hub>eth0';
+  const M = S.specDiagramMerge(L, {
+    pos: { hub: { x: 500, y: 900 } }, text: { mc: { title: '모션 보드 (메인)' }, lane0: { title: '모션 계통' } },
+    hideBox: { eth1: true }, add: [{ id: 'bx1', x: 700, y: 20, w: 160, h: 44, title: 'UPS' }],
+    links: [{ id: 'l1', from: 'bx1', to: 'ipc', label: 'AC 220V' }, { id: 'l2', from: 'bx1', to: 'nope' }],
+    hideEdge: { 'mp>ser0': true }, flip: { [hubKey]: true }, edgeLabel: { [hubKey]: 'LAN' }
+  });
+  const box = (id) => M.boxes.find((b) => b.id === id);
+  assert.deepStrictEqual([box('hub').x, box('hub').y], [500, 900]);
+  assert.strictEqual(box('mc').title, '모션 보드 (메인)');
+  assert.strictEqual(M.lanes[0].title, '모션 계통');
+  assert.strictEqual(box('eth1'), undefined);
+  assert.strictEqual(box('bx1').kind, 'user');
+  assert.ok(M.edges.some((e) => e.key === 'u:l1' && e.label === 'AC 220V'));
+  assert.ok(!M.edges.some((e) => e.key === 'u:l2'));                 // 없는 상자로 가는 화살표는 버림
+  assert.ok(!M.edges.some((e) => e.key === 'a:mp>ser0'));
+  assert.ok(!M.edges.some((e) => e.to === 'eth1' || e.from === 'eth1')); // 숨긴 상자의 화살표도 사라짐
+  const f = M.edges.find((e) => e.key === 'a:' + hubKey);
+  assert.deepStrictEqual([f.from, f.to, f.label], ['eth0', 'hub', 'LAN']);
+  assert.ok(M.height >= 900 + 52);                                  // 옮긴 상자까지 그림이 커진다
+  assert.deepStrictEqual(M.brackets, []);                           // 옮기면 경고 괄호는 생략
+  assert.strictEqual(S.specDiagramMerge(L, null).brackets.length, L.brackets.length);
+});
+
+test('구성도 편집: 사양 값이 바뀌어도 id 로 위치 유지, 없어진 장치는 빠짐', () => {
+  const sheet = sampleSheet();
+  const dg = { pos: { eth0: { x: 600, y: 400 }, ser4: { x: 10, y: 10 } } };
+  sheet.values.ext_devices = sheet.values.ext_devices.filter((d) => d.iface !== 'RS-232C');
+  const M = S.specDiagramMerge(S.specDiagramLayout(S.specBuildDiagram(sheet), []), dg);
+  assert.deepStrictEqual([M.boxes.find((b) => b.id === 'eth0').x, M.boxes.find((b) => b.id === 'eth0').y], [600, 400]);
+  assert.ok(!M.boxes.some((b) => b.id === 'ser4'));
+});
+
+test('화살표 경로: 오른쪽·왼쪽·아래·위 모두 직각', () => {
+  const a = { x: 100, y: 100, w: 100, h: 40 };
+  const right = S.specEdgeRoute(a, { x: 300, y: 200, w: 100, h: 40 });
+  const left = S.specEdgeRoute(a, { x: 0, y: 0, w: 60, h: 40 });
+  const down = S.specEdgeRoute(a, { x: 120, y: 300, w: 100, h: 40 });
+  const up = S.specEdgeRoute(a, { x: 150, y: 0, w: 100, h: 40 });
+  assert.deepStrictEqual(right[0], [200, 120]); assert.deepStrictEqual(right.at(-1), [300, 220]);
+  assert.deepStrictEqual(left[0], [100, 120]); assert.deepStrictEqual(left.at(-1), [60, 20]);
+  assert.deepStrictEqual(down[0], [150, 140]); assert.deepStrictEqual(down.at(-1), [170, 300]);
+  assert.deepStrictEqual(up[0], [150, 100]); assert.deepStrictEqual(up.at(-1), [200, 40]);
+  [right, left, down, up].forEach((pts) => { for (let i = 1; i < pts.length; i++) assert.ok(pts[i][0] === pts[i - 1][0] || pts[i][1] === pts[i - 1][1]); });
+});
+
+test('변경분: 구성도 편집은 diagram 통째 한 건', () => {
+  const base = S.specNormalize({ v: 2, values: {} });
+  const next = S.specNormalize({ v: 2, values: {}, diagram: { pos: { mc: { x: 1, y: 2 } } } });
+  const ch = S.specDiff(base, next, schema);
+  assert.strictEqual(ch.length, 1);
+  assert.deepStrictEqual(ch[0].path, ['diagram']);
+  assert.ok(S.specDiagramEmpty(null) && S.specDiagramEmpty({ pos: {} }) && !S.specDiagramEmpty(next.diagram));
+});
+
+test('SVG: 편집 모드는 data-box·data-edge 와 선택 표시, 라벨은 이스케이프', () => {
+  const sheet = sampleSheet();
+  const M = S.specDiagramMerge(S.specDiagramLayout(S.specBuildDiagram(sheet), []), { links: [{ id: 'x', from: 'mc', to: 'ipc', label: '<24V>' }] });
+  const svg = S.specDiagramSvg(M, { interactive: true, selected: 'box:mc' });
+  assert.match(svg, /data-box="mc"/);
+  assert.match(svg, /data-edge="u:x"/);
+  assert.match(svg, /&lt;24V&gt;/);
+  assert.doesNotMatch(S.specDiagramSvg(M, {}), /data-box=/);
+});
