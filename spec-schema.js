@@ -71,7 +71,9 @@ var SPEC_BUILTIN_TEMPLATE = {
       ] },
       { key: 'ipc', label: '제어 PC (IPC)', discipline: 'control', items: [
         { key: 'ipc_model', label: '모델', type: 'text', owner: 'control' },
-        { key: 'ipc_cpu', label: 'CPU·메모리', type: 'text', owner: 'control' },
+        { key: 'ipc_cpu', label: 'CPU', type: 'text', owner: 'control' },
+        { key: 'ipc_mem', label: '메모리', type: 'text', unit: 'GB', owner: 'control' },
+        { key: 'ipc_pci', label: 'PCI 슬롯 수', type: 'number', owner: 'control' },
         { key: 'ipc_pcie', label: 'PCIe 슬롯 수', type: 'number', owner: 'control' },
         { key: 'ipc_com', label: '내장 COM 포트 수', type: 'number', owner: 'control' },
         { key: 'ipc_lan', label: 'LAN 포트 수', type: 'number', owner: 'control' }
@@ -79,7 +81,7 @@ var SPEC_BUILTIN_TEMPLATE = {
       { key: 'mc', label: '모션 컨트롤러', discipline: 'control', items: [
         { key: 'mc_vendor', label: '제조사', type: 'select', options: ['A1', 'Ajinextek', '기타'], owner: 'control' },
         { key: 'mc_model', label: '모델', type: 'text', owner: 'control' },
-        { key: 'mc_form', label: '형태', type: 'select', options: ['PCIe 보드', 'EtherCAT 마스터', '단독형 컨트롤러', '기타'], owner: 'control' },
+        { key: 'mc_form', label: '형태', type: 'select', options: ['PCI 보드', 'PCIe 보드', 'EtherCAT 마스터', '단독형 컨트롤러', '기타'], owner: 'control' },
         { key: 'mc_axes', label: '보드당 축 수', type: 'number', owner: 'control' },
         { key: 'mc_ctrl', label: '제어 방식', type: 'select', options: ['펄스', 'EtherCAT', 'MECHATROLINK', '기타'], owner: 'control' },
         { key: 'mc_interp', label: '보간 기능', type: 'text', owner: 'software' },
@@ -87,6 +89,7 @@ var SPEC_BUILTIN_TEMPLATE = {
       ] },
       { key: 'io', label: 'IO', discipline: 'control', items: [
         { key: 'io_model', label: 'IO 카드 모델', type: 'text', owner: 'control' },
+        { key: 'io_form', label: 'IO 카드 형태', type: 'select', options: ['PCI 보드', 'PCIe 보드', 'EtherCAT 슬레이브', '리모트 IO', '기타'], owner: 'control' },
         { key: 'io_in_cards', label: '입력 카드 수량', type: 'number', unit: 'EA', owner: 'control' },
         { key: 'io_out_cards', label: '출력 카드 수량', type: 'number', unit: 'EA', owner: 'control' },
         { key: 'io_di', label: 'DI 접점 수', type: 'number', unit: '점', owner: 'control' },
@@ -103,7 +106,7 @@ var SPEC_BUILTIN_TEMPLATE = {
         { key: 'ext_devices', label: '외부장치 목록', type: 'table', owner: 'control', columns: [
           { key: 'name', label: '장치', type: 'text', owner: 'control' },
           { key: 'vendor', label: '제조사/모델', type: 'text', owner: 'control' },
-          { key: 'iface', label: '인터페이스', type: 'select', options: ['Ethernet', 'RS-232C', 'RS-485', 'USB', 'EtherCAT', '기타'], owner: 'control' },
+          { key: 'iface', label: '인터페이스', type: 'select', options: ['Ethernet', 'RS-232C', 'RS-485', 'USB', 'PCI', 'PCIe', 'EtherCAT', '기타'], owner: 'control' },
           { key: 'via', label: '연결 위치', type: 'text', owner: 'control' },
           { key: 'port', label: '포트', type: 'text', owner: 'software' },
           { key: 'protocol', label: '프로토콜', type: 'text', owner: 'software' },
@@ -301,7 +304,7 @@ function specBuildDiagram(sheet) {
       board: mcName || (V.mc_form ? _specStr(V.mc_form) : ''),
       boardSub: [V.mc_axes ? _specStr(V.mc_axes) + '축' : '', _specStr(V.mc_form), V.mc_qty && _specNum(V.mc_qty) !== 1 ? '× ' + _specStr(V.mc_qty) : ''].filter(Boolean).join(' · '),
       io: (_specStr(V.io_model) || _specNum(V.io_in_cards) != null || _specNum(V.io_out_cards) != null)
-        ? { name: _specStr(V.io_model), sub: [V.io_in_cards ? 'In ' + _specStr(V.io_in_cards) : '', V.io_out_cards ? 'Out ' + _specStr(V.io_out_cards) : '', V.io_di ? 'DI ' + _specStr(V.io_di) : '', V.io_do ? 'DO ' + _specStr(V.io_do) : ''].filter(Boolean).join(' · ') }
+        ? { name: _specStr(V.io_model), sub: [_specStr(V.io_form), V.io_in_cards ? 'In ' + _specStr(V.io_in_cards) : '', V.io_out_cards ? 'Out ' + _specStr(V.io_out_cards) : '', V.io_di ? 'DI ' + _specStr(V.io_di) : '', V.io_do ? 'DO ' + _specStr(V.io_do) : ''].filter(Boolean).join(' · ') }
         : null,
       base: _specStr(V.bb_model),
       axes: axes.map(function (a) {
@@ -331,6 +334,17 @@ function specChecks(sheet) {
       out.push({ level: 'warn', key: 'serial_ports', text: 'RS-232C 장치 ' + serialNeed + '대 > 포트 ' + have + '개 (멀티포트 ' + mpPorts + (com != null ? ' + IPC 내장 ' + com : '') + ')' + (com == null ? ' — IPC 내장 COM 포트 수를 입력하세요' : '') });
     }
   }
+  // 슬롯 — 모션 보드·IO 카드·PCI/PCIe 외부장치 수 vs IPC 슬롯 수 (슬롯 수를 입력했을 때만)
+  ['PCI', 'PCIe'].forEach(function (bus) {
+    var slots = _specNum(V[bus === 'PCI' ? 'ipc_pci' : 'ipc_pcie']);
+    if (slots == null) return;
+    var isBus = function (v) { return new RegExp('^' + bus + '(\\s|$)', 'i').test(_specStr(v).trim()); };
+    var used = 0, parts = [];
+    if (isBus(V.mc_form)) { var n = _specQty(V.mc_qty, 1); used += n; parts.push('모션 ' + n); }
+    if (isBus(V.io_form)) { var m = (_specNum(V.io_in_cards) || 0) + (_specNum(V.io_out_cards) || 0) || 1; used += m; parts.push('IO ' + m); }
+    devs.filter(function (d) { return isBus(d.iface); }).forEach(function (d) { var q = _specQty(d.qty, 1); used += q; parts.push(_specStr(d.name) || '장치'); });
+    if (used > slots) out.push({ level: 'warn', key: 'slot_' + bus.toLowerCase(), text: bus + ' 보드 ' + used + '장 > IPC ' + bus + ' 슬롯 ' + slots + '개 (' + parts.join(', ') + ')' });
+  });
   var axes = (Array.isArray(V.axes) ? V.axes : []).filter(function (r) { return !specRowEmpty(r); });
   var perBoard = _specNum(V.mc_axes);
   if (perBoard != null && axes.length) {

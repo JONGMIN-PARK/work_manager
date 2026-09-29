@@ -179,3 +179,21 @@ test('부품 요약: 같은 모델은 합산, 축 이름을 비고로', () => {
   assert.strictEqual(bom.find((r) => r.name === '모션 컨트롤러').qty, 2);
   assert.strictEqual(bom.find((r) => r.group === '외부장치').qty, 2);
 });
+
+test('PCI: 선택지 포함, CPU·메모리 분리, 슬롯 초과 검사 (PCI 와 PCIe 구분)', () => {
+  const idx = S.specItemIndex(schema);
+  assert.ok(idx.mc_form.item.options.includes('PCI 보드'));
+  assert.ok(idx.io_form.item.options.includes('PCI 보드'));
+  assert.ok(idx.ext_devices.item.columns.find((c) => c.key === 'iface').options.includes('PCI'));
+  assert.strictEqual(idx.ipc_cpu.item.label, 'CPU');
+  assert.strictEqual(idx.ipc_mem.item.label, '메모리');
+  const sheet = (v) => S.specNormalize({ v: 2, values: v });
+  const base = { mc_form: 'PCI 보드', mc_qty: '2', io_form: 'PCI 보드', io_in_cards: '1', io_out_cards: '1', ipc_pci: '3', ipc_pcie: '1',
+    ext_devices: [{ id: 'g', name: '프레임 그래버', iface: 'PCIe' }, { id: 'h', name: 'GPIB', iface: 'PCI' }] };
+  const w = S.specChecks(sheet(base));
+  const pci = w.find((x) => x.key === 'slot_pci');
+  assert.match(pci.text, /PCI 보드 5장 > IPC PCI 슬롯 3개/);
+  assert.ok(!w.some((x) => x.key === 'slot_pcie'));   // PCIe 는 1장 = 슬롯 1 — 'PCIe' 가 PCI 로 세어지지 않아야 함
+  assert.ok(!S.specChecks(sheet(Object.assign({}, base, { ipc_pci: '' }))).some((x) => x.key === 'slot_pci'));
+  assert.deepStrictEqual(S.specValidateSchema(schema), []);
+});
