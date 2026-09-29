@@ -118,6 +118,39 @@ describe('회의록 API', function () {
     expect(r.body.data.mailedByName).toBe('박설계');
   });
 
+  test('회의·액션 수정은 프로젝트 편집 권한 필요 (v13.202)', async function () {
+    function del(u, url) { return h.request(h.app).delete(url).set('Authorization', 'Bearer ' + u.token); }
+    expect((await as(outsider).get('/api/meetings/' + mid)).status).toBe(403);
+    expect((await as(outsider).put('/api/meetings/' + mid, { title: '탈취' })).status).toBe(403);
+    expect((await del(outsider, '/api/meetings/' + mid)).status).toBe(403);
+    expect((await as(outsider).post('/api/meetings', { projectId: projId, title: '끼어들기' })).status).toBe(403);
+    expect((await as(outsider).post('/api/meetings/' + mid + '/actions', { title: 'x' })).status).toBe(403);
+    var a = await as(admin).post('/api/meetings/' + mid + '/actions', { title: '도면 검토' });
+    expect(a.status).toBe(201);
+    var aid = a.body.data.id;
+    expect((await as(outsider).put('/api/meetings/' + mid + '/actions/' + aid, { status: 'done' })).status).toBe(403);
+    expect((await as(outsider).post('/api/meetings/' + mid + '/actions/' + aid + '/convert', { target: 'issue' })).status).toBe(403);
+    expect((await del(outsider, '/api/meetings/' + mid + '/actions/' + aid)).status).toBe(403);
+    expect((await del(admin, '/api/meetings/' + mid + '/actions/' + aid)).status).toBe(200);
+    expect((await as(admin).get('/api/meetings/' + mid)).body.data.title).toBe('킥오프');
+    expect((await as(admin).get('/api/meetings/nope')).status).toBe(404);
+  });
+
+  test('동시 편집 — version 이 어긋나면 409 + 최신 회의, 안 보내면 예전처럼 저장', async function () {
+    var v0 = (await as(admin).get('/api/meetings/' + mid)).body.data.version;
+    var first = await as(admin).put('/api/meetings/' + mid, { minutes: 'A가 저장', version: v0 });
+    expect(first.status).toBe(200);
+    expect(first.body.data.version).toBe(v0 + 1);
+    var stale = await as(admin).put('/api/meetings/' + mid, { minutes: 'B가 덮어쓰기', version: v0 });
+    expect(stale.status).toBe(409);
+    expect(stale.body.data.minutes).toBe('A가 저장');
+    expect(Array.isArray(stale.body.data.action_items)).toBe(true);
+    var retry = await as(admin).put('/api/meetings/' + mid, { minutes: 'B가 확인 후 저장', version: stale.body.data.version });
+    expect(retry.status).toBe(200);
+    var legacy = await as(admin).put('/api/meetings/' + mid, { minutes: '논의' });
+    expect(legacy.status).toBe(200);
+  });
+
   test('메일 앱 공유 기록 — 올바른 주소만, 방법 표시', async function () {
     var r = await as(admin).post('/api/meetings/' + mid + '/mail-log', { to: ['a@b.com', 'bad', 'c@d.co.kr'], method: 'eml' });
     expect(r.status).toBe(200);

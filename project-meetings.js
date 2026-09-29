@@ -181,7 +181,7 @@ function _pmtCardHtml(m, t) {
     (m.meetDate ? '<span style="font-size:10px;color:var(--t5);white-space:nowrap">' + _pmtEsc(m.meetDate) + '</span>' : '') +
     (m.attendees.length ? '<span style="font-size:10px;color:var(--t5);white-space:nowrap" title="' + _pmtEsc(m.attendees.join(', ')) + '">👥 ' + m.attendees.length + '</span>' : '') +
     (acts.length ? '<span style="font-size:10px;white-space:nowrap;color:' + (openCnt ? SEM_COLOR.warn : SEM_COLOR.ok) + '" title="완료 / 전체 액션">✔ ' + (acts.length - openCnt) + '/' + acts.length + '</span>' : '') +
-    (m.mailedAt ? '<span style="font-size:10px;color:var(--t5)" title="' + _pmtEsc('메일 발송 ' + String(m.mailedAt).slice(0, 16).replace('T', ' ') + ' · ' + (m.mailedByName || '')) + '">✉</span>' : '') +
+    (m.mailedAt ? '<span style="font-size:10px;color:var(--t5)" title="' + _pmtEsc('메일 발송 ' + _pmtFmtWhen(m.mailedAt) + ' · ' + (m.mailedByName || '')) + '">✉</span>' : '') +
     '<span id="pmtDirtyDot-' + _pmtEsc(m.id) + '" style="font-size:9.5px;color:' + SEM_COLOR.warn + ';display:' + (dirty ? 'inline' : 'none') + '" title="저장하지 않은 내용">●</span>' +
   '</div>';
   if (!open) return h + '</div>';
@@ -189,7 +189,8 @@ function _pmtCardHtml(m, t) {
   h += '<div style="padding:8px 10px">';
   if (_pmtDone(m)) {
     h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 9px;margin-bottom:6px;border:1px solid ' + SEM_COLOR.warn + ';background:' + SEM_COLOR.warn + '14;border-radius:6px;font-size:10.5px;color:var(--t2)">' +
-      '<span>✏️ <b>완료된 회의록을 수정하는 중</b> — 저장하면 문서에 반영됩니다.</span>' +
+      '<span>✏️ <b>완료된 회의록을 수정하는 중</b> — 저장하면 문서에 반영됩니다.' +
+        '<br><span style="color:var(--t5)">안건 추가·체크·삭제와 액션 아이템은 누르는 즉시 저장되며, 취소해도 되돌아가지 않습니다.</span></span>' +
       '<button class="btn btn-g btn-s" style="font-size:10px;white-space:nowrap" onclick="pmtEditCancel(\'' + mid + '\')">취소 (문서 보기)</button></div>';
   }
   var agNow = _pmtAgendaOf(m);
@@ -487,14 +488,26 @@ function pmtSaveForm(mid, quiet) {
     return true;
   });
 }
-/* 회의 필드 저장 → 서버 응답으로 갱신(액션은 그대로 유지). 성공 여부 */
+/* 회의 필드 저장 → 서버 응답으로 갱신(액션은 그대로 유지). 성공 여부
+   version 을 함께 보낸다(v13.202) — 그사이 다른 사람이 저장했으면 409 + 최신 회의: 최신 내용으로 바꾸고
+   이쪽 초안(_pmt.drafts)은 남겨 두어, 확인 후 다시 저장하면 고친 칸만 덮어쓴다 */
 function _pmtUpdate(mid, patch) {
-  return apiFetch('/api/meetings/' + encodeURIComponent(mid), { method: 'PUT', body: JSON.stringify(patch) }).then(function (r) {
+  var cur = _pmtFind(mid);
+  var body = Object.assign({}, patch, cur && cur.version != null ? { version: cur.version } : {});
+  return apiFetch('/api/meetings/' + encodeURIComponent(mid), { method: 'PUT', body: JSON.stringify(body) }).then(function (r) {
     var old = _pmtFind(mid); if (!old) return false;
     var m = _pmtNorm(r.data); m.actionItems = old.actionItems;
     _pmtReplace(m);
     return true;
-  }).catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '저장 실패'), 'error'); return false; });
+  }).catch(function (e) {
+    if (e && e.status === 409 && e.data && e.data.data) {
+      _pmtReplace(_pmtNorm(e.data.data));
+      _pmtPaintCard(mid);
+      _pmtToast('⚠ 다른 사람이 먼저 저장해 최신 내용을 불러왔습니다. 내가 고친 칸은 남아 있으니 확인 후 다시 저장하세요.', 'warn');
+      return false;
+    }
+    _pmtToast('❌ ' + _pmtErr(e, '저장 실패'), 'error'); return false;
+  });
 }
 function pmtDelete(mid) {
   var m = _pmtFind(mid); if (!m) return;
@@ -521,7 +534,7 @@ function pmtPreview(mid, focusMail) {
 }
 function _pmtBuildPreview(mid, doc, recips, focusMail) {
   window._pmtDoc = doc;   // 메일 앱으로 보내기 — 클릭 직후 바로 복사하려고 미리 받은 문서를 둔다
-  var sent = doc.mailedAt ? '<div style="font-size:10px;color:var(--t5);margin-top:4px">마지막 발송: ' + _pmtEsc(String(doc.mailedAt).slice(0, 16).replace('T', ' ')) + ' · ' + _pmtEsc(doc.mailedByName || '') + ' · ' + (doc.mailedTo || []).length + '명</div>' : '';
+  var sent = doc.mailedAt ? '<div style="font-size:10px;color:var(--t5);margin-top:4px">마지막 발송: ' + _pmtEsc(_pmtFmtWhen(doc.mailedAt)) + ' · ' + _pmtEsc(doc.mailedByName || '') + ' · ' + (doc.mailedTo || []).length + '명</div>' : '';
   var people = recips.map(function (r, i) {
     return '<label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;border:1px solid var(--bd);border-radius:12px;padding:2px 8px;margin:0 4px 4px 0;' + (r.hasEmail ? '' : 'opacity:.5') + '" title="' + _pmtEsc(r.hasEmail ? r.masked : '계정·메일 주소를 찾지 못함 — 아래에 주소를 직접 넣으세요') + '">' +
       '<input type="checkbox" class="pmt-rc" data-name="' + _pmtEsc(r.name) + '" data-email="' + _pmtEsc(r.email || '') + '"' + (r.hasEmail ? ' checked' : ' disabled') + '> ' + _pmtEsc(r.name) + (r.hasEmail ? '' : ' (메일 없음)') + '</label>';
@@ -681,13 +694,14 @@ function pmtSendMail(mid) {
   var msg = (document.getElementById('pmtMailMsg') || {}).value || '';
   if (!names.length && !emails.length) { _pmtToast('받는 사람을 고르거나 주소를 입력하세요.', 'warn'); return; }
   if (!confirm((names.length + emails.length) + '곳에 회의록을 보낼까요?')) return;
-  var btn = document.getElementById('pmtMailBtn'); if (btn) { btn.disabled = true; btn.textContent = '보내는 중...'; }
+  var btn = document.getElementById('pmtMailBtn'), label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '보내는 중...'; }
   apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/mail', { method: 'POST', body: JSON.stringify({ attendees: names, emails: emails, message: msg }), timeoutMs: 45000 }).then(function (r) {
     var m = _pmtFind(mid); if (m) { m.mailedAt = r.data.mailedAt; _pmtPaintCard(mid); }
     var ov = document.getElementById('pmtPreviewModal'); if (ov) ov.remove();
     _pmtToast('✉ ' + (r.message || '보냈습니다.'), 'success');
   }).catch(function (e) {
-    if (btn) { btn.disabled = false; btn.textContent = '보내기'; }
+    if (btn) { btn.disabled = false; btn.textContent = label; }
     _pmtToast('❌ ' + _pmtErr(e, '메일 전송 실패'), 'error');
   });
 }

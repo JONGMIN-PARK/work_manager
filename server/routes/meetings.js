@@ -66,6 +66,23 @@ async function resolveUserId(name, tenantId) {
   } catch (_) { return null; }
 }
 
+/** 회의 한 건 + 권한 (v13.202) — 프로젝트 회의: 읽기 canRead · 쓰기 canEdit(생성자·참여자·관리자·임원), 일반 회의: 작성자만.
+ *  실패 시 응답(404/403)을 보내고 null. 성공 시 { m, proj } */
+async function _meetingGate(req, res, needEdit, meetingId) {
+  var r = await db.query('SELECT * FROM meetings WHERE id = $1 AND tenant_id = $2', [meetingId || req.params.id, req.tenant.id]);
+  if (!r.rows.length) { res.status(404).json({ error: 'NOT_FOUND', message: '회의를 찾을 수 없습니다.' }); return null; }
+  var m = r.rows[0], proj = null;
+  if (m.project_id) {
+    var pr = await db.query('SELECT id, name, order_no, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [m.project_id, req.tenant.id]);
+    proj = pr.rows[0] || null;
+    var ok = proj && (needEdit ? await ps.canEdit(req, proj) : await ps.canRead(req, proj));
+    if (!ok) { res.status(403).json({ error: 'FORBIDDEN', message: needEdit ? '프로젝트 생성자·참여자·관리자만 회의를 수정할 수 있습니다.' : '접근 권한이 없습니다.' }); return null; }
+  } else if (m.created_by !== req.user.sub) {
+    res.status(403).json({ error: 'FORBIDDEN', message: '접근 권한이 없습니다.' }); return null;
+  }
+  return { m: m, proj: proj };
+}
+
 /** 회의에 액션아이템 배열 첨부 */
 async function attachActions(meetings, tenantId) {
   if (!meetings.length) return meetings;
@@ -104,10 +121,9 @@ router.get('/', async function (req, res) {
 // GET /api/meetings/:id
 router.get('/:id', async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM meetings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
-    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
-    await attachActions(r.rows, req.tenant.id);
-    res.json({ data: r.rows[0] });
+    var x = await _meetingGate(req, res, false); if (!x) return;
+    await attachActions([x.m], req.tenant.id);
+    res.json({ data: x.m });
   } catch (e) {
     httpErr.serverError(res, '[meetings/get]', e);
   }
@@ -120,8 +136,9 @@ router.post('/', async function (req, res) {
     if (!b.title) return res.status(400).json({ error: 'VALIDATION', message: 'title 필수' });
     var projectId = b.projectId || b.project_id || null;
     if (projectId) {
-      var pR = await db.query('SELECT id FROM projects WHERE id = $1 AND tenant_id = $2', [projectId, req.tenant.id]);
-      if (!pR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
+      var can = await ps.canEditById(req, projectId);
+      if (can === null) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
+      if (!can) return res.status(403).json({ error: 'FORBIDDEN', message: '프로젝트 생성자·참여자·관리자만 회의를 등록할 수 있습니다.' });
     }
     var id = b.id || genId('mtg');
     var meetDate = b.meetDate || b.meet_date || null;
@@ -147,9 +164,10 @@ router.post('/', async function (req, res) {
   }
 });
 
-// PUT /api/meetings/:id
+// PUT /api/meetings/:id — body.version 을 주면 낙관적 락: 그사이 다른 사람이 저장했으면 409 + 최신 회의(data)
 router.put('/:id', async function (req, res) {
   try {
+    var x = await _meetingGate(req, res, true); if (!x) return;
     var b = req.body;
     var sets = [];
     var params = [];
@@ -168,9 +186,16 @@ router.put('/:id', async function (req, res) {
     params.push(req.params.id);
     var idIdx = idx++;
     params.push(req.tenant.id);
-    var sql = 'UPDATE meetings SET ' + sets.join(', ') + ' WHERE id = $' + idIdx + ' AND tenant_id = $' + idx + ' RETURNING *';
-    var r = await db.query(sql, params);
-    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    var where = ' WHERE id = $' + idIdx + ' AND tenant_id = $' + idx++;
+    var ver = b.version != null ? parseInt(b.version, 10) : NaN;
+    if (!isNaN(ver)) { where += ' AND version = $' + idx; params.push(ver); }
+    var r = await db.query('UPDATE meetings SET ' + sets.join(', ') + where + ' RETURNING *', params);
+    if (!r.rows.length) {
+      var cur = await db.query('SELECT * FROM meetings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+      if (!cur.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+      await attachActions(cur.rows, req.tenant.id);
+      return res.status(409).json({ error: 'CONFLICT', message: '다른 사람이 먼저 이 회의를 저장했습니다.', data: cur.rows[0] });
+    }
     var meeting = r.rows[0];
     // 일정 동기화 (제목/일자 변경 반영, meet_date 새로 생기면 발행)
     var evId = await syncMeetingEvent(meeting, req.tenant.id, req.user.sub);
@@ -188,9 +213,8 @@ router.put('/:id', async function (req, res) {
 // DELETE /api/meetings/:id — 연동 일정 함께 삭제, 액션아이템 CASCADE
 router.delete('/:id', async function (req, res) {
   try {
-    var mR = await db.query('SELECT event_id FROM meetings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
-    if (!mR.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
-    var eventId = mR.rows[0].event_id;
+    var x = await _meetingGate(req, res, true); if (!x) return;
+    var eventId = x.m.event_id;
     await db.query('DELETE FROM meetings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (eventId) await db.query('DELETE FROM events WHERE id = $1 AND tenant_id = $2', [eventId, req.tenant.id]);
     res.json({ message: '삭제 완료' });
@@ -205,18 +229,9 @@ var emailService = require('../services/email.service');
 
 /** 회의 + 액션 + 프로젝트 이름. 프로젝트 회의는 프로젝트 읽기 권한, 일반 회의는 작성자만. 실패 시 응답 후 null */
 async function _meetingForDoc(req, res) {
-  var r = await db.query('SELECT * FROM meetings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
-  if (!r.rows.length) { res.status(404).json({ error: 'NOT_FOUND' }); return null; }
-  var m = r.rows[0], proj = null;
-  if (m.project_id) {
-    var pr = await db.query('SELECT id, name, order_no, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [m.project_id, req.tenant.id]);
-    proj = pr.rows[0] || null;
-    if (!proj || !(await ps.canRead(req, proj))) { res.status(403).json({ error: 'FORBIDDEN', message: '접근 권한이 없습니다.' }); return null; }
-  } else if (m.created_by !== req.user.sub) {
-    res.status(403).json({ error: 'FORBIDDEN', message: '접근 권한이 없습니다.' }); return null;
-  }
-  await attachActions([m], req.tenant.id);
-  return { m: m, proj: proj };
+  var x = await _meetingGate(req, res, false); if (!x) return null;
+  await attachActions([x.m], req.tenant.id);
+  return x;
 }
 async function _senderName(req) {
   try { var u = await db.query('SELECT name, display_name, email FROM users WHERE id = $1', [req.user.sub]); if (u.rows.length) return u.rows[0]; } catch (_) {}
@@ -315,8 +330,7 @@ router.post('/:id/mail-log', async function (req, res) {
 // POST /api/meetings/:id/actions
 router.post('/:id/actions', async function (req, res) {
   try {
-    var mR = await db.query('SELECT id, title FROM meetings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
-    if (!mR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '회의를 찾을 수 없습니다.' });
+    var x = await _meetingGate(req, res, true); if (!x) return;
     var b = req.body;
     if (!b.title) return res.status(400).json({ error: 'VALIDATION', message: 'title 필수' });
     var assigneeName = b.assigneeName || b.assignee_name || null;
@@ -328,7 +342,7 @@ router.post('/:id/actions', async function (req, res) {
       [id, req.tenant.id, req.params.id, b.title, assigneeName, assigneeId, b.dueDate || b.due_date || null, parseInt(b.sortOrder || b.sort_order, 10) || 0]
     );
     res.status(201).json({ data: r.rows[0] });
-    notifyActionAssigned(r.rows[0], mR.rows[0].title, req.user.sub);
+    notifyActionAssigned(r.rows[0], x.m.title, req.user.sub);
   } catch (e) {
     httpErr.serverError(res, '[meetings/action/create]', e);
   }
@@ -337,6 +351,7 @@ router.post('/:id/actions', async function (req, res) {
 // PUT /api/meetings/:id/actions/:aid
 router.put('/:id/actions/:aid', async function (req, res) {
   try {
+    var x = await _meetingGate(req, res, true); if (!x) return;
     var b = req.body;
     var sets = [];
     var params = [];
@@ -362,9 +377,7 @@ router.put('/:id/actions/:aid', async function (req, res) {
     res.json({ data: r.rows[0] });
     // 담당자를 명시적으로 (재)지정한 경우 배정 알림
     if ((b.assigneeName !== undefined || b.assignee_name !== undefined) && r.rows[0].assignee_id) {
-      db.query('SELECT title FROM meetings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id])
-        .then(function (mr) { notifyActionAssigned(r.rows[0], mr.rows.length ? mr.rows[0].title : null, req.user.sub); })
-        .catch(function () {});
+      notifyActionAssigned(r.rows[0], x.m.title, req.user.sub);
     }
   } catch (e) {
     httpErr.serverError(res, '[meetings/action/update]', e);
@@ -374,6 +387,7 @@ router.put('/:id/actions/:aid', async function (req, res) {
 // DELETE /api/meetings/:id/actions/:aid
 router.delete('/:id/actions/:aid', async function (req, res) {
   try {
+    var x = await _meetingGate(req, res, true); if (!x) return;
     var r = await db.query('DELETE FROM meeting_action_items WHERE id = $1 AND meeting_id = $2 AND tenant_id = $3 RETURNING id', [req.params.aid, req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
@@ -385,6 +399,7 @@ router.delete('/:id/actions/:aid', async function (req, res) {
 // POST /api/meetings/:id/actions/:aid/convert — 이슈/개발아이템 전환 (body: { target: 'issue' | 'dev' })
 router.post('/:id/actions/:aid/convert', async function (req, res) {
   try {
+    var gate = await _meetingGate(req, res, true); if (!gate) return;
     var target = req.body.target === 'dev' ? 'dev' : 'issue';
     var aR = await db.query(
       'SELECT a.*, m.project_id FROM meeting_action_items a JOIN meetings m ON m.id = a.meeting_id AND m.tenant_id = a.tenant_id ' +

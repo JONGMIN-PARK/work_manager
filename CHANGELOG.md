@@ -1,5 +1,12 @@
 # Work Manager — 변경 이력
 
+## v13.202 (2026-09-29) — 회의 권한 · 동시 편집 보호
+
+- routes/meetings: `_meetingGate(req, res, needEdit)` — 프로젝트 회의 읽기 canRead · 쓰기 canEdit, 일반 회의 작성자만. GET/:id·PUT·DELETE·액션 CRUD·전환·POST(프로젝트 canEditById) 모두 적용, `_meetingForDoc` 도 이것을 사용.
+- PUT /api/meetings/:id: body.version 을 주면 낙관적 락 — 어긋나면 409 + 최신 회의(data). version 이 없으면 예전처럼 저장.
+- project-meetings: `_pmtUpdate` 가 version 전송, 409 면 최신 회의로 바꾸고 초안 유지. 메일 발송 시각 `_pmtFmtWhen`(로컬 시각), 서버 발송 실패 시 버튼 원래 이름 복구, 완료 회의 편집 배너에 즉시 저장 항목 안내.
+- 테스트: 편집 권한(403)·version 충돌(409) 추가.
+
 ## v13.201 (2026-09-29) — 회의록 작성 완료 → 문서 표시
 
 - form.completedAt·completedBy(서버 FORM_KEYS 추가). 완료 카드 = 서버 렌더 문서(캐시 키: updated_at + 액션), 편집 전환(_pmt.editing) · 저장 후 문서 보기 · 취소 · 작성 중으로.
