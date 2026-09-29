@@ -1349,13 +1349,13 @@ function _projModalFormHtml(proj, projMs, allProjects) {
         '<div><label class="fl">프로젝트명</label><input type="text" class="si" id="projName" value="' + eH(proj ? proj.name : '') + '" placeholder="프로젝트명..." style="padding-left:10px"></div>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">' +
-        '<div><label class="fl">시작일</label><input type="date" class="si" id="projStart" value="' + (proj ? proj.startDate : '') + '" style="padding-left:10px"></div>' +
-        '<div><label class="fl">종료일</label><input type="date" class="si" id="projEnd" value="' + (proj ? proj.endDate : '') + '" style="padding-left:10px"></div>' +
+        '<div><label class="fl">시작일</label><input type="date" class="si" id="projStart" value="' + (proj ? proj.startDate : '') + '" style="padding-left:10px" onchange="_projUpdateEstimatedHours()"></div>' +
+        '<div><label class="fl">종료일</label><input type="date" class="si" id="projEnd" value="' + (proj ? proj.endDate : '') + '" style="padding-left:10px" onchange="_projUpdateEstimatedHours()"></div>' +
         '<div><label class="fl">상태</label><select class="si" id="projStatus" style="padding-left:8px">' + statusOpts + '</select></div>' +
       '</div>' +
       _projVisibilityRowHtml(proj) +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-        '<div><label class="fl">예상 총 투입시간 (h)</label><input type="number" class="si" id="projEstHours" value="' + (proj ? proj.estimatedHours : '') + '" placeholder="0" style="padding-left:10px" min="0"></div>' +
+        '<div><label class="fl">예상 총 투입시간 (h)</label><input type="number" class="si" id="projEstHours" value="' + (proj ? proj.estimatedHours : '') + '" placeholder="시작일·종료일 선택 시 자동 계산" style="padding-left:10px" min="0"><div id="projEstHoursHint" style="font-size:10px;color:var(--t5);margin-top:3px">날짜 변경 시 주말·대한민국 공휴일을 제외하고 하루 8시간으로 계산합니다.</div></div>' +
         '<div><label class="fl">담당자 <span style="font-size:9px;color:var(--t6)">(쉼표로 구분)</span></label><input type="text" class="si" id="projAssignees" value="' + eH(proj ? (proj.assignees || []).join(', ') : '') + '" placeholder="홍길동, 김철수..." style="padding-left:10px" oninput="renderAssigneeWorkload(\'' + (proj ? proj.id : '') + '\')">' +
           _projAssigneeGroupHtml(proj) +
           '<div id="assigneeWorkloadArea" style="margin-top:4px"></div></div>' +
@@ -1740,6 +1740,47 @@ async function saveProjectUI(existingId) {
 }
 
 /* 편집 폼 읽기 + 검증. 실패 시 토스트 후 null. 반환: { data(저장 페이로드), assignees } */
+var _projHolidayCache = {};
+var _projEstimateRequest = 0;
+async function _projUpdateEstimatedHours() {
+  var request = ++_projEstimateRequest;
+  var start = document.getElementById('projStart').value;
+  var end = document.getElementById('projEnd').value;
+  var hint = document.getElementById('projEstHoursHint');
+  if (!start || !end || start > end) return;
+  hint.textContent = '공휴일을 확인하는 중...';
+  try {
+    var firstYear = Number(start.slice(0, 4)), lastYear = Number(end.slice(0, 4));
+    var years = [];
+    for (let year = firstYear; year <= lastYear; year++) {
+      if (!_projHolidayCache[year]) {
+        _projHolidayCache[year] = fetch('https://date.nager.at/api/v3/PublicHolidays/' + year + '/KR')
+          .then(function (response) { if (!response.ok) throw new Error('holiday service'); return response.json(); })
+          .then(function (items) { return items.map(function (item) { return item.date; }); })
+          .catch(function (error) { delete _projHolidayCache[year]; throw error; });
+      }
+      years.push(_projHolidayCache[year]);
+    }
+    var holidayLists = await Promise.all(years);
+    if (request !== _projEstimateRequest || !hint.isConnected) return;
+    var holidays = new Set([].concat.apply([], holidayLists));
+    var day = new Date(start + 'T00:00:00Z');
+    var last = new Date(end + 'T00:00:00Z');
+    var workdays = 0;
+    while (day <= last) {
+      var weekday = day.getUTCDay();
+      if (weekday !== 0 && weekday !== 6 && !holidays.has(day.toISOString().slice(0, 10))) workdays++;
+      day.setUTCDate(day.getUTCDate() + 1);
+    }
+    document.getElementById('projEstHours').value = workdays * 8;
+    hint.textContent = workdays + '근무일 × 8시간 = ' + (workdays * 8) + '시간 (주말·공휴일 제외, 직접 수정 가능)';
+  } catch (error) {
+    if (request !== _projEstimateRequest || !hint.isConnected) return;
+    hint.textContent = '공휴일 정보를 불러오지 못했습니다. 예상 시간을 직접 입력해 주세요.';
+    showToast('공휴일 정보를 불러오지 못했습니다. 예상 시간을 직접 입력해 주세요.', 'warn');
+  }
+}
+
 function _projFormRead(existingId) {
   var name = document.getElementById('projName').value.trim();
   var orderNo = document.getElementById('projOrderNo').value.trim();
@@ -1750,6 +1791,9 @@ function _projFormRead(existingId) {
   var endDate = document.getElementById('projEnd').value;
   if (!startDate || !endDate) { showToast('시작일과 종료일을 입력하세요.','warn'); return null; }
   if (startDate > endDate) { showToast('종료일이 시작일보다 앞설 수 없습니다.','warn'); return null; }
+  if (document.getElementById('projEstHoursHint').textContent === '공휴일을 확인하는 중...') {
+    showToast('예상 시간 계산이 끝난 뒤 저장해 주세요.','warn'); return null;
+  }
 
   var assigneesStr = document.getElementById('projAssignees').value;
   var assignees = assigneesStr ? assigneesStr.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
