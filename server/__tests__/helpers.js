@@ -77,7 +77,9 @@ async function cleanup() {
     'milestones', 'checklists', 'user_settings',
     // 이번 확장에서 추가된 테이블들 — users 를 참조하므로 users 삭제 전에 비워야 함
     'tech_logs', 'tech_usages', 'tech_assets',
-    'meeting_action_items', 'meetings', 'project_dev_items', 'prestudies', 'comments'
+    'meeting_action_items', 'meetings', 'project_dev_items', 'prestudies', 'comments',
+    // v13.196 표준 사양서
+    'project_spec_files', 'spec_template_versions', 'spec_templates'
   ];
   for (var i = 0; i < byTenant.length; i++) {
     await tryDel('DELETE FROM ' + byTenant[i] + ' WHERE tenant_id = $1');

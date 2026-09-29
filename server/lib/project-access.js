@@ -28,7 +28,8 @@
  *     POST /milestones/:id/transfer 가 존재하지 않거나 **다른 테넌트의** projectId 로 마일스톤을
  *     옮길 수 있었다 → canEditById 는 모든 역할에서 먼저 테넌트 내 존재를 확인한다(없으면 null).
  *  3) comments 의 규칙은 의도적으로 더 좁다(가시성 공개만으로 코멘트 불가) → canComment 로 분리 유지.
- *  4) PUT /projects/:id/specs 는 owner + admin/executive 만(멤버 제외) — 라우트에 의도 주석과 함께 유지.
+ *  4) PUT /projects/:id/specs 는 v13.160~195 동안 owner + admin/executive 만(멤버 제외)이었다.
+ *     v13.196 표준 사양서부터 설계·전장·SW 가 함께 채우도록 canEdit(참여자 포함)으로 통일.
  */
 var db = require('../config/db');
 var operator = require('../middleware/operator');

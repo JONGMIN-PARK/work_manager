@@ -1,5 +1,15 @@
 # Work Manager — 변경 이력
 
+## v13.196 (2026-09-29) — 장비 표준 사양서 (P1)
+
+- 사양 탭을 표준 사양서로 재구성: 회사 표준 양식(분야 → 섹션 → 항목, 표 항목은 열 정의) + 내장 기본 양식(일반 기구·축 구성·제어 PC·모션 컨트롤러·IO·베이스보드·외부장치 I/F·확장 모듈·SW·공정).
+- 하드웨어 구성도: 표 값으로 자동 계통도(SVG) + 맞지 않는 값 경고, draw.io embed 도면(자동 계통도를 mxGraph XML 로 시드), 섹션별 이미지·파일 첨부(GCS, 미설정 시 압축 이미지 인라인).
+- 협업: 칸 단위 변경분 병합 저장(PATCH /specs, 충돌 반환), 항목 상태(미정·검토·확정, 확정 수정 시 자동 검토), 변경 이력(project_spec_changes)과 최근 변경 표시, 섹션 바로가기·확정 현황.
+- 부품 요약(BOM 기초), 이전 프로젝트 사양서 복사(도면 포함), XLSX(사양서·표별·부품 요약·확인 필요), 프로젝트 보고서 사양 시트 새 형식 대응.
+- 서버: 053_spec_templates·054_spec_changes 마이그레이션, /api/spec-templates, /api/projects/:id/spec-files·spec-changes·specs(PATCH)·specs/copy-from, lib/spec-patch. PUT /specs 권한을 canEdit(참여자 포함)로 통일.
+- CSP: frame-src embed.diagrams.net, img/connect-src storage.googleapis.com (문서관리 GCS 업로드도 Render 서빙 페이지에서 허용).
+- 수정: timeline 저장 시 projEstHoursHint 가 없으면 TypeError (v13.195) → null 확인, 모달 스냅샷 갱신.
+
 ## v13.195 (2026-09-29) — 프로젝트 예상 투입시간 자동 계산
 
 - 프로젝트 타임라인의 등록·편집 화면에서 시작일 또는 종료일을 변경하면, 대한민국 공휴일과 주말을 제외한 근무일에 하루 8시간을 적용해 예상 총 투입시간을 자동 입력.

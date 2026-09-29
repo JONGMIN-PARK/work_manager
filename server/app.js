@@ -36,11 +36,13 @@ app.use(helmet({
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"],
-      imgSrc: ["'self'", "data:", "blob:"],
+      // GCS 서명 URL 이미지(사양서 첨부, v13.196)
+      imgSrc: ["'self'", "data:", "blob:", "https://storage.googleapis.com"],
       // PDF 미리보기(iframe blob:) 허용 — A/S 보고서 PDF
-      frameSrc: ["'self'", "blob:", "data:"],
+      // draw.io 편집기 embed (사양서 구성도, v13.196)
+      frameSrc: ["'self'", "blob:", "data:", "https://embed.diagrams.net"],
       objectSrc: ["'self'", "blob:", "data:"],
-      connectSrc: ["'self'", "https://generativelanguage.googleapis.com", "https://api.anthropic.com", "https://api.telegram.org"]
+      connectSrc: ["'self'", "https://generativelanguage.googleapis.com", "https://api.anthropic.com", "https://api.telegram.org", "https://storage.googleapis.com"]
     }
   },
   crossOriginEmbedderPolicy: false
@@ -203,6 +205,8 @@ var prestudyRoutes = require('./routes/prestudies');
 var techRoutes = require('./routes/tech');
 var commentRoutes = require('./routes/comments');
 var messageRoutes = require('./routes/messages');
+var specTemplateRoutes = require('./routes/spec-templates');
+var projectSpecRoutes = require('./routes/project-specs');
 var v1Router = require('./routes/v1');
 var apiDocsRoutes = require('./routes/api-docs');
 
@@ -210,6 +214,8 @@ var apiDocsRoutes = require('./routes/api-docs');
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/projects', projectSpecRoutes);   // 사양서 첨부·복사 (v13.196)
+app.use('/api/spec-templates', specTemplateRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/issues', issueRoutes);
 app.use('/api/as-tickets', asTicketRoutes);

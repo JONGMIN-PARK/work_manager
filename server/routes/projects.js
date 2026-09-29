@@ -485,18 +485,21 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
   }
 });
 
-// ─── PUT /api/projects/:id/specs — 사양 정리 표 저장 (v13.160) ───
-//  body: { specs }. 생성자·참여자·관리자만(canEditProject). 최종 수정자/시각 기록.
+// ─── PUT /api/projects/:id/specs — 사양서 저장 (v13.160, v13.196 표준 사양서) ───
+//  body: { specs }. 최종 수정자/시각 기록.
+//  v13.196: 설계·전장·SW 가 함께 채우도록 참여자(멤버)도 편집 가능 — canEditProject(생성자·참여자·관리자·임원).
+//  (v13.160~195 는 생성자 + admin/executive 만이었다)
+var _SPECS_MAX = 2 * 1024 * 1024;
 router.put('/:id/specs', async function (req, res) {
   try {
     var pr = await db.query('SELECT id, owner_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!pr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
-    // 사양은 생성자(owner) + 관리자(admin/executive)만 — 참여자(멤버) 제외
-    var _isAdminTier = (req.user.role === 'admin' || req.user.role === 'executive');
-    if (!(_isAdminTier || pr.rows[0].owner_id === req.user.sub)) {
-      return res.status(403).json({ error: 'FORBIDDEN', message: '프로젝트 생성자와 관리자만 사양을 수정할 수 있습니다.' });
+    if (!(await canEditProject(req, pr.rows[0]))) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: '생성자·참여자·관리자만 사양서를 수정할 수 있습니다.' });
     }
     var specs = (req.body && req.body.specs) || {};
+    if (typeof specs !== 'object' || Array.isArray(specs)) return res.status(400).json({ error: 'VALIDATION', message: '사양서 형식 오류' });
+    if (JSON.stringify(specs).length > _SPECS_MAX) return res.status(413).json({ error: 'TOO_LARGE', message: '사양서가 너무 큽니다(2MB 이하).' });
     // 수정자명
     var byName = req.user.name || '';
     try { var ar = await db.query('SELECT name, display_name FROM users WHERE id = $1', [req.user.sub]); if (ar.rows.length) byName = ar.rows[0].display_name || ar.rows[0].name || byName; } catch (_) {}

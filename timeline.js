@@ -1791,7 +1791,8 @@ function _projFormRead(existingId) {
   var endDate = document.getElementById('projEnd').value;
   if (!startDate || !endDate) { showToast('시작일과 종료일을 입력하세요.','warn'); return null; }
   if (startDate > endDate) { showToast('종료일이 시작일보다 앞설 수 없습니다.','warn'); return null; }
-  if (document.getElementById('projEstHoursHint').textContent === '공휴일을 확인하는 중...') {
+  var _estHint = document.getElementById('projEstHoursHint');   // 힌트 요소가 없는 폼(구버전 모달 등)에서도 저장되게
+  if (_estHint && _estHint.textContent === '공휴일을 확인하는 중...') {
     showToast('예상 시간 계산이 끝난 뒤 저장해 주세요.','warn'); return null;
   }
 

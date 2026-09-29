@@ -406,8 +406,22 @@ function exportProjectReport() {
   var issPromise = typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve([]);
   var chkPromise2 = typeof pipelineLoadAllChecklists === 'function' ? pipelineLoadAllChecklists() : Promise.resolve({});
 
-  Promise.all([projGetAll(), msGetAll(), orderGetAll(), issPromise, chkPromise2]).then(function (results) {
+  // 사양서 양식(v13.196) — 프로젝트가 참조하는 (양식, 버전)을 미리 받아 둔다
+  var specSchemaPromise = Promise.resolve(projGetAll()).then(function (list) {
+    if (typeof specNormalize !== 'function' || typeof psTemplateSchema !== 'function') return {};
+    var map = {}, jobs = [];
+    (list || []).forEach(function (p) {
+      var s = specNormalize(p.specs), k = s.templateId + ':' + s.templateVersion;
+      if (!s.templateId || map[k] !== undefined) return;
+      map[k] = null;
+      jobs.push(psTemplateSchema(s.templateId, s.templateVersion).then(function (sc) { map[k] = sc; }).catch(function () {}));
+    });
+    return Promise.all(jobs).then(function () { return map; });
+  }).catch(function () { return {}; });
+
+  Promise.all([projGetAll(), msGetAll(), orderGetAll(), issPromise, chkPromise2, specSchemaPromise]).then(function (results) {
     var projects = results[0] || [];
+    var specSchemas = results[5] || {};
     var milestones = results[1] || [];
     var orders = results[2] || [];
     var issues = results[3] || [];
@@ -483,21 +497,28 @@ function exportProjectReport() {
       XLSX.utils.book_append_sheet(wb, ws3, '마일스톤');
     }
 
-    // Sheet 4: 사양 정리 (v13.160) — 프로젝트 / 분류 / 항목 / 내용 / 비고
-    var SPEC_CAT_LBL = { design: '설계', control: '제어·전장', software: '소프트웨어', process: '공정' };
-    var specRows = [['프로젝트', '분류', '항목', '내용', '비고']];
-    projects.forEach(function (p) {
-      var specs = p.specs || {};
-      Object.keys(SPEC_CAT_LBL).forEach(function (ck) {
-        (specs[ck] || []).forEach(function (s) {
-          if (!s) return;
-          specRows.push([p.name || '', SPEC_CAT_LBL[ck], s.item || '', s.value || '', s.remark || '']);
+    // Sheet 4: 사양서 (v13.160 → v13.196 표준 사양서) — 일반 항목은 한 시트, 표 항목(축 구성·외부장치 등)은 표마다 시트
+    if (typeof specNormalize === 'function') {
+      var specRows = [['프로젝트', '섹션', '항목', '값', '단위', '비고', '상태']];
+      var specTables = {}, specTableOrder = [];
+      projects.forEach(function (p) {
+        var sh = specNormalize(p.specs);
+        var sc = (sh.templateId && specSchemas[sh.templateId + ':' + sh.templateVersion]) || { sections: [] };
+        var out = specSheetRows(p.name || '', sc, sh);
+        specRows = specRows.concat(out.rows);
+        out.tables.forEach(function (t) {
+          if (!specTables[t.label]) { specTables[t.label] = t.rows.slice(0, 1); specTableOrder.push(t.label); }
+          specTables[t.label] = specTables[t.label].concat(t.rows.slice(1));
         });
       });
-    });
-    if (specRows.length > 1) {
-      var ws4 = XLSX.utils.aoa_to_sheet(specRows);
-      XLSX.utils.book_append_sheet(wb, ws4, '사양정리');
+      if (specRows.length > 1) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(specRows), '사양서');
+      var usedNm = {};
+      specTableOrder.forEach(function (lbl) {
+        var base = ('사양-' + String(lbl).replace(/[\\/\?\*\[\]:]/g, ' ')).slice(0, 28), nm = base, n = 2;
+        while (usedNm[nm]) nm = base + ' ' + (n++);
+        usedNm[nm] = true;
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(specTables[lbl]), nm);
+      });
     }
 
     XLSX.writeFile(wb, '프로젝트_보고서_' + localDate() + '.xlsx');
