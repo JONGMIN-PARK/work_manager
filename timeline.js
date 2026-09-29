@@ -795,15 +795,51 @@ function renderTlProjectList(allProjects) {
     '</div>';
   }
   var html = '';
+  var labeled = groups.filter(function (g) { return grouped && g.label; });
+  if (labeled.length > 1) {   // v13.198 분류 모두 접기/펼치기
+    html += '<div class="tl-list-gtools"><button onclick="tlSetAllListGroups(true)">모두 접기</button><button onclick="tlSetAllListGroups(false)">모두 펼치기</button></div>';
+  }
   groups.forEach(function (g) {
     if (grouped && g.label) {
-      html += '<div class="tl-list-group" style="border-left:3px solid ' + (g.color || 'var(--ac)') + ';color:' + (g.color || 'var(--t3)') + '">' +
-        '<span>' + g.label + '</span><span class="tl-list-group-n">' + g.items.length + '</span></div>';
+      // v13.198 분류(상태 그룹) 머리글을 누르면 접기/펼치기 — 상태는 localStorage 에 유지
+      var off = !!_tlListGroupCollapsed[g.key];
+      html += '<div class="tl-list-group" data-gkey="' + eH(g.key) + '" onclick="tlToggleListGroup(\'' + eH(g.key) + '\')" title="눌러서 ' + (off ? '펼치기' : '접기') + '" style="cursor:pointer;border-left:3px solid ' + (g.color || 'var(--ac)') + ';color:' + (g.color || 'var(--t3)') + '">' +
+        '<span><span class="tl-list-caret">' + (off ? '▸' : '▾') + '</span> ' + g.label + '</span><span class="tl-list-group-n">' + g.items.length + '</span></div>';
+      html += '<div class="tl-list-gbody" data-gbody="' + eH(g.key) + '"' + (off ? ' style="display:none"' : '') + '>';
+      g.items.forEach(function (p) { html += itemHtml(p); });
+      html += '</div>';
+      return;
     }
     g.items.forEach(function (p) { html += itemHtml(p); });
   });
 
   el.innerHTML = html;
+}
+
+/* v13.198 프로젝트 목록 분류 접기 — 다시 그리지 않고 표시만 바꾼다 */
+var _tlListGroupCollapsed = (typeof lsGetJSON === 'function') ? (lsGetJSON('tlListGroupCollapsed', {}) || {}) : {};
+function _tlPaintListGroup(key) {
+  var off = !!_tlListGroupCollapsed[key];
+  document.querySelectorAll('#tlProjList [data-gbody]').forEach(function (b) { if (b.getAttribute('data-gbody') === key) b.style.display = off ? 'none' : ''; });
+  document.querySelectorAll('#tlProjList [data-gkey]').forEach(function (h) {
+    if (h.getAttribute('data-gkey') !== key) return;
+    var c = h.querySelector('.tl-list-caret'); if (c) c.textContent = off ? '▸' : '▾';
+    h.title = '눌러서 ' + (off ? '펼치기' : '접기');
+  });
+}
+function _tlSaveListGroups() { if (typeof lsSetJSON === 'function') lsSetJSON('tlListGroupCollapsed', _tlListGroupCollapsed); }
+function tlToggleListGroup(key) {
+  if (_tlListGroupCollapsed[key]) delete _tlListGroupCollapsed[key]; else _tlListGroupCollapsed[key] = true;
+  _tlSaveListGroups();
+  _tlPaintListGroup(key);
+}
+function tlSetAllListGroups(collapse) {
+  document.querySelectorAll('#tlProjList [data-gkey]').forEach(function (h) {
+    var k = h.getAttribute('data-gkey');
+    if (collapse) _tlListGroupCollapsed[k] = true; else delete _tlListGroupCollapsed[k];
+    _tlPaintListGroup(k);
+  });
+  _tlSaveListGroups();
 }
 
 function tlScrollToProject(projId) {

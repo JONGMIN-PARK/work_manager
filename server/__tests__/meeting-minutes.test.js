@@ -1,0 +1,100 @@
+/**
+ * 회의록 양식·미리 보기·메일 (v13.198)
+ */
+var h = require('./helpers');
+var minutes = require('../lib/meeting-minutes');
+var emailService = require('../services/email.service');
+
+describe('회의록 문서 (lib/meeting-minutes)', function () {
+  test('양식 칸·안건·액션을 표로, 값은 이스케이프', function () {
+    var doc = minutes.renderMinutes({
+      title: '설계 <검토>', meet_date: '2026-09-30', attendees: ['박설계', '김전장'],
+      agenda: [{ text: '축 구성 확정', done: true }, '레거시 문자열 안건'],
+      minutes: '1줄\n2줄', form: { timeStart: '10:00', timeEnd: '11:30', place: '3층 회의실', writer: '박설계', decisions: 'X축 볼스크류 L10', nextDate: '2026-10-07', nextNote: '전장 검토' },
+      action_items: [{ title: '드라이브 선정', assignee_name: '김전장', due_date: '2026-10-02', status: 'open' }]
+    }, { projectName: '광 정렬기 #3', orderNo: 'A-31', message: '공유드립니다' });
+    expect(doc.subject).toBe('[회의록] 설계 <검토> (2026-09-30)');
+    expect(doc.html).toContain('설계 &lt;검토&gt;');
+    expect(doc.html).not.toContain('<검토>');
+    expect(doc.html).toContain('2026-09-30 10:00 ~ 11:30');
+    expect(doc.html).toContain('3층 회의실');
+    expect(doc.html).toContain('1줄<br>2줄');
+    expect(doc.html).toContain('축 구성 확정 <span style="color:#10b981">(완료)</span>');
+    expect(doc.html).toContain('레거시 문자열 안건');
+    expect(doc.html).toContain('드라이브 선정');
+    expect(doc.html).toContain('광 정렬기 #3 (A-31)');
+    expect(doc.html).toContain('공유드립니다');
+  });
+  test('메일 주소 검사', function () {
+    expect(minutes.isEmail('a.b@c.co.kr')).toBe(true);
+    ['a@b', 'a b@c.com', 'a@b.com\r\nBcc: x@y.com', '<a@b.com>', ''].forEach(function (e) { expect(minutes.isEmail(e)).toBe(false); });
+  });
+});
+
+describe('회의록 API', function () {
+  var admin, member, outsider, projId, mid;
+  beforeAll(async function () {
+    await h.createTestTenant('mtg-' + Date.now());
+    admin = await h.createTestUser({ role: 'admin', email: 'mtg-admin@test.com', name: '박설계' });
+    member = await h.createTestUser({ role: 'member', email: 'mtg-member@test.com', name: '김전장' });
+    outsider = await h.createTestUser({ role: 'member', email: 'mtg-out@test.com', name: '외부인' });
+    var p = await h.request(h.app).post('/api/projects').set('Authorization', 'Bearer ' + admin.token).send({ name: '회의 프로젝트', status: 'active', visibility: 'private' });
+    projId = p.body.data.id;
+  });
+  afterAll(async function () { await h.cleanup(); });
+  function as(u) { return { post: function (url, b) { return h.request(h.app).post(url).set('Authorization', 'Bearer ' + u.token).send(b || {}); }, put: function (url, b) { return h.request(h.app).put(url).set('Authorization', 'Bearer ' + u.token).send(b || {}); }, get: function (url) { return h.request(h.app).get(url).set('Authorization', 'Bearer ' + u.token); } }; }
+
+  test('양식 칸 저장 — 알려진 키만, 빈 값 제외', async function () {
+    var c = await as(admin).post('/api/meetings', { projectId: projId, title: '킥오프', meetDate: '2026-09-30', attendees: ['박설계', '김전장', '없는사람'], form: { writer: '박설계' } });
+    expect(c.status).toBe(201);
+    mid = c.body.data.id;
+    expect(c.body.data.form).toEqual({ writer: '박설계' });
+    var u = await as(admin).put('/api/meetings/' + mid, { minutes: '논의', form: { place: '회의실', decisions: '결정', timeStart: '10:00', hack: 'x', nextNote: '' } });
+    expect(u.status).toBe(200);
+    expect(u.body.data.form).toEqual({ place: '회의실', decisions: '결정', timeStart: '10:00' });
+  });
+
+  test('미리 보기·받는 사람 — 프로젝트 권한 필요, 주소는 가림', async function () {
+    var r = await as(admin).post('/api/meetings/' + mid + '/render');
+    expect(r.status).toBe(200);
+    expect(r.body.data.html).toContain('회의실');
+    expect(r.body.data.html).toContain('회의 프로젝트');
+    var denied = await as(outsider).post('/api/meetings/' + mid + '/render');
+    expect(denied.status).toBe(403);
+    var rc = await as(admin).get('/api/meetings/' + mid + '/mail-recipients');
+    expect(rc.body.data).toEqual([
+      { name: '박설계', hasEmail: true, masked: 'mt***@test.com' },
+      { name: '김전장', hasEmail: true, masked: 'mt***@test.com' },
+      { name: '없는사람', hasEmail: false, masked: null }
+    ]);
+  });
+
+  test('메일: 주소 검사, 받는 사람은 숨은 참조, 발송 기록', async function () {
+    var bad = await as(admin).post('/api/meetings/' + mid + '/mail', { emails: ['x@y.com\r\nBcc: z@w.com'] });
+    expect(bad.status).toBe(400);
+    var none = await as(admin).post('/api/meetings/' + mid + '/mail', { attendees: ['외부인'] });   // 참석자가 아닌 이름은 무시
+    expect(none.status).toBe(400);
+    var cfg = require('../config');
+    var saved = { user: cfg.smtp.user, pass: cfg.smtp.pass };
+    var off0 = await as(admin).post('/api/meetings/' + mid + '/mail', { emails: ['a@b.com'] });
+    if (!saved.user || !saved.pass) expect(off0.status).toBe(503);   // SMTP 계정 없음 → 발송 전에 안내
+    cfg.smtp.user = 'bot@test.com'; cfg.smtp.pass = 'x';
+    var spy = jest.spyOn(emailService, 'sendMail').mockResolvedValue(true);
+    var ok = await as(admin).post('/api/meetings/' + mid + '/mail', { attendees: ['김전장'], emails: ['partner@vendor.com', 'PARTNER@vendor.com'], message: '공유' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.sent).toBe(2);
+    var args = spy.mock.calls[0];
+    expect(args[0]).toBe('mtg-admin@test.com');                   // 보낸 사람 본인이 To
+    expect(args[3].bcc.sort()).toEqual(['mtg-member@test.com', 'partner@vendor.com']);
+    expect(args[3].replyTo).toBe('mtg-admin@test.com');
+    expect(args[1]).toContain('[회의록] 킥오프');
+    spy.mockResolvedValue(false);                                   // SMTP 미설정
+    var off = await as(admin).post('/api/meetings/' + mid + '/mail', { emails: ['a@b.com'] });
+    expect(off.status).toBe(503);
+    spy.mockRestore();
+    cfg.smtp.user = saved.user; cfg.smtp.pass = saved.pass;
+    var r = await as(admin).post('/api/meetings/' + mid + '/render');
+    expect(r.body.data.mailedTo.length).toBe(2);
+    expect(r.body.data.mailedByName).toBe('박설계');
+  });
+});

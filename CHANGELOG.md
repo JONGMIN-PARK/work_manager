@@ -1,5 +1,12 @@
 # Work Manager — 변경 이력
 
+## v13.198 (2026-09-29) — 회의록 양식·미리 보기·메일 + 타임라인 목록 분류 접기
+
+- 타임라인 좌측 프로젝트 목록: 상태 그룹 머리글 접기/펼치기(localStorage tlListGroupCollapsed), 모두 접기·펼치기. 재렌더 없이 표시만 전환.
+- 회의 탭을 project-meetings.js 로 분리·재구성: 요약·미완료 액션 모아보기·필터, 카드 접기, 회의록 양식(form JSONB: timeStart·timeEnd·place·writer·decisions·nextDate·nextNote, 논의 내용은 minutes), 안건 체크(agenda {text, done}), 참석자.
+- 변경 시 해당 회의 카드만 다시 그리고 양식 초안은 메모리에 유지 — 액션 체크 시 다른 회의 미저장 회의록이 사라지던 버그 수정. 모든 요청 실패 안내.
+- 서버: 055_meeting_minutes_form(form·mailed_*), lib/meeting-minutes(문서 HTML 한 벌), POST /meetings/:id/render, GET /:id/mail-recipients(참석자 → 계정 메일, 주소 가림), POST /:id/mail(프로젝트 읽기 권한, 주소 검사, BCC, replyTo=보낸 사람, SMTP 미설정 503, 발송 기록).
+
 ## v13.197 (2026-09-29) — 사양서 PCI 지원 · CPU/메모리 분리
 
 - 내장 기본 양식: mc_form·io_form(신규)에 PCI 보드, ext_devices.iface 에 PCI·PCIe, IPC 에 ipc_mem(신규)·ipc_pci(신규), ipc_cpu 라벨 "CPU".

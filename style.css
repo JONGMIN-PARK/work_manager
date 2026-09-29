@@ -459,6 +459,11 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-list-group:first-child{margin-top:0}
 .tl-list-group-n{font-size:9px;color:var(--t6);font-weight:700;background:var(--bg-p);padding:1px 7px;border-radius:9px}
 .tl-list-grouped{margin-left:6px}
+.tl-list-group:hover{filter:brightness(1.06)}
+.tl-list-caret{display:inline-block;width:10px;font-size:9px}
+.tl-list-gtools{display:flex;justify-content:flex-end;gap:4px;margin-bottom:4px}
+.tl-list-gtools button{font-size:9.5px;padding:1px 7px;border:1px solid var(--bd);border-radius:5px;background:transparent;color:var(--t5);cursor:pointer}
+.tl-list-gtools button:hover{color:var(--t2);background:var(--bg-i)}
 /* v13.152~153 파이프라인 카드 순서변경 — 카드 사이 삽입 가이드 라인 */
 .pipeline-card{position:relative}
 .pipeline-card.pipe-drop-before::before,

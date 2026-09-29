@@ -128,6 +128,7 @@ GET /api/license/status
 GET /api/locks
 GET /api/meetings
 GET /api/meetings/:id
+GET /api/meetings/:id/mail-recipients
 GET /api/messages
 GET /api/messages/threads
 GET /api/messages/unread-count
@@ -304,6 +305,8 @@ POST /api/license/generate
 POST /api/meetings
 POST /api/meetings/:id/actions
 POST /api/meetings/:id/actions/:aid/convert
+POST /api/meetings/:id/mail
+POST /api/meetings/:id/render
 POST /api/messages
 POST /api/messages/read
 POST /api/milestones
