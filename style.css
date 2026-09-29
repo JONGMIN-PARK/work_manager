@@ -768,3 +768,6 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
   .pd-ov{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:0 24px;align-items:start}
   .pd-ov-side{border-left:1px solid var(--bd);padding-left:20px}
 }
+/* v13.201 회의 탭 안의 회의록 문서 — 앱 표 스타일(th 대문자·자간 등)이 출력물 모양을 바꾸지 않게 */
+.pmt-doc th,.pmt-doc td{text-transform:none;letter-spacing:normal}
+.pmt-doc table{margin:0}

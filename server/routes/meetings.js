@@ -28,7 +28,7 @@ async function notifyActionAssigned(action, meetingTitle, actorId) {
 }
 
 /** 회의록 양식 칸 (v13.198) — 알려진 키만, 빈 값 제외, 각 4000자 */
-var FORM_KEYS = ['timeStart', 'timeEnd', 'place', 'writer', 'purpose', 'decisions', 'nextDate', 'nextNote'];
+var FORM_KEYS = ['timeStart', 'timeEnd', 'place', 'writer', 'purpose', 'decisions', 'nextDate', 'nextNote', 'completedAt', 'completedBy'];
 function _formOf(f) {
   var out = {};
   FORM_KEYS.forEach(function (k) { if (f && f[k] != null && String(f[k]).trim() !== '') out[k] = String(f[k]).slice(0, 4000); });

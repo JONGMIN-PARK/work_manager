@@ -65,6 +65,9 @@ describe('회의록 API', function () {
     var u = await as(admin).put('/api/meetings/' + mid, { minutes: '논의', form: { place: '회의실', decisions: '결정', timeStart: '10:00', hack: 'x', nextNote: '' } });
     expect(u.status).toBe(200);
     expect(u.body.data.form).toEqual({ place: '회의실', decisions: '결정', timeStart: '10:00' });
+    var done = await as(admin).put('/api/meetings/' + mid, { form: { place: '회의실', completedAt: '2026-09-29T05:00:00.000Z', completedBy: '박설계' } });
+    expect(done.body.data.form).toEqual({ place: '회의실', completedAt: '2026-09-29T05:00:00.000Z', completedBy: '박설계' });   // 작성 완료 표시 (v13.201)
+    await as(admin).put('/api/meetings/' + mid, { form: { place: '회의실', decisions: '결정', timeStart: '10:00' } });
   });
 
   test('미리 보기·받는 사람 — 프로젝트 권한 필요, 주소는 가림', async function () {
@@ -99,7 +102,8 @@ describe('회의록 API', function () {
     var ok = await as(admin).post('/api/meetings/' + mid + '/mail', { attendees: ['김전장'], emails: ['partner@vendor.com', 'PARTNER@vendor.com'], message: '공유' });
     expect(ok.status).toBe(200);
     expect(ok.body.data.sent).toBe(2);
-    var args = spy.mock.calls[0];
+    // 백그라운드 알림 메일도 같은 sendMail 을 거치므로(순서가 매번 다름) 회의록 메일만 골라 본다
+    var args = spy.mock.calls.filter(function (c) { return String(c[1] || '').indexOf('[회의록]') === 0; })[0];
     expect(args[0]).toBe('mtg-admin@test.com');                   // 보낸 사람 본인이 To
     expect(args[3].bcc.sort()).toEqual(['mtg-member@test.com', 'partner@vendor.com']);
     expect(args[3].replyTo).toBe('mtg-admin@test.com');
