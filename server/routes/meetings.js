@@ -228,13 +228,16 @@ router.post('/:id/render', async function (req, res) {
   try {
     var x = await _meetingForDoc(req, res); if (!x) return;
     var doc = minutesDoc.renderMinutes(x.m, { projectName: x.proj && x.proj.name, orderNo: x.proj && x.proj.order_no, message: (req.body && req.body.message) || '' });
-    res.json({ data: { subject: doc.subject, html: doc.html, mailedAt: x.m.mailed_at, mailedByName: x.m.mailed_by_name, mailedTo: x.m.mailed_to || [] } });
+    var smtpCfg = require('../config').smtp || {};
+    res.json({ data: { subject: doc.subject, html: doc.html, mailedAt: x.m.mailed_at, mailedByName: x.m.mailed_by_name, mailedTo: x.m.mailed_to || [], smtp: !!(smtpCfg.user && smtpCfg.pass) } });
   } catch (e) {
     httpErr.serverError(res, '[meetings/render]', e);
   }
 });
 
-// GET /api/meetings/:id/mail-recipients — 참석자 이름 → 메일 주소가 있는 사용자 (주소는 가려서)
+// GET /api/meetings/:id/mail-recipients — 참석자 이름 → 계정 메일 주소
+//  v13.199: 메일 앱으로 보내기(mailto·.eml)는 브라우저가 주소를 알아야 하므로 실제 주소도 준다.
+//  _meetingForDoc 가 프로젝트 읽기 권한(일반 회의는 작성자)을 확인한 뒤에만 응답한다.
 router.get('/:id/mail-recipients', async function (req, res) {
   try {
     var x = await _meetingForDoc(req, res); if (!x) return;
@@ -245,7 +248,7 @@ router.get('/:id/mail-recipients', async function (req, res) {
       u.rows.forEach(function (row) { [row.name, row.display_name].forEach(function (n) { if (n && names.indexOf(n) >= 0 && !found[n]) found[n] = row.email; }); });
     }
     function mask(e) { var p = String(e).split('@'); return (p[0].length <= 2 ? p[0][0] + '*' : p[0].slice(0, 2) + '***') + '@' + p[1]; }
-    res.json({ data: names.map(function (n) { return { name: n, hasEmail: !!found[n], masked: found[n] ? mask(found[n]) : null }; }) });
+    res.json({ data: names.map(function (n) { return { name: n, hasEmail: !!found[n], masked: found[n] ? mask(found[n]) : null, email: found[n] || null }; }) });
   } catch (e) {
     httpErr.serverError(res, '[meetings/mail-recipients]', e);
   }
@@ -289,6 +292,21 @@ router.post('/:id/mail', async function (req, res) {
     res.json({ data: { sent: to.length, mailedAt: new Date().toISOString() }, message: to.length + '명에게 보냈습니다.' });
   } catch (e) {
     httpErr.serverError(res, '[meetings/mail]', e);
+  }
+});
+
+// POST /api/meetings/:id/mail-log — 메일 앱(mailto·.eml)으로 보낸 경우의 기록. body: { to: string[], method: 'app'|'eml' }
+//  실제 발송 여부는 서버가 알 수 없으므로 "공유함" 기록만 남긴다.
+router.post('/:id/mail-log', async function (req, res) {
+  try {
+    var x = await _meetingForDoc(req, res); if (!x) return;
+    var to = (Array.isArray(req.body && req.body.to) ? req.body.to : []).map(function (e) { return String(e).trim(); }).filter(minutesDoc.isEmail).slice(0, 50);
+    var me = await _senderName(req);
+    var by = (me.display_name || me.name || '') + ((req.body && req.body.method) === 'eml' ? ' (Outlook 초안)' : ' (메일 앱)');
+    await db.query('UPDATE meetings SET mailed_at = now(), mailed_by_name = $1, mailed_to = $2 WHERE id = $3 AND tenant_id = $4', [by, JSON.stringify(to), req.params.id, req.tenant.id]);
+    res.json({ data: { mailedAt: new Date().toISOString() } });
+  } catch (e) {
+    httpErr.serverError(res, '[meetings/mail-log]', e);
   }
 });
 

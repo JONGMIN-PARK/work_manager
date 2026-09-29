@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.199 (2026-09-29) — 회의록 메일: 메일 서버 없이 보내기
+
+- 미리 보기 메일 영역: ① 메일 앱으로 보내기(서식 HTML 을 클립보드에 + mailto 로 받는 사람·제목) ② Outlook 초안 .eml(UTF-8 제목, HTML 본문 base64, X-Unsent: 1) ③ 서버 발송은 SMTP 설정 시에만.
+- 서버: render 응답에 smtp 여부, mail-recipients 가 실제 주소도 반환(프로젝트 읽기 권한 확인 후), POST /meetings/:id/mail-log(메일 앱·초안 공유 기록).
+
 ## v13.198 (2026-09-29) — 회의록 양식·미리 보기·메일 + 타임라인 목록 분류 접기
 
 - 타임라인 좌측 프로젝트 목록: 상태 그룹 머리글 접기/펼치기(localStorage tlListGroupCollapsed), 모두 접기·펼치기. 재렌더 없이 표시만 전환.

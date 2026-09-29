@@ -61,11 +61,14 @@ describe('회의록 API', function () {
     expect(r.body.data.html).toContain('회의 프로젝트');
     var denied = await as(outsider).post('/api/meetings/' + mid + '/render');
     expect(denied.status).toBe(403);
+    var deniedRc = await as(outsider).get('/api/meetings/' + mid + '/mail-recipients');   // 주소는 권한 있는 사람에게만
+    expect(deniedRc.status).toBe(403);
+    expect(typeof r.body.data.smtp).toBe('boolean');
     var rc = await as(admin).get('/api/meetings/' + mid + '/mail-recipients');
     expect(rc.body.data).toEqual([
-      { name: '박설계', hasEmail: true, masked: 'mt***@test.com' },
-      { name: '김전장', hasEmail: true, masked: 'mt***@test.com' },
-      { name: '없는사람', hasEmail: false, masked: null }
+      { name: '박설계', hasEmail: true, masked: 'mt***@test.com', email: 'mtg-admin@test.com' },
+      { name: '김전장', hasEmail: true, masked: 'mt***@test.com', email: 'mtg-member@test.com' },
+      { name: '없는사람', hasEmail: false, masked: null, email: null }
     ]);
   });
 
@@ -96,5 +99,15 @@ describe('회의록 API', function () {
     var r = await as(admin).post('/api/meetings/' + mid + '/render');
     expect(r.body.data.mailedTo.length).toBe(2);
     expect(r.body.data.mailedByName).toBe('박설계');
+  });
+
+  test('메일 앱 공유 기록 — 올바른 주소만, 방법 표시', async function () {
+    var r = await as(admin).post('/api/meetings/' + mid + '/mail-log', { to: ['a@b.com', 'bad', 'c@d.co.kr'], method: 'eml' });
+    expect(r.status).toBe(200);
+    var d = await as(admin).post('/api/meetings/' + mid + '/render');
+    expect(d.body.data.mailedTo).toEqual(['a@b.com', 'c@d.co.kr']);
+    expect(d.body.data.mailedByName).toBe('박설계 (Outlook 초안)');
+    var no = await as(outsider).post('/api/meetings/' + mid + '/mail-log', { to: ['a@b.com'] });
+    expect(no.status).toBe(403);
   });
 });

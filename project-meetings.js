@@ -362,10 +362,11 @@ function pmtPreview(mid, focusMail) {
   }, 'pmtPreviewModal', { timeoutMs: 15000 });
 }
 function _pmtBuildPreview(mid, doc, recips, focusMail) {
+  window._pmtDoc = doc;   // 메일 앱으로 보내기 — 클릭 직후 바로 복사하려고 미리 받은 문서를 둔다
   var sent = doc.mailedAt ? '<div style="font-size:10px;color:var(--t5);margin-top:4px">마지막 발송: ' + _pmtEsc(String(doc.mailedAt).slice(0, 16).replace('T', ' ')) + ' · ' + _pmtEsc(doc.mailedByName || '') + ' · ' + (doc.mailedTo || []).length + '명</div>' : '';
   var people = recips.map(function (r, i) {
     return '<label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;border:1px solid var(--bd);border-radius:12px;padding:2px 8px;margin:0 4px 4px 0;' + (r.hasEmail ? '' : 'opacity:.5') + '" title="' + _pmtEsc(r.hasEmail ? r.masked : '계정·메일 주소를 찾지 못함 — 아래에 주소를 직접 넣으세요') + '">' +
-      '<input type="checkbox" class="pmt-rc" data-name="' + _pmtEsc(r.name) + '"' + (r.hasEmail ? ' checked' : ' disabled') + '> ' + _pmtEsc(r.name) + (r.hasEmail ? '' : ' (메일 없음)') + '</label>';
+      '<input type="checkbox" class="pmt-rc" data-name="' + _pmtEsc(r.name) + '" data-email="' + _pmtEsc(r.email || '') + '"' + (r.hasEmail ? ' checked' : ' disabled') + '> ' + _pmtEsc(r.name) + (r.hasEmail ? '' : ' (메일 없음)') + '</label>';
   }).join('');
   var html =
     '<div style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:12px">' +
@@ -380,8 +381,14 @@ function _pmtBuildPreview(mid, doc, recips, focusMail) {
           '<input id="pmtMailExtra" class="si" placeholder="name@company.com, …" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 7px">' +
           '<div style="font-size:10px;color:var(--t5);margin:6px 0 3px">머리말 (선택)</div>' +
           '<textarea id="pmtMailMsg" class="si" rows="3" placeholder="예: 오늘 회의 내용 공유드립니다." style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 7px;resize:vertical"></textarea>' +
-          '<button class="btn btn-p btn-s" id="pmtMailBtn" style="width:100%;margin-top:6px;font-size:11px" onclick="pmtSendMail(\'' + _pmtJs(mid) + '\')">보내기</button>' +
-          '<div style="font-size:9.5px;color:var(--t6);margin-top:5px;line-height:1.5">받는 사람끼리는 주소가 보이지 않게 숨은 참조로 보냅니다. 답장은 보낸 사람에게 갑니다.</div>' +
+          // v13.199 메일 서버 없이: ① 메일 앱(본문 복사 + 새 메일 창) ② Outlook 초안(.eml) — ③ 서버 발송은 SMTP 가 설정된 경우만
+          '<button class="btn btn-p btn-s" style="width:100%;margin-top:8px;font-size:11px" onclick="pmtMailApp(\'' + _pmtJs(mid) + '\')" title="회의록 문서를 복사하고 받는 사람·제목이 채워진 새 메일 창을 엽니다">📋 메일 앱으로 보내기</button>' +
+          '<div style="font-size:9.5px;color:var(--t6);margin:3px 0 0;line-height:1.5">새 메일 창이 열리면 본문에 <b>Ctrl+V</b> 로 붙여넣고 보내세요 (표 서식 유지).</div>' +
+          '<button class="btn btn-g btn-s" style="width:100%;margin-top:6px;font-size:11px" onclick="pmtMailEml(\'' + _pmtJs(mid) + '\')" title="받는 사람·제목·본문이 들어간 메일 파일 — 더블클릭하면 Outlook 에서 보내기 전 초안으로 열립니다">⬇ Outlook 초안 (.eml)</button>' +
+          (doc.smtp
+            ? '<button class="btn btn-g btn-s" id="pmtMailBtn" style="width:100%;margin-top:6px;font-size:11px" onclick="pmtSendMail(\'' + _pmtJs(mid) + '\')">🚀 바로 보내기 (서버 발송)</button>' +
+              '<div style="font-size:9.5px;color:var(--t6);margin-top:3px;line-height:1.5">서버 발송은 받는 사람끼리 주소가 보이지 않게 숨은 참조로 보냅니다.</div>'
+            : '') +
           sent +
         '</div>' +
       '</div>' +
@@ -391,6 +398,103 @@ function _pmtBuildPreview(mid, doc, recips, focusMail) {
   if (fr) fr.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><title>' + _pmtEsc(doc.subject) + '</title><style>@page{margin:16mm}body{margin:18px;background:#fff}</style></head><body>' + doc.html + '</body></html>';
   if (focusMail) { var ex = document.getElementById('pmtMailExtra'); if (ex) setTimeout(function () { ex.focus(); }, 50); }
 }
+/* ── 메일 서버 없이 보내기 (v13.199) ─────────────────────────────────── */
+function _pmtPickedEmails() {
+  var list = Array.prototype.slice.call(document.querySelectorAll('#pmtPreviewModal .pmt-rc:checked')).map(function (c) { return c.getAttribute('data-email'); }).filter(Boolean);
+  _pmtSplit((document.getElementById('pmtMailExtra') || {}).value).forEach(function (e) { list.push(e); });
+  var seen = {}, bad = [];
+  var out = list.filter(function (e) {
+    if (!/^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]+$/.test(e)) { bad.push(e); return false; }
+    var k = e.toLowerCase(); if (seen[k]) return false; seen[k] = true; return true;
+  });
+  return { to: out, bad: bad };
+}
+/* 머리말을 넣은 문서 — 서버가 만든 한 벌 그대로 */
+function _pmtDocWithMessage(mid) {
+  var msg = (document.getElementById('pmtMailMsg') || {}).value || '';
+  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/render', { method: 'POST', body: JSON.stringify({ message: msg }) }).then(function (r) { return r.data; });
+}
+function _pmtMailLog(mid, to, method) {
+  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/mail-log', { method: 'POST', body: JSON.stringify({ to: to, method: method }) }).then(function (r) {
+    var m = _pmtFind(mid); if (m) { m.mailedAt = r.data.mailedAt; _pmtPaintCard(mid); }
+  }).catch(function () {});
+}
+/* 서식 있는 HTML 을 클립보드로 — ClipboardItem 이 안 되면 문서 영역을 선택해 복사 */
+function _pmtCopyHtml(html, plain) {
+  if (navigator.clipboard && window.ClipboardItem && window.isSecureContext) {
+    try {
+      return navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([plain], { type: 'text/plain' }) })]).then(function () { return true; }, function () { return _pmtCopyFallback(html); });
+    } catch (e) { /* 아래로 */ }
+  }
+  return Promise.resolve(_pmtCopyFallback(html));
+}
+function _pmtCopyFallback(html) {
+  var box = document.createElement('div');
+  box.setAttribute('contenteditable', 'true');
+  box.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff';
+  box.innerHTML = html;
+  document.body.appendChild(box);
+  var range = document.createRange(); range.selectNodeContents(box);
+  var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  var ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  sel.removeAllRanges(); box.remove();
+  return ok;
+}
+function _pmtPlainOf(html) { var d = document.createElement('div'); d.innerHTML = html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(tr|p|div|li|h1)>/gi, '\n'); return (d.textContent || '').replace(/\n{3,}/g, '\n\n').trim(); }
+
+function pmtMailApp(mid) {
+  var r = _pmtPickedEmails();
+  if (r.bad.length) { _pmtToast('메일 주소 형식 오류: ' + r.bad.slice(0, 3).join(', '), 'warn'); return; }
+  // 메일 창은 사용자 클릭 직후에 열어야 팝업 차단을 피한다 → 문서는 미리 보기에서 받은 것 사용, 머리말이 있으면 새로 받는다
+  var msg = (document.getElementById('pmtMailMsg') || {}).value || '';
+  var docP = msg.trim() ? _pmtDocWithMessage(mid) : Promise.resolve(window._pmtDoc);
+  docP.then(function (doc) {
+    return _pmtCopyHtml(doc.html, _pmtPlainOf(doc.html)).then(function (copied) {
+      var url = 'mailto:' + r.to.map(encodeURIComponent).join(',') + '?subject=' + encodeURIComponent(doc.subject) +
+        '&body=' + encodeURIComponent(copied ? '(여기에 Ctrl+V 로 회의록을 붙여넣으세요)\n\n' : _pmtPlainOf(doc.html).slice(0, 1500));
+      window.location.href = url;
+      _pmtToast(copied ? '회의록을 복사했습니다. 열린 메일 창 본문에 Ctrl+V 로 붙여넣으세요.' : '복사가 막혀 본문을 글자로만 넣었습니다. 서식이 필요하면 Outlook 초안(.eml)을 쓰세요.', copied ? 'success' : 'warn');
+      _pmtMailLog(mid, r.to, 'app');
+    });
+  }).catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '메일 준비 실패'), 'error'); });
+}
+
+/* .eml — 받는 사람·제목(UTF-8)·HTML 본문. X-Unsent: 1 이면 Outlook 이 보내기 전 초안으로 연다 */
+function _pmtB64(str) {
+  var bytes = new TextEncoder().encode(str), bin = '';
+  for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function _pmtBuildEml(to, subject, html) {
+  var body = '<!doctype html><html><head><meta charset="utf-8"></head><body>' + html + '</body></html>';
+  var b64 = _pmtB64(body).replace(/.{76}/g, '$&\r\n');
+  return [
+    'To: ' + to.join(', '),
+    'Subject: =?UTF-8?B?' + _pmtB64(subject) + '?=',
+    'X-Unsent: 1',
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64,
+    ''
+  ].join('\r\n');
+}
+function pmtMailEml(mid) {
+  var r = _pmtPickedEmails();
+  if (r.bad.length) { _pmtToast('메일 주소 형식 오류: ' + r.bad.slice(0, 3).join(', '), 'warn'); return; }
+  _pmtDocWithMessage(mid).then(function (doc) {
+    var blob = new Blob([_pmtBuildEml(r.to, doc.subject, doc.html)], { type: 'message/rfc822' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = doc.subject.replace(/[\\\/:*?"<>|]/g, '_').slice(0, 80) + '.eml';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+    _pmtToast('메일 파일을 내려받았습니다. 더블클릭하면 Outlook 에서 초안으로 열립니다.', 'success');
+    _pmtMailLog(mid, r.to, 'eml');
+  }).catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '메일 파일 만들기 실패'), 'error'); });
+}
+
 function pmtPrint() {
   var fr = document.getElementById('pmtPreviewFrame');
   if (fr && fr.contentWindow) { fr.contentWindow.focus(); fr.contentWindow.print(); }

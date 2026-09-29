@@ -306,6 +306,7 @@ POST /api/meetings
 POST /api/meetings/:id/actions
 POST /api/meetings/:id/actions/:aid/convert
 POST /api/meetings/:id/mail
+POST /api/meetings/:id/mail-log
 POST /api/meetings/:id/render
 POST /api/messages
 POST /api/messages/read
