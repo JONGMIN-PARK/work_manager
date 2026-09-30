@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.208 (2026-09-30) — 달력 처리 필요 · 요약 개선
+
+- calendar `_calStatusInfo`/`_calStatusHtml`: 오른쪽 목록 행에 저장된 상태 배지(`.cal-row-st`) — 마일스톤·납기는 PROJ_STATUS 라벨 + 진척%, 이슈는 ISSUE_STATUS. 지연은 왼쪽 D+n 이 표시. 완료 버튼 "✓ 완료" → "완료 처리"(점선).
+- 월/주 요약에 "전체" 타일(k='' = 강조 해제, 기간 막대 제외 건수). 타일 3열 × 2줄.
+
 ## v13.207 (2026-09-30) — 사전검토 카드 미리보기 · 세부 팝업
 
 - prestudy 칸반 카드 `_psCardPreviewHtml`: 배경 2줄·노트 첫 줄(확정/보류/드롭은 결론)·참여자 수·태그. 서식 기호는 `_psOneLine` 으로 걷고, 자르기는 CSS line-clamp(`.psc-clamp1/2`).

@@ -473,6 +473,8 @@ function renderCalSide() {
   function cnt(f) { return inPeriod.filter(f).length; }
   var msAll = cnt(function (it) { return it.kind === 'ms'; }), msDone = cnt(function (it) { return it.kind === 'ms' && it.done; });
   var tiles = [
+    // 전체 = 강조 해제(모든 항목). 기간 막대(pspan)는 목록을 덮으므로 건수에서 뺀다
+    { k: '', label: '전체', val: inPeriod.length, color: 'var(--ac)' },
     { k: 'overdue', label: '지연', val: cnt(function (it) { return it.overdue; }), color: SEM_COLOR.danger },
     { k: 'pend', label: '납기', val: cnt(function (it) { return it.kind === 'pend'; }), color: '#F97316' },
     { k: 'ms', label: '마일스톤', val: msDone + '/' + msAll, color: SEM_COLOR.purple, sub: '완료/전체' },
@@ -546,8 +548,32 @@ function _calRowHtml(it, withDate) {
     + '<span class="cal-row-ic">' + _calIcon(it) + '</span>'
     + '<span class="cal-row-main" data-id="' + eH(it.id) + '" onclick="calOpenItem(this.dataset.id)" title="열기"><span class="cal-row-t">' + eH(it.title) + '</span>'
     + '<span class="cal-row-s">' + eH(sub) + (who ? ' · 👤 ' + eH(who) : '') + '</span></span>'
-    + (it.kind === 'ms' && !it.done ? '<button class="cal-row-btn" data-id="' + eH(it.id) + '" onclick="calMsDone(this.dataset.id)" title="완료 처리">✓ 완료</button>' : '')
+    + _calStatusHtml(it)
+    + (it.kind === 'ms' && !it.done ? '<button class="cal-row-btn" data-id="' + eH(it.id) + '" onclick="calMsDone(this.dataset.id)" title="이 마일스톤을 완료로 바꿉니다">완료 처리</button>' : '')
     + '</div>';
+}
+
+/* 행의 현재 상태 배지 — 예전엔 "✓ 완료" 버튼만 보여 이미 완료된 것처럼 읽혔다.
+   저장된 상태(마일스톤·프로젝트: 대기/진행중/보류 + 진척%, 이슈: 접수/대응중/보류)를 그대로 보여준다.
+   지연 여부는 왼쪽 D+n(빨강)이 따로 보여준다. 일정·착수·기간 막대는 상태가 없어 생략 */
+function _calStatusInfo(it) {
+  if (it.done) return null;
+  if (it.kind === 'ms' || it.kind === 'pend') {
+    var src = it.kind === 'ms' ? (it.ref || {}) : (it.proj || {});
+    var key = PROJ_STATUS[src.status] ? src.status : (it.kind === 'ms' ? 'waiting' : 'active');
+    var info = PROJ_STATUS[key];
+    var prog = Number(src.progress) || 0;
+    return { label: info.label + (prog > 0 ? ' ' + prog + '%' : ''), color: info.color };
+  }
+  if (it.kind === 'issue' && typeof ISSUE_STATUS !== 'undefined') {
+    var si = ISSUE_STATUS[(it.ref || {}).status];
+    return si ? { label: si.label, color: si.color } : null;
+  }
+  return null;
+}
+function _calStatusHtml(it) {
+  var s = _calStatusInfo(it);
+  return s ? '<span class="cal-row-st" style="--sc:' + s.color + '" title="현재 상태">' + eH(s.label) + '</span>' : '';
 }
 
 /* ═══ 주간 뷰 ═══ */
