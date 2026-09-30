@@ -104,7 +104,9 @@ function _psRender() {
   else if (_psView === 'client') html += _psClientHtml(items);
   else html += _psListHtml(items);
 
+  _psPopHide(true);
   wrap.innerHTML = html;
+  _psPopBind(wrap);
 }
 
 /* ═══ 칸반 ═══ */
@@ -127,8 +129,8 @@ function _psBoardHtml(items) {
           return '<option value="' + s.key + '"' + (s.key === p.status ? ' selected' : '') + '>' + s.label + '</option>';
         }).join('');
         var overdue = p.dueDate && p.dueDate < _psToday();
-        html += '<div draggable="true" ondragstart="psDragStart(event,\'' + _psEsc(p.id) + '\')" ondragend="psDragEnd(event)"' +
-          ' style="border:1px solid var(--bd);border-radius:6px;padding:7px;margin-bottom:6px;background:var(--bg-i);cursor:grab" title="드래그해서 상태 이동">' +
+        html += '<div draggable="true" data-ps-id="' + _psEsc(p.id) + '" ondragstart="psDragStart(event,\'' + _psEsc(p.id) + '\')" ondragend="psDragEnd(event)"' +
+          ' style="border:1px solid var(--bd);border-radius:6px;padding:7px;margin-bottom:6px;background:var(--bg-i);cursor:grab">' +
           '<div style="font-size:11px;font-weight:600;color:var(--t2);cursor:pointer;word-break:break-word;margin-bottom:3px" onclick="psOpenModal(\'' + _psEsc(p.id) + '\')">' + _psEsc(p.title) + '</div>' +
           (p.client ? '<div style="font-size:10px;color:var(--t4);margin-bottom:3px">🏢 ' + _psEsc(p.client) + '</div>' : '') +
           '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">' +
@@ -137,6 +139,7 @@ function _psBoardHtml(items) {
             (p.ownerName ? '<span style="font-size:9px;color:var(--t5)">@' + _psEsc(p.ownerName) + '</span>' : '') +
             (p.dueDate ? '<span style="font-size:9px;color:' + (overdue ? SEM_COLOR.danger : 'var(--t5)') + '">' + (overdue ? '⚠️' : '~') + _psEsc(p.dueDate) + '</span>' : '') +
           '</div>' +
+          _psCardPreviewHtml(p) +
           '<select class="si" style="font-size:9px;padding:1px 2px;margin-top:4px;width:100%" onchange="psMove(\'' + _psEsc(p.id) + '\',this.value)">' + selOpts + '</select>' +
         '</div>';
       });
@@ -145,6 +148,125 @@ function _psBoardHtml(items) {
   });
   html += '</div>';
   return html;
+}
+
+/* 카드 미리보기 — 배경 2줄 · 노트 첫 줄(결정된 건은 결론) · 참여자·태그. 자르기는 CSS(.psc-clamp) */
+function _psOneLine(t) {
+  // 노트 서식 기호(체크박스·목록·제목)를 걷어 미리보기에 내용만
+  var lines = String(t || '').split(/\r?\n/).map(function (l) { return l.replace(/^\s*(?:[-*]\s*\[[ xX]\]|[-*•]|#+|\d+[.)])\s*/, '').trim(); }).filter(Boolean);
+  return lines.join(' · ');
+}
+function _psCardPreviewHtml(p) {
+  var h = '';
+  if (p.background) h += '<div class="psc-line psc-clamp2">' + _psEsc(_psOneLine(p.background)) + '</div>';
+  var decided = p.status === 'won' || p.status === 'dropped' || p.status === 'hold';
+  if (decided && p.conclusion) h += '<div class="psc-line psc-clamp1 psc-concl">✔ ' + _psEsc(_psOneLine(p.conclusion)) + '</div>';
+  else if (p.notes) h += '<div class="psc-line psc-clamp1">📝 ' + _psEsc(_psOneLine(p.notes)) + '</div>';
+  var parts = Array.isArray(p.participants) ? p.participants.filter(Boolean) : [];
+  var tags = Array.isArray(p.tags) ? p.tags.filter(Boolean) : [];
+  if (parts.length || tags.length) {
+    h += '<div class="psc-meta">' +
+      (parts.length ? '<span>👥 ' + parts.length + '</span>' : '') +
+      tags.map(function (t) { return '<span class="psc-tag">#' + _psEsc(t) + '</span>'; }).join('') +
+    '</div>';
+  }
+  return h;
+}
+
+/* ═══ 마우스를 올리면 세부 내용 팝업 (칸반 카드·업체별/목록 행 공통, 이벤트 위임) ═══ */
+var _psPopTimer = null, _psPopHideTimer = null, _psPopId = null;
+function _psPopEl() {
+  var el = document.getElementById('psPop');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'psPop';
+    el.className = 'psc-pop';
+    el.style.display = 'none';
+    // 팝업 안으로 옮겨 가도 닫히지 않게(긴 내용 스크롤)
+    el.addEventListener('mouseenter', function () { clearTimeout(_psPopHideTimer); });
+    el.addEventListener('mouseleave', function () { _psPopHide(); });
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function _psPopBind(wrap) {
+  if (wrap._psPopBound) return;
+  wrap._psPopBound = true;
+  wrap.addEventListener('mouseover', function (e) {
+    var t = e.target.closest('[data-ps-id]');
+    if (!t || _psDragId) return;
+    if (e.relatedTarget && t.contains(e.relatedTarget)) return;   // 같은 카드 안에서 움직임
+    clearTimeout(_psPopHideTimer);
+    clearTimeout(_psPopTimer);
+    var id = t.getAttribute('data-ps-id');
+    if (_psPopId === id) return;               // 이미 떠 있음
+    _psPopTimer = setTimeout(function () { _psPopShow(id, t); }, 350);
+  });
+  wrap.addEventListener('mouseout', function (e) {
+    var t = e.target.closest('[data-ps-id]');
+    if (!t || (e.relatedTarget && t.contains(e.relatedTarget))) return;
+    clearTimeout(_psPopTimer);
+    _psPopHide();
+  });
+}
+function _psPopHide(now) {
+  clearTimeout(_psPopTimer);
+  clearTimeout(_psPopHideTimer);
+  function hide() { var el = document.getElementById('psPop'); if (el) el.style.display = 'none'; _psPopId = null; }
+  if (now) hide(); else _psPopHideTimer = setTimeout(hide, 180);
+}
+function _psPopShow(id, anchor) {
+  var p = _psList.filter(function (x) { return x.id === id; })[0];
+  if (!p || !anchor.isConnected || _psDragId) return;
+  var el = _psPopEl();
+  el.innerHTML = _psPopHtml(p);
+  el.style.display = 'block';
+  el.scrollTop = 0;
+  _psPopId = id;
+  // 카드 오른쪽에, 넘치면 왼쪽 — 세로는 화면 안으로
+  var r = anchor.getBoundingClientRect();
+  var w = el.offsetWidth, h = el.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+  var left = r.right + 8;
+  if (left + w > vw - 8) left = r.left - w - 8;
+  if (left < 8) left = Math.max(8, Math.min(vw - w - 8, r.left));
+  el.style.left = left + 'px';
+  el.style.top = Math.max(8, Math.min(r.top, vh - h - 8)) + 'px';
+}
+function _psPopHtml(p) {
+  var st = _psInfo(p.status);
+  var cat = PS_CAT[p.category] || PS_CAT.inquiry;
+  var prio = PS_PRIO[p.priority] || PS_PRIO.normal;
+  var parts = Array.isArray(p.participants) ? p.participants.filter(Boolean) : [];
+  var tags = Array.isArray(p.tags) ? p.tags.filter(Boolean) : [];
+  var overdue = p.dueDate && p.dueDate < _psToday() && p.status !== 'won' && p.status !== 'dropped';
+  var linked = p.linkedProjectId ? '프로젝트로 전환됨' : (p.linkedOrderNo ? '수주 ' + _psEsc(p.linkedOrderNo) : '');
+  var rel = (p.updatedAt && typeof _pdRelTime === 'function') ? _pdRelTime(p.updatedAt) : '';
+  function row(k, v) { return v ? '<div class="psc-k">' + k + '</div><div class="psc-v">' + v + '</div>' : ''; }
+  function sec(k, text, rich) {
+    if (!text) return '';
+    var body = (rich && typeof wmRichNote === 'function') ? wmRichNote(text) : _psEsc(text);
+    return '<div class="psc-sec"><div class="psc-sec-k">' + k + '</div><div class="psc-sec-v">' + body + '</div></div>';
+  }
+  return '<div class="psc-pop-hd">' +
+      '<span class="badge" style="background:' + st.color + '22;color:' + st.color + '">' + st.icon + ' ' + st.label + '</span>' +
+      '<span class="psc-pop-title">' + _psEsc(p.title) + '</span>' +
+    '</div>' +
+    '<div class="psc-grid">' +
+      row('업체', _psEsc(p.client || '')) +
+      row('유형', '<span style="color:' + cat.color + '">' + cat.label + '</span>') +
+      row('우선순위', '<span style="color:' + prio.color + '">● ' + prio.label + '</span>') +
+      row('담당', _psEsc(p.ownerName || '')) +
+      row('참여자', _psEsc(parts.join(', '))) +
+      row('기한', p.dueDate ? '<span style="color:' + (overdue ? SEM_COLOR.danger : 'inherit') + '">' + (overdue ? '⚠️ ' : '') + _psEsc(p.dueDate) + '</span>' : '') +
+      row('태그', tags.map(function (t) { return '<span class="psc-tag">#' + _psEsc(t) + '</span>'; }).join(' ')) +
+      row('전환', linked) +
+      row('수정', _psEsc(rel)) +
+    '</div>' +
+    sec('배경 · 요청', p.background, false) +
+    sec('검토 노트', p.notes, true) +
+    sec('결론', p.conclusion, false) +
+    (!p.background && !p.notes && !p.conclusion ? '<div class="psc-empty">적힌 내용이 없습니다. 제목을 눌러 작성하세요.</div>' : '') +
+    '<div class="psc-hint">제목을 누르면 편집 · 드래그로 상태 이동</div>';
 }
 
 /* ═══ 업체별 ═══ */
@@ -171,7 +293,7 @@ function _psClientHtml(items) {
     list.forEach(function (p) {
       var st = _psInfo(p.status);
       var cat = PS_CAT[p.category] || PS_CAT.inquiry;
-      html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--bd)">' +
+      html += '<div data-ps-id="' + _psEsc(p.id) + '" style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--bd)">' +
         '<span style="font-size:11px">' + st.icon + '</span>' +
         '<span style="flex:1;font-size:11px;color:var(--t2);cursor:pointer;word-break:break-word" onclick="psOpenModal(\'' + _psEsc(p.id) + '\')">' + _psEsc(p.title) + '</span>' +
         '<span class="badge" style="background:' + cat.color + '22;color:' + cat.color + ';font-size:8px;padding:1px 4px">' + cat.label + '</span>' +
@@ -196,7 +318,7 @@ function _psListHtml(items) {
     var st = _psInfo(p.status);
     var cat = PS_CAT[p.category] || PS_CAT.inquiry;
     var linked = p.linkedProjectId ? '프로젝트' : (p.linkedOrderNo ? '수주 ' + _psEsc(p.linkedOrderNo) : '-');
-    html += '<tr style="border-bottom:1px solid var(--bd)">' +
+    html += '<tr data-ps-id="' + _psEsc(p.id) + '" style="border-bottom:1px solid var(--bd)">' +
       '<td style="padding:5px"><span class="badge" style="background:' + st.color + '22;color:' + st.color + ';font-size:8px;padding:1px 4px">' + st.icon + ' ' + st.label + '</span></td>' +
       '<td style="padding:5px;color:var(--t3)">' + _psEsc(p.client || '-') + '</td>' +
       '<td style="padding:5px;color:var(--t2);cursor:pointer" onclick="psOpenModal(\'' + _psEsc(p.id) + '\')">' + _psEsc(p.title) + '</td>' +
@@ -222,6 +344,7 @@ function _psToday() {
 var _psDragId = null;
 function psDragStart(ev, id) {
   _psDragId = id;
+  _psPopHide(true);
   try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', id); } catch (_) {}
 }
 function psDragEnd(ev) {

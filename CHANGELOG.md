@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.207 (2026-09-30) — 사전검토 카드 미리보기 · 세부 팝업
+
+- prestudy 칸반 카드 `_psCardPreviewHtml`: 배경 2줄·노트 첫 줄(확정/보류/드롭은 결론)·참여자 수·태그. 서식 기호는 `_psOneLine` 으로 걷고, 자르기는 CSS line-clamp(`.psc-clamp1/2`).
+- 호버 팝업 `#psPop`: `[data-ps-id]`(칸반 카드·업체별 행·목록 행) 위에 350ms 머물면 표시, 팝업 안으로 이동 시 유지, 벗어나면 180ms 후 닫힘. 드래그 시작·다시 그리기 때 닫음. 오른쪽이 넘치면 왼쪽, 세로는 화면 안으로. 검토 노트는 `wmRichNote` 렌더.
+- 스타일은 style.css `.psc-*` (글자 10px 이상). 중복 `.pmt-readonly` 한 줄 제거.
+
 ## v13.206 (2026-09-30) — 사전검토 화면 멈춤 수정
 
 - project-spec.js(v13.196)가 prestudy.js 와 같은 전역 함수 `_psRender`·`_psEsc`·`_psToast` 를 정의 — 나중에 로드돼 덮어쓰면서 사전검토의 `renderPrestudy` 가 사양서용 `_psRender` 를 불러 `#prestudyWrap` 이 "로딩 중..." 에서 멈췄다. 사양서 쪽을 `_specRender`·`_specEsc`·`_specToast` 로 이름 변경(spec-template-admin.js 호출 1곳 포함).
