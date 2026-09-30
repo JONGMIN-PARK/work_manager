@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.209 (2026-09-30) — 글래스 테마 타임라인 겹침 수정
+
+- 글래스 테마의 반투명 변수(--th/--bg-p/--bg-i/--bg-hv)를 쓰던 타임라인 sticky 영역을 불투명 `--tl-th/--tl-p/--tl-i/--tl-hv/--tl-drop` 으로(값은 반투명 색을 --bg 위에 합성한 색). 대상: .tl-header-row·.tl-label-header·.tl-label(-sub)·.tl-group-label·.tl-list-group·호버·드롭존·담당자 목표표 첫 칸. 다른 테마는 `var(--tl-*, 기존)` 폴백으로 변화 없음.
+- 층 순서: 막대(1~3)·의존 화살표 svg(5) < 라벨(6) < 날짜 머리행(7). 전에는 머리행·라벨이 모두 3이라 뒤에 오는 라벨이 머리행 왼쪽 칸을 덮었다.
+
 ## v13.208 (2026-09-30) — 달력 처리 필요 · 요약 개선
 
 - calendar `_calStatusInfo`/`_calStatusHtml`: 오른쪽 목록 행에 저장된 상태 배지(`.cal-row-st`) — 마일스톤·납기는 PROJ_STATUS 라벨 + 진척%, 이슈는 ISSUE_STATUS. 지연은 왼쪽 D+n 이 표시. 완료 버튼 "✓ 완료" → "완료 처리"(점선).

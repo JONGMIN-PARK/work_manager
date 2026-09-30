@@ -16,7 +16,8 @@
 .tl-ms-grip{display:inline-block;line-height:1;letter-spacing:-1px;flex-shrink:0}
 .tl-label-sub:hover .tl-ms-grip{opacity:.85!important}
 .tl-row-sub.tl-ms-dropzone{box-shadow:inset 0 2px 0 0 var(--ac);background:var(--ac-g)}
-.tl-row-sub.tl-ms-dropzone .tl-label-sub,.tl-row-sub.tl-ms-dropzone .tl-bars{background-color:var(--ac-g)}
+.tl-row-sub.tl-ms-dropzone .tl-bars{background-color:var(--ac-g)}
+.tl-row-sub.tl-ms-dropzone .tl-label-sub{background-color:var(--tl-drop,var(--ac-g))}
 /* 편집 모달 마일스톤 행 드래그 핸들 */
 .ms-drag-handle{cursor:grab;text-align:center;color:var(--t6);font-size:13px;line-height:1;user-select:none;letter-spacing:-1px}
 .ms-drag-handle:hover{color:var(--t3)}
@@ -114,6 +115,10 @@
 [data-theme="glass"] body{background:linear-gradient(135deg,#DCE6F4 0%,#E8EEF8 35%,#F4F7FC 70%,#E2EAF5 100%)!important;background-attachment:fixed}
 [data-theme="glass"] .pnl,[data-theme="glass"] .sc{backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 8px 24px rgba(99,102,241,.06)}
 [data-theme="glass"] .hdr{backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);background:rgba(255,255,255,.55)!important}
+/* 타임라인 고정 영역 층: 막대(1~3)·의존 화살표(5) < 왼쪽 라벨(6) < 날짜 머리행(7). 같은 층이면 뒤에 오는 라벨이 머리행 왼쪽 칸을 덮었다.
+   글래스: 타임라인 고정(sticky) 영역은 불투명 — 반투명이면 가로·세로 스크롤 때 막대·날짜·격자가 비쳐 겹쳐 보인다.
+   값은 기존 반투명 색을 --bg(#E8EEF8) 위에 합성한 색(겉보기 동일). 다른 테마는 var(--tl-*, 기존 변수) 폴백으로 그대로 */
+[data-theme="glass"]{--tl-th:#F8FAFD;--tl-p:#F6F8FC;--tl-i:#F1F5FB;--tl-hv:#D6E0F1;--tl-drop:#D7DBF9}
 /* 사이버 — 네온 글로우 강조 */
 [data-theme="cyber"] h1 .ac,[data-theme="cyber"] .pnl-t{text-shadow:0 0 8px rgba(255,45,149,.3)}
 [data-theme="cyber"] .pnl{box-shadow:0 0 0 1px rgba(255,45,149,.06),0 4px 14px rgba(86,20,160,.18)}
@@ -437,17 +442,17 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-container{border:1px solid var(--bd);border-radius:8px;overflow:hidden}
 /* v13.41: 600px 캡 → 뷰포트 기반으로 — 큰 모니터에서 모든 프로젝트 한눈에. 작은 화면은 min 400px 보장 */
 .tl-scroll{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 220px);min-height:400px}
-.tl-header-row{display:flex;position:sticky;top:0;z-index:3;background:var(--th);width:fit-content;min-width:100%}
-.tl-label-header{min-width:160px;padding:10px 12px;font-size:10px;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.5px;border-right:1px solid var(--bd);border-bottom:2px solid var(--bd2);position:sticky;left:0;z-index:4;background:var(--th);box-sizing:border-box;flex-shrink:0}
+.tl-header-row{display:flex;position:sticky;top:0;z-index:7;background:var(--tl-th,var(--th));width:fit-content;min-width:100%}
+.tl-label-header{min-width:160px;padding:10px 12px;font-size:10px;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.5px;border-right:1px solid var(--bd);border-bottom:2px solid var(--bd2);position:sticky;left:0;z-index:4;background:var(--tl-th,var(--th));box-sizing:border-box;flex-shrink:0}
 .tl-header{display:flex;border-bottom:2px solid var(--bd2)}
 .tl-unit{padding:8px 4px;font-size:10px;font-weight:600;color:var(--t4);text-align:center;border-right:1px solid var(--bd);white-space:nowrap}
 .tl-unit-now{background:var(--ac-g);color:var(--ac-t)}
 .tl-row{display:flex;border-bottom:1px solid var(--bd);width:fit-content;min-width:100%}
 .tl-row-sub{background:var(--bg-i)}
-.tl-label{min-width:160px;padding:10px 12px;border-right:1px solid var(--bd);cursor:pointer;transition:background .15s;position:sticky;left:0;z-index:3;background:var(--bg-p);box-sizing:border-box;flex-shrink:0}
-.tl-label:hover{background:var(--bg-hv)}
-.tl-label-sub{padding:6px 12px 6px 24px;background:var(--bg-i)}
-.tl-row-sub .tl-label{background:var(--bg-i)}
+.tl-label{min-width:160px;padding:10px 12px;border-right:1px solid var(--bd);cursor:pointer;transition:background .15s;position:sticky;left:0;z-index:6;background:var(--tl-p,var(--bg-p));box-sizing:border-box;flex-shrink:0}
+.tl-label:hover{background:var(--tl-hv,var(--bg-hv))}
+.tl-label-sub{padding:6px 12px 6px 24px;background:var(--tl-i,var(--bg-i))}
+.tl-row-sub .tl-label{background:var(--tl-i,var(--bg-i))}
 /* v13.137 그리드/주말·과거 음영을 .tl-bars 배경 그라디언트로 1회 처리 (행×단위 div 제거). 단위폭/오프셋은 .tl-container CSS 변수로 주입 */
 .tl-bars{position:relative;min-height:44px;flex-shrink:0;flex:1;--tl-grid:rgba(128,128,128,.16);--tl-weekend:rgba(108,140,255,.055);--tl-past:rgba(128,128,128,.035);background-repeat:no-repeat;background-image:repeating-linear-gradient(to right,transparent 0,transparent calc(var(--tl-uw,32px) - 1px),var(--tl-grid) calc(var(--tl-uw,32px) - 1px),var(--tl-grid) var(--tl-uw,32px)),linear-gradient(to right,var(--tl-past) 0,var(--tl-past) var(--tl-pastw,0px),transparent var(--tl-pastw,0px)),repeating-linear-gradient(to right,transparent 0,transparent var(--tl-sat,0px),var(--tl-weekend) var(--tl-sat,0px),var(--tl-weekend) calc(var(--tl-sat,0px) + var(--tl-wkw,0px)),transparent calc(var(--tl-sat,0px) + var(--tl-wkw,0px)),transparent calc(var(--tl-uw,32px) * 7)),repeating-linear-gradient(to right,transparent 0,transparent var(--tl-sun,0px),var(--tl-weekend) var(--tl-sun,0px),var(--tl-weekend) calc(var(--tl-sun,0px) + var(--tl-wkw,0px)),transparent calc(var(--tl-sun,0px) + var(--tl-wkw,0px)),transparent calc(var(--tl-uw,32px) * 7))}
 .tl-row-sub .tl-bars{min-height:28px}
@@ -455,8 +460,8 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 /* v13.151 상태 그룹 헤더 행 + 좌측 목록 그룹 헤더 */
 .tl-group-row{border-top:2px solid var(--bd2);background:var(--th)}
 .tl-group-row .tl-bars{min-height:24px;background-image:none;background-color:var(--th)}
-.tl-group-label{display:flex;align-items:center;min-height:24px;padding:3px 10px!important;background:var(--th)!important;z-index:3}
-.tl-list-group{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 8px;margin:8px 0 3px;font-size:10px;font-weight:800;background:var(--bg-i);border-radius:5px;position:sticky;top:0}
+.tl-group-label{display:flex;align-items:center;min-height:24px;padding:3px 10px!important;background:var(--tl-th,var(--th))!important;z-index:6}
+.tl-list-group{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 8px;margin:8px 0 3px;font-size:10px;font-weight:800;background:var(--tl-i,var(--bg-i));border-radius:5px;position:sticky;top:0}
 .tl-list-group:first-child{margin-top:0}
 .tl-list-group-n{font-size:9px;color:var(--t6);font-weight:700;background:var(--bg-p);padding:1px 7px;border-radius:9px}
 .tl-list-grouped{margin-left:6px}
@@ -501,7 +506,8 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .tl-today-line{position:absolute;top:0;bottom:0;width:2px;background:#EF4444;z-index:2;pointer-events:none;box-shadow:0 0 4px rgba(239,68,68,.45)}
 .tl-today-line::before{content:'';position:absolute;top:50%;left:2px;transform:translateY(-50%);width:0;height:0;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid #EF4444;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
 /* v13.132 타임라인 시인성 */
-.tl-row:hover>.tl-bars,.tl-row:hover>.tl-label{background-color:var(--bg-hv)}
+.tl-row:hover>.tl-bars{background-color:var(--bg-hv)}
+.tl-row:hover>.tl-label{background-color:var(--tl-hv,var(--bg-hv))}
 .tl-row-proj{border-top:2px solid var(--bd2)}
 .tl-label,.tl-label-header{box-shadow:3px 0 5px -3px rgba(0,0,0,.18)}
 .tl-row-delayed>.tl-label{box-shadow:inset 4px 0 0 0 #EF4444,3px 0 5px -3px rgba(0,0,0,.18)}
