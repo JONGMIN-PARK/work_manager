@@ -13,7 +13,7 @@
 
 var calYear, calMonth, calViewMode = 'month';
 var calWeekStart = null; // 주간 뷰 시작일 (일요일, 로컬 자정)
-var calFilterProj = '', calFilterAssignee = '', calFilterType = '';
+var calFilterAssignee = '', calFilterType = '';
 var calFilterProjs = new Set();        // 다중 프로젝트 필터 (비어있으면 전체)
 var _calProjPanelOpen = false;         // 프로젝트 선택 패널 열림 여부
 var _calAllProjects = [];              // 최근 렌더된 전체 프로젝트(전체선택/해제용)
@@ -63,9 +63,11 @@ function _calViewRange() {
 }
 
 /* ═══ 메인 렌더 ═══ */
+var _calRenderSeq = 0;   // 렌더 번호 — 월 이동 연타·저장 직후 재렌더가 겹칠 때 늦게 끝난 옛 렌더를 버린다
 async function renderCalendar() {
   var wrap = document.getElementById('calendarWrap');
   if (!wrap) return;
+  var seq = ++_calRenderSeq;
 
   // initCalendar()가 먼저 호출되지 않았을 때 방어 — calYear/calMonth 미설정 시 오늘 기준 초기화
   if (typeof calYear !== 'number' || isNaN(calYear) || typeof calMonth !== 'number' || isNaN(calMonth)) {
@@ -75,6 +77,7 @@ async function renderCalendar() {
   }
 
   var _calData = await Promise.all([(typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()), evtGetAll(), msGetAll(), typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve(null)]);
+  if (seq !== _calRenderSeq) return;
   var projects = _calData[0] || [];
   var rawEvents = _calData[1] || [];
   var milestones = _calData[2] || [];
@@ -83,8 +86,9 @@ async function renderCalendar() {
   var rg = _calViewRange();
   var events = expandRepeatingEvents(rawEvents, rg.start, rg.end);
 
-  // 대시보드 렌더
-  renderDashboard(projects);
+  // 대시보드 렌더 (기다리지 않음 — 실패가 처리 안 된 rejection 으로 남지 않게 catch)
+  var _dash = renderDashboard(projects);
+  if (_dash && typeof _dash.catch === 'function') _dash.catch(function (e) { console.warn('[Calendar] dashboard', e); });
 
   // 필터 바
   renderCalFilter(wrap, projects);
@@ -117,6 +121,7 @@ async function renderCalendar() {
   var archiveSummaries = [];
   if (typeof getWeeklyArchiveSummary === 'function') {
     try { archiveSummaries = await getWeeklyArchiveSummary(); } catch (e) { console.warn('[Calendar]', e); }
+    if (seq !== _calRenderSeq) return;
   }
 
   // 보이는 범위와 겹치는 항목 (+ 표시 토글·완료 숨김)
@@ -312,6 +317,9 @@ function renderMonthView(items, rg, archiveSummaries) {
 
   var spans = items.filter(function (it) { return it.end > it.date; });
   var singles = items.filter(function (it) { return it.end === it.date; });
+  // 날짜별로 한 번만 묶는다 — 칸마다(42일 × 2회) 전체를 거르지 않게. items 가 정렬돼 있어 순서는 유지된다
+  var singlesByDate = {};
+  singles.forEach(function (it) { (singlesByDate[it.date] = singlesByDate[it.date] || []).push(it); });
 
   for (var ws = rg.start; ws <= rg.end; ws = _calAddDays(ws, 7)) {
     var we = _calAddDays(ws, 6);
@@ -335,7 +343,7 @@ function renderMonthView(items, rg, archiveSummaries) {
     html += '<div class="calm-week" style="grid-template-rows:24px' + (nLanes ? ' repeat(' + nLanes + ',19px)' : '') + ' minmax(' + (CAL_DAY_MAX * 19 + 4) + 'px,auto)">';
     days.forEach(function (d, i) {
       var inMonth = d >= rg.monthStart && d <= rg.monthEnd;
-      var dayItems = singles.filter(function (it) { return it.date === d; });
+      var dayItems = singlesByDate[d] || [];
       var od = dayItems.filter(function (it) { return it.overdue; }).length;
       var arch = '';
       (archiveSummaries || []).forEach(function (as) {
@@ -357,7 +365,7 @@ function renderMonthView(items, rg, archiveSummaries) {
         + (p.cont ? '◂ ' : '') + _calIcon(it) + ' ' + eH(it.title) + '</div>';
     });
     days.forEach(function (d, i) {
-      var dayItems = singles.filter(function (it) { return it.date === d; });
+      var dayItems = singlesByDate[d] || [];
       var show = dayItems.slice(0, CAL_DAY_MAX);
       var rest = dayItems.length - show.length;
       html += '<div class="calm-chips" data-date="' + d + '" style="grid-column:' + (i + 1) + ';grid-row:' + (nLanes + 2) + '">'

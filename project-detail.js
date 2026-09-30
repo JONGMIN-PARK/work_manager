@@ -5,7 +5,13 @@
 
 var _pdDetailBusy = false; // v13.159 중복 오픈 가드 — 연타 시 패널 다중 생성 방지
 // 패널+백드롭 닫기 (인라인 onclick 용 JS 문자열)
-var _PD_CLOSE_JS = 'document.getElementById(\'projDetailPanel\').remove();var bd=document.getElementById(\'projDetailBackdrop\');if(bd)bd.remove()';
+var _PD_CLOSE_JS = 'pdCloseDetail()';
+// 지연 로딩 탭 요청 번호 — 늦게 온 옛 응답(연타·다른 프로젝트로 전환)이 새 화면을 덮지 않게
+var _pdLoadSeq = {};
+function _pdNextSeq(tab) { _pdLoadSeq[tab] = (_pdLoadSeq[tab] || 0) + 1; return _pdLoadSeq[tab]; }
+function _pdIsStale(tab, seq, projId) {
+  return seq !== _pdLoadSeq[tab] || !window._pdProj || window._pdProj.id !== projId;
+}
 // 지연 로딩 탭 공통 "로딩 중" 자리표시
 var _PD_LOADING_HTML = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">로딩 중...</div>';
 
@@ -19,7 +25,7 @@ async function showProjectDetail(id) {
   if (existingBd) existingBd.remove();
 
   var data = await _pdFetchDetailData(id);
-  if (!data) { _pdDetailBusy = false; return; }
+  if (!data) return;  // finally 에서 _pdDetailBusy 해제
   var proj = data.proj, projMs = data.projMs, allChk = data.allChk;
   window._pdProj = proj; // 사양 탭 등에서 현재 프로젝트 참조
   var st = autoProjectStatus(proj);
@@ -323,6 +329,8 @@ function pdSetPanelSize(frac) {
 function pdCloseDetail() {
   var p = document.getElementById('projDetailPanel'); if (p) p.remove();
   var bd = document.getElementById('projDetailBackdrop'); if (bd) bd.remove();
+  // 떨어져 나간 캔버스를 붙잡고 있지 않게 진척 차트 정리
+  if (typeof _progressChart !== 'undefined' && _progressChart) { try { _progressChart.destroy(); } catch (e) {} _progressChart = null; }
 }
 function _pdBindPanelResize(panel) {
   var h = document.createElement('div');
@@ -381,7 +389,7 @@ function _pdAttachDetailPanel(id, proj, html) {
   var backdrop = document.createElement('div');
   backdrop.id = 'projDetailBackdrop';
   backdrop.style.cssText = 'position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,.3)';
-  backdrop.onclick = function () { panel.remove(); backdrop.remove(); };
+  backdrop.onclick = pdCloseDetail;
   document.body.appendChild(backdrop);
 }
 
@@ -452,8 +460,9 @@ function pdLoadDev(projId) {
   _pdDevProj = projId;
   var el = document.getElementById('pdDev'); if (!el) return;
   el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">로딩 중...</div>';
-  devItemsByProject(projId).then(function (items) { pdRenderDev(items); })
-    .catch(function () { el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">개발 백로그를 불러오지 못했습니다.</div>'; });
+  var seq = _pdNextSeq('dev');
+  devItemsByProject(projId).then(function (items) { if (!_pdIsStale('dev', seq, projId)) pdRenderDev(items); })
+    .catch(function () { if (_pdIsStale('dev', seq, projId)) return; el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">개발 백로그를 불러오지 못했습니다.</div>'; });
 }
 
 function pdRenderDev(items) {
@@ -474,7 +483,6 @@ function pdRenderDev(items) {
   var doneCnt = items.filter(function (it) { return it.status === 'done'; }).length;
   html += '<div style="font-size:10px;color:var(--t5);margin-bottom:8px">총 ' + total + '건 · 완료 ' + doneCnt + '</div>';
 
-  var moveOpts = PD_DEV_STATUS.map(function (s) { return s; });
 
   PD_DEV_STATUS.forEach(function (col) {
     var colItems = items.filter(function (it) { return it.status === col.key; });
@@ -487,7 +495,7 @@ function pdRenderDev(items) {
         var cat = PD_DEV_CAT[it.category] || PD_DEV_CAT.chore;
         var prio = PD_DEV_PRIO[it.priority] || PD_DEV_PRIO.normal;
         var estH = parseFloat(it.estimateH || it.estimate_h) || 0;
-        var selOpts = moveOpts.map(function (s) { return '<option value="' + s.key + '"' + (s.key === it.status ? ' selected' : '') + '>' + s.label + '</option>'; }).join('');
+        var selOpts = PD_DEV_STATUS.map(function (s) { return '<option value="' + s.key + '"' + (s.key === it.status ? ' selected' : '') + '>' + s.label + '</option>'; }).join('');
         html += '<div style="border:1px solid var(--bd);border-radius:6px;padding:6px 8px;margin-bottom:5px;background:var(--bg-i)">' +
           '<div style="font-size:11px;color:var(--t2);font-weight:600;word-break:break-word;margin-bottom:3px">' + eH(it.title) + '</div>' +
           '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">' +
@@ -524,7 +532,8 @@ function pdDevMove(id, status) {
 }
 function pdDevDel(id) {
   if (!confirm('이 개발 아이템을 삭제할까요?')) return;
-  devItemDel(id).then(function () { pdLoadDev(_pdDevProj); });
+  devItemDel(id).then(function () { pdLoadDev(_pdDevProj); })
+    .catch(function () { if (typeof showToast === 'function') showToast('삭제 실패', 'error'); });
 }
 
 /* ═══ 회의 탭 — v13.198 부터 project-meetings.js (요약·미완료 액션 모아보기·참석자·안건·회의록·액션아이템) ═══
@@ -541,10 +550,12 @@ function pdLoadIssues(projId) {
     wrap.innerHTML = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">이슈 관리 모듈이 로드되지 않았습니다.</div>';
     return;
   }
+  var seq = _pdNextSeq('issues');
   issueGetByProject(projId).then(function (issues) {
+    if (_pdIsStale('issues', seq, projId)) return;
     if (!issues || issues.length === 0) {
       wrap.innerHTML = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">등록된 이슈가 없습니다.' +
-        '<br><button class="btn btn-g btn-s" style="margin-top:8px;font-size:10px" onclick="document.getElementById(\'projDetailPanel\').remove();var bd=document.getElementById(\'projDetailBackdrop\');if(bd)bd.remove();if(typeof showIssueModal===\'function\')showIssueModal()">+ 이슈 등록</button></div>';
+        '<br><button class="btn btn-g btn-s" style="margin-top:8px;font-size:10px" onclick="pdCloseDetail();if(typeof showIssueModal===\'function\')showIssueModal()">+ 이슈 등록</button></div>';
       return;
     }
     var statuses = typeof ISSUE_STATUS !== 'undefined' ? ISSUE_STATUS : {};
@@ -564,7 +575,8 @@ function pdLoadIssues(projId) {
     issues.sort(function (a, b) {
       var uOrd = { urgent: 0, normal: 1, low: 2 };
       var sOrd = { open: 0, inProgress: 1, hold: 2, resolved: 3, closed: 4 };
-      var us = (uOrd[a.urgency] || 1) - (uOrd[b.urgency] || 1);
+      // urgent 는 0 — `|| 1` 로 쓰면 긴급이 보통과 같은 순위가 된다
+      var us = (a.urgency in uOrd ? uOrd[a.urgency] : 1) - (b.urgency in uOrd ? uOrd[b.urgency] : 1);
       if (us !== 0) return us;
       return (sOrd[a.status] || 0) - (sOrd[b.status] || 0);
     });
@@ -589,6 +601,7 @@ function pdLoadIssues(projId) {
 }
 
 /* ═══ 프로젝트 상세: 투입실적 로딩 ═══ */
+var _pdWorkLast = null;  // 마지막 투입실적 결과 — 단위(h/d) 전환은 다시 받지 않고 이것으로 다시 그린다
 function pdLoadWork(projId) {
   var wrap = document.getElementById('pdWork');
   if (!wrap) return;
@@ -596,9 +609,13 @@ function pdLoadWork(projId) {
     wrap.innerHTML = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">투입실적 데이터를 가져올 수 없습니다.</div>';
     return;
   }
+  var seq = _pdNextSeq('work');
   _pdFetchWorkData(projId).then(function (results) {
+    if (_pdIsStale('work', seq, projId)) return;
+    _pdWorkLast = { projId: projId, results: results };
     wrap.innerHTML = _pdRenderWorkHtml(projId, results);
   }).catch(function (err) {
+      if (_pdIsStale('work', seq, projId)) return;
       console.error('[pdLoadWork]', err);
       if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
@@ -948,11 +965,6 @@ function _pdWorkMsPeopleHtml(pe, at, hf) {
   return h;
 }
 
-/* 현재 로그인 사용자 표시명 */
-function _pdMeName() {
-  return (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.display_name || currentUser.name || '') : '';
-}
-
 /* ISO 시각 → 상대 시간 ("3시간 전") */
 function _pdRelTime(iso) {
   try {
@@ -1290,12 +1302,13 @@ function pdMsProgressUpdate(mid, projId, curProg, opts) {
 /* 진척률 모달 — 담당자별 할당시간 vs 실 작업시간(달성률%) 표
    할당시간 = 마일스톤 목표시간(assigneeTargets[이름]),
    실 작업시간 = 작업노트 로그(hours)를 작성자별로 합산. */
-function _pdFillAllocInfo(mid, projId) {
+function _pdFillAllocInfo(mid, projId, pLogs) {
   if (!document.getElementById('pdProgAlloc')) return;
-  if (typeof msGetByProject !== 'function' || typeof msLogsGet !== 'function') return;
+  if (typeof msGetAll !== 'function' || typeof msLogsGet !== 'function') return;
+  // 마일스톤은 캐시(msGetAll)에서 — 로그 추가·삭제·마일스톤 저장 때 'ms' 캐시가 무효화된다
   Promise.all([
-    msGetByProject(projId).catch(function () { return []; }),
-    msLogsGet(mid).catch(function () { return []; })
+    msGetAll().catch(function () { return []; }),
+    (pLogs || msLogsGet(mid)).catch(function () { return []; })
   ]).then(function (res) {
     var box = document.getElementById('pdProgAlloc');
     if (!box) return;   // 모달이 닫혔으면 무시
@@ -1402,7 +1415,9 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
     boxStyle: 'padding:20px;width:400px;max-height:90vh;overflow:auto;box-shadow:none;color:inherit'
   }).overlay;
   // 투입시간 옆 누적 작업/할당 시간(작업시간/할당시간 및 %) 채우기
-  _pdFillAllocInfo(mid, projId);
+  // 작업노트 로그는 한 번만 받아 할당표·이력이 같이 쓴다
+  var pLogs = typeof msLogsGet === 'function' ? msLogsGet(mid) : null;
+  _pdFillAllocInfo(mid, projId, pLogs);
   // 마일스톤 담당 배정(변경/대체/원복) 패널
   if (typeof renderMsAssignments === 'function') renderMsAssignments(mid, projId, 'pdMsAssignSection');
   // 이력 컨텍스트(삭제 후 재렌더·하위뷰 갱신용) + 이력 로드
@@ -1410,7 +1425,7 @@ function _pdBuildProgressModal(mid, projId, curProg, opts) {
     mid: mid, projId: projId,
     refresh: (opts && typeof opts.onSaved === 'function') ? opts.onSaved : function () { if (typeof pdLoadWork === 'function') pdLoadWork(projId); }
   };
-  _pdRenderProgHist();
+  _pdRenderProgHist(pLogs);
   // 마일스톤 첨언(코멘트) 스레드 — 관리자/운영자/멤버가 피드백 작성·열람 (서버에서 권한 검증)
   if (typeof renderCommentThread === 'function') renderCommentThread('milestone', mid, 'pdMsCommentSection');
   var saveBtn = document.getElementById('pdProgSave');
@@ -1607,12 +1622,12 @@ function pdAssignReplaceUndo(mid, projId, currentPrimaryId, restoreUserId) {
 var _pdProgCtx = null;
 
 /* 모달 내 이력 렌더 (부분/전체 삭제 버튼 포함) */
-function _pdRenderProgHist() {
+function _pdRenderProgHist(pLogs) {
   var el = document.getElementById('pdProgHist');
   if (!el || !_pdProgCtx) return;
   if (typeof msLogsGet !== 'function') { el.innerHTML = '<div style="font-size:10px;color:var(--t6)">이력 기능을 사용할 수 없습니다.</div>'; return; }
   el.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:2px 0">이력 로딩 중...</div>';
-  msLogsGet(_pdProgCtx.mid).then(function (logs) {
+  (pLogs || msLogsGet(_pdProgCtx.mid)).then(function (logs) {
     logs = logs || [];
     // 관리자: 삭제된 이력 복구용 휴지통 토글
     var trashHtml = _pdIsAdmin()
@@ -1681,6 +1696,8 @@ function pdProgHistClear() {
 /* 투입실적 표시 단위(시간 h / 일 d) 전환 — 재렌더 */
 function pdSetUnit(u, projId) {
   try { window.pdUnit = (u === 'd') ? 'd' : 'h'; } catch (_) {}
+  var wrap = document.getElementById('pdWork');
+  if (wrap && _pdWorkLast && _pdWorkLast.projId === projId) { wrap.innerHTML = _pdRenderWorkHtml(projId, _pdWorkLast.results); return; }
   if (typeof pdLoadWork === 'function') pdLoadWork(projId);
 }
 
@@ -1715,13 +1732,13 @@ function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
   h += '<span style="font-size:12px;font-weight:700;color:var(--t2)">' + ph.icon + ' ' + ph.label + ' 단계</span>';
   if (items.length > 0) {
-    h += '<span style="font-size:10px;color:' + ph.color + ';font-weight:600">' + done + '/' + items.length + ' (' + pct + '%)</span>';
+    h += '<span id="pdPhaseChkStat" style="font-size:10px;color:' + ph.color + ';font-weight:600">' + done + '/' + items.length + ' (' + pct + '%)</span>';
   }
   h += '</div>';
 
   // 진행률 바
   if (items.length > 0) {
-    h += '<div style="height:4px;background:var(--bg-i);border-radius:2px;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:' + pct + '%;background:' + ph.color + ';border-radius:2px;transition:width .3s"></div></div>';
+    h += '<div style="height:4px;background:var(--bg-i);border-radius:2px;overflow:hidden;margin-bottom:10px"><div class="pdChkBar" style="height:100%;width:' + pct + '%;background:' + ph.color + ';border-radius:2px;transition:width .3s"></div></div>';
   }
 
   // 항목들
@@ -1778,24 +1795,29 @@ function pdToggleCheck(projId, chkId, checkbox) {
     }
   }
 
-  toggleCheckItem(chkId, '', doneDate).then(function () {
-    pdRefreshChkProgress(projId);
-  }).catch(function (err) {
+  var listEl = row ? row.parentNode : null;
+  pdRefreshChkProgress(projId, listEl, row && row.getAttribute('data-phase'));
+  // 값을 직접 지정 — 서버 값을 뒤집는 방식은 빠른 연속 클릭 때 화면과 어긋났다
+  chkPatchItem(chkId, { done: isDone, doneDate: doneDate, doneBy: isDone ? '' : null }).catch(function (err) {
     console.warn('[pdToggleCheck]', err);
     checkbox.checked = !isDone;
     if (textSpan) { textSpan.style.textDecoration = !isDone ? 'line-through' : 'none'; textSpan.style.color = !isDone ? 'var(--t6)' : 'var(--t2)'; }
+    pdRefreshChkProgress(projId, listEl, row && row.getAttribute('data-phase'));
+    if (typeof showToast === 'function') showToast('체크 저장 실패', 'error');
   });
 }
 
 function pdDeleteCheck(projId, chkId, btn) {
   var row = btn.closest('.pdChkRow');
   if (row) row.style.opacity = '0.3';
+  var listEl = row ? row.parentNode : null, phase = row && row.getAttribute('data-phase');
   chkDel(chkId).then(function () {
     if (row) row.remove();
-    pdRefreshChkProgress(projId);
+    pdRefreshChkProgress(projId, listEl, phase);
   }).catch(function (err) {
     console.warn('[pdDeleteCheck]', err);
     if (row) row.style.opacity = '1';
+    if (typeof showToast === 'function') showToast('삭제 실패', 'error');
   });
 }
 
@@ -1808,24 +1830,24 @@ function pdChangeDoneDate(projId, chkId, newDate) {
   });
 }
 
-/* 체크리스트 진행률 카운터 인라인 갱신 */
-function pdRefreshChkProgress(projId) {
-  chkGetByProject(projId).then(function (allChk) {
-    var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
-    // 개요 탭 카운터 갱신
-    var panel = document.getElementById('projDetailPanel');
-    if (!panel) return;
-    var overviewCounters = panel.querySelectorAll('[data-chk-counter]');
-    var phaseKeys = Object.keys(phases);
-    phaseKeys.forEach(function (pk) {
-      var items = allChk.filter(function (c) { return c.phase === pk; });
-      var done = items.filter(function (c) { return c.done; }).length;
-      var pct = items.length ? Math.round(done / items.length * 100) : 0;
-      // 라이프사이클 단계 진행바의 카운터도 갱신
-      var phCounters = panel.querySelectorAll('[data-phase-count="' + pk + '"]');
-      phCounters.forEach(function (el) { el.textContent = done + '/' + items.length; });
-    });
-  });
+/* 체크리스트 진행률(개수·막대) 인라인 갱신 — 화면의 행으로 다시 센다(서버 요청 없음).
+   listEl: #pdOverviewChkList(개요) 또는 #pdChkList(라이프사이클). 마지막 항목이 지워지면 빈 안내를 다시 그린다. */
+function pdRefreshChkProgress(projId, listEl, phase) {
+  if (!listEl || !listEl.isConnected) return;
+  var isOverview = listEl.id === 'pdOverviewChkList';
+  var rows = listEl.querySelectorAll('.pdChkRow');
+  if (!rows.length) {
+    if (isOverview) pdRefreshOverviewChk(projId, phase).catch(function (err) { console.warn('[pdRefreshChkProgress]', err); });
+    else pdShowPhase(projId, phase);
+    return;
+  }
+  var done = 0;
+  rows.forEach(function (r) { var cb = r.querySelector('input[type="checkbox"]'); if (cb && cb.checked) done++; });
+  var pct = Math.round(done / rows.length * 100);
+  var stat = document.getElementById(isOverview ? 'pdOverviewChkStat' : 'pdPhaseChkStat');
+  if (stat) stat.textContent = done + '/' + rows.length + ' (' + pct + '%)';
+  var bar = (isOverview ? listEl : listEl.parentNode).querySelector('.pdChkBar');
+  if (bar) bar.style.width = pct + '%';
 }
 
 /* ═══ 체크리스트 항목 인라인 수정 ═══ */
@@ -1873,7 +1895,7 @@ function renderOverviewChkListHtml(projId, phase, phMeta, items) {
   if (items.length > 0) {
     var done = items.filter(function (c) { return c.done; }).length;
     var pct = Math.round(done / items.length * 100);
-    out += '<div style="height:4px;background:var(--bg-i);border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:' + pct + '%;background:' + phMeta.color + ';border-radius:2px"></div></div>';
+    out += '<div style="height:4px;background:var(--bg-i);border-radius:2px;overflow:hidden;margin-bottom:8px"><div class="pdChkBar" style="height:100%;width:' + pct + '%;background:' + phMeta.color + ';border-radius:2px"></div></div>';
     items.forEach(function (item) {
       var cStyle = item.done ? 'text-decoration:line-through;color:var(--t6)' : 'color:var(--t2)';
       out += '<div class="pdChkRow" data-chkid="' + item.id + '" data-projid="' + projId + '" data-phase="' + phase + '" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">';
@@ -1924,9 +1946,7 @@ function pdAddCheck(projId, phase) {
   else if (inpOverview && inpOverview.value.trim()) { text = inpOverview.value.trim(); usedInput = inpOverview; }
   else if (inpLifecycle && inpLifecycle.value.trim()) { text = inpLifecycle.value.trim(); usedInput = inpLifecycle; }
   if (!text) return;
-  chkGetByPhase(projId, phase).then(function (items) {
-    return createCheckItem({ projectId: projId, phase: phase, text: text, order: items.length });
-  }).then(function () {
+  createCheckItem({ projectId: projId, phase: phase, text: text }).then(function () {
     if (usedInput) { usedInput.value = ''; usedInput.focus(); }
     // 현재 활성 탭에 해당하는 영역만 부분 갱신 (패널은 유지)
     var lifecycleEl2 = document.getElementById('pdLifecycle');
@@ -1934,7 +1954,7 @@ function pdAddCheck(projId, phase) {
     if (lifecycleNow && typeof pdShowPhase === 'function') {
       pdShowPhase(projId, phase);
     } else {
-      pdRefreshOverviewChk(projId, phase);
+      return pdRefreshOverviewChk(projId, phase);
     }
   }).catch(function (err) {
       console.error('[pdAddCheck]', err);
@@ -1970,10 +1990,11 @@ function pdGenerateChecklists(projId) {
 var _pdChkDragId = null;
 
 function pdChkDragStart(e) {
-  _pdChkDragId = e.currentTarget.getAttribute('data-chkid');
+  var el = e.currentTarget;  // setTimeout 안에서는 e.currentTarget 이 null
+  _pdChkDragId = el.getAttribute('data-chkid');
   e.dataTransfer.effectAllowed = 'move';
-  e.currentTarget.style.opacity = '0.4';
-  setTimeout(function () { if (e.currentTarget) e.currentTarget.style.opacity = ''; }, 200);
+  el.style.opacity = '0.4';
+  setTimeout(function () { el.style.opacity = ''; }, 200);
 }
 
 function pdChkDragOver(e) {
@@ -1999,47 +2020,29 @@ function pdChkDrop(e) {
   ids.splice(fromIdx, 1);
   ids.splice(toIdx, 0, _pdChkDragId);
 
-  // 순서 업데이트: parent row의 items 배열 순서를 직접 변경
-  (function () {
-    // flat ID에서 parent row id 추출
-    var parentId = ids[0] && ids[0].indexOf('::') >= 0 ? ids[0].split('::')[0] : null;
-    if (parentId && typeof apiFetch === 'function' && (typeof AUTH_SKIP === 'undefined' || !AUTH_SKIP)) {
-      // 서버 모드: parent row를 가져와서 items 배열 순서 변경 후 한 번에 PUT
-      apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
-        var row = r.data;
-        var rowItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
-        // ids에서 index 추출하여 새 순서 만들기
-        var reordered = ids.map(function (cid) {
-          var idx = parseInt(cid.split('::')[1], 10);
-          return rowItems[idx];
-        }).filter(Boolean);
-        reordered.forEach(function (it, i) { it.order = i; });
-        return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: reordered }) });
-      }).then(function () {
-        showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
-      }).catch(function (err) {
-        console.error('[pdChkDrop]', err);
-        if (typeof showToast === 'function') showToast('순서 변경 실패', 'error');
-      });
-    } else {
-      // 로컬 모드
-      chkGetByPhase(projId, phase).then(function (allItems) {
-        var itemMap = {};
-        allItems.forEach(function (it) { itemMap[it.id] = it; });
-        var updates = ids.map(function (cid, idx) {
-          var item = itemMap[cid];
-          if (item) { item.order = idx; return chkPut(item); }
-          return Promise.resolve();
-        });
-        return Promise.all(updates);
-      }).then(function () {
-        showProjectDetail(projId).then(function () { pdSwitchTab('lifecycle'); });
-      }).catch(function (err) {
-        console.error('[pdChkDrop]', err);
-        if (typeof showToast === 'function') showToast('순서 변경 실패', 'error');
-      });
-    }
-  })();
+  // 순서 업데이트: parent row의 items 배열 순서를 직접 변경해 한 번에 PUT
+  var parentId = ids[0] && ids[0].indexOf('::') >= 0 ? ids[0].split('::')[0] : null;
+  if (!parentId) return;
+  apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
+    var row = r.data;
+    var rowItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+    var used = {};
+    var reordered = ids.map(function (cid) {
+      if (cid.split('::')[0] !== parentId) return null;
+      var idx = parseInt(cid.split('::')[1], 10);
+      used[idx] = true;
+      return rowItems[idx];
+    }).filter(Boolean);
+    // 화면에 없던 항목(다른 곳에서 막 추가된 것 등)이 사라지지 않게 뒤에 붙인다
+    rowItems.forEach(function (it, idx) { if (!used[idx]) reordered.push(it); });
+    reordered.forEach(function (it, i) { it.order = i; });
+    return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: reordered }) });
+  }).then(function () {
+    pdShowPhase(projId, phase);  // 개수는 그대로 — 목록만 다시 그린다(flat id 재부여)
+  }).catch(function (err) {
+    console.error('[pdChkDrop]', err);
+    if (typeof showToast === 'function') showToast('순서 변경 실패', 'error');
+  });
   _pdChkDragId = null;
 }
 

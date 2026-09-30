@@ -61,7 +61,6 @@ function memoToHtml(memo) {
 }
 
 var tlScale = 'day'; // day, week, month, quarter
-var tlScrollLeft = 0;
 var tlHideDone = false; // 완료 프로젝트 숨기기
 var tlEditMode = false; // 기간 조정/이동 모드
 var tlMsReorder = false; // v13.136: 마일스톤 순서 변경 모드 — 체크 시에만 드래그 재배열 허용(평상시 순서 고정)
@@ -178,11 +177,14 @@ function initTimeline() {
 
 /* ═══ 메인 렌더 ═══
    데이터 로드 → 필터/정렬(순수) → 범위/단위(순수) → 컨트롤·헤더·행 HTML → 마운트 후처리 */
+var _tlRenderSeq = 0;   // 렌더 번호 — 저장 직후 렌더와 버스 렌더가 겹칠 때 늦게 끝난 옛 렌더를 버린다
 async function renderTimeline() {
   var wrap = document.getElementById('timelineWrap');
   if (!wrap) return;
 
+  var seq = ++_tlRenderSeq;
   var data = await _tlLoadData();
+  if (seq !== _tlRenderSeq) return;
   var allProjects = data.allProjects;
 
   // 프로젝트 리스트 패널 렌더
@@ -225,7 +227,7 @@ async function renderTimeline() {
   var todayPos = getTodayPosition(rangeStart, units);
 
   var ctx = {
-    projects: projects, milestones: f.milestones, groupHeads: f.groupHeads, msWorkH: data.msWorkH,
+    projects: projects, milestones: f.milestones, msByProj: _tlGroupMsByProj(f.milestones), groupHeads: f.groupHeads, msWorkH: data.msWorkH,
     rangeStart: rangeStart, units: units, totalWidth: rg.totalWidth, labelW: labelW,
     todayStr: rg.todayStr, todayPos: todayPos,
     // Feature 8: 크리티컬 패스 계산
@@ -256,7 +258,7 @@ async function renderTimeline() {
 /* 프로젝트·마일스톤 + 마일스톤별 업무일지 투입시간 집계 로드 */
 async function _tlLoadData() {
   // v13.162 업무일지(archive)는 마일스톤 툴팁 실적(참고)에만 쓰임 → 렌더를 막지 않음.
-  //   ARCHIVE_CACHE_TTL(5s) 만료 시 readAllArchiveRecords 가 전체(최대 5만건) 재조회하며 버튼 재렌더가 5초+ 지연되던 문제.
+  //   (당시 ARCHIVE_CACHE_TTL 5s — 지금은 60s + 동시 요청 합치기) 만료 시 readAllArchiveRecords 가 전체(최대 5만건) 재조회하며 버튼 재렌더가 5초+ 지연되던 문제.
   //   첫 로드만 await, 이후 렌더는 마지막으로 받은 archive 재사용 + 백그라운드 갱신(다음 렌더에 반영).
   var _tlData = await Promise.all([
     (typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()),
@@ -447,15 +449,26 @@ function _tlRenderHeader(units, totalWidth, uw, todayStr) {
   return headerHtml;
 }
 
+/* 마일스톤 표시 순서 — order 우선, 동률이면 createdAt. 타임라인 행·편집 모달이 같은 비교자를 쓴다 */
+function _msOrderCmp(a, b) { return ((a.order || 0) - (b.order || 0)) || (a.createdAt || '').localeCompare(b.createdAt || ''); }
+
+/* [순수] 마일스톤을 프로젝트별로 한 번에 묶고 정렬 — 행마다 전체 목록을 거르던 O(P×M) 제거 */
+function _tlGroupMsByProj(milestones) {
+  var by = {};
+  (milestones || []).forEach(function (m) { (by[m.projectId] = by[m.projectId] || []).push(m); });
+  Object.keys(by).forEach(function (k) { by[k].sort(_msOrderCmp); });
+  return by;
+}
+
 /* 프로젝트 행 + 마일스톤 하위 행 HTML. ctx: renderTimeline 의 렌더 컨텍스트 */
 function _tlRenderRows(ctx) {
   var rowsHtml = '';
+  var msByProj = ctx.msByProj || _tlGroupMsByProj(ctx.milestones);
   ctx.projects.forEach(function (p, _pi) {
     // v13.151 상태 그룹 헤더 행 (그룹의 첫 프로젝트 앞에 삽입)
     if (ctx.groupHeads[p.id]) rowsHtml += _tlGroupRowHtml(ctx.groupHeads[p.id], ctx.labelW, ctx.totalWidth);
     var st = autoProjectStatus(p);
-    // 편집 모달과 동일 비교자 — order 우선, 동률이면 createdAt (양쪽 표시 순서 일치 보장)
-    var pMs = ctx.milestones.filter(function (m) { return m.projectId === p.id; }).sort(function (a, b) { return ((a.order || 0) - (b.order || 0)) || (a.createdAt || '').localeCompare(b.createdAt || ''); });
+    var pMs = msByProj[p.id] || [];
 
     rowsHtml += '<div class="tl-row tl-row-proj' + (st === 'delayed' ? ' tl-row-delayed' : '') + (_pi % 2 === 1 ? ' tl-proj-alt' : '') + '" data-proj-id="' + p.id + '">';
     rowsHtml += _tlProjLabelHtml(p, st, pMs, ctx.labelW);
@@ -1311,11 +1324,13 @@ async function showProjectModal(projId) {
 async function _projModalLoad(projId) {
   var proj = null;
   var projMs = [];
-  var allProjects = await projGetAll();
+  // 세 요청은 서로 무관 — 한꺼번에 보낸다
+  var _r = await Promise.all([projGetAll(), projId ? projGet(projId) : null, projId ? msGetByProject(projId) : []]);
+  var allProjects = _r[0];
   if (projId) {
-    proj = await projGet(projId);
-    projMs = await msGetByProject(projId);
-    projMs.sort(function (a, b) { return (a.order - b.order) || (a.createdAt || '').localeCompare(b.createdAt || ''); });
+    proj = _r[1];
+    projMs = _r[2] || [];
+    projMs.sort(_msOrderCmp);
     // 중복 정리 — (name|startDate|endDate) 키로 먼저 등장한 것만 유지, 나머지는 DB에서 삭제
     var seen = {};
     var uniq = [];

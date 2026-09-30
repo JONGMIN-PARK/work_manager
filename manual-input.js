@@ -106,6 +106,7 @@ async function saveManualInput(keepOpen){
     var saved=null;
     if(typeof apiFetch==='function'){
       var res=await apiFetch('/api/archives/records',{method:'POST',body:JSON.stringify(record)});
+      if(typeof invalidateArchiveCache==='function')invalidateArchiveCache();
       if(res&&res.data){
         saved=res.data;
         // snake_case → camelCase

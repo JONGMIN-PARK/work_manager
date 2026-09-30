@@ -81,3 +81,35 @@ test('항목 통합: 지연 판정·완료·정렬(지연 → 납기 → 마일�
   assert.strictEqual(sorted[sorted.length - 1], 'ms_m2', '완료는 맨 뒤');
   assert.ok(sorted.indexOf('is_i1') < sorted.indexOf('ev_e1_2026-09-27'), '이슈 기한이 일반 일정보다 앞');
 });
+
+/* 월간 그리드 — 날짜별 묶음(singlesByDate)으로 바꾼 뒤에도 칸별 항목·순서가 같아야 한다 */
+function renderMonthHtml(s) {
+  const els = {};
+  s.eH = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  s.document.getElementById = (id) => (els[id] = els[id] || { id, style: {}, innerHTML: '', className: '', addEventListener() {}, querySelectorAll() { return []; } });
+  s.calViewMode = 'month'; s.calYear = 2026; s.calMonth = 8; s.calSelDate = '2026-09-10';
+  const P = [{ id: 'p1', name: 'P1', startDate: '2026-09-01', endDate: '2026-09-30', color: '#123456', status: 'active', assignees: [] }];
+  const EV = [
+    { id: 'e1', title: '킥오프', type: 'meeting', startDate: '2026-09-10', endDate: '2026-09-10', projectIds: ['p1'] },
+    { id: 'e2', title: '검수', type: 'etc', startDate: '2026-09-10', endDate: '2026-09-10', projectIds: [] },
+    { id: 'e3', title: '출장', type: 'trip', startDate: '2026-09-14', endDate: '2026-09-16', projectIds: [] },
+  ];
+  const MS = [{ id: 'm1', projectId: 'p1', name: '설계', startDate: '2026-09-10', endDate: '2026-09-10', status: 'waiting' }];
+  const projMap = { p1: P[0] };
+  const items = s._calBuildItems(P, EV, MS, [], projMap);
+  items.sort(s._calItemCmp);
+  const rg = s._calViewRange();
+  s.renderMonthView(items, rg, []);
+  return els.calGrid.innerHTML;
+}
+
+test('월간 그리드: 같은 날 여러 항목이 그 칸에만 들어간다', () => {
+  const html = renderMonthHtml(load(KST_MORNING));
+  // 날짜 칸(calm-chips)별로 잘라 본다
+  const cells = {};
+  html.split('<div class="calm-chips" data-date="').slice(1).forEach((seg) => { cells[seg.slice(0, 10)] = seg; });
+  const c = cells['2026-09-10'];
+  assert.ok(c, '9/10 칸 존재');
+  ['킥오프', '검수', '설계'].forEach((t) => assert.ok(c.indexOf(t) > 0, '9/10 칸에 ' + t));
+  Object.keys(cells).filter((d) => d !== '2026-09-10').forEach((d) => assert.ok(cells[d].indexOf('킥오프') < 0, d + ' 칸에 중복 없음'));
+});

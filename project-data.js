@@ -69,10 +69,12 @@ function lsSetJSON(key, value) {
 }
 
 /* ═══ #4/#10 리팩토링: 아카이브 캐시 ═══ */
-var _archiveCache = { data: null, ts: 0 };
-var ARCHIVE_CACHE_TTL = 5000; // 5초 캐시
+// 5초였을 땐 달력 월 이동·타임라인 보기 전환마다 업무일지 전체(수만 건)를 다시 받았다.
+// 이 화면에서의 쓰기(wr*·수동 입력·자동 태깅·주차 저장)는 모두 무효화하므로 60초로 둔다(다른 사용자 변경은 최대 60초 늦게 반영)
+var _archiveCache = { data: null, ts: 0, inflight: null, gen: 0 };
+var ARCHIVE_CACHE_TTL = 60000;
 
-function invalidateArchiveCache() { _archiveCache.data = null; _archiveCache.ts = 0; }
+function invalidateArchiveCache() { _archiveCache.data = null; _archiveCache.ts = 0; _archiveCache.inflight = null; _archiveCache.gen++; }
 
 /* ═══ #13 리팩토링: 매직 넘버 상수 ═══ */
 var REPEAT_LIMIT = 200;
@@ -369,7 +371,10 @@ function _pdPrimeCache(projectsRaw, milestonesRaw, eventsRaw) {
 }
 
 /* ─── 프로젝트 ─── */
-function projGetAll() { return _pdCached('proj', function () { return apiFetch('/api/projects').then(function (r) { return toCamelArray(r.data); }); }); }
+// 목록 상한은 /api/bootstrap 과 같게(프로젝트 500·마일스톤/일정 2000) — 쿼리 없이 부르면 서버 기본 100건에서 잘려
+// 저장 뒤 캐시가 다시 채워질 때 타임라인·달력에서 항목이 조용히 빠졌다
+var _PD_LIST_Q = { proj: '?all=true&limit=500', ms: '?all=true&limit=2000', evt: '?all=true&limit=2000' };
+function projGetAll() { return _pdCached('proj', function () { return apiFetch('/api/projects' + _PD_LIST_Q.proj).then(function (r) { return toCamelArray(r.data); }); }); }
 function projGet(id) { return apiFetch('/api/projects/' + id).then(function (r) { return toCamel(r.data); }); }
 /* 운영자 전용 — 테넌트 전체 프로젝트(가시성 우회) */
 function projGetAllOperator() { return _pdCached('projAll', function () { return apiFetch('/api/projects/all').then(function (r) { return toCamelArray(r.data); }); }); }
@@ -467,16 +472,16 @@ function projTransfer(id, newOwnerId, opts) {
   var body = { newOwnerId: newOwnerId };
   if (opts && opts.keepPrevAsMember === false) body.keepPrevAsMember = false;
   return apiFetch('/api/projects/' + id + '/transfer', { method: 'POST', body: JSON.stringify(body) })
-    .then(function (r) { _pdInvalidate('proj'); return r.data; });
+    .then(function (r) { _pdInvalidate('proj'); _pdInvalidate('projAll'); return r.data; });
 }
 function msTransfer(id, targetProjectId) {
   return apiFetch('/api/milestones/' + id + '/transfer', { method: 'POST', body: JSON.stringify({ targetProjectId: targetProjectId }) })
-    .then(function (r) { _pdInvalidate('proj'); return toCamel(r.data); });
+    .then(function (r) { _pdInvalidate('proj'); _pdInvalidate('projAll'); _emitBus('milestone', 'updated', { id: id, projectId: targetProjectId }); return toCamel(r.data); });
 }
 // 프로젝트 사본 생성 — data: { name(필수), orderNo? }. 내용·인원·마일스톤·담당배정 복사(실적은 초기화)
 function projCopy(id, data) {
   return apiFetch('/api/projects/' + id + '/copy', { method: 'POST', body: JSON.stringify(data || {}) })
-    .then(function (r) { _pdInvalidate('proj'); _pdInvalidate('ms'); return toCamel(r.data); });
+    .then(function (r) { _pdInvalidate('proj'); _pdInvalidate('projAll'); _pdInvalidate('ms'); return toCamel(r.data); });
 }
 
 // 담당자 이름(string[]) → users 매칭 후 project_members 에 active assignee 로 추가 (additive only)
@@ -583,7 +588,7 @@ function _msNorm(list) {
   });
   return list;
 }
-function msGetAll() { return _pdCached('ms', function () { return apiFetch('/api/milestones').then(function (r) { return _msDedupe(_msNorm(toCamelArray(r.data))); }); }); }
+function msGetAll() { return _pdCached('ms', function () { return apiFetch('/api/milestones' + _PD_LIST_Q.ms).then(function (r) { return _msDedupe(_msNorm(toCamelArray(r.data))); }); }); }
 function msGetByProject(pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return _msDedupe(_msNorm(toCamelArray(r.data))); }); }
 function msPut(ms) {
   _pdInvalidate('ms');
@@ -609,11 +614,6 @@ function msDel(id) {
     .then(function (r) { _emitBus('milestone', 'deleted', { id: id }); return r; });
 }
 
-function msDelByProject(projectId) {
-  return msGetByProject(projectId).then(function (list) {
-    return Promise.all(list.map(function (m) { return msDel(m.id); }));
-  });
-}
 
 /* ─── 마일스톤 담당 배정(assignment) — 변경(교체)/대체(임시)/원복 (v13.141) ───
    사람은 user_id 기반. 과거 이력은 보존. msPut 와 달리 캐시 무효화 불필요(별도 테이블). */
@@ -639,6 +639,12 @@ function msAssignmentRelease(mid, aid) {
 }
 
 /* ─── 마일스톤 작업 노트 + 보고 진척률 이력 ─── */
+// 로그 쓰기 뒤에는 서버가 마일스톤 진척 → 프로젝트 진척(projects.progress)까지 다시 계산한다.
+// 버스 키(milestone → ms)만으론 프로젝트 캐시가 남으므로 여기서 같이 지운다(일반 msPut 은 프로젝트를 안 바꾼다)
+function _msLogChanged(mid, projectId) {
+  _pdInvalidate('proj'); _pdInvalidate('projAll');
+  _emitBus('milestone', 'updated', { id: mid, projectId: projectId });
+}
 function msLogsGet(mid) {
   return apiFetch('/api/milestones/' + mid + '/logs').then(function (r) { return toCamelArray(r.data); });
 }
@@ -649,19 +655,19 @@ function msLogAdd(mid, data) {
     body: JSON.stringify({ progress: data.progress, note: data.note || '', hours: data.hours || 0 })
   }).then(function (r) {
     var s = toCamel(r.data);
-    _emitBus('milestone', 'updated', { id: mid, projectId: s && s.projectId });
+    _msLogChanged(mid, s && s.projectId);
     return s;
   });
 }
 function msLogDel(mid, logId) {
   _pdInvalidate('ms');   // 삭제 후 progress 재동기화 → 캐시 무효화
   return apiFetch('/api/milestones/' + mid + '/logs/' + logId, { method: 'DELETE' })
-    .then(function (r) { _emitBus('milestone', 'updated', { id: mid }); return r; });
+    .then(function (r) { _msLogChanged(mid); return r; });
 }
 function msLogClear(mid) {
   _pdInvalidate('ms');
   return apiFetch('/api/milestones/' + mid + '/logs', { method: 'DELETE' })
-    .then(function (r) { _emitBus('milestone', 'updated', { id: mid }); return r; });
+    .then(function (r) { _msLogChanged(mid); return r; });
 }
 /* 휴지통(삭제된 투입실적 이력) 목록 — 관리자 전용 */
 function msLogsTrashGet(mid) {
@@ -671,7 +677,7 @@ function msLogsTrashGet(mid) {
 function msLogRestore(mid, logId) {
   _pdInvalidate('ms');   // 복구 시 진척률·투입시간 재집계 → 캐시 무효화
   return apiFetch('/api/milestones/' + mid + '/logs/' + logId + '/restore', { method: 'POST' })
-    .then(function (r) { _emitBus('milestone', 'updated', { id: mid }); return r; });
+    .then(function (r) { _msLogChanged(mid); return r; });
 }
 /* 완전 삭제(복구 불가) — 관리자 전용. 휴지통 항목만. */
 function msLogHardDel(mid, logId) {
@@ -706,7 +712,7 @@ function createMilestone(data) {
 }
 
 /* ─── 이벤트 ─── */
-function evtGetAll() { return _pdCached('evt', function () { return apiFetch('/api/events').then(function (r) { return toCamelArray(r.data); }); }); }
+function evtGetAll() { return _pdCached('evt', function () { return apiFetch('/api/events' + _PD_LIST_Q.evt).then(function (r) { return toCamelArray(r.data); }); }); }
 function evtGet(id) { return apiFetch('/api/events/' + id).then(function (r) { return toCamel(r.data); }); }
 function evtPut(evt) {
   _pdInvalidate('evt');
@@ -762,38 +768,12 @@ function updateEvent(id, updates) {
 
 /* ─── 프로젝트 삭제 (캐스케이드) ─── */
 function deleteProjectCascade(id) {
-  var issDel = typeof issueGetByProject === 'function'
-    ? issueGetByProject(id).then(function (issues) {
-        return Promise.all(issues.map(function (iss) { return deleteIssueCascade(iss.id); }));
-      })
-    : Promise.resolve();
+  // 이슈·마일스톤·체크리스트 삭제와 일정·의존관계 참조 정리는 서버 DELETE 가 권한 확인 뒤 한 트랜잭션으로 한다.
+  // 문서 파일은 저장소(GCS) 정리가 필요해 먼저 지운다.
   var docDel = typeof deleteProjectFiles === 'function' ? deleteProjectFiles(id) : Promise.resolve();
-  return Promise.all([issDel, docDel]).then(function () { return msDelByProject(id); }).then(function () {
-    // 이벤트에서 삭제된 프로젝트 참조 제거
-    return evtGetAll().then(function (events) {
-      var updates = [];
-      events.forEach(function (ev) {
-        if (ev.projectIds && ev.projectIds.includes(id)) {
-          ev.projectIds = ev.projectIds.filter(function (pid) { return pid !== id; });
-          updates.push(evtPut(ev));
-        }
-      });
-      return Promise.all(updates);
-    });
-  }).then(function () {
-    // 다른 프로젝트의 의존관계에서 제거
-    return projGetAll().then(function (projects) {
-      var updates = [];
-      projects.forEach(function (p) {
-        if (p.dependencies && p.dependencies.includes(id)) {
-          p.dependencies = p.dependencies.filter(function (did) { return did !== id; });
-          updates.push(projPut(p));
-        }
-      });
-      return Promise.all(updates);
-    });
-  }).then(function () {
-    return projDel(id);
+  return docDel.then(function () { return projDel(id); }).then(function (r) {
+    _pdInvalidate('ms'); _pdInvalidate('evt');
+    return r;
   });
 }
 
@@ -1012,7 +992,7 @@ function chkDel(id) {
   // flat id (chk-xxx::N) → 부모 row에서 해당 항목 제거
   var sep = id.indexOf('::');
   if (sep < 0) {
-    return apiFetch('/api/checklists/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
+    return apiFetch('/api/checklists/' + encodeURIComponent(id), { method: 'DELETE' });
   }
   var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
   return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
@@ -1022,10 +1002,7 @@ function chkDel(id) {
     items.splice(idx, 1);
     if (items.length === 0) return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'DELETE' });
     return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
-  }).catch(function (err) {
-    console.warn('[chkDel] fallback delete:', err);
-    return null;
-  });
+  });  // 실패는 호출부로 — 예전엔 null 로 삼켜서 삭제 실패도 행이 사라졌다
 }
 
 function chkGetByPhase(projectId, phase) {
@@ -1047,24 +1024,6 @@ function chkPatchItem(id, patch) {
     if (!(idx >= 0 && idx < items.length)) throw new Error('체크리스트 항목을 찾을 수 없습니다: ' + id);
     Object.keys(patch || {}).forEach(function (k) { items[idx][k] = patch[k]; });
     return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
-  });
-}
-
-function toggleCheckItem(id, doneBy, doneDate) {
-  var sep = id.indexOf('::');
-  if (sep < 0) return Promise.resolve(null);
-  var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
-  return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
-    var row = r.data;
-    var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
-    if (idx < 0 || idx >= items.length) return null;
-    items[idx].done = !items[idx].done;
-    items[idx].doneDate = items[idx].done ? (doneDate || localDate()) : null;
-    items[idx].doneBy = items[idx].done ? (doneBy || '') : null;
-    return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
-  }).catch(function (err) {
-    console.warn('[toggleCheckItem] error:', err);
-    return null;
   });
 }
 
@@ -1355,7 +1314,12 @@ function createProjectFromOrder(order) {
     milestones: milestones, checklists: checklists
   };
   return apiFetch('/api/projects/full', { method: 'POST', body: JSON.stringify(payload) })
-    .then(function (r) { return toCamel(r.data); });
+    .then(function (r) {
+      var p = toCamel(r.data);
+      _pdInvalidate('ms');   // 마일스톤도 함께 생성됨
+      _emitBus('project', 'created', { id: p && p.id || projId });
+      return p;
+    });
 }
 
 /* ─── 이슈 ─── */
@@ -1694,11 +1658,8 @@ function updateIssue(id, updates) {
 }
 
 function deleteIssueCascade(id) {
-  return issueLogGetByIssue(id).then(function (logs) {
-    return Promise.all(logs.map(function (l) { return issueLogDel(l.id); }));
-  }).then(function () {
-    return issueDel(id);
-  });
+  // 대응 이력은 서버 DELETE /api/issues/:id 가 같은 문장에서 함께 지운다(한 건씩 지우던 요청 제거)
+  return issueDel(id);
 }
 
 /* ─── 이슈 대응 이력 ─── */
@@ -1755,18 +1716,19 @@ function wrGetAll() {
 function wrCount() {
   return apiFetch('/api/archives/records/count').then(function (r) { return r.data.count; });
 }
+function _wrWrote(r) { invalidateArchiveCache(); return r; }
 function wrBulkPut(records) {
-  return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) });
+  return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) }).then(_wrWrote);
 }
 function wrClear() {
-  return apiFetch('/api/archives/records', { method: 'DELETE' });
+  return apiFetch('/api/archives/records', { method: 'DELETE' }).then(_wrWrote);
 }
 function wrUpdateRecords(records) {
-  return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) });
+  return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) }).then(_wrWrote);
 }
 function wrDeleteRecords(remainingRecords, deletedIds) {
   if (deletedIds && deletedIds.length) {
-    return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) });
+    return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) }).then(_wrWrote);
   }
   return wrClear().then(function () { return wrBulkPut(remainingRecords); });
 }
@@ -1777,11 +1739,15 @@ function readAllArchiveRecords() {
   if (_archiveCache.data && (now - _archiveCache.ts) < ARCHIVE_CACHE_TTL) {
     return Promise.resolve(_archiveCache.data);
   }
-  return wrGetAll().then(function (records) {
-    _archiveCache.data = records;
-    _archiveCache.ts = Date.now();
+  if (_archiveCache.inflight) return _archiveCache.inflight;   // 동시에 부른 화면들은 요청 하나를 같이 기다린다
+  var gen = _archiveCache.gen;
+  var p = wrGetAll().then(function (records) {
+    if (gen === _archiveCache.gen) { _archiveCache.data = records; _archiveCache.ts = Date.now(); }  // 도중 무효화됐으면 옛 결과는 캐시하지 않음
+    if (_archiveCache.inflight === p) _archiveCache.inflight = null;
     return records;
-  });
+  }, function (err) { if (_archiveCache.inflight === p) _archiveCache.inflight = null; throw err; });
+  _archiveCache.inflight = p;
+  return p;
 }
 
 /* ═══ 진척률 자동 산출 (아카이브 연동) ═══ */

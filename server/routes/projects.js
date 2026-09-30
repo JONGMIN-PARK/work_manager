@@ -121,10 +121,12 @@ router.post('/', rbac.checkPermission('project.create'), async function (req, re
 // ─── PUT /api/projects/:id ───
 router.put('/:id', rbac.checkPermission('project.edit'), async function (req, res) {
   try {
-    // 가시성 사전 체크 — RBAC 권한이 있어도 보이지 않는 프로젝트는 편집 불가
-    var preR = await db.query('SELECT id, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    // 가시성 사전 체크 — RBAC 권한이 있어도 보이지 않는 프로젝트는 편집 불가.
+    // 같은 조회로 변경 비교용 이전 값도 얻는다(실제 변경된 필드만 알림 → 무의미 중복 방지)
+    var preR = await db.query('SELECT id, owner_id, visibility, department_id, status, name, order_no, end_date, start_date, progress, estimated_hours, current_phase, assignees, memo FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!preR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     if (!await canEditProject(req, preR.rows[0])) return res.status(403).json({ error: 'FORBIDDEN', message: '생성자·참여자·관리자만 프로젝트를 편집할 수 있습니다.' });
+    var prev = preR.rows[0];
 
     var b = req.body;
     var updates = {
@@ -152,13 +154,6 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
     // undefined 제거
     var clean = {};
     for (var k in updates) { if (updates[k] !== undefined) clean[k] = updates[k]; }
-
-    // 변경 비교용 이전 값 조회 (실제 변경된 필드만 알림 → 무의미 중복 방지)
-    var prev = null;
-    try {
-      var prevR = await db.query('SELECT status, name, order_no, end_date, start_date, progress, estimated_hours, current_phase, visibility, assignees, memo FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
-      prev = prevR.rows[0] || null;
-    } catch (e) { /* ignore */ }
 
     var result = await lock.optimisticUpdate(db, 'projects', 'id', req.params.id, b.version, clean, req.user.sub, { clause: 'AND tenant_id = $NEXT1', values: [req.tenant.id] });
 
@@ -264,7 +259,16 @@ router.delete('/:id', rbac.checkPermission('project.delete'), async function (re
     if (!preR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     if (!await canEditProject(req, preR.rows[0])) return res.status(403).json({ error: 'FORBIDDEN', message: '생성자·참여자·관리자만 프로젝트를 삭제할 수 있습니다.' });
 
-    var r = await db.query('DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
+    // 딸린 데이터 정리를 권한 확인 뒤 한 트랜잭션으로 — 예전엔 화면이 이슈·마일스톤·일정·의존관계를
+    // 한 건씩 지우고 고친 다음에 여기로 와서, 403 이 나도 자식 데이터는 이미 지워져 있었다.
+    // 마일스톤·체크리스트·멤버 등은 FK ON DELETE CASCADE. issues.project_id 는 FK 가 없어 직접 지운다(대응 이력 issue_logs 는 issues 에서 CASCADE).
+    var id = req.params.id, tid = req.tenant.id;
+    var r = await db.transaction(async function (client) {
+      await client.query('DELETE FROM issues WHERE project_id = $1 AND tenant_id = $2', [id, tid]);
+      await client.query('UPDATE events SET project_ids = project_ids - $1::text WHERE tenant_id = $2 AND project_ids ? $1::text', [id, tid]);
+      await client.query('UPDATE projects SET dependencies = dependencies - $1::text WHERE tenant_id = $2 AND dependencies ? $1::text', [id, tid]);
+      return client.query('DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tid]);
+    });
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     res.json({ message: '삭제 완료' });
   } catch (e) {

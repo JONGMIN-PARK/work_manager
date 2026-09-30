@@ -54,7 +54,7 @@ if(typeof PROJ_STATUS==='undefined'){
 if(typeof SEM_COLOR==='undefined'){var SEM_COLOR={danger:'#EF4444',warn:'#F59E0B',ok:'#10B981',info:'#3B82F6',muted:'#94A3B8',purple:'#8B5CF6'};var stColor=function(st){return(PROJ_STATUS[st]||PROJ_STATUS.waiting).color};var stBg=function(st){return(PROJ_STATUS[st]||PROJ_STATUS.waiting).bg}}
 if(typeof projGetAll==='undefined'){
   window.projGetAll=function(){return Promise.resolve([])};window.projGet=function(){return Promise.resolve(null)};window.projPut=function(p){return Promise.resolve(p)};window.projDel=function(){return Promise.resolve()};
-  window.msGetAll=function(){return Promise.resolve([])};window.msGetByProject=function(){return Promise.resolve([])};window.msPut=function(m){return Promise.resolve(m)};window.msDel=function(){return Promise.resolve()};window.msDelByProject=function(){return Promise.resolve()};
+  window.msGetAll=function(){return Promise.resolve([])};window.msGetByProject=function(){return Promise.resolve([])};window.msPut=function(m){return Promise.resolve(m)};window.msDel=function(){return Promise.resolve()};
   window.evtGetAll=function(){return Promise.resolve([])};window.evtGet=function(){return Promise.resolve(null)};window.evtPut=function(e){return Promise.resolve(e)};window.evtDel=function(){return Promise.resolve()};
   window.createProject=function(){return Promise.resolve({})};window.updateProject=function(){return Promise.resolve(null)};window.deleteProjectCascade=function(){return Promise.resolve()};
   window.createMilestone=function(){return Promise.resolve({})};window.createEvent=function(){return Promise.resolve({})};window.updateEvent=function(){return Promise.resolve(null)};
@@ -63,7 +63,7 @@ if(typeof projGetAll==='undefined'){
   window.orderGetAll=function(){return Promise.resolve([])};window.orderGet=function(){return Promise.resolve(null)};window.orderPut=function(o){return Promise.resolve(o)};window.orderDel=function(){return Promise.resolve()};
   window.createOrder=function(){return Promise.resolve({})};window.deleteOrder=function(){return Promise.resolve()};window.syncOrderMapToDB=function(){return Promise.resolve()};window.loadOrdersToMap=function(){return Promise.resolve([])};window.createProjectFromOrder=function(){return Promise.resolve({})};
   window.chkPut=function(i){return Promise.resolve(i)};window.chkGetByProject=function(){return Promise.resolve([])};window.chkGetByPhase=function(){return Promise.resolve([])};window.chkDel=function(){return Promise.resolve()};window.chkDelByProject=function(){return Promise.resolve()};
-  window.createCheckItem=function(){return Promise.resolve({})};window.toggleCheckItem=function(){return Promise.resolve(null)};window.calcPhaseProgress=function(){return Promise.resolve({total:0,done:0,pct:0})};
+  window.createCheckItem=function(){return Promise.resolve({})};window.calcPhaseProgress=function(){return Promise.resolve({total:0,done:0,pct:0})};
   window.createDefaultChecklists=function(){return Promise.resolve()};window.advancePhase=function(){return Promise.resolve(null)};window.executePhaseTransition=function(){return Promise.resolve(null)};
   window.DEFAULT_CHECKLIST={order:[],design:[],manufacture:[],inspect:[],deliver:[],as:[]};
   window.issueGetAll=function(){return Promise.resolve([])};window.issueGet=function(){return Promise.resolve(null)};window.issuePut=function(i){return Promise.resolve(i)};window.issueDel=function(){return Promise.resolve()};

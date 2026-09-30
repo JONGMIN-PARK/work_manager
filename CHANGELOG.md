@@ -1,5 +1,18 @@
 # Work Manager — 변경 이력
 
+## v13.205 (2026-09-30) — 프로젝트 관리 최적화
+
+- project-data: `projGetAll`/`msGetAll`/`evtGetAll` 에 bootstrap 과 같은 상한(`_PD_LIST_Q`: 500/2000/2000, all=true). 쿼리 없이 부르면 서버 기본 100건에서 잘려, 캐시 무효화 뒤 타임라인·달력에서 항목이 빠졌다.
+- 캐시 무효화 보강: 작업노트 쓰기(`_msLogChanged`)는 프로젝트 진척 롤업 때문에 `proj`·`projAll` 도, `msTransfer` 는 `ms`, `createProjectFromOrder` 는 project 버스 + `ms`, 이관·사본은 `projAll`.
+- 업무일지 캐시(`readAllArchiveRecords`) 5초 → 60초 + 동시 요청 합치기 + 무효화 세대. `wrBulkPut`/`wrClear`/`wrUpdateRecords`/`wrDeleteRecords`·수동 입력이 무효화.
+- DELETE /api/projects/:id: 권한 확인 뒤 한 트랜잭션에서 이슈 삭제·일정 `project_ids`·다른 프로젝트 `dependencies` 참조 제거(마일스톤·체크리스트는 FK CASCADE). 화면 `deleteProjectCascade` 는 문서 파일 정리 + projDel 만. `msDelByProject` 제거, `deleteIssueCascade` 는 issueDel 한 번(이력은 서버가 함께 삭제).
+- PUT /api/milestones/:id: 날짜 `''` = 비우기(`||` → `!== undefined`). PUT /api/projects/:id: 권한 확인·변경 비교 SELECT 1번으로.
+- core-bus: 달력 자동 재렌더를 `initCalendar`(오늘 달로 리셋) → `renderCalendar`. `renderCalendar`/`renderTimeline` 에 렌더 번호로 옛 렌더 버림, 대시보드 promise catch.
+- calendar: 월간 그리드 날짜별 묶음(`singlesByDate`) — 칸마다 전체 필터 제거(출력 동일 확인). timeline: `_msOrderCmp`·`_tlGroupMsByProj` 로 행마다 마일스톤 필터 제거, 편집 모달과 같은 비교자, `_projModalLoad` 요청 병렬.
+- project-detail 체크리스트: 토글은 `chkPatchItem` 으로 값 지정(뒤집기 → 연타 어긋남 해결, 실패 시 되돌림), `chkDel` 은 실패를 호출부로, `pdRefreshChkProgress` 는 화면 행으로 다시 세기(서버 요청 없음·아무것도 안 고치던 코드 교체), 추가 전 GET 제거, 순서 변경 후 목록만 다시 그림(로컬 분기 제거, 화면 밖 항목 보존), 드래그 투명도 복원.
+- project-detail: 이슈 정렬 `urgent`(0) falsy 버그, 탭 로딩 `_pdNextSeq`/`_pdIsStale` 로 옛 응답 버림, 투입실적 h/d 전환은 마지막 결과로 다시 그림, 진척 창 작업노트 1번 조회 + 마일스톤은 캐시, `pdCloseDetail` 한 곳(진척 차트 destroy), `_pdMeName`·`toggleCheckItem` 제거.
+- 테스트: 서버 project-delete(403 시 보존·성공 시 정리·마일스톤 날짜 비우기), 화면 달력 월간 그리드.
+
 ## v13.204 (2026-09-29) — 회의 보기 전용 · 스타일 정리
 
 - GET /api/meetings?projectId= 응답에 `canEdit`(ps.canEditById). 화면 `_pmt.canEdit` 가 false 면 모든 카드를 문서 보기로, 새 회의·편집·작성 중으로·모아보기 액션 체크 숨김, 상단 `.pmt-readonly` 안내. 문서 보기 줄은 작성 중인 회의에 "작성 중" 표시.

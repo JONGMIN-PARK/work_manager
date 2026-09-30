@@ -73,7 +73,8 @@ router.put('/:id', async function (req, res) {
     var atParam = (atRaw !== undefined) ? JSON.stringify(atRaw || {}) : null;
     var r = await db.query(
       "UPDATE milestones SET name=COALESCE($1,name), start_date=COALESCE($2,start_date), end_date=COALESCE($3,end_date), status=COALESCE($4,status), sort_order=COALESCE($5,sort_order), assignee_targets=COALESCE($8::jsonb,assignee_targets) WHERE id=$6 AND tenant_id=$7 RETURNING *",
-      [b.name, b.startDate || b.start_date, b.endDate || b.end_date, b.status, sortOrder, req.params.id, req.tenant.id, atParam]
+      // 날짜: '' 는 "비우기" — `||` 로 쓰면 '' 가 undefined→NULL→COALESCE 로 옛 날짜가 남아 지울 수 없었다
+      [b.name, b.startDate !== undefined ? b.startDate : b.start_date, b.endDate !== undefined ? b.endDate : b.end_date, b.status, sortOrder, req.params.id, req.tenant.id, atParam]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });

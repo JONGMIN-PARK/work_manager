@@ -230,7 +230,8 @@ window.WM_TAB_DEPS = {
   var depMap = window.WM_TAB_DEPS;
   var renderMap = {
     pipeline: function () { if (typeof renderPipeline === 'function') renderPipeline(); },
-    calendar: function () { if (typeof initCalendar === 'function') initCalendar(); },
+    // initCalendar 는 오늘 달로 되돌린다 — 다른 달을 보다가 일정을 옮기면 화면이 이번 달로 튀었다
+    calendar: function () { if (typeof renderCalendar === 'function') renderCalendar(); },
     timeline: function () { if (typeof renderTimeline === 'function') renderTimeline(); },
     orders:   function () { if (typeof renderOrders === 'function') renderOrders(); },
     prestudy: function () { if (typeof renderPrestudy === 'function') renderPrestudy(); },
