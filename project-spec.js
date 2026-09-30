@@ -470,7 +470,7 @@ function _psNavHtml() {
       _specEsc(sec.label) + ' <span style="color:' + (done ? SEM_COLOR.ok : 'var(--t6)') + ';font-weight:600">' + st.fixed + '/' + st.total + '</span></button>';
   }).join('');
   var pct = all.total ? Math.round(all.fixed / all.total * 100) : 0;
-  return '<div style="position:sticky;top:0;z-index:2;background:var(--bg-p,var(--bg));padding:6px 0 8px;margin-bottom:6px;border-bottom:1px solid var(--bd)">' +
+  return '<div style="position:sticky;top:0;z-index:2;background:var(--bg-ps,var(--bg-p,var(--bg)));padding:6px 0 8px;margin-bottom:6px;border-bottom:1px solid var(--bd)">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:10.5px;color:var(--t4)">' +
       '<span style="font-weight:700;color:var(--t2)">확정 ' + all.fixed + '/' + all.total + ' (' + pct + '%)</span>' +
       '<span style="flex:1;max-width:260px;height:6px;border-radius:3px;background:var(--bg-i);overflow:hidden;display:flex">' +

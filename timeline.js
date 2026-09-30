@@ -1636,7 +1636,7 @@ function editMsTargetsMatrix() {
   });
   if (!rows.length) { if (typeof showToast === 'function') showToast('마일스톤을 먼저 추가하세요.', 'warn'); return; }
 
-  var th = '<th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--t4);position:sticky;left:0;background:var(--tl-p,var(--bg-p))">마일스톤 \\ 담당자</th>';
+  var th = '<th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--t4);position:sticky;left:0;background:var(--bg-ps,var(--bg-p))">마일스톤 \\ 담당자</th>';
   assignees.forEach(function (n) {
     var dn = typeof shortName === 'function' ? shortName(n) : n;
     th += '<th style="padding:6px 6px;font-size:10px;color:var(--t3);min-width:62px" title="' + eH(n) + '">' + eH(dn) + '</th>';
@@ -1647,7 +1647,7 @@ function editMsTargetsMatrix() {
   rows.forEach(function (row) {
     var stg = _msTargetStaging[row.rk] || {};
     body += '<tr>';
-    body += '<td style="padding:4px 8px;font-size:11px;color:var(--t2);white-space:nowrap;position:sticky;left:0;background:var(--tl-p,var(--bg-p));max-width:160px;overflow:hidden;text-overflow:ellipsis" title="' + eH(row.name) + '">' + eH(row.name) + '</td>';
+    body += '<td style="padding:4px 8px;font-size:11px;color:var(--t2);white-space:nowrap;position:sticky;left:0;background:var(--bg-ps,var(--bg-p));max-width:160px;overflow:hidden;text-overflow:ellipsis" title="' + eH(row.name) + '">' + eH(row.name) + '</td>';
     assignees.forEach(function (n) {
       var v = (stg[n] != null) ? stg[n] : '';
       body += '<td style="padding:2px 4px;text-align:center"><input type="number" min="0" step="0.5" class="si msTgtCell" data-rk="' + eH(row.rk) + '" data-nm="' + eH(n) + '" value="' + v + '" style="width:54px;padding:4px 4px;font-size:11px;text-align:center" oninput="msTargetsRecalc()"></td>';
@@ -1670,7 +1670,7 @@ function editMsTargetsMatrix() {
       '<thead><tr style="border-bottom:1px solid var(--bd)">' + th + '</tr></thead>' +
       '<tbody>' + body + '</tbody>' +
       '<tfoot><tr style="border-top:1px solid var(--bd)">' +
-        '<td style="padding:6px 8px;font-size:10px;color:var(--t4);position:sticky;left:0;background:var(--tl-p,var(--bg-p));font-weight:700">담당자 합계</td>' +
+        '<td style="padding:6px 8px;font-size:10px;color:var(--t4);position:sticky;left:0;background:var(--bg-ps,var(--bg-p));font-weight:700">담당자 합계</td>' +
         assignees.map(function () { return '<td class="msTgtColSum" style="padding:6px 6px;font-size:10px;color:var(--t3);text-align:center;font-weight:600">0h</td>'; }).join('') +
         '<td class="msTgtGrand" style="padding:6px 8px;font-size:11px;color:var(--ac);font-weight:700;text-align:right">0h</td>' +
       '</tr></tfoot>' +

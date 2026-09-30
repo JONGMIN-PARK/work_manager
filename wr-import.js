@@ -279,7 +279,7 @@ function showImportPreviewModal(analysis,opts){
     if(nConf>0){
       conflictsHtml='<div style="padding:14px 22px 4px;font-size:12px;color:var(--t3);font-weight:600">⚠️ 충돌 (날짜+이름+수주번호 일치하나 시간/내용 차이) — 행별 처리 선택</div>';
       conflictsHtml+='<div style="display:flex;gap:8px;padding:0 22px 8px"><button class="btn btn-g btn-s" id="wrConfAllUpd" style="font-size:10px">전체 갱신</button><button class="btn btn-g btn-s" id="wrConfAllSkip" style="font-size:10px">전체 무시</button><button class="btn btn-g btn-s" id="wrConfAllAdd" style="font-size:10px">전체 별개 추가</button></div>';
-      conflictsHtml+='<div style="overflow:auto;flex:1;padding:0 22px"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="position:sticky;top:0;background:var(--bg-i)">'+
+      conflictsHtml+='<div style="overflow:auto;flex:1;padding:0 22px"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="position:sticky;top:0;background:var(--bg-is,var(--bg-i))">'+
         '<th style="padding:6px;text-align:left;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">날짜</th>'+
         '<th style="padding:6px;text-align:left;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">이름</th>'+
         '<th style="padding:6px;text-align:left;color:var(--t5);font-weight:600;border-bottom:1px solid var(--bd)">수주번호</th>'+
