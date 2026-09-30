@@ -119,6 +119,11 @@
    글래스: 타임라인 고정(sticky) 영역은 불투명 — 반투명이면 가로·세로 스크롤 때 막대·날짜·격자가 비쳐 겹쳐 보인다.
    값은 기존 반투명 색을 --bg(#E8EEF8) 위에 합성한 색(겉보기 동일). 다른 테마는 var(--tl-*, 기존 변수) 폴백으로 그대로 */
 [data-theme="glass"]{--tl-th:#F8FAFD;--tl-p:#F6F8FC;--tl-i:#F1F5FB;--tl-hv:#D6E0F1;--tl-drop:#D7DBF9}
+/* 글래스: 위에 뜨는 창(프로젝트 상세 패널·사전검토 팝업)은 거의 불투명 + 흐림 — --bg-p(.62)면 뒤 화면 글자가 비쳐 읽기 어렵다.
+   상세 패널의 고정 제목·탭(.pd-sticky)도 같은 색이어야 스크롤되는 본문이 비치지 않는다. 패널 배경은 인라인이라 !important */
+[data-theme="glass"] .pd-panel{background:rgba(246,248,252,.94)!important;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+[data-theme="glass"] .pd-sticky{background:#F6F8FC}
+[data-theme="glass"] .psc-pop{background:rgba(246,248,252,.95);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 /* 사이버 — 네온 글로우 강조 */
 [data-theme="cyber"] h1 .ac,[data-theme="cyber"] .pnl-t{text-shadow:0 0 8px rgba(255,45,149,.3)}
 [data-theme="cyber"] .pnl{box-shadow:0 0 0 1px rgba(255,45,149,.06),0 4px 14px rgba(86,20,160,.18)}

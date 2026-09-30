@@ -1,5 +1,9 @@
 # Work Manager — 변경 이력
 
+## v13.210 (2026-09-30) — 글래스 테마 상세 패널 불투명
+
+- 글래스 테마 `.pd-panel` rgba(246,248,252,.94)+blur(18px) (인라인 배경이라 !important), `.pd-sticky` #F6F8FC, `.psc-pop` .95+blur(14px). 다른 테마 변화 없음.
+
 ## v13.209 (2026-09-30) — 글래스 테마 타임라인 겹침 수정
 
 - 글래스 테마의 반투명 변수(--th/--bg-p/--bg-i/--bg-hv)를 쓰던 타임라인 sticky 영역을 불투명 `--tl-th/--tl-p/--tl-i/--tl-hv/--tl-drop` 으로(값은 반투명 색을 --bg 위에 합성한 색). 대상: .tl-header-row·.tl-label-header·.tl-label(-sub)·.tl-group-label·.tl-list-group·호버·드롭존·담당자 목표표 첫 칸. 다른 테마는 `var(--tl-*, 기존)` 폴백으로 변화 없음.
