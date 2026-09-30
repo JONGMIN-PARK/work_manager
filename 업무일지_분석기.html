@@ -19,7 +19,7 @@
 <script src="config.js?v=5" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="settings.js?v=5" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="auth.js?v=5" onerror="console.warn('auth.js 로드 실패')"></script>
-<script defer src="weekly-report-admin.js?v=5" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
+<script defer src="weekly-report-admin.js?v=6" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
 <script src="project-data.js?v=6" onerror="console.warn('project-data.js 로드 실패')"></script>
 <script src="ui-helpers.js?v=5" onerror="console.warn('ui-helpers.js 로드 실패')"></script>
 <!-- 렌더러 (defer — 초기 표시 이후 실행돼도 무방) -->
@@ -55,13 +55,13 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" onerror="console.warn('mammoth.js 로드 실패')"></script>
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.210';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.211';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -443,7 +443,7 @@
 
 <!-- 앱 스크립트 — 예전 인라인 <script> 를 나눈 파일들. 동기 로드(defer 금지) · 이 순서 그대로 (app-init.js 가 마지막) -->
 <script src="wm-fallbacks.js?v=2" onerror="console.warn('wm-fallbacks.js 로드 실패')"></script>
-<script src="wm-state.js?v=1" onerror="console.warn('wm-state.js 로드 실패')"></script>
+<script src="wm-state.js?v=2" onerror="console.warn('wm-state.js 로드 실패')"></script>
 <script src="wr-import.js?v=1" onerror="console.warn('wr-import.js 로드 실패')"></script>
 <script src="mode.js?v=1" onerror="console.warn('mode.js 로드 실패')"></script>
 <script src="wr-filters.js?v=1" onerror="console.warn('wr-filters.js 로드 실패')"></script>

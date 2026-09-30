@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.211 (2026-09-30) — 글래스 테마 글자 시인성 · 글씨체
+
+- 글래스 글자색: t1~t6 #0F172A/#1C2640/#2F3B55/#434F6A/#56627C/#6F7B94, ac #5558E8, ac-t·tg-t #3F43D6 (c-t/ct/cl/ta-sh 동반). 대비(패널~호버 배경): t5 4.6~5.8, t6 3.2~4.0(전 1.6~2.0), 강조 글자 ≥5.3.
+- wm-state `_wmFontFor`: 고른 글씨체가 기본(noto)이고 테마가 glass 면 pretendard 로 표시(저장값은 그대로), `aTh` 가 테마 바뀔 때 다시 적용(`_wmFontReady` 로 부팅 첫 호출 건너뜀). 글씨체 메뉴의 노토 항목에 안내 문구.
+- style.css 첫 줄의 Pretendard @import 제거 — 경로 404(pretendard-dynamic-subset)에 쓰는 곳도 없고 렌더를 막았다. weekly-report-admin 내보내기의 같은 경로를 pretendardvariable-dynamic-subset(v1.3.9)으로 수정.
+
 ## v13.210 (2026-09-30) — 글래스 테마 상세 패널 불투명
 
 - 글래스 테마 `.pd-panel` rgba(246,248,252,.94)+blur(18px) (인라인 배경이라 !important), `.pd-sticky` #F6F8FC, `.psc-pop` .95+blur(14px). 다른 테마 변화 없음.

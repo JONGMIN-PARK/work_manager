@@ -3,18 +3,23 @@
 /* ═══ THEME (TH → config.js) ═══ */
 let cTh='auto';
 function gSysTh(){return matchMedia('(prefers-color-scheme:dark)').matches?'midnight':'light'}
-function aTh(id){cTh=id;document.documentElement.setAttribute('data-theme',id==='auto'?gSysTh():id);rTh();lsSet('wa-theme',id)}
+function aTh(id){cTh=id;document.documentElement.setAttribute('data-theme',id==='auto'?gSysTh():id);rTh();lsSet('wa-theme',id);if(_wmFontReady)aFnt(cFnt)}  // 테마별 기본 글씨체(_wmFontFor) 반영 — 폰트 초기화 전(부팅 첫 호출)엔 건너뜀
+var _wmFontReady=false;
 function rTh(){var bar=document.getElementById('themeBar');if(!bar)return;bar.innerHTML=TH.map(t=>`<div class="thd ${cTh===t.id?'on':''}" style="background:${t.c}" onclick="aTh('${t.id}')" title="${t.l}"><span class="dl">${t.l}</span></div>`).join('')}
 var _th=lsGet('wa-theme');if(_th)cTh=_th
 aTh(cTh);matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(cTh==='auto')aTh('auto')});
 
 /* ═══ FONT (FONTS → config.js) — 동적 Google Fonts 로드 + body 폰트 변경 ═══ */
 let cFnt='noto';
+/* 테마별 기본 글씨체 — 기본(노토)을 고른 상태에서 글래스 테마면 프리텐다드(흐린 배경에서 작은 글자가 더 또렷).
+   사용자가 노토 외 글씨체를 직접 고르면 그대로. 저장값(wa-font)은 고른 글씨체 id 그대로 둔다 */
+function _wmFontFor(id){ return (id==='noto' && document.documentElement.getAttribute('data-theme')==='glass') ? 'pretendard' : id; }
 function aFnt(id){
   var FF = (typeof FONTS!=='undefined')?FONTS:[];
-  var f = FF.find(function(x){return x.id===id}) || FF[0];
-  if(!f) return;
-  cFnt = f.id;
+  var chosen = FF.find(function(x){return x.id===id}) || FF[0];
+  if(!chosen) return;
+  var f = FF.find(function(x){return x.id===_wmFontFor(chosen.id)}) || chosen;
+  cFnt = chosen.id;
   // 동적 <link> 로드 (한 번만)
   if(!document.getElementById('fontLink_'+f.id)){
     var link = document.createElement('link');
@@ -30,7 +35,7 @@ function aFnt(id){
     document.head.appendChild(link);
   }
   document.documentElement.style.setProperty('--app-font', f.family + ',-apple-system,sans-serif');
-  lsSet('wa-font', id);
+  lsSet('wa-font', cFnt);
   rFnt();
 }
 function rFnt(){
@@ -48,12 +53,14 @@ function rFnt(){
   order.forEach(function(g){
     html += '<div class="fnd-group">'+g+'</div>';
     groups[g].forEach(function(f){
-      html += '<div class="fnd '+(cFnt===f.id?'on':'')+'" onclick="aFnt(\''+f.id+'\')" title="'+f.l+'" style="font-family:'+f.family.replace(/"/g,'&quot;')+'">'+f.l+'</div>';
+      var sub = (_wmFontFor(f.id)!==f.id) ? ' <span style="font-size:10px;opacity:.7">· 글래스 테마는 프리텐다드로 표시</span>' : '';
+      html += '<div class="fnd '+(cFnt===f.id?'on':'')+'" onclick="aFnt(\''+f.id+'\')" title="'+f.l+'" style="font-family:'+f.family.replace(/"/g,'&quot;')+'">'+f.l+sub+'</div>';
     });
   });
   bar.innerHTML = html;
 }
 var _fnt=lsGet('wa-font');if(_fnt)aFnt(_fnt);else aFnt('noto');
+_wmFontReady=true;
 // 폰트 메뉴 외부 클릭 시 닫기
 document.addEventListener('click',function(e){
   var w=document.getElementById('fontBarWrap');
