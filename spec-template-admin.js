@@ -252,5 +252,5 @@ function staDelete() {
 /* 사양 탭이 열려 있으면 양식 목록을 새로 받아 "새 표준 적용" 버튼 등을 갱신 */
 function _staRefreshSpecTab() {
   if (typeof _ps === 'undefined' || !_ps) return;
-  psTemplatesList(true).then(function () { if (_ps) { _psCollect(); _psRender(); } });
+  psTemplatesList(true).then(function () { if (_ps) { _psCollect(); _specRender(); } });
 }

@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.206 (2026-09-30) — 사전검토 화면 멈춤 수정
+
+- project-spec.js(v13.196)가 prestudy.js 와 같은 전역 함수 `_psRender`·`_psEsc`·`_psToast` 를 정의 — 나중에 로드돼 덮어쓰면서 사전검토의 `renderPrestudy` 가 사양서용 `_psRender` 를 불러 `#prestudyWrap` 이 "로딩 중..." 에서 멈췄다. 사양서 쪽을 `_specRender`·`_specEsc`·`_specToast` 로 이름 변경(spec-template-admin.js 호출 1곳 포함).
+- test/global-names.test.js: 업무일지_분석기.html 이 로드하는 스크립트끼리 최상위 function 이름 중복 검사(옛 코드에서 이 3개를 잡는 것 확인).
+
 ## v13.205 (2026-09-30) — 프로젝트 관리 최적화
 
 - project-data: `projGetAll`/`msGetAll`/`evtGetAll` 에 bootstrap 과 같은 상한(`_PD_LIST_Q`: 500/2000/2000, all=true). 쿼리 없이 부르면 서버 기본 100건에서 잘려, 캐시 무효화 뒤 타임라인·달력에서 항목이 빠졌다.

@@ -16,9 +16,9 @@ var PS_DISC_COLOR = { design: '#8B5CF6', control: '#F59E0B', software: '#EC4899'
 var PS_HW_SECTION = 'hw';                         // 사양서 전체 구성도·도면 첨부용 섹션 키
 var PS_DRAWIO_URL = 'https://embed.diagrams.net/?embed=1&proto=json&spin=1&saveAndExit=0&noExitBtn=0&lang=ko';
 
-function _psEsc(s) { return (typeof eH === 'function') ? eH(s == null ? '' : String(s)) : String(s == null ? '' : s); }
+function _specEsc(s) { return (typeof eH === 'function') ? eH(s == null ? '' : String(s)) : String(s == null ? '' : s); }
 function _psJs(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
-function _psToast(m, t) { if (typeof showToast === 'function') showToast(m, t); }
+function _specToast(m, t) { if (typeof showToast === 'function') showToast(m, t); }
 function _psMe() { return (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.sub || currentUser.id) : null; }
 function _psRole() { return (typeof currentUser !== 'undefined' && currentUser) ? currentUser.role : null; }
 function _psErrMsg(err, dflt) {
@@ -101,13 +101,13 @@ function _psFmtChange(c) {
   var f = c.from, t = c.to;
   if (p[0] === 'status') { var L = { '': '미정', review: '검토', fixed: '확정' }; f = L[f || ''] || f; t = L[t || ''] || t; }
   if (p[0] === 'extra') return ' (목록 수정)';
-  return ': <span style="color:var(--t5)">' + _psEsc(_psFmtVal(f)) + '</span> → <b>' + _psEsc(_psFmtVal(t)) + '</b>';
+  return ': <span style="color:var(--t5)">' + _specEsc(_psFmtVal(f)) + '</span> → <b>' + _specEsc(_psFmtVal(t)) + '</b>';
 }
 function _psFmtVal(v) { if (v == null || v === '') return '(빈 값)'; if (typeof v === 'object') return v.name ? '행 "' + v.name + '"' : '(행)'; return String(v).length > 40 ? String(v).slice(0, 39) + '…' : String(v); }
 function _psFmtAt(at) { var d = new Date(at); if (isNaN(d)) return ''; return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function _psRecentMark(key) {
   var r = (_ps.recent || {})[key]; if (!r) return '';
-  return '<span title="' + _psEsc(_psFmtAt(r.at) + ' ' + r.by + ' 변경: ' + _psFmtVal(r.from) + ' → ' + _psFmtVal(r.to)) + '" style="display:inline-block;font-size:8.5px;font-weight:700;color:#fff;background:' + SEM_COLOR.info + ';border-radius:6px;padding:0 4px;margin-left:4px;vertical-align:middle;cursor:help">변경</span>';
+  return '<span title="' + _specEsc(_psFmtAt(r.at) + ' ' + r.by + ' 변경: ' + _psFmtVal(r.from) + ' → ' + _psFmtVal(r.to)) + '" style="display:inline-block;font-size:8.5px;font-weight:700;color:#fff;background:' + SEM_COLOR.info + ';border-radius:6px;padding:0 4px;margin-left:4px;vertical-align:middle;cursor:help">변경</span>';
 }
 function _psFilesUrl(projId, fid) { return '/api/projects/' + encodeURIComponent(projId) + '/spec-files' + (fid ? '/' + encodeURIComponent(fid) : ''); }
 
@@ -135,8 +135,8 @@ function pdRenderSpec(projId) {
   }).then(function (schema) {
     if (!_ps || _ps.projId !== projId) return;
     _ps.schema = schema;
-    if (_ps.sheet.templateId && !schema) _psToast('사양서 양식을 불러오지 못했습니다. 기타 사양만 표시합니다.', 'warn');
-    _psRender();
+    if (_ps.sheet.templateId && !schema) _specToast('사양서 양식을 불러오지 못했습니다. 기타 사양만 표시합니다.', 'warn');
+    _specRender();
   }).catch(function (e) {
     console.error('[pdRenderSpec]', e);
     el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">사양서를 불러오지 못했습니다.</div>';
@@ -144,7 +144,7 @@ function pdRenderSpec(projId) {
 }
 
 /* ═══ 렌더 ═══ */
-function _psRender() {
+function _specRender() {
   var el = document.getElementById('pdSpec'); if (!el || !_ps) return;
   _ps.recent = _psRecentByOthers();
   var h = _psToolbarHtml() + _psConflictsHtml();
@@ -179,18 +179,18 @@ function _psToolbarHtml() {
   var tpl = '';
   if (s.templateId) {
     var latest = psLatestVersion(s.templateId);
-    tpl = '<span style="font-size:10px;color:var(--t4);background:var(--bg-i);border:1px solid var(--bd);border-radius:10px;padding:1px 8px">양식: ' + _psEsc(psTemplateName(s.templateId)) + ' v' + _psEsc(s.templateVersion) + '</span>';
+    tpl = '<span style="font-size:10px;color:var(--t4);background:var(--bg-i);border:1px solid var(--bd);border-radius:10px;padding:1px 8px">양식: ' + _specEsc(psTemplateName(s.templateId)) + ' v' + _specEsc(s.templateVersion) + '</span>';
     if (_ps.canEdit && latest && latest > s.templateVersion) tpl += ' <button class="btn btn-g btn-s" style="font-size:10px;padding:1px 7px" onclick="psUpgradeTemplate()" title="값은 항목 키 기준으로 유지됩니다">새 표준 v' + latest + ' 적용</button>';
   }
   var chips = [{ key: 'all', label: '전체' }].concat(SPEC_DISCIPLINES).map(function (d) {
     var on = _ps.filter === d.key, c = PS_DISC_COLOR[d.key] || '#64748B';
-    return '<button class="btn btn-s" onclick="psSetFilter(\'' + d.key + '\')" style="font-size:10px;padding:2px 8px;border:1px solid ' + (on ? c : 'var(--bd)') + ';background:' + (on ? c + '22' : 'transparent') + ';color:' + (on ? 'var(--t1)' : 'var(--t4)') + ';font-weight:' + (on ? 700 : 400) + '">' + _psEsc(d.label) + '</button>';
+    return '<button class="btn btn-s" onclick="psSetFilter(\'' + d.key + '\')" style="font-size:10px;padding:2px 8px;border:1px solid ' + (on ? c : 'var(--bd)') + ';background:' + (on ? c + '22' : 'transparent') + ';color:' + (on ? 'var(--t1)' : 'var(--t4)') + ';font-weight:' + (on ? 700 : 400) + '">' + _specEsc(d.label) + '</button>';
   }).join('');
   return '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px">' +
-      '<div style="display:flex;flex-direction:column;gap:3px"><span id="pdSpecMeta" style="font-size:10px;color:var(--t6)">' + _psEsc(_psMetaText()) + '</span><span>' + tpl + '</span></div>' +
+      '<div style="display:flex;flex-direction:column;gap:3px"><span id="pdSpecMeta" style="font-size:10px;color:var(--t6)">' + _specEsc(_psMetaText()) + '</span><span>' + tpl + '</span></div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">' +
         (_ps.schema ? '<span style="display:flex;gap:3px;margin-right:4px" title="분야를 고르면 그 분야 담당 칸만 입력할 수 있고 나머지는 흐려집니다">' + chips + '</span>' : '') +
-        (_psNarrow() && typeof pdSetPanelSize === 'function' ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pdSetPanelSize(0.67);setTimeout(_psRender,50)" title="상세 패널을 넓혀 사양서를 편하게 봅니다 (폭은 기억됩니다)">↔ 넓게 보기</button>' : '') +
+        (_psNarrow() && typeof pdSetPanelSize === 'function' ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="pdSetPanelSize(0.67);setTimeout(_specRender,50)" title="상세 패널을 넓혀 사양서를 편하게 봅니다 (폭은 기억됩니다)">↔ 넓게 보기</button>' : '') +
         (_ps.schema ? '<button class="btn btn-s" onclick="psToggleOnlyOpen()" title="확정되지 않은 항목만 보기" style="font-size:10px;padding:2px 8px;border:1px solid ' + (_ps.onlyOpen ? SEM_COLOR.warn : 'var(--bd)') + ';background:' + (_ps.onlyOpen ? SEM_COLOR.warn + '22' : 'transparent') + ';color:var(--t2)">' + (_ps.onlyOpen ? '☑' : '☐') + ' 미확정만</button>' : '') +
         '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psOpenHistory()" title="누가 언제 무엇을 바꿨는지">🕘 변경 이력</button>' +
         '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psExportXlsx()" title="사양서를 XLSX 로 저장">📥 XLSX</button>' +
@@ -256,8 +256,8 @@ function _psDgPanelHtml(L) {
     var o = bx || ln; if (!o) return '';
     var isUser = bx && bx.kind === 'user';
     h += '<div style="font-size:10.5px;font-weight:700;color:var(--t3);margin-bottom:5px">' + (ln ? '계통 제목' : isUser ? '추가한 상자' : '상자') + '</div>' +
-      '<input class="si" value="' + _psEsc(o.title) + '" placeholder="이름" oninput="psDgText(\'' + _psJs(id) + '\',\'title\',this.value)" style="' + inp + '">' +
-      (bx && bx.kind !== 'warn' ? '<input class="si" value="' + _psEsc(o.sub || '') + '" placeholder="부제 (선택)" oninput="psDgText(\'' + _psJs(id) + '\',\'sub\',this.value)" style="' + inp + '">' : '') +
+      '<input class="si" value="' + _specEsc(o.title) + '" placeholder="이름" oninput="psDgText(\'' + _psJs(id) + '\',\'title\',this.value)" style="' + inp + '">' +
+      (bx && bx.kind !== 'warn' ? '<input class="si" value="' + _specEsc(o.sub || '') + '" placeholder="부제 (선택)" oninput="psDgText(\'' + _psJs(id) + '\',\'sub\',this.value)" style="' + inp + '">' : '') +
       '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
         (!isUser ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psDgRestore(\'' + _psJs(id) + '\')" title="이름·위치를 자동 값으로">원래대로</button>' : '') +
         (bx ? '<button class="btn btn-d btn-s" style="font-size:10px" onclick="psDgDelete()">' + (isUser ? '삭제' : '숨기기') + '</button>' : '') +
@@ -265,8 +265,8 @@ function _psDgPanelHtml(L) {
   } else {
     var e = (L.edges || []).filter(function (x) { return x.key === id; })[0]; if (!e) return '';
     var nm = function (bid) { var x = (L.boxes || []).filter(function (y) { return y.id === bid; })[0]; return x ? x.title : bid; };
-    h += '<div style="font-size:10.5px;font-weight:700;color:var(--t3);margin-bottom:5px">화살표 · ' + _psEsc(nm(e.from)) + ' → ' + _psEsc(nm(e.to)) + '</div>' +
-      '<input class="si" value="' + _psEsc(e.label || '') + '" placeholder="라벨 (예: RS-232C, 24V, CH0)" oninput="psDgEdgeLabel(this.value)" style="' + inp + '">' +
+    h += '<div style="font-size:10.5px;font-weight:700;color:var(--t3);margin-bottom:5px">화살표 · ' + _specEsc(nm(e.from)) + ' → ' + _specEsc(nm(e.to)) + '</div>' +
+      '<input class="si" value="' + _specEsc(e.label || '') + '" placeholder="라벨 (예: RS-232C, 24V, CH0)" oninput="psDgEdgeLabel(this.value)" style="' + inp + '">' +
       '<div style="display:flex;gap:4px"><button class="btn btn-g btn-s" style="font-size:10px" onclick="psDgFlip()">⇄ 방향 바꾸기</button><button class="btn btn-d btn-s" style="font-size:10px" onclick="psDgDelete()">삭제</button></div>';
   }
   return h + '</div>';
@@ -421,7 +421,7 @@ function psDgSnapAll() {
     if (u) { u.x = x; u.y = y; delete dg.pos[b.id]; } else dg.pos[b.id] = { x: x, y: y };
   });
   _psDgChanged();
-  _psToast('격자에 맞췄습니다.');
+  _specToast('격자에 맞췄습니다.');
 }
 function psDgAutoArrange() {
   var dg = _psDgDoc(), n = 0;
@@ -430,7 +430,7 @@ function psDgAutoArrange() {
   var L0 = specDiagramLayout(specBuildDiagram(_psCollect(true)), []), x = (L0.width || 796) - 184, y = 16;
   dg.add.forEach(function (a) { a.x = x; a.y = y; y += (a.h || 44) + 16; delete dg.pos[a.id]; });
   _psDgChanged();
-  _psToast('자동 배치로 정리했습니다' + (dg.add.length ? ' (추가한 상자는 오른쪽에 정렬)' : '') + '.');
+  _specToast('자동 배치로 정리했습니다' + (dg.add.length ? ' (추가한 상자는 오른쪽에 정렬)' : '') + '.');
 }
 function psDgReset() {
   if (!confirm('구성도에서 옮기고 고친 내용·추가한 상자·화살표를 모두 지우고 자동 계통도로 되돌릴까요?')) return;
@@ -467,7 +467,7 @@ function _psNavHtml() {
     all.total += st.total; all.fixed += st.fixed; all.review += st.review;
     var done = st.total && st.fixed === st.total;
     return '<button class="btn btn-s" onclick="psJump(\'' + sec.key + '\')" style="font-size:10px;padding:2px 7px;border:1px solid var(--bd);border-left:3px solid ' + c + ';background:' + (done ? SEM_COLOR.ok + '1a' : 'transparent') + ';color:var(--t3)">' +
-      _psEsc(sec.label) + ' <span style="color:' + (done ? SEM_COLOR.ok : 'var(--t6)') + ';font-weight:600">' + st.fixed + '/' + st.total + '</span></button>';
+      _specEsc(sec.label) + ' <span style="color:' + (done ? SEM_COLOR.ok : 'var(--t6)') + ';font-weight:600">' + st.fixed + '/' + st.total + '</span></button>';
   }).join('');
   var pct = all.total ? Math.round(all.fixed / all.total * 100) : 0;
   return '<div style="position:sticky;top:0;z-index:2;background:var(--bg-p,var(--bg));padding:6px 0 8px;margin-bottom:6px;border-bottom:1px solid var(--bd)">' +
@@ -481,11 +481,11 @@ function _psNavHtml() {
 }
 function psJump(key) {
   if (!_ps) return;
-  if (_ps.collapsed[key]) { _psCollect(); _ps.collapsed[key] = false; _psRender(); }
+  if (_ps.collapsed[key]) { _psCollect(); _ps.collapsed[key] = false; _specRender(); }
   var el = document.getElementById('ps-sec-' + key);
   if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-function psToggleOnlyOpen() { if (!_ps) return; _psCollect(); _ps.onlyOpen = !_ps.onlyOpen; _psRender(); }
+function psToggleOnlyOpen() { if (!_ps) return; _psCollect(); _ps.onlyOpen = !_ps.onlyOpen; _specRender(); }
 
 /* 상태 버튼 */
 function _psStatusBtnHtml(key) {
@@ -521,17 +521,17 @@ function _psConflictsHtml() {
     '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psDismissConflicts()">닫기</button></div>' +
     list.map(function (c, i) {
       return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:3px 0;border-top:1px solid var(--bd)">' +
-        '<span><b>' + _psEsc(c.label) + '</b> · 저장된 값 <b>' + _psEsc(_psFmtVal(c.theirs)) + '</b> · 내가 입력한 값 <b>' + _psEsc(_psFmtVal(c.mine)) + '</b></span>' +
+        '<span><b>' + _specEsc(c.label) + '</b> · 저장된 값 <b>' + _specEsc(_psFmtVal(c.theirs)) + '</b> · 내가 입력한 값 <b>' + _specEsc(_psFmtVal(c.mine)) + '</b></span>' +
         (c.path && c.path.length ? '<button class="btn btn-g btn-s" style="font-size:10px;white-space:nowrap" onclick="psResolveConflict(' + i + ')">내 값으로 바꾸기</button>' : '') + '</div>';
     }).join('') + '</div>';
 }
-function psDismissConflicts() { if (!_ps) return; _psCollect(); _ps.conflicts = []; _psRender(); }
+function psDismissConflicts() { if (!_ps) return; _psCollect(); _ps.conflicts = []; _specRender(); }
 function psResolveConflict(i) {
   var c = (_ps.conflicts || [])[i]; if (!c) return;
   _psPatch([{ path: c.path, from: c.theirs, to: c.mine, label: c.label }]).then(function (ok) {
     if (!ok) return;
     _ps.conflicts.splice(i, 1);
-    _psRender();
+    _specRender();
   });
 }
 
@@ -539,7 +539,7 @@ function _psStartPanelHtml() {
   var opts = psChoosableTemplates();
   var body = _ps.canEdit
     ? '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px"><select id="psStartTpl" class="si" style="font-size:11px;padding:4px 8px;max-width:280px">' +
-        opts.map(function (t) { return '<option value="' + _psEsc(t.id) + '"' + (t.isDefault ? ' selected' : '') + '>' + _psEsc(t.name) + ' v' + t.version + '</option>'; }).join('') +
+        opts.map(function (t) { return '<option value="' + _specEsc(t.id) + '"' + (t.isDefault ? ' selected' : '') + '>' + _specEsc(t.name) + ' v' + t.version + '</option>'; }).join('') +
       '</select><button class="btn btn-p btn-s" onclick="psStartWithTemplate()">이 양식으로 시작</button>' +
       '<button class="btn btn-g btn-s" onclick="psOpenCopy()">📋 이전 프로젝트에서 복사</button></div>' +
       '<div style="font-size:10px;color:var(--t6);margin-top:6px">아래 "기타 사양"의 항목 중 이름이 표준 항목과 같은 것은 해당 항목으로 옮겨집니다. 시작한 뒤 💾 저장을 눌러야 반영됩니다.</div>'
@@ -582,7 +582,7 @@ function _psRefreshDiagram() {
   if (ck) ck.innerHTML = checks.length
     ? '<div style="border:1px solid ' + SEM_COLOR.warn + ';background:' + SEM_COLOR.warn + '14;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--t2)">' +
         '<div style="font-weight:700;margin-bottom:2px">⚠️ 확인이 필요한 값 ' + checks.length + '건</div>' +
-        checks.map(function (c) { return '<div>· ' + _psEsc(c.text) + '</div>'; }).join('') + '</div>'
+        checks.map(function (c) { return '<div>· ' + _specEsc(c.text) + '</div>'; }).join('') + '</div>'
     : '';
   var bomBox = document.getElementById('psBom');
   if (bomBox) {
@@ -593,7 +593,7 @@ function _psRefreshDiagram() {
         '<div style="overflow-x:auto;border:1px solid var(--bd);border-radius:6px"><table style="border-collapse:collapse;width:100%"><thead><tr>' +
         ['구분', '품목', '모델', '수량', '비고'].map(function (h) { return '<th style="' + td + ';text-align:left;font-size:9.5px;color:var(--t5);background:var(--bg-i);text-transform:none;letter-spacing:0">' + h + '</th>'; }).join('') +
         '</tr></thead><tbody>' + bom.map(function (r) {
-          return '<tr><td style="' + td + '">' + _psEsc(r.group) + '</td><td style="' + td + '">' + _psEsc(r.name) + '</td><td style="' + td + ';font-weight:600">' + _psEsc(r.model) + '</td><td style="' + td + ';text-align:right">' + r.qty + '</td><td style="' + td + ';color:var(--t5)">' + _psEsc(r.note) + '</td></tr>';
+          return '<tr><td style="' + td + '">' + _specEsc(r.group) + '</td><td style="' + td + '">' + _specEsc(r.name) + '</td><td style="' + td + ';font-weight:600">' + _specEsc(r.model) + '</td><td style="' + td + ';text-align:right">' + r.qty + '</td><td style="' + td + ';color:var(--t5)">' + _specEsc(r.note) + '</td></tr>';
         }).join('') + '</tbody></table></div>'
       : '';
   }
@@ -604,7 +604,7 @@ function _psRefreshDiagram() {
 /* ── 섹션 ──────────────────────────────────────────────────────────────── */
 function _psOwnerDot(owner) {
   var c = PS_DISC_COLOR[owner]; if (!c) return '';
-  return '<span title="담당: ' + _psEsc(specDisciplineLabel(owner)) + '" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + c + ';margin-right:4px;vertical-align:middle"></span>';
+  return '<span title="담당: ' + _specEsc(specDisciplineLabel(owner)) + '" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + c + ';margin-right:4px;vertical-align:middle"></span>';
 }
 function _psSectionHtml(sec) {
   var prog = specSectionProgress(sec, _ps.sheet);
@@ -625,10 +625,10 @@ function _psSectionHtml(sec) {
   }
   tables.forEach(function (it) { body += _psTableHtml(it); });
   body += _psFilesBlockHtml(sec.key);
-  return '<div id="ps-sec-' + sec.key + '" data-disc="' + _psEsc(sec.discipline) + '" style="margin-bottom:12px;border:1px solid var(--bd);border-left:3px solid ' + dc + ';border-radius:8px;overflow:hidden">' +
+  return '<div id="ps-sec-' + sec.key + '" data-disc="' + _specEsc(sec.discipline) + '" style="margin-bottom:12px;border:1px solid var(--bd);border-left:3px solid ' + dc + ';border-radius:8px;overflow:hidden">' +
     '<div onclick="psToggleSection(\'' + sec.key + '\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:var(--bg-i);padding:6px 10px">' +
-      '<span style="font-size:12px;font-weight:700;color:var(--t2)">' + (collapsed ? '▸' : '▾') + ' ' + _psEsc(sec.label) +
-        ' <span style="font-size:9px;font-weight:500;color:' + dc + ';border:1px solid ' + dc + ';border-radius:8px;padding:0 5px;margin-left:4px">' + _psEsc(specDisciplineLabel(sec.discipline)) + '</span></span>' +
+      '<span style="font-size:12px;font-weight:700;color:var(--t2)">' + (collapsed ? '▸' : '▾') + ' ' + _specEsc(sec.label) +
+        ' <span style="font-size:9px;font-weight:500;color:' + dc + ';border:1px solid ' + dc + ';border-radius:8px;padding:0 5px;margin-left:4px">' + _specEsc(specDisciplineLabel(sec.discipline)) + '</span></span>' +
       '<span style="display:flex;gap:4px;align-items:center;font-size:10px;color:var(--t5)">' + _psAttachBtnsHtml(sec.key, true) +
         '<span style="margin-left:4px" title="입력한 항목 / 전체"><span id="ps-prog-' + sec.key + '">' + prog.filled + '/' + prog.total + '</span> 입력 · <span id="ps-stat-' + sec.key + '">' + _psSecStatusText(sec) + '</span>' + (nFiles ? ' · 📎 ' + nFiles : '') + '</span></span>' +
     '</div>' +
@@ -638,15 +638,15 @@ function _psSectionHtml(sec) {
 
 function _psItemRowHtml(it) {
   var v = _ps.sheet.values[it.key], r = _ps.sheet.remarks[it.key];
-  var label = '<span style="font-size:11px;font-weight:600;color:var(--t2)" title="' + _psEsc(it.help || '') + '">' + _psOwnerDot(it.owner) + _psEsc(it.label) + (it.unit ? ' <span style="font-weight:400;color:var(--t6)">(' + _psEsc(it.unit) + ')</span>' : '') + (it.help ? ' <span style="color:var(--t6);cursor:help">ⓘ</span>' : '') + _psRecentMark(it.key) + '</span>';
+  var label = '<span style="font-size:11px;font-weight:600;color:var(--t2)" title="' + _specEsc(it.help || '') + '">' + _psOwnerDot(it.owner) + _specEsc(it.label) + (it.unit ? ' <span style="font-weight:400;color:var(--t6)">(' + _specEsc(it.unit) + ')</span>' : '') + (it.help ? ' <span style="color:var(--t6);cursor:help">ⓘ</span>' : '') + _psRecentMark(it.key) + '</span>';
   var stBtn = '<span>' + _psStatusBtnHtml(it.key) + '</span>';
   if (!_ps.canEdit) {
-    return label + '<span style="font-size:11px;color:var(--t2);white-space:pre-wrap">' + (v != null && String(v) !== '' ? _psEsc(v) : '<span style="color:var(--t6)">—</span>') +
-      (r ? ' <span style="font-size:10px;color:var(--t5)">· ' + _psEsc(r) + '</span>' : '') + '</span>' + stBtn;
+    return label + '<span style="font-size:11px;color:var(--t2);white-space:pre-wrap">' + (v != null && String(v) !== '' ? _specEsc(v) : '<span style="color:var(--t6)">—</span>') +
+      (r ? ' <span style="font-size:10px;color:var(--t5)">· ' + _specEsc(r) + '</span>' : '') + '</span>' + stBtn;
   }
   return label + '<span style="display:flex;flex-wrap:wrap;gap:4px;min-width:0">' +
-      '<span style="flex:3 1 170px;min-width:0">' + _psInputHtml(it, v, 'class="ps-v si" data-k="' + it.key + '" data-o="' + _psEsc(it.owner || '') + '"') + '</span>' +
-      '<input class="ps-r si" data-k="' + it.key + '" data-o="' + _psEsc(it.owner || '') + '" value="' + _psEsc(r || '') + '" placeholder="비고" style="flex:1 1 90px;min-width:0;font-size:11px;padding:3px 6px;box-sizing:border-box">' +
+      '<span style="flex:3 1 170px;min-width:0">' + _psInputHtml(it, v, 'class="ps-v si" data-k="' + it.key + '" data-o="' + _specEsc(it.owner || '') + '"') + '</span>' +
+      '<input class="ps-r si" data-k="' + it.key + '" data-o="' + _specEsc(it.owner || '') + '" value="' + _specEsc(r || '') + '" placeholder="비고" style="flex:1 1 90px;min-width:0;font-size:11px;padding:3px 6px;box-sizing:border-box">' +
     '</span>' + stBtn;
 }
 
@@ -657,10 +657,10 @@ function _psInputHtml(def, v, attrs) {
   if (def.type === 'select') {
     var opts = (def.options || []).slice();
     if (val && opts.indexOf(val) < 0) opts.push(val);
-    return '<select ' + attrs + ' style="' + st + '"><option value=""></option>' + opts.map(function (o) { return '<option' + (o === val ? ' selected' : '') + '>' + _psEsc(o) + '</option>'; }).join('') + '</select>';
+    return '<select ' + attrs + ' style="' + st + '"><option value=""></option>' + opts.map(function (o) { return '<option' + (o === val ? ' selected' : '') + '>' + _specEsc(o) + '</option>'; }).join('') + '</select>';
   }
-  if (def.type === 'textarea') return '<textarea ' + attrs + ' rows="2" style="' + st + ';resize:vertical">' + _psEsc(val) + '</textarea>';
-  return '<input ' + attrs + (def.type === 'number' ? ' inputmode="decimal"' : '') + ' value="' + _psEsc(val) + '" placeholder="' + _psEsc(def.help || '') + '" style="' + st + '">';
+  if (def.type === 'textarea') return '<textarea ' + attrs + ' rows="2" style="' + st + ';resize:vertical">' + _specEsc(val) + '</textarea>';
+  return '<input ' + attrs + (def.type === 'number' ? ' inputmode="decimal"' : '') + ' value="' + _specEsc(val) + '" placeholder="' + _specEsc(def.help || '') + '" style="' + st + '">';
 }
 
 /* ── 표 항목 (축 구성·외부장치 목록 등) — 열 묶음 머리글을 누르면 묶음을 접는다 ── */
@@ -673,19 +673,19 @@ function _psTableHtml(it) {
   cols.forEach(function (c) { var g = c.group || ''; if (!groups.length || groups[groups.length - 1].name !== g) groups.push({ name: g, n: 0, owner: c.owner }); groups[groups.length - 1].n++; });
   var th = 'font-size:9.5px;font-weight:600;color:var(--t5);padding:3px 4px;border-bottom:1px solid var(--bd);white-space:nowrap;text-align:left;text-transform:none;letter-spacing:0';
   var h = '<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
-    '<span style="font-size:11px;font-weight:700;color:var(--t2)">' + _psOwnerDot(it.owner) + _psEsc(it.label) + ' <span style="font-weight:400;color:var(--t6)">' + rows.filter(function (r) { return !specRowEmpty(r); }).length + '행</span>' + _psRecentMark(it.key) + '</span>' +
+    '<span style="font-size:11px;font-weight:700;color:var(--t2)">' + _psOwnerDot(it.owner) + _specEsc(it.label) + ' <span style="font-weight:400;color:var(--t6)">' + rows.filter(function (r) { return !specRowEmpty(r); }).length + '행</span>' + _psRecentMark(it.key) + '</span>' +
     '<span style="display:flex;gap:6px;align-items:center">' + _psStatusBtnHtml(it.key) +
     (_ps.canEdit ? '<button class="btn btn-g btn-s" style="font-size:10px;padding:1px 7px" onclick="psAddRow(\'' + it.key + '\')">+ 행</button>' : '') + '</span>' +
     '</div><div style="overflow-x:auto;border:1px solid var(--bd);border-radius:6px"><table class="ps-tbl" data-k="' + it.key + '" style="border-collapse:collapse;min-width:100%">';
   if (hasGroups) {
     h += '<thead><tr>' + groups.map(function (g) {
       var off = !!hidden[g.name];
-      return '<th colspan="' + (off ? 1 : g.n) + '" onclick="psToggleGroup(\'' + it.key + '\',\'' + _psJs(g.name) + '\')" title="눌러서 ' + (off ? '펼치기' : '접기') + '" style="' + th + ';cursor:pointer;background:var(--bg-i);border-left:1px solid var(--bd)">' + (off ? '▸ ' : '▾ ') + _psEsc(g.name || '—') + '</th>';
+      return '<th colspan="' + (off ? 1 : g.n) + '" onclick="psToggleGroup(\'' + it.key + '\',\'' + _psJs(g.name) + '\')" title="눌러서 ' + (off ? '펼치기' : '접기') + '" style="' + th + ';cursor:pointer;background:var(--bg-i);border-left:1px solid var(--bd)">' + (off ? '▸ ' : '▾ ') + _specEsc(g.name || '—') + '</th>';
     }).join('') + (_ps.canEdit ? '<th style="' + th + ';background:var(--bg-i)"></th>' : '') + '</tr>';
   } else h += '<thead>';
   h += '<tr>' + cols.map(function (c) {
     if (hidden[c.group || '']) return c === _psFirstOfGroup(cols, c.group) ? '<th style="' + th + '">…</th>' : '';
-    return '<th data-o="' + _psEsc(c.owner || '') + '" style="' + th + '">' + _psOwnerDot(c.owner) + _psEsc(c.label) + (c.unit ? ' <span style="font-weight:400;color:var(--t6)">(' + _psEsc(c.unit) + ')</span>' : '') + '</th>';
+    return '<th data-o="' + _specEsc(c.owner || '') + '" style="' + th + '">' + _psOwnerDot(c.owner) + _specEsc(c.label) + (c.unit ? ' <span style="font-weight:400;color:var(--t6)">(' + _specEsc(c.unit) + ')</span>' : '') + '</th>';
   }).join('') + (_ps.canEdit ? '<th style="' + th + '"></th>' : '') + '</tr></thead><tbody>';
   if (!rows.length) h += '<tr><td colspan="' + (cols.length + 1) + '" style="font-size:10px;color:var(--t6);padding:8px;text-align:center">' + (_ps.canEdit ? '+ 행 으로 추가하세요' : '—') + '</td></tr>';
   rows.forEach(function (r) { h += _psTableRowHtml(it, r); });
@@ -701,13 +701,13 @@ function _psTableRowHtml(it, r) {
       if (c !== _psFirstOfGroup(cols, g)) return '';
       // 접힌 묶음: 값은 숨은 입력으로 유지 (저장 시 사라지지 않게)
       return '<td style="' + td + ';color:var(--t6);font-size:10px;text-align:center">…' +
-        cols.filter(function (x) { return (x.group || '') === g; }).map(function (x) { return '<input type="hidden" class="ps-c" data-c="' + x.key + '" value="' + _psEsc(r[x.key] == null ? '' : r[x.key]) + '">'; }).join('') + '</td>';
+        cols.filter(function (x) { return (x.group || '') === g; }).map(function (x) { return '<input type="hidden" class="ps-c" data-c="' + x.key + '" value="' + _specEsc(r[x.key] == null ? '' : r[x.key]) + '">'; }).join('') + '</td>';
     }
-    if (!_ps.canEdit) return '<td style="' + td + ';font-size:11px;color:var(--t2);white-space:nowrap">' + _psEsc(r[c.key] == null ? '' : r[c.key]) + '</td>';
+    if (!_ps.canEdit) return '<td style="' + td + ';font-size:11px;color:var(--t2);white-space:nowrap">' + _specEsc(r[c.key] == null ? '' : r[c.key]) + '</td>';
     var minW = c.type === 'number' ? 64 : c.type === 'select' ? 96 : 110;
-    return '<td data-o="' + _psEsc(c.owner || '') + '" style="' + td + ';min-width:' + minW + 'px">' + _psInputHtml(c, r[c.key], 'class="ps-c si" data-c="' + c.key + '" data-o="' + _psEsc(c.owner || '') + '"') + '</td>';
+    return '<td data-o="' + _specEsc(c.owner || '') + '" style="' + td + ';min-width:' + minW + 'px">' + _psInputHtml(c, r[c.key], 'class="ps-c si" data-c="' + c.key + '" data-o="' + _specEsc(c.owner || '') + '"') + '</td>';
   }).join('');
-  return '<tr data-rid="' + _psEsc(r.id || specNewId('r')) + '">' + cells +
+  return '<tr data-rid="' + _specEsc(r.id || specNewId('r')) + '">' + cells +
     (_ps.canEdit ? '<td style="' + td + ';white-space:nowrap"><button class="btn btn-g btn-s" title="행 복제" onclick="psDupRow(this)" style="padding:1px 5px;font-size:10px">⧉</button><button class="btn btn-d btn-s" title="행 삭제" onclick="psDelRow(this)" style="padding:1px 5px;font-size:10px;margin-left:2px">✕</button></td>' : '') +
     '</tr>';
 }
@@ -721,7 +721,7 @@ function _psExtraHtml() {
     '<div style="background:var(--bg-i);padding:6px 10px;font-size:12px;font-weight:700;color:var(--t2)">🗂 기타 사양 <span style="font-size:10px;font-weight:400;color:var(--t6)">표준 양식에 없는 항목 · 이전 형식 사양</span></div><div style="padding:6px 10px">';
   discs.forEach(function (d) {
     var rows = ex[d.key] || [];
-    h += '<div style="margin:4px 0 8px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:600;color:var(--t3)">' + _psOwnerDot(d.key) + _psEsc(d.label) + '</span>' +
+    h += '<div style="margin:4px 0 8px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:600;color:var(--t3)">' + _psOwnerDot(d.key) + _specEsc(d.label) + '</span>' +
       (_ps.canEdit ? '<button class="btn btn-g btn-s" style="font-size:10px;padding:1px 7px" onclick="psAddExtra(\'' + d.key + '\')">+ 행</button>' : '') + '</div>' +
       '<div id="ps-extra-' + d.key + '">' + rows.map(function (r) { return _psExtraRowHtml(d.key, r); }).join('') + '</div></div>';
   });
@@ -730,12 +730,12 @@ function _psExtraHtml() {
 function _psExtraRowHtml(disc, r) {
   r = r || {};
   if (!_ps.canEdit) {
-    return '<div style="display:grid;grid-template-columns:150px 1fr 120px;gap:5px;padding:3px 0;font-size:11px;border-bottom:1px solid var(--bd)"><span style="font-weight:600;color:var(--t2)">' + _psEsc(r.item) + '</span><span style="color:var(--t2);white-space:pre-wrap">' + _psEsc(r.value) + '</span><span style="color:var(--t5)">' + _psEsc(r.remark) + '</span></div>';
+    return '<div style="display:grid;grid-template-columns:150px 1fr 120px;gap:5px;padding:3px 0;font-size:11px;border-bottom:1px solid var(--bd)"><span style="font-weight:600;color:var(--t2)">' + _specEsc(r.item) + '</span><span style="color:var(--t2);white-space:pre-wrap">' + _specEsc(r.value) + '</span><span style="color:var(--t5)">' + _specEsc(r.remark) + '</span></div>';
   }
-  return '<div class="ps-x" data-d="' + disc + '" data-id="' + _psEsc(r.id || specNewId('sp')) + '" style="display:grid;grid-template-columns:150px 1fr 120px 24px;gap:5px;align-items:center;padding:2px 0">' +
-    '<input class="si ps-xi" data-o="' + disc + '" value="' + _psEsc(r.item) + '" placeholder="항목" style="font-size:11px;padding:3px 6px">' +
-    '<input class="si ps-xv" data-o="' + disc + '" value="' + _psEsc(r.value) + '" placeholder="내용" style="font-size:11px;padding:3px 6px">' +
-    '<input class="si ps-xr" data-o="' + disc + '" value="' + _psEsc(r.remark) + '" placeholder="비고" style="font-size:11px;padding:3px 6px">' +
+  return '<div class="ps-x" data-d="' + disc + '" data-id="' + _specEsc(r.id || specNewId('sp')) + '" style="display:grid;grid-template-columns:150px 1fr 120px 24px;gap:5px;align-items:center;padding:2px 0">' +
+    '<input class="si ps-xi" data-o="' + disc + '" value="' + _specEsc(r.item) + '" placeholder="항목" style="font-size:11px;padding:3px 6px">' +
+    '<input class="si ps-xv" data-o="' + disc + '" value="' + _specEsc(r.value) + '" placeholder="내용" style="font-size:11px;padding:3px 6px">' +
+    '<input class="si ps-xr" data-o="' + disc + '" value="' + _specEsc(r.remark) + '" placeholder="비고" style="font-size:11px;padding:3px 6px">' +
     '<button class="btn btn-d btn-s" title="행 삭제" onclick="this.closest(\'.ps-x\').remove();_psMarkDirty()" style="padding:1px 5px;font-size:10px">✕</button></div>';
 }
 
@@ -747,14 +747,14 @@ function _psFilesInnerHtml(secKey) {
   var list = _ps.files.filter(function (f) { return f.sectionKey === secKey; });
   var h = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start">';
   list.forEach(function (f) {
-    var fid = _psJs(f.id), name = _psEsc(f.name || f.caption || '');
+    var fid = _psJs(f.id), name = _specEsc(f.name || f.caption || '');
     var del = _ps.canEdit ? '<button onclick="event.stopPropagation();psDeleteFile(\'' + fid + '\')" title="삭제" style="position:absolute;top:2px;right:2px;border:none;background:rgba(0,0,0,.55);color:#fff;border-radius:4px;font-size:10px;cursor:pointer;padding:0 4px">✕</button>' : '';
     if (f.kind === 'image') {
-      h += '<div style="position:relative;width:96px"><img src="' + _psEsc(f.url || f.data || '') + '" loading="lazy" decoding="async" onclick="psViewImages(\'' + secKey + '\',\'' + fid + '\')" style="width:96px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--bd);cursor:zoom-in;background:var(--bg-i)" alt="' + name + '">' +
+      h += '<div style="position:relative;width:96px"><img src="' + _specEsc(f.url || f.data || '') + '" loading="lazy" decoding="async" onclick="psViewImages(\'' + secKey + '\',\'' + fid + '\')" style="width:96px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--bd);cursor:zoom-in;background:var(--bg-i)" alt="' + name + '">' +
         '<div style="font-size:9.5px;color:var(--t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + name + '">' + name + '</div>' + del + '</div>';
     } else if (f.kind === 'drawio') {
       h += '<div style="position:relative;width:180px;border:1px solid var(--bd);border-radius:6px;padding:4px;background:var(--bg)">' +
-        (f.previewSvg ? '<img src="' + _psEsc(f.previewSvg) + '" onclick="psViewDrawio(\'' + fid + '\')" style="width:170px;height:110px;object-fit:contain;cursor:zoom-in;background:#fff;border-radius:4px" alt="' + name + '">' : '<div style="height:110px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--t6)">미리보기 없음</div>') +
+        (f.previewSvg ? '<img src="' + _specEsc(f.previewSvg) + '" onclick="psViewDrawio(\'' + fid + '\')" style="width:170px;height:110px;object-fit:contain;cursor:zoom-in;background:#fff;border-radius:4px" alt="' + name + '">' : '<div style="height:110px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--t6)">미리보기 없음</div>') +
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin-top:2px"><span style="font-size:10px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + name + '">✏️ ' + name + '</span>' +
         (_ps.canEdit ? '<button class="btn btn-g btn-s" style="font-size:9.5px;padding:0 5px" onclick="psDrawioEdit(\'' + fid + '\')">편집</button>' : '') + '</div>' + del + '</div>';
     } else {
@@ -824,7 +824,7 @@ function _psOnInput(e) {
   if (key && !e.target.classList.contains('ps-r') && specStatusOf(_ps.sheet, key) === 'fixed') {
     _ps.sheet.status[key] = 'review';
     _psPaintStatus(key);
-    if (!_ps.warnedFixed[key]) { _ps.warnedFixed[key] = true; _psToast('확정된 항목을 수정해 "검토"로 바뀌었습니다. 확인 후 다시 확정하세요.', 'warn'); }
+    if (!_ps.warnedFixed[key]) { _ps.warnedFixed[key] = true; _specToast('확정된 항목을 수정해 "검토"로 바뀌었습니다. 확인 후 다시 확정하세요.', 'warn'); }
   }
   clearTimeout(_psInputTimer);
   _psInputTimer = setTimeout(function () {
@@ -842,7 +842,7 @@ function _psMarkDirty() {
 }
 
 /* ═══ 화면 동작 ═══ */
-function psSetFilter(k) { if (!_ps) return; _psCollect(); _ps.filter = k; _psRender(); }
+function psSetFilter(k) { if (!_ps) return; _psCollect(); _ps.filter = k; _specRender(); }
 /* 고른 분야의 칸만 입력 가능 — 나머지는 흐리게 + 비활성 */
 function _psApplyFilter() {
   var el = document.getElementById('pdSpec'); if (!el || !_ps) return;
@@ -859,14 +859,14 @@ function psToggleSection(k) {
   if (!_ps) return;
   _psCollect();
   _ps.collapsed[k] = !_ps.collapsed[k];
-  _psRender();
+  _specRender();
 }
 function psToggleGroup(itemKey, g) {
   if (!_ps) return;
   _psCollect();
   var h = _ps.hiddenGroups[itemKey] = _ps.hiddenGroups[itemKey] || {};
   h[g] = !h[g];
-  _psRender();
+  _specRender();
 }
 function psAddRow(itemKey) {
   if (!_ps) return;
@@ -874,7 +874,7 @@ function psAddRow(itemKey) {
   var rows = Array.isArray(_ps.sheet.values[itemKey]) ? _ps.sheet.values[itemKey] : [];
   rows.push({ id: specNewId('r') });
   _ps.sheet.values[itemKey] = rows;
-  _psRender();
+  _specRender();
   _psMarkDirty();
 }
 function psDupRow(btn) {
@@ -916,9 +916,9 @@ function _psApplyTpl(id, ver) {
     var moved = specApplyTemplate(_ps.sheet, id, ver, schema);
     _ps.schema = schema;
     _ps.dirty = true;
-    _psRender();
-    _psToast('표준 양식을 적용했습니다' + (moved ? ' — 기타 사양 ' + moved + '건을 표준 항목으로 옮김' : '') + '. 💾 저장을 눌러 반영하세요.');
-  }).catch(function () { _psToast('양식을 불러오지 못했습니다.', 'error'); });
+    _specRender();
+    _specToast('표준 양식을 적용했습니다' + (moved ? ' — 기타 사양 ' + moved + '건을 표준 항목으로 옮김' : '') + '. 💾 저장을 눌러 반영하세요.');
+  }).catch(function () { _specToast('양식을 불러오지 못했습니다.', 'error'); });
 }
 
 /* 저장용 사본 — 빈 표 행 제거 */
@@ -934,13 +934,13 @@ function pdSpecSave(projId) {
   if (!_ps || _ps.projId !== projId) return;
   var sheet = _psForSave(_psCollect());
   var changes = _ps.baseIsV2 ? specDiff(_ps.base, sheet, _ps.schema) : [{ path: [], from: _ps.rawBase, to: sheet, label: '사양서 (표준 형식으로 전환)' }];
-  if (!changes.length) { _psToast('바뀐 내용이 없습니다.'); _ps.dirty = false; var d0 = document.getElementById('psDirty'); if (d0) d0.style.display = 'none'; return; }
+  if (!changes.length) { _specToast('바뀐 내용이 없습니다.'); _ps.dirty = false; var d0 = document.getElementById('psDirty'); if (d0) d0.style.display = 'none'; return; }
   var btn = document.getElementById('pdSpecSaveBtn'); if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
   _psPatch(changes).then(function (ok) {
     if (btn) { btn.disabled = false; btn.textContent = '💾 저장'; }
     if (!ok) return;
     var n = (_ps.conflicts || []).length;
-    _psToast(n ? '저장했습니다. 다른 사람이 먼저 바꾼 ' + n + '건은 저장된 값으로 표시됩니다.' : '사양서가 저장되었습니다.', n ? 'warn' : undefined);
+    _specToast(n ? '저장했습니다. 다른 사람이 먼저 바꾼 ' + n + '건은 저장된 값으로 표시됩니다.' : '사양서가 저장되었습니다.', n ? 'warn' : undefined);
   });
 }
 /* 변경분 전송 → 서버 문서로 상태 갱신. 성공 여부를 돌려준다 */
@@ -956,14 +956,14 @@ function _psPatch(changes) {
     if (window._pdProj && window._pdProj.id === projId) window._pdProj.specs = d.specs;
     if (typeof _pdInvalidate === 'function') { _pdInvalidate('proj'); _pdInvalidate('projAll'); }
     _ps.dirty = false;
-    return psChangesGet(projId).then(function (list) { if (_ps && _ps.projId === projId) { _ps.changes = list; _psRender(); } return true; });
+    return psChangesGet(projId).then(function (list) { if (_ps && _ps.projId === projId) { _ps.changes = list; _specRender(); } return true; });
   }).catch(function (err) {
     if (err && err.status === 409) {
-      _psToast('다른 사람이 사양서 형식을 바꿨습니다. 새로 불러옵니다 — 입력한 내용을 다시 확인하세요.', 'warn');
+      _specToast('다른 사람이 사양서 형식을 바꿨습니다. 새로 불러옵니다 — 입력한 내용을 다시 확인하세요.', 'warn');
       psReload();
       return false;
     }
-    _psToast('❌ ' + _psErrMsg(err, '저장 실패'), 'error');
+    _specToast('❌ ' + _psErrMsg(err, '저장 실패'), 'error');
     return false;
   });
 }
@@ -985,10 +985,10 @@ function psOpenHistory() {
       var html = list.length ? list.map(function (row) {
         var ch = row.changes || [];
         return '<div style="border:1px solid var(--bd);border-radius:6px;padding:6px 10px;margin-bottom:6px">' +
-          '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><b style="color:var(--t1)">' + _psEsc(row.changedByName || '') + '</b>' +
-          '<span style="color:var(--t5)">' + _psEsc(kindLbl[row.kind] || row.kind) + ' · ' + ch.length + '건 · ' + _psEsc(String(row.changedAt || '').slice(0, 16).replace('T', ' ')) + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><b style="color:var(--t1)">' + _specEsc(row.changedByName || '') + '</b>' +
+          '<span style="color:var(--t5)">' + _specEsc(kindLbl[row.kind] || row.kind) + ' · ' + ch.length + '건 · ' + _specEsc(String(row.changedAt || '').slice(0, 16).replace('T', ' ')) + '</span></div>' +
           ch.slice(0, 30).map(function (c) {
-            return '<div style="font-size:10.5px;color:var(--t3);padding:1px 0">· ' + _psEsc(c.label || (c.path || []).join('.')) + (row.kind === 'copy' ? '' : _psFmtChange(c)) + '</div>';
+            return '<div style="font-size:10.5px;color:var(--t3);padding:1px 0">· ' + _specEsc(c.label || (c.path || []).join('.')) + (row.kind === 'copy' ? '' : _psFmtChange(c)) + '</div>';
           }).join('') + (ch.length > 30 ? '<div style="font-size:10px;color:var(--t6)">… 외 ' + (ch.length - 30) + '건</div>' : '') + '</div>';
       }).join('') : '<div style="font-size:11px;color:var(--t6);padding:14px;text-align:center">아직 변경 이력이 없습니다.</div>';
       createModal({ id: 'psHistoryModal', titleText: '🕘 사양서 변경 이력 (최근 100회)', html: '<div style="max-height:64vh;overflow-y:auto">' + html + '</div>', width: '680px', closeOnEsc: true, closeOnOverlay: true });
@@ -1025,8 +1025,8 @@ function _psCopyFilter() {
     var s = specNormalize(p.specs);
     var info = s.templateId ? psTemplateName(s.templateId) + ' v' + s.templateVersion : '기타 사양만';
     return '<div onclick="psCopyFrom(\'' + _psJs(p.id) + '\')" style="cursor:pointer;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;margin-bottom:5px;display:flex;justify-content:space-between;gap:8px" onmouseover="this.style.background=\'var(--bg-i)\'" onmouseout="this.style.background=\'\'">' +
-      '<span style="font-size:12px;color:var(--t1);font-weight:600">' + _psEsc(p.name || p.id) + (p.orderNo ? ' <span style="font-weight:400;color:var(--t5);font-size:10px">' + _psEsc(p.orderNo) + '</span>' : '') + '</span>' +
-      '<span style="font-size:10px;color:var(--t5);white-space:nowrap">' + _psEsc(info) + '</span></div>';
+      '<span style="font-size:12px;color:var(--t1);font-weight:600">' + _specEsc(p.name || p.id) + (p.orderNo ? ' <span style="font-weight:400;color:var(--t5);font-size:10px">' + _specEsc(p.orderNo) + '</span>' : '') + '</span>' +
+      '<span style="font-size:10px;color:var(--t5);white-space:nowrap">' + _specEsc(info) + '</span></div>';
   }).join('') : '<div style="font-size:11px;color:var(--t6);padding:14px;text-align:center">사양서가 있는 다른 프로젝트가 없습니다.</div>';
 }
 function psCopyFrom(srcId) {
@@ -1046,16 +1046,16 @@ function psCopyFrom(srcId) {
       if (typeof _pdInvalidate === 'function') { _pdInvalidate('proj'); _pdInvalidate('projAll'); }
       return Promise.all([psTemplateSchema(_ps.sheet.templateId, _ps.sheet.templateVersion).catch(function () { return null; }), psFilesGet(projId), psChangesGet(projId)]).then(function (res) {
         _ps.schema = res[0]; _ps.files = res[1].files; _ps.storage = res[1].storage; _ps.changes = res[2];
-        _psRender();
-        _psToast('사양서를 복사했습니다' + (r.copiedDrawings ? ' (도면 ' + r.copiedDrawings + '개 포함)' : '') + '.');
+        _specRender();
+        _specToast('사양서를 복사했습니다' + (r.copiedDrawings ? ' (도면 ' + r.copiedDrawings + '개 포함)' : '') + '.');
       });
-    }).catch(function (err) { _psToast('❌ ' + _psErrMsg(err, '복사 실패'), 'error'); });
+    }).catch(function (err) { _specToast('❌ ' + _psErrMsg(err, '복사 실패'), 'error'); });
 }
 
 /* ═══ XLSX 내보내기 ═══ */
 function psExportXlsx() {
   if (!_ps) return;
-  if (typeof XLSX === 'undefined') { _psToast('SheetJS(xlsx) 라이브러리를 불러올 수 없습니다.', 'error'); return; }
+  if (typeof XLSX === 'undefined') { _specToast('SheetJS(xlsx) 라이브러리를 불러올 수 없습니다.', 'error'); return; }
   var sheet = _psCollect(true), name = _ps.proj.name || _ps.projId;
   var out = specSheetRows(name, _ps.schema || { sections: [] }, sheet);
   var wb = XLSX.utils.book_new();
@@ -1082,7 +1082,7 @@ function psUpload(input, secKey) {
   input.value = '';
   if (!files.length) return;
   var projId = _ps.projId, ok = 0, fail = 0, skipped = 0;
-  _psToast('첨부 업로드 중... (' + files.length + '개)');
+  _specToast('첨부 업로드 중... (' + files.length + '개)');
   // 순차 처리 — 대용량 여러 장 동시 처리 시 브라우저 메모리 급증 방지(v13.150 과 같은 이유)
   files.reduce(function (p, file) {
     return p.then(function () {
@@ -1092,7 +1092,7 @@ function psUpload(input, secKey) {
   }, Promise.resolve()).then(function () {
     _psRefreshFiles(secKey);
     var msg = ok + '개 첨부' + (fail ? ', 실패 ' + fail : '') + (skipped ? ', 이미지가 아니라 건너뜀 ' + skipped + ' (파일 스토리지 미설정)' : '');
-    _psToast(msg, fail || skipped ? 'warn' : undefined);
+    _specToast(msg, fail || skipped ? 'warn' : undefined);
   });
 }
 function _psUploadOne(projId, secKey, file) {
@@ -1125,13 +1125,13 @@ function psViewDrawio(fid) {
 }
 function psDownloadFile(fid) {
   apiFetch(_psFilesUrl(_ps.projId, fid) + '/download-url').then(function (r) { window.open(r.data.downloadUrl, '_blank', 'noopener'); })
-    .catch(function (err) { _psToast('❌ ' + _psErrMsg(err, '다운로드 실패'), 'error'); });
+    .catch(function (err) { _specToast('❌ ' + _psErrMsg(err, '다운로드 실패'), 'error'); });
 }
 function psDeleteFile(fid) {
   var f = _ps.files.filter(function (x) { return x.id === fid; })[0]; if (!f) return;
   if (!confirm('"' + (f.name || '첨부') + '" 을(를) 삭제할까요?')) return;
-  apiFetch(_psFilesUrl(_ps.projId, fid), { method: 'DELETE' }).then(function () { _psRefreshFiles(f.sectionKey); _psToast('삭제했습니다.'); })
-    .catch(function (err) { _psToast('❌ ' + _psErrMsg(err, '삭제 실패'), 'error'); });
+  apiFetch(_psFilesUrl(_ps.projId, fid), { method: 'DELETE' }).then(function () { _psRefreshFiles(f.sectionKey); _specToast('삭제했습니다.'); })
+    .catch(function (err) { _specToast('❌ ' + _psErrMsg(err, '삭제 실패'), 'error'); });
 }
 
 /* ═══ draw.io 도면 (embed 모드 — 도면 데이터는 브라우저 안에서만 오가고 diagrams.net 에 저장되지 않는다) ═══ */
@@ -1143,7 +1143,7 @@ function psDrawioNew(secKey) {
 function psDrawioFromAuto() {
   if (!_ps) return;
   var L = _psDgLayout();
-  if (L.empty) { _psToast('모션 컨트롤러·축 구성·외부장치 값을 먼저 채우세요.', 'warn'); return; }
+  if (L.empty) { _specToast('모션 컨트롤러·축 구성·외부장치 값을 먼저 채우세요.', 'warn'); return; }
   var nm = prompt('도면 이름', '하드웨어 구조도');
   if (nm == null) return;
   return psDrawioOpen({ secKey: PS_HW_SECTION, name: nm.trim() || '하드웨어 구조도', xml: specDiagramDrawioXml(L) });
@@ -1154,7 +1154,7 @@ function psDrawioEdit(fid) {
   return apiFetch(_psFilesUrl(projId, fid)).then(function (r) {
     var f = toCamel(r.data);
     return psDrawioOpen({ secKey: f.sectionKey, name: f.name || '도면', xml: f.drawioXml || '', fileId: f.id });
-  }).catch(function (err) { _psToast('❌ ' + _psErrMsg(err, '도면을 불러오지 못했습니다.'), 'error'); });
+  }).catch(function (err) { _specToast('❌ ' + _psErrMsg(err, '도면을 불러오지 못했습니다.'), 'error'); });
 }
 function psDrawioOpen(o) {
   return wmGuardedModal('psDrawio', function () { _psBuildDrawio(o); }, 'psDrawioModal', { timeoutMs: 8000 });
@@ -1166,7 +1166,7 @@ function _psBuildDrawio(o) {
     id: 'psDrawioModal', width: '100vw',
     overlayStyle: 'padding:0', boxStyle: 'padding:0;width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0;overflow:hidden;display:flex;flex-direction:column',
     html: '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-bottom:1px solid var(--bd);background:var(--bg-p)">' +
-      '<span style="font-size:12px;font-weight:700;color:var(--t1)">✏️ ' + _psEsc(o.name) + ' <span id="psDrawioStatus" style="font-weight:400;color:var(--t5);font-size:11px;margin-left:6px">편집기를 여는 중...</span></span>' +
+      '<span style="font-size:12px;font-weight:700;color:var(--t1)">✏️ ' + _specEsc(o.name) + ' <span id="psDrawioStatus" style="font-weight:400;color:var(--t5);font-size:11px;margin-left:6px">편집기를 여는 중...</span></span>' +
       '<span style="font-size:10px;color:var(--t6)">편집기 오른쪽 위 "저장"(Ctrl+S) · "나가기"로 닫기</span></div>' +
       '<iframe id="psDrawioFrame" src="' + PS_DRAWIO_URL + '" style="flex:1;width:100%;height:calc(100vh - 36px);border:0;background:#fff"></iframe>'
   });
@@ -1189,7 +1189,7 @@ function _psBuildDrawio(o) {
     }).catch(function (err) {
       st.saving = false;
       status('저장 실패');
-      _psToast('❌ ' + _psErrMsg(err, '도면 저장 실패'), 'error');
+      _specToast('❌ ' + _psErrMsg(err, '도면 저장 실패'), 'error');
     });
   }
   function onMsg(ev) {
