@@ -171,11 +171,22 @@ function expandRepeatingEvents(events, viewStart, viewEnd) {
     var until = ev.repeatUntil || viewEnd;
     if (until > viewEnd) until = viewEnd;
     var cur = new Date(ev.startDate);
+    var origDay = cur.getDate();
+    var step = 0;
     var limit = REPEAT_LIMIT;
     while (limit-- > 0) {
+      step++;
       if (ev.repeat === 'weekly') cur.setDate(cur.getDate() + 7);
       else if (ev.repeat === 'biweekly') cur.setDate(cur.getDate() + 14);
-      else if (ev.repeat === 'monthly') cur.setMonth(cur.getMonth() + 1);
+      else if (ev.repeat === 'monthly') {
+        // 31일 시작이면 다음 달 말일로 — setMonth 는 2월 31일을 3월 3일로 넘겨 이후 회차가 계속 밀렸다
+        var base = new Date(ev.startDate);
+        base.setDate(1);
+        base.setMonth(base.getMonth() + step);
+        var lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+        base.setDate(Math.min(origDay, lastDay));
+        cur = base;
+      }
       else break;
       var ns = dateToStr(cur);
       if (ns > until) break;
@@ -405,7 +416,30 @@ function pmGetProjects() {
     return (list || []).filter(function (p) { return !pmHidden[p.id]; });
   });
 }
-function projPut(proj) {
+/* 편집 권한 (v13.213) — 서버가 목록·단건에 can_edit 을 내려준다(관리자·임원·생성자·참여자).
+   값이 없으면(옛 캐시·신규 객체) 막지 않는다 — 최종 판단은 서버(403). */
+function projCanEdit(proj) { return !proj || proj.canEdit !== false; }
+
+/* PUT 이 404 일 때: 가져오기(upsert)만 POST 로 생성하고, 일반 저장은 "삭제됨" 오류로 알린다.
+   예전엔 남이 지운 프로젝트·마일스톤·일정을 내 저장/드래그가 되살렸다. */
+function _isNotFound(err) { return !!(err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))); }
+function _deletedErr(what) {
+  var e = new Error(what + '이(가) 다른 사용자에 의해 삭제되었습니다. 화면을 새로고침하세요.');
+  e.status = 404;
+  e.data = { error: 'DELETED', message: e.message };
+  return e;
+}
+function _putOr404(url, postUrl, body, opts, what) {
+  return apiFetch(url, { method: 'PUT', body: JSON.stringify(body) })
+    .then(function (r) { return toCamel(r.data); })
+    .catch(function (err) {
+      if (!_isNotFound(err)) throw err;
+      if (opts && opts.upsert) return apiFetch(postUrl, { method: 'POST', body: JSON.stringify(body) }).then(function (r) { return toCamel(r.data); });
+      throw _deletedErr(what);
+    });
+}
+
+function projPut(proj, opts) {
   _pdInvalidate('proj'); _pdInvalidate('projAll');
   var isNew = !proj.id || proj._isNew;
   if (isNew) {
@@ -413,14 +447,7 @@ function projPut(proj) {
     return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) })
       .then(function (r) { var saved = toCamel(r.data); _emitBus('project', 'created', { id: saved && saved.id }); return saved; });
   }
-  return apiFetch('/api/projects/' + proj.id, { method: 'PUT', body: JSON.stringify(proj) })
-    .then(function (r) { return toCamel(r.data); })
-    .catch(function (err) {
-      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-        return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(proj) }).then(function (r) { return toCamel(r.data); });
-      }
-      throw err;
-    })
+  return _putOr404('/api/projects/' + proj.id, '/api/projects', proj, opts, '프로젝트')
     .then(function (saved) { _emitBus('project', 'updated', { id: saved && saved.id }); return saved; });
 }
 function projDel(id) {
@@ -543,12 +570,12 @@ function createProject(data) {
   return projPut(proj);
 }
 
-function updateProject(id, updates) {
-  return projGet(id).then(function (p) {
-    if (!p) return null;
-    Object.assign(p, updates, { updatedAt: new Date().toISOString() });
-    return projPut(p);
-  });
+/* 바뀐 필드만 PUT (서버는 보낸 필드만 갱신). baseVersion 을 주면 그 사이 남이 고쳤을 때 409.
+   예전엔 최신본을 다시 읽어 통째로 보냈기 때문에 편집창을 연 뒤 남이 저장한 내용을 조용히 덮어썼다. */
+function updateProject(id, updates, baseVersion) {
+  var body = Object.assign({}, updates, { id: id });
+  if (baseVersion != null) body.version = baseVersion;
+  return projPut(body);
 }
 
 /* ─── 마일스톤 ─── */
@@ -571,13 +598,9 @@ function _msDedupe(list) {
     if (seen[key]) dupIds.push(m.id);
     else { seen[key] = true; uniq.push(m); }
   });
-  if (dupIds.length) {
-    Promise.all(dupIds.map(function (id) {
-      return apiFetch('/api/milestones/' + id, { method: 'DELETE' }).catch(function () {});
-    })).then(function () {
-      if (typeof console !== 'undefined') console.info('[milestones] 중복 ' + dupIds.length + '개 자동 정리');
-    });
-  }
+  // v13.213: 읽기만 해도 서버에서 지우던 동작 제거(보기 권한만 있는 사람도, 휴지통 없이 지웠다).
+  //  화면에서만 숨기고, 실제 정리는 프로젝트 편집창 [수정] 때 한다(_projSyncMilestones).
+  if (dupIds.length && typeof console !== 'undefined') console.info('[milestones] 중복 ' + dupIds.length + '개 숨김 — 편집창 저장 시 정리');
   return uniq;
 }
 // 서버는 sort_order 컬럼을 반환 → toCamel 이 sortOrder 로 변환하지만,
@@ -590,7 +613,7 @@ function _msNorm(list) {
 }
 function msGetAll() { return _pdCached('ms', function () { return apiFetch('/api/milestones' + _PD_LIST_Q.ms).then(function (r) { return _msDedupe(_msNorm(toCamelArray(r.data))); }); }); }
 function msGetByProject(pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return _msDedupe(_msNorm(toCamelArray(r.data))); }); }
-function msPut(ms) {
+function msPut(ms, opts) {
   _pdInvalidate('ms');
   var isNew = !ms.id || ms._isNew;
   if (isNew) {
@@ -598,14 +621,7 @@ function msPut(ms) {
     return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) })
       .then(function (r) { var s = toCamel(r.data); _emitBus('milestone', 'created', { id: s && s.id, projectId: s && s.projectId }); return s; });
   }
-  return apiFetch('/api/milestones/' + ms.id, { method: 'PUT', body: JSON.stringify(ms) })
-    .then(function (r) { return toCamel(r.data); })
-    .catch(function (err) {
-      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-        return apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify(ms) }).then(function (r) { return toCamel(r.data); });
-      }
-      throw err;
-    })
+  return _putOr404('/api/milestones/' + ms.id, '/api/milestones', ms, opts, '마일스톤')
     .then(function (s) { _emitBus('milestone', 'updated', { id: s && s.id, projectId: s && s.projectId }); return s; });
 }
 function msDel(id) {
@@ -714,7 +730,7 @@ function createMilestone(data) {
 /* ─── 이벤트 ─── */
 function evtGetAll() { return _pdCached('evt', function () { return apiFetch('/api/events' + _PD_LIST_Q.evt).then(function (r) { return toCamelArray(r.data); }); }); }
 function evtGet(id) { return apiFetch('/api/events/' + id).then(function (r) { return toCamel(r.data); }); }
-function evtPut(evt) {
+function evtPut(evt, opts) {
   _pdInvalidate('evt');
   var isNew = !evt.id || evt._isNew;
   if (isNew) {
@@ -722,14 +738,7 @@ function evtPut(evt) {
     return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) })
       .then(function (r) { var s = toCamel(r.data); _emitBus('event', 'created', { id: s && s.id }); return s; });
   }
-  return apiFetch('/api/events/' + evt.id, { method: 'PUT', body: JSON.stringify(evt) })
-    .then(function (r) { return toCamel(r.data); })
-    .catch(function (err) {
-      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-        return apiFetch('/api/events', { method: 'POST', body: JSON.stringify(evt) }).then(function (r) { return toCamel(r.data); });
-      }
-      throw err;
-    })
+  return _putOr404('/api/events/' + evt.id, '/api/events', evt, opts, '일정')
     .then(function (s) { _emitBus('event', 'updated', { id: s && s.id }); return s; });
 }
 function evtDel(id) {
@@ -758,21 +767,20 @@ function createEvent(data) {
   return evtPut(evt);
 }
 
-function updateEvent(id, updates) {
-  return evtGet(id).then(function (e) {
-    if (!e) return null;
-    Object.assign(e, updates);
-    return evtPut(e);
-  });
+/* updateProject 와 같은 방식 — 바뀐 필드만 PUT, baseVersion 을 주면 충돌 시 409 */
+function updateEvent(id, updates, baseVersion) {
+  var body = Object.assign({}, updates, { id: id });
+  if (baseVersion != null) body.version = baseVersion;
+  return evtPut(body);
 }
 
 /* ─── 프로젝트 삭제 (캐스케이드) ─── */
 function deleteProjectCascade(id) {
-  // 이슈·마일스톤·체크리스트 삭제와 일정·의존관계 참조 정리는 서버 DELETE 가 권한 확인 뒤 한 트랜잭션으로 한다.
-  // 문서 파일은 저장소(GCS) 정리가 필요해 먼저 지운다.
-  var docDel = typeof deleteProjectFiles === 'function' ? deleteProjectFiles(id) : Promise.resolve();
-  return docDel.then(function () { return projDel(id); }).then(function (r) {
+  // 이슈·마일스톤·체크리스트·문서 파일 삭제와 일정·의존관계 참조 정리는 서버 DELETE 가 권한 확인 뒤
+  // 한 트랜잭션으로 한다(v13.213 — 문서 파일도 서버로. 예전엔 권한 확인 전에 파일부터 지웠다).
+  return projDel(id).then(function (r) {
     _pdInvalidate('ms'); _pdInvalidate('evt');
+    _emitBus('document', 'deleted', { kind: 'project', projectId: id });
     return r;
   });
 }
@@ -952,7 +960,8 @@ function chkGetByProject(pid) {
       if (Array.isArray(items) && items.length > 0) {
         items.forEach(function (it, idx) {
           flat.push({
-            id: rc.id + '::' + idx,
+            // 항목 고유 iid 가 있으면 그걸로 — 위치(idx)는 삭제·순서 변경 뒤 다른 항목을 가리켰다 (v13.213)
+            id: rc.id + '::' + (it.iid || idx),
             _parentId: rc.id,
             projectId: rc.projectId,
             phase: rc.phase,
@@ -971,38 +980,85 @@ function chkGetByProject(pid) {
     return flat;
   });
 }
-function chkPut(item) {
+function chkPut(item, opts) {
   var isNew = !item.id || item._isNew;
   if (isNew) {
     delete item._isNew;
     return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) })
       .then(function (r) { var s = toCamel(r.data); _emitBus('checklist', 'created', { id: s && s.id, projectId: s && s.projectId }); return s; });
   }
-  return apiFetch('/api/checklists/' + item.id, { method: 'PUT', body: JSON.stringify(item) })
-    .then(function (r) { return toCamel(r.data); })
-    .catch(function (err) {
-      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-        return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify(item) }).then(function (r) { return toCamel(r.data); });
-      }
-      throw err;
-    })
+  return _putOr404('/api/checklists/' + item.id, '/api/checklists', item, opts, '체크리스트')
     .then(function (s) { _emitBus('checklist', 'updated', { id: s && s.id, projectId: s && s.projectId }); return s; });
 }
+
+/* ── 체크리스트 항목 쓰기 공통 (v13.213) ──
+   서버는 phase 별 row 의 items 배열을 통째로 저장한다. 그래서
+   - 같은 row 에 대한 내 쓰기는 줄 세워 하나씩(빠른 연속 체크가 서로 덮어쓰지 않게),
+   - 저장은 읽은 version 으로 보내고, 남이 먼저 고쳤으면(409) 최신본을 다시 읽어 같은 변경을 한 번 더 적용,
+   - 항목마다 고유 iid 를 붙여(없으면 채움) 위치가 바뀌어도 같은 항목을 찾는다. */
+var _chkQueue = {};
+function _chkNewIid() { return 'i' + Math.random().toString(36).slice(2, 10); }
+function _chkItems(row) {
+  var items = row && row.items;
+  if (typeof items === 'string') { try { items = JSON.parse(items); } catch (e) { items = []; } }
+  if (!Array.isArray(items)) items = [];
+  items.forEach(function (it) { if (it && !it.iid) it.iid = _chkNewIid(); });
+  return items;
+}
+// key: flat id 의 '::' 뒤 — iid 우선, 숫자면(아직 iid 없던 화면) 위치로
+function _chkFindIdx(items, key) {
+  for (var i = 0; i < items.length; i++) if (items[i] && items[i].iid === key) return i;
+  if (/^\d+$/.test(key)) { var n = parseInt(key, 10); if (n >= 0 && n < items.length) return n; }
+  return -1;
+}
+function _chkSplitId(id) {
+  var sep = String(id || '').indexOf('::');
+  return sep < 0 ? null : { parentId: id.slice(0, sep), key: id.slice(sep + 2) };
+}
+/* mutate(items) — 배열을 직접 고친다. 'delete-row' 를 돌려주면 row 삭제, false 면 저장 안 함. */
+function _chkMutate(parentId, mutate) {
+  var prev = _chkQueue[parentId] || Promise.resolve();
+  var run = prev.catch(function () {}).then(function () {
+    function attempt(left) {
+      return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
+        var row = r.data || {};
+        var items = _chkItems(row);
+        var res = mutate(items);
+        if (res === false) return null;
+        var req = (res === 'delete-row' || items.length === 0)
+          ? apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'DELETE' })
+          : apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items, version: row.version }) });
+        return req.then(function (out) {
+          _emitBus('checklist', 'updated', { id: parentId, projectId: row.project_id });
+          return out;
+        });
+      }).catch(function (err) {
+        if (left > 0 && err && (err.status === 409 || (err.data && err.data.error === 'CONFLICT'))) return attempt(left - 1);
+        throw err;
+      });
+    }
+    return attempt(2);
+  });
+  _chkQueue[parentId] = run;
+  run.then(function () { if (_chkQueue[parentId] === run) delete _chkQueue[parentId]; },
+           function () { if (_chkQueue[parentId] === run) delete _chkQueue[parentId]; });
+  return run;
+}
+/* 대기 중인 체크리스트 쓰기가 모두 끝나면 resolve (화면 재동기화 전에 사용) */
+function chkWhenIdle() {
+  var all = Object.keys(_chkQueue).map(function (k) { return _chkQueue[k].catch(function () {}); });
+  return Promise.all(all);
+}
+
 function chkDel(id) {
-  // flat id (chk-xxx::N) → 부모 row에서 해당 항목 제거
-  var sep = id.indexOf('::');
-  if (sep < 0) {
-    return apiFetch('/api/checklists/' + encodeURIComponent(id), { method: 'DELETE' });
-  }
-  var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
-  return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
-    var row = r.data;
-    var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
-    if (idx < 0 || idx >= items.length) return null;
+  var p = _chkSplitId(id);
+  if (!p) return apiFetch('/api/checklists/' + encodeURIComponent(id), { method: 'DELETE' });
+  // 실패는 호출부로 — 예전엔 null 로 삼켜서 삭제 실패도 행이 사라졌다
+  return _chkMutate(p.parentId, function (items) {
+    var idx = _chkFindIdx(items, p.key);
+    if (idx < 0) throw new Error('체크리스트 항목을 찾을 수 없습니다(이미 삭제됨).');
     items.splice(idx, 1);
-    if (items.length === 0) return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'DELETE' });
-    return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
-  });  // 실패는 호출부로 — 예전엔 null 로 삼켜서 삭제 실패도 행이 사라졌다
+  });
 }
 
 function chkGetByPhase(projectId, phase) {
@@ -1015,15 +1071,33 @@ function chkGetByPhase(projectId, phase) {
 /* 체크리스트 항목(flat id 'rowId::idx') 필드 일부 수정 — 서버 PUT 은 phase/items 만 받으므로
    부모 row 의 items 배열을 고쳐 통째로 보낸다. '::' 없는 id 는 서버에서 개별 수정할 방법이 없어 거부. */
 function chkPatchItem(id, patch) {
-  var sep = String(id || '').indexOf('::');
-  if (sep < 0) return Promise.reject(new Error('수정할 수 없는 체크리스트 항목입니다: ' + id));
-  var parentId = id.slice(0, sep), idx = parseInt(id.slice(sep + 2), 10);
-  return apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
-    var row = r.data || {};
-    var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
-    if (!(idx >= 0 && idx < items.length)) throw new Error('체크리스트 항목을 찾을 수 없습니다: ' + id);
+  var p = _chkSplitId(id);
+  if (!p) return Promise.reject(new Error('수정할 수 없는 체크리스트 항목입니다: ' + id));
+  return _chkMutate(p.parentId, function (items) {
+    var idx = _chkFindIdx(items, p.key);
+    if (idx < 0) throw new Error('체크리스트 항목을 찾을 수 없습니다: ' + id);
     Object.keys(patch || {}).forEach(function (k) { items[idx][k] = patch[k]; });
-    return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: items }) });
+  });
+}
+
+/* 한 phase row 의 항목 순서 변경 — orderedIds: 화면 순서의 flat id 목록.
+   화면에 없던 항목(다른 곳에서 막 추가된 것 등)은 사라지지 않게 뒤에 붙인다. */
+function chkReorder(parentId, orderedIds) {
+  return _chkMutate(parentId, function (items) {
+    var used = {};
+    var reordered = [];
+    orderedIds.forEach(function (cid) {
+      var p = _chkSplitId(cid);
+      if (!p || p.parentId !== parentId) return;
+      var idx = _chkFindIdx(items, p.key);
+      if (idx < 0 || used[idx]) return;
+      used[idx] = true;
+      reordered.push(items[idx]);
+    });
+    items.forEach(function (it, idx) { if (!used[idx]) reordered.push(it); });
+    reordered.forEach(function (it, i) { it.order = i; });
+    items.length = 0;
+    Array.prototype.push.apply(items, reordered);
   });
 }
 
@@ -1032,22 +1106,19 @@ function createCheckItem(data) {
   return apiFetch('/api/checklists?projectId=' + encodeURIComponent(data.projectId)).then(function (r) {
     var rows = r.data || [];
     var parentRow = rows.find(function (row) { return row.phase === data.phase; });
-    var newItem = { text: data.text || '', done: false, doneDate: null, doneBy: null, dueDate: data.dueDate || '', order: 0 };
+    var newItem = { iid: _chkNewIid(), text: data.text || '', done: false, doneDate: null, doneBy: null, dueDate: data.dueDate || '', order: 0 };
     if (parentRow) {
-      var existing = parentRow.items;
-      if (typeof existing === 'string') { try { existing = JSON.parse(existing); } catch (e) { existing = []; } }
-      if (!Array.isArray(existing)) existing = [];
-      var items = existing.slice();
-      newItem.order = typeof data.order === 'number' ? data.order : items.length;
-      items.push(newItem);
-      return apiFetch('/api/checklists/' + encodeURIComponent(parentRow.id), { method: 'PUT', body: JSON.stringify({ items: items }) });
+      return _chkMutate(parentRow.id, function (items) {
+        newItem.order = typeof data.order === 'number' ? data.order : items.length;
+        items.push(newItem);
+      });
     } else {
       newItem.order = typeof data.order === 'number' ? data.order : 0;
       return apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
         id: 'chk-' + uuid(), projectId: data.projectId, phase: data.phase, items: [newItem]
-      }) });
+      }) }).then(function (r) { _emitBus('checklist', 'created', { projectId: data.projectId }); return r; });
     }
-  }).then(function (r) { return toCamel(r.data); });
+  }).then(function (r) { return toCamel(r && r.data); });
 }
 
 /* 프로젝트에 기본 체크리스트 일괄 생성 (phase별 items 배열로 묶어서 저장) */
@@ -1055,7 +1126,7 @@ function createDefaultChecklists(projectId) {
   var promises = [];
   Object.keys(DEFAULT_CHECKLIST).forEach(function (phase) {
     var items = DEFAULT_CHECKLIST[phase].map(function (text, idx) {
-      return { text: text, done: false, doneDate: null, doneBy: null, order: idx };
+      return { iid: _chkNewIid(), text: text, done: false, doneDate: null, doneBy: null, order: idx };
     });
     promises.push(apiFetch('/api/checklists', { method: 'POST', body: JSON.stringify({
       id: 'chk-' + uuid(), projectId: projectId, phase: phase, items: items
@@ -1831,15 +1902,17 @@ function autoUpdateProgress() {
         var progChanged = (progress != null && progress !== p.progress);
         var hoursChanged = (actual > 0 && Math.round((p.actualHours || 0) * 10) / 10 !== actual);
         if (!progChanged && !hoursChanged) return;
+        // v13.213: 편집 권한이 있는 프로젝트만 — 보기만 하는 사람의 대시보드가 403 을 쏟아내고
+        //  Promise.all 이 첫 실패에서 멈춰 다른 프로젝트 스냅샷까지 빠졌다.
+        if (!projCanEdit(p)) return;
         updates.push({ id: p.id, progress: progress, actualHours: actual });
       });
+      // 프로젝트마다 독립 — 하나가 실패해도 나머지는 저장. 바뀐 두 필드만 PUT.
       return Promise.all(updates.map(function (u) {
-        return updateProject(u.id, { progress: u.progress, actualHours: u.actualHours });
-      })).then(function () {
-        return Promise.all(updates.map(function (u) {
-          return saveProgressSnapshot(u.id, u.progress, u.actualHours);
-        }));
-      }).then(function () { return updates.length; });
+        return updateProject(u.id, { progress: u.progress, actualHours: u.actualHours })
+          .then(function () { return saveProgressSnapshot(u.id, u.progress, u.actualHours); })
+          .then(function () { return 1; }, function (err) { console.warn('[autoUpdateProgress]', u.id, err && err.message); return 0; });
+      })).then(function (oks) { return oks.reduce(function (a, b) { return a + b; }, 0); });
     });
   });
 }
@@ -2127,16 +2200,6 @@ function filePut(f) {
 function fileDel(id) {
   return apiFetch('/api/docs/files/' + id, { method: 'DELETE' })
     .then(function (r) { _emitBus('document', 'deleted', { kind: 'file', id: id }); return r; });
-}
-
-function deleteProjectFiles(projectId) {
-  return fileGetByProject(projectId).then(function (files) {
-    return Promise.all(files.map(function (f) { return fileDel(f.id); }));
-  }).then(function () {
-    return folderGetByProject(projectId);
-  }).then(function (folders) {
-    return Promise.all(folders.map(function (f) { return folderDel(f.id); }));
-  });
 }
 
 function getProjectStorageSize(projectId) {

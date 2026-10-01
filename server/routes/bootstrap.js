@@ -32,10 +32,11 @@ router.get('/', async function (req, res) {
     // ── projects (가시성: lib/project-access — GET /api/projects 와 동일 규칙, admin 은 테넌트 전체) ──
     // owner / project_members(active) / visibility='tenant' / (visibility='dept' AND 부서 일치)
     var projVis = ps.visibleProjectsSql(req, 'p', 2);
+    var projEd = ps.editableProjectsSql(req, 'p', projVis.nextIdx);   // can_edit — v13.213
     var projQ = db.query(
-      'SELECT p.* FROM projects p WHERE p.tenant_id = $1 AND ' + projVis.sql +
+      'SELECT p.*, (' + projEd.sql + ') AS can_edit FROM projects p WHERE p.tenant_id = $1 AND ' + projVis.sql +
       ' ORDER BY p.sort_order ASC NULLS LAST, p.created_at DESC LIMIT 500',
-      [tenantId].concat(projVis.params)
+      [tenantId].concat(projVis.params, projEd.params)
     );
 
     // ── milestones (v13.34 가시성: 접근 가능한 프로젝트만) ──

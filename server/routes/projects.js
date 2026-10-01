@@ -20,6 +20,49 @@ router.use(tenant.tenantScope);
 // 편집(canEditProject = pa.canEdit, v13.145): admin·executive · owner · 활성 멤버 (가시성만으로는 불가)
 var canAccessProject = pa.canRead;
 var canEditProject = pa.canEdit;
+var gcs = require('../services/gcs.service');
+
+/**
+ * 프로젝트 1행 INSERT (POST / 와 POST /full 공용, v13.213).
+ *  예전엔 두 곳에 INSERT 가 따로 있었고 /full 쪽은 department_id·specs 를 빠뜨려,
+ *  /full 로 만든 visibility='dept' 프로젝트는 부서원에게 보이지 않았다.
+ * @param q db 또는 트랜잭션 client
+ */
+async function insertProject(q, req, b) {
+  var id = b.id || ('proj-' + require('crypto').randomUUID().slice(0, 12));
+  var deptId = b.departmentId || b.department_id || req.user.departmentId || null;
+  var visibility = b.visibility || 'private';
+  if (['private','dept','tenant'].indexOf(visibility) === -1) visibility = 'private';
+  var ownerId = b.ownerId || b.owner_id || req.user.sub;
+  if (ownerId !== req.user.sub) {
+    // 다른 사람을 생성자로 지정하면 같은 테넌트 사용자인지 확인 — 아니면 본인으로
+    var ur = await q.query('SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2', [ownerId, req.tenant.id]);
+    if (!ur.rows.length) ownerId = req.user.sub;
+  }
+  var r = await q.query(
+    "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id, tenant_id, owner_id, visibility, specs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16,$17,$18,$19,$20) RETURNING *",
+    [id, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
+     b.status || 'active', b.progress || 0, b.estimatedHours || b.estimated_hours || 0,
+     JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
+     b.color || '#3B82F6', b.memo || '', b.currentPhase || b.current_phase || 'order',
+     JSON.stringify(b.phases || {}), req.user.sub, deptId, req.tenant.id, ownerId, visibility, JSON.stringify(b.specs || {})]
+  );
+  var row = r.rows[0];
+  if (row) row.can_edit = req.user.role === 'admin' || req.user.role === 'executive' || row.owner_id === req.user.sub;
+  return row;
+}
+
+function _afterProjectCreate(req, row) {
+  // 감사 로그 + 이해관계자 알림 (best-effort)
+  try {
+    authService.auditLog(req.user.sub, 'project.create', 'project', row.id, { name: row.name }, req).catch(function () {});
+  } catch (_) {}
+  try {
+    notificationService.notifyAdmins('project_created', {
+      projectName: row.name, orderNo: row.order_no
+    }, req.tenant.id).catch(function (e) { console.error('[noti]', e.message); });
+  } catch (_) {}
+}
 
 // ─── GET /api/projects ───
 router.get('/', async function (req, res) {
@@ -28,11 +71,13 @@ router.get('/', async function (req, res) {
 
     // 가시성 룰 (lib/project-access). 관리자(admin)는 테넌트 전체 접근.
     var vis = pa.visibleProjectsSql(req, 'p', 2);
+    // can_edit: 화면이 편집 컨트롤(드래그·체크·삭제)을 숨길지 판단 (v13.213)
+    var ed = pa.editableProjectsSql(req, 'p', vis.nextIdx);
     var r = await db.query(
-      "SELECT p.*, COUNT(*) OVER() AS _total FROM projects p "
+      "SELECT p.*, (" + ed.sql + ") AS can_edit, COUNT(*) OVER() AS _total FROM projects p "
       + "WHERE p.tenant_id = $1 AND " + vis.sql
-      + " ORDER BY p.sort_order ASC NULLS LAST, p.created_at DESC LIMIT $" + vis.nextIdx + " OFFSET $" + (vis.nextIdx + 1),
-      [req.tenant.id].concat(vis.params, [pg.limit, pg.offset])
+      + " ORDER BY p.sort_order ASC NULLS LAST, p.created_at DESC LIMIT $" + ed.nextIdx + " OFFSET $" + (ed.nextIdx + 1),
+      [req.tenant.id].concat(vis.params, ed.params, [pg.limit, pg.offset])
     );
 
     var total = r.rows.length > 0 ? parseInt(r.rows[0]._total, 10) : 0;
@@ -47,7 +92,8 @@ router.get('/', async function (req, res) {
 //  (반드시 /:id 보다 먼저 정의 — /all 이 /:id 로 매칭되지 않도록)
 router.get('/all', operator.requireOperator, async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM projects WHERE tenant_id = $1 ORDER BY sort_order ASC NULLS LAST, created_at DESC', [req.tenant.id]);
+    var ed = pa.editableProjectsSql(req, 'p', 2);
+    var r = await db.query('SELECT p.*, (' + ed.sql + ') AS can_edit FROM projects p WHERE p.tenant_id = $1 ORDER BY p.sort_order ASC NULLS LAST, p.created_at DESC', [req.tenant.id].concat(ed.params));
     res.json({ data: r.rows });
   } catch (e) {
     httpErr.serverError(res, '[projects/all]', e);
@@ -79,6 +125,7 @@ router.get('/:id', async function (req, res) {
     var p = r.rows[0];
     var allowed = await canAccessProject(req, p);
     if (!allowed) return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 접근 권한이 없습니다.' });
+    p.can_edit = await canEditProject(req, p);
     res.json({ data: p });
   } catch (e) {
     httpErr.serverError(res, '[projects/get]', e);
@@ -88,31 +135,9 @@ router.get('/:id', async function (req, res) {
 // ─── POST /api/projects ───
 router.post('/', rbac.checkPermission('project.create'), async function (req, res) {
   try {
-    var b = req.body;
-    var id = b.id || ('proj-' + require('crypto').randomUUID().slice(0, 12));
-    var deptId = b.departmentId || b.department_id || req.user.departmentId || null;
-    var visibility = b.visibility || 'private';
-    if (['private','dept','tenant'].indexOf(visibility) === -1) visibility = 'private';
-    var ownerId = b.ownerId || b.owner_id || req.user.sub;
-    var r = await db.query(
-      "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id, tenant_id, owner_id, visibility, specs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16,$17,$18,$19,$20) RETURNING *",
-      [id, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
-       b.status || 'active', b.progress || 0, b.estimatedHours || b.estimated_hours || 0,
-       JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
-       b.color || '#3B82F6', b.memo || '', b.currentPhase || b.current_phase || 'order',
-       JSON.stringify(b.phases || {}), req.user.sub, deptId, req.tenant.id, ownerId, visibility, JSON.stringify(b.specs || {})]
-    );
-    res.status(201).json({ data: r.rows[0] });
-
-    // 감사 로그 + 이해관계자 알림 (best-effort)
-    try {
-      authService.auditLog(req.user.sub, 'project.create', 'project', r.rows[0].id, { name: r.rows[0].name }, req).catch(function () {});
-    } catch (_) {}
-    try {
-      notificationService.notifyAdmins('project_created', {
-        projectName: r.rows[0].name, orderNo: r.rows[0].order_no
-      }, req.tenant.id).catch(function (e) { console.error('[noti]', e.message); });
-    } catch (_) {}
+    var row = await insertProject(db, req, req.body);
+    res.status(201).json({ data: row });
+    _afterProjectCreate(req, row);
   } catch (e) {
     httpErr.serverError(res, '[projects/create]', e);
   }
@@ -209,20 +234,10 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
 router.post('/full', rbac.checkPermission('project.create'), async function (req, res) {
   try {
     var b = req.body;
-    var projId = b.id || ('proj-' + require('crypto').randomUUID().slice(0, 12));
     var result = await db.transaction(async function (client) {
-      // 1. 프로젝트 생성
-      var fullVisibility = b.visibility || 'private';
-      if (['private','dept','tenant'].indexOf(fullVisibility) === -1) fullVisibility = 'private';
-      var fullOwnerId = b.ownerId || b.owner_id || req.user.sub;
-      var pr = await client.query(
-        "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, tenant_id, owner_id, visibility) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16,$17,$18) RETURNING *",
-        [projId, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
-         b.status || 'active', b.progress || 0, b.estimatedHours || b.estimated_hours || 0,
-         JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
-         b.color || '#3B82F6', b.memo || '', b.currentPhase || b.current_phase || 'order',
-         JSON.stringify(b.phases || {}), req.user.sub, req.tenant.id, fullOwnerId, fullVisibility]
-      );
+      // 1. 프로젝트 생성 (POST / 와 같은 INSERT)
+      var proj = await insertProject(client, req, b);
+      var projId = proj.id;
       // 2. 마일스톤 일괄 생성
       var milestones = b.milestones || [];
       for (var i = 0; i < milestones.length; i++) {
@@ -230,7 +245,8 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
         var msId = m.id || ('ms-' + require('crypto').randomUUID().slice(0, 12));
         await client.query(
           "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
-          [msId, projId, m.name || '', m.startDate || m.start_date || '', m.endDate || m.end_date || '', m.status || 'waiting', m.order || m.sort_order || i, req.user.sub, req.tenant.id]
+          [msId, projId, m.name || '', m.startDate || m.start_date || '', m.endDate || m.end_date || '', m.status || 'waiting',
+           (m.order != null ? m.order : (m.sort_order != null ? m.sort_order : i)), req.user.sub, req.tenant.id]
         );
       }
       // 3. 체크리스트 일괄 생성
@@ -243,9 +259,10 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
           [chkId, projId, c.phase || null, JSON.stringify(c.items || []), req.user.sub, req.tenant.id]
         );
       }
-      return pr.rows[0];
+      return proj;
     });
     res.status(201).json({ data: result });
+    _afterProjectCreate(req, result);
   } catch (e) {
     httpErr.serverError(res, '[projects/full]', e);
   }
@@ -262,15 +279,26 @@ router.delete('/:id', rbac.checkPermission('project.delete'), async function (re
     // 딸린 데이터 정리를 권한 확인 뒤 한 트랜잭션으로 — 예전엔 화면이 이슈·마일스톤·일정·의존관계를
     // 한 건씩 지우고 고친 다음에 여기로 와서, 403 이 나도 자식 데이터는 이미 지워져 있었다.
     // 마일스톤·체크리스트·멤버 등은 FK ON DELETE CASCADE. issues.project_id 는 FK 가 없어 직접 지운다(대응 이력 issue_logs 는 issues 에서 CASCADE).
+    // v13.213: 문서 파일·폴더도 여기서 지운다 — 예전엔 화면이 권한 확인 전에 파일(GCS)부터 지웠다.
+    //  project_files/project_folders 는 projects 와 FK 가 없어 직접 지우고, GCS 원본은 커밋 뒤 best-effort.
     var id = req.params.id, tid = req.tenant.id;
+    var storageKeys = [];
     var r = await db.transaction(async function (client) {
+      var fr = await client.query('DELETE FROM project_files WHERE project_id = $1 AND tenant_id = $2 RETURNING storage_key', [id, tid]);
+      storageKeys = fr.rows.map(function (x) { return x.storage_key; }).filter(Boolean);
+      await client.query('DELETE FROM project_folders WHERE project_id = $1 AND tenant_id = $2', [id, tid]);
       await client.query('DELETE FROM issues WHERE project_id = $1 AND tenant_id = $2', [id, tid]);
       await client.query('UPDATE events SET project_ids = project_ids - $1::text WHERE tenant_id = $2 AND project_ids ? $1::text', [id, tid]);
       await client.query('UPDATE projects SET dependencies = dependencies - $1::text WHERE tenant_id = $2 AND dependencies ? $1::text', [id, tid]);
       return client.query('DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tid]);
     });
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
-    res.json({ message: '삭제 완료' });
+    res.json({ message: '삭제 완료', deletedFiles: storageKeys.length });
+    if (storageKeys.length && gcs.isEnabled()) {
+      storageKeys.forEach(function (sk) {
+        gcs.deleteObject(sk).catch(function (e) { console.warn('[projects/delete] GCS delete failed:', e.message); });
+      });
+    }
   } catch (e) {
     httpErr.serverError(res, '[projects/delete]', e);
   }
@@ -589,23 +617,28 @@ router.post('/:id/images', async function (req, res) {
     if (await _imgGate(req, res, true) === null) return;
     var b = req.body || {};
     var arr = Array.isArray(b.images) ? b.images : (b.src ? [{ src: b.src, caption: b.caption }] : []);
+    arr = arr.filter(function (x) { return x && x.src; });
     if (!arr.length) return res.status(400).json({ error: 'BAD_REQUEST', message: '이미지가 없습니다.' });
+    // v13.213: 크기 검사를 저장 전에 전부 — 예전엔 2번째가 크면 1번째만 저장된 채 413 이 났다
+    if (arr.some(function (x) { return String(x.src).length > _IMG_MAX; })) {
+      return res.status(413).json({ error: 'TOO_LARGE', message: '이미지가 너무 큽니다(1장 4MB 이하).' });
+    }
     // 현재 최대 sort_order
     var mr = await db.query('SELECT COALESCE(MAX(sort_order), -1) AS mx FROM project_images WHERE project_id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     var ord = (mr.rows[0] && mr.rows[0].mx != null) ? (parseInt(mr.rows[0].mx, 10) + 1) : 0;
     var crypto = require('crypto');
-    var saved = [];
-    for (var i = 0; i < arr.length; i++) {
-      var src = arr[i] && arr[i].src ? String(arr[i].src) : '';
-      if (!src) continue;
-      if (src.length > _IMG_MAX) return res.status(413).json({ error: 'TOO_LARGE', message: '이미지가 너무 큽니다(1장 4MB 이하).' });
-      var id = 'pimg-' + crypto.randomUUID().slice(0, 12);
-      var ir = await db.query(
-        'INSERT INTO project_images (id, tenant_id, project_id, src, caption, sort_order, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, project_id, caption, sort_order, created_at',
-        [id, req.tenant.id, req.params.id, src, (arr[i].caption || null), ord++, req.user.sub]
-      );
-      saved.push(ir.rows[0]);
-    }
+    var saved = await db.transaction(async function (q) {
+      var out = [];
+      for (var i = 0; i < arr.length; i++) {
+        var id = 'pimg-' + crypto.randomUUID().slice(0, 12);
+        var ir = await q.query(
+          'INSERT INTO project_images (id, tenant_id, project_id, src, caption, sort_order, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, project_id, caption, sort_order, created_at',
+          [id, req.tenant.id, req.params.id, String(arr[i].src), (arr[i].caption || null), ord++, req.user.sub]
+        );
+        out.push(ir.rows[0]);
+      }
+      return out;
+    });
     res.status(201).json({ data: saved });
     try { authService.auditLog(req.user.sub, 'project.image.add', 'project', req.params.id, { count: saved.length }, req); } catch (_) {}
   } catch (e) {

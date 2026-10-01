@@ -48,14 +48,21 @@ router.get('/', async function (req, res) {
 router.post('/', async function (req, res) {
   try {
     var b = req.body;
+    var projectId = b.projectId || b.project_id;
+    if (!projectId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'projectId 필수' });
+    // v13.213: 프로젝트 편집 권한 + 같은 테넌트 존재 확인 (예전엔 다른 테넌트 projectId 도 FK 만 통과하면 들어갔다)
+    if (!await ps.gateEdit(req, res, projectId, '생성자·참여자·관리자만 마일스톤을 추가할 수 있습니다.')) return;
     var id = b.id || ('ms-' + require('crypto').randomUUID().slice(0, 12));
     var atIns = b.assigneeTargets || b.assignee_targets || {};
+    var sortIns = (b.order != null) ? b.order : (b.sort_order != null ? b.sort_order : 0);
     var r = await db.query(
       "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, assignee_targets, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
-      [id, b.projectId || b.project_id, b.name || '', b.startDate || b.start_date || '',
-       b.endDate || b.end_date || '', b.status || 'waiting', b.order || b.sort_order || 0, JSON.stringify(atIns), req.user.sub, req.tenant.id]
+      [id, projectId, b.name || '', b.startDate || b.start_date || '',
+       b.endDate || b.end_date || '', b.status || 'waiting', sortIns, JSON.stringify(atIns), req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
+    // 목표시간이 있는 마일스톤이 추가되면 가중평균이 바뀐다
+    _rollupProjectProgress(projectId, req.tenant.id).catch(function (e) { console.error('[ms/rollup]', e.message); });
     try { authService.auditLog(req.user.sub, 'milestone.create', 'milestone', id, { name: r.rows[0] && r.rows[0].name, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
   } catch (e) {
     httpErr.serverError(res, '[milestones/create]', e);
@@ -66,6 +73,9 @@ router.post('/', async function (req, res) {
 router.put('/:id', async function (req, res) {
   try {
     var b = req.body;
+    var cur = await db.query('SELECT project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!cur.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    if (!await ps.gateEdit(req, res, cur.rows[0].project_id, '생성자·참여자·관리자만 마일스톤을 수정할 수 있습니다.')) return;
     // sort_order=0 도 유효한 값 → falsy(||) 대신 null 체크로 보존 (첫 번째 마일스톤 순서 저장 누락 방지)
     var sortOrder = (b.order != null) ? b.order : (b.sort_order != null ? b.sort_order : null);
     // assignee_targets: 명시적으로 전달된 경우에만 갱신(미전달 시 COALESCE로 보존)
@@ -84,7 +94,7 @@ router.put('/:id', async function (req, res) {
     try {
       if (b.status === 'done' && r.rows[0]) {
         var ms = r.rows[0];
-        var projR = await db.query('SELECT name, order_no FROM projects WHERE id = $1', [ms.project_id]);
+        var projR = await db.query('SELECT name, order_no FROM projects WHERE id = $1 AND tenant_id = $2', [ms.project_id, req.tenant.id]);
         var proj = projR.rows[0];
         if (proj) {
           notificationService.notifyProjectStakeholders('milestone_complete', {
@@ -111,8 +121,9 @@ function _isAdminRole(req) {
 
 // 프로젝트 진척률 롤업 — 마일스톤 보고 진척률을 목표시간(assignee_targets) 가중평균.
 // 보고 이력이 하나도 없으면 손대지 않음(시간기반 자동 진척률 폴백 유지).
-async function _rollupProjectProgress(projectId, tenantId) {
-  var mr = await db.query(
+async function _rollupProjectProgress(projectId, tenantId, q) {
+  q = q || db;
+  var mr = await q.query(
     'SELECT progress, assignee_targets, progress_updated_at FROM milestones WHERE project_id = $1 AND tenant_id = $2',
     [projectId, tenantId]
   );
@@ -129,12 +140,15 @@ async function _rollupProjectProgress(projectId, tenantId) {
   });
   var proj = wsum > 0 ? Math.round(psum / wsum) : Math.round(psimple / Math.max(cnt, 1));
   proj = Math.max(0, Math.min(100, proj));
-  await db.query('UPDATE projects SET progress = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3', [proj, projectId, tenantId]);
+  await q.query('UPDATE projects SET progress = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3', [proj, projectId, tenantId]);
 }
 
 // GET /api/milestones/:id/logs — 마일스톤 작업 노트 + 진척률 이력 (최신순)
 router.get('/:id/logs', async function (req, res) {
   try {
+    var msr = await db.query('SELECT project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    if (!await ps.gateRead(req, res, msr.rows[0].project_id)) return;   // 비공개 프로젝트 작업노트 노출 차단
     var r = await db.query(
       'SELECT id, milestone_id, project_id, author_id, author_name, progress, note, hours, created_at ' +
       'FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100',
@@ -157,7 +171,9 @@ router.post('/:id/logs', async function (req, res) {
     var hours = parseFloat(b.hours);
     if (isNaN(hours) || hours < 0) hours = 0;
 
-    var msr = await db.query('SELECT id, project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var msr = await db.query(
+      'SELECT m.id, m.project_id, m.name, p.name AS project_name FROM milestones m LEFT JOIN projects p ON p.id = m.project_id AND p.tenant_id = m.tenant_id ' +
+      'WHERE m.id = $1 AND m.tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!msr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '마일스톤을 찾을 수 없습니다.' });
     var ms = msr.rows[0];
 
@@ -173,14 +189,19 @@ router.post('/:id/logs', async function (req, res) {
     } catch (_) { /* ignore */ }
 
     var logId = 'mpl-' + require('crypto').randomUUID().slice(0, 12);
-    await db.query(
-      'INSERT INTO milestone_progress_logs (id, milestone_id, project_id, tenant_id, author_id, author_name, progress, note, hours) ' +
-      'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-      [logId, ms.id, ms.project_id, req.tenant.id, req.user.sub, authorName, progress, note, hours]
-    );
-    // 마일스톤 denormalize 재동기화 (최신 진척률 + 보고 투입시간 합) + 프로젝트 진척률 롤업
-    await _resyncMilestoneProgress(ms.id, req.tenant.id);
-    await _rollupProjectProgress(ms.project_id, req.tenant.id);
+    // v13.213: INSERT + 재동기화 + 롤업을 한 트랜잭션으로. 마일스톤 행을 잠가 동시 보고가
+    // 서로의 투입시간 합계를 덮어쓰지 않게 한다 (중간 실패 시 로그만 남는 일도 없음).
+    await db.transaction(async function (q) {
+      await q.query('SELECT 1 FROM milestones WHERE id = $1 AND tenant_id = $2 FOR UPDATE', [ms.id, req.tenant.id]);
+      await q.query(
+        'INSERT INTO milestone_progress_logs (id, milestone_id, project_id, tenant_id, author_id, author_name, progress, note, hours) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+        [logId, ms.id, ms.project_id, req.tenant.id, req.user.sub, authorName, progress, note, hours]
+      );
+      // 마일스톤 denormalize 재동기화 (최신 진척률 + 보고 투입시간 합) + 프로젝트 진척률 롤업
+      await _resyncMilestoneProgress(ms.id, req.tenant.id, q);
+      await _rollupProjectProgress(ms.project_id, req.tenant.id, q);
+    });
 
     res.status(201).json({ data: { id: logId, milestoneId: ms.id, projectId: ms.project_id, authorName: authorName, progress: progress, note: note, hours: hours } });
 
@@ -191,10 +212,8 @@ router.post('/:id/logs', async function (req, res) {
 
     // 마일스톤 진척 보고 알림 — 관리자에게만 발송 (추적용)
     try {
-      var fullMs = await db.query('SELECT name FROM milestones WHERE id = $1 AND tenant_id = $2', [ms.id, req.tenant.id]);
-      var msName = fullMs.rows.length ? (fullMs.rows[0].name || '') : '';
-      var projR2 = await db.query('SELECT name FROM projects WHERE id = $1 AND tenant_id = $2', [ms.project_id, req.tenant.id]);
-      var projName2 = projR2.rows.length ? (projR2.rows[0].name || '') : '';
+      var msName = ms.name || '';
+      var projName2 = ms.project_name || '';
       notificationService.notifyAdmins('milestone_progress', {
         projectName: projName2, milestoneName: msName, progress: progress, hours: hours, authorName: authorName,
         note: (note || '').slice(0, 200)
@@ -206,24 +225,25 @@ router.post('/:id/logs', async function (req, res) {
 });
 
 // 마일스톤 denormalize 재동기화 — 최신 진척률(로그) + 보고 투입시간 합(reported_hours). 로그 없으면 초기화.
-async function _resyncMilestoneProgress(mid, tenantId) {
-  var agg = await db.query(
+async function _resyncMilestoneProgress(mid, tenantId, q) {
+  q = q || db;
+  var agg = await q.query(
     'SELECT COALESCE(SUM(hours),0) AS sum_h FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 AND deleted_at IS NULL',
     [mid, tenantId]
   );
   var sumH = Number(agg.rows[0].sum_h) || 0;
-  var lr = await db.query(
+  var lr = await q.query(
     'SELECT progress, note, author_name, created_at FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1',
     [mid, tenantId]
   );
   if (lr.rows.length) {
     var l = lr.rows[0];
-    await db.query(
+    await q.query(
       'UPDATE milestones SET progress = $1, progress_note = $2, progress_updated_at = $3, progress_updated_by = $4, reported_hours = $5 WHERE id = $6 AND tenant_id = $7',
       [l.progress, l.note, l.created_at, l.author_name, sumH, mid, tenantId]
     );
   } else {
-    await db.query(
+    await q.query(
       'UPDATE milestones SET progress = 0, progress_note = NULL, progress_updated_at = NULL, progress_updated_by = NULL, reported_hours = 0 WHERE id = $1 AND tenant_id = $2',
       [mid, tenantId]
     );
@@ -403,8 +423,17 @@ router.post('/:id/transfer', async function (req, res) {
     if (canDst === null) return res.status(404).json({ error: 'NOT_FOUND', message: '대상 프로젝트를 찾을 수 없습니다.' });
     if (!canSrc || !canDst) return res.status(403).json({ error: 'FORBIDDEN', message: '양쪽 프로젝트의 쓰기 권한이 필요합니다.' });
 
-    var ur = await db.query('UPDATE milestones SET project_id = $1 WHERE id = $2 AND tenant_id = $3 RETURNING *', [targetProjectId, ms.id, req.tenant.id]);
-    res.json({ data: ur.rows[0], message: '이관 완료' });
+    // v13.213: 담당 배정·작업노트의 project_id 도 함께 옮기고 양쪽 진척률을 다시 계산한다.
+    //  (예전엔 milestones 만 바뀌어 배정·이력이 옛 프로젝트에 남았고, 프로젝트 복사 시 엉뚱하게 딸려갔다)
+    var moved = await db.transaction(async function (q) {
+      var ur = await q.query('UPDATE milestones SET project_id = $1 WHERE id = $2 AND tenant_id = $3 RETURNING *', [targetProjectId, ms.id, req.tenant.id]);
+      await q.query('UPDATE milestone_assignments SET project_id = $1 WHERE milestone_id = $2 AND tenant_id = $3', [targetProjectId, ms.id, req.tenant.id]);
+      await q.query('UPDATE milestone_progress_logs SET project_id = $1 WHERE milestone_id = $2 AND tenant_id = $3', [targetProjectId, ms.id, req.tenant.id]);
+      await _rollupProjectProgress(ms.project_id, req.tenant.id, q);
+      await _rollupProjectProgress(targetProjectId, req.tenant.id, q);
+      return ur.rows[0];
+    });
+    res.json({ data: moved, message: '이관 완료' });
   } catch (e) {
     httpErr.serverError(res, '[milestones/transfer]', e);
   }
@@ -413,9 +442,13 @@ router.post('/:id/transfer', async function (req, res) {
 // DELETE /api/milestones/:id
 router.delete('/:id', async function (req, res) {
   try {
+    var cur = await db.query('SELECT project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!cur.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    if (!await ps.gateEdit(req, res, cur.rows[0].project_id, '생성자·참여자·관리자만 마일스톤을 삭제할 수 있습니다.')) return;
     var r = await db.query('DELETE FROM milestones WHERE id = $1 AND tenant_id = $2 RETURNING id, project_id, name', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
+    _rollupProjectProgress(r.rows[0].project_id, req.tenant.id).catch(function (e) { console.error('[ms/rollup]', e.message); });
     try { authService.auditLog(req.user.sub, 'milestone.delete', 'milestone', req.params.id, { name: r.rows[0] && r.rows[0].name, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
   } catch (e) {
     httpErr.serverError(res, '[milestones/delete]', e);
@@ -439,6 +472,16 @@ async function _msEditGate(req, res) {
   var projectId = msr.rows[0].project_id;
   if (!await _canEditProject(req, projectId)) { res.status(403).json({ error: 'FORBIDDEN', message: '담당 배정 권한이 없습니다.' }); return null; }
   return projectId;
+}
+
+// 배정 대상 사용자가 이 테넌트 소속인지 확인 (v13.213). 아니면 400 응답 후 false.
+async function _usersInTenant(req, res, ids) {
+  ids = ids.filter(Boolean);
+  if (!ids.length) return true;
+  var r = await db.query('SELECT COUNT(DISTINCT id)::int AS n FROM users WHERE id = ANY($1) AND tenant_id = $2', [ids, req.tenant.id]);
+  if (r.rows[0].n === new Set(ids).size) return true;
+  res.status(400).json({ error: 'BAD_REQUEST', message: '존재하지 않는 사용자입니다.' });
+  return false;
 }
 
 // GET /api/milestones/:id/assignments[?all=1] — 유효 배정(기본) 또는 전체(이력 포함)
@@ -469,6 +512,7 @@ router.post('/:id/assignments', async function (req, res) {
     if (!b.userId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'userId 필수' });
     var projectId = await _msEditGate(req, res);
     if (projectId === null) return;
+    if (!await _usersInTenant(req, res, [b.userId, b.coversUserId])) return;
     var role = (b.role === 'deputy') ? 'deputy' : 'primary';
     var id = 'msa-' + require('crypto').randomUUID().slice(0, 12);
     var r = await db.query(
@@ -493,30 +537,35 @@ router.post('/:id/assignments/handover', async function (req, res) {
     var mode = (b.mode === 'cover') ? 'cover' : 'replace';
     var projectId = await _msEditGate(req, res);
     if (projectId === null) return;
+    if (!await _usersInTenant(req, res, [b.toUserId, b.fromUserId])) return;
     var crypto = require('crypto');
 
     if (mode === 'replace') {
       // 구 담당(fromUserId) 활성 배정 해제(이력 보존) + 신 담당 primary 생성(목표시간 승계)
-      var oldTargets = null, oldRole = 'primary';
-      if (b.fromUserId) {
-        var ar = await db.query(
-          'SELECT target_hours, role FROM milestone_assignments WHERE milestone_id=$1 AND tenant_id=$2 AND user_id=$3 AND released_at IS NULL ORDER BY created_at DESC LIMIT 1',
-          [req.params.id, req.tenant.id, b.fromUserId]
+      // v13.213: 해제와 생성을 한 트랜잭션으로 — 중간 실패 시 담당자 없는 마일스톤이 남지 않게
+      var created = await db.transaction(async function (q) {
+        var oldTargets = null, oldRole = 'primary';
+        if (b.fromUserId) {
+          var ar = await q.query(
+            'SELECT target_hours, role FROM milestone_assignments WHERE milestone_id=$1 AND tenant_id=$2 AND user_id=$3 AND released_at IS NULL ORDER BY created_at DESC LIMIT 1',
+            [req.params.id, req.tenant.id, b.fromUserId]
+          );
+          if (ar.rows.length) { oldTargets = ar.rows[0].target_hours; oldRole = ar.rows[0].role; }
+          await q.query(
+            'UPDATE milestone_assignments SET released_at=now() WHERE milestone_id=$1 AND tenant_id=$2 AND user_id=$3 AND released_at IS NULL',
+            [req.params.id, req.tenant.id, b.fromUserId]
+          );
+        }
+        var th = (b.targetHours != null) ? b.targetHours : oldTargets;
+        var nid = 'msa-' + crypto.randomUUID().slice(0, 12);
+        var nr = await q.query(
+          'INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id, role, target_hours, created_by) ' +
+          'VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+          [nid, req.tenant.id, req.params.id, projectId, b.toUserId, (b.role === 'deputy' ? 'deputy' : oldRole), th, req.user.sub]
         );
-        if (ar.rows.length) { oldTargets = ar.rows[0].target_hours; oldRole = ar.rows[0].role; }
-        await db.query(
-          'UPDATE milestone_assignments SET released_at=now() WHERE milestone_id=$1 AND tenant_id=$2 AND user_id=$3 AND released_at IS NULL',
-          [req.params.id, req.tenant.id, b.fromUserId]
-        );
-      }
-      var th = (b.targetHours != null) ? b.targetHours : oldTargets;
-      var nid = 'msa-' + crypto.randomUUID().slice(0, 12);
-      var nr = await db.query(
-        'INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id, role, target_hours, created_by) ' +
-        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-        [nid, req.tenant.id, req.params.id, projectId, b.toUserId, (b.role === 'deputy' ? 'deputy' : oldRole), th, req.user.sub]
-      );
-      res.status(201).json({ data: nr.rows[0] });
+        return nr.rows[0];
+      });
+      res.status(201).json({ data: created });
     } else {
       // 임시대체 — deputy 배정 + 기간 + covers_user_id(원담당은 그대로)
       var vf = b.validFrom || _assignToday();

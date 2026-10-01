@@ -23,6 +23,7 @@ var calHideDone = false;               // 완료 항목 숨김
 var calFocus = '';                     // 요약 타일 강조: '' | overdue | pend | ms | issue | evt
 var calSelDate = '';                   // 선택한 날짜 (오른쪽 패널 일정 목록)
 var calDragEvtId = null; // 드래그 중인 이벤트 ID
+var calDragEvtDate = null; // 드래그 중인 회차 날짜 (반복 일정 이동량 계산)
 var _calRenderTimer;
 var _calView = null;                   // 마지막 렌더 결과 (패널·액션용)
 var CAL_DAY_MAX = 4;                   // 월간 칸당 칩 최대 개수
@@ -175,6 +176,7 @@ function _calBuildItems(projects, events, milestones, issues, projMap) {
     var t = EVT_TYPE[ev.type] || EVT_TYPE.etc;
     var pid = ev.projectIds && ev.projectIds[0];
     items.push({ kind: 'evt', id: 'ev_' + (ev._origId || ev.id) + '_' + ev.startDate, ref: ev, evtId: ev._origId || ev.id, date: ev.startDate, end: ev.endDate || ev.startDate,
+      canMod: _calEvtCanModify(ev, projMap),
       title: ev.title || t.label, icon: t.icon, typeLabel: t.label, repeat: !!(ev.repeat || ev._repeatInstance), proj: projMap[pid], projectId: pid,
       color: ev.color || t.color, done: false, overdue: false, assignees: ev.assignees || [] });
   });
@@ -280,11 +282,26 @@ function calToggleItem(kind, on) {
   renderCalendarDebounced();
 }
 
+/* 일정 수정 권한 (서버 routes/events.js 와 같은 규칙, v13.213):
+   관리자 · 작성자 · 연결 프로젝트 중 하나라도 편집 가능한 사람. 판단 못 하면 막지 않는다(최종은 서버 403). */
+function _calEvtCanModify(ev, projMap) {
+  var me = (typeof currentUser !== 'undefined' && currentUser) || null;
+  if (!ev || !me) return true;
+  if (me.role === 'admin' || (ev.createdBy && ev.createdBy === me.id)) return true;
+  return (ev.projectIds || []).some(function (id) { var p = projMap && projMap[id]; return !!p && projCanEdit(p); });
+}
+/* 드래그 속성 — 수정 가능한 일정만. 반복 일정은 끌어 놓은 회차 날짜(data-evt-date)를 같이 실어
+   원본을 "회차 → 놓은 날" 만큼 옮긴다(예전엔 원본 시작일을 놓은 날로 바꿔 시리즈 전체가 엉뚱하게 이동). */
+function _calDragAttr(it) {
+  if (it.kind !== 'evt' || it.canMod === false) return '';
+  return ' draggable="true" data-evt-id="' + eH(it.evtId) + '" data-evt-date="' + eH(it.date) + '"';
+}
+
 /* 칩 하나 — 월간/주간/패널 공용 */
 function _calChipHtml(it, opt) {
   opt = opt || {};
   var cls = 'calm-chip k-' + it.kind + (it.overdue ? ' is-overdue' : '') + (it.done ? ' is-done' : '');
-  var drag = it.kind === 'evt' ? ' draggable="true" data-evt-id="' + eH(it.evtId) + '"' : '';
+  var drag = _calDragAttr(it);
   var sub = it.proj && it.kind !== 'pend' && it.kind !== 'pstart' && it.kind !== 'pspan' ? ' [' + _calPname(it.proj) + ']' : '';
   var tip = CAL_KIND[it.kind].label + (it.kind === 'evt' ? '·' + it.typeLabel : '') + ' — ' + it.title + sub
     + (it.end !== it.date ? ' (' + _calMd(it.date) + '~' + _calMd(it.end) + ')' : '')
@@ -359,7 +376,7 @@ function renderMonthView(items, rg, archiveSummaries) {
     placed.forEach(function (p) {
       var it = p.it;
       var cls = 'calm-span k-' + it.kind + (it.overdue ? ' is-overdue' : '') + (it.done ? ' is-done' : '') + (p.cont ? ' cont-l' : '') + (p.more ? ' cont-r' : '');
-      var drag = it.kind === 'evt' ? ' draggable="true" data-evt-id="' + eH(it.evtId) + '"' : '';
+      var drag = _calDragAttr(it);
       var bg = it.kind === 'pspan' ? it.color + '55' : it.color;
       html += '<div class="' + cls + '"' + drag + ' data-cal-item="' + eH(it.id) + '" style="grid-column:' + (p.s + 1) + '/' + (p.e + 2) + ';grid-row:' + (p.lane + 2) + ';background:' + bg + '" title="' + eH(_calIcon(it) + ' ' + it.title + ' (' + _calMd(it.date) + '~' + _calMd(it.end) + ')') + '">'
         + (p.cont ? '◂ ' : '') + _calIcon(it) + ' ' + eH(it.title) + '</div>';
@@ -442,8 +459,8 @@ async function calMsDone(id) {
   if (!it || it.kind !== 'ms') return;
   if (!confirm('마일스톤 "' + it.title + '" 을(를) 완료 처리할까요?')) return;
   try {
-    var ms = Object.assign({}, it.ref, { status: 'done' });
-    await msPut(ms);
+    // 상태만 보낸다 — 예전엔 화면에 들고 있던 옛 마일스톤 전체를 보내 그 사이 바뀐 이름·날짜를 되돌렸다
+    await msPut({ id: it.ref.id, status: 'done' });
     if (typeof showToast === 'function') showToast('✅ 완료 처리: ' + it.title);
     await renderCalendar();
   } catch (err) {
@@ -549,7 +566,7 @@ function _calRowHtml(it, withDate) {
     + '<span class="cal-row-main" data-id="' + eH(it.id) + '" onclick="calOpenItem(this.dataset.id)" title="열기"><span class="cal-row-t">' + eH(it.title) + '</span>'
     + '<span class="cal-row-s">' + eH(sub) + (who ? ' · 👤 ' + eH(who) : '') + '</span></span>'
     + _calStatusHtml(it)
-    + (it.kind === 'ms' && !it.done ? '<button class="cal-row-btn" data-id="' + eH(it.id) + '" onclick="calMsDone(this.dataset.id)" title="이 마일스톤을 완료로 바꿉니다">완료 처리</button>' : '')
+    + (it.kind === 'ms' && !it.done && projCanEdit(it.proj) ? '<button class="cal-row-btn" data-id="' + eH(it.id) + '" onclick="calMsDone(this.dataset.id)" title="이 마일스톤을 완료로 바꿉니다">완료 처리</button>' : '')
     + '</div>';
 }
 
@@ -649,11 +666,16 @@ async function showEventModal(evtId, defaultDate) {
   var repeatUntil = evt ? (evt.repeatUntil || '') : '';
   var selProjs = evt ? (evt.projectIds || []) : [];
   var selAssignees = evt ? (evt.assignees || []) : [];
+  var _projMapM = {};
+  projects.forEach(function (p) { _projMapM[p.id] = p; });
+  var _evtCanMod = _calEvtCanModify(evt, _projMapM);
+  window._evtModalBaseVersion = evt ? evt.version : null;
 
-  // 프로젝트 체크박스
+  // 프로젝트 체크박스 — 새로 연결은 편집 권한 있는 프로젝트만(서버 규칙과 동일). 이미 연결된 건 그대로 둘 수 있다.
   var projChecks = projects.map(function (p) {
     var chk = selProjs.includes(p.id) ? ' checked' : '';
-    return '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t3);cursor:pointer"><input type="checkbox" class="evt-proj-chk" value="' + p.id + '"' + chk + '><span class="dot" style="background:' + p.color + ';width:6px;height:6px;border-radius:50%;display:inline-block"></span>' + eH(p.name || p.orderNo) + '</label>';
+    var dis = (!chk && !projCanEdit(p)) ? ' disabled title="편집 권한이 없는 프로젝트"' : '';
+    return '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t3);cursor:pointer"><input type="checkbox" class="evt-proj-chk" value="' + p.id + '"' + chk + dis + '><span class="dot" style="background:' + p.color + ';width:6px;height:6px;border-radius:50%;display:inline-block"></span>' + eH(p.name || p.orderNo) + '</label>';
   }).join('');
 
   // 유형 옵션
@@ -688,8 +710,9 @@ async function showEventModal(evtId, defaultDate) {
       '<div><label class="fl">메모</label><textarea class="si" id="evtMemo" rows="2" style="padding-left:10px;resize:vertical" placeholder="상세 내용...">' + eH(memo) + '</textarea></div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">' +
-      (evt ? '<button class="btn btn-d btn-s" onclick="deleteEventUI(\'' + evt.id + '\')">🗑 삭제</button>' : '') +
-      '<button class="btn btn-p" onclick="saveEventUI(\'' + (evt ? evt.id : '') + '\')">' + (evt ? '💾 수정' : '➕ 등록') + '</button>' +
+      (evt && _evtCanMod ? '<button class="btn btn-d btn-s" onclick="deleteEventUI(\'' + evt.id + '\')">🗑 삭제</button>' : '') +
+      (_evtCanMod ? '<button class="btn btn-p" onclick="saveEventUI(\'' + (evt ? evt.id : '') + '\')">' + (evt ? '💾 수정' : '➕ 등록') + '</button>'
+                  : '<span style="font-size:11px;color:var(--t6);align-self:center">보기 전용 — 작성자·연결 프로젝트 참여자만 수정할 수 있습니다</span>') +
     '</div>' +
   '' }).overlay;
 }
@@ -778,9 +801,14 @@ async function saveEventUI(existingId) {
     repeatUntil: repeatSel ? (document.getElementById('evtRepeatUntil').value || '') : ''
   };
 
+  // 더블클릭 방지 + 연 시점 version 으로 저장(그 사이 남이 고쳤으면 409) — v13.213
+  if (saveEventUI._busy) return;
+  saveEventUI._busy = true;
+  var saveBtn = document.querySelector('#evtModal .btn-p');
+  if (saveBtn) saveBtn.disabled = true;
   try {
     if (existingId) {
-      await updateEvent(existingId, data);
+      await updateEvent(existingId, data, window._evtModalBaseVersion);
     } else {
       await createEvent(data);
     }
@@ -790,8 +818,16 @@ async function saveEventUI(existingId) {
     showToast(existingId ? '일정이 수정되었습니다' : '일정이 등록되었습니다');
   } catch (err) {
     console.error('[saveEventUI]', err);
-    if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+    if (typeof showToast === 'function') showToast('❌ ' + _calErrMsg(err), 'error');
+  } finally {
+    saveEventUI._busy = false;
+    if (saveBtn && saveBtn.isConnected) saveBtn.disabled = false;
   }
+}
+
+function _calErrMsg(err) {
+  if (err && err.data && err.data.error === 'CONFLICT') return '다른 사용자가 먼저 수정했습니다. 창을 닫고 다시 열어 주세요.';
+  return (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
 }
 
 async function deleteEventUI(id) {
@@ -806,7 +842,7 @@ async function deleteEventUI(id) {
     showToast('일정이 삭제되었습니다', 'warn');
   } catch (err) {
     console.error('[deleteEventUI]', err);
-    if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+    if (typeof showToast === 'function') showToast('❌ ' + _calErrMsg(err), 'error');
   }
 }
 
@@ -944,6 +980,7 @@ function bindCalDrag(container) {
   draggables.forEach(function (el) {
     el.addEventListener('dragstart', function (e) {
       calDragEvtId = el.dataset.evtId;
+      calDragEvtDate = el.dataset.evtDate || null;
       e.dataTransfer.setData('text/plain', calDragEvtId);
       e.dataTransfer.effectAllowed = 'move';
       el.style.opacity = '0.5';
@@ -976,17 +1013,23 @@ async function calDropEvt(e, targetDate) {
     var evt = await evtGet(evtId);
     if (!evt) return;
 
-    // 날짜 차이 계산하여 시작일/종료일 동시 이동
+    // 끌어 온 회차 날짜 → 놓은 날짜 만큼 원본을 옮긴다 (반복 일정이 아니면 회차 = 원본 시작일)
     var duration = daysDiff(evt.startDate, evt.endDate) || 0;
-    var newStart = targetDate;
-    var newEnd = _calAddDays(targetDate, duration);
+    var fromDate = calDragEvtDate || evt.startDate;
+    var shift = daysDiff(fromDate, targetDate) || 0;
+    if (!shift) { calDragEvtId = null; calDragEvtDate = null; return; }
+    var newStart = _calAddDays(evt.startDate, shift);
+    var newEnd = _calAddDays(newStart, duration);
+    if (evt.repeat && !confirm('반복 일정입니다. 모든 회차가 ' + (shift > 0 ? '+' : '') + shift + '일 이동합니다. 계속할까요?')) return;
 
     await updateEvent(evtId, { startDate: newStart, endDate: newEnd });
-    showToast('일정을 ' + targetDate + '로 이동했습니다');
+    showToast(evt.repeat ? '반복 일정을 ' + (shift > 0 ? '+' : '') + shift + '일 이동했습니다' : '일정을 ' + targetDate + '로 이동했습니다');
     calDragEvtId = null;
+    calDragEvtDate = null;
     await renderCalendar();
   } catch (err) {
     console.error('[calDropEvt]', err);
-    if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+    if (typeof showToast === 'function') showToast('❌ ' + _calErrMsg(err), 'error');
+    renderCalendar();
   }
 }

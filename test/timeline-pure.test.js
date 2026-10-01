@@ -186,7 +186,7 @@ test('_projModalResetStaging: 원래 id·목표시간 스테이징 복사·rowke
 
 test('_projSaveErrMsg: CONFLICT / 서버 메시지 / 일반 오류 + HTTP 상태', () => {
   const s = load();
-  assert.strictEqual(s._projSaveErrMsg({ data: { error: 'CONFLICT' }, status: 409, message: 'x' }), '다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요. (HTTP 409)');
+  assert.strictEqual(s._projSaveErrMsg({ data: { error: 'CONFLICT' }, status: 409, message: 'x' }), '다른 사용자가 먼저 수정했습니다. 창을 닫고 다시 열어 최신 내용으로 수정하세요. (HTTP 409)');
   assert.strictEqual(s._projSaveErrMsg({ data: { message: '권한' }, message: 'x' }), '권한');
   assert.strictEqual(s._projSaveErrMsg(new Error('net')), 'net');
 });

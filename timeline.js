@@ -593,7 +593,8 @@ function _tlProjBarsHtml(p, st, pMs, ctx) {
   var h = '<div class="tl-bars" style="width:' + ctx.totalWidth + 'px">';
   var barStyle = getBarStyle(p.startDate, p.endDate, ctx.rangeStart, ctx.units);
   var isCritical = showCriticalPath && ctx.criticalPathIds[p.id];
-  var barCls = 'tl-bar' + (st === 'delayed' ? ' tl-bar-delayed' : '') + (st === 'done' ? ' tl-bar-done' : '') + (tlEditMode ? ' tl-bar-editable' : '');
+  var _ed = tlEditMode && projCanEdit(p);   // v13.213: 편집 권한 없는 프로젝트는 기간 조정 불가
+  var barCls = 'tl-bar' + (st === 'delayed' ? ' tl-bar-delayed' : '') + (st === 'done' ? ' tl-bar-done' : '') + (_ed ? ' tl-bar-editable' : '');
   var criticalStyle = isCritical ? 'box-shadow:0 0 0 2px ' + SEM_COLOR.danger + ',0 0 8px rgba(239,68,68,.5);z-index:3;' : '';
   h += '<div class="' + barCls + '" data-type="proj" data-id="' + p.id + '" style="' + barStyle + 'background:' + p.color + ';' + criticalStyle + '" title="' + eH(p.name) + ' (' + p.startDate + ' ~ ' + p.endDate + ')"' + (isCritical ? ' data-critical="1"' : '') + '>';  // v13.191: 기간 막대 hover 장비 사진 미리보기 제거 (막대 위에서 작업할 때 가림)
   // 단계 밴드 오버레이
@@ -604,7 +605,7 @@ function _tlProjBarsHtml(p, st, pMs, ctx) {
     var prominentCls = (p.progress > 30) ? ' prominent' : '';
     h += '<div class="tl-bar-progress' + prominentCls + '" style="width:' + Math.min(p.progress, 100) + '%;background:' + p.color + '"></div>';
   }
-  if (tlEditMode) {
+  if (_ed) {
     h += '<div class="tl-handle tl-handle-l" data-handle="left"></div>';
     h += '<div class="tl-handle tl-handle-r" data-handle="right"></div>';
   }
@@ -661,16 +662,18 @@ function _tlMsRowHtml(ms, p, _pi, collapsedCls, ctx) {
   var msTitle = _tlMsTitle(ms, msSt, ctx.msWorkH);
   var _perf = (typeof _tlMsPerf === 'function') ? _tlMsPerf(ms, ctx.msWorkH) : { text: '', html: '' };
   var _msProg = Number(ms.progress) || 0;
-  var h = '<div class="tl-row tl-row-sub' + (_pi % 2 === 1 ? ' tl-proj-alt' : '') + collapsedCls + '" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '"' + (tlMsReorder ? ' ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)"' : '') + '>';
-  h += '<div class="tl-label tl-label-sub"' + (tlMsReorder ? ' draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' : '') +
+  var _canEd = projCanEdit(p);
+  var _reo = tlMsReorder && _canEd;
+  var h = '<div class="tl-row tl-row-sub' + (_pi % 2 === 1 ? ' tl-proj-alt' : '') + collapsedCls + '" data-ms-id="' + ms.id + '" data-proj-id="' + p.id + '"' + (_reo ? ' ondragover="tlMsDragOver(event)" ondragleave="tlMsDragLeave(event)" ondrop="tlMsDrop(event)"' : '') + '>';
+  h += '<div class="tl-label tl-label-sub"' + (_reo ? ' draggable="true" ondragstart="tlMsDragStart(event,\'' + ms.id + '\',\'' + p.id + '\')" ondragend="tlMsDragEnd(event)"' : '') +
     ' title="' + eH(msTitle) + ' — 클릭: 진척률·작업노트 업데이트"' +
     ' onclick="tlMsOpenUpdate(event,\'' + ms.id + '\',\'' + p.id + '\',' + _msProg + ')"' +
     ' style="width:' + labelW + 'px;min-width:' + labelW + 'px;max-width:' + labelW + 'px;cursor:pointer">' +
-    '<span style="color:var(--t5);font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap">' + (tlMsReorder ? '<span class="tl-ms-grip" style="opacity:.6;cursor:grab" title="드래그하여 순서 변경">⠿</span>' : '') + eH(ms.name) +
+    '<span style="color:var(--t5);font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap">' + (_reo ? '<span class="tl-ms-grip" style="opacity:.6;cursor:grab" title="드래그하여 순서 변경">⠿</span>' : '') + eH(ms.name) +
     ' <span class="badge" style="background:' + msStInfo.bg + ';color:' + msStInfo.color + ';font-size:8px;padding:1px 4px">' + msStInfo.label + '</span>' + _perf.html +
     '</span></div>';
   h += '<div class="tl-bars" style="width:' + ctx.totalWidth + 'px">';
-  var msEditCls = tlEditMode ? ' tl-bar-editable' : '';
+  var msEditCls = (tlEditMode && _canEd) ? ' tl-bar-editable' : '';
   h += '<div class="' + msBarCls + msEditCls + '" data-type="ms" data-id="' + ms.id + '"' +
     ' title="' + eH(msTitle) + (tlEditMode ? '' : ' — 클릭: 업데이트') + '"' +
     (tlEditMode ? '' : ' onclick="tlMsOpenUpdate(event,\'' + ms.id + '\',\'' + p.id + '\',' + _msProg + ')"') +
@@ -680,7 +683,7 @@ function _tlMsRowHtml(ms, p, _pi, collapsedCls, ctx) {
     var _msFillCol = _msProg >= 100 ? SEM_COLOR.ok : p.color;
     h += '<div class="tl-bar-progress' + (_msProg > 30 ? ' prominent' : '') + '" style="width:' + Math.min(_msProg, 100) + '%;background:' + _msFillCol + '"></div>';
   }
-  if (tlEditMode) {
+  if (tlEditMode && _canEd) {
     h += '<div class="tl-handle tl-handle-l" data-handle="left"></div>';
     h += '<div class="tl-handle tl-handle-r" data-handle="right"></div>';
   }
@@ -1302,6 +1305,8 @@ async function showProjectModal(projId) {
   var loaded = await _projModalLoad(projId);
   var proj = loaded.proj;
   _projModalResetStaging(loaded.projMs);
+  // v13.213: 연 시점의 version 으로 저장 — 그 사이 다른 사람이 고쳤으면 409 로 알린다(예전엔 조용히 덮어씀)
+  window._projModalBaseVersion = proj ? proj.version : null;
 
   // v13.62: backdrop 클릭으로 닫히지 않도록 — 편집 중 실수 클릭으로 데이터 유실 방지.
   //         반드시 [✕ 닫기] 또는 [💾 등록/수정] 버튼으로만 닫힘.
@@ -1331,7 +1336,8 @@ async function _projModalLoad(projId) {
     proj = _r[1];
     projMs = _r[2] || [];
     projMs.sort(_msOrderCmp);
-    // 중복 정리 — (name|startDate|endDate) 키로 먼저 등장한 것만 유지, 나머지는 DB에서 삭제
+    // 중복 — (name|startDate|endDate) 키로 먼저 등장한 것만 편집 목록에 둔다.
+    // v13.213: 모달을 여는 것만으로 지우지 않는다(보기만 한 사람도 지웠다). [수정]을 누르면 그때 정리.
     var seen = {};
     var uniq = [];
     var dupIds = [];
@@ -1341,9 +1347,11 @@ async function _projModalLoad(projId) {
     });
     if (dupIds.length) {
       projMs = uniq;
-      Promise.all(dupIds.map(function (id) { return msDel(id).catch(function () {}); }))
-        .then(function () { if (typeof showToast === 'function') showToast('중복 마일스톤 ' + dupIds.length + '개 정리됨', 'warn'); });
+      if (typeof showToast === 'function') showToast('중복 마일스톤 ' + dupIds.length + '개 — [수정]을 누르면 정리됩니다', 'warn');
     }
+    window._projMsDupIds = dupIds;
+  } else {
+    window._projMsDupIds = [];
   }
   return { proj: proj, projMs: projMs, allProjects: allProjects };
 }
@@ -1754,11 +1762,16 @@ async function saveProjectUI(existingId) {
   var form = _projFormRead(existingId);
   if (!form) return;   // 검증 실패 (토스트 표시됨)
   var data = form.data, assignees = form.assignees;
+  // 더블클릭 방지 — 저장이 끝날 때까지 버튼 잠금 (예전엔 두 번 눌리면 프로젝트·마일스톤이 두 벌 생겼다)
+  if (saveProjectUI._busy) return;
+  saveProjectUI._busy = true;
+  var saveBtn = document.querySelector('#projModal .pm-footer .btn-p');
+  if (saveBtn) saveBtn.disabled = true;
 
   var projId;
   try {
     if (existingId) {
-      await updateProject(existingId, data);
+      await updateProject(existingId, data, window._projModalBaseVersion);
       projId = existingId;
     } else {
       var p = await createProject(data);
@@ -1787,6 +1800,9 @@ async function saveProjectUI(existingId) {
   } catch (err) {
     console.error('[saveProjectUI] 저장 실패:', err, err && err.data);
     showToast('프로젝트 저장 실패: ' + _projSaveErrMsg(err), 'error');
+  } finally {
+    saveProjectUI._busy = false;
+    if (saveBtn && saveBtn.isConnected) saveBtn.disabled = false;
   }
 }
 
@@ -1912,17 +1928,23 @@ async function _projSyncMilestones(projId, existingId) {
       msPromises.push(createMilestone({ projectId: projId, name: msName, startDate: msStart, endDate: msEnd, status: msStatus, order: i, assigneeTargets: msTargets }));
     }
   }
-  // 제거된 마일스톤 삭제
-  origIds.forEach(function (id) { if (!keptIds[id]) msPromises.push(msDel(id).catch(function () {})); });
+  // 제거된 마일스톤 + 열 때 발견한 중복 삭제 — 실패는 모아서 알린다(예전엔 삼켜서 "저장됨"만 떴다)
+  var delIds = origIds.filter(function (id) { return !keptIds[id]; });
+  if (existingId && Array.isArray(window._projMsDupIds)) delIds = delIds.concat(window._projMsDupIds);
+  var delFail = 0;
+  delIds.forEach(function (id) { msPromises.push(msDel(id).catch(function (err) { console.warn('[projSync:del]', id, err); delFail++; })); });
   await Promise.all(msPromises);
   window._projMsOrigIds = null;
+  window._projMsDupIds = null;
+  if (delFail && typeof showToast === 'function') showToast('마일스톤 ' + delFail + '개를 삭제하지 못했습니다.', 'warn');
 }
 
 // [순수] 저장 실패 메시지 — 서버 CONFLICT/메시지 우선, HTTP 상태 덧붙임
 function _projSaveErrMsg(err) {
   var detail = '';
   if (err && err.data) {
-    if (err.data.error === 'CONFLICT') detail = '다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.';
+    if (err.data.error === 'CONFLICT') detail = '다른 사용자가 먼저 수정했습니다. 창을 닫고 다시 열어 최신 내용으로 수정하세요.';
+    else if (err.data.error === 'DELETED') detail = err.data.message;
     else detail = err.data.message || err.data.error || '';
   }
   var msg = detail || err.message || String(err);
@@ -2171,13 +2193,14 @@ function importProjectsJSON() {
     try {
       var data = JSON.parse(text);
       if (data.projects) {
-        for (var i = 0; i < data.projects.length; i++) await projPut(data.projects[i]);
+        // 가져오기는 "있으면 수정, 없으면 생성" — 일반 저장과 달리 404 → 생성 폴백을 켠다
+        for (var i = 0; i < data.projects.length; i++) await projPut(data.projects[i], { upsert: true });
       }
       if (data.milestones) {
-        for (var j = 0; j < data.milestones.length; j++) await msPut(data.milestones[j]);
+        for (var j = 0; j < data.milestones.length; j++) await msPut(data.milestones[j], { upsert: true });
       }
       if (data.events) {
-        for (var k = 0; k < data.events.length; k++) await evtPut(data.events[k]);
+        for (var k = 0; k < data.events.length; k++) await evtPut(data.events[k], { upsert: true });
       }
       showToast('가져오기 완료!');
       renderTimeline();
@@ -2464,7 +2487,8 @@ function startBarDrag(bar, mode, startEvt) {
         showToast('기간이 변경되었습니다');
       }).catch(function (err) {
           console.error('[startBarDrag:proj]', err);
-          if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+          if (typeof showToast === 'function') showToast('❌ ' + _projSaveErrMsg(err), 'error');
+          renderTimeline();   // 실패하면 막대를 원래 자리로
       });
     } else if (type === 'ms') {
       // 마일스톤: get → update → put (서버 모드 — 과거 IndexedDB db.transaction 잔존 코드 제거)
@@ -2481,7 +2505,8 @@ function startBarDrag(bar, mode, startEvt) {
         showToast('기간이 변경되었습니다');
       }).catch(function (err) {
           console.error('[startBarDrag:ms]', err);
-          if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+          if (typeof showToast === 'function') showToast('❌ ' + _projSaveErrMsg(err), 'error');
+          renderTimeline();   // 실패하면 막대를 원래 자리로
       });
     }
   }

@@ -1,5 +1,18 @@
 # Work Manager — 변경 이력
 
+## v13.213 (2026-10-01) — 프로젝트 편집 권한 · 체크리스트 동기화
+
+- 서버 권한: lib/project-access 에 `canReadById`·`gateEdit`·`gateRead`. milestones POST/PUT/DELETE·GET /:id/logs, checklists 전 쓰기·GET /:id, progress POST(편집)·GET(가시성 서브쿼리), events(개인=작성자·admin / 프로젝트=작성자·연결 프로젝트 편집자, 새 연결은 편집 권한 필수, GET /:id 가시성). 다른 테넌트·없는 projectId 는 404/400(전엔 FK 만 통과하면 INSERT).
+- can_edit: GET /api/projects·/all·/:id·bootstrap 에 `editableProjectsSql` 컬럼. 클라 `projCanEdit(p)`(값 없으면 허용) → 상세 패널 `.pd-ro`(style.css, `.pd-edit-only` 숨김·체크박스 pointer-events), 타임라인 편집 클래스·핸들·순서 드래그, 달력 드래그·완료 처리·일정 모달 버튼·연결 체크박스.
+- 체크리스트: 항목 고유 `iid`(쓰기 때 백필), flat id `row::iid`(옛 숫자 id 는 위치로 폴백). `_chkMutate` = row 별 직렬 큐 + version 전송 + 409 시 재읽기 후 재적용(2회). PUT /checklists 는 version 을 보내면 비교(안 보내면 예전처럼). `_pdChkResync`: 쓰기 뒤 350ms 모아 큐가 빈 다음 개요·라이프사이클 목록·`.pdPhPill` 을 서버 값으로 다시 그림(텍스트 입력 중인 목록은 건너뜀).
+- 저장: `_putOr404` — PUT 404 는 `DELETED` 오류, JSON 가져오기만 `{upsert:true}` 로 POST 폴백. `updateProject/updateEvent(id, updates, baseVersion)` 는 바뀐 필드만 PUT(전엔 GET 후 전체 PUT → 연 뒤 남이 저장한 내용 덮어씀). 편집창이 연 시점 version 을 넘겨 409. saveProjectUI·saveEventUI·pdAddCheck 중복 실행 잠금.
+- `_msDedupe`·`_projModalLoad` 읽기 시 DELETE 제거 → 편집창 저장 때 `_projMsDupIds` 정리. `_projSyncMilestones` 삭제 실패 집계·알림. 막대 드래그 실패 시 renderTimeline.
+- milestones: 작업노트 POST 를 `db.transaction`(FOR UPDATE + INSERT + resync + rollup), resync/rollup 에 q 인자. transfer 가 milestone_assignments·milestone_progress_logs project_id 도 갱신 + 양쪽 롤업. POST/DELETE 후 롤업. order 0 보존(`!= null`). 배정 userId/toUserId 테넌트 확인, replace handover 트랜잭션.
+- projects: `insertProject` 공용(POST /·/full) — /full 의 department_id·specs·감사 로그·알림 누락 해결, ownerId 테넌트 확인. DELETE 트랜잭션에서 project_files/folders 삭제 후 커밋 뒤 GCS deleteObject(클라 `deleteProjectFiles` 제거). 이미지 크기 사전 검사 + 트랜잭션 INSERT.
+- optimistic-lock: 바꿀 컬럼이 없으면 현재 행 반환(version 다르면 충돌) — 전엔 `SET , version` 500.
+- calendar: 칩에 `data-evt-date`, 드롭 시 회차→목표일 차이만큼 원본 이동(반복이면 확인). `expandRepeatingEvents` 월간은 말일 보정. autoUpdateProgress 는 편집 가능 프로젝트만, 프로젝트별 독립 처리·부분 PUT.
+- 테스트: server/__tests__/project-writes.test.js(19), tenant-isolation 진척 upsert 기대값 409→404.
+
 ## v13.212 (2026-09-30) — 스크롤 시 제목·글자 겹침 일괄 수정
 
 - sticky 영역 전수 조사 후 불투명 토큰으로 통일: 타임라인 전용 --tl-* → 공용 `--th-s`(표 머리)·`--bg-ps`(패널)·`--bg-is`(입력)·`--bg-hvs`(호버). 글래스에서만 값(반투명 색을 --bg 위에 합성), 사용처는 `var(--th-s,var(--th))` 폴백으로 다른 테마 그대로.

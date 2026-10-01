@@ -225,7 +225,7 @@ function _pdOverviewChecklistHtml(id, proj, allChk, phases) {
   html += '</div>';
   html += '<div id="pdOverviewChkList">' + renderOverviewChkListHtml(id, overviewChkPhase, overviewChkPh, overviewChkItems) + '</div>';
   // 개요 탭 항목 추가 input
-  html += '<div style="margin-top:6px;display:flex;gap:4px">';
+  html += '<div class="pd-edit-only" style="margin-top:6px;display:flex;gap:4px">';
   html += '<input type="text" id="pdOverviewNewChk" placeholder="새 항목 추가..." style="flex:1;font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t2)" onkeydown="if(event.key===\'Enter\')pdAddCheck(\'' + id + '\',\'' + overviewChkPhase + '\')">';
   html += '<button class="btn btn-g btn-s" style="font-size:10px;padding:4px 8px" onclick="pdAddCheck(\'' + id + '\',\'' + overviewChkPhase + '\')">추가</button>';
   html += '</div>';
@@ -253,9 +253,8 @@ function _pdDetailLifecycleHtml(id, proj, allChk, ph) {
     html += '<div style="font-size:14px">' + (isDone ? '✅' : isCur ? '🔄' : ph.icon) + '</div>';
     html += '<div style="font-size:9px;color:' + textColor + ';font-weight:' + (isCur ? '700' : '500') + ';margin-top:2px">' + ph.label + '</div>';
     var pp = phaseProgress[pk];
-    if (pp && pp.total > 0) {
-      html += '<div style="font-size:8px;color:' + textColor + ';margin-top:1px">' + pp.done + '/' + pp.total + '</div>';
-    }
+    // 항목 수는 체크리스트를 고칠 때 _pdChkResync 가 갱신한다 — 0개여도 자리를 둔다
+    html += '<div class="pdPhPill" data-phase="' + pk + '" style="font-size:8px;color:' + textColor + ';margin-top:1px">' + (pp && pp.total > 0 ? pp.done + '/' + pp.total : '') + '</div>';
     html += '</div>';
     if (idx < phaseKeys.length - 1) html += '<div style="color:var(--t6);font-size:10px">→</div>';
   });
@@ -264,7 +263,7 @@ function _pdDetailLifecycleHtml(id, proj, allChk, ph) {
   // 단계 전환 버튼
   var curIdx = phaseKeys.indexOf(curPhase);
   var nextPhase = curIdx < phaseKeys.length - 1 ? phaseKeys[curIdx + 1] : null;
-  html += '<div style="text-align:center;margin-bottom:14px">';
+  html += '<div class="pd-edit-only" style="text-align:center;margin-bottom:14px">';
   if (nextPhase) {
     var nextPh = phases[nextPhase];
     html += '<button class="btn btn-p btn-s" onclick="pdAdvancePhase(\'' + id + '\',\'' + nextPhase + '\')" style="font-size:11px;margin-right:8px">➡️ 다음 단계(' + nextPh.label + ')</button>';
@@ -279,7 +278,7 @@ function _pdDetailLifecycleHtml(id, proj, allChk, ph) {
   html += '</div>';
 
   // 현재 단계 체크리스트 (기본 표시)
-  html += '<div id="pdPhaseChecklists">';
+  html += '<div id="pdPhaseChecklists" data-phase="' + curPhase + '">';
   html += buildPhaseChecklistHtml(id, curPhase, allChk, phases);
   html += '</div>';
 
@@ -298,7 +297,7 @@ function _pdDetailLazyTabsHtml() {
 
 /* 하단 버튼(편집/체크리스트 생성/삭제) + 진척 히스토리·코멘트 섹션 */
 function _pdDetailFooterHtml(id) {
-  return '<div style="display:flex;gap:8px;margin-top:16px">' +
+  return '<div class="pd-edit-only" style="display:flex;gap:8px;margin-top:16px">' +
     '<button class="btn btn-p btn-s" onclick="' + _PD_CLOSE_JS + ';showProjectModal(\'' + id + '\')">✏️ 편집</button>' +
     '<button class="btn btn-g btn-s" onclick="pdGenerateChecklists(\'' + id + '\')">📋 체크리스트 생성</button>' +
     '<button class="btn btn-d btn-s" onclick="' + _PD_CLOSE_JS + ';deleteProjectUI(\'' + id + '\')">🗑 삭제</button>' +
@@ -369,7 +368,8 @@ if (typeof document !== 'undefined' && document.addEventListener) {
 function _pdAttachDetailPanel(id, proj, html) {
   var panel = document.createElement('div');
   panel.id = 'projDetailPanel';
-  panel.className = 'pd-panel';
+  // v13.213: 편집 권한 없는 프로젝트는 보기 전용 — 체크·추가·삭제·드래그·단계 전환·편집 버튼을 숨김(.pd-ro, style.css)
+  panel.className = 'pd-panel' + (projCanEdit(proj) ? '' : ' pd-ro');
   panel.style.cssText = 'position:fixed;top:0;right:0;bottom:0;background:var(--bg-p);border-left:1px solid var(--bd);z-index:9998;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);padding:20px;animation:slideIn .2s ease';
   panel.innerHTML = html;
   _pdApplyPanelFrac(panel, _pdPanelFrac());
@@ -1743,7 +1743,7 @@ function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
 
   // 항목들
   if (items.length === 0) {
-    h += '<div style="text-align:center;color:var(--t6);font-size:11px;padding:16px 0">체크리스트 항목이 없습니다.<br><button class="btn btn-g btn-s" style="margin-top:6px;font-size:10px" onclick="pdGenerateChecklists(\'' + projId + '\')">기본 체크리스트 생성</button></div>';
+    h += '<div style="text-align:center;color:var(--t6);font-size:11px;padding:16px 0">체크리스트 항목이 없습니다.<br><button class="btn btn-g btn-s pd-edit-only" style="margin-top:6px;font-size:10px" onclick="pdGenerateChecklists(\'' + projId + '\')">기본 체크리스트 생성</button></div>';
   } else {
     h += '<div id="pdChkList" data-projid="' + projId + '" data-phase="' + phase + '">';
     items.forEach(function (item, idx) {
@@ -1764,7 +1764,7 @@ function buildPhaseChecklistHtml(projId, phase, allChk, phases) {
   }
 
   // 항목 추가
-  h += '<div style="margin-top:8px;display:flex;gap:4px">';
+  h += '<div class="pd-edit-only" style="margin-top:8px;display:flex;gap:4px">';
   h += '<input type="text" id="pdNewChkText" placeholder="새 항목 추가..." style="flex:1;font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t2)" onkeydown="if(event.key===\'Enter\')pdAddCheck(\'' + projId + '\',\'' + phase + '\')">';
   h += '<button class="btn btn-g btn-s" style="font-size:10px;padding:4px 8px" onclick="pdAddCheck(\'' + projId + '\',\'' + phase + '\')">추가</button>';
   h += '</div>';
@@ -1798,13 +1798,58 @@ function pdToggleCheck(projId, chkId, checkbox) {
   var listEl = row ? row.parentNode : null;
   pdRefreshChkProgress(projId, listEl, row && row.getAttribute('data-phase'));
   // 값을 직접 지정 — 서버 값을 뒤집는 방식은 빠른 연속 클릭 때 화면과 어긋났다
-  chkPatchItem(chkId, { done: isDone, doneDate: doneDate, doneBy: isDone ? '' : null }).catch(function (err) {
+  chkPatchItem(chkId, { done: isDone, doneDate: doneDate, doneBy: isDone ? '' : null }).then(function () {
+    _pdChkResync(projId);
+  }).catch(function (err) {
     console.warn('[pdToggleCheck]', err);
     checkbox.checked = !isDone;
     if (textSpan) { textSpan.style.textDecoration = !isDone ? 'line-through' : 'none'; textSpan.style.color = !isDone ? 'var(--t6)' : 'var(--t2)'; }
     pdRefreshChkProgress(projId, listEl, row && row.getAttribute('data-phase'));
-    if (typeof showToast === 'function') showToast('체크 저장 실패', 'error');
+    if (typeof showToast === 'function') showToast('체크 저장 실패: ' + _pdErrMsg(err), 'error');
+    _pdChkResync(projId);
   });
+}
+
+function _pdErrMsg(err) {
+  return (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
+}
+
+/* 체크리스트를 고친 뒤 개요·라이프사이클 두 목록과 단계별 개수를 서버 값으로 다시 그린다 (v13.213).
+   예전엔 고친 쪽 목록만 바뀌어 다른 탭이 옛 상태로 남았고, 위치 기반 id 라 엉뚱한 항목을 고치기도 했다.
+   연속 클릭은 모아서(350ms) 대기 중인 저장이 다 끝난 뒤 한 번만 읽는다. 입력 중인 목록은 건드리지 않는다. */
+var _pdChkResyncT = null;
+function _pdChkResync(projId) {
+  clearTimeout(_pdChkResyncT);
+  _pdChkResyncT = setTimeout(function () {
+    var same = function () { return window._pdProj && window._pdProj.id === projId; };
+    (typeof chkWhenIdle === 'function' ? chkWhenIdle() : Promise.resolve()).then(function () {
+      return same() ? chkGetByProject(projId) : null;
+    }).then(function (allChk) {
+      if (!allChk || !same()) return;
+      if (typeof _chkQueue !== 'undefined' && Object.keys(_chkQueue).length) { _pdChkResync(projId); return; }
+      var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
+      var typing = function (el) {
+        var a = document.activeElement;
+        return !!(el && a && el.contains(a) && a.tagName === 'INPUT' && a.type === 'text');
+      };
+      var ovWrap = document.querySelector('[data-overview-chk-phase]');
+      var ovList = document.getElementById('pdOverviewChkList');
+      if (ovWrap && ovList && !typing(ovList)) {
+        var ovPhase = ovWrap.getAttribute('data-overview-chk-phase');
+        _pdRenderOverviewChk(projId, ovPhase, allChk.filter(function (c) { return c.phase === ovPhase; }));
+      }
+      var lc = document.getElementById('pdPhaseChecklists');
+      if (lc && !typing(lc)) {
+        var lcPhase = lc.getAttribute('data-phase') || (window._pdProj.currentPhase || 'order');
+        lc.innerHTML = buildPhaseChecklistHtml(projId, lcPhase, allChk, phases);
+      }
+      var info = _pdPhaseInfo(allChk);
+      document.querySelectorAll('#projDetailPanel .pdPhPill').forEach(function (el) {
+        var pp = info.phaseProgress[el.getAttribute('data-phase')];
+        el.textContent = (pp && pp.total > 0) ? pp.done + '/' + pp.total : '';
+      });
+    }).catch(function (err) { console.warn('[pdChkResync]', err); });
+  }, 350);
 }
 
 function pdDeleteCheck(projId, chkId, btn) {
@@ -1814,19 +1859,23 @@ function pdDeleteCheck(projId, chkId, btn) {
   chkDel(chkId).then(function () {
     if (row) row.remove();
     pdRefreshChkProgress(projId, listEl, phase);
+    _pdChkResync(projId);
   }).catch(function (err) {
     console.warn('[pdDeleteCheck]', err);
     if (row) row.style.opacity = '1';
-    if (typeof showToast === 'function') showToast('삭제 실패', 'error');
+    if (typeof showToast === 'function') showToast('삭제 실패: ' + _pdErrMsg(err), 'error');
+    _pdChkResync(projId);
   });
 }
 
 /* 완료 날짜 변경 */
 function pdChangeDoneDate(projId, chkId, newDate) {
   // 서버 전용 — 예전 IndexedDB 분기(db.transaction)는 db 가 항상 null 이라 TypeError 로 죽었다
-  return chkPatchItem(chkId, { doneDate: newDate }).catch(function (err) {
+  return chkPatchItem(chkId, { doneDate: newDate }).then(function () {
+    _pdChkResync(projId);
+  }).catch(function (err) {
     console.warn('[pdChangeDoneDate]', err);
-    if (typeof showToast === 'function') showToast('완료일 변경 실패', 'error');
+    if (typeof showToast === 'function') showToast('완료일 변경 실패: ' + _pdErrMsg(err), 'error');
   });
 }
 
@@ -1882,10 +1931,12 @@ function pdSaveCheckInline(span, projId, chkId, newText, oldText) {
   span.textContent = newText || oldText;
   if (!newText || newText === oldText) return;
 
-  return chkPatchItem(chkId, { text: newText }).catch(function (err) {
+  return chkPatchItem(chkId, { text: newText }).then(function () {
+    _pdChkResync(projId);
+  }).catch(function (err) {
     console.error('[pdSaveCheckInline]', err);
     span.textContent = oldText;
-    if (typeof showToast === 'function') showToast('수정 실패', 'error');
+    if (typeof showToast === 'function') showToast('수정 실패: ' + _pdErrMsg(err), 'error');
   });
 }
 
@@ -1906,7 +1957,7 @@ function renderOverviewChkListHtml(projId, phase, phMeta, items) {
       out += '</div>';
     });
   } else {
-    out += '<div style="text-align:center;color:var(--t6);font-size:11px;padding:12px 0">체크리스트 항목이 없습니다.<br><button class="btn btn-g btn-s" style="margin-top:6px;font-size:10px" onclick="pdGenerateChecklists(\'' + projId + '\')">기본 체크리스트 생성</button></div>';
+    out += '<div style="text-align:center;color:var(--t6);font-size:11px;padding:12px 0">체크리스트 항목이 없습니다.<br><button class="btn btn-g btn-s pd-edit-only" style="margin-top:6px;font-size:10px" onclick="pdGenerateChecklists(\'' + projId + '\')">기본 체크리스트 생성</button></div>';
   }
   return out;
 }
@@ -1915,23 +1966,29 @@ function renderOverviewChkListHtml(projId, phase, phMeta, items) {
 function pdRefreshOverviewChk(projId, phase) {
   var listEl = document.getElementById('pdOverviewChkList');
   if (!listEl || typeof chkGetByPhase !== 'function') return Promise.resolve();
+  return chkGetByPhase(projId, phase).then(function (items) {
+    _pdRenderOverviewChk(projId, phase, items);
+  });
+}
+/* 개요 체크리스트 목록 + 개수 표시를 주어진 항목으로 그린다 (pdRefreshOverviewChk·_pdChkResync 공용) */
+function _pdRenderOverviewChk(projId, phase, items) {
+  var listEl = document.getElementById('pdOverviewChkList');
+  if (!listEl) return;
   var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
   var phMeta = phases[phase] || { label: phase, icon: '', color: SEM_COLOR.muted };
-  return chkGetByPhase(projId, phase).then(function (items) {
-    items.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
-    listEl.innerHTML = renderOverviewChkListHtml(projId, phase, phMeta, items);
-    var stat = document.getElementById('pdOverviewChkStat');
-    if (stat) {
-      if (items.length > 0) {
-        var done = items.filter(function (c) { return c.done; }).length;
-        var pct = Math.round(done / items.length * 100);
-        stat.textContent = done + '/' + items.length + ' (' + pct + '%)';
-        stat.style.display = '';
-      } else {
-        stat.style.display = 'none';
-      }
+  items = items.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+  listEl.innerHTML = renderOverviewChkListHtml(projId, phase, phMeta, items);
+  var stat = document.getElementById('pdOverviewChkStat');
+  if (stat) {
+    if (items.length > 0) {
+      var done = items.filter(function (c) { return c.done; }).length;
+      var pct = Math.round(done / items.length * 100);
+      stat.textContent = done + '/' + items.length + ' (' + pct + '%)';
+      stat.style.display = '';
+    } else {
+      stat.style.display = 'none';
     }
-  });
+  }
 }
 
 function pdAddCheck(projId, phase) {
@@ -1946,28 +2003,25 @@ function pdAddCheck(projId, phase) {
   else if (inpOverview && inpOverview.value.trim()) { text = inpOverview.value.trim(); usedInput = inpOverview; }
   else if (inpLifecycle && inpLifecycle.value.trim()) { text = inpLifecycle.value.trim(); usedInput = inpLifecycle; }
   if (!text) return;
+  // Enter 연타·버튼 더블클릭으로 같은 항목이 두 번 들어가지 않게 — 입력을 비우고 저장 끝까지 잠근다
+  if (pdAddCheck._busy) return;
+  pdAddCheck._busy = true;
+  if (usedInput) usedInput.value = '';
   createCheckItem({ projectId: projId, phase: phase, text: text }).then(function () {
-    if (usedInput) { usedInput.value = ''; usedInput.focus(); }
-    // 현재 활성 탭에 해당하는 영역만 부분 갱신 (패널은 유지)
-    var lifecycleEl2 = document.getElementById('pdLifecycle');
-    var lifecycleNow = lifecycleEl2 && lifecycleEl2.style.display !== 'none';
-    if (lifecycleNow && typeof pdShowPhase === 'function') {
-      pdShowPhase(projId, phase);
-    } else {
-      return pdRefreshOverviewChk(projId, phase);
-    }
+    if (usedInput && usedInput.isConnected) usedInput.focus();
+    _pdChkResync(projId);   // 두 탭 모두 갱신
   }).catch(function (err) {
       console.error('[pdAddCheck]', err);
-      var msg = (err && err.message) ? err.message : '추가 실패';
-      if (typeof showToast === 'function') showToast('체크리스트 추가 실패: ' + msg, 'error');
-  });
+      if (usedInput && usedInput.isConnected && !usedInput.value) usedInput.value = text;   // 실패하면 입력 복원
+      if (typeof showToast === 'function') showToast('체크리스트 추가 실패: ' + _pdErrMsg(err), 'error');
+  }).then(function () { pdAddCheck._busy = false; });
 }
 
 function pdShowPhase(projId, phase) {
   chkGetByProject(projId).then(function (allChk) {
     var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
     var el = document.getElementById('pdPhaseChecklists');
-    if (el) el.innerHTML = buildPhaseChecklistHtml(projId, phase, allChk, phases);
+    if (el) { el.setAttribute('data-phase', phase); el.innerHTML = buildPhaseChecklistHtml(projId, phase, allChk, phases); }
   }).catch(function (err) {
       console.error('[pdShowPhase]', err);
       if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
@@ -1991,6 +2045,7 @@ var _pdChkDragId = null;
 
 function pdChkDragStart(e) {
   var el = e.currentTarget;  // setTimeout 안에서는 e.currentTarget 이 null
+  if (el.closest('.pd-ro')) { e.preventDefault(); return; }   // 보기 전용
   _pdChkDragId = el.getAttribute('data-chkid');
   e.dataTransfer.effectAllowed = 'move';
   el.style.opacity = '0.4';
@@ -2020,28 +2075,15 @@ function pdChkDrop(e) {
   ids.splice(fromIdx, 1);
   ids.splice(toIdx, 0, _pdChkDragId);
 
-  // 순서 업데이트: parent row의 items 배열 순서를 직접 변경해 한 번에 PUT
+  // 순서 업데이트: parent row의 items 배열 순서를 바꿔 한 번에 저장 (iid 기준 — chkReorder)
   var parentId = ids[0] && ids[0].indexOf('::') >= 0 ? ids[0].split('::')[0] : null;
   if (!parentId) return;
-  apiFetch('/api/checklists/' + encodeURIComponent(parentId)).then(function (r) {
-    var row = r.data;
-    var rowItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
-    var used = {};
-    var reordered = ids.map(function (cid) {
-      if (cid.split('::')[0] !== parentId) return null;
-      var idx = parseInt(cid.split('::')[1], 10);
-      used[idx] = true;
-      return rowItems[idx];
-    }).filter(Boolean);
-    // 화면에 없던 항목(다른 곳에서 막 추가된 것 등)이 사라지지 않게 뒤에 붙인다
-    rowItems.forEach(function (it, idx) { if (!used[idx]) reordered.push(it); });
-    reordered.forEach(function (it, i) { it.order = i; });
-    return apiFetch('/api/checklists/' + encodeURIComponent(parentId), { method: 'PUT', body: JSON.stringify({ items: reordered }) });
-  }).then(function () {
-    pdShowPhase(projId, phase);  // 개수는 그대로 — 목록만 다시 그린다(flat id 재부여)
+  chkReorder(parentId, ids).then(function () {
+    _pdChkResync(projId);   // 라이프사이클·개요 두 목록 모두 새 순서로
   }).catch(function (err) {
     console.error('[pdChkDrop]', err);
-    if (typeof showToast === 'function') showToast('순서 변경 실패', 'error');
+    if (typeof showToast === 'function') showToast('순서 변경 실패: ' + _pdErrMsg(err), 'error');
+    pdShowPhase(projId, phase);
   });
   _pdChkDragId = null;
 }

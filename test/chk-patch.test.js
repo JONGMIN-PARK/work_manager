@@ -30,7 +30,32 @@ test('부모 row 의 해당 항목만 고쳐 items 통째로 PUT', async () => {
   await s.chkPatchItem('c1::1', { doneDate: '2026-09-27' });
   assert.strictEqual(calls.length, 2);
   assert.deepStrictEqual(calls[1].slice(0, 2), ['/api/checklists/c1', 'PUT']);
-  assert.deepStrictEqual(JSON.parse(calls[1][2]), { items: [{ text: 'a' }, { text: 'b', done: true, doneDate: '2026-09-27' }] });
+  const body = JSON.parse(calls[1][2]);
+  // v13.213: 쓰기 때 항목마다 고유 iid 를 채운다 (위치가 바뀌어도 같은 항목을 찾도록)
+  assert.ok(body.items.every((it) => /^i[a-z0-9]+$/.test(it.iid)));
+  body.items.forEach((it) => { delete it.iid; });
+  assert.deepStrictEqual(body, { items: [{ text: 'a' }, { text: 'b', done: true, doneDate: '2026-09-27' }] });
+});
+
+test('iid 로 항목을 찾고 version 을 보낸다 — 409 면 다시 읽어 같은 변경을 재적용', async () => {
+  let row = { id: 'c1', version: 3, items: [{ iid: 'ia', text: 'a' }, { iid: 'ib', text: 'b' }] };
+  const puts = [];
+  let first = true;
+  const s = load((url, opt) => {
+    if (!opt) return Promise.resolve({ data: JSON.parse(JSON.stringify(row)) });
+    const b = JSON.parse(opt.body);
+    puts.push(b.version);
+    if (first) {   // 그 사이 다른 사람이 맨 앞에 항목을 넣고 저장
+      first = false;
+      row = { id: 'c1', version: 4, items: [{ iid: 'iz', text: 'z' }].concat(row.items) };
+      return Promise.reject(Object.assign(new Error('409'), { status: 409, data: { error: 'CONFLICT' } }));
+    }
+    row = Object.assign({}, row, { items: b.items, version: row.version + 1 });
+    return Promise.resolve({ data: row });
+  });
+  await s.chkPatchItem('c1::ib', { done: true });
+  assert.deepStrictEqual(puts, [3, 4]);
+  assert.deepStrictEqual(row.items.map((it) => it.text + (it.done ? ':x' : '')), ['z', 'a', 'b:x']);
 });
 
 test("'::' 없는 id·범위 밖 인덱스는 거부 (예전엔 null db.transaction 으로 TypeError)", async () => {

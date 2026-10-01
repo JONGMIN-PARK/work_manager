@@ -156,6 +156,35 @@ async function canEditById(req, projectId) {
 }
 
 /**
+ * projectId 로 읽기 권한 판정. 반환: true / false / null(이 테넌트에 프로젝트 없음).
+ */
+async function canReadById(req, projectId) {
+  if (!projectId) return null;
+  var pr = await db.query('SELECT id, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [projectId, req.tenant.id]);
+  if (!pr.rows.length) return null;
+  return canRead(req, pr.rows[0]);
+}
+
+/**
+ * 라우트용 편집 게이트 (v13.213). 통과하면 true, 아니면 응답(404/403)을 보내고 false.
+ *   if (!await pa.gateEdit(req, res, projectId)) return;
+ * 마일스톤·체크리스트·진척률·일정 쓰기가 프로젝트 편집 규칙을 따르도록 하는 단일 진입점.
+ */
+async function gateEdit(req, res, projectId, msg) {
+  var can = await canEditById(req, projectId);
+  if (can === null) { res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' }); return false; }
+  if (!can) { res.status(403).json({ error: 'FORBIDDEN', message: msg || '생성자·참여자·관리자만 수정할 수 있습니다.' }); return false; }
+  return true;
+}
+
+/** 라우트용 읽기 게이트. 통과하면 true, 아니면 404 응답 후 false (존재 여부를 숨기려고 403 대신 404). */
+async function gateRead(req, res, projectId) {
+  if (await canReadById(req, projectId)) return true;
+  res.status(404).json({ error: 'NOT_FOUND' });
+  return false;
+}
+
+/**
  * 코멘트 접근/작성 권한 (협업 규칙): admin · 운영자 · owner · 활성 멤버.
  * 가시성 공개(tenant/dept)나 executive 만으로는 허용하지 않는다 — routes/comments.js 기존 규칙 그대로.
  */
@@ -177,5 +206,8 @@ module.exports = {
   canRead: canRead,
   canEdit: canEdit,
   canEditById: canEditById,
+  canReadById: canReadById,
+  gateEdit: gateEdit,
+  gateRead: gateRead,
   canComment: canComment
 };

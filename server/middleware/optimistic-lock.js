@@ -19,6 +19,19 @@ async function optimisticUpdate(client, table, idCol, idVal, clientVersion, upda
   var extraClause = (extraWhere && extraWhere.clause) ? ' ' + extraWhere.clause : '';
   var extraValues = (extraWhere && extraWhere.values) ? extraWhere.values : [];
 
+  // 바꿀 컬럼이 없으면(예: body 가 {version} 뿐) 'SET , version = ...' 문법 오류로 500 이 났다 — v13.213.
+  // 변경 없이 현재 행을 돌려준다 (version 을 보냈는데 다르면 충돌로 처리).
+  if (!Object.keys(updates || {}).length) {
+    var curExtra = extraClause;
+    for (var ce = 0; ce < extraValues.length; ce++) curExtra = curExtra.replace('$NEXT' + (ce + 1), '$' + (ce + 2));
+    var curRes = await client.query('SELECT * FROM ' + table + ' WHERE ' + idCol + ' = $1' + curExtra, [idVal].concat(extraValues));
+    var curRow = curRes.rows[0] || null;
+    if (curRow && clientVersion != null && Number(curRow.version) !== Number(clientVersion)) {
+      return { success: false, row: null, conflict: true, latest: curRow, yourVersion: clientVersion };
+    }
+    return { success: !!curRow, row: curRow, conflict: false };
+  }
+
   // version이 없으면 잠금 없이 진행 (하위호환)
   if (clientVersion === undefined || clientVersion === null) {
     var cols = Object.keys(updates);

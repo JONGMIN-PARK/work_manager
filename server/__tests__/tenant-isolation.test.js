@@ -400,7 +400,8 @@ describe('Cross-tenant security holes', function () {
     var b = await req().post('/api/progress').set('Authorization', auth(adminB)).send({ projectId: projectBId, date: '2026-01-01', progress: 50 });
     expect(b.status).toBe(201);
     var a = await req().post('/api/progress').set('Authorization', auth(adminA)).send({ projectId: projectBId, date: '2026-01-01', progress: 99 });
-    expect(a.status).toBe(409);
+    // v13.213: 진척 기록도 프로젝트 편집 권한을 먼저 확인 → 다른 테넌트 프로젝트는 404 (upsert 까지 가지 않음)
+    expect(a.status).toBe(404);
     var row = (await h.db.query('SELECT progress, tenant_id FROM progress_history WHERE id = $1', [projectBId + '_2026-01-01'])).rows[0];
     expect(Number(row.progress)).toBe(50);
     expect(row.tenant_id).toBe(TENANT_B_ID);

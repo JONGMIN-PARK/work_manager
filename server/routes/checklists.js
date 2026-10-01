@@ -11,6 +11,9 @@ var httpErr = require('../lib/http-errors');
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
+// 쓰기는 프로젝트 편집 규칙(관리자·임원·생성자·참여자)을 따른다 — v13.213
+var CHK_FORBIDDEN = '생성자·참여자·관리자만 체크리스트를 수정할 수 있습니다.';
+
 // GET /api/checklists?projectId=xxx&phase=yyy — v13.34 가시성 적용
 router.get('/', async function (req, res) {
   try {
@@ -43,6 +46,7 @@ router.get('/:id', async function (req, res) {
   try {
     var r = await db.query('SELECT * FROM checklists WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    if (!await ps.gateRead(req, res, r.rows[0].project_id)) return;
     res.json({ data: r.rows[0] });
   } catch (e) {
     httpErr.serverError(res, '[checklists/get]', e);
@@ -53,10 +57,13 @@ router.get('/:id', async function (req, res) {
 router.post('/', async function (req, res) {
   try {
     var b = req.body;
+    var projectId = b.projectId || b.project_id;
+    if (!projectId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'projectId 필수' });
+    if (!await ps.gateEdit(req, res, projectId, CHK_FORBIDDEN)) return;
     var id = b.id || ('chk-' + require('crypto').randomUUID().slice(0, 12));
     var r = await db.query(
       "INSERT INTO checklists (id, project_id, phase, items, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
-      [id, b.projectId || b.project_id, b.phase || null, JSON.stringify(b.items || []), req.user.sub, req.tenant.id]
+      [id, projectId, b.phase || null, JSON.stringify(b.items || []), req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
@@ -68,6 +75,9 @@ router.post('/', async function (req, res) {
 router.put('/:id', async function (req, res) {
   try {
     var b = req.body;
+    var cur = await db.query('SELECT project_id, version FROM checklists WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!cur.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    if (!await ps.gateEdit(req, res, cur.rows[0].project_id, CHK_FORBIDDEN)) return;
     var sets = [];
     var params = [];
     var idx = 1;
@@ -78,9 +88,15 @@ router.put('/:id', async function (req, res) {
     params.push(req.params.id);
     var idIdx = idx++;
     params.push(req.tenant.id);
-    var sql = 'UPDATE checklists SET ' + sets.join(', ') + ' WHERE id = $' + idIdx + ' AND tenant_id = $' + idx + ' RETURNING *';
-    var r = await db.query(sql, params);
-    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    var sql = 'UPDATE checklists SET ' + sets.join(', ') + ' WHERE id = $' + idIdx + ' AND tenant_id = $' + idx++;
+    // v13.213: version 을 보내면 비교한다(items 배열 통째 저장이라 동시 편집 시 서로 덮어썼다). 안 보내면 예전처럼 무조건 저장.
+    if (b.version != null) { sql += ' AND version = $' + idx++; params.push(Number(b.version)); }
+    var r = await db.query(sql + ' RETURNING *', params);
+    if (!r.rows.length) {
+      var latest = await db.query('SELECT * FROM checklists WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+      if (!latest.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+      return lock.sendConflict(res, latest.rows[0], b.version);
+    }
     res.json({ data: r.rows[0] });
   } catch (e) {
     httpErr.serverError(res, '[checklists/update]', e);
@@ -90,6 +106,9 @@ router.put('/:id', async function (req, res) {
 // DELETE /api/checklists/:id
 router.delete('/:id', async function (req, res) {
   try {
+    var cur = await db.query('SELECT project_id FROM checklists WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!cur.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    if (!await ps.gateEdit(req, res, cur.rows[0].project_id, CHK_FORBIDDEN)) return;
     var r = await db.query('DELETE FROM checklists WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
