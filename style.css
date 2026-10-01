@@ -383,6 +383,14 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .calm-dhead{display:flex;align-items:center;gap:4px;padding:3px 6px;height:24px;box-sizing:border-box}
 .calm-dnum{font-size:12px;font-weight:600;color:var(--t3)}
 .calm-day.today .calm-dnum{color:#fff;background:var(--ac);border-radius:10px;padding:0 6px}
+/* v13.214 일요일·대한민국 공휴일(대체공휴일 포함) 빨간 날 */
+.calm-day.sun .calm-dnum,.calm-day.hol .calm-dnum{color:#EF4444}
+.calm-day.today.sun .calm-dnum,.calm-day.today.hol .calm-dnum{color:#fff;background:#EF4444}
+.calm-day.out.hol .calm-hol{opacity:.45}
+.calm-hol{font-size:9px;font-weight:600;color:#EF4444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.cal-week-cell.sun .cal-date,.cal-week-cell.sun .cal-week-dow,.cal-week-cell.hol .cal-date,.cal-week-cell.hol .cal-week-dow{color:#EF4444}
+.cal-week-hol{flex:1;margin:0 6px;font-size:10px;font-weight:600;color:#EF4444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.cal-side-hol{font-size:10px;font-weight:600;color:#EF4444}
 .calm-od{font-size:9px;font-weight:700;color:#EF4444}
 .calm-cnt{margin-left:auto;font-size:9px;color:var(--t6)}
 .calm-arch{font-size:8px;padding:0 4px;background:rgba(59,130,246,.12);color:#3B82F6;border-radius:3px;white-space:nowrap;overflow:hidden}

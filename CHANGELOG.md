@@ -1,5 +1,13 @@
 # Work Manager — 변경 이력
 
+## v13.214 (2026-10-01) — 달력 공휴일 표시 (대체공휴일 포함)
+
+- kr-holidays.js(신규, 순수): `krHolidaysOfYear(y)`·`krHolidayName(ymd)`·`krHolidayCovered(y)`. 고정 공휴일(2026~ 노동절·제헌절) + 음력 표 LUNAR(2024~2030 설·부처님오신날·추석) + EXTRA(선거일·임시공휴일). 대체공휴일: 설·추석 연휴는 일요일/겹침 → 연휴 끝 다음 첫 평일, 3·1절·어린이날·광복절·개천절·한글날·부처님오신날·성탄절·노동절·제헌절은 토/일/겹침, 신정·현충일·선거일은 없음. 평일 겹침은 (겹친 수 - 1)일.
+- date.nager.at 대신 쓰는 이유: 2025 5/6·10/8 누락, 2026 3·1절·광복절을 대체일로 옮겨 적고 원래 날짜 누락, 2027 설날 2/7 누락.
+- calendar: `_calHoliday` → 월간 `.calm-day.hol/.sun`(날짜 빨강) + `.calm-hol` 이름, 주간 `.cal-week-cell.hol/.sun` + `.cal-week-hol`, 오른쪽 선택일 제목 `.cal-side-hol`. 오늘이 휴일이면 동그라미도 빨강.
+- timeline `_projUpdateEstimatedHours`: 표가 있는 해는 내장 공휴일, 표 밖의 해만 외부 API.
+- 업무일지_분석기.html: kr-holidays.js(defer, calendar.js 앞). test/kr-holidays.test.js — 2025~2029 대체공휴일·2026 22일·2027 24일.
+
 ## v13.213 (2026-10-01) — 프로젝트 편집 권한 · 체크리스트 동기화
 
 - 서버 권한: lib/project-access 에 `canReadById`·`gateEdit`·`gateRead`. milestones POST/PUT/DELETE·GET /:id/logs, checklists 전 쓰기·GET /:id, progress POST(편집)·GET(가시성 서브쿼리), events(개인=작성자·admin / 프로젝트=작성자·연결 프로젝트 편집자, 새 연결은 편집 권한 필수, GET /:id 가시성). 다른 테넌트·없는 projectId 는 404/400(전엔 FK 만 통과하면 INSERT).

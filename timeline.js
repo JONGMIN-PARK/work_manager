@@ -1820,6 +1820,12 @@ async function _projUpdateEstimatedHours() {
     var firstYear = Number(start.slice(0, 4)), lastYear = Number(end.slice(0, 4));
     var years = [];
     for (let year = firstYear; year <= lastYear; year++) {
+      // v13.214: 내장 공휴일 표(kr-holidays.js, 대체공휴일 포함)를 우선 — 외부 API 는 대체공휴일이 부정확.
+      //  음력 표 밖의 해만 외부 API 로 보충
+      if (typeof krHolidayCovered === 'function' && krHolidayCovered(year)) {
+        years.push(Object.keys(krHolidaysOfYear(year)));
+        continue;
+      }
       if (!_projHolidayCache[year]) {
         _projHolidayCache[year] = fetch('https://date.nager.at/api/v3/PublicHolidays/' + year + '/KR')
           .then(function (response) { if (!response.ok) throw new Error('holiday service'); return response.json(); })

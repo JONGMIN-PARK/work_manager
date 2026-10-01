@@ -40,6 +40,8 @@ function renderCalendarDebounced(){clearTimeout(_calRenderTimer);_calRenderTimer
 
 function _calAddDays(ymd, n) { return ymdAddDays(ymd, n); }
 function _calDow(ymd) { return new Date(ymd + 'T00:00:00').getDay(); }
+/* 대한민국 공휴일 이름 (대체공휴일 포함, kr-holidays.js) — 없거나 모듈 미로드면 '' */
+function _calHoliday(ymd) { return typeof krHolidayName === 'function' ? krHolidayName(ymd) : ''; }
 function _calMd(ymd) { return ymd ? (+ymd.slice(5, 7)) + '/' + (+ymd.slice(8, 10)) : ''; }
 function _calPname(p) { return p ? (p.name || p.orderNo || '') : ''; }
 
@@ -366,8 +368,10 @@ function renderMonthView(items, rg, archiveSummaries) {
       (archiveSummaries || []).forEach(function (as) {
         if (d === as.startDate || (d >= as.startDate && d <= as.endDate && i === 1)) arch = '<span class="calm-arch" title="' + eH(as.label || '') + '">📊 ' + Math.round(as.totalHours) + 'h/' + as.memberCount + '명</span>';
       });
-      html += '<div class="calm-day' + (inMonth ? '' : ' out') + (d === today ? ' today' : '') + (d === calSelDate ? ' sel' : '') + (i === 0 || i === 6 ? ' wkend' : '') + '" data-date="' + d + '" style="grid-column:' + (i + 1) + ';grid-row:1/-1">'
+      var hol = _calHoliday(d);
+      html += '<div class="calm-day' + (inMonth ? '' : ' out') + (d === today ? ' today' : '') + (d === calSelDate ? ' sel' : '') + (i === 0 || i === 6 ? ' wkend' : '') + (i === 0 ? ' sun' : '') + (hol ? ' hol' : '') + '" data-date="' + d + '" style="grid-column:' + (i + 1) + ';grid-row:1/-1"' + (hol ? ' title="' + eH(hol) + '"' : '') + '>'
         + '<div class="calm-dhead"><span class="calm-dnum">' + (+d.slice(8)) + '</span>'
+        + (hol ? '<span class="calm-hol">' + eH(hol) + '</span>' : '')
         + (od ? '<span class="calm-od" title="지연 ' + od + '건">⚠' + od + '</span>' : '')
         + arch
         + (dayItems.length ? '<span class="calm-cnt">' + dayItems.length + '</span>' : '')
@@ -512,7 +516,8 @@ function renderCalSide() {
   var running = onDay.filter(function (it) { return it.kind === 'pspan'; }).length;
   var dayItems = onDay.filter(function (it) { return it.kind !== 'pspan'; });
   var dw = ['일', '월', '화', '수', '목', '금', '토'][_calDow(sel)];
-  h += '<div class="cal-side-sec"><div class="cal-side-h">📅 ' + _calMd(sel) + ' (' + dw + ')' + (sel === today ? ' <span class="cal-side-today">오늘</span>' : '')
+  var selHol = _calHoliday(sel);
+  h += '<div class="cal-side-sec"><div class="cal-side-h">📅 ' + _calMd(sel) + ' (' + dw + ')' + (selHol ? ' <span class="cal-side-hol">' + eH(selHol) + '</span>' : '') + (sel === today ? ' <span class="cal-side-today">오늘</span>' : '')
     + '<span style="flex:1"></span><button class="btn btn-p btn-s" style="font-size:10px" onclick="showEventModal(null,\'' + sel + '\')">＋ 일정</button></div>'
     + (dayItems.length ? dayItems.map(function (it) { return _calRowHtml(it, false); }).join('') : '<div class="cal-side-empty">이 날 항목이 없습니다</div>')
     + (running ? '<div class="cal-side-hint" style="margin-top:4px">▭ 진행 중 프로젝트 ' + running + '건</div>' : '')
@@ -614,10 +619,11 @@ function renderWeekView(items, rg, archiveSummaries) {
   var dowNames = ['일', '월', '화', '수', '목', '금', '토'];
   var html = '';
   days.forEach(function (dateStr, idx) {
-    var cls = 'cal-week-cell' + (dateStr === todayStr ? ' cal-today' : '') + (dateStr === calSelDate ? ' sel' : '');
+    var wHol = _calHoliday(dateStr);
+    var cls = 'cal-week-cell' + (dateStr === todayStr ? ' cal-today' : '') + (dateStr === calSelDate ? ' sel' : '') + (idx === 0 ? ' sun' : '') + (wHol ? ' hol' : '');
     var dayItems = items.filter(function (it) { return it.date <= dateStr && it.end >= dateStr; });
     html += '<div class="' + cls + '" data-date="' + dateStr + '">' +
-      '<div class="cal-week-hdr"><span class="cal-week-dow">' + dowNames[idx] + '</span><span class="cal-date">' + _calMd(dateStr) + '</span></div>' +
+      '<div class="cal-week-hdr"><span class="cal-week-dow">' + dowNames[idx] + '</span>' + (wHol ? '<span class="cal-week-hol">' + eH(wHol) + '</span>' : '') + '<span class="cal-date">' + _calMd(dateStr) + '</span></div>' +
       '<div class="cal-week-items">' + dayItems.map(function (it) { return _calChipHtml(it, { withProj: true }); }).join('') + '</div>' +
     '</div>';
   });

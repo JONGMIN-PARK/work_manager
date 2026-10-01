@@ -23,8 +23,9 @@
 <script src="project-data.js?v=6" onerror="console.warn('project-data.js 로드 실패')"></script>
 <script src="ui-helpers.js?v=5" onerror="console.warn('ui-helpers.js 로드 실패')"></script>
 <!-- 렌더러 (defer — 초기 표시 이후 실행돼도 무방) -->
-<script defer src="calendar.js?v=7" onerror="console.warn('calendar.js 로드 실패')"></script>
-<script defer src="timeline.js?v=11" onerror="console.warn('timeline.js 로드 실패')"></script>
+<script defer src="kr-holidays.js?v=1" onerror="console.warn('kr-holidays.js 로드 실패')"></script>
+<script defer src="calendar.js?v=8" onerror="console.warn('calendar.js 로드 실패')"></script>
+<script defer src="timeline.js?v=12" onerror="console.warn('timeline.js 로드 실패')"></script>
 <script defer src="project-detail.js?v=5" onerror="console.warn('project-detail.js 로드 실패')"></script>
 <script defer src="dashboard.js?v=5" onerror="console.warn('dashboard.js 로드 실패')"></script>
 <script defer src="pipeline.js?v=6" onerror="console.warn('pipeline.js 로드 실패')"></script>
@@ -61,7 +62,7 @@
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.213';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.214';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
