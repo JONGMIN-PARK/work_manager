@@ -1,5 +1,15 @@
 # Work Manager — 변경 이력
 
+## v13.215 (2026-10-26) — 텔레그램 변경 내용 알림 (주간업무보고 · 프로젝트)
+
+- lib/change-diff.js(신규, 순수): `diffProject`·`diffMilestone`·`msCreated/msDeleted`·`diffChecklist`(iid 기준)·`specChanges`·`diffWeeklyItems`(client|name 기준). 항목 형식 `{key,label,from,to}` / `{key,text}` / `{key,label,list}`.
+- services/notification/change-feed.js(신규): (tenant, project, actor) 단위 메모리 버퍼 → 마지막 변경 후 60초 조용하거나 첫 변경 후 5분이면 `project_updated` 1건을 notifyProjectStakeholders(멤버·소유자·admin + 그룹방). 같은 key 는 처음 from·마지막 to, 되돌리면 제외, list 는 합집합. 최대 15줄 + "외 N건". env `CHANGE_FEED_QUIET_MS`·`CHANGE_FEED_MAX_MS`. SIGTERM 시 flushAll.
+- projects PUT: notifyAdmins(project_updated, summary) → change-feed (phases·dependencies·specs 도 비교, 감사 로그 changes 는 같은 줄). PUT /:id/specs 도 실제 변경 시 기록.
+- milestones POST/PUT/DELETE, checklists POST/PUT/DELETE, PATCH /:id/specs → change-feed. 마일스톤 완료 전환은 milestone_complete 가 따로 가므로 제외.
+- weekly-reports POST: upsert 전에 이전 저장본(같은 name 우선, 없으면 같은 team·week_start 최신) cur.items 조회 → `diffWeeklyItems` → weekly_report_uploaded 에 `first`·`changes`(최대 20)·`more`. 변경 없는 재저장은 알림 생략.
+- templates: project_updated(actorName·lines·more), weekly_report_uploaded(등록/수정 + 🆕✏️🗑 목록). 알림 설정 UI 에 weekly_report_uploaded.
+- __tests__/change-diff.test.js.
+
 ## v13.214 (2026-10-01) — 달력 공휴일 표시 (대체공휴일 포함)
 
 - kr-holidays.js(신규, 순수): `krHolidaysOfYear(y)`·`krHolidayName(ymd)`·`krHolidayCovered(y)`. 고정 공휴일(2026~ 노동절·제헌절) + 음력 표 LUNAR(2024~2030 설·부처님오신날·추석) + EXTRA(선거일·임시공휴일). 대체공휴일: 설·추석 연휴는 일요일/겹침 → 연휴 끝 다음 첫 평일, 3·1절·어린이날·광복절·개천절·한글날·부처님오신날·성탄절·노동절·제헌절은 토/일/겹침, 신정·현충일·선거일은 없음. 평일 겹침은 (겹친 수 - 1)일.

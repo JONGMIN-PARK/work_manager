@@ -9,6 +9,8 @@ var tenant = require('../middleware/tenant');
 var ps = require('../lib/project-access');
 var operator = require('../middleware/operator');
 var httpErr = require('../lib/http-errors');
+var changeDiff = require('../lib/change-diff');
+var changeFeed = require('../services/notification/change-feed');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -64,6 +66,7 @@ router.post('/', async function (req, res) {
     // 목표시간이 있는 마일스톤이 추가되면 가중평균이 바뀐다
     _rollupProjectProgress(projectId, req.tenant.id).catch(function (e) { console.error('[ms/rollup]', e.message); });
     try { authService.auditLog(req.user.sub, 'milestone.create', 'milestone', id, { name: r.rows[0] && r.rows[0].name, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
+    if (r.rows[0]) changeFeed.record(req, projectId, [changeDiff.msCreated(r.rows[0])]);
   } catch (e) {
     httpErr.serverError(res, '[milestones/create]', e);
   }
@@ -73,7 +76,7 @@ router.post('/', async function (req, res) {
 router.put('/:id', async function (req, res) {
   try {
     var b = req.body;
-    var cur = await db.query('SELECT project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var cur = await db.query('SELECT id, project_id, name, start_date, end_date, status FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!cur.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     if (!await ps.gateEdit(req, res, cur.rows[0].project_id, '생성자·참여자·관리자만 마일스톤을 수정할 수 있습니다.')) return;
     // sort_order=0 도 유효한 값 → falsy(||) 대신 null 체크로 보존 (첫 번째 마일스톤 순서 저장 누락 방지)
@@ -89,6 +92,7 @@ router.put('/:id', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
     try { authService.auditLog(req.user.sub, 'milestone.update', 'milestone', req.params.id, { name: r.rows[0] && r.rows[0].name, status: r.rows[0] && r.rows[0].status, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
+    changeFeed.record(req, r.rows[0].project_id, changeDiff.diffMilestone(cur.rows[0], r.rows[0]));
 
     // 텔레그램 알림: 마일스톤 완료
     try {
@@ -450,6 +454,7 @@ router.delete('/:id', async function (req, res) {
     res.json({ message: '삭제 완료' });
     _rollupProjectProgress(r.rows[0].project_id, req.tenant.id).catch(function (e) { console.error('[ms/rollup]', e.message); });
     try { authService.auditLog(req.user.sub, 'milestone.delete', 'milestone', req.params.id, { name: r.rows[0] && r.rows[0].name, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
+    changeFeed.record(req, r.rows[0].project_id, [changeDiff.msDeleted(r.rows[0])]);
   } catch (e) {
     httpErr.serverError(res, '[milestones/delete]', e);
   }

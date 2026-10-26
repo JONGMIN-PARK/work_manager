@@ -14,6 +14,8 @@ var gcs = require('../services/gcs.service');
 var pa = require('../lib/project-access');
 var specPatch = require('../lib/spec-patch');
 var httpErr = require('../lib/http-errors');
+var changeDiff = require('../lib/change-diff');
+var changeFeed = require('../services/notification/change-feed');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -244,12 +246,13 @@ router.patch('/:id/specs', async function (req, res) {
         var r2 = await client.query('SELECT specs, specs_updated_by, specs_updated_at FROM projects WHERE id = $1', [req.params.id]);
         row = r2.rows[0];
       }
-      return { row: row, applied: result.applied.length, conflicts: result.conflicts };
+      return { row: row, applied: result.applied.length, appliedList: result.applied, conflicts: result.conflicts };
     });
     if (out.stale) return res.status(409).json({ error: 'STALE', message: '사양서 형식이 바뀌었습니다. 새로 불러온 뒤 다시 저장하세요.' });
     if (out.tooLarge) return res.status(413).json({ error: 'TOO_LARGE', message: '사양서가 너무 큽니다(2MB 이하).' });
     res.json({ data: out.row, applied: out.applied, conflicts: out.conflicts });
     if (out.applied) { try { authService.auditLog(req.user.sub, 'project.specs.patch', 'project', req.params.id, { applied: out.applied, conflicts: out.conflicts.length }, req); } catch (_) {} }
+    if (out.applied) changeFeed.record(req, req.params.id, changeDiff.specChanges(out.appliedList));
   } catch (e) {
     httpErr.serverError(res, '[specs/patch]', e);
   }

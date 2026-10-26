@@ -7,6 +7,8 @@ var { parsePagination } = require('../middleware/pagination');
 var tenant = require('../middleware/tenant');
 var ps = require('../lib/project-access');
 var httpErr = require('../lib/http-errors');
+var changeDiff = require('../lib/change-diff');
+var changeFeed = require('../services/notification/change-feed');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -66,6 +68,7 @@ router.post('/', async function (req, res) {
       [id, projectId, b.phase || null, JSON.stringify(b.items || []), req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
+    changeFeed.record(req, projectId, changeDiff.diffChecklist([], b.items || [], b.phase || null));
   } catch (e) {
     httpErr.serverError(res, '[checklists/create]', e);
   }
@@ -75,7 +78,7 @@ router.post('/', async function (req, res) {
 router.put('/:id', async function (req, res) {
   try {
     var b = req.body;
-    var cur = await db.query('SELECT project_id, version FROM checklists WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var cur = await db.query('SELECT project_id, version, phase, items FROM checklists WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!cur.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     if (!await ps.gateEdit(req, res, cur.rows[0].project_id, CHK_FORBIDDEN)) return;
     var sets = [];
@@ -98,6 +101,8 @@ router.put('/:id', async function (req, res) {
       return lock.sendConflict(res, latest.rows[0], b.version);
     }
     res.json({ data: r.rows[0] });
+    // 텔레그램 변경 알림 — 저장 직전 항목과 비교 (같은 version 으로 저장됐으니 cur 가 곧 이전 값)
+    if (b.items !== undefined) changeFeed.record(req, cur.rows[0].project_id, changeDiff.diffChecklist(cur.rows[0].items, r.rows[0].items, r.rows[0].phase));
   } catch (e) {
     httpErr.serverError(res, '[checklists/update]', e);
   }
@@ -106,12 +111,13 @@ router.put('/:id', async function (req, res) {
 // DELETE /api/checklists/:id
 router.delete('/:id', async function (req, res) {
   try {
-    var cur = await db.query('SELECT project_id FROM checklists WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var cur = await db.query('SELECT project_id, phase, items FROM checklists WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!cur.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     if (!await ps.gateEdit(req, res, cur.rows[0].project_id, CHK_FORBIDDEN)) return;
     var r = await db.query('DELETE FROM checklists WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
+    changeFeed.record(req, cur.rows[0].project_id, changeDiff.diffChecklist(cur.rows[0].items, [], cur.rows[0].phase));
   } catch (e) {
     httpErr.serverError(res, '[checklists/delete]', e);
   }

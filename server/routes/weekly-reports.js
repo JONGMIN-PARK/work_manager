@@ -6,6 +6,9 @@ var tenant = require('../middleware/tenant');
 var parser = require('../services/weekly-report-parser');
 var notificationService = require('../services/notification.service');
 var httpErr = require('../lib/http-errors');
+var changeDiff = require('../lib/change-diff');
+
+var WR_MAX_CHANGES = 20;
 
 /**
  * 주간업무보고 업로드 알림 — 테넌트 관리자/팀장 + 보고서에 언급된 멤버에게 발송.
@@ -38,12 +41,20 @@ async function notifyWeeklyReportUploads(tenantId, savedReports, uploaderName) {
       var ids = Object.keys(recipients);
       if (!ids.length) continue;
 
+      // v13.215: 이전 저장본(같은 이름 덮어쓰기, 없으면 같은 팀·주차의 최신 버전)과 업무 단위 비교
+      var first = !rep.prevItems;
+      var changes = changeDiff.diffWeeklyItems(rep.prevItems || [], (parsed.cur && parsed.cur.items) || []);
+      if (!first && !changes.length) continue; // 내용 그대로 다시 저장 — 알림 생략
+
       await notificationService.notify('weekly_report_uploaded', {
         team: (parsed.meta && parsed.meta.team) || rep.team || null,
         weekLabel: (parsed.meta && parsed.meta.weekLabel) || rep.week_label || null,
         count: stats.total || 0,
         done: byStatus.done != null ? byStatus.done : null,
-        uploader: uploaderName || null
+        uploader: uploaderName || null,
+        first: first,
+        changes: changes.slice(0, WR_MAX_CHANGES),
+        more: Math.max(0, changes.length - WR_MAX_CHANGES)
       }, ids);
     }
   } catch (e) {
@@ -74,6 +85,14 @@ router.post('/', async function (req, res) {
         if (!isNaN(d.getTime())) savedAt = d.toISOString();
       }
 
+      // 알림 비교용 이전 저장본 — 같은 이름(덮어쓰기) 우선, 없으면 같은 팀·주차의 가장 최근 버전
+      var prevR = await db.query(
+        "SELECT parsed->'cur'->'items' AS items FROM weekly_reports " +
+        'WHERE tenant_id = $1 AND (name = $2 OR ($3::text IS NOT NULL AND team = $3 AND week_start = $4)) ' +
+        'ORDER BY (name = $2) DESC, updated_at DESC NULLS LAST LIMIT 1',
+        [req.tenant.id, p.name, meta.team || null, meta.weekStart || null]
+      );
+
       var r = await db.query(
         'INSERT INTO weekly_reports ' +
         '(tenant_id, name, team, week_label, week_start, week_end, saved_at, last_text, cur_text, parsed, uploaded_by) ' +
@@ -96,7 +115,8 @@ router.post('/', async function (req, res) {
       savedForNotify.push({
         team: r.rows[0].team || meta.team || null,
         week_label: r.rows[0].week_label || meta.weekLabel || null,
-        parsed: parsed
+        parsed: parsed,
+        prevItems: prevR.rows.length ? (prevR.rows[0].items || []) : null
       });
     }
     res.status(201).json({ data: saved, count: saved.length });

@@ -72,11 +72,20 @@ var TEMPLATES = {
       (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.milestoneName);
   },
   weekly_report_uploaded: function (p) {
-    return '📋 <b>주간업무보고 등록</b>\n' +
+    // v13.215: p.changes — 이전 저장본과 달라진 업무 [{ kind: add|mod|del, client, name, detail }]
+    var ch = p.changes || [];
+    var icon = { add: '🆕', mod: '✏️', del: '🗑' };
+    var body = ch.map(function (c) {
+      return (icon[c.kind] || '•') + ' ' + (c.client ? '[' + escHtml(c.client) + '] ' : '') + escHtml(c.name || '') +
+        (c.detail ? '\n    ' + escHtml(c.detail) : '');
+    }).join('\n');
+    return '📋 <b>주간업무보고 ' + (p.first ? '등록' : '수정') + '</b>\n' +
       escHtml(p.team || '(팀 미지정)') + (p.weekLabel ? ' <code>' + escHtml(p.weekLabel) + '</code>' : '') + '\n' +
       '총 ' + escHtml(p.count) + '건' +
       (p.done != null ? ' (완료 ' + escHtml(p.done) + ')' : '') +
-      (p.uploader ? ' · 작성 ' + escHtml(p.uploader) : '') + '\n' +
+      (p.uploader ? ' · 작성 ' + escHtml(p.uploader) : '') +
+      (body ? '\n\n<b>' + (p.first ? '업무 ' : '변경 ') + (ch.length + (p.more || 0)) + '건</b>\n' + body : '') +
+      (p.more ? '\n… 외 ' + escHtml(p.more) + '건' : '') + '\n' +
       '💡 /wr 로 확인';
   },
   dev_item_assigned: function (p) {
@@ -204,8 +213,12 @@ var TEMPLATES = {
       (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.projectName || p.name);
   },
   project_updated: function (p) {
+    // v13.215: p.lines — change-feed 가 묶은 변경 줄 (프로젝트·마일스톤·체크리스트·사양서)
     return '✏️ <b>프로젝트 수정</b>\n' +
       (p.orderNo ? '[' + escHtml(p.orderNo) + '] ' : '') + escHtml(p.projectName || p.name) +
+      (p.actorName ? ' · ' + escHtml(p.actorName) : '') +
+      (p.lines && p.lines.length ? '\n' + p.lines.map(function (l) { return '• ' + escHtml(l); }).join('\n') : '') +
+      (p.more ? '\n… 외 ' + escHtml(p.more) + '건' : '') +
       (p.summary ? '\n' + escHtml(p.summary) : '');
   },
   milestone_progress: function (p) {

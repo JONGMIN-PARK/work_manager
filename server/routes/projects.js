@@ -11,6 +11,8 @@ var tenant = require('../middleware/tenant');
 var operator = require('../middleware/operator');
 var pa = require('../lib/project-access');
 var httpErr = require('../lib/http-errors');
+var changeDiff = require('../lib/change-diff');
+var changeFeed = require('../services/notification/change-feed');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -148,7 +150,7 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
   try {
     // 가시성 사전 체크 — RBAC 권한이 있어도 보이지 않는 프로젝트는 편집 불가.
     // 같은 조회로 변경 비교용 이전 값도 얻는다(실제 변경된 필드만 알림 → 무의미 중복 방지)
-    var preR = await db.query('SELECT id, owner_id, visibility, department_id, status, name, order_no, end_date, start_date, progress, estimated_hours, current_phase, assignees, memo FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var preR = await db.query('SELECT id, owner_id, visibility, department_id, status, name, order_no, end_date, start_date, progress, estimated_hours, current_phase, assignees, memo, phases, dependencies, specs FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!preR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     if (!await canEditProject(req, preR.rows[0])) return res.status(403).json({ error: 'FORBIDDEN', message: '생성자·참여자·관리자만 프로젝트를 편집할 수 있습니다.' });
     var prev = preR.rows[0];
@@ -196,33 +198,13 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
       }
     } catch (_) { /* 알림 실패 무시 */ }
 
-    // 실제 변경된 필드만 추려 감사 로그 + 수정 알림 (best-effort, 무의미 중복 방지)
+    // 실제 변경된 필드만 추려 감사 로그 + 텔레그램 변경 알림 (best-effort, no-op 저장은 스킵)
+    //  v13.215: 관리자에게 즉시 보내던 요약 → change-feed 로 묶어 이해관계자·그룹방에 (마일스톤·체크리스트 변경과 한 건으로)
     try {
-      var updRow = result.row || {};
-      var _labels = { status: '상태', progress: '진척률', start_date: '시작일', end_date: '종료일', estimated_hours: '예상시간', current_phase: '단계', name: '이름', visibility: '가시성', order_no: '수주번호' };
-      var _changes = [];
-      if (prev) {
-        Object.keys(_labels).forEach(function (k) {
-          if (clean[k] === undefined) return;
-          var nv = (clean[k] == null ? '' : String(clean[k]));
-          var ov = (prev[k] == null ? '' : String(prev[k]));
-          if (nv !== ov) _changes.push(_labels[k] + ' ' + (ov ? ov + '→' : '') + nv);
-        });
-        if (clean.assignees !== undefined) {
-          var _nA = clean.assignees;  // 이미 JSON.stringify 됨
-          var _oA = prev.assignees == null ? '[]' : (typeof prev.assignees === 'string' ? prev.assignees : JSON.stringify(prev.assignees));
-          if (_nA !== _oA) _changes.push('담당자 변경');
-        }
-        if (clean.memo !== undefined && String(clean.memo || '') !== String(prev.memo || '')) _changes.push('메모 변경');
-      } else {
-        _changes = Object.keys(clean).map(function (k) { return _labels[k] || k; });
-      }
-      // 실제 변경이 있을 때만 로그·알림 (no-op 저장은 스킵)
+      var _changes = changeDiff.diffProject(prev, clean);
       if (_changes.length) {
-        try { authService.auditLog(req.user.sub, 'project.update', 'project', req.params.id, { changes: _changes }, req).catch(function () {}); } catch (_e) {}
-        notificationService.notifyAdmins('project_updated', {
-          projectName: updRow.name, orderNo: updRow.order_no, summary: _changes.join(' · ')
-        }, req.tenant.id).catch(function (e) { console.error('[noti]', e.message); });
+        try { authService.auditLog(req.user.sub, 'project.update', 'project', req.params.id, { changes: _changes.map(changeFeed.lineOf) }, req).catch(function () {}); } catch (_e) {}
+        changeFeed.record(req, req.params.id, _changes);
       }
     } catch (_) {}
   } catch (e) {
@@ -524,7 +506,7 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
 var _SPECS_MAX = 2 * 1024 * 1024;
 router.put('/:id/specs', async function (req, res) {
   try {
-    var pr = await db.query('SELECT id, owner_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var pr = await db.query('SELECT id, owner_id, specs FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!pr.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
     if (!(await canEditProject(req, pr.rows[0]))) {
       return res.status(403).json({ error: 'FORBIDDEN', message: '생성자·참여자·관리자만 사양서를 수정할 수 있습니다.' });
@@ -541,6 +523,7 @@ router.put('/:id/specs', async function (req, res) {
     );
     res.json({ data: r.rows[0], message: '사양이 저장되었습니다.' });
     try { authService.auditLog(req.user.sub, 'project.specs.update', 'project', req.params.id, {}, req); } catch (_) {}
+    if (changeDiff.stable(pr.rows[0].specs || {}) !== changeDiff.stable(specs)) changeFeed.record(req, req.params.id, [{ key: 'spec', label: '사양서 수정', list: ['전체 저장'] }]);
   } catch (e) {
     httpErr.serverError(res, '[projects/specs/update]', e);
   }

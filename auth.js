@@ -1005,7 +1005,8 @@ async function loadTelegramPrefs(container) {
 
   var eventLabels = {
     project_created: '프로젝트 생성',
-    project_updated: '프로젝트 수정',
+    project_updated: '프로젝트 수정 (변경 내용)',
+    weekly_report_uploaded: '주간업무보고',
     milestone_progress: '마일스톤 진척 보고',
     milestone_complete: '마일스톤 완료',
     comment_added: '코멘트/피드백',
