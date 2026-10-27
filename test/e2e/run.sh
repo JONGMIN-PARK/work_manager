@@ -71,7 +71,7 @@ else
   run_batch api-comments.js e2e14-comments.js
   run_batch api-notify.js e2e15-meeting.js e2e16-theme.js e2e17-xmind.js
   run_batch e2e18-pitch.js e2e19-risk.js
-  run_batch e2e20-files.js e2e21-structures.js
+  run_batch e2e20-files.js e2e21-structures.js e2e22-floating.js
 fi
 
 # 이 실행이 띄운 Postgres 면 정상 종료 (start.mjs 가 .pgstop 을 보고 멈춤)

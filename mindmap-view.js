@@ -355,7 +355,7 @@ function _mmNodeHtml(n, depth, color, num) {
   var hit = _mm.hits.indexOf(n.id) >= 0;
   var cls = 'mm-node ' + (depth === 0 ? 'mm-root' : depth === 1 ? 'mm-main' : 'mm-topic2') +
     ((n.done || _mmRefDone(n)) ? ' mm-done' : '') + (hit ? ' mm-hit' : '') + (n.id === _mm.sel ? ' mm-sel' : '') + (n.color ? ' mm-colored' : '') +
-    (n.ref ? ' mm-has-ref' : '') + (n.bold ? ' mm-bold' : '') + (n.fs === 's' || n.fs === 'l' ? ' mm-fs-' + n.fs : '') + (n._ai ? ' mm-ai' : '') + (n.collapsed && (n.children || []).length ? ' mm-folded' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '') +
+    (n.ref ? ' mm-has-ref' : '') + (n.float ? ' mm-float' : '') + (n.bold ? ' mm-bold' : '') + (n.fs === 's' || n.fs === 'l' ? ' mm-fs-' + n.fs : '') + (n._ai ? ' mm-ai' : '') + (n.collapsed && (n.children || []).length ? ' mm-folded' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '') +
     (_mm.preview ? _mmHistNodeClass(n.id) : '') + (typeof _mmFilterDim === 'function' && _mmFilterDim(n.id) ? ' mm-dim' : '');
   var mk = '';
   (n.markers || []).forEach(function (m) {
@@ -463,6 +463,7 @@ function _mmPaint() {
     if (!p.parentId) return;
     var pp = lay.pos[p.parentId];
     var edim = (typeof _mmFilterDim === 'function' && _mmFilterDim(id)) ? ' mm-edge-dim' : '';   // 흐린 주제의 선 · 밑줄도 함께
+    if (p.float) return;   // 떠있는 주제는 중심과 잇지 않음
     if (alt) {
       var ap = mmEdgePathAlt(pp, p, st);
       if (ap) paths.push('<path d="' + ap + '" data-e="' + _mmEsc(id) + '" class="mm-edge' + edim + '" style="stroke:' + colors[id] + ';stroke-width:' + (p.depth === 1 ? 2.6 : 1.6) + '"/>');

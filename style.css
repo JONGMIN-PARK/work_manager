@@ -1594,3 +1594,5 @@ body.mm-zen-body{overflow:hidden}
 .mm-edges .mm-grid-head{fill:color-mix(in srgb,var(--ac) 6%,transparent);stroke:none}
 .mm-st-timeline .mm-node,.mm-st-fishbone .mm-node,.mm-st-matrix .mm-node{text-align:left}
 .mm-st-matrix .mm-node.mm-main{box-shadow:none}
+/* ═══ 🧠 마인드맵 떠있는 주제 (v13.246) ═══ */
+.mm-node.mm-float{box-shadow:0 2px 0 color-mix(in srgb,var(--mm-c) 25%,transparent),0 6px 18px rgba(15,23,42,.12);border-style:dashed}

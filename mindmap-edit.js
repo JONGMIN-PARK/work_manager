@@ -253,6 +253,28 @@ function _mmNearestSlot(dragId, clientX, clientY) {
   return best ? { id: best.id, zone: best.zone } : null;
 }
 
+/** 떠있는 주제 추가 — x, y 가 없으면 맵 오른쪽 아래 빈 곳. 만들고 바로 이름 입력 */
+function mmAddFloating(x, y) {
+  if (_mm.readOnly || !_mm.doc) return;
+  var b = _mm.layout && _mm.layout.bounds;
+  if (x == null) { x = b ? Math.round(b.maxX + 40) : 200; y = b ? Math.round(b.maxY - 30) : 120; }
+  var n = mmNewNode('');
+  n.float = { x: x, y: y };
+  _mmMutate(function () { _mmRoot().children.push(n); _mm.sel = n.id; });
+  _mmEdit(n.id, null);
+}
+/** 1단계 주제 ↔ 떠있는 주제 */
+function mmToggleFloat() {
+  var f = _mmSelInfo();
+  if (!f || _mm.readOnly || !f.parent) return;
+  if (f.node.float) { _mmMutate(function () { delete f.node.float; }); return; }
+  var p = _mm.layout && _mm.layout.pos[f.node.id];
+  _mmMutate(function () {
+    if (f.parent !== _mmRoot()) mmMoveNode(_mmRoot(), f.node.id, _mmRoot().id);
+    f.node.float = { x: p ? Math.round(p.x + 30) : 200, y: p ? Math.round(p.y + 30) : 120 };
+  });
+}
+
 /* ── 인라인 편집 ── */
 function _mmEdit(id, initial, useSink) {
   if (_mm.readOnly || _mm.editing) return;
@@ -642,7 +664,9 @@ function _mmBindCanvas() {
       }
     } else {
       // 주제 사이 빈 곳: 가까운 주제의 앞/뒤로 (같은 단계 자리 바꾸기 — 주제 위에 정확히 놓지 않아도 되게)
-      var slot = _mmNearestSlot(drag.id, e.clientX, e.clientY);
+      // 떠있는 주제는 빈 곳에서는 자리만 옮긴다(주제 위에 놓아야 붙음)
+      var dn = mmFind(_mmRoot(), drag.id);
+      var slot = dn && dn.node.float ? null : _mmNearestSlot(drag.id, e.clientX, e.clientY);
       if (slot) {
         var sn = _mmEl('mmStage').querySelector('.mm-node[data-id="' + slot.id + '"]');
         if (sn) sn.classList.add('mm-drop-' + slot.zone);
@@ -677,6 +701,8 @@ function _mmBindCanvas() {
     if (d.target) {
       var t = d.target;
       _mmMutate(function () {
+        var mv = mmFind(root, d.id);
+        if (mv && mv.node.float && !(t.zone !== 'child' && mmFind(root, t.id).parent === root && mmFind(root, t.id).node.float)) delete mv.node.float;   // 다른 주제에 놓으면 붙음
         if (t.zone === 'child') { mmMoveNode(root, d.id, t.id); var tf = mmFind(root, t.id); if (tf) tf.node.collapsed = false; }
         else {
           var tf2 = mmFind(root, t.id);
@@ -687,8 +713,15 @@ function _mmBindCanvas() {
       });
       return;
     }
-    // 빈 곳에 놓음: 마인드맵 구조의 1단계 주제는 루트 기준 왼쪽/오른쪽으로 옮김
+    // 빈 곳에 놓음: 떠있는 주제는 놓은 자리로
     var f = mmFind(root, d.id);
+    if (f && f.node.float && _mm.layout && _mm.layout.pos[d.id]) {
+      var p0 = _mm.layout.pos[d.id];
+      var nx = Math.round(p0.x + (e.clientX - d.sx) / _mm.zoom), ny = Math.round(p0.y + (e.clientY - d.sy) / _mm.zoom);
+      _mmMutate(function () { f.node.float = { x: nx, y: ny }; });
+      return;
+    }
+    // 마인드맵 구조의 1단계 주제는 루트 기준 왼쪽/오른쪽으로 옮김
     if (f && f.parent === root && (_mmSheet().structure || 'balanced') === 'balanced') {
       var cvr = cv.getBoundingClientRect();
       var wx = (e.clientX - cvr.left - _mm.panX) / _mm.zoom;
@@ -708,7 +741,11 @@ function _mmBindCanvas() {
     if (imgEl && typeof mmImageView === 'function') { mmImageView(imgEl.getAttribute('data-img')); return; }
     var node = e.target.closest('.mm-node');
     if (node && !e.target.closest('.mm-fold')) _mmEdit(node.getAttribute('data-id'), null);
-    else if (!node && !_mm.readOnly && _mmSheet().root) { _mmSelect(_mmRoot().id); }
+    else if (!node && !_mm.readOnly && _mmSheet().root && !e.target.closest('.mm-fbar,.mm-zoom,.mm-minimap,.mm-pitch-hud')) {
+      // 빈 곳 더블클릭 → 그 자리에 떠있는 주제 (XMind 와 같음)
+      var r = cv.getBoundingClientRect();
+      mmAddFloating(Math.round((e.clientX - r.left - _mm.panX) / _mm.zoom), Math.round((e.clientY - r.top - _mm.panY) / _mm.zoom));
+    }
   });
   cv.addEventListener('wheel', function (e) {
     e.preventDefault();

@@ -21,6 +21,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
 
 (async function () {
   var c = new pg.Client(process.env.DATABASE_URL); await c.connect();
+  await c.query("DELETE FROM mindmaps WHERE title LIKE '알림 시험%'");   // 지난 실행이 남긴 맵 — 알림 묶음이 15건을 넘지 않게
   var A = api(await login('admin@t.com')), K = api(await login('kim@t.com'));
   var kimId = (await K('GET', '/api/auth/me')).d.data.id;
   var adminId = (await A('GET', '/api/auth/me')).d.data.id;

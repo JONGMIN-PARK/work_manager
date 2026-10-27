@@ -84,12 +84,39 @@ function mmCloneBranch(node) {
  * 반환: { pos: { id: { x, y, w, h, side, depth, parentId } }, bounds: { minX, minY, maxX, maxY } }
  * 좌표는 루트 중심 (0,0) 기준. 경계·요약 위치는 mmDecorations.
  */
+/**
+ * 떠있는 주제 (v13.246) — 중심 주제의 하위 중 node.float = { x, y } 인 것. 정해진 자리(왼쪽 위 = x, y)에 두고 연결선 없이,
+ * 자기 하위는 오른쪽으로 펼친다. 트리에는 그대로 있어서 편집 · 검색 · 간트 등은 보통 주제와 같다.
+ */
+function _mmIsFloat(n) { return !!(n && n.float && isFinite(n.float.x) && isFinite(n.float.y)); }
+function _mmWithFloats(root, structure, sizes, core) {
+  var floats = (root.collapsed ? [] : (root.children || [])).filter(_mmIsFloat);
+  if (!floats.length) return core(root);
+  var trimmed = Object.assign({}, root, { children: root.children.filter(function (c) { return !_mmIsFloat(c); }) });
+  var lay = core(trimmed);
+  floats.forEach(function (f) {
+    var sub = _mmLayoutCore(Object.assign({}, f, { float: null }), 'right', sizes);
+    var o = sub.pos[f.id];
+    var dx = f.float.x - o.x, dy = f.float.y - o.y;
+    Object.keys(sub.pos).forEach(function (id) {
+      var p = sub.pos[id];
+      p.x += dx; p.y += dy;
+      p.depth += 1;
+      if (id === f.id) { p.parentId = root.id; p.side = 'right'; p.float = true; }
+      lay.pos[id] = p;
+      var b = lay.bounds;
+      b.minX = Math.min(b.minX, p.x); b.minY = Math.min(b.minY, p.y);
+      b.maxX = Math.max(b.maxX, p.x + p.w); b.maxY = Math.max(b.maxY, p.y + p.h);
+    });
+  });
+  return lay;
+}
 function mmLayout(root, structure, sizes) {
-  var lay = _mmLayoutCore(root, structure, sizes);
+  var lay = _mmWithFloats(root, structure, sizes, function (r) { return _mmLayoutCore(r, structure, sizes); });
   var aligned = mmAlignSizes(root, structure, sizes, lay.pos);
   if (!aligned) return lay;
   // 같은 단계 맞춤: 폭(조직도는 높이도)을 넓힌 크기로 다시 배치 — 높이는 그대로라 좌우 배정도 같다
-  var lay2 = _mmLayoutCore(root, structure, aligned.sizes);
+  var lay2 = _mmWithFloats(root, structure, aligned.sizes, function (r) { return _mmLayoutCore(r, structure, aligned.sizes); });
   lay2.aligned = aligned.ids;
   return lay2;
 }
@@ -658,6 +685,11 @@ function mmFromXmindSheets(sheets) {
       if (t.branch === 'folded') n.collapsed = true;
       var kids = (t.children && t.children.attached) || [];
       n.children = kids.map(function (c) { return conv(c, depth + 1); });
+      if (depth === 0) ((t.children && t.children.detached) || []).forEach(function (c, i) {
+        var fn = conv(c, 1);
+        fn.float = { x: Math.round((c.position && c.position.x) || 300), y: Math.round((c.position && c.position.y) || (120 + i * 60)) };
+        n.children.push(fn);
+      });
       // 경계: 전체(master)·하위 전체 → 이 주제, 일부 범위 → 해당 하위 주제마다
       (t.boundaries || []).forEach(function (bd) {
         var r = _mmRange(bd.range, n.children.length);
@@ -734,8 +766,14 @@ function mmToXmindSheets(doc, whoOf) {
       else if (n.progress != null && n.progress !== '' && !isNaN(parseInt(n.progress, 10))) mk.push({ markerId: _mmXmindTask(parseInt(n.progress, 10)) });
       if (mk.length) t.markers = mk;
       if (n.collapsed && (n.children || []).length) t.branch = 'folded';
-      var kids = (n.children || []).map(function (c) { return conv(c, false); });
+      var att = (n.children || []).filter(function (c) { return !(isRoot && _mmIsFloat(c)); });
+      var det = isRoot ? (n.children || []).filter(_mmIsFloat) : [];
+      var kids = att.map(function (c) { return conv(c, false); });
       if (kids.length) t.children = { attached: kids };
+      if (det.length) {
+        t.children = t.children || {};
+        t.children.detached = det.map(function (c) { var x = conv(c, false); x.position = { x: c.float.x, y: c.float.y }; return x; });
+      }
       if (n.boundary) t.boundaries = [{ id: n.id + '-bd', range: 'master', title: n.boundary.title || '' }];
       if (n.summary && kids.length) {
         var sid = n.id + '-sum';
@@ -785,6 +823,6 @@ if (typeof module !== 'undefined' && module.exports) {
     mmIsAncestor: mmIsAncestor, mmRemoveNode: mmRemoveNode, mmMoveNode: mmMoveNode, mmCloneBranch: mmCloneBranch,
     mmLayout: mmLayout, mmEdgePath: mmEdgePath, mmEdgeShape: mmEdgeShape, mmToMarkdown: mmToMarkdown, mmFromMarkdown: mmFromMarkdown,
     mmSubtreeBox: mmSubtreeBox, mmAlignSizes: mmAlignSizes, mmDecorations: mmDecorations, mmNumbering: mmNumbering, mmProgressRollup: mmProgressRollup, mmSplitLineItems: mmSplitLineItems, mmRelationPath: mmRelationPath,
-    mmFromXmindSheets: mmFromXmindSheets, mmToXmindSheets: mmToXmindSheets, mmEdgePathAlt: mmEdgePathAlt, MM_ALT_STRUCTURES: MM_ALT_STRUCTURES, mmToOpml: mmToOpml, mmFromPlainTree: mmFromPlainTree
+    mmFromXmindSheets: mmFromXmindSheets, mmToXmindSheets: mmToXmindSheets, mmEdgePathAlt: mmEdgePathAlt, _mmIsFloat: _mmIsFloat, MM_ALT_STRUCTURES: MM_ALT_STRUCTURES, mmToOpml: mmToOpml, mmFromPlainTree: mmFromPlainTree
   };
 }

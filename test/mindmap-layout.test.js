@@ -329,3 +329,22 @@ test('타임라인 · 피시본 · 매트릭스 — 모든 주제 자리 · 서�
   assert.ok(L.mmLayout(t, 'timeline', SIZE).pos.a.x > 0, '타임라인은 오른쪽으로');
   assert.ok(L.mmLayout(t, 'fishbone', SIZE).pos.a.x < 0, '피시본은 왼쪽으로');
 });
+
+test('떠있는 주제 — 정한 자리 · 하위는 오른쪽 · 다른 배치에 영향 없음 · XMind detached 왕복', () => {
+  const t = tree();
+  const base = L.mmLayout(tree(), 'balanced', SIZE);
+  t.children.push({ id: 'f', text: '메모', float: { x: 500, y: -300 }, children: [{ id: 'f1', text: '메모1', children: [] }] });
+  const lay = L.mmLayout(t, 'balanced', SIZE);
+  assert.deepStrictEqual([lay.pos.f.x, lay.pos.f.y, lay.pos.f.float, lay.pos.f.depth], [500, -300, true, 1]);
+  assert.ok(lay.pos.f1.x > lay.pos.f.x + lay.pos.f.w, '하위는 오른쪽');
+  assert.strictEqual(lay.pos.f1.depth, 2);
+  for (const id of ['a', 'b', 'c', 'd', 'a1']) assert.deepStrictEqual([lay.pos[id].x, lay.pos[id].y], [base.pos[id].x, base.pos[id].y], id + ' 자리 그대로');
+  assert.ok(lay.bounds.maxX >= 560 && lay.bounds.minY <= -300, '범위에 포함');
+  for (const st of ['right', 'down', 'timeline', 'matrix']) assert.deepStrictEqual([L.mmLayout(t, st, SIZE).pos.f.x, L.mmLayout(t, st, SIZE).pos.f.y], [500, -300], st);
+  const xs = L.mmToXmindSheets({ sheets: [{ id: 's', structure: 'balanced', root: t, relations: [] }] });
+  assert.strictEqual(xs[0].rootTopic.children.detached[0].title, '메모');
+  assert.deepStrictEqual(xs[0].rootTopic.children.detached[0].position, { x: 500, y: -300 });
+  const back = L.mmFromXmindSheets(JSON.parse(JSON.stringify(xs))).sheets[0].root;
+  const bf = back.children.filter((c) => c.float)[0];
+  assert.ok(bf && bf.text === '메모' && bf.float.x === 500 && bf.children[0].text === '메모1');
+});

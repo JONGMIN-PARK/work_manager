@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.246 (2026-10-28) — 마인드맵 떠있는 주제
+
+- mindmap-layout.js: 중심 주제 하위 중 `node.float {x,y}` 는 `_mmWithFloats` 가 빼고 배치한 뒤 자기 자리에 'right' 배치로 붙임(pos.float). 트리에는 그대로 — 편집 · 패널 · 검색 · 간트 공통. XMind `children.detached` + position 왕복.
+- mindmap-view.js: 떠있는 주제는 선 없음 · .mm-float. mindmap-edit.js `mmAddFloating`(빈 곳 더블클릭) · `mmToggleFloat` · 끌기(빈 곳 = 자리 옮김, 주제 위 = 붙음). 명령 addFloating(Alt+Shift+F) · toggleFloat.
+- test: 레이아웃 단위(자리 · 다른 배치 영향 없음 · XMind 왕복), test/e2e/e2e22-floating.js(6).
+
 ## v13.245 (2026-10-27) — 마인드맵 타임라인 · 피시본 · 매트릭스 구조
 
 - mindmap-layout.js `_mmLayoutAlt`(MM_ALT_STRUCTURES — 들여쓴 목록 listDown/listUp, spine · grid 를 함께 반환) · `mmEdgePathAlt`. XMind 구조 class 대응(timeline.horizontal · fishbone.leftHeaded · spreadsheet). 테스트: 세 구조 모두 겹침 없음 · 줄기/격자.

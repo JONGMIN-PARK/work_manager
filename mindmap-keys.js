@@ -327,6 +327,8 @@ var MM_COMMANDS = [
   { id: 'moveDown', group: '주제', label: '아래로 옮기기 (형제 순서)', keys: ['Alt+ArrowDown'], edit: true, when: _mmkNotRoot, run: _mmkSingle(function () { _mmkMoveSibling(1); }) },
   { id: 'indent', group: '주제', label: '들여쓰기 (앞 주제의 하위로)', keys: ['Ctrl+]'], edit: true, when: _mmkNotRoot, run: _mmkSingle(_mmkIndent) },
   { id: 'outdent', group: '주제', label: '내어쓰기 (한 단계 위로)', keys: ['Ctrl+['], edit: true, when: _mmkNotRoot, run: _mmkSingle(_mmkOutdent) },
+  { id: 'addFloating', group: '주제', label: '떠있는 주제 추가 (빈 곳 더블클릭도)', keys: ['Alt+Shift+F'], edit: true, run: function () { mmAddFloating(); } },
+  { id: 'toggleFloat', group: '주제', label: '떠 있게 하기 / 중심에 붙이기', keys: [], edit: true, when: _mmkNotRoot, run: _mmkSingle(function () { mmToggleFloat(); }) },
   { id: 'splitChildren', group: '주제', label: '줄을 하위 주제로 나누기 (첫 줄은 주제 이름)', keys: [], edit: true, when: function () { return _mmkLines() >= 2; }, run: _mmkSingle(_mmkSplitToChildren) },
   { id: 'splitSiblings', group: '주제', label: '줄마다 같은 단계 주제로 나누기', keys: [], edit: true, when: function () { return _mmkNotRoot() && _mmkLines() >= 2; }, run: _mmkSingle(_mmkSplitToSiblings) },
   { id: 'mergeChildren', group: '주제', label: '하위 주제를 줄로 합치기', keys: [], edit: true, when: _mmkHasKids, run: _mmkSingle(_mmkMergeChildren) },
@@ -458,10 +460,10 @@ function mmRunCommand(id) {
 
 /* ═══ 오른쪽 클릭 메뉴 ═══ */
 var MM_CTX_NODE = ['addChild', 'addSibling', 'addBefore', 'addParent', 'edit', 'duplicate', 'delete', '|',
-  'moveUp', 'moveDown', 'indent', 'outdent', 'splitSiblings', 'splitChildren', 'mergeChildren', '|', 'relation', 'boundary', 'summary', 'numbering', 'alignLevels', '|',
+  'moveUp', 'moveDown', 'indent', 'outdent', 'splitSiblings', 'splitChildren', 'mergeChildren', 'toggleFloat', '|', 'relation', 'boundary', 'summary', 'numbering', 'alignLevels', '|',
   'linkRef', 'openRef', 'promoteMs', 'promoteIssue', '|', 'addImage', 'addLine', 'done', 'colorCycle', 'copyStyle', 'pasteStyle', 'progress', 'note', 'fold', 'foldDeep', '|', 'aiExpand', 'aiSummary'];
 var MM_CTX_MULTI = ['delete', 'duplicate', '|', 'done', 'colorCycle', 'pasteStyle', 'bold', 'progress', 'boundary', 'alignLevels', 'fold', '|', 'priority:1', 'priorityClear'];
-var MM_CTX_CANVAS = ['fit', 'unfoldAll', 'foldLevel1', 'selectAll', '|', 'alignAll', 'textAlign:auto', 'textAlign:left', 'textAlign:right', '|', 'addSheet', 'outline', 'zen', 'structure', '|', 'palette', 'help'];
+var MM_CTX_CANVAS = ['addFloating', 'fit', 'unfoldAll', 'foldLevel1', 'selectAll', '|', 'alignAll', 'textAlign:auto', 'textAlign:left', 'textAlign:right', '|', 'addSheet', 'outline', 'zen', 'structure', '|', 'palette', 'help'];
 
 function _mmCloseCtx() {
   var m = document.getElementById('mmCtxMenu');
