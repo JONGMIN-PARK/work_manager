@@ -334,13 +334,14 @@ function mmOpen(id) {
     _mm.sel = _mmRoot().id;
     _mm.undo = []; _mm.redo = [];
     _mm.dirty = false; _mm.titleDirty = false; _mm.conflict = null; _mm.lockedBy = null;
-    _mm.search = ''; _mm.hits = []; _mm.hitIdx = -1; _mm.vf = null;
+    _mm.search = ''; _mm.hits = []; _mm.hitIdx = -1; _mm.vf = null; _mm.comments = [];
     _mm.zoom = 1; _mm.panX = null; _mm.panY = null;
     if (window.innerWidth < 768) _mm.outline = true;   // 휴대폰은 아웃라인 보기로 시작
     _mmRenderEditor();
     if (_mm.canEdit) _mmLockAcquire(false);
     _mmResolveRefs();
     if (typeof mmLoadImages === 'function') mmLoadImages(id);
+    if (typeof mmLoadComments === 'function') mmLoadComments();
     if (typeof mmAiCheck === 'function') mmAiCheck();
   }).catch(function (e) {
     _mm.mapId = null;

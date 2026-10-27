@@ -29,6 +29,7 @@ function _mmPaintPanel() {
   var h = '<div class="mm-pn-sec"><div class="mm-pn-h">' + (f.depth === 0 ? '중심 주제' : f.depth === 1 ? '주요 주제' : '하위 주제') + '</div>' +
     '<textarea id="mmPnText" class="mm-input mm-pn-text" rows="3"' + ro + '>' + _mmEsc(n.text || '') + '</textarea></div>';
   if (typeof _mmBlocksPanelHtml === 'function') h += _mmBlocksPanelHtml(n, ro);
+  if (typeof _mmCommentsPanelHtml === 'function' && !_mm.preview) h += _mmCommentsPanelHtml(n, f.depth);
   h += '<div class="mm-pn-sec"><div class="mm-pn-h">색상</div><div class="mm-swatches">' + MM_COLORS.map(function (c) {
     return '<button class="mm-sw' + ((n.color || '') === c.key ? ' on' : '') + '" data-act="color" data-v="' + c.key + '" title="' + (c.label || c.key) + '"' + ro +
       ' style="' + (c.c ? 'background:' + c.c : '') + '">' + (c.c ? '' : 'A') + '</button>';
@@ -89,6 +90,7 @@ function _mmPaintPanel() {
   h += '<div class="mm-pn-sec"><div class="mm-pn-h">노트</div><textarea id="mmPnNote" class="mm-input" rows="5"' + ro + '>' + _mmEsc(n.note || '') + '</textarea></div>';
   pn.innerHTML = h;
   if (typeof _mmBindBlocksPanel === 'function') _mmBindBlocksPanel(pn, n);
+  if (typeof _mmBindComments === 'function') _mmBindComments(pn, n);   // 보기 전용이어도 댓글은 됨
   if (_mm.readOnly) return;
   function bind(id, fn) { var el = _mmEl(id); if (el) el.onchange = function () { fn(el); }; }
   bind('mmPnText', function (el) { var v = el.value.replace(/\s+$/, ''); if (v !== (n.text || '')) _mmSetProp('text', v); });

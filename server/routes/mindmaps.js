@@ -26,6 +26,7 @@ var httpErr = require('../lib/http-errors');
 var mmData = require('../lib/mindmap-data');
 var aiMindmap = require('../services/ai-mindmap.service');
 var rateLimit = require('express-rate-limit');
+var notificationService = require('../services/notification.service');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -797,6 +798,111 @@ router.post('/:id/snapshots/:sid/restore', async function (req, res) {
     res.json({ data: r.rows[0], backup: backup });
   } catch (e) {
     httpErr.serverError(res, '[mindmaps/snapshots/restore]', e);
+  }
+});
+
+/* ═══ 주제 댓글 (v13.237) — 읽기 권한이면 쓰기 가능, 알림: @이름 · 주제 담당 · 같은 주제에 댓글 단 사람 · 맵 소유자 ═══ */
+var CMT_MAX = 2000;
+var CMT_SELECT = 'SELECT c.id, c.node_id, c.body, c.resolved, c.created_by, c.created_at, c.updated_at, ' +
+  "COALESCE(NULLIF(u.display_name,''), u.name) AS author_name FROM mindmap_comments c LEFT JOIN users u ON u.id = c.created_by ";
+
+// GET /api/mindmaps/:id/comments — 맵의 댓글 전부 (오래된 순)
+router.get('/:id/comments', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, false);
+    if (!row) return;
+    var r = await db.query(CMT_SELECT + 'WHERE c.map_id = $1 AND c.tenant_id = $2 ORDER BY c.created_at LIMIT 2000', [row.id, req.tenant.id]);
+    res.json({ data: r.rows });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/comments/list]', e);
+  }
+});
+
+/** 알림 받을 사람 — 맵을 읽을 수 있는 사람으로 한정(개인 맵은 소유자 · 공유 대상만) */
+async function commentRecipients(req, row, nodeId, body, assigneeId) {
+  var ids = {};
+  var users = await db.query("SELECT id, COALESCE(NULLIF(display_name,''), name) AS name FROM users WHERE tenant_id = $1 AND status = 'active'", [req.tenant.id]);
+  var byName = {};
+  users.rows.forEach(function (u) { if (u.name) byName[String(u.name).replace(/\s+/g, '')] = u.id; });
+  (String(body).match(/@([^\s@]+)/g) || []).forEach(function (t) { var id = byName[t.slice(1)]; if (id) ids[id] = 1; });
+  if (assigneeId && users.rows.some(function (u) { return u.id === assigneeId; })) ids[assigneeId] = 1;
+  var prev = await db.query('SELECT DISTINCT created_by FROM mindmap_comments WHERE map_id = $1 AND tenant_id = $2 AND node_id = $3 AND created_by IS NOT NULL', [row.id, req.tenant.id, nodeId]);
+  prev.rows.forEach(function (p) { ids[p.created_by] = 1; });
+  if (row.owner_id) ids[row.owner_id] = 1;
+  delete ids[req.user.sub];
+  var out = Object.keys(ids);
+  if (row.scope === 'personal') {
+    var allowed = [row.owner_id].concat(asArray(row.editors), asArray(row.viewers));
+    out = out.filter(function (id) { return allowed.indexOf(id) >= 0; });
+  }
+  return out;
+}
+
+// POST /api/mindmaps/:id/comments — { nodeId, body, nodeText?, assigneeId? } (nodeText · assigneeId 는 알림용 — 문서는 클라에 있음)
+router.post('/:id/comments', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, false);
+    if (!row) return;
+    var b = req.body || {};
+    var nodeId = String(b.nodeId || '').slice(0, 100);
+    var body = String(b.body || '').trim();
+    if (!nodeId || !body) return httpErr.sendError(res, 400, 'VALIDATION', '주제와 내용이 필요합니다.');
+    if (body.length > CMT_MAX) return httpErr.sendError(res, 400, 'VALIDATION', '댓글은 ' + CMT_MAX + '자까지 쓸 수 있습니다.');
+    var id = genId('mmc');
+    await db.query('INSERT INTO mindmap_comments (id, map_id, tenant_id, node_id, body, created_by) VALUES ($1,$2,$3,$4,$5,$6)',
+      [id, row.id, req.tenant.id, nodeId, body, req.user.sub]);
+    var r = await db.query(CMT_SELECT + 'WHERE c.id = $1', [id]);
+    res.status(201).json({ data: r.rows[0] });
+    // 알림 (응답 후)
+    commentRecipients(req, row, nodeId, body, b.assigneeId ? String(b.assigneeId) : null).then(function (to) {
+      if (!to.length) return;
+      return notificationService.notify('mindmap_comment', {
+        mapTitle: row.title, nodeText: String(b.nodeText || '').split('\n')[0].slice(0, 80), authorName: r.rows[0].author_name, body: body
+      }, to);
+    }).catch(function (e) { console.error('[mindmaps/comments/notify]', e.message); });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/comments/create]', e);
+  }
+});
+
+// PUT /api/mindmaps/:id/comments/:cid — { body? (쓴 사람만), resolved? (쓴 사람 · 맵 편집 권한) }
+router.put('/:id/comments/:cid', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, false);
+    if (!row) return;
+    var c = await db.query('SELECT * FROM mindmap_comments WHERE id = $1 AND map_id = $2 AND tenant_id = $3', [req.params.cid, row.id, req.tenant.id]);
+    if (!c.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    var mine = c.rows[0].created_by === req.user.sub;
+    var b = req.body || {};
+    if (b.body != null) {
+      if (!mine) return httpErr.sendError(res, 403, 'FORBIDDEN', '쓴 사람만 고칠 수 있습니다.');
+      var body = String(b.body).trim();
+      if (!body || body.length > CMT_MAX) return httpErr.sendError(res, 400, 'VALIDATION', '내용은 1~' + CMT_MAX + '자입니다.');
+      await db.query('UPDATE mindmap_comments SET body = $1, updated_at = NOW() WHERE id = $2', [body, req.params.cid]);
+    }
+    if (b.resolved != null) {
+      if (!mine && !row._perm.edit) return httpErr.sendError(res, 403, 'FORBIDDEN', '쓴 사람이나 편집 권한이 있는 사람만 해결 처리할 수 있습니다.');
+      await db.query('UPDATE mindmap_comments SET resolved = $1 WHERE id = $2', [!!b.resolved, req.params.cid]);
+    }
+    var r = await db.query(CMT_SELECT + 'WHERE c.id = $1', [req.params.cid]);
+    res.json({ data: r.rows[0] });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/comments/update]', e);
+  }
+});
+
+// DELETE /api/mindmaps/:id/comments/:cid — 쓴 사람 · 맵 소유자 · admin
+router.delete('/:id/comments/:cid', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, false);
+    if (!row) return;
+    var mgr = row.owner_id === req.user.sub || req.user.role === 'admin';
+    var r = await db.query('DELETE FROM mindmap_comments WHERE id = $1 AND map_id = $2 AND tenant_id = $3 AND ($4 OR created_by = $5) RETURNING id',
+      [req.params.cid, row.id, req.tenant.id, mgr, req.user.sub]);
+    if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    res.json({ data: { id: req.params.cid } });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/comments/delete]', e);
   }
 });
 

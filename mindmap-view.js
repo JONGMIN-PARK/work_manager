@@ -353,6 +353,7 @@ function _mmNodeHtml(n, depth, color, num) {
     for (var i = 0; i < MM_SYMBOLS.length; i++) if (MM_SYMBOLS[i].k === m) mk += '<span class="mm-sym">' + MM_SYMBOLS[i].g + '</span>';
   });
   var icons = '';
+  if (typeof _mmCmtBadge === 'function') icons += _mmCmtBadge(n);
   if (n.note) icons += '<span class="mm-ico" title="' + _mmEsc(String(n.note).slice(0, 300)) + '">📝</span>';
   if (n.link && /^https?:\/\//i.test(n.link)) icons += '<a class="mm-ico" href="' + _mmEsc(n.link) + '" target="_blank" rel="noopener" title="' + _mmEsc(n.link) + '">🔗</a>';
   var meta = [];

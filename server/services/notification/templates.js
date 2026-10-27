@@ -203,6 +203,12 @@ var TEMPLATES = {
       (p.authorName ? '작성: ' + escHtml(p.authorName) + '\n' : '') +
       escHtml((p.body || '').slice(0, 300));
   },
+  mindmap_comment: function (p) {
+    return '💬 <b>마인드맵 댓글</b>\n' +
+      (p.mapTitle ? '🧠 ' + escHtml(p.mapTitle) + (p.nodeText ? ' · ' + escHtml(p.nodeText) : '') + '\n' : '') +
+      (p.authorName ? '작성: ' + escHtml(p.authorName) + '\n' : '') +
+      escHtml((p.body || '').slice(0, 300));
+  },
   message_received: function (p) {
     return '✉️ <b>새 메시지</b>\n' +
       (p.fromName ? escHtml(p.fromName) + ' 님\n' : '') +
@@ -265,6 +271,7 @@ var EVENT_TITLES = {
   as_report_issued: 'A/S 보고서 발행',
   as_weekly_digest: 'A/S 주간 요약',
   comment_added: '새 피드백이 등록되었습니다',
+  mindmap_comment: '마인드맵에 댓글이 달렸습니다',
   project_created: '프로젝트가 생성되었습니다',
   project_updated: '프로젝트가 수정되었습니다',
   milestone_progress: '마일스톤 진척이 보고되었습니다'

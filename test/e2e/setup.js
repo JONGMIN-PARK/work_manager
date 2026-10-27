@@ -12,13 +12,19 @@ var bcrypt = req('bcryptjs');
   var c = new pg.Client({ connectionString: process.env.DATABASE_URL });
   await c.connect();
   var dir = path.join(__dirname, '../../migrations');
+  var failed = [];
   for (var f of fs.readdirSync(dir).filter(function (x) { return x.endsWith('.sql'); }).sort()) {
     try { await c.query(fs.readFileSync(path.join(dir, f), 'utf8')); console.log('root ok', f); }
-    catch (e) { console.log('root fail', f, e.message); }
+    catch (e) { console.log('root fail', f, e.message); failed.push(f); }
   }
-  await c.end();
   var db = require(path.join(SRV, 'config/db'));
   await db.migrationsReady();
+  // 루트 마이그레이션 일부(004~006)는 서버 마이그레이션이 만든 tenants 등을 전제 — 서버 쪽을 돌린 뒤 한 번 더
+  for (var f2 of failed) {
+    try { await c.query(fs.readFileSync(path.join(dir, f2), 'utf8')); console.log('root retry ok', f2); }
+    catch (e) { console.log('root retry fail', f2, e.message); }
+  }
+  await c.end();
   var T = '00000000-0000-0000-0000-000000000001';
   await db.query("INSERT INTO tenants (id, name, slug, plan, max_users) VALUES ($1,'기본','default','pro',50) ON CONFLICT (id) DO NOTHING", [T]);
   var hash = await bcrypt.hash('Test1234!', 10);

@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.237 (2026-10-27) — 마인드맵 주제 댓글 · 알림
+
+- 서버: `060_mindmap_comments.sql` · `GET/POST /api/mindmaps/:id/comments` · `PUT/DELETE …/:cid` (routes/mindmaps.js, 권한은 snapGate — 읽기면 쓰기 가능). 알림 이벤트 `mindmap_comment`(templates.js) — `commentRecipients`: @이름(공백 없앤 이름 일치) · assigneeId · 같은 주제 작성자 · 소유자, 쓴 사람 제외, personal 은 owner/editors/viewers 로 한정. route-inventory 스냅샷 갱신.
+- 클라: mindmap-comments.js (새 파일) — `_mm.comments`(맵 열 때 `mmLoadComments`), 주제 `_mmCmtBadge`, 패널 `_mmCommentsPanelHtml` · `_mmBindComments`(보기 전용이어도 연결).
+- test/e2e: api-comments.js(16) · e2e14-comments.js(6). setup.js — 루트 마이그레이션 004~006 을 서버 마이그레이션 뒤 다시 실행(tenants 전제, 알림 테이블이 없던 것).
+
 ## v13.236 (2026-10-27) — 마인드맵 → 주간 업무 보고 문장
 
 - mindmap-report.js (새 파일): `mmWrSite` · `mmWeeklyItems` · `mmWeeklyText`(server/services/weekly-report-parser.js 가 같은 항목으로 다시 읽는지 test/mindmap-report.test.js 로 확인) · `mmWeeklyDiff`(직접 값 · 완료만 — 하위 평균은 중복이라 제외) · `mmIsoWeek`. 창 `mmWeeklyReportModal`(wmGuardedModal) — 기록 목록에서 6일 이상 지난 것 중 최근 것을 기본 비교, 같은 시트 id 의 문서로 lastText. 구분은 localStorage `mm-wr-sec:<mapId>`.
