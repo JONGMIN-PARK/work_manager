@@ -500,6 +500,7 @@ function _mmEdClick(e) {
     case 'view-outline': _mmSetOutline(true); return;
     case 'view-gantt': _mmSetView('gantt'); return;
     case 'export-png': mmExportPng(); return;
+    case 'weekly-report': if (typeof mmWeeklyReportModal === 'function') mmWeeklyReportModal(); return;
     case 'export-md': mmExportMarkdown(); return;
     case 'share': mmShareModal(); return;
     case 'help': if (typeof mmHelpModal === 'function') mmHelpModal(); return;

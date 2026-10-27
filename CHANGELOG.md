@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.236 (2026-10-27) — 마인드맵 → 주간 업무 보고 문장
+
+- mindmap-report.js (새 파일): `mmWrSite` · `mmWeeklyItems` · `mmWeeklyText`(server/services/weekly-report-parser.js 가 같은 항목으로 다시 읽는지 test/mindmap-report.test.js 로 확인) · `mmWeeklyDiff`(직접 값 · 완료만 — 하위 평균은 중복이라 제외) · `mmIsoWeek`. 창 `mmWeeklyReportModal`(wmGuardedModal) — 기록 목록에서 6일 이상 지난 것 중 최근 것을 기본 비교, 같은 시트 id 의 문서로 lastText. 구분은 localStorage `mm-wr-sec:<mapId>`.
+- 내보내기 메뉴 `data-act="weekly-report"`, 명령 `weeklyReport`. test/e2e/e2e13-weekly.js(9).
+
 ## v13.235 (2026-10-27) — 마인드맵 캔버스 배경 고르기
 
 - mindmap.js `MM_BG_GROUPS` · `MM_BACKGROUNDS`(k · grp · tone) · `_mmBgKey()` — 시트 속성 `sheet.bg`(없으면 dots). mindmap-view.js `_mmPaintBgMenu` · `_mmPaint` 가 #mmCanvas 에 `data-mmbg`. mindmap-edit.js `data-act="bg"`(Ctrl+Z 됨). mindmap-panel.js PNG 내보내기 상자에도 `data-mmbg`.

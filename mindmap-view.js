@@ -45,7 +45,7 @@ function _mmRenderEditor() {
     '<button data-act="ai-text">📝 글로 가지 만들기</button>' +
     '<button data-act="ai-wbs">🏗 WBS 초안 <span class="mm-hint">프로젝트</span></button></div></div>' +
     menuBtn('mmExportMenu', 'download', '', '내보내기') +
-    '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
+    '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="weekly-report">🗓 주간 업무 보고 문장…</button><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
     '<button data-act="export-opml">OPML (.opml)</button></div></div>' +
     tb('history', 'history', '기록', '버전 기록 (Ctrl+Shift+H)') +
     ((row.is_owner || _mmIsAdmin()) ? tb('share', 'share', '공유', '공유 설정', ' mm-tbtn-accent') : '') +
