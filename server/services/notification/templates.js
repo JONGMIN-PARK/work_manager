@@ -203,6 +203,17 @@ var TEMPLATES = {
       (p.authorName ? '작성: ' + escHtml(p.authorName) + '\n' : '') +
       escHtml((p.body || '').slice(0, 300));
   },
+  mindmap_shared: function (p) {
+    return '🧠 <b>마인드맵 공유</b>\n' + escHtml(p.mapTitle || '') + '\n' +
+      (p.byName ? escHtml(p.byName) + ' 님이 ' : '') + (p.canEdit ? '편집할 수 있게' : '볼 수 있게') + ' 공유했습니다';
+  },
+  mindmap_due: function (p) {
+    var label = { today: '오늘 마감', tomorrow: '내일 마감', late: '지연' };
+    var items = p.items || [];
+    return '🧠 <b>마인드맵 마감 알림</b>\n' + items.slice(0, 15).map(function (it) {
+      return '• [' + label[it.kind] + (it.kind === 'late' ? ' ' + it.lateDays + '일' : '') + '] ' + escHtml(it.text) + ' — ' + escHtml(it.mapTitle || '');
+    }).join('\n') + (items.length > 15 ? '\n… 외 ' + (items.length - 15) + '건' : '');
+  },
   mindmap_comment: function (p) {
     return '💬 <b>마인드맵 댓글</b>\n' +
       (p.mapTitle ? '🧠 ' + escHtml(p.mapTitle) + (p.nodeText ? ' · ' + escHtml(p.nodeText) : '') + '\n' : '') +
@@ -272,6 +283,8 @@ var EVENT_TITLES = {
   as_weekly_digest: 'A/S 주간 요약',
   comment_added: '새 피드백이 등록되었습니다',
   mindmap_comment: '마인드맵에 댓글이 달렸습니다',
+  mindmap_due: '마인드맵 주제 마감 알림',
+  mindmap_shared: '마인드맵을 공유받았습니다',
   project_created: '프로젝트가 생성되었습니다',
   project_updated: '프로젝트가 수정되었습니다',
   milestone_progress: '마일스톤 진척이 보고되었습니다'

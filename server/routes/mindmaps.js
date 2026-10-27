@@ -576,6 +576,18 @@ router.put('/:id', async function (req, res) {
     }
     if (b.doc !== undefined) { await syncLinks(req, req.params.id, b.doc); await syncImages(req, req.params.id, b.doc); }
     res.json({ data: r.rows[0] });
+    // 새로 공유받은 사람에게 알림 (응답 후)
+    if (b.editors !== undefined || b.viewers !== undefined) {
+      var before = asArray(row.editors).concat(asArray(row.viewers));
+      var added = asArray(r.rows[0].editors).concat(asArray(r.rows[0].viewers)).filter(function (id, i, a) { return a.indexOf(id) === i && before.indexOf(id) < 0 && id !== req.user.sub; });
+      if (added.length) {
+        var editSet = asArray(r.rows[0].editors);
+        Promise.all([0, 1].map(function (k) {
+          var ids = added.filter(function (id) { return (editSet.indexOf(id) >= 0) === (k === 0); });
+          return ids.length ? notificationService.notify('mindmap_shared', { mapTitle: r.rows[0].title, byName: req.user.name || '', canEdit: k === 0 }, ids) : null;
+        })).catch(function (e) { console.error('[mindmaps/share/notify]', e.message); });
+      }
+    }
   } catch (e) {
     httpErr.serverError(res, '[mindmaps/update]', e);
   }

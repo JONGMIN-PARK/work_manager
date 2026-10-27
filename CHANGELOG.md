@@ -1,5 +1,12 @@
 # Work Manager — 변경 이력
 
+## v13.238 (2026-10-27) — 마인드맵 마감 알림 · 공유 알림
+
+- server/lib/mindmap-due.js (순수, __tests__/mindmap-due.test.js): `collectDue(doc, today)` · `groupDueByUser(maps, today)` — 완료 · 진척 100% 제외, 지연은 1·3·7·14일째만(매일 반복 방지).
+- notification/jobs.js `sendMindmapDueReminders` — 텔레그램 설정 시 매일 UTC 00:12(KST 09:12) (app.js). 이벤트 `mindmap_due` · `mindmap_shared`(templates.js).
+- routes/mindmaps.js PUT: editors/viewers 가 바뀌면 새로 들어온 사람에게 `mindmap_shared`(응답 후).
+- test/e2e/api-notify.js(6) — 작업 함수를 직접 불러 확인. route-inventory 테스트의 notification.service 내보내기 목록 갱신.
+
 ## v13.237 (2026-10-27) — 마인드맵 주제 댓글 · 알림
 
 - 서버: `060_mindmap_comments.sql` · `GET/POST /api/mindmaps/:id/comments` · `PUT/DELETE …/:cid` (routes/mindmaps.js, 권한은 snapGate — 읽기면 쓰기 가능). 알림 이벤트 `mindmap_comment`(templates.js) — `commentRecipients`: @이름(공백 없앤 이름 일치) · assigneeId · 같은 주제 작성자 · 소유자, 쓴 사람 제외, personal 은 owner/editors/viewers 로 한정. route-inventory 스냅샷 갱신.

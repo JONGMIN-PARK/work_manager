@@ -3,6 +3,7 @@
  * app.js / scheduler 가 notification.service.js 를 통해 호출한다.
  */
 var db = require('../../config/db');
+var mindmapDue = require('../../lib/mindmap-due');
 var telegramService = require('../telegram.service');
 var escHtml = require('../../telegram/util/escape').escHtml;
 var dispatch = require('./dispatch');
@@ -447,6 +448,25 @@ async function sendActionItemReminders() {
   console.log('[Notification] Action item D-1 reminders checked:', r.rows.length);
 }
 
+/**
+ * 마인드맵 주제 마감 알림 (매일 실행) — 담당(assigneeId)이 있는 주제의 마감 오늘 · 내일 · 지연(1·3·7·14일째)을
+ * 사람마다 한 통으로 묶어 보냄. 계산은 lib/mindmap-due (순수).
+ */
+async function sendMindmapDueReminders() {
+  var today = _kstYmd(0);
+  var r = await db.query('SELECT id, title, doc FROM mindmaps WHERE deleted_at IS NULL');
+  var by = mindmapDue.groupDueByUser(r.rows, today);
+  var users = Object.keys(by);
+  for (var i = 0; i < users.length; i++) {
+    try {
+      await notify('mindmap_due', { items: by[users[i]], today: today }, [users[i]]);
+    } catch (e) {
+      console.error('[MindmapDue]', users[i], e.message);
+    }
+  }
+  console.log('[Notification] Mindmap due reminders:', users.length, 'users');
+}
+
 /** 사전검토 회신기한 D-1 리마인더 (매일 실행) */
 async function sendPrestudyReminders() {
   var tomorrow = new Date();
@@ -507,6 +527,7 @@ module.exports = {
   sendOverloadWarnings: sendOverloadWarnings,
   sendActionItemReminders: sendActionItemReminders,
   sendPrestudyReminders: sendPrestudyReminders,
+  sendMindmapDueReminders: sendMindmapDueReminders,
   sendTechStaleReminders: sendTechStaleReminders,
   _kstYmd: _kstYmd,     // 테스트용
   _parseYmd: _parseYmd
