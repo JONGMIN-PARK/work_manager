@@ -19,6 +19,17 @@ kill_port() {
   fi
 }
 
+# 지난 실행이 남긴 postgres(.pgdata 를 쓰는 것)는 정리하고 매번 새로 띄움 — 남은 것은 연결이 멈춰 있을 수 있다
+kill_stale_pg() {
+  if command -v powershell > /dev/null 2>&1; then
+    powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='postgres.exe'\" | Where-Object { \$_.CommandLine -like '*e2e*pgdata*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }" > /dev/null 2>&1
+  else
+    pkill -f "e2e/.pgdata" > /dev/null 2>&1
+  fi
+  sleep 1
+}
+kill_stale_pg
+
 PG_PID=
 if ! port_open 54329; then
   FRESH=; [ -d .pgdata ] || FRESH=1
@@ -33,6 +44,7 @@ FAILED=0
 run_batch() {
   (cd "$SRV" && DATABASE_URL=$DB PORT=3000 CORS_ORIGIN=http://localhost:3000 node server.js > "$DIR/server.log" 2>&1) &
   curl -s -o /dev/null --retry 20 --retry-connrefused --retry-delay 1 http://localhost:3000/
+  sleep 3   # 시작 직후 마이그레이션 확인이 끝날 때까지 — 첫 테스트가 가끔 목록을 못 받던 것
   for f in "$@"; do
     out=$(node "$f" 2>&1)
     res=$(echo "$out" | grep -E "ALL PASS|FAIL|AssertionError|Error:" | head -3 | tr '\n' ' ')
@@ -54,11 +66,13 @@ else
   run_batch e2e3.js e2e4.js e2e5.js
   run_batch e2e6.js
   run_batch e2e8.js e2e9-progress.js e2e10-split.js
+  run_batch e2e11-filter.js
 fi
 
 # 이 실행이 띄운 Postgres 면 정상 종료 (start.mjs 가 .pgstop 을 보고 멈춤)
 if [ -n "$PG_PID" ]; then
   touch .pgstop
   for i in $(seq 1 30); do port_open 54329 || break; sleep 1; done
+  port_open 54329 && kill_stale_pg
 fi
 [ $FAILED = 0 ] && echo "== 전부 통과" || { echo "== 실패 있음"; exit 1; }

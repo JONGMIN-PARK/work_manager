@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.233 (2026-10-27) — 마인드맵 담당자별 보기 · 상태 거르기
+
+- mindmap-filter.js (새 파일): `mmTaskFacts`(작업 · 지연 · 이번 주 · 미입력 · 완료, 진행률은 `_mmProgressMap`) · `mmPeopleSummary` · `mmFilterMatch` (test/mindmap-filter.test.js). 화면 `#mmFbar` · `_mm.vf {who, st, dimDone, idx}`(보기 설정, 저장 안 함, 맵 열 때 초기화). 맞는 주제 · 위 단계 · 그 가지는 또렷, 나머지 `.mm-dim` + 선 `.mm-edge-dim`. 칩 다시 누르기 = 다음(Shift 이전), 접힌 위 단계 펼침(검색과 같음).
+- mindmap-view.js: `_mmPaint` 가 `_mmFilterPrepare` → 주제 class · 선 class → `_mmPaintFilter`. mindmap.js `MM_ICONS.user`.
+- test/e2e: e2e11-filter.js(8). run.sh — 지난 실행이 남긴 postgres(.pgdata) 정리 후 매번 새로 띄움, 서버 시작 후 3초 대기.
+
 ## v13.232 (2026-10-27) — 마인드맵 간트 · 맵 진행률 기준 통일
 
 - mindmap.js `_mmProgressMap(root)` — `mmProgressRollup` + 연결된 앱 데이터(완료 · 진척). 맵(`_mm.prog`)과 간트가 함께 씀.

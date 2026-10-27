@@ -261,7 +261,8 @@ var MM_ICONS = {
   gantt: 'M3 3v18h18M7 7h7M10 12h8M7 17h5',
   calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
   pen: 'M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z',
-  x: 'M18 6L6 18M6 6l12 12'
+  x: 'M18 6L6 18M6 6l12 12',
+  user: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'
 };
 function _mmIcon(name, size) {
   var d = MM_ICONS[name];
@@ -322,7 +323,7 @@ function mmOpen(id) {
     _mm.sel = _mmRoot().id;
     _mm.undo = []; _mm.redo = [];
     _mm.dirty = false; _mm.titleDirty = false; _mm.conflict = null; _mm.lockedBy = null;
-    _mm.search = ''; _mm.hits = []; _mm.hitIdx = -1;
+    _mm.search = ''; _mm.hits = []; _mm.hitIdx = -1; _mm.vf = null;
     _mm.zoom = 1; _mm.panX = null; _mm.panY = null;
     if (window.innerWidth < 768) _mm.outline = true;   // 휴대폰은 아웃라인 보기로 시작
     _mmRenderEditor();

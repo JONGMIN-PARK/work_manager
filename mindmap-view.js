@@ -66,6 +66,7 @@ function _mmRenderEditor() {
     tool('fold', 'fold', '접기', '접기/펴기 (Space)', true) + tool('fold-all', 'level1', '1단계', '1단계만 보기', true) + tool('unfold-all', 'unfold', '펴기', '모두 펴기', true) +
     '</div>' +
     '<div class="mm-canvas" id="mmCanvas"><div class="mm-stage" id="mmStage"></div>' +
+    '<div class="mm-fbar hidden" id="mmFbar"></div>' +
     '<textarea id="mmSink" class="mm-sink" aria-label="마인드맵 키 입력" autocomplete="off" spellcheck="false"></textarea>' +
     '<canvas class="mm-minimap' + (_mmMiniOn() ? '' : ' hidden') + '" id="mmMini" width="176" height="114" title="눌러서 그 자리로 이동"></canvas>' +
     '<div class="mm-zoom"><button data-act="zoom-out" title="축소 (Ctrl+-)">' + _mmIcon('minus', 14) + '</button><span id="mmZoomV">100%</span>' +
@@ -100,6 +101,7 @@ function _mmRenderEditor() {
     else if (e.key === 'Escape') { search.value = ''; _mmSearch('', false); _mmFocusCanvas(); }
   };
   _mmBindCanvas();
+  if (typeof _mmBindFilter === 'function') _mmBindFilter();
   _mmRefreshMode();
   _mmPaintSheets();
   if (typeof _mmAiBar === 'function') _mmAiBar();
@@ -329,7 +331,7 @@ function _mmNodeHtml(n, depth, color, num) {
   var cls = 'mm-node ' + (depth === 0 ? 'mm-root' : depth === 1 ? 'mm-main' : 'mm-topic2') +
     ((n.done || _mmRefDone(n)) ? ' mm-done' : '') + (hit ? ' mm-hit' : '') + (n.id === _mm.sel ? ' mm-sel' : '') + (n.color ? ' mm-colored' : '') +
     (n.ref ? ' mm-has-ref' : '') + (n._ai ? ' mm-ai' : '') + (n.collapsed && (n.children || []).length ? ' mm-folded' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '') +
-    (_mm.preview ? _mmHistNodeClass(n.id) : '');
+    (_mm.preview ? _mmHistNodeClass(n.id) : '') + (typeof _mmFilterDim === 'function' && _mmFilterDim(n.id) ? ' mm-dim' : '');
   var mk = '';
   (n.markers || []).forEach(function (m) {
     var pm = /^priority-(\d)$/.exec(m);
@@ -367,6 +369,7 @@ function _mmPaint() {
   var nums = mmNumbering(root);
   // 진행률: 직접 값 · 완료 · 연결된 앱 데이터(진척) → 없으면 하위 평균
   _mm.prog = _mmProgressMap(root);
+  if (typeof _mmFilterPrepare === 'function') _mmFilterPrepare(root);
   mmWalk(root, function (n, parent, depth) {
     var c = _mmNodeColor(n, parent, depth, root, colors);
     colors[n.id] = c;
@@ -429,13 +432,14 @@ function _mmPaint() {
     var p = lay.pos[id];
     if (!p.parentId) return;
     var pp = lay.pos[p.parentId];
+    var edim = (typeof _mmFilterDim === 'function' && _mmFilterDim(id)) ? ' mm-edge-dim' : '';   // 흐린 주제의 선 · 밑줄도 함께
     if (p.depth <= 2) {
       // 가지는 부모 쪽이 굵고 끝으로 갈수록 가늘게 (유료 마인드맵 툴의 기본 모양)
       // 끝 굵기를 하위 주제 밑줄과 같게 — 밑줄까지 한 도형이라 이음매가 없다.
       var w0 = p.depth === 1 ? 7 : 3.4, w1 = p.depth === 1 ? 2.4 : MM_UNDERLINE;
-      paths.push('<path d="' + mmEdgeShape(pp, p, st, w0, w1) + '" class="mm-branch" style="fill:' + colors[id] + '"/>');
+      paths.push('<path d="' + mmEdgeShape(pp, p, st, w0, w1) + '" class="mm-branch' + edim + '" style="fill:' + colors[id] + '"/>');
     } else {
-      paths.push('<path d="' + mmEdgePath(pp, p, st) + '" class="mm-edge" style="stroke:' + colors[id] + ';stroke-width:' + MM_UNDERLINE + '"/>');
+      paths.push('<path d="' + mmEdgePath(pp, p, st) + '" class="mm-edge' + edim + '" style="stroke:' + colors[id] + ';stroke-width:' + MM_UNDERLINE + '"/>');
     }
   });
   var svg = _mmEl('mmEdges');
@@ -461,6 +465,7 @@ function _mmPaint() {
   if (typeof _mmAiBar === 'function') _mmAiBar();
   if (_mm.outline) _mmPaintOutline();
   if (_mm.gantt) _mmPaintGantt();
+  if (typeof _mmPaintFilter === 'function') _mmPaintFilter();
 }
 
 // 글꼴(웹 폰트 글자 묶음)이 그린 뒤에 받아지면 주제 크기가 바뀌므로 다시 배치 — 입력 중이면 건너뜀
