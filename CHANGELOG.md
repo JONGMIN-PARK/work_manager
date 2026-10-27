@@ -1,5 +1,12 @@
 # Work Manager — 변경 이력
 
+## v13.218 (2026-10-27) — 마인드맵 단축키 · 여러 선택 · 오른쪽 클릭 · 명령 찾기
+
+- mindmap-keys.js(신규): 단축키 표 `MM_COMMANDS`({id,label,group,keys,run,edit,when,hidden}) 하나로 키 입력(`mmHandleKey`) · 오른쪽 클릭 메뉴(`mmContextMenu`, 주제/여러 주제/빈 곳) · 명령 찾기(`mmPalette`, Ctrl+/) · 도움말(`mmHelpModal`, F1, 표에서 생성) · 여러 선택 패널(`mmMultiPanelHtml`). `mmKeyName` 은 글자·숫자·괄호를 `e.code` 로 읽어 한글 자판에서도 Alt+R 등이 같게 동작, ⌘ = Ctrl. 보기 전용에서 편집 명령은 키만 먹고 무시(Tab 포커스 이탈 방지).
+- 새 동작: 위에 형제(Shift+Enter) · 가지 복제(Ctrl+D) · 형제 순서(Alt+↑/↓) · 들여/내어쓰기(Ctrl+] / Ctrl+[) · 하위 모두 접기(Shift+Space) · 경계/요약/번호/관계선/연결/열기(Alt+B/S/N/R/L/Enter) · 색/완료/진척/노트/라벨(Alt+C/K/P/M/T) · 아웃라인(Alt+O) · 시트(Alt+PgUp/PgDn) · AI 제안(Alt+A). 브라우저 예약 조합(Ctrl+T/W/N/L/P/R/K, Alt+D/E/F, Alt+←/→ 등)은 쓰지 않음 — test/mindmap-keys.test.js 가 겹침·예약 조합·메뉴 항목을 검사.
+- mindmap.js: 여러 선택 `_mm.multi` (Ctrl+클릭 토글 · Shift+빈 곳 끌기 상자 · Ctrl+A) — 삭제(다른 선택의 하위 제외, 한 번의 되돌리기) · 복사(여러 가지 → 배열 clip · Markdown) · 붙여넣기(배열) · 그리기 `.mm-multi`. `_mmKey` 는 표에 맡기고 남은 글자만 바로 편집. contextmenu 이벤트. 툴바 ⌘(명령 찾기). PNG 내보내기에서 선택 표시 제거.
+- style.css `.mm-multi` · `.mm-selbox` · `.mm-ctx*` · `.mm-pal-*` · `.mm-help-grid`.
+
 ## v13.217 (2026-10-27) — 마인드맵 Phase 2 (앱 데이터 연동 · XMind 고급 · AI)
 
 - 기획: docs/PRD_마인드맵.md v0.4 — 12장에 구현 결과 · 기획 대비 달라진 점 · Phase 3 로 넘긴 것.

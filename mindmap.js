@@ -78,8 +78,40 @@ var _mm = {
   sel: null, editing: false, dirty: false, titleDirty: false, saving: false, saveAgain: false, saveTimer: null, savePromise: null,
   undo: [], redo: [], zoom: 1, panX: 0, panY: 0, layout: null, outline: false, zen: false,
   search: '', hits: [], hitIdx: -1, clip: null, clipText: '', lockTimer: null, lockedBy: null, conflict: null, lastSaved: null,
-  sheetIdx: 0, refs: {}, relFrom: null, aiReady: null
+  sheetIdx: 0, refs: {}, relFrom: null, aiReady: null,
+  multi: []   // 여러 주제 선택 (Ctrl+클릭 · Shift+끌기 · Ctrl+A) — 비어 있으면 _mm.sel 하나
 };
+
+/** 지금 선택된 주제 id 목록 (여러 개 선택이면 그 목록, 아니면 [sel]) */
+function _mmSelIds() {
+  if (_mm.multi.length) return _mm.multi.slice();
+  return _mm.sel ? [_mm.sel] : [];
+}
+function _mmClearMulti() {
+  if (!_mm.multi.length) return;
+  _mm.multi = [];
+  var st = _mmEl('mmStage');
+  if (st) st.querySelectorAll('.mm-multi').forEach(function (el) { el.classList.remove('mm-multi'); });
+  _mmPaintPanel();
+}
+function _mmToggleMulti(id) {
+  if (!_mm.multi.length && _mm.sel && _mm.sel !== id) _mm.multi = [_mm.sel];
+  var i = _mm.multi.indexOf(id);
+  if (i >= 0) _mm.multi.splice(i, 1); else _mm.multi.push(id);
+  if (_mm.multi.length === 1) { _mm.sel = _mm.multi[0]; _mm.multi = []; }
+  else if (_mm.multi.length) _mm.sel = id;
+  _mmPaintMulti();
+  _mmPaintPanel();
+}
+function _mmPaintMulti() {
+  var st = _mmEl('mmStage');
+  if (!st) return;
+  st.querySelectorAll('.mm-node').forEach(function (el) {
+    var id = el.getAttribute('data-id');
+    el.classList.toggle('mm-multi', _mm.multi.indexOf(id) >= 0);
+    el.classList.toggle('mm-sel', id === _mm.sel);
+  });
+}
 
 /* ═══ 공통 헬퍼 ═══ */
 function _mmEsc(v) { return (typeof eH === 'function') ? eH(v == null ? '' : v) : String(v == null ? '' : v); }
@@ -543,7 +575,7 @@ function mmOpen(id) {
     _mm.version = row.version;
     _mm.canEdit = !!row.can_edit;
     _mm.readOnly = !row.can_edit;
-    _mm.sheetIdx = 0; _mm.refs = {}; _mm.relFrom = null;
+    _mm.sheetIdx = 0; _mm.refs = {}; _mm.relFrom = null; _mm.multi = [];
     _mm.sel = _mmRoot().id;
     _mm.undo = []; _mm.redo = [];
     _mm.dirty = false; _mm.titleDirty = false; _mm.conflict = null; _mm.lockedBy = null;
@@ -657,7 +689,8 @@ function _mmRenderEditor() {
     '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
     '<button data-act="export-opml">OPML (.opml)</button></div></div>' +
     ((row.is_owner || _mmIsAdmin()) ? '<button class="btn btn-g btn-s" data-act="share">🔗 공유</button>' : '') +
-    '<button class="btn btn-g btn-s" data-act="help" title="단축키">?</button>' +
+    '<button class="btn btn-g btn-s" data-act="palette" title="명령 찾기 (Ctrl+/)">⌘</button>' +
+    '<button class="btn btn-g btn-s" data-act="help" title="단축키 (F1)">?</button>' +
     '</div>' +
     '<div id="mmBanner"></div>' +
     '<div id="mmAiBar"></div>' +
@@ -665,9 +698,9 @@ function _mmRenderEditor() {
     '<div class="mm-body">' +
     '<div class="mm-tools">' +
     tool('child', '＋하위', '하위 주제 추가 (Tab)') + tool('sibling', '＋형제', '형제 주제 추가 (Enter)') + tool('parent', '＋부모', '부모 주제 삽입 (Ctrl+Enter)') +
-    tool('del', '삭제', '삭제 (Delete)') + '<span class="mm-tool-sep"></span>' +
+    tool('del', '삭제', '삭제 (Delete) · 여러 개: Ctrl+클릭 / Shift+끌기') + '<span class="mm-tool-sep"></span>' +
     tool('undo', '↶ 취소', '되돌리기 (Ctrl+Z)') + tool('redo', '↷ 다시', '다시 실행 (Ctrl+Y)') + '<span class="mm-tool-sep"></span>' +
-    tool('relation', '↔ 관계', '관계선 — 누른 뒤 이을 주제를 클릭 (Esc 취소)') + tool('link-ref', '🔗 연결', '앱 데이터 연결 — 프로젝트·마일스톤·이슈·팀원…') +
+    tool('relation', '↔ 관계', '관계선 (Alt+R) — 누른 뒤 이을 주제를 클릭, Esc 취소') + tool('link-ref', '🔗 연결', '앱 데이터 연결 (Alt+L) — 프로젝트·마일스톤·이슈·팀원…') +
     '<button class="mm-tool" data-act="refs-refresh" title="연결된 항목 상태 새로고침">↻ 상태</button><span class="mm-tool-sep"></span>' +
     '<button class="mm-tool" data-act="fold" title="접기/펴기 (Space)">접기</button>' +
     '<button class="mm-tool" data-act="fold-all" title="1단계만 보기">1단계</button>' +
@@ -766,7 +799,7 @@ function mmSwitchSheet(i) {
   if (!_mm.doc.sheets[i] || i === _mm.sheetIdx) return;
   _mm.sheetIdx = i;
   _mm.sel = _mmRoot().id;
-  _mm.hits = []; _mm.hitIdx = -1; _mm.relFrom = null;
+  _mm.hits = []; _mm.hitIdx = -1; _mm.relFrom = null; _mm.multi = [];
   var st = _mmEl('mmStructure');
   if (st) st.value = _mmSheet().structure || 'balanced';
   _mmPaintSheets();
@@ -889,7 +922,7 @@ function _mmNodeHtml(n, depth, color, num) {
   var hit = _mm.hits.indexOf(n.id) >= 0;
   var cls = 'mm-node ' + (depth === 0 ? 'mm-root' : depth === 1 ? 'mm-main' : 'mm-topic2') +
     ((n.done || _mmRefDone(n)) ? ' mm-done' : '') + (hit ? ' mm-hit' : '') + (n.id === _mm.sel ? ' mm-sel' : '') + (n.color ? ' mm-colored' : '') +
-    (n.ref ? ' mm-has-ref' : '') + (n._ai ? ' mm-ai' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '');
+    (n.ref ? ' mm-has-ref' : '') + (n._ai ? ' mm-ai' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '');
   var mk = '';
   (n.markers || []).forEach(function (m) {
     var pm = /^priority-(\d)$/.exec(m);
@@ -1197,11 +1230,19 @@ function mmAddParent() {
   _mmEdit(n.id, null);
 }
 function mmDeleteSel() {
-  var f = _mmSelInfo();
-  if (!f || !f.parent) return;
+  var root = _mmRoot();
+  var ids = _mmSelIds().filter(function (id) { return id !== root.id; });
+  if (!ids.length) return;
+  // 다른 선택 주제의 하위는 같이 지워지므로 빼고, 지운 뒤엔 첫 주제의 이웃(없으면 부모)을 선택
+  ids = ids.filter(function (id) { return !ids.some(function (o) { return o !== id && mmIsAncestor(root, o, id); }); });
+  var f = mmFind(root, ids[0]);
   var sibs = f.parent.children;
-  var next = sibs[f.index + 1] || sibs[f.index - 1] || f.parent;
-  _mmMutate(function () { mmRemoveNode(_mmRoot(), f.node.id); _mm.sel = next.id; });
+  var next = sibs.filter(function (c) { return ids.indexOf(c.id) < 0; })[0] || f.parent;
+  _mmMutate(function () {
+    ids.forEach(function (id) { mmRemoveNode(root, id); });
+    _mm.multi = [];
+    _mm.sel = next.id;
+  });
 }
 function mmToggleFold(id) {
   var f = mmFind(_mmRoot(), id || _mm.sel);
@@ -1337,19 +1378,24 @@ function _mmNav(dir) {
 
 /* ── 가지 복사 · 붙여넣기 ── */
 function _mmCopy(e, cut) {
-  var f = _mmSelInfo();
-  if (!f) return;
+  var root = _mmRoot();
+  var ids = _mmSelIds();
+  ids = ids.filter(function (id) { return !ids.some(function (o) { return o !== id && mmIsAncestor(root, o, id); }); });
+  var nodes = ids.map(function (id) { var f = mmFind(root, id); return f && f.node; }).filter(Boolean);
+  if (!nodes.length) return;
   // 가지를 Markdown 목록으로 — 다른 앱(메모·XMind)에 붙여넣어도 같은 모양
   var out = [];
-  mmWalk(f.node, function (n, parent, depth) {
-    out.push(new Array(depth + 1).join('  ') + '- ' + (n.done ? '[x] ' : '') + String(n.text || '').replace(/\n/g, ' '));
+  nodes.forEach(function (node) {
+    mmWalk(node, function (n, parent, depth) {
+      out.push(new Array(depth + 1).join('  ') + '- ' + (n.done ? '[x] ' : '') + String(n.text || '').replace(/\n/g, ' '));
+    });
   });
   var md = out.join('\n') + '\n';
-  _mm.clip = JSON.stringify(f.node);
+  _mm.clip = JSON.stringify(nodes);
   _mm.clipText = md;
   if (e && e.clipboardData) { e.clipboardData.setData('text/plain', md); e.preventDefault(); }
-  if (cut && f.parent) mmDeleteSel();
-  _mmToast(cut ? '잘라냈습니다' : '가지를 복사했습니다');
+  if (cut && !_mm.readOnly) mmDeleteSel();
+  _mmToast((cut ? '잘라냈습니다' : '복사했습니다') + (nodes.length > 1 ? ' (' + nodes.length + '개 가지)' : ''));
 }
 function _mmPaste(e) {
   if (_mm.readOnly) return;
@@ -1359,7 +1405,8 @@ function _mmPaste(e) {
   if (e) e.preventDefault();
   var nodes = [];
   if (_mm.clip && (!text || text === _mm.clipText)) {
-    nodes = [mmCloneBranch(JSON.parse(_mm.clip))];
+    var clip = JSON.parse(_mm.clip);
+    nodes = (Array.isArray(clip) ? clip : [clip]).map(mmCloneBranch);
   } else if (text && text.trim()) {
     var lines = text.trim().split(/\r?\n/);
     if (lines.length === 1) nodes = [mmNewNode(lines[0].replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '').trim())];
@@ -1457,7 +1504,9 @@ function _mmEdClick(e) {
     case 'export-png': mmExportPng(); return;
     case 'export-md': mmExportMarkdown(); return;
     case 'share': mmShareModal(); return;
-    case 'help': mmHelpModal(); return;
+    case 'help': if (typeof mmHelpModal === 'function') mmHelpModal(); return;
+    case 'palette': if (typeof mmPalette === 'function') mmPalette(); return;
+    case 'cmd': if (typeof mmRunCommand === 'function') mmRunCommand(t.getAttribute('data-cmd')); break;
     case 'take-lock':
       if (!confirm((_mm.lockedBy || '다른 사용자') + ' 님이 아직 편집 중일 수 있습니다.\n가져오면 그분이 마지막으로 저장한 내용부터 이어서 편집하고, 그분 화면은 보기 전용으로 바뀝니다.\n가져올까요?')) return;
       _mmLockAcquire(true); return;
@@ -1503,11 +1552,25 @@ function _mmBindCanvas() {
       e.preventDefault();
       return;
     }
+    if (node && (e.ctrlKey || e.metaKey)) {
+      _mmToggleMulti(node.getAttribute('data-id'));
+      e.preventDefault();
+      return;
+    }
     if (node) {
       var id = node.getAttribute('data-id');
+      if (_mm.multi.indexOf(id) < 0) _mmClearMulti();
       _mmSelect(id, { scroll: false });
       drag = { mode: 'node', sx: e.clientX, sy: e.clientY, id: id, moved: false };
+    } else if (e.shiftKey) {
+      // Shift+끌기: 상자 안 주제 여러 개 선택
+      var cr = cv.getBoundingClientRect();
+      var box = document.createElement('div');
+      box.className = 'mm-selbox';
+      cv.appendChild(box);
+      drag = { mode: 'box', sx: e.clientX, sy: e.clientY, ox: cr.left, oy: cr.top, box: box };
     } else {
+      _mmClearMulti();
       drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, px: _mm.panX, py: _mm.panY };
       cv.classList.add('mm-panning');
     }
@@ -1519,6 +1582,11 @@ function _mmBindCanvas() {
     if (drag.mode === 'pan') {
       _mm.panX = drag.px + dx; _mm.panY = drag.py + dy;
       _mmApplyTransform();
+      return;
+    }
+    if (drag.mode === 'box') {
+      var x1 = Math.min(drag.sx, e.clientX) - drag.ox, y1 = Math.min(drag.sy, e.clientY) - drag.oy;
+      drag.box.style.cssText = 'left:' + x1 + 'px;top:' + y1 + 'px;width:' + Math.abs(dx) + 'px;height:' + Math.abs(dy) + 'px';
       return;
     }
     if (_mm.readOnly || drag.id === _mmRoot().id) return;
@@ -1555,6 +1623,19 @@ function _mmBindCanvas() {
     var d = drag;
     drag = null;
     cv.classList.remove('mm-panning');
+    if (d.mode === 'box') {
+      d.box.remove();
+      // 화면 좌표 → 스테이지 좌표로 바꿔 겹치는 주제 선택
+      var bx1 = (Math.min(d.sx, e.clientX) - d.ox - _mm.panX) / _mm.zoom, by1 = (Math.min(d.sy, e.clientY) - d.oy - _mm.panY) / _mm.zoom;
+      var bx2 = (Math.max(d.sx, e.clientX) - d.ox - _mm.panX) / _mm.zoom, by2 = (Math.max(d.sy, e.clientY) - d.oy - _mm.panY) / _mm.zoom;
+      var hit = Object.keys(_mm.layout ? _mm.layout.pos : {}).filter(function (id) {
+        var p = _mm.layout.pos[id];
+        return p.x < bx2 && p.x + p.w > bx1 && p.y < by2 && p.y + p.h > by1;
+      });
+      if (hit.length === 1) { _mm.multi = []; _mmSelect(hit[0]); }
+      else if (hit.length) { _mm.multi = hit; _mm.sel = hit[0]; _mmPaintMulti(); _mmPaintPanel(); }
+      return;
+    }
     if (d.ghost) d.ghost.remove();
     document.querySelectorAll('.mm-dragging,.mm-drop-child,.mm-drop-before,.mm-drop-after').forEach(function (x) { x.classList.remove('mm-dragging', 'mm-drop-child', 'mm-drop-before', 'mm-drop-after'); });
     if (d.mode !== 'node' || !d.moved) return;
@@ -1605,6 +1686,17 @@ function _mmBindCanvas() {
     }
   }, { passive: false });
   cv.addEventListener('keydown', _mmKey);
+  cv.addEventListener('contextmenu', function (e) {
+    if (_mm.editing || typeof mmContextMenu !== 'function') return;
+    e.preventDefault();
+    var node = e.target.closest('.mm-node');
+    if (node) {
+      var id = node.getAttribute('data-id');
+      if (_mm.multi.indexOf(id) < 0) { _mmClearMulti(); _mmSelect(id, { scroll: false }); }
+    }
+    _mmFocusCanvas();
+    mmContextMenu(e.clientX, e.clientY, node ? 'node' : 'canvas');
+  });
   var sink = _mmEl('mmSink');
   if (sink) {
     sink.addEventListener('compositionstart', function () {
@@ -1621,45 +1713,15 @@ function _mmKey(e) {
   if (_mm.editing) return;
   // 한글 등 IME 입력(keyCode 229)은 compositionstart 에서 mmSink 를 입력칸으로 바꿔 처리
   if (e.isComposing || e.keyCode === 229) return;
+  // 단축키 — 표는 mindmap-keys.js (MM_COMMANDS). 복사·잘라내기·붙여넣기는 copy/cut/paste 이벤트로
+  if (typeof mmHandleKey === 'function' && mmHandleKey(e)) { e.preventDefault(); e.stopPropagation(); return; }
   var k = e.key;
-  var ctrl = e.ctrlKey || e.metaKey;
-  var lk = k.length === 1 ? k.toLowerCase() : k;
-  var handled = true;
-  if (ctrl && e.shiftKey && lk === 'f') _mmSetZen(!_mm.zen);
-  else if (ctrl && e.shiftKey && lk === 'l') {
-    var order = MM_STRUCTURES.map(function (s) { return s.k; });
-    var next = order[(order.indexOf(_mmSheet().structure || 'balanced') + 1) % order.length];
-    if (_mmMutate(function () { _mmSheet().structure = next; })) { var sel = _mmEl('mmStructure'); if (sel) sel.value = next; _mmFit(); }
-  }
-  else if (ctrl && lk === 'z') { if (e.shiftKey) mmRedo(); else mmUndo(); }
-  else if (ctrl && lk === 'y') mmRedo();
-  else if (ctrl && lk === 's') _mmSaveNow();
-  else if (ctrl && lk === 'f') { var s = _mmEl('mmSearch'); if (s) { s.focus(); s.select(); } }
-  else if (ctrl && (lk === 'c' || lk === 'x' || lk === 'v')) handled = false;   // copy/cut/paste 이벤트로 처리
-  else if (ctrl && (k === '0' || k === '=' || k === '+' || k === '-')) {
-    if (k === '0') _mmFit(); else _mmZoomAt(k === '-' ? 1 / 1.2 : 1.2);
-  }
-  else if (e.altKey && /^[0-9]$/.test(k)) _mmSetMarker('priority', k === '0' ? null : k);
-  else if (k === 'Tab') mmAddChild();
-  else if (k === 'Enter' && ctrl) mmAddParent();
-  else if (k === 'Enter') mmAddSibling();
-  else if (k === 'Delete' || k === 'Backspace') mmDeleteSel();
-  else if (k === 'F2') _mmEdit(_mm.sel, null);
-  else if (k === ' ') mmToggleFold();
-  else if (k === 'ArrowLeft') _mmNav('left');
-  else if (k === 'ArrowRight') _mmNav('right');
-  else if (k === 'ArrowUp') _mmNav('up');
-  else if (k === 'ArrowDown') _mmNav('down');
-  else if (k === 'Home') _mmSelect(_mmRoot().id);
-  else if (k === 'Escape') { if (_mm.relFrom) mmCancelRelation(); else if (_mm.zen) _mmSetZen(false); else handled = false; }
-  else if (k.length === 1 && !ctrl && !e.altKey && !_mm.readOnly) {
+  if (k.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !_mm.readOnly) {
     // XMind 처럼: 주제를 고른 채 바로 타이핑하면 내용을 바꿔 씀
     e.preventDefault();
+    _mmClearMulti();
     _mmEdit(_mm.sel, k);
-    return;
   }
-  else handled = false;
-  if (handled) { e.preventDefault(); e.stopPropagation(); }
 }
 
 /* 페이지 단위 리스너 (1회) — 나가기 전 저장 경고 · 집중 모드 Esc */
@@ -1723,6 +1785,11 @@ function _mmPaintPanel() {
   if (!pn || !_mm.doc) return;
   var f = _mmSelInfo();
   if (!f) { pn.innerHTML = ''; return; }
+  if (_mm.multi.length > 1 && typeof mmMultiPanelHtml === 'function') {
+    pn.removeAttribute('data-sel');
+    pn.innerHTML = mmMultiPanelHtml();
+    return;
+  }
   // 같은 주제의 입력칸을 쓰는 중이면 다시 그리지 않음 (Tab 으로 다음 칸 이동 시 포커스 유지)
   var ae = document.activeElement;
   // (체크박스는 켜면 딸린 입력칸이 나타나야 하므로 다시 그림)
@@ -1958,7 +2025,7 @@ function mmExportPng() {
   var clone = stage.cloneNode(true);
   clone.removeAttribute('id');
   clone.style.transform = 'translate(' + (pad - b.minX) + 'px,' + (pad - b.minY) + 'px)';
-  clone.querySelectorAll('.mm-sel,.mm-hit').forEach(function (x) { x.classList.remove('mm-sel', 'mm-hit'); });
+  clone.querySelectorAll('.mm-sel,.mm-hit,.mm-multi,.mm-rel-from').forEach(function (x) { x.classList.remove('mm-sel', 'mm-hit', 'mm-multi', 'mm-rel-from'); });
   clone.querySelectorAll('.mm-inline').forEach(function (x) { x.remove(); });
   box.appendChild(clone);
   document.body.appendChild(box);
@@ -1968,19 +2035,4 @@ function mmExportPng() {
     canvas.toBlob(function (blob) { if (blob) _mmDownload(_mmFileName(_mm.row.title) + '.png', blob); }, 'image/png');
   }).catch(function (e) { _mmToast('❌ 이미지 만들기 실패 — ' + _mmErr(e), 'error'); })
     .then(function () { box.remove(); });
-}
-
-function mmHelpModal() {
-  return wmGuardedModal('mmHelp', function () {
-    var rows = [
-      ['Tab', '하위 주제 추가'], ['Enter', '형제 주제 추가'], ['Ctrl+Enter', '부모 주제 삽입'], ['F2 · 더블클릭 · 바로 타이핑', '주제 편집'],
-      ['Shift+Enter (편집 중)', '줄바꿈'], ['Delete', '삭제 (하위 포함)'], ['Space', '접기/펴기'], ['방향키 · Home', '이동 · 중심 주제로'],
-      ['Ctrl+Z / Ctrl+Y', '되돌리기 / 다시 실행'], ['Ctrl+C / X / V', '가지 복사 · 잘라내기 · 붙여넣기 (Markdown 목록도 붙여넣기 가능)'],
-      ['Alt+1~9 · Alt+0', '우선순위 지정 · 해제'], ['Ctrl+F', '검색 (Enter 다음 · Shift+Enter 이전)'], ['Ctrl+Shift+L', '구조 바꾸기'],
-      ['Ctrl+Shift+F · Esc', '집중 모드 켜기 · 끄기'], ['Ctrl+휠 · Ctrl+= / - / 0', '확대·축소 · 화면 맞춤'], ['휠 · 빈 곳 끌기', '화면 이동'],
-      ['주제 끌어 놓기', '다른 주제의 하위(가운데) · 앞/뒤(위/아래 가장자리)로 이동'], ['Ctrl+S', '바로 저장 (평소엔 자동 저장)']
-    ];
-    var html = '<table class="mm-help">' + rows.map(function (r) { return '<tr><td><kbd>' + _mmEsc(r[0]) + '</kbd></td><td>' + _mmEsc(r[1]) + '</td></tr>'; }).join('') + '</table>';
-    createModal({ id: 'mmHelpModal', title: '⌨️ 마인드맵 단축키', html: html, width: '560px', closeOnEsc: true, closeOnOverlay: true });
-  }, 'mmHelpModal');
 }

@@ -1066,3 +1066,21 @@ body.mm-zen-body{overflow:hidden}
 .mm-pd-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px}
 .mm-pd-row{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--bd);padding:7px 2px;cursor:pointer;color:var(--t2);font-family:inherit;font-size:12px}
 .mm-pd-row:hover{background:var(--bg-hv)}
+/* ═══ 🧠 마인드맵 단축키 · 여러 선택 · 오른쪽 클릭 메뉴 · 명령 찾기 (v13.218) ═══ */
+.mm-node.mm-multi{outline:2px dashed var(--ac);outline-offset:3px;background-color:var(--ac-g)}
+.mm-node.mm-multi.mm-sel{outline-style:solid}
+.mm-selbox{position:absolute;border:1.5px dashed var(--ac);background:var(--ac-g);pointer-events:none;z-index:6}
+.mm-ctx{position:fixed;z-index:10050;min-width:230px;max-height:80vh;overflow-y:auto;background:var(--bg-ps,var(--bg-p));border:1px solid var(--bd);border-radius:10px;padding:4px;box-shadow:0 12px 32px rgba(0,0,0,.25)}
+.mm-ctx button{display:flex;justify-content:space-between;align-items:center;gap:16px;width:100%;background:none;border:none;color:var(--t2);font-size:12px;padding:6px 10px;border-radius:6px;cursor:pointer;font-family:inherit;text-align:left}
+.mm-ctx button:hover{background:var(--bg-hv)}
+.mm-ctx kbd,.mm-pal-row kbd{font-family:inherit;font-size:10px;color:var(--t5);background:var(--bg-i);border:1px solid var(--bd);border-radius:4px;padding:0 5px;white-space:nowrap}
+.mm-ctx-sep{height:1px;background:var(--bd);margin:4px 6px}
+.mm-ctx-head{font-size:10.5px;font-weight:700;color:var(--t4);padding:5px 10px 3px}
+.mm-pal-q{width:100%;font-size:14px;padding:10px 12px;margin-bottom:8px}
+.mm-pal-list{max-height:52vh;overflow-y:auto}
+.mm-pal-row{display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;border-radius:7px;padding:7px 10px;cursor:pointer;color:var(--t2);font-family:inherit;font-size:12.5px;text-align:left}
+.mm-pal-row.on,.mm-pal-row:hover{background:var(--ac-bg)}
+.mm-pal-g{font-size:10px;color:var(--t5);min-width:62px}
+.mm-pal-l{flex:1}
+.mm-help-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(380px,100%),1fr));gap:14px}
+.mm-help-sec .mm-pn-h{margin-bottom:4px}
