@@ -1,5 +1,12 @@
 # Work Manager — 변경 이력
 
+## v13.240 (2026-10-27) — 마인드맵 색 테마 · 글자 서식 · 서식 복사
+
+- mindmap.js `MM_THEMES` · `_mmTheme()`(sheet.theme) · `MM_STYLE_KEYS`(color · bold · fs). mindmap-view.js `_mmNodeColor` 가 테마 색, 주제 class `mm-bold` · `mm-fs-s/l`, 배경 메뉴 맨 위 색 테마 칸(버튼 이름 "테마").
+- mindmap-keys.js 명령 copyStyle · pasteStyle · bold · fontUp · fontDown (`_mm.styleClip`). mindmap-edit.js `data-act` theme · fs · bold. 패널 [글자] 칸.
+- test/e2e/e2e16-theme.js(7), e2e12-bg 메뉴 묶음 검사 갱신.
+- 고침: 웹 글꼴 받기 후 다시 그리기(v13.226)를 주제 크기가 실제로 바뀐 때만 — 크기가 같아도 다시 그려 누르던 주제가 바뀌는(클릭이 빗나가는) 일이 있었음(e2e.js 가 가끔 실패하던 원인). run.sh 는 파일별 출력을 .shots/<이름>.log 로 남김.
+
 ## v13.239 (2026-10-27) — 회의록 → 마인드맵
 
 - server/lib/mindmap-data.js `meetingTree(m, acts)`(순수, __tests__/mindmap-meeting.test.js) · `genMeeting`(프로젝트 회의 = 프로젝트 읽기 권한, 프로젝트 없는 회의 = 만든 사람만) · generate kind `meeting` + `meetingId`.

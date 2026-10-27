@@ -35,7 +35,7 @@ function _mmRenderEditor() {
     '<button data-act="view-gantt" id="mmVGantt" title="간트 (Alt+J)">간트</button></div>' +
     '<select id="mmStructure" class="mm-select mm-edit-only" title="구조 (Ctrl+Shift+L)">' + MM_STRUCTURES.map(function (s) { return '<option value="' + s.k + '"' + (s.k === st ? ' selected' : '') + '>' + s.l + '</option>'; }).join('') + '</select>' +
     menuBtn('mmAlignMenu', 'align', '정렬', '같은 단계 맞춤 · 글자 정렬 (Alt+G)', ' mm-edit-only') + '<div class="mm-menu hidden" id="mmAlignMenu"></div></div>' +
-    menuBtn('mmBgMenu', 'bg', '배경', '캔버스 배경 (이 시트)', ' mm-edit-only') + '<div class="mm-menu mm-bgmenu hidden" id="mmBgMenu"></div></div>' +
+    menuBtn('mmBgMenu', 'bg', '테마', '색 테마 · 캔버스 배경 (이 시트)', ' mm-edit-only') + '<div class="mm-menu mm-bgmenu hidden" id="mmBgMenu"></div></div>' +
     (_mm.doc.meta && _mm.doc.meta.gen ? tb('resync', 'sync', '원본과 맞추기', '원본 데이터에 새로 생긴 항목을 맵에 추가', ' mm-edit-only') : '') +
     '<span class="mm-tsep"></span>' +
     menuBtn('mmAiMenu', 'sparkles', 'AI', 'AI 도우미', ' mm-edit-only' + (_mm.aiReady ? '' : ' hidden')).replace('<div class="mm-menu-wrap', '<div id="mmAiWrap" class="mm-menu-wrap') +
@@ -178,8 +178,14 @@ function _mmPaintAlignMenu() {
 function _mmPaintBgMenu() {
   var m = _mmEl('mmBgMenu');
   if (!m) return;
-  var cur = _mmBgKey();
-  m.innerHTML = MM_BG_GROUPS.map(function (g) {
+  var cur = _mmBgKey(), th = _mmTheme().k;
+  var themes = '<div class="mm-menu-h">색 테마 <span class="mm-hint">가지 색 · 중심 주제 색</span></div><div class="mm-thgrid">' + MM_THEMES.map(function (t) {
+    var cs = t.colors || MM_AUTO_COLORS.map(_mmColorVar);
+    return '<button class="mm-thsw' + (t.k === th ? ' on' : '') + '" data-act="theme" data-v="' + t.k + '" title="' + t.l + '">' +
+      '<span class="mm-thdots"><i style="background:' + (t.root || 'var(--ac)') + '"></i>' + cs.slice(0, 5).map(function (c) { return '<i style="background:' + c + '"></i>'; }).join('') + '</span>' +
+      '<span class="mm-bgname">' + t.l + '</span></button>';
+  }).join('') + '</div>';
+  m.innerHTML = themes + MM_BG_GROUPS.map(function (g) {
     return '<div class="mm-menu-h">' + g.l + '</div><div class="mm-bggrid">' + MM_BACKGROUNDS.filter(function (b) { return b.grp === g.k; }).map(function (b) {
       return '<button class="mm-bgsw' + (b.k === cur ? ' on' : '') + '" data-act="bg" data-v="' + b.k + '" title="' + b.l + '">' +
         '<span class="mm-bgprev" data-mmbg="' + b.k + '"><i></i><i></i></span><span class="mm-bgname">' + b.l + '</span></button>';
@@ -323,8 +329,12 @@ function _mmRefDone(n) {
 /* ═══ 그리기 ═══ */
 /** 주제 색 — 중심은 강조색, 주요 주제는 자기 색 또는 차례대로 자동 색, 그 아래는 부모 색을 물려받음. colors = 지금까지 정한 {id: 색} */
 function _mmNodeColor(n, parent, depth, root, colors) {
-  if (depth === 0) return _mmColorVar(n.color) || 'var(--ac)';
-  if (depth === 1) return _mmColorVar(n.color) || _mmColorVar(MM_AUTO_COLORS[root.children.indexOf(n) % MM_AUTO_COLORS.length]);
+  var th = _mmTheme();
+  if (depth === 0) return _mmColorVar(n.color) || th.root || 'var(--ac)';
+  if (depth === 1) {
+    var i = root.children.indexOf(n);
+    return _mmColorVar(n.color) || (th.colors ? th.colors[i % th.colors.length] : _mmColorVar(MM_AUTO_COLORS[i % MM_AUTO_COLORS.length]));
+  }
   return _mmColorVar(n.color) || colors[parent.id];
 }
 /**
@@ -344,7 +354,7 @@ function _mmNodeHtml(n, depth, color, num) {
   var hit = _mm.hits.indexOf(n.id) >= 0;
   var cls = 'mm-node ' + (depth === 0 ? 'mm-root' : depth === 1 ? 'mm-main' : 'mm-topic2') +
     ((n.done || _mmRefDone(n)) ? ' mm-done' : '') + (hit ? ' mm-hit' : '') + (n.id === _mm.sel ? ' mm-sel' : '') + (n.color ? ' mm-colored' : '') +
-    (n.ref ? ' mm-has-ref' : '') + (n._ai ? ' mm-ai' : '') + (n.collapsed && (n.children || []).length ? ' mm-folded' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '') +
+    (n.ref ? ' mm-has-ref' : '') + (n.bold ? ' mm-bold' : '') + (n.fs === 's' || n.fs === 'l' ? ' mm-fs-' + n.fs : '') + (n._ai ? ' mm-ai' : '') + (n.collapsed && (n.children || []).length ? ' mm-folded' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '') +
     (_mm.preview ? _mmHistNodeClass(n.id) : '') + (typeof _mmFilterDim === 'function' && _mmFilterDim(n.id) ? ' mm-dim' : '');
   var mk = '';
   (n.markers || []).forEach(function (m) {
@@ -489,7 +499,15 @@ function _mmPaint() {
 if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) {
   document.fonts.addEventListener('loadingdone', function () {
     var stage = _mmEl('mmStage');
-    if (stage && stage.offsetParent && _mm.doc && !_mm.editing) _mmPaint();
+    if (!(stage && stage.offsetParent && _mm.doc && !_mm.editing && _mm.layout)) return;
+    // 크기가 실제로 바뀐 주제가 있을 때만 — 괜히 다시 그리면 누르던 주제가 새것으로 바뀌어 클릭이 빗나간다
+    var zm = _mm.zoom || 1, changed = false;
+    stage.querySelectorAll('.mm-node').forEach(function (el) {
+      if (changed) return;
+      var p = _mm.layout.pos[el.getAttribute('data-id')], r = el.getBoundingClientRect();
+      if (p && r.width && (Math.abs(r.width / zm - p.w) > 0.5 || Math.abs(r.height / zm - p.h) > 0.5)) changed = true;
+    });
+    if (changed) _mmPaint();
   });
 }
 

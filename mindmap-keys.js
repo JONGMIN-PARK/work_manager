@@ -219,6 +219,29 @@ function _mmkMergeChildren() {
   });
 }
 
+/* ── 서식 복사 · 붙여넣기 (색 · 굵게 · 글자 크기) ── */
+function _mmkCopyStyle() {
+  var f = _mmSelInfo();
+  if (!f) return;
+  var st = {};
+  MM_STYLE_KEYS.forEach(function (k) { if (f.node[k] != null && f.node[k] !== '' && f.node[k] !== false) st[k] = f.node[k]; });
+  _mm.styleClip = st;
+  _mmToast('서식을 복사했습니다 — 붙일 주제를 고르고 Alt+Shift+V', 'success');
+}
+function _mmkPasteStyle() {
+  var st = _mm.styleClip;
+  if (!st) { _mmToast('먼저 서식을 복사하세요 (Alt+Shift+C)', 'warning'); return; }
+  _mmkEach(function (n) { MM_STYLE_KEYS.forEach(function (k) { if (st[k] != null) n[k] = st[k]; else delete n[k]; }); });
+}
+function _mmkBold() { var all = _mmkNodes().every(function (n) { return n.bold; }); _mmkEach(function (n) { if (all) delete n.bold; else n.bold = true; }); }
+function _mmkFontSize(step) {
+  var order = ['s', '', 'l'];
+  _mmkEach(function (n) {
+    var i = Math.max(0, Math.min(2, order.indexOf(n.fs || '') + step));
+    if (order[i]) n.fs = order[i]; else delete n.fs;
+  });
+}
+
 function _mmkToggleBoundary() {
   var nodes = _mmkNodes();
   var on = !nodes.every(function (n) { return n.boundary; });
@@ -322,6 +345,11 @@ var MM_COMMANDS = [
   { id: 'foldLevel1', group: '선택 · 이동', label: '1단계만 보기', keys: [], run: function () { _mmFoldAll(1); } },
   { id: 'unfoldAll', group: '선택 · 이동', label: '모두 펴기', keys: [], run: function () { _mmFoldAll(null); } },
   // 꾸미기
+  { id: 'copyStyle', group: '꾸미기', label: '서식 복사 (색 · 굵게 · 글자 크기)', keys: ['Alt+Shift+C'], run: _mmkSingle(_mmkCopyStyle) },
+  { id: 'pasteStyle', group: '꾸미기', label: '서식 붙여넣기 (여러 주제 가능)', keys: ['Alt+Shift+V'], edit: true, run: _mmkPasteStyle },
+  { id: 'bold', group: '꾸미기', label: '굵게 켜기 / 끄기', keys: ['Ctrl+B'], edit: true, run: _mmkBold },
+  { id: 'fontUp', group: '꾸미기', label: '글자 크게', keys: ['Alt+Shift+.'], edit: true, run: function () { _mmkFontSize(1); } },
+  { id: 'fontDown', group: '꾸미기', label: '글자 작게', keys: ['Alt+Shift+,'], edit: true, run: function () { _mmkFontSize(-1); } },
   { id: 'colorCycle', group: '꾸미기', label: '색 바꾸기 (차례로)', keys: ['Alt+C'], edit: true, run: _mmkColorCycle },
   { id: 'done', group: '꾸미기', label: '완료 표시 켜기 / 끄기', keys: ['Alt+K'], edit: true, run: _mmkDone },
   { id: 'progress', group: '꾸미기', label: '진척 바꾸기 (0 → 25 → … → 100%)', keys: ['Alt+P'], edit: true, run: _mmkProgress },
@@ -429,8 +457,8 @@ function mmRunCommand(id) {
 /* ═══ 오른쪽 클릭 메뉴 ═══ */
 var MM_CTX_NODE = ['addChild', 'addSibling', 'addBefore', 'addParent', 'edit', 'duplicate', 'delete', '|',
   'moveUp', 'moveDown', 'indent', 'outdent', 'splitSiblings', 'splitChildren', 'mergeChildren', '|', 'relation', 'boundary', 'summary', 'numbering', 'alignLevels', '|',
-  'linkRef', 'openRef', 'promoteMs', 'promoteIssue', '|', 'addImage', 'addLine', 'done', 'colorCycle', 'progress', 'note', 'fold', 'foldDeep', '|', 'aiExpand', 'aiSummary'];
-var MM_CTX_MULTI = ['delete', 'duplicate', '|', 'done', 'colorCycle', 'progress', 'boundary', 'alignLevels', 'fold', '|', 'priority:1', 'priorityClear'];
+  'linkRef', 'openRef', 'promoteMs', 'promoteIssue', '|', 'addImage', 'addLine', 'done', 'colorCycle', 'copyStyle', 'pasteStyle', 'progress', 'note', 'fold', 'foldDeep', '|', 'aiExpand', 'aiSummary'];
+var MM_CTX_MULTI = ['delete', 'duplicate', '|', 'done', 'colorCycle', 'pasteStyle', 'bold', 'progress', 'boundary', 'alignLevels', 'fold', '|', 'priority:1', 'priorityClear'];
 var MM_CTX_CANVAS = ['fit', 'unfoldAll', 'foldLevel1', 'selectAll', '|', 'alignAll', 'textAlign:auto', 'textAlign:left', 'textAlign:right', '|', 'addSheet', 'outline', 'zen', 'structure', '|', 'palette', 'help'];
 
 function _mmCloseCtx() {

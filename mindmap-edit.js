@@ -512,6 +512,13 @@ function _mmEdClick(e) {
     case 'conflict-reload': _mm.conflict = null; _mm.dirty = false; mmOpen(_mm.mapId); return;
     case 'conflict-overwrite': _mmConflictOverwrite(); return;
     case 'color': _mmSetProp('color', t.getAttribute('data-v')); return;
+    case 'theme': {
+      var thv = t.getAttribute('data-v');
+      _mmMutate(function () { var sh = _mmSheet(); if (thv === 'default') delete sh.theme; else sh.theme = thv; });
+      return;
+    }
+    case 'fs': _mmkEach(function (n) { var v = t.getAttribute('data-v'); if (v) n.fs = v; else delete n.fs; }); return;
+    case 'bold': { var allB = _mmkNodes().every(function (n) { return n.bold; }); _mmkEach(function (n) { if (allB) delete n.bold; else n.bold = true; }); return; }
     case 'bg': {
       var bgv = t.getAttribute('data-v');
       _mmMutate(function () { var sh = _mmSheet(); if (bgv === 'dots') delete sh.bg; else sh.bg = bgv; });

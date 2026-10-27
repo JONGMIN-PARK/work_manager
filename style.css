@@ -1529,3 +1529,15 @@ body.mm-zen-body{overflow:hidden}
 .mm-cmt-send{display:flex;justify-content:flex-end;gap:6px;margin-top:4px}
 .mm-cmt-orphan{margin-top:8px;font-size:11.5px;color:var(--t4)}
 .mm-cmt-orphan summary{cursor:pointer;margin-bottom:6px}
+/* ═══ 🧠 마인드맵 색 테마 · 글자 서식 (v13.240) ═══ */
+.mm-node.mm-bold .mm-txt{font-weight:800}
+.mm-node.mm-fs-s .mm-txt{font-size:.86em}
+.mm-node.mm-fs-l .mm-txt{font-size:1.28em;line-height:1.3}
+.mm-thgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px 6px 8px}
+.mm-menu .mm-thsw{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border:1.5px solid transparent;border-radius:8px;background:none;cursor:pointer}
+.mm-menu .mm-thsw:hover{background:var(--bg-hv)}
+.mm-menu .mm-thsw.on{border-color:var(--ac)}
+.mm-thdots{display:flex;gap:3px}
+.mm-thdots i{width:12px;height:12px;border-radius:50%;display:block}
+.mm-thdots i:first-child{width:14px;height:14px;border-radius:4px}
+.mm-fsbtn{width:auto!important;min-width:34px;padding:0 8px!important;font-size:11px}

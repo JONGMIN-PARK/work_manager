@@ -29,6 +29,18 @@ var MM_COLORS = [
   { key: 'cyan', c: 'var(--stat-cyan,#06B6D4)' },
   { key: 'slate', c: '#64748B' }
 ];
+/* 색 테마 — 시트마다(sheet.theme, 없으면 default). 주요 주제가 차례로 쓰는 가지 색 · 중심 주제 색. 주제에 직접 고른 색이 먼저 */
+var MM_THEMES = [
+  { k: 'default', l: '기본', root: null, colors: null },
+  { k: 'pastel', l: '파스텔', root: '#8B9CF7', colors: ['#7FB3F5', '#7DD3B0', '#F5C26B', '#F59AB0', '#B69CF5', '#7CD3E3'] },
+  { k: 'vivid', l: '선명', root: '#E11D48', colors: ['#2563EB', '#16A34A', '#EA580C', '#DB2777', '#7C3AED', '#0891B2'] },
+  { k: 'earth', l: '흙빛', root: '#7C5A3A', colors: ['#B7793E', '#6F8F4E', '#C29A3B', '#A45A52', '#7D6B91', '#4F7F86'] },
+  { k: 'ocean', l: '바다', root: '#0E4A7A', colors: ['#1D7AB8', '#14A3A3', '#3B6FD1', '#2DB3C9', '#5468C4', '#22839B'] },
+  { k: 'mono', l: '단색', root: '#334155', colors: ['#475569', '#64748B', '#475569', '#64748B', '#475569', '#64748B'] }
+];
+function _mmTheme() { var k = _mmSheet().theme; return MM_THEMES.filter(function (t) { return t.k === k; })[0] || MM_THEMES[0]; }
+/* 글자 서식 — node.bold · node.fs('s' 작게 | 'l' 크게). 서식 복사 대상: 색 · 굵게 · 크기 */
+var MM_STYLE_KEYS = ['color', 'bold', 'fs'];
 var MM_UNDERLINE = 2;   // 하위 주제 밑줄 굵기(px) — style.css .mm-topic2 border-bottom 과 같게
 var MM_AUTO_COLORS = ['blue', 'green', 'amber', 'rose', 'purple', 'cyan'];
 /* 마커 — 묶음(grp)별로 패널에 표시. k 는 저장 값이라 바꾸지 않는다 */

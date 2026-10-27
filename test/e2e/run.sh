@@ -47,6 +47,7 @@ run_batch() {
   sleep 3   # 시작 직후 마이그레이션 확인이 끝날 때까지 — 첫 테스트가 가끔 목록을 못 받던 것
   for f in "$@"; do
     out=$(node "$f" 2>&1)
+    mkdir -p "$DIR/.shots"; echo "$out" > "$DIR/.shots/${f%.js}.log"   # 실패 때 어느 단계인지 보려고
     res=$(echo "$out" | grep -E "ALL PASS|FAIL|AssertionError|Error:" | head -3 | tr '\n' ' ')
     [ -z "$res" ] && res=$(echo "$out" | tail -1)
     echo "$res" | grep -q "ALL PASS" || FAILED=1
@@ -68,7 +69,7 @@ else
   run_batch e2e8.js e2e9-progress.js e2e10-split.js
   run_batch e2e11-filter.js e2e12-bg.js e2e13-weekly.js
   run_batch api-comments.js e2e14-comments.js
-  run_batch api-notify.js e2e15-meeting.js
+  run_batch api-notify.js e2e15-meeting.js e2e16-theme.js
 fi
 
 # 이 실행이 띄운 Postgres 면 정상 종료 (start.mjs 가 .pgstop 을 보고 멈춤)

@@ -30,7 +30,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(await page.evaluate(function () { return _mmEl('mmCanvas').getAttribute('data-mmbg'); }) === 'dots', '기본은 점');
     await page.click('[data-menu="mmBgMenu"]'); await wait(150);
     var tiles = await page.evaluate(function () { return { n: document.querySelectorAll('#mmBgMenu .mm-bgsw').length, groups: Array.from(document.querySelectorAll('#mmBgMenu .mm-menu-h')).map(function (h) { return h.textContent; }), on: document.querySelector('#mmBgMenu .mm-bgsw.on').getAttribute('data-v') }; });
-    check(tiles.n === 13 && tiles.groups.join() === '깨끗한,무늬,색감,어둡게' && tiles.on === 'dots', '메뉴 묶음 · 13종 ' + JSON.stringify(tiles));
+    check(tiles.n === 13 && tiles.groups.slice(1).join() === '깨끗한,무늬,색감,어둡게' && tiles.on === 'dots', '메뉴 묶음 · 13종 ' + JSON.stringify(tiles));
     await page.screenshot({ path: path.join(SHOT, 'bg-menu.png'), clip: { x: 700, y: 140, width: 560, height: 520 } });
     await page.click('#mmBgMenu [data-v="blueprint"]'); await wait(250);
     var bp = await page.evaluate(function () {

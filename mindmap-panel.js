@@ -34,6 +34,11 @@ function _mmPaintPanel() {
     return '<button class="mm-sw' + ((n.color || '') === c.key ? ' on' : '') + '" data-act="color" data-v="' + c.key + '" title="' + (c.label || c.key) + '"' + ro +
       ' style="' + (c.c ? 'background:' + c.c : '') + '">' + (c.c ? '' : 'A') + '</button>';
   }).join('') + '</div></div>';
+  h += '<div class="mm-pn-sec"><div class="mm-pn-h">글자 <span class="mm-hint">Ctrl+B · 서식 복사 Alt+Shift+C/V</span></div><div class="mm-swatches">' +
+    '<button class="mm-mkbtn mm-fsbtn' + (n.bold ? ' on' : '') + '" data-act="bold"' + ro + ' title="굵게"><b>B</b></button>' +
+    [['s', '작게'], ['', '보통'], ['l', '크게']].map(function (x) {
+      return '<button class="mm-mkbtn mm-fsbtn' + ((n.fs || '') === x[0] ? ' on' : '') + '" data-act="fs" data-v="' + x[0] + '"' + ro + '>' + x[1] + '</button>';
+    }).join('') + '</div></div>';
   h += '<div class="mm-pn-sec"><div class="mm-pn-h">우선순위 <span class="mm-hint">Alt+1~9</span></div><div class="mm-swatches">' +
     '<button class="mm-mkbtn' + (!pri ? ' on' : '') + '" data-act="priority" data-v=""' + ro + '>—</button>' +
     [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (i) { return '<button class="mm-mkbtn' + (pri === String(i) ? ' on' : '') + '" data-act="priority" data-v="' + i + '"' + ro + '><span class="mm-pri mm-pri' + i + '">' + i + '</span></button>'; }).join('') +
