@@ -407,7 +407,7 @@ var MM_COMMANDS = [
   { id: 'exportPng', group: '맵', label: 'PNG 이미지로 내보내기', keys: [], run: function () { mmExportPng(); } },
   { id: 'exportMd', group: '맵', label: 'Markdown 으로 내보내기', keys: [], run: function () { mmExportMarkdown(); } },
   { id: 'exportOpml', group: '맵', label: 'OPML 로 내보내기', keys: [], run: function () { if (typeof mmExportOpml === 'function') mmExportOpml(); } },
-  { id: 'share', group: '맵', label: '공유 설정', keys: [], when: function () { return !!(_mm.row && (_mm.row.is_owner || _mmIsAdmin())); }, run: function () { mmShareModal(); } },
+  { id: 'share', group: '맵', label: '보내기 · 공유', keys: [], when: function () { return !!(_mm.row && _mm.row.is_owner); }, run: function () { mmShareModal(); } },
   { id: 'palette', group: '맵', label: '명령 찾기', keys: ['Ctrl+/'], run: function () { mmPalette(); } },
   { id: 'help', group: '맵', label: '단축키 보기', keys: ['F1'], run: function () { mmHelpModal(); } }
 ];

@@ -1705,3 +1705,21 @@ body.mm-zen-body{overflow:hidden}
   .mw-add{flex-wrap:wrap}
   .mw-move,.mw-move-sp{width:100%}
 }
+
+/* ═══ 🧠 새 맵 — 상황별 추천 템플릿 갤러리 (v13.249) ═══ */
+.mm-tpl-cats{display:flex;gap:6px;flex-wrap:wrap}
+.mm-tpl-cats button{background:transparent;border:1px solid var(--bd);color:var(--t4);border-radius:99px;padding:4px 11px;font-size:12px;cursor:pointer;font-family:inherit}
+.mm-tpl-cats button:hover{color:var(--t2)}
+.mm-tpl-cats button.on{background:var(--ac-bg);border-color:var(--ac);color:var(--ac-t);font-weight:600}
+.mm-tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;max-height:260px;overflow-y:auto;padding:2px}
+.mm-tpl-card{display:flex;flex-direction:column;gap:4px;text-align:left;background:var(--bg-i);border:1px solid var(--bd);border-radius:9px;padding:9px 11px;cursor:pointer;font-family:inherit;color:var(--t2)}
+.mm-tpl-card:hover{border-color:var(--bd2)}
+.mm-tpl-card.on{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac-g);background:var(--ac-bg)}
+.mm-tpl-card b{font-size:13px}
+.mm-tpl-card span{font-size:11px;color:var(--t5);line-height:1.4}
+.mm-tpl-sel-l{display:none!important}
+.mm-tpl-prev{font-size:12px;color:var(--t3);background:var(--bg-i);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:3px}
+.mm-tpl-prev:empty{display:none}
+.mm-tpl-prev b{font-size:11px;color:var(--t5);font-weight:600}
+.mm-tpl-prev span{font-weight:600;color:var(--t2)}
+.mm-tpl-prev i{font-style:normal;color:var(--t5);margin-left:8px}

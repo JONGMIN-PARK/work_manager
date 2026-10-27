@@ -1,19 +1,8 @@
-// 마인드맵 사용 권한 — admin 자동 + user_settings 'mindmap_access'.enabled 부여 사용자 (PRD_마인드맵 2.1)
-// operator.js 와 같은 패턴
-var db = require('../config/db');
+// 마인드맵 사용 권한 — v13.249 부터 로그인한 모든 사용자 (맵마다 볼 수 있는 사람은 소유자 + 보낸 사람 — routes/mindmaps permsOf)
+// 예전 user_settings 'mindmap_access' 값은 남아 있지만 더 이상 보지 않는다.
 
-async function hasMindmapAccessByUser(userId, role) {
-  if (role === 'admin') return true;
-  if (!userId) return false;
-  try {
-    var r = await db.query(
-      "SELECT value FROM user_settings WHERE user_id = $1 AND key = 'mindmap_access'",
-      [userId]
-    );
-    return !!(r.rows.length && r.rows[0].value && r.rows[0].value.enabled);
-  } catch (e) {
-    return false;
-  }
+async function hasMindmapAccessByUser(userId) {
+  return !!userId;
 }
 
 // req.user 기준 사용 권한 여부

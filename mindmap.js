@@ -1,6 +1,6 @@
 /**
  * 업무 관리자 — 🧠 마인드맵 (PRD_마인드맵) — 공통 상수 · 상태 · 헬퍼 · 진입점 · 열기/닫기 · 편집 잠금
- * 상위 탭 페이지. 관리자 + 관리자가 지정한 사용자만 사용 (currentUser.mindmapAccess).
+ * 상위 탭 페이지. 로그인한 모든 사용자 — 맵은 각자 자기 것과 받은 것만 보인다 (v13.249).
  *
  * 모듈 (모두 전역 함수 · 이 순서로 로드 — 업무일지_분석기.html):
  *   mindmap-layout.js  순수 로직 — 트리 조작 · 배치(같은 단계 맞춤 포함) · 경계/요약/관계선 위치 · Markdown/XMind/OPML 변환
@@ -112,23 +112,7 @@ var MM_REF_TYPES = {
   user: { i: '👤', l: '팀원' }, tech: { i: '🧪', l: '요소기술' }, prestudy: { i: '🔍', l: '사전검토' },
   as: { i: '🛠️', l: 'A/S' }, meeting: { i: '🤝', l: '회의' }
 };
-var MM_TEMPLATES = [
-  { k: 'blank', l: '빈 맵', tree: function (t) { return { text: t, children: [] }; } },
-  { k: 'meeting', l: '회의', tree: function (t) { return { text: t, children: ['안건', '논의 내용', '결정 사항', '할 일 (담당 · 기한)', '다음 회의'] }; } },
-  { k: 'wbs', l: '프로젝트 WBS 골격', structure: 'right', tree: function (t) { return { text: t, children: [
-    { text: '기획 · 사양', children: ['요구사항', '사양 확정', '견적'] },
-    { text: '설계', children: ['기구', '전장', 'SW'] },
-    { text: '제작', children: ['가공 · 구매', '조립', '배선'] },
-    { text: '시운전', children: ['자체 시운전', '고객 입회'] },
-    { text: '납품 · 셋업', children: ['출하', '현장 셋업', '교육 · 인수'] }
-  ] }; } },
-  { k: 'swot', l: 'SWOT', tree: function (t) { return { text: t, children: ['강점 (S)', '약점 (W)', '기회 (O)', '위협 (T)'] }; } },
-  { k: 'why5', l: '5 Why (원인 분석)', structure: 'right', tree: function (t) { return { text: t, children: [
-    { text: '왜? 1', children: [{ text: '왜? 2', children: [{ text: '왜? 3', children: [{ text: '왜? 4', children: ['왜? 5 → 근본 원인'] }] }] }] }
-  ] }; } },
-  { k: 'weekly', l: '내 주간 업무', tree: function (t) { return { text: t, children: ['이번 주 한 일', '다음 주 할 일', '이슈 · 리스크', '요청 · 협조', '아이디어'] }; } },
-  { k: 'team', l: '팀 업무 분장', structure: 'down', tree: function (t) { return { text: t, children: ['팀원 1', '팀원 2', '팀원 3'] }; } }
-];
+/* 빈 틀 · 예제 템플릿 MM_TEMPLATES 는 mindmap-templates.js (상황별 추천, v13.249) */
 
 /* 앱 데이터로 자동 생성 (lib/mindmap-data generate) · AI 로 만들기 — mindmap-extra.js 가 문서를 만든다 */
 var MM_GEN_TEMPLATES = [
@@ -190,7 +174,7 @@ function _mmErr(e) { return (e && e.message) || '권한 또는 서버 오류'; }
 function _mmEl(id) { return document.getElementById(id); }
 function _mmMe() { return (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null; }
 function _mmIsAdmin() { var u = _mmMe(); return !!(u && u.role === 'admin'); }
-function mmHasAccess() { var u = _mmMe(); return !!(u && (u.role === 'admin' || u.mindmapAccess)); }
+function mmHasAccess() { return !!_mmMe(); }
 function _mmSheet() {
   var list = _mm.doc.sheets;
   if (!(_mm.sheetIdx >= 0 && _mm.sheetIdx < list.length)) _mm.sheetIdx = 0;
@@ -242,7 +226,11 @@ function _mmLoadMembers() {
 /** 템플릿 정의 → 노드 트리 (문자열 자식은 노드로) */
 function _mmBuildTree(def) {
   var n = mmNewNode(typeof def === 'string' ? def : def.text);
-  if (typeof def !== 'string') n.children = (def.children || []).map(_mmBuildTree);
+  if (typeof def !== 'string') {
+    n.children = (def.children || []).map(_mmBuildTree);
+    if (def.note) n.note = def.note;
+    if (def.labels) n.labels = def.labels.slice();
+  }
   return n;
 }
 function _mmDownload(name, blob) {

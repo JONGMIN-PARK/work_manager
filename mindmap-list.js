@@ -1,7 +1,7 @@
 /**
  * 업무 관리자 — 🧠 마인드맵 목록 · 모달
  * 맵 목록(카드 · 탭 · 즐겨찾기 · 복제 · 삭제), 새 맵(빈 틀 · 자동 생성 · AI), 가져오기(.xmind · .opml · Markdown),
- * 사용 권한(관리자), 공유 설정.
+ * 보내기(공유) — 맵은 소유자와 보낸 사람만 본다 (v13.249).
  * 의존(전역): mindmap.js(_mm · 헬퍼 · mmOpen), mindmap-extra.js(mmGenerateDoc · mmAiTextDoc · mmAiWbsDoc · mmReadImportFile)
  */
 
@@ -10,11 +10,10 @@ function _mmRenderList() {
   var wrap = _mmEl('mindmapWrap');
   if (!wrap) return;
   _mm.view = 'list';
-  var tabs = [['all', '전체'], ['mine', '내 맵'], ['shared', '공유받은'], ['project', '프로젝트'], ['org', '조직']];
+  var tabs = [['all', '전체'], ['mine', '내 맵'], ['shared', '받은 맵']];
   var h = '<div class="mm-list-head">' +
-    '<div><h3 class="mm-h3">🧠 마인드맵</h3><div class="mm-sub">생각 정리 · 업무 분장 · 프로젝트 구조 — 개인 맵은 본인과 공유한 사람만 볼 수 있습니다.</div></div>' +
+    '<div><h3 class="mm-h3">🧠 마인드맵</h3><div class="mm-sub">생각 정리 · 업무 분장 · 프로젝트 구조 — 맵은 나와 내가 보낸 사람만 볼 수 있습니다.</div></div>' +
     '<div class="mm-list-actions">' +
-    (_mmIsAdmin() ? '<button class="btn btn-g btn-s" data-act="access">👥 사용 권한</button>' : '') +
     '<button class="btn btn-g btn-s" data-act="import">⤓ 가져오기</button>' +
     '<button class="btn btn-p btn-s" data-act="new">+ 새 맵</button>' +
     '</div></div>' +
@@ -44,9 +43,7 @@ function _mmPaintList() {
     if (q && String(m.title || '').toLowerCase().indexOf(q) < 0) return false;
     switch (_mm.listTab) {
       case 'mine': return m.owner_id === me;
-      case 'shared': return m.owner_id !== me && m.scope === 'personal';
-      case 'project': return m.scope === 'project';
-      case 'org': return m.scope === 'org';
+      case 'shared': return m.owner_id !== me;
       default: return true;
     }
   });
@@ -65,21 +62,22 @@ function _mmPaintList() {
 
 function _mmCardHtml(m) {
   var me = (_mmMe() || {}).id;
-  var sc = MM_SCOPE[m.scope] || MM_SCOPE.personal;
   var pinned = (m.pinned_by || []).indexOf(me) >= 0;
   var owner = m.owner_id === me;
   var shared = (m.editors || []).length + (m.viewers || []).length;
+  var badge = owner ? '🔒 내 맵' : '📨 받은 맵 · ' + ((m.editors || []).indexOf(me) >= 0 ? '편집' : '보기');
   return '<div class="mm-card" data-act="open" data-id="' + _mmEsc(m.id) + '">' +
-    '<div class="mm-card-top"><span class="mm-badge">' + sc.i + ' ' + sc.l + '</span>' +
+    '<div class="mm-card-top"><span class="mm-badge">' + badge + '</span>' +
     '<span class="mm-star' + (pinned ? ' on' : '') + '" data-act="pin" data-id="' + _mmEsc(m.id) + '" title="즐겨찾기">' + (pinned ? '★' : '☆') + '</span></div>' +
     '<div class="mm-card-title">' + _mmEsc(m.title) + '</div>' +
     '<div class="mm-card-root">◉ ' + _mmEsc(m.root_text || '') + '</div>' +
     (m.project_name ? '<div class="mm-card-meta">📁 ' + _mmEsc(m.project_name) + '</div>' : '') +
-    '<div class="mm-card-meta">' + _mmEsc(m.owner_name || '') + (shared ? ' · 공유 ' + shared + '명' : '') +
+    '<div class="mm-card-meta">' + _mmEsc(m.owner_name || '') + (owner ? (shared ? ' · ' + shared + '명에게 보냄' : '') : '') +
     ' · 노드 ' + (m.node_count || 0) + ' · ' + _mmFmtTime(m.updated_at) + '</div>' +
     '<div class="mm-card-acts">' +
     '<button class="btn btn-g btn-s" data-act="dup" data-id="' + _mmEsc(m.id) + '">복제</button>' +
-    ((owner || (_mmIsAdmin() && m.scope !== 'personal')) ? '<button class="btn btn-g btn-s mm-danger" data-act="del" data-id="' + _mmEsc(m.id) + '">삭제</button>' : '') +
+    (owner ? '<button class="btn btn-g btn-s" data-act="send" data-id="' + _mmEsc(m.id) + '">📨 보내기</button>' : '') +
+    (owner ? '<button class="btn btn-g btn-s mm-danger" data-act="del" data-id="' + _mmEsc(m.id) + '">삭제</button>' : '') +
     '</div></div>';
 }
 
@@ -93,7 +91,7 @@ function _mmListClick(e) {
   else if (act === 'open') mmOpen(id);
   else if (act === 'new') mmNewMapModal();
   else if (act === 'import') mmImportModal();
-  else if (act === 'access') mmAccessModal();
+  else if (act === 'send') mmShareModal(_mm.list.filter(function (m) { return m.id === id; })[0]);
   else if (act === 'pin') _mmTogglePin(id);
   else if (act === 'dup') _mmDuplicate(id);
   else if (act === 'del') _mmDelete(id);
@@ -142,12 +140,17 @@ function mmNewMapModal() {
       var hasDept = !!(me.department_id || me.departmentId);
       var opt = function (t) { return '<option value="' + t.k + '">' + t.l + '</option>'; };
       var html = '<div class="mm-form">' +
-        '<label>시작 방법<select id="mmNewTpl" class="mm-input">' +
-        '<optgroup label="빈 틀">' + MM_TEMPLATES.map(opt).join('') + '</optgroup>' +
+        // 상황별 추천 갤러리 — 카드를 고르면 아래 숨긴 #mmNewTpl 값이 바뀐다 (키보드 · 테스트는 select 를 그대로 씀)
+        '<div class="mm-tpl-cats" id="mmTplCats">' + MM_TPL_CATS.map(function (c) { return '<button type="button" data-cat="' + c.k + '">' + c.l + '</button>'; }).join('') + '</div>' +
+        '<div class="mm-tpl-grid" id="mmTplGrid"></div>' +
+        '<label class="mm-tpl-sel-l">시작 방법<select id="mmNewTpl" class="mm-input">' +
+        '<optgroup label="템플릿">' + MM_TEMPLATES.map(opt).join('') + '</optgroup>' +
         '<optgroup label="앱 데이터로 자동 생성 (상태가 실시간으로 보임)">' + MM_GEN_TEMPLATES.map(opt).join('') + '</optgroup>' +
         (ai ? '<optgroup label="✨ AI">' + MM_AI_TEMPLATES.map(opt).join('') + '</optgroup>' : '') +
         '</select></label>' +
         '<div class="mm-sub" id="mmNewHint"></div>' +
+        '<div class="mm-tpl-prev" id="mmNewPrev"></div>' +
+        '<label class="mm-pn-chk" id="mmNewExWrap"><input type="checkbox" id="mmNewEx" checked> 예제 내용 넣기 — 바로 고쳐 쓰기 쉽게 (끄면 가지 이름만)</label>' +
         '<label>제목<input id="mmNewTitle" class="mm-input" placeholder="예: SK 2호기 WBS"></label>' +
         '<label id="mmNewProjWrap" class="hidden">프로젝트<select id="mmNewProj" class="mm-input">' + _mmProjectOptions(projects) + '</select></label>' +
         '<label id="mmNewMeetWrap" class="hidden">회의<select id="mmNewMeet" class="mm-input"><option value="">불러오는 중…</option></select></label>' +
@@ -155,32 +158,51 @@ function mmNewMapModal() {
         (hasDept ? '<option value="">내 부서</option>' : '') + (_mmIsAdmin() ? '<option value="__all">전체 (모든 사용자)</option>' : '') +
         depts.map(function (d) { return '<option value="' + _mmEsc(d.id) + '">' + _mmEsc(d.name) + '</option>'; }).join('') + '</select></label>' +
         '<label id="mmNewAiWrap" class="hidden">정리할 글 (회의 메모 · 요구사항 · 메일 등)<textarea id="mmNewAiText" class="mm-input" rows="8"></textarea></label>' +
-        '<label>공개 범위<select id="mmNewScope" class="mm-input">' +
-        '<option value="personal">🔒 개인 — 나와 공유한 사람만</option>' +
-        '<option value="project">📁 프로젝트 — 프로젝트 권한을 따름</option>' +
-        ((hasDept || _mmIsAdmin()) ? '<option value="dept">👥 팀 — 같은 부서 사용 권한자 읽기</option>' : '') +
-        (_mmIsAdmin() ? '<option value="org">🏢 조직 — 사용 권한자 전체 읽기</option>' : '') +
-        '</select></label>' +
+        '<div class="mm-sub">만든 맵은 나만 봅니다. 다른 사람에게는 [📨 보내기]로 보내세요.</div>' +
         '<div class="mm-form-acts"><button class="btn btn-p" id="mmNewOk">만들기</button></div></div>';
-      var md = createModal({ id: 'mmNewModal', title: '🧠 새 마인드맵', html: html, width: '500px', closeOnEsc: true });
-      var scope = _mmEl('mmNewScope'), tplSel = _mmEl('mmNewTpl');
+      var md = createModal({ id: 'mmNewModal', title: '🧠 새 마인드맵', html: html, width: '680px', closeOnEsc: true });
+      var tplSel = _mmEl('mmNewTpl');
       function tplOf(k) { return MM_TEMPLATES.concat(MM_GEN_TEMPLATES, MM_AI_TEMPLATES).filter(function (t) { return t.k === k; })[0] || MM_TEMPLATES[0]; }
       function refresh(fromTpl) {
         var t = tplOf(tplSel.value);
         if (fromTpl) {
-          if (t.gen === 'project' || t.ai === 'wbs') scope.value = 'project';
-          else if (t.gen === 'team' && scope.querySelector('option[value="dept"]')) scope.value = 'dept';
-          else if (t.gen === 'mine') scope.value = 'personal';
           if (t.gen === 'meeting') _mmLoadMeetingOptions();
         }
-        var needProj = (scope.value === 'project' && t.gen !== 'meeting') || t.gen === 'project' || t.ai === 'wbs';
+        var needProj = t.gen === 'project' || t.ai === 'wbs';
         _mmEl('mmNewMeetWrap').classList.toggle('hidden', t.gen !== 'meeting');
         _mmEl('mmNewProjWrap').classList.toggle('hidden', !needProj);
-        _mmEl('mmNewDeptWrap').classList.toggle('hidden', !(_mmIsAdmin() && (t.gen === 'team' || scope.value === 'dept')));
+        _mmEl('mmNewDeptWrap').classList.toggle('hidden', !(_mmIsAdmin() && t.gen === 'team'));
         _mmEl('mmNewAiWrap').classList.toggle('hidden', t.ai !== 'text');
-        _mmEl('mmNewTitle').placeholder = (t.gen || t.ai) ? '비우면 자동으로 정함' : '예: SK 2호기 WBS';
-        _mmEl('mmNewHint').textContent = t.hint || '';
+        _mmEl('mmNewTitle').placeholder = (t.gen || t.ai) ? '비우면 자동으로 정함' : t.k === 'blank' ? '예: SK 2호기 WBS' : '비우면 「' + t.l + '」';
+        _mmEl('mmNewHint').textContent = t.hint || t.when || '';
+        var ex = !!t.ex;
+        _mmEl('mmNewExWrap').classList.toggle('hidden', !ex);
+        var def = t.tree ? ((ex && _mmEl('mmNewEx').checked) ? t.ex('') : t.tree('')) : null;
+        _mmEl('mmNewPrev').innerHTML = def && (def.children || []).length ? '<b>미리 보기</b>' + (def.children || []).map(function (c) {
+          var kids = typeof c === 'string' ? [] : (c.children || []);
+          return '<div><span>' + _mmEsc(typeof c === 'string' ? c : c.text) + '</span>' + (kids.length ? '<i>' + kids.slice(0, 3).map(function (k) { return _mmEsc(typeof k === 'string' ? k : k.text); }).join(' · ') + (kids.length > 3 ? ' …' : '') + '</i>' : '') + '</div>';
+        }).join('') : '';
+        _mmEl('mmTplGrid').querySelectorAll('[data-k]').forEach(function (c) { c.classList.toggle('on', c.getAttribute('data-k') === t.k); });
       }
+      var allTpl = MM_TEMPLATES.concat(MM_GEN_TEMPLATES, ai ? MM_AI_TEMPLATES : []);
+      function paintCat(cat) {
+        _mmEl('mmTplCats').querySelectorAll('[data-cat]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-cat') === cat); });
+        var list = cat === 'rec' ? MM_TPL_REC.map(tplOf) : cat === 'auto' ? MM_GEN_TEMPLATES.concat(ai ? MM_AI_TEMPLATES : []) : allTpl.filter(function (t) { return t.cat === cat; });
+        _mmEl('mmTplGrid').innerHTML = list.map(function (t) {
+          return '<button type="button" class="mm-tpl-card' + (t.k === tplSel.value ? ' on' : '') + '" data-k="' + t.k + '">' +
+            '<b>' + (t.icon ? t.icon + ' ' : '') + _mmEsc(t.l) + '</b><span>' + _mmEsc(t.when || t.hint || '') + '</span></button>';
+        }).join('');
+      }
+      _mmEl('mmTplCats').onclick = function (e) { var b = e.target.closest('[data-cat]'); if (b) paintCat(b.getAttribute('data-cat')); };
+      _mmEl('mmTplGrid').onclick = function (e) {
+        var c = e.target.closest('[data-k]');
+        if (!c) return;
+        tplSel.value = c.getAttribute('data-k');
+        refresh(true);
+        _mmEl('mmNewTitle').focus();
+      };
+      _mmEl('mmNewEx').onchange = function () { refresh(false); };
+      paintCat('rec');
       function _mmLoadMeetingOptions() {
         var sel = _mmEl('mmNewMeet');
         if (sel.getAttribute('data-loaded')) return;
@@ -192,7 +214,6 @@ function mmNewMapModal() {
         }).catch(function () { sel.innerHTML = '<option value="">회의 목록을 불러오지 못했습니다</option>'; });
       }
       tplSel.onchange = function () { refresh(true); };
-      scope.onchange = function () { refresh(false); };
       refresh(false);
       _mmEl('mmNewTitle').onkeydown = function (e) { if (e.key === 'Enter') _mmEl('mmNewOk').click(); };
       _mmEl('mmNewOk').onclick = function () {
@@ -202,16 +223,17 @@ function mmNewMapModal() {
         var projectId = _mmEl('mmNewProj').value || null;
         var deptSel = _mmEl('mmNewDept').value;
         var deptId = deptSel && deptSel !== '__all' ? deptSel : null;
+        if (!title && t.tree && t.k !== 'blank') title = t.l;   // 템플릿은 이름을 기본 제목으로
         if (!title && !t.gen && !t.ai) { _mmToast('제목을 입력하세요', 'error'); return; }
         var meetingId = _mmEl('mmNewMeet').value || null;
         if (t.gen === 'meeting' && !meetingId) { _mmToast('회의를 선택하세요', 'error'); return; }
-        if (((scope.value === 'project' && t.gen !== 'meeting') || t.gen === 'project' || t.ai === 'wbs') && !projectId) { _mmToast('프로젝트를 선택하세요', 'error'); return; }
+        if ((t.gen === 'project' || t.ai === 'wbs') && !projectId) { _mmToast('프로젝트를 선택하세요', 'error'); return; }
         var made;
         if (t.gen) made = mmGenerateDoc(t.gen, { projectId: projectId, departmentId: deptId, all: deptSel === '__all', meetingId: meetingId });
         else if (t.ai === 'text') made = mmAiTextDoc(_mmEl('mmNewAiText').value, title);
         else if (t.ai === 'wbs') made = mmAiWbsDoc(projectId, title);
         else {
-          var root = _mmBuildTree(t.tree(title));
+          var root = _mmBuildTree(t.ex && _mmEl('mmNewEx').checked ? t.ex(title) : t.tree(title));
           root.id = 'n-root';
           made = Promise.resolve({ title: title, doc: { sheets: [{ id: 'sh-1', title: '시트 1', structure: t.structure || 'balanced', root: root, relations: [] }] } });
         }
@@ -220,10 +242,9 @@ function mmNewMapModal() {
         if (t.gen || t.ai) btn.textContent = t.ai ? '✨ AI 가 정리하는 중…' : '불러오는 중…';
         made.then(function (r) {
           if (!r) throw new Error('만들 내용이 없습니다');
-          // 회의록 → 맵: 프로젝트 회의면 그 프로젝트 범위로
-          var sc = scope.value, pid = projectId;
-          if (t.gen === 'meeting') { pid = r.projectId || null; if (sc === 'project' && !pid) sc = 'personal'; if (pid && sc === 'personal') sc = 'project'; }
-          return _mmCreate({ title: (title || r.title || '새 맵').slice(0, 255), scope: sc, projectId: sc === 'project' ? pid : null, departmentId: sc === 'dept' ? deptId : null, template: t.k, doc: r.doc });
+          // 볼 수 있는 사람은 늘 나 + 보낸 사람. 프로젝트 맵 · 프로젝트 회의록은 그 프로젝트에 연결만 (프로젝트 상세의 맵 목록용)
+          var pid = t.gen === 'meeting' ? (r.projectId || null) : (t.gen === 'project' || t.ai === 'wbs') ? projectId : null;
+          return _mmCreate({ title: (title || r.title || '새 맵').slice(0, 255), scope: pid ? 'project' : 'personal', projectId: pid, template: t.k, doc: r.doc });
         }).then(function (ok) {
           if (ok) md.close(); else { btn.disabled = false; btn.textContent = oldLabel; }
         }).catch(function (e) {
@@ -292,95 +313,63 @@ function mmImportModal() {
   }, 'mmImportModal', { onOpen: function () { var t = _mmEl('mmImpText'); if (t) t.focus(); } });
 }
 
-/** 관리자: 사용 권한 부여/회수 */
-function mmAccessModal() {
-  return wmGuardedModal('mmAccess', function () {
-    return apiFetch('/api/mindmaps/access/users').then(function (r) {
-      var users = (r && r.data) || [];
-      var roleL = { admin: '관리자', executive: '임원', manager: '팀장', member: '팀원' };
-      var html = '<div class="mm-sub" style="margin-bottom:10px">관리자는 항상 사용할 수 있습니다. 그 외 사용자는 여기서 켠 사람만 마인드맵 탭이 보입니다. 권한을 끄면 그 사람의 맵은 보존되고 접근만 막힙니다.</div>' +
-        '<input id="mmAccQ" class="mm-input" placeholder="🔍 이름·이메일" style="margin-bottom:8px">' +
-        '<div class="mm-acc-list">' + users.map(function (u) {
-          var admin = u.role === 'admin';
-          return '<label class="mm-acc-row" data-q="' + _mmEsc(((u.name || '') + ' ' + (u.email || '')).toLowerCase()) + '">' +
-            '<input type="checkbox" data-uid="' + _mmEsc(u.id) + '"' + (admin || u.mindmap_enabled ? ' checked' : '') + (admin ? ' disabled' : '') + '>' +
-            '<span class="mm-acc-name">' + _mmEsc(u.name || '') + '</span>' +
-            '<span class="mm-acc-meta">' + _mmEsc(roleL[u.role] || u.role || '') + ' · ' + _mmEsc(u.email || '') + '</span></label>';
-        }).join('') + '</div>';
-      createModal({ id: 'mmAccessModal', title: '👥 마인드맵 사용 권한', html: html, width: '520px', closeOnEsc: true });
-      var box = _mmEl('mmAccessModal');
-      box.addEventListener('change', function (e) {
-        var cb = e.target;
-        if (!cb || !cb.getAttribute('data-uid')) return;
-        var on = cb.checked;
-        apiFetch('/api/mindmaps/access/users/' + encodeURIComponent(cb.getAttribute('data-uid')), { method: 'PUT', body: JSON.stringify({ enabled: on }) })
-          .then(function () { _mmToast(on ? '사용 권한을 부여했습니다' : '사용 권한을 회수했습니다'); _mm.members = null; })
-          .catch(function (err) { cb.checked = !on; _mmToast('❌ ' + _mmErr(err), 'error'); });
-      });
-      _mmEl('mmAccQ').oninput = function () {
-        var q = this.value.trim().toLowerCase();
-        box.querySelectorAll('.mm-acc-row').forEach(function (row) {
-          row.style.display = !q || row.getAttribute('data-q').indexOf(q) >= 0 ? '' : 'none';
-        });
-      };
-    });
-  }, 'mmAccessModal');
-}
-
-/** 소유자: 공개 범위 · 공유 대상 */
-function mmShareModal() {
-  if (!_mm.row) return;
+/**
+ * 소유자: 📨 보내기 — 고른 사람만 이 맵을 본다 (보기 = 읽기만, 편집 = 같이 고치기). 받은 사람에게 알림이 간다.
+ * row 를 주면 목록 카드에서 (편집기 밖), 없으면 열린 맵(_mm.row)
+ */
+function mmShareModal(row) {
+  var inEditor = !row;
+  row = row || _mm.row;
+  if (!row) return;
   return wmGuardedModal('mmShare', function () {
-    var pList = (typeof projGetAll === 'function') ? projGetAll().catch(function () { return []; }) : Promise.resolve([]);
-    return Promise.all([_mmLoadMembers(), pList]).then(function (res) {
+    return _mmLoadMembers().then(function (all) {
       var me = (_mmMe() || {}).id;
-      var members = (res[0] || []).filter(function (u) { return u.id !== me; });
-      var projects = res[1] || [];
-      var row = _mm.row;
+      var members = (all || []).filter(function (u) { return u.id !== me; });
       var editors = row.editors || [], viewers = row.viewers || [];
       var html = '<div class="mm-form">' +
-        '<label>공개 범위<select id="mmShScope" class="mm-input">' +
-        '<option value="personal"' + (row.scope === 'personal' ? ' selected' : '') + '>🔒 개인 — 나와 아래 공유 대상만</option>' +
-        '<option value="project"' + (row.scope === 'project' ? ' selected' : '') + '>📁 프로젝트 — 프로젝트 권한을 따름</option>' +
-        (_mmIsAdmin() || row.scope === 'org' ? '<option value="org"' + (row.scope === 'org' ? ' selected' : '') + '>🏢 조직 — 사용 권한자 전체 읽기</option>' : '') +
-        '</select></label>' +
-        '<label id="mmShProjWrap" class="' + (row.scope === 'project' ? '' : 'hidden') + '">프로젝트<select id="mmShProj" class="mm-input">' + _mmProjectOptions(projects, row.project_id) + '</select></label>' +
-        '<div class="mm-sub">공유 대상 — 마인드맵 사용 권한이 있는 사람만 고를 수 있습니다.</div>' +
+        '<div class="mm-sub">「' + _mmEsc(row.title || '') + '」 — 여기서 고른 사람만 이 맵을 볼 수 있습니다. 새로 받은 사람에게는 알림이 갑니다.</div>' +
+        '<input id="mmShQ" class="mm-input" placeholder="🔍 이름으로 찾기">' +
         '<div class="mm-acc-list">' + members.map(function (u) {
           var role = editors.indexOf(u.id) >= 0 ? 'edit' : viewers.indexOf(u.id) >= 0 ? 'view' : '';
-          return '<div class="mm-acc-row"><span class="mm-acc-name">' + _mmEsc(u.name) + '</span>' +
-            (u.has_access ? '<select class="mm-input mm-sh-role" data-uid="' + _mmEsc(u.id) + '">' +
-              '<option value="">—</option><option value="view"' + (role === 'view' ? ' selected' : '') + '>보기</option>' +
-              '<option value="edit"' + (role === 'edit' ? ' selected' : '') + '>편집</option></select>'
-              : '<span class="mm-acc-meta">사용 권한 없음</span>') + '</div>';
+          return '<div class="mm-acc-row" data-q="' + _mmEsc(String(u.name || '').toLowerCase()) + '"><span class="mm-acc-name">' + _mmEsc(u.name) + '</span>' +
+            '<select class="mm-input mm-sh-role" data-uid="' + _mmEsc(u.id) + '">' +
+              '<option value="">보내지 않음</option><option value="view"' + (role === 'view' ? ' selected' : '') + '>보기만</option>' +
+              '<option value="edit"' + (role === 'edit' ? ' selected' : '') + '>같이 편집</option></select></div>';
         }).join('') + '</div>' +
-        '<div class="mm-form-acts"><button class="btn btn-p" id="mmShOk">저장</button></div></div>';
-      var md = createModal({ id: 'mmShareModal', title: '🔗 공유 설정', html: html, width: '480px', closeOnEsc: true });
-      var scope = _mmEl('mmShScope');
-      scope.onchange = function () { _mmEl('mmShProjWrap').classList.toggle('hidden', scope.value !== 'project'); };
+        '<div class="mm-form-acts"><span class="mm-hint" id="mmShCount"></span><button class="btn btn-p" id="mmShOk">보내기</button></div></div>';
+      var md = createModal({ id: 'mmShareModal', title: '📨 맵 보내기', html: html, width: '480px', closeOnEsc: true });
+      function count() {
+        var n = 0;
+        document.querySelectorAll('#mmShareModal .mm-sh-role').forEach(function (x) { if (x.value) n++; });
+        _mmEl('mmShCount').textContent = n ? n + '명이 볼 수 있음' : '나만 볼 수 있음';
+      }
+      count();
+      _mmEl('mmShareModal').addEventListener('change', count);
+      _mmEl('mmShQ').oninput = function () {
+        var q = this.value.trim().toLowerCase();
+        document.querySelectorAll('#mmShareModal .mm-acc-row').forEach(function (r) { r.style.display = !q || r.getAttribute('data-q').indexOf(q) >= 0 ? '' : 'none'; });
+      };
       _mmEl('mmShOk').onclick = function () {
         var btn = this;
         var ed = [], vw = [];
-        document.querySelectorAll('#mmShareModal .mm-sh-role').forEach(function (s) {
-          if (s.value === 'edit') ed.push(s.getAttribute('data-uid'));
-          else if (s.value === 'view') vw.push(s.getAttribute('data-uid'));
+        document.querySelectorAll('#mmShareModal .mm-sh-role').forEach(function (x) {
+          if (x.value === 'edit') ed.push(x.getAttribute('data-uid'));
+          else if (x.value === 'view') vw.push(x.getAttribute('data-uid'));
         });
-        var body = { scope: scope.value, projectId: _mmEl('mmShProj').value || null, editors: ed, viewers: vw };
+        var added = ed.concat(vw).filter(function (id) { return editors.indexOf(id) < 0 && viewers.indexOf(id) < 0; }).length;
         btn.disabled = true;
-        // 편집 중인 내용을 먼저 저장해 version 을 맞춘 뒤 공유 설정 저장
-        Promise.resolve(_mmSaveNow()).then(function () {
-          body.version = _mm.version;
-          return apiFetch('/api/mindmaps/' + encodeURIComponent(_mm.mapId), { method: 'PUT', body: JSON.stringify(body) });
+        // 편집기에서는 고치던 내용을 먼저 저장해 version 을 맞춘다
+        Promise.resolve(inEditor ? _mmSaveNow() : null).then(function () {
+          return apiFetch('/api/mindmaps/' + encodeURIComponent(row.id), { method: 'PUT', body: JSON.stringify({ version: inEditor ? _mm.version : row.version, editors: ed, viewers: vw }) });
         }).then(function (r) {
-          _mm.version = r.data.version;
-          _mm.row.scope = r.data.scope; _mm.row.project_id = r.data.project_id;
-          _mm.row.editors = r.data.editors || []; _mm.row.viewers = r.data.viewers || [];
-          _mmToast('공유 설정을 저장했습니다');
+          row.version = r.data.version; row.editors = r.data.editors || []; row.viewers = r.data.viewers || [];
+          if (inEditor) { _mm.version = r.data.version; _mmStatus(); }
+          else _mmPaintList();
+          _mmToast(added ? '📨 ' + added + '명에게 보냈습니다' : '보낼 사람을 바꿨습니다');
           md.close();
-          _mmStatus();
         }).catch(function (e) {
           btn.disabled = false;
-          _mmToast('❌ ' + (e && e.status === 409 ? '다른 사람이 먼저 저장했습니다 — 새로고침 후 다시 시도하세요' : _mmErr(e)), 'error');
+          _mmToast('❌ ' + (e && e.status === 409 ? '그 사이 맵이 바뀌었습니다 — 새로고침 후 다시 해 주세요' : _mmErr(e)), 'error');
         });
       };
     });

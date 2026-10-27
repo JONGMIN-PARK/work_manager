@@ -21,19 +21,10 @@ function check(name, cond, extra) { assert.ok(cond, name + ' ' + JSON.stringify(
   var K = api(await login('kim@t.com'));
   var L = api(await login('lee@t.com'));
   var me = { a: (await A('GET', '/api/auth/me')).d.data, k: (await K('GET', '/api/auth/me')).d.data, l: (await L('GET', '/api/auth/me')).d.data };
-  check('admin mindmapAccess=true', me.a.mindmapAccess === true);
-  // 초기화: 김·이 권한 회수
-  await A('PUT', '/api/mindmaps/access/users/' + me.k.id, { enabled: false });
-  await A('PUT', '/api/mindmaps/access/users/' + me.l.id, { enabled: false });
-  check('권한 없는 팀원 /me mindmapAccess=false', (await K('GET', '/api/auth/me')).d.data.mindmapAccess === false);
-  check('권한 없는 팀원 목록 403', (await K('GET', '/api/mindmaps')).s === 403);
-  check('팀원은 권한 부여 API 403', (await K('PUT', '/api/mindmaps/access/users/' + me.k.id, { enabled: true })).s === 403);
-
-  var g = await A('PUT', '/api/mindmaps/access/users/' + me.k.id, { enabled: true });
-  check('관리자 권한 부여', g.s === 200);
-  check('부여 후 /me true', (await K('GET', '/api/auth/me')).d.data.mindmapAccess === true);
-  var list = (await A('GET', '/api/mindmaps/access/users')).d.data;
-  check('권한 목록에 반영', list.find(function (u) { return u.id === me.k.id; }).mindmap_enabled === true);
+  // v13.249: 모든 사용자가 쓴다 — 맵은 소유자와 보낸 사람만 봄
+  check('관리자 · 팀원 모두 mindmapAccess=true', me.a.mindmapAccess === true && me.k.mindmapAccess === true && me.l.mindmapAccess === true);
+  check('팀원 목록 200', (await K('GET', '/api/mindmaps')).s === 200);
+  check('사용 권한 관리 API 없어짐', (await A('GET', '/api/mindmaps/access/users')).s === 404);
 
   // 김: 개인 맵 생성
   var c = await K('POST', '/api/mindmaps', { title: '김 개인맵', scope: 'personal' });
@@ -43,8 +34,10 @@ function check(name, cond, extra) { assert.ok(cond, name + ' ' + JSON.stringify(
   // 관리자는 남의 개인 맵 못 봄
   check('관리자 남의 개인 맵 404', (await A('GET', '/api/mindmaps/' + id)).s === 404);
   check('관리자 목록에 남의 개인 맵 없음', !(await A('GET', '/api/mindmaps')).d.data.some(function (m) { return m.id === id; }));
-  // 조직 맵은 관리자만
-  check('팀원 조직 맵 생성 403', (await K('POST', '/api/mindmaps', { title: 'x', scope: 'org' })).s === 403);
+  // 조직 범위 맵이어도 소유자 · 보낸 사람만 봄 (관리자가 만든 조직 맵을 팀원이 못 봄)
+  var om = (await A('POST', '/api/mindmaps', { title: '관리자 조직맵', scope: 'org' })).d.data;
+  check('보내지 않은 맵은 다른 사람이 못 봄 (조직 범위여도)', (await K('GET', '/api/mindmaps/' + om.id)).s === 404 && !(await K('GET', '/api/mindmaps')).d.data.some(function (m) { return m.id === om.id; }));
+  await A('DELETE', '/api/mindmaps/' + om.id);
 
   // 저장 + 충돌
   var doc = c.d.data.doc;
@@ -57,10 +50,10 @@ function check(name, cond, extra) { assert.ok(cond, name + ' ' + JSON.stringify(
   check('progress 0 보존 · node_count 2', got.doc.sheets[0].root.children[0].progress === 0 && got.node_count === 2, got.node_count);
   check('잘못된 doc 400', (await K('PUT', '/api/mindmaps/' + id, { version: 2, doc: { sheets: [{ root: { text: 'no id' } }] } })).s === 400);
 
-  // 공유: 이팀원(권한 없음)은 공유 대상에서 빠짐 → 부여 후 편집자로
-  var sh = await K('PUT', '/api/mindmaps/' + id, { version: 2, editors: [me.l.id] });
-  check('권한 없는 사람은 공유 목록에서 제외', sh.s === 200 && sh.d.data.editors.length === 0, sh);
-  await A('PUT', '/api/mindmaps/access/users/' + me.l.id, { enabled: true });
+  // 보내기: 없는 사람 id 는 빠짐
+  var sh = await K('PUT', '/api/mindmaps/' + id, { version: 2, editors: ['00000000-0000-0000-0000-0000000000ff'] });
+  check('없는 사람은 보낼 목록에서 제외', sh.s === 200 && sh.d.data.editors.length === 0, sh);
+  check('보내기 전 이팀원은 못 봄', (await L('GET', '/api/mindmaps/' + id)).s === 404);
   var sh2 = await K('PUT', '/api/mindmaps/' + id, { version: 3, viewers: [me.l.id] });
   check('보기 공유', sh2.s === 200 && sh2.d.data.viewers[0] === me.l.id, sh2);
   var lr = await L('GET', '/api/mindmaps/' + id);
@@ -78,11 +71,7 @@ function check(name, cond, extra) { assert.ok(cond, name + ' ' + JSON.stringify(
   // 복제는 내 개인 맵으로
   var dp = await L('POST', '/api/mindmaps/' + id + '/duplicate', {});
   check('복제 → 내 개인 맵', dp.s === 201 && dp.d.data.owner_id === me.l.id && dp.d.data.scope === 'personal');
-  // 권한 회수 → 접근 차단, 맵은 보존
-  await A('PUT', '/api/mindmaps/access/users/' + me.k.id, { enabled: false });
-  check('회수 후 403', (await K('GET', '/api/mindmaps/' + id)).s === 403);
-  check('회수 후에도 공유받은 사람은 계속 열람', (await L('GET', '/api/mindmaps/' + id)).s === 200);
-  await A('PUT', '/api/mindmaps/access/users/' + me.k.id, { enabled: true });
+  check('관리자도 받지 않은 맵은 못 봄', (await A('GET', '/api/mindmaps/' + id)).s === 404);
   check('소유자 삭제', (await K('DELETE', '/api/mindmaps/' + id)).s === 200);
   check('삭제 후 404', (await L('GET', '/api/mindmaps/' + id)).s === 404);
   console.log('\nALL PASS', ok);

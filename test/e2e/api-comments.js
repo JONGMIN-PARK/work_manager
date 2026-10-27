@@ -21,8 +21,6 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
   var A = api(await login('admin@t.com')), K = api(await login('kim@t.com')), L = api(await login('lee@t.com'));
   var kimId = (await K('GET', '/api/auth/me')).d.data.id;
   var leeId = (await L('GET', '/api/auth/me')).d.data.id;
-  await A('PUT', '/api/mindmaps/access/users/' + kimId, { enabled: true });
-  await A('PUT', '/api/mindmaps/access/users/' + leeId, { enabled: true });
   var m = (await K('POST', '/api/mindmaps', { title: '댓글 시험', scope: 'personal' })).d.data;
   var U = '/api/mindmaps/' + m.id;
   check('빈 목록', (await K('GET', U + '/comments')).d.data.length === 0);

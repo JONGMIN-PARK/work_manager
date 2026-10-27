@@ -47,7 +47,7 @@ function _mmRenderEditor() {
     menuBtn('mmExportMenu', 'download', '', '내보내기') +
     '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="weekly-report">🗓 주간 업무 보고 문장…</button><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
     '<button data-act="export-opml">OPML (.opml)</button><button data-act="export-xmind">XMind (.xmind)</button></div></div>' +
-    ((row.is_owner || _mmIsAdmin()) ? tb('share', 'share', '공유', '공유 설정', ' mm-tbtn-accent') : '') +
+    (row.is_owner ? tb('share', 'share', '보내기', '보내기 · 공유 — 고른 사람만 이 맵을 봅니다', ' mm-tbtn-accent') : '') +
     // 가끔 쓰는 것은 더보기 메뉴로 (상단을 가볍게)
     menuBtn('mmMoreMenu', 'more', '', '더보기 — 발표 · 버전 기록 · 집중 모드 · 명령 찾기 · 단축키') +
     '<div class="mm-menu mm-moremenu hidden" id="mmMoreMenu">' +

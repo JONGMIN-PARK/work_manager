@@ -42,7 +42,7 @@ function _mmCmtBody(t) {
 }
 function _mmCmtItem(c, showNode) {
   var me = typeof currentUser !== 'undefined' && currentUser && currentUser.id === c.created_by;
-  var mgr = me || (_mm.row && (_mm.row.is_owner || (typeof _mmIsAdmin === 'function' && _mmIsAdmin())));
+  var mgr = me || (_mm.row && _mm.row.is_owner);
   return '<div class="mm-cmt-item' + (c.resolved ? ' mm-cmt-done' : '') + '" data-cmt-id="' + _mmEsc(c.id) + '">' +
     '<div class="mm-cmt-head"><b>' + _mmEsc(c.author_name || '알 수 없음') + '</b><span class="mm-hint">' + _mmEsc(_mmCmtTime(c.created_at)) + (c.updated_at ? ' · 고침' : '') + '</span>' +
     (c.resolved ? '<span class="mm-cmt-tag">해결</span>' : '') + '</div>' +

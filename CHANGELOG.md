@@ -1,5 +1,14 @@
 # Work Manager — 변경 이력
 
+## v13.249 (2026-10-28) — 마인드맵 모두 사용 · 보내기 · 상황별 템플릿
+
+- 사용 권한: `middleware/mindmap-access` 는 로그인한 모든 사용자 허용. `/api/mindmaps/access/users` (GET · PUT) 와 관리자 사용 권한 창 제거.
+- 가시성: `lib/mindmap-visible` · `permsOf` — 소유자 + editors(편집) + viewers(보기)만. 범위(scope)는 프로젝트 연결 표시용으로만 남김(project 는 프로젝트 상세의 맵 목록). 관리자 특례(남의 비개인 맵 열람 · 삭제 · 공유 변경 · 기록/댓글 관리) 제거.
+- 보내기: `mmShareModal(row)` — 목록 카드(`data-act="send"`)와 편집기 모두. 새 맵 창의 공개 범위 고르기 제거.
+- 템플릿: `mindmap-templates.js` (`MM_TPL_CATS` · `MM_TPL_REC` · `MM_TEMPLATES` — tree 빈 틀 / ex 예제). `_mmBuildTree` 가 note · labels 도 옮김. 새 맵 창 갤러리(`#mmTplCats` · `#mmTplGrid` · `#mmNewPrev` · `#mmNewEx`), 예전 키(blank · meeting · wbs · swot · why5 · weekly · team) 유지.
+- 주의: 예전에 팀 · 조직 · 프로젝트 범위로 열려 있던 맵은 이제 소유자만 봄 — 필요한 사람에게 보내기로 다시 보내야 함.
+- 테스트: `e2e25-templates.js`, 권한 관련 기존 테스트를 새 규칙으로 고침.
+
 ## v13.248 (2026-10-28) — 내 업무 · 👥 업무 부하
 
 - 서버: `GET /api/my-work` · `/people` · `PUT /done` · `POST·PUT·DELETE /todos` · `GET /load` · `PUT /reassign` (`server/routes/my-work.js`). 모으기는 `server/lib/my-work.js` — 마인드맵 doc · `issue_assignees` · `meeting_action_items` · `prestudies` · `milestone_assignments` · `project_dev_items`(마감 = 연결 마일스톤 종료일) · `my_todos`.

@@ -34,27 +34,18 @@ async function waitSaved(page) {
 (async function () {
   var browser = await puppeteer.launch({ headless: 'shell', pipe: true, args: ['--no-sandbox'], userDataDir: path.join(require('os').tmpdir(), 'wm-e2e-chrome-' + Date.now()) });
   try {
-    // ── 권한 없는 팀원: 탭 숨김 ──
+    // ── 모든 사용자: 탭 보임 (v13.249) ──
     var api = await loginPage(browser, 'admin@t.com');
-    await api.evaluate(function () {
-      return apiFetch('/api/mindmaps/access/users').then(function (r) {
-        var kim = r.data.filter(function (u) { return u.email === 'kim@t.com'; })[0];
-        var lee = r.data.filter(function (u) { return u.email === 'lee@t.com'; })[0];
-        return Promise.all([
-          apiFetch('/api/mindmaps/access/users/' + kim.id, { method: 'PUT', body: JSON.stringify({ enabled: true }) }),
-          apiFetch('/api/mindmaps/access/users/' + lee.id, { method: 'PUT', body: JSON.stringify({ enabled: false }) })
-        ]);
-      });
-    });
     var lee = await loginPage(browser, 'lee@t.com');
-    check('권한 없는 사용자: 마인드맵 탭 숨김', await lee.$eval('#tabMindmap', function (e) { return getComputedStyle(e).display === 'none'; }));
+    check('팀원도 마인드맵 탭 보임', await lee.$eval('#tabMindmap', function (e) { return getComputedStyle(e).display !== 'none'; }));
 
     // ── 관리자: 탭 → 목록 → 새 맵(WBS 템플릿) ──
     var page = api;
     check('관리자: 마인드맵 탭 보임', await page.$eval('#tabMindmap', function (e) { return getComputedStyle(e).display !== 'none'; }));
     await page.click('#tabMindmap');
     await page.waitForSelector('#mindmapWrap [data-act="new"]');
-    check('사용 권한 버튼(관리자)', !!(await page.$('#mindmapWrap [data-act="access"]')));
+    check('사용 권한 버튼 없음 · 탭은 전체 · 내 맵 · 받은 맵', !(await page.$('#mindmapWrap [data-act="access"]')) &&
+      (await page.$$eval('#mindmapWrap [data-act="tab"]', function (b) { return b.map(function (x) { return x.textContent; }).join(','); })) === '전체,내 맵,받은 맵');
     await page.click('#mindmapWrap [data-act="new"]');
     await page.waitForSelector('#mmNewTitle');
     await page.type('#mmNewTitle', 'E2E 장비 WBS');
@@ -267,7 +258,7 @@ async function waitSaved(page) {
     await kim.click('#tabMindmap');
     await kim.waitForSelector('#mindmapWrap .mm-card[data-id="' + mapId + '"]');
     await kim.click('[data-act="tab"][data-tab="shared"]');
-    check('공유받은 탭에 표시', !!(await kim.$('#mindmapWrap .mm-card[data-id="' + mapId + '"]')));
+    check('받은 맵 탭에 표시', !!(await kim.$('#mindmapWrap .mm-card[data-id="' + mapId + '"]')));
     await kim.click('#mindmapWrap .mm-card[data-id="' + mapId + '"]');
     await kim.waitForSelector('#mmStage .mm-root');
     await kim.waitForFunction(function () { return _mm.lockedBy; }, { timeout: 8000 });
@@ -326,14 +317,14 @@ async function waitSaved(page) {
     var ni = await nodes(page);
     check('Markdown 가져오기 → 맵', ni[0] === '가져온 회의' && ni.indexOf('납기') >= 0 && ni.length === 6, ni);
 
-    // ── 사용 권한 모달 ──
+    // ── 목록 카드에서 📨 보내기 ──
     await page.click('[data-act="back"]');
-    await page.waitForSelector('#mindmapWrap [data-act="access"]');
-    await page.click('#mindmapWrap [data-act="access"]');
-    await page.waitForSelector('#mmAccessModal input[data-uid]');
-    var rows = await page.$$eval('#mmAccessModal .mm-acc-row', function (r) { return r.map(function (x) { var c = x.querySelector('input'); return [x.textContent, c.checked, c.disabled]; }); });
-    check('권한 모달: 관리자 고정 체크 · 김 체크 · 이 미체크', rows.some(function (r) { return /관리자/.test(r[0]) && r[1] && r[2]; }) && rows.some(function (r) { return /김팀원/.test(r[0]) && r[1]; }) && rows.some(function (r) { return /이팀원/.test(r[0]) && !r[1]; }), rows);
-    await page.screenshot({ path: path.join(SHOT, '7-access.png') });
+    await page.waitForSelector('#mindmapWrap .mm-card[data-id="' + mapId + '"] [data-act="send"]');
+    await page.click('#mindmapWrap .mm-card[data-id="' + mapId + '"] [data-act="send"]');
+    await page.waitForSelector('#mmShareModal .mm-sh-role');
+    var rows = await page.$$eval('#mmShareModal .mm-acc-row', function (r) { return r.map(function (x) { return [x.textContent, x.querySelector('select').value]; }); });
+    check('보내기 창: 김 = 같이 편집 · 이 = 보내지 않음 (모든 사용자 고를 수 있음)', rows.some(function (r) { return /김팀원/.test(r[0]) && r[1] === 'edit'; }) && rows.some(function (r) { return /이팀원/.test(r[0]) && r[1] === ''; }), rows);
+    await page.screenshot({ path: path.join(SHOT, '7-send.png') });
 
     // 테마 확인 (글래스 · 라이트)
     await page.keyboard.press('Escape');

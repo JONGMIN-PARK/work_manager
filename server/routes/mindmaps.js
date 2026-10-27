@@ -1,7 +1,7 @@
 /**
  * 마인드맵 라우트 — PRD_마인드맵 Phase 1
  * - 맵 CRUD · 복제 · 즐겨찾기
- * - 사용 권한 관리 (admin): 관리자 기본, 그 외는 관리자가 지정한 사용자만 (user_settings 'mindmap_access')
+ * - 사용: 로그인한 모든 사용자. 맵은 소유자와 보낸 사람(editors 편집 · viewers 보기)만 본다 — 관리자도 남의 맵은 못 봄 (v13.249)
  *
  * 규약: 인증 + 테넌트 격리 + 사용 권한(requireMindmapAccess) + 낙관적 락(version) + 소프트 삭제.
  * 맵 범위(scope):
@@ -78,14 +78,12 @@ function inspectDoc(doc) {
   return { count: count };
 }
 
-/** 공유 대상 정리 — 같은 테넌트 · 활성 · 사용 권한이 있는 사용자만 남긴다 (PRD 2.1) */
+/** 보낼 사람 정리 — 같은 테넌트 · 활성 사용자만 남긴다 */
 async function sanitizeShareList(req, ids) {
   ids = asArray(ids).filter(function (x) { return typeof x === 'string' && x !== req.user.sub; });
   if (!ids.length) return [];
   var r = await db.query(
-    "SELECT u.id FROM users u LEFT JOIN user_settings s ON s.user_id = u.id AND s.key = 'mindmap_access' " +
-    "WHERE u.tenant_id = $1 AND u.status = 'active' AND u.id::text = ANY($2) " +
-    "AND (u.role = 'admin' OR COALESCE((s.value->>'enabled')::boolean, false))",
+    "SELECT u.id FROM users u WHERE u.tenant_id = $1 AND u.status = 'active' AND u.id::text = ANY($2)",
     [req.tenant.id, ids]
   );
   var ok = {};
@@ -93,27 +91,11 @@ async function sanitizeShareList(req, ids) {
   return ids.filter(function (id, i) { return ok[id] && ids.indexOf(id) === i; });
 }
 
-/** 행 기준 읽기/편집 권한 → { read, edit } */
+/** 행 기준 읽기/편집 권한 → { read, edit } — 소유자 · 편집으로 받은 사람 = 편집, 보기로 받은 사람 = 읽기 (v13.249) */
 async function permsOf(req, row) {
   var me = req.user.sub;
-  var isAdmin = req.user.role === 'admin';
-  var owner = row.owner_id === me;
-  var editor = asArray(row.editors).indexOf(me) >= 0;
-  var viewer = asArray(row.viewers).indexOf(me) >= 0;
-  if (owner || editor) return { read: true, edit: true };
-  if (row.scope === 'personal') return { read: viewer, edit: false };
-  if (row.scope === 'project') {
-    if (!row.project_id) return { read: isAdmin || viewer, edit: isAdmin };
-    var canR = await pa.canReadById(req, row.project_id);
-    var canE = canR ? await pa.canEditById(req, row.project_id) : false;
-    return { read: !!canR || viewer, edit: !!canE };
-  }
-  if (row.scope === 'dept') {
-    var myDept = req.user.departmentId || null;
-    return { read: isAdmin || viewer || (!!myDept && row.department_id === myDept), edit: isAdmin };
-  }
-  // org
-  return { read: true, edit: isAdmin };
+  if (row.owner_id === me || asArray(row.editors).indexOf(me) >= 0) return { read: true, edit: true };
+  return { read: asArray(row.viewers).indexOf(me) >= 0, edit: false };
 }
 
 /** 범위별 부서 id 결정 — dept 는 내 부서(관리자는 지정 가능). 오류 시 { error } */
@@ -235,50 +217,12 @@ async function loadRow(req, id) {
   return r.rows[0] || null;
 }
 
-/* ═══ 사용 권한 관리 (admin) ═══ */
-
-// GET /api/mindmaps/access/users — 사용자별 부여 현황
-router.get('/access/users', auth.requireRole('admin'), async function (req, res) {
-  try {
-    var r = await db.query(
-      "SELECT u.id, COALESCE(NULLIF(u.display_name,''), u.name) AS name, u.email, u.role, " +
-      "COALESCE((s.value->>'enabled')::boolean, false) AS mindmap_enabled " +
-      "FROM users u LEFT JOIN user_settings s ON s.user_id = u.id AND s.key = 'mindmap_access' " +
-      "WHERE u.status = 'active' AND u.tenant_id = $1 ORDER BY u.role, name",
-      [req.tenant.id]
-    );
-    res.json({ data: r.rows });
-  } catch (e) {
-    httpErr.serverError(res, '[mindmaps/access/list]', e);
-  }
-});
-
-// PUT /api/mindmaps/access/users/:userId — 부여/회수 { enabled }
-router.put('/access/users/:userId', auth.requireRole('admin'), async function (req, res) {
-  try {
-    var enabled = !!(req.body && req.body.enabled);
-    var ur = await db.query('SELECT id FROM users WHERE id::text = $1 AND tenant_id = $2', [req.params.userId, req.tenant.id]);
-    if (!ur.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND', '사용자를 찾을 수 없습니다.');
-    await db.query(
-      "INSERT INTO user_settings (user_id, key, value, updated_at, tenant_id) VALUES ($1, 'mindmap_access', $2, NOW(), $3) " +
-      "ON CONFLICT (user_id, key) DO UPDATE SET value = $2, updated_at = NOW()",
-      [req.params.userId, JSON.stringify({ enabled: enabled }), req.tenant.id]
-    );
-    authService.auditLog(req.user.sub, enabled ? 'mindmap.access_grant' : 'mindmap.access_revoke', 'user', req.params.userId, null, req).catch(function () {});
-    res.json({ data: { userId: req.params.userId, enabled: enabled } });
-  } catch (e) {
-    httpErr.serverError(res, '[mindmaps/access/set]', e);
-  }
-});
-
-// GET /api/mindmaps/members — 공유·담당자 선택용 (사용 권한 있는 사용자만)
+// GET /api/mindmaps/members — 보내기 · 담당자 선택용 (같은 테넌트 활성 사용자)
 router.get('/members', async function (req, res) {
   try {
     var r = await db.query(
-      "SELECT u.id, COALESCE(NULLIF(u.display_name,''), u.name) AS name, " +
-      "(u.role = 'admin' OR COALESCE((s.value->>'enabled')::boolean, false)) AS has_access " +
-      "FROM users u LEFT JOIN user_settings s ON s.user_id = u.id AND s.key = 'mindmap_access' " +
-      "WHERE u.tenant_id = $1 AND u.status = 'active' ORDER BY name",
+      "SELECT u.id, COALESCE(NULLIF(u.display_name,''), u.name) AS name, TRUE AS has_access " +
+      "FROM users u WHERE u.tenant_id = $1 AND u.status = 'active' ORDER BY name",
       [req.tenant.id]
     );
     res.json({ data: r.rows });
@@ -530,7 +474,7 @@ router.put('/:id', async function (req, res) {
     // 범위·공유 설정은 소유자(또는 admin)만
     var shareKeys = ['scope', 'projectId', 'project_id', 'departmentId', 'department_id', 'editors', 'viewers'];
     var touchesShare = shareKeys.some(function (k) { return b[k] !== undefined; });
-    if (touchesShare && !(isOwner || req.user.role === 'admin')) {
+    if (touchesShare && !isOwner) {
       return httpErr.sendError(res, 403, 'FORBIDDEN', '공유 설정은 소유자만 바꿀 수 있습니다.');
     }
     if (b.scope !== undefined) {
@@ -675,7 +619,7 @@ router.delete('/:id', async function (req, res) {
     var row = await loadRow(req, req.params.id);
     if (!row || !(await permsOf(req, row)).read) return httpErr.sendError(res, 404, 'NOT_FOUND');
     var isOwner = row.owner_id === req.user.sub;
-    if (!isOwner && !(req.user.role === 'admin' && row.scope !== 'personal')) {
+    if (!isOwner) {
       return httpErr.sendError(res, 403, 'FORBIDDEN', '소유자만 삭제할 수 있습니다.');
     }
     await db.query(
@@ -710,7 +654,7 @@ router.get('/:id/snapshots', async function (req, res) {
       'FROM mindmap_snapshots s LEFT JOIN users u ON u.id = s.created_by WHERE s.map_id = $1 AND s.tenant_id = $2 ORDER BY s.created_at DESC LIMIT 300',
       [row.id, req.tenant.id]
     );
-    var me = req.user.sub, mgr = row.owner_id === me || req.user.role === 'admin';
+    var me = req.user.sub, mgr = row.owner_id === me;
     res.json({ data: r.rows.map(function (s) { s.can_edit = row._perm.edit && (mgr || s.created_by === me); return s; }) });
   } catch (e) {
     httpErr.serverError(res, '[mindmaps/snapshots/list]', e);
@@ -750,7 +694,7 @@ router.put('/:id/snapshots/:sid', async function (req, res) {
     var row = await snapGate(req, res, true);
     if (!row) return;
     var label = snapLabel(req.body && req.body.label);
-    var mgr = row.owner_id === req.user.sub || req.user.role === 'admin';
+    var mgr = row.owner_id === req.user.sub;
     var r = await db.query(
       "UPDATE mindmap_snapshots SET label = $1::varchar, kind = CASE WHEN $1::varchar IS NOT NULL AND kind = 'auto' THEN 'manual' ELSE kind END " +
       'WHERE id = $2 AND map_id = $3 AND tenant_id = $4 AND ($5 OR created_by = $6 OR kind = \'auto\') RETURNING id, kind, label',
@@ -768,7 +712,7 @@ router.delete('/:id/snapshots/:sid', async function (req, res) {
   try {
     var row = await snapGate(req, res, true);
     if (!row) return;
-    var mgr = row.owner_id === req.user.sub || req.user.role === 'admin';
+    var mgr = row.owner_id === req.user.sub;
     var r = await db.query('DELETE FROM mindmap_snapshots WHERE id = $1 AND map_id = $2 AND tenant_id = $3 AND ($4 OR created_by = $5) RETURNING id',
       [req.params.sid, row.id, req.tenant.id, mgr, req.user.sub]);
     if (!r.rows.length) return httpErr.sendError(res, 403, 'FORBIDDEN', '만든 사람이나 맵 소유자만 지울 수 있습니다.');
@@ -904,7 +848,7 @@ router.delete('/:id/comments/:cid', async function (req, res) {
   try {
     var row = await snapGate(req, res, false);
     if (!row) return;
-    var mgr = row.owner_id === req.user.sub || req.user.role === 'admin';
+    var mgr = row.owner_id === req.user.sub;
     var r = await db.query('DELETE FROM mindmap_comments WHERE id = $1 AND map_id = $2 AND tenant_id = $3 AND ($4 OR created_by = $5) RETURNING id',
       [req.params.cid, row.id, req.tenant.id, mgr, req.user.sub]);
     if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');

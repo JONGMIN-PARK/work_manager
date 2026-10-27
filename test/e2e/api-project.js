@@ -15,7 +15,6 @@ function check(n, c, x) { if (!c) { console.log('FAIL', n, JSON.stringify(x)); p
 (async function () {
   var A = api(await login('admin@t.com')), K = api(await login('kim@t.com'));
   var kimId = (await K('GET', '/api/auth/me')).d.data.id;
-  await A('PUT', '/api/mindmaps/access/users/' + kimId, { enabled: true });
   var pid = 'p-mm-' + Date.now();
   var pr = await A('POST', '/api/projects', { id: pid, name: '비공개 프로젝트', visibility: 'private' });
   check('프로젝트 생성', pr.s === 200 || pr.s === 201, pr);
@@ -32,11 +31,13 @@ function check(n, c, x) { if (!c) { console.log('FAIL', n, JSON.stringify(x)); p
   var mem = await A('POST', '/api/projects/' + pid + '/members', { userId: kimId, role: 'assignee' });
   console.log('  member add', mem.s, mem.d && (mem.d.error || ''));
   if (mem.s < 300) {
+    check('김(참여자)이어도 보내지 않으면 404 (v13.249)', (await K('GET', '/api/mindmaps/' + id)).s === 404);
+    check('소유자가 김에게 보내기', (await A('PUT', '/api/mindmaps/' + id, { version: 1, editors: [kimId] })).s === 200);
     var g = await K('GET', '/api/mindmaps/' + id);
-    check('김(참여자): 읽기 · 편집 가능', g.s === 200 && g.d.data.can_edit === true, g.d);
+    check('김(받음): 읽기 · 편집 가능', g.s === 200 && g.d.data.can_edit === true, g.d);
     check('김(참여자): 목록에 표시 · 프로젝트명', (await K('GET', '/api/mindmaps?scope=project')).d.data.some(function (m) { return m.id === id && m.project_name === '비공개 프로젝트'; }));
-    check('김(참여자, 소유자 아님): 공유 설정 변경 불가', (await K('PUT', '/api/mindmaps/' + id, { version: 1, scope: 'personal' })).s === 403);
-    check('김(참여자): 내용 저장', (await K('PUT', '/api/mindmaps/' + id, { version: 1, doc: g.d.data.doc })).s === 200);
+    check('김(받음, 소유자 아님): 보낼 사람 변경 불가', (await K('PUT', '/api/mindmaps/' + id, { version: 2, viewers: [] })).s === 403);
+    check('김(받음): 내용 저장', (await K('PUT', '/api/mindmaps/' + id, { version: 2, doc: g.d.data.doc })).s === 200);
   }
   console.log('ALL PASS');
 })();

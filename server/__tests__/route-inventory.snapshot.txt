@@ -149,7 +149,6 @@ GET /api/mindmaps/:id/files/:fid
 GET /api/mindmaps/:id/images
 GET /api/mindmaps/:id/snapshots
 GET /api/mindmaps/:id/snapshots/:sid
-GET /api/mindmaps/access/users
 GET /api/mindmaps/ai/status
 GET /api/mindmaps/by-link
 GET /api/mindmaps/members
@@ -460,7 +459,6 @@ PUT /api/mindmaps/:id
 PUT /api/mindmaps/:id/comments/:cid
 PUT /api/mindmaps/:id/pin
 PUT /api/mindmaps/:id/snapshots/:sid
-PUT /api/mindmaps/access/users/:userId
 PUT /api/my-work/done
 PUT /api/my-work/reassign
 PUT /api/my-work/todos/:id

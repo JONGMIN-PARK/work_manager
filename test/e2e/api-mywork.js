@@ -15,7 +15,7 @@ function api(tok) {
   };
 }
 var n = 0;
-function check(name, c, x) { if (!c) { console.log('FAIL', name, JSON.stringify(x, null, 1).slice(0, 1500)); process.exit(1); } n++; console.log('✔', name); }
+function check(name, c, x) { if (!c) { console.log('FAIL', name, JSON.stringify(x, null, 1).slice(0, 1500)); throw new Error('FAIL ' + name); } n++; console.log('✔', name); }   // throw — finally 에서 사람 설정을 되돌리도록
 function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d.getUTCDate() + k); return d.toISOString().slice(0, 10); }
 
 (async function () {
@@ -34,6 +34,8 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
   await c.query("DELETE FROM projects WHERE id LIKE 'mw-%'");
   await c.query("DELETE FROM edit_locks WHERE resource_type = 'mindmap'");
   // 이팀원 = 팀장, 김 · 이 같은 부서
+  var orig = (await c.query('SELECT id, role, department_id FROM users WHERE id = ANY($1)', [[kim, lee]])).rows;   // 다른 테스트(e2e2 설계팀)가 쓰는 값 — 끝나면 되돌림
+  await c.query("DELETE FROM departments WHERE name = '내업무부서' AND NOT EXISTS (SELECT 1 FROM users WHERE department_id = departments.id)");
   var dep = (await c.query("INSERT INTO departments (name) VALUES ('내업무부서') RETURNING id")).rows[0].id;
   await c.query("UPDATE users SET role = 'manager', department_id = $1 WHERE id = $2", [dep, lee]);
   await c.query('UPDATE users SET department_id = $1 WHERE id = $2', [dep, kim]);
@@ -48,9 +50,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await c.query("INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id) VALUES ('mw-ma1', $1, 'mw-ms1', 'mw-p1', $2)", [tid, kim]);
     await c.query("INSERT INTO project_dev_items (id, tenant_id, project_id, milestone_id, title, status, assignee_id) VALUES ('mw-d1', $1, 'mw-p1', 'mw-ms1', 'PLC 로직', 'todo', $2)", [tid, kim]);
     var A = api(await login('admin@t.com'));
-    await A('PUT', '/api/mindmaps/access/users/' + kim, { enabled: true });
-    await A('PUT', '/api/mindmaps/access/users/' + lee, { enabled: true });
-    var m = (await A('POST', '/api/mindmaps', { title: '내업무 맵', scope: 'org' })).d.data;
+    var m = (await A('POST', '/api/mindmaps', { title: '내업무 맵', editors: [kim, lee] })).d.data;   // 김 · 이에게 보낸 맵
     var doc = { sheets: [{ id: 's1', title: '시트', structure: 'balanced', root: { id: 'r', text: '루트', children: [
       { id: 'g', text: '설계', children: [{ id: 'n1', text: '배선도 검토', assigneeId: kim, dueDate: kst(1), progress: 50, children: [] }] },
       { id: 'n2', text: '끝난 일', assigneeId: kim, dueDate: kst(-1), done: true, children: [] },
@@ -63,7 +63,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     var r = await K('GET', '/api/my-work');
     check('내 업무 읽기', r.s === 200 && r.d.self === true, r);
     var by = {};
-    r.d.data.forEach(function (it) { by[it.src] = it; });
+    r.d.data.forEach(function (it) { if (/^mw-/.test(it.id) || it.mapId === m.id) by[it.src] = it; });   // 다른 테스트가 남긴 일은 빼고
     check('여섯 곳에서 모음 (맵 · 이슈 · 회의 · 사전검토 · 일정 · 개발)', ['mindmap', 'issue', 'action', 'prestudy', 'milestone', 'dev'].every(function (s) { return by[s]; }), Object.keys(by));
     check('맵 주제 — 위 단계 · 진행률 · 남은 양', by.mindmap.ctx === '내업무 맵 › 설계' && by.mindmap.progress === 50 && by.mindmap.weight === 0.5 && by.mindmap.mapOpen && by.mindmap.due === kst(1), by.mindmap);
     check('완료 시각 없는 끝난 주제 · 남의 주제는 빠짐', !r.d.data.some(function (it) { return /끝난 일|이 사람 일/.test(it.title); }));
@@ -155,7 +155,8 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     var none = await jobs._myWorkBlock({ user_id: '00000000-0000-0000-0000-0000000000ff', name: '없는사람', tenant_id: tid }, kst(0));
     check('할 일 없으면 조각 없음', none === '', none);
   } finally {
-    await c.query("UPDATE users SET role = 'member', department_id = NULL WHERE id = ANY($1)", [[kim, lee]]);
+    await c.query("DELETE FROM mindmaps WHERE title LIKE '내업무%'");   // 마감 알림 시험(api-notify)에 섞이지 않게
+    for (var oi = 0; oi < orig.length; oi++) await c.query('UPDATE users SET role = $1, department_id = $2 WHERE id = $3', [orig[oi].role, orig[oi].department_id, orig[oi].id]);
     await c.query('DELETE FROM departments WHERE id = $1', [dep]);
   }
   await c.end();

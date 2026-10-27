@@ -22,7 +22,6 @@ function api(tok) {
   // ── API ──
   var A = api(await login('admin@t.com')), L = api(await login('lee@t.com'));
   var leeId = (await L('GET', '/api/auth/me')).d.data.id;
-  await A('PUT', '/api/mindmaps/access/users/' + leeId, { enabled: true });
   var m = (await A('POST', '/api/mindmaps', { title: '첨부 API', scope: 'personal' })).d.data;
   var U = '/api/mindmaps/' + m.id;
   var up = await A('POST', U + '/files', { nodeId: 'n1', name: '견적서.pdf', mime: 'application/pdf', data: Buffer.from('%PDF-1.4 hello').toString('base64') });

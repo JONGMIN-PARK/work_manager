@@ -69,13 +69,6 @@ function overlap(page) {
   var browser = await puppeteer.launch({ headless: 'shell', pipe: true, args: ['--no-sandbox'], userDataDir: path.join(require('os').tmpdir(), 'wm-e2e-chrome-' + Date.now()) });
   try {
     var page = await loginPage(browser, 'admin@t.com');
-    await page.evaluate(function () {
-      return apiFetch('/api/mindmaps/access/users').then(function (r) {
-        return Promise.all(r.data.filter(function (u) { return u.role !== 'admin'; }).map(function (u) {
-          return apiFetch('/api/mindmaps/access/users/' + u.id, { method: 'PUT', body: JSON.stringify({ enabled: true }) });
-        }));
-      });
-    });
     // 시드: 새 프로젝트 + 마일스톤 + 이슈
     var seed = await page.evaluate(function () {
       var stamp = Date.now();
@@ -96,7 +89,7 @@ function overlap(page) {
     await page.click('#mindmapWrap [data-act="new"]');
     await page.waitForSelector('#mmNewTpl');
     await page.select('#mmNewTpl', 'gen-project');
-    check('구조도 선택 → 프로젝트 칸 표시 · 범위 프로젝트', await page.evaluate(function () { return !document.getElementById('mmNewProjWrap').classList.contains('hidden') && document.getElementById('mmNewScope').value === 'project'; }));
+    check('구조도 선택 → 프로젝트 칸 표시 · 공개 범위 고르기 없음', await page.evaluate(function () { return !document.getElementById('mmNewProjWrap').classList.contains('hidden') && !document.getElementById('mmNewScope'); }));
     check('AI 미설정 → AI 템플릿 없음', !(await page.$('#mmNewTpl option[value="ai-text"]')));
     await page.select('#mmNewProj', seed.pid);
     await page.click('#mmNewOk');
@@ -304,7 +297,6 @@ function overlap(page) {
     await page.select('#mmNewTpl', 'gen-team');
     var deptVal = await page.evaluate(function () { return apiFetch('/api/users').then(function (r) { var k = (r.data || []).filter(function (u) { return u.email === 'kim@t.com'; })[0]; return k.department_id || k.departmentId; }); });
     await page.select('#mmNewDept', deptVal);
-    check('팀 지도 → 범위 팀', await page.$eval('#mmNewScope', function (e) { return e.value; }) === 'dept');
     await page.click('#mmNewOk');
     await page.waitForSelector('#mmStage .mm-root');
     await wait(600);
@@ -312,13 +304,20 @@ function overlap(page) {
     check('팀원 업무 지도: 설계팀 · 팀원 노드', tt[0] === '설계팀 업무 지도' && tt.indexOf('김팀원') >= 0 && tt.indexOf('이팀원') >= 0, tt);
     await page.screenshot({ path: path.join(SHOT, '6-team.png') });
     var teamId = await page.evaluate(function () { return _mm.mapId; });
+    // v13.249: 같은 부서라도 보내야 보임 — 이팀원에게 보기로 보냄
+    await page.evaluate(function () {
+      return Promise.resolve(_mmSaveNow()).then(function () { return apiFetch('/api/mindmaps/members'); }).then(function (r) {
+        var lee = r.data.filter(function (u) { return u.name === '이팀원'; })[0];
+        return apiFetch('/api/mindmaps/' + _mm.mapId, { method: 'PUT', body: JSON.stringify({ version: _mm.version, viewers: [lee.id] }) });
+      }).then(function (r) { _mm.version = r.data.version; });
+    });
     var lee = await loginPage(browser, 'lee@t.com');
     await lee.click('#tabMindmap');
     await lee.waitForSelector('#mindmapWrap .mm-card');
-    check('같은 부서 이팀원 목록에 팀 맵', !!(await lee.$('#mindmapWrap .mm-card[data-id="' + teamId + '"]')));
+    check('보내 준 이팀원 목록에 팀 맵', !!(await lee.$('#mindmapWrap .mm-card[data-id="' + teamId + '"]')));
     await lee.click('#mindmapWrap .mm-card[data-id="' + teamId + '"]');
     await lee.waitForSelector('#mmStage .mm-root');
-    check('팀 맵: 같은 부서는 보기 전용', await lee.evaluate(function () { return _mm.readOnly === true; }));
+    check('팀 맵: 보기로 받은 사람은 보기 전용', await lee.evaluate(function () { return _mm.readOnly === true; }));
     console.log('\nALL PASS', ok);
   } catch (e) {
     console.log(e.message);

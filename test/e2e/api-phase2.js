@@ -25,8 +25,6 @@ function check(name, c, x) { if (!c) { console.log('FAIL', name, JSON.stringify(
   var A = api(await login('admin@t.com')), K = api(await login('kim@t.com')), L = api(await login('lee@t.com'));
   var ids = {};
   for (var e of ['kim', 'lee']) ids[e] = (await (e === 'kim' ? K : L)('GET', '/api/auth/me')).d.data.id;
-  await A('PUT', '/api/mindmaps/access/users/' + ids.kim, { enabled: true });
-  await A('PUT', '/api/mindmaps/access/users/' + ids.lee, { enabled: true });
 
   // 프로젝트 2개: P1(공개 tenant), P2(비공개, 김 미참여)
   var p1 = (await A('POST', '/api/projects', { name: '검사기 1호기', visibility: 'tenant', orderNo: 'A-100' })).d.data;
@@ -72,12 +70,11 @@ function check(name, c, x) { if (!c) { console.log('FAIL', name, JSON.stringify(
   var gm = (await K('POST', '/api/mindmaps/generate', { kind: 'mine' })).d.data;
   check('내 업무: 할 일·아이디어 가지 포함', /할 일/.test(JSON.stringify(gm.root)) && JSON.stringify(gm.root).indexOf(m1.id) >= 0);
 
-  // 팀(부서) 맵 — 같은 부서 읽기, 편집은 소유자
+  // 팀(부서) 맵 — v13.249 부터 범위와 상관없이 소유자 + 보낸 사람만
   var tm = await K('POST', '/api/mindmaps', { title: '설계팀 맵', scope: 'dept', doc: { sheets: [{ id: 'sh-1', title: '시트 1', structure: gt.structure, root: gt.root }] } });
   check('팀 맵 생성 (부서 자동)', tm.s === 201 && tm.d.data.department_id === deptId, tm.d);
   var lr = await L('GET', '/api/mindmaps/' + tm.d.data.id);
-  check('같은 부서 이팀원 읽기 · 편집 불가', lr.s === 200 && lr.d.data.can_edit === false);
-  check('같은 부서 목록에 표시 + 부서명', (await L('GET', '/api/mindmaps')).d.data.some(function (m) { return m.id === tm.d.data.id && m.department_name === '설계팀'; }));
+  check('같은 부서여도 보내지 않으면 못 봄', lr.s === 404 && !(await L('GET', '/api/mindmaps')).d.data.some(function (m) { return m.id === tm.d.data.id; }));
   check('관리자(부서 없음) 팀 맵 생성 → 부서 지정 필요', (await A('POST', '/api/mindmaps', { title: 'x', scope: 'dept' })).s === 400);
   check('관리자는 부서 지정해 생성', (await A('POST', '/api/mindmaps', { title: 'x', scope: 'dept', departmentId: deptId })).s === 201);
 
@@ -86,7 +83,8 @@ function check(name, c, x) { if (!c) { console.log('FAIL', name, JSON.stringify(
   check('역참조: 마일스톤이 들어간 맵', bl.some(function (m) { return m.id === tm.d.data.id; }), bl);
   var pmap = (await A('POST', '/api/mindmaps', { title: '프로젝트 소속 맵', scope: 'project', projectId: p1.id })).d.data;
   var bp = (await K('GET', '/api/mindmaps/by-link?type=project&id=' + p1.id)).d.data;
-  check('역참조: 프로젝트 소속 맵도 포함', bp.some(function (m) { return m.id === pmap.id; }) && bp.some(function (m) { return m.id === tm.d.data.id; }), bp);
+  check('역참조: 내 맵은 포함 · 받지 않은 남의 프로젝트 맵은 빠짐', !bp.some(function (m) { return m.id === pmap.id; }) && bp.some(function (m) { return m.id === tm.d.data.id; }), bp);
+  check('역참조: 관리자는 자기 프로젝트 맵 봄', (await A('GET', '/api/mindmaps/by-link?type=project&id=' + p1.id)).d.data.some(function (m) { return m.id === pmap.id; }));
   // 참조 제거 후 저장 → 역참조에서 빠짐
   var cur = (await K('GET', '/api/mindmaps/' + tm.d.data.id)).d.data;
   cur.doc.sheets[0].root.children = [];

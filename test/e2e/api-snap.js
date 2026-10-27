@@ -55,7 +55,6 @@ function doc(texts, img) {
   check('이름 붙이면 직접 저장으로', rn.s === 200 && rn.d.data.kind === 'manual' && rn.d.data.label === '회의 전', rn);
   // 권한: 다른 사람(공유 안 됨) 404, 보기만 공유된 이씨는 목록 OK · 저장 403
   var me = (await L('GET', '/api/auth/me')).d.data.id;
-  await A('PUT', '/api/mindmaps/access/users/' + me, { enabled: true });
   var ls0 = await L('GET', U + '/snapshots'); check('남의 개인 맵 기록 404', ls0.s === 404, ls0);
   
   await K('PUT', U, { version: v, viewers: [me] }); v++;
