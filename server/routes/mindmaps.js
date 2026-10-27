@@ -394,6 +394,9 @@ router.post('/ai', aiLimiter, async function (req, res) {
     } else if (b.action === 'summarize') {
       if (!b.outline || !String(b.outline).trim()) return httpErr.sendError(res, 400, 'VALIDATION', '요약할 내용이 없습니다.');
       result = await aiMindmap.summarize({ outline: String(b.outline) });
+    } else if (b.action === 'risk') {
+      if (!b.outline || !String(b.outline).trim()) return httpErr.sendError(res, 400, 'VALIDATION', '점검할 내용이 없습니다.');
+      result = await aiMindmap.riskReview({ outline: String(b.outline), findings: String(b.findings || ''), today: String(b.today || '').slice(0, 10) });
     } else {
       return httpErr.sendError(res, 400, 'VALIDATION', '알 수 없는 AI 동작입니다.');
     }

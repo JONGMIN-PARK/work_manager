@@ -377,6 +377,7 @@ var MM_COMMANDS = [
   { id: 'openRef', group: '앱 데이터', label: '연결된 항목 열기', keys: ['Alt+Enter'], when: function () { var f = _mmSelInfo(); return !!(f && f.node.ref); }, run: _mmkSingle(function () { var f = _mmSelInfo(); if (f && f.node.ref && typeof mmOpenRef === 'function') mmOpenRef(f.node.ref); }) },
   { id: 'promoteMs', group: '앱 데이터', label: '마일스톤으로 만들기', keys: [], edit: true, when: _mmkFree, run: _mmkSingle(function () { if (typeof mmPromoteModal === 'function') mmPromoteModal('milestone'); }) },
   { id: 'promoteIssue', group: '앱 데이터', label: '이슈로 만들기', keys: [], edit: true, when: _mmkFree, run: _mmkSingle(function () { if (typeof mmPromoteModal === 'function') mmPromoteModal('issue'); }) },
+  { id: 'riskCheck', group: '앱 데이터', label: '🩺 리스크 점검 (지연 · 담당 없음 · 몰림 · 선후 역전 · 진척 정체)', keys: [], run: function () { if (typeof mmRiskModal === 'function') mmRiskModal(); } },
   { id: 'weeklyReport', group: '앱 데이터', label: '주간 업무 보고 문장 만들기 (지난주 기록과 비교)', keys: [], run: function () { if (typeof mmWeeklyReportModal === 'function') mmWeeklyReportModal(); } },
   { id: 'refsRefresh', group: '앱 데이터', label: '연결 항목 상태 새로고침', keys: [], run: function () { _mm.refs = {}; _mmResolveRefs(); } },
   { id: 'resync', group: '앱 데이터', label: '원본과 맞추기 (자동 생성 맵)', keys: [], edit: true, when: function () { return !!(_mm.doc.meta && _mm.doc.meta.gen); }, run: function () { if (typeof mmResync === 'function') mmResync(); } },

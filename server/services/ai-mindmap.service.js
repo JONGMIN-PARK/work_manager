@@ -110,4 +110,41 @@ async function summarize(input) {
   return { summary: String(r.data.summary || '').trim().slice(0, 200), usage: r.usage };
 }
 
-module.exports = { isReady: aiClaude.isReady, expand: expand, fromText: fromText, wbs: wbs, summarize: summarize, cleanFlat: cleanFlat };
+/** 리스크 점검 — 맵 개요 + 규칙 점검 결과 → 위험 요약 · 대응 제안 (v13.243) */
+async function riskReview(input) {
+  var schema = {
+    type: 'object',
+    properties: {
+      summary: { type: 'string', description: '전체 위험 상황 한두 문장(100자 이내)' },
+      risks: {
+        type: 'array', maxItems: 8,
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: '위험 이름 (30자 이내)' },
+            why: { type: 'string', description: '왜 위험한지 — 맵의 주제 이름을 들어 (120자 이내)' },
+            action: { type: 'string', description: '이번 주에 할 대응 (80자 이내)' }
+          },
+          required: ['title', 'why', 'action'],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ['summary', 'risks'],
+    additionalProperties: false
+  };
+  var user = '오늘은 ' + (input.today || '') + ' 입니다. 아래는 업무 마인드맵(담당 · 마감 · 진행률 포함)과 규칙 점검 결과입니다.\n' +
+    '일정 · 인력 · 선후 관계 관점에서 가장 중요한 위험을 우선순위대로 골라, 이유와 이번 주 대응을 제안하세요. 맵에 없는 사실을 지어내지 마세요.\n\n' +
+    '[규칙 점검]\n' + (clip(input.findings, 6000) || '(걸린 것 없음)') + '\n\n[맵]\n' + clip(input.outline, 12000);
+  var r = await aiClaude.callJson({ system: SYSTEM, messages: [{ role: 'user', content: user }], schema: schema, maxTokens: 2048 });
+  var d = r.data || {};
+  return {
+    summary: String(d.summary || '').trim().slice(0, 300),
+    risks: (Array.isArray(d.risks) ? d.risks : []).slice(0, 8).map(function (x) {
+      return { title: String(x.title || '').slice(0, 60), why: String(x.why || '').slice(0, 300), action: String(x.action || '').slice(0, 200) };
+    }),
+    usage: r.usage
+  };
+}
+
+module.exports = { isReady: aiClaude.isReady, expand: expand, fromText: fromText, wbs: wbs, summarize: summarize, riskReview: riskReview, cleanFlat: cleanFlat };

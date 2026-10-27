@@ -134,6 +134,7 @@ function _mmPaintFilter() {
     }).join('') + '</div></div>' +
     chip('late', '지연', cnt.late, ' mm-fchip-late') + chip('week', '이번 주 마감', cnt.week) + chip('noprog', '진행률 미입력', cnt.noprog) +
     '<button class="mm-fchip' + (vf.dimDone ? ' on' : '') + '" data-vf-act="dimdone" title="완료한 주제를 흐리게">완료 흐리게</button>' +
+    (typeof mmRiskModal === 'function' ? '<button class="mm-fchip mm-fchip-risk" data-vf-act="risk" title="지연 · 담당 없음 · 몰림 · 선후 역전 · 진척 정체 점검">🩺 점검</button>' : '') +
     (vf.who != null || vf.st || vf.dimDone ? '<button class="mm-fchip mm-fchip-x" data-vf-act="clear" title="거르기 끄기">×</button>' : '') +
     (vf.st || vf.who != null ? '<span class="mm-fcount">' + (_mm.vfHits.length ? (vf.idx >= 0 ? (vf.idx + 1) + '/' : '') + _mm.vfHits.length + '개' : '맞는 주제 없음') + '</span>' : '');
   bar.innerHTML = h;
@@ -165,6 +166,7 @@ function _mmFilterClick(e) {
   if (t.hasAttribute('data-vf-act')) {
     var act = t.getAttribute('data-vf-act');
     if (act === 'people') { if (pop) pop.classList.toggle('hidden'); return; }
+    if (act === 'risk') { mmRiskModal(); return; }
     if (act === 'dimdone') vf.dimDone = !vf.dimDone;
     if (act === 'clear') { vf.who = null; vf.st = null; vf.dimDone = false; }
     vf.idx = -1;

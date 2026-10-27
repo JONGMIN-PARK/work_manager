@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.243 (2026-10-27) — 마인드맵 리스크 점검 · AI 의견
+
+- mindmap-risk.js (새 파일): `mmRiskFindings(root, facts, prog, relations, today, old)`(순수, test/mindmap-risk.test.js) · `mmRiskModal`. 몰림 기준 `MM_RISK_LOAD`(진행 중 8 · 이번 주 4).
+- 서버 ai-mindmap.service `riskReview` · /api/mindmaps/ai action `risk` (__tests__/ai-mindmap-risk.test.js — 응답 흉내). 실제 AI 응답은 배포 서버에서 확인 필요.
+- test/e2e/e2e19-risk.js(5) — AI 는 요청 가로채기로 흉내.
+
 ## v13.242 (2026-10-27) — 마인드맵 발표 모드
 
 - mindmap-pitch.js (새 파일): `mmPitchSlides` · `mmPitchStart/Go/End` — #mmEd 에 .mm-pitch(도구 · 패널 숨김), requestFullscreen(막히면 창 안), 캡처 단계 keydown. `_mmPaint` 끝에서 발표 중이면 장면 다시 맞춤. 선 path 에 `data-e`(주제 id) — 장면 밖 선 흐리게.

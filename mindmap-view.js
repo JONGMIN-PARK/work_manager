@@ -43,7 +43,7 @@ function _mmRenderEditor() {
     '<button data-act="ai-expand">💡 하위 주제 제안 <span class="mm-hint">Alt+A</span></button>' +
     '<button data-act="ai-summary">} 가지 요약 <span class="mm-hint">선택 주제</span></button>' +
     '<button data-act="ai-text">📝 글로 가지 만들기</button>' +
-    '<button data-act="ai-wbs">🏗 WBS 초안 <span class="mm-hint">프로젝트</span></button></div></div>' +
+    '<button data-act="ai-wbs">🏗 WBS 초안 <span class="mm-hint">프로젝트</span></button><button data-act="cmd" data-cmd="riskCheck">🩺 리스크 점검 · AI 의견</button></div></div>' +
     menuBtn('mmExportMenu', 'download', '', '내보내기') +
     '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="weekly-report">🗓 주간 업무 보고 문장…</button><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
     '<button data-act="export-opml">OPML (.opml)</button><button data-act="export-xmind">XMind (.xmind)</button></div></div>' +
