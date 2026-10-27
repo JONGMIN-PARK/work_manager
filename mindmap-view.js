@@ -395,7 +395,8 @@ function _mmPaint() {
     // 같은 단계 맞춤으로 넓힌 주제는 그 너비로 (글자 정렬은 시트 설정 — stage 의 mm-ta-*)
     if (lay.aligned && lay.aligned[id]) { el.style.width = p.w + 'px'; el.classList.add('mm-aligned'); }
   });
-  stage.className = 'mm-stage mm-ta-' + (sheet.textAlign || 'auto');
+  // 가로 구조는 하위 주제 밑줄을 SVG 연결선이 이어 그린다 — CSS 밑줄은 자리만 차지(투명)
+  stage.className = 'mm-stage mm-ta-' + (sheet.textAlign || 'auto') + (st === 'down' ? '' : ' mm-ul-svg');
   var b = lay.bounds;
   b.minX = Math.floor(b.minX); b.minY = Math.floor(b.minY); b.maxX = Math.ceil(b.maxX); b.maxY = Math.ceil(b.maxY);
   var pad = 40;
@@ -418,7 +419,7 @@ function _mmPaint() {
     var pp = lay.pos[p.parentId];
     if (p.depth <= 2) {
       // 가지는 부모 쪽이 굵고 끝으로 갈수록 가늘게 (유료 마인드맵 툴의 기본 모양)
-      // 끝 굵기를 하위 주제 밑줄과 같게 해 이음매에 단이 지지 않게 한다.
+      // 끝 굵기를 하위 주제 밑줄과 같게 — 밑줄까지 한 도형이라 이음매가 없다.
       var w0 = p.depth === 1 ? 7 : 3.4, w1 = p.depth === 1 ? 2.4 : MM_UNDERLINE;
       paths.push('<path d="' + mmEdgeShape(pp, p, st, w0, w1) + '" class="mm-branch" style="fill:' + colors[id] + '"/>');
     } else {

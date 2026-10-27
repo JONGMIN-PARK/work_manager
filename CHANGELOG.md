@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.227 (2026-10-27) — 마인드맵 가지 이음매 근본 해결
+
+- 원인: 밑줄은 CSS border(화소 맞춤), 연결선은 SVG(소수 좌표) — 서로 다른 래스터화가 맞닿아 배율마다 위/아래로 어긋남. v13.224~226 은 좌표를 맞추는 보정이라 배율이 소수(예: 93% × 화면 125%)면 다시 생김.
+- mindmap-layout.js `_mmEdgeEnds` 에 `ux`(자식 밑줄 먼 끝) — `mmEdgePath` 는 `L ux,ey` 로, `mmEdgeShape` 는 밑줄 두께 띠까지 한 도형으로. 가로 구조에서 stage 에 `mm-ul-svg` → style.css 가 `.mm-topic2` 밑줄을 투명(자리만, AI 제안 주제 제외). 조직도(down)는 CSS 밑줄 그대로.
+
 ## v13.226 (2026-10-27) — 마인드맵 주제 글자 꺾임
 
 - mindmap-view.js: v13.225 의 `width` 고정 → `min-width`(같은 단계 맞춤 주제만 width). 웹 폰트(Noto Sans KR 글자 묶음)가 그린 뒤 받아지거나 측정 오차로 실제 글자가 더 넓으면 한 글자씩 꺾이던 것. 올림 여유 -0.05 → -0.01.

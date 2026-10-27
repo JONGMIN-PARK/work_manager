@@ -1400,3 +1400,5 @@ body.mm-zen-body{overflow:hidden}
 .mm-node.mm-df-mov::after{content:'옮김';background:var(--stat-purple,#8B5CF6)}
 .mm-tbtn.on{background:var(--ac-bg);color:var(--ac-t)}
 @media (max-width:900px){ .mm-hist{width:100%} }
+/* 밑줄은 SVG 연결선이 이어 그림(v13.227) — CSS 밑줄은 자리만 */
+.mm-ul-svg .mm-node.mm-topic2:not(.mm-ai){border-bottom-color:transparent}

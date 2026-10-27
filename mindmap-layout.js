@@ -343,7 +343,8 @@ function mmRelationPath(a, b) {
 
 /**
  * 연결선 양 끝점. 가로 구조에서 2단계 아래 주제(밑줄 모양)는 밑줄 높이에서 잇는다 — XMind 기본 모양.
- * 반환 { sx, sy, ex, ey, vertical }
+ * 반환 { sx, sy, ex, ey, ux, vertical } — ux 가 있으면 자식 밑줄의 먼 끝. 밑줄을 연결선과 한 도형으로
+ * 이어 그린다(밑줄을 CSS 테두리로 따로 그리면 화소 맞춤 차이로 확대 배율마다 이음매가 어긋난다).
  */
 function _mmEdgeEnds(p, c, structure) {
   if (structure === 'down') return { sx: p.x + p.w / 2, sy: p.y + p.h, ex: c.x + c.w / 2, ey: c.y, vertical: true };
@@ -355,6 +356,7 @@ function _mmEdgeEnds(p, c, structure) {
     sy: p.depth >= 2 ? p.y + p.h - 1 : p.y + p.h / 2,
     ex: left ? c.x + c.w - co : c.x + co,
     ey: c.depth >= 2 ? c.y + c.h - 1 : c.y + c.h / 2,
+    ux: c.depth >= 2 ? (left ? c.x : c.x + c.w) : null,
     vertical: false
   };
 }
@@ -367,7 +369,8 @@ function mmEdgePath(p, c, structure) {
     return 'M' + e.sx + ',' + e.sy + ' C' + e.sx + ',' + my + ' ' + e.ex + ',' + my + ' ' + e.ex + ',' + e.ey;
   }
   var mx = (e.sx + e.ex) / 2;
-  return 'M' + e.sx + ',' + e.sy + ' C' + mx + ',' + e.sy + ' ' + mx + ',' + e.ey + ' ' + e.ex + ',' + e.ey;
+  return 'M' + e.sx + ',' + e.sy + ' C' + mx + ',' + e.sy + ' ' + mx + ',' + e.ey + ' ' + e.ex + ',' + e.ey +
+    (e.ux != null ? ' L' + e.ux + ',' + e.ey : '');
 }
 
 /**
@@ -385,6 +388,7 @@ function mmEdgeShape(p, c, structure, w0, w1) {
   }
   var mx = (e.sx + e.ex) / 2;
   return 'M' + pt(e.sx, e.sy - h0) + ' C' + pt(mx, e.sy - h0) + ' ' + pt(mx, e.ey - h1) + ' ' + pt(e.ex, e.ey - h1) +
+    (e.ux != null ? ' L' + pt(e.ux, e.ey - h1) + ' L' + pt(e.ux, e.ey + h1) : '') +
     ' L' + pt(e.ex, e.ey + h1) + ' C' + pt(mx, e.ey + h1) + ' ' + pt(mx, e.sy + h0) + ' ' + pt(e.sx, e.sy + h0) + ' Z';
 }
 
