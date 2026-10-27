@@ -14,6 +14,7 @@ function _mmPaintPanel() {
   if (_mm.multi.length > 1 && typeof mmMultiPanelHtml === 'function') {
     pn.removeAttribute('data-sel');
     pn.innerHTML = mmMultiPanelHtml();
+    _mmPanelFolds(pn);
     return;
   }
   // 같은 주제의 입력칸을 쓰는 중이면 다시 그리지 않음 (Tab 으로 다음 칸 이동 시 포커스 유지)
@@ -95,6 +96,7 @@ function _mmPaintPanel() {
   h += '<div class="mm-pn-sec"><div class="mm-pn-h">링크</div><input id="mmPnLink" class="mm-input" placeholder="https://" value="' + _mmEsc(n.link || '') + '"' + ro + '></div>';
   h += '<div class="mm-pn-sec"><div class="mm-pn-h">노트</div><textarea id="mmPnNote" class="mm-input" rows="5"' + ro + '>' + _mmEsc(n.note || '') + '</textarea></div>';
   pn.innerHTML = h;
+  _mmPanelFolds(pn);
   if (typeof _mmBindBlocksPanel === 'function') _mmBindBlocksPanel(pn, n);
   if (typeof _mmBindComments === 'function') _mmBindComments(pn, n);   // 보기 전용이어도 댓글은 됨
   if (typeof _mmBindFiles === 'function') _mmBindFiles(pn, n);   // 보기 전용이어도 내려받기는 됨
@@ -145,6 +147,48 @@ function _mmPaintPanel() {
   });
   // 패널 입력 중 단축키가 캔버스로 가지 않게
   pn.onkeydown = function (e) { e.stopPropagation(); if (e.key === 'Escape') _mmFocusCanvas(); };
+}
+
+/*
+ * 패널 칸 접기 — 칸 제목을 누르면 접고 편다. 접은 칸은 제목 첫 낱말로 기억(localStorage 'mm-pn-fold').
+ * 처음에는 칸이 큰 마커 · 우선순위만 접어 둔다. 첫 칸(주제 글)은 접지 않는다.
+ */
+var MM_PN_FOLD_DEFAULT = ['마커', '우선순위'];
+function _mmPnFoldSet() {
+  try { var v = localStorage.getItem('mm-pn-fold'); if (v != null) return JSON.parse(v) || []; } catch (_) {}
+  return MM_PN_FOLD_DEFAULT.slice();
+}
+function _mmPnFoldSave(list) { try { localStorage.setItem('mm-pn-fold', JSON.stringify(list)); } catch (_) {} }
+function _mmPnSecKey(sec) {
+  var h = sec.querySelector('.mm-pn-h');
+  var t = h && h.firstChild && h.firstChild.nodeType === 3 ? h.firstChild.nodeValue : (h ? h.textContent : '');
+  return t.trim().split(/\s+/)[0] || '';
+}
+function _mmPanelFolds(pn) {
+  var folded = _mmPnFoldSet();
+  pn.querySelectorAll('.mm-pn-sec').forEach(function (sec, i) {
+    if (i === 0) return;
+    var k = _mmPnSecKey(sec);
+    if (!k) return;
+    sec.classList.add('mm-pn-foldable');
+    sec.classList.toggle('mm-pn-folded', folded.indexOf(k) >= 0);
+  });
+  pn.onclick = function (e) {
+    var h = e.target.closest('.mm-pn-foldable > .mm-pn-h');
+    if (!h || e.target.closest('button,input,select,a,label')) return;
+    var sec = h.parentNode, k = _mmPnSecKey(sec), list = _mmPnFoldSet().filter(function (x) { return x !== k; });
+    if (!sec.classList.contains('mm-pn-folded')) list.push(k);
+    sec.classList.toggle('mm-pn-folded');
+    _mmPnFoldSave(list);
+  };
+}
+/** 접힌 칸 안의 입력칸으로 가야 하면(단축키) 그 칸을 편다 */
+function _mmPnUnfoldFor(el) {
+  var sec = el && el.closest && el.closest('.mm-pn-folded');
+  if (!sec) return;
+  var k = _mmPnSecKey(sec);
+  sec.classList.remove('mm-pn-folded');
+  _mmPnFoldSave(_mmPnFoldSet().filter(function (x) { return x !== k; }));
 }
 
 /* ═══ 아웃라인 보기 ═══ */

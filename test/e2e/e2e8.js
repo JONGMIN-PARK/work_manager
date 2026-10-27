@@ -163,7 +163,8 @@ function dayStr(off) { var d = new Date(); d.setDate(d.getDate() + off); return 
     // ── 버전 기록
     await page.evaluate(function () { return _mmSaveNow(); });
     await wait(300);
-    await page.click('#mmEd [data-act="history"]');
+    await page.click('[data-menu="mmMoreMenu"]'); await wait(120);
+    await page.click('#mmMoreMenu [data-act="history"]');
     await page.waitForSelector('#mmHist:not(.hidden) .mm-hist-cur');
     await wait(300);
     await page.type('#mmHistLabel', '1차 일정안');

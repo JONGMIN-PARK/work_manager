@@ -139,6 +139,14 @@ async function waitSaved(page) {
     await page.keyboard.down('Alt'); await page.keyboard.press('1'); await page.keyboard.up('Alt');
     await wait(150);
     check('Alt+1 우선순위 마커', !!(await page.$('#mmStage .mm-node.mm-sel .mm-pri1')));
+    // 마커 칸은 처음에 접혀 있음 — 제목을 눌러 펴고, 접기 상태 기억 확인
+    check('마커 칸 기본 접힘', !!(await page.$('#mmPanel .mm-pn-folded [data-act="symbol"]')));
+    await page.evaluate(function () {
+      var h = Array.prototype.filter.call(document.querySelectorAll('#mmPanel .mm-pn-foldable > .mm-pn-h'), function (x) { return /^마커/.test(x.textContent); })[0];
+      h.click();
+    });
+    await wait(100);
+    check('제목 눌러 펴기 · 기억', !(await page.$('#mmPanel .mm-pn-folded [data-act="symbol"]')) && (await page.evaluate(function () { return localStorage.getItem('mm-pn-fold'); })).indexOf('마커') < 0);
     await page.click('#mmPanel [data-act="symbol"][data-v="flag"]');
     await page.$eval('#mmPnDue', function (e) { e.value = '2020-01-01'; e.dispatchEvent(new Event('change')); });
     await page.$eval('#mmPnProg', function (e) { e.value = '0'; e.dispatchEvent(new Event('change')); });

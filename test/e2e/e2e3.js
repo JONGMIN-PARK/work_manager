@@ -79,6 +79,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await key('Enter'); await type('A2');
     await key('ArrowLeft');
     check('방향키 ← 부모(A)', await sel() === 'A');
+    await page.evaluate(function () { localStorage.setItem('mm-pn-fold', JSON.stringify(['구조'])); });   // 구조 칸을 접어 둬도 단축키가 펴서 감
     await key('Alt+KeyB'); await key('Alt+KeyN');
     await key('Alt+KeyS');
     await wait(150);

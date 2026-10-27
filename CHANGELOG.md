@@ -1,5 +1,13 @@
 # Work Manager — 변경 이력
 
+## v13.247 (2026-10-28) — 마인드맵 큰 맵 속도 · 화면 정리
+
+- 성능: `_mmPaintMini` 가 주제마다 `querySelector` + `getComputedStyle` 을 불러 주제 수의 제곱으로 느려졌던 것 — 색은 `_mm.colors`(그릴 때 정한 색)를 색마다 한 번만 풀어 쓰고, 주제 그림은 배치가 바뀔 때만 다시 그려 둔 뒤(`_mm.miniImg`) 화면 이동 때는 보이는 영역만 긋는다.
+- 성능: 거르기의 조상 찾기를 부모 표로 (주제마다 `mmFind` 하던 것).
+- 화면: 상단 `[⋯]` 더보기 메뉴(`#mmMoreMenu`) — 발표 · 버전 기록 · 집중 모드 · 명령 찾기 · 단축키.
+- 화면: 패널 칸 접기(`_mmPanelFolds`, localStorage `mm-pn-fold`, 기본 마커 · 우선순위). `_mmkFocusPanel` 은 접힌 칸을 편다.
+- 테스트: `e2e23-perf.js` (주제 1,000 · 3,000개 그리기 · 고치기 · 고르기 · 거르기 · 저장 시간 상한).
+
 ## v13.246 (2026-10-28) — 마인드맵 떠있는 주제
 
 - mindmap-layout.js: 중심 주제 하위 중 `node.float {x,y}` 는 `_mmWithFloats` 가 빼고 배치한 뒤 자기 자리에 'right' 배치로 붙임(pos.float). 트리에는 그대로 — 편집 · 패널 · 검색 · 간트 공통. XMind `children.detached` + position 왕복.

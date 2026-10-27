@@ -47,13 +47,14 @@ function _mmRenderEditor() {
     menuBtn('mmExportMenu', 'download', '', '내보내기') +
     '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="weekly-report">🗓 주간 업무 보고 문장…</button><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
     '<button data-act="export-opml">OPML (.opml)</button><button data-act="export-xmind">XMind (.xmind)</button></div></div>' +
-    tb('pitch', 'play', '발표', '발표 모드 — 개요 → 주요 주제를 한 장씩 (← → · Esc)') +
-    tb('history', 'history', '기록', '버전 기록 (Ctrl+Shift+H)') +
     ((row.is_owner || _mmIsAdmin()) ? tb('share', 'share', '공유', '공유 설정', ' mm-tbtn-accent') : '') +
-    '<span class="mm-tsep"></span>' +
-    tb('zen', 'zen', '', '집중 모드 (Ctrl+Shift+F)', ' mm-tbtn-icon') +
-    tb('palette', 'command', '', '명령 찾기 (Ctrl+/)', ' mm-tbtn-icon') +
-    tb('help', 'help', '', '단축키 (F1)', ' mm-tbtn-icon') +
+    // 가끔 쓰는 것은 더보기 메뉴로 (상단을 가볍게)
+    menuBtn('mmMoreMenu', 'more', '', '더보기 — 발표 · 버전 기록 · 집중 모드 · 명령 찾기 · 단축키') +
+    '<div class="mm-menu mm-moremenu hidden" id="mmMoreMenu">' +
+    [['pitch', 'play', '발표 모드', '← →'], ['history', 'history', '버전 기록', 'Ctrl+Shift+H'], ['zen', 'zen', '집중 모드', 'Ctrl+Shift+F'],
+      ['palette', 'command', '명령 찾기', 'Ctrl+/'], ['help', 'help', '단축키', 'F1']].map(function (x) {
+      return '<button data-act="' + x[0] + '">' + _mmIcon(x[1], 14) + '<span>' + x[2] + '</span><span class="mm-hint">' + x[3] + '</span></button>';
+    }).join('') + '</div></div>' +
     '</div>' +
     '<div id="mmBanner"></div>' +
     '<div id="mmAiBar"></div>' +
@@ -424,6 +425,7 @@ function _mmPaint() {
   var lay = mmLayout(root, st, sizes);
   var deco = mmDecorations(root, st, lay, sizes);
   _mm.layout = lay;
+  _mm.colors = colors;
   Object.keys(lay.pos).forEach(function (id) { var p = lay.pos[id]; p.x = Math.round(p.x); p.y = Math.round(p.y); });
   els.forEach(function (el) {
     var id = el.getAttribute('data-id');
@@ -556,17 +558,30 @@ function _mmPaintMini() {
   if (!g || g.c.classList.contains('hidden')) return;
   var ctx = g.c.getContext('2d');
   var cs = getComputedStyle(g.c);
+  // 주제 그림은 배치가 바뀔 때만 다시 그려 두고(_mm.miniImg), 화면을 옮길 때는 그것 위에 보이는 영역만 긋는다
+  // — 주제 3,000개에서 옮길 때마다 전부 그리면 0.5초씩 걸렸다
+  var mi = _mm.miniImg;
+  if (!mi || mi.layout !== _mm.layout || mi.w !== g.c.width || mi.h !== g.c.height) {
+    var off = document.createElement('canvas');
+    off.width = g.c.width; off.height = g.c.height;
+    var oc = off.getContext('2d'), rgb = {}, base = cs.color;
+    // 주제 색은 'var(--…)' 라 캔버스가 못 읽음 — 색마다 한 번만 실제 색으로 풀어 둔다
+    function colorOf(c) {
+      if (!c) return base;
+      if (!(c in rgb)) { g.c.style.color = c; rgb[c] = getComputedStyle(g.c).color || base; g.c.style.color = ''; }
+      return rgb[c];
+    }
+    var pos = _mm.layout.pos, colors = _mm.colors || {};
+    Object.keys(pos).forEach(function (id) {
+      var p = pos[id];
+      oc.fillStyle = colorOf(colors[id]);
+      oc.globalAlpha = p.depth === 0 ? 0.95 : p.depth === 1 ? 0.75 : 0.45;
+      oc.fillRect(g.ox + p.x * g.k, g.oy + p.y * g.k, Math.max(2, p.w * g.k), Math.max(2, p.h * g.k));
+    });
+    mi = _mm.miniImg = { layout: _mm.layout, w: g.c.width, h: g.c.height, img: off };
+  }
   ctx.clearRect(0, 0, g.c.width, g.c.height);
-  var pos = _mm.layout.pos;
-  var stage = _mmEl('mmStage');
-  Object.keys(pos).forEach(function (id) {
-    var p = pos[id];
-    var el = stage && stage.querySelector('.mm-node[data-id="' + id + '"]');
-    ctx.fillStyle = (el && getComputedStyle(el).borderTopColor) || cs.color;
-    ctx.globalAlpha = p.depth === 0 ? 0.95 : p.depth === 1 ? 0.75 : 0.45;
-    ctx.fillRect(g.ox + p.x * g.k, g.oy + p.y * g.k, Math.max(2, p.w * g.k), Math.max(2, p.h * g.k));
-  });
-  ctx.globalAlpha = 1;
+  ctx.drawImage(mi.img, 0, 0);
   var cv = _mmEl('mmCanvas');
   if (!cv) return;
   // 지금 보이는 영역

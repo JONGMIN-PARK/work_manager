@@ -1596,3 +1596,15 @@ body.mm-zen-body{overflow:hidden}
 .mm-st-matrix .mm-node.mm-main{box-shadow:none}
 /* ═══ 🧠 마인드맵 떠있는 주제 (v13.246) ═══ */
 .mm-node.mm-float{box-shadow:0 2px 0 color-mix(in srgb,var(--mm-c) 25%,transparent),0 6px 18px rgba(15,23,42,.12);border-style:dashed}
+/* ═══ 🧠 마인드맵 화면 정리 — 더보기 메뉴 · 패널 칸 접기 (v13.247) ═══ */
+.mm-moremenu{min-width:200px}
+.mm-moremenu button{display:flex;align-items:center;gap:8px}
+.mm-moremenu button span:first-of-type{flex:1}
+.mm-moremenu .mm-ic{color:var(--t4)}
+.mm-pn-foldable>.mm-pn-h{cursor:pointer;user-select:none;justify-content:flex-start;gap:4px}
+.mm-pn-foldable>.mm-pn-h::before{content:'';width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--t5);transition:transform .15s;flex:none}
+.mm-pn-foldable>.mm-pn-h>.mm-hint:last-child,.mm-pn-foldable>.mm-pn-h>button:last-child{margin-left:auto}
+.mm-pn-foldable>.mm-pn-h:hover{color:var(--t2)}
+.mm-pn-folded>.mm-pn-h::before{transform:rotate(-90deg)}
+.mm-pn-folded>:not(.mm-pn-h){display:none!important}
+.mm-pn-folded{padding-bottom:10px}

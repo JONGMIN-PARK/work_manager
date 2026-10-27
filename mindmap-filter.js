@@ -85,13 +85,14 @@ function _mmFilterPrepare(root) {
   _mm.vfHits = hits || [];
   var dim = {};
   if (hits) {
-    var keep = {};
+    var keep = {}, up = {}, byId = {};
+    mmWalk(root, function (n, parent) { byId[n.id] = n; if (parent) up[n.id] = parent.id; });
     hits.forEach(function (id) {
-      keep[id] = true;
-      var f = mmFind(root, id);
-      while (f && f.parent) { keep[f.parent.id] = true; f = mmFind(root, f.parent.id); }
+      // 위로 (조상) — 한 번에 하나씩 찾으면 주제가 많을 때 느려서 부모 표를 씀
+      for (var u = up[id]; u && !keep[u]; u = up[u]) keep[u] = true;
+      if (keep[id] === 'sub') return;
       // 맞는 주제의 하위는 함께 또렷하게 (가지째 보기)
-      mmWalk(mmFind(root, id).node, function (c) { keep[c.id] = true; });
+      mmWalk(byId[id], function (c) { keep[c.id] = 'sub'; });
     });
     mmWalk(root, function (n) { if (!keep[n.id]) dim[n.id] = true; });
   }

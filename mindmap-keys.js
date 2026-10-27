@@ -264,6 +264,7 @@ function _mmkFocusPanel(id) {
   _mmPaintPanel();
   var el = _mmEl(id);
   if (!el) return;
+  if (typeof _mmPnUnfoldFor === 'function') _mmPnUnfoldFor(el);
   el.focus();
   if (el.select) el.select();
 }
