@@ -303,7 +303,8 @@ function _pdDetailFooterHtml(id) {
     '<button class="btn btn-d btn-s" onclick="' + _PD_CLOSE_JS + ';deleteProjectUI(\'' + id + '\')">🗑 삭제</button>' +
   '</div>' +
   '<div id="progressHistorySection" style="margin-top:16px"></div>' +
-  '<div id="pdCommentsSection" style="margin-top:16px"></div>';
+  '<div id="pdCommentsSection" style="margin-top:16px"></div>' +
+  '<div id="pdMindmapSection" style="margin-top:16px"></div>';
 }
 
 /* 우측 슬라이드 패널 + 백드롭 부착, 비동기 섹션(진척 히스토리·요소기술·코멘트) 로드 */
@@ -385,6 +386,8 @@ function _pdAttachDetailPanel(id, proj, html) {
   if (typeof renderCommentThread === 'function') {
     renderCommentThread('project', id, 'pdCommentsSection');
   }
+  // 관련 마인드맵 (마인드맵 사용 권한이 있을 때만 — mindmap-extra.js)
+  if (typeof mmProjectSection === 'function') mmProjectSection(id, 'pdMindmapSection');
 
   var backdrop = document.createElement('div');
   backdrop.id = 'projDetailBackdrop';

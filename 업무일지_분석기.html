@@ -26,11 +26,14 @@
 <script defer src="kr-holidays.js?v=1" onerror="console.warn('kr-holidays.js 로드 실패')"></script>
 <script defer src="calendar.js?v=8" onerror="console.warn('calendar.js 로드 실패')"></script>
 <script defer src="timeline.js?v=12" onerror="console.warn('timeline.js 로드 실패')"></script>
-<script defer src="project-detail.js?v=5" onerror="console.warn('project-detail.js 로드 실패')"></script>
+<script defer src="project-detail.js?v=6" onerror="console.warn('project-detail.js 로드 실패')"></script>
 <script defer src="dashboard.js?v=5" onerror="console.warn('dashboard.js 로드 실패')"></script>
 <script defer src="pipeline.js?v=6" onerror="console.warn('pipeline.js 로드 실패')"></script>
 <script defer src="prestudy.js?v=4" onerror="console.warn('prestudy.js 로드 실패')"></script>
 <script defer src="tech.js?v=3" onerror="console.warn('tech.js 로드 실패')"></script>
+<script defer src="mindmap-layout.js?v=2" onerror="console.warn('mindmap-layout.js 로드 실패')"></script>
+<script defer src="mindmap.js?v=2" onerror="console.warn('mindmap.js 로드 실패')"></script>
+<script defer src="mindmap-extra.js?v=1" onerror="console.warn('mindmap-extra.js 로드 실패')"></script>
 <script defer src="order-view.js?v=5" onerror="console.warn('order-view.js 로드 실패')"></script>
 <script defer src="issue-manager.js?v=5" onerror="console.warn('issue-manager.js 로드 실패')"></script>
 <script defer src="document-manager.js?v=6" onerror="console.warn('document-manager.js 로드 실패')"></script>
@@ -56,13 +59,13 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" onerror="console.warn('mammoth.js 로드 실패')"></script>
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.215';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.217';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -94,6 +97,7 @@
   <div class="tabs page-tabs" id="pageTabs" role="tablist" aria-label="메인 탭">
     <button class="tab on" data-page="team" onclick="setPage('team')" role="tab" aria-selected="true" aria-controls="modeTabs">👥 팀 관리</button>
     <button class="tab" data-page="project" onclick="setPage('project')" role="tab" aria-selected="false" aria-controls="modeTabsProj">📁 프로젝트 관리</button>
+    <button class="tab" data-page="mindmap" onclick="setPage('mindmap')" role="tab" aria-selected="false" id="tabMindmap" style="display:none" title="생각 정리 · 업무 분장 · 프로젝트 구조 (관리자가 지정한 사용자)">🧠 마인드맵</button>
     <button class="tab" data-page="useradmin" onclick="setPage('useradmin')" role="tab" aria-selected="false" id="tabUserAdmin" style="display:none">👤 사용자 관리</button>
     <button class="tab" data-page="weekly_report" onclick="setPage('weekly_report')" role="tab" aria-selected="false" id="tabWeeklyReport" style="display:none">📅 주간 업무</button>
     <button class="tab" data-page="messages" onclick="setPage('messages')" role="tab" aria-selected="false" style="position:relative">✉️ 메시지<span id="msgBadge" style="display:none;background:#EF4444;color:#fff;font-size:9px;font-weight:700;border-radius:9px;min-width:15px;height:15px;align-items:center;justify-content:center;padding:0 3px;position:absolute;top:-4px;right:-4px;pointer-events:none">0</span></button>
@@ -380,6 +384,7 @@
   <!-- 패치노트 -->
   <div id="mPatchNotes" class="hidden"></div>
   <div id="mMessages" class="hidden"></div>
+  <div id="mMindmap" class="hidden"><div id="mindmapWrap"></div></div>
 
   <div id="mCalendar" class="hidden">
     <div id="dashCards" style="margin-bottom:16px"></div>

@@ -30,6 +30,7 @@ DELETE /api/milestones/:id/logs
 DELETE /api/milestones/:id/logs/:logId
 DELETE /api/milestones/:id/logs/:logId/hard
 DELETE /api/milestones/:id/logs/trash/empty
+DELETE /api/mindmaps/:id
 DELETE /api/notifications/:id
 DELETE /api/orders/:orderNo
 DELETE /api/prestudies/:id
@@ -136,6 +137,13 @@ GET /api/milestones
 GET /api/milestones/:id/assignments
 GET /api/milestones/:id/logs
 GET /api/milestones/:id/logs/trash
+GET /api/mindmaps
+GET /api/mindmaps/:id
+GET /api/mindmaps/access/users
+GET /api/mindmaps/ai/status
+GET /api/mindmaps/by-link
+GET /api/mindmaps/members
+GET /api/mindmaps/search-refs
 GET /api/notifications
 GET /api/notifications/preferences
 GET /api/notifications/unread-count
@@ -318,6 +326,11 @@ POST /api/milestones/:id/logs
 POST /api/milestones/:id/logs/:logId/restore
 POST /api/milestones/:id/logs/:logId/toggle-check
 POST /api/milestones/:id/transfer
+POST /api/mindmaps
+POST /api/mindmaps/:id/duplicate
+POST /api/mindmaps/ai
+POST /api/mindmaps/generate
+POST /api/mindmaps/resolve
 POST /api/orders
 POST /api/orders/:orderNo/renumber
 POST /api/orders/bulk
@@ -424,6 +437,9 @@ PUT /api/issues/:id
 PUT /api/meetings/:id
 PUT /api/meetings/:id/actions/:aid
 PUT /api/milestones/:id
+PUT /api/mindmaps/:id
+PUT /api/mindmaps/:id/pin
+PUT /api/mindmaps/access/users/:userId
 PUT /api/notifications/:id/read
 PUT /api/notifications/preferences
 PUT /api/notifications/read-all

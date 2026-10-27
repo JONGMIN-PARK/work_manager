@@ -221,6 +221,7 @@ async function recommendSimilarCases(current, candidates) {
 
 module.exports = {
   isReady: isReady,
+  callJson: callJson,
   analyzeTicket: analyzeTicket,
   summarizeWeeklyStats: summarizeWeeklyStats,
   recommendSimilarCases: recommendSimilarCases

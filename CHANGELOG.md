@@ -1,5 +1,28 @@
 # Work Manager — 변경 이력
 
+## v13.217 (2026-10-27) — 마인드맵 Phase 2 (앱 데이터 연동 · XMind 고급 · AI)
+
+- 기획: docs/PRD_마인드맵.md v0.4 — 12장에 구현 결과 · 기획 대비 달라진 점 · Phase 3 로 넘긴 것.
+- migrations/057_mindmap_links.sql: 참조 노드 역인덱스 (map_id, node_id) → (link_type, link_id). POST/PUT(doc)/duplicate 때 `syncLinks` 로 삭제 후 삽입.
+- lib/mindmap-data.js(신규): `resolve(req, refs)` — 종류별 1쿼리(`= ANY`), 각 화면 목록과 같은 가시성(프로젝트 visibleProjectsSql, 마일스톤·회의·이슈 accessibleProjectsSubquery), 안 보이면 같은 테넌트 존재 여부로 locked/missing 구분(제목 미노출), 팀원 담당 건수도 보이는 프로젝트 안에서만. `search` · `generate`(project/team/mine — team 은 내 부서, 다른 부서·`__all` 은 admin) · `refsOfDoc`.
+- services/ai-mindmap.service.js(신규): expand · fromText · wbs · summarize. 재귀 스키마 대신 평평한 `{text, parent}` 목록 + `cleanFlat`(부모 재번호·고아 제거·개수/일수 제한). ai-claude.service 에 `callJson` export 추가.
+- routes/mindmaps.js: scope `dept`(department_id = 내 부서, admin 지정 가능; 읽기 = 같은 부서·viewers·admin, 편집 = 소유자·editors·admin) · POST /resolve · GET /search-refs · POST /generate · GET /by-link(내가 읽을 수 있는 맵만, 프로젝트 소속 맵 포함) · GET /ai/status · POST /ai(시간당 30회, ai_query_usage·감사 로그). 시트 20개 상한. 라우트 스냅샷 +6.
+- mindmap-layout.js: 경계 여백(MM_BOUND_PAD)·요약 글상자 크기를 블록 계산에 반영, `mmDecorations`(경계 사각형 · 요약 중괄호 path · bounds 확장) · `mmNumbering` · `mmRelationPath` · `mmFromXmindSheets`(마커·task 진척·접힘·경계 범위·요약 주제·관계선·structureClass) · `mmToOpml` · `mmFromPlainTree`. 테스트 +5.
+- mindmap.js: 시트 탭(`_mm.sheetIdx`, 스냅샷 포함) · 참조 상태 한 줄(`_mmRefLine`, `/resolve` 결과 `_mm.refs`) · 경계/요약/관계선/번호 그리기 · 관계 잇기 모드(relFrom, Esc 취소) · 패널(앱 데이터 연결·승격 · 구조 · 관계) · 저장은 `_mmDocForSave`(_ai 노드·끊긴 관계선 제외) · 새 맵 모달(자동 생성·AI optgroup, 부서 선택) · 가져오기 모달(.xmind/.opml). 패널은 체크박스 변경 땐 다시 그림(딸린 입력칸 표시). 시트 추가 뒤 키 입력을 캔버스로.
+- mindmap-extra.js(신규): AI 미리보기(_ai)·채택·버리기, 연결 창, 참조 열기(showProjectDetail·showIssueDetail·techOpenModal·psOpenModal·showASDetail), 승격(POST /api/milestones · /api/issues 후 ref, `_emitBus`), 원본과 맞추기, XMind 8 content.xml → content.json 모양 변환, OPML 가져오기/내보내기, 프로젝트 상세 `mmProjectSection`.
+- project-detail.js: `#pdMindmapSection` + `mmProjectSection` 호출 (스냅샷 3개 갱신). style.css `.mm-sheet*` · `.mm-ref*` · `.mm-boundary` · `.mm-sumlabel` · `.mm-relation` · `.mm-ai` 등.
+- __tests__/ai-mindmap.test.js.
+
+## v13.216 (2026-10-27) — 마인드맵 (Phase 1)
+
+- 기획: docs/PRD_마인드맵.md (v0.3, Phase 1 구현 반영).
+- migrations/056_mindmaps.sql: `mindmaps` — 맵 1행 + 노드 트리 `doc` JSONB(`{sheets:[{id,title,structure,root}]}`), scope(personal|project|org)·project_id·editors·viewers·pinned_by·node_count·version·soft delete.
+- middleware/mindmap-access.js: admin 자동 + user_settings `mindmap_access`.enabled (operator.js 패턴). /api/auth/me 에 `mindmapAccess`.
+- routes/mindmaps.js(전 라우트 requireMindmapAccess): GET / (doc 제외, 가시성 = 소유자·editors·viewers·org·접근 가능 프로젝트, admin 은 + 남의 personal 제외 전부) · GET/PUT/DELETE /:id · POST / · POST /:id/duplicate(내 개인 맵) · PUT /:id/pin(version 안 올림) · GET /members · GET/PUT /access/users(/:userId)(admin, 감사 로그 mindmap.access_grant/revoke). PUT 은 version 필수 → 불일치 409 CONFLICT {latest}. doc 검증: 노드 id·children 배열·깊이 60·노드 2000·2MB. 범위·공유 변경은 소유자/admin 만, 공유 대상은 사용 권한 있는 같은 테넌트 활성 사용자로 정리. 프로젝트 맵 권한은 lib/project-access(canReadById/canEditById).
+- mindmap-layout.js(신규, 순수 · test/mindmap-layout.test.js): mmFind·mmWalk·mmMoveNode(같은 부모 뒤로 이동 보정, 1단계 이탈 시 side 해제)·mmCloneBranch·mmLayout(balanced 좌우 가벼운 쪽 채우기·right·down, 접힌 하위 제외)·mmEdgePath·mmToMarkdown·mmFromMarkdown(제목 계층 + 목록 들여쓰기·체크박스).
+- mindmap.js(신규): 목록(탭·검색·즐겨찾기·복제·삭제), 새 맵/가져오기/사용 권한/공유/단축키 모달(wmGuardedModal), 편집기 — DOM 노드 측정 → mmLayout → 절대배치 + SVG 곡선, transform 줌/팬, 키 입력은 캔버스 안 투명 textarea `#mmSink`(IME 조합 시작 시 그 자체가 인라인 편집칸 → 한글 첫 글자 유지), 스냅샷 되돌리기 50, 1.5초 디바운스 저장, 편집 잠금(/api/locks resourceType=mindmap, 2분 연장 전에 GET 으로 탈취 확인 → 보기 전용 전환), 아웃라인·집중 모드·PNG(html2canvas 오프스크린 복제)·Markdown 내보내기. mode.js setPage('mindmap') + 떠날 때 mmOnLeave(저장·잠금 해제), auth.js updateAuthUI 탭 표시. style.css `.mm-*` (노드 `width:max-content` — 폭 0 스테이지 안 절대배치 축소 방지).
+- 라우트 스냅샷 +10.
+
 ## v13.215 (2026-10-26) — 텔레그램 변경 내용 알림 (주간업무보고 · 프로젝트)
 
 - lib/change-diff.js(신규, 순수): `diffProject`·`diffMilestone`·`msCreated/msDeleted`·`diffChecklist`(iid 기준)·`specChanges`·`diffWeeklyItems`(client|name 기준). 항목 형식 `{key,label,from,to}` / `{key,text}` / `{key,label,list}`.

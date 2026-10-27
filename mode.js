@@ -4,6 +4,7 @@
 let curMode='weekly';
 var curPage='team';
 function setPage(page){
+  if(curPage==='mindmap'&&page!=='mindmap'&&typeof mmOnLeave==='function')mmOnLeave();  // 저장 마무리 · 편집 잠금 해제
   curPage=page;
   document.querySelectorAll('#pageTabs .tab').forEach(function(t){var sel=t.dataset.page===page;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
   document.getElementById('modeTabs').classList.toggle('hidden',page!=='team');
@@ -12,7 +13,7 @@ function setPage(page){
   var _opTab=document.querySelector('#modeTabsProj .tab[data-m="operator"]');
   if(_opTab)_opTab.classList.toggle('hidden',!(typeof isOperator==='function'&&isOperator()));
   // 모든 모드 숨기기
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   if(typeof _applyWideMode==='function')_applyWideMode(false);  // 타임라인 외 페이지는 기본 폭
   // 해당 페이지의 첫 탭 활성화
   if(page==='useradmin'){
@@ -30,6 +31,12 @@ function setPage(page){
     document.getElementById('modeTabsProj').classList.add('hidden');
     var pn=document.getElementById('mPatchNotes');if(pn)pn.classList.remove('hidden');
     renderPatchNotes();
+  }else if(page==='mindmap'){
+    document.getElementById('modeTabs').classList.add('hidden');
+    document.getElementById('modeTabsProj').classList.add('hidden');
+    var mmw=document.getElementById('mMindmap');if(mmw)mmw.classList.remove('hidden');
+    if(typeof _applyWideMode==='function')_applyWideMode(true);  // 캔버스는 창 너비 전체
+    if(typeof renderMindmap==='function')renderMindmap();
   }else if(page==='messages'){
     document.getElementById('modeTabs').classList.add('hidden');
     document.getElementById('modeTabsProj').classList.add('hidden');
@@ -80,7 +87,7 @@ function setMode(m){
   var projModes=['pipeline','calendar','timeline','orders','prestudy','tech','issues','docs','as','operator'];
   var tabBar=teamModes.includes(m)?'#modeTabs':'#modeTabsProj';
   document.querySelectorAll(tabBar+' .tab').forEach(function(t){var sel=t.dataset.m===m;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',tech:'mTech',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
   _applyWideMode(projModes.includes(m));  // v13.189 프로젝트 관리 탭은 전부 창 너비 사용 (v13.185 타임라인에서 확대)

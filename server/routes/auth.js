@@ -3,6 +3,7 @@ var router = express.Router();
 var db = require('../config/db');
 var authService = require('../services/auth.service');
 var authMiddleware = require('../middleware/auth');
+var mindmapAccess = require('../middleware/mindmap-access');
 var config = require('../config');
 var notificationService = require('../services/notification.service');
 var httpErr = require('../lib/http-errors');
@@ -239,6 +240,8 @@ router.get('/me', authMiddleware.authenticate, async function (req, res) {
       } catch (e) { /* user_settings 없을 수 있음 */ }
     }
     sanitized.operatorMode = operatorMode;
+    // 마인드맵 사용 권한 (admin 자동 또는 user_settings 'mindmap_access' 부여)
+    sanitized.mindmapAccess = await mindmapAccess.hasMindmapAccessByUser(user.id, user.role);
 
     res.json({ data: sanitized });
   } catch (e) {

@@ -496,6 +496,11 @@ function updateAuthUI() {
   if (adminTab) {
     adminTab.style.display = currentUser.role === 'admin' ? '' : 'none';
   }
+  // 마인드맵 — 관리자 + 관리자가 지정한 사용자 (mindmapAccess, /api/auth/me)
+  var mmTab = document.getElementById('tabMindmap');
+  if (mmTab) {
+    mmTab.style.display = (currentUser.role === 'admin' || currentUser.mindmapAccess) ? '' : 'none';
+  }
   var wrTab = document.getElementById('tabWeeklyReport');
   if (wrTab) {
     wrTab.style.display = currentUser.role === 'admin' ? '' : 'none';
