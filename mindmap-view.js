@@ -12,51 +12,64 @@ function _mmRenderEditor() {
   var row = _mm.row;
   var sc = MM_SCOPE[row.scope] || MM_SCOPE.personal;
   var st = _mmSheet().structure || 'balanced';
-  var tool = function (act, label, title) { return '<button class="mm-tool mm-edit-only" data-act="' + act + '" title="' + title + '">' + label + '</button>'; };
+  // 왼쪽 도구: 아이콘 + 작은 이름 / 상단: 묶음별 아이콘 버튼 (편집 전용은 mm-edit-only — 보기 전용이면 숨김)
+  var tool = function (act, icon, label, title, always) {
+    return '<button class="mm-rail-btn' + (always ? '' : ' mm-edit-only') + '" data-act="' + act + '" title="' + title + '">' + _mmIcon(icon, 18) + '<span>' + label + '</span></button>';
+  };
+  var tb = function (act, icon, label, title, extra) {
+    return '<button class="mm-tbtn' + (extra || '') + '" data-act="' + act + '"' + (title ? ' title="' + title + '"' : '') + '>' + _mmIcon(icon) + (label ? '<span>' + label + '</span>' : '') + '</button>';
+  };
+  var menuBtn = function (menuId, icon, label, title, extraWrap) {
+    return '<div class="mm-menu-wrap' + (extraWrap || '') + '"><button class="mm-tbtn" data-act="menu" data-menu="' + menuId + '"' + (title ? ' title="' + title + '"' : '') + '>' + _mmIcon(icon) + (label ? '<span>' + label + '</span>' : '') + '</button>';
+  };
   var h = '<div class="mm-ed' + (_mm.zen ? ' mm-zen' : '') + '" id="mmEd">' +
     '<div class="mm-top">' +
-    '<button class="btn btn-g btn-s" data-act="back">← 목록</button>' +
-    '<input id="mmTitle" class="mm-title" value="' + _mmEsc(row.title) + '" maxlength="255">' +
-    '<span class="mm-badge">' + sc.i + ' ' + sc.l + (row.project_name ? ' · ' + _mmEsc(row.project_name) : '') + '</span>' +
-    '<span id="mmStatus" class="mm-status"></span>' +
+    '<button class="mm-tbtn mm-tbtn-icon" data-act="back" title="목록으로">' + _mmIcon('back', 18) + '</button>' +
+    '<div class="mm-titlebox"><input id="mmTitle" class="mm-title" value="' + _mmEsc(row.title) + '" maxlength="255">' +
+    '<div class="mm-subline"><span class="mm-badge">' + sc.i + ' ' + sc.l + (row.project_name ? ' · ' + _mmEsc(row.project_name) : '') + '</span>' +
+    '<span id="mmStatus" class="mm-status"></span></div></div>' +
     '<span class="mm-flex"></span>' +
-    '<input id="mmSearch" class="mm-input mm-search" placeholder="🔍 검색 (Ctrl+F)">' +
+    '<label class="mm-searchbox">' + _mmIcon('search', 14) + '<input id="mmSearch" class="mm-search" placeholder="맵에서 찾기  Ctrl+F"></label>' +
+    '<span class="mm-tsep"></span>' +
     '<div class="mm-seg"><button data-act="view-map" id="mmVMap">맵</button><button data-act="view-outline" id="mmVOut">아웃라인</button></div>' +
-    '<select id="mmStructure" class="mm-input mm-edit-only" title="구조 (Ctrl+Shift+L)">' + MM_STRUCTURES.map(function (s) { return '<option value="' + s.k + '"' + (s.k === st ? ' selected' : '') + '>' + s.l + '</option>'; }).join('') + '</select>' +
-    '<div class="mm-menu-wrap mm-edit-only"><button class="btn btn-g btn-s" data-act="menu" data-menu="mmAlignMenu" title="같은 단계 맞춤 · 글자 정렬">⇶ 정렬</button>' +
-    '<div class="mm-menu hidden" id="mmAlignMenu"></div></div>' +
-    '<button class="btn btn-g btn-s" data-act="zen" title="집중 모드 (Ctrl+Shift+F)">⛶</button>' +
-    (_mm.doc.meta && _mm.doc.meta.gen ? '<button class="btn btn-g btn-s mm-edit-only" data-act="resync" title="원본 데이터에 새로 생긴 항목을 맵에 추가">↻ 원본과 맞추기</button>' : '') +
-    '<div class="mm-menu-wrap mm-edit-only' + (_mm.aiReady ? '' : ' hidden') + '" id="mmAiWrap"><button class="btn btn-g btn-s" data-act="menu" data-menu="mmAiMenu">✨ AI</button>' +
+    '<select id="mmStructure" class="mm-select mm-edit-only" title="구조 (Ctrl+Shift+L)">' + MM_STRUCTURES.map(function (s) { return '<option value="' + s.k + '"' + (s.k === st ? ' selected' : '') + '>' + s.l + '</option>'; }).join('') + '</select>' +
+    menuBtn('mmAlignMenu', 'align', '정렬', '같은 단계 맞춤 · 글자 정렬 (Alt+G)', ' mm-edit-only') + '<div class="mm-menu hidden" id="mmAlignMenu"></div></div>' +
+    (_mm.doc.meta && _mm.doc.meta.gen ? tb('resync', 'sync', '원본과 맞추기', '원본 데이터에 새로 생긴 항목을 맵에 추가', ' mm-edit-only') : '') +
+    '<span class="mm-tsep"></span>' +
+    menuBtn('mmAiMenu', 'sparkles', 'AI', 'AI 도우미', ' mm-edit-only' + (_mm.aiReady ? '' : ' hidden')).replace('<div class="mm-menu-wrap', '<div id="mmAiWrap" class="mm-menu-wrap') +
     '<div class="mm-menu hidden" id="mmAiMenu">' +
-    '<button data-act="ai-expand">💡 하위 주제 제안 <span class="mm-hint">선택 주제</span></button>' +
+    '<button data-act="ai-expand">💡 하위 주제 제안 <span class="mm-hint">Alt+A</span></button>' +
     '<button data-act="ai-summary">} 가지 요약 <span class="mm-hint">선택 주제</span></button>' +
     '<button data-act="ai-text">📝 글로 가지 만들기</button>' +
     '<button data-act="ai-wbs">🏗 WBS 초안 <span class="mm-hint">프로젝트</span></button></div></div>' +
-    '<div class="mm-menu-wrap"><button class="btn btn-g btn-s" data-act="menu" data-menu="mmExportMenu">⤓ 내보내기</button>' +
+    menuBtn('mmExportMenu', 'download', '', '내보내기') +
     '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
     '<button data-act="export-opml">OPML (.opml)</button></div></div>' +
-    ((row.is_owner || _mmIsAdmin()) ? '<button class="btn btn-g btn-s" data-act="share">🔗 공유</button>' : '') +
-    '<button class="btn btn-g btn-s" data-act="palette" title="명령 찾기 (Ctrl+/)">⌘</button>' +
-    '<button class="btn btn-g btn-s" data-act="help" title="단축키 (F1)">?</button>' +
+    ((row.is_owner || _mmIsAdmin()) ? tb('share', 'share', '공유', '공유 설정', ' mm-tbtn-accent') : '') +
+    '<span class="mm-tsep"></span>' +
+    tb('zen', 'zen', '', '집중 모드 (Ctrl+Shift+F)', ' mm-tbtn-icon') +
+    tb('palette', 'command', '', '명령 찾기 (Ctrl+/)', ' mm-tbtn-icon') +
+    tb('help', 'help', '', '단축키 (F1)', ' mm-tbtn-icon') +
     '</div>' +
     '<div id="mmBanner"></div>' +
     '<div id="mmAiBar"></div>' +
     '<div class="mm-sheets" id="mmSheets"></div>' +
     '<div class="mm-body">' +
     '<div class="mm-tools">' +
-    tool('child', '＋하위', '하위 주제 추가 (Tab)') + tool('sibling', '＋형제', '형제 주제 추가 (Enter)') + tool('parent', '＋부모', '부모 주제 삽입 (Ctrl+Enter)') +
-    tool('del', '삭제', '삭제 (Delete) · 여러 개: Ctrl+클릭 / Shift+끌기') + '<span class="mm-tool-sep"></span>' +
-    tool('undo', '↶ 취소', '되돌리기 (Ctrl+Z)') + tool('redo', '↷ 다시', '다시 실행 (Ctrl+Y)') + '<span class="mm-tool-sep"></span>' +
-    tool('relation', '↔ 관계', '관계선 (Alt+R) — 누른 뒤 이을 주제를 클릭, Esc 취소') + tool('link-ref', '🔗 연결', '앱 데이터 연결 (Alt+L) — 프로젝트·마일스톤·이슈·팀원…') +
-    '<button class="mm-tool" data-act="refs-refresh" title="연결된 항목 상태 새로고침">↻ 상태</button><span class="mm-tool-sep"></span>' +
-    '<button class="mm-tool" data-act="fold" title="접기/펴기 (Space)">접기</button>' +
-    '<button class="mm-tool" data-act="fold-all" title="1단계만 보기">1단계</button>' +
-    '<button class="mm-tool" data-act="unfold-all" title="모두 펴기">모두 펴기</button>' +
+    tool('child', 'child', '하위', '하위 주제 추가 (Tab)') + tool('sibling', 'sibling', '형제', '형제 주제 추가 (Enter · 위는 Shift+Enter)') + tool('parent', 'parent', '부모', '부모 주제 끼워 넣기 (Ctrl+Enter)') +
+    tool('del', 'trash', '삭제', '삭제 (Delete) · 여러 개: Ctrl+클릭 / Shift+끌기') + '<span class="mm-tool-sep"></span>' +
+    tool('undo', 'undo', '취소', '되돌리기 (Ctrl+Z)') + tool('redo', 'redo', '다시', '다시 실행 (Ctrl+Y)') + '<span class="mm-tool-sep"></span>' +
+    tool('relation', 'relation', '관계', '관계선 (Alt+R) — 누른 뒤 이을 주제를 클릭, Esc 취소') + tool('link-ref', 'link', '연결', '앱 데이터 연결 (Alt+L) — 프로젝트·마일스톤·이슈·팀원…') +
+    tool('refs-refresh', 'refresh', '상태', '연결된 항목 상태 새로고침', true) + '<span class="mm-tool-sep"></span>' +
+    tool('fold', 'fold', '접기', '접기/펴기 (Space)', true) + tool('fold-all', 'level1', '1단계', '1단계만 보기', true) + tool('unfold-all', 'unfold', '펴기', '모두 펴기', true) +
     '</div>' +
     '<div class="mm-canvas" id="mmCanvas"><div class="mm-stage" id="mmStage"></div>' +
     '<textarea id="mmSink" class="mm-sink" aria-label="마인드맵 키 입력" autocomplete="off" spellcheck="false"></textarea>' +
-    '<div class="mm-zoom"><button data-act="zoom-out">−</button><span id="mmZoomV">100%</span><button data-act="zoom-in">＋</button><button data-act="fit" title="화면 맞춤">⤢</button></div>' +
+    '<canvas class="mm-minimap' + (_mmMiniOn() ? '' : ' hidden') + '" id="mmMini" width="176" height="114" title="눌러서 그 자리로 이동"></canvas>' +
+    '<div class="mm-zoom"><button data-act="zoom-out" title="축소 (Ctrl+-)">' + _mmIcon('minus', 14) + '</button><span id="mmZoomV">100%</span>' +
+    '<button data-act="zoom-in" title="확대 (Ctrl+=)">' + _mmIcon('plus', 14) + '</button><span class="mm-zsep"></span>' +
+    '<button data-act="fit" title="화면 맞춤 (Ctrl+0)">' + _mmIcon('fit', 14) + '</button>' +
+    '<button data-act="minimap" id="mmMiniBtn" class="' + (_mmMiniOn() ? 'on' : '') + '" title="미니맵">' + _mmIcon('map', 14) + '</button></div>' +
     '<button class="mm-zen-exit" data-act="zen">집중 모드 끝내기 (Esc)</button></div>' +
     '<div class="mm-outline hidden" id="mmOutline"></div>' +
     '<div class="mm-panel" id="mmPanel"></div>' +
@@ -288,7 +301,7 @@ function _mmNodeHtml(n, depth, color, num) {
   var hit = _mm.hits.indexOf(n.id) >= 0;
   var cls = 'mm-node ' + (depth === 0 ? 'mm-root' : depth === 1 ? 'mm-main' : 'mm-topic2') +
     ((n.done || _mmRefDone(n)) ? ' mm-done' : '') + (hit ? ' mm-hit' : '') + (n.id === _mm.sel ? ' mm-sel' : '') + (n.color ? ' mm-colored' : '') +
-    (n.ref ? ' mm-has-ref' : '') + (n._ai ? ' mm-ai' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '');
+    (n.ref ? ' mm-has-ref' : '') + (n._ai ? ' mm-ai' : '') + (n.collapsed && (n.children || []).length ? ' mm-folded' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '');
   var mk = '';
   (n.markers || []).forEach(function (m) {
     var pm = /^priority-(\d)$/.exec(m);
@@ -377,7 +390,13 @@ function _mmPaint() {
     var p = lay.pos[id];
     if (!p.parentId) return;
     var pp = lay.pos[p.parentId];
-    paths.push('<path d="' + mmEdgePath(pp, p, st) + '" class="mm-edge" style="stroke:' + colors[id] + ';stroke-width:' + (p.depth === 1 ? 2.6 : p.depth === 2 ? 1.8 : 1.3) + '"/>');
+    if (p.depth <= 2) {
+      // 가지는 부모 쪽이 굵고 끝으로 갈수록 가늘게 (유료 마인드맵 툴의 기본 모양)
+      var w0 = p.depth === 1 ? 7 : 3.2, w1 = p.depth === 1 ? 2.4 : 1.4;
+      paths.push('<path d="' + mmEdgeShape(pp, p, st, w0, w1) + '" class="mm-branch" style="fill:' + colors[id] + '"/>');
+    } else {
+      paths.push('<path d="' + mmEdgePath(pp, p, st) + '" class="mm-edge" style="stroke:' + colors[id] + ';stroke-width:1.3"/>');
+    }
   });
   var svg = _mmEl('mmEdges');
   var w = (b.maxX - b.minX) + pad * 2, hh = (b.maxY - b.minY) + pad * 2;
@@ -403,10 +422,67 @@ function _mmPaint() {
   if (_mm.outline) _mmPaintOutline();
 }
 
+/* ═══ 미니맵 — 전체 축소 지도 + 지금 보이는 영역, 눌러서 이동 ═══ */
+function _mmMiniOn() {
+  try { return localStorage.getItem('mm-minimap') !== '0'; } catch (_) { return true; }
+}
+function mmToggleMinimap() {
+  var on = !_mmMiniOn();
+  try { localStorage.setItem('mm-minimap', on ? '1' : '0'); } catch (_) {}
+  var c = _mmEl('mmMini'), b = _mmEl('mmMiniBtn');
+  if (c) c.classList.toggle('hidden', !on);
+  if (b) b.classList.toggle('on', on);
+  _mmPaintMini();
+}
+function _mmMiniGeom() {
+  var c = _mmEl('mmMini');
+  if (!c || !_mm.layout) return null;
+  var b = _mm.layout.bounds, pad = 30;
+  var bw = b.maxX - b.minX + pad * 2, bh = b.maxY - b.minY + pad * 2;
+  var k = Math.min(c.width / bw, c.height / bh);
+  return { c: c, k: k, ox: (c.width - bw * k) / 2 - (b.minX - pad) * k, oy: (c.height - bh * k) / 2 - (b.minY - pad) * k };
+}
+function _mmPaintMini() {
+  var g = _mmMiniGeom();
+  if (!g || g.c.classList.contains('hidden')) return;
+  var ctx = g.c.getContext('2d');
+  var cs = getComputedStyle(g.c);
+  ctx.clearRect(0, 0, g.c.width, g.c.height);
+  var pos = _mm.layout.pos;
+  var stage = _mmEl('mmStage');
+  Object.keys(pos).forEach(function (id) {
+    var p = pos[id];
+    var el = stage && stage.querySelector('.mm-node[data-id="' + id + '"]');
+    ctx.fillStyle = (el && getComputedStyle(el).borderTopColor) || cs.color;
+    ctx.globalAlpha = p.depth === 0 ? 0.95 : p.depth === 1 ? 0.75 : 0.45;
+    ctx.fillRect(g.ox + p.x * g.k, g.oy + p.y * g.k, Math.max(2, p.w * g.k), Math.max(2, p.h * g.k));
+  });
+  ctx.globalAlpha = 1;
+  var cv = _mmEl('mmCanvas');
+  if (!cv) return;
+  // 지금 보이는 영역
+  var vx = -_mm.panX / _mm.zoom, vy = -_mm.panY / _mm.zoom, vw = cv.clientWidth / _mm.zoom, vh = cv.clientHeight / _mm.zoom;
+  ctx.strokeStyle = cs.outlineColor || '#5B8DEF';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(g.ox + vx * g.k, g.oy + vy * g.k, vw * g.k, vh * g.k);
+}
+/** 미니맵을 누르거나 끌면 그 자리를 화면 가운데로 */
+function _mmMiniPan(e) {
+  var g = _mmMiniGeom(), cv = _mmEl('mmCanvas');
+  if (!g || !cv) return;
+  var r = g.c.getBoundingClientRect();
+  var sx = ((e.clientX - r.left) * (g.c.width / r.width) - g.ox) / g.k;
+  var sy = ((e.clientY - r.top) * (g.c.height / r.height) - g.oy) / g.k;
+  _mm.panX = cv.clientWidth / 2 - sx * _mm.zoom;
+  _mm.panY = cv.clientHeight / 2 - sy * _mm.zoom;
+  _mmApplyTransform();
+}
+
 function _mmApplyTransform() {
   var stage = _mmEl('mmStage');
   if (!stage) return;
   stage.style.transform = 'translate(' + (_mm.panX || 0) + 'px,' + (_mm.panY || 0) + 'px) scale(' + _mm.zoom + ')';
+  _mmPaintMini();
   var z = _mmEl('mmZoomV');
   if (z) z.textContent = Math.round(_mm.zoom * 100) + '%';
 }

@@ -1112,3 +1112,108 @@ body.mm-zen-body{overflow:hidden}
 .mm-canvas.mm-dropping{box-shadow:inset 0 0 0 3px var(--ac)}
 .mm-imgview{display:flex;justify-content:center}
 .mm-imgview img{max-width:100%;max-height:78vh;border-radius:8px}
+/* 접기 버튼(−/개수)을 주제 칸 밖 연결선 위로 — 글자와 겹치지 않게 (v13.221) */
+.mm-fold{right:-24px}
+.mm-node[data-side="left"] .mm-fold{right:auto;left:-24px}
+.mm-node[data-side="down"] .mm-fold{bottom:-24px}
+.mm-node.mm-topic2{padding-right:8px;padding-left:8px}
+/* ═══ 🧠 마인드맵 디자인 다듬기 (v13.221) — 앞 규칙을 덮어씀. 색은 모두 테마 변수 ═══ */
+/* 편집기 틀 */
+.mm-ed{border-radius:14px;box-shadow:0 1px 2px rgba(15,23,42,.05),0 10px 30px rgba(15,23,42,.07)}
+.mm-ic{flex:none;display:block}
+.mm-top{gap:6px;padding:8px 12px;min-height:52px;background:var(--bg-ps,var(--bg-p))}
+.mm-titlebox{display:flex;flex-direction:column;min-width:0;max-width:360px;flex:0 1 360px}
+.mm-titlebox .mm-title{flex:none;width:100%;font-size:15px;font-weight:800;padding:2px 6px;letter-spacing:-.2px}
+.mm-subline{display:flex;gap:8px;align-items:center;padding-left:6px;min-height:18px}
+.mm-tbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:8px;border:1px solid transparent;background:none;color:var(--t3);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .12s,color .12s,border-color .12s}
+.mm-tbtn:hover{background:var(--bg-hv);color:var(--t1)}
+.mm-tbtn:active{transform:translateY(1px)}
+.mm-tbtn-icon{width:32px;padding:0;justify-content:center}
+.mm-tbtn-accent{background:var(--ac);color:#fff}
+.mm-tbtn-accent:hover{background:var(--ac);color:#fff;filter:brightness(1.08)}
+.mm-tsep{width:1px;height:20px;background:var(--bd);margin:0 4px;flex:none}
+.mm-searchbox{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t5);width:210px;box-sizing:border-box;cursor:text;transition:border-color .12s,box-shadow .12s}
+.mm-searchbox:focus-within{border-color:var(--ac);box-shadow:0 0 0 3px var(--ac-g)}
+.mm-searchbox .mm-search{border:none;background:none;outline:none;color:var(--t2);font-size:12px;width:100%;font-family:inherit;padding:0;height:auto}
+.mm-select{height:32px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t2);font-size:12px;padding:0 8px;font-family:inherit;cursor:pointer}
+.mm-select:focus{outline:none;border-color:var(--ac)}
+.mm-top .mm-seg{height:32px;box-sizing:border-box;border-radius:8px;background:var(--bg-i);padding:2px;gap:2px;align-items:center}
+.mm-top .mm-seg button{height:26px;border-radius:6px;padding:0 12px;border:none}
+.mm-top .mm-seg button+button{border-left:none}
+.mm-top .mm-seg button.on{background:var(--bg-ps,var(--bg-p));color:var(--t1);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.mm-menu{border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,.18);padding:5px}
+.mm-menu button{border-radius:7px}
+/* 시트 탭 */
+.mm-sheets{padding:6px 12px 0;gap:4px;background:var(--bg-ps,var(--bg-p))}
+.mm-sheet{border-radius:8px 8px 0 0;padding:6px 14px;font-size:12px}
+.mm-sheet.on{background:var(--bg);color:var(--t1)}
+/* 왼쪽 도구 */
+.mm-tools{width:62px;padding:8px 6px;gap:1px;background:var(--bg-ps,var(--bg-p));align-items:stretch;box-sizing:border-box}
+.mm-rail-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 2px 6px;border-radius:8px;border:none;background:none;color:var(--t4);font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .12s,color .12s}
+.mm-rail-btn:hover{background:var(--bg-hv);color:var(--t1)}
+.mm-rail-btn:active{transform:scale(.95)}
+.mm-ro .mm-rail-btn.mm-edit-only{display:none}
+.mm-tool-sep{margin:5px 10px}
+/* 캔버스 */
+.mm-canvas{background-color:var(--bg);background-image:radial-gradient(circle,color-mix(in srgb,var(--t6) 40%,transparent) 1px,transparent 1.3px);background-size:24px 24px}
+/* 가지 · 선 */
+.mm-branch{stroke:none;opacity:.92}
+.mm-edge{opacity:.85}
+/* 주제 */
+.mm-node{transition:box-shadow .15s,background-color .15s}
+.mm-node.mm-main{background:color-mix(in srgb,var(--mm-c) 8%,var(--bg-ps,var(--bg-p)));border:1.5px solid color-mix(in srgb,var(--mm-c) 75%,transparent);border-radius:10px;padding:8px 15px;color:var(--t1);
+  box-shadow:0 1px 2px rgba(15,23,42,.06),0 4px 14px color-mix(in srgb,var(--mm-c) 14%,transparent)}
+.mm-node.mm-root{background:linear-gradient(135deg,var(--mm-c),color-mix(in srgb,var(--mm-c) 72%,#0b1020));border:none;padding:13px 24px;border-radius:14px;letter-spacing:-.3px;
+  box-shadow:0 8px 24px color-mix(in srgb,var(--mm-c) 35%,transparent),inset 0 1px 0 rgba(255,255,255,.18)}
+.mm-node.mm-topic2{border-bottom:2px solid var(--mm-c);border-radius:6px 6px 0 0;padding:4px 8px 5px}
+.mm-node.mm-topic2:hover{background:color-mix(in srgb,var(--mm-c) 9%,transparent)}
+.mm-node.mm-main:hover{box-shadow:0 1px 2px rgba(15,23,42,.06),0 6px 18px color-mix(in srgb,var(--mm-c) 22%,transparent)}
+.mm-node.mm-sel{outline:none;box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ac),0 8px 22px var(--ac-g)}
+.mm-node.mm-multi{outline:none;background-color:var(--ac-g);box-shadow:0 0 0 2px var(--bg),0 0 0 4px color-mix(in srgb,var(--ac) 50%,transparent)}
+.mm-node.mm-multi.mm-sel{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ac)}
+.mm-node.mm-hit{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--mk-t)}
+.mm-node.mm-drop-child{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ac)}
+/* 접기 버튼 — 평소 숨김, 올리거나 선택하면 표시, 접히면 개수 배지 */
+.mm-fold{width:18px;min-width:18px;height:18px;padding:0;border-radius:50%;font-size:10px;color:var(--mm-c);border:1.5px solid var(--mm-c);background:var(--bg-ps,var(--bg-p));
+  box-shadow:0 1px 3px rgba(15,23,42,.15);opacity:0;transition:opacity .12s,transform .12s}
+.mm-node:hover>.mm-fold,.mm-node.mm-sel>.mm-fold,.mm-node.mm-folded>.mm-fold{opacity:1}
+.mm-node.mm-folded>.mm-fold{width:auto;min-width:20px;padding:0 5px;border-radius:10px;background:var(--mm-c);color:#fff;font-weight:800}
+.mm-node.mm-topic2>.mm-fold{top:auto;bottom:-9px;transform:none}
+.mm-node.mm-topic2[data-side="down"]>.mm-fold{bottom:-24px;transform:translateX(50%)}
+/* 확대 · 미니맵 */
+.mm-zoom{right:12px;bottom:12px;gap:2px;padding:3px;border-radius:10px;background:var(--bg-ps,var(--bg-p));box-shadow:0 4px 16px rgba(15,23,42,.12)}
+.mm-zoom button{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--t3)}
+.mm-zoom button.on{color:var(--ac);background:var(--ac-bg)}
+.mm-zoom span{font-size:11px;font-weight:600;color:var(--t3);min-width:42px}
+.mm-zsep{width:1px;height:16px;background:var(--bd);margin:0 2px;min-width:0!important}
+.mm-minimap{position:absolute;right:12px;bottom:56px;width:200px;height:130px;border-radius:10px;border:1px solid var(--bd);background:var(--bg-ps,var(--bg-p));
+  box-shadow:0 4px 16px rgba(15,23,42,.12);cursor:pointer;color:var(--t5);outline-color:var(--ac)}
+/* 속성 패널 */
+.mm-panel{width:276px;padding:0;gap:0;background:var(--bg-ps,var(--bg-p))}
+.mm-pn-sec{padding:12px 14px;border-bottom:1px solid var(--bd);gap:7px}
+.mm-pn-sec:last-child{border-bottom:none}
+.mm-pn-h{font-size:11px;color:var(--t4);letter-spacing:.1px}
+.mm-panel .mm-input{border-radius:7px}
+.mm-sw{width:20px;height:20px}
+.mm-mkbtn{border-radius:7px}
+/* 목록 카드 */
+.mm-card{border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(15,23,42,.05);transition:border-color .15s,transform .15s,box-shadow .15s}
+.mm-card:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(15,23,42,.10)}
+.mm-card-title{font-size:14.5px;letter-spacing:-.2px}
+@media (max-width:900px){
+  .mm-tools{width:auto;flex-direction:row}
+  .mm-searchbox{width:140px}
+  .mm-minimap{display:none}
+  .mm-titlebox{flex-basis:200px}
+}
+/* 선택 표시는 마우스 올림보다 우선 · 도구 막대 촘촘히 */
+.mm-stage .mm-node.mm-sel{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ac),0 8px 22px var(--ac-g)}
+.mm-stage .mm-node.mm-multi{box-shadow:0 0 0 2px var(--bg),0 0 0 4px color-mix(in srgb,var(--ac) 50%,transparent)}
+.mm-stage .mm-node.mm-multi.mm-sel{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ac)}
+.mm-stage .mm-node.mm-hit{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--mk-t)}
+.mm-stage .mm-node.mm-rel-from{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--mk-t)}
+.mm-tools{overflow-y:auto;scrollbar-width:none}
+.mm-tools::-webkit-scrollbar{display:none}
+.mm-rail-btn{padding:5px 2px 4px;gap:2px;font-size:9.5px}
+.mm-tool-sep{margin:3px 10px}
+.mm-minimap{width:176px;height:114px}

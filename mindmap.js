@@ -172,6 +172,42 @@ function _mmDownload(name, blob) {
   a.click();
   setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
+/* 선 아이콘 — 24 격자 path (Lucide 모양, MIT). _mmIcon(name) → <svg> */
+var MM_ICONS = {
+  back: 'M15 18l-6-6 6-6',
+  child: 'M3 8h6v8H3zM9 12h5M18 9v6M15 12h6',
+  sibling: 'M4 4h8v6H4zM4 14h8v6H4zM18 14v6M15 17h6',
+  parent: 'M10 3h8v6h-8zM14 9v3M14 12H7v3M3 15h8v6H3z',
+  trash: 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
+  undo: 'M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11',
+  redo: 'M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13',
+  relation: 'M5 19C5 10 19 14 19 5M15 5h4v4',
+  link: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+  refresh: 'M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M8 16H3v5',
+  fold: 'M4 4h16v16H4zM8 12h8',
+  level1: 'M12 3L2 8l10 5 10-5-10-5zM2 16l10 5 10-5',
+  unfold: 'M7 15l5 5 5-5M7 9l5-5 5 5',
+  fit: 'M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3',
+  map: 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15',
+  minus: 'M5 12h14',
+  plus: 'M12 5v14M5 12h14',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
+  align: 'M21 6H3M17 12H3M21 18H3',
+  zen: 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7',
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  share: 'M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4',
+  command: 'M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3',
+  help: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
+  sparkles: 'M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2zM19 3v4M21 5h-4',
+  sync: 'M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16'
+};
+function _mmIcon(name, size) {
+  var d = MM_ICONS[name];
+  if (!d) return '';
+  var s = size || 16;
+  return '<svg class="mm-ic" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg>';
+}
+
 /** 프로젝트 고르기 <option> 목록 (이름순, "선택…" 포함) — 새 맵 · 공유 · 승격 · WBS 창 공용 */
 function _mmProjectOptions(projects, selId) {
   return '<option value="">선택…</option>' + (projects || []).slice().sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); })

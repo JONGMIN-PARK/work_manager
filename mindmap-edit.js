@@ -442,6 +442,7 @@ function _mmEdClick(e) {
     case 'zoom-in': _mmZoomAt(1.2); break;
     case 'zoom-out': _mmZoomAt(1 / 1.2); break;
     case 'fit': _mmFit(); break;
+    case 'minimap': mmToggleMinimap(); break;
     case 'zen': _mmSetZen(!_mm.zen); break;
     case 'view-map': _mmSetOutline(false); return;
     case 'view-outline': _mmSetOutline(true); return;
@@ -474,6 +475,16 @@ function _mmBindCanvas() {
     var fold = e.target.closest('.mm-fold');
     if (fold) { e.preventDefault(); mmToggleFold(fold.getAttribute('data-fold')); return; }
     if (e.target.closest('.mm-zoom, .mm-zen-exit, a')) return;
+    if (e.target.closest('.mm-minimap')) {
+      // 미니맵 누른 채 끌면 계속 이동
+      e.preventDefault();
+      _mmMiniPan(e);
+      var mv = function (ev) { _mmMiniPan(ev); };
+      var up = function () { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', up);
+      return;
+    }
     var node = e.target.closest('.mm-node');
     _mmFocusCanvas();
     var relLb = e.target.closest('.mm-rel-label');

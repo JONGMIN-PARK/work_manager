@@ -1,5 +1,12 @@
 # Work Manager — 변경 이력
 
+## v13.221 (2026-10-27) — 마인드맵 화면 다듬기
+
+- 접기 버튼: 주제 칸 밖(-24px) 연결선 위, 평소 opacity 0 → `.mm-node:hover/.mm-sel/.mm-folded` 에서 표시, 접히면 채운 개수 배지. 2단계 아래는 밑줄 높이.
+- mindmap-layout.js: `_mmEdgeEnds`(가로 구조 2단계 아래는 밑줄 높이에서 잇기) · `mmEdgeShape`(가늘어지는 채운 가지 path). 1·2단계는 `.mm-branch`(w 7→2.4 / 3.2→1.4), 그 아래는 선.
+- mindmap.js: 선 아이콘 `MM_ICONS` · `_mmIcon` (Lucide 모양, MIT). mindmap-view.js: 상단 막대(`.mm-tbtn` · 검색 상자 · 보기 전환 · 구조 · 정렬 · AI · 내보내기 · 공유 · 집중/명령/단축키) · 왼쪽 도구(`.mm-rail-btn` 아이콘+이름) · 미니맵(`#mmMini` canvas — `_mmPaintMini` 를 `_mmApplyTransform` 마다, 누르기/끌기로 이동, localStorage `mm-minimap`).
+- style.css v13.221 블록: 주요 주제 색 바탕·그림자, 중심 그라데이션, 선택 링(`.mm-stage .mm-node.mm-sel` — 마우스 올림보다 우선), 캔버스 점 격자, 시트·패널·카드·확대 막대.
+
 ## v13.220 (2026-10-27) — 마인드맵 주제 안 이미지 · 내용 줄 · 모듈 분리
 
 - migrations/058_mindmap_images.sql: (map_id, id) 키, src = 클라에서 줄인 data URI, w·h, bytes, unref_at. routes/mindmaps.js: GET/POST `/:id/images`(읽기/편집 권한, png·jpeg·webp·gif data URI만, 약 1.5MB, 맵당 50장), PUT(doc) 때 `syncImages` — 문서에서 빠진 이미지는 unref_at 표시, 다시 쓰이면 해제, 7일 지나면 삭제(되돌리기 대비). duplicate 는 이미지 행을 같은 id 로 복사. 라우트 스냅샷 +2.

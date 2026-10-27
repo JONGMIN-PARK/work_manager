@@ -341,20 +341,49 @@ function mmRelationPath(a, b) {
   };
 }
 
+/**
+ * 연결선 양 끝점. 가로 구조에서 2단계 아래 주제(밑줄 모양)는 밑줄 높이에서 잇는다 — XMind 기본 모양.
+ * 반환 { sx, sy, ex, ey, vertical }
+ */
+function _mmEdgeEnds(p, c, structure) {
+  if (structure === 'down') return { sx: p.x + p.w / 2, sy: p.y + p.h, ex: c.x + c.w / 2, ey: c.y, vertical: true };
+  var left = c.side === 'left';
+  return {
+    sx: left ? p.x : p.x + p.w,
+    sy: p.depth >= 2 ? p.y + p.h - 1 : p.y + p.h / 2,
+    ex: left ? c.x + c.w : c.x,
+    ey: c.depth >= 2 ? c.y + c.h - 1 : c.y + c.h / 2,
+    vertical: false
+  };
+}
+
 /** 부모→자식 연결선 SVG path (곡선). p·c = mmLayout 의 pos 항목 */
 function mmEdgePath(p, c, structure) {
-  if (structure === 'down') {
-    var x1 = p.x + p.w / 2, y1 = p.y + p.h, x2 = c.x + c.w / 2, y2 = c.y;
-    var my = (y1 + y2) / 2;
-    return 'M' + x1 + ',' + y1 + ' C' + x1 + ',' + my + ' ' + x2 + ',' + my + ' ' + x2 + ',' + y2;
+  var e = _mmEdgeEnds(p, c, structure);
+  if (e.vertical) {
+    var my = (e.sy + e.ey) / 2;
+    return 'M' + e.sx + ',' + e.sy + ' C' + e.sx + ',' + my + ' ' + e.ex + ',' + my + ' ' + e.ex + ',' + e.ey;
   }
-  var left = c.side === 'left';
-  var sx = left ? p.x : p.x + p.w;
-  var sy = p.y + p.h / 2;
-  var ex = left ? c.x + c.w : c.x;
-  var ey = c.y + c.h / 2;
-  var mx = (sx + ex) / 2;
-  return 'M' + sx + ',' + sy + ' C' + mx + ',' + sy + ' ' + mx + ',' + ey + ' ' + ex + ',' + ey;
+  var mx = (e.sx + e.ex) / 2;
+  return 'M' + e.sx + ',' + e.sy + ' C' + mx + ',' + e.sy + ' ' + mx + ',' + e.ey + ' ' + e.ex + ',' + e.ey;
+}
+
+/**
+ * 끝으로 갈수록 가늘어지는 가지 — 채운 도형 path. w0 = 부모 쪽 굵기, w1 = 자식 쪽 굵기.
+ * 곡선 양 끝의 접선이 가로(조직도는 세로)라 그 수직 방향으로 두께를 벌린다.
+ */
+function mmEdgeShape(p, c, structure, w0, w1) {
+  var e = _mmEdgeEnds(p, c, structure);
+  var h0 = w0 / 2, h1 = w1 / 2;
+  function pt(x, y) { return x + ',' + y; }
+  if (e.vertical) {
+    var my = (e.sy + e.ey) / 2;
+    return 'M' + pt(e.sx - h0, e.sy) + ' C' + pt(e.sx - h0, my) + ' ' + pt(e.ex - h1, my) + ' ' + pt(e.ex - h1, e.ey) +
+      ' L' + pt(e.ex + h1, e.ey) + ' C' + pt(e.ex + h1, my) + ' ' + pt(e.sx + h0, my) + ' ' + pt(e.sx + h0, e.sy) + ' Z';
+  }
+  var mx = (e.sx + e.ex) / 2;
+  return 'M' + pt(e.sx, e.sy - h0) + ' C' + pt(mx, e.sy - h0) + ' ' + pt(mx, e.ey - h1) + ' ' + pt(e.ex, e.ey - h1) +
+    ' L' + pt(e.ex, e.ey + h1) + ' C' + pt(mx, e.ey + h1) + ' ' + pt(mx, e.sy + h0) + ' ' + pt(e.sx, e.sy + h0) + ' Z';
 }
 
 /** 트리 → Markdown (# 중심 주제 / - 하위 들여쓰기 2칸). 완료 노드는 [x] */
@@ -531,7 +560,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     mmUid: mmUid, mmNewNode: mmNewNode, mmWalk: mmWalk, mmFind: mmFind, mmCount: mmCount,
     mmIsAncestor: mmIsAncestor, mmRemoveNode: mmRemoveNode, mmMoveNode: mmMoveNode, mmCloneBranch: mmCloneBranch,
-    mmLayout: mmLayout, mmEdgePath: mmEdgePath, mmToMarkdown: mmToMarkdown, mmFromMarkdown: mmFromMarkdown,
+    mmLayout: mmLayout, mmEdgePath: mmEdgePath, mmEdgeShape: mmEdgeShape, mmToMarkdown: mmToMarkdown, mmFromMarkdown: mmFromMarkdown,
     mmSubtreeBox: mmSubtreeBox, mmAlignSizes: mmAlignSizes, mmDecorations: mmDecorations, mmNumbering: mmNumbering, mmRelationPath: mmRelationPath,
     mmFromXmindSheets: mmFromXmindSheets, mmToOpml: mmToOpml, mmFromPlainTree: mmFromPlainTree
   };
