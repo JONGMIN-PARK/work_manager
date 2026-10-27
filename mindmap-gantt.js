@@ -1,7 +1,7 @@
 /**
  * 업무 관리자 — 🧠 마인드맵 간트 보기
  * 주제 트리를 그대로 행으로(접기 반영), 시작일·마감일을 막대로. 일 · 주 · 월 눈금, 오늘 선, 주말 음영.
- *  - 막대: 시작~마감 / 마감만 있으면 ◆ 마일스톤 / 날짜 없는 부모는 하위 일정을 묶은 요약 막대(진척은 기간 가중 평균)
+ *  - 막대: 시작~마감 / 마감만 있으면 ◆ 마일스톤 / 날짜 없는 부모는 하위 일정을 묶은 요약 막대(진척은 맵과 같은 하위 평균)
  *  - 앱 데이터에 연결된 주제(프로젝트 · 마일스톤 · 이슈 …)는 원본 날짜로 — 빗금 막대, 여기서는 못 옮김
  *  - 관계선은 선후 화살표로 (뒤 작업이 앞 작업보다 먼저 시작하면 빨간색)
  *  - 끌어서 옮기기 · 양 끝을 끌어 기간 바꾸기 · 빈 줄을 끌어 새 일정. Alt+←/→ 하루(Shift 는 한 주) 옮기기
@@ -65,7 +65,9 @@ function _mmgSpan(n) {
   return { s: a, e: b, kind: 'task', src: src };
 }
 function _mmgDone(n) { return !!(n.done || _mmRefDone(n)); }
+var _mmgPmap = null;   // _mmgCollect 때 만든 진행률 표 (맵과 같은 기준 — _mmProgressMap)
 function _mmgProg(n) {
+  if (_mmgPmap && n.id && _mmgPmap[n.id]) return _mmgPmap[n.id].p;
   if (_mmgDone(n)) return 100;
   var p = parseInt(n.progress, 10);
   if (isNaN(p) && n.ref) { var r = _mm.refs[n.ref.type + ':' + n.ref.id]; if (r) p = parseInt(r.progress, 10); }
@@ -73,12 +75,13 @@ function _mmgProg(n) {
 }
 
 /**
- * 트리 → 행 정보. 요약(부모)은 하위 일정 전체를 묶고, 진척은 기간 가중 평균.
+ * 트리 → 행 정보. 요약(부모)은 하위 일정 전체를 묶고, 진척은 맵과 같은 값(값 있는 하위만의 평균).
  * 반환 { info: {id: {n, depth, parent, span, sum, color}}, order: [id…] (전체, 트리 순) }
  */
 function _mmgCollect(root) {
   var info = {}, order = [];
   var colors = {};
+  _mmgPmap = _mmProgressMap(root);
   mmWalk(root, function (n, parent, depth) {
     colors[n.id] = _mmNodeColor(n, parent, depth, root, colors);
     info[n.id] = { n: n, depth: depth, parent: parent ? parent.id : null, span: _mmgSpan(n), color: colors[n.id] };
@@ -86,21 +89,17 @@ function _mmgCollect(root) {
   });
   (function roll(n) {
     var it = info[n.id];
-    var lo = null, hi = null, wsum = 0, psum = 0;
+    var lo = null, hi = null;
     (n.children || []).forEach(function (c) {
       var r = roll(c);
       if (!r) return;
       lo = lo == null ? r.s : Math.min(lo, r.s);
       hi = hi == null ? r.e : Math.max(hi, r.e);
-      wsum += r.w; psum += r.p * r.w;
     });
-    if (lo != null) it.sum = { s: lo, e: hi, prog: wsum ? Math.round(psum / wsum) : 0 };
-    if (it.span) {
-      var w = it.span.e - it.span.s + 1;
-      // 자기 일정이 있으면 그것이 기준(하위는 참고), 없으면 하위 묶음
-      return { s: Math.min(it.span.s, lo == null ? it.span.s : lo), e: Math.max(it.span.e, hi == null ? it.span.e : hi), w: w, p: _mmgProg(n) };
-    }
-    return it.sum ? { s: it.sum.s, e: it.sum.e, w: wsum, p: it.sum.prog } : null;
+    if (lo != null) it.sum = { s: lo, e: hi, prog: _mmgProg(n) };
+    // 자기 일정이 있으면 그것이 기준(하위는 참고), 없으면 하위 묶음
+    if (it.span) return { s: Math.min(it.span.s, lo == null ? it.span.s : lo), e: Math.max(it.span.e, hi == null ? it.span.e : hi) };
+    return it.sum ? { s: it.sum.s, e: it.sum.e } : null;
   })(root);
   return { info: info, order: order };
 }

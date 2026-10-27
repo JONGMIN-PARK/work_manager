@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.232 (2026-10-27) — 마인드맵 간트 · 맵 진행률 기준 통일
+
+- mindmap.js `_mmProgressMap(root)` — `mmProgressRollup` + 연결된 앱 데이터(완료 · 진척). 맵(`_mm.prog`)과 간트가 함께 씀.
+- mindmap-gantt.js: `_mmgCollect` 가 `_mmgPmap` 을 만들고 `_mmgProg` 는 그 값을 먼저 씀. 요약 막대 진척의 기간 가중 평균(psum/wsum) 제거.
+
 ## v13.231 (2026-10-27) — 마인드맵 줄 나누기 · 자리 바꾸기
 
 - mindmap-layout.js `mmSplitLineItems(text)` (순수, 테스트): 빈 줄 제외 · 목록 기호 제거 · 줄 끝 `@이름`(앞 공백 필수) → who.

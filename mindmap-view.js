@@ -366,14 +366,7 @@ function _mmPaint() {
   var colors = {};
   var nums = mmNumbering(root);
   // 진행률: 직접 값 · 완료 · 연결된 앱 데이터(진척) → 없으면 하위 평균
-  _mm.prog = mmProgressRollup(root, function (n) {
-    if (!n.ref || n.ref.type === 'user') return null;
-    var r = _mm.refs[n.ref.type + ':' + n.ref.id];
-    if (!r) return null;
-    if (r.done || r.status === 'done') return 100;
-    var p = parseInt(r.progress, 10);
-    return isNaN(p) ? null : p;
-  });
+  _mm.prog = _mmProgressMap(root);
   mmWalk(root, function (n, parent, depth) {
     var c = _mmNodeColor(n, parent, depth, root, colors);
     colors[n.id] = c;

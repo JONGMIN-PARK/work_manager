@@ -187,6 +187,20 @@ function _mmFmtTime(iso) {
   if (diff < 86400) return Math.floor(diff / 3600) + '시간 전';
   return (d.getMonth() + 1) + '/' + d.getDate();
 }
+/**
+ * 진행률 표 {id: {p, own, n, of}} — 맵 · 간트가 같은 기준으로 쓴다(mmProgressRollup).
+ * 직접 값 · 완료가 없으면 연결된 앱 데이터(마일스톤 · 프로젝트 …)의 완료 · 진척을 쓴다.
+ */
+function _mmProgressMap(root) {
+  return mmProgressRollup(root, function (n) {
+    if (!n.ref || n.ref.type === 'user') return null;
+    var r = _mm.refs && _mm.refs[n.ref.type + ':' + n.ref.id];
+    if (!r) return null;
+    if (r.done || r.status === 'done') return 100;
+    var p = parseInt(r.progress, 10);
+    return isNaN(p) ? null : p;
+  });
+}
 /** 담당자 표시 이름 — 사용자 목록에서 고른 사람(assigneeId) 또는 직접 입력한 이름(assigneeName) */
 function _mmAssigneeName(n) {
   return (n.assigneeId && _mmMemberName(n.assigneeId)) || n.assigneeName || '';

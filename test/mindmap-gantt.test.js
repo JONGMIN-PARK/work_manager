@@ -53,7 +53,7 @@ test('연결된 앱 데이터는 원본 날짜로 (자기 날짜가 없을 때)'
   assert.strictEqual(g._mmgSpan({ startDate: '2026-11-01', ref: { type: 'milestone', id: 'm1' } }).src, 'own', '자기 날짜가 먼저');
 });
 
-test('부모 요약 — 하위 일정 묶음 · 기간 가중 진척', () => {
+test('부모 요약 — 하위 일정 묶음 · 진척은 맵과 같은 값', () => {
   const root = N('r', {}, [
     N('a', {}, [
       N('a1', { startDate: '2026-10-01', dueDate: '2026-10-10', progress: 100 }),   // 10일 100%
@@ -69,6 +69,21 @@ test('부모 요약 — 하위 일정 묶음 · 기간 가중 진척', () => {
   assert.strictEqual(a.prog, 50);
   assert.strictEqual(data.info.b.sum, undefined, '하위 일정이 없으면 요약 없음');
   assert.strictEqual(data.info.r.sum.prog, 50);
+});
+
+test('진척 — 맵(mmProgressRollup)과 같다: 기간 가중 아님 · 값 없는 하위 제외', () => {
+  const root = N('r', {}, [
+    N('a', {}, [
+      N('a1', { startDate: '2026-10-01', dueDate: '2026-10-02', progress: 100 }),   // 2일 100%
+      N('a2', { startDate: '2026-10-03', dueDate: '2026-10-12', progress: 0 }),     // 10일 0%
+      N('a3', { startDate: '2026-10-13', dueDate: '2026-10-14' })                   // 값 없음 → 제외
+    ])
+  ]);
+  const g = load(root);
+  const data = g._mmgCollect(root);
+  assert.strictEqual(data.info.a.sum.prog, 50, '(100 + 0) / 2');
+  assert.strictEqual(g._mmgProg(root.children[0]), g._mmProgressMap(root).a.p);
+  assert.strictEqual(g._mmgProg(root.children[0].children[2]), 0, '값 없는 행은 0');
 });
 
 test('통계 · 거르기 (지연만 → 위 단계 포함)', () => {
