@@ -135,7 +135,119 @@ function mmAlignSizes(root, structure, sizes, pos) {
   return { sizes: out, ids: ids };
 }
 
+/* ═══ 타임라인 · 피시본 · 매트릭스 (v13.245) ═══
+ * 세 구조 모두 주요 주제 아래는 "들여쓴 목록"(하위가 부모 아래로 MM_LIST.indent 만큼 들여 쌓임).
+ *  timeline : 중심 주제 왼쪽, 가로 줄기 오른쪽으로 — 주요 주제를 줄기 위/아래 번갈아 (위쪽은 주요 주제가 줄기에 가깝게 아래, 하위는 그 위로)
+ *  fishbone : 중심 주제(머리) 오른쪽, 줄기 왼쪽으로 — 주요 주제 묶음을 줄기 위/아래 번갈아, 비스듬한 뼈로 이음
+ *  matrix   : 표 — 행 = 주요 주제, 열 = 하위 주제 순서(1열 · 2열 …), 칸 안은 들여쓴 목록. 선 대신 격자
+ * 반환에 spine { x1, x2 } (줄기, y=0) · grid { xs, ys } (매트릭스) 를 더한다.
+ */
+var MM_ALT_STRUCTURES = ['timeline', 'fishbone', 'matrix'];
+var MM_LIST = { indent: 22, gap: 8, spineGap: 34, colGap: 40, cellPad: 14 };
+function _mmLayoutAlt(root, structure, sizes) {
+  var pos = {};
+  function sz(n) { return sizes[n.id] || { w: 80, h: 30 }; }
+  function kids(n) { return (n.collapsed || !n.children) ? [] : n.children; }
+  var lh = {}, lw = {};
+  function listH(n) {
+    if (lh[n.id] != null) return lh[n.id];
+    var h = sz(n).h;
+    kids(n).forEach(function (c) { h += MM_LIST.gap + listH(c); });
+    return (lh[n.id] = h);
+  }
+  function listW(n) {
+    if (lw[n.id] != null) return lw[n.id];
+    var w = sz(n).w;
+    kids(n).forEach(function (c) { w = Math.max(w, MM_LIST.indent + listW(c)); });
+    return (lw[n.id] = w);
+  }
+  // 아래로 쌓기: 노드 위 끝 = y
+  function listDown(n, x, y, depth, parentId) {
+    var s = sz(n);
+    pos[n.id] = { x: x, y: y, w: s.w, h: s.h, side: 'right', depth: depth, parentId: parentId };
+    var cy = y + s.h + MM_LIST.gap;
+    kids(n).forEach(function (c) { listDown(c, x + MM_LIST.indent, cy, depth + 1, n.id); cy += listH(c) + MM_LIST.gap; });
+  }
+  // 위로 쌓기: 노드 아래 끝 = y (하위는 노드 위에, 첫 하위가 노드에 가깝게)
+  function listUp(n, x, y, depth, parentId) {
+    var s = sz(n);
+    pos[n.id] = { x: x, y: y - s.h, w: s.w, h: s.h, side: 'right', depth: depth, parentId: parentId, up: true };
+    var cy = y - s.h - MM_LIST.gap;
+    kids(n).forEach(function (c) { listUp(c, x + MM_LIST.indent, cy, depth + 1, n.id); cy -= listH(c) + MM_LIST.gap; });
+  }
+  var rs = sz(root), ks = kids(root), out = {};
+  if (structure === 'matrix') {
+    pos[root.id] = { x: 0, y: 0, w: rs.w, h: rs.h, side: 'root', depth: 0, parentId: null };
+    var headW = rs.w, cols = 0;
+    ks.forEach(function (m) { headW = Math.max(headW, sz(m).w); cols = Math.max(cols, kids(m).length); });
+    var colW = [];
+    for (var j = 0; j < cols; j++) {
+      colW[j] = 60;
+      ks.forEach(function (m) { var c = kids(m)[j]; if (c) colW[j] = Math.max(colW[j], listW(c)); });
+    }
+    var P = MM_LIST.cellPad, xs = [-P, headW + P], x = headW + P * 2;
+    var colX = colW.map(function (w) { var cx = x + P; x += w + P * 2; xs.push(x - P); return cx; });
+    var ys = [-P, rs.h + P], y = rs.h + P * 2;
+    ks.forEach(function (m) {
+      var rowH = sz(m).h;
+      kids(m).forEach(function (c) { rowH = Math.max(rowH, listH(c)); });
+      var s = sz(m);
+      pos[m.id] = { x: 0, y: y + P, w: s.w, h: s.h, side: 'right', depth: 1, parentId: root.id };
+      kids(m).forEach(function (c, ci) { listDown(c, colX[ci], y + P, 2, m.id); });
+      y += rowH + P * 2;
+      ys.push(y - P);
+    });
+    out.grid = { xs: xs, ys: ys };
+  } else if (structure === 'timeline') {
+    pos[root.id] = { x: -rs.w, y: -rs.h / 2, w: rs.w, h: rs.h, side: 'root', depth: 0, parentId: null };
+    var tx = MM_LIST.spineGap * 1.5;
+    ks.forEach(function (m, i) {
+      if (i % 2 === 0) listDown(m, tx, MM_LIST.spineGap, 1, root.id);
+      else listUp(m, tx, -MM_LIST.spineGap, 1, root.id);
+      tx += listW(m) + MM_LIST.colGap;
+    });
+    out.spine = { x1: 0, x2: Math.max(tx - MM_LIST.colGap / 2, MM_LIST.spineGap * 2) };
+  } else {   // fishbone
+    pos[root.id] = { x: 0, y: -rs.h / 2, w: rs.w, h: rs.h, side: 'root', depth: 0, parentId: null };
+    var fx = -MM_LIST.spineGap * 2;   // 묶음 오른쪽 끝
+    ks.forEach(function (m, i) {
+      var bw = listW(m), bx = fx - bw;
+      if (i % 2 === 0) listUp(m, bx, -MM_LIST.spineGap * 1.6, 1, root.id);
+      else listDown(m, bx, MM_LIST.spineGap * 1.6, 1, root.id);
+      pos[m.id].bone = fx + MM_LIST.spineGap * 0.8;   // 뼈가 줄기와 만나는 x
+      if (i % 2 === 1) fx = bx - MM_LIST.colGap;
+    });
+    out.spine = { x1: Math.min(fx, -MM_LIST.spineGap * 2) - 10, x2: 0 };
+  }
+  var b = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  Object.keys(pos).forEach(function (id) {
+    var p = pos[id];
+    b.minX = Math.min(b.minX, p.x); b.minY = Math.min(b.minY, p.y);
+    b.maxX = Math.max(b.maxX, p.x + p.w); b.maxY = Math.max(b.maxY, p.y + p.h);
+  });
+  if (out.spine) { b.minX = Math.min(b.minX, out.spine.x1); b.maxX = Math.max(b.maxX, out.spine.x2); }
+  if (out.grid) { b.minX = Math.min(b.minX, out.grid.xs[0]); b.maxX = Math.max(b.maxX, out.grid.xs[out.grid.xs.length - 1]); b.maxY = Math.max(b.maxY, out.grid.ys[out.grid.ys.length - 1]); b.minY = Math.min(b.minY, out.grid.ys[0]); }
+  out.pos = pos;
+  out.bounds = b;
+  return out;
+}
+/** 세 구조의 선 — 주요 주제: 줄기에서 (타임라인 세로 · 피시본 비스듬), 그 아래: 부모 왼쪽 아래에서 꺾어 들어가는 선. 매트릭스는 없음 */
+function mmEdgePathAlt(p, c, structure) {
+  if (structure === 'matrix') return '';
+  if (c.depth === 1) {
+    if (structure === 'timeline') {
+      var mx = c.x + 12;
+      return 'M' + mx + ',0 L' + mx + ',' + (c.up ? c.y + c.h : c.y);
+    }
+    var ey = c.up ? c.y + c.h : c.y;
+    return 'M' + c.bone + ',0 L' + (c.x + c.w) + ',' + ey;
+  }
+  var sx = p.x + 10, sy = c.up ? p.y : p.y + p.h, cy = c.y + c.h / 2;
+  return 'M' + sx + ',' + sy + ' L' + sx + ',' + (cy + (c.up ? 6 : -6)) + ' Q' + sx + ',' + cy + ' ' + (sx + 6) + ',' + cy + ' L' + c.x + ',' + cy;
+}
+
 function _mmLayoutCore(root, structure, sizes) {
+  if (MM_ALT_STRUCTURES.indexOf(structure) >= 0) return _mmLayoutAlt(root, structure, sizes);
   var pos = {};
   function sz(n) { return sizes[n.id] || { w: 80, h: 30 }; }
   function kids(n) { return (n.collapsed || !n.children) ? [] : n.children; }
@@ -567,7 +679,8 @@ function mmFromXmindSheets(sheets) {
     }
     var root = conv(sh.rootTopic, 0);
     var sc = String(sh.rootTopic.structureClass || '');
-    var structure = /(logic\.right|tree\.right|timeline|fishbone)/.test(sc) ? 'right' : /(org-chart|org\.chart|tree\.down)/.test(sc) ? 'down' : 'balanced';
+    var structure = /timeline/.test(sc) ? 'timeline' : /fishbone/.test(sc) ? 'fishbone' : /(spreadsheet|matrix)/.test(sc) ? 'matrix' :
+      /(logic\.right|tree\.right)/.test(sc) ? 'right' : /(org-chart|org\.chart|tree\.down)/.test(sc) ? 'down' : 'balanced';
     var rel = [];
     (sh.relationships || []).forEach(function (r) {
       var a = idMap[r.end1Id], b = idMap[r.end2Id];
@@ -585,7 +698,8 @@ var MM_XMIND_OUT = {
   smile: 'smiley-smile', meh: 'smiley-boring', sad: 'smiley-cry', angry: 'smiley-angry', surprise: 'smiley-surprise',
   up: 'arrow-up', down: 'arrow-down', left: 'arrow-left', right: 'arrow-right', refresh: 'arrow-refresh'
 };
-var MM_XMIND_STRUCT = { balanced: 'org.xmind.ui.map.unbalanced', right: 'org.xmind.ui.logic.right', down: 'org.xmind.ui.org-chart.down' };
+var MM_XMIND_STRUCT = { balanced: 'org.xmind.ui.map.unbalanced', right: 'org.xmind.ui.logic.right', down: 'org.xmind.ui.org-chart.down',
+  timeline: 'org.xmind.ui.timeline.horizontal', fishbone: 'org.xmind.ui.fishbone.leftHeaded', matrix: 'org.xmind.ui.spreadsheet' };
 /** 진척 % → XMind 작업 마커 (가장 가까운 칸) */
 function _mmXmindTask(p) {
   var best = null, bd = 999;
@@ -671,6 +785,6 @@ if (typeof module !== 'undefined' && module.exports) {
     mmIsAncestor: mmIsAncestor, mmRemoveNode: mmRemoveNode, mmMoveNode: mmMoveNode, mmCloneBranch: mmCloneBranch,
     mmLayout: mmLayout, mmEdgePath: mmEdgePath, mmEdgeShape: mmEdgeShape, mmToMarkdown: mmToMarkdown, mmFromMarkdown: mmFromMarkdown,
     mmSubtreeBox: mmSubtreeBox, mmAlignSizes: mmAlignSizes, mmDecorations: mmDecorations, mmNumbering: mmNumbering, mmProgressRollup: mmProgressRollup, mmSplitLineItems: mmSplitLineItems, mmRelationPath: mmRelationPath,
-    mmFromXmindSheets: mmFromXmindSheets, mmToXmindSheets: mmToXmindSheets, mmToOpml: mmToOpml, mmFromPlainTree: mmFromPlainTree
+    mmFromXmindSheets: mmFromXmindSheets, mmToXmindSheets: mmToXmindSheets, mmEdgePathAlt: mmEdgePathAlt, MM_ALT_STRUCTURES: MM_ALT_STRUCTURES, mmToOpml: mmToOpml, mmFromPlainTree: mmFromPlainTree
   };
 }

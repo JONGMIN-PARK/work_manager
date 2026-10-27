@@ -438,7 +438,8 @@ function _mmPaint() {
     if (lay.aligned && lay.aligned[id]) { el.style.width = p.w + 'px'; el.classList.add('mm-aligned'); }
   });
   // 가로 구조는 하위 주제 밑줄을 SVG 연결선이 이어 그린다 — CSS 밑줄은 자리만 차지(투명)
-  stage.className = 'mm-stage mm-ta-' + (sheet.textAlign || 'auto') + (st === 'down' ? '' : ' mm-ul-svg');
+  var alt = MM_ALT_STRUCTURES.indexOf(st) >= 0;
+  stage.className = 'mm-stage mm-ta-' + (sheet.textAlign || 'auto') + (st === 'down' || alt ? '' : ' mm-ul-svg') + (alt ? ' mm-st-' + st : '');
   var cvEl = _mmEl('mmCanvas');
   if (cvEl) cvEl.setAttribute('data-mmbg', _mmBgKey());
   var b = lay.bounds;
@@ -462,7 +463,10 @@ function _mmPaint() {
     if (!p.parentId) return;
     var pp = lay.pos[p.parentId];
     var edim = (typeof _mmFilterDim === 'function' && _mmFilterDim(id)) ? ' mm-edge-dim' : '';   // 흐린 주제의 선 · 밑줄도 함께
-    if (p.depth <= 2) {
+    if (alt) {
+      var ap = mmEdgePathAlt(pp, p, st);
+      if (ap) paths.push('<path d="' + ap + '" data-e="' + _mmEsc(id) + '" class="mm-edge' + edim + '" style="stroke:' + colors[id] + ';stroke-width:' + (p.depth === 1 ? 2.6 : 1.6) + '"/>');
+    } else if (p.depth <= 2) {
       // 가지는 부모 쪽이 굵고 끝으로 갈수록 가늘게 (유료 마인드맵 툴의 기본 모양)
       // 끝 굵기를 하위 주제 밑줄과 같게 — 밑줄까지 한 도형이라 이음매가 없다.
       var w0 = p.depth === 1 ? 7 : 3.4, w1 = p.depth === 1 ? 2.4 : MM_UNDERLINE;
@@ -478,6 +482,18 @@ function _mmPaint() {
   svg.setAttribute('height', hh);
   svg.style.left = (b.minX - pad) + 'px';
   svg.style.top = (b.minY - pad) + 'px';
+  // 타임라인 · 피시본 줄기, 매트릭스 격자 (주제 뒤)
+  if (lay.spine) paths.unshift('<path class="mm-spine" d="M' + lay.spine.x1 + ',0 L' + lay.spine.x2 + ',0" style="stroke:' + colors[root.id] + '"/>' +
+    (st === 'timeline' ? '<path class="mm-spine-arrow" d="M' + lay.spine.x2 + ',-7 L' + (lay.spine.x2 + 12) + ',0 L' + lay.spine.x2 + ',7 z" style="fill:' + colors[root.id] + '"/>' : '') +
+    (st === 'fishbone' ? '<path class="mm-spine-arrow" d="M' + (lay.spine.x1 + 14) + ',-9 L' + lay.spine.x1 + ',0 L' + (lay.spine.x1 + 14) + ',9" style="stroke:' + colors[root.id] + ';fill:none"/>' : ''));
+  if (lay.grid) {
+    var gx = lay.grid.xs, gy = lay.grid.ys, gl = [];
+    gx.forEach(function (x) { gl.push('M' + x + ',' + gy[0] + ' L' + x + ',' + gy[gy.length - 1]); });
+    gy.forEach(function (y) { gl.push('M' + gx[0] + ',' + y + ' L' + gx[gx.length - 1] + ',' + y); });
+    paths.unshift('<rect class="mm-grid-head" x="' + gx[0] + '" y="' + gy[0] + '" width="' + (gx[gx.length - 1] - gx[0]) + '" height="' + (gy[1] - gy[0]) + '"/>' +
+      '<rect class="mm-grid-head" x="' + gx[0] + '" y="' + gy[0] + '" width="' + (gx[1] - gx[0]) + '" height="' + (gy[gy.length - 1] - gy[0]) + '"/>' +
+      '<path class="mm-grid" d="' + gl.join(' ') + '"/>');
+  }
   // 관계선 (양 끝이 보일 때만)
   (sheet.relations || []).forEach(function (rl) {
     var a = lay.pos[rl.from], c = lay.pos[rl.to];

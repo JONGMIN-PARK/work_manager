@@ -97,7 +97,8 @@ var MM_BACKGROUNDS = [
 ];
 function _mmBgKey() { var b = _mmSheet().bg; return MM_BACKGROUNDS.some(function (x) { return x.k === b; }) ? b : 'dots'; }
 var MM_STRUCTURES = [
-  { k: 'balanced', l: '마인드맵 ⇆' }, { k: 'right', l: '논리도 →' }, { k: 'down', l: '조직도 ↓' }
+  { k: 'balanced', l: '마인드맵 ⇆' }, { k: 'right', l: '논리도 →' }, { k: 'down', l: '조직도 ↓' },
+  { k: 'timeline', l: '타임라인 ⟶' }, { k: 'fishbone', l: '피시본 ⟵' }, { k: 'matrix', l: '매트릭스 ▦' }
 ];
 var MM_SCOPE = {
   personal: { l: '개인', i: '🔒' },

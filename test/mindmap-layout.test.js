@@ -297,3 +297,35 @@ test('mmToXmindSheets → mmFromXmindSheets 왕복 — 글 · 노트 · 링크 �
   assert.strictEqual(back.relations[0].from, a.id);
   assert.strictEqual(back.relations[0].label, '선후');
 });
+
+test('타임라인 · 피시본 · 매트릭스 — 모든 주제 자리 · 서로 겹치지 않음 · 줄기/격자', () => {
+  const t = {
+    id: 'r', text: '중심', children: [
+      { id: 'a', text: 'A', children: [{ id: 'a1', text: 'A1', children: [{ id: 'a11', text: 'A11', children: [] }] }, { id: 'a2', text: 'A2', children: [] }] },
+      { id: 'b', text: 'B', children: [{ id: 'b1', text: 'B1', children: [] }] },
+      { id: 'c', text: 'C', children: [] },
+      { id: 'd', text: 'D', children: [{ id: 'd1', text: 'D1', children: [] }, { id: 'd2', text: 'D2', children: [] }, { id: 'd3', text: 'D3', children: [] }] }
+    ]
+  };
+  const ids = ['r', 'a', 'a1', 'a11', 'a2', 'b', 'b1', 'c', 'd', 'd1', 'd2', 'd3'];
+  for (const st of ['timeline', 'fishbone', 'matrix']) {
+    const lay = L.mmLayout(t, st, SIZE);
+    for (const id of ids) assert.ok(lay.pos[id], st + ' ' + id + ' 자리');
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+      const p = lay.pos[ids[i]], q = lay.pos[ids[j]];
+      const hit = p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h;
+      assert.ok(!hit, st + ': ' + ids[i] + ' 와 ' + ids[j] + ' 겹침');
+    }
+    if (st === 'matrix') {
+      assert.ok(lay.grid && lay.grid.ys.length === 2 + 4, '행 = 머리 + 주요 주제 4');
+      assert.strictEqual(lay.pos.d3.x > lay.pos.d2.x && lay.pos.d2.x > lay.pos.d1.x, true, '하위 = 열');
+      assert.strictEqual(L.mmEdgePathAlt(lay.pos.r, lay.pos.a, st), '', '매트릭스는 선 없음');
+    } else {
+      assert.ok(lay.spine && lay.spine.x2 > lay.spine.x1, st + ' 줄기');
+      assert.ok(lay.pos.a.y > 0 !== lay.pos.b.y > 0, st + ' 주요 주제 위/아래 번갈아');
+      assert.match(L.mmEdgePathAlt(lay.pos.a, lay.pos.a1, st), /^M/);
+    }
+  }
+  assert.ok(L.mmLayout(t, 'timeline', SIZE).pos.a.x > 0, '타임라인은 오른쪽으로');
+  assert.ok(L.mmLayout(t, 'fishbone', SIZE).pos.a.x < 0, '피시본은 왼쪽으로');
+});

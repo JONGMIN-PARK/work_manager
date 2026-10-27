@@ -1587,3 +1587,10 @@ body.mm-zen-body{overflow:hidden}
 .mm-file-name:hover{text-decoration:underline}
 .mm-file-del{background:none;border:none;color:var(--t5);cursor:pointer;font-size:11px}
 #mmPnFiles .btn{margin-top:6px}
+/* ═══ 🧠 마인드맵 타임라인 · 피시본 · 매트릭스 (v13.245) ═══ */
+.mm-edges .mm-spine{stroke-width:4;stroke-linecap:round;fill:none}
+.mm-edges .mm-spine-arrow{stroke-width:3;stroke-linejoin:round}
+.mm-edges .mm-grid{stroke:var(--bd);stroke-width:1.2;fill:none}
+.mm-edges .mm-grid-head{fill:color-mix(in srgb,var(--ac) 6%,transparent);stroke:none}
+.mm-st-timeline .mm-node,.mm-st-fishbone .mm-node,.mm-st-matrix .mm-node{text-align:left}
+.mm-st-matrix .mm-node.mm-main{box-shadow:none}

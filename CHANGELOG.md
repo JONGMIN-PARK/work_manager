@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.245 (2026-10-27) — 마인드맵 타임라인 · 피시본 · 매트릭스 구조
+
+- mindmap-layout.js `_mmLayoutAlt`(MM_ALT_STRUCTURES — 들여쓴 목록 listDown/listUp, spine · grid 를 함께 반환) · `mmEdgePathAlt`. XMind 구조 class 대응(timeline.horizontal · fishbone.leftHeaded · spreadsheet). 테스트: 세 구조 모두 겹침 없음 · 줄기/격자.
+- mindmap-view.js: 세 구조는 SVG 밑줄 대신 CSS 밑줄 · .mm-st-* · 줄기(.mm-spine, 화살표) · 격자(.mm-grid). MM_STRUCTURES 6종. test/e2e/e2e21-structures.js(8).
+
 ## v13.244 (2026-10-27) — 마인드맵 주제 첨부 파일
 
 - 서버: `061_mindmap_files.sql`(bytea — GCS 설정 확인 전이라 DB) · `GET/POST /api/mindmaps/:id/files` · `GET/DELETE …/:fid`(내려받기는 base64 JSON). 목록 · 내려받기 = 읽기, 올리기 · 지우기 = 편집. route-inventory 스냅샷 갱신.
