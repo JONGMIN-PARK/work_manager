@@ -291,8 +291,8 @@ var MM_COMMANDS = [
   { id: 'aiText', group: 'AI', label: '✨ 글로 가지 만들기', keys: [], edit: true, when: function () { return !!_mm.aiReady; }, run: _mmkSingle(function () { if (typeof mmAiTextModal === 'function') mmAiTextModal(); }) },
   { id: 'aiWbs', group: 'AI', label: '✨ WBS 초안', keys: [], edit: true, when: function () { return !!_mm.aiReady; }, run: _mmkSingle(function () { if (typeof mmAiWbsModal === 'function') mmAiWbsModal(); }) },
   // 보기
-  { id: 'zoomIn', group: '보기', label: '확대', keys: ['Ctrl+=', 'Ctrl+Shift+='], run: function () { _mmZoomAt(1.2); } },
-  { id: 'zoomOut', group: '보기', label: '축소', keys: ['Ctrl+-'], run: function () { _mmZoomAt(1 / 1.2); } },
+  { id: 'zoomIn', group: '보기', label: '확대', keys: ['Ctrl+=', 'Ctrl+Shift+='], run: function () { _mmZoomAt(1.1); } },
+  { id: 'zoomOut', group: '보기', label: '축소', keys: ['Ctrl+-'], run: function () { _mmZoomAt(1 / 1.1); } },
   { id: 'fit', group: '보기', label: '화면 맞춤', keys: ['Ctrl+0'], run: function () { _mmFit(); } },
   { id: 'search', group: '보기', label: '맵에서 찾기', keys: ['Ctrl+F'], run: function () { var s = _mmEl('mmSearch'); if (s) { s.focus(); s.select(); } } },
   { id: 'zen', group: '보기', label: '집중 모드', keys: ['Ctrl+Shift+F'], run: function () { _mmSetZen(!_mm.zen); } },

@@ -348,10 +348,12 @@ function mmRelationPath(a, b) {
 function _mmEdgeEnds(p, c, structure) {
   if (structure === 'down') return { sx: p.x + p.w / 2, sy: p.y + p.h, ex: c.x + c.w / 2, ey: c.y, vertical: true };
   var left = c.side === 'left';
+  // 밑줄 주제 쪽은 선을 1px 밑줄 안으로 겹쳐 그린다 — 크기 반올림으로 생기는 틈(이음매 끊김) 방지
+  var po = p.depth >= 2 ? 1 : 0, co = c.depth >= 2 ? 1 : 0;
   return {
-    sx: left ? p.x : p.x + p.w,
+    sx: left ? p.x + po : p.x + p.w - po,
     sy: p.depth >= 2 ? p.y + p.h - 1 : p.y + p.h / 2,
-    ex: left ? c.x + c.w : c.x,
+    ex: left ? c.x + c.w - co : c.x + co,
     ey: c.depth >= 2 ? c.y + c.h - 1 : c.y + c.h / 2,
     vertical: false
   };

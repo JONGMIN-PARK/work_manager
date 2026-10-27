@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.224 (2026-10-27) — 마인드맵 가지 이음매 · 확대 단계
+
+- mindmap-view.js `_mmPaint`: 주제 크기를 `offsetWidth/Height`(정수 반올림) 대신 `getBoundingClientRect() / _mm.zoom` 소수 값으로 — 밑줄 끝과 선 시작이 0.5px 어긋나 틈이 보이던 것.
+- mindmap-layout.js `_mmEdgeEnds`: 2단계 아래(밑줄) 주제 쪽 끝점을 1px 안쪽으로 — 밑줄(불투명 border)이 겹친 부분을 덮어 이음매가 이어짐.
+- mindmap-edit.js 휠: Ctrl+휠 배율 `exp(-deltaY·0.0008)`, deltaY ±60 상한(deltaMode 줄/페이지 환산) → 한 칸 약 5%. 확대 단추 · 단축키 1.2 → 1.1.
+
 ## v13.223 (2026-10-27) — 마인드맵 간트 보기 · 버전 기록
 
 - **mindmap-gantt.js (새 파일)**: 간트 보기. `_mmSetView('map'|'outline'|'gantt')` 로 보기 전환 통합(`_mmSetOutline` 은 감싼 함수). 행 = 트리(접힘 반영, 거르기 중엔 맞는 주제 + 위 단계). `_mmgSpan` 자기 날짜 → 없으면 연결된 앱 데이터(`_mm.refs` start/end). 부모 요약 = 하위 일정 묶음 · 기간 가중 진척. 끌기(옮기기 · 양 끝 · 새 일정) · Alt+←/→ · ↑↓ · Ctrl+Z. 관계선 = 선후 화살표(어긋나면 빨간 점선). 눈금은 localStorage `mm-gantt-scale`.

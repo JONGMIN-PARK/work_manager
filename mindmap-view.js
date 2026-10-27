@@ -366,10 +366,16 @@ function _mmPaint() {
   });
   stage.innerHTML = '<svg class="mm-edges" id="mmEdges" xmlns="http://www.w3.org/2000/svg"></svg>' + html.join('');
   var sizes = {};
+  // offsetWidth 는 정수로 반올림돼 밑줄과 선 끝이 어긋난다 — 실제(소수) 크기를 확대 배율로 되돌려 쓴다
+  var zm = _mm.zoom || 1;
+  function sizeOf(el) {
+    var r = el.getBoundingClientRect();
+    return r.width ? { w: r.width / zm, h: r.height / zm } : { w: el.offsetWidth, h: el.offsetHeight };
+  }
   var els = stage.querySelectorAll('.mm-node');
-  els.forEach(function (el) { sizes[el.getAttribute('data-id')] = { w: el.offsetWidth, h: el.offsetHeight }; });
+  els.forEach(function (el) { sizes[el.getAttribute('data-id')] = sizeOf(el); });
   var sumEls = stage.querySelectorAll('.mm-sumlabel');
-  sumEls.forEach(function (el) { sizes['sum:' + el.getAttribute('data-sum')] = { w: el.offsetWidth, h: el.offsetHeight }; });
+  sumEls.forEach(function (el) { sizes['sum:' + el.getAttribute('data-sum')] = sizeOf(el); });
   var lay = mmLayout(root, st, sizes);
   var deco = mmDecorations(root, st, lay, sizes);
   _mm.layout = lay;

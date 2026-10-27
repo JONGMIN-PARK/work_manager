@@ -441,8 +441,8 @@ function _mmEdClick(e) {
     case 'fold': mmToggleFold(); break;
     case 'fold-all': _mmFoldAll(1); break;
     case 'unfold-all': _mmFoldAll(null); break;
-    case 'zoom-in': _mmZoomAt(1.2); break;
-    case 'zoom-out': _mmZoomAt(1 / 1.2); break;
+    case 'zoom-in': _mmZoomAt(1.1); break;
+    case 'zoom-out': _mmZoomAt(1 / 1.1); break;
     case 'fit': _mmFit(); break;
     case 'minimap': mmToggleMinimap(); break;
     case 'zen': _mmSetZen(!_mm.zen); break;
@@ -638,7 +638,10 @@ function _mmBindCanvas() {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) {
       var r = cv.getBoundingClientRect();
-      _mmZoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - r.left, e.clientY - r.top);
+      // 휠 한 칸에 약 5% — 움직인 양에 비례(터치패드 핀치는 더 잘게), 한 번에 크게 튀지 않게 상한
+      var dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
+      dy = Math.max(-60, Math.min(60, dy));
+      _mmZoomAt(Math.exp(-dy * 0.0008), e.clientX - r.left, e.clientY - r.top);
     } else {
       _mm.panX -= e.shiftKey ? e.deltaY : e.deltaX;
       _mm.panY -= e.shiftKey ? 0 : e.deltaY;
