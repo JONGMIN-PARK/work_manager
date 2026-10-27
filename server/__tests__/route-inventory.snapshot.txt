@@ -139,6 +139,7 @@ GET /api/milestones/:id/logs
 GET /api/milestones/:id/logs/trash
 GET /api/mindmaps
 GET /api/mindmaps/:id
+GET /api/mindmaps/:id/images
 GET /api/mindmaps/access/users
 GET /api/mindmaps/ai/status
 GET /api/mindmaps/by-link
@@ -328,6 +329,7 @@ POST /api/milestones/:id/logs/:logId/toggle-check
 POST /api/milestones/:id/transfer
 POST /api/mindmaps
 POST /api/mindmaps/:id/duplicate
+POST /api/mindmaps/:id/images
 POST /api/mindmaps/ai
 POST /api/mindmaps/generate
 POST /api/mindmaps/resolve

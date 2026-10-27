@@ -119,6 +119,36 @@ function deptFor(req, scope, b, cur) {
   return { id: mine };
 }
 
+/* ═══ 주제 안 이미지 (v13.220) — node.blocks [{ t: 'img', id }] · 058_mindmap_images ═══ */
+var MAX_IMAGES = 50;
+var MAX_IMG_CHARS = 2 * 1024 * 1024;   // data URI 길이 (클라에서 긴 변 1600px 로 줄여 올림)
+var IMG_SRC_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+
+/** 문서가 쓰는 이미지 id */
+function imageIdsOfDoc(doc) {
+  var out = {};
+  ((doc && doc.sheets) || []).forEach(function (sh) {
+    (function walk(n) {
+      if (!n || typeof n !== 'object') return;
+      (Array.isArray(n.blocks) ? n.blocks : []).forEach(function (b) { if (b && b.t === 'img' && b.id) out[String(b.id)] = true; });
+      (n.children || []).forEach(walk);
+    })(sh && sh.root);
+  });
+  return Object.keys(out);
+}
+
+/** 문서에서 빠진 이미지는 unref_at 표시, 다시 쓰이면 해제, 7일 지난 것은 삭제 (실패해도 저장은 유지) */
+async function syncImages(req, mapId, doc) {
+  try {
+    var ids = imageIdsOfDoc(doc);
+    await db.query('UPDATE mindmap_images SET unref_at = now() WHERE map_id = $1 AND tenant_id = $2 AND unref_at IS NULL AND NOT (id = ANY($3))', [mapId, req.tenant.id, ids]);
+    if (ids.length) await db.query('UPDATE mindmap_images SET unref_at = NULL WHERE map_id = $1 AND tenant_id = $2 AND unref_at IS NOT NULL AND id = ANY($3)', [mapId, req.tenant.id, ids]);
+    await db.query("DELETE FROM mindmap_images WHERE map_id = $1 AND tenant_id = $2 AND unref_at < now() - interval '7 days'", [mapId, req.tenant.id]);
+  } catch (e) {
+    console.error('[mindmaps/syncImages]', e.message);
+  }
+}
+
 /** 참조 노드 역인덱스 다시 계산 (실패해도 저장은 유지) */
 async function syncLinks(req, mapId, doc) {
   try {
@@ -491,12 +521,51 @@ router.put('/:id', async function (req, res) {
       );
       return httpErr.sendError(res, 409, 'CONFLICT', '다른 사용자가 먼저 저장했습니다.', { latest: cur.rows[0] || null, yourVersion: ver });
     }
-    if (b.doc !== undefined) await syncLinks(req, req.params.id, b.doc);
+    if (b.doc !== undefined) { await syncLinks(req, req.params.id, b.doc); await syncImages(req, req.params.id, b.doc); }
     res.json({ data: r.rows[0] });
   } catch (e) {
     httpErr.serverError(res, '[mindmaps/update]', e);
   }
 });
+
+// GET /api/mindmaps/:id/images — 이 맵의 이미지 (읽기 권한)
+router.get('/:id/images', async function (req, res) {
+  try {
+    var row = await loadRow(req, req.params.id);
+    if (!row || !(await permsOf(req, row)).read) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    var r = await db.query('SELECT id, src, w, h FROM mindmap_images WHERE map_id = $1 AND tenant_id = $2 ORDER BY created_at', [req.params.id, req.tenant.id]);
+    res.json({ data: r.rows });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/images/list]', e);
+  }
+});
+
+// POST /api/mindmaps/:id/images — 올리기 { src: data URI, w, h } → { id } (편집 권한)
+router.post('/:id/images', async function (req, res) {
+  try {
+    var row = await loadRow(req, req.params.id);
+    if (!row) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    var perm = await permsOf(req, row);
+    if (!perm.read) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    if (!perm.edit) return httpErr.sendError(res, 403, 'FORBIDDEN', '편집 권한이 없습니다.');
+    var b = req.body || {};
+    var src = String(b.src || '');
+    if (!IMG_SRC_RE.test(src)) return httpErr.sendError(res, 400, 'VALIDATION', 'PNG · JPEG · WebP · GIF 이미지만 넣을 수 있습니다.');
+    if (src.length > MAX_IMG_CHARS) return httpErr.sendError(res, 400, 'VALIDATION', '이미지가 너무 큽니다 (최대 약 1.5MB).');
+    var cnt = await db.query('SELECT COUNT(*)::int AS n FROM mindmap_images WHERE map_id = $1 AND tenant_id = $2 AND unref_at IS NULL', [req.params.id, req.tenant.id]);
+    if (cnt.rows[0].n >= MAX_IMAGES) return httpErr.sendError(res, 400, 'LIMIT', '맵 하나에 이미지는 ' + MAX_IMAGES + '장까지 넣을 수 있습니다.');
+    var id = genId('img');
+    var w = clampIntPx(b.w), h = clampIntPx(b.h);
+    await db.query(
+      'INSERT INTO mindmap_images (map_id, id, tenant_id, src, w, h, bytes, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [req.params.id, id, req.tenant.id, src, w, h, Math.round(src.length * 0.75), req.user.sub]
+    );
+    res.status(201).json({ data: { id: id, w: w, h: h } });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/images/create]', e);
+  }
+});
+function clampIntPx(v) { var n = parseInt(v, 10); return (n > 0 && n < 20000) ? n : null; }
 
 // PUT /api/mindmaps/:id/pin — 즐겨찾기 { pinned }
 router.put('/:id/pin', async function (req, res) {
@@ -527,6 +596,12 @@ router.post('/:id/duplicate', async function (req, res) {
       [id, req.tenant.id, title, req.user.sub, row.theme, row.template, JSON.stringify(row.doc), row.node_count]
     );
     await syncLinks(req, id, row.doc);
+    // 이미지도 같은 id 로 복사 — 복사본 문서가 그대로 이미지를 찾도록
+    await db.query(
+      'INSERT INTO mindmap_images (map_id, id, tenant_id, src, w, h, bytes, created_by) ' +
+      'SELECT $1, id, tenant_id, src, w, h, bytes, $2 FROM mindmap_images WHERE map_id = $3 AND tenant_id = $4 AND unref_at IS NULL',
+      [id, req.user.sub, req.params.id, req.tenant.id]
+    );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
     httpErr.serverError(res, '[mindmaps/duplicate]', e);

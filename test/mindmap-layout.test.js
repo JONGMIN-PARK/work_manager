@@ -200,3 +200,38 @@ test('mmToOpml — 이스케이프 · 계층', () => {
   assert.match(x, /<outline text="A1"\/>/);
   assert.match(x, /<title>제목<\/title>/);
 });
+
+test('같은 단계 맞춤 — 맵 전체: 같은 깊이·같은 쪽은 폭·x 가 같고, 다음 단계 x 도 같다', () => {
+  const t = tree();
+  t.alignLevels = true;
+  t.children[1].children = [{ id: 'b1', text: 'B1', children: [] }];
+  const sizes = { a: { w: 120, h: 20 }, b: { w: 50, h: 20 }, c: { w: 70, h: 20 }, d: { w: 60, h: 20 }, a1: { w: 40, h: 20 }, a2: { w: 90, h: 20 }, b1: { w: 30, h: 20 }, r: { w: 80, h: 30 } };
+  const lay = L.mmLayout(t, 'right', sizes);
+  const P = lay.pos;
+  assert.deepStrictEqual(['a', 'b', 'c', 'd'].map((id) => P[id].w), [120, 120, 120, 120]);
+  assert.ok(['b', 'c', 'd'].every((id) => P[id].x === P.a.x));
+  assert.deepStrictEqual(['a1', 'a2', 'b1'].map((id) => P[id].w), [90, 90, 90], '2단계도 가장 넓은 폭');
+  assert.ok(P.a1.x === P.b1.x && P.a2.x === P.b1.x, '2단계 열도 맞음');
+  assert.ok(lay.aligned.b && !lay.aligned.a, '넓힌 주제만 표시');
+});
+
+test('같은 단계 맞춤 — 가지만: 그 가지 하위만 맞추고 다른 가지는 그대로', () => {
+  const t = tree();
+  t.children[0].alignLevels = true;
+  const sizes = { a: { w: 120, h: 20 }, b: { w: 50, h: 20 }, a1: { w: 40, h: 20 }, a2: { w: 90, h: 20 } };
+  const P = L.mmLayout(t, 'right', sizes).pos;
+  assert.strictEqual(P.a1.w, 90);
+  assert.strictEqual(P.b.w, 50, '다른 가지·같은 단계는 그대로');
+});
+
+test('같은 단계 맞춤 — 좌우는 따로, 조직도는 높이도 맞춤', () => {
+  const t = tree();
+  t.alignLevels = true;
+  t.children[0].side = 'left'; t.children[1].side = 'right'; t.children[2].side = 'left'; t.children[3].side = 'right';
+  const sizes = { a: { w: 120, h: 20 }, b: { w: 50, h: 20 }, c: { w: 70, h: 20 }, d: { w: 60, h: 34 } };
+  let P = L.mmLayout(t, 'balanced', sizes).pos;
+  assert.strictEqual(P.c.w, 120, '왼쪽끼리');
+  assert.strictEqual(P.b.w, 60, '오른쪽끼리');
+  P = L.mmLayout(t, 'down', sizes).pos;
+  assert.ok(['a', 'b', 'c', 'd'].every((id) => P[id].h === 34 && P[id].w === 120 && P[id].y === P.a.y));
+});

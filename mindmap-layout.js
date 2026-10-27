@@ -85,6 +85,57 @@ function mmCloneBranch(node) {
  * 좌표는 루트 중심 (0,0) 기준. 경계·요약 위치는 mmDecorations.
  */
 function mmLayout(root, structure, sizes) {
+  var lay = _mmLayoutCore(root, structure, sizes);
+  var aligned = mmAlignSizes(root, structure, sizes, lay.pos);
+  if (!aligned) return lay;
+  // 같은 단계 맞춤: 폭(조직도는 높이도)을 넓힌 크기로 다시 배치 — 높이는 그대로라 좌우 배정도 같다
+  var lay2 = _mmLayoutCore(root, structure, aligned.sizes);
+  lay2.aligned = aligned.ids;
+  return lay2;
+}
+
+/**
+ * 같은 단계 맞춤 (node.alignLevels) — 켜진 주제의 하위를 (좌우 방향, 상대 깊이)로 묶어
+ * 묶음 안 가장 넓은 폭으로 맞춘다. 중심 주제에 켜면 맵 전체. 조직도는 같은 줄 높이도 맞춘다.
+ * 켜진 주제 안에 또 켜진 주제가 있으면 바깥 것을 따른다.
+ * 반환: null(맞출 게 없음) 또는 { sizes: 새 크기표, ids: { id: true } 크기가 바뀐 주제 }
+ */
+function mmAlignSizes(root, structure, sizes, pos) {
+  var groups = {}, any = false;
+  function sz(id) { return sizes[id] || { w: 80, h: 30 }; }
+  mmWalk(root, function (n) {
+    if (!pos[n.id]) return false;
+    if (!n.alignLevels) return n.collapsed ? false : undefined;
+    any = true;
+    (function go(list, depth) {
+      list.forEach(function (c) {
+        var p = pos[c.id];
+        if (!p) return;
+        var key = n.id + '|' + (structure === 'down' ? 'down' : p.side) + '|' + depth;
+        (groups[key] = groups[key] || []).push(c.id);
+        if (!c.collapsed) go(c.children || [], depth + 1);
+      });
+    })(n.collapsed ? [] : (n.children || []), 1);
+    return false;   // 하위는 이 묶음이 맡음
+  });
+  if (!any) return null;
+  var out = {}, ids = {};
+  Object.keys(sizes).forEach(function (k) { out[k] = sizes[k]; });
+  Object.keys(groups).forEach(function (key) {
+    var list = groups[key];
+    if (list.length < 2) return;
+    var w = 0, h = 0;
+    list.forEach(function (id) { var s0 = sz(id); w = Math.max(w, s0.w); h = Math.max(h, s0.h); });
+    list.forEach(function (id) {
+      var s0 = sz(id);
+      var nw = { w: w, h: structure === 'down' ? h : s0.h };
+      if (nw.w !== s0.w || nw.h !== s0.h) { out[id] = nw; ids[id] = true; }
+    });
+  });
+  return { sizes: out, ids: ids };
+}
+
+function _mmLayoutCore(root, structure, sizes) {
   var pos = {};
   function sz(n) { return sizes[n.id] || { w: 80, h: 30 }; }
   function kids(n) { return (n.collapsed || !n.children) ? [] : n.children; }
@@ -481,7 +532,7 @@ if (typeof module !== 'undefined' && module.exports) {
     mmUid: mmUid, mmNewNode: mmNewNode, mmWalk: mmWalk, mmFind: mmFind, mmCount: mmCount,
     mmIsAncestor: mmIsAncestor, mmRemoveNode: mmRemoveNode, mmMoveNode: mmMoveNode, mmCloneBranch: mmCloneBranch,
     mmLayout: mmLayout, mmEdgePath: mmEdgePath, mmToMarkdown: mmToMarkdown, mmFromMarkdown: mmFromMarkdown,
-    mmSubtreeBox: mmSubtreeBox, mmDecorations: mmDecorations, mmNumbering: mmNumbering, mmRelationPath: mmRelationPath,
+    mmSubtreeBox: mmSubtreeBox, mmAlignSizes: mmAlignSizes, mmDecorations: mmDecorations, mmNumbering: mmNumbering, mmRelationPath: mmRelationPath,
     mmFromXmindSheets: mmFromXmindSheets, mmToOpml: mmToOpml, mmFromPlainTree: mmFromPlainTree
   };
 }

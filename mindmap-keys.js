@@ -204,6 +204,23 @@ function _mmkStructure() {
   var next = order[(order.indexOf(_mmSheet().structure || 'balanced') + 1) % order.length];
   if (_mmMutate(function () { _mmSheet().structure = next; })) { var sel = _mmEl('mmStructure'); if (sel) sel.value = next; _mmFit(); }
 }
+/** 같은 단계 맞춤 켜기/끄기 — 선택 주제(중심 주제면 맵 전체) */
+function _mmkAlign() {
+  var nodes = _mmkNodes().filter(function (n) { return (n.children || []).length; });
+  if (!nodes.length) { _mmToast('하위 주제가 있는 주제에서 쓸 수 있습니다'); return; }
+  var on = !nodes.every(function (n) { return n.alignLevels; });
+  _mmkEach(function (n) { if (!(n.children || []).length) return; if (on) n.alignLevels = true; else delete n.alignLevels; });
+  _mmToast(on ? '같은 단계를 맞췄습니다' : '같은 단계 맞춤을 껐습니다');
+}
+function _mmkAlignAll() {
+  var root = _mmRoot();
+  var on = !root.alignLevels;
+  _mmMutate(function () { if (on) root.alignLevels = true; else delete root.alignLevels; });
+  _mmToast(on ? '맵 전체의 같은 단계를 맞췄습니다' : '맵 전체 맞춤을 껐습니다');
+}
+function _mmkTextAlign(k) {
+  _mmMutate(function () { var sh = _mmSheet(); if (k === 'auto') delete sh.textAlign; else sh.textAlign = k; });
+}
 function _mmkSingle(fn) { return function () { if (_mm.multi.length) _mmClearMulti(); fn(); }; }
 function _mmkHasKids() { var f = _mmSelInfo(); return !!(f && (f.node.children || []).length); }
 function _mmkNotRoot() { var f = _mmSelInfo(); return !!(f && f.parent); }
@@ -247,11 +264,19 @@ var MM_COMMANDS = [
   { id: 'labels', group: '꾸미기', label: '라벨 쓰기', keys: ['Alt+T'], edit: true, run: function () { _mmkFocusPanel('mmPnLabels'); } },
   { id: 'dueDate', group: '꾸미기', label: '마감일 넣기', keys: [], edit: true, run: function () { _mmkFocusPanel('mmPnDue'); } },
   { id: 'assignee', group: '꾸미기', label: '담당자 넣기', keys: [], edit: true, run: function () { _mmkFocusPanel('mmPnAssignee'); } },
+  { id: 'addImage', group: '꾸미기', label: '이미지 줄 넣기 (캡처는 Ctrl+V · 파일은 끌어다 놓기)', keys: ['Alt+I'], edit: true, run: _mmkSingle(function () { if (typeof mmPickImage === 'function') mmPickImage(); }) },
+  { id: 'addLine', group: '꾸미기', label: '글 줄 넣기 (주제 안 둘째 줄부터)', keys: [], edit: true, run: _mmkSingle(function () { if (typeof mmAddTextLine === 'function') mmAddTextLine(); }) },
   // 구조
   { id: 'relation', group: '구조', label: '관계선 잇기', keys: ['Alt+R'], edit: true, run: _mmkSingle(function () { mmStartRelation(); }) },
   { id: 'boundary', group: '구조', label: '경계 켜기 / 끄기', keys: ['Alt+B'], edit: true, run: _mmkToggleBoundary },
   { id: 'summary', group: '구조', label: '요약 켜기 / 끄기', keys: ['Alt+S'], edit: true, when: _mmkHasKids, run: _mmkSingle(_mmkToggleSummary) },
   { id: 'numbering', group: '구조', label: '하위 번호 켜기 / 끄기', keys: ['Alt+N'], edit: true, when: _mmkHasKids, run: _mmkToggleNumbering },
+  { id: 'alignLevels', group: '구조', label: '같은 단계 맞춤 켜기 / 끄기 (선택 가지 · 중심 주제면 맵 전체)', keys: ['Alt+G'], edit: true, when: _mmkHasKids, run: _mmkAlign },
+  { id: 'alignAll', group: '구조', label: '맵 전체 같은 단계 맞춤', keys: [], edit: true, run: _mmkAlignAll },
+  { id: 'textAlign:auto', group: '구조', label: '글자 정렬 — 자동 (오른쪽 가지 왼쪽 · 왼쪽 가지 오른쪽)', keys: [], edit: true, run: function () { _mmkTextAlign('auto'); } },
+  { id: 'textAlign:left', group: '구조', label: '글자 정렬 — 왼쪽', keys: [], edit: true, run: function () { _mmkTextAlign('left'); } },
+  { id: 'textAlign:center', group: '구조', label: '글자 정렬 — 가운데', keys: [], edit: true, run: function () { _mmkTextAlign('center'); } },
+  { id: 'textAlign:right', group: '구조', label: '글자 정렬 — 오른쪽', keys: [], edit: true, run: function () { _mmkTextAlign('right'); } },
   { id: 'structure', group: '구조', label: '맵 구조 바꾸기 (마인드맵 → 논리도 → 조직도)', keys: ['Ctrl+Shift+L'], edit: true, run: _mmkStructure },
   // 앱 데이터
   { id: 'linkRef', group: '앱 데이터', label: '앱 데이터 연결 (프로젝트·이슈·팀원…)', keys: ['Alt+L'], edit: true, when: _mmkFree, run: _mmkSingle(function () { if (typeof mmLinkModal === 'function') mmLinkModal(); }) },
@@ -334,10 +359,10 @@ function mmRunCommand(id) {
 
 /* ═══ 오른쪽 클릭 메뉴 ═══ */
 var MM_CTX_NODE = ['addChild', 'addSibling', 'addBefore', 'addParent', 'edit', 'duplicate', 'delete', '|',
-  'moveUp', 'moveDown', 'indent', 'outdent', '|', 'relation', 'boundary', 'summary', 'numbering', '|',
-  'linkRef', 'openRef', 'promoteMs', 'promoteIssue', '|', 'done', 'colorCycle', 'progress', 'note', 'fold', 'foldDeep', '|', 'aiExpand', 'aiSummary'];
-var MM_CTX_MULTI = ['delete', 'duplicate', '|', 'done', 'colorCycle', 'progress', 'boundary', 'fold', '|', 'priority:1', 'priorityClear'];
-var MM_CTX_CANVAS = ['fit', 'unfoldAll', 'foldLevel1', 'selectAll', '|', 'addSheet', 'outline', 'zen', 'structure', '|', 'palette', 'help'];
+  'moveUp', 'moveDown', 'indent', 'outdent', '|', 'relation', 'boundary', 'summary', 'numbering', 'alignLevels', '|',
+  'linkRef', 'openRef', 'promoteMs', 'promoteIssue', '|', 'addImage', 'addLine', 'done', 'colorCycle', 'progress', 'note', 'fold', 'foldDeep', '|', 'aiExpand', 'aiSummary'];
+var MM_CTX_MULTI = ['delete', 'duplicate', '|', 'done', 'colorCycle', 'progress', 'boundary', 'alignLevels', 'fold', '|', 'priority:1', 'priorityClear'];
+var MM_CTX_CANVAS = ['fit', 'unfoldAll', 'foldLevel1', 'selectAll', '|', 'alignAll', 'textAlign:auto', 'textAlign:left', 'textAlign:right', '|', 'addSheet', 'outline', 'zen', 'structure', '|', 'palette', 'help'];
 
 function _mmCloseCtx() {
   var m = document.getElementById('mmCtxMenu');

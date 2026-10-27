@@ -1084,3 +1084,31 @@ body.mm-zen-body{overflow:hidden}
 .mm-pal-l{flex:1}
 .mm-help-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(380px,100%),1fr));gap:14px}
 .mm-help-sec .mm-pn-h{margin-bottom:4px}
+/* ═══ 마인드맵 같은 단계 맞춤 · 글자 정렬 (v13.219) — stage 의 mm-ta-{auto|left|center|right} ═══ */
+.mm-stage .mm-node{text-align:left}
+.mm-ta-center .mm-node,.mm-ta-auto .mm-node.mm-root,.mm-ta-auto .mm-node[data-side="down"]{text-align:center}
+.mm-ta-right .mm-node,.mm-ta-auto .mm-node[data-side="left"]{text-align:right}
+.mm-ta-center .mm-node :is(.mm-line,.mm-labels,.mm-ref),.mm-ta-auto .mm-node.mm-root :is(.mm-line,.mm-labels,.mm-ref),.mm-ta-auto .mm-node[data-side="down"] :is(.mm-line,.mm-labels,.mm-ref){justify-content:center}
+.mm-ta-right .mm-node :is(.mm-line,.mm-labels,.mm-ref),.mm-ta-auto .mm-node[data-side="left"] :is(.mm-line,.mm-labels,.mm-ref){justify-content:flex-end}
+.mm-menu-h{font-size:10.5px;font-weight:700;color:var(--t4);padding:6px 10px 2px}
+.mm-menu .mm-chk{display:inline-block;width:14px;color:var(--ac);font-weight:800}
+.mm-inline{max-width:none;padding:7px 14px}
+.mm-inline-meas{position:fixed;left:-9999px;top:0;white-space:pre;visibility:hidden}
+.mm-pn-text{min-height:60px;font-size:13px;line-height:1.5}
+/* ═══ 마인드맵 주제 안 내용 줄 — 글 · 이미지 (v13.220) ═══ */
+.mm-blocks{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.mm-blk-text{font-size:.92em;font-weight:400;color:var(--t2);white-space:pre-wrap;word-break:break-word}
+.mm-root .mm-blk-text{color:#fff}
+.mm-blk-img{display:block;border-radius:6px;object-fit:cover;background:var(--bg-i);border:1px solid var(--bd);box-sizing:border-box}
+.mm-ta-center .mm-blk-img,.mm-ta-auto .mm-node.mm-root .mm-blk-img,.mm-ta-auto .mm-node[data-side="down"] .mm-blk-img{margin:0 auto}
+.mm-ta-right .mm-blk-img,.mm-ta-auto .mm-node[data-side="left"] .mm-blk-img{margin-left:auto}
+.mm-blk-missing{display:flex;align-items:center;justify-content:center;font-size:10.5px;color:var(--t5)}
+.mm-blk-row{display:flex;align-items:center;gap:6px}
+.mm-blk-row .mm-input{flex:1;min-width:0;padding:4px 7px}
+.mm-blk-thumb{width:44px;height:32px;object-fit:cover;border-radius:4px;border:1px solid var(--bd);cursor:zoom-in;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.mm-blk-tools{display:inline-flex;gap:2px;flex:none}
+.mm-blk-tools button{background:none;border:1px solid var(--bd);border-radius:4px;color:var(--t4);font-size:11px;width:20px;height:22px;padding:0;cursor:pointer}
+.mm-blk-tools button:disabled{opacity:.35;cursor:default}
+.mm-canvas.mm-dropping{box-shadow:inset 0 0 0 3px var(--ac)}
+.mm-imgview{display:flex;justify-content:center}
+.mm-imgview img{max-width:100%;max-height:78vh;border-radius:8px}

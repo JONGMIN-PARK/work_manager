@@ -171,11 +171,6 @@ function _mmNearestProject(id) {
   return (_mm.row && _mm.row.project_id) || '';
 }
 
-function _mmProjectOptions(projects, selId) {
-  return '<option value="">선택…</option>' + (projects || []).slice().sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); })
-    .map(function (p) { return '<option value="' + _mmEsc(p.id) + '"' + (p.id === selId ? ' selected' : '') + '>' + _mmEsc((p.orderNo ? '[' + p.orderNo + '] ' : '') + (p.name || '')) + '</option>'; }).join('');
-}
-
 function mmAiWbsModal() {
   if (_mm.readOnly) return;
   var f = _mmSelInfo();

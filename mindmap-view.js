@@ -1,0 +1,464 @@
+/**
+ * 업무 관리자 — 🧠 마인드맵 편집기 화면 · 그리기
+ * 편집기 틀(상단 · 도구 · 캔버스 · 패널 자리), 정렬 메뉴, 시트 탭, 참조 노드 상태 해석·표시,
+ * 노드 HTML · 배치(mmLayout) · 연결선 · 경계 · 요약 · 관계선, 확대·이동·화면 맞춤·선택 표시.
+ * 의존(전역): mindmap.js, mindmap-layout.js, mindmap-media.js(_mmBlocksHtml · _mmNodeMaxW)
+ */
+
+/* ═══ 편집기 화면 ═══ */
+function _mmRenderEditor() {
+  var wrap = _mmEl('mindmapWrap');
+  if (!wrap) return;
+  var row = _mm.row;
+  var sc = MM_SCOPE[row.scope] || MM_SCOPE.personal;
+  var st = _mmSheet().structure || 'balanced';
+  var tool = function (act, label, title) { return '<button class="mm-tool mm-edit-only" data-act="' + act + '" title="' + title + '">' + label + '</button>'; };
+  var h = '<div class="mm-ed' + (_mm.zen ? ' mm-zen' : '') + '" id="mmEd">' +
+    '<div class="mm-top">' +
+    '<button class="btn btn-g btn-s" data-act="back">← 목록</button>' +
+    '<input id="mmTitle" class="mm-title" value="' + _mmEsc(row.title) + '" maxlength="255">' +
+    '<span class="mm-badge">' + sc.i + ' ' + sc.l + (row.project_name ? ' · ' + _mmEsc(row.project_name) : '') + '</span>' +
+    '<span id="mmStatus" class="mm-status"></span>' +
+    '<span class="mm-flex"></span>' +
+    '<input id="mmSearch" class="mm-input mm-search" placeholder="🔍 검색 (Ctrl+F)">' +
+    '<div class="mm-seg"><button data-act="view-map" id="mmVMap">맵</button><button data-act="view-outline" id="mmVOut">아웃라인</button></div>' +
+    '<select id="mmStructure" class="mm-input mm-edit-only" title="구조 (Ctrl+Shift+L)">' + MM_STRUCTURES.map(function (s) { return '<option value="' + s.k + '"' + (s.k === st ? ' selected' : '') + '>' + s.l + '</option>'; }).join('') + '</select>' +
+    '<div class="mm-menu-wrap mm-edit-only"><button class="btn btn-g btn-s" data-act="menu" data-menu="mmAlignMenu" title="같은 단계 맞춤 · 글자 정렬">⇶ 정렬</button>' +
+    '<div class="mm-menu hidden" id="mmAlignMenu"></div></div>' +
+    '<button class="btn btn-g btn-s" data-act="zen" title="집중 모드 (Ctrl+Shift+F)">⛶</button>' +
+    (_mm.doc.meta && _mm.doc.meta.gen ? '<button class="btn btn-g btn-s mm-edit-only" data-act="resync" title="원본 데이터에 새로 생긴 항목을 맵에 추가">↻ 원본과 맞추기</button>' : '') +
+    '<div class="mm-menu-wrap mm-edit-only' + (_mm.aiReady ? '' : ' hidden') + '" id="mmAiWrap"><button class="btn btn-g btn-s" data-act="menu" data-menu="mmAiMenu">✨ AI</button>' +
+    '<div class="mm-menu hidden" id="mmAiMenu">' +
+    '<button data-act="ai-expand">💡 하위 주제 제안 <span class="mm-hint">선택 주제</span></button>' +
+    '<button data-act="ai-summary">} 가지 요약 <span class="mm-hint">선택 주제</span></button>' +
+    '<button data-act="ai-text">📝 글로 가지 만들기</button>' +
+    '<button data-act="ai-wbs">🏗 WBS 초안 <span class="mm-hint">프로젝트</span></button></div></div>' +
+    '<div class="mm-menu-wrap"><button class="btn btn-g btn-s" data-act="menu" data-menu="mmExportMenu">⤓ 내보내기</button>' +
+    '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
+    '<button data-act="export-opml">OPML (.opml)</button></div></div>' +
+    ((row.is_owner || _mmIsAdmin()) ? '<button class="btn btn-g btn-s" data-act="share">🔗 공유</button>' : '') +
+    '<button class="btn btn-g btn-s" data-act="palette" title="명령 찾기 (Ctrl+/)">⌘</button>' +
+    '<button class="btn btn-g btn-s" data-act="help" title="단축키 (F1)">?</button>' +
+    '</div>' +
+    '<div id="mmBanner"></div>' +
+    '<div id="mmAiBar"></div>' +
+    '<div class="mm-sheets" id="mmSheets"></div>' +
+    '<div class="mm-body">' +
+    '<div class="mm-tools">' +
+    tool('child', '＋하위', '하위 주제 추가 (Tab)') + tool('sibling', '＋형제', '형제 주제 추가 (Enter)') + tool('parent', '＋부모', '부모 주제 삽입 (Ctrl+Enter)') +
+    tool('del', '삭제', '삭제 (Delete) · 여러 개: Ctrl+클릭 / Shift+끌기') + '<span class="mm-tool-sep"></span>' +
+    tool('undo', '↶ 취소', '되돌리기 (Ctrl+Z)') + tool('redo', '↷ 다시', '다시 실행 (Ctrl+Y)') + '<span class="mm-tool-sep"></span>' +
+    tool('relation', '↔ 관계', '관계선 (Alt+R) — 누른 뒤 이을 주제를 클릭, Esc 취소') + tool('link-ref', '🔗 연결', '앱 데이터 연결 (Alt+L) — 프로젝트·마일스톤·이슈·팀원…') +
+    '<button class="mm-tool" data-act="refs-refresh" title="연결된 항목 상태 새로고침">↻ 상태</button><span class="mm-tool-sep"></span>' +
+    '<button class="mm-tool" data-act="fold" title="접기/펴기 (Space)">접기</button>' +
+    '<button class="mm-tool" data-act="fold-all" title="1단계만 보기">1단계</button>' +
+    '<button class="mm-tool" data-act="unfold-all" title="모두 펴기">모두 펴기</button>' +
+    '</div>' +
+    '<div class="mm-canvas" id="mmCanvas"><div class="mm-stage" id="mmStage"></div>' +
+    '<textarea id="mmSink" class="mm-sink" aria-label="마인드맵 키 입력" autocomplete="off" spellcheck="false"></textarea>' +
+    '<div class="mm-zoom"><button data-act="zoom-out">−</button><span id="mmZoomV">100%</span><button data-act="zoom-in">＋</button><button data-act="fit" title="화면 맞춤">⤢</button></div>' +
+    '<button class="mm-zen-exit" data-act="zen">집중 모드 끝내기 (Esc)</button></div>' +
+    '<div class="mm-outline hidden" id="mmOutline"></div>' +
+    '<div class="mm-panel" id="mmPanel"></div>' +
+    '</div></div>';
+  wrap.innerHTML = h;
+  wrap.onclick = _mmEdClick;
+  var title = _mmEl('mmTitle');
+  title.onchange = function () {
+    var v = title.value.trim();
+    if (!v) { title.value = _mm.row.title; return; }
+    if (v === _mm.row.title || _mm.readOnly) { title.value = _mm.row.title; return; }
+    _mm.row.title = v; _mm.titleDirty = true; _mmMarkDirty();
+  };
+  title.onkeydown = function (e) { if (e.key === 'Enter') { title.blur(); _mmFocusCanvas(); } };
+  _mmEl('mmStructure').onchange = function () {
+    var v = this.value;
+    _mmMutate(function () { _mmSheet().structure = v; });
+    _mmFit();
+  };
+  var search = _mmEl('mmSearch');
+  search.oninput = function () { _mmSearch(search.value, false); };
+  search.onkeydown = function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); _mmSearch(search.value, true, e.shiftKey ? -1 : 1); }
+    else if (e.key === 'Escape') { search.value = ''; _mmSearch('', false); _mmFocusCanvas(); }
+  };
+  _mmBindCanvas();
+  _mmRefreshMode();
+  _mmPaintSheets();
+  if (typeof _mmAiBar === 'function') _mmAiBar();
+  _mmPaint();
+  if (_mm.panX == null) _mmFit();
+  _mmSetOutline(_mm.outline);
+  _mmFocusCanvas();
+}
+
+/** 보기 전용/편집 상태 · 배너 · 상태 표시 갱신 */
+function _mmRefreshMode() {
+  var ed = _mmEl('mmEd');
+  if (!ed) return;
+  ed.classList.toggle('mm-ro', _mm.readOnly);
+  var t = _mmEl('mmTitle');
+  if (t) t.readOnly = _mm.readOnly;
+  _mmBanner();
+  _mmStatus();
+  _mmPaintPanel();
+}
+
+function _mmBanner() {
+  var b = _mmEl('mmBanner');
+  if (!b) return;
+  if (_mm.conflict) {
+    var who = _mm.conflict.updated_by_name ? _mm.conflict.updated_by_name + ' 님이' : '다른 사용자가';
+    b.innerHTML = '<div class="mm-banner mm-banner-warn">⚠️ ' + _mmEsc(who) + ' 먼저 저장해 내 변경을 저장하지 못했습니다. ' +
+      '<button class="btn btn-g btn-s" data-act="conflict-reload">최신본 불러오기 (내 변경 버림)</button> ' +
+      '<button class="btn btn-g btn-s" data-act="conflict-overwrite">내 내용으로 덮어쓰기</button></div>';
+  } else if (_mm.lockedBy) {
+    b.innerHTML = '<div class="mm-banner">✏️ <b>' + _mmEsc(_mm.lockedBy) + '</b> 님이 편집 중입니다 — 보기 전용으로 열었습니다. ' +
+      '<button class="btn btn-g btn-s" data-act="take-lock">편집 가져오기</button></div>';
+  } else if (!_mm.canEdit) {
+    b.innerHTML = '<div class="mm-banner">👁 보기 권한만 있습니다.</div>';
+  } else {
+    b.innerHTML = '';
+  }
+}
+
+function _mmStatus() {
+  var s = _mmEl('mmStatus');
+  if (!s) return;
+  if (_mm.readOnly) s.textContent = '보기 전용';
+  else if (_mm.conflict) s.textContent = '⚠️ 저장 충돌';
+  else if (_mm.saving) s.textContent = '저장 중…';
+  else if (_mm.dirty) s.textContent = '● 변경됨';
+  else s.textContent = _mm.lastSaved ? '✓ 저장됨' : '';
+}
+
+/* ═══ 정렬 메뉴 — 같은 단계 맞춤(중심 주제 · 선택 가지) · 글자 정렬(시트) ═══ */
+var MM_TEXT_ALIGNS = [
+  { k: 'auto', l: '자동 — 오른쪽 가지는 왼쪽, 왼쪽 가지는 오른쪽 정렬' },
+  { k: 'left', l: '모두 왼쪽 정렬' }, { k: 'center', l: '모두 가운데 정렬' }, { k: 'right', l: '모두 오른쪽 정렬' }
+];
+function _mmPaintAlignMenu() {
+  var m = _mmEl('mmAlignMenu');
+  if (!m) return;
+  var root = _mmRoot(), f = _mmSelInfo();
+  var ta = _mmSheet().textAlign || 'auto';
+  var chk = function (on) { return '<span class="mm-chk">' + (on ? '✓' : '') + '</span>'; };
+  m.innerHTML = '<div class="mm-menu-h">같은 단계 맞춤 <span class="mm-hint">폭은 가장 넓은 주제 기준</span></div>' +
+    '<button data-act="cmd" data-cmd="alignAll">' + chk(root.alignLevels) + '맵 전체 <span class="mm-hint">Alt+G (중심 주제)</span></button>' +
+    (f && f.parent && (f.node.children || []).length ? '<button data-act="cmd" data-cmd="alignLevels">' + chk(f.node.alignLevels) + '선택한 가지의 하위만 <span class="mm-hint">Alt+G</span></button>' : '') +
+    '<div class="mm-menu-h">글자 정렬 <span class="mm-hint">이 시트</span></div>' +
+    MM_TEXT_ALIGNS.map(function (a) { return '<button data-act="cmd" data-cmd="textAlign:' + a.k + '">' + chk(ta === a.k) + a.l + '</button>'; }).join('');
+}
+
+/* ═══ 시트 ═══ */
+function _mmPaintSheets() {
+  var bar = _mmEl('mmSheets');
+  if (!bar || !_mm.doc) return;
+  var list = _mm.doc.sheets;
+  bar.innerHTML = list.map(function (sh, i) {
+    var on = i === _mm.sheetIdx;
+    return '<button class="mm-sheet' + (on ? ' on' : '') + '" data-act="sheet" data-i="' + i + '" title="' + (on ? '두 번 눌러 이름 바꾸기' : '') + '">' + _mmEsc(sh.title || ('시트 ' + (i + 1))) +
+      (on && list.length > 1 ? '<span class="mm-sheet-x mm-edit-only" data-act="sheet-del" data-i="' + i + '" title="시트 삭제">×</span>' : '') + '</button>';
+  }).join('') + '<button class="mm-sheet mm-sheet-add mm-edit-only" data-act="sheet-add" title="새 시트 (현재 시트 구조로)">＋</button>';
+}
+function mmSwitchSheet(i) {
+  if (!_mm.doc.sheets[i] || i === _mm.sheetIdx) return;
+  _mm.sheetIdx = i;
+  _mm.sel = _mmRoot().id;
+  _mm.hits = []; _mm.hitIdx = -1; _mm.relFrom = null; _mm.multi = [];
+  var st = _mmEl('mmStructure');
+  if (st) st.value = _mmSheet().structure || 'balanced';
+  _mmPaintSheets();
+  _mmPaint();
+  _mmFit();
+  _mmFocusCanvas();
+}
+function mmAddSheet() {
+  var name = prompt('새 시트 이름', '시트 ' + (_mm.doc.sheets.length + 1));
+  if (name == null) return;
+  if (_mm.doc.sheets.length >= 20) { _mmToast('시트는 최대 20개까지 만들 수 있습니다', 'error'); return; }
+  _mmMutate(function () {
+    _mm.doc.sheets.push({ id: 'sh-' + mmUid().slice(2), title: (name.trim() || '시트').slice(0, 60), structure: _mmSheet().structure || 'balanced', root: mmNewNode(name.trim() || '중심 주제'), relations: [] });
+    _mm.sheetIdx = _mm.doc.sheets.length - 1;
+    _mm.sel = _mmRoot().id;
+  });
+  var st = _mmEl('mmStructure');
+  if (st) st.value = _mmSheet().structure || 'balanced';
+  _mmPaintSheets();
+  _mmFit();
+  _mmFocusCanvas();   // 이름 입력 창이 가져간 키 입력을 캔버스로
+}
+function mmRenameSheet() {
+  if (_mm.readOnly) return;
+  var cur = _mmSheet();
+  var name = prompt('시트 이름', cur.title || '');
+  if (name == null || !name.trim() || name.trim() === cur.title) return;
+  _mmMutate(function () { cur.title = name.trim().slice(0, 60); }, { paint: false });
+  _mmPaintSheets();
+}
+function mmDeleteSheet(i) {
+  if (_mm.doc.sheets.length <= 1) return;
+  var sh = _mm.doc.sheets[i];
+  if (!confirm('"' + (sh.title || '') + '" 시트를 삭제할까요? (되돌리기 가능)')) return;
+  _mmMutate(function () {
+    _mm.doc.sheets.splice(i, 1);
+    _mm.sheetIdx = Math.max(0, Math.min(_mm.sheetIdx, _mm.doc.sheets.length - 1));
+    _mm.sel = _mmRoot().id;
+  });
+  _mmPaintSheets();
+  _mmFit();
+}
+
+/* ═══ 앱 데이터 참조 — 상태 해석 ═══ */
+function _mmAllRefs() {
+  var out = [], seen = {};
+  (_mm.doc ? _mm.doc.sheets : []).forEach(function (sh) {
+    mmWalk(sh.root, function (n) {
+      if (!n.ref) return;
+      var k = n.ref.type + ':' + n.ref.id;
+      if (!seen[k]) { seen[k] = true; out.push({ type: n.ref.type, id: n.ref.id }); }
+    });
+  });
+  return out;
+}
+/** 참조 상태 불러오기 — onlyMissing 이면 아직 모르는 것만 */
+function _mmResolveRefs(onlyMissing) {
+  var mapId = _mm.mapId;
+  var refs = _mmAllRefs().filter(function (r) { return !onlyMissing || !_mm.refs[r.type + ':' + r.id]; });
+  if (!refs.length) return Promise.resolve();
+  return apiFetch('/api/mindmaps/resolve', { method: 'POST', body: JSON.stringify({ refs: refs }) }).then(function (r) {
+    if (_mm.mapId !== mapId) return;
+    var d = (r && r.data) || {};
+    Object.keys(d).forEach(function (k) { _mm.refs[k] = d[k]; });
+    _mmPaint();
+  }).catch(function () {});
+}
+function _mmStatusLabel(type, st) {
+  if (st == null || st === '') return '';
+  var tbl = null;
+  if (type === 'project' || type === 'milestone') tbl = (typeof PROJ_STATUS !== 'undefined') ? PROJ_STATUS : null;
+  else if (type === 'issue') {
+    tbl = (typeof ISSUE_STATUS !== 'undefined') ? ISSUE_STATUS : null;
+    if (st === 'in_progress') st = 'inProgress';
+  } else if (type === 'as') tbl = (typeof AS_STATUS !== 'undefined') ? AS_STATUS : null;
+  else if (type === 'prestudy' && typeof PS_STATUS !== 'undefined') { for (var i = 0; i < PS_STATUS.length; i++) if (PS_STATUS[i].key === st) return PS_STATUS[i].label; }
+  else if (type === 'tech' && typeof TECH_STATUS !== 'undefined') { for (var j = 0; j < TECH_STATUS.length; j++) if (TECH_STATUS[j].key === st) return TECH_STATUS[j].label; }
+  return (tbl && tbl[st] && tbl[st].label) || st;
+}
+/** 참조 노드의 상태 한 줄 (해석 결과 r) */
+function _mmRefLine(n) {
+  if (!n.ref) return '';
+  var info = MM_REF_TYPES[n.ref.type] || { i: '🔗', l: '항목' };
+  var r = _mm.refs[n.ref.type + ':' + n.ref.id];
+  var body = [];
+  if (!r) body.push('<span class="mm-ref-dim">불러오는 중…</span>');
+  else if (r.locked) body.push('<span class="mm-ref-dim">🔒 볼 권한이 없는 항목</span>');
+  else if (r.missing) body.push('<span class="mm-late">⚠️ 삭제된 항목</span>');
+  else {
+    var st = _mmStatusLabel(n.ref.type, r.status);
+    if (st) body.push('<b>' + _mmEsc(st) + '</b>');
+    if (r.progress != null && n.ref.type !== 'user') {
+      var pg = Math.max(0, Math.min(100, parseInt(r.progress, 10) || 0));
+      body.push('<span class="mm-ref-bar"><i style="width:' + pg + '%"></i></span>' + pg + '%');
+    }
+    if (n.ref.type === 'user') body.push('◆ ' + (r.msCount || 0) + ' · 🎫 ' + (r.issueCount || 0) + (r.dept ? ' · ' + _mmEsc(r.dept) : ''));
+    if (r.trl) body.push('TRL ' + _mmEsc(r.trl));
+    if (r.people && r.people.length) body.push('👤 ' + _mmEsc(r.people.slice(0, 3).join(', ')) + (r.people.length > 3 ? ' 외 ' + (r.people.length - 3) : ''));
+    var end = r.end || (n.ref.type === 'meeting' ? r.start : null);
+    if (end) {
+      var done = r.done || r.status === 'done';
+      var late = !done && n.ref.type !== 'meeting' && String(end).slice(0, 10) < new Date().toISOString().slice(0, 10);
+      body.push('<span class="' + (late ? 'mm-late' : '') + '">📅 ' + _mmEsc(String(end).slice(5, 10)) + '</span>');
+    }
+    // 프로젝트명은 맵의 프로젝트(맵 소속 · 중심 주제 참조)와 다를 때만
+    var rootRef = _mmRoot().ref;
+    var mapProj = (rootRef && rootRef.type === 'project') ? rootRef.id : (_mm.row && _mm.row.project_id);
+    if (r.projectName && n.ref.type !== 'project' && r.projectId !== mapProj) body.push('<span class="mm-ref-dim">' + _mmEsc(r.projectName) + '</span>');
+  }
+  return '<div class="mm-ref"><span class="mm-ref-open" data-open-ref="1" title="' + info.l + ' 열기">' + info.i + '</span>' + body.join(' · ') + '</div>';
+}
+function _mmRefDone(n) {
+  if (!n.ref) return false;
+  var r = _mm.refs[n.ref.type + ':' + n.ref.id];
+  return !!(r && (r.done || r.status === 'done'));
+}
+
+/* ═══ 그리기 ═══ */
+function _mmNodeHtml(n, depth, color, num) {
+  var hit = _mm.hits.indexOf(n.id) >= 0;
+  var cls = 'mm-node ' + (depth === 0 ? 'mm-root' : depth === 1 ? 'mm-main' : 'mm-topic2') +
+    ((n.done || _mmRefDone(n)) ? ' mm-done' : '') + (hit ? ' mm-hit' : '') + (n.id === _mm.sel ? ' mm-sel' : '') + (n.color ? ' mm-colored' : '') +
+    (n.ref ? ' mm-has-ref' : '') + (n._ai ? ' mm-ai' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '');
+  var mk = '';
+  (n.markers || []).forEach(function (m) {
+    var pm = /^priority-(\d)$/.exec(m);
+    if (pm) { mk += '<span class="mm-pri mm-pri' + pm[1] + '">' + pm[1] + '</span>'; return; }
+    for (var i = 0; i < MM_SYMBOLS.length; i++) if (MM_SYMBOLS[i].k === m) mk += '<span class="mm-sym">' + MM_SYMBOLS[i].g + '</span>';
+  });
+  if (n.progress != null && n.progress !== '' && !isNaN(n.progress)) {
+    var pg = Math.max(0, Math.min(100, parseInt(n.progress, 10)));
+    mk += '<span class="mm-prog" title="진척 ' + pg + '%">' + (pg >= 100 ? '●' : pg >= 75 ? '◕' : pg >= 50 ? '◑' : pg >= 25 ? '◔' : '○') + '</span>';
+  }
+  var icons = '';
+  if (n.note) icons += '<span class="mm-ico" title="' + _mmEsc(String(n.note).slice(0, 300)) + '">📝</span>';
+  if (n.link && /^https?:\/\//i.test(n.link)) icons += '<a class="mm-ico" href="' + _mmEsc(n.link) + '" target="_blank" rel="noopener" title="' + _mmEsc(n.link) + '">🔗</a>';
+  var meta = [];
+  if (n.assigneeId) meta.push('👤 ' + _mmEsc(_mmMemberName(n.assigneeId) || '담당'));
+  if (n.dueDate) {
+    var late = !n.done && n.dueDate < new Date().toISOString().slice(0, 10);
+    meta.push('<span class="' + (late ? 'mm-late' : '') + '">📅 ' + _mmEsc((n.startDate ? n.startDate.slice(5) + '~' : '') + n.dueDate.slice(5)) + '</span>');
+  }
+  var labels = (n.labels || []).length ? '<div class="mm-labels">' + n.labels.map(function (l) { return '<span class="mm-label">' + _mmEsc(l) + '</span>'; }).join('') + '</div>' : '';
+  var kids = (n.children || []).length;
+  var fold = (kids && depth > 0 || (kids && n.collapsed)) ? '<span class="mm-fold" data-fold="' + _mmEsc(n.id) + '">' + (n.collapsed ? kids : '−') + '</span>' : '';
+  var maxW = (typeof _mmNodeMaxW === 'function') ? _mmNodeMaxW(n) : 0;   // 이미지 줄이 있으면 그만큼 넓게
+  return '<div class="' + cls + '" data-id="' + _mmEsc(n.id) + '" style="--mm-c:' + color + (maxW ? ';max-width:' + maxW + 'px' : '') + '">' +
+    '<div class="mm-line">' + (num ? '<span class="mm-num">' + num + '</span>' : '') + mk + '<span class="mm-txt">' + (n.text ? _mmEsc(n.text) : '<i class="mm-ph">(빈 주제)</i>') + '</span>' + icons + '</div>' +
+    (typeof _mmBlocksHtml === 'function' ? _mmBlocksHtml(n) : '') + _mmRefLine(n) + labels + (meta.length ? '<div class="mm-meta">' + meta.join(' · ') + '</div>' : '') + fold + '</div>';
+}
+
+function _mmPaint() {
+  var stage = _mmEl('mmStage');
+  if (!stage || !_mm.doc) return;
+  var sheet = _mmSheet();
+  var root = sheet.root;
+  var st = sheet.structure || 'balanced';
+  var html = [];
+  var colors = {};
+  var nums = mmNumbering(root);
+  mmWalk(root, function (n, parent, depth) {
+    var c;
+    if (depth === 0) c = _mmColorVar(n.color) || 'var(--ac)';
+    else if (depth === 1) c = _mmColorVar(n.color) || _mmColorVar(MM_AUTO_COLORS[root.children.indexOf(n) % MM_AUTO_COLORS.length]);
+    else c = _mmColorVar(n.color) || colors[parent.id];
+    colors[n.id] = c;
+    html.push(_mmNodeHtml(n, depth, c, nums[n.id]));
+    if (n.summary && !n.collapsed && (n.children || []).length) {
+      html.push('<div class="mm-sumlabel" data-sum="' + _mmEsc(n.id) + '" style="--mm-c:' + c + '">' + _mmEsc(n.summary.text || '요약') + '</div>');
+    }
+    if (n.collapsed) return false;
+  });
+  stage.innerHTML = '<svg class="mm-edges" id="mmEdges" xmlns="http://www.w3.org/2000/svg"></svg>' + html.join('');
+  var sizes = {};
+  var els = stage.querySelectorAll('.mm-node');
+  els.forEach(function (el) { sizes[el.getAttribute('data-id')] = { w: el.offsetWidth, h: el.offsetHeight }; });
+  var sumEls = stage.querySelectorAll('.mm-sumlabel');
+  sumEls.forEach(function (el) { sizes['sum:' + el.getAttribute('data-sum')] = { w: el.offsetWidth, h: el.offsetHeight }; });
+  var lay = mmLayout(root, st, sizes);
+  var deco = mmDecorations(root, st, lay, sizes);
+  _mm.layout = lay;
+  els.forEach(function (el) {
+    var id = el.getAttribute('data-id');
+    var p = lay.pos[id];
+    if (!p) { el.style.display = 'none'; return; }
+    el.style.left = p.x + 'px';
+    el.style.top = p.y + 'px';
+    el.setAttribute('data-side', p.side);
+    // 같은 단계 맞춤으로 넓힌 주제는 그 크기로 (글자 정렬은 시트 설정 — stage 의 mm-ta-*)
+    if (lay.aligned && lay.aligned[id]) { el.style.width = p.w + 'px'; el.style.minHeight = p.h + 'px'; el.classList.add('mm-aligned'); }
+  });
+  stage.className = 'mm-stage mm-ta-' + (sheet.textAlign || 'auto');
+  var b = lay.bounds;
+  var pad = 40;
+  var paths = [];
+  var extra = [];
+  // 경계 (노드 뒤)
+  deco.boundaries.forEach(function (bd) {
+    paths.push('<rect class="mm-boundary" x="' + bd.x + '" y="' + bd.y + '" width="' + bd.w + '" height="' + bd.h + '" rx="12" style="stroke:' + colors[bd.id] + ';fill:' + colors[bd.id] + '"/>');
+    if (bd.title) extra.push('<div class="mm-bd-title" style="left:' + (bd.x + 8) + 'px;top:' + (bd.y - 19) + 'px;--mm-c:' + colors[bd.id] + '">' + _mmEsc(bd.title) + '</div>');
+  });
+  // 요약 중괄호 + 글상자 위치
+  deco.summaries.forEach(function (sm) {
+    paths.push('<path class="mm-sumbrace" d="' + sm.path + '" style="stroke:' + colors[sm.id] + '"/>');
+    var el = stage.querySelector('.mm-sumlabel[data-sum="' + sm.id + '"]');
+    if (el) { el.style.left = sm.x + 'px'; el.style.top = sm.y + 'px'; }
+  });
+  Object.keys(lay.pos).forEach(function (id) {
+    var p = lay.pos[id];
+    if (!p.parentId) return;
+    var pp = lay.pos[p.parentId];
+    paths.push('<path d="' + mmEdgePath(pp, p, st) + '" class="mm-edge" style="stroke:' + colors[id] + ';stroke-width:' + (p.depth === 1 ? 2.6 : p.depth === 2 ? 1.8 : 1.3) + '"/>');
+  });
+  var svg = _mmEl('mmEdges');
+  var w = (b.maxX - b.minX) + pad * 2, hh = (b.maxY - b.minY) + pad * 2;
+  svg.setAttribute('viewBox', (b.minX - pad) + ' ' + (b.minY - pad) + ' ' + w + ' ' + hh);
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', hh);
+  svg.style.left = (b.minX - pad) + 'px';
+  svg.style.top = (b.minY - pad) + 'px';
+  // 관계선 (양 끝이 보일 때만)
+  (sheet.relations || []).forEach(function (rl) {
+    var a = lay.pos[rl.from], c = lay.pos[rl.to];
+    if (!a || !c) return;
+    var rp = mmRelationPath(a, c);
+    paths.push('<path class="mm-relation" d="' + rp.d + '" marker-end="url(#mmArrow)"/>');
+    extra.push('<div class="mm-rel-label' + (rl.label ? '' : ' mm-rel-empty') + '" data-rel="' + _mmEsc(rl.id) + '" style="left:' + rp.mx + 'px;top:' + rp.my + 'px">' + _mmEsc(rl.label || '') + '</div>');
+  });
+  svg.innerHTML = '<defs><marker id="mmArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">' +
+    '<path d="M0,0 L10,5 L0,10 z" class="mm-arrow"/></marker></defs>' + paths.join('');
+  if (extra.length) stage.insertAdjacentHTML('beforeend', extra.join(''));
+  _mmApplyTransform();
+  _mmPaintPanel();
+  if (typeof _mmAiBar === 'function') _mmAiBar();
+  if (_mm.outline) _mmPaintOutline();
+}
+
+function _mmApplyTransform() {
+  var stage = _mmEl('mmStage');
+  if (!stage) return;
+  stage.style.transform = 'translate(' + (_mm.panX || 0) + 'px,' + (_mm.panY || 0) + 'px) scale(' + _mm.zoom + ')';
+  var z = _mmEl('mmZoomV');
+  if (z) z.textContent = Math.round(_mm.zoom * 100) + '%';
+}
+
+function _mmFit() {
+  var cv = _mmEl('mmCanvas');
+  if (!cv || !_mm.layout) return;
+  var b = _mm.layout.bounds;
+  var cw = cv.clientWidth || 800, ch = cv.clientHeight || 500;
+  var bw = b.maxX - b.minX + 80, bh = b.maxY - b.minY + 80;
+  _mm.zoom = Math.max(0.25, Math.min(1.1, Math.min(cw / bw, ch / bh)));
+  _mm.panX = cw / 2 - ((b.minX + b.maxX) / 2) * _mm.zoom;
+  _mm.panY = ch / 2 - ((b.minY + b.maxY) / 2) * _mm.zoom;
+  _mmApplyTransform();
+}
+
+function _mmZoomAt(factor, cx, cy) {
+  var cv = _mmEl('mmCanvas');
+  if (!cv) return;
+  if (cx == null) { cx = cv.clientWidth / 2; cy = cv.clientHeight / 2; }
+  var nz = Math.max(0.2, Math.min(3, _mm.zoom * factor));
+  _mm.panX = cx - (cx - _mm.panX) * (nz / _mm.zoom);
+  _mm.panY = cy - (cy - _mm.panY) * (nz / _mm.zoom);
+  _mm.zoom = nz;
+  _mmApplyTransform();
+}
+
+/** 선택 노드가 화면 밖이면 보이게 이동 */
+function _mmEnsureVisible(id) {
+  var cv = _mmEl('mmCanvas');
+  var p = _mm.layout && _mm.layout.pos[id];
+  if (!cv || !p) return;
+  var m = 40;
+  var x1 = _mm.panX + p.x * _mm.zoom, y1 = _mm.panY + p.y * _mm.zoom;
+  var x2 = x1 + p.w * _mm.zoom, y2 = y1 + p.h * _mm.zoom;
+  var cw = cv.clientWidth, ch = cv.clientHeight;
+  if (x1 < m) _mm.panX += m - x1; else if (x2 > cw - m) _mm.panX -= x2 - (cw - m);
+  if (y1 < m) _mm.panY += m - y1; else if (y2 > ch - m) _mm.panY -= y2 - (ch - m);
+  _mmApplyTransform();
+}
+
+function _mmSelect(id, opts) {
+  if (!id) return;
+  _mm.sel = id;
+  var stage = _mmEl('mmStage');
+  if (stage) stage.querySelectorAll('.mm-node').forEach(function (el) { el.classList.toggle('mm-sel', el.getAttribute('data-id') === id); });
+  if (!opts || opts.scroll !== false) _mmEnsureVisible(id);
+  _mmPaintPanel();
+}
+
+function _mmFocusCanvas() {
+  // 키 입력은 캔버스 안의 투명한 입력칸(mmSink)이 받는다 — 한글 IME 가 켜지려면 입력 가능한 요소여야 함
+  var sink = _mmEl('mmSink');
+  if (sink && !_mm.outline && !_mm.editing) { try { sink.focus({ preventScroll: true }); } catch (_) { sink.focus(); } }
+}

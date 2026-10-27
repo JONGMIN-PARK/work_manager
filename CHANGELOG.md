@@ -1,5 +1,17 @@
 # Work Manager — 변경 이력
 
+## v13.220 (2026-10-27) — 마인드맵 주제 안 이미지 · 내용 줄 · 모듈 분리
+
+- migrations/058_mindmap_images.sql: (map_id, id) 키, src = 클라에서 줄인 data URI, w·h, bytes, unref_at. routes/mindmaps.js: GET/POST `/:id/images`(읽기/편집 권한, png·jpeg·webp·gif data URI만, 약 1.5MB, 맵당 50장), PUT(doc) 때 `syncImages` — 문서에서 빠진 이미지는 unref_at 표시, 다시 쓰이면 해제, 7일 지나면 삭제(되돌리기 대비). duplicate 는 이미지 행을 같은 id 로 복사. 라우트 스냅샷 +2.
+- mindmap-media.js(신규): node.blocks = [{t:'text', v} | {t:'img', id, w, h, dw}]. 저장된 크기로 자리를 먼저 잡아 불러오기 전후 배치 동일, 이미지 줄이 있으면 주제 max-width 를 그 폭에 맞춤. `_mmDownscale`(긴 변 1600, 작은 PNG/GIF/WebP 는 그대로, 나머지 JPEG 0.85) · 붙여넣기(`mmPasteImages`) · 끌어 놓기(캔버스 drop, body 의 업무일지 가져오기로 전파 막음) · 패널 "내용 줄"(글 줄 Enter 로 다음 줄) · 크게 보기(더블클릭). Alt+I · 글 줄 명령. 검색에 글 줄 포함.
+- 모듈 분리(동작 변화 없음, 함수 목록 비교로 확인): mindmap.js(상수·상태·헬퍼·진입·열기·잠금) → mindmap-list.js(목록·모달) · mindmap-view.js(편집기 화면·시트·참조 상태·그리기) · mindmap-edit.js(저장·편집·이벤트·관계선) · mindmap-panel.js(패널·아웃라인·내보내기). 프로젝트 고르기 옵션은 `_mmProjectOptions` 하나로.
+
+## v13.219 (2026-10-27) — 마인드맵 같은 단계 맞춤 · 글자 정렬 · 넓은 입력칸
+
+- mindmap-layout.js: `mmLayout` = `_mmLayoutCore` 1차 배치 → `mmAlignSizes`(node.alignLevels 가 켜진 주제의 하위를 (좌우, 상대 깊이)로 묶어 최대 폭, 조직도는 높이도) → 넓힌 크기로 2차 배치. 높이는 그대로라 좌우 배정이 바뀌지 않음. 바깥 alignLevels 가 안쪽을 덮음. `lay.aligned` = 넓힌 주제. 테스트 +3.
+- mindmap.js: 넓힌 주제에 width/min-height 적용, stage 에 `mm-ta-{auto|left|center|right}`(sheet.textAlign). 상단 [⇶ 정렬] 메뉴(맵 전체 · 선택 가지 · 글자 정렬), 패널 "같은 단계 맞춤" 체크. 인라인 편집칸: 최소 max(주제 폭, 260) ~ 최대 480px, 줄 단위 글자 폭 측정으로 자동 확장, 주제와 같은 글씨 크기·굵기·정렬, 왼쪽 가지는 오른쪽 끝·조직도/중심은 가운데 고정.
+- mindmap-keys.js: Alt+G `alignLevels`, `alignAll`, `textAlign:*` 명령 — 주제·여러 선택·빈 곳 메뉴에 추가.
+
 ## v13.218 (2026-10-27) — 마인드맵 단축키 · 여러 선택 · 오른쪽 클릭 · 명령 찾기
 
 - mindmap-keys.js(신규): 단축키 표 `MM_COMMANDS`({id,label,group,keys,run,edit,when,hidden}) 하나로 키 입력(`mmHandleKey`) · 오른쪽 클릭 메뉴(`mmContextMenu`, 주제/여러 주제/빈 곳) · 명령 찾기(`mmPalette`, Ctrl+/) · 도움말(`mmHelpModal`, F1, 표에서 생성) · 여러 선택 패널(`mmMultiPanelHtml`). `mmKeyName` 은 글자·숫자·괄호를 `e.code` 로 읽어 한글 자판에서도 Alt+R 등이 같게 동작, ⌘ = Ctrl. 보기 전용에서 편집 명령은 키만 먹고 무시(Tab 포커스 이탈 방지).
