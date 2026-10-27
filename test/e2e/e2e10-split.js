@@ -81,8 +81,11 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.mouse.move(fb.x + 20, fb.y - 6, { steps: 8 });   // 첫 주제 바로 위 빈 곳
     await wait(100);
     var hint = await page.evaluate(function (id) { var e = document.querySelector('#mmStage .mm-node[data-id="' + id + '"]'); return e.classList.contains('mm-drop-before'); }, first);
+    var line = await page.evaluate(function () { var l = document.querySelector('#mmStage .mm-drop-line'); return l ? l.className : null; });
+    check(line === 'mm-drop-line mm-drop-line-before', 'drop line ' + line + ' ' + await page.evaluate(function () { return typeof _mmDropLine + ' ' + document.querySelectorAll('.mm-drop-line').length + ' ' + document.querySelectorAll('.mm-drop-before').length; }));
     await page.screenshot({ path: path.join(SHOT, 'drag-gap.png'), clip: { x: fb.x - 200, y: fb.y - 60, width: 500, height: 260 } });
     await page.mouse.up(); await wait(200);
+    check(await page.evaluate(function () { return !document.querySelector('#mmStage .mm-drop-line'); }), 'drop line removed');
     var order1 = await page.evaluate(function (id) { return mmFind(_mmRoot(), id).node.children.map(function (k) { return k.text; }); }, ids.b);
     check(hint, 'gap hint before');
     check(order1[0] === '작업 툴 순서 지정' && order1.length === 4, 'reorder ' + JSON.stringify(order0) + ' -> ' + JSON.stringify(order1));

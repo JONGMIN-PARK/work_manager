@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.234 (2026-10-27) — 마인드맵 끌어 놓을 자리 표시선
+
+- mindmap-edit.js `_mmDropLine(target)` — 끌기 중 #mmStage 에 .mm-drop-line(앞/뒤 = 이웃 틈 가로선, 하위 = 주제 옆 짧은 선 · 조직도는 축 바꿈), 놓거나 취소하면 지움. 앞/뒤 그림자 표시는 없앰(하위 링은 유지).
+- test/e2e/e2e10-split.js: 표시선 검사 2개 (스크린샷은 다시 그리기를 일으켜 그 전에 검사).
+
 ## v13.233 (2026-10-27) — 마인드맵 담당자별 보기 · 상태 거르기
 
 - mindmap-filter.js (새 파일): `mmTaskFacts`(작업 · 지연 · 이번 주 · 미입력 · 완료, 진행률은 `_mmProgressMap`) · `mmPeopleSummary` · `mmFilterMatch` (test/mindmap-filter.test.js). 화면 `#mmFbar` · `_mm.vf {who, st, dimDone, idx}`(보기 설정, 저장 안 함, 맵 열 때 초기화). 맞는 주제 · 위 단계 · 그 가지는 또렷, 나머지 `.mm-dim` + 선 `.mm-edge-dim`. 칩 다시 누르기 = 다음(Shift 이전), 접힌 위 단계 펼침(검색과 같음).

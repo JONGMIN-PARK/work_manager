@@ -205,6 +205,31 @@ function _mmSetProp(key, value) {
 }
 
 /**
+ * 놓을 자리 표시선 — 앞(before) · 뒤(after)면 그 주제와 이웃 사이 틈에 굵은 선, 하위(child)면 주제 오른쪽(왼쪽 가지는 왼쪽)에 짧은 화살표 선.
+ * 끌던 글자(ghost)에 가리지 않게 주제 칸 밖에 그린다. t = null 이면 지움
+ */
+function _mmDropLine(t) {
+  var stage = _mmEl('mmStage');
+  if (!stage) return;
+  var ln = stage.querySelector('.mm-drop-line');
+  var p = t && _mm.layout && _mm.layout.pos[t.id];
+  if (!p) { if (ln) ln.remove(); return; }
+  if (!ln) { ln = document.createElement('div'); stage.appendChild(ln); }
+  var down = (_mmSheet().structure === 'down'), g = 6, css;
+  if (t.zone === 'child') {
+    var left = p.side === 'left';
+    css = down ? 'left:' + (p.x + p.w / 2 - 1.5) + 'px;top:' + (p.y + p.h + 4) + 'px;width:3px;height:22px'
+      : 'left:' + (left ? p.x - 30 : p.x + p.w + 6) + 'px;top:' + (p.y + p.h / 2 - 1.5) + 'px;width:24px;height:3px';
+  } else if (down) {
+    css = 'left:' + (t.zone === 'before' ? p.x - g - 2 : p.x + p.w + g - 1) + 'px;top:' + (p.y - 4) + 'px;width:3px;height:' + (p.h + 8) + 'px';
+  } else {
+    css = 'left:' + (p.x - 6) + 'px;top:' + (t.zone === 'before' ? p.y - g - 2 : p.y + p.h + g - 1) + 'px;width:' + (p.w + 12) + 'px;height:3px';
+  }
+  ln.className = 'mm-drop-line mm-drop-line-' + t.zone;
+  ln.style.cssText = css;
+}
+
+/**
  * 끌던 주제를 빈 곳에 놓을 때 들어갈 자리 — 커서와 가로로 겹치는(±40px) 주제 중 세로로 가장 가까운 것(60px 안)의
  * 앞(before) · 뒤(after). 조직도는 가로 · 세로를 바꿔 본다. 중심 주제 · 끌던 가지 안은 제외. 없으면 null
  */
@@ -608,6 +633,7 @@ function _mmBindCanvas() {
         drag.target = slot;
       }
     }
+    _mmDropLine(drag.target);
   }
   function onUp(e) {
     if (!drag) return;
@@ -628,6 +654,7 @@ function _mmBindCanvas() {
       return;
     }
     if (d.ghost) d.ghost.remove();
+    _mmDropLine(null);
     document.querySelectorAll('.mm-dragging,.mm-drop-child,.mm-drop-before,.mm-drop-after').forEach(function (x) { x.classList.remove('mm-dragging', 'mm-drop-child', 'mm-drop-before', 'mm-drop-after'); });
     if (d.mode !== 'node' || !d.moved) return;
     var root = _mmRoot();

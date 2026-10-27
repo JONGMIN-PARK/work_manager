@@ -1447,3 +1447,8 @@ body.mm-zen-body{overflow:hidden}
 .mm-stage .mm-node.mm-dim{opacity:.22;filter:saturate(.4)}
 .mm-stage .mm-node.mm-dim.mm-sel{opacity:.6}
 .mm-edges .mm-edge-dim{opacity:.22}
+/* 끌어 놓을 자리 표시선 (v13.234) — 주제 칸 밖 틈에 */
+.mm-drop-line{position:absolute;z-index:4;pointer-events:none;border-radius:2px;background:var(--ac);box-shadow:0 0 0 2px color-mix(in srgb,var(--bg) 80%,transparent),0 0 10px color-mix(in srgb,var(--ac) 60%,transparent)}
+.mm-drop-line::before{content:'';position:absolute;left:-4px;top:-3px;width:9px;height:9px;border-radius:50%;background:var(--ac)}
+.mm-drop-line-child::before{left:auto;right:-5px}
+.mm-stage .mm-node.mm-drop-before,.mm-stage .mm-node.mm-drop-after{box-shadow:none}
