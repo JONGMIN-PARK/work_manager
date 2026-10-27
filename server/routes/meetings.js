@@ -367,7 +367,10 @@ router.put('/:id/actions/:aid', async function (req, res) {
     function set(col, val) { sets.push(col + ' = $' + idx++); params.push(val); }
     if (b.title !== undefined) set('title', b.title);
     if (b.dueDate !== undefined || b.due_date !== undefined) set('due_date', b.dueDate || b.due_date || null);
-    if (b.status !== undefined) set('status', b.status === 'done' ? 'done' : 'open');
+    if (b.status !== undefined) {
+      set('status', b.status === 'done' ? 'done' : 'open');
+      sets.push(b.status === 'done' ? 'done_at = COALESCE(done_at, now())' : 'done_at = NULL');   // 내 업무 '다 한 것' (v13.248)
+    }
     if (b.assigneeName !== undefined || b.assignee_name !== undefined) {
       var an = b.assigneeName || b.assignee_name || null;
       set('assignee_name', an);

@@ -13,7 +13,7 @@ function setPage(page){
   var _opTab=document.querySelector('#modeTabsProj .tab[data-m="operator"]');
   if(_opTab)_opTab.classList.toggle('hidden',!(typeof isOperator==='function'&&isOperator()));
   // 모든 모드 숨기기
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap','mMyWork','mWorkload'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   if(typeof _applyWideMode==='function')_applyWideMode(false);  // 타임라인 외 페이지는 기본 폭
   // 해당 페이지의 첫 탭 활성화
   if(page==='useradmin'){
@@ -37,6 +37,13 @@ function setPage(page){
     var mmw=document.getElementById('mMindmap');if(mmw)mmw.classList.remove('hidden');
     if(typeof _applyWideMode==='function')_applyWideMode(true);  // 캔버스는 창 너비 전체
     if(typeof renderMindmap==='function')renderMindmap();
+  }else if(page==='mywork'||page==='workload'){
+    document.getElementById('modeTabs').classList.add('hidden');
+    document.getElementById('modeTabsProj').classList.add('hidden');
+    var mwId=page==='mywork'?'mMyWork':'mWorkload';
+    var mwe=document.getElementById(mwId);if(mwe)mwe.classList.remove('hidden');
+    if(page==='mywork'&&typeof renderMyWork==='function')renderMyWork();
+    if(page==='workload'&&typeof renderWorkload==='function')renderWorkload();
   }else if(page==='messages'){
     document.getElementById('modeTabs').classList.add('hidden');
     document.getElementById('modeTabsProj').classList.add('hidden');

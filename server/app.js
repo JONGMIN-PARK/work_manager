@@ -208,6 +208,7 @@ var messageRoutes = require('./routes/messages');
 var specTemplateRoutes = require('./routes/spec-templates');
 var projectSpecRoutes = require('./routes/project-specs');
 var mindmapRoutes = require('./routes/mindmaps');
+var myWorkRoutes = require('./routes/my-work');
 var v1Router = require('./routes/v1');
 var apiDocsRoutes = require('./routes/api-docs');
 
@@ -257,6 +258,7 @@ app.use('/api/tech', techRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/mindmaps', mindmapRoutes);
+app.use('/api/my-work', myWorkRoutes);
 
 // ─── API v1 (버전 관리) ───
 app.use('/api/v1', v1Router);

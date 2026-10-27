@@ -501,6 +501,11 @@ function updateAuthUI() {
   if (mmTab) {
     mmTab.style.display = (currentUser.role === 'admin' || currentUser.mindmapAccess) ? '' : 'none';
   }
+  // 업무 부하 — 관리자 · 임원 · 팀장 (v13.248)
+  var wlTab = document.getElementById('tabWorkload');
+  if (wlTab) {
+    wlTab.style.display = ['admin', 'executive', 'manager'].indexOf(currentUser.role) >= 0 ? '' : 'none';
+  }
   var wrTab = document.getElementById('tabWeeklyReport');
   if (wrTab) {
     wrTab.style.display = currentUser.role === 'admin' ? '' : 'none';

@@ -201,7 +201,14 @@ function _mmSetProp(key, value) {
   _mmMutate(function () {
     if (value === '' || value == null || value === false || (Array.isArray(value) && !value.length)) delete f.node[key];
     else f.node[key] = value;
+    if (key === 'done') _mmStampDone(f.node);
   });
+}
+
+/** 완료 시각 — 내 업무 '다 한 것(최근 7일)' 용 (v13.248) */
+function _mmStampDone(n) {
+  if (n.done) { if (!n.doneAt) n.doneAt = new Date().toISOString(); }
+  else delete n.doneAt;
 }
 
 /**

@@ -65,7 +65,7 @@ function _mmkColorCycle() {
 function _mmkDone() {
   var nodes = _mmkNodes();
   var on = !nodes.every(function (n) { return n.done; });
-  _mmkEach(function (n) { if (on) n.done = true; else delete n.done; });
+  _mmkEach(function (n) { if (on) n.done = true; else delete n.done; _mmStampDone(n); });
 }
 var MM_PROGRESS_STEPS = [null, 0, 25, 50, 75, 100];
 function _mmkProgress() {

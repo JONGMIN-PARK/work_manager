@@ -353,7 +353,9 @@ function mmOpen(id) {
     _mm.search = ''; _mm.hits = []; _mm.hitIdx = -1; _mm.vf = null; _mm.comments = []; _mm.files = [];
     _mm.zoom = 1; _mm.panX = null; _mm.panY = null;
     if (window.innerWidth < 768) _mm.outline = true;   // 휴대폰은 아웃라인 보기로 시작
+    var go = _mmTakeGoto(id);
     _mmRenderEditor();
+    if (go) setTimeout(function () { if (_mm.mapId === id) _mmSelect(go); }, 0);
     if (_mm.canEdit) _mmLockAcquire(false);
     _mmResolveRefs();
     if (typeof mmLoadImages === 'function') mmLoadImages(id);
@@ -366,6 +368,25 @@ function mmOpen(id) {
     _mmToast('❌ 맵을 열 수 없습니다 — ' + (e && e.status === 404 ? '삭제되었거나 권한이 없습니다' : _mmErr(e)), 'error');
     _mmRenderList();
   });
+}
+
+/**
+ * 다른 화면(내 업무)에서 주제로 바로 열기 — _mm.goto = { mapId, sheet, node }.
+ * 그 시트로 바꾸고 접힌 위 단계를 펴서 고를 주제 id 를 돌려준다 (없으면 null)
+ */
+function _mmTakeGoto(id) {
+  var g = _mm.goto;
+  if (!g || g.mapId !== id) return null;
+  _mm.goto = null;
+  if (_mm.doc.sheets[g.sheet]) _mm.sheetIdx = g.sheet;
+  var f = mmFind(_mmRoot(), g.node);
+  if (!f) { _mmToast('주제를 찾을 수 없습니다 — 지워졌거나 옮겨졌습니다', 'warn'); return null; }
+  while (f && f.parent) {
+    f.parent.collapsed = false;
+    f = mmFind(_mmRoot(), f.parent.id);
+  }
+  _mm.sel = g.node;
+  return g.node;
 }
 
 function mmBack() {

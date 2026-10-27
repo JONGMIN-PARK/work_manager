@@ -1,5 +1,14 @@
 # Work Manager — 변경 이력
 
+## v13.248 (2026-10-28) — 내 업무 · 👥 업무 부하
+
+- 서버: `GET /api/my-work` · `/people` · `PUT /done` · `POST·PUT·DELETE /todos` · `GET /load` · `PUT /reassign` (`server/routes/my-work.js`). 모으기는 `server/lib/my-work.js` — 마인드맵 doc · `issue_assignees` · `meeting_action_items` · `prestudies` · `milestone_assignments` · `project_dev_items`(마감 = 연결 마일스톤 종료일) · `my_todos`.
+- 권한: 보기 — 관리자 · 임원 전체, 팀장 같은 부서, 팀원 본인. 남의 것은 보는 사람이 볼 수 있는 프로젝트 · 맵 것만. 완료 체크는 본인 · 관리자, 담당 바꾸기는 관리자 · 임원 · 팀장. 맵은 편집 잠금이 있으면 409 `LOCKED`, 버전이 다르면 409.
+- 마이그레이션 `062_my_todos.sql` — `my_todos` 테이블, `meeting_action_items.done_at`.
+- 마인드맵: 완료 체크 때 `doneAt` 기록(`_mmStampDone`), 다른 화면에서 주제로 열기(`_mm.goto`, `_mmTakeGoto`). 맵 가시성 조건을 `server/lib/mindmap-visible.js` 로 뺌(목록과 내 업무가 같이 씀).
+- 브리핑: `sendDailyBriefing` 에 `myWorkBlock`.
+- 테스트: `api-mywork.js` (43), `e2e24-mywork.js` (12).
+
 ## v13.247 (2026-10-28) — 마인드맵 큰 맵 속도 · 화면 정리
 
 - 성능: `_mmPaintMini` 가 주제마다 `querySelector` + `getComputedStyle` 을 불러 주제 수의 제곱으로 느려졌던 것 — 색은 `_mm.colors`(그릴 때 정한 색)를 색마다 한 번만 풀어 쓰고, 주제 그림은 배치가 바뀔 때만 다시 그려 둔 뒤(`_mm.miniImg`) 화면 이동 때는 보이는 영역만 긋는다.

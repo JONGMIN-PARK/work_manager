@@ -4,6 +4,7 @@
  */
 var db = require('../../config/db');
 var mindmapDue = require('../../lib/mindmap-due');
+var myWork = require('../../lib/my-work');
 var telegramService = require('../telegram.service');
 var escHtml = require('../../telegram/util/escape').escHtml;
 var dispatch = require('./dispatch');
@@ -174,6 +175,9 @@ async function sendDailyBriefing() {
       // 오늘 납기 (공통)
       msg += dlBlockFor(usr.tenant_id);
 
+      // 내 할 일 — 지연 · 오늘 · 이번 주 (v13.248 내 업무 탭과 같은 모음)
+      msg += await myWorkBlock(usr, today);
+
       if (!msg) {
         msg = '✨ 오늘은 특별한 일정이 없습니다. 좋은 하루 되세요!';
       }
@@ -186,6 +190,33 @@ async function sendDailyBriefing() {
     }
   }
   console.log('[Notification] Daily briefing sent for', today);
+}
+
+/** 브리핑용 '내 할 일' 조각 — 지연 · 오늘 마감 위주로 5건, 실패해도 브리핑은 보냄 */
+async function myWorkBlock(usr, today) {
+  try {
+    var req = { tenant: { id: usr.tenant_id }, user: { sub: usr.user_id, role: 'member' } };
+    var items = (await myWork.collect(req, [{ id: usr.user_id, name: usr.name }])).filter(function (it) { return !it.done && it.due; });
+    var weekEnd = myWork.daysBetween(today, myWork.mondayOf(today)) + 6;   // 오늘부터 이번 주 일요일까지 남은 날
+    var late = [], todays = [], week = 0;
+    items.forEach(function (it) {
+      var d = myWork.daysBetween(today, it.due);
+      if (d < 0) late.push({ it: it, d: -d });
+      else if (d === 0) todays.push({ it: it, d: 0 });
+      else if (d <= weekEnd) week++;
+    });
+    if (!late.length && !todays.length && !week) return '';
+    late.sort(function (a, b) { return b.d - a.d; });
+    var b = '📋 <b>내 할 일</b> — ' + [late.length ? '지연 ' + late.length : '', todays.length ? '오늘 ' + todays.length : '', week ? '이번 주 ' + week : ''].filter(Boolean).join(' · ') + '\n';
+    late.concat(todays).slice(0, 5).forEach(function (x) {
+      b += '  ' + (x.d ? '⚠️ 지연 ' + x.d + '일' : '· 오늘') + ' — ' + escHtml(x.it.title) + (x.it.ctx ? ' <i>(' + escHtml(x.it.ctx.slice(0, 30)) + ')</i>' : '') + '\n';
+    });
+    if (late.length + todays.length > 5) b += '  … 외 ' + (late.length + todays.length - 5) + '건 — 웹의 🎯 내 업무에서\n';
+    return b + '\n';
+  } catch (e) {
+    console.error('[DailyBriefing/myWork]', usr.user_id, e.message);
+    return '';
+  }
 }
 
 /** 수주 납품 리마인더 (매일 실행) */
@@ -529,6 +560,7 @@ module.exports = {
   sendPrestudyReminders: sendPrestudyReminders,
   sendMindmapDueReminders: sendMindmapDueReminders,
   sendTechStaleReminders: sendTechStaleReminders,
+  _myWorkBlock: myWorkBlock,   // 테스트용
   _kstYmd: _kstYmd,     // 테스트용
   _parseYmd: _parseYmd
 };

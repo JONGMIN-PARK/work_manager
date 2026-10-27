@@ -24,6 +24,7 @@ var pa = require('../lib/project-access');
 var authService = require('../services/auth.service');
 var httpErr = require('../lib/http-errors');
 var mmData = require('../lib/mindmap-data');
+var mmVisible = require('../lib/mindmap-visible');
 var aiMindmap = require('../services/ai-mindmap.service');
 var rateLimit = require('express-rate-limit');
 var notificationService = require('../services/notification.service');
@@ -415,18 +416,10 @@ router.post('/ai', aiLimiter, async function (req, res) {
 // GET /api/mindmaps?scope=&projectId=&q= — 목록 (doc 제외)
 router.get('/', async function (req, res) {
   try {
-    var me = req.user.sub;
-    var params = [req.tenant.id, me];
-    var idx = 3;
-    var sub = pa.accessibleProjectsSubquery(req, idx);
-    params = params.concat(sub.params);
-    idx = sub.nextIdx;
-    var deptCond = '';
-    if (req.user.departmentId) { params.push(req.user.departmentId); deptCond = " OR (m.scope = 'dept' AND m.department_id = $" + params.length + ')'; idx = params.length + 1; }
-    var visible = '(m.owner_id = $2 OR m.editors ? $2::text OR m.viewers ? $2::text' +
-      " OR m.scope = 'org'" + deptCond +
-      " OR (m.scope = 'project' AND m.project_id IN (" + sub.sql + '))' +
-      (req.user.role === 'admin' ? " OR m.scope <> 'personal'" : '') + ')';
+    var vis = mmVisible.visibleMapsSql(req, 2);
+    var params = [req.tenant.id].concat(vis.params);
+    var idx = vis.nextIdx;
+    var visible = vis.sql;
     var sql = 'SELECT m.id, m.title, m.scope, m.owner_id, m.project_id, m.editors, m.viewers, m.theme, m.template, ' +
       'm.node_count, m.pinned_by, m.version, m.created_at, m.updated_at, m.updated_by, ' +
       "COALESCE(NULLIF(u.display_name,''), u.name) AS owner_name, " +
