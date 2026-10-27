@@ -367,12 +367,13 @@ function _mmPaint() {
   stage.innerHTML = '<svg class="mm-edges" id="mmEdges" xmlns="http://www.w3.org/2000/svg"></svg>' + html.join('');
   var sizes = {};
   // 이음매: 주제 상자는 화소 단위로 맞춰 그려지는데 선(SVG)은 그렇지 않아, 위치 · 크기가 소수면 확대할수록
-  // 밑줄과 선이 위아래로 어긋난다. 크기는 실제 크기를 올림한 정수로 재고 그 크기로 고정, 위치도 정수로 맞춘다.
+  // 밑줄과 선이 위아래로 어긋난다. 크기는 실제 크기를 올림한 정수로 재 최소 크기로 두고, 위치도 정수로 맞춘다.
+  // (width 로 고정하면 글꼴이 늦게 받아져 글자가 넓어질 때 한 글자씩 줄이 꺾인다 — min-width 라 그때는 늘어난다)
   var zm = _mm.zoom || 1;
   function sizeOf(el) {
     var r = el.getBoundingClientRect();
     var w = r.width ? r.width / zm : el.offsetWidth, h = r.width ? r.height / zm : el.offsetHeight;
-    return { w: Math.ceil(w - 0.05), h: Math.ceil(h - 0.05) };
+    return { w: Math.ceil(w - 0.01), h: Math.ceil(h - 0.01) };
   }
   var els = stage.querySelectorAll('.mm-node');
   els.forEach(function (el) { sizes[el.getAttribute('data-id')] = sizeOf(el); });
@@ -389,10 +390,10 @@ function _mmPaint() {
     el.style.left = p.x + 'px';
     el.style.top = p.y + 'px';
     el.setAttribute('data-side', p.side);
-    el.style.width = p.w + 'px';
+    el.style.minWidth = p.w + 'px';
     el.style.minHeight = p.h + 'px';
-    // 같은 단계 맞춤으로 넓힌 주제 (글자 정렬은 시트 설정 — stage 의 mm-ta-*)
-    if (lay.aligned && lay.aligned[id]) el.classList.add('mm-aligned');
+    // 같은 단계 맞춤으로 넓힌 주제는 그 너비로 (글자 정렬은 시트 설정 — stage 의 mm-ta-*)
+    if (lay.aligned && lay.aligned[id]) { el.style.width = p.w + 'px'; el.classList.add('mm-aligned'); }
   });
   stage.className = 'mm-stage mm-ta-' + (sheet.textAlign || 'auto');
   var b = lay.bounds;
@@ -447,6 +448,14 @@ function _mmPaint() {
   if (typeof _mmAiBar === 'function') _mmAiBar();
   if (_mm.outline) _mmPaintOutline();
   if (_mm.gantt) _mmPaintGantt();
+}
+
+// 글꼴(웹 폰트 글자 묶음)이 그린 뒤에 받아지면 주제 크기가 바뀌므로 다시 배치 — 입력 중이면 건너뜀
+if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) {
+  document.fonts.addEventListener('loadingdone', function () {
+    var stage = _mmEl('mmStage');
+    if (stage && stage.offsetParent && _mm.doc && !_mm.editing) _mmPaint();
+  });
 }
 
 /* ═══ 미니맵 — 전체 축소 지도 + 지금 보이는 영역, 눌러서 이동 ═══ */

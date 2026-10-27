@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.226 (2026-10-27) — 마인드맵 주제 글자 꺾임
+
+- mindmap-view.js: v13.225 의 `width` 고정 → `min-width`(같은 단계 맞춤 주제만 width). 웹 폰트(Noto Sans KR 글자 묶음)가 그린 뒤 받아지거나 측정 오차로 실제 글자가 더 넓으면 한 글자씩 꺾이던 것. 올림 여유 -0.05 → -0.01.
+- `document.fonts` `loadingdone` 때 마인드맵이 보이고 입력 중이 아니면 `_mmPaint()` 로 다시 배치.
+
 ## v13.225 (2026-10-27) — 마인드맵 확대 시 이음매 어긋남
 
 - mindmap-view.js `_mmPaint`: 주제 상자(border)는 화소에 맞춰 그려지고 SVG 선은 아니어서, 소수 위치 · 크기면 확대할수록 밑줄과 선이 위/아래로 어긋남. 크기는 실제 크기 올림 정수로 재고 모든 주제에 width/min-height 로 고정, `lay.pos` x·y 반올림, SVG 범위(bounds)도 정수. 300% · 화면 배율 125% 에서 확인.
