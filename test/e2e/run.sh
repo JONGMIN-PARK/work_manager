@@ -1,0 +1,64 @@
+#!/bin/bash
+# 마인드맵 통합 테스트 — 임시 Postgres(:54329) + 서버(:3000) 를 띄우고 API · 브라우저 테스트 실행.
+#   bash test/e2e/run.sh              # 전부
+#   bash test/e2e/run.sh e2e3.js ...  # 고른 파일만 (한 묶음)
+# 처음 한 번: 이 폴더에서 npm install (embedded-postgres). puppeteer · pg 는 server/node_modules 것을 씀.
+# 서버는 묶음마다 다시 켠다 — 로그인 횟수 제한(10회) 때문.
+cd "$(dirname "$0")"
+DIR=$(pwd)
+SRV="$DIR/../../server"
+DB=postgres://postgres:pw@localhost:54329/wm
+[ -d node_modules ] || npm install --no-audit --no-fund > /dev/null
+
+port_open() { (echo > /dev/tcp/127.0.0.1/$1) > /dev/null 2>&1; }
+kill_port() {
+  if command -v taskkill > /dev/null 2>&1; then
+    for p in $(netstat -ano 2>/dev/null | grep ":$1 .*LISTENING" | awk '{print $5}' | sort -u); do taskkill //PID $p //F > /dev/null 2>&1; done
+  else
+    fuser -k $1/tcp > /dev/null 2>&1
+  fi
+}
+
+PG_PID=
+if ! port_open 54329; then
+  FRESH=; [ -d .pgdata ] || FRESH=1
+  node start.mjs > pg.log 2>&1 &
+  PG_PID=$!
+  for i in $(seq 1 60); do grep -q "PG READY" pg.log 2>/dev/null && break; sleep 1; done
+  if [ -n "$FRESH" ]; then node setup.js > setup.log 2>&1 || { echo "setup 실패 — setup.log 참고"; exit 1; }; fi
+fi
+port_open 3000 && { echo "포트 3000 이 이미 쓰이고 있습니다 — 띄워 둔 서버를 끄고 다시 실행하세요"; exit 1; }
+
+FAILED=0
+run_batch() {
+  (cd "$SRV" && DATABASE_URL=$DB PORT=3000 CORS_ORIGIN=http://localhost:3000 node server.js > "$DIR/server.log" 2>&1) &
+  curl -s -o /dev/null --retry 20 --retry-connrefused --retry-delay 1 http://localhost:3000/
+  for f in "$@"; do
+    out=$(node "$f" 2>&1)
+    res=$(echo "$out" | grep -E "ALL PASS|FAIL|AssertionError|Error:" | head -3 | tr '\n' ' ')
+    [ -z "$res" ] && res=$(echo "$out" | tail -1)
+    echo "$res" | grep -q "ALL PASS" || FAILED=1
+    printf "%-20s %s\n" "$f" "$res"
+  done
+  kill_port 3000
+  sleep 1
+}
+
+if [ $# -gt 0 ]; then
+  run_batch "$@"
+else
+  run_batch api-test.js api-project.js
+  run_batch api-phase2.js api-snap.js
+  run_batch e2e.js e2e7.js
+  run_batch e2e2.js
+  run_batch e2e3.js e2e4.js e2e5.js
+  run_batch e2e6.js
+  run_batch e2e8.js e2e9-progress.js e2e10-split.js
+fi
+
+# 이 실행이 띄운 Postgres 면 정상 종료 (start.mjs 가 .pgstop 을 보고 멈춤)
+if [ -n "$PG_PID" ]; then
+  touch .pgstop
+  for i in $(seq 1 30); do port_open 54329 || break; sleep 1; done
+fi
+[ $FAILED = 0 ] && echo "== 전부 통과" || { echo "== 실패 있음"; exit 1; }

@@ -1,0 +1,8 @@
+{
+  "name": "work-manager-e2e",
+  "private": true,
+  "description": "브라우저 · API 통합 테스트 (임시 Postgres + 로컬 서버). 실행: bash test/e2e/run.sh",
+  "dependencies": {
+    "embedded-postgres": "^18.4.0-beta.17"
+  }
+}
