@@ -422,7 +422,7 @@ function mmMultiPanelHtml() {
     }).join('') + '</div></div>' +
     '<div class="mm-pn-sec"><div class="mm-pn-h">우선순위</div><div class="mm-swatches">' + btn('priorityClear', '—') +
     [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (i) { return btn('priority:' + i, '<span class="mm-pri mm-pri' + i + '">' + i + '</span>'); }).join('') + '</div></div>' +
-    '<div class="mm-pn-sec"><div class="mm-pn-h">마커</div><div class="mm-swatches">' + MM_SYMBOLS.map(function (s) { return btn('symbol:' + s.k, s.g, s.l); }).join('') + '</div></div>' +
+    '<div class="mm-pn-sec"><div class="mm-pn-h">마커</div>' + _mmSymbolGroupsHtml(function (s) { return btn('symbol:' + s.k, s.g, s.l); }) + '</div>' +
     '<div class="mm-pn-sec"><div class="mm-pn-h">한 번에</div><div class="mm-swatches">' +
     btn('done', '✓ 완료', 'Alt+K') + btn('progress', '◔ 진척', 'Alt+P') + btn('boundary', '▭ 경계', 'Alt+B') + btn('fold', '접기', 'Space') +
     btn('duplicate', '복제', 'Ctrl+D') + btn('delete', '🗑 삭제', 'Delete') + '</div></div>';

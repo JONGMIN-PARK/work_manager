@@ -37,10 +37,10 @@ function _mmPaintPanel() {
     '<button class="mm-mkbtn' + (!pri ? ' on' : '') + '" data-act="priority" data-v=""' + ro + '>—</button>' +
     [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (i) { return '<button class="mm-mkbtn' + (pri === String(i) ? ' on' : '') + '" data-act="priority" data-v="' + i + '"' + ro + '><span class="mm-pri mm-pri' + i + '">' + i + '</span></button>'; }).join('') +
     '</div></div>';
-  h += '<div class="mm-pn-sec"><div class="mm-pn-h">마커</div><div class="mm-swatches">' + MM_SYMBOLS.map(function (s) {
+  h += '<div class="mm-pn-sec"><div class="mm-pn-h">마커</div>' + _mmSymbolGroupsHtml(function (s) {
     var on = (n.markers || []).indexOf(s.k) >= 0;
     return '<button class="mm-mkbtn' + (on ? ' on' : '') + '" data-act="symbol" data-v="' + s.k + '" title="' + s.l + '"' + ro + '>' + s.g + '</button>';
-  }).join('') + '</div></div>';
+  }) + '</div>';
   h += '<div class="mm-pn-sec"><div class="mm-pn-h">라벨 <span class="mm-hint">쉼표로 구분</span></div>' +
     '<input id="mmPnLabels" class="mm-input" value="' + _mmEsc((n.labels || []).join(', ')) + '"' + ro + '></div>';
   var members = _mm.members || [];

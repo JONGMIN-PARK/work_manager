@@ -460,6 +460,10 @@ function _mmXmindMarker(id, n) {
   if (MM_XMIND_TASK[id] != null) { n.progress = MM_XMIND_TASK[id]; if (id === 'task-done') n.done = true; return null; }
   if (/^flag-/.test(id)) return 'flag';
   if (/^star-/.test(id)) return 'star';
+  var sm = /^smiley-(\w+)/.exec(id);
+  if (sm) return { smile: 'smile', laugh: 'smile', boring: 'meh', cry: 'sad', angry: 'angry', surprise: 'surprise' }[sm[1]] || 'smile';
+  var ar = /^arrow-(up|down|left|right|refresh)/.exec(id);
+  if (ar) return ar[1];
   if (/question/.test(id)) return 'question';
   if (/(attention|exclam|warning)/.test(id)) return 'warning';
   if (/(idea|bulb)/.test(id)) return 'idea';

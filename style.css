@@ -1157,8 +1157,8 @@ body.mm-zen-body{overflow:hidden}
 /* 캔버스 */
 .mm-canvas{background-color:var(--bg);background-image:radial-gradient(circle,color-mix(in srgb,var(--t6) 40%,transparent) 1px,transparent 1.3px);background-size:24px 24px}
 /* 가지 · 선 */
-.mm-branch{stroke:none;opacity:.92}
-.mm-edge{opacity:.85}
+.mm-branch{stroke:none}
+.mm-edge{stroke-linecap:butt}
 /* 주제 */
 .mm-node{transition:box-shadow .15s,background-color .15s}
 .mm-node.mm-main{background:color-mix(in srgb,var(--mm-c) 8%,var(--bg-ps,var(--bg-p)));border:1.5px solid color-mix(in srgb,var(--mm-c) 75%,transparent);border-radius:10px;padding:8px 15px;color:var(--t1);
@@ -1217,3 +1217,8 @@ body.mm-zen-body{overflow:hidden}
 .mm-rail-btn{padding:5px 2px 4px;gap:2px;font-size:9.5px}
 .mm-tool-sep{margin:3px 10px}
 .mm-minimap{width:176px;height:114px}
+/* ═══ 🧠 마인드맵 마커 묶음 (v13.222) ═══ */
+.mm-mk-grp{display:flex;flex-direction:column;gap:4px}
+.mm-mk-grp+.mm-mk-grp{margin-top:6px}
+.mm-mk-grp-h{font-size:10.5px;color:var(--t5);font-weight:600}
+.mm-mk-grp .mm-mkbtn{width:28px;height:28px;font-size:14px;padding:0}

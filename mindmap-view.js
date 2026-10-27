@@ -392,10 +392,11 @@ function _mmPaint() {
     var pp = lay.pos[p.parentId];
     if (p.depth <= 2) {
       // 가지는 부모 쪽이 굵고 끝으로 갈수록 가늘게 (유료 마인드맵 툴의 기본 모양)
-      var w0 = p.depth === 1 ? 7 : 3.2, w1 = p.depth === 1 ? 2.4 : 1.4;
+      // 끝 굵기를 하위 주제 밑줄과 같게 해 이음매에 단이 지지 않게 한다.
+      var w0 = p.depth === 1 ? 7 : 3.4, w1 = p.depth === 1 ? 2.4 : MM_UNDERLINE;
       paths.push('<path d="' + mmEdgeShape(pp, p, st, w0, w1) + '" class="mm-branch" style="fill:' + colors[id] + '"/>');
     } else {
-      paths.push('<path d="' + mmEdgePath(pp, p, st) + '" class="mm-edge" style="stroke:' + colors[id] + ';stroke-width:1.3"/>');
+      paths.push('<path d="' + mmEdgePath(pp, p, st) + '" class="mm-edge" style="stroke:' + colors[id] + ';stroke-width:' + MM_UNDERLINE + '"/>');
     }
   });
   var svg = _mmEl('mmEdges');

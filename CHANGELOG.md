@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.222 (2026-10-27) — 마인드맵 마커 늘림 · 가지 이음매
+
+- mindmap.js: `MM_SYMBOL_GROUPS` 7묶음 · `MM_SYMBOLS` 59종(기존 키 유지, `grp` 추가) · `_mmSymbolGroupsHtml(btn)` — 속성 패널과 여러 주제 패널이 함께 씀. `MM_UNDERLINE = 2`.
+- mindmap-layout.js `_mmXmindMarker`: `smiley-*` · `arrow-*` 대응.
+- mindmap-view.js: 2단계 가지 끝 굵기와 3단계 아래 선 굵기를 `MM_UNDERLINE`(밑줄 2px)과 같게. style.css: 가지 · 선 opacity 제거(겹치는 곳이 진해져 단이 지던 것).
+
 ## v13.221 (2026-10-27) — 마인드맵 화면 다듬기
 
 - 접기 버튼: 주제 칸 밖(-24px) 연결선 위, 평소 opacity 0 → `.mm-node:hover/.mm-sel/.mm-folded` 에서 표시, 접히면 채운 개수 배지. 2단계 아래는 밑줄 높이.

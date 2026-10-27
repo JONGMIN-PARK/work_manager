@@ -29,12 +29,51 @@ var MM_COLORS = [
   { key: 'cyan', c: 'var(--stat-cyan,#06B6D4)' },
   { key: 'slate', c: '#64748B' }
 ];
+var MM_UNDERLINE = 2;   // 하위 주제 밑줄 굵기(px) — style.css .mm-topic2 border-bottom 과 같게
 var MM_AUTO_COLORS = ['blue', 'green', 'amber', 'rose', 'purple', 'cyan'];
-var MM_SYMBOLS = [
-  { k: 'flag', g: '🚩', l: '플래그' }, { k: 'star', g: '⭐', l: '별' }, { k: 'question', g: '❓', l: '질문' },
-  { k: 'warning', g: '⚠️', l: '주의' }, { k: 'idea', g: '💡', l: '아이디어' }, { k: 'check', g: '✅', l: '확인' },
-  { k: 'cross', g: '❌', l: '취소' }, { k: 'people', g: '👥', l: '협의' }
+/* 마커 — 묶음(grp)별로 패널에 표시. k 는 저장 값이라 바꾸지 않는다 */
+var MM_SYMBOL_GROUPS = [
+  { k: 'state', l: '상태' }, { k: 'flag', l: '깃발 · 별' }, { k: 'face', l: '표정' },
+  { k: 'arrow', l: '화살표 · 의견' }, { k: 'people', l: '사람' }, { k: 'work', l: '업무' }, { k: 'misc', l: '기타' }
 ];
+var MM_SYMBOLS = [
+  { k: 'check', g: '✅', l: '확인', grp: 'state' }, { k: 'cross', g: '❌', l: '취소', grp: 'state' },
+  { k: 'question', g: '❓', l: '질문', grp: 'state' }, { k: 'warning', g: '⚠️', l: '주의', grp: 'state' },
+  { k: 'stop', g: '⛔', l: '막힘', grp: 'state' }, { k: 'wait', g: '⏳', l: '대기', grp: 'state' },
+  { k: 'hot', g: '🔥', l: '긴급', grp: 'state' }, { k: 'new', g: '🆕', l: '새 항목', grp: 'state' },
+  { k: 'repeat', g: '🔁', l: '반복', grp: 'state' }, { k: 'lock', g: '🔒', l: '잠금 · 비공개', grp: 'state' },
+  { k: 'flag', g: '🚩', l: '플래그', grp: 'flag' }, { k: 'flag-finish', g: '🏁', l: '완료 지점', grp: 'flag' },
+  { k: 'flag-white', g: '🏳️', l: '흰 깃발', grp: 'flag' }, { k: 'flag-black', g: '🏴', l: '검은 깃발', grp: 'flag' },
+  { k: 'star', g: '⭐', l: '별', grp: 'flag' }, { k: 'sparkle', g: '✨', l: '반짝', grp: 'flag' },
+  { k: 'heart', g: '❤️', l: '하트', grp: 'flag' }, { k: 'medal', g: '🏅', l: '메달', grp: 'flag' }, { k: 'trophy', g: '🏆', l: '트로피', grp: 'flag' },
+  { k: 'smile', g: '😀', l: '좋음', grp: 'face' }, { k: 'meh', g: '😐', l: '보통', grp: 'face' },
+  { k: 'sad', g: '😟', l: '걱정', grp: 'face' }, { k: 'angry', g: '😠', l: '불만', grp: 'face' },
+  { k: 'surprise', g: '😮', l: '놀람', grp: 'face' }, { k: 'think', g: '🤔', l: '고민', grp: 'face' },
+  { k: 'up', g: '⬆️', l: '올림', grp: 'arrow' }, { k: 'down', g: '⬇️', l: '내림', grp: 'arrow' },
+  { k: 'right', g: '➡️', l: '다음', grp: 'arrow' }, { k: 'left', g: '⬅️', l: '이전', grp: 'arrow' },
+  { k: 'refresh', g: '🔄', l: '갱신', grp: 'arrow' }, { k: 'back', g: '↩️', l: '되돌림', grp: 'arrow' },
+  { k: 'thumbs-up', g: '👍', l: '찬성', grp: 'arrow' }, { k: 'thumbs-down', g: '👎', l: '반대', grp: 'arrow' },
+  { k: 'person', g: '👤', l: '개인', grp: 'people' }, { k: 'people', g: '👥', l: '협의', grp: 'people' },
+  { k: 'handshake', g: '🤝', l: '협력', grp: 'people' }, { k: 'raise', g: '🙋', l: '요청', grp: 'people' },
+  { k: 'customer', g: '🧑‍💼', l: '고객', grp: 'people' }, { k: 'engineer', g: '🧑‍🔧', l: '기술', grp: 'people' },
+  { k: 'target', g: '🎯', l: '목표', grp: 'work' }, { k: 'rocket', g: '🚀', l: '출시', grp: 'work' },
+  { k: 'calendar', g: '📅', l: '일정', grp: 'work' }, { k: 'pin', g: '📌', l: '고정', grp: 'work' },
+  { k: 'doc', g: '📄', l: '문서', grp: 'work' }, { k: 'chat', g: '💬', l: '논의', grp: 'work' },
+  { k: 'mail', g: '✉️', l: '메일', grp: 'work' }, { k: 'phone', g: '📞', l: '전화', grp: 'work' },
+  { k: 'money', g: '💰', l: '비용', grp: 'work' }, { k: 'chart', g: '📈', l: '실적', grp: 'work' },
+  { k: 'bug', g: '🐞', l: '결함', grp: 'work' }, { k: 'tool', g: '🔧', l: '수리 · 조정', grp: 'work' },
+  { k: 'test', g: '🧪', l: '시험', grp: 'work' }, { k: 'box', g: '📦', l: '출하 · 자재', grp: 'work' },
+  { k: 'idea', g: '💡', l: '아이디어', grp: 'misc' }, { k: 'bell', g: '🔔', l: '알림', grp: 'misc' },
+  { k: 'search', g: '🔍', l: '확인 필요', grp: 'misc' }, { k: 'key', g: '🔑', l: '핵심', grp: 'misc' },
+  { k: 'link', g: '🔗', l: '연결', grp: 'misc' }, { k: 'coffee', g: '☕', l: '휴식', grp: 'misc' }
+];
+/** 마커 단추를 묶음별로. btn(s) → 단추 하나의 HTML */
+function _mmSymbolGroupsHtml(btn) {
+  return MM_SYMBOL_GROUPS.map(function (g) {
+    var items = MM_SYMBOLS.filter(function (s) { return s.grp === g.k; });
+    return '<div class="mm-mk-grp"><div class="mm-mk-grp-h">' + g.l + '</div><div class="mm-swatches">' + items.map(btn).join('') + '</div></div>';
+  }).join('');
+}
 var MM_STRUCTURES = [
   { k: 'balanced', l: '마인드맵 ⇆' }, { k: 'right', l: '논리도 →' }, { k: 'down', l: '조직도 ↓' }
 ];
