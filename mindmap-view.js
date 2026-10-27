@@ -311,12 +311,18 @@ function _mmNodeColor(n, parent, depth, root, colors) {
   if (depth === 1) return _mmColorVar(n.color) || _mmColorVar(MM_AUTO_COLORS[root.children.indexOf(n) % MM_AUTO_COLORS.length]);
   return _mmColorVar(n.color) || colors[parent.id];
 }
-/** 진행률 막대 — 직접 입력 · 완료면 그 값, 아니면 하위 평균(점선 테두리 · "하위 평균"). 값이 없으면 안 그림 */
+/**
+ * 진행률 막대 — 직접 입력 · 완료면 그 값, 아니면 값 있는 하위만의 평균(빗금). 값이 없으면 안 그림.
+ * 하위 평균인데 값이 빠진 하위가 있으면 "· 2/3" 처럼 반영된 수를 함께 (평균이 몇 개 기준인지 보이게)
+ */
 function _mmProgHtml(n) {
   var g = _mm.prog && _mm.prog[n.id];
   if (!g || (n.done && !(n.children || []).length)) return '';
-  return '<div class="mm-pg' + (g.own ? '' : ' mm-pg-roll') + (g.p >= 100 ? ' mm-pg-full' : '') + '" title="' + (g.own ? '진행률 ' : '하위 주제 평균 진행률 ') + g.p + '%">' +
-    '<span class="mm-pg-bar"><i style="width:' + g.p + '%"></i></span><b>' + g.p + '%</b></div>';
+  var part = !g.own && g.n < g.of;
+  var tip = g.own ? '진행률 ' + g.p + '%' : '하위 주제 평균 진행률 ' + g.p + '%' + (part ? ' — 하위 ' + g.of + '개 중 ' + g.n + '개 반영, 진행률 미입력 ' + (g.of - g.n) + '개' : '');
+  return '<div class="mm-pg' + (g.own ? '' : ' mm-pg-roll') + (g.p >= 100 ? ' mm-pg-full' : '') + '" title="' + tip + '">' +
+    '<span class="mm-pg-bar"><i style="width:' + g.p + '%"></i></span><b>' + g.p + '%</b>' +
+    (part ? '<small class="mm-pg-cnt">' + g.n + '/' + g.of + '</small>' : '') + '</div>';
 }
 function _mmNodeHtml(n, depth, color, num) {
   var hit = _mm.hits.indexOf(n.id) >= 0;

@@ -49,7 +49,7 @@ function _mmPaintPanel() {
     '<datalist id="mmPnMembers">' + members.map(function (u) { return '<option value="' + _mmEsc(u.name) + '">'; }).join('') + '</datalist>' +
     '<label class="mm-pn-row">시작<input type="date" id="mmPnStart" class="mm-input" value="' + _mmEsc(n.startDate || '') + '"' + ro + '></label>' +
     '<label class="mm-pn-row">마감<input type="date" id="mmPnDue" class="mm-input" value="' + _mmEsc(n.dueDate || '') + '"' + ro + '></label>' +
-    '<label class="mm-pn-row">진행률<input type="number" min="0" max="100" step="5" id="mmPnProg" class="mm-input" placeholder="' + (_mm.prog && _mm.prog[n.id] && !_mm.prog[n.id].own ? '하위 평균 ' + _mm.prog[n.id].p : '') + '%" value="' + (n.progress != null ? _mmEsc(n.progress) : '') + '"' + ro + '></label>' +
+    '<label class="mm-pn-row">진행률<input type="number" min="0" max="100" step="5" id="mmPnProg" class="mm-input" placeholder="' + (_mm.prog && _mm.prog[n.id] && !_mm.prog[n.id].own ? '하위 평균 ' + _mm.prog[n.id].p + (_mm.prog[n.id].n < _mm.prog[n.id].of ? ' (' + _mm.prog[n.id].n + '/' + _mm.prog[n.id].of + ' 반영)' : '') : '') + '%" value="' + (n.progress != null ? _mmEsc(n.progress) : '') + '"' + ro + '></label>' +
     (_mm.readOnly ? '' : '<div class="mm-swatches mm-pg-quick">' + [0, 25, 50, 75, 100].map(function (v) {
       return '<button class="mm-mkbtn' + (String(n.progress) === String(v) ? ' on' : '') + '" data-act="prog" data-v="' + v + '">' + v + '</button>';
     }).join('') + '<button class="mm-mkbtn" data-act="prog" data-v="" title="직접 값 지우기 (하위 평균 사용)">—</button></div>') +

@@ -1411,6 +1411,9 @@ body.mm-zen-body{overflow:hidden}
 .mm-pg-full b{color:var(--stat-green,#10B981)}
 .mm-pg-roll .mm-pg-bar i{background:repeating-linear-gradient(135deg,var(--mm-c) 0 4px,color-mix(in srgb,var(--mm-c) 60%,transparent) 4px 7px)}
 .mm-pg-roll b{font-weight:600;color:var(--t5)}
+.mm-pg-cnt{font-size:9.5px;color:var(--t5);font-variant-numeric:tabular-nums}
+.mm-pg-cnt::before{content:'· ';opacity:.7}
+.mm-root .mm-pg-cnt{color:rgba(255,255,255,.8)}
 .mm-ta-center .mm-node .mm-pg,.mm-ta-auto .mm-node.mm-root .mm-pg,.mm-ta-auto .mm-node[data-side="down"] .mm-pg{justify-content:center}
 .mm-ta-right .mm-node .mm-pg,.mm-ta-auto .mm-node[data-side="left"] .mm-pg{justify-content:flex-end;flex-direction:row-reverse}
 .mm-root .mm-pg,.mm-root .mm-pg b{color:#fff}

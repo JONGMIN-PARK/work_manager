@@ -1,5 +1,9 @@
 # Work Manager — 변경 이력
 
+## v13.230 (2026-10-27) — 마인드맵 하위 평균 반영 개수
+
+- `mmProgressRollup` 하위 평균 항목에 `n`(값 있는 바로 아래 하위 수) · `of`(전체 하위 수). `_mmProgHtml` 이 n < of 면 `.mm-pg-cnt` "2/3" + title 안내, 패널 진행률 placeholder 에도. 미입력 하위는 평균에서 제외(v13.229) 유지 — 사용자 결정 ③.
+
 ## v13.229 (2026-10-27) — 마인드맵 하위 평균 진행률 계산
 
 - mindmap-layout.js `mmProgressRollup`: 값 없는 하위를 0 으로 넣던 것 → 값 있는 하위만의 평균(사용자 결정).

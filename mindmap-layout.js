@@ -305,7 +305,7 @@ function mmDecorations(root, structure, layout, sizes) {
 
 /** 번호 매기기 — numbering 이 켜진 주제의 하위에 1 · 1.1 · 1.1.1 */
 /**
- * 진행률 — 주제마다 { p: 0~100, own: 직접 값인지 }. 완료 = 100, 직접 입력(progress)이 우선,
+ * 진행률 — 주제마다 { p: 0~100, own: 직접 값인지, n · of: (하위 평균일 때) 값이 있는 바로 아래 하위 수 · 전체 하위 수 }. 완료 = 100, 직접 입력(progress)이 우선,
  * 없으면 값이 있는 하위 주제만의 평균(값 없는 하위는 빼고 계산). 하위 어디에도 값이 없으면 표시 안 함(목록에 없음).
  * extra(n) → 연결된 앱 데이터 등 다른 출처의 값(없으면 null).
  */
@@ -322,7 +322,7 @@ function mmProgressRollup(root, extra) {
     var known = vals.filter(function (v) { return v != null; });
     if (!known.length) return null;
     var sum = known.reduce(function (a, v) { return a + v; }, 0);
-    out[n.id] = { p: Math.round(sum / known.length), own: false };
+    out[n.id] = { p: Math.round(sum / known.length), own: false, n: known.length, of: kids.length };
     return out[n.id].p;
   })(root);
   return out;

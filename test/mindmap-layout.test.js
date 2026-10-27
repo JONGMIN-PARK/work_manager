@@ -246,11 +246,11 @@ test('mmProgressRollup — 직접 값 · 완료 우선, 없으면 값 있는 하
     ]
   };
   const g = L.mmProgressRollup(t);
-  assert.deepStrictEqual(g.a, { p: 75, own: false });          // (50 + 100) / 2 — a3 은 값 없어 제외
+  assert.deepStrictEqual(g.a, { p: 75, own: false, n: 2, of: 3 });          // (50 + 100) / 2 — a3 은 값 없어 제외
   assert.deepStrictEqual(g.b, { p: 0, own: true }, '0 도 직접 값');
   assert.strictEqual(g.c, undefined, '하위에 값이 없으면 표시 안 함');
   assert.strictEqual(g.d, undefined);
-  assert.deepStrictEqual(g.r, { p: 38, own: false });          // (75 + 0) / 2 = 37.5 → 38 — c · d 제외
+  assert.deepStrictEqual(g.r, { p: 38, own: false, n: 2, of: 4 });          // (75 + 0) / 2 = 37.5 → 38 — c · d 제외
   const g2 = L.mmProgressRollup(t, (n) => (n.id === 'c1' ? 80 : null));
-  assert.deepStrictEqual(g2.c, { p: 80, own: false });
+  assert.deepStrictEqual(g2.c, { p: 80, own: false, n: 1, of: 1 });
 });
