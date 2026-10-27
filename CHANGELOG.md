@@ -1,5 +1,9 @@
 # Work Manager — 변경 이력
 
+## v13.229 (2026-10-27) — 마인드맵 하위 평균 진행률 계산
+
+- mindmap-layout.js `mmProgressRollup`: 값 없는 하위를 0 으로 넣던 것 → 값 있는 하위만의 평균(사용자 결정).
+
 ## v13.228 (2026-10-27) — 마인드맵 담당자 직접 입력 · 진행률 표시
 
 - 담당: 노드 필드 `assigneeName`(직접 입력 이름) 추가 — `assigneeId`(사용자)와 둘 중 하나. 패널은 select → input + datalist(사용자 이름), 이름이 사용자와 같으면 assigneeId 로. 표시 이름 `_mmAssigneeName(n)`(mindmap.js) — 주제 · 간트 · 이슈 승격 · 버전 비교가 함께 씀.

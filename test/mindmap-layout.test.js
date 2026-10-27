@@ -236,7 +236,7 @@ test('같은 단계 맞춤 — 좌우는 따로, 조직도는 높이도 맞춤',
   assert.ok(['a', 'b', 'c', 'd'].every((id) => P[id].h === 34 && P[id].w === 120 && P[id].y === P.a.y));
 });
 
-test('mmProgressRollup — 직접 값 · 완료 우선, 없으면 하위 평균(값 없는 하위 = 0)', () => {
+test('mmProgressRollup — 직접 값 · 완료 우선, 없으면 값 있는 하위만의 평균', () => {
   const t = {
     id: 'r', children: [
       { id: 'a', children: [{ id: 'a1', progress: 50, children: [] }, { id: 'a2', done: true, children: [] }, { id: 'a3', children: [] }] },
@@ -246,11 +246,11 @@ test('mmProgressRollup — 직접 값 · 완료 우선, 없으면 하위 평균(
     ]
   };
   const g = L.mmProgressRollup(t);
-  assert.deepStrictEqual(g.a, { p: 50, own: false });          // (50 + 100 + 0) / 3
+  assert.deepStrictEqual(g.a, { p: 75, own: false });          // (50 + 100) / 2 — a3 은 값 없어 제외
   assert.deepStrictEqual(g.b, { p: 0, own: true }, '0 도 직접 값');
   assert.strictEqual(g.c, undefined, '하위에 값이 없으면 표시 안 함');
   assert.strictEqual(g.d, undefined);
-  assert.deepStrictEqual(g.r, { p: 13, own: false });          // (50 + 0 + 0 + 0) / 4 = 12.5 → 13
+  assert.deepStrictEqual(g.r, { p: 38, own: false });          // (75 + 0) / 2 = 37.5 → 38 — c · d 제외
   const g2 = L.mmProgressRollup(t, (n) => (n.id === 'c1' ? 80 : null));
   assert.deepStrictEqual(g2.c, { p: 80, own: false });
 });
