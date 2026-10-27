@@ -362,6 +362,7 @@ function _pmtDocViewHtml(m) {
       (_pmt.canEdit ? '<button class="btn btn-g btn-s pmt-btn" onclick="pmtEdit(\'' + mid + '\')" title="양식으로 바꿔 내용을 고칩니다">✏️ 편집</button>' : '') +
       '<button class="btn btn-g btn-s pmt-btn" onclick="pmtPreview(\'' + mid + '\')" title="A4 출력 · PDF 저장">🖨 출력 미리보기</button>' +
       '<button class="btn btn-g btn-s pmt-btn" onclick="pmtPreview(\'' + mid + '\',true)">✉ 메일</button>' +
+      (typeof mmFromMeeting === 'function' && typeof mmHasAccess === 'function' && mmHasAccess() ? '<button class="btn btn-g btn-s pmt-btn" onclick="mmFromMeeting(\'' + mid + '\',this)" title="안건 · 결정 사항 · 액션 아이템을 가지로">🧠 맵으로</button>' : '') +
       (_pmt.canEdit ? '<button class="btn btn-g btn-s pmt-btn" onclick="pmtUncomplete(\'' + mid + '\')" title="완료 표시를 풀고 작성 중으로">작성 중으로</button>' : '') +
     '</span></div>';
   var doc = _pmt.docs && _pmt.docs[m.id];

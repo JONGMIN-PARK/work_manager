@@ -219,12 +219,13 @@ function mmAiWbsDoc(projectId, title) {
 /* ═══ 자동 생성 · 원본과 맞추기 ═══ */
 function mmGenerateDoc(kind, opts) {
   opts = opts || {};
-  var body = { kind: kind, projectId: opts.projectId || undefined, departmentId: opts.all ? '__all' : (opts.departmentId || undefined) };
+  var body = { kind: kind, projectId: opts.projectId || undefined, departmentId: opts.all ? '__all' : (opts.departmentId || undefined), meetingId: opts.meetingId || undefined };
   return apiFetch('/api/mindmaps/generate', { method: 'POST', body: JSON.stringify(body), timeoutMs: 30000 }).then(function (r) {
     var g = r.data;
     return {
       title: g.title,
-      doc: { meta: { gen: { kind: kind, projectId: body.projectId || null, departmentId: body.departmentId || null } },
+      projectId: g.projectId || null,
+      doc: { meta: { gen: { kind: kind, projectId: body.projectId || null, departmentId: body.departmentId || null, meetingId: body.meetingId || null } },
         sheets: [{ id: 'sh-1', title: '시트 1', structure: g.structure || 'balanced', root: g.root, relations: [] }] }
     };
   });
@@ -234,7 +235,7 @@ function mmGenerateDoc(kind, opts) {
 function mmResync() {
   var g = _mm.doc.meta && _mm.doc.meta.gen;
   if (!g || _mm.readOnly) return;
-  var body = { kind: g.kind, projectId: g.projectId || undefined, departmentId: g.departmentId || undefined };
+  var body = { kind: g.kind, projectId: g.projectId || undefined, departmentId: g.departmentId || undefined, meetingId: g.meetingId || undefined };
   apiFetch('/api/mindmaps/generate', { method: 'POST', body: JSON.stringify(body), timeoutMs: 30000 }).then(function (r) {
     var fresh = r.data.root;
     var sheet = _mm.doc.sheets[0];
@@ -533,6 +534,20 @@ function mmProjectSection(projectId, elId) {
     };
   }).catch(function () { /* 권한 없음·서버 미배포 — 칸을 비워 둠 */ });
 }
+/** 회의 화면의 [🧠 맵으로] — 이 회의를 담은 맵이 있으면 열고, 없으면 만들어 엶 (프로젝트 회의는 프로젝트 범위) */
+function mmFromMeeting(meetingId, btn) {
+  if (typeof mmHasAccess === 'function' && !mmHasAccess()) { _mmToast('마인드맵 사용 권한이 없습니다 — 관리자에게 요청하세요', 'error'); return; }
+  if (btn) btn.disabled = true;
+  apiFetch('/api/mindmaps/by-link?type=meeting&id=' + encodeURIComponent(meetingId)).then(function (r) {
+    var maps = (r && r.data) || [];
+    if (maps.length && confirm('이 회의를 담은 맵이 이미 있습니다 (' + maps[0].title + ').\n그 맵을 열까요? (취소 = 새로 만들기)')) { _mmGoTo(maps[0].id); return; }
+    return mmGenerateDoc('meeting', { meetingId: meetingId }).then(function (res) {
+      return apiFetch('/api/mindmaps', { method: 'POST', body: JSON.stringify({ title: res.title, scope: res.projectId ? 'project' : 'personal', projectId: res.projectId || null, template: 'gen-meeting', doc: res.doc }) });
+    }).then(function (cr) { _mmGoTo(cr.data.id); });
+  }).catch(function (e) { _mmToast('❌ ' + _mmErr(e), 'error'); })
+    .then(function () { if (btn) btn.disabled = false; });
+}
+
 /** 다른 화면에서 맵 열기 — 상세 패널을 닫고 마인드맵 탭으로 */
 function _mmGoTo(mapId) {
   if (typeof pdCloseDetail === 'function') pdCloseDetail();

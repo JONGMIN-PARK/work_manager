@@ -327,8 +327,67 @@ async function genMine(req) {
   return { title: me.name + ' 업무', structure: 'balanced', root: root };
 }
 
+/** 글 → 줄 목록 (빈 줄 · 목록 기호 제거) */
+function _lines(t) {
+  return String(t || '').replace(/\r\n?/g, '\n').split('\n').map(function (s) {
+    return s.trim().replace(/^(?:-\.|[-*+•·▪◦‣□■○●]|\d{1,3}[.)])\s*/, '');
+  }).filter(Boolean);
+}
+/**
+ * 회의 → 맵 트리 (순수 — 테스트). m = meetings 행(agenda · minutes · attendees · form), acts = meeting_action_items 행
+ * 가지: 📋 안건(완료 표시 · 논의/결과는 하위) · 💬 논의 · ✅ 결정 사항 · 🎯 액션 아이템(담당 · 마감 · 완료) · 👥 참석자(접힘) · 📅 다음 회의
+ */
+function meetingTree(m, acts) {
+  var root = refNode('meeting', m.id, (m.title || '회의') + (m.meet_date ? ' (' + String(m.meet_date).slice(0, 10) + ')' : ''));
+  var form = (m.form && typeof m.form === 'object') ? m.form : {};
+  var agenda = arr(m.agenda).map(function (g) { return typeof g === 'string' ? { text: g } : (g || {}); }).filter(function (g) { return g.text; });
+  if (agenda.length) {
+    var gA = node('📋 안건');
+    agenda.forEach(function (g) {
+      var a = node(String(g.text), { done: g.done ? true : undefined });
+      _lines(g.note).forEach(function (t) { a.children.push(node('💬 ' + t)); });
+      _lines(g.result).forEach(function (t) { a.children.push(node('✅ ' + t)); });
+      gA.children.push(a);
+    });
+    root.children.push(gA);
+  }
+  var talk = _lines(m.minutes).slice(0, 80);
+  if (talk.length) { var gT = node('💬 논의'); talk.forEach(function (t) { gT.children.push(node(t)); }); root.children.push(gT); }
+  var dec = _lines(form.decisions).slice(0, 60);
+  if (dec.length) { var gD = node('✅ 결정 사항'); dec.forEach(function (t) { gD.children.push(node(t)); }); root.children.push(gD); }
+  if (acts && acts.length) {
+    var gX = node('🎯 액션 아이템');
+    acts.forEach(function (a) {
+      gX.children.push(node(a.title || '', {
+        assigneeId: a.assignee_id || undefined,
+        assigneeName: !a.assignee_id && a.assignee_name ? a.assignee_name : undefined,
+        dueDate: a.due_date ? String(a.due_date).slice(0, 10) : undefined,
+        done: a.status === 'done' ? true : undefined
+      }));
+    });
+    root.children.push(gX);
+  }
+  var att = arr(m.attendees).filter(Boolean);
+  if (att.length) { var gP = node('👥 참석자', { collapsed: true }); att.forEach(function (p) { gP.children.push(node(String(p))); }); root.children.push(gP); }
+  if (form.nextDate || form.nextNote) {
+    var gN = node('📅 다음 회의' + (form.nextDate ? ' ' + String(form.nextDate).slice(0, 10) : ''));
+    _lines(form.nextNote).forEach(function (t) { gN.children.push(node(t)); });
+    root.children.push(gN);
+  }
+  return root;
+}
+/** 회의록 → 맵 — 프로젝트 회의는 프로젝트 읽기 권한, 프로젝트 없는 회의는 만든 사람만 */
+async function genMeeting(req, meetingId) {
+  var m = (await db.query('SELECT * FROM meetings WHERE id = $1 AND tenant_id = $2', [meetingId, req.tenant.id])).rows[0];
+  if (!m) return null;
+  if (m.project_id ? !await pa.canReadById(req, m.project_id) : m.created_by !== req.user.sub) return null;
+  var acts = (await db.query('SELECT * FROM meeting_action_items WHERE meeting_id = $1 AND tenant_id = $2 ORDER BY sort_order, created_at', [meetingId, req.tenant.id])).rows;
+  return { title: '회의 · ' + (m.title || ''), structure: 'right', root: meetingTree(m, acts), projectId: m.project_id || null };
+}
+
 async function generate(req, kind, opts) {
   opts = opts || {};
+  if (kind === 'meeting') return opts.meetingId ? genMeeting(req, opts.meetingId) : null;
   if (kind === 'project') return opts.projectId ? genProject(req, opts.projectId) : null;
   if (kind === 'team') return genTeam(req, opts.departmentId || null);
   if (kind === 'mine') return genMine(req);
@@ -348,4 +407,4 @@ function refsOfDoc(doc) {
   return out;
 }
 
-module.exports = { REF_TYPES: REF_TYPES, resolve: resolve, search: search, generate: generate, refsOfDoc: refsOfDoc };
+module.exports = { meetingTree: meetingTree, REF_TYPES: REF_TYPES, resolve: resolve, search: search, generate: generate, refsOfDoc: refsOfDoc };

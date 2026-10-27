@@ -313,7 +313,7 @@ router.get('/search-refs', async function (req, res) {
 router.post('/generate', async function (req, res) {
   try {
     var b = req.body || {};
-    var out = await mmData.generate(req, b.kind, { projectId: b.projectId, departmentId: b.departmentId });
+    var out = await mmData.generate(req, b.kind, { projectId: b.projectId, departmentId: b.departmentId, meetingId: b.meetingId });
     if (!out) return httpErr.sendError(res, 404, 'NOT_FOUND', '만들 수 없습니다 — 항목이 없거나 권한이 없습니다.');
     res.json({ data: out });
   } catch (e) {

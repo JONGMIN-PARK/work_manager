@@ -150,6 +150,7 @@ function mmNewMapModal() {
         '<div class="mm-sub" id="mmNewHint"></div>' +
         '<label>제목<input id="mmNewTitle" class="mm-input" placeholder="예: SK 2호기 WBS"></label>' +
         '<label id="mmNewProjWrap" class="hidden">프로젝트<select id="mmNewProj" class="mm-input">' + _mmProjectOptions(projects) + '</select></label>' +
+        '<label id="mmNewMeetWrap" class="hidden">회의<select id="mmNewMeet" class="mm-input"><option value="">불러오는 중…</option></select></label>' +
         '<label id="mmNewDeptWrap" class="hidden">부서<select id="mmNewDept" class="mm-input">' +
         (hasDept ? '<option value="">내 부서</option>' : '') + (_mmIsAdmin() ? '<option value="__all">전체 (모든 사용자)</option>' : '') +
         depts.map(function (d) { return '<option value="' + _mmEsc(d.id) + '">' + _mmEsc(d.name) + '</option>'; }).join('') + '</select></label>' +
@@ -170,13 +171,25 @@ function mmNewMapModal() {
           if (t.gen === 'project' || t.ai === 'wbs') scope.value = 'project';
           else if (t.gen === 'team' && scope.querySelector('option[value="dept"]')) scope.value = 'dept';
           else if (t.gen === 'mine') scope.value = 'personal';
+          if (t.gen === 'meeting') _mmLoadMeetingOptions();
         }
-        var needProj = scope.value === 'project' || t.gen === 'project' || t.ai === 'wbs';
+        var needProj = (scope.value === 'project' && t.gen !== 'meeting') || t.gen === 'project' || t.ai === 'wbs';
+        _mmEl('mmNewMeetWrap').classList.toggle('hidden', t.gen !== 'meeting');
         _mmEl('mmNewProjWrap').classList.toggle('hidden', !needProj);
         _mmEl('mmNewDeptWrap').classList.toggle('hidden', !(_mmIsAdmin() && (t.gen === 'team' || scope.value === 'dept')));
         _mmEl('mmNewAiWrap').classList.toggle('hidden', t.ai !== 'text');
         _mmEl('mmNewTitle').placeholder = (t.gen || t.ai) ? '비우면 자동으로 정함' : '예: SK 2호기 WBS';
         _mmEl('mmNewHint').textContent = t.hint || '';
+      }
+      function _mmLoadMeetingOptions() {
+        var sel = _mmEl('mmNewMeet');
+        if (sel.getAttribute('data-loaded')) return;
+        sel.setAttribute('data-loaded', '1');
+        apiFetch('/api/mindmaps/search-refs?type=meeting&q=').then(function (r) {
+          var list = (r && r.data) || [];
+          sel.innerHTML = list.length ? list.map(function (m) { return '<option value="' + _mmEsc(m.id) + '">' + _mmEsc((m.sub ? String(m.sub).slice(0, 10) + ' · ' : '') + m.title) + '</option>'; }).join('')
+            : '<option value="">볼 수 있는 회의가 없습니다</option>';
+        }).catch(function () { sel.innerHTML = '<option value="">회의 목록을 불러오지 못했습니다</option>'; });
       }
       tplSel.onchange = function () { refresh(true); };
       scope.onchange = function () { refresh(false); };
@@ -190,9 +203,11 @@ function mmNewMapModal() {
         var deptSel = _mmEl('mmNewDept').value;
         var deptId = deptSel && deptSel !== '__all' ? deptSel : null;
         if (!title && !t.gen && !t.ai) { _mmToast('제목을 입력하세요', 'error'); return; }
-        if ((scope.value === 'project' || t.gen === 'project' || t.ai === 'wbs') && !projectId) { _mmToast('프로젝트를 선택하세요', 'error'); return; }
+        var meetingId = _mmEl('mmNewMeet').value || null;
+        if (t.gen === 'meeting' && !meetingId) { _mmToast('회의를 선택하세요', 'error'); return; }
+        if (((scope.value === 'project' && t.gen !== 'meeting') || t.gen === 'project' || t.ai === 'wbs') && !projectId) { _mmToast('프로젝트를 선택하세요', 'error'); return; }
         var made;
-        if (t.gen) made = mmGenerateDoc(t.gen, { projectId: projectId, departmentId: deptId, all: deptSel === '__all' });
+        if (t.gen) made = mmGenerateDoc(t.gen, { projectId: projectId, departmentId: deptId, all: deptSel === '__all', meetingId: meetingId });
         else if (t.ai === 'text') made = mmAiTextDoc(_mmEl('mmNewAiText').value, title);
         else if (t.ai === 'wbs') made = mmAiWbsDoc(projectId, title);
         else {
@@ -205,7 +220,10 @@ function mmNewMapModal() {
         if (t.gen || t.ai) btn.textContent = t.ai ? '✨ AI 가 정리하는 중…' : '불러오는 중…';
         made.then(function (r) {
           if (!r) throw new Error('만들 내용이 없습니다');
-          return _mmCreate({ title: (title || r.title || '새 맵').slice(0, 255), scope: scope.value, projectId: projectId, departmentId: scope.value === 'dept' ? deptId : null, template: t.k, doc: r.doc });
+          // 회의록 → 맵: 프로젝트 회의면 그 프로젝트 범위로
+          var sc = scope.value, pid = projectId;
+          if (t.gen === 'meeting') { pid = r.projectId || null; if (sc === 'project' && !pid) sc = 'personal'; if (pid && sc === 'personal') sc = 'project'; }
+          return _mmCreate({ title: (title || r.title || '새 맵').slice(0, 255), scope: sc, projectId: sc === 'project' ? pid : null, departmentId: sc === 'dept' ? deptId : null, template: t.k, doc: r.doc });
         }).then(function (ok) {
           if (ok) md.close(); else { btn.disabled = false; btn.textContent = oldLabel; }
         }).catch(function (e) {

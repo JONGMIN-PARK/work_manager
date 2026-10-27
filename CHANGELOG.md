@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.239 (2026-10-27) — 회의록 → 마인드맵
+
+- server/lib/mindmap-data.js `meetingTree(m, acts)`(순수, __tests__/mindmap-meeting.test.js) · `genMeeting`(프로젝트 회의 = 프로젝트 읽기 권한, 프로젝트 없는 회의 = 만든 사람만) · generate kind `meeting` + `meetingId`.
+- 클라: `MM_GEN_TEMPLATES` gen-meeting, 새 맵 창 회의 고르기(search-refs meeting), 만든 범위는 회의 프로젝트 기준. mindmap-extra.js `mmFromMeeting` — project-meetings.js 문서 막대의 [🧠 맵으로]. meta.gen.meetingId 로 원본과 맞추기.
+- test/e2e/e2e15-meeting.js(8).
+
 ## v13.238 (2026-10-27) — 마인드맵 마감 알림 · 공유 알림
 
 - server/lib/mindmap-due.js (순수, __tests__/mindmap-due.test.js): `collectDue(doc, today)` · `groupDueByUser(maps, today)` — 완료 · 진척 100% 제외, 지연은 1·3·7·14일째만(매일 반복 방지).
