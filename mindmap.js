@@ -238,7 +238,12 @@ var MM_ICONS = {
   command: 'M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3',
   help: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
   sparkles: 'M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2zM19 3v4M21 5h-4',
-  sync: 'M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16'
+  sync: 'M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16',
+  history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
+  gantt: 'M3 3v18h18M7 7h7M10 12h8M7 17h5',
+  calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+  pen: 'M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z',
+  x: 'M18 6L6 18M6 6l12 12'
 };
 function _mmIcon(name, size) {
   var d = MM_ICONS[name];
@@ -295,6 +300,7 @@ function mmOpen(id) {
     _mm.canEdit = !!row.can_edit;
     _mm.readOnly = !row.can_edit;
     _mm.sheetIdx = 0; _mm.refs = {}; _mm.relFrom = null; _mm.multi = []; _mm.images = {}; _mm.imagesLoaded = false;
+    _mm.preview = null; _mm.hist = null; if (_mm.gt) _mm.gt.scrolled = false;
     _mm.sel = _mmRoot().id;
     _mm.undo = []; _mm.redo = [];
     _mm.dirty = false; _mm.titleDirty = false; _mm.conflict = null; _mm.lockedBy = null;
@@ -356,7 +362,8 @@ function _mmLockAcquire(force) {
 }
 function _mmLockBeat(id) {
   var me = (_mmMe() || {}).id;
-  if (_mm.mapId !== id || _mm.readOnly) return Promise.resolve();
+  var ro = _mm.preview ? _mm.preview.live.readOnly : _mm.readOnly;   // 미리 보기 중에도 잠금은 계속 연장
+  if (_mm.mapId !== id || ro) return Promise.resolve();
   return apiFetch('/api/locks?resourceType=mindmap&resourceId=' + encodeURIComponent(id)).then(function (r) {
     if (_mm.mapId !== id) return;
     var cur = r && r.data;

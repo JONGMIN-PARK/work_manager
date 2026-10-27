@@ -49,6 +49,7 @@ function _mmMarkDirty() {
 
 function _mmSaveNow(force) {
   clearTimeout(_mm.saveTimer);
+  if (_mm.preview) return _mm.savePromise || Promise.resolve();   // 이전 버전 미리 보기 중 — 문서가 바뀌어 있음
   if (!_mm.mapId || !_mm.dirty || (_mm.readOnly && !force) || (_mm.conflict && !force)) return _mm.savePromise || Promise.resolve();
   if (_mm.saving) { _mm.saveAgain = true; return _mm.savePromise; }
   _mm.saving = true;
@@ -402,6 +403,7 @@ function _mmEdClick(e) {
     if (!(act === 'menu' && t.getAttribute('data-menu') === m.id)) m.classList.add('hidden');
   });
   if (!act) return;
+  if (/^history/.test(act) && typeof mmHistAction === 'function' && mmHistAction(act, t)) return;
   switch (act) {
     case 'menu':
       var mEl = _mmEl(t.getAttribute('data-menu'));
@@ -446,6 +448,7 @@ function _mmEdClick(e) {
     case 'zen': _mmSetZen(!_mm.zen); break;
     case 'view-map': _mmSetOutline(false); return;
     case 'view-outline': _mmSetOutline(true); return;
+    case 'view-gantt': _mmSetView('gantt'); return;
     case 'export-png': mmExportPng(); return;
     case 'export-md': mmExportMarkdown(); return;
     case 'share': mmShareModal(); return;

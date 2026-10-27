@@ -297,6 +297,8 @@ var MM_COMMANDS = [
   { id: 'search', group: '보기', label: '맵에서 찾기', keys: ['Ctrl+F'], run: function () { var s = _mmEl('mmSearch'); if (s) { s.focus(); s.select(); } } },
   { id: 'zen', group: '보기', label: '집중 모드', keys: ['Ctrl+Shift+F'], run: function () { _mmSetZen(!_mm.zen); } },
   { id: 'outline', group: '보기', label: '맵 ↔ 아웃라인 보기', keys: ['Alt+O'], run: function () { _mmSetOutline(!_mm.outline); } },
+  { id: 'gantt', group: '보기', label: '간트 보기 (일정 막대)', keys: ['Alt+J'], run: function () { _mmSetView(_mm.gantt ? 'map' : 'gantt'); } },
+  { id: 'history', group: '보기', label: '버전 기록', keys: ['Ctrl+Shift+H'], run: function () { mmHistToggle(); } },
   { id: 'sheetPrev', group: '보기', label: '이전 시트', keys: ['Alt+PageUp'], run: function () { _mmkSheetStep(-1); } },
   { id: 'sheetNext', group: '보기', label: '다음 시트', keys: ['Alt+PageDown'], run: function () { _mmkSheetStep(1); } },
   { id: 'addSheet', group: '보기', label: '새 시트', keys: [], edit: true, run: function () { mmAddSheet(); } },

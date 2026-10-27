@@ -31,7 +31,8 @@ function _mmRenderEditor() {
     '<span class="mm-flex"></span>' +
     '<label class="mm-searchbox">' + _mmIcon('search', 14) + '<input id="mmSearch" class="mm-search" placeholder="맵에서 찾기  Ctrl+F"></label>' +
     '<span class="mm-tsep"></span>' +
-    '<div class="mm-seg"><button data-act="view-map" id="mmVMap">맵</button><button data-act="view-outline" id="mmVOut">아웃라인</button></div>' +
+    '<div class="mm-seg"><button data-act="view-map" id="mmVMap" title="맵">맵</button><button data-act="view-outline" id="mmVOut" title="아웃라인 (Alt+O)">아웃라인</button>' +
+    '<button data-act="view-gantt" id="mmVGantt" title="간트 (Alt+J)">간트</button></div>' +
     '<select id="mmStructure" class="mm-select mm-edit-only" title="구조 (Ctrl+Shift+L)">' + MM_STRUCTURES.map(function (s) { return '<option value="' + s.k + '"' + (s.k === st ? ' selected' : '') + '>' + s.l + '</option>'; }).join('') + '</select>' +
     menuBtn('mmAlignMenu', 'align', '정렬', '같은 단계 맞춤 · 글자 정렬 (Alt+G)', ' mm-edit-only') + '<div class="mm-menu hidden" id="mmAlignMenu"></div></div>' +
     (_mm.doc.meta && _mm.doc.meta.gen ? tb('resync', 'sync', '원본과 맞추기', '원본 데이터에 새로 생긴 항목을 맵에 추가', ' mm-edit-only') : '') +
@@ -45,6 +46,7 @@ function _mmRenderEditor() {
     menuBtn('mmExportMenu', 'download', '', '내보내기') +
     '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
     '<button data-act="export-opml">OPML (.opml)</button></div></div>' +
+    tb('history', 'history', '기록', '버전 기록 (Ctrl+Shift+H)') +
     ((row.is_owner || _mmIsAdmin()) ? tb('share', 'share', '공유', '공유 설정', ' mm-tbtn-accent') : '') +
     '<span class="mm-tsep"></span>' +
     tb('zen', 'zen', '', '집중 모드 (Ctrl+Shift+F)', ' mm-tbtn-icon') +
@@ -72,7 +74,9 @@ function _mmRenderEditor() {
     '<button data-act="minimap" id="mmMiniBtn" class="' + (_mmMiniOn() ? 'on' : '') + '" title="미니맵">' + _mmIcon('map', 14) + '</button></div>' +
     '<button class="mm-zen-exit" data-act="zen">집중 모드 끝내기 (Esc)</button></div>' +
     '<div class="mm-outline hidden" id="mmOutline"></div>' +
+    '<div class="mm-gantt hidden" id="mmGantt"></div>' +
     '<div class="mm-panel" id="mmPanel"></div>' +
+    '<div class="mm-hist hidden" id="mmHist"></div>' +
     '</div></div>';
   wrap.innerHTML = h;
   wrap.onclick = _mmEdClick;
@@ -101,7 +105,8 @@ function _mmRenderEditor() {
   if (typeof _mmAiBar === 'function') _mmAiBar();
   _mmPaint();
   if (_mm.panX == null) _mmFit();
-  _mmSetOutline(_mm.outline);
+  _mmSetView(_mm.gantt ? 'gantt' : _mm.outline ? 'outline' : 'map');
+  if (_mm.hist && _mm.hist.open) mmHistToggle(true);
   _mmFocusCanvas();
 }
 
@@ -120,7 +125,9 @@ function _mmRefreshMode() {
 function _mmBanner() {
   var b = _mmEl('mmBanner');
   if (!b) return;
-  if (_mm.conflict) {
+  if (_mm.preview) {
+    b.innerHTML = _mmHistBannerHtml();
+  } else if (_mm.conflict) {
     var who = _mm.conflict.updated_by_name ? _mm.conflict.updated_by_name + ' 님이' : '다른 사용자가';
     b.innerHTML = '<div class="mm-banner mm-banner-warn">⚠️ ' + _mmEsc(who) + ' 먼저 저장해 내 변경을 저장하지 못했습니다. ' +
       '<button class="btn btn-g btn-s" data-act="conflict-reload">최신본 불러오기 (내 변경 버림)</button> ' +
@@ -138,7 +145,8 @@ function _mmBanner() {
 function _mmStatus() {
   var s = _mmEl('mmStatus');
   if (!s) return;
-  if (_mm.readOnly) s.textContent = '보기 전용';
+  if (_mm.preview) s.textContent = '🕘 이전 버전 미리 보기';
+  else if (_mm.readOnly) s.textContent = '보기 전용';
   else if (_mm.conflict) s.textContent = '⚠️ 저장 충돌';
   else if (_mm.saving) s.textContent = '저장 중…';
   else if (_mm.dirty) s.textContent = '● 변경됨';
@@ -297,11 +305,18 @@ function _mmRefDone(n) {
 }
 
 /* ═══ 그리기 ═══ */
+/** 주제 색 — 중심은 강조색, 주요 주제는 자기 색 또는 차례대로 자동 색, 그 아래는 부모 색을 물려받음. colors = 지금까지 정한 {id: 색} */
+function _mmNodeColor(n, parent, depth, root, colors) {
+  if (depth === 0) return _mmColorVar(n.color) || 'var(--ac)';
+  if (depth === 1) return _mmColorVar(n.color) || _mmColorVar(MM_AUTO_COLORS[root.children.indexOf(n) % MM_AUTO_COLORS.length]);
+  return _mmColorVar(n.color) || colors[parent.id];
+}
 function _mmNodeHtml(n, depth, color, num) {
   var hit = _mm.hits.indexOf(n.id) >= 0;
   var cls = 'mm-node ' + (depth === 0 ? 'mm-root' : depth === 1 ? 'mm-main' : 'mm-topic2') +
     ((n.done || _mmRefDone(n)) ? ' mm-done' : '') + (hit ? ' mm-hit' : '') + (n.id === _mm.sel ? ' mm-sel' : '') + (n.color ? ' mm-colored' : '') +
-    (n.ref ? ' mm-has-ref' : '') + (n._ai ? ' mm-ai' : '') + (n.collapsed && (n.children || []).length ? ' mm-folded' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '');
+    (n.ref ? ' mm-has-ref' : '') + (n._ai ? ' mm-ai' : '') + (n.collapsed && (n.children || []).length ? ' mm-folded' : '') + (n.id === _mm.relFrom ? ' mm-rel-from' : '') + (_mm.multi.indexOf(n.id) >= 0 ? ' mm-multi' : '') +
+    (_mm.preview ? _mmHistNodeClass(n.id) : '');
   var mk = '';
   (n.markers || []).forEach(function (m) {
     var pm = /^priority-(\d)$/.exec(m);
@@ -325,7 +340,8 @@ function _mmNodeHtml(n, depth, color, num) {
   var kids = (n.children || []).length;
   var fold = (kids && depth > 0 || (kids && n.collapsed)) ? '<span class="mm-fold" data-fold="' + _mmEsc(n.id) + '">' + (n.collapsed ? kids : '−') + '</span>' : '';
   var maxW = (typeof _mmNodeMaxW === 'function') ? _mmNodeMaxW(n) : 0;   // 이미지 줄이 있으면 그만큼 넓게
-  return '<div class="' + cls + '" data-id="' + _mmEsc(n.id) + '" style="--mm-c:' + color + (maxW ? ';max-width:' + maxW + 'px' : '') + '">' +
+  var dfTip = _mm.preview ? _mmHistNodeTip(n.id) : '';
+  return '<div class="' + cls + '" data-id="' + _mmEsc(n.id) + '"' + (dfTip ? ' title="' + _mmEsc(dfTip) + '"' : '') + ' style="--mm-c:' + color + (maxW ? ';max-width:' + maxW + 'px' : '') + '">' +
     '<div class="mm-line">' + (num ? '<span class="mm-num">' + num + '</span>' : '') + mk + '<span class="mm-txt">' + (n.text ? _mmEsc(n.text) : '<i class="mm-ph">(빈 주제)</i>') + '</span>' + icons + '</div>' +
     (typeof _mmBlocksHtml === 'function' ? _mmBlocksHtml(n) : '') + _mmRefLine(n) + labels + (meta.length ? '<div class="mm-meta">' + meta.join(' · ') + '</div>' : '') + fold + '</div>';
 }
@@ -340,10 +356,7 @@ function _mmPaint() {
   var colors = {};
   var nums = mmNumbering(root);
   mmWalk(root, function (n, parent, depth) {
-    var c;
-    if (depth === 0) c = _mmColorVar(n.color) || 'var(--ac)';
-    else if (depth === 1) c = _mmColorVar(n.color) || _mmColorVar(MM_AUTO_COLORS[root.children.indexOf(n) % MM_AUTO_COLORS.length]);
-    else c = _mmColorVar(n.color) || colors[parent.id];
+    var c = _mmNodeColor(n, parent, depth, root, colors);
     colors[n.id] = c;
     html.push(_mmNodeHtml(n, depth, c, nums[n.id]));
     if (n.summary && !n.collapsed && (n.children || []).length) {
@@ -421,6 +434,7 @@ function _mmPaint() {
   _mmPaintPanel();
   if (typeof _mmAiBar === 'function') _mmAiBar();
   if (_mm.outline) _mmPaintOutline();
+  if (_mm.gantt) _mmPaintGantt();
 }
 
 /* ═══ 미니맵 — 전체 축소 지도 + 지금 보이는 영역, 눌러서 이동 ═══ */
@@ -537,5 +551,5 @@ function _mmSelect(id, opts) {
 function _mmFocusCanvas() {
   // 키 입력은 캔버스 안의 투명한 입력칸(mmSink)이 받는다 — 한글 IME 가 켜지려면 입력 가능한 요소여야 함
   var sink = _mmEl('mmSink');
-  if (sink && !_mm.outline && !_mm.editing) { try { sink.focus({ preventScroll: true }); } catch (_) { sink.focus(); } }
+  if (sink && !_mm.outline && !_mm.gantt && !_mm.editing) { try { sink.focus({ preventScroll: true }); } catch (_) { sink.focus(); } }
 }

@@ -126,18 +126,8 @@ function _mmPaintPanel() {
 }
 
 /* ═══ 아웃라인 보기 ═══ */
-function _mmSetOutline(on) {
-  _mm.outline = !!on;
-  var ol = _mmEl('mmOutline'), cv = _mmEl('mmCanvas');
-  if (!ol || !cv) return;
-  ol.classList.toggle('hidden', !_mm.outline);
-  cv.classList.toggle('hidden', _mm.outline);
-  var a = _mmEl('mmVMap'), b = _mmEl('mmVOut');
-  if (a) a.classList.toggle('on', !_mm.outline);
-  if (b) b.classList.toggle('on', _mm.outline);
-  if (_mm.outline) _mmPaintOutline();
-  else { _mmPaint(); _mmFit(); _mmFocusCanvas(); }
-}
+/** 맵 ↔ 아웃라인 (보기 전환은 mindmap-gantt.js _mmSetView) */
+function _mmSetOutline(on) { _mmSetView(on ? 'outline' : 'map'); }
 
 function _mmPaintOutline(focusId) {
   var ol = _mmEl('mmOutline');
@@ -245,7 +235,7 @@ function mmExportPng() {
   if (typeof html2canvas !== 'function') { _mmToast('이미지 모듈을 불러오지 못했습니다', 'error'); return; }
   var stage = _mmEl('mmStage');
   if (!stage || !_mm.layout) return;
-  if (_mm.outline) { _mmSetOutline(false); }
+  if (_mm.outline || _mm.gantt) _mmSetView('map');
   var b = _mm.layout.bounds;
   var pad = 40;
   var w = Math.ceil(b.maxX - b.minX + pad * 2), h = Math.ceil(b.maxY - b.minY + pad * 2);

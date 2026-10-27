@@ -1,5 +1,12 @@
 # Work Manager — 변경 이력
 
+## v13.223 (2026-10-27) — 마인드맵 간트 보기 · 버전 기록
+
+- **mindmap-gantt.js (새 파일)**: 간트 보기. `_mmSetView('map'|'outline'|'gantt')` 로 보기 전환 통합(`_mmSetOutline` 은 감싼 함수). 행 = 트리(접힘 반영, 거르기 중엔 맞는 주제 + 위 단계). `_mmgSpan` 자기 날짜 → 없으면 연결된 앱 데이터(`_mm.refs` start/end). 부모 요약 = 하위 일정 묶음 · 기간 가중 진척. 끌기(옮기기 · 양 끝 · 새 일정) · Alt+←/→ · ↑↓ · Ctrl+Z. 관계선 = 선후 화살표(어긋나면 빨간 점선). 눈금은 localStorage `mm-gantt-scale`.
+- **mindmap-history.js (새 파일)**: 버전 기록 서랍 · 미리 보기(`_mm.preview` — 지금 문서를 잠시 치우고 기록 문서를 보기 전용으로, 저장 · 편집 막음, 잠금 연장은 계속) · 비교(`mmHistDiff` 주제 id 기준 추가/삭제/수정/이동) · 되돌리기(undo 에 지금 상태).
+- **서버**: `059_mindmap_snapshots.sql` · `GET/POST /api/mindmaps/:id/snapshots` · `GET/PUT/DELETE …/:sid` · `POST …/:sid/restore`(version 확인, 지금 상태를 'restore' 기록으로 먼저 남김). PUT 저장 때 `autoSnapshot` — 30분 넘게 쉬었다가 저장(또는 2시간마다) 직전 상태를 'auto' 로, 같은 맵 버전은 한 번만, 자동은 최근 40개 · 90일. 직접 저장 최대 100개. 이미지: 기록이 쓰는 이미지는 7일 정리에서 제외(개수 제한은 지금 문서 기준 그대로).
+- mindmap-view.js: `_mmNodeColor` 로 가지 색 계산 분리(간트와 같이 씀) · 미리 보기 배너 · 비교 표시 class. mindmap-keys.js: `gantt`(Alt+J) · `history`(Ctrl+Shift+H).
+
 ## v13.222 (2026-10-27) — 마인드맵 마커 늘림 · 가지 이음매
 
 - mindmap.js: `MM_SYMBOL_GROUPS` 7묶음 · `MM_SYMBOLS` 59종(기존 키 유지, `grp` 추가) · `_mmSymbolGroupsHtml(btn)` — 속성 패널과 여러 주제 패널이 함께 씀. `MM_UNDERLINE = 2`.

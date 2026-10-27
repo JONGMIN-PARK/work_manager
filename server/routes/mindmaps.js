@@ -35,6 +35,11 @@ var SCOPES = ['personal', 'project', 'dept', 'org'];
 var MAX_SHEETS = 20;
 var MAX_NODES = 2000;
 var MAX_DOC_BYTES = 2 * 1024 * 1024;
+// 버전 기록 — 자동 기록은 30분 넘게 쉬었다가 저장할 때 1개, 최근 40개 · 90일까지. 직접 저장은 맵당 100개
+var SNAP_AUTO_GAP_MIN = 30;
+var SNAP_AUTO_KEEP = 40;
+var SNAP_AUTO_DAYS = 90;
+var SNAP_MANUAL_MAX = 100;
 
 function genId(prefix) { return prefix + '-' + crypto.randomUUID().slice(0, 12); }
 function clampEnum(v, allowed, fallback) { return allowed.indexOf(v) >= 0 ? v : fallback; }
@@ -143,7 +148,12 @@ async function syncImages(req, mapId, doc) {
     var ids = imageIdsOfDoc(doc);
     await db.query('UPDATE mindmap_images SET unref_at = now() WHERE map_id = $1 AND tenant_id = $2 AND unref_at IS NULL AND NOT (id = ANY($3))', [mapId, req.tenant.id, ids]);
     if (ids.length) await db.query('UPDATE mindmap_images SET unref_at = NULL WHERE map_id = $1 AND tenant_id = $2 AND unref_at IS NOT NULL AND id = ANY($3)', [mapId, req.tenant.id, ids]);
-    await db.query("DELETE FROM mindmap_images WHERE map_id = $1 AND tenant_id = $2 AND unref_at < now() - interval '7 days'", [mapId, req.tenant.id]);
+    // 버전 기록이 쓰는 이미지는 지우지 않음 (되돌리면 다시 보여야 하므로) — 개수 제한에는 지금 문서 것만 셈
+    await db.query(
+      "DELETE FROM mindmap_images i WHERE i.map_id = $1 AND i.tenant_id = $2 AND i.unref_at < now() - interval '7 days' " +
+      'AND NOT EXISTS (SELECT 1 FROM mindmap_snapshots s WHERE s.map_id = i.map_id AND s.tenant_id = i.tenant_id AND i.id = ANY(s.image_ids))',
+      [mapId, req.tenant.id]
+    );
   } catch (e) {
     console.error('[mindmaps/syncImages]', e.message);
   }
@@ -167,6 +177,47 @@ async function syncLinks(req, mapId, doc) {
     await db.query('INSERT INTO mindmap_links (map_id, tenant_id, node_id, link_type, link_id) VALUES ' + vals.join(','), params);
   } catch (e) {
     console.error('[mindmaps/syncLinks]', e.message);
+  }
+}
+
+/* ═══ 버전 기록 ═══ */
+/** 스냅샷 1개 저장 → 행. at = 이 상태가 저장된 시각(기본 now) */
+async function insertSnapshot(req, row, kind, label, at) {
+  var doc = typeof row.doc === 'string' ? JSON.parse(row.doc) : row.doc;
+  var r = await db.query(
+    'INSERT INTO mindmap_snapshots (id, map_id, tenant_id, kind, label, title, doc, node_count, map_version, image_ids, created_by, created_at) ' +
+    'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,COALESCE($12, now())) RETURNING id, kind, label, title, node_count, map_version, created_by, created_at',
+    [genId('snap'), row.id, req.tenant.id, kind, label || null, row.title, JSON.stringify(doc), row.node_count || 0, row.version,
+      imageIdsOfDoc(doc), kind === 'auto' ? row.updated_by : req.user.sub, at || null]
+  );
+  return r.rows[0];
+}
+
+/**
+ * 저장 직전 자동 기록 — 마지막 기록(또는 맵 저장)에서 30분 넘게 지났으면, 지금까지 저장된 상태를 남긴다.
+ * 같은 맵 버전은 두 번 남기지 않고, 오래된 자동 기록은 정리. 실패해도 저장은 계속.
+ */
+async function autoSnapshot(req, row) {
+  try {
+    if (!row.updated_at || row.version <= 1) return;
+    var last = await db.query('SELECT MAX(created_at) AS at, BOOL_OR(map_version = $3) AS same FROM mindmap_snapshots WHERE map_id = $1 AND tenant_id = $2',
+      [row.id, req.tenant.id, row.version]);
+    var l = last.rows[0] || {};
+    if (l.same) return;
+    var gapMs = SNAP_AUTO_GAP_MIN * 60000;
+    var lastAt = l.at ? new Date(l.at).getTime() : 0;
+    var sinceSnap = Date.now() - lastAt;
+    var idle = Date.now() - new Date(row.updated_at).getTime() >= gapMs;
+    if (sinceSnap < gapMs) return;
+    if (!idle && sinceSnap < gapMs * 4) return;   // 쉬지 않고 계속 편집해도 2시간마다는 남김
+    await insertSnapshot(req, row, 'auto', null, row.updated_at);
+    await db.query(
+      "DELETE FROM mindmap_snapshots WHERE map_id = $1 AND tenant_id = $2 AND kind <> 'manual' AND (created_at < now() - make_interval(days => $3::int) OR id IN (" +
+      "SELECT id FROM mindmap_snapshots WHERE map_id = $1 AND tenant_id = $2 AND kind <> 'manual' ORDER BY created_at DESC OFFSET $4))",
+      [row.id, req.tenant.id, SNAP_AUTO_DAYS, SNAP_AUTO_KEEP]
+    );
+  } catch (e) {
+    console.error('[mindmaps/autoSnapshot]', e.message);
   }
 }
 
@@ -474,6 +525,7 @@ router.put('/:id', async function (req, res) {
     if (b.doc !== undefined) {
       var info = inspectDoc(b.doc);
       if (info.error) return httpErr.sendError(res, 400, 'VALIDATION', info.error);
+      if (parseInt(row.version, 10) === ver) await autoSnapshot(req, row);
       set('doc', JSON.stringify(b.doc));
       set('node_count', info.count);
     }
@@ -624,6 +676,127 @@ router.delete('/:id', async function (req, res) {
     res.json({ message: '삭제 완료' });
   } catch (e) {
     httpErr.serverError(res, '[mindmaps/delete]', e);
+  }
+});
+
+/* ═══ 버전 기록 API ═══ */
+async function snapGate(req, res, needEdit) {
+  var row = await loadRow(req, req.params.id);
+  if (!row) { httpErr.sendError(res, 404, 'NOT_FOUND'); return null; }
+  var perm = await permsOf(req, row);
+  if (!perm.read) { httpErr.sendError(res, 404, 'NOT_FOUND'); return null; }
+  if (needEdit && !perm.edit) { httpErr.sendError(res, 403, 'FORBIDDEN', '편집 권한이 없습니다.'); return null; }
+  row._perm = perm;
+  return row;
+}
+function snapLabel(v) { return String(v == null ? '' : v).trim().slice(0, 100); }
+
+// GET /api/mindmaps/:id/snapshots — 기록 목록 (문서 제외, 최근 순)
+router.get('/:id/snapshots', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, false);
+    if (!row) return;
+    var r = await db.query(
+      "SELECT s.id, s.kind, s.label, s.title, s.node_count, s.map_version, s.created_by, s.created_at, COALESCE(NULLIF(u.display_name,''), u.name) AS created_by_name " +
+      'FROM mindmap_snapshots s LEFT JOIN users u ON u.id = s.created_by WHERE s.map_id = $1 AND s.tenant_id = $2 ORDER BY s.created_at DESC LIMIT 300',
+      [row.id, req.tenant.id]
+    );
+    var me = req.user.sub, mgr = row.owner_id === me || req.user.role === 'admin';
+    res.json({ data: r.rows.map(function (s) { s.can_edit = row._perm.edit && (mgr || s.created_by === me); return s; }) });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/snapshots/list]', e);
+  }
+});
+
+// GET /api/mindmaps/:id/snapshots/:sid — 기록 1개 (문서 포함)
+router.get('/:id/snapshots/:sid', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, false);
+    if (!row) return;
+    var r = await db.query('SELECT * FROM mindmap_snapshots WHERE id = $1 AND map_id = $2 AND tenant_id = $3', [req.params.sid, row.id, req.tenant.id]);
+    if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    res.json({ data: r.rows[0] });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/snapshots/get]', e);
+  }
+});
+
+// POST /api/mindmaps/:id/snapshots — 지금 저장된 상태를 이름 붙여 기록 { label }
+router.post('/:id/snapshots', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, true);
+    if (!row) return;
+    var cnt = await db.query("SELECT COUNT(*)::int AS n FROM mindmap_snapshots WHERE map_id = $1 AND tenant_id = $2 AND kind = 'manual'", [row.id, req.tenant.id]);
+    if (cnt.rows[0].n >= SNAP_MANUAL_MAX) return httpErr.sendError(res, 400, 'LIMIT', '직접 저장한 버전은 ' + SNAP_MANUAL_MAX + '개까지 둘 수 있습니다. 오래된 것을 지워 주세요.');
+    var s = await insertSnapshot(req, row, 'manual', snapLabel(req.body && req.body.label) || null, null);
+    res.status(201).json({ data: s });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/snapshots/create]', e);
+  }
+});
+
+// PUT /api/mindmaps/:id/snapshots/:sid — 이름 바꾸기 { label }. 자동 기록에 이름을 붙이면 직접 저장으로 (정리 대상에서 빠짐)
+router.put('/:id/snapshots/:sid', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, true);
+    if (!row) return;
+    var label = snapLabel(req.body && req.body.label);
+    var mgr = row.owner_id === req.user.sub || req.user.role === 'admin';
+    var r = await db.query(
+      "UPDATE mindmap_snapshots SET label = $1::varchar, kind = CASE WHEN $1::varchar IS NOT NULL AND kind = 'auto' THEN 'manual' ELSE kind END " +
+      'WHERE id = $2 AND map_id = $3 AND tenant_id = $4 AND ($5 OR created_by = $6 OR kind = \'auto\') RETURNING id, kind, label',
+      [label || null, req.params.sid, row.id, req.tenant.id, mgr, req.user.sub]
+    );
+    if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    res.json({ data: r.rows[0] });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/snapshots/rename]', e);
+  }
+});
+
+// DELETE /api/mindmaps/:id/snapshots/:sid — 지우기 (만든 사람 · 맵 소유자 · admin)
+router.delete('/:id/snapshots/:sid', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, true);
+    if (!row) return;
+    var mgr = row.owner_id === req.user.sub || req.user.role === 'admin';
+    var r = await db.query('DELETE FROM mindmap_snapshots WHERE id = $1 AND map_id = $2 AND tenant_id = $3 AND ($4 OR created_by = $5) RETURNING id',
+      [req.params.sid, row.id, req.tenant.id, mgr, req.user.sub]);
+    if (!r.rows.length) return httpErr.sendError(res, 403, 'FORBIDDEN', '만든 사람이나 맵 소유자만 지울 수 있습니다.');
+    res.json({ message: '삭제 완료' });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/snapshots/delete]', e);
+  }
+});
+
+// POST /api/mindmaps/:id/snapshots/:sid/restore — 이 버전으로 되돌리기 { version }. 지금 상태는 'restore' 기록으로 먼저 남김
+router.post('/:id/snapshots/:sid/restore', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, true);
+    if (!row) return;
+    var ver = parseInt(req.body && req.body.version, 10);
+    if (!ver) return httpErr.sendError(res, 400, 'VALIDATION', 'version 필수');
+    var s = await db.query('SELECT * FROM mindmap_snapshots WHERE id = $1 AND map_id = $2 AND tenant_id = $3', [req.params.sid, row.id, req.tenant.id]);
+    if (!s.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    var snap = s.rows[0];
+    if (parseInt(row.version, 10) !== ver) {
+      return httpErr.sendError(res, 409, 'CONFLICT', '다른 사용자가 먼저 저장했습니다.', { latest: { version: row.version, updated_at: row.updated_at }, yourVersion: ver });
+    }
+    var backup = await insertSnapshot(req, row, 'restore', ('‘' + (snap.label || (snap.kind === 'auto' ? '자동 기록' : '이전 버전')) + '’으로 되돌리기 전').slice(0, 100), null);
+    var r = await db.query(
+      'UPDATE mindmaps SET doc = $1, node_count = $2, updated_by = $3, updated_at = now(), version = version + 1 ' +
+      'WHERE id = $4 AND tenant_id = $5 AND deleted_at IS NULL AND version = $6 RETURNING id, version, updated_at, doc, node_count',
+      [JSON.stringify(snap.doc), snap.node_count, req.user.sub, row.id, req.tenant.id, ver]
+    );
+    if (!r.rows.length) {
+      await db.query('DELETE FROM mindmap_snapshots WHERE id = $1', [backup.id]);
+      return httpErr.sendError(res, 409, 'CONFLICT', '다른 사용자가 먼저 저장했습니다.', { yourVersion: ver });
+    }
+    await syncLinks(req, row.id, snap.doc);
+    await syncImages(req, row.id, snap.doc);
+    res.json({ data: r.rows[0], backup: backup });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/snapshots/restore]', e);
   }
 });
 
