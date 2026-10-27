@@ -1541,3 +1541,18 @@ body.mm-zen-body{overflow:hidden}
 .mm-thdots i{width:12px;height:12px;border-radius:50%;display:block}
 .mm-thdots i:first-child{width:14px;height:14px;border-radius:4px}
 .mm-fsbtn{width:auto!important;min-width:34px;padding:0 8px!important;font-size:11px}
+/* ═══ 🧠 마인드맵 발표 모드 (v13.242) ═══ */
+.mm-ed.mm-pitch{position:fixed;inset:0;z-index:950;height:auto;border-radius:0;border:none}
+.mm-ed.mm-pitch .mm-top,.mm-ed.mm-pitch .mm-tools,.mm-ed.mm-pitch .mm-panel,.mm-ed.mm-pitch #mmBanner,.mm-ed.mm-pitch .mm-sheets,.mm-ed.mm-pitch #mmAiBar,
+.mm-ed.mm-pitch .mm-fbar,.mm-ed.mm-pitch .mm-minimap,.mm-ed.mm-pitch .mm-zoom,.mm-ed.mm-pitch .mm-zen-exit,.mm-ed.mm-pitch .mm-fold{display:none!important}
+.mm-stage.mm-pitch-anim{transition:transform .55s cubic-bezier(.4,0,.2,1)}
+.mm-stage .mm-node.mm-pitch-off{opacity:.16;transition:opacity .4s}
+.mm-stage .mm-node{transition:box-shadow .15s,background-color .15s,opacity .4s}
+.mm-pitch-hud{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:8;display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:12px;
+  background:color-mix(in srgb,var(--bg-ps,var(--bg-p)) 92%,transparent);box-shadow:0 8px 28px rgba(15,23,42,.22);font-size:13px;color:var(--t2);max-width:80%}
+.mm-pitch-hud span{min-width:120px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mm-pitch-hud b{color:var(--ac);margin-right:6px;font-variant-numeric:tabular-nums}
+.mm-pitch-hud button{width:32px;height:32px;border:none;border-radius:8px;background:var(--bg-hv);color:var(--t2);cursor:pointer;font-size:13px}
+.mm-pitch-hud button:hover{background:var(--ac-bg);color:var(--ac)}
+.mm-pitch-hud .mm-pitch-x{background:none;color:var(--t5)}
+.mm-edges .mm-pitch-off{opacity:.14;transition:opacity .4s}

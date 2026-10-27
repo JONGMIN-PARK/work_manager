@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.242 (2026-10-27) — 마인드맵 발표 모드
+
+- mindmap-pitch.js (새 파일): `mmPitchSlides` · `mmPitchStart/Go/End` — #mmEd 에 .mm-pitch(도구 · 패널 숨김), requestFullscreen(막히면 창 안), 캡처 단계 keydown. `_mmPaint` 끝에서 발표 중이면 장면 다시 맞춤. 선 path 에 `data-e`(주제 id) — 장면 밖 선 흐리게.
+- 상단 tb('pitch') · 명령 pitch(Alt+Shift+P) · MM_ICONS.play. test/e2e/e2e18-pitch.js(7).
+
 ## v13.241 (2026-10-27) — 마인드맵 XMind 내보내기
 
 - mindmap-layout.js `mmToXmindSheets(doc, whoOf)` (가져오기 mmFromXmindSheets 와 짝 — test/mindmap-layout.test.js 왕복 검사) · `MM_XMIND_OUT`(마커) · `MM_XMIND_STRUCT` · 진척 → 가장 가까운 task-* 마커.

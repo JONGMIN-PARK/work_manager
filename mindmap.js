@@ -286,6 +286,7 @@ var MM_ICONS = {
   pen: 'M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z',
   x: 'M18 6L6 18M6 6l12 12',
   user: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+  play: 'M7 4v16l13-8z',
   bg: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15.5 8.5h.01'
 };
 function _mmIcon(name, size) {

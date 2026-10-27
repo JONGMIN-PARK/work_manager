@@ -390,6 +390,7 @@ var MM_COMMANDS = [
   { id: 'zoomOut', group: '보기', label: '축소', keys: ['Ctrl+-'], run: function () { _mmZoomAt(1 / 1.1); } },
   { id: 'fit', group: '보기', label: '화면 맞춤', keys: ['Ctrl+0'], run: function () { _mmFit(); } },
   { id: 'search', group: '보기', label: '맵에서 찾기', keys: ['Ctrl+F'], run: function () { var s = _mmEl('mmSearch'); if (s) { s.focus(); s.select(); } } },
+  { id: 'pitch', group: '보기', label: '발표 모드 (개요 → 주요 주제 한 장씩)', keys: ['Alt+Shift+P'], run: function () { if (typeof mmPitchStart === 'function') mmPitchStart(); } },
   { id: 'zen', group: '보기', label: '집중 모드', keys: ['Ctrl+Shift+F'], run: function () { _mmSetZen(!_mm.zen); } },
   { id: 'outline', group: '보기', label: '맵 ↔ 아웃라인 보기', keys: ['Alt+O'], run: function () { _mmSetOutline(!_mm.outline); } },
   { id: 'gantt', group: '보기', label: '간트 보기 (일정 막대)', keys: ['Alt+J'], run: function () { _mmSetView(_mm.gantt ? 'map' : 'gantt'); } },

@@ -47,6 +47,7 @@ function _mmRenderEditor() {
     menuBtn('mmExportMenu', 'download', '', '내보내기') +
     '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="weekly-report">🗓 주간 업무 보고 문장…</button><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
     '<button data-act="export-opml">OPML (.opml)</button><button data-act="export-xmind">XMind (.xmind)</button></div></div>' +
+    tb('pitch', 'play', '발표', '발표 모드 — 개요 → 주요 주제를 한 장씩 (← → · Esc)') +
     tb('history', 'history', '기록', '버전 기록 (Ctrl+Shift+H)') +
     ((row.is_owner || _mmIsAdmin()) ? tb('share', 'share', '공유', '공유 설정', ' mm-tbtn-accent') : '') +
     '<span class="mm-tsep"></span>' +
@@ -464,9 +465,9 @@ function _mmPaint() {
       // 가지는 부모 쪽이 굵고 끝으로 갈수록 가늘게 (유료 마인드맵 툴의 기본 모양)
       // 끝 굵기를 하위 주제 밑줄과 같게 — 밑줄까지 한 도형이라 이음매가 없다.
       var w0 = p.depth === 1 ? 7 : 3.4, w1 = p.depth === 1 ? 2.4 : MM_UNDERLINE;
-      paths.push('<path d="' + mmEdgeShape(pp, p, st, w0, w1) + '" class="mm-branch' + edim + '" style="fill:' + colors[id] + '"/>');
+      paths.push('<path d="' + mmEdgeShape(pp, p, st, w0, w1) + '" data-e="' + _mmEsc(id) + '" class="mm-branch' + edim + '" style="fill:' + colors[id] + '"/>');
     } else {
-      paths.push('<path d="' + mmEdgePath(pp, p, st) + '" class="mm-edge' + edim + '" style="stroke:' + colors[id] + ';stroke-width:' + MM_UNDERLINE + '"/>');
+      paths.push('<path d="' + mmEdgePath(pp, p, st) + '" data-e="' + _mmEsc(id) + '" class="mm-edge' + edim + '" style="stroke:' + colors[id] + ';stroke-width:' + MM_UNDERLINE + '"/>');
     }
   });
   var svg = _mmEl('mmEdges');
@@ -493,6 +494,7 @@ function _mmPaint() {
   if (_mm.outline) _mmPaintOutline();
   if (_mm.gantt) _mmPaintGantt();
   if (typeof _mmPaintFilter === 'function') _mmPaintFilter();
+  if (_mm.pitch && typeof mmPitchGo === 'function') mmPitchGo(_mm.pitch.idx);
 }
 
 // 글꼴(웹 폰트 글자 묶음)이 그린 뒤에 받아지면 주제 크기가 바뀌므로 다시 배치 — 입력 중이면 건너뜀

@@ -2,6 +2,10 @@
  * (fetch 는 file:// 에서 막히므로 JSON 이 아니라 스크립트). 버전을 올릴 때: 맨 앞에 항목 추가 + 업무일지_분석기.html 의 WM_VERSION 도 같은 값으로
  * — test/patch-notes.test.js 가 형식·내림차순·WM_VERSION 일치를 검사한다. */
 var WM_PATCHES=[
+    {ver:'13.242',date:'2026-10-27',title:'▶ 마인드맵 발표 모드',tag:'feature',items:[
+      '발표 모드 — 상단 [▶ 발표] 또는 Alt+Shift+P: 전체 화면에서 개요 → 주요 주제를 한 장씩 화면 가득 확대(부드럽게 이동), 장면 밖 주제 · 선은 흐리게',
+      '→ · Space · PageDown 다음 / ← · PageUp 이전 / Home · End / Esc 끝내기, 아래 막대로도 넘김 — 끝내면 원래 확대 · 위치로, 맵 내용은 바뀌지 않음(보기 전용도 발표 가능)'
+    ]},
     {ver:'13.241',date:'2026-10-27',title:'📤 마인드맵 XMind 내보내기',tag:'feature',items:[
       'XMind 파일로 내보내기 — 내보내기 메뉴 [XMind (.xmind)]: 주제 · 노트 · 링크 · 라벨 · 마커 · 진척 · 접힘 · 경계 · 요약 · 관계선 · 구조가 XMind 에서 그대로 열림',
       '담당 · 시작 · 마감은 XMind 에 같은 칸이 없어 라벨("담당 …" · "마감 …")로, 주제 안 글 줄은 노트로 — 이미지 · 댓글은 빠짐'
