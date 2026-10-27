@@ -1577,3 +1577,13 @@ body.mm-zen-body{overflow:hidden}
 .mm-risk-aiitem b{color:var(--t1)}
 .mm-risk-act{margin-top:3px;color:var(--ac);font-weight:600}
 .mm-fchip-risk{color:var(--t3)}
+/* ═══ 🧠 마인드맵 첨부 파일 (v13.244) ═══ */
+.mm-filebadge{display:inline-flex;align-items:center;margin-left:4px;padding:0 5px;height:17px;border-radius:9px;background:color-mix(in srgb,var(--t4) 14%,transparent);color:var(--t3);font-size:10.5px;font-weight:700;flex:none}
+.mm-root .mm-filebadge{background:rgba(255,255,255,.2);color:#fff}
+.mm-file{display:flex;align-items:center;gap:6px;padding:4px 2px;border-bottom:1px solid var(--bd)}
+.mm-file:last-of-type{border-bottom:none}
+.mm-file-ic{flex:none}
+.mm-file-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;background:none;border:none;padding:0;color:var(--ac);font-size:12px;cursor:pointer;font-family:inherit}
+.mm-file-name:hover{text-decoration:underline}
+.mm-file-del{background:none;border:none;color:var(--t5);cursor:pointer;font-size:11px}
+#mmPnFiles .btn{margin-top:6px}

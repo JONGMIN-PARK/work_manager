@@ -32,6 +32,7 @@ DELETE /api/milestones/:id/logs/:logId/hard
 DELETE /api/milestones/:id/logs/trash/empty
 DELETE /api/mindmaps/:id
 DELETE /api/mindmaps/:id/comments/:cid
+DELETE /api/mindmaps/:id/files/:fid
 DELETE /api/mindmaps/:id/snapshots/:sid
 DELETE /api/notifications/:id
 DELETE /api/orders/:orderNo
@@ -142,6 +143,8 @@ GET /api/milestones/:id/logs/trash
 GET /api/mindmaps
 GET /api/mindmaps/:id
 GET /api/mindmaps/:id/comments
+GET /api/mindmaps/:id/files
+GET /api/mindmaps/:id/files/:fid
 GET /api/mindmaps/:id/images
 GET /api/mindmaps/:id/snapshots
 GET /api/mindmaps/:id/snapshots/:sid
@@ -335,6 +338,7 @@ POST /api/milestones/:id/transfer
 POST /api/mindmaps
 POST /api/mindmaps/:id/comments
 POST /api/mindmaps/:id/duplicate
+POST /api/mindmaps/:id/files
 POST /api/mindmaps/:id/images
 POST /api/mindmaps/:id/snapshots
 POST /api/mindmaps/:id/snapshots/:sid/restore

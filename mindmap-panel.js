@@ -30,6 +30,7 @@ function _mmPaintPanel() {
     '<textarea id="mmPnText" class="mm-input mm-pn-text" rows="3"' + ro + '>' + _mmEsc(n.text || '') + '</textarea></div>';
   if (typeof _mmBlocksPanelHtml === 'function') h += _mmBlocksPanelHtml(n, ro);
   if (typeof _mmCommentsPanelHtml === 'function' && !_mm.preview) h += _mmCommentsPanelHtml(n, f.depth);
+  if (typeof _mmFilesPanelHtml === 'function' && !_mm.preview) h += _mmFilesPanelHtml(n, f.depth);
   h += '<div class="mm-pn-sec"><div class="mm-pn-h">색상</div><div class="mm-swatches">' + MM_COLORS.map(function (c) {
     return '<button class="mm-sw' + ((n.color || '') === c.key ? ' on' : '') + '" data-act="color" data-v="' + c.key + '" title="' + (c.label || c.key) + '"' + ro +
       ' style="' + (c.c ? 'background:' + c.c : '') + '">' + (c.c ? '' : 'A') + '</button>';
@@ -96,6 +97,7 @@ function _mmPaintPanel() {
   pn.innerHTML = h;
   if (typeof _mmBindBlocksPanel === 'function') _mmBindBlocksPanel(pn, n);
   if (typeof _mmBindComments === 'function') _mmBindComments(pn, n);   // 보기 전용이어도 댓글은 됨
+  if (typeof _mmBindFiles === 'function') _mmBindFiles(pn, n);   // 보기 전용이어도 내려받기는 됨
   if (_mm.readOnly) return;
   function bind(id, fn) { var el = _mmEl(id); if (el) el.onchange = function () { fn(el); }; }
   bind('mmPnText', function (el) { var v = el.value.replace(/\s+$/, ''); if (v !== (n.text || '')) _mmSetProp('text', v); });

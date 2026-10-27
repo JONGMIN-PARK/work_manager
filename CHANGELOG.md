@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.244 (2026-10-27) — 마인드맵 주제 첨부 파일
+
+- 서버: `061_mindmap_files.sql`(bytea — GCS 설정 확인 전이라 DB) · `GET/POST /api/mindmaps/:id/files` · `GET/DELETE …/:fid`(내려받기는 base64 JSON). 목록 · 내려받기 = 읽기, 올리기 · 지우기 = 편집. route-inventory 스냅샷 갱신.
+- 클라: mindmap-files.js (새 파일) — `_mm.files`(맵 열 때 `mmLoadFiles`) · `_mmFileBadge` · `_mmFilesPanelHtml` · `mmAttachFiles`. 캔버스 drop 은 이미지/그 밖을 나눠 처리.
+- test/e2e/e2e20-files.js(11).
+
 ## v13.243 (2026-10-27) — 마인드맵 리스크 점검 · AI 의견
 
 - mindmap-risk.js (새 파일): `mmRiskFindings(root, facts, prog, relations, today, old)`(순수, test/mindmap-risk.test.js) · `mmRiskModal`. 몰림 기준 `MM_RISK_LOAD`(진행 중 8 · 이번 주 4).

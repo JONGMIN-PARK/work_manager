@@ -746,7 +746,11 @@ function _mmBindCanvas() {
     if (!e.dataTransfer.files.length || typeof mmAddImageFiles !== 'function') return;
     var under = document.elementFromPoint(e.clientX, e.clientY);
     var nd = under && under.closest && under.closest('.mm-node');
-    mmAddImageFiles(e.dataTransfer.files, nd ? nd.getAttribute('data-id') : _mm.sel);
+    var target = nd ? nd.getAttribute('data-id') : _mm.sel;
+    var all = Array.prototype.slice.call(e.dataTransfer.files);
+    var imgs = all.filter(function (x) { return /^image\//.test(x.type); }), others = all.filter(function (x) { return !/^image\//.test(x.type); });
+    if (imgs.length) mmAddImageFiles(imgs, target);
+    if (others.length && typeof mmAttachFiles === 'function') mmAttachFiles(others, target);
   });
   cv.addEventListener('contextmenu', function (e) {
     if (_mm.editing || typeof mmContextMenu !== 'function') return;

@@ -921,4 +921,73 @@ router.delete('/:id/comments/:cid', async function (req, res) {
   }
 });
 
+/* ═══ 주제 첨부 파일 (v13.244) — DB 저장 · 파일당 5MB · 맵당 100개. 목록 · 내려받기 = 읽기, 올리기 · 지우기 = 편집 ═══ */
+var FILE_MAX_BYTES = 5 * 1024 * 1024;
+var FILE_MAX_COUNT = 100;
+var FILE_SELECT = "SELECT f.id, f.node_id, f.name, f.mime, f.size, f.created_by, f.created_at, COALESCE(NULLIF(u.display_name,''), u.name) AS author_name " +
+  'FROM mindmap_files f LEFT JOIN users u ON u.id = f.created_by ';
+
+// GET /api/mindmaps/:id/files — 목록 (내용 없이)
+router.get('/:id/files', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, false);
+    if (!row) return;
+    var r = await db.query(FILE_SELECT + 'WHERE f.map_id = $1 AND f.tenant_id = $2 ORDER BY f.created_at', [row.id, req.tenant.id]);
+    res.json({ data: r.rows });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/files/list]', e);
+  }
+});
+
+// GET /api/mindmaps/:id/files/:fid — 내려받기 { name, mime, data(base64) }
+router.get('/:id/files/:fid', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, false);
+    if (!row) return;
+    var r = await db.query('SELECT name, mime, size, data FROM mindmap_files WHERE id = $1 AND map_id = $2 AND tenant_id = $3', [req.params.fid, row.id, req.tenant.id]);
+    if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    var f = r.rows[0];
+    res.json({ data: { name: f.name, mime: f.mime, size: f.size, data: Buffer.from(f.data).toString('base64') } });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/files/get]', e);
+  }
+});
+
+// POST /api/mindmaps/:id/files — { nodeId, name, mime, data(base64) }
+router.post('/:id/files', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, true);
+    if (!row) return;
+    var b = req.body || {};
+    var nodeId = String(b.nodeId || '').slice(0, 100);
+    var name = String(b.name || '').replace(/[\\/\r\n]+/g, '_').trim().slice(0, 255);
+    if (!nodeId || !name || typeof b.data !== 'string') return httpErr.sendError(res, 400, 'VALIDATION', '주제 · 파일 이름 · 내용이 필요합니다.');
+    var buf = Buffer.from(b.data, 'base64');
+    if (!buf.length) return httpErr.sendError(res, 400, 'VALIDATION', '빈 파일입니다.');
+    if (buf.length > FILE_MAX_BYTES) return httpErr.sendError(res, 400, 'VALIDATION', '파일이 너무 큽니다 (최대 5MB).');
+    var cnt = await db.query('SELECT COUNT(*)::int AS n FROM mindmap_files WHERE map_id = $1 AND tenant_id = $2', [row.id, req.tenant.id]);
+    if (cnt.rows[0].n >= FILE_MAX_COUNT) return httpErr.sendError(res, 400, 'LIMIT', '맵 하나에 첨부는 ' + FILE_MAX_COUNT + '개까지 둘 수 있습니다.');
+    var id = genId('mmf');
+    await db.query('INSERT INTO mindmap_files (id, map_id, tenant_id, node_id, name, mime, size, data, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [id, row.id, req.tenant.id, nodeId, name, String(b.mime || 'application/octet-stream').slice(0, 120), buf.length, buf, req.user.sub]);
+    var r = await db.query(FILE_SELECT + 'WHERE f.id = $1', [id]);
+    res.status(201).json({ data: r.rows[0] });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/files/create]', e);
+  }
+});
+
+// DELETE /api/mindmaps/:id/files/:fid — 편집 권한
+router.delete('/:id/files/:fid', async function (req, res) {
+  try {
+    var row = await snapGate(req, res, true);
+    if (!row) return;
+    var r = await db.query('DELETE FROM mindmap_files WHERE id = $1 AND map_id = $2 AND tenant_id = $3 RETURNING id', [req.params.fid, row.id, req.tenant.id]);
+    if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    res.json({ data: { id: req.params.fid } });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/files/delete]', e);
+  }
+});
+
 module.exports = router;
