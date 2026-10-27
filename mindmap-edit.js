@@ -457,6 +457,7 @@ function _mmEdClick(e) {
     case 'menu':
       var mEl = _mmEl(t.getAttribute('data-menu'));
       if (mEl && mEl.id === 'mmAlignMenu') _mmPaintAlignMenu();
+      if (mEl && mEl.id === 'mmBgMenu') _mmPaintBgMenu();
       if (mEl) mEl.classList.toggle('hidden');
       return;
     case 'sheet':
@@ -510,6 +511,11 @@ function _mmEdClick(e) {
     case 'conflict-reload': _mm.conflict = null; _mm.dirty = false; mmOpen(_mm.mapId); return;
     case 'conflict-overwrite': _mmConflictOverwrite(); return;
     case 'color': _mmSetProp('color', t.getAttribute('data-v')); return;
+    case 'bg': {
+      var bgv = t.getAttribute('data-v');
+      _mmMutate(function () { var sh = _mmSheet(); if (bgv === 'dots') delete sh.bg; else sh.bg = bgv; });
+      return;
+    }
     case 'priority': _mmSetMarker('priority', t.getAttribute('data-v')); return;
     case 'symbol': _mmSetMarker('symbol', t.getAttribute('data-v')); return;
     case 'prog': { var pv = t.getAttribute('data-v'); _mmSetProp('progress', pv === '' ? null : parseInt(pv, 10)); return; }

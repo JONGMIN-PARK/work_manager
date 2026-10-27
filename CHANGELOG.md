@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.235 (2026-10-27) — 마인드맵 캔버스 배경 고르기
+
+- mindmap.js `MM_BG_GROUPS` · `MM_BACKGROUNDS`(k · grp · tone) · `_mmBgKey()` — 시트 속성 `sheet.bg`(없으면 dots). mindmap-view.js `_mmPaintBgMenu` · `_mmPaint` 가 #mmCanvas 에 `data-mmbg`. mindmap-edit.js `data-act="bg"`(Ctrl+Z 됨). mindmap-panel.js PNG 내보내기 상자에도 `data-mmbg`.
+- style.css `[data-mmbg=…]` — 캔버스 · 메뉴 미리 보기 · 내보내기 상자 공용. 밝은/어두운 배경은 `--t1~t6 · --bd · --bg-p(s) · --ac` 등을 그 안에서 고정.
+- test/e2e/e2e12-bg.js(7).
+
 ## v13.234 (2026-10-27) — 마인드맵 끌어 놓을 자리 표시선
 
 - mindmap-edit.js `_mmDropLine(target)` — 끌기 중 #mmStage 에 .mm-drop-line(앞/뒤 = 이웃 틈 가로선, 하위 = 주제 옆 짧은 선 · 조직도는 축 바꿈), 놓거나 취소하면 지움. 앞/뒤 그림자 표시는 없앰(하위 링은 유지).

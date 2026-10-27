@@ -35,6 +35,7 @@ function _mmRenderEditor() {
     '<button data-act="view-gantt" id="mmVGantt" title="간트 (Alt+J)">간트</button></div>' +
     '<select id="mmStructure" class="mm-select mm-edit-only" title="구조 (Ctrl+Shift+L)">' + MM_STRUCTURES.map(function (s) { return '<option value="' + s.k + '"' + (s.k === st ? ' selected' : '') + '>' + s.l + '</option>'; }).join('') + '</select>' +
     menuBtn('mmAlignMenu', 'align', '정렬', '같은 단계 맞춤 · 글자 정렬 (Alt+G)', ' mm-edit-only') + '<div class="mm-menu hidden" id="mmAlignMenu"></div></div>' +
+    menuBtn('mmBgMenu', 'bg', '배경', '캔버스 배경 (이 시트)', ' mm-edit-only') + '<div class="mm-menu mm-bgmenu hidden" id="mmBgMenu"></div></div>' +
     (_mm.doc.meta && _mm.doc.meta.gen ? tb('resync', 'sync', '원본과 맞추기', '원본 데이터에 새로 생긴 항목을 맵에 추가', ' mm-edit-only') : '') +
     '<span class="mm-tsep"></span>' +
     menuBtn('mmAiMenu', 'sparkles', 'AI', 'AI 도우미', ' mm-edit-only' + (_mm.aiReady ? '' : ' hidden')).replace('<div class="mm-menu-wrap', '<div id="mmAiWrap" class="mm-menu-wrap') +
@@ -171,6 +172,19 @@ function _mmPaintAlignMenu() {
     (f && f.parent && (f.node.children || []).length ? '<button data-act="cmd" data-cmd="alignLevels">' + chk(f.node.alignLevels) + '선택한 가지의 하위만 <span class="mm-hint">Alt+G</span></button>' : '') +
     '<div class="mm-menu-h">글자 정렬 <span class="mm-hint">이 시트</span></div>' +
     MM_TEXT_ALIGNS.map(function (a) { return '<button data-act="cmd" data-cmd="textAlign:' + a.k + '">' + chk(ta === a.k) + a.l + '</button>'; }).join('');
+}
+
+/** 배경 메뉴 — 묶음별 미리 보기 칸 */
+function _mmPaintBgMenu() {
+  var m = _mmEl('mmBgMenu');
+  if (!m) return;
+  var cur = _mmBgKey();
+  m.innerHTML = MM_BG_GROUPS.map(function (g) {
+    return '<div class="mm-menu-h">' + g.l + '</div><div class="mm-bggrid">' + MM_BACKGROUNDS.filter(function (b) { return b.grp === g.k; }).map(function (b) {
+      return '<button class="mm-bgsw' + (b.k === cur ? ' on' : '') + '" data-act="bg" data-v="' + b.k + '" title="' + b.l + '">' +
+        '<span class="mm-bgprev" data-mmbg="' + b.k + '"><i></i><i></i></span><span class="mm-bgname">' + b.l + '</span></button>';
+    }).join('') + '</div>';
+  }).join('') + '<div class="mm-hint mm-bg-foot">시트마다 저장 · 함께 보는 사람에게도 같은 배경</div>';
 }
 
 /* ═══ 시트 ═══ */
@@ -412,6 +426,8 @@ function _mmPaint() {
   });
   // 가로 구조는 하위 주제 밑줄을 SVG 연결선이 이어 그린다 — CSS 밑줄은 자리만 차지(투명)
   stage.className = 'mm-stage mm-ta-' + (sheet.textAlign || 'auto') + (st === 'down' ? '' : ' mm-ul-svg');
+  var cvEl = _mmEl('mmCanvas');
+  if (cvEl) cvEl.setAttribute('data-mmbg', _mmBgKey());
   var b = lay.bounds;
   b.minX = Math.floor(b.minX); b.minY = Math.floor(b.minY); b.maxX = Math.ceil(b.maxX); b.maxY = Math.ceil(b.maxY);
   var pad = 40;

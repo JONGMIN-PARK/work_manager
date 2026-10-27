@@ -1452,3 +1452,40 @@ body.mm-zen-body{overflow:hidden}
 .mm-drop-line::before{content:'';position:absolute;left:-4px;top:-3px;width:9px;height:9px;border-radius:50%;background:var(--ac)}
 .mm-drop-line-child::before{left:auto;right:-5px}
 .mm-stage .mm-node.mm-drop-before,.mm-stage .mm-node.mm-drop-after{box-shadow:none}
+/* ═══ 🧠 마인드맵 캔버스 배경 (v13.235) — [data-mmbg] 는 캔버스 · 메뉴 미리 보기 · PNG 내보내기 상자에 함께 붙는다 ═══ */
+[data-mmbg]{background-color:var(--bg)}
+[data-mmbg="plain"]{background-image:none}
+[data-mmbg="dots"]{background-image:radial-gradient(circle,color-mix(in srgb,var(--t6) 40%,transparent) 1px,transparent 1.3px);background-size:24px 24px}
+[data-mmbg="grid"]{background-image:linear-gradient(color-mix(in srgb,var(--t6) 26%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--t6) 26%,transparent) 1px,transparent 1px);background-size:24px 24px}
+[data-mmbg="lines"]{background-image:linear-gradient(transparent 27px,color-mix(in srgb,var(--t6) 30%,transparent) 27px);background-size:100% 28px}
+[data-mmbg="cross"]{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Cpath d='M14 10v8M10 14h8' stroke='%23808898' stroke-opacity='.35' stroke-width='1.2'/%3E%3C/svg%3E");background-size:28px 28px}
+/* 밝은 배경 — 글자 · 칸 색을 밝은 테마 값으로 고정 */
+[data-mmbg="white"],[data-mmbg="ivory"],[data-mmbg="mint"],[data-mmbg="sky"],[data-mmbg="lavender"],[data-mmbg="rose"]{
+  --t1:#1A1E30;--t2:#2A3048;--t3:#424862;--t4:#5E6580;--t5:#8890A6;--t6:#B0B6C8;--bd:#C8CDE0;--bg-p:#F7F8FC;--bg-ps:#FFFFFF;--bg-hv:#E6E9F2;
+  --ac:#5865F2;--ac-bg:#E5E7FD;--ac-g:rgba(88,101,242,.12);--d-t:#DC2626;--mk-t:#B45309;color-scheme:light}
+[data-mmbg="white"]{--bg:#FFFFFF;background-image:none}
+[data-mmbg="ivory"]{--bg:#FBF6EA}
+[data-mmbg="mint"]{--bg:#ECF7F1}
+[data-mmbg="sky"]{--bg:#EAF3FC}
+[data-mmbg="lavender"]{--bg:#F3F0FC}
+[data-mmbg="rose"]{--bg:#FCEFF2}
+[data-mmbg="ivory"],[data-mmbg="mint"],[data-mmbg="sky"],[data-mmbg="lavender"],[data-mmbg="rose"]{background-image:radial-gradient(circle,rgba(30,40,70,.10) 1px,transparent 1.3px);background-size:24px 24px}
+/* 어두운 배경 — 글자 · 칸 색을 어두운 테마 값으로 고정 */
+[data-mmbg="slate"],[data-mmbg="blueprint"]{
+  --t1:#F0F2F8;--t2:#D8DEE8;--t3:#B8C0D4;--t4:#8894B0;--t5:#7482AA;--t6:#4A5578;--bd:#33405E;--bg-p:#1B2230;--bg-ps:#1F2736;--bg-hv:#26304A;
+  --ac:#7BA4FF;--ac-bg:#1B2D55;--ac-g:rgba(123,164,255,.18);--d-t:#FF8A8A;--mk-t:#FBBF24;color-scheme:dark}
+[data-mmbg="slate"]{--bg:#1F252D;background-image:radial-gradient(circle,rgba(255,255,255,.08) 1px,transparent 1.3px);background-size:24px 24px}
+[data-mmbg="blueprint"]{--bg:#123257;--bg-ps:#173B66;--bg-p:#163961;--bd:#2F5A8A;
+  background-image:linear-gradient(rgba(255,255,255,.14) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.14) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);
+  background-size:120px 120px,120px 120px,24px 24px,24px 24px}
+/* 배경 메뉴 */
+.mm-bgmenu{min-width:300px;padding:6px}
+.mm-bggrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:4px 6px 6px}
+.mm-menu .mm-bgsw{display:flex;flex-direction:column;align-items:center;gap:3px;padding:3px;border:1.5px solid transparent;border-radius:8px;background:none;cursor:pointer}
+.mm-menu .mm-bgsw:hover{background:var(--bg-hv)}
+.mm-menu .mm-bgsw.on{border-color:var(--ac)}
+.mm-bgprev{position:relative;display:block;width:58px;height:40px;border-radius:6px;border:1px solid var(--bd);overflow:hidden;background-size:12px 12px}
+.mm-bgprev i:first-child{position:absolute;left:8px;top:9px;width:26px;height:11px;border-radius:4px;background:var(--bg-ps,var(--bg-p));border:1px solid var(--bd)}
+.mm-bgprev i:last-child{position:absolute;left:8px;top:26px;width:36px;height:3px;border-radius:2px;background:var(--t3)}
+.mm-bgname{font-size:10.5px;color:var(--t3)}
+.mm-bg-foot{padding:4px 10px 2px}

@@ -255,7 +255,8 @@ function mmExportPng() {
   var bg = getComputedStyle(_mmEl('mmCanvas')).backgroundColor || getComputedStyle(document.body).backgroundColor;
   var box = document.createElement('div');
   box.className = 'mm-export-box';
-  box.style.cssText = 'position:fixed;left:-100000px;top:0;width:' + w + 'px;height:' + h + 'px;overflow:hidden;background:' + bg;
+  box.style.cssText = 'position:fixed;left:-100000px;top:0;width:' + w + 'px;height:' + h + 'px;overflow:hidden';
+  box.setAttribute('data-mmbg', _mmBgKey());   // 배경 무늬 · 글자색(어두운 배경)도 같게
   var clone = stage.cloneNode(true);
   clone.removeAttribute('id');
   clone.style.transform = 'translate(' + (pad - b.minX) + 'px,' + (pad - b.minY) + 'px)';

@@ -74,6 +74,16 @@ function _mmSymbolGroupsHtml(btn) {
     return '<div class="mm-mk-grp"><div class="mm-mk-grp-h">' + g.l + '</div><div class="mm-swatches">' + items.map(btn).join('') + '</div></div>';
   }).join('');
 }
+/* 캔버스 배경 — 시트마다(sheet.bg, 없으면 dots). 모양은 style.css [data-mmbg=…]. tone: 'light' · 'dark' 는 글자색을 그 배경에 맞춰 고정 */
+var MM_BG_GROUPS = [{ k: 'clean', l: '깨끗한' }, { k: 'pattern', l: '무늬' }, { k: 'tint', l: '색감' }, { k: 'dark', l: '어둡게' }];
+var MM_BACKGROUNDS = [
+  { k: 'plain', l: '단색', grp: 'clean' }, { k: 'white', l: '흰 종이', grp: 'clean', tone: 'light' },
+  { k: 'dots', l: '점', grp: 'pattern' }, { k: 'grid', l: '모눈', grp: 'pattern' }, { k: 'lines', l: '가로줄', grp: 'pattern' }, { k: 'cross', l: '십자', grp: 'pattern' },
+  { k: 'ivory', l: '아이보리', grp: 'tint', tone: 'light' }, { k: 'mint', l: '민트', grp: 'tint', tone: 'light' }, { k: 'sky', l: '하늘', grp: 'tint', tone: 'light' },
+  { k: 'lavender', l: '라벤더', grp: 'tint', tone: 'light' }, { k: 'rose', l: '로즈', grp: 'tint', tone: 'light' },
+  { k: 'slate', l: '칠판', grp: 'dark', tone: 'dark' }, { k: 'blueprint', l: '청사진', grp: 'dark', tone: 'dark' }
+];
+function _mmBgKey() { var b = _mmSheet().bg; return MM_BACKGROUNDS.some(function (x) { return x.k === b; }) ? b : 'dots'; }
 var MM_STRUCTURES = [
   { k: 'balanced', l: '마인드맵 ⇆' }, { k: 'right', l: '논리도 →' }, { k: 'down', l: '조직도 ↓' }
 ];
@@ -262,7 +272,8 @@ var MM_ICONS = {
   calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
   pen: 'M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z',
   x: 'M18 6L6 18M6 6l12 12',
-  user: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'
+  user: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+  bg: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15.5 8.5h.01'
 };
 function _mmIcon(name, size) {
   var d = MM_ICONS[name];

@@ -66,7 +66,7 @@ else
   run_batch e2e3.js e2e4.js e2e5.js
   run_batch e2e6.js
   run_batch e2e8.js e2e9-progress.js e2e10-split.js
-  run_batch e2e11-filter.js
+  run_batch e2e11-filter.js e2e12-bg.js
 fi
 
 # 이 실행이 띄운 Postgres 면 정상 종료 (start.mjs 가 .pgstop 을 보고 멈춤)
