@@ -366,11 +366,13 @@ function _mmPaint() {
   });
   stage.innerHTML = '<svg class="mm-edges" id="mmEdges" xmlns="http://www.w3.org/2000/svg"></svg>' + html.join('');
   var sizes = {};
-  // offsetWidth 는 정수로 반올림돼 밑줄과 선 끝이 어긋난다 — 실제(소수) 크기를 확대 배율로 되돌려 쓴다
+  // 이음매: 주제 상자는 화소 단위로 맞춰 그려지는데 선(SVG)은 그렇지 않아, 위치 · 크기가 소수면 확대할수록
+  // 밑줄과 선이 위아래로 어긋난다. 크기는 실제 크기를 올림한 정수로 재고 그 크기로 고정, 위치도 정수로 맞춘다.
   var zm = _mm.zoom || 1;
   function sizeOf(el) {
     var r = el.getBoundingClientRect();
-    return r.width ? { w: r.width / zm, h: r.height / zm } : { w: el.offsetWidth, h: el.offsetHeight };
+    var w = r.width ? r.width / zm : el.offsetWidth, h = r.width ? r.height / zm : el.offsetHeight;
+    return { w: Math.ceil(w - 0.05), h: Math.ceil(h - 0.05) };
   }
   var els = stage.querySelectorAll('.mm-node');
   els.forEach(function (el) { sizes[el.getAttribute('data-id')] = sizeOf(el); });
@@ -379,6 +381,7 @@ function _mmPaint() {
   var lay = mmLayout(root, st, sizes);
   var deco = mmDecorations(root, st, lay, sizes);
   _mm.layout = lay;
+  Object.keys(lay.pos).forEach(function (id) { var p = lay.pos[id]; p.x = Math.round(p.x); p.y = Math.round(p.y); });
   els.forEach(function (el) {
     var id = el.getAttribute('data-id');
     var p = lay.pos[id];
@@ -386,11 +389,14 @@ function _mmPaint() {
     el.style.left = p.x + 'px';
     el.style.top = p.y + 'px';
     el.setAttribute('data-side', p.side);
-    // 같은 단계 맞춤으로 넓힌 주제는 그 크기로 (글자 정렬은 시트 설정 — stage 의 mm-ta-*)
-    if (lay.aligned && lay.aligned[id]) { el.style.width = p.w + 'px'; el.style.minHeight = p.h + 'px'; el.classList.add('mm-aligned'); }
+    el.style.width = p.w + 'px';
+    el.style.minHeight = p.h + 'px';
+    // 같은 단계 맞춤으로 넓힌 주제 (글자 정렬은 시트 설정 — stage 의 mm-ta-*)
+    if (lay.aligned && lay.aligned[id]) el.classList.add('mm-aligned');
   });
   stage.className = 'mm-stage mm-ta-' + (sheet.textAlign || 'auto');
   var b = lay.bounds;
+  b.minX = Math.floor(b.minX); b.minY = Math.floor(b.minY); b.maxX = Math.ceil(b.maxX); b.maxY = Math.ceil(b.maxY);
   var pad = 40;
   var paths = [];
   var extra = [];
