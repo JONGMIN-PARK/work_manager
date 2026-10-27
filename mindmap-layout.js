@@ -578,6 +578,66 @@ function mmFromXmindSheets(sheets) {
   return out.length ? { sheets: out } : null;
 }
 
+/* ═══ XMind 내보내기 (content.json — XMind 2020 이후). 가져오기(mmFromXmindSheets)와 짝 ═══ */
+var MM_XMIND_OUT = {
+  check: 'symbol-right', cross: 'symbol-wrong', question: 'symbol-question', warning: 'symbol-attention', idea: 'symbol-idea',
+  flag: 'flag-red', 'flag-finish': 'flag-green', star: 'star-yellow', people: 'people-blue', person: 'people-red',
+  smile: 'smiley-smile', meh: 'smiley-boring', sad: 'smiley-cry', angry: 'smiley-angry', surprise: 'smiley-surprise',
+  up: 'arrow-up', down: 'arrow-down', left: 'arrow-left', right: 'arrow-right', refresh: 'arrow-refresh'
+};
+var MM_XMIND_STRUCT = { balanced: 'org.xmind.ui.map.unbalanced', right: 'org.xmind.ui.logic.right', down: 'org.xmind.ui.org-chart.down' };
+/** 진척 % → XMind 작업 마커 (가장 가까운 칸) */
+function _mmXmindTask(p) {
+  var best = null, bd = 999;
+  Object.keys(MM_XMIND_TASK).forEach(function (k) { var d = Math.abs(MM_XMIND_TASK[k] - p); if (d < bd) { bd = d; best = k; } });
+  return best;
+}
+/**
+ * 맵 문서 → XMind content.json 시트 배열. whoOf(n) = 담당 이름(없으면 '').
+ * XMind 에 없는 담당 · 시작 · 마감은 라벨로("담당 …" · "마감 …"), 내용 줄의 글은 노트 뒤에 붙인다. 이미지 · 댓글은 빠짐.
+ */
+function mmToXmindSheets(doc, whoOf) {
+  return (doc.sheets || []).map(function (sh) {
+    function conv(n, isRoot) {
+      var t = { id: n.id, title: String(n.text || '') };
+      if (isRoot) t.structureClass = MM_XMIND_STRUCT[sh.structure] || MM_XMIND_STRUCT.balanced;
+      var lines = (n.blocks || []).filter(function (b) { return b.t === 'text' && b.v; }).map(function (b) { return b.v; });
+      var note = [n.note || ''].concat(lines).filter(Boolean).join('\n');
+      if (note) t.notes = { plain: { content: note } };
+      if (n.link) t.href = n.link;
+      var labels = (n.labels || []).slice();
+      var who = whoOf ? whoOf(n) : '';
+      if (who) labels.push('담당 ' + who);
+      if (n.startDate) labels.push('시작 ' + n.startDate);
+      if (n.dueDate) labels.push('마감 ' + n.dueDate);
+      if (labels.length) t.labels = labels;
+      var mk = [];
+      (n.markers || []).forEach(function (m) {
+        if (/^priority-\d$/.test(m)) mk.push({ markerId: m });
+        else if (MM_XMIND_OUT[m]) mk.push({ markerId: MM_XMIND_OUT[m] });
+      });
+      if (n.done) mk.push({ markerId: 'task-done' });
+      else if (n.progress != null && n.progress !== '' && !isNaN(parseInt(n.progress, 10))) mk.push({ markerId: _mmXmindTask(parseInt(n.progress, 10)) });
+      if (mk.length) t.markers = mk;
+      if (n.collapsed && (n.children || []).length) t.branch = 'folded';
+      var kids = (n.children || []).map(function (c) { return conv(c, false); });
+      if (kids.length) t.children = { attached: kids };
+      if (n.boundary) t.boundaries = [{ id: n.id + '-bd', range: 'master', title: n.boundary.title || '' }];
+      if (n.summary && kids.length) {
+        var sid = n.id + '-sum';
+        t.summaries = [{ id: n.id + '-sm', range: '(0,' + (kids.length - 1) + ')', topicId: sid }];
+        t.children.summary = [{ id: sid, title: n.summary.text || '요약' }];
+      }
+      return t;
+    }
+    return {
+      id: sh.id, class: 'sheet', title: sh.title || '시트',
+      rootTopic: conv(sh.root, true),
+      relationships: (sh.relations || []).map(function (r) { return { id: r.id, end1Id: r.from, end2Id: r.to, title: r.label || '' }; })
+    };
+  });
+}
+
 /** OPML 내보내기 */
 function mmToOpml(root, title) {
   function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '&#10;'); }
@@ -611,6 +671,6 @@ if (typeof module !== 'undefined' && module.exports) {
     mmIsAncestor: mmIsAncestor, mmRemoveNode: mmRemoveNode, mmMoveNode: mmMoveNode, mmCloneBranch: mmCloneBranch,
     mmLayout: mmLayout, mmEdgePath: mmEdgePath, mmEdgeShape: mmEdgeShape, mmToMarkdown: mmToMarkdown, mmFromMarkdown: mmFromMarkdown,
     mmSubtreeBox: mmSubtreeBox, mmAlignSizes: mmAlignSizes, mmDecorations: mmDecorations, mmNumbering: mmNumbering, mmProgressRollup: mmProgressRollup, mmSplitLineItems: mmSplitLineItems, mmRelationPath: mmRelationPath,
-    mmFromXmindSheets: mmFromXmindSheets, mmToOpml: mmToOpml, mmFromPlainTree: mmFromPlainTree
+    mmFromXmindSheets: mmFromXmindSheets, mmToXmindSheets: mmToXmindSheets, mmToOpml: mmToOpml, mmFromPlainTree: mmFromPlainTree
   };
 }

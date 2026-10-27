@@ -267,3 +267,33 @@ test('mmSplitLineItems — 목록 기호 지우기 · 빈 줄 빼기 · 줄 끝 
   assert.deepStrictEqual(L.mmSplitLineItems('  '), []);
   assert.deepStrictEqual(L.mmSplitLineItems('-1.5 mm 공차'), [{ text: '1.5 mm 공차', who: '' }]);
 });
+
+test('mmToXmindSheets → mmFromXmindSheets 왕복 — 글 · 노트 · 링크 · 라벨 · 마커 · 진척 · 접힘 · 경계 · 요약 · 관계 · 구조', () => {
+  const doc = { sheets: [{ id: 's1', title: '시트', structure: 'right', relations: [{ id: 'r1', from: 'a', to: 'b', label: '선후' }], root: {
+    id: 'r', text: '중심', children: [
+      { id: 'a', text: '가', note: '메모', link: 'https://x.y', labels: ['긴급'], markers: ['priority-2', 'flag', 'lock'], progress: 50, collapsed: true, boundary: { title: '묶음' },
+        children: [{ id: 'a1', text: '가1', done: true, children: [] }] },
+      { id: 'b', text: '나', assigneeName: '외주', dueDate: '2026-11-01', summary: { text: '요약글' }, blocks: [{ t: 'text', v: '둘째 줄' }],
+        children: [{ id: 'b1', text: '나1', children: [] }] }
+    ] } }] };
+  const xs = L.mmToXmindSheets(doc, (n) => n.assigneeName || '');
+  assert.strictEqual(xs[0].rootTopic.structureClass, 'org.xmind.ui.logic.right');
+  const back = L.mmFromXmindSheets(JSON.parse(JSON.stringify(xs))).sheets[0];
+  assert.strictEqual(back.structure, 'right');
+  const [a, b] = back.root.children;
+  assert.strictEqual(a.text, '가');
+  assert.strictEqual(a.note, '메모');
+  assert.strictEqual(a.link, 'https://x.y');
+  assert.deepStrictEqual(a.labels, ['긴급']);
+  assert.deepStrictEqual(a.markers, ['priority-2', 'flag'], 'XMind 에 없는 마커(lock)는 빠짐');
+  assert.strictEqual(a.progress, 50);
+  assert.strictEqual(a.collapsed, true);
+  assert.deepStrictEqual(a.boundary, { title: '묶음' });
+  assert.strictEqual(a.children[0].done, true);
+  assert.deepStrictEqual(b.labels, ['담당 외주', '마감 2026-11-01']);
+  assert.strictEqual(b.note, '둘째 줄', '내용 줄 글은 노트로');
+  assert.deepStrictEqual(b.summary, { text: '요약글' });
+  assert.strictEqual(back.relations.length, 1);
+  assert.strictEqual(back.relations[0].from, a.id);
+  assert.strictEqual(back.relations[0].label, '선후');
+});

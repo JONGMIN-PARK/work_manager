@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.241 (2026-10-27) — 마인드맵 XMind 내보내기
+
+- mindmap-layout.js `mmToXmindSheets(doc, whoOf)` (가져오기 mmFromXmindSheets 와 짝 — test/mindmap-layout.test.js 왕복 검사) · `MM_XMIND_OUT`(마커) · `MM_XMIND_STRUCT` · 진척 → 가장 가까운 task-* 마커.
+- mindmap-extra.js `mmExportXmind` — JSZip 으로 content.json · metadata.json · manifest.json. 내보내기 메뉴 `export-xmind`. test/e2e/e2e17-xmind.js(6) — 만든 파일을 다시 가져와 확인.
+
 ## v13.240 (2026-10-27) — 마인드맵 색 테마 · 글자 서식 · 서식 복사
 
 - mindmap.js `MM_THEMES` · `_mmTheme()`(sheet.theme) · `MM_STYLE_KEYS`(color · bold · fs). mindmap-view.js `_mmNodeColor` 가 테마 색, 주제 class `mm-bold` · `mm-fs-s/l`, 배경 메뉴 맨 위 색 테마 칸(버튼 이름 "테마").

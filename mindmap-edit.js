@@ -475,6 +475,7 @@ function _mmEdClick(e) {
     case 'promote': if (typeof mmPromoteModal === 'function') mmPromoteModal(t.getAttribute('data-kind')); return;
     case 'resync': if (typeof mmResync === 'function') mmResync(); return;
     case 'export-opml': if (typeof mmExportOpml === 'function') mmExportOpml(); return;
+    case 'export-xmind': if (typeof mmExportXmind === 'function') mmExportXmind(); return;
     case 'ai-expand': if (typeof mmAiExpand === 'function') mmAiExpand(); return;
     case 'ai-summary': if (typeof mmAiSummary === 'function') mmAiSummary(); return;
     case 'ai-text': if (typeof mmAiTextModal === 'function') mmAiTextModal(); return;

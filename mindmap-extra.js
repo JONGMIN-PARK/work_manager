@@ -469,6 +469,18 @@ function _mmOpmlToTree(xmlText) {
   return { text: title || '가져온 맵', children: tops };
 }
 
+/** XMind 파일로 내보내기 (content.json · metadata.json · manifest.json) — 이미지 · 댓글 · 거르기는 빠짐 */
+function mmExportXmind() {
+  if (typeof JSZip === 'undefined') { _mmToast('압축 모듈(JSZip)을 불러오지 못했습니다', 'error'); return; }
+  var zip = new JSZip();
+  zip.file('content.json', JSON.stringify(mmToXmindSheets(_mm.doc, _mmAssigneeName)));
+  zip.file('metadata.json', JSON.stringify({ creator: { name: 'Work Manager', version: String(typeof WM_VERSION !== 'undefined' ? WM_VERSION : '') } }));
+  zip.file('manifest.json', JSON.stringify({ 'file-entries': { 'content.json': {}, 'metadata.json': {} } }));
+  zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.xmind.workbook' }).then(function (blob) {
+    _mmDownload(_mmFileName(_mm.row.title) + '.xmind', blob);
+  }).catch(function (e) { _mmToast('❌ XMind 만들기 실패 — ' + _mmErr(e), 'error'); });
+}
+
 /** .xmind · .opml 파일 → { title, doc } */
 function mmReadImportFile(file) {
   var name = file.name || '';
