@@ -254,3 +254,16 @@ test('mmProgressRollup — 직접 값 · 완료 우선, 없으면 값 있는 하
   const g2 = L.mmProgressRollup(t, (n) => (n.id === 'c1' ? 80 : null));
   assert.deepStrictEqual(g2.c, { p: 80, own: false, n: 1, of: 1 });
 });
+
+test('mmSplitLineItems — 목록 기호 지우기 · 빈 줄 빼기 · 줄 끝 @이름은 담당', () => {
+  const it = L.mmSplitLineItems('-. 드릴 + 커팅\n\n- 해치 가공 @심정현\n• 리페어\n2) 작업 툴 순서 지정 @외주 업체\nmail a@b.com');
+  assert.deepStrictEqual(it, [
+    { text: '드릴 + 커팅', who: '' },
+    { text: '해치 가공', who: '심정현' },
+    { text: '리페어', who: '' },
+    { text: '작업 툴 순서 지정 @외주 업체', who: '' },   // @ 가 마지막 낱말이 아니면 그대로
+    { text: 'mail a@b.com', who: '' }
+  ]);
+  assert.deepStrictEqual(L.mmSplitLineItems('  '), []);
+  assert.deepStrictEqual(L.mmSplitLineItems('-1.5 mm 공차'), [{ text: '1.5 mm 공차', who: '' }]);
+});

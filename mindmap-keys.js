@@ -156,6 +156,69 @@ function _mmkDuplicate() {
   });
   _mmEnsureVisible(_mm.sel);
 }
+/* ── 여러 줄 주제 ↔ 하위 주제 ── */
+function _mmkLines() { var f = _mmSelInfo(); return f ? mmSplitLineItems(f.node.text).length : 0; }
+/** 담당 이름 → 사용자와 같으면 assigneeId, 아니면 assigneeName */
+function _mmkSetWho(n, who) {
+  if (!who) return;
+  var u = (_mm.members || []).filter(function (m) { return m.name === who; })[0];
+  delete n.assigneeId; delete n.assigneeName;
+  if (u) n.assigneeId = u.id; else n.assigneeName = who;
+}
+function _mmkItemNode(it) { var c = mmNewNode(it.text); _mmkSetWho(c, it.who); return c; }
+/** 첫 줄은 주제 이름으로 두고, 둘째 줄부터 하위 주제로 (기존 하위 앞에) */
+function _mmkSplitToChildren() {
+  var f = _mmSelInfo();
+  if (!f) return;
+  var lines = String(f.node.text || '').replace(/\r\n?/g, '\n').split('\n');
+  var first = lines.shift().trim();
+  var items = mmSplitLineItems(lines.join('\n'));
+  if (!items.length) { _mmToast('나눌 줄이 없습니다 (둘째 줄부터 하위 주제가 됩니다)', 'warning'); return; }
+  _mmMutate(function () {
+    f.node.text = first;
+    f.node.children = items.map(_mmkItemNode).concat(f.node.children || []);
+    delete f.node.collapsed;
+  });
+  _mmToast('줄 ' + items.length + '개를 하위 주제로 나눴습니다 — Ctrl+Z 로 되돌리기', 'success');
+}
+/** 줄마다 같은 단계 주제로 — 이 주제는 첫 줄이 되고(하위 · 속성 유지), 나머지 줄은 바로 뒤에 */
+function _mmkSplitToSiblings() {
+  var f = _mmSelInfo();
+  if (!f || !f.parent) return;
+  var items = mmSplitLineItems(f.node.text);
+  if (items.length < 2) { _mmToast('두 줄 이상인 주제만 나눌 수 있습니다', 'warning'); return; }
+  _mmMutate(function () {
+    f.node.text = items[0].text;
+    _mmkSetWho(f.node, items[0].who);
+    var at = f.parent.children.indexOf(f.node) + 1;
+    Array.prototype.splice.apply(f.parent.children, [at, 0].concat(items.slice(1).map(_mmkItemNode)));
+  });
+  _mmToast('주제 ' + items.length + '개로 나눴습니다 — Ctrl+Z 로 되돌리기', 'success');
+}
+var MM_LOSSY = ['assigneeId', 'assigneeName', 'startDate', 'dueDate', 'progress', 'done', 'note', 'link', 'ref', 'markers', 'labels', 'blocks', 'color', 'boundary', 'summary'];
+/** 하위 주제를 이 주제의 줄로 합치기 (하위의 하위가 있으면 못 함) */
+function _mmkMergeChildren() {
+  var f = _mmSelInfo();
+  if (!f) return;
+  var kids = f.node.children || [];
+  if (!kids.length) return;
+  if (kids.some(function (k) { return (k.children || []).length; })) { _mmToast('하위의 하위가 있는 주제는 줄로 합칠 수 없습니다', 'warning'); return; }
+  var lossy = kids.filter(function (k) {
+    return MM_LOSSY.some(function (p) { var v = k[p]; return v != null && v !== '' && v !== false && !(Array.isArray(v) && !v.length); });
+  }).length;
+  if (lossy && !confirm('담당 · 진행률 · 일정 · 메모 같은 정보가 있는 하위 주제 ' + lossy + '개가 있습니다.\n줄로 합치면 그 정보는 사라집니다 (Ctrl+Z 로 되돌릴 수 있음). 합칠까요?')) return;
+  var ids = kids.map(function (k) { return k.id; });
+  _mmMutate(function () {
+    var text = String(f.node.text || '').replace(/\s+$/, '');
+    f.node.text = (text ? text + '\n' : '') + kids.map(function (k) { return String(k.text || '').trim(); }).filter(Boolean).join('\n');
+    f.node.children = [];
+    delete f.node.collapsed; delete f.node.summary; delete f.node.numbering; delete f.node.alignLevels;
+    var sh = _mmSheet();
+    if (sh.relations) sh.relations = sh.relations.filter(function (r) { return ids.indexOf(r.from) < 0 && ids.indexOf(r.to) < 0; });
+    _mm.sel = f.node.id;
+  });
+}
+
 function _mmkToggleBoundary() {
   var nodes = _mmkNodes();
   var on = !nodes.every(function (n) { return n.boundary; });
@@ -241,6 +304,9 @@ var MM_COMMANDS = [
   { id: 'moveDown', group: '주제', label: '아래로 옮기기 (형제 순서)', keys: ['Alt+ArrowDown'], edit: true, when: _mmkNotRoot, run: _mmkSingle(function () { _mmkMoveSibling(1); }) },
   { id: 'indent', group: '주제', label: '들여쓰기 (앞 주제의 하위로)', keys: ['Ctrl+]'], edit: true, when: _mmkNotRoot, run: _mmkSingle(_mmkIndent) },
   { id: 'outdent', group: '주제', label: '내어쓰기 (한 단계 위로)', keys: ['Ctrl+['], edit: true, when: _mmkNotRoot, run: _mmkSingle(_mmkOutdent) },
+  { id: 'splitChildren', group: '주제', label: '줄을 하위 주제로 나누기 (첫 줄은 주제 이름)', keys: [], edit: true, when: function () { return _mmkLines() >= 2; }, run: _mmkSingle(_mmkSplitToChildren) },
+  { id: 'splitSiblings', group: '주제', label: '줄마다 같은 단계 주제로 나누기', keys: [], edit: true, when: function () { return _mmkNotRoot() && _mmkLines() >= 2; }, run: _mmkSingle(_mmkSplitToSiblings) },
+  { id: 'mergeChildren', group: '주제', label: '하위 주제를 줄로 합치기', keys: [], edit: true, when: _mmkHasKids, run: _mmkSingle(_mmkMergeChildren) },
   { id: 'undo', group: '주제', label: '되돌리기', keys: ['Ctrl+Z'], edit: true, run: function () { mmUndo(); } },
   { id: 'redo', group: '주제', label: '다시 실행', keys: ['Ctrl+Y', 'Ctrl+Shift+Z'], edit: true, run: function () { mmRedo(); } },
   // 선택 · 이동
@@ -361,7 +427,7 @@ function mmRunCommand(id) {
 
 /* ═══ 오른쪽 클릭 메뉴 ═══ */
 var MM_CTX_NODE = ['addChild', 'addSibling', 'addBefore', 'addParent', 'edit', 'duplicate', 'delete', '|',
-  'moveUp', 'moveDown', 'indent', 'outdent', '|', 'relation', 'boundary', 'summary', 'numbering', 'alignLevels', '|',
+  'moveUp', 'moveDown', 'indent', 'outdent', 'splitSiblings', 'splitChildren', 'mergeChildren', '|', 'relation', 'boundary', 'summary', 'numbering', 'alignLevels', '|',
   'linkRef', 'openRef', 'promoteMs', 'promoteIssue', '|', 'addImage', 'addLine', 'done', 'colorCycle', 'progress', 'note', 'fold', 'foldDeep', '|', 'aiExpand', 'aiSummary'];
 var MM_CTX_MULTI = ['delete', 'duplicate', '|', 'done', 'colorCycle', 'progress', 'boundary', 'alignLevels', 'fold', '|', 'priority:1', 'priorityClear'];
 var MM_CTX_CANVAS = ['fit', 'unfoldAll', 'foldLevel1', 'selectAll', '|', 'alignAll', 'textAlign:auto', 'textAlign:left', 'textAlign:right', '|', 'addSheet', 'outline', 'zen', 'structure', '|', 'palette', 'help'];

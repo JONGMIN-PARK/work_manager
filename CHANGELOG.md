@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.231 (2026-10-27) — 마인드맵 줄 나누기 · 자리 바꾸기
+
+- mindmap-layout.js `mmSplitLineItems(text)` (순수, 테스트): 빈 줄 제외 · 목록 기호 제거 · 줄 끝 `@이름`(앞 공백 필수) → who.
+- mindmap-keys.js 명령 `splitSiblings`(이 주제 = 첫 줄, 하위 · 속성 유지, 나머지 줄은 바로 뒤 형제) · `splitChildren`(첫 줄 = 이름, 나머지는 기존 하위 앞) · `mergeChildren`(하위의 하위 있으면 거부, 정보 있는 하위는 confirm, 관계선 정리). 담당 이름은 사용자와 같으면 assigneeId. 오른쪽 클릭 메뉴(주제)에 추가 — 줄 2개 이상일 때만.
+- mindmap-edit.js 끌기: 주제 위가 아닌 빈 곳이면 `_mmNearestSlot` — 커서와 가로로 겹치는(±40) 주제 중 세로 60px 안 가장 가까운 것의 앞/뒤(조직도는 축 바꿈). 주제 위 앞/뒤 영역 28% → 30%.
+
 ## v13.230 (2026-10-27) — 마인드맵 하위 평균 반영 개수
 
 - `mmProgressRollup` 하위 평균 항목에 `n`(값 있는 바로 아래 하위 수) · `of`(전체 하위 수). `_mmProgHtml` 이 n < of 면 `.mm-pg-cnt` "2/3" + title 안내, 패널 진행률 placeholder 에도. 미입력 하위는 평균에서 제외(v13.229) 유지 — 사용자 결정 ③.

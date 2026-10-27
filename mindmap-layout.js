@@ -328,6 +328,21 @@ function mmProgressRollup(root, extra) {
   return out;
 }
 
+/**
+ * 여러 줄 글 → 항목 목록. 빈 줄은 빼고, 줄 앞 목록 기호(-. · - · * · • · 1. · 1) 등)는 지우고,
+ * 줄 끝 "@이름" 은 담당으로 떼어 낸다(앞에 공백이 있을 때만 — 메일 주소는 그대로).
+ * 반환 [{ text, who }] (who 없으면 '')
+ */
+function mmSplitLineItems(text) {
+  return String(text || '').replace(/\r\n?/g, '\n').split('\n').map(function (raw) {
+    var t = raw.trim().replace(/^(?:-\.|[-*+•·▪◦‣]|\d{1,3}[.)])\s*/, '');
+    var who = '';
+    var m = /\s@([^\s@]+)\s*$/.exec(' ' + t);
+    if (m) { who = m[1]; t = (' ' + t).slice(0, m.index).trim(); }
+    return { text: t, who: who };
+  }).filter(function (it) { return it.text || it.who; });
+}
+
 function mmNumbering(root) {
   var out = {};
   mmWalk(root, function (n) {
@@ -595,7 +610,7 @@ if (typeof module !== 'undefined' && module.exports) {
     mmUid: mmUid, mmNewNode: mmNewNode, mmWalk: mmWalk, mmFind: mmFind, mmCount: mmCount,
     mmIsAncestor: mmIsAncestor, mmRemoveNode: mmRemoveNode, mmMoveNode: mmMoveNode, mmCloneBranch: mmCloneBranch,
     mmLayout: mmLayout, mmEdgePath: mmEdgePath, mmEdgeShape: mmEdgeShape, mmToMarkdown: mmToMarkdown, mmFromMarkdown: mmFromMarkdown,
-    mmSubtreeBox: mmSubtreeBox, mmAlignSizes: mmAlignSizes, mmDecorations: mmDecorations, mmNumbering: mmNumbering, mmProgressRollup: mmProgressRollup, mmRelationPath: mmRelationPath,
+    mmSubtreeBox: mmSubtreeBox, mmAlignSizes: mmAlignSizes, mmDecorations: mmDecorations, mmNumbering: mmNumbering, mmProgressRollup: mmProgressRollup, mmSplitLineItems: mmSplitLineItems, mmRelationPath: mmRelationPath,
     mmFromXmindSheets: mmFromXmindSheets, mmToOpml: mmToOpml, mmFromPlainTree: mmFromPlainTree
   };
 }

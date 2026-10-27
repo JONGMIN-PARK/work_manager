@@ -204,6 +204,30 @@ function _mmSetProp(key, value) {
   });
 }
 
+/**
+ * 끌던 주제를 빈 곳에 놓을 때 들어갈 자리 — 커서와 가로로 겹치는(±40px) 주제 중 세로로 가장 가까운 것(60px 안)의
+ * 앞(before) · 뒤(after). 조직도는 가로 · 세로를 바꿔 본다. 중심 주제 · 끌던 가지 안은 제외. 없으면 null
+ */
+function _mmNearestSlot(dragId, clientX, clientY) {
+  var cv = _mmEl('mmCanvas'), lay = _mm.layout;
+  if (!cv || !lay) return null;
+  var r = cv.getBoundingClientRect();
+  var x = (clientX - r.left - _mm.panX) / _mm.zoom, y = (clientY - r.top - _mm.panY) / _mm.zoom;
+  var down = (_mmSheet().structure === 'down');
+  var root = _mmRoot(), best = null;
+  Object.keys(lay.pos).forEach(function (id) {
+    if (id === root.id || id === dragId || mmIsAncestor(root, dragId, id)) return;
+    var p = lay.pos[id];
+    var a0 = down ? p.y : p.x, a1 = down ? p.y + p.h : p.x + p.w, ca = down ? y : x;     // 겹쳐야 하는 축
+    if (ca < a0 - 40 || ca > a1 + 40) return;
+    var c = down ? p.x + p.w / 2 : p.y + p.h / 2, cb = down ? x : y;                   // 거리 재는 축
+    var dist = Math.abs(cb - c) - (down ? p.w : p.h) / 2;
+    if (dist > 60) return;
+    if (!best || dist < best.dist) best = { id: id, zone: cb < c ? 'before' : 'after', dist: dist };
+  });
+  return best ? { id: best.id, zone: best.zone } : null;
+}
+
 /* ── 인라인 편집 ── */
 function _mmEdit(id, initial, useSink) {
   if (_mm.readOnly || _mm.editing) return;
@@ -571,9 +595,17 @@ function _mmBindCanvas() {
         var r = tn.getBoundingClientRect();
         var down = (_mmSheet().structure === 'down');
         var rel = down ? (e.clientX - r.left) / r.width : (e.clientY - r.top) / r.height;
-        var zone = tid === _mmRoot().id ? 'child' : rel < 0.28 ? 'before' : rel > 0.72 ? 'after' : 'child';
+        var zone = tid === _mmRoot().id ? 'child' : rel < 0.3 ? 'before' : rel > 0.7 ? 'after' : 'child';
         tn.classList.add('mm-drop-' + zone);
         drag.target = { id: tid, zone: zone };
+      }
+    } else {
+      // 주제 사이 빈 곳: 가까운 주제의 앞/뒤로 (같은 단계 자리 바꾸기 — 주제 위에 정확히 놓지 않아도 되게)
+      var slot = _mmNearestSlot(drag.id, e.clientX, e.clientY);
+      if (slot) {
+        var sn = _mmEl('mmStage').querySelector('.mm-node[data-id="' + slot.id + '"]');
+        if (sn) sn.classList.add('mm-drop-' + slot.zone);
+        drag.target = slot;
       }
     }
   }
