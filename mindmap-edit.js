@@ -463,6 +463,7 @@ function _mmEdClick(e) {
     case 'color': _mmSetProp('color', t.getAttribute('data-v')); return;
     case 'priority': _mmSetMarker('priority', t.getAttribute('data-v')); return;
     case 'symbol': _mmSetMarker('symbol', t.getAttribute('data-v')); return;
+    case 'prog': { var pv = t.getAttribute('data-v'); _mmSetProp('progress', pv === '' ? null : parseInt(pv, 10)); return; }
     default: return;
   }
   _mmFocusCanvas();

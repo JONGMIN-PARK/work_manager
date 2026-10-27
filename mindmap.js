@@ -187,6 +187,10 @@ function _mmFmtTime(iso) {
   if (diff < 86400) return Math.floor(diff / 3600) + '시간 전';
   return (d.getMonth() + 1) + '/' + d.getDate();
 }
+/** 담당자 표시 이름 — 사용자 목록에서 고른 사람(assigneeId) 또는 직접 입력한 이름(assigneeName) */
+function _mmAssigneeName(n) {
+  return (n.assigneeId && _mmMemberName(n.assigneeId)) || n.assigneeName || '';
+}
 function _mmMemberName(id) {
   var list = _mm.members || [];
   for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].name;

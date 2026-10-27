@@ -304,6 +304,29 @@ function mmDecorations(root, structure, layout, sizes) {
 }
 
 /** 번호 매기기 — numbering 이 켜진 주제의 하위에 1 · 1.1 · 1.1.1 */
+/**
+ * 진행률 — 주제마다 { p: 0~100, own: 직접 값인지 }. 완료 = 100, 직접 입력(progress)이 우선,
+ * 없으면 하위 주제 평균(값이 없는 하위는 0). 하위 어디에도 값이 없으면 표시 안 함(목록에 없음).
+ * extra(n) → 연결된 앱 데이터 등 다른 출처의 값(없으면 null).
+ */
+function mmProgressRollup(root, extra) {
+  var out = {};
+  (function eff(n) {
+    var own = null;
+    if (n.done) own = 100;
+    else if (n.progress != null && n.progress !== '' && !isNaN(parseInt(n.progress, 10))) own = parseInt(n.progress, 10);
+    else if (extra) own = extra(n);
+    var kids = n.children || [];
+    var vals = kids.map(eff);
+    if (own != null) { out[n.id] = { p: Math.max(0, Math.min(100, own)), own: true }; return out[n.id].p; }
+    if (!kids.length || vals.every(function (v) { return v == null; })) return null;
+    var sum = vals.reduce(function (a, v) { return a + (v || 0); }, 0);
+    out[n.id] = { p: Math.round(sum / kids.length), own: false };
+    return out[n.id].p;
+  })(root);
+  return out;
+}
+
 function mmNumbering(root) {
   var out = {};
   mmWalk(root, function (n) {
@@ -571,7 +594,7 @@ if (typeof module !== 'undefined' && module.exports) {
     mmUid: mmUid, mmNewNode: mmNewNode, mmWalk: mmWalk, mmFind: mmFind, mmCount: mmCount,
     mmIsAncestor: mmIsAncestor, mmRemoveNode: mmRemoveNode, mmMoveNode: mmMoveNode, mmCloneBranch: mmCloneBranch,
     mmLayout: mmLayout, mmEdgePath: mmEdgePath, mmEdgeShape: mmEdgeShape, mmToMarkdown: mmToMarkdown, mmFromMarkdown: mmFromMarkdown,
-    mmSubtreeBox: mmSubtreeBox, mmAlignSizes: mmAlignSizes, mmDecorations: mmDecorations, mmNumbering: mmNumbering, mmRelationPath: mmRelationPath,
+    mmSubtreeBox: mmSubtreeBox, mmAlignSizes: mmAlignSizes, mmDecorations: mmDecorations, mmNumbering: mmNumbering, mmProgressRollup: mmProgressRollup, mmRelationPath: mmRelationPath,
     mmFromXmindSheets: mmFromXmindSheets, mmToOpml: mmToOpml, mmFromPlainTree: mmFromPlainTree
   };
 }

@@ -1,5 +1,10 @@
 # Work Manager — 변경 이력
 
+## v13.228 (2026-10-27) — 마인드맵 담당자 직접 입력 · 진행률 표시
+
+- 담당: 노드 필드 `assigneeName`(직접 입력 이름) 추가 — `assigneeId`(사용자)와 둘 중 하나. 패널은 select → input + datalist(사용자 이름), 이름이 사용자와 같으면 assigneeId 로. 표시 이름 `_mmAssigneeName(n)`(mindmap.js) — 주제 · 간트 · 이슈 승격 · 버전 비교가 함께 씀.
+- 진행률: mindmap-layout.js `mmProgressRollup(root, extra)` (순수, 테스트) — 완료 100 · 직접 값 · extra(연결된 앱 데이터 진척) 우선, 없으면 하위 평균(값 없는 하위 0), 하위에도 없으면 표시 안 함. `_mmPaint` 가 `_mm.prog` 로 계산, `_mmProgHtml` 막대(.mm-pg, 하위 평균은 .mm-pg-roll 빗금). 기존 진척 기호(○◔◑◕●)는 막대로 대체. 패널 빠른 단추 `data-act="prog"`.
+
 ## v13.227 (2026-10-27) — 마인드맵 가지 이음매 근본 해결
 
 - 원인: 밑줄은 CSS border(화소 맞춤), 연결선은 SVG(소수 좌표) — 서로 다른 래스터화가 맞닿아 배율마다 위/아래로 어긋남. v13.224~226 은 좌표를 맞추는 보정이라 배율이 소수(예: 93% × 화면 125%)면 다시 생김.

@@ -45,11 +45,14 @@ function _mmPaintPanel() {
     '<input id="mmPnLabels" class="mm-input" value="' + _mmEsc((n.labels || []).join(', ')) + '"' + ro + '></div>';
   var members = _mm.members || [];
   h += '<div class="mm-pn-sec"><div class="mm-pn-h">작업 정보</div>' +
-    '<label class="mm-pn-row">담당<select id="mmPnAssignee" class="mm-input"' + ro + '><option value="">—</option>' +
-    members.map(function (u) { return '<option value="' + _mmEsc(u.id) + '"' + (u.id === n.assigneeId ? ' selected' : '') + '>' + _mmEsc(u.name) + '</option>'; }).join('') + '</select></label>' +
+    '<label class="mm-pn-row">담당<input id="mmPnAssignee" class="mm-input" list="mmPnMembers" autocomplete="off" placeholder="고르거나 이름 입력" value="' + _mmEsc(_mmAssigneeName(n)) + '"' + ro + '></label>' +
+    '<datalist id="mmPnMembers">' + members.map(function (u) { return '<option value="' + _mmEsc(u.name) + '">'; }).join('') + '</datalist>' +
     '<label class="mm-pn-row">시작<input type="date" id="mmPnStart" class="mm-input" value="' + _mmEsc(n.startDate || '') + '"' + ro + '></label>' +
     '<label class="mm-pn-row">마감<input type="date" id="mmPnDue" class="mm-input" value="' + _mmEsc(n.dueDate || '') + '"' + ro + '></label>' +
-    '<label class="mm-pn-row">진척<input type="number" min="0" max="100" step="5" id="mmPnProg" class="mm-input" placeholder="%" value="' + (n.progress != null ? _mmEsc(n.progress) : '') + '"' + ro + '></label>' +
+    '<label class="mm-pn-row">진행률<input type="number" min="0" max="100" step="5" id="mmPnProg" class="mm-input" placeholder="' + (_mm.prog && _mm.prog[n.id] && !_mm.prog[n.id].own ? '하위 평균 ' + _mm.prog[n.id].p : '') + '%" value="' + (n.progress != null ? _mmEsc(n.progress) : '') + '"' + ro + '></label>' +
+    (_mm.readOnly ? '' : '<div class="mm-swatches mm-pg-quick">' + [0, 25, 50, 75, 100].map(function (v) {
+      return '<button class="mm-mkbtn' + (String(n.progress) === String(v) ? ' on' : '') + '" data-act="prog" data-v="' + v + '">' + v + '</button>';
+    }).join('') + '<button class="mm-mkbtn" data-act="prog" data-v="" title="직접 값 지우기 (하위 평균 사용)">—</button></div>') +
     '<label class="mm-pn-chk"><input type="checkbox" id="mmPnDone"' + (n.done ? ' checked' : '') + ro + '> 완료</label></div>';
   // 앱 데이터 연결 · 승격
   var ri = n.ref ? (MM_REF_TYPES[n.ref.type] || { i: '🔗', l: '항목' }) : null;
@@ -93,7 +96,17 @@ function _mmPaintPanel() {
     var arr = el.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 10);
     _mmSetProp('labels', arr);
   });
-  bind('mmPnAssignee', function (el) { _mmSetProp('assigneeId', el.value || null); });
+  // 담당: 사용자 목록 이름과 같으면 그 사용자, 아니면 입력한 이름 그대로 (외부 인원 · 업체 등)
+  bind('mmPnAssignee', function (el) {
+    var v = el.value.trim().slice(0, 60);
+    var u = (_mm.members || []).filter(function (m) { return m.name === v; })[0];
+    var f = _mmSelInfo();
+    if (!f) return;
+    _mmMutate(function () {
+      delete f.node.assigneeId; delete f.node.assigneeName;
+      if (u) f.node.assigneeId = u.id; else if (v) f.node.assigneeName = v;
+    });
+  });
   bind('mmPnStart', function (el) { _mmSetProp('startDate', el.value || null); });
   bind('mmPnDue', function (el) { _mmSetProp('dueDate', el.value || null); });
   bind('mmPnProg', function (el) {

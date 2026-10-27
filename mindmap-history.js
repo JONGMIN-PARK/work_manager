@@ -118,7 +118,7 @@ function _mmHistPaint() {
 }
 
 /* ═══ 비교 — 미리 보는 버전(old) ↔ 지금(cur), 주제 id 기준 ═══ */
-var MM_HIST_FIELDS = ['text', 'note', 'link', 'startDate', 'dueDate', 'assigneeId', 'progress', 'done', 'color'];
+var MM_HIST_FIELDS = ['text', 'note', 'link', 'startDate', 'dueDate', 'assigneeId', 'assigneeName', 'progress', 'done', 'color'];
 function _mmHistIndex(doc) {
   var m = {};
   (doc.sheets || []).forEach(function (sh) {
@@ -146,7 +146,7 @@ function mmHistDiff(oldDoc, curDoc) {
   d.counts = { del: Object.keys(d.del).length, chg: Object.keys(d.chg).length, mov: Object.keys(d.mov).length, add: d.add.length };
   return d;
 }
-var MM_HIST_FIELD_L = { text: '내용', note: '메모', link: '링크', startDate: '시작일', dueDate: '마감일', assigneeId: '담당', progress: '진척', done: '완료', color: '색', markers: '마커', blocks: '내용 줄' };
+var MM_HIST_FIELD_L = { text: '내용', note: '메모', link: '링크', startDate: '시작일', dueDate: '마감일', assigneeId: '담당', assigneeName: '담당', progress: '진행률', done: '완료', color: '색', markers: '마커', blocks: '내용 줄' };
 function _mmHistDiffHtml(d) {
   var c = d.counts;
   if (!c.del && !c.chg && !c.mov && !c.add) return '<div class="mm-hist-diff"><span class="mm-hist-same">지금과 같습니다</span></div>';

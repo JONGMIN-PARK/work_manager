@@ -304,7 +304,7 @@ function _mmgRowHtml(it, x, dw, today, ro) {
   var sp = it.span, sum = it.sum;
   var prog = _mmgProg(n);
   var name = String(n.text || '').split('\n')[0] || '(제목 없음)';
-  var who = n.assigneeId ? _mmMemberName(n.assigneeId) : '';
+  var who = _mmAssigneeName(n);
   if (!who && n.ref && _mm.refs[n.ref.type + ':' + n.ref.id]) who = (_mm.refs[n.ref.type + ':' + n.ref.id].people || [])[0] || '';
   var shown = sp || sum;
   var late = sp && !done && prog < 100 && sp.e < today;

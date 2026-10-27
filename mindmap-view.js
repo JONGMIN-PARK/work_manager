@@ -311,6 +311,13 @@ function _mmNodeColor(n, parent, depth, root, colors) {
   if (depth === 1) return _mmColorVar(n.color) || _mmColorVar(MM_AUTO_COLORS[root.children.indexOf(n) % MM_AUTO_COLORS.length]);
   return _mmColorVar(n.color) || colors[parent.id];
 }
+/** 진행률 막대 — 직접 입력 · 완료면 그 값, 아니면 하위 평균(점선 테두리 · "하위 평균"). 값이 없으면 안 그림 */
+function _mmProgHtml(n) {
+  var g = _mm.prog && _mm.prog[n.id];
+  if (!g || (n.done && !(n.children || []).length)) return '';
+  return '<div class="mm-pg' + (g.own ? '' : ' mm-pg-roll') + (g.p >= 100 ? ' mm-pg-full' : '') + '" title="' + (g.own ? '진행률 ' : '하위 주제 평균 진행률 ') + g.p + '%">' +
+    '<span class="mm-pg-bar"><i style="width:' + g.p + '%"></i></span><b>' + g.p + '%</b></div>';
+}
 function _mmNodeHtml(n, depth, color, num) {
   var hit = _mm.hits.indexOf(n.id) >= 0;
   var cls = 'mm-node ' + (depth === 0 ? 'mm-root' : depth === 1 ? 'mm-main' : 'mm-topic2') +
@@ -323,15 +330,12 @@ function _mmNodeHtml(n, depth, color, num) {
     if (pm) { mk += '<span class="mm-pri mm-pri' + pm[1] + '">' + pm[1] + '</span>'; return; }
     for (var i = 0; i < MM_SYMBOLS.length; i++) if (MM_SYMBOLS[i].k === m) mk += '<span class="mm-sym">' + MM_SYMBOLS[i].g + '</span>';
   });
-  if (n.progress != null && n.progress !== '' && !isNaN(n.progress)) {
-    var pg = Math.max(0, Math.min(100, parseInt(n.progress, 10)));
-    mk += '<span class="mm-prog" title="진척 ' + pg + '%">' + (pg >= 100 ? '●' : pg >= 75 ? '◕' : pg >= 50 ? '◑' : pg >= 25 ? '◔' : '○') + '</span>';
-  }
   var icons = '';
   if (n.note) icons += '<span class="mm-ico" title="' + _mmEsc(String(n.note).slice(0, 300)) + '">📝</span>';
   if (n.link && /^https?:\/\//i.test(n.link)) icons += '<a class="mm-ico" href="' + _mmEsc(n.link) + '" target="_blank" rel="noopener" title="' + _mmEsc(n.link) + '">🔗</a>';
   var meta = [];
-  if (n.assigneeId) meta.push('👤 ' + _mmEsc(_mmMemberName(n.assigneeId) || '담당'));
+  var who = _mmAssigneeName(n) || (n.assigneeId ? '담당' : '');
+  if (who) meta.push('👤 ' + _mmEsc(who));
   if (n.dueDate) {
     var late = !n.done && n.dueDate < new Date().toISOString().slice(0, 10);
     meta.push('<span class="' + (late ? 'mm-late' : '') + '">📅 ' + _mmEsc((n.startDate ? n.startDate.slice(5) + '~' : '') + n.dueDate.slice(5)) + '</span>');
@@ -343,7 +347,7 @@ function _mmNodeHtml(n, depth, color, num) {
   var dfTip = _mm.preview ? _mmHistNodeTip(n.id) : '';
   return '<div class="' + cls + '" data-id="' + _mmEsc(n.id) + '"' + (dfTip ? ' title="' + _mmEsc(dfTip) + '"' : '') + ' style="--mm-c:' + color + (maxW ? ';max-width:' + maxW + 'px' : '') + '">' +
     '<div class="mm-line">' + (num ? '<span class="mm-num">' + num + '</span>' : '') + mk + '<span class="mm-txt">' + (n.text ? _mmEsc(n.text) : '<i class="mm-ph">(빈 주제)</i>') + '</span>' + icons + '</div>' +
-    (typeof _mmBlocksHtml === 'function' ? _mmBlocksHtml(n) : '') + _mmRefLine(n) + labels + (meta.length ? '<div class="mm-meta">' + meta.join(' · ') + '</div>' : '') + fold + '</div>';
+    (typeof _mmBlocksHtml === 'function' ? _mmBlocksHtml(n) : '') + _mmRefLine(n) + labels + (meta.length ? '<div class="mm-meta">' + meta.join(' · ') + '</div>' : '') + _mmProgHtml(n) + fold + '</div>';
 }
 
 function _mmPaint() {
@@ -355,6 +359,15 @@ function _mmPaint() {
   var html = [];
   var colors = {};
   var nums = mmNumbering(root);
+  // 진행률: 직접 값 · 완료 · 연결된 앱 데이터(진척) → 없으면 하위 평균
+  _mm.prog = mmProgressRollup(root, function (n) {
+    if (!n.ref || n.ref.type === 'user') return null;
+    var r = _mm.refs[n.ref.type + ':' + n.ref.id];
+    if (!r) return null;
+    if (r.done || r.status === 'done') return 100;
+    var p = parseInt(r.progress, 10);
+    return isNaN(p) ? null : p;
+  });
   mmWalk(root, function (n, parent, depth) {
     var c = _mmNodeColor(n, parent, depth, root, colors);
     colors[n.id] = c;

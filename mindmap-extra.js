@@ -394,7 +394,7 @@ function mmPromoteModal(kind) {
             var body = isMs
               ? { projectId: pid, name: j.name, startDate: j.start || '', endDate: j.end || '', status: 'waiting' }
               : { projectId: pid, title: j.name, dueDate: j.end || null, urgency: _mmEl('mmPrUrg').value, status: 'open', description: j.node.note || '',
-                assignees: j.node.assigneeId && _mmMemberName(j.node.assigneeId) ? [_mmMemberName(j.node.assigneeId)] : [] };
+                assignees: _mmAssigneeName(j.node) ? [_mmAssigneeName(j.node)] : [] };
             return apiFetch(isMs ? '/api/milestones' : '/api/issues', { method: 'POST', body: JSON.stringify(body) })
               .then(function (r) { done.push({ node: j.node, id: r.data.id }); });
           });

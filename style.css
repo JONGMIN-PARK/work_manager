@@ -1402,3 +1402,19 @@ body.mm-zen-body{overflow:hidden}
 @media (max-width:900px){ .mm-hist{width:100%} }
 /* 밑줄은 SVG 연결선이 이어 그림(v13.227) — CSS 밑줄은 자리만 */
 .mm-ul-svg .mm-node.mm-topic2:not(.mm-ai){border-bottom-color:transparent}
+/* ═══ 🧠 마인드맵 진행률 막대 · 담당 직접 입력 (v13.228) ═══ */
+.mm-pg{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10px;line-height:1;color:var(--t4)}
+.mm-pg-bar{flex:1 1 auto;min-width:44px;max-width:120px;height:5px;border-radius:3px;background:color-mix(in srgb,var(--mm-c) 16%,var(--bd));overflow:hidden}
+.mm-pg-bar i{display:block;height:100%;border-radius:3px;background:var(--mm-c);transition:width .2s}
+.mm-pg b{font-weight:700;font-variant-numeric:tabular-nums;color:var(--t3)}
+.mm-pg-full .mm-pg-bar i{background:var(--stat-green,#10B981)}
+.mm-pg-full b{color:var(--stat-green,#10B981)}
+.mm-pg-roll .mm-pg-bar i{background:repeating-linear-gradient(135deg,var(--mm-c) 0 4px,color-mix(in srgb,var(--mm-c) 60%,transparent) 4px 7px)}
+.mm-pg-roll b{font-weight:600;color:var(--t5)}
+.mm-ta-center .mm-node .mm-pg,.mm-ta-auto .mm-node.mm-root .mm-pg,.mm-ta-auto .mm-node[data-side="down"] .mm-pg{justify-content:center}
+.mm-ta-right .mm-node .mm-pg,.mm-ta-auto .mm-node[data-side="left"] .mm-pg{justify-content:flex-end;flex-direction:row-reverse}
+.mm-root .mm-pg,.mm-root .mm-pg b{color:#fff}
+.mm-root .mm-pg-bar{background:rgba(255,255,255,.28)}
+.mm-root .mm-pg-bar i,.mm-root .mm-pg-roll .mm-pg-bar i{background:#fff}
+.mm-pg-quick{margin:0 0 2px}
+.mm-pg-quick .mm-mkbtn{width:auto;min-width:30px;height:24px;padding:0 6px;font-size:10.5px}
