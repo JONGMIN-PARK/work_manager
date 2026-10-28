@@ -15,6 +15,8 @@ function loadClient() {
     '\n  window.__weekly = { clientParseText, buildPreviewHTML };\n})();\n');
   const sandbox = { window: {}, document: { getElementById() { return null; } } };
   vm.createContext(sandbox);
+  // 공용 파서(전역 WeeklyReportParse)를 먼저 — 브라우저의 defer 순서와 같게
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'weekly-report-parse.js'), 'utf8'), sandbox, { filename: 'weekly-report-parse.js' });
   vm.runInContext(src, sandbox, { filename: 'weekly-report-admin.js' });
   return sandbox.window.__weekly;
 }

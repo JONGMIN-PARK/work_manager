@@ -17,6 +17,8 @@ function loadClient() {
     '\n  window.__weekly = { clientParseText, buildPreviewHTML, buildStandaloneHTML, inlineThemeVars, dday };\n})();\n');
   const sandbox = { window: {}, document: { getElementById() { return null; } } };
   vm.createContext(sandbox);
+  // 공용 파서(전역 WeeklyReportParse)를 먼저 — 브라우저의 defer 순서와 같게
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'weekly-report-parse.js'), 'utf8'), sandbox, { filename: 'weekly-report-parse.js' });
   vm.runInContext(src, sandbox, { filename: 'weekly-report-admin.js' });
   return sandbox.window.__weekly;
 }
@@ -158,4 +160,36 @@ test('통일: 태그 없는 "완료"도 클라이언트/서버 모두 done', () 
   const s = server.parseText(input).items[0].status;
   assert.strictEqual(c, 'done');
   assert.strictEqual(s, 'done');
+});
+
+// ─────────────── v13.250 공용 파서 · 해 넘김 ───────────────
+test('공용 파서: 서버 모듈 = 루트 weekly-report-parse.js (한 벌)', () => {
+  assert.strictEqual(server, require('../weekly-report-parse.js'));
+});
+
+test('항목 이름 공백 정리 — 예전엔 서버만 겹친 공백을 남겼다', () => {
+  const input = '[개발]\n- [A] 검사기   개조 @김 50%';
+  assert.strictEqual(server.parseText(input).items[0].name, '검사기 개조');
+  assert.strictEqual(clientItems(client.clientParseText(input))[0].name, '검사기 개조');
+});
+
+test('parseName: 해를 넘기는 주 (25W01 = 2024-12-30 ~ 2025-01-03)', () => {
+  assert.deepStrictEqual(server.parseName('팀_25W01_12/30~01/03_R2'),
+    { team: '팀', weekLabel: '25W01', weekStart: '2024-12-30', weekEnd: '2025-01-03' });
+  assert.strictEqual(server.parseName('팀_26W53_12/28~01/01_R1').weekEnd, '2027-01-01');
+  assert.strictEqual(server.parseName('소프트웨어팀_26W17_04/20~04/24_R1').weekStart, '2026-04-20');
+});
+
+test('namePrefix: ISO 주차의 해 (예전 서버는 시작일의 해를 붙여 24W01)', () => {
+  assert.deepStrictEqual(server.namePrefix('팀', '2024-12-30', '2025-01-03'), { weekLabel: '25W01', prefix: '팀_25W01_12/30~01/03' });
+  assert.strictEqual(server.namePrefix('팀', '2026-10-26', '2026-10-30').prefix, '팀_26W44_10/26~10/30');
+  assert.strictEqual(server.namePrefix('팀', 'x', '2026-10-30'), null);
+});
+
+test('dday: 반년 넘게 차이 나면 해를 넘긴 것으로', () => {
+  const md = (d) => '~' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
+  const ahead = new Date(); ahead.setDate(ahead.getDate() + 250);
+  const behind = new Date(); behind.setDate(behind.getDate() - 250);
+  assert.match(client.dday(md(ahead)).label, /^D\+/);   // 250일 뒤 날짜 = 실은 지난해의 그 날
+  assert.match(client.dday(md(behind)).label, /^D-/);   // 250일 전 날짜 = 실은 내년의 그 날
 });

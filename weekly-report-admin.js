@@ -11,21 +11,11 @@
     cs:    { label: 'C/S',  num: '03', main: '#c06000', bg: 'rgba(192,96,0,.12)',   bar: 'linear-gradient(90deg,#c06000,#e09850)' },
     etc:   { label: '기타', num: '04', main: '#506070', bg: 'rgba(80,96,112,.12)',  bar: 'linear-gradient(90deg,#506070,#80909a)' }
   };
-  var SECTION_KEYS = ['dev', 'setup', 'cs', 'etc'];
-  var SECTION_ALIAS = { 'CS': 'cs' }; // 라벨→key (파싱용). 나머지는 SECTIONS에서 파생
-  SECTION_KEYS.forEach(function (k) { SECTION_ALIAS[SECTIONS[k].label] = k; });
+  // 텍스트 파서는 서버와 같은 파일 (weekly-report-parse.js → 전역 WeeklyReportParse)
+  var WRP = WeeklyReportParse;
+  var SECTION_KEYS = WRP.SECTION_KEYS;
   function secOf(t) { return SECTIONS[t] || SECTIONS.dev; }
   function secLabel(t) { return (SECTIONS[t] || {}).label || t; }
-
-  // ── 줄머리 기본 도형 (서버 weekly-report-parser.js와 동일 유지 — parity 테스트로 강제) ──
-  // 항목 줄: (도형 생략 가능) [사이트] 업무명 …
-  var ITEM_LINE_RE = /^(?:[-–—*+·•∙◦○●◯□■▪▫▶►◆◇>＞]\s*)?\[([^\]]+)\]\s*(.*)$/;
-  // 세부 줄: ':' '-.' 또는 각종 기본 도형·하위 도형(└ ↳ → 등)
-  var DETAIL_LINE_RE = /^(?::|[-–—]\.|[-–—*+·•∙◦○●◯□■▪▫▶►◆◇>＞]|[└┗┕ㄴ↳➔→⇒])\s*(.*)$/;
-  // 하위 세부 줄: └ ↳ → 로 시작하거나 4칸(탭 2회) 이상 들여쓴 줄
-  function isSubLine(raw, line) {
-    return /^[└┗┕ㄴ↳➔→⇒]/.test(line) || /^(?: {4,}|\t{2,})/.test(raw);
-  }
 
   // ── 상태/진행률 상수 (색·크기·임계값 단일 소스) ──
   var STATUS_COLORS = { planned: '#4f74c9', in_progress: '#d03030', done: '#1a8a40' };
@@ -66,6 +56,9 @@
     var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     var target = new Date(now.getFullYear(), parseInt(m[1], 10) - 1, parseInt(m[2], 10));
     var diff = Math.round((target - today) / 86400000);
+    // 기한엔 해가 없다 — 반년 넘게 차이 나면 해를 넘긴 것으로 (12월에 본 ~01/05 = D-몇, 1월에 본 ~12/20 = 지난해)
+    if (diff > 183) { target.setFullYear(target.getFullYear() - 1); diff = Math.round((target - today) / 86400000); }
+    else if (diff < -183) { target.setFullYear(target.getFullYear() + 1); diff = Math.round((target - today) / 86400000); }
     if (diff === 0) return { label: 'D-DAY', color: DDAY.dday.color, bg: DDAY.dday.bg };
     if (diff > 0) {
       var t = diff <= DDAY.soonAt ? DDAY.soon : (diff <= DDAY.nearAt ? DDAY.near : DDAY.far);
@@ -260,7 +253,7 @@
   // 파싱된 sections/items 배열을 보기용 HTML로 빌드
   function buildPreviewHTML(parsedPane) {
     if (!parsedPane || !parsedPane.sections || !parsedPane.sections.length) {
-      return '<div style="padding:24px;text-align:center;color:var(--t5)">내용 없음</div>';
+      return '<div class="wr-msg">내용 없음</div>';
     }
     // 전 섹션에서 사이트명 최대 폭 → 배지 폭 통일(이름 시작 위치 정렬)
     var maxSiteW = 0;
@@ -370,25 +363,16 @@
     }
     var rows = ''
       + ok.map(function (r) {
-          var wk = (r.saved && r.saved.week_label) || '-';
-          return '<tr><td style="padding:6px 8px;border-bottom:1px solid var(--bd)">' + esc(r.file) + '</td>'
-            + '<td style="padding:6px 8px;border-bottom:1px solid var(--bd)">' + esc(wk) + '</td>'
-            + '<td style="padding:6px 8px;border-bottom:1px solid var(--bd);color:#1a8a40">저장됨</td></tr>';
+          return '<tr>' + td(esc(r.file)) + td(esc((r.saved && r.saved.week_label) || '-')) + td('<span class="wr-ok">저장됨 · ' + esc((r.saved && r.saved.name) || '') + '</span>') + '</tr>';
         }).join('')
       + fail.map(function (r) {
-          return '<tr><td style="padding:6px 8px;border-bottom:1px solid var(--bd)">' + esc(r.file) + '</td>'
-            + '<td style="padding:6px 8px;border-bottom:1px solid var(--bd)">-</td>'
-            + '<td style="padding:6px 8px;border-bottom:1px solid var(--bd);color:#d03030">실패: ' + esc(r.error) + '</td></tr>';
+          return '<tr>' + td(esc(r.file)) + td('-') + td('<span class="wr-bad">실패: ' + esc(r.error) + '</span>') + '</tr>';
         }).join('');
     box.innerHTML = ''
-      + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px">'
-      +   '<div style="font-size:12px;margin-bottom:8px;color:var(--t3)">처리 결과 — 성공 ' + ok.length + ' / 실패 ' + fail.length + '</div>'
-      +   '<table style="width:100%;border-collapse:collapse;font-size:12px">'
-      +     '<thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--t5);font-weight:600">파일</th>'
-      +     '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--t5);font-weight:600">주차</th>'
-      +     '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--t5);font-weight:600">상태</th></tr></thead>'
-      +     '<tbody>' + rows + '</tbody>'
-      +   '</table>'
+      + '<div class="wr-card">'
+      +   '<div class="wr-card-h">처리 결과 — 성공 ' + ok.length + ' / 실패 ' + fail.length + '</div>'
+      +   '<table class="wr-tbl"><thead><tr>' + th('파일') + th('주차') + th('상태') + '</tr></thead>'
+      +   '<tbody>' + rows + '</tbody></table>'
       + '</div>';
     if (typeof showToast === 'function') {
       showToast('업로드 완료 — 성공 ' + ok.length + ' / 실패 ' + fail.length, fail.length ? 'warn' : 'ok');
@@ -398,7 +382,7 @@
   /* ─── 검색 ─── */
   function renderSearch() {
     $('wrPanel').innerHTML = ''
-      + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px">'
+      + '<div class="wr-card wr-mb">'
       +   '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'
       +     inputCell('wrSQ', 'text', '키워드 (이름/세부)')
       +     inputCell('wrSAssignee', 'text', '담당자 (예: 박종민)')
@@ -430,11 +414,10 @@
   }
 
   function inputCell(id, type, ph) {
-    return '<input id="' + id + '" type="' + type + '" placeholder="' + esc(ph) + '" '
-      + 'style="padding:7px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12px;font-family:inherit">';
+    return '<input id="' + id + '" type="' + type + '" placeholder="' + esc(ph) + '" class="wr-inp">';
   }
   function selectCell(id, opts) {
-    return '<select id="' + id + '" style="padding:7px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12px;font-family:inherit">'
+    return '<select id="' + id + '" class="wr-inp">'
       + opts.map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join('')
       + '</select>';
   }
@@ -454,17 +437,17 @@
       return encodeURIComponent(k) + '=' + encodeURIComponent(f[k]);
     }).join('&');
     var box = $('wrSearchResult');
-    box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5)">⏳ 검색 중...</div>';
+    box.innerHTML = '<div class="wr-msg">⏳ 검색 중...</div>';
     try {
       var r = await apiFetch('/api/weekly-reports/search?' + qs);
       var rows = r.data || [];
       $('wrSearchCount').textContent = rows.length + '건';
       if (!rows.length) {
-        box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5);background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">결과 없음</div>';
+        box.innerHTML = '<div class="wr-msg wr-box">결과 없음</div>';
         return;
       }
-      var html = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;overflow:auto">'
-        + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      var html = '<div class="wr-card wr-tbl-wrap">'
+        + '<table class="wr-tbl">'
         +   '<thead><tr>'
         +     th('주차') + th('섹션') + th('사이트') + th('업무') + th('D-day') + th('%') + th('담당자') + th('상태')
         +   '</tr></thead><tbody>'
@@ -490,17 +473,17 @@
         + '</tbody></table></div>';
       box.innerHTML = html;
     } catch (e) {
-      box.innerHTML = '<div style="padding:14px;color:#d03030;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">검색 실패: ' + esc(e.message || e) + '</div>';
+      box.innerHTML = '<div class="wr-err">검색 실패: ' + esc(e.message || e) + '</div>';
     }
   }
 
-  function th(t) { return '<th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--bd);font-size:11px;color:var(--t5);font-weight:600;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">' + t + '</th>'; }
-  function td(html) { return '<td style="padding:8px 10px;border-bottom:1px solid var(--bd);vertical-align:top">' + html + '</td>'; }
+  function th(t) { return '<th>' + t + '</th>'; }
+  function td(html) { return '<td>' + html + '</td>'; }
 
   /* ─── 통계 ─── */
   function renderStats() {
     $('wrPanel').innerHTML = ''
-      + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px">'
+      + '<div class="wr-card wr-mb">'
       +   '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
       +     inputCell('wrStTeam', 'text', '팀 (예: 소프트웨어팀)')
       +     inputCell('wrStFrom', 'date', '')
@@ -519,12 +502,12 @@
       return encodeURIComponent(k) + '=' + encodeURIComponent(f[k]);
     }).join('&');
     var box = $('wrStatsResult');
-    box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5)">⏳ 조회 중...</div>';
+    box.innerHTML = '<div class="wr-msg">⏳ 조회 중...</div>';
     try {
       var r = await apiFetch('/api/weekly-reports/stats' + (qs ? '?' + qs : ''));
       var d = r.data;
       if (!d || !d.weekly || !d.weekly.length) {
-        box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5);background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">데이터 없음 — 먼저 업로드 탭에서 JSON을 올려주세요</div>';
+        box.innerHTML = '<div class="wr-msg wr-box">데이터 없음 — 먼저 업로드 탭에서 JSON을 올려주세요</div>';
         return;
       }
       var totals = d.totals;
@@ -552,23 +535,23 @@
       }).join('');
       box.innerHTML = ''
         + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">' + stHtml + '</div>'
-        + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px">'
+        + '<div class="wr-card wr-mb">'
         +   '<div style="font-size:13px;font-weight:600;margin-bottom:10px">주차별 진행</div>'
-        +   '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +   '<table class="wr-tbl">'
         +     '<thead><tr>' + th('주차') + th('총') + th('완료') + th('진행중') + th('완료율') + th('평균%') + '</tr></thead>'
         +     '<tbody>' + weeklyRows + '</tbody>'
         +   '</table>'
         + '</div>'
         + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">'
-        +   '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px">'
+        +   '<div class="wr-card">'
         +     '<div style="font-size:13px;font-weight:600;margin-bottom:8px">담당자별 (상위 15)</div>' + memHtml
         +   '</div>'
-        +   '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px">'
+        +   '<div class="wr-card">'
         +     '<div style="font-size:13px;font-weight:600;margin-bottom:8px">사이트별 (상위 15)</div>' + cliHtml
         +   '</div>'
         + '</div>';
     } catch (e) {
-      box.innerHTML = '<div style="padding:14px;color:#d03030;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">조회 실패: ' + esc(e.message || e) + '</div>';
+      box.innerHTML = '<div class="wr-err">조회 실패: ' + esc(e.message || e) + '</div>';
     }
   }
 
@@ -582,12 +565,12 @@
   /* ─── 목록 ─── */
   async function renderList() {
     var box = $('wrPanel');
-    box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5)">⏳ 불러오는 중...</div>';
+    box.innerHTML = '<div class="wr-msg">⏳ 불러오는 중...</div>';
     try {
       var r = await apiFetch('/api/weekly-reports');
       var rows = r.data || [];
       if (!rows.length) {
-        box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5);background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">업로드된 보고서가 없습니다</div>';
+        box.innerHTML = '<div class="wr-msg wr-box">업로드된 보고서가 없습니다</div>';
         return;
       }
       var bodyRows = rows.map(function (it) {
@@ -605,8 +588,8 @@
           + '</tr>';
       }).join('');
       box.innerHTML = ''
-        + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;overflow:auto">'
-        +   '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        + '<div class="wr-card wr-tbl-wrap">'
+        +   '<table class="wr-tbl">'
         +     '<thead><tr>'
         +       th('주차') + th('팀') + th('이름') + th('기간') + th('완료/진행/총') + th('저장') + th('')
         +     '</tr></thead>'
@@ -620,7 +603,7 @@
         b.addEventListener('click', function () { renderPreview(b.dataset.prev); });
       });
     } catch (e) {
-      box.innerHTML = '<div style="padding:14px;color:#d03030;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">조회 실패: ' + esc(e.message || e) + '</div>';
+      box.innerHTML = '<div class="wr-err">조회 실패: ' + esc(e.message || e) + '</div>';
     }
   }
 
@@ -628,7 +611,7 @@
   var _previewState = { id: null, pane: 'cur', data: null };
   async function renderPreview(id) {
     var box = $('wrPanel');
-    box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t5)">⏳ 불러오는 중...</div>';
+    box.innerHTML = '<div class="wr-msg">⏳ 불러오는 중...</div>';
     try {
       var r = await apiFetch('/api/weekly-reports/' + encodeURIComponent(id));
       _previewState.id = id;
@@ -636,7 +619,7 @@
       _previewState.pane = 'cur';
       drawPreview();
     } catch (e) {
-      box.innerHTML = '<div style="padding:14px;color:#d03030;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px">불러오기 실패: ' + esc(e.message || e) + '</div>';
+      box.innerHTML = '<div class="wr-err">불러오기 실패: ' + esc(e.message || e) + '</div>';
     }
   }
 
@@ -684,78 +667,7 @@
      작성 탭 — 편집기 + 라이브 프리뷰 + 팀관리 데이터 인서트
      ═══════════════════════════════════════════════════════════ */
 
-  // 클라이언트 사이드 텍스트 파서 (서버와 동일 로직)
-  function clientParseText(text) {
-    var SEC_MAP = SECTION_ALIAS;
-    if (!text) return { sections: [] };
-    var sections = [], cur = null, item = null;
-    var lines = text.split('\n');
-    // 서버(weekly-report-parser.js)와 동일 로직 유지 — parity 테스트로 강제
-    function detectStatus(t) {
-      if (/#완료/.test(t)) return 'done';
-      if (/#진행중?/.test(t)) return 'in_progress';
-      if (/완료/.test(t)) return 'done'; // 태그 없는 '완료'도 완료로 (서버와 동일)
-      return 'none';
-    }
-    function members(t) {
-      return (t.match(/@([^\s@]+)/g) || []).map(function (s) { return s.slice(1); });
-    }
-    for (var i = 0; i < lines.length; i++) {
-      var raw = lines[i];
-      var line = raw.trim();
-      if (!line) continue;
-      var sm = line.match(/^\[([^\]]+)\]$/);
-      if (sm) {
-        var k = Object.keys(SEC_MAP).find(function (key) { return sm[1].indexOf(key) >= 0; });
-        if (k) { cur = { type: SEC_MAP[k], label: sm[1], items: [] }; sections.push(cur); item = null; continue; }
-      }
-      if (!cur) continue;
-      // 알 수 없는 [xxx] 단독 줄(섹션 오타 등)은 항목으로 오인하지 않고 건너뜀
-      if (sm) continue;
-      var im = line.match(ITEM_LINE_RE);
-      if (im) {
-        var rest = im[2].trim();
-        var dm = rest.match(/(~\d{2}\/\d{2})/);
-        var pm = rest.match(/(\d+)%/) || rest.match(/#%(\d+)/);
-        // 상태 태그(#완료/#진행중)는 이름에서 제거 — 상태는 줄 끝 배지로 항상 표시하고,
-        // 이름이 말줄임될 때 태그가 잘려 사라지는 것을 방지
-        var name = rest.replace(/@[^\s@]+/g, '').replace(/(~\d{2}\/\d{2})/g, '').replace(/\d+%/g, '').replace(/#%\d+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').replace(/\s+/g, ' ').trim();
-        item = {
-          section: cur.type,
-          client: im[1].trim(),
-          name: name,
-          deadline: dm ? dm[1] : '',
-          pct: pm ? parseInt(pm[1], 10) : -1,
-          members: members(rest),
-          status: detectStatus(rest),
-          details: []
-        };
-        cur.items.push(item);
-        continue;
-      }
-      if (item) {
-        // 세부 줄: 도형(:, -., -, ·, •, ○, └ …) 또는 들여쓴 맨텍스트 모두 허용
-        var dmk = line.match(DETAIL_LINE_RE);
-        var dt = dmk ? dmk[1].trim() : (/^\s/.test(raw) ? line : null);
-        if (dt) {
-          var dMembers = members(dt);
-          item.details.push({ text: dt, members: dMembers, status: detectStatus(dt), sub: isSubLine(raw, line) });
-          dMembers.forEach(function (m) { if (item.members.indexOf(m) < 0) item.members.push(m); });
-        }
-      }
-    }
-    sections.forEach(function (sec) {
-      sec.items.forEach(function (it) {
-        if (it.status === 'none' && it.details.length) {
-          var hasDone = it.details.some(function (x) { return x.status === 'done'; });
-          var hasProg = it.details.some(function (x) { return x.status === 'in_progress'; });
-          if (hasDone && !hasProg) it.status = 'done';
-          else if (hasProg) it.status = 'in_progress';
-        }
-      });
-    });
-    return { sections: sections };
-  }
+  function clientParseText(text) { return WRP.parseText(text); }
 
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
@@ -777,6 +689,8 @@
     viewMode: 'compare', // 'compare' = 지난주+금주 동시, 'single' = 토글
     loadedId: null,
     loadedName: '',
+    loadedVersion: null,   // 덮어쓰기 충돌 확인용 (서버 version)
+    savedSig: '\u0000',    // 마지막으로 불러오거나 저장한 내용 — 다르면 '저장 안 한 변경'
     showPreview: lsGet(LS_SHOW_PV) !== '0',
     workRecords: [],
     workRecordsKey: '',
@@ -817,14 +731,14 @@
     }
     var box = $('wrPanel');
     box.innerHTML = ''
-      + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:10px">'
+      + '<div class="wr-card wr-mb10">'
       +   '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
       +     '<label style="font-size:11px;color:var(--t5)">팀</label>'
-      +     '<input id="wrAuTeam" type="text" placeholder="소프트웨어팀" value="' + esc(_authorState.team) + '" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12px;font-family:inherit;width:140px">'
+      +     '<input id="wrAuTeam" type="text" placeholder="소프트웨어팀" value="' + esc(_authorState.team) + '" class="wr-inp wr-inp-sm" style="width:140px">'
       +     '<label style="font-size:11px;color:var(--t5);margin-left:6px">주차</label>'
-      +     '<input id="wrAuStart" type="date" value="' + esc(_authorState.weekStart) + '" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12px;font-family:inherit">'
+      +     '<input id="wrAuStart" type="date" value="' + esc(_authorState.weekStart) + '" class="wr-inp wr-inp-sm">'
       +     '<span style="color:var(--t6)">~</span>'
-      +     '<input id="wrAuEnd" type="date" value="' + esc(_authorState.weekEnd) + '" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12px;font-family:inherit">'
+      +     '<input id="wrAuEnd" type="date" value="' + esc(_authorState.weekEnd) + '" class="wr-inp wr-inp-sm">'
       +     '<button id="wrAuLoadList" class="tab" style="padding:6px 12px">📂 불러오기</button>'
       +     '<button id="wrAuLoadPrev" class="tab" style="padding:6px 12px" title="가장 최근 주의 curText를 lastText로 복사">⬅ 지난주에서 가져오기</button>'
       +     '<button id="wrAuNew" class="tab" style="padding:6px 12px">📋 새로 만들기</button>'
@@ -1063,7 +977,7 @@
       _authorState[p === 'last' ? 'lastText' : 'curText'] = ed.value;
       _authorState.editPane = p; // 마지막 편집 페인 추적 (툴바 타겟 추정용)
       clearTimeout(debounceT);
-      debounceT = setTimeout(function () { updateAuthorPreview(p); }, 200);
+      debounceT = setTimeout(function () { updateAuthorPreview(p); updateAuthorStatusBadge(); }, 200);
     });
     ed.addEventListener('focus', function () {
       var p = ed.dataset.pane || paneKey;
@@ -1107,34 +1021,38 @@
   function updateAuthorStatusBadge() {
     var el = $('wrAuStatusBadge');
     if (!el) return;
+    var dirty = isDirty() ? ' <span class="wr-dirty" title="Ctrl+S 로 덮어쓰기">● 저장 안 됨</span>' : '';
     if (_authorState.loadedId) {
-      el.innerHTML = '✏️ 편집 중: <strong style="color:var(--t3)">' + esc(_authorState.loadedName) + '</strong>';
+      el.innerHTML = '✏️ 편집 중: <strong style="color:var(--t3)">' + esc(_authorState.loadedName) + '</strong>' + dirty;
       var ow = $('wrAuOverwrite'); if (ow) ow.style.display = '';
     } else {
-      el.innerHTML = '<span style="color:var(--t6)">새 보고서 (저장 시 자동 R 부여)</span>';
+      el.innerHTML = '<span style="color:var(--t6)">새 보고서 (저장 시 자동 R 부여)</span>' + dirty;
       var ow2 = $('wrAuOverwrite'); if (ow2) ow2.style.display = 'none';
     }
   }
 
   function authorNew() {
-    if (_authorState.lastText || _authorState.curText) {
-      if (!confirm('현재 작성 내용이 사라집니다. 새로 만드시겠습니까?')) return;
-    }
+    if (isDirty() && !confirm('저장하지 않은 내용이 사라집니다. 새로 만드시겠습니까?')) return;
     _authorState.lastText = '';
     _authorState.curText = '';
     _authorState.loadedId = null;
     _authorState.loadedName = '';
+    _authorState.loadedVersion = null;
+    _authorState.savedSig = textSig();
     forgetLoaded();
     renderAuthor();
   }
 
+  // 작성 주차 바로 전(같은 팀 우선)의 가장 최근 버전 '금주' → 이번 '지난주'.
+  // 예전엔 주차를 보지 않고 최근 10건 중 첫 건을 골라, 이번 주 보고서를 이미 저장했으면 자기 자신을 가져왔다
   async function authorLoadFromPrevWeek() {
     try {
-      var r = await apiFetch('/api/weekly-reports?limit=10');
-      var rows = r.data || [];
-      if (!rows.length) { alert('저장된 보고서가 없습니다.'); return; }
-      var match = _authorState.team ? rows.filter(function (x) { return x.team === _authorState.team; })[0] : rows[0];
-      if (!match) match = rows[0];
+      var before = _authorState.weekStart ? isoDate(new Date(mondayOf(_authorState.weekStart).getTime() - 86400000)) : '';
+      var qs = '?limit=1' + (before ? '&to=' + before : '');
+      var r = _authorState.team ? await apiFetch('/api/weekly-reports' + qs + '&team=' + encodeURIComponent(_authorState.team)) : { data: [] };
+      if (!(r.data || []).length) r = await apiFetch('/api/weekly-reports' + qs);
+      var match = (r.data || [])[0];
+      if (!match) { alert('이 주차 전에 저장된 보고서가 없습니다.'); return; }
       var d = await apiFetch('/api/weekly-reports/' + encodeURIComponent(match.id));
       var prevCur = d.data && d.data.cur_text || '';
       if (!prevCur) { alert('이전 주 금주 텍스트가 비어있습니다.'); return; }
@@ -1142,6 +1060,7 @@
       _authorState.lastText = prevCur;
       _authorState.editPane = 'last';
       renderAuthor();
+      if (typeof showToast === 'function') showToast('지난주 ← ' + match.name, 'ok');
     } catch (e) {
       alert('가져오기 실패: ' + (e.message || e));
     }
@@ -1165,6 +1084,7 @@
         + '</div>';
       dd.querySelectorAll('[data-load-id]').forEach(function (b) {
         b.addEventListener('click', async function () {
+          if (isDirty() && !confirm('저장하지 않은 내용이 있습니다. 버리고 불러올까요?')) return;
           try { await authorLoadById(b.dataset.loadId); $('wrAuLoadDropdown').style.display = 'none'; }
           catch (e) { alert('불러오기 실패: ' + (e.message || e)); }
         });
@@ -1175,61 +1095,78 @@
   }
 
   async function authorLoadById(id) {
-    try {
-      var r = await apiFetch('/api/weekly-reports/' + encodeURIComponent(id));
-      var d = r.data;
-      _authorState.loadedId = d.id;
-      _authorState.loadedName = d.name;
-      _authorState.team = d.team || _authorState.team;
-      _authorState.weekStart = d.week_start ? String(d.week_start).slice(0, 10) : _authorState.weekStart;
-      _authorState.weekEnd = d.week_end ? String(d.week_end).slice(0, 10) : _authorState.weekEnd;
-      _authorState.lastText = d.last_text || '';
-      _authorState.curText = d.cur_text || '';
-      rememberLoaded(d.id);
-      renderAuthor();
-    } catch (e) {
-      throw e;
-    }
+    var r = await apiFetch('/api/weekly-reports/' + encodeURIComponent(id));
+    var d = r.data;
+    // 주차는 이름(팀_26W17_04/20~04/24)에서 읽는다 — DATE 칼럼은 서버 시간대에 따라 하루 밀려 올 수 있다
+    var meta = WRP.parseName(d.name);
+    _authorState.loadedId = d.id;
+    _authorState.loadedName = d.name;
+    _authorState.loadedVersion = d.version;
+    _authorState.team = d.team || _authorState.team;
+    _authorState.weekStart = meta.weekStart || (d.week_start ? String(d.week_start).slice(0, 10) : _authorState.weekStart);
+    _authorState.weekEnd = meta.weekEnd || (d.week_end ? String(d.week_end).slice(0, 10) : _authorState.weekEnd);
+    _authorState.lastText = d.last_text || '';
+    _authorState.curText = d.cur_text || '';
+    _authorState.savedSig = textSig();
+    rememberLoaded(d.id);
+    renderAuthor();
   }
 
+  // 새 버전(R+1)은 서버가 빈 번호를 골라 넣고, 덮어쓰기는 불러온 버전과 같을 때만 — 그 사이 남이 저장했으면 409
+  var _saving = false;
   async function saveAuthor(asNewVersion) {
-    if (!_authorState.team) { alert('팀명을 입력하세요.'); return; }
-    if (!_authorState.weekStart || !_authorState.weekEnd) { alert('주차를 선택하세요.'); return; }
+    if (_saving) return;
     syncAuthorEditorsToState();
-
-    var name;
-    if (asNewVersion || !_authorState.loadedName) {
-      try {
-        var r = await apiFetch('/api/weekly-reports/next-name?team=' + encodeURIComponent(_authorState.team)
-          + '&weekStart=' + encodeURIComponent(_authorState.weekStart)
-          + '&weekEnd=' + encodeURIComponent(_authorState.weekEnd));
-        name = r.data && r.data.nextName;
-      } catch (e) { alert('이름 조회 실패: ' + (e.message || e)); return; }
-    } else {
-      name = _authorState.loadedName;
+    var overwrite = !asNewVersion && !!_authorState.loadedName;
+    if (!overwrite) {
+      if (!_authorState.team) { alert('팀명을 입력하세요.'); return; }
+      if (!_authorState.weekStart || !_authorState.weekEnd) { alert('주차를 선택하세요.'); return; }
     }
-    if (!name) { alert('이름 생성 실패'); return; }
-
+    var sig = textSig();
     var payload = {
-      version: 1,
-      name: name,
-      savedAt: new Date().toLocaleString('ko-KR'),
+      savedAt: new Date().toISOString(),
       lastText: _authorState.lastText || '',
       curText: _authorState.curText || ''
     };
+    if (overwrite) { payload.name = _authorState.loadedName; payload.baseVersion = _authorState.loadedVersion; }
+    else payload.autoName = { team: _authorState.team, weekStart: _authorState.weekStart, weekEnd: _authorState.weekEnd };
 
+    _saving = true;
     try {
       var resp = await apiFetch('/api/weekly-reports', { method: 'POST', body: JSON.stringify(payload) });
       var saved = resp.data && resp.data[0];
-      _authorState.loadedId = saved && saved.id;
-      _authorState.loadedName = name;
-      rememberLoaded(_authorState.loadedId);
-      if (typeof showToast === 'function') showToast('저장됨: ' + name, 'ok');
-      else alert('저장됨: ' + name);
+      if (!saved) throw new Error('응답이 비었습니다.');
+      _authorState.loadedId = saved.id;
+      _authorState.loadedName = saved.name;
+      _authorState.loadedVersion = saved.version;
+      _authorState.savedSig = sig;
+      rememberLoaded(saved.id);
+      if (typeof showToast === 'function') showToast('저장됨: ' + saved.name, 'ok');
       updateAuthorStatusBadge();
     } catch (e) {
-      alert('저장 실패: ' + (e.message || e));
+      if (e && e.status === 409) {
+        var by = (e.data && e.data.data && e.data.data.by) || '다른 사용자';
+        if (confirm(by + ' 님이 그 사이 [' + _authorState.loadedName + '] 을(를) 저장했습니다.\n\n'
+          + '덮어쓰면 그 내용이 사라집니다. 내 내용을 새 버전(R+1)으로 따로 저장할까요?')) {
+          _saving = false;
+          return await saveAuthor(true);
+        }
+      } else {
+        alert('저장 실패: ' + (e.message || e));
+      }
+    } finally {
+      _saving = false;
     }
+  }
+
+  // 저장 안 한 변경 — 불러오기 · 새로 만들기 · 창 닫기 전에 묻는다
+  function textSig() { return (_authorState.lastText || '') + '\u0000' + (_authorState.curText || ''); }
+  function isDirty() { syncAuthorEditorsToState(); return textSig() !== _authorState.savedSig; }
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('beforeunload', function (e) {
+      if (!$('wrAuWork') || !isDirty()) return;
+      e.preventDefault(); e.returnValue = '';
+    });
   }
 
   /* ─── HTML 복사 / 다운로드 (iframe 임베드용) ─── */
@@ -1492,6 +1429,7 @@
     var single = $('wrAuEditor');
     if (single && (single.dataset.pane || _authorState.editPane) === pane) single.value = txt;
     updateAuthorPreview(_authorState.viewMode === 'compare' ? pane : undefined);
+    updateAuthorStatusBadge();
   }
 
   // 섹션 인식 삽입 — { dev: [블록…], … } 를 대상 편집창의 해당 섹션 끝에 붙인다. 섹션이 없으면 새로 만든다
@@ -1500,12 +1438,7 @@
     var key = paneKeyText(pane);
     var lines = (_authorState[key] || '').split('\n');
     var added = 0;
-    function headerType(l) {
-      var m = l.trim().match(/^\[([^\]]+)\]$/);
-      if (!m) return null;
-      var k = Object.keys(SECTION_ALIAS).filter(function (a) { return m[1].indexOf(a) >= 0; })[0];
-      return k ? SECTION_ALIAS[k] : '?';
-    }
+    var headerType = WRP.sectionOfLine;
     SECTION_KEYS.forEach(function (sk) {
       var blocks = bySec[sk];
       if (!blocks || !blocks.length) return;
@@ -1921,9 +1854,8 @@
       buf = [];
     }
     String(text || '').split('\n').forEach(function (l) {
-      var m = l.trim().match(/^\[([^\]]+)\]$/);
-      var k = m ? Object.keys(SECTION_ALIAS).filter(function (a) { return m[1].indexOf(a) >= 0; })[0] : null;
-      if (k) { flush(); cur = SECTION_ALIAS[k]; } else buf.push(l);
+      var k = WRP.sectionOfLine(l);
+      if (k && k !== '?') { flush(); cur = k; } else buf.push(l);
     });
     flush();
     if (!Object.keys(bySec).length) { alert('삽입할 내용이 없습니다.'); return; }
@@ -1984,60 +1916,4 @@
       renderSrcBody();
     }
   }
-
-  // 패널 스타일 — 한 번만 주입
-  (function injectSrcStyle() {
-    if (typeof document === 'undefined' || !document.head || document.getElementById('wrSrcStyle')) return;
-    var st = document.createElement('style');
-    st.id = 'wrSrcStyle';
-    st.textContent = ''
-      + '.wr-au-work{display:grid;grid-template-columns:minmax(0,1fr) 10px var(--wr-src-w,440px);align-items:start;margin-bottom:10px}'
-      + '.wr-au-work.src-off{grid-template-columns:minmax(0,1fr) 10px 34px}'
-      + '.wr-au-edit{min-width:0}'
-      + '.wr-src-resizer{align-self:stretch;cursor:col-resize;position:relative;min-height:200px}'
-      + '.wr-src-resizer::after{content:"";position:absolute;left:4px;top:0;bottom:0;width:2px;border-radius:2px;background:transparent;transition:background .15s}'
-      + '.wr-src-resizer:hover::after,.wr-src-resizer.drag::after{background:var(--ac)}'
-      + '.src-off .wr-src-resizer{cursor:default}.src-off .wr-src-resizer::after{display:none}'
-      + '.wr-src{position:sticky;top:8px;height:calc(100vh - 16px);min-height:480px;display:flex;flex-direction:column;background:var(--bg-ps,var(--bg-p));border:1px solid var(--bd);border-radius:8px;min-width:0;overflow:hidden}'
-      + '.wr-src-rail{flex:1;border:0;background:transparent;color:var(--t4);cursor:pointer;font:inherit;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px 0}'
-      + '.wr-src-rail span{writing-mode:vertical-rl;letter-spacing:2px}.wr-src-rail:hover{background:var(--bg-i);color:var(--ac)}'
-      + '.wr-src-h{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--bd);font-size:13px}'
-      + '.wr-src-h .tab{padding:3px 9px;font-size:12px}'
-      + '.wr-src-f{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-bottom:1px solid var(--bd)}'
-      + '.wr-src-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}'
-      + '.wr-src-f input[type=date],.wr-src-f input[type=search]{padding:4px 8px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:11.5px;font-family:inherit}'
-      + '.wr-src-f input[type=search]{width:100%;box-sizing:border-box;padding:6px 10px}'
-      + '.wr-src-f input:disabled{opacity:.6}'
-      + '.wr-src-seg{margin:0!important}.wr-src-seg .tab{padding:3px 8px;font-size:11px}'
-      + '.wr-src-chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center;max-height:92px;overflow:auto}'
-      + '.wr-src-lbl{font-size:10.5px;color:var(--t5);width:28px;flex-shrink:0}'
-      + '.wr-chip{--chip-c:var(--ac);border:1px solid var(--bd);background:var(--bg-i);color:var(--t4);border-radius:12px;padding:2px 9px;font-size:11px;font-family:inherit;cursor:pointer;line-height:1.5}'
-      + '.wr-chip small{color:var(--t6);font-size:10px}'
-      + '.wr-chip.on{border-color:var(--chip-c);color:var(--t1);background:color-mix(in srgb,var(--chip-c) 16%,transparent);font-weight:600}'
-      + '.wr-chip-ghost{border-style:dashed;color:var(--t5)}'
-      + '.wr-src-muted{color:var(--t6);font-size:11px;font-weight:400}'
-      + '.wr-src-body{flex:1;overflow:auto;padding:8px 10px;min-height:0}'
-      + '.wr-src-empty{color:var(--t6);padding:24px 8px;text-align:center;font-size:12px}'
-      + '.wr-src-foot{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--bd)}.wr-src-foot .tab{flex:1;padding:6px 8px;font-size:12px}'
-      + '.wr-sum-grp{margin-bottom:10px}'
-      + '.wr-sum-gh{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 0;border-bottom:1px solid var(--bd);margin-bottom:4px}'
-      + '.wr-sum-gh .tab,.wr-sum-top .tab,.wr-raw-row .tab{padding:1px 8px;font-size:11px;flex-shrink:0}'
-      + '.wr-sum-it{padding:5px 6px;border-radius:6px;margin-bottom:2px}.wr-sum-it:hover{background:var(--bg-i)}'
-      + '.wr-sum-top{display:flex;align-items:center;gap:5px;font-size:12px}'
-      + '.wr-sum-site{color:var(--ac);flex-shrink:0}'
-      + '.wr-sum-title{flex:1;min-width:0;font-weight:600;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-      + '.wr-sum-sec{font-size:10px;font-weight:700;padding:0 5px;border-radius:3px;flex-shrink:0}'
-      + '.wr-sum-meta{font-size:10.5px;color:var(--t5);margin:1px 0 2px}'
-      + '.wr-sum-det{font-size:11.5px;color:var(--t3);padding-left:10px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}'
-      + '.wr-raw-grp{margin-bottom:6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i)}'
-      + '.wr-raw-grp summary{cursor:pointer;padding:5px 8px;font-size:12px;font-weight:600;color:var(--t3)}'
-      + '.wr-raw-row{display:flex;gap:6px;padding:4px 8px;border-top:1px solid var(--bd);font-size:11.5px;align-items:flex-start}'
-      + '.wr-raw-d{color:var(--t6);font-family:ui-monospace,monospace;flex-shrink:0;width:38px}'
-      + '.wr-raw-n{color:var(--t5);flex-shrink:0;width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-      + '.wr-raw-c{flex:1;min-width:0;color:var(--t3);word-break:break-word}'
-      + '.wr-ai-card{border:1px solid var(--ac);border-radius:8px;padding:8px;margin-bottom:10px;background:var(--bg-i)}'
-      + '.wr-ai-card textarea{width:100%;box-sizing:border-box;min-height:220px;margin:6px 0 4px;padding:8px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-p);color:var(--t2);font-size:12px;font-family:ui-monospace,Consolas,monospace;line-height:1.55;resize:vertical}'
-      + '@media (max-width:1100px){.wr-au-work,.wr-au-work.src-off{grid-template-columns:1fr}.wr-src-resizer{display:none}.wr-src{position:static;height:auto;min-height:0;margin-top:10px}.wr-src-body{max-height:560px}.wr-src-rail{flex-direction:row;justify-content:center}.wr-src-rail span{writing-mode:horizontal-tb}}';
-    document.head.appendChild(st);
-  })();
 })();

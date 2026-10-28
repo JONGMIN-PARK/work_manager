@@ -1,5 +1,14 @@
 # Work Manager — 변경 이력
 
+## v13.250 (2026-10-28) — 주간 업무 보고 저장 안전 · 공용 파서
+
+- 공용 파서: 루트 `weekly-report-parse.js` (UMD — 브라우저 전역 `WeeklyReportParse`, 서버는 `server/services/weekly-report-parser.js` 가 그대로 재수출). 클라 `clientParseText` 와 서버 파서 두 벌 제거. `sectionOfLine` · `namePrefix`(ISO 주차, 시간대 영향 없음) · `parseName`(해 넘김) 추가.
+- 저장 API: `POST /api/weekly-reports` 에 `autoName {team, weekStart, weekEnd}`(서버가 빈 R 번호에 INSERT … ON CONFLICT DO NOTHING, 겹치면 다음 번호) · `baseVersion`(다르면 409 CONFLICT + 마지막 저장자). 파일 업로드(둘 다 없음)는 예전처럼 같은 이름 덮어쓰기.
+- 마이그레이션 063: `weekly_reports.version` (덮어쓸 때마다 +1). 목록 정렬은 같은 주 안에서 저장 시각 순(R9/R10 뒤집힘 해결), 응답에 version.
+- 작성 화면: 저장 안 됨 표시 · 불러오기/새로 만들기/창 닫기 확인, 409 시 새 버전으로 저장 제안, 지난주 가져오기는 `to=작성 주차 전날`, 불러올 때 주차는 이름에서 읽음, D-day 반년 넘김 보정.
+- 스타일: JS 주입 `#wrSrcStyle` 과 반복 인라인(카드 · 표 · 입력칸 · 빈/오류 상태)을 style.css `.wr-*` 로. 보고서 미리보기 · 내보내기 HTML 은 외부 붙여넣기용이라 인라인 유지.
+- 테스트: `test/weekly-report*.test.js` 공용 파서 · 해 넘김 · 공백, `test/e2e/api-weekly.js`(동시 저장 · 409 · 시각 · 순서), `test/e2e/e2e26-weekly-author.js`(작성 화면 흐름).
+
 ## v13.249 (2026-10-28) — 마인드맵 모두 사용 · 보내기 · 상황별 템플릿
 
 - 사용 권한: `middleware/mindmap-access` 는 로그인한 모든 사용자 허용. `/api/mindmaps/access/users` (GET · PUT) 와 관리자 사용 권한 창 제거.

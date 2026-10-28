@@ -66,7 +66,75 @@ router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 router.use(auth.requireRole('admin'));
 
+// 저장 시각 — ISO 또는 예전 도구가 쓰던 '2026. 4. 24. 오후 3:12:05'(ko-KR). 못 읽으면 지금
+function parseSavedAt(v) {
+  if (v) {
+    var d = new Date(v);
+    if (!isNaN(d.getTime())) return d.toISOString();
+    var m = String(v).match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?\s*(오전|오후)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (m) {
+      var h = parseInt(m[5], 10);
+      if (m[4]) h = h % 12 + (m[4] === '오후' ? 12 : 0);
+      var p2 = function (n) { return String(n).padStart(2, '0'); };
+      var k = new Date(m[1] + '-' + p2(m[2]) + '-' + p2(m[3]) + 'T' + p2(h) + ':' + m[6] + ':' + (m[7] || '00') + '+09:00');
+      if (!isNaN(k.getTime())) return k.toISOString();
+    }
+  }
+  return new Date().toISOString();
+}
+
+var INSERT_SQL = 'INSERT INTO weekly_reports ' +
+  '(tenant_id, name, team, week_label, week_start, week_end, saved_at, last_text, cur_text, parsed, uploaded_by) ' +
+  'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ';
+var UPSERT_SET = 'ON CONFLICT (tenant_id, name) DO UPDATE SET ' +
+  '  team = EXCLUDED.team, week_label = EXCLUDED.week_label, ' +
+  '  week_start = EXCLUDED.week_start, week_end = EXCLUDED.week_end, ' +
+  '  saved_at = EXCLUDED.saved_at, last_text = EXCLUDED.last_text, ' +
+  '  cur_text = EXCLUDED.cur_text, parsed = EXCLUDED.parsed, ' +
+  '  uploaded_by = EXCLUDED.uploaded_by, updated_at = now(), version = weekly_reports.version + 1 ';
+var RETURNING = 'RETURNING id, name, team, week_label, week_start, week_end, saved_at, updated_at, version';
+
+function rowParams(req, name, p, parsed) {
+  var meta = parsed.meta || {};
+  return [
+    req.tenant.id, name, meta.team || null, meta.weekLabel || null,
+    meta.weekStart || null, meta.weekEnd || null, parseSavedAt(p.savedAt),
+    p.lastText || '', p.curText || '', JSON.stringify(parsed),
+    req.user.sub || null,
+  ];
+}
+
+/**
+ * 새 버전 저장 — 이름(팀_주차_기간_R{n})을 서버가 정한다. 예전엔 next-name 으로 이름을 받은 뒤 따로 저장해
+ * 두 사람이 거의 동시에 저장하면 같은 R 번호로 서로 덮어썼다. 이제 비어 있는 번호에만 넣고, 겹치면 다음 번호로.
+ */
+async function insertNewVersion(req, p) {
+  var a = p.autoName || {};
+  var team = String(a.team || '').trim();
+  var np = parser.namePrefix(team, a.weekStart, a.weekEnd);
+  if (!team || !np) return { error: 'team · weekStart · weekEnd(YYYY-MM-DD) 가 필요합니다.' };
+  var ex = await db.query(
+    'SELECT name FROM weekly_reports WHERE tenant_id = $1 AND team = $2 AND week_start = $3',
+    [req.tenant.id, team, a.weekStart]
+  );
+  var maxR = 0;
+  ex.rows.forEach(function (row) {
+    var m = String(row.name).match(/_R(\d+)\b/);
+    if (m) maxR = Math.max(maxR, parseInt(m[1], 10));
+  });
+  for (var n = maxR + 1; n <= maxR + 20; n++) {
+    var name = np.prefix + '_R' + n;
+    var parsed = parser.buildParsed({ name: name, lastText: p.lastText, curText: p.curText });
+    var ins = await db.query(INSERT_SQL + 'ON CONFLICT (tenant_id, name) DO NOTHING ' + RETURNING, rowParams(req, name, p, parsed));
+    if (ins.rows.length) return { row: ins.rows[0], parsed: parsed };
+  }
+  return { error: '저장할 이름을 정하지 못했습니다. 다시 시도해 주세요.' };
+}
+
 // ─── POST /api/weekly-reports — JSON 업로드 (단건 또는 배열) ───
+//   { name, lastText, curText, savedAt }             같은 이름이면 덮어씀 (파일 업로드)
+//   { name, baseVersion, ... }                      작성 화면 덮어쓰기 — 그 사이 누가 저장했으면 409
+//   { autoName: { team, weekStart, weekEnd }, ... }  작성 화면 새 버전 — R 번호는 서버가 정함
 router.post('/', async function (req, res) {
   try {
     var payloads = Array.isArray(req.body) ? req.body : [req.body];
@@ -74,47 +142,56 @@ router.post('/', async function (req, res) {
     var savedForNotify = [];
     for (var i = 0; i < payloads.length; i++) {
       var p = payloads[i];
-      if (!p || !p.name) {
+      if (!p || (!p.name && !p.autoName)) {
         return res.status(400).json({ error: 'VALIDATION', message: 'name 필드는 필수입니다.' });
       }
-      var parsed = parser.buildParsed(p);
-      var meta = parsed.meta || {};
-      var savedAt = null;
-      if (p.savedAt) {
-        var d = new Date(p.savedAt);
-        if (!isNaN(d.getTime())) savedAt = d.toISOString();
+      var row = null, parsed;
+      if (p.autoName) {
+        var nv = await insertNewVersion(req, p);
+        if (nv.error) return res.status(400).json({ error: 'VALIDATION', message: nv.error });
+        row = nv.row; parsed = nv.parsed;
+      } else {
+        parsed = parser.buildParsed(p);
       }
+      var meta = parsed.meta || {};
+      var name = row ? row.name : p.name;
 
-      // 알림 비교용 이전 저장본 — 같은 이름(덮어쓰기) 우선, 없으면 같은 팀·주차의 가장 최근 버전
+      // 알림 비교용 이전 저장본 — 같은 이름(덮어쓰기) 우선, 없으면 같은 팀·주차의 가장 최근 버전 (방금 넣은 새 버전은 빼고)
       var prevR = await db.query(
         "SELECT parsed->'cur'->'items' AS items FROM weekly_reports " +
-        'WHERE tenant_id = $1 AND (name = $2 OR ($3::text IS NOT NULL AND team = $3 AND week_start = $4)) ' +
+        'WHERE tenant_id = $1 AND ($5::uuid IS NULL OR id <> $5) ' +
+        '  AND (name = $2 OR ($3::text IS NOT NULL AND team = $3 AND week_start = $4)) ' +
         'ORDER BY (name = $2) DESC, updated_at DESC NULLS LAST LIMIT 1',
-        [req.tenant.id, p.name, meta.team || null, meta.weekStart || null]
+        [req.tenant.id, name, meta.team || null, meta.weekStart || null, row ? row.id : null]
       );
 
-      var r = await db.query(
-        'INSERT INTO weekly_reports ' +
-        '(tenant_id, name, team, week_label, week_start, week_end, saved_at, last_text, cur_text, parsed, uploaded_by) ' +
-        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ' +
-        'ON CONFLICT (tenant_id, name) DO UPDATE SET ' +
-        '  team = EXCLUDED.team, week_label = EXCLUDED.week_label, ' +
-        '  week_start = EXCLUDED.week_start, week_end = EXCLUDED.week_end, ' +
-        '  saved_at = EXCLUDED.saved_at, last_text = EXCLUDED.last_text, ' +
-        '  cur_text = EXCLUDED.cur_text, parsed = EXCLUDED.parsed, ' +
-        '  uploaded_by = EXCLUDED.uploaded_by, updated_at = now() ' +
-        'RETURNING id, name, week_label, week_start, week_end, saved_at, updated_at',
-        [
-          req.tenant.id, p.name, meta.team || null, meta.weekLabel || null,
-          meta.weekStart || null, meta.weekEnd || null, savedAt,
-          p.lastText || '', p.curText || '', JSON.stringify(parsed),
-          req.user.sub || null,
-        ]
-      );
-      saved.push(r.rows[0]);
+      if (!row) {
+        var base = p.baseVersion != null ? parseInt(p.baseVersion, 10) : NaN;
+        var guarded = !isNaN(base);
+        var r = await db.query(
+          INSERT_SQL + UPSERT_SET + (guarded ? 'WHERE weekly_reports.version = $12 ' : '') + RETURNING,
+          rowParams(req, name, p, parsed).concat(guarded ? [base] : [])
+        );
+        if (!r.rows.length) {
+          // 불러온 뒤 다른 사람이 저장함 — 덮어쓰지 않고 알린다
+          var cur = await db.query(
+            'SELECT w.version, w.updated_at, u.name AS by_name FROM weekly_reports w LEFT JOIN users u ON u.id = w.uploaded_by ' +
+            'WHERE w.tenant_id = $1 AND w.name = $2',
+            [req.tenant.id, name]
+          );
+          var c = cur.rows[0] || {};
+          return res.status(409).json({
+            error: 'CONFLICT',
+            message: (c.by_name || '다른 사용자') + ' 님이 그 사이 이 보고서를 저장했습니다.',
+            data: { version: c.version || null, updated_at: c.updated_at || null, by: c.by_name || null },
+          });
+        }
+        row = r.rows[0];
+      }
+      saved.push(row);
       savedForNotify.push({
-        team: r.rows[0].team || meta.team || null,
-        week_label: r.rows[0].week_label || meta.weekLabel || null,
+        team: row.team || meta.team || null,
+        week_label: row.week_label || meta.weekLabel || null,
         parsed: parsed,
         prevItems: prevR.rows.length ? (prevR.rows[0].items || []) : null
       });
@@ -142,9 +219,10 @@ router.get('/', async function (req, res) {
 
     var sql =
       'SELECT id, name, team, week_label, week_start, week_end, saved_at, ' +
-      '       parsed->\'stats\' AS stats, updated_at, created_at ' +
+      '       parsed->\'stats\' AS stats, updated_at, created_at, version ' +
       'FROM weekly_reports WHERE ' + where.join(' AND ') +
-      ' ORDER BY week_start DESC NULLS LAST, name DESC LIMIT $' + idx;
+      // name DESC 는 _R9 를 _R10 보다 앞에 둬서 '가장 최근 버전'이 어긋났다 → 저장 시각 순
+      ' ORDER BY week_start DESC NULLS LAST, updated_at DESC NULLS LAST LIMIT $' + idx;
     params.push(limit);
     var r = await db.query(sql, params);
     res.json({ data: r.rows });
@@ -162,18 +240,10 @@ router.get('/next-name', async function (req, res) {
     if (!team || !weekStart || !weekEnd) {
       return res.status(400).json({ error: 'VALIDATION', message: 'team/weekStart/weekEnd 필요' });
     }
-    var ws = new Date(weekStart);
-    var we = new Date(weekEnd);
-    function pad(n) { return String(n).padStart(2, '0'); }
-    var yy = pad(ws.getFullYear() % 100);
-    // ISO 주차 계산 — 보고서 형식에서 쓰는 W 번호
-    var d = new Date(Date.UTC(ws.getFullYear(), ws.getMonth(), ws.getDate()));
-    var dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-    var weekLabel = yy + 'W' + pad(weekNo);
-    var prefix = team + '_' + weekLabel + '_' + pad(ws.getMonth() + 1) + '/' + pad(ws.getDate()) + '~' + pad(we.getMonth() + 1) + '/' + pad(we.getDate());
+    // ISO 주차 — 공용 파서와 같은 계산 (예전엔 해를 시작일 기준으로 붙여 2024-12-30 주가 24W01 이 됐다)
+    var np = parser.namePrefix(team, weekStart, weekEnd);
+    if (!np) return res.status(400).json({ error: 'VALIDATION', message: 'weekStart/weekEnd 형식: YYYY-MM-DD' });
+    var weekLabel = np.weekLabel, prefix = np.prefix;
 
     var r = await db.query(
       "SELECT name FROM weekly_reports WHERE tenant_id = $1 AND team = $2 AND week_start = $3",
