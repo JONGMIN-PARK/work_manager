@@ -289,7 +289,7 @@ td{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--tdb)}tr:nth-chi
 #wmProgOverlay .wm-prog-tip{font-size:10px;color:#7882A0;margin-top:14px;font-style:italic;line-height:1.5}
 #wmProgOverlay .wm-prog-cancel{margin-top:14px;font-size:10px;padding:5px 14px;border:1px solid rgba(255,255,255,.15);border-radius:6px;background:transparent;color:#A8B4D8;cursor:pointer;transition:all .15s}
 #wmProgOverlay .wm-prog-cancel:hover{background:rgba(255,255,255,.06);color:#fff;border-color:rgba(255,255,255,.3)}
-/* v13.67 — 인라인 데이터 로딩 카드 (팀 관리 첫 진입 등) */
+/* v13.67 — 인라인 데이터 로딩 카드 (업무일지 탭 첫 진입 등) */
 .wm-init-load{display:flex;align-items:center;justify-content:center;padding:50px 20px;animation:wmProgFade .3s ease}
 .wm-init-card{background:linear-gradient(135deg,var(--bg-p),var(--bg-c));border:1px solid var(--bd);border-radius:16px;padding:36px 44px;min-width:300px;max-width:460px;text-align:center;position:relative;box-shadow:0 4px 28px rgba(0,0,0,.18);animation:wmProgGlow 3s ease-in-out infinite}
 .wm-init-ring-wrap{position:relative;width:72px;height:72px;margin:0 auto 16px}

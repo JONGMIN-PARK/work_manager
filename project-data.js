@@ -1833,7 +1833,7 @@ function readAllArchiveRecords() {
   if (_archiveCache.inflight) return _archiveCache.inflight;   // 동시에 부른 화면들은 요청 하나를 같이 기다린다
   return _archiveFetch();
 }
-/* 팀 관리가 시작할 때 받은 기록(최근 60일 + 그 이전)으로 전체 캐시를 채움 (v13.258) — 달력 · 타임라인이 같은 1만 건 이상을
+/* 업무일지 탭이 시작할 때 받은 기록(최근 60일 + 그 이전)으로 전체 캐시를 채움 (v13.258) — 달력 · 타임라인이 같은 1만 건 이상을
    처음 들어갈 때 또 내려받지 않게. gen 은 받기 시작할 때 값: 그사이 저장이 있었으면(무효화) 채우지 않음. rows 는 서버 행 모양 */
 function archiveCacheGen() { return _archiveCache.gen; }
 function archiveCachePrime(rows, gen) {

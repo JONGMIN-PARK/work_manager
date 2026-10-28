@@ -86,7 +86,7 @@
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.261';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.262';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div class="hdr-ctl" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -118,7 +118,7 @@
 <div class="con" role="main">
   <!-- 상위 페이지 탭 -->
   <div class="tabs page-tabs" id="pageTabs" role="tablist" aria-label="메인 탭">
-    <button class="tab on" data-page="team" onclick="setPage('team')" role="tab" aria-selected="true" aria-controls="modeTabs">👥 팀 관리</button>
+    <button class="tab on" data-page="team" onclick="setPage('team')" role="tab" aria-selected="true" aria-controls="modeTabs">📒 업무일지</button>
     <button class="tab" data-page="project" onclick="setPage('project')" role="tab" aria-selected="false" aria-controls="modeTabsProj">📁 프로젝트 관리</button>
     <button class="tab" data-page="mywork" onclick="setPage('mywork')" role="tab" aria-selected="false" id="tabMyWork" title="담당 · 마감이 있는 일을 한곳에 — 맵 · 이슈 · 회의 액션 · 사전검토 · 일정 · 개발">🎯 내 업무</button>
     <button class="tab" data-page="workload" onclick="setPage('workload')" role="tab" aria-selected="false" id="tabWorkload" style="display:none" title="누가 언제 일이 몰리는지 — 관리자 · 임원 · 팀장">👥 업무 부하</button>
@@ -129,7 +129,7 @@
     <button class="tab" data-page="patchnotes" onclick="setPage('patchnotes')" role="tab" aria-selected="false">📋 패치노트</button>
   </div>
   <!-- 하위 모드 탭 -->
-  <div class="tabs sub-tabs" id="modeTabs" role="tablist" aria-label="팀 관리 하위 탭">
+  <div class="tabs sub-tabs" id="modeTabs" role="tablist" aria-label="업무일지 하위 탭">
     <button class="tab on" data-m="weekly" onclick="setMode('weekly')" role="tab" aria-selected="true">📋 주간 분석</button>
     <button class="tab" data-m="archive" onclick="setMode('archive')" role="tab" aria-selected="false">🗄️ 아카이브</button>
     <button class="tab" data-m="trend" onclick="setMode('trend')" role="tab" aria-selected="false">📈 트렌드 분석</button>

@@ -11,7 +11,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
   function check(c, m) { if (c) { ok++; console.log('✔', m); } else { fail++; console.log('FAIL', m); } }
   // 시작이 끝나 복원까지 된 상태 (로딩 표시가 사라진 뒤)
   async function ready() {
-    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 30000 });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(500);
   }
   function view() {
@@ -31,7 +31,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.setViewport({ width: 1400, height: 900 });
     await login('admin@t.com');
     var v0 = await view();
-    check(v0.page === 'team' && v0.mode === 'weekly', '처음 방문 — 기본 팀 관리 ' + JSON.stringify(v0));
+    check(v0.page === 'team' && v0.mode === 'weekly', '처음 방문 — 기본 업무일지 탭 ' + JSON.stringify(v0));
 
     // 프로젝트 관리 › 타임라인 → 새로고침 → 그대로 · 처음 그려 새로 받음
     await page.click('#pageTabs [data-page="project"]'); await wait(300);

@@ -662,7 +662,7 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
-     작성 탭 — 편집기 + 라이브 프리뷰 + 팀관리 데이터 인서트
+     작성 탭 — 편집기 + 라이브 프리뷰 + 업무일지 데이터 인서트
      ═══════════════════════════════════════════════════════════ */
 
   function clientParseText(text) { return WRP.parseText(text); }
@@ -1668,7 +1668,7 @@
     while (_recCacheKeys.length > REC_CACHE_MAX) delete _recCache[_recCacheKeys.shift()];
   }
 
-  // 업무일지가 바뀌면(팀 관리 다른파일 병합 등) 기간 캐시를 비운다 — 지금 보고 있으면 바로, 아니면 다음 진입 때 새로 받음
+  // 업무일지가 바뀌면(업무일지 탭 다른파일 병합 등) 기간 캐시를 비운다 — 지금 보고 있으면 바로, 아니면 다음 진입 때 새로 받음
   if (typeof wmDataBus !== 'undefined') wmDataBus.on('workRecord', function () {
     _recCache = {}; _recCacheKeys = []; _recGen++;
     _authorState.workRecordsKey = '';
