@@ -247,6 +247,7 @@ window.wmSplash = (function () {
     if (cur < 0) stage('auth');
     timer = setInterval(tick, 400);
     tipTimer = setInterval(showTip, 4200);
+    setTimeout(done, 90000);   // 최후의 안전장치 — 무슨 일이 있어도 화면을 영영 막지 않게
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else setTimeout(start, 0);

@@ -175,19 +175,24 @@ async function _postAuthInit(){
   var ctx={dataLoaded:false,authReadyHandled:false,cutoff60:_wmCutoffYmd(60)};  // 최근 60일 기준 YYYYMMDD
   // v13.258: 부트스트랩을 수주맵과 동시에 요청 (예전엔 수주맵이 끝난 뒤에야 시작). 실패는 _wmLoadBootstrap 이 처리
   if(_wmServerLoadAllowed()&&_accessToken){ctx.bsP=apiFetch('/api/bootstrap?recentDays=60');ctx.bsP.catch(function(){});}
-  if(typeof loadOrdersToMap==='function')await _wmLoadOrderMap();
-  _wmInitPrelude();
-  _wmListenLateAuth(ctx);
-  // 1단계: 서버 API에서 전체 로드 (모든 기기에서 동일 데이터 보장)
-  if(_wmServerLoadAllowed()&&_accessToken){
-    await _wmLoadFromServer(ctx);
+  // 시작 화면은 화면 전체를 막으므로 중간에 무엇이 실패해도 반드시 닫는다 (finally)
+  try{
+    if(typeof loadOrdersToMap==='function')await _wmLoadOrderMap();
+    _wmInitPrelude();
+    _wmListenLateAuth(ctx);
+    // 1단계: 서버 API에서 전체 로드 (모든 기기에서 동일 데이터 보장)
+    if(_wmServerLoadAllowed()&&_accessToken){
+      await _wmLoadFromServer(ctx);
+    }
+    if(_wmNeedAuthWait(ctx))await _wmWaitAuthAndLoad(ctx);
+  }catch(e){console.error('[init]',e)}
+  finally{
+    try{_wmFinishLoading(ctx);_wmBindUploadUI();
+      // 데이터를 새로 받은 뒤 마지막으로 보던 화면으로 (그 화면도 처음 그리므로 내용은 새로 받음)
+      if(typeof wmRestoreLastView==='function')wmRestoreLastView();
+    }catch(e){console.error('[init finish]',e)}
+    if(window.wmSplash)wmSplash.done();
   }
-  if(_wmNeedAuthWait(ctx))await _wmWaitAuthAndLoad(ctx);
-  _wmFinishLoading(ctx);
-  _wmBindUploadUI();
-  // 데이터를 새로 받은 뒤 마지막으로 보던 화면으로 (그 화면도 처음 그리므로 내용은 새로 받음)
-  if(typeof wmRestoreLastView==='function')wmRestoreLastView();
-  if(window.wmSplash)wmSplash.done();
 }
 
 // 로그인 성공 후 콜백 — auth.js에서 호출

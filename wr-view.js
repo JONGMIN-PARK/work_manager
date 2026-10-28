@@ -64,8 +64,8 @@ function _vsRenderRow(r,idx,editable){
       +'<td style="word-break:keep-all"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:'+c+'"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="'+eH(r.name)+'">'+eH(dn)+'</span></span></td>'
       +'<td class="mono" style="color:var(--t4);white-space:nowrap">'+fD(r.date)+'</td>'
       +'<td class="mono" style="color:var(--ac-t);word-break:break-all" title="'+eH(curOrder)+'">'+eH(curOrder)+'</td>'
-      +'<td style="font-size:11px;color:var(--t5);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curOcmt)+'">'+eH(curOcmt)+'</td>'
-      +'<td style="font-size:10px;color:var(--t5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curClient)+'">'+eH(curClient)+'</td>'
+      // v13.264 수주명 · 거래처를 한 칸에 붙여서 (두 칸에 나뉘어 멀리 떨어져 보이던 것)
+      +'<td colspan="2" class="oc-cell" title="'+eH((curOcmt||'')+(curClient?' · '+curClient:''))+'"><span class="oc-nm">'+(curOcmt?eH(curOcmt):'<span class="oc-none">수주명 없음</span>')+'</span>'+(curClient?'<span class="oc-cl">'+eH(curClient)+'</span>':'')+'</td>'
       +'<td class="mono" style="text-align:right;color:#F59E0B;font-weight:600;white-space:nowrap">'+curHours+'</td>'
       +'<td style="font-size:11px;color:var(--c-t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curTask)+'">'+eH(curTask)+'</td>'
       +'<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curAbbr)+'"><span class="badge" style="background:'+(ABG[curAbbr]||'#1A1F35')+';color:'+(AFG[curAbbr]||'#94A3B8')+'">'+curAbbr+'</span></td>'

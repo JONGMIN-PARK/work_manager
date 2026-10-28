@@ -112,7 +112,15 @@ async function apiFetch(url, opts) {
 }
 
 var _refreshUser = null;
-async function _tryRefresh() {
+// 동시에 여러 곳이 갱신을 부르면 하나의 요청을 같이 기다린다 — refresh 토큰은 한 번 쓰면 바뀌어서,
+// 시작 중(토큰 복원 전)에 다른 화면 요청이 401 로 갱신을 또 부르면 둘 중 하나가 실패해 로그아웃되던 문제
+var _refreshP = null;
+function _tryRefresh() {
+  if (_refreshP) return _refreshP;
+  _refreshP = _doRefresh().then(function (ok) { _refreshP = null; return ok; });
+  return _refreshP;
+}
+async function _doRefresh() {
   try {
     var controller = new AbortController();
     // Render Free 플랜 콜드 스타트(30~60초) 대비 — 8s → 35s

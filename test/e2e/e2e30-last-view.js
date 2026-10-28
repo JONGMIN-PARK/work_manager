@@ -44,6 +44,10 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(await page.evaluate(function () { return !!document.querySelector('#mTimeline .tl-label, #mTimeline [class*="tl-"]'); }), '타임라인 내용이 그려짐');
     check(await page.evaluate(function () { return !document.querySelector('#modeTabsProj .tab.on[data-m="pipeline"]'); }), '파이프라인을 먼저 그리지 않음 (하위 탭 하나만)');
 
+    // 토큰 갱신이 동시에 불려도 요청 하나 — 한 번 쓰면 바뀌는 refresh 토큰이라 둘이 따로 가면 하나가 실패해 로그아웃됐다
+    var rf = await page.evaluate(async function () { var n = 0, of = window.fetch; window.fetch = function (u) { if (/\/auth\/refresh/.test(String(u))) n++; return of.apply(this, arguments); }; var r = await Promise.all([_tryRefresh(), _tryRefresh(), _tryRefresh()]); window.fetch = of; var me = await apiFetch('/api/auth/me'); return { r: r, n: n, me: !!(me && me.data) }; });
+    check(rf.r.every(Boolean) && rf.n === 1 && rf.me, '동시 토큰 갱신 — 요청 1번 · 로그인 유지 ' + JSON.stringify(rf));
+
     // 하위 탭 없는 페이지 — 주간 업무
     await page.click('#pageTabs [data-page="weekly_report"]'); await wait(500);
     await page.reload({ waitUntil: 'networkidle2' });
@@ -70,7 +74,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(pn.tab === 'none' && pn.page !== 'patchnotes', '팀원 — 패치노트 탭 숨김 · 열리지 않음 ' + JSON.stringify(pn));
     check(errs.length === 0, '화면 오류 없음 ' + JSON.stringify(errs));
     console.log(fail ? 'FAILED ' + fail : 'ALL PASS ' + ok, errs);
-  } catch (e) { console.log('ERR', e.message); } finally {
+  } catch (e) { console.log('ERR', e.message); try { console.log('STATE', JSON.stringify(await page.evaluate(function () { var on = document.querySelector('#wmSpSteps li.on'); return { splash: !!document.getElementById('initLoading'), step: on && on.dataset.k, user: !!(typeof currentUser !== 'undefined' && currentUser), tok: typeof _accessToken !== 'undefined' && !!_accessToken, initDone: typeof _initDone !== 'undefined' && _initDone, page: curPage, login: (document.getElementById('loginOverlay') || {}).style && document.getElementById('loginOverlay').style.display, url: location.href }; }))); } catch (e2) { console.log('STATE?', e2.message); } } finally {
     await browser.close();
   }
 })();

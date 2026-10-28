@@ -70,29 +70,72 @@ function renderWeekSelector(){
     filtered=yearFiltered.filter(function(w){return w.start.slice(4,6)===weekMonthFilter});
   }
   const cntEl=document.getElementById('weekSelCount');
-  if(cntEl)cntEl.textContent=selWeek?'(선택: '+selWeek.label+')':'(전체 '+filtered.length+'주)';
-  if(!filtered.length){el.innerHTML='<span style="font-size:11px;color:var(--t6)">해당 기간 데이터 없음</span>';return}
-  // 오늘이 속한 주 찾기
+  if(cntEl){
+    // 버튼에는 짧게 — 한 주면 'W15 · 04/12 ~ 04/18', 그 밖의 기간은 라벨 그대로
+    var lab='전체 기간';
+    if(selWeek){
+      var one=selWeek.end===getSatEnd(selWeek.start);
+      if(one){var s0=selWeek.start,dt0=new Date(+s0.slice(0,4),+s0.slice(4,6)-1,+s0.slice(6,8));lab='W'+String(getISOWeek(dt0)).padStart(2,'0')+' · '+s0.slice(4,6)+'/'+s0.slice(6,8)+' ~ '+selWeek.end.slice(4,6)+'/'+selWeek.end.slice(6,8)}
+      else lab=selWeek.label;
+    }
+    cntEl.textContent=lab;
+    cntEl.title=selWeek?selWeek.label:'모든 주';
+  }
+  if(!filtered.length){el.innerHTML='<div class="wq-empty">해당 기간 데이터 없음</div>';return}
   const today=todayStr();
   const todaySun=getSunStart(today);
-  let html='<span class="chip '+(selWeek===null?'cn':'co')+'" style="padding:4px 10px;font-size:11px" onclick="pickWeek(null)">전체</span>';
+  var maxC=filtered.reduce(function(m,w){return Math.max(m,w.count)},1);
+  let html='<div class="wq-row'+(selWeek===null?' on':'')+'" role="option" onclick="pickWeek(null);wqClose()"><span class="wq-wk">전체</span><span class="wq-rg">모든 주</span><span class="wq-cnt">'+aD.length.toLocaleString()+'건</span></div>';
+  var lastYM='';
   filtered.forEach(function(w){
+    var ym=w.start.slice(0,6);
+    if(ym!==lastYM){lastYM=ym;html+='<div class="wq-grp">'+ym.slice(0,4)+'년 '+(+ym.slice(4,6))+'월</div>'}
     const isSel=selWeek&&(selWeek.start===w.start||(w.start>=selWeek.start&&w.start<=selWeek.end));
     const isToday=w.start===todaySun;
-    const badge=isToday?' <span style="font-size:9px;color:'+SEM_COLOR.ok+'">●오늘</span>':'';
-    var chipStyle='padding:4px 10px;font-size:11px';
-    if(isSel)chipStyle+=';border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)';
-    else if(isToday)chipStyle+=';border-color:'+SEM_COLOR.ok;
-    html+='<span class="chip '+(isSel?'cn':'co')+'" style="'+chipStyle
-      +'" onclick="pickWeek(\''+w.start+'\')" title="'+w.count+'건">'+w.label+badge+' <span style="font-size:9px;color:var(--t6)">('+w.count+')</span></span>';
+    var dt=new Date(+w.start.slice(0,4),+w.start.slice(4,6)-1,+w.start.slice(6,8));
+    html+='<div class="wq-row'+(isSel?' on':'')+(isToday?' today':'')+'" role="option" aria-selected="'+(!!isSel)+'" data-wk="'+w.start+'" onclick="pickWeek(\''+w.start+'\');wqClose()">'
+      +'<span class="wq-wk">W'+String(getISOWeek(dt)).padStart(2,'0')+'</span>'
+      +'<span class="wq-rg">'+w.start.slice(4,6)+'/'+w.start.slice(6,8)+' ~ '+w.end.slice(4,6)+'/'+w.end.slice(6,8)+(isToday?' <em>오늘</em>':'')+'</span>'
+      +'<span class="wq-bar-s"><i style="width:'+Math.max(4,Math.round(w.count/maxC*100))+'%"></i></span>'
+      +'<span class="wq-cnt">'+w.count.toLocaleString()+'건</span></div>';
   });
   el.innerHTML=html;
 }
+/* ◀ ▶ — 이전 · 다음 주 (dir 1 = 더 옛날). 전체 보기 중이면 가장 최근 주부터 */
+function stepWeek(dir){
+  var weeks=buildWeekList();if(!weeks.length)return;
+  var i=selWeek?weeks.findIndex(function(w){return w.start===selWeek.start}):-1;
+  var j=i<0?0:i+dir;
+  if(j<0||j>=weeks.length){showToast(dir>0?'더 이전 주가 없습니다.':'가장 최근 주입니다.','warn');return}
+  pickWeek(weeks[j].start);
+}
+/* 조회 조건 팝업 (주차 · 팀원) — 한 번에 하나, 바깥 클릭 · Esc 로 닫음 */
+function wqToggle(id){
+  var el=document.getElementById(id);if(!el)return;
+  var open=!el.classList.contains('open');
+  wqClose();
+  if(!open)return;
+  el.classList.add('open');
+  if(id==='wqWeek'){var on=el.querySelector('.wq-row.on[data-wk]');if(on)on.scrollIntoView({block:'center'})}
+  if(id==='wqName'){var f=document.getElementById('nameFind');if(f&&window.matchMedia&&matchMedia('(hover:hover)').matches)f.focus()}
+}
+function wqClose(){document.querySelectorAll('.wq-dd.open').forEach(function(d){d.classList.remove('open')})}
+document.addEventListener('mousedown',function(e){if(!e.target.closest||e.target.closest('.wq-dd'))return;wqClose()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')wqClose()});
+/* 상세 필터 접기 · 펼치기 (기억) */
+function wqFilterToggle(force){
+  var box=document.getElementById('wqFilters'),btn=document.getElementById('wqFilterBtn');if(!box)return;
+  var show=typeof force==='boolean'?force:box.classList.contains('hidden');
+  box.classList.toggle('hidden',!show);
+  if(btn){btn.classList.toggle('on',show);btn.setAttribute('aria-expanded',show)}
+  try{localStorage.setItem('wm-wq-filters',show?'1':'0')}catch(e){}
+}
+(function(){function init(){try{if(localStorage.getItem('wm-wq-filters')==='1')wqFilterToggle(true)}catch(e){}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init()})();
 /* 기간 드롭다운으로 선택 (연도/분기/월) */
 function pickPeriod(){
   renderWeekSelector();
   // 아무 필터도 없으면 전체
-  if(!weekYearFilter&&!weekQtrFilter&&!weekMonthFilter){selWeek=null;gfInvalidate();rFL();upV();return}
+  if(!weekYearFilter&&!weekQtrFilter&&!weekMonthFilter){selWeek=null;gfInvalidate();if(aN.length)rNC();rFL();upV();return}
   var y=weekYearFilter||new Date().getFullYear().toString();
   var s,e;
   if(weekMonthFilter){
@@ -119,7 +162,7 @@ function pickPeriod(){
   document.getElementById('weekLabel').value='';
   document.getElementById('weekAutoLabel').textContent='('+selWeek.label+')';
   renderWeekSelector();
-  gfInvalidate();rFL();upV();
+  gfInvalidate();if(aN.length)rNC();rFL();upV();
 }
 /* 날짜 범위 직접 선택 */
 function pickDateRange(){
@@ -133,7 +176,7 @@ function pickDateRange(){
   document.getElementById('weekLabel').value='';
   document.getElementById('weekAutoLabel').textContent='('+selWeek.label+')';
   renderWeekSelector();
-  gfInvalidate();rFL();upV();
+  gfInvalidate();if(aN.length)rNC();rFL();upV();
 }
 /* 주차 선택 */
 function pickWeek(sunStart){
@@ -155,7 +198,7 @@ function pickWeek(sunStart){
     document.getElementById('weekLabel').value=s.slice(0,4)+'-W'+String(wk).padStart(2,'0');
     document.getElementById('weekAutoLabel').textContent='('+selWeek.label+')';
   }
-  gfInvalidate();rFL();upV();
+  gfInvalidate();if(aN.length)rNC();rFL();upV();
 }
 /* applyADToUI 후 주차 선택기 초기화 — v13.60: 항상 한 주만 자동 선택 (성능)
  * 우선순위: ① localStorage에 저장된 마지막 선택 (해당 주가 데이터에 있을 때)
@@ -195,33 +238,54 @@ function rNC(){
   }else{
     list=[...aN];
   }
-  // 사업부별 그룹핑
+  // 이름 찾기
+  var q=((document.getElementById('nameFind')||{}).value||'').trim().toLowerCase();
+  var shown=q?list.filter(function(n){var dn=typeof shortName==='function'?shortName(n):n;return n.toLowerCase().indexOf(q)>=0||String(dn).toLowerCase().indexOf(q)>=0}):list;
+  // 지금 기간의 사람별 건수 · 시간 — 누가 기록이 있는지 한눈에
+  var stat={};
+  aD.forEach(function(r){if(selWeek&&(r.date<selWeek.start||r.date>selWeek.end))return;var o=stat[r.name]||(stat[r.name]={c:0,h:0});o.c++;o.h+=r.hours||0});
+  var rowFn=function(name){const i=aN.indexOf(name),on=sN.has(name),c=COL[i%COL.length],f=fvN.includes(name);const dn=typeof shortName==='function'?shortName(name):name;const hasAlias=typeof getAlias==='function'&&getAlias(name);const st=stat[name];
+    return '<div class="wq-row wq-nm'+(on?' on':'')+(st?'':' none')+'" role="option" aria-selected="'+on+'" onclick="togN('+i+')" title="'+eH(name)+'">'
+      +'<span class="wq-cb" style="'+(on?'background:'+c+';border-color:'+c:'')+'"></span>'
+      +'<span class="dot" style="background:'+c+'"></span>'
+      +'<span class="wq-nmt">'+(f?'⭐':'')+eH(hasAlias?dn:name)+(hasAlias&&dn!==name?' <em>'+eH(name)+'</em>':'')+'</span>'
+      +'<span class="wq-cnt">'+(st?(Math.round(st.h*10)/10)+'h · '+st.c+'건':'기록 없음')+'</span>'
+      +'<button class="wq-only" type="button" onclick="event.stopPropagation();togOnly('+i+')" title="이 사람만">만</button></div>'};
   var dm=getDeptMembers();var deptKeys=Object.keys(dm).sort(function(a,b){return a.localeCompare(b,'ko')});
-  var chipFn=function(name){const i=aN.indexOf(name),on=sN.has(name),c=COL[i%COL.length],f=fvN.includes(name);const dn=typeof shortName==='function'?shortName(name):name;const hasAlias=typeof getAlias==='function'&&getAlias(name);const nmText=hasAlias?dn:name;return`<span class="chip ${on?'cn':'co'}" style="${on?'border-color:'+c:''}" onclick="togN(${i})" title="${eH(name)}"><span class="dot" style="background:${c}"></span>${f?'⭐':''}<span class="chip-nm">${eH(nmText)}</span></span>`};
   var html='';
   if(deptKeys.length>=2){
-    // 사업부가 2개 이상이면 그룹별로 표시
     var assigned=new Set();
     deptKeys.forEach(function(d){
-      var members=list.filter(function(n){return dm[d]&&dm[d].has(n)});
+      var members=shown.filter(function(n){return dm[d]&&dm[d].has(n)&&!assigned.has(n)});
       if(!members.length)return;
       members.forEach(function(n){assigned.add(n)});
-      html+='<div style="margin-bottom:6px"><div style="font-size:9px;font-weight:700;color:var(--t5);margin-bottom:3px;letter-spacing:.5px">'+eH(d)+'</div><div style="display:flex;gap:5px;flex-wrap:wrap">'+members.map(chipFn).join('')+'</div></div>';
+      html+='<div class="wq-grp">'+eH(d)+'</div>'+members.map(rowFn).join('');
     });
-    var unassigned=list.filter(function(n){return!assigned.has(n)});
-    if(unassigned.length){
-      html+='<div style="margin-bottom:6px"><div style="font-size:9px;font-weight:700;color:var(--t6);margin-bottom:3px">미지정</div><div style="display:flex;gap:5px;flex-wrap:wrap">'+unassigned.map(chipFn).join('')+'</div></div>';
-    }
+    var unassigned=shown.filter(function(n){return!assigned.has(n)});
+    if(unassigned.length)html+='<div class="wq-grp">미지정</div>'+unassigned.map(rowFn).join('');
   }else{
-    html=list.map(chipFn).join('');
+    html=shown.map(rowFn).join('');
   }
+  if(!html)html='<div class="wq-empty">'+(q?'"'+eH(q)+'" 없음':'팀원 없음')+'</div>';
   document.getElementById('nameChips').innerHTML=html;
   const sc=[...sN].filter(n=>list.includes(n)).length;
-  document.getElementById('nameCount').textContent=`(${sc}/${list.length})`;
+  document.getElementById('nameCount').textContent=sc?sc+'/'+list.length:'';
+  // 버튼 요약 · 아래 고른 사람 태그 (× 로 빼기)
+  var sel=aN.filter(function(n){return sN.has(n)});
+  var nm=function(n){return typeof shortName==='function'?shortName(n):n};
+  var sum=document.getElementById('nameSum');
+  if(sum){sum.textContent=!sel.length?'선택 안 함':sel.length===aN.length?'전원':sel.length<=2?sel.map(nm).join(', '):nm(sel[0])+', '+nm(sel[1])+' 외 '+(sel.length-2)+'명';sum.title=sel.map(nm).join(', ')}
+  var ns=document.getElementById('nameSel');
+  if(ns){
+    var MAX=12;
+    ns.innerHTML=sel.slice(0,MAX).map(function(n){var i=aN.indexOf(n),c=COL[i%COL.length];return'<span class="ft wq-nt" style="border-color:'+c+'"><span class="dot" style="background:'+c+'"></span>'+eH(nm(n))+'<span class="tx" onclick="togN('+i+')" title="빼기">&times;</span></span>'}).join('')
+      +(sel.length>MAX?'<span class="ft wq-more" onclick="wqToggle(\'wqName\')">+'+(sel.length-MAX)+'명</span>':'')
+      +(!sel.length&&aN.length?'<span class="wq-hint" onclick="wqToggle(\'wqName\')">👤 팀원을 고르면 기록이 보입니다</span>':'');
+  }
   if(typeof updateGroupButtons==='function')updateGroupButtons();
   renderDeptBtns();
 }
-let multiSel=false;
+let multiSel=true;   // v13.264 팀원 목록은 체크 목록 — 늘 여러 명 (한 명만은 줄의 '만')
 let cmpMode=false;
 /* compare vars declared in COMPARE section */
 function togMultiSel(){multiSel=document.getElementById('multiSelTog').checked;document.getElementById('selAllBtn').classList.toggle('hidden',!multiSel);if(!multiSel){cmpMode=false;document.getElementById('cmpTog').checked=false;document.getElementById('cmpPanel').classList.add('hidden');document.getElementById('cmpLabel').classList.add('hidden')}}
@@ -238,7 +302,8 @@ function syncCmpVisibility(){
   }
 }
 function togN(i){const n=aN[i];if(multiSel){sN.has(n)?sN.delete(n):sN.add(n)}else{const wasOnly=sN.size===1&&sN.has(n);sN.clear();if(!wasOnly)sN.add(n)}gfInvalidate();syncCmpVisibility();rNC();rFL();upOP();upVD()}
-function selAll(){if(!multiSel)return;const l=getVisibleNames();l.forEach(n=>sN.add(n));gfInvalidate();syncCmpVisibility();rNC();rFL();upOP();upVD()}
+function togOnly(i){sN.clear();sN.add(aN[i]);gfInvalidate();syncCmpVisibility();rNC();rFL();upOP();upVD()}
+function selAll(){const l=getVisibleNames();l.forEach(n=>sN.add(n));gfInvalidate();syncCmpVisibility();rNC();rFL();upOP();upVD()}
 function getVisibleNames(){if(typeof activeGroupId!=='undefined'&&activeGroupId){const g=typeof getGroup==='function'?getGroup(activeGroupId):null;return g?aN.filter(n=>g.members.includes(n)):aN}return fvO&&fvN.length>0?vN:[...aN]}
 function deAll(){sN.clear();gfInvalidate();syncCmpVisibility();rNC();rFL();upOP();upVD()}
 
@@ -329,7 +394,7 @@ function rONL(){const q=(document.getElementById('onSearch')||{}).value||'';cons
 function rCLL(){const q=(document.getElementById('clSearch')||{}).value||'';const ql=q.toLowerCase();const filtered=q?avCL.filter(([cl])=>cl.toLowerCase().includes(ql)):avCL;document.getElementById('clLB').innerHTML=filtered.map(([cl,c])=>{const on=sCL.has(cl);return`<div class="li ${on?'ck':''}" onclick="togCL('${eA(cl)}')"><span class="cb2">${on?'✓':''}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">${eH(cl)}</span><span style="font-size:9px;color:var(--t6)" class="mono">${c}</span></div>`}).join('')||'<div style="padding:10px;text-align:center;color:var(--t6);font-size:10px">'+(q?'검색 결과 없음':'팀원 선택 필요')+'</div>';document.getElementById('clFC').textContent=sCL.size>0?`(${sCL.size})`:''}
 
 function clrS(){cKw='';document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');gfInvalidate();upV()}
-function resetAll(){selWeek=null;renderWeekSelector();sO.clear();sT.clear();sON.clear();sCL.clear();sDV.clear();cKw='';document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');gfInvalidate();rOL();rTL();rONL();rCLL();rDVL();upOP();upV()}
+function resetAll(){sO.clear();sT.clear();sON.clear();sCL.clear();sDV.clear();cKw='';document.getElementById('cSearch').value='';document.getElementById('sClear').classList.add('hidden');gfInvalidate();rOL();rTL();rONL();rCLL();rDVL();upOP();upV()}
 var _siTimer;
 function onSI(){cKw=document.getElementById('cSearch').value.trim();document.getElementById('sClear').classList.toggle('hidden',!cKw);gfInvalidate();clearTimeout(_siTimer);_siTimer=setTimeout(upV,200)}
 function togExcludeVac(el){excludeVac=!!el.checked;try{localStorage.setItem('wm_excludeVac',excludeVac?'1':'0')}catch(e){}gfInvalidate();upV()}
@@ -378,7 +443,7 @@ function gF(){
   _gfDirty=false;return _gfCache
 }
 function hAF(){return sO.size>0||sT.size>0||sON.size>0||sCL.size>0||sDV.size>0||!!cKw||!!selWeek}
-function rAFT(){const t=[];if(selWeek)t.push({y:'w',l:'주차:'+selWeek.label,v:''});sO.forEach(o=>t.push({y:'o',l:'수주:'+o,v:o}));sT.forEach(x=>t.push({y:'t',l:AM[x]||x,v:x}));if(cKw)t.push({y:'s',l:'검색:"'+cKw+'"',v:''});document.getElementById('afTags').innerHTML=t.map(x=>`<span class="ft">${eH(x.l)}<span class="tx" onclick="rmFT('${x.y}','${eA(x.v)}')">&times;</span></span>`).join('');document.getElementById('resetBtn').classList.toggle('hidden',t.length===0)}
-function rmFT(y,v){if(y==='w'){selWeek=null;weekYearFilter='';weekQtrFilter='';weekMonthFilter='';var ys=document.getElementById('weekYearSel');if(ys)ys.value='';var qs=document.getElementById('weekQtrSel');if(qs)qs.value='';var ms=document.getElementById('weekMonthSel');if(ms)ms.value='';renderWeekSelector()}if(y==='o'){sO.delete(v);rOL()}if(y==='t'){sT.delete(v);rTL()}if(y==='s')clrS();gfInvalidate();upV()}
+function rAFT(){const t=[];sO.forEach(o=>t.push({y:'o',l:'수주:'+o,v:o}));sT.forEach(x=>t.push({y:'t',l:AM[x]||x,v:x}));sON.forEach(x=>t.push({y:'on',l:'수주명:'+x,v:x}));sCL.forEach(x=>t.push({y:'cl',l:'거래처:'+x,v:x}));sDV.forEach(x=>t.push({y:'dv',l:'사업부:'+x,v:x}));if(cKw)t.push({y:'s',l:'검색:"'+cKw+'"',v:''});document.getElementById('afTags').innerHTML=t.map(x=>`<span class="ft">${eH(x.l)}<span class="tx" onclick="rmFT('${x.y}','${eA(x.v)}')">&times;</span></span>`).join('');document.getElementById('resetBtn').classList.toggle('hidden',t.length===0);var fn=document.getElementById('wqFilterN');if(fn){var n=sO.size+sT.size+sON.size+sCL.size+sDV.size;fn.textContent=n?n:''}}
+function rmFT(y,v){if(y==='w'){selWeek=null;weekYearFilter='';weekQtrFilter='';weekMonthFilter='';var ys=document.getElementById('weekYearSel');if(ys)ys.value='';var qs=document.getElementById('weekQtrSel');if(qs)qs.value='';var ms=document.getElementById('weekMonthSel');if(ms)ms.value='';renderWeekSelector()}if(y==='o'){sO.delete(v);rOL()}if(y==='t'){sT.delete(v);rTL()}if(y==='on'){sON.delete(v);rONL()}if(y==='cl'){sCL.delete(v);rCLL()}if(y==='dv'){sDV.delete(v);rDVL()}if(y==='s')clrS();gfInvalidate();upV()}
 function gTC(){const s=getComputedStyle(document.documentElement);return{g:s.getPropertyValue('--cg').trim(),t:s.getPropertyValue('--ct').trim(),l:s.getPropertyValue('--cl').trim()}}
 
