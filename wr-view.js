@@ -16,6 +16,7 @@ function rTbl(f){
   document.getElementById('editStatus').style.display='none';
   document.getElementById('thChk').style.display='none';
   document.getElementById('delBar').classList.remove('show');
+  var wt=document.getElementById('wrTbl');if(wt)wt.classList.remove('ed');
   document.getElementById('tInfo').textContent=f.length+'건·'+sN.size+'명'+(hAF()?' (필터)':'');
   const tb=document.getElementById('tBody');
   if(!f.length){_vsData=[];tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--t6);padding:30px">결과 없음</td></tr>';document.getElementById('contentSummary').innerHTML='';return}
@@ -62,13 +63,13 @@ function _vsRenderRow(r,idx,editable){
   }else{
     return'<tr style="'+(hasEdit?'background:rgba(245,158,11,.06)':'')+'">'
       +'<td style="word-break:keep-all"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:'+c+'"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="'+eH(r.name)+'">'+eH(dn)+'</span></span></td>'
-      +'<td class="mono" style="color:var(--t4);white-space:nowrap">'+fD(r.date)+'</td>'
-      +'<td class="mono" style="color:var(--ac-t);word-break:break-all" title="'+eH(curOrder)+'">'+eH(curOrder)+'</td>'
+      +'<td class="mono" style="color:var(--t4);white-space:nowrap" title="'+fD(r.date)+'"><span class="d-y">'+r.date.slice(0,4)+'-</span>'+r.date.slice(4,6)+'-'+r.date.slice(6,8)+'</td>'
+      +'<td class="mono c-on" style="color:var(--ac-t);word-break:break-all" title="'+eH(curOrder)+'">'+eH(curOrder)+'</td>'
       // v13.264 수주명 · 거래처를 한 칸에 붙여서 (두 칸에 나뉘어 멀리 떨어져 보이던 것)
       +'<td colspan="2" class="oc-cell" title="'+eH((curOcmt||'')+(curClient?' · '+curClient:''))+'"><span class="oc-nm">'+(curOcmt?eH(curOcmt):'<span class="oc-none">수주명 없음</span>')+'</span>'+(curClient?'<span class="oc-cl">'+eH(curClient)+'</span>':'')+'</td>'
       +'<td class="mono" style="text-align:right;color:#F59E0B;font-weight:600;white-space:nowrap">'+curHours+'</td>'
-      +'<td style="font-size:11px;color:var(--c-t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curTask)+'">'+eH(curTask)+'</td>'
-      +'<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curAbbr)+'"><span class="badge" style="background:'+(ABG[curAbbr]||'#1A1F35')+';color:'+(AFG[curAbbr]||'#94A3B8')+'">'+curAbbr+'</span></td>'
+      +'<td class="c-task" style="font-size:11px;color:var(--c-t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curTask)+'">'+eH(curTask)+'</td>'
+      +'<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curAbbr)+(AM[curAbbr]?' · '+eH(AM[curAbbr]):'')+'"><span class="badge" style="background:'+(ABG[curAbbr]||'#1A1F35')+';color:'+(AFG[curAbbr]||'#94A3B8')+'">'+curAbbr+'</span></td>'
       +'<td style="color:var(--t3);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curContent)+'">'+ch+'</td>'
       +'</tr>';
   }
@@ -152,6 +153,7 @@ function togEdit(){
   document.getElementById('editApplyBtn').classList.toggle('hidden',!editMode);
   document.getElementById('editCancelBtn').classList.toggle('hidden',!editMode);
   document.getElementById('thChk').style.display=editMode?'':'none';
+  var wt=document.getElementById('wrTbl');if(wt)wt.classList.toggle('ed',editMode);   // 휴대폰 좁은 표는 보기 모드에서만
   document.getElementById('delBar').classList.remove('show');
   var thChkInput=document.querySelector('#thChk input');if(thChkInput)thChkInput.checked=false;
   renderTblRows(lastFiltered,editMode);

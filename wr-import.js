@@ -432,13 +432,16 @@ function applyADToUI(){
   document.getElementById('cSearch').value=cKw;
   document.getElementById('sClear').classList.toggle('hidden',!cKw);
   document.getElementById('fileInfo').classList.remove('hidden');document.getElementById('rcDisp').textContent=aD.length;document.getElementById('uploadZone').classList.add('hidden');document.getElementById('mainArea').classList.remove('hidden');
+  /* v13.265 처음 기록이 들어올 때 — 마지막으로 보던 주간 분석 상태 되살리기 */
+  var _wv=(!_wvRestored&&aD.length&&!prevSN.size&&typeof wvRestoreSel==='function')?wvRestoreSel():null;
   /* 이전 선택이 하나도 없었을 때만 즐겨찾기로 초기 선택 */
-  if(sN.size===0&&fvN.length>0){aN.forEach(n=>{if(fvN.includes(n))sN.add(n)});if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}}
+  if(sN.size===0&&fvN.length>0&&!_wv){aN.forEach(n=>{if(fvN.includes(n))sN.add(n)});if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}}
   if(sN.size>1){multiSel=true;document.getElementById('multiSelTog').checked=true;document.getElementById('selAllBtn').classList.remove('hidden')}
   const dates=[...new Set(aD.map(r=>r.date))].sort();if(dates.length>0){const d=dates[0];const dt=new Date(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8));const wk=getISOWeek(dt);document.getElementById('weekLabel').value=d.slice(0,4)+'-W'+String(wk).padStart(2,'0');document.getElementById('weekAutoLabel').textContent=`(${fD(dates[0])} ~ ${fD(dates[dates.length-1])})`}
   initWeekSelector();syncCmpVisibility();rNC();rFL();upV();document.getElementById('sumOut').innerHTML='<div style="text-align:center;color:var(--t6);padding:30px;font-size:12px">위 "요약 생성" 버튼을 눌러주세요.</div>';
   if(typeof mtrInit==='function')mtrInit();
   if(typeof mtrCInit==='function')mtrCInit();
+  if(!_wvRestored&&aD.length&&typeof wvRestoreView==='function')wvRestoreView(_wv);
 }
 
 /* v13.263 파일 불러오기 진행 표시 — 고르는 창(갱신/대체 · 미리보기)이 뜰 땐 감추고 다시 띄움 */

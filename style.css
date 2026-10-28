@@ -2555,3 +2555,21 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .oc-nm{display:inline-block;max-width:calc(100% - 96px);overflow:hidden;text-overflow:ellipsis;font-size:11px;font-weight:500;color:var(--t2)}
 .oc-none{color:var(--t6);font-weight:400;font-style:italic}
 .oc-cl{display:inline-block;max-width:90px;overflow:hidden;text-overflow:ellipsis;margin-left:8px;font-size:10px;color:var(--t4);background:var(--bg-i);border:1px solid var(--bd);border-radius:10px;padding:1px 8px}
+
+/* v13.265 휴대폰 업무일지 상세 표 — 칸을 좁혀 옆으로 덜 밀게 (보기 모드만, 편집 모드는 그대로)
+ * 날짜는 연도 빼고 MM-DD · 업무분장 칸은 약자 배지로 대신(누르고 있으면 이름) · 수주번호는 한 줄 */
+@media (max-width:700px){
+  #wrTbl:not(.ed){min-width:620px!important}
+  #wrTbl:not(.ed) th,#wrTbl:not(.ed) td{padding-left:5px;padding-right:5px}
+  #wrTbl:not(.ed) .c-nm{width:50px!important}
+  #wrTbl:not(.ed) .c-dt{width:44px!important}
+  #wrTbl:not(.ed) .c-on{width:86px!important}
+  #wrTbl:not(.ed) td.c-on{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal!important}
+  #wrTbl:not(.ed) .oc-th{width:150px!important}
+  #wrTbl:not(.ed) .oc-th2{width:0!important;padding:0!important}
+  #wrTbl:not(.ed) .c-hr{width:38px!important}
+  #wrTbl:not(.ed) .c-ab{width:40px!important}
+  #wrTbl:not(.ed) .c-task,#wrTbl:not(.ed) .d-y{display:none}
+  #wrTbl:not(.ed) .oc-nm{max-width:calc(100% - 62px)}
+  #wrTbl:not(.ed) .oc-cl{max-width:58px;margin-left:4px;padding:1px 5px}
+}

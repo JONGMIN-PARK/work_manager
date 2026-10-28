@@ -80,7 +80,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" onerror="console.warn('mammoth.js 로드 실패')"></script>
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=45">
+<link rel="stylesheet" href="style.css?v=46">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -111,7 +111,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge"></span><script>var WM_VERSION='13.264';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge"></span><script>var WM_VERSION='13.265';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div class="hdr-ctl" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -300,7 +300,7 @@
           <button class="tab" data-t="sum" onclick="sTab('sum')">📝 내용요약</button>
         </div>
         <!-- Table -->
-        <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span class="del-bar" id="delBar"><span class="del-count" id="delCount">0건 선택</span><button class="btn btn-d btn-s" onclick="deleteSelected()">🗑️ 선택 삭제</button></span><span class="mob-sep" style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button><button class="btn btn-p btn-s" onclick="openManualInput()" title="수동 입력">➕ 수동입력</button></div></div><div class="tw"><table style="table-layout:fixed;width:100%;min-width:1040px"><thead><tr><th id="thChk" style="width:30px;display:none"><input type="checkbox" class="del-chk" onchange="toggleSelectAll(this)" title="전체 선택"></th><th style="width:70px;white-space:nowrap">이름</th><th style="width:75px;white-space:nowrap">날짜</th><th style="width:110px;white-space:nowrap">수주번호</th><th class="oc-th" style="width:21%">수주명 · 거래처</th><th class="oc-th2" style="width:10%"></th><th style="width:78px;text-align:right;white-space:nowrap">시간</th><th style="width:88px;white-space:nowrap">업무분장</th><th style="width:56px;white-space:nowrap">약자</th><th style="width:auto">업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div></div>
+        <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span class="del-bar" id="delBar"><span class="del-count" id="delCount">0건 선택</span><button class="btn btn-d btn-s" onclick="deleteSelected()">🗑️ 선택 삭제</button></span><span class="mob-sep" style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button><button class="btn btn-p btn-s" onclick="openManualInput()" title="수동 입력">➕ 수동입력</button></div></div><div class="tw"><table id="wrTbl" style="table-layout:fixed;width:100%;min-width:1040px"><thead><tr><th id="thChk" style="width:30px;display:none"><input type="checkbox" class="del-chk" onchange="toggleSelectAll(this)" title="전체 선택"></th><th class="c-nm" style="width:70px;white-space:nowrap">이름</th><th class="c-dt" style="width:75px;white-space:nowrap">날짜</th><th class="c-on" style="width:110px;white-space:nowrap">수주번호</th><th class="oc-th" style="width:21%">수주명 · 거래처</th><th class="oc-th2" style="width:10%"></th><th class="c-hr" style="width:78px;text-align:right;white-space:nowrap">시간</th><th class="c-task" style="width:88px;white-space:nowrap">업무분장</th><th class="c-ab" style="width:56px;white-space:nowrap">약자</th><th style="width:auto">업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div></div>
         </div>
         <!-- Content Summary (separate tab, no filter) -->
         <div id="tSum" class="hidden">
@@ -490,13 +490,13 @@
 <!-- 앱 스크립트 — 예전 인라인 <script> 를 나눈 파일들. 동기 로드(defer 금지) · 이 순서 그대로 (app-init.js 가 마지막) -->
 <script src="wm-fallbacks.js?v=3" onerror="console.warn('wm-fallbacks.js 로드 실패')"></script>
 <script src="wm-state.js?v=2" onerror="console.warn('wm-state.js 로드 실패')"></script>
-<script src="wr-import.js?v=4" onerror="console.warn('wr-import.js 로드 실패')"></script>
+<script src="wr-import.js?v=5" onerror="console.warn('wr-import.js 로드 실패')"></script>
 <script src="mode.js?v=6" onerror="console.warn('mode.js 로드 실패')"></script>
-<script src="wr-filters.js?v=2" onerror="console.warn('wr-filters.js 로드 실패')"></script>
+<script src="wr-filters.js?v=3" onerror="console.warn('wr-filters.js 로드 실패')"></script>
 <script src="order-map.js?v=1" onerror="console.warn('order-map.js 로드 실패')"></script>
-<script src="wr-view.js?v=2" onerror="console.warn('wr-view.js 로드 실패')"></script>
+<script src="wr-view.js?v=3" onerror="console.warn('wr-view.js 로드 실패')"></script>
 <script src="manual-input.js?v=2" onerror="console.warn('manual-input.js 로드 실패')"></script>
-<script src="wr-charts.js?v=1" onerror="console.warn('wr-charts.js 로드 실패')"></script>
+<script src="wr-charts.js?v=2" onerror="console.warn('wr-charts.js 로드 실패')"></script>
 <script src="archive-trend.js?v=1" onerror="console.warn('archive-trend.js 로드 실패')"></script>
 <script src="search-notif.js?v=1" onerror="console.warn('search-notif.js 로드 실패')"></script>
 <script src="anyworks-import.js?v=1" onerror="console.warn('anyworks-import.js 로드 실패')"></script>
