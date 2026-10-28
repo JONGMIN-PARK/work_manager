@@ -694,7 +694,7 @@
     workRecordsKey: '',
     // 우측 업무일지 패널 — 지난주 업무를 팀/팀원으로 골라 요약·삽입
     src: {
-      range: 'prev',        // prev = 작성 주차의 전주 · cur = 작성 주차 · custom
+      range: 'cur',         // cur = 작성 주차(기본) · prev = 작성 주차의 전주 · custom
       start: '', end: '',   // custom 일 때만 사용
       groupId: null,        // null = 아직 안 정함(작성 팀명과 같은 그룹 자동 선택) · '' = 전체
       members: null,        // null = 팀 전원 · [이름…] = 고른 팀원만
@@ -702,7 +702,8 @@
       view: 'summary',      // summary | raw
       sumBy: 'order',       // order = 수주별(보고서 형태) · person = 담당자별
       rawBy: 'name',        // name | oclient | date | none
-      target: 'last',       // 삽입할 편집창
+      target: 'cur',        // 삽입할 편집창 — 직접 고르기 전까지 기간을 따라감 (작성 주차 → 금주 · 지난주 → 지난주)
+      targetAuto: true,
       collapsed: lsGet(LS_SRC_COLLAPSED) === '1',
       width: clampSrcWidth(parseInt(lsGet(LS_SRC_WIDTH), 10)),
       aiText: '', aiBusy: false
@@ -813,7 +814,13 @@
 
     updateAuthorPreview();
     updateAuthorStatusBadge();
-    autoLoadIfEmpty();
+    // 마지막 보고서를 불러올 거면 그 주차로 한 번만 읽는다 (예전엔 이번 주를 읽고 곧바로 다시 읽음)
+    var pending = autoLoadIfEmpty();
+    if (pending) pending.then(function (loaded) { if (!loaded) ensureSrcRecords(); });
+    else ensureSrcRecords();
+  }
+
+  function ensureSrcRecords() {
     var rg = srcRange();
     if (rg.start && rg.end && _authorState.workRecordsKey !== rg.start + '~' + rg.end) loadWorkRecords();
     else renderSrcDynamic();
@@ -975,7 +982,7 @@
       _authorState[p === 'last' ? 'lastText' : 'curText'] = ed.value;
       _authorState.editPane = p; // 마지막 편집 페인 추적 (툴바 타겟 추정용)
       clearTimeout(debounceT);
-      debounceT = setTimeout(function () { updateAuthorPreview(p); updateAuthorStatusBadge(); }, 200);
+      debounceT = setTimeout(function () { updateAuthorPreview(p); updateAuthorStatusBadge(); if (p === _authorState.src.target) refreshSrcMarks(); }, 200);
     });
     ed.addEventListener('focus', function () {
       var p = ed.dataset.pane || paneKey;
@@ -1248,20 +1255,24 @@
   function rememberLoaded(id) { try { if (id) localStorage.setItem(LS_LAST_ID, id); } catch (e) {} }
   function forgetLoaded() { try { localStorage.removeItem(LS_LAST_ID); } catch (e) {} }
 
-  async function autoLoadIfEmpty() {
-    if (_authorState.loadedId || _authorState.lastText || _authorState.curText) return;
-    if (_authorState._autoLoadTried) return;
+  // 시도하면 Promise(불러왔으면 true), 시도할 게 없으면 null
+  function autoLoadIfEmpty() {
+    if (_authorState.loadedId || _authorState.lastText || _authorState.curText) return null;
+    if (_authorState._autoLoadTried) return null;
     _authorState._autoLoadTried = true;
     var stored = null;
     try { stored = localStorage.getItem(LS_LAST_ID); } catch (e) {}
-    try {
-      if (stored) {
-        try { await authorLoadById(stored); return; }
-        catch (e) { forgetLoaded(); }
-      }
-      var r = await apiFetch('/api/weekly-reports?limit=1');
-      if (r.data && r.data.length) await authorLoadById(r.data[0].id);
-    } catch (e) { /* silent */ }
+    return (async function () {
+      try {
+        if (stored) {
+          try { await authorLoadById(stored); return true; }
+          catch (e) { forgetLoaded(); }
+        }
+        var r = await apiFetch('/api/weekly-reports?limit=1');
+        if (r.data && r.data.length) { await authorLoadById(r.data[0].id); return true; }
+      } catch (e) { /* silent */ }
+      return false;
+    })();
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -1416,6 +1427,30 @@
     return line;
   }
 
+  // 이미 넣은 항목 표시 — 대상 편집창에 같은 '- [사이트] 제목' 으로 시작하는 줄이 있으면 들어간 것으로 본다
+  function lineHead(s) { return String(s || '').split('\n')[0].replace(/\s+/g, ' ').trim(); }
+  function summaryHead(it) { return lineHead('- [' + reportSafe(it.site) + '] ' + reportSafe(it.title)); }
+  function paneHasHead(lines, head) {
+    for (var i = 0; i < lines.length; i++) { if (lines[i] === head || lines[i].indexOf(head + ' ') === 0) return true; }
+    return false;
+  }
+  function paneLines(pane) {
+    return (_authorState[paneKeyText(pane)] || '').split('\n').map(lineHead).filter(function (l) { return l.charAt(0) === '-'; });
+  }
+  function refreshSrcMarks() {
+    var body = $('wrSrcBody');
+    if (!body) return;
+    var lines = paneLines(_authorState.src.target);
+    body.querySelectorAll('[data-head]').forEach(function (b) {
+      var on = paneHasHead(lines, b.getAttribute('data-head'));
+      if (b.classList.contains('wr-ins-done') === on) return;
+      b.classList.toggle('wr-ins-done', on);
+      b.textContent = on ? '✓' : '＋';
+      b.title = on ? '이미 ' + paneLabel(_authorState.src.target) + ' 편집창에 있음 — 누르면 한 번 더 넣음'
+        : paneLabel(_authorState.src.target) + ' 편집창의 해당 섹션에 삽입';
+    });
+  }
+
   function paneKeyText(pane) { return pane === 'last' ? 'lastText' : 'curText'; }
   function paneLabel(pane) { return pane === 'last' ? '지난주' : '금주'; }
 
@@ -1431,7 +1466,7 @@
   }
 
   // 섹션 인식 삽입 — { dev: [블록…], … } 를 대상 편집창의 해당 섹션 끝에 붙인다. 섹션이 없으면 새로 만든다
-  function insertBlocksBySection(pane, bySec) {
+  function insertBlocksBySection(pane, bySec, skipped) {
     syncAuthorEditorsToState();
     var key = paneKeyText(pane);
     var lines = (_authorState[key] || '').split('\n');
@@ -1469,7 +1504,8 @@
     _authorState[key] = lines.join('\n');
     _authorState.editPane = pane;
     refreshPaneEditors(pane);
-    if (typeof showToast === 'function') showToast(paneLabel(pane) + ' 편집창에 ' + added + '개 항목 삽입', 'ok');
+    refreshSrcMarks();
+    if (typeof showToast === 'function') showToast(paneLabel(pane) + ' 편집창에 ' + added + '개 항목 삽입' + (skipped ? ' · ' + skipped + '개는 이미 있어 건너뜀' : ''), 'ok');
   }
 
   /* ─── 패널 틀 (한 번만 그림 — 입력 중인 검색어가 재렌더로 끊기지 않게) ─── */
@@ -1527,15 +1563,9 @@
       ex.addEventListener('click', function () { setSrcCollapsed(false); });
     } else {
       $('wrSrcCollapse').addEventListener('click', function () { setSrcCollapsed(true); });
-      $('wrSrcReload').addEventListener('click', loadWorkRecords);
+      $('wrSrcReload').addEventListener('click', function () { loadWorkRecords(true); });
       box.querySelectorAll('[data-src-range]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          if (s.range === b.dataset.srcRange) return;
-          if (b.dataset.srcRange === 'custom') { var cr = srcRange(); s.start = cr.start; s.end = cr.end; }
-          s.range = b.dataset.srcRange;
-          rerenderSrcShell();
-          loadWorkRecords();
-        });
+        b.addEventListener('click', function () { setSrcRange(b.dataset.srcRange); });
       });
       ['wrSrcStart', 'wrSrcEnd'].forEach(function (id) {
         $(id).addEventListener('change', function (e) {
@@ -1552,6 +1582,7 @@
         box.querySelectorAll('[' + p[0] + ']').forEach(function (b) {
           b.addEventListener('click', function () {
             s[p[1]] = b.getAttribute(p[0]);
+            if (p[1] === 'target') s.targetAuto = false;
             if (p[1] === 'view') rerenderSrcShell();
             else {
               box.querySelectorAll('[' + p[0] + ']').forEach(function (x) { x.classList.toggle('on', x === b); });
@@ -1564,6 +1595,16 @@
       $('wrSrcAi').addEventListener('click', runSrcAi);
     }
     bindSrcResizer();
+  }
+
+  function setSrcRange(range) {
+    var s = _authorState.src;
+    if (s.range === range) return;
+    if (range === 'custom') { var cr = srcRange(); s.start = cr.start; s.end = cr.end; }
+    else if (s.targetAuto) s.target = range === 'prev' ? 'last' : 'cur';
+    s.range = range;
+    rerenderSrcShell();
+    loadWorkRecords();
   }
 
   function rerenderSrcShell() {
@@ -1615,7 +1656,15 @@
     h.addEventListener('dblclick', function () { setW(SRC_W_DEFAULT, true); });
   }
 
-  async function loadWorkRecords() {
+  // 기간별로 기억 — 지난주 ↔ 작성 주차를 오가도 다시 받지 않는다 (↻ 는 새로 받음)
+  var _recCache = {}, _recCacheKeys = [], REC_CACHE_MAX = 6;
+  function recCachePut(key, rows) {
+    if (!_recCache[key]) _recCacheKeys.push(key);
+    _recCache[key] = rows;
+    while (_recCacheKeys.length > REC_CACHE_MAX) delete _recCache[_recCacheKeys.shift()];
+  }
+
+  async function loadWorkRecords(force) {
     var rg = srcRange();
     var body = $('wrSrcBody');
     if (!rg.start || !rg.end) { _authorState.workRecords = []; _authorState.workRecordsKey = ''; renderSrcDynamic(); return; }
@@ -1624,11 +1673,14 @@
     // 기간 입력칸이 prev/cur 모드면 작성 주차 변경을 따라가도록 갱신
     var si = $('wrSrcStart'), ei = $('wrSrcEnd');
     if (si && _authorState.src.range !== 'custom') { si.value = rg.start; ei.value = rg.end; }
+    if (force !== true && _recCache[key]) { _authorState.workRecords = _recCache[key]; renderSrcDynamic(); return; }
     if (body) body.innerHTML = '<div class="wr-src-empty">⏳ 로드 중...</div>';
     try {
       var r = await apiFetch('/api/archives/records?startDate=' + rg.start.replace(/-/g, '') + '&endDate=' + rg.end.replace(/-/g, '') + '&all=true&limit=5000');
+      var rows = (r && r.data) || [];
+      recCachePut(key, rows);
       if (_authorState.workRecordsKey !== key) return; // 그 사이 기간이 바뀜
-      _authorState.workRecords = (r && r.data) || [];
+      _authorState.workRecords = rows;
       renderSrcDynamic();
     } catch (e) {
       if (_authorState.workRecordsKey === key) _authorState.workRecordsKey = '';
@@ -1707,8 +1759,13 @@
     }
     var aiHtml = renderSrcAiCard();
     if (!rows.length) {
-      body.innerHTML = aiHtml + '<div class="wr-src-empty">' + (_authorState.workRecords.length ? '조건에 맞는 기록이 없습니다' : '이 기간의 업무일지가 없습니다') + '</div>';
+      // 작성 주차 초반엔 아직 기록이 없다 — 지난주로 바로 넘어가는 버튼
+      var toPrev = !_authorState.workRecords.length && s.range === 'cur'
+        ? '<div style="margin-top:10px"><button class="tab" id="wrSrcToPrev">지난주 업무일지 보기</button></div>' : '';
+      body.innerHTML = aiHtml + '<div class="wr-src-empty">' + (_authorState.workRecords.length ? '조건에 맞는 기록이 없습니다' : '이 기간의 업무일지가 없습니다') + toPrev + '</div>';
       bindSrcAiCard();
+      var tp = $('wrSrcToPrev');
+      if (tp) tp.addEventListener('click', function () { setSrcRange('prev'); });
       return;
     }
     body.innerHTML = aiHtml + (s.view === 'summary' ? renderSummaryHtml(rows) : renderRawHtml(rows));
@@ -1734,14 +1791,22 @@
         insertBlocksBySection(s.target, o);
       });
     });
+    syncAuthorEditorsToState();
+    refreshSrcMarks();
   }
 
   var _srcSummaryCache = [];
+  // 여러 개 넣기는 이미 들어간 항목을 건너뛴다 (한 개씩 ＋ 는 그래도 넣을 수 있음)
   function insertSummaryItems(items) {
     if (!items.length) { alert('삽입할 항목이 없습니다.'); return; }
+    var target = _authorState.src.target;
+    syncAuthorEditorsToState();
+    var lines = paneLines(target);
+    var fresh = items.filter(function (it) { return !paneHasHead(lines, summaryHead(it)); });
+    if (!fresh.length) { if (typeof showToast === 'function') showToast('모두 이미 ' + paneLabel(target) + ' 편집창에 있습니다', 'ok'); return; }
     var bySec = {};
-    items.forEach(function (it) { (bySec[it.sec] = bySec[it.sec] || []).push(summaryItemText(it)); });
-    insertBlocksBySection(_authorState.src.target, bySec);
+    fresh.forEach(function (it) { (bySec[it.sec] = bySec[it.sec] || []).push(summaryItemText(it)); });
+    insertBlocksBySection(target, bySec, items.length - fresh.length);
   }
   function insertAllSummary() {
     insertSummaryItems(buildSrcSummary(srcRows(), 'order'));
@@ -1772,7 +1837,7 @@
         +   (s.sumBy === 'person' ? '<span class="wr-sum-sec" style="color:' + SECTIONS[it.sec].main + ';background:' + SECTIONS[it.sec].bg + '">' + esc(SECTIONS[it.sec].label) + '</span>' : '')
         +   '<span class="wr-sum-site">[' + esc(it.site) + ']</span>'
         +   '<span class="wr-sum-title" title="' + esc(it.orderNo) + '">' + esc(it.title) + '</span>'
-        +   '<button class="tab" data-sum-idx="' + idx + '" title="' + paneLabel(s.target) + ' 편집창의 해당 섹션에 삽입">＋</button>'
+        +   '<button class="tab" data-sum-idx="' + idx + '" data-head="' + esc(summaryHead(it)) + '" title="' + paneLabel(s.target) + ' 편집창의 해당 섹션에 삽입">＋</button>'
         + '</div>'
         + '<div class="wr-sum-meta">' + esc(it.members.join(', ')) + ' · ' + it.hours + 'h · ' + esc(range)
         +   (it.orderNo ? ' · <span style="font-family:ui-monospace,monospace">' + esc(it.orderNo) + '</span>' : '') + '</div>'
@@ -1807,7 +1872,7 @@
               + '<span class="wr-raw-n">' + esc(r.name || '') + '</span>'
               + '<span class="wr-raw-c"><span style="color:var(--ac)">' + esc(r.oclient || '') + '</span> ' + esc(content)
               +   ' <span class="wr-src-muted">' + (Number(r.hours) || 0) + 'h' + (r.abbr ? ' · ' + esc(r.abbr) : '') + '</span></span>'
-              + '<button class="tab" data-src-sec="' + (srcSectionOf(r) || 'etc') + '" data-src-add="' + esc(inj) + '" title="' + paneLabel(s.target) + ' 편집창의 해당 섹션에 삽입">＋</button>'
+              + '<button class="tab" data-src-sec="' + (srcSectionOf(r) || 'etc') + '" data-src-add="' + esc(inj) + '" data-head="' + esc(lineHead(inj)) + '" title="' + paneLabel(s.target) + ' 편집창의 해당 섹션에 삽입">＋</button>'
               + '</div>';
           }).join('')
         + '</details>';

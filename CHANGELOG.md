@@ -1,5 +1,14 @@
 # Work Manager — 변경 이력
 
+## v13.255 (2026-10-28) — 주간 업무 작성: 업무일지 기본 작성 주차 · 최적화
+
+- 업무일지 패널 `src.range` 기본 'cur'(작성 주차), `src.target` 기본 'cur' + `targetAuto` — 기간을 바꾸면 넣는 곳이 따라감(prev→지난주, cur→금주), 사용자가 고르면 고정. 기간 바꾸기는 `setSrcRange`.
+- 기간별 기록 캐시(`_recCache`, 최근 6개) — 같은 기간은 다시 받지 않음, ↻ 는 `loadWorkRecords(true)`.
+- 첫 진입: `autoLoadIfEmpty` 가 Promise/null 을 돌려줌 → 마지막 보고서를 불러오면 그 주차로 한 번만 받음(예전엔 이번 주를 받고 곧바로 다시 받음).
+- 이미 넣은 항목: 버튼 `data-head` 와 대상 편집창의 '- [사이트] 제목' 줄 비교(`refreshSrcMarks`, `.wr-ins-done`), 여러 개 넣기는 건너뜀.
+- 서버 `/api/archives/records`: milestone_id 칼럼 확인(information_schema)을 요청마다 하던 것 → 한 번만.
+- 테스트: `e2e26-weekly-author.js` 22.
+
 ## v13.254 (2026-10-28) — 할 일 상세 패널 · 자동 저장 · 되돌리기
 
 - 점검: 할 일 편집 경로가 셋(줄 안 제목 편집 · 날짜 칸 · 편집 팝업)이라 구멍이 났음 — 한글 조합 중 Enter, Esc/✕ 로 닫으면 내용 사라짐, 달력 · 다 한 것에서 안 열림, 다른 출처는 누르면 화면을 떠남.

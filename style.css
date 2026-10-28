@@ -2027,6 +2027,7 @@ textarea.mwp-title:focus{border-color:var(--ac);outline:none;background:var(--bg
 .wr-src-muted{color:var(--t6);font-size:11px;font-weight:400}
 .wr-src-body{flex:1;overflow:auto;padding:8px 10px;min-height:0}
 .wr-src-empty{color:var(--t6);padding:24px 8px;text-align:center;font-size:12px}
+.wr-src-body .tab.wr-ins-done{color:#10B981;border-color:rgba(16,185,129,.45);background:rgba(16,185,129,.08)}
 .wr-src-foot{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--bd)}.wr-src-foot .tab{flex:1;padding:6px 8px;font-size:12px}
 .wr-sum-grp{margin-bottom:10px}
 .wr-sum-gh{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 0;border-bottom:1px solid var(--bd);margin-bottom:4px}

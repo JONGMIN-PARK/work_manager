@@ -15,6 +15,7 @@ router.use(tenant.tenantScope);
 // 주의: /:id 보다 먼저 정의해야 /records가 :id로 매칭되지 않음
 
 // GET /api/archives/records
+var _hasMs = null;
 router.get('/records', async function (req, res) {
   try {
     // 역할별 범위: admin=테넌트 / manager·executive(부서)=부서 / 그 외=본인 (lib/record-scope)
@@ -38,9 +39,12 @@ router.get('/records', async function (req, res) {
       total = parseInt(countR.rows[0].cnt, 10);
     }
 
-    // milestone_id 컬럼이 아직 없는 배포 환경도 허용 (migration 미적용 폴백)
-    var colCheck = await db.query("SELECT 1 FROM information_schema.columns WHERE table_name='work_records' AND column_name='milestone_id'");
-    var hasMs = colCheck.rows.length > 0;
+    // milestone_id 컬럼이 아직 없는 배포 환경도 허용 (migration 미적용 폴백) — 한 번만 확인
+    if (_hasMs === null) {
+      var colCheck = await db.query("SELECT 1 FROM information_schema.columns WHERE table_name='work_records' AND column_name='milestone_id'");
+      _hasMs = colCheck.rows.length > 0;
+    }
+    var hasMs = _hasMs;
     var cols = 'id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient' + (hasMs ? ', milestone_id' : '');
     var dataSql = 'SELECT ' + cols + ' FROM work_records ' + where +
       ' ORDER BY date DESC, name, order_no LIMIT $' + idx++ + ' OFFSET $' + idx++;

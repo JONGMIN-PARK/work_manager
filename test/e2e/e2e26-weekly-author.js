@@ -1,6 +1,7 @@
 // 주간 업무 보고 작성 화면 — 공용 파서 미리보기 · 저장 안 됨 표시 · 새 버전 · 덮어쓰기 충돌 · 지난주 가져오기 · 스타일 이전 (v13.250)
 var path = require('path');
 var puppeteer = require(path.join(__dirname, '../../server/node_modules/puppeteer'));
+var pg = require(path.join(__dirname, '../../server/node_modules/pg'));
 var SHOT = path.join(__dirname, '.shots');
 require('fs').mkdirSync(SHOT, { recursive: true });
 var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -14,7 +15,15 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
   function check(c, m) { if (c) { ok++; console.log('✔', m); } else { fail++; console.log('FAIL', m); } }
   var team = 'UI팀' + Date.now();
   var made = [];
+  var c = new pg.Client(process.env.DATABASE_URL || 'postgres://postgres:pw@localhost:54329/wm'); await c.connect();
   try {
+    // 업무일지 패널용 기록 — 작성 주차(10/26 주) 2건 · 그 전주 1건
+    var adm = (await c.query("SELECT id, tenant_id FROM users WHERE email = 'admin@t.com'")).rows[0];
+    await c.query("DELETE FROM work_records WHERE content LIKE 'E2E업무일지%'");
+    var recs = [['20261027', 'E2E업무일지 도면 검토'], ['20261028', 'E2E업무일지 배선 작업'], ['20261020', 'E2E업무일지 지난주 일']];
+    for (var ri = 0; ri < recs.length; ri++) {
+      await c.query("INSERT INTO work_records (date, name, order_no, hours, abbr, content, oclient, ocmt, user_id, tenant_id) VALUES ($1, '관리자', 'E2E-ORD1', 4, 'D', $2, '시험사이트', '검사기 개조', $3, $4)", [recs[ri][0], recs[ri][1], adm.id, adm.tenant_id]);
+    }
     await page.setViewport({ width: 1500, height: 950 });
     await page.goto('http://localhost:3000/', { waitUntil: 'networkidle2' });
     await page.waitForSelector('#loginEmail', { visible: true });
@@ -96,6 +105,42 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.click('#wrAuLoadDropdown [data-load-id]');
     await wait(500);
     check(dialogs.slice(n0).some(function (m) { return /저장하지 않은/.test(m); }), '저장 안 한 내용 불러오기 전 확인');
+    // 업무일지 패널 — 기본 작성 주차 · 삽입 대상 금주 · 이미 넣은 항목 ✓ · 전체 삽입은 건너뜀 · 기간 캐시 (v13.255)
+    await page.waitForFunction(function () { return document.getElementById('wrAuLoadDropdown').style.display === 'none'; }, { timeout: 5000 }).catch(function () {});
+    await page.$eval('#wrAuNew', function (b) { b.click(); }); await wait(200);
+    check(await page.$eval('#wrAuEditorCur', function (e) { return e.value === ''; }), '새로 만들기 → 편집창 비움');
+    await page.$eval('#wrAuStart', function (e) { e.value = '2026-10-26'; e.dispatchEvent(new Event('change')); });
+    await page.$eval('#wrAuEnd', function (e) { e.value = '2026-10-30'; e.dispatchEvent(new Event('change')); });
+    await page.waitForFunction(function () { return /E2E업무일지 도면/.test(document.getElementById('wrSrcBody').textContent); }, { timeout: 6000 }).catch(function () {});
+    var sp = await page.evaluate(function () {
+      return { range: (document.querySelector('[data-src-range].on') || {}).textContent, target: (document.querySelector('[data-src-target].on') || {}).getAttribute('data-src-target'), body: document.getElementById('wrSrcBody').textContent };
+    });
+    check(sp.range === '작성 주차' && sp.target === 'cur', '기본 기간 = 작성 주차 · 삽입 → 금주 ' + JSON.stringify([sp.range, sp.target]));
+    check(/E2E업무일지 도면/.test(sp.body) && !/E2E업무일지 지난주/.test(sp.body), '작성 주차의 업무일지만 보임');
+    var sumBtn = await page.evaluateHandle(function () { return Array.from(document.querySelectorAll('#wrSrcBody [data-sum-idx]')).filter(function (b) { return /시험사이트/.test(b.getAttribute('data-head')); })[0]; });
+    await sumBtn.click();
+    await wait(300);
+    var ins = await page.evaluate(function () {
+      var b = Array.from(document.querySelectorAll('#wrSrcBody [data-sum-idx]')).filter(function (x) { return /시험사이트/.test(x.getAttribute('data-head')); })[0];
+      return { cur: document.getElementById('wrAuEditorCur').value, done: b.classList.contains('wr-ins-done'), txt: b.textContent };
+    });
+    check(/^- \[시험사이트\] 검사기 개조 @관리자$/m.test(ins.cur) && ins.cur.indexOf('[개발]') < ins.cur.indexOf('[시험사이트]') && ins.done && ins.txt === '✓', '＋ → 금주 [개발]에 들어가고 ✓ 표시 ' + JSON.stringify(ins));
+    await page.click('#wrSrcInsertAll');
+    await wait(300);
+    var cnt = await page.$eval('#wrAuEditorCur', function (e) { return (e.value.match(/- \[시험사이트\]/g) || []).length; });
+    check(cnt === 1, '요약 전체 삽입은 이미 있는 항목을 건너뜀 (' + cnt + ')');
+    var reqs = 0;
+    page.on('request', function (r) { if (/\/api\/archives\/records\?/.test(r.url())) reqs++; });
+    await page.click('[data-src-range="prev"]');
+    await page.waitForFunction(function () { return /E2E업무일지 지난주/.test(document.getElementById('wrSrcBody').textContent); }, { timeout: 6000 }).catch(function () {});
+    check(await page.$eval('[data-src-target].on', function (e) { return e.getAttribute('data-src-target'); }) === 'last', '지난주로 바꾸면 삽입 대상도 지난주');
+    await page.click('[data-src-range="cur"]');
+    await wait(300);
+    check(reqs === 1 && /E2E업무일지 도면/.test(await page.$eval('#wrSrcBody', function (e) { return e.textContent; })), '작성 주차로 돌아올 땐 다시 받지 않음 (요청 ' + reqs + ')');
+    await page.click('[data-src-target="last"]');
+    await page.click('[data-src-range="prev"]'); await wait(200);
+    await page.click('[data-src-range="cur"]'); await wait(200);
+    check(await page.$eval('[data-src-target].on', function (e) { return e.getAttribute('data-src-target'); }) === 'last', '직접 고른 삽입 대상은 기간을 바꿔도 유지');
     await page.screenshot({ path: path.join(SHOT, 'weekly-author.png') });
     // 목록 · 검색 탭 (클래스 이전 후에도 표)
     await page.click('#wrSubTabs [data-wt="list"]');
@@ -109,6 +154,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     console.log(fail ? 'FAILED ' + fail : 'ALL PASS ' + ok, errs);
   } catch (e) { console.log('ERR', e.message); } finally {
     try { await page.evaluate(async function (ids) { for (var i = 0; i < ids.length; i++) { try { await apiFetch('/api/weekly-reports/' + ids[i], { method: 'DELETE' }); } catch (e) {} } }, made); } catch (e) {}
-    await browser.close();
+    await c.query("DELETE FROM work_records WHERE content LIKE 'E2E업무일지%'");
+    await browser.close(); await c.end();
   }
 })();
