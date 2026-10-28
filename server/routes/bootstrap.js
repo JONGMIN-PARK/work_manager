@@ -14,6 +14,7 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var ps = require('../lib/project-access');
 var { recordScope } = require('../lib/record-scope');
+var _hasMs = null;   // work_records.milestone_id 컬럼 있는지 (서버 켜진 뒤 한 번만 확인)
 var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
@@ -60,10 +61,12 @@ router.get('/', async function (req, res) {
     var arWhere = 'WHERE ' + arScope.where + ' AND date >= $' + arScope.nextIdx;
     var arParams = arScope.params.concat([cutoff]);
     // milestone_id 컬럼 존재 여부 (마이그레이션 전 배포 호환)
-    var colCheckQ = db.query("SELECT 1 FROM information_schema.columns WHERE table_name='work_records' AND column_name='milestone_id'");
-
-    var colCheck = await colCheckQ;
-    var hasMs = colCheck.rows.length > 0;
+    // v13.258: 한 번만 확인 (예전엔 요청마다 — 다른 쿼리보다 먼저 기다려 DB 왕복 한 번이 더 들었다)
+    if (_hasMs === null) {
+      var colCheck = await db.query("SELECT 1 FROM information_schema.columns WHERE table_name='work_records' AND column_name='milestone_id'");
+      _hasMs = colCheck.rows.length > 0;
+    }
+    var hasMs = _hasMs;
     var cols = 'id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient' + (hasMs ? ', milestone_id' : '');
     var arQ = db.query('SELECT ' + cols + ' FROM work_records ' + arWhere + ' ORDER BY date DESC LIMIT 50000', arParams);
 

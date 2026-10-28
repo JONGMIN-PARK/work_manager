@@ -80,6 +80,10 @@ router.get('/people', async function (req, res) {
 // GET /api/my-work?userId=
 router.get('/', async function (req, res) {
   try {
+    // v13.258: 표시(⭐ 집중 · 순서)는 볼 사람 id 만 알면 되므로 권한 확인 · 모으기와 동시에 (예전엔 셋을 차례로)
+    var wantId = req.query.userId || req.user.sub;
+    var mkP = db.query('SELECT item_key, focus_date, sort_order FROM my_work_marks WHERE user_id = $1 AND tenant_id = $2', [wantId, req.tenant.id]);
+    mkP.catch(function () {});
     var u = await targetUser(req, req.query.userId);
     if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN', '이 사람의 업무를 볼 권한이 없습니다.');
     var items = await myWork.collect(req, [u], { done: true });
@@ -90,7 +94,7 @@ router.get('/', async function (req, res) {
       it.canPri = canDone && prio.SRC.indexOf(it.src) >= 0 && (it.src !== 'todo' || self);
     });
     // ⭐ 오늘 집중 · 직접 순서 — 그 사람 표시 (끝난 일의 표시는 정리)
-    var mk = await db.query('SELECT item_key, focus_date, sort_order FROM my_work_marks WHERE user_id = $1 AND tenant_id = $2', [u.id, req.tenant.id]);
+    var mk = await mkP;
     var byKey = {};
     mk.rows.forEach(function (m) { byKey[m.item_key] = m; });
     items.forEach(function (it) {
@@ -276,9 +280,11 @@ router.get('/load', async function (req, res) {
     var weeks = Math.max(2, Math.min(12, parseInt(req.query.weeks, 10) || 8));
     var people = await viewablePeople(req);
     if (req.query.deptId) people = people.filter(function (u) { return u.department_id === req.query.deptId; });
-    var items = await myWork.collect(req, people, { load: true });
+    // v13.258: 주 칸은 오늘만으로 정해지므로 휴가 조회를 모으기와 동시에
+    var w0 = myWork.loadGrid([], weeks).weeks[0];
+    var got = await Promise.all([myWork.collect(req, people, { load: true }), leaveDays(req, people, w0, myEvents.addDays(w0, weeks * 7 - 1))]);
+    var items = got[0], leaves = got[1];
     var grid = myWork.loadGrid(items, weeks);
-    var leaves = await leaveDays(req, people, grid.weeks[0], myEvents.addDays(grid.weeks[0], weeks * 7 - 1));
     // 칸을 누르면 볼 목록 — 개인 할 일은 제목 없이
     res.json({ data: { users: people.map(toUser), weeks: grid.weeks, today: grid.today, rows: grid.rows, items: items, leaves: leaves } });
   } catch (e) { httpErr.serverError(res, '[my-work/load]', e); }

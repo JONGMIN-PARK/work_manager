@@ -943,23 +943,71 @@ function tlThumbClick(pid) {
     projImagesGet(pid).then(function (list) { if (list && list.length && typeof pimgOpenViewer === 'function') pimgOpenViewer(list, 0); else openMemo(); }).catch(openMemo);
   } else openMemo();
 }
-// 렌더 후: 메모 이미지가 없는 행은 참고이미지(project_images) 커버를 지연 로드(캐시)
+// 렌더 후: 메모 이미지가 없는 행은 참고이미지(project_images) 커버를 지연 로드
+// v13.258: 프로젝트마다 /images 를 따로 부르던 것(요청 = 프로젝트 수, 원본 이미지 전부) →
+//   ① /api/projects/covers 한 번으로 프로젝트별 대표 이미지 번호 ② 브라우저에 줄여 둔 게 없는 것만 원본을 한꺼번에 받아
+//   작게 줄여 저장(localStorage, 이미지 번호 기준 — 이미지가 바뀌면 번호가 바뀌므로 오래된 것이 남지 않음)
+var _tlCoverIds = null, _tlCoverAt = 0, _tlCoverReq = null;
+var _TL_THUMB_LS = 'wm_tlthumb:';
+function _tlThumbHtml(src) { return '<img src="' + src + '" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">'; }
+function _tlThumbGet(imgId) {
+  if (_tlThumbCache[imgId]) return _tlThumbCache[imgId];
+  try { var v = localStorage.getItem(_TL_THUMB_LS + imgId); if (v) return (_tlThumbCache[imgId] = v); } catch (e) {}
+  return null;
+}
+// 원본(data URI · 주소) → 가로세로 240px 안쪽 JPEG. 실패하면 원본 그대로 (저장은 안 함)
+function _tlThumbMake(imgId, src) {
+  return new Promise(function (resolve) {
+    var im = new Image();
+    im.onload = function () {
+      try {
+        var k = Math.min(1, 240 / Math.max(im.width, im.height));
+        var c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k));
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        var t = c.toDataURL('image/jpeg', 0.78);
+        _tlThumbCache[imgId] = t;
+        try { localStorage.setItem(_TL_THUMB_LS + imgId, t); } catch (e) { /* 저장 공간 부족 — 이번 세션 메모리에만 */ }
+        resolve(t);
+      } catch (e) { _tlThumbCache[imgId] = src; resolve(src); }
+    };
+    im.onerror = function () { resolve(null); };
+    im.src = src;
+  });
+}
+function _tlLoadCovers() {
+  if (_tlCoverIds && Date.now() - _tlCoverAt < 60000) return Promise.resolve(_tlCoverIds);
+  if (_tlCoverReq) return _tlCoverReq;
+  _tlCoverReq = apiFetch('/api/projects/covers').then(function (r) {
+    var m = {};
+    ((r && r.data) || []).forEach(function (x) { m[x.project_id || x.projectId] = x.id; });
+    _tlCoverIds = m; _tlCoverAt = Date.now();
+    return m;
+  }).finally(function () { _tlCoverReq = null; });
+  return _tlCoverReq;
+}
 function tlFillThumbs() {
-  if (!tlShowThumb || typeof projImagesGet !== 'function') return;
-  var boxes = document.querySelectorAll('.tl-thumb[data-proj-thumb]');
-  for (var i = 0; i < boxes.length; i++) {
-    var box = boxes[i];
-    if (box.querySelector('img')) continue;                 // 메모 이미지 이미 표시됨
-    var pid = box.getAttribute('data-proj-thumb');
-    if (_tlThumbCache[pid] === false) continue;             // 이미지 없음 확인됨
-    if (_tlThumbCache[pid]) { box.innerHTML = '<img src="' + _tlThumbCache[pid] + '" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">'; continue; }
-    (function (box2, pid2) {
-      projImagesGet(pid2).then(function (list) {
-        if (list && list.length) { _tlThumbCache[pid2] = list[0].src; box2.innerHTML = '<img src="' + list[0].src + '" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">'; }
-        else { _tlThumbCache[pid2] = false; }
+  if (!tlShowThumb || typeof apiFetch !== 'function') return;
+  var boxes = Array.prototype.filter.call(document.querySelectorAll('.tl-thumb[data-proj-thumb]'), function (b) { return !b.querySelector('img'); });   // 메모 이미지 표시된 것 제외
+  if (!boxes.length) return;
+  _tlLoadCovers().then(function (cov) {
+    var need = {};
+    boxes.forEach(function (box) {
+      var imgId = cov[box.getAttribute('data-proj-thumb')];
+      if (!imgId) return;
+      var t = _tlThumbGet(imgId);
+      if (t) box.innerHTML = _tlThumbHtml(t);
+      else (need[imgId] = need[imgId] || []).push(box);
+    });
+    var ids = Object.keys(need);
+    for (var i = 0; i < ids.length; i += 40) {
+      apiFetch('/api/projects/covers?ids=' + encodeURIComponent(ids.slice(i, i + 40).join(','))).then(function (r) {
+        ((r && r.data) || []).forEach(function (x) {
+          _tlThumbMake(x.id, x.src).then(function (t) { if (t) need[x.id].forEach(function (box) { if (box.isConnected && !box.querySelector('img')) box.innerHTML = _tlThumbHtml(t); }); });
+        });
       }).catch(function () {});
-    })(box, pid);
-  }
+    }
+  }).catch(function () {});
 }
 
 /* ═══ 라벨 셋째 줄용 — 기간/D-Day 포맷 헬퍼 (v13.43) ═══ */

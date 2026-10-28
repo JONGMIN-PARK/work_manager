@@ -200,6 +200,32 @@ function wrAnalyzeImport(existing,newRecs){
   return{deduped:deduped,dupRemoved:dupRemoved,identical:identical,conflicts:conflicts,newRows:newRows};
 }
 
+/* 병합 결과 → 서버에 보낼 차이 (v13.258)
+   - insert: id 없는 것(새 행) · deleteIds: 기존에 있었는데 결과에 없는 것(중복 정리 · 대체 모드에서 빠진 것)
+   - update: id 가 있고 저장되는 칸(날짜·이름·수주번호·시간·업무분장·약자·내용·수주명·거래처)이 실제로 달라진 것만 */
+var WR_SAVED_FIELDS=['date','name','orderNo','hours','taskType','abbr','content','ocmt','oclient'];
+function _wrNorm(k,v){if(v==null)return '';if(k==='hours')return String(parseFloat(v)||0);return String(v)}
+function wrMergeDiff(existing,merged){
+  var byId=new Map();existing.forEach(function(r){if(r.id!=null)byId.set(String(r.id),r)});
+  var kept=new Set(),insert=[],update=[];
+  merged.forEach(function(r){
+    if(r.id==null){insert.push(r);return}
+    kept.add(String(r.id));
+    var old=byId.get(String(r.id));
+    if(!old||WR_SAVED_FIELDS.some(function(k){return _wrNorm(k,r[k])!==_wrNorm(k,old[k])}))update.push(r);
+  });
+  var deleteIds=[];byId.forEach(function(r,id){if(!kept.has(id))deleteIds.push(r.id)});
+  return{insert:insert,update:update,deleteIds:deleteIds};
+}
+/* 서버 목록과 같은 순서 (날짜 최신 → 이름 → 수주번호) */
+function wrSortRecords(arr){
+  return arr.sort(function(a,b){
+    if(a.date!==b.date)return (a.date||'')<(b.date||'')?1:-1;
+    if(a.name!==b.name)return (a.name||'')<(b.name||'')?-1:1;
+    return (a.orderNo||'')<(b.orderNo||'')?-1:((a.orderNo||'')>(b.orderNo||'')?1:0);
+  });
+}
+
 /* 사용자 결정에 따라 최종 merged 배열 생성
    decisions: { conflicts: { [newIdx]: 'update'|'skip'|'add' }, mode: 'merge'|'replace_keep_matched' }
    - update: 기존(첫 후보)을 신규로 덮어쓰기
@@ -423,7 +449,9 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
   var _seen=new Set();newRecords=newRecords.filter(function(r){var k=wrKey(r);if(_seen.has(k))return false;_seen.add(k);return true});
 
   // DB에 기존 데이터가 있는지 확인
+  // v13.258: 기존 전체도 동시에 받기 시작 — 사용자가 갱신/대체를 고르는 동안 내려받음
   var existCount=0;
+  var existP=(typeof wrGetAll==='function')?wrGetAll():null;if(existP)existP.catch(function(){});
   try{if(typeof wrCount==='function')existCount=await wrCount()}catch(ex){console.warn('wrCount err:',ex)}
 
   if(existCount>0){
@@ -432,7 +460,7 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
     if(choice==='cancel')return;
     if(choice==='merge'){
       // 병합 — 미리보기 모달로 충돌 행별 처리
-      var existing=await wrGetAll();
+      var existing=await (existP||wrGetAll());
       var analysis=wrAnalyzeImport(existing, newRecords);
       var needPreview=analysis.conflicts.length>0||analysis.identical.length>0;
       var decision;
@@ -444,10 +472,11 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
         decision={action:'apply',decisions:{conflicts:{},mode:'merge'}};
       }
       var result=wrApplyDecisions(newRecords, analysis, decision.decisions);
-      // wrBulkPut은 로컬·서버 모두에서 사용자 레코드 전체 삭제 후 재삽입 의미 — replace/merge 두 모드 모두 단일 호출로 충분
-      await wrBulkPut(result.merged);
-      // 서버에서 자동 생성된 신규 id로 aD를 리로드 — 이후 편집/PATCH 시 stale id로 인한 silent 실패 방지
-      try{aD=await wrGetAll()}catch(e){aD=result.merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o})}
+      // v13.258: 전체를 올려 "내 레코드 전부 삭제 후 재삽입" 하던 것 → 바뀐 것만 (추가 · 실제로 달라진 수정 · 빠진 것 삭제) 한 번에.
+      //   다시 전체를 내려받지 않고, 서버가 돌려준 새 id 로 화면 데이터를 맞춘다
+      var diff=wrMergeDiff(existing,result.merged);
+      var sync=await wrSync(diff.insert,diff.update,diff.deleteIds);
+      aD=wrSortRecords(result.merged.filter(function(r){return r.id!=null}).concat(sync.inserted));
       var parts=[];
       if(result.added)parts.push('추가 '+result.added);
       if(result.updated)parts.push('갱신 '+result.updated);
@@ -530,12 +559,15 @@ function importWorkRecordsJSON(file){
       if(!data.records||!data.records.length){showToast('유효하지 않은 업무일지 파일입니다.','error');return}
       /* 파일 자체 중복 제거 */
       var _seen=new Set();data.records=data.records.filter(function(r){var k=wrKey(r);if(_seen.has(k))return false;_seen.add(k);return true});
+      /* 내보낸 파일의 DB 번호는 떼고 새 레코드로 다룸 (병합 차이 계산이 기존 번호와 섞이지 않게) */
+      data.records=data.records.map(function(r){var o=Object.assign({},r);delete o.id;delete o.userId;delete o.user_id;return o});
+      var existP=wrGetAll();existP.catch(function(){});   // 고르는 동안 미리 받기 (v13.258)
       var existCount=await wrCount();
       if(existCount>0){
         var choice=await showWorkRecordChoiceModal(existCount, data.records.length);
         if(choice==='cancel')return;
         if(choice==='merge'){
-          var existing=await wrGetAll();
+          var existing=await existP;
           var analysis=wrAnalyzeImport(existing, data.records);
           var needPreview=analysis.conflicts.length>0||analysis.identical.length>0;
           var decision;
@@ -546,8 +578,9 @@ function importWorkRecordsJSON(file){
             decision={action:'apply',decisions:{conflicts:{},mode:'merge'}};
           }
           var result=wrApplyDecisions(data.records, analysis, decision.decisions);
-          await wrBulkPut(result.merged);
-          try{aD=await wrGetAll()}catch(e){aD=result.merged.map(function(r){var o={date:r.date,name:r.name,orderNo:r.orderNo,hours:r.hours,taskType:r.taskType,abbr:r.abbr,content:r.content};if(r.id)o.id=r.id;if(r.ocmt!==undefined)o.ocmt=r.ocmt;if(r.oclient!==undefined)o.oclient=r.oclient;if(r.dept)o.dept=r.dept;return o})}
+          var diff=wrMergeDiff(existing,result.merged);   // v13.258 바뀐 것만
+          var sync=await wrSync(diff.insert,diff.update,diff.deleteIds);
+          aD=wrSortRecords(result.merged.filter(function(r){return r.id!=null}).concat(sync.inserted));
           var parts=[];
           if(result.added)parts.push('추가 '+result.added);
           if(result.updated)parts.push('갱신 '+result.updated);

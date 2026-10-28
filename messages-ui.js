@@ -54,6 +54,13 @@ var _msgPeerName = '';
 function renderMessages() {
   var el = document.getElementById('mMessages');
   if (!el) return;
+  // v13.258: 다시 들어올 때는 틀 · 열린 대화를 그대로 두고 목록 · 대화만 새로 받음 (비웠다 다시 그리지 않음)
+  if (el.querySelector('.msg-split')) {
+    _msgRenderThreadList(true);
+    if (_msgPeer) msgThreadGet(_msgPeer).then(function (msgs) { _msgRenderMsgs(msgs || []); }).catch(function () {});
+    refreshMsgBadge();
+    return;
+  }
   el.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
       '<h2 style="margin:0;font-size:18px;color:var(--t2)">✉️ 메시지</h2>' +
@@ -69,10 +76,10 @@ function renderMessages() {
   refreshMsgBadge();
 }
 
-function _msgRenderThreadList() {
+function _msgRenderThreadList(keep) {
   var box = document.getElementById('msgThreadList');
   if (!box) return;
-  box.innerHTML = '<div style="font-size:11px;color:var(--t6);padding:12px">로딩 중...</div>';
+  if (!keep) box.innerHTML = '<div style="font-size:11px;color:var(--t6);padding:12px">로딩 중...</div>';
   msgThreadsGet().then(function (list) {
     list = list || [];
     if (!list.length) { box.innerHTML = '<div style="font-size:11px;color:var(--t6);padding:14px;line-height:1.6">아직 주고받은 메시지가 없습니다.<br>[새 메시지]로 시작하세요.</div>'; return; }
@@ -99,7 +106,7 @@ function _mqJs(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').rep
 
 function msgOpenThread(peerId, peerName) {
   _msgPeer = peerId; _msgPeerName = peerName || '';
-  _msgRenderThreadList();
+  _msgRenderThreadList(true);
   var view = document.getElementById('msgThreadView');
   if (!view) return;
   view.parentNode.classList.add('msg-open');   // 좁은 화면에서는 목록 대신 대화만 보임 (v13.257)
@@ -114,7 +121,7 @@ function msgOpenThread(peerId, peerName) {
   msgThreadGet(peerId).then(function (msgs) {
     _msgRenderMsgs(msgs || []);
     refreshMsgBadge();
-    _msgRenderThreadList(); // 미읽음 갱신
+    _msgRenderThreadList(true); // 미읽음 갱신
   }).catch(function (err) {
     var body = document.getElementById('msgThreadBody');
     if (body) body.innerHTML = '<div style="color:var(--t6);font-size:11px">' + ((err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.' : '대화를 불러오지 못했습니다.') + '</div>';
@@ -127,7 +134,7 @@ function msgCloseThread() {
   _msgPeer = null; _msgPeerName = '';
   var split = document.querySelector('#mMessages .msg-split');
   if (split) split.classList.remove('msg-open');
-  _msgRenderThreadList();
+  _msgRenderThreadList(true);
 }
 
 function _msgRenderMsgs(msgs) {
@@ -164,7 +171,7 @@ function msgSendUI() {
     return msgThreadGet(_msgPeer);
   }).then(function (msgs) {
     _msgRenderMsgs(msgs || []);
-    _msgRenderThreadList();
+    _msgRenderThreadList(true);
   }).catch(function (err) {
     if (ta) ta.disabled = false;
     var msg = (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.' : ((err && err.message) || '전송 실패');

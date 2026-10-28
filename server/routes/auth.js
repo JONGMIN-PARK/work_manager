@@ -156,37 +156,41 @@ router.post('/refresh', async function (req, res) {
       return res.status(400).json({ error: 'VALIDATION', message: 'Refresh token이 필요합니다.' });
     }
 
-    // DB에서 토큰 확인
-    var stored = await authService.findRefreshToken(refreshToken);
+    // v13.258: 서명 확인(DB 없음)을 먼저 하고, 토큰 · 사용자 조회와 새 토큰 저장 · 내 정보를 동시에 —
+    //   예전엔 쿼리 5~6번을 차례로 해 운영(서버 미국 · DB 싱가포르)에서 1초 가까이 걸렸다. 응답 순서 · 오류 코드는 그대로
+    var decoded = null;
+    try { decoded = authService.verifyRefreshToken(refreshToken); } catch (e) { decoded = null; }
+    var got = await Promise.all([
+      authService.findRefreshToken(refreshToken),
+      decoded ? authService.findUserById(decoded.sub) : null
+    ]);
+    var stored = got[0], user = got[1];
     if (!stored) {
       return res.status(401).json({ error: 'INVALID_TOKEN', message: '유효하지 않은 refresh token입니다.' });
     }
-
-    // JWT 서명 검증
-    var decoded;
-    try {
-      decoded = authService.verifyRefreshToken(refreshToken);
-    } catch (e) {
+    if (!decoded) {
       await authService.deleteRefreshToken(refreshToken);
       return res.status(401).json({ error: 'TOKEN_EXPIRED', message: 'Refresh token이 만료되었습니다.' });
     }
-
-    var user = await authService.findUserById(decoded.sub);
     if (!user || user.status !== 'active') {
       await authService.deleteRefreshToken(refreshToken);
       return res.status(401).json({ error: 'INVALID_USER', message: '유효하지 않은 사용자입니다.' });
     }
 
-    // 기존 토큰 삭제 + 새 토큰 발급 (토큰 로테이션)
-    await authService.deleteRefreshToken(refreshToken);
-    var newAccessToken = await authService.signAccessToken(user);
+    // 기존 토큰 삭제 + 새 토큰 발급 (토큰 로테이션). 화면이 /me 를 따로 부르지 않게 내 정보도 함께
     var newRefreshToken = authService.signRefreshToken(user);
-    await authService.saveRefreshToken(user.id, newRefreshToken, stored.device_info);
+    var done = await Promise.all([
+      authService.deleteRefreshToken(refreshToken),
+      authService.signAccessToken(user),
+      authService.saveRefreshToken(user.id, newRefreshToken, stored.device_info),
+      _meData(user).catch(function () { return null; })
+    ]);
 
     res.json({
       data: {
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken
+        accessToken: done[1],
+        refreshToken: newRefreshToken,
+        user: done[3]
       }
     });
   } catch (e) {
@@ -209,6 +213,25 @@ router.post('/logout', authMiddleware.authenticate, async function (req, res) {
 });
 
 // ─── GET /api/auth/me ───
+// 내 정보 (/me 와 /refresh 가 같이 씀) — PL 프로젝트 · 운영자 모드 · 마인드맵 권한을 동시에 조회 (v13.258)
+async function _meData(user) {
+  var r = await Promise.all([
+    // PL 프로젝트 목록 (project_members 테이블이 아직 없으면 빈 배열)
+    db.query("SELECT project_id FROM project_members WHERE user_id = $1 AND role = 'pl' AND released_at IS NULL", [user.id])
+      .then(function (x) { return x.rows.map(function (row) { return row.project_id; }); }, function () { return []; }),
+    // 운영자 모드 (admin 자동 또는 user_settings 'operator_mode' 부여)
+    user.role === 'admin' ? true : db.query("SELECT value FROM user_settings WHERE user_id = $1 AND key = 'operator_mode'", [user.id])
+      .then(function (x) { return !!(x.rows.length && x.rows[0].value && x.rows[0].value.enabled); }, function () { return false; }),
+    // 마인드맵 사용 권한 (admin 자동 또는 user_settings 'mindmap_access' 부여)
+    mindmapAccess.hasMindmapAccessByUser(user.id, user.role)
+  ]);
+  var sanitized = authService.sanitizeUser(user);
+  sanitized.plProjects = r[0];
+  sanitized.operatorMode = r[1];
+  sanitized.mindmapAccess = r[2];
+  return sanitized;
+}
+
 router.get('/me', authMiddleware.authenticate, async function (req, res) {
   try {
     var user = await authService.findUserById(req.user.sub);
@@ -216,33 +239,7 @@ router.get('/me', authMiddleware.authenticate, async function (req, res) {
       return res.status(404).json({ error: 'NOT_FOUND', message: '사용자를 찾을 수 없습니다.' });
     }
 
-    // PL 프로젝트 목록 조회 (project_members 테이블이 아직 없으면 빈 배열)
-    var plProjects = [];
-    try {
-      var plRes = await db.query(
-        "SELECT project_id FROM project_members WHERE user_id = $1 AND role = 'pl' AND released_at IS NULL",
-        [user.id]
-      );
-      plProjects = plRes.rows.map(function (r) { return r.project_id; });
-    } catch (e) {
-      // project_members 테이블이 아직 없을 수 있음 (Phase 2에서 생성)
-    }
-
-    var sanitized = authService.sanitizeUser(user);
-    sanitized.plProjects = plProjects;
-
-    // 운영자 모드 여부 (admin 자동 또는 user_settings 'operator_mode' 부여)
-    var operatorMode = (user.role === 'admin');
-    if (!operatorMode) {
-      try {
-        var opRes = await db.query("SELECT value FROM user_settings WHERE user_id = $1 AND key = 'operator_mode'", [user.id]);
-        operatorMode = !!(opRes.rows.length && opRes.rows[0].value && opRes.rows[0].value.enabled);
-      } catch (e) { /* user_settings 없을 수 있음 */ }
-    }
-    sanitized.operatorMode = operatorMode;
-    // 마인드맵 사용 권한 (admin 자동 또는 user_settings 'mindmap_access' 부여)
-    sanitized.mindmapAccess = await mindmapAccess.hasMindmapAccessByUser(user.id, user.role);
-
+    var sanitized = await _meData(user);
     res.json({ data: sanitized });
   } catch (e) {
     httpErr.serverError(res, '[auth/me]', e, '서버 오류가 발생했습니다.');

@@ -76,6 +76,83 @@ router.get('/records/count', async function (req, res) {
   }
 });
 
+// 여러 건 넣기 — 열마다 배열 하나(unnest)로 보내 한 문장으로 (v13.258).
+//   예전엔 500건씩 나눠 넣어 1만 6천 건이면 왕복 32번이었다 (운영은 서버 · DB 가 멀어 왕복마다 0.2초 가까이).
+//   returning=true 면 넣은 행(id 포함), 아니면 넣은 건수를 돌려준다
+async function _insertRecords(client, records, userId, tenantId, returning) {
+  var out = [], n = 0;
+  var STEP = 20000;
+  for (var b = 0; b < records.length; b += STEP) {
+    var cols = [[], [], [], [], [], [], [], [], [], []];
+    records.slice(b, b + STEP).forEach(function (r) {
+      var row = [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, r.milestoneId || r.milestone_id || null];
+      for (var c = 0; c < row.length; c++) cols[c].push(row[c] == null ? null : String(row[c]));
+    });
+    var r2 = await client.query(
+      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, user_id, tenant_id) ' +
+      'SELECT u.date, u.name, u.order_no, u.hours::numeric, u.task_type, u.abbr, u.content, u.ocmt, u.oclient, u.milestone_id, $11, $12 ' +
+      'FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[]) ' +
+      'AS u(date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id)' +
+      (returning ? ' RETURNING id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, user_id' : ''),
+      cols.concat([userId, tenantId])
+    );
+    if (returning) out = out.concat(r2.rows);
+    n += cols[0].length;
+  }
+  return returning ? out : n;
+}
+
+// POST /api/archives/records/sync — 바뀐 것만 한 번에 (v13.258). 파일 병합(갱신)용.
+//   body: { insert:[레코드], update:[{id, ...}], deleteIds:[id] } — 한 트랜잭션. 수정 · 삭제는 GET 과 같은 범위(lib/record-scope)만.
+//   예전 병합은 전체를 올려 "내 레코드 전부 삭제 후 재삽입" 했다 — 느리고, 관리자는 남의 레코드를 내 것으로 한 벌 더 넣었으며 마일스톤 연결이 지워졌다.
+//   수정은 milestone_id 를 건드리지 않는다. 응답 inserted 는 넣은 행(새 id 포함)
+router.post('/records/sync', rbac.checkPermission('archive.manage'), async function (req, res) {
+  var client;
+  try {
+    client = await db.pool.connect();
+  } catch (connErr) {
+    console.error('[work-records/sync] DB connect failed:', connErr);
+    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'DB 연결 실패' });
+  }
+  try {
+    var ins = Array.isArray(req.body.insert) ? req.body.insert : [];
+    var upd = (Array.isArray(req.body.update) ? req.body.update : []).filter(function (u) { return u && u.id; });
+    var del = (Array.isArray(req.body.deleteIds) ? req.body.deleteIds : []).filter(function (v) { return v != null; });
+    var deleted = 0, inserted = [];
+    await client.query('BEGIN');
+    if (del.length) {
+      var scD = recordScope(req, { startIdx: 2 });
+      var rd = await client.query('DELETE FROM work_records WHERE id = ANY($1::int[]) AND ' + scD.where, [del.map(String)].concat(scD.params));
+      deleted = rd.rowCount;
+    }
+    if (upd.length) {
+      var byId = new Map();
+      upd.forEach(function (u) {
+        byId.set(String(u.id), [u.id, u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null]);
+      });
+      var cols = [[], [], [], [], [], [], [], [], [], []];
+      byId.forEach(function (row) { for (var c = 0; c < row.length; c++) cols[c].push(row[c] == null ? null : String(row[c])); });
+      var scU = recordScope(req, { alias: 'w', startIdx: 11 });
+      await client.query(
+        'UPDATE work_records w SET date=u.date, name=u.name, order_no=u.order_no, hours=u.hours::numeric, task_type=u.task_type, ' +
+        'abbr=u.abbr, content=u.content, ocmt=u.ocmt, oclient=u.oclient ' +
+        'FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[]) ' +
+        'AS u(id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient) ' +
+        'WHERE w.id = u.id::integer AND ' + scU.where,
+        cols.concat(scU.params)
+      );
+    }
+    if (ins.length) inserted = await _insertRecords(client, ins, req.user.sub, req.tenant.id, true);
+    await client.query('COMMIT');
+    res.json({ inserted: inserted, updated: upd.length, deleted: deleted });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (rbErr) { console.error('[ROLLBACK failed]', rbErr); }
+    httpErr.serverError(res, '[work-records/sync]', e, '서버 오류가 발생했습니다.');
+  } finally {
+    if (client) client.release();
+  }
+});
+
 // POST /api/archives/records/bulk — 일괄 저장 (해당 사용자 레코드만 삭제 후 삽입, 트랜잭션)
 router.post('/records/bulk', rbac.checkPermission('archive.manage'), async function (req, res) {
   var client;
@@ -95,22 +172,7 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
     // 해당 사용자의 레코드만 삭제 후 재삽입 (사용자별 데이터 분리)
     await client.query('DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2', [userId, req.tenant.id]);
 
-    // 배치 삽입 (PostgreSQL 파라미터 한도 대비 500건씩, user_id 포함)
-    var BATCH = 500;
-    var totalInserted = 0;
-    for (var b = 0; b < records.length; b += BATCH) {
-      var chunk = records.slice(b, b + BATCH);
-      var values = [];
-      var params = [];
-      var idx = 1;
-      chunk.forEach(function (r) {
-        values.push('($' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ',$' + idx++ + ')');
-        params.push(r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, r.milestoneId || r.milestone_id || null, userId, req.tenant.id);
-      });
-      var sql = 'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, user_id, tenant_id) VALUES ' + values.join(',');
-      await client.query(sql, params);
-      totalInserted += chunk.length;
-    }
+    var totalInserted = await _insertRecords(client, records, userId, req.tenant.id, false);
 
     await client.query('COMMIT');
     res.status(201).json({ data: [], count: totalInserted });

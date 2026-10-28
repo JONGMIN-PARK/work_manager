@@ -78,6 +78,7 @@ else
   run_batch api-calendar.js e2e28-calendar.js
   run_batch api-remind.js
   run_batch api-tasks.js e2e29-tasks.js
+  run_batch api-speed.js
 fi
 
 # 이 실행이 띄운 Postgres 면 정상 종료 (start.mjs 가 .pgstop 을 보고 멈춤)

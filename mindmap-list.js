@@ -25,8 +25,10 @@ function _mmRenderList() {
   wrap.onclick = _mmListClick;
   var q = _mmEl('mmListQ');
   if (q) q.oninput = function () { _mm.q = q.value; _mmPaintList(); };
+  if (_mm.listLoaded) _mmPaintList();   // v13.258 다시 들어올 때 — 받아 둔 목록을 바로 그리고 뒤에서 새로 받음
   apiFetch('/api/mindmaps').then(function (r) {
     _mm.list = (r && r.data) || [];
+    _mm.listLoaded = true;
     _mmPaintList();
   }).catch(function (e) {
     var b = _mmEl('mmListBody');

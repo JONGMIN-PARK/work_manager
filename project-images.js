@@ -21,11 +21,11 @@ function projImagesGet(projId) {
 }
 function projImagesAdd(projId, images) {
   return apiFetch('/api/projects/' + projId + '/images', { method: 'POST', body: JSON.stringify({ images: images }) })
-    .then(function (r) { _pimgCache[projId] = null; return toCamelArray(r.data); });
+    .then(function (r) { _pimgCache[projId] = null; if (typeof _tlCoverAt !== 'undefined') _tlCoverAt = 0; return toCamelArray(r.data); });
 }
 function projImageDel(projId, imgId) {
   return apiFetch('/api/projects/' + projId + '/images/' + imgId, { method: 'DELETE' })
-    .then(function (r) { _pimgCache[projId] = null; return r; });
+    .then(function (r) { _pimgCache[projId] = null; if (typeof _tlCoverAt !== 'undefined') _tlCoverAt = 0; return r; });
 }
 
 /* ── 업로드 이미지 다운스케일(canvas, 최대 1280px, JPEG) → data URI ──── */

@@ -79,7 +79,9 @@ async function renderCalendar() {
     calMonth = _t0.getMonth();
   }
 
-  var _calData = await Promise.all([(typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()), evtGetAll(), msGetAll(), typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve(null)]);
+  var _calData = await Promise.all([(typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()), evtGetAll(), msGetAll(), typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve(null),
+    // v13.258 아카이브 요약도 같이 (예전엔 위 넷이 끝난 뒤에야 불렀다)
+    typeof getWeeklyArchiveSummary === 'function' ? getWeeklyArchiveSummary().catch(function (e) { console.warn('[Calendar]', e); return []; }) : Promise.resolve([])]);
   if (seq !== _calRenderSeq) return;
   var projects = _calData[0] || [];
   var rawEvents = _calData[1] || [];
@@ -121,11 +123,7 @@ async function renderCalendar() {
   var all = _calBuildItems(projects, events, milestones, issues, projMap);
 
   // Integration 9: 아카이브 요약 로드
-  var archiveSummaries = [];
-  if (typeof getWeeklyArchiveSummary === 'function') {
-    try { archiveSummaries = await getWeeklyArchiveSummary(); } catch (e) { console.warn('[Calendar]', e); }
-    if (seq !== _calRenderSeq) return;
-  }
+  var archiveSummaries = _calData[4] || [];
 
   // 보이는 범위와 겹치는 항목 (+ 표시 토글·완료 숨김)
   var visible = all.filter(function (it) {

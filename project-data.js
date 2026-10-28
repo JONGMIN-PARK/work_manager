@@ -1779,7 +1779,8 @@ function _toWrRecord(r) {
     id: r.id, date: r.date, name: r.name,
     orderNo: r.order_no, hours: typeof r.hours === 'string' ? parseFloat(r.hours) || 0 : r.hours || 0,
     taskType: r.task_type, abbr: r.abbr, content: r.content,
-    ocmt: r.ocmt, oclient: r.oclient, dept: r.dept, userId: r.user_id
+    ocmt: r.ocmt, oclient: r.oclient, dept: r.dept, userId: r.user_id,
+    milestoneId: r.milestone_id || null   // v13.258 — 다시 저장할 때 마일스톤 연결이 지워지지 않게
   };
 }
 function wrGetAll() {
@@ -1793,6 +1794,11 @@ function wrCount() {
 function _wrWrote(r) { invalidateArchiveCache(); return r; }
 function wrBulkPut(records) {
   return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) }).then(_wrWrote);
+}
+// 바뀐 것만 한 번에 (v13.258 — 파일 병합용). 응답 inserted: 넣은 행(새 id 포함, 화면 레코드 모양으로)
+function wrSync(insert, update, deleteIds) {
+  return apiFetch('/api/archives/records/sync', { method: 'POST', timeoutMs: 120000, body: JSON.stringify({ insert: insert, update: update, deleteIds: deleteIds }) })
+    .then(function (r) { invalidateArchiveCache(); return { inserted: ((r && r.inserted) || []).map(_toWrRecord), updated: (r && r.updated) || 0, deleted: (r && r.deleted) || 0 }; });
 }
 function wrClear() {
   return apiFetch('/api/archives/records', { method: 'DELETE' }).then(_wrWrote);
@@ -1813,7 +1819,25 @@ function readAllArchiveRecords() {
   if (_archiveCache.data && (now - _archiveCache.ts) < ARCHIVE_CACHE_TTL) {
     return Promise.resolve(_archiveCache.data);
   }
+  // v13.258: 시간이 지났을 뿐이면(저장으로 비워진 게 아니면) 받아 둔 것을 바로 쓰고 뒤에서 새로 받음 —
+  //   예전엔 1분마다 달력 · 타임라인에 들어갈 때 전체(1만 건 이상)를 다시 받을 때까지 기다렸다. 이 브라우저의 저장은 invalidate 로 즉시 비워짐
+  if (_archiveCache.data) {
+    if (!_archiveCache.inflight) _archiveFetch().catch(function () {});
+    return Promise.resolve(_archiveCache.data);
+  }
   if (_archiveCache.inflight) return _archiveCache.inflight;   // 동시에 부른 화면들은 요청 하나를 같이 기다린다
+  return _archiveFetch();
+}
+/* 팀 관리가 시작할 때 받은 기록(최근 60일 + 그 이전)으로 전체 캐시를 채움 (v13.258) — 달력 · 타임라인이 같은 1만 건 이상을
+   처음 들어갈 때 또 내려받지 않게. gen 은 받기 시작할 때 값: 그사이 저장이 있었으면(무효화) 채우지 않음. rows 는 서버 행 모양 */
+function archiveCacheGen() { return _archiveCache.gen; }
+function archiveCachePrime(rows, gen) {
+  if (gen !== _archiveCache.gen || _archiveCache.data) return;
+  var seen = {}, out = [];
+  rows.forEach(function (r) { if (r.id == null || seen[r.id]) return; seen[r.id] = 1; out.push(_toWrRecord(r)); });
+  _archiveCache.data = out; _archiveCache.ts = Date.now();
+}
+function _archiveFetch() {
   var gen = _archiveCache.gen;
   var p = wrGetAll().then(function (records) {
     if (gen === _archiveCache.gen) { _archiveCache.data = records; _archiveCache.ts = Date.now(); }  // 도중 무효화됐으면 옛 결과는 캐시하지 않음

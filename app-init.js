@@ -45,6 +45,7 @@ function _wmInitPrelude(){
 
 /* 서버에서 받은 레코드를 화면에 주입 + 로딩 표시 제거. 호출부는 이어서 설정 동기화(_wmSyncSettings) */
 function _wmApplyServerRecords(ctx,rows){
+  ctx.recentRaw=rows;ctx.recentGen=typeof archiveCacheGen==='function'?archiveCacheGen():null;
   aD=rows.map(_wmNormRec);
   applyADToUI();
   ctx.dataLoaded=true;
@@ -56,6 +57,8 @@ async function _wmSyncSettings(){try{await syncSettingsFromServer()}catch(settEx
 function _wmScheduleHistoryLoad(ctx){
   setTimeout(function(){
     apiFetch('/api/archives/records?endDate='+ctx.cutoff60+'&limit=50000&all=true').then(function(_srvFull){
+      // v13.258 최근 + 이전 = 전체 → 달력 · 타임라인이 쓰는 전체 기록 캐시도 채움 (다시 내려받지 않게)
+      if(_srvFull&&_srvFull.data&&ctx.recentRaw&&typeof archiveCachePrime==='function')archiveCachePrime(ctx.recentRaw.concat(_srvFull.data),ctx.recentGen);
       if(!_srvFull||!_srvFull.data||!_srvFull.data.length)return;
       var existingIds={};aD.forEach(function(r){if(r.id)existingIds[r.id]=true;});
       var hist=_srvFull.data.map(_wmNormRec);
@@ -71,7 +74,7 @@ function _wmScheduleHistoryLoad(ctx){
 /* 부트스트랩 — /api/bootstrap 한 번에 projects+milestones+events+최근 60일 아카이브. 성공 true / 실패 false */
 async function _wmLoadBootstrap(ctx){
   try{
-    var _bs=await _wmWithTimeout(apiFetch('/api/bootstrap?recentDays=60'),8000);
+    var _bs=await _wmWithTimeout(ctx.bsP||apiFetch('/api/bootstrap?recentDays=60'),8000);ctx.bsP=null;
     if(!_bs||!_bs.archives||!Array.isArray(_bs.archives.data))return false;
     // 프로젝트/마일스톤/이벤트 캐시 프라이밍 (개별 API 호출 생략 가능)
     if(typeof _pdPrimeCache==='function')_pdPrimeCache(_bs.projects,_bs.milestones,_bs.events);
@@ -168,9 +171,11 @@ function _wmBindUploadUI(){
 
 async function _postAuthInit(){
   if(_initDone)return;_initDone=true;
+  var ctx={dataLoaded:false,authReadyHandled:false,cutoff60:_wmCutoffYmd(60)};  // 최근 60일 기준 YYYYMMDD
+  // v13.258: 부트스트랩을 수주맵과 동시에 요청 (예전엔 수주맵이 끝난 뒤에야 시작). 실패는 _wmLoadBootstrap 이 처리
+  if(_wmServerLoadAllowed()&&_accessToken){ctx.bsP=apiFetch('/api/bootstrap?recentDays=60');ctx.bsP.catch(function(){});}
   if(typeof loadOrdersToMap==='function')await _wmLoadOrderMap();
   _wmInitPrelude();
-  var ctx={dataLoaded:false,authReadyHandled:false,cutoff60:_wmCutoffYmd(60)};  // 최근 60일 기준 YYYYMMDD
   _wmListenLateAuth(ctx);
   // 1단계: 서버 API에서 전체 로드 (모든 기기에서 동일 데이터 보장)
   if(_wmServerLoadAllowed()&&_accessToken){

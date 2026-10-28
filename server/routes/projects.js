@@ -120,6 +120,27 @@ router.get('/members/all', async function (req, res) {
 });
 
 // ─── GET /api/projects/:id ───
+// ─── GET /api/projects/covers — 볼 수 있는 프로젝트마다 대표(첫) 이미지 번호 (v13.258) ───
+//  타임라인 썸네일용. 예전엔 프로젝트마다 /:id/images 를 따로 불러 요청이 프로젝트 수만큼 생겼다.
+//  ?ids=이미지번호,... 를 주면 그 이미지들의 src 만 (브라우저가 줄여서 저장해 두지 않은 것만 받음)
+router.get('/covers', async function (req, res) {
+  try {
+    var vis = pa.visibleProjectsSql(req, 'p', 2);
+    var base = 'FROM project_images pi JOIN projects p ON p.id = pi.project_id AND p.tenant_id = pi.tenant_id WHERE pi.tenant_id = $1 AND ' + vis.sql;
+    var params = [req.tenant.id].concat(vis.params);
+    if (req.query.ids) {
+      var ids = String(req.query.ids).split(',').map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 200);
+      if (!ids.length) return res.json({ data: [] });
+      var r = await db.query('SELECT pi.id, pi.src ' + base + ' AND pi.id = ANY($' + vis.nextIdx + ')', params.concat([ids]));
+      return res.json({ data: r.rows });
+    }
+    var r2 = await db.query('SELECT DISTINCT ON (pi.project_id) pi.project_id, pi.id ' + base + ' ORDER BY pi.project_id, pi.sort_order, pi.created_at', params);
+    res.json({ data: r2.rows });
+  } catch (e) {
+    httpErr.serverError(res, '[projects/covers]', e);
+  }
+});
+
 router.get('/:id', async function (req, res) {
   try {
     var r = await db.query('SELECT * FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);

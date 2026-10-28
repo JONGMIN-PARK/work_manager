@@ -111,6 +111,7 @@ async function apiFetch(url, opts) {
   }
 }
 
+var _refreshUser = null;
 async function _tryRefresh() {
   try {
     var controller = new AbortController();
@@ -127,6 +128,7 @@ async function _tryRefresh() {
     var data = await res.json();
     _accessToken = data.data.accessToken;
     _refreshToken = data.data.refreshToken;
+    _refreshUser = data.data.user || null;   // v13.258 서버가 내 정보도 같이 줌 — 시작할 때 /me 를 한 번 덜 부름
     localStorage.setItem('wm_refresh', _refreshToken);
     // 토큰이 늦게 도착해 부트스트랩 race가 이미 종료된 경우라도, 데이터 로드를 다시 시도할 수 있게 신호
     try { window.dispatchEvent(new CustomEvent('wm:auth-ready')); } catch (_) {}
@@ -209,9 +211,11 @@ async function authLogout() {
 }
 
 /* ═══ 내 정보 조회 ═══ */
-async function authFetchMe() {
+async function authFetchMe(useRefreshed) {
   try {
-    var data = await apiFetch('/api/auth/me');
+    var pre = useRefreshed ? _refreshUser : null;
+    _refreshUser = null;
+    var data = pre ? { data: pre } : await apiFetch('/api/auth/me');
     if (data && data.data) {
       currentUser = data.data;
       if (typeof pmLoadFocus === 'function') { try { pmLoadFocus(); } catch (_) {} }  // 운영자 포커스 셋 로드
@@ -294,8 +298,8 @@ async function authInit() {
     return false;
   }
 
-  // 사용자 정보 조회
-  var user = await authFetchMe();
+  // 사용자 정보 조회 (refresh 응답에 왔으면 그것으로)
+  var user = await authFetchMe(true);
   if (!user) {
     showLoginOverlay();
     return false;
@@ -523,6 +527,8 @@ async function renderUserAdmin() {
   if (!container) return;
 
   // v13.68: 화려한 인라인 로딩 카드 (wmProgress 디자인 일관) + 단계 메시지 회전
+  // v13.258: 다시 들어올 때는 이전 목록을 그대로 둔 채 새로 받음 (로딩 카드로 비우지 않음)
+  if (!container.querySelector('.uaTab')) {
   container.innerHTML =
     '<div class="wm-init-load" style="padding:40px 20px">' +
       '<div class="wm-init-card">' +
@@ -551,6 +557,7 @@ async function renderUserAdmin() {
     }
     setTimeout(tick, 600);
   })();
+  }
 
   try {
     // 3개 API 병렬 호출 (직렬 3회 → 1회 round-trip)

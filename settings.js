@@ -737,15 +737,12 @@ function initSettings() {
 /** 서버 인증 완료 후 호출 — 서버에서 그룹/별칭 동기화 */
 async function syncSettingsFromServer() {
   if (!_canUseServer()) return;
-  try {
-    await loadGroupsFromServer();
-    if (typeof updateGroupButtons === 'function') updateGroupButtons();
-  } catch (e) { console.warn('[Settings] group sync:', e); }
-  try {
-    await loadAliasesFromServer();
-    if (typeof rNC === 'function') rNC();
-  } catch (e) { console.warn('[Settings] alias sync:', e); }
-  try {
-    await loadAbbrColorsFromServer();
-  } catch (e) { console.warn('[Settings] abbrColors sync:', e); }
+  // v13.258: 세 설정을 차례로 받던 것 → 동시에 (첫 화면 대기 줄임)
+  await Promise.all([
+    loadGroupsFromServer().then(function () { if (typeof updateGroupButtons === 'function') updateGroupButtons(); })
+      .catch(function (e) { console.warn('[Settings] group sync:', e); }),
+    loadAliasesFromServer().then(function () { if (typeof rNC === 'function') rNC(); })
+      .catch(function (e) { console.warn('[Settings] alias sync:', e); }),
+    loadAbbrColorsFromServer().catch(function (e) { console.warn('[Settings] abbrColors sync:', e); })
+  ]);
 }

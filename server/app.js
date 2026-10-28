@@ -120,9 +120,12 @@ var serveStatic = express.static(path.join(__dirname, '..'), {
   etag: true,
   lastModified: true,
   setHeaders: function (res, filePath) {
-    // JS/CSS: 짧은 캐시 + 반드시 재검증 (배포 즉시 반영)
+    // JS/CSS: HTML 이 ?v=<빌드 버전> 을 붙여 부른 것은 배포마다 주소가 바뀌므로 오래 캐시 (v13.258 —
+    //   예전엔 새로고침마다 80여 개 파일을 하나하나 서버에 재확인해 첫 화면이 수 초 늦었다). 그 밖(개발 · 지연 로드)은 재검증
     if (/\.(js|css)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      var q = res.req && res.req.query;
+      if (process.env.NODE_ENV === 'production' && q && q.v === BUILD_VERSION) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      else res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     } else {
       // 이미지, 폰트 등 정적 에셋: 장기 캐시
       res.setHeader('Cache-Control', 'public, max-age=2592000');

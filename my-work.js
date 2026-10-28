@@ -115,12 +115,12 @@ function renderMyWork() {
   var ppl = _mw.people ? Promise.resolve(_mw.people) : apiFetch('/api/my-work/people').then(function (r) {
     _mw.people = (r && r.data) || []; _mw.canLoad = !!(r && r.canLoad); return _mw.people;
   });
-  ppl.then(function () {
-    return Promise.all([
-      apiFetch('/api/my-work' + (_mw.userId && _mw.userId !== _mwMe() ? '?userId=' + encodeURIComponent(_mw.userId) : '')),
-      typeof mwCalLoadEvents === 'function' ? mwCalLoadEvents(true).catch(function () { return null; }) : null
-    ]);
-  }).then(function (res) {
+  // v13.258: 사람 목록을 기다린 뒤에 할 일을 부르던 것 → 셋을 동시에 (할 일 요청은 사람 목록과 상관없음)
+  Promise.all([
+    apiFetch('/api/my-work' + (_mw.userId && _mw.userId !== _mwMe() ? '?userId=' + encodeURIComponent(_mw.userId) : '')),
+    typeof mwCalLoadEvents === 'function' ? mwCalLoadEvents(true).catch(function () { return null; }) : null,
+    ppl
+  ]).then(function (res) {
     _mw.data = res[0];
     _mwPaint();
   }).catch(function (e) {
