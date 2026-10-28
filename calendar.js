@@ -180,6 +180,7 @@ function _calBuildItems(projects, events, milestones, issues, projMap) {
     items.push({ kind: 'evt', id: 'ev_' + (ev._origId || ev.id) + '_' + ev.startDate, ref: ev, evtId: ev._origId || ev.id, date: ev.startDate, end: ev.endDate || ev.startDate,
       canMod: _calEvtCanModify(ev, projMap),
       title: ev.title || t.label, icon: t.icon, typeLabel: t.label, repeat: !!(ev.repeat || ev._repeatInstance), proj: projMap[pid], projectId: pid,
+      time: ev.startTime || '', timeEnd: ev.endTime || '',
       color: ev.color || t.color, done: false, overdue: false, assignees: ev.assignees || [] });
   });
   return items;
@@ -189,6 +190,7 @@ function _calItemCmp(a, b) {
   if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
   var ka = CAL_KIND[a.kind].ord, kb = CAL_KIND[b.kind].ord;
   if (ka !== kb) return ka - kb;
+  if ((a.time || '') !== (b.time || '')) return (a.time || '') < (b.time || '') ? -1 : 1;   // 하루 종일 먼저, 그다음 시각 순 (v13.252)
   return a.title < b.title ? -1 : a.title > b.title ? 1 : 0;
 }
 function _calIcon(it) { return it.kind === 'evt' ? it.icon : CAL_KIND[it.kind].icon; }
@@ -305,7 +307,7 @@ function _calChipHtml(it, opt) {
   var cls = 'calm-chip k-' + it.kind + (it.overdue ? ' is-overdue' : '') + (it.done ? ' is-done' : '');
   var drag = _calDragAttr(it);
   var sub = it.proj && it.kind !== 'pend' && it.kind !== 'pstart' && it.kind !== 'pspan' ? ' [' + _calPname(it.proj) + ']' : '';
-  var tip = CAL_KIND[it.kind].label + (it.kind === 'evt' ? '·' + it.typeLabel : '') + ' — ' + it.title + sub
+  var tip = CAL_KIND[it.kind].label + (it.kind === 'evt' ? '·' + it.typeLabel : '') + ' — ' + (it.time ? it.time + (it.timeEnd ? '~' + it.timeEnd : '') + ' ' : '') + it.title + sub
     + (it.end !== it.date ? ' (' + _calMd(it.date) + '~' + _calMd(it.end) + ')' : '')
     + (it.overdue ? ' · 지연' : '') + (it.done ? ' · 완료' : '');
   var style = it.kind === 'evt' || it.kind === 'issue'
@@ -314,7 +316,7 @@ function _calChipHtml(it, opt) {
   return '<div class="' + cls + '"' + drag + ' data-cal-item="' + eH(it.id) + '" style="' + style + '" title="' + eH(tip) + '">'
     + '<span class="calm-ic">' + _calIcon(it) + '</span>'
     + (it.repeat ? '<span class="calm-ic">🔁</span>' : '')
-    + '<span class="calm-tx">' + eH(it.title) + (opt.withProj && sub ? '<span class="calm-sub">' + eH(sub) + '</span>' : '') + '</span></div>';
+    + '<span class="calm-tx">' + (it.time ? '<b class="calm-time">' + eH(it.time) + '</b> ' : '') + eH(it.title) + (opt.withProj && sub ? '<span class="calm-sub">' + eH(sub) + '</span>' : '') + '</span></div>';
 }
 
 /* ═══ 월간 뷰 ═══ */
@@ -563,7 +565,7 @@ function _calRowHtml(it, withDate) {
   var dd = it.overdue && it.date < _calView.today ? daysDiff(it.date, _calView.today) : 0;
   var when = withDate ? '<span class="cal-row-d' + (it.overdue ? ' od' : '') + '">' + (dd ? 'D+' + dd : it.date === _calView.today ? '오늘' : _calMd(it.date)) + '</span>' : '';
   var sub = it.proj && it.kind !== 'pend' && it.kind !== 'pstart' && it.kind !== 'pspan' ? _calPname(it.proj) : (it.kind === 'pend' ? '납기' : it.kind === 'pstart' ? '착수' : it.kind === 'pspan' ? _calMd(it.date) + '~' + _calMd(it.end) : '');
-  if (it.kind === 'evt') sub = it.typeLabel + (it.end !== it.date ? ' · ' + _calMd(it.date) + '~' + _calMd(it.end) : '') + (it.proj ? ' · ' + _calPname(it.proj) : '');
+  if (it.kind === 'evt') sub = (it.time ? it.time + (it.timeEnd ? '~' + it.timeEnd : '') + ' · ' : '') + it.typeLabel + (it.end !== it.date ? ' · ' + _calMd(it.date) + '~' + _calMd(it.end) : '') + (it.proj ? ' · ' + _calPname(it.proj) : '');
   var who = (it.assignees || []).slice(0, 3).map(function (a) { return typeof shortName === 'function' ? shortName(a) : a; }).join(', ');
   return '<div class="cal-row k-' + it.kind + (it.overdue ? ' is-overdue' : '') + (it.done ? ' is-done' : '') + '" style="--rc:' + it.color + '">'
     + when
@@ -645,7 +647,8 @@ function renderWeekView(items, rg, archiveSummaries) {
 }
 
 /* ═══ 일정 등록/편집 모달 ═══ */
-async function showEventModal(evtId, defaultDate) {
+/* opts (v13.252): { startTime, endTime, title } 새로 만들 때 채울 값 · onSaved 저장/삭제 뒤 부를 것 (기본 renderCalendar) */
+async function showEventModal(evtId, defaultDate, opts) {
   var existing = document.getElementById('evtModal');
   if (existing) existing.remove();
 
@@ -663,10 +666,13 @@ async function showEventModal(evtId, defaultDate) {
     evtId = evt.id;
   }
 
-  var title = evt ? evt.title : '';
+  var title = evt ? evt.title : ((opts && opts.title) || '');
+  window._evtModalOnSaved = (opts && opts.onSaved) || null;
   var type = evt ? evt.type : 'etc';
   var start = evt ? evt.startDate : (defaultDate || localDate());
   var end = evt ? evt.endDate : start;
+  var tStart = evt ? (evt.startTime || '') : ((opts && opts.startTime) || '');
+  var tEnd = evt ? (evt.endTime || '') : ((opts && opts.endTime) || '');
   var memo = evt ? evt.memo : '';
   var repeatVal = evt ? (evt.repeat || '') : '';
   var repeatUntil = evt ? (evt.repeatUntil || '') : '';
@@ -706,6 +712,10 @@ async function showEventModal(evtId, defaultDate) {
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
         '<div><label class="fl">시작일</label><input type="date" class="si" id="evtStart" value="' + start + '" style="padding-left:10px"></div>' +
         '<div><label class="fl">종료일</label><input type="date" class="si" id="evtEnd" value="' + end + '" style="padding-left:10px"></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        '<div><label class="fl">시작 시각 <span style="font-size:9px;color:var(--t6)">(비우면 하루 종일)</span></label><input type="time" class="si" id="evtStartTime" value="' + eH(tStart) + '" step="300" style="padding-left:10px"></div>' +
+        '<div><label class="fl">끝 시각</label><input type="time" class="si" id="evtEndTime" value="' + eH(tEnd) + '" step="300" style="padding-left:10px"></div>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
         '<div><label class="fl">반복</label><select class="si" id="evtRepeat" style="padding-left:8px"><option value="">없음</option><option value="weekly"' + (repeatVal === 'weekly' ? ' selected' : '') + '>매주</option><option value="biweekly"' + (repeatVal === 'biweekly' ? ' selected' : '') + '>격주</option><option value="monthly"' + (repeatVal === 'monthly' ? ' selected' : '') + '>매월</option></select></div>' +
@@ -774,6 +784,10 @@ async function saveEventUI(existingId) {
   var evtEndVal = document.getElementById('evtEnd').value || evtStartVal;
   if (!evtStartVal) { showToast('시작일을 입력하세요.','warn'); return; }
   if (evtEndVal < evtStartVal) { showToast('종료일이 시작일보다 앞설 수 없습니다.','warn'); return; }
+  var evtTimeS = (document.getElementById('evtStartTime') || {}).value || '';
+  var evtTimeE = (document.getElementById('evtEndTime') || {}).value || '';
+  if (!evtTimeS) evtTimeE = '';
+  if (evtTimeE && evtStartVal === evtEndVal && evtTimeE <= evtTimeS) { showToast('끝 시각이 시작 시각보다 늦어야 합니다.','warn'); return; }
 
   var projIds = [];
   document.querySelectorAll('.evt-proj-chk:checked').forEach(function (c) { projIds.push(c.value); });
@@ -804,7 +818,9 @@ async function saveEventUI(existingId) {
     assignees: assignees,
     memo: document.getElementById('evtMemo').value.trim(),
     repeat: repeatSel || null,
-    repeatUntil: repeatSel ? (document.getElementById('evtRepeatUntil').value || '') : ''
+    repeatUntil: repeatSel ? (document.getElementById('evtRepeatUntil').value || '') : '',
+    startTime: evtTimeS || null,
+    endTime: evtTimeE || null
   };
 
   // 더블클릭 방지 + 연 시점 version 으로 저장(그 사이 남이 고쳤으면 409) — v13.213
@@ -820,7 +836,7 @@ async function saveEventUI(existingId) {
     }
 
     document.getElementById('evtModal').remove();
-    await renderCalendar();
+    await _calAfterEvtSave();
     showToast(existingId ? '일정이 수정되었습니다' : '일정이 등록되었습니다');
   } catch (err) {
     console.error('[saveEventUI]', err);
@@ -829,6 +845,14 @@ async function saveEventUI(existingId) {
     saveEventUI._busy = false;
     if (saveBtn && saveBtn.isConnected) saveBtn.disabled = false;
   }
+}
+
+/* 저장·삭제 뒤 — 내 업무 달력에서 열었으면 그쪽을 다시 그림 */
+function _calAfterEvtSave() {
+  var fn = window._evtModalOnSaved;
+  window._evtModalOnSaved = null;
+  if (typeof fn === 'function') return Promise.resolve(fn());
+  return renderCalendar();
 }
 
 function _calErrMsg(err) {
@@ -844,7 +868,7 @@ async function deleteEventUI(id) {
     if (!confirm(msg)) return;
     await evtDel(id);
     document.getElementById('evtModal').remove();
-    await renderCalendar();
+    await _calAfterEvtSave();
     showToast('일정이 삭제되었습니다', 'warn');
   } catch (err) {
     console.error('[deleteEventUI]', err);

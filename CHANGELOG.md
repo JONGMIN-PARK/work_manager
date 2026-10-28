@@ -1,5 +1,16 @@
 # Work Manager — 변경 이력
 
+## v13.252 (2026-10-28) — 내 업무 달력 · 구독 · 일정 알림
+
+- 마이그레이션 064: `events.start_time` · `end_time` ('HH:MM', 비면 하루 종일), `calendar_feeds`(사람당 .ics 토큰), `event_reminder_sent`(30분 전 알림 회차별 한 번).
+- `routes/events.js`: startTime · endTime 받기 (형식 틀리면 null).
+- `lib/my-events.js`: 내 일정 모으기(만든 것 · 담당 이름) — 남의 달력은 보는 사람이 볼 수 있는 프로젝트 일정만, 개인 일정은 본인만. 반복 회차 계산(클라 expandRepeatingEvents 와 같은 규칙), 수정 가능 표시.
+- `routes/my-work.js`: `GET /events`, `PUT /due`(todo · mindmap · issue · action — 권한 · 담당 확인은 완료 처리와 같은 길, 맵 편집 잠금 409), `GET · POST · DELETE /feed`.
+- `routes/ics.js` + `lib/ics.js`: `GET /api/ics/:token.ics` 로그인 없이 토큰으로 — 할 일은 마감일 종일, 시각 일정은 UTC, 반복은 RRULE, 75바이트 줄 접기. 비활성 사용자 · 옛 토큰 404.
+- 알림 `jobs.js`: 브리핑 '오늘 내 일정'(시각 순) + 회사 일정 조각에서 개인 일정 뺌. `sendEventSoonReminders` 5분마다 — 30분 안에 시작하는 회차, 알림 설정 `event_soon`.
+- 클라: `my-work-cal.js` 새 파일(주 · 월 보기, 끌어 놓기, 빠른 등록, 구독 창). `calendar.js` 등록 창 시각 칸 · 칩 시각 · 시각 순 정렬, `showEventModal(id, date, opts)` 에 onSaved. `style.css` `.mwc-*`.
+- 테스트: `test/e2e/api-calendar.js`(45), `test/e2e/e2e28-calendar.js`(25 — 주 · 월 · 등록 · 끌기 · 달력 탭 · 휴대폰 · 어두운 테마 그림). 라우트 스냅샷 갱신.
+
 ## v13.251 (2026-10-28) — 모든 탭 창 너비 전체
 
 - style.css: `.con` · `.hdr-in` 의 1400px 캡 제거, `.mw-wrap`(내 업무 · 업무 부하) 1100px 캡 제거. 패치노트 800px 캡 제거(mode.js).

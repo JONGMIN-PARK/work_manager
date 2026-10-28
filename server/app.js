@@ -209,6 +209,7 @@ var specTemplateRoutes = require('./routes/spec-templates');
 var projectSpecRoutes = require('./routes/project-specs');
 var mindmapRoutes = require('./routes/mindmaps');
 var myWorkRoutes = require('./routes/my-work');
+var icsRoutes = require('./routes/ics');
 var v1Router = require('./routes/v1');
 var apiDocsRoutes = require('./routes/api-docs');
 
@@ -259,6 +260,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/mindmaps', mindmapRoutes);
 app.use('/api/my-work', myWorkRoutes);
+app.use('/api/ics', icsRoutes);   // 개인 달력 구독 — 로그인 없이 토큰 (v13.252)
 
 // ─── API v1 (버전 관리) ───
 app.use('/api/v1', v1Router);
@@ -289,6 +291,8 @@ if (telegramService.isConfigured()) {
   scheduler.scheduleDaily(0, 12, function () { return notificationService.sendMindmapDueReminders(); }, 'Mindmap due reminder');
   // 요소기술 일지 미작성(30일+) — 매주 월요일 (KST 화 01:00 = UTC 월 16:00)
   scheduler.scheduleWeekly(1, 16, 0, function () { return notificationService.sendTechStaleReminders(); }, 'Tech stale reminder');
+  // 시각 있는 일정 30분 전 알림 (v13.252)
+  scheduler.scheduleEvery(5, function () { return notificationService.sendEventSoonReminders(); }, 'Event soon reminder');
 
   // ─── 1분마다 리마인더 워커 (telegram_reminders) ───
   // 서버 재시작 시 setTimeout 소실 문제를 DB 영속화 + 폴링 워커로 해소

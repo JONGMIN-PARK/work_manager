@@ -34,6 +34,7 @@ DELETE /api/mindmaps/:id
 DELETE /api/mindmaps/:id/comments/:cid
 DELETE /api/mindmaps/:id/files/:fid
 DELETE /api/mindmaps/:id/snapshots/:sid
+DELETE /api/my-work/feed
 DELETE /api/my-work/todos/:id
 DELETE /api/notifications/:id
 DELETE /api/orders/:orderNo
@@ -126,6 +127,7 @@ GET /api/docs/files/:id/download-url
 GET /api/docs/folders
 GET /api/events
 GET /api/events/:id
+GET /api/ics/:file
 GET /api/issues
 GET /api/issues/:id
 GET /api/issues/:id/logs
@@ -154,6 +156,8 @@ GET /api/mindmaps/by-link
 GET /api/mindmaps/members
 GET /api/mindmaps/search-refs
 GET /api/my-work
+GET /api/my-work/events
+GET /api/my-work/feed
 GET /api/my-work/load
 GET /api/my-work/people
 GET /api/notifications
@@ -348,6 +352,7 @@ POST /api/mindmaps/:id/snapshots/:sid/restore
 POST /api/mindmaps/ai
 POST /api/mindmaps/generate
 POST /api/mindmaps/resolve
+POST /api/my-work/feed
 POST /api/my-work/todos
 POST /api/orders
 POST /api/orders/:orderNo/renumber
@@ -460,6 +465,7 @@ PUT /api/mindmaps/:id/comments/:cid
 PUT /api/mindmaps/:id/pin
 PUT /api/mindmaps/:id/snapshots/:sid
 PUT /api/my-work/done
+PUT /api/my-work/due
 PUT /api/my-work/reassign
 PUT /api/my-work/todos/:id
 PUT /api/notifications/:id/read

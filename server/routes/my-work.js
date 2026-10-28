@@ -8,6 +8,11 @@
  *   DELETE /api/my-work/todos/:id
  *   GET    /api/my-work/load?weeks=&deptId=   업무 부하 (관리자 · 임원 · 팀장)
  *   PUT    /api/my-work/reassign         { src, id, fromUserId, toUserId } — 담당 바꾸기 (관리자 · 임원 · 팀장)
+ *   GET    /api/my-work/events?userId=&from=&to=   내 일정 (만든 것 · 담당에 내 이름) — 달력 보기용 (v13.252)
+ *   PUT    /api/my-work/due              { src, id, userId, due } — 달력에서 끌어 마감 바꾸기 (todo · mindmap · issue · action)
+ *   GET    /api/my-work/feed             내 .ics 구독 주소 (없으면 null)
+ *   POST   /api/my-work/feed             구독 주소 만들기 · 다시 만들기 (옛 주소는 끊김)
+ *   DELETE /api/my-work/feed             구독 끄기
  *
  * 완료 처리 · 담당 바꾸기는 본인 또는 관리자(완료) / 관리자 · 임원 · 팀장(담당)만.
  * 마인드맵 주제는 누가 그 맵을 편집 중이면 바꾸지 않는다 (편집 잠금).
@@ -20,6 +25,7 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var httpErr = require('../lib/http-errors');
 var myWork = require('../lib/my-work');
+var myEvents = require('../lib/my-events');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -27,6 +33,7 @@ router.use(tenant.tenantScope);
 var LEAD_ROLES = ['admin', 'executive', 'manager'];
 var DONE_SRC = ['mindmap', 'issue', 'action', 'dev', 'todo'];
 var MOVE_SRC = ['mindmap', 'issue', 'action', 'dev', 'prestudy'];
+var DUE_SRC = ['todo', 'mindmap', 'issue', 'action'];
 
 function genId() { return 'todo-' + crypto.randomUUID().slice(0, 12); }
 function isLead(req) { return LEAD_ROLES.indexOf(req.user.role) >= 0; }
@@ -249,6 +256,90 @@ router.put('/reassign', async function (req, res) {
     }
     res.json({ data: { src: b.src, id: b.id, userId: to.id } });
   } catch (e) { httpErr.serverError(res, '[my-work/reassign]', e); }
+});
+
+/* ═══ 달력 (v13.252) ═══ */
+function cleanYmd(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null; }
+
+// GET /api/my-work/events?userId=&from=&to=
+router.get('/events', async function (req, res) {
+  try {
+    var u = await targetUser(req, req.query.userId);
+    if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN', '이 사람의 일정을 볼 권한이 없습니다.');
+    var today = myWork.kstToday();
+    var from = cleanYmd(req.query.from) || myEvents.addDays(today, -31);
+    var to = cleanYmd(req.query.to) || myEvents.addDays(today, 62);
+    if (myWork.daysBetween(from, to) > 400) return httpErr.sendError(res, 400, 'VALIDATION', '기간이 너무 깁니다.');
+    var rows = await myEvents.eventsFor(req, u, from, to);
+    await myEvents.markCanModify(req, rows);
+    res.json({ data: rows, from: from, to: to });
+  } catch (e) { httpErr.serverError(res, '[my-work/events]', e); }
+});
+
+// PUT /api/my-work/due { src, id, userId, due } — 마감 바꾸기 (due 가 null 이면 마감 없앰)
+router.put('/due', async function (req, res) {
+  try {
+    var b = req.body || {};
+    if (DUE_SRC.indexOf(b.src) < 0 || !b.id) return httpErr.sendError(res, 400, 'VALIDATION', '여기서 마감을 바꿀 수 없는 항목입니다. 원래 화면에서 바꿔 주세요.');
+    var due = b.due == null || b.due === '' ? null : cleanYmd(b.due);
+    if (b.due && !due) return httpErr.sendError(res, 400, 'VALIDATION', '날짜 형식이 맞지 않습니다.');
+    var userId = b.userId || req.user.sub;
+    if (userId !== req.user.sub && req.user.role !== 'admin') return httpErr.sendError(res, 403, 'FORBIDDEN', '본인 업무만 마감을 바꿀 수 있습니다.');
+    if (b.src === 'todo' && userId !== req.user.sub) return httpErr.sendError(res, 403, 'FORBIDDEN');
+    var u = await targetUser(req, userId);
+    if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN');
+    var items = await myWork.collect(req, [u], { done: true, sources: [b.src] });
+    if (!items.some(function (x) { return x.id === b.id; })) return httpErr.sendError(res, 404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.');
+    var tid = req.tenant.id;
+    if (b.src === 'todo') {
+      await db.query('UPDATE my_todos SET due_date = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 AND user_id = $4', [due, b.id, tid, req.user.sub]);
+    } else if (b.src === 'issue') {
+      await db.query('UPDATE issues SET due_date = $1, updated_by = $2, updated_at = now() WHERE id = $3 AND tenant_id = $4', [due, req.user.sub, b.id, tid]);
+    } else if (b.src === 'action') {
+      await db.query('UPDATE meeting_action_items SET due_date = $1 WHERE id = $2 AND tenant_id = $3', [due, b.id, tid]);
+    } else if (b.src === 'mindmap') {
+      var mp = splitMapId(b.id);
+      var ok = await editMapNode(req, res, mp.mapId, mp.nodeId, function (n) {
+        if (n.assigneeId !== userId) return false;
+        if (due) n.dueDate = due; else delete n.dueDate;
+      });
+      if (!ok) return;
+    }
+    res.json({ data: { src: b.src, id: b.id, due: due } });
+  } catch (e) { httpErr.serverError(res, '[my-work/due]', e); }
+});
+
+/* ═══ .ics 구독 주소 ═══ */
+function feedUrl(req, token) {
+  var proto = String(req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+  var host = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  return proto + '://' + host + '/api/ics/' + token + '.ics';
+}
+
+router.get('/feed', async function (req, res) {
+  try {
+    var r = await db.query('SELECT token, created_at, last_used_at FROM calendar_feeds WHERE user_id = $1 AND tenant_id = $2', [req.user.sub, req.tenant.id]);
+    var f = r.rows[0];
+    res.json({ data: f ? { url: feedUrl(req, f.token), createdAt: f.created_at, lastUsedAt: f.last_used_at } : null });
+  } catch (e) { httpErr.serverError(res, '[my-work/feed]', e); }
+});
+
+router.post('/feed', async function (req, res) {
+  try {
+    var token = crypto.randomBytes(24).toString('hex');
+    await db.query(
+      'INSERT INTO calendar_feeds (user_id, tenant_id, token) VALUES ($1, $2, $3) ' +
+      'ON CONFLICT (user_id) DO UPDATE SET token = EXCLUDED.token, tenant_id = EXCLUDED.tenant_id, created_at = now(), last_used_at = NULL',
+      [req.user.sub, req.tenant.id, token]);
+    res.json({ data: { url: feedUrl(req, token), createdAt: new Date().toISOString(), lastUsedAt: null } });
+  } catch (e) { httpErr.serverError(res, '[my-work/feed-create]', e); }
+});
+
+router.delete('/feed', async function (req, res) {
+  try {
+    await db.query('DELETE FROM calendar_feeds WHERE user_id = $1 AND tenant_id = $2', [req.user.sub, req.tenant.id]);
+    res.json({ data: null });
+  } catch (e) { httpErr.serverError(res, '[my-work/feed-delete]', e); }
 });
 
 module.exports = router;

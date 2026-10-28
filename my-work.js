@@ -6,6 +6,7 @@
    서버 API (server/routes/my-work.js):
      GET /api/my-work?userId=   GET /api/my-work/people   PUT /api/my-work/done
      POST·PUT·DELETE /api/my-work/todos   GET /api/my-work/load   PUT /api/my-work/reassign
+   달력 보기(주 · 월) · 구독은 my-work-cal.js (v13.252)
    전역 의존: apiFetch, eH, showToast, currentUser, setPage, setMode, showIssueDetail, showProjectDetail, psOpenModal, _mm
    ═══════════════════════════════════════════════════════════════════════ */
 
@@ -19,7 +20,8 @@ var MW_SRC = {
   todo:      { icon: '✏️', label: '할 일' }
 };
 var MW_MOVE_SRC = ['mindmap', 'issue', 'action', 'dev', 'prestudy'];
-var _mw = { userId: null, people: null, canLoad: false, data: null, src: 'all', open: null, load: null, loadSel: null, weeks: 8, dept: '' };
+var _mw = { userId: null, people: null, canLoad: false, data: null, src: 'all', open: null, load: null, loadSel: null, weeks: 8, dept: '',
+  view: null, anchor: null, ev: null };   // view: list · week · month — anchor: 달력에서 보고 있는 날 — ev: 내 일정 { from, to, userId, rows }
 
 function _mwEsc(s) { return (typeof eH === 'function') ? eH(s == null ? '' : String(s)) : String(s == null ? '' : s); }
 function _mwToast(m, t) { if (typeof showToast === 'function') showToast(m, t); }
@@ -108,9 +110,12 @@ function renderMyWork() {
     _mw.people = (r && r.data) || []; _mw.canLoad = !!(r && r.canLoad); return _mw.people;
   });
   ppl.then(function () {
-    return apiFetch('/api/my-work' + (_mw.userId && _mw.userId !== _mwMe() ? '?userId=' + encodeURIComponent(_mw.userId) : ''));
-  }).then(function (r) {
-    _mw.data = r;
+    return Promise.all([
+      apiFetch('/api/my-work' + (_mw.userId && _mw.userId !== _mwMe() ? '?userId=' + encodeURIComponent(_mw.userId) : '')),
+      typeof mwCalLoadEvents === 'function' ? mwCalLoadEvents(true).catch(function () { return null; }) : null
+    ]);
+  }).then(function (res) {
+    _mw.data = res[0];
     _mwPaint();
   }).catch(function (e) {
     el.innerHTML = '<div class="mw-empty">내 업무를 불러오지 못했습니다 — ' + _mwEsc(_mwErr(e)) + '</div>';
@@ -144,13 +149,22 @@ function _mwPaint() {
       (_mw.people && _mw.people.length > 1 ? '<select id="mwWho" class="mw-sel" title="다른 사람 업무 보기">' + _mw.people.map(function (u) {
         return '<option value="' + _mwEsc(u.id) + '"' + (u.id === r.user.id ? ' selected' : '') + '>' + _mwEsc(u.name) + (u.id === _mwMe() ? ' (나)' : u.dept ? ' · ' + _mwEsc(u.dept) : '') + '</option>';
       }).join('') + '</select>' : '') +
+      (typeof mwCalToolsHtml === 'function' ? mwCalToolsHtml(r) : '') +
       '<button class="mw-btn" data-mw="refresh" title="새로 고침">↻</button>' +
     '</div></div>';
   // 출처 거르기
   h += '<div class="mw-chips"><button class="mw-chip' + (_mw.src === 'all' ? ' on' : '') + '" data-src="all">전체 ' + items.filter(function (x) { return !x.done; }).length + '</button>' +
     Object.keys(MW_SRC).filter(function (k) { return counts[k]; }).map(function (k) {
       return '<button class="mw-chip' + (_mw.src === k ? ' on' : '') + '" data-src="' + k + '">' + MW_SRC[k].icon + ' ' + MW_SRC[k].label + ' ' + counts[k] + '</button>';
-    }).join('') + '</div>';
+    }).join('') + (typeof mwCalChipHtml === 'function' ? mwCalChipHtml() : '') + '</div>';
+  // 달력 보기 — 목록 대신 주 · 월 달력
+  if (_mw.view === 'week' || _mw.view === 'month') {
+    el.innerHTML = '<div class="mw-wrap">' + h + mwCalHtml(items, today) + '</div>';
+    _mwBind(el);
+    mwCalBind(el);
+    return;
+  }
+  if (typeof mwCalTodayHtml === 'function') h += mwCalTodayHtml(today);
   if (r.self) {
     h += '<form class="mw-add" id="mwAdd"><input id="mwAddTitle" class="mw-input" maxlength="500" placeholder="+ 개인 할 일 — 어디에도 속하지 않는 일을 적어 두세요" autocomplete="off">' +
       '<input id="mwAddDue" type="date" class="mw-input mw-date" title="마감 (없어도 됨)"><button class="mw-btn mw-btn-p" type="submit">추가</button></form>';
@@ -190,7 +204,7 @@ function _mwFind(key) { return ((_mw.data && _mw.data.data) || []).filter(functi
 
 function _mwBind(el) {
   var who = el.querySelector('#mwWho');
-  if (who) who.onchange = function () { _mw.userId = who.value; _mw.src = 'all'; renderMyWork(); };
+  if (who) who.onchange = function () { _mw.userId = who.value; _mw.src = 'all'; _mw.anchor = null; renderMyWork(); };
   var add = el.querySelector('#mwAdd');
   if (add) add.onsubmit = function (e) {
     e.preventDefault();
@@ -205,6 +219,7 @@ function _mwBind(el) {
   el.onclick = function (e) {
     var t = e.target;
     if (t.closest('[data-mw="refresh"]')) { renderMyWork(); return; }
+    if (typeof mwCalClick === 'function' && mwCalClick(e)) return;
     var chip = t.closest('[data-src]');
     if (chip) { _mw.src = chip.getAttribute('data-src'); _mwPaint(); return; }
     var fold = t.closest('[data-fold]');

@@ -1026,6 +1026,7 @@ async function loadTelegramPrefs(container) {
     deadline_today: '납기 D-day',
     user_pending: '가입 승인 요청',
     event_today: '일일 브리핑 (08:30)',
+    event_soon: '일정 30분 전',
     order_delivery_d7: '납품 D-7',
     order_delivery_d3: '납품 D-3',
     weekly_digest: '주간 다이제스트 (월)',

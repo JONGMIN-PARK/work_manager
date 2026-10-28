@@ -761,6 +761,8 @@ function createEvent(data) {
     memo: data.memo || '',
     repeat: data.repeat || null,
     repeatUntil: data.repeatUntil || '',
+    startTime: data.startTime || null,
+    endTime: data.endTime || null,
     createdAt: now,
     _isNew: true
   };

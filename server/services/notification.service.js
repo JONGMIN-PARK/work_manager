@@ -29,5 +29,6 @@ module.exports = {
   sendPrestudyReminders: jobs.sendPrestudyReminders,
   sendTechStaleReminders: jobs.sendTechStaleReminders,
   sendMindmapDueReminders: jobs.sendMindmapDueReminders,
+  sendEventSoonReminders: jobs.sendEventSoonReminders,
   TEMPLATES: templates.TEMPLATES
 };

@@ -59,7 +59,7 @@ describe('route inventory', function () {
     var ns = require('../services/notification.service');
     expect(Object.keys(ns).sort()).toEqual([
       'TEMPLATES', 'notify', 'notifyAdmins', 'notifyGroup', 'notifyProjectStakeholders',
-      'sendActionItemReminders', 'sendDailyBriefing', 'sendDeadlineReminders', 'sendMindmapDueReminders', 'sendOrderDeliveryReminders',
+      'sendActionItemReminders', 'sendDailyBriefing', 'sendDeadlineReminders', 'sendEventSoonReminders', 'sendMindmapDueReminders', 'sendOrderDeliveryReminders',
       'sendOverloadWarnings', 'sendPrestudyReminders', 'sendProgressWarnings', 'sendTechStaleReminders',
       'sendWeeklyDigest'
     ]);
