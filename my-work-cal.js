@@ -266,7 +266,7 @@ function _mwcRepaint() {
 
 function _mwcOpen(x) {
   if (!x) return;
-  if (x.kind === 'task') { mwOpenItem(x.it); return; }
+  if (x.kind === 'task') { if (typeof mwPanelOpen === 'function') mwPanelOpen(x.it); else mwOpenItem(x.it); return; }
   _mwcEventModal(x.ev.id);
 }
 function _mwcEventModal(id, date, opts) {

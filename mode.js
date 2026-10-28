@@ -5,6 +5,7 @@ let curMode='weekly';
 var curPage='team';
 function setPage(page){
   if(curPage==='mindmap'&&page!=='mindmap'&&typeof mmOnLeave==='function')mmOnLeave();  // 저장 마무리 · 편집 잠금 해제
+  if(curPage==='mywork'&&page!=='mywork'&&typeof mwPanelClose==='function')mwPanelClose();  // 내 업무 상세 패널 — 남은 저장 마저 하고 닫음 (다른 화면을 가리지 않게)
   curPage=page;
   document.querySelectorAll('#pageTabs .tab').forEach(function(t){var sel=t.dataset.page===page;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
   document.getElementById('modeTabs').classList.toggle('hidden',page!=='team');

@@ -29,7 +29,8 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
   var browser = await puppeteer.launch({ headless: 'shell', pipe: true, args: ['--no-sandbox'], userDataDir: path.join(require('os').tmpdir(), 'wm-e2e-chrome-' + Date.now()) });
   var page = (await browser.pages())[0] || await browser.newPage();
   var errs = []; page.on('pageerror', function (e) { errs.push(e.message); });
-  page.on('dialog', function (d) { d.accept(); });
+  var dialogs = [];
+  page.on('dialog', function (d) { dialogs.push(d.message()); d.accept(); });
   var ok = 0, fail = 0;
   function check(cnd, m) { if (cnd) { ok++; console.log('✔', m); } else { fail++; console.log('FAIL', m); } }
   async function until(fn, arg, ms) { return page.waitForFunction(fn, { timeout: ms || 8000 }, arg).then(function () { return true; }, function () { return false; }); }
@@ -70,25 +71,122 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await wait(500);
     check((await rowOf('할일화면 이슈')).grp === 'focus' && await page.evaluate(function () { return document.querySelector('#mMyWork .mw-grp').getAttribute('data-grp') === 'focus'; }), '⭐ → 오늘 집중 묶음이 맨 위');
 
-    // 4. 할 일 편집 창
-    await page.evaluate(function () { Array.from(document.querySelectorAll('#mMyWork .mw-title')).filter(function (x) { return x.textContent === '할일화면 견적'; })[0].click(); });
-    await page.waitForSelector('#mwTodoModal #mwtTitle');
-    await page.click('#mwtSt [data-v="waiting"]');
-    await page.type('#mwtWait', '고객 회신');
-    await page.type('#mwtClIn', '견적서 작성'); await page.keyboard.press('Enter');
-    await page.type('#mwtClIn', '단가 확인'); await page.keyboard.press('Enter');
-    await page.click('#mwtCl [data-ci="0"]');
-    await page.type('#mwtMemo', '담당: 영업팀');
-    await page.select('#mwtRep', 'weekly');
-    await page.type('#mwtEst', '3');
-    await page.screenshot({ path: path.join(SHOT, 'tasks-edit.png') });
-    await page.click('#mwtForm button[type=submit]');
-    await until(function () { return !document.getElementById('mwTodoModal'); });
-    await wait(600);
+    // 4. 상세 패널 — 자동 저장 (v13.254)
+    async function openTitle(t) { await page.evaluate(function (x) { Array.from(document.querySelectorAll('#mMyWork .mw-title')).filter(function (e) { return e.textContent === x; })[0].click(); }, t); await page.waitForSelector('#mwPanel.on #mwpSave'); await wait(350); }
+    async function saved() { return until(function () { var s = document.getElementById('mwpSave'); return s && /저장됨/.test(s.textContent); }); }
+    await openTitle('할일화면 견적');
+    check(await page.evaluate(function () { return !document.querySelector('.wa-modal-overlay') && !!document.querySelector('#mMyWork .mw-row.mw-picked'); }), '패널은 목록을 가리지 않고 · 고른 줄 표시');
+    await page.click('#mwPanel [data-st-v="waiting"]');
+    await page.type('#mwpWait', '고객 회신');
+    await page.type('#mwpClAdd', '견적서 작성'); await page.keyboard.press('Enter');
+    await page.type('#mwpClAdd', '단가 확인'); await page.keyboard.press('Enter');
+    await page.click('#mwpCl [data-cchk="0"]');
+    await page.type('#mwpMemo', '담당: 영업팀');
+    await page.select('#mwpRep', 'weekly');
+    await page.type('#mwpEst', '3');
+    check(await saved(), '자동 저장 — "저장됨" 표시 (저장 버튼 없음)');
+    await page.screenshot({ path: path.join(SHOT, 'tasks-panel.png') });
     var te = (await c.query("SELECT status, waiting_for, memo, repeat, estimate_h, checklist FROM my_todos WHERE title = '할일화면 견적'")).rows[0];
-    check(te.status === 'waiting' && te.waiting_for === '고객 회신' && te.memo === '담당: 영업팀' && te.repeat === 'weekly' && Number(te.estimate_h) === 3 && te.checklist.length === 2 && te.checklist[0].d, '편집 창 저장 ' + JSON.stringify(te));
+    check(te.status === 'waiting' && te.waiting_for === '고객 회신' && te.memo === '담당: 영업팀' && te.repeat === 'weekly' && Number(te.estimate_h) === 3 && te.checklist.length === 2 && te.checklist[0].d, '패널에서 바로 저장 ' + JSON.stringify(te));
     var r2 = await rowOf('할일화면 견적');
-    check(/대기 · 고객 회신/.test(r2.txt) && /☑ 1\/2/.test(r2.txt) && /📝/.test(r2.txt) && /🔁/.test(r2.txt), '줄에 대기 · 1/2 · 메모 · 반복 ' + r2.txt);
+    check(/대기 · 고객 회신/.test(r2.txt) && /☑ 1\/2/.test(r2.txt) && /📝/.test(r2.txt) && /🔁/.test(r2.txt), '목록 줄도 바로 바뀜 ' + r2.txt);
+
+    // 4-2. 하위 항목 다루기 — 한글 조합 Enter · 여러 줄 붙여넣기 · 빈 줄 Backspace · 끌기
+    var ime = await page.evaluate(function () {
+      var inp = document.getElementById('mwpClAdd');
+      inp.value = '조합중';
+      inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, isComposing: true, bubbles: true }));
+      var r = { n: document.querySelectorAll('#mwpCl .mwp-cli').length, v: inp.value };
+      inp.value = '';
+      return r;
+    });
+    check(ime.n === 2 && ime.v === '조합중', '한글 조합 중 Enter 는 넣지 않음 ' + JSON.stringify(ime));
+    await page.evaluate(function () {
+      var inp = document.getElementById('mwpClAdd'), dt = new DataTransfer();
+      dt.setData('text/plain', '- 도면 확인\n- 납기 협의\n\n3) 계약서');
+      inp.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    });
+    await saved(); await wait(500);
+    var cl = (await c.query("SELECT checklist FROM my_todos WHERE title = '할일화면 견적'")).rows[0].checklist;
+    check(cl.length === 5 && cl[2].t === '도면 확인' && cl[4].t === '계약서', '여러 줄 붙여넣기 → 하위 항목 3개 (기호 · 번호 떼고) ' + JSON.stringify(cl.map(function (x) { return x.t; })));
+    // 줄에서 Enter → 다음 줄 생기고 커서, 비운 채 Backspace → 지워짐
+    await page.click('#mwpCl [data-ct="1"]');
+    await page.keyboard.press('End'); await page.keyboard.press('Enter');
+    var mid = await page.evaluate(function () { return { n: document.querySelectorAll('#mwpCl .mwp-cli').length, f: document.activeElement && document.activeElement.getAttribute('data-ct') }; });
+    await page.keyboard.press('Backspace');
+    var back = await page.evaluate(function () { return { n: document.querySelectorAll('#mwpCl .mwp-cli').length, f: document.activeElement && document.activeElement.getAttribute('data-ct') }; });
+    check(mid.n === 6 && mid.f === '2' && back.n === 5 && back.f === '1', 'Enter 다음 줄 · 빈 줄 Backspace 지우기 ' + JSON.stringify([mid, back]));
+    // 끌어서 순서 — 마지막(계약서)을 맨 위로
+    await page.evaluate(function () {
+      var rows = document.querySelectorAll('#mwpCl .mwp-cli'), dt = new DataTransfer();
+      rows[4].querySelector('.mwp-grip').dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+      rows[0].dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      rows[0].dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    });
+    await saved(); await wait(500);
+    cl = (await c.query("SELECT checklist FROM my_todos WHERE title = '할일화면 견적'")).rows[0].checklist;
+    check(cl[0].t === '계약서' && cl[0].d === false, '하위 항목 끌어서 순서');
+    // 제목 고치기 · Esc 로 닫아도 저장됨
+    await page.click('#mwpTitle', { clickCount: 3 });
+    await page.keyboard.type('할일화면 견적 수정');
+    await page.keyboard.press('Escape');
+    await wait(900);
+    check(!(await page.$('#mwPanel.on')) && (await c.query("SELECT COUNT(*)::int AS n FROM my_todos WHERE title = '할일화면 견적 수정'")).rows[0].n === 1, 'Esc 로 닫아도 고친 제목은 저장됨');
+    await c.query("UPDATE my_todos SET title = '할일화면 견적' WHERE title = '할일화면 견적 수정'");
+    await page.evaluate(function () { renderMyWork(); });
+    await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '할일화면 견적'; }); });
+
+    // 4-3. 다른 출처도 같은 패널 — 이슈: 중요도 · 마감 빨리 고르기 · 원래 화면 열기
+    await openTitle('할일화면 이슈');
+    var ip = await page.evaluate(function () { var p = document.getElementById('mwPanel'); return { ro: !!p.querySelector('.mwp-title.mwp-ro'), src: !!p.querySelector('[data-p="source"]'), pri: !!p.querySelector('[data-pri-v]'), quick: p.querySelectorAll('[data-due-v]').length, cl: !!p.querySelector('#mwpCl') }; });
+    check(ip.ro && ip.src && ip.pri && ip.quick === 5 && !ip.cl, '이슈 패널 — 제목 읽기 · 중요도 · 마감 빨리 고르기 · [이슈 화면에서 열기] ' + JSON.stringify(ip));
+    await page.evaluate(function () { document.querySelector('#mwPanel [data-due-v]').click(); });   // 오늘
+    await wait(700);
+    check((await c.query("SELECT due_date FROM issues WHERE id = 'twu-i1'")).rows[0].due_date === kst(0), '마감 [오늘] → 이슈 마감 바뀜');
+    check(await until(function () { var u = document.getElementById('mwUndo'); return u && /이슈에도 반영/.test(u.textContent) && u.querySelector('button'); }), '되돌리기 알림');
+    await page.click('#mwUndo button');
+    await wait(800);
+    check((await c.query("SELECT due_date FROM issues WHERE id = 'twu-i1'")).rows[0].due_date === kst(5), '되돌리기 → 원래 마감');
+    await page.keyboard.press('Escape');
+
+    // 4-4. 달력 칩 · 끝낸 일도 같은 패널
+    await page.click('#mMyWork [data-mwc-view="month"]');
+    await page.waitForSelector('#mMyWork .mwc-month');
+    await page.evaluate(function () { Array.from(document.querySelectorAll('.mwc-chip.mwc-task')).filter(function (x) { return /할일화면 견적/.test(x.textContent); })[0].click(); });
+    check(await until(function () { var p = document.getElementById('mwPanel'); return p && p.classList.contains('on') && document.getElementById('mwpTitle').value === '할일화면 견적'; }), '월 보기 할 일 칩 → 패널');
+    await wait(350);
+    await page.click('#mwPanel [data-p="close"]');
+    await page.click('#mMyWork [data-mwc-view="list"]');
+    await page.waitForSelector('#mwAddTitle');
+    await page.type('#mwAddTitle', '할일화면 끝낸 일');
+    await page.keyboard.press('Enter');
+    await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '할일화면 끝낸 일'; }); });
+    var dk = (await rowOf('할일화면 끝낸 일')).key;
+    await page.evaluate(function (k) { var g = document.querySelector('#mMyWork [data-grp="nodue"]'); if (g && g.classList.contains('mw-folded')) g.querySelector('[data-fold]').click(); document.querySelector('#mMyWork input[data-done="' + k + '"]').click(); }, dk);
+    check(await until(function () { var u = document.getElementById('mwUndo'); return u && /완료/.test(u.textContent); }), '완료 → 되돌리기 알림');
+    await wait(400);
+    await page.evaluate(function () { var d = document.querySelector('#mMyWork [data-grp="done"]'); if (d && d.classList.contains('mw-folded')) d.querySelector('[data-fold]').click(); });
+    await openTitle('할일화면 끝낸 일');
+    check(await page.evaluate(function () { return document.querySelector('#mwPanel [data-p="done"]').checked; }), '다 한 것의 할 일도 패널로 열림 (완료 표시)');
+    await page.keyboard.press('Escape');
+
+    // 4-5. 단축키 — ↓ 고르기 · 2 중요도 · Delete 지우기 → 되돌리기
+    await page.evaluate(function () { document.activeElement && document.activeElement.blur(); _mw.sel = Array.from(document.querySelectorAll('#mMyWork .mw-row')).filter(function (r) { return /할일화면 견적/.test(r.textContent); })[0].getAttribute('data-key'); });
+    await page.keyboard.press('2');
+    await wait(600);
+    check((await c.query("SELECT priority FROM my_todos WHERE title = '할일화면 견적'")).rows[0].priority === 2, '단축키 2 → 중요도 높음');
+    await page.keyboard.press('1');
+    await wait(500);
+    await page.keyboard.press('Delete');
+    await wait(600);
+    check((await c.query("SELECT COUNT(*)::int AS n FROM my_todos WHERE title = '할일화면 견적'")).rows[0].n === 0, 'Delete → 지움 (묻지 않음)');
+    await page.click('#mwUndo button');
+    check(await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '할일화면 견적'; }); }), '되돌리기 → 되살림');
+    var back2 = (await c.query("SELECT priority, repeat, memo, checklist FROM my_todos WHERE title = '할일화면 견적'")).rows[0];
+    check(back2 && back2.priority === 1 && back2.repeat === 'weekly' && back2.memo === '담당: 영업팀' && back2.checklist.length === 5, '되살린 할 일 내용 그대로 ' + JSON.stringify(back2 && { p: back2.priority, r: back2.repeat }));
+    await page.keyboard.press('?');
+    check(!!(await page.waitForSelector('#mwKeys', { timeout: 3000 }).catch(function () { return null; })), '? → 단축키 도움말');
+    await page.keyboard.press('Escape');
 
     // 5. 거르기 · 정렬
     await page.select('#mwPriF', 'urgent');

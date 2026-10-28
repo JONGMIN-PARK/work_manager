@@ -2,7 +2,7 @@
    my-work-task.js — 🎯 내 업무 할 일 관리 · 종류별 등록 (v13.253)
    ─────────────────────────────────────────────────────────────────────
    중요도 4단계 (1 긴급 · 2 높음 · 3 보통 · 4 낮음) — 이슈 · 회의 액션 · 개발 · 사전검토 · 맵 주제는 원래 자리에 반영
-   ⭐ 오늘 집중 · 정렬(마감 · 중요도 · 직접 순서) · 거르기 · 할 일 편집 창(상태 · 메모 · 하위 항목 · 반복 · 예상 시간)
+   ⭐ 오늘 집중 · 정렬(마감 · 중요도 · 직접 순서) · 거르기 (할 일 편집은 my-work-panel.js 상세 패널)
    종류별 등록 창 — 할 일 · 회의 · 출장 · 외근 · 연차/반차 · 검토 · 기타 (참석자 고르기 · 겹침 경고 · 회의록 같이 만들기)
    4칸 보기 — 중요 × 급함
    서버 API: PUT /api/my-work/priority · /mark · /order · GET /directory · POST·PUT /todos · POST /api/meetings · /api/events
@@ -103,7 +103,7 @@ function mwTaskClick(e) {
   var pb = t.closest('[data-pri]');
   if (pb) { _mwPriMenu(pb, _mwFind(pb.getAttribute('data-pri'))); return true; }
   var fb = t.closest('[data-focus]');
-  if (fb) { _mwToggleFocus(_mwFind(fb.getAttribute('data-focus'))); return true; }
+  if (fb) { mwToggleFocus(_mwFind(fb.getAttribute('data-focus'))); return true; }
   if (t.closest('[data-mwt="new"]')) { mwRegister({ date: _mwtToday(), kind: 'meeting' }); return true; }
   return false;
 }
@@ -143,10 +143,12 @@ function mwSetPriority(it, p) {
   it.pri = p; it.urgent = p === 1;
   _mwPaint();
   return apiFetch('/api/my-work/priority', { method: 'PUT', body: JSON.stringify({ src: it.src, id: it.id, userId: it.userId, priority: p }) }).then(function () {
-    _mwToast(MW_PRI[p].icon + ' 중요도 ' + MW_PRI[p].label + (it.src !== 'todo' ? ' — ' + (MW_SRC[it.src] || {}).label + '에도 반영' : ''));
+    var msg = MW_PRI[p].icon + ' 중요도 ' + MW_PRI[p].label + (it.src !== 'todo' ? ' — ' + (MW_SRC[it.src] || {}).label + '에도 반영' : '');
+    if (typeof mwUndoToast === 'function') mwUndoToast(msg, function () { mwSetPriority(it, prev); }); else _mwToast(msg);
+    if (typeof mwPanelSync === 'function') mwPanelSync();
   }).catch(function (e) { it.pri = prev; it.urgent = prev === 1; _mwPaint(); _mwToast('❌ ' + _mwErr(e), 'error'); });
 }
-function _mwToggleFocus(it) {
+function mwToggleFocus(it) {
   if (!it) return;
   var on = !it.focus;
   it.focus = on ? _mwtToday() : null;
@@ -193,92 +195,28 @@ function mwBindOrder(el) {
   });
 }
 
-/* ═══ 할 일 편집 창 ═══ */
-function mwTodoEdit(it) {
-  if (!it) return;
-  wmGuardedModal('mwTodoEdit', function () { _mwBuildTodoEdit(it); }, 'mwTodoModal', {
-    onOpen: function () { var x = document.getElementById('mwtTitle'); if (x) x.focus(); }
-  });
-}
-function _mwBuildTodoEdit(it) {
-  var cl = (it.checklist || []).map(function (c) { return { id: c.id, t: c.t, d: !!c.d }; });
-  var st = { pri: it.pri || 3, status: it.todoStatus || 'todo' };
-  var html = '<form id="mwtForm" class="mwt-f">' +
-    '<input id="mwtTitle" class="mw-input mwt-title" maxlength="500" value="' + _mwEsc(it.title) + '">' +
-    '<div class="mwt-row"><span class="mwt-l">중요도</span><span class="mwt-seg" id="mwtPri">' + [1, 2, 3, 4].map(function (p) {
-      return '<button type="button" data-v="' + p + '" class="mwt-p' + p + (st.pri === p ? ' on' : '') + '">' + MW_PRI[p].icon + ' ' + MW_PRI[p].label + '</button>';
-    }).join('') + '</span></div>' +
-    '<div class="mwt-row"><span class="mwt-l">상태</span><span class="mwt-seg" id="mwtSt">' + Object.keys(MW_TODO_STATUS).map(function (k) {
-      return '<button type="button" data-v="' + k + '"' + (st.status === k ? ' class="on"' : '') + '>' + MW_TODO_STATUS[k] + '</button>';
-    }).join('') + '</span><input id="mwtWait" class="mw-input" maxlength="100" placeholder="누구 · 무엇을 기다리나요?" value="' + _mwEsc(it.waitingFor || '') + '"' + (st.status === 'waiting' ? '' : ' hidden') + '></div>' +
-    '<div class="mwt-row"><span class="mwt-l">마감</span><input id="mwtDue" type="date" class="mw-input" value="' + _mwEsc(it.due || '') + '">' +
-      '<input id="mwtTime" type="time" step="300" class="mw-input" value="' + _mwEsc(it.dueTime || '') + '" title="마감 시각 — 넣으면 30분 전에 텔레그램 알림">' +
-      '<select id="mwtRep" class="mw-sel">' + Object.keys(MW_REPEAT).map(function (k) { return '<option value="' + k + '"' + ((it.repeat || '') === k ? ' selected' : '') + '>' + MW_REPEAT[k] + '</option>'; }).join('') + '</select></div>' +
-    '<div class="mwt-row"><span class="mwt-l">예상 시간</span><input id="mwtEst" type="number" min="0" max="999" step="0.5" class="mw-input mwt-num" value="' + (it.estimateH || '') + '" placeholder="h"><span class="mw-sub">업무 부하에 반영 (4시간 = 1칸)</span></div>' +
-    '<div class="mwt-sec">하위 항목 <b id="mwtClN"></b></div><div id="mwtCl" class="mwt-cl"></div>' +
-    '<div class="mwt-cl-add"><input id="mwtClIn" class="mw-input" maxlength="200" placeholder="+ 하위 항목 (Enter)"></div>' +
-    '<div class="mwt-sec">메모</div><textarea id="mwtMemo" class="mw-input mwt-memo" rows="4" maxlength="5000" placeholder="자세한 내용 · 링크 · 연락처…">' + _mwEsc(it.memo || '') + '</textarea>' +
-    '<div class="mwc-q-btns"><button type="button" class="mw-btn mwt-del" id="mwtDel">🗑 지우기</button><span style="flex:1"></span>' +
-      '<button type="button" class="mw-btn" id="mwtCancel">닫기</button><button type="submit" class="mw-btn mw-btn-p">저장</button></div></form>';
-  var ov = createModal({ id: 'mwTodoModal', width: '540px', titleText: '✏️ 할 일', html: html, closeOnEsc: true }).overlay;
-  var $ = function (id) { return ov.querySelector('#' + id); };
-  function paintCl() {
-    $('mwtCl').innerHTML = cl.map(function (c, i) {
-      return '<div class="mwt-cli' + (c.d ? ' is-d' : '') + '"><input type="checkbox" data-ci="' + i + '"' + (c.d ? ' checked' : '') + '><input class="mwt-clt" data-ct="' + i + '" value="' + _mwEsc(c.t) + '" maxlength="200"><button type="button" class="mw-x" data-cx="' + i + '" title="빼기">×</button></div>';
-    }).join('');
-    $('mwtClN').textContent = cl.length ? cl.filter(function (c) { return c.d; }).length + '/' + cl.length : '';
+/* 창 열기 — 머리(✕)와 Esc 를 직접 묶어 저장 안 한 내용이 있으면 묻는다 (createModal 기본 ✕ · Esc 는 그냥 닫음) */
+function _mwtModal(id, width, title, body, isDirty) {
+  var ov = createModal({ id: id, width: width, html: '<div class="mwt-head"><b>' + title + '</b><button type="button" class="mwt-x" data-mwt-close title="닫기 (Esc)">✕</button></div>' + body }).overlay;
+  function close(force) {
+    if (!ov.isConnected) return;
+    if (!force && isDirty() && !confirm('저장하지 않은 내용이 있습니다. 닫을까요?')) return;
+    ov.remove();
+    document.removeEventListener('keydown', onKey, true);
   }
-  paintCl();
-  var dirty = false;
-  ov.addEventListener('input', function () { dirty = true; });
-  ov.querySelector('form').onclick = function (e) {
-    var b = e.target.closest('[data-v]');
-    if (b && b.parentNode.id === 'mwtPri') { st.pri = +b.getAttribute('data-v'); dirty = true; }
-    else if (b && b.parentNode.id === 'mwtSt') { st.status = b.getAttribute('data-v'); dirty = true; $('mwtWait').hidden = st.status !== 'waiting'; if (st.status === 'waiting') $('mwtWait').focus(); }
-    if (b) b.parentNode.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
-    var cx = e.target.closest('[data-cx]');
-    if (cx) { cl.splice(+cx.getAttribute('data-cx'), 1); dirty = true; paintCl(); }
-  };
-  $('mwtCl').onchange = function (e) {
-    var ci = e.target.getAttribute('data-ci'), ct = e.target.getAttribute('data-ct');
-    if (ci != null) { cl[+ci].d = e.target.checked; paintCl(); }
-    if (ct != null) { cl[+ct].t = e.target.value.trim() || cl[+ct].t; }
-    dirty = true;
-  };
-  $('mwtClIn').onkeydown = function (e) {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    var v = this.value.trim();
-    if (!v) return;
-    if (cl.length >= 50) { _mwToast('하위 항목은 50개까지입니다', 'warn'); return; }
-    cl.push({ id: 'c' + Date.now().toString(36), t: v, d: false });
-    this.value = ''; dirty = true; paintCl();
-  };
-  function close() { if (dirty && !confirm('저장하지 않은 내용이 있습니다. 닫을까요?')) return; ov.remove(); }
-  $('mwtCancel').onclick = close;
-  $('mwtDel').onclick = function () {
-    if (!confirm('"' + it.title + '" 할 일을 지울까요?')) return;
-    apiFetch('/api/my-work/todos/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(function () { ov.remove(); _mwToast('🗑 지웠습니다', 'warn'); renderMyWork(); })
-      .catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); });
-  };
-  var busy = false;
-  ov.querySelector('form').onsubmit = function (e) {
-    e.preventDefault();
-    if (busy) return;
-    var title = $('mwtTitle').value.trim();
-    if (!title) { $('mwtTitle').focus(); return; }
-    var due = $('mwtDue').value || null, tm = $('mwtTime').value || null;
-    if (tm && !due) { _mwToast('마감 시각은 마감일과 같이 넣어 주세요', 'warn'); return; }
-    if ($('mwtRep').value && !due) { _mwToast('반복은 마감일이 있어야 합니다', 'warn'); return; }
-    busy = true;
-    var body = { title: title, priority: st.pri, status: st.status, waitingFor: st.status === 'waiting' ? $('mwtWait').value.trim() : '',
-      dueDate: due, dueTime: tm, repeat: $('mwtRep').value || null, estimateH: $('mwtEst').value === '' ? null : +$('mwtEst').value,
-      memo: $('mwtMemo').value, checklist: cl };
-    apiFetch('/api/my-work/todos/' + encodeURIComponent(it.id), { method: 'PUT', body: JSON.stringify(body) }).then(function () {
-      dirty = false; ov.remove(); _mwToast('💾 저장했습니다'); renderMyWork();
-    }).catch(function (e2) { busy = false; _mwToast('❌ ' + _mwErr(e2), 'error'); });
-  };
+  function onKey(e) {
+    if (e.key !== 'Escape' || e.isComposing || !ov.isConnected) return;
+    var all = document.querySelectorAll('.wa-modal-overlay');
+    if (all[all.length - 1] !== ov) return;   // 맨 위 창만
+    e.stopPropagation();
+    close();
+  }
+  document.addEventListener('keydown', onKey, true);
+  ov.querySelector('[data-mwt-close]').onclick = function () { close(); };
+  return { ov: ov, close: close };
 }
+
+/* 할 일 편집은 my-work-panel.js 상세 패널 (v13.254 — 팝업 대신 자동 저장 패널) */
 
 /* ═══ 종류별 등록 창 ═══ */
 /** opt: { date, t1, t2, kind, title } */
@@ -315,7 +253,8 @@ function _mwBuildRegister(opt) {
     '<textarea id="mwrMemo" class="mw-input mwt-memo" rows="2" maxlength="5000" placeholder="메모 (선택)"></textarea>' +
     '<div class="mwc-q-btns"><button type="button" class="mw-btn" id="mwrMore" data-f="more" title="반복 · 색 · 여러 프로젝트">자세히…</button><span style="flex:1"></span>' +
       '<button type="button" class="mw-btn" id="mwrCancel">닫기</button><button type="submit" class="mw-btn mw-btn-p">등록</button></div></form>';
-  var ov = createModal({ id: 'mwRegModal', width: '560px', titleText: '➕ 등록', html: html, closeOnEsc: true }).overlay;
+  var M = _mwtModal('mwRegModal', '560px', '➕ 등록', html, function () { return !!($('mwrTitle').value.trim() || $('mwrMemo').value.trim() || $('mwrPlace').value.trim() || st.people.length); });
+  var ov = M.ov;
   var $ = function (id) { return ov.querySelector('#' + id); };
   // 프로젝트 — 편집할 수 있는 것만 (서버 규칙과 같음)
   if (typeof projGetAll === 'function') projGetAll().then(function (ps) {
@@ -408,10 +347,10 @@ function _mwBuildRegister(opt) {
     if (this.value && st.people.indexOf(this.value) < 0) st.people.push(this.value);
     this.value = ''; paintPeople();
   };
-  $('mwrCancel').onclick = function () { ov.remove(); };
+  $('mwrCancel').onclick = function () { M.close(); };
   $('mwrMore').onclick = function () {
     var v = vals();
-    ov.remove();
+    M.close(true);
     _mwcEventModal(null, v.date, { title: v.title, startTime: v.t1, endTime: v.t2, location: v.place });
   };
   function vals() {
@@ -447,7 +386,7 @@ function _mwBuildRegister(opt) {
         projectIds: v.proj ? [v.proj] : [], assignees: st.people, location: v.place, memo: v.memo });
     }
     p.then(function () {
-      ov.remove();
+      M.close(true);
       _mwToast(k.icon + ' ' + k.label + ' 등록 — ' + title + (st.people.length && k.people ? ' (' + k.people + ' 달력에도 나옵니다)' : ''));
       if (typeof _pdInvalidate === 'function') _pdInvalidate('evt');
       if (k.k === 'todo') renderMyWork(); else _mwcAfterChange();

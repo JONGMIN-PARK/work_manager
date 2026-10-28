@@ -62,14 +62,18 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     var key = await page.evaluate(function () { return _mw.data.data.filter(function (x) { return x.src === 'action'; })[0].key; });
     await page.click('#mMyWork input[data-done="' + key + '"]');
     await page.waitForFunction(function (k) { var s = document.querySelector('#mMyWork [data-grp="done"]'); return s && s.querySelector('[data-key="' + k + '"]'); }, {}, key);
-    check((await c.query("SELECT status FROM meeting_action_items WHERE id = 'mwu-a1'")).rows[0].status === 'done', '체크 → 회의 액션 완료 · 다 한 것 으로');
+    var st = null;
+    for (var tr = 0; tr < 20 && st !== 'done'; tr++) { await wait(150); st = (await c.query("SELECT status FROM meeting_action_items WHERE id = 'mwu-a1'")).rows[0].status; }   // 화면이 먼저 바뀌고 저장이 뒤따름 (v13.254)
+    check(st === 'done', '체크 → 회의 액션 완료 · 다 한 것 으로');
     // 출처 거르기
     await page.click('#mMyWork .mw-chip[data-src="issue"]');
     check(await page.evaluate(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-row')).every(function (r) { return /이슈/.test(r.querySelector('.mw-src').textContent); }); }), '출처 거르기 — 이슈만');
     await page.click('#mMyWork .mw-chip[data-src="all"]');
     await page.screenshot({ path: path.join(SHOT, 'mywork.png') });
-    // 맵 주제 → 그 주제로 바로 열기 (접힌 위 단계 펴기)
+    // 맵 주제 → 상세 패널 → [맵 화면에서 열기] → 그 주제로 (접힌 위 단계 펴기) — v13.254 부터 줄을 누르면 패널
     await page.evaluate(function () { var it = _mw.data.data.filter(function (x) { return x.nodeId === 'nx'; })[0]; document.querySelector('#mMyWork [data-open="' + it.key + '"]').click(); });
+    await page.waitForSelector('#mwPanel.on [data-p="source"]');
+    await page.evaluate(function () { document.querySelector('#mwPanel [data-p="source"]').click(); });
     await page.waitForFunction(function () { return _mm.view === 'editor' && document.querySelector('#mmStage .mm-node[data-id="nx"]'); }, { timeout: 8000 });
     await wait(200);
     check(await page.evaluate(function () { return _mm.sel === 'nx' && !!document.querySelector('#mmStage .mm-node.mm-sel[data-id="nx"]'); }), '맵이 열리고 그 주제가 골라짐 (접힌 위 단계 폄)');

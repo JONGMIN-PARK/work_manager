@@ -7,7 +7,8 @@
      GET /api/my-work?userId=   GET /api/my-work/people   PUT /api/my-work/done
      POST·PUT·DELETE /api/my-work/todos   GET /api/my-work/load   PUT /api/my-work/reassign
    달력 보기(주 · 월) · 구독은 my-work-cal.js (v13.252)
-   중요도 · 오늘 집중 · 정렬 · 할 일 편집 · 종류별 등록 · 4칸 보기는 my-work-task.js (v13.253)
+   중요도 · 오늘 집중 · 정렬 · 종류별 등록 · 4칸 보기는 my-work-task.js (v13.253)
+   상세 패널(자동 저장) · 되돌리기 · 단축키는 my-work-panel.js (v13.254) — 줄을 누르면 패널, 원래 화면은 패널의 [열기]
    전역 의존: apiFetch, eH, showToast, currentUser, setPage, setMode, showIssueDetail, showProjectDetail, psOpenModal, _mm
    ═══════════════════════════════════════════════════════════════════════ */
 
@@ -21,7 +22,7 @@ var MW_SRC = {
   todo:      { icon: '✏️', label: '할 일' }
 };
 var MW_MOVE_SRC = ['mindmap', 'issue', 'action', 'dev', 'prestudy'];
-var _mw = { userId: null, people: null, canLoad: false, data: null, src: 'all', open: null, load: null, loadSel: null, weeks: 8, dept: '',
+var _mw = { sel: null, userId: null, people: null, canLoad: false, data: null, src: 'all', open: null, load: null, loadSel: null, weeks: 8, dept: '',
   view: null, anchor: null, ev: null };   // view: list · week · month — anchor: 달력에서 보고 있는 날 — ev: 내 일정 { from, to, userId, rows }
 
 function _mwEsc(s) { return (typeof eH === 'function') ? eH(s == null ? '' : String(s)) : String(s == null ? '' : s); }
@@ -74,6 +75,7 @@ var MW_GROUPS = [
 ];
 
 /* ── 원래 자리로 열기 ─────────────────────────────────────────────── */
+/** 원래 자리로 열기 — 패널의 [화면에서 열기] · 업무 부하 목록에서. 개인 할 일은 상세 패널 */
 function mwOpenItem(it) {
   if (!it) return;
   switch (it.src) {
@@ -96,6 +98,7 @@ function mwOpenItem(it) {
       })();
       return;
     case 'todo':
+      if (_mw.data && _mw.data.self && typeof mwPanelOpen === 'function') mwPanelOpen(it);
       return;
     default:   // action · milestone · dev — 프로젝트 상세
       if (it.projectId && typeof showProjectDetail === 'function') showProjectDetail(it.projectId);
@@ -165,6 +168,7 @@ function _mwPaint() {
     el.innerHTML = '<div class="mw-wrap">' + h + mwCalHtml(items, today) + '</div>';
     _mwBind(el);
     mwCalBind(el);
+    if (typeof mwPanelSync === 'function') mwPanelSync();
     return;
   }
   if (typeof mwCalTodayHtml === 'function') h += mwCalTodayHtml(today);
@@ -178,6 +182,7 @@ function _mwPaint() {
     el.innerHTML = '<div class="mw-wrap">' + h + mwMatrixHtml(shown, today) + '</div>';
     _mwBind(el);
     mwBindMatrix(el);
+    if (typeof mwPanelSync === 'function') mwPanelSync();
     return;
   }
   var any = false;
@@ -194,6 +199,7 @@ function _mwPaint() {
   el.innerHTML = '<div class="mw-wrap">' + h + '</div>';
   _mwBind(el);
   if (typeof mwBindOrder === 'function') mwBindOrder(el);
+  if (typeof mwPanelSync === 'function') mwPanelSync();
 }
 
 function _mwRowHtml(it, today) {
@@ -221,7 +227,7 @@ function _mwFind(key) { return ((_mw.data && _mw.data.data) || []).filter(functi
 
 function _mwBind(el) {
   var who = el.querySelector('#mwWho');
-  if (who) who.onchange = function () { _mw.userId = who.value; _mw.src = 'all'; _mw.anchor = null; renderMyWork(); };
+  if (who) who.onchange = function () { if (typeof mwPanelClose === 'function') mwPanelClose(); _mw.userId = who.value; _mw.src = 'all'; _mw.anchor = null; renderMyWork(); };
   var add = el.querySelector('#mwAdd');
   if (add) add.onsubmit = function (e) {
     e.preventDefault();
@@ -256,46 +262,21 @@ function _mwBind(el) {
     var del = t.closest('[data-del]');
     if (del) {
       var it = _mwFind(del.getAttribute('data-del'));
-      if (!it || !confirm('"' + it.title + '" 할 일을 지울까요?')) return;
-      apiFetch('/api/my-work/todos/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(renderMyWork).catch(function (e2) { _mwToast('❌ ' + _mwErr(e2), 'error'); });
+      if (it && typeof mwDeleteTodo === 'function') mwDeleteTodo(it);   // 묻지 않고 지우고 아래 알림에서 되돌리기
       return;
     }
     var op = t.closest('[data-open]');
     if (op) {
       var it2 = _mwFind(op.getAttribute('data-open'));
-      if (it2 && it2.src === 'todo' && _mw.data.self && !it2.done) { if (typeof mwTodoEdit === 'function') mwTodoEdit(it2); else _mwEditTodo(op, it2); return; }
-      mwOpenItem(it2);
+      if (typeof mwPanelOpen === 'function') mwPanelOpen(it2, op.classList.contains('mw-due-btn') ? { focus: '#mwpDue' } : null);
+      else mwOpenItem(it2);
     }
   };
   el.onchange = function (e) {
     var t = e.target;
     if (typeof mwTaskChange === 'function' && mwTaskChange(e)) return;
     if (t.hasAttribute('data-done')) { _mwToggleDone(_mwFind(t.getAttribute('data-done')), t.checked, t); return; }
-    if (t.hasAttribute('data-due')) {
-      var it = _mwFind(t.getAttribute('data-due'));
-      if (!it) return;
-      apiFetch('/api/my-work/todos/' + encodeURIComponent(it.id), { method: 'PUT', body: JSON.stringify({ dueDate: t.value || null }) }).then(renderMyWork)
-        .catch(function (e2) { _mwToast('❌ ' + _mwErr(e2), 'error'); });
-    }
   };
-}
-
-function _mwEditTodo(span, it) {
-  var inp = document.createElement('input');
-  inp.className = 'mw-input mw-title-edit';
-  inp.value = it.title; inp.maxLength = 500;
-  span.replaceWith(inp);
-  inp.focus(); inp.select();
-  var done = false;
-  function finish(save) {
-    if (done) return; done = true;
-    var v = inp.value.trim();
-    if (!save || !v || v === it.title) { _mwPaint(); return; }
-    apiFetch('/api/my-work/todos/' + encodeURIComponent(it.id), { method: 'PUT', body: JSON.stringify({ title: v }) }).then(renderMyWork)
-      .catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); _mwPaint(); });
-  }
-  inp.onkeydown = function (e) { if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); };
-  inp.onblur = function () { finish(true); };
 }
 
 function _mwToggleDone(it, done, box) {
@@ -303,17 +284,8 @@ function _mwToggleDone(it, done, box) {
   box.disabled = true;
   var row = box.closest('.mw-row');
   if (row) row.classList.toggle('mw-done', done);
-  apiFetch('/api/my-work/done', { method: 'PUT', body: JSON.stringify({ src: it.src, id: it.id, userId: it.userId, done: done }) }).then(function (res) {
-    it.done = done; it.doneAt = done ? new Date().toISOString() : null; it.focus = null;
-    var next = res && res.data && res.data.next;
-    _mwToast(done ? '✅ 완료' + (it.src === 'todo' ? '' : ' — ' + (MW_SRC[it.src] || {}).label + '에도 반영했습니다') + (next ? ' · 🔁 다음 회차를 만들었습니다' : '') : '↩ 완료를 되돌렸습니다');
-    if (next) { setTimeout(renderMyWork, 350); return; }
-    setTimeout(_mwPaint, 350);   // 체크가 보인 뒤 '다 한 것' 으로 옮김
-  }).catch(function (e) {
-    box.checked = !done; box.disabled = false;
-    if (row) row.classList.toggle('mw-done', !done);
-    _mwToast('❌ ' + _mwErr(e), 'error');
-  });
+  // 체크가 보인 뒤 '다 한 것' 으로 옮김 — 저장 · 되돌리기 알림은 mwSetDone (my-work-panel.js)
+  setTimeout(function () { mwSetDone(it, done); }, 250);
 }
 
 /* ═══ 👥 업무 부하 ═══ */

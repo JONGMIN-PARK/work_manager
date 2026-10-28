@@ -1,5 +1,15 @@
 # Work Manager — 변경 이력
 
+## v13.254 (2026-10-28) — 할 일 상세 패널 · 자동 저장 · 되돌리기
+
+- 점검: 할 일 편집 경로가 셋(줄 안 제목 편집 · 날짜 칸 · 편집 팝업)이라 구멍이 났음 — 한글 조합 중 Enter, Esc/✕ 로 닫으면 내용 사라짐, 달력 · 다 한 것에서 안 열림, 다른 출처는 누르면 화면을 떠남.
+- `my-work-panel.js` 새 파일: 오른쪽 상세 패널 하나로 통일(모든 출처), 바뀐 칸만 모아 차례로 자동 저장(실패 시 다시 하기), 하위 항목 키보드 · 붙여넣기 · 끌기, 되돌리기 알림(mwSetDone · mwSetDue · mwDeleteTodo · 중요도), 목록 단축키 · 도움말.
+- 지운 것: my-work.js `_mwEditTodo`(줄 안 편집) · 날짜 칸 change, my-work-task.js 편집 팝업(`mwTodoEdit` · `_mwBuildTodoEdit`). 줄 누르기 = 패널, 원래 화면은 패널의 [열기].
+- 패널은 다른 화면으로 가면 닫음(mode.js setPage · [화면에서 열기]) — 열린 채 남아 다른 화면 클릭을 막던 것.
+- 시험 정리: e2e24 맵 열기는 패널 [화면에서 열기]로, 완료는 화면 먼저 · 저장 뒤따름이라 DB 를 기다려 확인, e2e28 은 앞 시험 맵 데이터 정리.
+- 고른 줄 표시 클래스는 `.mw-picked` (`.mw-sel` 은 select 스타일 — 같이 쓰면 select 모양이 지워짐).
+- 테스트: `e2e29-tasks.js` 42 (패널 자동 저장 · 하위 항목 · 다른 출처 · 되돌리기 · 단축키).
+
 ## v13.253 (2026-10-28) — 할 일 관리 · 종류별 등록
 
 - 마이그레이션 065: `my_todos` priority · status · waiting_for · memo · due_time · repeat · estimate_h · checklist, `meeting_action_items.priority`, `events.location`, `my_work_marks`(오늘 집중 · 직접 순서, 출처 무관 item_key).

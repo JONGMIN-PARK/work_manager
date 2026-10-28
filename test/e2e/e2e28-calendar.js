@@ -17,6 +17,7 @@ function otherDayThisWeek() {
   var me = (await c.query("SELECT id, tenant_id FROM users WHERE email = 'admin@t.com'")).rows[0];
   var tid = me.tenant_id;
   await c.query('DELETE FROM my_todos WHERE user_id = $1', [me.id]);
+  await c.query("DELETE FROM mindmaps WHERE title LIKE '내업무%'");   // 앞 시험(e2e24)의 맵 주제가 같은 날 칸을 채우지 않게
   await c.query("DELETE FROM events WHERE title LIKE '화면%'");
   await c.query("DELETE FROM issues WHERE id LIKE 'cwu-%'");
   await c.query("DELETE FROM projects WHERE id LIKE 'cwu-%'");
@@ -135,7 +136,7 @@ function otherDayThisWeek() {
       var cell = document.querySelector('.mwc-md[data-day="' + d + '"]');
       return { n: cells.length, today: !!document.querySelector('.mwc-md.is-today'), txt: cell && cell.textContent };
     }, other);
-    check(mo.n === 42 && mo.today && /08:00/.test(mo.txt) && /화면 새 할 일/.test(mo.txt), '월 보기 42칸 · 오늘 · 시각 표시');
+    check(mo.n === 42 && mo.today && /08:00/.test(mo.txt) && /화면 새 할 일/.test(mo.txt), '월 보기 42칸 · 오늘 · 시각 표시 ' + JSON.stringify(mo));
     await page.click('#mMyWork [data-mwc-nav="1"]');
     await wait(400);
     var lbl = await page.evaluate(function () { return document.querySelector('.mwc-label').textContent; });
