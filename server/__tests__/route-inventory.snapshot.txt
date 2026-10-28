@@ -487,6 +487,7 @@ PUT /api/spec-templates/:id
 PUT /api/tech/:id
 PUT /api/tech/:id/logs/:logId
 PUT /api/telegram/prefs
+PUT /api/telegram/prefs/lead
 PUT /api/tenants/me
 PUT /api/users/:id/approve
 PUT /api/users/:id/department
@@ -509,6 +510,7 @@ PUT /api/v1/projects/:id
 PUT /api/v1/projects/:id/specs
 PUT /api/v1/settings/:key
 PUT /api/v1/telegram/prefs
+PUT /api/v1/telegram/prefs/lead
 PUT /api/v1/tenants/me
 PUT /api/v1/users/:id/approve
 PUT /api/v1/users/:id/department

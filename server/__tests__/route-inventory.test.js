@@ -60,7 +60,7 @@ describe('route inventory', function () {
     expect(Object.keys(ns).sort()).toEqual([
       'TEMPLATES', 'notify', 'notifyAdmins', 'notifyGroup', 'notifyProjectStakeholders',
       'sendActionItemReminders', 'sendDailyBriefing', 'sendDeadlineReminders', 'sendEventSoonReminders', 'sendMindmapDueReminders', 'sendOrderDeliveryReminders',
-      'sendOverloadWarnings', 'sendPrestudyReminders', 'sendProgressWarnings', 'sendTechStaleReminders',
+      'sendOverloadWarnings', 'sendPrestudyReminders', 'sendProgressWarnings', 'sendTechStaleReminders', 'sendTomorrowPreview',
       'sendWeeklyDigest'
     ]);
     Object.keys(ns).forEach(function (k) {

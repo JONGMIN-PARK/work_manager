@@ -20,6 +20,7 @@ module.exports = {
   notifyProjectStakeholders: dispatch.notifyProjectStakeholders,
   notifyGroup: groups.notifyGroup,
   sendDeadlineReminders: jobs.sendDeadlineReminders,
+  sendTomorrowPreview: jobs.sendTomorrowPreview,
   sendDailyBriefing: jobs.sendDailyBriefing,
   sendOrderDeliveryReminders: jobs.sendOrderDeliveryReminders,
   sendWeeklyDigest: jobs.sendWeeklyDigest,

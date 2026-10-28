@@ -293,6 +293,7 @@ if (telegramService.isConfigured()) {
   scheduler.scheduleWeekly(1, 16, 0, function () { return notificationService.sendTechStaleReminders(); }, 'Tech stale reminder');
   // 시각 있는 일정 30분 전 알림 (v13.252)
   scheduler.scheduleEvery(5, function () { return notificationService.sendEventSoonReminders(); }, 'Event soon reminder');
+  scheduler.scheduleDaily(9, 0, function () { return notificationService.sendTomorrowPreview(); }, 'Tomorrow preview');   // KST 18:00
 
   // ─── 1분마다 리마인더 워커 (telegram_reminders) ───
   // 서버 재시작 시 setTimeout 소실 문제를 DB 영속화 + 폴링 워커로 해소

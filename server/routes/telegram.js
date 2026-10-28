@@ -284,7 +284,8 @@ router.get('/prefs', authenticate, tenant.tenantScope, planGate('telegram'), asy
     );
     var prefs = {};
     r.rows.forEach(function (row) { prefs[row.event_type] = row.is_enabled; });
-    res.json({ data: prefs });
+    var lk = await db.query('SELECT remind_lead FROM telegram_links WHERE user_id = $1 AND is_active = TRUE LIMIT 1', [req.user.sub]);
+    res.json({ data: prefs, remindLead: lk.rows.length ? lk.rows[0].remind_lead : 30 });
   } catch (err) {
     httpErr.serverError(res, '[telegram]', err, '설정 조회 실패');
   }
@@ -310,6 +311,19 @@ router.put('/prefs', authenticate, tenant.tenantScope, planGate('telegram'), asy
     );
 
     res.json({ message: '설정이 변경되었습니다.', data: { event_type: eventType, is_enabled: isEnabled } });
+  } catch (err) {
+    httpErr.serverError(res, '[telegram]', err, '설정 변경 실패');
+  }
+});
+
+/** PUT /api/telegram/prefs/lead — { minutes: 10 | 30 | 60 } 일정 · 할 일 미리 알림 시점 (v13.256) */
+router.put('/prefs/lead', authenticate, tenant.tenantScope, planGate('telegram'), async function (req, res) {
+  try {
+    var m = parseInt(req.body && req.body.minutes, 10);
+    if ([10, 30, 60].indexOf(m) < 0) return res.status(400).json({ error: 'BAD_REQUEST', message: '10 · 30 · 60 분 중 하나' });
+    var r = await db.query('UPDATE telegram_links SET remind_lead = $1 WHERE user_id = $2 RETURNING user_id', [m, req.user.sub]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '텔레그램 연동이 없습니다.' });
+    res.json({ data: { remindLead: m } });
   } catch (err) {
     httpErr.serverError(res, '[telegram]', err, '설정 변경 실패');
   }

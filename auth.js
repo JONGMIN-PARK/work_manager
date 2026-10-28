@@ -1011,6 +1011,19 @@ async function loadTelegramPrefs(container) {
   var prefsArea = container.querySelector('#tgPrefsArea');
   if (!prefsArea) return;
 
+  // v13.256: 내 일정 · 할 일 묶음을 위에 — 미리 알림 시점 · 추가/변경 · 내일 미리보기
+  var myLabels = {
+    event_assigned: '📅 내 일정 추가 · 변경',
+    mindmap_assigned: '🧠 맵 주제 담당 지정',
+    action_item_assigned: '📌 회의 액션 배정',
+    issue_assigned: '🎫 이슈 배정',
+    dev_item_assigned: '🛠 개발 아이템 배정',
+    prestudy_assigned: '🔍 사전검토 배정',
+    event_soon: '⏰ 일정 · 할 일 미리 알림',
+    event_today: '☀️ 아침 브리핑 (08:30)',
+    event_tomorrow: '🌙 내일 미리보기 (18:00)',
+    mindmap_due: '🧠 맵 주제 마감'
+  };
   var eventLabels = {
     project_created: '프로젝트 생성',
     project_updated: '프로젝트 수정 (변경 내용)',
@@ -1018,15 +1031,12 @@ async function loadTelegramPrefs(container) {
     milestone_progress: '마일스톤 진척 보고',
     milestone_complete: '마일스톤 완료',
     comment_added: '코멘트/피드백',
-    issue_assigned: '이슈 배정',
     issue_status_changed: '이슈 상태 변경',
     project_delayed: '프로젝트 지연',
     deadline_d3: '납기 D-3',
     deadline_d1: '납기 D-1',
     deadline_today: '납기 D-day',
     user_pending: '가입 승인 요청',
-    event_today: '일일 브리핑 (08:30)',
-    event_soon: '일정 30분 전',
     order_delivery_d7: '납품 D-7',
     order_delivery_d3: '납품 D-3',
     weekly_digest: '주간 다이제스트 (월)',
@@ -1036,18 +1046,39 @@ async function loadTelegramPrefs(container) {
   try {
     var data = await apiFetch('/api/telegram/prefs');
     var prefs = data.data || {};
+    var lead = data.remindLead || 30;
 
-    var html = '<div style="font-size:11px;color:var(--t5,#6070A0);margin-bottom:6px">알림 설정</div>';
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">';
-    Object.keys(eventLabels).forEach(function (evt) {
-      var checked = prefs[evt] !== false; // 기본값 true
-      html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t2,#D8DEE8);padding:3px 0;cursor:pointer">' +
-        '<input type="checkbox" data-evt="' + evt + '" ' + (checked ? 'checked' : '') +
-        ' style="width:14px;height:14px;accent-color:#0088CC;cursor:pointer">' +
-        eventLabels[evt] + '</label>';
-    });
-    html += '</div>';
+    function boxes(labels) {
+      var h = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">';
+      Object.keys(labels).forEach(function (evt) {
+        var checked = prefs[evt] !== false; // 기본값 true
+        h += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t2,#D8DEE8);padding:3px 0;cursor:pointer">' +
+          '<input type="checkbox" data-evt="' + evt + '" ' + (checked ? 'checked' : '') +
+          ' style="width:14px;height:14px;accent-color:#0088CC;cursor:pointer">' +
+          labels[evt] + '</label>';
+      });
+      return h + '</div>';
+    }
+    var html = '<div style="font-size:11px;font-weight:700;color:var(--t3,#A0AACC);margin-bottom:6px">내 일정 · 할 일</div>';
+    html += '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t2,#D8DEE8);margin-bottom:6px">⏰ 미리 알림 '
+      + [10, 30, 60].map(function (m) {
+          return '<button type="button" data-lead="' + m + '" style="padding:3px 9px;border-radius:99px;font-size:11px;cursor:pointer;border:1px solid ' + (m === lead ? '#0088CC;background:#0088CC;color:#fff' : 'var(--bd,#222C44);background:transparent;color:var(--t3,#A0AACC)') + '">' + (m === 60 ? '1시간' : m + '분') + ' 전</button>';
+        }).join('') + '</div>';
+    html += boxes(myLabels);
+    html += '<div style="font-size:11px;font-weight:700;color:var(--t3,#A0AACC);margin:10px 0 6px">그 밖의 알림</div>';
+    html += boxes(eventLabels);
     prefsArea.innerHTML = html;
+
+    prefsArea.querySelectorAll('[data-lead]').forEach(function (b) {
+      b.onclick = async function () {
+        try {
+          await apiFetch('/api/telegram/prefs/lead', { method: 'PUT', body: JSON.stringify({ minutes: +b.dataset.lead }) });
+          loadTelegramPrefs(container);
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('설정 변경 실패', 'error');
+        }
+      };
+    });
 
     // 토글 이벤트
     prefsArea.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {

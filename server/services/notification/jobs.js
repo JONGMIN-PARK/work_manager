@@ -231,16 +231,25 @@ async function myEventsBlock(usr, today) {
   }
 }
 
-/** 시각 있는 일정 30분 전 알림 (5분마다) — 만든 사람(개인 일정) · 담당에 이름 있는 사람. 회차마다 한 번 */
-async function sendEventSoonReminders() {
+var LEADS = [10, 30, 60];
+function leadOf(v) { v = parseInt(v, 10); return LEADS.indexOf(v) >= 0 ? v : 30; }
+/** 'HH:MM' + 분 — 자정을 넘으면 '23:59' 로 막는다 (다음 날 일정은 그날 알림) */
+function addMin(hm, m) {
+  var t = (+hm.slice(0, 2)) * 60 + (+hm.slice(3, 5)) + m;
+  if (t >= 24 * 60) return '23:59';
+  return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+}
+
+/** 시각 있는 일정 미리 알림 (5분마다) — 사람마다 10 · 30 · 60분 전 (telegram_links.remind_lead, v13.256)
+ *  대상: 만든 사람(개인 일정) · 담당에 이름 있는 사람. 회차마다 한 번 */
+async function sendEventSoonReminders(nowMs) {
   // 보낸 기록은 일주일만 둠 (한 시간에 한 번 정리)
   if (new Date().getUTCMinutes() < 5) await db.query("DELETE FROM event_reminder_sent WHERE sent_at < now() - interval '7 days'").catch(function () {});
-  var now = new Date(Date.now() + 9 * 3600 * 1000);   // KST
+  var now = new Date((nowMs || Date.now()) + 9 * 3600 * 1000);   // KST
   var today = now.toISOString().slice(0, 10);
   var hm = now.toISOString().slice(11, 16);
-  var soon = new Date(now.getTime() + 30 * 60000).toISOString();
-  if (soon.slice(0, 10) !== today) return;   // 자정 넘어가는 창은 건너뜀 (00:00 일정은 알림 없음)
-  var until = soon.slice(11, 16);
+  if (hm === '23:59') return;
+  var until = addMin(hm, Math.max.apply(null, LEADS));
   await sendTodoSoonReminders(today, hm, until).catch(function (e) { console.error('[TodoSoon]', e.message); });
   var evR = await db.query(
     "SELECT * FROM events WHERE start_time IS NOT NULL AND start_time > $1 AND start_time <= $2 AND start_date <= $3 " +
@@ -249,7 +258,7 @@ async function sendEventSoonReminders() {
   );
   if (!evR.rows.length) return;
   var users = await db.query(
-    "SELECT tl.chat_id, tl.user_id, u.name, u.tenant_id FROM telegram_links tl JOIN users u ON u.id = tl.user_id " +
+    "SELECT tl.chat_id, tl.user_id, tl.remind_lead, u.name, u.tenant_id FROM telegram_links tl JOIN users u ON u.id = tl.user_id " +
     "WHERE tl.is_active = TRUE AND u.status = 'active' AND u.tenant_id = ANY($1)",
     [evR.rows.map(function (e) { return e.tenant_id; })]
   );
@@ -266,6 +275,7 @@ async function sendEventSoonReminders() {
     var personal = !(Array.isArray(ev.project_ids) && ev.project_ids.length);
     var targets = users.rows.filter(function (u) {
       if (u.tenant_id !== ev.tenant_id || offMap[u.user_id]) return false;
+      if (ev.start_time > addMin(hm, leadOf(u.remind_lead))) return false;   // 이 사람에겐 아직 이름
       return names.indexOf(u.name) >= 0 || (u.user_id === ev.created_by && (personal || !names.length));
     });
     for (var j = 0; j < targets.length; j++) {
@@ -273,7 +283,7 @@ async function sendEventSoonReminders() {
       try {
         var ins = await db.query('INSERT INTO event_reminder_sent (event_id, occur_date, user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING event_id', [ev.id, today, u.user_id]);
         if (!ins.rows.length) continue;
-        var msg = '⏰ <b>곧 시작</b> — ' + ev.start_time + (ev.end_time && ev.start_date === ev.end_date ? '~' + ev.end_time : '') + '\n' +
+        var msg = '⏰ <b>' + leftText(hm, ev.start_time) + ' 시작</b> — ' + ev.start_time + (ev.end_time && ev.start_date === ev.end_date ? '~' + ev.end_time : '') + '\n' +
           (EVT_ICONS[ev.type] || '📌') + ' ' + escHtml(ev.title || '일정') + (ev.memo ? '\n<i>' + escHtml(String(ev.memo).slice(0, 200)) + '</i>' : '');
         await telegramService.sendMessage(u.chat_id, msg);
         sent++;
@@ -288,21 +298,70 @@ async function sendEventSoonReminders() {
 /** 마감 시각 있는 개인 할 일 30분 전 알림 (v13.253) — sendEventSoonReminders 가 같이 부름 */
 async function sendTodoSoonReminders(today, hm, until) {
   var r = await db.query(
-    "SELECT t.id, t.title, t.due_time, t.priority, t.user_id, tl.chat_id FROM my_todos t " +
+    "SELECT t.id, t.title, t.due_time, t.priority, t.user_id, tl.chat_id, tl.remind_lead FROM my_todos t " +
     "JOIN telegram_links tl ON tl.user_id = t.user_id AND tl.is_active = TRUE JOIN users u ON u.id = t.user_id AND u.status = 'active' " +
     "WHERE t.done_at IS NULL AND t.due_date = $1 AND t.due_time > $2 AND t.due_time <= $3 " +
     "AND NOT EXISTS (SELECT 1 FROM notification_prefs np WHERE np.user_id = t.user_id AND np.channel = 'telegram' AND np.event_type = 'event_soon' AND np.is_enabled = FALSE)",
     [today, hm, until]);
   for (var i = 0; i < r.rows.length; i++) {
     var t = r.rows[i];
+    if (t.due_time > addMin(hm, leadOf(t.remind_lead))) continue;
     try {
       var ins = await db.query('INSERT INTO event_reminder_sent (event_id, occur_date, user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING event_id', ['todo:' + t.id, today, t.user_id]);
       if (!ins.rows.length) continue;
-      await telegramService.sendMessage(t.chat_id, '⏰ <b>마감 ' + t.due_time + '</b> — ✏️ ' + escHtml(t.title) + ({ 1: ' 🔴 긴급', 2: ' 🟠 높음' }[t.priority] || ''));
+      await telegramService.sendMessage(t.chat_id, '⏰ <b>마감 ' + t.due_time + '</b> (' + leftText(hm, t.due_time) + ') — ✏️ ' + escHtml(t.title) + ({ 1: ' 🔴 긴급', 2: ' 🟠 높음' }[t.priority] || ''));
     } catch (e) {
       console.error('[TodoSoon]', t.id, e.message);
     }
   }
+}
+
+function leftText(hm, at) {
+  var d = ((+at.slice(0, 2)) * 60 + (+at.slice(3, 5))) - ((+hm.slice(0, 2)) * 60 + (+hm.slice(3, 5)));
+  return d >= 60 ? Math.floor(d / 60) + '시간' + (d % 60 ? ' ' + d % 60 + '분' : '') + ' 뒤' : Math.max(d, 1) + '분 뒤';
+}
+
+/** 저녁 6시 '내일 미리보기' (v13.256) — 내일 내 일정 + 내일 마감인 일. 둘 다 없으면 안 보냄. 끄기: event_tomorrow */
+async function sendTomorrowPreview(nowMs) {
+  var tomorrow = new Date((nowMs || Date.now()) + 9 * 3600 * 1000 + 86400000).toISOString().slice(0, 10);
+  var users = await db.query(
+    "SELECT tl.chat_id, tl.user_id, u.name, u.tenant_id FROM telegram_links tl JOIN users u ON u.id = tl.user_id " +
+    "WHERE tl.is_active = TRUE AND u.status = 'active' " +
+    "AND NOT EXISTS (SELECT 1 FROM notification_prefs np WHERE np.user_id = tl.user_id AND np.channel = 'telegram' AND np.event_type = 'event_tomorrow' AND np.is_enabled = FALSE)");
+  var t = new Date(tomorrow + 'T00:00:00Z');
+  var label = (t.getUTCMonth() + 1) + '/' + t.getUTCDate() + ' (' + '일월화수목금토'.charAt(t.getUTCDay()) + ')';
+  var sent = 0;
+  for (var i = 0; i < users.rows.length; i++) {
+    var usr = users.rows[i];
+    try {
+      var evs = await myEventsToday(usr, tomorrow);
+      var req = { tenant: { id: usr.tenant_id }, user: { sub: usr.user_id, role: 'member' } };
+      var due = (await myWork.collect(req, [{ id: usr.user_id, name: usr.name }])).filter(function (it) { return !it.done && it.due === tomorrow; })
+        .sort(function (a, b) { return (a.pri - b.pri) || ((a.dueTime || '') < (b.dueTime || '') ? -1 : 1); });
+      if (!evs.length && !due.length) continue;
+      var msg = '🌙 <b>내일 미리보기</b> — ' + label + '\n';
+      if (evs.length) {
+        msg += '\n📅 <b>일정 ' + evs.length + '</b>\n';
+        evs.slice(0, 8).forEach(function (x) {
+          var tm = x.time ? x.time + (x.ev.end_time && x.ev.start_date === x.ev.end_date ? '~' + x.ev.end_time : '') + ' ' : '';
+          msg += '  ' + (EVT_ICONS[x.ev.type] || '📌') + ' ' + escHtml(tm + (x.ev.title || '일정')) + (x.ev.location ? ' <i>@' + escHtml(x.ev.location) + '</i>' : '') + '\n';
+        });
+        if (evs.length > 8) msg += '  … 외 ' + (evs.length - 8) + '건\n';
+      }
+      if (due.length) {
+        msg += '\n📋 <b>마감 ' + due.length + '</b>\n';
+        due.slice(0, 8).forEach(function (it) {
+          msg += '  · ' + (it.dueTime ? it.dueTime + ' ' : '') + escHtml(it.title) + ({ 1: ' 🔴', 2: ' 🟠' }[it.pri] || '') + (it.ctx ? ' <i>(' + escHtml(it.ctx.slice(0, 30)) + ')</i>' : '') + '\n';
+        });
+        if (due.length > 8) msg += '  … 외 ' + (due.length - 8) + '건\n';
+      }
+      await telegramService.sendMessage(usr.chat_id, msg.replace(/\n$/, ''));
+      sent++;
+    } catch (e) {
+      console.error('[TomorrowPreview]', usr.user_id, e.message);
+    }
+  }
+  if (sent) console.log('[Notification] Tomorrow preview sent:', sent);
 }
 
 /** 브리핑용 '내 할 일' 조각 — 지연 · 오늘 마감 위주로 5건, 실패해도 브리핑은 보냄 */
@@ -685,6 +744,8 @@ module.exports = {
   sendMindmapDueReminders: sendMindmapDueReminders,
   sendTechStaleReminders: sendTechStaleReminders,
   sendEventSoonReminders: sendEventSoonReminders,
+  sendTomorrowPreview: sendTomorrowPreview,
+  _addMin: addMin,   // 테스트용
   _myEventsBlock: myEventsBlock,   // 테스트용
   _myWorkBlock: myWorkBlock,   // 테스트용
   _kstYmd: _kstYmd,     // 테스트용

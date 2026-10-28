@@ -1,5 +1,15 @@
 # Work Manager — 변경 이력
 
+## v13.256 (2026-10-28) — 텔레그램 내 일정 · 할 일 추가 · 변경 · 미리 알림
+
+- `server/lib/assign-notify.js` 새 파일: `eventChanged(tenant, actor, actorName, prev, next)` — 담당(이름)에 새로 들어간 사람 'added', 원래 담당 + 날짜·시각 변경 'moved'. `mindmapChanged` — 문서 전후 assigneeId 비교, 맵 볼 수 있는 사람(소유자 · editors · viewers)만, 맵마다 묶어 한 번. 본인은 제외. 응답 뒤 기다리지 않고 부름.
+- 부르는 곳: events POST/PUT(`_loadForModify` 가 이제 `SELECT *`), meetings `syncMeetingEvent`(actorName 인자 추가, RETURNING *), mindmaps PUT doc.
+- 템플릿 `event_assigned` · `mindmap_assigned` (dispatch.notify → 텔레그램 · 인앱 · 이메일, 알림 설정 존중).
+- 미리 알림 시점: migration `066_remind_lead.sql`(telegram_links.remind_lead 10/30/60, 기본 30), `PUT /api/telegram/prefs/lead`, GET prefs 에 `remindLead`. `sendEventSoonReminders(nowMs)` 창을 60분으로 넓히고 사람마다 자름, 자정은 23:59 로 막음(예전엔 23:30 이후 알림이 없었음), 메시지에 '20분 뒤'.
+- `sendTomorrowPreview(nowMs)` — KST 18:00(app.js scheduleDaily 9:00 UTC), 끄기 `event_tomorrow`.
+- auth.js 알림 설정: '내 일정 · 할 일' 묶음 + 미리 알림 10 · 30 · 60 버튼.
+- 테스트: `api-remind.js` 16 (run.sh 묶음 추가). api-calendar 메시지 문구 맞춤.
+
 ## v13.255 (2026-10-28) — 주간 업무 작성: 업무일지 기본 작성 주차 · 최적화
 
 - 업무일지 패널 `src.range` 기본 'cur'(작성 주차), `src.target` 기본 'cur' + `targetAuto` — 기간을 바꾸면 넣는 곳이 따라감(prev→지난주, cur→금주), 사용자가 고르면 고정. 기간 바꾸기는 `setSrcRange`.

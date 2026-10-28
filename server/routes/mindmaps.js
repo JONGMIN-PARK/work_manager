@@ -28,6 +28,7 @@ var mmVisible = require('../lib/mindmap-visible');
 var aiMindmap = require('../services/ai-mindmap.service');
 var rateLimit = require('express-rate-limit');
 var notificationService = require('../services/notification.service');
+var assignNotify = require('../lib/assign-notify');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -516,6 +517,7 @@ router.put('/:id', async function (req, res) {
     }
     if (b.doc !== undefined) { await syncLinks(req, req.params.id, b.doc); await syncImages(req, req.params.id, b.doc); }
     res.json({ data: r.rows[0] });
+    if (b.doc !== undefined) assignNotify.mindmapChanged(req.tenant.id, req.user.sub, req.user.name, Object.assign({ owner_id: row.owner_id }, r.rows[0]), row.doc, b.doc);   // 새로 담당이 된 사람에게 (응답 후)
     // 새로 공유받은 사람에게 알림 (응답 후)
     if (b.editors !== undefined || b.viewers !== undefined) {
       var before = asArray(row.editors).concat(asArray(row.viewers));

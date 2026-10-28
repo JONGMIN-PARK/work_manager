@@ -12,6 +12,7 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var ps = require('../lib/project-access');
 var notificationService = require('../services/notification.service');
+var assignNotify = require('../lib/assign-notify');
 var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
@@ -45,7 +46,7 @@ function _hm(v) {
   if (!m || +m[1] > 23 || +m[2] > 59) return null;
   return (m[1].length === 1 ? '0' : '') + m[1] + ':' + m[2];
 }
-async function syncMeetingEvent(meeting, tenantId, userId) {
+async function syncMeetingEvent(meeting, tenantId, userId, actorName) {
   if (!meeting.meet_date) return meeting.event_id || null;
   var projectIds = meeting.project_id ? JSON.stringify([meeting.project_id]) : '[]';
   var form = meeting.form;
@@ -57,17 +58,20 @@ async function syncMeetingEvent(meeting, tenantId, userId) {
   if (typeof att === 'string') { try { att = JSON.parse(att); } catch (_) { att = []; } }
   att = JSON.stringify((Array.isArray(att) ? att : []).filter(Boolean).map(String));
   if (meeting.event_id) {
-    await db.query(
-      "UPDATE events SET title = $1, start_date = $2, end_date = $2, project_ids = $3, start_time = $6, end_time = $7, assignees = $8, location = $9 WHERE id = $4 AND tenant_id = $5",
+    var old = await db.query('SELECT * FROM events WHERE id = $1 AND tenant_id = $2', [meeting.event_id, tenantId]);
+    var up = await db.query(
+      "UPDATE events SET title = $1, start_date = $2, end_date = $2, project_ids = $3, start_time = $6, end_time = $7, assignees = $8, location = $9 WHERE id = $4 AND tenant_id = $5 RETURNING *",
       [meeting.title, meeting.meet_date, projectIds, meeting.event_id, tenantId, t1, t2, att, place]
     );
+    if (up.rows[0]) assignNotify.eventChanged(tenantId, userId, actorName, old.rows[0] || null, up.rows[0]);
     return meeting.event_id;
   }
   var evId = genId('evt');
-  await db.query(
-    "INSERT INTO events (id, title, type, start_date, end_date, project_ids, created_by, tenant_id, start_time, end_time, assignees, location) VALUES ($1,$2,'meeting',$3,$3,$4,$5,$6,$7,$8,$9,$10)",
+  var ins = await db.query(
+    "INSERT INTO events (id, title, type, start_date, end_date, project_ids, created_by, tenant_id, start_time, end_time, assignees, location) VALUES ($1,$2,'meeting',$3,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
     [evId, meeting.title, meeting.meet_date, projectIds, userId, tenantId, t1, t2, att, place]
   );
+  assignNotify.eventChanged(tenantId, userId, actorName, null, ins.rows[0]);
   return evId;
 }
 
@@ -168,7 +172,7 @@ router.post('/', async function (req, res) {
     var meeting = r.rows[0];
     // 일정 자동 발행
     if (meetDate) {
-      var evId = await syncMeetingEvent(meeting, req.tenant.id, req.user.sub);
+      var evId = await syncMeetingEvent(meeting, req.tenant.id, req.user.sub, req.user.name);
       if (evId && evId !== meeting.event_id) {
         await db.query('UPDATE meetings SET event_id = $1 WHERE id = $2 AND tenant_id = $3', [evId, id, req.tenant.id]);
         meeting.event_id = evId;
@@ -215,7 +219,7 @@ router.put('/:id', async function (req, res) {
     }
     var meeting = r.rows[0];
     // 일정 동기화 (제목/일자 변경 반영, meet_date 새로 생기면 발행)
-    var evId = await syncMeetingEvent(meeting, req.tenant.id, req.user.sub);
+    var evId = await syncMeetingEvent(meeting, req.tenant.id, req.user.sub, req.user.name);
     if (evId && evId !== meeting.event_id) {
       await db.query('UPDATE meetings SET event_id = $1 WHERE id = $2 AND tenant_id = $3', [evId, meeting.id, req.tenant.id]);
       meeting.event_id = evId;

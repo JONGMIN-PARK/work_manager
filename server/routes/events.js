@@ -7,6 +7,7 @@ var { parsePagination } = require('../middleware/pagination');
 var tenant = require('../middleware/tenant');
 var ps = require('../lib/project-access');
 var httpErr = require('../lib/http-errors');
+var assignNotify = require('../lib/assign-notify');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -62,7 +63,7 @@ function _bodyTime(b, camel, snake) { return b[camel] !== undefined ? b[camel] :
 
 // 수정/삭제 대상 일정 로드 + 권한 확인. 실패 시 응답 후 null.
 async function _loadForModify(req, res) {
-  var r = await db.query('SELECT id, created_by, project_ids FROM events WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+  var r = await db.query('SELECT * FROM events WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
   if (!r.rows.length) { res.status(404).json({ error: 'NOT_FOUND' }); return null; }
   if (!await _canModifyEvent(req, r.rows[0])) {
     res.status(403).json({ error: 'FORBIDDEN', message: '작성자 또는 연결된 프로젝트의 참여자만 일정을 수정할 수 있습니다.' });
@@ -142,6 +143,7 @@ router.post('/', async function (req, res) {
        _time(_bodyTime(b, 'startTime', 'start_time')), _time(_bodyTime(b, 'endTime', 'end_time')), String(b.location || '').trim().slice(0, 255) || null]
     );
     res.status(201).json({ data: r.rows[0] });
+    assignNotify.eventChanged(req.tenant.id, req.user.sub, req.user.name, null, r.rows[0]);
   } catch (e) {
     httpErr.serverError(res, '[events/create]', e);
   }
@@ -179,6 +181,7 @@ router.put('/:id', async function (req, res) {
     if (result.conflict) return lock.sendConflict(res, result.latest, result.yourVersion);
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: result.row });
+    assignNotify.eventChanged(req.tenant.id, req.user.sub, req.user.name, ev, result.row);
   } catch (e) {
     httpErr.serverError(res, '[events/update]', e);
   }

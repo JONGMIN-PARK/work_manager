@@ -203,6 +203,25 @@ var TEMPLATES = {
       (p.authorName ? '작성: ' + escHtml(p.authorName) + '\n' : '') +
       escHtml((p.body || '').slice(0, 300));
   },
+  // v13.256 — 남이 나를 일정 담당에 넣음 · 내 일정의 날짜/시각이 바뀜
+  event_assigned: function (p) {
+    var md = function (d) { var m = /^\d{4}-(\d{2})-(\d{2})/.exec(d || ''); return m ? (+m[1]) + '/' + (+m[2]) : (d || ''); };
+    var dw = function (d) { var t = new Date((d || '') + 'T00:00:00Z'); return isNaN(t) ? '' : ' (' + '일월화수목금토'.charAt(t.getUTCDay()) + ')'; };
+    var range = md(p.startDate) + dw(p.startDate) + (p.endDate && p.endDate !== p.startDate ? ' ~ ' + md(p.endDate) : '');
+    var time = p.startTime ? ' ' + p.startTime + (p.endTime ? '~' + p.endTime : '') : '';
+    var head = p.kind === 'moved' ? '🔁 <b>일정 변경</b>' : '📅 <b>일정에 추가됨</b>';
+    return head + (p.byName ? ' — ' + escHtml(p.byName) : '') + '\n' +
+      escHtml(p.title || '일정') + '\n' +
+      '🗓 ' + escHtml(range + time) +
+      (p.kind === 'moved' && p.prevDate ? ' <i>(전: ' + escHtml(md(p.prevDate) + (p.prevTime ? ' ' + p.prevTime : '')) + ')</i>' : '') +
+      (p.location ? '\n📍 ' + escHtml(p.location) : '');
+  },
+  mindmap_assigned: function (p) {
+    var items = p.items || [];
+    return '🧠 <b>맵 주제 담당</b>' + (p.byName ? ' — ' + escHtml(p.byName) : '') + '\n' + escHtml(p.mapTitle || '') + '\n' +
+      items.slice(0, 10).map(function (it) { return '• ' + escHtml(it.text) + (it.due ? ' <i>(~' + escHtml(String(it.due).slice(5).replace('-', '/')) + ')</i>' : ''); }).join('\n') +
+      (items.length > 10 ? '\n… 외 ' + (items.length - 10) + '건' : '');
+  },
   mindmap_shared: function (p) {
     return '🧠 <b>마인드맵 공유</b>\n' + escHtml(p.mapTitle || '') + '\n' +
       (p.byName ? escHtml(p.byName) + ' 님이 ' : '') + (p.canEdit ? '편집할 수 있게' : '볼 수 있게') + ' 공유했습니다';
@@ -285,6 +304,8 @@ var EVENT_TITLES = {
   mindmap_comment: '마인드맵에 댓글이 달렸습니다',
   mindmap_due: '마인드맵 주제 마감 알림',
   mindmap_shared: '마인드맵을 공유받았습니다',
+  mindmap_assigned: '맵 주제 담당이 되었습니다',
+  event_assigned: '내 일정이 추가 · 변경되었습니다',
   project_created: '프로젝트가 생성되었습니다',
   project_updated: '프로젝트가 수정되었습니다',
   milestone_progress: '마일스톤 진척이 보고되었습니다'

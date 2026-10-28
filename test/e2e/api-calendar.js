@@ -159,7 +159,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
       await A('POST', '/api/events', { title: '달력 지난주 반복', startDate: kst(-7), endDate: kst(-7), startTime: hm, repeat: 'weekly', projectIds: ['cal-p1'], assignees: ['이팀원'] });
       await jobs.sendEventSoonReminders();
       var toKim = sent.filter(function (x) { return x.chat === '990001'; }), toLee = sent.filter(function (x) { return x.chat === '990002'; });
-      check('30분 안 일정 → 담당에게 한 번', toKim.length === 1 && /곧 시작/.test(toKim[0].msg) && /달력 곧 회의/.test(toKim[0].msg), sent);
+      check('30분 안 일정 → 담당에게 한 번', toKim.length === 1 && /분 뒤 시작/.test(toKim[0].msg) && /달력 곧 회의/.test(toKim[0].msg), sent);
       check('50분 뒤 일정은 아직', !sent.some(function (x) { return /달력 먼 회의/.test(x.msg); }));
       check('반복 회차(오늘)도 알림', toLee.length === 1 && /달력 지난주 반복/.test(toLee[0].msg), sent);
       await jobs.sendEventSoonReminders();
