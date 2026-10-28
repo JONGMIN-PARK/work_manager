@@ -28,7 +28,9 @@ function wmRestoreLastView(){
   try{pb.scrollIntoView({block:'nearest',inline:'nearest'})}catch(_){}  // 휴대폰 — 가로로 밀리는 탭 줄에서 보이게
 }
 window.wmRestoreLastView=wmRestoreLastView;
+function wmCanSeePatchNotes(){return typeof currentUser!=='undefined'&&!!currentUser&&currentUser.role==='admin'}
 function setPage(page){
+  if(page==='patchnotes'&&!wmCanSeePatchNotes())return;  // 패치노트는 관리자만
   if(curPage==='mindmap'&&page!=='mindmap'&&typeof mmOnLeave==='function')mmOnLeave();  // 저장 마무리 · 편집 잠금 해제
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwPanelClose==='function')mwPanelClose();  // 내 업무 상세 패널 — 남은 저장 마저 하고 닫음 (다른 화면을 가리지 않게)
   curPage=page;

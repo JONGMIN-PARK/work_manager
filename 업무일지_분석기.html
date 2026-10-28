@@ -14,11 +14,11 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>var ORDER_MAP={};/* 수주맵: 엑셀 기반 — order.js 대체 */</script>
 <!-- core-bus.js: wmProgress · wmDataBus · WM_TAB_DEPS — 다른 모든 스크립트보다 먼저 동기 로드 -->
-<script src="core-bus.js?v=3" onerror="console.warn('core-bus.js 로드 실패')"></script>
+<script src="core-bus.js?v=4" onerror="console.warn('core-bus.js 로드 실패')"></script>
 <!-- core (동기 로드 필수 — 인라인 폴백 typeof 체크가 파싱 중에 실행됨) -->
 <script src="config.js?v=6" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="settings.js?v=6" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
-<script src="auth.js?v=11" onerror="console.warn('auth.js 로드 실패')"></script>
+<script src="auth.js?v=12" onerror="console.warn('auth.js 로드 실패')"></script>
 <script defer src="weekly-report-parse.js?v=1" onerror="console.warn('weekly-report-parse.js 로드 실패')"></script>
 <script defer src="weekly-report-admin.js?v=13" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
 <script src="project-data.js?v=11" onerror="console.warn('project-data.js 로드 실패')"></script>
@@ -80,13 +80,38 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" onerror="console.warn('mammoth.js 로드 실패')"></script>
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=43">
+<link rel="stylesheet" href="style.css?v=44">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
+<!-- 시작 화면 — 로그인 확인 · 데이터 받기 · 마지막 화면 복원까지 (core-bus.js wmSplash · app-init.js) -->
+<div id="initLoading" class="wm-splash" role="status" aria-live="polite" aria-label="불러오는 중">
+  <div class="wm-sp-aurora"><i></i><i></i><i></i></div>
+  <div class="wm-sp-grid"></div>
+  <div class="wm-sp-main">
+    <div class="wm-sp-logo">
+      <div class="wm-sp-ring"></div>
+      <div class="wm-sp-orbit o1"><b></b></div>
+      <div class="wm-sp-orbit o2"><b></b></div>
+      <div class="wm-sp-orbit o3"><b></b></div>
+      <div class="wm-sp-core"><span>◆</span></div>
+    </div>
+    <div class="wm-sp-name">업무 관리자 <em id="wmSpVer"></em></div>
+    <div class="wm-sp-msg" id="wmSpMsg">작업 공간을 준비하고 있어요</div>
+    <div class="wm-sp-bar"><div class="wm-sp-bar-fill" id="wmSpBar"></div></div>
+    <ol class="wm-sp-steps" id="wmSpSteps">
+      <li data-k="auth"><i></i>로그인 확인</li>
+      <li data-k="base"><i></i>수주 · 설정</li>
+      <li data-k="data"><i></i>업무일지 · 프로젝트</li>
+      <li data-k="ui"><i></i>화면 준비</li>
+    </ol>
+    <div class="wm-sp-wake" id="wmSpWake">☕ 서버를 깨우는 중이에요 — 오래 쉬었다면 1분쯤 걸릴 수 있어요 <span id="wmSpSec"></span></div>
+    <div class="wm-sp-tip" id="wmSpTip"></div>
+  </div>
+</div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.262';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge"></span><script>var WM_VERSION='13.263';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
   <div class="hdr-ctl" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
@@ -126,7 +151,7 @@
     <button class="tab" data-page="useradmin" onclick="setPage('useradmin')" role="tab" aria-selected="false" id="tabUserAdmin" style="display:none">👤 사용자 관리</button>
     <button class="tab" data-page="weekly_report" onclick="setPage('weekly_report')" role="tab" aria-selected="false" id="tabWeeklyReport" style="display:none">📅 주간 업무</button>
     <button class="tab" data-page="messages" onclick="setPage('messages')" role="tab" aria-selected="false" style="position:relative">✉️ 메시지<span id="msgBadge" style="display:none;background:#EF4444;color:#fff;font-size:9px;font-weight:700;border-radius:9px;min-width:15px;height:15px;align-items:center;justify-content:center;padding:0 3px;position:absolute;top:-4px;right:-4px;pointer-events:none">0</span></button>
-    <button class="tab" data-page="patchnotes" onclick="setPage('patchnotes')" role="tab" aria-selected="false">📋 패치노트</button>
+    <button class="tab" data-page="patchnotes" onclick="setPage('patchnotes')" role="tab" aria-selected="false" id="tabPatchNotes" style="display:none">📋 패치노트</button>
   </div>
   <!-- 하위 모드 탭 -->
   <div class="tabs sub-tabs" id="modeTabs" role="tablist" aria-label="업무일지 하위 탭">
@@ -163,20 +188,6 @@
       </div>
       <div id="encUp" style="margin-top:12px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap"></div>
     </div>
-    <div id="initLoading" class="wm-init-load">
-      <div class="wm-init-card">
-        <div class="wm-init-ring-wrap">
-          <div class="wm-init-ring"></div>
-          <div class="wm-init-ring2"></div>
-          <div class="wm-init-ring-icon">⏳</div>
-        </div>
-        <div class="wm-init-title">데이터 불러오는 중<span class="wm-init-dots"><span></span><span></span><span></span></span></div>
-        <div class="wm-init-step" id="wmInitStep">📂 캐시 확인</div>
-        <div class="wm-init-bar"><div class="wm-init-bar-fill"></div></div>
-        <div class="wm-init-tip">처음 진입은 데이터 양에 따라 잠시 걸릴 수 있습니다.</div>
-      </div>
-    </div>
-
     <div id="mainArea" class="hidden">
       <!-- Encoding + Reupload -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
@@ -477,8 +488,8 @@
 <!-- 앱 스크립트 — 예전 인라인 <script> 를 나눈 파일들. 동기 로드(defer 금지) · 이 순서 그대로 (app-init.js 가 마지막) -->
 <script src="wm-fallbacks.js?v=3" onerror="console.warn('wm-fallbacks.js 로드 실패')"></script>
 <script src="wm-state.js?v=2" onerror="console.warn('wm-state.js 로드 실패')"></script>
-<script src="wr-import.js?v=3" onerror="console.warn('wr-import.js 로드 실패')"></script>
-<script src="mode.js?v=5" onerror="console.warn('mode.js 로드 실패')"></script>
+<script src="wr-import.js?v=4" onerror="console.warn('wr-import.js 로드 실패')"></script>
+<script src="mode.js?v=6" onerror="console.warn('mode.js 로드 실패')"></script>
 <script src="wr-filters.js?v=1" onerror="console.warn('wr-filters.js 로드 실패')"></script>
 <script src="order-map.js?v=1" onerror="console.warn('order-map.js 로드 실패')"></script>
 <script src="wr-view.js?v=1" onerror="console.warn('wr-view.js 로드 실패')"></script>
@@ -487,6 +498,6 @@
 <script src="archive-trend.js?v=1" onerror="console.warn('archive-trend.js 로드 실패')"></script>
 <script src="search-notif.js?v=1" onerror="console.warn('search-notif.js 로드 실패')"></script>
 <script src="anyworks-import.js?v=1" onerror="console.warn('anyworks-import.js 로드 실패')"></script>
-<script src="app-init.js?v=4" onerror="console.warn('app-init.js 로드 실패')"></script>
+<script src="app-init.js?v=5" onerror="console.warn('app-init.js 로드 실패')"></script>
 </body>
 </html>

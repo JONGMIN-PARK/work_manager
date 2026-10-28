@@ -17,7 +17,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.waitForSelector('#loginEmail', { visible: true });
     await page.type('#loginEmail', 'admin@t.com'); await page.type('#loginPw', 'Test1234!');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id; });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(500);
     await page.click('#tabMindmap');
     await page.waitForSelector('#mindmapWrap [data-act="new"]');

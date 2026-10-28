@@ -19,7 +19,7 @@ async function loginPage(browser, email) {
   await page.type('#loginEmail', email);
   await page.type('#loginPw', 'Test1234!');
   await page.keyboard.press('Enter');
-  await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id; }, { timeout: 20000 });
+  await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
   await wait(800);
   return page;
 }
@@ -191,7 +191,7 @@ async function waitSaved(page) {
     check('자동 저장 상태 ✓', /저장됨/.test(await page.$eval('#mmStatus', function (e) { return e.textContent; })));
     var mapId = await page.evaluate(function () { return _mm.mapId; });
     await page.reload({ waitUntil: 'networkidle2' });
-    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id; });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(500);
     await page.click('#tabMindmap');
     await page.waitForSelector('#mindmapWrap .mm-card');

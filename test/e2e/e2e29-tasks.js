@@ -42,7 +42,7 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await page.waitForSelector('#loginEmail', { visible: true });
     await page.type('#loginEmail', 'admin@t.com'); await page.type('#loginPw', 'Test1234!');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id; });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(400);
     await page.click('#tabMyWork');
     await page.waitForSelector('#mwAddTitle');

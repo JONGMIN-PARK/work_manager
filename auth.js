@@ -512,6 +512,11 @@ function updateAuthUI() {
   if (wrTab) {
     wrTab.style.display = currentUser.role === 'admin' ? '' : 'none';
   }
+  // 패치노트 — 관리자만 (헤더 버전 표시를 눌러 여는 것도)
+  var pnTab = document.getElementById('tabPatchNotes');
+  if (pnTab) pnTab.style.display = currentUser.role === 'admin' ? '' : 'none';
+  var verB = document.getElementById('wmVerBadge');
+  if (verB) { verB.style.cursor = currentUser.role === 'admin' ? 'pointer' : 'default'; verB.title = currentUser.role === 'admin' ? '패치노트 보기' : ''; }
   // 애니웍스 버튼 — 모든 사용자에게 표시
   var awBtns = document.querySelectorAll('.awAdminBtn');
   for (var i = 0; i < awBtns.length; i++) {

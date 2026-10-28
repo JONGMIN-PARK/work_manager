@@ -16,7 +16,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.waitForSelector('#loginEmail', { visible: true });
     await page.type('#loginEmail', 'admin@t.com'); await page.type('#loginPw', 'Test1234!');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id; });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(500);
     // 회의 만들기 (프로젝트 없음 — 만든 사람만 맵으로 만들 수 있음)
     var mt = await page.evaluate(function () {

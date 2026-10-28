@@ -12,7 +12,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
   await page.waitForSelector('#loginEmail', { visible: true });
   await page.type('#loginEmail', 'admin@t.com'); await page.type('#loginPw', 'Test1234!');
   await page.keyboard.press('Enter');
-  await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id; });
+  await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
   await wait(800);
   var out = [];
   var pages = ['team:weekly', 'team:archive', 'team:trend', 'project:pipeline', 'project:calendar', 'project:orders', 'project:issues', 'project:docs', 'project:as', 'mywork', 'workload', 'weekly_report', 'messages', 'useradmin', 'patchnotes', 'mindmap'];

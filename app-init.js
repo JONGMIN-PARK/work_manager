@@ -49,7 +49,7 @@ function _wmApplyServerRecords(ctx,rows){
   aD=rows.map(_wmNormRec);
   applyADToUI();
   ctx.dataLoaded=true;
-  var _iel=document.getElementById('initLoading');if(_iel)_iel.remove();
+  if(window.wmSplash)wmSplash.stage('ui');  // 시작 화면은 마지막 화면 복원 뒤 닫음 (_postAuthInit)
 }
 async function _wmSyncSettings(){try{await syncSettingsFromServer()}catch(settEx){console.warn('settings sync:',settEx)}}
 
@@ -106,6 +106,7 @@ async function _wmLoadRecent60(ctx){
 
 /* ③ 서버 로드 — 부트스트랩 우선, 실패 시 60일 로드 */
 async function _wmLoadFromServer(ctx){
+  if(window.wmSplash)wmSplash.stage('data');
   if(await _wmLoadBootstrap(ctx))return;
   await _wmLoadRecent60(ctx);
 }
@@ -137,9 +138,8 @@ async function _wmWaitAuthAndLoad(ctx){
 function _wmFinishLoading(ctx){
   // 서버에서 못 받았어도 그사이 파일 업로드 등으로 aD 가 채워졌으면 로드된 것으로 취급
   if(!ctx.dataLoaded&&aD&&aD.length)ctx.dataLoaded=true;
-  // 로딩 표시 제거, 데이터 없으면 업로드 영역 표시
-  var _initLoadEl=document.getElementById('initLoading');
-  if(_initLoadEl)_initLoadEl.remove();
+  // 데이터 없으면 업로드 영역 표시 (시작 화면은 _postAuthInit 끝에서 닫음)
+  if(window.wmSplash)wmSplash.stage('ui');
   if(!ctx.dataLoaded){
     document.getElementById('uploadZone').classList.remove('hidden');
   }
@@ -171,6 +171,7 @@ function _wmBindUploadUI(){
 
 async function _postAuthInit(){
   if(_initDone)return;_initDone=true;
+  if(window.wmSplash)wmSplash.stage('base');
   var ctx={dataLoaded:false,authReadyHandled:false,cutoff60:_wmCutoffYmd(60)};  // 최근 60일 기준 YYYYMMDD
   // v13.258: 부트스트랩을 수주맵과 동시에 요청 (예전엔 수주맵이 끝난 뒤에야 시작). 실패는 _wmLoadBootstrap 이 처리
   if(_wmServerLoadAllowed()&&_accessToken){ctx.bsP=apiFetch('/api/bootstrap?recentDays=60');ctx.bsP.catch(function(){});}
@@ -186,6 +187,7 @@ async function _postAuthInit(){
   _wmBindUploadUI();
   // 데이터를 새로 받은 뒤 마지막으로 보던 화면으로 (그 화면도 처음 그리므로 내용은 새로 받음)
   if(typeof wmRestoreLastView==='function')wmRestoreLastView();
+  if(window.wmSplash)wmSplash.done();
 }
 
 // 로그인 성공 후 콜백 — auth.js에서 호출

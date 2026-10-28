@@ -33,7 +33,7 @@ async function loginPage(browser, email) {
   await page.type('#loginEmail', email);
   await page.type('#loginPw', 'Test1234!');
   await page.keyboard.press('Enter');
-  await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id; }, { timeout: 20000 });
+  await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
   await wait(800);
   return page;
 }

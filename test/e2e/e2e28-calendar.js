@@ -56,7 +56,7 @@ function otherDayThisWeek() {
     await page.waitForSelector('#loginEmail', { visible: true });
     await page.type('#loginEmail', 'admin@t.com'); await page.type('#loginPw', 'Test1234!');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id; });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(500);
     await page.click('#tabMyWork');
     await page.waitForSelector('#mMyWork .mwc-seg');
@@ -151,7 +151,7 @@ function otherDayThisWeek() {
     await page.click('#mMyWork .mw-chip[data-src="all"]');
     // 보기 기억
     await page.reload({ waitUntil: 'networkidle2' });
-    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id; });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await page.click('#tabMyWork');
     await page.waitForSelector('#mMyWork .mwc-month', { timeout: 8000 });
     check(true, '새로 열어도 월 보기 그대로');

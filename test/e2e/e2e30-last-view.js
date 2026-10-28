@@ -30,6 +30,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
   try {
     await page.setViewport({ width: 1400, height: 900 });
     await login('admin@t.com');
+    check(await page.$eval('#tabPatchNotes', function (e) { return e.style.display !== 'none'; }), '관리자 — 패치노트 탭 보임');
     var v0 = await view();
     check(v0.page === 'team' && v0.mode === 'weekly', '처음 방문 — 기본 업무일지 탭 ' + JSON.stringify(v0));
 
@@ -64,6 +65,9 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await login('kim@t.com');
     var v3 = await view();
     check(v3.page === 'team' && !v3.wr, '권한 없는 탭은 복원 안 함 → 기본 화면 ' + JSON.stringify(v3));
+    // 패치노트 — 관리자만 (v13.263)
+    var pn = await page.evaluate(function () { setPage('patchnotes'); return { tab: document.getElementById('tabPatchNotes').style.display, page: curPage }; });
+    check(pn.tab === 'none' && pn.page !== 'patchnotes', '팀원 — 패치노트 탭 숨김 · 열리지 않음 ' + JSON.stringify(pn));
     check(errs.length === 0, '화면 오류 없음 ' + JSON.stringify(errs));
     console.log(fail ? 'FAILED ' + fail : 'ALL PASS ' + ok, errs);
   } catch (e) { console.log('ERR', e.message); } finally {

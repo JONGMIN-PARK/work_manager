@@ -441,9 +441,18 @@ function applyADToUI(){
   if(typeof mtrCInit==='function')mtrCInit();
 }
 
-async function ldBuf(buf,enc,dept){lBuf=buf;
+/* v13.263 파일 불러오기 진행 표시 — 고르는 창(갱신/대체 · 미리보기)이 뜰 땐 감추고 다시 띄움 */
+function _ldProg(o){if(typeof wmProgress==='undefined')return;if(document.getElementById('wmProgOverlay'))wmProgress.update(o);else wmProgress.show(Object.assign({icon:'📒',title:'업무일지 불러오는 중',tip:'1만 건이 넘어도 바뀐 것만 골라 저장해요'},o))}
+function _ldProgHide(){if(typeof wmProgress!=='undefined')wmProgress.hide()}
+async function ldBuf(buf,enc,dept){
+  try{return await _ldBuf(buf,enc,dept)}finally{_ldProgHide()}
+}
+async function _ldBuf(buf,enc,dept){lBuf=buf;
+  _ldProg({step:'📖 파일 읽는 중',pct:5});
+  await new Promise(function(r){setTimeout(r,30)});  // 진행 창이 먼저 그려지게 (큰 파일은 읽기가 화면을 잠시 붙잡음)
   var newRecords=parseFileBuf(buf,enc);
   if(!newRecords.length)return;
+  _ldProg({sub:'파일 '+newRecords.length.toLocaleString()+'건',step:'🗂 기존 기록 확인',pct:15});
   if(dept)newRecords.forEach(function(r){r.dept=dept});
   /* 파일 자체 중복 제거 */
   var _seen=new Set();newRecords=newRecords.filter(function(r){var k=wrKey(r);if(_seen.has(k))return false;_seen.add(k);return true});
@@ -456,15 +465,19 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
 
   if(existCount>0){
     // 기존 데이터 존재 → 갱신/대체/취소 선택
+    _ldProgHide();
     var choice=await showWorkRecordChoiceModal(existCount, newRecords.length);
     if(choice==='cancel')return;
     if(choice==='merge'){
       // 병합 — 미리보기 모달로 충돌 행별 처리
+      _ldProg({title:'업무일지 병합 중',sub:'파일 '+newRecords.length.toLocaleString()+'건 · 기존 '+existCount.toLocaleString()+'건',step:'🔍 기존 기록과 비교',pct:30});
       var existing=await (existP||wrGetAll());
+      await new Promise(function(r){setTimeout(r,0)});
       var analysis=wrAnalyzeImport(existing, newRecords);
       var needPreview=analysis.conflicts.length>0||analysis.identical.length>0;
       var decision;
       if(needPreview){
+        _ldProgHide();
         decision=await showImportPreviewModal(analysis,{existCount:existCount,newCount:newRecords.length});
         if(decision.action==='cancel')return;
       }else{
@@ -475,7 +488,9 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
       // v13.258: 전체를 올려 "내 레코드 전부 삭제 후 재삽입" 하던 것 → 바뀐 것만 (추가 · 실제로 달라진 수정 · 빠진 것 삭제) 한 번에.
       //   다시 전체를 내려받지 않고, 서버가 돌려준 새 id 로 화면 데이터를 맞춘다
       var diff=wrMergeDiff(existing,result.merged);
+      _ldProg({title:'업무일지 병합 중',sub:'추가 '+diff.insert.length.toLocaleString()+' · 수정 '+diff.update.length.toLocaleString()+' · 삭제 '+diff.deleteIds.length.toLocaleString(),step:'💾 바뀐 것만 저장',pct:60});
       var sync=await wrSync(diff.insert,diff.update,diff.deleteIds);
+      _ldProg({step:'🖥 화면 갱신',pct:90});
       aD=wrSortRecords(result.merged.filter(function(r){return r.id!=null}).concat(sync.inserted));
       var parts=[];
       if(result.added)parts.push('추가 '+result.added);
@@ -485,14 +500,19 @@ async function ldBuf(buf,enc,dept){lBuf=buf;
       showToast('📊 업무일지 가져오기: 총 '+result.merged.length+'건'+(parts.length?' ('+parts.join(', ')+')':''));
     }else{
       // 대체: 기존 삭제 후 새로 저장
+      _ldProg({title:'업무일지 새로 불러오는 중',sub:'파일 '+newRecords.length.toLocaleString()+'건',step:'🧹 기존 기록 지우기',pct:30});
       await wrClear();
+      _ldProg({step:'💾 새로 저장',pct:55});
       await wrBulkPut(newRecords);
+      _ldProg({step:'🖥 화면 갱신',pct:85});
       try{aD=await wrGetAll()}catch(e){aD=newRecords}
       showToast('📊 업무일지 새로 불러오기: '+newRecords.length+'건');
     }
   }else{
     // 기존 데이터 없음 → 바로 저장
+    _ldProg({step:'💾 저장',pct:50});
     await wrBulkPut(newRecords);
+    _ldProg({step:'🖥 화면 갱신',pct:85});
     try{aD=await wrGetAll()}catch(e){aD=newRecords}
     showToast('📊 업무일지 저장: '+newRecords.length+'건');
   }

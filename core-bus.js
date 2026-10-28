@@ -16,7 +16,7 @@
  * wmProgress.run(opts, asyncFn)            — 자동 wrap (try/finally hide)
  */
 window.wmProgress = (function () {
-  var _stepTimer = null;
+  var _stepTimer = null, _clock = null;
   function _esc(s) { var d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
   function _ensure() {
     var ov = document.getElementById('wmProgOverlay');
@@ -39,14 +39,15 @@ window.wmProgress = (function () {
       '<div class="wm-prog-card">' +
       '<div class="wm-prog-ring-wrap">' +
         '<div class="wm-prog-ring"></div>' +
-        '<div class="wm-prog-ring2"></div>' +
+        '<div class="wm-prog-ring2"><b></b></div>' +
         '<div class="wm-prog-ring-icon" id="wmProgIcon">' + _esc(icon) + '</div>' +
       '</div>' +
       '<div class="wm-prog-title" id="wmProgTitle">' + _esc(title) +
         '<span class="wm-prog-dots"><span></span><span></span><span></span></span></div>' +
       '<div class="wm-prog-sub" id="wmProgSub">' + _esc(sub) + '</div>' +
       (step ? '<div class="wm-prog-step" id="wmProgStep">' + _esc(step) + '</div>' : '<div id="wmProgStep" style="display:none"></div>') +
-      '<div class="wm-prog-bar"><div class="wm-prog-bar-fill"></div></div>' +
+      '<div class="wm-prog-bar"><div class="wm-prog-bar-fill" id="wmProgFill"></div></div>' +
+      '<div class="wm-prog-meta"><span id="wmProgPct"></span><span id="wmProgTime"></span></div>' +
       (tip ? '<div class="wm-prog-tip">' + _esc(tip) + '</div>' : '') +
       (cancelable ? '<button class="wm-prog-cancel" id="wmProgCancel">취소</button>' : '') +
       '</div>';
@@ -55,6 +56,16 @@ window.wmProgress = (function () {
       if (btn) btn.onclick = function () { opts.onCancel(); hide(); };
     }
     document.body.style.overflow = 'hidden';
+    if (opts.pct != null) update({ pct: opts.pct });
+    // 3초 넘게 걸리면 경과 시간 표시 — 멈춘 게 아니라는 표시
+    var t0 = Date.now();
+    if (_clock) clearInterval(_clock);
+    _clock = setInterval(function () {
+      var el = document.getElementById('wmProgTime');
+      if (!el) { clearInterval(_clock); _clock = null; return; }
+      var sec = Math.floor((Date.now() - t0) / 1000);
+      if (sec >= 3) el.textContent = '⏱ ' + (sec >= 60 ? Math.floor(sec / 60) + '분 ' : '') + (sec % 60) + '초';
+    }, 500);
   }
   function update(opts) {
     opts = opts || {};
@@ -83,6 +94,13 @@ window.wmProgress = (function () {
       var ic = document.getElementById('wmProgIcon');
       if (ic) ic.innerHTML = _esc(opts.icon);
     }
+    // 진행률을 알면 막대가 실제로 차오름 (모르면 흐르는 막대)
+    if (opts.pct != null) {
+      var f = document.getElementById('wmProgFill'), pc = document.getElementById('wmProgPct');
+      var v = Math.max(0, Math.min(100, Math.round(opts.pct)));
+      if (f) { f.classList.add('det'); f.style.width = v + '%'; }
+      if (pc) pc.textContent = v + '%';
+    }
   }
   function step(text) { update({ step: text }); }
   function hide() {
@@ -90,6 +108,7 @@ window.wmProgress = (function () {
     if (ov) ov.remove();
     document.body.style.overflow = '';
     if (_stepTimer) { clearTimeout(_stepTimer); _stepTimer = null; }
+    if (_clock) { clearInterval(_clock); _clock = null; }
   }
   /* 미리 정의된 단계 시퀀스를 자동으로 흘려보내는 헬퍼 */
   function autoSteps(steps, intervalMs) {
@@ -156,28 +175,82 @@ window.toggleNameChipsCollapse = function () {
   else setTimeout(bind, 0);
 })();
 
-/* v13.67: #initLoading 카드의 단계 메시지 자동 회전 — DOM에서 제거되면 자동 종료 */
-(function () {
-  var steps = [
-    '📂 캐시 확인',
-    '👥 팀원 정보 로드',
-    '📅 주차 데이터 정리',
-    '📊 통계 집계 준비',
-    '🔄 최근 주차 자동 선택',
-    '✨ 화면 준비'
+/* v13.263 시작 화면(#initLoading) — 실제 단계로 진행 표시 · 오래 걸리면 서버 깨우는 중 안내 · 사용 팁.
+   wmSplash.stage('auth'|'base'|'data'|'ui') · wmSplash.done() (app-init.js). 로그인 창이 뜨면 그 아래에 가려짐 */
+window.wmSplash = (function () {
+  var ORDER = ['auth', 'base', 'data', 'ui'];
+  var PCT = { auth: 12, base: 34, data: 62, ui: 90 };
+  var MSG = {
+    auth: '로그인 정보를 확인하고 있어요',
+    base: '수주 목록과 설정을 맞추고 있어요',
+    data: '업무일지와 프로젝트를 받아 오고 있어요',
+    ui: '마지막으로 보던 화면을 준비하고 있어요'
+  };
+  var TIPS = [
+    '📍 다음에 들어오면 마지막으로 보던 화면으로 바로 이어집니다',
+    '🔎 상단 검색 한 번으로 수주 · 프로젝트 · 이슈를 함께 찾을 수 있어요',
+    '🎯 내 업무에서 맵 · 이슈 · 회의 액션 · 일정을 한곳에 모아 봅니다',
+    '📒 업무일지 탭에 다른 파일을 놓으면 바뀐 것만 골라 병합해요',
+    '📨 텔레그램 /todo · /event 로 할 일과 일정을 바로 추가할 수 있어요',
+    '🧠 마인드맵은 두 손가락으로 확대 · 축소, 길게 눌러 주제를 옮겨요',
+    '📅 내 업무 달력은 .ics 주소로 휴대폰 달력에 구독할 수 있어요',
+    '🎨 헤더의 테마 버튼으로 화면 색을 바꿀 수 있어요'
   ];
-  var i = 0;
-  function tick() {
-    var el = document.getElementById('wmInitStep');
-    if (!el) return; // DOM에서 제거됨 — 자체 종료
-    el.textContent = steps[i % steps.length];
-    // pop 애니메이션 재시작
-    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
-    i++;
-    setTimeout(tick, 1500);
+  var cur = -1, pct = 4, t0 = Date.now(), timer = null, tipTimer = null, tipI = Math.floor(Math.random() * TIPS.length);
+  function $(id) { return document.getElementById(id); }
+  function alive() { return !!$('initLoading'); }
+  function setBar(v) { pct = Math.max(pct, Math.min(99, v)); var b = $('wmSpBar'); if (b) b.style.width = pct + '%'; }
+  function stage(k) {
+    var i = ORDER.indexOf(k);
+    if (i < 0 || i < cur || !alive()) return;
+    cur = i;
+    var lis = document.querySelectorAll('#wmSpSteps li');
+    for (var j = 0; j < lis.length; j++) {
+      lis[j].classList.toggle('done', j < i);
+      lis[j].classList.toggle('on', j === i);
+    }
+    var m = $('wmSpMsg');
+    if (m) { m.textContent = MSG[k]; m.style.animation = 'none'; void m.offsetWidth; m.style.animation = ''; }
+    setBar(PCT[k]);
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(tick, 800); });
-  else setTimeout(tick, 800);
+  // 단계 안에서도 막대가 조금씩 차오르게 (다음 단계 몫의 직전까지만) · 경과 시간 · 서버 깨우는 중 안내
+  function tick() {
+    if (!alive()) { clearInterval(timer); clearInterval(tipTimer); return; }
+    var next = cur + 1 < ORDER.length ? PCT[ORDER[cur + 1]] : 99;
+    setBar(pct + (next - 2 - pct) * 0.06);
+    var sec = Math.round((Date.now() - t0) / 1000);
+    var w = $('wmSpWake');
+    if (w && sec >= 7 && cur <= 2) { w.classList.add('show'); var sp = $('wmSpSec'); if (sp) sp.textContent = sec + '초'; }
+    else if (w && cur > 2) w.classList.remove('show');
+  }
+  function showTip() {
+    var el = $('wmSpTip'); if (!el) return;
+    el.classList.add('fade');
+    setTimeout(function () { el.textContent = TIPS[tipI++ % TIPS.length]; el.classList.remove('fade'); }, 350);
+  }
+  function done() {
+    var el = $('initLoading');
+    if (!el || el.classList.contains('out')) return;
+    var lis = document.querySelectorAll('#wmSpSteps li');
+    for (var j = 0; j < lis.length; j++) { lis[j].classList.remove('on'); lis[j].classList.add('done'); }
+    var b = $('wmSpBar'); if (b) b.style.width = '100%';
+    clearInterval(timer); clearInterval(tipTimer);
+    setTimeout(function () {
+      el.classList.add('out');
+      setTimeout(function () { if (el.parentNode) el.remove(); }, 460);
+    }, 220);
+  }
+  function start() {
+    if (!alive()) return;
+    var v = $('wmSpVer'); if (v && typeof WM_VERSION !== 'undefined') v.textContent = 'v' + WM_VERSION;
+    var tip = $('wmSpTip'); if (tip) tip.textContent = TIPS[tipI++ % TIPS.length];
+    if (cur < 0) stage('auth');
+    timer = setInterval(tick, 400);
+    tipTimer = setInterval(showTip, 4200);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else setTimeout(start, 0);
+  return { stage: stage, done: done };
 })();
 
 window.wmDataBus = (function () {

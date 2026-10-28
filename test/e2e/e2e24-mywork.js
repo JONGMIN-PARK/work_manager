@@ -40,7 +40,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.waitForSelector('#loginEmail', { visible: true });
     await page.type('#loginEmail', 'admin@t.com'); await page.type('#loginPw', 'Test1234!');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id; });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(500);
     check(await page.evaluate(function () { var t = document.getElementById('tabWorkload'); return t && t.style.display !== 'none'; }), '관리자에게 업무 부하 탭 보임');
     await page.click('#tabMyWork');
