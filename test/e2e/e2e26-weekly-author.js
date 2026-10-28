@@ -48,6 +48,11 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
       return { grid: getComputedStyle(w).display, card: getComputedStyle(document.querySelector('.wr-card')).borderRadius };
     });
     check(css.grid === 'grid' && css.card === '8px', 'style.css 의 .wr-au-work · .wr-card 적용 ' + JSON.stringify(css));
+    // 기본값 — 업무일지 패널 원본 · 날짜별 (v13.259)
+    var dv = await page.evaluate(function () {
+      return { team: document.getElementById('wrAuTeam').value, view: (document.querySelector('[data-src-view].on') || {}).textContent, by: (document.querySelector('[data-src-rawby].on') || {}).textContent };
+    });
+    check(dv.view === '원본' && dv.by === '날짜', '업무일지 패널 기본 원본 · 날짜 (팀은 최근 보고서 것) ' + JSON.stringify(dv));
     // 새로 시작 → 팀 · 주차
     await page.click('#wrAuNew'); await wait(200);
     await page.$eval('#wrAuTeam', function (e, t) { e.value = t; e.dispatchEvent(new Event('input')); }, team);
@@ -117,6 +122,8 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     });
     check(sp.range === '작성 주차' && sp.target === 'cur', '기본 기간 = 작성 주차 · 삽입 → 금주 ' + JSON.stringify([sp.range, sp.target]));
     check(/E2E업무일지 도면/.test(sp.body) && !/E2E업무일지 지난주/.test(sp.body), '작성 주차의 업무일지만 보임');
+    await page.click('[data-src-view="summary"]');
+    await page.waitForSelector('#wrSrcBody [data-sum-idx]', { timeout: 5000 }).catch(function () {});
     var sumBtn = await page.evaluateHandle(function () { return Array.from(document.querySelectorAll('#wrSrcBody [data-sum-idx]')).filter(function (b) { return /시험사이트/.test(b.getAttribute('data-head')); })[0]; });
     await sumBtn.click();
     await wait(300);

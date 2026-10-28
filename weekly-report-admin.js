@@ -677,7 +677,7 @@
 
   // 작성 탭 상태
   var _authorState = {
-    team: '',
+    team: '소프트웨어팀',   // 기본 팀 — 업무일지 패널도 같은 이름의 그룹을 고른다
     weekStart: '',
     weekEnd: '',
     lastText: '',
@@ -699,9 +699,9 @@
       groupId: null,        // null = 아직 안 정함(작성 팀명과 같은 그룹 자동 선택) · '' = 전체
       members: null,        // null = 팀 전원 · [이름…] = 고른 팀원만
       q: '',
-      view: 'summary',      // summary | raw
+      view: 'raw',          // summary | raw (기본 원본)
       sumBy: 'order',       // order = 수주별(보고서 형태) · person = 담당자별
-      rawBy: 'name',        // name | oclient | date | none
+      rawBy: 'date',        // name | oclient | date | none (기본 날짜)
       target: 'cur',        // 삽입할 편집창 — 직접 고르기 전까지 기간을 따라감 (작성 주차 → 금주 · 지난주 → 지난주)
       targetAuto: true,
       collapsed: lsGet(LS_SRC_COLLAPSED) === '1',
@@ -1277,7 +1277,7 @@
 
   /* ═══════════════════════════════════════════════════════════════
    * 우측 업무일지 패널 — 지난주 업무를 팀/팀원으로 골라 나열·요약하고 편집창에 삽입
-   *   · 기간: 작성 주차의 전주(기본) / 작성 주차 / 직접 지정
+   *   · 기간: 작성 주차(기본) / 작성 주차의 전주 / 직접 지정
    *   · 팀: 설정 > 팀원 그룹(memberGroups) — 주간분석·트렌드와 같은 그룹
    *   · 요약: 규칙 기반(수주별/담당자별, 즉시) + AI 초안(/api/ai/summary)
    *   · 삽입: 요약 항목·원본 줄 모두 대상 편집창의 해당 섹션 끝에 (섹션이 없으면 표준 순서 자리에 생성)
@@ -1325,7 +1325,10 @@
     if (id === null) {
       // 처음 열 때: 작성 중인 팀명과 이름이 같은 그룹이 있으면 그 그룹으로
       var t = (_authorState.team || '').trim();
-      var hit = t ? srcGroups().filter(function (g) { return g.name === t; })[0] : null;
+      // 띄어쓰기 · 끝의 '팀' 차이는 같은 팀으로 본다 ("소프트웨어 팀" · "소프트웨어")
+      var norm = function (v) { return String(v || '').replace(/\s+/g, '').replace(/팀$/, ''); };
+      var hit = t ? (srcGroups().filter(function (g) { return g.name === t; })[0]
+        || srcGroups().filter(function (g) { return norm(g.name) === norm(t); })[0]) : null;
       _authorState.src.groupId = hit ? hit.id : '';
       id = _authorState.src.groupId;
     }
