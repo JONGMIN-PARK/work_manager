@@ -77,7 +77,7 @@ var tlFilterAssignee = 'all'; // 'all' | 담당자 이름
 var tlSort = (typeof lsGet === 'function') ? lsGet('tlSort', 'default') : 'default'; // default|name|name_desc|created|created_desc|deadline|progress|status
 var tlGroupBy = (typeof lsGet === 'function') ? lsGet('tlGroupBy', 'none') : 'none'; // none|status
 // v13.156 프로젝트 라벨에 대표 이미지 썸네일 상시 표시(기본 on)
-var tlShowThumb = (typeof lsGet === 'function') ? (lsGet('tlShowThumb', '1') !== '0') : true;
+var tlShowThumb = (typeof lsGet === 'function') ? (lsGet('tlShowThumb', window.innerWidth <= 600 ? '0' : '1') !== '0') : true;   // 휴대폰은 기본 끔 (v13.257)
 // v13.158 썸네일 크기 선택(px) — 56|84|108|140
 var tlThumbSize = (typeof lsGet === 'function') ? (parseInt(lsGet('tlThumbSize', '108'), 10) || 108) : 108;
 function _tlThumbColW() { return tlShowThumb ? (tlThumbSize + 8) : 0; } // 라벨 예약폭 = 썸네일 + gap
@@ -1111,6 +1111,8 @@ function calcLabelWidth(projects, milestones, msWorkH) {
   // 최소 160px, 최대 400px (+ 썸네일 컬럼)
   var base = Math.max(160, Math.min(Math.ceil(maxW), 400));
   base += _tlThumbColW();
+  // 휴대폰 — 이름 칸이 화면을 다 차지해 막대가 안 보이던 것. 화면 폭의 42% 까지만 (v13.257)
+  if (window.innerWidth <= 600) base = Math.min(base, Math.max(130, Math.round(window.innerWidth * 0.42)));
   return base;
 }
 
@@ -2250,6 +2252,7 @@ function bindBarDrag() {
         startBarDrag(bar, h.dataset.handle, e);
       });
     });
+    if (typeof wmTouchDrag === 'function') wmTouchDrag(bar, { hold: 350 });   // 터치 — 길게 눌러 끌기 (v13.257)
     // 바 중앙 드래그 (이동)
     bar.addEventListener('mousedown', function (e) {
       if (e.target.classList.contains('tl-handle')) return;

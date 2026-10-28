@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>업무 관리자</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,14 +20,14 @@
 <script src="settings.js?v=5" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="auth.js?v=10" onerror="console.warn('auth.js 로드 실패')"></script>
 <script defer src="weekly-report-parse.js?v=1" onerror="console.warn('weekly-report-parse.js 로드 실패')"></script>
-<script defer src="weekly-report-admin.js?v=10" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
+<script defer src="weekly-report-admin.js?v=11" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
 <script src="project-data.js?v=8" onerror="console.warn('project-data.js 로드 실패')"></script>
-<script src="ui-helpers.js?v=5" onerror="console.warn('ui-helpers.js 로드 실패')"></script>
+<script src="ui-helpers.js?v=6" onerror="console.warn('ui-helpers.js 로드 실패')"></script>
 <!-- 렌더러 (defer — 초기 표시 이후 실행돼도 무방) -->
 <script defer src="kr-holidays.js?v=1" onerror="console.warn('kr-holidays.js 로드 실패')"></script>
 <script defer src="calendar.js?v=10" onerror="console.warn('calendar.js 로드 실패')"></script>
-<script defer src="timeline.js?v=12" onerror="console.warn('timeline.js 로드 실패')"></script>
-<script defer src="project-detail.js?v=7" onerror="console.warn('project-detail.js 로드 실패')"></script>
+<script defer src="timeline.js?v=13" onerror="console.warn('timeline.js 로드 실패')"></script>
+<script defer src="project-detail.js?v=8" onerror="console.warn('project-detail.js 로드 실패')"></script>
 <script defer src="dashboard.js?v=5" onerror="console.warn('dashboard.js 로드 실패')"></script>
 <script defer src="pipeline.js?v=6" onerror="console.warn('pipeline.js 로드 실패')"></script>
 <script defer src="prestudy.js?v=5" onerror="console.warn('prestudy.js 로드 실패')"></script>
@@ -37,12 +37,12 @@
 <script defer src="mindmap-templates.js?v=1" onerror="console.warn('mindmap-templates.js 로드 실패')"></script>
 <script defer src="mindmap-list.js?v=3" onerror="console.warn('mindmap-list.js 로드 실패')"></script>
 <script defer src="mindmap-view.js?v=24" onerror="console.warn('mindmap-view.js 로드 실패')"></script>
-<script defer src="mindmap-edit.js?v=15" onerror="console.warn('mindmap-edit.js 로드 실패')"></script>
+<script defer src="mindmap-edit.js?v=16" onerror="console.warn('mindmap-edit.js 로드 실패')"></script>
 <script defer src="mindmap-panel.js?v=10" onerror="console.warn('mindmap-panel.js 로드 실패')"></script>
 <script defer src="mindmap-extra.js?v=4" onerror="console.warn('mindmap-extra.js 로드 실패')"></script>
 <script defer src="mindmap-keys.js?v=14" onerror="console.warn('mindmap-keys.js 로드 실패')"></script>
 <script defer src="mindmap-media.js?v=1" onerror="console.warn('mindmap-media.js 로드 실패')"></script>
-<script defer src="mindmap-gantt.js?v=3" onerror="console.warn('mindmap-gantt.js 로드 실패')"></script>
+<script defer src="mindmap-gantt.js?v=4" onerror="console.warn('mindmap-gantt.js 로드 실패')"></script>
 <script defer src="mindmap-history.js?v=2" onerror="console.warn('mindmap-history.js 로드 실패')"></script>
 <script defer src="mindmap-filter.js?v=4" onerror="console.warn('mindmap-filter.js 로드 실패')"></script>
 <script defer src="mindmap-report.js?v=2" onerror="console.warn('mindmap-report.js 로드 실패')"></script>
@@ -51,7 +51,7 @@
 <script defer src="mindmap-risk.js?v=2" onerror="console.warn('mindmap-risk.js 로드 실패')"></script>
 <script defer src="mindmap-files.js?v=2" onerror="console.warn('mindmap-files.js 로드 실패')"></script>
 <script defer src="order-view.js?v=5" onerror="console.warn('order-view.js 로드 실패')"></script>
-<script defer src="issue-manager.js?v=5" onerror="console.warn('issue-manager.js 로드 실패')"></script>
+<script defer src="issue-manager.js?v=6" onerror="console.warn('issue-manager.js 로드 실패')"></script>
 <script defer src="document-manager.js?v=6" onerror="console.warn('document-manager.js 로드 실패')"></script>
 <script defer src="as-core.js?v=5" onerror="console.warn('as-core.js 로드 실패')"></script>
 <script defer src="as-list.js?v=5" onerror="console.warn('as-list.js 로드 실패')"></script>
@@ -69,7 +69,7 @@
 <script defer src="my-work-cal.js?v=3" onerror="console.warn('my-work-cal.js 로드 실패')"></script>
 <script defer src="my-work-task.js?v=2" onerror="console.warn('my-work-task.js 로드 실패')"></script>
 <script defer src="my-work-panel.js?v=1" onerror="console.warn('my-work-panel.js 로드 실패')"></script>
-<script defer src="messages-ui.js?v=1" onerror="console.warn('messages-ui.js 로드 실패')"></script>
+<script defer src="messages-ui.js?v=2" onerror="console.warn('messages-ui.js 로드 실패')"></script>
 <script defer src="project-images.js?v=1" onerror="console.warn('project-images.js 로드 실패')"></script>
 <script defer src="project-meetings.js?v=9" onerror="console.warn('project-meetings.js 로드 실패')"></script>
 <script defer src="spec-schema.js?v=3" onerror="console.warn('spec-schema.js 로드 실패')"></script>
@@ -80,23 +80,23 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" onerror="console.warn('mammoth.js 로드 실패')"></script>
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="style.css?v=43">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)"></div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.256';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:pointer" onclick="setPage('patchnotes')" title="패치노트 보기" id="wmVerBadge"></span><script>var WM_VERSION='13.257';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
+  <div class="hdr-ctl" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <!-- 통합 검색 -->
     <div id="globalSearchWrap">
       <span id="gsIcon">🔎</span>
       <input id="globalSearchInput" type="text" placeholder="통합 검색... (Ctrl+K)" oninput="gsDebounce(this.value)" onfocus="if(this.value.trim().length>=1)globalSearch(this.value)" onkeydown="gsKeyNav(event)" autocomplete="off" aria-label="통합 검색" role="searchbox">
       <div id="globalSearchDropdown" style="display:none"></div>
     </div>
-    <div class="thb" id="themeBar"></div>
+    <div class="thb hdr-more" id="themeBar"></div>
     <!-- 폰트 선택기 (v13.57) -->
-    <div class="fnb" id="fontBarWrap">
+    <div class="fnb hdr-more" id="fontBarWrap">
       <button class="fnb-tg" id="fontBarToggle" onclick="document.getElementById('fontBarWrap').classList.toggle('open')" title="글씨체 변경" aria-label="글씨체 변경">🔤 글씨체</button>
       <div class="fnb-menu" id="fontBar"></div>
     </div>
@@ -105,11 +105,13 @@
       <button id="notifBtn" onclick="toggleNotifPanel()" title="알림 센터">🔔<span id="notifBadge" style="display:none">0</span></button>
       <div id="notifDropdown" style="display:none"></div>
     </div>
-    <button onclick="showBackupRestoreModal()" style="border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'" title="데이터 백업/복원">💾</button>
-    <button onclick="deduplicateRecords()" style="border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'" title="중복 레코드 제거">🧹</button>
-    <button onclick="resetAllData()" style="border:1px solid var(--d-bd);background:var(--d-bg);color:var(--d-t);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:opacity .15s" onmouseenter="this.style.opacity='.8'" onmouseleave="this.style.opacity='1'" title="전체 데이터 초기화">🗑️</button>
+    <button class="hdr-more" onclick="showBackupRestoreModal()" style="border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'" title="데이터 백업/복원">💾</button>
+    <button class="hdr-more" onclick="deduplicateRecords()" style="border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'" title="중복 레코드 제거">🧹</button>
+    <button class="hdr-more" onclick="resetAllData()" style="border:1px solid var(--d-bd);background:var(--d-bg);color:var(--d-t);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:opacity .15s" onmouseenter="this.style.opacity='.8'" onmouseleave="this.style.opacity='1'" title="전체 데이터 초기화">🗑️</button>
     <span id="authUserInfo" style="display:flex;align-items:center;gap:4px"></span>
-    <div id="fileInfo" class="hidden" style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:var(--t5)">📄 <span id="fnDisp"></span></span><span class="badge" style="background:var(--ac-bg);color:var(--ac-t)"><span id="rcDisp"></span>건</span></div>
+    <!-- 휴대폰 — 테마 · 글씨체 · 데이터 도구 접기 (v13.257) -->
+    <button class="hdr-more-tg" onclick="var h=this.closest('.hdr');this.setAttribute('aria-expanded',h.classList.toggle('more-on'))" aria-expanded="false" aria-label="테마 · 글씨체 · 데이터 도구" title="테마 · 글씨체 · 데이터 도구">⋯</button>
+    <div id="fileInfo" class="hidden hdr-more" style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:var(--t5)">📄 <span id="fnDisp"></span></span><span class="badge" style="background:var(--ac-bg);color:var(--ac-t)"><span id="rcDisp"></span>건</span></div>
   </div>
 </div></div>
 
@@ -179,7 +181,7 @@
       <!-- Encoding + Reupload -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap"><span style="font-size:11px;color:var(--t5);margin-right:3px">인코딩:</span><div id="encMain"></div></div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-g" onclick="document.getElementById('fileInput2').click()">📁 다른파일<input id="fileInput2" type="file" accept=".xls,.xlsx,.html,.htm" multiple style="display:none"></button>
           <button class="btn btn-w" onclick="saveWeek()" id="saveWeekBtn">💾 주차 저장</button>
           <span class="mob-sep" style="color:var(--bd2)">│</span>

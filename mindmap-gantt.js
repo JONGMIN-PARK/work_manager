@@ -409,6 +409,7 @@ function _mmgBind(g) {
     _mmSetView('map');
     _mmSelect(id);
   });
+  if (typeof wmTouchDrag === 'function') wmTouchDrag(g, { hold: 350 });   // 터치 — 막대를 길게 눌러 끌기 (v13.257)
   g.addEventListener('mousedown', function (e) {
     if (e.button !== 0 || _mm.readOnly) return;
     var track = e.target.closest('.mm-gt-track');

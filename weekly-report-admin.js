@@ -1637,6 +1637,7 @@
       if (window._wrAuCheckCols) window._wrAuCheckCols();
       if (save) lsSet(LS_SRC_WIDTH, String(w));
     }
+    if (typeof wmTouchDrag === 'function') wmTouchDrag(h);   // 패드 — 손가락으로 폭 조절 (v13.257)
     h.addEventListener('mousedown', function (e) {
       if (_authorState.src.collapsed) return;
       e.preventDefault();

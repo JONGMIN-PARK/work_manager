@@ -743,6 +743,12 @@ function _mmBindCanvas() {
   if (_mmBindCanvas._prev && _mmBindCanvas._prev !== cv && _mmBindCanvas._prev._mmCleanup) _mmBindCanvas._prev._mmCleanup();
   _mmBindCanvas._prev = cv;
 
+  // 터치 — 한 손가락 끌기 = 마우스 끌기, 두 손가락 = 확대 · 이동 (v13.257)
+  if (typeof wmTouchDrag === 'function') wmTouchDrag(cv, { onPinch: function (k, x, y, dx, dy) {
+    var r = cv.getBoundingClientRect();
+    _mm.panX += dx; _mm.panY += dy;
+    _mmZoomAt(k, x - r.left, y - r.top);
+  } });
   cv.addEventListener('dblclick', function (e) {
     var imgEl = e.target.closest('.mm-blk-img[data-img]');
     if (imgEl && typeof mmImageView === 'function') { mmImageView(imgEl.getAttribute('data-img')); return; }

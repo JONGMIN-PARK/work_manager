@@ -337,6 +337,7 @@ function _pdBindPanelResize(panel) {
   h.className = 'pd-resizer';
   h.title = '드래그: 폭 조절 · 더블클릭: 기본(1/3)';
   panel.appendChild(h);
+  if (typeof wmTouchDrag === 'function') wmTouchDrag(h);   // 패드 — 손가락으로 폭 조절 (v13.257)
   h.addEventListener('mousedown', function (e) {
     e.preventDefault();
     h.classList.add('drag');

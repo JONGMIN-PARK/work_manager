@@ -198,11 +198,11 @@ function renderIssues(afterRender) {
     issues.forEach(function (iss, idx) {
       var proj = projMap[iss.projectId];
       var projName = proj ? proj.name : (iss.orderNo || '-');
-      var ph = phases[iss.phase] || { label: iss.phase, icon: '', color: SEM_COLOR.muted };
-      var dp = depts[iss.dept] || { label: iss.dept, icon: '', color: SEM_COLOR.muted };
-      var tp = types[iss.type] || { label: iss.type, icon: '', color: SEM_COLOR.muted };
-      var ug = urgencies[iss.urgency] || { label: iss.urgency, icon: '', color: SEM_COLOR.muted };
-      var st = statuses[iss.status] || { label: iss.status, color: SEM_COLOR.muted };
+      var ph = phases[iss.phase] || { label: iss.phase || '-', icon: '', color: SEM_COLOR.muted };
+      var dp = depts[iss.dept] || { label: iss.dept || '-', icon: '', color: SEM_COLOR.muted };
+      var tp = types[iss.type] || { label: iss.type || '-', icon: '', color: SEM_COLOR.muted };
+      var ug = urgencies[iss.urgency] || { label: iss.urgency || '-', icon: '', color: SEM_COLOR.muted };
+      var st = statuses[iss.status] || { label: iss.status || '-', color: SEM_COLOR.muted };
       var isUrgent = iss.urgency === 'urgent' && iss.status !== 'closed' && iss.status !== 'resolved';
       var rowBg = isUrgent ? 'rgba(239,68,68,.05)' : 'transparent';
       var safeId = iss.id.replace(/'/g, "\\'");
@@ -577,11 +577,11 @@ function showIssueDetail(id) {
     var proj = projMap[iss.projectId];
     var projName = proj ? proj.name : (iss.orderNo || '-');
 
-    var ph = phases[iss.phase] || { label: iss.phase, icon: '', color: SEM_COLOR.muted };
-    var dp = depts[iss.dept] || { label: iss.dept, icon: '', color: SEM_COLOR.muted };
-    var tp = types[iss.type] || { label: iss.type, icon: '', color: SEM_COLOR.muted };
-    var ug = urgencies[iss.urgency] || { label: iss.urgency, icon: '', color: SEM_COLOR.muted };
-    var st = statuses[iss.status] || { label: iss.status, color: SEM_COLOR.muted };
+    var ph = phases[iss.phase] || { label: iss.phase || '-', icon: '', color: SEM_COLOR.muted };
+    var dp = depts[iss.dept] || { label: iss.dept || '-', icon: '', color: SEM_COLOR.muted };
+    var tp = types[iss.type] || { label: iss.type || '-', icon: '', color: SEM_COLOR.muted };
+    var ug = urgencies[iss.urgency] || { label: iss.urgency || '-', icon: '', color: SEM_COLOR.muted };
+    var st = statuses[iss.status] || { label: iss.status || '-', color: SEM_COLOR.muted };
 
     // 기존 패널 제거
     var old = document.getElementById('issueDetailPanel');

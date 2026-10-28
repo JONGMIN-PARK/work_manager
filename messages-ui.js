@@ -59,9 +59,9 @@ function renderMessages() {
       '<h2 style="margin:0;font-size:18px;color:var(--t2)">✉️ 메시지</h2>' +
       '<button class="btn btn-p btn-s" onclick="msgNewMessage()">✏️ 새 메시지</button>' +
     '</div>' +
-    '<div style="display:flex;gap:12px;align-items:stretch;min-height:420px;max-height:calc(100vh - 240px)">' +
-      '<div id="msgThreadList" style="width:280px;flex-shrink:0;overflow:auto;border:1px solid var(--bd);border-radius:10px;background:var(--bg-p)"></div>' +
-      '<div id="msgThreadView" style="flex:1;display:flex;flex-direction:column;border:1px solid var(--bd);border-radius:10px;background:var(--bg-p);overflow:hidden">' +
+    '<div class="msg-split" style="display:flex;gap:12px;align-items:stretch;min-height:420px;max-height:calc(100vh - 240px)">' +
+      '<div id="msgThreadList" class="msg-list" style="width:280px;flex-shrink:0;overflow:auto;border:1px solid var(--bd);border-radius:10px;background:var(--bg-p)"></div>' +
+      '<div id="msgThreadView" class="msg-view" style="flex:1;display:flex;flex-direction:column;border:1px solid var(--bd);border-radius:10px;background:var(--bg-p);overflow:hidden">' +
         '<div style="margin:auto;color:var(--t6);font-size:12px;padding:30px">왼쪽에서 대화를 선택하거나 [새 메시지]로 시작하세요.</div>' +
       '</div>' +
     '</div>';
@@ -102,8 +102,10 @@ function msgOpenThread(peerId, peerName) {
   _msgRenderThreadList();
   var view = document.getElementById('msgThreadView');
   if (!view) return;
+  view.parentNode.classList.add('msg-open');   // 좁은 화면에서는 목록 대신 대화만 보임 (v13.257)
   view.innerHTML =
-    '<div style="padding:10px 14px;border-bottom:1px solid var(--bd);font-size:13px;font-weight:700;color:var(--t2);flex-shrink:0">' + _mqEsc(peerName) + '</div>' +
+    '<div style="display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid var(--bd);font-size:13px;font-weight:700;color:var(--t2);flex-shrink:0">' +
+      '<button class="msg-back" onclick="msgCloseThread()" aria-label="대화 목록으로">←</button>' + _mqEsc(peerName) + '</div>' +
     '<div id="msgThreadBody" style="flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px"><div style="color:var(--t6);font-size:11px">로딩 중...</div></div>' +
     '<div style="display:flex;gap:6px;padding:10px;border-top:1px solid var(--bd);flex-shrink:0">' +
       '<textarea id="msgComposeBody" rows="2" placeholder="메시지를 입력하세요 (Enter 전송, Shift+Enter 줄바꿈)" style="flex:1;resize:none;box-sizing:border-box;padding:8px;font-size:12px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t2)" onkeydown="msgComposeKey(event)"></textarea>' +
@@ -118,6 +120,14 @@ function msgOpenThread(peerId, peerName) {
     if (body) body.innerHTML = '<div style="color:var(--t6);font-size:11px">' + ((err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.' : '대화를 불러오지 못했습니다.') + '</div>';
   });
   var ta = document.getElementById('msgComposeBody'); if (ta) ta.focus();
+}
+
+// 좁은 화면 — 대화에서 목록으로 돌아가기
+function msgCloseThread() {
+  _msgPeer = null; _msgPeerName = '';
+  var split = document.querySelector('#mMessages .msg-split');
+  if (split) split.classList.remove('msg-open');
+  _msgRenderThreadList();
 }
 
 function _msgRenderMsgs(msgs) {
