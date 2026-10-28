@@ -308,8 +308,6 @@
       t.classList.toggle('on', t.dataset.wt === name);
       t.setAttribute('aria-selected', t.dataset.wt === name);
     });
-    // 작성 탭은 편집·미리보기·업무일지 패널이 나란히 서므로 1400px 캡을 풀어 창 너비를 다 쓴다
-    if (typeof _applyWideMode === 'function') _applyWideMode(name === 'author');
     if (name === 'author') renderAuthor();
     else if (name === 'upload') renderUpload();
     else if (name === 'search') renderSearch();

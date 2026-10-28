@@ -1,5 +1,11 @@
 # Work Manager — 변경 이력
 
+## v13.251 (2026-10-28) — 모든 탭 창 너비 전체
+
+- style.css: `.con` · `.hdr-in` 의 1400px 캡 제거, `.mw-wrap`(내 업무 · 업무 부하) 1100px 캡 제거. 패치노트 800px 캡 제거(mode.js).
+- mode.js: 탭별 넓히기 `_applyWideMode` 와 호출부(setPage · setMode · weekly-report-admin.js) 제거 — 캡이 없어 필요 없음.
+- 테스트: `test/e2e/e2e27-wide.js` — 1920px 창에서 16개 화면 모두 본문 = 창 너비, 가로 스크롤 없음.
+
 ## v13.250 (2026-10-28) — 주간 업무 보고 저장 안전 · 공용 파서
 
 - 공용 파서: 루트 `weekly-report-parse.js` (UMD — 브라우저 전역 `WeeklyReportParse`, 서버는 `server/services/weekly-report-parser.js` 가 그대로 재수출). 클라 `clientParseText` 와 서버 파서 두 벌 제거. `sectionOfLine` · `namePrefix`(ISO 주차, 시간대 영향 없음) · `parseName`(해 넘김) 추가.

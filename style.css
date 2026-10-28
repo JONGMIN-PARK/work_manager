@@ -156,13 +156,11 @@ body{min-height:100vh;background:var(--bg);color:var(--t2);font-family:var(--app
 /* v13.70 — 헤더 미세 반사 효과 (좌→우 흐름) */
 .hdr::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,var(--ac-g) 50%,transparent 100%);opacity:.35;pointer-events:none;mix-blend-mode:overlay}
 .hdr h1 .ac{background:linear-gradient(135deg,var(--ac),var(--ac-t));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800;text-shadow:0 0 18px var(--ac-g)}
-.hdr-in{display:flex;align-items:center;justify-content:space-between;max-width:1400px;margin:0 auto;flex-wrap:wrap;gap:10px}
+.hdr-in{display:flex;align-items:center;justify-content:space-between;margin:0 auto;flex-wrap:wrap;gap:10px}
 h1{font-size:18px;font-weight:700;color:var(--t1);letter-spacing:-.3px}h1 .ac{color:var(--ac)}
 .sub{font-size:10px;color:var(--t5);margin-top:3px;letter-spacing:.2px}
-.con{max-width:1400px;margin:0 auto;padding:20px 28px}
-/* 간트 차트는 폭이 곧 정보량 — 타임라인 탭에서만 1400px 캡을 풀어 창 너비만큼 늘린다.
-   헤더(.hdr-in)도 같이 풀어야 본문과 좌우가 어긋나지 않는다. */
-body.wide-mode .con,body.wide-mode .hdr-in{max-width:none}
+.con{margin:0 auto;padding:20px 28px}
+/* v13.251 모든 탭이 창 너비 전체를 쓴다 (예전엔 1400px 캡 — 프로젝트 · 마인드맵 · 주간 보고 작성만 풀었음) */
 .dz{border:2px dashed var(--bd2);border-radius:16px;padding:48px 24px;text-align:center;transition:all .25s;cursor:pointer;background:var(--bg-p)}
 .dz:hover,.dz.active{border-color:var(--ac);background:var(--ac-g);box-shadow:0 0 20px var(--ac-g)}
 .pnl{background:var(--bg-p);border:1px solid var(--bd);border-radius:12px;padding:18px;margin-bottom:14px;transition:background .3s,border-color .25s,box-shadow .25s,transform .15s;box-shadow:0 2px 8px rgba(0,0,0,.12)}
@@ -1610,7 +1608,7 @@ body.mm-zen-body{overflow:hidden}
 .mm-pn-folded{padding-bottom:10px}
 
 /* ═══ 🎯 내 업무 · 👥 업무 부하 (v13.248) ═══ */
-.mw-wrap{max-width:1100px;margin:0 auto}
+.mw-wrap{margin:0 auto}
 #mWorkload .mw-wrap{max-width:none}
 .mw-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .mw-head h2{margin:0;font-size:18px;color:var(--t2)}

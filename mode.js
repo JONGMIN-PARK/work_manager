@@ -14,7 +14,6 @@ function setPage(page){
   if(_opTab)_opTab.classList.toggle('hidden',!(typeof isOperator==='function'&&isOperator()));
   // 모든 모드 숨기기
   ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap','mMyWork','mWorkload'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
-  if(typeof _applyWideMode==='function')_applyWideMode(false);  // 타임라인 외 페이지는 기본 폭
   // 해당 페이지의 첫 탭 활성화
   if(page==='useradmin'){
     document.getElementById('modeTabs').classList.add('hidden');
@@ -35,7 +34,6 @@ function setPage(page){
     document.getElementById('modeTabs').classList.add('hidden');
     document.getElementById('modeTabsProj').classList.add('hidden');
     var mmw=document.getElementById('mMindmap');if(mmw)mmw.classList.remove('hidden');
-    if(typeof _applyWideMode==='function')_applyWideMode(true);  // 캔버스는 창 너비 전체
     if(typeof renderMindmap==='function')renderMindmap();
   }else if(page==='mywork'||page==='workload'){
     document.getElementById('modeTabs').classList.add('hidden');
@@ -82,22 +80,18 @@ function refreshCurrentTab(){
 }
 window.refreshCurrentTab = refreshCurrentTab;
 
-function _applyWideMode(on){
-  try{ document.body.classList.toggle('wide-mode', !!on); }catch(e){}
-}
+// v13.251 모든 탭이 창 너비 전체를 쓴다 — 폭 캡(style.css .con · .hdr-in)을 없애 탭별 넓히기(_applyWideMode) 제거
 
 function setMode(m){
   var prevMode = curMode;
   curMode=m;
   // 해당 페이지의 서브탭만 업데이트
   var teamModes=['weekly','archive','trend'];
-  var projModes=['pipeline','calendar','timeline','orders','prestudy','tech','issues','docs','as','operator'];
   var tabBar=teamModes.includes(m)?'#modeTabs':'#modeTabsProj';
   document.querySelectorAll(tabBar+' .tab').forEach(function(t){var sel=t.dataset.m===m;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
   ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',tech:'mTech',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
-  _applyWideMode(projModes.includes(m));  // v13.189 프로젝트 관리 탭은 전부 창 너비 사용 (v13.185 타임라인에서 확대)
 
   // 캐시 hit이면 render 호출 자체를 스킵 → 이전 그려진 내용 즉시 표시
   if(_modeIsFresh(m)) return;
@@ -172,7 +166,7 @@ function renderPatchNotes(){
   var tagLabel={major:'Major',feature:'Feature',feat:'Feature',perf:'Perf',fix:'Fix',style:'Style',refactor:'Refactor',initial:'Initial'};
   function _patchTagStyle(t){return tagStyle[t]||'background:#6B7280;color:#fff';}
   function _patchTagLabel(t){return tagLabel[t]||(t?String(t):'Update');}
-  var html='<div style="max-width:800px;margin:0 auto;padding:20px 0">';
+  var html='<div style="padding:20px 0">';
   html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px"><h2 style="margin:0;font-size:20px;color:var(--t2)">📋 패치노트</h2><span style="font-size:12px;color:var(--t6)">현재 v'+PATCHES[0].ver+'</span></div>';
   PATCHES.forEach(function(p,i){
     var isLatest=i===0;
