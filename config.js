@@ -231,6 +231,7 @@ var ISSUE_TYPE = {
 /* ═══ 이슈 긴급도 ═══ */
 var ISSUE_URGENCY = {
   urgent: { label: '긴급', icon: '🔴', color: '#EF4444' },
+  high:   { label: '높음', icon: '🟠', color: '#F97316' },   // v13.253 내 업무 중요도 4단계
   normal: { label: '보통', icon: '🟡', color: '#F59E0B' },
   low:    { label: '일반', icon: '🟢', color: '#10B981' }
 };

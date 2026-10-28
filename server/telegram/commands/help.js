@@ -5,6 +5,20 @@ var escHtml = require('../util/escape').escHtml;
 
 /** 명령어별 상세 도움말 */
 var CMD_HELP = {
+  todo: {
+    title: '/todo — 할 일 등록',
+    usage: '/todo [날짜] [시각] [!중요도] 내용\n/todo done 번호',
+    format: '날짜: 오늘 · 내일 · 모레 · 금요일 · 다음주 월 · 10/30\n시각: 14:00 · 오후 3시 (날짜와 같이 → 30분 전 알림)\n중요도: !긴급 !높음 !낮음 (없으면 보통)',
+    examples: ['/todo 내일 견적서 회신', '/todo 금요일 15:00 !긴급 출하 검사', '/todos', '/todo done 2'],
+    tip: '웹 🎯 내 업무에서 메모 · 하위 항목 · 반복까지'
+  },
+  event: {
+    title: '/event — 개인 일정 등록',
+    usage: '/event [날짜] [시각~시각] [#종류] 내용',
+    format: '종류: #회의 #출장 #외근 #연차 #오전반차 #오후반차 #검토 (없으면 기타)\n시각이 없으면 하루 종일, 날짜가 없으면 오늘',
+    examples: ['/event 금요일 오후 3시~4시 #회의 고객 미팅', '/event 다음주 월 #연차', '/event 내일 #오후반차'],
+    tip: '시각이 있으면 30분 전에 알려 드립니다'
+  },
   log: {
     title: '/log — 업무일지 빠른 등록',
     usage: '/log {시간}h {분장} {수주번호} {내용}\n또는 바로: 8h D B2024-001 업무내용',
@@ -262,6 +276,9 @@ function create(sendMessage) {
       '<b>📋 개인</b>\n' +
       '/today — 오늘 브리핑\n' +
       '/my — 내 현황 (이슈 + 납기)\n' +
+      '/todo — 할 일 등록 (내일 14:00 !긴급 …)\n' +
+      '/todos — 개인 할 일 목록 · 완료\n' +
+      '/event — 개인 일정 등록 (#회의 금요일 3시 …)\n' +
       '/issues — 미해결 이슈 목록\n' +
       '/tasks — 미완료 작업\n' +
       '/done &lt;번호&gt; — 작업 완료 처리\n' +

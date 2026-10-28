@@ -4,7 +4,7 @@
    [목록 | 주 | 월] — 할 일은 마감일에, 일정(events)은 날짜 · 시각에 놓인다.
      끌어 놓기: 할 일 = 마감 바꾸기 (개인 할 일 · 맵 주제 · 이슈 · 회의 액션 — 마일스톤 · 개발 · 사전검토는 원래 화면에서)
                 일정 = 날짜 · 시각 옮기기 (수정 권한 있는 것만, 반복은 전체 회차)
-     빈 칸 누르기: 개인 할 일 · 개인 일정 등록 (주 보기 시간 칸은 그 시각으로)
+     빈 칸 누르기: 종류별 등록 창 (my-work-task.js mwRegister — 주 보기 시간 칸은 그 시각으로)
      📤 구독: 개인 .ics 주소 — 구글 · 아웃룩 달력에 'URL로 추가'
    서버 API: GET /api/my-work/events · PUT /api/my-work/due · GET·POST·DELETE /api/my-work/feed
    전역 의존: _mw · _mwPaint · _mwFind · _mwEsc · _mwToast · _mwErr · _mwMe · _mwLS · _mwDays · MW_SRC · mwOpenItem (my-work.js)
@@ -75,7 +75,7 @@ function _mwcEntries(items, from, to) {
     if (_mw.src !== 'all' && it.src !== _mw.src) return;
     var s = MW_SRC[it.src] || { icon: '•', label: it.src };
     out.push({ kind: 'task', key: 't|' + it.key, it: it, title: it.title, icon: s.icon, color: MWC_SRC_COLOR[it.src] || '#64748B',
-      date: it.due, end: it.due, time: '', done: it.done, late: !it.done && it.due < today, urgent: it.urgent && !it.done,
+      date: it.due, end: it.due, time: it.dueTime || '', timeEnd: it.dueTime ? _mwcHm(_mwcMin(it.dueTime) + 30) : '', done: it.done, pri: it.pri, late: !it.done && it.due < today, urgent: it.urgent && !it.done,
       drag: !it.done && it.canDone && MWC_DUE_SRC.indexOf(it.src) >= 0,
       tip: s.label + ' — ' + it.title + (it.ctx ? ' · ' + it.ctx : '') });
   });
@@ -103,20 +103,20 @@ function _mwcChip(x, opt) {
     (x.drag ? ' draggable="true"' : '') + ' style="--c:' + _mwEsc(x.color) + '" title="' + _mwEsc(x.tip) + '">' +
     '<span class="mwc-ic">' + x.icon + '</span>' + (x.repeat ? '<span class="mwc-ic">🔁</span>' : '') +
     (x.time && !opt.noTime ? '<b class="mwc-tm">' + _mwEsc(x.time) + '</b>' : '') +
-    (x.urgent ? '<b class="mw-urg">긴급</b>' : '') + '<span class="mwc-tx">' + _mwEsc(x.title) + '</span></div>';
+    (x.urgent ? '<b class="mw-urg">긴급</b>' : x.pri === 2 && !x.done ? '<b class="mw-urg mw-urg2">높음</b>' : '') + '<span class="mwc-tx">' + _mwEsc(x.title) + '</span></div>';
 }
 
 /* ── 머리 도구 · 거르기 칩 · 목록 위 '오늘 일정' 띠 ───────────────── */
 function mwCalToolsHtml(r) {
   var v = _mwcView();
-  var h = '<span class="mwc-seg">' + [['list', '목록'], ['week', '주'], ['month', '월']].map(function (x) {
+  var h = '<span class="mwc-seg">' + [['list', '목록'], ['matrix', '4칸'], ['week', '주'], ['month', '월']].map(function (x) {
     return '<button class="mwc-seg-b' + (v === x[0] ? ' on' : '') + '" data-mwc-view="' + x[0] + '">' + x[1] + '</button>';
   }).join('') + '</span>';
   if (r && r.self) h += '<button class="mw-btn" data-mwc="feed" title="구글 · 아웃룩 달력에서 내 업무 보기">📤 구독</button>';
   return h;
 }
 function mwCalChipHtml() {
-  if (_mwcView() === 'list' || !_mw.ev) return '';
+  if ((_mwcView() !== 'week' && _mwcView() !== 'month') || !_mw.ev) return '';
   var rg = _mwcRange();
   var n = _mwcOccurrences(rg.from, rg.to).length;
   return n ? '<button class="mw-chip' + (_mw.src === 'event' ? ' on' : '') + '" data-src="event">📅 일정 ' + n + '</button>' : '';
@@ -156,7 +156,7 @@ function _mwcDayHead(d, today) {
 function _mwcWeekHtml(all, rg, today) {
   var days = [];
   for (var i = 0; i < 7; i++) days.push(_mwcAdd(rg.from, i));
-  var timed = function (x) { return x.kind === 'evt' && x.time && x.date === x.end; };
+  var timed = function (x) { return x.time && x.date === x.end; };   // 마감 시각 있는 할 일도 시간 칸에 (v13.253)
   var h = '<div class="mwc mwc-week"><div class="mwc-wk-in"><div class="mwc-row mwc-wk-h"><div class="mwc-gut"></div>' + days.map(function (d) { return _mwcDayHead(d, today); }).join('') + '</div>';
   h += '<div class="mwc-row mwc-allday"><div class="mwc-gut">종일</div>' + days.map(function (d) {
     var list = all.filter(function (x) { return !timed(x) && x.date <= d && x.end >= d; }).sort(_mwcCmp);
@@ -252,11 +252,11 @@ function mwCalClick(e) {
   if (col && t === col) {
     var y = e.clientY - col.getBoundingClientRect().top;
     var m = Math.floor(y / MWC_HOUR_H * 2) * 30;
-    mwCalQuickAdd(col.getAttribute('data-tday'), _mwcHm(m), _mwcHm(Math.min(m + 60, 23 * 60 + 59)));
+    mwRegister({ date: col.getAttribute('data-tday'), t1: _mwcHm(m), t2: _mwcHm(Math.min(m + 60, 23 * 60 + 59)), kind: 'etc' });
     return true;
   }
   var day = t.closest('[data-day]');
-  if (day && (t === day || t.closest('.mwc-mdn'))) { mwCalQuickAdd(day.getAttribute('data-day')); return true; }
+  if (day && (t === day || t.closest('.mwc-mdn'))) { mwRegister({ date: day.getAttribute('data-day'), kind: 'todo' }); return true; }
   return false;
 }
 
@@ -279,61 +279,7 @@ function _mwcAfterChange() {
   return mwCalLoadEvents(true).then(_mwPaint);
 }
 
-/* ── 빈 칸 → 빠른 등록 ────────────────────────────────────────────── */
-function mwCalQuickAdd(date, t1, t2) {
-  wmGuardedModal('mwcQuick', function () { _mwcBuildQuick(date, t1, t2); }, 'mwcQuickModal', {
-    onOpen: function () { var i = document.getElementById('mwcQTitle'); if (i) i.focus(); }
-  });
-}
-function _mwcBuildQuick(date, t1, t2) {
-  var asEvt = !!t1;
-  var html = '<form id="mwcQForm" class="mwc-q">' +
-    '<div class="mwc-q-kind"><label><input type="radio" name="mwcQK" value="todo"' + (asEvt ? '' : ' checked') + '> ✏️ 할 일 <i>마감일에 놓임</i></label>' +
-    '<label><input type="radio" name="mwcQK" value="evt"' + (asEvt ? ' checked' : '') + '> 📅 개인 일정 <i>나만 봄</i></label></div>' +
-    '<input id="mwcQTitle" class="mw-input" maxlength="255" placeholder="무엇을 할까요?" autocomplete="off">' +
-    '<div class="mwc-q-row"><input id="mwcQDate" type="date" class="mw-input" value="' + _mwEsc(date) + '">' +
-    '<span class="mwc-q-time"' + (asEvt ? '' : ' hidden') + '><input id="mwcQT1" type="time" step="300" class="mw-input" value="' + _mwEsc(t1 || '') + '" title="비우면 하루 종일"> ~ ' +
-    '<input id="mwcQT2" type="time" step="300" class="mw-input" value="' + _mwEsc(t2 || '') + '"></span></div>' +
-    '<div class="mwc-q-btns"><button type="button" class="mw-btn" id="mwcQMore" title="유형 · 반복 · 담당 · 프로젝트까지">자세히…</button>' +
-    '<span style="flex:1"></span><button type="button" class="mw-btn" id="mwcQCancel">닫기</button><button type="submit" class="mw-btn mw-btn-p">등록</button></div></form>';
-  var ov = createModal({ id: 'mwcQuickModal', width: '420px', titleText: (+date.slice(5, 7)) + '월 ' + (+date.slice(8, 10)) + '일에 추가', html: html, closeOnEsc: true }).overlay;
-  var f = ov.querySelector('#mwcQForm');
-  var kind = function () { var r = f.querySelector('input[name="mwcQK"]:checked'); return r ? r.value : 'todo'; };
-  f.onchange = function (e) {
-    if (e.target.name === 'mwcQK') { ov.querySelector('.mwc-q-time').hidden = kind() !== 'evt'; ov.querySelector('#mwcQMore').hidden = kind() !== 'evt'; }
-  };
-  ov.querySelector('#mwcQMore').hidden = !asEvt;
-  ov.querySelector('#mwcQCancel').onclick = function () { ov.remove(); };
-  ov.querySelector('#mwcQMore').onclick = function () {
-    var v = _mwcQVals(ov);
-    ov.remove();
-    _mwcEventModal(null, v.date, { title: v.title, startTime: v.t1, endTime: v.t2 });
-  };
-  var busy = false;
-  f.onsubmit = function (e) {
-    e.preventDefault();
-    if (busy) return;
-    var v = _mwcQVals(ov);
-    if (!v.title) { ov.querySelector('#mwcQTitle').focus(); return; }
-    if (!v.date) { _mwToast('날짜를 고르세요', 'warn'); return; }
-    if (kind() === 'evt' && v.t1 && v.t2 && v.t2 <= v.t1) { _mwToast('끝 시각이 시작 시각보다 늦어야 합니다', 'warn'); return; }
-    busy = true;
-    _mwc.selfAt = Date.now();
-    var p = kind() === 'todo'
-      ? apiFetch('/api/my-work/todos', { method: 'POST', body: JSON.stringify({ title: v.title, dueDate: v.date }) })
-      : createEvent({ title: v.title, type: 'etc', startDate: v.date, endDate: v.date, startTime: v.t1 || null, endTime: v.t1 ? (v.t2 || null) : null, projectIds: [], assignees: [] });
-    p.then(function () {
-      ov.remove();
-      _mwToast(kind() === 'todo' ? '✏️ 할 일을 추가했습니다' : '📅 일정을 추가했습니다');
-      if (kind() === 'todo') renderMyWork(); else _mwcAfterChange();
-    }).catch(function (e2) { busy = false; _mwToast('❌ ' + _mwErr(e2), 'error'); });
-  };
-}
-function _mwcQVals(ov) {
-  var g = function (id) { var x = ov.querySelector('#' + id); return x ? x.value.trim() : ''; };
-  var t1 = g('mwcQT1');
-  return { title: g('mwcQTitle'), date: g('mwcQDate'), t1: t1, t2: t1 ? g('mwcQT2') : '' };
-}
+/* ── 빈 칸 → 등록: my-work-task.js mwRegister (v13.253 — 종류별 등록 창) ── */
 
 /* ── 끌어 놓기 ────────────────────────────────────────────────────── */
 function mwCalBind(el) {
@@ -391,13 +337,22 @@ function mwCalBind(el) {
       time = _mwcHm(Math.round(y / MWC_HOUR_H * 4) * 15);   // 15분 단위
     }
     _mwc.drag = null;
-    if (d.x.kind === 'task') _mwcMoveTask(d.x, date);
+    if (d.x.kind === 'task') _mwcMoveTask(d.x, date, time);
     else _mwcMoveEvent(d.x, date, time);
   });
 }
 
-function _mwcMoveTask(x, date) {
+function _mwcMoveTask(x, date, time) {
   var it = x.it;
+  // 개인 할 일은 시간 칸에 놓으면 마감 시각도 (다른 출처는 날짜만)
+  if (it.src === 'todo' && time && (it.due !== date || it.dueTime !== time)) {
+    apiFetch('/api/my-work/todos/' + encodeURIComponent(it.id), { method: 'PUT', body: JSON.stringify({ dueDate: date, dueTime: time }) }).then(function () {
+      it.due = date; it.dueTime = time;
+      _mwToast('📆 "' + it.title + '" 마감을 ' + (+date.slice(5, 7)) + '/' + (+date.slice(8, 10)) + ' ' + time + ' 로 옮겼습니다');
+      _mwPaint();
+    }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); _mwPaint(); });
+    return;
+  }
   if (it.due === date) return;
   apiFetch('/api/my-work/due', { method: 'PUT', body: JSON.stringify({ src: it.src, id: it.id, userId: it.userId, due: date }) }).then(function () {
     it.due = date;

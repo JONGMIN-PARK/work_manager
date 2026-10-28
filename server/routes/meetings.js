@@ -52,20 +52,21 @@ async function syncMeetingEvent(meeting, tenantId, userId) {
   if (typeof form === 'string') { try { form = JSON.parse(form); } catch (_) { form = {}; } }
   form = form || {};
   var t1 = _hm(form.timeStart), t2 = t1 ? _hm(form.timeEnd) : null;
+  var place = String(form.place || '').trim().slice(0, 255) || null;
   var att = meeting.attendees;
   if (typeof att === 'string') { try { att = JSON.parse(att); } catch (_) { att = []; } }
   att = JSON.stringify((Array.isArray(att) ? att : []).filter(Boolean).map(String));
   if (meeting.event_id) {
     await db.query(
-      "UPDATE events SET title = $1, start_date = $2, end_date = $2, project_ids = $3, start_time = $6, end_time = $7, assignees = $8 WHERE id = $4 AND tenant_id = $5",
-      [meeting.title, meeting.meet_date, projectIds, meeting.event_id, tenantId, t1, t2, att]
+      "UPDATE events SET title = $1, start_date = $2, end_date = $2, project_ids = $3, start_time = $6, end_time = $7, assignees = $8, location = $9 WHERE id = $4 AND tenant_id = $5",
+      [meeting.title, meeting.meet_date, projectIds, meeting.event_id, tenantId, t1, t2, att, place]
     );
     return meeting.event_id;
   }
   var evId = genId('evt');
   await db.query(
-    "INSERT INTO events (id, title, type, start_date, end_date, project_ids, created_by, tenant_id, start_time, end_time, assignees) VALUES ($1,$2,'meeting',$3,$3,$4,$5,$6,$7,$8,$9)",
-    [evId, meeting.title, meeting.meet_date, projectIds, userId, tenantId, t1, t2, att]
+    "INSERT INTO events (id, title, type, start_date, end_date, project_ids, created_by, tenant_id, start_time, end_time, assignees, location) VALUES ($1,$2,'meeting',$3,$3,$4,$5,$6,$7,$8,$9,$10)",
+    [evId, meeting.title, meeting.meet_date, projectIds, userId, tenantId, t1, t2, att, place]
   );
   return evId;
 }
@@ -380,6 +381,10 @@ router.put('/:id/actions/:aid', async function (req, res) {
     function set(col, val) { sets.push(col + ' = $' + idx++); params.push(val); }
     if (b.title !== undefined) set('title', b.title);
     if (b.dueDate !== undefined || b.due_date !== undefined) set('due_date', b.dueDate || b.due_date || null);
+    if (b.priority !== undefined) {   // 중요도 1 긴급 · 2 높음 · 3 보통 · 4 낮음 (v13.253, 내 업무와 같음)
+      var pr = parseInt(b.priority, 10);
+      set('priority', pr >= 1 && pr <= 4 && pr !== 3 ? pr : null);
+    }
     if (b.status !== undefined) {
       set('status', b.status === 'done' ? 'done' : 'open');
       sets.push(b.status === 'done' ? 'done_at = COALESCE(done_at, now())' : 'done_at = NULL');   // 내 업무 '다 한 것' (v13.248)

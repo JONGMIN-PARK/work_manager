@@ -23,7 +23,7 @@ var PS_CAT = {
   idea:    { label: '아이디어', color: '#F59E0B' },
   quote:   { label: '견적',     color: '#EC4899' }
 };
-var PS_PRIO = { high: { label: '높음', color: SEM_COLOR.danger }, normal: { label: '보통', color: SEM_COLOR.warn }, low: { label: '낮음', color: SEM_COLOR.muted } };
+var PS_PRIO = { urgent: { label: '긴급', color: '#B91C1C' }, high: { label: '높음', color: SEM_COLOR.danger }, normal: { label: '보통', color: SEM_COLOR.warn }, low: { label: '낮음', color: SEM_COLOR.muted } };
 
 var _psList = [];
 var _psView = 'board';   // board | client | list

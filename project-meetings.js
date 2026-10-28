@@ -326,6 +326,7 @@ function _pmtActsHtml(m, t) {
     var full = a.title + (a.assigneeName ? ' · 담당 ' + a.assigneeName : '') + (a.dueDate ? ' · 기한 ' + a.dueDate : '');
     return '<div class="pmt-act' + (done ? ' done' : '') + '">' +
       '<span style="cursor:pointer;flex:0 0 auto" onclick="pmtActToggle(\'' + mid + '\',\'' + aid + '\',\'' + (done ? 'open' : 'done') + '\')">' + (done ? '☑' : '☐') + '</span>' +
+      (done ? '' : _pmtPriBadge(mid, aid, a.priority)) +
       '<span title="' + _pmtEsc(full) + '" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;color:' + (done ? 'var(--t5);text-decoration:line-through' : 'var(--t2)') + '">' + _pmtEsc(a.title) + '</span>' +
       (a.assigneeName ? '<span style="flex:0 0 auto;max-width:120px;overflow:hidden;text-overflow:ellipsis;font-size:10px;background:var(--bg-i);border:1px solid var(--bd);border-radius:9px;padding:0 7px;color:var(--t3)" title="' + _pmtEsc(a.assigneeName) + '">' + _pmtEsc(a.assigneeName) + '</span>' : '') +
       (a.dueDate ? '<span style="flex:0 0 auto;font-size:10px;color:' + (late ? SEM_COLOR.danger : 'var(--t6)') + ';font-weight:' + (late ? 700 : 400) + '">' + _pmtEsc(a.dueDate.slice(5)) + (late ? ' 지남' : '') + '</span>' : '') +
@@ -775,6 +776,18 @@ function pmtActAdd(mid) {
     .then(function () { return _pmtAfterAct(mid); })
     .then(function () { var n = document.getElementById('pmtActT-' + mid); if (n) n.focus(); })
     .catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '추가 실패'), 'error'); });
+}
+/* 액션 중요도 (v13.253) — 내 업무와 같은 4단계. 누르면 보통 → 높음 → 긴급 → 낮음 → 보통 */
+var PMT_PRI = { 1: { l: '긴급', c: '#DC2626' }, 2: { l: '높음', c: '#F97316' }, 4: { l: '낮음', c: '#64748B' } };
+function _pmtPriBadge(mid, aid, p) {
+  var x = PMT_PRI[p];
+  return '<span class="pmt-pri' + (x ? '' : ' is-none') + '" style="' + (x ? '--pc:' + x.c : '') + '" title="중요도 — 눌러서 바꾸기" onclick="pmtActPri(\'' + mid + '\',\'' + aid + '\',' + (p || 3) + ')">' + (x ? x.l : '중요도') + '</span>';
+}
+function pmtActPri(mid, aid, cur) {
+  var next = { 3: 2, 2: 1, 1: 4, 4: 3 }[cur] || 2;
+  apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions/' + encodeURIComponent(aid), { method: 'PUT', body: JSON.stringify({ priority: next }) })
+    .then(function () { return _pmtAfterAct(mid); })
+    .catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '변경 실패'), 'error'); });
 }
 function pmtActToggle(mid, aid, status) {
   apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions/' + encodeURIComponent(aid), { method: 'PUT', body: JSON.stringify({ status: status }) })

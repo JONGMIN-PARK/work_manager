@@ -13,6 +13,10 @@
  *   GET    /api/my-work/feed             내 .ics 구독 주소 (없으면 null)
  *   POST   /api/my-work/feed             구독 주소 만들기 · 다시 만들기 (옛 주소는 끊김)
  *   DELETE /api/my-work/feed             구독 끄기
+ *   PUT    /api/my-work/priority         { src, id, userId, priority 1~4 } — 중요도, 원래 자리에 반영 (v13.253)
+ *   PUT    /api/my-work/mark             { key, focus } — ⭐ 오늘 집중 (어느 출처든, 내 표시)
+ *   PUT    /api/my-work/order            { keys: [...] } — 직접 순서
+ *   GET    /api/my-work/directory        같은 회사 활성 사용자 이름 (참석자 · 담당 고르기)
  *
  * 완료 처리 · 담당 바꾸기는 본인 또는 관리자(완료) / 관리자 · 임원 · 팀장(담당)만.
  * 마인드맵 주제는 누가 그 맵을 편집 중이면 바꾸지 않는다 (편집 잠금).
@@ -26,6 +30,8 @@ var tenant = require('../middleware/tenant');
 var httpErr = require('../lib/http-errors');
 var myWork = require('../lib/my-work');
 var myEvents = require('../lib/my-events');
+var prio = require('../lib/priority');
+var repeatNext = require('../lib/todo-repeat').repeatNext;
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -79,7 +85,20 @@ router.get('/', async function (req, res) {
     var items = await myWork.collect(req, [u], { done: true });
     var self = u.id === req.user.sub;
     var canDone = self || req.user.role === 'admin';
-    items.forEach(function (it) { it.canDone = canDone && DONE_SRC.indexOf(it.src) >= 0 && (it.src !== 'todo' || self); });
+    items.forEach(function (it) {
+      it.canDone = canDone && DONE_SRC.indexOf(it.src) >= 0 && (it.src !== 'todo' || self);
+      it.canPri = canDone && prio.SRC.indexOf(it.src) >= 0 && (it.src !== 'todo' || self);
+    });
+    // ⭐ 오늘 집중 · 직접 순서 — 그 사람 표시 (끝난 일의 표시는 정리)
+    var mk = await db.query('SELECT item_key, focus_date, sort_order FROM my_work_marks WHERE user_id = $1 AND tenant_id = $2', [u.id, req.tenant.id]);
+    var byKey = {};
+    mk.rows.forEach(function (m) { byKey[m.item_key] = m; });
+    items.forEach(function (it) {
+      var m = byKey[it.src + ':' + it.id];
+      if (!m) return;
+      if (m.focus_date && !it.done) it.focus = m.focus_date;
+      if (m.sort_order != null) it.order = m.sort_order;
+    });
     res.json({ data: items, user: toUser(u), today: myWork.kstToday(), self: self });
   } catch (e) { httpErr.serverError(res, '[my-work/list]', e); }
 });
@@ -133,6 +152,7 @@ router.put('/done', async function (req, res) {
     if (!it) return httpErr.sendError(res, 404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.');
     var tid = req.tenant.id;
     var today = myWork.kstToday();
+    var next = null;   // 반복 할 일의 다음 회차
     if (b.src === 'issue') {
       await db.query(
         "UPDATE issues SET status = $1::varchar, resolved_date = CASE WHEN $1::varchar = 'resolved' THEN COALESCE(NULLIF(resolved_date, ''), $2::varchar) ELSE resolved_date END, updated_by = $3, updated_at = now() WHERE id = $4 AND tenant_id = $5",
@@ -146,6 +166,7 @@ router.put('/done', async function (req, res) {
         [done ? 'done' : 'doing', req.user.sub, b.id, tid]);
     } else if (b.src === 'todo') {
       await db.query('UPDATE my_todos SET done_at = ' + (done ? 'COALESCE(done_at, now())' : 'NULL') + ', updated_at = now() WHERE id = $1 AND tenant_id = $2 AND user_id = $3', [b.id, tid, req.user.sub]);
+      if (done) next = await repeatNext(req, b.id);
     } else if (b.src === 'mindmap') {
       var mp = splitMapId(b.id);
       var ok = await editMapNode(req, res, mp.mapId, mp.nodeId, function (n) {
@@ -155,22 +176,69 @@ router.put('/done', async function (req, res) {
       });
       if (!ok) return;
     }
-    res.json({ data: { src: b.src, id: b.id, done: done } });
+    res.json({ data: { src: b.src, id: b.id, done: done, next: next || null } });
   } catch (e) { httpErr.serverError(res, '[my-work/done]', e); }
 });
 
 /* ═══ 개인 할 일 ═══ */
 function cleanDue(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null; }
+function cleanTime(v) {
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim());
+  return m && +m[1] <= 23 && +m[2] <= 59 ? (m[1].length === 1 ? '0' : '') + m[1] + ':' + m[2] : null;
+}
+var TODO_STATUS = ['todo', 'doing', 'waiting'];
+var TODO_REPEAT = ['daily', 'weekdays', 'weekly', 'monthly'];
+function cleanChecklist(v) {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 50).map(function (c, i) {
+    var t = String((c && c.t) || '').trim().slice(0, 200);
+    return t ? { id: String((c && c.id) || ('c' + Date.now().toString(36) + i)).slice(0, 30), t: t, d: !!(c && c.d) } : null;
+  }).filter(Boolean);
+}
+/** 본문 → 고칠 칸들 [[sql, value]] — 잘못된 값은 VALIDATION 오류 문자열 */
+function todoFields(b) {
+  var f = [];
+  if (b.title !== undefined) {
+    var t = String(b.title || '').trim().slice(0, 500);
+    if (!t) return '할 일을 입력하세요.';
+    f.push(['title', t]);
+  }
+  if (b.dueDate !== undefined) f.push(['due_date', cleanDue(b.dueDate)]);
+  if (b.dueTime !== undefined) f.push(['due_time', cleanTime(b.dueTime)]);
+  if (b.priority !== undefined) {
+    if (!prio.clamp(b.priority)) return '중요도는 1~4 입니다.';
+    f.push(['priority', prio.clamp(b.priority)]);
+  }
+  if (b.status !== undefined) {
+    if (TODO_STATUS.indexOf(b.status) < 0) return '상태 값이 맞지 않습니다.';
+    f.push(['status', b.status]);
+  }
+  if (b.waitingFor !== undefined) f.push(['waiting_for', String(b.waitingFor || '').trim().slice(0, 100) || null]);
+  if (b.memo !== undefined) f.push(['memo', String(b.memo || '').slice(0, 5000) || null]);
+  if (b.repeat !== undefined) {
+    if (b.repeat && TODO_REPEAT.indexOf(b.repeat) < 0) return '반복 값이 맞지 않습니다.';
+    f.push(['repeat', b.repeat || null]);
+  }
+  if (b.estimateH !== undefined) {
+    var h = b.estimateH === null || b.estimateH === '' ? null : Number(b.estimateH);
+    if (h !== null && (isNaN(h) || h < 0 || h > 999)) return '예상 시간이 맞지 않습니다.';
+    f.push(['estimate_h', h ? Math.round(h * 10) / 10 : null]);
+  }
+  if (b.checklist !== undefined) f.push(['checklist', JSON.stringify(cleanChecklist(b.checklist))]);
+  return f;
+}
 
 router.post('/todos', async function (req, res) {
   try {
     var b = req.body || {};
-    var title = String(b.title || '').trim().slice(0, 500);
-    if (!title) return httpErr.sendError(res, 400, 'VALIDATION', '할 일을 입력하세요.');
+    if (!String(b.title || '').trim()) return httpErr.sendError(res, 400, 'VALIDATION', '할 일을 입력하세요.');
+    var f = todoFields(b);
+    if (typeof f === 'string') return httpErr.sendError(res, 400, 'VALIDATION', f);
     var n = await db.query('SELECT COUNT(*)::int AS n FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND done_at IS NULL', [req.tenant.id, req.user.sub]);
     if (n.rows[0].n >= 300) return httpErr.sendError(res, 400, 'VALIDATION', '끝나지 않은 개인 할 일은 300개까지입니다.');
-    var r = await db.query('INSERT INTO my_todos (id, tenant_id, user_id, title, due_date) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [genId(), req.tenant.id, req.user.sub, title, cleanDue(b.dueDate)]);
+    var cols = ['id', 'tenant_id', 'user_id'], vals = [genId(), req.tenant.id, req.user.sub];
+    f.forEach(function (x) { cols.push(x[0]); vals.push(x[1]); });
+    var r = await db.query('INSERT INTO my_todos (' + cols.join(', ') + ') VALUES (' + vals.map(function (_, i) { return '$' + (i + 1); }).join(',') + ') RETURNING *', vals);
     res.status(201).json({ data: r.rows[0] });
   } catch (e) { httpErr.serverError(res, '[my-work/todo-create]', e); }
 });
@@ -178,20 +246,17 @@ router.post('/todos', async function (req, res) {
 router.put('/todos/:id', async function (req, res) {
   try {
     var b = req.body || {};
+    var f = todoFields(b);
+    if (typeof f === 'string') return httpErr.sendError(res, 400, 'VALIDATION', f);
     var sets = [], params = [];
-    function set(sql, v) { params.push(v); sets.push(sql.replace('?', '$' + params.length)); }
-    if (b.title !== undefined) {
-      var t = String(b.title || '').trim().slice(0, 500);
-      if (!t) return httpErr.sendError(res, 400, 'VALIDATION', '할 일을 입력하세요.');
-      set('title = ?', t);
-    }
-    if (b.dueDate !== undefined) set('due_date = ?', cleanDue(b.dueDate));
+    f.forEach(function (x) { params.push(x[1]); sets.push(x[0] + ' = $' + params.length); });
     if (b.done !== undefined) sets.push(b.done ? 'done_at = COALESCE(done_at, now())' : 'done_at = NULL');
     if (!sets.length) return httpErr.sendError(res, 400, 'VALIDATION', '바꿀 내용이 없습니다.');
     params.push(req.params.id, req.tenant.id, req.user.sub);
     var r = await db.query('UPDATE my_todos SET ' + sets.join(', ') + ', updated_at = now() WHERE id = $' + (params.length - 2) + ' AND tenant_id = $' + (params.length - 1) + ' AND user_id = $' + params.length + ' RETURNING *', params);
     if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
-    res.json({ data: r.rows[0] });
+    var next = b.done ? await repeatNext(req, req.params.id) : null;
+    res.json({ data: r.rows[0], next: next });
   } catch (e) { httpErr.serverError(res, '[my-work/todo-update]', e); }
 });
 
@@ -213,10 +278,36 @@ router.get('/load', async function (req, res) {
     if (req.query.deptId) people = people.filter(function (u) { return u.department_id === req.query.deptId; });
     var items = await myWork.collect(req, people, { load: true });
     var grid = myWork.loadGrid(items, weeks);
+    var leaves = await leaveDays(req, people, grid.weeks[0], myEvents.addDays(grid.weeks[0], weeks * 7 - 1));
     // 칸을 누르면 볼 목록 — 개인 할 일은 제목 없이
-    res.json({ data: { users: people.map(toUser), weeks: grid.weeks, today: grid.today, rows: grid.rows, items: items } });
+    res.json({ data: { users: people.map(toUser), weeks: grid.weeks, today: grid.today, rows: grid.rows, items: items, leaves: leaves } });
   } catch (e) { httpErr.serverError(res, '[my-work/load]', e); }
 });
+
+/** 휴가 (연차 · 반차 일정) — { userId: [{ date, type }] } 주말 · 반복 회차 포함. 일정의 담당(이름) 또는 만든 사람(개인 일정) */
+async function leaveDays(req, people, from, to) {
+  var names = people.map(function (u) { return u.name; });
+  var byName = {}, out = {};
+  people.forEach(function (u) { byName[u.name] = u.id; });
+  var r = await db.query(
+    "SELECT * FROM events WHERE tenant_id = $1 AND type IN ('dayoff','amoff','pmoff') AND start_date <= $2 " +
+    "AND (COALESCE(NULLIF(end_date, ''), start_date) >= $3 OR (repeat IN ('weekly','biweekly','monthly') AND (COALESCE(repeat_until, '') = '' OR repeat_until >= $3))) " +
+    "AND (created_by = ANY($4) OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(assignees, '[]'::jsonb)) a WHERE a = ANY($5)))",
+    [req.tenant.id, to, from, people.map(function (u) { return u.id; }), names]);
+  r.rows.forEach(function (ev) {
+    var who = (Array.isArray(ev.assignees) ? ev.assignees : []).map(function (n) { return byName[n]; }).filter(Boolean);
+    if (!who.length && people.some(function (u) { return u.id === ev.created_by; })) who = [ev.created_by];
+    myEvents.occurrences(ev, from, to).forEach(function (o) {
+      for (var d = o.date; d <= o.end; d = myEvents.addDays(d, 1)) {
+        if (d < from || d > to) continue;
+        var w = new Date(d + 'T00:00:00Z').getUTCDay();
+        if (w === 0 || w === 6) continue;
+        who.forEach(function (uid) { (out[uid] = out[uid] || []).push({ date: d, type: ev.type }); });
+      }
+    });
+  });
+  return out;
+}
 
 // PUT /api/my-work/reassign { src, id, fromUserId, toUserId }
 router.put('/reassign', async function (req, res) {
@@ -307,6 +398,82 @@ router.put('/due', async function (req, res) {
     }
     res.json({ data: { src: b.src, id: b.id, due: due } });
   } catch (e) { httpErr.serverError(res, '[my-work/due]', e); }
+});
+
+/* ═══ 중요도 · 오늘 집중 · 순서 (v13.253) ═══ */
+// PUT /api/my-work/priority { src, id, userId, priority }
+router.put('/priority', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var p = prio.clamp(b.priority);
+    if (prio.SRC.indexOf(b.src) < 0 || !b.id) return httpErr.sendError(res, 400, 'VALIDATION', '중요도를 바꿀 수 없는 항목입니다.');
+    if (!p) return httpErr.sendError(res, 400, 'VALIDATION', '중요도는 1~4 입니다.');
+    var userId = b.userId || req.user.sub;
+    if (userId !== req.user.sub && req.user.role !== 'admin') return httpErr.sendError(res, 403, 'FORBIDDEN', '본인 업무만 중요도를 바꿀 수 있습니다.');
+    if (b.src === 'todo' && userId !== req.user.sub) return httpErr.sendError(res, 403, 'FORBIDDEN');
+    var u = await targetUser(req, userId);
+    if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN');
+    var items = await myWork.collect(req, [u], { done: true, sources: [b.src] });
+    if (!items.some(function (x) { return x.id === b.id; })) return httpErr.sendError(res, 404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.');
+    var tid = req.tenant.id;
+    if (b.src === 'todo') {
+      await db.query('UPDATE my_todos SET priority = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 AND user_id = $4', [p, b.id, tid, req.user.sub]);
+    } else if (b.src === 'issue') {
+      await db.query('UPDATE issues SET urgency = $1, updated_by = $2, updated_at = now() WHERE id = $3 AND tenant_id = $4', [prio.toWord(p), req.user.sub, b.id, tid]);
+    } else if (b.src === 'action') {
+      await db.query('UPDATE meeting_action_items SET priority = $1 WHERE id = $2 AND tenant_id = $3', [p, b.id, tid]);
+    } else if (b.src === 'dev') {
+      await db.query('UPDATE project_dev_items SET priority = $1, version = version + 1, updated_by = $2, updated_at = now() WHERE id = $3 AND tenant_id = $4', [prio.toWord(p), req.user.sub, b.id, tid]);
+    } else if (b.src === 'prestudy') {
+      await db.query('UPDATE prestudies SET priority = $1, version = version + 1, updated_by = $2, updated_at = now() WHERE id = $3 AND tenant_id = $4', [prio.toWord(p), req.user.sub, b.id, tid]);
+    } else if (b.src === 'mindmap') {
+      var mp = splitMapId(b.id);
+      var ok = await editMapNode(req, res, mp.mapId, mp.nodeId, function (n) {
+        if (n.assigneeId !== userId) return false;
+        prio.setMarkers(n, p);
+      });
+      if (!ok) return;
+    }
+    res.json({ data: { src: b.src, id: b.id, priority: p } });
+  } catch (e) { httpErr.serverError(res, '[my-work/priority]', e); }
+});
+
+function cleanKey(k) { return typeof k === 'string' && /^[a-z]+:[^\s]{1,190}$/.test(k) ? k : null; }
+
+// PUT /api/my-work/mark { key, focus } — 내 표시만
+router.put('/mark', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var key = cleanKey(b.key);
+    if (!key) return httpErr.sendError(res, 400, 'VALIDATION', '항목이 맞지 않습니다.');
+    var focus = b.focus ? myWork.kstToday() : null;
+    await db.query(
+      'INSERT INTO my_work_marks (user_id, item_key, tenant_id, focus_date) VALUES ($1, $2, $3, $4) ' +
+      'ON CONFLICT (user_id, item_key) DO UPDATE SET focus_date = EXCLUDED.focus_date, updated_at = now()',
+      [req.user.sub, key, req.tenant.id, focus]);
+    res.json({ data: { key: key, focus: focus } });
+  } catch (e) { httpErr.serverError(res, '[my-work/mark]', e); }
+});
+
+// PUT /api/my-work/order { keys: [...] } — 이 순서대로 0,1,2…
+router.put('/order', async function (req, res) {
+  try {
+    var keys = ((req.body || {}).keys || []).map(cleanKey);
+    if (!keys.length || keys.length > 500 || keys.some(function (k) { return !k; })) return httpErr.sendError(res, 400, 'VALIDATION', '항목이 맞지 않습니다.');
+    await db.query(
+      'INSERT INTO my_work_marks (user_id, item_key, tenant_id, sort_order) SELECT $1, k, $2, (o - 1)::int FROM unnest($3::text[]) WITH ORDINALITY AS t(k, o) ' +
+      'ON CONFLICT (user_id, item_key) DO UPDATE SET sort_order = EXCLUDED.sort_order, updated_at = now()',
+      [req.user.sub, req.tenant.id, keys]);
+    res.json({ data: { n: keys.length } });
+  } catch (e) { httpErr.serverError(res, '[my-work/order]', e); }
+});
+
+// GET /api/my-work/directory — 같은 회사 활성 사용자 (이름 · 부서만)
+router.get('/directory', async function (req, res) {
+  try {
+    var r = await db.query('SELECT ' + USER_COLS + " FROM users u LEFT JOIN departments d ON d.id = u.department_id WHERE u.tenant_id = $1 AND u.status = 'active' ORDER BY u.name", [req.tenant.id]);
+    res.json({ data: r.rows.map(function (u) { return { id: u.id, name: u.name, display: u.display_name, dept: u.department_name || '' }; }) });
+  } catch (e) { httpErr.serverError(res, '[my-work/directory]', e); }
 });
 
 /* ═══ .ics 구독 주소 ═══ */

@@ -9,11 +9,14 @@
  *   todo     개인 할 일 (my_todos)
  * 새로 입력받는 것은 todo 뿐 — 나머지는 원래 자리에 있는 값을 읽기만 한다.
  *
- * 항목: { key, src, id, userId, title, ctx, ctxId, due, done, doneAt, progress, weight, urgent, status, mapId, sheet, nodeId, projectId, mapOpen }
+ * 항목: { key, src, id, userId, title, ctx, ctxId, due, done, doneAt, progress, weight, pri, urgent, status, mapId, sheet, nodeId, projectId, mapOpen }
+ *   pri — 중요도 1 긴급 · 2 높음 · 3 보통 · 4 낮음 (lib/priority, v13.253). urgent = pri 1
+ *   todo 는 본인일 때 todoStatus · waitingFor · memo · dueTime · repeat · estimateH · checklist 도
  */
 var db = require('../config/db');
 var mmVisible = require('./mindmap-visible');
 var pa = require('./project-access');
+var prio = require('./priority');
 
 var DONE_DAYS = 7;
 
@@ -70,14 +73,14 @@ async function collect(req, users, opt) {
       seen[x.id + uid] = true;
       var done = x.status === 'resolved' || x.status === 'closed';
       out.push({ src: 'issue', id: x.id, userId: uid, title: firstLine(x.title), ctx: x.project_name || '', projectId: x.project_id,
-        due: ymd(x.due_date), done: done, doneAt: done ? x.updated_at : null, status: x.status, urgent: x.urgency === 'urgent' });
+        due: ymd(x.due_date), done: done, doneAt: done ? x.updated_at : null, status: x.status, pri: prio.fromWord(x.urgency) });
     });
   })());
 
   if (want('action')) jobs.push((async function () {
     var pf = projFilter('m.project_id', 5);
     var r = await db.query(
-      'SELECT a.id, a.title, a.due_date, a.status, a.done_at, a.assignee_id, a.assignee_name, a.meeting_id, m.title AS meeting_title, m.meet_date, m.project_id, p.name AS project_name ' +
+      'SELECT a.id, a.title, a.due_date, a.status, a.done_at, a.priority, a.assignee_id, a.assignee_name, a.meeting_id, m.title AS meeting_title, m.meet_date, m.project_id, p.name AS project_name ' +
       'FROM meeting_action_items a JOIN meetings m ON m.id = a.meeting_id AND m.tenant_id = a.tenant_id ' +
       'LEFT JOIN projects p ON p.id = m.project_id AND p.tenant_id = m.tenant_id ' +
       'WHERE a.tenant_id = $1 AND (a.assignee_id = ANY($2) OR (a.assignee_id IS NULL AND a.assignee_name = ANY($3))) ' +
@@ -89,18 +92,18 @@ async function collect(req, users, opt) {
       if (!uid) return;
       var done = x.status === 'done';
       out.push({ src: 'action', id: x.id, userId: uid, title: firstLine(x.title), ctx: (x.meeting_title || '회의') + (x.meet_date ? ' ' + String(x.meet_date).slice(5) : ''),
-        ctxId: x.meeting_id, projectId: x.project_id, due: ymd(x.due_date), done: done, doneAt: done ? x.done_at : null, status: x.status });
+        ctxId: x.meeting_id, projectId: x.project_id, due: ymd(x.due_date), done: done, doneAt: done ? x.done_at : null, status: x.status, pri: prio.fromInt(x.priority) });
     });
   })());
 
   if (want('prestudy')) jobs.push((async function () {
     var r = await db.query(
-      'SELECT id, title, client, due_date, status, owner_id FROM prestudies ' +
+      'SELECT id, title, client, due_date, status, priority, owner_id FROM prestudies ' +
       "WHERE tenant_id = $1 AND deleted_at IS NULL AND owner_id = ANY($2) AND status NOT IN ('won','dropped','hold')",
       [tid, ids]
     );
     r.rows.forEach(function (x) {
-      out.push({ src: 'prestudy', id: x.id, userId: x.owner_id, title: firstLine(x.title), ctx: x.client || '사전검토', due: ymd(x.due_date), done: false, status: x.status });
+      out.push({ src: 'prestudy', id: x.id, userId: x.owner_id, title: firstLine(x.title), ctx: x.client || '사전검토', due: ymd(x.due_date), done: false, status: x.status, pri: prio.fromWord(x.priority) });
     });
   })());
 
@@ -134,19 +137,27 @@ async function collect(req, users, opt) {
     r.rows.forEach(function (x) {
       var done = x.status === 'done';
       out.push({ src: 'dev', id: x.id, userId: x.assignee_id, title: firstLine(x.title), ctx: x.project_name || '', projectId: x.project_id,
-        due: ymd(x.end_date), done: done, doneAt: done ? x.updated_at : null, status: x.status, urgent: x.priority === 'high' || x.priority === 'urgent' });
+        due: ymd(x.end_date), done: done, doneAt: done ? x.updated_at : null, status: x.status, pri: prio.fromWord(x.priority) });
     });
   })());
 
   if (want('todo')) jobs.push((async function () {
     if (!onlySelf && !opt.load) return;   // 개인 할 일은 본인만 — 업무 부하에서는 개수만
     var r = await db.query(
-      'SELECT id, user_id, title, due_date, done_at FROM my_todos WHERE tenant_id = $1 AND user_id = ANY($2) ' +
+      'SELECT id, user_id, title, due_date, done_at, priority, status, waiting_for, memo, due_time, repeat, estimate_h, checklist FROM my_todos WHERE tenant_id = $1 AND user_id = ANY($2) ' +
       'AND (done_at IS NULL OR ($3::int > 0 AND done_at >= now() - make_interval(days => $3::int)))',
       [tid, ids, doneWin]
     );
     r.rows.forEach(function (x) {
-      out.push({ src: 'todo', id: x.id, userId: x.user_id, title: onlySelf ? firstLine(x.title, 500) : '개인 할 일', ctx: '', due: ymd(x.due_date), done: !!x.done_at, doneAt: x.done_at });
+      var it = { src: 'todo', id: x.id, userId: x.user_id, title: onlySelf ? firstLine(x.title, 500) : '개인 할 일', ctx: '', due: ymd(x.due_date), done: !!x.done_at, doneAt: x.done_at,
+        pri: prio.fromInt(x.priority), estimateH: x.estimate_h != null ? Number(x.estimate_h) : null };
+      var cl = Array.isArray(x.checklist) ? x.checklist : [];
+      if (cl.length) { it.checkDone = cl.filter(function (c) { return c && c.d; }).length; it.checkTotal = cl.length; it.progress = Math.round(it.checkDone / it.checkTotal * 100); }
+      if (onlySelf) {   // 내용은 본인만
+        it.todoStatus = x.status || 'todo'; it.waitingFor = x.waiting_for || ''; it.memo = x.memo || ''; it.dueTime = x.due_time || null;
+        it.repeat = x.repeat || null; it.checklist = cl;
+      }
+      out.push(it);
     });
   })());
 
@@ -173,7 +184,7 @@ async function collect(req, users, opt) {
             if (!done || (doneWin && recent(n.doneAt, doneWin))) {
               out.push({ src: 'mindmap', id: m.id + ':' + n.id, userId: n.assigneeId, title: firstLine(n.text), ctx: m.title + (path ? ' › ' + path : ''),
                 mapId: m.id, sheet: si, nodeId: n.id, due: ymd(n.dueDate), done: done, doneAt: done ? n.doneAt || null : null,
-                progress: isNaN(p) ? null : p, urgent: n.priority === 1, mapOpen: !!m.can_open });
+                progress: isNaN(p) ? null : p, pri: prio.fromMarkers(n.markers), mapOpen: !!m.can_open });
             }
           }
           var here = n === sh.root ? '' : firstLine(n.text, 24);
@@ -186,8 +197,12 @@ async function collect(req, users, opt) {
   await Promise.all(jobs);
   out.forEach(function (it) {
     it.key = it.src + ':' + it.id + (ids.length > 1 ? ':' + it.userId : '');
-    // 남은 양 — 진행률이 있으면 그만큼 덜 셈 (0.1 아래로는 안 내림)
-    it.weight = it.done ? 0 : (it.progress != null && it.progress > 0 ? Math.max(0.1, Math.round((100 - it.progress)) / 100) : 1);
+    if (it.pri == null) it.pri = 3;
+    it.urgent = it.pri === 1;
+    // 남은 양 — 1 = 반나절(4시간). 예상 시간이 있으면 그만큼, 진행률이 있으면 그만큼 덜 셈 (0.1 아래로는 안 내림)
+    var base = it.estimateH ? Math.max(0.25, it.estimateH / 4) : 1;
+    var left = it.progress != null && it.progress > 0 ? Math.max(0, 100 - it.progress) / 100 : 1;
+    it.weight = it.done ? 0 : Math.max(0.1, Math.round(base * left * 100) / 100);
   });
   return out;
 }

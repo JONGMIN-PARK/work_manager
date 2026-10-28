@@ -1,5 +1,16 @@
 # Work Manager — 변경 이력
 
+## v13.253 (2026-10-28) — 할 일 관리 · 종류별 등록
+
+- 마이그레이션 065: `my_todos` priority · status · waiting_for · memo · due_time · repeat · estimate_h · checklist, `meeting_action_items.priority`, `events.location`, `my_work_marks`(오늘 집중 · 직접 순서, 출처 무관 item_key).
+- `lib/priority.js`: 중요도 4단계 ↔ 출처별 값 (issue.urgency · dev/prestudy priority 'urgent·high·normal·low', 액션 1~4, 맵 markers priority-N). `lib/my-work.js` 항목에 pri, 할 일 상세, 하위 항목 진행률, 예상 시간 → weight. 맵 주제 긴급 판정 버그(n.priority → markers) 수정.
+- `routes/my-work.js`: `PUT /priority`(원래 자리 반영, 맵 잠금 409) · `PUT /mark` · `PUT /order` · `GET /directory`, 할 일 POST/PUT 칸 확장 · 검증, `/done` 반복 다음 회차, `/load` 휴가(leaves). `lib/todo-repeat.js` 공용.
+- 공용 한 줄 읽기 `quick-parse.js`(UMD) — 웹 입력 · 등록 창 · 텔레그램.
+- 텔레그램 `commands/mywork.js`: /todo · /todos · /todo done N · /event. 브리핑 ⭐ 집중 · 중요도 순, 마감 시각 할 일 30분 전 알림(event_reminder_sent 'todo:id').
+- 회의: 액션 PUT priority, form.place → 일정 location. 일정 API location, .ics LOCATION, 달력 일정 창 장소 칸.
+- 클라: `my-work-task.js` 새 파일(중요도 메뉴 · 집중 · 정렬/거르기 · 직접 순서 · 할 일 편집 창 · 종류별 등록 창 · 4칸 보기). my-work.js 목록 줄 · 한 줄 입력 · 업무 부하 휴가, my-work-cal.js 4칸 전환 · 시간 칸 할 일 · 빈 칸 → 등록 창. ISSUE_URGENCY high · PD_DEV_PRIO/PS_PRIO urgent, 회의 액션 배지.
+- 테스트: `test/e2e/api-tasks.js`(40), `test/e2e/e2e29-tasks.js`(23), `test/quick-parse.test.js`(7). 라우트 스냅샷 갱신.
+
 ## v13.252 (2026-10-28) — 내 업무 달력 · 구독 · 일정 알림
 
 - 마이그레이션 064: `events.start_time` · `end_time` ('HH:MM', 비면 하루 종일), `calendar_feeds`(사람당 .ics 토큰), `event_reminder_sent`(30분 전 알림 회차별 한 번).

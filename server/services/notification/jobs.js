@@ -241,6 +241,7 @@ async function sendEventSoonReminders() {
   var soon = new Date(now.getTime() + 30 * 60000).toISOString();
   if (soon.slice(0, 10) !== today) return;   // 자정 넘어가는 창은 건너뜀 (00:00 일정은 알림 없음)
   var until = soon.slice(11, 16);
+  await sendTodoSoonReminders(today, hm, until).catch(function (e) { console.error('[TodoSoon]', e.message); });
   var evR = await db.query(
     "SELECT * FROM events WHERE start_time IS NOT NULL AND start_time > $1 AND start_time <= $2 AND start_date <= $3 " +
     "AND (start_date = $3 OR (repeat IN ('weekly','biweekly','monthly') AND (COALESCE(repeat_until, '') = '' OR repeat_until >= $3)))",
@@ -284,24 +285,55 @@ async function sendEventSoonReminders() {
   if (sent) console.log('[Notification] Event soon reminders sent:', sent);
 }
 
+/** 마감 시각 있는 개인 할 일 30분 전 알림 (v13.253) — sendEventSoonReminders 가 같이 부름 */
+async function sendTodoSoonReminders(today, hm, until) {
+  var r = await db.query(
+    "SELECT t.id, t.title, t.due_time, t.priority, t.user_id, tl.chat_id FROM my_todos t " +
+    "JOIN telegram_links tl ON tl.user_id = t.user_id AND tl.is_active = TRUE JOIN users u ON u.id = t.user_id AND u.status = 'active' " +
+    "WHERE t.done_at IS NULL AND t.due_date = $1 AND t.due_time > $2 AND t.due_time <= $3 " +
+    "AND NOT EXISTS (SELECT 1 FROM notification_prefs np WHERE np.user_id = t.user_id AND np.channel = 'telegram' AND np.event_type = 'event_soon' AND np.is_enabled = FALSE)",
+    [today, hm, until]);
+  for (var i = 0; i < r.rows.length; i++) {
+    var t = r.rows[i];
+    try {
+      var ins = await db.query('INSERT INTO event_reminder_sent (event_id, occur_date, user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING event_id', ['todo:' + t.id, today, t.user_id]);
+      if (!ins.rows.length) continue;
+      await telegramService.sendMessage(t.chat_id, '⏰ <b>마감 ' + t.due_time + '</b> — ✏️ ' + escHtml(t.title) + ({ 1: ' 🔴 긴급', 2: ' 🟠 높음' }[t.priority] || ''));
+    } catch (e) {
+      console.error('[TodoSoon]', t.id, e.message);
+    }
+  }
+}
+
 /** 브리핑용 '내 할 일' 조각 — 지연 · 오늘 마감 위주로 5건, 실패해도 브리핑은 보냄 */
 async function myWorkBlock(usr, today) {
   try {
     var req = { tenant: { id: usr.tenant_id }, user: { sub: usr.user_id, role: 'member' } };
-    var items = (await myWork.collect(req, [{ id: usr.user_id, name: usr.name }])).filter(function (it) { return !it.done && it.due; });
+    var all = (await myWork.collect(req, [{ id: usr.user_id, name: usr.name }])).filter(function (it) { return !it.done; });
+    // ⭐ 오늘 집중 (v13.253) — 어제 고른 것도 안 끝났으면 남김
+    var mk = await db.query('SELECT item_key FROM my_work_marks WHERE user_id = $1 AND focus_date IS NOT NULL', [usr.user_id]);
+    var focusKey = {};
+    mk.rows.forEach(function (r) { focusKey[r.item_key] = true; });
+    var focus = all.filter(function (it) { return focusKey[it.src + ':' + it.id]; });
+    var items = all.filter(function (it) { return it.due && !focusKey[it.src + ':' + it.id]; });
     var weekEnd = myWork.daysBetween(today, myWork.mondayOf(today)) + 6;   // 오늘부터 이번 주 일요일까지 남은 날
-    var late = [], todays = [], week = 0;
+    var late = [], todays = [], week = 0, hot = 0;
     items.forEach(function (it) {
       var d = myWork.daysBetween(today, it.due);
       if (d < 0) late.push({ it: it, d: -d });
       else if (d === 0) todays.push({ it: it, d: 0 });
-      else if (d <= weekEnd) week++;
+      else if (d <= weekEnd) { week++; if (it.pri <= 2) hot++; }
     });
-    if (!late.length && !todays.length && !week) return '';
-    late.sort(function (a, b) { return b.d - a.d; });
-    var b = '📋 <b>내 할 일</b> — ' + [late.length ? '지연 ' + late.length : '', todays.length ? '오늘 ' + todays.length : '', week ? '이번 주 ' + week : ''].filter(Boolean).join(' · ') + '\n';
+    if (!focus.length && !late.length && !todays.length && !week) return '';
+    // 중요도 먼저, 같으면 오래 밀린 것부터
+    late.sort(function (a, b) { return (a.it.pri - b.it.pri) || (b.d - a.d); });
+    todays.sort(function (a, b) { return (a.it.pri - b.it.pri) || ((a.it.dueTime || '') < (b.it.dueTime || '') ? -1 : 1); });
+    var PRI_MARK = { 1: ' 🔴', 2: ' 🟠' };
+    var line = function (it) { return escHtml(it.title) + (PRI_MARK[it.pri] || '') + (it.ctx ? ' <i>(' + escHtml(it.ctx.slice(0, 30)) + ')</i>' : ''); };
+    var b = '📋 <b>내 할 일</b> — ' + [focus.length ? '집중 ' + focus.length : '', late.length ? '지연 ' + late.length : '', todays.length ? '오늘 ' + todays.length : '', week ? '이번 주 ' + week + (hot ? ' (중요 ' + hot + ')' : '') : ''].filter(Boolean).join(' · ') + '\n';
+    focus.sort(function (a, b) { return a.pri - b.pri; }).slice(0, 5).forEach(function (it) { b += '  ⭐ ' + line(it) + '\n'; });
     late.concat(todays).slice(0, 5).forEach(function (x) {
-      b += '  ' + (x.d ? '⚠️ 지연 ' + x.d + '일' : '· 오늘') + ' — ' + escHtml(x.it.title) + (x.it.ctx ? ' <i>(' + escHtml(x.it.ctx.slice(0, 30)) + ')</i>' : '') + '\n';
+      b += '  ' + (x.d ? '⚠️ 지연 ' + x.d + '일' : '· 오늘' + (x.it.dueTime ? ' ' + x.it.dueTime : '')) + ' — ' + line(x.it) + '\n';
     });
     if (late.length + todays.length > 5) b += '  … 외 ' + (late.length + todays.length - 5) + '건 — 웹의 🎯 내 업무에서\n';
     return b + '\n';

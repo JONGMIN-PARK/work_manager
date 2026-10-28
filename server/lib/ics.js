@@ -77,6 +77,7 @@ function build(name, items, events, host) {
     var rr = rrule(ev);
     if (rr) L.push(rr);
     L.push('SUMMARY:' + esc((EVT_ICON[ev.type] || '📌') + ' ' + (ev.title || '일정')));
+    if (ev.location) L.push('LOCATION:' + esc(ev.location));
     if (ev.memo) L.push('DESCRIPTION:' + esc(ev.memo));
     L.push('END:VEVENT');
   });

@@ -53,11 +53,12 @@ async function sendMessage(chatId, text, opts) {
 }
 
 /* ── Command modules (lazy-initialized) ── */
-var personalCmds, analysisCmds, scheduleCmds, projectCmds, docsCmds, teamCmds, utilityCmds, helpCmds, weeklyCmds, pmextCmds, techCmds;
+var myWorkCmds, personalCmds, analysisCmds, scheduleCmds, projectCmds, docsCmds, teamCmds, utilityCmds, helpCmds, weeklyCmds, pmextCmds, techCmds;
 
 function initCommands() {
   if (personalCmds) return;
   personalCmds = require('../telegram/commands/personal').create(sendMessage);
+  myWorkCmds   = require('../telegram/commands/mywork').create(sendMessage);
   analysisCmds = require('../telegram/commands/analysis').create(sendMessage);
   scheduleCmds = require('../telegram/commands/schedule').create(sendMessage);
   projectCmds  = require('../telegram/commands/project').create(sendMessage);
@@ -75,6 +76,9 @@ async function setMyCommands() {
   var commands = [
     { command: 'today', description: '오늘 브리핑' },
     { command: 'my', description: '내 현황 (이슈+납기)' },
+    { command: 'todo', description: '할 일 등록 (내일 14:00 !긴급 …)' },
+    { command: 'todos', description: '내 개인 할 일 목록' },
+    { command: 'event', description: '개인 일정 등록 (#회의 금요일 3시 …)' },
     { command: 'issues', description: '미해결 이슈 목록' },
     { command: 'tasks', description: '미완료 작업' },
     { command: 'done', description: '작업 완료 처리' },
@@ -344,6 +348,10 @@ async function handleUpdate(update) {
 
   // Command dispatch
   if (text === '/my') return personalCmds.cmdMy(chatId, user);
+  // 내 업무 (v13.253) — /todos 를 /todo 보다 먼저
+  if (text === '/todos' || text === '/할일목록') return myWorkCmds.cmdTodos(chatId, user);
+  if (text === '/todo' || text.startsWith('/todo ') || text === '/할일' || text.startsWith('/할일 ')) return myWorkCmds.cmdTodo(chatId, user, text.replace(/^\/(todo|할일)\s*/, ''));
+  if (text === '/event' || text.startsWith('/event ') || text === '/일정' || text.startsWith('/일정 ')) return myWorkCmds.cmdEvent(chatId, user, text.replace(/^\/(event|일정)\s*/, ''));
   if (text === '/issues') return personalCmds.cmdIssues(chatId, user);
   if (text === '/summary') return analysisCmds.cmdSummary(chatId, user);
   if (text === '/report') return analysisCmds.cmdReport(chatId, user);

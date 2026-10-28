@@ -28,7 +28,7 @@ function create(sendMessage) {
     var today = new Date().toISOString().slice(0, 10);
     // 미해결 이슈 (issue_assignees 정규화 매핑 — user_id 우선, 폴백 이름 정확매칭)
     var issues = await db.query(
-      "SELECT title, urgency, status FROM issues WHERE EXISTS (SELECT 1 FROM issue_assignees ia WHERE ia.issue_id = issues.id AND ia.tenant_id = issues.tenant_id AND (ia.user_id = $1 OR ia.assignee_name = $2)) AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 5",
+      "SELECT title, urgency, status FROM issues WHERE EXISTS (SELECT 1 FROM issue_assignees ia WHERE ia.issue_id = issues.id AND ia.tenant_id = issues.tenant_id AND (ia.user_id = $1 OR ia.assignee_name = $2)) AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END LIMIT 5",
       [user.user_id, user.name]
     );
     // 임박 납기 (7일 이내) — project_members 정규화 매핑 (활성 멤버) + created_by 폴백
@@ -42,7 +42,7 @@ function create(sendMessage) {
     if (issues.rows.length > 0) {
       msg += '🔴 <b>미해결 이슈</b>\n';
       issues.rows.forEach(function (r) {
-        var icon = r.urgency === 'urgent' ? '🔴' : r.urgency === 'normal' ? '🟡' : '🟢';
+        var icon = r.urgency === 'urgent' ? '🔴' : r.urgency === 'high' ? '🟠' : r.urgency === 'normal' ? '🟡' : '🟢';
         msg += icon + ' ' + escHtml(r.title) + ' [' + r.status + ']\n';
       });
       msg += '\n';
@@ -67,7 +67,7 @@ function create(sendMessage) {
   async function cmdIssues(chatId, user) {
     // issue_assignees 정규화 매핑 — user_id 우선, 폴백 이름 정확매칭
     var issues = await db.query(
-      "SELECT title, urgency, status, due_date FROM issues WHERE EXISTS (SELECT 1 FROM issue_assignees ia WHERE ia.issue_id = issues.id AND ia.tenant_id = issues.tenant_id AND (ia.user_id = $1 OR ia.assignee_name = $2)) AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 10",
+      "SELECT title, urgency, status, due_date FROM issues WHERE EXISTS (SELECT 1 FROM issue_assignees ia WHERE ia.issue_id = issues.id AND ia.tenant_id = issues.tenant_id AND (ia.user_id = $1 OR ia.assignee_name = $2)) AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END LIMIT 10",
       [user.user_id, user.name]
     );
 

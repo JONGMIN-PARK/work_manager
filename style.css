@@ -1659,6 +1659,10 @@ body.mm-zen-body{overflow:hidden}
 .mw-due{flex:none;width:74px;text-align:right;font-size:12px;color:var(--t4);white-space:nowrap}
 .mw-late{color:var(--d-t);font-weight:600}
 .mw-due-edit{width:128px;padding:3px 6px}
+.mw-due-btn{cursor:pointer;border-radius:5px;padding:2px 4px}
+.mw-due-btn:hover{background:var(--bg-hv);color:var(--ac-t)}
+.mw-due-btn.is-empty{color:var(--t6);opacity:0;transition:opacity .15s}
+.mw-row:hover .mw-due-btn.is-empty{opacity:1}
 .mw-x{flex:none;background:none;border:none;color:var(--t5);font-size:16px;cursor:pointer;padding:0 4px;line-height:1}
 .mw-x:hover{color:var(--d-t)}
 .mw-done .mw-title{text-decoration:line-through;color:var(--t5)}
@@ -1694,6 +1698,99 @@ body.mm-zen-body{overflow:hidden}
 .mw-ll-row[draggable="true"]{cursor:grab}
 .mw-move{flex:none;width:130px;padding:3px 6px}
 .mw-move-sp{width:130px;flex:none}
+/* 내 업무 할 일 관리 (v13.253) — my-work-task.js */
+.mw-pri{flex:none;min-width:30px;text-align:center;font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px;line-height:15px;color:#fff;user-select:none}
+.mw-pri1{background:#DC2626}
+.mw-pri2{background:#F97316}
+.mw-pri3{background:transparent;min-width:30px}
+.mw-pri4{background:var(--bg-i);color:var(--t5);border:1px solid var(--bd)}
+.mw-pri.is-can{cursor:pointer}
+.mw-pri3.is-can::after{content:'·';color:var(--t6);font-size:14px;line-height:10px}
+.mw-row:hover .mw-pri3.is-can{border:1px dashed var(--bd2)}
+.mw-row:hover .mw-pri3.is-can::after{content:'중요도';font-size:9px;font-weight:500;color:var(--t5)}
+.mw-pri.is-can:focus-visible,.mw-star:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.mw-pri-sp{flex:none;width:30px}
+.mw-row-urg{box-shadow:inset 3px 0 0 #DC2626}
+.mw-star{flex:none;background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:0 2px;color:var(--t6)}
+.mw-star:hover{color:#F59E0B}
+.mw-star.on{color:#F59E0B}
+.mw-g-focus{border-color:#F59E0B}
+.mw-g-focus .mw-grp-h{color:#D97706}
+.mw-st{flex:none;font-size:10px;font-weight:600;border-radius:99px;padding:1px 7px;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.mw-st-doing{background:rgba(59,130,246,.15);color:#3B82F6}
+.mw-st-wait{background:rgba(245,158,11,.15);color:#D97706}
+.mw-cl{flex:none;font-size:11px;color:var(--t4);white-space:nowrap}
+.mw-ic{flex:none;font-size:11px;color:var(--t5);cursor:default}
+.mw-est{font-weight:600}
+.mw-urg2{background:#F97316}
+.mw-ltools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:-4px 0 10px}
+.mw-ltools .mw-sel{padding:4px 8px}
+.mw-row[data-ord]{cursor:grab}
+.mw-row-drag{opacity:.45;background:var(--ac-bg)}
+.mw-pmenu{position:fixed;z-index:10050;background:var(--bg-p);border:1px solid var(--bd2);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.28);padding:4px;display:flex;flex-direction:column;min-width:130px}
+.mw-pmenu button{background:none;border:none;color:var(--t2);text-align:left;padding:7px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit}
+.mw-pmenu button:hover{background:var(--bg-hv)}
+.mw-pmenu button.on{background:var(--ac-bg);color:var(--ac-t);font-weight:600}
+.mw-pmenu-n{font-size:10px;color:var(--t5);padding:4px 10px 3px;border-top:1px solid var(--bd);margin-top:3px}
+.mw-leave{font-style:normal;font-size:10px;margin-left:3px;vertical-align:1px}
+/* 할 일 편집 · 등록 창 */
+.mwt-f{display:flex;flex-direction:column;gap:10px}
+.mwt-f [hidden]{display:none!important}
+.mwt-title{font-size:15px;font-weight:600;padding:9px 10px}
+.mwt-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mwt-l{flex:none;width:62px;font-size:12px;color:var(--t4)}
+.mwt-seg{display:inline-flex;border:1px solid var(--bd);border-radius:7px;overflow:hidden;flex-wrap:wrap}
+.mwt-seg button{background:var(--bg-i);border:none;color:var(--t3);padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit}
+.mwt-seg button+button{border-left:1px solid var(--bd)}
+.mwt-seg button.on{background:var(--ac-bg);color:var(--ac-t);font-weight:600}
+.mwt-seg .mwt-p1.on{background:#DC2626;color:#fff}
+.mwt-seg .mwt-p2.on{background:#F97316;color:#fff}
+.mwt-num{width:80px}
+.mwt-sec{font-size:12px;font-weight:600;color:var(--t3);margin-top:4px}
+.mwt-sec b{font-weight:500;color:var(--t5);margin-left:4px}
+.mwt-cl{display:flex;flex-direction:column;gap:3px}
+.mwt-cli{display:flex;align-items:center;gap:6px}
+.mwt-cli input[type=checkbox]{width:15px;height:15px;accent-color:var(--ac);flex:none}
+.mwt-clt{flex:1;background:transparent;border:1px solid transparent;border-radius:5px;color:var(--t2);padding:3px 6px;font-size:13px;font-family:inherit;min-width:0}
+.mwt-clt:hover,.mwt-clt:focus{border-color:var(--bd-i);outline:none}
+.mwt-cli.is-d .mwt-clt{text-decoration:line-through;color:var(--t5)}
+.mwt-cl-add .mw-input{width:100%;box-sizing:border-box}
+.mwt-memo{width:100%;box-sizing:border-box;resize:vertical;line-height:1.5}
+.mwt-del{color:var(--d-t)}
+.mwr-kinds{display:flex;flex-wrap:wrap;gap:5px}
+.mwr-kinds button{background:var(--bg-i);border:1px solid var(--bd);color:var(--t3);border-radius:99px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit}
+.mwr-kinds button:hover{color:var(--t2);border-color:var(--bd2)}
+.mwr-kinds button.on{background:var(--ac-bg);border-color:var(--ac);color:var(--ac-t);font-weight:600}
+.mwr-hint{font-size:11px;color:var(--t5);margin-top:-4px}
+.mwr-warn{font-size:12px;color:#B45309;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);border-radius:7px;padding:6px 10px}
+.mwr-wide{flex:1;min-width:180px}
+.mwr-people{display:inline-flex;flex-wrap:wrap;gap:4px}
+.mwr-pp{display:inline-flex;align-items:center;gap:2px;background:var(--ac-bg);color:var(--ac-t);border-radius:99px;padding:2px 4px 2px 9px;font-size:12px}
+.mwr-pp button{background:none;border:none;color:inherit;cursor:pointer;font-size:13px;padding:0 3px;line-height:1}
+.mwr-chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer}
+.mwr-chk i{font-style:normal;color:var(--t5);font-size:11px}
+/* 4칸 보기 */
+.mwq-hint{display:block;margin-bottom:8px}
+.mwq{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mwq-c{background:var(--bg-p);border:1px solid var(--bd);border-top:3px solid var(--qc);border-radius:10px;min-height:180px;display:flex;flex-direction:column}
+.mwq-1{--qc:#DC2626}
+.mwq-2{--qc:#3B82F6}
+.mwq-3{--qc:#F59E0B}
+.mwq-4{--qc:#94A3B8}
+.mwq-h{padding:9px 12px;font-size:13px;font-weight:700;color:var(--t2)}
+.mwq-h i{font-style:normal;font-weight:400;font-size:11px;color:var(--t5);margin-left:4px}
+.mwq-h b{font-weight:500;color:var(--t5);margin-left:4px}
+.mwq-l{padding:0 8px 8px;display:flex;flex-direction:column;gap:4px;max-height:420px;overflow-y:auto;flex:1}
+.mwq-i{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--bd);border-radius:7px;background:var(--bg);font-size:12px}
+.mwq-i[draggable="true"]{cursor:grab}
+.mwq-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2);cursor:pointer}
+.mwq-t:hover{color:var(--ac-t)}
+.mwq-e{font-size:12px;color:var(--t6);text-align:center;padding:20px 0}
+.mwq-c .mw-due{width:auto}
+/* 회의 액션 중요도 (v13.253) */
+.pmt-pri{flex:0 0 auto;font-size:10px;font-weight:700;border-radius:4px;padding:0 5px;cursor:pointer;color:#fff;background:var(--pc)}
+.pmt-pri.is-none{background:none;color:var(--t6);font-weight:400;border:1px dashed var(--bd);opacity:0;transition:opacity .15s}
+.pmt-act:hover .pmt-pri.is-none{opacity:1}
 /* 내 업무 달력 (v13.252) — my-work-cal.js */
 .mwc-seg{display:inline-flex;border:1px solid var(--bd);border-radius:7px;overflow:hidden}
 .mwc-seg-b{background:var(--bg-i);border:none;color:var(--t4);padding:6px 11px;font-size:12px;cursor:pointer;font-family:inherit}
@@ -1789,6 +1886,12 @@ body.mm-zen-body{overflow:hidden}
   .mw-title{flex-basis:60%}
   .mw-add{flex-wrap:wrap}
   .mw-move,.mw-move-sp{width:100%}
+  .mwq{grid-template-columns:1fr}
+  .mw-tools{flex-wrap:wrap;margin-left:0;max-width:100%}
+  .mwc-seg-b{padding:6px 9px}
+  .mw-add .mw-btn{flex:1}
+  .mw-st,.mw-ic,.mw-cl{display:none}
+  .mwt-l{width:100%}
 }
 
 /* ═══ 🧠 새 맵 — 상황별 추천 템플릿 갤러리 (v13.249) ═══ */

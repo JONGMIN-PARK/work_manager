@@ -85,20 +85,22 @@ function otherDayThisWeek() {
       r = col.getBoundingClientRect();
       col.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + 10, clientY: r.top + 14 * 44 + 10 }));
     }, other);
-    await page.waitForSelector('#mwcQuickModal #mwcQTitle');
-    var q = await page.evaluate(function () { return { k: document.querySelector('input[name="mwcQK"]:checked').value, t1: document.getElementById('mwcQT1').value, t2: document.getElementById('mwcQT2').value, focus: document.activeElement && document.activeElement.id }; });
-    check(q.k === 'evt' && q.t1 === '14:00' && q.t2 === '15:00' && q.focus === 'mwcQTitle', '시간 칸 → 일정 · 14:00~15:00 · 제목에 커서 ' + JSON.stringify(q));
-    await page.type('#mwcQTitle', '화면 새 일정');
-    await page.click('#mwcQForm button[type=submit]');
-    await page.waitForFunction(function (d) { var col = document.querySelector('.mwc-tcol[data-tday="' + d + '"]'); return col && /화면 새 일정/.test(col.textContent) && !document.getElementById('mwcQuickModal'); }, { timeout: 8000 }, other);
+    // v13.253 — 빈 칸은 종류별 등록 창 (시간 칸 = 기타 일정)
+    await page.waitForSelector('#mwRegModal #mwrTitle');
+    await wait(200);
+    var q = await page.evaluate(function () { return { k: document.querySelector('#mwrKinds .on').getAttribute('data-k'), t1: document.getElementById('mwrT1').value, t2: document.getElementById('mwrT2').value, focus: document.activeElement && document.activeElement.id }; });
+    check(q.k === 'etc' && q.t1 === '14:00' && q.t2 === '15:00' && q.focus === 'mwrTitle', '시간 칸 → 일정 · 14:00~15:00 · 제목에 커서 ' + JSON.stringify(q));
+    await page.type('#mwrTitle', '화면 새 일정');
+    await page.click('#mwrForm button[type=submit]');
+    await page.waitForFunction(function (d) { var col = document.querySelector('.mwc-tcol[data-tday="' + d + '"]'); return col && /화면 새 일정/.test(col.textContent) && !document.getElementById('mwRegModal'); }, { timeout: 8000 }, other);
     var ne = (await c.query("SELECT start_date, start_time, end_time, project_ids FROM events WHERE title = '화면 새 일정'")).rows[0];
     check(ne && ne.start_date === other && ne.start_time === '14:00' && ne.end_time === '15:00' && ne.project_ids.length === 0, '개인 일정 저장 (프로젝트 없음) ' + JSON.stringify(ne));
 
     // 종일 칸 누르기 → 할 일
     await page.evaluate(function (d) { document.querySelector('.mwc-ad[data-day="' + d + '"]').click(); }, other);
-    await page.waitForSelector('#mwcQuickModal #mwcQTitle');
-    check(await page.evaluate(function () { return document.querySelector('input[name="mwcQK"]:checked').value === 'todo' && document.querySelector('.mwc-q-time').hidden; }), '종일 칸 → 할 일 (시각 칸 숨김)');
-    await page.type('#mwcQTitle', '화면 새 할 일');
+    await page.waitForSelector('#mwRegModal #mwrTitle');
+    check(await page.evaluate(function () { return document.querySelector('#mwrKinds .on').getAttribute('data-k') === 'todo' && !document.getElementById('mwrT1').value; }), '종일 칸 → 할 일 (시각 없음)');
+    await page.type('#mwrTitle', '화면 새 할 일');
     await page.keyboard.press('Enter');
     await page.waitForFunction(function (d) { var x = document.querySelector('.mwc-ad[data-day="' + d + '"]'); return x && /화면 새 할 일/.test(x.textContent); }, { timeout: 8000 }, other);
     check((await c.query("SELECT due_date FROM my_todos WHERE title = '화면 새 할 일'")).rows[0].due_date === other, '할 일 마감 = 누른 날');

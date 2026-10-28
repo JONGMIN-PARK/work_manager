@@ -763,6 +763,7 @@ function createEvent(data) {
     repeatUntil: data.repeatUntil || '',
     startTime: data.startTime || null,
     endTime: data.endTime || null,
+    location: data.location || '',
     createdAt: now,
     _isNew: true
   };

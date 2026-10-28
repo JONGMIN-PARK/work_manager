@@ -647,7 +647,7 @@ function renderWeekView(items, rg, archiveSummaries) {
 }
 
 /* ═══ 일정 등록/편집 모달 ═══ */
-/* opts (v13.252): { startTime, endTime, title } 새로 만들 때 채울 값 · onSaved 저장/삭제 뒤 부를 것 (기본 renderCalendar) */
+/* opts (v13.252): { startTime, endTime, title, location } 새로 만들 때 채울 값 · onSaved 저장/삭제 뒤 부를 것 (기본 renderCalendar) */
 async function showEventModal(evtId, defaultDate, opts) {
   var existing = document.getElementById('evtModal');
   if (existing) existing.remove();
@@ -674,6 +674,7 @@ async function showEventModal(evtId, defaultDate, opts) {
   var tStart = evt ? (evt.startTime || '') : ((opts && opts.startTime) || '');
   var tEnd = evt ? (evt.endTime || '') : ((opts && opts.endTime) || '');
   var memo = evt ? evt.memo : '';
+  var evLoc = evt ? (evt.location || '') : ((opts && opts.location) || '');
   var repeatVal = evt ? (evt.repeat || '') : '';
   var repeatUntil = evt ? (evt.repeatUntil || '') : '';
   var selProjs = evt ? (evt.projectIds || []) : [];
@@ -721,6 +722,7 @@ async function showEventModal(evtId, defaultDate, opts) {
         '<div><label class="fl">반복</label><select class="si" id="evtRepeat" style="padding-left:8px"><option value="">없음</option><option value="weekly"' + (repeatVal === 'weekly' ? ' selected' : '') + '>매주</option><option value="biweekly"' + (repeatVal === 'biweekly' ? ' selected' : '') + '>격주</option><option value="monthly"' + (repeatVal === 'monthly' ? ' selected' : '') + '>매월</option></select></div>' +
         '<div><label class="fl">반복 종료일</label><input type="date" class="si" id="evtRepeatUntil" value="' + repeatUntil + '" style="padding-left:10px"></div>' +
       '</div>' +
+      '<div><label class="fl">장소</label><input type="text" class="si" id="evtLocation" value="' + eH(evLoc) + '" maxlength="255" placeholder="회의실 · 고객사 · 지역..." style="padding-left:10px"></div>' +
       '<div><label class="fl">담당자 <span style="font-size:9px;color:var(--t6)">(쉼표로 구분)</span></label><input type="text" class="si" id="evtAssignees" value="' + eH(assVal) + '" placeholder="홍길동, 김철수..." style="padding-left:10px"></div>' +
       (projChecks ? '<div><label class="fl">연관 프로젝트</label><div style="display:flex;flex-wrap:wrap;gap:8px;max-height:100px;overflow:auto;padding:6px;background:var(--bg-i);border-radius:6px">' + projChecks + '</div></div>' : '') +
       '<div><label class="fl">메모</label><textarea class="si" id="evtMemo" rows="2" style="padding-left:10px;resize:vertical" placeholder="상세 내용...">' + eH(memo) + '</textarea></div>' +
@@ -820,7 +822,8 @@ async function saveEventUI(existingId) {
     repeat: repeatSel || null,
     repeatUntil: repeatSel ? (document.getElementById('evtRepeatUntil').value || '') : '',
     startTime: evtTimeS || null,
-    endTime: evtTimeE || null
+    endTime: evtTimeE || null,
+    location: ((document.getElementById('evtLocation') || {}).value || '').trim()
   };
 
   // 더블클릭 방지 + 연 시점 version 으로 저장(그 사이 남이 고쳤으면 409) — v13.213

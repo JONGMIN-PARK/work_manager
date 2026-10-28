@@ -456,7 +456,7 @@ var PD_DEV_STATUS = [
   { key: 'done', label: '완료', icon: '✅' }
 ];
 var PD_DEV_CAT = { feature: { l: '신규', c: '#10B981' }, improve: { l: '개선', c: '#3B82F6' }, change: { l: '설계변경', c: '#F59E0B' }, refactor: { l: '리팩토링', c: '#8B5CF6' }, chore: { l: '기타', c: '#64748B' } };
-var PD_DEV_PRIO = { high: { l: '높음', c: SEM_COLOR.danger }, normal: { l: '보통', c: SEM_COLOR.warn }, low: { l: '낮음', c: SEM_COLOR.muted } };
+var PD_DEV_PRIO = { urgent: { l: '긴급', c: '#B91C1C' }, high: { l: '높음', c: SEM_COLOR.danger }, normal: { l: '보통', c: SEM_COLOR.warn }, low: { l: '낮음', c: SEM_COLOR.muted } };
 var _pdDevProj = null;
 
 function pdLoadDev(projId) {

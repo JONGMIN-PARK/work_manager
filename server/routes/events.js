@@ -134,12 +134,12 @@ router.post('/', async function (req, res) {
     if (!await _gateLink(req, res, pids)) return;
     var id = b.id || ('evt-' + require('crypto').randomUUID().slice(0, 12));
     var r = await db.query(
-      "INSERT INTO events (id, title, type, start_date, end_date, project_ids, assignees, color, memo, repeat, repeat_until, created_by, tenant_id, start_time, end_time) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *",
+      "INSERT INTO events (id, title, type, start_date, end_date, project_ids, assignees, color, memo, repeat, repeat_until, created_by, tenant_id, start_time, end_time, location) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *",
       [id, b.title || '', b.type || 'etc', b.startDate || b.start_date || '',
        b.endDate || b.end_date || '', JSON.stringify(pids),
        JSON.stringify(b.assignees || []), b.color || null, b.memo || '',
        b.repeat || null, b.repeatUntil || b.repeat_until || null, req.user.sub, req.tenant.id,
-       _time(_bodyTime(b, 'startTime', 'start_time')), _time(_bodyTime(b, 'endTime', 'end_time'))]
+       _time(_bodyTime(b, 'startTime', 'start_time')), _time(_bodyTime(b, 'endTime', 'end_time')), String(b.location || '').trim().slice(0, 255) || null]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
@@ -172,6 +172,7 @@ router.put('/:id', async function (req, res) {
     if (b.repeat !== undefined) clean.repeat = b.repeat;
     if (_bodyTime(b, 'startTime', 'start_time') !== undefined) clean.start_time = _time(_bodyTime(b, 'startTime', 'start_time'));
     if (_bodyTime(b, 'endTime', 'end_time') !== undefined) clean.end_time = _time(_bodyTime(b, 'endTime', 'end_time'));
+    if (b.location !== undefined) clean.location = String(b.location || '').trim().slice(0, 255) || null;
     if (b.repeatUntil !== undefined || b.repeat_until !== undefined) clean.repeat_until = (b.repeatUntil !== undefined ? b.repeatUntil : b.repeat_until);
 
     var result = await lock.optimisticUpdate(db, 'events', 'id', req.params.id, b.version, clean, undefined, { clause: 'AND tenant_id = $NEXT1', values: [req.tenant.id] });
