@@ -85,6 +85,8 @@ var tlCollapsed = new Set(); // 접힌 프로젝트 ID 모음
 var tlDayOffset = (localStorage.getItem('tlDayOffset') === 'true'); // D-Day 배지 표시 토글
 var _tlMsWorkH = null, _tlMsWorkHSrc = null; // v13.137 마일스톤 투입시간 집계 메모(archive 캐시 참조 기준)
 var _tlArchiveData = null; // v13.162 마지막으로 받은 업무일지(archive) — 재렌더가 재조회를 기다리지 않도록
+// 업무일지가 바뀌면 옛 것을 먼저 보여 주지 않고 새로 받아 그린다 (다른파일 병합 뒤 실적 시간이 그대로이던 문제)
+if (typeof wmDataBus !== 'undefined') wmDataBus.on('workRecord', function () { _tlArchiveData = null; });
 
 /* 현재 렌더 범위 안이면 가로 스크롤만 즉시 이동(세로 위치 유지·재렌더 없음). 범위 밖이면 false. */
 function _tlScrollToDate(dateStr) {

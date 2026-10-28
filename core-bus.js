@@ -212,14 +212,15 @@ window.wmDataBus = (function () {
    pipeline: 카드에 수주 정보 표시 · timeline: 수주 정보 + 일정(event) 마커 표시 · archive/trend: 팀 탭(재렌더 대상 아님, 캐시만 무효화) */
 window.WM_TAB_DEPS = {
   pipeline: { project:1, milestone:1, checklist:1, issue:1, order:1 },
-  calendar: { project:1, milestone:1, event:1 },
-  timeline: { project:1, milestone:1, checklist:1, order:1, event:1 },
+  calendar: { project:1, milestone:1, event:1, workRecord:1 },          // 대시보드 진척률 · 업무 분포가 업무일지 집계
+  timeline: { project:1, milestone:1, checklist:1, order:1, event:1, workRecord:1 },  // 마일스톤 실적 시간
   orders:   { order:1, project:1, issue:1 },
   prestudy: { prestudy:1 },
   tech:     { tech:1 },
   issues:   { issue:1, project:1 },
   docs:     { document:1, project:1 },
   as:       { as:1, asCategory:1, order:1, project:1 },
+  operator: { workRecord:1 },                                          // 프로젝트 투입 실적
   archive:  { archive:1 },
   trend:    { archive:1 }
 };
@@ -238,7 +239,8 @@ window.WM_TAB_DEPS = {
     tech:     function () { if (typeof renderTech === 'function') renderTech(); },
     issues:   function () { if (typeof renderIssues === 'function') renderIssues(); },
     docs:     function () { if (typeof renderDocManager === 'function') renderDocManager(); },
-    as:       function () { if (typeof renderAS === 'function') renderAS(); }
+    as:       function () { if (typeof renderAS === 'function') renderAS(); },
+    operator: function () { if (typeof renderOperator === 'function') renderOperator(); }
   };
   var t = null;
   window.wmDataBus.on('*', function (e) {

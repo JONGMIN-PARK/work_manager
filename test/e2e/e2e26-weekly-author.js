@@ -149,6 +149,18 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.click('[data-src-range="cur"]'); await wait(200);
     check(await page.$eval('[data-src-target].on', function (e) { return e.getAttribute('data-src-target'); }) === 'last', '직접 고른 삽입 대상은 기간을 바꿔도 유지');
     await page.screenshot({ path: path.join(SHOT, 'weekly-author.png') });
+    // 업무일지가 바뀌면(팀 관리 다른파일 병합 = wrSync) ↻ 없이 패널이 새로 받음 · 다른 화면에 있었으면 다음 진입 때 (v13.260)
+    var rec = function (d, t) { return { date: d, name: '관리자', orderNo: 'E2E-ORD1', hours: 2, abbr: 'D', content: t, oclient: '시험사이트', ocmt: '검사기 개조' }; };
+    await page.evaluate(function (r) { return wrSync([r], [], []); }, rec('20261029', 'E2E업무일지 병합으로 들어옴'));
+    await page.waitForFunction(function () { return /병합으로 들어옴/.test(document.getElementById('wrSrcBody').textContent); }, { timeout: 6000 }).catch(function () {});
+    check(/병합으로 들어옴/.test(await page.$eval('#wrSrcBody', function (e) { return e.textContent; })), '보고 있는 패널 — 업무일지 변경 즉시 반영');
+    await page.evaluate(function () { setPage('mywork'); });
+    await wait(300);
+    var tl = await page.evaluate(async function (r) { _tlArchiveData = [1]; await wrSync([r], [], []); return _tlArchiveData; }, rec('20261029', 'E2E업무일지 다른 화면에서 들어옴'));
+    check(tl === null, '타임라인 업무일지 캐시도 비움');
+    await page.evaluate(function () { setPage('weekly_report'); });
+    await page.waitForFunction(function () { return /다른 화면에서 들어옴/.test(document.getElementById('wrSrcBody').textContent); }, { timeout: 6000 }).catch(function () {});
+    check(/다른 화면에서 들어옴/.test(await page.$eval('#wrSrcBody', function (e) { return e.textContent; })), '다른 화면에 있던 동안 바뀐 것 — 돌아오면 반영');
     // 목록 · 검색 탭 (클래스 이전 후에도 표)
     await page.click('#wrSubTabs [data-wt="list"]');
     await page.waitForSelector('#wrPanel table.wr-tbl td');

@@ -1661,12 +1661,19 @@
   }
 
   // 기간별로 기억 — 지난주 ↔ 작성 주차를 오가도 다시 받지 않는다 (↻ 는 새로 받음)
-  var _recCache = {}, _recCacheKeys = [], REC_CACHE_MAX = 6;
+  var _recCache = {}, _recCacheKeys = [], REC_CACHE_MAX = 6, _recGen = 0;  // _recGen: 업무일지 변경 세대 — 변경 전에 시작한 조회는 캐시하지 않음
   function recCachePut(key, rows) {
     if (!_recCache[key]) _recCacheKeys.push(key);
     _recCache[key] = rows;
     while (_recCacheKeys.length > REC_CACHE_MAX) delete _recCache[_recCacheKeys.shift()];
   }
+
+  // 업무일지가 바뀌면(팀 관리 다른파일 병합 등) 기간 캐시를 비운다 — 지금 보고 있으면 바로, 아니면 다음 진입 때 새로 받음
+  if (typeof wmDataBus !== 'undefined') wmDataBus.on('workRecord', function () {
+    _recCache = {}; _recCacheKeys = []; _recGen++;
+    _authorState.workRecordsKey = '';
+    if (typeof curPage !== 'undefined' && curPage === 'weekly_report' && STATE.tab === 'author' && $('wrSrcBody')) loadWorkRecords(true);
+  });
 
   async function loadWorkRecords(force) {
     var rg = srcRange();
@@ -1679,9 +1686,11 @@
     if (si && _authorState.src.range !== 'custom') { si.value = rg.start; ei.value = rg.end; }
     if (force !== true && _recCache[key]) { _authorState.workRecords = _recCache[key]; renderSrcDynamic(); return; }
     if (body) body.innerHTML = '<div class="wr-src-empty">⏳ 로드 중...</div>';
+    var gen = _recGen;
     try {
       var r = await apiFetch('/api/archives/records?startDate=' + rg.start.replace(/-/g, '') + '&endDate=' + rg.end.replace(/-/g, '') + '&all=true&limit=5000');
       var rows = (r && r.data) || [];
+      if (gen !== _recGen) return;                      // 그 사이 업무일지가 바뀜 — 새 조회가 이어서 그림
       recCachePut(key, rows);
       if (_authorState.workRecordsKey !== key) return; // 그 사이 기간이 바뀜
       _authorState.workRecords = rows;

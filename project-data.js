@@ -74,7 +74,12 @@ function lsSetJSON(key, value) {
 var _archiveCache = { data: null, ts: 0, inflight: null, gen: 0 };
 var ARCHIVE_CACHE_TTL = 60000;
 
-function invalidateArchiveCache() { _archiveCache.data = null; _archiveCache.ts = 0; _archiveCache.inflight = null; _archiveCache.gen++; }
+// 업무일지가 바뀌면(불러오기 · 병합 · 직접 입력 · 수정 · 삭제 · 마일스톤 자동 태깅) 'workRecord' 를 알린다 —
+// 업무일지를 쓰는 화면(주간 업무 작성 패널 · 타임라인 · 달력 대시보드 · 운영자)이 각자 캐시를 비우고 보이는 화면은 다시 그림
+function invalidateArchiveCache() {
+  _archiveCache.data = null; _archiveCache.ts = 0; _archiveCache.inflight = null; _archiveCache.gen++;
+  try { if (typeof window !== 'undefined' && window.wmDataBus) window.wmDataBus.emit('workRecord', 'changed', {}); } catch (e) { /* ignore */ }
+}
 
 /* ═══ #13 리팩토링: 매직 넘버 상수 ═══ */
 var REPEAT_LIMIT = 200;
