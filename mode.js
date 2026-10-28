@@ -3,6 +3,31 @@
 /* ═══ MODE ═══ */
 let curMode='weekly';
 var curPage='team';
+/* 마지막 위치 기억 — 페이지 · 하위 탭을 옮길 때마다 저장하고, 다음 방문 때 데이터를 새로 받은 뒤 그 화면으로 들어간다 (wmRestoreLastView · app-init.js) */
+var WM_LAST_VIEW='wm-last-view';
+var _wmNavMoved=false;      // 시작 후 사용자가(또는 알림 링크 등이) 이미 화면을 옮겼으면 복원하지 않음
+var _wmViewRestoring=false;
+function _wmSaveView(){
+  if(!_wmViewRestoring)_wmNavMoved=true;
+  lsSetJSON(WM_LAST_VIEW,{page:curPage,mode:curMode});
+}
+function wmRestoreLastView(){
+  if(_wmNavMoved)return;
+  var v=lsGetJSON(WM_LAST_VIEW,null);
+  if(!v||!v.page||(v.page==='team'&&(!v.mode||v.mode==='weekly')))return;  // 기본 화면이면 그대로
+  var pb=document.querySelector('#pageTabs .tab[data-page="'+v.page+'"]');
+  if(!pb||pb.style.display==='none'||pb.classList.contains('hidden'))return;  // 지금 계정에 없는 탭 (권한)
+  if(v.page==='team'||v.page==='project'){
+    // 하위 탭을 미리 골라 두면 setPage 가 그 탭 하나만 그린다 (기본 탭을 그렸다가 다시 그리지 않게). 운영자 권한은 setPage 가 확인
+    var bar=document.getElementById(v.page==='team'?'modeTabs':'modeTabsProj');
+    var mb=v.mode&&bar&&bar.querySelector('.tab[data-m="'+v.mode+'"]');
+    if(mb)bar.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('on',t===mb)});
+  }
+  _wmViewRestoring=true;
+  try{setPage(v.page)}finally{_wmViewRestoring=false}
+  try{pb.scrollIntoView({block:'nearest',inline:'nearest'})}catch(_){}  // 휴대폰 — 가로로 밀리는 탭 줄에서 보이게
+}
+window.wmRestoreLastView=wmRestoreLastView;
 function setPage(page){
   if(curPage==='mindmap'&&page!=='mindmap'&&typeof mmOnLeave==='function')mmOnLeave();  // 저장 마무리 · 편집 잠금 해제
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwPanelClose==='function')mwPanelClose();  // 내 업무 상세 패널 — 남은 저장 마저 하고 닫음 (다른 화면을 가리지 않게)
@@ -58,6 +83,7 @@ function setPage(page){
     if(m==='operator'&&!(typeof isOperator==='function'&&isOperator()))m='pipeline';  // 권한 없으면 폴백
     setMode(m);
   }
+  _wmSaveView();
 }
 /* v13.64: 탭 렌더 결과 메모리 캐시 — 한 번 그린 탭은 다시 진입해도 즉시 표시.
  * - _modeRendered[m] : 마지막 렌더 timestamp (없으면 첫 진입)
@@ -93,6 +119,7 @@ function setMode(m){
   ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',tech:'mTech',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
+  _wmSaveView();
 
   // 캐시 hit이면 render 호출 자체를 스킵 → 이전 그려진 내용 즉시 표시
   if(_modeIsFresh(m)) return;

@@ -184,6 +184,8 @@ async function _postAuthInit(){
   if(_wmNeedAuthWait(ctx))await _wmWaitAuthAndLoad(ctx);
   _wmFinishLoading(ctx);
   _wmBindUploadUI();
+  // 데이터를 새로 받은 뒤 마지막으로 보던 화면으로 (그 화면도 처음 그리므로 내용은 새로 받음)
+  if(typeof wmRestoreLastView==='function')wmRestoreLastView();
 }
 
 // 로그인 성공 후 콜백 — auth.js에서 호출
