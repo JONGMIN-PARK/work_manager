@@ -2162,6 +2162,8 @@ body.mm-zen-body{overflow:hidden}
 .mwb-i.is-urg{box-shadow:inset 3px 0 0 #DC2626}
 .mwb-i.is-focus{background:rgba(245,158,11,.07)}
 .mwb-i.mw-done{opacity:.55}
+/* 저장 중인 새 할 일 (v13.270 — 바로 그리고 저장) */
+.mw-row.is-pending,.mwb-i.is-pending{opacity:.55;pointer-events:none}
 .mwb-i.mw-done .mwb-t{text-decoration:line-through}
 .mwb-top{display:flex;align-items:flex-start;gap:8px}
 .mwb-top .mw-chk{margin-top:2px}

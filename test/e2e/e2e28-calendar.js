@@ -154,6 +154,7 @@ function otherDayThisWeek() {
     await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await page.click('#tabMyWork');
     await page.waitForSelector('#mMyWork .mwc-month', { timeout: 8000 });
+    await page.waitForNetworkIdle({ idleTime: 400, timeout: 10000 }).catch(function () {});   // 기억한 목록을 먼저 그리고 새로 받아 다시 그림 (v13.270)
     check(true, '새로 열어도 월 보기 그대로');
 
     // 구독 창

@@ -109,18 +109,20 @@ async function collect(req, users, opt) {
 
   if (want('milestone')) jobs.push((async function () {
     var pf = projFilter('ms.project_id', 4);
+    // can_edit — 보는 사람이 그 프로젝트를 편집할 수 있는지 (마일스톤 완료 체크 칸, v13.270: 따로 묻지 않고 같이)
+    var ed = pa.editableProjectsSql(req, 'p', 4 + pf.params.length);
     var r = await db.query(
-      'SELECT DISTINCT ON (ms.id, a.user_id) ms.id, ms.name, ms.end_date, ms.status, ms.progress, ms.project_id, p.name AS project_name, a.user_id ' +
+      'SELECT DISTINCT ON (ms.id, a.user_id) ms.id, ms.name, ms.end_date, ms.status, ms.progress, ms.project_id, p.name AS project_name, a.user_id, (' + ed.sql + ') AS can_edit ' +
       'FROM milestones ms JOIN milestone_assignments a ON a.milestone_id = ms.id AND a.tenant_id = ms.tenant_id AND a.released_at IS NULL ' +
       'JOIN projects p ON p.id = ms.project_id AND p.tenant_id = ms.tenant_id ' +
       "WHERE ms.tenant_id = $1 AND a.user_id = ANY($2) AND COALESCE(ms.status, '') <> 'done' AND COALESCE(p.status, '') <> 'done' " +
       "AND (a.valid_until IS NULL OR a.valid_until = '' OR a.valid_until >= $3)" + pf.sql,
-      [tid, ids, new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)].concat(pf.params)
+      [tid, ids, new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)].concat(pf.params, ed.params)
     );
     r.rows.forEach(function (x) {
       var p = parseInt(x.progress, 10) || 0;
       out.push({ src: 'milestone', id: x.id, userId: x.user_id, title: firstLine(x.name), ctx: x.project_name || '', projectId: x.project_id,
-        due: ymd(x.end_date), done: false, progress: p, status: x.status });
+        due: ymd(x.end_date), done: false, progress: p, status: x.status, canEdit: !!x.can_edit });
     });
   })());
 
@@ -163,33 +165,31 @@ async function collect(req, users, opt) {
 
   if (want('mindmap')) jobs.push((async function () {
     // 보는 사람이 볼 수 있는 맵인지 (열기 가능) — 남의 것을 볼 때는 볼 수 있는 맵만
+    // v13.270: 맵 문서(수백 KB 일 수 있음)를 매번 DB 에서 받지 않음 — 담당 주제만 뽑아 맵 내용 지문(md5)으로 기억해 두고,
+    //          지문이 같으면 DB 가 doc 대신 NULL 을 보냄 (서버 미국 ↔ DB 싱가포르라 받는 양이 곧 시간)
     var vis = mmVisible.visibleMapsSql(req, 3);
     var like = ids.map(function (id) { return '%' + id + '%'; });
+    var known = mapCacheKnown();
+    var ki = vis.nextIdx;
     var r = await db.query(
-      'SELECT m.id, m.title, m.doc, (' + vis.sql + ') AS can_open FROM mindmaps m ' +
+      'SELECT m.id, m.title, h.hash, (' + vis.sql + ') AS can_open, CASE WHEN k.h = h.hash THEN NULL ELSE m.doc END AS doc FROM mindmaps m ' +
+      'CROSS JOIN LATERAL (SELECT md5(m.doc::text) AS hash) h ' +
+      'LEFT JOIN unnest($' + ki + '::text[], $' + (ki + 1) + '::text[]) AS k(id, h) ON k.id = m.id ' +
       'WHERE m.tenant_id = $1 AND m.deleted_at IS NULL AND m.doc::text LIKE ANY($2)',
-      [tid, like].concat(vis.params)
+      [tid, like].concat(vis.params, [known.ids, known.hashes])
     );
     var wantId = {};
     ids.forEach(function (id) { wantId[id] = true; });
     r.rows.forEach(function (m) {
       if (!onlySelf && !m.can_open) return;
-      var doc = typeof m.doc === 'string' ? JSON.parse(m.doc) : m.doc;
-      ((doc && doc.sheets) || []).forEach(function (sh, si) {
-        (function walk(n, path) {
-          if (!n || typeof n !== 'object') return;
-          if (n.assigneeId && wantId[n.assigneeId] && n.id !== (sh.root && sh.root.id)) {
-            var p = parseInt(n.progress, 10);
-            var done = !!n.done || p >= 100;
-            if (!done || (doneWin && recent(n.doneAt, doneWin))) {
-              out.push({ src: 'mindmap', id: m.id + ':' + n.id, userId: n.assigneeId, title: firstLine(n.text), ctx: m.title + (path ? ' › ' + path : ''),
-                mapId: m.id, sheet: si, nodeId: n.id, due: ymd(n.dueDate), done: done, doneAt: done ? n.doneAt || null : null,
-                progress: isNaN(p) ? null : p, pri: prio.fromMarkers(n.markers), mapOpen: !!m.can_open });
-            }
-          }
-          var here = n === sh.root ? '' : firstLine(n.text, 24);
-          (n.children || []).forEach(function (c) { walk(c, n === sh.root ? '' : here); });
-        })(sh && sh.root, '');
+      var nodes = m.doc != null ? mapCachePut(m.id, m.hash, m.doc) : mapCacheGet(m.id, m.hash);
+      if (!nodes) return;   // (지문은 맞았는데 그새 기억에서 밀려난 드문 경우 — 다음 요청에서 다시 받음)
+      nodes.forEach(function (n) {
+        if (!wantId[n.assigneeId]) return;
+        if (n.done && !(doneWin && recent(n.doneAt, doneWin))) return;
+        out.push({ src: 'mindmap', id: m.id + ':' + n.nodeId, userId: n.assigneeId, title: n.title, ctx: m.title + (n.path ? ' › ' + n.path : ''),
+          mapId: m.id, sheet: n.sheet, nodeId: n.nodeId, due: n.due, done: n.done, doneAt: n.done ? n.doneAt || null : null,
+          progress: n.progress, pri: n.pri, mapOpen: !!m.can_open });
       });
     });
   })());
@@ -205,6 +205,42 @@ async function collect(req, users, opt) {
     it.weight = it.done ? 0 : Math.max(0.1, Math.round(base * left * 100) / 100);
   });
   return out;
+}
+
+/* ── 맵 담당 주제 기억 (v13.270) — 맵 id → { hash, nodes } . 담당 있는 주제만 (누구 담당이든) ── */
+var MAP_CACHE_MAX = 1000;
+var _mapCache = new Map();
+function mapCacheKnown() {
+  var ids = [], hashes = [];
+  _mapCache.forEach(function (v, id) { ids.push(id); hashes.push(v.hash); });
+  return { ids: ids, hashes: hashes };
+}
+function mapCacheGet(id, hash) {
+  var v = _mapCache.get(id);
+  if (!v || v.hash !== hash) return null;
+  _mapCache.delete(id); _mapCache.set(id, v);   // 최근 쓴 것을 뒤로 (오래 안 쓴 것부터 밀어냄)
+  return v.nodes;
+}
+/** 문서에서 담당 주제만 뽑아 기억 → nodes */
+function mapCachePut(id, hash, doc) {
+  if (typeof doc === 'string') { try { doc = JSON.parse(doc); } catch (_) { doc = null; } }
+  var nodes = [];
+  ((doc && doc.sheets) || []).forEach(function (sh, si) {
+    (function walk(n, path) {
+      if (!n || typeof n !== 'object') return;
+      if (n.assigneeId && n.id !== (sh.root && sh.root.id)) {
+        var p = parseInt(n.progress, 10);
+        nodes.push({ nodeId: n.id, assigneeId: n.assigneeId, title: firstLine(n.text), path: path, sheet: si, due: ymd(n.dueDate),
+          done: !!n.done || p >= 100, doneAt: n.doneAt || null, progress: isNaN(p) ? null : p, pri: prio.fromMarkers(n.markers) });
+      }
+      var here = n === sh.root ? '' : firstLine(n.text, 24);
+      (n.children || []).forEach(function (c) { walk(c, n === sh.root ? '' : here); });
+    })(sh && sh.root, '');
+  });
+  _mapCache.delete(id);
+  _mapCache.set(id, { hash: hash, nodes: nodes });
+  while (_mapCache.size > MAP_CACHE_MAX) _mapCache.delete(_mapCache.keys().next().value);
+  return nodes;
 }
 
 /** 'YYYY-MM-DD' 두 날의 차이 (b - a, 일) */

@@ -105,7 +105,7 @@ function _mwbCard(it, today) {
       (it.src === 'todo' ? '<button data-btrash="' + k + '" title="휴지통으로">🗑</button>' : '') +
       '<button data-bmenu="' + k + '" title="다른 칸으로 (m)">⋯</button></span>';
   }
-  return '<div class="mwb-i' + (it.done ? ' mw-done' : '') + (it.pri === 1 && !it.done ? ' is-urg' : '') + (it.focus ? ' is-focus' : '') + '" data-qk="' + k + '"' + (self && !it.done ? ' draggable="true"' : '') + '>' +
+  return '<div class="mwb-i' + (it.done ? ' mw-done' : '') + (it.pending ? ' is-pending' : '') + (it.pri === 1 && !it.done ? ' is-urg' : '') + (it.focus ? ' is-focus' : '') + '" data-qk="' + k + '"' + (self && !it.done ? ' draggable="true"' : '') + '>' +
     '<div class="mwb-top">' +
       (it.canDone ? '<input type="checkbox" class="mw-chk" data-done="' + k + '"' + (it.done ? ' checked' : '') + ' title="' + (it.done ? '완료 되돌리기' : '완료') + '">' : '<span class="mw-chk-sp"></span>') +
       '<span class="mwb-t" data-open="' + k + '"><em title="' + _mwEsc(s.label) + '">' + s.icon + '</em> ' + _mwEsc(it.title) + '</span>' + acts + '</div>' +
@@ -148,17 +148,22 @@ function mwSetCat(it, catId) {
   }).catch(function (er) { it.cat = prev; _mwPaint(); _mwToast('❌ ' + _mwErr(er), 'error'); });
 }
 
-/* ── 떠 있는 작은 메뉴 (칸 옮기기 · 마감) ─────────────────────────── */
-function _mwbPop(anchor, html, onPick, onCancel) {
-  var old = document.getElementById('mwbPop');
-  if (old) { var same = old._a === anchor; if (old._cancel) old._cancel(); old.remove(); if (same) return; }
+/* ── 떠 있는 작은 메뉴 — 내 업무 공용 (칸 옮기기 · 마감 · 중요도 · 내보내기 · 사전검토 끝내기, v13.270 하나로) ──
+   mwPopMenu(anchor, html, onPick(v), { id, key, onCancel, align: 'left'|'right' })
+   html 안 버튼은 data-v. 같은 key 로 다시 부르면 닫힘(토글). 밖을 누르거나 Esc = onCancel. ↑↓ 로 고르기 */
+function mwPopMenu(anchor, html, onPick, opt) {
+  opt = opt || {};
+  var id = opt.id || 'mwbPop';
+  var key = opt.key != null ? opt.key : anchor;
+  document.querySelectorAll('.mwb-pop').forEach(function (o) { if (o._cancel) o._cancel(); o.remove(); if (o.id === id && o._key === key) id = null; });
+  if (!id) return;
   var m = document.createElement('div');
-  m.id = 'mwbPop'; m.className = 'mw-pmenu mwb-pop'; m._a = anchor; m._cancel = onCancel || null;
+  m.id = id; m.className = 'mw-pmenu mwb-pop'; m._key = key; m._cancel = opt.onCancel || null;
   m.innerHTML = html;
   document.body.appendChild(m);
   var r = anchor.getBoundingClientRect();
   m.style.top = Math.max(8, Math.min(window.innerHeight - m.offsetHeight - 8, r.bottom + 4)) + 'px';
-  m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth)) + 'px';
+  m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, opt.align === 'left' ? r.left : r.right - m.offsetWidth)) + 'px';
   m.onclick = function (ev) {
     var b = ev.target.closest('[data-v]');
     if (!b) return;
@@ -186,7 +191,7 @@ function mwMoveMenu(anchor, it) {
     return '<button data-v="' + _mwEsc(c.id) + '"' + (c.id === cur.id ? ' class="on"' : '') + '><i class="mwb-dot" style="background:' + _mwbColor(c) + '"></i>' + (c.icon ? c.icon + ' ' : '') + _mwEsc(c.name) + '</button>';
   }).join('') + (it.cat ? '<button data-v="__unpin">↺ 고정 풀기 (자동 분류)</button>' : '') +
     (it.src === 'todo' ? '<button data-v="__trash" class="mwb-pop-del">🗑 휴지통으로</button>' : '');
-  _mwbPop(anchor, h, function (v) {
+  mwPopMenu(anchor, h, function (v) {
     if (v === '__unpin') return mwSetCat(it, null);
     if (v === '__trash') return mwDeleteTodo(it);
     mwSetCat(it, v);
@@ -197,7 +202,7 @@ function _mwbDueMenu(anchor, it) {
   var h = '<div class="mw-pmenu-n">마감</div>' + _mwpQuickDues().map(function (q) {
     return '<button data-v="' + q[1] + '"' + (it.due === q[1] ? ' class="on"' : '') + '>' + q[0] + ' <i>' + (+q[1].slice(5, 7)) + '/' + (+q[1].slice(8, 10)) + '</i></button>';
   }).join('') + '<button data-v="">없음</button><button data-v="__more">날짜 고르기…</button>';
-  _mwbPop(anchor, h, function (v) {
+  mwPopMenu(anchor, h, function (v) {
     if (v === '__more') { mwPanelOpen(it, { focus: '#mwpDue' }); return; }
     mwSetDue(it, v || null);
   });
@@ -251,14 +256,11 @@ function mwBindBoard(el) {
     var catId = f.getAttribute('data-bform');
     var q = typeof QuickParse !== 'undefined' ? QuickParse.parse(raw, _mw.data.today) : { title: raw };
     if (!q.title) { _mwToast('할 일 내용을 적어 주세요', 'warn'); return; }
-    inp.disabled = true;
-    apiFetch('/api/my-work/todos', { method: 'POST', body: JSON.stringify({ title: q.title, dueDate: q.due || null, dueTime: q.due && q.time ? q.time : null, priority: q.priority || 3 }) }).then(function (r) {
-      var id = r && r.data && r.data.id;
-      return id ? apiFetch('/api/my-work/mark', { method: 'PUT', body: JSON.stringify({ key: 'todo:' + id, category: catId }) }) : null;
-    }).then(function () {
-      _mwLS('bqa', catId);   // 다시 그린 뒤 같은 칸 입력 칸을 열어 둠
-      renderMyWork();
-    }).catch(function (er) { inp.disabled = false; _mwToast('❌ ' + _mwErr(er), 'error'); });
+    // 바로 그림 (v13.270) — 다시 그린 뒤 같은 칸 입력 칸을 열어 둠 (연달아 넣기)
+    _mwLS('bqa', catId);
+    inp.value = '';   // 먼저 비움 — 다시 그릴 때 쓰던 글을 지켜 주므로
+    mwAddTodo({ title: q.title, dueDate: q.due || null, dueTime: q.due && q.time ? q.time : null, priority: q.priority || 3 }, catId)
+      .catch(function (er) { _mwToast('❌ 추가하지 못했습니다 — ' + _mwErr(er), 'error'); });
   });
 }
 /** 다시 그린 뒤 — 방금 쓰던 칸의 바로 추가 칸을 다시 열어 둠 (연달아 넣기) */

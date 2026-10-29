@@ -37,7 +37,6 @@ var myWork = require('../lib/my-work');
 var myEvents = require('../lib/my-events');
 var prio = require('../lib/priority');
 var repeatNext = require('../lib/todo-repeat').repeatNext;
-var pa = require('../lib/project-access');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -75,6 +74,13 @@ async function targetUser(req, userId) {
 
 function toUser(u) { return { id: u.id, name: u.display_name, dept: u.department_name || '', departmentId: u.department_id || null }; }
 
+/** 모을 대상 — 나면 토큰 정보로 바로 (사람 목록 쿼리를 기다리지 않음, v13.270), 남이면 볼 수 있는지 확인 */
+function subjectOf(req, userId) {
+  var id = userId || req.user.sub;
+  if (id === req.user.sub) return Promise.resolve({ id: id, name: req.user.name || '' });
+  return targetUser(req, id);
+}
+
 // GET /api/my-work/people
 router.get('/people', async function (req, res) {
   try {
@@ -94,26 +100,27 @@ router.get('/', async function (req, res) {
     catP.catch(function () {});
     var trP = wantId === req.user.sub ? db.query('SELECT COUNT(*)::int AS n FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NOT NULL', [req.tenant.id, req.user.sub]) : null;
     if (trP) trP.catch(function () {});
-    var u = await targetUser(req, req.query.userId);
+    // v13.270: 내 것이면 사람 확인을 기다리지 않고 바로 모으기 시작 (한 번 왕복 줄임)
+    var self = wantId === req.user.sub;
+    var uP = targetUser(req, req.query.userId);
+    var itemsP = self ? myWork.collect(req, [{ id: req.user.sub, name: req.user.name || '' }], { done: true }) : null;
+    if (itemsP) itemsP.catch(function () {});
+    var u = await uP;
+    if (!u && self) u = { id: req.user.sub, name: req.user.name, display_name: req.user.name, department_id: req.user.departmentId || null };
     if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN', '이 사람의 업무를 볼 권한이 없습니다.');
-    var items = await myWork.collect(req, [u], { done: true });
-    var self = u.id === req.user.sub;
+    // 이름을 바꾼 뒤 아직 예전 토큰이면 (이슈 · 회의 담당을 이름으로도 찾으므로) 새 이름으로 다시
+    var items = itemsP && u.name === (req.user.name || '') ? await itemsP : await myWork.collect(req, [u], { done: true });
     var canDone = self || req.user.role === 'admin';
     items.forEach(function (it) {
       it.canDone = canDone && DONE_SRC.indexOf(it.src) >= 0 && (it.src !== 'todo' || self);
       it.canPri = canDone && prio.SRC.indexOf(it.src) >= 0 && (it.src !== 'todo' || self);
     });
     // 사전검토 · 마일스톤 (v13.269) — 완료는 원래 화면 저장 API 로 (클라가 PUT /api/prestudies · /api/milestones).
-    //   사전검토 = 담당 본인 · 관리자 (확정 · 보류 · 드롭 중 고름), 마일스톤 = 그 프로젝트 편집 권한
-    if (canDone) {
-      var msProj = {};
-      items.forEach(function (it) { if (it.src === 'milestone' && it.projectId) msProj[it.projectId] = false; });
-      await Promise.all(Object.keys(msProj).map(async function (pid) { msProj[pid] = !!(await pa.canEditById(req, pid)); }));
-      items.forEach(function (it) {
-        if (it.src === 'prestudy') it.canDone = true;
-        if (it.src === 'milestone') it.canDone = !!msProj[it.projectId];
-      });
-    }
+    //   사전검토 = 담당 본인 · 관리자 (확정 · 보류 · 드롭 중 고름), 마일스톤 = 그 프로젝트 편집 권한 (모을 때 같이 계산 — canEdit)
+    items.forEach(function (it) {
+      if (it.src === 'prestudy') it.canDone = canDone;
+      if (it.src === 'milestone') { it.canDone = canDone && !!it.canEdit; delete it.canEdit; }
+    });
     // ⭐ 오늘 집중 · 직접 순서 — 그 사람 표시 (끝난 일의 표시는 정리)
     var mk = await mkP;
     var byKey = {};
@@ -170,15 +177,22 @@ router.put('/done', async function (req, res) {
     var userId = b.userId || req.user.sub;
     if (userId !== req.user.sub && req.user.role !== 'admin') return httpErr.sendError(res, 403, 'FORBIDDEN', '본인 업무만 완료로 바꿀 수 있습니다.');
     if (b.src === 'todo' && userId !== req.user.sub) return httpErr.sendError(res, 403, 'FORBIDDEN');
+    // 개인 할 일은 바로 — 내 것인지는 UPDATE 조건으로 (예전엔 할 일 목록을 다 모아 확인, v13.270)
+    if (b.src === 'todo') {
+      var tr = await db.query('UPDATE my_todos SET done_at = ' + (done ? 'COALESCE(done_at, now())' : 'NULL') + ', updated_at = now() ' +
+        'WHERE id = $1 AND tenant_id = $2 AND user_id = $3 AND deleted_at IS NULL RETURNING *', [b.id, req.tenant.id, req.user.sub]);
+      if (!tr.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.');
+      var nx = done && tr.rows[0].repeat ? await repeatNext(req, b.id, tr.rows[0]) : null;
+      return res.json({ data: { src: b.src, id: b.id, done: done, next: nx ? nx.id : null, nextRow: nx } });
+    }
     // 그 사람 담당이 맞는지 — 목록을 다시 모아 확인 (권한 · 가시성 규칙을 한 곳에)
-    var u = await targetUser(req, userId);
+    var u = await subjectOf(req, userId);
     if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN');
     var items = await myWork.collect(req, [u], { done: true, sources: [b.src] });
     var it = items.filter(function (x) { return x.id === b.id; })[0];
     if (!it) return httpErr.sendError(res, 404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.');
     var tid = req.tenant.id;
     var today = myWork.kstToday();
-    var next = null;   // 반복 할 일의 다음 회차
     if (b.src === 'issue') {
       await db.query(
         "UPDATE issues SET status = $1::varchar, resolved_date = CASE WHEN $1::varchar = 'resolved' THEN COALESCE(NULLIF(resolved_date, ''), $2::varchar) ELSE resolved_date END, updated_by = $3, updated_at = now() WHERE id = $4 AND tenant_id = $5",
@@ -190,9 +204,6 @@ router.put('/done', async function (req, res) {
     } else if (b.src === 'dev') {
       await db.query('UPDATE project_dev_items SET status = $1, version = version + 1, updated_by = $2, updated_at = now() WHERE id = $3 AND tenant_id = $4',
         [done ? 'done' : 'doing', req.user.sub, b.id, tid]);
-    } else if (b.src === 'todo') {
-      await db.query('UPDATE my_todos SET done_at = ' + (done ? 'COALESCE(done_at, now())' : 'NULL') + ', updated_at = now() WHERE id = $1 AND tenant_id = $2 AND user_id = $3', [b.id, tid, req.user.sub]);
-      if (done) next = await repeatNext(req, b.id);
     } else if (b.src === 'mindmap') {
       var mp = splitMapId(b.id);
       var ok = await editMapNode(req, res, mp.mapId, mp.nodeId, function (n) {
@@ -202,7 +213,7 @@ router.put('/done', async function (req, res) {
       });
       if (!ok) return;
     }
-    res.json({ data: { src: b.src, id: b.id, done: done, next: next || null } });
+    res.json({ data: { src: b.src, id: b.id, done: done, next: null } });
   } catch (e) { httpErr.serverError(res, '[my-work/done]', e); }
 });
 
@@ -260,11 +271,12 @@ router.post('/todos', async function (req, res) {
     if (!String(b.title || '').trim()) return httpErr.sendError(res, 400, 'VALIDATION', '할 일을 입력하세요.');
     var f = todoFields(b);
     if (typeof f === 'string') return httpErr.sendError(res, 400, 'VALIDATION', f);
-    var n = await db.query('SELECT COUNT(*)::int AS n FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND done_at IS NULL AND deleted_at IS NULL', [req.tenant.id, req.user.sub]);
-    if (n.rows[0].n >= 300) return httpErr.sendError(res, 400, 'VALIDATION', '끝나지 않은 개인 할 일은 300개까지입니다.');
     var cols = ['id', 'tenant_id', 'user_id'], vals = [genId(), req.tenant.id, req.user.sub];
     f.forEach(function (x) { cols.push(x[0]); vals.push(x[1]); });
-    var r = await db.query('INSERT INTO my_todos (' + cols.join(', ') + ') VALUES (' + vals.map(function (_, i) { return '$' + (i + 1); }).join(',') + ') RETURNING *', vals);
+    // 300개 한도 확인과 넣기를 한 문장으로 (v13.270 — 예전엔 세고 나서 넣어 두 번 왕복)
+    var r = await db.query('INSERT INTO my_todos (' + cols.join(', ') + ') SELECT ' + vals.map(function (_, i) { return '$' + (i + 1); }).join(',') +
+      ' WHERE (SELECT COUNT(*) FROM my_todos WHERE tenant_id = $2 AND user_id = $3 AND done_at IS NULL AND deleted_at IS NULL) < 300 RETURNING *', vals);
+    if (!r.rows.length) return httpErr.sendError(res, 400, 'VALIDATION', '끝나지 않은 개인 할 일은 300개까지입니다.');
     res.status(201).json({ data: r.rows[0] });
   } catch (e) { httpErr.serverError(res, '[my-work/todo-create]', e); }
 });
@@ -281,8 +293,8 @@ router.put('/todos/:id', async function (req, res) {
     params.push(req.params.id, req.tenant.id, req.user.sub);
     var r = await db.query('UPDATE my_todos SET ' + sets.join(', ') + ', updated_at = now() WHERE id = $' + (params.length - 2) + ' AND tenant_id = $' + (params.length - 1) + ' AND user_id = $' + params.length + ' AND deleted_at IS NULL RETURNING *', params);
     if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
-    var next = b.done ? await repeatNext(req, req.params.id) : null;
-    res.json({ data: r.rows[0], next: next });
+    var nx = b.done && r.rows[0].repeat ? await repeatNext(req, req.params.id, r.rows[0]) : null;
+    res.json({ data: r.rows[0], next: nx ? nx.id : null, nextRow: nx });
   } catch (e) { httpErr.serverError(res, '[my-work/todo-update]', e); }
 });
 
@@ -525,7 +537,7 @@ function cleanYmd(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.tes
 // GET /api/my-work/events?userId=&from=&to=
 router.get('/events', async function (req, res) {
   try {
-    var u = await targetUser(req, req.query.userId);
+    var u = await subjectOf(req, req.query.userId);
     if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN', '이 사람의 일정을 볼 권한이 없습니다.');
     var today = myWork.kstToday();
     var from = cleanYmd(req.query.from) || myEvents.addDays(today, -31);
@@ -547,7 +559,7 @@ router.put('/due', async function (req, res) {
     var userId = b.userId || req.user.sub;
     if (userId !== req.user.sub && req.user.role !== 'admin') return httpErr.sendError(res, 403, 'FORBIDDEN', '본인 업무만 마감을 바꿀 수 있습니다.');
     if (b.src === 'todo' && userId !== req.user.sub) return httpErr.sendError(res, 403, 'FORBIDDEN');
-    var u = await targetUser(req, userId);
+    var u = await subjectOf(req, userId);
     if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN');
     var items = await myWork.collect(req, [u], { done: true, sources: [b.src] });
     if (!items.some(function (x) { return x.id === b.id; })) return httpErr.sendError(res, 404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.');
@@ -581,7 +593,7 @@ router.put('/priority', async function (req, res) {
     var userId = b.userId || req.user.sub;
     if (userId !== req.user.sub && req.user.role !== 'admin') return httpErr.sendError(res, 403, 'FORBIDDEN', '본인 업무만 중요도를 바꿀 수 있습니다.');
     if (b.src === 'todo' && userId !== req.user.sub) return httpErr.sendError(res, 403, 'FORBIDDEN');
-    var u = await targetUser(req, userId);
+    var u = await subjectOf(req, userId);
     if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN');
     var items = await myWork.collect(req, [u], { done: true, sources: [b.src] });
     if (!items.some(function (x) { return x.id === b.id; })) return httpErr.sendError(res, 404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.');

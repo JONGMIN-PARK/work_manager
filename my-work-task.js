@@ -116,26 +116,10 @@ function mwTaskChange(e) {
 
 function _mwPriMenu(anchor, it) {
   if (!it) return;
-  var old = document.getElementById('mwPriMenu');
-  if (old) { var same = old._key === it.key; old.remove(); if (same) return; }
-  var m = document.createElement('div');
-  m.id = 'mwPriMenu'; m.className = 'mw-pmenu'; m._key = it.key;
-  m.innerHTML = [1, 2, 3, 4].map(function (p) {
-    return '<button data-p="' + p + '"' + (it.pri === p ? ' class="on"' : '') + '>' + MW_PRI[p].icon + ' ' + MW_PRI[p].label + '</button>';
-  }).join('') + (it.src !== 'todo' ? '<div class="mw-pmenu-n">' + _mwEsc((MW_SRC[it.src] || {}).label || '') + '에도 반영됩니다</div>' : '');
-  document.body.appendChild(m);
-  var r = anchor.getBoundingClientRect();
-  m.style.top = Math.min(window.innerHeight - m.offsetHeight - 8, r.bottom + 4) + 'px';
-  m.style.left = Math.min(window.innerWidth - m.offsetWidth - 8, r.left) + 'px';
-  m.onclick = function (ev) {
-    var b = ev.target.closest('[data-p]');
-    if (!b) return;
-    m.remove();
-    mwSetPriority(it, +b.getAttribute('data-p'));
-  };
-  setTimeout(function () {
-    document.addEventListener('mousedown', function off(ev) { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener('mousedown', off); } });
-  }, 0);
+  mwPopMenu(anchor, [1, 2, 3, 4].map(function (p) {
+    return '<button data-v="' + p + '"' + (it.pri === p ? ' class="on"' : '') + '>' + MW_PRI[p].icon + ' ' + MW_PRI[p].label + '</button>';
+  }).join('') + (it.src !== 'todo' ? '<div class="mw-pmenu-n">' + _mwEsc((MW_SRC[it.src] || {}).label || '') + '에도 반영됩니다</div>' : ''),
+  function (v) { mwSetPriority(it, +v); }, { id: 'mwPriMenu', key: 'pri:' + it.key, align: 'left' });
 }
 function mwSetPriority(it, p) {
   if (!it || it.pri === p) return Promise.resolve();
@@ -385,11 +369,12 @@ function _mwBuildRegister(opt) {
       p = createEvent({ title: title, type: k.evt, startDate: v.date, endDate: v.end, startTime: v.t1 || null, endTime: v.t1 ? (v.t2 || null) : null,
         projectIds: v.proj ? [v.proj] : [], assignees: st.people, location: v.place, memo: v.memo });
     }
-    p.then(function () {
+    p.then(function (r) {
       M.close(true);
       _mwToast(k.icon + ' ' + k.label + ' 등록 — ' + title + (st.people.length && k.people ? ' (' + k.people + ' 달력에도 나옵니다)' : ''));
       if (typeof _pdInvalidate === 'function') _pdInvalidate('evt');
-      if (k.k === 'todo') renderMyWork(); else _mwcAfterChange();
+      if (k.k === 'todo') { if (!(r && r.data && mwPutTodo(r.data))) renderMyWork(); }   // 할 일은 그 한 줄만 바로 (v13.270)
+      else _mwcAfterChange();
     }).catch(function (e2) { busy = false; _mwToast('❌ ' + _mwErr(e2), 'error'); });
   };
   apply();

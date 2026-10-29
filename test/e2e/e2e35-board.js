@@ -58,6 +58,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.waitForSelector('#mwAddTitle');
     await page.click('#mMyWork [data-mwc-view="matrix"]');
     await page.waitForSelector('#mMyWork .mwb');
+    await page.waitForNetworkIdle({ idleTime: 400, timeout: 10000 }).catch(function () {});   // 사람 · 일정이 와서 다시 그리는 것까지 (v13.270)
 
     // 1. 기본 4칸 · 자동 분류 · 높이
     check(await page.evaluate(function () { return document.querySelectorAll('.mwb-c').length === 4; }), '기본 4칸');
@@ -145,9 +146,33 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.type('[data-bform="' + nc.id + '"] input', '내일 보드 제안서');
     await page.keyboard.press('Enter');
     check(await until(function () { return Array.from(document.querySelectorAll('.mwb-i')).some(function (x) { return /보드 제안서/.test(x.textContent) && /보드 영업/.test(x.closest('.mwb-c').textContent); }); }), '칸 [+] → 그 칸에 바로');
+    await until(function () { return !document.querySelector('.is-pending'); });   // 저장 끝날 때까지 (바로 그리기 — v13.270)
+    await wait(300);
     var nt = (await c.query("SELECT due_date FROM my_todos WHERE title = '보드 제안서'")).rows[0];
     check(nt && nt.due_date === kst(1), '한 줄 읽기 — 내일');
     check(await page.evaluate(function (id) { var f = document.querySelector('[data-bform="' + id + '"]'); return f && !f.hidden && document.activeElement === f.querySelector('input'); }, nc.id), '입력 칸 그대로 열려 있음 (연달아 넣기)');
+
+    // 6-2. 바로 그리기 (v13.270) — 추가해도 전체 목록을 다시 받지 않음 · 다시 그려도 쓰던 글은 그대로
+    var gets = 0;
+    var onReq = function (rq) { if (/\/api\/my-work(\?|$)/.test(rq.url()) && rq.method() === 'GET') gets++; };
+    page.on('request', onReq);
+    await page.evaluate(function () { var f = document.querySelector('[data-bform]:not([hidden])'); if (f) f.hidden = true; document.activeElement && document.activeElement.blur(); });
+    await page.click('#mwAddTitle');
+    await page.type('#mwAddTitle', '보드 바로 추가');
+    await page.keyboard.press('Enter');
+    check(await page.evaluate(function () { return Array.from(document.querySelectorAll('.mwb-i')).some(function (x) { return /보드 바로 추가/.test(x.textContent); }); }), '엔터 즉시 화면에 (응답 기다리지 않음)');
+    check(await until(function () { var x = Array.from(document.querySelectorAll('.mwb-i')).filter(function (x) { return /보드 바로 추가/.test(x.textContent); })[0]; return x && !x.classList.contains('is-pending') && /^issue|^todo:todo-/.test(x.getAttribute('data-qk')); }), '저장되면 진짜 항목으로 바뀜');
+    check(await page.evaluate(function () { return document.activeElement && document.activeElement.id === 'mwAddTitle' && !document.activeElement.value; }), '입력 칸은 비고 커서 그대로 (연달아 입력)');
+    await wait(400);
+    check(gets === 0, '추가해도 전체 목록 다시 받기 없음 (GET ' + gets + '번)');
+    page.off('request', onReq);
+    await page.type('#mwAddTitle', '쓰는 중');
+    await page.evaluate(function () { _mwPaint(); });
+    check(await page.evaluate(function () { var x = document.getElementById('mwAddTitle'); return x.value === '쓰는 중' && document.activeElement === x; }), '다시 그려도 쓰던 글 · 커서 그대로');
+    await page.evaluate(function () { var x = document.getElementById('mwAddTitle'); x.value = ''; x.blur(); });
+    check((await c.query("SELECT COUNT(*)::int AS n FROM my_todos WHERE title = '보드 바로 추가' AND user_id = $1", [me.id])).rows[0].n === 1, '한 번만 저장');
+    await c.query("DELETE FROM my_todos WHERE title = '보드 바로 추가'");
+    await page.evaluate(function () { _mw.data.data = _mw.data.data.filter(function (x) { return x.title !== '보드 바로 추가'; }); _mwPaint(); });
 
     // 7. 카드에서 휴지통 → 되돌리기 · 휴지통 창
     await page.evaluate(function (k) { document.querySelector('[data-qk="' + k + '"] [data-btrash]').click(); }, await keyOf('보드 잡일'));
@@ -175,13 +200,13 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.evaluate(function () { window._dl = []; window._mwioDownload = function (n, b) { b.arrayBuffer().then(function (ab) { var u = new Uint8Array(ab); window._dl.push({ n: n, t: new TextDecoder('utf-8', { ignoreBOM: true }).decode(u), bom: u[0] === 0xEF && u[1] === 0xBB && u[2] === 0xBF }); }); }; });
     await page.click('[data-mwio="export"]');
     await page.waitForSelector('#mwioMenu');
-    await page.click('#mwioMenu [data-x="csv"]');
+    await page.click('#mwioMenu [data-v="csv"]');
     await until(function () { return window._dl.length === 1; });
     var csv = await page.evaluate(function () { return window._dl[0]; });
     check(/\.csv$/.test(csv.n) && csv.bom && /^﻿칸,제목,출처/.test(csv.t) && /보드 영업.*보드 이슈|보드 이슈.*보드 영업/.test(csv.t.split('\r\n').filter(function (l) { return /보드 이슈/.test(l); })[0] || '') && /1\/2/.test(csv.t), 'CSV — 칸 · 제목 · 하위 항목');
     await page.evaluate(function () { window._clip = null; navigator.clipboard.writeText = function (t) { window._clip = t; return Promise.resolve(); }; });
     await page.click('[data-mwio="export"]');
-    await page.click('#mwioMenu [data-x="text"]');
+    await page.click('#mwioMenu [data-v="text"]');
     await until(function () { return !!window._clip; });
     var clip = await page.evaluate(function () { return window._clip; });
     check(/■ 💼 보드 영업/.test(clip) && /- 보드 이슈/.test(clip), '글로 복사 — 칸별 글머리표');
@@ -189,7 +214,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     if (hasX) {
       await page.evaluate(function () { window._xf = null; XLSX.writeFile = function (wb, n) { window._xf = { n: n, sheets: wb.SheetNames, a1: wb.Sheets['목록'].A1.v, rows: XLSX.utils.sheet_to_json(wb.Sheets['목록']).length }; }; });
       await page.click('[data-mwio="export"]');
-      await page.click('#mwioMenu [data-x="xlsx"]');
+      await page.click('#mwioMenu [data-v="xlsx"]');
       await until(function () { return !!window._xf; });
       var xf = await page.evaluate(function () { return window._xf; });
       check(/\.xlsx$/.test(xf.n) && xf.sheets.join() === '목록,요약' && xf.a1 === '칸' && xf.rows >= 5, '엑셀 — 목록 + 요약 ' + JSON.stringify(xf));

@@ -55,10 +55,11 @@ function _mwioWhen(iso) {
 function _mwioTrashBuild(rows) {
   var ov = createModal({ id: 'mwTrashModal', width: '640px', titleText: '🗑 휴지통', closeOnEsc: true, closeOnOverlay: true, html: '<div id="mwtrBody"></div>' }).overlay;
   var body = ov.querySelector('#mwtrBody');
-  var changed = false;
-  function done() {
+  // 되살린 것은 서버가 준 한 줄을 바로 목록에 넣음 (v13.270 — 예전엔 창을 닫을 때 전체 다시 받기)
+  function done(back) {
+    (back || []).forEach(function (row) { if (row) mwPutTodo(row); });
     _mw.data.trashN = rows.length;
-    changed = true;
+    _mwPaint();
     paint();
   }
   function paint() {
@@ -83,12 +84,12 @@ function _mwioTrashBuild(rows) {
     var t = rows.filter(function (x) { return x.id === id; })[0];
     var p;
     if (k === 'restore') {
-      p = apiFetch('/api/my-work/todos/' + encodeURIComponent(id) + '/restore', { method: 'POST' }).then(function () { rows = rows.filter(function (x) { return x !== t; }); _mwToast('↩ "' + t.title + '" 되살렸습니다'); });
+      p = apiFetch('/api/my-work/todos/' + encodeURIComponent(id) + '/restore', { method: 'POST' }).then(function (r) { rows = rows.filter(function (x) { return x !== t; }); _mwToast('↩ "' + t.title + '" 되살렸습니다'); return [r && r.data]; });
     } else if (k === 'purge') {
       if (!confirm('"' + t.title + '" 을(를) 영구 삭제할까요? 되돌릴 수 없습니다.')) return;
       p = apiFetch('/api/my-work/trash/' + encodeURIComponent(id), { method: 'DELETE' }).then(function () { rows = rows.filter(function (x) { return x !== t; }); });
     } else if (k === 'restoreAll') {
-      p = Promise.all(rows.map(function (x) { return apiFetch('/api/my-work/todos/' + encodeURIComponent(x.id) + '/restore', { method: 'POST' }); })).then(function () { _mwToast('↩ ' + rows.length + '개 되살렸습니다'); rows = []; });
+      p = Promise.all(rows.map(function (x) { return apiFetch('/api/my-work/todos/' + encodeURIComponent(x.id) + '/restore', { method: 'POST' }); })).then(function (rs) { _mwToast('↩ ' + rows.length + '개 되살렸습니다'); rows = []; return rs.map(function (r) { return r && r.data; }); });
     } else if (k === 'empty') {
       if (!confirm('휴지통의 ' + rows.length + '개를 모두 영구 삭제할까요? 되돌릴 수 없습니다.')) return;
       p = apiFetch('/api/my-work/trash', { method: 'DELETE' }).then(function () { _mwToast('🗑 휴지통을 비웠습니다'); rows = []; });
@@ -97,9 +98,6 @@ function _mwioTrashBuild(rows) {
     busy = true;
     p.then(done).catch(function (er) { _mwToast('❌ ' + _mwErr(er), 'error'); }).then(function () { busy = false; });
   });
-  // 닫을 때 — 되살린 게 있으면 목록 새로
-  var obs = new MutationObserver(function () { if (!ov.isConnected) { obs.disconnect(); if (changed) renderMyWork(); } });
-  obs.observe(document.body, { childList: true });
   return ov;
 }
 
@@ -107,25 +105,9 @@ function _mwioTrashBuild(rows) {
 function _mwioExportMenu(anchor) {
   var n = mwVisibleItems().length;
   if (!n) { _mwToast('내보낼 항목이 없습니다', 'warn'); return; }
-  var old = document.getElementById('mwioMenu');
-  if (old) { old.remove(); return; }
-  var m = document.createElement('div');
-  m.id = 'mwioMenu'; m.className = 'mw-pmenu mwb-pop';
-  m.innerHTML = '<div class="mw-pmenu-n">지금 보이는 ' + n + '개</div>' +
-    '<button data-x="xlsx">📊 엑셀 (.xlsx) <i>목록 + 요약</i></button><button data-x="csv">📄 CSV</button><button data-x="text">📋 글로 복사 <i>칸별 글머리표</i></button>';
-  document.body.appendChild(m);
-  var r = anchor.getBoundingClientRect();
-  m.style.top = (r.bottom + 4) + 'px';
-  m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth)) + 'px';
-  m.onclick = function (ev) {
-    var b = ev.target.closest('[data-x]');
-    if (!b) return;
-    m.remove();
-    mwExport(b.getAttribute('data-x'));
-  };
-  setTimeout(function () {
-    document.addEventListener('mousedown', function off(ev) { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener('mousedown', off); } });
-  }, 0);
+  mwPopMenu(anchor, '<div class="mw-pmenu-n">지금 보이는 ' + n + '개</div>' +
+    '<button data-v="xlsx">📊 엑셀 (.xlsx) <i>목록 + 요약</i></button><button data-v="csv">📄 CSV</button><button data-v="text">📋 글로 복사 <i>칸별 글머리표</i></button>',
+    mwExport, { id: 'mwioMenu', key: 'export' });
 }
 var MW_EXPORT_HEAD = ['칸', '제목', '출처', '중요도', '상태', '마감', '마감 시각', '완료', '완료일', '하위 항목', '진행률(%)', '예상 시간(h)', '위치', '메모', '담당'];
 function _mwioRows(items) {

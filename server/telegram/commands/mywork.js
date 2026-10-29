@@ -66,11 +66,8 @@ function create(sendMessage) {
     await db.query('UPDATE my_todos SET done_at = now(), updated_at = now() WHERE id = $1 AND user_id = $2', [t.id, user.user_id]);
     var next = '';
     if (t.repeat) {
-      var nid = await repeatNext({ tenant: { id: user.tenant_id }, user: { sub: user.user_id } }, t.id);   // 웹과 같은 규칙
-      if (nid) {
-        var nr = await db.query('SELECT due_date FROM my_todos WHERE id = $1', [nid]);
-        next = '\n🔁 다음 회차: ' + md(nr.rows[0] && nr.rows[0].due_date);
-      }
+      var nx = await repeatNext({ tenant: { id: user.tenant_id }, user: { sub: user.user_id } }, t.id);   // 웹과 같은 규칙 — 다음 회차 행
+      if (nx) next = '\n🔁 다음 회차: ' + md(nx.due_date);
     }
     return sendMessage(chatId, '☑️ 완료 — ' + escHtml(t.title) + next);
   }

@@ -260,7 +260,8 @@ function mwSetDone(it, done, anchor) {
   return apiFetch('/api/my-work/done', { method: 'PUT', body: JSON.stringify({ src: it.src, id: it.id, userId: it.userId, done: done }) }).then(function (r) {
     var next = r && r.data && r.data.next;
     mwUndoToast(done ? '✅ 완료' + (it.src !== 'todo' ? ' — ' + (MW_SRC[it.src] || {}).label + '에도 반영' : '') + (next ? ' · 🔁 다음 회차 만듦' : '') : '↩ 완료 취소', function () { mwSetDone(it, !done); });
-    if (next) renderMyWork();
+    // 반복 할 일의 다음 회차 — 서버가 준 한 줄만 넣음 (v13.270, 예전엔 전체 다시 받기)
+    if (next && !(r.data.nextRow && mwPutTodo(r.data.nextRow))) renderMyWork();
   }).catch(function (e) {
     it.done = prev.done; it.doneAt = prev.doneAt; it.focus = prev.focus;
     _mwPaint(); _mwToast('❌ ' + _mwErr(e), 'error');
@@ -297,11 +298,11 @@ function mwCloseOther(it, done, anchor) {
   if (it.src === 'milestone') return _mwCloseApply(it, 'done', true);
   if (!anchor || !anchor.isConnected) anchor = document.querySelector('#mMyWork [data-key="' + it.key + '"], #mMyWork [data-qk="' + it.key + '"]') || document.getElementById('mwPanel');
   return new Promise(function (resolve) {
-    _mwbPop(anchor, '<div class="mw-pmenu-n">사전검토 끝내기 — 사전검토 화면에도 반영</div>' + MW_PS_CLOSE.map(function (x) {
+    mwPopMenu(anchor, '<div class="mw-pmenu-n">사전검토 끝내기 — 사전검토 화면에도 반영</div>' + MW_PS_CLOSE.map(function (x) {
       return '<button data-v="' + x[0] + '">' + x[1] + '</button>';
-    }).join(''), function (v) { resolve(_mwCloseApply(it, v, true)); }, function () {
+    }).join(''), function (v) { resolve(_mwCloseApply(it, v, true)); }, { key: 'ps:' + it.key, onCancel: function () {
       _mwPaint(); if (_mwp.key === it.key) _mwpRender(document.getElementById('mwPanel')); resolve();   // 고르지 않으면 체크 되돌림
-    });
+    } });
   });
 }
 function _mwCloseApply(it, status, done) {
@@ -333,8 +334,10 @@ function mwDeleteTodo(it) {
   }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); renderMyWork(); });
 }
 function mwRestoreTodo(id) {
-  return apiFetch('/api/my-work/todos/' + encodeURIComponent(id) + '/restore', { method: 'POST' }).then(function () {
-    _mwToast('↩ 되살렸습니다'); renderMyWork();
+  return apiFetch('/api/my-work/todos/' + encodeURIComponent(id) + '/restore', { method: 'POST' }).then(function (r) {
+    _mwToast('↩ 되살렸습니다');
+    if (_mw.data) _mw.data.trashN = Math.max(0, (_mw.data.trashN || 1) - 1);
+    if (!(r && r.data && mwPutTodo(r.data))) renderMyWork();   // 전체 다시 받지 않고 그 한 줄만 (v13.270)
   }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); });
 }
 
@@ -465,7 +468,7 @@ document.addEventListener('keydown', function (e) {
   if (_mw.view === 'week' || _mw.view === 'month') return;
   var t = e.target;
   if (e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (t && (t.closest && t.closest('input,textarea,select,[contenteditable="true"],#mwPanel,.wa-modal-overlay'))) return;
+  if (t && (t.closest && t.closest('input,textarea,select,[contenteditable="true"],#mwPanel,.wa-modal-overlay,.mw-pmenu'))) return;
   if (document.querySelector('.wa-modal-overlay')) return;
   var k = e.key;
   if (k === 'Escape' && mwPanelIsOpen()) { mwPanelClose(); return; }
@@ -485,7 +488,7 @@ document.addEventListener('keydown', function (e) {
   if (k === 'ArrowDown' || k === 'j') return move(1);
   if (k === 'ArrowUp' || k === 'k') return move(-1);
   var it = _mwFind(_mw.sel);
-  if (!it) return;
+  if (!it || it.pending) return;   // 저장 중인 새 할 일은 잠깐 기다림
   if (k === 'Enter' || k === 'o') { e.preventDefault(); mwPanelOpen(it); return; }
   if (k === 'x' || k === ' ') { e.preventDefault(); if (it.canDone) mwSetDone(it, !it.done, rows[i]); else _mwToast(it.src === 'milestone' ? '이 마일스톤은 프로젝트 편집 권한이 있어야 완료할 수 있습니다' : '이 항목은 원래 화면에서 완료합니다', 'warn'); return; }
   if (/^[1-4]$/.test(k)) {

@@ -51,7 +51,7 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     // 1. 한 줄 입력
     await page.type('#mwAddTitle', '내일 15:00 !긴급 할일화면 견적');
     await page.keyboard.press('Enter');
-    check(await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '할일화면 견적'; }); }), '한 줄 입력 → 제목만 남음');
+    check(await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '할일화면 견적'; }) && !document.querySelector('#mMyWork .is-pending'); }), '한 줄 입력 → 제목만 남음');
     var tq = (await c.query("SELECT due_date, due_time, priority FROM my_todos WHERE title = '할일화면 견적'")).rows[0];
     check(tq && tq.due_date === kst(1) && tq.due_time === '15:00' && tq.priority === 1, '마감 · 시각 · 긴급 저장 ' + JSON.stringify(tq));
     var r1 = await rowOf('할일화면 견적');
@@ -63,7 +63,7 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await page.waitForSelector('#mwPriMenu');
     check(await page.evaluate(function () { return /이슈에도 반영/.test(document.getElementById('mwPriMenu').textContent); }), '메뉴에 "이슈에도 반영" 안내');
     await page.screenshot({ path: path.join(SHOT, 'tasks-primenu.png') });
-    await page.click('#mwPriMenu [data-p="2"]');
+    await page.click('#mwPriMenu [data-v="2"]');
     await wait(600);
     check((await c.query("SELECT urgency FROM issues WHERE id = 'twu-i1'")).rows[0].urgency === 'high' && /높음/.test((await rowOf('할일화면 이슈')).txt), '이슈 → 높음 (urgency high)');
 
@@ -161,7 +161,7 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await page.waitForSelector('#mwAddTitle');
     await page.type('#mwAddTitle', '할일화면 끝낸 일');
     await page.keyboard.press('Enter');
-    await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '할일화면 끝낸 일'; }); });
+    await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '할일화면 끝낸 일'; }) && !document.querySelector('#mMyWork .is-pending'); });
     var dk = (await rowOf('할일화면 끝낸 일')).key;
     await page.evaluate(function (k) { var g = document.querySelector('#mMyWork [data-grp="nodue"]'); if (g && g.classList.contains('mw-folded')) g.querySelector('[data-fold]').click(); document.querySelector('#mMyWork input[data-done="' + k + '"]').click(); }, dk);
     check(await until(function () { var u = document.getElementById('mwUndo'); return u && /완료/.test(u.textContent); }), '완료 → 되돌리기 알림');

@@ -82,15 +82,25 @@ async function eventsFor(req, user, from, to) {
 
 /** 수정할 수 있는지 — routes/events.js 와 같은 규칙 (관리자 · 작성자 · 연결 프로젝트 편집 가능) */
 async function markCanModify(req, rows) {
-  var cache = {};
+  // v13.270: 프로젝트마다 차례로 묻던 것을 한 번에 (편집할 수 있는 프로젝트만 돌려받음)
+  var need = {};
+  rows.forEach(function (ev) {
+    if (req.user.role === 'admin' || ev.created_by === req.user.sub) return;
+    (ev.project_ids || []).forEach(function (pid) { if (pid) need[pid] = true; });
+  });
+  var can = {};
+  var pids = Object.keys(need);
+  if (pids.length) {
+    var ed = pa.editableProjectsSql(req, 'p', 3);
+    var r = await db.query('SELECT p.id FROM projects p WHERE p.tenant_id = $1 AND p.id = ANY($2) AND ' + ed.sql, [req.tenant.id, pids].concat(ed.params));
+    r.rows.forEach(function (x) { can[x.id] = true; });
+  }
   for (var i = 0; i < rows.length; i++) {
     var ev = rows[i];
     if (req.user.role === 'admin' || ev.created_by === req.user.sub) { ev.can_modify = true; continue; }
     ev.can_modify = false;
-    for (var j = 0; j < ev.project_ids.length; j++) {
-      var pid = ev.project_ids[j];
-      if (cache[pid] === undefined) cache[pid] = !!(await pa.canEditById(req, pid));
-      if (cache[pid]) { ev.can_modify = true; break; }
+    for (var j = 0; j < (ev.project_ids || []).length; j++) {
+      if (can[ev.project_ids[j]]) { ev.can_modify = true; break; }
     }
   }
   return rows;

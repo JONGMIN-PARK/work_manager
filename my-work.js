@@ -108,30 +108,74 @@ function mwOpenItem(it) {
 }
 
 /* ═══ 🎯 내 업무 ═══ */
+/* 마지막 목록 기억 (v13.270) — 탭을 처음 열 때 '불러오는 중' 대신 이 브라우저 탭에서 마지막으로 본 내 목록을 바로 그리고 새로 받아 바꿈.
+   sessionStorage (탭을 닫으면 지워짐) · 내 것만 */
+function _mwCache(v) {
+  var k = 'mw-cache:' + _mwMe();
+  try {
+    if (v === undefined) { var c = JSON.parse(sessionStorage.getItem(k) || 'null'); return c && c.self ? c : null; }
+    var s = JSON.stringify(v);
+    if (s.length < 2000000) sessionStorage.setItem(k, s);
+  } catch (_) { return null; }
+}
 function renderMyWork() {
   var el = document.getElementById('mMyWork');
   if (!el) return;
   if (_mw.userId == null) _mw.userId = _mwMe();
+  var mine = _mw.userId === _mwMe();
+  if (!_mw.data && mine) { var c = _mwCache(); if (c) { _mw.data = c; _mwPaint(); } }
   if (!_mw.data) el.innerHTML = '<div class="mw-empty">불러오는 중...</div>';
-  var ppl = _mw.people ? Promise.resolve(_mw.people) : apiFetch('/api/my-work/people').then(function (r) {
-    _mw.people = (r && r.data) || []; _mw.canLoad = !!(r && r.canLoad); return _mw.people;
-  });
-  // v13.258: 사람 목록을 기다린 뒤에 할 일을 부르던 것 → 셋을 동시에 (할 일 요청은 사람 목록과 상관없음)
-  Promise.all([
-    apiFetch('/api/my-work' + (_mw.userId && _mw.userId !== _mwMe() ? '?userId=' + encodeURIComponent(_mw.userId) : '')),
-    typeof mwCalLoadEvents === 'function' ? mwCalLoadEvents(true).catch(function () { return null; }) : null,
-    ppl
-  ]).then(function (res) {
-    _mw.data = res[0];
+  var seq = _mw.seq = (_mw.seq || 0) + 1;   // 사람을 빨리 바꿔도 늦게 온 옛 응답은 버림
+  // 사람 목록 · 일정이 비슷한 때 오면 한 번만 다시 그림 (그리는 사이 누른 것이 빗나가지 않게)
+  var again = function () {
+    if (seq !== _mw.seq || !_mw.data || _mw.againT) return;
+    _mw.againT = requestAnimationFrame(function () { _mw.againT = null; if (seq === _mw.seq) _mwPaint(); });
+  };
+  // v13.270: 목록이 오면 바로 그림 — 사람 목록 · 일정은 따로 와서 오면 다시 그림 (예전엔 셋 다 올 때까지 기다림)
+  if (!_mw.people) apiFetch('/api/my-work/people').then(function (r) {
+    _mw.people = (r && r.data) || []; _mw.canLoad = !!(r && r.canLoad); again();
+  }).catch(function () {});
+  if (typeof mwCalLoadEvents === 'function') mwCalLoadEvents(true).then(again, function () {});
+  apiFetch('/api/my-work' + (!mine ? '?userId=' + encodeURIComponent(_mw.userId) : '')).then(function (r) {
+    if (seq !== _mw.seq) return;
+    _mw.data = r;
+    if (r.self) _mwCache(r);
     _mwPaint();
   }).catch(function (e) {
+    if (seq !== _mw.seq) return;
+    if (_mw.data && mine) { _mwToast('❌ 내 업무를 새로 받지 못했습니다 — ' + _mwErr(e), 'error'); return; }   // 기억해 둔 목록은 그대로
     el.innerHTML = '<div class="mw-empty">내 업무를 불러오지 못했습니다 — ' + _mwEsc(_mwErr(e)) + '</div>';
   });
 }
 
+/** 다시 그려도 쓰던 글은 그대로 — 위 입력 칸 · 보드 칸 [+] 입력 (v13.270) */
+function _mwKeepInputs(el) {
+  var keep = [], act = document.activeElement;
+  el.querySelectorAll('#mwAddTitle, #mwAddDue, [data-bform] input').forEach(function (x) {
+    var f = x.closest('[data-bform]');
+    var sel = x.id ? '#' + x.id : '[data-bform="' + f.getAttribute('data-bform') + '"] input';
+    if (x.value || x === act || (f && !f.hidden)) keep.push({ sel: sel, v: x.value, focus: x === act, s: x.selectionStart, e: x.selectionEnd, open: f && !f.hidden });
+  });
+  return keep;
+}
+function _mwRestoreInputs(el, keep) {
+  keep.forEach(function (k) {
+    var x = el.querySelector(k.sel);
+    if (!x) return;
+    var f = x.closest('[data-bform]');
+    if (f && k.open) f.hidden = false;
+    x.value = k.v;
+    if (k.focus) { x.focus(); try { if (k.s != null) x.setSelectionRange(k.s, k.e); } catch (_) {} }
+  });
+}
 function _mwPaint() {
   var el = document.getElementById('mMyWork');
   if (!el || !_mw.data) return;
+  var keep = _mwKeepInputs(el);
+  _mwPaintNow(el);
+  _mwRestoreInputs(el, keep);
+}
+function _mwPaintNow(el) {
   var r = _mw.data, today = r.today, items = r.data || [];
   var folds = _mwLS('fold') || { later: true, nodue: true, done: true };
   var counts = {};
@@ -209,7 +253,7 @@ function _mwRowHtml(it, today) {
   var s = MW_SRC[it.src] || { icon: '•', label: it.src };
   var late = !it.done && it.due && it.due < today;
   var ord = !it.done && _mw.data.self && typeof mwSortMode === 'function' && mwSortMode() === 'manual';
-  return '<div class="mw-row' + (it.done ? ' mw-done' : '') + (it.pri === 1 && !it.done ? ' mw-row-urg' : '') + '" data-key="' + _mwEsc(it.key) + '"' + (ord ? ' data-ord="1" draggable="true"' : '') + '>' +
+  return '<div class="mw-row' + (it.done ? ' mw-done' : '') + (it.pri === 1 && !it.done ? ' mw-row-urg' : '') + (it.pending ? ' is-pending' : '') + '" data-key="' + _mwEsc(it.key) + '"' + (ord ? ' data-ord="1" draggable="true"' : '') + '>' +
     (typeof mwFocusBtn === 'function' ? mwFocusBtn(it) : '') +
     (it.canDone ? '<input type="checkbox" class="mw-chk" data-done="' + _mwEsc(it.key) + '"' + (it.done ? ' checked' : '') + ' title="' + (it.done ? '완료 되돌리기' : '완료 — 원래 자리에도 반영됩니다') + '">' : '<span class="mw-chk-sp"></span>') +
     '<span class="mw-src" title="' + s.label + '">' + s.icon + '<i>' + s.label + '</i></span>' +
@@ -228,6 +272,58 @@ function _mwRowHtml(it, today) {
 
 function _mwFind(key) { return ((_mw.data && _mw.data.data) || []).filter(function (x) { return x.key === key; })[0]; }
 
+/* ── 할 일 바로 그리기 (v13.270) ───────────────────────────────────────
+   예전엔 추가한 뒤 내 업무 전체(맵 · 이슈 · 회의 …)를 다시 받아 한참 걸렸다.
+   이제 누르는 즉시 목록에 넣어 그리고(저장 중 흐림), 서버가 돌려준 한 줄로 바꿔 끼운다. 전체 다시 받기 없음 */
+/** 서버 my_todos 행 → 목록 항목 (server/lib/my-work.js collect 의 todo 와 같은 모양) */
+function mwTodoItem(x) {
+  var cl = Array.isArray(x.checklist) ? x.checklist : [];
+  var it = { src: 'todo', id: x.id, key: 'todo:' + x.id, userId: x.user_id || (_mw.data.user && _mw.data.user.id), title: String(x.title || '').split('\n')[0].trim() || '(제목 없음)', ctx: '',
+    due: x.due_date || null, done: !!x.done_at, doneAt: x.done_at || null, pri: +x.priority || 3, estimateH: x.estimate_h != null ? Number(x.estimate_h) : null,
+    todoStatus: x.status || 'todo', waitingFor: x.waiting_for || '', memo: x.memo || '', dueTime: x.due_time || null, repeat: x.repeat || null, checklist: cl,
+    canDone: true, canPri: true, weight: 1 };
+  it.urgent = it.pri === 1;
+  if (cl.length) { it.checkDone = cl.filter(function (c) { return c && c.d; }).length; it.checkTotal = cl.length; it.progress = Math.round(it.checkDone / it.checkTotal * 100); }
+  return it;
+}
+/** 서버가 준 행을 목록에 넣고 그림 (이미 있으면 바꿈) */
+function mwPutTodo(row, extra) {
+  if (!_mw.data || !_mw.data.self || !row) return null;
+  var it = Object.assign(mwTodoItem(row), extra || {});
+  var list = _mw.data.data, i;
+  for (i = 0; i < list.length; i++) if (list[i].key === it.key) { list[i] = it; break; }
+  if (i === list.length) list.push(it);
+  _mwPaint();
+  return it;
+}
+/** 할 일 추가 — 바로 그리고 저장. catId 면 보드 그 칸에 고정까지 → Promise(항목) */
+function mwAddTodo(body, catId) {
+  if (!_mw.data || !_mw.data.self) return apiFetch('/api/my-work/todos', { method: 'POST', body: JSON.stringify(body) }).then(function () { renderMyWork(); });
+  var tmp = 'tmp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  var it = mwTodoItem({ id: tmp, title: body.title, due_date: body.dueDate || null, due_time: body.dueTime || null, priority: body.priority || 3,
+    repeat: body.repeat || null, memo: body.memo || null, checklist: [] });
+  it.pending = true; it.canDone = false; it.canPri = false;
+  if (catId) it.cat = catId;
+  _mw.data.data.push(it);
+  _mwPaint();
+  return apiFetch('/api/my-work/todos', { method: 'POST', body: JSON.stringify(body) }).then(function (r) {
+    var real = mwTodoItem(r.data);
+    var wasSel = _mw.sel === it.key;
+    delete it.pending;
+    Object.assign(it, real);
+    if (catId) it.cat = catId;
+    if (wasSel) _mw.sel = it.key;
+    _mwPaint();
+    if (catId) apiFetch('/api/my-work/mark', { method: 'PUT', body: JSON.stringify({ key: it.key, category: catId }) })
+      .catch(function (e) { it.cat = null; _mwPaint(); _mwToast('❌ 칸에 넣지 못했습니다 — ' + _mwErr(e), 'error'); });
+    return it;
+  }).catch(function (e) {
+    _mw.data.data = _mw.data.data.filter(function (x) { return x !== it; });
+    _mwPaint();
+    throw e;
+  });
+}
+
 function _mwBind(el) {
   var who = el.querySelector('#mwWho');
   if (who) who.onchange = function () { if (typeof mwPanelClose === 'function') mwPanelClose(); _mw.userId = who.value; _mw.src = 'all'; _mw.anchor = null; renderMyWork(); };
@@ -241,11 +337,15 @@ function _mwBind(el) {
     var q = typeof QuickParse !== 'undefined' ? QuickParse.parse(title, _mw.data.today) : { title: title };
     if (!q.title) { _mwToast('할 일 내용을 적어 주세요', 'warn'); t.focus(); return; }
     var body = { title: q.title, dueDate: d.value || q.due || null, dueTime: (d.value || q.due) && q.time ? q.time : null, priority: q.priority || 3 };
-    apiFetch('/api/my-work/todos', { method: 'POST', body: JSON.stringify(body) }).then(function () {
+    // 바로 그림 — 입력 칸을 먼저 비우고(다시 그릴 때 쓰던 글을 지켜 주므로), 이어서 칠 수 있게 커서를 둠 (v13.270)
+    t.value = ''; d.value = '';
+    mwAddTodo(body).then(function () {
       if (q.title !== title) _mwToast('✏️ 추가 — ' + q.title + (body.dueDate ? ' · ' + _mwDueLabel(body.dueDate, _mw.data.today) + (body.dueTime ? ' ' + body.dueTime : '') : '') + (body.priority !== 3 && typeof MW_PRI !== 'undefined' ? ' · ' + MW_PRI[body.priority].label : ''));
-      renderMyWork();
-      setTimeout(function () { var x = document.getElementById('mwAddTitle'); if (x) x.focus(); }, 300);
-    }).catch(function (e2) { _mwToast('❌ ' + _mwErr(e2), 'error'); });
+    }).catch(function (e2) {
+      _mwToast('❌ 추가하지 못했습니다 — ' + _mwErr(e2), 'error');
+      var x = document.getElementById('mwAddTitle'); if (x && !x.value) x.value = title;   // 쓴 글은 돌려줌
+    });
+    var x = document.getElementById('mwAddTitle'); if (x) x.focus();
   };
   el.onclick = function (e) {
     var t = e.target;
