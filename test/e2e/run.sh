@@ -85,6 +85,8 @@ else
   run_batch api-board.js e2e35-board.js
   run_batch e2e36-timeline.js
   run_batch api-notes.js e2e37-notes.js
+  run_batch api-myproj.js e2e38-myproj.js
+  run_batch api-tgmywork.js
   run_batch api-speed.js
 fi
 

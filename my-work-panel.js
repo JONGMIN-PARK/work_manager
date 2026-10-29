@@ -34,6 +34,7 @@ function mwPanelOpen(it, opt) {
   if (!it) return;
   opt = opt || {};
   if (typeof mwNotesIsOpen === 'function' && mwNotesIsOpen()) mwNotesClose(true);   // 노트 서랍과 같은 자리 — 하나만 (v13.272)
+  if (typeof mwProjIsOpen === 'function' && mwProjIsOpen()) mwProjClose();          // 📁 프로젝트 패널도 (v13.273)
   if (_mwp.key && _mwp.key !== it.key) _mwpFlush();
   _mwp.key = it.key; _mwp.it = it;
   _mw.sel = it.key;
@@ -55,7 +56,7 @@ function mwPanelClose() {
   var p = document.getElementById('mwPanel');
   _mwpFlush();
   _mwp.key = null; _mwp.it = null;
-  document.body.classList.remove('mwp-open');
+  if (!(typeof mwProjIsOpen === 'function' && mwProjIsOpen())) document.body.classList.remove('mwp-open');
   if (p) p.classList.remove('on');
   _mwpMarkRow();
 }
@@ -143,6 +144,14 @@ function _mwpRender(p) {
     h += '<div class="mwp-sec"><div class="mwp-l">칸' + (it.cat && col.id === it.cat ? ' <i>📌 고정</i>' : ' <i>자동 — 중요도 · 마감 따라</i>') + '</div><div class="mwp-row"><select id="mwpCat" class="mw-sel">' +
       mwBoardCols().map(function (c) { return '<option value="' + _mwEsc(c.id) + '"' + (c.id === col.id ? ' selected' : '') + '>' + _mwEsc((c.icon ? c.icon + ' ' : '') + c.name) + '</option>'; }).join('') +
       '</select>' + (it.cat ? '<button class="mwp-chip" data-p="unpin">고정 풀기</button>' : '') + '</div></div>';
+  }
+  // 📁 내 프로젝트 (v13.273) — 어느 출처든 넣기 · 빼기 (연계 프로젝트 항목은 저절로)
+  if (_mw.data.self && typeof mwProjChoices === 'function' && (mwProjChoices().length || mwProjOf(it))) {
+    var pj = mwProjOf(it), auto = pj && !it.proj;
+    h += '<div class="mwp-sec"><div class="mwp-l">프로젝트' + (auto ? ' <i>🔗 연계로 저절로</i>' : '') + '</div><div class="mwp-row"><select id="mwpProj" class="mw-sel">' +
+      '<option value="">(없음)</option>' + mwProjChoices().concat(pj && pj.status === 'done' ? [[pj.id, (pj.icon || '📁') + ' ' + pj.title]] : []).map(function (c) {
+        return '<option value="' + _mwEsc(c[0]) + '"' + (pj && pj.id === c[0] ? ' selected' : '') + '>' + _mwEsc(c[1]) + '</option>';
+      }).join('') + '</select>' + (pj ? '<button class="mwp-chip" data-p="proj">📁 열기</button>' : '') + '</div></div>';
   }
   h += '<div class="mwp-f">' + (todo ? '<button class="mw-btn mwp-del" data-p="delete">🗑 휴지통으로</button>' : '') +
     '<span class="mwp-keys" title="단축키">Esc 닫기 · ? 단축키</span></div>';
@@ -358,6 +367,7 @@ function _mwpBind(p) {
       if (k === 'source') { mwPanelClose(); mwOpenItem(it); return; }   // 다른 화면으로 가면 패널은 닫음
       if (k === 'delete') return mwDeleteTodo(it);
       if (k === 'unpin') { mwSetCat(it, null); return; }
+      if (k === 'proj') { var pj = mwProjOf(it); if (pj) mwProjOpen(pj.id); return; }
       if (k === 'done') return;   // change 에서
     }
     var pv = t.closest('[data-pri-v]');
@@ -393,6 +403,7 @@ function _mwpBind(p) {
       _mwpQueue({ startDate: t.value || null }, 0); _mwpApply(it, { startDate: t.value || null }); _mwPaint(); return;
     }
     if (t.id === 'mwpCat') return mwSetCat(it, t.value);
+    if (t.id === 'mwpProj') return mwProjSetItem(it, t.value || null);
     if (t.id === 'mwpTime') { if (!it.due) return; _mwpQueue({ dueTime: t.value || null }, 0); return; }
     if (t.id === 'mwpRep') {
       if (t.value && !it.due) { _mwToast('반복은 마감일이 있어야 합니다 — 마감을 먼저 고르세요', 'warn'); t.value = ''; return; }
@@ -476,10 +487,11 @@ document.addEventListener('keydown', function (e) {
   if (_mw.view === 'week' || _mw.view === 'month') return;
   var t = e.target;
   if (e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (t && (t.closest && t.closest('input,textarea,select,[contenteditable="true"],#mwPanel,#mwNotes,.wa-modal-overlay,.mw-pmenu'))) return;
+  if (t && (t.closest && t.closest('input,textarea,select,[contenteditable="true"],#mwPanel,#mwNotes,#mwjPanel,.wa-modal-overlay,.mw-pmenu'))) return;
   if (document.querySelector('.wa-modal-overlay')) return;
   var k = e.key;
   if (k === 'Escape' && mwPanelIsOpen()) { mwPanelClose(); return; }
+  if (k === 'Escape' && typeof mwProjIsOpen === 'function' && mwProjIsOpen()) { mwProjClose(); return; }
   if (k === 'Escape' && typeof mwNotesIsOpen === 'function' && mwNotesIsOpen()) { mwNotesClose(); return; }
   if (k === '?') { _mwKeysHelp(); e.preventDefault(); return; }
   if (k === 'n') { var a = document.getElementById('mwAddTitle'); if (a) { e.preventDefault(); a.focus(); } return; }

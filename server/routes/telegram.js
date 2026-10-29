@@ -31,6 +31,11 @@ async function handleCallbackQuery(query) {
   var action = parts[0];
 
   try {
+    // 내 업무 ✅ 완료 · 목록 · 추천 · 프로젝트 버튼 (v13.274)
+    if (/^mw[dlrp]/.test(data)) {
+      await require('../telegram/commands/mywork').handleCallback(telegramService, chatId, user, data, callbackId);
+      return;
+    }
     if (action === 'issue_start') {
       // 이슈 상태 → inProgress (테넌트 격리 가드)
       var issueId = parts[1];
@@ -284,8 +289,8 @@ router.get('/prefs', authenticate, tenant.tenantScope, planGate('telegram'), asy
     );
     var prefs = {};
     r.rows.forEach(function (row) { prefs[row.event_type] = row.is_enabled; });
-    var lk = await db.query('SELECT remind_lead FROM telegram_links WHERE user_id = $1 AND is_active = TRUE LIMIT 1', [req.user.sub]);
-    res.json({ data: prefs, remindLead: lk.rows.length ? lk.rows[0].remind_lead : 30 });
+    var lk = await db.query('SELECT remind_lead, rec_slots FROM telegram_links WHERE user_id = $1 AND is_active = TRUE LIMIT 1', [req.user.sub]);
+    res.json({ data: prefs, remindLead: lk.rows.length ? lk.rows[0].remind_lead : 30, recSlots: lk.rows.length ? lk.rows[0].rec_slots : null });
   } catch (err) {
     httpErr.serverError(res, '[telegram]', err, '설정 조회 실패');
   }
@@ -326,6 +331,37 @@ router.put('/prefs/lead', authenticate, tenant.tenantScope, planGate('telegram')
     res.json({ data: { remindLead: m } });
   } catch (err) {
     httpErr.serverError(res, '[telegram]', err, '설정 변경 실패');
+  }
+});
+
+/** PUT /api/telegram/prefs/rec — { slots: '10:00,13:30' | '' (끄기) } 💡 내 업무 추천 받을 시각 (v13.274, 평일) */
+router.put('/prefs/rec', authenticate, tenant.tenantScope, planGate('telegram'), async function (req, res) {
+  try {
+    var raw = req.body && req.body.slots;
+    var slots = raw === '' || raw === null ? '' : require('../telegram/commands/mywork').parseSlots(String(raw || ''));
+    if (slots === null) return res.status(400).json({ error: 'BAD_REQUEST', message: '시각이 맞지 않습니다 (07:00~21:55, 5분 단위, 4개까지).' });
+    var r = await db.query('UPDATE telegram_links SET rec_slots = $1 WHERE user_id = $2 AND is_active = TRUE RETURNING user_id', [slots, req.user.sub]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '텔레그램 연동이 없습니다.' });
+    res.json({ data: { recSlots: slots } });
+  } catch (err) {
+    httpErr.serverError(res, '[telegram]', err, '설정 변경 실패');
+  }
+});
+
+/** POST /api/telegram/mywork-send — { kind: 'rec' | 'list' } 내 업무 추천 · 목록을 지금 텔레그램으로 (연동 확인 겸, v13.274) */
+router.post('/mywork-send', authenticate, tenant.tenantScope, planGate('telegram'), async function (req, res) {
+  try {
+    if (!telegramService.isConfigured()) return res.status(503).json({ error: 'NOT_CONFIGURED', message: '서버에 텔레그램 봇이 설정되어 있지 않습니다.' });
+    var kind = (req.body && req.body.kind) === 'list' ? 'list' : 'rec';
+    var r = await db.query('SELECT tl.chat_id, tl.user_id, tl.tenant_id, u.name, u.role, u.department_id FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.user_id = $1 AND tl.is_active = TRUE LIMIT 1', [req.user.sub]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_LINKED', message: '텔레그램 연동이 없습니다 — 프로필 → 텔레그램 연동에서 먼저 연결하세요.' });
+    var u = r.rows[0];
+    var cmds = require('../telegram/commands/mywork').create(telegramService.sendMessage);
+    var out = kind === 'list' ? await cmds.cmdMyWork(u.chat_id, u, '') : await cmds.cmdRec(u.chat_id, u, '');
+    if (out && out.ok === false) return res.status(502).json({ error: 'TELEGRAM_FAILED', message: '텔레그램이 받지 않았습니다 — ' + (out.description || '봇을 차단했거나 대화가 끊겼을 수 있습니다') });
+    res.json({ data: { sent: true, kind: kind } });
+  } catch (err) {
+    httpErr.serverError(res, '[telegram/mywork-send]', err, '보내지 못했습니다');
   }
 });
 

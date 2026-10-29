@@ -16,7 +16,8 @@
 function mwIoToolsHtml(r) {
   return '<button class="mw-btn" data-mwio="export" title="엑셀 · CSV · 글로 복사 — 지금 보이는 그대로">📤 내보내기</button>' +
     (r.self ? '<button class="mw-btn" data-mwio="map" title="마인드맵으로 옮기기 · 복사">🧠 맵으로</button>' +
-      '<button class="mw-btn mwio-trash" data-mwio="trash" title="휴지통 — 비우기 전까지 보관">🗑' + (r.trashN ? ' <b>' + r.trashN + '</b>' : '') + '</button>' : '');
+      '<button class="mw-btn mwio-trash" data-mwio="trash" title="휴지통 — 비우기 전까지 보관">🗑' + (r.trashN ? ' <b>' + r.trashN + '</b>' : '') + '</button>' +
+      '<button class="mw-btn" data-mwio="tg" title="텔레그램 — 연동 확인 · 지금 추천 받기 · 추천 시각 (/mywork · /rec)">📨</button>' : '');
 }
 function mwIoClick(e) {
   var b = e.target.closest('[data-mwio]');
@@ -25,7 +26,46 @@ function mwIoClick(e) {
   if (k === 'trash') mwTrashOpen();
   else if (k === 'export') _mwioExportMenu(b);
   else if (k === 'map') mwToMapOpen();
+  else if (k === 'tg') mwTgMenu(b);
   return true;
+}
+
+/* ═══ 📨 텔레그램 (v13.274) — 연동 확인 · 지금 받기 · 추천 시각. 명령어 /mywork · /rec · /myproj · /board ═══ */
+var MW_TG_SLOTS = ['10:00', '13:30', '16:30'];
+function mwTgMenu(anchor) {
+  apiFetch('/api/telegram/status').then(function (st) {
+    var s = (st && st.data) || {};
+    if (!s.configured) { _mwToast('서버에 텔레그램 봇이 설정되어 있지 않습니다', 'warn'); return; }
+    if (!s.linked || !s.isActive) {
+      mwPopMenu(anchor, '<div class="mw-pmenu-n">📨 텔레그램 — 연동 안 됨</div><div class="mwio-tgtip">프로필 → 텔레그램 연동에서 QR 로 연결하면<br>내 업무 조회(/mywork) · 완료 버튼 · 💡 추천을 받을 수 있습니다.</div>', function () {});
+      return;
+    }
+    return apiFetch('/api/telegram/prefs').then(function (p) {
+      var slots = p && p.recSlots != null ? p.recSlots : '13:30';
+      var on = slots ? slots.split(',') : [];
+      var h = '<div class="mw-pmenu-n">📨 텔레그램 — 연동됨' + (s.username ? ' @' + _mwEsc(s.username) : '') + '</div>' +
+        '<button data-v="rec">💡 지금 추천 받기</button><button data-v="list">📋 내 업무 목록 보내기</button>' +
+        '<div class="mw-pmenu-n">추천 받을 시각 (평일)</div>' + MW_TG_SLOTS.map(function (t) {
+          return '<button data-v="slot:' + t + '"' + (on.indexOf(t) >= 0 ? ' class="on"' : '') + '>' + (on.indexOf(t) >= 0 ? '● ' : '○ ') + t + '</button>';
+        }).join('') + (on.length ? '<button data-v="slot:off">🔕 추천 끄기</button>' : '') +
+        '<div class="mwio-tgtip">텔레그램에서: /mywork · /rec · /myproj · /board</div>';
+      mwPopMenu(anchor, h, function (v) {
+        if (v === 'rec' || v === 'list') return mwTgSend(v);
+        var t = v.slice(5);
+        var next = t === 'off' ? [] : on.indexOf(t) >= 0 ? on.filter(function (x) { return x !== t; }) : on.concat([t]);
+        apiFetch('/api/telegram/prefs/rec', { method: 'PUT', body: JSON.stringify({ slots: next.sort().join(',') }) }).then(function (r) {
+          var ns = (r && r.data && r.data.recSlots) || '';
+          _mwToast(ns ? '💡 추천 ' + ns.split(',').join(' · ') + ' (평일)' : '🔕 추천을 껐습니다');
+        }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); });
+      });
+    });
+  }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); });
+}
+/** 지금 텔레그램으로 — 연동 확인 겸 (설정 화면 '지금 받아 보기'도 이것) */
+function mwTgSend(kind) {
+  return apiFetch('/api/telegram/mywork-send', { method: 'POST', body: JSON.stringify({ kind: kind }) }).then(function () {
+    _mwToast('📨 텔레그램으로 보냈습니다 — ' + (kind === 'list' ? '내 업무 목록' : '💡 추천'));
+  }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); });
 }
 
 /** 지금 화면에 보이는 항목 — 출처 칩 · 거르기 · (보드면) 위 요약 · 다 한 것 */

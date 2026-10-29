@@ -79,6 +79,8 @@ function _mwcEntries(items, from, to) {
       drag: !it.done && it.canDone && MWC_DUE_SRC.indexOf(it.src) >= 0,
       tip: s.label + ' — ' + it.title + (it.ctx ? ' · ' + it.ctx : '') });
   });
+  // 📁 내 프로젝트 기간 띠 (v13.273) — 전체 보기일 때
+  if (_mw.src === 'all' && typeof mwProjCalEntries === 'function') out = mwProjCalEntries(from, to).concat(out);
   if (showEvt) _mwcOccurrences(from, to).forEach(function (o) {
     var ev = o.ev, t = EVT_TYPE[ev.type] || EVT_TYPE.etc;
     out.push({ kind: 'evt', key: 'e|' + ev.id + '|' + o.date, ev: ev, occ: o.date, title: ev.title || t.label, icon: t.icon, color: ev.color || t.color,
@@ -91,6 +93,7 @@ function _mwcEntries(items, from, to) {
   return out;
 }
 function _mwcCmp(a, b) {
+  if ((a.kind === 'proj') !== (b.kind === 'proj')) return a.kind === 'proj' ? -1 : 1;   // 프로젝트 띠는 맨 위
   if (a.done !== b.done) return a.done ? 1 : -1;
   if ((a.time || '') !== (b.time || '')) return (a.time || '') < (b.time || '') ? -1 : 1;
   if (a.kind !== b.kind) return a.kind === 'evt' ? -1 : 1;
@@ -99,6 +102,10 @@ function _mwcCmp(a, b) {
 
 function _mwcChip(x, opt) {
   opt = opt || {};
+  // 프로젝트 띠 — 이어지는 날은 글 없이 띠만 (시작 날 · 월요일 · 1일에 이름)
+  var cont = x.kind === 'proj' && opt.day && opt.day !== x.date && new Date(opt.day + 'T00:00:00Z').getUTCDay() !== 1 && opt.day.slice(8) !== '01';
+  if (x.kind === 'proj') return '<div class="mwc-chip mwc-proj' + (cont ? ' is-cont' : '') + (opt.day === x.date ? ' is-s' : '') + (opt.day === x.end ? ' is-e' : '') + '" data-ck="' + _mwEsc(x.key) + '" tabindex="0" role="button" style="--c:' + _mwEsc(x.color) + '" title="' + _mwEsc(x.tip) + '">' +
+    (cont ? '' : '<span class="mwc-ic">' + _mwEsc(x.icon) + '</span><span class="mwc-tx">' + _mwEsc(x.title) + '</span>') + '</div>';
   return '<div class="mwc-chip mwc-' + x.kind + (x.done ? ' is-done' : '') + (x.late ? ' is-late' : '') + '" data-ck="' + _mwEsc(x.key) + '" tabindex="0" role="button"' +
     (x.drag ? ' draggable="true"' : '') + ' style="--c:' + _mwEsc(x.color) + '" title="' + _mwEsc(x.tip) + '">' +
     '<span class="mwc-ic">' + x.icon + '</span>' + (x.repeat ? '<span class="mwc-ic">🔁</span>' : '') +
@@ -160,7 +167,7 @@ function _mwcWeekHtml(all, rg, today) {
   var h = '<div class="mwc mwc-week"><div class="mwc-wk-in"><div class="mwc-row mwc-wk-h"><div class="mwc-gut"></div>' + days.map(function (d) { return _mwcDayHead(d, today); }).join('') + '</div>';
   h += '<div class="mwc-row mwc-allday"><div class="mwc-gut">종일</div>' + days.map(function (d) {
     var list = all.filter(function (x) { return !timed(x) && x.date <= d && x.end >= d; }).sort(_mwcCmp);
-    return '<div class="mwc-ad' + (d === today ? ' is-today' : '') + '" data-day="' + d + '">' + list.map(function (x) { return _mwcChip(x); }).join('') + '</div>';
+    return '<div class="mwc-ad' + (d === today ? ' is-today' : '') + '" data-day="' + d + '">' + list.map(function (x) { return _mwcChip(x, { day: d }); }).join('') + '</div>';
   }).join('') + '</div>';
   var hours = '';
   for (var hr = 0; hr < 24; hr++) hours += '<div class="mwc-hr" style="height:' + MWC_HOUR_H + 'px"><span>' + (hr ? hr + ':00' : '') + '</span></div>';
@@ -215,7 +222,7 @@ function _mwcMonthHtml(all, rg, today, anchor) {
     var hol = typeof krHolidayName === 'function' ? krHolidayName(d) : '';
     h += '<div class="mwc-md' + (d.slice(0, 7) !== mon ? ' is-out' : '') + (d === today ? ' is-today' : '') + (i % 7 === 6 || hol ? ' is-off' : i % 7 === 5 ? ' is-sat' : '') + '" data-day="' + d + '">' +
       '<div class="mwc-mdn"><b>' + (+d.slice(8, 10)) + '</b>' + (hol ? '<i>' + _mwEsc(hol) + '</i>' : '') + '</div>' +
-      list.slice(0, MWC_DAY_MAX).map(function (x) { return _mwcChip(x); }).join('') +
+      list.slice(0, MWC_DAY_MAX).map(function (x) { return _mwcChip(x, { day: d }); }).join('') +
       (list.length > MWC_DAY_MAX ? '<button class="mwc-more" data-mwc-more="' + d + '">+' + (list.length - MWC_DAY_MAX) + ' 더보기</button>' : '') +
     '</div>';
   }
@@ -267,6 +274,7 @@ function _mwcRepaint() {
 function _mwcOpen(x) {
   if (!x) return;
   if (x.kind === 'task') { if (typeof mwPanelOpen === 'function') mwPanelOpen(x.it); else mwOpenItem(x.it); return; }
+  if (x.kind === 'proj') { mwProjOpen(x.p.id); return; }
   _mwcEventModal(x.ev.id);
 }
 function _mwcEventModal(id, date, opts) {

@@ -5,6 +5,27 @@ var escHtml = require('../util/escape').escHtml;
 
 /** 명령어별 상세 도움말 */
 var CMD_HELP = {
+  mywork: {
+    title: '/mywork — 🎯 내 업무 전체 (v13.274)',
+    usage: '/mywork [지연 · 오늘 · 이번주 · 전체]\n/mywork done 번호 · /mywork focus 번호',
+    format: '맵 주제 · 이슈 · 회의 액션 · 사전검토 · 마일스톤 · 개발 · 개인 할 일을 웹과 같은 묶음(⭐ 집중 · 지연 · 오늘 · 이번 주)으로\n✅ 버튼으로 바로 완료 — 원래 화면에도 반영',
+    examples: ['/mywork', '/mywork 지연', '/mywork done 2', '/mywork focus 1', '/내업무 전체'],
+    tip: '/board 칸별 · /myproj 프로젝트별 · /rec 추천'
+  },
+  rec: {
+    title: '/rec — 💡 지금 하면 좋은 일',
+    usage: '/rec — 지금 추천\n/rec 1 · /rec 2 · /rec 3 · /rec 09:30 14:00 · /rec off — 받을 시각',
+    format: '중요도 · 마감(지연 · 오늘 · 내일) · ⭐ 집중 · 진행 중 · 끝나가는 프로젝트로 점수를 매겨 위 5개\n+ 마감 없는 중요한 일 · 기다리는 일 · 끝나가는 프로젝트\n평일 정해 둔 시각에 보내고, 같은 날 같은 추천은 다시 안 보냄 (기본 13:30)',
+    examples: ['/rec', '/추천', '/rec 2', '/rec 09:30 14:00', '/rec off', '/rec 설정'],
+    tip: '웹 → 프로필 → 텔레그램 알림 설정에서도 바꿀 수 있습니다'
+  },
+  myproj: {
+    title: '/myproj — 📁 내 프로젝트',
+    usage: '/myproj — 목록\n/myproj 번호 (또는 이름 일부) — 자세히',
+    format: '기간 · D-day · 진행률 · 남은 항목, 연계 프로젝트면 다가오는 마일스톤까지',
+    examples: ['/myproj', '/myproj 2', '/내프로젝트 홈페이지'],
+    tip: '웹 🎯 내 업무 → ＋ 프로젝트 로 만들고 🔗 프로젝트 관리와 연결'
+  },
   todo: {
     title: '/todo — 할 일 등록',
     usage: '/todo [날짜] [시각] [!중요도] 내용\n/todo done 번호',
@@ -279,6 +300,9 @@ function create(sendMessage) {
       '/todo — 할 일 등록 (내일 14:00 !긴급 …)\n' +
       '/todos — 개인 할 일 목록 · 완료\n' +
       '/event — 개인 일정 등록 (#회의 금요일 3시 …)\n' +
+      '/mywork — 🎯 내 업무 전체 + ✅ 완료\n' +
+      '/rec — 💡 지금 하면 좋은 일 (평일 13:30 자동)\n' +
+      '/myproj — 📁 내 프로젝트 · /board — 🗂 내 보드\n' +
       '/issues — 미해결 이슈 목록\n' +
       '/tasks — 미완료 작업\n' +
       '/done &lt;번호&gt; — 작업 완료 처리\n' +

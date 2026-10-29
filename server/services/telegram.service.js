@@ -76,6 +76,10 @@ async function setMyCommands() {
   var commands = [
     { command: 'today', description: '오늘 브리핑' },
     { command: 'my', description: '내 현황 (이슈+납기)' },
+    { command: 'mywork', description: '🎯 내 업무 전체 (지연 · 오늘 · 이번 주) + ✅ 완료' },
+    { command: 'rec', description: '💡 지금 하면 좋은 일 · 추천 시각 설정' },
+    { command: 'myproj', description: '📁 내 프로젝트 (기간 · 진행률 · 남은 일)' },
+    { command: 'board', description: '🗂 내 보드 (칸별)' },
     { command: 'todo', description: '할 일 등록 (내일 14:00 !긴급 …)' },
     { command: 'todos', description: '내 개인 할 일 목록' },
     { command: 'event', description: '개인 일정 등록 (#회의 금요일 3시 …)' },
@@ -222,7 +226,7 @@ async function getLinkStatus(userId) {
 /** chat_id로 user_id 조회 — tenant_id 포함 반환 */
 async function getUserByChatId(chatId) {
   var r = await db.query(
-    'SELECT tl.user_id, tl.tenant_id, u.name, u.role FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.chat_id = $1 AND tl.is_active = TRUE',
+    'SELECT tl.user_id, tl.tenant_id, u.name, u.role, u.department_id FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.chat_id = $1 AND tl.is_active = TRUE',
     [chatId]
   );
   return r.rows[0] || null;
@@ -352,6 +356,11 @@ async function handleUpdate(update) {
   if (text === '/todos' || text === '/할일목록') return myWorkCmds.cmdTodos(chatId, user);
   if (text === '/todo' || text.startsWith('/todo ') || text === '/할일' || text.startsWith('/할일 ')) return myWorkCmds.cmdTodo(chatId, user, text.replace(/^\/(todo|할일)\s*/, ''));
   if (text === '/event' || text.startsWith('/event ') || text === '/일정' || text.startsWith('/일정 ')) return myWorkCmds.cmdEvent(chatId, user, text.replace(/^\/(event|일정)\s*/, ''));
+  // 내 업무 조회 · 추천 (v13.274)
+  if (/^\/(mywork|내업무)(\s|$)/.test(text)) return myWorkCmds.cmdMyWork(chatId, user, text.replace(/^\/(mywork|내업무)\s*/, ''));
+  if (/^\/(myproj|내프로젝트)(\s|$)/.test(text)) return myWorkCmds.cmdMyProj(chatId, user, text.replace(/^\/(myproj|내프로젝트)\s*/, ''));
+  if (/^\/(board|보드)$/.test(text)) return myWorkCmds.cmdBoard(chatId, user);
+  if (/^\/(rec|추천)(\s|$)/.test(text)) return myWorkCmds.cmdRec(chatId, user, text.replace(/^\/(rec|추천)\s*/, ''));
   if (text === '/issues') return personalCmds.cmdIssues(chatId, user);
   if (text === '/summary') return analysisCmds.cmdSummary(chatId, user);
   if (text === '/report') return analysisCmds.cmdReport(chatId, user);

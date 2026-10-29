@@ -224,7 +224,7 @@ MwTimeline.prototype.itemHtml = function (t, r) {
       (t.bar ? '' : '<i></i>') + '<b>' + t.cluster.length + '</b><span class="mtl-tx">' + _mwEsc(t.title) + '</span></div>';
   }
   var cls = 'mtl-it ' + (t.bar ? 'mtl-bar' : 'mtl-pt') + (t.late ? ' is-late' : '') + (t.done ? ' is-done' : '') + (t.pri === 1 ? ' is-urg' : t.pri === 2 ? ' is-hi' : '') +
-    (t.drag ? ' can-drag' : '') + (t.key === _mw.sel ? ' mw-picked' : '') + (t.pending ? ' is-pending' : '');
+    (t.drag ? ' can-drag' : '') + (t.key === _mw.sel ? ' mw-picked' : '') + (t.pending ? ' is-pending' : '') + (t.proj ? ' mtl-proj' : t.pjms ? ' mtl-pjms' : '');
   var top = r * MWT_ROW + 4;
   var tip = t.title + '\n' + (t.tip || '');
   var lbl = '<span class="mtl-tx">' + (t.icon ? '<em>' + t.icon + '</em>' : '') + _mwEsc(t.title) + '</span>';
@@ -505,7 +505,7 @@ MwTimeline.prototype.bind = function () {
 /** ⋯ 메뉴 — 줄 나누기 · 옆 달력 · 날짜로 가기 · 확대 · 축소 */
 MwTimeline.prototype.moreMenu = function (anchor) {
   var self = this, st = this.st, o = this.o, h = '';
-  if (o.groups) h += '<div class="mw-pmenu-n">줄 나누기</div>' + [['cat', '칸 (보드 카테고리)'], ['src', '출처 (맵 · 이슈 · 회의 …)'], ['pack', '한 줄로 촘촘히']].map(function (x) {
+  if (o.groups) h += '<div class="mw-pmenu-n">줄 나누기</div>' + [['cat', '칸 (보드 카테고리)'], ['src', '출처 (맵 · 이슈 · 회의 …)'], ['proj', '📁 프로젝트별'], ['pack', '한 줄로 촘촘히']].map(function (x) {
     return '<button data-v="g:' + x[0] + '"' + (st.group === x[0] ? ' class="on"' : '') + '>' + (st.group === x[0] ? '● ' : '○ ') + x[1] + '</button>';
   }).join('');
   if (o.calendar) h += '<div class="mw-pmenu-n">보기</div><button data-v="cal">📅 옆 달력 ' + (st.cal ? '숨기기' : '보이기') + '</button>';
@@ -699,7 +699,7 @@ function _mtlTaskOf(it, grp, today) {
   var n0 = _mtlNum(start || d), n1 = _mtlNum(d);
   var tm = !bar && it.dueTime ? _mtlMin(it.dueTime) : null;
   return {
-    key: it.key, it: it, title: it.title, icon: s.icon, lane: grp === 'cat' ? col.id : grp === 'src' ? it.src : 'all',
+    key: it.key, it: it, title: it.title, icon: s.icon, lane: grp === 'cat' ? col.id : grp === 'src' ? it.src : grp === 'proj' ? mwProjLaneOf(it) : 'all',
     color: grp === 'cat' ? (MW_CAT_COLORS[col.color] || '#94A3B8') : (MWT_SRC_COLOR[it.src] || '#94A3B8'),
     bar: bar, n0: n0, n1: n1, f0: bar ? 0 : (tm != null ? tm / 1440 : 0.5), f1: 1, time: it.dueTime || null,
     late: !it.done && it.due && it.due < today, done: !!it.done, pri: it.pri || 3, pending: !!it.pending,
@@ -732,14 +732,22 @@ function _mtlMainInst() {
     id: 'mwTimeline', ls: 'main', title: '타임라인', calendar: true, groups: true,
     lanes: function (tl) {
       var g = tl.st.group, ev = { id: '__ev', name: '일정', icon: '📅', color: '#06B6D4' };
+      // 📁 내 프로젝트 (v13.273) — 프로젝트별이면 프로젝트마다 한 줄, 아니면 맨 위 '프로젝트' 줄에 기간 막대
+      var hasPj = typeof mwProjLanes === 'function';
+      var showDone = typeof _mwbShowDone === 'function' && _mwbShowDone();
+      if (g === 'proj' && hasPj) return mwProjLanes(showDone).concat([ev]);
+      var pj = hasPj ? [{ id: '__pj', name: '프로젝트', icon: '📁', color: '#6366F1' }] : [];
       if (g === 'pack') return [{ id: 'all', name: '전체', icon: '🎯', color: '#6366F1', keep: true }];
-      if (g === 'src') return Object.keys(MW_SRC).map(function (k) { return { id: k, name: MW_SRC[k].label, icon: MW_SRC[k].icon, color: MWT_SRC_COLOR[k] }; }).concat([ev]);
+      if (g === 'src') return pj.concat(Object.keys(MW_SRC).map(function (k) { return { id: k, name: MW_SRC[k].label, icon: MW_SRC[k].icon, color: MWT_SRC_COLOR[k] }; }), [ev]);
       var cols = (typeof mwBoardCols === 'function' ? mwBoardCols() : []).map(function (c) { return { id: c.id, name: c.name, icon: c.icon, color: MW_CAT_COLORS[c.color] || '#94A3B8', keep: true }; });
-      return cols.concat([{ id: 'none', name: MW_NONE_COL.name, icon: MW_NONE_COL.icon, color: '#94A3B8' }, ev]);
+      return pj.concat(cols, [{ id: 'none', name: MW_NONE_COL.name, icon: MW_NONE_COL.icon, color: '#94A3B8' }, ev]);
     },
     items: function (tl) {
       var today = _mtlToday(), g = tl.st.group, out = [];
       var showDone = typeof _mwbShowDone === 'function' && _mwbShowDone();
+      if (g === 'proj' && typeof mwProjLanes !== 'function') g = 'cat';
+      // 📁 프로젝트 기간 막대 — 한 줄로면 같은 줄에 (v13.273)
+      if (typeof mwProjTimelineTasks === 'function' && (_mw.src === 'all')) out = mwProjTimelineTasks(g, _mtlNum, today, showDone).map(function (t) { if (g === 'pack') t.lane = 'all'; return t; });
       if (_mw.src !== 'event') (typeof mwVisibleItems === 'function' ? mwVisibleItems() : (_mw.data.data || [])).forEach(function (it) {
         if (it.done && !showDone) return;
         var t = _mtlTaskOf(it, g, today);
@@ -753,10 +761,21 @@ function _mtlMainInst() {
     },
     onOpen: function (t) {
       if (t.ev) { if (typeof _mwcEventModal === 'function') _mwcEventModal(t.ev.id, t.occ); return; }
+      if (t.proj) { mwProjOpen(t.proj.id); return; }
+      if (t.pjms) { if (typeof showProjectDetail === 'function') showProjectDetail(t.pjLink); return; }
       if (typeof mwPanelOpen === 'function') mwPanelOpen(t.it); else mwOpenItem(t.it);
     },
     onMove: function (t, edge, shift) {
       if (t.ev) { if (typeof _mwcMoveEvent === 'function') _mwcMoveEvent({ ev: t.ev, occ: t.occ }, _mtlYmd(_mtlNum(t.occ) + shift)); return; }
+      if (t.proj) {   // 📁 단독 프로젝트 기간 끌기 (v13.273)
+        var p = t.proj, ps = p.start || p.end, pd = p.end || p.start;
+        if (edge === 'l') ps = _mtlYmd(_mtlNum(ps) + shift);
+        else if (edge === 'r') pd = _mtlYmd(_mtlNum(pd) + shift);
+        else { ps = _mtlYmd(_mtlNum(ps) + shift); pd = _mtlYmd(_mtlNum(pd) + shift); }
+        if (ps > pd) ps = pd;
+        mwProjSetRange(p, ps, pd);
+        return;
+      }
       var it = t.it;
       if (t.drag === 'bar') {
         var s = it.start, d = it.due;

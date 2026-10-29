@@ -10,6 +10,7 @@
    중요도 · 오늘 집중 · 정렬 · 종류별 등록은 my-work-task.js (v13.253)
    상세 패널(자동 저장) · 되돌리기 · 단축키는 my-work-panel.js (v13.254) — 줄을 누르면 패널, 원래 화면은 패널의 [열기]
    보드(내 칸 · 카테고리)는 my-work-board.js, 휴지통 · 내보내기 · 맵으로는 my-work-io.js (v13.268)
+   📁 내 프로젝트(목록 · 보드 위 띠 · 프로젝트 패널)는 my-work-proj.js (v13.273)
    전역 의존: apiFetch, eH, showToast, currentUser, setPage, setMode, showIssueDetail, showProjectDetail, psOpenModal, _mm
    ═══════════════════════════════════════════════════════════════════════ */
 
@@ -175,6 +176,7 @@ function _mwPaint() {
   _mwPaintNow(el);
   if (typeof mwTimelineMount === 'function') mwTimelineMount(el);
   _mwRestoreInputs(el, keep);
+  if (typeof mwProjSync === 'function') mwProjSync();
 }
 function _mwPaintNow(el) {
   var r = _mw.data, today = r.today, items = r.data || [];
@@ -227,10 +229,12 @@ function _mwPaintNow(el) {
       '<input id="mwAddDue" type="date" class="mw-input mw-date" title="마감 (없어도 됨)"><button class="mw-btn mw-btn-p" type="submit">추가</button>' +
       '<button class="mw-btn" type="button" data-mwt="new" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅 일정 등록…</button></form>';
   }
+  if (typeof mwProjStripHtml === 'function') h += mwProjStripHtml(today);   // 📁 내 프로젝트 (v13.273)
   if (typeof mwListToolsHtml === 'function') h += mwListToolsHtml();
   if (_mw.view === 'matrix' && typeof mwBoardHtml === 'function') {   // 보드 — 내 칸 (v13.268, 예전 4칸)
     el.innerHTML = '<div class="mw-wrap mw-wrap-board">' + h + mwBoardHtml(shown, today) + '</div>';
     _mwBind(el);
+    if (typeof mwProjBind === 'function') mwProjBind(el);
     mwBindBoard(el);
     mwBoardAfterPaint(el);
     if (typeof mwPanelSync === 'function') mwPanelSync();
@@ -249,6 +253,7 @@ function _mwPaintNow(el) {
   if (!any) h += '<div class="mw-empty">' + (r.self ? '🎉 담당한 일이 없습니다. 마인드맵 주제 · 이슈 · 회의 액션에 담당과 마감을 넣으면 여기에 모입니다.' : '담당한 일이 없습니다.') + '</div>';
   el.innerHTML = '<div class="mw-wrap">' + h + '</div>';
   _mwBind(el);
+  if (typeof mwProjBind === 'function') mwProjBind(el);
   if (typeof mwBindOrder === 'function') mwBindOrder(el);
   if (typeof mwPanelSync === 'function') mwPanelSync();
 }
@@ -264,6 +269,7 @@ function _mwRowHtml(it, today) {
     (typeof mwPriBadge === 'function' ? mwPriBadge(it) : '') +
     '<span class="mw-title' + (it.src === 'todo' ? ' mw-todo-t' : '') + '" data-open="' + _mwEsc(it.key) + '">' + _mwEsc(it.title) + '</span>' +
     (it.src === 'todo' && typeof mwTodoExtra === 'function' ? mwTodoExtra(it) : '') +
+    (typeof mwProjTag === 'function' ? mwProjTag(it) : '') +
     (it.ctx ? '<span class="mw-ctx" title="' + _mwEsc(it.ctx) + '">' + _mwEsc(it.ctx) + '</span>' : '<span class="mw-ctx"></span>') +
     (it.progress != null && !it.done && it.src !== 'todo' ? '<span class="mw-prog" title="진행률"><span style="width:' + Math.max(0, Math.min(100, it.progress)) + '%"></span><em>' + it.progress + '%</em></span>' : '') +
     // 개인 할 일 마감은 눌러서 편집 창에서 (v13.253 — 날짜 · 시각 · 반복을 같이)
@@ -308,6 +314,7 @@ function mwAddTodo(body, catId) {
     repeat: body.repeat || null, memo: body.memo || null, checklist: [] });
   it.pending = true; it.canDone = false; it.canPri = false;
   if (catId) it.cat = catId;
+  if (body.myProjectId) it.proj = body.myProjectId;   // 📁 내 프로젝트에 바로 (v13.273 — 서버가 표시까지)
   _mw.data.data.push(it);
   _mwPaint();
   return apiFetch('/api/my-work/todos', { method: 'POST', body: JSON.stringify(body) }).then(function (r) {
@@ -316,6 +323,7 @@ function mwAddTodo(body, catId) {
     delete it.pending;
     Object.assign(it, real);
     if (catId) it.cat = catId;
+    if (body.myProjectId) it.proj = body.myProjectId;
     if (wasSel) _mw.sel = it.key;
     _mwPaint();
     if (catId) apiFetch('/api/my-work/mark', { method: 'PUT', body: JSON.stringify({ key: it.key, category: catId }) })
@@ -330,7 +338,7 @@ function mwAddTodo(body, catId) {
 
 function _mwBind(el) {
   var who = el.querySelector('#mwWho');
-  if (who) who.onchange = function () { if (typeof mwPanelClose === 'function') mwPanelClose(); _mw.userId = who.value; _mw.src = 'all'; _mw.anchor = null; renderMyWork(); };
+  if (who) who.onchange = function () { if (typeof mwPanelClose === 'function') mwPanelClose(); if (typeof mwProjClose === 'function') mwProjClose(); _mw.userId = who.value; _mw.src = 'all'; _mw.anchor = null; renderMyWork(); };
   var add = el.querySelector('#mwAdd');
   if (add) add.onsubmit = function (e) {
     e.preventDefault();
@@ -356,6 +364,7 @@ function _mwBind(el) {
     if (t.closest('[data-mw="refresh"]')) { renderMyWork(); return; }
     if (t.closest('[data-mwn="open"]')) { mwNotesToggle(); return; }
     if (typeof mwIoClick === 'function' && mwIoClick(e)) return;
+    if (typeof mwProjClick === 'function' && mwProjClick(e)) return;
     if (typeof mwBoardClick === 'function' && mwBoardClick(e)) return;
     if (typeof mwCalClick === 'function' && mwCalClick(e)) return;
     if (typeof mwTaskClick === 'function' && mwTaskClick(e)) return;
@@ -385,6 +394,7 @@ function _mwBind(el) {
   el.onchange = function (e) {
     var t = e.target;
     if (typeof mwTaskChange === 'function' && mwTaskChange(e)) return;
+    if (typeof mwProjChange === 'function' && mwProjChange(e)) return;
     if (t.hasAttribute('data-done')) { _mwToggleDone(_mwFind(t.getAttribute('data-done')), t.checked, t); return; }
   };
 }

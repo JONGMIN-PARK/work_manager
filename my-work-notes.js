@@ -43,6 +43,7 @@ function mwNotesToggle() { if (_mwn.open) mwNotesClose(); else mwNotesOpen(); }
 function mwNotesOpen(date, ref) {
   if (!_mw.data || !_mw.data.self) return;
   if (typeof mwPanelIsOpen === 'function' && mwPanelIsOpen()) mwPanelClose();
+  if (typeof mwProjIsOpen === 'function' && mwProjIsOpen()) mwProjClose();   // 📁 프로젝트 패널과 같은 자리 (v13.273)
   var el = document.getElementById('mwNotes');
   if (!el) {
     el = document.createElement('aside');

@@ -98,6 +98,7 @@ function _mwbCard(it, today) {
   if (it.todoStatus === 'waiting') meta += '<span class="mw-st mw-st-wait">대기' + (it.waitingFor ? ' · ' + _mwEsc(it.waitingFor) : '') + '</span>';
   if (it.ctx) meta += '<span class="mwb-ctx" title="' + _mwEsc(it.ctx) + '">' + _mwEsc(it.ctx) + '</span>';
   if (it.cat && mwBoardColOf(it).id === it.cat) meta += '<span class="mwb-pin" title="이 칸에 고정 — ⋯ 에서 풀기">📌</span>';
+  if (typeof mwProjTag === 'function') meta += mwProjTag(it);   // 📁 내 프로젝트 (v13.273)
   var acts = '';
   if (self && !it.done) {
     acts = '<span class="mwb-acts">' + mwFocusBtn(it) +
@@ -189,9 +190,15 @@ function mwMoveMenu(anchor, it) {
   var cur = mwBoardColOf(it);
   var h = '<div class="mw-pmenu-n">다른 칸으로</div>' + mwBoardCols().map(function (c) {
     return '<button data-v="' + _mwEsc(c.id) + '"' + (c.id === cur.id ? ' class="on"' : '') + '><i class="mwb-dot" style="background:' + _mwbColor(c) + '"></i>' + (c.icon ? c.icon + ' ' : '') + _mwEsc(c.name) + '</button>';
-  }).join('') + (it.cat ? '<button data-v="__unpin">↺ 고정 풀기 (자동 분류)</button>' : '') +
-    (it.src === 'todo' ? '<button data-v="__trash" class="mwb-pop-del">🗑 휴지통으로</button>' : '');
+  }).join('') + (it.cat ? '<button data-v="__unpin">↺ 고정 풀기 (자동 분류)</button>' : '');
+  // 📁 내 프로젝트로 (v13.273)
+  var pjs = typeof mwProjChoices === 'function' ? mwProjChoices() : [], pjCur = typeof mwProjOf === 'function' ? mwProjOf(it) : null;
+  if (pjs.length || pjCur) h += '<div class="mw-pmenu-n">프로젝트로</div>' + pjs.map(function (c) {
+    return '<button data-v="__pj:' + _mwEsc(c[0]) + '"' + (pjCur && pjCur.id === c[0] ? ' class="on"' : '') + '>' + _mwEsc(c[1]) + '</button>';
+  }).join('') + (pjCur ? '<button data-v="__pj:">↺ 프로젝트에서 빼기</button>' : '');
+  h += it.src === 'todo' ? '<button data-v="__trash" class="mwb-pop-del">🗑 휴지통으로</button>' : '';
   mwPopMenu(anchor, h, function (v) {
+    if (v.slice(0, 5) === '__pj:') return mwProjSetItem(it, v.slice(5) || null);
     if (v === '__unpin') return mwSetCat(it, null);
     if (v === '__trash') return mwDeleteTodo(it);
     mwSetCat(it, v);

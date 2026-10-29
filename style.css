@@ -3107,3 +3107,83 @@ mark.wd-hl{background:var(--ac-g);color:var(--ac-t);outline:1px solid var(--ac);
   .mm-pk-col.l .mm-pk-k{justify-content:flex-start}
   .mm-pk-col .mm-pk-b::before{display:none}
 }
+
+/* ═══ 📁 내 업무 · 내 프로젝트 (v13.273, my-work-proj.js) — 접두어 mwj- ═══ */
+.mwj{margin:10px 0 12px;border:1px solid var(--bd);border-radius:12px;background:var(--bg-p);padding:8px 10px 10px}
+.mwj.is-folded{padding-bottom:8px}
+.mwj.is-dropping .mwj-c{outline:1px dashed color-mix(in srgb,var(--pc) 60%,transparent)}
+.mwj-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mwj-tri{background:none;border:none;cursor:pointer;color:var(--t4);font-size:12px;padding:2px 4px;transition:transform .15s}
+.mwj.is-folded .mwj-tri{transform:rotate(-90deg)}
+.mwj-ttl{font-size:14px;color:var(--t1);cursor:pointer}
+.mwj-n{font-style:normal;font-size:12px;color:var(--t4);background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:0 7px}
+.mwj-cand b{color:var(--ac-t)}
+.mwj-lnk{background:none;border:1px solid transparent;border-radius:8px;padding:2px 8px;font-size:12px;color:var(--t4);cursor:pointer}
+.mwj-lnk:hover,.mwj-lnk.on{border-color:var(--bd2);color:var(--t2)}
+.mwj-tg{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--t4);cursor:pointer}
+.mwj-l{display:flex;gap:10px;overflow-x:auto;padding:8px 2px 2px;scroll-snap-type:x proximity}
+.mwj-e{font-size:12.5px;color:var(--t5);padding:6px 4px;line-height:1.5}
+.mwj-c{flex:0 0 232px;scroll-snap-align:start;display:flex;flex-direction:column;gap:6px;padding:9px 10px;border:1px solid var(--bd);border-left:4px solid var(--pc);border-radius:10px;background:var(--bg);cursor:pointer;transition:box-shadow .15s,border-color .15s}
+.mwj-c:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.mwj-c.mw-picked{box-shadow:0 0 0 2px color-mix(in srgb,var(--pc) 55%,transparent)}
+.mwj-c.is-over{box-shadow:0 0 0 2px var(--pc);background:color-mix(in srgb,var(--pc) 10%,var(--bg))}
+.mwj-c.is-hidden{opacity:.6}
+.mwj-c.is-done .mwj-t{text-decoration:line-through;color:var(--t5)}
+.mwj-c:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.mwj-ct{display:flex;align-items:center;gap:6px;min-width:0}
+.mwj-ic{flex:none}
+.mwj-t{flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mwj-link{font-style:normal;font-size:12px;flex:none}
+.mwj-eye{flex:none;background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px;opacity:.55}
+.mwj-eye:hover{opacity:1}
+.mwj-bar{position:relative;height:6px;border-radius:3px;background:color-mix(in srgb,var(--pc) 14%,var(--bg-p))}
+.mwj-fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--pc)}
+.mwj-bar i{position:absolute;top:-3px;width:2px;height:12px;margin-left:-1px;background:var(--d-t,#EF4444);border-radius:1px}
+.mwj-m{display:flex;flex-wrap:wrap;gap:4px 8px;font-size:11.5px;color:var(--t4)}
+.mwj-nod{color:var(--t5)}
+.mwj-dd{font-weight:600;color:var(--t3)}
+.mwj-dd.is-soon{color:#D97706}
+.mwj-dd.is-late{color:var(--d-t)}
+.mwj-dd.is-done{color:#10B981}
+.mwj-st{padding:0 5px;border-radius:5px;background:var(--bg-p);border:1px solid var(--bd)}
+.mwj-tag{flex:none;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;padding:1px 6px;border-radius:8px;cursor:pointer;color:var(--t2);background:color-mix(in srgb,var(--pc) 14%,transparent);border:1px solid color-mix(in srgb,var(--pc) 40%,transparent)}
+.mwj-tag:hover{background:color-mix(in srgb,var(--pc) 26%,transparent)}
+/* 프로젝트 패널 (.mwp 를 그대로 쓰고 모자란 것만) */
+.mwj-icin{width:42px;flex:none;text-align:center;font-size:18px;padding:4px}
+.mwj-ck{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--t3);cursor:pointer}
+.mwj-prow{align-items:center;gap:10px}
+.mwj-prow input[type=range]{flex:1}
+.mwj-hint{font-size:12px;color:var(--t5)}
+.mwj-sw{align-self:center}
+.mwj-lk{font-size:13.5px;color:var(--t1);margin-bottom:6px}
+.mwj-lk i{font-style:normal;font-size:11.5px;color:var(--t4);margin-left:4px}
+.mwj-pick{display:flex;flex-direction:column;gap:3px;max-height:220px;overflow:auto;margin-top:6px}
+.mwj-pk{display:block;text-align:left;background:var(--bg);border:1px solid var(--bd);border-radius:7px;padding:6px 9px;font-size:13px;color:var(--t2);cursor:pointer}
+.mwj-pk:hover:not(:disabled){border-color:var(--ac);background:var(--ac-bg)}
+.mwj-pk i{font-style:normal;font-size:11.5px;color:var(--t5);margin-left:4px}
+.mwj-pk.is-used{opacity:.5;cursor:default}
+.mwj-add{margin-bottom:6px}
+.mwj-its{display:flex;flex-direction:column;gap:2px}
+.mwj-it{display:flex;align-items:center;gap:6px;padding:4px 4px;border-radius:6px;font-size:13px}
+.mwj-it:hover{background:var(--bg)}
+.mwj-it.mw-done .mwj-its-t{text-decoration:line-through;color:var(--t5)}
+.mwj-its-ic{flex:none;font-size:12px}
+.mwj-its-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:var(--t2)}
+.mwj-its-t:hover{text-decoration:underline}
+.mwj-ms .mwj-its-ic{color:#6366F1}
+.mwj-it .mw-x{opacity:0}
+.mwj-it:hover .mw-x{opacity:.7}
+/* 타임라인 · 달력 */
+.mtl-bar.mtl-proj{background:color-mix(in srgb,var(--c) 30%,var(--bg-p));border-width:2px;font-weight:600}
+.mtl-bar.mtl-proj:hover,.mtl-bar.mtl-proj.mw-picked{background:color-mix(in srgb,var(--c) 44%,var(--bg-p))}
+.mtl-pjms i{border-radius:1px}
+.mwc-chip.mwc-proj{border-left:0;border-radius:0;background:color-mix(in srgb,var(--c) 26%,transparent);font-weight:600;min-height:18px;margin:0 -3px}
+.mwc-chip.mwc-proj.is-s{border-top-left-radius:5px;border-bottom-left-radius:5px;border-left:3px solid var(--c);margin-left:0}
+.mwc-chip.mwc-proj.is-e{border-top-right-radius:5px;border-bottom-right-radius:5px;margin-right:0}
+.mwc-chip.mwc-proj.is-cont{height:18px}
+@media (max-width:768px){
+  .mwj-c{flex-basis:78vw}
+  .mwj-tg{margin-left:0}
+  .mwj-tag{display:none}
+}
+.mwio-tgtip{font-size:11.5px;color:var(--t5);padding:6px 10px 4px;line-height:1.5}

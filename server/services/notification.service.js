@@ -21,6 +21,7 @@ module.exports = {
   notifyGroup: groups.notifyGroup,
   sendDeadlineReminders: jobs.sendDeadlineReminders,
   sendTomorrowPreview: jobs.sendTomorrowPreview,
+  sendMyWorkRecs: jobs.sendMyWorkRecs,
   sendDailyBriefing: jobs.sendDailyBriefing,
   sendOrderDeliveryReminders: jobs.sendOrderDeliveryReminders,
   sendWeeklyDigest: jobs.sendWeeklyDigest,

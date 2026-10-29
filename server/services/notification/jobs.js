@@ -6,6 +6,8 @@ var db = require('../../config/db');
 var mindmapDue = require('../../lib/mindmap-due');
 var myWork = require('../../lib/my-work');
 var myEvents = require('../../lib/my-events');
+var mwRec = require('../../lib/my-work-rec');
+var krHol = require('../../../kr-holidays');
 var telegramService = require('../telegram.service');
 var escHtml = require('../../telegram/util/escape').escHtml;
 var dispatch = require('./dispatch');
@@ -402,6 +404,44 @@ async function myWorkBlock(usr, today) {
   }
 }
 
+/** 💡 내 업무 추천 (v13.274) — 5분마다 돌며, 사람마다 정해 둔 시각(telegram_links.rec_slots, 기본 13:30)이 지났고 오늘 아직 안 보낸 칸이면 보냄.
+ *  평일만 · 공휴일 빼고. 서버가 잠깐 꺼졌어도 1시간 안이면 보냄. 같은 날 같은 추천(sig)이면 다시 안 보냄. 챙길 게 없으면 안 보냄 */
+async function sendMyWorkRecs(nowMs) {
+  var now = new Date((nowMs || Date.now()) + 9 * 3600 * 1000);
+  var today = now.toISOString().slice(0, 10), hm = now.toISOString().slice(11, 16);
+  var wd = now.getUTCDay();
+  if (wd === 0 || wd === 6 || krHol.krHolidayName(today)) return 0;
+  var mins = function (t) { return (+t.slice(0, 2)) * 60 + (+t.slice(3, 5)); };
+  var users = await db.query(
+    "SELECT tl.chat_id, tl.user_id, tl.rec_slots, tl.rec_sent_date, tl.rec_sent_slots, tl.rec_sig, u.name, u.role, u.department_id, u.tenant_id " +
+    "FROM telegram_links tl JOIN users u ON u.id = tl.user_id WHERE tl.is_active = TRUE AND u.status = 'active' AND COALESCE(tl.rec_slots, '') <> ''");
+  var tgMw = require('../../telegram/commands/mywork');
+  var sent = 0;
+  for (var i = 0; i < users.rows.length; i++) {
+    var usr = users.rows[i];
+    try {
+      var done = usr.rec_sent_date === today ? String(usr.rec_sent_slots || '').split(',').filter(Boolean) : [];
+      var due = String(usr.rec_slots).split(',').filter(function (s) { return /^\d{2}:\d{2}$/.test(s) && s <= hm && done.indexOf(s) < 0 && mins(hm) - mins(s) < 60; });
+      if (!due.length) continue;
+      // 먼저 '보냄' 표시 — 보내다 실패해도 5분마다 거듭 시도하지 않게
+      await db.query('UPDATE telegram_links SET rec_sent_date = $1, rec_sent_slots = $2 WHERE user_id = $3 AND chat_id = $4', [today, done.concat(due).join(','), usr.user_id, usr.chat_id]);
+      var req = { tenant: { id: usr.tenant_id }, user: { sub: usr.user_id, role: usr.role || 'member', name: usr.name, departmentId: usr.department_id || null } };
+      var mine = await mwRec.loadMine(req, { name: usr.name });
+      var out = tgMw.recMessage(mine, mwRec.recommend(mine), hm < '12:00' ? '오전 추천 — 지금 하면 좋은 일' : '오후 추천 — 지금 하면 좋은 일');
+      if (!out) continue;
+      if (usr.rec_sent_date === today && usr.rec_sig === out.sig) continue;   // 아까와 같은 추천
+      await telegramService.sendMessage(usr.chat_id, out.text, { reply_markup: out.markup });
+      tgMw.remember(usr.chat_id, out.list);
+      await db.query('UPDATE telegram_links SET rec_sig = $1 WHERE user_id = $2 AND chat_id = $3', [out.sig, usr.user_id, usr.chat_id]);
+      sent++;
+    } catch (e) {
+      console.error('[MyWorkRec]', usr.user_id, e.message);
+    }
+  }
+  if (sent) console.log('[Notification] My-work recommendations sent:', sent);
+  return sent;
+}
+
 /** 수주 납품 리마인더 (매일 실행) */
 async function sendOrderDeliveryReminders() {
   var checks = [
@@ -745,6 +785,7 @@ module.exports = {
   sendTechStaleReminders: sendTechStaleReminders,
   sendEventSoonReminders: sendEventSoonReminders,
   sendTomorrowPreview: sendTomorrowPreview,
+  sendMyWorkRecs: sendMyWorkRecs,
   _addMin: addMin,   // 테스트용
   _myEventsBlock: myEventsBlock,   // 테스트용
   _myWorkBlock: myWorkBlock,   // 테스트용

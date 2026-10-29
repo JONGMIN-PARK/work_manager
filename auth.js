@@ -1067,6 +1067,7 @@ async function loadTelegramPrefs(container) {
     var data = await apiFetch('/api/telegram/prefs');
     var prefs = data.data || {};
     var lead = data.remindLead || 30;
+    var recSlots = data.recSlots == null ? '13:30' : data.recSlots;   // 💡 내 업무 추천 (v13.274) — '' 끄기
 
     function boxes(labels) {
       var h = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">';
@@ -1084,11 +1085,33 @@ async function loadTelegramPrefs(container) {
       + [10, 30, 60].map(function (m) {
           return '<button type="button" data-lead="' + m + '" style="padding:3px 9px;border-radius:99px;font-size:11px;cursor:pointer;border:1px solid ' + (m === lead ? '#0088CC;background:#0088CC;color:#fff' : 'var(--bd,#222C44);background:transparent;color:var(--t3,#A0AACC)') + '">' + (m === 60 ? '1시간' : m + '분') + ' 전</button>';
         }).join('') + '</div>';
+    var recOn = recSlots ? recSlots.split(',') : [];
+    html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--t2,#D8DEE8);margin-bottom:6px" title="평일 이 시각에 지금 하면 좋은 일 · 챙길 것을 보냅니다 (같은 날 같은 추천은 다시 안 보냄)">💡 추천 '
+      + ['10:00', '13:30', '16:30'].map(function (t) {
+          var on = recOn.indexOf(t) >= 0;
+          return '<button type="button" data-rec="' + t + '" style="padding:3px 9px;border-radius:99px;font-size:11px;cursor:pointer;border:1px solid ' + (on ? '#0088CC;background:#0088CC;color:#fff' : 'var(--bd,#222C44);background:transparent;color:var(--t3,#A0AACC)') + '">' + t + '</button>';
+        }).join('')
+      + (recOn.some(function (t) { return ['10:00', '13:30', '16:30'].indexOf(t) < 0; }) ? '<span style="color:var(--t4,#8090B0)">' + recOn.join(' · ') + '</span>' : '')
+      + (recOn.length ? '' : '<span style="color:var(--t5,#6070A0)">꺼짐</span>')
+      + '<button type="button" data-recnow="1" style="margin-left:auto;padding:3px 9px;border-radius:99px;font-size:11px;cursor:pointer;border:1px solid var(--bd,#222C44);background:transparent;color:var(--t2,#D8DEE8)">📨 지금 받아 보기</button></div>';
     html += boxes(myLabels);
     html += '<div style="font-size:11px;font-weight:700;color:var(--t3,#A0AACC);margin:10px 0 6px">그 밖의 알림</div>';
     html += boxes(eventLabels);
     prefsArea.innerHTML = html;
 
+    prefsArea.querySelectorAll('[data-rec]').forEach(function (b) {
+      b.onclick = async function () {
+        var t = b.dataset.rec, next = recOn.indexOf(t) >= 0 ? recOn.filter(function (x) { return x !== t; }) : recOn.concat([t]);
+        try {
+          await apiFetch('/api/telegram/prefs/rec', { method: 'PUT', body: JSON.stringify({ slots: next.sort().join(',') }) });
+          loadTelegramPrefs(container);
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('설정 변경 실패 — ' + ((e && e.message) || ''), 'error');
+        }
+      };
+    });
+    var recNow = prefsArea.querySelector('[data-recnow]');
+    if (recNow) recNow.onclick = function () { if (typeof mwTgSend === 'function') mwTgSend('rec'); };
     prefsArea.querySelectorAll('[data-lead]').forEach(function (b) {
       b.onclick = async function () {
         try {
