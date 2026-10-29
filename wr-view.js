@@ -1,7 +1,7 @@
 /* wr-view.js — 주간 분석 뷰(upV) · 테이블 가상 스크롤 · 셀 편집
  * 업무일지_분석기.html 인라인 <script> 에서 분리. 동기 <script src> 로 원래 자리·순서대로 로드(defer/async 금지 — 최상위 let/function 을 다른 파일이 전역으로 공유하고, 로드 시점 코드의 의존 순서가 고정돼 있음). */
 /* ═══ VIEW ═══ */
-function upV(){rAFT();const f=gF();const ss=document.getElementById('statsS');if(f.length===0&&sN.size===0){ss.classList.add('hidden');document.getElementById('cmpPanel').classList.add('hidden');return}ss.classList.remove('hidden');const tH=Math.round(f.reduce((s,r)=>s+r.hours,0)*10)/10;const ds=[...new Set(f.map(r=>r.date))].sort();document.getElementById('sC').textContent=f.length;document.getElementById('sH').textContent=tH+'h';document.getElementById('sP').textContent=ds.length>0?fD(ds[0])+' ~ '+fD(ds[ds.length-1]):'-';document.getElementById('sA').textContent=(ds.length>0?Math.round(tH/ds.length*10)/10:0)+'h';rTbl(f);if(!document.getElementById('tCht').classList.contains('hidden'))rCht(f);if(!document.getElementById('tSum').classList.contains('hidden'))rContentSum();if(!document.getElementById('tAi').classList.contains('hidden')){var so=document.getElementById('sumOut');if(so&&so.dataset.generated){so.innerHTML='<div style="text-align:center;color:'+SEM_COLOR.warn+';padding:20px;font-size:12px">⚠️ 데이터가 변경되었습니다. "요약 생성" 버튼을 눌러 갱신하세요.</div>';so.dataset.generated=''}}if(cmpMode&&sN.size>=2)rCmp(f);else document.getElementById('cmpPanel').classList.add('hidden')}
+function upV(){rAFT();const f=typeof wdApply==='function'?wdApply(gF()):gF();const ss=document.getElementById('statsS');if(f.length===0&&sN.size===0){ss.classList.add('hidden');document.getElementById('cmpPanel').classList.add('hidden');return}ss.classList.remove('hidden');const tH=Math.round(f.reduce((s,r)=>s+r.hours,0)*10)/10;const ds=[...new Set(f.map(r=>r.date))].sort();document.getElementById('sC').textContent=f.length;document.getElementById('sH').textContent=tH+'h';var _pf=typeof wdMobile==='function'&&wdMobile()?function(d){return d.slice(4,6)+'/'+d.slice(6,8)}:fD;document.getElementById('sP').textContent=ds.length>0?_pf(ds[0])+' ~ '+_pf(ds[ds.length-1]):'-';document.getElementById('sA').textContent=(ds.length>0?Math.round(tH/ds.length*10)/10:0)+'h';rTbl(f);if(!document.getElementById('tCht').classList.contains('hidden'))rCht(f);if(!document.getElementById('tSum').classList.contains('hidden'))rContentSum();if(!document.getElementById('tAi').classList.contains('hidden')){var so=document.getElementById('sumOut');if(so&&so.dataset.generated){so.innerHTML='<div style="text-align:center;color:'+SEM_COLOR.warn+';padding:20px;font-size:12px">⚠️ 데이터가 변경되었습니다. "요약 생성" 버튼을 눌러 갱신하세요.</div>';so.dataset.generated=''}}if(cmpMode&&sN.size>=2)rCmp(f);else document.getElementById('cmpPanel').classList.add('hidden')}
 let editMode=false;
 let lastFiltered=[]; // 현재 필터 결과 참조 보관
 let editMap={}; // {rowIdx: {field: newValue}} 수정 추적
@@ -16,10 +16,9 @@ function rTbl(f){
   document.getElementById('editStatus').style.display='none';
   document.getElementById('thChk').style.display='none';
   document.getElementById('delBar').classList.remove('show');
-  var wt=document.getElementById('wrTbl');if(wt)wt.classList.remove('ed');
   document.getElementById('tInfo').textContent=f.length+'건·'+sN.size+'명'+(hAF()?' (필터)':'');
   const tb=document.getElementById('tBody');
-  if(!f.length){_vsData=[];tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--t6);padding:30px">결과 없음</td></tr>';document.getElementById('contentSummary').innerHTML='';return}
+  if(!f.length){_vsData=[];tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--t6);padding:30px">결과 없음</td></tr>';document.getElementById('contentSummary').innerHTML='';if(typeof wdRender==='function')wdRender(f,true);return}
   renderTblRows(f,false);
 }
 
@@ -28,7 +27,8 @@ var _vsData=[],_vsEditable=false,_vsKw='',_vsNameIdx=new Map(),_vsWrapEl=null;
 var VS_ROW_H=36,VS_BUFFER=10;
 var _vsRAF=0; // requestAnimationFrame guard
 
-function _vsRenderRow(r,idx,editable){
+function _vsRenderRow(r,idx,editable,o){   // o: v13.266 묶어 보기 줄 정보 {sn 이름 생략, sd 날짜 생략, sep 날짜 바뀜}
+  o=o||{};
   var ni=_vsNameIdx.get(r.name)||0,c=COL[ni%COL.length];
   var dn=typeof shortName==='function'?shortName(r.name):r.name;
   var ocmt=r.ocmt||getOCmt(r.orderNo);
@@ -61,15 +61,17 @@ function _vsRenderRow(r,idx,editable){
       +'<td class="editable '+(em.content!==undefined?'modified':'')+'" contenteditable="true" data-row="'+idx+'" data-field="content" oninput="onCellEdit(this)" style="color:var(--t3);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curContent)+'">'+eH(curContent)+'</td>'
       +'</tr>';
   }else{
-    return'<tr style="'+(hasEdit?'background:rgba(245,158,11,.06)':'')+'">'
-      +'<td style="word-break:keep-all"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:'+c+'"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="'+eH(r.name)+'">'+eH(dn)+'</span></span></td>'
-      +'<td class="mono" style="color:var(--t4);white-space:nowrap" title="'+fD(r.date)+'"><span class="d-y">'+r.date.slice(0,4)+'-</span>'+r.date.slice(4,6)+'-'+r.date.slice(6,8)+'</td>'
-      +'<td class="mono c-on" style="color:var(--ac-t);word-break:break-all" title="'+eH(curOrder)+'">'+eH(curOrder)+'</td>'
+    if(typeof _wdHL==='function')ch=_wdHL(ch);
+    var cls=(o.sep?' wd-sep':'')+(typeof _wdIsCur==='function'&&_wdIsCur(o.i!==undefined?o.i:idx)&&o.t?' wd-cur':'');
+    return'<tr class="'+cls+'" style="'+(hasEdit?'background:rgba(245,158,11,.06)':'')+'">'
+      +(o.sn?'<td></td>':'<td style="word-break:keep-all"><span style="display:inline-flex;align-items:center;gap:5px" data-wk="name" data-wv="'+eH(r.name)+'"><span style="width:5px;height:5px;border-radius:50%;background:'+c+'"></span><span style="font-size:11px;font-weight:500;color:var(--t3)" title="'+eH(r.name)+'">'+eH(dn)+'</span></span></td>')
+      +(o.sd?'<td></td>':'<td class="mono" style="color:var(--t4);white-space:nowrap" title="'+fD(r.date)+'"><span data-wk="date" data-wv="'+r.date+'"><span class="d-y">'+r.date.slice(0,4)+'-</span>'+r.date.slice(4,6)+'-'+r.date.slice(6,8)+'</span></td>')
+      +'<td class="mono c-on" style="color:var(--ac-t);word-break:break-all" title="'+eH(curOrder)+'"><span data-wk="order" data-wv="'+eH(curOrder||'')+'">'+eH(curOrder)+'</span></td>'
       // v13.264 수주명 · 거래처를 한 칸에 붙여서 (두 칸에 나뉘어 멀리 떨어져 보이던 것)
-      +'<td colspan="2" class="oc-cell" title="'+eH((curOcmt||'')+(curClient?' · '+curClient:''))+'"><span class="oc-nm">'+(curOcmt?eH(curOcmt):'<span class="oc-none">수주명 없음</span>')+'</span>'+(curClient?'<span class="oc-cl">'+eH(curClient)+'</span>':'')+'</td>'
+      +'<td colspan="2" class="oc-cell" title="'+eH((curOcmt||'')+(curClient?' · '+curClient:''))+'"><span class="oc-nm" data-wk="ocmt" data-wv="'+eH(curOcmt||'(미지정)')+'">'+(curOcmt?eH(curOcmt):'<span class="oc-none">수주명 없음</span>')+'</span>'+(curClient?'<span class="oc-cl" data-wk="client" data-wv="'+eH(curClient)+'">'+eH(curClient)+'</span>':'')+'</td>'
       +'<td class="mono" style="text-align:right;color:#F59E0B;font-weight:600;white-space:nowrap">'+curHours+'</td>'
       +'<td class="c-task" style="font-size:11px;color:var(--c-t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curTask)+'">'+eH(curTask)+'</td>'
-      +'<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curAbbr)+(AM[curAbbr]?' · '+eH(AM[curAbbr]):'')+'"><span class="badge" style="background:'+(ABG[curAbbr]||'#1A1F35')+';color:'+(AFG[curAbbr]||'#94A3B8')+'">'+curAbbr+'</span></td>'
+      +'<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curAbbr)+(AM[curAbbr]?' · '+eH(AM[curAbbr]):'')+'"><span class="badge" data-wk="abbr" data-wv="'+eH(curAbbr||'')+'" style="background:'+(ABG[curAbbr]||'#1A1F35')+';color:'+(AFG[curAbbr]||'#94A3B8')+'">'+curAbbr+'</span></td>'
       +'<td style="color:var(--t3);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+eH(curContent)+'">'+ch+'</td>'
       +'</tr>';
   }
@@ -80,9 +82,10 @@ function _vsRender(){
   if(!_vsWrapEl){_vsWrapEl=document.getElementById('tBody').closest('.tw')}
   if(!_vsWrapEl)return;
   var scrollTop=_vsWrapEl.scrollTop;
-  var viewH=_vsWrapEl.clientHeight;
+  var viewH=Math.max(_vsWrapEl.clientHeight,window.innerHeight||800);   // 펼치기 직후엔 상자가 아직 작음 — 화면 높이만큼은 그림
   var total=_vsData.length;
   var colSpan=_vsEditable?10:9;
+  var rowFn=_vsEditable||typeof wdRowHTML!=='function'?function(it,i){return _vsRenderRow(it,i,_vsEditable)}:function(it){return it&&it.t?wdRowHTML(it):_vsRenderRow(it,0,false)};
 
   var startIdx=Math.max(0,Math.floor(scrollTop/VS_ROW_H)-VS_BUFFER);
   var endIdx=Math.min(total,Math.ceil((scrollTop+viewH)/VS_ROW_H)+VS_BUFFER);
@@ -93,7 +96,7 @@ function _vsRender(){
   var parts=[];
   if(topPad>0)parts.push('<tr style="height:'+topPad+'px"><td colspan="'+colSpan+'"></td></tr>');
   for(var i=startIdx;i<endIdx;i++){
-    parts.push(_vsRenderRow(_vsData[i],i,_vsEditable));
+    parts.push(rowFn(_vsData[i],i));
   }
   if(bottomPad>0)parts.push('<tr style="height:'+bottomPad+'px"><td colspan="'+colSpan+'"></td></tr>');
 
@@ -106,6 +109,16 @@ function _vsOnScroll(){
 }
 
 function renderTblRows(f,editable){
+  var wt=document.getElementById('wrTbl');if(wt)wt.classList.toggle('ed',!!editable);   // 휴대폰 좁은 표는 보기 모드에서만
+  if(typeof wdEditMode==='function')wdEditMode(!!editable);
+  if(!editable&&typeof wdRender==='function'){
+    /* v13.266 보기 모드 — 묶어 보기 · 카드 · 격자 (wr-drill.js) */
+    _vsKw=cKw?cKw.toLowerCase():'';
+    _vsNameIdx=new Map();aN.forEach(function(n,i){_vsNameIdx.set(n,i)});
+    if(!_vsWrapEl){_vsWrapEl=document.getElementById('tBody').closest('.tw');if(_vsWrapEl)_vsWrapEl.addEventListener('scroll',_vsOnScroll)}
+    if(_vsWrapEl)_vsWrapEl.scrollTop=0;
+    wdRender(f);return;
+  }
   _vsData=f;
   _vsEditable=editable;
   _vsKw=cKw?cKw.toLowerCase():'';
@@ -153,7 +166,6 @@ function togEdit(){
   document.getElementById('editApplyBtn').classList.toggle('hidden',!editMode);
   document.getElementById('editCancelBtn').classList.toggle('hidden',!editMode);
   document.getElementById('thChk').style.display=editMode?'':'none';
-  var wt=document.getElementById('wrTbl');if(wt)wt.classList.toggle('ed',editMode);   // 휴대폰 좁은 표는 보기 모드에서만
   document.getElementById('delBar').classList.remove('show');
   var thChkInput=document.querySelector('#thChk input');if(thChkInput)thChkInput.checked=false;
   renderTblRows(lastFiltered,editMode);

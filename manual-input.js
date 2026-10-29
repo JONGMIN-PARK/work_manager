@@ -216,7 +216,7 @@ async function resetOcmtOclient(){
 }
 
 function exportXlsx(){
-  const f=gF();if(!f.length){showToast('데이터 없음','warn');return}
+  const f=typeof wdExportRows==='function'?wdExportRows():gF();   // v13.266 부분 필터 반영 (위 조건 전체도 고를 수 있음)if(!f.length){showToast('데이터 없음','warn');return}
   const rows=f.map(r=>{
     const em=editMap[lastFiltered.indexOf(r)]||{};
     const oNo=em.orderNo!==undefined?em.orderNo:r.orderNo;
@@ -241,5 +241,5 @@ function exportXlsx(){
   XLSX.writeFile(wb,`업무일지_${ts}.xlsx`);
 }
 
-function cpTSV(){const f=gF(),h='이름\t날짜\t수주번호\t수주명\t거래처\t시간\t업무분장\t약자\t업무내용';const r=f.map((x,i)=>{const em=editMap[lastFiltered.indexOf(x)]||{};const oNo=em.orderNo!==undefined?em.orderNo:x.orderNo;const baseOcmt=x.ocmt!==undefined?x.ocmt:getOCmt(x.orderNo);const baseClient=x.oclient!==undefined?x.oclient:getOClient(x.orderNo);const curOcmt=em.ocmt!==undefined?em.ocmt:(em.orderNo!==undefined?getOCmt(em.orderNo):baseOcmt);const curClient=em.oclient!==undefined?em.oclient:(em.orderNo!==undefined?getOClient(em.orderNo):baseClient);return`${x.name}\t${fD(x.date)}\t${oNo}\t${curOcmt}\t${curClient}\t${em.hours!==undefined?em.hours:x.hours}\t${em.taskType!==undefined?em.taskType:x.taskType}\t${em.abbr!==undefined?em.abbr:x.abbr}\t${em.content!==undefined?em.content:x.content}`});navigator.clipboard.writeText([h,...r].join('\n')).then(()=>{const b=document.getElementById('cpBtn'),o=b.innerHTML;b.innerHTML='✅완료';setTimeout(()=>b.innerHTML=o,1200)})}
+function cpTSV(){const f=typeof wdExportRows==='function'?wdExportRows():gF(),h='이름\t날짜\t수주번호\t수주명\t거래처\t시간\t업무분장\t약자\t업무내용';const r=f.map((x,i)=>{const em=editMap[lastFiltered.indexOf(x)]||{};const oNo=em.orderNo!==undefined?em.orderNo:x.orderNo;const baseOcmt=x.ocmt!==undefined?x.ocmt:getOCmt(x.orderNo);const baseClient=x.oclient!==undefined?x.oclient:getOClient(x.orderNo);const curOcmt=em.ocmt!==undefined?em.ocmt:(em.orderNo!==undefined?getOCmt(em.orderNo):baseOcmt);const curClient=em.oclient!==undefined?em.oclient:(em.orderNo!==undefined?getOClient(em.orderNo):baseClient);return`${x.name}\t${fD(x.date)}\t${oNo}\t${curOcmt}\t${curClient}\t${em.hours!==undefined?em.hours:x.hours}\t${em.taskType!==undefined?em.taskType:x.taskType}\t${em.abbr!==undefined?em.abbr:x.abbr}\t${em.content!==undefined?em.content:x.content}`});navigator.clipboard.writeText([h,...r].join('\n')).then(()=>{const b=document.getElementById('cpBtn'),o=b.innerHTML;b.innerHTML='✅완료';setTimeout(()=>b.innerHTML=o,1200)})}
 

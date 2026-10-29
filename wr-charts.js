@@ -91,7 +91,7 @@ function downloadCanvas(canvas,filename){
 function rContentSum(){
   const el=document.getElementById('contentSummary');
   // 필터 반영: 현재 필터(수주/분장/검색/주차/부서/휴가제외 등)가 적용된 데이터 — gF()와 동일 기준
-  const f=gF();
+  const f=typeof wdApply==='function'?wdApply(gF()):gF();   // v13.266 표 안 부분 필터도
   if(!f.length){el.innerHTML='<div style="text-align:center;color:var(--t6);padding:30px;font-size:12px">'+(sN.size===0?'팀원을 선택하면':'필터 조건에 맞는')+' 업무 내용 요약이 표시됩니다.</div>';return}
   const byPerson={};
   f.forEach(r=>{

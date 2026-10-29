@@ -71,19 +71,18 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await wait(500);
     await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
     await ready(); await wait(600);
+    // v13.266 휴대폰 보기 모드는 표 대신 카드 — 가로 스크롤 없음. 편집 모드만 넓은 표
     var m = await page.evaluate(function () {
-      setPage('team'); setMode('weekly'); sTab('tbl');
-      var t = document.getElementById('wrTbl'), td = document.querySelector('#tBody tr td.mono'), task = document.querySelector('#wrTbl th.c-task');
-      return { w: t.offsetWidth, task: getComputedStyle(task).display, date: td && td.innerText.trim(), rows: document.querySelectorAll('#tBody tr').length, sw: document.documentElement.scrollWidth };
+      setPage('team'); setMode('weekly'); sTab('tbl'); wdSetGroup('none');
+      var cards = document.getElementById('wdCards'), r = cards.querySelector('.wdc-r');
+      return { cards: cards.querySelectorAll('.wdc-r').length, tw: getComputedStyle(document.querySelector('#tTbl .tw')).display, cw: r ? r.offsetWidth : 0, sw: document.documentElement.scrollWidth };
     });
-    check(m.w <= 640 && m.w >= 600, '휴대폰 표 폭 ' + m.w + ' (전엔 1040)');
-    check(m.task === 'none', '업무분장 칸 숨김 (약자 배지로 대신)');
-    check(/^\d\d-\d\d$/.test(m.date || ''), '날짜는 월-일 ' + m.date);
+    check(m.cards > 0 && m.tw === 'none' && m.cw <= 380, '휴대폰 — 표 대신 카드 ' + JSON.stringify(m));
     check(m.sw <= 392, '화면 자체는 옆으로 안 넘침 ' + m.sw);
-    await page.screenshot({ path: path.join(__dirname, '.shots', 'e2e32-phone-table.png') });
+    await (await page.$('#tTbl')).screenshot({ path: path.join(__dirname, '.shots', 'e2e32-phone-table.png') });
     await page.evaluate(function () { togEdit(); });
     check(await page.evaluate(function () { return document.getElementById('wrTbl').offsetWidth >= 1000; }), '편집 모드는 넓은 표 그대로');
-    await page.evaluate(function () { cancelEdits(); });
+    await page.evaluate(function () { cancelEdits(); wdSetGroup('name'); });
     check(errs.length === 0, '화면 오류 없음 ' + JSON.stringify(errs));
     console.log(fail ? 'FAILED ' + fail : 'ALL PASS ' + ok, errs);
   } catch (e) { console.log('ERR', e.message); } finally {

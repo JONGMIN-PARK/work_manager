@@ -152,22 +152,25 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     if (soon.toISOString().slice(0, 10) === kst(0)) {
       var hm = soon.toISOString().slice(11, 16);
       await c.query('DELETE FROM telegram_links WHERE chat_id IN (990001, 990002)');
+      await c.query("DELETE FROM notification_prefs WHERE user_id = $1 AND event_type = 'event_soon'", [kim]);   // 앞 실행이 중간에 멈춰 남긴 '알림 끔' 정리
       await c.query('INSERT INTO telegram_links (user_id, chat_id, is_active) VALUES ($1, 990001, TRUE) ON CONFLICT (user_id) DO UPDATE SET chat_id = 990001, is_active = TRUE', [kim]);
       await c.query('INSERT INTO telegram_links (user_id, chat_id, is_active) VALUES ($1, 990002, TRUE) ON CONFLICT (user_id) DO UPDATE SET chat_id = 990002, is_active = TRUE', [lee]);
       var s1 = (await A('POST', '/api/events', { title: '달력 곧 회의', type: 'meeting', startDate: kst(0), endDate: kst(0), startTime: hm, projectIds: ['cal-p1'], assignees: ['김팀원'] })).d.data;
       await A('POST', '/api/events', { title: '달력 먼 회의', startDate: kst(0), endDate: kst(0), startTime: new Date(nowK.getTime() + 50 * 60000).toISOString().slice(11, 16), projectIds: ['cal-p1'], assignees: ['김팀원'] });
       await A('POST', '/api/events', { title: '달력 지난주 반복', startDate: kst(-7), endDate: kst(-7), startTime: hm, repeat: 'weekly', projectIds: ['cal-p1'], assignees: ['이팀원'] });
       await jobs.sendEventSoonReminders();
-      var toKim = sent.filter(function (x) { return x.chat === '990001'; }), toLee = sent.filter(function (x) { return x.chat === '990002'; });
+      // 앞에서 만든 09:05 일정은 돌리는 시각에 따라 30분 안에 들 수 있어 셈에서 뺌
+      var toKim = sent.filter(function (x) { return x.chat === '990001' && !/달력 개인 회의/.test(x.msg); }), toLee = sent.filter(function (x) { return x.chat === '990002'; });
       check('30분 안 일정 → 담당에게 한 번', toKim.length === 1 && /분 뒤 시작/.test(toKim[0].msg) && /달력 곧 회의/.test(toKim[0].msg), sent);
       check('50분 뒤 일정은 아직', !sent.some(function (x) { return /달력 먼 회의/.test(x.msg); }));
       check('반복 회차(오늘)도 알림', toLee.length === 1 && /달력 지난주 반복/.test(toLee[0].msg), sent);
+      var n1 = sent.length;
       await jobs.sendEventSoonReminders();
-      check('두 번 돌려도 한 번만', sent.length === 2, sent);
+      check('두 번 돌려도 한 번만', sent.length === n1, sent);
       await c.query("DELETE FROM event_reminder_sent WHERE event_id = $1", [s1.id]);
       await c.query("INSERT INTO notification_prefs (user_id, channel, event_type, is_enabled, tenant_id) VALUES ($1, 'telegram', 'event_soon', FALSE, $2)", [kim, tid]);
       await jobs.sendEventSoonReminders();
-      check('알림 끈 사람은 안 받음', sent.length === 2, sent);
+      check('알림 끈 사람은 안 받음', sent.length === n1, sent);
       await c.query("DELETE FROM notification_prefs WHERE user_id = $1 AND event_type = 'event_soon'", [kim]);
       await c.query('DELETE FROM telegram_links WHERE chat_id IN (990001, 990002)');
     } else {

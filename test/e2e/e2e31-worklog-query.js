@@ -22,7 +22,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     }
     await page.setViewport({ width: 1400, height: 900 });
     await page.goto('http://localhost:3000/', { waitUntil: 'networkidle2' });
-    await page.evaluate(function () { try { localStorage.removeItem('wm-lastWeek'); localStorage.removeItem('wm-wq-filters'); } catch (e) {} });
+    await page.evaluate(function () { try { localStorage.removeItem('wm-lastWeek'); localStorage.removeItem('wm-wq-filters'); localStorage.removeItem('wm-wd'); } catch (e) {} });
     await page.waitForSelector('#loginEmail', { visible: true });
     await page.type('#loginEmail', 'admin@t.com'); await page.type('#loginPw', 'Test1234!');
     await page.keyboard.press('Enter');
@@ -79,11 +79,12 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(await page.evaluate(function () { return sCL.size === 0 && selWeek && selWeek.start === '20261018'; }), '필터 초기화는 주차를 그대로 둠');
 
     // 상세 표 — 수주명 · 거래처 한 칸에 붙어서
+    await page.evaluate(function () { wdSetGroup('none'); });   // v13.266 기본은 사람별 묶음 — 낱개로 펼쳐 놓고 확인
     var cell = await page.evaluate(function () { var td = document.querySelector('#tBody .oc-cell'); if (!td) return null; var a = td.querySelector('.oc-nm').getBoundingClientRect(), b = td.querySelector('.oc-cl').getBoundingClientRect(); return { span: td.colSpan, nm: td.querySelector('.oc-nm').textContent, cl: td.querySelector('.oc-cl').textContent, gap: Math.round(b.left - a.right) }; });
     check(cell && cell.span === 2 && cell.nm === '조회수주명' && cell.cl === '조회거래처' && cell.gap >= 0 && cell.gap <= 16, '수주명 바로 옆 거래처 ' + JSON.stringify(cell));
     await page.evaluate(function () { togEdit(); });
     check(await page.evaluate(function () { return !!document.querySelector('#tBody td[data-field="ocmt"]') && !!document.querySelector('#tBody td[data-field="oclient"]'); }), '편집 모드는 두 칸 따로 고침');
-    await page.evaluate(function () { cancelEdits(); });
+    await page.evaluate(function () { cancelEdits(); wdSetGroup('name'); });
 
     // 휴대폰 — 가로로 넘치지 않음
     await page.setViewport({ width: 390, height: 844 });
