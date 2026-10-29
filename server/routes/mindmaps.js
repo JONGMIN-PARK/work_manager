@@ -387,6 +387,55 @@ router.get('/', async function (req, res) {
   }
 });
 
+// GET /api/mindmaps/search?q= — v13.267 내용 검색: 볼 수 있는 맵의 제목 · 주제 · 내용 줄 · 메모 · 라벨에서 찾음.
+// 맵마다 맞은 주제(시트 · 위 단계 경로 포함) 최대 5개와 전체 개수
+router.get('/search', async function (req, res) {
+  try {
+    var q = String(req.query.q || '').trim().slice(0, 100);
+    if (!q) return res.json({ data: [] });
+    var vis = mmVisible.visibleMapsSql(req, 2);
+    var params = [req.tenant.id].concat(vis.params);
+    var like = '%' + q.replace(/[\\%_]/g, function (c) { return '\\' + c; }) + '%';
+    params.push(like);
+    var li = '$' + vis.nextIdx;
+    var r = await db.query(
+      'SELECT m.id, m.title, m.doc FROM mindmaps m WHERE m.tenant_id = $1 AND m.deleted_at IS NULL AND ' + vis.sql +
+      ' AND (m.title ILIKE ' + li + ' OR m.doc::text ILIKE ' + li + ') ORDER BY m.updated_at DESC LIMIT 300', params);
+    var ql = q.toLowerCase();
+    var out = [];
+    r.rows.forEach(function (row) {
+      var doc = row.doc;
+      if (typeof doc === 'string') { try { doc = JSON.parse(doc); } catch (_) { doc = null; } }
+      var hits = [], total = 0;
+      ((doc && doc.sheets) || []).forEach(function (sh, si) {
+        (function walk(n, path) {
+          if (!n) return;
+          var lines = (n.blocks || []).map(function (b) { return b && b.t === 'text' ? b.v || '' : ''; }).join(' ');
+          var where = String(n.text || '').toLowerCase().indexOf(ql) >= 0 ? 'text'
+            : lines.toLowerCase().indexOf(ql) >= 0 ? 'blocks'
+            : String(n.note || '').toLowerCase().indexOf(ql) >= 0 ? 'note'
+            : (n.labels || []).join(' ').toLowerCase().indexOf(ql) >= 0 ? 'label' : '';
+          if (where) {
+            total++;
+            if (hits.length < 5) {
+              var src = where === 'text' ? n.text : where === 'blocks' ? lines : where === 'note' ? n.note : (n.labels || []).join(', ');
+              var at = String(src || '').toLowerCase().indexOf(ql);
+              var snip = String(src || '').slice(Math.max(0, at - 30), at + ql.length + 50);
+              hits.push({ sheet: si, sheetTitle: sh.title || '', node: n.id, text: String(n.text || '').slice(0, 120), where: where, snip: snip, path: path.slice(-3) });
+            }
+          }
+          (n.children || []).forEach(function (c) { walk(c, path.concat([String(n.text || '').slice(0, 40)])); });
+        })(sh.root, []);
+      });
+      var titleHit = String(row.title || '').toLowerCase().indexOf(ql) >= 0;
+      if (total || titleHit) out.push({ id: row.id, titleHit: titleHit, total: total, hits: hits });
+    });
+    res.json({ data: out });
+  } catch (e) {
+    httpErr.serverError(res, '[mindmaps/search]', e);
+  }
+});
+
 // GET /api/mindmaps/:id — 단건 (doc + 내 권한)
 router.get('/:id', async function (req, res) {
   try {

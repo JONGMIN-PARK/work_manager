@@ -319,6 +319,7 @@ function mmOpen(id) {
   var wrap = _mmEl('mindmapWrap');
   if (!wrap) return;
   if (_mm.view === 'editor' && _mm.mapId && _mm.mapId !== id) { _mmSaveNow(); _mmLockRelease(); }
+  if (typeof _mmPeekHide === 'function') _mmPeekHide();
   _mm.mapId = id;
   _mm.view = 'editor';
   wrap.innerHTML = '<div class="mm-empty">맵을 여는 중...</div>';
@@ -341,6 +342,7 @@ function mmOpen(id) {
     _mm.search = ''; _mm.hits = []; _mm.hitIdx = -1; _mm.vf = null; _mm.comments = []; _mm.files = [];
     _mm.zoom = 1; _mm.panX = null; _mm.panY = null;
     if (window.innerWidth < 768) _mm.outline = true;   // 휴대폰은 아웃라인 보기로 시작
+    if (typeof _mmRecentPush === 'function') _mmRecentPush(id);   // v13.267 목록의 「최근 연 맵」
     var go = _mmTakeGoto(id);
     _mmRenderEditor();
     if (go) setTimeout(function () { if (_mm.mapId === id) _mmSelect(go); }, 0);

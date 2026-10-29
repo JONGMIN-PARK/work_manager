@@ -79,6 +79,7 @@ else
   run_batch e2e31-worklog-query.js
   run_batch e2e32-weekly-state.js
   run_batch e2e33-drill.js
+  run_batch e2e34-mindmap-list.js
   run_batch api-remind.js
   run_batch api-tasks.js e2e29-tasks.js
   run_batch api-speed.js
