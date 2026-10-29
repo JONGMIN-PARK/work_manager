@@ -2341,6 +2341,73 @@ body.mm-zen-body{overflow:hidden}
   .mtl-hint{display:none}
   .mtl-ln,.mtl-corner{width:76px}
 }
+/* 📝 내 업무 노트 서랍 · 회의 미리보기 (v13.272) — my-work-notes.js. 서랍 틀은 상세 패널(.mwp) 그대로 */
+.mwn-btn{position:relative}
+.mwn-btn.on{background:var(--ac-bg);border-color:var(--ac);color:var(--ac-t)}
+.mwn-btn.has::after{content:'';position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:#F59E0B}
+.mwn-ttl{font-size:14px;color:var(--t1)}
+.mwn-ib{background:none;border:none;cursor:pointer;font-size:14px;padding:4px 6px;border-radius:6px;color:var(--t4)}
+.mwn-ib:hover{background:var(--bg-hv)}
+.mwn-nav{display:flex;align-items:center;gap:4px;padding:8px 12px;border-bottom:1px solid var(--bd)}
+.mwn-nav>button{background:var(--bg-i);border:1px solid var(--bd);border-radius:7px;color:var(--t3);cursor:pointer;padding:4px 10px;font-size:13px;font-family:inherit}
+.mwn-nav>button:hover{color:var(--t1)}
+.mwn-date{position:relative;flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--t1);cursor:pointer;padding:4px 0;border-radius:7px}
+.mwn-date:hover{background:var(--bg-hv)}
+.mwn-date input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.mwn-tod{font-size:12px!important}
+.mwn-find{padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;flex-direction:column;gap:6px;max-height:45vh;overflow-y:auto}
+.mwn-find .mw-input{width:100%;box-sizing:border-box}
+.mwn-list{display:flex;flex-direction:column;gap:2px}
+.mwn-fi{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;text-align:left;border:none;background:none;border-radius:7px;padding:6px 6px;cursor:pointer;font-family:inherit;color:var(--t2);font-size:12px}
+.mwn-fi:hover{background:var(--bg-hv)}
+.mwn-fi b{font-size:11px;color:var(--t4);white-space:nowrap}
+.mwn-fi span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mwn-fi i{font-style:normal;font-size:10px;color:var(--t6)}
+.mwn-e{font-size:12px;color:var(--t6);padding:8px 4px}
+.mwn-b{gap:10px}
+.mwn-mt{display:flex;flex-direction:column;gap:4px}
+.mwn-mtr{display:flex;align-items:center;gap:8px;border:1px solid var(--bd);background:var(--bg);border-radius:8px;padding:7px 10px;cursor:pointer;font-family:inherit;color:var(--t2);font-size:13px;text-align:left}
+.mwn-mtr:hover{border-color:#06B6D4}
+.mwn-mtr b{font-size:12px;color:#0891B2}
+.mwn-mtr span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mwn-mtr i{font-style:normal;font-size:11px;color:var(--t5);white-space:nowrap}
+.mwn-ref{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--t1)}
+.mwn-ref button{background:var(--bg-i);border:1px solid var(--bd);border-radius:7px;cursor:pointer;color:var(--t3);padding:2px 9px}
+.mwn-ref b{color:#0891B2}
+.mwn-bf{border:1px solid var(--bd);border-radius:9px;padding:6px 10px;background:var(--bg)}
+.mwn-bf summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--t3);display:flex;align-items:center;gap:6px}
+.mwn-om{margin-left:auto;padding:3px 9px;font-size:11px}
+.mwn-bf-e{font-size:12px;color:var(--t5);padding:4px 0}
+.mwn-bf-p{font-size:11px;color:var(--t5);margin-top:4px}
+.mwn-bf-l{font-size:10px;font-weight:700;color:var(--t5);margin-top:6px}
+.mwn-bf-a{margin:2px 0 0;padding-left:16px;font-size:12px;color:var(--t2);display:flex;flex-direction:column;gap:2px}
+.mwn-bf-a li.is-done{color:var(--t5);text-decoration:line-through}
+.mwn-bf-a i{font-style:normal;color:var(--t5);font-size:11px}
+.mwn-bf-m{font-size:12px;color:var(--t3);line-height:1.5;margin-top:2px}
+.mwn-ed{display:flex;flex-direction:column;gap:0;min-height:200px}
+.mwn-r{display:flex;align-items:center;gap:6px;border-radius:6px;padding:0 2px}
+.mwn-r:hover,.mwn-r:focus-within{background:var(--bg-hv)}
+.mwn-dot{width:16px;text-align:center;color:var(--t6);flex:none;font-size:12px}
+.mwn-t{flex:1;min-width:0;border:none;background:transparent;color:var(--t1);font-size:14px;padding:6px 2px;font-family:inherit;outline:none;line-height:1.5}
+.mwn-r.is-todo .mwn-t{color:var(--t4)}
+.mwn-up{flex:none;border:none;background:none;color:var(--ac-t);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:5px;opacity:0}
+.mwn-r:hover .mwn-up,.mwn-r:focus-within .mwn-up{opacity:.85}
+.mwn-up:hover{background:var(--ac-bg);opacity:1}
+.mwn-ok{flex:none;width:16px;height:16px;border:none;border-radius:4px;background:#10B981;color:#fff;font-size:10px;line-height:16px;padding:0;cursor:pointer}
+.mwn-tip{font-size:11px;color:var(--t6)}
+.mwn-tip code{background:var(--bg-i);border-radius:4px;padding:0 4px}
+.mwn-old summary{cursor:pointer;font-size:12px;color:var(--t4);font-weight:600}
+@media (hover:none){.mwn-up{opacity:.8}}
+/* 타임라인 · 달력의 노트 점 */
+.mtl-nd{position:absolute;top:30px;width:6px;height:6px;border-radius:50%;background:#F59E0B;cursor:pointer;z-index:1}
+.mtl-cd.has-note span{text-decoration:underline;text-decoration-color:#F59E0B;text-decoration-thickness:2px;text-underline-offset:3px}
+/* 회의 미리보기 카드 */
+.mwn-card{position:fixed;z-index:10040;width:300px;background:var(--bg-p);border:1px solid var(--bd2);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px 12px;display:none;color:var(--t2)}
+.mwn-card-h b{display:block;font-size:13px;color:var(--t1)}
+.mwn-card-h i{font-style:normal;font-size:11px;color:var(--t5)}
+.mwn-card-b{font-size:12px;color:var(--t4);margin:4px 0 8px;max-height:220px;overflow-y:auto}
+.mwn-card-f{display:flex;gap:6px;justify-content:flex-end}
+.mwn-card-f .mw-btn{padding:4px 10px}
 /* 휴지통 · 맵으로 — my-work-io.js */
 .mwio-trash b{font-weight:700;color:var(--d-t);margin-left:2px}
 .mwtr-list{display:flex;flex-direction:column;gap:6px;margin-top:12px;max-height:55vh;overflow-y:auto}

@@ -244,6 +244,8 @@ MwTimeline.prototype.view = function () {
 MwTimeline.prototype.drawAxis = function () {
   var self = this, st = this.st, ppd = st.ppd, v = this.view(), tn = _mtlNum(_mtlToday());
   var a = '', b = '', n0 = Math.max(this.from, v.n0 - 2), n1 = Math.min(this.to, v.n1 + 2);
+  var nd = {};   // 📝 노트 있는 날 (v13.272)
+  (this.o.noteDays ? this.o.noteDays() : []).forEach(function (d) { nd[d] = true; });
   if (ppd < 6) {   // 년 — 달 · 해
     for (var n = n0 - 40; n <= n1; n++) {
       var d = _mtlYmd(n);
@@ -259,6 +261,7 @@ MwTimeline.prototype.drawAxis = function () {
       var show = ppd >= 14 || dow === 1;
       if (show) a += '<span class="mtl-t2' + (dow === 0 || hol ? ' is-sun' : dow === 6 ? ' is-sat' : '') + (m === tn ? ' is-today' : '') + '" style="left:' + xx + 'px;width:' + (ppd >= 14 ? ppd : 7 * ppd) + 'px"' + (hol ? ' title="' + _mwEsc(hol) + '"' : '') + '>' +
         (ppd >= 60 ? (+dd.slice(5, 7)) + '/' + (+dd.slice(8, 10)) + ' ' + MWT_WD[dow] + (hol ? ' · ' + _mwEsc(hol) : '') : +dd.slice(8, 10)) + '</span>';
+      if (nd[dd]) a += '<i class="mtl-nd" data-nd="' + dd + '" style="left:' + (xx + ppd / 2 - 3) + 'px" title="📝 노트 있음 — 누르면 열기"></i>';
       if (dow === 0 || dow === 6 || hol) b += '<i class="mtl-we' + (hol ? ' is-hol' : '') + '" style="left:' + xx + 'px;width:' + ppd + 'px"></i>';
       if (ppd >= 14 || dow === 1) b += '<i class="mtl-vl' + (dow === 1 ? ' is-w' : '') + '" style="left:' + xx + 'px"></i>';
       if (ppd >= 60) for (var hh = 6; hh < 24; hh += 6) b += '<i class="mtl-vl is-h" style="left:' + (xx + hh / 24 * ppd) + 'px"></i>';
@@ -318,6 +321,7 @@ MwTimeline.prototype.setPick = function (d) {
     if (this.st.link) this.calMonth = d.slice(0, 7);
     this.drawCal();
   }
+  if (this.o.onPick) this.o.onPick(d, this);
 };
 MwTimeline.prototype.hoverAt = function (clientX) {
   var r = this.sc.getBoundingClientRect(), x = this.sc.scrollLeft + clientX - r.left;
@@ -391,6 +395,21 @@ MwTimeline.prototype.bind = function () {
   // 마우스 — 안내선
   sc.addEventListener('mousemove', function (e) { if (!self._drag && !self._pan) self.hoverAt(e.clientX); });
   sc.addEventListener('mouseleave', function () { el.querySelector('.mtl-guide.is-hover').hidden = true; self.hover = null; });
+  // 회의 일정에 마우스를 올리면 회의록 미리보기 카드 (v13.272, my-work-notes.js)
+  sc.addEventListener('mouseover', function (e) {
+    var n = e.target.closest && e.target.closest('.mtl-it');
+    if (!n || typeof mwMeetingCard !== 'function') return;
+    var t = self.find(n.getAttribute('data-tk'));
+    if (!t || !t.ev || t.ev.type !== 'meeting') return;
+    clearTimeout(self._mcT);
+    self._mcT = setTimeout(function () { if (!self._drag && n.isConnected) mwMeetingCard(t, n.getBoundingClientRect()); }, 350);
+  });
+  sc.addEventListener('mouseout', function (e) {
+    var n = e.target.closest && e.target.closest('.mtl-it');
+    if (!n || (e.relatedTarget && n.contains(e.relatedTarget))) return;
+    clearTimeout(self._mcT);
+    if (typeof mwMeetingCardHide === 'function') mwMeetingCardHide();
+  });
 
   // 끌기 — 빈 곳 = 가로 이동, 항목 = 마감 · 기간 바꾸기 (마우스). 손가락은 아래 touch
   sc.addEventListener('pointerdown', function (e) {
@@ -446,6 +465,8 @@ MwTimeline.prototype.bind = function () {
   // 누르기
   sc.addEventListener('click', function (e) {
     if (self._noClick && Date.now() - self._noClick < 300) return;
+    var ndb = e.target.closest('[data-nd]');
+    if (ndb && typeof mwNotesOpen === 'function') { mwNotesOpen(ndb.getAttribute('data-nd')); return; }
     var ag = e.target.closest('[data-agg]');
     if (ag) { self.st.center = +ag.getAttribute('data-agg') + 3.5; self.zoomTo(MWT_PPD.month); return; }
     var cl = e.target.closest('[data-cl]');
@@ -541,6 +562,8 @@ MwTimeline.prototype.drawCal = function () {
   var cal = this.el.querySelector('.mtl-cal');
   if (!cal || !this.st.cal) return;
   var self = this, ym = this.calBase(), today = _mtlToday(), by = this.byDay;
+  var nd = {};
+  (this.o.noteDays ? this.o.noteDays() : []).forEach(function (d) { nd[d] = true; });
   var narrow = _mtlNarrow(), h = '';
   var year = this.st.ppd < 6;
   h += '<div class="mtl-cal-hd"><button data-cn="-1" title="이전">◀</button><b>' + (year ? ym.slice(0, 4) + '년' : ym.slice(0, 4) + '.' + (+ym.slice(5, 7))) + '</b><button data-cn="1" title="다음">▶</button>' +
@@ -564,7 +587,7 @@ MwTimeline.prototype.drawCal = function () {
     for (var i = 0; i < cells; i++) {
       var n = g0 + i, d = _mtlYmd(n), ts = by[d] || [], dow = i % 7, hol = _mtlHol(d);
       var dots = ts.slice(0, 3).map(function (t) { return '<i style="background:' + (t.late ? '#DC2626' : t.ev ? (t.color || '#06B6D4') : t.pri <= 2 ? '#F97316' : '#94A3B8') + '"></i>'; }).join('');
-      h += '<button class="mtl-cd' + (d.slice(0, 7) !== ym && cells === 42 ? ' is-out' : '') + (d === today ? ' is-today' : '') + (dow === 0 || hol ? ' is-sun' : dow === 6 ? ' is-sat' : '') +
+      h += '<button class="mtl-cd' + (nd[d] ? ' has-note' : '') + (d.slice(0, 7) !== ym && cells === 42 ? ' is-out' : '') + (d === today ? ' is-today' : '') + (dow === 0 || hol ? ' is-sun' : dow === 6 ? ' is-sat' : '') +
         (d === self.pick ? ' is-pick' : '') + (d === self.hover && self.st.link ? ' is-hover' : '') + '" data-cd="' + d + '" title="' + _mwEsc(d + (hol ? ' ' + hol : '') + (ts.length ? ' · ' + ts.length + '개' : '')) + '">' +
         '<span>' + (+d.slice(8, 10)) + '</span><em>' + (ts.length > 3 ? '<b>' + ts.length + '</b>' : dots) + '</em></button>';
     }
@@ -747,6 +770,9 @@ function _mtlMainInst() {
       mwSetDue(it, _mtlYmd(_mtlNum(it.due) + shift));
     },
     onAdd: function (date, x, y) { if (_mw.data && _mw.data.self) mwtQuickAdd(date, x, y); },
+    noteDays: function () { return (_mw.data && _mw.data.self && _mw.data.noteDays) || []; },
+    // 🔗 연동 — 노트 서랍이 열려 있으면 고른 날 노트로 (v13.272)
+    onPick: function (d, tl) { if (tl.st.link && typeof mwNotesIsOpen === 'function' && mwNotesIsOpen()) mwNotesGo(d); },
     loadMore: function (v) {
       if (_mtlEv.from && _mtlYmd(v.n0) >= _mtlEv.from && _mtlYmd(v.n1) <= _mtlEv.to) return;
       clearTimeout(_mtlMain._ldT);

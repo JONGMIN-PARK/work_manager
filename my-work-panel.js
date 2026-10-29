@@ -33,6 +33,7 @@ function _mwpIsTodo(it) { return it && it.src === 'todo' && _mw.data && _mw.data
 function mwPanelOpen(it, opt) {
   if (!it) return;
   opt = opt || {};
+  if (typeof mwNotesIsOpen === 'function' && mwNotesIsOpen()) mwNotesClose(true);   // 노트 서랍과 같은 자리 — 하나만 (v13.272)
   if (_mwp.key && _mwp.key !== it.key) _mwpFlush();
   _mwp.key = it.key; _mwp.it = it;
   _mw.sel = it.key;
@@ -475,10 +476,11 @@ document.addEventListener('keydown', function (e) {
   if (_mw.view === 'week' || _mw.view === 'month') return;
   var t = e.target;
   if (e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (t && (t.closest && t.closest('input,textarea,select,[contenteditable="true"],#mwPanel,.wa-modal-overlay,.mw-pmenu'))) return;
+  if (t && (t.closest && t.closest('input,textarea,select,[contenteditable="true"],#mwPanel,#mwNotes,.wa-modal-overlay,.mw-pmenu'))) return;
   if (document.querySelector('.wa-modal-overlay')) return;
   var k = e.key;
   if (k === 'Escape' && mwPanelIsOpen()) { mwPanelClose(); return; }
+  if (k === 'Escape' && typeof mwNotesIsOpen === 'function' && mwNotesIsOpen()) { mwNotesClose(); return; }
   if (k === '?') { _mwKeysHelp(); e.preventDefault(); return; }
   if (k === 'n') { var a = document.getElementById('mwAddTitle'); if (a) { e.preventDefault(); a.focus(); } return; }
   var rows = _mwKeyRows();

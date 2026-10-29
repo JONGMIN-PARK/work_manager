@@ -203,6 +203,8 @@ function _mwPaintNow(el) {
       }).join('') + '</select>' : '') +
       (typeof mwCalToolsHtml === 'function' ? mwCalToolsHtml(r) : '') +
       (typeof mwIoToolsHtml === 'function' ? mwIoToolsHtml(r) : '') +
+      (r.self && typeof mwNotesOpen === 'function' ? '<button class="mw-btn mwn-btn' + (typeof mwNotesIsOpen === 'function' && mwNotesIsOpen() ? ' on' : '') + ((r.noteDays || []).indexOf(today) >= 0 ? ' has' : '') +
+        '" data-mwn="open" title="📝 노트 — 끄적 메모 · 회의 메모 (줄을 할 일로 올리기)">📝 노트</button>' : '') +
       '<button class="mw-btn" data-mw="refresh" title="새로 고침">↻</button>' +
     '</div></div>';
   h += '<div id="mwtSlot"></div>';   // 🕒 타임라인 · 옆 달력 (v13.271, my-work-timeline.js — 다시 그려도 그 띠는 그대로 옮겨 붙임)
@@ -352,6 +354,7 @@ function _mwBind(el) {
   el.onclick = function (e) {
     var t = e.target;
     if (t.closest('[data-mw="refresh"]')) { renderMyWork(); return; }
+    if (t.closest('[data-mwn="open"]')) { mwNotesToggle(); return; }
     if (typeof mwIoClick === 'function' && mwIoClick(e)) return;
     if (typeof mwBoardClick === 'function' && mwBoardClick(e)) return;
     if (typeof mwCalClick === 'function' && mwCalClick(e)) return;

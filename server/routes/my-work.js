@@ -11,6 +11,10 @@
  *   DELETE /api/my-work/trash/:id        하나 영구 삭제 · DELETE /api/my-work/trash 비우기
  *   GET·POST /api/my-work/categories     내 칸 (없으면 기본 4칸을 만들어 줌) · PUT·DELETE /categories/:id
  *   PUT    /api/my-work/categories-order { ids } · POST /api/my-work/categories-reset 기본 4칸으로
+ *   GET    /api/my-work/notes?date=      📝 그날 노트들 (v13.272 — ref '' = 그날 노트, 'ev:<일정 id>' = 회의 메모). 본인만
+ *   PUT    /api/my-work/notes            { date, ref, body } — 빈 글이면 지움
+ *   GET    /api/my-work/notes/find?q=    검색 (q 없으면 최근)
+ *   GET    /api/my-work/meeting-brief?eventId=   회의 일정 → 회의록 요약 (안건 · 회의록 앞부분 · 내 액션). 회의 화면과 같은 권한
  *   GET    /api/my-work/load?weeks=&deptId=   업무 부하 (관리자 · 임원 · 팀장)
  *   PUT    /api/my-work/reassign         { src, id, fromUserId, toUserId } — 담당 바꾸기 (관리자 · 임원 · 팀장)
  *   GET    /api/my-work/events?userId=&from=&to=   내 일정 (만든 것 · 담당에 내 이름) — 달력 보기용 (v13.252)
@@ -37,6 +41,7 @@ var myWork = require('../lib/my-work');
 var myEvents = require('../lib/my-events');
 var prio = require('../lib/priority');
 var repeatNext = require('../lib/todo-repeat').repeatNext;
+var pa = require('../lib/project-access');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -100,6 +105,9 @@ router.get('/', async function (req, res) {
     catP.catch(function () {});
     var trP = wantId === req.user.sub ? db.query('SELECT COUNT(*)::int AS n FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NOT NULL', [req.tenant.id, req.user.sub]) : null;
     if (trP) trP.catch(function () {});
+    // 📝 노트 있는 날 (타임라인 · 달력 점) — 본인만 (v13.272)
+    var ndP = wantId === req.user.sub ? db.query("SELECT DISTINCT note_date FROM my_notes WHERE tenant_id = $1 AND user_id = $2 AND body <> ''", [req.tenant.id, req.user.sub]) : null;
+    if (ndP) ndP.catch(function () {});
     // v13.270: 내 것이면 사람 확인을 기다리지 않고 바로 모으기 시작 (한 번 왕복 줄임)
     var self = wantId === req.user.sub;
     var uP = targetUser(req, req.query.userId);
@@ -132,7 +140,8 @@ router.get('/', async function (req, res) {
       if (m.sort_order != null) it.order = m.sort_order;
       if (m.category_id) it.cat = m.category_id;
     });
-    res.json({ data: items, user: toUser(u), today: myWork.kstToday(), self: self, cats: await catP, trashN: trP ? (await trP).rows[0].n : 0 });
+    res.json({ data: items, user: toUser(u), today: myWork.kstToday(), self: self, cats: await catP, trashN: trP ? (await trP).rows[0].n : 0,
+      noteDays: ndP ? (await ndP).rows.map(function (x) { return x.note_date; }) : [] });
   } catch (e) { httpErr.serverError(res, '[my-work/list]', e); }
 });
 
@@ -345,6 +354,78 @@ router.delete('/trash', async function (req, res) {
   try {
     res.json({ data: { n: await purgeTodos(req, null) } });
   } catch (e) { httpErr.serverError(res, '[my-work/trash-empty]', e); }
+});
+
+/* ═══ 📝 노트 (v13.272) — 본인만 ═══ */
+var NOTE_MAX = 20000;
+function cleanRef(v) { var s = String(v == null ? '' : v); return s === '' || /^ev:[^\s]{1,110}$/.test(s) ? s : null; }
+
+router.get('/notes', async function (req, res) {
+  try {
+    var d = cleanDue(req.query.date);
+    if (!d) return httpErr.sendError(res, 400, 'VALIDATION', '날짜가 맞지 않습니다.');
+    var r = await db.query('SELECT ref, body, updated_at FROM my_notes WHERE tenant_id = $1 AND user_id = $2 AND note_date = $3', [req.tenant.id, req.user.sub, d]);
+    res.json({ data: { date: d, notes: r.rows.map(function (x) { return { ref: x.ref, body: x.body, updatedAt: x.updated_at }; }) } });
+  } catch (e) { httpErr.serverError(res, '[my-work/notes]', e); }
+});
+
+router.put('/notes', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var d = cleanDue(b.date), ref = cleanRef(b.ref);
+    if (!d || ref == null) return httpErr.sendError(res, 400, 'VALIDATION', '날짜 · 회의가 맞지 않습니다.');
+    var body = String(b.body == null ? '' : b.body);
+    if (body.length > NOTE_MAX) return httpErr.sendError(res, 400, 'VALIDATION', '노트는 ' + NOTE_MAX + '자까지입니다.');
+    if (!body.trim()) {
+      await db.query('DELETE FROM my_notes WHERE user_id = $1 AND note_date = $2 AND ref = $3 AND tenant_id = $4', [req.user.sub, d, ref, req.tenant.id]);
+      return res.json({ data: { date: d, ref: ref, updatedAt: null, empty: true } });
+    }
+    var r = await db.query(
+      'INSERT INTO my_notes (user_id, note_date, ref, tenant_id, body) VALUES ($1, $2, $3, $4, $5) ' +
+      'ON CONFLICT (user_id, note_date, ref) DO UPDATE SET body = EXCLUDED.body, updated_at = now() RETURNING updated_at',
+      [req.user.sub, d, ref, req.tenant.id, body]);
+    res.json({ data: { date: d, ref: ref, updatedAt: r.rows[0].updated_at } });
+  } catch (e) { httpErr.serverError(res, '[my-work/notes-put]', e); }
+});
+
+// GET /notes/find?q= — 맞은 줄 조각 (q 없으면 최근 고친 것)
+router.get('/notes/find', async function (req, res) {
+  try {
+    var q = String(req.query.q || '').trim().slice(0, 100);
+    var params = [req.tenant.id, req.user.sub], cond = '';
+    if (q) { params.push('%' + q.replace(/[\\%_]/g, function (c) { return '\\' + c; }) + '%'); cond = ' AND body ILIKE $3'; }
+    var r = await db.query("SELECT note_date, ref, body, updated_at FROM my_notes WHERE tenant_id = $1 AND user_id = $2 AND body <> ''" + cond + ' ORDER BY ' + (q ? 'note_date DESC' : 'updated_at DESC') + ' LIMIT 30', params);
+    var ql = q.toLowerCase();
+    res.json({ data: r.rows.map(function (x) {
+      var lines = x.body.split('\n').map(function (l) { return l.replace(/⟦[^⟧]*⟧/g, '').replace(/^- \[[ x]\] /, '').trim(); }).filter(Boolean);
+      var hit = ql ? lines.filter(function (l) { return l.toLowerCase().indexOf(ql) >= 0; }) : lines;
+      return { date: x.note_date, ref: x.ref, snip: (hit[0] || lines[0] || '').slice(0, 120), lines: lines.length, updatedAt: x.updated_at };
+    }) });
+  } catch (e) { httpErr.serverError(res, '[my-work/notes-find]', e); }
+});
+
+// GET /meeting-brief?eventId= — 회의 일정 → 회의록 요약. 권한은 회의 화면과 같게 (프로젝트 읽기 · 프로젝트 없으면 만든 사람)
+router.get('/meeting-brief', async function (req, res) {
+  try {
+    var ev = String(req.query.eventId || '').slice(0, 100);
+    if (!ev) return httpErr.sendError(res, 400, 'VALIDATION');
+    var r = await db.query('SELECT m.id, m.title, m.meet_date, m.project_id, m.agenda, m.minutes, m.created_by, p.name AS project_name FROM meetings m ' +
+      'LEFT JOIN projects p ON p.id = m.project_id AND p.tenant_id = m.tenant_id WHERE m.event_id = $1 AND m.tenant_id = $2 LIMIT 1', [ev, req.tenant.id]);
+    var m = r.rows[0];
+    if (!m) return res.json({ data: null });   // 회의록 없는 일정
+    var ok = m.project_id ? await pa.canReadById(req, m.project_id) : m.created_by === req.user.sub;
+    if (!ok) return res.json({ data: { locked: true, title: m.title } });
+    var acts = await db.query('SELECT title, due_date, status, assignee_id, assignee_name FROM meeting_action_items WHERE meeting_id = $1 AND tenant_id = $2 ORDER BY sort_order, created_at', [m.id, req.tenant.id]);
+    var agenda = (Array.isArray(m.agenda) ? m.agenda : []).map(function (g) {
+      return typeof g === 'string' ? { text: g, done: false, result: '' } : { text: String((g && g.text) || ''), done: !!(g && g.done), result: String((g && g.result) || '') };
+    }).filter(function (g) { return g.text; });
+    var me = req.user.sub, myName = req.user.name || '';
+    res.json({ data: { meetingId: m.id, title: m.title, date: m.meet_date, projectId: m.project_id, projectName: m.project_name || '',
+      agenda: agenda.slice(0, 8), agendaN: agenda.length, minutes: String(m.minutes || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300),
+      actionN: acts.rows.length,
+      myActions: acts.rows.filter(function (a) { return a.assignee_id === me || (!a.assignee_id && myName && a.assignee_name === myName); })
+        .map(function (a) { return { title: a.title, due: a.due_date, done: a.status === 'done' }; }) } });
+  } catch (e) { httpErr.serverError(res, '[my-work/meeting-brief]', e); }
 });
 
 /* ═══ 내 칸 — 카테고리 (v13.268) ═══ */
