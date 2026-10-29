@@ -250,9 +250,10 @@ function mwUndoToast(msg, undo, label) {
   if (b) b.onclick = function () { t.remove(); clearTimeout(_mwp.undoT); undo(); };
   _mwp.undoT = setTimeout(function () { t.classList.remove('on'); setTimeout(function () { t.remove(); }, 250); }, 6000);
 }
-/** 완료 · 되돌리기 — 목록 체크 · 패널 · 단축키 공용 */
-function mwSetDone(it, done) {
+/** 완료 · 되돌리기 — 목록 체크 · 패널 · 단축키 공용. anchor = 사전검토 고르기 메뉴를 띄울 자리 */
+function mwSetDone(it, done, anchor) {
   if (!it || !it.canDone || !!it.done === !!done) return Promise.resolve();
+  if (it.src === 'prestudy' || it.src === 'milestone') return mwCloseOther(it, done, anchor);
   var prev = { done: it.done, doneAt: it.doneAt, focus: it.focus };
   it.done = done; it.doneAt = done ? new Date().toISOString() : null; if (done) it.focus = null;
   _mwPaint(); if (_mwp.key === it.key) _mwpRender(document.getElementById('mwPanel'));
@@ -288,6 +289,37 @@ function mwSetDue(it, due, time) {
     _mwToast('❌ ' + _mwErr(e), 'error');
   });
 }
+/* 사전검토 · 마일스톤 완료 (v13.269) — 원래 화면 저장 API 로 (알림 · 일정 동기화 · 변경 기록도 그쪽에서)
+   사전검토는 끝내는 방법이 셋이라 메뉴에서 고름 (확정 · 보류 · 드롭), 마일스톤은 바로 '완료' */
+var MW_PS_CLOSE = [['won', '✅ 확정'], ['hold', '⏸ 보류'], ['dropped', '❌ 드롭']];
+function mwCloseOther(it, done, anchor) {
+  if (!done) return it._prevStatus ? _mwCloseApply(it, it._prevStatus, false) : Promise.resolve();
+  if (it.src === 'milestone') return _mwCloseApply(it, 'done', true);
+  if (!anchor || !anchor.isConnected) anchor = document.querySelector('#mMyWork [data-key="' + it.key + '"], #mMyWork [data-qk="' + it.key + '"]') || document.getElementById('mwPanel');
+  return new Promise(function (resolve) {
+    _mwbPop(anchor, '<div class="mw-pmenu-n">사전검토 끝내기 — 사전검토 화면에도 반영</div>' + MW_PS_CLOSE.map(function (x) {
+      return '<button data-v="' + x[0] + '">' + x[1] + '</button>';
+    }).join(''), function (v) { resolve(_mwCloseApply(it, v, true)); }, function () {
+      _mwPaint(); if (_mwp.key === it.key) _mwpRender(document.getElementById('mwPanel')); resolve();   // 고르지 않으면 체크 되돌림
+    });
+  });
+}
+function _mwCloseApply(it, status, done) {
+  var url = (it.src === 'prestudy' ? '/api/prestudies/' : '/api/milestones/') + encodeURIComponent(it.id);
+  var prev = { done: it.done, doneAt: it.doneAt, focus: it.focus, status: it.status, prevStatus: it._prevStatus };
+  if (done) it._prevStatus = it.status;
+  it.done = done; it.doneAt = done ? new Date().toISOString() : null; it.status = status; if (done) it.focus = null;
+  _mwPaint(); if (_mwp.key === it.key) _mwpRender(document.getElementById('mwPanel'));
+  return apiFetch(url, { method: 'PUT', body: JSON.stringify({ status: status }) }).then(function () {
+    if (!done) { it._prevStatus = null; _mwToast('↩ 다시 열었습니다'); return; }
+    var lb = it.src === 'milestone' ? '◆ 마일스톤 완료 — 프로젝트에도 반영' : (MW_PS_CLOSE.filter(function (x) { return x[0] === status; })[0] || ['', status])[1] + ' — 사전검토에도 반영';
+    mwUndoToast(lb, function () { mwSetDone(it, false); });
+  }).catch(function (e) {
+    it.done = prev.done; it.doneAt = prev.doneAt; it.focus = prev.focus; it.status = prev.status; it._prevStatus = prev.prevStatus;
+    _mwPaint(); _mwToast('❌ ' + _mwErr(e), 'error');
+  });
+}
+
 /** 개인 할 일 지우기 — 휴지통으로 (v13.268, 비우기 전까지 보관). 되돌리기 = 되살리기 */
 function mwDeleteTodo(it) {
   if (!it || it.src !== 'todo') return;
@@ -347,7 +379,7 @@ function _mwpBind(p) {
   p.addEventListener('change', function (e) {
     var it = _mwp.it, t = e.target;
     if (!it) return;
-    if (t.matches('[data-p="done"]')) return mwSetDone(it, t.checked);
+    if (t.matches('[data-p="done"]')) return mwSetDone(it, t.checked, t);
     if (t.id === 'mwpDue') return mwSetDue(it, t.value || null);
     if (t.id === 'mwpCat') return mwSetCat(it, t.value);
     if (t.id === 'mwpTime') { if (!it.due) return; _mwpQueue({ dueTime: t.value || null }, 0); return; }
@@ -455,7 +487,7 @@ document.addEventListener('keydown', function (e) {
   var it = _mwFind(_mw.sel);
   if (!it) return;
   if (k === 'Enter' || k === 'o') { e.preventDefault(); mwPanelOpen(it); return; }
-  if (k === 'x' || k === ' ') { e.preventDefault(); if (it.canDone) mwSetDone(it, !it.done); else _mwToast('이 항목은 원래 화면에서 완료합니다', 'warn'); return; }
+  if (k === 'x' || k === ' ') { e.preventDefault(); if (it.canDone) mwSetDone(it, !it.done, rows[i]); else _mwToast(it.src === 'milestone' ? '이 마일스톤은 프로젝트 편집 권한이 있어야 완료할 수 있습니다' : '이 항목은 원래 화면에서 완료합니다', 'warn'); return; }
   if (/^[1-4]$/.test(k)) {
     if (!it.canPri || it.done) return;
     var v = +k;

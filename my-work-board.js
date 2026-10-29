@@ -149,11 +149,11 @@ function mwSetCat(it, catId) {
 }
 
 /* ── 떠 있는 작은 메뉴 (칸 옮기기 · 마감) ─────────────────────────── */
-function _mwbPop(anchor, html, onPick) {
+function _mwbPop(anchor, html, onPick, onCancel) {
   var old = document.getElementById('mwbPop');
-  if (old) { var same = old._a === anchor; old.remove(); if (same) return; }
+  if (old) { var same = old._a === anchor; if (old._cancel) old._cancel(); old.remove(); if (same) return; }
   var m = document.createElement('div');
-  m.id = 'mwbPop'; m.className = 'mw-pmenu mwb-pop'; m._a = anchor;
+  m.id = 'mwbPop'; m.className = 'mw-pmenu mwb-pop'; m._a = anchor; m._cancel = onCancel || null;
   m.innerHTML = html;
   document.body.appendChild(m);
   var r = anchor.getBoundingClientRect();
@@ -162,17 +162,19 @@ function _mwbPop(anchor, html, onPick) {
   m.onclick = function (ev) {
     var b = ev.target.closest('[data-v]');
     if (!b) return;
+    m._cancel = null;
     m.remove();
     onPick(b.getAttribute('data-v'));
   };
+  function cancel() { var f = m._cancel; m._cancel = null; m.remove(); if (f) f(); }
   setTimeout(function () {
-    document.addEventListener('mousedown', function off(ev) { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener('mousedown', off); } });
+    document.addEventListener('mousedown', function off(ev) { if (!m.isConnected) { document.removeEventListener('mousedown', off); return; } if (!m.contains(ev.target)) { cancel(); document.removeEventListener('mousedown', off); } });
   }, 0);
   var first = m.querySelector('button');
   if (first) first.focus();
   m.addEventListener('keydown', function (ev) {
     var bs = Array.from(m.querySelectorAll('button')), i = bs.indexOf(document.activeElement);
-    if (ev.key === 'Escape') { ev.stopPropagation(); m.remove(); }
+    if (ev.key === 'Escape') { ev.stopPropagation(); cancel(); }
     else if (ev.key === 'ArrowDown') { ev.preventDefault(); bs[Math.min(bs.length - 1, i + 1)].focus(); }
     else if (ev.key === 'ArrowUp') { ev.preventDefault(); bs[Math.max(0, i - 1)].focus(); }
   });

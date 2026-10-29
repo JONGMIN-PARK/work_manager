@@ -16,12 +16,18 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await c.query('DELETE FROM my_work_marks WHERE user_id = $1', [me.id]);
     await c.query('DELETE FROM my_work_categories WHERE user_id = $1', [me.id]);
     await c.query("DELETE FROM issues WHERE id LIKE 'bd-%'");
+    await c.query("DELETE FROM prestudies WHERE id LIKE 'bd-%'");
+    await c.query("DELETE FROM milestone_assignments WHERE id LIKE 'bd-%'");
+    await c.query("DELETE FROM milestones WHERE id LIKE 'bd-%'");
     await c.query("DELETE FROM projects WHERE id LIKE 'bd-%'");
     await c.query("DELETE FROM mindmaps WHERE title LIKE '보드%' OR title LIKE '내 업무 %'");
   }
   await clean();
   await c.query("INSERT INTO projects (id, name, status, visibility, owner_id, tenant_id) VALUES ('bd-p1', '보드 프로젝트', 'active', 'tenant', $1, $2)", [me.id, tid]);
   await c.query("INSERT INTO issues (id, project_id, title, status, urgency, due_date, assignees, tenant_id) VALUES ('bd-i1', 'bd-p1', '보드 이슈', 'open', 'high', $1, '[\"관리자\"]', $2)", [kst(1), tid]);
+  await c.query("INSERT INTO prestudies (id, title, client, owner_id, due_date, status, priority, tenant_id) VALUES ('bd-s1', '보드 사전검토', 'C사', $1, $2, 'reviewing', 'normal', $3)", [me.id, kst(4), tid]);
+  await c.query("INSERT INTO milestones (id, project_id, name, end_date, status, tenant_id) VALUES ('bd-ms1', 'bd-p1', '보드 마일스톤', $1, 'progress', $2)", [kst(6), tid]);
+  await c.query("INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id) VALUES ('bd-ma1', $1, 'bd-ms1', 'bd-p1', $2)", [tid, me.id]);
   var ins = function (title, due, pri) { return c.query("INSERT INTO my_todos (id, tenant_id, user_id, title, due_date, priority, checklist) VALUES ($1,$2,$3,$4,$5,$6,$7)", ['todo-bd' + Math.random().toString(36).slice(2, 8), tid, me.id, title, due, pri, JSON.stringify(title === '보드 견적' ? [{ id: 'c1', t: '단가 확인', d: true }, { id: 'c2', t: '메일', d: false }] : [])]); };
   await ins('보드 견적', kst(0), 1);
   await ins('보드 계획', kst(9), 2);
@@ -61,6 +67,29 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check(await page.evaluate(function () { var c = document.querySelectorAll('.mwb-c'); return c[0].getBoundingClientRect().top === c[3].getBoundingClientRect().top; }), '넓은 화면은 4칸 한 줄');
     check(await page.evaluate(function () { var i = Array.from(document.querySelectorAll('.mwb-i')).filter(function (x) { return /보드 견적/.test(x.textContent); })[0]; return /☑ 1\/2/.test(i.textContent) && /오늘/.test(i.textContent) && /긴급/.test(i.textContent); }), '카드 — 하위 항목 · 마감 · 중요도');
     await page.screenshot({ path: path.join(SHOT, 'board.png') });
+
+    // 1-2. 사전검토 · 마일스톤 완료 체크 (v13.269)
+    var ps = await keyOf('보드 사전검토'), ms = await keyOf('보드 마일스톤');
+    check(await page.evaluate(function (a) { return !!document.querySelector('[data-qk="' + a[0] + '"] input[data-done]') && !!document.querySelector('[data-qk="' + a[1] + '"] input[data-done]'); }, [ps, ms]), '사전검토 · 마일스톤에도 완료 체크');
+    await page.click('[data-qk="' + ps + '"] input[data-done]');
+    await page.waitForSelector('#mwbPop [data-v="hold"]');
+    await page.mouse.click(5, 5);   // 고르지 않고 닫으면 체크 되돌림
+    await wait(300);
+    check(await page.evaluate(function (k) { var b = document.querySelector('[data-qk="' + k + '"] input[data-done]'); return b && !b.checked; }, ps) && (await c.query("SELECT status FROM prestudies WHERE id = 'bd-s1'")).rows[0].status === 'reviewing', '메뉴 그냥 닫기 → 체크 풀림 · 그대로');
+    await page.click('[data-qk="' + ps + '"] input[data-done]');
+    await page.waitForSelector('#mwbPop [data-v="hold"]');
+    await page.click('#mwbPop [data-v="hold"]');
+    await wait(700);
+    check((await c.query("SELECT status FROM prestudies WHERE id = 'bd-s1'")).rows[0].status === 'hold' && !(await keyOf('보드 사전검토')), '사전검토 체크 → ⏸ 보류 고르기 → 사전검토에 반영 · 보드에서 빠짐');
+    await page.click('#mwUndo button');
+    await wait(700);
+    check((await c.query("SELECT status FROM prestudies WHERE id = 'bd-s1'")).rows[0].status === 'reviewing' && !!(await keyOf('보드 사전검토')), '되돌리기 → 원래 상태 (검토중)');
+    await page.click('[data-qk="' + ms + '"] input[data-done]');
+    await wait(700);
+    check((await c.query("SELECT status FROM milestones WHERE id = 'bd-ms1'")).rows[0].status === 'done', '마일스톤 체크 → 완료');
+    await page.click('#mwUndo button');
+    await wait(700);
+    check((await c.query("SELECT status FROM milestones WHERE id = 'bd-ms1'")).rows[0].status === 'progress', '되돌리기 → 진행');
 
     // 2. 위 요약 거르기
     await page.click('[data-bf="today"]');

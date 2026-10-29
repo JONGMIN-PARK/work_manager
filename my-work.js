@@ -287,6 +287,7 @@ function _mwBind(el) {
 function _mwToggleDone(it, done, box) {
   if (!it) return;
   box.disabled = true;
+  if (it.src === 'prestudy' || it.src === 'milestone') { box.disabled = false; mwSetDone(it, done, box); return; }   // 사전검토는 끝내는 방법을 고름
   var row = box.closest('.mw-row');
   if (row) row.classList.toggle('mw-done', done);
   // 체크가 보인 뒤 '다 한 것' 으로 옮김 — 저장 · 되돌리기 알림은 mwSetDone (my-work-panel.js)

@@ -69,7 +69,8 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check('완료 시각 없는 끝난 주제 · 남의 주제는 빠짐', !r.d.data.some(function (it) { return /끝난 일|이 사람 일/.test(it.title); }));
     check('이슈 긴급 · 지연 마감', by.issue.urgent && by.issue.due === kst(-2) && by.issue.ctx === '내업무 프로젝트', by.issue);
     check('개발 작업 마감 = 마일스톤 종료일', by.dev.due === kst(10), by.dev);
-    check('완료 체크 가능 — 맵 · 이슈 · 회의 · 개발 (사전검토 · 일정은 아님)', by.mindmap.canDone && by.issue.canDone && by.action.canDone && by.dev.canDone && !by.prestudy.canDone && !by.milestone.canDone);
+    // v13.269: 사전검토도 완료 체크 (확정 · 보류 · 드롭), 마일스톤은 그 프로젝트 편집 권한이 있을 때만 — 김은 관리자 프로젝트 멤버가 아님
+    check('완료 체크 가능 — 맵 · 이슈 · 회의 · 개발 · 사전검토 (편집 권한 없는 프로젝트의 일정은 아님)', by.mindmap.canDone && by.issue.canDone && by.action.canDone && by.dev.canDone && by.prestudy.canDone && !by.milestone.canDone);
 
     // 개인 할 일
     var t = await K('POST', '/api/my-work/todos', { title: '내업무 메모', dueDate: kst(2) });

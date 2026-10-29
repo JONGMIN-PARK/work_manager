@@ -37,6 +37,7 @@ var myWork = require('../lib/my-work');
 var myEvents = require('../lib/my-events');
 var prio = require('../lib/priority');
 var repeatNext = require('../lib/todo-repeat').repeatNext;
+var pa = require('../lib/project-access');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -102,6 +103,17 @@ router.get('/', async function (req, res) {
       it.canDone = canDone && DONE_SRC.indexOf(it.src) >= 0 && (it.src !== 'todo' || self);
       it.canPri = canDone && prio.SRC.indexOf(it.src) >= 0 && (it.src !== 'todo' || self);
     });
+    // 사전검토 · 마일스톤 (v13.269) — 완료는 원래 화면 저장 API 로 (클라가 PUT /api/prestudies · /api/milestones).
+    //   사전검토 = 담당 본인 · 관리자 (확정 · 보류 · 드롭 중 고름), 마일스톤 = 그 프로젝트 편집 권한
+    if (canDone) {
+      var msProj = {};
+      items.forEach(function (it) { if (it.src === 'milestone' && it.projectId) msProj[it.projectId] = false; });
+      await Promise.all(Object.keys(msProj).map(async function (pid) { msProj[pid] = !!(await pa.canEditById(req, pid)); }));
+      items.forEach(function (it) {
+        if (it.src === 'prestudy') it.canDone = true;
+        if (it.src === 'milestone') it.canDone = !!msProj[it.projectId];
+      });
+    }
     // ⭐ 오늘 집중 · 직접 순서 — 그 사람 표시 (끝난 일의 표시는 정리)
     var mk = await mkP;
     var byKey = {};
