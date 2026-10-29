@@ -19,6 +19,7 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await c.query("DELETE FROM issues WHERE id LIKE 'twu-%'");
     await c.query("DELETE FROM projects WHERE id LIKE 'twu-%'");
     await c.query('DELETE FROM my_work_marks WHERE user_id = $1', [me.id]);
+    await c.query('DELETE FROM my_work_categories WHERE user_id = $1', [me.id]);
   }
   await clean();
   await c.query("INSERT INTO projects (id, name, status, visibility, owner_id, tenant_id) VALUES ('twu-p1', '할일화면 프로젝트', 'active', 'tenant', $1, $2)", [me.id, tid]);
@@ -179,7 +180,8 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await wait(500);
     await page.keyboard.press('Delete');
     await wait(600);
-    check((await c.query("SELECT COUNT(*)::int AS n FROM my_todos WHERE title = '할일화면 견적'")).rows[0].n === 0, 'Delete → 지움 (묻지 않음)');
+    check((await c.query("SELECT COUNT(*)::int AS n FROM my_todos WHERE title = '할일화면 견적' AND deleted_at IS NOT NULL")).rows[0].n === 1, 'Delete → 휴지통으로 (묻지 않음)');
+    check(!(await rowOf('할일화면 견적')), '휴지통 항목은 목록에서 빠짐');
     await page.click('#mwUndo button');
     check(await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '할일화면 견적'; }); }), '되돌리기 → 되살림');
     var back2 = (await c.query("SELECT priority, repeat, memo, checklist FROM my_todos WHERE title = '할일화면 견적'")).rows[0];
@@ -245,22 +247,26 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     var am = (await c.query("SELECT title, start_time, end_time FROM events WHERE type = 'amoff' AND created_by = $1 AND start_date = $2", [me.id, kst(3)])).rows[0];
     check(am && am.title === '오전반차' && am.start_time === '09:00' && am.end_time === '13:00', '오전반차 저장 ' + JSON.stringify(am));
 
-    // 7. 4칸 보기
+    // 7. 보드 (v13.268 — 예전 4칸, 기본 칸은 중요 × 급함 자동)
     await page.click('#mMyWork [data-mwc-view="matrix"]');
-    await page.waitForSelector('#mMyWork .mwq');
-    var q = await page.evaluate(function () { var o = {}; document.querySelectorAll('[data-quad]').forEach(function (s) { o[s.getAttribute('data-quad')] = s.textContent; }); return o; });
-    check(/할일화면 견적/.test(q[1]) && /할일화면 이슈/.test(q[2]), '4칸 — 긴급·내일 = 지금 하기, 높음·5일 뒤 = 계획하기');
+    await page.waitForSelector('#mMyWork .mwb');
+    var q = await page.evaluate(function () { var o = {}; document.querySelectorAll('.mwb-c[data-col]').forEach(function (s) { o[s.querySelector('.mwb-name').textContent] = s.textContent; }); return o; });
+    check(/할일화면 견적/.test(q['🔥 지금 하기']) && /할일화면 이슈/.test(q['📅 계획하기']), '보드 기본 칸 — 긴급·내일 = 지금 하기, 높음·5일 뒤 = 계획하기 ' + Object.keys(q).join(','));
     await page.screenshot({ path: path.join(SHOT, 'tasks-matrix.png') });
-    // 계획하기 → 나중에 로 끌면 보통
+    // 계획하기 → 나중에 로 끌면 그 칸에 고정 (중요도는 그대로)
     var qk = await page.evaluate(function () { var x = Array.from(document.querySelectorAll('[data-qk]')).filter(function (e) { return /할일화면 이슈/.test(e.textContent); })[0]; return x.getAttribute('data-qk'); });
     await page.evaluate(function (k) {
-      var src = document.querySelector('[data-qk="' + k + '"]'), dst = document.querySelector('[data-quad="4"] .mwq-l'), dt = new DataTransfer();
+      var dst = Array.from(document.querySelectorAll('.mwb-c')).filter(function (s) { return /나중에/.test(s.querySelector('.mwb-name').textContent); })[0].querySelector('.mwb-l');
+      var src = document.querySelector('[data-qk="' + k + '"]'), dt = new DataTransfer();
       src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
       dst.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
       dst.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
     }, qk);
     await wait(700);
-    check((await c.query("SELECT urgency FROM issues WHERE id = 'twu-i1'")).rows[0].urgency === 'normal', '4칸에서 덜 중요 칸으로 끌기 → 보통');
+    check((await c.query("SELECT urgency FROM issues WHERE id = 'twu-i1'")).rows[0].urgency === 'high', '보드에서 끌어도 중요도는 그대로');
+    var pin = (await c.query("SELECT k.name FROM my_work_marks m JOIN my_work_categories k ON k.id = m.category_id WHERE m.user_id = $1 AND m.item_key = 'issue:twu-i1'", [me.id])).rows[0];
+    check(pin && /나중에/.test(pin.name), '끌어 놓은 칸에 고정 ' + JSON.stringify(pin));
+    check(await page.evaluate(function (k) { var c = document.querySelector('[data-qk="' + k + '"]').closest('.mwb-c'); return /나중에/.test(c.querySelector('.mwb-name').textContent) && !!c.querySelector('[data-qk="' + k + '"] .mwb-pin'); }, qk), '화면에서도 나중에 칸 · 📌 표시');
 
     // 8. 주 보기 — 마감 시각 있는 할 일은 시간 칸에
     await page.click('#mMyWork [data-mwc-view="week"]');

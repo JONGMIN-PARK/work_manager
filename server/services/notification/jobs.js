@@ -300,7 +300,7 @@ async function sendTodoSoonReminders(today, hm, until) {
   var r = await db.query(
     "SELECT t.id, t.title, t.due_time, t.priority, t.user_id, tl.chat_id, tl.remind_lead FROM my_todos t " +
     "JOIN telegram_links tl ON tl.user_id = t.user_id AND tl.is_active = TRUE JOIN users u ON u.id = t.user_id AND u.status = 'active' " +
-    "WHERE t.done_at IS NULL AND t.due_date = $1 AND t.due_time > $2 AND t.due_time <= $3 " +
+    "WHERE t.done_at IS NULL AND t.deleted_at IS NULL AND t.due_date = $1 AND t.due_time > $2 AND t.due_time <= $3 " +
     "AND NOT EXISTS (SELECT 1 FROM notification_prefs np WHERE np.user_id = t.user_id AND np.channel = 'telegram' AND np.event_type = 'event_soon' AND np.is_enabled = FALSE)",
     [today, hm, until]);
   for (var i = 0; i < r.rows.length; i++) {

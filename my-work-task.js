@@ -4,7 +4,7 @@
    중요도 4단계 (1 긴급 · 2 높음 · 3 보통 · 4 낮음) — 이슈 · 회의 액션 · 개발 · 사전검토 · 맵 주제는 원래 자리에 반영
    ⭐ 오늘 집중 · 정렬(마감 · 중요도 · 직접 순서) · 거르기 (할 일 편집은 my-work-panel.js 상세 패널)
    종류별 등록 창 — 할 일 · 회의 · 출장 · 외근 · 연차/반차 · 검토 · 기타 (참석자 고르기 · 겹침 경고 · 회의록 같이 만들기)
-   4칸 보기 — 중요 × 급함
+   중요 × 급함 칸 계산 (mwQuadOf) — 보드 그리기는 my-work-board.js (v13.268)
    서버 API: PUT /api/my-work/priority · /mark · /order · GET /directory · POST·PUT /todos · POST /api/meetings · /api/events
    전역 의존: _mw · _mwPaint · _mwFind · _mwEsc · _mwToast · _mwErr · _mwMe · _mwLS · _mwDays · _mwDueLabel · MW_SRC · mwOpenItem · renderMyWork (my-work.js)
               _mwc · mwCalLoadEvents · _mwcAfterChange · _mwcEventModal (my-work-cal.js) · QuickParse (quick-parse.js)
@@ -396,48 +396,10 @@ function _mwBuildRegister(opt) {
   paintPeople();
 }
 
-/* ═══ 4칸 보기 — 중요 × 급함 ═══ */
-var MW_QUADS = [
-  { q: 1, label: '🔥 지금 하기', sub: '중요 · 급함', cls: 'mwq-1' },
-  { q: 2, label: '📅 계획하기', sub: '중요 · 안 급함', cls: 'mwq-2' },
-  { q: 3, label: '⚡ 빨리 끝내기 · 맡기기', sub: '덜 중요 · 급함', cls: 'mwq-3' },
-  { q: 4, label: '🗂 나중에', sub: '덜 중요 · 안 급함', cls: 'mwq-4' }
-];
-/** 급함 = 지연 · 오늘~2일 안 마감 / 중요 = 긴급 · 높음 */
+/* ═══ 중요 × 급함 — 보드 기본 칸(rule 1~4)의 자동 분류 ═══ */
+/** 급함 = 지연 · 오늘~2일 안 마감 / 중요 = 긴급 · 높음 → 1 지금 하기 · 2 계획하기 · 3 빨리 끝내기 · 4 나중에 */
 function mwQuadOf(it, today) {
   var imp = it.pri <= 2;
   var urg = !!it.due && _mwDays(today, it.due) <= 2;
   return imp ? (urg ? 1 : 2) : (urg ? 3 : 4);
-}
-function mwMatrixHtml(items, today) {
-  var by = { 1: [], 2: [], 3: [], 4: [] };
-  items.forEach(function (it) { if (!it.done) by[mwQuadOf(it, today)].push(it); });
-  return '<div class="mw-sub mwq-hint">중요 = 🔴 긴급 · 🟠 높음 / 급함 = 지연 · 2일 안 마감 — 카드를 위아래 칸으로 끌면 중요도가 바뀝니다</div><div class="mwq">' + MW_QUADS.map(function (Q) {
-    var list = by[Q.q].sort(mwSortFn(''));
-    return '<section class="mwq-c ' + Q.cls + '" data-quad="' + Q.q + '"><div class="mwq-h">' + Q.label + ' <i>' + Q.sub + '</i> <b>' + list.length + '</b></div><div class="mwq-l">' +
-      (list.length ? list.map(function (it) {
-        var s = MW_SRC[it.src] || {};
-        return '<div class="mwq-i"' + (it.canPri ? ' draggable="true"' : '') + ' data-qk="' + _mwEsc(it.key) + '">' + mwPriBadge(it) +
-          '<span class="mwq-t" data-open="' + _mwEsc(it.key) + '">' + (s.icon || '') + ' ' + _mwEsc(it.title) + '</span>' +
-          '<span class="mw-due' + (it.due && it.due < today ? ' mw-late' : '') + '">' + _mwEsc(_mwDueLabel(it.due, today)) + '</span></div>';
-      }).join('') : '<div class="mwq-e">없음</div>') + '</div></section>';
-  }).join('') + '</div>';
-}
-function mwBindMatrix(el) {
-  if (el._mwq) return;
-  el._mwq = true;
-  var key = null;
-  el.addEventListener('dragstart', function (e) { var c = e.target.closest && e.target.closest('[data-qk]'); if (!c) return; key = c.getAttribute('data-qk'); e.dataTransfer.setData('text/plain', key); });
-  el.addEventListener('dragover', function (e) { if (key && e.target.closest && e.target.closest('[data-quad]')) e.preventDefault(); });
-  el.addEventListener('drop', function (e) {
-    var q = e.target.closest && e.target.closest('[data-quad]');
-    if (!key || !q) return;
-    e.preventDefault();
-    var it = _mwFind(key); key = null;
-    if (!it) return;
-    var wantImp = +q.getAttribute('data-quad') <= 2;
-    if (wantImp && it.pri > 2) mwSetPriority(it, 2);
-    else if (!wantImp && it.pri <= 2) mwSetPriority(it, 3);
-  });
-  el.addEventListener('dragend', function () { key = null; });
 }

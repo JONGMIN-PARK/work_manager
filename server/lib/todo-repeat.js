@@ -30,11 +30,11 @@ function nextDue(due, rep) {
 }
 /** 반복 할 일을 끝내면 다음 회차를 만든다 (같은 회차가 이미 있으면 안 만듦 — 완료를 되돌렸다 다시 해도 하나) */
 async function repeatNext(req, id) {
-  var r = await db.query('SELECT * FROM my_todos WHERE id = $1 AND tenant_id = $2 AND user_id = $3', [id, req.tenant.id, req.user.sub]);
+  var r = await db.query('SELECT * FROM my_todos WHERE id = $1 AND tenant_id = $2 AND user_id = $3 AND deleted_at IS NULL', [id, req.tenant.id, req.user.sub]);
   var t = r.rows[0];
   if (!t || !t.repeat) return null;
   var due = nextDue(t.due_date, t.repeat);
-  var dup = await db.query('SELECT id FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND title = $3 AND due_date = $4 AND done_at IS NULL', [req.tenant.id, req.user.sub, t.title, due]);
+  var dup = await db.query('SELECT id FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND title = $3 AND due_date = $4 AND done_at IS NULL AND deleted_at IS NULL', [req.tenant.id, req.user.sub, t.title, due]);
   if (dup.rows.length) return dup.rows[0].id;
   var cl = (Array.isArray(t.checklist) ? t.checklist : []).map(function (c) { return { id: c.id, t: c.t, d: false }; });
   var nid = genId();

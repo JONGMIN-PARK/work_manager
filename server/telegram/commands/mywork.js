@@ -20,7 +20,7 @@ function md(d) { return d ? (+d.slice(5, 7)) + '/' + (+d.slice(8, 10)) : ''; }
 
 async function openTodos(user) {
   var r = await db.query(
-    'SELECT id, title, due_date, due_time, priority, repeat FROM my_todos WHERE user_id = $1 AND tenant_id = $2 AND done_at IS NULL ' +
+    'SELECT id, title, due_date, due_time, priority, repeat FROM my_todos WHERE user_id = $1 AND tenant_id = $2 AND done_at IS NULL AND deleted_at IS NULL ' +
     "ORDER BY priority, COALESCE(NULLIF(due_date, ''), '9999'), due_time NULLS LAST, created_at LIMIT 30",
     [user.user_id, user.tenant_id]);
   return r.rows;
@@ -37,7 +37,7 @@ function create(sendMessage) {
     var q = QuickParse.parse(arg, kstToday());
     var title = q.title.slice(0, 500);
     if (!title) return sendMessage(chatId, '✏️ 할 일 내용을 적어 주세요. 예: <code>/todo 내일 견적 회신</code>');
-    var cnt = await db.query('SELECT COUNT(*)::int AS n FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND done_at IS NULL', [user.tenant_id, user.user_id]);
+    var cnt = await db.query('SELECT COUNT(*)::int AS n FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND done_at IS NULL AND deleted_at IS NULL', [user.tenant_id, user.user_id]);
     if (cnt.rows[0].n >= 300) return sendMessage(chatId, '⚠️ 끝나지 않은 개인 할 일은 300개까지입니다.');
     await db.query('INSERT INTO my_todos (id, tenant_id, user_id, title, due_date, due_time, priority) VALUES ($1,$2,$3,$4,$5,$6,$7)',
       ['todo-' + crypto.randomUUID().slice(0, 12), user.tenant_id, user.user_id, title, q.due, q.due ? q.time : null, q.priority || 3]);

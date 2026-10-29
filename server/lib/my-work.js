@@ -144,7 +144,7 @@ async function collect(req, users, opt) {
   if (want('todo')) jobs.push((async function () {
     if (!onlySelf && !opt.load) return;   // 개인 할 일은 본인만 — 업무 부하에서는 개수만
     var r = await db.query(
-      'SELECT id, user_id, title, due_date, done_at, priority, status, waiting_for, memo, due_time, repeat, estimate_h, checklist FROM my_todos WHERE tenant_id = $1 AND user_id = ANY($2) ' +
+      'SELECT id, user_id, title, due_date, done_at, priority, status, waiting_for, memo, due_time, repeat, estimate_h, checklist FROM my_todos WHERE tenant_id = $1 AND user_id = ANY($2) AND deleted_at IS NULL ' +
       'AND (done_at IS NULL OR ($3::int > 0 AND done_at >= now() - make_interval(days => $3::int)))',
       [tid, ids, doneWin]
     );

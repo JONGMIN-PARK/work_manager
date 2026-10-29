@@ -135,7 +135,14 @@ function _mwpRender(p) {
     h += '<div class="mwp-sec"><div class="mwp-l">메모</div><textarea id="mwpMemo" class="mw-input mwp-memo" data-f="memo" maxlength="5000" placeholder="자세한 내용 · 링크 · 연락처…">' + _mwEsc(it.memo || '') + '</textarea></div>';
   }
   h += '</div>';
-  h += '<div class="mwp-f">' + (todo ? '<button class="mw-btn mwp-del" data-p="delete">🗑 지우기</button>' : '') +
+  // 칸 (v13.268) — 보드의 어느 칸에 있는지 · 옮기기
+  if (_mw.data.self && !it.done && typeof mwBoardColOf === 'function') {
+    var col = mwBoardColOf(it);
+    h += '<div class="mwp-sec"><div class="mwp-l">칸' + (it.cat && col.id === it.cat ? ' <i>📌 고정</i>' : ' <i>자동 — 중요도 · 마감 따라</i>') + '</div><div class="mwp-row"><select id="mwpCat" class="mw-sel">' +
+      mwBoardCols().map(function (c) { return '<option value="' + _mwEsc(c.id) + '"' + (c.id === col.id ? ' selected' : '') + '>' + _mwEsc((c.icon ? c.icon + ' ' : '') + c.name) + '</option>'; }).join('') +
+      '</select>' + (it.cat ? '<button class="mwp-chip" data-p="unpin">고정 풀기</button>' : '') + '</div></div>';
+  }
+  h += '<div class="mwp-f">' + (todo ? '<button class="mw-btn mwp-del" data-p="delete">🗑 휴지통으로</button>' : '') +
     '<span class="mwp-keys" title="단축키">Esc 닫기 · ? 단축키</span></div>';
   p.innerHTML = h;
   if (todo) { _mwpPaintCl(); _mwpGrow(p.querySelector('#mwpTitle')); _mwpGrow(p.querySelector('#mwpMemo')); }
@@ -230,13 +237,13 @@ function _mwpShowState() {
 }
 
 /* ═══ 바로 바뀌는 것 (완료 · 중요도 · 마감 · 집중 · 지우기) — 되돌리기 알림 ═══ */
-function mwUndoToast(msg, undo) {
+function mwUndoToast(msg, undo, label) {
   var old = document.getElementById('mwUndo');
   if (old) old.remove();
   clearTimeout(_mwp.undoT);
   var t = document.createElement('div');
   t.id = 'mwUndo'; t.className = 'mw-undo';
-  t.innerHTML = '<span>' + _mwEsc(msg) + '</span>' + (undo ? '<button>되돌리기</button>' : '');
+  t.innerHTML = '<span>' + _mwEsc(msg) + '</span>' + (undo ? '<button>' + _mwEsc(label || '되돌리기') + '</button>' : '');
   document.body.appendChild(t);
   requestAnimationFrame(function () { t.classList.add('on'); });
   var b = t.querySelector('button');
@@ -281,24 +288,22 @@ function mwSetDue(it, due, time) {
     _mwToast('❌ ' + _mwErr(e), 'error');
   });
 }
-/** 개인 할 일 지우기 — 되돌리면 같은 내용으로 다시 만듦 */
+/** 개인 할 일 지우기 — 휴지통으로 (v13.268, 비우기 전까지 보관). 되돌리기 = 되살리기 */
 function mwDeleteTodo(it) {
   if (!it || it.src !== 'todo') return;
   _mwpFlush();
-  var copy = { title: it.title, dueDate: it.due || null, dueTime: it.dueTime || null, priority: it.pri || 3, status: it.todoStatus || 'todo', waitingFor: it.waitingFor || '',
-    memo: it.memo || '', repeat: it.repeat || null, estimateH: it.estimateH || null, checklist: it.checklist || [] };
-  var wasDone = it.done;
   if (_mwp.key === it.key) mwPanelClose();
   _mw.data.data = _mw.data.data.filter(function (x) { return x !== it; });
+  _mw.data.trashN = (_mw.data.trashN || 0) + 1;
   _mwPaint();
   apiFetch('/api/my-work/todos/' + encodeURIComponent(it.id), { method: 'DELETE' }).then(function () {
-    mwUndoToast('🗑 "' + it.title + '" 지움', function () {
-      apiFetch('/api/my-work/todos', { method: 'POST', body: JSON.stringify(copy) }).then(function (r) {
-        var nid = r && r.data && r.data.id;
-        return wasDone && nid ? apiFetch('/api/my-work/todos/' + encodeURIComponent(nid), { method: 'PUT', body: JSON.stringify({ done: true }) }) : null;
-      }).then(function () { _mwToast('↩ 되살렸습니다'); renderMyWork(); }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); });
-    });
+    mwUndoToast('🗑 "' + it.title + '" 휴지통으로', function () { mwRestoreTodo(it.id); });
   }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); renderMyWork(); });
+}
+function mwRestoreTodo(id) {
+  return apiFetch('/api/my-work/todos/' + encodeURIComponent(id) + '/restore', { method: 'POST' }).then(function () {
+    _mwToast('↩ 되살렸습니다'); renderMyWork();
+  }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); });
 }
 
 /* ═══ 패널 이벤트 (한 번만 묶음) ═══ */
@@ -313,6 +318,7 @@ function _mwpBind(p) {
       if (k === 'focus') { mwToggleFocus(it); setTimeout(function () { if (_mwp.key === it.key) _mwpRender(p); }, 0); return; }
       if (k === 'source') { mwPanelClose(); mwOpenItem(it); return; }   // 다른 화면으로 가면 패널은 닫음
       if (k === 'delete') return mwDeleteTodo(it);
+      if (k === 'unpin') { mwSetCat(it, null); return; }
       if (k === 'done') return;   // change 에서
     }
     var pv = t.closest('[data-pri-v]');
@@ -343,6 +349,7 @@ function _mwpBind(p) {
     if (!it) return;
     if (t.matches('[data-p="done"]')) return mwSetDone(it, t.checked);
     if (t.id === 'mwpDue') return mwSetDue(it, t.value || null);
+    if (t.id === 'mwpCat') return mwSetCat(it, t.value);
     if (t.id === 'mwpTime') { if (!it.due) return; _mwpQueue({ dueTime: t.value || null }, 0); return; }
     if (t.id === 'mwpRep') {
       if (t.value && !it.due) { _mwToast('반복은 마감일이 있어야 합니다 — 마감을 먼저 고르세요', 'warn'); t.value = ''; return; }
@@ -416,7 +423,7 @@ function _mwpBind(p) {
 
 /* ═══ 단축키 — 목록 · 4칸에서 (입력 칸 · 창이 열려 있으면 안 함) ═══ */
 var MW_KEYS_HELP = [['↑ ↓ · j k', '고르기'], ['Enter · o', '상세 열기'], ['x · Space', '완료 / 되돌리기'], ['1 2 3 4', '중요도 긴급 · 높음 · 보통 · 낮음'], ['f', '⭐ 오늘 집중'],
-  ['d', '마감 오늘 → 내일 → 없음'], ['Delete', '개인 할 일 지우기 (되돌리기 가능)'], ['n', '새 할 일 입력'], ['Esc', '패널 닫기'], ['?', '이 도움말']];
+  ['d', '마감 오늘 → 내일 → 없음'], ['m', '다른 칸으로 옮기기 (보드)'], ['Delete', '개인 할 일 휴지통으로 (되돌리기 가능)'], ['n', '새 할 일 입력'], ['Esc', '패널 닫기'], ['?', '이 도움말']];
 function _mwKeyRows() {
   var sel = _mw.view === 'matrix' ? '#mMyWork [data-qk]' : '#mMyWork .mw-row[data-key]';
   return Array.from(document.querySelectorAll(sel)).filter(function (r) { return r.offsetParent !== null; });
@@ -463,6 +470,11 @@ document.addEventListener('keydown', function (e) {
     return;
   }
   if (k === 'f' && _mw.data.self && !it.done) { mwToggleFocus(it); return; }
+  if (k === 'm' && _mw.data.self && !it.done && typeof mwMoveMenu === 'function') {
+    var cardEl = rows[i];
+    if (cardEl) { e.preventDefault(); mwMoveMenu(cardEl, it); }
+    return;
+  }
   if (k === 'd') {
     if (!_mwpCanDue(it)) { _mwToast('이 항목의 마감은 원래 화면에서 바꿉니다', 'warn'); return; }
     var td = _mwpToday();

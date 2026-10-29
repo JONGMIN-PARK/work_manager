@@ -7,8 +7,9 @@
      GET /api/my-work?userId=   GET /api/my-work/people   PUT /api/my-work/done
      POST·PUT·DELETE /api/my-work/todos   GET /api/my-work/load   PUT /api/my-work/reassign
    달력 보기(주 · 월) · 구독은 my-work-cal.js (v13.252)
-   중요도 · 오늘 집중 · 정렬 · 종류별 등록 · 4칸 보기는 my-work-task.js (v13.253)
+   중요도 · 오늘 집중 · 정렬 · 종류별 등록은 my-work-task.js (v13.253)
    상세 패널(자동 저장) · 되돌리기 · 단축키는 my-work-panel.js (v13.254) — 줄을 누르면 패널, 원래 화면은 패널의 [열기]
+   보드(내 칸 · 카테고리)는 my-work-board.js, 휴지통 · 내보내기 · 맵으로는 my-work-io.js (v13.268)
    전역 의존: apiFetch, eH, showToast, currentUser, setPage, setMode, showIssueDetail, showProjectDetail, psOpenModal, _mm
    ═══════════════════════════════════════════════════════════════════════ */
 
@@ -156,6 +157,7 @@ function _mwPaint() {
         return '<option value="' + _mwEsc(u.id) + '"' + (u.id === r.user.id ? ' selected' : '') + '>' + _mwEsc(u.name) + (u.id === _mwMe() ? ' (나)' : u.dept ? ' · ' + _mwEsc(u.dept) : '') + '</option>';
       }).join('') + '</select>' : '') +
       (typeof mwCalToolsHtml === 'function' ? mwCalToolsHtml(r) : '') +
+      (typeof mwIoToolsHtml === 'function' ? mwIoToolsHtml(r) : '') +
       '<button class="mw-btn" data-mw="refresh" title="새로 고침">↻</button>' +
     '</div></div>';
   // 출처 거르기
@@ -178,10 +180,11 @@ function _mwPaint() {
       '<button class="mw-btn" type="button" data-mwt="new" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅 일정 등록…</button></form>';
   }
   if (typeof mwListToolsHtml === 'function') h += mwListToolsHtml();
-  if (_mw.view === 'matrix' && typeof mwMatrixHtml === 'function') {
-    el.innerHTML = '<div class="mw-wrap">' + h + mwMatrixHtml(shown, today) + '</div>';
+  if (_mw.view === 'matrix' && typeof mwBoardHtml === 'function') {   // 보드 — 내 칸 (v13.268, 예전 4칸)
+    el.innerHTML = '<div class="mw-wrap mw-wrap-board">' + h + mwBoardHtml(shown, today) + '</div>';
     _mwBind(el);
-    mwBindMatrix(el);
+    mwBindBoard(el);
+    mwBoardAfterPaint(el);
     if (typeof mwPanelSync === 'function') mwPanelSync();
     return;
   }
@@ -219,7 +222,7 @@ function _mwRowHtml(it, today) {
     (it.src === 'todo' && !it.done && _mw.data.self
       ? '<span class="mw-due mw-due-btn' + (late ? ' mw-late' : '') + (it.due ? '' : ' is-empty') + '" data-open="' + _mwEsc(it.key) + '" title="마감 바꾸기">' + (it.due ? _mwEsc(_mwDueLabel(it.due, today)) + (it.dueTime ? ' ' + _mwEsc(it.dueTime) : '') : '마감 ＋') + '</span>'
       : '<span class="mw-due' + (late ? ' mw-late' : '') + '">' + _mwEsc(_mwDueLabel(it.due, today)) + (it.dueTime ? ' ' + _mwEsc(it.dueTime) : '') + '</span>') +
-    (it.src === 'todo' && _mw.data.self ? '<button class="mw-x" data-del="' + _mwEsc(it.key) + '" title="지우기">×</button>' : '') +
+    (it.src === 'todo' && _mw.data.self ? '<button class="mw-x" data-del="' + _mwEsc(it.key) + '" title="휴지통으로">×</button>' : '') +
     '</div>';
 }
 
@@ -247,6 +250,8 @@ function _mwBind(el) {
   el.onclick = function (e) {
     var t = e.target;
     if (t.closest('[data-mw="refresh"]')) { renderMyWork(); return; }
+    if (typeof mwIoClick === 'function' && mwIoClick(e)) return;
+    if (typeof mwBoardClick === 'function' && mwBoardClick(e)) return;
     if (typeof mwCalClick === 'function' && mwCalClick(e)) return;
     if (typeof mwTaskClick === 'function' && mwTaskClick(e)) return;
     var chip = t.closest('[data-src]');

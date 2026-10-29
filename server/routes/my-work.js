@@ -5,7 +5,12 @@
  *   PUT    /api/my-work/done             { src, id, userId, done } — 원래 자리에서 완료/되돌리기
  *   POST   /api/my-work/todos            { title, dueDate } 개인 할 일
  *   PUT    /api/my-work/todos/:id        { title?, dueDate?, done? }
- *   DELETE /api/my-work/todos/:id
+ *   DELETE /api/my-work/todos/:id        휴지통으로 (v13.268 — 비우기 전까지 보관)
+ *   GET    /api/my-work/trash            휴지통 목록
+ *   POST   /api/my-work/todos/:id/restore 되살리기
+ *   DELETE /api/my-work/trash/:id        하나 영구 삭제 · DELETE /api/my-work/trash 비우기
+ *   GET·POST /api/my-work/categories     내 칸 (없으면 기본 4칸을 만들어 줌) · PUT·DELETE /categories/:id
+ *   PUT    /api/my-work/categories-order { ids } · POST /api/my-work/categories-reset 기본 4칸으로
  *   GET    /api/my-work/load?weeks=&deptId=   업무 부하 (관리자 · 임원 · 팀장)
  *   PUT    /api/my-work/reassign         { src, id, fromUserId, toUserId } — 담당 바꾸기 (관리자 · 임원 · 팀장)
  *   GET    /api/my-work/events?userId=&from=&to=   내 일정 (만든 것 · 담당에 내 이름) — 달력 보기용 (v13.252)
@@ -14,7 +19,7 @@
  *   POST   /api/my-work/feed             구독 주소 만들기 · 다시 만들기 (옛 주소는 끊김)
  *   DELETE /api/my-work/feed             구독 끄기
  *   PUT    /api/my-work/priority         { src, id, userId, priority 1~4 } — 중요도, 원래 자리에 반영 (v13.253)
- *   PUT    /api/my-work/mark             { key, focus } — ⭐ 오늘 집중 (어느 출처든, 내 표시)
+ *   PUT    /api/my-work/mark             { key, focus?, category? } — ⭐ 오늘 집중 · 칸 고정 (어느 출처든, 내 표시)
  *   PUT    /api/my-work/order            { keys: [...] } — 직접 순서
  *   GET    /api/my-work/directory        같은 회사 활성 사용자 이름 (참석자 · 담당 고르기)
  *
@@ -82,8 +87,12 @@ router.get('/', async function (req, res) {
   try {
     // v13.258: 표시(⭐ 집중 · 순서)는 볼 사람 id 만 알면 되므로 권한 확인 · 모으기와 동시에 (예전엔 셋을 차례로)
     var wantId = req.query.userId || req.user.sub;
-    var mkP = db.query('SELECT item_key, focus_date, sort_order FROM my_work_marks WHERE user_id = $1 AND tenant_id = $2', [wantId, req.tenant.id]);
+    var mkP = db.query('SELECT item_key, focus_date, sort_order, category_id FROM my_work_marks WHERE user_id = $1 AND tenant_id = $2', [wantId, req.tenant.id]);
     mkP.catch(function () {});
+    var catP = categoriesOf(req, wantId, wantId === req.user.sub);
+    catP.catch(function () {});
+    var trP = wantId === req.user.sub ? db.query('SELECT COUNT(*)::int AS n FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NOT NULL', [req.tenant.id, req.user.sub]) : null;
+    if (trP) trP.catch(function () {});
     var u = await targetUser(req, req.query.userId);
     if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN', '이 사람의 업무를 볼 권한이 없습니다.');
     var items = await myWork.collect(req, [u], { done: true });
@@ -102,8 +111,9 @@ router.get('/', async function (req, res) {
       if (!m) return;
       if (m.focus_date && !it.done) it.focus = m.focus_date;
       if (m.sort_order != null) it.order = m.sort_order;
+      if (m.category_id) it.cat = m.category_id;
     });
-    res.json({ data: items, user: toUser(u), today: myWork.kstToday(), self: self });
+    res.json({ data: items, user: toUser(u), today: myWork.kstToday(), self: self, cats: await catP, trashN: trP ? (await trP).rows[0].n : 0 });
   } catch (e) { httpErr.serverError(res, '[my-work/list]', e); }
 });
 
@@ -238,7 +248,7 @@ router.post('/todos', async function (req, res) {
     if (!String(b.title || '').trim()) return httpErr.sendError(res, 400, 'VALIDATION', '할 일을 입력하세요.');
     var f = todoFields(b);
     if (typeof f === 'string') return httpErr.sendError(res, 400, 'VALIDATION', f);
-    var n = await db.query('SELECT COUNT(*)::int AS n FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND done_at IS NULL', [req.tenant.id, req.user.sub]);
+    var n = await db.query('SELECT COUNT(*)::int AS n FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND done_at IS NULL AND deleted_at IS NULL', [req.tenant.id, req.user.sub]);
     if (n.rows[0].n >= 300) return httpErr.sendError(res, 400, 'VALIDATION', '끝나지 않은 개인 할 일은 300개까지입니다.');
     var cols = ['id', 'tenant_id', 'user_id'], vals = [genId(), req.tenant.id, req.user.sub];
     f.forEach(function (x) { cols.push(x[0]); vals.push(x[1]); });
@@ -257,19 +267,161 @@ router.put('/todos/:id', async function (req, res) {
     if (b.done !== undefined) sets.push(b.done ? 'done_at = COALESCE(done_at, now())' : 'done_at = NULL');
     if (!sets.length) return httpErr.sendError(res, 400, 'VALIDATION', '바꿀 내용이 없습니다.');
     params.push(req.params.id, req.tenant.id, req.user.sub);
-    var r = await db.query('UPDATE my_todos SET ' + sets.join(', ') + ', updated_at = now() WHERE id = $' + (params.length - 2) + ' AND tenant_id = $' + (params.length - 1) + ' AND user_id = $' + params.length + ' RETURNING *', params);
+    var r = await db.query('UPDATE my_todos SET ' + sets.join(', ') + ', updated_at = now() WHERE id = $' + (params.length - 2) + ' AND tenant_id = $' + (params.length - 1) + ' AND user_id = $' + params.length + ' AND deleted_at IS NULL RETURNING *', params);
     if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
     var next = b.done ? await repeatNext(req, req.params.id) : null;
     res.json({ data: r.rows[0], next: next });
   } catch (e) { httpErr.serverError(res, '[my-work/todo-update]', e); }
 });
 
+// 지우기 = 휴지통으로 (v13.268). 비우기 전까지 보관
 router.delete('/todos/:id', async function (req, res) {
   try {
-    var r = await db.query('DELETE FROM my_todos WHERE id = $1 AND tenant_id = $2 AND user_id = $3', [req.params.id, req.tenant.id, req.user.sub]);
+    var r = await db.query('UPDATE my_todos SET deleted_at = now(), updated_at = now() WHERE id = $1 AND tenant_id = $2 AND user_id = $3 AND deleted_at IS NULL', [req.params.id, req.tenant.id, req.user.sub]);
     if (!r.rowCount) return httpErr.sendError(res, 404, 'NOT_FOUND');
     res.json({ data: { id: req.params.id } });
   } catch (e) { httpErr.serverError(res, '[my-work/todo-delete]', e); }
+});
+
+/* ═══ 휴지통 (v13.268) ═══ */
+router.get('/trash', async function (req, res) {
+  try {
+    var r = await db.query('SELECT id, title, due_date, due_time, priority, done_at, deleted_at, memo, checklist FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 1000',
+      [req.tenant.id, req.user.sub]);
+    res.json({ data: r.rows });
+  } catch (e) { httpErr.serverError(res, '[my-work/trash]', e); }
+});
+
+router.post('/todos/:id/restore', async function (req, res) {
+  try {
+    var r = await db.query('UPDATE my_todos SET deleted_at = NULL, updated_at = now() WHERE id = $1 AND tenant_id = $2 AND user_id = $3 AND deleted_at IS NOT NULL RETURNING *', [req.params.id, req.tenant.id, req.user.sub]);
+    if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    res.json({ data: r.rows[0] });
+  } catch (e) { httpErr.serverError(res, '[my-work/todo-restore]', e); }
+});
+
+/** 영구 삭제 — 칸 고정 · 집중 표시도 같이 정리 */
+async function purgeTodos(req, id) {
+  var params = [req.tenant.id, req.user.sub];
+  if (id) params.push(id);
+  var r = await db.query('DELETE FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NOT NULL' + (id ? ' AND id = $3' : '') + ' RETURNING id', params);
+  var keys = r.rows.map(function (x) { return 'todo:' + x.id; });
+  if (keys.length) await db.query('DELETE FROM my_work_marks WHERE user_id = $1 AND tenant_id = $2 AND item_key = ANY($3)', [req.user.sub, req.tenant.id, keys]);
+  return r.rows.length;
+}
+router.delete('/trash/:id', async function (req, res) {
+  try {
+    var n = await purgeTodos(req, req.params.id);
+    if (!n) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    res.json({ data: { n: n } });
+  } catch (e) { httpErr.serverError(res, '[my-work/trash-purge]', e); }
+});
+router.delete('/trash', async function (req, res) {
+  try {
+    res.json({ data: { n: await purgeTodos(req, null) } });
+  } catch (e) { httpErr.serverError(res, '[my-work/trash-empty]', e); }
+});
+
+/* ═══ 내 칸 — 카테고리 (v13.268) ═══ */
+var DEFAULT_CATS = [
+  { name: '지금 하기', icon: '🔥', color: 'red', rule: 1 },
+  { name: '계획하기', icon: '📅', color: 'blue', rule: 2 },
+  { name: '빨리 끝내기 · 맡기기', icon: '⚡', color: 'amber', rule: 3 },
+  { name: '나중에', icon: '🗂', color: 'slate', rule: 4 }
+];
+var CAT_COLORS = ['red', 'orange', 'amber', 'green', 'teal', 'blue', 'purple', 'pink', 'slate'];
+var MAX_CATS = 12;
+function genCatId() { return 'cat-' + crypto.randomUUID().slice(0, 12); }
+function catOut(c) { return { id: c.id, name: c.name, icon: c.icon || '', color: c.color || 'slate', rule: c.rule || null, order: c.sort_order }; }
+/** 그 사람 칸 — 본인이 처음 보면 기본 4칸을 만들어 둠. 남의 것은 없으면 기본 모양만 (저장 안 함) */
+async function categoriesOf(req, userId, seed) {
+  var q = function () { return db.query('SELECT * FROM my_work_categories WHERE tenant_id = $1 AND user_id = $2 ORDER BY sort_order, created_at', [req.tenant.id, userId]); };
+  var r = await q();
+  if (!r.rows.length && seed) {
+    // 처음 두 요청이 겹쳐도 한 벌만 — 기본 칸 id 를 사람마다 정해 두고 겹치면 건너뜀
+    var vals = [], params = [req.tenant.id, userId];
+    DEFAULT_CATS.forEach(function (d, i) {
+      params.push('catd-' + d.rule + '-' + userId, d.name, d.icon, d.color, d.rule, i);
+      var b = params.length;
+      vals.push('($' + (b - 5) + ', $1, $2, $' + (b - 4) + ', $' + (b - 3) + ', $' + (b - 2) + ', $' + (b - 1) + ', $' + b + ')');
+    });
+    await db.query('INSERT INTO my_work_categories (id, tenant_id, user_id, name, icon, color, rule, sort_order) VALUES ' + vals.join(', ') + ' ON CONFLICT (id) DO NOTHING', params);
+    r = await q();
+  }
+  if (!r.rows.length) return DEFAULT_CATS.map(function (d, i) { return { id: 'catd-' + d.rule + '-' + userId, name: d.name, icon: d.icon, color: d.color, rule: d.rule, order: i }; });
+  return r.rows.map(catOut);
+}
+function catFields(b) {
+  var f = [];
+  if (b.name !== undefined) {
+    var n = String(b.name || '').trim().slice(0, 40);
+    if (!n) return '칸 이름을 적어 주세요.';
+    f.push(['name', n]);
+  }
+  if (b.icon !== undefined) f.push(['icon', String(b.icon || '').trim().slice(0, 16) || null]);
+  if (b.color !== undefined) f.push(['color', CAT_COLORS.indexOf(b.color) >= 0 ? b.color : 'slate']);
+  return f;
+}
+
+router.get('/categories', async function (req, res) {
+  try { res.json({ data: await categoriesOf(req, req.user.sub, true) }); } catch (e) { httpErr.serverError(res, '[my-work/cats]', e); }
+});
+
+router.post('/categories', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var f = catFields(Object.assign({}, b, { name: b.name || '' }));
+    if (typeof f === 'string') return httpErr.sendError(res, 400, 'VALIDATION', f);
+    var cur = await categoriesOf(req, req.user.sub, true);
+    if (cur.length >= MAX_CATS) return httpErr.sendError(res, 400, 'VALIDATION', '칸은 ' + MAX_CATS + '개까지 만들 수 있습니다.');
+    var cols = ['id', 'tenant_id', 'user_id', 'sort_order'];
+    var vals = [genCatId(), req.tenant.id, req.user.sub, cur.reduce(function (m, c) { return Math.max(m, c.order); }, -1) + 1];
+    f.forEach(function (x) { cols.push(x[0]); vals.push(x[1]); });
+    var r = await db.query('INSERT INTO my_work_categories (' + cols.join(', ') + ') VALUES (' + vals.map(function (_, i) { return '$' + (i + 1); }).join(',') + ') RETURNING *', vals);
+    res.status(201).json({ data: catOut(r.rows[0]) });
+  } catch (e) { httpErr.serverError(res, '[my-work/cat-create]', e); }
+});
+
+router.put('/categories/:id', async function (req, res) {
+  try {
+    var f = catFields(req.body || {});
+    if (typeof f === 'string') return httpErr.sendError(res, 400, 'VALIDATION', f);
+    if (!f.length) return httpErr.sendError(res, 400, 'VALIDATION', '바꿀 내용이 없습니다.');
+    var params = f.map(function (x) { return x[1]; });
+    var sets = f.map(function (x, i) { return x[0] + ' = $' + (i + 1); });
+    params.push(req.params.id, req.tenant.id, req.user.sub);
+    var r = await db.query('UPDATE my_work_categories SET ' + sets.join(', ') + ' WHERE id = $' + (params.length - 2) + ' AND tenant_id = $' + (params.length - 1) + ' AND user_id = $' + params.length + ' RETURNING *', params);
+    if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    res.json({ data: catOut(r.rows[0]) });
+  } catch (e) { httpErr.serverError(res, '[my-work/cat-update]', e); }
+});
+
+// 칸 지우기 — 들어 있던 항목은 고정이 풀려 자동 분류로 (항목은 그대로)
+router.delete('/categories/:id', async function (req, res) {
+  try {
+    var r = await db.query('DELETE FROM my_work_categories WHERE id = $1 AND tenant_id = $2 AND user_id = $3', [req.params.id, req.tenant.id, req.user.sub]);
+    if (!r.rowCount) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    await db.query('UPDATE my_work_marks SET category_id = NULL, updated_at = now() WHERE user_id = $1 AND tenant_id = $2 AND category_id = $3', [req.user.sub, req.tenant.id, req.params.id]);
+    res.json({ data: { id: req.params.id } });
+  } catch (e) { httpErr.serverError(res, '[my-work/cat-delete]', e); }
+});
+
+router.put('/categories-order', async function (req, res) {
+  try {
+    var ids = (req.body || {}).ids;
+    if (!Array.isArray(ids) || !ids.length || ids.length > MAX_CATS) return httpErr.sendError(res, 400, 'VALIDATION', '순서가 맞지 않습니다.');
+    await db.query('UPDATE my_work_categories c SET sort_order = (t.o - 1)::int FROM unnest($1::text[]) WITH ORDINALITY AS t(k, o) WHERE c.id = t.k AND c.tenant_id = $2 AND c.user_id = $3',
+      [ids.map(String), req.tenant.id, req.user.sub]);
+    res.json({ data: await categoriesOf(req, req.user.sub, false) });
+  } catch (e) { httpErr.serverError(res, '[my-work/cat-order]', e); }
+});
+
+router.post('/categories-reset', async function (req, res) {
+  try {
+    await db.query('DELETE FROM my_work_categories WHERE tenant_id = $1 AND user_id = $2', [req.tenant.id, req.user.sub]);
+    await db.query('UPDATE my_work_marks SET category_id = NULL, updated_at = now() WHERE user_id = $1 AND tenant_id = $2 AND category_id IS NOT NULL', [req.user.sub, req.tenant.id]);
+    res.json({ data: await categoriesOf(req, req.user.sub, true) });
+  } catch (e) { httpErr.serverError(res, '[my-work/cat-reset]', e); }
 });
 
 /* ═══ 업무 부하 ═══ */
@@ -446,18 +598,25 @@ router.put('/priority', async function (req, res) {
 
 function cleanKey(k) { return typeof k === 'string' && /^[a-z]+:[^\s]{1,190}$/.test(k) ? k : null; }
 
-// PUT /api/my-work/mark { key, focus } — 내 표시만
+// PUT /api/my-work/mark { key, focus?, category? } — 내 표시만. 보낸 것만 바꿈 (category null = 칸 고정 풀기)
 router.put('/mark', async function (req, res) {
   try {
     var b = req.body || {};
     var key = cleanKey(b.key);
     if (!key) return httpErr.sendError(res, 400, 'VALIDATION', '항목이 맞지 않습니다.');
-    var focus = b.focus ? myWork.kstToday() : null;
+    if (b.focus === undefined && b.category === undefined) return httpErr.sendError(res, 400, 'VALIDATION', '바꿀 내용이 없습니다.');
+    if (b.category) {
+      var c = await db.query('SELECT id FROM my_work_categories WHERE id = $1 AND tenant_id = $2 AND user_id = $3', [String(b.category), req.tenant.id, req.user.sub]);
+      if (!c.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND', '칸을 찾을 수 없습니다.');
+    }
+    var out = { key: key }, cols = [], vals = [];
+    if (b.focus !== undefined) { out.focus = b.focus ? myWork.kstToday() : null; cols.push('focus_date'); vals.push(out.focus); }
+    if (b.category !== undefined) { out.category = b.category ? String(b.category) : null; cols.push('category_id'); vals.push(out.category); }
     await db.query(
-      'INSERT INTO my_work_marks (user_id, item_key, tenant_id, focus_date) VALUES ($1, $2, $3, $4) ' +
-      'ON CONFLICT (user_id, item_key) DO UPDATE SET focus_date = EXCLUDED.focus_date, updated_at = now()',
-      [req.user.sub, key, req.tenant.id, focus]);
-    res.json({ data: { key: key, focus: focus } });
+      'INSERT INTO my_work_marks (user_id, item_key, tenant_id, ' + cols.join(', ') + ') VALUES ($1, $2, $3' + cols.map(function (_, i) { return ', $' + (i + 4); }).join('') + ') ' +
+      'ON CONFLICT (user_id, item_key) DO UPDATE SET ' + cols.map(function (x) { return x + ' = EXCLUDED.' + x; }).join(', ') + ', updated_at = now()',
+      [req.user.sub, key, req.tenant.id].concat(vals));
+    res.json({ data: out });
   } catch (e) { httpErr.serverError(res, '[my-work/mark]', e); }
 });
 

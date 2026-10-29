@@ -82,6 +82,7 @@ else
   run_batch e2e34-mindmap-list.js
   run_batch api-remind.js
   run_batch api-tasks.js e2e29-tasks.js
+  run_batch api-board.js e2e35-board.js
   run_batch api-speed.js
 fi
 
