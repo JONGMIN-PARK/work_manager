@@ -173,6 +173,7 @@ function _mwPaint() {
   if (!el || !_mw.data) return;
   var keep = _mwKeepInputs(el);
   _mwPaintNow(el);
+  if (typeof mwTimelineMount === 'function') mwTimelineMount(el);
   _mwRestoreInputs(el, keep);
 }
 function _mwPaintNow(el) {
@@ -204,6 +205,7 @@ function _mwPaintNow(el) {
       (typeof mwIoToolsHtml === 'function' ? mwIoToolsHtml(r) : '') +
       '<button class="mw-btn" data-mw="refresh" title="새로 고침">↻</button>' +
     '</div></div>';
+  h += '<div id="mwtSlot"></div>';   // 🕒 타임라인 · 옆 달력 (v13.271, my-work-timeline.js — 다시 그려도 그 띠는 그대로 옮겨 붙임)
   // 출처 거르기
   h += '<div class="mw-chips"><button class="mw-chip' + (_mw.src === 'all' ? ' on' : '') + '" data-src="all">전체 ' + items.filter(function (x) { return !x.done; }).length + '</button>' +
     Object.keys(MW_SRC).filter(function (k) { return counts[k]; }).map(function (k) {
@@ -279,7 +281,7 @@ function _mwFind(key) { return ((_mw.data && _mw.data.data) || []).filter(functi
 function mwTodoItem(x) {
   var cl = Array.isArray(x.checklist) ? x.checklist : [];
   var it = { src: 'todo', id: x.id, key: 'todo:' + x.id, userId: x.user_id || (_mw.data.user && _mw.data.user.id), title: String(x.title || '').split('\n')[0].trim() || '(제목 없음)', ctx: '',
-    due: x.due_date || null, done: !!x.done_at, doneAt: x.done_at || null, pri: +x.priority || 3, estimateH: x.estimate_h != null ? Number(x.estimate_h) : null,
+    start: x.start_date || null, due: x.due_date || null, done: !!x.done_at, doneAt: x.done_at || null, pri: +x.priority || 3, estimateH: x.estimate_h != null ? Number(x.estimate_h) : null,
     todoStatus: x.status || 'todo', waitingFor: x.waiting_for || '', memo: x.memo || '', dueTime: x.due_time || null, repeat: x.repeat || null, checklist: cl,
     canDone: true, canPri: true, weight: 1 };
   it.urgent = it.pri === 1;
@@ -300,7 +302,7 @@ function mwPutTodo(row, extra) {
 function mwAddTodo(body, catId) {
   if (!_mw.data || !_mw.data.self) return apiFetch('/api/my-work/todos', { method: 'POST', body: JSON.stringify(body) }).then(function () { renderMyWork(); });
   var tmp = 'tmp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  var it = mwTodoItem({ id: tmp, title: body.title, due_date: body.dueDate || null, due_time: body.dueTime || null, priority: body.priority || 3,
+  var it = mwTodoItem({ id: tmp, title: body.title, start_date: body.startDate || null, due_date: body.dueDate || null, due_time: body.dueTime || null, priority: body.priority || 3,
     repeat: body.repeat || null, memo: body.memo || null, checklist: [] });
   it.pending = true; it.canDone = false; it.canPri = false;
   if (catId) it.cat = catId;
@@ -435,8 +437,18 @@ function _mwPaintLoad() {
       (Object.keys(depts).length > 1 ? '<select id="mwDept" class="mw-sel"><option value="">전체 부서</option>' + Object.keys(depts).map(function (d) {
         return '<option value="' + _mwEsc(d) + '"' + (d === _mw.dept ? ' selected' : '') + '>' + _mwEsc(depts[d]) + '</option>';
       }).join('') + '</select>' : '') +
+      '<span class="mwc-seg">' + [['table', '표'], ['tl', '🕒 타임라인']].map(function (x) {
+        return '<button class="mwc-seg-b' + ((_mwLS('loadview') || 'table') === x[0] ? ' on' : '') + '" data-lv="' + x[0] + '">' + x[1] + '</button>';
+      }).join('') + '</span>' +
       '<select id="mwWeeks" class="mw-sel">' + [4, 8, 12].map(function (w) { return '<option value="' + w + '"' + (w === _mw.weeks ? ' selected' : '') + '>' + w + '주</option>'; }).join('') + '</select>' +
       '<button class="mw-btn" data-mw="refresh" title="새로 고침">↻</button></div></div>';
+  // 🕒 팀 타임라인 (v13.271) — 사람마다 한 줄, 마감 ◆ · 기간 막대 · 🌴 휴가
+  if (_mwLS('loadview') === 'tl' && typeof mwLoadTimelineMount === 'function') {
+    el.innerHTML = '<div class="mw-wrap">' + h + '<div id="mwtLoadSlot"></div></div>';
+    _mwBindLoad(el);
+    mwLoadTimelineMount(el);
+    return;
+  }
   h += '<div class="mw-load-scroll"><table class="mw-load"><thead><tr><th class="mw-l-name">사람</th><th class="mw-l-late">지연</th>' +
     L.weeks.map(function (w, i) { return '<th' + (i === 0 ? ' class="mw-l-now"' : '') + '>' + (i === 0 ? '이번 주' : (+w.slice(5, 7)) + '/' + (+w.slice(8, 10))) + '</th>'; }).join('') +
     '<th>이후</th><th>마감 없음</th><th>합계</th></tr></thead><tbody>';
@@ -531,6 +543,8 @@ function _mwBindLoad(el) {
   el.onclick = function (e) {
     var t = e.target;
     if (t.closest('[data-mw="refresh"]')) { renderWorkload(); return; }
+    var lv = t.closest('[data-lv]');
+    if (lv) { _mwLS('loadview', lv.getAttribute('data-lv')); _mwPaintLoad(); return; }
     var c = t.closest('[data-cell]');
     if (c) {
       var p = c.getAttribute('data-cell').split('|');

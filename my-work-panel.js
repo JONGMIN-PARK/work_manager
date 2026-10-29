@@ -117,7 +117,8 @@ function _mwpRender(p) {
     h += '<div class="mwp-quick">' + _mwpQuickDues().map(function (q) {
       return '<button class="mwp-chip' + (it.due === q[1] ? ' on' : '') + '" data-due-v="' + q[1] + '">' + q[0] + '</button>';
     }).join('') + '<button class="mwp-chip" data-due-v="">없음</button></div>' +
-      '<div class="mwp-row"><input id="mwpDue" type="date" class="mw-input" value="' + _mwEsc(it.due || '') + '">' +
+      '<div class="mwp-row">' + (todo ? '<label class="mwp-start" title="시작일 — 있으면 타임라인에 시작 ~ 마감 막대로">시작 <input id="mwpStart" type="date" class="mw-input" value="' + _mwEsc(it.start || '') + '"' + (it.due ? ' max="' + _mwEsc(it.due) + '"' : '') + '></label><span class="mwp-tilde">~</span>' : '') +
+      '<input id="mwpDue" type="date" class="mw-input" value="' + _mwEsc(it.due || '') + '">' +
       (todo ? '<input id="mwpTime" type="time" step="300" class="mw-input" value="' + _mwEsc(it.dueTime || '') + '" title="마감 시각 — 30분 전 텔레그램 알림"' + (it.due ? '' : ' disabled') + '>' : '') + '</div>';
   } else {
     h += '<div class="mwp-ro">' + (it.due ? _mwEsc(it.due) : '없음') + (it.done ? '' : ' <i>— ' + _mwEsc(s.label) + ' 화면에서 바꿉니다</i>') + '</div>';
@@ -222,6 +223,7 @@ function _mwpApply(it, b) {
   if ('status' in b) it.todoStatus = b.status;
   if ('waitingFor' in b) it.waitingFor = b.waitingFor;
   if ('dueDate' in b) it.due = b.dueDate;
+  if ('startDate' in b) it.start = b.startDate;
   if ('dueTime' in b) it.dueTime = b.dueTime;
   if ('repeat' in b) it.repeat = b.repeat;
   if ('estimateH' in b) it.estimateH = b.estimateH;
@@ -273,6 +275,7 @@ function mwSetDue(it, due, time) {
   var prev = { due: it.due || null, dueTime: it.dueTime || null };
   if (it.src === 'todo') {
     var b = { dueDate: due || null };
+    if (it.start && due && due < it.start) b.startDate = due;   // 마감을 시작보다 앞으로 옮기면 시작도 같이 (v13.271)
     if (!due) b.dueTime = null; else if (time !== undefined) b.dueTime = time;
     if (_mwp.key === it.key) { _mwpQueue(b, 0); _mwpApply(it, b); _mwpRender(document.getElementById('mwPanel')); _mwPaint(); }
     else {
@@ -384,6 +387,10 @@ function _mwpBind(p) {
     if (!it) return;
     if (t.matches('[data-p="done"]')) return mwSetDone(it, t.checked, t);
     if (t.id === 'mwpDue') return mwSetDue(it, t.value || null);
+    if (t.id === 'mwpStart') {   // 시작일 (v13.271) — 마감보다 늦을 수 없음
+      if (t.value && it.due && t.value > it.due) { _mwToast('시작일이 마감보다 늦을 수 없습니다', 'warn'); t.value = it.start || ''; return; }
+      _mwpQueue({ startDate: t.value || null }, 0); _mwpApply(it, { startDate: t.value || null }); _mwPaint(); return;
+    }
     if (t.id === 'mwpCat') return mwSetCat(it, t.value);
     if (t.id === 'mwpTime') { if (!it.due) return; _mwpQueue({ dueTime: t.value || null }, 0); return; }
     if (t.id === 'mwpRep') {

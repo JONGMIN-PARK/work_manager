@@ -74,6 +74,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check(await page.evaluate(function (a) { return !!document.querySelector('[data-qk="' + a[0] + '"] input[data-done]') && !!document.querySelector('[data-qk="' + a[1] + '"] input[data-done]'); }, [ps, ms]), '사전검토 · 마일스톤에도 완료 체크');
     await page.click('[data-qk="' + ps + '"] input[data-done]');
     await page.waitForSelector('#mwbPop [data-v="hold"]');
+    await wait(150);   // 바깥 누르기 감지는 메뉴가 뜬 다음 틱부터
     await page.mouse.click(5, 5);   // 고르지 않고 닫으면 체크 되돌림
     await wait(300);
     check(await page.evaluate(function (k) { var b = document.querySelector('[data-qk="' + k + '"] input[data-done]'); return b && !b.checked; }, ps) && (await c.query("SELECT status FROM prestudies WHERE id = 'bd-s1'")).rows[0].status === 'reviewing', '메뉴 그냥 닫기 → 체크 풀림 · 그대로');

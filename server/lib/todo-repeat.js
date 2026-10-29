@@ -41,13 +41,19 @@ async function repeatNext(req, id, row) {
   }
   if (!t || !t.repeat) return null;
   var due = nextDue(t.due_date, t.repeat);
+  // 시작일이 있으면 같은 간격으로 (v13.271) — 시작 3일 전 마감이면 다음 회차도 3일 전 시작
+  var start = null;
+  if (t.start_date && t.due_date && due && t.start_date <= t.due_date) {
+    var gap = Math.round((Date.parse(t.due_date + 'T00:00:00Z') - Date.parse(t.start_date + 'T00:00:00Z')) / 86400000);
+    start = new Date(Date.parse(due + 'T00:00:00Z') - gap * 86400000).toISOString().slice(0, 10);
+  }
   var cl = (Array.isArray(t.checklist) ? t.checklist : []).map(function (c) { return { id: c.id, t: c.t, d: false }; });
   // 같은 회차가 없을 때만 넣기 — 확인과 넣기를 한 문장으로 (v13.270)
   var ins = await db.query(
-    'INSERT INTO my_todos (id, tenant_id, user_id, title, due_date, due_time, priority, memo, repeat, estimate_h, checklist) ' +
-    'SELECT $1::varchar, $2::uuid, $3::uuid, $4::varchar, $5::varchar, $6::varchar, $7::smallint, $8::text, $9::varchar, $10::numeric, $11::jsonb ' +
+    'INSERT INTO my_todos (id, tenant_id, user_id, title, due_date, due_time, priority, memo, repeat, estimate_h, checklist, start_date) ' +
+    'SELECT $1::varchar, $2::uuid, $3::uuid, $4::varchar, $5::varchar, $6::varchar, $7::smallint, $8::text, $9::varchar, $10::numeric, $11::jsonb, $12::varchar ' +
     'WHERE NOT EXISTS (SELECT 1 FROM my_todos WHERE tenant_id = $2::uuid AND user_id = $3::uuid AND title = $4::varchar AND due_date = $5::varchar AND done_at IS NULL AND deleted_at IS NULL) RETURNING *',
-    [genId(), req.tenant.id, req.user.sub, t.title, due, t.due_time, t.priority, t.memo, t.repeat, t.estimate_h, JSON.stringify(cl)]);
+    [genId(), req.tenant.id, req.user.sub, t.title, due, t.due_time, t.priority, t.memo, t.repeat, t.estimate_h, JSON.stringify(cl), start]);
   if (ins.rows.length) return ins.rows[0];
   var dup = await db.query('SELECT * FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND title = $3 AND due_date = $4 AND done_at IS NULL AND deleted_at IS NULL LIMIT 1', [req.tenant.id, req.user.sub, t.title, due]);
   return dup.rows[0] || null;

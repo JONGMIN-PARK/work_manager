@@ -9,7 +9,8 @@
  *   todo     개인 할 일 (my_todos)
  * 새로 입력받는 것은 todo 뿐 — 나머지는 원래 자리에 있는 값을 읽기만 한다.
  *
- * 항목: { key, src, id, userId, title, ctx, ctxId, due, done, doneAt, progress, weight, pri, urgent, status, mapId, sheet, nodeId, projectId, mapOpen }
+ * 항목: { key, src, id, userId, title, ctx, ctxId, start, due, done, doneAt, progress, weight, pri, urgent, status, mapId, sheet, nodeId, projectId, mapOpen }
+ *   start — 시작일 (마일스톤 · 맵 주제 startDate · 할 일 start_date, 없으면 null) — 타임라인 막대용 (v13.271)
  *   pri — 중요도 1 긴급 · 2 높음 · 3 보통 · 4 낮음 (lib/priority, v13.253). urgent = pri 1
  *   todo 는 본인일 때 todoStatus · waitingFor · memo · dueTime · repeat · estimateH · checklist 도
  */
@@ -112,7 +113,7 @@ async function collect(req, users, opt) {
     // can_edit — 보는 사람이 그 프로젝트를 편집할 수 있는지 (마일스톤 완료 체크 칸, v13.270: 따로 묻지 않고 같이)
     var ed = pa.editableProjectsSql(req, 'p', 4 + pf.params.length);
     var r = await db.query(
-      'SELECT DISTINCT ON (ms.id, a.user_id) ms.id, ms.name, ms.end_date, ms.status, ms.progress, ms.project_id, p.name AS project_name, a.user_id, (' + ed.sql + ') AS can_edit ' +
+      'SELECT DISTINCT ON (ms.id, a.user_id) ms.id, ms.name, ms.start_date, ms.end_date, ms.status, ms.progress, ms.project_id, p.name AS project_name, a.user_id, (' + ed.sql + ') AS can_edit ' +
       'FROM milestones ms JOIN milestone_assignments a ON a.milestone_id = ms.id AND a.tenant_id = ms.tenant_id AND a.released_at IS NULL ' +
       'JOIN projects p ON p.id = ms.project_id AND p.tenant_id = ms.tenant_id ' +
       "WHERE ms.tenant_id = $1 AND a.user_id = ANY($2) AND COALESCE(ms.status, '') <> 'done' AND COALESCE(p.status, '') <> 'done' " +
@@ -122,7 +123,7 @@ async function collect(req, users, opt) {
     r.rows.forEach(function (x) {
       var p = parseInt(x.progress, 10) || 0;
       out.push({ src: 'milestone', id: x.id, userId: x.user_id, title: firstLine(x.name), ctx: x.project_name || '', projectId: x.project_id,
-        due: ymd(x.end_date), done: false, progress: p, status: x.status, canEdit: !!x.can_edit });
+        start: ymd(x.start_date), due: ymd(x.end_date), done: false, progress: p, status: x.status, canEdit: !!x.can_edit });
     });
   })());
 
@@ -146,12 +147,12 @@ async function collect(req, users, opt) {
   if (want('todo')) jobs.push((async function () {
     if (!onlySelf && !opt.load) return;   // 개인 할 일은 본인만 — 업무 부하에서는 개수만
     var r = await db.query(
-      'SELECT id, user_id, title, due_date, done_at, priority, status, waiting_for, memo, due_time, repeat, estimate_h, checklist FROM my_todos WHERE tenant_id = $1 AND user_id = ANY($2) AND deleted_at IS NULL ' +
+      'SELECT id, user_id, title, start_date, due_date, done_at, priority, status, waiting_for, memo, due_time, repeat, estimate_h, checklist FROM my_todos WHERE tenant_id = $1 AND user_id = ANY($2) AND deleted_at IS NULL ' +
       'AND (done_at IS NULL OR ($3::int > 0 AND done_at >= now() - make_interval(days => $3::int)))',
       [tid, ids, doneWin]
     );
     r.rows.forEach(function (x) {
-      var it = { src: 'todo', id: x.id, userId: x.user_id, title: onlySelf ? firstLine(x.title, 500) : '개인 할 일', ctx: '', due: ymd(x.due_date), done: !!x.done_at, doneAt: x.done_at,
+      var it = { src: 'todo', id: x.id, userId: x.user_id, title: onlySelf ? firstLine(x.title, 500) : '개인 할 일', ctx: '', start: ymd(x.start_date), due: ymd(x.due_date), done: !!x.done_at, doneAt: x.done_at,
         pri: prio.fromInt(x.priority), estimateH: x.estimate_h != null ? Number(x.estimate_h) : null };
       var cl = Array.isArray(x.checklist) ? x.checklist : [];
       if (cl.length) { it.checkDone = cl.filter(function (c) { return c && c.d; }).length; it.checkTotal = cl.length; it.progress = Math.round(it.checkDone / it.checkTotal * 100); }
@@ -188,7 +189,7 @@ async function collect(req, users, opt) {
         if (!wantId[n.assigneeId]) return;
         if (n.done && !(doneWin && recent(n.doneAt, doneWin))) return;
         out.push({ src: 'mindmap', id: m.id + ':' + n.nodeId, userId: n.assigneeId, title: n.title, ctx: m.title + (n.path ? ' › ' + n.path : ''),
-          mapId: m.id, sheet: n.sheet, nodeId: n.nodeId, due: n.due, done: n.done, doneAt: n.done ? n.doneAt || null : null,
+          mapId: m.id, sheet: n.sheet, nodeId: n.nodeId, start: n.start, due: n.due, done: n.done, doneAt: n.done ? n.doneAt || null : null,
           progress: n.progress, pri: n.pri, mapOpen: !!m.can_open });
       });
     });
@@ -230,7 +231,7 @@ function mapCachePut(id, hash, doc) {
       if (!n || typeof n !== 'object') return;
       if (n.assigneeId && n.id !== (sh.root && sh.root.id)) {
         var p = parseInt(n.progress, 10);
-        nodes.push({ nodeId: n.id, assigneeId: n.assigneeId, title: firstLine(n.text), path: path, sheet: si, due: ymd(n.dueDate),
+        nodes.push({ nodeId: n.id, assigneeId: n.assigneeId, title: firstLine(n.text), path: path, sheet: si, start: ymd(n.startDate), due: ymd(n.dueDate),
           done: !!n.done || p >= 100, doneAt: n.doneAt || null, progress: isNaN(p) ? null : p, pri: prio.fromMarkers(n.markers) });
       }
       var here = n === sh.root ? '' : firstLine(n.text, 24);

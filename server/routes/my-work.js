@@ -241,6 +241,7 @@ function todoFields(b) {
     f.push(['title', t]);
   }
   if (b.dueDate !== undefined) f.push(['due_date', cleanDue(b.dueDate)]);
+  if (b.startDate !== undefined) f.push(['start_date', cleanDue(b.startDate)]);   // v13.271 타임라인 막대
   if (b.dueTime !== undefined) f.push(['due_time', cleanTime(b.dueTime)]);
   if (b.priority !== undefined) {
     if (!prio.clamp(b.priority)) return '중요도는 1~4 입니다.';

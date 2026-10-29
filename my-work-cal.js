@@ -276,6 +276,7 @@ function _mwcEventModal(id, date, opts) {
 }
 function _mwcAfterChange() {
   _mwc.selfAt = Date.now();
+  if (typeof mwTimelineEvReload === 'function') mwTimelineEvReload();   // 타임라인 일정도 (v13.271)
   return mwCalLoadEvents(true).then(_mwPaint);
 }
 
