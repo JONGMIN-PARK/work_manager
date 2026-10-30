@@ -315,7 +315,7 @@ async function buildInsightPrompt() {
   try { if (typeof issueGetAll === 'function') issues = await issueGetAll(); } catch (e) { console.warn('[Dashboard]', e); }
 
   var lines = [];
-  lines.push('당신은 프로젝트 라이프사이클 관리 전문가입니다. 수주→설계→제작→검수→납품→A/S 전 과정의 데이터를 분석해주세요.');
+  lines.push('당신은 프로젝트 라이프사이클 관리 전문가입니다. 수주→설계→제작→검수→납품→완료 전 과정의 데이터를 분석해주세요.');
   lines.push('오늘: ' + today);
   lines.push('');
   lines.push('[프로젝트 목록]');

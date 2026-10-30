@@ -75,7 +75,7 @@ function _mwcEntries(items, from, to) {
     out.push({ kind: 'task', key: 't|' + it.key, it: it, title: it.title, icon: s.icon, color: mwSrcColor(it.src),
       date: it.due, end: it.due, time: it.dueTime || '', timeEnd: it.dueTime ? _mwcHm(_mwcMin(it.dueTime) + 30) : '', done: it.done, pri: it.pri, late: !it.done && it.due < today, urgent: it.urgent && !it.done,
       drag: !it.done && it.canDone && MWC_DUE_SRC.indexOf(it.src) >= 0,
-      tip: s.label + ' — ' + it.title + (it.ctx ? ' · ' + it.ctx : '') });
+      tip: s.label + ' — ' + it.title + (it.ctx ? ' · ' + it.ctx : '') + (it.memo ? '\n\n📝 ' + it.memo.slice(0, 300) : '') });
   });
   // 📁 내 프로젝트 기간 띠 (v13.273) — 전체 보기일 때
   if (_mw.src === 'all' && typeof mwProjCalEntries === 'function') out = mwProjCalEntries(from, to).concat(out);

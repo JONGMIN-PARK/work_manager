@@ -9,7 +9,7 @@ var PHASE_MAP = {
   manufacture: { label: '제작', icon: '🏭', color: '#3B82F6' },
   inspect: { label: '검수', icon: '🔍', color: '#06B6D4' },
   deliver: { label: '납품', icon: '🚚', color: '#10B981' },
-  as: { label: 'A/S', icon: '🛠️', color: '#F59E0B' },
+  done: { label: '완료', icon: '✅', color: '#059669' },
 };
 
 // orders 테이블에는 status 컬럼이 없다. 예전에는 없는 필드를 폼에서 받아

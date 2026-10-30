@@ -52,11 +52,46 @@ function mwTodoExtra(it) {
   if (it.todoStatus === 'doing') h += '<span class="mw-st mw-st-doing">진행 중</span>';
   if (it.todoStatus === 'waiting') h += '<span class="mw-st mw-st-wait" title="기다리는 중' + (it.waitingFor ? ' — ' + _mwEsc(it.waitingFor) : '') + '">대기' + (it.waitingFor ? ' · ' + _mwEsc(it.waitingFor) : '') + '</span>';
   if (it.checkTotal) h += '<span class="mw-cl" title="하위 항목">☑ ' + it.checkDone + '/' + it.checkTotal + '</span>';
-  if (it.memo) h += '<span class="mw-ic" title="' + _mwEsc(it.memo.slice(0, 200)) + '">📝</span>';
+  if (it.memo) h += '<span class="mw-ic mw-ic-memo">📝</span>';   // 내용은 줄에 올리면 뜨는 메모 창 (mwMemoTip)
   if (it.repeat) h += '<span class="mw-ic" title="' + _mwEsc(MW_REPEAT[it.repeat] || '') + ' 반복">🔁</span>';
   if (it.estimateH) h += '<span class="mw-ic mw-est" title="예상 시간">' + it.estimateH + 'h</span>';
   return h;
 }
+
+/* ── 메모 미리보기 (v13.276) — 목록 줄 · 보드 카드에 마우스를 올리면 메모 내용을 띄움 ───────
+   예전엔 작은 📝 아이콘의 title 로 200자만 보였다. 줄 전체에서, 줄바꿈 그대로, 길면 스크롤 */
+var _mwMemo = { el: null, t: null, cur: null };
+function _mwMemoHide() {
+  clearTimeout(_mwMemo.t); _mwMemo.cur = null;
+  if (_mwMemo.el) _mwMemo.el.hidden = true;
+}
+function _mwMemoShow(host, it) {
+  var el = _mwMemo.el;
+  if (!el) { el = _mwMemo.el = document.createElement('div'); el.className = 'mw-memo-tip'; el.hidden = true; document.body.appendChild(el); }
+  el.innerHTML = '<div class="mw-memo-h">📝 ' + _mwEsc(it.title) + '</div><div class="mw-memo-b">' + _mwEsc(it.memo) + '</div>';
+  el.hidden = false;
+  var r = host.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+  var x = Math.max(8, Math.min(r.left + 24, window.innerWidth - w - 8));
+  var y = r.bottom + 4;
+  if (y + h > window.innerHeight - 8) y = Math.max(8, r.top - h - 4);   // 아래 자리가 없으면 위로
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+}
+(function () {
+  if (window.matchMedia && window.matchMedia('(hover: none)').matches) return;   // 휴대폰 · 패드는 상세 패널에서
+  document.addEventListener('mouseover', function (e) {
+    var host = e.target.closest && e.target.closest('.mw-row[data-key], .mwb-i[data-qk]');
+    if (host === _mwMemo.cur) return;
+    _mwMemoHide();
+    if (!host || typeof _mwFind !== 'function') return;
+    var it = _mwFind(host.getAttribute('data-key') || host.getAttribute('data-qk'));
+    if (!it || !it.memo || !String(it.memo).trim()) return;
+    _mwMemo.cur = host;
+    _mwMemo.t = setTimeout(function () { if (_mwMemo.cur === host && host.isConnected) _mwMemoShow(host, it); }, 350);
+  });
+  ['mousedown', 'dragstart', 'keydown'].forEach(function (ev) { document.addEventListener(ev, _mwMemoHide, true); });
+  window.addEventListener('scroll', _mwMemoHide, true);
+  window.addEventListener('blur', _mwMemoHide);
+})();
 
 /* ── 정렬 · 거르기 ────────────────────────────────────────────────── */
 function mwSortMode() { return _mwLS('sort') || 'due'; }

@@ -30,12 +30,48 @@ var gcs = require('../services/gcs.service');
  *  /full 로 만든 visibility='dept' 프로젝트는 부서원에게 보이지 않았다.
  * @param q db 또는 트랜잭션 client
  */
+/** 완료 단계 ↔ 상태 완료 연동 (v13.277 — 마지막 단계 A/S → 완료).
+ *  완료 단계로 옮기면 상태 완료 · 진척 100, 상태를 완료로 바꾸면 완료 단계로.
+ *  완료 단계에서 다른 단계로 옮기면 진행중, 완료를 풀면(단계를 따로 안 줬을 때) 납품 단계로 돌림.
+ *  clean: DB 컬럼 이름(snake)으로 바뀔 값 · prev: 이전 행 (새로 만들 땐 null) */
+function syncDonePhase(clean, prev) {
+  prev = prev || {};
+  var phase = clean.current_phase !== undefined ? clean.current_phase : prev.current_phase;
+  var status = clean.status !== undefined ? clean.status : prev.status;
+  var phaseMoved = clean.current_phase !== undefined && clean.current_phase !== prev.current_phase;
+  var statusMoved = clean.status !== undefined && clean.status !== prev.status;
+  if (phaseMoved && phase === 'done') { clean.status = 'done'; clean.progress = 100; }
+  else if (phaseMoved && prev.current_phase === 'done' && status === 'done') clean.status = 'active';
+  else if (statusMoved && status === 'done' && phase !== 'done') { clean.current_phase = 'done'; clean.progress = 100; }
+  else if (statusMoved && prev.status === 'done' && phase === 'done' && clean.current_phase === undefined) clean.current_phase = 'deliver';
+  else return clean;
+  // 단계 일정(phases JSON)도 같이 — 지난 단계는 완료, 새 단계는 진행(완료 단계는 바로 완료)
+  if (clean.current_phase !== undefined && clean.current_phase !== prev.current_phase) {
+    var ph = clean.phases !== undefined ? clean.phases : prev.phases;
+    if (typeof ph === 'string') { try { ph = JSON.parse(ph); } catch (e) { ph = null; } }
+    if (ph && typeof ph === 'object') {
+      ph = JSON.parse(JSON.stringify(ph));
+      var today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      var from = prev.current_phase, to = clean.current_phase;
+      if (from && ph[from] && to === 'done') { ph[from].status = 'done'; if (!ph[from].endDate) ph[from].endDate = today; }
+      if (!ph[to]) ph[to] = {};
+      ph[to].status = to === 'done' ? 'done' : 'active';
+      if (!ph[to].startDate) ph[to].startDate = today;
+      if (to === 'done' && !ph[to].endDate) ph[to].endDate = today;
+      if (from === 'done' && ph.done) ph.done.status = 'waiting';
+      clean.phases = JSON.stringify(ph);
+    }
+  }
+  return clean;
+}
+
 async function insertProject(q, req, b) {
   var id = b.id || ('proj-' + require('crypto').randomUUID().slice(0, 12));
   var deptId = b.departmentId || b.department_id || req.user.departmentId || null;
   var visibility = b.visibility || 'private';
   if (['private','dept','tenant'].indexOf(visibility) === -1) visibility = 'private';
   var ownerId = b.ownerId || b.owner_id || req.user.sub;
+  var st0 = syncDonePhase({ status: b.status || 'active', current_phase: b.currentPhase || b.current_phase || 'order', phases: b.phases || {} }, { current_phase: 'order', status: 'active' });
   if (ownerId !== req.user.sub) {
     // 다른 사람을 생성자로 지정하면 같은 테넌트 사용자인지 확인 — 아니면 본인으로
     var ur = await q.query('SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2', [ownerId, req.tenant.id]);
@@ -44,10 +80,10 @@ async function insertProject(q, req, b) {
   var r = await q.query(
     "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id, tenant_id, owner_id, visibility, specs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16,$17,$18,$19,$20) RETURNING *",
     [id, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
-     b.status || 'active', b.progress || 0, b.estimatedHours || b.estimated_hours || 0,
+     st0.status, st0.progress != null ? st0.progress : (b.progress || 0), b.estimatedHours || b.estimated_hours || 0,
      JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
-     b.color || '#3B82F6', b.memo || '', b.currentPhase || b.current_phase || 'order',
-     JSON.stringify(b.phases || {}), req.user.sub, deptId, req.tenant.id, ownerId, visibility, JSON.stringify(b.specs || {})]
+     b.color || '#3B82F6', b.memo || '', st0.current_phase,
+     typeof st0.phases === 'string' ? st0.phases : JSON.stringify(st0.phases), req.user.sub, deptId, req.tenant.id, ownerId, visibility, JSON.stringify(b.specs || {})]
   );
   var row = r.rows[0];
   if (row) row.can_edit = req.user.role === 'admin' || req.user.role === 'executive' || row.owner_id === req.user.sub;
@@ -202,6 +238,7 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
     // undefined 제거
     var clean = {};
     for (var k in updates) { if (updates[k] !== undefined) clean[k] = updates[k]; }
+    syncDonePhase(clean, prev);   // 완료 단계 ↔ 상태 완료 (v13.277)
 
     var result = await lock.optimisticUpdate(db, 'projects', 'id', req.params.id, b.version, clean, req.user.sub, { clause: 'AND tenant_id = $NEXT1', values: [req.tenant.id] });
 

@@ -2088,6 +2088,11 @@ button.mw-pill:hover{border-color:var(--ac)}
 .mw-cl{flex:none;font-size:11px;color:var(--t4);white-space:nowrap}
 .mw-ic{flex:none;font-size:11px;color:var(--t5);cursor:default}
 .mw-est{font-weight:600}
+.mw-ic-memo{cursor:help}
+/* 메모 미리보기 (v13.276) — 줄 · 카드에 올리면 (my-work-task.js mwMemo) */
+.mw-memo-tip{position:fixed;z-index:9000;max-width:min(420px,calc(100vw - 16px));max-height:300px;overflow:auto;padding:8px 11px;border-radius:8px;background:var(--bg-p);border:1px solid var(--bd2);box-shadow:0 8px 24px rgba(0,0,0,.28);color:var(--t2);font-size:12px;line-height:1.55;pointer-events:none}
+.mw-memo-h{font-weight:700;color:var(--t1);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mw-memo-b{white-space:pre-wrap;word-break:break-word}
 .mw-urg2{background:#F97316}
 .mw-ltools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:-4px 0 10px}
 .mw-ltools .mw-sel{padding:4px 8px}

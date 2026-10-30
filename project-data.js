@@ -94,11 +94,11 @@ var DEFAULT_CHECKLIST = {
   manufacture: ['자재 입고 확인', '기구 가공/조립 완료', '전장 배선 완료', 'SW 개발/탑재 완료', '단품 시험 완료'],
   inspect: ['자체 검수 완료', '검수 성적서 작성', '고객 입회 검수(FAT) 완료', '불량 시정 완료'],
   deliver: ['출하 검사 완료', '운송/설치 완료', '시운전 완료(SAT)', '운전 교육 완료', '인수인계서 서명'],
-  as: ['하자보증 기간 설정', '정기점검 일정 등록', 'A/S 연락처 공유']
+  done: ['잔금 수령', '하자보증 기간 설정', '정기점검 일정 등록', 'A/S 연락처 공유']   // v13.277 A/S → 완료
 };
 
 /* ═══ 문서 폴더 / 파일 상수 ═══ */
-var DOC_FOLDER_DEFAULTS = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'as'];
+var DOC_FOLDER_DEFAULTS = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'done'];
 var DOC_MAX_FILE = 50 * 1024 * 1024; // 50MB
 var DOC_MAX_PROJECT = 500 * 1024 * 1024; // 500MB
 
@@ -549,7 +549,7 @@ function syncAssigneesToMembers(projectId, names) {
 
 function createProject(data) {
   var now = new Date().toISOString();
-  var defaultPhases = { order: { status: 'waiting', startDate: '', endDate: '' }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, as: { status: 'waiting', startDate: '', endDate: '' } };
+  var defaultPhases = { order: { status: 'waiting', startDate: '', endDate: '' }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, done: { status: 'waiting', startDate: '', endDate: '' } };
   var proj = {
     id: 'proj-' + uuid(),
     orderNo: (data.orderNo || '').trim(),
@@ -1361,6 +1361,15 @@ function executePhaseTransition(projectId, targetPhase) {
     if (!proj.phases[targetPhase]) proj.phases[targetPhase] = {};
     proj.phases[targetPhase].status = 'active';
     if (!proj.phases[targetPhase].startDate) proj.phases[targetPhase].startDate = localDate();
+    // 완료 단계 ↔ 상태 완료 (v13.277 — 서버 routes/projects.js syncDonePhase 와 같은 규칙)
+    if (targetPhase === 'done') {
+      proj.status = 'done'; proj.progress = 100;
+      proj.phases.done.status = 'done';
+      if (!proj.phases.done.endDate) proj.phases.done.endDate = localDate();
+    } else if (curPhase === 'done') {
+      if (proj.status === 'done') proj.status = 'active';
+      if (proj.phases.done) proj.phases.done.status = 'waiting';
+    }
     proj.updatedAt = new Date().toISOString();
     return projPut(proj);
   });
@@ -1371,8 +1380,8 @@ function createProjectFromOrder(order) {
   var projId = 'proj-' + uuid();
   var startDate = order.date || localDate();
   var endDate = order.delivery || '';
-  var defaultPhases = { order: { status: 'done', startDate: startDate, endDate: startDate }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, as: { status: 'waiting', startDate: '', endDate: '' } };
-  var phaseKeys = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'as'];
+  var defaultPhases = { order: { status: 'done', startDate: startDate, endDate: startDate }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, done: { status: 'waiting', startDate: '', endDate: '' } };
+  var phaseKeys = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'done'];
   var phaseLabels = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
   var milestones = phaseKeys.map(function (pk, idx) {
     var label = phaseLabels[pk] ? phaseLabels[pk].label : pk;

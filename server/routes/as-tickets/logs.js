@@ -174,7 +174,8 @@ router.post('/:id/link-issue', async function (req, res) {
         'INSERT INTO issues (id, project_id, order_no, phase, dept, type, urgency, status, report_date, ' +
         ' title, description, reporter, reporter_id, assignees, tags, created_by, updated_by, tenant_id) ' +
         'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$16,$17)',
-        [issueId, t.project_id, t.order_no, 'as', null, issueType, urgency, 'open',
+        [issueId, t.project_id, t.order_no, 'done', null,   // 단계: 완료 이후 (v13.277 A/S 단계 → 완료)
+         issueType, urgency, 'open',
          todayStr, title, description, t.customer_name || null, req.user.sub,
          JSON.stringify([]), JSON.stringify(['from-as', t.ticket_no]),
          req.user.sub, req.tenant.id]

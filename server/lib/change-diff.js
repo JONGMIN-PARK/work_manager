@@ -8,7 +8,7 @@
  */
 
 var PROJECT_STATUS = { waiting: '대기', active: '진행중', delayed: '지연', done: '완료', hold: '보류' };
-var PHASE = { order: '수주', design: '설계', manufacture: '제작', inspect: '검수', deliver: '납품', as: 'A/S' };
+var PHASE = { order: '수주', design: '설계', manufacture: '제작', inspect: '검수', deliver: '납품', done: '완료', as: '완료' };
 var MS_STATUS = { waiting: '대기', active: '진행', in_progress: '진행', progress: '진행', done: '완료', delayed: '지연', hold: '보류' };
 var WR_STATUS = { done: '완료', in_progress: '진행중', none: '' };
 

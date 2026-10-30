@@ -709,7 +709,7 @@ function _mtlTaskOf(it, grp, today) {
     bar: bar, n0: n0, n1: n1, f0: bar ? 0 : (tm != null ? tm / 1440 : 0.5), f1: 1, time: it.dueTime || null,
     late: !it.done && it.due && it.due < today, done: !!it.done, pri: it.pri || 3, pending: !!it.pending,
     drag: !self || it.done || it.pending ? null : (bar ? (it.src === 'todo' ? 'bar' : null) : (_mwpCanDue(it) ? 'pt' : null)),
-    tip: (s.label || '') + (it.ctx ? ' · ' + it.ctx : '') + (start ? '\n' + start + ' ~ ' + d : it.due ? '\n마감 ' + _mwDueLabel(it.due, today) + (it.dueTime ? ' ' + it.dueTime : '') : '') + (it.done ? ' · 완료' : '')
+    tip: (s.label || '') + (it.ctx ? ' · ' + it.ctx : '') + (start ? '\n' + start + ' ~ ' + d : it.due ? '\n마감 ' + _mwDueLabel(it.due, today) + (it.dueTime ? ' ' + it.dueTime : '') : '') + (it.done ? ' · 완료' : '') + (it.memo ? '\n\n📝 ' + it.memo.slice(0, 300) : '')
   };
 }
 function _mtlEvTasks(grp, from, to) {

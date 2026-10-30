@@ -22,7 +22,7 @@ test('showProjectDetail: 전체 패널(헤더·탭·개요·라이프사이클·
 
 test('showProjectDetail: 최소 프로젝트(마일스톤·수주·메모·진척 없음, 마지막 단계) 스냅샷', async () => {
   const fx = H.fixtures();
-  const proj = { id: 'p1', name: '빈 프로젝트', color: '#abcdef', status: 'waiting', currentPhase: 'as' };
+  const proj = { id: 'p1', name: '빈 프로젝트', color: '#abcdef', status: 'waiting', currentPhase: 'done' };
   const { dom } = await openDetail({ fx: { proj, milestones: [], chk: [] }, after: (s) => { s.getOrderInfo = undefined; } });
   H.matchSnapshot(assert, 'detail-minimal', dom.snapshot());
   void fx;

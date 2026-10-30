@@ -15,7 +15,7 @@ var PHASES = [
   { key: 'manufacture', label: '제작', icon: '🔧' },
   { key: 'inspect', label: '검수', icon: '🔍' },
   { key: 'deliver', label: '납품', icon: '🚚' },
-  { key: 'as', label: 'A/S', icon: '🛠️' },
+  { key: 'done', label: '완료', icon: '✅' },
 ];
 
 var INITIAL_FORM = {

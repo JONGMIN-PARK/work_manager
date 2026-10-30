@@ -203,7 +203,7 @@ var PROJ_PHASE = {
   manufacture: { label: '제작',   icon: '🏭', color: '#3B82F6', seq: 3 },
   inspect:     { label: '검수',   icon: '🔍', color: '#06B6D4', seq: 4 },
   deliver:     { label: '납품',   icon: '🚚', color: '#10B981', seq: 5 },
-  as:          { label: 'A/S',   icon: '🛠️', color: '#F59E0B', seq: 6 }
+  done:        { label: '완료',   icon: '✅', color: '#059669', seq: 6 }   // v13.277 A/S → 완료 (A/S 는 A/S 탭에서). 완료 단계 = 상태 완료
 };
 
 /* ═══ 부서 ═══ */

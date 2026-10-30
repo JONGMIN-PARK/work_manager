@@ -42,7 +42,7 @@ if(typeof initSettings==='undefined'){
   console.warn('⚠️ settings.js 로드 실패 → 스텁 폴백 사용');
 }
 
-if(typeof PROJ_PHASE==='undefined'){var PROJ_PHASE={order:{label:'수주',icon:'📋',color:'#6366F1',seq:1},design:{label:'설계',icon:'📐',color:'#8B5CF6',seq:2},manufacture:{label:'제작',icon:'🏭',color:'#3B82F6',seq:3},inspect:{label:'검수',icon:'🔍',color:'#06B6D4',seq:4},deliver:{label:'납품',icon:'🚚',color:'#10B981',seq:5},as:{label:'A/S',icon:'🛠️',color:'#F59E0B',seq:6}}}
+if(typeof PROJ_PHASE==='undefined'){var PROJ_PHASE={order:{label:'수주',icon:'📋',color:'#6366F1',seq:1},design:{label:'설계',icon:'📐',color:'#8B5CF6',seq:2},manufacture:{label:'제작',icon:'🏭',color:'#3B82F6',seq:3},inspect:{label:'검수',icon:'🔍',color:'#06B6D4',seq:4},deliver:{label:'납품',icon:'🚚',color:'#10B981',seq:5},done:{label:'완료',icon:'✅',color:'#059669',seq:6}}}
 if(typeof DEPT==='undefined'){var DEPT={design:{label:'설계',icon:'📐',color:'#8B5CF6'},manufacturing:{label:'제조',icon:'🏭',color:'#3B82F6'},electrical:{label:'전장',icon:'⚡',color:'#F59E0B'},control:{label:'제어',icon:'🎛️',color:'#06B6D4'},process:{label:'공정',icon:'⚙️',color:'#10B981'},software:{label:'소프트웨어',icon:'💻',color:'#EC4899'}}}
 if(typeof ISSUE_TYPE==='undefined'){var ISSUE_TYPE={fault:{label:'장애',icon:'🔴',color:'#EF4444'},defect:{label:'불량',icon:'🟠',color:'#F97316'},change:{label:'설계변경',icon:'🔵',color:'#3B82F6'},performance:{label:'성능',icon:'🟡',color:'#F59E0B'},inquiry:{label:'문의',icon:'🟣',color:'#8B5CF6'},improve:{label:'개선',icon:'🟢',color:'#10B981'},periodic:{label:'정기점검',icon:'🔧',color:'#14B8A6'},etc:{label:'기타',icon:'⚪',color:'#64748B'}}}
 if(typeof ISSUE_URGENCY==='undefined'){var ISSUE_URGENCY={urgent:{label:'긴급',icon:'🔴',color:'#EF4444'},high:{label:'높음',icon:'🟠',color:'#F97316'},normal:{label:'보통',icon:'🟡',color:'#F59E0B'},low:{label:'일반',icon:'🟢',color:'#10B981'}}}
@@ -65,7 +65,7 @@ if(typeof projGetAll==='undefined'){
   window.chkPut=function(i){return Promise.resolve(i)};window.chkGetByProject=function(){return Promise.resolve([])};window.chkGetByPhase=function(){return Promise.resolve([])};window.chkDel=function(){return Promise.resolve()};window.chkDelByProject=function(){return Promise.resolve()};
   window.createCheckItem=function(){return Promise.resolve({})};window.calcPhaseProgress=function(){return Promise.resolve({total:0,done:0,pct:0})};
   window.createDefaultChecklists=function(){return Promise.resolve()};window.advancePhase=function(){return Promise.resolve(null)};window.executePhaseTransition=function(){return Promise.resolve(null)};
-  window.DEFAULT_CHECKLIST={order:[],design:[],manufacture:[],inspect:[],deliver:[],as:[]};
+  window.DEFAULT_CHECKLIST={order:[],design:[],manufacture:[],inspect:[],deliver:[],done:[]};
   window.issueGetAll=function(){return Promise.resolve([])};window.issueGet=function(){return Promise.resolve(null)};window.issuePut=function(i){return Promise.resolve(i)};window.issueDel=function(){return Promise.resolve()};
   window.issueGetByProject=function(){return Promise.resolve([])};window.issueGetByOrder=function(){return Promise.resolve([])};
   window.createIssue=function(){return Promise.resolve({})};window.updateIssue=function(){return Promise.resolve(null)};window.deleteIssueCascade=function(){return Promise.resolve()};

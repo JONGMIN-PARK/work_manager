@@ -175,7 +175,7 @@ function renderPipeline() {
 function guessPhase(proj) {
   if (proj.currentPhase) return proj.currentPhase;
   var s = proj.status;
-  if (s === 'done') return 'as';
+  if (s === 'done') return 'done';
   if (s === 'waiting') return 'order';
   // 진행중/지연/보류 → 중간 단계로 추정
   return 'manufacture';

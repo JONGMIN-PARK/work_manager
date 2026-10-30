@@ -210,7 +210,7 @@ async function search(req, type, q, projectId) {
 }
 
 /* ═══ 자동 생성 템플릿 ═══ */
-var PHASE_LABEL = { order: '수주', design: '설계', manufacture: '제작', inspect: '검수', deliver: '납품', as: 'A/S' };
+var PHASE_LABEL = { order: '수주', design: '설계', manufacture: '제작', inspect: '검수', deliver: '납품', done: '완료', as: '완료' };
 
 /** 프로젝트 구조도: 프로젝트 → 마일스톤 / 체크리스트(단계별) / 미해결 이슈 / 최근 회의 */
 async function genProject(req, projectId) {
