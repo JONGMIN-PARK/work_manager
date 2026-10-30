@@ -3240,3 +3240,79 @@ mark.wd-hl{background:var(--ac-g);color:var(--ac-t);outline:1px solid var(--ac);
   .mwj-tag{display:none}
 }
 .mwio-tgtip{font-size:11.5px;color:var(--t5);padding:6px 10px 4px;line-height:1.5}
+
+/* ═══ v13.284 아이폰 17 Pro — 세로 402 · 가로 874×402 ═══ */
+/* 아이폰 Safari 의 100vh 는 주소창이 접힌 높이 — 화면 높이 기준 칸은 dvh(지금 보이는 높이)로 */
+@supports (height:100dvh){
+  body{min-height:100dvh}
+  .cal-side{max-height:calc(100dvh - 16px)}
+  .tl-scroll{max-height:calc(100dvh - 220px)}
+  .mm-ed{height:calc(100dvh - 170px)}
+  .wr-src{height:calc(100dvh - 16px)}
+  #tTbl .tw{max-height:calc(100dvh - 170px)}
+  .mm-peek{max-height:calc(100dvh - 16px)}
+}
+/* 타임라인 [⚙ 보기 옵션] — 넓은 화면은 그대로 펼침, 좁거나 낮은 화면만 접음 */
+.tl-ctl-tg{display:none}
+.tl-ctl-more{display:contents}
+.tl-ctl-tg.on{border-color:var(--ac);color:var(--ac-t);background:var(--ac-bg)}
+@media (max-width:768px),(orientation:landscape) and (max-height:500px){
+  .tl-ctl-tg{display:inline-flex}
+  #tlControls:not(.tl-more-on) .tl-ctl-more{display:none}
+  #tlControls.tl-more-on .tl-ctl-more{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 100%}
+}
+/* 터치 기기 — 입력칸 16px(아이폰 Safari 는 그보다 작으면 누를 때 화면을 확대함). 가로(874px)도 포함 · 맵 주제 글칸은 제외 */
+@media (pointer:coarse){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not(.mm-inline),
+  select,textarea:not(.mm-inline):not(#mmSink){font-size:16px!important}
+  /* 누르기 쉬운 크기 — 작은 버튼 · 탭도 최소 30px */
+  .btn,.btn-s,.tab{min-height:30px}
+  /* 편집 창 마일스톤 행은 12px 로 줄여 두었던 것 — 누를 때 확대되지 않게 */
+  #projModal .proj-ms-row .ms-name,#projModal .proj-ms-row .ms-start,#projModal .proj-ms-row .ms-end,#projModal .proj-ms-row .ms-status{font-size:16px!important}
+  /* 작은 손잡이 · 체크 · 테마 점 */
+  input[type=checkbox],input[type=radio]{min-width:18px;min-height:18px}
+  .tl-collapse-toggle{min-width:26px;min-height:24px}
+  .thd{width:26px;height:26px}
+  html{-webkit-tap-highlight-color:rgba(99,102,241,.15)}
+}
+/* 가로(높이가 낮은 휴대폰) — 머리 · 탭을 한 줄로 눌러 화면 높이를 내용에 */
+@media (orientation:landscape) and (max-height:500px){
+  .hdr{padding:4px max(12px,env(safe-area-inset-right)) 4px max(12px,env(safe-area-inset-left))}
+  .hdr-in{flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px}
+  .hdr-in .sub{display:none}
+  .hdr h1{font-size:15px;white-space:nowrap}
+  .hdr-ctl{flex:1 1 auto;justify-content:flex-end;flex-wrap:nowrap!important;min-width:0;gap:6px!important}
+  #globalSearchWrap{flex:0 1 240px;min-width:0}
+  #globalSearchInput,#globalSearchInput:focus{width:100%!important;max-width:none!important;box-sizing:border-box}
+  .hdr.more-on .hdr-ctl{flex-wrap:wrap!important}
+  /* 노치 · 다이내믹 아일랜드가 옆에 오므로 좌우 안전 영역 */
+  .con{padding:6px max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+  .page-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:4px}
+  .page-tabs::-webkit-scrollbar,.sub-tabs::-webkit-scrollbar{display:none}
+  .page-tabs .tab{padding:6px 14px;font-size:12px;flex-shrink:0;border-radius:8px}
+  .sub-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:3px;margin-bottom:8px}
+  .sub-tabs .tab{flex-shrink:0;padding:5px 10px}
+  /* 창 · 패널 — 낮은 화면 높이에 맞춤 (dvh: 주소창이 줄었다 늘어도 맞게) */
+  .wa-modal-overlay>div{max-height:calc(100dvh - 12px)!important}
+  .wa-modal-overlay{padding-top:6px!important;padding-bottom:6px!important}
+  .pd-panel{padding-right:env(safe-area-inset-right)}
+  /* 타임라인 · 간트 — 화면 높이를 넘지 않게 */
+  .tl-scroll{max-height:calc(100dvh - 70px);min-height:220px}
+  #mTimeline>div{grid-template-columns:minmax(0,1fr)!important}
+  #tlProjList{max-height:120px!important;min-height:0!important}
+  .cal-side{position:static;max-height:none}
+  /* 메시지 · 내 업무 상세 등 화면 높이 기준 칸 */
+  .msg-split{min-height:calc(100dvh - 120px)!important;max-height:calc(100dvh - 120px)!important}
+  /* 마인드맵 편집 — 최소 480px 이라 가로에서 화면보다 길었다 */
+  .mm-ed{height:calc(100dvh - 64px);min-height:260px}
+  .wr-src{height:auto;min-height:0}
+}
+/* 세로 휴대폰 — 파이프라인 칸을 한 칸씩 넘겨 보기 · 칸반 끝에 걸리지 않게 */
+@media (max-width:600px){
+  .pipeline-board{scroll-snap-type:x proximity}
+  .pipeline-board>.pipeline-lane{flex:0 0 min(300px,80vw)!important}   /* 한 칸 + 옆 칸 살짝 — 넘길 칸이 있다는 걸 보이게 */
+  .con{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  /* 넓은 표의 '없음' 안내 — 표 가운데(화면 밖)가 아니라 보이는 자리에 */
+  .pnl table td[colspan]{text-align:left!important}
+  .pnl table td[colspan]>*{position:sticky;left:8px;max-width:calc(100vw - 72px)}
+}

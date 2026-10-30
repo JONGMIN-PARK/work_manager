@@ -607,7 +607,7 @@ async function renderUserAdmin() {
         html += '<div style="background:var(--bg-p,#111620);border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid var(--bd,#222C44)">';
         html += '<div style="font-size:14px;font-weight:600;margin-bottom:6px">' + eH(u.name) + ' &lt;' + eH(u.email) + '&gt;</div>';
         html += '<div style="font-size:12px;color:var(--t5,#6070A0);margin-bottom:12px">직급: ' + eH(u.position || '-') + ' · 연락처: ' + eH(u.phone || '-') + ' · 신청: ' + (u.created_at || '').slice(0, 10) + '</div>';
-        html += '<div style="display:flex;gap:8px;align-items:center">';
+        html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';   // 휴대폰 — 거절 버튼이 카드 밖으로 밀리던 것
         html += '<select id="approveRole_' + u.id + '" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">';
         html += '<option value="member">팀원</option><option value="manager">팀장</option><option value="executive">임원</option><option value="admin">관리자</option>';
         html += '</select>';

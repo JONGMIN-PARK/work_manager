@@ -112,8 +112,8 @@ function renderOrders(afterRender) {
     // 상단 컨트롤
     html += '<div class="pnl" style="margin-bottom:14px;padding:14px 18px">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">';
-    html += '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;flex-wrap:wrap">';
-    html += '<span style="font-size:13px;font-weight:700;color:var(--t2)">📋 수주 대장</span>';
+    html += '<div style="display:flex;align-items:center;gap:10px;flex:1 1 260px;min-width:0;flex-wrap:wrap">';   // 기준 폭 — 0 이면 휴대폰에서 버튼 줄에 밀려 폭 0 으로 겹쳤다
+    html += '<span style="font-size:13px;font-weight:700;color:var(--t2);white-space:nowrap">📋 수주 대장</span>';
     html += '<span style="font-size:11px;color:var(--t5)">' + orders.length + '건' + (filterActive ? ' / 전체 ' + totalCnt + '건' : '') + '</span>';
     // 거래처 필터
     html += '<select style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3)" onchange="orderFilterClient=this.value;_orderPersistFilters();renderOrders()">';
@@ -125,7 +125,7 @@ function renderOrders(afterRender) {
     // 텍스트 검색
     html += '<input type="text" id="orderQ" placeholder="🔍 수주번호·프로젝트명·거래처" value="' + eH(orderSearchKw) + '" oninput="orderSetQ(this.value)" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);flex:1;min-width:160px;max-width:360px">';
     html += '</div>';
-    html += '<div style="display:flex;gap:6px">';
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap">';   // 휴대폰 — 버튼이 줄을 넘겨 제목을 짓누르지 않게 (v13.284)
     html += '<button class="btn btn-p btn-s" onclick="showOrderModal()">+ 신규 수주</button>';
     html += '<button class="btn btn-g btn-s" onclick="importOrderExcel()">📥 엑셀 불러오기</button>';
     html += '<button class="btn btn-g btn-s" onclick="exportOrderExcel()">📤 엑셀 저장</button>';

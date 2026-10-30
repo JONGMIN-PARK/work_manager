@@ -220,7 +220,7 @@ async function renderTimeline() {
   tlLabelW = labelW;
 
   // 컨트롤 바
-  document.getElementById('tlControls').innerHTML = _tlRenderControls(f.assigneeList);
+  var _tlc = document.getElementById('tlControls'); _tlc.innerHTML = _tlRenderControls(f.assigneeList); _tlc.classList.toggle('tl-more-on', !!window._tlCtlMore);
 
   // 헤더 (기간 표시)
   var headerHtml = _tlRenderHeader(units, rg.totalWidth, rg.unitW, rg.todayStr);
@@ -399,6 +399,9 @@ function _tlRenderControls(assigneeList) {
       '<button class="btn btn-g btn-s" onclick="tlGoToday()" title="오늘 날짜를 중앙으로">📍 오늘</button>' +
       '<input type="date" onchange="if(this.value)tlGoToDate(this.value)" title="지정 날짜로 이동" style="font-size:10px;padding:2px 5px;border:1px solid var(--bd-i);border-radius:5px;background:var(--bg-i);color:var(--t3)">' +
     '</div>' +
+    // v13.284 휴대폰 · 가로 — 보기 옵션(편집 모드 · 토글 · 필터 · 내보내기)은 [⚙ 보기 옵션] 안에 접음 (넓은 화면은 그대로 펼침)
+    '<button class="btn btn-g btn-s tl-ctl-tg' + (window._tlCtlMore ? ' on' : '') + '" onclick="tlToggleCtlMore()" aria-label="보기 옵션">⚙ 보기 옵션</button>' +
+    '<span class="tl-ctl-more">' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlEditMode ? '#FCD34D' : 'var(--t5)') + ';cursor:pointer;background:' + (tlEditMode ? 'rgba(245,158,11,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlEditMode ? 'rgba(245,158,11,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlEditModeTog" onchange="tlEditMode=this.checked;renderTimeline()"' + (tlEditMode ? ' checked' : '') + '> ✏️ 기간 조정</label>' +
     // v13.136 마일스톤 순서 변경 모드 — 체크 시에만 드래그 재배열 허용
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlMsReorder ? '#A78BFA' : 'var(--t5)') + ';cursor:pointer;background:' + (tlMsReorder ? 'rgba(139,92,246,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlMsReorder ? 'rgba(139,92,246,.4)' : 'var(--bd-i)') + '" title="체크 시에만 마일스톤을 드래그하여 순서를 바꿀 수 있습니다 (평상시엔 순서 고정)"><input type="checkbox" id="tlMsReorderTog" onchange="tlMsReorder=this.checked;renderTimeline()"' + (tlMsReorder ? ' checked' : '') + '> ↕️ 순서 변경</label>' +
@@ -433,7 +436,15 @@ function _tlRenderControls(assigneeList) {
       '</select>' +
     '</div>' +
     '<button class="btn btn-g btn-s" onclick="exportProjectsJSON()">📥 내보내기</button>' +
-    '<button class="btn btn-g btn-s" onclick="tlCompressAllMemoImages()" title="모든 프로젝트의 메모에 들어간 큰 이미지를 일괄 압축·축소(편집 권한 있는 프로젝트만)">🗜 메모이미지 일괄압축</button>';
+    '<button class="btn btn-g btn-s" onclick="tlCompressAllMemoImages()" title="모든 프로젝트의 메모에 들어간 큰 이미지를 일괄 압축·축소(편집 권한 있는 프로젝트만)">🗜 메모이미지 일괄압축</button>' +
+    '</span>';
+}
+/* 휴대폰 · 가로 — [⚙ 보기 옵션] 펼치기/접기 (다시 그려도 상태 유지) */
+function tlToggleCtlMore() {
+  window._tlCtlMore = !window._tlCtlMore;
+  var c = document.getElementById('tlControls'); if (!c) return;
+  c.classList.toggle('tl-more-on', window._tlCtlMore);
+  var b = c.querySelector('.tl-ctl-tg'); if (b) b.classList.toggle('on', window._tlCtlMore);
 }
 // [순수] [[value,label],...] → <option> 목록 (cur 와 같으면 selected)
 function _tlOpts(pairs, cur) {

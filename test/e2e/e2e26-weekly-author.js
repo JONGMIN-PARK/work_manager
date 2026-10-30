@@ -70,11 +70,25 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var pv = await page.$eval('#wrAuPreviewCur', function (e) { return e.textContent; });
     check(/검사기 개조/.test(pv) && /40%/.test(pv), '미리보기 (공용 파서 · 공백 정리) ' + pv.slice(0, 60));
     check(/저장 안 됨/.test(await page.$eval('#wrAuStatusBadge', function (e) { return e.textContent; })), '저장 안 됨 표시');
+    // 제목 옆 '● 변경 중' (v13.284) — 보이는 배지만 센다
+    var paneDirty = function () { return page.evaluate(function () {
+      var v = function (p) { var b = document.querySelector('#wrAuEditArea [data-dirty-pane="' + p + '"]'); return !!b && b.style.display !== 'none' && /변경 중/.test(b.textContent); };
+      return { last: v('last'), cur: v('cur') };
+    }); };
+    var pd = await paneDirty();
+    check(pd.cur && pd.last, '금주 · 지난주(가져오기) 제목에 변경 중 ' + JSON.stringify(pd));
     // 새 버전 저장 → R2 (같은 주 R1 이 이미 있음)
     await page.click('#wrAuSave');
     await page.waitForFunction(function () { return /편집 중/.test(document.getElementById('wrAuStatusBadge').textContent); });
     var badge = await page.$eval('#wrAuStatusBadge', function (e) { return e.textContent; });
     check(new RegExp(team + '_26W44_10/26~10/30_R2').test(badge) && !/저장 안 됨/.test(badge), '새 버전 R2 · 저장 안 됨 사라짐 ' + badge);
+    pd = await paneDirty();
+    check(!pd.cur && !pd.last, '저장 → 변경 중 사라짐 ' + JSON.stringify(pd));
+    await page.click('#wrAuEditorCur'); await page.keyboard.type('zz');
+    check((await paneDirty()).cur, '금주 입력 → 변경 중 바로 표시');
+    await page.keyboard.press('Backspace'); await page.keyboard.press('Backspace');
+    pd = await paneDirty();
+    check(!pd.cur && !pd.last, '저장된 내용으로 되돌리면 변경 중 사라짐 ' + JSON.stringify(pd));
     var st = await page.evaluate(function () { return apiFetch('/api/weekly-reports?team=' + encodeURIComponent(document.getElementById('wrAuTeam').value)); });
     var mine = st.data.filter(function (x) { return /_R2$/.test(x.name) && x.week_label === '26W44'; })[0];
     if (mine) made.push(mine.id);

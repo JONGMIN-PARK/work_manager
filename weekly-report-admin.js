@@ -877,6 +877,7 @@
         + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + color + ';border-radius:8px;padding:10px;display:flex;flex-direction:column;min-height:340px">'
         +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
         +     '<span style="font-size:11px;font-weight:700;color:' + color + ';background:rgba(58,106,176,.08);padding:2px 8px;border-radius:4px">' + title + '</span>'
+        +     paneDirtyBadge(key)
         +     '<div style="font-size:11px;color:var(--t5)">✏️ 편집</div>'
         +   '</div>'
         +   authorToolbar(edId)
@@ -905,8 +906,8 @@
       +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
       +     '<div style="font-size:12px;font-weight:600;color:var(--t3)">✏️ 편집</div>'
       +     '<div class="tabs sub-tabs" style="margin:0">'
-      +       '<button class="tab' + (_authorState.editPane === 'last' ? ' on' : '') + '" data-ep="last">지난주</button>'
-      +       '<button class="tab' + (_authorState.editPane === 'cur'  ? ' on' : '') + '" data-ep="cur">금주</button>'
+      +       '<button class="tab' + (_authorState.editPane === 'last' ? ' on' : '') + '" data-ep="last">지난주' + paneDirtyBadge('last', true) + '</button>'
+      +       '<button class="tab' + (_authorState.editPane === 'cur'  ? ' on' : '') + '" data-ep="cur">금주' + paneDirtyBadge('cur', true) + '</button>'
       +     '</div>'
       +   '</div>'
       +   authorToolbar('wrAuEditor')
@@ -981,6 +982,7 @@
       var p = ed.dataset.pane || paneKey;
       _authorState[p === 'last' ? 'lastText' : 'curText'] = ed.value;
       _authorState.editPane = p; // 마지막 편집 페인 추적 (툴바 타겟 추정용)
+      updatePaneDirtyBadges();   // 제목 '변경 중'은 바로 (미리보기만 디바운스)
       clearTimeout(debounceT);
       debounceT = setTimeout(function () { updateAuthorPreview(p); updateAuthorStatusBadge(); if (p === _authorState.src.target) refreshSrcMarks(); }, 200);
     });
@@ -1023,10 +1025,28 @@
     }
   }
 
+  // 지난주/금주 제목 옆 '● 변경 중' — 마지막으로 불러오거나 저장한 내용(savedSig)과 다르면 표시
+  function paneDirtyBadge(pane, compact) {
+    return '<span class="wr-dirty wr-pane-dirty" data-dirty-pane="' + pane + '" title="저장하지 않은 변경이 있습니다"'
+      + ' style="font-size:10.5px;margin-left:' + (compact ? '4' : '0') + 'px;display:' + (isPaneDirty(pane) ? '' : 'none') + '">'
+      + (compact ? '●' : '● 변경 중') + '</span>';
+  }
+  function isPaneDirty(pane) {
+    var sig = _authorState.savedSig || '', i = sig.indexOf('\u0000');
+    var saved = pane === 'last' ? sig.slice(0, i) : sig.slice(i + 1);
+    return (_authorState[pane === 'last' ? 'lastText' : 'curText'] || '') !== saved;
+  }
+  function updatePaneDirtyBadges() {
+    document.querySelectorAll('#wrAuEditArea [data-dirty-pane]').forEach(function (b) {
+      b.style.display = isPaneDirty(b.dataset.dirtyPane) ? '' : 'none';
+    });
+  }
+
   function updateAuthorStatusBadge() {
     var el = $('wrAuStatusBadge');
     if (!el) return;
     var dirty = isDirty() ? ' <span class="wr-dirty" title="Ctrl+S 로 덮어쓰기">● 저장 안 됨</span>' : '';
+    updatePaneDirtyBadges();
     if (_authorState.loadedId) {
       el.innerHTML = '✏️ 편집 중: <strong style="color:var(--t3)">' + esc(_authorState.loadedName) + '</strong>' + dirty;
       var ow = $('wrAuOverwrite'); if (ow) ow.style.display = '';
