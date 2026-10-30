@@ -102,13 +102,56 @@ function _mwcChip(x, opt) {
   opt = opt || {};
   // 프로젝트 띠 — 이어지는 날은 글 없이 띠만 (시작 날 · 월요일 · 1일에 이름)
   var cont = x.kind === 'proj' && opt.day && opt.day !== x.date && new Date(opt.day + 'T00:00:00Z').getUTCDay() !== 1 && opt.day.slice(8) !== '01';
-  if (x.kind === 'proj') return '<div class="mwc-chip mwc-proj' + (cont ? ' is-cont' : '') + (opt.day === x.date ? ' is-s' : '') + (opt.day === x.end ? ' is-e' : '') + '" data-ck="' + _mwEsc(x.key) + '" tabindex="0" role="button" style="--c:' + _mwEsc(x.color) + '" title="' + _mwEsc(x.tip) + '">' +
+  if (x.kind === 'proj') return '<div class="mwc-chip mwc-proj' + (cont ? ' is-cont' : '') + (opt.day === x.date ? ' is-s' : '') + (opt.day === x.end ? ' is-e' : '') + '" data-ck="' + _mwEsc(x.key) + '" tabindex="0" role="button" style="--c:' + _mwEsc(x.color) + '" aria-label="' + _mwEsc(x.tip) + '">' +
     (cont ? '' : '<span class="mwc-ic">' + _mwEsc(x.icon) + '</span><span class="mwc-tx">' + _mwEsc(x.title) + '</span>') + '</div>';
   return '<div class="mwc-chip mwc-' + x.kind + (x.done ? ' is-done' : '') + (x.late ? ' is-late' : '') + '" data-ck="' + _mwEsc(x.key) + '" tabindex="0" role="button"' +
-    (x.drag ? ' draggable="true"' : '') + ' style="--c:' + _mwEsc(x.color) + '" title="' + _mwEsc(x.tip) + '">' +
+    (x.drag ? ' draggable="true"' : '') + ' style="--c:' + _mwEsc(x.color) + '" aria-label="' + _mwEsc(x.tip) + '">' +
     '<span class="mwc-ic">' + _mwEsc(x.icon) + '</span>' + (x.repeat ? '<span class="mwc-ic">🔁</span>' : '') +
     (x.time && !opt.noTime ? '<b class="mwc-tm">' + _mwEsc(x.time) + '</b>' : '') +
     (x.urgent ? '<b class="mw-urg">긴급</b>' : x.pri === 2 && !x.done ? '<b class="mw-urg mw-urg2">높음</b>' : '') + '<span class="mwc-tx">' + _mwEsc(x.title) + '</span></div>';
+}
+
+/** 달력 항목 풍선 도움말 (v13.278) — 제목 · 종류 · 기한/일시 · 상태 · 장소 · 함께 · 메모 앞부분.
+ *  띄우기는 my-work-task.js _mwMemo (목록 메모 미리보기와 같은 창) */
+function _mwcTipDay(d) { return d ? (+d.slice(5, 7)) + '/' + (+d.slice(8, 10)) + ' (' + _mwWeekday(d) + ')' : ''; }
+function mwCalTipHtml(x) {
+  var rows = [], memo = '', today = mwToday();
+  function row(k, v) { if (v) rows.push('<div class="mw-tip-r"><span>' + k + '</span><b>' + v + '</b></div>'); }
+  var range = _mwcTipDay(x.date) + (x.end && x.end !== x.date ? ' ~ ' + _mwcTipDay(x.end) : '');
+  if (x.kind === 'task') {
+    var it = x.it || {}, s = MW_SRC[it.src] || { label: it.src };
+    var d = it.due ? _mwDays(today, it.due) : null;
+    row('종류', _mwEsc(s.label));
+    row('기한', _mwEsc(_mwcTipDay(it.due) + (it.dueTime ? ' ' + it.dueTime : '')) +
+      (it.done ? ' <em class="is-ok">완료</em>' : d < 0 ? ' <em class="is-late">' + (-d) + '일 지남</em>' : d === 0 ? ' <em class="is-soon">오늘</em>' : d === 1 ? ' <em class="is-soon">내일</em>' : d != null ? ' <em>D-' + d + '</em>' : ''));
+    if (!it.done && (it.pri === 1 || it.pri === 2)) row('중요도', it.pri === 1 ? '<em class="is-late">긴급</em>' : '<em class="is-soon">높음</em>');
+    if (it.todoStatus === 'doing') row('상태', '진행 중');
+    if (it.todoStatus === 'waiting') row('상태', '대기' + (it.waitingFor ? ' · ' + _mwEsc(it.waitingFor) : ''));
+    if (it.checkTotal) row('하위 항목', it.checkDone + ' / ' + it.checkTotal);
+    else if (it.progress != null && !it.done) row('진행률', it.progress + '%');
+    if (it.ctx) row('관련', _mwEsc(it.ctx));
+    memo = it.memo || '';
+  } else if (x.kind === 'evt') {
+    var ev = x.ev || {}, t = EVT_TYPE[ev.type] || EVT_TYPE.etc;
+    row('종류', _mwEsc(t.label) + (ev.repeat ? ' · 🔁 반복' : ''));
+    row('일시', _mwEsc(range + (ev.startTime ? ' ' + ev.startTime + (ev.endTime ? ' ~ ' + ev.endTime : '') : '')));
+    if (ev.location) row('장소', _mwEsc(ev.location));
+    var who = Array.isArray(ev.assignees) ? ev.assignees.filter(function (a) { return typeof a === 'string' && a; }) : [];
+    if (who.length) row('함께', _mwEsc(who.slice(0, 6).join(', ') + (who.length > 6 ? ' 외 ' + (who.length - 6) + '명' : '')));
+    if (!ev.canModify) row('', '<em>보기 전용</em>');
+    memo = ev.memo || '';
+  } else {
+    row('종류', '📁 내 프로젝트');
+    row('기간', _mwEsc(range));
+    var st = x.p && typeof mwProjStats === 'function' ? mwProjStats(x.p) : null;
+    if (st && st.prog != null) row('진행률', st.prog + '%');
+    if (st) row('남은 항목', st.open + '개');
+    memo = (x.p && x.p.memo) || '';
+  }
+  memo = String(memo).trim();
+  return '<div class="mw-memo-h">' + _mwEsc(x.icon || '') + ' ' + _mwEsc(x.title) + '</div>' +
+    '<div class="mw-tip-rows">' + rows.join('') + '</div>' +
+    (memo ? '<div class="mw-memo-b mw-tip-memo">📝 ' + _mwEsc(memo.length > 300 ? memo.slice(0, 300) + '…' : memo) + '</div>' : '');
 }
 
 /* ── 머리 도구 · 거르기 칩 · 목록 위 '오늘 일정' 띠 ───────────────── */
@@ -175,7 +218,7 @@ function _mwcWeekHtml(all, rg, today) {
       _mwcLanes(list).map(function (b) {
         var x = b.x, s = _mwcMin(x.time), e = x.timeEnd && x.timeEnd > x.time ? _mwcMin(x.timeEnd) : s + 60;
         var short = (e - s) < 45;   // 45분 아래는 한 줄 (시작 시각 + 제목)
-        return '<div class="mwc-blk' + (short ? ' mwc-blk-s' : '') + '" data-ck="' + _mwEsc(x.key) + '" tabindex="0" role="button"' + (x.drag ? ' draggable="true"' : '') + ' title="' + _mwEsc(x.tip) + '" style="--c:' + _mwEsc(x.color) +
+        return '<div class="mwc-blk' + (short ? ' mwc-blk-s' : '') + '" data-ck="' + _mwEsc(x.key) + '" tabindex="0" role="button"' + (x.drag ? ' draggable="true"' : '') + ' aria-label="' + _mwEsc(x.tip) + '" style="--c:' + _mwEsc(x.color) +
           ';top:' + (s / 60 * MWC_HOUR_H) + 'px;height:' + Math.max(20, (e - s) / 60 * MWC_HOUR_H - 2) + 'px;left:calc(' + (b.col / b.cols * 100) + '% + 2px);width:calc(' + (100 / b.cols) + '% - 4px)">' +
           '<b>' + _mwEsc(x.time) + (x.timeEnd && !short ? '~' + _mwEsc(x.timeEnd) : '') + '</b> ' + x.icon + (x.repeat ? '🔁' : '') + ' ' + _mwEsc(x.title) + '</div>';
       }).join('') +
