@@ -61,6 +61,7 @@ function mwTodoExtra(it) {
 /* ── 풍선 도움말 (v13.276 · v13.278) ─────────────────────────────────────
    목록 줄 · 보드 카드 — 메모가 있으면 메모 내용 (예전엔 📝 아이콘 title 로 200자만)
    달력 항목(월 · 주 · 시간 칸) — 제목 · 종류 · 기한 · 장소 · 메모 요약 (mwCalTipHtml, my-work-cal.js)
+   타임라인 막대 · 옆 달력 날짜 칸 · 고른 날 목록 (mtlTipHtml, my-work-timeline.js — v13.279)
    줄 · 칸 전체에서, 줄바꿈 그대로, 길면 스크롤 */
 var _mwMemo = { el: null, t: null, cur: null, off: null };
 function _mwMemoHide() {
@@ -80,6 +81,7 @@ function _mwMemoShow(host, html) {
 }
 /** 마우스 아래 것의 풍선 내용 — 없으면 '' */
 function _mwTipHtml(host) {
+  if (host.closest('.mwt')) return typeof mtlTipHtml === 'function' ? mtlTipHtml(host) : '';   // 타임라인 · 옆 달력 (my-work-timeline.js)
   var ck = host.getAttribute('data-ck');
   if (ck != null) {
     var x = typeof _mwc !== 'undefined' && _mwc.map ? _mwc.map[ck] : null;
@@ -93,7 +95,7 @@ function _mwTipHtml(host) {
   if (window.matchMedia && window.matchMedia('(hover: none)').matches) return;   // 휴대폰 · 패드는 상세 패널에서
   // mousemove 로 — 스크롤로 닫힌 뒤에도 살짝 움직이면 다시 뜸. 눌러서 닫은 항목(off)은 벗어날 때까지 다시 안 띄움
   document.addEventListener('mousemove', function (e) {
-    var host = e.target.closest && e.target.closest('.mw-row[data-key], .mwb-i[data-qk], #mMyWork [data-ck]');
+    var host = e.target.closest && e.target.closest('.mw-row[data-key], .mwb-i[data-qk], #mMyWork [data-ck], .mwt [data-tk], .mwt [data-cd], .mwt [data-ctk]');
     if (host === _mwMemo.cur || (host && host === _mwMemo.off)) return;
     _mwMemoHide(); _mwMemo.off = null;
     if (!host) return;

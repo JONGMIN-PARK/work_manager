@@ -72,6 +72,21 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     var t4 = await hover('#mMyWork .mwc-ad [data-ck="t|todo:tip-1"]');
     check(/풍선 견적 회신/.test(t4), '주 — 종일 칸 할 일 풍선');
     await page.screenshot({ path: path.join(SHOT, 'cal-tip-week.png') });
+    // 타임라인 옆 달력 (v13.279) — 날짜 칸: 그날 항목 목록 · 타임라인 막대: 항목 상세
+    await page.waitForSelector('#mwTimeline .mtl-cal [data-cd="' + kst(0) + '"]');
+    var t5 = await hover('#mwTimeline .mtl-cal [data-cd="' + kst(0) + '"]');
+    check(/오늘/.test(t5) && /풍선 견적 회신/.test(t5) && /풍선 회의/.test(t5) && /10:00/.test(t5), '옆 달력 날짜 칸 — 그날 목록 ' + JSON.stringify(t5));
+    check(await page.evaluate(function () { return !document.querySelector('#mwTimeline [data-cd][title], #mwTimeline [data-tk][title]'); }), '타임라인 · 옆 달력에 기본 title 겹침 없음');
+    var t6 = await hover('#mwTimeline [data-tk="todo:tip-1"]');
+    check(/기한/.test(t6) && /단가표/.test(t6), '타임라인 막대 — 할 일 상세 ' + JSON.stringify(t6));
+    await page.screenshot({ path: path.join(SHOT, 'cal-tip-tl.png') });
+    // '오늘' 버튼 — 다른 날을 골라 둔 뒤 누르면 달력 아래 목록이 오늘로
+    await page.evaluate(function (d) { document.querySelector('#mwTimeline .mtl-cal [data-cd="' + d + '"]').click(); }, kst(3));
+    await wait(300);
+    check(await page.evaluate(function (d) { return _mtlMain.pick === d; }, kst(3)), '다른 날 고름');
+    await page.click('#mwTimeline [data-t="today"]'); await wait(400);
+    var dl = await page.evaluate(function () { var x = document.querySelector('#mwTimeline .mtl-dl'); return { pick: _mtlMain.pick, txt: x ? x.textContent : '' }; });
+    check(dl.pick === kst(0) && /풍선 견적 회신/.test(dl.txt) && /풍선 회의/.test(dl.txt), '오늘 버튼 — 달력 아래 목록이 오늘 항목으로 ' + JSON.stringify(dl));
     check(errs.length === 0, '페이지 오류 없음 ' + JSON.stringify(errs));
   } catch (e) {
     fail++; console.log('FAIL', e.message);

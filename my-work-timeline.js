@@ -92,7 +92,7 @@ MwTimeline.prototype.build = function () {
       (o.calendar ? '<aside class="mtl-cal"></aside>' : '') +
     '</div>' +
     '<div class="mtl-rs" title="끌어서 높이 조절"></div>';
-  this.el = el;
+  this.el = el; el._mtl = this;   // 풍선 도움말이 칸 → 항목을 찾을 때 (mtlTipHtml)
   this.sc = el.querySelector('.mtl-sc'); this.cv = el.querySelector('.mtl-cv');
   this.bind();
   return el;
@@ -227,10 +227,10 @@ MwTimeline.prototype.itemHtml = function (t, r) {
   var lbl = '<span class="mtl-tx">' + (t.icon ? '<em>' + _mwEsc(t.icon) + '</em>' : '') + _mwEsc(t.title) + '</span>';
   if (t.bar) {
     var w = Math.max(6, t.x1 - t.x0);
-    return '<div class="' + cls + (w < 60 ? ' is-short' : '') + '" data-tk="' + _mwEsc(t.key) + '" style="left:' + t.x0 + 'px;width:' + w + 'px;top:' + top + 'px;--c:' + t.color + '" title="' + _mwEsc(tip) + '">' +
+    return '<div class="' + cls + (w < 60 ? ' is-short' : '') + '" data-tk="' + _mwEsc(t.key) + '" style="left:' + t.x0 + 'px;width:' + w + 'px;top:' + top + 'px;--c:' + t.color + '" aria-label="' + _mwEsc(tip) + '">' +
       (t.drag === 'bar' ? '<b class="mtl-h is-l" data-edge="l"></b><b class="mtl-h is-r" data-edge="r"></b>' : '') + lbl + '</div>';
   }
-  return '<div class="' + cls + '" data-tk="' + _mwEsc(t.key) + '" style="left:' + (t.x0 - 7) + 'px;top:' + top + 'px;--c:' + t.color + '" title="' + _mwEsc(tip) + '"><i></i>' + lbl + '</div>';
+  return '<div class="' + cls + '" data-tk="' + _mwEsc(t.key) + '" style="left:' + (t.x0 - 7) + 'px;top:' + top + 'px;--c:' + t.color + '" aria-label="' + _mwEsc(tip) + '"><i></i>' + lbl + '</div>';
 };
 
 /* ── 날짜 머리 · 바탕 (보이는 구간만) ─────────────────────────────── */
@@ -359,7 +359,7 @@ MwTimeline.prototype.bind = function () {
     if (t === 'fold') { st.collapsed = !st.collapsed; self.save(true); if (!st.collapsed) self.el.querySelector('.mtl-dens').hidden = true; self.update(); return; }
     if (t === 'lv') { self.zoomTo(MWT_PPD[b.getAttribute('data-v')]); return; }
     if (t === 'prev' || t === 'next') { self.sc.scrollBy({ left: (t === 'prev' ? -1 : 1) * (self.sc.clientWidth - self.L - 40), behavior: 'smooth' }); return; }
-    if (t === 'today') { self.st.center = null; self.pick = null; self.calMonth = null; self.update(); self.save(true); return; }
+    if (t === 'today') { self.st.center = null; self.calMonth = null; self.update(); self.save(true); self.setPick(mwToday()); return; }   // 오늘을 골라 달력 아래 목록도 오늘로 (예전엔 고른 날을 비워 목록이 안 바뀌었다 — v13.279)
     if (t === 'more') { self.moreMenu(b); return; }
   });
   el.querySelector('.mtl-hd').addEventListener('change', function (e) {
@@ -593,7 +593,7 @@ MwTimeline.prototype.drawCal = function () {
       var n = g0 + i, d = _mtlYmd(n), ts = by[d] || [], dow = i % 7, hol = _mtlHol(d);
       var dots = ts.slice(0, 3).map(function (t) { return '<i style="background:' + (t.late ? '#DC2626' : t.ev ? (t.color || '#06B6D4') : t.pri <= 2 ? '#F97316' : '#94A3B8') + '"></i>'; }).join('');
       h += '<button class="mtl-cd' + (nd[d] ? ' has-note' : '') + (d.slice(0, 7) !== ym && cells === 42 ? ' is-out' : '') + (d === today ? ' is-today' : '') + (dow === 0 || hol ? ' is-sun' : dow === 6 ? ' is-sat' : '') +
-        (d === self.pick ? ' is-pick' : '') + (d === self.hover && self.st.link ? ' is-hover' : '') + '" data-cd="' + d + '" title="' + _mwEsc(d + (hol ? ' ' + hol : '') + (ts.length ? ' · ' + ts.length + '개' : '')) + '">' +
+        (d === self.pick ? ' is-pick' : '') + (d === self.hover && self.st.link ? ' is-hover' : '') + '" data-cd="' + d + '" aria-label="' + _mwEsc(d + (hol ? ' ' + hol : '') + (ts.length ? ' · ' + ts.length + '개' : '')) + '">' +
         '<span>' + (+d.slice(8, 10)) + '</span><em>' + (ts.length > 3 ? '<b>' + ts.length + '</b>' : dots) + '</em></button>';
     }
     h += '</div></div>';
@@ -611,6 +611,36 @@ MwTimeline.prototype.drawCal = function () {
   cal.innerHTML = h;
   this.drawBand();
 };
+/* ── 풍선 도움말 (v13.279) — 옆 달력 날짜 칸: 그날 항목 목록 · 고른 날 목록 · 타임라인 막대: 항목 상세
+   띄우기는 my-work-task.js _mwMemo (목록 · 달력과 같은 창), 항목 상세는 mwCalTipHtml (my-work-cal.js) */
+function _mtlItemTip(t) {
+  if (!t) return '';
+  var a = _mtlYmd(t.n0), b = _mtlYmd(t.n1);
+  if (typeof mwCalTipHtml === 'function') {
+    if (t.it) return mwCalTipHtml({ kind: 'task', it: t.it, title: t.title, icon: t.icon });
+    if (t.ev) return mwCalTipHtml({ kind: 'evt', ev: t.ev, title: t.title, icon: t.icon, date: t.occ || a, end: b });
+    if (t.proj) return mwCalTipHtml({ kind: 'proj', p: t.proj, title: t.proj.title, icon: t.icon, date: a, end: b });
+  }
+  return '<div class="mw-memo-h">' + _mwEsc(t.icon || '') + ' ' + _mwEsc(t.title) + '</div>' + (t.tip ? '<div class="mw-memo-b">' + _mwEsc(t.tip) + '</div>' : '');
+}
+function mtlTipHtml(host) {
+  var root = host.closest('.mwt'), inst = root && root._mtl;
+  if (!inst) return '';
+  var k = host.getAttribute('data-tk') || host.getAttribute('data-ctk');
+  if (k) return _mtlItemTip(inst.find(k));
+  var d = host.getAttribute('data-cd');
+  if (!d) return '';
+  var ts = (inst.byDay[d] || []).slice().sort(function (x, y) { return (x.time || '99').localeCompare(y.time || '99'); });
+  var hol = _mtlHol(d), today = mwToday();
+  if (!ts.length && !hol) return '';
+  var MAX = 8;
+  return '<div class="mw-memo-h">📅 ' + _mtlFmt(_mtlNum(d), 30) + (d === today ? ' · 오늘' : '') + (hol ? ' · ' + _mwEsc(hol) : '') + (ts.length ? ' <i class="mtl-tip-n">' + ts.length + '개</i>' : '') + '</div>' +
+    (ts.length ? '<div class="mtl-tip-l">' + ts.slice(0, MAX).map(function (t) {
+      return '<div class="mtl-tip-i' + (t.done ? ' is-done' : t.late ? ' is-late' : '') + '"><i style="background:' + _mwEsc(t.color || '#94A3B8') + '"></i>' +
+        (t.time ? '<b>' + _mwEsc(t.time) + '</b>' : '') + _mwEsc((t.icon ? t.icon + ' ' : '') + t.title) +
+        (t.done ? ' <em>완료</em>' : t.late ? ' <em>지연</em>' : t.pri === 1 ? ' <em>긴급</em>' : '') + '</div>';
+    }).join('') + (ts.length > MAX ? '<div class="mtl-tip-more">… 외 ' + (ts.length - MAX) + '개 — 눌러서 그날 목록</div>' : '') + '</div>' : '');
+}
 /** 달력에 타임라인이 보는 기간 띠 */
 MwTimeline.prototype.drawBand = function () {
   var cal = this.el.querySelector('.mtl-cal');

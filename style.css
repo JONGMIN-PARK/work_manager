@@ -2101,6 +2101,15 @@ button.mw-pill:hover{border-color:var(--ac)}
 .mw-tip-r em{font-style:normal;font-weight:700;color:var(--t4)}
 .mw-tip-r em.is-late{color:#DC2626}.mw-tip-r em.is-soon{color:#D97706}.mw-tip-r em.is-ok{color:#059669}
 .mw-tip-memo{margin-top:6px;padding-top:6px;border-top:1px solid var(--bd);color:var(--t3)}
+/* 타임라인 옆 달력 날짜 풍선 (v13.279) — 그날 항목 목록 */
+.mtl-tip-n{font-style:normal;font-weight:500;color:var(--t4);font-size:11px}
+.mtl-tip-l{display:flex;flex-direction:column;gap:2px}
+.mtl-tip-i{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mtl-tip-i>i{flex:none;width:7px;height:7px;border-radius:50%}
+.mtl-tip-i>b{flex:none;font-weight:600;color:var(--t4);font-size:11px}
+.mtl-tip-i em{font-style:normal;font-weight:700;font-size:10px;color:var(--t4)}
+.mtl-tip-i.is-late em{color:#DC2626}.mtl-tip-i.is-done{opacity:.6}
+.mtl-tip-more{color:var(--t4);font-size:11px;margin-top:2px}
 .mw-urg2{background:#F97316}
 .mw-ltools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:-4px 0 10px}
 .mw-ltools .mw-sel{padding:4px 8px}
