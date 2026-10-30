@@ -194,9 +194,9 @@ async function waitSaved(page) {
     await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(500);
     await page.click('#tabMindmap');
-    await page.waitForSelector('#mindmapWrap .mm-card');
-    await page.click('#mindmapWrap .mm-card[data-id="' + mapId + '"]');
+    // v13.285 열어 둔 채 새로고침하면 그 맵이 바로 다시 열림 (목록을 거치지 않음)
     await page.waitForSelector('#mmStage .mm-root');
+    check('새로고침 — 열어 둔 맵이 다시 열림', await page.evaluate(function (id) { return _mm.mapId === id; }, mapId));
     await wait(300);
     var ns3 = await nodes(page);
     check('새로고침 후 내용 유지', ns3.indexOf('예산안') >= 0 && ns3.indexOf('리스크 검토') >= 0);

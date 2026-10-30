@@ -21,8 +21,9 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     // 회의 만들기 (프로젝트 없음 — 만든 사람만 맵으로 만들 수 있음)
     var mt = await page.evaluate(function () {
       var title = '설계 검토 회의 ' + Date.now();
+      // 회의 고르기 목록은 최근 30개(회의일 순) — 쌓인 테스트 회의에 밀리지 않게 먼 날짜로
       return apiFetch('/api/meetings', { method: 'POST', body: JSON.stringify({
-        title: title, meetDate: '2026-10-27', agenda: [{ text: '도면 검토', done: true, note: '- 치수 확인', result: '' }, { text: '일정' }],
+        title: title, meetDate: '2099-10-27', agenda: [{ text: '도면 검토', done: true, note: '- 치수 확인', result: '' }, { text: '일정' }],
         minutes: '-. 프레임 강성 부족\n-. 커버 간섭', attendees: ['김팀원'], form: { decisions: '1. 프레임 보강', nextDate: '2026-11-03' } }) })
         .then(function (r) {
           var id = r.data.id;
@@ -48,7 +49,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
       return { title: _mm.row.title, scope: _mm.row.scope, root: r.text, ref: r.ref, branches: r.children.map(function (c) { return c.text; }), act: act && act.children[0], gen: _mm.doc.meta && _mm.doc.meta.gen };
     });
     check(info.title === '회의 · ' + mt.title && info.scope === 'personal', '제목 · 범위 ' + info.title + ' ' + info.scope);
-    check(info.ref && info.ref.type === 'meeting' && info.root === mt.title + ' (2026-10-27)', '중심 주제 = 회의(연결)');
+    check(info.ref && info.ref.type === 'meeting' && info.root === mt.title + ' (2099-10-27)', '중심 주제 = 회의(연결)');
     check(info.branches.join('|') === '📋 안건|💬 논의|✅ 결정 사항|🎯 액션 아이템|👥 참석자|📅 다음 회의 2026-11-03', '가지 ' + info.branches.join('|'));
     check(info.act && info.act.text === '보강안 작성' && info.act.assigneeName === '외주' && info.act.dueDate === '2026-11-01', '액션 아이템 담당 · 마감');
     check(info.gen && info.gen.kind === 'meeting' && info.gen.meetingId === mt.id, '원본과 맞추기 정보');

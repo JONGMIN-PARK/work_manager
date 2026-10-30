@@ -303,7 +303,29 @@ function renderMindmap() {
   }
   _mmBindGlobal();
   if (_mm.mapId) { mmOpen(_mm.mapId); return; }
+  // 새로고침 · 다시 방문 — 열어 둔 채 나갔던 맵을 다시 연다 (페이지를 처음 그릴 때 한 번만, 같은 사용자일 때만)
+  if (!_mmRestoreTried) {
+    _mmRestoreTried = true;
+    var last = _mmOpenSaved();
+    if (last) { mmOpen(last, { restore: true }); return; }
+  }
   _mmRenderList();
+}
+
+/* 열어 둔 맵 기억 — 마지막 화면 복원(wmRestoreLastView)은 '마인드맵 탭'까지만이라 맵은 여기서 (localStorage 'wm-mm-open') */
+var _mmRestoreTried = false;
+function _mmOpenSaved() {
+  try {
+    var v = JSON.parse(localStorage.getItem('wm-mm-open') || 'null');
+    var me = (_mmMe() || {}).id;
+    return v && v.id && (!v.user || v.user === me) ? v.id : null;
+  } catch (e) { return null; }
+}
+function _mmOpenRemember(id) {
+  try {
+    if (id) localStorage.setItem('wm-mm-open', JSON.stringify({ id: id, user: (_mmMe() || {}).id || null }));
+    else localStorage.removeItem('wm-mm-open');
+  } catch (e) {}
 }
 
 /** 다른 페이지로 나갈 때 (mode.js setPage) — 저장 마무리 · 잠금 해제 */
@@ -315,7 +337,7 @@ function mmOnLeave() {
 }
 
 /* ═══ 편집기 열기 · 닫기 ═══ */
-function mmOpen(id) {
+function mmOpen(id, opt) {
   var wrap = _mmEl('mindmapWrap');
   if (!wrap) return;
   if (_mm.view === 'editor' && _mm.mapId && _mm.mapId !== id) { _mmSaveNow(); _mmLockRelease(); }
@@ -343,6 +365,7 @@ function mmOpen(id) {
     _mm.zoom = 1; _mm.panX = null; _mm.panY = null;
     if (window.innerWidth < 768) _mm.outline = true;   // 휴대폰은 아웃라인 보기로 시작
     if (typeof _mmRecentPush === 'function') _mmRecentPush(id);   // v13.267 목록의 「최근 연 맵」
+    _mmOpenRemember(id);
     var go = _mmTakeGoto(id);
     _mmRenderEditor();
     if (go) setTimeout(function () { if (_mm.mapId === id) _mmSelect(go); }, 0);
@@ -355,6 +378,8 @@ function mmOpen(id) {
   }).catch(function (e) {
     _mm.mapId = null;
     _mm.view = 'list';
+    _mmOpenRemember(null);
+    if (opt && opt.restore) { _mmRenderList(); return; }   // 복원 중 — 지워졌거나 권한이 없어진 맵은 조용히 목록으로
     _mmToast('❌ 맵을 열 수 없습니다 — ' + (e && e.status === 404 ? '삭제되었거나 권한이 없습니다' : _mmErr(e)), 'error');
     _mmRenderList();
   });
@@ -385,6 +410,7 @@ function mmBack() {
   _mmLockRelease();
   _mm.mapId = null;
   _mm.view = 'list';
+  _mmOpenRemember(null);   // 목록으로 돌아왔으면 다음에도 목록부터
   Promise.resolve(p).then(function () { _mmRenderList(); });
 }
 

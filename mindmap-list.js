@@ -26,6 +26,7 @@ function _mmRenderList() {
   var wrap = _mmEl('mindmapWrap');
   if (!wrap) return;
   _mm.view = 'list';
+  if (typeof _mmOpenRemember === 'function') _mmOpenRemember(null);   // 목록을 보고 있으면 다음 방문도 목록부터 (v13.285)
   _mmPeekHide(true);
   var tabs = [['all', '전체'], ['mine', '내 맵'], ['shared', '받은 맵']];
   var h = '<div class="mm-list-head">' +

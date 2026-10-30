@@ -87,6 +87,16 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.evaluate(function () { setPage('mindmap'); }); await page.waitForSelector('#mmListBody tr.mm-row');
     check(await page.evaluate(function () { return _mmLV.view === 'table' && _mmLV.sort === 'nodes'; }), '보기 · 정렬 기억');
 
+    // 열어 둔 맵 — 새로고침해도 그 맵으로 (v13.285) · 목록으로 돌아온 뒤엔 목록
+    await page.evaluate(function (id) { mmOpen(id); }, ids[0]);
+    await page.waitForFunction(function (id) { return _mm.view === 'editor' && _mm.mapId === id && _mm.row; }, { timeout: 8000 }, ids[0]);
+    await page.reload({ waitUntil: 'networkidle2' }); await ready();
+    var ro = await page.waitForFunction(function (id) { return curPage === 'mindmap' && _mm.view === 'editor' && _mm.mapId === id && !!_mm.row; }, { timeout: 10000 }, ids[0]).then(function () { return true; }).catch(function () { return false; });
+    check(ro, '열어 둔 맵 — 새로고침하면 그 맵이 다시 열림');
+    await page.evaluate(function () { mmBack(); }); await wait(500);
+    await page.reload({ waitUntil: 'networkidle2' }); await ready(); await wait(1500);
+    check(await page.evaluate(function () { return _mm.view !== 'editor' && !_mm.mapId; }), '목록으로 돌아온 뒤 새로고침 — 목록');
+
     // 휴대폰 — 👁 로 아래에서 미리보기
     await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
     await ready(); await page.evaluate(function () { setPage('mindmap'); _mmLV.view = 'card'; }); await page.waitForSelector(A); await page.evaluate(function () { _mmPaintList(); }); await wait(300);
