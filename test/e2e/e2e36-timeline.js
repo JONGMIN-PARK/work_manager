@@ -213,6 +213,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     if (!(await page.$('#mwTimeline'))) { await page.click('#tabMyWork').catch(function () {}); await page.waitForSelector('#mwTimeline .mtl-lane'); }
     await page.waitForNetworkIdle({ idleTime: 400, timeout: 10000 }).catch(function () {});
+    await page.evaluate(function () { if (mwPanelIsOpen()) mwPanelClose(); });   // v13.286 — 앞에서 연 상세 패널이 탭을 오가도 복원되므로, 휴대폰 달력을 가리지 않게 닫음
     await tl(function () { _mtlMain.update(); });
     check(await tl(function () { return document.querySelectorAll('#mwTimeline .mtl-cd').length === 7 && _mtlMain.L === 92; }), '휴대폰 — 달력은 한 주 줄');
     await page.click('#mwTimeline [data-cn="open"]');

@@ -133,6 +133,7 @@ function _mwCache(v) {
 function renderMyWork() {
   var el = document.getElementById('mMyWork');
   if (!el) return;
+  _mwLastLoad();
   if (_mw.userId == null) _mw.userId = _mwMe();
   var mine = _mw.userId === _mwMe();
   if (!_mw.data && mine) { var c = _mwCache(); if (c) { _mw.data = c; _mwPaint(); } }
@@ -153,12 +154,73 @@ function renderMyWork() {
     _mw.data = r;
     if (r.self) _mwCache(r);
     _mwPaint();
+    _mwLastApply();
   }).catch(function (e) {
     if (seq !== _mw.seq) return;
+    if (_mwLast.pending && _mwLast.pending.who && _mw.userId !== _mwMe()) { _mwLast.pending = null; _mw.userId = _mwMe(); renderMyWork(); return; }   // 기억한 다른 사람을 못 보게 됐으면 나로
+    _mwLast.pending = null;
     if (_mw.data && mine) { _mwToast('❌ 내 업무를 새로 받지 못했습니다 — ' + _mwErr(e), 'error'); return; }   // 기억해 둔 목록은 그대로
     el.innerHTML = '<div class="mw-empty">내 업무를 불러오지 못했습니다 — ' + _mwEsc(_mwErr(e)) + '</div>';
   });
 }
+
+/* ═══ 마지막 상태 (v13.286) ═══
+   새로고침 · 다른 탭에 갔다 와도 보던 그대로 — 출처 칩 · 보던 사람 · 달력에서 보던 날 · 열린 상세/📁 프로젝트/노트 패널 · 스크롤.
+   보기(목록 · 보드 · 주 · 월) · 정렬 · 접기 · 타임라인은 원래 따로 기억(mw-view · mtl-*). localStorage 'mw-last' */
+var _mwLast = { tried: false, leaving: false, pending: null, t: null };
+function _mwLastState() {
+  var me = _mwMe();
+  return {
+    user: me, who: _mw.userId && _mw.userId !== me ? _mw.userId : null, src: _mw.src || 'all', anchor: _mw.anchor || null,
+    panel: typeof mwPanelIsOpen === 'function' && mwPanelIsOpen() ? _mw.sel : null,
+    proj: typeof mwProjIsOpen === 'function' && mwProjIsOpen() && typeof _mwj !== 'undefined' ? _mwj.id : null,
+    notes: typeof mwNotesIsOpen === 'function' && mwNotesIsOpen() && typeof _mwn !== 'undefined' ? (_mwn.date || true) : null,
+    y: Math.round(window.scrollY || 0)
+  };
+}
+function _mwLastSave(now) {
+  clearTimeout(_mwLast.t);
+  var go = function () {
+    if (_mwLast.leaving || _mwLast.pending || (typeof curPage !== 'undefined' && curPage !== 'mywork') || !_mw.data) return;
+    _mwLS('last', _mwLastState());
+  };
+  if (now) go(); else _mwLast.t = setTimeout(go, 300);
+}
+/** 이 화면에 들어올 때 한 번 — 기억한 출처 · 사람 · 날을 먼저 맞춰 그 화면으로 불러옴 */
+function _mwLastLoad() {
+  if (_mwLast.tried) return;
+  _mwLast.tried = true; _mwLast.leaving = false;
+  var L = _mwLS('last');
+  if (!L || L.user !== _mwMe()) return;
+  _mw.src = L.src || 'all';
+  _mw.anchor = L.anchor || null;
+  _mw.userId = L.who || _mwMe();
+  _mwLast.pending = L;
+}
+/** 목록이 오면 — 열려 있던 패널 · 스크롤 */
+function _mwLastApply() {
+  var L = _mwLast.pending;
+  if (!L) return;
+  _mwLast.pending = null;
+  if (L.panel && typeof mwPanelOpen === 'function') { var it = _mwFind(L.panel); if (it) mwPanelOpen(it); }
+  else if (L.proj && typeof mwProjOpen === 'function') mwProjOpen(L.proj);
+  else if (L.notes && typeof mwNotesOpen === 'function' && _mw.data && _mw.data.self) mwNotesOpen(typeof L.notes === 'string' ? L.notes : undefined);
+  if (L.y) requestAnimationFrame(function () { requestAnimationFrame(function () { window.scrollTo(0, L.y); }); });
+}
+/** 다른 화면으로 나갈 때 (mode.js setPage) — 지금 상태를 바로 기억하고, 나가며 닫는 패널은 기억에 안 넣음. 다시 오면 복원 */
+function mwOnLeave() {
+  _mwLastSave(true);
+  _mwLast.leaving = true;
+  _mwLast.tried = false;
+}
+// 누르기 · 키 · 스크롤 뒤에 기억 (패널은 body 에 붙으므로 문서 전체에서)
+(function () {
+  if (typeof document === 'undefined') return;
+  var on = function () { if (typeof curPage !== 'undefined' && curPage === 'mywork') _mwLastSave(); };
+  document.addEventListener('click', on, true);
+  document.addEventListener('keyup', on, true);
+  window.addEventListener('scroll', on, { passive: true });
+})();
 
 /** 다시 그려도 쓰던 글은 그대로 — 위 입력 칸 · 보드 칸 [+] 입력 (v13.270) */
 function _mwKeepInputs(el) {

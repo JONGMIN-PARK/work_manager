@@ -109,6 +109,26 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     // 8. 아이콘 이스케이프 — 칸 아이콘에 태그
 
     // 9. 휴대폰 — 줄 이름 폭
+    // 마지막 상태 (v13.286) — 출처 칩 · 열린 상세 패널을 새로고침해도 · 다른 탭에 갔다 와도 그대로
+    await ev(function () { mwPanelClose(); var c = document.querySelector('#mMyWork [data-src="todo"]') || document.querySelector('#mMyWork [data-src]:not([data-src="all"])'); if (c) c.click(); });
+    await wait(200);
+    var src0 = await ev(function () { return _mw.src; });
+    await ev(function () { var it = _mwFind('todo:mtp-a'); mwPanelOpen(it); window.scrollTo(0, 200); document.body.click(); });
+    await wait(700);
+    await page.reload({ waitUntil: 'networkidle2' });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
+    var rs = await until(function (s) { return curPage === 'mywork' && _mw.src === s && typeof mwPanelIsOpen === 'function' && mwPanelIsOpen() && _mw.sel === 'todo:mtp-a'; }, src0, 10000);
+    check(src0 !== 'all' && rs, '새로고침 — 출처 칩 · 상세 패널 그대로 ' + src0);
+    await ev(function () { setPage('project'); }); await wait(400);
+    check(await ev(function () { return !mwPanelIsOpen(); }), '다른 탭 — 패널 닫힘');
+    await ev(function () { setPage('mywork'); });
+    check(await until(function (s) { return _mw.src === s && mwPanelIsOpen() && _mw.sel === 'todo:mtp-a'; }, src0, 8000), '다시 오면 패널 · 칩 그대로');
+    await ev(function () { mwPanelClose(); document.querySelector('#mMyWork [data-src="all"]').click(); }); await wait(600);
+    await page.reload({ waitUntil: 'networkidle2' });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
+    await wait(1500);
+    check(await ev(function () { return _mw.src === 'all' && !mwPanelIsOpen(); }), '닫고 전체로 바꾼 뒤 새로고침 — 그대로 닫힘 · 전체');
+
     await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await idle(); await wait(500);
     await ev(function () { _mwPaint(); }); await wait(300);
     var w = await ev(function () { var l = document.querySelector('#mMyWork .mtl-ln'); return { L: _mtlMain.L, w: l ? l.getBoundingClientRect().width : 0 }; });

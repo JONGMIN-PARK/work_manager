@@ -40,6 +40,7 @@ function setPage(page){
     page='team';
   }
   if(curPage==='mindmap'&&page!=='mindmap'&&typeof mmOnLeave==='function')mmOnLeave();  // 저장 마무리 · 편집 잠금 해제
+  if(curPage==='mywork'&&page!=='mywork'&&typeof mwOnLeave==='function')mwOnLeave();  // 지금 상태 기억 — 다시 오면 그대로 (v13.286)
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwPanelClose==='function')mwPanelClose();  // 내 업무 상세 패널 — 남은 저장 마저 하고 닫음 (다른 화면을 가리지 않게)
   curPage=page;
   document.querySelectorAll('#pageTabs .tab').forEach(function(t){var sel=t.dataset.page===page;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
