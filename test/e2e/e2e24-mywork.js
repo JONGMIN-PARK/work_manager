@@ -45,6 +45,8 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check(await page.evaluate(function () { var t = document.getElementById('tabWorkload'); return t && t.style.display !== 'none'; }), '관리자에게 업무 부하 탭 보임');
     await page.click('#tabMyWork');
     await page.waitForSelector('#mMyWork .mw-grp');
+    // 긴 묶음은 15줄까지만 (v13.275) — 시드에 지연이 많으니 모두 펴고 봄
+    await page.evaluate(function () { _mw.more = { late: true, today: true, week: true, next: true, later: true, nodue: true, done: true }; _mwPaint(); });
     var g = await page.evaluate(function () {
       var o = {};
       document.querySelectorAll('#mMyWork .mw-grp').forEach(function (s) { o[s.getAttribute('data-grp')] = Array.from(s.querySelectorAll('.mw-title')).map(function (x) { return x.textContent; }); });

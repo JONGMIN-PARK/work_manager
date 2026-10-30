@@ -15,14 +15,12 @@
 var MWC_DUE_SRC = ['todo', 'mindmap', 'issue', 'action'];
 var MWC_HOUR_H = 44;          // 주 보기 한 시간 높이(px)
 var MWC_DAY_MAX = 4;          // 월 보기 칸당 칩
-var MWC_SRC_COLOR = { mindmap: '#8B5CF6', issue: '#EF4444', action: '#06B6D4', prestudy: '#F59E0B', milestone: '#6366F1', dev: '#0EA5E9', todo: '#64748B' };
 var _mwc = { map: {}, drag: null, selfAt: 0 };
 
 function _mwcView() {
   if (!_mw.view) _mw.view = _mwLS('view') || 'list';
   return _mw.view;
 }
-function _mwcToday() { return (_mw.data && _mw.data.today) || (typeof localDate === 'function' ? localDate() : new Date().toISOString().slice(0, 10)); }
 function _mwcAdd(d, n) { return ymdAddDays(d, n); }
 function _mwcMonday(d) {
   var w = (new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10))).getUTCDay() + 6) % 7;
@@ -33,7 +31,7 @@ function _mwcHm(m) { m = Math.max(0, Math.min(23 * 60 + 59, Math.round(m))); ret
 
 /** 지금 보기의 날짜 범위 */
 function _mwcRange() {
-  var v = _mwcView(), today = _mwcToday();
+  var v = _mwcView(), today = mwToday();
   var a = _mw.anchor || today;
   if (v === 'week') { var m = _mwcMonday(a); return { from: m, to: _mwcAdd(m, 6) }; }
   if (v === 'month') { var g = _mwcMonday(a.slice(0, 8) + '01'); return { from: g, to: _mwcAdd(g, 41) }; }
@@ -67,14 +65,14 @@ function _mwcOccurrences(from, to) {
 
 /** 달력에 놓을 것 — 할 일 + 일정 회차 */
 function _mwcEntries(items, from, to) {
-  var today = _mwcToday(), self = _mw.data && _mw.data.self;
+  var today = mwToday(), self = _mw.data && _mw.data.self;
   var out = [];
   var showTasks = _mw.src !== 'event', showEvt = _mw.src === 'all' || _mw.src === 'event';
   if (showTasks) items.forEach(function (it) {
     if (!it.due || it.due < from || it.due > to) return;
     if (_mw.src !== 'all' && it.src !== _mw.src) return;
     var s = MW_SRC[it.src] || { icon: '•', label: it.src };
-    out.push({ kind: 'task', key: 't|' + it.key, it: it, title: it.title, icon: s.icon, color: MWC_SRC_COLOR[it.src] || '#64748B',
+    out.push({ kind: 'task', key: 't|' + it.key, it: it, title: it.title, icon: s.icon, color: mwSrcColor(it.src),
       date: it.due, end: it.due, time: it.dueTime || '', timeEnd: it.dueTime ? _mwcHm(_mwcMin(it.dueTime) + 30) : '', done: it.done, pri: it.pri, late: !it.done && it.due < today, urgent: it.urgent && !it.done,
       drag: !it.done && it.canDone && MWC_DUE_SRC.indexOf(it.src) >= 0,
       tip: s.label + ' — ' + it.title + (it.ctx ? ' · ' + it.ctx : '') });
@@ -108,7 +106,7 @@ function _mwcChip(x, opt) {
     (cont ? '' : '<span class="mwc-ic">' + _mwEsc(x.icon) + '</span><span class="mwc-tx">' + _mwEsc(x.title) + '</span>') + '</div>';
   return '<div class="mwc-chip mwc-' + x.kind + (x.done ? ' is-done' : '') + (x.late ? ' is-late' : '') + '" data-ck="' + _mwEsc(x.key) + '" tabindex="0" role="button"' +
     (x.drag ? ' draggable="true"' : '') + ' style="--c:' + _mwEsc(x.color) + '" title="' + _mwEsc(x.tip) + '">' +
-    '<span class="mwc-ic">' + x.icon + '</span>' + (x.repeat ? '<span class="mwc-ic">🔁</span>' : '') +
+    '<span class="mwc-ic">' + _mwEsc(x.icon) + '</span>' + (x.repeat ? '<span class="mwc-ic">🔁</span>' : '') +
     (x.time && !opt.noTime ? '<b class="mwc-tm">' + _mwEsc(x.time) + '</b>' : '') +
     (x.urgent ? '<b class="mw-urg">긴급</b>' : x.pri === 2 && !x.done ? '<b class="mw-urg mw-urg2">높음</b>' : '') + '<span class="mwc-tx">' + _mwEsc(x.title) + '</span></div>';
 }
@@ -243,7 +241,7 @@ function mwCalClick(e) {
   if (t.closest('[data-mwc="feed"]')) { mwCalFeedModal(); return true; }
   var nav = t.closest('[data-mwc-nav]');
   if (nav) {
-    var n = +nav.getAttribute('data-mwc-nav'), a = _mw.anchor || _mwcToday();
+    var n = +nav.getAttribute('data-mwc-nav'), a = _mw.anchor || mwToday();
     if (!n) _mw.anchor = null;
     else if (_mw.view === 'week') _mw.anchor = _mwcAdd(a, 7 * n);
     else { var dt = new Date(+a.slice(0, 4), +a.slice(5, 7) - 1 + n, 1); _mw.anchor = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-01'; }

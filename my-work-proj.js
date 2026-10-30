@@ -17,7 +17,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 var MW_PJ_STATUS = { plan: '계획', doing: '진행', hold: '보류', done: '완료' };
-var _mwj = { id: null, q: {}, timer: null, inflight: null, state: 'idle', err: '', pickQ: '', pick: null, pickT: null, drag: null };
+var _mwj = { id: null, q: {}, qId: null, timer: null, inflight: null, state: 'idle', err: '', pickQ: '', pick: null, pickT: null, drag: null };
 
 function mwProjs() { return (_mw.data && _mw.data.projs) || []; }
 function mwProjById(id) { return mwProjs().filter(function (p) { return p.id === id; })[0] || null; }
@@ -284,7 +284,7 @@ function mwProjOpen(id, opt) {
   opt = opt || {};
   if (typeof mwPanelIsOpen === 'function' && mwPanelIsOpen()) mwPanelClose();
   if (typeof mwNotesIsOpen === 'function' && mwNotesIsOpen()) mwNotesClose(true);
-  if (_mwj.id && _mwj.id !== id) _mwjFlush();
+  if (_mwj.id && _mwj.id !== id) _mwjDetach();
   _mwj.id = id; _mwj.pick = null; _mwj.pickQ = '';
   var el = document.getElementById('mwjPanel');
   if (!el) {
@@ -302,7 +302,7 @@ function mwProjOpen(id, opt) {
 }
 function mwProjClose() {
   if (!_mwj.id) return;
-  _mwjFlush();
+  _mwjDetach();
   _mwj.id = null;
   var el = document.getElementById('mwjPanel');
   if (el) el.classList.remove('on');
@@ -426,17 +426,29 @@ function _mwjLoadPick() {
 
 /* ── 자동 저장 (글 · 기간 · 진행률) ── */
 function _mwjQueue(patch, delay) {
+  if (_mwj.qId && _mwj.qId !== _mwj.id) _mwjDetach();
+  _mwj.qId = _mwj.id;
   Object.keys(patch).forEach(function (k) { _mwj.q[k] = patch[k]; });
   _mwj.state = 'dirty'; _mwjShowState();
   clearTimeout(_mwj.timer);
   _mwj.timer = setTimeout(_mwjFlush, delay == null ? 0 : delay);
 }
+/** 다른 프로젝트로 옮기거나 닫을 때 — 모아 둔 것은 원래 프로젝트 몫으로 따로 보냄 (v13.275, 패널 _mwpDetach 와 같은 이유) */
+function _mwjDetach() {
+  clearTimeout(_mwj.timer); _mwj.timer = null;
+  var id = _mwj.qId, body = _mwj.q;
+  _mwj.q = {}; _mwj.qId = null;
+  if (!id || !Object.keys(body).length) return;
+  (_mwj.inflight || Promise.resolve()).catch(function () {}).then(function () {
+    return apiFetch('/api/my-work/projects/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(body) });
+  }).then(function (r) { _mwjPutLocal(r.data); _mwPaint(); }, function (e) { _mwToast('❌ 프로젝트 저장 못 함: ' + _mwErr(e), 'error'); });
+}
 function _mwjFlush() {
   clearTimeout(_mwj.timer); _mwj.timer = null;
-  var p = mwProjById(_mwj.id);
+  var p = mwProjById(_mwj.qId);
   if (!p || !Object.keys(_mwj.q).length) return _mwj.inflight || Promise.resolve();
-  if (_mwj.inflight) { _mwj.inflight.then(function () { _mwjFlush(); }); return _mwj.inflight; }
-  var body = _mwj.q; _mwj.q = {};
+  if (_mwj.inflight) { _mwj.inflight.then(function () { _mwjFlush(); }, function () {}); return _mwj.inflight; }
+  var body = _mwj.q; _mwj.q = {}; _mwj.qId = null;
   var id = p.id;
   _mwj.state = 'saving'; _mwjShowState();
   _mwj.inflight = apiFetch('/api/my-work/projects/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(body) }).then(function (r) {
@@ -447,6 +459,8 @@ function _mwjFlush() {
     if (Object.keys(_mwj.q).length) _mwjFlush();
   }).catch(function (e) {
     _mwj.inflight = null;
+    if (_mwj.id !== id || (_mwj.qId && _mwj.qId !== id)) { _mwToast('❌ 프로젝트 저장 못 함: ' + _mwErr(e), 'error'); return; }
+    _mwj.qId = id;
     Object.keys(body).forEach(function (k) { if (!(k in _mwj.q)) _mwj.q[k] = body[k]; });
     _mwj.state = 'error'; _mwj.err = _mwErr(e); _mwjShowState();
   });

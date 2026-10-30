@@ -14,21 +14,25 @@
    전역 의존: apiFetch, eH, showToast, currentUser, setPage, setMode, showIssueDetail, showProjectDetail, psOpenModal, _mm
    ═══════════════════════════════════════════════════════════════════════ */
 
+// color — 달력 · 타임라인이 같은 색을 쓰게 한 곳에 (v13.275, 예전엔 둘이 달라 같은 일이 다른 색이었다)
 var MW_SRC = {
-  mindmap:   { icon: '🧠', label: '맵' },
-  issue:     { icon: '🎫', label: '이슈' },
-  action:    { icon: '📝', label: '회의' },
-  prestudy:  { icon: '🔍', label: '사전검토' },
-  milestone: { icon: '◆', label: '일정' },
-  dev:       { icon: '🛠', label: '개발' },
-  todo:      { icon: '✏️', label: '할 일' }
+  mindmap:   { icon: '🧠', label: '맵',       color: '#EC4899' },
+  issue:     { icon: '🎫', label: '이슈',     color: '#F59E0B' },
+  action:    { icon: '📝', label: '회의',     color: '#06B6D4' },
+  prestudy:  { icon: '🔍', label: '사전검토', color: '#8B5CF6' },
+  milestone: { icon: '◆', label: '마일스톤', color: '#6366F1' },
+  dev:       { icon: '🛠', label: '개발',     color: '#10B981' },
+  todo:      { icon: '✏️', label: '할 일',    color: '#3B82F6' }
 };
+function mwSrcColor(src) { return (MW_SRC[src] && MW_SRC[src].color) || '#94A3B8'; }
 var MW_MOVE_SRC = ['mindmap', 'issue', 'action', 'dev', 'prestudy'];
 var _mw = { sel: null, userId: null, people: null, canLoad: false, data: null, src: 'all', open: null, load: null, loadSel: null, weeks: 8, dept: '',
   view: null, anchor: null, ev: null };   // view: list · week · month — anchor: 달력에서 보고 있는 날 — ev: 내 일정 { from, to, userId, rows }
 
 function _mwEsc(s) { return (typeof eH === 'function') ? eH(s == null ? '' : String(s)) : String(s == null ? '' : s); }
 function _mwToast(m, t) { if (typeof showToast === 'function') showToast(m, t); }
+/** 오늘 (서버가 준 날 → 이 PC 날짜). 달력 · 타임라인 · 패널 · 노트가 모두 이것 (v13.275 — 다섯 벌이던 것, UTC 대체값 없앰) */
+function mwToday() { return (_mw.data && _mw.data.today) || localDate(); }
 function _mwMe() { return (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.sub || currentUser.id) : null; }
 function _mwErr(e) { return (e && (e.message || (e.data && e.data.message))) || '오류'; }
 function _mwLS(k, v) {
@@ -77,6 +81,11 @@ var MW_GROUPS = [
 ];
 
 /* ── 원래 자리로 열기 ─────────────────────────────────────────────── */
+/** 다른 화면의 창 열기 — 표준 가드(두 번 눌러도 한 번만 · 안 뜨면 알림) */
+function _mwGuard(key, fn, elId) {
+  if (typeof wmGuardedModal === 'function') return wmGuardedModal(key, fn, elId);
+  fn();
+}
 /** 원래 자리로 열기 — 패널의 [화면에서 열기] · 업무 부하 목록에서. 개인 할 일은 상세 패널 */
 function mwOpenItem(it) {
   if (!it) return;
@@ -89,17 +98,19 @@ function mwOpenItem(it) {
       setPage('mindmap');
       return;
     case 'issue':
-      if (typeof showIssueDetail === 'function') showIssueDetail(it.id);
+      if (typeof showIssueDetail === 'function') _mwGuard('mwIssue', function () { showIssueDetail(it.id); }, 'issueDetailPanel');
       return;
     case 'prestudy':
       setPage('project'); setMode('prestudy');
       var tries = 0;
       (function wait() {
-        if (typeof _psList !== 'undefined' && _psList.some(function (p) { return p.id === it.id; })) { psOpenModal(it.id); return; }
+        if (typeof _psList !== 'undefined' && _psList.some(function (p) { return p.id === it.id; })) { _mwGuard('mwPrestudy', function () { psOpenModal(it.id); }, 'psmTitle'); return; }
         if (++tries < 30) setTimeout(wait, 100);
       })();
       return;
     case 'todo':
+      // 팀 보기에서 남의 할 일은 열지 않음 — 고치면 404 만 나던 것 (v13.275)
+      if (it.userId && it.userId !== _mwMe()) { _mwToast('🔒 다른 사람의 개인 할 일은 열 수 없습니다', 'warn'); return; }
       if (_mw.data && _mw.data.self && typeof mwPanelOpen === 'function') mwPanelOpen(it);
       return;
     default:   // action · milestone · dev — 프로젝트 상세
@@ -196,8 +207,8 @@ function _mwPaintNow(el) {
   var h = '<div class="mw-head">' +
     '<h2>🎯 ' + (r.self ? '내 업무' : _mwEsc(r.user.name) + ' 님 업무') + '</h2>' +
     '<div class="mw-sum">' +
-      (n('late') ? '<span class="mw-pill mw-pill-late">지연 ' + n('late') + '</span>' : '') +
-      '<span class="mw-pill">오늘 ' + n('today') + '</span><span class="mw-pill">이번 주 ' + n('week') + '</span>' +
+      (n('late') ? _mwPill('late', '지연 ' + n('late'), ' mw-pill-late') : '') +
+      _mwPill('today', '오늘 ' + n('today'), n('today') ? '' : ' is-0') + _mwPill('week', '이번 주 ' + n('week'), n('week') ? '' : ' is-0') +
     '</div>' +
     '<div class="mw-tools">' +
       (_mw.people && _mw.people.length > 1 ? '<select id="mwWho" class="mw-sel" title="다른 사람 업무 보기">' + _mw.people.map(function (u) {
@@ -248,7 +259,7 @@ function _mwPaintNow(el) {
     var folded = !!folds[g.key];
     h += '<section class="mw-grp ' + (g.cls || '') + (folded ? ' mw-folded' : '') + '" data-grp="' + g.key + '">' +
       '<div class="mw-grp-h" data-fold="' + g.key + '"><span class="mw-tri">▾</span>' + g.label + ' <b>' + list.length + '</b></div>' +
-      '<div class="mw-rows">' + list.map(function (it) { return _mwRowHtml(it, today); }).join('') + '</div></section>';
+      '<div class="mw-rows">' + _mwRowsHtml(g.key, list, today) + '</div></section>';
   });
   if (!any) h += '<div class="mw-empty">' + (r.self ? '🎉 담당한 일이 없습니다. 마인드맵 주제 · 이슈 · 회의 액션에 담당과 마감을 넣으면 여기에 모입니다.' : '담당한 일이 없습니다.') + '</div>';
   el.innerHTML = '<div class="mw-wrap">' + h + '</div>';
@@ -258,6 +269,28 @@ function _mwPaintNow(el) {
   if (typeof mwPanelSync === 'function') mwPanelSync();
 }
 
+/** 묶음이 길면 앞 MW_ROW_CAP 줄만 — 나머지는 '＋ N개 더 보기' (v13.275, 지연 수십 개가 화면을 다 덮던 것) */
+var MW_ROW_CAP = 15;
+function _mwRowsHtml(key, list, today) {
+  var all = (_mw.more || {})[key] || list.length <= MW_ROW_CAP + 3;
+  var shown = all ? list : list.slice(0, MW_ROW_CAP);
+  return shown.map(function (it) { return _mwRowHtml(it, today); }).join('') +
+    (all ? '' : '<button class="mw-more" data-mw-more="' + key + '">＋ ' + (list.length - MW_ROW_CAP) + '개 더 보기</button>');
+}
+/** 머리 요약 알약 — 누르면 그 묶음으로 (목록 보기에서만, 접혀 있으면 폄 — v13.275) */
+function _mwPill(key, text, cls) {
+  return '<button class="mw-pill' + (cls || '') + '" data-mw-jump="' + key + '" title="목록에서 이 묶음으로">' + text + '</button>';
+}
+function _mwJump(key) {
+  if (_mw.view !== 'list') { _mw.view = 'list'; _mwLS('view', 'list'); _mwPaint(); }
+  var f = _mwLS('fold') || { later: true, nodue: true, done: true };
+  if (f[key]) { f[key] = false; _mwLS('fold', f); }
+  var sec = document.querySelector('#mMyWork .mw-grp[data-grp="' + key + '"]');
+  if (!sec) { _mwToast('이 묶음에 보이는 일이 없습니다 — 거르기를 확인하세요'); return; }
+  sec.classList.remove('mw-folded');
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  sec.classList.add('mw-flash'); setTimeout(function () { sec.classList.remove('mw-flash'); }, 1200);
+}
 function _mwRowHtml(it, today) {
   var s = MW_SRC[it.src] || { icon: '•', label: it.src };
   var late = !it.done && it.due && it.due < today;
@@ -271,7 +304,7 @@ function _mwRowHtml(it, today) {
     (it.src === 'todo' && typeof mwTodoExtra === 'function' ? mwTodoExtra(it) : '') +
     (typeof mwProjTag === 'function' ? mwProjTag(it) : '') +
     (it.ctx ? '<span class="mw-ctx" title="' + _mwEsc(it.ctx) + '">' + _mwEsc(it.ctx) + '</span>' : '<span class="mw-ctx"></span>') +
-    (it.progress != null && !it.done && it.src !== 'todo' ? '<span class="mw-prog" title="진행률"><span style="width:' + Math.max(0, Math.min(100, it.progress)) + '%"></span><em>' + it.progress + '%</em></span>' : '') +
+    (it.progress != null && !it.done && it.src !== 'todo' ? '<span class="mw-prog' + (it.progress ? '' : ' is-zero') + '" title="진행률"><span style="width:' + Math.max(0, Math.min(100, it.progress)) + '%"></span><em>' + it.progress + '%</em></span>' : '') +
     // 개인 할 일 마감은 눌러서 편집 창에서 (v13.253 — 날짜 · 시각 · 반복을 같이)
     (it.src === 'todo' && !it.done && _mw.data.self
       ? '<span class="mw-due mw-due-btn' + (late ? ' mw-late' : '') + (it.due ? '' : ' is-empty') + '" data-open="' + _mwEsc(it.key) + '" title="마감 바꾸기">' + (it.due ? _mwEsc(_mwDueLabel(it.due, today)) + (it.dueTime ? ' ' + _mwEsc(it.dueTime) : '') : '마감 ＋') + '</span>'
@@ -370,6 +403,10 @@ function _mwBind(el) {
     if (typeof mwTaskClick === 'function' && mwTaskClick(e)) return;
     var chip = t.closest('[data-src]');
     if (chip) { _mw.src = chip.getAttribute('data-src'); _mwPaint(); return; }
+    var jump = t.closest('[data-mw-jump]');
+    if (jump) { _mwJump(jump.getAttribute('data-mw-jump')); return; }
+    var more = t.closest('[data-mw-more]');
+    if (more) { _mw.more = _mw.more || {}; _mw.more[more.getAttribute('data-mw-more')] = true; _mwPaint(); return; }
     var fold = t.closest('[data-fold]');
     if (fold) {
       var f = _mwLS('fold') || { later: true, nodue: true, done: true };

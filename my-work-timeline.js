@@ -20,11 +20,9 @@
 
 var MWT_PPD = { week: 120, month: 30, year: 2.6 };   // 하루 폭(px)
 var MWT_MIN = 1.4, MWT_MAX = 320;
-var MWT_LABEL = 118;   // 왼쪽 줄 이름 폭 (휴대폰 76 — CSS 와 같게, 인스턴스마다 this.L)
+var MWT_LABEL = 118;   // 왼쪽 줄 이름 폭 (휴대폰 92 — CSS 와 같게, 인스턴스마다 this.L)
 var MWT_ROW = 24;      // 한 줄 높이
-var MWT_AX = 36;       // 날짜 머리
 var MWT_MAXROWS = 6;   // 한 칸 안 쌓기 — 넘치면 +n
-var MWT_SRC_COLOR = { mindmap: '#EC4899', issue: '#F59E0B', action: '#06B6D4', prestudy: '#8B5CF6', milestone: '#6366F1', dev: '#10B981', todo: '#3B82F6' };
 var MWT_WD = '일월화수목금토';
 
 function _mtlNum(d) { return Math.floor(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 864e5); }
@@ -32,7 +30,6 @@ function _mtlYmd(n) { return new Date(Math.floor(n) * 864e5).toISOString().slice
 function _mtlMin(t) { return t ? (+t.slice(0, 2)) * 60 + (+t.slice(3, 5)) : 0; }
 function _mtlHm(m) { m = Math.max(0, Math.min(1439, Math.round(m))); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
 function _mtlDow(n) { return new Date(Math.floor(n) * 864e5).getUTCDay(); }
-function _mtlToday() { return (_mw.data && _mw.data.today) || (typeof localDate === 'function' ? localDate() : new Date().toISOString().slice(0, 10)); }
 function _mtlHol(d) { return typeof krHolidayName === 'function' ? krHolidayName(d) : ''; }
 function _mtlNarrow() { return window.matchMedia && window.matchMedia('(max-width: 768px)').matches; }
 var _mtlCtx = null;
@@ -111,8 +108,8 @@ MwTimeline.prototype.mount = function (slot) {
 
 /* ── 데이터 → 배치 ───────────────────────────────────────────────── */
 MwTimeline.prototype.update = function () {
-  var o = this.o, st = this.st, today = _mtlToday(), tn = _mtlNum(today);
-  this.L = _mtlNarrow() ? 76 : MWT_LABEL;
+  var o = this.o, st = this.st, today = mwToday(), tn = _mtlNum(today);
+  this.L = _mtlNarrow() ? 92 : MWT_LABEL;
   this.el.classList.toggle('is-collapsed', st.collapsed);
   this.el.classList.toggle('no-cal', !st.cal);
   var lk = this.el.querySelector('[data-t="link"]'); if (lk) lk.checked = st.link;
@@ -150,7 +147,7 @@ MwTimeline.prototype.update = function () {
 
 /** 줄마다 쌓기 · 그리기 */
 MwTimeline.prototype.layout = function (lanes) {
-  var self = this, st = this.st, ppd = st.ppd, agg = ppd < 6, tn = _mtlNum(_mtlToday());
+  var self = this, st = this.st, ppd = st.ppd, agg = ppd < 6, tn = _mtlNum(mwToday());
   var byLane = {};
   this.items.forEach(function (t) { (byLane[t.lane] = byLane[t.lane] || []).push(t); });
   var used = lanes.filter(function (l) { return byLane[l.id] || l.keep; });
@@ -212,7 +209,7 @@ MwTimeline.prototype.layout = function (lanes) {
     var nrows = Math.max(1, rows.length) + (Object.keys(over).length ? 1 : 0);
     var cnt = list.length;
     h += '<div class="mtl-lane" data-lane="' + _mwEsc(l.id) + '" style="height:' + (nrows * MWT_ROW + 8) + 'px;--c:' + (l.color || '#94A3B8') + '">' +
-      '<div class="mtl-ln" title="' + _mwEsc(l.name) + '"><i></i><span>' + (l.icon ? l.icon + ' ' : '') + _mwEsc(l.name) + '</span><b>' + (cnt || '') + '</b></div>' + out + '</div>';
+      '<div class="mtl-ln" title="' + _mwEsc(l.name) + '"><i></i><span>' + (l.icon ? _mwEsc(l.icon) + ' ' : '') + _mwEsc(l.name) + '</span><b>' + (cnt || '') + '</b></div>' + out + '</div>';
   });
   this.cv.querySelector('.mtl-lanes').innerHTML = h;
 };
@@ -227,7 +224,7 @@ MwTimeline.prototype.itemHtml = function (t, r) {
     (t.drag ? ' can-drag' : '') + (t.key === _mw.sel ? ' mw-picked' : '') + (t.pending ? ' is-pending' : '') + (t.proj ? ' mtl-proj' : t.pjms ? ' mtl-pjms' : '');
   var top = r * MWT_ROW + 4;
   var tip = t.title + '\n' + (t.tip || '');
-  var lbl = '<span class="mtl-tx">' + (t.icon ? '<em>' + t.icon + '</em>' : '') + _mwEsc(t.title) + '</span>';
+  var lbl = '<span class="mtl-tx">' + (t.icon ? '<em>' + _mwEsc(t.icon) + '</em>' : '') + _mwEsc(t.title) + '</span>';
   if (t.bar) {
     var w = Math.max(6, t.x1 - t.x0);
     return '<div class="' + cls + (w < 60 ? ' is-short' : '') + '" data-tk="' + _mwEsc(t.key) + '" style="left:' + t.x0 + 'px;width:' + w + 'px;top:' + top + 'px;--c:' + t.color + '" title="' + _mwEsc(tip) + '">' +
@@ -242,7 +239,7 @@ MwTimeline.prototype.view = function () {
   return { n0: Math.floor(this.N(sl + this.L)), n1: Math.ceil(this.N(sl + w)), c: this.N(sl + this.L + (w - this.L) / 2) };
 };
 MwTimeline.prototype.drawAxis = function () {
-  var self = this, st = this.st, ppd = st.ppd, v = this.view(), tn = _mtlNum(_mtlToday());
+  var self = this, st = this.st, ppd = st.ppd, v = this.view(), tn = _mtlNum(mwToday());
   var a = '', b = '', n0 = Math.max(this.from, v.n0 - 2), n1 = Math.min(this.to, v.n1 + 2);
   var nd = {};   // 📝 노트 있는 날 (v13.272)
   (this.o.noteDays ? this.o.noteDays() : []).forEach(function (d) { nd[d] = true; });
@@ -277,7 +274,7 @@ MwTimeline.prototype.drawAxis = function () {
 
 /* ── 접었을 때 — 다음 8주 밀도 막대 ─────────────────────────────── */
 MwTimeline.prototype.drawDensity = function () {
-  var tn = _mtlNum(_mtlToday()), by = this.byDay, h = '';
+  var tn = _mtlNum(mwToday()), by = this.byDay, h = '';
   for (var n = tn - 7; n < tn + 49; n++) {
     var d = _mtlYmd(n), ts = by[d] || [], late = ts.some(function (t) { return t.late; });
     h += '<button class="mtl-dc' + (n === tn ? ' is-today' : '') + (late ? ' is-late' : '') + '" data-dd="' + d + '" style="--k:' + Math.min(1, ts.length / 5) + '" title="' + _mwEsc(_mtlFmt(n, 30) + ' · ' + ts.length + '개') + '"></button>';
@@ -556,12 +553,20 @@ MwTimeline.prototype.startDrag = function (e, node, edge) {
 
 /* ═══ 옆 달력 ═══ */
 MwTimeline.prototype.calBase = function () {
-  return this.calMonth || (this.pick ? this.pick.slice(0, 7) : _mtlYmd(this.st.center != null ? this.st.center : _mtlNum(_mtlToday())).slice(0, 7));
+  return this.calMonth || _mtlYmd(this.calAnchor()).slice(0, 7);
+};
+/** 달력이 기준으로 삼을 날 — 고른 날 → 타임라인에 오늘이 보이면 오늘 → 가운데 날
+ *  (예전엔 가운데 날이라, 오늘이 왼쪽에 있으면 달력 · 휴대폰 한 주에서 오늘이 빠지던 것 — v13.275) */
+MwTimeline.prototype.calAnchor = function () {
+  if (this.pick) return _mtlNum(this.pick);
+  var tn = _mtlNum(mwToday()), v = this.sc ? this.view() : null;
+  if (this.st.center == null || (v && tn >= v.n0 && tn < v.n1)) return tn;
+  return Math.floor(this.st.center);
 };
 MwTimeline.prototype.drawCal = function () {
   var cal = this.el.querySelector('.mtl-cal');
   if (!cal || !this.st.cal) return;
-  var self = this, ym = this.calBase(), today = _mtlToday(), by = this.byDay;
+  var self = this, ym = this.calBase(), today = mwToday(), by = this.byDay;
   var nd = {};
   (this.o.noteDays ? this.o.noteDays() : []).forEach(function (d) { nd[d] = true; });
   var narrow = _mtlNarrow(), h = '';
@@ -580,7 +585,7 @@ MwTimeline.prototype.drawCal = function () {
     var first = _mtlNum(ym + '-01'), g0 = first - _mtlDow(first);
     var cells = 42;
     if (narrow && !this.st.calOpen) {   // 휴대폰 — 고른 날(없으면 가운데 날)이 든 한 주만
-      var base = this.pick ? _mtlNum(this.pick) : Math.floor(this.st.center || _mtlNum(today));
+      var base = this.calAnchor();
       g0 = base - _mtlDow(base); cells = 7;
     }
     h += '<div class="mtl-cal-g"><div class="mtl-cal-w">' + MWT_WD.split('').map(function (w, i) { return '<span' + (i === 0 ? ' class="is-sun"' : i === 6 ? ' class="is-sat"' : '') + '>' + w + '</span>'; }).join('') + '</div><div class="mtl-cal-d">';
@@ -683,7 +688,7 @@ function mwtLoadEvents(from, to, force) {
 function mwTimelineEvReload() {
   if (!_mtlMain) return;
   var v = _mtlMain.from != null ? _mtlMain.view() : null;
-  var c = v ? _mtlYmd(v.c) : _mtlToday();
+  var c = v ? _mtlYmd(v.c) : mwToday();
   mwtLoadEvents(_mtlYmd(_mtlNum(c) - 120), _mtlYmd(_mtlNum(c) + 270), true).then(function (ch) { if (ch && _mtlMain.el && _mtlMain.el.isConnected) _mtlMain.update(); });
 }
 
@@ -700,7 +705,7 @@ function _mtlTaskOf(it, grp, today) {
   var tm = !bar && it.dueTime ? _mtlMin(it.dueTime) : null;
   return {
     key: it.key, it: it, title: it.title, icon: s.icon, lane: grp === 'cat' ? col.id : grp === 'src' ? it.src : grp === 'proj' ? mwProjLaneOf(it) : 'all',
-    color: grp === 'cat' ? (MW_CAT_COLORS[col.color] || '#94A3B8') : (MWT_SRC_COLOR[it.src] || '#94A3B8'),
+    color: grp === 'cat' ? (MW_CAT_COLORS[col.color] || '#94A3B8') : mwSrcColor(it.src),
     bar: bar, n0: n0, n1: n1, f0: bar ? 0 : (tm != null ? tm / 1440 : 0.5), f1: 1, time: it.dueTime || null,
     late: !it.done && it.due && it.due < today, done: !!it.done, pri: it.pri || 3, pending: !!it.pending,
     drag: !self || it.done || it.pending ? null : (bar ? (it.src === 'todo' ? 'bar' : null) : (_mwpCanDue(it) ? 'pt' : null)),
@@ -738,12 +743,12 @@ function _mtlMainInst() {
       if (g === 'proj' && hasPj) return mwProjLanes(showDone).concat([ev]);
       var pj = hasPj ? [{ id: '__pj', name: '프로젝트', icon: '📁', color: '#6366F1' }] : [];
       if (g === 'pack') return [{ id: 'all', name: '전체', icon: '🎯', color: '#6366F1', keep: true }];
-      if (g === 'src') return pj.concat(Object.keys(MW_SRC).map(function (k) { return { id: k, name: MW_SRC[k].label, icon: MW_SRC[k].icon, color: MWT_SRC_COLOR[k] }; }), [ev]);
+      if (g === 'src') return pj.concat(Object.keys(MW_SRC).map(function (k) { return { id: k, name: MW_SRC[k].label, icon: MW_SRC[k].icon, color: mwSrcColor(k) }; }), [ev]);
       var cols = (typeof mwBoardCols === 'function' ? mwBoardCols() : []).map(function (c) { return { id: c.id, name: c.name, icon: c.icon, color: MW_CAT_COLORS[c.color] || '#94A3B8', keep: true }; });
       return pj.concat(cols, [{ id: 'none', name: MW_NONE_COL.name, icon: MW_NONE_COL.icon, color: '#94A3B8' }, ev]);
     },
     items: function (tl) {
-      var today = _mtlToday(), g = tl.st.group, out = [];
+      var today = mwToday(), g = tl.st.group, out = [];
       var showDone = typeof _mwbShowDone === 'function' && _mwbShowDone();
       if (g === 'proj' && typeof mwProjLanes !== 'function') g = 'cat';
       // 📁 프로젝트 기간 막대 — 한 줄로면 같은 줄에 (v13.273)
@@ -811,7 +816,7 @@ function mwTimelineMount(el) {
   var uid = _mw.userId || _mwMe();
   if (_mtlEv.uid !== uid) {
     _mtlEv.rows = []; _mtlEv.from = null; _mtlEv.to = null;
-    var tn = _mtlNum(_mtlToday());
+    var tn = _mtlNum(mwToday());
     mwtLoadEvents(_mtlYmd(tn - 90), _mtlYmd(tn + 300)).then(function (ch) { if (ch && tl.el && tl.el.isConnected) tl.update(); });
   }
   tl.mount(slot);
@@ -847,7 +852,7 @@ function mwtQuickAdd(date, x, y) {
     e.preventDefault();
     var raw = inp.value.trim();
     if (!raw) return;
-    var q = typeof QuickParse !== 'undefined' ? QuickParse.parse(raw, _mtlToday()) : { title: raw };
+    var q = typeof QuickParse !== 'undefined' ? QuickParse.parse(raw, mwToday()) : { title: raw };
     close();
     mwAddTodo({ title: q.title || raw, dueDate: date, dueTime: q.time || null, priority: q.priority || 3 }).then(function () {
       _mwToast('✏️ ' + (+date.slice(5, 7)) + '/' + (+date.slice(8, 10)) + ' 마감 — ' + (q.title || raw));
@@ -866,7 +871,7 @@ function mwLoadTimelineMount(el) {
       return (_mw.load.users || []).map(function (u) { return { id: u.id, name: u.name, icon: '👤', color: '#6366F1', keep: true }; });
     },
     items: function () {
-      var L = _mw.load, today = L.today || _mtlToday(), out = [];
+      var L = _mw.load, today = L.today || mwToday(), out = [];
       (L.items || []).forEach(function (it) {
         if (it.done || !(it.due || it.start)) return;
         var t = _mtlTaskOf(Object.assign({}, it, { key: it.key }), 'src', today);

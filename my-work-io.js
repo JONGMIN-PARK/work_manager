@@ -273,7 +273,7 @@ function _mwioMapBuild(maps) {
       '<label class="mwr-chk"><input type="radio" name="mwmTo" value="old"' + (maps.length ? '' : ' disabled') + '> 내 맵에 가지로 붙이기 <select id="mwmMap" class="mw-sel mwm-in"' + (maps.length ? '' : ' disabled') + '>' +
         (maps.length ? maps.map(function (m) { return '<option value="' + _mwEsc(m.id) + '">' + _mwEsc(m.title) + '</option>'; }).join('') : '<option>편집할 수 있는 맵이 없습니다</option>') + '</select></label></div>' +
     '<div class="mwm-sec"><div class="mwp-l">무엇을 <i id="mwmN"></i></div><div class="mwm-tree">' + groups.map(function (g, gi) {
-      return '<div class="mwm-g"><label class="mwm-gh" style="--qc:' + (MW_CAT_COLORS[g.col.color] || '#94A3B8') + '"><input type="checkbox" data-mg="' + gi + '"> ' + (g.col.icon ? g.col.icon + ' ' : '') + _mwEsc(g.col.name) + ' <i>' + g.list.length + '</i></label>' +
+      return '<div class="mwm-g"><label class="mwm-gh" style="--qc:' + (MW_CAT_COLORS[g.col.color] || '#94A3B8') + '"><input type="checkbox" data-mg="' + gi + '"> ' + (g.col.icon ? _mwEsc(g.col.icon) + ' ' : '') + _mwEsc(g.col.name) + ' <i>' + g.list.length + '</i></label>' +
         g.list.map(function (it) {
           return '<label class="mwm-it"><input type="checkbox" data-mk="' + _mwEsc(it.key) + '" data-g="' + gi + '"' + (pick[it.key] ? ' checked' : '') + '> ' + ((MW_SRC[it.src] || {}).icon || '') + ' ' + _mwEsc(it.title) +
             (it.due ? ' <i>' + _mwEsc(_mwDueLabel(it.due, _mw.data.today)) + '</i>' : '') + '</label>';

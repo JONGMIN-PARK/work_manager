@@ -118,7 +118,7 @@ async function collect(req, users, opt) {
       'JOIN projects p ON p.id = ms.project_id AND p.tenant_id = ms.tenant_id ' +
       "WHERE ms.tenant_id = $1 AND a.user_id = ANY($2) AND COALESCE(ms.status, '') <> 'done' AND COALESCE(p.status, '') <> 'done' " +
       "AND (a.valid_until IS NULL OR a.valid_until = '' OR a.valid_until >= $3)" + pf.sql,
-      [tid, ids, new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)].concat(pf.params, ed.params)
+      [tid, ids, kstToday()].concat(pf.params, ed.params)
     );
     r.rows.forEach(function (x) {
       var p = parseInt(x.progress, 10) || 0;

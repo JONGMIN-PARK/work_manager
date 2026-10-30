@@ -32,7 +32,6 @@ var MW_KINDS = [
   { k: 'etc', icon: '📌', label: '기타 일정', evt: 'etc', time: true, place: true, defDur: 60 }
 ];
 function _mwKind(k) { return MW_KINDS.filter(function (x) { return x.k === k; })[0] || MW_KINDS[0]; }
-function _mwtToday() { return (_mw.data && _mw.data.today) || localDate(); }
 function _mwtMin(t) { return t ? (+t.slice(0, 2)) * 60 + (+t.slice(3, 5)) : 0; }
 function _mwtHm(m) { m = Math.max(0, Math.min(23 * 60 + 59, m)); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
 
@@ -104,7 +103,7 @@ function mwTaskClick(e) {
   if (pb) { _mwPriMenu(pb, _mwFind(pb.getAttribute('data-pri'))); return true; }
   var fb = t.closest('[data-focus]');
   if (fb) { mwToggleFocus(_mwFind(fb.getAttribute('data-focus'))); return true; }
-  if (t.closest('[data-mwt="new"]')) { mwRegister({ date: _mwtToday(), kind: 'meeting' }); return true; }
+  if (t.closest('[data-mwt="new"]')) { mwRegister({ date: mwToday(), kind: 'meeting' }); return true; }
   return false;
 }
 function mwTaskChange(e) {
@@ -135,11 +134,11 @@ function mwSetPriority(it, p) {
 function mwToggleFocus(it) {
   if (!it) return;
   var on = !it.focus;
-  it.focus = on ? _mwtToday() : null;
+  it.focus = on ? mwToday() : null;
   _mwPaint();
   apiFetch('/api/my-work/mark', { method: 'PUT', body: JSON.stringify({ key: it.src + ':' + it.id, focus: on }) }).then(function () {
     if (on) _mwToast('⭐ 오늘 집중에 넣었습니다 — 끝낼 때까지 맨 위에 있고 아침 브리핑에도 나옵니다');
-  }).catch(function (e) { it.focus = on ? null : _mwtToday(); _mwPaint(); _mwToast('❌ ' + _mwErr(e), 'error'); });
+  }).catch(function (e) { it.focus = on ? null : mwToday(); _mwPaint(); _mwToast('❌ ' + _mwErr(e), 'error'); });
 }
 
 /* ── 직접 순서 — 같은 묶음 안에서 끌기 ────────────────────────────── */
@@ -219,8 +218,8 @@ function _mwBuildRegister(opt) {
     }).join('') + '</div>' +
     '<input id="mwrTitle" class="mw-input mwt-title" maxlength="255" autocomplete="off" value="' + _mwEsc(opt.title || '') + '">' +
     '<div class="mwr-hint" id="mwrHint">💡 "내일 14:00 !긴급 견적 회신" 처럼 적으면 날짜 · 시각 · 중요도를 알아서 채웁니다</div>' +
-    '<div class="mwt-row"><span class="mwt-l" id="mwrDateL">날짜</span><input id="mwrDate" type="date" class="mw-input" value="' + _mwEsc(opt.date || _mwtToday()) + '">' +
-      '<span data-f="range">~ <input id="mwrEnd" type="date" class="mw-input" value="' + _mwEsc(opt.date || _mwtToday()) + '"></span>' +
+    '<div class="mwt-row"><span class="mwt-l" id="mwrDateL">날짜</span><input id="mwrDate" type="date" class="mw-input" value="' + _mwEsc(opt.date || mwToday()) + '">' +
+      '<span data-f="range">~ <input id="mwrEnd" type="date" class="mw-input" value="' + _mwEsc(opt.date || mwToday()) + '"></span>' +
       '<span data-f="time"><input id="mwrT1" type="time" step="300" class="mw-input" value="' + _mwEsc(opt.t1 || '') + '"> ~ <input id="mwrT2" type="time" step="300" class="mw-input" value="' + _mwEsc(opt.t2 || '') + '"></span>' +
       '<span data-f="half" class="mw-sub" id="mwrHalf"></span></div>' +
     '<div class="mwr-warn" id="mwrWarn" hidden></div>' +
@@ -269,7 +268,7 @@ function _mwBuildRegister(opt) {
   function parseTitle() {
     if (typeof QuickParse === 'undefined') return;
     var v = $('mwrTitle').value;
-    var q = QuickParse.parse(v, _mwtToday());
+    var q = QuickParse.parse(v, mwToday());
     if (q.title === v.trim()) return;
     var got = [];
     if (q.kind && q.kind !== 'todo') { st.kind = q.kind; got.push(_mwKind(q.kind).label); }

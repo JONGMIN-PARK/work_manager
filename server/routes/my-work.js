@@ -167,18 +167,31 @@ async function editMapNode(req, res, mapId, nodeId, fn) {
 }
 var splitMapId = mwDone.splitMapId;
 
+/** 남의 업무를 고칠 때 공통 확인 — 본인 또는 관리자, 개인 할 일은 본인만 (v13.275 — /done · /due · /priority 세 곳에 같은 줄이 있던 것)
+ *  opt.inList: 그 사람 담당 목록에 정말 있는지도 확인. 되돌림: { userId, u } 또는 null(이미 응답함) */
+async function actingSubject(req, res, b, verb, opt) {
+  var userId = b.userId || req.user.sub;
+  if (userId !== req.user.sub && req.user.role !== 'admin') { httpErr.sendError(res, 403, 'FORBIDDEN', '본인 업무만 ' + verb + ' 수 있습니다.'); return null; }
+  if (b.src === 'todo' && userId !== req.user.sub) { httpErr.sendError(res, 403, 'FORBIDDEN'); return null; }
+  var u = b.src === 'todo' && !(opt && opt.inList) ? null : await subjectOf(req, userId);
+  if (b.src !== 'todo' && !u) { httpErr.sendError(res, 403, 'FORBIDDEN'); return null; }
+  if (opt && opt.inList) {
+    if (!u) { httpErr.sendError(res, 403, 'FORBIDDEN'); return null; }
+    var items = await myWork.collect(req, [u], { done: true, sources: [b.src] });
+    if (!items.some(function (x) { return x.id === b.id; })) { httpErr.sendError(res, 404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.'); return null; }
+  }
+  return { userId: userId, u: u };
+}
+
 // PUT /api/my-work/done { src, id, userId, done }
 router.put('/done', async function (req, res) {
   try {
     var b = req.body || {};
     var done = !!b.done;
     if (DONE_SRC.indexOf(b.src) < 0 || !b.id) return httpErr.sendError(res, 400, 'VALIDATION', '완료로 바꿀 수 없는 항목입니다.');
-    var userId = b.userId || req.user.sub;
-    if (userId !== req.user.sub && req.user.role !== 'admin') return httpErr.sendError(res, 403, 'FORBIDDEN', '본인 업무만 완료로 바꿀 수 있습니다.');
-    if (b.src === 'todo' && userId !== req.user.sub) return httpErr.sendError(res, 403, 'FORBIDDEN');
-    var u = b.src === 'todo' ? null : await subjectOf(req, userId);
-    if (b.src !== 'todo' && !u) return httpErr.sendError(res, 403, 'FORBIDDEN');
-    var r = await mwDone.setDone(req, b.src, b.id, u, done);
+    var who = await actingSubject(req, res, b, '완료로 바꿀');
+    if (!who) return;
+    var r = await mwDone.setDone(req, b.src, b.id, who.u, done);
     if (r.err) return httpErr.sendError(res, r.err[0], r.err[1], r.err[2]);
     res.json({ data: r.data });
   } catch (e) { httpErr.serverError(res, '[my-work/done]', e); }
@@ -707,13 +720,9 @@ router.put('/due', async function (req, res) {
     if (DUE_SRC.indexOf(b.src) < 0 || !b.id) return httpErr.sendError(res, 400, 'VALIDATION', '여기서 마감을 바꿀 수 없는 항목입니다. 원래 화면에서 바꿔 주세요.');
     var due = b.due == null || b.due === '' ? null : cleanYmd(b.due);
     if (b.due && !due) return httpErr.sendError(res, 400, 'VALIDATION', '날짜 형식이 맞지 않습니다.');
-    var userId = b.userId || req.user.sub;
-    if (userId !== req.user.sub && req.user.role !== 'admin') return httpErr.sendError(res, 403, 'FORBIDDEN', '본인 업무만 마감을 바꿀 수 있습니다.');
-    if (b.src === 'todo' && userId !== req.user.sub) return httpErr.sendError(res, 403, 'FORBIDDEN');
-    var u = await subjectOf(req, userId);
-    if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN');
-    var items = await myWork.collect(req, [u], { done: true, sources: [b.src] });
-    if (!items.some(function (x) { return x.id === b.id; })) return httpErr.sendError(res, 404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.');
+    var who = await actingSubject(req, res, b, '마감을 바꿀', { inList: true });
+    if (!who) return;
+    var userId = who.userId;
     var tid = req.tenant.id;
     if (b.src === 'todo') {
       await db.query('UPDATE my_todos SET due_date = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 AND user_id = $4', [due, b.id, tid, req.user.sub]);
@@ -741,13 +750,9 @@ router.put('/priority', async function (req, res) {
     var p = prio.clamp(b.priority);
     if (prio.SRC.indexOf(b.src) < 0 || !b.id) return httpErr.sendError(res, 400, 'VALIDATION', '중요도를 바꿀 수 없는 항목입니다.');
     if (!p) return httpErr.sendError(res, 400, 'VALIDATION', '중요도는 1~4 입니다.');
-    var userId = b.userId || req.user.sub;
-    if (userId !== req.user.sub && req.user.role !== 'admin') return httpErr.sendError(res, 403, 'FORBIDDEN', '본인 업무만 중요도를 바꿀 수 있습니다.');
-    if (b.src === 'todo' && userId !== req.user.sub) return httpErr.sendError(res, 403, 'FORBIDDEN');
-    var u = await subjectOf(req, userId);
-    if (!u) return httpErr.sendError(res, 403, 'FORBIDDEN');
-    var items = await myWork.collect(req, [u], { done: true, sources: [b.src] });
-    if (!items.some(function (x) { return x.id === b.id; })) return httpErr.sendError(res, 404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.');
+    var who = await actingSubject(req, res, b, '중요도를 바꿀', { inList: true });
+    if (!who) return;
+    var userId = who.userId;
     var tid = req.tenant.id;
     if (b.src === 'todo') {
       await db.query('UPDATE my_todos SET priority = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 AND user_id = $4', [p, b.id, tid, req.user.sub]);

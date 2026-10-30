@@ -11,7 +11,7 @@
    저장: 줄 = 글 한 줄, 올린 줄은 '- [x] 제목 ⟦todo-id⟧' (검색 · 다른 곳에선 표시 없이)
    서버 API: GET·PUT /api/my-work/notes · GET /notes/find · GET /meeting-brief · GET /events
    전역 의존: _mw · _mwEsc · _mwToast · _mwErr · _mwFind · _mwPaint · mwAddTodo (my-work.js) · mwPanelOpen · mwPanelClose · mwPanelIsOpen (my-work-panel.js)
-              _mtlMain · _mtlNum · _mtlYmd · _mtlFmt · _mtlToday (my-work-timeline.js) · QuickParse · expandRepeatingEvents · toCamelArray · showProjectDetail · pdSwitchTab · pmtOpenCard
+              _mtlMain · _mtlNum · _mtlYmd · _mtlFmt · mwToday (my-work-timeline.js) · QuickParse · expandRepeatingEvents · toCamelArray · showProjectDetail · pdSwitchTab · pmtOpenCard
    ═══════════════════════════════════════════════════════════════════════ */
 
 var _mwn = { open: false, date: null, ref: '', rows: [], notes: {}, meetings: [], timer: null, inflight: null, state: 'idle', find: false, brief: {}, seq: 0 };
@@ -19,9 +19,8 @@ var MWN_TODO_RE = /^- \[x\] (.*?)(?: ⟦([^⟧]*)⟧)?$/;
 var MWN_PEND_RE = /^(?:- )?\[ ?\]\s+/;
 
 function mwNotesIsOpen() { return _mwn.open; }
-function _mwnToday() { return typeof _mtlToday === 'function' ? _mtlToday() : ((_mw.data && _mw.data.today) || localDate()); }
 function _mwnLabel(d) {
-  var t = _mwnToday(), n = _mtlNum(d) - _mtlNum(t);
+  var t = mwToday(), n = _mtlNum(d) - _mtlNum(t);
   return (+d.slice(5, 7)) + '/' + (+d.slice(8, 10)) + ' (' + '일월화수목금토'[new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10))).getUTCDay()] + ')' +
     (n === 0 ? ' · 오늘' : n === -1 ? ' · 어제' : n === 1 ? ' · 내일' : d.slice(0, 4) !== t.slice(0, 4) ? ' · ' + d.slice(0, 4) : '');
 }
@@ -56,7 +55,7 @@ function mwNotesOpen(date, ref) {
   document.body.classList.add('mwp-open');
   requestAnimationFrame(function () { el.classList.add('on'); });
   _mwnBtn();
-  mwNotesGo(date || (_mtlMain && _mtlMain.st.link && _mtlMain.pick) || _mwnToday(), ref || '');
+  mwNotesGo(date || (_mtlMain && _mtlMain.st.link && _mtlMain.pick) || mwToday(), ref || '');
 }
 function mwNotesClose(quiet) {
   if (!_mwn.open) return;
@@ -117,7 +116,7 @@ function _mwnRender() {
   var h = '<div class="mwp-h mwn-h"><b class="mwn-ttl">📝 노트</b><span class="mwp-save" id="mwnSave" aria-live="polite"></span>' +
     '<button class="mwn-ib" data-n="find" title="노트 검색">🔍</button><button class="mwp-x" data-n="close" title="닫기 (Esc)">✕</button></div>';
   h += '<div class="mwn-nav"><button data-n="prev" title="전날">‹</button><label class="mwn-date" title="날짜 고르기"><span>' + _mwEsc(_mwnLabel(d)) + '</span><input type="date" data-n="date" value="' + d + '"></label>' +
-    '<button data-n="next" title="다음날">›</button>' + (d !== _mwnToday() ? '<button data-n="today" class="mwn-tod">오늘</button>' : '') + '</div>';
+    '<button data-n="next" title="다음날">›</button>' + (d !== mwToday() ? '<button data-n="today" class="mwn-tod">오늘</button>' : '') + '</div>';
   if (_mwn.find) {
     h += '<div class="mwn-find"><input class="mw-input" id="mwnQ" placeholder="노트에서 찾기 — Enter" autocomplete="off"><div id="mwnFound" class="mwn-list"></div></div>';
   }
@@ -182,7 +181,7 @@ function _mwnBtn() {
   if (!b) return;
   b.classList.toggle('on', _mwn.open);
   var days = (_mw.data && _mw.data.noteDays) || [];
-  b.classList.toggle('has', days.indexOf(_mwnToday()) >= 0);
+  b.classList.toggle('has', days.indexOf(mwToday()) >= 0);
 }
 
 /* ═══ 저장 — 잠깐 쉬면 ═══ */
@@ -197,7 +196,11 @@ function _mwnSave() {
   var date = _mwn.date, ref = _mwn.ref, body = _mwnBody();
   _mwn.notes[ref] = body;
   _mwn.state = 'saving'; _mwnShowState();
-  var p = _mwn.inflight = apiFetch('/api/my-work/notes', { method: 'PUT', body: JSON.stringify({ date: date, ref: ref, body: body }) }).then(function () {
+  // 앞 저장이 끝난 뒤 보냄 — 둘이 엇갈려 옛 글이 새 글을 덮던 것 (v13.275)
+  var prev = _mwn.inflight || Promise.resolve();
+  var p = _mwn.inflight = prev.catch(function () {}).then(function () {
+    return apiFetch('/api/my-work/notes', { method: 'PUT', body: JSON.stringify({ date: date, ref: ref, body: body }) });
+  }).then(function () {
     if (_mwn.inflight === p) _mwn.inflight = null;
     if (_mwn.date === date && _mwn.ref === ref && !_mwn.timer) { _mwn.state = 'saved'; _mwnShowState(); }
     // 노트 있는 날 점 (그날 어느 장이든 글이 있으면)
@@ -219,7 +222,7 @@ function _mwnUp(i) {
   if (!r || r.todo) return;
   var raw = r.t.replace(MWN_PEND_RE, '').trim();
   if (!raw) { _mwToast('할 일로 올릴 내용을 적어 주세요', 'warn'); return; }
-  var q = typeof QuickParse !== 'undefined' ? QuickParse.parse(raw, _mwnToday()) : { title: raw };
+  var q = typeof QuickParse !== 'undefined' ? QuickParse.parse(raw, mwToday()) : { title: raw };
   r.t = raw; r.todo = true;
   _mwnPaintRows();
   _mwnQueue(0);
@@ -346,7 +349,7 @@ function _mwnBind(el) {
       var k = n.getAttribute('data-n');
       if (k === 'close') return mwNotesClose();
       if (k === 'prev' || k === 'next') return mwNotesGo(_mtlYmd(_mtlNum(_mwn.date) + (k === 'prev' ? -1 : 1)));
-      if (k === 'today') return mwNotesGo(_mwnToday());
+      if (k === 'today') return mwNotesGo(mwToday());
       if (k === 'back') return mwNotesGo(_mwn.date, '');
       if (k === 'find') { _mwnFlush(); _mwn.find = !_mwn.find; _mwnRender(); return; }
     }

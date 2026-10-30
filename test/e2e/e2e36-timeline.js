@@ -214,7 +214,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     if (!(await page.$('#mwTimeline'))) { await page.click('#tabMyWork').catch(function () {}); await page.waitForSelector('#mwTimeline .mtl-lane'); }
     await page.waitForNetworkIdle({ idleTime: 400, timeout: 10000 }).catch(function () {});
     await tl(function () { _mtlMain.update(); });
-    check(await tl(function () { return document.querySelectorAll('#mwTimeline .mtl-cd').length === 7 && _mtlMain.L === 76; }), '휴대폰 — 달력은 한 주 줄');
+    check(await tl(function () { return document.querySelectorAll('#mwTimeline .mtl-cd').length === 7 && _mtlMain.L === 92; }), '휴대폰 — 달력은 한 주 줄');
     await page.click('#mwTimeline [data-cn="open"]');
     check(await tl(function () { return document.querySelectorAll('#mwTimeline .mtl-cd').length === 42; }), '펼치면 한 달');
     check(await tl(function () { return document.documentElement.scrollWidth <= window.innerWidth + 1; }), '휴대폰 — 가로 스크롤 없음');

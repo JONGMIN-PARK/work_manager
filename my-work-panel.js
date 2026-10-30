@@ -13,14 +13,13 @@
               MW_PRI · MW_TODO_STATUS · MW_REPEAT · mwSetPriority · mwToggleFocus (my-work-task.js) · MWC_DUE_SRC (my-work-cal.js)
    ═══════════════════════════════════════════════════════════════════════ */
 
-var _mwp = { key: null, it: null, q: {}, timer: null, inflight: null, state: 'idle', undoT: null };
+var _mwp = { key: null, it: null, q: {}, qIt: null, timer: null, inflight: null, state: 'idle', undoT: null };   // qIt: 모아 둔 q 가 누구 것인지
 
-function _mwpToday() { return (_mw.data && _mw.data.today) || localDate(); }
 function _mwpAdd(d, n) { return ymdAddDays(d, n); }
 function _mwpDow(d) { return new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10))).getUTCDay(); }
 /** 마감 빨리 고르기 — 오늘 · 내일 · 이번 주 금(지났으면 다음 주) · 다음 주 월 */
 function _mwpQuickDues() {
-  var t = _mwpToday(), w = _mwpDow(t);
+  var t = mwToday(), w = _mwpDow(t);
   var fri = _mwpAdd(t, ((5 - w) + 7) % 7);
   if (fri <= _mwpAdd(t, 1)) fri = _mwpAdd(fri, 7);   // 오늘 · 내일과 겹치면 다음 주 금
   var mon = _mwpAdd(t, ((1 - w) + 7) % 7 || 7);
@@ -35,7 +34,7 @@ function mwPanelOpen(it, opt) {
   opt = opt || {};
   if (typeof mwNotesIsOpen === 'function' && mwNotesIsOpen()) mwNotesClose(true);   // 노트 서랍과 같은 자리 — 하나만 (v13.272)
   if (typeof mwProjIsOpen === 'function' && mwProjIsOpen()) mwProjClose();          // 📁 프로젝트 패널도 (v13.273)
-  if (_mwp.key && _mwp.key !== it.key) _mwpFlush();
+  if (_mwp.key && _mwp.key !== it.key) _mwpDetach();
   _mwp.key = it.key; _mwp.it = it;
   _mw.sel = it.key;
   var p = document.getElementById('mwPanel');
@@ -80,7 +79,7 @@ function _mwpMarkRow() {
 
 /* ═══ 그리기 ═══ */
 function _mwpRender(p) {
-  var it = _mwp.it, today = _mwpToday();
+  var it = _mwp.it, today = mwToday();
   var s = MW_SRC[it.src] || { icon: '•', label: it.src };
   var todo = _mwpIsTodo(it);
   var pri = it.pri || 3;
@@ -200,17 +199,30 @@ function _mwpClAddLines(text, at) {
 
 /* ═══ 저장 — 바뀐 칸만 모아서 차례로 ═══ */
 function _mwpQueue(patch, delay) {
+  if (_mwp.qIt && _mwp.qIt !== _mwp.it) _mwpDetach();
+  _mwp.qIt = _mwp.it;
   Object.keys(patch).forEach(function (k) { _mwp.q[k] = patch[k]; });
   _mwp.state = 'dirty'; _mwpShowState();
   clearTimeout(_mwp.timer);
   _mwp.timer = setTimeout(_mwpFlush, delay == null ? 0 : delay);
 }
+/** 다른 항목으로 옮길 때 — 모아 둔 것을 그 항목 몫으로 떼어 따로 보냄.
+ *  예전엔 저장 중에 옮기면 앞 항목의 바뀐 칸이 새 항목으로 저장될 수 있었다 (v13.275) */
+function _mwpDetach() {
+  clearTimeout(_mwp.timer); _mwp.timer = null;
+  var it = _mwp.qIt, body = _mwp.q;
+  _mwp.q = {}; _mwp.qIt = null;
+  if (!it || !Object.keys(body).length) return;
+  (_mwp.inflight || Promise.resolve()).catch(function () {}).then(function () {
+    return apiFetch('/api/my-work/todos/' + encodeURIComponent(it.id), { method: 'PUT', body: JSON.stringify(body) });
+  }).then(function () { _mwpApply(it, body); _mwPaint(); }, function (e) { _mwToast('❌ 저장 못 함 — ' + it.title + ': ' + _mwErr(e), 'error'); });
+}
 function _mwpFlush() {
   clearTimeout(_mwp.timer); _mwp.timer = null;
-  var it = _mwp.it;
+  var it = _mwp.qIt;
   if (!it || !Object.keys(_mwp.q).length) return _mwp.inflight || Promise.resolve();
-  if (_mwp.inflight) { _mwp.inflight.then(function () { _mwpFlush(); }); return _mwp.inflight; }
-  var body = _mwp.q; _mwp.q = {};
+  if (_mwp.inflight) { _mwp.inflight.then(function () { _mwpFlush(); }, function () {}); return _mwp.inflight; }
+  var body = _mwp.q; _mwp.q = {}; _mwp.qIt = null;
   var id = it.id;
   _mwp.state = 'saving'; _mwpShowState();
   _mwp.inflight = apiFetch('/api/my-work/todos/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(body) }).then(function () {
@@ -221,6 +233,8 @@ function _mwpFlush() {
     if (Object.keys(_mwp.q).length) _mwpFlush();
   }).catch(function (e) {
     _mwp.inflight = null;
+    if (_mwp.it !== it || (_mwp.qIt && _mwp.qIt !== it)) { _mwToast('❌ 저장 못 함 — ' + it.title + ': ' + _mwErr(e), 'error'); return; }
+    _mwp.qIt = it;
     Object.keys(body).forEach(function (k) { if (!(k in _mwp.q)) _mwp.q[k] = body[k]; });   // 다시 하기용으로 되돌려 둠
     _mwp.state = 'error'; _mwp.err = _mwErr(e); _mwpShowState();
   });
@@ -292,12 +306,12 @@ function mwSetDue(it, due, time) {
       _mwpApply(it, b); _mwPaint();
       apiFetch('/api/my-work/todos/' + encodeURIComponent(it.id), { method: 'PUT', body: JSON.stringify(b) }).catch(function (e) { _mwpApply(it, { dueDate: prev.due, dueTime: prev.dueTime }); _mwPaint(); _mwToast('❌ ' + _mwErr(e), 'error'); });
     }
-    mwUndoToast('📆 마감 ' + (due ? _mwDueLabel(due, _mwpToday()) : '없음'), function () { mwSetDue(it, prev.due, prev.dueTime); });
+    mwUndoToast('📆 마감 ' + (due ? _mwDueLabel(due, mwToday()) : '없음'), function () { mwSetDue(it, prev.due, prev.dueTime); });
     return Promise.resolve();
   }
   it.due = due || null; _mwPaint(); if (_mwp.key === it.key) _mwpRender(document.getElementById('mwPanel'));
   return apiFetch('/api/my-work/due', { method: 'PUT', body: JSON.stringify({ src: it.src, id: it.id, userId: it.userId, due: due || null }) }).then(function () {
-    mwUndoToast('📆 마감 ' + (due ? _mwDueLabel(due, _mwpToday()) : '없음') + ' — ' + (MW_SRC[it.src] || {}).label + '에도 반영', function () { mwSetDue(it, prev.due); });
+    mwUndoToast('📆 마감 ' + (due ? _mwDueLabel(due, mwToday()) : '없음') + ' — ' + (MW_SRC[it.src] || {}).label + '에도 반영', function () { mwSetDue(it, prev.due); });
   }).catch(function (e) {
     it.due = prev.due; _mwPaint(); if (_mwp.key === it.key) _mwpRender(document.getElementById('mwPanel'));
     _mwToast('❌ ' + _mwErr(e), 'error');
@@ -533,7 +547,7 @@ document.addEventListener('keydown', function (e) {
   }
   if (k === 'd') {
     if (!_mwpCanDue(it)) { _mwToast('이 항목의 마감은 원래 화면에서 바꿉니다', 'warn'); return; }
-    var td = _mwpToday();
+    var td = mwToday();
     mwSetDue(it, !it.due || it.due < td ? td : it.due === td ? _mwpAdd(td, 1) : null);
     return;
   }

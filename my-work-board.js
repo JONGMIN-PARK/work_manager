@@ -75,7 +75,7 @@ function mwBoardHtml(items, today) {
     });
     var n = list.filter(function (x) { return !x.done; }).length;
     return '<section class="mwb-c" data-col="' + _mwEsc(c.id) + '" style="--qc:' + _mwbColor(c) + '">' +
-      '<div class="mwb-h"><span class="mwb-name">' + (c.icon ? c.icon + ' ' : '') + _mwEsc(c.name) + '</span>' +
+      '<div class="mwb-h"><span class="mwb-name">' + (c.icon ? _mwEsc(c.icon) + ' ' : '') + _mwEsc(c.name) + '</span>' +
         (c.rule ? '<i title="고정하지 않은 항목이 여기 자동으로 들어옵니다">' + MW_RULE_HINT[c.rule] + '</i>' : c.virtual ? '<i>기본 칸을 지워 갈 곳이 없는 항목</i>' : '') +
         '<b>' + n + '</b>' +
         (self && !c.virtual ? '<button class="mwb-add" data-badd="' + _mwEsc(c.id) + '" title="이 칸에 할 일 추가">＋</button>' : '') + '</div>' +
@@ -189,7 +189,7 @@ function mwMoveMenu(anchor, it) {
   if (!it) return;
   var cur = mwBoardColOf(it);
   var h = '<div class="mw-pmenu-n">다른 칸으로</div>' + mwBoardCols().map(function (c) {
-    return '<button data-v="' + _mwEsc(c.id) + '"' + (c.id === cur.id ? ' class="on"' : '') + '><i class="mwb-dot" style="background:' + _mwbColor(c) + '"></i>' + (c.icon ? c.icon + ' ' : '') + _mwEsc(c.name) + '</button>';
+    return '<button data-v="' + _mwEsc(c.id) + '"' + (c.id === cur.id ? ' class="on"' : '') + '><i class="mwb-dot" style="background:' + _mwbColor(c) + '"></i>' + (c.icon ? _mwEsc(c.icon) + ' ' : '') + _mwEsc(c.name) + '</button>';
   }).join('') + (it.cat ? '<button data-v="__unpin">↺ 고정 풀기 (자동 분류)</button>' : '');
   // 📁 내 프로젝트로 (v13.273)
   var pjs = typeof mwProjChoices === 'function' ? mwProjChoices() : [], pjCur = typeof mwProjOf === 'function' ? mwProjOf(it) : null;
