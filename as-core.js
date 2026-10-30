@@ -76,12 +76,43 @@ function _asAdminOnly() {
 }
 
 /* ═══ 헬퍼 ═══ */
+/* HTML 이스케이프 — 공용 eH(wm-state.js) 위임. eH 가 없을 때(단위 테스트 등)만 같은 규칙으로 직접 */
 function _asEsc(s) {
   if (s == null) return '';
+  if (typeof eH === 'function') return eH(s);
   return String(s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 }
+/* CSS url('...') 안에 넣을 URL — 따옴표·괄호·역슬래시·공백을 %XX 로 바꿔 style 밖으로 못 나가게 한 뒤 HTML 이스케이프 */
+function _asCssUrl(u) {
+  return _asEsc(String(u == null ? '' : u).replace(/['"()\\\s]/g, function (c) { return '%' + ('0' + c.charCodeAt(0).toString(16).toUpperCase()).slice(-2); }));
+}
+/* 첨부 파일 선택창 형식 — 서버 허용 목록(server/routes/as-tickets/_shared.js ALLOWED_MIME)과 맞춤 */
+var AS_ATTACH_ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.log';
+/* 브라우저가 형식을 모르는 파일(.log 등)은 data URL 이 octet-stream 이 되어 서버가 거부 → 확장자로 형식 보정 */
+var _AS_EXT_MIME = { txt: 'text/plain', log: 'text/plain', csv: 'text/csv', pdf: 'application/pdf',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' };
+function _asFixDataUrlMime(dataUrl, fileName) {
+  var ext = (String(fileName || '').split('.').pop() || '').toLowerCase();
+  var m = /^data:([^;,]*)/.exec(dataUrl || '');
+  if (!m || !_AS_EXT_MIME[ext] || (m[1] && m[1] !== 'application/octet-stream')) return dataUrl;
+  return 'data:' + _AS_EXT_MIME[ext] + dataUrl.slice(5 + m[1].length);
+}
+/* A/S 창 열기 — 표준 모달 가드(wmGuardedModal) 경유. builder 는 창을 만들고(비동기면 Promise 반환) 실패 시 throw */
+function _asGuard(key, elId, builder) {
+  if (typeof wmGuardedModal === 'function') return wmGuardedModal(key, builder, elId);
+  return Promise.resolve().then(builder);
+}
+/* 저장 충돌(409) 여부 + 안내 — 다른 사람이 먼저 저장한 경우. 공통 문구 */
+function _asIsConflict(err) { return !!(err && (err.status === 409 || (err.data && err.data.error === 'CONFLICT'))); }
+function _asConflictToast(msg) {
+  if (typeof showToast === 'function') showToast(msg || '⚠ 다른 사용자가 이미 수정했습니다. 최신 내용을 불러왔으니 확인 후 다시 저장하세요.', 'warn');
+}
+/* 오류 메시지 추출 (서버 message 우선) */
+function _asErrMsg(err) { return (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류'; }
 /* onclick="fn('...')" 안의 JS 문자열 인자용 — JS 이스케이프(\, ') 후 HTML 이스케이프.
    (_asEsc 가 ' → &#39; 로 바꾸므로 기존 _asEsc(x).replace(/'/g, "\\'") 는 동작하지 않았음) */
 function _asJsArg(s) {

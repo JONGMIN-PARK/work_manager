@@ -22,6 +22,7 @@ var notificationService = require('../services/notification.service');
 var ttlCache = require('../services/ttl-cache.service');
 var asPolicy = require('../config/as-policy');
 var httpErr = require('../lib/http-errors');
+var scheduler = require('../services/scheduler.service');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -120,18 +121,8 @@ router.get('/', async function (req, res) {
 
     var BASE_WHERE = "tenant_id = $1 AND deleted_at IS NULL" + extraWhere;
 
-    // SLA breach CASE 식 (priority별 closeDays)
-    var SLA_BREACH_EXPR =
-      "CASE " +
-      "  WHEN status NOT IN ('closed','cancelled') AND priority='P1' AND received_at < NOW() - INTERVAL '3 days' THEN 1 " +
-      "  WHEN status NOT IN ('closed','cancelled') AND priority='P2' AND received_at < NOW() - INTERVAL '7 days' THEN 1 " +
-      "  WHEN status NOT IN ('closed','cancelled') AND priority='P3' AND received_at < NOW() - INTERVAL '14 days' THEN 1 " +
-      "  WHEN status NOT IN ('closed','cancelled') AND priority='P4' AND received_at < NOW() - INTERVAL '30 days' THEN 1 " +
-      "  WHEN status='closed' AND priority='P1' AND closed_at - received_at > INTERVAL '3 days' THEN 1 " +
-      "  WHEN status='closed' AND priority='P2' AND closed_at - received_at > INTERVAL '7 days' THEN 1 " +
-      "  WHEN status='closed' AND priority='P3' AND closed_at - received_at > INTERVAL '14 days' THEN 1 " +
-      "  WHEN status='closed' AND priority='P4' AND closed_at - received_at > INTERVAL '30 days' THEN 1 " +
-      "  ELSE 0 END";
+    // SLA breach CASE 식 (priority별 closeDays — as-policy.js 한 곳에서)
+    var SLA_BREACH_EXPR = asPolicy.slaBreachExpr(true);
 
     // ─── 병렬 쿼리 ───
     var sqls = {
@@ -495,12 +486,12 @@ router.get('/', async function (req, res) {
 });
 
 // 캐시 상태 조회 (admin 디버그용)
-router.get('/_cache/stats', function (req, res) {
+router.get('/_cache/stats', auth.requireRole('admin'), function (req, res) {
   res.json({ data: statsCache.stats(), ttlMs: STATS_CACHE_TTL_MS });
 });
 
 // 강제 무효화 (admin)
-router.post('/_cache/invalidate', function (req, res) {
+router.post('/_cache/invalidate', auth.requireRole('admin'), function (req, res) {
   var n = invalidateStats(req.tenant.id);
   res.json({ message: '캐시 무효화 완료', removed: n });
 });
@@ -621,74 +612,11 @@ function buildInsights(kpi, ctx) {
 router.get('/weekly-digest', async function (req, res) {
   try {
     var tid = req.tenant.id;
-    var now = new Date();
-    var weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
-    var twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
-
-    var BASE = "tenant_id = $1 AND deleted_at IS NULL";
-
-    var SLA_BREACH_EXPR =
-      "CASE " +
-      "  WHEN status NOT IN ('closed','cancelled') AND priority='P1' AND received_at < NOW() - INTERVAL '3 days' THEN 1 " +
-      "  WHEN status NOT IN ('closed','cancelled') AND priority='P2' AND received_at < NOW() - INTERVAL '7 days' THEN 1 " +
-      "  WHEN status NOT IN ('closed','cancelled') AND priority='P3' AND received_at < NOW() - INTERVAL '14 days' THEN 1 " +
-      "  WHEN status NOT IN ('closed','cancelled') AND priority='P4' AND received_at < NOW() - INTERVAL '30 days' THEN 1 " +
-      "  ELSE 0 END";
-
-    var [curR, prevR, topCatR, topCustR, openCritR] = await Promise.all([
-      db.query("SELECT COUNT(*)::int AS new_count, " +
-        "COUNT(*) FILTER (WHERE status='closed')::int AS closed_count, " +
-        "COALESCE(AVG(EXTRACT(EPOCH FROM (closed_at - received_at))/3600.0) FILTER (WHERE status='closed' AND closed_at IS NOT NULL),0)::numeric(10,2) AS mttr_h, " +
-        "COALESCE(SUM(" + SLA_BREACH_EXPR + "),0)::int AS sla_breach " +
-        "FROM as_tickets WHERE " + BASE + " AND received_at >= $2 AND received_at <= $3",
-        [tid, weekAgo.toISOString(), now.toISOString()]),
-      db.query("SELECT COUNT(*)::int AS new_count, " +
-        "COALESCE(AVG(EXTRACT(EPOCH FROM (closed_at - received_at))/3600.0) FILTER (WHERE status='closed' AND closed_at IS NOT NULL),0)::numeric(10,2) AS mttr_h " +
-        "FROM as_tickets WHERE " + BASE + " AND received_at >= $2 AND received_at <= $3",
-        [tid, twoWeeksAgo.toISOString(), weekAgo.toISOString()]),
-      db.query("SELECT category, COUNT(*)::int AS c FROM as_tickets " +
-        "WHERE " + BASE + " AND received_at >= $2 AND category IS NOT NULL GROUP BY category ORDER BY c DESC LIMIT 3",
-        [tid, weekAgo.toISOString()]),
-      db.query("SELECT customer_name, COUNT(*)::int AS c FROM as_tickets " +
-        "WHERE " + BASE + " AND received_at >= $2 AND customer_name <> '' GROUP BY customer_name ORDER BY c DESC LIMIT 3",
-        [tid, weekAgo.toISOString()]),
-      db.query("SELECT ticket_no, priority, customer_name FROM as_tickets " +
-        "WHERE " + BASE + " AND status NOT IN ('closed','cancelled') AND priority IN ('P1','P2') ORDER BY received_at ASC LIMIT 5",
-        [tid])
-    ]);
-
-    var c = curR.rows[0] || {};
-    var pr = prevR.rows[0] || {};
-    var dPct = pctDelta(c.new_count || 0, pr.new_count || 0);
-
-    var lines = [];
-    lines.push('📊 <b>A/S 주간 요약</b> (' + weekAgo.toISOString().slice(0, 10) + ' ~ ' + now.toISOString().slice(0, 10) + ')');
-    lines.push('');
-    lines.push('🆕 신규 ' + (c.new_count || 0) + '건' + (dPct != null ? ' (전주 대비 ' + (dPct > 0 ? '+' : '') + dPct + '%)' : ''));
-    lines.push('✅ 종결 ' + (c.closed_count || 0) + '건');
-    if (c.mttr_h) lines.push('⏱️ 평균 처리 ' + Number(c.mttr_h).toFixed(1) + 'h' + (pr.mttr_h ? ' (전주 ' + Number(pr.mttr_h).toFixed(1) + 'h)' : ''));
-    lines.push('🚨 SLA 위반 ' + (c.sla_breach || 0) + '건');
-
-    if (topCatR.rows.length) {
-      lines.push('');
-      lines.push('<b>📌 주요 카테고리</b>');
-      topCatR.rows.forEach(function (r) { lines.push('  • ' + (r.category || '-') + ' ' + r.c + '건'); });
-    }
-    if (topCustR.rows.length) {
-      lines.push('');
-      lines.push('<b>🎯 최다 발생 고객</b>');
-      topCustR.rows.forEach(function (r) { lines.push('  • ' + r.customer_name + ' ' + r.c + '건'); });
-    }
-    if (openCritR.rows.length) {
-      lines.push('');
-      lines.push('<b>🔴 P1/P2 미해결 (최대 5건)</b>');
-      openCritR.rows.forEach(function (r) {
-        lines.push('  • [' + r.ticket_no + '] ' + r.priority + ' · ' + (r.customer_name || '-'));
-      });
-    }
-
-    var content = lines.join('\n');
     var send = (req.query.send === '1' || req.query.send === 'true');
+    // 발송은 관리자만 (화면 버튼도 관리자에게만 보임) — 일반 사용자가 관리자들에게 반복 발송하지 못하게
+    if (send && !(req.user && req.user.role === 'admin')) return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만 발송할 수 있습니다.' });
+    // 본문은 스케줄러 자동 발송과 같은 함수로 (중복 제거)
+    var content = await scheduler.buildWeeklyDigestText(tid);
     var sentTo = 0;
     if (send) {
       var adminR = await db.query(

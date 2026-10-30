@@ -95,7 +95,9 @@ function fD(d){return d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8)}
 /* v13.189 따옴표까지 이스케이프 — 속성값(title="…", value="…")에 들어가도 안전. 이전 DOM 방식은 " ' 를 그대로 둬 저장형 XSS 가능 */
 function eH(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 /* onclick="f('…')" 용 — JS 문자열 이스케이프 + 속성 구분자(") 보호 */
-function eA(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,'\\n').replace(/"/g,'&quot;')}
+function eA(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,'\\n').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}  // & 도 — &#39; 가 속성에서 ' 로 풀려 문자열을 탈출하던 것
+/* style="background:…" 용 색 — #hex · rgb()/hsl() · 영문 이름만, 아니면 fb (서버 lib/safe-val.js 와 같은 규칙) */
+function eC(c,fb){var s=String(c==null?'':c).trim();return /^#[0-9a-f]{3,8}$/i.test(s)||/^(rgb|hsl)a?\([\d\s.,%]+\)$/i.test(s)||/^[a-z]{3,20}$/i.test(s)?s:(fb||'#3B82F6')}
 // HTML 테이블 파싱 (기존)
 function pNormDate(v){
   if(v===undefined||v===null)return null;

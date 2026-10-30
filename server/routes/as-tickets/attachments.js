@@ -38,6 +38,7 @@ router.post('/:id/attachments', async function (req, res) {
 
     if (!fileName) return res.status(400).json({ error: 'VALIDATION', message: '파일 이름 필수' });
     if (!fileUrl) return res.status(400).json({ error: 'VALIDATION', message: '파일 URL 필수' });
+    if (!(await shared.assertTicket(req, res))) return;
 
     // 1) 위험 확장자 차단 (SVG/HTML/스크립트/실행파일)
     if (DENY_EXT.test(fileName)) {
@@ -145,10 +146,11 @@ router.post('/:id/signatures', async function (req, res) {
       ' csat_speed, csat_quality, csat_overall, comment, created_by) ' +
       'VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7,NOW()),$8,$9,$10,$11,$12,$13) ' +
       'ON CONFLICT (ticket_id, role) DO UPDATE SET ' +
-      '  signer_name = EXCLUDED.signer_name, signer_id = EXCLUDED.signer_id, ' +
-      '  signed_at = EXCLUDED.signed_at, signature_url = EXCLUDED.signature_url, ' +
-      '  csat_speed = EXCLUDED.csat_speed, csat_quality = EXCLUDED.csat_quality, ' +
-      '  csat_overall = EXCLUDED.csat_overall, comment = EXCLUDED.comment ' +
+      // 보내지 않은(NULL) 칸은 기존 값 유지 — 이름만 고치거나 다시 서명해도 CSAT 이 지워지지 않고, CSAT 저장이 서명을 지우지 않게
+      '  signer_name = COALESCE(EXCLUDED.signer_name, as_signatures.signer_name), signer_id = COALESCE(EXCLUDED.signer_id, as_signatures.signer_id), ' +
+      '  signed_at = EXCLUDED.signed_at, signature_url = COALESCE(EXCLUDED.signature_url, as_signatures.signature_url), ' +
+      '  csat_speed = COALESCE(EXCLUDED.csat_speed, as_signatures.csat_speed), csat_quality = COALESCE(EXCLUDED.csat_quality, as_signatures.csat_quality), ' +
+      '  csat_overall = COALESCE(EXCLUDED.csat_overall, as_signatures.csat_overall), comment = COALESCE(EXCLUDED.comment, as_signatures.comment) ' +
       // 다른 테넌트의 (ticket_id, role) 행을 덮어쓰지 않도록 가드
       'WHERE as_signatures.tenant_id = EXCLUDED.tenant_id ' +
       'RETURNING *',
@@ -166,7 +168,7 @@ router.post('/:id/signatures', async function (req, res) {
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
 
     // 고객 현장 서명이 들어오면 status를 customer_wait → approved → closed 보조 자동 전이
-    if (b.role === 'customer_field') {
+    if (b.role === 'customer_field' && r.rows[0].signature_url) {   // 실제 서명이 있을 때만 (CSAT 만 저장한 경우 제외)
       await db.query(
         "UPDATE as_tickets SET status = 'customer_wait', updated_at = NOW(), updated_by = $3 " +
         "WHERE id = $1 AND tenant_id = $2 AND status IN ('reporting','approved')",
@@ -174,6 +176,7 @@ router.post('/:id/signatures', async function (req, res) {
       );
     }
 
+    shared._invalidateStatsCache(req.tenant.id);
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
     httpErr.serverError(res, '[as-signatures/upsert]', e);
@@ -187,6 +190,7 @@ router.delete('/:id/signatures/:sid', async function (req, res) {
       [req.params.sid, req.params.id, req.tenant.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    shared._invalidateStatsCache(req.tenant.id);
     res.json({ message: '삭제 완료' });
   } catch (e) {
     httpErr.serverError(res, '[as-signatures/delete]', e);

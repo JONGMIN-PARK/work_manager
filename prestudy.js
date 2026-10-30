@@ -34,9 +34,10 @@ function _psInfo(key) {
   for (var i = 0; i < PS_STATUS.length; i++) if (PS_STATUS[i].key === key) return PS_STATUS[i];
   return PS_STATUS[0];
 }
-function _psEsc(v) { return (typeof eH === 'function') ? eH(v == null ? '' : v) : String(v == null ? '' : v); }
+function _psEsc(v) { return eH(v); }   // HTML 자리. onclick 의 JS 문자열 자리는 eA (wm-state.js)
 function _psToast(m, t) { if (typeof showToast === 'function') showToast(m, t); }
 function _psCloseModal() { if (_psModal && _psModal.close) { _psModal.close(); _psModal = null; } }
+function _prestudyErrMsg(e) { return (e && e.data && e.data.message) || (e && e.message) || '권한 또는 서버 오류'; }
 
 /* ═══ 진입점 ═══ */
 function renderPrestudy() {
@@ -129,9 +130,9 @@ function _psBoardHtml(items) {
           return '<option value="' + s.key + '"' + (s.key === p.status ? ' selected' : '') + '>' + s.label + '</option>';
         }).join('');
         var overdue = p.dueDate && p.dueDate < _psToday();
-        html += '<div draggable="true" data-ps-id="' + _psEsc(p.id) + '" ondragstart="psDragStart(event,\'' + _psEsc(p.id) + '\')" ondragend="psDragEnd(event)"' +
+        html += '<div draggable="true" data-ps-id="' + _psEsc(p.id) + '" ondragstart="psDragStart(event,\'' + eA(p.id) + '\')" ondragend="psDragEnd(event)"' +
           ' style="border:1px solid var(--bd);border-radius:6px;padding:7px;margin-bottom:6px;background:var(--bg-i);cursor:grab">' +
-          '<div style="font-size:11px;font-weight:600;color:var(--t2);cursor:pointer;word-break:break-word;margin-bottom:3px" onclick="psOpenModal(\'' + _psEsc(p.id) + '\')">' + _psEsc(p.title) + '</div>' +
+          '<div style="font-size:11px;font-weight:600;color:var(--t2);cursor:pointer;word-break:break-word;margin-bottom:3px" onclick="psOpenModal(\'' + eA(p.id) + '\')">' + _psEsc(p.title) + '</div>' +
           (p.client ? '<div style="font-size:10px;color:var(--t4);margin-bottom:3px">🏢 ' + _psEsc(p.client) + '</div>' : '') +
           '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">' +
             '<span class="badge" style="background:' + cat.color + '22;color:' + cat.color + ';font-size:8px;padding:1px 4px">' + cat.label + '</span>' +
@@ -140,7 +141,7 @@ function _psBoardHtml(items) {
             (p.dueDate ? '<span style="font-size:9px;color:' + (overdue ? SEM_COLOR.danger : 'var(--t5)') + '">' + (overdue ? '⚠️' : '~') + _psEsc(p.dueDate) + '</span>' : '') +
           '</div>' +
           _psCardPreviewHtml(p) +
-          '<select class="si" style="font-size:9px;padding:1px 2px;margin-top:4px;width:100%" onchange="psMove(\'' + _psEsc(p.id) + '\',this.value)">' + selOpts + '</select>' +
+          '<select class="si" style="font-size:9px;padding:1px 2px;margin-top:4px;width:100%" onchange="psMove(\'' + eA(p.id) + '\',this.value)">' + selOpts + '</select>' +
         '</div>';
       });
     }
@@ -295,7 +296,7 @@ function _psClientHtml(items) {
       var cat = PS_CAT[p.category] || PS_CAT.inquiry;
       html += '<div data-ps-id="' + _psEsc(p.id) + '" style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--bd)">' +
         '<span style="font-size:11px">' + st.icon + '</span>' +
-        '<span style="flex:1;font-size:11px;color:var(--t2);cursor:pointer;word-break:break-word" onclick="psOpenModal(\'' + _psEsc(p.id) + '\')">' + _psEsc(p.title) + '</span>' +
+        '<span style="flex:1;font-size:11px;color:var(--t2);cursor:pointer;word-break:break-word" onclick="psOpenModal(\'' + eA(p.id) + '\')">' + _psEsc(p.title) + '</span>' +
         '<span class="badge" style="background:' + cat.color + '22;color:' + cat.color + ';font-size:8px;padding:1px 4px">' + cat.label + '</span>' +
         (p.dueDate ? '<span style="font-size:9px;color:var(--t5)">~' + _psEsc(p.dueDate) + '</span>' : '') +
         '<span class="badge" style="background:' + st.color + '22;color:' + st.color + ';font-size:8px;padding:1px 4px">' + st.label + '</span>' +
@@ -321,7 +322,7 @@ function _psListHtml(items) {
     html += '<tr data-ps-id="' + _psEsc(p.id) + '" style="border-bottom:1px solid var(--bd)">' +
       '<td style="padding:5px"><span class="badge" style="background:' + st.color + '22;color:' + st.color + ';font-size:8px;padding:1px 4px">' + st.icon + ' ' + st.label + '</span></td>' +
       '<td style="padding:5px;color:var(--t3)">' + _psEsc(p.client || '-') + '</td>' +
-      '<td style="padding:5px;color:var(--t2);cursor:pointer" onclick="psOpenModal(\'' + _psEsc(p.id) + '\')">' + _psEsc(p.title) + '</td>' +
+      '<td style="padding:5px;color:var(--t2);cursor:pointer" onclick="psOpenModal(\'' + eA(p.id) + '\')">' + _psEsc(p.title) + '</td>' +
       '<td style="padding:5px;color:' + cat.color + '">' + cat.label + '</td>' +
       '<td style="padding:5px;color:var(--t4)">' + _psEsc(p.ownerName || '-') + '</td>' +
       '<td style="padding:5px;color:' + (p.dueDate && p.dueDate < _psToday() ? SEM_COLOR.danger : 'var(--t5)') + '">' + _psEsc(p.dueDate || '-') + '</td>' +
@@ -334,11 +335,7 @@ function _psListHtml(items) {
 
 /* ═══ 필터/뷰 ═══ */
 // 로컬 날짜 기준 (toISOString 은 UTC → KST 09:00 이전엔 하루 전 날짜가 됨)
-function _psToday() {
-  if (typeof localDate === 'function') return localDate();
-  var d = new Date();
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
+function _psToday() { return localDate(); }
 
 /* ═══ 칸반 드래그앤드롭 ═══ */
 var _psDragId = null;
@@ -389,8 +386,10 @@ function psSetQ(v) {
 
 /* ═══ 상세/편집 모달 ═══ */
 function psOpenModal(id) {
-  // 담당자·참여자 선택지를 먼저 확보한 뒤 모달을 그린다(캐시되므로 2회차부터 즉시).
-  prestudyMembers().then(function (members) { _psBuildModal(id, members || []); });
+  // 담당자·참여자 선택지를 먼저 확보한 뒤 모달을 그린다(캐시되므로 2회차부터 즉시). 표준 가드 — 연타해도 한 번만
+  return wmGuardedModal('psModal', function () {
+    return prestudyMembers().then(function (members) { _psBuildModal(id, members || []); });
+  }, 'psModal');
 }
 
 function _psBuildModal(id, members) {
@@ -461,8 +460,8 @@ function _psBuildModal(id, members) {
         ? '<div style="font-size:11px;color:' + SEM_COLOR.ok + '">' + linkInfo + '</div>'
         : '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">' +
             '<span style="font-size:10px;color:var(--t5)">확정되면 전환:</span>' +
-            '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psConvert(\'' + _psEsc(p.id) + '\',\'project\')">📁 프로젝트로</button>' +
-            '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psConvert(\'' + _psEsc(p.id) + '\',\'order\')">📋 수주로</button>' +
+            '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psConvert(\'' + eA(p.id) + '\',\'project\')">📁 프로젝트로</button>' +
+            '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psConvert(\'' + eA(p.id) + '\',\'order\')">📋 수주로</button>' +
           '</div>') +
     '</div>';
     html += '<div id="psmTech" style="margin-top:12px"></div>';
@@ -470,12 +469,11 @@ function _psBuildModal(id, members) {
   }
 
   html += '<div style="display:flex;gap:6px;margin-top:14px">' +
-    '<button class="btn btn-p btn-s" onclick="psSave(' + (isNew ? 'null' : '\'' + _psEsc(p.id) + '\'') + ')">💾 저장</button>' +
-    (isNew ? '' : '<button class="btn btn-d btn-s" onclick="psDelete(\'' + _psEsc(p.id) + '\')">🗑 삭제</button>') +
+    '<button class="btn btn-p btn-s" onclick="psSave(' + (isNew ? 'null' : '\'' + eA(p.id) + '\'') + ')">💾 저장</button>' +
+    (isNew ? '' : '<button class="btn btn-d btn-s" onclick="psDelete(\'' + eA(p.id) + '\')">🗑 삭제</button>') +
   '</div>';
 
-  if (typeof createModal !== 'function') { _psToast('모달을 열 수 없습니다.', 'error'); return; }
-  _psModal = createModal({ title: isNew ? '새 사전검토' : '사전검토 상세', html: html, width: '640px' });
+  _psModal = createModal({ id: 'psModal', title: isNew ? '새 사전검토' : '사전검토 상세', html: html, width: '640px' });
   // 관련 요소기술 + 코멘트 스레드
   if (!isNew) {
     psLoadTech(p.id);
@@ -505,7 +503,7 @@ function psSave(id) {
     _psToast('저장되었습니다.', 'success');
     _psCloseModal();
     renderPrestudy();
-  }).catch(function () { _psToast('저장 실패', 'error'); });
+  }).catch(function (e) { _psToast('저장 실패: ' + _prestudyErrMsg(e), 'error'); });
 }
 
 /** 노트 미리보기 토글 — project-detail.js의 wmRichNote 서식 렌더 재사용 */
@@ -528,7 +526,7 @@ function psToggleNotePreview() {
 
 function psMove(id, status) {
   prestudyMove(id, status).then(function () { renderPrestudy(); })
-    .catch(function () { _psToast('상태 변경 실패', 'error'); });
+    .catch(function (e) { _psToast('상태 변경 실패: ' + _prestudyErrMsg(e), 'error'); });
 }
 
 function psDelete(id) {
@@ -536,10 +534,12 @@ function psDelete(id) {
   prestudyDel(id).then(function () {
     _psCloseModal();
     renderPrestudy();
-  }).catch(function (e) { _psToast('삭제 실패: ' + ((e && e.message) || '권한 또는 서버 오류'), 'error'); });
+  }).catch(function (e) { _psToast('삭제 실패: ' + _prestudyErrMsg(e), 'error'); });
 }
 
+var _psConverting = false;   // 전환 중 연타 방지 (서버도 한 번만 전환되게 막는다)
 function psConvert(id, target) {
+  if (_psConverting) return;
   var orderNo = null;
   if (target === 'order') {
     var no = prompt('생성할 수주번호를 입력하세요. (예: B2026-001)');
@@ -548,12 +548,15 @@ function psConvert(id, target) {
   } else if (!confirm('이 검토 건을 프로젝트로 전환할까요?')) {
     return;
   }
+  _psConverting = true;
   prestudyConvert(id, target, orderNo).then(function () {
+    _psConverting = false;
     _psToast(target === 'order' ? '수주로 전환되었습니다.' : '프로젝트로 전환되었습니다.', 'success');
     _psCloseModal();
     renderPrestudy();
   }).catch(function (e) {
-    _psToast('전환 실패: ' + ((e && e.message) || ''), 'error');
+    _psConverting = false;
+    _psToast('전환 실패: ' + _prestudyErrMsg(e), 'error');
   });
 }
 
@@ -587,7 +590,7 @@ function _psRenderTech(prestudyId, linked, allTech) {
           (t.techVersion ? ' <span style="color:var(--t5)">' + _psEsc(t.techVersion) + '</span>' : '') +
           (t.note ? '<span style="color:var(--t5)"> — ' + _psEsc(t.note) + '</span>' : '') +
         '</span>' +
-        '<button class="btn btn-d btn-s" style="font-size:8px;padding:0 4px" onclick="psTechUnlink(\'' + _psEsc(t.techId) + '\',\'' + _psEsc(t.id) + '\',\'' + _psEsc(prestudyId) + '\')">✕</button>' +
+        '<button class="btn btn-d btn-s" style="font-size:8px;padding:0 4px" onclick="psTechUnlink(\'' + eA(t.techId) + '\',\'' + eA(t.id) + '\',\'' + eA(prestudyId) + '\')">✕</button>' +
       '</div>';
     });
   }
@@ -603,7 +606,7 @@ function _psRenderTech(prestudyId, linked, allTech) {
   html += '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">' +
     '<select id="psTechSel" class="si" style="flex:1;min-width:160px;font-size:10px;padding:3px">' + opts + '</select>' +
     '<input id="psTechNote" placeholder="적용 방식(선택)" style="flex:1;min-width:110px;font-size:10px;padding:3px 5px">' +
-    '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psTechLink(\'' + _psEsc(prestudyId) + '\')">+ 연결</button>' +
+    '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psTechLink(\'' + eA(prestudyId) + '\')">+ 연결</button>' +
   '</div></div>';
   box.innerHTML = html;
 }
@@ -615,11 +618,11 @@ function psTechLink(prestudyId) {
   var note = (document.getElementById('psTechNote') || {}).value || '';
   techUsageAdd(techId, 'prestudy', prestudyId, note.trim() || null)
     .then(function () { _psToast('요소기술이 연결되었습니다.', 'success'); psLoadTech(prestudyId); })
-    .catch(function () { _psToast('연결 실패', 'error'); });
+    .catch(function (e) { _psToast('연결 실패: ' + _prestudyErrMsg(e), 'error'); });
 }
 
 function psTechUnlink(techId, usageId, prestudyId) {
   if (!confirm('이 요소기술 연결을 해제할까요?')) return;
   techUsageDel(techId, usageId).then(function () { psLoadTech(prestudyId); })
-    .catch(function (e) { _psToast('연결 해제 실패: ' + ((e && e.message) || '권한 또는 서버 오류'), 'error'); });
+    .catch(function (e) { _psToast('연결 해제 실패: ' + _prestudyErrMsg(e), 'error'); });
 }

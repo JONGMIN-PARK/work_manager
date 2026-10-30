@@ -89,7 +89,7 @@ function renderOperator() {
         if (admin) {
           h += '<span style="font-size:10px;color:' + SEM_COLOR.ok + ';font-weight:600">관리자 · 항상 ON</span>';
         } else {
-          h += '<label style="cursor:pointer;font-size:10px;color:' + (on ? SEM_COLOR.ok : 'var(--t5)') + '"><input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="opGrant(\'' + u.id + '\', this.checked, this)"> ' + (on ? '허용' : '차단') + '</label>';
+          h += '<label style="cursor:pointer;font-size:10px;color:' + (on ? SEM_COLOR.ok : 'var(--t5)') + '"><input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="opGrant(\'' + eA(u.id) + '\', this.checked, this)"> ' + (on ? '허용' : '차단') + '</label>';
         }
         h += '</div>';
       });
@@ -151,18 +151,15 @@ function _opInjectStyle() {
     '@media(min-width:1600px){#opManageGrid.op-two{grid-template-columns:minmax(0,2.4fr) minmax(360px,1fr)}}';
   document.head.appendChild(st);
 }
-function opShowAll() {
+function opShowAll() { _opSetAllHidden(false); }
+function opHideAll() { _opSetAllHidden(true); }
+function _opSetAllHidden(hidden) {
   if (typeof projGetAllOperator !== 'function') return;
   projGetAllOperator().then(function (list) {
-    (list || []).forEach(function (p) { pmSetHidden(p.id, false); });
+    (list || []).forEach(function (p) { pmSetHidden(p.id, hidden); });
     _opInvalidateViews(); _opSaveFocusDebounced(); renderOperator();
-  });
-}
-function opHideAll() {
-  if (typeof projGetAllOperator !== 'function') return;
-  projGetAllOperator().then(function (list) {
-    (list || []).forEach(function (p) { pmSetHidden(p.id, true); });
-    _opInvalidateViews(); _opSaveFocusDebounced(); renderOperator();
+  }).catch(function (err) {
+    if (typeof showToast === 'function') showToast('❌ 프로젝트 목록을 불러오지 못했습니다: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 function opGrant(userId, enabled, el) {
@@ -191,12 +188,7 @@ var _OP_LOG_LABELS = {
   'comment.create': { icon: '💬', label: '코멘트/피드백', color: '#EC4899' },
   'approve_user': { icon: '👤', label: '사용자 승인', color: '#6366F1' }
 };
-function _opEsc(s) {
-  if (s == null) return '';
-  return String(s).replace(/[&<>"']/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-  });
-}
+function _opEsc(s) { return eH(s == null ? '' : s); }   // 공용 eH(wm-state.js) 별칭
 function _opLogTime(iso) {
   if (typeof _pdRelTime === 'function') { var r = _pdRelTime(iso); if (r) return r; }
   try { var d = new Date(iso); if (isNaN(d.getTime())) return ''; return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); } catch (e) { return ''; }
@@ -221,12 +213,15 @@ function _opLogDetail(a) {
 function renderOperatorLog(containerId) {
   var box = document.getElementById(containerId || 'opLogBody');
   if (!box) return;
+  var seq = _opRenderSeq;   // 그사이 다른 뷰로 바뀌면 늦은 응답은 버림
   box.innerHTML = '<div style="font-size:11px;color:var(--t6);padding:12px">활동 로그 로딩 중...</div>';
   apiFetch('/api/audit?limit=300').then(function (r) {
+    if (seq !== _opRenderSeq || !box.isConnected) return;
     _opLogCache = (r && r.data) || [];
     _opRenderLogShell(box);
     _opRenderLogList();
   }).catch(function (err) {
+    if (seq !== _opRenderSeq || !box.isConnected) return;
     var msg = (err && err.status === 403) ? '관리자만 조회할 수 있습니다.' : (err && err.status === 404) ? '서버 배포 후 사용할 수 있습니다.' : ((err && err.message) || '로드 실패');
     box.innerHTML = '<div style="color:' + SEM_COLOR.danger + ';font-size:12px;padding:20px">활동 로그 ' + _opEsc(msg) + '</div>';
   });

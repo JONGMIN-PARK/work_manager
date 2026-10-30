@@ -127,8 +127,10 @@ GET /api/departments/:id/members
 GET /api/dev-items
 GET /api/dev-items/:id
 GET /api/docs/files
+GET /api/docs/files/:id
 GET /api/docs/files/:id/download-url
 GET /api/docs/folders
+GET /api/docs/folders/:id
 GET /api/events
 GET /api/events/:id
 GET /api/ics/:file
@@ -242,8 +244,10 @@ GET /api/v1/checklists/:id
 GET /api/v1/departments
 GET /api/v1/departments/:id/members
 GET /api/v1/docs/files
+GET /api/v1/docs/files/:id
 GET /api/v1/docs/files/:id/download-url
 GET /api/v1/docs/folders
+GET /api/v1/docs/folders/:id
 GET /api/v1/events
 GET /api/v1/events/:id
 GET /api/v1/issues

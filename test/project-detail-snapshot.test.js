@@ -81,12 +81,15 @@ test('pdLoadWork: calcHoursByMilestone 미정의 시 안내', async () => {
   assert.strictEqual(dom.stub('pdWork').innerHTML, '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">투입실적 데이터를 가져올 수 없습니다.</div>');
 });
 
-test('pdLoadWork: 에러 시 토스트', async () => {
-  const { s, calls } = await openDetail();
+test('pdLoadWork: 에러 시 탭 안에 실패 안내 + 다시 시도 (로딩 중에 멈추지 않음)', async () => {
+  const { s } = await openDetail();
   s.calcHoursByMilestone = () => Promise.reject(new Error('boom'));
   s.pdLoadWork('p1');
   await H.flush();
-  assert.ok(calls.some((c) => c[0] === 'toast' && c[1] === '❌ 오류: boom'));
+  const html = s.document.getElementById('pdWork').innerHTML;
+  assert.match(html, /투입실적을\(를\) 불러오지 못했습니다/);
+  assert.match(html, /boom/);
+  assert.match(html, /onclick="pdLoadWork\('p1'\)"/);
 });
 
 test('pdMsProgressUpdate: 진척률 모달 내용·id·z-index', async () => {

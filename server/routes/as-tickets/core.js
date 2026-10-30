@@ -104,46 +104,54 @@ router.post('/', async function (req, res) {
     }
 
     var id = b.id || ('as-' + require('crypto').randomUUID().slice(0, 12));
-    var ticketNo = await nextTicketNo(req.tenant.id);
 
-    var r = await db.query(
-      'INSERT INTO as_tickets ' +
-      '(id, ticket_no, tenant_id, customer_name, site_line, customer_contact, ' +
-      ' equipment_no, equipment_model, serial_no, install_date, warranty_status, ' +
-      ' received_at, received_by, channel, priority, category, method, ' +
-      ' issue_summary, reproduction, frequency, frequency_count, impact_scope, initial_analysis, ' +
-      ' status, project_id, order_no, created_by, updated_by) ' +
-      'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,' +
-      'COALESCE($12, NOW()),$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27) ' +
-      'RETURNING *',
-      [
-        id, ticketNo, req.tenant.id,
-        b.customerName || b.customer_name,
-        b.siteLine || b.site_line || null,
-        b.customerContact || b.customer_contact || null,
-        b.equipmentNo || b.equipment_no || null,
-        b.equipmentModel || b.equipment_model || null,
-        b.serialNo || b.serial_no || null,
-        b.installDate || b.install_date || null,
-        b.warrantyStatus || b.warranty_status || null,
-        b.receivedAt || b.received_at || null,
-        req.user.sub,
-        b.channel || null,
-        b.priority || 'P3',
-        b.category || null,
-        b.method || null,
-        b.issueSummary || b.issue_summary,
-        b.reproduction || null,
-        b.frequency || null,
-        b.frequencyCount != null ? b.frequencyCount : (b.frequency_count != null ? b.frequency_count : null),
-        b.impactScope || b.impact_scope || null,
-        b.initialAnalysis || b.initial_analysis || null,
-        b.status || 'received',
-        b.projectId || b.project_id || null,
-        b.orderNo || b.order_no || null,
-        req.user.sub
-      ]
-    );
+    // 채번은 MAX+1 이라 동시 접수 시 같은 번호가 나올 수 있다 → 접수번호 유일 인덱스 위반이면 다시 채번 (최대 3회)
+    var r = null;
+    for (var attempt = 0; attempt < 3 && !r; attempt++) {
+      var ticketNo = await nextTicketNo(req.tenant.id);
+      try {
+        r = await db.query(
+          'INSERT INTO as_tickets ' +
+          '(id, ticket_no, tenant_id, customer_name, site_line, customer_contact, ' +
+          ' equipment_no, equipment_model, serial_no, install_date, warranty_status, ' +
+          ' received_at, received_by, channel, priority, category, method, ' +
+          ' issue_summary, reproduction, frequency, frequency_count, impact_scope, initial_analysis, ' +
+          ' status, project_id, order_no, created_by, updated_by) ' +
+          'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,' +
+          'COALESCE($12, NOW()),$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27) ' +
+          'RETURNING *',
+          [
+            id, ticketNo, req.tenant.id,
+            b.customerName || b.customer_name,
+            b.siteLine || b.site_line || null,
+            b.customerContact || b.customer_contact || null,
+            b.equipmentNo || b.equipment_no || null,
+            b.equipmentModel || b.equipment_model || null,
+            b.serialNo || b.serial_no || null,
+            b.installDate || b.install_date || null,
+            b.warrantyStatus || b.warranty_status || null,
+            b.receivedAt || b.received_at || null,
+            req.user.sub,
+            b.channel || null,
+            b.priority || 'P3',
+            b.category || null,
+            b.method || null,
+            b.issueSummary || b.issue_summary,
+            b.reproduction || null,
+            b.frequency || null,
+            b.frequencyCount != null ? b.frequencyCount : (b.frequency_count != null ? b.frequency_count : null),
+            b.impactScope || b.impact_scope || null,
+            b.initialAnalysis || b.initial_analysis || null,
+            b.status || 'received',
+            b.projectId || b.project_id || null,
+            b.orderNo || b.order_no || null,
+            req.user.sub
+          ]
+        );
+      } catch (ie) {
+        if (!(ie && ie.code === '23505' && /ticket_no|tenant_no/.test(ie.constraint || ie.detail || '')) || attempt === 2) throw ie;
+      }
+    }
     res.status(201).json({ data: r.rows[0] });
     _invalidateStatsCache(req.tenant.id);
 
@@ -239,6 +247,14 @@ router.put('/:id', async function (req, res) {
       var val = b[f] !== undefined ? b[f] : (camel ? b[camel] : undefined);
       if (val !== undefined) clean[f] = val;
     });
+
+    // 종결 시각 — 완료로 바꾸면 비어 있을 때 지금으로, 완료가 아닌 상태로 바꾸면 비움 (칸반 끌기 등 status 만 보낸 경우)
+    if (clean.status === 'closed' && !clean.closed_at) {
+      var curC = await db.query('SELECT closed_at FROM as_tickets WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+      clean.closed_at = (curC.rows[0] && curC.rows[0].closed_at) || new Date().toISOString();
+    } else if (clean.status && clean.status !== 'closed') {
+      clean.closed_at = null;
+    }
 
     var result = await lock.optimisticUpdate(
       db, 'as_tickets', 'id', req.params.id, b.version, clean, req.user.sub,

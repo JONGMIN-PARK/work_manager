@@ -36,13 +36,19 @@ function saveOCmt(orderNo){
   const inp=document.getElementById('oc_'+CSS.escape(orderNo));
   if(!inp)return;
   const val=inp.value.trim();
-  /* per-record ocmt 업데이트: 해당 수주번호의 모든 레코드에 반영 후 서버 저장 */
-  aD.forEach(function(r){if(r.orderNo===orderNo)r.ocmt=val||null});
-  wrBulkPut(aD).catch(function(e){console.error('[saveOCmt] DB 저장 실패:',e)});
+  /* per-record ocmt 업데이트: 해당 수주번호 레코드 중 값이 바뀐 행만 PATCH (v13.281)
+     예전엔 업무일지 전체(aD)를 bulk(=내 레코드 전부 지우고 다시 넣기)로 보내고, 실패해도 ✅ 를 띄웠다 */
+  const changed=[];
+  aD.forEach(function(r){if(r.orderNo===orderNo&&(r.ocmt||null)!==(val||null)){r.ocmt=val||null;if(r.id)changed.push(r)}});
   gfInvalidate();
   rFL();rOL();upV();
   const fb=document.getElementById('ocfb_'+CSS.escape(orderNo));
-  if(fb){fb.textContent='✅';setTimeout(()=>{fb.textContent=''},800)}
+  const done=function(ok){if(fb){fb.textContent=ok?'✅':'❌';setTimeout(()=>{fb.textContent=''},ok?800:2500)}};
+  if(!changed.length){done(true);return}
+  wrUpdateRecords(changed).then(function(){done(true)}).catch(function(e){
+    console.error('[saveOCmt] DB 저장 실패:',e);done(false);
+    showToast('❌ 수주명 저장 실패: '+((e&&e.message)||'서버 오류'),'error');
+  });
 }
 /* ═══ 수주맵 엑셀 불러오기 / 저장하기 ═══ */
 function importOrderExcel(){document.getElementById('orderExcelInput').click()}
@@ -205,7 +211,7 @@ function upOP(){
   pList.innerHTML=sorted.map(([name,info])=>{
     const ni=aN.indexOf(name);
     const c=COL[ni%COL.length];
-    const abbrTags=[...info.abbrs].map(a=>`<span class="badge" style="background:${ABG[a]||'#1A1F35'};color:${AFG[a]||'#94A3B8'};font-size:8px;padding:1px 5px">${a}</span>`).join(' ');
+    const abbrTags=[...info.abbrs].map(a=>`<span class="badge" style="background:${ABG[a]||'#1A1F35'};color:${AFG[a]||'#94A3B8'};font-size:8px;padding:1px 5px">${eH(a)}</span>`).join(' ');
     const orderCnt=info.orders.size;
     return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg-p);border:1px solid var(--bd);border-radius:6px">
       <span style="width:6px;height:6px;border-radius:50%;background:${c};flex-shrink:0"></span>

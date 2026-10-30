@@ -17,8 +17,10 @@ function showASCategoryAdmin() {
     if (typeof showToast === 'function') showToast('카테고리 API 미연결', 'error');
     return;
   }
-
-  asCategoryGetAll(true).then(function (rows) {
+  return _asGuard('asCatAdmin', 'asCatAdminOverlay', _asBuildCategoryAdmin);
+}
+function _asBuildCategoryAdmin() {
+  return asCategoryGetAll(true).then(function (rows) {
     document.querySelectorAll('#asCatAdminOverlay').forEach(function (el) { el.remove(); });
 
     var h = '';
@@ -79,7 +81,7 @@ function showASCategoryAdmin() {
     // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
   }).catch(function (err) {
     console.error('[showASCategoryAdmin]', err);
-    if (typeof showToast === 'function') showToast('카테고리 로드 실패: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+    throw new Error('카테고리 로드 실패: ' + _asErrMsg(err));   // 토스트는 _asGuard
   });
 }
 

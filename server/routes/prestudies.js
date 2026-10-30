@@ -14,17 +14,19 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var notificationService = require('../services/notification.service');
 var httpErr = require('../lib/http-errors');
+var sv = require('../lib/safe-val');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
 var CATEGORIES = ['inquiry', 'tech', 'improve', 'idea', 'quote'];
 var STATUSES = ['idea', 'reviewing', 'discussing', 'proposed', 'won', 'hold', 'dropped'];
-var PRIORITIES = ['high', 'normal', 'low'];
+var PRIORITIES = ['urgent', 'high', 'normal', 'low'];   // 화면(PS_PRIO)과 같게 — 예전엔 '긴급'이 보통으로 바뀌어 저장됐다
 
 function genId(prefix) { return prefix + '-' + crypto.randomUUID().slice(0, 12); }
 function clampEnum(v, allowed, fallback) { return allowed.indexOf(v) >= 0 ? v : fallback; }
-function today() { return new Date().toISOString().slice(0, 10); }
+// 한국 날짜 'YYYY-MM-DD' — 서버는 UTC 라 toISOString 그대로면 KST 0~9시에 전날이 된다
+function today() { return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); }
 
 /**
  * 회신기한 → events(type='review') 발행/동기화. 회의(meetings)와 동일한 패턴.
@@ -153,7 +155,7 @@ router.post('/', async function (req, res) {
   try {
     var b = req.body || {};
     if (!b.title) return res.status(400).json({ error: 'VALIDATION', message: 'title 필수' });
-    var id = b.id || genId('pst');
+    var id = sv.safeId(b.id, function () { return genId('pst'); });
     var r = await db.query(
       "INSERT INTO prestudies (id, tenant_id, title, client, category, status, priority, owner_id, participants, " +
       " background, notes, conclusion, due_date, tags, sort_order, created_by, updated_by) " +
@@ -249,41 +251,53 @@ router.post('/:id/convert', async function (req, res) {
     if (!pR.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     var ps = pR.rows[0];
 
+    // 전환은 한 트랜잭션 — 먼저 linked_* 를 '비어 있을 때만' 차지해서 더블클릭·동시 전환으로 프로젝트/수주가 두 개 생기지 않게 한다.
+    // 요소기술 이관은 트랜잭션 밖(실패해도 전환은 유지)
     var created;
-    if (target === 'order') {
-      if (ps.linked_order_no) return res.status(409).json({ error: 'CONFLICT', message: '이미 수주로 전환되었습니다.' });
-      var orderNo = (req.body.orderNo || req.body.order_no || '').trim();
-      if (!orderNo) return res.status(400).json({ error: 'VALIDATION', message: '수주번호(orderNo)가 필요합니다.' });
-      var dupR = await db.query('SELECT order_no FROM orders WHERE order_no = $1', [orderNo]);
-      if (dupR.rows.length) return res.status(409).json({ error: 'CONFLICT', message: '이미 존재하는 수주번호입니다.' });
-      var oR = await db.query(
-        "INSERT INTO orders (order_no, date, client, name, memo, created_by, updated_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$6,$7) RETURNING *",
-        [orderNo, today(), ps.client || null, ps.title, [ps.background, ps.notes, ps.conclusion].filter(Boolean).join('\n\n') || null, req.user.sub, req.tenant.id]
-      );
-      created = oR.rows[0];
-      await db.query("UPDATE prestudies SET linked_order_no = $1, status = 'won', updated_by = $2, updated_at = now(), version = version + 1 WHERE id = $3 AND tenant_id = $4",
-        [orderNo, req.user.sub, ps.id, req.tenant.id]);
-    } else {
-      if (ps.linked_project_id) return res.status(409).json({ error: 'CONFLICT', message: '이미 프로젝트로 전환되었습니다.' });
-      var projId = genId('proj');
-      var memo = [ps.background, ps.notes, ps.conclusion].filter(Boolean).join('\n\n');
-      var prR = await db.query(
-        "INSERT INTO projects (id, name, status, start_date, memo, created_by, updated_by, tenant_id, owner_id) " +
-        "VALUES ($1,$2,'waiting',$3,$4,$5,$5,$6,$5) RETURNING *",
-        [projId, ps.title, today().replace(/-/g, ''), memo || null, req.user.sub, req.tenant.id]
-      );
-      created = prR.rows[0];
-      // 담당자를 PL로 등록 (있으면)
-      if (ps.owner_id) {
-        try {
-          await db.query(
+    var projId = null;
+    try {
+      created = await db.transaction(async function (client) {
+        if (target === 'order') {
+          var orderNo = (req.body.orderNo || req.body.order_no || '').trim();
+          if (!orderNo) throw Object.assign(new Error('수주번호(orderNo)가 필요합니다.'), { http: 400, code: 'VALIDATION' });
+          var claim = await client.query("UPDATE prestudies SET linked_order_no = $1, status = 'won', updated_by = $2, updated_at = now(), version = version + 1 " +
+            'WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL AND linked_order_no IS NULL RETURNING id', [orderNo, req.user.sub, ps.id, req.tenant.id]);
+          if (!claim.rows.length) throw Object.assign(new Error('이미 수주로 전환되었습니다.'), { http: 409, code: 'CONFLICT' });
+          // order_no 는 전역 PK — 다른 테넌트가 쓰고 있어도 충돌한다 (renumber 와 같은 규칙)
+          var dupR = await client.query('SELECT order_no FROM orders WHERE order_no = $1', [orderNo]);
+          if (dupR.rows.length) throw Object.assign(new Error('이미 존재하는 수주번호입니다.'), { http: 409, code: 'CONFLICT' });
+          var oR = await client.query(
+            "INSERT INTO orders (order_no, date, client, name, memo, created_by, updated_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$6,$7) RETURNING *",
+            [orderNo, today(), ps.client || null, ps.title, [ps.background, ps.notes, ps.conclusion].filter(Boolean).join('\n\n') || null, req.user.sub, req.tenant.id]
+          );
+          return oR.rows[0];
+        }
+        projId = genId('proj');
+        var claimP = await client.query("UPDATE prestudies SET linked_project_id = $1, status = 'won', updated_by = $2, updated_at = now(), version = version + 1 " +
+          'WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL AND linked_project_id IS NULL RETURNING id', [projId, req.user.sub, ps.id, req.tenant.id]);
+        if (!claimP.rows.length) throw Object.assign(new Error('이미 프로젝트로 전환되었습니다.'), { http: 409, code: 'CONFLICT' });
+        var memo = [ps.background, ps.notes, ps.conclusion].filter(Boolean).join('\n\n');
+        // 시작일은 다른 프로젝트와 같은 'YYYY-MM-DD' (예전엔 옛 형식 YYYYMMDD 로 들어갔다)
+        var prR = await client.query(
+          "INSERT INTO projects (id, name, status, start_date, memo, created_by, updated_by, tenant_id, owner_id) " +
+          "VALUES ($1,$2,'waiting',$3,$4,$5,$5,$6,$5) RETURNING *",
+          [projId, ps.title, today(), memo || null, req.user.sub, req.tenant.id]
+        );
+        // 담당자를 PL로 등록 (있으면)
+        if (ps.owner_id) {
+          await client.query(
             "INSERT INTO project_members (project_id, user_id, role, assigned_by) VALUES ($1,$2,'pl',$3) ON CONFLICT (project_id, user_id) DO NOTHING",
             [projId, ps.owner_id, req.user.sub]
           );
-        } catch (_) { /* 멤버 등록 실패는 전환을 막지 않음 */ }
-      }
-      await db.query("UPDATE prestudies SET linked_project_id = $1, status = 'won', updated_by = $2, updated_at = now(), version = version + 1 WHERE id = $3 AND tenant_id = $4",
-        [projId, req.user.sub, ps.id, req.tenant.id]);
+        }
+        return prR.rows[0];
+      });
+    } catch (ce) {
+      if (ce && ce.http) return res.status(ce.http).json({ error: ce.code, message: ce.message });
+      if (ce && ce.code === '23505') return res.status(409).json({ error: 'CONFLICT', message: '이미 존재하는 수주번호입니다.' });
+      throw ce;
+    }
+    if (projId) {
       // 사전검토에 연결돼 있던 요소기술 적용 이력을 새 프로젝트로 이관(복제)
       // — 검토 단계에서 "이 기술로 된다"고 판단한 근거가 프로젝트에도 남는다.
       try {

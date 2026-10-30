@@ -246,7 +246,7 @@ function buildResourceMap(projects) {
 
     projs.forEach(function (p) {
       var st = autoProjectStatus(p);
-      html += '<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:' + p.color + '20;color:' + p.color + ';border:1px solid ' + p.color + '40;white-space:nowrap">' + eH((p.name || p.orderNo).slice(0, 10)) +
+      html += '<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:' + eC(p.color) + '20;color:' + eC(p.color) + ';border:1px solid ' + eC(p.color) + '40;white-space:nowrap">' + eH((p.name || p.orderNo).slice(0, 10)) +
         (p.progress ? ' ' + p.progress + '%' : '') + '</span>';
     });
 

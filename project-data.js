@@ -492,13 +492,15 @@ function projMembersAll() {
     return map;
   });
 }
+// 멤버가 바뀌면 편집 권한(can_edit)도 바뀐다 — 운영자 목록(projAll) 캐시까지 비운다
+//  (버스 알림은 안 보냄: syncAssigneesToMembers 가 이름마다 불러 화면이 여러 번 다시 그려진다)
 function projShareAdd(id, userId, role) {
   return apiFetch('/api/projects/' + id + '/members', { method: 'POST', body: JSON.stringify({ userId: userId, role: role || 'assignee' }) })
-    .then(function (r) { _pdInvalidate('proj'); return toCamel(r.data); });
+    .then(function (r) { _pdInvalidate('proj'); _pdInvalidate('projAll'); return toCamel(r.data); });
 }
 function projShareRemove(id, userId) {
   return apiFetch('/api/projects/' + id + '/members/' + userId, { method: 'DELETE' })
-    .then(function (r) { _pdInvalidate('proj'); return r; });
+    .then(function (r) { _pdInvalidate('proj'); _pdInvalidate('projAll'); return r; });
 }
 function projTransfer(id, newOwnerId, opts) {
   var body = { newOwnerId: newOwnerId };
@@ -838,7 +840,12 @@ function orderDel(orderNo) {
     .then(function (r) { _emitBus('order', 'deleted', { orderNo: orderNo }); return r; });
 }
 
-function createOrder(data) {
+/* 수주 저장 (v13.281)
+   opts.edit && opts.version 있음 → PUT(낙관적 잠금: 그새 남이 고쳤으면 409)
+   그 외(신규·DB 에 없던 ORDER_MAP 항목) → POST createOnly — 이미 있는 번호면 409 (예전엔 조용히 덮어썼다)
+   ORDER_MAP 캐시는 서버 저장이 성공한 뒤에만 고친다 (실패해도 목록에 보이던 문제) */
+function createOrder(data, opts) {
+  opts = opts || {};
   var now = new Date().toISOString();
   var order = {
     orderNo: data.orderNo,
@@ -851,11 +858,18 @@ function createOrder(data) {
     memo: data.memo || '',
     createdAt: now
   };
-  if (typeof ORDER_MAP !== 'undefined') {
-    ORDER_MAP[order.orderNo] = { name: order.name, date: order.date, client: order.client, amount: String(order.amount), manager: order.manager, delivery: order.delivery };
-  }
-  if (order.name) lsSet('wa-oc-' + order.orderNo, order.name);
-  return orderPut(order);
+  var req = (opts.edit && opts.version != null)
+    ? apiFetch('/api/orders/' + encodeURIComponent(order.orderNo), { method: 'PUT', body: JSON.stringify(Object.assign({ version: opts.version }, order)) })
+    : apiFetch('/api/orders', { method: 'POST', body: JSON.stringify(Object.assign({ createOnly: true }, order)) });
+  return req.then(function (r) {
+    var s = toCamel(r.data);
+    if (typeof ORDER_MAP !== 'undefined') {
+      ORDER_MAP[order.orderNo] = { name: order.name, date: order.date, client: order.client, amount: String(order.amount), manager: order.manager, delivery: order.delivery };
+    }
+    if (order.name) lsSet('wa-oc-' + order.orderNo, order.name);
+    _emitBus('order', 'updated', { orderNo: s && s.orderNo });
+    return s;
+  });
 }
 
 function deleteOrder(orderNo) {
@@ -1144,10 +1158,10 @@ function createDefaultChecklists(projectId) {
 }
 
 /* ═══ 개발 백로그 (project_dev_items, 칸반) — PRD Phase 1 ═══ */
+// 실패는 호출부로 — 예전엔 [] 로 삼켜서 불러오기 실패가 "총 0건"으로 보였다
 function devItemsByProject(pid) {
   return apiFetch('/api/dev-items?projectId=' + encodeURIComponent(pid))
-    .then(function (r) { return toCamelArray(r.data); })
-    .catch(function () { return []; });
+    .then(function (r) { return toCamelArray(r.data); });
 }
 function devItemCreate(item) {
   return apiFetch('/api/dev-items', { method: 'POST', body: JSON.stringify(item) })
@@ -1158,7 +1172,7 @@ function devItemMove(id, status, sortOrder) {
     .then(function (r) { return toCamel(r.data); });
 }
 function devItemDel(id) {
-  return apiFetch('/api/dev-items/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
+  return apiFetch('/api/dev-items/' + encodeURIComponent(id), { method: 'DELETE' });   // 실패는 호출부(토스트)로
 }
 
 /* ═══ 사전검토 (prestudies) — 프로젝트 이전 단계 독립 모듈 ═══ */
@@ -1206,48 +1220,10 @@ function prestudyConvert(id, target, orderNo) {
 }
 function prestudyDel(id) {
   return apiFetch('/api/prestudies/' + encodeURIComponent(id), { method: 'DELETE' })
-    .then(function () { _emitBus('prestudy', 'deleted', { id: id }); })
-    .catch(function () { return null; });
+    .then(function () { _emitBus('prestudy', 'deleted', { id: id }); });   // 실패(권한 등)는 호출부가 알리도록 그대로 던진다
 }
 
-/* ═══ 회의 관리 (meetings + action_items) — PRD Phase 2 ═══ */
-function meetingsByProject(pid) {
-  return apiFetch('/api/meetings?projectId=' + encodeURIComponent(pid))
-    .then(function (r) {
-      return (r.data || []).map(function (m) {
-        var c = toCamel(m);
-        c.actionItems = (m.action_items || []).map(toCamel);
-        return c;
-      });
-    })
-    .catch(function () { return []; });
-}
-function meetingCreate(item) {
-  return apiFetch('/api/meetings', { method: 'POST', body: JSON.stringify(item) })
-    .then(function (r) { return toCamel(r.data); });
-}
-function meetingUpdate(id, patch) {
-  return apiFetch('/api/meetings/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(patch) })
-    .then(function (r) { return toCamel(r.data); });
-}
-function meetingDel(id) {
-  return apiFetch('/api/meetings/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function () { return null; });
-}
-function meetingActionAdd(mid, item) {
-  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions', { method: 'POST', body: JSON.stringify(item) })
-    .then(function (r) { return toCamel(r.data); });
-}
-function meetingActionUpdate(mid, aid, patch) {
-  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions/' + encodeURIComponent(aid), { method: 'PUT', body: JSON.stringify(patch) })
-    .then(function (r) { return toCamel(r.data); });
-}
-function meetingActionDel(mid, aid) {
-  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions/' + encodeURIComponent(aid), { method: 'DELETE' }).catch(function () { return null; });
-}
-function meetingActionConvert(mid, aid, target) {
-  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions/' + encodeURIComponent(aid) + '/convert', { method: 'POST', body: JSON.stringify({ target: target }) })
-    .then(function (r) { return r.data; });
-}
+/* ═══ 회의 관리 — API 호출은 project-meetings.js 가 직접 한다 (여기 있던 meeting* 래퍼 8개는 쓰는 곳이 없어 제거) ═══ */
 
 /* ═══ 요소기술 (tech_assets + tech_logs) — 기반기술 자산 ═══ */
 function techGetAll(params) {
@@ -1257,9 +1233,9 @@ function techGetAll(params) {
       if (params[k] !== undefined && params[k] !== null && params[k] !== '') qs.push(k + '=' + encodeURIComponent(params[k]));
     });
   }
+  // 실패를 빈 목록으로 삼키지 않는다 — 호출부가 "불러오지 못했습니다"를 보여 주도록
   return apiFetch('/api/tech' + (qs.length ? '?' + qs.join('&') : ''))
-    .then(function (r) { return toCamelArray(r.data); })
-    .catch(function () { return []; });
+    .then(function (r) { return toCamelArray(r.data); });
 }
 function techStacks() {
   return apiFetch('/api/tech/stacks').then(function (r) { return r.data || []; }).catch(function () { return []; });
@@ -1281,8 +1257,7 @@ function techPut(item) {
 }
 function techDel(id) {
   return apiFetch('/api/tech/' + encodeURIComponent(id), { method: 'DELETE' })
-    .then(function () { _emitBus('tech', 'deleted', { id: id }); })
-    .catch(function () { return null; });
+    .then(function () { _emitBus('tech', 'deleted', { id: id }); });
 }
 /* 개발일지 */
 function techLogsGet(techId) {
@@ -1296,8 +1271,7 @@ function techLogAdd(techId, log) {
 }
 function techLogDel(techId, logId) {
   return apiFetch('/api/tech/' + encodeURIComponent(techId) + '/logs/' + encodeURIComponent(logId), { method: 'DELETE' })
-    .then(function () { _emitBus('tech', 'updated', { id: techId }); })
-    .catch(function () { return null; });
+    .then(function () { _emitBus('tech', 'updated', { id: techId }); });
 }
 
 /* 요소기술 적용 이력 (Phase 2) */
@@ -1313,8 +1287,7 @@ function techUsageAdd(techId, targetType, targetId, note) {
 }
 function techUsageDel(techId, usageId) {
   return apiFetch('/api/tech/' + encodeURIComponent(techId) + '/usages/' + encodeURIComponent(usageId), { method: 'DELETE' })
-    .then(function () { _emitBus('tech', 'updated', { id: techId }); })
-    .catch(function () { return null; });
+    .then(function () { _emitBus('tech', 'updated', { id: techId }); });
 }
 /* 역방향 — 이 프로젝트/사전검토에 적용된 요소기술 */
 function techByTarget(targetType, targetId) {
@@ -1353,9 +1326,17 @@ function executePhaseTransition(projectId, targetPhase) {
     if (!proj) return null;
     if (!proj.phases) proj.phases = {};
     var curPhase = proj.currentPhase || 'order';
+    // 단계 순서 — 뒤로 되돌리면 떠나는 단계는 '완료'가 아니라 '대기' (끝내지 않은 단계에 ✅·종료일이 찍히던 문제)
+    var seqKeys = (typeof PROJ_PHASE !== 'undefined')
+      ? Object.keys(PROJ_PHASE).sort(function (a, b) { return (PROJ_PHASE[a].seq || 0) - (PROJ_PHASE[b].seq || 0); })
+      : ['order', 'design', 'manufacture', 'inspect', 'deliver', 'done'];
+    var backward = seqKeys.indexOf(targetPhase) >= 0 && seqKeys.indexOf(targetPhase) < seqKeys.indexOf(curPhase);
     if (proj.phases[curPhase]) {
-      proj.phases[curPhase].status = 'done';
-      if (!proj.phases[curPhase].endDate) proj.phases[curPhase].endDate = localDate();
+      if (backward) proj.phases[curPhase].status = 'waiting';
+      else {
+        proj.phases[curPhase].status = 'done';
+        if (!proj.phases[curPhase].endDate) proj.phases[curPhase].endDate = localDate();
+      }
     }
     proj.currentPhase = targetPhase;
     if (!proj.phases[targetPhase]) proj.phases[targetPhase] = {};
@@ -1369,6 +1350,9 @@ function executePhaseTransition(projectId, targetPhase) {
     } else if (curPhase === 'done') {
       if (proj.status === 'done') proj.status = 'active';
       if (proj.phases.done) proj.phases.done.status = 'waiting';
+      // 완료에서 빠지면 진척 100 을 그대로 두지 않고 단계 비율로(수주 0 · 설계 20 … 납품 80) — 서버 syncDonePhase 와 같은 규칙
+      var si = seqKeys.indexOf(targetPhase);
+      if ((Number(proj.progress) || 0) >= 100 && si >= 0) proj.progress = Math.round(si / (seqKeys.length - 1) * 100);
     }
     proj.updatedAt = new Date().toISOString();
     return projPut(proj);
@@ -1411,7 +1395,8 @@ function createProjectFromOrder(order) {
 }
 
 /* ─── 이슈 ─── */
-function issueGetAll() { return apiFetch('/api/issues').then(function (r) { return toCamelArray(r.data); }); }
+// 기본 limit 100 이라 이슈가 100건을 넘으면 최신 100건만 왔다(목록·통계·수주대장 이슈 수가 잘림) → 전체를 받는다
+function issueGetAll() { return apiFetch('/api/issues?all=true&limit=20000').then(function (r) { return toCamelArray(r.data); }); }
 function issueGet(id) { return apiFetch('/api/issues/' + id).then(function (r) { return toCamel(r.data); }); }
 function issuePut(issue) {
   var isNew = !issue.id || issue._isNew;
@@ -1420,14 +1405,9 @@ function issuePut(issue) {
     return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) })
       .then(function (r) { var s = toCamel(r.data); _emitBus('issue', 'created', { id: s && s.id, projectId: s && s.projectId, orderNo: s && s.orderNo }); return s; });
   }
+  // 404 면 그대로 실패 — 예전엔 POST 로 다시 만들어, 남이 지운 이슈가 편집 저장으로 되살아났다
   return apiFetch('/api/issues/' + issue.id, { method: 'PUT', body: JSON.stringify(issue) })
     .then(function (r) { return toCamel(r.data); })
-    .catch(function (err) {
-      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-        return apiFetch('/api/issues', { method: 'POST', body: JSON.stringify(issue) }).then(function (r) { return toCamel(r.data); });
-      }
-      throw err;
-    })
     .then(function (s) { _emitBus('issue', 'updated', { id: s && s.id, projectId: s && s.projectId, orderNo: s && s.orderNo }); return s; });
 }
 function issueDel(id) {
@@ -1551,6 +1531,7 @@ function createASTicket(data) {
     issueSummary: data.issueSummary || '',
     reproduction: data.reproduction || '',
     frequency: data.frequency || '',
+    frequencyCount: data.frequencyCount != null ? data.frequencyCount : null,   // 발생 빈도 회수 (0 도 값)
     impactScope: data.impactScope || '',
     initialAnalysis: data.initialAnalysis || '',
     status: 'received',
@@ -1561,7 +1542,12 @@ function createASTicket(data) {
   };
   return asPut(ticket);
 }
-function updateASTicket(id, updates) {
+/* version 을 주면(화면에 불러온 시점의 값) 바꾼 칸만 보내고 낙관적 락 적용 — 그사이 다른 사람이 저장했으면 409.
+   version 이 없으면 예전처럼 최신을 받아 덮어쓴다(하위호환). */
+function updateASTicket(id, updates, version) {
+  if (version != null) {
+    return asPut(Object.assign({}, updates, { id: id, version: version }));
+  }
   return asGet(id).then(function (t) {
     if (!t) return null;
     Object.assign(t, updates);
@@ -1695,10 +1681,6 @@ function asSignaturePut(ticketId, sig) {
   return apiFetch('/api/as-tickets/' + ticketId + '/signatures', { method: 'POST', body: JSON.stringify(sig) })
     .then(function (r) { var s = toCamel(r.data); _emitBus('as', 'updated', { id: ticketId, action: 'sign-' + (sig.role || '') }); return s; });
 }
-function asSignatureDel(ticketId, sid) {
-  return apiFetch('/api/as-tickets/' + ticketId + '/signatures/' + sid, { method: 'DELETE' })
-    .then(function (r) { _emitBus('as', 'updated', { id: ticketId, action: 'sign-remove' }); return r; });
-}
 
 /* ─── A/S → 이슈 양방향 연계 ─── */
 function asLinkIssue(ticketId, issueId) {
@@ -1736,10 +1718,13 @@ function createIssue(data) {
   return issuePut(issue);
 }
 
-function updateIssue(id, updates) {
+/* baseVersion: 편집 창을 열 때 받은 version — 주면 그사이 남이 고친 경우 409(덮어쓰기 방지).
+   안 주면(상태 버튼처럼 한 필드만 바로 바꾸는 경우) 최신 version 으로 저장 */
+function updateIssue(id, updates, baseVersion) {
   return issueGet(id).then(function (issue) {
     if (!issue) return null;
     Object.assign(issue, updates);
+    if (baseVersion != null) issue.version = baseVersion;
     issue.updatedAt = new Date().toISOString();
     return issuePut(issue);
   });
@@ -1755,8 +1740,9 @@ function issueLogGetByIssue(issueId) { return apiFetch('/api/issues/' + issueId 
 function issueLogPut(log) {
   return apiFetch('/api/issues/' + log.issueId + '/logs', { method: 'POST', body: JSON.stringify(log) }).then(function (r) { return toCamel(r.data); });
 }
-function issueLogDel(id) {
-  return apiFetch('/api/issues/_/logs/' + id, { method: 'DELETE' });
+function issueLogDel(id, issueId) {
+  // 서버는 issue_id 도 맞아야 지운다 — 예전엔 '_' 를 보내 늘 404 였다
+  return apiFetch('/api/issues/' + encodeURIComponent(issueId) + '/logs/' + encodeURIComponent(id), { method: 'DELETE' });
 }
 
 function createIssueLog(data) {
@@ -1930,10 +1916,12 @@ function autoUpdateProgress() {
           }
         }
         actual = Math.round(actual * 10) / 10;
-        // 진척률: 보고값 우선, 없으면 시간기반 폴백
+        // 진척률: 보고값 우선, 없으면 시간기반 폴백. 완료 프로젝트는 100 고정(서버 롤업도 같은 규칙, v13.277)
         var reported = reportedProgress(p.id);
         var progress;
-        if (reported != null) {
+        if (p.status === 'done' || p.currentPhase === 'done') {
+          progress = p.progress;   // 변경 없음 — 투입시간만 갱신
+        } else if (reported != null) {
           progress = reported;
         } else if (p.estimatedHours && p.estimatedHours > 0 && actual > 0) {
           progress = Math.min(Math.round((actual / p.estimatedHours) * 100), PROGRESS_MAX);
@@ -2175,8 +2163,14 @@ function getRecentArchiveWeeks(count) {
 
 /* ─── 문서 폴더 ─── */
 function folderGetAll() { return apiFetch('/api/docs/folders').then(function (r) { return toCamelArray(r.data); }); }
-function folderGet(id) { return apiFetch('/api/docs/folders').then(function (r) { var all = toCamelArray(r.data); return all.find(function (f) { return f.id === id; }) || null; }); }
-function folderGetByProject(pid) { return apiFetch('/api/docs/folders?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
+// 단건은 GET /folders/:id — 예전엔 테넌트 목록 첫 100건에서 찾아 오래된 폴더는 null(조용히 아무 일도 안 함)이었다
+function _docGetOne(kind, id) {
+  return apiFetch('/api/docs/' + kind + '/' + encodeURIComponent(id))
+    .then(function (r) { return toCamel(r.data) || null; })
+    .catch(function (err) { if (err && err.status === 404) return null; throw err; });
+}
+function folderGet(id) { return _docGetOne('folders', id); }
+function folderGetByProject(pid) { return apiFetch('/api/docs/folders?all=true&limit=20000&projectId=' + encodeURIComponent(pid)).then(function (r) { return toCamelArray(r.data); }); }
 function folderPut(f) {
   var isNew = !f.id || f._isNew;
   if (isNew) {
@@ -2184,14 +2178,9 @@ function folderPut(f) {
     return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) })
       .then(function (r) { var s = toCamel(r.data); _emitBus('document', 'created', { kind: 'folder', id: s && s.id, projectId: s && s.projectId }); return s; });
   }
+  // 404 면 그대로 실패 (지워진 폴더를 POST 로 되살리지 않는다)
   return apiFetch('/api/docs/folders/' + f.id, { method: 'PUT', body: JSON.stringify(f) })
     .then(function (r) { return toCamel(r.data); })
-    .catch(function (err) {
-      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-        return apiFetch('/api/docs/folders', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
-      }
-      throw err;
-    })
     .then(function (s) { _emitBus('document', 'updated', { kind: 'folder', id: s && s.id, projectId: s && s.projectId }); return s; });
 }
 function folderDel(id) {
@@ -2217,10 +2206,11 @@ function createDefaultFolders(projectId) {
 }
 
 /* ─── 문서 파일 ─── */
-function fileGetAll() { return apiFetch('/api/docs/files').then(function (r) { return toCamelArray(r.data); }); }
-function fileGet(id) { return apiFetch('/api/docs/files').then(function (r) { var all = toCamelArray(r.data); return all.find(function (f) { return f.id === id; }) || null; }); }
-function fileGetByProject(pid) { return apiFetch('/api/docs/files?projectId=' + pid).then(function (r) { return toCamelArray(r.data); }); }
-function fileGetByFolder(fid) { return apiFetch('/api/docs/files?folderId=' + fid).then(function (r) { return toCamelArray(r.data); }); }
+// 목록은 기본 limit 100 을 넘겨 전체를 받는다 (100건 넘는 프로젝트에서 파일·용량이 잘리던 문제)
+function fileGetAll() { return apiFetch('/api/docs/files?all=true&limit=20000').then(function (r) { return toCamelArray(r.data); }); }
+function fileGet(id) { return _docGetOne('files', id); }
+function fileGetByProject(pid) { return apiFetch('/api/docs/files?all=true&limit=20000&projectId=' + encodeURIComponent(pid)).then(function (r) { return toCamelArray(r.data); }); }
+function fileGetByFolder(fid) { return apiFetch('/api/docs/files?all=true&limit=20000&folderId=' + encodeURIComponent(fid)).then(function (r) { return toCamelArray(r.data); }); }
 function filePut(f) {
   var isNew = !f.id || f._isNew;
   if (isNew) {
@@ -2228,14 +2218,9 @@ function filePut(f) {
     return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) })
       .then(function (r) { var s = toCamel(r.data); _emitBus('document', 'created', { kind: 'file', id: s && s.id, projectId: s && s.projectId }); return s; });
   }
+  // 404 면 그대로 실패 (지워진 파일 메타를 POST 로 되살리지 않는다 — 원본은 이미 GCS 에서 지워졌다)
   return apiFetch('/api/docs/files/' + f.id, { method: 'PUT', body: JSON.stringify(f) })
     .then(function (r) { return toCamel(r.data); })
-    .catch(function (err) {
-      if (err && (err.status === 404 || (err.data && err.data.error === 'NOT_FOUND'))) {
-        return apiFetch('/api/docs/files', { method: 'POST', body: JSON.stringify(f) }).then(function (r) { return toCamel(r.data); });
-      }
-      throw err;
-    })
     .then(function (s) { _emitBus('document', 'updated', { kind: 'file', id: s && s.id, projectId: s && s.projectId }); return s; });
 }
 function fileDel(id) {
@@ -2243,10 +2228,3 @@ function fileDel(id) {
     .then(function (r) { _emitBus('document', 'deleted', { kind: 'file', id: id }); return r; });
 }
 
-function getProjectStorageSize(projectId) {
-  return fileGetByProject(projectId).then(function (files) {
-    var total = 0;
-    files.forEach(function (f) { total += (f.size || 0); });
-    return { total: total, count: files.length };
-  });
-}

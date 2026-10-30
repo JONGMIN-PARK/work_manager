@@ -1,4 +1,5 @@
 var express = require('express');
+var sv = require('../lib/safe-val');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
@@ -133,12 +134,12 @@ router.post('/', async function (req, res) {
     var b = req.body;
     var pids = _pids(b.projectIds || b.project_ids);
     if (!await _gateLink(req, res, pids)) return;
-    var id = b.id || ('evt-' + require('crypto').randomUUID().slice(0, 12));
+    var id = sv.safeId(b.id, function () { return 'evt-' + require('crypto').randomUUID().slice(0, 12); });
     var r = await db.query(
       "INSERT INTO events (id, title, type, start_date, end_date, project_ids, assignees, color, memo, repeat, repeat_until, created_by, tenant_id, start_time, end_time, location) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *",
       [id, b.title || '', b.type || 'etc', b.startDate || b.start_date || '',
        b.endDate || b.end_date || '', JSON.stringify(pids),
-       JSON.stringify(b.assignees || []), b.color || null, b.memo || '',
+       JSON.stringify(b.assignees || []), sv.safeColor(b.color, null), b.memo || '',
        b.repeat || null, b.repeatUntil || b.repeat_until || null, req.user.sub, req.tenant.id,
        _time(_bodyTime(b, 'startTime', 'start_time')), _time(_bodyTime(b, 'endTime', 'end_time')), String(b.location || '').trim().slice(0, 255) || null]
     );
@@ -169,7 +170,7 @@ router.put('/:id', async function (req, res) {
       clean.project_ids = JSON.stringify(nextIds);
     }
     if (b.assignees !== undefined) clean.assignees = JSON.stringify(b.assignees);
-    if (b.color !== undefined) clean.color = b.color;
+    if (b.color !== undefined) clean.color = sv.safeColor(b.color, null);
     if (b.memo !== undefined) clean.memo = b.memo;
     if (b.repeat !== undefined) clean.repeat = b.repeat;
     if (_bodyTime(b, 'startTime', 'start_time') !== undefined) clean.start_time = _time(_bodyTime(b, 'startTime', 'start_time'));

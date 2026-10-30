@@ -23,6 +23,8 @@ function load(now) {
     localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
   };
   vm.createContext(sandbox);
+  // wm-state.js 의 eA · eC 그대로 (속성 안 JS 문자열 · 색)
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'wm-state.js'), 'utf8').split(/\r?\n/).filter((l) => /^function e[AC]\(/.test(l)).join('\n'), sandbox);
   for (const f of ['config.js', 'project-data.js', 'calendar.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), sandbox, { filename: f });
   }

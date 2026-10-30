@@ -23,13 +23,8 @@ var _docPageInfo = null; // renderFileList가 계산한 페이지 정보 (마운
    rMD(HTML 전역)는 입력을 이스케이프하지 않으므로 업로드 .md·메모·AI 결과를 그대로 넣으면 저장형 XSS.
    rMD가 매칭하는 문법(##, ###, **, "- ", 줄바꿈)은 & < > " ' 를 쓰지 않으므로
    먼저 이스케이프한 뒤 rMD를 적용해도 마크다운 렌더 결과는 동일하다. */
-function _docEsc(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-  });
-}
 function _docMD(t) {
-  var safe = _docEsc(t);
+  var safe = eH(t);
   return typeof rMD === 'function' ? rMD(safe) : safe.replace(/\n/g, '<br>');
 }
 
@@ -57,6 +52,8 @@ function _docInjectStyle() {
    현재 프로젝트의 folders/allFiles를 캐시해 두고, renderDocManager({useCache:true})로
    재사용한다. 업로드·삭제·이름변경 등 "변경"은 renderDocManager()(useCache 없음)로 재조회. */
 var _docDataCache = { projId: null, folders: null, allFiles: null };
+var _docRenderSeq = 0;   // 렌더 경합 토큰 — 프로젝트를 빨리 바꾸면 늦게 끝난 이전 렌더가 화면·캐시를 덮던 문제 (v13.281)
+function _docSortFolders(list) { return list.sort(function (a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0) || String(a.name || '').localeCompare(String(b.name || '')); }); }
 
 /* ═══ Blob URL 관리 ═══ */
 function docRevokeBlobUrls() {
@@ -74,9 +71,12 @@ function docCreateBlobUrl(data, type) {
 async function renderDocManager(opts) {
   var wrap = document.getElementById('mDocs');
   if (!wrap) return;
-  docRevokeBlobUrls();
+  var seq = ++_docRenderSeq;
+  var _stale = function () { return seq !== _docRenderSeq; };
 
   var projects = await (typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll());
+  if (_stale()) return;
+  docRevokeBlobUrls();
   projects.sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
   // 프로젝트 미선택 시 첫 번째 자동 선택
@@ -88,24 +88,28 @@ async function renderDocManager(opts) {
   }
 
   var proj = projects.find(function (p) { return p.id === docSelProject; });
+  var projId = docSelProject;   // 아래 await 동안 docSelProject 가 바뀌어도 이 렌더는 이 프로젝트 기준
 
   // 폴더 + 파일 로드 (캐시) — 폴더/메뉴 선택 시 매번 재조회하던 것이 느림의 핵심.
   // opts.useCache && 같은 프로젝트면 직전에 받아둔 folders/allFiles를 그대로 재사용한다.
   var folders = [], allFiles = [];
   if (proj) {
-    var _useCache = opts && opts.useCache && _docDataCache.projId === docSelProject && _docDataCache.allFiles;
+    var _useCache = opts && opts.useCache && _docDataCache.projId === projId && _docDataCache.allFiles;
     if (_useCache) {
       folders = _docDataCache.folders;
       allFiles = _docDataCache.allFiles;
     } else {
-      folders = await folderGetByProject(docSelProject);
+      folders = await folderGetByProject(projId);
+      if (_stale()) return;
       if (!folders.length) {
-        await createDefaultFolders(docSelProject);
-        folders = await folderGetByProject(docSelProject);
+        await createDefaultFolders(projId);
+        folders = await folderGetByProject(projId);
+        if (_stale()) return;
       }
-      folders.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
-      allFiles = await fileGetByProject(docSelProject);
-      _docDataCache = { projId: docSelProject, folders: folders, allFiles: allFiles };
+      _docSortFolders(folders);
+      allFiles = await fileGetByProject(projId);
+      if (_stale()) return;
+      _docDataCache = { projId: projId, folders: folders, allFiles: allFiles };
     }
   }
   // 용량은 위에서 받은 allFiles로 계산 — 별도 getProjectStorageSize() 재조회(중복 fetch) 제거
@@ -210,32 +214,21 @@ function renderFolderTree(folders, allFiles) {
   html += '<div onclick="docSelectFolder(null)" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center;border:1px solid transparent;transition:all .15s;' + allSel + '">';
   html += '<span>📁 전체</span><span class="badge" style="background:var(--bg-i);color:var(--t4);font-size:9px">' + allFiles.length + '</span></div>';
 
-  // 루트 폴더
-  var rootFolders = folders.filter(function (f) { return !f.parentId; });
-  rootFolders.forEach(function (folder) {
-    var count = allFiles.filter(function (f) { return f.folderId === folder.id; }).length;
+  // 폴더 (최대 3단계 — docAddFolder 가 3단계까지 만든다)
+  var countOf = function (id) { return allFiles.filter(function (f) { return f.folderId === id; }).length; };
+  var drawFolder = function (folder, depth) {
     var sel = docSelFolder === folder.id ? 'background:var(--ac-bg);color:var(--ac-t);border-color:var(--ac)' : '';
     var hasMemo = folder.memo ? 'border-left:2px solid var(--ac);' : '';
-    html += '<div onclick="docSelectFolder(\'' + folder.id + '\')" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center;border:1px solid transparent;transition:all .15s;' + hasMemo + sel + '">';
-    html += '<span>📁 ' + eH(folder.name) + '</span>';
-    html += '<span style="display:flex;align-items:center;gap:4px"><span class="badge" style="background:var(--bg-i);color:var(--t4);font-size:9px">' + count + '</span>';
-    html += '<span onclick="event.stopPropagation();docEditFolderMemo(\'' + folder.id + '\')" style="cursor:pointer;font-size:10px;color:' + (folder.memo ? 'var(--ac-t)' : 'var(--t5)') + '" title="' + (folder.memo ? eH(folder.memo.slice(0, 60)) : '메모 추가') + '">📝</span>';
-    if (!folder.phase) html += '<span onclick="event.stopPropagation();docRenameFolder(\'' + folder.id + '\')" style="cursor:pointer;font-size:10px;color:var(--t5)" title="이름변경">✏️</span>';
+    var pad = depth ? 'padding:5px 10px 5px ' + (10 + depth * 16) + 'px;font-size:10px;margin-bottom:1px;' : 'padding:6px 10px;font-size:11px;margin-bottom:2px;';
+    html += '<div onclick="docSelectFolder(\'' + eA(folder.id) + '\')" style="' + pad + 'border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border:1px solid transparent;transition:all .15s;' + hasMemo + sel + '">';
+    html += '<span>' + (depth ? '📄 ' : '📁 ') + eH(folder.name) + '</span>';
+    html += '<span style="display:flex;align-items:center;gap:4px"><span class="badge" style="background:var(--bg-i);color:var(--t4);font-size:9px">' + countOf(folder.id) + '</span>';
+    html += '<span onclick="event.stopPropagation();docEditFolderMemo(\'' + eA(folder.id) + '\')" style="cursor:pointer;font-size:10px;color:' + (folder.memo ? 'var(--ac-t)' : 'var(--t5)') + '" title="' + (folder.memo ? eH(folder.memo.slice(0, 60)) : '메모 추가') + '">📝</span>';
+    if (!folder.phase) html += '<span onclick="event.stopPropagation();docRenameFolder(\'' + eA(folder.id) + '\')" style="cursor:pointer;font-size:10px;color:var(--t5)" title="이름변경">✏️</span>';
     html += '</span></div>';
-
-    // 하위 폴더
-    var children = folders.filter(function (f) { return f.parentId === folder.id; });
-    children.forEach(function (child) {
-      var cCount = allFiles.filter(function (f) { return f.folderId === child.id; }).length;
-      var cSel = docSelFolder === child.id ? 'background:var(--ac-bg);color:var(--ac-t);border-color:var(--ac)' : '';
-      var cHasMemo = child.memo ? 'border-left:2px solid var(--ac);' : '';
-      html += '<div onclick="docSelectFolder(\'' + child.id + '\')" style="padding:5px 10px 5px 26px;border-radius:6px;cursor:pointer;font-size:10px;margin-bottom:1px;display:flex;justify-content:space-between;align-items:center;border:1px solid transparent;transition:all .15s;' + cHasMemo + cSel + '">';
-      html += '<span>📄 ' + eH(child.name) + '</span>';
-      html += '<span style="display:flex;align-items:center;gap:4px"><span class="badge" style="background:var(--bg-i);color:var(--t4);font-size:9px">' + cCount + '</span>';
-      html += '<span onclick="event.stopPropagation();docEditFolderMemo(\'' + child.id + '\')" style="cursor:pointer;font-size:10px;color:' + (child.memo ? 'var(--ac-t)' : 'var(--t5)') + '" title="' + (child.memo ? eH(child.memo.slice(0, 60)) : '메모 추가') + '">📝</span>';
-      html += '</span></div>';
-    });
-  });
+    if (depth < 2) folders.filter(function (f) { return f.parentId === folder.id; }).forEach(function (c) { drawFolder(c, depth + 1); });
+  };
+  folders.filter(function (f) { return !f.parentId; }).forEach(function (f) { drawFolder(f, 0); });
 
   html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">';
   html += '<button class="btn btn-g btn-s" onclick="docAddFolder()" style="width:100%;justify-content:center">+ 폴더 추가</button>';
@@ -290,7 +283,7 @@ function renderFileList(folders, allFiles) {
 
   // 폴더 메모 표시
   if (selFolderObj && selFolderObj.memo) {
-    html += '<div style="margin-bottom:8px;padding:8px 10px;background:var(--bg-i);border-radius:6px;border-left:2px solid var(--ac);cursor:pointer;position:relative" onclick="docEditFolderMemo(\'' + selFolderObj.id + '\')" title="클릭하여 메모 편집">';
+    html += '<div style="margin-bottom:8px;padding:8px 10px;background:var(--bg-i);border-radius:6px;border-left:2px solid var(--ac);cursor:pointer;position:relative" onclick="docEditFolderMemo(\'' + eA(selFolderObj.id) + '\')" title="클릭하여 메모 편집">';
     html += '<div style="font-size:9px;font-weight:700;color:var(--t4);margin-bottom:3px;display:flex;justify-content:space-between;align-items:center"><span>📝 폴더 메모</span><span style="font-size:9px;color:var(--t5)">✏️ 편집</span></div>';
     html += '<div style="font-size:11px;color:var(--t2);line-height:1.5;white-space:pre-wrap;max-height:60px;overflow-y:auto">' + eH(selFolderObj.memo) + '</div>';
     html += '</div>';
@@ -305,6 +298,9 @@ function renderFileList(folders, allFiles) {
 
   // 업로드 존 + 파일 목록
   html += '<div style="flex:1;overflow-y:auto">';
+  if (selFolderObj && !selFolderObj.phase) {
+    html += '<div style="margin-bottom:8px;text-align:right"><button class="btn btn-d btn-s" onclick="docDeleteFolder(\'' + eA(selFolderObj.id) + '\')">🗑️ 폴더 삭제</button></div>';
+  }
 
   if (!files.length) {
     html += '<div id="docDropZone" class="dz" style="margin-bottom:12px" onclick="document.getElementById(\'docFileInput\').click()" ondragover="event.preventDefault();this.classList.add(\'active\')" ondragleave="this.classList.remove(\'active\')" ondrop="event.preventDefault();this.classList.remove(\'active\');docHandleDrop(event)">';
@@ -316,7 +312,6 @@ function renderFileList(folders, allFiles) {
     // 업로드 버튼
     html += '<div style="margin-bottom:10px;display:flex;gap:6px">';
     html += '<button class="btn btn-p btn-s" onclick="document.getElementById(\'docFileInput\').click()">📤 파일 업로드</button>';
-    if (docSelFolder) html += '<button class="btn btn-d btn-s" onclick="docDeleteFolder(\'' + docSelFolder + '\')">🗑️ 폴더 삭제</button>';
     html += '</div>';
 
     // 파일 카드 / 리스트
@@ -329,7 +324,7 @@ function renderFileList(folders, allFiles) {
       pageInfo.items.forEach(function (f) {
         var icon = getDocIcon(f.ext);
         var sel = docSelFile === f.id ? 'border-color:var(--ac);background:var(--ac-g)' : '';
-        html += '<div onclick="docClickFile(\'' + f.id + '\')" style="padding:12px 10px;border-radius:8px;border:1px solid var(--bd);cursor:pointer;text-align:center;transition:all .15s;' + sel + '" onmouseover="this.style.borderColor=\'var(--ac)\'" onmouseout="if(\'' + f.id + '\'!==docSelFile)this.style.borderColor=\'var(--bd)\'">';
+        html += '<div onclick="docClickFile(\'' + eA(f.id) + '\')" style="padding:12px 10px;border-radius:8px;border:1px solid var(--bd);cursor:pointer;text-align:center;transition:all .15s;' + sel + '" onmouseover="this.style.borderColor=\'var(--ac)\'" onmouseout="if(\'' + eA(f.id) + '\'!==docSelFile)this.style.borderColor=\'var(--bd)\'">';
         html += '<div style="font-size:28px;margin-bottom:6px">' + icon.icon + '</div>';
         html += '<div style="font-size:10px;font-weight:600;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(f.name) + '">' + eH(f.name) + '</div>';
         html += '<div style="font-size:9px;color:var(--t5);margin-top:3px">' + formatFileSize(f.size) + '</div>';
@@ -341,7 +336,7 @@ function renderFileList(folders, allFiles) {
       pageInfo.items.forEach(function (f) {
         var icon = getDocIcon(f.ext);
         var sel = docSelFile === f.id ? 'background:var(--ac-g)' : '';
-        html += '<tr onclick="docClickFile(\'' + f.id + '\')" style="cursor:pointer;' + sel + '">';
+        html += '<tr onclick="docClickFile(\'' + eA(f.id) + '\')" style="cursor:pointer;' + sel + '">';
         html += '<td><span style="margin-right:4px">' + icon.icon + '</span>' + eH(f.name);
         if (f.tags && f.tags.length) html += ' <span style="font-size:9px;color:var(--tg-t)">' + f.tags.map(function(t){return '#'+eH(t)}).join(' ') + '</span>';
         html += '</td>';
@@ -349,8 +344,8 @@ function renderFileList(folders, allFiles) {
         html += '<td>' + eH((f.ext || '').toUpperCase()) + '</td>';
         html += '<td style="font-size:10px">' + (f.createdAt ? new Date(f.createdAt).toLocaleDateString('ko') : '') + '</td>';
         html += '<td style="white-space:nowrap">';
-        html += '<span onclick="event.stopPropagation();docMoveFile(\'' + f.id + '\')" style="cursor:pointer;color:var(--t5);font-size:12px;margin-right:4px" title="이동">📁</span>';
-        html += '<span onclick="event.stopPropagation();docDeleteFile(\'' + f.id + '\')" style="cursor:pointer;color:var(--t5);font-size:12px" title="삭제">🗑️</span>';
+        html += '<span onclick="event.stopPropagation();docMoveFile(\'' + eA(f.id) + '\')" style="cursor:pointer;color:var(--t5);font-size:12px;margin-right:4px" title="이동">📁</span>';
+        html += '<span onclick="event.stopPropagation();docDeleteFile(\'' + eA(f.id) + '\')" style="cursor:pointer;color:var(--t5);font-size:12px" title="삭제">🗑️</span>';
         html += '</td></tr>';
       });
       html += '</tbody></table>';
@@ -428,80 +423,6 @@ function docHandleDrop(e) {
   if (files.length) docUploadWithVersion(files);
 }
 
-async function docHandleFiles(fileList) {
-  if (!docSelProject) { showToast('프로젝트를 먼저 선택하세요.', 'warn'); return; }
-
-  try {
-    var targetFolder = docSelFolder;
-    if (!targetFolder) {
-      // 전체 보기에서 업로드 시 첫 번째 폴더에 저장
-      var folders = await folderGetByProject(docSelProject);
-      if (folders.length) targetFolder = folders[0].id;
-      else { showToast('폴더가 없습니다.', 'error'); return; }
-    }
-
-    var count = 0;
-    var errors = [];
-
-    for (var i = 0; i < fileList.length; i++) {
-      var file = fileList[i];
-      if (file.size > DOC_MAX_FILE) {
-        errors.push(file.name + ' (크기 초과)');
-        continue;
-      }
-
-      var ext = (file.name.split('.').pop() || '').toLowerCase();
-      var mime = file.type || 'application/octet-stream';
-      var buf = await readFileAsArrayBuffer(file);
-
-      var record = {
-        id: 'file-' + uuid(),
-        projectId: docSelProject,
-        folderId: targetFolder,
-        name: file.name,
-        type: mime,
-        mimeType: mime,
-        ext: ext,
-        size: file.size,
-        data: buf,            // 텍스트 추출용(아래에서 서버 전송 전 제거)
-        textCache: '',
-        memo: '',
-        tags: [],
-        uploadedBy: '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        _isNew: true
-      };
-
-      // 텍스트 캐시 추출 (검색·AI용 — 원본과 별개로 DB에 보관)
-      record.textCache = await extractTextFromFile(record);
-
-      // ── 원본 바이너리를 GCS에 직접 업로드 (서명 URL) ──
-      try {
-        record.storageKey = await docUploadBinary(file, mime, ext);
-      } catch (upErr) {
-        console.error('[docUpload] GCS', file.name, upErr);
-        var msg = (upErr && upErr.data && upErr.data.error === 'STORAGE_DISABLED')
-          ? '스토리지 미설정' : ((upErr && upErr.message) || '업로드 실패');
-        errors.push(file.name + ' (' + msg + ')');
-        continue;
-      }
-
-      delete record.data;   // 원본은 GCS에 있으므로 메타데이터만 서버 저장
-      await filePut(record);
-      count++;
-    }
-
-    if (count) showToast('📤 ' + count + '개 파일 업로드 완료');
-    if (errors.length) showToast('⚠️ ' + errors.join(', '), 'warn');
-
-    renderDocManager();
-  } catch (err) {
-    console.error('[docHandleFiles]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
-  }
-}
-
 function readFileAsArrayBuffer(file) {
   return new Promise(function (res) {
     var reader = new FileReader();
@@ -512,10 +433,10 @@ function readFileAsArrayBuffer(file) {
 }
 
 // 원본 바이너리를 GCS에 직접 업로드(서명 URL)하고 storageKey 반환
-async function docUploadBinary(file, mime, ext) {
+async function docUploadBinary(file, mime, ext, projectId) {
   var sign = await apiFetch('/api/docs/files/upload-url', {
     method: 'POST',
-    body: JSON.stringify({ name: file.name, mimeType: mime, ext: ext })
+    body: JSON.stringify({ name: file.name, mimeType: mime, ext: ext, projectId: projectId || null })
   });
   var up = sign.data;
   var putRes = await fetch(up.uploadUrl, {
@@ -620,10 +541,10 @@ async function showFilePreview(fileRecord) {
     infoHtml += '<div style="font-size:10px;color:var(--t4);margin-bottom:6px;background:var(--bg-i);padding:6px 8px;border-radius:4px;max-height:80px;overflow-y:auto;line-height:1.5">' + eH(fileRecord.memo).slice(0, 300) + '</div>';
   }
   infoHtml += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
-  infoHtml += '<button class="btn btn-g btn-s" onclick="docDownloadFile(\'' + fileRecord.id + '\')">💾 다운로드</button>';
-  infoHtml += '<button class="btn btn-g btn-s" onclick="docEditFileMeta(\'' + fileRecord.id + '\')">✏️ 편집</button>';
-  infoHtml += '<button class="btn btn-g btn-s" onclick="docMoveFile(\'' + fileRecord.id + '\')">📁 이동</button>';
-  infoHtml += '<button class="btn btn-d btn-s" onclick="docDeleteFile(\'' + fileRecord.id + '\')">🗑️ 삭제</button>';
+  infoHtml += '<button class="btn btn-g btn-s" onclick="docDownloadFile(\'' + eA(fileRecord.id) + '\')">💾 다운로드</button>';
+  infoHtml += '<button class="btn btn-g btn-s" onclick="docEditFileMeta(\'' + eA(fileRecord.id) + '\')">✏️ 편집</button>';
+  infoHtml += '<button class="btn btn-g btn-s" onclick="docMoveFile(\'' + eA(fileRecord.id) + '\')">📁 이동</button>';
+  infoHtml += '<button class="btn btn-d btn-s" onclick="docDeleteFile(\'' + eA(fileRecord.id) + '\')">🗑️ 삭제</button>';
   infoHtml += '</div></div>';
 
   // 서버에서 불러온 파일은 data가 없음 → GCS에서 원본 바이너리를 가져온다
@@ -802,21 +723,21 @@ async function showAISummaryPanel(fileRecord) {
     { id: 'issue', icon: '🔍', label: '이슈추출', prompt: '이 문서에서 잠재적 리스크나 이슈 사항을 찾아줘.' }
   ];
   presets.forEach(function (p) {
-    leftHtml += '<button class="btn btn-g btn-s" onclick="docRunSummary(\'' + fileRecord.id + '\',\'' + p.id + '\')" title="' + eH(p.prompt) + '">' + p.icon + ' ' + p.label + '</button>';
+    leftHtml += '<button class="btn btn-g btn-s" onclick="docRunSummary(\'' + eA(fileRecord.id) + '\',\'' + eA(p.id) + '\')" title="' + eH(p.prompt) + '">' + p.icon + ' ' + p.label + '</button>';
   });
   leftHtml += '</div></div>';
 
   // 자유 입력
   leftHtml += '<div style="margin-bottom:10px">';
   leftHtml += '<textarea id="docSumPrompt" placeholder="자유 입력: 분석할 내용을 입력하세요..." style="width:100%;height:48px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px;color:var(--t2);font-family:inherit;resize:vertical;outline:none"></textarea>';
-  leftHtml += '<button class="btn btn-p btn-s" onclick="docRunSummary(\'' + fileRecord.id + '\',\'custom\')" style="margin-top:4px;width:100%;justify-content:center">🚀 요약 실행</button>';
+  leftHtml += '<button class="btn btn-p btn-s" onclick="docRunSummary(\'' + eA(fileRecord.id) + '\',\'custom\')" style="margin-top:4px;width:100%;justify-content:center">🚀 요약 실행</button>';
   leftHtml += '</div>';
 
   // 요약 이력 버튼
   var histCount = (fileRecord.summaryHistory || []).length;
   if (histCount || fileRecord.memo) {
     leftHtml += '<div>';
-    leftHtml += '<button class="btn btn-g btn-s" onclick="docShowSummaryHistory(\'' + fileRecord.id + '\')" style="width:100%;justify-content:center">📜 요약 이력' + (histCount ? ' (' + histCount + ')' : '') + '</button>';
+    leftHtml += '<button class="btn btn-g btn-s" onclick="docShowSummaryHistory(\'' + eA(fileRecord.id) + '\')" style="width:100%;justify-content:center">📜 요약 이력' + (histCount ? ' (' + histCount + ')' : '') + '</button>';
     leftHtml += '</div>';
   }
   leftHtml += '</div>';
@@ -928,8 +849,8 @@ async function docRunSummary(fileId, presetId) {
       resHtml += '<div id="docSumText" style="font-size:11px;color:var(--t2);line-height:1.7;background:var(--bg-i);border-radius:6px;padding:12px;max-height:280px;overflow-y:auto">' + _docMD(aiResult) + '</div>';
       resHtml += '<div style="display:flex;gap:4px;margin-top:8px">';
       resHtml += '<button class="btn btn-g btn-s" onclick="docCopySummary()">📋 복사</button>';
-      resHtml += '<button class="btn btn-p btn-s" onclick="docSaveSummary(\'' + fileId + '\')">💾 메모 저장</button>';
-      resHtml += '<button class="btn btn-g btn-s" onclick="docShowSummaryHistory(\'' + fileId + '\')">📜 이력</button>';
+      resHtml += '<button class="btn btn-p btn-s" onclick="docSaveSummary(\'' + eA(fileId) + '\')">💾 메모 저장</button>';
+      resHtml += '<button class="btn btn-g btn-s" onclick="docShowSummaryHistory(\'' + eA(fileId) + '\')">📜 이력</button>';
       resHtml += '</div>';
 
       resultEl.innerHTML = resHtml;
@@ -1054,7 +975,7 @@ async function docAddFolder() {
       parentId: parentId,
       name: name.trim(),
       phase: null,
-      order: folders.length,
+      sortOrder: folders.length,
       createdAt: new Date().toISOString(),
       _isNew: true
     });
@@ -1067,42 +988,41 @@ async function docAddFolder() {
   }
 }
 
-/* ═══ 폴더 삭제 ═══ */
+/* ═══ 폴더 삭제 ═══
+   하위 폴더 전부(손자까지)와 그 안 파일을 함께 지운다. 예전엔 자식까지만 지워, 서버가 손자 폴더를 루트로 올려 버렸고
+   확인창은 바로 아래 파일 수만 보여 줬다. */
 async function docDeleteFolder(folderId) {
   try {
     var folder = await folderGet(folderId);
-    if (!folder) return;
+    if (!folder) { showToast('폴더를 찾을 수 없습니다 (이미 삭제됐을 수 있습니다).', 'warn'); renderDocManager(); return; }
     if (folder.phase) {
       showToast('기본 단계 폴더는 삭제할 수 없습니다.', 'warn');
       return;
     }
-
-    var files = await fileGetByFolder(folderId);
-    if (files.length) {
-      if (!confirm('이 폴더에 ' + files.length + '개의 파일이 있습니다.\n폴더와 파일을 모두 삭제하시겠습니까?')) return;
-      await Promise.all(files.map(function (f) { return fileDel(f.id); }));
-    } else {
-      if (!confirm('"' + folder.name + '" 폴더를 삭제하시겠습니까?')) return;
-    }
-
-    // 하위 폴더도 삭제
     var allFolders = await folderGetByProject(folder.projectId);
-    var children = allFolders.filter(function (f) { return f.parentId === folderId; });
-    for (var i = 0; i < children.length; i++) {
-      var childFiles = await fileGetByFolder(children[i].id);
-      await Promise.all(childFiles.map(function (f) { return fileDel(f.id); }));
-      await folderDel(children[i].id);
+    var ids = [folderId];   // 지울 폴더: 자신 + 모든 하위 (부모가 먼저)
+    for (var k = 0; k < ids.length; k++) {
+      allFolders.forEach(function (f) { if (f.parentId === ids[k] && ids.indexOf(f.id) < 0) ids.push(f.id); });
     }
+    var projFiles = await fileGetByProject(folder.projectId);
+    var files = projFiles.filter(function (f) { return ids.indexOf(f.folderId) >= 0; });
+    var sub = ids.length - 1;
+    var msg = '"' + folder.name + '" 폴더' + (sub ? '와 하위 폴더 ' + sub + '개' : '') + '를 삭제하시겠습니까?' +
+      (files.length ? '\n안에 있는 파일 ' + files.length + '개도 함께 삭제됩니다.' : '');
+    if (!confirm(msg)) return;
 
-    await folderDel(folderId);
+    await Promise.all(files.map(function (f) { return fileDel(f.id); }));
+    for (var i = ids.length - 1; i >= 0; i--) await folderDel(ids[i]);   // 깊은 것부터
     docSelFolder = null;
     showToast('🗑️ 폴더 삭제됨');
     renderDocManager();
   } catch (err) {
     console.error('[docDeleteFolder]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+    showToast('❌ 폴더 삭제 실패: ' + _docErrMsg(err), 'error');
+    renderDocManager();
   }
 }
+function _docErrMsg(err) { return (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류'; }
 
 /* ═══ Phase 2: 파일 검색 ═══ */
 var _docSearchTimer = null;
@@ -1129,7 +1049,7 @@ function docSearchFiles(keyword) {
 async function docRenameFolder(folderId) {
   try {
     var folder = await folderGet(folderId);
-    if (!folder) return;
+    if (!folder) { showToast('폴더를 찾을 수 없습니다 (이미 삭제됐을 수 있습니다).', 'warn'); return; }
     var newName = prompt('폴더 이름 변경:', folder.name);
     if (!newName || !newName.trim() || newName.trim() === folder.name) return;
     folder.name = newName.trim();
@@ -1142,32 +1062,30 @@ async function docRenameFolder(folderId) {
   }
 }
 
-/* ═══ 폴더 메모 편집 ═══ */
-async function docEditFolderMemo(folderId) {
-  try {
-    var folder = await folderGet(folderId);
-    if (!folder) return;
+/* ═══ 폴더 메모 편집 ═══ — 이 파일의 창은 모두 표준 가드(wmGuardedModal: 연타 방지·열림 대기·오류 토스트) */
+function docEditFolderMemo(folderId) {
+  return wmGuardedModal('docFolderMemo', function () { return _docBuildFolderMemo(folderId); }, 'docFolderMemoModal');
+}
+async function _docBuildFolderMemo(folderId) {
+  var folder = await folderGet(folderId);
+  if (!folder) throw new Error('폴더를 찾을 수 없습니다');
 
-    var div = document.createElement('div');
-    div.innerHTML = '<div style="margin-bottom:12px">'
-      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'
-      + '<span style="font-size:16px">📁</span>'
-      + '<span style="font-size:12px;font-weight:700;color:var(--t1)">' + eH(folder.name) + '</span>'
-      + (folder.phase ? '<span class="ft" style="font-size:9px">' + eH(folder.phase) + '</span>' : '')
-      + '</div>'
-      + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">📝 메모</label>'
-      + '<textarea id="docFolderMemo" style="width:100%;height:120px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:10px;font-size:11px;color:var(--t2);font-family:inherit;resize:vertical;outline:none;line-height:1.6" placeholder="미팅 내용, 사양 관련 메모, 회의 결과 등...">' + eH(folder.memo || '') + '</textarea>'
-      + '</div>'
-      + '<div style="display:flex;gap:6px">'
-      + '<button class="btn btn-p" onclick="docSaveFolderMemo(\'' + folderId + '\')" style="flex:1;justify-content:center">💾 저장</button>'
-      + (folder.memo ? '<button class="btn btn-d" onclick="docClearFolderMemo(\'' + folderId + '\')" style="justify-content:center">🗑️ 삭제</button>' : '')
-      + '</div>';
+  var div = document.createElement('div');
+  div.innerHTML = '<div style="margin-bottom:12px">'
+    + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'
+    + '<span style="font-size:16px">📁</span>'
+    + '<span style="font-size:12px;font-weight:700;color:var(--t1)">' + eH(folder.name) + '</span>'
+    + (folder.phase ? '<span class="ft" style="font-size:9px">' + eH(folder.phase) + '</span>' : '')
+    + '</div>'
+    + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">📝 메모</label>'
+    + '<textarea id="docFolderMemo" style="width:100%;height:120px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:10px;font-size:11px;color:var(--t2);font-family:inherit;resize:vertical;outline:none;line-height:1.6" placeholder="미팅 내용, 사양 관련 메모, 회의 결과 등...">' + eH(folder.memo || '') + '</textarea>'
+    + '</div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<button class="btn btn-p" onclick="docSaveFolderMemo(\'' + eA(folderId) + '\')" style="flex:1;justify-content:center">💾 저장</button>'
+    + (folder.memo ? '<button class="btn btn-d" onclick="docClearFolderMemo(\'' + eA(folderId) + '\')" style="justify-content:center">🗑️ 삭제</button>' : '')
+    + '</div>';
 
-    createModal({ title: '📝 폴더 메모 — ' + eH(folder.name), content: div, width: '460px' });
-  } catch (err) {
-    console.error('[docEditFolderMemo]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
-  }
+  createModal({ id: 'docFolderMemoModal', title: '📝 폴더 메모 — ' + eH(folder.name), content: div, width: '460px' });
 }
 
 /* 저장 후 방금 쓴 모달 닫기 — 첫 번째가 아니라 맨 위(마지막) .wa-modal-overlay.
@@ -1213,28 +1131,25 @@ async function docClearFolderMemo(folderId) {
 }
 
 /* ═══ Phase 2: 파일 이동 ═══ */
-async function docMoveFile(fileId) {
-  try {
-    var f = await fileGet(fileId);
-    if (!f) return;
-    var folders = await folderGetByProject(f.projectId);
-    folders.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+function docMoveFile(fileId) {
+  return wmGuardedModal('docMoveFile', function () { return _docBuildMoveFile(fileId); }, 'docMoveFileModal');
+}
+async function _docBuildMoveFile(fileId) {
+  var f = await fileGet(fileId);
+  if (!f) throw new Error('파일을 찾을 수 없습니다');
+  var folders = _docSortFolders(await folderGetByProject(f.projectId));
 
-    var html = '<div style="max-height:300px;overflow-y:auto">';
-    folders.forEach(function (folder) {
-      var isCurrent = f.folderId === folder.id;
-      html += '<div onclick="docExecMoveFile(\'' + fileId + '\',\'' + folder.id + '\')" style="padding:8px 12px;cursor:pointer;border-radius:6px;margin-bottom:4px;transition:all .15s;display:flex;align-items:center;gap:8px;font-size:12px;' + (isCurrent ? 'background:var(--ac-bg);color:var(--ac-t);font-weight:700' : 'color:var(--t2)') + '" onmouseover="if(!' + isCurrent + ')this.style.background=\'var(--bg-hv)\'" onmouseout="if(!' + isCurrent + ')this.style.background=\'none\'">';
-      html += '<span>📁</span><span>' + eH(folder.name) + '</span>';
-      if (isCurrent) html += '<span style="font-size:10px;color:var(--t5);margin-left:auto">(현재)</span>';
-      html += '</div>';
-    });
+  var html = '<div style="max-height:300px;overflow-y:auto">';
+  folders.forEach(function (folder) {
+    var isCurrent = f.folderId === folder.id;
+    html += '<div onclick="docExecMoveFile(\'' + eA(fileId) + '\',\'' + eA(folder.id) + '\')" style="padding:8px 12px;cursor:pointer;border-radius:6px;margin-bottom:4px;transition:all .15s;display:flex;align-items:center;gap:8px;font-size:12px;' + (isCurrent ? 'background:var(--ac-bg);color:var(--ac-t);font-weight:700' : 'color:var(--t2)') + '" onmouseover="if(!' + isCurrent + ')this.style.background=\'var(--bg-hv)\'" onmouseout="if(!' + isCurrent + ')this.style.background=\'none\'">';
+    html += '<span>📁</span><span>' + eH(folder.name) + '</span>';
+    if (isCurrent) html += '<span style="font-size:10px;color:var(--t5);margin-left:auto">(현재)</span>';
     html += '</div>';
+  });
+  html += '</div>';
 
-    createModal({ title: '📁 파일 이동: ' + eH(f.name), html: html, width: '360px' });
-  } catch (err) {
-    console.error('[docMoveFile]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
-  }
+  createModal({ id: 'docMoveFileModal', title: '📁 파일 이동: ' + eH(f.name), html: html, width: '360px' });
 }
 
 async function docExecMoveFile(fileId, targetFolderId) {
@@ -1255,51 +1170,30 @@ async function docExecMoveFile(fileId, targetFolderId) {
   }
 }
 
-/* ═══ Phase 2: 파일 이름변경 ═══ */
-async function docRenameFile(fileId) {
-  try {
-    var f = await fileGet(fileId);
-    if (!f) return;
-    var newName = prompt('파일 이름 변경:', f.name);
-    if (!newName || !newName.trim() || newName.trim() === f.name) return;
-    f.name = newName.trim();
-    f.ext = (newName.split('.').pop() || '').toLowerCase();
-    f.updatedAt = new Date().toISOString();
-    await filePut(f);
-    showToast('✏️ 파일 이름 변경됨');
-    renderDocManager();
-  } catch (err) {
-    console.error('[docRenameFile]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
-  }
-}
-
 /* ═══ Phase 2: 파일 메모/태그 편집 ═══ */
-async function docEditFileMeta(fileId) {
-  try {
-    var f = await fileGet(fileId);
-    if (!f) return;
+function docEditFileMeta(fileId) {
+  return wmGuardedModal('docFileMeta', function () { return _docBuildFileMeta(fileId); }, 'docFileMetaModal');
+}
+async function _docBuildFileMeta(fileId) {
+  var f = await fileGet(fileId);
+  if (!f) throw new Error('파일을 찾을 수 없습니다');
 
-    var div = document.createElement('div');
-    div.innerHTML = '<div style="margin-bottom:12px">'
-      + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">📝 메모</label>'
-      + '<textarea id="docMetaMemo" style="width:100%;height:80px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px;color:var(--t2);font-family:inherit;resize:vertical;outline:none">' + eH(f.memo || '') + '</textarea>'
-      + '</div>'
-      + '<div style="margin-bottom:12px">'
-      + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">🏷️ 태그 <span style="font-weight:400;color:var(--t5)">(쉼표로 구분)</span></label>'
-      + '<input id="docMetaTags" class="si" style="font-size:11px" value="' + eH((f.tags || []).join(', ')) + '" placeholder="예: 견적, 최종, v2">'
-      + '</div>'
-      + '<div style="margin-bottom:12px">'
-      + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">✏️ 파일명</label>'
-      + '<input id="docMetaName" class="si" style="font-size:11px" value="' + eH(f.name) + '">'
-      + '</div>'
-      + '<button class="btn btn-p" onclick="docSaveFileMeta(\'' + fileId + '\')" style="width:100%;justify-content:center">💾 저장</button>';
+  var div = document.createElement('div');
+  div.innerHTML = '<div style="margin-bottom:12px">'
+    + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">📝 메모</label>'
+    + '<textarea id="docMetaMemo" style="width:100%;height:80px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px;color:var(--t2);font-family:inherit;resize:vertical;outline:none">' + eH(f.memo || '') + '</textarea>'
+    + '</div>'
+    + '<div style="margin-bottom:12px">'
+    + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">🏷️ 태그 <span style="font-weight:400;color:var(--t5)">(쉼표로 구분)</span></label>'
+    + '<input id="docMetaTags" class="si" style="font-size:11px" value="' + eH((f.tags || []).join(', ')) + '" placeholder="예: 견적, 최종, v2">'
+    + '</div>'
+    + '<div style="margin-bottom:12px">'
+    + '<label style="font-size:11px;font-weight:700;color:var(--t4);display:block;margin-bottom:4px">✏️ 파일명</label>'
+    + '<input id="docMetaName" class="si" style="font-size:11px" value="' + eH(f.name) + '">'
+    + '</div>'
+    + '<button class="btn btn-p" onclick="docSaveFileMeta(\'' + eA(fileId) + '\')" style="width:100%;justify-content:center">💾 저장</button>';
 
-    createModal({ title: '📄 파일 정보 편집', content: div, width: '400px' });
-  } catch (err) {
-    console.error('[docEditFileMeta]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
-  }
+  createModal({ id: 'docFileMetaModal', title: '📄 파일 정보 편집', content: div, width: '400px' });
 }
 
 /* ═══ Phase 3: 전문 검색 (textCache 포함) ═══ */
@@ -1323,10 +1217,11 @@ async function docUploadWithVersion(fileList) {
 
     var existingFiles = await fileGetByFolder(targetFolder);
     var count = 0;
+    var tooBig = [];
 
     for (var i = 0; i < fileList.length; i++) {
       var file = fileList[i];
-      if (file.size > DOC_MAX_FILE) continue;
+      if (file.size > DOC_MAX_FILE) { tooBig.push(file.name); continue; }   // 예전엔 말없이 건너뛰었다
 
       var ext = (file.name.split('.').pop() || '').toLowerCase();
       var buf = await readFileAsArrayBuffer(file);
@@ -1336,15 +1231,6 @@ async function docUploadWithVersion(fileList) {
       if (existing) {
         var action = confirm('"' + file.name + '" 파일이 이미 존재합니다.\n\n[확인] 새 버전으로 교체 (이전 버전 보관)\n[취소] 건너뛰기');
         if (!action) continue;
-
-        // 이전 버전 이름 변경하여 보관
-        var ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-        var baseName = existing.name.replace(/\.[^.]+$/, '');
-        var oldExt = existing.ext || '';
-        existing.name = baseName + '_v' + ts + (oldExt ? '.' + oldExt : '');
-        existing.tags = (existing.tags || []).concat(['이전버전']);
-        existing.updatedAt = new Date().toISOString();
-        await filePut(existing);
       }
 
       var mime = file.type || 'application/octet-stream';
@@ -1368,11 +1254,22 @@ async function docUploadWithVersion(fileList) {
       };
       record.textCache = await extractTextFromFile(record);
       try {
-        record.storageKey = await docUploadBinary(file, mime, ext);
+        record.storageKey = await docUploadBinary(file, mime, ext, docSelProject);
       } catch (upErr) {
         console.error('[docUploadVersion] GCS', file.name, upErr);
-        showToast('❌ ' + file.name + ' 업로드 실패: ' + ((upErr && upErr.message) || ''), 'error');
+        var upMsg = (upErr && upErr.data && upErr.data.error === 'STORAGE_DISABLED') ? '스토리지 미설정' : _docErrMsg(upErr);
+        showToast('❌ ' + file.name + ' 업로드 실패: ' + upMsg, 'error');
         continue;
+      }
+      // 이전 버전은 새 원본이 올라간 뒤에 이름을 바꿔 보관 — 예전엔 먼저 바꿔서, 업로드가 실패하면 원본만 '_v…' 로 남았다
+      if (existing) {
+        var ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+        var baseName = existing.name.replace(/\.[^.]+$/, '');
+        var oldExt = existing.ext || '';
+        existing.name = baseName + '_v' + ts + (oldExt ? '.' + oldExt : '');
+        existing.tags = (existing.tags || []).concat(['이전버전']);
+        existing.updatedAt = new Date().toISOString();
+        await filePut(existing);
       }
       delete record.data;
       await filePut(record);
@@ -1380,6 +1277,7 @@ async function docUploadWithVersion(fileList) {
     }
 
     if (count) showToast('📤 ' + count + '개 파일 업로드 완료');
+    if (tooBig.length) showToast('⚠️ 50MB 초과로 건너뜀: ' + tooBig.join(', '), 'warn');
     renderDocManager();
   } catch (err) {
     console.error('[docUploadWithVersion]', err);
@@ -1388,102 +1286,95 @@ async function docUploadWithVersion(fileList) {
 }
 
 /* ═══ Phase 3: 요약 이력 관리 ═══ */
-async function docShowSummaryHistory(fileId) {
-  try {
-    var f = await fileGet(fileId);
-    if (!f) return;
+function docShowSummaryHistory(fileId) {
+  return wmGuardedModal('docSumHist', function () { return _docBuildSummaryHistory(fileId); }, 'docSumHistModal');
+}
+async function _docBuildSummaryHistory(fileId) {
+  var f = await fileGet(fileId);
+  if (!f) throw new Error('파일을 찾을 수 없습니다');
 
-    var history = f.summaryHistory || [];
-    if (!history.length && !f.memo) {
-      showToast('저장된 요약 이력이 없습니다.', 'warn');
-      return;
-    }
+  var history = f.summaryHistory || [];
+  if (!history.length && !f.memo) { showToast('저장된 요약 이력이 없습니다.', 'warn'); return false; }   // 창 없이 끝 (가드가 기다리지 않음)
 
-    var html = '<div style="max-height:400px;overflow-y:auto">';
-    if (f.memo) {
-      html += '<div style="margin-bottom:12px;padding:10px;background:var(--bg-i);border-radius:6px;border-left:3px solid var(--ac)">';
-      html += '<div style="font-size:10px;font-weight:700;color:var(--t4);margin-bottom:4px">📝 현재 메모</div>';
-      html += '<div style="font-size:11px;color:var(--t2);line-height:1.6">' + _docMD(f.memo) + '</div>';
-      html += '</div>';
-    }
-    history.forEach(function (h, idx) {
-      html += '<div style="margin-bottom:10px;padding:10px;background:var(--bg-i);border-radius:6px">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
-      html += '<span style="font-size:10px;font-weight:700;color:var(--t4)">' + eH(h.preset || '자유입력') + '</span>';
-      html += '<span style="font-size:9px;color:var(--t5)">' + eH(h.date || '') + '</span></div>';
-      html += '<div style="font-size:11px;color:var(--t2);line-height:1.6;max-height:150px;overflow-y:auto">' + _docMD(h.text) + '</div>';
-      html += '</div>';
-    });
+  var html = '<div style="max-height:400px;overflow-y:auto">';
+  if (f.memo) {
+    html += '<div style="margin-bottom:12px;padding:10px;background:var(--bg-i);border-radius:6px;border-left:3px solid var(--ac)">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--t4);margin-bottom:4px">📝 현재 메모</div>';
+    html += '<div style="font-size:11px;color:var(--t2);line-height:1.6">' + _docMD(f.memo) + '</div>';
     html += '</div>';
-
-    createModal({ title: '📜 요약 이력: ' + eH(f.name), html: html, width: '500px' });
-  } catch (err) {
-    console.error('[docShowSummaryHistory]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   }
+  history.forEach(function (h, idx) {
+    html += '<div style="margin-bottom:10px;padding:10px;background:var(--bg-i);border-radius:6px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+    html += '<span style="font-size:10px;font-weight:700;color:var(--t4)">' + eH(h.preset || '자유입력') + '</span>';
+    html += '<span style="font-size:9px;color:var(--t5)">' + eH(h.date || '') + '</span></div>';
+    html += '<div style="font-size:11px;color:var(--t2);line-height:1.6;max-height:150px;overflow-y:auto">' + _docMD(h.text) + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  createModal({ id: 'docSumHistModal', title: '📜 요약 이력: ' + eH(f.name), html: html, width: '500px' });
 }
 
 /* ═══ Phase 3: 용량 대시보드 ═══ */
-async function docShowStorageDashboard() {
-  try {
-    var projects = await projGetAll();
-    var allFiles = await fileGetAll();
+function docShowStorageDashboard() {
+  return wmGuardedModal('docStorage', _docBuildStorageDashboard, 'docStorageModal');
+}
+async function _docBuildStorageDashboard() {
+  var projects = await projGetAll();
+  var allFiles = await fileGetAll();
 
-    var byProject = {};
-    var totalSize = 0;
-    allFiles.forEach(function (f) {
-      if (!byProject[f.projectId]) byProject[f.projectId] = { size: 0, count: 0 };
-      byProject[f.projectId].size += (f.size || 0);
-      byProject[f.projectId].count++;
-      totalSize += (f.size || 0);
-    });
+  var byProject = {};
+  var totalSize = 0;
+  allFiles.forEach(function (f) {
+    if (!byProject[f.projectId]) byProject[f.projectId] = { size: 0, count: 0 };
+    byProject[f.projectId].size += (f.size || 0);
+    byProject[f.projectId].count++;
+    totalSize += (f.size || 0);
+  });
 
-    // 확장자별 분포
-    var byExt = {};
-    allFiles.forEach(function (f) {
-      var ext = (f.ext || 'other').toLowerCase();
-      if (!byExt[ext]) byExt[ext] = { size: 0, count: 0 };
-      byExt[ext].size += (f.size || 0);
-      byExt[ext].count++;
-    });
+  // 확장자별 분포
+  var byExt = {};
+  allFiles.forEach(function (f) {
+    var ext = (f.ext || 'other').toLowerCase();
+    if (!byExt[ext]) byExt[ext] = { size: 0, count: 0 };
+    byExt[ext].size += (f.size || 0);
+    byExt[ext].count++;
+  });
 
-    var html = '<div style="margin-bottom:16px">';
-    html += '<div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:8px">📊 전체 용량: ' + formatFileSize(totalSize) + ' (' + allFiles.length + '개 파일)</div>';
+  var html = '<div style="margin-bottom:16px">';
+  html += '<div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:8px">📊 전체 용량: ' + formatFileSize(totalSize) + ' (' + allFiles.length + '개 파일)</div>';
+  html += '</div>';
+
+  // 프로젝트별
+  html += '<div style="font-size:11px;font-weight:700;color:var(--t4);margin-bottom:8px">프로젝트별 사용량</div>';
+  var sortedProjects = Object.entries(byProject).sort(function (a, b) { return b[1].size - a[1].size; });
+  sortedProjects.forEach(function (entry) {
+    var projId = entry[0];
+    var info = entry[1];
+    var proj = projects.find(function (p) { return p.id === projId; });
+    var name = proj ? (proj.name || proj.orderNo || projId) : projId;
+    var pct = totalSize > 0 ? Math.round(info.size / totalSize * 100) : 0;
+    html += '<div style="margin-bottom:6px">';
+    html += '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);margin-bottom:2px"><span>' + eH(name) + '</span><span>' + formatFileSize(info.size) + ' (' + info.count + ')</span></div>';
+    html += '<div style="height:6px;background:var(--pt);border-radius:3px"><div style="width:' + pct + '%;height:100%;background:var(--ac);border-radius:3px"></div></div>';
     html += '</div>';
+  });
 
-    // 프로젝트별
-    html += '<div style="font-size:11px;font-weight:700;color:var(--t4);margin-bottom:8px">프로젝트별 사용량</div>';
-    var sortedProjects = Object.entries(byProject).sort(function (a, b) { return b[1].size - a[1].size; });
-    sortedProjects.forEach(function (entry) {
-      var projId = entry[0];
-      var info = entry[1];
-      var proj = projects.find(function (p) { return p.id === projId; });
-      var name = proj ? (proj.name || proj.orderNo || projId) : projId;
-      var pct = totalSize > 0 ? Math.round(info.size / totalSize * 100) : 0;
-      html += '<div style="margin-bottom:6px">';
-      html += '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);margin-bottom:2px"><span>' + eH(name) + '</span><span>' + formatFileSize(info.size) + ' (' + info.count + ')</span></div>';
-      html += '<div style="height:6px;background:var(--pt);border-radius:3px"><div style="width:' + pct + '%;height:100%;background:var(--ac);border-radius:3px"></div></div>';
-      html += '</div>';
-    });
-
-    // 확장자별
-    html += '<div style="font-size:11px;font-weight:700;color:var(--t4);margin:12px 0 8px">파일 유형별 분포</div>';
-    html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
-    Object.entries(byExt).sort(function (a, b) { return b[1].size - a[1].size; }).forEach(function (entry) {
-      var ext = entry[0];
-      var info = entry[1];
-      var icon = getDocIcon(ext);
-      html += '<div style="padding:6px 10px;background:var(--bg-i);border-radius:6px;font-size:10px;color:var(--t3)">';
-      html += icon.icon + ' .' + eH(ext.toUpperCase()) + ' <b>' + info.count + '</b>개 · ' + formatFileSize(info.size);
-      html += '</div>';
-    });
+  // 확장자별
+  html += '<div style="font-size:11px;font-weight:700;color:var(--t4);margin:12px 0 8px">파일 유형별 분포</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+  Object.entries(byExt).sort(function (a, b) { return b[1].size - a[1].size; }).forEach(function (entry) {
+    var ext = entry[0];
+    var info = entry[1];
+    var icon = getDocIcon(ext);
+    html += '<div style="padding:6px 10px;background:var(--bg-i);border-radius:6px;font-size:10px;color:var(--t3)">';
+    html += icon.icon + ' .' + eH(ext.toUpperCase()) + ' <b>' + info.count + '</b>개 · ' + formatFileSize(info.size);
     html += '</div>';
+  });
+  html += '</div>';
 
-    createModal({ title: '💾 문서 용량 대시보드', html: html, width: '500px' });
-  } catch (err) {
-    console.error('[docShowStorageDashboard]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
-  }
+  createModal({ id: 'docStorageModal', title: '💾 문서 용량 대시보드', html: html, width: '500px' });
 }
 
 async function docSaveFileMeta(fileId) {

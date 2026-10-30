@@ -84,7 +84,7 @@ function fakeRows(html) {
     const isProj = m[1].indexOf('tl-row-proj') >= 0;
     let bar = null;
     if (isProj) {
-      const bre = new RegExp('data-type="proj" data-id="' + pid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '" style="([^"]*)"');
+      const bre = new RegExp('data-type="proj" data-id="' + pid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"(?: data-[se]="[^"]*")* style="([^"]*)"');   // v13.281 막대에 실제 날짜(data-s · data-e)
       const bm = bre.exec(html);
       const st = bm ? bm[1] : '';
       const l = /left:([\d.]+)px/.exec(st), w = /width:([\d.]+)px/.exec(st);
@@ -176,6 +176,8 @@ function load(opts) {
     getComputedStyle: (el) => ({ position: (el && el.style && el.style.position) || 'static' }),
   };
   vm.createContext(sandbox);
+  // wm-state.js 의 eA · eC 그대로 (속성 안 JS 문자열 · 색)
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'wm-state.js'), 'utf8').split(/\r?\n/).filter((l) => /^function e[AC]\(/.test(l)).join('\n'), sandbox);
   for (const f of ['config.js', 'project-data.js', 'timeline.js']) {
     // TL_SRC: 비교용 원본 timeline.js 경로(스냅샷 생성 시에만)
     const file = (f === 'timeline.js' && process.env.TL_SRC) ? process.env.TL_SRC : path.join(ROOT, f);

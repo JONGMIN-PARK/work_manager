@@ -8,14 +8,13 @@ function renderPipeline() {
   var wrap = document.getElementById('pipelineWrap');
   if (!wrap) return;
 
+  // 체크리스트·이슈는 보조 정보 — 실패해도 보드는 그린다. (마일스톤·수주 목록은 쓰지 않아 요청 제거 — 거래처는 ORDER_MAP)
   var chkAllPromise = typeof pipelineLoadAllChecklists === 'function' ? pipelineLoadAllChecklists() : Promise.resolve({});
-  var issAllPromise = typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve([]);
-  Promise.all([(typeof pmGetProjects === 'function' ? pmGetProjects() : projGetAll()), msGetAll(), orderGetAll(), chkAllPromise, issAllPromise]).then(function (results) {
+  var issAllPromise = typeof issueGetAll === 'function' ? issueGetAll().catch(function () { return []; }) : Promise.resolve([]);
+  Promise.all([_pipeProjects(), chkAllPromise, issAllPromise]).then(function (results) {
     var projects = results[0] || [];
-    var milestones = results[1] || [];
-    var orders = results[2] || [];
-    var chkProgress = results[3] || {};
-    var allIssues = results[4] || [];
+    var chkProgress = results[1] || {};
+    var allIssues = results[2] || [];
 
     // 프로젝트별 미해결 이슈 카운트
     var issueCount = {};
@@ -32,16 +31,12 @@ function renderPipeline() {
     phaseKeys.forEach(function (k) { buckets[k] = []; });
 
     projects.forEach(function (p) {
-      var phase = p.currentPhase || guessPhase(p);
+      var phase = guessPhase(p);
       if (!buckets[phase]) phase = phaseKeys[0];
       buckets[phase].push(p);
     });
     // v13.152 레인 내 카드 순서: sort_order 우선(미지정은 뒤, 기존 등록순 유지)
     phaseKeys.forEach(function (k) { buckets[k].sort(_pipeOrderCmp); });
-
-    // 수주 대장에 있지만 프로젝트가 없는 수주 → '수주' 레인에 표시
-    var projOrderNos = {};
-    projects.forEach(function (p) { if (p.orderNo) projOrderNos[p.orderNo] = true; });
 
     var html = '';
     var liveIds = {};
@@ -100,7 +95,10 @@ function renderPipeline() {
 
         var isOpen = !!_pipeOpen[p.id];
         liveIds[p.id] = 1;
-        html += '<div class="pipeline-card' + (isOpen ? ' open' : '') + '" draggable="true" data-pid="' + p.id + '" data-phase="' + k + '" ondragstart="pipelineDragStart(event,\'' + p.id + '\')" ondragend="pipelineDragEnd(event)" ondragover="pipelineCardDragOver(event)" ondragleave="pipelineCardDragLeave(event)" ondrop="pipelineCardDrop(event,\'' + p.id + '\',\'' + k + '\')" style="background:var(--bg-p);border:' + borderStyle + ';border-radius:8px;padding:10px 12px;cursor:grab;transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 3px 8px rgba(0,0,0,.1)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'\'" onclick="pipelineCardToggle(event,\'' + p.id + '\')" ondblclick="pipelineCardClick(\'' + p.id + '\')" title="' + eH(p.name) + ' — 클릭: 펼치기/접기 · 더블클릭: 상세 · 드래그: 단계 이동(레인) / 같은 단계 카드 위로: 순서 변경">';
+        // 편집 권한 없는 카드는 끌 수 없게 — 예전엔 끌어 놓으면 서버 403 이 조용히 묻혔다 (v13.213 can_edit)
+        var canDrag = typeof projCanEdit !== 'function' || projCanEdit(p);
+        var pidA = eA(p.id);
+        html += '<div class="pipeline-card' + (isOpen ? ' open' : '') + '" draggable="' + (canDrag ? 'true' : 'false') + '" data-pid="' + eH(p.id) + '" data-phase="' + k + '"' + (canDrag ? ' ondragstart="pipelineDragStart(event,\'' + pidA + '\')" ondragend="pipelineDragEnd(event)"' : '') + ' ondragover="pipelineCardDragOver(event)" ondragleave="pipelineCardDragLeave(event)" ondrop="pipelineCardDrop(event,\'' + pidA + '\',\'' + k + '\')" style="background:var(--bg-p);border:' + borderStyle + ';border-radius:8px;padding:10px 12px;cursor:' + (canDrag ? 'grab' : 'pointer') + ';transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 3px 8px rgba(0,0,0,.1)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'\'" onclick="pipelineCardToggle(event,\'' + pidA + '\')" ondblclick="pipelineCardClick(\'' + pidA + '\')" title="' + eH(p.name) + ' — 클릭: 펼치기/접기 · 더블클릭: 상세' + (canDrag ? ' · 드래그: 단계 이동(레인) / 같은 단계 카드 위로: 순서 변경' : ' · 보기 전용(편집 권한 없음)') + '">';
 
         // 프로젝트명 (접힌 상태에서는 이 줄만 보임)
         html += '<div class="pipe-title"><span class="pipe-caret">▸</span><span class="pipe-name">' + eH(p.name) + '</span></div>';
@@ -124,7 +122,7 @@ function renderPipeline() {
 
         // 진척률 바
         html += '<div style="margin-top:4px;height:3px;background:var(--bd);border-radius:2px;overflow:hidden">';
-        html += '<div style="height:100%;width:' + progress + '%;background:' + (p.color || SEM_COLOR.info) + ';border-radius:2px"></div>';
+        html += '<div style="height:100%;width:' + progress + '%;background:' + eC(p.color, SEM_COLOR.info) + ';border-radius:2px"></div>';
         html += '</div>';
 
         // 체크리스트 완료율
@@ -145,7 +143,7 @@ function renderPipeline() {
 
         // 담당자
         if (p.assignees && p.assignees.length) {
-          html += '<div style="font-size:9px;color:var(--t5);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">👤 ' + p.assignees.map(function (a) { return typeof displayName === 'function' ? displayName(a) : a; }).join(', ') + '</div>';
+          html += '<div style="font-size:9px;color:var(--t5);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">👤 ' + p.assignees.map(function (a) { return eH(typeof displayName === 'function' ? displayName(a) : a); }).join(', ') + '</div>';
         }
 
         // 지연 경고
@@ -154,7 +152,7 @@ function renderPipeline() {
           html += '<div style="font-size:9px;color:#EF4444;font-weight:600;margin-top:3px">⚠️ ' + overDays + '일 초과</div>';
         }
 
-        html += '<button class="pipe-open-btn" onclick="event.stopPropagation();pipelineCardClick(\'' + p.id + '\')">🔍 상세 보기</button>';
+        html += '<button class="pipe-open-btn" onclick="event.stopPropagation();pipelineCardClick(\'' + pidA + '\')">🔍 상세 보기</button>';
         html += '</div>'; // pipe-det end
         html += '</div>'; // card end
       });
@@ -168,7 +166,17 @@ function renderPipeline() {
     // 삭제된 프로젝트의 펼침 기록 정리
     Object.keys(_pipeOpen).forEach(function (id) { if (!liveIds[id]) delete _pipeOpen[id]; });
     _pipeSaveOpen();
+  }).catch(function (err) {
+    // 예전엔 catch 가 없어 프로젝트 목록을 못 받으면 보드가 빈 채(또는 옛 화면)로 남았다
+    console.error('[renderPipeline]', err);
+    wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:var(--t5)">파이프라인을 불러오지 못했습니다: ' + eH((err && err.message) || '알 수 없는 오류') +
+      '<br><button class="btn btn-g btn-s" style="margin-top:8px" onclick="renderPipeline()">다시 시도</button></div>';
   });
+}
+
+/* 화면에 쓰는 프로젝트 목록 — 그리기·순서 변경이 같은 소스(운영자는 전체, 숨김 제외)를 쓰게 */
+function _pipeProjects() {
+  return (typeof pmGetProjects === 'function') ? pmGetProjects() : projGetAll();
 }
 
 /* 프로젝트의 현재 단계 추정 (currentPhase 없을 때 폴백) */
@@ -209,12 +217,11 @@ function pipelineLaneToggle(phase) {
   pipelineSetAll(closed > 0, phase);
 }
 
-/* 파이프라인 카드 클릭 → 프로젝트 상세 */
+/* 파이프라인 카드 더블클릭·[상세 보기] → 프로젝트 상세 패널 (다른 화면과 같게 — 예전엔 편집창이 열렸다).
+   편집은 상세 패널의 [✏️ 편집] 에서 */
 function pipelineCardClick(projId) {
-  // timeline.js의 showProjectModal 활용
-  if (typeof showProjectModal === 'function') {
-    showProjectModal(projId);
-  }
+  if (typeof showProjectDetail === 'function') showProjectDetail(projId);
+  else if (typeof showProjectModal === 'function') showProjectModal(projId);
 }
 
 /* ═══ 파이프라인 드래그 앤 드롭 ═══ */
@@ -263,22 +270,14 @@ function pipelineCardDrop(e, targetId, targetPhase) {
   pipelineReorder(dragId, targetId, targetPhase, after);
 }
 function pipelineReorder(dragId, targetId, targetPhase, after) {
-  if (typeof projGetAll !== 'function') return;
-  projGetAll().then(function (list) {
+  // 그리기와 같은 목록(_pipeProjects) — 예전엔 projGetAll 이라 운영자가 보는 카드 일부는 찾지 못해 조용히 무시됐다
+  _pipeProjects().then(function (list) {
     var dragProj = null;
     list.forEach(function (p) { if (p.id === dragId) dragProj = p; });
     if (!dragProj) return;
-    var dragPhase = dragProj.currentPhase || guessPhase(dragProj);
-    // 다른 단계 카드 위로 드롭 → 단계 변경(기존 전환 로직 재사용)
-    if (dragPhase !== targetPhase) {
-      if (typeof executePhaseTransition === 'function') {
-        executePhaseTransition(dragId, targetPhase).then(function () {
-          if (typeof showToast === 'function') showToast(getPhaseName(targetPhase) + ' 단계로 이동했습니다.');
-          renderPipeline();
-        });
-      }
-      return;
-    }
+    var dragPhase = guessPhase(dragProj);
+    // 다른 단계 카드 위로 드롭 → 레인에 놓은 것과 같게(체크리스트 확인 · 오류 표시 포함)
+    if (dragPhase !== targetPhase) { _pipeMovePhase(dragId, targetPhase); return; }
     // v13.155 같은 단계 내 순서 변경 → 전역 순서(sort_order) 통일.
     //  list 는 이미 전역 정렬 순서(서버 sort_order 우선)로 옴 → 드래그 항목을 타겟 위치로 옮기고 전체 재번호.
     var arr = list.slice();
@@ -297,7 +296,7 @@ function pipelineReorder(dragId, targetId, targetPhase, after) {
     }).catch(function (err) {
       if (typeof showToast === 'function') showToast('순서 변경 실패' + ((err && err.status === 404) ? ' — 서버 배포 후 사용 가능' : ''), 'error');
     });
-  });
+  }).catch(_pipeErr);
 }
 
 function pipelineDragEnter(e) {
@@ -318,33 +317,38 @@ function pipelineDrop(e, targetPhase) {
   var projId = pipelineDragId || e.dataTransfer.getData('text/plain');
   if (!projId) return;
   pipelineDragId = '';
+  _pipeMovePhase(projId, targetPhase);
+}
 
-  // 현재 단계와 동일하면 무시
-  projGet(projId).then(function (proj) {
-    if (!proj) return;
-    var curPhase = proj.currentPhase || guessPhase(proj);
-    if (curPhase === targetPhase) return;
-
-    // 게이트 체크
-    if (typeof advancePhase === 'function') {
-      advancePhase(projId, targetPhase).then(function (result) {
-        if (!result) return;
-        if (result.gatePass === false) {
-          if (!confirm('현재 단계 체크리스트가 미완료입니다 (' + (result.progress ? result.progress.pct : 0) + '%). 강제로 ' + getPhaseName(targetPhase) + ' 단계로 이동하시겠습니까?')) return;
-        }
-        executePhaseTransition(projId, targetPhase).then(function () {
-          showToast(getPhaseName(targetPhase) + ' 단계로 이동했습니다.');
-          renderPipeline();
-        });
-      });
-    } else {
-      // advancePhase 없으면 직접 전환
-      executePhaseTransition(projId, targetPhase).then(function () {
-        showToast(getPhaseName(targetPhase) + ' 단계로 이동했습니다.');
-        renderPipeline();
-      });
+/* 단계 이동 공통 — 레인에 놓기 · 다른 단계 카드 위에 놓기 모두.
+   현재 단계와 같으면 무시 · 편집 권한 확인 · 체크리스트 미완료면 확인 · 실패(403 · 409 등)는 토스트 */
+function _pipeMovePhase(projId, targetPhase) {
+  var gate = (typeof advancePhase === 'function')
+    ? advancePhase(projId, targetPhase)
+    : projGet(projId).then(function (proj) { return proj ? { proj: proj, gatePass: true } : null; });
+  gate.then(function (result) {
+    if (!result) return;
+    if (result.proj && guessPhase(result.proj) === targetPhase) return;   // 현재 단계와 같음
+    if (result.proj && typeof projCanEdit === 'function' && !projCanEdit(result.proj)) {
+      if (typeof showToast === 'function') showToast('편집 권한이 없는 프로젝트입니다.', 'warn');
+      return;
     }
-  });
+    if (result.gatePass === false) {
+      if (!confirm('현재 단계 체크리스트가 미완료입니다 (' + (result.progress ? result.progress.pct : 0) + '%). 강제로 ' + getPhaseName(targetPhase) + ' 단계로 이동하시겠습니까?')) return;
+    }
+    return executePhaseTransition(projId, targetPhase).then(function () {
+      if (typeof showToast === 'function') showToast(getPhaseName(targetPhase) + ' 단계로 이동했습니다.');
+      renderPipeline();
+    });
+  }).catch(_pipeErr);
+}
+function _pipeErr(err) {
+  console.error('[pipeline]', err);
+  var msg = (err && err.status === 403) ? '편집 권한이 없습니다.'
+    : (err && err.status === 409) ? '다른 사용자가 먼저 수정했습니다 — 화면을 다시 불러옵니다.'
+    : ((err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류');
+  if (typeof showToast === 'function') showToast('❌ ' + msg, 'error');
+  if (err && err.status === 409) renderPipeline();
 }
 
 function getPhaseName(phaseKey) {
@@ -353,48 +357,27 @@ function getPhaseName(phaseKey) {
 }
 
 /* ═══ 전체 체크리스트 로드 (파이프라인용) ═══ */
+// 서버 전용 — 예전 로컬(IndexedDB) 분기는 쓰이지 않아 제거. 실패하면 {} (체크리스트 막대만 빠지고 보드는 그림)
 function pipelineLoadAllChecklists() {
-  // 서버 모드: API를 통해 전체 체크리스트 로드
-  if (typeof apiFetch === 'function' && (typeof AUTH_SKIP === 'undefined' || !AUTH_SKIP)) {
-    return apiFetch('/api/checklists?limit=5000&all=true').then(function (r) {
-      var rows = r.data || [];
-      var map = {};
-      rows.forEach(function (row) {
-        var pid = row.project_id || row.projectId;
-        var phase = row.phase;
-        if (!pid || !phase) return;
-        if (!map[pid]) map[pid] = {};
-        if (!map[pid][phase]) map[pid][phase] = { total: 0, done: 0 };
-        var items = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
-        items.forEach(function (it) {
-          map[pid][phase].total++;
-          if (it.done) map[pid][phase].done++;
-        });
+  if (typeof apiFetch !== 'function') return Promise.resolve({});
+  return apiFetch('/api/checklists?limit=5000&all=true').then(function (r) {
+    var rows = r.data || [];
+    var map = {};
+    rows.forEach(function (row) {
+      var pid = row.project_id || row.projectId;
+      var phase = row.phase;
+      if (!pid || !phase) return;
+      if (!map[pid]) map[pid] = {};
+      if (!map[pid][phase]) map[pid][phase] = { total: 0, done: 0 };
+      var items = row.items;
+      if (typeof items === 'string') { try { items = JSON.parse(items); } catch (e) { items = []; } }   // 한 행이 깨져도 전체를 잃지 않게
+      (Array.isArray(items) ? items : []).forEach(function (it) {
+        map[pid][phase].total++;
+        if (it && it.done) map[pid][phase].done++;
       });
-      return map;
-    }).catch(function () { return {}; });
-  }
-  // 로컬 모드: IndexedDB
-  return new Promise(function (res) {
-    if (typeof db === 'undefined' || !db) { res({}); return; }
-    try {
-      var tx = db.transaction('checklists', 'readonly');
-      var req = tx.objectStore('checklists').getAll();
-      req.onsuccess = function () {
-        var items = req.result || [];
-        var map = {};
-        items.forEach(function (it) {
-          if (!it.projectId || !it.phase) return;
-          if (!map[it.projectId]) map[it.projectId] = {};
-          if (!map[it.projectId][it.phase]) map[it.projectId][it.phase] = { total: 0, done: 0 };
-          map[it.projectId][it.phase].total++;
-          if (it.done) map[it.projectId][it.phase].done++;
-        });
-        res(map);
-      };
-      req.onerror = function () { res({}); };
-    } catch (e) { res({}); }
-  });
+    });
+    return map;
+  }).catch(function () { return {}; });
 }
 
 /* ═══ 프로젝트 보고서 엑셀 내보내기 ═══ */
@@ -419,13 +402,13 @@ function exportProjectReport() {
     return Promise.all(jobs).then(function () { return map; });
   }).catch(function () { return {}; });
 
-  Promise.all([projGetAll(), msGetAll(), orderGetAll(), issPromise, chkPromise2, specSchemaPromise]).then(function (results) {
+  // (수주 목록은 쓰지 않아 요청 제거 — 거래처는 ORDER_MAP)
+  Promise.all([projGetAll(), msGetAll(), issPromise, chkPromise2, specSchemaPromise]).then(function (results) {
     var projects = results[0] || [];
-    var specSchemas = results[5] || {};
+    var specSchemas = results[4] || {};
     var milestones = results[1] || [];
-    var orders = results[2] || [];
-    var issues = results[3] || [];
-    var chkMap = results[4] || {};
+    var issues = results[2] || [];
+    var chkMap = results[3] || {};
 
     if (typeof XLSX === 'undefined') { showToast('SheetJS(xlsx) 라이브러리를 불러올 수 없습니다.','error'); return; }
 
@@ -523,6 +506,9 @@ function exportProjectReport() {
 
     XLSX.writeFile(wb, '프로젝트_보고서_' + localDate() + '.xlsx');
     showToast('프로젝트 보고서를 엑셀로 저장했습니다.');
+  }).catch(function (err) {
+    console.error('[exportProjectReport]', err);
+    showToast('보고서 만들기 실패: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 

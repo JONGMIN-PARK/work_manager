@@ -13,7 +13,9 @@ var ALLOWED_MIME = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
   'application/vnd.ms-excel', // xls
-  'application/msword' // doc
+  'application/msword', // doc
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
+  'application/vnd.ms-powerpoint' // ppt
 ];
 // 실행/스크립트/SVG·HTML(XSS 운반체) 등 위험 확장자 차단
 var DENY_EXT = /\.(svg|html?|js|mjs|jsx|ts|tsx|vbs|bat|sh|exe|dll|jar|com|cmd|ps1|psm1|app|deb|rpm|dmg|pkg)$/i;
@@ -35,7 +37,8 @@ async function nextTicketNo(tenantId) {
   var ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
   var prefix = 'AS-' + ym + '-';
   var r = await db.query(
-    "SELECT ticket_no FROM as_tickets WHERE tenant_id=$1 AND ticket_no LIKE $2 ORDER BY ticket_no DESC LIMIT 1",
+    // 문자열 정렬은 'AS-..-1000' 을 '-999' 보다 작게 본다 → 길이 먼저 비교(같은 접두사라 길수록 큰 순번)
+    "SELECT ticket_no FROM as_tickets WHERE tenant_id=$1 AND ticket_no LIKE $2 ORDER BY length(ticket_no) DESC, ticket_no DESC LIMIT 1",
     [tenantId, prefix + '%']
   );
   var nextSeq = 1;
@@ -47,10 +50,18 @@ async function nextTicketNo(tenantId) {
   return prefix + String(nextSeq).padStart(3, '0');
 }
 
+// 티켓이 이 테넌트 소유인지 — 하위 항목(할당·로그·부품·첨부·서명) 만들기 전에 확인. 없으면 404 응답 후 false
+async function assertTicket(req, res) {
+  var r = await db.query('SELECT 1 FROM as_tickets WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+  if (!r.rows.length) { res.status(404).json({ error: 'NOT_FOUND', message: '접수를 찾을 수 없습니다.' }); return false; }
+  return true;
+}
+
 module.exports = {
   ALLOWED_MIME: ALLOWED_MIME,
   DENY_EXT: DENY_EXT,
   MAX_FILE_BYTES: MAX_FILE_BYTES,
   _invalidateStatsCache: _invalidateStatsCache,
-  nextTicketNo: nextTicketNo
+  nextTicketNo: nextTicketNo,
+  assertTicket: assertTicket
 };

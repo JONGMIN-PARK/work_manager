@@ -10,27 +10,40 @@
  * 현재 슬라이스: ①②③ 풀구현, ④는 RCA/재발방지 입력 + 종결 토글, ⑤⑥은 Phase 2 placeholder.
  */
 var _asDetailTab = 'overview';  // overview|assign|work|report|customer|doc
+var _asDetailCur = null;        // 지금 상세 창에 그려진 접수 (탭 전환·저장 시 version 사용)
+var _asRptDraft = {};           // ④ 보고 탭 입력 초안 — 탭을 옮겨도 저장 전 입력이 남도록 { ticketId: { rca, ... } }
 
+/* 상세 창 열기/새로 고침 — 표준 모달 가드 경유. 실패하면 가드가 오류 토스트 */
 function showASDetail(id) {
   if (!id) return;
-  Promise.all([
-    asGetExpand(id),
-    _asLoadCats()
-  ]).then(function (results) {
-    var t = results[0];
-    var CAT = results[1] || {};
-    if (!t) { if (typeof showToast === 'function') showToast('A/S 정보를 찾을 수 없습니다.', 'error'); return; }
-    _asRenderDetail(t, CAT);
-  }).catch(function (err) {
-    console.error('[showASDetail]', err);
-    if (typeof showToast === 'function') showToast('A/S 조회 실패: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+  return _asGuard('asDetail', 'asDetailOverlay', function () {
+    return Promise.all([asGetExpand(id), _asLoadCats()]).then(function (results) {
+      var t = results[0];
+      if (!t) throw new Error('A/S 정보를 찾을 수 없습니다.');
+      _asRenderDetail(t, results[1] || {});
+    });
   });
 }
+/* 탭 전환 — 다시 조회하지 않고 받아 둔 내용으로 다시 그림(④ 입력은 초안으로 보관) */
+function asDetailTab(key) {
+  _asRptKeepDraft();
+  _asDetailTab = key;
+  if (_asDetailCur && document.getElementById('asDetailOverlay')) _asRenderDetail(_asDetailCur, _asCats());
+}
+function _asRptKeepDraft() {
+  var t = _asDetailCur; if (!t || !document.getElementById('asRpt_rca')) return;
+  var d = {};
+  ['rca', 'prevention', 'finalEquipStatus', 'monitoring', 'closure'].forEach(function (k) { var el = document.getElementById('asRpt_' + k); if (el) d[k] = el.value; });
+  _asRptDraft[t.id] = d;
+}
+function _asRptVal(t, k) { var d = _asRptDraft[t.id]; return (d && d[k] != null) ? d[k] : t[k]; }
 
 function _asRenderDetail(t, CAT) {
   var STATUS = typeof AS_STATUS !== 'undefined' ? AS_STATUS : {};
   var PRIO   = typeof AS_PRIORITY !== 'undefined' ? AS_PRIORITY : {};
 
+  if (_asDetailCur && _asDetailCur.id !== t.id) _asRptKeepDraft();
+  _asDetailCur = t;
   document.querySelectorAll('#asDetailOverlay').forEach(function (el) { el.remove(); });
 
   var st = STATUS[t.status] || { label: t.status, color: SEM_COLOR.muted, icon: '' };
@@ -52,7 +65,7 @@ function _asRenderDetail(t, CAT) {
   h += '</div>';
   h += '<div style="margin-top:6px;font-size:13px;font-weight:600;color:var(--t2)">' + _asEsc(t.customerName || '-') +
        ' · ' + _asEsc(t.equipmentModel || '-') + (t.serialNo ? ' (' + _asEsc(t.serialNo) + ')' : '') + '</div>';
-  h += '<div style="margin-top:2px;font-size:11px;color:var(--t5)">' + (ct.icon || '') + ' ' + _asEsc(ct.label) + ' · ' + _asFmtDT(t.receivedAt) + '</div>';
+  h += '<div style="margin-top:2px;font-size:11px;color:var(--t5)">' + _asEsc(ct.icon || '') + ' ' + _asEsc(ct.label) + ' · ' + _asFmtDT(t.receivedAt) + '</div>';
   h += '</div>';
   h += '<div style="display:flex;gap:6px;align-items:flex-start">';
   h += '<button onclick="showASModal(\'' + _asEsc(t.id) + '\')" style="font-size:11px;padding:6px 12px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer">✏️ 접수 편집</button>';
@@ -74,7 +87,7 @@ function _asRenderDetail(t, CAT) {
   h += '<div style="display:flex;border-bottom:1px solid var(--bd);background:var(--bg-i)">';
   steps.forEach(function (s) {
     var active = _asDetailTab === s.key;
-    h += '<button onclick="_asDetailTab=\'' + s.key + '\';showASDetail(\'' + _asEsc(t.id) + '\')" ' +
+    h += '<button onclick="asDetailTab(\'' + s.key + '\')" ' +
          'style="flex:1;padding:10px 6px;border:none;background:' + (active ? 'var(--bg)' : 'transparent') +
          ';color:' + (active ? 'var(--t2)' : 'var(--t5)') + ';font-size:11px;font-weight:' + (active ? '700' : '500') +
          ';cursor:pointer;border-bottom:2px solid ' + (active ? '#F59E0B' : 'transparent') + '">' +
@@ -268,14 +281,15 @@ function _asTabWork(t) {
   h += '<div style="text-align:right"><button onclick="asLogAdd(\'' + _asEsc(t.id) + '\')" style="font-size:11px;padding:6px 14px;border:none;border-radius:6px;background:#10B981;color:#fff;cursor:pointer;font-weight:600">+ 추가</button></div>';
   h += '</div>';
 
+  // 부품 사용 + 첨부 섹션 — 작업 기록이 없어도 표시 (기록 전에 부품·사진을 먼저 올리는 경우)
+  h += _asSubBlockParts(t);
+  h += _asSubBlockAttachments(t);
+
   // 타임라인
   if (!logs.length) {
     h += '<div style="padding:30px;text-align:center;color:var(--t5);font-size:12px">아직 작업 기록이 없습니다.</div>';
     return h;
   }
-  // 부품 사용 + 첨부 섹션
-  h += _asSubBlockParts(t);
-  h += _asSubBlockAttachments(t);
 
   h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px;margin-top:18px">📋 작업 타임라인 (' + logs.length + '개)</div>';
   h += '<div style="display:flex;flex-direction:column;gap:6px">';
@@ -312,25 +326,25 @@ function _asTabReport(t) {
   h += '<div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:10px">📝 근본원인 / 재발방지</div>';
   h += '<div style="margin-bottom:10px">';
   h += '<label style="display:block;font-size:11px;color:var(--t4);margin-bottom:4px">근본원인 (RCA)</label>';
-  h += '<textarea id="asRpt_rca" rows="3" placeholder="장비/SW/공정 등 어디에서 왜 발생했는지" style="width:100%;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);font-size:11px;resize:vertical">' + _asEsc(t.rca || '') + '</textarea>';
+  h += '<textarea id="asRpt_rca" rows="3" placeholder="장비/SW/공정 등 어디에서 왜 발생했는지" style="width:100%;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);font-size:11px;resize:vertical">' + _asEsc(_asRptVal(t, 'rca') || '') + '</textarea>';
   h += '</div>';
   h += '<div style="margin-bottom:14px">';
   h += '<label style="display:block;font-size:11px;color:var(--t4);margin-bottom:4px">재발방지 대책</label>';
-  h += '<textarea id="asRpt_prevention" rows="3" placeholder="유사 건 재발을 막기 위한 조치 (SW 패치/매뉴얼/예방점검 등)" style="width:100%;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);font-size:11px;resize:vertical">' + _asEsc(t.prevention || '') + '</textarea>';
+  h += '<textarea id="asRpt_prevention" rows="3" placeholder="유사 건 재발을 막기 위한 조치 (SW 패치/매뉴얼/예방점검 등)" style="width:100%;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);font-size:11px;resize:vertical">' + _asEsc(_asRptVal(t, 'prevention') || '') + '</textarea>';
   h += '</div>';
 
   h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">';
   h += _asField('장비 최종 상태', '<select id="asRpt_finalEquipStatus" ' + _asInpStyle() + '>' +
     ['', '정상가동', '임시조치(가동)', '제한가동', '가동불가', '재방문 필요'].map(function (v) {
-      return '<option value="' + v + '"' + (t.finalEquipStatus === v ? ' selected' : '') + '>' + (v || '선택') + '</option>';
+      return '<option value="' + v + '"' + (_asRptVal(t, 'finalEquipStatus') === v ? ' selected' : '') + '>' + (v || '선택') + '</option>';
     }).join('') + '</select>');
   h += _asField('모니터링', '<select id="asRpt_monitoring" ' + _asInpStyle() + '>' +
     ['', '불필요', '단기관찰', '장기관찰'].map(function (v) {
-      return '<option value="' + v + '"' + (t.monitoring === v ? ' selected' : '') + '>' + (v || '선택') + '</option>';
+      return '<option value="' + v + '"' + (_asRptVal(t, 'monitoring') === v ? ' selected' : '') + '>' + (v || '선택') + '</option>';
     }).join('') + '</select>');
   h += _asField('완료 분류', '<select id="asRpt_closure" ' + _asInpStyle() + '>' +
     ['', '정상완료', '부분완료', '미완료(사유필요)', '이관처리', '취소'].map(function (v) {
-      return '<option value="' + v + '"' + (t.closure === v ? ' selected' : '') + '>' + (v || '선택') + '</option>';
+      return '<option value="' + v + '"' + (_asRptVal(t, 'closure') === v ? ' selected' : '') + '>' + (v || '선택') + '</option>';
     }).join('') + '</select>');
   h += '</div>';
 
@@ -435,7 +449,7 @@ function _asSubBlockAttachments(t) {
       h += '<div style="border:1px solid var(--bd);border-radius:6px;padding:8px;background:var(--bg-i);position:relative;cursor:pointer;transition:border-color 0.15s" onmouseover="this.style.borderColor=\'#F59E0B\'" onmouseout="this.style.borderColor=\'\'" onclick="asAttachPreview(\'' + safeTid + '\',\'' + safeId + '\')">';
       // 썸네일/아이콘 영역
       if (isImg) {
-        h += '<div style="width:100%;height:90px;background:#0f172a center / contain no-repeat url(\'' + _asEsc(a.fileUrl) + '\');border-radius:4px;margin-bottom:6px"></div>';
+        h += '<div style="width:100%;height:90px;background:#0f172a center / contain no-repeat url(\'' + _asCssUrl(a.fileUrl) + '\');border-radius:4px;margin-bottom:6px"></div>';
       } else {
         var bigIcon = isPdf ? '📄' : (c.icon || '📎');
         h += '<div style="width:100%;height:90px;display:flex;align-items:center;justify-content:center;font-size:42px;background:var(--bg);border-radius:4px;margin-bottom:6px">' + bigIcon + '</div>';
@@ -484,21 +498,20 @@ function _asAttIsText(a) {
 
 /* ─── 첨부 Preview 모달 ─── */
 function asAttachPreview(ticketId, attId) {
-  var atts = (window._asAttachIndex && window._asAttachIndex[ticketId]) || [];
-  var a = atts.find(function (x) { return x.id === attId; });
-  if (!a) {
+  return _asGuard('asAttachPreview', 'asAttachPreviewOverlay', function () {
+    var atts = (window._asAttachIndex && window._asAttachIndex[ticketId]) || [];
+    var a = atts.find(function (x) { return x.id === attId; });
+    if (a) { _asRenderAttachPreview(a); return; }
     // 캐시에 없으면 서버에서 다시 받기
-    if (typeof asAttachmentGetAll === 'function') {
-      asAttachmentGetAll(ticketId).then(function (rows) {
-        window._asAttachIndex[ticketId] = rows;
-        var found = (rows || []).find(function (x) { return x.id === attId; });
-        if (found) _asRenderAttachPreview(found);
-        else if (typeof showToast === 'function') showToast('첨부를 찾지 못했습니다.', 'error');
-      });
-    }
-    return;
-  }
-  _asRenderAttachPreview(a);
+    if (typeof asAttachmentGetAll !== 'function') throw new Error('첨부 API 미연결');
+    return asAttachmentGetAll(ticketId).then(function (rows) {
+      window._asAttachIndex = window._asAttachIndex || {};
+      window._asAttachIndex[ticketId] = rows;
+      var found = (rows || []).find(function (x) { return x.id === attId; });
+      if (!found) throw new Error('첨부를 찾지 못했습니다.');
+      _asRenderAttachPreview(found);
+    });
+  });
 }
 
 function _asRenderAttachPreview(a) {
@@ -547,8 +560,9 @@ function _asRenderAttachPreview(a) {
   var overlay = _asOverlay('asAttachPreviewOverlay', 10003, 'background:rgba(0,0,0,0.75);padding:30px');
   overlay.innerHTML = h;
   // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
-  // ESC 키
+  // ESC 키 — ✕ 로 먼저 닫혔으면 다음 키 입력 때 리스너만 정리 (리스너가 쌓이지 않게)
   function onKey(ev) {
+    if (!overlay.isConnected) { document.removeEventListener('keydown', onKey); return; }
     if (ev.key === 'Escape') {
       overlay.remove();
       document.removeEventListener('keydown', onKey);

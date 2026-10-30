@@ -6,6 +6,7 @@ var express = require('express');
 var router = express.Router();
 var db = require('../../config/db');
 var httpErr = require('../../lib/http-errors');
+var shared = require('./_shared');
 
 // ────────────────────────────────────────────────────────────
 // ── 사용 부품 (as_parts) ──
@@ -27,6 +28,7 @@ router.post('/:id/parts', async function (req, res) {
   try {
     var b = req.body || {};
     if (!b.itemName && !b.item_name) return res.status(400).json({ error: 'VALIDATION', message: '품목명을 입력하세요.' });
+    if (!(await shared.assertTicket(req, res))) return;
 
     var id = b.id || ('asp-' + require('crypto').randomUUID().slice(0, 12));
     var r = await db.query(
@@ -46,6 +48,7 @@ router.post('/:id/parts', async function (req, res) {
        b.note || null,
        req.user.sub]
     );
+    shared._invalidateStatsCache(req.tenant.id);
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
     httpErr.serverError(res, '[as-parts/create]', e);
@@ -78,6 +81,7 @@ router.put('/:id/parts/:pid', async function (req, res) {
       ' WHERE id = $' + idx++ + ' AND ticket_id = $' + idx++ + ' AND tenant_id = $' + idx++ + ' RETURNING *';
     var r = await db.query(sql, params);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    shared._invalidateStatsCache(req.tenant.id);
     res.json({ data: r.rows[0] });
   } catch (e) {
     httpErr.serverError(res, '[as-parts/update]', e);
@@ -91,6 +95,7 @@ router.delete('/:id/parts/:pid', async function (req, res) {
       [req.params.pid, req.params.id, req.tenant.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    shared._invalidateStatsCache(req.tenant.id);
     res.json({ message: '삭제 완료' });
   } catch (e) {
     httpErr.serverError(res, '[as-parts/delete]', e);

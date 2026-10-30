@@ -253,9 +253,21 @@ router.get('/:orderNo/history', async function (req, res) {
 });
 
 // POST /api/orders — 신규 등록 (기존 번호면 내용 갱신)
+//   v13.281: body.createOnly=true(수주 대장 '신규 등록')면 이미 있는 번호를 덮어쓰지 않고 409.
+//   예전엔 신규 등록에 기존 번호를 넣으면 그 수주가 조용히 덮이고 프로젝트도 하나 더 생겼다.
 router.post('/', rbac.checkPermission('order.edit'), async function (req, res) {
   try {
     var b = req.body;
+    if (b.createOnly) {
+      var no = String(b.orderNo || b.order_no || '').trim();
+      if (!no) return res.status(400).json({ error: 'VALIDATION', message: '수주번호를 입력하세요.' });
+      var ins = await db.query(
+        "INSERT INTO orders (order_no, date, client, name, amount, manager, delivery, memo, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (order_no) DO NOTHING RETURNING *",
+        [no, normDate(b.date), b.client || '', b.name || '', normAmount(b.amount), b.manager || '', normDate(b.delivery), b.memo || '', req.user.sub, req.tenant.id]
+      );
+      if (!ins.rows.length) return res.status(409).json({ error: 'DUPLICATE', message: '이미 등록된 수주번호입니다: ' + no });
+      return res.status(201).json({ data: ins.rows[0] });
+    }
     var r = await db.query(
       "INSERT INTO orders (order_no, date, client, name, amount, manager, delivery, memo, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (order_no) DO UPDATE SET date=$2, client=$3, name=$4, amount=$5, manager=$6, delivery=$7, memo=$8, version=orders.version+1, updated_at=now(), updated_by=$9 WHERE orders.tenant_id = $10 RETURNING *",
       [String(b.orderNo || b.order_no || '').trim(), normDate(b.date), b.client || '', b.name || '', normAmount(b.amount), b.manager || '', normDate(b.delivery), b.memo || '', req.user.sub, req.tenant.id]

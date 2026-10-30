@@ -12,6 +12,9 @@ const ROOT = path.join(__dirname, '..', '..');
 const NOW = Date.UTC(2026, 8, 27, 1, 0);
 
 function eH(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+// wm-state.js 와 같은 정의 (onclick 문자열 · CSS 색 검사)
+function eA(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, '\\n').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+function eC(c, fb) { var s = String(c == null ? '' : c).trim(); return /^#[0-9a-f]{3,8}$/i.test(s) || /^(rgb|hsl)a?\([\d\s.,%]+\)$/i.test(s) || /^[a-z]{3,20}$/i.test(s) ? s : (fb || '#3B82F6'); }
 
 /* ── 가짜 DOM ──
    실제 생성(createElement)된 요소는 트리로 보관, innerHTML 문자열 안의 id 는
@@ -154,7 +157,7 @@ function load(opts) {
   // ── 데이터 게터/외부 모듈 스텁 (로드 후 덮어쓰기) ──
   const P = (v) => Promise.resolve(clone(v));
   Object.assign(sandbox, {
-    eH,
+    eH, eA, eC,
     apiFetch: () => Promise.resolve(null),
     pmGetProjects: () => P([fx.proj].filter(Boolean)),
     projGetAll: () => P([fx.proj].filter(Boolean)),

@@ -127,6 +127,7 @@ router.post('/:id/email-report', emailReportLimiter, async function (req, res) {
 
     if (!subject) subject = 'A/S 작업 보고서 ' + t.ticket_no + ' — ' + (t.customer_name || '');
 
+    function escH(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     var safeMessage = (message || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\r?\n/g, '<br>');
     var senderName = (me.name || '').replace(/[<>"&]/g, '');
@@ -139,8 +140,8 @@ router.post('/:id/email-report', emailReportLimiter, async function (req, res) {
       '<div style="font-family:Malgun Gothic,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1F2937">' +
       '<h2 style="color:#F59E0B;border-bottom:2px solid #F59E0B;padding-bottom:8px">🛠️ A/S 작업 보고서</h2>' +
       '<p style="font-size:13px;line-height:1.7">' +
-      '<strong>접수번호:</strong> ' + t.ticket_no + '<br>' +
-      '<strong>고객사:</strong> ' + (t.customer_name || '-') + '<br>' +
+      '<strong>접수번호:</strong> ' + escH(t.ticket_no) + '<br>' +
+      '<strong>고객사:</strong> ' + escH(t.customer_name || '-') + '<br>' +
       '</p>' +
       (safeMessage ? '<div style="background:#F9FAFB;border-left:3px solid #F59E0B;padding:10px 14px;margin:14px 0;font-size:12px;white-space:pre-wrap">' + safeMessage + '</div>' : '') +
       '<p style="font-size:12px;color:#6B7280">상세 내용은 첨부 PDF를 확인하세요.</p>' +

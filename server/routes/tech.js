@@ -15,6 +15,8 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var notificationService = require('../services/notification.service');
 var httpErr = require('../lib/http-errors');
+var sv = require('../lib/safe-val');
+var pa = require('../lib/project-access');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -188,6 +190,7 @@ router.get('/usages', async function (req, res) {
     if (['project', 'prestudy'].indexOf(targetType) === -1 || !targetId) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: "targetType('project'|'prestudy')·targetId 필수" });
     }
+    if (targetType === 'project' && !await pa.gateRead(req, res, targetId)) return;
     var r = await db.query(
       'SELECT u.id, u.tech_id, u.note, u.created_at, ' +
       '  t.name AS tech_name, t.code AS tech_code, t.category, t.status, t.trl, t.tech_version ' +
@@ -222,7 +225,7 @@ router.post('/', async function (req, res) {
   try {
     var b = req.body || {};
     if (!b.name) return res.status(400).json({ error: 'VALIDATION', message: 'name 필수' });
-    var id = b.id || genId('tech');
+    var id = sv.safeId(b.id, function () { return genId('tech'); });
     var r = await db.query(
       "INSERT INTO tech_assets (id, tenant_id, code, name, category, summary, description, status, trl, " +
       " tech_version, owner_id, participants, stack, tags, repo_url, doc_url, created_by, updated_by) " +
@@ -371,7 +374,7 @@ router.post('/:id/logs', async function (req, res) {
       "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
       [
         id, req.tenant.id, req.params.id,
-        b.logDate || b.log_date || new Date().toISOString().slice(0, 10),
+        b.logDate || b.log_date || new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10),   // 한국 날짜 (UTC 그대로면 KST 0~9시에 전날)
         clampEnum(b.kind, LOG_KINDS, 'dev'),
         req.user.sub, authorName,
         toProgress(b.progress),
@@ -467,6 +470,14 @@ router.get('/:id/usages', async function (req, res) {
       'WHERE u.tech_id = $1 AND u.tenant_id = $2 ORDER BY u.created_at DESC',
       [req.params.id, req.tenant.id]
     );
+    // 볼 수 없는(비공개) 프로젝트는 이름을 가린다 — 같은 테넌트라도 프로젝트 가시성 규칙을 따른다 (v13.281)
+    var seen = {};
+    for (var i = 0; i < r.rows.length; i++) {
+      var u = r.rows[i];
+      if (u.target_type !== 'project' || !u.target_name) continue;
+      if (seen[u.target_id] === undefined) seen[u.target_id] = !!(await pa.canReadById(req, u.target_id));
+      if (!seen[u.target_id]) u.target_name = '(비공개 프로젝트)';
+    }
     res.json({ data: r.rows });
   } catch (e) {
     httpErr.serverError(res, '[tech/usages/list]', e);
@@ -486,6 +497,8 @@ router.post('/:id/usages', async function (req, res) {
     if (!tR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '기술을 찾을 수 없습니다.' });
 
     // 대상이 같은 테넌트에 실재하는지 확인
+    // 프로젝트는 편집권(관리자·임원·생성자·참여자)이 있어야 연결 — 비공개 프로젝트에 몰래 붙이지 못하게
+    if (targetType === 'project' && !await pa.gateEdit(req, res, targetId, '생성자·참여자·관리자만 이 프로젝트에 기술을 연결할 수 있습니다.')) return;
     var okR = targetType === 'project'
       ? await db.query('SELECT id FROM projects WHERE id = $1 AND tenant_id = $2', [targetId, req.tenant.id])
       : await db.query('SELECT id FROM prestudies WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [targetId, req.tenant.id]);

@@ -19,6 +19,9 @@
  */
 var db = require('../config/db');
 var notificationService = require('./notification.service');
+var asPolicy = require('../config/as-policy');
+// 텔레그램 HTML 모드 — 고객사명 등 사용자 입력은 이스케이프 (& < > 가 있으면 전송 자체가 실패)
+function _escH(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 var _started = false;
 var _tasks = [];
@@ -220,13 +223,7 @@ async function buildWeeklyDigestText(tenantId) {
   var twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
   var BASE = "tenant_id = $1 AND deleted_at IS NULL";
 
-  var SLA_BREACH_EXPR =
-    "CASE " +
-    "  WHEN status NOT IN ('closed','cancelled') AND priority='P1' AND received_at < NOW() - INTERVAL '3 days' THEN 1 " +
-    "  WHEN status NOT IN ('closed','cancelled') AND priority='P2' AND received_at < NOW() - INTERVAL '7 days' THEN 1 " +
-    "  WHEN status NOT IN ('closed','cancelled') AND priority='P3' AND received_at < NOW() - INTERVAL '14 days' THEN 1 " +
-    "  WHEN status NOT IN ('closed','cancelled') AND priority='P4' AND received_at < NOW() - INTERVAL '30 days' THEN 1 " +
-    "  ELSE 0 END";
+  var SLA_BREACH_EXPR = asPolicy.slaBreachExpr(false);
 
   var [curR, prevR, topCatR, topCustR, openCritR] = await Promise.all([
     db.query("SELECT COUNT(*)::int AS new_count, " +
@@ -265,21 +262,21 @@ async function buildWeeklyDigestText(tenantId) {
   if (topCatR.rows.length) {
     lines.push('');
     lines.push('<b>📌 주요 카테고리</b>');
-    topCatR.rows.forEach(function (r) { lines.push('  • ' + (r.category || '-') + ' ' + r.c + '건'); });
+    topCatR.rows.forEach(function (r) { lines.push('  • ' + _escH(r.category || '-') + ' ' + r.c + '건'); });
   }
   if (topCustR.rows.length) {
     lines.push('');
     lines.push('<b>🎯 최다 발생 고객</b>');
-    topCustR.rows.forEach(function (r) { lines.push('  • ' + r.customer_name + ' ' + r.c + '건'); });
+    topCustR.rows.forEach(function (r) { lines.push('  • ' + _escH(r.customer_name) + ' ' + r.c + '건'); });
   }
   if (openCritR.rows.length) {
     lines.push('');
     lines.push('<b>🔴 P1/P2 미해결 (최대 5건)</b>');
     openCritR.rows.forEach(function (r) {
-      lines.push('  • [' + r.ticket_no + '] ' + r.priority + ' · ' + (r.customer_name || '-'));
+      lines.push('  • [' + _escH(r.ticket_no) + '] ' + _escH(r.priority) + ' · ' + _escH(r.customer_name || '-'));
     });
   }
   return lines.join('\n');
 }
 
-module.exports = { start: start, stop: stop, checkSlaBreaches: checkSlaBreaches, checkCustomerWaitOverdue: checkCustomerWaitOverdue, sendWeeklyDigests: sendWeeklyDigests };
+module.exports = { start: start, stop: stop, checkSlaBreaches: checkSlaBreaches, checkCustomerWaitOverdue: checkCustomerWaitOverdue, sendWeeklyDigests: sendWeeklyDigests, buildWeeklyDigestText: buildWeeklyDigestText };

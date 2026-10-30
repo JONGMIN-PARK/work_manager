@@ -3,7 +3,6 @@
    ─────────────────────────────────────────────────────────────────────
    · 등록: 여러 장(업로드 시 다운스케일) — 프로젝트 등록/편집 모달의 📷 섹션
    · 열람: 한 장씩 표시 + ◀▶ 돌아가며 보기(라이트박스 캐러셀)
-   · 타임라인 호버 프리뷰: 개요 + 대표 이미지
    서버: GET/POST /api/projects/:id/images, DELETE /api/projects/:id/images/:imgId
    전역 의존: apiFetch, toCamelArray, eH, showToast, projGet.
    ═══════════════════════════════════════════════════════════════════════ */
@@ -118,7 +117,7 @@ function renderProjImages(projId) {
   el.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
       '<span style="font-size:11px;font-weight:700;color:var(--t3)">📷 참고 이미지 <span style="color:var(--t6);font-weight:400">(장비 사진 등 · 여러 장)</span></span>' +
-      '<label class="btn btn-g btn-s" style="font-size:10px;cursor:pointer">＋ 사진 추가<input type="file" accept="image/*" multiple style="display:none" onchange="pimgOnPick(this,\'' + (projId || '') + '\')"></label>' +
+      '<label class="btn btn-g btn-s" style="font-size:10px;cursor:pointer">＋ 사진 추가<input type="file" accept="image/*" multiple style="display:none" onchange="pimgOnPick(this,\'' + eA(projId || '') + '\')"></label>' +
     '</div>' +
     '<div id="' + _PIMG_CONTAINER + '_grid" style="display:flex;flex-wrap:wrap;gap:6px"></div>';
   _pimgRenderGrid(projId);
@@ -130,9 +129,9 @@ function _pimgRenderGrid(projId) {
     if (!list || !list.length) { grid.innerHTML = '<div style="font-size:10px;color:var(--t6);padding:2px 0">등록된 이미지 없음 — [＋ 사진 추가]</div>'; return; }
     grid.innerHTML = list.map(function (im, i) {
       var key = im.id || ('staged:' + i);
-      return '<div style="position:relative;width:64px;height:64px;border:1px solid var(--bd);border-radius:6px;overflow:hidden;cursor:pointer;background:var(--bg-i)" onclick="pimgViewerFor(\'' + (projId || '') + '\',' + i + ')" title="클릭하여 크게 보기">' +
-        '<img src="' + im.src + '" style="width:100%;height:100%;object-fit:cover" alt="">' +
-        '<button onclick="event.stopPropagation();pimgRemove(\'' + (projId || '') + '\',\'' + key + '\')" title="삭제" style="position:absolute;top:1px;right:1px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:17px;height:17px;font-size:10px;line-height:1;cursor:pointer;padding:0">✕</button>' +
+      return '<div style="position:relative;width:64px;height:64px;border:1px solid var(--bd);border-radius:6px;overflow:hidden;cursor:pointer;background:var(--bg-i)" onclick="pimgViewerFor(\'' + eA(projId || '') + '\',' + i + ')" title="클릭하여 크게 보기">' +
+        '<img src="' + _pimgEsc(im.src) + '" style="width:100%;height:100%;object-fit:cover" alt="">' +   // src 는 저장값 — 반드시 이스케이프
+        '<button onclick="event.stopPropagation();pimgRemove(\'' + eA(projId || '') + '\',\'' + eA(key) + '\')" title="삭제" style="position:absolute;top:1px;right:1px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:17px;height:17px;font-size:10px;line-height:1;cursor:pointer;padding:0">✕</button>' +
       '</div>';
     }).join('');
   }
@@ -198,8 +197,13 @@ function pimgViewerFor(projId, index) {
   if (list) { pimgOpenViewer(list, index); return; }
   projImagesGet(projId).then(function (l) { _pimgCache[projId] = l; pimgOpenViewer(l, index); }).catch(function () { _pimgToast('이미지를 불러오지 못했습니다.', 'error'); });
 }
+/* 크게 보기 — 표준 모달 가드(wmGuardedModal) 경유. 사양서 첨부(psViewImages·psViewDrawio)도 이 경로 */
 function pimgOpenViewer(list, index) {
   if (!list || !list.length) return;
+  if (typeof wmGuardedModal === 'function') return wmGuardedModal('pimgViewer', function () { _pimgBuildViewer(list, index); }, 'pimgViewer');
+  _pimgBuildViewer(list, index);
+}
+function _pimgBuildViewer(list, index) {
   _pimgViewer = { list: list, idx: Math.max(0, Math.min(index || 0, list.length - 1)) };
   var ov = createModal({ id: 'pimgViewer', z: MODAL_Z + 51, overlayStyle: 'padding:0;background:rgba(0,0,0,.86);backdrop-filter:none' }).overlay;
   ov.onclick = function (e) { if (e.target === ov) pimgViewerClose(); };
@@ -233,90 +237,10 @@ function pimgViewerClose() {
   document.removeEventListener('keydown', _pimgViewerKey);
 }
 function _pimgViewerKey(e) {
+  if (!document.getElementById('pimgViewer')) { _pimgViewer = null; document.removeEventListener('keydown', _pimgViewerKey); return; }   // 다른 경로로 닫힌 경우 정리
   if (e.key === 'Escape') pimgViewerClose();
   else if (e.key === 'ArrowLeft') pimgViewerNav(-1);
   else if (e.key === 'ArrowRight') pimgViewerNav(1);
-}
-
-/* ── 타임라인 호버 프리뷰 (개요 + 대표 이미지) ───────────────────────── */
-var _tlOv = (typeof window !== 'undefined' && window._tlOv) ? window._tlOv : {};
-if (typeof window !== 'undefined') window._tlOv = _tlOv;
-var _pimgHoverTimer = null, _pimgHoverProj = null, _pimgHoverIdx = 0;
-
-function pimgHover(ev, projId) {
-  if (_pimgHoverTimer) { clearTimeout(_pimgHoverTimer); _pimgHoverTimer = null; }
-  _pimgHoverProj = projId; _pimgHoverIdx = 0;
-  var anchor = ev && ev.currentTarget ? ev.currentTarget : null;
-  var card = document.getElementById('pimgPreview');
-  if (!card) {
-    card = document.createElement('div'); card.id = 'pimgPreview';
-    card.style.cssText = 'position:fixed;z-index:' + (MODAL_Z + 41) + ';width:280px;background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:10px;font-size:11px;color:var(--t2);pointer-events:auto';
-    card.onmouseenter = function () { if (_pimgHoverTimer) { clearTimeout(_pimgHoverTimer); _pimgHoverTimer = null; } };
-    card.onmouseleave = function () { pimgHoverOut(); };
-    document.body.appendChild(card);
-  }
-  // 위치 — 앵커 기준 우하단, 뷰포트 클램프
-  var x = 80, y = 80;
-  if (anchor && anchor.getBoundingClientRect) { var r = anchor.getBoundingClientRect(); x = Math.min(r.left, window.innerWidth - 296); y = Math.min(r.bottom + 8, window.innerHeight - 260); }
-  card.style.left = Math.max(8, x) + 'px';
-  card.style.top = Math.max(8, y) + 'px';
-  card.style.display = 'block';
-  _pimgRenderPreview(projId);
-}
-function _pimgRenderPreview(projId) {
-  var card = document.getElementById('pimgPreview'); if (!card || _pimgHoverProj !== projId) return;
-  var ov = _tlOv[projId] || {};
-  var head =
-    '<div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:3px;display:flex;align-items:center;gap:5px">' +
-      (ov.color ? '<span style="width:8px;height:8px;border-radius:50%;background:' + ov.color + ';flex-shrink:0"></span>' : '') +
-      _pimgEsc(ov.name || '프로젝트') + '</div>' +
-    '<div style="font-size:10px;color:var(--t5);line-height:1.6;margin-bottom:6px">' +
-      (ov.statusLabel ? '<span>' + _pimgEsc(ov.statusLabel) + '</span>' : '') +
-      (ov.period ? ' · ' + _pimgEsc(ov.period) : '') +
-      (ov.progress != null ? ' · ' + ov.progress + '%' : '') +
-      (ov.assignees ? '<br>👤 ' + _pimgEsc(ov.assignees) : '') +
-    '</div>';
-  var memoList = (ov.memoImgs || []).map(function (s) { return { src: s }; });
-  var imgBox = '<div id="pimgPreviewImg" style="width:100%;height:158px;border-radius:8px;background:#0d0d10;display:flex;align-items:center;justify-content:center;color:var(--t6);font-size:10px;overflow:hidden;position:relative">' + (memoList.length ? '' : '사진 로딩...') + '</div>';
-  card.innerHTML = head + imgBox;
-  // 메모 내 이미지가 있으면 즉시 표시(서버 참고이미지가 없을 때의 폴백 + 즉시성)
-  if (memoList.length) _pimgPreviewImg(projId, memoList);
-  var cached = _pimgCache[projId];
-  if (cached) { _pimgPreviewImg(projId, cached.length ? cached : memoList); return; }
-  projImagesGet(projId).then(function (l) {
-    _pimgCache[projId] = l;
-    if (_pimgHoverProj === projId) _pimgPreviewImg(projId, (l && l.length) ? l : memoList);
-  }).catch(function () {
-    if (_pimgHoverProj === projId && !memoList.length) { var b = document.getElementById('pimgPreviewImg'); if (b) b.innerHTML = '<span style="color:var(--t6)">사진 없음</span>'; }
-  });
-}
-var _pimgPreviewCur = null; // 현재 프리뷰에 표시 중인 이미지 리스트(서버 또는 메모)
-function _pimgPreviewImg(projId, list) {
-  var b = document.getElementById('pimgPreviewImg'); if (!b || _pimgHoverProj !== projId) return;
-  if (!list || !list.length) { b.innerHTML = '<span style="color:var(--t6)">등록된 사진 없음</span>'; return; }
-  _pimgPreviewCur = list;
-  var idx = Math.max(0, Math.min(_pimgHoverIdx, list.length - 1));
-  var multi = list.length > 1;
-  b.style.cursor = 'zoom-in';
-  b.onclick = function () { pimgOpenViewer(list, idx); };
-  b.innerHTML = '<img src="' + list[idx].src + '" style="width:100%;height:100%;object-fit:contain;background:#0d0d10">' +
-    '<div style="position:absolute;right:6px;bottom:5px;background:rgba(0,0,0,.62);color:#fff;font-size:9px;padding:2px 7px;border-radius:9px;backdrop-filter:blur(2px)">' + (multi ? (idx + 1) + '/' + list.length + ' · ' : '') + '🔍 클릭</div>' +
-    (multi ?
-      '<button onclick="event.stopPropagation();pimgPreviewNav(\'' + projId + '\',-1)" style="position:absolute;left:3px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;width:24px;height:38px;border-radius:6px;cursor:pointer;font-size:15px">‹</button>' +
-      '<button onclick="event.stopPropagation();pimgPreviewNav(\'' + projId + '\',1)" style="position:absolute;right:3px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;width:24px;height:38px;border-radius:6px;cursor:pointer;font-size:15px">›</button>'
-      : '');
-}
-function pimgPreviewNav(projId, d) {
-  var list = _pimgPreviewCur; if (!list || !list.length) return;
-  _pimgHoverIdx = (_pimgHoverIdx + d + list.length) % list.length;
-  _pimgPreviewImg(projId, list);
-}
-function pimgHoverOut() {
-  if (_pimgHoverTimer) clearTimeout(_pimgHoverTimer);
-  _pimgHoverTimer = setTimeout(function () {
-    var card = document.getElementById('pimgPreview'); if (card) card.style.display = 'none';
-    _pimgHoverProj = null;
-  }, 180);
 }
 
 /* ── 전역 노출 ───────────────────────────────────────────────────────── */
@@ -325,7 +249,6 @@ if (typeof window !== 'undefined') {
   window.renderProjImages = renderProjImages; window.pimgOnPick = pimgOnPick; window.pimgRemove = pimgRemove;
   window.pimgFlushStaging = pimgFlushStaging; window.pimgResetStaging = pimgResetStaging;
   window.pimgViewerFor = pimgViewerFor; window.pimgOpenViewer = pimgOpenViewer; window.pimgViewerNav = pimgViewerNav; window.pimgViewerClose = pimgViewerClose;
-  window.pimgHover = pimgHover; window.pimgHoverOut = pimgHoverOut; window.pimgPreviewNav = pimgPreviewNav;
   window.pimgDownscale = _pimgDownscale; // 메모 이미지 등 다른 모듈에서 압축 재사용
   window.pimgDownscaleDataUrl = pimgDownscaleDataUrl;
   window.pimgCompressMemoHtml = pimgCompressMemoHtml;

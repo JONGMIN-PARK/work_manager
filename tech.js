@@ -54,10 +54,10 @@ function _trlInfo(n) {
   if (t >= 4) return { label: '검증중', color: SEM_COLOR.warn, dot: '🟡' };
   return { label: '초기', color: SEM_COLOR.danger, dot: '🔴' };
 }
-function _tEsc(v) { return (typeof eH === 'function') ? eH(v == null ? '' : v) : String(v == null ? '' : v); }
+function _tEsc(v) { return eH(v); }   // HTML 자리. onclick 의 JS 문자열 자리는 eA (wm-state.js)
 /** onclick="fn('여기')" 자리 값: ① JS 문자열 이스케이프(\, ') → ② HTML 속성 이스케이프 (order-view.js _orderJsStr 와 동일 규약) */
-function _tJsStr(v) { return _tEsc(String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'")); }
-function _tErrMsg(e) { return (e && e.message) || '권한 또는 서버 오류'; }
+function _tJsStr(v) { return eA(v); }   // 옛 이름 유지
+function _tErrMsg(e) { return (e && e.data && e.data.message) || (e && e.message) || '권한 또는 서버 오류'; }
 function _tToast(m, t) { if (typeof showToast === 'function') showToast(m, t); }
 function _tCloseModal() { if (_techModal && _techModal.close) { _techModal.close(); _techModal = null; } }
 
@@ -150,7 +150,7 @@ function _techCardHtml(t) {
   var trl = _trlInfo(t.trl);
   var stack = (t.stack || []).slice(0, 5);
   return '<div style="border:1px solid var(--bd);border-radius:8px;padding:10px;background:var(--bg-i);cursor:pointer' +
-      (t.status === 'deprecated' ? ';opacity:.55' : '') + '" onclick="techOpenModal(\'' + _tEsc(t.id) + '\')">' +
+      (t.status === 'deprecated' ? ';opacity:.55' : '') + '" onclick="techOpenModal(\'' + eA(t.id) + '\')">' +
     '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">' +
       '<span style="font-size:13px">' + cat.icon + '</span>' +
       '<span style="flex:1;font-size:12px;font-weight:700;color:var(--t1);word-break:break-word">' + _tEsc(t.name) + '</span>' +
@@ -243,7 +243,7 @@ function _techListHtml(items) {
     html += '<tr style="border-bottom:1px solid var(--bd)' + (t.status === 'deprecated' ? ';opacity:.55' : '') + '">' +
       '<td style="padding:5px;color:' + cat.color + '">' + cat.icon + ' ' + cat.label + '</td>' +
       '<td style="padding:5px;color:var(--t5)"><code>' + _tEsc(t.code || '-') + '</code></td>' +
-      '<td style="padding:5px;color:var(--t2);cursor:pointer" onclick="techOpenModal(\'' + _tEsc(t.id) + '\')">' + _tEsc(t.name) + (t.techVersion ? ' <span style="color:var(--t6)">' + _tEsc(t.techVersion) + '</span>' : '') + '</td>' +
+      '<td style="padding:5px;color:var(--t2);cursor:pointer" onclick="techOpenModal(\'' + eA(t.id) + '\')">' + _tEsc(t.name) + (t.techVersion ? ' <span style="color:var(--t6)">' + _tEsc(t.techVersion) + '</span>' : '') + '</td>' +
       '<td style="padding:5px"><span class="badge" style="background:' + st.color + '22;color:' + st.color + ';font-size:8px;padding:1px 4px">' + st.label + '</span></td>' +
       '<td style="padding:5px;color:' + trl.color + '">' + trl.dot + ' ' + (t.trl || 1) + '</td>' +
       '<td style="padding:5px;color:var(--t4)">' + _tEsc(t.ownerName || '-') + '</td>' +
@@ -293,7 +293,10 @@ function techSetQ(v) {
 
 /* ═══ 상세/편집 모달 ═══ */
 function techOpenModal(id) {
-  techMembers().then(function (members) { _techBuildModal(id, members || []); });
+  // 표준 가드 — 연타해도 한 번만, 실패하면 오류 토스트
+  return wmGuardedModal('techModal', function () {
+    return techMembers().then(function (members) { _techBuildModal(id, members || []); });
+  }, 'techModal');
 }
 
 function _techBuildModal(id, members) {
@@ -367,12 +370,11 @@ function _techBuildModal(id, members) {
   }
 
   html += '<div style="display:flex;gap:6px;margin-top:14px">' +
-    '<button class="btn btn-p btn-s" onclick="techSave(' + (isNew ? 'null' : '\'' + _tEsc(t.id) + '\'') + ')">💾 저장</button>' +
-    (isNew ? '' : '<button class="btn btn-d btn-s" onclick="techDelete(\'' + _tEsc(t.id) + '\')">🗑 삭제</button>') +
+    '<button class="btn btn-p btn-s" onclick="techSave(' + (isNew ? 'null' : '\'' + eA(t.id) + '\'') + ')">💾 저장</button>' +
+    (isNew ? '' : '<button class="btn btn-d btn-s" onclick="techDelete(\'' + eA(t.id) + '\')">🗑 삭제</button>') +
   '</div>';
 
-  if (typeof createModal !== 'function') { _tToast('모달을 열 수 없습니다.', 'error'); return; }
-  _techModal = createModal({ title: isNew ? '새 요소기술' : '요소기술 상세', html: html, width: '720px' });
+  _techModal = createModal({ id: 'techModal', title: isNew ? '새 요소기술' : '요소기술 상세', html: html, width: '720px' });
 
   if (!isNew) {
     techLoadUsages(t.id);
@@ -437,7 +439,7 @@ function techSave(id) {
     _tToast('저장되었습니다.', 'success');
     _tCloseModal();
     renderTech();
-  }).catch(function () { _tToast('저장 실패 (권한 또는 서버 오류)', 'error'); });
+  }).catch(function (e) { _tToast('저장 실패: ' + _tErrMsg(e), 'error'); });
 }
 
 function techDelete(id) {
@@ -494,7 +496,7 @@ function _techRenderUsages(techId, list) {
           _tEsc(name) + (u.targetClient ? ' <span style="color:var(--t5)">· ' + _tEsc(u.targetClient) + '</span>' : '') +
           (u.note ? '<span style="color:var(--t5)"> — ' + _tEsc(u.note) + '</span>' : '') +
         '</span>' +
-        '<button class="btn btn-d btn-s" style="font-size:8px;padding:0 4px" onclick="techUsageRemove(\'' + _tEsc(techId) + '\',\'' + _tEsc(u.id) + '\')">✕</button>' +
+        '<button class="btn btn-d btn-s" style="font-size:8px;padding:0 4px" onclick="techUsageRemove(\'' + eA(techId) + '\',\'' + eA(u.id) + '\')">✕</button>' +
       '</div>';
     });
   }
@@ -502,7 +504,7 @@ function _techRenderUsages(techId, list) {
   html += '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">' +
     '<select id="tuTarget" class="si" style="flex:1;min-width:160px;font-size:10px;padding:3px"><option value="">로딩 중...</option></select>' +
     '<input id="tuNote" placeholder="적용 방식(선택)" style="flex:1;min-width:110px;font-size:10px;padding:3px 5px">' +
-    '<button class="btn btn-g btn-s" style="font-size:10px" onclick="techUsageAddFromForm(\'' + _tEsc(techId) + '\')">+ 적용</button>' +
+    '<button class="btn btn-g btn-s" style="font-size:10px" onclick="techUsageAddFromForm(\'' + eA(techId) + '\')">+ 적용</button>' +
   '</div>';
   html += '</div>';
   box.innerHTML = html;
@@ -570,7 +572,7 @@ function _techRenderLogs(techId, logs) {
       '<input id="tlHours" type="number" min="0" step="0.5" placeholder="시간" class="si" style="font-size:11px;padding:3px">' +
     '</div>' +
     '<textarea id="tlContent" placeholder="무엇을 했고, 무엇을 알게 됐는지. **굵게** ~~취소선~~ `코드` - [ ] 체크박스" style="width:100%;font-size:11px;padding:5px;min-height:52px;resize:vertical"></textarea>' +
-    '<button class="btn btn-p btn-s" style="font-size:10px;margin-top:4px" onclick="techLogSave(\'' + _tEsc(techId) + '\')">+ 일지 등록</button>' +
+    '<button class="btn btn-p btn-s" style="font-size:10px;margin-top:4px" onclick="techLogSave(\'' + eA(techId) + '\')">+ 일지 등록</button>' +
   '</div>';
 
   if (!logs.length) {
@@ -587,7 +589,7 @@ function _techRenderLogs(techId, logs) {
           (lg.progress != null ? '<span style="color:var(--ac)">· ' + lg.progress + '%</span>' : '') +
           (parseFloat(lg.hours) > 0 ? '<span>· ' + (Math.round(parseFloat(lg.hours) * 10) / 10) + 'h</span>' : '') +
           '<span style="flex:1"></span>' +
-          '<button class="btn btn-d btn-s" style="font-size:8px;padding:0 4px" onclick="techLogDelete(\'' + _tEsc(techId) + '\',\'' + _tEsc(lg.id) + '\')">✕</button>' +
+          '<button class="btn btn-d btn-s" style="font-size:8px;padding:0 4px" onclick="techLogDelete(\'' + eA(techId) + '\',\'' + eA(lg.id) + '\')">✕</button>' +
         '</div>' +
         '<div style="font-size:11px;color:var(--t3);white-space:pre-wrap;word-break:break-word">' + body + '</div>' +
       '</div>';

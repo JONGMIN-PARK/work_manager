@@ -1,4 +1,5 @@
 var express = require('express');
+var sv = require('../lib/safe-val');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
@@ -62,7 +63,7 @@ router.post('/', async function (req, res) {
     var projectId = b.projectId || b.project_id;
     if (!projectId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'projectId 필수' });
     if (!await ps.gateEdit(req, res, projectId, CHK_FORBIDDEN)) return;
-    var id = b.id || ('chk-' + require('crypto').randomUUID().slice(0, 12));
+    var id = sv.safeId(b.id, function () { return 'chk-' + require('crypto').randomUUID().slice(0, 12); });
     var r = await db.query(
       "INSERT INTO checklists (id, project_id, phase, items, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
       [id, projectId, b.phase || null, JSON.stringify(b.items || []), req.user.sub, req.tenant.id]

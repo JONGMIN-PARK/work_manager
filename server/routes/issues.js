@@ -1,4 +1,5 @@
 var express = require('express');
+var sv = require('../lib/safe-val');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
@@ -12,6 +13,26 @@ var httpErr = require('../lib/http-errors');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
+
+/* 이슈 권한 (v13.281) — 목록(GET /)과 같은 가시성 규칙을 단건·수정·이력에도 적용.
+ *  프로젝트 이슈: 읽기 = 프로젝트를 볼 수 있으면 · 쓰기 = 프로젝트 편집권(관리자·임원·생성자·참여자) 또는 이슈 작성자
+ *  프로젝트 없는 이슈(또는 프로젝트가 지워진 이슈): 작성자·관리자만. 볼 수 없는 것은 존재를 숨기려고 404.
+ *  통과하면 행 {id, project_id, created_by}, 아니면 응답 보내고 null */
+async function _gateIssue(req, res, id, mode) {
+  var r = await db.query('SELECT id, project_id, created_by FROM issues WHERE id = $1 AND tenant_id = $2', [id, req.tenant.id]);
+  if (!r.rows.length) { res.status(404).json({ error: 'NOT_FOUND' }); return null; }
+  var row = r.rows[0];
+  var mine = row.created_by === req.user.sub || req.user.role === 'admin';
+  var canRead = row.project_id ? await ps.canReadById(req, row.project_id) : null;
+  if (canRead === null) {   // 프로젝트 없음
+    if (mine) return row;
+    res.status(404).json({ error: 'NOT_FOUND' }); return null;
+  }
+  if (!canRead) { res.status(404).json({ error: 'NOT_FOUND' }); return null; }
+  if (mode !== 'edit' || mine || await ps.canEditById(req, row.project_id)) return row;
+  res.status(403).json({ error: 'FORBIDDEN', message: '생성자·참여자·관리자만 이슈를 수정할 수 있습니다.' });
+  return null;
+}
 
 // GET /api/issues — v13.34 가시성: 접근 가능한 프로젝트의 이슈 + 본인이 만든 프로젝트-없는 이슈
 router.get('/', async function (req, res) {
@@ -50,6 +71,7 @@ router.get('/', async function (req, res) {
 // GET /api/issues/:id
 router.get('/:id', async function (req, res) {
   try {
+    if (!await _gateIssue(req, res, req.params.id, 'read')) return;
     var r = await db.query('SELECT * FROM issues WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
@@ -62,7 +84,9 @@ router.get('/:id', async function (req, res) {
 router.post('/', rbac.checkPermission('issue.create'), async function (req, res) {
   try {
     var b = req.body;
-    var id = b.id || ('iss-' + require('crypto').randomUUID().slice(0, 12));
+    var id = sv.safeId(b.id, function () { return 'iss-' + require('crypto').randomUUID().slice(0, 12); });
+    var newPid = b.projectId || b.project_id || null;
+    if (newPid && !await ps.gateRead(req, res, newPid)) return;   // 볼 수 없는 프로젝트에 이슈 달기 금지
     var r = await db.query(
       "INSERT INTO issues (id, project_id, order_no, phase, dept, type, urgency, status, report_date, due_date, title, description, reporter, reporter_id, assignees, tags, resolution, resolved_date, created_by, updated_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$19,$20) RETURNING *",
       [id, b.projectId || b.project_id || null, b.orderNo || b.order_no || null,
@@ -99,6 +123,8 @@ router.post('/', rbac.checkPermission('issue.create'), async function (req, res)
 router.put('/:id', async function (req, res) {
   try {
     var b = req.body;
+    var cur = await _gateIssue(req, res, req.params.id, 'edit');
+    if (!cur) return;
     var clean = {};
     var fields = ['project_id', 'order_no', 'phase', 'dept', 'type', 'urgency', 'status',
       'report_date', 'due_date', 'title', 'description', 'reporter', 'resolution', 'resolved_date'];
@@ -112,6 +138,7 @@ router.put('/:id', async function (req, res) {
     });
     if (b.assignees !== undefined) clean.assignees = JSON.stringify(b.assignees);
     if (b.tags !== undefined) clean.tags = JSON.stringify(b.tags);
+    if (clean.project_id && clean.project_id !== cur.project_id && !await ps.gateRead(req, res, clean.project_id)) return;
 
     // 상태 변경 추적을 위해 이전 상태 조회
     var prevR = clean.status ? await db.query('SELECT status, title, assignees, reporter_id FROM issues WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]) : null;
@@ -147,7 +174,10 @@ router.put('/:id', async function (req, res) {
 // DELETE /api/issues/:id
 router.delete('/:id', rbac.checkPermission('issue.delete'), async function (req, res) {
   try {
-    var r = await db.query('WITH del_logs AS (DELETE FROM issue_logs WHERE issue_id = $1) DELETE FROM issues WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
+    if (!await _gateIssue(req, res, req.params.id, 'edit')) return;
+    // 대응 이력은 issue_logs.issue_id FK(ON DELETE CASCADE)가 함께 지운다.
+    // (예전 CTE 'DELETE FROM issue_logs WHERE issue_id=$1' 는 tenant 조건이 없어, 본문이 0건이어도 다른 테넌트 이력을 지웠다)
+    var r = await db.query('DELETE FROM issues WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });
   } catch (e) {
@@ -160,6 +190,7 @@ router.delete('/:id', rbac.checkPermission('issue.delete'), async function (req,
 // GET /api/issues/:id/logs
 router.get('/:id/logs', async function (req, res) {
   try {
+    if (!await _gateIssue(req, res, req.params.id, 'read')) return;
     var r = await db.query('SELECT * FROM issue_logs WHERE issue_id = $1 AND tenant_id = $2 ORDER BY date DESC, created_at DESC', [req.params.id, req.tenant.id]);
     res.json({ data: r.rows });
   } catch (e) {
@@ -171,10 +202,14 @@ router.get('/:id/logs', async function (req, res) {
 router.post('/:id/logs', async function (req, res) {
   try {
     var b = req.body;
-    var id = b.id || ('il-' + require('crypto').randomUUID().slice(0, 12));
+    if (!await _gateIssue(req, res, req.params.id, 'read')) return;   // 볼 수 있는 이슈에만 대응 이력 추가
+    var id = sv.safeId(b.id, function () { return 'il-' + require('crypto').randomUUID().slice(0, 12); });
+    // 유형·시각·부서·첨부 메모 (073 마이그레이션 컬럼 — 예전엔 버려졌다)
     var r = await db.query(
-      "INSERT INTO issue_logs (id, issue_id, date, content, author, author_id, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$6,$7) RETURNING *",
-      [id, req.params.id, b.date || null, b.content || '', b.author || null, req.user.sub, req.tenant.id]
+      "INSERT INTO issue_logs (id, issue_id, date, content, author, author_id, created_by, tenant_id, log_time, type, dept, attachment_note) VALUES ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9,$10,$11) RETURNING *",
+      [id, req.params.id, b.date || null, b.content || '', b.author || null, req.user.sub, req.tenant.id,
+       String(b.time || b.logTime || '').slice(0, 5) || null, String(b.type || '').slice(0, 20) || null,
+       String(b.dept || '').slice(0, 50) || null, b.attachmentNote || b.attachment_note || null]
     );
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
@@ -185,6 +220,12 @@ router.post('/:id/logs', async function (req, res) {
 // DELETE /api/issues/:id/logs/:logId
 router.delete('/:id/logs/:logId', async function (req, res) {
   try {
+    // 이슈 편집권 또는 그 이력의 작성자
+    var lr = await db.query('SELECT author_id FROM issue_logs WHERE id = $1 AND issue_id = $2 AND tenant_id = $3', [req.params.logId, req.params.id, req.tenant.id]);
+    if (!lr.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    if (lr.rows[0].author_id === req.user.sub) {
+      if (!await _gateIssue(req, res, req.params.id, 'read')) return;
+    } else if (!await _gateIssue(req, res, req.params.id, 'edit')) return;
     var r = await db.query('DELETE FROM issue_logs WHERE id = $1 AND issue_id = $2 AND tenant_id = $3 RETURNING id', [req.params.logId, req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ message: '삭제 완료' });

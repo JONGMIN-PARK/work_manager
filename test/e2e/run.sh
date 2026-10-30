@@ -75,7 +75,8 @@ else
   run_batch e2e23-perf.js
   run_batch api-mywork.js e2e24-mywork.js e2e25-templates.js
   run_batch api-weekly.js e2e26-weekly-author.js e2e27-wide.js
-  run_batch api-calendar.js e2e28-calendar.js e2e30-last-view.js
+  run_batch api-calendar.js e2e28-calendar.js
+  run_batch e2e30-last-view.js   # 따로 — 앞 묶음 로그인과 합치면 횟수 제한(10회)에 걸림
   run_batch e2e31-worklog-query.js
   run_batch e2e32-weekly-state.js
   run_batch e2e33-drill.js
@@ -88,6 +89,7 @@ else
   run_batch api-myproj.js e2e38-myproj.js
   run_batch e2e39-mw-polish.js e2e40-cal-tip.js
   run_batch api-tgmywork.js
+  run_batch api-pm.js e2e41-pm.js
   run_batch api-speed.js
 fi
 

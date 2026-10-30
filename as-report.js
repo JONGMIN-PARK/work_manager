@@ -196,6 +196,10 @@ function asExportExcel(ticketId) {
 }
 
 function asPrintReport(ticketId) {
+  // 새 창은 클릭 순간에 먼저 연다 — 조회가 끝난 뒤 열면 브라우저가 팝업으로 막는다
+  var w = window.open('', '_blank', 'width=900,height=900');
+  if (!w) { if (typeof showToast === 'function') showToast('팝업이 차단되었습니다 — 브라우저 주소창의 팝업 허용 후 다시 눌러 주세요.', 'warn'); return; }
+  try { w.document.write('<p style="font-family:sans-serif;color:#64748b;padding:20px">보고서를 불러오는 중…</p>'); } catch (e) {}
   asGetExpand(ticketId).then(function (t) {
     var CAT = _asCats();
     var DEPT_MAP = typeof DEPT !== 'undefined' ? DEPT : {};
@@ -283,10 +287,12 @@ function asPrintReport(ticketId) {
 
     html += '</body></html>';
 
-    var w = window.open('', '_blank', 'width=900,height=900');
+    if (w.closed) return;
+    w.document.open();
     w.document.write(html);
     w.document.close();
   }).catch(function (err) {
+    try { w.close(); } catch (e) {}
     if (typeof showToast === 'function') showToast('미리보기 실패: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
@@ -567,6 +573,9 @@ function _asBuildComposeUrl(provider, to, subject, body) {
 
 /* ⑥ 보고서 — PDF 미리보기 모달 진입점 */
 function asReportPdfPreview(ticketId) {
+  return _asGuard('asPdfPreview', 'asPdfPreviewOverlay', function () { return _asBuildPdfPreview(ticketId); });
+}
+function _asBuildPdfPreview(ticketId) {
   if (window.wmProgress) {
     wmProgress.show({
       icon: '📄',
@@ -583,7 +592,7 @@ function asReportPdfPreview(ticketId) {
       '📄 jsPDF 생성 + 페이지 분할'
     ], 1500);
   }
-  asGetExpand(ticketId).then(function (t) {
+  return asGetExpand(ticketId).then(function (t) {
     return _asGeneratePdf(t).then(function (out) {
       if (window.wmProgress) wmProgress.hide();
       _asRenderPdfPreviewModal(t, out);
@@ -591,7 +600,7 @@ function asReportPdfPreview(ticketId) {
   }).catch(function (err) {
     if (window.wmProgress) wmProgress.hide();
     console.error('[asReportPdfPreview]', err);
-    if (typeof showToast === 'function') showToast('❌ PDF 생성 실패: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+    throw new Error('PDF 생성 실패: ' + _asErrMsg(err));   // 토스트는 _asGuard
   });
 }
 

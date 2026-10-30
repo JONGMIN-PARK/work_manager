@@ -7,6 +7,7 @@ var router = express.Router();
 var db = require('../../config/db');
 var notificationService = require('../../services/notification.service');
 var httpErr = require('../../lib/http-errors');
+var shared = require('./_shared');
 
 // ────────────────────────────────────────────────────────────
 // ── 부서 할당 (as_assignments) ──
@@ -30,6 +31,7 @@ router.post('/:id/assignments', async function (req, res) {
   try {
     var b = req.body || {};
     if (!b.dept) return res.status(400).json({ error: 'VALIDATION', message: '부서를 지정하세요.' });
+    if (!(await shared.assertTicket(req, res))) return;
 
     var id = b.id || ('asg-' + require('crypto').randomUUID().slice(0, 12));
     var role = b.role === 'primary' ? 'primary' : 'support';
@@ -55,13 +57,14 @@ router.post('/:id/assignments', async function (req, res) {
     );
 
     res.status(201).json({ data: r.rows[0] });
+    shared._invalidateStatsCache(req.tenant.id);
 
     // 텔레그램: 담당자에게 할당 알림
     var asg = r.rows[0];
     if (asg.assignee_id) {
       (async function () {
         try {
-          var tR = await db.query('SELECT ticket_no, priority, customer_name FROM as_tickets WHERE id = $1', [req.params.id]);
+          var tR = await db.query('SELECT ticket_no, priority, customer_name FROM as_tickets WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
           var t = tR.rows[0] || {};
           notificationService.notify('as_assigned', {
             ticketNo: t.ticket_no, priority: t.priority, customerName: t.customer_name,
@@ -126,8 +129,8 @@ router.put('/:id/assignments/:aid', async function (req, res) {
     var r = await db.query(sql, params);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
 
-    // 모든 할당이 completed면 ticket을 'reporting'로 자동 승격
-    if (b.status === 'completed') {
+    // 모든 할당이 completed(또는 취소)면 ticket을 'reporting'로 자동 승격
+    if (b.status === 'completed' || b.status === 'cancelled') {
       var pendR = await db.query(
         "SELECT COUNT(*)::int AS n FROM as_assignments WHERE ticket_id=$1 AND tenant_id=$2 AND status <> 'completed' AND status <> 'cancelled'",
         [req.params.id, req.tenant.id]
@@ -141,6 +144,7 @@ router.put('/:id/assignments/:aid', async function (req, res) {
       }
     }
 
+    shared._invalidateStatsCache(req.tenant.id);
     res.json({ data: r.rows[0] });
   } catch (e) {
     httpErr.serverError(res, '[as-assignments/update]', e);
@@ -155,6 +159,7 @@ router.delete('/:id/assignments/:aid', async function (req, res) {
       [req.params.aid, req.params.id, req.tenant.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    shared._invalidateStatsCache(req.tenant.id);
     res.json({ message: '삭제 완료' });
   } catch (e) {
     httpErr.serverError(res, '[as-assignments/delete]', e);

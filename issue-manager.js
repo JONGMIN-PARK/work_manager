@@ -148,7 +148,7 @@ function renderIssues(afterRender) {
     html += '<select onchange="issueFilterProject=this.value;renderIssues()" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
     html += '<option value="">전체 프로젝트</option>';
     projects.forEach(function (p) {
-      html += '<option value="' + p.id + '"' + (issueFilterProject === p.id ? ' selected' : '') + '>' + eH(p.name) + '</option>';
+      html += '<option value="' + eH(p.id) + '"' + (issueFilterProject === p.id ? ' selected' : '') + '>' + eH(p.name) + '</option>';
     });
     html += '</select>';
     // 키워드 검색
@@ -198,14 +198,14 @@ function renderIssues(afterRender) {
     issues.forEach(function (iss, idx) {
       var proj = projMap[iss.projectId];
       var projName = proj ? proj.name : (iss.orderNo || '-');
-      var ph = phases[iss.phase] || { label: iss.phase || '-', icon: '', color: SEM_COLOR.muted };
-      var dp = depts[iss.dept] || { label: iss.dept || '-', icon: '', color: SEM_COLOR.muted };
-      var tp = types[iss.type] || { label: iss.type || '-', icon: '', color: SEM_COLOR.muted };
-      var ug = urgencies[iss.urgency] || { label: iss.urgency || '-', icon: '', color: SEM_COLOR.muted };
-      var st = statuses[iss.status] || { label: iss.status || '-', color: SEM_COLOR.muted };
+      var ph = phases[iss.phase] || { label: eH(iss.phase || '-'), icon: '', color: SEM_COLOR.muted };
+      var dp = depts[iss.dept] || { label: eH(iss.dept || '-'), icon: '', color: SEM_COLOR.muted };
+      var tp = types[iss.type] || { label: eH(iss.type || '-'), icon: '', color: SEM_COLOR.muted };
+      var ug = urgencies[iss.urgency] || { label: eH(iss.urgency || '-'), icon: '', color: SEM_COLOR.muted };
+      var st = statuses[iss.status] || { label: eH(iss.status || '-'), color: SEM_COLOR.muted };
       var isUrgent = iss.urgency === 'urgent' && iss.status !== 'closed' && iss.status !== 'resolved';
       var rowBg = isUrgent ? 'rgba(239,68,68,.05)' : 'transparent';
-      var safeId = iss.id.replace(/'/g, "\\'");
+      var safeId = eA(iss.id);
 
       var isChecked = issueBulkSelected[iss.id] ? ' checked' : '';
       html += '<tr style="border-bottom:1px solid var(--bd);background:' + rowBg + ';cursor:pointer" onclick="showIssueDetail(\'' + safeId + '\')" title="' + eH(iss.title) + '">';
@@ -369,14 +369,17 @@ function issueToggleStats() {
   renderIssues();
 }
 
-/* ═══ 이슈 등록/편집 모달 ═══ */
+/* ═══ 이슈 등록/편집 모달 ═══ — 표준 가드(재진입 방지·열림 대기·오류 토스트) */
 function showIssueModal(editId) {
+  return wmGuardedModal('issueModal', function () { return _issueBuildModal(editId); }, 'issueModalOverlay');
+}
+function _issueBuildModal(editId) {
   var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
   var depts = typeof DEPT !== 'undefined' ? DEPT : {};
   var types = typeof ISSUE_TYPE !== 'undefined' ? ISSUE_TYPE : {};
   var urgencies = typeof ISSUE_URGENCY !== 'undefined' ? ISSUE_URGENCY : {};
 
-  Promise.all([projGetAll(), editId ? issueGet(editId) : Promise.resolve(null)]).then(function (results) {
+  return Promise.all([projGetAll(), editId ? issueGet(editId) : Promise.resolve(null)]).then(function (results) {
     var projects = results[0] || [];
     var existing = results[1];
     var isEdit = !!existing;
@@ -393,7 +396,7 @@ function showIssueModal(editId) {
     h += '<option value="">선택...</option>';
     projects.forEach(function (p) {
       var sel = iss.projectId === p.id ? ' selected' : '';
-      h += '<option value="' + p.id + '" data-phase="' + (p.currentPhase || 'order') + '" data-orderno="' + eH(p.orderNo || '') + '"' + sel + '>' + eH(p.name) + (p.orderNo ? ' (' + eH(p.orderNo) + ')' : '') + '</option>';
+      h += '<option value="' + eH(p.id) + '" data-phase="' + eH(p.currentPhase || 'order') + '" data-orderno="' + eH(p.orderNo || '') + '"' + sel + '>' + eH(p.name) + (p.orderNo ? ' (' + eH(p.orderNo) + ')' : '') + '</option>';
     });
     h += '</select></div>';
 
@@ -463,16 +466,13 @@ function showIssueModal(editId) {
     // 저장 버튼
     h += '<div style="display:flex;gap:8px;justify-content:flex-end">';
     h += '<button onclick="document.getElementById(\'issueModalOverlay\').remove()" style="padding:8px 16px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:11px">취소</button>';
-    h += '<button onclick="saveIssueModal(' + (isEdit ? 'true' : 'false') + ',\'' + (isEdit ? editId.replace(/'/g, "\\'") : '') + '\')" style="padding:8px 16px;border:none;border-radius:6px;background:#6366F1;color:#fff;cursor:pointer;font-size:11px;font-weight:600">' + (isEdit ? '수정' : '등록') + '</button>';
+    h += '<button onclick="saveIssueModal(' + (isEdit ? 'true' : 'false') + ',\'' + (isEdit ? eA(editId) : '') + '\',' + (isEdit && iss.version != null ? Number(iss.version) : 'null') + ')" style="padding:8px 16px;border:none;border-radius:6px;background:#6366F1;color:#fff;cursor:pointer;font-size:11px;font-weight:600">' + (isEdit ? '수정' : '등록') + '</button>';
     h += '</div>';
 
     // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기) = createModal 기본값
     var dialog = createModal({ id: 'issueModalOverlay', z: MODAL_Z, overlayStyle: 'padding:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px)' }).box;
     dialog.style.cssText = 'background:var(--bg-p);border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)';
     dialog.innerHTML = h;
-  }).catch(function (err) {
-    console.error('[showIssueModal]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 
@@ -486,7 +486,8 @@ function issueModalAutoPhase() {
   }
 }
 
-function saveIssueModal(isEdit, editId) {
+/* version: 편집 창을 열 때의 version — 그사이 남이 고쳤으면 서버가 409 (덮어쓰기 방지) */
+function saveIssueModal(isEdit, editId, version) {
   var projId = document.getElementById('issModalProj').value;
   var phase = document.getElementById('issModalPhase').value;
   var dept = document.getElementById('issModalDept').value;
@@ -521,7 +522,7 @@ function saveIssueModal(isEdit, editId) {
 
   var promise;
   if (isEdit && editId) {
-    promise = updateIssue(editId, data);
+    promise = updateIssue(editId, data, version);
   } else {
     promise = createIssue(data);
   }
@@ -538,7 +539,8 @@ function saveIssueModal(isEdit, editId) {
   }).catch(function (err) {
     console.error('[saveIssueModal]', err);
     var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
-    if (err && err.status === 403) msg = '이슈 등록 권한이 없습니다.';
+    if (err && err.status === 403) msg = (err.data && err.data.message) || '이슈 등록 권한이 없습니다.';
+    if (err && err.status === 409) msg = '다른 사용자가 이 이슈를 먼저 수정했습니다. 창을 닫고 다시 열어 주세요.';
     showToast('❌ 이슈 저장 실패: ' + msg, 'error');
   });
 }
@@ -577,11 +579,11 @@ function showIssueDetail(id) {
     var proj = projMap[iss.projectId];
     var projName = proj ? proj.name : (iss.orderNo || '-');
 
-    var ph = phases[iss.phase] || { label: iss.phase || '-', icon: '', color: SEM_COLOR.muted };
-    var dp = depts[iss.dept] || { label: iss.dept || '-', icon: '', color: SEM_COLOR.muted };
-    var tp = types[iss.type] || { label: iss.type || '-', icon: '', color: SEM_COLOR.muted };
-    var ug = urgencies[iss.urgency] || { label: iss.urgency || '-', icon: '', color: SEM_COLOR.muted };
-    var st = statuses[iss.status] || { label: iss.status || '-', color: SEM_COLOR.muted };
+    var ph = phases[iss.phase] || { label: eH(iss.phase || '-'), icon: '', color: SEM_COLOR.muted };
+    var dp = depts[iss.dept] || { label: eH(iss.dept || '-'), icon: '', color: SEM_COLOR.muted };
+    var tp = types[iss.type] || { label: eH(iss.type || '-'), icon: '', color: SEM_COLOR.muted };
+    var ug = urgencies[iss.urgency] || { label: eH(iss.urgency || '-'), icon: '', color: SEM_COLOR.muted };
+    var st = statuses[iss.status] || { label: eH(iss.status || '-'), color: SEM_COLOR.muted };
 
     // 기존 패널 제거
     var old = document.getElementById('issueDetailPanel');
@@ -591,7 +593,7 @@ function showIssueDetail(id) {
     panel.id = 'issueDetailPanel';
     panel.style.cssText = 'position:fixed;right:0;top:0;height:100vh;width:520px;max-width:95vw;background:var(--bg-p);border-left:1px solid var(--bd);z-index:' + (MODAL_Z - 1) + ';overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);animation:slideIn .2s ease';
 
-    var safeId = id.replace(/'/g, "\\'");
+    var safeId = eA(id);
     var h = '';
 
     // 헤더
@@ -599,7 +601,7 @@ function showIssueDetail(id) {
     h += '<div style="flex:1;min-width:0">';
     h += '<div style="font-size:13px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(iss.title) + '">' + eH(iss.title) + '</div>';
     var projLinkHtml = proj
-      ? '<span onclick="if(typeof showProjectDetail===\'function\')showProjectDetail(\'' + (proj.id || '').replace(/'/g,"\\'") + '\')" style="cursor:pointer;text-decoration:underline;color:var(--ac,#6366F1)" title="프로젝트 상세 보기">' + eH(projName) + '</span>'
+      ? '<span onclick="if(typeof showProjectDetail===\'function\')showProjectDetail(\'' + eA(proj.id || '') + '\')" style="cursor:pointer;text-decoration:underline;color:var(--ac,#6366F1)" title="프로젝트 상세 보기">' + eH(projName) + '</span>'
       : eH(projName);
     h += '<div style="font-size:10px;color:var(--t5);margin-top:4px">' + projLinkHtml + (iss.orderNo ? ' (' + eH(iss.orderNo) + ')' : '') + '</div>';
     h += '</div>';
@@ -616,14 +618,14 @@ function showIssueDetail(id) {
     h += issueDetailField('유형', tp.icon + ' ' + tp.label);
     h += issueDetailField('긴급도', ug.icon + ' ' + ug.label);
     h += issueDetailField('상태', '<span style="padding:2px 8px;border-radius:8px;background:' + st.color + '22;color:' + st.color + ';font-weight:600">' + st.label + '</span>');
-    h += issueDetailField('등록일', iss.reportDate || '-');
+    h += issueDetailField('등록일', eH(iss.reportDate || '-'));
     if (iss.dueDate) {
       var overdue = iss.dueDate < localDate() && iss.status !== 'resolved' && iss.status !== 'closed';
-      h += issueDetailField('대응기한', '<span style="color:' + (overdue ? SEM_COLOR.danger + ';font-weight:700' : 'var(--t2)') + '">' + (overdue ? '⚠️ ' : '') + iss.dueDate + '</span>');
+      h += issueDetailField('대응기한', '<span style="color:' + (overdue ? SEM_COLOR.danger + ';font-weight:700' : 'var(--t2)') + '">' + (overdue ? '⚠️ ' : '') + eH(iss.dueDate) + '</span>');
     }
     if (iss.reporter) h += issueDetailField('보고자', eH(iss.reporter));
     if (iss.assignees && iss.assignees.length) h += issueDetailField('담당자', iss.assignees.map(function (a) { return eH(a); }).join(', '));
-    if (iss.resolvedDate) h += issueDetailField('해결일', iss.resolvedDate);
+    if (iss.resolvedDate) h += issueDetailField('해결일', eH(iss.resolvedDate));
     h += '</div>';
     if (iss.description) {
       h += '<div style="margin-top:10px;padding:8px;background:var(--bg-i);border-radius:6px;font-size:11px;color:var(--t3);white-space:pre-wrap">' + eH(iss.description) + '</div>';
@@ -645,7 +647,7 @@ function showIssueDetail(id) {
 
     // 빠른 상태 변경 — v13.38: 선택/미선택 시각 명확화 (현재 상태 ✓ + 굵은 외곽선, 미선택은 옅은 배경)
     h += '<div style="padding:10px 18px;border-bottom:1px solid var(--bd)">';
-    h += '<div style="font-size:10px;color:var(--t5);font-weight:600;margin-bottom:6px">상태 변경 <span style="color:var(--t6);font-weight:400">(현재: ' + (statuses[iss.status] ? statuses[iss.status].label : iss.status) + ')</span></div>';
+    h += '<div style="font-size:10px;color:var(--t5);font-weight:600;margin-bottom:6px">상태 변경 <span style="color:var(--t6);font-weight:400">(현재: ' + (statuses[iss.status] ? statuses[iss.status].label : eH(iss.status)) + ')</span></div>';
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
     Object.keys(statuses).forEach(function (sk) {
       var s = statuses[sk];
@@ -695,12 +697,12 @@ function showIssueDetail(id) {
     } else {
       h += '<div style="border-left:2px solid var(--bd);margin-left:8px;padding-left:14px">';
       logs.forEach(function (log) {
-        var logDp = depts[log.dept] || { label: log.dept || '', icon: '', color: SEM_COLOR.muted };
+        var logDp = depts[log.dept] || { label: eH(log.dept || ''), icon: '', color: SEM_COLOR.muted };
         var icon = LOG_TYPE_ICON[log.type] || '📝';
-        var safeLogId = log.id.replace(/'/g, "\\'");
+        var safeLogId = eA(log.id);
         h += '<div style="position:relative;margin-bottom:12px">';
         h += '<div style="position:absolute;left:-21px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--bg-p);border:2px solid var(--bd)"></div>';
-        h += '<div style="font-size:10px;color:var(--t5)">' + (log.date || '') + ' ' + (log.time || '') + '</div>';
+        h += '<div style="font-size:10px;color:var(--t5)">' + eH(log.date || '') + ' ' + eH(log.time || log.logTime || '') + '</div>';
         h += '<div style="font-size:11px;color:var(--t2);margin-top:2px">';
         h += icon + ' <strong>' + eH(log.type) + '</strong>';
         if (log.author) h += ' — ' + eH(log.author);
@@ -808,7 +810,7 @@ function issueSaveResolution(id) {
 
 function issueDeleteLog(logId, issueId) {
   if (!confirm('이 대응 이력을 삭제하시겠습니까?')) return;
-  issueLogDel(logId).then(function () {
+  issueLogDel(logId, issueId).then(function () {
     showToast('이력이 삭제되었습니다.');
     showIssueDetail(issueId);
   }).catch(function (err) {

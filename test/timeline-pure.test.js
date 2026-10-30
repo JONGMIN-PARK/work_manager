@@ -27,6 +27,8 @@ function load() {
     localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
     eH: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'),
   };
+  // wm-state.js 의 eA · eC 그대로 (속성 안 JS 문자열 · 색)
+  vm.runInNewContext(require('fs').readFileSync(path.join(__dirname, '..', 'wm-state.js'), 'utf8').split(/\r?\n/).filter((l) => /^function e[AC]\(/.test(l)).join('\n'), sandbox);
   vm.createContext(sandbox);
   for (const f of ['config.js', 'project-data.js', 'timeline.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), sandbox, { filename: f });

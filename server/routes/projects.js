@@ -1,4 +1,5 @@
 var express = require('express');
+var sv = require('../lib/safe-val');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
@@ -33,7 +34,9 @@ var gcs = require('../services/gcs.service');
 /** 완료 단계 ↔ 상태 완료 연동 (v13.277 — 마지막 단계 A/S → 완료).
  *  완료 단계로 옮기면 상태 완료 · 진척 100, 상태를 완료로 바꾸면 완료 단계로.
  *  완료 단계에서 다른 단계로 옮기면 진행중, 완료를 풀면(단계를 따로 안 줬을 때) 납품 단계로 돌림.
+ *  완료에서 빠지면 진척 100 이 남지 않게 단계 비율(수주 0 · 설계 20 … 납품 80)로 — 이후 마일스톤 보고·자동 산출이 덮어씀.
  *  clean: DB 컬럼 이름(snake)으로 바뀔 값 · prev: 이전 행 (새로 만들 땐 null) */
+var _PHASE_SEQ = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'done'];
 function syncDonePhase(clean, prev) {
   prev = prev || {};
   var phase = clean.current_phase !== undefined ? clean.current_phase : prev.current_phase;
@@ -44,7 +47,15 @@ function syncDonePhase(clean, prev) {
   else if (phaseMoved && prev.current_phase === 'done' && status === 'done') clean.status = 'active';
   else if (statusMoved && status === 'done' && phase !== 'done') { clean.current_phase = 'done'; clean.progress = 100; }
   else if (statusMoved && prev.status === 'done' && phase === 'done' && clean.current_phase === undefined) clean.current_phase = 'deliver';
-  else return clean;
+  // 진척: 완료 단계면 100 고정, 완료에서 빠졌는데 100 이면 단계 비율로
+  var finalPhase = clean.current_phase !== undefined ? clean.current_phase : prev.current_phase;
+  if (finalPhase === 'done') { if (clean.progress !== undefined) clean.progress = 100; }
+  else if (prev.current_phase === 'done') {
+    var pg = clean.progress !== undefined ? clean.progress : prev.progress;
+    var si = _PHASE_SEQ.indexOf(finalPhase);
+    if (Number(pg) >= 100 && si >= 0) clean.progress = Math.round(si / (_PHASE_SEQ.length - 1) * 100);
+  }
+  if (!(clean.current_phase !== undefined && clean.current_phase !== prev.current_phase)) return clean;
   // 단계 일정(phases JSON)도 같이 — 지난 단계는 완료, 새 단계는 진행(완료 단계는 바로 완료)
   if (clean.current_phase !== undefined && clean.current_phase !== prev.current_phase) {
     var ph = clean.phases !== undefined ? clean.phases : prev.phases;
@@ -66,7 +77,7 @@ function syncDonePhase(clean, prev) {
 }
 
 async function insertProject(q, req, b) {
-  var id = b.id || ('proj-' + require('crypto').randomUUID().slice(0, 12));
+  var id = sv.safeId(b.id, function () { return 'proj-' + require('crypto').randomUUID().slice(0, 12); });
   var deptId = b.departmentId || b.department_id || req.user.departmentId || null;
   var visibility = b.visibility || 'private';
   if (['private','dept','tenant'].indexOf(visibility) === -1) visibility = 'private';
@@ -82,7 +93,7 @@ async function insertProject(q, req, b) {
     [id, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
      st0.status, st0.progress != null ? st0.progress : (b.progress || 0), b.estimatedHours || b.estimated_hours || 0,
      JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
-     b.color || '#3B82F6', b.memo || '', st0.current_phase,
+     sv.safeColor(b.color, '#3B82F6'), b.memo || '', st0.current_phase,
      typeof st0.phases === 'string' ? st0.phases : JSON.stringify(st0.phases), req.user.sub, deptId, req.tenant.id, ownerId, visibility, JSON.stringify(b.specs || {})]
   );
   var row = r.rows[0];
@@ -224,7 +235,7 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
       actual_hours: b.actualHours !== undefined ? b.actualHours : b.actual_hours,
       assignees: b.assignees !== undefined ? JSON.stringify(b.assignees) : undefined,
       dependencies: b.dependencies !== undefined ? JSON.stringify(b.dependencies) : undefined,
-      color: b.color,
+      color: b.color !== undefined ? sv.safeColor(b.color, '#3B82F6') : undefined,
       memo: b.memo,
       current_phase: b.currentPhase !== undefined ? b.currentPhase : b.current_phase,
       phases: b.phases !== undefined ? JSON.stringify(b.phases) : undefined,
@@ -282,7 +293,7 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
       var milestones = b.milestones || [];
       for (var i = 0; i < milestones.length; i++) {
         var m = milestones[i];
-        var msId = m.id || ('ms-' + require('crypto').randomUUID().slice(0, 12));
+        var msId = sv.safeId(m.id, function () { return 'ms-' + require('crypto').randomUUID().slice(0, 12); });
         await client.query(
           "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
           [msId, projId, m.name || '', m.startDate || m.start_date || '', m.endDate || m.end_date || '', m.status || 'waiting',
@@ -473,7 +484,7 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
         "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id, tenant_id, owner_id, visibility) " +
         "VALUES ($1,$2,$3,$4,$5,$6,0,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16,$14,$17)",
         [newId, (b.orderNo != null ? String(b.orderNo) : ''), newName, src.start_date, src.end_date, src.status || 'active', src.estimated_hours || 0,
-         JSON.stringify(src.assignees || []), JSON.stringify(src.dependencies || []), src.color || '#3B82F6', src.memo || '', src.current_phase || 'order',
+         JSON.stringify(src.assignees || []), JSON.stringify(src.dependencies || []), sv.safeColor(src.color, '#3B82F6'), src.memo || '', src.current_phase || 'order',
          JSON.stringify(src.phases || {}), meId, deptId, req.tenant.id, src.visibility || 'private']
       );
       // 2) 활성 멤버(인원 할당) 복사
@@ -663,6 +674,10 @@ router.post('/:id/images', async function (req, res) {
     // v13.213: 크기 검사를 저장 전에 전부 — 예전엔 2번째가 크면 1번째만 저장된 채 413 이 났다
     if (arr.some(function (x) { return String(x.src).length > _IMG_MAX; })) {
       return res.status(413).json({ error: 'TOO_LARGE', message: '이미지가 너무 큽니다(1장 4MB 이하).' });
+    }
+    // 화면이 <img src> 로 그리므로 래스터 이미지 data URI 만 허용 (임의 문자열·SVG 로 스크립트 주입 차단)
+    if (arr.some(function (x) { return !/^data:image\/(png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+\/=\s]+$/i.test(String(x.src)); })) {
+      return res.status(400).json({ error: 'VALIDATION', message: '이미지 형식 오류 (PNG·JPEG·GIF·WEBP 만 가능)' });
     }
     // 현재 최대 sort_order
     var mr = await db.query('SELECT COALESCE(MAX(sort_order), -1) AS mx FROM project_images WHERE project_id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);

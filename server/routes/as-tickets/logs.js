@@ -6,6 +6,7 @@ var express = require('express');
 var router = express.Router();
 var db = require('../../config/db');
 var httpErr = require('../../lib/http-errors');
+var shared = require('./_shared');
 
 // ────────────────────────────────────────────────────────────
 // ── 활동 로그 (as_activity_logs) ──
@@ -32,10 +33,12 @@ router.post('/:id/logs', async function (req, res) {
     if (!b.workType && !b.work_type) return res.status(400).json({ error: 'VALIDATION', message: '작업 유형을 지정하세요.' });
     if (!b.actionTaken && !b.action_taken) return res.status(400).json({ error: 'VALIDATION', message: '조치 내용을 입력하세요.' });
 
+    if (!(await shared.assertTicket(req, res))) return;
+
     // 다음 seq
     var seqR = await db.query(
-      'SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM as_activity_logs WHERE ticket_id = $1',
-      [req.params.id]
+      'SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM as_activity_logs WHERE ticket_id = $1 AND tenant_id = $2',
+      [req.params.id, req.tenant.id]
     );
     var nextSeq = seqR.rows[0].next_seq;
 
@@ -76,6 +79,7 @@ router.post('/:id/logs', async function (req, res) {
       [req.params.id, req.tenant.id, req.user.sub]
     );
 
+    shared._invalidateStatsCache(req.tenant.id);
     res.status(201).json({ data: r.rows[0] });
   } catch (e) {
     httpErr.serverError(res, '[as-logs/create]', e);
@@ -117,6 +121,7 @@ router.put('/:id/logs/:lid', async function (req, res) {
       ' WHERE id = $' + idx++ + ' AND ticket_id = $' + idx++ + ' AND tenant_id = $' + idx++ + ' RETURNING *';
     var r = await db.query(sql, params);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    shared._invalidateStatsCache(req.tenant.id);
     res.json({ data: r.rows[0] });
   } catch (e) {
     httpErr.serverError(res, '[as-logs/update]', e);
@@ -131,6 +136,7 @@ router.delete('/:id/logs/:lid', async function (req, res) {
       [req.params.lid, req.params.id, req.tenant.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    shared._invalidateStatsCache(req.tenant.id);
     res.json({ message: '삭제 완료' });
   } catch (e) {
     httpErr.serverError(res, '[as-logs/delete]', e);
@@ -152,6 +158,8 @@ router.post('/:id/link-issue', async function (req, res) {
 
     var b = req.body || {};
     var issueId = b.issueId || b.issue_id;
+    // 이미 연결됨 + 새 이슈 생성 요청 → 중복 이슈 방지 (두 번 클릭 등)
+    if (!issueId && t.linked_issue_id) return res.status(409).json({ error: 'CONFLICT', message: '이미 이슈에 연결된 접수입니다.', issueId: t.linked_issue_id });
 
     if (!issueId) {
       // 새 이슈 자동 생성
@@ -192,7 +200,7 @@ router.post('/:id/link-issue', async function (req, res) {
       [issueId, req.user.sub, req.params.id, req.tenant.id]
     );
 
-    var freshR = await db.query('SELECT * FROM as_tickets WHERE id = $1', [req.params.id]);
+    var freshR = await db.query('SELECT * FROM as_tickets WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     res.json({ data: freshR.rows[0], issueId: issueId });
   } catch (e) {
     httpErr.serverError(res, '[as/link-issue]', e);

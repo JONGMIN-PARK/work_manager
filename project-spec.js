@@ -456,6 +456,9 @@ function psDiagramZoom() {
   var L = _psDgLayout();
   if (L.empty) return;
   var svg = specDiagramSvg(L, { accent: SEM_COLOR.info, warn: SEM_COLOR.warn });
+  return wmGuardedModal('psDiagramZoom', function () { _psBuildDiagramZoom(svg); }, 'psDiagramZoom');
+}
+function _psBuildDiagramZoom(svg) {
   createModal({ id: 'psDiagramZoom', titleText: '🔌 하드웨어 구성도 — ' + (_ps.proj.name || ''), html: '<div style="overflow:auto;max-height:78vh;background:var(--bg);border-radius:8px;padding:10px">' + svg + '</div>', width: '1000px', closeOnEsc: true, closeOnOverlay: true });
 }
 

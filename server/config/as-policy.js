@@ -27,8 +27,24 @@ var WARRANTY_COLORS = { '보증 내': '#10B981', '보증 종료': '#EF4444', '�
 
 var METHOD_COLORS = { 원격지원: '#3B82F6', 출장: '#F59E0B', RMA: '#EF4444', 가이드제공: '#06B6D4', 자료송부: '#8B5CF6' };
 
+/** SLA 위반 판정 CASE 식 — SLA[].closeDays 로 만든다(통계·주간 요약·스케줄러 공용).
+ *  includeClosed: 종결 건도 (종결-접수) 가 기한을 넘었으면 위반으로 센다 */
+function slaBreachExpr(includeClosed) {
+  var w = [];
+  Object.keys(SLA).forEach(function (p) {
+    var d = parseInt(SLA[p].closeDays, 10); if (!d) return;
+    w.push("WHEN status NOT IN ('closed','cancelled') AND priority='" + p + "' AND received_at < NOW() - INTERVAL '" + d + " days' THEN 1");
+  });
+  if (includeClosed) Object.keys(SLA).forEach(function (p) {
+    var d = parseInt(SLA[p].closeDays, 10); if (!d) return;
+    w.push("WHEN status='closed' AND priority='" + p + "' AND closed_at - received_at > INTERVAL '" + d + " days' THEN 1");
+  });
+  return 'CASE ' + w.join(' ') + ' ELSE 0 END';
+}
+
 module.exports = {
   SLA: SLA,
+  slaBreachExpr: slaBreachExpr,
   STATUS_COLORS: STATUS_COLORS,
   WARRANTY_COLORS: WARRANTY_COLORS,
   METHOD_COLORS: METHOD_COLORS

@@ -82,7 +82,7 @@ function _pdPhaseInfo(allChk) {
 /* 헤더(이름·닫기) + 상태 배지 */
 function _pdDetailHeaderHtml(proj, stInfo) {
   var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
-    '<h3 style="font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="background:' + proj.color + ';width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0"></span>' + eH(proj.name) + '</h3>' +
+    '<h3 style="font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="background:' + eC(proj.color) + ';width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0"></span>' + eH(proj.name) + '</h3>' +
     '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
       '<div class="pd-size" title="패널 폭">' +
         '<button data-pd-size="0.34" onclick="pdSetPanelSize(0.34)">1/3</button>' +
@@ -127,7 +127,7 @@ function _pdDetailOverviewHtml(id, proj, projMs, allChk, phases) {
 
   // 진척률 바
   if (proj.progress > 0) {
-    html += '<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t5);margin-bottom:3px"><span>진척률</span><span>' + proj.progress + '%' + (proj.actualHours ? ' (' + proj.actualHours + 'h / ' + proj.estimatedHours + 'h)' : '') + '</span></div><div style="height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + Math.min(proj.progress, 100) + '%;background:' + proj.color + ';border-radius:3px"></div></div></div>';
+    html += '<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t5);margin-bottom:3px"><span>진척률</span><span>' + proj.progress + '%' + (proj.actualHours ? ' (' + proj.actualHours + 'h / ' + proj.estimatedHours + 'h)' : '') + '</span></div><div style="height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + Math.min(proj.progress, 100) + '%;background:' + eC(proj.color) + ';border-radius:3px"></div></div></div>';
   }
 
   // 담당자
@@ -466,7 +466,13 @@ function pdLoadDev(projId) {
   el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">로딩 중...</div>';
   var seq = _pdNextSeq('dev');
   devItemsByProject(projId).then(function (items) { if (!_pdIsStale('dev', seq, projId)) pdRenderDev(items); })
-    .catch(function () { if (_pdIsStale('dev', seq, projId)) return; el.innerHTML = '<div style="color:var(--t6);font-size:11px;padding:10px 0">개발 백로그를 불러오지 못했습니다.</div>'; });
+    .catch(function (err) { if (_pdIsStale('dev', seq, projId)) return; el.innerHTML = _pdLoadFailHtml('개발 백로그', 'pdLoadDev', projId, err); });
+}
+/* 지연 로딩 탭 실패 안내 + 다시 시도 — 예전엔 토스트만 뜨고 탭은 "로딩 중..."에 멈췄다 */
+function _pdLoadFailHtml(what, fnName, projId, err) {
+  return '<div style="text-align:center;color:var(--t5);font-size:11px;padding:20px 0">' + what + '을(를) 불러오지 못했습니다' +
+    '<div style="font-size:10px;color:var(--t6);margin-top:3px">' + eH(_pdErrMsg(err)) + '</div>' +
+    '<button class="btn btn-g btn-s" style="margin-top:8px;font-size:10px" onclick="' + fnName + '(\'' + eA(projId) + '\')">다시 시도</button></div>';
 }
 
 function pdRenderDev(items) {
@@ -537,7 +543,7 @@ function pdDevMove(id, status) {
 function pdDevDel(id) {
   if (!confirm('이 개발 아이템을 삭제할까요?')) return;
   devItemDel(id).then(function () { pdLoadDev(_pdDevProj); })
-    .catch(function () { if (typeof showToast === 'function') showToast('삭제 실패', 'error'); });
+    .catch(function (err) { if (typeof showToast === 'function') showToast('삭제 실패: ' + _pdErrMsg(err), 'error'); });
 }
 
 /* ═══ 회의 탭 — v13.198 부터 project-meetings.js (요약·미완료 액션 모아보기·참석자·안건·회의록·액션아이템) ═══
@@ -559,7 +565,7 @@ function pdLoadIssues(projId) {
     if (_pdIsStale('issues', seq, projId)) return;
     if (!issues || issues.length === 0) {
       wrap.innerHTML = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">등록된 이슈가 없습니다.' +
-        '<br><button class="btn btn-g btn-s" style="margin-top:8px;font-size:10px" onclick="pdCloseDetail();if(typeof showIssueModal===\'function\')showIssueModal()">+ 이슈 등록</button></div>';
+        '<br><button class="btn btn-g btn-s pd-edit-only" style="margin-top:8px;font-size:10px" onclick="pdNewIssue(\'' + eA(projId) + '\')">+ 이슈 등록</button></div>';
       return;
     }
     var statuses = typeof ISSUE_STATUS !== 'undefined' ? ISSUE_STATUS : {};
@@ -599,8 +605,28 @@ function pdLoadIssues(projId) {
 
     wrap.innerHTML = h;
   }).catch(function (err) {
+      if (_pdIsStale('issues', seq, projId)) return;
       console.error('[pdLoadIssues]', err);
-      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+      wrap.innerHTML = _pdLoadFailHtml('이슈', 'pdLoadIssues', projId, err);
+  });
+}
+
+/* 이 프로젝트로 새 이슈 등록 — 표준 모달 가드 + 프로젝트 미리 선택 (예전엔 빈 양식이라 프로젝트를 다시 골라야 했다) */
+function pdNewIssue(projId) {
+  if (typeof showIssueModal !== 'function') return;
+  pdCloseDetail();
+  return wmGuardedModal('issueModal', function () { showIssueModal(); }, 'issueModalOverlay', {
+    onOpen: function () {
+      // 양식은 프로젝트 목록을 받은 뒤 채워진다 — 선택칸이 생기면 고른다
+      var tries = 0;
+      (function pick() {
+        var sel = document.getElementById('issModalProj');
+        if (sel && sel.querySelector('option[value="' + String(projId).replace(/"/g, '') + '"]')) {
+          sel.value = projId;
+          if (typeof issueModalAutoPhase === 'function') issueModalAutoPhase();
+        } else if (tries++ < 40) setTimeout(pick, 50);
+      })();
+    }
   });
 }
 
@@ -621,7 +647,7 @@ function pdLoadWork(projId) {
   }).catch(function (err) {
       if (_pdIsStale('work', seq, projId)) return;
       console.error('[pdLoadWork]', err);
-      if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+      wrap.innerHTML = _pdLoadFailHtml('투입실적', 'pdLoadWork', projId, err);
   });
 }
 
@@ -1284,8 +1310,11 @@ function wmGuardedModal(key, builderFn, checkElId, opts) {
   _wmModalBusy[key] = true;
   return Promise.resolve()
     .then(function () { return builderFn(); })             // 창 생성
-    .then(function () { return wmWaitForEl(checkElId, opts.timeoutMs || 5000); })  // 완전히 열릴 때까지 대기
-    .then(function () { if (typeof opts.onOpen === 'function') opts.onOpen(); return true; })
+    .then(function (r) {
+      if (r === false) return false;                       // 열지 않기로 함(안내 토스트 뒤 그만둠) → 기다리지 않음
+      return wmWaitForEl(checkElId, opts.timeoutMs || 5000)  // 완전히 열릴 때까지 대기
+        .then(function () { if (typeof opts.onOpen === 'function') opts.onOpen(); return true; });
+    })
     .catch(function (err) {
       var ex = document.getElementById(checkElId); if (ex) ex.remove();
       if (typeof showToast === 'function') showToast('❌ 창을 여는 중 오류: ' + ((err && err.message) || err), 'error');
@@ -1509,12 +1538,16 @@ function _pdAssignNoteField() {
   return '<label class="fl" style="font-size:11px">인수인계 메모(선택 — 새 담당에게 메일·텔레그램·코멘트로 전달)</label>' +
     '<textarea id="pdAsgNote" rows="3" class="si" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:4px" placeholder="관련 진행 상황·맥락·전달 사항을 적으면 새 담당에게 전달됩니다"></textarea>';
 }
+// 표준 모달 가드 — 연타 시 사용자 목록 요청·창이 여러 번 뜨지 않게
 function _pdAssignAction(kind, mid, projId, fromUserId) {
   if (typeof userLookup !== 'function') { if (typeof showToast === 'function') showToast('사용자 목록을 불러올 수 없습니다.', 'error'); return; }
+  return wmGuardedModal('pdAssign', function () { return _pdBuildAssignModal(kind, mid, projId, fromUserId); }, 'pdAssignModal');
+}
+function _pdBuildAssignModal(kind, mid, projId, fromUserId) {
   _pdAssignCtx = { kind: kind, mid: mid, projId: projId, fromUserId: fromUserId || '' };
-  userLookup().then(function (users) {
+  return userLookup().then(function (users) {
     users = (users || []).filter(function (u) { return kind === 'add' || u.id !== fromUserId; });
-    var opts = users.map(function (u) { return '<option value="' + u.id + '">' + eH(u.displayName || u.name || u.id) + '</option>'; }).join('');
+    var opts = users.map(function (u) { return '<option value="' + eH(u.id) + '">' + eH(u.displayName || u.name || u.id) + '</option>'; }).join('');
     var titleMap = { add: '담당 추가', replace: '담당 변경(교체)', cover: '임시 대체' };
     var extra;
     if (kind === 'add') {
@@ -1537,7 +1570,7 @@ function _pdAssignAction(kind, mid, projId, fromUserId) {
       boxStyle: 'border-radius:12px;padding:18px;width:340px;max-height:none;overflow-y:visible;box-shadow:none;color:inherit'
     });
     document.getElementById('pdAsgOk').onclick = function () { _pdAssignSubmit(); };
-  }).catch(function () { if (typeof showToast === 'function') showToast('사용자 목록 로드 실패', 'error'); });
+  }).catch(function () { if (typeof showToast === 'function') showToast('사용자 목록 로드 실패', 'error'); return false; });
 }
 
 function _pdAssignSubmit() {
@@ -1708,10 +1741,12 @@ function pdSetUnit(u, projId) {
 /* 업무일지 레코드를 프로젝트 마일스톤의 날짜 구간으로 자동 태깅 */
 function pdAutoTagWork(projId) {
   if (typeof apiFetch !== 'function') return;
-  var overwrite = confirm('미태깅 레코드만 태깅합니다.\n확인: 미태깅만 태깅 / 취소: 기존 태그도 덮어쓰기\n\n[확인] 누를까요?');
+  // [취소] 는 항상 "그만두기" — 예전엔 [취소]가 "기존 태그 덮어쓰기"라 그만두려던 사람이 태그를 덮어썼다
+  if (!confirm('업무일지 레코드를 마일스톤 날짜 구간으로 자동 태깅합니다.\n(태그 없는 레코드만 — 기존 태그는 그대로)\n\n진행할까요?')) return;
+  var overwrite = confirm('기존 태그도 날짜 구간 기준으로 다시 덮어쓸까요?\n\n[확인] 덮어쓰기 · [취소] 태그 없는 것만');
   apiFetch('/api/archives/records/auto-tag-milestones', {
     method: 'POST',
-    body: JSON.stringify({ projectId: projId, overwrite: !overwrite })
+    body: JSON.stringify({ projectId: projId, overwrite: overwrite })
   }).then(function (r) {
     var d = r && r.data ? r.data : {};
     if (d.reason) { if (typeof showToast === 'function') showToast(d.reason, 'warn'); return; }
@@ -2155,6 +2190,9 @@ function renderProgressHistoryChart(projectId, proj) {
 
     // 기존 차트 제거
     if (_progressChart) { try { _progressChart.destroy(); } catch (e) { console.warn('[Timeline]', e); } }
+    // 색은 검사된 값만 · 반투명 채움('20' 덧붙이기)은 #rrggbb 일 때만
+    var pcol = eC(proj.color);
+    var pfill = /^#[0-9a-f]{6}$/i.test(pcol) ? pcol + '20' : 'rgba(59,130,246,.12)';
 
     _progressChart = new Chart(ctx, {
       type: 'line',
@@ -2164,12 +2202,12 @@ function renderProgressHistoryChart(projectId, proj) {
           {
             label: '진척률 (%)',
             data: progressData,
-            borderColor: proj.color || '#3B82F6',
-            backgroundColor: (proj.color || '#3B82F6') + '20',
+            borderColor: pcol,
+            backgroundColor: pfill,
             fill: true,
             tension: 0.3,
             pointRadius: 3,
-            pointBackgroundColor: proj.color || '#3B82F6',
+            pointBackgroundColor: pcol,
             yAxisID: 'y'
           },
           {

@@ -66,7 +66,8 @@ function _calViewRange() {
 }
 
 /* ═══ 메인 렌더 ═══ */
-var _calRenderSeq = 0;   // 렌더 번호 — 월 이동 연타·저장 직후 재렌더가 겹칠 때 늦게 끝난 옛 렌더를 버린다
+var _calRenderSeq = 0;
+var _calDashKey = null;   // 마지막으로 대시보드를 그린 프로젝트 상태   // 렌더 번호 — 월 이동 연타·저장 직후 재렌더가 겹칠 때 늦게 끝난 옛 렌더를 버린다
 async function renderCalendar() {
   var wrap = document.getElementById('calendarWrap');
   if (!wrap) return;
@@ -92,8 +93,14 @@ async function renderCalendar() {
   var events = expandRepeatingEvents(rawEvents, rg.start, rg.end);
 
   // 대시보드 렌더 (기다리지 않음 — 실패가 처리 안 된 rejection 으로 남지 않게 catch)
-  var _dash = renderDashboard(projects);
-  if (_dash && typeof _dash.catch === 'function') _dash.catch(function (e) { console.warn('[Calendar] dashboard', e); });
+  //  프로젝트가 바뀌었을 때만 — 예전엔 달 넘기기 · 필터 누를 때마다 업무 분포까지 다시 계산했다
+  var _dashKey = projects.map(function (p) { return p.id + ':' + (p.version || '') + ':' + (p.progress || 0) + ':' + (p.status || ''); }).join('|') + '#' +
+    milestones.map(function (m) { return m.id + ':' + (m.status || '') + ':' + (m.endDate || ''); }).join('|') + '#' + rawEvents.length;
+  if (_dashKey !== _calDashKey || !document.querySelector('#dashCards *')) {
+    _calDashKey = _dashKey;
+    var _dash = renderDashboard(projects);
+    if (_dash && typeof _dash.catch === 'function') _dash.catch(function (e) { _calDashKey = null; console.warn('[Calendar] dashboard', e); });
+  }
 
   // 필터 바
   renderCalFilter(wrap, projects);
@@ -154,7 +161,7 @@ function _calBuildItems(projects, events, milestones, issues, projMap) {
   var items = [];
   projects.forEach(function (p) {
     var st = autoProjectStatus(p);
-    var base = { proj: p, projectId: p.id, color: p.color || SEM_COLOR.info, assignees: p.assignees || [], done: p.status === 'done' };
+    var base = { proj: p, projectId: p.id, color: eC(p.color, SEM_COLOR.info), assignees: p.assignees || [], done: p.status === 'done' };
     if (p.endDate) items.push(Object.assign({ kind: 'pend', id: 'pe_' + p.id, date: p.endDate, end: p.endDate, title: _calPname(p), overdue: st === 'delayed' }, base));
     if (p.startDate) items.push(Object.assign({ kind: 'pstart', id: 'ps_' + p.id, date: p.startDate, end: p.startDate, title: _calPname(p), overdue: false }, base));
     if (p.startDate && p.endDate && p.endDate > p.startDate) items.push(Object.assign({ kind: 'pspan', id: 'pp_' + p.id, date: p.startDate, end: p.endDate, title: _calPname(p), overdue: st === 'delayed' }, base));
@@ -164,7 +171,7 @@ function _calBuildItems(projects, events, milestones, issues, projMap) {
     var p = projMap[ms.projectId];
     var done = ms.status === 'done';
     items.push({ kind: 'ms', id: 'ms_' + ms.id, ref: ms, date: ms.endDate, end: ms.endDate, title: ms.name || '(이름 없음)', proj: p, projectId: ms.projectId,
-      color: (p && p.color) || SEM_COLOR.purple, done: done, overdue: !done && ms.endDate < today, assignees: ms.assignees || (p && p.assignees) || [] });
+      color: eC(p && p.color, SEM_COLOR.purple), done: done, overdue: !done && ms.endDate < today, assignees: ms.assignees || (p && p.assignees) || [] });
   });
   issues.forEach(function (iss) {
     var urg = iss.urgency === 'urgent' ? SEM_COLOR.danger : iss.urgency === 'normal' ? SEM_COLOR.warn : '#64748B';
@@ -179,7 +186,7 @@ function _calBuildItems(projects, events, milestones, issues, projMap) {
       canMod: _calEvtCanModify(ev, projMap),
       title: ev.title || t.label, icon: t.icon, typeLabel: t.label, repeat: !!(ev.repeat || ev._repeatInstance), proj: projMap[pid], projectId: pid,
       time: ev.startTime || '', timeEnd: ev.endTime || '',
-      color: ev.color || t.color, done: false, overdue: false, assignees: ev.assignees || [] });
+      color: eC(ev.color, t.color), done: false, overdue: false, assignees: ev.assignees || [] });
   });
   return items;
 }
@@ -208,8 +215,8 @@ function renderCalFilter(wrap, allProjects) {
       var ck = calFilterProjs.has(p.id) ? ' checked' : '';
       return '<label style="display:flex;align-items:center;gap:6px;padding:4px 6px;font-size:11px;cursor:pointer;white-space:nowrap;border-radius:5px"' +
         ' onmouseover="this.style.background=\'var(--bg-hv)\'" onmouseout="this.style.background=\'\'">' +
-        '<input type="checkbox"' + ck + ' onchange="calToggleProj(\'' + p.id + '\',this.checked)" style="cursor:pointer">' +
-        '<span style="width:8px;height:8px;border-radius:50%;background:' + p.color + ';flex-shrink:0"></span>' +
+        '<input type="checkbox"' + ck + ' onchange="calToggleProj(\'' + eA(p.id) + '\',this.checked)" style="cursor:pointer">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + eC(p.color) + ';flex-shrink:0"></span>' +
         '<span style="overflow:hidden;text-overflow:ellipsis;max-width:260px">' + eH(p.name || p.orderNo) + '</span></label>';
     }).join('') || '<div style="padding:8px;font-size:11px;color:var(--t6)">프로젝트가 없습니다</div>';
     projPanel = '<div style="position:absolute;top:100%;left:0;margin-top:4px;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:6px;max-height:340px;overflow:auto;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.35);min-width:220px">' +
@@ -465,8 +472,7 @@ async function calMsDone(id) {
   try {
     // 상태만 보낸다 — 예전엔 화면에 들고 있던 옛 마일스톤 전체를 보내 그 사이 바뀐 이름·날짜를 되돌렸다
     await msPut({ id: it.ref.id, status: 'done' });
-    if (typeof showToast === 'function') showToast('✅ 완료 처리: ' + it.title);
-    await renderCalendar();
+    if (typeof showToast === 'function') showToast('✅ 완료 처리: ' + it.title);   // 다시 그리기는 데이터 버스가
   } catch (err) {
     console.error('[calMsDone]', err);
     if (typeof showToast === 'function') showToast('❌ 완료 처리 실패: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
@@ -646,7 +652,15 @@ function renderWeekView(items, rg, archiveSummaries) {
 
 /* ═══ 일정 등록/편집 모달 ═══ */
 /* opts (v13.252): { startTime, endTime, title, location } 새로 만들 때 채울 값 · onSaved 저장/삭제 뒤 부를 것 (기본 renderCalendar) */
-async function showEventModal(evtId, defaultDate, opts) {
+/* 창 여는 함수는 표준 가드(wmGuardedModal · project-detail.js)로 — 연타해도 한 번만, 다 열릴 때까지 다음 클릭 무시 */
+function _calGuardModal(key, raw, args, elId) {
+  var self = this;
+  if (typeof wmGuardedModal !== 'function') return raw.apply(self, args);
+  return wmGuardedModal(key, function () { return raw.apply(self, args); }, elId);
+}
+
+function showEventModal(evtId, defaultDate, opts) { return _calGuardModal('cal:evt', _showEventModalRaw, arguments, 'evtModal'); }
+async function _showEventModalRaw(evtId, defaultDate, opts) {
   var existing = document.getElementById('evtModal');
   if (existing) existing.remove();
 
@@ -656,13 +670,6 @@ async function showEventModal(evtId, defaultDate, opts) {
   var projects = await projGetAll();
 
   // v13.63: backdrop 클릭 닫기 비활성화 — 데이터 유실 방지 (✕ 버튼만 닫기)
-
-  // 반복 인스턴스인 경우 원본 로드
-  if (evt && evt._repeatInstance && evt._origId) {
-    evt = await evtGet(evt._origId);
-    if (!evt) return;
-    evtId = evt.id;
-  }
 
   var title = evt ? evt.title : ((opts && opts.title) || '');
   window._evtModalOnSaved = (opts && opts.onSaved) || null;
@@ -686,7 +693,7 @@ async function showEventModal(evtId, defaultDate, opts) {
   var projChecks = projects.map(function (p) {
     var chk = selProjs.includes(p.id) ? ' checked' : '';
     var dis = (!chk && !projCanEdit(p)) ? ' disabled title="편집 권한이 없는 프로젝트"' : '';
-    return '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t3);cursor:pointer"><input type="checkbox" class="evt-proj-chk" value="' + p.id + '"' + chk + dis + '><span class="dot" style="background:' + p.color + ';width:6px;height:6px;border-radius:50%;display:inline-block"></span>' + eH(p.name || p.orderNo) + '</label>';
+    return '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t3);cursor:pointer"><input type="checkbox" class="evt-proj-chk" value="' + eH(p.id) + '"' + chk + dis + '><span class="dot" style="background:' + eC(p.color) + ';width:6px;height:6px;border-radius:50%;display:inline-block"></span>' + eH(p.name || p.orderNo) + '</label>';
   }).join('');
 
   // 유형 옵션
@@ -726,7 +733,7 @@ async function showEventModal(evtId, defaultDate, opts) {
       '<div><label class="fl">메모</label><textarea class="si" id="evtMemo" rows="2" style="padding-left:10px;resize:vertical" placeholder="상세 내용...">' + eH(memo) + '</textarea></div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">' +
-      (evt && _evtCanMod ? '<button class="btn btn-d btn-s" onclick="deleteEventUI(\'' + evt.id + '\')">🗑 삭제</button>' : '') +
+      (evt && _evtCanMod ? '<button class="btn btn-d btn-s" onclick="deleteEventUI(\'' + eA(evt.id) + '\')">🗑 삭제</button>' : '') +
       (_evtCanMod ? '<button class="btn btn-p" onclick="saveEventUI(\'' + (evt ? evt.id : '') + '\')">' + (evt ? '💾 수정' : '➕ 등록') + '</button>'
                   : '<span style="font-size:11px;color:var(--t6);align-self:center">보기 전용 — 작성자·연결 프로젝트 참여자만 수정할 수 있습니다</span>') +
     '</div>' +
@@ -836,7 +843,7 @@ async function saveEventUI(existingId) {
       await createEvent(data);
     }
 
-    document.getElementById('evtModal').remove();
+    var _em = document.getElementById('evtModal'); if (_em) _em.remove();   // 저장 중 창을 닫았어도 "실패" 로 보이지 않게
     await _calAfterEvtSave();
     showToast(existingId ? '일정이 수정되었습니다' : '일정이 등록되었습니다');
   } catch (err) {
@@ -853,7 +860,7 @@ function _calAfterEvtSave() {
   var fn = window._evtModalOnSaved;
   window._evtModalOnSaved = null;
   if (typeof fn === 'function') return Promise.resolve(fn());
-  return renderCalendar();
+  return Promise.resolve();   // 달력 탭이면 데이터 버스가 다시 그림 (예전엔 여기서도 그려 두 번)
 }
 
 function _calErrMsg(err) {
@@ -868,7 +875,7 @@ async function deleteEventUI(id) {
     if (ev && ev.repeat) msg = '이 반복 일정의 모든 인스턴스가 삭제됩니다. 계속하시겠습니까?';
     if (!confirm(msg)) return;
     await evtDel(id);
-    document.getElementById('evtModal').remove();
+    var _em = document.getElementById('evtModal'); if (_em) _em.remove();   // 저장 중 창을 닫았어도 "실패" 로 보이지 않게
     await _calAfterEvtSave();
     showToast('일정이 삭제되었습니다', 'warn');
   } catch (err) {
@@ -878,7 +885,8 @@ async function deleteEventUI(id) {
 }
 
 /* ═══ Google Calendar / ICS 가져오기 ═══ */
-function showGcalImportModal() {
+function showGcalImportModal() { return _calGuardModal('cal:gcal', _showGcalImportModalRaw, arguments, 'gcalModal'); }
+function _showGcalImportModalRaw() {
   var existing = document.getElementById('gcalModal');
   if (existing) existing.remove();
 
@@ -936,8 +944,18 @@ async function importICSFile(file) {
   }
 }
 
+/* ICS 날짜 — 'Z'(UTC) 는 이 컴퓨터 시각(KST)으로 바꿔 날짜 · 시각을 (예전엔 날짜만 잘라 23시Z 가 하루 앞 날로 들어갔다) */
+function _icsDT(block, key) {
+  var m = block.match(new RegExp('(?:^|\\n)' + key + '[^:\\n]*:(\\d{4})(\\d{2})(\\d{2})(?:T(\\d{2})(\\d{2})(\\d{2})?(Z)?)?'));
+  if (!m) return null;
+  if (!m[4]) return { date: m[1] + '-' + m[2] + '-' + m[3], time: null };
+  var d = m[7] ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5])) : new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+  return { date: d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()), time: p2(d.getHours()) + ':' + p2(d.getMinutes()) };
+}
 function parseICS(text) {
   var events = [];
+  text = String(text || '').replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '');   // RFC5545 접힌 줄 펴기 (긴 SUMMARY 가 잘렸다)
   var blocks = text.split('BEGIN:VEVENT');
 
   for (var i = 1; i < blocks.length; i++) {
@@ -948,20 +966,14 @@ function parseICS(text) {
     var sumMatch = block.match(/SUMMARY[^:]*:(.*)/);
     if (sumMatch) ev.title = sumMatch[1].trim().replace(/\\n/g, ' ').replace(/\\,/g, ',');
 
-    // DTSTART
-    var startMatch = block.match(/DTSTART[^:]*:(\d{4})(\d{2})(\d{2})(T(\d{2})(\d{2}))?/);
-    if (startMatch) {
-      ev.startDate = startMatch[1] + '-' + startMatch[2] + '-' + startMatch[3];
-    }
-
-    // DTEND
-    var endMatch = block.match(/DTEND[^:]*:(\d{4})(\d{2})(\d{2})(T(\d{2})(\d{2}))?/);
-    if (endMatch) {
-      ev.endDate = endMatch[1] + '-' + endMatch[2] + '-' + endMatch[3];
-      // 종일 이벤트: DTEND는 exclusive이므로 하루 빼기
-      if (!endMatch[4]) {
-        ev.endDate = _calAddDays(ev.endDate, -1);
-      }
+    // DTSTART · DTEND (시각 있으면 startTime · endTime 도)
+    var st = _icsDT(block, 'DTSTART'), en = _icsDT(block, 'DTEND');
+    if (st) { ev.startDate = st.date; if (st.time) ev.startTime = st.time; }
+    if (en) {
+      ev.endDate = en.date;
+      if (en.time) ev.endTime = en.time;
+      else ev.endDate = _calAddDays(ev.endDate, -1);   // 종일 이벤트: DTEND는 exclusive이므로 하루 빼기
+      if (ev.startDate && ev.endDate < ev.startDate) ev.endDate = ev.startDate;
     } else {
       ev.endDate = ev.startDate;
     }
@@ -974,7 +986,7 @@ function parseICS(text) {
     var locMatch = block.match(/LOCATION[^:]*:(.*)/);
     if (locMatch) {
       var loc = locMatch[1].trim().replace(/\\,/g, ',');
-      ev.memo = (ev.memo || '') + (loc ? '\n장소: ' + loc : '');
+      if (loc) ev.location = loc;   // 일정의 장소 칸으로 (v13.252 부터 있음)
     }
 
     // RRULE → repeat
@@ -1056,8 +1068,7 @@ async function calDropEvt(e, targetDate) {
     await updateEvent(evtId, { startDate: newStart, endDate: newEnd });
     showToast(evt.repeat ? '반복 일정을 ' + (shift > 0 ? '+' : '') + shift + '일 이동했습니다' : '일정을 ' + targetDate + '로 이동했습니다');
     calDragEvtId = null;
-    calDragEvtDate = null;
-    await renderCalendar();
+    calDragEvtDate = null;   // 다시 그리기는 데이터 버스가
   } catch (err) {
     console.error('[calDropEvt]', err);
     if (typeof showToast === 'function') showToast('❌ ' + _calErrMsg(err), 'error');

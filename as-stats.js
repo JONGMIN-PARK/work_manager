@@ -477,12 +477,8 @@ function _asStatsHtmlChartCell(canvasId, title, sub, drillKey, size, isDoughnut)
   return h;
 }
 
-function _asStatsEsc(s) {
-  if (s == null) return '';
-  return String(s).replace(/[&<>"']/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-  });
-}
+/* HTML 이스케이프 — as-core.js _asEsc(→ 공용 eH) 위임 */
+function _asStatsEsc(s) { return _asEsc(s); }
 
 /* 와이드 레이아웃 스타일 (1회 주입) */
 function _asStatsInjectStyle() {
@@ -882,7 +878,15 @@ function _asStatsDrawAll(d) {
         y: { grid: { color: gridColor }, ticks: { font: { size: 10 }, beginAtZero: true } }
       }
     },
-    deepMerge: function (a, b) { return Object.assign({}, a, b); },
+    // 진짜 깊은 병합 — 예전 얕은 병합은 { plugins: {legend} } 만 줘도 공통 tooltip·scales 설정이 통째로 사라졌다
+    deepMerge: function merge(a, b) {
+      var o = Object.assign({}, a);
+      Object.keys(b || {}).forEach(function (k) {
+        var bv = b[k], av = o[k];
+        o[k] = (bv && av && typeof bv === 'object' && typeof av === 'object' && !Array.isArray(bv) && !Array.isArray(av)) ? merge(av, bv) : bv;
+      });
+      return o;
+    },
     groupBy: (d.period && d.period.groupBy) || 'month'
   };
 
@@ -892,7 +896,8 @@ function _asStatsDrawAll(d) {
 /* ─── Drill-down: 차트 클릭 → A/S 목록 필터로 점프 ─── */
 function _asStatsDrillDown(filter) {
   if (!filter) return;
-  // 적용 가능한 필터만
+  // 이전 목록 필터가 남아 겹치지 않도록 먼저 비움 → 적용 가능한 필터만
+  asFilterStatus = ''; asFilterPriority = ''; asFilterCategory = ''; asSearchKw = '';
   if (filter.category)  asFilterCategory = filter.category;
   if (filter.priority)  asFilterPriority = filter.priority;
   if (filter.status)    asFilterStatus = filter.status;

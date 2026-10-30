@@ -43,12 +43,13 @@ function _asSignClear(role) {
 }
 
 function asSignRedraw(ticketId, role) {
-  // 기존 서명을 가린 채 다시 그리기 캔버스 띄움
+  // 기존 서명을 가린 채 다시 그리기 캔버스 띄움 (저장 시 이름·CSAT 은 서버가 유지)
   asGetExpand(ticketId).then(function (t) {
-    if (t && t.signatures) {
-      t.signatures = t.signatures.filter(function (s) { return s.role !== role; });
-    }
+    if (!t) return;
+    if (t.signatures) t.signatures = t.signatures.filter(function (s) { return s.role !== role; });
     _asRenderDetail(t, _asCats());
+  }).catch(function (err) {
+    if (typeof showToast === 'function') showToast('❌ 불러오기 실패: ' + _asErrMsg(err), 'error');
   });
 }
 
@@ -134,6 +135,9 @@ function asCSATSave(ticketId) {
 
 /* ─── 부품 추가 모달 + 액션 ─── */
 function showASPartAddForm(ticketId) {
+  return _asGuard('asPartAdd', 'asPartAddOverlay', function () { _asBuildPartAddForm(ticketId); });
+}
+function _asBuildPartAddForm(ticketId) {
   var BILL = typeof AS_BILLING !== 'undefined' ? AS_BILLING : {};
   document.querySelectorAll('#asPartAddOverlay').forEach(function (el) { el.remove(); });
 
@@ -202,6 +206,9 @@ function asPartRemove(ticketId, pid) {
 
 /* ─── 첨부 추가 모달 + 액션 ─── */
 function showASAttachAddForm(ticketId) {
+  return _asGuard('asAttachAdd', 'asAttachAddOverlay', function () { _asBuildAttachAddForm(ticketId); });
+}
+function _asBuildAttachAddForm(ticketId) {
   var CAT = typeof AS_ATTACH_CATEGORY !== 'undefined' ? AS_ATTACH_CATEGORY : {};
   document.querySelectorAll('#asAttachAddOverlay').forEach(function (el) { el.remove(); });
 
@@ -212,7 +219,7 @@ function showASAttachAddForm(ticketId) {
   h += '<div style="font-size:10px;color:var(--t5);margin-bottom:10px">사진·캡처·PDF·문서 등을 첨부할 수 있습니다 (10MB 이하 자동 임베드).<br>큰 파일은 외부 스토리지(또는 문서관리)에 먼저 올린 뒤 URL만 등록하세요.</div>';
   h += '<div style="margin-bottom:10px">';
   h += '<label style="display:block;font-size:10px;color:var(--t4);margin-bottom:3px">📁 파일 선택 (이미지·캡처·PDF·문서 등)</label>';
-  h += '<input id="asAttNew_file" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.log,.zip" onchange="_asAttachFilePicked(event)" style="font-size:11px;width:100%">';
+  h += '<input id="asAttNew_file" type="file" accept="' + AS_ATTACH_ACCEPT + '" onchange="_asAttachFilePicked(event)" style="font-size:11px;width:100%">';
   h += '<div id="asAttNew_preview" style="margin-top:8px"></div>';
   h += '</div>';
   h += '<div style="margin-bottom:10px">';
@@ -249,7 +256,7 @@ function _asAttachFilePicked(ev) {
     var nameInp = document.getElementById('asAttNew_fileName');
     var catSel  = document.getElementById('asAttNew_category');
     var prev    = document.getElementById('asAttNew_preview');
-    var dataUrl = e.target.result;
+    var dataUrl = _asFixDataUrlMime(e.target.result, f.name);
     if (urlInp) urlInp.value = dataUrl;
     if (nameInp && !nameInp.value) nameInp.value = f.name;
 
@@ -316,6 +323,9 @@ function asAttachRemove(ticketId, aid) {
 
 /* ─── 할당 추가 모달 ─── */
 function showASAssignAddForm(ticketId) {
+  return _asGuard('asAssignAdd', 'asAssignAddOverlay', function () { _asBuildAssignAddForm(ticketId); });
+}
+function _asBuildAssignAddForm(ticketId) {
   var DEPT_MAP = typeof DEPT       !== 'undefined' ? DEPT       : {};
   var METH     = typeof AS_METHOD  !== 'undefined' ? AS_METHOD  : {};
   var ROLE     = typeof AS_ASSIGN_ROLE !== 'undefined' ? AS_ASSIGN_ROLE : {};
@@ -426,7 +436,6 @@ function asLogAdd(ticketId) {
   if (!data.actionTaken) { if (typeof showToast === 'function') showToast('조치 내용을 입력하세요.', 'warn'); return; }
 
   // 동일 부서의 in-progress assignment 자동 연결
-  var assigns = []; // 현재 상세 데이터에서 가져오면 좋지만 새로 받는 게 정확
   asAssignmentGetAll(ticketId).then(function (asgs) {
     var matched = (asgs || []).filter(function (a) { return a.dept === data.dept && a.status !== 'completed' && a.status !== 'cancelled'; })
       .sort(function (a, b) { return (a.role === 'primary' ? -1 : 1); });
@@ -470,13 +479,16 @@ function asReportSave(ticketId, finalize) {
     data.closedAt = new Date().toISOString();
   }
 
-  updateASTicket(ticketId, data).then(function () {
+  // 화면에 불러온 시점의 version 으로 저장 — 그사이 다른 사람이 고쳤으면 409 (덮어쓰지 않음)
+  var ver = (_asDetailCur && _asDetailCur.id === ticketId) ? _asDetailCur.version : null;
+  updateASTicket(ticketId, data, ver).then(function () {
+    delete _asRptDraft[ticketId];
     if (typeof showToast === 'function') showToast(finalize ? '✅ 최종 종결되었습니다.' : '저장되었습니다.');
     showASDetail(ticketId);
     renderAS();
   }).catch(function (err) {
-    var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
-    if (typeof showToast === 'function') showToast('❌ 실패: ' + msg, 'error');
+    if (_asIsConflict(err)) { _asRptKeepDraft(); _asConflictToast(); showASDetail(ticketId); return; }   // 입력은 초안으로 남김
+    if (typeof showToast === 'function') showToast('❌ 실패: ' + _asErrMsg(err), 'error');
   });
 }
 

@@ -1,4 +1,5 @@
 var express = require('express');
+var sv = require('../lib/safe-val');
 var router = express.Router();
 var db = require('../config/db');
 var auth = require('../middleware/auth');
@@ -54,7 +55,7 @@ router.post('/', async function (req, res) {
     if (!projectId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'projectId 필수' });
     // v13.213: 프로젝트 편집 권한 + 같은 테넌트 존재 확인 (예전엔 다른 테넌트 projectId 도 FK 만 통과하면 들어갔다)
     if (!await ps.gateEdit(req, res, projectId, '생성자·참여자·관리자만 마일스톤을 추가할 수 있습니다.')) return;
-    var id = b.id || ('ms-' + require('crypto').randomUUID().slice(0, 12));
+    var id = sv.safeId(b.id, function () { return 'ms-' + require('crypto').randomUUID().slice(0, 12); });
     var atIns = b.assigneeTargets || b.assignee_targets || {};
     var sortIns = (b.order != null) ? b.order : (b.sort_order != null ? b.sort_order : 0);
     var r = await db.query(
@@ -91,6 +92,8 @@ router.put('/:id', async function (req, res) {
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     res.json({ data: r.rows[0] });
+    // 목표시간(가중치)이 바뀌면 프로젝트 진척 가중평균도 바뀐다 — POST/DELETE 와 같게
+    if (atParam != null) _rollupProjectProgress(r.rows[0].project_id, req.tenant.id).catch(function (e) { console.error('[ms/rollup]', e.message); });
     try { authService.auditLog(req.user.sub, 'milestone.update', 'milestone', req.params.id, { name: r.rows[0] && r.rows[0].name, status: r.rows[0] && r.rows[0].status, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
     changeFeed.record(req, r.rows[0].project_id, changeDiff.diffMilestone(cur.rows[0], r.rows[0]));
 
@@ -144,7 +147,8 @@ async function _rollupProjectProgress(projectId, tenantId, q) {
   });
   var proj = wsum > 0 ? Math.round(psum / wsum) : Math.round(psimple / Math.max(cnt, 1));
   proj = Math.max(0, Math.min(100, proj));
-  await q.query('UPDATE projects SET progress = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3', [proj, projectId, tenantId]);
+  // 완료(status done) 프로젝트는 진척 100 고정 — 덮어쓰지 않는다 (v13.277 완료 단계 ↔ 진척 100)
+  await q.query("UPDATE projects SET progress = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 AND status IS DISTINCT FROM 'done'", [proj, projectId, tenantId]);
 }
 
 // GET /api/milestones/:id/logs — 마일스톤 작업 노트 + 진척률 이력 (최신순)

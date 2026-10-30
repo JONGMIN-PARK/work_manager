@@ -7,6 +7,10 @@
 
 /* ═══ 접수 등록/편집 모달 ═══ */
 function showASModal(editId) {
+  return _asGuard('asModal', 'asModalOverlay', function () { return _asBuildModal(editId); });
+}
+var _asModalVersion = null;   // 편집 창을 연 시점의 접수 version — 저장 시 낙관적 락
+function _asBuildModal(editId) {
   var PRIO = typeof AS_PRIORITY !== 'undefined' ? AS_PRIORITY : {};
   var CHAN = typeof AS_CHANNEL !== 'undefined' ? AS_CHANNEL : {};
   var METH = typeof AS_METHOD !== 'undefined' ? AS_METHOD : {};
@@ -24,9 +28,11 @@ function showASModal(editId) {
   // 신규 모달용 임시 첨부 큐 초기화
   window._asPendingAttachments = [];
 
-  Promise.all([pOrders, pExist, pCats, pAtts]).then(function (results) {
+  return Promise.all([pOrders, pExist, pCats, pAtts]).then(function (results) {
     var orders = results[0] || [];
     var existing = results[1];
+    if (editId && !existing) throw new Error('접수를 찾을 수 없습니다.');
+    _asModalVersion = existing ? existing.version : null;
     var CAT = results[2] || {};
     var existingAtts = results[3] || [];
     var isEdit = !!existing;
@@ -114,7 +120,7 @@ function showASModal(editId) {
     h += _asSection('④ 첨부 파일 ' + (isEdit ? '<span style="color:var(--t6);font-weight:400;font-size:10px">— 이미지·캡처·PDF·문서 (선택 즉시 업로드, 10MB 이하)</span>' : '<span style="color:var(--t6);font-weight:400;font-size:10px">— 접수 등록 후 일괄 업로드 (10MB 이하 다중 선택 가능)</span>'));
     h += '<div style="margin-bottom:14px">';
     h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
-    h += '<input id="asM_attachInput" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.log,.zip" onchange="_asModalAttachPicked(event,\'' + (isEdit ? _asJsArg(editId) : '') + '\')" style="font-size:11px;flex:1;min-width:240px">';
+    h += '<input id="asM_attachInput" type="file" multiple accept="' + AS_ATTACH_ACCEPT + '" onchange="_asModalAttachPicked(event,\'' + (isEdit ? _asJsArg(editId) : '') + '\')" style="font-size:11px;flex:1;min-width:240px">';
     h += '<span style="font-size:9px;color:var(--t6)">여러 파일을 한 번에 선택 가능 (Ctrl/Shift)</span>';
     h += '</div>';
     h += '<div id="asM_attachGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;min-height:60px">';
@@ -131,17 +137,14 @@ function showASModal(editId) {
     }
     h += '</div><div style="display:flex;gap:8px">';
     h += '<button onclick="document.getElementById(\'asModalOverlay\').remove()" style="padding:8px 16px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-size:11px">취소</button>';
-    h += '<button onclick="saveASModal(' + (isEdit ? 'true' : 'false') + ',\'' + (isEdit ? _asJsArg(editId) : '') + '\')" style="padding:8px 16px;border:none;border-radius:6px;background:#F59E0B;color:#fff;cursor:pointer;font-size:11px;font-weight:600">' + (isEdit ? '수정 저장' : '접수 등록') + '</button>';
+    h += '<button id="asM_saveBtn" onclick="saveASModal(' + (isEdit ? 'true' : 'false') + ',\'' + (isEdit ? _asJsArg(editId) : '') + '\')" style="padding:8px 16px;border:none;border-radius:6px;background:#F59E0B;color:#fff;cursor:pointer;font-size:11px;font-weight:600">' + (isEdit ? '수정 저장' : '접수 등록') + '</button>';
     h += '</div></div>';
     h += '</div>';
 
     var overlay = _asOverlay('asModalOverlay', 9999, 'align-items:flex-start;padding:40px 20px;overflow-y:auto');
     overlay.innerHTML = h;
     // v13.63: backdrop 클릭 닫기 비활성화 — 작업 중 실수 클릭 데이터 유실 방지 (✕ 버튼만 닫기)
-  }).catch(function (err) {
-    console.error('[showASModal]', err);
-    if (typeof showToast === 'function') showToast('A/S 모달 로드 실패', 'error');
-  });
+  });   // 실패는 _asGuard(wmGuardedModal)가 토스트로 알림
 }
 
 function _asSection(title) {
@@ -380,7 +383,7 @@ function _asRenderAttachGridHtml(atts, ticketId, isPending) {
     }
     html += '<div style="border:1px solid var(--bd);border-radius:6px;padding:6px;background:var(--bg-i);position:relative;cursor:pointer;transition:border-color 0.15s" onmouseover="this.style.borderColor=\'#F59E0B\'" onmouseout="this.style.borderColor=\'\'" onclick="' + clickHandler + '">';
     if (isImg) {
-      html += '<div style="width:100%;height:70px;background:#0f172a center / contain no-repeat url(\'' + _asEsc(a.fileUrl) + '\');border-radius:3px;margin-bottom:4px"></div>';
+      html += '<div style="width:100%;height:70px;background:#0f172a center / contain no-repeat url(\'' + _asCssUrl(a.fileUrl) + '\');border-radius:3px;margin-bottom:4px"></div>';
     } else {
       html += '<div style="width:100%;height:70px;display:flex;align-items:center;justify-content:center;font-size:32px;background:var(--bg);border-radius:3px;margin-bottom:4px">' + (isPdf ? '📄' : (c.icon || '📎')) + '</div>';
     }
@@ -439,7 +442,7 @@ function _asModalAttachPicked(ev, ticketId) {
         resolve({
           category: cat,
           fileName: f.name,
-          fileUrl: e.target.result,
+          fileUrl: _asFixDataUrlMime(e.target.result, f.name),
           fileSize: f.size,
           mimeType: f.type || null
         });
@@ -574,7 +577,13 @@ function saveASModal(isEdit, editId) {
   if (!data.customerName) { if (typeof showToast === 'function') showToast('고객사를 입력하세요.', 'warn'); return; }
   if (!data.issueSummary) { if (typeof showToast === 'function') showToast('신고 내용(증상)을 입력하세요.', 'warn'); return; }
 
-  var promise = (isEdit && editId) ? updateASTicket(editId, data) : createASTicket(data);
+  if (_asModalSaving) return;   // 두 번 클릭 → 중복 접수 방지
+  _asModalSaving = true;
+  var saveBtn = document.getElementById('asM_saveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.style.opacity = '.6'; }
+  var _unlock = function () { _asModalSaving = false; if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = ''; } };
+  // 편집은 창을 연 시점의 version 으로 — 그사이 다른 사람이 고쳤으면 409
+  var promise = (isEdit && editId) ? updateASTicket(editId, data, _asModalVersion) : createASTicket(data);
 
   promise.then(function (saved) {
     // 신규 등록 성공 + 임시 첨부 큐가 있으면 일괄 업로드
@@ -583,6 +592,7 @@ function saveASModal(isEdit, editId) {
     window._asPendingAttachments = [];
 
     var afterAttach = Promise.resolve();
+    var failed = [];
     if (pending.length && typeof asAttachmentPut === 'function') {
       if (typeof showToast === 'function') showToast('📎 ' + pending.length + '개 첨부 업로드 중…', 'info');
       // 순차 업로드 (서버 부담 방지)
@@ -590,26 +600,39 @@ function saveASModal(isEdit, editId) {
         afterAttach = afterAttach.then(function () {
           return asAttachmentPut(saved.id, att).catch(function (e) {
             console.warn('[attach upload]', att.fileName, e.message);
+            failed.push(att.fileName + ' (' + _asErrMsg(e) + ')');
           });
         });
       });
     }
 
-    afterAttach.then(function () {
+    return afterAttach.then(function () {
+      _unlock();
       var ov = document.getElementById('asModalOverlay');
       if (ov) ov.remove();
       if (typeof showToast === 'function') {
-        var attachMsg = pending.length ? ' · 📎 ' + pending.length + '개 첨부' : '';
+        var okN = pending.length - failed.length;
+        var attachMsg = pending.length ? ' · 📎 ' + okN + '개 첨부' : '';
         showToast(isEdit
           ? 'A/S가 수정되었습니다.'
           : 'A/S가 접수되었습니다. ' + (saved && saved.ticketNo ? '(' + saved.ticketNo + ')' : '') + attachMsg);
+        // 첨부 실패는 따로 알림 (접수는 됐으므로 상세 ③처리에서 다시 첨부)
+        if (failed.length) showToast('⚠ 첨부 ' + failed.length + '개 실패: ' + failed.slice(0, 3).join(', ') + ' — 상세 ③처리에서 다시 첨부하세요.', 'warn');
       }
       renderAS();
+      // 편집이면 뒤에 열린 상세 창도 새 내용으로
+      if (isEdit && editId && document.getElementById('asDetailOverlay')) showASDetail(editId);
     });
   }).catch(function (err) {
+    _unlock();
     console.error('[saveASModal]', err);
-    var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
+    if (_asIsConflict(err)) {   // 다른 사람이 먼저 저장 — 창은 닫지 않고(입력 유지) 안내, 다시 저장하면 최신 version 으로
+      _asConflictToast('⚠ 다른 사용자가 이미 수정했습니다. 상세에서 바뀐 내용을 확인하세요 — 다시 저장하면 지금 입력한 내용으로 덮어씁니다.');
+      return asGet(editId).then(function (t) { if (t) _asModalVersion = t.version; }).catch(function () {});
+    }
+    var msg = _asErrMsg(err);
     if (err && err.status === 403) msg = '권한이 없습니다.';
     if (typeof showToast === 'function') showToast('❌ 저장 실패: ' + msg, 'error');
   });
 }
+var _asModalSaving = false;

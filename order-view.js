@@ -262,8 +262,11 @@ function formatAmount(val) {
   return '-';
 }
 
-/* ═══ 수주 등록/편집 모달 ═══ */
+/* ═══ 수주 등록/편집 모달 ═══ — 표준 가드(재진입 방지·열림 대기·오류 토스트) */
 function showOrderModal(editOrderNo) {
+  return wmGuardedModal('orderModal', function () { return _orderBuildModal(editOrderNo); }, 'orderModal');
+}
+function _orderBuildModal(editOrderNo) {
   var existing = null;
   var isEdit = false;
 
@@ -303,7 +306,7 @@ function showOrderModal(editOrderNo) {
       (!isEdit ? '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t4);cursor:pointer"><input type="checkbox" id="omAutoProj" checked> 프로젝트 자동 생성 (6단계 마일스톤 포함)</label>' : '') +
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">' +
       '<button class="btn btn-g" onclick="document.getElementById(\'orderModal\').remove()">취소</button>' +
-      '<button class="btn btn-p" onclick="saveOrderModal(' + (isEdit ? 'true' : 'false') + ')">저장</button>' +
+      '<button class="btn btn-p" onclick="saveOrderModal(' + (isEdit ? 'true' : 'false') + ', ' + (o.version === undefined || o.version === null ? 'null' : Number(o.version)) + ')">저장</button>' +
       '</div></div></div>';
 
     if (!isEdit) document.getElementById('omOrderNo').focus();
@@ -311,7 +314,8 @@ function showOrderModal(editOrderNo) {
 
   if (editOrderNo) {
     isEdit = true;
-    orderGet(editOrderNo).then(function (o) {
+    // DB 에 없고 ORDER_MAP(엑셀)에만 있는 수주는 404 → ORDER_MAP 으로 채운다 (예전엔 404 가 그대로 던져져 창이 안 열렸다)
+    return orderGet(editOrderNo).catch(function (err) { if (err && err.status === 404) return null; throw err; }).then(function (o) {
       if (o) { existing = o; }
       else if (typeof ORDER_MAP !== 'undefined' && ORDER_MAP[editOrderNo]) {
         var v = ORDER_MAP[editOrderNo];
@@ -319,13 +323,15 @@ function showOrderModal(editOrderNo) {
       }
       doShow();
     });
-  } else {
-    doShow();
   }
+  doShow();
+  return Promise.resolve();
 }
 
-/* ═══ 수주 저장 ═══ */
-function saveOrderModal(isEdit) {
+/* ═══ 수주 저장 ═══
+   version: 편집 창을 열 때 받은 값 — 있으면 PUT 낙관적 잠금 (그사이 남이 고쳤으면 409)
+   신규(또는 DB 에 없던 ORDER_MAP 항목)는 이미 있는 번호면 409 — 예전엔 기존 수주를 조용히 덮어쓰고 프로젝트도 하나 더 만들었다 */
+function saveOrderModal(isEdit, version) {
   var orderNo = document.getElementById('omOrderNo').value.trim();
   if (!orderNo) { showToast('수주번호를 입력하세요', 'error'); return; }
 
@@ -342,7 +348,7 @@ function saveOrderModal(isEdit) {
 
   var autoProj = !isEdit && document.getElementById('omAutoProj') && document.getElementById('omAutoProj').checked;
 
-  createOrder(data).then(function () {
+  createOrder(data, { edit: isEdit, version: version }).then(function () {
     if (autoProj) {
       return createProjectFromOrder(data).then(function (proj) {
         showToast('✅ 수주 등록 + 프로젝트 자동 생성 완료', 'success');
@@ -368,6 +374,7 @@ function saveOrderModal(isEdit) {
     console.error('[saveOrderModal]', err);
     var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
     if (err && err.status === 403) msg = '수주 등록 권한이 없습니다. 관리자에게 문의하세요.';
+    if (err && err.status === 409) msg = (err.data && err.data.error === 'DUPLICATE') ? msg : '다른 사용자가 이 수주를 먼저 수정했습니다. 창을 닫고 다시 열어 주세요.';
     showToast('❌ 수주 저장 실패: ' + msg, 'error');
   });
 }
@@ -378,12 +385,8 @@ function saveOrderModal(isEdit) {
    ① 함께 바뀔 건수를 먼저 보여주고 ② 변경 사유를 받은 뒤
    ③ 서버가 한 트랜잭션으로 전파 + 감사 로그까지 남긴다. */
 
-/* onclick="...(' + 여기 + ')" 자리에 들어갈 값.
-   ① JS 문자열 리터럴 이스케이프(역슬래시·작은따옴표) → ② HTML 속성 이스케이프.
-   순서가 중요하다 — 브라우저가 속성을 먼저 디코드한 뒤 JS 로 파싱한다. */
-function _orderJsStr(s) {
-  return eH(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
-}
+/* onclick="...(' + 여기 + ')" 자리에 들어갈 값 — 공용 eA(wm-state.js) 를 쓴다 (옛 이름 유지) */
+function _orderJsStr(s) { return eA(s); }
 
 function _renumberHistoryHTML(logs) {
   if (!logs || !logs.length) return '<div style="font-size:10px;color:var(--t6);padding:6px 0">변경 이력이 없습니다.</div>';
@@ -414,6 +417,9 @@ function _renumberRefsHTML(refs) {
 }
 
 function showRenumberModal(orderNo, version) {
+  return wmGuardedModal('renumberModal', function () { _orderBuildRenumber(orderNo, version); }, 'renumberModal');
+}
+function _orderBuildRenumber(orderNo, version) {
   var modal = createModal({ id: 'renumberModal', z: MODAL_Z + 1, overlayStyle: 'padding:0;background:rgba(0,0,0,.6)' }).overlay;
   modal.innerHTML = '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:14px;padding:20px;max-width:520px;width:95%;max-height:90vh;overflow:auto">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
@@ -513,6 +519,9 @@ function syncOrdersToDB() {
   syncOrderMapToDB().then(function () {
     showToast('✅ ORDER_MAP → DB 동기화 완료', 'success');
     renderOrders();
+  }).catch(function (err) {
+    console.error('[syncOrdersToDB]', err);
+    showToast('❌ DB 동기화 실패: ' + ((err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류'), 'error');
   });
 }
 

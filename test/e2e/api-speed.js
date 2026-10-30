@@ -43,7 +43,7 @@ function check(name, cond, extra) { assert.ok(cond, name + ' ' + JSON.stringify(
   await c.query("DELETE FROM projects WHERE id LIKE 'spd-%'");
   await c.query("INSERT INTO projects (id, name, status, visibility, owner_id, tenant_id) VALUES ('spd-pub', '공개 썸네일', 'active', 'tenant', $1, $2), ('spd-priv', '비공개 썸네일', 'active', 'private', $1, $2)", [me.id, tid]);
   var px = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-  check('이미지 등록', (await A('POST', '/api/projects/spd-pub/images', { images: [{ src: px, caption: '첫' }, { src: px + '#2', caption: '둘' }] })).s < 300);
+  check('이미지 등록', (await A('POST', '/api/projects/spd-pub/images', { images: [{ src: px, caption: '첫' }, { src: px + 'AAAA', caption: '둘' }] })).s < 300);   // v13.281 서버가 data:image base64 만 받음
   await A('POST', '/api/projects/spd-priv/images', { images: [{ src: px }] });
   var cov = await A('GET', '/api/projects/covers');
   var mine = (cov.d.data || []).filter(function (x) { return x.project_id === 'spd-pub'; });

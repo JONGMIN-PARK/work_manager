@@ -19,10 +19,10 @@ function renderAS(opts) {
     ++_asRenderSeq;   // 진행 중인 목록 조회가 통계 화면을 덮어쓰지 않도록
     if (typeof renderASStats === 'function') {
       renderASStats();
-      return;
+      return Promise.resolve();
     }
     wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:' + SEM_COLOR.danger + '">as-stats.js 모듈 로드 실패</div>';
-    return;
+    return Promise.resolve();
   }
 
   var STATUS = typeof AS_STATUS !== 'undefined' ? AS_STATUS : {};
@@ -30,7 +30,7 @@ function renderAS(opts) {
 
   if (typeof asGetAll !== 'function') {
     wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:var(--t5)">A/S 데이터 로직 로드 실패 (project-data.js)</div>';
-    return;
+    return Promise.resolve();
   }
 
   var listParams = null;
@@ -189,7 +189,7 @@ function renderAS(opts) {
         html += '<td style="padding:8px 10px;font-family:monospace;font-weight:600;color:var(--t2)">' + _asEsc(t.ticketNo) + (isTrashView ? ' <span style="font-size:9px;color:' + SEM_COLOR.danger + '">🗑️</span>' : '') + '</td>';
         html += '<td style="padding:8px 10px;color:var(--t2)"><div style="font-weight:600">' + _asEsc(t.customerName) + '</div>';
         html += '<div style="font-size:10px;color:var(--t5)">' + _asEsc(t.equipmentModel || '-') + (t.serialNo ? ' · ' + _asEsc(t.serialNo) : '') + '</div></td>';
-        html += '<td style="padding:8px 10px;color:var(--t3)">' + (ct.icon || '') + ' ' + _asEsc(ct.label) + '</td>';
+        html += '<td style="padding:8px 10px;color:var(--t3)">' + _asEsc(ct.icon || '') + ' ' + _asEsc(ct.label) + '</td>';
         html += '<td style="padding:8px 10px"><span style="display:inline-block;padding:2px 8px;border-radius:10px;background:' + pr.color + ';color:#fff;font-size:10px;font-weight:600">' + (pr.icon || '') + ' ' + _asEsc(t.priority) + '</span></td>';
         html += '<td style="padding:8px 10px"><span style="display:inline-block;padding:2px 8px;border-radius:10px;background:' + st.color + '22;color:' + st.color + ';font-size:10px;font-weight:600">' + (st.icon || '') + ' ' + _asEsc(st.label) + '</span></td>';
         // 신고 내용: 잘라내지 않고 남는 폭을 모두 쓰는 말줄임 셀 (전체 내용은 title)
@@ -307,7 +307,7 @@ function _asRenderKanban(tickets, CAT) {
       h += '<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:' + pr.color + ';color:#fff;font-weight:600">' + _asEsc(t.priority) + '</span>';
       h += '</div>';
       h += '<div style="font-size:11px;font-weight:600;color:var(--t2);margin-top:3px">' + _asEsc(t.customerName || '-') + '</div>';
-      h += '<div style="font-size:10px;color:var(--t5);margin-top:1px">' + (ct.icon || '') + ' ' + _asEsc(ct.label) + '</div>';
+      h += '<div style="font-size:10px;color:var(--t5);margin-top:1px">' + _asEsc(ct.icon || '') + ' ' + _asEsc(ct.label) + '</div>';
       var elapsed = _asElapsed(t.receivedAt);
       if (elapsed) h += '<div style="font-size:9px;color:var(--t6);margin-top:3px">⏱️ ' + elapsed + '</div>';
       h += '</div>';
@@ -346,11 +346,24 @@ function _asAttachKanbanDnD() {
       col.style.background = 'var(--bg-i)';
       if (!draggingId) return;
       var newStatus = col.dataset.status;
-      updateASTicket(draggingId, { status: newStatus }).then(function () {
-        if (typeof showToast === 'function') showToast('상태 변경 → ' + newStatus);
+      var rows = (_asListCache && _asListCache.rows) || [];
+      var cur = rows.filter(function (x) { return x.id === draggingId; })[0];
+      if (cur && (cur.status === newStatus || (cur.status === 'approved' && newStatus === 'customer_wait'))) return;   // 같은 칸
+      // 완료 칸 — 종결은 RCA 가 필요하므로 ④ 보고/결재 탭에서 (종결 시각·완료 분류 함께 기록)
+      if (newStatus === 'closed') {
+        if (typeof showToast === 'function') showToast('종결은 상세의 ④ 보고/결재 탭에서 RCA 를 입력한 뒤 [최종 종결]로 해 주세요.', 'warn');
+        _asDetailTab = 'report';
+        showASDetail(draggingId);
+        return;
+      }
+      var STATUS = typeof AS_STATUS !== 'undefined' ? AS_STATUS : {};
+      // 목록을 불러온 시점의 version 으로 — 그사이 다른 사람이 고쳤으면 409
+      updateASTicket(draggingId, { status: newStatus }, cur ? cur.version : null).then(function () {
+        if (typeof showToast === 'function') showToast('상태 변경 → ' + ((STATUS[newStatus] || {}).label || newStatus));
         renderAS();
       }).catch(function (err) {
-        if (typeof showToast === 'function') showToast('❌ 변경 실패: ' + ((err && err.message) || ''), 'error');
+        if (_asIsConflict(err)) _asConflictToast();
+        else if (typeof showToast === 'function') showToast('❌ 변경 실패: ' + _asErrMsg(err), 'error');
         renderAS();
       });
     });

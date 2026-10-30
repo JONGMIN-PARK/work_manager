@@ -4,6 +4,13 @@
 -- 매 기동 시 다시 돌아도 되게(멱등) 작성.
 BEGIN;
 
+-- 0) 수주에서 자동으로 만든 단계 마일스톤 이름 'A/S' → '완료'
+--    아직 A/S 단계를 쓰던(=이 파일이 처음 도는) 프로젝트만 — 매 기동 다시 돌 때 사용자가 지은 'A/S' 마일스톤까지 바꾸지 않게
+UPDATE milestones m SET name = '완료'
+  FROM projects p
+ WHERE m.project_id = p.id AND m.tenant_id = p.tenant_id AND m.name = 'A/S'
+   AND (p.current_phase = 'as' OR (jsonb_typeof(p.phases) = 'object' AND p.phases ? 'as'));
+
 -- 1) 단계 일정(phases JSON)의 as 키 → done
 UPDATE projects
    SET phases = (phases - 'as') || jsonb_build_object('done', phases->'as')
@@ -15,6 +22,7 @@ UPDATE projects SET phases = phases - 'as'
 UPDATE projects SET current_phase = 'done' WHERE current_phase = 'as';
 -- 상태가 완료인데 다른 단계에 있던 프로젝트도 완료 단계로
 UPDATE projects SET current_phase = 'done' WHERE status = 'done' AND current_phase IS DISTINCT FROM 'done';
+-- (진척 100 고정은 서버도 지킨다 — 마일스톤 롤업·자동 산출은 완료 프로젝트를 건드리지 않음. 그래서 다시 돌아도 바뀌는 행이 없다)
 UPDATE projects SET status = 'done', progress = 100
  WHERE current_phase = 'done' AND (status IS DISTINCT FROM 'done' OR progress IS DISTINCT FROM 100);
 
@@ -28,8 +36,5 @@ UPDATE projects p
 -- 4) 단계 키를 쓰는 곳 — 체크리스트 · 이슈 단계
 UPDATE checklists SET phase = 'done' WHERE phase = 'as';
 UPDATE issues SET phase = 'done' WHERE phase = 'as';
-
--- 5) 수주에서 자동으로 만든 단계 마일스톤 이름
-UPDATE milestones SET name = '완료' WHERE name = 'A/S';
 
 COMMIT;

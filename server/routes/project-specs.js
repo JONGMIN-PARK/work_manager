@@ -292,8 +292,11 @@ router.post('/:id/specs/copy-from/:srcId', async function (req, res) {
       );
       var c = await client.query(
         'INSERT INTO project_spec_files (id, tenant_id, project_id, section_key, kind, name, mime, size, drawio_xml, preview_svg, caption, sort_order, created_by) ' +
-        "SELECT 'psf-' || substr(md5(random()::text || f.id), 1, 12), f.tenant_id, $1, f.section_key, f.kind, f.name, f.mime, f.size, f.drawio_xml, f.preview_svg, f.caption, f.sort_order, $2 " +
-        "FROM project_spec_files f WHERE f.project_id = $3 AND f.tenant_id = $4 AND f.kind = 'drawio'",
+        "SELECT 'psf-' || substr(md5(random()::text || f.id), 1, 12), f.tenant_id, $1::varchar, f.section_key, f.kind, f.name, f.mime, f.size, f.drawio_xml, f.preview_svg, f.caption, f.sort_order, $2 " +
+        "FROM project_spec_files f WHERE f.project_id = $3 AND f.tenant_id = $4 AND f.kind = 'drawio' " +
+        // 같은 도면(섹션·이름·내용)이 대상에 이미 있으면 건너뜀 — 여러 번 복사해도 도면이 쌓이지 않게
+        "AND NOT EXISTS (SELECT 1 FROM project_spec_files t WHERE t.project_id = $1::varchar AND t.tenant_id = $4 AND t.kind = 'drawio' " +
+        "AND t.section_key = f.section_key AND t.name IS NOT DISTINCT FROM f.name AND md5(COALESCE(t.drawio_xml, '')) = md5(COALESCE(f.drawio_xml, '')))",
         [req.params.id, req.user.sub, req.params.srcId, req.tenant.id]
       );
       await client.query('SAVEPOINT spec_log');

@@ -27,12 +27,7 @@ var _OA_STALE_DAYS = 14;       // 진척 정체 임계 (PRD: 기본 14일)
 var _oaFilterName = '';        // 담당자(등록 인원) 필터 — '' 이면 전체
 
 /* ───────── 유틸 ───────── */
-function _oaEsc(s) {
-  if (s == null) return '';
-  return String(s).replace(/[&<>"']/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-  });
-}
+function _oaEsc(s) { return eH(s == null ? '' : s); }   // 공용 eH(wm-state.js) 별칭
 /* 와이드 레이아웃 (1회 주입): ≥1800px 에서 개요(목록) | 상세 마스터/디테일 분할, 상세는 sticky */
 function _oaInjectStyle() {
   if (document.getElementById('oaWideStyle')) return;
@@ -279,19 +274,10 @@ function _oaCollect() {
         (msByProj[pid] = msByProj[pid] || []).push(m);
       });
 
-      return Promise.all(projects.map(function (p) {
-        var milestones = msByProj[p.id] || [];
-        var pHist = (typeof getProgressHistory === 'function')
-          ? getProgressHistory(p.id).catch(function () { return []; })
-          : Promise.resolve([]);
-        var pCalc = (typeof calcHoursByMilestone === 'function')
-          ? calcHoursByMilestone(p.id, { proj: p, milestones: milestones }).catch(function () { return null; })
-          : Promise.resolve(null);
-
-        return Promise.all([pHist, pCalc]).then(function (res) {
-          return _oaAnalyze(p, milestones, res[0] || [], res[1]);
-        });
-      })).then(function (rows) {
+      // 프로젝트마다 진척 이력 요청 — 한꺼번에 쏘지 않고 6개씩 (프로젝트가 많으면 브라우저·서버가 밀림)
+      return _oaMapLimit(projects, 6, function (p) {
+        return _oaRowOf(p, msByProj[p.id] || []);
+      }).then(function (rows) {
         // 위험 점수 내림차순 (위험한 프로젝트 우선)
         rows.sort(function (a, b) { return b.riskScore - a.riskScore; });
         return rows;
@@ -690,18 +676,33 @@ function _oaCollectOne(projectId) {
     var pMs = (typeof msGetByProject === 'function')
       ? msGetByProject(projectId).catch(function () { return []; })
       : Promise.resolve([]);
-    return pMs.then(function (milestones) {
-      var pHist = (typeof getProgressHistory === 'function')
-        ? getProgressHistory(projectId).catch(function () { return []; })
-        : Promise.resolve([]);
-      var pCalc = (typeof calcHoursByMilestone === 'function')
-        ? calcHoursByMilestone(projectId, { proj: p, milestones: milestones }).catch(function () { return null; })
-        : Promise.resolve(null);
-      return Promise.all([pHist, pCalc]).then(function (res) {
-        return _oaAnalyze(p, milestones, res[0] || [], res[1]);
-      });
-    });
+    return pMs.then(function (milestones) { return _oaRowOf(p, milestones); });
   });
+}
+
+// 프로젝트 1건 → 분석 행 (진척 이력 + 투입 집계). 전체 수집·단건 수집 공용
+function _oaRowOf(p, milestones) {
+  var pHist = (typeof getProgressHistory === 'function')
+    ? getProgressHistory(p.id).catch(function () { return []; })
+    : Promise.resolve([]);
+  var pCalc = (typeof calcHoursByMilestone === 'function')
+    ? calcHoursByMilestone(p.id, { proj: p, milestones: milestones }).catch(function () { return null; })
+    : Promise.resolve(null);
+  return Promise.all([pHist, pCalc]).then(function (res) {
+    return _oaAnalyze(p, milestones, res[0] || [], res[1]);
+  });
+}
+// 동시 실행 수 제한 map — 결과 순서는 입력 순서
+function _oaMapLimit(items, limit, fn) {
+  var out = new Array(items.length), i = 0;
+  function worker() {
+    if (i >= items.length) return Promise.resolve();
+    var k = i++;
+    return Promise.resolve(fn(items[k], k)).then(function (r) { out[k] = r; return worker(); });
+  }
+  var ws = [];
+  for (var w = 0; w < Math.min(limit, items.length); w++) ws.push(worker());
+  return Promise.all(ws).then(function () { return out; });
 }
 
 function _oaRenderProjectDetail(box, row) {
