@@ -12,6 +12,7 @@ var operator = require('../middleware/operator');
 var httpErr = require('../lib/http-errors');
 var changeDiff = require('../lib/change-diff');
 var changeFeed = require('../services/notification/change-feed');
+var pd = require('../lib/project-defaults');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -61,7 +62,7 @@ router.post('/', async function (req, res) {
     var r = await db.query(
       "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, assignee_targets, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
       [id, projectId, b.name || '', b.startDate || b.start_date || '',
-       b.endDate || b.end_date || '', b.status || 'waiting', sortIns, JSON.stringify(atIns), req.user.sub, req.tenant.id]
+       b.endDate || b.end_date || '', pd.normalizeMsStatus(b.status), sortIns, JSON.stringify(atIns), req.user.sub, req.tenant.id]
     );
     var row = r.rows[0];
     try {
@@ -81,6 +82,8 @@ router.post('/', async function (req, res) {
 router.put('/:id', async function (req, res) {
   try {
     var b = req.body;
+    // 저장 상태는 waiting · active · done 만 (v13.283 — 지연은 날짜로 계산, 보류 → 대기)
+    if (b.status != null) b.status = pd.normalizeMsStatus(b.status);
     var cur = await db.query('SELECT id, project_id, name, start_date, end_date, status, progress FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!cur.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     if (!await ps.gateEdit(req, res, cur.rows[0].project_id, '생성자·참여자·관리자만 마일스톤을 수정할 수 있습니다.')) return;

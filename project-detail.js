@@ -39,7 +39,7 @@ async function showProjectDetail(id) {
   _pdScheduleMsHours(id, proj, projMs);
   html += _pdDetailLifecycleHtml(id, proj, allChk, ph) +
     _pdDetailLazyTabsHtml() +
-    _pdDetailFooterHtml(id);
+    _pdDetailFooterHtml(id, allChk.length);
 
   _pdAttachDetailPanel(id, proj, html);
   } finally { _pdDetailBusy = false; }
@@ -79,26 +79,90 @@ function _pdPhaseInfo(allChk) {
   return { phases: phases, phaseKeys: phaseKeys, phaseProgress: phaseProgress };
 }
 
-/* 헤더(이름·닫기) + 상태 배지 */
+/* 공개 범위 표시 (C4) */
+var PD_VIS = { private: '🔒 비공개', dept: '👥 부서', tenant: '🌐 전체' };
+
+/* 헤더(이름 · ✏️ 편집 · ⋯ 더보기 · 폭 · 닫기) + 상태 · 단계 · 공개 범위 · 수주번호 배지.
+   상태 = autoProjectStatus (저장은 진행·보류·완료, 대기·지연은 날짜로 표시만) */
 function _pdDetailHeaderHtml(proj, stInfo) {
-  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
-    '<h3 style="font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="background:' + eC(proj.color) + ';width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0"></span>' + eH(proj.name) + '</h3>' +
+  var idA = eA(proj.id);
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:14px">' +
+    '<div style="display:flex;align-items:center;gap:4px;min-width:0">' +
+      '<h3 style="font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(proj.name) + '"><span style="background:' + eC(proj.color) + ';width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis">' + eH(proj.name) + '</span></h3>' +
+      '<button class="btn btn-g btn-s pd-edit-only" style="flex-shrink:0;padding:2px 7px" onclick="pdEditProject(\'' + idA + '\')" title="프로젝트 편집 — 저장하면 이 패널로 돌아옵니다">✏️ 편집</button>' +
+      '<span class="pd-more" style="position:relative;flex-shrink:0">' +
+        '<button class="btn btn-g btn-s" style="padding:2px 8px" onclick="pdToggleMore(event)" title="더보기 — 공유 · 복사 · 소유권 이관 · 삭제" aria-haspopup="true">⋯</button>' +
+        '<div class="pd-more-menu" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;min-width:150px;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:4px;z-index:5">' +
+          _pdMoreItem('👥 공유 관리', 'showProjectShareModal(\'' + idA + '\')', 'pd-edit-only') +
+          _pdMoreItem('📄 복사', 'showProjectCopyModal(\'' + idA + '\')', '') +
+          _pdMoreItem('🔁 소유권 이관', 'showProjectTransferModal(\'' + idA + '\')', 'pd-edit-only') +
+          _pdMoreItem('🗑 삭제', _PD_CLOSE_JS + ';deleteProjectUI(\'' + idA + '\')', 'pd-edit-only', true) +
+        '</div>' +
+      '</span>' +
+    '</div>' +
     '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
-      '<div class="pd-size" title="패널 폭">' +
-        '<button data-pd-size="0.34" onclick="pdSetPanelSize(0.34)">1/3</button>' +
-        '<button data-pd-size="0.5" onclick="pdSetPanelSize(0.5)">1/2</button>' +
-        '<button data-pd-size="0.67" onclick="pdSetPanelSize(0.67)">2/3</button>' +
+      '<div class="pd-size" title="패널 폭 — 왼쪽 경계를 끌어도 조절됩니다">' +
+        '<button data-pd-size="0.34" onclick="pdSetPanelSize(0.34)" title="좁게 — 화면의 1/3">좁게</button>' +
+        '<button data-pd-size="0.5" onclick="pdSetPanelSize(0.5)" title="보통 — 화면의 절반">보통</button>' +
+        '<button data-pd-size="0.67" onclick="pdSetPanelSize(0.67)" title="넓게 — 화면의 2/3">넓게</button>' +
       '</div>' +
       '<button class="btn btn-g btn-s" onclick="' + _PD_CLOSE_JS + '" title="닫기 (Esc)">✕</button>' +
     '</div>' +
   '</div>';
 
-  // 상태 배지
+  // 상태 · 현재 단계 · 공개 범위 · 수주번호
+  var phKey = proj.currentPhase || 'order';
+  var ph = typeof PROJ_PHASE !== 'undefined' && PROJ_PHASE[phKey];
+  var vis = PD_VIS[proj.visibility] || PD_VIS.private;
   html += '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">' +
-    '<span class="badge" style="background:' + stInfo.bg + ';color:' + stInfo.color + '">' + stInfo.icon + ' ' + stInfo.label + '</span>' +
-    (proj.orderNo ? '<span class="badge" style="background:var(--bg-i);color:var(--t4)">' + eH(proj.orderNo) + '</span>' : '') +
+    '<span class="badge" style="background:' + stInfo.bg + ';color:' + stInfo.color + '" title="상태">' + stInfo.icon + ' ' + stInfo.label + '</span>' +
+    (ph ? '<span class="badge" style="background:' + ph.color + '22;color:' + ph.color + '" title="현재 단계">' + ph.icon + ' ' + ph.label + ' 단계</span>' : '') +
+    '<span class="badge" style="background:var(--bg-i);color:var(--t4)" title="공개 범위">' + vis + '</span>' +
+    (proj.orderNo ? '<span class="badge" style="background:var(--bg-i);color:var(--t4)" title="수주번호">' + eH(proj.orderNo) + '</span>' : '') +
   '</div>';
   return html;
+}
+function _pdMoreItem(label, js, cls, danger) {
+  return '<button class="' + cls + '" style="display:block;width:100%;text-align:left;border:0;background:none;padding:6px 10px;border-radius:5px;font:inherit;font-size:12px;cursor:pointer;color:' + (danger ? SEM_COLOR.danger : 'var(--t2)') + '" onmouseover="this.style.background=\'var(--bg-i)\'" onmouseout="this.style.background=\'\'" onclick="pdCloseMore();' + js + '">' + label + '</button>';
+}
+/* ⋯ 메뉴 열고 닫기 — 바깥을 누르면 닫힘 */
+function pdToggleMore(e) {
+  if (e) e.stopPropagation();
+  var m = document.querySelector('#projDetailPanel .pd-more-menu');
+  if (!m) return;
+  var on = m.style.display === 'none';
+  m.style.display = on ? 'block' : 'none';
+  if (on) setTimeout(function () { document.addEventListener('click', pdCloseMore, { once: true }); }, 0);
+}
+function pdCloseMore() {
+  var m = document.querySelector('#projDetailPanel .pd-more-menu');
+  if (m) m.style.display = 'none';
+}
+
+/* ✏️ 편집 — 편집 창이 저장(버스 project 'updated' 같은 id)하고 닫히면 상세 패널을 다시 연다.
+   저장 없이 닫으면 그냥 끝(다시 열지 않음) */
+var _pdBusHooked = false;
+function pdEditProject(id) {
+  pdCloseDetail();
+  window._pdReopenAfterEdit = { id: id, saved: false, seen: false, t0: Date.now() };
+  if (!_pdBusHooked && typeof wmDataBus !== 'undefined' && wmDataBus.on) {
+    _pdBusHooked = true;
+    wmDataBus.on('project', function (e) {
+      var r = window._pdReopenAfterEdit;
+      if (r && e && e.action === 'updated' && e.detail && e.detail.id === r.id) r.saved = true;
+    });
+  }
+  var timer = setInterval(function () {
+    var r = window._pdReopenAfterEdit;
+    if (!r || r.id !== id) { clearInterval(timer); return; }
+    var open = !!document.getElementById('projModal');
+    if (open) { r.seen = true; return; }
+    if (!r.seen && Date.now() - r.t0 < 5000) return;   // 아직 창이 안 떴음
+    clearInterval(timer);
+    window._pdReopenAfterEdit = null;
+    if (r.saved && !document.getElementById('projDetailPanel')) showProjectDetail(id);
+  }, 400);
+  showProjectModal(id);
 }
 
 /* 탭 바 (개요 / 라이프사이클 / 이슈 / 투입실적 / 사양 / 개발 / 회의) */
@@ -125,10 +189,9 @@ function _pdDetailOverviewHtml(id, proj, projMs, allChk, phases) {
     '<div style="font-size:10px;color:var(--t5)">종료일<div style="font-size:12px;color:var(--t2);font-weight:600;margin-top:2px">' + (proj.endDate || '-') + '</div></div>' +
   '</div>';
 
-  // 진척률 바
-  if (proj.progress > 0) {
-    html += '<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t5);margin-bottom:3px"><span>진척률</span><span>' + proj.progress + '%' + (proj.actualHours ? ' (' + proj.actualHours + 'h / ' + proj.estimatedHours + 'h)' : '') + '</span></div><div style="height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + Math.min(proj.progress, 100) + '%;background:' + eC(proj.color) + ';border-radius:3px"></div></div></div>';
-  }
+  // 진척률 바 — 0% 여도 보인다 (C4)
+  var prog = Number(proj.progress) || 0;
+  html += '<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t5);margin-bottom:3px"><span>진척률</span><span>' + prog + '%' + (proj.actualHours ? ' (' + proj.actualHours + 'h / ' + proj.estimatedHours + 'h)' : '') + '</span></div><div style="height:6px;background:var(--bg-i);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + Math.max(0, Math.min(prog, 100)) + '%;background:' + eC(proj.color) + ';border-radius:3px"></div></div></div>';
 
   // 담당자
   var assigneeHtml = (proj.assignees || []).length ?
@@ -180,16 +243,25 @@ function _pdOrderInfoHtml(proj) {
 function _pdOverviewMsListHtml(projMs) {
   var msHtml = projMs.length ?
     projMs.map(function (m) {
-      var mSt = PROJ_STATUS[m.status] || PROJ_STATUS.waiting;
+      var mSt = PROJ_STATUS[_pdMsDispStatus(m)] || PROJ_STATUS.waiting;
+      var mp = Math.max(0, Math.min(100, Number(m.progress) || (m.status === 'done' ? 100 : 0)));
       return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">' +
         '<span style="font-size:10px">' + mSt.icon + '</span>' +
         '<span style="flex:1;font-size:11px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(m.name) +
           '<span class="pd-ms-hours" data-msid="' + eH(m.id) + '"></span>' +
         '</span>' +
-        '<span style="font-size:9px;color:var(--t6)">' + (m.endDate || '') + '</span>' +
+        '<span style="font-size:9px;color:var(--t5);font-weight:600;min-width:26px;text-align:right" title="진척률">' + mp + '%</span>' +
+        '<span style="font-size:9px;color:var(--t6)">' + eH(m.endDate || '') + '</span>' +
         '<span class="badge" style="background:' + mSt.bg + ';color:' + mSt.color + ';font-size:8px;padding:1px 4px">' + mSt.label + '</span></div>';
     }).join('') : '<div style="font-size:11px;color:var(--t6)">마일스톤 없음</div>';
   return '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--t5);margin-bottom:6px">마일스톤 (' + projMs.length + ')</div>' + msHtml + '</div>';
+}
+
+/* 마일스톤 표시 상태 — 저장은 대기·진행·완료, 끝나지 않았는데 종료일이 지났으면 '지연'으로 보인다 */
+function _pdMsDispStatus(m) {
+  if (m.status === 'done') return 'done';
+  if (m.endDate && typeof localDate === 'function' && m.endDate < localDate()) return 'delayed';
+  return (m.status && PROJ_STATUS[m.status]) ? m.status : 'waiting';
 }
 
 /* 마일스톤별 시간 집계 → .pd-ms-hours 채움 (setTimeout 0 — 패널 부착 후 비동기 실행) */
@@ -295,13 +367,12 @@ function _pdDetailLazyTabsHtml() {
     '<div id="pdMeeting" style="display:none">' + _PD_LOADING_HTML + '</div>';
 }
 
-/* 하단 버튼(편집/체크리스트 생성/삭제) + 진척 히스토리·코멘트 섹션 */
-function _pdDetailFooterHtml(id) {
-  return '<div class="pd-edit-only" style="display:flex;gap:8px;margin-top:16px">' +
-    '<button class="btn btn-p btn-s" onclick="' + _PD_CLOSE_JS + ';showProjectModal(\'' + id + '\')">✏️ 편집</button>' +
-    '<button class="btn btn-g btn-s" onclick="pdGenerateChecklists(\'' + id + '\')">📋 체크리스트 생성</button>' +
-    '<button class="btn btn-d btn-s" onclick="' + _PD_CLOSE_JS + ';deleteProjectUI(\'' + id + '\')">🗑 삭제</button>' +
-  '</div>' +
+/* 하단(체크리스트가 하나도 없을 때만 [체크리스트 생성]) + 진척 히스토리·코멘트 섹션.
+   편집 · 삭제는 헤더의 ✏️ · ⋯ 로 옮김 (C4) */
+function _pdDetailFooterHtml(id, chkCount) {
+  return (chkCount ? '' : '<div class="pd-edit-only" style="display:flex;gap:8px;margin-top:16px">' +
+    '<button class="btn btn-g btn-s" onclick="pdGenerateChecklists(\'' + eA(id) + '\')">📋 체크리스트 생성</button>' +
+  '</div>') +
   '<div id="progressHistorySection" style="margin-top:16px"></div>' +
   '<div id="pdCommentsSection" style="margin-top:16px"></div>' +
   '<div id="pdMindmapSection" style="margin-top:16px"></div>';
@@ -924,7 +995,7 @@ function _pdWorkMilestoneRowHtml(m, ctx) {
   var ut = mH ? mH.untagged : 0;
   var at = m.assigneeTargets || {};
   var msTarget = 0; Object.keys(at).forEach(function (k) { msTarget += (Number(at[k]) || 0); });
-  var mSt = (typeof PROJ_STATUS !== 'undefined' ? PROJ_STATUS[m.status] : null) || { icon: '⏳', label: m.status, color: SEM_COLOR.muted, bg: 'rgba(148,163,184,.15)' };
+  var mSt = (typeof PROJ_STATUS !== 'undefined' ? PROJ_STATUS[_pdMsDispStatus(m)] : null) || { icon: '⏳', label: m.status, color: SEM_COLOR.muted, bg: 'rgba(148,163,184,.15)' };
   var prog = Number(m.progress) || 0;
   var repH = Number(m.reportedHours) || 0;
   var effMs = _pdRnd1(repH);   // 마일스톤 누적 투입 = 보고만 (업무일지는 참고 표시)

@@ -72,7 +72,7 @@ function overlap(page) {
     // 시드: 새 프로젝트 + 마일스톤 + 이슈
     var seed = await page.evaluate(function () {
       var stamp = Date.now();
-      return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify({ name: 'E2E 장비 ' + stamp, visibility: 'tenant' }) }).then(function (r) {
+      return apiFetch('/api/projects', { method: 'POST', body: JSON.stringify({ name: 'E2E 장비 ' + stamp, visibility: 'tenant', checklists: false }) }).then(function (r) {
         var pid = r.data.id;
         return Promise.all([
           apiFetch('/api/milestones', { method: 'POST', body: JSON.stringify({ projectId: pid, name: '기구 설계', status: 'active', endDate: '2020-01-10' }) }),

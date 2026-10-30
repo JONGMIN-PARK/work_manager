@@ -3,7 +3,7 @@
  "log": [
   [
    "toast",
-   "시작일과 종료일을 입력하세요.",
+   "종료일을 입력하세요.",
    "warn"
   ]
  ],
@@ -40,6 +40,115 @@
  "timers": [],
  "errs": []
 }
+<!-- save: no-name -->
+{
+ "log": [
+  [
+   "toast",
+   "프로젝트명을 입력하세요.",
+   "warn"
+  ]
+ ],
+ "removed": false,
+ "origIds": null,
+ "timers": [],
+ "errs": []
+}
+<!-- save: ms-invalid -->
+{
+ "log": [
+  [
+   "toast",
+   "마일스톤 이름을 입력하세요 (필요 없는 행은 ✕ 로 빼세요). (외 1건)",
+   "warn"
+  ]
+ ],
+ "removed": false,
+ "origIds": null,
+ "timers": [],
+ "errs": []
+}
+<!-- save: dep-cycle -->
+{
+ "log": [
+  [
+   "toast",
+   "선행 관계가 돌고 돕니다: 가 → 나 → 다 → 가",
+   "warn"
+  ]
+ ],
+ "removed": false,
+ "origIds": null,
+ "timers": [],
+ "errs": []
+}
+<!-- save: edit-changed-only -->
+{
+ "log": [
+  [
+   "updateProject",
+   [
+    "p1",
+    {
+     "orderNo": "SO-9",
+     "name": "새 이름",
+     "startDate": "2026-09-01",
+     "endDate": "2026-12-31",
+     "status": "active",
+     "estimatedHours": 12.5,
+     "assignees": [
+      "김철수",
+      "이영희"
+     ],
+     "dependencies": [],
+     "memo": "",
+     "visibility": "dept",
+     "currentPhase": "design"
+    },
+    null
+   ]
+  ],
+  [
+   "msPut",
+   [
+    {
+     "id": "m1",
+     "name": "설계2"
+    }
+   ]
+  ],
+  [
+   "msPut",
+   [
+    {
+     "id": "m3",
+     "assigneeTargets": {
+      "이영희": 4
+     }
+    }
+   ]
+  ],
+  [
+   "syncAssigneesToMembers",
+   [
+    "p1",
+    [
+     "김철수",
+     "이영희"
+    ]
+   ]
+  ],
+  [
+   "toast",
+   "프로젝트가 수정되었습니다",
+   ""
+  ]
+ ],
+ "removed": true,
+ "origIds": null,
+ "timers": [],
+ "errs": []
+}
 <!-- save: edit-diff -->
 {
  "log": [
@@ -49,7 +158,7 @@
     "p1",
     {
      "orderNo": "SO-9",
-     "name": "SO-9",
+     "name": "편집 이름",
      "startDate": "2026-09-01",
      "endDate": "2026-12-31",
      "status": "active",
@@ -71,7 +180,6 @@
    [
     {
      "id": "m1",
-     "projectId": "p1",
      "name": "설계2",
      "startDate": "2026-08-01",
      "endDate": "2026-08-31",
@@ -154,7 +262,7 @@
    [
     {
      "orderNo": "",
-     "name": "미정 프로젝트",
+     "name": "혼자",
      "startDate": "2026-09-01",
      "endDate": "2026-12-31",
      "status": "active",
@@ -181,7 +289,8 @@
  "removed": true,
  "origIds": null,
  "timers": [
-  200
+  600,
+  900
  ],
  "errs": []
 }

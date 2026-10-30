@@ -454,10 +454,13 @@ function _psBuildModal(id, members) {
     '<div><div style="' + lbl + '">결론</div><textarea id="psmConc" style="' + inp + ';min-height:44px;resize:vertical">' + _psEsc(p.conclusion) + '</textarea></div>';
 
   if (!isNew) {
-    var linkInfo = p.linkedProjectId ? '✅ 프로젝트로 전환됨' : (p.linkedOrderNo ? '✅ 수주(' + _psEsc(p.linkedOrderNo) + ')로 전환됨' : '');
+    // 프로젝트로 전환된 건은 [새 프로젝트 열기] — 연결된 프로젝트가 지워졌으면 아래 _psCheckLinkedProj 가 문구를 바꾼다
+    var linkInfo = p.linkedProjectId
+      ? '<span id="psmLinkTxt">✅ 프로젝트로 전환됨</span> <button id="psmLinkOpen" class="btn btn-g btn-s" style="font-size:10px;margin-left:6px" onclick="_psOpenProject(\'' + eA(p.linkedProjectId) + '\')">📁 프로젝트 열기</button>'
+      : (p.linkedOrderNo ? '✅ 수주(' + _psEsc(p.linkedOrderNo) + ')로 전환됨' : '');
     html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bd)">' +
       (linkInfo
-        ? '<div style="font-size:11px;color:' + SEM_COLOR.ok + '">' + linkInfo + '</div>'
+        ? '<div id="psmLink" style="font-size:11px;color:' + SEM_COLOR.ok + '">' + linkInfo + '</div>'
         : '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">' +
             '<span style="font-size:10px;color:var(--t5)">확정되면 전환:</span>' +
             '<button class="btn btn-g btn-s" style="font-size:10px" onclick="psConvert(\'' + eA(p.id) + '\',\'project\')">📁 프로젝트로</button>' +
@@ -476,6 +479,7 @@ function _psBuildModal(id, members) {
   _psModal = createModal({ id: 'psModal', title: isNew ? '새 사전검토' : '사전검토 상세', html: html, width: '640px' });
   // 관련 요소기술 + 코멘트 스레드
   if (!isNew) {
+    if (p.linkedProjectId) _psCheckLinkedProj(p.linkedProjectId);
     psLoadTech(p.id);
     if (typeof renderCommentThread === 'function') renderCommentThread('prestudy', p.id, 'psmComments');
   }
@@ -537,6 +541,24 @@ function psDelete(id) {
   }).catch(function (e) { _psToast('삭제 실패: ' + _prestudyErrMsg(e), 'error'); });
 }
 
+/* 전환된 프로젝트 열기 — 사전검토 창을 닫고 프로젝트 상세 패널로 */
+function _psOpenProject(projId) {
+  if (typeof showProjectDetail !== 'function') return;
+  _psCloseModal();
+  showProjectDetail(projId);
+}
+/* 연결된 프로젝트가 아직 있는지 — 404 면 '연결된 프로젝트가 삭제됨' (403 은 있지만 내가 못 보는 것 → 그대로 둔다) */
+function _psCheckLinkedProj(projId) {
+  if (typeof projGet !== 'function') return;
+  projGet(projId).catch(function (e) { return e && e.status === 404 ? null : false; }).then(function (pr) {
+    if (pr !== null) return;
+    var box = document.getElementById('psmLink');
+    if (!box) return;
+    box.style.color = SEM_COLOR.warn || '#F59E0B';
+    box.textContent = '⚠️ 연결된 프로젝트가 삭제됨';
+  });
+}
+
 var _psConverting = false;   // 전환 중 연타 방지 (서버도 한 번만 전환되게 막는다)
 function psConvert(id, target) {
   if (_psConverting) return;
@@ -549,11 +571,14 @@ function psConvert(id, target) {
     return;
   }
   _psConverting = true;
-  prestudyConvert(id, target, orderNo).then(function () {
+  prestudyConvert(id, target, orderNo).then(function (res) {
     _psConverting = false;
     _psToast(target === 'order' ? '수주로 전환되었습니다.' : '프로젝트로 전환되었습니다.', 'success');
     _psCloseModal();
     renderPrestudy();
+    // 프로젝트로 전환했으면 바로 열 수 있게 — 응답 { target, created: 프로젝트 행 }
+    var newId = target === 'project' && res && res.created && res.created.id;
+    if (newId && confirm('새 프로젝트가 만들어졌습니다. 지금 열까요?')) _psOpenProject(newId);
   }).catch(function (e) {
     _psConverting = false;
     _psToast('전환 실패: ' + _prestudyErrMsg(e), 'error');

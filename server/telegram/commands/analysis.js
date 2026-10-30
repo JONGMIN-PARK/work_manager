@@ -3,6 +3,7 @@
  */
 var db = require('../../config/db');
 var escHtml = require('../util/escape').escHtml;
+var pd = require('../../lib/project-defaults');
 
 /** 업무분장 코드 매핑 */
 var AM = { A: 'A(CS현장)', B: 'B(수주)', D: 'D(개발)', G: 'G(공통)', M: 'M(양산)', R: 'R(제안)', S: 'S(영업지원)' };
@@ -129,7 +130,8 @@ function create(sendMessage) {
 
     // 프로젝트 현황
     var projR = await db.query(
-      "SELECT status, COUNT(*) as cnt FROM projects WHERE status != 'done' GROUP BY status"
+      // 대기 · 지연은 날짜로 계산 (v13.283)
+      "SELECT " + pd.computeStatusSql('', '$1') + " AS status, COUNT(*) as cnt FROM projects WHERE status != 'done' GROUP BY 1", [pd.todayKST()]
     );
 
     // 이슈 현황
@@ -263,15 +265,10 @@ function create(sendMessage) {
 
   /** 봇 명령어: /overdue — 지연 프로젝트 + 긴급 미해결 이슈 */
   async function cmdOverdue(chatId, user) {
-    // 지연 프로젝트
+    // 지연(= 납기 지난, 완료·보류 아님) 프로젝트 — v13.283 지연은 저장 상태가 아니라 날짜로 계산.
+    //  (예전엔 status='delayed' 목록과 납기 초과 목록이 따로였고, 납기 비교가 YYYYMMDD 와 YYYY-MM-DD 를 섞어 거의 모든 프로젝트가 걸렸다)
     var delayedR = await db.query(
-      "SELECT name, order_no, end_date, progress FROM projects WHERE status = 'delayed' ORDER BY end_date LIMIT 10"
-    );
-
-    // 납기 지난 프로젝트
-    var overdueR = await db.query(
-      "SELECT name, order_no, end_date, progress FROM projects WHERE status NOT IN ('done','hold') AND end_date < $1 ORDER BY end_date LIMIT 10",
-      [new Date().toISOString().slice(0, 10).replace(/-/g, '')]
+      "SELECT name, order_no, end_date, progress FROM projects WHERE " + pd.computeStatusSql('', '$1') + " = 'delayed' ORDER BY end_date LIMIT 10", [pd.todayKST()]
     );
 
     // 긴급 미해결 이슈
@@ -295,22 +292,9 @@ function create(sendMessage) {
         msg += '· ' + escHtml(r.name);
         if (r.order_no) msg += ' [' + escHtml(r.order_no) + ']';
         msg += ' — ' + (r.progress || 0) + '%';
-        if (r.end_date) msg += ', 납기 ' + r.end_date;
+        var ed = pd.ymd(r.end_date);
+        if (ed) msg += ', 납기 ' + ed + ' <b>+' + Math.round((Date.parse(pd.todayKST()) - Date.parse(ed)) / 86400000) + '일</b> 초과';
         msg += '\n';
-      });
-      msg += '\n';
-    }
-
-    if (overdueR.rows.length > 0) {
-      hasContent = true;
-      var today = new Date();
-      msg += '🔴 <b>납기 초과 (' + overdueR.rows.length + ')</b>\n';
-      overdueR.rows.forEach(function (r) {
-        var endD = new Date(r.end_date.slice(0, 4) + '-' + r.end_date.slice(4, 6) + '-' + r.end_date.slice(6, 8));
-        var diffDays = Math.floor((today - endD) / 86400000);
-        msg += '· ' + escHtml(r.name);
-        if (r.order_no) msg += ' [' + escHtml(r.order_no) + ']';
-        msg += ' — <b>+' + diffDays + '일</b> 초과\n';
       });
       msg += '\n';
     }

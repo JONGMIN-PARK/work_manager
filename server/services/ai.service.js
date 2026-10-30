@@ -4,6 +4,7 @@
  */
 var config = require('../config');
 var db = require('../config/db');
+var pd = require('../lib/project-defaults');
 
 var AM = { A: 'A(CS현장)', B: 'B(수주)', D: 'D(개발)', G: 'G(공통)', M: 'M(양산)', R: 'R(제안)', S: 'S(영업지원)' };
 
@@ -108,7 +109,8 @@ async function gatherContext(intents, userName) {
     // 프로젝트 데이터
     if (intents.includes('projects') || intents.includes('general')) {
       var projR = await db.query(
-        "SELECT name, order_no, status, progress, end_date, assignees FROM projects WHERE status NOT IN ('done') ORDER BY CASE status WHEN 'delayed' THEN 0 WHEN 'active' THEN 1 ELSE 2 END LIMIT 10"
+        // 대기 · 지연은 날짜로 계산 (v13.283) — 지연 먼저
+        "SELECT name, order_no, " + pd.computeStatusSql('', '$1') + " AS status, progress, end_date, assignees FROM projects WHERE status NOT IN ('done') ORDER BY CASE " + pd.computeStatusSql('', '$1') + " WHEN 'delayed' THEN 0 WHEN 'active' THEN 1 ELSE 2 END LIMIT 10", [pd.todayKST()]
       );
       if (projR.rows.length > 0) {
         context.push('[진행중 프로젝트]\n' +

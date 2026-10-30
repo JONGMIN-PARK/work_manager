@@ -154,7 +154,7 @@ function renderOrders(afterRender) {
       { key: 'amount', label: '수주액', w: '100px' },
       { key: 'manager', label: '담당자', w: '90px' },
       { key: 'delivery', label: '납품예정', w: '90px' },
-      { key: '_phase', label: '현재 단계', w: '110px' },
+      { key: '_phase', label: '현재 단계', w: '130px' },
       { key: '_issues', label: '이슈', w: '60px' },
       { key: '_actions', label: '', w: '90px' }
     ];
@@ -188,14 +188,19 @@ function renderOrders(afterRender) {
     orders.forEach(function (o) {
       var linked = projByOrder[o.orderNo] || [];
       var phase = '';
+      var safeOrderNo0 = _orderJsStr(o.orderNo);
       if (linked.length > 0) {
+        // B9: 단계 배지 = 연결 프로젝트 열기. 한 수주번호에 프로젝트가 여럿이면 +n
         var p = linked[0];
         var phKey = p.currentPhase || guessPhase(p);
         var ph = typeof PROJ_PHASE !== 'undefined' && PROJ_PHASE[phKey] ? PROJ_PHASE[phKey] : null;
-        if (ph) phase = '<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + ph.color + '22;color:' + ph.color + '">' + ph.icon + ' ' + ph.label + '</span>';
-        else phase = '<span style="font-size:10px;color:var(--t5)">' + eH(phKey) + '</span>';
+        var tip = '연결된 프로젝트 열기: ' + linked.map(function (x) { return x.name || x.id; }).join(', ');
+        phase = '<span onclick="event.stopPropagation();showProjectDetail(\'' + eA(p.id) + '\')" title="' + eH(tip) + '" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:8px;' +
+          (ph ? 'background:' + ph.color + '22;color:' + ph.color + '">' + ph.icon + ' ' + ph.label : 'color:var(--t5)">' + eH(phKey)) + '</span>';
+        if (linked.length > 1) phase += ' <span title="' + eH(tip) + '" style="font-size:9px;color:var(--t5);font-weight:700">+' + (linked.length - 1) + '</span>';
       } else {
-        phase = '<span style="font-size:10px;color:var(--t6)">미연결</span>';
+        phase = '<span style="font-size:10px;color:var(--t6)">미연결</span> ' +
+          '<button class="btn btn-g" style="padding:1px 5px;font-size:9px" title="이 수주로 프로젝트 만들기" onclick="event.stopPropagation();orderCreateProjFor(\'' + safeOrderNo0 + '\')">＋ 프로젝트</button>';
       }
 
       html += '<tr style="border-bottom:1px solid var(--bd);transition:background .1s" onmouseover="this.style.background=\'var(--bg-i)\'" onmouseout="this.style.background=\'\'">';
@@ -203,7 +208,8 @@ function renderOrders(afterRender) {
       html += '<td style="padding:8px 6px;font-weight:600;color:var(--t2);' + ell + '" title="' + eH(o.orderNo) + '">' + eH(o.orderNo) + '</td>';
       html += '<td style="padding:8px 6px;color:var(--t4);' + ell + '">' + eH(o.date) + '</td>';
       html += '<td style="padding:8px 6px;color:var(--t3);' + ell + '" title="' + eH(o.client) + '">' + eH(o.client) + '</td>';
-      html += '<td style="padding:8px 6px;color:var(--t2);' + ell + '" title="' + eH(o.name) + '">' + eH(o.name) + '</td>';
+      if (linked.length > 0) html += '<td style="padding:8px 6px;color:var(--t2);' + ell + '" title="' + eH(o.name) + ' — 클릭: 연결된 프로젝트 열기"><a href="javascript:void(0)" style="color:inherit;text-decoration:underline dotted" onclick="showProjectDetail(\'' + eA(linked[0].id) + '\')">' + eH(o.name || linked[0].name) + '</a></td>';
+      else html += '<td style="padding:8px 6px;color:var(--t2);' + ell + '" title="' + eH(o.name) + '">' + eH(o.name) + '</td>';
       html += '<td style="padding:8px 6px;color:var(--t3);text-align:right;' + ell + '">' + (o.amount ? formatAmount(o.amount) : '-') + '</td>';
       html += '<td style="padding:8px 6px;color:var(--t4);' + ell + '" title="' + eH(o.manager) + '">' + eH(o.manager) + '</td>';
       html += '<td style="padding:8px 6px;color:var(--t4);' + ell + '">' + eH(o.delivery) + '</td>';
@@ -303,7 +309,7 @@ function _orderBuildModal(editOrderNo) {
       '<div><label class="fl">납품예정일</label><input type="date" class="si" id="omDelivery" value="' + (o.delivery || '') + '" style="padding-left:10px"></div>' +
       '</div>' +
       '<div><label class="fl">메모</label><textarea class="si" id="omMemo" rows="2" style="padding:8px 10px;resize:vertical">' + eH(o.memo || '') + '</textarea></div>' +
-      (!isEdit ? '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t4);cursor:pointer"><input type="checkbox" id="omAutoProj" checked> 프로젝트 자동 생성 (6단계 마일스톤 포함)</label>' : '') +
+      (!isEdit ? '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t4);cursor:pointer"><input type="checkbox" id="omAutoProj" checked> 프로젝트 자동 생성 (6단계 · 체크리스트 포함)</label>' : '') +
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">' +
       '<button class="btn btn-g" onclick="document.getElementById(\'orderModal\').remove()">취소</button>' +
       '<button class="btn btn-p" onclick="saveOrderModal(' + (isEdit ? 'true' : 'false') + ', ' + (o.version === undefined || o.version === null ? 'null' : Number(o.version)) + ')">저장</button>' +
@@ -348,34 +354,79 @@ function saveOrderModal(isEdit, version) {
 
   var autoProj = !isEdit && document.getElementById('omAutoProj') && document.getElementById('omAutoProj').checked;
 
+  // A2: 수주 저장과 프로젝트 생성은 따로 처리 — 수주가 저장된 뒤 프로젝트만 실패하면 "수주 저장 실패"가 아니다.
+  //   수주는 다시 POST 하지 않는다(이미 있어 409). 프로젝트 생성만 다시 시도
   createOrder(data, { edit: isEdit, version: version }).then(function () {
-    if (autoProj) {
-      return createProjectFromOrder(data).then(function (proj) {
-        showToast('✅ 수주 등록 + 프로젝트 자동 생성 완료', 'success');
-        return proj;
-      });
-    } else {
-      showToast('✅ 수주 ' + (isEdit ? '수정' : '등록') + ' 완료', 'success');
-    }
-  }).then(function () {
     var modal = document.getElementById('orderModal');
     if (modal) modal.remove();
-    renderOrders();
-    // 파이프라인도 갱신
-    if (typeof renderPipeline === 'function' && document.getElementById('mPipeline') && !document.getElementById('mPipeline').classList.contains('hidden')) {
-      renderPipeline();
+    if (!autoProj) {
+      showToast('✅ 수주 ' + (isEdit ? '수정' : '등록') + ' 완료', 'success');
+      _orderAfterSave();
+      return;
     }
-    // 주간분석 상세 필드도 갱신 (수주명/거래처 반영)
-    if (typeof invalidateOrderInfoCache === 'function') invalidateOrderInfoCache();
-    if (typeof gfInvalidate === 'function') gfInvalidate();
-    if (typeof rFL === 'function') rFL();
-    if (typeof upV === 'function') upV();
+    return _orderCreateProj(data, true);
   }).catch(function (err) {
     console.error('[saveOrderModal]', err);
     var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
     if (err && err.status === 403) msg = '수주 등록 권한이 없습니다. 관리자에게 문의하세요.';
     if (err && err.status === 409) msg = (err.data && err.data.error === 'DUPLICATE') ? msg : '다른 사용자가 이 수주를 먼저 수정했습니다. 창을 닫고 다시 열어 주세요.';
     showToast('❌ 수주 저장 실패: ' + msg, 'error');
+  });
+}
+
+/* 수주 저장 뒤 화면 갱신 — 수주 대장 · 파이프라인 · 주간분석 수주 정보 */
+function _orderAfterSave() {
+  renderOrders();
+  if (typeof renderPipeline === 'function' && document.getElementById('mPipeline') && !document.getElementById('mPipeline').classList.contains('hidden')) {
+    renderPipeline();
+  }
+  if (typeof invalidateOrderInfoCache === 'function') invalidateOrderInfoCache();
+  if (typeof gfInvalidate === 'function') gfInvalidate();
+  if (typeof rFL === 'function') rFL();
+  if (typeof upV === 'function') upV();
+}
+
+/* 수주 → 프로젝트 생성 (신규 저장 직후 · 실패 후 다시 시도 · 대장의 [＋ 프로젝트]).
+   withOrder: 방금 수주를 저장한 흐름인지(문구만 다름). 실패하면 수주는 그대로 두고 프로젝트만 다시 시도 */
+function _orderCreateProj(order, withOrder) {
+  return createProjectFromOrder(order).then(function (proj) {
+    var r = proj && proj._assigneeSync;
+    showToast('✅ ' + (withOrder ? '수주 등록 + ' : '') + '프로젝트 생성 완료', 'success');
+    if (r && r.unmatched && r.unmatched.length) showToast('계정이 없는 담당자: ' + r.unmatched.join(', ') + ' (외부)', 'warn');
+    _orderAfterSave();
+    return proj;
+  }, function (err) {
+    console.error('[_orderCreateProj]', err);
+    var msg = (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
+    if (err && err.status === 403) msg = '프로젝트 생성 권한이 없습니다';
+    _orderAfterSave();
+    showToast('⚠️ ' + (withOrder ? '수주는 저장됨 · ' : '') + '프로젝트 생성 실패: ' + msg, 'error');
+    // showToast 는 버튼을 못 달아서 확인 창으로 [다시 시도]를 묻는다 (대장의 [＋ 프로젝트]로도 다시 만들 수 있음)
+    setTimeout(function () {
+      if (confirm((withOrder ? '수주 ' + order.orderNo + ' 는 저장됐지만 ' : '') + '프로젝트를 만들지 못했습니다.\n(' + msg + ')\n\n프로젝트 생성을 다시 시도할까요?\n(취소해도 수주 대장의 [＋ 프로젝트] 로 나중에 만들 수 있습니다)')) {
+        _orderCreateProj(order, withOrder);
+      }
+    }, 50);
+  });
+}
+
+/* B9: 수주 대장 '미연결' 행의 [＋ 프로젝트] — 이 수주로 프로젝트를 만든다 */
+var _orderProjBusy = {};
+function orderCreateProjFor(orderNo) {
+  if (_orderProjBusy[orderNo]) return;
+  _orderProjBusy[orderNo] = true;
+  var done = function () { delete _orderProjBusy[orderNo]; };
+  orderGet(orderNo).catch(function (err) { if (err && err.status === 404) return null; throw err; }).then(function (o) {
+    if (!o && typeof ORDER_MAP !== 'undefined' && ORDER_MAP[orderNo]) {
+      var v = ORDER_MAP[orderNo];
+      o = { orderNo: orderNo, date: (typeof v === 'object' ? v.date : '') || '', name: (typeof v === 'object' ? v.name : v) || '', manager: (typeof v === 'object' ? v.manager : '') || '', delivery: (typeof v === 'object' ? v.delivery : '') || '' };
+    }
+    if (!o) { showToast('수주 ' + orderNo + ' 를 찾지 못했습니다', 'error'); return; }
+    if (!confirm('수주 ' + orderNo + (o.name ? ' (' + o.name + ')' : '') + ' 로 프로젝트를 만들까요?')) return;
+    return _orderCreateProj(o, false);
+  }).then(done, function (err) {
+    done();
+    showToast('❌ 수주 정보를 불러오지 못했습니다: ' + ((err && err.message) || ''), 'error');
   });
 }
 

@@ -378,12 +378,15 @@ async function saveCase(name, form, opts) {
   s.syncAssigneesToMembers = rec('syncAssigneesToMembers'); s.pimgFlushStaging = rec('pimgFlushStaging');
   s.showToast = (m, t) => log.push(['toast', m, t || '']);
   s.window._projMsOrigIds = opts.origIds || null;
+  s.window._projMsSnap = opts.snap || null;
+  s.window._projModalAll = opts.all || null;
+  s.window._projModalOrigPhase = opts.origPhase;
   s._msTargetStaging = opts.staging || {};
   const modal = fakeEl('div', 'projModal');
   const ids = Object.assign({ projModal: modal }, form.ids);
   const origGet = s.document.getElementById;
   s.document.getElementById = (id) => (id in ids ? ids[id] : origGet(id));
-  s.document.querySelectorAll = (q) => (q === '.proj-dep-chk:checked' ? (form.deps || []).map((v) => ({ value: v }))
+  s.document.querySelectorAll = (q) => (q === '#projDepChips .proj-dep-chip' ? (form.deps || []).map((v) => ({ getAttribute: () => v }))
     : q === '#msRows .proj-ms-row' ? (form.rows || []) : []);
   const errs = [];
   const oe = console.error; console.error = (...a) => errs.push(a.map(String).join(' ').slice(0, 80));
@@ -403,13 +406,26 @@ async function saveAll() {
   out += await saveCase('no-dates', { ids: baseIds({ projEnd: { value: '' } }) });
   out += await saveCase('start-after-end', { ids: baseIds({ projStart: { value: '2027-01-01' } }) });
   out += await saveCase('self-dep', { existingId: 'p1', deps: ['p2', 'p1'], ids: baseIds() });
+  // v13.283 검증 — 이름 필수 · 마일스톤 날짜 앞뒤 · 이름 없는 행(날짜 있음) · 순환 선행
+  out += await saveCase('no-name', { ids: baseIds({ projName: { value: '  ' } }) });
+  out += await saveCase('ms-invalid', { ids: baseIds(), rows: [msRow(null, 'new-1', '', '2026-10-01', '', 'waiting'), msRow(null, 'new-2', '설계', '2026-10-09', '2026-10-01', 'active')] });
+  out += await saveCase('dep-cycle', { existingId: 'p1', deps: ['p2'], ids: baseIds() },
+    { all: [{ id: 'p1', name: '가' }, { id: 'p2', name: '나', dependencies: ['p3'] }, { id: 'p3', name: '다', dependencies: ['p1'] }] });
+  // v13.283 고친 칸만 — m1 이름만 · m2 그대로(안 보냄) · m3 목표시간만 · 단계 바뀜 → currentPhase
+  out += await saveCase('edit-changed-only', {
+    existingId: 'p1', ids: baseIds({ projPhase: { value: 'design' } }),
+    rows: [msRow('m1', 'm1', '설계2', '2026-09-01', '2026-09-10', 'done'), msRow('m2', 'm2', '제작', '2026-09-11', '2026-09-30', 'active'), msRow('m3', 'm3', '셋업', '2026-10-01', '2026-10-05', 'waiting')],
+  }, { origIds: ['m1', 'm2', 'm3'], origPhase: 'order', staging: { m1: {}, m2: { '김철수': 8 }, m3: { '이영희': 4 } },
+    snap: { m1: { name: '설계', startDate: '2026-09-01', endDate: '2026-09-10', status: 'done', order: 0, tg: '{}' },
+      m2: { name: '제작', startDate: '2026-09-11', endDate: '2026-09-30', status: 'active', order: 1, tg: '{"김철수":8}' },
+      m3: { name: '셋업', startDate: '2026-10-01', endDate: '2026-10-05', status: 'waiting', order: 2, tg: '{}' } } });
   out += await saveCase('edit-diff', {
     existingId: 'p1', deps: ['p3'],
-    ids: baseIds({ projName: { value: '' }, projVisibility: undefined, projEstHours: { value: 'x' } }),
+    ids: baseIds({ projName: { value: ' 편집 이름 ' }, projVisibility: undefined, projEstHours: { value: 'x' } }),
     rows: [msRow('m1', 'm1', ' 설계2 ', '2026-08-01', '2026-08-31', 'done'), msRow(null, 'new-1', '신규', '2026-10-01', '2026-10-05', 'waiting'),
       msRow(null, 'new-2', '신규', '2026-10-01', '2026-10-05', 'active'), msRow(null, 'new-3', '  ', '', '', 'waiting'), msRow('zz', 'zz', '외부', '', '', 'hold')],
   }, { origIds: ['m1', 'm2', 'm3'], staging: { m1: { '김철수': 10 }, 'new-1': { '이영희': 4 } } });
-  out += await saveCase('create-private-alone', { ids: baseIds({ projName: { value: '' }, projOrderNo: { value: '' }, projAssignees: { value: '' }, projVisibility: { value: 'private' }, projMemo: { innerHTML: '<div><br></div>' } }) },
+  out += await saveCase('create-private-alone', { ids: baseIds({ projName: { value: '혼자' }, projOrderNo: { value: '' }, projAssignees: { value: '' }, projVisibility: { value: 'private' }, projMemo: { innerHTML: '<div><br></div>' } }) },
     { createProject: async () => ({ id: 'new1' }) });
   out += await saveCase('create-null', { ids: baseIds() }, { createProject: async () => null });
   out += await saveCase('conflict', { existingId: 'p1', ids: baseIds() },

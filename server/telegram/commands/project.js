@@ -3,6 +3,7 @@
  */
 var db = require('../../config/db');
 var escHtml = require('../util/escape').escHtml;
+var pd = require('../../lib/project-defaults');
 
 /** 텍스트 바 차트 생성 */
 function textBar(value, max, width) {
@@ -17,13 +18,18 @@ function create(sendMessage) {
     if (!query) {
       // 프로젝트 목록 표시
       var listR = await db.query(
-        "SELECT name, status, progress, order_no FROM projects WHERE status NOT IN ('done') ORDER BY CASE status WHEN 'delayed' THEN 0 WHEN 'active' THEN 1 WHEN 'waiting' THEN 2 ELSE 3 END, name LIMIT 15"
+        "SELECT name, status, progress, order_no, start_date, end_date FROM projects WHERE status NOT IN ('done') ORDER BY name LIMIT 300"
       );
+      // 대기 · 지연은 날짜로 계산 (v13.283 — 저장 상태는 active · hold · done 만). 지연 → 진행 → 대기 → 보류 순
+      var _ord = { delayed: 0, active: 1, waiting: 2, hold: 3 }, _t = pd.todayKST();
+      listR.rows.forEach(function (r) { r.status = pd.computeStatus(r, _t); });
+      listR.rows.sort(function (a, b) { return (_ord[a.status] - _ord[b.status]) || String(a.name).localeCompare(String(b.name)); });
+      listR.rows = listR.rows.slice(0, 15);
       if (listR.rows.length === 0) return sendMessage(chatId, '📁 진행중인 프로젝트가 없습니다.');
 
       var msg = '📁 <b>진행중 프로젝트</b>\n\n';
       listR.rows.forEach(function (r, i) {
-        var statusIcon = r.status === 'delayed' ? '⚠️' : r.status === 'active' ? '🔵' : '⏳';
+        var statusIcon = r.status === 'delayed' ? '⚠️' : r.status === 'active' ? '🔵' : r.status === 'hold' ? '⏸' : '⏳';
         var pct = r.progress || 0;
         msg += statusIcon + ' ' + escHtml(r.name);
         if (r.order_no) msg += ' <code>[' + escHtml(r.order_no) + ']</code>';
@@ -46,7 +52,8 @@ function create(sendMessage) {
 
     var msg = '📁 <b>' + escHtml(p.name) + '</b>\n\n';
     if (p.order_no) msg += '📋 수주: <code>' + escHtml(p.order_no) + '</code>\n';
-    msg += '📊 상태: ' + (statusMap[p.status] || escHtml(p.status)) + '\n';
+    var pst = pd.computeStatus(p);
+    msg += '📊 상태: ' + (statusMap[pst] || escHtml(pst)) + '\n';
     msg += '📈 진행률: <code>' + textBar(pct, 100, 14) + '</code> <b>' + pct + '%</b>\n';
     if (p.start_date) msg += '📅 기간: ' + p.start_date + ' ~ ' + (p.end_date || '?') + '\n';
 

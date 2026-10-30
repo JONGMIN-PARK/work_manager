@@ -191,6 +191,7 @@ GET /api/profile/password-status
 GET /api/progress
 GET /api/projects
 GET /api/projects/:id
+GET /api/projects/:id/delete-preview
 GET /api/projects/:id/images
 GET /api/projects/:id/members
 GET /api/projects/:id/spec-changes
@@ -267,6 +268,7 @@ GET /api/v1/profile/password-status
 GET /api/v1/progress
 GET /api/v1/projects
 GET /api/v1/projects/:id
+GET /api/v1/projects/:id/delete-preview
 GET /api/v1/projects/:id/images
 GET /api/v1/projects/:id/members
 GET /api/v1/projects/all

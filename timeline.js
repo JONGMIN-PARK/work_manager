@@ -1346,7 +1346,9 @@ function _tlModal(o) {
   return m;
 }
 
-/* ═══ 프로젝트 등록/편집 모달 ═══ */
+/* ═══ 프로젝트 등록/편집 모달 ═══
+   v13.283 배치: 이름 → 기간·상태·단계 → 사람 → 수주번호·예상 시간 → 마일스톤 → 선행 프로젝트 → 메모·참고 이미지.
+   저장/취소는 아래 고정 막대, 공유·복사·이관·삭제는 ⋯ 더보기. Esc·✕·취소는 고친 게 있으면 묻고, Ctrl+Enter 는 저장 */
 function showProjectModal(projId) { return _tlGuardModal('tl:proj', _showProjectModalRaw, arguments, 'projModal'); }
 async function _showProjectModalRaw(projId) {
   var existing = document.getElementById('projModal');
@@ -1359,14 +1361,21 @@ async function _showProjectModalRaw(projId) {
   _projModalResetStaging(loaded.projMs);
   // v13.213: 연 시점의 version 으로 저장 — 그 사이 다른 사람이 고쳤으면 409 로 알린다(예전엔 조용히 덮어씀)
   window._projModalBaseVersion = proj ? proj.version : null;
+  // v13.283 연 시점 상태 — 단계 변경 감지 · 순환 검사 · 수주번호 중복 경고 · 고친 것 표시
+  window._projModalId = proj ? proj.id : '';
+  window._projModalAll = loaded.allProjects || [];
+  window._projModalOrigPhase = proj ? (proj.currentPhase || 'order') : null;
+  window._projModalDirty = false;
+  window._projEstAuto = null;
+  window._projOrderWarned = '';
 
   // v13.62: backdrop 클릭으로 닫히지 않도록 — 편집 중 실수 클릭으로 데이터 유실 방지.
-  //         반드시 [✕ 닫기] 또는 [💾 등록/수정] 버튼으로만 닫힘.
-  _tlModal({
+  var m = _tlModal({
     id: 'projModal', z: 9999, cls: 'pm-modal',
     box: 'padding:20px;max-width:880px;width:95%;max-height:90vh;overflow:auto',
     html: _projModalFormHtml(proj, loaded.projMs, loaded.allProjects)
   });
+  _projModalBindEvents(m && m.overlay);
 
   // Integration 2: 기존 담당자가 있으면 부하 표시 초기화
   if (proj && proj.assignees && proj.assignees.length) {
@@ -1375,6 +1384,49 @@ async function _showProjectModalRaw(projId) {
   // v13.147 참고 이미지 섹션 — 신규 등록 시 이전 스테이징 초기화
   if (!proj && typeof pimgResetStaging === 'function') pimgResetStaging();
   if (typeof renderProjImages === 'function') renderProjImages(proj ? proj.id : '');
+  var nameEl = document.getElementById('projName');
+  if (nameEl && typeof nameEl.focus === 'function') nameEl.focus();
+  // 기간이 있는 기존 프로젝트 — 예상 시간이 0 이면 바로 채우고, 계산값과 같으면 날짜를 바꿀 때 따라가게
+  if (proj && proj.startDate && proj.endDate) _projUpdateEstimatedHours('open');
+}
+
+/* 고친 것 추적 · 키보드(Esc 닫기 · Ctrl+Enter 저장) — 모달이 사라지면 키 처리기도 스스로 떼어 낸다 */
+function _projModalBindEvents(ov) {
+  if (ov && ov.addEventListener) {
+    var mark = function (e) {
+      var t = e && e.target;
+      if (t && t.getAttribute && t.getAttribute('data-nodirty') != null) return;   // 찾기 칸 입력은 변경 아님
+      window._projModalDirty = true;
+      if (t && t.classList && t.classList.contains('pm-invalid')) _projClearErr(t);
+    };
+    ov.addEventListener('input', mark);
+    ov.addEventListener('change', mark);
+  }
+  if (window._projModalKeyH) document.removeEventListener('keydown', window._projModalKeyH);
+  window._projModalKeyH = function (e) {
+    var pm = document.getElementById('projModal');
+    if (!pm) { document.removeEventListener('keydown', window._projModalKeyH); window._projModalKeyH = null; return; }
+    var all = document.querySelectorAll('.wa-modal-overlay');
+    if (all.length && all[all.length - 1] !== pm) return;   // 위에 다른 창(공유 · 목표 배분 등)이 떠 있으면 그 창 몫
+    if (e.key === 'Escape') { e.preventDefault(); _projModalClose(); }
+    else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      var b = pm.querySelector('.pm-save');
+      if (b && !b.disabled) b.click();
+    }
+  };
+  document.addEventListener('keydown', window._projModalKeyH);
+}
+function _projMarkDirty() { window._projModalDirty = true; }
+/* 편집 창 닫기 — 저장 안 한 변경이 있으면 묻는다(force=true 는 묻지 않음). 닫았으면 true */
+function _projModalClose(force) {
+  var pm = document.getElementById('projModal');
+  if (!pm) return true;
+  if (!force && window._projModalDirty && typeof confirm === 'function' && !confirm('저장하지 않은 변경이 있습니다. 닫을까요?')) return false;
+  pm.remove();
+  if (window._projModalKeyH) { document.removeEventListener('keydown', window._projModalKeyH); window._projModalKeyH = null; }
+  window._projModalDirty = false;
+  return true;
 }
 
 /* 편집 대상 로드 — 프로젝트·마일스톤(정렬, 중복은 DB에서 정리)·전체 프로젝트(의존관계 후보) */
@@ -1408,32 +1460,71 @@ async function _projModalLoad(projId) {
   return { proj: proj, projMs: projMs, allProjects: allProjects };
 }
 
-/* 모달 스테이징 초기화 — 원래 마일스톤 id(삭제 diff 기준) + 마일스톤별 인원 목표시간(assigneeTargets) */
+/* 모달 스테이징 초기화 — 원래 마일스톤 id(삭제 diff 기준) + 마일스톤별 인원 목표시간(assigneeTargets)
+   + 연 시점 사진(_projMsSnap — 저장 때 안 고친 행은 보내지 않고, 고친 칸만 보낸다) */
 function _projModalResetStaging(projMs) {
   window._projMsOrigIds = projMs.map(function (m) { return m.id; });
+  window._projMsSnap = {};
   _msTargetStaging = {};
   _msRowKeySeq = 0;
-  projMs.forEach(function (m) { _msTargetStaging[m.id] = Object.assign({}, m.assigneeTargets || {}); });
+  projMs.forEach(function (m) {
+    _msTargetStaging[m.id] = Object.assign({}, m.assigneeTargets || {});
+    window._projMsSnap[m.id] = _projMsSnapOf({ name: (m.name || '').trim(), startDate: m.startDate, endDate: m.endDate, status: _msEditStatus(m.status), order: m.order, assigneeTargets: m.assigneeTargets });
+  });
 }
 
-/* [순수] 마일스톤 편집 행 하나 — 기존(m.id 있음)·새 행·🤖 제안 모두 같은 열 (예전엔 세 벌이라 열 수·rowkey·끌기 손잡이가 달랐다) */
+/* [순수] 고를 수 있는 상태로 맞춤 — 프로젝트: 진행·보류·완료(대기·지연 → 진행) / 마일스톤: 대기·진행·완료(보류 → 대기, 지연 → 진행) */
+function _projEditStatus(st) {
+  var keys = typeof PROJ_STATUS_EDIT !== 'undefined' ? PROJ_STATUS_EDIT : ['active', 'hold', 'done'];
+  return keys.indexOf(st) >= 0 ? st : 'active';
+}
+function _msEditStatus(st) {
+  var keys = typeof MS_STATUS_EDIT !== 'undefined' ? MS_STATUS_EDIT : ['waiting', 'active', 'done'];
+  if (keys.indexOf(st) >= 0) return st;
+  return (!st || st === 'hold') ? 'waiting' : 'active';
+}
+/* [순수] 단계 키 — seq 순 */
+function _projPhaseKeys() {
+  return Object.keys(PROJ_PHASE).sort(function (a, b) { return (PROJ_PHASE[a].seq || 0) - (PROJ_PHASE[b].seq || 0); });
+}
+/* 상태 ↔ 단계 맞물림(서버 syncDonePhase 와 같은 규칙) — 상태 완료면 단계 완료, 단계 완료면 상태 완료 */
+function _projPhaseStatusSync(el) {
+  var st = document.getElementById('projStatus'), ph = document.getElementById('projPhase');
+  if (!el || !st || !ph) return;
+  if (el === st) {
+    if (st.value === 'done') ph.value = 'done';
+    else if (ph.value === 'done') ph.value = 'deliver';
+  } else if (el === ph) {
+    if (ph.value === 'done') st.value = 'done';
+    else if (st.value === 'done') st.value = 'active';
+  }
+}
+
+/* [순수] 마일스톤 편집 행 하나 — 기존(m.id 있음)·새 행·🤖 제안 모두 같은 열 (열 배치는 style.css .proj-ms-row) */
 function _projMsRowHtml(m, rowKey) {
-  var statusOpts = Object.keys(PROJ_STATUS).map(function (k) { return '<option value="' + k + '"' + (m.status === k ? ' selected' : '') + '>' + PROJ_STATUS[k].label + '</option>'; }).join('');
-  return '<div class="proj-ms-row"' + (m.id ? ' data-msid="' + eH(m.id) + '"' : '') + ' data-rowkey="' + eH(rowKey) + '" ondragover="msRowDragOver(event)" ondrop="msRowDrop(event)" style="display:grid;grid-template-columns:18px 1fr 110px 110px 90px 30px 30px;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bd)">' +
+  var cur = _msEditStatus(m.status);
+  var keys = typeof MS_STATUS_EDIT !== 'undefined' ? MS_STATUS_EDIT : ['waiting', 'active', 'done'];
+  var statusOpts = keys.map(function (k) { return '<option value="' + k + '"' + (cur === k ? ' selected' : '') + '>' + PROJ_STATUS[k].label + '</option>'; }).join('');
+  return '<div class="proj-ms-row"' + (m.id ? ' data-msid="' + eH(m.id) + '"' : '') + ' data-rowkey="' + eH(rowKey) + '" ondragover="msRowDragOver(event)" ondrop="msRowDrop(event)">' +
     '<span class="ms-drag-handle" draggable="true" ondragstart="msRowDragStart(event)" ondragend="msRowDragEnd(event)" title="드래그하여 순서 변경">⠿</span>' +
     '<input type="text" class="si ms-name" value="' + eH(m.name || '') + '"' + (m.id ? '' : ' placeholder="단계명..."') + ' style="padding:4px 8px;font-size:11px;padding-left:8px">' +
     '<input type="date" class="si ms-start" value="' + eH(m.startDate || '') + '" style="padding:4px 6px;font-size:10px;padding-left:6px">' +
     '<input type="date" class="si ms-end" value="' + eH(m.endDate || '') + '" style="padding:4px 6px;font-size:10px;padding-left:6px">' +
     '<select class="si ms-status" style="padding:4px 6px;font-size:10px;padding-left:6px">' + statusOpts + '</select>' +
-    (m.id ? '<button class="btn btn-g btn-s" title="다른 프로젝트로 이관" onclick="showMilestoneTransferModal(\'' + eA(m.id) + '\')" style="padding:2px 4px;font-size:11px">↪</button>' : '<span></span>') +
-    '<button class="btn btn-d btn-s" onclick="this.closest(\'.proj-ms-row\').remove()" style="padding:2px 6px">✕</button>' +
+    (m.id ? '<button type="button" class="btn btn-g btn-s" title="다른 프로젝트로 이관" onclick="showMilestoneTransferModal(\'' + eA(m.id) + '\')" style="padding:2px 4px;font-size:11px">↪</button>' : '<span></span>') +
+    '<button type="button" class="btn btn-d btn-s" title="이 행 빼기 (저장할 때 반영)" onclick="_projMsRemoveRow(this)" style="padding:2px 6px">✕</button>' +
   '</div>';
+}
+function _projMsRemoveRow(btn) {
+  var r = btn && btn.closest ? btn.closest('.proj-ms-row') : null;
+  if (r) { r.remove(); _projMarkDirty(); }
 }
 /* 새 행(빈 행 · 제안)을 #msRows 끝에 붙임 — rowkey 를 붙여 🎯 목표 배분 표에도 나온다 */
 function _projMsAppendRow(m) {
   var container = document.getElementById('msRows');
   if (!container) return;
   container.insertAdjacentHTML('beforeend', _projMsRowHtml(m, 'new-' + (++_msRowKeySeq)));
+  _projMarkDirty();
 }
 
 /* [순수] 마일스톤 편집 리스트 (#msRows 내용) — 드래그 순서 변경·이관·삭제 버튼 */
@@ -1441,84 +1532,140 @@ function _projMsEditRowsHtml(projMs) {
   return projMs.map(function (m) { return _projMsRowHtml(m, m.id); }).join('');
 }
 
-/* [순수] 등록/편집 폼 전체 HTML (헤더·입력·메모·참고이미지·마일스톤·푸터) */
+/* [순수] 등록/편집 폼 전체 HTML (헤더 · 입력 · 마일스톤 · 선행 · 메모 · 참고 이미지 · 고정 푸터) */
 function _projModalFormHtml(proj, projMs, allProjects) {
-  // order.js 수주번호 목록
-  var orderOpts = '<option value="">직접 입력</option>';
-  if (typeof ORDER_MAP !== 'undefined') {
-    Object.keys(ORDER_MAP).forEach(function (k) {
-      var sel = proj && proj.orderNo === k ? ' selected' : '';
-      var oName = typeof ORDER_MAP[k] === 'object' ? (ORDER_MAP[k].name || '') : (ORDER_MAP[k] || '');
-      orderOpts += '<option value="' + eH(k) + '"' + sel + '>' + eH(k) + ' - ' + eH(oName) + '</option>';
-    });
-  }
-
-  var statusOpts = Object.keys(PROJ_STATUS).map(function (k) {
-    var sel = proj && proj.status === k ? ' selected' : '';
+  var curPhase = proj ? (proj.currentPhase || 'order') : 'order';
+  var statusOpts = (typeof PROJ_STATUS_EDIT !== 'undefined' ? PROJ_STATUS_EDIT : ['active', 'hold', 'done']).map(function (k) {
+    var sel = _projEditStatus(proj ? proj.status : '') === k ? ' selected' : '';
     return '<option value="' + k + '"' + sel + '>' + PROJ_STATUS[k].icon + ' ' + PROJ_STATUS[k].label + '</option>';
   }).join('');
+  var phaseOpts = _projPhaseKeys().map(function (k) {
+    return '<option value="' + k + '"' + (curPhase === k ? ' selected' : '') + '>' + PROJ_PHASE[k].icon + ' ' + PROJ_PHASE[k].label + '</option>';
+  }).join('');
+  var est = proj && proj.estimatedHours != null ? proj.estimatedHours : '';
 
-  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+  return '<div class="pm-head">' +
       '<h3 style="font-size:14px;font-weight:700;color:var(--t1)">' + (proj ? '📝 프로젝트 편집' : '➕ 프로젝트 등록') + '</h3>' +
-      '<button class="btn btn-g btn-s" onclick="document.getElementById(\'projModal\').remove()">✕ 닫기</button>' +
+      '<button type="button" class="btn btn-g btn-s" onclick="_projModalClose()" title="닫기 (Esc)">✕ 닫기</button>' +
     '</div>' +
-    '<div style="display:flex;flex-direction:column;gap:10px">' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-        '<div><label class="fl">수주번호</label><select class="si" id="projOrderSel" style="padding-left:8px;font-size:11px" onchange="var v=this.value;if(v){document.getElementById(\'projOrderNo\').value=v;var oi=typeof ORDER_MAP!==\'undefined\'?ORDER_MAP[v]:null;var n=oi?(typeof oi===\'object\'?oi.name||\'\':(oi||\'\')):\'\';;if(n)document.getElementById(\'projName\').value=n}">' + orderOpts + '</select>' +
-          '<input type="text" class="si" id="projOrderNo" value="' + eH(proj ? proj.orderNo : '') + '" placeholder="수주번호 직접 입력..." style="margin-top:4px;padding-left:10px;font-size:11px"></div>' +
-        '<div><label class="fl">프로젝트명</label><input type="text" class="si" id="projName" value="' + eH(proj ? proj.name : '') + '" placeholder="프로젝트명..." style="padding-left:10px"></div>' +
+    '<div class="pm-body">' +
+      '<div><label class="fl">프로젝트명 <span class="pm-req">*</span></label><input type="text" class="si" id="projName" value="' + eH(proj ? proj.name : '') + '" placeholder="프로젝트명..." style="padding-left:10px" autofocus></div>' +
+      '<div class="pm-grid-4">' +
+        '<div><label class="fl">시작일 <span class="pm-req">*</span></label><input type="date" class="si" id="projStart" value="' + eH(proj ? proj.startDate : '') + '" style="padding-left:10px" onchange="_projUpdateEstimatedHours()"></div>' +
+        '<div><label class="fl">종료일 <span class="pm-req">*</span></label><input type="date" class="si" id="projEnd" value="' + eH(proj ? proj.endDate : '') + '" style="padding-left:10px" onchange="_projUpdateEstimatedHours()"></div>' +
+        '<div><label class="fl">상태</label><select class="si" id="projStatus" style="padding-left:8px" onchange="_projPhaseStatusSync(this)" title="대기 · 지연은 날짜로 자동 표시됩니다">' + statusOpts + '</select></div>' +
+        '<div><label class="fl">현재 단계</label><select class="si" id="projPhase" style="padding-left:8px" onchange="_projPhaseStatusSync(this)" title="완료 단계 = 상태 완료">' + phaseOpts + '</select></div>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">' +
-        '<div><label class="fl">시작일</label><input type="date" class="si" id="projStart" value="' + (proj ? proj.startDate : '') + '" style="padding-left:10px" onchange="_projUpdateEstimatedHours()"></div>' +
-        '<div><label class="fl">종료일</label><input type="date" class="si" id="projEnd" value="' + (proj ? proj.endDate : '') + '" style="padding-left:10px" onchange="_projUpdateEstimatedHours()"></div>' +
-        '<div><label class="fl">상태</label><select class="si" id="projStatus" style="padding-left:8px">' + statusOpts + '</select></div>' +
-      '</div>' +
-      _projVisibilityRowHtml(proj) +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-        '<div><label class="fl">예상 총 투입시간 (h)</label><input type="number" class="si" id="projEstHours" value="' + (proj ? proj.estimatedHours : '') + '" placeholder="시작일·종료일 선택 시 자동 계산" style="padding-left:10px" min="0"><div id="projEstHoursHint" style="font-size:10px;color:var(--t5);margin-top:3px">날짜 변경 시 주말·대한민국 공휴일을 제외하고 하루 8시간으로 계산합니다.</div></div>' +
-        '<div><label class="fl">담당자 <span style="font-size:9px;color:var(--t6)">(쉼표로 구분)</span></label><input type="text" class="si" id="projAssignees" value="' + eH(proj ? (proj.assignees || []).join(', ') : '') + '" placeholder="홍길동, 김철수..." style="padding-left:10px" oninput="renderAssigneeWorkload(\'' + (proj ? proj.id : '') + '\')">' +
+      '<div class="pm-grid-2">' +
+        '<div><label class="fl">담당자 <span style="font-size:9px;color:var(--t6)">(쉼표로 구분)</span></label><input type="text" class="si" id="projAssignees" value="' + eH(proj ? (proj.assignees || []).join(', ') : '') + '" placeholder="홍길동, 김철수..." style="padding-left:10px" oninput="renderAssigneeWorkload(\'' + (proj ? eA(proj.id) : '') + '\')">' +
           _projAssigneeGroupHtml(proj) +
           '<div id="assigneeWorkloadArea" style="margin-top:4px"></div></div>' +
+        _projVisibilityRowHtml(proj) +
       '</div>' +
-      _projDepChecksHtml(proj, allProjects) +
+      '<div class="pm-grid-2">' +
+        _projOrderFieldHtml(proj) +
+        '<div><label class="fl">예상 총 투입시간 (h)</label>' +
+          '<div style="display:flex;gap:4px;align-items:center"><input type="number" class="si" id="projEstHours" value="' + eH(est) + '" placeholder="기간을 고르면 자동 계산" style="padding-left:10px;flex:1;min-width:0" min="0">' +
+          '<button type="button" id="projEstRecalc" class="btn btn-g btn-s" style="display:none;font-size:10px;white-space:nowrap" onclick="_projUpdateEstimatedHours(true)" title="기간(주말·공휴일 제외 × 8h)으로 다시 계산">↻ 다시 계산</button></div>' +
+          '<div id="projEstHoursHint" class="pm-hint">주말·대한민국 공휴일을 빼고 하루 8시간으로 계산합니다.</div></div>' +
+      '</div>' +
+      _projMsSectionHtml(proj, projMs) +
+      _projDepPickerHtml(proj, allProjects) +
       _projMemoEditorHtml(proj) +
       // v13.147 참고 이미지(장비 사진 등) 섹션
-      '<div id="projImagesSection" style="padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:8px"></div>' +
-      // 마일스톤 섹션
-      '<div style="padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:8px">' +
-        '<div class="pm-ms-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;row-gap:8px;margin-bottom:8px">' +
-          '<span style="font-size:12px;font-weight:600;color:var(--t4)">◆ 마일스톤 (하위 단계)</span>' +
-          '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">' +
-            (proj && proj.orderNo ? '<button class="btn btn-g btn-s" style="font-size:10px" onclick="runSuggestMilestones(\'' + eH(proj.orderNo) + '\')">🤖 마일스톤 제안</button>' : '') +
-            '<button class="btn btn-g btn-s" style="font-size:10px" onclick="editMsTargetsMatrix()" title="담당자별·마일스톤별 목표시간 배분">🎯 목표 배분</button>' +
-            '<button class="btn btn-g btn-s" onclick="addMsRow()">+ 추가</button>' +
-          '</div>' +
-        '</div>' +
-        '<div id="msRows">' + _projMsEditRowsHtml(projMs) + '</div>' +
-      '</div>' +
+      '<div id="projImagesSection" class="pm-section"></div>' +
     '</div>' +
-    '<div class="pm-footer" style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap">' +
-      (proj ? '<button class="btn btn-d btn-s" onclick="deleteProjectUI(\'' + eA(proj.id) + '\')">🗑 삭제</button>' : '') +
-      '<button class="btn btn-p" onclick="saveProjectUI(\'' + (proj ? proj.id : '') + '\')">' + (proj ? '💾 수정' : '➕ 등록') + '</button>' +
-    '</div>';
+    _projFooterHtml(proj);
 }
 
-// 가시성: 본인만(private) / 부서(dept) / 테넌트 전체(tenant) + 공유·복사·이관 버튼(편집 시)
-function _projVisibilityRowHtml(proj) {
-  return '<div class="pm-vis-row" style="display:grid;grid-template-columns:1fr 2fr;gap:10px;align-items:end">' +
-    '<div><label class="fl">가시성</label><select class="si" id="projVisibility" style="padding-left:8px;font-size:11px">' +
-      ['private','dept','tenant'].map(function (v) {
-        var labels = { 'private':'🔒 비공개 (본인+공유 사용자)', 'dept':'🏢 부서 공개', 'tenant':'🌐 전체 공개' };
-        var cur = proj && proj.visibility ? proj.visibility : 'private';
-        return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + labels[v] + '</option>';
-      }).join('') +
-    '</select></div>' +
-    (proj ? '<div class="pm-share-btns" style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">' +
-      '<button class="btn btn-g btn-s" style="font-size:10px" onclick="showProjectShareModal(\'' + eA(proj.id) + '\')">👥 공유 관리</button>' +
-      '<button class="btn btn-g btn-s" style="font-size:10px" onclick="showProjectCopyModal(\'' + eA(proj.id) + '\')" title="이 프로젝트를 다른 이름으로 복사(내용·인원·마일스톤 동일)">📋 복사</button>' +
-      '<button class="btn btn-g btn-s" style="font-size:10px" onclick="showProjectTransferModal(\'' + eA(proj.id) + '\')">↪ 소유권 이관</button>' +
-    '</div>' : '<div style="font-size:10px;color:var(--t6);align-self:center">등록 후 공유 사용자 추가·복사 가능</div>') +
+/* 마일스톤 섹션 — 🤖 제안(수주번호 있을 때) · 🎯 목표 배분 · + 추가 */
+function _projMsSectionHtml(proj, projMs) {
+  return '<div class="pm-section">' +
+    '<div class="pm-ms-header">' +
+      '<span style="font-size:12px;font-weight:600;color:var(--t4)">◆ 마일스톤 (하위 단계)</span>' +
+      '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">' +
+        (proj && proj.orderNo ? '<button type="button" class="btn btn-g btn-s" style="font-size:10px" onclick="runSuggestMilestones(\'' + eA(proj.orderNo) + '\')">🤖 마일스톤 제안</button>' : '') +
+        '<button type="button" class="btn btn-g btn-s" style="font-size:10px" onclick="editMsTargetsMatrix()" title="담당자별·마일스톤별 목표시간 배분">🎯 목표 배분</button>' +
+        '<button type="button" class="btn btn-g btn-s" onclick="addMsRow()">+ 추가</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="msRows">' + _projMsEditRowsHtml(projMs) + '</div>' +
   '</div>';
+}
+
+/* 고정 푸터 — [⋯ 더보기(공유·복사·이관 | 삭제)] … [취소] [저장] */
+function _projFooterHtml(proj) {
+  var more = '';
+  if (proj) {
+    var pid = eA(proj.id);
+    var item = function (fn, label, title) {
+      return '<button type="button" onclick="this.closest(\'details\').open=false;' + fn + '(\'' + pid + '\')"' + (title ? ' title="' + title + '"' : '') + '>' + label + '</button>';
+    };
+    more = '<details class="pm-more"><summary class="btn btn-g btn-s">⋯ 더보기</summary><div class="pm-more-menu">' +
+      item('showProjectShareModal', '👥 공유 관리') +
+      item('showProjectCopyModal', '📋 복사', '이 프로젝트를 다른 이름으로 복사(내용·인원·마일스톤 동일)') +
+      item('showProjectTransferModal', '↪ 소유권 이관') +
+      '<div class="pm-more-sep"></div>' +
+      '<button type="button" class="pm-more-del" onclick="this.closest(\'details\').open=false;deleteProjectUI(\'' + pid + '\')">🗑 프로젝트 삭제</button>' +
+    '</div></details>';
+  }
+  return '<div class="pm-footer">' + more +
+    '<span class="pm-footer-hint">Ctrl+Enter 저장 · Esc 닫기</span>' +
+    '<button type="button" class="btn btn-g" onclick="_projModalClose()">취소</button>' +
+    '<button type="button" class="btn btn-p pm-save" onclick="saveProjectUI(\'' + (proj ? eA(proj.id) : '') + '\')">' + (proj ? '💾 수정' : '➕ 등록') + '</button>' +
+  '</div>';
+}
+
+// 가시성: 본인만(private) / 부서(dept) / 테넌트 전체(tenant) — 공유·복사·이관은 푸터 ⋯ 더보기
+function _projVisibilityRowHtml(proj) {
+  var labels = { 'private': '🔒 비공개 (본인+공유 사용자)', 'dept': '🏢 부서 공개', 'tenant': '🌐 전체 공개' };
+  var cur = proj && proj.visibility ? proj.visibility : 'private';
+  return '<div class="pm-vis-row"><label class="fl">가시성 · 공유</label><select class="si" id="projVisibility" style="padding-left:8px;font-size:11px">' +
+      ['private', 'dept', 'tenant'].map(function (v) { return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + labels[v] + '</option>'; }).join('') +
+    '</select>' +
+    '<div class="pm-hint">' + (proj ? '공유 사용자 추가는 아래 ⋯ 더보기 › 공유 관리' : '등록 후 공유 사용자 추가·복사 가능') + '</div>' +
+  '</div>';
+}
+
+/* 수주번호 — 입력 하나 + 목록(datalist "번호 — 이름"). 이미 번호가 있는 프로젝트는 읽기 전용(번호 변경은 수주대장에서) */
+function _projOrderName(k) {
+  var oi = typeof ORDER_MAP !== 'undefined' ? ORDER_MAP[k] : null;
+  return oi ? (typeof oi === 'object' ? (oi.name || '') : String(oi)) : '';
+}
+function _projOrderFieldHtml(proj) {
+  var cur = proj && proj.orderNo ? proj.orderNo : '';
+  if (cur) {
+    return '<div><label class="fl">수주번호</label><input type="text" class="si" id="projOrderNo" value="' + eH(cur) + '" readonly style="padding-left:10px;opacity:.75;cursor:not-allowed" title="수주번호 변경은 수주대장 › 번호 변경에서">' +
+      '<div class="pm-hint">수주번호 변경은 수주대장 › 번호 변경에서 (이슈 · A/S · 업무일지 연결 유지)</div></div>';
+  }
+  var opts = typeof ORDER_MAP !== 'undefined' ? Object.keys(ORDER_MAP).map(function (k) {
+    var n = _projOrderName(k);
+    return '<option value="' + eH(n ? k + ' — ' + n : k) + '"></option>';
+  }).join('') : '';
+  return '<div><label class="fl">수주번호</label><input type="text" class="si" id="projOrderNo" list="projOrderList" value="" placeholder="번호·이름으로 찾기 또는 직접 입력" autocomplete="off" style="padding-left:10px" oninput="_projOrderInput(this)" onchange="_projOrderPicked(this)">' +
+    '<datalist id="projOrderList">' + opts + '</datalist></div>';
+}
+// 목록에서 고르면 값이 "번호 — 이름" — 번호만 남기고 처리
+function _projOrderInput(el) {
+  var m = /^(.+?)\s+—\s+/.exec(el.value || '');
+  if (m && typeof ORDER_MAP !== 'undefined' && ORDER_MAP[m[1]] != null) _projOrderPicked(el);
+}
+function _projOrderPicked(el) {
+  if (!el || el.readOnly) return;
+  var v = (el.value || '').trim();
+  var m = /^(.+?)\s+—\s+/.exec(v);
+  if (m && typeof ORDER_MAP !== 'undefined' && ORDER_MAP[m[1]] != null) { v = m[1]; el.value = v; }
+  if (!v) return;
+  // 프로젝트명은 비어 있을 때만 채운다
+  var nm = _projOrderName(v), nEl = document.getElementById('projName');
+  if (nm && nEl && !nEl.value.trim()) nEl.value = nm;
+  // 다른 프로젝트가 같은 번호를 쓰면 알림(막지는 않음)
+  if (window._projOrderWarned === v) return;
+  var dup = (window._projModalAll || []).filter(function (p) { return p.orderNo === v && p.id !== window._projModalId; })[0];
+  if (dup) {
+    window._projOrderWarned = v;
+    if (typeof showToast === 'function') showToast('⚠️ 수주번호 ' + v + ' 는 이미 「' + (dup.name || dup.id) + '」 프로젝트에서 쓰고 있습니다', 'warn');
+  }
 }
 
 // Integration 6: 그룹에서 가져오기 dropdown + 그룹 저장 버튼
@@ -1529,40 +1676,107 @@ function _projAssigneeGroupHtml(proj) {
     grpOpts += '<option value="' + eH(g.id) + '">' + eH(g.name) + ' (' + g.members.length + '명)</option>';
   });
   return '<div style="display:flex;gap:4px;margin-top:4px;align-items:center">' +
-    '<select class="si" style="flex:1;padding:3px 6px;padding-left:6px;font-size:10px" onchange="if(this.value){var g=typeof getGroup===\'function\'?getGroup(this.value):null;if(g){document.getElementById(\'projAssignees\').value=g.members.join(\', \');if(typeof renderAssigneeWorkload===\'function\')renderAssigneeWorkload(\'' + (proj ? proj.id : '') + '\')}this.value=\'\'}">' + grpOpts + '</select>' +
-    '<button class="btn btn-g btn-s" style="font-size:9px;white-space:nowrap;padding:3px 6px" onclick="saveAssigneesAsGroup()" title="현재 담당자를 그룹으로 저장">💾 그룹 저장</button>' +
+    '<select class="si" style="flex:1;padding:3px 6px;padding-left:6px;font-size:10px" onchange="if(this.value){var g=typeof getGroup===\'function\'?getGroup(this.value):null;if(g){document.getElementById(\'projAssignees\').value=g.members.join(\', \');if(typeof renderAssigneeWorkload===\'function\')renderAssigneeWorkload(\'' + (proj ? eA(proj.id) : '') + '\')}this.value=\'\'}">' + grpOpts + '</select>' +
+    '<button type="button" class="btn btn-g btn-s" style="font-size:9px;white-space:nowrap;padding:3px 6px" onclick="saveAssigneesAsGroup()" title="현재 담당자를 그룹으로 저장">💾 그룹 저장</button>' +
   '</div>';
 }
 
-// 의존관계 (선행 프로젝트) 체크 목록 — 후보(자기 자신 제외)가 없으면 ''
-function _projDepChecksHtml(proj, allProjects) {
+/* 선행 프로젝트(의존관계) — 고른 것은 칩, 이름·수주번호로 찾아 추가. 후보(자기 자신 제외)가 없으면 '' */
+function _projDepPickerHtml(proj, allProjects) {
   var allP = allProjects || [];
-  var deps = proj ? (proj.dependencies || []) : [];
   var others = allP.filter(function (op) { return !proj || op.id !== proj.id; });
   if (!others.length) return '';
-  var depChecks = others.map(function (op) {
-    var chk = deps.includes(op.id) ? ' checked' : '';
-    return '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t3);cursor:pointer"><input type="checkbox" class="proj-dep-chk" value="' + eH(op.id) + '"' + chk + '><span class="dot" style="background:' + eC(op.color) + ';width:6px;height:6px;border-radius:50%;display:inline-block"></span>' + eH(op.name || op.orderNo) + '</label>';
+  var byId = {};
+  allP.forEach(function (p) { byId[p.id] = p; });
+  var deps = proj ? (proj.dependencies || []) : [];
+  return '<div class="pm-dep"><label class="fl">선행 프로젝트 (의존관계)</label>' +
+    '<div id="projDepChips" class="pm-dep-chips">' + deps.map(function (id) { return _projDepChipHtml(id, byId[id]); }).join('') + '</div>' +
+    '<div style="position:relative"><input type="text" class="si" id="projDepSearch" data-nodirty autocomplete="off" placeholder="🔍 프로젝트 이름 · 수주번호로 찾아 추가..." style="padding-left:10px;font-size:11px" ' +
+      'oninput="_projDepFilter()" onfocus="_projDepFilter()" onblur="var b=document.getElementById(\'projDepSugg\');if(b)b.style.display=\'none\'" ' +
+      'onkeydown="if(event.key===\'Enter\'){event.preventDefault();_projDepPickFirst()}">' +
+    '<div id="projDepSugg" class="pm-dep-sugg" style="display:none"></div></div>' +
+  '</div>';
+}
+// [순수] 칩 하나 — 볼 수 없는 프로젝트(목록에 없음)도 칩으로 남겨 저장 때 조용히 빠지지 않게
+function _projDepChipHtml(id, p) {
+  var label = p ? (p.name || p.orderNo || id) : '(볼 수 없는 프로젝트)';
+  return '<span class="proj-dep-chip" data-id="' + eH(id) + '"' + (p ? '' : ' title="' + eH(id) + '"') + '><span class="pm-dot" style="background:' + eC(p && p.color, '#94A3B8') + '"></span>' + eH(label) +
+    '<button type="button" title="빼기" onclick="_projDepRemove(this)">×</button></span>';
+}
+function _projDepIds() {
+  var out = [];
+  document.querySelectorAll('#projDepChips .proj-dep-chip').forEach(function (c) { var id = c.getAttribute('data-id'); if (id && out.indexOf(id) < 0) out.push(id); });
+  return out;
+}
+function _projDepFilter() {
+  var inp = document.getElementById('projDepSearch'), box = document.getElementById('projDepSugg');
+  if (!inp || !box) return;
+  var q = inp.value.trim().toLowerCase();
+  var picked = _projDepIds();
+  var list = (window._projModalAll || []).filter(function (p) {
+    if (p.id === window._projModalId || picked.indexOf(p.id) >= 0) return false;
+    return !q || ((p.name || '') + ' ' + (p.orderNo || '')).toLowerCase().indexOf(q) >= 0;
+  }).slice(0, 8);
+  if (!list.length) { box.innerHTML = q ? '<div class="pm-dep-none">맞는 프로젝트가 없습니다</div>' : ''; box.style.display = q ? '' : 'none'; return; }
+  box.innerHTML = list.map(function (p) {
+    return '<button type="button" class="pm-dep-opt" onmousedown="event.preventDefault()" onclick="_projDepAdd(\'' + eA(p.id) + '\')"><span class="pm-dot" style="background:' + eC(p.color) + '"></span>' + eH(p.name || p.orderNo) +
+      (p.name && p.orderNo ? ' <span class="pm-dep-no">' + eH(p.orderNo) + '</span>' : '') + '</button>';
   }).join('');
-  return '<div><label class="fl">선행 프로젝트 (의존관계)</label><div style="display:flex;flex-wrap:wrap;gap:8px;max-height:80px;overflow:auto;padding:6px;background:var(--bg-i);border-radius:6px">' + depChecks + '</div></div>';
+  box.style.display = '';
+}
+function _projDepPickFirst() {
+  var b = document.querySelector('#projDepSugg .pm-dep-opt');
+  if (b) b.click();
+}
+function _projDepAdd(id) {
+  var chips = document.getElementById('projDepChips');
+  if (!chips || _projDepIds().indexOf(id) >= 0) return;
+  var p = (window._projModalAll || []).filter(function (x) { return x.id === id; })[0];
+  chips.insertAdjacentHTML('beforeend', _projDepChipHtml(id, p));
+  _projMarkDirty();
+  var inp = document.getElementById('projDepSearch');
+  if (inp) { inp.value = ''; inp.focus(); }
+  _projDepFilter();
+}
+function _projDepRemove(btn) {
+  var c = btn && btn.closest ? btn.closest('.proj-dep-chip') : null;
+  if (c) { c.remove(); _projMarkDirty(); }
+}
+/* [순수] 순환 의존 찾기 — selfId 의 선행을 depIds 로 바꿨을 때 selfId → … → selfId 경로(id 배열), 없으면 null */
+function _projDepCycle(selfId, depIds, allProjects) {
+  if (!selfId || !depIds || !depIds.length) return null;
+  var g = {};
+  (allProjects || []).forEach(function (p) { g[p.id] = p.dependencies || []; });
+  g[selfId] = depIds;
+  var seen = {};
+  function walk(id, path) {
+    if (id === selfId) return path.concat(id);
+    if (seen[id]) return null;
+    seen[id] = true;
+    var ds = g[id] || [];
+    for (var i = 0; i < ds.length; i++) { var r = walk(ds[i], path.concat(id)); if (r) return r; }
+    return null;
+  }
+  for (var i = 0; i < depIds.length; i++) { var r = walk(depIds[i], [selfId]); if (r) return r; }
+  return null;
 }
 
 // 메모 — contenteditable로 인라인 이미지 지원 (v13.35~) + 다중 + 삭제 (v13.37~)
 function _projMemoEditorHtml(proj) {
   return '<div>' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:6px">' +
+    '<div class="pm-memo-head">' +
       '<label class="fl" style="margin:0">메모</label>' +
-      '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">' +
-        '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:3px 8px" onclick="memoInsertImagePicker()" title="이미지 파일 선택 (여러 개 동시 가능)">🖼 이미지 추가</button>' +
-        '<button type="button" class="btn btn-g btn-s" style="font-size:10px;padding:3px 8px" onclick="memoCompressImages()" title="이 메모에 이미 넣은 큰 이미지들을 압축·축소">🗜 이미지 압축</button>' +
-        '<button type="button" id="memoDelImgBtn" class="btn btn-d btn-s" style="font-size:10px;padding:3px 8px;opacity:.45;cursor:not-allowed" disabled onclick="memoDeleteSelectedImage()" title="에디터에서 이미지 클릭 후 이 버튼으로 삭제">🗑 선택 이미지 삭제</button>' +
-        '<span style="font-size:9px;color:var(--t6);align-self:center" title="여러 이미지 동시 선택/붙여넣기/드래그 가능. 5MB 이하 권장">다중·붙여넣기·드래그</span>' +
+      '<div class="pm-memo-tools">' +
+        '<button type="button" class="btn btn-g btn-s" onclick="memoInsertImagePicker()" title="이미지 파일 선택 (여러 개 동시 가능)">🖼 이미지 추가</button>' +
+        '<button type="button" class="btn btn-g btn-s" onclick="memoCompressImages()" title="이 메모에 이미 넣은 큰 이미지들을 압축·축소">🗜 이미지 압축</button>' +
+        '<button type="button" id="memoDelImgBtn" class="btn btn-d btn-s" style="opacity:.45;cursor:not-allowed" disabled onclick="memoDeleteSelectedImage()" title="에디터에서 이미지 클릭 후 이 버튼으로 삭제">🗑 선택 이미지 삭제</button>' +
+        '<span class="pm-memo-tip" title="여러 이미지 동시 선택/붙여넣기/드래그 가능. 5MB 이하 권장">다중·붙여넣기·드래그</span>' +
       '</div>' +
     '</div>' +
     '<div id="projMemo" contenteditable="true" class="si" ' +
       'onclick="memoEditorClickHandler(event)" onkeydown="memoEditorKeyHandler(event)" ' +
       'onpaste="memoPasteHandler(event)" ondragover="event.preventDefault();this.style.borderColor=\'var(--ac)\'" ondragleave="this.style.borderColor=\'\'" ondrop="memoDropHandler(event)" ' +
-      'style="padding:10px;resize:vertical;min-height:240px;max-height:500px;overflow:auto;white-space:pre-wrap;word-break:break-word"' +
+      'style="padding:10px;resize:vertical;min-height:200px;max-height:500px;overflow:auto;white-space:pre-wrap;word-break:break-word"' +
     '>' + (proj ? memoToHtml(proj.memo) : '') + '</div>' +
   '</div>';
 }
@@ -1661,7 +1875,7 @@ function msRowDragOver(e) {
 }
 function msRowDrop(e) {
   e.preventDefault();
-  if (_msDragRow) _msDragRow.style.opacity = '';
+  if (_msDragRow) { _msDragRow.style.opacity = ''; _projMarkDirty(); }
   _msDragRow = null;
 }
 
@@ -1797,17 +2011,18 @@ function saveMsTargetsMatrix() {
     else delete _msTargetStaging[rk][nm];
   });
   modal.remove();
+  _projMarkDirty();
   if (typeof showToast === 'function') showToast('목표 배분 저장됨 — 프로젝트 [수정/등록]을 눌러 반영하세요');
 }
 
 async function saveProjectUI(existingId) {
   var form = _projFormRead(existingId);
-  if (!form) return;   // 검증 실패 (토스트 표시됨)
+  if (!form) return;   // 검증 실패 (칸 표시 + 토스트)
   var data = form.data, assignees = form.assignees;
   // 더블클릭 방지 — 저장이 끝날 때까지 버튼 잠금 (예전엔 두 번 눌리면 프로젝트·마일스톤이 두 벌 생겼다)
   if (saveProjectUI._busy) return;
   saveProjectUI._busy = true;
-  var saveBtn = document.querySelector('#projModal .pm-footer .btn-p');
+  var saveBtn = document.querySelector('#projModal .pm-save');
   if (saveBtn) saveBtn.disabled = true;
 
   var projId;
@@ -1816,13 +2031,17 @@ async function saveProjectUI(existingId) {
       var up = await updateProject(existingId, data, window._projModalBaseVersion);
       projId = existingId;
       if (up && up.version != null) window._projModalBaseVersion = up.version;   // 뒤 단계가 실패해 다시 누를 때 자기 자신과 409 나지 않게
+      if (data.currentPhase) window._projModalOrigPhase = data.currentPhase;
     } else {
       var p = await createProject(data);
       if (!p || !p.id) { showToast('프로젝트 저장 실패: DB 연결을 확인하세요.','warn'); return; }
       projId = p.id;
       // 만든 뒤 단계(마일스톤 등)가 실패해 창이 남으면 다시 누를 때 '수정'으로 — 예전엔 프로젝트가 한 벌 더 생겼다
       window._projModalBaseVersion = p.version != null ? p.version : null;
+      window._projModalId = projId;
+      window._projModalOrigPhase = data.currentPhase || 'order';
       window._projMsOrigIds = [];
+      window._projMsSnap = {};
       if (saveBtn) saveBtn.setAttribute('onclick', "saveProjectUI('" + eA(projId) + "')");
       // 신규 등록 시 스테이징된 참고 이미지 업로드 (best-effort)
       if (typeof pimgFlushStaging === 'function') { try { await pimgFlushStaging(projId); } catch (_) {} }
@@ -1830,19 +2049,15 @@ async function saveProjectUI(existingId) {
 
     await _projSyncMilestones(projId, existingId);
 
-    // 담당자 이름 → project_members 자동 동기화 (additive, best-effort)
-    if (typeof syncAssigneesToMembers === 'function' && assignees.length) {
+    // 담당자 이름 → project_members 자동 동기화 (additive, best-effort) — 새 프로젝트는 서버가 만들 때 이미 넣는다(v13.283)
+    if (existingId && typeof syncAssigneesToMembers === 'function' && assignees.length) {
       try { await syncAssigneesToMembers(projId, assignees); } catch (_) { /* ignore */ }
     }
 
-    var _pm = document.getElementById('projModal'); if (_pm) _pm.remove();
+    _projModalClose(true);
     showToast(existingId ? '프로젝트가 수정되었습니다' : '프로젝트가 등록되었습니다');
     // 다시 그리기는 데이터 버스(core-bus · 지금 보이는 탭만)가 한다 — 예전엔 여기서 타임라인 · 달력을 또 그려 두 번씩 그렸다
-
-    // 신규 등록 + 비공개 + 담당자 없음 → 동료가 못 보는 상태이므로 공유 모달 자동 오픈
-    if (!existingId && data.visibility === 'private' && (!assignees || !assignees.length)) {
-      setTimeout(function () { if (typeof showProjectShareModal === 'function') showProjectShareModal(projId); }, 200);
-    }
+    if (!existingId) _projAfterCreate(projId, data, assignees);
   } catch (err) {
     console.error('[saveProjectUI] 저장 실패:', err, err && err.data);
     showToast('프로젝트 저장 실패: ' + _projSaveErrMsg(err), 'error');
@@ -1852,15 +2067,33 @@ async function saveProjectUI(existingId) {
   }
 }
 
-/* 편집 폼 읽기 + 검증. 실패 시 토스트 후 null. 반환: { data(저장 페이로드), assignees } */
+/* 새로 만든 뒤 — 상세 패널을 열고, 타임라인이면 그 줄로 스크롤(다시 그려진 뒤).
+   비공개 + 담당자 없음 → 동료가 못 보는 상태이므로 공유 창도 띄운다(상세 패널 위) */
+function _projAfterCreate(projId, data, assignees) {
+  setTimeout(function () {
+    if (typeof showProjectDetail === 'function') showProjectDetail(projId);
+    var sc = document.getElementById('tlScroll');
+    var sel = '[data-proj-id="' + (window.CSS && CSS.escape ? CSS.escape(projId) : projId) + '"]';
+    if (sc && sc.querySelector(sel) && typeof doTlScroll === 'function') doTlScroll(projId);   // 필터에 가렸으면 조용히 건너뜀
+  }, 600);
+  if (data.visibility === 'private' && (!assignees || !assignees.length)) {
+    setTimeout(function () { if (typeof showProjectShareModal === 'function') showProjectShareModal(projId); }, 900);
+  }
+}
+
+/* 예상 투입시간 — 기간(주말·공휴일 제외) × 8h.
+   칸이 비었거나(0 포함) 마지막 자동 계산값 그대로일 때만 바꾼다. 직접 고친 값은 두고 [↻ 다시 계산]을 보여 준다.
+   mode: true = 다시 계산(무조건 채움) · 'open' = 열 때(못 채우면 조용히) */
 var _projHolidayCache = {};
 var _projEstimateRequest = 0;
-async function _projUpdateEstimatedHours() {
+async function _projUpdateEstimatedHours(mode) {
   var request = ++_projEstimateRequest;
-  var start = document.getElementById('projStart').value;
-  var end = document.getElementById('projEnd').value;
-  var hint = document.getElementById('projEstHoursHint');
+  var sEl = document.getElementById('projStart'), eEl = document.getElementById('projEnd');
+  var hint = document.getElementById('projEstHoursHint'), field = document.getElementById('projEstHours');
+  if (!sEl || !eEl || !hint || !field) return;
+  var start = sEl.value, end = eEl.value;
   if (!start || !end || start > end) return;
+  var prevHint = hint.textContent;
   hint.textContent = '공휴일을 확인하는 중...';
   try {
     var firstYear = Number(start.slice(0, 4)), lastYear = Number(end.slice(0, 4));
@@ -1891,38 +2124,105 @@ async function _projUpdateEstimatedHours() {
       if (weekday !== 0 && weekday !== 6 && !holidays.has(day.toISOString().slice(0, 10))) workdays++;
       day.setUTCDate(day.getUTCDate() + 1);
     }
-    document.getElementById('projEstHours').value = workdays * 8;
-    hint.textContent = workdays + '근무일 × 8시간 = ' + (workdays * 8) + '시간 (주말·공휴일 제외, 직접 수정 가능)';
+    var hours = workdays * 8;
+    var cur = String(field.value || '').trim();
+    var btn = document.getElementById('projEstRecalc');
+    var canFill = mode === true || cur === '' || Number(cur) === 0 || Number(cur) === hours ||
+      (window._projEstAuto != null && Number(cur) === Number(window._projEstAuto));
+    if (canFill) {
+      if (mode === true && Number(cur) !== hours) _projMarkDirty();
+      field.value = hours;
+      window._projEstAuto = hours;
+      if (btn) btn.style.display = 'none';
+      hint.textContent = workdays + '근무일 × 8시간 = ' + hours + '시간 (주말·공휴일 제외, 직접 수정 가능)';
+    } else if (mode === 'open') {
+      hint.textContent = prevHint;   // 열 때 직접 입력값이 있으면 건드리지 않음
+    } else {
+      if (btn) btn.style.display = '';
+      hint.textContent = '기간 기준 ' + hours + '시간 — 직접 입력한 ' + cur + '시간을 그대로 둡니다';
+    }
   } catch (error) {
     if (request !== _projEstimateRequest || !hint.isConnected) return;
     hint.textContent = '공휴일 정보를 불러오지 못했습니다. 예상 시간을 직접 입력해 주세요.';
-    showToast('공휴일 정보를 불러오지 못했습니다. 예상 시간을 직접 입력해 주세요.', 'warn');
+    if (mode !== 'open') showToast('공휴일 정보를 불러오지 못했습니다. 예상 시간을 직접 입력해 주세요.', 'warn');
   }
 }
 
-function _projFormRead(existingId) {
-  var name = document.getElementById('projName').value.trim();
-  var orderNo = document.getElementById('projOrderNo').value.trim();
-  // 프로젝트명이 없으면 수주번호로 대체, 둘 다 없으면 '미정'
-  if (!name) name = orderNo || '미정 프로젝트';
+/* 입력 칸 오류 표시 — 빨간 테두리 + 칸 아래 문구(마일스톤 행은 격자라 title 로) */
+function _projMarkErr(el, msg) {
+  if (!el) return;
+  if (el.classList) el.classList.add('pm-invalid');
+  if (el.setAttribute) { el.setAttribute('aria-invalid', 'true'); if (msg) el.setAttribute('title', msg); }
+  var inRow = el.closest ? el.closest('.proj-ms-row') : null;
+  if (msg && !inRow && typeof el.insertAdjacentHTML === 'function') el.insertAdjacentHTML('afterend', '<div class="pm-err-msg">' + eH(msg) + '</div>');
+}
+function _projClearErr(el) {
+  if (!el) return;
+  if (el.classList) el.classList.remove('pm-invalid');
+  if (el.removeAttribute) { el.removeAttribute('aria-invalid'); el.removeAttribute('title'); }
+  var n = el.nextElementSibling;
+  if (n && n.classList && n.classList.contains('pm-err-msg')) n.remove();
+}
+function _projClearErrs() {
+  document.querySelectorAll('#projModal .pm-invalid').forEach(_projClearErr);
+  document.querySelectorAll('#projModal .pm-err-msg').forEach(function (n) { n.remove(); });
+}
 
-  var startDate = document.getElementById('projStart').value;
-  var endDate = document.getElementById('projEnd').value;
-  if (!startDate || !endDate) { showToast('시작일과 종료일을 입력하세요.','warn'); return null; }
-  if (startDate > endDate) { showToast('종료일이 시작일보다 앞설 수 없습니다.','warn'); return null; }
-  var _estHint = document.getElementById('projEstHoursHint');   // 힌트 요소가 없는 폼(구버전 모달 등)에서도 저장되게
-  if (_estHint && _estHint.textContent === '공휴일을 확인하는 중...') {
-    showToast('예상 시간 계산이 끝난 뒤 저장해 주세요.','warn'); return null;
-  }
+/* 편집 폼 읽기 + 검증. 실패 시 칸 표시 + 토스트 후 null. 반환: { data(저장 페이로드), assignees }
+   v13.283: 이름 필수(예전엔 '미정 프로젝트'로 조용히 저장) · 마일스톤 날짜 앞뒤 · 이름 없는 행(완전히 빈 행만 무시) ·
+   선행 순환 금지 · 프로젝트 기간 밖 마일스톤은 확인 후 저장 */
+function _projFormRead(existingId) {
+  _projClearErrs();
+  var errs = [];   // [칸, 문구]
+  var nameEl = document.getElementById('projName');
+  var name = nameEl.value.trim();
+  var orderNo = document.getElementById('projOrderNo').value.trim();
+  if (!name) errs.push([nameEl, '프로젝트명을 입력하세요.']);
+
+  var sEl = document.getElementById('projStart'), eEl = document.getElementById('projEnd');
+  var startDate = sEl.value;
+  var endDate = eEl.value;
+  if (!startDate) errs.push([sEl, '시작일을 입력하세요.']);
+  if (!endDate) errs.push([eEl, '종료일을 입력하세요.']);
+  if (startDate && endDate && startDate > endDate) errs.push([eEl, '종료일이 시작일보다 앞설 수 없습니다.']);
+
+  // 마일스톤 행 — 이름만 비고 날짜가 있으면 오류, 완전히 빈 행은 무시
+  var outside = [];
+  document.querySelectorAll('#msRows .proj-ms-row').forEach(function (row) {
+    var nEl = row.querySelector('.ms-name'), msEl = row.querySelector('.ms-start'), meEl = row.querySelector('.ms-end');
+    var nm = (nEl.value || '').trim(), ms = msEl.value, me = meEl.value;
+    if (!nm) { if (ms || me) errs.push([nEl, '마일스톤 이름을 입력하세요 (필요 없는 행은 ✕ 로 빼세요).']); return; }
+    if (ms && me && ms > me) { errs.push([meEl, '마일스톤 「' + nm + '」 종료일이 시작일보다 앞섭니다.']); return; }
+    if (startDate && endDate && ((ms && (ms < startDate || ms > endDate)) || (me && (me < startDate || me > endDate)))) outside.push(nm);
+  });
 
   var assigneesStr = document.getElementById('projAssignees').value;
   var assignees = assigneesStr ? assigneesStr.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
 
-  var depIds = [];
-  document.querySelectorAll('.proj-dep-chk:checked').forEach(function (c) { depIds.push(c.value); });
+  var depIds = _projDepIds();
+  var depEl = document.getElementById('projDepSearch');
+  if (existingId && depIds.indexOf(existingId) >= 0) errs.push([depEl, '자기 자신을 선행 프로젝트로 지정할 수 없습니다.']);
+  else {
+    var all = window._projModalAll || [];
+    var cyc = _projDepCycle(existingId, depIds, all);
+    if (cyc) {
+      var nmOf = function (id) { var p = all.filter(function (x) { return x.id === id; })[0]; return p ? (p.name || p.orderNo || id) : id; };
+      errs.push([depEl, '선행 관계가 돌고 돕니다: ' + cyc.map(nmOf).join(' → ')]);
+    }
+  }
 
-  // 순환 의존 방지
-  if (existingId && depIds.includes(existingId)) { showToast('자기 자신을 선행 프로젝트로 지정할 수 없습니다.','warn'); return null; }
+  var _estHint = document.getElementById('projEstHoursHint');   // 힌트 요소가 없는 폼(구버전 모달 등)에서도 저장되게
+  if (!errs.length && _estHint && _estHint.textContent === '공휴일을 확인하는 중...') {
+    showToast('예상 시간 계산이 끝난 뒤 저장해 주세요.','warn'); return null;
+  }
+  if (errs.length) {
+    errs.forEach(function (x) { _projMarkErr(x[0], x[1]); });
+    showToast(errs[0][1] + (errs.length > 1 ? ' (외 ' + (errs.length - 1) + '건)' : ''), 'warn');
+    if (errs[0][0] && typeof errs[0][0].focus === 'function') errs[0][0].focus();
+    return null;
+  }
+  if (outside.length && typeof confirm === 'function' &&
+      !confirm('마일스톤 ' + outside.length + '개가 프로젝트 기간(' + startDate + ' ~ ' + endDate + ') 밖에 있습니다.\n' + outside.slice(0, 5).join(', ') + (outside.length > 5 ? ' …' : '') + '\n\n그대로 저장할까요?')) return null;
 
   var visibilityEl = document.getElementById('projVisibility');
   var data = {
@@ -1938,6 +2238,9 @@ function _projFormRead(existingId) {
     // 셀렉트가 없으면 visibility 미전송 → 서버가 기존 값 보존 (수정 시 private 리셋 방지)
     visibility: visibilityEl ? visibilityEl.value : undefined
   };
+  // 단계 — 새 프로젝트는 항상, 기존은 바꿨을 때만(서버 syncDonePhase 가 단계 일정 · 완료↔상태를 맞춘다)
+  var phEl = document.getElementById('projPhase');
+  if (phEl && phEl.value && (!existingId || phEl.value !== window._projModalOrigPhase)) data.currentPhase = phEl.value;
   return { data: data, assignees: assignees };
 }
 
@@ -1951,11 +2254,34 @@ function _projMemoRead() {
   return typeof sanitizeMemo === 'function' ? sanitizeMemo(html) : html;
 }
 
+/* [순수] 마일스톤 비교용 사진 — 목표시간은 키 정렬 문자열로 */
+function _projTgKey(o) {
+  var src = o || {}, out = {};
+  Object.keys(src).sort().forEach(function (k) { out[k] = src[k]; });
+  return JSON.stringify(out);
+}
+function _projMsSnapOf(c) {
+  return { name: c.name || '', startDate: c.startDate || '', endDate: c.endDate || '', status: c.status || '', order: c.order == null ? null : c.order, tg: _projTgKey(c.assigneeTargets) };
+}
+/* [순수] 연 시점 사진과 비교해 바뀐 칸만 — 없으면 null. 사진이 없으면(이번 창에서 만든 행 등) 전부 */
+function _projMsDiff(snap, cur) {
+  if (!snap) return Object.assign({}, cur);
+  var d = {}, n = 0;
+  var norm = function (v) { return v == null ? '' : String(v); };
+  ['name', 'startDate', 'endDate', 'status', 'order'].forEach(function (k) {
+    if (norm(snap[k]) !== norm(cur[k])) { d[k] = cur[k]; n++; }
+  });
+  if (snap.tg !== _projTgKey(cur.assigneeTargets)) { d.assigneeTargets = cur.assigneeTargets; n++; }
+  return n ? d : null;
+}
+
 /* 마일스톤 diff 기반 동기화 (destroy-recreate 제거 → 중복 방지)
-   #msRows DOM 순서 = order. 기존 id 는 msPut, 새 행은 createMilestone, 빠진 원래 id 는 msDel */
+   #msRows DOM 순서 = order. 기존 행은 고친 칸만 msPut(안 고친 행은 보내지 않음), 새 행은 createMilestone, 빠진 원래 id 는 msDel */
 async function _projSyncMilestones(projId, existingId) {
   var msRows = document.querySelectorAll('#msRows .proj-ms-row');
   var origIds = (existingId && Array.isArray(window._projMsOrigIds)) ? window._projMsOrigIds.slice() : [];
+  if (!window._projMsSnap) window._projMsSnap = {};
+  var snapMap = window._projMsSnap;
   var keptIds = {};
   var seenKeys = {};
   var msPromises = [];
@@ -1973,16 +2299,22 @@ async function _projSyncMilestones(projId, existingId) {
     var existingMsId = row.getAttribute('data-msid');
     var rowKey = row.getAttribute('data-rowkey');
     var msTargets = (rowKey && _msTargetStaging[rowKey]) || {};
+    var cur = { name: msName, startDate: msStart, endDate: msEnd, status: msStatus, order: i, assigneeTargets: msTargets };
     if (existingMsId && origIds.indexOf(existingMsId) >= 0) {
       keptIds[existingMsId] = true;
-      msPromises.push(msPut({ id: existingMsId, projectId: projId, name: msName, startDate: msStart, endDate: msEnd, status: msStatus, order: i, assigneeTargets: msTargets }));
+      var diff = _projMsDiff(snapMap[existingMsId], cur);
+      if (!diff) continue;   // 안 고친 행 — 보내지 않음
+      msPromises.push(msPut(Object.assign({ id: existingMsId }, diff)).then(function (id, c) {
+        snapMap[id] = _projMsSnapOf(c);   // 뒤가 실패해 다시 저장할 때 또 보내지 않게
+      }.bind(null, existingMsId, cur)));
     } else {
-      msPromises.push(createMilestone({ projectId: projId, name: msName, startDate: msStart, endDate: msEnd, status: msStatus, order: i, assigneeTargets: msTargets }).then(function (row, ms) {
+      msPromises.push(createMilestone(Object.assign({ projectId: projId }, cur)).then(function (row, c, ms) {
         // 만든 행에 id 를 달아 둠 — 뒤가 실패해 다시 저장하면 새로 만들지 않고 수정 (목표시간 스테이징도 같은 키로)
         if (!ms || !ms.id) return;
         row.setAttribute('data-msid', ms.id);
         if (Array.isArray(window._projMsOrigIds)) window._projMsOrigIds.push(ms.id);
-      }.bind(null, row)));
+        snapMap[ms.id] = _projMsSnapOf(c);
+      }.bind(null, row, cur)));
     }
   }
   // 제거된 마일스톤 + 열 때 발견한 중복 삭제 — 실패는 모아서 알린다(예전엔 삼켜서 "저장됨"만 떴다)
@@ -2033,8 +2365,7 @@ function submitProjectCopy(projId) {
   var orderNo = orderEl ? (orderEl.value || '').trim() : '';
   var btn = document.getElementById('projCopyOk'); if (btn) { btn.disabled = true; btn.textContent = '생성 중...'; }
   projCopy(projId, { name: name, orderNo: orderNo }).then(function () {
-    var cm = document.getElementById('projCopyModal'); if (cm) cm.remove();
-    var pm = document.getElementById('projModal'); if (pm) pm.remove();
+    var cm = document.getElementById('projCopyModal'); if (cm) cm.remove();   // v13.283 편집 창은 그대로(예전엔 고친 내용과 함께 닫혔다)
     if (typeof showToast === 'function') showToast('사본 생성됨: ' + name);
     if (typeof renderTimeline === 'function') renderTimeline();
     if (typeof renderCalendar === 'function') renderCalendar();
@@ -2162,7 +2493,7 @@ async function projTransferDoUI(projId) {
     await projTransfer(projId, sel.value, { keepPrevAsMember: keep });
     showToast('소유권이 이관되었습니다');
     document.getElementById('projTransferModal').remove();
-    var pm = document.getElementById('projModal'); if (pm) pm.remove();
+    _projModalClose();   // 소유자가 바뀌어 다시 열어야 — 고친 게 있으면 묻는다(아니오면 창 유지)
     if (typeof renderTimeline === 'function') await renderTimeline();
   } catch (err) {
     showToast('이관 실패: ' + (err && err.message ? err.message : err), 'error');
@@ -2205,21 +2536,61 @@ async function msTransferDoUI(msId) {
     await msTransfer(msId, sel.value);
     showToast('마일스톤이 이관되었습니다');
     document.getElementById('msTransferModal').remove();
-    var pm = document.getElementById('projModal'); if (pm) pm.remove();
+    _projMsDropTransferred(msId);   // v13.283 편집 창은 그대로 — 옮긴 행만 뺀다
     if (typeof renderTimeline === 'function') await renderTimeline();
   } catch (err) {
     showToast('이관 실패: ' + (err && err.message ? err.message : err), 'error');
   }
 }
 
-async function deleteProjectUI(id) {
-  if (!confirm('이 프로젝트와 모든 마일스톤을 삭제하시겠습니까?')) return;
+/* 편집 창에서 다른 프로젝트로 옮긴 마일스톤 — 행을 빼고 원래 id 목록에서도 빼서 저장 때 지우지 않게 */
+function _projMsDropTransferred(msId) {
+  document.querySelectorAll('#msRows .proj-ms-row').forEach(function (r) { if (r.getAttribute('data-msid') === msId) r.remove(); });
+  var o = window._projMsOrigIds, k = Array.isArray(o) ? o.indexOf(msId) : -1;
+  if (k >= 0) o.splice(k, 1);
+  if (window._projMsSnap) delete window._projMsSnap[msId];
+}
+
+/* ═══ 프로젝트 삭제 — 함께 지워지는 것을 보여 주고 이름을 쳐야 삭제 (v13.283) ═══
+   GET /api/projects/:id/delete-preview 가 없으면(배포 전 404 등) 일반 안내로 */
+var _PROJ_DEL_LABELS = { milestones: '마일스톤', issues: '이슈', docFiles: '문서 파일', docFolders: '문서 폴더', meetings: '회의록', mindmaps: '마인드맵', asTickets: 'A/S 건' };
+function deleteProjectUI(id) { return _tlGuardModal('tl:del', _deleteProjectUIRaw, arguments, 'projDelModal'); }
+async function _deleteProjectUIRaw(id) {
+  var r = await Promise.all([
+    typeof projGet === 'function' ? projGet(id).catch(function () { return null; }) : null,
+    typeof apiFetch === 'function' ? apiFetch('/api/projects/' + encodeURIComponent(id) + '/delete-preview').catch(function () { return null; }) : null
+  ]);
+  var p = r[0], pv = r[1] && r[1].data;
+  var name = ((p && (p.name || p.orderNo)) || id).trim();
+  // 마인드맵 · A/S 는 지우지 않고 연결만 끊는다(서버 delete-preview 계약)
+  var li = function (keys) { return keys.filter(function (k) { return pv && Number(pv[k]) > 0; }).map(function (k) { return '<li>' + _PROJ_DEL_LABELS[k] + ' <b>' + Number(pv[k]) + '</b>개</li>'; }).join(''); };
+  var delRows = li(['milestones', 'issues', 'docFiles', 'docFolders', 'meetings']), unlinkRows = li(['mindmaps', 'asTickets']);
+  var what = pv ? ((delRows ? '<div style="margin-bottom:4px">함께 지워지는 항목:</div><ul class="pm-del-list">' + delRows + '</ul>' : '<div>딸린 마일스톤 · 이슈 · 문서 · 회의록은 없습니다.</div>') +
+      (unlinkRows ? '<div style="margin:6px 0 4px">연결만 끊기는 항목(지워지지 않음):</div><ul class="pm-del-list">' + unlinkRows + '</ul>' : ''))
+    : '<div>이 프로젝트와 모든 마일스톤 · 딸린 자료가 함께 삭제됩니다.</div>';
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:14px;font-weight:700;color:var(--d-t)">🗑 프로젝트 삭제</h3><button class="btn btn-g btn-s" onclick="document.getElementById(\'projDelModal\').remove()">✕</button></div>' +
+    '<div style="font-size:12px;color:var(--t2);margin-bottom:8px"><b>' + eH(name) + '</b></div>' +
+    '<div style="font-size:11px;color:var(--t4);line-height:1.6;margin-bottom:10px">' + what + '<div style="color:var(--d-t);margin-top:6px">되돌릴 수 없습니다.</div></div>' +
+    '<label class="fl" style="font-size:11px;display:block">확인을 위해 프로젝트 이름 <b>' + eH(name) + '</b> 을(를) 입력하세요</label>' +
+    '<input id="projDelName" class="si" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:12px;padding-left:10px" ' +
+      'oninput="var b=document.getElementById(\'projDelOk\');if(b)b.disabled=this.value.trim()!==\'' + eA(name) + '\'" ' +
+      'onkeydown="if(event.key===\'Enter\'){var b=document.getElementById(\'projDelOk\');if(b&&!b.disabled)b.click()}">' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-g btn-s" onclick="document.getElementById(\'projDelModal\').remove()">취소</button>' +
+    '<button class="btn btn-d btn-s" id="projDelOk" disabled onclick="_projDeleteDo(\'' + eA(id) + '\')">삭제</button></div>';
+  _tlModal({ id: 'projDelModal', z: 10003, bg: 'rgba(0,0,0,.55)', blur: '3px', box: 'border-radius:12px;padding:18px;width:400px;max-width:94%', html: html });
+  var ni = document.getElementById('projDelName'); if (ni && ni.focus) ni.focus();
+}
+async function _projDeleteDo(id) {
+  var btn = document.getElementById('projDelOk');
+  if (btn) { btn.disabled = true; btn.textContent = '삭제 중...'; }
   try {
     await deleteProjectCascade(id);
-    var _pm = document.getElementById('projModal'); if (_pm) _pm.remove();   // 상세 패널에서 지우면 편집 창이 없다 (예전엔 null 오류로 "오류" 토스트)
+    var dm = document.getElementById('projDelModal'); if (dm) dm.remove();
+    _projModalClose(true);   // 상세 패널에서 지우면 편집 창이 없다 (예전엔 null 오류로 "오류" 토스트)
     showToast('프로젝트가 삭제되었습니다', 'warn');   // 다시 그리기는 데이터 버스가
   } catch (err) {
     console.error('[deleteProjectUI]', err);
+    if (btn) { btn.disabled = false; btn.textContent = '삭제'; }
     if (typeof showToast === 'function') showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
   }
 }

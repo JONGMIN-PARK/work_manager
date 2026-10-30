@@ -79,10 +79,15 @@ function renderPipeline() {
       html += '<div style="display:flex;flex-direction:column;gap:6px;flex:1">';
       if (items.length === 0) {
         html += '<div style="text-align:center;color:var(--t6);font-size:10px;padding:20px 0">—</div>';
+      } else if (items.length >= 8 && k !== phaseKeys[phaseKeys.length - 1]) {
+        // 한 단계에 카드가 몰려 있으면(대개 '수주') 옮기는 방법 안내
+        html += '<div style="font-size:9px;color:var(--t6);text-align:center;line-height:1.4;padding:0 2px 2px">진행된 프로젝트는 카드를 오른쪽 단계 칸으로 끌어 옮기세요</div>';
       }
       items.forEach(function (p) {
-        var st = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[p.status] ? PROJ_STATUS[p.status] : { label: p.status, color: SEM_COLOR.muted, icon: '' };
-        var isDelayed = p.status === 'delayed' || (p.endDate && p.endDate < localDate() && p.status !== 'done');
+        // 표시 상태 = autoProjectStatus (저장은 진행·보류·완료뿐, 대기·지연은 날짜로)
+        var dst = typeof autoProjectStatus === 'function' ? autoProjectStatus(p) : p.status;
+        var st = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[dst] ? PROJ_STATUS[dst] : { label: dst, color: SEM_COLOR.muted, icon: '' };
+        var isDelayed = dst === 'delayed';
         var borderColor = isDelayed ? SEM_COLOR.danger : 'var(--bd)';
         var borderStyle = isDelayed ? '2px solid ' + borderColor : '1px solid ' + borderColor;
         var progress = p.progress || 0;
@@ -98,10 +103,11 @@ function renderPipeline() {
         // 편집 권한 없는 카드는 끌 수 없게 — 예전엔 끌어 놓으면 서버 403 이 조용히 묻혔다 (v13.213 can_edit)
         var canDrag = typeof projCanEdit !== 'function' || projCanEdit(p);
         var pidA = eA(p.id);
-        html += '<div class="pipeline-card' + (isOpen ? ' open' : '') + '" draggable="' + (canDrag ? 'true' : 'false') + '" data-pid="' + eH(p.id) + '" data-phase="' + k + '"' + (canDrag ? ' ondragstart="pipelineDragStart(event,\'' + pidA + '\')" ondragend="pipelineDragEnd(event)"' : '') + ' ondragover="pipelineCardDragOver(event)" ondragleave="pipelineCardDragLeave(event)" ondrop="pipelineCardDrop(event,\'' + pidA + '\',\'' + k + '\')" style="background:var(--bg-p);border:' + borderStyle + ';border-radius:8px;padding:10px 12px;cursor:' + (canDrag ? 'grab' : 'pointer') + ';transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 3px 8px rgba(0,0,0,.1)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'\'" onclick="pipelineCardToggle(event,\'' + pidA + '\')" ondblclick="pipelineCardClick(\'' + pidA + '\')" title="' + eH(p.name) + ' — 클릭: 펼치기/접기 · 더블클릭: 상세' + (canDrag ? ' · 드래그: 단계 이동(레인) / 같은 단계 카드 위로: 순서 변경' : ' · 보기 전용(편집 권한 없음)') + '">';
+        html += '<div class="pipeline-card' + (isOpen ? ' open' : '') + '" draggable="' + (canDrag ? 'true' : 'false') + '" data-pid="' + eH(p.id) + '" data-phase="' + k + '"' + (canDrag ? ' ondragstart="pipelineDragStart(event,\'' + pidA + '\')" ondragend="pipelineDragEnd(event)"' : '') + ' ondragover="pipelineCardDragOver(event)" ondragleave="pipelineCardDragLeave(event)" ondrop="pipelineCardDrop(event,\'' + pidA + '\',\'' + k + '\')" style="background:var(--bg-p);border:' + borderStyle + ';border-radius:8px;padding:10px 12px;cursor:' + (canDrag ? 'grab' : 'pointer') + ';transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 3px 8px rgba(0,0,0,.1)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'\'" onclick="pipelineCardToggle(event,\'' + pidA + '\')" ondblclick="pipelineCardClick(\'' + pidA + '\')" title="' + eH(p.name) + '\n클릭: 펼치기/접기 · 더블클릭: 상세' + (canDrag ? '\n단계 옮기기: 카드를 다른 단계 칸으로 끌어 놓기 (같은 단계 카드 위로 끌면 순서 변경)' : '\n보기 전용(편집 권한 없음)') + '">';
 
-        // 프로젝트명 (접힌 상태에서는 이 줄만 보임)
+        // 프로젝트명 + 요약 한 줄(접혀도 보임): 상태(진행 외) · 진척 막대 · D-day · 담당
         html += '<div class="pipe-title"><span class="pipe-caret">▸</span><span class="pipe-name">' + eH(p.name) + '</span></div>';
+        html += _pipeSummaryHtml(p, dst, st, progress);
         html += '<div class="pipe-det">';
 
         // 수주번호 + 거래처
@@ -114,15 +120,10 @@ function renderPipeline() {
           html += '<div style="font-size:9px;color:var(--t5);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(p.orderNo) + (client ? ' · ' + eH(client) : '') + '</div>';
         }
 
-        // 상태 + 진척률
+        // 상태 (진척 막대는 위 요약 줄에)
         html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">';
         html += '<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:' + st.color + '22;color:' + st.color + '">' + st.icon + ' ' + st.label + '</span>';
-        html += '<span style="font-size:9px;color:var(--t5);font-weight:600">' + progress + '%</span>';
-        html += '</div>';
-
-        // 진척률 바
-        html += '<div style="margin-top:4px;height:3px;background:var(--bd);border-radius:2px;overflow:hidden">';
-        html += '<div style="height:100%;width:' + progress + '%;background:' + eC(p.color, SEM_COLOR.info) + ';border-radius:2px"></div>';
+        if (p.startDate || p.endDate) html += '<span style="font-size:9px;color:var(--t5)">' + eH((p.startDate || '?').slice(5) + ' ~ ' + (p.endDate || '?').slice(5)) + '</span>';
         html += '</div>';
 
         // 체크리스트 완료율
@@ -172,6 +173,29 @@ function renderPipeline() {
     wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:var(--t5)">파이프라인을 불러오지 못했습니다: ' + eH((err && err.message) || '알 수 없는 오류') +
       '<br><button class="btn btn-g btn-s" style="margin-top:8px" onclick="renderPipeline()">다시 시도</button></div>';
   });
+}
+
+/* 카드 요약 줄 (C5/B8) — 접힌 카드에서도 보이게.
+   진행 중이 아닌 상태(대기·지연·보류·완료) 배지 · 진척 막대와 % (0% 도) · D-day(지나면 빨강) · 담당 2명 + n */
+function _pipeSummaryHtml(p, dst, st, progress) {
+  var h = '<div class="pipe-sum" style="display:flex;align-items:center;gap:5px;margin-top:5px;font-size:9px;color:var(--t5);min-width:0">';
+  if (dst !== 'active') h += '<span style="flex-shrink:0;padding:0 5px;border-radius:7px;background:' + st.color + '22;color:' + st.color + ';font-weight:700">' + st.label + '</span>';
+  h += '<span style="flex:1;min-width:24px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden" title="진척률 ' + progress + '%">' +
+    '<span style="display:block;height:100%;width:' + Math.max(0, Math.min(100, progress)) + '%;background:' + eC(p.color, SEM_COLOR.info) + '"></span></span>';
+  h += '<span style="flex-shrink:0;font-weight:600">' + progress + '%</span>';
+  if (p.endDate && dst !== 'done') {
+    var d = daysDiff(localDate(), p.endDate);
+    var late = d < 0;
+    h += '<span style="flex-shrink:0;font-weight:700;color:' + (late ? SEM_COLOR.danger : d <= 7 ? SEM_COLOR.warn : 'var(--t5)') + '" title="종료일 ' + eH(p.endDate) + '">' +
+      (d === 0 ? 'D-day' : late ? 'D+' + (-d) : 'D-' + d) + '</span>';
+  }
+  var as = (p.assignees || []).filter(Boolean);
+  if (as.length) {
+    var nm = function (a) { return typeof displayName === 'function' ? displayName(a) : a; };
+    h += '<span style="flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="담당: ' + eH(as.map(nm).join(', ')) + '">👤 ' +
+      eH(as.slice(0, 2).map(nm).join(',')) + (as.length > 2 ? ' +' + (as.length - 2) : '') + '</span>';
+  }
+  return h + '</div>';
 }
 
 /* 화면에 쓰는 프로젝트 목록 — 그리기·순서 변경이 같은 소스(운영자는 전체, 숨김 제외)를 쓰게 */
@@ -423,7 +447,8 @@ function exportProjectReport() {
         var oi = ORDER_MAP[p.orderNo];
         client = typeof oi === 'object' ? (oi.client || '') : '';
       }
-      var stLabel = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[p.status] ? PROJ_STATUS[p.status].label : p.status;
+      var dSt = typeof autoProjectStatus === 'function' ? autoProjectStatus(p) : p.status;
+      var stLabel = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[dSt] ? PROJ_STATUS[dSt].label : dSt;
       projRows.push([p.name || '', p.orderNo || '', client, p.startDate || '', p.endDate || '', stLabel, phaseName, (p.progress || 0) + '%', (p.assignees || []).join(', ')]);
     });
 

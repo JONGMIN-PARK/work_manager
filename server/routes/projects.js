@@ -6,7 +6,6 @@ var auth = require('../middleware/auth');
 var rbac = require('../middleware/rbac');
 var lock = require('../middleware/optimistic-lock');
 var { parsePagination } = require('../middleware/pagination');
-var notificationService = require('../services/notification.service');
 var authService = require('../services/auth.service');
 var tenant = require('../middleware/tenant');
 var operator = require('../middleware/operator');
@@ -25,93 +24,12 @@ var canAccessProject = pa.canRead;
 var canEditProject = pa.canEdit;
 var gcs = require('../services/gcs.service');
 
-/**
- * 프로젝트 1행 INSERT (POST / 와 POST /full 공용, v13.213).
- *  예전엔 두 곳에 INSERT 가 따로 있었고 /full 쪽은 department_id·specs 를 빠뜨려,
- *  /full 로 만든 visibility='dept' 프로젝트는 부서원에게 보이지 않았다.
- * @param q db 또는 트랜잭션 client
- */
-/** 완료 단계 ↔ 상태 완료 연동 (v13.277 — 마지막 단계 A/S → 완료).
- *  완료 단계로 옮기면 상태 완료 · 진척 100, 상태를 완료로 바꾸면 완료 단계로.
- *  완료 단계에서 다른 단계로 옮기면 진행중, 완료를 풀면(단계를 따로 안 줬을 때) 납품 단계로 돌림.
- *  완료에서 빠지면 진척 100 이 남지 않게 단계 비율(수주 0 · 설계 20 … 납품 80)로 — 이후 마일스톤 보고·자동 산출이 덮어씀.
- *  clean: DB 컬럼 이름(snake)으로 바뀔 값 · prev: 이전 행 (새로 만들 땐 null) */
-var _PHASE_SEQ = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'done'];
-function syncDonePhase(clean, prev) {
-  prev = prev || {};
-  var phase = clean.current_phase !== undefined ? clean.current_phase : prev.current_phase;
-  var status = clean.status !== undefined ? clean.status : prev.status;
-  var phaseMoved = clean.current_phase !== undefined && clean.current_phase !== prev.current_phase;
-  var statusMoved = clean.status !== undefined && clean.status !== prev.status;
-  if (phaseMoved && phase === 'done') { clean.status = 'done'; clean.progress = 100; }
-  else if (phaseMoved && prev.current_phase === 'done' && status === 'done') clean.status = 'active';
-  else if (statusMoved && status === 'done' && phase !== 'done') { clean.current_phase = 'done'; clean.progress = 100; }
-  else if (statusMoved && prev.status === 'done' && phase === 'done' && clean.current_phase === undefined) clean.current_phase = 'deliver';
-  // 진척: 완료 단계면 100 고정, 완료에서 빠졌는데 100 이면 단계 비율로
-  var finalPhase = clean.current_phase !== undefined ? clean.current_phase : prev.current_phase;
-  if (finalPhase === 'done') { if (clean.progress !== undefined) clean.progress = 100; }
-  else if (prev.current_phase === 'done') {
-    var pg = clean.progress !== undefined ? clean.progress : prev.progress;
-    var si = _PHASE_SEQ.indexOf(finalPhase);
-    if (Number(pg) >= 100 && si >= 0) clean.progress = Math.round(si / (_PHASE_SEQ.length - 1) * 100);
-  }
-  if (!(clean.current_phase !== undefined && clean.current_phase !== prev.current_phase)) return clean;
-  // 단계 일정(phases JSON)도 같이 — 지난 단계는 완료, 새 단계는 진행(완료 단계는 바로 완료)
-  if (clean.current_phase !== undefined && clean.current_phase !== prev.current_phase) {
-    var ph = clean.phases !== undefined ? clean.phases : prev.phases;
-    if (typeof ph === 'string') { try { ph = JSON.parse(ph); } catch (e) { ph = null; } }
-    if (ph && typeof ph === 'object') {
-      ph = JSON.parse(JSON.stringify(ph));
-      var today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-      var from = prev.current_phase, to = clean.current_phase;
-      if (from && ph[from] && to === 'done') { ph[from].status = 'done'; if (!ph[from].endDate) ph[from].endDate = today; }
-      if (!ph[to]) ph[to] = {};
-      ph[to].status = to === 'done' ? 'done' : 'active';
-      if (!ph[to].startDate) ph[to].startDate = today;
-      if (to === 'done' && !ph[to].endDate) ph[to].endDate = today;
-      if (from === 'done' && ph.done) ph.done.status = 'waiting';
-      clean.phases = JSON.stringify(ph);
-    }
-  }
-  return clean;
-}
-
-async function insertProject(q, req, b) {
-  var id = sv.safeId(b.id, function () { return 'proj-' + require('crypto').randomUUID().slice(0, 12); });
-  var deptId = b.departmentId || b.department_id || req.user.departmentId || null;
-  var visibility = b.visibility || 'private';
-  if (['private','dept','tenant'].indexOf(visibility) === -1) visibility = 'private';
-  var ownerId = b.ownerId || b.owner_id || req.user.sub;
-  var st0 = syncDonePhase({ status: b.status || 'active', current_phase: b.currentPhase || b.current_phase || 'order', phases: b.phases || {} }, { current_phase: 'order', status: 'active' });
-  if (ownerId !== req.user.sub) {
-    // 다른 사람을 생성자로 지정하면 같은 테넌트 사용자인지 확인 — 아니면 본인으로
-    var ur = await q.query('SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2', [ownerId, req.tenant.id]);
-    if (!ur.rows.length) ownerId = req.user.sub;
-  }
-  var r = await q.query(
-    "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id, tenant_id, owner_id, visibility, specs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16,$17,$18,$19,$20) RETURNING *",
-    [id, b.orderNo || b.order_no || '', b.name || '', b.startDate || b.start_date || '', b.endDate || b.end_date || '',
-     st0.status, st0.progress != null ? st0.progress : (b.progress || 0), b.estimatedHours || b.estimated_hours || 0,
-     JSON.stringify(b.assignees || []), JSON.stringify(b.dependencies || []),
-     sv.safeColor(b.color, '#3B82F6'), b.memo || '', st0.current_phase,
-     typeof st0.phases === 'string' ? st0.phases : JSON.stringify(st0.phases), req.user.sub, deptId, req.tenant.id, ownerId, visibility, JSON.stringify(b.specs || {})]
-  );
-  var row = r.rows[0];
-  if (row) row.can_edit = req.user.role === 'admin' || req.user.role === 'executive' || row.owner_id === req.user.sub;
-  return row;
-}
-
-function _afterProjectCreate(req, row) {
-  // 감사 로그 + 이해관계자 알림 (best-effort)
-  try {
-    authService.auditLog(req.user.sub, 'project.create', 'project', row.id, { name: row.name }, req).catch(function () {});
-  } catch (_) {}
-  try {
-    notificationService.notifyAdmins('project_created', {
-      projectName: row.name, orderNo: row.order_no
-    }, req.tenant.id).catch(function (e) { console.error('[noti]', e.message); });
-  } catch (_) {}
-}
+// 생성 경로 · 완료 단계 연동 · 단계/상태 규칙 — lib/project-create · lib/project-defaults 단일 정의 (v13.283)
+var pc = require('../lib/project-create');
+var pd = require('../lib/project-defaults');
+var syncDonePhase = pc.syncDonePhase;
+var insertProject = pc.insertProject;
+var _afterProjectCreate = pc.afterProjectCreate;
 
 // ─── GET /api/projects ───
 router.get('/', async function (req, res) {
@@ -205,7 +123,8 @@ router.get('/:id', async function (req, res) {
 // ─── POST /api/projects ───
 router.post('/', rbac.checkPermission('project.create'), async function (req, res) {
   try {
-    var row = await insertProject(db, req, req.body);
+    // 프로젝트 + 기본 체크리스트 + 담당 멤버를 한 트랜잭션으로 (v13.283)
+    var row = await db.transaction(function (client) { return insertProject(client, req, req.body); });
     res.status(201).json({ data: row });
     _afterProjectCreate(req, row);
   } catch (e) {
@@ -229,7 +148,8 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
       name: b.name,
       start_date: b.startDate !== undefined ? b.startDate : b.start_date,
       end_date: b.endDate !== undefined ? b.endDate : b.end_date,
-      status: b.status,
+      // 저장 상태는 active · hold · done 만 — 대기 · 지연은 날짜로 계산해 보여 줌 (v13.283)
+      status: b.status !== undefined ? pd.normalizeStatus(b.status) : undefined,
       progress: b.progress,
       estimated_hours: b.estimatedHours !== undefined ? b.estimatedHours : b.estimated_hours,
       actual_hours: b.actualHours !== undefined ? b.actualHours : b.actual_hours,
@@ -257,15 +177,7 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
 
     res.json({ data: result.row });
-
-    // 텔레그램 알림: 프로젝트 지연
-    try {
-      if (clean.status === 'delayed' && prev && prev.status !== 'delayed') {
-        notificationService.notifyProjectStakeholders('project_delayed', {
-          name: prev.name, orderNo: prev.order_no, endDate: prev.end_date
-        }, req.params.id).catch(function(e) { console.error('[noti]', e.message); });
-      }
-    } catch (_) { /* 알림 실패 무시 */ }
+    // (v13.283) '지연' 은 더 이상 저장 상태가 아니라 날짜로 계산 — 상태를 지연으로 바꿀 때 보내던 알림은 없앰
 
     // 실제 변경된 필드만 추려 감사 로그 + 텔레그램 변경 알림 (best-effort, no-op 저장은 스킵)
     //  v13.215: 관리자에게 즉시 보내던 요약 → change-feed 로 묶어 이해관계자·그룹방에 (마일스톤·체크리스트 변경과 한 건으로)
@@ -286,7 +198,7 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
   try {
     var b = req.body;
     var result = await db.transaction(async function (client) {
-      // 1. 프로젝트 생성 (POST / 와 같은 INSERT)
+      // 1. 프로젝트 생성 (POST / 와 같은 경로) — 체크리스트(b.checklists, 없으면 기본)·담당 멤버도 여기서
       var proj = await insertProject(client, req, b);
       var projId = proj.id;
       // 2. 마일스톤 일괄 생성
@@ -296,18 +208,8 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
         var msId = sv.safeId(m.id, function () { return 'ms-' + require('crypto').randomUUID().slice(0, 12); });
         await client.query(
           "INSERT INTO milestones (id, project_id, name, start_date, end_date, status, sort_order, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
-          [msId, projId, m.name || '', m.startDate || m.start_date || '', m.endDate || m.end_date || '', m.status || 'waiting',
+          [msId, projId, m.name || '', m.startDate || m.start_date || '', m.endDate || m.end_date || '', pd.normalizeMsStatus(m.status),
            (m.order != null ? m.order : (m.sort_order != null ? m.sort_order : i)), req.user.sub, req.tenant.id]
-        );
-      }
-      // 3. 체크리스트 일괄 생성
-      var checklists = b.checklists || [];
-      for (var j = 0; j < checklists.length; j++) {
-        var c = checklists[j];
-        var chkId = c.id || ('chk-' + require('crypto').randomUUID().slice(0, 12));
-        await client.query(
-          "INSERT INTO checklists (id, project_id, phase, items, created_by, tenant_id) VALUES ($1,$2,$3,$4,$5,$6)",
-          [chkId, projId, c.phase || null, JSON.stringify(c.items || []), req.user.sub, req.tenant.id]
         );
       }
       return proj;
@@ -316,6 +218,24 @@ router.post('/full', rbac.checkPermission('project.create'), async function (req
     _afterProjectCreate(req, result);
   } catch (e) {
     httpErr.serverError(res, '[projects/full]', e);
+  }
+});
+
+// ─── GET /api/projects/:id/delete-preview — 지우면 함께 지워지거나 연결이 끊기는 것 개수 (v13.283) ───
+//  삭제와 같은 권한(생성자·참여자·관리자). 응답 { data: { milestones, issues, docFiles, docFolders, meetings, mindmaps, asTickets } }
+//  milestones·issues·docFiles·docFolders·meetings 는 함께 지워지고, mindmaps(개인 맵으로)·asTickets 는 연결만 끊긴다.
+router.get('/:id/delete-preview', async function (req, res) {
+  try {
+    var preR = await db.query('SELECT id, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    if (!preR.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
+    if (!await canEditProject(req, preR.rows[0])) return res.status(403).json({ error: 'FORBIDDEN', message: '생성자·참여자·관리자만 프로젝트를 삭제할 수 있습니다.' });
+    function c(table, extra) { return '(SELECT COUNT(*)::int FROM ' + table + ' WHERE project_id = $1 AND tenant_id = $2' + (extra || '') + ')'; }
+    var r = await db.query('SELECT ' + c('milestones') + ' AS milestones, ' + c('issues') + ' AS issues, ' + c('project_files') + ' AS "docFiles", ' +
+      c('project_folders') + ' AS "docFolders", ' + c('meetings') + ' AS meetings, ' + c('mindmaps', ' AND deleted_at IS NULL') + ' AS mindmaps, ' +
+      c('as_tickets', ' AND deleted_at IS NULL') + ' AS "asTickets"', [req.params.id, req.tenant.id]);
+    res.json({ data: r.rows[0] });
+  } catch (e) {
+    httpErr.serverError(res, '[projects/delete-preview]', e);
   }
 });
 
@@ -338,9 +258,24 @@ router.delete('/:id', rbac.checkPermission('project.delete'), async function (re
       var fr = await client.query('DELETE FROM project_files WHERE project_id = $1 AND tenant_id = $2 RETURNING storage_key', [id, tid]);
       storageKeys = fr.rows.map(function (x) { return x.storage_key; }).filter(Boolean);
       await client.query('DELETE FROM project_folders WHERE project_id = $1 AND tenant_id = $2', [id, tid]);
+      // v13.283 남는 연결 정리 — 다른 모듈 행은 지우지 않고 연결만 끊는다
+      //  내 업무 표시(my_work_marks: 'milestone:id' · 'issue:id' · 'dev:id')는 지움, 코멘트(comments)는 프로젝트·마일스톤 것 모두 지움
+      await client.query(
+        "DELETE FROM my_work_marks WHERE tenant_id = $2 AND item_key IN (" +
+        "SELECT 'milestone:' || id FROM milestones WHERE project_id = $1 AND tenant_id = $2 UNION ALL " +
+        "SELECT 'issue:' || id FROM issues WHERE project_id = $1 AND tenant_id = $2 UNION ALL " +
+        "SELECT 'dev:' || id FROM project_dev_items WHERE project_id = $1 AND tenant_id = $2)", [id, tid]);
       await client.query('DELETE FROM issues WHERE project_id = $1 AND tenant_id = $2', [id, tid]);
       await client.query('UPDATE events SET project_ids = project_ids - $1::text WHERE tenant_id = $2 AND project_ids ? $1::text', [id, tid]);
       await client.query('UPDATE projects SET dependencies = dependencies - $1::text WHERE tenant_id = $2 AND dependencies ? $1::text', [id, tid]);
+      await client.query('DELETE FROM comments WHERE project_id = $1 AND tenant_id = $2', [id, tid]);
+      //  프로젝트 맵은 프로젝트가 없으면 볼 사람이 없어진다 → 만든 사람의 개인 맵으로
+      await client.query("UPDATE mindmaps SET project_id = NULL, scope = CASE WHEN scope = 'project' THEN 'personal' ELSE scope END, updated_at = now() WHERE project_id = $1 AND tenant_id = $2", [id, tid]);
+      await client.query('UPDATE as_tickets SET project_id = NULL WHERE project_id = $1 AND tenant_id = $2', [id, tid]);
+      //  사전검토: 연결만 끊어 다시 전환할 수 있게 (상태 '확정'은 검토 결과라 그대로)
+      await client.query('UPDATE prestudies SET linked_project_id = NULL, updated_at = now() WHERE linked_project_id = $1 AND tenant_id = $2', [id, tid]);
+      //  내 프로젝트(연계)는 단독으로
+      await client.query('UPDATE my_projects SET link_project_id = NULL, updated_at = now() WHERE link_project_id = $1 AND tenant_id = $2', [id, tid]);
       return client.query('DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tid]);
     });
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
@@ -461,6 +396,7 @@ router.post('/:id/transfer', async function (req, res) {
 //  body: { name(필수), orderNo? }
 //  내용·인원(활성 멤버)·마일스톤·목표시간·담당배정(정/부)을 동일하게 복사.
 //  실행 실적(진척률/보고시간/이력/코멘트)은 초기화 — 새 진행을 위한 깨끗한 사본.
+//  v13.283: 상태 진행중 · 수주 단계 · 단계 일정 기본 · 마일스톤 대기 · 체크리스트(체크 풀림) · 사양서도 복사.
 //  복사자가 새 프로젝트의 owner. 원본은 읽기 권한만 있으면 복사 가능.
 router.post('/:id/copy', rbac.checkPermission('project.create'), async function (req, res) {
   try {
@@ -474,28 +410,29 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
     if (!await canAccessProject(req, src)) return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 접근 권한이 없습니다.' });
 
     var crypto = require('crypto');
-    var newId = 'proj-' + crypto.randomUUID().slice(0, 12);
     var meId = req.user.sub;
-    var deptId = req.user.departmentId || src.department_id || null;
 
+    // v13.283 만들기는 insertProject 하나로 — 사본은 새로 시작하는 프로젝트:
+    //  상태 진행중 · 수주 단계 · 단계 일정 기본(날짜 없음) · 진척 0, 체크리스트는 항목만(체크 풀림), 사양서 복사
     var copyResult = await db.transaction(async function (client) {
-      // 1) 프로젝트 행 — 진척률은 0으로 초기화, 나머지 내용 동일. owner/생성자 = 복사자.
-      await client.query(
-        "INSERT INTO projects (id, order_no, name, start_date, end_date, status, progress, estimated_hours, assignees, dependencies, color, memo, current_phase, phases, created_by, updated_by, department_id, tenant_id, owner_id, visibility) " +
-        "VALUES ($1,$2,$3,$4,$5,$6,0,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16,$14,$17)",
-        [newId, (b.orderNo != null ? String(b.orderNo) : ''), newName, src.start_date, src.end_date, src.status || 'active', src.estimated_hours || 0,
-         JSON.stringify(src.assignees || []), JSON.stringify(src.dependencies || []), sv.safeColor(src.color, '#3B82F6'), src.memo || '', src.current_phase || 'order',
-         JSON.stringify(src.phases || {}), meId, deptId, req.tenant.id, src.visibility || 'private']
-      );
-      // 2) 활성 멤버(인원 할당) 복사
-      //    행마다 INSERT 하던 루프 → INSERT ... SELECT 한 번. tenant_id 도 기록(예전엔 누락되어 DEFAULT 테넌트로 들어감).
-      await client.query(
-        "INSERT INTO project_members (project_id, user_id, role, assigned_by, tenant_id) " +
-        "SELECT $1, user_id, COALESCE(NULLIF(role, ''), 'assignee'), $2, $3 FROM project_members WHERE project_id = $4 AND released_at IS NULL " +
-        "ON CONFLICT (project_id, user_id) DO NOTHING",
-        [newId, meId, req.tenant.id, src.id]
-      );
-      // 3) 마일스톤 복사(진척 초기화) — old→new id 매핑
+      var memR = await client.query("SELECT user_id, role FROM project_members WHERE project_id = $1 AND released_at IS NULL", [src.id]);
+      var clR = await client.query('SELECT phase, items FROM checklists WHERE project_id = $1 AND tenant_id = $2 ORDER BY created_at', [src.id, req.tenant.id]);
+      var cls = clR.rows.map(function (c) {
+        var items = c.items;
+        if (typeof items === 'string') { try { items = JSON.parse(items); } catch (e) { items = []; } }
+        items = (Array.isArray(items) ? items : []).map(function (it) { return Object.assign({}, it, { done: false, doneDate: null, doneBy: null }); });
+        return { phase: c.phase, items: items };
+      });
+      // 1) 프로젝트 행 + 체크리스트 + 멤버(활성 멤버 역할 그대로 · 담당자 이름 매칭)
+      var proj = await insertProject(client, req, {
+        orderNo: b.orderNo != null ? String(b.orderNo) : '', name: newName, startDate: src.start_date, endDate: src.end_date,
+        status: 'active', progress: 0, currentPhase: 'order', phases: pd.defaultPhases(''),
+        estimatedHours: src.estimated_hours || 0, assignees: src.assignees || [], dependencies: src.dependencies || [],
+        color: src.color, memo: src.memo || '', departmentId: req.user.departmentId || src.department_id || null,
+        visibility: src.visibility || 'private', specs: src.specs || {}, checklists: cls
+      }, { members: memR.rows.map(function (m) { return { userId: m.user_id, role: m.role }; }) });
+      var newId = proj.id;
+      // 2) 마일스톤 복사(상태 대기 · 진척 초기화, 기간·목표시간 유지) — old→new id 매핑
       //    마일스톤별 INSERT 루프 → unnest 다중 행 INSERT 한 번 (새 id 는 JS 에서 생성해 매핑 유지)
       var ms = await client.query('SELECT * FROM milestones WHERE project_id = $1 AND tenant_id = $2 ORDER BY sort_order', [src.id, req.tenant.id]);
       var idMap = {};
@@ -505,7 +442,7 @@ router.post('/:id/copy', rbac.checkPermission('project.create'), async function 
         var nmid = 'ms-' + crypto.randomUUID().slice(0, 12);
         idMap[m.id] = nmid;
         mIds.push(nmid); mNames.push(m.name); mStarts.push(m.start_date); mEnds.push(m.end_date);
-        mStatus.push(m.status || 'waiting'); mSort.push(m.sort_order || 0); mTargets.push(JSON.stringify(m.assignee_targets || {}));
+        mStatus.push('waiting'); mSort.push(m.sort_order || 0); mTargets.push(JSON.stringify(m.assignee_targets || {}));
       }
       if (mIds.length) {
         await client.query(

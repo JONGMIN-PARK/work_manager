@@ -175,6 +175,60 @@ test('_projMsEditRowsHtml: 마일스톤 편집 행 (id·rowkey·상태 선택)',
   assert.ok(h.indexOf('showMilestoneTransferModal(\'m1\')') > 0);
 });
 
+test('_projMsRowHtml: 마일스톤 상태는 대기·진행·완료만 (지연 → 진행, 보류 → 대기) · 열 배치는 CSS', () => {
+  const s = load();
+  const opts = (h) => [...h.matchAll(/<option value="(\w+)"( selected)?/g)].map((m) => m[1] + (m[2] ? '*' : ''));
+  assert.deepStrictEqual(opts(s._projMsRowHtml({ id: 'm', status: 'delayed' }, 'm')), ['waiting', 'active*', 'done']);
+  assert.deepStrictEqual(opts(s._projMsRowHtml({ id: 'm', status: 'hold' }, 'm')), ['waiting*', 'active', 'done']);
+  assert.deepStrictEqual(opts(s._projMsRowHtml({}, 'new-1')), ['waiting*', 'active', 'done']);
+  assert.ok(s._projMsRowHtml({}, 'new-1').indexOf('grid-template-columns') < 0);
+  assert.strictEqual(s._projEditStatus('waiting'), 'active');
+  assert.strictEqual(s._projEditStatus('delayed'), 'active');
+  assert.strictEqual(s._projEditStatus('hold'), 'hold');
+});
+
+test('_projModalFormHtml: 이름 먼저 · 상태 3개 · 단계 선택 · 수주번호 입력 하나(기존 번호는 읽기 전용) · 더보기', () => {
+  const s = load();
+  s.ORDER_MAP = { 'SO-1': { name: '장비' } };
+  const h = s._projModalFormHtml(null, [], []);
+  assert.ok(h.indexOf('id="projName"') < h.indexOf('id="projStart"'));
+  assert.ok(h.indexOf('id="projStart"') < h.indexOf('id="projAssignees"'));
+  assert.ok(h.indexOf('id="projAssignees"') < h.indexOf('id="projOrderNo"'));
+  assert.ok(h.indexOf('id="msRows"') < h.indexOf('id="projMemo"'));
+  assert.ok(h.indexOf('<option value="SO-1 — 장비">') > 0, 'datalist "번호 — 이름"');
+  assert.ok(h.indexOf('projOrderSel') < 0);
+  assert.ok(h.indexOf('pm-more') < 0, '새 프로젝트엔 더보기 없음');
+  const st = h.slice(h.indexOf('id="projStatus"'), h.indexOf('</select>', h.indexOf('id="projStatus"')));
+  assert.deepStrictEqual([...st.matchAll(/value="(\w+)"/g)].map((m) => m[1]), ['active', 'hold', 'done']);
+  const e = s._projModalFormHtml({ id: 'p1', name: 'x', orderNo: 'SO-1', status: 'done', currentPhase: 'done' }, [], []);
+  assert.ok(/id="projOrderNo" value="SO-1" readonly/.test(e));
+  assert.ok(e.indexOf('수주대장 › 번호 변경') > 0);
+  assert.ok(e.indexOf('<option value="done" selected>✅ 완료</option></select></div></div>') > 0, '단계 완료 선택');
+  assert.ok(e.indexOf('class="pm-more-del"') > e.indexOf('showProjectTransferModal'), '삭제는 더보기 맨 끝');
+});
+
+test('_projMsDiff: 연 시점 사진과 비교해 바뀐 칸만 (없으면 null · 사진 없으면 전부)', () => {
+  const s = load();
+  const snap = s._projMsSnapOf({ name: '설계', startDate: '2026-09-01', endDate: null, status: 'active', order: 0, assigneeTargets: { b: 2, a: 1 } });
+  const cur = { name: '설계', startDate: '2026-09-01', endDate: '', status: 'active', order: 0, assigneeTargets: { a: 1, b: 2 } };
+  assert.strictEqual(s._projMsDiff(snap, cur), null, 'null 날짜 = 빈 칸 · 목표시간 키 순서 무관');
+  assert.deepStrictEqual(plain(s._projMsDiff(snap, Object.assign({}, cur, { status: 'done', order: 2 }))), { status: 'done', order: 2 });
+  assert.deepStrictEqual(plain(s._projMsDiff(snap, Object.assign({}, cur, { assigneeTargets: { a: 1 } }))), { assigneeTargets: { a: 1 } });
+  assert.deepStrictEqual(plain(s._projMsDiff(null, cur)), plain(cur));
+  const noOrder = s._projMsSnapOf({ name: 'x' });
+  assert.deepStrictEqual(plain(s._projMsDiff(noOrder, { name: 'x', startDate: '', endDate: '', status: '', order: 0, assigneeTargets: {} })), { order: 0 });
+});
+
+test('_projDepCycle: 선행 순환 경로 — 없으면 null · 새 프로젝트는 검사 안 함', () => {
+  const s = load();
+  const all = [{ id: 'a' }, { id: 'b', dependencies: ['c'] }, { id: 'c', dependencies: ['a'] }, { id: 'd' }];
+  assert.deepStrictEqual(plain(s._projDepCycle('a', ['b'], all)), ['a', 'b', 'c', 'a']);
+  assert.strictEqual(s._projDepCycle('a', ['d'], all), null);
+  assert.deepStrictEqual(plain(s._projDepCycle('a', ['a'], all)), ['a', 'a']);
+  assert.strictEqual(s._projDepCycle('', ['b'], all), null);
+  assert.strictEqual(s._projDepCycle('a', [], all), null);
+});
+
 test('_projModalResetStaging: 원래 id·목표시간 스테이징 복사·rowkey 시퀀스 초기화', () => {
   const s = load();
   s._msRowKeySeq = 7;
@@ -184,6 +238,7 @@ test('_projModalResetStaging: 원래 id·목표시간 스테이징 복사·rowke
   assert.deepStrictEqual(plain(s._msTargetStaging), { m1: { 김: 3 }, m2: {} });
   assert.notStrictEqual(s._msTargetStaging.m1, tg, '복사본');
   assert.strictEqual(s._msRowKeySeq, 0);
+  assert.deepStrictEqual(plain(s.window._projMsSnap.m1), { name: '', startDate: '', endDate: '', status: 'waiting', order: null, tg: '{"김":3}' });
 });
 
 test('_projSaveErrMsg: CONFLICT / 서버 메시지 / 일반 오류 + HTTP 상태', () => {

@@ -75,7 +75,14 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await wait(300);
     check(/필터/.test(await toasts()), '가린 프로젝트 — 안내 토스트');
     // 7. 상세 패널에서처럼(편집 창 없이) 삭제 — 오류 토스트 없음
+    // v13.283 삭제는 확인 창에서 이름을 쳐야 — 함께 지워지는 항목 표시
     await page.evaluate(function (id) { return deleteProjectUI(id); }, pid);
+    await page.waitForSelector('#projDelName');
+    check(await page.evaluate(function () { return document.getElementById('projDelOk').disabled; }), '삭제 확인 — 이름 치기 전엔 잠김');
+    await page.evaluate(function () {
+      var i = document.getElementById('projDelName'); i.value = document.querySelector('#projDelModal b').textContent;
+      i.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('projDelOk').click();
+    });
     await wait(800);
     var t = await toasts();
     check(/삭제되었습니다/.test(t) && !/Cannot read/.test(t), '편집 창 없이 삭제 — 오류 없음 ' + t.slice(-120));

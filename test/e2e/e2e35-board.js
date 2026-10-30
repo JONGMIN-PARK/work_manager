@@ -26,7 +26,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
   await c.query("INSERT INTO projects (id, name, status, visibility, owner_id, tenant_id) VALUES ('bd-p1', '보드 프로젝트', 'active', 'tenant', $1, $2)", [me.id, tid]);
   await c.query("INSERT INTO issues (id, project_id, title, status, urgency, due_date, assignees, tenant_id) VALUES ('bd-i1', 'bd-p1', '보드 이슈', 'open', 'high', $1, '[\"관리자\"]', $2)", [kst(1), tid]);
   await c.query("INSERT INTO prestudies (id, title, client, owner_id, due_date, status, priority, tenant_id) VALUES ('bd-s1', '보드 사전검토', 'C사', $1, $2, 'reviewing', 'normal', $3)", [me.id, kst(4), tid]);
-  await c.query("INSERT INTO milestones (id, project_id, name, end_date, status, tenant_id) VALUES ('bd-ms1', 'bd-p1', '보드 마일스톤', $1, 'progress', $2)", [kst(6), tid]);
+  await c.query("INSERT INTO milestones (id, project_id, name, end_date, status, tenant_id) VALUES ('bd-ms1', 'bd-p1', '보드 마일스톤', $1, 'active', $2)", [kst(6), tid]);
   await c.query("INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id) VALUES ('bd-ma1', $1, 'bd-ms1', 'bd-p1', $2)", [tid, me.id]);
   var ins = function (title, due, pri) { return c.query("INSERT INTO my_todos (id, tenant_id, user_id, title, due_date, priority, checklist) VALUES ($1,$2,$3,$4,$5,$6,$7)", ['todo-bd' + Math.random().toString(36).slice(2, 8), tid, me.id, title, due, pri, JSON.stringify(title === '보드 견적' ? [{ id: 'c1', t: '단가 확인', d: true }, { id: 'c2', t: '메일', d: false }] : [])]); };
   await ins('보드 견적', kst(0), 1);
@@ -91,7 +91,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check((await c.query("SELECT status FROM milestones WHERE id = 'bd-ms1'")).rows[0].status === 'done', '마일스톤 체크 → 완료');
     await page.click('#mwUndo button');
     await wait(700);
-    check((await c.query("SELECT status FROM milestones WHERE id = 'bd-ms1'")).rows[0].status === 'progress', '되돌리기 → 진행');
+    check((await c.query("SELECT status FROM milestones WHERE id = 'bd-ms1'")).rows[0].status === 'active', '되돌리기 → 진행');
 
     // 2. 위 요약 거르기
     await page.click('[data-bf="today"]');

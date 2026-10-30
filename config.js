@@ -167,6 +167,9 @@ var PROJ_STATUS = {
   done:    { label: '완료',   color: '#10B981', bg: 'rgba(16,185,129,.15)',  icon: '✅' },
   hold:    { label: '보류',   color: '#F59E0B', bg: 'rgba(245,158,11,.15)', icon: '⏸️' }
 };
+/* v13.283 고를 수 있는 상태 — 대기 · 지연은 날짜로 자동 표시만 (autoProjectStatus). 저장 값은 아래 셋뿐 (마이그레이션 074) */
+var PROJ_STATUS_EDIT = ['active', 'hold', 'done'];        // 프로젝트: 진행 · 보류 · 완료
+var MS_STATUS_EDIT = ['waiting', 'active', 'done'];       // 마일스톤: 대기 · 진행 · 완료
 
 /* ═══ 일정 유형 ═══ */
 var EVT_TYPE = {

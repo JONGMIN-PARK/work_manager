@@ -515,15 +515,24 @@ function msTransfer(id, targetProjectId) {
 // 프로젝트 사본 생성 — data: { name(필수), orderNo? }. 내용·인원·마일스톤·담당배정 복사(실적은 초기화)
 function projCopy(id, data) {
   return apiFetch('/api/projects/' + id + '/copy', { method: 'POST', body: JSON.stringify(data || {}) })
-    .then(function (r) { _pdInvalidate('proj'); _pdInvalidate('projAll'); _pdInvalidate('ms'); return toCamel(r.data); });
+    .then(function (r) {
+      var p = toCamel(r.data);
+      _pdInvalidate('ms');
+      // 버스 알림 — 파이프라인 · 수주 대장 · 타임라인이 새 사본을 바로 보이게 (proj/projAll 캐시도 여기서 비움)
+      _emitBus('project', 'created', { id: p && p.id, copiedFrom: id });
+      return p;
+    });
 }
 
 // 담당자 이름(string[]) → users 매칭 후 project_members 에 active assignee 로 추가 (additive only)
 //  · 매칭 실패한 이름은 외부 인원으로 간주하고 무시
 //  · 같은 이름의 사용자가 여러 명이면 먼저 매칭된 한 명만 사용
 //  · 기존 멤버 자동 해제는 하지 않음 (의도치 않은 접근 손실 방지)
+//  · 결과: { added:[이름], unmatched:[계정 없는 이름(외부)], failed:[이름] } — 부르는 쪽이
+//    unmatched 가 있으면 "계정이 없는 담당자: …(외부)" 를 띄운다 (예전엔 조용히 무시돼 담당자가 비공개 프로젝트를 못 봤다)
 function syncAssigneesToMembers(projectId, names) {
-  if (!projectId || !Array.isArray(names) || !names.length) return Promise.resolve([]);
+  var res = { added: [], unmatched: [], failed: [] };
+  if (!projectId || !Array.isArray(names) || !names.length) return Promise.resolve(res);
   return userLookup().then(function (users) {
     var byName = {};
     (users || []).forEach(function (u) {
@@ -541,24 +550,26 @@ function syncAssigneesToMembers(projectId, names) {
       if (u && u.id) {
         ops.push(
           projShareAdd(projectId, u.id, 'assignee')
-            .catch(function (e) { console.warn('[syncAssignee]', nm, e && e.message); })
+            .then(function () { res.added.push(nm); })
+            .catch(function (e) { res.failed.push(nm); console.warn('[syncAssignee]', nm, e && e.message); })
         );
-      }
+      } else res.unmatched.push(nm);
     });
-    return Promise.all(ops);
-  }).catch(function (e) { console.warn('[syncAssigneesToMembers]', e && e.message); return []; });
+    return Promise.all(ops).then(function () { return res; });
+  }).catch(function (e) { console.warn('[syncAssigneesToMembers]', e && e.message); return res; });
 }
 
 function createProject(data) {
   var now = new Date().toISOString();
-  var defaultPhases = { order: { status: 'waiting', startDate: '', endDate: '' }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, done: { status: 'waiting', startDate: '', endDate: '' } };
+  // v13.283: 저장 상태는 active/hold/done 만 — '대기'·'지연'은 autoProjectStatus 가 날짜로 보여 준다. 현재 단계(수주)는 진행 중
+  var defaultPhases = { order: { status: 'active', startDate: data.startDate || '', endDate: '' }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, done: { status: 'waiting', startDate: '', endDate: '' } };
   var proj = {
     id: 'proj-' + uuid(),
     orderNo: (data.orderNo || '').trim(),
     name: (data.name || '').trim(),
     startDate: data.startDate || '',
     endDate: data.endDate || '',
-    status: data.status || 'active',
+    status: (typeof PROJ_STATUS_EDIT !== 'undefined' ? PROJ_STATUS_EDIT : ['active', 'hold', 'done']).indexOf(data.status) >= 0 ? data.status : 'active',
     progress: data.progress || 0,
     estimatedHours: data.estimatedHours || 0,
     assignees: data.assignees || [],
@@ -1359,39 +1370,41 @@ function executePhaseTransition(projectId, targetPhase) {
   });
 }
 
-/* 수주에서 프로젝트 + 마일스톤 + 체크리스트 1회 호출 생성 */
+/* 수주에서 프로젝트 1회 호출 생성 (v13.283)
+   서버 insertProject 가 단계별 기본 체크리스트 · 담당자 이름 → 멤버(assignee) 등록까지 한다 → 화면은 체크리스트를 보내지 않는다(중복 방지).
+   B3: 단계 이름과 같은 날짜 없는 마일스톤 6개도 더 이상 만들지 않는다(단계는 phases 로 이미 있다).
+   결과 p._assigneeSync = { added, unmatched } — unmatched(계정 없는 담당자)는 부르는 쪽이 "(외부)" 로 알린다 */
 function createProjectFromOrder(order) {
   var projId = 'proj-' + uuid();
   var startDate = order.date || localDate();
   var endDate = order.delivery || '';
   var defaultPhases = { order: { status: 'done', startDate: startDate, endDate: startDate }, design: { status: 'waiting', startDate: '', endDate: '' }, manufacture: { status: 'waiting', startDate: '', endDate: '' }, inspect: { status: 'waiting', startDate: '', endDate: '' }, deliver: { status: 'waiting', startDate: '', endDate: '' }, done: { status: 'waiting', startDate: '', endDate: '' } };
-  var phaseKeys = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'done'];
-  var phaseLabels = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
-  var milestones = phaseKeys.map(function (pk, idx) {
-    var label = phaseLabels[pk] ? phaseLabels[pk].label : pk;
-    return { id: 'ms-' + uuid(), name: label, startDate: '', endDate: '', status: 'waiting', order: idx };
-  });
-  var checklists = phaseKeys.map(function (pk) {
-    var items = (DEFAULT_CHECKLIST[pk] || []).map(function (text, idx) {
-      return { text: text, done: false, doneDate: null, doneBy: null, order: idx };
-    });
-    return { id: 'chk-' + uuid(), phase: pk, items: items };
-  });
   var payload = {
     id: projId, orderNo: order.orderNo, name: order.name || order.orderNo,
     startDate: startDate, endDate: endDate, status: 'active', progress: 0,
     estimatedHours: 0, assignees: order.manager ? [order.manager] : [],
     dependencies: [], color: typeof COL !== 'undefined' ? COL[Math.floor(Math.random() * COL.length)] : '#3B82F6',
     memo: '', currentPhase: 'design', phases: defaultPhases,
-    milestones: milestones, checklists: checklists
+    milestones: []
   };
   return apiFetch('/api/projects/full', { method: 'POST', body: JSON.stringify(payload) })
     .then(function (r) {
-      var p = toCamel(r.data);
-      _pdInvalidate('ms');   // 마일스톤도 함께 생성됨
-      _emitBus('project', 'created', { id: p && p.id || projId });
-      return p;
+      var p = toCamel(r.data) || {};
+      var pid = p.id || projId;
+      _emitBus('project', 'created', { id: pid });
+      return _pdMatchAssignees(payload.assignees).then(function (m) { p._assigneeSync = m; return p; });
     });
+}
+/* 담당자 이름 중 계정이 있는 것/없는 것 — 서버가 멤버 등록을 했으므로 여기선 알림용으로 나누기만 */
+function _pdMatchAssignees(names) {
+  var res = { added: [], unmatched: [] };
+  if (!Array.isArray(names) || !names.length || typeof userLookup !== 'function') return Promise.resolve(res);
+  return userLookup().then(function (users) {
+    var has = {};
+    (users || []).forEach(function (u) { [u.name, u.displayName].forEach(function (k) { if (k) has[k] = true; }); });
+    names.forEach(function (n) { var nm = (n || '').trim(); if (nm) (has[nm] ? res.added : res.unmatched).push(nm); });
+    return res;
+  }).catch(function () { return res; });
 }
 
 /* ─── 이슈 ─── */

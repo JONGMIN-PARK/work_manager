@@ -20,6 +20,21 @@ var MW_PJ_STATUS = { plan: '계획', doing: '진행', hold: '보류', done: '완
 var _mwj = { id: null, q: {}, qId: null, timer: null, inflight: null, state: 'idle', err: '', pickQ: '', pick: null, pickT: null, drag: null };
 
 function mwProjs() { return (_mw.data && _mw.data.projs) || []; }
+/* B7: 연계(볼 수 있는) 프로젝트는 이름 · 상태를 프로젝트 관리의 지금 값으로 보인다 (내 사본 제목은 연결할 때 복사본)
+   — 연계 프로젝트가 완료 · 보류면 내 프로젝트도 완료 · 보류로 본다. 저장 값(p.title · p.status)은 그대로 */
+function mwProjLive(p) { return p && p.link && p.linkInfo && !p.linkInfo.locked ? p.linkInfo : null; }
+function mwProjTitle(p) { var li = mwProjLive(p); return (li && li.name) || (p && p.title) || ''; }
+function mwProjSt(p) {
+  var li = mwProjLive(p);
+  if (li && (li.status === 'done' || li.status === 'hold')) return li.status;
+  return p.status;
+}
+/* 프로젝트 관리 상태 이름 — 저장 키(active…) 대신 '진행중' 등. 프로젝트는 날짜로 대기 · 지연도 보인다 */
+function mwPmStLabel(st, start, end) {
+  if (start !== undefined && typeof autoProjectStatus === 'function') st = autoProjectStatus({ status: st, startDate: start || '', endDate: end || '' });
+  var m = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[st];
+  return m ? m.label : (st || '');
+}
 function mwProjById(id) { return mwProjs().filter(function (p) { return p.id === id; })[0] || null; }
 function mwProjBandOn() { return _mwLS('pjband') !== false; }
 /** 색 — 내가 고른 색 → 연계 프로젝트 색 → 기본 */
@@ -44,12 +59,12 @@ function mwProjStats(p) {
   var otherDone = its.filter(function (x) { return x.src !== 'todo' && x.done; }).length;
   var done = Math.max(p.todoDone || 0, todoDoneList) + otherDone;
   var auto = done + open ? Math.round(done / (done + open) * 100) : null;
-  return { open: open, done: done, items: its, prog: p.progress != null ? p.progress : (p.status === 'done' ? 100 : auto), auto: auto };
+  return { open: open, done: done, items: its, prog: p.progress != null ? p.progress : (mwProjSt(p) === 'done' ? 100 : auto), auto: auto };
 }
 function _mwjMd(d) { return d ? (+d.slice(5, 7)) + '/' + (+d.slice(8, 10)) : ''; }
 /** D-day 글 — { t, cls } */
 function _mwjDday(p, today) {
-  if (p.status === 'done') return { t: '완료', cls: 'is-done' };
+  if (mwProjSt(p) === 'done') return { t: '완료', cls: 'is-done' };
   if (p.start && p.start > today) return { t: _mwjMd(p.start) + ' 시작', cls: '' };
   if (!p.end) return { t: '', cls: '' };
   var d = _mwDays(today, p.end);
@@ -69,8 +84,8 @@ function mwProjStripHtml(today) {
   if (!_mw.data || !_mw.data.self) return '';
   var all = mwProjs(), cands = _mw.data.projCands || [];
   var showDone = !!_mwLS('pjdone'), folded = !!_mwLS('pjfold');
-  var doneN = all.filter(function (p) { return p.status === 'done'; }).length;
-  var list = all.filter(function (p) { return showDone || p.status !== 'done'; });
+  var doneN = all.filter(function (p) { return mwProjSt(p) === 'done'; }).length;
+  var list = all.filter(function (p) { return showDone || mwProjSt(p) !== 'done'; });
   var h = '<section class="mwj' + (folded ? ' is-folded' : '') + '" id="mwjStrip">' +
     '<div class="mwj-h"><button class="mwj-tri" data-mwj="fold" title="접기 · 펴기">▾</button><b class="mwj-ttl" data-mwj="fold">📁 내 프로젝트</b><i class="mwj-n">' + (all.length - doneN) + '</i>' +
       '<button class="mw-btn" data-mwj="new" title="기간이 있는 일 묶음 — 여기서만 쓰거나 프로젝트 관리와 연결">＋ 프로젝트</button>' +
@@ -87,10 +102,10 @@ function mwProjStripHtml(today) {
 }
 function _mwjCard(p, today) {
   var s = mwProjStats(p), dd = _mwjDday(p, today), tp = _mwjTodayPct(p, today);
-  var locked = p.linkInfo && p.linkInfo.locked;
-  return '<div class="mwj-c' + (p.visible ? '' : ' is-hidden') + (p.status === 'done' ? ' is-done' : '') + (p.status === 'hold' ? ' is-hold' : '') + (_mwj.id === p.id ? ' mw-picked' : '') +
-      '" data-pj="' + _mwEsc(p.id) + '" style="--pc:' + mwProjColor(p) + '" tabindex="0" role="button" title="' + _mwEsc(p.title + (p.memo ? '\n' + p.memo.slice(0, 120) : '')) + '">' +
-    '<div class="mwj-ct"><span class="mwj-ic">' + _mwEsc(p.icon || '📁') + '</span><span class="mwj-t">' + _mwEsc(p.title) + '</span>' +
+  var locked = p.linkInfo && p.linkInfo.locked, st = mwProjSt(p), ttl = mwProjTitle(p);
+  return '<div class="mwj-c' + (p.visible ? '' : ' is-hidden') + (st === 'done' ? ' is-done' : '') + (st === 'hold' ? ' is-hold' : '') + (_mwj.id === p.id ? ' mw-picked' : '') +
+      '" data-pj="' + _mwEsc(p.id) + '" style="--pc:' + mwProjColor(p) + '" tabindex="0" role="button" title="' + _mwEsc(ttl + (p.memo ? '\n' + p.memo.slice(0, 120) : '')) + '">' +
+    '<div class="mwj-ct"><span class="mwj-ic">' + _mwEsc(p.icon || '📁') + '</span><span class="mwj-t">' + _mwEsc(ttl) + '</span>' +
       (p.link ? '<em class="mwj-link' + (locked ? ' is-locked' : '') + '" title="' + (locked ? '연결한 프로젝트를 볼 수 없습니다' : '프로젝트 관리와 연계 — ' + _mwEsc(p.linkInfo.name)) + '">' + (locked ? '🔒' : '🔗') + '</em>' : '') +
       '<button class="mwj-eye" data-pjeye="' + _mwEsc(p.id) + '" title="' + (p.visible ? '타임라인 · 달력에서 숨기기' : '타임라인 · 달력에 보이기') + '">' + (p.visible ? '👁' : '🙈') + '</button></div>' +
     '<div class="mwj-bar" title="진행 ' + (s.prog != null ? s.prog + '%' : '—') + (tp != null ? ' · 기간 중 오늘 자리' : '') + '"><span class="mwj-fill" style="width:' + (s.prog || 0) + '%"></span>' + (tp != null ? '<i style="left:' + tp + '%"></i>' : '') + '</div>' +
@@ -98,12 +113,12 @@ function _mwjCard(p, today) {
       (dd.t ? '<span class="mwj-dd ' + dd.cls + '">' + dd.t + '</span>' : '') +
       (s.prog != null ? '<span>' + s.prog + '%</span>' : '') +
       '<span class="mwj-cnt" title="남은 항목">☐ ' + s.open + '</span>' +
-      (p.status === 'hold' || p.status === 'plan' ? '<span class="mwj-st">' + MW_PJ_STATUS[p.status] + '</span>' : '') + '</div></div>';
+      (st === 'hold' || st === 'plan' ? '<span class="mwj-st">' + MW_PJ_STATUS[st] + '</span>' : '') + '</div></div>';
 }
 /** 목록 줄 · 보드 카드의 작은 프로젝트 표 */
 function mwProjTag(it) {
   var p = mwProjOf(it);
-  return p ? '<span class="mwj-tag" style="--pc:' + mwProjColor(p) + '" data-pjopen="' + _mwEsc(p.id) + '" title="📁 ' + _mwEsc(p.title) + '">' + _mwEsc(p.icon || '📁') + ' ' + _mwEsc(p.title) + '</span>' : '';
+  return p ? '<span class="mwj-tag" style="--pc:' + mwProjColor(p) + '" data-pjopen="' + _mwEsc(p.id) + '" title="📁 ' + _mwEsc(mwProjTitle(p)) + '">' + _mwEsc(p.icon || '📁') + ' ' + _mwEsc(mwProjTitle(p)) + '</span>' : '';
 }
 
 /* ═══ 누르기 (my-work.js el.onclick 에서 먼저 부름) ═══ */
@@ -195,7 +210,7 @@ function mwProjSetItem(it, pid) {
   _mwPaint(); _mwjRepaintPanel();
   var p = pid ? mwProjById(pid) : cur;
   apiFetch('/api/my-work/mark', { method: 'PUT', body: JSON.stringify({ key: it.src + ':' + it.id, project: val }) }).then(function () {
-    if (typeof mwUndoToast === 'function') mwUndoToast(pid ? '📁 ' + (p ? p.title : '') + '에 넣음' : '📁 ' + (p ? p.title : '프로젝트') + '에서 뺌', function () {
+    if (typeof mwUndoToast === 'function') mwUndoToast(pid ? '📁 ' + (p ? mwProjTitle(p) : '') + '에 넣음' : '📁 ' + (p ? mwProjTitle(p) : '프로젝트') + '에서 뺌', function () {
       it.proj = prev; _mwPaint(); _mwjRepaintPanel();
       apiFetch('/api/my-work/mark', { method: 'PUT', body: JSON.stringify({ key: it.src + ':' + it.id, project: prev }) }).catch(function (er) { _mwToast('❌ ' + _mwErr(er), 'error'); });
     });
@@ -203,7 +218,7 @@ function mwProjSetItem(it, pid) {
 }
 /** 프로젝트 고르기 메뉴 항목 (보드 ⋯ · 상세 패널) — [[id, 이름]] (끝난 것 빼고) */
 function mwProjChoices() {
-  return mwProjs().filter(function (p) { return p.status !== 'done'; }).map(function (p) { return [p.id, (p.icon || '📁') + ' ' + p.title]; });
+  return mwProjs().filter(function (p) { return mwProjSt(p) !== 'done'; }).map(function (p) { return [p.id, (p.icon || '📁') + ' ' + mwProjTitle(p)]; });
 }
 
 /* ═══ 만들기 · 고치기 · 지우기 ═══ */
@@ -224,7 +239,7 @@ function mwProjCreate(b) {
     var p = _mwjPutLocal(r.data);
     _mwPaint();
     mwProjOpen(p.id, { focus: b.linkProjectId ? null : '#mwjTitle' });
-    if (b.linkProjectId) _mwToast('🔗 ' + p.title + ' — 내 프로젝트로 연결했습니다');
+    if (b.linkProjectId) _mwToast('🔗 ' + mwProjTitle(p) + ' — 내 프로젝트로 연결했습니다');
     return p;
   }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); });
 }
@@ -239,8 +254,8 @@ function mwProjSave(p, patch, opt) {
     var np = _mwjPutLocal(r.data);
     _mwPaint(); _mwjRepaintPanel();
     if (opt.undo) {
-      var msg = 'visible' in patch ? (patch.visible ? '👁 ' + np.title + ' — 타임라인 · 달력에 보임' : '🙈 ' + np.title + ' — 타임라인 · 달력에서 숨김')
-        : 'status' in patch ? '📁 ' + np.title + ' — ' + MW_PJ_STATUS[patch.status] : '📁 저장';
+      var msg = 'visible' in patch ? (patch.visible ? '👁 ' + mwProjTitle(np) + ' — 타임라인 · 달력에 보임' : '🙈 ' + mwProjTitle(np) + ' — 타임라인 · 달력에서 숨김')
+        : 'status' in patch ? '📁 ' + mwProjTitle(np) + ' — ' + MW_PJ_STATUS[patch.status] : '📁 저장';
       mwUndoToast(msg, function () { mwProjSave(np, prev); });
     }
     return np;
@@ -258,7 +273,7 @@ function mwProjSetRange(p, s, d) {
   _mwPaint(); _mwjRepaintPanel();
   apiFetch('/api/my-work/projects/' + encodeURIComponent(p.id), { method: 'PUT', body: JSON.stringify({ startDate: s, endDate: d }) }).then(function (r) {
     _mwjPutLocal(r.data); _mwPaint(); _mwjRepaintPanel();
-    mwUndoToast('📁 ' + p.title + ' ' + _mwjMd(s) + ' ~ ' + _mwjMd(d), function () { mwProjSetRange(mwProjById(p.id), prev.start, prev.end); });
+    mwUndoToast('📁 ' + mwProjTitle(p) + ' ' + _mwjMd(s) + ' ~ ' + _mwjMd(d), function () { mwProjSetRange(mwProjById(p.id), prev.start, prev.end); });
   }).catch(function (e) { p.start = prev.start; p.end = prev.end; _mwPaint(); _mwjRepaintPanel(); _mwToast('❌ ' + _mwErr(e), 'error'); });
 }
 function mwProjDelete(p) {
@@ -267,7 +282,7 @@ function mwProjDelete(p) {
   _mw.data.projs = mwProjs().filter(function (x) { return x !== p; });
   _mwPaint();
   apiFetch('/api/my-work/projects/' + encodeURIComponent(p.id), { method: 'DELETE' }).then(function () {
-    mwUndoToast('🗑 "' + p.title + '" 프로젝트를 지웠습니다 (항목은 그대로)', function () {
+    mwUndoToast('🗑 "' + mwProjTitle(p) + '" 프로젝트를 지웠습니다 (항목은 그대로)', function () {
       apiFetch('/api/my-work/projects/' + encodeURIComponent(p.id) + '/restore', { method: 'POST' }).then(function (r) {
         _mwjPutLocal(r.data); _mwPaint();
       }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); });
@@ -336,11 +351,12 @@ function _mwjRender(el) {
   var h = '<div class="mwp-h"><span class="mwp-src">📁 내 프로젝트' + (p.link ? ' · 🔗 연계' : ' · 단독') + '</span>' +
     '<span class="mwp-save" id="mwjSave" aria-live="polite"></span><button class="mwp-x" data-jp="close" title="닫기 (Esc)">✕</button></div><div class="mwp-b">';
   h += '<div class="mwp-trow"><input id="mwjIcon" class="mw-input mwj-icin" data-jf="icon" maxlength="4" value="' + _mwEsc(p.icon || '') + '" placeholder="📁" title="아이콘 (이모지 하나)">' +
-    '<textarea id="mwjTitle" class="mwp-title" rows="1" maxlength="200" data-jf="title">' + _mwEsc(p.title) + '</textarea></div>';
+    (okLink && li.name ? '<textarea id="mwjTitle" class="mwp-title" rows="1" readonly title="프로젝트 관리의 이름을 따릅니다 — 이름은 프로젝트 관리에서 바꾸세요">' + _mwEsc(li.name) + '</textarea></div>'
+      : '<textarea id="mwjTitle" class="mwp-title" rows="1" maxlength="200" data-jf="title">' + _mwEsc(p.title) + '</textarea></div>');
   // 상태
   h += '<div class="mwp-sec"><div class="mwp-l">상태</div><div class="mwp-seg" data-g="pjst">' + Object.keys(MW_PJ_STATUS).map(function (k) {
     return '<button data-jst="' + k + '"' + (p.status === k ? ' class="on"' : '') + '>' + MW_PJ_STATUS[k] + '</button>';
-  }).join('') + '</div></div>';
+  }).join('') + '</div>' + (mwProjSt(p) !== p.status ? '<div class="mwp-ro"><i>연결한 프로젝트가 ' + MW_PJ_STATUS[mwProjSt(p)] + ' 상태라 ' + MW_PJ_STATUS[mwProjSt(p)] + '(으)로 보입니다</i></div>' : '') + '</div>';
   // 기간
   var dd = _mwjDday(p, today);
   h += '<div class="mwp-sec"><div class="mwp-l">기간' + (dd.t ? ' <i class="' + (dd.cls === 'is-late' ? 'mw-late' : '') + '">' + dd.t + '</i>' : '') + '</div>';
@@ -363,7 +379,7 @@ function _mwjRender(el) {
   h += '<div class="mwp-sec"><div class="mwp-l">프로젝트 관리 연계</div>';
   if (p.link) {
     if (okLink) {
-      h += '<div class="mwj-lk"><b>🔗 ' + _mwEsc(li.name) + '</b>' + (li.status ? ' <i>' + _mwEsc(li.status) + '</i>' : '') + '</div>' +
+      h += '<div class="mwj-lk"><b>🔗 ' + _mwEsc(li.name) + '</b>' + (li.status ? ' <i>' + _mwEsc(mwPmStLabel(li.status, li.start, li.end)) + '</i>' : '') + '</div>' +
         '<div class="mwp-acts"><button class="mwp-chip" data-jp="openpm">↗ 프로젝트 관리에서 열기</button><button class="mwp-chip" data-jp="unlink">연결 끊기</button></div>';
     } else {
       h += '<div class="mwp-ro">' + (li && li.gone ? '🗑 연결한 프로젝트가 지워졌습니다' : '🔒 연결한 프로젝트를 볼 권한이 없습니다') + '</div><div class="mwp-acts"><button class="mwp-chip" data-jp="unlink">연결 끊기</button></div>';
@@ -572,7 +588,7 @@ function _mwjBindPanel(el) {
 /** 보일 프로젝트 — 전체 표시 켜짐 · 👁 · 날짜 있음 (끝난 것은 '다 한 것도'일 때만) */
 function mwProjBandList(showDone) {
   if (!_mw.data || !_mw.data.self || !mwProjBandOn()) return [];
-  return mwProjs().filter(function (p) { return p.visible && (p.start || p.end) && (showDone || p.status !== 'done'); });
+  return mwProjs().filter(function (p) { return p.visible && (p.start || p.end) && (showDone || mwProjSt(p) !== 'done'); });
 }
 /** 줄 나누기 '프로젝트별'에서 이 항목의 줄 */
 function mwProjLaneOf(it) {
@@ -587,8 +603,8 @@ function mwProjTimelineTasks(grp, numFn, today, showDone) {
     var s = p.start || p.end, d = p.end || p.start;
     var st = mwProjStats(p), lane = grp === 'proj' ? 'pj:' + p.id : '__pj';
     var dd = _mwjDday(p, today);
-    out.push({ key: 'pj:' + p.id, proj: p, title: p.title + (st.prog != null ? ' · ' + st.prog + '%' : ''), icon: p.icon || '📁', lane: lane, color: mwProjColor(p),
-      bar: true, n0: numFn(s), n1: numFn(d), f0: 0, f1: 1, late: dd.cls === 'is-late', done: p.status === 'done', pri: 3,
+    out.push({ key: 'pj:' + p.id, proj: p, title: mwProjTitle(p) + (st.prog != null ? ' · ' + st.prog + '%' : ''), icon: p.icon || '📁', lane: lane, color: mwProjColor(p),
+      bar: true, n0: numFn(s), n1: numFn(d), f0: 0, f1: 1, late: dd.cls === 'is-late', done: mwProjSt(p) === 'done', pri: 3,
       drag: p.link ? null : 'bar',
       tip: '📁 내 프로젝트' + (p.link ? ' · 🔗 연계' : '') + '\n' + (s || '') + ' ~ ' + (d || '') + (dd.t ? ' · ' + dd.t : '') + ' · 남은 항목 ' + st.open });
     if (grp !== 'proj' || !p.linkInfo || !p.linkInfo.ms) return;
@@ -596,14 +612,14 @@ function mwProjTimelineTasks(grp, numFn, today, showDone) {
       if (!m.due || have[m.id] || (m.status === 'done' && !showDone)) return;
       out.push({ key: 'pjms:' + m.id, pjms: m, pjLink: p.link, title: m.name, icon: '◆', lane: lane, color: mwProjColor(p), bar: false,
         n0: numFn(m.due), n1: numFn(m.due), f0: 0.5, f1: 1, late: m.status !== 'done' && m.due < today, done: m.status === 'done', pri: 3, drag: null,
-        tip: '◆ 마일스톤 (프로젝트 관리) · ' + m.due + (m.status ? ' · ' + m.status : '') });
+        tip: '◆ 마일스톤 (프로젝트 관리) · ' + m.due + (m.status ? ' · ' + mwPmStLabel(m.status) : '') });
     });
   });
   return out;
 }
 /** 프로젝트별 줄 — 보일 프로젝트마다 한 줄 + 프로젝트 없음 */
 function mwProjLanes(showDone) {
-  return mwProjBandList(showDone).map(function (p) { return { id: 'pj:' + p.id, name: p.title, icon: p.icon || '📁', color: mwProjColor(p), keep: true }; })
+  return mwProjBandList(showDone).map(function (p) { return { id: 'pj:' + p.id, name: mwProjTitle(p), icon: p.icon || '📁', color: mwProjColor(p), keep: true }; })
     .concat([{ id: '__nopj', name: '프로젝트 없음', icon: '📥', color: '#94A3B8' }]);
 }
 
@@ -614,7 +630,7 @@ function mwProjCalEntries(from, to) {
     return s <= to && d >= from;
   }).map(function (p) {
     var s = p.start || p.end, d = p.end || p.start, st = mwProjStats(p);
-    return { kind: 'proj', key: 'p|' + p.id, p: p, title: p.title, icon: p.icon || '📁', color: mwProjColor(p), date: s, end: d, time: '', timeEnd: '',
-      done: false, late: false, drag: false, tip: '📁 ' + p.title + ' · ' + s + ' ~ ' + d + (st.prog != null ? ' · ' + st.prog + '%' : '') };
+    return { kind: 'proj', key: 'p|' + p.id, p: p, title: mwProjTitle(p), icon: p.icon || '📁', color: mwProjColor(p), date: s, end: d, time: '', timeEnd: '',
+      done: false, late: false, drag: false, tip: '📁 ' + mwProjTitle(p) + ' · ' + s + ' ~ ' + d + (st.prog != null ? ' · ' + st.prog + '%' : '') };
   });
 }

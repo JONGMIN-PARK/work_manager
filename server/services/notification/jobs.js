@@ -11,6 +11,7 @@ var krHol = require('../../../kr-holidays');
 var telegramService = require('../telegram.service');
 var escHtml = require('../../telegram/util/escape').escHtml;
 var dispatch = require('./dispatch');
+var pd = require('../../lib/project-defaults');
 
 function notify(eventType, payload, targetUserIds) { return dispatch.notify(eventType, payload, targetUserIds); }
 function notifyAdmins(eventType, payload, tenantId) { return dispatch.notifyAdmins(eventType, payload, tenantId); }
@@ -520,7 +521,8 @@ async function sendWeeklyDigest() {
     var resolvedIssues = await db.query("SELECT COUNT(*) as cnt FROM issues WHERE resolved_date >= $1 AND resolved_date <= $2 AND tenant_id = $3", [start, end, tid]);
 
     // 지연 프로젝트
-    var delayed = await db.query("SELECT COUNT(*) as cnt FROM projects WHERE status = 'delayed' AND tenant_id = $1", [tid]);
+    //  v13.283 지연은 저장 상태가 아니라 날짜로 계산 (종료일 지남 · 완료/보류 아님)
+    var delayed = await db.query("SELECT COUNT(*) as cnt FROM projects WHERE tenant_id = $1 AND " + pd.computeStatusSql('', '$2') + " = 'delayed'", [tid, pd.todayKST()]);
 
     // 요소기술 — 지난주 개발일지 활동 (모듈 미적용 시 조용히 스킵)
     var techLine = '';

@@ -64,7 +64,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check(await tl(function () { return document.querySelector('#mwTimeline [data-t="lv"][data-v="month"]').classList.contains('on') && !!document.querySelector('#mwTimeline .mtl-cal .mtl-cal-d'); }), '처음 — 월 줌 · 옆 달력');
     var bx = { quote: await itemBox('타임 견적'), late: await itemBox('타임 지연'), range: await itemBox('타임 설계 기간'), ms: await itemBox('타임 마일스톤'), mt: await itemBox('타임 회의'), trip: await itemBox('타임 출장') };
     check(bx.quote && /mtl-pt/.test(bx.quote.cls) && bx.late && /is-late/.test(bx.late.cls), '마감만 = ◆, 지연은 빨강');
-    check(bx.range && /mtl-bar/.test(bx.range.cls) && bx.range.w > 100 && bx.ms && /mtl-bar/.test(bx.ms.cls) && bx.trip && /mtl-bar/.test(bx.trip.cls), '시작일 있는 할 일 · 마일스톤 · 출장 = 막대');
+    check(bx.range && /mtl-bar/.test(bx.range.cls) && bx.range.w > 100 && bx.ms && /mtl-bar/.test(bx.ms.cls) && bx.trip && /mtl-bar/.test(bx.trip.cls), '시작일 있는 할 일 · 마일스톤 · 출장 = 막대 ' + JSON.stringify(bx));
     check(await tl(function () { return !!document.querySelector('#mwTimeline .mtl-tail') && !!document.querySelector('#mwTimeline .mtl-now') && !!document.querySelector('#mwTimeline .mtl-lane[data-lane="__ev"]'); }), '지연 꼬리 · 오늘 선 · 일정 줄');
     check(await tl(function () { var a = Array.from(document.querySelectorAll('#mwTimeline .mtl-lane')).map(function (l) { return l.querySelector('.mtl-ln').textContent; }).join('|'); return /지금 하기/.test(a) && /계획하기/.test(a); }), '줄 = 칸 (보드 카테고리)');
     // 같은 날 3개 넘으면 묶음 하나 — 누르면 그날 고정 · 달력 목록

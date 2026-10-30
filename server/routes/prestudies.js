@@ -15,6 +15,8 @@ var tenant = require('../middleware/tenant');
 var notificationService = require('../services/notification.service');
 var httpErr = require('../lib/http-errors');
 var sv = require('../lib/safe-val');
+var rbac = require('../middleware/rbac');
+var pc = require('../lib/project-create');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -244,7 +246,11 @@ router.put('/:id/move', async function (req, res) {
 });
 
 // POST /api/prestudies/:id/convert — 프로젝트 또는 수주로 전환 (body: { target: 'project' | 'order' })
-router.post('/:id/convert', async function (req, res) {
+//  v13.283: 프로젝트 전환은 POST /api/projects 와 같은 경로(insertProject) — 권한 project.create · 기본 단계·체크리스트 · 종료일(없으면 시작+90일) · 멤버 tenant_id · 감사 로그·알림
+router.post('/:id/convert', function (req, res, next) {
+  if (req.body && req.body.target === 'order') return next();
+  return rbac.checkPermission('project.create', function () { return null; })(req, res, next);
+}, async function (req, res) {
   try {
     var target = req.body.target === 'order' ? 'order' : 'project';
     var pR = await db.query('SELECT * FROM prestudies WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [req.params.id, req.tenant.id]);
@@ -277,20 +283,15 @@ router.post('/:id/convert', async function (req, res) {
           'WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL AND linked_project_id IS NULL RETURNING id', [projId, req.user.sub, ps.id, req.tenant.id]);
         if (!claimP.rows.length) throw Object.assign(new Error('이미 프로젝트로 전환되었습니다.'), { http: 409, code: 'CONFLICT' });
         var memo = [ps.background, ps.notes, ps.conclusion].filter(Boolean).join('\n\n');
-        // 시작일은 다른 프로젝트와 같은 'YYYY-MM-DD' (예전엔 옛 형식 YYYYMMDD 로 들어갔다)
-        var prR = await client.query(
-          "INSERT INTO projects (id, name, status, start_date, memo, created_by, updated_by, tenant_id, owner_id) " +
-          "VALUES ($1,$2,'waiting',$3,$4,$5,$5,$6,$5) RETURNING *",
-          [projId, ps.title, today(), memo || null, req.user.sub, req.tenant.id]
-        );
-        // 담당자를 PL로 등록 (있으면)
-        if (ps.owner_id) {
-          await client.query(
-            "INSERT INTO project_members (project_id, user_id, role, assigned_by) VALUES ($1,$2,'pl',$3) ON CONFLICT (project_id, user_id) DO NOTHING",
-            [projId, ps.owner_id, req.user.sub]
-          );
-        }
-        return prR.rows[0];
+        var sd = today();
+        var ed = new Date(Date.parse(sd + 'T00:00:00Z') + 90 * 86400000).toISOString().slice(0, 10);
+        // 담당자를 PL 로 (있으면) — 담당 이름도 assignees 에
+        var ownerName = null;
+        if (ps.owner_id) { var onR = await client.query('SELECT name FROM users WHERE id = $1 AND tenant_id = $2', [ps.owner_id, req.tenant.id]); ownerName = onR.rows[0] ? onR.rows[0].name : null; }
+        return pc.insertProject(client, req, {
+          id: projId, name: ps.title, status: 'active', startDate: sd, endDate: ed, memo: memo || '',
+          assignees: ownerName ? [ownerName] : []
+        }, { members: ps.owner_id ? [{ userId: ps.owner_id, role: 'pl' }] : [] });
       });
     } catch (ce) {
       if (ce && ce.http) return res.status(ce.http).json({ error: ce.code, message: ce.message });
@@ -314,6 +315,7 @@ router.post('/:id/convert', async function (req, res) {
       }
     }
     res.status(201).json({ data: { target: target, created: created } });
+    if (projId && created) pc.afterProjectCreate(req, created);
     notifyWon(ps, req.tenant.id, req.user.sub);
   } catch (e) {
     httpErr.serverError(res, '[prestudies/convert]', e, '서버 오류가 발생했습니다.');
