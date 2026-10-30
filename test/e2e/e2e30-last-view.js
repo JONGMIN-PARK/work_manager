@@ -17,7 +17,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
   function view() {
     return page.evaluate(function () {
       var on = function (sel) { var t = document.querySelector(sel + ' .tab.on'); return t ? (t.dataset.page || t.dataset.m) : null; };
-      return { page: curPage, mode: curMode, pageTab: on('#pageTabs'), projTab: on('#modeTabsProj'), tl: !document.getElementById('mTimeline').classList.contains('hidden'), wr: !document.getElementById('mWeeklyReport').classList.contains('hidden') };
+      return { page: curPage, mode: curMode, pageTab: on('#pageTabs'), projTab: on('#modeTabsProj'), teamTab: on('#modeTabs'), tl: !document.getElementById('mTimeline').classList.contains('hidden'), wr: !document.getElementById('mWeeklyReport').classList.contains('hidden') };
     });
   }
   async function login(email) {
@@ -48,12 +48,24 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var rf = await page.evaluate(async function () { var n = 0, of = window.fetch; window.fetch = function (u) { if (/\/auth\/refresh/.test(String(u))) n++; return of.apply(this, arguments); }; var r = await Promise.all([_tryRefresh(), _tryRefresh(), _tryRefresh()]); window.fetch = of; var me = await apiFetch('/api/auth/me'); return { r: r, n: n, me: !!(me && me.data) }; });
     check(rf.r.every(Boolean) && rf.n === 1 && rf.me, '동시 토큰 갱신 — 요청 1번 · 로그인 유지 ' + JSON.stringify(rf));
 
-    // 하위 탭 없는 페이지 — 주간 업무
-    await page.click('#pageTabs [data-page="weekly_report"]'); await wait(500);
+    // 업무 관리 › 주간 업무 (v13.280 상위 탭에서 옮김)
+    await page.click('#pageTabs [data-page="team"]'); await page.click('#modeTabs [data-m="weekly_report"]'); await wait(500);
     await page.reload({ waitUntil: 'networkidle2' });
     await ready();
     var v2 = await view();
-    check(v2.page === 'weekly_report' && v2.wr && v2.pageTab === 'weekly_report', '새로고침 → 주간 업무 ' + JSON.stringify(v2));
+    check(v2.page === 'team' && v2.mode === 'weekly_report' && v2.wr && v2.pageTab === 'team' && v2.teamTab === 'weekly_report', '새로고침 → 업무 관리 › 주간 업무 ' + JSON.stringify(v2));
+
+    // 메뉴 순서 (v13.280) · 예전 저장값 — 업무 부하가 상위 탭이던 때 기억한 것도 업무 관리 › 업무 부하로
+    var order = await page.evaluate(function () { return Array.from(document.querySelectorAll('#pageTabs .tab')).map(function (t) { return t.dataset.page; }).join(','); });
+    check(order === 'mywork,mindmap,team,project,messages,useradmin,patchnotes', '메뉴 순서 ' + order);
+    check(/업무 관리/.test(await page.$eval('#pageTabs [data-page="team"]', function (e) { return e.textContent; })), '업무일지 → 업무 관리 이름');
+    await page.evaluate(function () { localStorage.setItem('wm-last-view', JSON.stringify({ page: 'workload' })); });
+    await page.reload({ waitUntil: 'networkidle2' });
+    await ready();
+    var v4 = await page.evaluate(function () { return { page: curPage, mode: curMode, wl: !document.getElementById('mWorkload').classList.contains('hidden'), wk: !document.getElementById('mWeekly').classList.contains('hidden') }; });
+    check(v4.page === 'team' && v4.mode === 'workload' && v4.wl && !v4.wk, '예전 저장값 workload → 업무 관리 › 업무 부하 ' + JSON.stringify(v4));
+    await page.click('#modeTabs [data-m="weekly"]'); await wait(300);
+    check(await page.evaluate(function () { return document.getElementById('mWorkload').classList.contains('hidden') && !document.getElementById('mWeekly').classList.contains('hidden'); }), '하위 탭 주간 분석으로 옮기면 업무 부하 숨김');
 
     // 로딩 중에 사용자가 탭을 누르면 그쪽을 따름 (복원이 끌고 가지 않음)
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -68,7 +80,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await wait(800);
     await login('kim@t.com');
     var v3 = await view();
-    check(v3.page === 'team' && !v3.wr, '권한 없는 탭은 복원 안 함 → 기본 화면 ' + JSON.stringify(v3));
+    check(v3.page === 'team' && v3.mode === 'weekly' && !v3.wr, '권한 없는 탭은 복원 안 함 → 기본 화면 ' + JSON.stringify(v3));
     // 패치노트 — 관리자만 (v13.263)
     var pn = await page.evaluate(function () { setPage('patchnotes'); return { tab: document.getElementById('tabPatchNotes').style.display, page: curPage }; });
     check(pn.tab === 'none' && pn.page !== 'patchnotes', '팀원 — 패치노트 탭 숨김 · 열리지 않음 ' + JSON.stringify(pn));

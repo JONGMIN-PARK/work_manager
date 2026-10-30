@@ -39,7 +39,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     }, team);
     made = made.concat(prep);
     await page.evaluate(function () { try { localStorage.removeItem('wr-author-last-id'); } catch (e) {} });
-    await page.click('#tabWeeklyReport');
+    await page.click('#pageTabs [data-page="team"]'); await page.click('#tabWeeklyReport');   // v13.280 업무 관리 › 주간 업무
     await page.waitForSelector('#wrAuSave');
     await wait(600);
     check(!(await page.$('#wrSrcStyle')), 'JS 주입 스타일 없음 (style.css 로 이전)');

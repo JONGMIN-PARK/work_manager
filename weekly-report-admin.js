@@ -1672,7 +1672,7 @@
   if (typeof wmDataBus !== 'undefined') wmDataBus.on('workRecord', function () {
     _recCache = {}; _recCacheKeys = []; _recGen++;
     _authorState.workRecordsKey = '';
-    if (typeof curPage !== 'undefined' && curPage === 'weekly_report' && STATE.tab === 'author' && $('wrSrcBody')) loadWorkRecords(true);
+    if (typeof curPage !== 'undefined' && curPage === 'team' && curMode === 'weekly_report' && STATE.tab === 'author' && $('wrSrcBody')) loadWorkRecords(true);
   });
 
   async function loadWorkRecords(force) {

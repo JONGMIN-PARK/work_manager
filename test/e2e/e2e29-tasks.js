@@ -275,7 +275,7 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await page.click('#mMyWork [data-mwc-view="list"]');
 
     // 9. 업무 부하 — 휴가
-    await page.click('#tabWorkload');
+    await page.click('#pageTabs [data-page="team"]'); await page.click('#tabWorkload');   // v13.280 업무 관리 › 업무 부하
     await page.waitForSelector('#mWorkload table.mw-load');
     check(await page.evaluate(function (id) { var th = document.querySelector('#mWorkload th[data-drop="' + id + '"]'); return th && /🌴/.test(th.parentNode.textContent); }, me.id), '업무 부하에 🌴 휴가');
     await page.screenshot({ path: path.join(SHOT, 'tasks-load.png') });

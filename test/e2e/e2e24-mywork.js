@@ -80,7 +80,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await wait(200);
     check(await page.evaluate(function () { return _mm.sel === 'nx' && !!document.querySelector('#mmStage .mm-node.mm-sel[data-id="nx"]'); }), '맵이 열리고 그 주제가 골라짐 (접힌 위 단계 폄)');
     // 업무 부하
-    await page.click('#tabWorkload');
+    await page.click('#pageTabs [data-page="team"]'); await page.click('#tabWorkload');   // v13.280 업무 관리 › 업무 부하
     await page.waitForSelector('#mWorkload table.mw-load');
     var rowTxt = await page.evaluate(function (id) { var th = document.querySelector('#mWorkload th[data-drop="' + id + '"]'); return th && th.parentNode.textContent; }, me);
     check(!!rowTxt, '업무 부하 표에 내 줄');

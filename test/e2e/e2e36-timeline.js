@@ -198,7 +198,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await tl(function () { _mtlMain.st.group = 'cat'; _mtlMain.zoomTo(30); });
 
     // 8. 업무 부하 — 팀 타임라인
-    await page.click('#tabWorkload');
+    await page.click('#pageTabs [data-page="team"]'); await page.click('#tabWorkload');   // v13.280 업무 관리 › 업무 부하
     await page.waitForSelector('#mWorkload [data-lv="tl"]');
     await page.click('#mWorkload [data-lv="tl"]');
     check(await until(function () { var t = document.getElementById('mwLoadTimeline'); return t && t.querySelectorAll('.mtl-lane').length >= 2 && /타임/.test(t.textContent); }), '업무 부하 → 팀 타임라인 (사람마다 줄)');

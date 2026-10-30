@@ -14,9 +14,11 @@ function _wmSaveView(){
 function wmRestoreLastView(){
   if(_wmNavMoved)return;
   var v=lsGetJSON(WM_LAST_VIEW,null);
+  if(v&&WM_TEAM_SUB[v.page])v={page:'team',mode:v.page};  // v13.280 전 저장값 — 업무 부하 · 주간 업무가 상위 탭이던 때
   if(!v||!v.page||(v.page==='team'&&(!v.mode||v.mode==='weekly')))return;  // 기본 화면이면 그대로
   var pb=document.querySelector('#pageTabs .tab[data-page="'+v.page+'"]');
   if(!pb||pb.style.display==='none'||pb.classList.contains('hidden'))return;  // 지금 계정에 없는 탭 (권한)
+  if(v.page==='team'&&v.mode&&WM_TEAM_SUB[v.mode]){var sb=document.querySelector('#modeTabs .tab[data-m="'+v.mode+'"]');if(!sb||sb.style.display==='none')return}  // 권한 없는 하위 탭
   if(v.page==='team'||v.page==='project'){
     // 하위 탭을 미리 골라 두면 setPage 가 그 탭 하나만 그린다 (기본 탭을 그렸다가 다시 그리지 않게). 운영자 권한은 setPage 가 확인
     var bar=document.getElementById(v.page==='team'?'modeTabs':'modeTabsProj');
@@ -28,9 +30,15 @@ function wmRestoreLastView(){
   try{pb.scrollIntoView({block:'nearest',inline:'nearest'})}catch(_){}  // 휴대폰 — 가로로 밀리는 탭 줄에서 보이게
 }
 window.wmRestoreLastView=wmRestoreLastView;
+/* v13.280 업무 관리(team) 하위 탭으로 옮긴 화면 — 예전 setPage('workload' · 'weekly_report') 도 그대로 동작 */
+var WM_TEAM_SUB={workload:'mWorkload',weekly_report:'mWeeklyReport'};
 function wmCanSeePatchNotes(){return typeof currentUser!=='undefined'&&!!currentUser&&currentUser.role==='admin'}
 function setPage(page){
   if(page==='patchnotes'&&!wmCanSeePatchNotes())return;  // 패치노트는 관리자만
+  if(WM_TEAM_SUB[page]){  // 업무 관리 › 주간 업무 · 업무 부하
+    document.querySelectorAll('#modeTabs .tab').forEach(function(t){t.classList.toggle('on',t.dataset.m===page)});
+    page='team';
+  }
   if(curPage==='mindmap'&&page!=='mindmap'&&typeof mmOnLeave==='function')mmOnLeave();  // 저장 마무리 · 편집 잠금 해제
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwPanelClose==='function')mwPanelClose();  // 내 업무 상세 패널 — 남은 저장 마저 하고 닫음 (다른 화면을 가리지 않게)
   curPage=page;
@@ -48,11 +56,6 @@ function setPage(page){
     document.getElementById('modeTabsProj').classList.add('hidden');
     var ua=document.getElementById('mUserAdmin');if(ua)ua.classList.remove('hidden');
     if(typeof renderUserAdmin==='function')renderUserAdmin();
-  }else if(page==='weekly_report'){
-    document.getElementById('modeTabs').classList.add('hidden');
-    document.getElementById('modeTabsProj').classList.add('hidden');
-    var wr=document.getElementById('mWeeklyReport');if(wr)wr.classList.remove('hidden');
-    if(typeof renderWeeklyReportPage==='function')renderWeeklyReportPage();
   }else if(page==='patchnotes'){
     document.getElementById('modeTabs').classList.add('hidden');
     document.getElementById('modeTabsProj').classList.add('hidden');
@@ -63,13 +66,11 @@ function setPage(page){
     document.getElementById('modeTabsProj').classList.add('hidden');
     var mmw=document.getElementById('mMindmap');if(mmw)mmw.classList.remove('hidden');
     if(typeof renderMindmap==='function')renderMindmap();
-  }else if(page==='mywork'||page==='workload'){
+  }else if(page==='mywork'){
     document.getElementById('modeTabs').classList.add('hidden');
     document.getElementById('modeTabsProj').classList.add('hidden');
-    var mwId=page==='mywork'?'mMyWork':'mWorkload';
-    var mwe=document.getElementById(mwId);if(mwe)mwe.classList.remove('hidden');
-    if(page==='mywork'&&typeof renderMyWork==='function')renderMyWork();
-    if(page==='workload'&&typeof renderWorkload==='function')renderWorkload();
+    var mwe=document.getElementById('mMyWork');if(mwe)mwe.classList.remove('hidden');
+    if(typeof renderMyWork==='function')renderMyWork();
   }else if(page==='messages'){
     document.getElementById('modeTabs').classList.add('hidden');
     document.getElementById('modeTabsProj').classList.add('hidden');
@@ -78,6 +79,7 @@ function setPage(page){
   }else if(page==='team'){
     var activeTab=document.querySelector('#modeTabs .tab.on');
     var m=activeTab?activeTab.dataset.m:'weekly';
+    if(WM_TEAM_SUB[m]&&activeTab.style.display==='none')m='weekly';  // 권한 없는 하위 탭이면 폴백
     setMode(m);
   }else{
     var activeTab=document.querySelector('#modeTabsProj .tab.on');
@@ -115,13 +117,16 @@ function setMode(m){
   var prevMode = curMode;
   curMode=m;
   // 해당 페이지의 서브탭만 업데이트
-  var teamModes=['weekly','archive','trend'];
+  var teamModes=['weekly','archive','trend','weekly_report','workload'];
   var tabBar=teamModes.includes(m)?'#modeTabs':'#modeTabsProj';
   document.querySelectorAll(tabBar+' .tab').forEach(function(t){var sel=t.dataset.m===m;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
-  var modeMap={weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',tech:'mTech',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap','mWorkload'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  var modeMap={weekly_report:'mWeeklyReport',workload:'mWorkload',weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',tech:'mTech',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
   _wmSaveView();
+  // 주간 업무 · 업무 부하 — 예전 상위 탭 때처럼 들어올 때마다 새로 그림 (각자 불러오기 · 저장 충돌 확인)
+  if(m==='weekly_report'){if(typeof renderWeeklyReportPage==='function')renderWeeklyReportPage();return}
+  if(m==='workload'){if(typeof renderWorkload==='function')renderWorkload();return}
 
   // 캐시 hit이면 render 호출 자체를 스킵 → 이전 그려진 내용 즉시 표시
   if(_modeIsFresh(m)) return;
