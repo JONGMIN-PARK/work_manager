@@ -35,6 +35,22 @@ function check(n, c, x) { if (!c) { console.log('FAIL', n, JSON.stringify(x)); p
   check('목표시간 바꿔도 완료 진척 100', g.d.data.progress === 100, g.d.data.progress);
   var back = await A('PUT', '/api/projects/' + pid, { currentPhase: 'deliver' });
   check('완료에서 나오면 진행중 · 100 아님', back.d.data.status === 'active' && back.d.data.progress < 100, back.d.data);
+  // 2-1. 마일스톤 완료 처리 → 그 마일스톤 100 · 프로젝트 완료율 바로 갱신 (v13.282)
+  //   설계(목표 20h) + 제작(목표 없음 → 평균 가중치 20h) — 제작만 완료하면 50%
+  var ms2 = await A('POST', '/api/milestones', { projectId: pid, name: '제작', startDate: '2026-10-11', endDate: '2026-10-20', status: 'waiting' });
+  var d2 = await A('PUT', '/api/milestones/' + ms2.d.data.id, { status: 'done' });
+  check('마일스톤 완료 → 진척 100', d2.s === 200 && d2.d.data.progress === 100, d2.d.data);
+  var p2 = await A('GET', '/api/projects/' + pid);
+  check('프로젝트 완료율 바로 갱신 (목표시간 없는 마일스톤도 반영) 50', p2.d.data.progress === 50, p2.d.data.progress);
+  var lg2 = await A('GET', '/api/milestones/' + ms2.d.data.id + '/logs');
+  check('진척 이력에 ✅ 완료 처리', (lg2.d.data || []).some(function (l) { return l.progress === 100 && /완료 처리/.test(l.note); }), lg2.d);
+  var d1 = await A('PUT', '/api/milestones/' + ms.d.data.id, { status: 'done' });
+  check('나머지도 완료 → 프로젝트 100', d1.d.data.progress === 100 && (await A('GET', '/api/projects/' + pid)).d.data.progress === 100);
+  var u2 = await A('PUT', '/api/milestones/' + ms2.d.data.id, { status: 'active' });
+  check('완료 풀면 자동 100 지움 → 0', u2.d.data.progress === 0, u2.d.data);
+  check('프로젝트 완료율 다시 50', (await A('GET', '/api/projects/' + pid)).d.data.progress === 50);
+  var ms3 = await A('POST', '/api/milestones', { projectId: pid, name: '검수', status: 'done' });
+  check('처음부터 완료로 만든 마일스톤도 100', ms3.d.data.progress === 100, ms3.d.data);
   // 3. 이슈 — 이력 유형 저장 · 이력 삭제 · 비공개 프로젝트 이슈는 남이 못 봄
   var iss = await A('POST', '/api/issues', { projectId: pid, title: '이슈 ' + T, status: 'open' });
   check('이슈 생성', iss.s === 201, iss);

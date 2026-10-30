@@ -621,7 +621,7 @@ function _msNorm(list) {
 function msGetAll() { return _pdCached('ms', function () { return apiFetch('/api/milestones' + _PD_LIST_Q.ms).then(function (r) { return _msDedupe(_msNorm(toCamelArray(r.data))); }); }); }
 function msGetByProject(pid) { return apiFetch('/api/milestones?projectId=' + pid).then(function (r) { return _msDedupe(_msNorm(toCamelArray(r.data))); }); }
 function msPut(ms, opts) {
-  _pdInvalidate('ms');
+  _pdInvalidate('ms'); _pdInvalidate('proj'); _pdInvalidate('projAll');   // 완료 처리 → 마일스톤 100 · 프로젝트 완료율이 서버에서 바뀜
   var isNew = !ms.id || ms._isNew;
   if (isNew) {
     delete ms._isNew;
@@ -632,7 +632,7 @@ function msPut(ms, opts) {
     .then(function (s) { _emitBus('milestone', 'updated', { id: s && s.id, projectId: s && s.projectId }); return s; });
 }
 function msDel(id) {
-  _pdInvalidate('ms');
+  _pdInvalidate('ms'); _pdInvalidate('proj'); _pdInvalidate('projAll');   // 삭제 → 프로젝트 완료율 다시 계산
   return apiFetch('/api/milestones/' + id, { method: 'DELETE' })
     .then(function (r) { _emitBus('milestone', 'deleted', { id: id }); return r; });
 }
@@ -1866,6 +1866,16 @@ function calcProgressFromArchive() {
 
 // 마일스톤 보고 진척률(가중평균)을 프로젝트 진척률로 사용. 보고 이력 없으면 시간기반 폴백.
 // 투입시간(actual_hours)은 항상 멤버 한정으로 집계.
+/* 마일스톤 진척 가중평균 — 서버 routes/milestones.js msWeightedProgress 와 같은 규칙.
+   가중치 = 목표시간 합, 목표시간 없는 마일스톤은 있는 것들의 평균 가중치 (예전엔 0 이라 완료해도 전체가 안 움직였다) */
+function msWeightedProgress(list) {
+  var ws = list.map(function (m) { var at = m.assigneeTargets || {}, w = 0; Object.keys(at).forEach(function (k) { w += Number(at[k]) || 0; }); return w; });
+  var pos = ws.filter(function (w) { return w > 0; });
+  var avg = pos.length ? pos.reduce(function (a, b) { return a + b; }, 0) / pos.length : 1;
+  var wsum = 0, psum = 0;
+  list.forEach(function (m, i) { var w = ws[i] > 0 ? ws[i] : avg; wsum += w; psum += (Number(m.progress) || 0) * w; });
+  return wsum > 0 ? Math.max(0, Math.min(100, Math.round(psum / wsum))) : 0;
+}
 function autoUpdateProgress() {
   return Promise.all([
     calcProgressFromArchive(),
@@ -1885,15 +1895,7 @@ function autoUpdateProgress() {
     function reportedProgress(pid) {
       var list = msByProj[pid] || [];
       if (!list.length || !list.some(function (m) { return m.progressUpdatedAt != null; })) return null;
-      var wsum = 0, psum = 0, psimple = 0, cnt = 0;
-      list.forEach(function (m) {
-        var at = m.assigneeTargets || {};
-        var w = 0; Object.keys(at).forEach(function (k) { w += Number(at[k]) || 0; });
-        var prog = Number(m.progress) || 0;
-        wsum += w; psum += prog * w; psimple += prog; cnt++;
-      });
-      var v = wsum > 0 ? Math.round(psum / wsum) : Math.round(psimple / Math.max(cnt, 1));
-      return Math.max(0, Math.min(100, v));
+      return msWeightedProgress(list);
     }
     return projGetAll().then(function (projects) {
       var updates = [];

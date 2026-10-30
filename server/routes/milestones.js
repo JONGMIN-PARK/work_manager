@@ -63,9 +63,13 @@ router.post('/', async function (req, res) {
       [id, projectId, b.name || '', b.startDate || b.start_date || '',
        b.endDate || b.end_date || '', b.status || 'waiting', sortIns, JSON.stringify(atIns), req.user.sub, req.tenant.id]
     );
-    res.status(201).json({ data: r.rows[0] });
-    // 목표시간이 있는 마일스톤이 추가되면 가중평균이 바뀐다
-    _rollupProjectProgress(projectId, req.tenant.id).catch(function (e) { console.error('[ms/rollup]', e.message); });
+    var row = r.rows[0];
+    try {
+      if (await _syncMsDoneProgress(db, req, row, false)) row = (await db.query('SELECT * FROM milestones WHERE id = $1 AND tenant_id = $2', [id, req.tenant.id])).rows[0] || row;
+      // 마일스톤이 늘면 가중평균이 바뀐다 — 응답 전에 (예전엔 응답 뒤라 화면이 옛 완료율을 읽었다)
+      await _rollupProjectProgress(projectId, req.tenant.id);
+    } catch (e) { console.error('[ms/rollup]', e.message); }
+    res.status(201).json({ data: row });
     try { authService.auditLog(req.user.sub, 'milestone.create', 'milestone', id, { name: r.rows[0] && r.rows[0].name, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
     if (r.rows[0]) changeFeed.record(req, projectId, [changeDiff.msCreated(r.rows[0])]);
   } catch (e) {
@@ -77,7 +81,7 @@ router.post('/', async function (req, res) {
 router.put('/:id', async function (req, res) {
   try {
     var b = req.body;
-    var cur = await db.query('SELECT id, project_id, name, start_date, end_date, status FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var cur = await db.query('SELECT id, project_id, name, start_date, end_date, status, progress FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
     if (!cur.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
     if (!await ps.gateEdit(req, res, cur.rows[0].project_id, '생성자·참여자·관리자만 마일스톤을 수정할 수 있습니다.')) return;
     // sort_order=0 도 유효한 값 → falsy(||) 대신 null 체크로 보존 (첫 번째 마일스톤 순서 저장 누락 방지)
@@ -91,9 +95,14 @@ router.put('/:id', async function (req, res) {
       [b.name, b.startDate !== undefined ? b.startDate : b.start_date, b.endDate !== undefined ? b.endDate : b.end_date, b.status, sortOrder, req.params.id, req.tenant.id, atParam]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
-    res.json({ data: r.rows[0] });
-    // 목표시간(가중치)이 바뀌면 프로젝트 진척 가중평균도 바뀐다 — POST/DELETE 와 같게
-    if (atParam != null) _rollupProjectProgress(r.rows[0].project_id, req.tenant.id).catch(function (e) { console.error('[ms/rollup]', e.message); });
+    var row = r.rows[0];
+    try {
+      // 완료로 → 진척 100 · 완료 풀기 → 자동 100 지움. 상태 · 목표시간이 바뀌면 프로젝트 완료율도 — 응답 전에
+      var synced = await _syncMsDoneProgress(db, req, row, cur.rows[0].status === 'done');
+      if (synced) row = (await db.query('SELECT * FROM milestones WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id])).rows[0] || row;
+      if (synced || atParam != null || (b.status !== undefined && b.status !== cur.rows[0].status)) await _rollupProjectProgress(row.project_id, req.tenant.id);
+    } catch (e) { console.error('[ms/rollup]', e.message); }
+    res.json({ data: row });
     try { authService.auditLog(req.user.sub, 'milestone.update', 'milestone', req.params.id, { name: r.rows[0] && r.rows[0].name, status: r.rows[0] && r.rows[0].status, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
     changeFeed.record(req, r.rows[0].project_id, changeDiff.diffMilestone(cur.rows[0], r.rows[0]));
 
@@ -128,8 +137,45 @@ function _isAdminRole(req) {
 
 // 프로젝트 진척률 롤업 — 마일스톤 보고 진척률을 목표시간(assignee_targets) 가중평균.
 // 보고 이력이 하나도 없으면 손대지 않음(시간기반 자동 진척률 폴백 유지).
+/* 마일스톤 진척 가중평균 — 가중치 = 목표시간 합. 목표시간이 없는 마일스톤은 있는 것들의 평균 가중치로
+   (예전엔 0 으로 빠져, 일부에만 목표시간이 있으면 나머지를 완료해도 전체 완료율이 안 움직였다). 화면 project-data.js 와 같은 규칙 */
+function msWeightedProgress(list) {
+  var ws = list.map(function (m) { var at = m.targets || {}, w = 0; Object.keys(at).forEach(function (k) { w += Number(at[k]) || 0; }); return w; });
+  var pos = ws.filter(function (w) { return w > 0; });
+  var avg = pos.length ? pos.reduce(function (a, b) { return a + b; }, 0) / pos.length : 1;
+  var wsum = 0, psum = 0;
+  list.forEach(function (m, i) { var w = ws[i] > 0 ? ws[i] : avg; wsum += w; psum += (Number(m.progress) || 0) * w; });
+  return wsum > 0 ? Math.max(0, Math.min(100, Math.round(psum / wsum))) : 0;
+}
+
+/* 마일스톤 상태 ↔ 진척 — 완료로 바꾸면 진척 100 (이력에 '✅ 완료 처리' 한 줄), 완료를 풀면 그 자동 줄을 지우고 이전 진척으로.
+   진척 이력이 기준이라(_resyncMilestoneProgress) 이력으로 남긴다 — 그냥 100 을 쓰면 이력 하나 지울 때 옛 값으로 돌아갔다 */
+var MS_DONE_NOTE = '✅ 완료 처리';
+async function _syncMsDoneProgress(q, req, ms, wasDone) {
+  var isDone = ms.status === 'done';
+  if (isDone === wasDone) return false;
+  if (isDone) {
+    if ((Number(ms.progress) || 0) >= 100) return false;
+    var nm = '';
+    try { var ur = await q.query('SELECT name FROM users WHERE id = $1', [req.user.sub]); nm = (ur.rows[0] && ur.rows[0].name) || ''; } catch (_) {}
+    await q.query(
+      'INSERT INTO milestone_progress_logs (id, milestone_id, project_id, tenant_id, author_id, author_name, progress, note, hours) VALUES ($1,$2,$3,$4,$5,$6,100,$7,0)',
+      ['mpl-' + require('crypto').randomUUID().slice(0, 12), ms.id, ms.project_id, req.tenant.id, req.user.sub, nm, MS_DONE_NOTE]);
+  } else {
+    var del = await q.query(
+      "UPDATE milestone_progress_logs SET deleted_at = now() WHERE id = (SELECT id FROM milestone_progress_logs WHERE milestone_id = $1 AND tenant_id = $2 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1) AND note = $3 RETURNING id",
+      [ms.id, req.tenant.id, MS_DONE_NOTE]);
+    if (!del.rows.length) return false;
+  }
+  await _resyncMilestoneProgress(ms.id, req.tenant.id, q);
+  return true;
+}
+
 async function _rollupProjectProgress(projectId, tenantId, q) {
-  q = q || db;
+  // 같은 프로젝트 계산은 차례로 — 편집 창이 마일스톤 여럿을 한꺼번에 저장하면 계산끼리 엇갈려 옛 완료율이 남았다.
+  //  프로젝트 행을 잠근 뒤 읽으므로 마지막 계산이 그때까지 저장된 마일스톤을 모두 본다
+  if (!q) return db.transaction(function (t) { return _rollupProjectProgress(projectId, tenantId, t); });
+  await q.query('SELECT 1 FROM projects WHERE id = $1 AND tenant_id = $2 FOR UPDATE', [projectId, tenantId]);
   var mr = await q.query(
     'SELECT progress, assignee_targets, progress_updated_at FROM milestones WHERE project_id = $1 AND tenant_id = $2',
     [projectId, tenantId]
@@ -137,15 +183,7 @@ async function _rollupProjectProgress(projectId, tenantId, q) {
   if (!mr.rows.length) return;
   var anyReported = mr.rows.some(function (m) { return m.progress_updated_at != null; });
   if (!anyReported) return;
-  var wsum = 0, psum = 0, psimple = 0, cnt = 0;
-  mr.rows.forEach(function (m) {
-    var at = m.assignee_targets || {};
-    var w = 0;
-    Object.keys(at).forEach(function (k) { w += Number(at[k]) || 0; });
-    var prog = Number(m.progress) || 0;
-    wsum += w; psum += prog * w; psimple += prog; cnt++;
-  });
-  var proj = wsum > 0 ? Math.round(psum / wsum) : Math.round(psimple / Math.max(cnt, 1));
+  var proj = msWeightedProgress(mr.rows.map(function (m) { return { progress: m.progress, targets: m.assignee_targets }; }));
   proj = Math.max(0, Math.min(100, proj));
   // 완료(status done) 프로젝트는 진척 100 고정 — 덮어쓰지 않는다 (v13.277 완료 단계 ↔ 진척 100)
   await q.query("UPDATE projects SET progress = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 AND status IS DISTINCT FROM 'done'", [proj, projectId, tenantId]);
@@ -455,8 +493,8 @@ router.delete('/:id', async function (req, res) {
     if (!await ps.gateEdit(req, res, cur.rows[0].project_id, '생성자·참여자·관리자만 마일스톤을 삭제할 수 있습니다.')) return;
     var r = await db.query('DELETE FROM milestones WHERE id = $1 AND tenant_id = $2 RETURNING id, project_id, name', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    try { await _rollupProjectProgress(r.rows[0].project_id, req.tenant.id); } catch (e) { console.error('[ms/rollup]', e.message); }   // 응답 전에 — 화면이 바로 새 완료율을 읽게
     res.json({ message: '삭제 완료' });
-    _rollupProjectProgress(r.rows[0].project_id, req.tenant.id).catch(function (e) { console.error('[ms/rollup]', e.message); });
     try { authService.auditLog(req.user.sub, 'milestone.delete', 'milestone', req.params.id, { name: r.rows[0] && r.rows[0].name, projectId: r.rows[0] && r.rows[0].project_id }, req); } catch (_) {}
     changeFeed.record(req, r.rows[0].project_id, [changeDiff.msDeleted(r.rows[0])]);
   } catch (e) {
@@ -641,3 +679,4 @@ router.delete('/:id/assignments/:aid', async function (req, res) {
 });
 
 module.exports = router;
+module.exports.msWeightedProgress = msWeightedProgress;

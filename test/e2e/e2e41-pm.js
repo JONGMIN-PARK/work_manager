@@ -55,6 +55,17 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(!!pid, '프로젝트 저장');
     var mss = await page.evaluate(async function (id) { return (await msGetByProject(id)).length; }, pid);
     check(mss === 1, '마일스톤 하나만 (빈 행은 건너뜀) ' + mss);
+    // 4-1. 편집 창에서 마일스톤을 완료로 → 진척 100 · 프로젝트 완료율 · 타임라인 막대 (v13.282)
+    await page.evaluate(function (id) { return showProjectModal(id); }, pid);
+    await page.waitForSelector('#msRows .proj-ms-row');
+    await page.evaluate(function () { var h = document.getElementById('projEstHoursHint'); if (h) h.textContent = ''; document.querySelector('#msRows .proj-ms-row .ms-status').value = 'done'; });
+    await page.evaluate(function (id) { return saveProjectUI(id); }, pid);
+    await page.waitForFunction(function () { return !document.getElementById('projModal'); }, { timeout: 10000 });
+    await wait(1500);
+    var pr = await page.evaluate(async function (id) { var m = await msGetByProject(id); var p = await projGet(id); return { ms: m[0].progress, p: p.progress }; }, pid);
+    check(pr.ms === 100 && pr.p === 100, '편집 창 완료 → 마일스톤 100 · 프로젝트 100 ' + JSON.stringify(pr));
+    var fill = await page.evaluate(function (id) { var b = document.querySelector('.tl-row-sub[data-proj-id="' + id + '"] .tl-bar'); return b ? b.innerHTML : ''; }, pid);
+    check(/100%/.test(fill) || /width:100%/.test(fill), '타임라인 마일스톤 막대 100% ' + fill.slice(0, 160));
     // 5. 타임라인 막대에 실제 날짜 — 끌기는 이 날짜 기준
     await wait(1200);
     var bar = await page.evaluate(function (id) { var b = document.querySelector('.tl-bar[data-type="proj"][data-id="' + id + '"]'); return b && { s: b.dataset.s, e: b.dataset.e }; }, pid);
