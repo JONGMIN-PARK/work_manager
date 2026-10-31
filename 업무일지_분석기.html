@@ -18,7 +18,7 @@
 <!-- core (동기 로드 필수 — 인라인 폴백 typeof 체크가 파싱 중에 실행됨) -->
 <script src="config.js?v=9" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="settings.js?v=6" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
-<script src="auth.js?v=16" onerror="console.warn('auth.js 로드 실패')"></script>
+<script src="auth.js?v=17" onerror="console.warn('auth.js 로드 실패')"></script>
 <script defer src="weekly-report-parse.js?v=1" onerror="console.warn('weekly-report-parse.js 로드 실패')"></script>
 <script defer src="weekly-report-admin.js?v=15" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
 <script src="project-data.js?v=15" onerror="console.warn('project-data.js 로드 실패')"></script>
@@ -85,7 +85,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" onerror="console.warn('mammoth.js 로드 실패')"></script>
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=60">
+<link rel="stylesheet" href="style.css?v=61">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -116,7 +116,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.287';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.288';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -153,6 +153,11 @@
         <div class="hdr-user-head" id="hdrUserHead"></div>
         <button class="hdr-mi" role="menuitem" onclick="wmHdrPopClose();wmGuardedModal('profile',showProfileModal,'profName')">👤 내 프로필</button>
         <button class="hdr-mi" role="menuitem" onclick="wmHdrPopClose();wmGuardedModal('backup',showBackupRestoreModal,'backupOverlay')">💾 백업 · 복원</button>
+        <!-- ⚙️ 관리 — 권한 있는 항목만 (auth.js updateAuthUI), 하나도 없으면 묶음째 숨김 (v13.288) -->
+        <div class="hdr-mi-sep" data-grp="admin" style="display:none"></div>
+        <div class="hdr-mi-grp" data-grp="admin" style="display:none">⚙️ 관리</div>
+        <button class="hdr-mi" role="menuitem" data-page="useradmin" id="tabUserAdmin" style="display:none" onclick="wmHdrPopClose();setPage('useradmin')">👤 사용자 관리</button>
+        <button class="hdr-mi" role="menuitem" data-m="operator" id="hdrOperatorItem" style="display:none" onclick="wmHdrPopClose();wmOpenOperator()" title="전체 프로젝트 가시성·접근 관리">🛡️ 운영자</button>
         <button class="hdr-mi" role="menuitem" data-page="patchnotes" id="tabPatchNotes" style="display:none" onclick="wmHdrPopClose();setPage('patchnotes')">📋 패치노트</button>
         <div class="hdr-mi-sep"></div>
         <button class="hdr-mi" role="menuitem" onclick="wmHdrPopClose();authLogout()">🚪 로그아웃</button>
@@ -169,27 +174,32 @@
     <button class="tab" data-page="mindmap" onclick="setPage('mindmap')" role="tab" aria-selected="false" id="tabMindmap" style="display:none" title="생각 정리 · 업무 분장 · 프로젝트 구조 (관리자가 지정한 사용자)">🧠 마인드맵</button>
     <button class="tab on" data-page="team" onclick="setPage('team')" role="tab" aria-selected="true" aria-controls="modeTabs" title="업무일지 분석 · 주간 업무 · 업무 부하">📒 업무 관리</button>
     <button class="tab" data-page="project" onclick="setPage('project')" role="tab" aria-selected="false" aria-controls="modeTabsProj">📁 프로젝트 관리</button>
-    <button class="tab" data-page="useradmin" onclick="setPage('useradmin')" role="tab" aria-selected="false" id="tabUserAdmin" style="display:none">👤 사용자 관리</button>
   </div>
-  <!-- 하위 모드 탭 -->
+  <!-- 하위 모드 탭 — 묶음(.tab-grp 이름 · .tab-sep 구분선)으로 나눔 (v13.288) -->
   <div class="tabs sub-tabs" id="modeTabs" role="tablist" aria-label="업무 관리 하위 탭">
+    <span class="tab-grp">업무일지</span>
     <button class="tab on" data-m="weekly" onclick="setMode('weekly')" role="tab" aria-selected="true">📋 주간 분석</button>
     <button class="tab" data-m="archive" onclick="setMode('archive')" role="tab" aria-selected="false">🗄️ 아카이브</button>
-    <button class="tab" data-m="trend" onclick="setMode('trend')" role="tab" aria-selected="false">📈 트렌드 분석</button>
+    <button class="tab" data-m="trend" onclick="setMode('trend')" role="tab" aria-selected="false" title="트렌드 분석">📈 트렌드</button>
+    <span class="tab-sep" data-grp="report" style="display:none"></span><span class="tab-grp" data-grp="report" style="display:none">보고 · 부하</span>
     <button class="tab" data-m="weekly_report" onclick="setMode('weekly_report')" role="tab" aria-selected="false" id="tabWeeklyReport" style="display:none" title="주간 업무 작성 · 취합 (관리자)">📅 주간 업무</button>
     <button class="tab" data-m="workload" onclick="setMode('workload')" role="tab" aria-selected="false" id="tabWorkload" style="display:none" title="누가 언제 일이 몰리는지 — 관리자 · 임원 · 팀장">👥 업무 부하</button>
   </div>
   <div class="tabs sub-tabs hidden" id="modeTabsProj" role="tablist" aria-label="프로젝트 관리 하위 탭">
+    <span class="tab-grp">보기</span>
     <button class="tab on" data-m="pipeline" onclick="setMode('pipeline')" role="tab" aria-selected="true">🔀 파이프라인</button>
-    <button class="tab" data-m="calendar" onclick="setMode('calendar')" role="tab" aria-selected="false">📅 달력</button>
     <button class="tab" data-m="timeline" onclick="setMode('timeline')" role="tab" aria-selected="false">📊 타임라인</button>
+    <button class="tab" data-m="calendar" onclick="setMode('calendar')" role="tab" aria-selected="false">📅 달력</button>
+    <span class="tab-sep"></span><span class="tab-grp">관리</span>
     <button class="tab" data-m="orders" onclick="setMode('orders')" role="tab" aria-selected="false">📋 수주대장</button>
+    <button class="tab" data-m="issues" onclick="setMode('issues')" role="tab" aria-selected="false" title="이슈 관리">🎫 이슈</button>
+    <button class="tab" data-m="docs" onclick="setMode('docs')" role="tab" aria-selected="false" title="문서 관리">📂 문서</button>
+    <button class="tab" data-m="as" onclick="setMode('as')" role="tab" aria-selected="false">🛠️ A/S</button>
+    <span class="tab-sep"></span><span class="tab-grp">준비</span>
     <button class="tab" data-m="prestudy" onclick="setMode('prestudy')" role="tab" aria-selected="false" title="프로젝트 이전 단계 — 업체 문의·기술검토·아이디어">🔍 사전검토</button>
     <button class="tab" data-m="tech" onclick="setMode('tech')" role="tab" aria-selected="false" title="프로젝트 무관 재사용 기반기술 — 카탈로그·개발일지">🧪 요소기술</button>
-    <button class="tab" data-m="issues" onclick="setMode('issues')" role="tab" aria-selected="false">🎫 이슈관리</button>
-    <button class="tab" data-m="docs" onclick="setMode('docs')" role="tab" aria-selected="false">📂 문서관리</button>
-    <button class="tab" data-m="as" onclick="setMode('as')" role="tab" aria-selected="false">🛠️ A/S</button>
-    <button class="tab hidden" data-m="operator" onclick="setMode('operator')" role="tab" aria-selected="false" title="전체 프로젝트 가시성·접근 관리">🛡️ 운영자</button>
+    <!-- 운영자 — 사용자 메뉴 ⚙️ 관리에서 들어오고, 그 화면일 때만 보임 (v13.288) -->
+    <button class="tab tab-op hidden" data-m="operator" onclick="setMode('operator')" role="tab" aria-selected="false" title="전체 프로젝트 가시성·접근 관리">🛡️ 운영자</button>
   </div>
 
   <!-- ═══ WEEKLY MODE ═══ -->
@@ -520,7 +530,7 @@
 <script src="wm-fallbacks.js?v=4" onerror="console.warn('wm-fallbacks.js 로드 실패')"></script>
 <script src="wm-state.js?v=4" onerror="console.warn('wm-state.js 로드 실패')"></script>
 <script src="wr-import.js?v=5" onerror="console.warn('wr-import.js 로드 실패')"></script>
-<script src="mode.js?v=8" onerror="console.warn('mode.js 로드 실패')"></script>
+<script src="mode.js?v=9" onerror="console.warn('mode.js 로드 실패')"></script>
 <script src="wr-filters.js?v=3" onerror="console.warn('wr-filters.js 로드 실패')"></script>
 <script src="order-map.js?v=2" onerror="console.warn('order-map.js 로드 실패')"></script>
 <script src="wr-view.js?v=4" onerror="console.warn('wr-view.js 로드 실패')"></script>

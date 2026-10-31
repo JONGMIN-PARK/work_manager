@@ -122,13 +122,14 @@ var SHOTS = path.join(__dirname, '.shots');
     await page.evaluate(function () { wmHdrPopClose(); });
 
     // 팀원 — 패치노트 없음
-    await page.setViewport({ width: 1400, height: 900 });
+    await page.setViewport({ width: 1400, height: 900 }); await wait(300); await ready();  // isMobile 을 바꾸면 puppeteer 가 페이지를 다시 불러옴 — 다 뜬 뒤 로그아웃
     await page.evaluate(function () { if (typeof authLogout === 'function') return authLogout(); });
+    await wait(800);  // e2e30 과 같이 — 로그아웃 요청이 끝난 뒤
     await login('kim@t.com');
     check(await page.evaluate(function () { return document.getElementById('tabPatchNotes').style.display === 'none' && /팀원|팀장|임원/.test(document.getElementById('authUserInfo').textContent); }), '팀원 — 사용자 메뉴에 패치노트 없음');
     check(errs.length === 0, '화면 오류 없음 ' + JSON.stringify(errs));
     console.log(fail ? 'FAILED ' + fail : 'ALL PASS ' + ok, errs);
-  } catch (e) { console.log('ERR', e.message); } finally {
+  } catch (e) { console.log('ERR', e.message); try { console.log('STATE', JSON.stringify(await page.evaluate(function () { var o = document.getElementById('loginOverlay'); var em = document.getElementById('loginEmail'); return { user: !!currentUser, ov: o && o.style.display, em: !!em, emVis: em && em.offsetParent !== null, url: location.href }; }))); await page.screenshot({ path: path.join(SHOTS, 'hdr-err.png') }); } catch (e2) {} } finally {
     await browser.close();
   }
   function TH_N() { return 18; }

@@ -503,10 +503,13 @@ function updateAuthUI() {
   if (head) head.innerHTML = '<b>' + eH(userName) + '</b><span>' + roleLabel + (currentUser.email ? ' · ' + eH(currentUser.email) : '') + '</span>';
 
   // 관리자 전용 탭 표시/숨김
+  // 관리자 화면 — 사용자 메뉴 ⚙️ 관리 (v13.288): 사용자 관리 · 운영자 · 패치노트
   var adminTab = document.getElementById('tabUserAdmin');
   if (adminTab) {
     adminTab.style.display = currentUser.role === 'admin' ? '' : 'none';
   }
+  var opItem = document.getElementById('hdrOperatorItem');
+  if (opItem) opItem.style.display = isOperator() ? '' : 'none';
   // 마인드맵 — 모든 사용자 (v13.249)
   var mmTab = document.getElementById('tabMindmap');
   if (mmTab) mmTab.style.display = '';
@@ -522,6 +525,15 @@ function updateAuthUI() {
   // 패치노트 — 관리자만 (헤더 버전 표시를 눌러 여는 것도)
   var pnTab = document.getElementById('tabPatchNotes');
   if (pnTab) pnTab.style.display = currentUser.role === 'admin' ? '' : 'none';
+  // 묶음 이름 · 구분선 — 안에 보이는 항목이 하나라도 있을 때만
+  var grpShow = {
+    admin: ['tabUserAdmin', 'hdrOperatorItem', 'tabPatchNotes'],
+    report: ['tabWeeklyReport', 'tabWorkload']
+  };
+  Object.keys(grpShow).forEach(function (g) {
+    var any = grpShow[g].some(function (id) { var e = document.getElementById(id); return e && e.style.display !== 'none'; });
+    document.querySelectorAll('[data-grp="' + g + '"]').forEach(function (e) { e.style.display = any ? '' : 'none'; });
+  });
   var verB = document.getElementById('wmVerBadge');
   if (verB) { verB.style.cursor = currentUser.role === 'admin' ? 'pointer' : 'default'; verB.title = currentUser.role === 'admin' ? '패치노트 보기' : ''; }
   // 애니웍스 버튼 — 모든 사용자에게 표시

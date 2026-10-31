@@ -32,6 +32,12 @@ function wmRestoreLastView(){
 window.wmRestoreLastView=wmRestoreLastView;
 /* v13.280 업무 관리(team) 하위 탭으로 옮긴 화면 — 예전 setPage('workload' · 'weekly_report') 도 그대로 동작 */
 var WM_TEAM_SUB={workload:'mWorkload',weekly_report:'mWeeklyReport'};
+/* 사용자 메뉴 ⚙️ 관리 › 운영자 — 하위 탭을 미리 골라 두고 들어가 프로젝트 첫 탭을 그렸다 다시 그리지 않게 (v13.288) */
+function wmOpenOperator(){
+  if(!(typeof isOperator==='function'&&isOperator()))return;
+  document.querySelectorAll('#modeTabsProj .tab').forEach(function(t){t.classList.toggle('on',t.dataset.m==='operator')});
+  setPage('project');
+}
 function wmCanSeePatchNotes(){return typeof currentUser!=='undefined'&&!!currentUser&&currentUser.role==='admin'}
 function setPage(page){
   if(page==='patchnotes'&&!wmCanSeePatchNotes())return;  // 패치노트는 관리자만
@@ -45,11 +51,9 @@ function setPage(page){
   curPage=page;
   document.querySelectorAll('#pageTabs .tab').forEach(function(t){var sel=t.dataset.page===page;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
   document.querySelectorAll('.hdr [data-page]').forEach(function(t){t.classList.toggle('on',t.dataset.page===page)});  // 헤더 ✉️ · 📋 (v13.287)
+  if(page!=='project'){var _opItem=document.getElementById('hdrOperatorItem');if(_opItem)_opItem.classList.remove('on')}
   document.getElementById('modeTabs').classList.toggle('hidden',page!=='team');
   document.getElementById('modeTabsProj').classList.toggle('hidden',page!=='project');
-  // 운영자 탭 노출 게이팅 (admin/운영자만)
-  var _opTab=document.querySelector('#modeTabsProj .tab[data-m="operator"]');
-  if(_opTab)_opTab.classList.toggle('hidden',!(typeof isOperator==='function'&&isOperator()));
   // 모든 모드 숨기기
   ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap','mMyWork','mWorkload'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   // 해당 페이지의 첫 탭 활성화
@@ -122,6 +126,9 @@ function setMode(m){
   var teamModes=['weekly','archive','trend','weekly_report','workload'];
   var tabBar=teamModes.includes(m)?'#modeTabs':'#modeTabsProj';
   document.querySelectorAll(tabBar+' .tab').forEach(function(t){var sel=t.dataset.m===m;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
+  // 운영자 탭은 사용자 메뉴 ⚙️ 관리로 들어왔을 때만 보임 (v13.288) — 권한은 setPage 가 확인
+  var _opTab=document.querySelector('#modeTabsProj .tab[data-m="operator"]');if(_opTab)_opTab.classList.toggle('hidden',m!=='operator');
+  var _opItem=document.getElementById('hdrOperatorItem');if(_opItem)_opItem.classList.toggle('on',m==='operator'&&curPage==='project');
   ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap','mWorkload'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   var modeMap={weekly_report:'mWeeklyReport',workload:'mWorkload',weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',tech:'mTech',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');

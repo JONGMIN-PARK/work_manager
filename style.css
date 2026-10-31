@@ -3339,3 +3339,17 @@ mark.wd-hl{background:var(--ac-g);color:var(--ac-t);outline:1px solid var(--ac);
   .hdr-font-list{max-height:32vh}
   .hdr-mi{padding:11px 12px;font-size:14px}
 }
+
+/* ═══ v13.288 — 상위 · 하위 탭 정리: 하위 탭 묶음(이름 · 구분선) · 관리자 화면은 사용자 메뉴 ⚙️ 관리 ═══ */
+.sub-tabs{align-items:center}
+.tab-grp{font-size:10px;font-weight:700;color:var(--t6);letter-spacing:.3px;padding:0 4px 0 8px;white-space:nowrap;flex-shrink:0;user-select:none}
+.tab-sep{width:1px;align-self:stretch;margin:6px 6px;background:var(--bd);flex-shrink:0}
+.tab-op{margin-left:auto}
+.hdr-mi-grp{font-size:10px;font-weight:700;color:var(--t6);padding:6px 10px 2px}
+/* 상위 탭 — 조금 낮고 가볍게 */
+@media (min-width:769px) and (min-height:501px){.page-tabs .tab{padding:8px 20px}}  /* 휴대폰 · 가로 규칙은 그대로 */
+@media (max-width:600px){
+  .tab-grp{padding:0 2px 0 4px;font-size:9px}
+  .tab-sep{margin:6px 3px}
+  .tab-op{margin-left:0}
+}

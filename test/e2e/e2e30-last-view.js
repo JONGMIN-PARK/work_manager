@@ -57,7 +57,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
 
     // 메뉴 순서 (v13.280) · 예전 저장값 — 업무 부하가 상위 탭이던 때 기억한 것도 업무 관리 › 업무 부하로
     var order = await page.evaluate(function () { return Array.from(document.querySelectorAll('#pageTabs .tab')).map(function (t) { return t.dataset.page; }).join(','); });
-    check(order === 'mywork,mindmap,team,project,useradmin', '메뉴 순서 (v13.287 메시지 · 패치노트는 헤더) ' + order);
+    check(order === 'mywork,mindmap,team,project', '메뉴 순서 (v13.288 메시지 · 사용자 관리 · 패치노트는 헤더) ' + order);
     check(/업무 관리/.test(await page.$eval('#pageTabs [data-page="team"]', function (e) { return e.textContent; })), '업무일지 → 업무 관리 이름');
     await page.evaluate(function () { localStorage.setItem('wm-last-view', JSON.stringify({ page: 'workload' })); });
     await page.reload({ waitUntil: 'networkidle2' });
