@@ -76,7 +76,7 @@
 <script defer src="my-work-proj.js?v=3" onerror="console.warn('my-work-proj.js 로드 실패')"></script>
 <script defer src="messages-ui.js?v=3" onerror="console.warn('messages-ui.js 로드 실패')"></script>
 <script defer src="project-images.js?v=3" onerror="console.warn('project-images.js 로드 실패')"></script>
-<script defer src="project-meetings.js?v=10" onerror="console.warn('project-meetings.js 로드 실패')"></script>
+<script defer src="project-meetings.js?v=11" onerror="console.warn('project-meetings.js 로드 실패')"></script>
 <script defer src="spec-schema.js?v=3" onerror="console.warn('spec-schema.js 로드 실패')"></script>
 <script defer src="project-spec.js?v=5" onerror="console.warn('project-spec.js 로드 실패')"></script>
 <script defer src="spec-template-admin.js?v=2" onerror="console.warn('spec-template-admin.js 로드 실패')"></script>
@@ -85,7 +85,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" onerror="console.warn('mammoth.js 로드 실패')"></script>
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=63">
+<link rel="stylesheet" href="style.css?v=64">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -116,13 +116,13 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.290';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.291';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
     <div id="globalSearchWrap">
       <span id="gsIcon">🔎</span>
-      <input id="globalSearchInput" type="text" placeholder="통합 검색... (Ctrl+K)" oninput="gsDebounce(this.value)" onfocus="if(this.value.trim().length>=1)globalSearch(this.value)" onkeydown="gsKeyNav(event)" autocomplete="off" aria-label="통합 검색" role="searchbox">
+      <input id="globalSearchInput" type="text" placeholder="통합 검색... (Ctrl+K)" oninput="gsDebounce(this.value)" onfocus="gsOnFocus(this.value)" onkeydown="gsKeyNav(event)" autocomplete="off" aria-label="통합 검색" role="searchbox">
       <div id="globalSearchDropdown" style="display:none"></div>
     </div>
     <!-- 알림 센터 -->
@@ -554,7 +554,7 @@
 <script src="manual-input.js?v=3" onerror="console.warn('manual-input.js 로드 실패')"></script>
 <script src="wr-charts.js?v=3" onerror="console.warn('wr-charts.js 로드 실패')"></script>
 <script src="archive-trend.js?v=1" onerror="console.warn('archive-trend.js 로드 실패')"></script>
-<script src="search-notif.js?v=1" onerror="console.warn('search-notif.js 로드 실패')"></script>
+<script src="search-notif.js?v=2" onerror="console.warn('search-notif.js 로드 실패')"></script>
 <script src="anyworks-import.js?v=1" onerror="console.warn('anyworks-import.js 로드 실패')"></script>
 <script src="app-init.js?v=6" onerror="console.warn('app-init.js 로드 실패')"></script>
 </body>

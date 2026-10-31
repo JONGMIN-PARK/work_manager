@@ -201,6 +201,7 @@ GET /api/projects/:id/spec-files/:fid/download-url
 GET /api/projects/all
 GET /api/projects/covers
 GET /api/projects/members/all
+GET /api/search
 GET /api/settings
 GET /api/settings/:key
 GET /api/spec-templates

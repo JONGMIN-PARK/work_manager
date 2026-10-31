@@ -50,12 +50,14 @@ function pdLoadMeetings(projId) {
   apiFetch('/api/meetings?projectId=' + encodeURIComponent(projId)).then(function (r) {
     if (!_pmt || _pmt.projId !== projId) return;
     _pmt.list = ((r && r.data) || []).map(_pmtNorm);
+    if (window._gsMeetOpen && _pmt.firstOpenDone) { _pmt.open[window._gsMeetOpen] = true; window._gsMeetOpen = null; }
     if (typeof pdSetTabCount === 'function') pdSetTabCount('meeting', _pmt.list.length);   // 탭 개수 (v13.290)
     _pmt.canEdit = r.canEdit !== false;   // 서버가 알려 준 편집 권한 (v13.204) — 없으면 보기 전용: 회의를 문서로만 표시
     if (!_pmt.firstOpenDone) {   // 처음 열 때: 오늘 이후 가장 가까운 회의, 없으면 가장 최근 회의 하나만 펼침
       var t = _pmtToday();
       var next = _pmt.list.filter(function (m) { return m.meetDate && m.meetDate >= t; }).sort(function (a, b) { return a.meetDate.localeCompare(b.meetDate); })[0];
       var pick = next || _pmt.list[0];
+      if (window._gsMeetOpen && _pmt.list.some(function (m) { return m.id === window._gsMeetOpen; })) { pick = { id: window._gsMeetOpen }; window._gsMeetOpen = null; }   // 통합 검색에서 고른 회의 (v13.291)
       if (pick) _pmt.open[pick.id] = true;
       _pmt.firstOpenDone = true;
     }

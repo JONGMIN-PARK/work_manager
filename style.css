@@ -3409,3 +3409,28 @@ label.hdr-mi input{margin:0}
 @container pd (max-width:540px){.pd-tab{padding:7px 8px}.pd-tab-i{display:none}}
 /* 개발 항목 카드의 상태 고르기 — .si 기본 폭(100%)이면 카드 한 줄을 다 차지 */
 #pdDev select.si{width:auto}
+
+/* ═══ v13.291 — 통합 검색: 전체 범위 · 범주 칩 · 문맥 줄 · 찾은 자리 형광 ═══ */
+#globalSearchDropdown{width:min(520px,calc(100vw - 24px));max-height:min(70vh,560px);display:flex;flex-direction:column;overflow:hidden}
+
+.gs-head{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:700;color:var(--t5);flex-shrink:0}
+.gs-keys{font-weight:500;color:var(--t6)}
+.gs-chips{display:flex;gap:4px;padding:7px 10px;border-bottom:1px solid var(--bd);overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+.gs-chips::-webkit-scrollbar{display:none}
+.gs-chip{flex-shrink:0;padding:3px 9px;border:1px solid var(--bd);border-radius:12px;background:var(--bg-i);color:var(--t4);font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+.gs-chip b{color:var(--t2);font-weight:700;margin-left:2px}
+.gs-chip.on{border-color:var(--ac);background:var(--ac-bg);color:var(--ac-t)}
+.gs-list{overflow-y:auto;flex:1 1 auto;min-height:0}
+.gs-group span{color:var(--t6);font-weight:600}
+.gs-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.gs-item .gs-name{flex:none}
+.gs-snip{font-size:10.5px;color:var(--t5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gs-item .gs-sub{max-width:150px}
+.gs-more{padding:5px 12px 7px 38px;font-size:11px;color:var(--ac-t);cursor:pointer}
+.gs-more:hover{text-decoration:underline}
+.gs-empty{padding:16px;text-align:center;font-size:12px;color:var(--t5)}
+/* 찾은 자리 — 글자는 형광, 그 줄 · 카드는 잠깐 깜빡 */
+mark.wm-hit{background:#FDE047;color:#1F2937;padding:0 1px;border-radius:2px;box-shadow:0 0 0 1px rgba(234,179,8,.6)}
+.wm-hit-box{animation:wmHitPulse 1.6s ease-out 2}
+@keyframes wmHitPulse{0%{box-shadow:0 0 0 0 rgba(250,204,21,.85)}70%{box-shadow:0 0 0 8px rgba(250,204,21,0)}100%{box-shadow:0 0 0 0 rgba(250,204,21,0)}}
+@media (max-width:600px){.gs-keys{display:none}.gs-item .gs-sub{max-width:90px}}

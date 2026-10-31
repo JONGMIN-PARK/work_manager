@@ -212,6 +212,7 @@ var specTemplateRoutes = require('./routes/spec-templates');
 var projectSpecRoutes = require('./routes/project-specs');
 var mindmapRoutes = require('./routes/mindmaps');
 var myWorkRoutes = require('./routes/my-work');
+var searchRoutes = require('./routes/search');   // 통합 검색 (v13.291)
 var icsRoutes = require('./routes/ics');
 var v1Router = require('./routes/v1');
 var apiDocsRoutes = require('./routes/api-docs');
@@ -263,6 +264,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/mindmaps', mindmapRoutes);
 app.use('/api/my-work', myWorkRoutes);
+app.use('/api/search', searchRoutes);
 app.use('/api/ics', icsRoutes);   // 개인 달력 구독 — 로그인 없이 토큰 (v13.252)
 
 // ─── API v1 (버전 관리) ───

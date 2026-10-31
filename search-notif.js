@@ -11,262 +11,314 @@ function gsDebounce(kw) {
 
 var _gsActiveIdx = -1;
 
+/* ═══ 통합 검색 v13.291 — 서버 /api/search 한 번으로 전체 범위 ═══
+ * 예전엔 프로젝트 · 마일스톤 · 이슈 · 수주 · 일정 목록을 통째로 받아 그 안에서만 찾았다.
+ * 이제 업무일지 · 회의 · 할 일 · 노트 · 마인드맵 · 문서 · 개발 · 체크리스트 · 코멘트 · 사전검토 · 요소기술 · A/S ·
+ * 주간 업무 · 메시지 · 팀원까지 서버가 권한대로 찾아 범주별 상위 몇 건 + 전체 건수를 준다.
+ * 고르면 그 화면 · 그 자리로 가서 검색어를 형광으로 표시한다(wmHitShow). */
+var GS_CATS = {
+  project:   { label: '📁 프로젝트',  icon: '📁' },
+  milestone: { label: '◆ 마일스톤',  icon: '◆' },
+  issue:     { label: '🎫 이슈',      icon: '🎫' },
+  order:     { label: '📋 수주',      icon: '📋' },
+  work:      { label: '📒 업무일지',  icon: '📒' },
+  meeting:   { label: '🗓 회의',      icon: '🗓' },
+  todo:      { label: '✅ 내 할 일',  icon: '✅' },
+  note:      { label: '📝 내 노트',   icon: '📝' },
+  mindmap:   { label: '🧠 마인드맵',  icon: '🧠' },
+  doc:       { label: '📂 문서',      icon: '📂' },
+  dev:       { label: '🧩 개발',      icon: '🧩' },
+  checklist: { label: '☑️ 체크리스트', icon: '☑️' },
+  comment:   { label: '💬 코멘트',    icon: '💬' },
+  prestudy:  { label: '🔍 사전검토',  icon: '🔍' },
+  tech:      { label: '🧪 요소기술',  icon: '🧪' },
+  as:        { label: '🛠️ A/S',       icon: '🛠️' },
+  weekly:    { label: '📅 주간 업무', icon: '📅' },
+  message:   { label: '✉️ 메시지',    icon: '✉️' },
+  member:    { label: '👤 팀원',      icon: '👤' },
+  group:     { label: '👥 그룹',      icon: '👥' }
+};
+var _gs = { q: '', groups: [], only: null, seq: 0 };
+var GS_RECENT = 'wm-gs-recent';
+
 function gsHighlight(text, kw) {
   if (!text || !kw) return eH(text || '');
   var escaped = eH(text);
-  var kwEsc = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return escaped.replace(new RegExp('(' + kwEsc + ')', 'gi'), '<mark style="background:var(--mk);color:var(--mk-t);padding:0 1px;border-radius:2px">$1</mark>');
+  var kwEsc = eH(kw).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return escaped.replace(new RegExp('(' + kwEsc + ')', 'gi'), '<mark>$1</mark>');
 }
 
-function gsMatchField(obj, fields, kl) {
-  for (var i = 0; i < fields.length; i++) {
-    var v = obj[fields[i]];
-    if (v && String(v).toLowerCase().includes(kl)) return fields[i];
-    if (Array.isArray(v) && v.some(function(x) { return String(x).toLowerCase().includes(kl); })) return fields[i];
-  }
-  return null;
-}
-
-var GS_FIELD_LABELS = {
-  name: '이름', title: '제목', orderNo: '수주번호', memo: '메모', description: '설명',
-  client: '거래처', manager: '담당자', assignees: '담당자', content: '내용',
-  label: '라벨', text: '항목', reporter: '보고자', tags: '태그',
-  resolution: '해결내용', startDate: '시작일', endDate: '종료일'
-};
-
-/* 목록에서 fields 중 하나라도 kl 을 포함하는 항목 → [{d, f(매칭 필드)}] */
-function gsFieldHits(list, fields, kl) {
+/* 그룹(팀원 묶음)은 설정에만 있어 화면에서 찾는다 */
+function gsLocalGroups(kl) {
   var out = [];
-  list.forEach(function(d) {
-    var f = gsMatchField(d, fields, kl);
-    if (f) out.push({ d: d, f: f });
+  (typeof memberGroups !== 'undefined' && Array.isArray(memberGroups) ? memberGroups : []).forEach(function (g) {
+    if ((g.name && g.name.toLowerCase().indexOf(kl) >= 0) || (g.members || []).some(function (m) { return String(m).toLowerCase().indexOf(kl) >= 0; }))
+      out.push({ id: g.id, title: g.name, sub: (g.members || []).length + '명', nav: { groupId: g.id } });
   });
-  return out;
+  return out.length ? { key: 'group', total: out.length, items: out.slice(0, 5) } : null;
 }
 
-/* 이름/제목이 아닌 필드로 걸렸을 때 붙는 [필드명] 힌트 */
-function gsFieldHint(f) {
-  return f && GS_FIELD_LABELS[f] && f !== 'name' && f !== 'title' ? '<span style="font-size:9px;color:var(--t6);margin-left:4px">[' + GS_FIELD_LABELS[f] + ']</span>' : '';
-}
-
-/* ═══ 통합 검색 카테고리 레지스트리 — 배열 순서 = 결과 표시 순서 ═══
- *  key   : 카테고리 식별자 (globalSearchNav 의 type 과 같음)
- *  label : 그룹 헤더 (뒤에 " (건수)" 가 붙음)
- *  limit : 카테고리별 최대 표시 건수
- *  match(kl, data) → 결과 배열 (kl = 소문자 검색어, data = gsCollectData 결과). 상한은 호출부가 자름
- *  render(hit, kw, data) → 결과 한 줄 HTML (kw = 원래 검색어, 하이라이트용) */
-var GS_MATCHERS = [
-  {
-    key: 'project', label: '📁 프로젝트', limit: 5,
-    match: function(kl, data) { return gsFieldHits(data.projects, ['name','orderNo','memo','assignees'], kl); },
-    render: function(h, kw) {
-      var p = h.d; var st = typeof autoProjectStatus === 'function' ? autoProjectStatus(p) : p.status;
-      var stInfo = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[st] ? PROJ_STATUS[st] : null;
-      return '<div class="gs-item" onclick="globalSearchNav(\'project\',\'' + p.id + '\')">' +
-        '<span class="gs-icon" style="color:' + (p.color || 'var(--ac)') + '">●</span>' +
-        '<span class="gs-name">' + gsHighlight(p.name, kw) + gsFieldHint(h.f) + '</span>' +
-        '<span class="gs-sub">' + (stInfo ? '<span style="color:' + stInfo.color + '">' + stInfo.icon + '</span> ' : '') + eH(p.orderNo || '') + '</span></div>';
-    }
-  },
-  {
-    key: 'milestone', label: '◆ 마일스톤', limit: 4,
-    match: function(kl, data) { return gsFieldHits(data.milestones, ['name'], kl); },
-    render: function(h, kw, data) {
-      var m = h.d; var proj = data.projects.find(function(p) { return p.id === m.projectId; });
-      return '<div class="gs-item" onclick="globalSearchNav(\'milestone\',\'' + m.projectId + '\')">' +
-        '<span class="gs-icon" style="color:' + SEM_COLOR.purple + '">◆</span>' +
-        '<span class="gs-name">' + gsHighlight(m.name, kw) + '</span>' +
-        '<span class="gs-sub">' + eH(proj ? (proj.name || proj.orderNo) : '') + '</span></div>';
-    }
-  },
-  {
-    key: 'issue', label: '🎫 이슈', limit: 5,
-    match: function(kl, data) { return gsFieldHits(data.issues, ['title','description','tags','reporter','assignees','resolution'], kl); },
-    render: function(h, kw) {
-      var i = h.d;
-      var urgColor = i.urgency === 'urgent' ? SEM_COLOR.danger : i.urgency === 'normal' ? SEM_COLOR.warn : 'var(--t5)';
-      return '<div class="gs-item" onclick="globalSearchNav(\'issue\',\'' + i.id + '\')">' +
-        '<span class="gs-icon" style="color:' + urgColor + '">🎫</span>' +
-        '<span class="gs-name">' + gsHighlight(i.title, kw) + gsFieldHint(h.f) + '</span>' +
-        '<span class="gs-sub" style="color:' + urgColor + '">' + eH(i.status || '') + '</span></div>';
-    }
-  },
-  {
-    key: 'order', label: '📋 수주', limit: 5,
-    match: function(kl, data) { return gsFieldHits(data.orders, ['orderNo','name','client','manager','memo'], kl); },
-    render: function(h, kw) {
-      var o = h.d;
-      return '<div class="gs-item" onclick="globalSearchNav(\'order\',\'' + (o.orderNo || o.id || '') + '\')">' +
-        '<span class="gs-icon">📋</span>' +
-        '<span class="gs-name">' + gsHighlight(o.name || o.orderNo || '', kw) + gsFieldHint(h.f) + '</span>' +
-        '<span class="gs-sub">' + eH(o.client || o.orderNo || '') + '</span></div>';
-    }
-  },
-  {
-    key: 'event', label: '📅 일정', limit: 4,
-    match: function(kl, data) { return gsFieldHits(data.events, ['title','memo','assignees'], kl); },
-    render: function(h, kw) {
-      var e = h.d; var t = typeof EVT_TYPE !== 'undefined' && EVT_TYPE[e.type] ? EVT_TYPE[e.type] : { icon: '📌' };
-      return '<div class="gs-item" onclick="globalSearchNav(\'event\',\'' + e.id + '\')">' +
-        '<span class="gs-icon">' + t.icon + '</span>' +
-        '<span class="gs-name">' + gsHighlight(e.title, kw) + gsFieldHint(h.f) + '</span>' +
-        '<span class="gs-sub">' + eH(e.startDate || '') + '</span></div>';
-    }
-  },
-  {
-    key: 'archive', label: '🗄️ 아카이브', limit: 3,
-    match: function(kl, data) {
-      var hits = []; if (Array.isArray(data.weeks)) data.weeks.forEach(function(w) {
-        if (w.label && w.label.toLowerCase().includes(kl)) hits.push({ d: w, f: 'label' });
-        else if (w.fileName && w.fileName.toLowerCase().includes(kl)) hits.push({ d: w, f: 'fileName' });
-        else if (w.selectedNames && w.selectedNames.some(function(n) { return n.toLowerCase().includes(kl); })) hits.push({ d: w, f: 'selectedNames' });
-      });
-      return hits;
-    },
-    render: function(h, kw) {
-      var w = h.d;
-      return '<div class="gs-item" onclick="globalSearchNav(\'archive\',\'' + eH(w.id) + '\')">' +
-        '<span class="gs-icon">🗄️</span>' +
-        '<span class="gs-name">' + gsHighlight(w.label || w.id, kw) + '</span>' +
-        '<span class="gs-sub">' + (w.totalHours ? Math.round(w.totalHours) + 'h' : '') + '</span></div>';
-    }
-  },
-  {
-    key: 'member', label: '👤 팀원', limit: 4,
-    match: function(kl, data) {
-      var members = [];
-      if (typeof data.aliasMap === 'object') {
-        Object.keys(data.aliasMap).forEach(function(realName) {
-          if (realName.toLowerCase().includes(kl) || (data.aliasMap[realName] && data.aliasMap[realName].toLowerCase().includes(kl))) {
-            members.push({ realName: realName, alias: data.aliasMap[realName] });
-          }
-        });
-      }
-      return members;
-    },
-    render: function(m, kw) {
-      return '<div class="gs-item" onclick="globalSearchNav(\'member\',\'' + eH(m.realName) + '\')">' +
-        '<span class="gs-icon">👤</span>' +
-        '<span class="gs-name">' + gsHighlight(m.realName, kw) + (m.alias ? ' <span style="color:var(--t5)">(' + gsHighlight(m.alias, kw) + ')</span>' : '') + '</span>' +
-        '<span class="gs-sub">팀원</span></div>';
-    }
-  },
-  {
-    key: 'group', label: '👥 그룹', limit: 3,
-    match: function(kl, data) {
-      var groups = [];
-      if (Array.isArray(data.memberGroups)) {
-        data.memberGroups.forEach(function(g) {
-          if (g.name && g.name.toLowerCase().includes(kl)) {
-            groups.push(g);
-          } else if (g.members && g.members.some(function(m) { return m.toLowerCase().includes(kl); })) {
-            groups.push(g);
-          }
-        });
-      }
-      return groups;
-    },
-    render: function(g, kw) {
-      return '<div class="gs-item" onclick="globalSearchNav(\'group\',\'' + eH(g.id) + '\')">' +
-        '<span class="gs-icon" style="color:' + (g.color || 'var(--ac)') + '">●</span>' +
-        '<span class="gs-name">' + gsHighlight(g.name, kw) + '</span>' +
-        '<span class="gs-sub">' + (g.members ? g.members.length + '명' : '') + '</span></div>';
-    }
-  }
-];
-
-/* 레지스트리 전체를 돌려 카테고리별 결과(상한 적용) → [{m: 매처, hits: [...]}] */
-function gsRunMatchers(kl, data) {
-  return GS_MATCHERS.map(function(m) { return { m: m, hits: m.match(kl, data).slice(0, m.limit) }; });
-}
-
-/* 결과 → 드롭다운 HTML (0건이면 빈 결과 문구) */
-function gsRenderResults(results, kw, data) {
-  var total = results.reduce(function(s, r) { return s + r.hits.length; }, 0);
-  if (total === 0) return '<div class="gs-empty">검색 결과 없음</div>';
-  var html = '<div style="padding:6px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd)"><span style="font-size:10px;color:var(--t5);font-weight:600">' + total + '건 발견</span><span style="font-size:9px;color:var(--t6)">↑↓ 이동 · Enter 선택 · Esc 닫기</span></div>';
-  results.forEach(function(r) {
-    if (!r.hits.length) return;
-    html += '<div class="gs-group">' + r.m.label + ' (' + r.hits.length + ')</div>';
-    r.hits.forEach(function(h) { html += r.m.render(h, kw, data); });
+/* 결과 → 드롭다운 HTML. groups = [{key,total,items}], only = 범주 칩으로 고른 것 */
+function gsRenderResults(groups, kw, only) {
+  var total = groups.reduce(function (s, g) { return s + g.total; }, 0);
+  if (!total) return '<div class="gs-empty">「' + eH(kw) + '」 검색 결과 없음</div>';
+  var h = '<div class="gs-head"><span>' + total + '건</span><span class="gs-keys">↑↓ 이동 · Enter 열기 · Esc 닫기</span></div>';
+  // 범주 칩 — 누르면 그 범주만 더 많이
+  h += '<div class="gs-chips"><button class="gs-chip' + (only ? '' : ' on') + '" onclick="gsOnly(null)">전체</button>' +
+    groups.map(function (g) { var c = GS_CATS[g.key] || { label: g.key }; return '<button class="gs-chip' + (only === g.key ? ' on' : '') + '" onclick="gsOnly(\'' + g.key + '\')">' + c.label + ' <b>' + g.total + '</b></button>'; }).join('') + '</div>';
+  h += '<div class="gs-list">';
+  groups.forEach(function (g) {
+    if (only && g.key !== only) return;
+    var c = GS_CATS[g.key] || { label: g.key, icon: '•' };
+    h += '<div class="gs-group">' + c.label + ' <span>' + g.total + '</span></div>';
+    g.items.forEach(function (it, i) {
+      h += '<div class="gs-item" data-k="' + g.key + '" data-i="' + i + '" onclick="gsPick(\'' + g.key + '\',' + i + ')">' +
+        '<span class="gs-icon">' + c.icon + '</span>' +
+        '<span class="gs-main"><span class="gs-name">' + gsHighlight(it.title || '', kw) + '</span>' +
+          (it.snippet ? '<span class="gs-snip">' + gsHighlight(it.snippet, kw) + '</span>' : '') + '</span>' +
+        (it.sub ? '<span class="gs-sub" title="' + eA(it.sub) + '">' + gsHighlight(it.sub, kw) + '</span>' : '') + '</div>';
+    });
+    if (!only && g.total > g.items.length) h += '<div class="gs-more" onclick="gsOnly(\'' + g.key + '\')">+' + (g.total - g.items.length) + '건 더 보기</div>';
   });
-  return html;
+  return h + '</div>';
+}
+/* 최근 검색어 (입력칸이 비었을 때) */
+function gsRecentHtml() {
+  var r = (typeof lsGetJSON === 'function' ? lsGetJSON(GS_RECENT, []) : []) || [];
+  if (!r.length) return '';
+  return '<div class="gs-head"><span>최근 검색</span></div><div class="gs-list">' + r.map(function (q) {
+    return '<div class="gs-item" onclick="gsUseRecent(this.dataset.q)" data-q="' + eA(q) + '"><span class="gs-icon">🕘</span><span class="gs-main"><span class="gs-name">' + eH(q) + '</span></span></div>';
+  }).join('') + '</div>';
+}
+function gsRemember(q) {
+  if (typeof lsGetJSON !== 'function') return;
+  var r = (lsGetJSON(GS_RECENT, []) || []).filter(function (x) { return x !== q; });
+  r.unshift(q); lsSetJSON(GS_RECENT, r.slice(0, 5));
+}
+function gsUseRecent(q) {
+  var inp = document.getElementById('globalSearchInput');
+  if (inp) { inp.value = q; inp.focus(); }
+  globalSearch(q);
 }
 
-var _gsCache=null,_gsCacheTime=0;
-/* 검색 대상 데이터 → data 객체. 캐시(5초)가 비었거나 지났으면 먼저 await gsRefreshCache() */
-function gsCacheStale() { return !_gsCache || (Date.now() - _gsCacheTime) > 5000; }
-async function gsRefreshCache() {
-  var _gsNow=Date.now();
-  _gsCache=await Promise.all([
-    typeof projGetAll === 'function' ? projGetAll() : Promise.resolve([]),
-    typeof msGetAll === 'function' ? msGetAll() : Promise.resolve([]),
-    typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve([]),
-    typeof orderGetAll === 'function' ? orderGetAll() : Promise.resolve([]),
-    typeof evtGetAll === 'function' ? evtGetAll() : Promise.resolve([]),
-    Promise.resolve([])  // 주간 아카이브(weeks): 과거 IndexedDB 전용 경로라 항상 빈 배열이었음 — 동작 동일
-  ]);
-  _gsCacheTime=_gsNow;
+function gsOnFocus(v) {
+  var dd = document.getElementById('globalSearchDropdown');
+  if (dd && dd.style.display === 'flex' && (v || '').trim() === _gs.q) return;
+  globalSearch(v);
 }
-function gsCollectData() {
-  const [projects, milestones, issues, orders, events, weeks] = _gsCache;
-  return {
-    projects: projects, milestones: milestones, issues: issues, orders: orders, events: events, weeks: weeks,
-    aliasMap: typeof aliasMap === 'object' ? aliasMap : undefined,  // 팀원 별칭 (settings.js)
-    memberGroups: memberGroups                                       // 팀원 그룹 (settings.js)
-  };
-}
-
-async function globalSearch(kw) {
-  const dd = document.getElementById('globalSearchDropdown');
+async function globalSearch(kw, only) {
+  var dd = document.getElementById('globalSearchDropdown');
   if (!dd) return;
   kw = (kw || '').trim();
-  if (kw.length < 1) { dd.style.display = 'none'; return; }
-  const kl = kw.toLowerCase();
   _gsActiveIdx = -1;
-  if (gsCacheStale()) await gsRefreshCache();  // 캐시 hit 이면 await 없이 동기 렌더 (예전과 같은 타이밍)
-  var data = gsCollectData();
-  dd.innerHTML = gsRenderResults(gsRunMatchers(kl, data), kw, data);
-  dd.style.display = 'block';
+  if (!kw) { var rc = gsRecentHtml(); dd.innerHTML = rc; dd.style.display = rc ? 'flex' : 'none'; return; }
+  var seq = ++_gs.seq;
+  if (_gs.q !== kw) { _gs.only = null; dd.innerHTML = '<div class="gs-empty">찾는 중…</div>'; dd.style.display = 'flex'; }
+  _gs.only = only || null;   // 입력칸에서 다시 치면 전체로 (칩은 gsOnly 가 넘김)
+  var r;
+  try {
+    r = await apiFetch('/api/search?q=' + encodeURIComponent(kw) + (_gs.only ? '&cat=' + _gs.only : ''));
+  } catch (e) {
+    if (seq === _gs.seq) dd.innerHTML = '<div class="gs-empty">검색하지 못했습니다 — ' + eH((e && e.message) || '서버 오류') + '</div>';
+    return;
+  }
+  if (seq !== _gs.seq) return;   // 더 늦게 친 검색어가 이미 나감
+  var groups = (r && r.data && r.data.groups) || [];
+  if (!_gs.only) { var lg = gsLocalGroups(kw.toLowerCase()); if (lg) groups.push(lg); }
+  else if (_gs.q === kw) {   // 범주 하나만 받았으면 나머지 범주(칩 숫자)는 앞 결과 그대로
+    groups = _gs.groups.map(function (g) { return g.key === _gs.only ? (groups[0] || g) : g; });
+  }
+  _gs.q = kw; _gs.groups = groups;
+  dd.innerHTML = gsRenderResults(groups, kw, _gs.only);
+  dd.style.display = 'flex';
+}
+function gsOnly(key) {
+  var inp = document.getElementById('globalSearchInput');
+  if (key && _gs.groups.some(function (g) { return g.key === key && g.items.length >= g.total; })) {   // 이미 다 받았으면 다시 안 받음
+    _gs.only = key;
+    document.getElementById('globalSearchDropdown').innerHTML = gsRenderResults(_gs.groups, _gs.q, key);
+  } else globalSearch(_gs.q, key);
+  if (inp) inp.focus();
 }
 
-function globalSearchNav(type, id) {
-  const dd = document.getElementById('globalSearchDropdown');
+/* 결과 고르기 → 그 화면 · 그 자리로 가서 검색어 형광 표시 */
+function gsPick(key, i) {
+  var g = _gs.groups.filter(function (x) { return x.key === key; })[0];
+  var it = g && g.items[i];
+  if (!it) return;
+  var kw = _gs.q;
+  gsRemember(kw);
+  var dd = document.getElementById('globalSearchDropdown');
   if (dd) dd.style.display = 'none';
-  const inp = document.getElementById('globalSearchInput');
+  var inp = document.getElementById('globalSearchInput');
   if (inp) { inp.value = ''; inp.blur(); }
+  globalSearchNav(key, it, kw);
+}
 
-  if (type === 'project' || type === 'milestone') {
-    setPage('project');
-    setMode('pipeline');
-    setTimeout(function() { if (typeof showProjectDetail === 'function') showProjectDetail(id); }, 100);
+/* 프로젝트 상세 패널을 열고(이미 열려 있으면 그대로) 탭을 고른 뒤 cb */
+function _gsOpenProject(pid, tab, cb) {
+  if (!pid) return;
+  if (curPage !== 'project') { setPage('project'); }
+  var open = window._pdProj && window._pdProj.id === pid && document.getElementById('projDetailPanel');
+  (open ? Promise.resolve() : showProjectDetail(pid)).then(function () {
+    if (tab) pdSwitchTab(tab, pid);
+    if (cb) cb();
+  });
+}
+
+function globalSearchNav(type, it, kw) {
+  var n = (it && it.nav) || {};
+  var hit = function (root, opt) { wmHitShow(root, kw, opt); };
+  if (type === 'project') {
+    _gsOpenProject(n.projectId, 'overview', function () { hit('#projDetailPanel'); });
+  } else if (type === 'milestone') {
+    _gsOpenProject(n.projectId, 'overview', function () { hit('#pdOverview'); });
+  } else if (type === 'dev') {
+    _gsOpenProject(n.projectId, 'dev', function () { hit('#pdDev'); });
+  } else if (type === 'checklist') {
+    _gsOpenProject(n.projectId, 'lifecycle', function () {
+      if (n.phase && typeof pdShowPhase === 'function') pdShowPhase(n.projectId, n.phase);
+      hit('#pdLifecycle');
+    });
+  } else if (type === 'comment') {
+    _gsOpenProject(n.projectId, 'overview', function () { hit('#pdCommentsSection'); });
+  } else if (type === 'meeting') {
+    if (!n.projectId) { setPage('mywork'); return; }
+    _gsOpenProject(n.projectId, null, function () {
+      if (typeof _pmt !== 'undefined' && _pmt && _pmt.projId === n.projectId) _pmt.open[n.meetingId] = true;
+      window._gsMeetOpen = n.meetingId;   // 처음 여는 프로젝트면 pdLoadMeetings 가 이 회의를 펼침
+      pdSwitchTab('meeting', n.projectId);
+      hit('#pdMeeting', { near: '#pmt-card-' + n.meetingId });
+    });
   } else if (type === 'issue') {
-    setPage('project');
-    setMode('issues');
-    setTimeout(function() { if (typeof showIssueDetail === 'function') showIssueDetail(id); }, 200);
+    setPage('project'); setMode('issues');
+    setTimeout(function () { if (typeof showIssueDetail === 'function') showIssueDetail(n.issueId); hit('#issueDetailPanel'); }, 200);
   } else if (type === 'order') {
     setPage('project');
+    if (typeof orderSearchKw !== 'undefined') { orderSearchKw = n.orderNo || kw; if (typeof orderFilterClient !== 'undefined') orderFilterClient = ''; }
     setMode('orders');
-  } else if (type === 'event') {
-    setPage('project');
-    setMode('calendar');
-    setTimeout(function() { if (typeof showEventModal === 'function') showEventModal(id); }, 200);
-  } else if (type === 'archive') {
-    setPage('team');
-    setMode('archive');
-    setTimeout(function() { if (typeof showArchDetail === 'function') showArchDetail(id); }, 200);
+    if (typeof renderOrders === 'function') renderOrders();
+    hit('#mOrders', { kw2: n.orderNo });
+  } else if (type === 'work') {
+    setPage('team'); setMode('weekly');
+    setTimeout(function () {
+      var s = document.getElementById('cSearch');
+      if (s) { s.value = kw; if (typeof onSI === 'function') onSI(); }
+      hit('#mWeekly');
+    }, 300);
+  } else if (type === 'todo') {
+    setPage('mywork');
+    var tries = 0;
+    (function open() {
+      var x = typeof _mwFind === 'function' ? _mwFind('todo:' + n.todoId) : null;
+      if (x && typeof mwPanelOpen === 'function') { mwPanelOpen(x); hit('#mwPanel'); }
+      else if (++tries < 30) setTimeout(open, 150);
+      else if (typeof showToast === 'function') showToast('내 업무 목록에 없는 할 일입니다 — 완료 · 보관된 것이면 필터를 바꿔 보세요', 'info');
+    })();
+  } else if (type === 'note') {
+    setPage('mywork');
+    setTimeout(function () { if (typeof mwNotesOpen === 'function') mwNotesOpen(n.noteDate); hit('#mwNotes, .mwn'); }, 400);
+  } else if (type === 'mindmap') {
+    setPage('mindmap');
+    if (n.nodeId && typeof _mm !== 'undefined') _mm.goto = { mapId: n.mapId, sheet: n.sheet || 0, node: n.nodeId };
+    if (typeof mmOpen === 'function') mmOpen(n.mapId);
+  } else if (type === 'doc') {
+    setPage('project'); setMode('docs');
+    setTimeout(function () { if (n.projectId && typeof docSelectProject === 'function') docSelectProject(n.projectId); hit('#mDocs'); }, 200);
+  } else if (type === 'prestudy') {
+    setPage('project'); setMode('prestudy');
+    setTimeout(function () { if (typeof psOpenModal === 'function') psOpenModal(n.prestudyId); hit('#psModal'); }, 300);
+  } else if (type === 'tech') {
+    setPage('project'); setMode('tech');
+    setTimeout(function () { if (typeof techOpenModal === 'function') techOpenModal(n.techId); hit('#techModal'); }, 300);
+  } else if (type === 'as') {
+    setPage('project'); setMode('as');
+    setTimeout(function () { if (typeof showASDetail === 'function') showASDetail(n.asId); hit('#asDetailOverlay'); }, 300);
+  } else if (type === 'weekly') {
+    setPage('weekly_report');
+    setTimeout(function () { var b = document.querySelector('#wrSubTabs [data-wt="list"]'); if (b) b.click(); hit('#mWeeklyReport'); }, 300);
+  } else if (type === 'message') {
+    setPage('messages');
+    setTimeout(function () { if (typeof msgOpenThread === 'function') msgOpenThread(n.peerId); hit('#mMessages'); }, 300);
   } else if (type === 'member') {
-    setPage('team');
-    setMode('weekly');
-    // try to select the member in name chips
-    setTimeout(function() {
-      var chips = document.querySelectorAll('#nameChips .chip');
-      chips.forEach(function(c) { if (c.textContent.includes(id)) c.click(); });
+    setPage('team'); setMode('weekly');
+    setTimeout(function () {
+      document.querySelectorAll('#nameChips .chip').forEach(function (c) { if (c.textContent.indexOf(n.name) >= 0) c.click(); });
     }, 200);
   } else if (type === 'group') {
-    setPage('team');
-    setMode('weekly');
+    setPage('team'); setMode('weekly');
   }
+}
+
+/* ═══ 찾은 자리 형광 표시 — 범위(root) 안 글자에 <mark class="wm-hit">, 첫 곳으로 스크롤 · 깜빡임.
+ * 화면이 늦게 그려지므로 최대 5초 기다리며 찾는다. 다른 곳을 누르면 지움(다시 그리면 자연히 사라짐).
+ * opt.near = 이 선택자 요소 안을 먼저 · opt.kw2 = 검색어가 안 보이면 대신 찾을 글자(수주번호 등) */
+function wmHitShow(rootSel, kw, opt) {
+  opt = opt || {};
+  if (!kw) return;
+  var t0 = Date.now();
+  (function tryIt() {
+    var roots = Array.prototype.slice.call(document.querySelectorAll(rootSel)).filter(function (e) { return e.offsetParent || e.getClientRects().length; });
+    var root = roots[roots.length - 1];   // 창이 겹치면 맨 위(마지막)
+    if (root && opt.near) { var nr = root.querySelector(opt.near); if (nr) root = nr; }
+    var n = root ? wmHitMark(root, kw) : 0;
+    if (!n && root && opt.kw2) n = wmHitMark(root, opt.kw2);
+    if (!n && root) n = wmHitField(root, kw);
+    if (n) return;
+    if (Date.now() - t0 < 5000) setTimeout(tryIt, 200);
+  })();
+}
+function wmHitClear() {
+  document.querySelectorAll('mark.wm-hit').forEach(function (m) {
+    var p = m.parentNode; if (!p) return;
+    p.replaceChild(document.createTextNode(m.textContent), m); p.normalize();
+  });
+  document.querySelectorAll('.wm-hit-box').forEach(function (e) { e.classList.remove('wm-hit-box'); });
+}
+/* root 안 글자 노드에서 kw 를 찾아 감쌈 → 감싼 수. 입력칸 · 스크립트는 건너뜀 */
+function wmHitMark(root, kw) {
+  wmHitClear();
+  var kl = String(kw).toLowerCase(), marks = [];
+  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: function (t) {
+      var p = t.parentNode;
+      if (!p || /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION|MARK)$/.test(p.nodeName)) return NodeFilter.FILTER_REJECT;
+      return t.nodeValue.toLowerCase().indexOf(kl) >= 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+    }
+  });
+  var nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.slice(0, 200).forEach(function (t) {
+    var s = t.nodeValue, low = s.toLowerCase(), i = 0, j, frag = document.createDocumentFragment();
+    while ((j = low.indexOf(kl, i)) >= 0) {
+      if (j > i) frag.appendChild(document.createTextNode(s.slice(i, j)));
+      var m = document.createElement('mark'); m.className = 'wm-hit'; m.textContent = s.slice(j, j + kl.length);
+      frag.appendChild(m); marks.push(m); i = j + kl.length;
+    }
+    if (i < s.length) frag.appendChild(document.createTextNode(s.slice(i)));
+    t.parentNode.replaceChild(frag, t);
+  });
+  if (marks.length) _wmHitFocus(marks[0]);
+  return marks.length;
+}
+/* 글자가 입력칸(회의록 · 메모 칸)에만 있으면 그 칸을 강조 */
+function wmHitField(root, kw) {
+  var kl = String(kw).toLowerCase();
+  var f = Array.prototype.slice.call(root.querySelectorAll('textarea, input[type=text], input:not([type])')).filter(function (e) { return String(e.value || '').toLowerCase().indexOf(kl) >= 0; })[0];
+  if (!f) return 0;
+  _wmHitFocus(f);
+  // 입력칸 안 글자는 형광을 못 칠하니 그 부분을 선택해 보이게
+  var i = String(f.value).toLowerCase().indexOf(kl);
+  setTimeout(function () { try { f.focus({ preventScroll: true }); f.setSelectionRange(i, i + kl.length); } catch (e) {} }, 350);
+  return 1;
+}
+function _wmHitFocus(el) {
+  try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { el.scrollIntoView(); }
+  var box = el.closest('tr, .gs-row, .pdChkRow, [data-mid], .mw-row, .card, .pnl, li') || el;
+  if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') box = el;
+  box.classList.remove('wm-hit-box'); void box.offsetWidth; box.classList.add('wm-hit-box');
+  setTimeout(function () {   // 다음에 누르면 지움
+    document.addEventListener('mousedown', function off(e) { if (e.target.closest && e.target.closest('#globalSearchWrap')) return; document.removeEventListener('mousedown', off, true); wmHitClear(); }, true);
+  }, 400);
 }
 
 // keyboard navigation for search results
