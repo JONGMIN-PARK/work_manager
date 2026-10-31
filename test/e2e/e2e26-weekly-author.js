@@ -54,12 +54,12 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     });
     check(dv.view === '원본' && dv.by === '날짜', '업무일지 패널 기본 원본 · 날짜 (팀은 최근 보고서 것) ' + JSON.stringify(dv));
     // 새로 시작 → 팀 · 주차
-    await page.click('#wrAuNew'); await wait(200);
+    await page.click('#wrAuMoreWrap > button'); await page.click('#wrAuNew'); await wait(200);  // v13.289 ⋯ 메뉴 안
     await page.$eval('#wrAuTeam', function (e, t) { e.value = t; e.dispatchEvent(new Event('input')); }, team);
     await page.$eval('#wrAuStart', function (e) { e.value = '2026-10-26'; e.dispatchEvent(new Event('change')); });
     await page.$eval('#wrAuEnd', function (e) { e.value = '2026-10-30'; e.dispatchEvent(new Event('change')); });
     // 지난주에서 가져오기 → 10/19 주의 금주
-    await page.click('#wrAuLoadPrev');
+    await page.click('#wrAuMoreWrap > button'); await page.click('#wrAuLoadPrev');
     await page.waitForFunction(function () { var e = document.getElementById('wrAuEditorLast'); return e && /지난주 금주 내용/.test(e.value); }, { timeout: 5000 }).catch(function () {});
     var last = await page.$eval('#wrAuEditorLast', function (e) { return e.value; });
     check(/지난주 금주 내용/.test(last) && !/이번 주 것/.test(last), '지난주 가져오기 = 작성 주차 전 보고서');

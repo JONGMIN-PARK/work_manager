@@ -91,7 +91,9 @@ function wmHdrPop(id){
 }
 document.addEventListener('click',function(e){
   // 테마 · 글씨체를 누르면 목록을 다시 그려 누른 칸이 문서에서 빠짐 — 그때는 닫지 않고 계속 골라 보게
-  if(e.target.isConnected===false||(e.target.closest&&e.target.closest('.hdr-pop')))return;
+  if(e.target.isConnected===false)return;
+  var inPop=e.target.closest&&e.target.closest('.hdr-pop');
+  if(inPop){if(e.target.closest('button.hdr-mi'))wmHdrPopClose();return}  // 메뉴 항목을 누르면 (항목 일을 한 뒤) 닫음 — 체크 · 칩은 열린 채
   wmHdrPopClose();
 });
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.querySelector('.hdr-pop.open'))wmHdrPopClose()});

@@ -543,17 +543,18 @@ function _mwPaintLoad() {
   var st = _mwLoadStats(L);
   var depts = {};
   (_mw.people || L.users).forEach(function (u) { if (u.departmentId) depts[u.departmentId] = u.dept; });
-  var h = '<div class="mw-head"><h2>👥 업무 부하</h2>' +
-    '<div class="mw-sum"><span class="mw-sub">칸 = 그 주에 마감인 남은 일 수 (색은 남은 양 — 1 = 반나절, 예상 시간 · 진행률 반영) · 🌴 휴가 · 칸을 누르면 목록 · 목록 줄을 사람 이름에 끌어 놓으면 담당이 바뀝니다</span></div>' +
-    '<div class="mw-tools">' +
+  // v13.289 공통 툴바(.wm-tb) — 제목 · 보기 전환 … 부서 · 기간 · ↻, 읽는 법은 툴바 아래 한 줄
+  var h = '<div class="wm-tb"><h3 class="wm-tb-t">👥 업무 부하</h3>' +
+    '<span class="mwc-seg wm-seg">' + [['table', '표'], ['tl', '🕒 타임라인']].map(function (x) {
+      return '<button class="mwc-seg-b' + ((_mwLS('loadview') || 'table') === x[0] ? ' on' : '') + '" data-lv="' + x[0] + '">' + x[1] + '</button>';
+    }).join('') + '</span>' +
+    '<span class="wm-tb-sp"></span>' +
       (Object.keys(depts).length > 1 ? '<select id="mwDept" class="mw-sel"><option value="">전체 부서</option>' + Object.keys(depts).map(function (d) {
         return '<option value="' + _mwEsc(d) + '"' + (d === _mw.dept ? ' selected' : '') + '>' + _mwEsc(depts[d]) + '</option>';
       }).join('') + '</select>' : '') +
-      '<span class="mwc-seg">' + [['table', '표'], ['tl', '🕒 타임라인']].map(function (x) {
-        return '<button class="mwc-seg-b' + ((_mwLS('loadview') || 'table') === x[0] ? ' on' : '') + '" data-lv="' + x[0] + '">' + x[1] + '</button>';
-      }).join('') + '</span>' +
       '<select id="mwWeeks" class="mw-sel">' + [4, 8, 12].map(function (w) { return '<option value="' + w + '"' + (w === _mw.weeks ? ' selected' : '') + '>' + w + '주</option>'; }).join('') + '</select>' +
-      '<button class="mw-btn" data-mw="refresh" title="새로 고침">↻</button></div></div>';
+      '<button class="mw-btn" data-mw="refresh" title="새로 고침">↻</button></div>' +
+    '<div class="wm-tb-help">칸 = 그 주에 마감인 남은 일 수 (색은 남은 양 — 1 = 반나절, 예상 시간 · 진행률 반영) · 🌴 휴가 · 칸을 누르면 목록 · 목록 줄을 사람 이름에 끌어 놓으면 담당이 바뀝니다</div>';
   // 🕒 팀 타임라인 (v13.271) — 사람마다 한 줄, 마감 ◆ · 기간 막대 · 🌴 휴가
   if (_mwLS('loadview') === 'tl' && typeof mwLoadTimelineMount === 'function') {
     el.innerHTML = '<div class="mw-wrap">' + h + '<div id="mwtLoadSlot"></div></div>';

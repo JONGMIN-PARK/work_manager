@@ -20,7 +20,7 @@
 <script src="settings.js?v=6" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="auth.js?v=17" onerror="console.warn('auth.js 로드 실패')"></script>
 <script defer src="weekly-report-parse.js?v=1" onerror="console.warn('weekly-report-parse.js 로드 실패')"></script>
-<script defer src="weekly-report-admin.js?v=15" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
+<script defer src="weekly-report-admin.js?v=16" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
 <script src="project-data.js?v=15" onerror="console.warn('project-data.js 로드 실패')"></script>
 <script src="ui-helpers.js?v=6" onerror="console.warn('ui-helpers.js 로드 실패')"></script>
 <!-- 렌더러 (defer — 초기 표시 이후 실행돼도 무방) -->
@@ -64,7 +64,7 @@
 <script defer src="operator-mode.js?v=3" onerror="console.warn('operator-mode.js 로드 실패')"></script>
 <script defer src="operator-analytics.js?v=2" onerror="console.warn('operator-analytics.js 로드 실패')"></script>
 <script defer src="comments-ui.js?v=1" onerror="console.warn('comments-ui.js 로드 실패')"></script>
-<script defer src="my-work.js?v=14" onerror="console.warn('my-work.js 로드 실패')"></script>
+<script defer src="my-work.js?v=15" onerror="console.warn('my-work.js 로드 실패')"></script>
 <script defer src="quick-parse.js?v=1" onerror="console.warn('quick-parse.js 로드 실패')"></script>
 <script defer src="my-work-cal.js?v=9" onerror="console.warn('my-work-cal.js 로드 실패')"></script>
 <script defer src="my-work-task.js?v=8" onerror="console.warn('my-work-task.js 로드 실패')"></script>
@@ -85,7 +85,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" onerror="console.warn('mammoth.js 로드 실패')"></script>
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=61">
+<link rel="stylesheet" href="style.css?v=62">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -116,7 +116,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.288';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.289';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -219,26 +219,28 @@
       <div id="encUp" style="margin-top:12px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap"></div>
     </div>
     <div id="mainArea" class="hidden">
-      <!-- Encoding + Reupload -->
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap"><div id="fileInfo" class="hidden" style="display:flex;align-items:center;gap:8px;margin-right:8px"><span style="font-size:11px;color:var(--t5)">📄 <span id="fnDisp"></span></span><span class="badge" style="background:var(--ac-bg);color:var(--ac-t)"><span id="rcDisp"></span>건</span></div><span style="font-size:11px;color:var(--t5);margin-right:3px">인코딩:</span><div id="encMain"></div></div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-g" onclick="document.getElementById('fileInput2').click()">📁 다른파일<input id="fileInput2" type="file" accept=".xls,.xlsx,.html,.htm" multiple style="display:none"></button>
-          <button class="btn btn-w" onclick="saveWeek()" id="saveWeekBtn">💾 주차 저장</button>
-          <span class="mob-sep" style="color:var(--bd2)">│</span>
-          <button class="btn btn-g" onclick="exportWorkRecordsJSON()">📤 업무일지 내보내기</button>
-          <button class="btn btn-g" onclick="document.getElementById('wrImportFile').click()">📥 업무일지 불러오기<input id="wrImportFile" type="file" accept=".json" style="display:none" onchange="importWorkRecordsJSON(this.files[0]);this.value=''"></button>
-          <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer" title="원본 파일을 함께 저장하면 나중에 인코딩 변경 후 재파싱이 가능합니다"><input type="checkbox" id="saveRawTog" checked> 원본포함</label>
-          <span class="mob-sep" style="color:var(--bd2)">│</span>
-          <button class="btn btn-g awAdminBtn" onclick="openAnyworksModal()" style="display:none;border-color:#06B6D4;color:#22D3EE">🌐 애니웍스</button>
-          <!-- 업무일지 데이터 도구 (v13.287 헤더에서 옮김) -->
-          <div class="hdr-pop" id="wrToolsWrap">
-            <button class="btn btn-g" onclick="wmHdrPop('wrToolsWrap')" title="업무일지 데이터 도구" aria-haspopup="true" aria-expanded="false">⋯</button>
-            <div class="hdr-pop-menu" role="menu">
-              <button class="hdr-mi" role="menuitem" onclick="wmHdrPopClose();deduplicateRecords()">🧹 중복 레코드 제거</button>
-              <div class="hdr-mi-sep"></div>
-              <button class="hdr-mi hdr-mi-danger" role="menuitem" onclick="wmHdrPopClose();resetAllData()">🗑️ 전체 데이터 초기화</button>
-            </div>
+      <!-- 툴바 (v13.289 .wm-tb) — 제목 · 파일 정보 … 파일 열기 · 애니웍스 · [주차 저장] · ⋯(내보내기 · 불러오기 · 원본 포함 · 인코딩 · 중복 제거 · 초기화) -->
+      <div class="wm-tb">
+        <h3 class="wm-tb-t">📋 주간 분석</h3>
+        <span id="fileInfo" class="hidden wm-tb-n" style="display:inline-flex;align-items:center;gap:6px"><span>📄 <span id="fnDisp"></span></span><span class="badge" style="background:var(--ac-bg);color:var(--ac-t)"><span id="rcDisp"></span>건</span></span>
+        <span class="wm-tb-sp"></span>
+        <button class="btn btn-g" onclick="document.getElementById('fileInput2').click()" title="업무일지 파일(.xls · .xlsx)을 열어 분석">📁 파일 열기</button>
+        <input id="fileInput2" type="file" accept=".xls,.xlsx,.html,.htm" multiple style="display:none">
+        <button class="btn btn-g awAdminBtn" onclick="openAnyworksModal()" style="display:none;border-color:#06B6D4;color:#22D3EE">🌐 애니웍스</button>
+        <button class="wm-pri" onclick="saveWeek()" id="saveWeekBtn">💾 주차 저장</button>
+        <input id="wrImportFile" type="file" accept=".json" style="display:none" onchange="importWorkRecordsJSON(this.files[0]);this.value=''">
+        <div class="hdr-pop" id="wrToolsWrap">
+          <button class="btn btn-g wm-more" onclick="wmHdrPop('wrToolsWrap')" title="내보내기 · 불러오기 · 인코딩 · 데이터 도구" aria-haspopup="true" aria-expanded="false">⋯</button>
+          <div class="hdr-pop-menu" role="menu">
+            <button class="hdr-mi" role="menuitem" onclick="exportWorkRecordsJSON()">📤 업무일지 내보내기 (JSON)</button>
+            <button class="hdr-mi" role="menuitem" onclick="document.getElementById('wrImportFile').click()">📥 업무일지 불러오기 (JSON)</button>
+            <label class="hdr-mi" title="원본 파일을 함께 저장하면 나중에 인코딩 변경 후 재파싱이 가능합니다"><input type="checkbox" id="saveRawTog" checked> 주차 저장 때 원본 파일도</label>
+            <div class="hdr-mi-sep"></div>
+            <div class="hdr-mi-grp">글자가 깨지면 — 인코딩</div>
+            <div class="hdr-mi-chips" id="encMain"></div>
+            <div class="hdr-mi-sep"></div>
+            <button class="hdr-mi" role="menuitem" onclick="deduplicateRecords()">🧹 중복 레코드 제거</button>
+            <button class="hdr-mi hdr-mi-danger" role="menuitem" onclick="resetAllData()">🗑️ 전체 데이터 초기화</button>
           </div>
         </div>
       </div>
@@ -397,8 +399,18 @@
 
   <!-- ═══ ARCHIVE MODE ═══ -->
   <div id="mArchive" class="hidden">
+    <div class="wm-tb">
+      <h3 class="wm-tb-t">🗄️ 아카이브</h3><span class="wm-tb-n">저장된 주차 목록</span>
+      <span class="wm-tb-sp"></span>
+      <select id="archMonthSel" class="msel" onchange="archMonthFilter=this.value;renderArch()" title="월 선택"><option value="">전체 월</option></select>
+      <div class="hdr-pop" id="archToolsWrap">
+        <button class="btn btn-g wm-more" onclick="wmHdrPop('archToolsWrap')" title="더보기" aria-haspopup="true" aria-expanded="false">⋯</button>
+        <div class="hdr-pop-menu" role="menu">
+          <button class="hdr-mi hdr-mi-danger" role="menuitem" onclick="clearAllWeeks()">🗑️ 저장된 주차 전체 삭제</button>
+        </div>
+      </div>
+    </div>
     <div class="pnl">
-      <div class="pnl-h"><h3 class="pnl-t">🗄️ 저장된 주차 목록</h3><div style="display:flex;gap:6px;align-items:center"><select id="archMonthSel" class="msel" onchange="archMonthFilter=this.value;renderArch()" title="월 선택"><option value="">전체 월</option></select><button class="btn btn-d btn-s" onclick="clearAllWeeks()">전체 삭제</button></div></div>
       <div id="archList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px"></div>
       <div id="archEmpty" style="text-align:center;color:var(--t6);padding:30px;font-size:12px">저장된 데이터가 없습니다. 주간 분석에서 "💾 주차 저장"을 눌러주세요.</div>
     </div>
@@ -497,11 +509,15 @@
 
   <!-- ═══ TREND MODE ═══ -->
   <div id="mTrend" class="hidden">
+    <div class="wm-tb">
+      <h3 class="wm-tb-t">📈 트렌드</h3><span class="wm-tb-n">여러 주차를 골라 월간 · 연간 누적 추이</span>
+      <span class="wm-tb-sp"></span>
+      <select id="trendMonthSel" class="msel" onchange="trendMonthFilter=this.value;renderTrend()" title="월 선택"><option value="">전체 월</option></select>
+      <button class="btn btn-g" onclick="trendSelAll()">전체 선택</button><button class="btn btn-g" onclick="trendDeAll()">전체 해제</button>
+      <button class="wm-pri" onclick="runTrend()">📊 분석 실행</button>
+    </div>
     <div class="pnl">
-      <div class="pnl-h"><h3 class="pnl-t">📈 트렌드 분석 — 복수 주차 선택</h3><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="btn btn-p btn-s" onclick="runTrend()">트렌드 분석 실행</button><button class="btn btn-g btn-s" onclick="trendSelAll()">전체 선택</button><button class="btn btn-g btn-s" onclick="trendDeAll()">전체 해제</button></div></div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:10px;font-weight:600;color:var(--t5)">월 필터:</span><select id="trendMonthSel" class="msel" onchange="trendMonthFilter=this.value;renderTrend()" title="월 선택"><option value="">전체 월</option></select></div>
       <div id="trendGroupFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
-      <p style="font-size:11px;color:var(--t5);margin-bottom:12px">아카이브에서 저장된 주차들을 선택하면 월간/연간 누적 트렌드를 분석합니다. 그룹별 필터로 빠르게 선택할 수 있습니다.</p>
       <div id="trendList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div>
       <div id="trendEmpty" style="text-align:center;color:var(--t6);padding:30px;font-size:12px">저장된 주차가 없습니다.</div>
     </div>
@@ -528,7 +544,7 @@
 
 <!-- 앱 스크립트 — 예전 인라인 <script> 를 나눈 파일들. 동기 로드(defer 금지) · 이 순서 그대로 (app-init.js 가 마지막) -->
 <script src="wm-fallbacks.js?v=4" onerror="console.warn('wm-fallbacks.js 로드 실패')"></script>
-<script src="wm-state.js?v=4" onerror="console.warn('wm-state.js 로드 실패')"></script>
+<script src="wm-state.js?v=5" onerror="console.warn('wm-state.js 로드 실패')"></script>
 <script src="wr-import.js?v=5" onerror="console.warn('wr-import.js 로드 실패')"></script>
 <script src="mode.js?v=9" onerror="console.warn('mode.js 로드 실패')"></script>
 <script src="wr-filters.js?v=3" onerror="console.warn('wr-filters.js 로드 실패')"></script>

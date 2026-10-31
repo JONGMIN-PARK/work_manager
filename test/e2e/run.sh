@@ -93,6 +93,7 @@ else
   run_batch api-speed.js
   run_batch e2e42-header.js
   run_batch e2e43-tabs.js
+  run_batch e2e44-toolbar.js
 fi
 
 # 이 실행이 띄운 Postgres 면 정상 종료 (start.mjs 가 .pgstop 을 보고 멈춤)

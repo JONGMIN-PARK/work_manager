@@ -3353,3 +3353,36 @@ mark.wd-hl{background:var(--ac-g);color:var(--ac-t);outline:1px solid var(--ac);
   .tab-sep{margin:6px 3px}
   .tab-op{margin-left:0}
 }
+
+/* ═══ v13.289 — 화면 툴바 공통 틀 (.wm-tb) ═══
+   [제목 · 건수] [보기 전환 .wm-seg] … [검색 · 필터] │ [주 버튼 .wm-pri] [⋯ .hdr-pop]
+   ⋯ 메뉴는 헤더와 같은 .hdr-pop / .hdr-mi (wmHdrPop) — 가져오기 · 내보내기 · 관리, 삭제는 맨 아래 .hdr-mi-danger */
+.wm-tb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;margin-bottom:12px;background:var(--bg-p);border:1px solid var(--bd);border-radius:12px}
+.wm-tb-t{display:inline-flex;align-items:center;gap:6px;margin:0;font-size:14px;font-weight:700;color:var(--t1);white-space:nowrap}
+.wm-tb-n{font-size:11px;font-weight:500;color:var(--t5);white-space:nowrap}
+.wm-tb-sp{flex:1 1 0;min-width:0}
+.wm-tb-sep{width:1px;height:22px;background:var(--bd);flex-shrink:0}
+.wm-tb .btn{padding:6px 12px}
+.wm-tb .msel,.wm-tb select{max-width:180px}
+.wm-tb-help{font-size:11px;color:var(--t5);margin:-4px 2px 12px;line-height:1.5}
+/* 보기 전환 — 묶음 버튼 하나의 모양 */
+.wm-seg{display:inline-flex;align-items:center;gap:2px;padding:2px;margin:0;background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;flex-wrap:nowrap;flex-shrink:0}
+.wm-seg>button{padding:5px 11px;min-height:0;border:none;border-radius:6px;background:transparent;color:var(--t4);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;box-shadow:none}
+.wm-seg>button+button{border-left:none}
+.wm-seg>button:hover{color:var(--t2);background:var(--bg-hv)}
+.wm-seg>button.on{background:var(--bg-p);color:var(--ac-t);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:700}
+/* 주 버튼 — 화면마다 하나, 오른쪽 끝 */
+.wm-pri{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border:1px solid var(--ac);border-radius:7px;background:var(--ac);color:#fff;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;transition:filter .15s}
+.wm-pri:hover{filter:brightness(1.08)}
+.wm-pri:disabled{opacity:.5;cursor:default}
+.wm-more{min-width:32px;justify-content:center}
+/* ⋯ 메뉴 안 체크 · 칩 */
+label.hdr-mi{cursor:pointer}
+label.hdr-mi input{margin:0}
+.hdr-mi-chips{display:flex;gap:4px;flex-wrap:wrap;padding:2px 10px 6px}
+@media (max-width:600px){
+  .wm-tb{padding:8px 10px;gap:6px}
+  .wm-tb-sp{flex-basis:100%;height:0;order:5}
+  .wm-tb-sp~*{order:6}
+  .wm-seg{max-width:100%;overflow-x:auto;scrollbar-width:none}
+}
