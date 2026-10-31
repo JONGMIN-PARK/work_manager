@@ -266,22 +266,27 @@ function _mwPaintNow(el) {
     });
   });
   var n = function (k) { return (by[k] || []).length; };
-  var h = '<div class="mw-head">' +
-    '<h2>🎯 ' + (r.self ? '내 업무' : _mwEsc(r.user.name) + ' 님 업무') + '</h2>' +
+  // v13.295 공통 툴바(.wm-tb) — [제목 · 지연 · 오늘 · 이번 주] [목록 · 보드 · 주 · 월] … [사람] [📝 노트] [⋯ 내보내기 · 맵으로 · 구독 · 텔레그램 · 휴지통 · 새로 고침]
+  var h = '<div class="mw-head wm-tb">' +
+    '<h3 class="wm-tb-t">🎯 ' + (r.self ? '내 업무' : _mwEsc(r.user.name) + ' 님 업무') + '</h3>' +
     '<div class="mw-sum">' +
       (n('late') ? _mwPill('late', '지연 ' + n('late'), ' mw-pill-late') : '') +
       _mwPill('today', '오늘 ' + n('today'), n('today') ? '' : ' is-0') + _mwPill('week', '이번 주 ' + n('week'), n('week') ? '' : ' is-0') +
     '</div>' +
-    '<div class="mw-tools">' +
-      (_mw.people && _mw.people.length > 1 ? '<select id="mwWho" class="mw-sel" title="다른 사람 업무 보기">' + _mw.people.map(function (u) {
-        return '<option value="' + _mwEsc(u.id) + '"' + (u.id === r.user.id ? ' selected' : '') + '>' + _mwEsc(u.name) + (u.id === _mwMe() ? ' (나)' : u.dept ? ' · ' + _mwEsc(u.dept) : '') + '</option>';
-      }).join('') + '</select>' : '') +
-      (typeof mwCalToolsHtml === 'function' ? mwCalToolsHtml(r) : '') +
-      (typeof mwIoToolsHtml === 'function' ? mwIoToolsHtml(r) : '') +
-      (r.self && typeof mwNotesOpen === 'function' ? '<button class="mw-btn mwn-btn' + (typeof mwNotesIsOpen === 'function' && mwNotesIsOpen() ? ' on' : '') + ((r.noteDays || []).indexOf(today) >= 0 ? ' has' : '') +
-        '" data-mwn="open" title="📝 노트 — 끄적 메모 · 회의 메모 (줄을 할 일로 올리기)">📝 노트</button>' : '') +
-      '<button class="mw-btn" data-mw="refresh" title="새로 고침">↻</button>' +
-    '</div></div>';
+    (typeof mwCalToolsHtml === 'function' ? mwCalToolsHtml(r) : '') +
+    '<span class="wm-tb-sp"></span>' +
+    (_mw.people && _mw.people.length > 1 ? '<select id="mwWho" class="mw-sel wm-tb-sel" title="다른 사람 업무 보기">' + _mw.people.map(function (u) {
+      return '<option value="' + _mwEsc(u.id) + '"' + (u.id === r.user.id ? ' selected' : '') + '>' + _mwEsc(u.name) + (u.id === _mwMe() ? ' (나)' : u.dept ? ' · ' + _mwEsc(u.dept) : '') + '</option>';
+    }).join('') + '</select>' : '') +
+    (r.self && typeof mwNotesOpen === 'function' ? '<button class="mw-btn mwn-btn' + (typeof mwNotesIsOpen === 'function' && mwNotesIsOpen() ? ' on' : '') + ((r.noteDays || []).indexOf(today) >= 0 ? ' has' : '') +
+      '" data-mwn="open" title="📝 노트 — 끄적 메모 · 회의 메모 (줄을 할 일로 올리기)">📝 노트</button>' : '') +
+    '<div class="hdr-pop" id="mwMoreWrap"><button class="btn btn-g wm-more" onclick="wmHdrPop(\'mwMoreWrap\')" title="내보내기 · 맵으로 · 달력 구독 · 텔레그램 · 휴지통" aria-haspopup="true" aria-expanded="false">⋯' + (r.self && r.trashN ? '<span class="wm-flt-n" title="휴지통">' + r.trashN + '</span>' : '') + '</button>' +
+      '<div class="hdr-pop-menu" role="menu">' +
+        (typeof mwIoToolsHtml === 'function' ? mwIoToolsHtml(r) : '') +
+        (r.self && typeof mwCalFeedModal === 'function' ? '<div class="hdr-mi-sep"></div><button class="hdr-mi" data-mwc="feed" title="구글 · 아웃룩 달력에서 내 업무 보기">📅 달력 구독 (구글 · 아웃룩)</button>' : '') +
+        '<div class="hdr-mi-sep"></div><button class="hdr-mi" data-mw="refresh" title="새로 고침">↻ 새로 고침</button>' +
+      '</div></div>' +
+  '</div>';
   h += '<div id="mwtSlot"></div>';   // 🕒 타임라인 · 옆 달력 (v13.271, my-work-timeline.js — 다시 그려도 그 띠는 그대로 옮겨 붙임)
   // 출처 거르기
   h += '<div class="mw-chips"><button class="mw-chip' + (_mw.src === 'all' ? ' on' : '') + '" data-src="all">전체 ' + items.filter(function (x) { return !x.done; }).length + '</button>' +

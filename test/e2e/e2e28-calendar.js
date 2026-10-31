@@ -158,7 +158,7 @@ function otherDayThisWeek() {
     check(true, '새로 열어도 월 보기 그대로');
 
     // 구독 창
-    await page.click('#mMyWork [data-mwc="feed"]');
+    await page.click('#mwMoreWrap > button'); await page.click('#mMyWork [data-mwc="feed"]');   // v13.295 ⋯ 메뉴 안
     await page.waitForSelector('#mwcFeedModal [data-f="new"]');
     await page.click('#mwcFeedModal [data-f="new"]');
     await page.waitForSelector('#mwcFeedModal #mwcFeedUrl');

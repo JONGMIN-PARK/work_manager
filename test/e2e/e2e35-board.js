@@ -186,7 +186,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await wait(500);
     await page.evaluate(function (k) { document.querySelector('[data-qk="' + k + '"] [data-btrash]').click(); }, await keyOf('보드 언젠가'));
     await wait(500);
-    await page.click('[data-mwio="trash"]');
+    await page.click('#mwMoreWrap > button'); await page.click('[data-mwio="trash"]');
     await page.waitForSelector('#mwTrashModal .mwtr-row');
     check(await page.evaluate(function () { return document.querySelectorAll('#mwTrashModal .mwtr-row').length === 2; }), '휴지통 창 — 2개');
     await page.evaluate(function () { Array.from(document.querySelectorAll('#mwTrashModal .mwtr-row')).filter(function (r) { return /보드 잡일/.test(r.textContent); })[0].querySelector('[data-tr="restore"]').click(); });
@@ -199,14 +199,14 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
 
     // 8. 내보내기 — CSV · 글로 복사 · 엑셀
     await page.evaluate(function () { window._dl = []; window._mwioDownload = function (n, b) { b.arrayBuffer().then(function (ab) { var u = new Uint8Array(ab); window._dl.push({ n: n, t: new TextDecoder('utf-8', { ignoreBOM: true }).decode(u), bom: u[0] === 0xEF && u[1] === 0xBB && u[2] === 0xBF }); }); }; });
-    await page.click('[data-mwio="export"]');
+    await page.click('#mwMoreWrap > button'); await page.click('[data-mwio="export"]');
     await page.waitForSelector('#mwioMenu');
     await page.click('#mwioMenu [data-v="csv"]');
     await until(function () { return window._dl.length === 1; });
     var csv = await page.evaluate(function () { return window._dl[0]; });
     check(/\.csv$/.test(csv.n) && csv.bom && /^﻿칸,제목,출처/.test(csv.t) && /보드 영업.*보드 이슈|보드 이슈.*보드 영업/.test(csv.t.split('\r\n').filter(function (l) { return /보드 이슈/.test(l); })[0] || '') && /1\/2/.test(csv.t), 'CSV — 칸 · 제목 · 하위 항목');
     await page.evaluate(function () { window._clip = null; navigator.clipboard.writeText = function (t) { window._clip = t; return Promise.resolve(); }; });
-    await page.click('[data-mwio="export"]');
+    await page.click('#mwMoreWrap > button'); await page.click('[data-mwio="export"]');
     await page.click('#mwioMenu [data-v="text"]');
     await until(function () { return !!window._clip; });
     var clip = await page.evaluate(function () { return window._clip; });
@@ -214,7 +214,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     var hasX = await page.evaluate(function () { return typeof XLSX !== 'undefined'; });
     if (hasX) {
       await page.evaluate(function () { window._xf = null; XLSX.writeFile = function (wb, n) { window._xf = { n: n, sheets: wb.SheetNames, a1: wb.Sheets['목록'].A1.v, rows: XLSX.utils.sheet_to_json(wb.Sheets['목록']).length }; }; });
-      await page.click('[data-mwio="export"]');
+      await page.click('#mwMoreWrap > button'); await page.click('[data-mwio="export"]');
       await page.click('#mwioMenu [data-v="xlsx"]');
       await until(function () { return !!window._xf; });
       var xf = await page.evaluate(function () { return window._xf; });
@@ -222,7 +222,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     } else console.log('(엑셀 도구를 못 불러와 엑셀 확인은 건너뜀)');
 
     // 9. 맵으로 — 새 맵 · 복사 (담당 비우기)
-    await page.click('[data-mwio="map"]');
+    await page.click('#mwMoreWrap > button'); await page.click('[data-mwio="map"]');
     await page.waitForSelector('#mwToMapModal #mwmGo');
     await page.evaluate(function () { var i = document.getElementById('mwmTitle'); i.value = '보드 새 맵'; });
     await page.click('#mwmGo');
@@ -240,7 +240,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check((await c.query("SELECT COUNT(*)::int AS n FROM my_todos WHERE user_id = $1 AND deleted_at IS NULL", [me.id])).rows[0].n === 4, '복사 — 할 일은 그대로');
 
     // 10. 맵으로 — 기존 맵에 가지로 · 옮기기 (영업 칸만)
-    await page.click('[data-mwio="map"]');
+    await page.click('#mwMoreWrap > button'); await page.click('[data-mwio="map"]');
     await page.waitForSelector('#mwToMapModal #mwmGo');
     await page.evaluate(function () {
       var sel = document.getElementById('mwmMap'); sel.value = 'mm-bd1'; sel.dispatchEvent(new Event('change', { bubbles: true }));

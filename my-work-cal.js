@@ -157,11 +157,10 @@ function mwCalTipHtml(x) {
 /* ── 머리 도구 · 거르기 칩 · 목록 위 '오늘 일정' 띠 ───────────────── */
 function mwCalToolsHtml(r) {
   var v = _mwcView();
-  var h = '<span class="mwc-seg">' + [['list', '목록'], ['matrix', '보드'], ['week', '주'], ['month', '월']].map(function (x) {
+  // v13.295 보기 전환만 — 📤 구독은 머리 ⋯ 메뉴로
+  return '<span class="mwc-seg wm-seg">' + [['list', '목록'], ['matrix', '보드'], ['week', '주'], ['month', '월']].map(function (x) {
     return '<button class="mwc-seg-b' + (v === x[0] ? ' on' : '') + '" data-mwc-view="' + x[0] + '">' + x[1] + '</button>';
   }).join('') + '</span>';
-  if (r && r.self) h += '<button class="mw-btn" data-mwc="feed" title="구글 · 아웃룩 달력에서 내 업무 보기">📤 구독</button>';
-  return h;
 }
 function mwCalChipHtml() {
   if ((_mwcView() !== 'week' && _mwcView() !== 'month') || !_mw.ev) return '';

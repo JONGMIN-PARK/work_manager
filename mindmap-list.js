@@ -29,19 +29,23 @@ function _mmRenderList() {
   if (typeof _mmOpenRemember === 'function') _mmOpenRemember(null);   // 목록을 보고 있으면 다음 방문도 목록부터 (v13.285)
   _mmPeekHide(true);
   var tabs = [['all', '전체'], ['mine', '내 맵'], ['shared', '받은 맵']];
-  var h = '<div class="mm-list-head">' +
-    '<div><h3 class="mm-h3">🧠 마인드맵</h3><div class="mm-sub">생각 정리 · 업무 분장 · 프로젝트 구조 — 맵은 나와 내가 보낸 사람만 볼 수 있습니다.</div></div>' +
-    '<div class="mm-list-actions">' +
-    '<button class="btn btn-g btn-s" data-act="import">⤓ 가져오기</button>' +
-    '<button class="btn btn-p btn-s" data-act="new">+ 새 맵</button>' +
-    '</div></div>' +
-    '<div class="mm-list-bar"><div class="mm-seg">' +
+  // v13.295 공통 툴바(.wm-tb) — [제목 · 개수] [전체 · 내 맵 · 받은 맵] … [검색] [정렬] [⏷ 필터(프로젝트 · 만든 사람 · 수정)] [카드 · 목록] [+ 새 맵] [⋯ 가져오기]
+  var h = '<div class="wm-tb mm-list-tb">' +
+    '<h3 class="wm-tb-t" title="생각 정리 · 업무 분장 · 프로젝트 구조 — 맵은 나와 내가 보낸 사람만 볼 수 있습니다.">🧠 마인드맵</h3>' +
+    '<span class="wm-tb-n mm-lcount" id="mmListCount"></span>' +
+    '<span class="wm-seg mm-seg">' +
     tabs.map(function (t) { return '<button data-act="tab" data-tab="' + t[0] + '" class="' + (_mm.listTab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') +
-    '</div><div class="mm-lq"><input id="mmListQ" class="mm-input" type="search" placeholder="🔍 제목 · 맵 안 내용 검색" value="' + _mmEsc(_mm.q) + '" aria-label="제목 · 맵 안 내용 검색"></div>' +
-    '<select id="mmListSort" class="mm-input mm-lsel" aria-label="정렬">' + MM_SORTS.map(function (s) { return '<option value="' + s[0] + '"' + (_mmLV.sort === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select>' +
-    '<div class="mm-seg mm-vseg" role="group" aria-label="보기"><button data-act="view" data-v="card" title="카드로 보기">▦ 카드</button><button data-act="view" data-v="table" title="목록으로 보기">☰ 목록</button></div>' +
+    '</span>' +
+    '<span class="wm-tb-sp"></span>' +
+    '<input id="mmListQ" class="wm-tb-q" type="search" placeholder="🔍 제목 · 맵 안 내용 검색" value="' + _mmEsc(_mm.q) + '" aria-label="제목 · 맵 안 내용 검색">' +
+    '<select id="mmListSort" class="wm-tb-sel" aria-label="정렬">' + MM_SORTS.map(function (s) { return '<option value="' + s[0] + '"' + (_mmLV.sort === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select>' +
+    '<div class="hdr-pop wm-flt" id="mmFltWrap"><button class="btn btn-g" id="mmFltBtn" onclick="wmHdrPop(\'mmFltWrap\')" aria-haspopup="true" aria-expanded="false" title="필터">⏷ 필터</button>' +
+      '<div class="hdr-pop-menu wm-flt-menu"><div class="mm-list-filt" id="mmListFilt"></div></div></div>' +
+    '<span class="wm-seg mm-seg mm-vseg" role="group" aria-label="보기"><button data-act="view" data-v="card" title="카드로 보기">▦ 카드</button><button data-act="view" data-v="table" title="목록으로 보기">☰ 목록</button></span>' +
+    '<button class="wm-pri" data-act="new">+ 새 맵</button>' +
+    '<div class="hdr-pop" id="mmListMore"><button class="btn btn-g wm-more" onclick="wmHdrPop(\'mmListMore\')" title="가져오기" aria-haspopup="true" aria-expanded="false">⋯</button>' +
+      '<div class="hdr-pop-menu" role="menu"><button class="hdr-mi" data-act="import">⤓ 가져오기 (XMind · JSON)</button></div></div>' +
     '</div>' +
-    '<div class="mm-list-filt" id="mmListFilt"></div>' +
     '<div id="mmListBody"><div class="mm-empty">로딩 중...</div></div>';
   wrap.innerHTML = h;
   wrap.onclick = _mmListClick;
@@ -103,12 +107,14 @@ function _mmPaintFilters(base) {
   var pk = Object.keys(projs).sort(function (a, b) { return String(projs[a]).localeCompare(String(projs[b]), 'ko'); });
   var ok = Object.keys(owners).sort(function (a, b) { return String(owners[a]).localeCompare(String(owners[b]), 'ko'); });
   var any = _mmLV.proj || _mmLV.owner || _mmLV.age;
+  var nF = (_mmLV.proj ? 1 : 0) + (_mmLV.owner ? 1 : 0) + (_mmLV.age ? 1 : 0);
   el.innerHTML =
-    '<select class="mm-input mm-lsel' + (_mmLV.proj ? ' on' : '') + '" data-f="proj" aria-label="프로젝트">' + opt('', '📁 프로젝트: 전체', _mmLV.proj) + opt('__none', '프로젝트 없음', _mmLV.proj) + pk.map(function (k) { return opt(k, projs[k], _mmLV.proj); }).join('') + '</select>' +
-    '<select class="mm-input mm-lsel' + (_mmLV.owner ? ' on' : '') + '" data-f="owner" aria-label="만든 사람">' + opt('', '👤 만든 사람: 전체', _mmLV.owner) + ok.map(function (k) { return opt(k, owners[k], _mmLV.owner); }).join('') + '</select>' +
-    '<select class="mm-input mm-lsel' + (_mmLV.age ? ' on' : '') + '" data-f="age" aria-label="수정 시기">' + MM_AGES.map(function (a) { return opt(a[0], a[1], _mmLV.age); }).join('') + '</select>' +
-    (any ? '<button class="btn btn-g btn-s" data-act="fclear">✕ 필터 풀기</button>' : '') +
-    '<span class="mm-lcount" id="mmListCount"></span>';
+    wmFltRow('프로젝트', '<select data-f="proj" aria-label="프로젝트">' + opt('', '전체', _mmLV.proj) + opt('__none', '프로젝트 없음', _mmLV.proj) + pk.map(function (k) { return opt(k, projs[k], _mmLV.proj); }).join('') + '</select>') +
+    wmFltRow('만든 사람', '<select data-f="owner" aria-label="만든 사람">' + opt('', '전체', _mmLV.owner) + ok.map(function (k) { return opt(k, owners[k], _mmLV.owner); }).join('') + '</select>') +
+    wmFltRow('수정', '<select data-f="age" aria-label="수정 시기">' + MM_AGES.map(function (a) { return opt(a[0], String(a[1]).replace(/^수정:\s*/, ''), _mmLV.age); }).join('') + '</select>') +
+    '<div class="hdr-mi-sep"></div><button class="hdr-mi" data-act="fclear"' + (any ? '' : ' disabled') + '>✕ 필터 모두 지우기</button>';
+  var fb = _mmEl('mmFltBtn');
+  if (fb) { fb.classList.toggle('wm-flt-on', !!nF); fb.innerHTML = '⏷ 필터' + (nF ? '<span class="wm-flt-n">' + nF + '</span>' : ''); }
 }
 
 function _mmPaintList() {

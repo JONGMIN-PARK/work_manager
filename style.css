@@ -3468,3 +3468,21 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 #wmHitBar button{border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);border-radius:14px;padding:3px 9px;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
 #wmHitBar button:hover{border-color:var(--ac);color:var(--ac-t)}
 #wmHitBar .wm-hit-x{border-color:#EAB308;color:var(--t2);font-weight:600}
+
+/* ═══ v13.295 — 내 업무 · 마인드맵 목록 툴바 (.wm-tb) ═══ */
+.wm-tb.mw-head .mw-sum{flex:0 1 auto}
+.wm-tb .mwc-seg{border:1px solid var(--bd);overflow:visible}
+.hdr-mi .wm-flt-n,.wm-more .wm-flt-n{margin-left:4px}
+.hdr-mi.mwio-trash b{margin-left:4px;color:var(--d-t)}
+.mm-list-tb .mm-lcount{margin:0;width:auto}
+.mm-list-tb .wm-tb-q{flex:0 1 260px;width:260px}
+.wm-flt-menu .mm-list-filt{display:block;margin:0;padding:0;border:0}
+/* 마인드맵 편집기 머리 — 넓은 화면에선 한 줄 (제목 · 찾기 칸이 줄어들고 ⋯ 가 아래로 밀리지 않게) */
+@media (min-width:1100px){
+  .mm-top{flex-wrap:nowrap}
+  .mm-top .mm-titlebox{flex:0 1 360px;min-width:140px}
+  .mm-top .mm-searchbox{flex:0 1 210px;min-width:120px;width:auto}
+  .mm-top>*{flex-shrink:0}
+  .mm-top>.mm-titlebox,.mm-top>.mm-searchbox,.mm-top>.mm-flex{flex-shrink:1}
+}
+@media (max-width:600px){.mm-list-tb .wm-tb-q{flex:1 1 100%;width:auto}}

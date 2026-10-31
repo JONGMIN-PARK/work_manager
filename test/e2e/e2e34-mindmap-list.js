@@ -67,9 +67,10 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     // 필터 · 정렬 · 목록 보기
     await page.evaluate(function () { var s = document.querySelector('#mmListFilt [data-f="age"]'); s.value = 'old'; s.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(200);
     check(await page.evaluate(function (A) { return !document.querySelector(A) && !!document.querySelector('#mmListFilt [data-act="fclear"]'); }, A), '90일 넘게 그대로 — 새 맵은 빠짐 · 필터 풀기 버튼');
-    await page.click('#mmListFilt [data-act="fclear"]'); await wait(200);
+    await page.click('#mmFltBtn'); await page.click('#mmListFilt [data-act="fclear"]'); await wait(200);   // v13.295 필터는 펼침 창 안
     await page.evaluate(function () { var s = document.querySelector('#mmListFilt [data-f="owner"]'); s.value = currentUser.id; s.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(200);
-    check(await page.evaluate(function (A) { return !!document.querySelector(A) && document.querySelector('#mmListFilt [data-f="owner"]').classList.contains('on'); }, A), '만든 사람 필터');
+    check(await page.evaluate(function (A) { return !!document.querySelector(A) && (document.querySelector('#mmFltBtn .wm-flt-n') || {}).textContent === '1'; }, A), '만든 사람 필터 · 배지 1');
+    if (!(await page.evaluate(function () { return document.getElementById('mmFltWrap').classList.contains('open'); }))) await page.click('#mmFltBtn');
     await page.click('#mmListFilt [data-act="fclear"]'); await wait(150);
     await page.select('#mmListSort', 'title'); await wait(150);
     var titles = await page.evaluate(function () { return Array.from(document.querySelectorAll('#mmListBody .mm-card-title')).map(function (t) { return t.textContent; }); });

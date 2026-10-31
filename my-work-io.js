@@ -13,16 +13,20 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 /** 머리 도구 버튼 (my-work.js _mwPaint 가 부름) */
+/** 머리 ⋯ 메뉴 항목 (my-work.js _mwPaint 가 부름, v13.295) */
 function mwIoToolsHtml(r) {
-  return '<button class="mw-btn" data-mwio="export" title="엑셀 · CSV · 글로 복사 — 지금 보이는 그대로">📤 내보내기</button>' +
-    (r.self ? '<button class="mw-btn" data-mwio="map" title="마인드맵으로 옮기기 · 복사">🧠 맵으로</button>' +
-      '<button class="mw-btn mwio-trash" data-mwio="trash" title="휴지통 — 비우기 전까지 보관">🗑' + (r.trashN ? ' <b>' + r.trashN + '</b>' : '') + '</button>' +
-      '<button class="mw-btn" data-mwio="tg" title="텔레그램 — 연동 확인 · 지금 추천 받기 · 추천 시각 (/mywork · /rec)">📨</button>' : '');
+  return '<button class="hdr-mi" data-mwio="export" title="엑셀 · CSV · 글로 복사 — 지금 보이는 그대로">📤 내보내기</button>' +
+    (r.self ? '<button class="hdr-mi" data-mwio="map" title="마인드맵으로 옮기기 · 복사">🧠 맵으로 옮기기</button>' +
+      '<button class="hdr-mi" data-mwio="tg" title="텔레그램 — 연동 확인 · 지금 추천 받기 · 추천 시각 (/mywork · /rec)">📨 텔레그램</button>' +
+      '<div class="hdr-mi-sep"></div><button class="hdr-mi mwio-trash" data-mwio="trash" title="휴지통 — 비우기 전까지 보관">🗑 휴지통' + (r.trashN ? ' <b>' + r.trashN + '</b>' : '') + '</button>' : '');
 }
 function mwIoClick(e) {
   var b = e.target.closest('[data-mwio]');
   if (!b) return false;
   var k = b.getAttribute('data-mwio');
+  // ⋯ 메뉴 안에서 눌렀으면 메뉴가 닫히므로 펼침 메뉴(내보내기 · 텔레그램)는 ⋯ 단추 밑에 (v13.295)
+  var pop = b.closest('.hdr-pop');
+  if (pop) b = pop.querySelector(':scope > button') || b;
   if (k === 'trash') mwTrashOpen();
   else if (k === 'export') _mwioExportMenu(b);
   else if (k === 'map') mwToMapOpen();
