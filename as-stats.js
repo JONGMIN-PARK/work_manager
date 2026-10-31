@@ -97,9 +97,8 @@ function _asStatsShellHtml() {
   h += '<div class="pnl" style="margin-bottom:12px;padding:14px 18px">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">';
   h += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
-  h += '<span style="font-size:13px;font-weight:700;color:var(--t2)">📊 A/S 통계 · 트렌드 분석</span>';
-  // 보기 모드 복귀
-  h += '<button onclick="asViewMode=\'all\';renderAS()" style="font-size:10px;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t4);cursor:pointer">← 목록으로</button>';
+  // v13.292 목록과 같은 제목 · 보기 전환 (예전 [← 목록으로] 대신)
+  h += '<h3 class="wm-tb-t">🛠️ A/S</h3>' + (typeof asModeSegHtml === 'function' ? asModeSegHtml() : '') + '<span class="wm-tb-n">통계 · 트렌드 분석</span>';
   h += '</div>';
   // 기간 토글
   h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';

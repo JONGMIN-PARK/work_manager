@@ -110,29 +110,25 @@ function _techRender() {
   ).join('');
 
   var viewBtn = function (key, label) {
-    var on = _techView === key;
-    return '<button class="btn btn-s" style="font-size:11px;' + (on ? 'background:var(--ac);color:#fff' : '') + '" onclick="techSetView(\'' + key + '\')">' + label + '</button>';
+    return '<button class="' + (_techView === key ? 'on' : '') + '" onclick="techSetView(\'' + key + '\')">' + label + '</button>';
   };
 
-  var html = '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
-    '<h3 style="font-size:14px;font-weight:700;color:var(--t1);margin:0">🧪 요소기술</h3>' +
-    '<span style="font-size:11px;color:var(--t5)">' + items.length + '건</span>' +
-    '<span style="flex:1"></span>' +
-    viewBtn('catalog', '카탈로그') + viewBtn('category', '분류별') + viewBtn('stack', '기술스택') + viewBtn('list', '목록') +
-    '<button class="btn btn-p btn-s" style="font-size:11px" onclick="techOpenModal()">+ 새 기술</button>' +
-  '</div>';
-
-  html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
-    '<input id="techQ" placeholder="기술명·코드·설명·스택 검색" value="' + _tEsc(_techFilter.q) + '" style="flex:1;min-width:150px;font-size:11px;padding:5px 8px" oninput="techSetQ(this.value)">' +
-    '<select class="si" style="font-size:11px;padding:4px;width:auto;flex:0 0 auto" onchange="techSetCat(this.value)">' + catOpts + '</select>' +
-    '<select class="si" style="font-size:11px;padding:4px;width:auto;flex:0 0 auto" onchange="techSetStatus(this.value)">' + stOpts + '</select>' +
-    '<label style="font-size:11px;color:var(--t4);display:flex;align-items:center;gap:4px">' +
-      '<input type="checkbox"' + (_techFilter.mine ? ' checked' : '') + ' onchange="techSetMine(this.checked)"> 내 담당' +
-    '</label>' +
+  // v13.292 공통 툴바 — [제목 · 건수] [카탈로그 · 분류별 · 기술스택 · 목록] … [검색] [⏷ 필터(분류 · 상태 · 내 담당)] [스택 배지] [+ 새 기술]
+  var nTechFlt = (_techFilter.category ? 1 : 0) + (_techFilter.status ? 1 : 0) + (_techFilter.mine ? 1 : 0);
+  var html = '<div class="wm-tb">' +
+    '<h3 class="wm-tb-t">🧪 요소기술</h3><span class="wm-tb-n">' + items.length + '건</span>' +
+    '<span class="wm-seg">' + viewBtn('catalog', '카탈로그') + viewBtn('category', '분류별') + viewBtn('stack', '기술스택') + viewBtn('list', '목록') + '</span>' +
+    '<span class="wm-tb-sp"></span>' +
+    '<input id="techQ" class="wm-tb-q" placeholder="🔍 기술명·코드·설명·스택 검색" value="' + _tEsc(_techFilter.q) + '" oninput="techSetQ(this.value)">' +
+    wmFltHtml('techFltWrap', nTechFlt,
+      wmFltRow('분류', '<select onchange="techSetCat(this.value)">' + catOpts + '</select>') +
+      wmFltRow('상태', '<select onchange="techSetStatus(this.value)">' + stOpts + '</select>') +
+      '<label class="wm-flt-row wm-flt-chk"><input type="checkbox"' + (_techFilter.mine ? ' checked' : '') + ' onchange="techSetMine(this.checked)"> 내 담당만</label>',
+      nTechFlt ? "_techFilter.category='';_techFilter.status='';_techFilter.mine=false;_techRender()" : null) +
     (_techFilter.stack
-      ? '<span class="badge" style="background:var(--ac);color:#fff;font-size:10px;padding:2px 6px;cursor:pointer" ' +
-        'onclick="techClearStack()" title="스택 필터 해제">🔧 ' + _tEsc(_techFilter.stack) + ' ✕</span>'
+      ? '<span class="wm-tb-badge" style="cursor:pointer" onclick="techClearStack()" title="스택 필터 해제">🔧 ' + _tEsc(_techFilter.stack) + ' ✕</span>'
       : '') +
+    '<button class="wm-pri" onclick="techOpenModal()">+ 새 기술</button>' +
   '</div>';
 
   if (_techView === 'catalog') html += _techCatalogHtml(items);
@@ -141,6 +137,7 @@ function _techRender() {
   else html += _techListHtml(items);
 
   wrap.innerHTML = html;
+  if (typeof wmHdrPopRestore === 'function') wmHdrPopRestore();
 }
 
 /** 카드 1개 */

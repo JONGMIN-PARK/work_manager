@@ -265,11 +265,12 @@ function renderCalFilter(wrap, allProjects) {
       chip(calShowSpans, '▭ 기간 막대', 'span', '프로젝트 진행 기간을 가로 막대로 (많으면 복잡해짐)') +
       chip(calHideDone, '완료 숨김', 'done') +
     '</div>' +
-    '<div style="display:flex;gap:3px">' +
-      '<button class="btn btn-s ' + (calViewMode === 'month' ? 'btn-p' : 'btn-g') + '" onclick="calViewMode=\'month\';renderCalendar()">월간</button>' +
-      '<button class="btn btn-s ' + (calViewMode === 'week' ? 'btn-p' : 'btn-g') + '" onclick="calViewMode=\'week\';renderCalendar()">주간</button>' +
-    '</div>' +
-    '<button class="btn btn-g btn-s" onclick="showGcalImportModal()" title="Google Calendar / ICS 가져오기">📅 가져오기</button>';
+    // v13.292 보기 전환 · ⋯ — 다른 화면 툴바와 같은 모양
+    '<span class="wm-seg">' +
+      '<button class="' + (calViewMode === 'month' ? 'on' : '') + '" onclick="calViewMode=\'month\';renderCalendar()">월간</button>' +
+      '<button class="' + (calViewMode === 'week' ? 'on' : '') + '" onclick="calViewMode=\'week\';renderCalendar()">주간</button>' +
+    '</span>' +
+    wmMoreHtml('calMoreWrap', [['📅 Google Calendar · ICS 가져오기', 'showGcalImportModal()']]);
 }
 
 /* 프로젝트 다중 선택/항목 토글 핸들러 */

@@ -3434,3 +3434,26 @@ mark.wm-hit{background:#FDE047;color:#1F2937;padding:0 1px;border-radius:2px;box
 .wm-hit-box{animation:wmHitPulse 1.6s ease-out 2}
 @keyframes wmHitPulse{0%{box-shadow:0 0 0 0 rgba(250,204,21,.85)}70%{box-shadow:0 0 0 8px rgba(250,204,21,0)}100%{box-shadow:0 0 0 0 rgba(250,204,21,0)}}
 @media (max-width:600px){.gs-keys{display:none}.gs-item .gs-sub{max-width:90px}}
+
+/* ═══ v13.292 — 툴바 필터 팝오버(.wm-flt) · 프로젝트 관리 화면 툴바 ═══ */
+.wm-flt-on{border-color:var(--ac)!important;color:var(--ac-t)!important;background:var(--ac-bg)!important}
+.wm-flt-n{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;margin-left:4px;border-radius:8px;background:var(--ac);color:#fff;font-size:10px;font-weight:700;box-sizing:border-box}
+.wm-flt-menu{min-width:260px;padding:8px}
+.wm-flt-row{display:grid;grid-template-columns:64px 1fr;align-items:center;gap:8px;padding:4px 4px}
+.wm-flt-row>span{font-size:11px;font-weight:600;color:var(--t5)}
+.wm-flt-row select,.wm-flt-row input[type=text]{width:100%;max-width:none;font-size:12px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);box-sizing:border-box}
+.wm-flt-row.wm-flt-chk{grid-template-columns:auto 1fr;cursor:pointer}
+.hdr-mi:disabled{opacity:.45;cursor:default}
+.wm-tb-q{font-size:12px;padding:6px 10px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-i);color:var(--t2);min-width:0;width:220px;flex:0 1 220px;box-sizing:border-box}
+.wm-tb-q:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 2px var(--ac-g)}
+.wm-tb select.wm-tb-sel{font-size:12px;padding:5px 8px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-i);color:var(--t3)}
+.wm-tb-chips{display:inline-flex;gap:4px;flex-wrap:wrap}
+.wm-tb-badge{font-size:11px;padding:3px 8px;border:1px solid var(--ac);border-radius:6px;background:var(--ac-bg);color:var(--ac-t);display:inline-flex;align-items:center;gap:4px}
+@media (max-width:600px){.wm-tb-q{flex:1 1 100%;width:auto}.wm-flt-menu{min-width:0}}
+/* 타임라인 — 제목 줄에 툴바 한 줄 (v13.292). 예전 [⚙ 보기 옵션] 접기(.tl-ctl-*)는 보기 창으로 바뀜 */
+.tl-tb{gap:10px;flex-wrap:wrap}
+.tl-tb .pnl-t{white-space:nowrap}
+#tlControls .btn{padding:5px 10px}
+.wm-flt-row{font-size:12px;color:var(--t2)}
+.wm-flt-row input[type=checkbox]{margin:0;min-width:14px;min-height:14px}
+#tlControls input[type=date],.wm-tb input[type=date]{font-size:12px;padding:5px 8px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-i);color:var(--t3);font-family:inherit}

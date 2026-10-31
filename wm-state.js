@@ -74,7 +74,9 @@ function rFnt(){
 var _fnt=lsGet('wa-font');if(_fnt)aFnt(_fnt);else aFnt('noto');
 _wmFontReady=true;
 /* 헤더 · 툴바 펼침 메뉴(.hdr-pop) — 한 번에 하나만, 바깥 누르기 · Esc 로 닫음 (v13.287) */
+var _wmPopOpen=null;   // 지금 펼친 메뉴 id — 필터(.wm-flt)는 화면을 다시 그려도 다시 펼침(wmHdrPopRestore)
 function wmHdrPopClose(except){
+  _wmPopOpen=except?except.id:null;
   document.querySelectorAll('.hdr-pop.open').forEach(function(w){
     if(w===except)return;
     w.classList.remove('open');
@@ -86,6 +88,7 @@ function wmHdrPop(id){
   var w=document.getElementById(id);if(!w)return;
   wmHdrPopClose(w);
   var on=w.classList.toggle('open');
+  _wmPopOpen=on?id:null;
   var b=w.querySelector('[aria-expanded]');if(b)b.setAttribute('aria-expanded',on?'true':'false');
   if(on&&id==='hdrLookWrap'){var l=document.getElementById('fontBar'),c=l&&l.querySelector('.fnd.on');if(c)l.scrollTop=Math.max(0,c.offsetTop-l.clientHeight/2)}  // 고른 글씨체가 보이게
 }
@@ -97,6 +100,33 @@ document.addEventListener('click',function(e){
   wmHdrPopClose();
 });
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.querySelector('.hdr-pop.open'))wmHdrPopClose()});
+/* 필터를 바꾸면 화면이 툴바째 다시 그려짐 — 펼쳐 두었던 필터 창을 다시 펼침 (각 화면 render 끝에서 부름, v13.292) */
+function wmHdrPopRestore(){
+  if(!_wmPopOpen)return;
+  var w=document.getElementById(_wmPopOpen);
+  if(!w||!w.classList.contains('wm-flt')||w.classList.contains('open'))return;
+  w.classList.add('open');
+  var b=w.querySelector('[aria-expanded]');if(b)b.setAttribute('aria-expanded','true');
+}
+/* 툴바 필터 단추 + 펼침 창 (v13.292). n = 걸린 필터 수(배지), rows = wmFltRow(...) 들, clearJs = [모두 지우기] 때 부를 코드 */
+function wmFltHtml(id,n,rows,clearJs,label){
+  return '<div class="hdr-pop wm-flt" id="'+id+'">'+
+    '<button class="btn btn-g'+(n?' wm-flt-on':'')+'" onclick="wmHdrPop(\''+id+'\')" aria-haspopup="true" aria-expanded="false" title="'+(label?'보기 옵션':'필터')+'">'+(label||'⏷ 필터')+(n?'<span class="wm-flt-n">'+n+'</span>':'')+'</button>'+
+    '<div class="hdr-pop-menu wm-flt-menu">'+rows+
+      (clearJs?'<div class="hdr-mi-sep"></div><button class="hdr-mi" onclick="'+clearJs+'"'+(n?'':' disabled')+'>✕ 필터 모두 지우기</button>':'')+
+    '</div></div>';
+}
+function wmFltRow(label,ctl){return '<label class="wm-flt-row"><span>'+label+'</span>'+ctl+'</label>'}
+/* ⋯ 메뉴 (v13.292) — items = [[라벨, onclick, 위험?], ...] · null 은 구분선 · 빈 항목은 건너뜀 */
+function wmMoreHtml(id,items,title){
+  var h='<div class="hdr-pop" id="'+id+'"><button class="btn btn-g wm-more" onclick="wmHdrPop(\''+id+'\')" title="'+(title||'더보기')+'" aria-haspopup="true" aria-expanded="false">⋯</button><div class="hdr-pop-menu" role="menu">';
+  items.forEach(function(it){
+    if(it===null){h+='<div class="hdr-mi-sep"></div>';return}
+    if(!it)return;
+    h+='<button class="hdr-mi'+(it[2]?' hdr-mi-danger':'')+'" role="menuitem" onclick="'+it[1]+'"'+(it[3]?' title="'+it[3]+'"':'')+'>'+it[0]+'</button>';
+  });
+  return h+'</div></div>';
+}
 
 /* ═══ CONSTS: config.js에서 로드 (TH, ENC, COL, AM, ABG, AFG, ABR, CMP_COL, CMP_DASH, CMP_PT, AI_CONFIG, DIFF_KEYWORDS, AI_PRESETS) ═══ */
 

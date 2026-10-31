@@ -197,6 +197,10 @@ async function renderTimeline() {
   });
   var projects = f.projects;
 
+  // 컨트롤 바 — 빈 결과여도 먼저 그림 (예전엔 필터 결과가 없으면 필터 표시가 안 바뀌었다, v13.292)
+  var _tlc = document.getElementById('tlControls'); _tlc.innerHTML = _tlRenderControls(f.assigneeList); _tlc.classList.toggle('tl-more-on', !!window._tlCtlMore);
+  if (typeof wmHdrPopRestore === 'function') wmHdrPopRestore();   // 필터 · 보기 창을 연 채 바꿨으면 다시 펼침
+
   // 프로젝트가 없으면 빈 상태
   var content = document.getElementById('tlContent');
   if (!allProjects.length) {
@@ -204,7 +208,7 @@ async function renderTimeline() {
     return;
   }
   if (!projects.length) {
-    content.innerHTML = '<div style="text-align:center;color:var(--t6);padding:30px;font-size:12px">표시할 프로젝트가 없습니다. (완료 ' + allProjects.length + '건 숨김)</div>';
+    content.innerHTML = '<div style="text-align:center;color:var(--t6);padding:30px;font-size:12px">필터에 맞는 프로젝트가 없습니다 (전체 ' + allProjects.length + '건) — <a href="#" onclick="tlFilterStatus=\'all\';tlFilterAssignee=\'all\';tlHideDone=false;renderTimeline();return false">필터 지우기</a></div>';
     return;
   }
 
@@ -219,8 +223,6 @@ async function renderTimeline() {
   tlUnits = units;
   tlLabelW = labelW;
 
-  // 컨트롤 바
-  var _tlc = document.getElementById('tlControls'); _tlc.innerHTML = _tlRenderControls(f.assigneeList); _tlc.classList.toggle('tl-more-on', !!window._tlCtlMore);
 
   // 헤더 (기간 표시)
   var headerHtml = _tlRenderHeader(units, rg.totalWidth, rg.unitW, rg.todayStr);
@@ -385,59 +387,60 @@ function _tlBarsVars(units, todayPos, todayStr, uw, scale) {
     (scale === 'day' ? ('--tl-sat:' + satX + 'px;--tl-sun:' + sunX + 'px;--tl-wkw:' + uw + 'px;') : '--tl-wkw:0px;');
 }
 
-/* 컨트롤 바 HTML (스케일·이동·토글·필터·정렬) */
+/* 컨트롤 바 HTML — v13.292 공통 툴바 한 줄:
+   [줄 단위 시간~분기] [📍 오늘] [날짜] … [⏷ 필터(상태 · 담당자 · 완료 숨기기)] [⚙ 보기(편집 · 표시 · 정렬 · 그룹)] [➕ 프로젝트] [⋯ 접기 · 펼치기 · 내보내기 · 압축]
+   칸 id(tlEditModeTog · tlFilterStatus …)는 예전 그대로 */
+function _tlChk(id, on, onchange, label, title) {
+  return '<label class="wm-flt-row wm-flt-chk"' + (title ? ' title="' + title + '"' : '') + '><input type="checkbox" id="' + id + '" onchange="' + onchange + '"' + (on ? ' checked' : '') + '> ' + label + '</label>';
+}
 function _tlRenderControls(assigneeList) {
-  return '<button class="btn btn-p btn-s" onclick="showProjectModal()">➕ 프로젝트</button>' +
-    '<div style="display:flex;gap:3px;align-items:center">' +
-      '<span style="font-size:11px;color:var(--t4);margin-right:4px">스케일:</span>' +
-      ['hour','day','week','month','quarter'].map(function (s) {
-        var labels = { hour: '시간', day: '일', week: '주', month: '월', quarter: '분기' };
-        return '<button class="btn btn-s ' + (tlScale === s ? 'btn-p' : 'btn-g') + '" onclick="tlScale=\'' + s + '\';renderTimeline()">' + labels[s] + '</button>';
-      }).join('') +
-    '</div>' +
-    '<div style="display:flex;gap:4px;align-items:center">' +
-      '<button class="btn btn-g btn-s" onclick="tlGoToday()" title="오늘 날짜를 중앙으로">📍 오늘</button>' +
-      '<input type="date" onchange="if(this.value)tlGoToDate(this.value)" title="지정 날짜로 이동" style="font-size:10px;padding:2px 5px;border:1px solid var(--bd-i);border-radius:5px;background:var(--bg-i);color:var(--t3)">' +
-    '</div>' +
-    // v13.284 휴대폰 · 가로 — 보기 옵션(편집 모드 · 토글 · 필터 · 내보내기)은 [⚙ 보기 옵션] 안에 접음 (넓은 화면은 그대로 펼침)
-    '<button class="btn btn-g btn-s tl-ctl-tg' + (window._tlCtlMore ? ' on' : '') + '" onclick="tlToggleCtlMore()" aria-label="보기 옵션">⚙ 보기 옵션</button>' +
-    '<span class="tl-ctl-more">' +
-    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlEditMode ? '#FCD34D' : 'var(--t5)') + ';cursor:pointer;background:' + (tlEditMode ? 'rgba(245,158,11,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlEditMode ? 'rgba(245,158,11,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlEditModeTog" onchange="tlEditMode=this.checked;renderTimeline()"' + (tlEditMode ? ' checked' : '') + '> ✏️ 기간 조정</label>' +
-    // v13.136 마일스톤 순서 변경 모드 — 체크 시에만 드래그 재배열 허용
-    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlMsReorder ? '#A78BFA' : 'var(--t5)') + ';cursor:pointer;background:' + (tlMsReorder ? 'rgba(139,92,246,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlMsReorder ? 'rgba(139,92,246,.4)' : 'var(--bd-i)') + '" title="체크 시에만 마일스톤을 드래그하여 순서를 바꿀 수 있습니다 (평상시엔 순서 고정)"><input type="checkbox" id="tlMsReorderTog" onchange="tlMsReorder=this.checked;renderTimeline()"' + (tlMsReorder ? ' checked' : '') + '> ↕️ 순서 변경</label>' +
-    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlHideDoneTog" onchange="tlHideDone=this.checked;renderTimeline()"' + (tlHideDone ? ' checked' : '') + '> 완료 숨기기</label>' +
-    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (showCriticalPath ? SEM_COLOR.danger : 'var(--t5)') + ';cursor:pointer;background:' + (showCriticalPath ? 'rgba(239,68,68,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (showCriticalPath ? 'rgba(239,68,68,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlCriticalPathTog" onchange="showCriticalPath=this.checked;renderTimeline()"' + (showCriticalPath ? ' checked' : '') + '> 🔴 크리티컬 패스</label>' +
-    // v13.133 컴팩트 밀도 토글
-    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer;background:var(--bg-i);padding:3px 8px;border-radius:5px;border:1px solid var(--bd-i)"><input type="checkbox" id="tlDensityTog" onchange="tlToggleDensityFast(this.checked)"' + (tlDensity === 'compact' ? ' checked' : '') + '> 🔳 컴팩트</label>' +
-    // v13.156 라벨 대표 이미지 썸네일 상시 표시 토글
-    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlShowThumb ? '#22D3EE' : 'var(--t5)') + ';cursor:pointer;background:' + (tlShowThumb ? 'rgba(34,211,238,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlShowThumb ? 'rgba(34,211,238,.4)' : 'var(--bd-i)') + '" title="프로젝트 라벨에 대표 이미지 썸네일 상시 표시"><input type="checkbox" id="tlThumbTog" onchange="tlShowThumb=this.checked;if(typeof lsSet===\'function\')lsSet(\'tlShowThumb\',this.checked?\'1\':\'0\');renderTimeline()"' + (tlShowThumb ? ' checked' : '') + '> 🖼 썸네일</label>' +
-    (tlShowThumb ? '<select class="si" id="tlThumbSizeSel" onchange="tlThumbSize=parseInt(this.value,10)||108;if(typeof lsSet===\'function\')lsSet(\'tlThumbSize\',String(tlThumbSize));renderTimeline()" style="max-width:96px;padding:3px 5px;font-size:10px" title="썸네일 크기">' +
+  var labels = { hour: '시간', day: '일', week: '주', month: '월', quarter: '분기' };
+  var nFlt = (tlFilterStatus !== 'all' ? 1 : 0) + (tlFilterAssignee !== 'all' ? 1 : 0) + (tlHideDone ? 1 : 0);
+  var nView = (tlEditMode ? 1 : 0) + (tlMsReorder ? 1 : 0);   // 편집 모드가 켜져 있으면 보기 단추에 표시
+  var flt =
+    wmFltRow('상태', '<select class="si" id="tlFilterStatus" onchange="tlFilterStatus=this.value;renderTimeline()">' +
+      _tlOpts([['all','모든 상태'],['waiting','대기'],['active','진행중'],['delayed','지연'],['done','완료'],['hold','보류']], tlFilterStatus) + '</select>') +
+    wmFltRow('담당자', '<select class="si" id="tlFilterAssignee" onchange="tlFilterAssignee=this.value;renderTimeline()">' +
+      '<option value="all"' + (tlFilterAssignee === 'all' ? ' selected' : '') + '>모든 담당자</option>' +
+      assigneeList.map(function (a) { return '<option value="' + eH(a) + '"' + (tlFilterAssignee === a ? ' selected' : '') + '>' + eH(a) + '</option>'; }).join('') + '</select>') +
+    _tlChk('tlHideDoneTog', tlHideDone, 'tlHideDone=this.checked;renderTimeline()', '완료 숨기기');
+  var view =
+    '<div class="hdr-mi-grp">편집</div>' +
+    _tlChk('tlEditModeTog', tlEditMode, 'tlEditMode=this.checked;renderTimeline()', '✏️ 기간 조정 — 막대를 끌어 날짜 바꾸기') +
+    _tlChk('tlMsReorderTog', tlMsReorder, 'tlMsReorder=this.checked;renderTimeline()', '↕️ 마일스톤 순서 변경', '체크 시에만 마일스톤을 드래그하여 순서를 바꿀 수 있습니다 (평상시엔 순서 고정)') +
+    '<div class="hdr-mi-sep"></div><div class="hdr-mi-grp">표시</div>' +
+    _tlChk('tlCriticalPathTog', showCriticalPath, 'showCriticalPath=this.checked;renderTimeline()', '🔴 크리티컬 패스') +
+    _tlChk('tlDensityTog', tlDensity === 'compact', 'tlToggleDensityFast(this.checked)', '🔳 컴팩트') +
+    _tlChk('tlDayOffsetTog', tlDayOffset, 'tlToggleDayOffset(this.checked)', '📏 D-Day 표시') +
+    _tlChk('tlThumbTog', tlShowThumb, "tlShowThumb=this.checked;if(typeof lsSet==='function')lsSet('tlShowThumb',this.checked?'1':'0');renderTimeline()", '🖼 썸네일', '프로젝트 라벨에 대표 이미지 썸네일 상시 표시') +
+    (tlShowThumb ? wmFltRow('썸네일', '<select class="si" id="tlThumbSizeSel" onchange="tlThumbSize=parseInt(this.value,10)||108;if(typeof lsSet===\'function\')lsSet(\'tlThumbSize\',String(tlThumbSize));renderTimeline()" title="썸네일 크기">' +
       [['56','작게'],['84','보통'],['108','크게'],['140','아주크게']].map(function(o){ return '<option value="' + o[0] + '"' + (tlThumbSize === parseInt(o[0],10) ? ' selected' : '') + '>🖼 ' + o[1] + '</option>'; }).join('') +
-    '</select>' : '') +
-    // v13.133 D-Day 표시 토글
-    '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:' + (tlDayOffset ? '#10B981' : 'var(--t5)') + ';cursor:pointer;background:' + (tlDayOffset ? 'rgba(16,185,129,.12)' : 'var(--bg-i)') + ';padding:3px 8px;border-radius:5px;border:1px solid ' + (tlDayOffset ? 'rgba(16,185,129,.4)' : 'var(--bd-i)') + '"><input type="checkbox" id="tlDayOffsetTog" onchange="tlToggleDayOffset(this.checked)"' + (tlDayOffset ? ' checked' : '') + '> 📏 D-Day 표시</label>' +
-    // v13.133 마일스톤 모두접기/펼치기
-    '<button class="btn btn-g btn-s" onclick="tlCollapseAll()" title="모든 프로젝트의 마일스톤 접기">⊟ 모두접기</button>' +
-    '<button class="btn btn-g btn-s" onclick="tlExpandAll()" title="모든 프로젝트의 마일스톤 펼치기">⊞ 모두펼치기</button>' +
-    // v13.133 상태/담당자 필터 + 정렬
-    '<div style="display:flex;gap:4px;align-items:center">' +
-      '<select class="si" id="tlFilterStatus" onchange="tlFilterStatus=this.value;renderTimeline()" style="max-width:140px;padding:4px 6px;font-size:10px">' +
-        _tlOpts([['all','모든 상태'],['waiting','대기'],['active','진행중'],['delayed','지연'],['done','완료'],['hold','보류']], tlFilterStatus) +
-      '</select>' +
-      '<select class="si" id="tlFilterAssignee" onchange="tlFilterAssignee=this.value;renderTimeline()" style="max-width:140px;padding:4px 6px;font-size:10px">' +
-        '<option value="all"' + (tlFilterAssignee === 'all' ? ' selected' : '') + '>모든 담당자</option>' +
-        assigneeList.map(function (a) { return '<option value="' + eH(a) + '"' + (tlFilterAssignee === a ? ' selected' : '') + '>' + eH(a) + '</option>'; }).join('') +
-      '</select>' +
-      '<select class="si" id="tlSortBy" onchange="tlSort=this.value;if(typeof lsSet===\'function\')lsSet(\'tlSort\',this.value);renderTimeline()" style="max-width:150px;padding:4px 6px;font-size:10px" title="정렬 기준 (좌측 목록·타임라인 공통, 선택은 새로고침 후에도 유지)">' +
-        _tlOpts([['default','사용자 지정 순서(파이프라인 연동)'],['name','이름순 가나다 ↑'],['name_desc','이름순 가나다 ↓'],['created','최초등록 오래된순 ↑'],['created_desc','최초등록 최신순 ↓'],['deadline','마감임박순'],['progress','진척률 높은순'],['status','상태순']], tlSort) +
-      '</select>' +
-      '<select class="si" id="tlGroupBy" onchange="tlGroupBy=this.value;if(typeof lsSet===\'function\')lsSet(\'tlGroupBy\',this.value);renderTimeline()" style="max-width:120px;padding:4px 6px;font-size:10px" title="그룹으로 묶기 — 묶은 그룹 안에서 위 정렬 기준 적용 (선택은 유지)">' +
-        _tlOpts([['none','그룹 없음'],['status','상태별 묶기']], tlGroupBy) +
-      '</select>' +
-    '</div>' +
-    '<button class="btn btn-g btn-s" onclick="exportProjectsJSON()">📥 내보내기</button>' +
-    '<button class="btn btn-g btn-s" onclick="tlCompressAllMemoImages()" title="모든 프로젝트의 메모에 들어간 큰 이미지를 일괄 압축·축소(편집 권한 있는 프로젝트만)">🗜 메모이미지 일괄압축</button>' +
-    '</span>';
+    '</select>') : '') +
+    '<div class="hdr-mi-sep"></div><div class="hdr-mi-grp">순서</div>' +
+    wmFltRow('정렬', '<select class="si" id="tlSortBy" onchange="tlSort=this.value;if(typeof lsSet===\'function\')lsSet(\'tlSort\',this.value);renderTimeline()" title="정렬 기준 (좌측 목록·타임라인 공통, 선택은 새로고침 후에도 유지)">' +
+      _tlOpts([['default','사용자 지정 순서(파이프라인 연동)'],['name','이름순 가나다 ↑'],['name_desc','이름순 가나다 ↓'],['created','최초등록 오래된순 ↑'],['created_desc','최초등록 최신순 ↓'],['deadline','마감임박순'],['progress','진척률 높은순'],['status','상태순']], tlSort) +
+    '</select>') +
+    wmFltRow('묶기', '<select class="si" id="tlGroupBy" onchange="tlGroupBy=this.value;if(typeof lsSet===\'function\')lsSet(\'tlGroupBy\',this.value);renderTimeline()" title="그룹으로 묶기 — 묶은 그룹 안에서 위 정렬 기준 적용 (선택은 유지)">' +
+      _tlOpts([['none','그룹 없음'],['status','상태별 묶기']], tlGroupBy) +
+    '</select>');
+  return '<span class="wm-seg" title="줄 단위">' +
+      ['hour','day','week','month','quarter'].map(function (s) {
+        return '<button class="' + (tlScale === s ? 'on' : '') + '" onclick="tlScale=\'' + s + '\';renderTimeline()">' + labels[s] + '</button>';
+      }).join('') +
+    '</span>' +
+    '<button class="btn btn-g" onclick="tlGoToday()" title="오늘 날짜를 중앙으로">📍 오늘</button>' +
+    '<input type="date" class="wm-tb-sel" onchange="if(this.value)tlGoToDate(this.value)" title="지정 날짜로 이동">' +
+    '<span class="wm-tb-sp"></span>' +
+    wmFltHtml('tlFltWrap', nFlt, flt, "tlFilterStatus='all';tlFilterAssignee='all';tlHideDone=false;renderTimeline()") +
+    wmFltHtml('tlViewWrap', nView, view, null, '⚙ 보기') +
+    '<button class="wm-pri" onclick="showProjectModal()">➕ 프로젝트</button>' +
+    wmMoreHtml('tlMoreWrap', [
+      ['⊟ 마일스톤 모두 접기', 'tlCollapseAll()'],
+      ['⊞ 마일스톤 모두 펼치기', 'tlExpandAll()'],
+      null,
+      ['📥 프로젝트 내보내기 (JSON)', 'exportProjectsJSON()'],
+      ['🗜 메모 이미지 일괄 압축', 'tlCompressAllMemoImages()', false, '모든 프로젝트의 메모에 들어간 큰 이미지를 일괄 압축·축소(편집 권한 있는 프로젝트만)']
+    ]);
 }
 /* 휴대폰 · 가로 — [⚙ 보기 옵션] 펼치기/접기 (다시 그려도 상태 유지) */
 function tlToggleCtlMore() {

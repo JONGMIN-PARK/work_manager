@@ -109,36 +109,28 @@ function renderOrders(afterRender) {
 
     var html = '';
 
-    // 상단 컨트롤
-    html += '<div class="pnl" style="margin-bottom:14px;padding:14px 18px">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">';
-    html += '<div style="display:flex;align-items:center;gap:10px;flex:1 1 260px;min-width:0;flex-wrap:wrap">';   // 기준 폭 — 0 이면 휴대폰에서 버튼 줄에 밀려 폭 0 으로 겹쳤다
-    html += '<span style="font-size:13px;font-weight:700;color:var(--t2);white-space:nowrap">📋 수주 대장</span>';
-    html += '<span style="font-size:11px;color:var(--t5)">' + orders.length + '건' + (filterActive ? ' / 전체 ' + totalCnt + '건' : '') + '</span>';
-    // 거래처 필터
-    html += '<select style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3)" onchange="orderFilterClient=this.value;_orderPersistFilters();renderOrders()">';
+    // v13.292 공통 툴바 — [제목 · 건수 · 총액 · 연결] [검색] [거래처] … [+ 신규 수주] [⋯ 엑셀 · DB 동기화]
+    var totalAmount = 0;
+    orders.forEach(function (o) { totalAmount += Number(o.amount) || 0; });
+    html += '<div class="wm-tb">';
+    html += '<h3 class="wm-tb-t">📋 수주 대장</h3>';
+    html += '<span class="wm-tb-n">' + orders.length + '건' + (filterActive ? ' / 전체 ' + totalCnt + '건' : '') +
+      ' · 총 ' + formatAmount(totalAmount) + ' · 프로젝트 연결 ' + Object.keys(projByOrder).length + '건</span>';
+    html += '<span class="wm-tb-sp"></span>';
+    html += '<input type="text" id="orderQ" class="wm-tb-q" placeholder="🔍 수주번호·프로젝트명·거래처" value="' + eH(orderSearchKw) + '" oninput="orderSetQ(this.value)">';
+    html += '<select class="wm-tb-sel" onchange="orderFilterClient=this.value;_orderPersistFilters();renderOrders()" title="거래처">';
     html += '<option value="">전체 거래처</option>';
     Object.keys(clients).sort().forEach(function (c) {
       html += '<option value="' + eH(c) + '"' + (orderFilterClient === c ? ' selected' : '') + '>' + eH(c) + '</option>';
     });
     html += '</select>';
-    // 텍스트 검색
-    html += '<input type="text" id="orderQ" placeholder="🔍 수주번호·프로젝트명·거래처" value="' + eH(orderSearchKw) + '" oninput="orderSetQ(this.value)" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);flex:1;min-width:160px;max-width:360px">';
-    html += '</div>';
-    html += '<div style="display:flex;gap:6px;flex-wrap:wrap">';   // 휴대폰 — 버튼이 줄을 넘겨 제목을 짓누르지 않게 (v13.284)
-    html += '<button class="btn btn-p btn-s" onclick="showOrderModal()">+ 신규 수주</button>';
-    html += '<button class="btn btn-g btn-s" onclick="importOrderExcel()">📥 엑셀 불러오기</button>';
-    html += '<button class="btn btn-g btn-s" onclick="exportOrderExcel()">📤 엑셀 저장</button>';
-    html += '<button class="btn btn-g btn-s" onclick="syncOrdersToDB()">🔄 DB 동기화</button>';
-    html += '</div></div>';
-
-    // 통계 카드
-    var totalAmount = 0;
-    orders.forEach(function (o) { totalAmount += Number(o.amount) || 0; });
-    html += '<div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">';
-    html += '<div style="font-size:10px;color:var(--t5)">총 수주액: <strong style="color:var(--t2)">' + formatAmount(totalAmount) + '</strong></div>';
-    html += '<div style="font-size:10px;color:var(--t5)">프로젝트 연결: <strong style="color:var(--t2)">' + Object.keys(projByOrder).length + '건</strong></div>';
-    html += '</div>';
+    html += '<button class="wm-pri" onclick="showOrderModal()">+ 신규 수주</button>';
+    html += wmMoreHtml('orderMoreWrap', [
+      ['📥 엑셀 불러오기', 'importOrderExcel()'],
+      ['📤 엑셀 저장', 'exportOrderExcel()'],
+      null,
+      ['🔄 DB 동기화', 'syncOrdersToDB()', false, '화면의 수주 목록을 서버에 맞춤']
+    ]);
     html += '</div>';
 
     // 테이블

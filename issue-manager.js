@@ -115,18 +115,35 @@ function renderIssues(afterRender) {
 
     var html = '';
 
-    // ─── 상단 컨트롤 바 ───
-    html += '<div class="pnl" style="margin-bottom:12px;padding:14px 18px">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
-    html += '<div style="display:flex;align-items:center;gap:10px">';
-    html += '<span style="font-size:13px;font-weight:700;color:var(--t2)">🎫 이슈 관리</span>';
-    html += '<span style="font-size:11px;color:var(--t5)">전체 ' + allIssues.length + '건' + (issues.length !== allIssues.length ? ' (필터: ' + issues.length + '건)' : '') + '</span>';
+    // ─── v13.292 공통 툴바 — [제목 · 건수] [검색] [상태] [단계] [⏷ 필터(부서 · 유형 · 긴급도 · 프로젝트)] [수주 배지] … [+ 등록] [⋯ 통계 · 내보내기] ───
+    var nIssFlt = (issueFilterDept ? 1 : 0) + (issueFilterType ? 1 : 0) + (issueFilterUrgency ? 1 : 0) + (issueFilterProject ? 1 : 0);
+    var anyIssFlt = issueFilterPhase || issueFilterDept || issueFilterType || issueFilterStatus || issueFilterUrgency || issueFilterProject || issueFilterOrderNo || issueSearchKw;
+    html += '<div class="wm-tb">';
+    html += '<h3 class="wm-tb-t">🎫 이슈</h3>';
+    html += '<span class="wm-tb-n">전체 ' + allIssues.length + '건' + (issues.length !== allIssues.length ? ' (보이는 ' + issues.length + '건)' : '') + '</span>';
+    html += '<span class="wm-tb-sp"></span>';
+    html += '<input type="text" id="issueQ" class="wm-tb-q" placeholder="🔍 제목·내용·수주번호·프로젝트·담당자" value="' + eH(issueSearchKw) + '" oninput="issueSetQ(this.value)">';
+    html += _issSel('상태', 'issueFilterStatus', issueFilterStatus, statuses, 'wm-tb-sel');
+    html += _issSel('단계', 'issueFilterPhase', issueFilterPhase, phases, 'wm-tb-sel');
+    var prjSel = '<select onchange="issueFilterProject=this.value;renderIssues()"><option value="">전체 프로젝트</option>';
+    projects.forEach(function (p) { prjSel += '<option value="' + eH(p.id) + '"' + (issueFilterProject === p.id ? ' selected' : '') + '>' + eH(p.name) + '</option>'; });
+    prjSel += '</select>';
+    html += wmFltHtml('issueFltWrap', nIssFlt,
+      wmFltRow('부서', _issSel('부서', 'issueFilterDept', issueFilterDept, depts)) +
+      wmFltRow('유형', _issSel('유형', 'issueFilterType', issueFilterType, types)) +
+      wmFltRow('긴급도', _issSel('긴급도', 'issueFilterUrgency', issueFilterUrgency, urgencies)) +
+      wmFltRow('프로젝트', prjSel),
+      anyIssFlt ? 'issueClearFilters()' : null);
+    // 수주번호 활성 필터 배지 (크로스탭 진입 시 표시)
+    if (issueFilterOrderNo) {
+      html += '<span class="wm-tb-badge" title="이 수주의 이슈만 표시 중">📋 수주 ' + eH(issueFilterOrderNo) + ' <span style="cursor:pointer;font-weight:700;padding:0 2px" onclick="issueFilterOrderNo=\'\';renderIssues()" title="필터 해제">✕</span></span>';
+    }
+    html += '<button class="wm-pri" onclick="showIssueModal()">+ 등록</button>';
+    html += wmMoreHtml('issueMoreWrap', [
+      [issueShowStats ? '📊 통계 숨기기' : '📊 통계 보기', 'issueToggleStats()'],
+      ['📥 엑셀 내보내기', 'exportIssueExcel()']
+    ]);
     html += '</div>';
-    html += '<div style="display:flex;gap:6px">';
-    html += '<button onclick="showIssueModal()" style="font-size:11px;padding:4px 12px;border:none;border-radius:6px;background:#6366F1;color:#fff;cursor:pointer;font-weight:600">+ 등록</button>';
-    html += '<button onclick="issueToggleStats()" style="font-size:11px;padding:4px 12px;border:1px solid var(--bd);border-radius:6px;background:' + (issueShowStats ? 'var(--accent)' : 'var(--bg-i)') + ';color:' + (issueShowStats ? '#fff' : 'var(--t3)') + ';cursor:pointer">📊 통계</button>';
-    html += '<button onclick="exportIssueExcel()" style="font-size:11px;padding:4px 12px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer">📥 내보내기</button>';
-    html += '</div></div></div>';
 
     // ─── 요약 카드 ───
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,240px));gap:10px;margin-bottom:12px">';
@@ -135,32 +152,6 @@ function renderIssues(afterRender) {
     html += issueStatCard('대응중', inProgCnt, SEM_COLOR.info, 'inProgress', issueFilterStatus === 'inProgress' && !issueFilterUrgency);
     html += issueStatCard('해결/종결', resolvedCnt, SEM_COLOR.ok);
     html += '</div>';
-
-    // ─── 필터 바 ───
-    html += '<div class="pnl" style="margin-bottom:12px;padding:10px 14px">';
-    html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">';
-    html += issueFilterSelect('단계', 'issueFilterPhase', issueFilterPhase, phases);
-    html += issueFilterSelect('부서', 'issueFilterDept', issueFilterDept, depts);
-    html += issueFilterSelect('유형', 'issueFilterType', issueFilterType, types);
-    html += issueFilterSelect('상태', 'issueFilterStatus', issueFilterStatus, statuses);
-    html += issueFilterSelect('긴급도', 'issueFilterUrgency', issueFilterUrgency, urgencies);
-    // 프로젝트 필터
-    html += '<select onchange="issueFilterProject=this.value;renderIssues()" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
-    html += '<option value="">전체 프로젝트</option>';
-    projects.forEach(function (p) {
-      html += '<option value="' + eH(p.id) + '"' + (issueFilterProject === p.id ? ' selected' : '') + '>' + eH(p.name) + '</option>';
-    });
-    html += '</select>';
-    // 키워드 검색
-    html += '<input type="text" id="issueQ" placeholder="🔍 제목·내용·수주번호·프로젝트·담당자" value="' + eH(issueSearchKw) + '" oninput="issueSetQ(this.value)" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3);flex:1;min-width:160px;max-width:360px">';
-    // 수주번호 활성 필터 배지 (크로스탭 진입 시 표시)
-    if (issueFilterOrderNo) {
-      html += '<span style="font-size:10px;padding:3px 8px;border:1px solid var(--ac);border-radius:4px;background:var(--ac-bg);color:var(--ac-t);display:inline-flex;align-items:center;gap:4px" title="이 수주의 이슈만 표시 중">📋 수주 ' + eH(issueFilterOrderNo) + ' <span style="cursor:pointer;font-weight:700;padding:0 2px" onclick="issueFilterOrderNo=\'\';renderIssues()" title="필터 해제">✕</span></span>';
-    }
-    if (issueFilterPhase || issueFilterDept || issueFilterType || issueFilterStatus || issueFilterUrgency || issueFilterProject || issueFilterOrderNo || issueSearchKw) {
-      html += '<button onclick="issueClearFilters()" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t5);cursor:pointer">✕ 초기화</button>';
-    }
-    html += '</div></div>';
 
     // ─── 테이블 ───
     html += '<div class="pnl" style="padding:0;overflow-x:auto">';
@@ -235,6 +226,7 @@ function renderIssues(afterRender) {
     }
 
     wrap.innerHTML = html;
+    if (typeof wmHdrPopRestore === 'function') wmHdrPopRestore();
 
     // ─── 일괄 작업 바 렌더 + 전체선택 체크박스 동기화 ───
     renderIssueBulkBar();
@@ -334,6 +326,16 @@ function issueStatCard(label, count, color, filterKey, active) {
     '<div style="font-size:10px;color:var(--t5);margin-top:2px">' + label + '</div></div>';
 }
 
+/* v13.292 툴바 · 필터 창용 select — 인라인 크기 없이 (모양은 style.css .wm-tb-sel · .wm-flt-row) */
+function _issSel(label, varName, curVal, options, cls) {
+  var h = '<select' + (cls ? ' class="' + cls + '"' : '') + ' title="' + label + '" onchange="' + varName + '=this.value;renderIssues()">';
+  h += '<option value="">전체 ' + label + '</option>';
+  Object.keys(options).forEach(function (k) {
+    var o = options[k];
+    h += '<option value="' + k + '"' + (curVal === k ? ' selected' : '') + '>' + (o.icon || '') + ' ' + o.label + '</option>';
+  });
+  return h + '</select>';
+}
 function issueFilterSelect(label, varName, curVal, options) {
   var h = '<select onchange="' + varName + '=this.value;renderIssues()" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
   h += '<option value="">전체 ' + label + '</option>';

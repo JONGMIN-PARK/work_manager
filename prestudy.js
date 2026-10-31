@@ -81,24 +81,18 @@ function _psRender() {
   ).join('');
 
   var viewBtn = function (key, label) {
-    var on = _psView === key;
-    return '<button class="btn btn-s" style="font-size:11px;' + (on ? 'background:var(--ac);color:#fff' : '') + '" onclick="psSetView(\'' + key + '\')">' + label + '</button>';
+    return '<button class="' + (_psView === key ? 'on' : '') + '" onclick="psSetView(\'' + key + '\')">' + label + '</button>';
   };
 
-  var html = '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
-    '<h3 style="font-size:14px;font-weight:700;color:var(--t1);margin:0">🔍 사전검토</h3>' +
-    '<span style="font-size:11px;color:var(--t5)">' + items.length + '건</span>' +
-    '<span style="flex:1"></span>' +
-    viewBtn('board', '칸반') + viewBtn('client', '업체별') + viewBtn('list', '목록') +
-    '<button class="btn btn-p btn-s" style="font-size:11px" onclick="psOpenModal()">+ 새 검토</button>' +
-  '</div>';
-
-  html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
-    '<input id="psQ" placeholder="제목·업체·내용 검색" value="' + _psEsc(_psFilter.q) + '" style="flex:1;min-width:140px;font-size:11px;padding:5px 8px" oninput="psSetQ(this.value)">' +
-    '<select class="si" style="font-size:11px;padding:4px;width:auto;flex:0 0 auto" onchange="psSetClient(this.value)">' + clientOpts + '</select>' +
-    '<label style="font-size:11px;color:var(--t4);display:flex;align-items:center;gap:4px">' +
-      '<input type="checkbox"' + (_psFilter.mine ? ' checked' : '') + ' onchange="psSetMine(this.checked)"> 내 담당' +
-    '</label>' +
+  // v13.292 공통 툴바 — [제목 · 건수] [칸반 · 업체별 · 목록] … [검색] [업체] [내 담당] [+ 새 검토]
+  var html = '<div class="wm-tb">' +
+    '<h3 class="wm-tb-t">🔍 사전검토</h3><span class="wm-tb-n">' + items.length + '건</span>' +
+    '<span class="wm-seg">' + viewBtn('board', '칸반') + viewBtn('client', '업체별') + viewBtn('list', '목록') + '</span>' +
+    '<span class="wm-tb-sp"></span>' +
+    '<input id="psQ" class="wm-tb-q" placeholder="🔍 제목·업체·내용 검색" value="' + _psEsc(_psFilter.q) + '" oninput="psSetQ(this.value)">' +
+    '<select class="wm-tb-sel" onchange="psSetClient(this.value)" title="업체">' + clientOpts + '</select>' +
+    '<span class="wm-seg"><button class="' + (_psFilter.mine ? 'on' : '') + '" onclick="psSetMine(' + (!_psFilter.mine) + ')" title="내가 담당 · 참여한 검토만">👤 내 담당</button></span>' +
+    '<button class="wm-pri" onclick="psOpenModal()">+ 새 검토</button>' +
   '</div>';
 
   if (_psView === 'board') html += _psBoardHtml(items);

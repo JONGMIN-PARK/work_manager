@@ -87,43 +87,27 @@ function renderAS(opts) {
 
     var html = '';
 
-    // 상단 컨트롤 바
-    html += '<div class="pnl" style="margin-bottom:12px;padding:14px 18px">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
-    html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
-    html += '<span style="font-size:13px;font-weight:700;color:var(--t2)">🛠️ A/S 접수 관리</span>';
-    // 전체 / 내 큐 / 칸반 / 통계 / 휴지통 토글
-    html += '<div style="display:inline-flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden">';
-    ['all', 'myqueue', 'kanban', 'stats', 'trash'].forEach(function (mode) {
-      var labels = {
-        all: '📋 전체',
-        myqueue: '🎯 내 큐',
-        kanban: '🗂️ 칸반',
-        stats: '📊 통계',
-        trash: '🗑️ 휴지통' + (_asTrashCount > 0 ? ' (' + _asTrashCount + ')' : '')
-      };
-      var titles = {
-        myqueue: '내게 할당된 처리 진행 중인 건만',
-        kanban: '상태별 칸반 보드 (드래그로 이동)',
-        stats: '트렌드·KPI·SLA·부서부하·CSAT·부품 비용 분석',
-        trash: '삭제(휴지통 이동)된 접수 — 복구 또는 완전 삭제'
-      };
-      var bgPerMode = { trash: SEM_COLOR.danger, stats: '#0EA5E9' };
-      var activeBg = bgPerMode[mode] || '#F59E0B';
-      var active = asViewMode === mode;
-      html += '<button onclick="asViewMode=\'' + mode + '\';renderAS()" style="font-size:10px;padding:4px 10px;border:none;background:' + (active ? activeBg : 'var(--bg-i)') + ';color:' + (active ? '#fff' : 'var(--t4)') + ';cursor:pointer;font-weight:' + (active ? '700' : '500') + '"' + (titles[mode] ? ' title="' + titles[mode] + '"' : '') + '>' + labels[mode] + '</button>';
-    });
+    // v13.292 공통 툴바 — [제목 · 보기 전환 · 건수] [검색] [상태] [⏷ 필터(긴급도 · 카테고리)] … [+ 새 접수] [⋯ 휴지통 · 카테고리 관리]
+    var nAsFlt = (asFilterPriority ? 1 : 0) + (asFilterCategory ? 1 : 0);
+    var anyAsFlt = asFilterStatus || asFilterPriority || asFilterCategory || asSearchKw;
+    var modeLabel = { all: '', myqueue: '내 큐 ', kanban: '', trash: '🗑️ 휴지통 ' }[asViewMode] || '';
+    html += '<div class="wm-tb">';
+    html += '<h3 class="wm-tb-t">🛠️ A/S</h3>' + asModeSegHtml();
+    html += '<span class="wm-tb-n">' + modeLabel + all.length + '건' + (filtered.length !== all.length ? ' (보이는 ' + filtered.length + '건)' : '') + '</span>';
+    if (asViewMode === 'trash') html += '<span class="wm-tb-badge">🗑️ 휴지통 보는 중 <span style="cursor:pointer;font-weight:700;padding:0 2px" onclick="asViewMode=\'all\';renderAS()" title="목록으로">✕</span></span>';
+    html += '<span class="wm-tb-sp"></span>';
+    html += '<input type="text" class="wm-tb-q" placeholder="🔍 접수번호·고객사·증상" value="' + _asEsc(asSearchKw) + '" id="asSearchInput" oninput="asOnSearchInput(this.value)">';
+    html += _asFilterSelect('상태', 'asFilterStatus', asFilterStatus, STATUS, 'wm-tb-sel');
+    html += wmFltHtml('asFltWrap', nAsFlt,
+      wmFltRow('긴급도', _asFilterSelect('긴급도', 'asFilterPriority', asFilterPriority, PRIO, '')) +
+      wmFltRow('카테고리', _asFilterSelect('카테고리', 'asFilterCategory', asFilterCategory, CAT, '')),
+      anyAsFlt ? 'asClearFilters()' : null);
+    html += '<button class="wm-pri" onclick="showASModal()">+ 새 접수</button>';
+    html += wmMoreHtml('asMoreWrap', [
+      ['🗑️ 휴지통' + (_asTrashCount > 0 ? ' (' + _asTrashCount + ')' : ''), "asViewMode='trash';renderAS()", false, '삭제(휴지통 이동)된 접수 — 복구 또는 완전 삭제'],
+      _asAdminOnly() ? ['⚙️ 카테고리 관리', 'showASCategoryAdmin()', false, '관리자 전용 — 카테고리 추가·수정·비활성'] : 0
+    ]);
     html += '</div>';
-    var modeLabel = { all: '전체 ', myqueue: '내 큐 ', kanban: '칸반 ', trash: '🗑️ 휴지통 ' }[asViewMode] || '';
-    html += '<span style="font-size:11px;color:var(--t5)">' + modeLabel + all.length + '건' +
-      (filtered.length !== all.length ? ' (필터: ' + filtered.length + '건)' : '') + '</span>';
-    html += '</div>';
-    html += '<div style="display:flex;gap:6px">';
-    if (_asAdminOnly()) {
-      html += '<button onclick="showASCategoryAdmin()" style="font-size:11px;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer" title="관리자 전용 — 카테고리 추가·수정·비활성화">⚙️ 카테고리 관리</button>';
-    }
-    html += '<button onclick="showASModal()" style="font-size:11px;padding:4px 12px;border:none;border-radius:6px;background:#F59E0B;color:#fff;cursor:pointer;font-weight:600">+ 새 접수</button>';
-    html += '</div></div></div>';
 
     // 요약 카드
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,260px));justify-content:start;gap:10px;margin-bottom:12px">';
@@ -133,23 +117,11 @@ function renderAS(opts) {
     html += _asStatCard('완료', cnt.closed, SEM_COLOR.ok);
     html += '</div>';
 
-    // 필터 바
-    html += '<div class="pnl" style="margin-bottom:12px;padding:10px 14px">';
-    html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">';
-    html += _asFilterSelect('상태', 'asFilterStatus', asFilterStatus, STATUS);
-    html += _asFilterSelect('긴급도', 'asFilterPriority', asFilterPriority, PRIO);
-    html += _asFilterSelect('카테고리', 'asFilterCategory', asFilterCategory, CAT);
-    html += '<input type="text" placeholder="🔍 접수번호·고객사·증상" value="' + _asEsc(asSearchKw) +
-      '" id="asSearchInput" oninput="asOnSearchInput(this.value)" style="font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t2);min-width:180px">';
-    if (asFilterStatus || asFilterPriority || asFilterCategory || asSearchKw) {
-      html += '<button onclick="asClearFilters()" style="font-size:10px;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t4);cursor:pointer">필터 해제</button>';
-    }
-    html += '</div></div>';
-
     // 칸반 모드일 때 다른 렌더로 분기 (휴지통 모드에서는 칸반 비활성)
     if (asViewMode === 'kanban') {
       html += _asRenderKanban(filtered, CAT);
       wrap.innerHTML = html;
+      if (typeof wmHdrPopRestore === 'function') wmHdrPopRestore();
       _asAttachKanbanDnD();
       return;
     }
@@ -218,6 +190,7 @@ function renderAS(opts) {
     html += '</div>';
 
     wrap.innerHTML = html;
+    if (typeof wmHdrPopRestore === 'function') wmHdrPopRestore();
   }).catch(function (err) {
     if (seq !== _asRenderSeq) return;
     console.error('[renderAS]', err);
@@ -231,8 +204,16 @@ function _asStatCard(label, count, color) {
     '<div style="font-size:10px;color:var(--t5);margin-top:2px">' + label + '</div></div>';
 }
 
-function _asFilterSelect(label, varName, curVal, options) {
-  var h = '<select onchange="' + varName + '=this.value;renderAS({useCache:true})" style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)">';
+/* v13.292 A/S 보기 전환 — 목록 · 통계 화면 툴바가 같이 씀 (휴지통은 ⋯ 메뉴) */
+function asModeSegHtml() {
+  var labels = { all: '📋 전체', myqueue: '🎯 내 큐', kanban: '🗂️ 칸반', stats: '📊 통계' };
+  var titles = { myqueue: '내게 할당된 처리 진행 중인 건만', kanban: '상태별 칸반 보드 (드래그로 이동)', stats: '트렌드·KPI·SLA·부서부하·CSAT·부품 비용 분석' };
+  return '<span class="wm-seg">' + ['all', 'myqueue', 'kanban', 'stats'].map(function (m) {
+    return '<button class="' + (asViewMode === m ? 'on' : '') + '" onclick="asViewMode=\'' + m + '\';renderAS()"' + (titles[m] ? ' title="' + titles[m] + '"' : '') + '>' + labels[m] + '</button>';
+  }).join('') + '</span>';
+}
+function _asFilterSelect(label, varName, curVal, options, cls) {
+  var h = '<select onchange="' + varName + '=this.value;renderAS({useCache:true})"' + (cls != null ? (cls ? ' class="' + cls + '"' : '') + ' title="' + label + '"' : ' style="font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3)"') + '>';
   h += '<option value="">전체 ' + label + '</option>';
   Object.keys(options).forEach(function (k) {
     var o = options[k];

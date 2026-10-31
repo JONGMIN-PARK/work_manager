@@ -123,6 +123,19 @@ var SHOTS = path.join(__dirname, '.shots');
     check(errs.length === 0, '화면 오류 없음 ' + JSON.stringify(errs));
     console.log(fail ? 'FAILED ' + fail : 'ALL PASS ' + ok, errs);
   } catch (e) { console.log('ERR', e.message); } finally {
+    // 만든 것 모두 지움 — 남으면 다른 시험(주간 분석 기간 · 내 프로젝트 후보 등)이 흔들림
+    try {
+      var pg = require(path.join(__dirname, '../../server/node_modules/pg'));
+      var c = new pg.Client({ connectionString: 'postgres://postgres:pw@localhost:54329/wm' });
+      await c.connect();
+      var L = '%' + K + '%';
+      for (var sql of ['DELETE FROM work_records WHERE content LIKE $1', 'DELETE FROM my_todos WHERE title LIKE $1', 'DELETE FROM messages WHERE body LIKE $1',
+        'DELETE FROM orders WHERE order_no LIKE $1', 'DELETE FROM prestudies WHERE title LIKE $1', 'DELETE FROM tech_assets WHERE name LIKE $1',
+        'DELETE FROM issues WHERE description LIKE $1', 'DELETE FROM meeting_action_items WHERE meeting_id IN (SELECT id FROM meetings WHERE minutes LIKE $1)',
+        'DELETE FROM meetings WHERE minutes LIKE $1', 'DELETE FROM mindmaps WHERE title LIKE $1', 'DELETE FROM project_members WHERE project_id IN (SELECT id FROM projects WHERE name LIKE $1)',
+        'DELETE FROM projects WHERE name LIKE $1']) { await c.query(sql, [L]).catch(function () {}); }
+      await c.end();
+    } catch (e2) { console.log('정리 실패', e2.message); }
     await browser.close();
   }
 })();

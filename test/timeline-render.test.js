@@ -177,7 +177,11 @@ function load(opts) {
   };
   vm.createContext(sandbox);
   // wm-state.js 의 eA · eC 그대로 (속성 안 JS 문자열 · 색)
-  vm.runInContext(fs.readFileSync(path.join(ROOT, 'wm-state.js'), 'utf8').split(/\r?\n/).filter((l) => /^function e[AC]\(/.test(l)).join('\n'), sandbox);
+  const wmState = fs.readFileSync(path.join(ROOT, 'wm-state.js'), 'utf8');
+  vm.runInContext(wmState.split(/\r?\n/).filter((l) => /^function e[AC]\(/.test(l)).join('\n'), sandbox);
+  // 툴바 부품 (v13.292) — wmFltHtml · wmFltRow · wmMoreHtml
+  const a = wmState.indexOf('function wmFltHtml('), b = wmState.indexOf('\n}', wmState.indexOf('function wmMoreHtml(')) + 2;
+  vm.runInContext(wmState.slice(a, b), sandbox);
   for (const f of ['config.js', 'project-data.js', 'timeline.js']) {
     // TL_SRC: 비교용 원본 timeline.js 경로(스냅샷 생성 시에만)
     const file = (f === 'timeline.js' && process.env.TL_SRC) ? process.env.TL_SRC : path.join(ROOT, f);

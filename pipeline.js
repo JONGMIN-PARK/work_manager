@@ -42,21 +42,20 @@ function renderPipeline() {
     var liveIds = {};
 
     // 상단 요약 카드
-    html += '<div class="pnl" style="margin-bottom:14px;padding:14px 18px">';
-    html += '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">';
-    html += '<span style="font-size:13px;font-weight:700;color:var(--t2)">🔀 파이프라인</span>';
-    html += '<span style="font-size:11px;color:var(--t5)">전체 ' + projects.length + '건</span>';
-    html += '<span style="margin-left:auto;display:flex;gap:6px">';
-    html += '<button class="pipe-tool-btn" onclick="pipelineSetAll(true)" title="모든 카드 펼치기">⊞ 전체 펼치기</button>';
-    html += '<button class="pipe-tool-btn" onclick="pipelineSetAll(false)" title="모든 카드를 제목만 보이게 접기">⊟ 전체 접기</button>';
-    html += '<button class="pipe-tool-btn" onclick="exportProjectReport()">📊 보고서</button>';
-    html += '</span>';
+    // v13.292 공통 툴바 — [제목 · 건수 · 단계별 수] … [펼치기 · 접기] [➕ 프로젝트] [⋯ 보고서]
+    html += '<div class="wm-tb">';
+    html += '<h3 class="wm-tb-t">🔀 파이프라인</h3><span class="wm-tb-n">전체 ' + projects.length + '건</span>';
+    html += '<span class="wm-tb-chips">';
     phaseKeys.forEach(function (k) {
       var ph = phases[k];
       var cnt = buckets[k].length;
       html += '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:' + ph.color + '22;color:' + ph.color + ';font-weight:600">' + ph.icon + ' ' + ph.label + ' ' + cnt + '</span>';
     });
-    html += '</div></div>';
+    html += '</span><span class="wm-tb-sp"></span>';
+    html += '<span class="wm-seg"><button onclick="pipelineSetAll(true)" title="모든 카드 펼치기">⊞ 펼치기</button><button onclick="pipelineSetAll(false)" title="모든 카드를 제목만 보이게 접기">⊟ 접기</button></span>';
+    html += '<button class="wm-pri" onclick="showProjectModal()">➕ 프로젝트</button>';
+    html += wmMoreHtml('pipeMoreWrap', [['📊 프로젝트 보고서', 'exportProjectReport()']]);
+    html += '</div>';
 
     // 칸반 보드
     html += '<div class="pipeline-board" style="display:grid;grid-template-columns:repeat(' + phaseKeys.length + ',minmax(0,1fr));gap:10px;min-height:400px">';

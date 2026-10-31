@@ -116,33 +116,31 @@ async function renderDocManager(opts) {
   var _storageTotal = 0;
   allFiles.forEach(function (f) { _storageTotal += (f.size || 0); });
 
-  var html = '<div class="pnl" style="padding:14px 18px">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
-  html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
-  html += '<span style="font-size:15px;font-weight:700;color:var(--t1)">📂 문서 관리</span>';
+  // v13.292 공통 툴바 — [제목] [프로젝트 고르기 · 접근 가능 수] … [용량] [⋯ 용량 대시보드]
+  var html = '<div class="wm-tb">';
+  html += '<h3 class="wm-tb-t">📂 문서</h3>';
   if (projects.length) {
-    html += '<select id="docProjSel" onchange="docSelectProject(this.value)" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:7px;padding:6px 10px;font-size:11px;color:var(--t2);font-family:inherit;outline:none;max-width:250px">';
+    html += '<select id="docProjSel" class="wm-tb-sel" onchange="docSelectProject(this.value)" style="max-width:260px">';
     html += '<option value="">프로젝트 선택...</option>';
     projects.forEach(function (p) {
       html += '<option value="' + eH(p.id) + '"' + (p.id === docSelProject ? ' selected' : '') + '>' + eH(p.name || p.orderNo || p.id) + '</option>';
     });
     html += '</select>';
-    html += '<span style="font-size:10px;color:var(--t6)">' + projects.length + '개 접근 가능</span>';
+    html += '<span class="wm-tb-n">' + projects.length + '개 접근 가능</span>';
   } else {
-    html += '<span style="font-size:11px;color:var(--t5)">접근 가능한 프로젝트가 없습니다</span>';
+    html += '<span class="wm-tb-n">접근 가능한 프로젝트가 없습니다</span>';
   }
-  html += '</div>';
-
+  html += '<span class="wm-tb-sp"></span>';
   // 용량 표시 (위에서 받은 allFiles로 계산 — 추가 네트워크 호출 없음)
   if (proj) {
     var pct = Math.round(_storageTotal / DOC_MAX_PROJECT * 100);
-    html += '<div style="display:flex;align-items:center;gap:8px;font-size:10px;color:var(--t4)">';
+    html += '<span style="display:inline-flex;align-items:center;gap:8px;font-size:11px;color:var(--t4)" title="이 프로젝트 문서 용량">';
     html += '<span>💾 ' + formatFileSize(_storageTotal) + ' / ' + formatFileSize(DOC_MAX_PROJECT) + '</span>';
-    html += '<div style="width:80px;height:5px;background:var(--pt);border-radius:3px"><div style="width:' + Math.min(pct, 100) + '%;height:100%;background:' + (pct > 80 ? SEM_COLOR.danger : 'var(--ac)') + ';border-radius:3px"></div></div>';
-    html += '<button class="btn btn-g btn-s" onclick="docShowStorageDashboard()" style="font-size:9px;padding:2px 6px" title="용량 대시보드">📊</button>';
-    html += '</div>';
+    html += '<span style="width:80px;height:5px;background:var(--pt);border-radius:3px;display:inline-block"><span style="display:block;width:' + Math.min(pct, 100) + '%;height:100%;background:' + (pct > 80 ? SEM_COLOR.danger : 'var(--ac)') + ';border-radius:3px"></span></span>';
+    html += '</span>';
+    html += wmMoreHtml('docMoreWrap', [['📊 용량 대시보드', 'docShowStorageDashboard()']]);
   }
-  html += '</div></div>';
+  html += '</div>';
 
   // 빈 상태: 접근 가능한 프로젝트가 없음 — CTA 안내
   if (!projects.length) {
