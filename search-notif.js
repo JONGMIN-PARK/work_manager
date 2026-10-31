@@ -222,6 +222,18 @@ function globalSearchNav(type, it, kw) {
     setPage('mindmap');
     if (n.nodeId && typeof _mm !== 'undefined') _mm.goto = { mapId: n.mapId, sheet: n.sheet || 0, node: n.nodeId };
     if (typeof mmOpen === 'function') mmOpen(n.mapId);
+    // 맵 안 찾기(🔍)에 검색어를 넣어 걸린 주제를 모두 표시 — 맵 찾기를 비우거나 [✕ 표시 지우기] 전까지 유지 (v13.293)
+    wmHitShow(null, kw);
+    if (_wmHit) _wmHit.map = n.mapId;
+    var mt = 0;
+    (function mmHit() {
+      var inp = document.getElementById('mmSearch');
+      if (typeof _mm !== 'undefined' && _mm.mapId === n.mapId && _mm.doc && inp && typeof _mmSearch === 'function') {
+        inp.value = kw;
+        _mmSearch(kw, !n.nodeId);   // 주제 위치를 알면 그 주제(goto)를 고른 채 두고 표시만
+        _wmHitBar();
+      } else if (++mt < 40) setTimeout(mmHit, 150);
+    })();
   } else if (type === 'doc') {
     setPage('project'); setMode('docs');
     setTimeout(function () { if (n.projectId && typeof docSelectProject === 'function') docSelectProject(n.projectId); hit('#mDocs'); }, 200);
@@ -250,44 +262,96 @@ function globalSearchNav(type, it, kw) {
   }
 }
 
-/* ═══ 찾은 자리 형광 표시 — 범위(root) 안 글자에 <mark class="wm-hit">, 첫 곳으로 스크롤 · 깜빡임.
- * 화면이 늦게 그려지므로 최대 5초 기다리며 찾는다. 다른 곳을 누르면 지움(다시 그리면 자연히 사라짐).
- * opt.near = 이 선택자 요소 안을 먼저 · opt.kw2 = 검색어가 안 보이면 대신 찾을 글자(수주번호 등) */
+/* ═══ 찾은 자리 형광 표시 (v13.291 → v13.293 유지) ═══
+ * 통합 검색으로 들어간 화면의 검색어를 <mark class="wm-hit"> 로 칠하고, 사용자가 [✕ 표시 지우기]를 누를 때까지 유지한다.
+ * 화면을 다시 그려 형광이 사라지면(필터 · 탭 전환 · 저장 후 다시 그림) 지켜보다가 다시 칠한다(MutationObserver).
+ * 다른 화면으로 갔다 돌아와도 같은 범위가 보이면 다시 칠함. 아래 막대에서 ◀ ▶ 로 칠한 곳 사이를 옮겨 다님.
+ * rootSel = 칠할 범위(선택자, 겹치면 맨 위 것) · opt.near = 그 안에서 먼저 볼 곳 · opt.kw2 = 검색어가 안 보이면 대신 칠할 글자
+ * 입력칸 · 편집 중인 글(contenteditable)은 건드리지 않음 — 입력칸에만 있으면 그 칸 테두리를 칠함 */
+var _wmHit = null;          // { kw, root, near, kw2, idx }
+var _wmHitObs = null, _wmHitT = null, _wmHitBusy = false;
 function wmHitShow(rootSel, kw, opt) {
   opt = opt || {};
   if (!kw) return;
+  wmHitOff(true);
+  _wmHit = { kw: kw, root: rootSel || null, near: opt.near || null, kw2: opt.kw2 || null, idx: 0 };
+  _wmHitBar();
+  if (!rootSel) return;
   var t0 = Date.now();
   (function tryIt() {
-    var roots = Array.prototype.slice.call(document.querySelectorAll(rootSel)).filter(function (e) { return e.offsetParent || e.getClientRects().length; });
-    var root = roots[roots.length - 1];   // 창이 겹치면 맨 위(마지막)
-    if (root && opt.near) { var nr = root.querySelector(opt.near); if (nr) root = nr; }
-    var n = root ? wmHitMark(root, kw) : 0;
-    if (!n && root && opt.kw2) n = wmHitMark(root, opt.kw2);
-    if (!n && root) n = wmHitField(root, kw);
-    if (n) return;
-    if (Date.now() - t0 < 5000) setTimeout(tryIt, 200);
+    if (!_wmHit || _wmHit.kw !== kw) return;
+    if (_wmHitApply(true)) { _wmHitWatch(); return; }
+    if (Date.now() - t0 < 6000) setTimeout(tryIt, 200);
+    else _wmHitWatch();   // 아직 안 그려졌어도 나중에 그려지면 칠함
   })();
 }
+/* 지금 보이는 범위에 칠함 → 칠한 수. first = 처음(스크롤 · 깜빡임) */
+function _wmHitApply(first) {
+  var h = _wmHit; if (!h || !h.root) return 0;
+  var roots = Array.prototype.slice.call(document.querySelectorAll(h.root)).filter(function (e) { return e.offsetParent || e.getClientRects().length; });
+  var root = roots[roots.length - 1];   // 창이 겹치면 맨 위(마지막)
+  if (!root) return 0;
+  var area = root;
+  if (h.near) { var nr = root.querySelector(h.near); if (nr) area = nr; }
+  var n = wmHitMark(area, h.kw, first);
+  if (!n && h.kw2) n = wmHitMark(area, h.kw2, first);
+  if (!n && area !== root) n = wmHitMark(root, h.kw, first);
+  if (!n) n = wmHitField(root, h.kw, first);
+  _wmHitBar();
+  return n;
+}
+/* 화면이 다시 그려져 형광이 지워지면 다시 칠함 */
+function _wmHitWatch() {
+  if (_wmHitObs || typeof MutationObserver === 'undefined') return;
+  _wmHitObs = new MutationObserver(function () {
+    if (_wmHitBusy || !_wmHit) return;
+    clearTimeout(_wmHitT);
+    _wmHitT = setTimeout(function () {
+      if (!_wmHit || document.querySelector('mark.wm-hit, .wm-hit-field')) { _wmHitBar(); return; }
+      _wmHitApply(false);
+    }, 250);
+  });
+  _wmHitObs.observe(document.body, { childList: true, subtree: true });
+}
+/* 형광 지우기 — keep=true 면 막대 · 상태는 둠(새로 칠하기 전) */
 function wmHitClear() {
+  _wmHitBusy = true;
   document.querySelectorAll('mark.wm-hit').forEach(function (m) {
     var p = m.parentNode; if (!p) return;
     p.replaceChild(document.createTextNode(m.textContent), m); p.normalize();
   });
   document.querySelectorAll('.wm-hit-box').forEach(function (e) { e.classList.remove('wm-hit-box'); });
+  document.querySelectorAll('.wm-hit-field').forEach(function (e) { e.classList.remove('wm-hit-field'); });
+  _wmHitBusy = false;
 }
-/* root 안 글자 노드에서 kw 를 찾아 감쌈 → 감싼 수. 입력칸 · 스크립트는 건너뜀 */
-function wmHitMark(root, kw) {
+/* [✕ 표시 지우기] — 형광 · 막대 · 지켜보기 끝. 마인드맵이면 맵 안 찾기도 비움 */
+function wmHitOff(silent) {
+  var h = _wmHit;
+  _wmHit = null;
+  clearTimeout(_wmHitT);
+  if (_wmHitObs) { _wmHitObs.disconnect(); _wmHitObs = null; }
   wmHitClear();
+  var bar = document.getElementById('wmHitBar'); if (bar) bar.remove();
+  if (!silent && h && h.map && typeof _mm !== 'undefined' && _mm.search && typeof _mmSearch === 'function') {
+    var inp = document.getElementById('mmSearch'); if (inp) inp.value = '';
+    _mmSearch('', false);
+  }
+}
+/* root 안 글자 노드에서 kw 를 찾아 감쌈 → 감싼 수. 입력칸 · 스크립트 · 편집 중인 글은 건너뜀 */
+function wmHitMark(root, kw, focus) {
+  wmHitClear();
+  _wmHitBusy = true;
   var kl = String(kw).toLowerCase(), marks = [];
   var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: function (t) {
       var p = t.parentNode;
       if (!p || /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION|MARK)$/.test(p.nodeName)) return NodeFilter.FILTER_REJECT;
+      if (p.closest && p.closest('[contenteditable=""],[contenteditable="true"],#wmHitBar')) return NodeFilter.FILTER_REJECT;
       return t.nodeValue.toLowerCase().indexOf(kl) >= 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
     }
   });
   var nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
-  nodes.slice(0, 200).forEach(function (t) {
+  nodes.slice(0, 300).forEach(function (t) {
     var s = t.nodeValue, low = s.toLowerCase(), i = 0, j, frag = document.createDocumentFragment();
     while ((j = low.indexOf(kl, i)) >= 0) {
       if (j > i) frag.appendChild(document.createTextNode(s.slice(i, j)));
@@ -297,28 +361,54 @@ function wmHitMark(root, kw) {
     if (i < s.length) frag.appendChild(document.createTextNode(s.slice(i)));
     t.parentNode.replaceChild(frag, t);
   });
-  if (marks.length) _wmHitFocus(marks[0]);
+  _wmHitBusy = false;
+  if (marks.length && focus) { if (_wmHit) _wmHit.idx = 0; _wmHitFocus(marks[0]); }
   return marks.length;
 }
-/* 글자가 입력칸(회의록 · 메모 칸)에만 있으면 그 칸을 강조 */
-function wmHitField(root, kw) {
+/* 글자가 입력칸(회의록 · 메모 칸)에만 있으면 그 칸 테두리를 칠함 */
+function wmHitField(root, kw, focus) {
   var kl = String(kw).toLowerCase();
   var f = Array.prototype.slice.call(root.querySelectorAll('textarea, input[type=text], input:not([type])')).filter(function (e) { return String(e.value || '').toLowerCase().indexOf(kl) >= 0; })[0];
   if (!f) return 0;
-  _wmHitFocus(f);
-  // 입력칸 안 글자는 형광을 못 칠하니 그 부분을 선택해 보이게
-  var i = String(f.value).toLowerCase().indexOf(kl);
-  setTimeout(function () { try { f.focus({ preventScroll: true }); f.setSelectionRange(i, i + kl.length); } catch (e) {} }, 350);
+  _wmHitBusy = true; f.classList.add('wm-hit-field'); _wmHitBusy = false;
+  if (focus) {
+    _wmHitFocus(f);
+    // 입력칸 안 글자는 형광을 못 칠하니 그 부분을 선택해 보이게
+    var i = String(f.value).toLowerCase().indexOf(kl);
+    setTimeout(function () { try { f.focus({ preventScroll: true }); f.setSelectionRange(i, i + kl.length); } catch (e) {} }, 350);
+  }
   return 1;
 }
 function _wmHitFocus(el) {
   try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { el.scrollIntoView(); }
   var box = el.closest('tr, .gs-row, .pdChkRow, [data-mid], .mw-row, .card, .pnl, li') || el;
   if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') box = el;
+  _wmHitBusy = true;
   box.classList.remove('wm-hit-box'); void box.offsetWidth; box.classList.add('wm-hit-box');
-  setTimeout(function () {   // 다음에 누르면 지움
-    document.addEventListener('mousedown', function off(e) { if (e.target.closest && e.target.closest('#globalSearchWrap')) return; document.removeEventListener('mousedown', off, true); wmHitClear(); }, true);
-  }, 400);
+  _wmHitBusy = false;
+}
+/* 칠한 곳 사이 옮겨 다니기 (◀ -1 · ▶ +1) */
+function wmHitStep(d) {
+  var ms = Array.prototype.slice.call(document.querySelectorAll('mark.wm-hit'));
+  if (!ms.length || !_wmHit) return;
+  _wmHit.idx = ((_wmHit.idx || 0) + d + ms.length) % ms.length;
+  ms.forEach(function (m) { m.classList.remove('on'); });
+  ms[_wmHit.idx].classList.add('on');
+  _wmHitFocus(ms[_wmHit.idx]);
+  _wmHitBar();
+}
+/* 아래 막대 — 「검색어」 표시 중 · N곳 · ◀ ▶ · ✕ 표시 지우기 */
+function _wmHitBar() {
+  var h = _wmHit;
+  var bar = document.getElementById('wmHitBar');
+  if (!h) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'wmHitBar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
+  var n = document.querySelectorAll('mark.wm-hit').length;
+  var where = h.map ? '맵에서 찾는 중' : (n ? n + '곳' : (document.querySelector('.wm-hit-field') ? '입력칸' : '이 화면엔 없음'));
+  var html = '<span class="wm-hit-ic">🖍</span><span class="wm-hit-kw">「' + eH(h.kw) + '」</span><span class="wm-hit-n">' + where + '</span>' +
+    (n > 1 ? '<button type="button" onclick="wmHitStep(-1)" title="앞 곳">◀</button><button type="button" onclick="wmHitStep(1)" title="다음 곳">▶</button>' : '') +
+    '<button type="button" class="wm-hit-x" onclick="wmHitOff()" title="형광 표시를 지웁니다">✕ 표시 지우기</button>';
+  if (bar.innerHTML !== html) { _wmHitBusy = true; bar.innerHTML = html; _wmHitBusy = false; }
 }
 
 // keyboard navigation for search results

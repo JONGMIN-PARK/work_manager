@@ -84,11 +84,22 @@ var SHOTS = path.join(__dirname, '.shots');
     check(await page.evaluate(function () { return curMode === 'orders' && !!document.querySelector('#mOrders tr mark.wm-hit'); }), '수주 → 수주대장 그 줄 · 형광');
     await search(K); await pick('mindmap'); await wait(1500);
     check(await page.evaluate(function (id) { return curPage === 'mindmap' && _mm.mapId === id; }, made.mm), '마인드맵 → 그 맵 열림');
-    // 형광은 다른 곳을 누르면 지움
+    check(await page.evaluate(function (k) { return _mm.search === k.toLowerCase() && document.getElementById('mmSearch').value === k && !!document.getElementById('wmHitBar'); }, K), '마인드맵 — 맵 찾기에 검색어 · 아래 막대');
+    // 형광은 지울 때까지 유지 — 다른 곳을 눌러도 · 화면을 다시 그려도 · 다른 화면에 갔다 와도 (v13.293)
     await page.evaluate(function () { setPage('project'); setMode('orders'); });
     await search(K); await pick('order'); await wait(1500);
-    await page.mouse.click(700, 850); await wait(200);
-    check(await page.evaluate(function () { return !document.querySelector('mark.wm-hit'); }), '다른 곳 누르면 형광 지움');
+    await page.click('.hdr-brand h1'); await wait(200);
+    check(await page.evaluate(function () { return !!document.querySelector('#mOrders mark.wm-hit'); }), '다른 곳 눌러도 형광 그대로');
+    await page.evaluate(function () { renderOrders(); }); await wait(1200);
+    check(await page.evaluate(function () { return !!document.querySelector('#mOrders mark.wm-hit'); }), '다시 그려도 형광 다시 칠함');
+    await page.evaluate(function () { setMode('issues'); }); await wait(800);
+    await page.evaluate(function () { setMode('orders'); }); await wait(1500);
+    check(await page.evaluate(function () { return !!document.querySelector('#mOrders mark.wm-hit') && /표시 지우기/.test(document.getElementById('wmHitBar').textContent); }), '다른 화면 갔다 와도 그대로 · 막대');
+    await page.screenshot({ path: path.join(SHOTS, 'search-hit-bar.png'), clip: { x: 0, y: 500, width: 1400, height: 400 } });
+    await page.click('#wmHitBar .wm-hit-x'); await wait(300);
+    check(await page.evaluate(function () { return !document.querySelector('mark.wm-hit') && !document.getElementById('wmHitBar'); }), '✕ 표시 지우기 → 형광 · 막대 없음');
+    await page.evaluate(function () { renderOrders(); }); await wait(1000);
+    check(await page.evaluate(function () { return !document.querySelector('mark.wm-hit'); }), '지운 뒤엔 다시 그려도 안 칠함');
     // 최근 검색어
     await page.evaluate(function () { document.getElementById('globalSearchInput').value = ''; });
     await page.click('#globalSearchInput'); await wait(300);
