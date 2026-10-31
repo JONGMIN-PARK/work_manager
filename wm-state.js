@@ -5,7 +5,19 @@ let cTh='auto';
 function gSysTh(){return matchMedia('(prefers-color-scheme:dark)').matches?'midnight':'light'}
 function aTh(id){cTh=id;document.documentElement.setAttribute('data-theme',id==='auto'?gSysTh():id);rTh();lsSet('wa-theme',id);if(_wmFontReady)aFnt(cFnt)}  // 테마별 기본 글씨체(_wmFontFor) 반영 — 폰트 초기화 전(부팅 첫 호출)엔 건너뜀
 var _wmFontReady=false;
-function rTh(){var bar=document.getElementById('themeBar');if(!bar)return;bar.innerHTML=TH.map(t=>`<div class="thd ${cTh===t.id?'on':''}" style="background:${t.c}" onclick="aTh('${t.id}')" title="${t.l}"><span class="dl">${t.l}</span></div>`).join('')}
+/* 🎨 화면 설정 — 테마를 무리(TH.g)별 이름 있는 칸으로. 올리면 미리 보기, 누르면 적용 (v13.287) */
+function rTh(){
+  var cur=TH.find(function(t){return t.id===cTh})||TH[0];
+  var dot=document.getElementById('hdrLookDot');if(dot)dot.style.background=cur.c;
+  var bar=document.getElementById('themeBar');if(!bar)return;
+  var html='',g=null;
+  TH.forEach(function(t){
+    if(t.g!==g){if(g!==null)html+='</div>';g=t.g;html+='<div class="thg-t">'+(g||'')+'</div><div class="thg">'}
+    html+='<button class="thc'+(cTh===t.id?' on':'')+'" onclick="aTh(\''+t.id+'\')" onmouseenter="wmThPeek(\''+t.id+'\')" onmouseleave="wmThPeek()" title="'+t.l+'"><i class="thd" style="background:'+t.c+'"></i>'+t.l+'</button>';
+  });
+  bar.innerHTML=html+(g!==null?'</div>':'');
+}
+function wmThPeek(id){var v=id||cTh;document.documentElement.setAttribute('data-theme',v==='auto'?gSysTh():v)}
 var _th=lsGet('wa-theme');if(_th)cTh=_th
 aTh(cTh);matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(cTh==='auto')aTh('auto')});
 
@@ -61,11 +73,28 @@ function rFnt(){
 }
 var _fnt=lsGet('wa-font');if(_fnt)aFnt(_fnt);else aFnt('noto');
 _wmFontReady=true;
-// 폰트 메뉴 외부 클릭 시 닫기
+/* 헤더 · 툴바 펼침 메뉴(.hdr-pop) — 한 번에 하나만, 바깥 누르기 · Esc 로 닫음 (v13.287) */
+function wmHdrPopClose(except){
+  document.querySelectorAll('.hdr-pop.open').forEach(function(w){
+    if(w===except)return;
+    w.classList.remove('open');
+    var b=w.querySelector('[aria-expanded]');if(b)b.setAttribute('aria-expanded','false');
+    if(w.id==='hdrLookWrap')wmThPeek();  // 미리 보던 테마 되돌림
+  });
+}
+function wmHdrPop(id){
+  var w=document.getElementById(id);if(!w)return;
+  wmHdrPopClose(w);
+  var on=w.classList.toggle('open');
+  var b=w.querySelector('[aria-expanded]');if(b)b.setAttribute('aria-expanded',on?'true':'false');
+  if(on&&id==='hdrLookWrap'){var l=document.getElementById('fontBar'),c=l&&l.querySelector('.fnd.on');if(c)l.scrollTop=Math.max(0,c.offsetTop-l.clientHeight/2)}  // 고른 글씨체가 보이게
+}
 document.addEventListener('click',function(e){
-  var w=document.getElementById('fontBarWrap');
-  if(w && w.classList.contains('open') && !w.contains(e.target)) w.classList.remove('open');
+  // 테마 · 글씨체를 누르면 목록을 다시 그려 누른 칸이 문서에서 빠짐 — 그때는 닫지 않고 계속 골라 보게
+  if(e.target.isConnected===false||(e.target.closest&&e.target.closest('.hdr-pop')))return;
+  wmHdrPopClose();
 });
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.querySelector('.hdr-pop.open'))wmHdrPopClose()});
 
 /* ═══ CONSTS: config.js에서 로드 (TH, ENC, COL, AM, ABG, AFG, ABR, CMP_COL, CMP_DASH, CMP_PT, AI_CONFIG, DIFF_KEYWORDS, AI_PRESETS) ═══ */
 

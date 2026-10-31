@@ -16,7 +16,7 @@ function wmRestoreLastView(){
   var v=lsGetJSON(WM_LAST_VIEW,null);
   if(v&&WM_TEAM_SUB[v.page])v={page:'team',mode:v.page};  // v13.280 전 저장값 — 업무 부하 · 주간 업무가 상위 탭이던 때
   if(!v||!v.page||(v.page==='team'&&(!v.mode||v.mode==='weekly')))return;  // 기본 화면이면 그대로
-  var pb=document.querySelector('#pageTabs .tab[data-page="'+v.page+'"]');
+  var pb=document.querySelector('#pageTabs .tab[data-page="'+v.page+'"],.hdr [data-page="'+v.page+'"]');  // 메시지 · 패치노트는 헤더 (v13.287)
   if(!pb||pb.style.display==='none'||pb.classList.contains('hidden'))return;  // 지금 계정에 없는 탭 (권한)
   if(v.page==='team'&&v.mode&&WM_TEAM_SUB[v.mode]){var sb=document.querySelector('#modeTabs .tab[data-m="'+v.mode+'"]');if(!sb||sb.style.display==='none')return}  // 권한 없는 하위 탭
   if(v.page==='team'||v.page==='project'){
@@ -44,6 +44,7 @@ function setPage(page){
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwPanelClose==='function')mwPanelClose();  // 내 업무 상세 패널 — 남은 저장 마저 하고 닫음 (다른 화면을 가리지 않게)
   curPage=page;
   document.querySelectorAll('#pageTabs .tab').forEach(function(t){var sel=t.dataset.page===page;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
+  document.querySelectorAll('.hdr [data-page]').forEach(function(t){t.classList.toggle('on',t.dataset.page===page)});  // 헤더 ✉️ · 📋 (v13.287)
   document.getElementById('modeTabs').classList.toggle('hidden',page!=='team');
   document.getElementById('modeTabsProj').classList.toggle('hidden',page!=='project');
   // 운영자 탭 노출 게이팅 (admin/운영자만)

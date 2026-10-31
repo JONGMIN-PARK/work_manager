@@ -496,12 +496,11 @@ function updateAuthUI() {
   var roleLabel = roleLabels[currentUser.role] || currentUser.role;
   var userName = currentUser.display_name || currentUser.name || '';
 
+  // v13.287 — 이름 · 역할은 사용자 메뉴 버튼에, 프로필 · 로그아웃은 그 메뉴 안에 (업무일지_분석기.html #hdrUserWrap)
   var el = document.getElementById('authUserInfo');
-  if (el) {
-    el.innerHTML = '<span style="font-size:13px;opacity:.8">' + userName + ' · ' + roleLabel + '</span>' +
-      ' <button onclick="showProfileModal()" title="내 프로필" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--t2,#D8DEE8);padding:4px">&#x1F464;</button>' +
-      ' <button onclick="authLogout()" title="로그아웃" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--t2,#D8DEE8);padding:4px">&#x1F6AA;</button>';
-  }
+  if (el) el.innerHTML = '<span class="hdr-user-av">' + eH((userName || '?').charAt(0)) + '</span><span class="hdr-user-nm">' + eH(userName) + ' · ' + roleLabel + '</span>';
+  var head = document.getElementById('hdrUserHead');
+  if (head) head.innerHTML = '<b>' + eH(userName) + '</b><span>' + roleLabel + (currentUser.email ? ' · ' + eH(currentUser.email) : '') + '</span>';
 
   // 관리자 전용 탭 표시/숨김
   var adminTab = document.getElementById('tabUserAdmin');

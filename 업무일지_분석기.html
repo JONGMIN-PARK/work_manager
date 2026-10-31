@@ -16,9 +16,9 @@
 <!-- core-bus.js: wmProgress · wmDataBus · WM_TAB_DEPS — 다른 모든 스크립트보다 먼저 동기 로드 -->
 <script src="core-bus.js?v=6" onerror="console.warn('core-bus.js 로드 실패')"></script>
 <!-- core (동기 로드 필수 — 인라인 폴백 typeof 체크가 파싱 중에 실행됨) -->
-<script src="config.js?v=8" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
+<script src="config.js?v=9" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="settings.js?v=6" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
-<script src="auth.js?v=15" onerror="console.warn('auth.js 로드 실패')"></script>
+<script src="auth.js?v=16" onerror="console.warn('auth.js 로드 실패')"></script>
 <script defer src="weekly-report-parse.js?v=1" onerror="console.warn('weekly-report-parse.js 로드 실패')"></script>
 <script defer src="weekly-report-admin.js?v=15" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
 <script src="project-data.js?v=15" onerror="console.warn('project-data.js 로드 실패')"></script>
@@ -85,7 +85,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" onerror="console.warn('mammoth.js 로드 실패')"></script>
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=59">
+<link rel="stylesheet" href="style.css?v=60">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -116,32 +116,49 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge"></span><script>var WM_VERSION='13.286';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1><p class="sub">Developed by Jongmin, Park</p></div>
-  <div class="hdr-ctl" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-    <!-- 통합 검색 -->
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.287';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
+  <div class="hdr-ctl">
+    <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
     <div id="globalSearchWrap">
       <span id="gsIcon">🔎</span>
       <input id="globalSearchInput" type="text" placeholder="통합 검색... (Ctrl+K)" oninput="gsDebounce(this.value)" onfocus="if(this.value.trim().length>=1)globalSearch(this.value)" onkeydown="gsKeyNav(event)" autocomplete="off" aria-label="통합 검색" role="searchbox">
       <div id="globalSearchDropdown" style="display:none"></div>
     </div>
-    <div class="thb hdr-more" id="themeBar"></div>
-    <!-- 폰트 선택기 (v13.57) -->
-    <div class="fnb hdr-more" id="fontBarWrap">
-      <button class="fnb-tg" id="fontBarToggle" onclick="document.getElementById('fontBarWrap').classList.toggle('open')" title="글씨체 변경" aria-label="글씨체 변경">🔤 글씨체</button>
-      <div class="fnb-menu" id="fontBar"></div>
-    </div>
     <!-- 알림 센터 -->
     <div id="notifWrap">
-      <button id="notifBtn" onclick="toggleNotifPanel()" title="알림 센터">🔔<span id="notifBadge" style="display:none">0</span></button>
+      <button id="notifBtn" class="hdr-ic" onclick="toggleNotifPanel()" title="알림 센터">🔔<span id="notifBadge" style="display:none">0</span></button>
       <div id="notifDropdown" style="display:none"></div>
     </div>
-    <button class="hdr-more" onclick="showBackupRestoreModal()" style="border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'" title="데이터 백업/복원">💾</button>
-    <button class="hdr-more" onclick="deduplicateRecords()" style="border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'" title="중복 레코드 제거">🧹</button>
-    <button class="hdr-more" onclick="resetAllData()" style="border:1px solid var(--d-bd);background:var(--d-bg);color:var(--d-t);font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:opacity .15s" onmouseenter="this.style.opacity='.8'" onmouseleave="this.style.opacity='1'" title="전체 데이터 초기화">🗑️</button>
-    <span id="authUserInfo" style="display:flex;align-items:center;gap:4px"></span>
-    <!-- 휴대폰 — 테마 · 글씨체 · 데이터 도구 접기 (v13.257) -->
-    <button class="hdr-more-tg" onclick="var h=this.closest('.hdr');this.setAttribute('aria-expanded',h.classList.toggle('more-on'))" aria-expanded="false" aria-label="테마 · 글씨체 · 데이터 도구" title="테마 · 글씨체 · 데이터 도구">⋯</button>
-    <div id="fileInfo" class="hidden hdr-more" style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:var(--t5)">📄 <span id="fnDisp"></span></span><span class="badge" style="background:var(--ac-bg);color:var(--ac-t)"><span id="rcDisp"></span>건</span></div>
+    <!-- 메시지 (v13.287 상위 탭에서 옮김) -->
+    <button class="hdr-ic" id="hdrMsgBtn" data-page="messages" onclick="setPage('messages')" title="메시지" aria-label="메시지">✉️<span id="msgBadge" style="display:none">0</span></button>
+    <!-- 🎨 화면 설정 — 테마 · 글씨체 -->
+    <div class="hdr-pop" id="hdrLookWrap">
+      <button class="hdr-ic" onclick="wmHdrPop('hdrLookWrap')" title="화면 설정 — 테마 · 글씨체" aria-label="화면 설정" aria-haspopup="true" aria-expanded="false">🎨<i class="hdr-look-dot" id="hdrLookDot"></i></button>
+      <div class="hdr-pop-menu hdr-look" role="menu">
+        <div class="hdr-look-col">
+          <div class="hdr-pop-t">테마</div>
+          <div class="thb" id="themeBar"></div>
+        </div>
+        <div class="hdr-look-col">
+          <div class="hdr-pop-t">글씨체</div>
+          <div class="hdr-font-list" id="fontBar"></div>
+        </div>
+      </div>
+    </div>
+    <!-- 사용자 메뉴 -->
+    <div class="hdr-pop" id="hdrUserWrap">
+      <button class="hdr-user-btn" onclick="wmHdrPop('hdrUserWrap')" title="내 메뉴" aria-haspopup="true" aria-expanded="false"><span id="authUserInfo">👤</span><span class="hdr-caret">▾</span></button>
+      <div class="hdr-pop-menu hdr-user-menu" role="menu">
+        <div class="hdr-user-head" id="hdrUserHead"></div>
+        <button class="hdr-mi" role="menuitem" onclick="wmHdrPopClose();wmGuardedModal('profile',showProfileModal,'profName')">👤 내 프로필</button>
+        <button class="hdr-mi" role="menuitem" onclick="wmHdrPopClose();wmGuardedModal('backup',showBackupRestoreModal,'backupOverlay')">💾 백업 · 복원</button>
+        <button class="hdr-mi" role="menuitem" data-page="patchnotes" id="tabPatchNotes" style="display:none" onclick="wmHdrPopClose();setPage('patchnotes')">📋 패치노트</button>
+        <div class="hdr-mi-sep"></div>
+        <button class="hdr-mi" role="menuitem" onclick="wmHdrPopClose();authLogout()">🚪 로그아웃</button>
+        <div class="hdr-mi-foot">Developed by Jongmin, Park</div>
+      </div>
+    </div>
   </div>
 </div></div>
 
@@ -152,9 +169,7 @@
     <button class="tab" data-page="mindmap" onclick="setPage('mindmap')" role="tab" aria-selected="false" id="tabMindmap" style="display:none" title="생각 정리 · 업무 분장 · 프로젝트 구조 (관리자가 지정한 사용자)">🧠 마인드맵</button>
     <button class="tab on" data-page="team" onclick="setPage('team')" role="tab" aria-selected="true" aria-controls="modeTabs" title="업무일지 분석 · 주간 업무 · 업무 부하">📒 업무 관리</button>
     <button class="tab" data-page="project" onclick="setPage('project')" role="tab" aria-selected="false" aria-controls="modeTabsProj">📁 프로젝트 관리</button>
-    <button class="tab" data-page="messages" onclick="setPage('messages')" role="tab" aria-selected="false" style="position:relative">✉️ 메시지<span id="msgBadge" style="display:none;background:#EF4444;color:#fff;font-size:9px;font-weight:700;border-radius:9px;min-width:15px;height:15px;align-items:center;justify-content:center;padding:0 3px;position:absolute;top:-4px;right:-4px;pointer-events:none">0</span></button>
     <button class="tab" data-page="useradmin" onclick="setPage('useradmin')" role="tab" aria-selected="false" id="tabUserAdmin" style="display:none">👤 사용자 관리</button>
-    <button class="tab" data-page="patchnotes" onclick="setPage('patchnotes')" role="tab" aria-selected="false" id="tabPatchNotes" style="display:none">📋 패치노트</button>
   </div>
   <!-- 하위 모드 탭 -->
   <div class="tabs sub-tabs" id="modeTabs" role="tablist" aria-label="업무 관리 하위 탭">
@@ -196,7 +211,7 @@
     <div id="mainArea" class="hidden">
       <!-- Encoding + Reupload -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap"><span style="font-size:11px;color:var(--t5);margin-right:3px">인코딩:</span><div id="encMain"></div></div>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap"><div id="fileInfo" class="hidden" style="display:flex;align-items:center;gap:8px;margin-right:8px"><span style="font-size:11px;color:var(--t5)">📄 <span id="fnDisp"></span></span><span class="badge" style="background:var(--ac-bg);color:var(--ac-t)"><span id="rcDisp"></span>건</span></div><span style="font-size:11px;color:var(--t5);margin-right:3px">인코딩:</span><div id="encMain"></div></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-g" onclick="document.getElementById('fileInput2').click()">📁 다른파일<input id="fileInput2" type="file" accept=".xls,.xlsx,.html,.htm" multiple style="display:none"></button>
           <button class="btn btn-w" onclick="saveWeek()" id="saveWeekBtn">💾 주차 저장</button>
@@ -206,6 +221,15 @@
           <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--t5);cursor:pointer" title="원본 파일을 함께 저장하면 나중에 인코딩 변경 후 재파싱이 가능합니다"><input type="checkbox" id="saveRawTog" checked> 원본포함</label>
           <span class="mob-sep" style="color:var(--bd2)">│</span>
           <button class="btn btn-g awAdminBtn" onclick="openAnyworksModal()" style="display:none;border-color:#06B6D4;color:#22D3EE">🌐 애니웍스</button>
+          <!-- 업무일지 데이터 도구 (v13.287 헤더에서 옮김) -->
+          <div class="hdr-pop" id="wrToolsWrap">
+            <button class="btn btn-g" onclick="wmHdrPop('wrToolsWrap')" title="업무일지 데이터 도구" aria-haspopup="true" aria-expanded="false">⋯</button>
+            <div class="hdr-pop-menu" role="menu">
+              <button class="hdr-mi" role="menuitem" onclick="wmHdrPopClose();deduplicateRecords()">🧹 중복 레코드 제거</button>
+              <div class="hdr-mi-sep"></div>
+              <button class="hdr-mi hdr-mi-danger" role="menuitem" onclick="wmHdrPopClose();resetAllData()">🗑️ 전체 데이터 초기화</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -494,9 +518,9 @@
 
 <!-- 앱 스크립트 — 예전 인라인 <script> 를 나눈 파일들. 동기 로드(defer 금지) · 이 순서 그대로 (app-init.js 가 마지막) -->
 <script src="wm-fallbacks.js?v=4" onerror="console.warn('wm-fallbacks.js 로드 실패')"></script>
-<script src="wm-state.js?v=3" onerror="console.warn('wm-state.js 로드 실패')"></script>
+<script src="wm-state.js?v=4" onerror="console.warn('wm-state.js 로드 실패')"></script>
 <script src="wr-import.js?v=5" onerror="console.warn('wr-import.js 로드 실패')"></script>
-<script src="mode.js?v=7" onerror="console.warn('mode.js 로드 실패')"></script>
+<script src="mode.js?v=8" onerror="console.warn('mode.js 로드 실패')"></script>
 <script src="wr-filters.js?v=3" onerror="console.warn('wr-filters.js 로드 실패')"></script>
 <script src="order-map.js?v=2" onerror="console.warn('order-map.js 로드 실패')"></script>
 <script src="wr-view.js?v=4" onerror="console.warn('wr-view.js 로드 실패')"></script>

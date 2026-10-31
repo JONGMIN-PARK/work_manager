@@ -57,7 +57,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
 
     // 메뉴 순서 (v13.280) · 예전 저장값 — 업무 부하가 상위 탭이던 때 기억한 것도 업무 관리 › 업무 부하로
     var order = await page.evaluate(function () { return Array.from(document.querySelectorAll('#pageTabs .tab')).map(function (t) { return t.dataset.page; }).join(','); });
-    check(order === 'mywork,mindmap,team,project,messages,useradmin,patchnotes', '메뉴 순서 ' + order);
+    check(order === 'mywork,mindmap,team,project,useradmin', '메뉴 순서 (v13.287 메시지 · 패치노트는 헤더) ' + order);
     check(/업무 관리/.test(await page.$eval('#pageTabs [data-page="team"]', function (e) { return e.textContent; })), '업무일지 → 업무 관리 이름');
     await page.evaluate(function () { localStorage.setItem('wm-last-view', JSON.stringify({ page: 'workload' })); });
     await page.reload({ waitUntil: 'networkidle2' });
@@ -69,7 +69,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
 
     // 로딩 중에 사용자가 탭을 누르면 그쪽을 따름 (복원이 끌고 가지 않음)
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(function () { return typeof setPage === 'function' && document.querySelector('#pageTabs [data-page="messages"]'); });
+    await page.waitForFunction(function () { return typeof setPage === 'function' && document.querySelector('#hdrMsgBtn'); });
     await page.evaluate(function () { setPage('messages'); });
     await ready();
     check((await view()).page === 'messages', '로딩 중 직접 고른 탭 유지');

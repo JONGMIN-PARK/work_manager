@@ -5,29 +5,25 @@
 
 /* ═══ 테마 (시인성 강화 — 라이트/다크/하이콘트라스트/특수) ═══ */
 var TH = [
-  { id: 'auto',         l: '시스템',     c: 'linear-gradient(135deg,#F5F7FA 50%,#0C0F1A 50%)' },
-  // 라이트 계열
-  { id: 'light',        l: '라이트',     c: '#F5F7FA' },
-  { id: 'paper',        l: '페이퍼',     c: '#FAF6EE' },
-  { id: 'mint',         l: '민트',       c: '#EAF6F0' },
-  { id: 'sand',         l: '웜샌드',     c: '#FAF7F2' },
-  // 다크 계열
-  { id: 'midnight',     l: '미드나잇',   c: '#0C0F1A' },
-  { id: 'slate',        l: '슬레이트',   c: '#1C1C1E' },
-  { id: 'forest',       l: '포레스트',   c: '#0B1410' },
-  { id: 'ocean',        l: '오션',       c: '#08121A' },
-  { id: 'rose',         l: '로즈',       c: '#1A0A14' },
-  { id: 'amethyst',     l: '애머시스트', c: '#100C18' },
-  { id: 'sunset',       l: '선셋',       c: '#1A0F10' },
-  { id: 'nord',         l: '노르드',     c: '#2E3440' },
-  // v13.81 — Linear/Vercel 스타일 (정제된 디자이너 테마)
-  { id: 'linear',       l: '리니어',     c: 'linear-gradient(135deg,#08090B,#1A1B2B)' },
-  // v13.70 — 트렌디 신규
-  { id: 'aurora',       l: '오로라',     c: 'linear-gradient(135deg,#0B1626 35%,#0FBE9B 65%,#A78BFA 100%)' },
-  { id: 'cyber',        l: '사이버',     c: 'linear-gradient(135deg,#0A0014 40%,#FF2D95 70%,#00E5FF 100%)' },
-  { id: 'glass',        l: '글래스',     c: 'linear-gradient(135deg,#E8EEF8,#C7D5EC)' },
-  // 시인성 강화
-  { id: 'highcontrast', l: '고대비',     c: 'linear-gradient(135deg,#000,#FFF)' }
+  // g: 🎨 화면 설정 창의 무리 (v13.287) — 같은 무리끼리 붙여 둔다
+  { id: 'auto',         l: '시스템',       g: '자동 · 접근성', c: 'linear-gradient(135deg,#F5F7FA 50%,#0C0F1A 50%)' },
+  { id: 'highcontrast', l: '고대비',       g: '자동 · 접근성', c: 'linear-gradient(135deg,#000,#FFF)' },
+  { id: 'light',        l: '라이트',       g: '라이트',     c: '#F5F7FA' },
+  { id: 'paper',        l: '페이퍼',       g: '라이트',     c: '#FAF6EE' },
+  { id: 'mint',         l: '민트',        g: '라이트',     c: '#EAF6F0' },
+  { id: 'sand',         l: '웜샌드',       g: '라이트',     c: '#FAF7F2' },
+  { id: 'glass',        l: '글래스',       g: '라이트',     c: 'linear-gradient(135deg,#E8EEF8,#C7D5EC)' },
+  { id: 'midnight',     l: '미드나잇',      g: '다크',      c: '#0C0F1A' },
+  { id: 'slate',        l: '슬레이트',      g: '다크',      c: '#1C1C1E' },
+  { id: 'forest',       l: '포레스트',      g: '다크',      c: '#0B1410' },
+  { id: 'ocean',        l: '오션',        g: '다크',      c: '#08121A' },
+  { id: 'rose',         l: '로즈',        g: '다크',      c: '#1A0A14' },
+  { id: 'amethyst',     l: '애머시스트',     g: '다크',      c: '#100C18' },
+  { id: 'sunset',       l: '선셋',        g: '다크',      c: '#1A0F10' },
+  { id: 'nord',         l: '노르드',       g: '다크',      c: '#2E3440' },
+  { id: 'linear',       l: '리니어',       g: '다크',      c: 'linear-gradient(135deg,#08090B,#1A1B2B)' },
+  { id: 'aurora',       l: '오로라',       g: '포인트',     c: 'linear-gradient(135deg,#0B1626 35%,#0FBE9B 65%,#A78BFA 100%)' },
+  { id: 'cyber',        l: '사이버',       g: '포인트',     c: 'linear-gradient(135deg,#0A0014 40%,#FF2D95 70%,#00E5FF 100%)' }
 ];
 
 /* ═══ 글씨체 (Google Fonts 기반 — 부팅 시 동적 로드)

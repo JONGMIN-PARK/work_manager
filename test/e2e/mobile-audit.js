@@ -59,7 +59,9 @@ var ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
     ['panel-todo', function () { setPage('mywork'); var r = document.querySelector('#mMyWork .mw-row[data-key]'); if (r) r.click(); }],
     ['panel-mwp', function () { setPage('mywork'); var it = (_mw.items || _mw.data && _mw.data.items || [])[0]; if (it) mwPanelOpen(it); }],
     ['mindmap-editor', function () { setPage('mindmap'); return apiFetch('/api/mindmaps').then(function (r) { var m = (r.data || [])[0]; if (m) mmOpen(m.id); }); }],
-    ['header-more', function () { var b = document.querySelector('.hdr-more-tg'); if (b) b.click(); }],
+    ['header-look', function () { wmHdrPop('hdrLookWrap'); }],
+    ['header-user', function () { wmHdrPop('hdrUserWrap'); }],
+    ['header-search', function () { document.getElementById('globalSearchInput').focus(); }],
     ['notif', function () { if (typeof toggleNotifPanel === 'function') toggleNotifPanel(); }]
   ];
   var report = [];
