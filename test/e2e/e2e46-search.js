@@ -49,8 +49,10 @@ var SHOTS = path.join(__dirname, '.shots');
     var mtg = await api('/api/meetings', 'POST', { projectId: proj.id, title: '설계 회의', meetDate: '2026-10-31', minutes: '회의록에 ' + K + ' 대책' });
     made.mtg = mtg && mtg.id;
     await api('/api/my-work/todos', 'POST', { title: K + ' 할 일' });
-    var mm = await api('/api/mindmaps', 'POST', { title: K + ' 맵', scope: 'personal' });
+    var mm = await api('/api/mindmaps', 'POST', { title: K + ' 맵', scope: 'personal', doc: { sheets: [{ id: 'sh-1', title: '시트 1', structure: 'balanced', root: { id: 'n-root', text: K + ' 맵', children: [{ id: 'n-a', text: '모터 ' + K + ' 점검', children: [] }, { id: 'n-b', text: '상관없는 주제', children: [] }] } }] } });
     made.mm = mm && mm.id;
+    var mmOther = await api('/api/mindmaps', 'POST', { title: '다른 맵 ' + Date.now(), scope: 'personal' });   // 먼저 열어 둘 맵 — 예전 맵이 열려 있을 때 찾기가 비워지던 문제 재현
+    made.mm2 = mmOther && mmOther.id;
     await api('/api/prestudies', 'POST', { title: K + ' 사전검토', client: '검색상사' });
     await api('/api/tech', 'POST', { name: K + ' 기술', code: 'T-' + K.slice(-5) });
     if (kim) await api('/api/messages', 'POST', { toUserId: kim.id, body: '확인 부탁 ' + K });
@@ -82,9 +84,14 @@ var SHOTS = path.join(__dirname, '.shots');
     await page.evaluate(function () { var p = document.getElementById('issueDetailPanel'); if (p) p.remove(); });
     await search(K); await pick('order'); await wait(1500);
     check(await page.evaluate(function () { return curMode === 'orders' && !!document.querySelector('#mOrders tr mark.wm-hit'); }), '수주 → 수주대장 그 줄 · 형광');
-    await search(K); await pick('mindmap'); await wait(1500);
+    await page.evaluate(function (id) { setPage('mindmap'); mmOpen(id); }, made.mm2); await wait(1800);   // 다른 맵을 열어 둔 상태에서
+    await search(K); await pick('mindmap'); await wait(2500);
     check(await page.evaluate(function (id) { return curPage === 'mindmap' && _mm.mapId === id; }, made.mm), '마인드맵 → 그 맵 열림');
-    check(await page.evaluate(function (k) { return _mm.search === k.toLowerCase() && document.getElementById('mmSearch').value === k && !!document.getElementById('wmHitBar'); }, K), '마인드맵 — 맵 찾기에 검색어 · 아래 막대');
+    var mmh = await page.evaluate(function (k) { return { search: _mm.search === k.toLowerCase(), box: document.getElementById('mmSearch').value === k, hits: _mm.hits.length, painted: document.querySelectorAll('#mMindmap .mm-node.mm-hit').length, minW: Math.min.apply(null, Array.from(document.querySelectorAll('#mMindmap .mm-node.mm-hit')).map(function (e) { return Math.round(e.getBoundingClientRect().width); })), bar: (document.getElementById('wmHitBar') || {}).textContent }; }, K);
+    check(mmh.search && mmh.box && mmh.hits === 2 && mmh.painted === 2 && mmh.minW > 150 && /주제 2곳/.test(mmh.bar || ''), '마인드맵 — 걸린 주제 2곳 테두리(한 글자씩 안 꺾임) · 막대 ' + JSON.stringify(mmh));
+    await page.screenshot({ path: path.join(SHOTS, 'search-hit-mindmap.png'), clip: { x: 0, y: 110, width: 1400, height: 790 } });
+    await page.click('#wmHitBar .wm-hit-x'); await wait(300);
+    check(await page.evaluate(function () { return !_mm.search && !document.querySelectorAll('#mMindmap .mm-node.mm-hit').length && !document.getElementById('wmHitBar'); }), '마인드맵 — 표시 지우기 → 맵 찾기도 비움');
     // 형광은 지울 때까지 유지 — 다른 곳을 눌러도 · 화면을 다시 그려도 · 다른 화면에 갔다 와도 (v13.293)
     await page.evaluate(function () { setPage('project'); setMode('orders'); });
     await search(K); await pick('order'); await wait(1500);
@@ -130,6 +137,7 @@ var SHOTS = path.join(__dirname, '.shots');
     // 정리
     await page.setViewport({ width: 1400, height: 900 }); await wait(300); await ready();
     if (made.mm) await api('/api/mindmaps/' + made.mm, 'DELETE');
+    if (made.mm2) await api('/api/mindmaps/' + made.mm2, 'DELETE');
     await api('/api/projects/' + made.proj, 'DELETE');
     check(errs.length === 0, '화면 오류 없음 ' + JSON.stringify(errs));
     console.log(fail ? 'FAILED ' + fail : 'ALL PASS ' + ok, errs);

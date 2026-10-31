@@ -221,18 +221,24 @@ function globalSearchNav(type, it, kw) {
   } else if (type === 'mindmap') {
     setPage('mindmap');
     if (n.nodeId && typeof _mm !== 'undefined') _mm.goto = { mapId: n.mapId, sheet: n.sheet || 0, node: n.nodeId };
-    if (typeof mmOpen === 'function') mmOpen(n.mapId);
     // 맵 안 찾기(🔍)에 검색어를 넣어 걸린 주제를 모두 표시 — 맵 찾기를 비우거나 [✕ 표시 지우기] 전까지 유지 (v13.293)
+    // 새 맵을 다 받은 뒤에 찾아야 함 — 예전 맵이 열려 있으면 그 맵에서 찾고, 곧이어 맵 열기가 찾기를 비워 표시가 안 보였다
+    var oldDoc = typeof _mm !== 'undefined' ? _mm.doc : null;
+    if (typeof mmOpen === 'function') mmOpen(n.mapId);
     wmHitShow(null, kw);
     if (_wmHit) _wmHit.map = n.mapId;
     var mt = 0;
     (function mmHit() {
       var inp = document.getElementById('mmSearch');
-      if (typeof _mm !== 'undefined' && _mm.mapId === n.mapId && _mm.doc && inp && typeof _mmSearch === 'function') {
-        inp.value = kw;
-        _mmSearch(kw, !n.nodeId);   // 주제 위치를 알면 그 주제(goto)를 고른 채 두고 표시만
-        _wmHitBar();
-      } else if (++mt < 40) setTimeout(mmHit, 150);
+      var loaded = typeof _mm !== 'undefined' && _mm.view === 'editor' && _mm.mapId === n.mapId && _mm.doc && _mm.doc !== oldDoc;
+      if (loaded && inp && typeof _mmSearch === 'function') {
+        setTimeout(function () {   // 열기 마무리(그리기 · goto 선택) 뒤에
+          if (!_wmHit || _wmHit.map !== n.mapId || _mm.mapId !== n.mapId) return;
+          var box = document.getElementById('mmSearch'); if (box) box.value = kw;
+          _mmSearch(kw, !n.nodeId);   // 주제 위치를 알면 그 주제(goto)를 고른 채 두고 표시만
+          _wmHitBar();
+        }, 120);
+      } else if (++mt < 60) setTimeout(mmHit, 150);
     })();
   } else if (type === 'doc') {
     setPage('project'); setMode('docs');
@@ -389,6 +395,7 @@ function _wmHitFocus(el) {
 }
 /* 칠한 곳 사이 옮겨 다니기 (◀ -1 · ▶ +1) */
 function wmHitStep(d) {
+  if (_wmHit && _wmHit.map && typeof _mm !== 'undefined' && _mm.mapId === _wmHit.map && typeof _mmSearch === 'function') { _mmSearch(_wmHit.kw, true, d); return; }   // 마인드맵 — 맵 찾기로 이동
   var ms = Array.prototype.slice.call(document.querySelectorAll('mark.wm-hit'));
   if (!ms.length || !_wmHit) return;
   _wmHit.idx = ((_wmHit.idx || 0) + d + ms.length) % ms.length;
@@ -404,7 +411,9 @@ function _wmHitBar() {
   if (!h) { if (bar) bar.remove(); return; }
   if (!bar) { bar = document.createElement('div'); bar.id = 'wmHitBar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
   var n = document.querySelectorAll('mark.wm-hit').length;
-  var where = h.map ? '맵에서 찾는 중' : (n ? n + '곳' : (document.querySelector('.wm-hit-field') ? '입력칸' : '이 화면엔 없음'));
+  var mmOn = h.map && typeof _mm !== 'undefined' && _mm.mapId === h.map && _mm.search;
+  if (mmOn) n = (_mm.hits || []).length;
+  var where = h.map ? (mmOn ? (n ? '주제 ' + n + '곳' : '주제에는 없음 (맵 제목에서 찾음)') : '맵 여는 중…') : (n ? n + '곳' : (document.querySelector('.wm-hit-field') ? '입력칸' : '이 화면엔 없음'));
   var html = '<span class="wm-hit-ic">🖍</span><span class="wm-hit-kw">「' + eH(h.kw) + '」</span><span class="wm-hit-n">' + where + '</span>' +
     (n > 1 ? '<button type="button" onclick="wmHitStep(-1)" title="앞 곳">◀</button><button type="button" onclick="wmHitStep(1)" title="다음 곳">▶</button>' : '') +
     '<button type="button" class="wm-hit-x" onclick="wmHitOff()" title="형광 표시를 지웁니다">✕ 표시 지우기</button>';

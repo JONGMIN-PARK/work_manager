@@ -3029,13 +3029,14 @@ mark.wd-hl{background:var(--ac-g);color:var(--ac-t);outline:1px solid var(--ac);
 .mm-rchip b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .mm-rchip span{font-size:10.5px;color:var(--t5);white-space:nowrap}
 /* 검색에 맞은 주제 */
+/* 목록 검색 결과 단추(.mm-hits .mm-hit) — 맵 안 찾기의 주제 표시(.mm-node.mm-hit)와 이름이 같아 범위를 묶음 (v13.293: 예전엔 주제가 한 글자씩 꺾였다) */
 .mm-hits{display:flex;flex-direction:column;gap:3px;margin-top:2px;padding:6px;border-radius:8px;background:var(--bg-i);border:1px dashed var(--bd2)}
-.mm-hit{display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:0;background:transparent;text-align:left;font:inherit;color:var(--t2);cursor:pointer;padding:4px 6px;border-radius:6px;min-width:0;width:100%}
-.mm-hit:hover{background:var(--bg-hv)}
+.mm-hits .mm-hit{display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:0;background:transparent;text-align:left;font:inherit;color:var(--t2);cursor:pointer;padding:4px 6px;border-radius:6px;min-width:0;width:100%}
+.mm-hits .mm-hit:hover{background:var(--bg-hv)}
 .mm-hit-p{font-size:10px;color:var(--t5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .mm-hit-t{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .mm-hit-t i{font-style:normal;color:var(--t4);font-size:11px}
-.mm-hit mark{background:var(--mk);color:var(--mk-t);border-radius:2px;padding:0 1px}
+.mm-hits .mm-hit mark{background:var(--mk);color:var(--mk-t);border-radius:2px;padding:0 1px}
 .mm-hit-more{font-size:10.5px;color:var(--t5);padding:0 6px}
 /* 목록(표) 보기 */
 .mm-tbl-w{overflow-x:auto;border:1px solid var(--bd);border-radius:10px;background:var(--bg-p)}
