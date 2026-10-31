@@ -39,9 +39,14 @@ async function showProjectDetail(id) {
   _pdScheduleMsHours(id, proj, projMs);
   html += _pdDetailLifecycleHtml(id, proj, allChk, ph) +
     _pdDetailLazyTabsHtml() +
-    _pdDetailFooterHtml(id, allChk.length);
+    _pdDetailFooterHtml();
 
   _pdAttachDetailPanel(id, proj, html);
+  pdSetTabCount('lifecycle', _pdPhaseCountText(proj, ph.phaseProgress));
+  _pdLoadTabCounts(id);
+  // 마지막으로 본 탭으로 (v13.290) — 다른 탭을 바로 여는 곳(알림 · 타임라인)은 이 뒤에 pdSwitchTab 을 다시 부름
+  var last = null; try { last = localStorage.getItem('pd-last-tab'); } catch (e) {}
+  if (last && last !== 'overview') pdSwitchTab(last, id);
   } finally { _pdDetailBusy = false; }
 }
 
@@ -97,15 +102,17 @@ function _pdDetailHeaderHtml(proj, stInfo) {
           _pdMoreItem('📄 복사', 'showProjectCopyModal(\'' + idA + '\')', '') +
           _pdMoreItem('🔁 소유권 이관', 'showProjectTransferModal(\'' + idA + '\')', 'pd-edit-only') +
           _pdMoreItem('🗑 삭제', _PD_CLOSE_JS + ';deleteProjectUI(\'' + idA + '\')', 'pd-edit-only', true) +
+          // 패널 폭 (v13.290 머리 줄에서 옮김) — 왼쪽 경계를 끌어도 조절
+          '<div class="pd-more-sep"></div><div class="pd-more-lbl">패널 폭</div>' +
+          '<div class="pd-size" title="패널 폭 — 왼쪽 경계를 끌어도 조절됩니다" onclick="event.stopPropagation()">' +
+            '<button data-pd-size="0.34" onclick="pdSetPanelSize(0.34)" title="좁게 — 화면의 1/3">좁게</button>' +
+            '<button data-pd-size="0.5" onclick="pdSetPanelSize(0.5)" title="보통 — 화면의 절반">보통</button>' +
+            '<button data-pd-size="0.67" onclick="pdSetPanelSize(0.67)" title="넓게 — 화면의 2/3">넓게</button>' +
+          '</div>' +
         '</div>' +
       '</span>' +
     '</div>' +
     '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
-      '<div class="pd-size" title="패널 폭 — 왼쪽 경계를 끌어도 조절됩니다">' +
-        '<button data-pd-size="0.34" onclick="pdSetPanelSize(0.34)" title="좁게 — 화면의 1/3">좁게</button>' +
-        '<button data-pd-size="0.5" onclick="pdSetPanelSize(0.5)" title="보통 — 화면의 절반">보통</button>' +
-        '<button data-pd-size="0.67" onclick="pdSetPanelSize(0.67)" title="넓게 — 화면의 2/3">넓게</button>' +
-      '</div>' +
       '<button class="btn btn-g btn-s" onclick="' + _PD_CLOSE_JS + '" title="닫기 (Esc)">✕</button>' +
     '</div>' +
   '</div>';
@@ -165,19 +172,41 @@ function pdEditProject(id) {
   showProjectModal(id);
 }
 
-/* 탭 바 (개요 / 라이프사이클 / 이슈 / 투입실적 / 사양 / 개발 / 회의) */
+/* 탭 바 (v13.290) — 개요 · 단계 · 이슈 · 개발 · 회의 · 투입 · 사양. 탭 id(pdTabXxx)와 pdSwitchTab 이름은 예전 그대로.
+   개수(.pd-tab-n)는 pdSetTabCount 가 채움 — 이슈 = 미해결, 개발 = 미완료, 회의 = 전체, 단계 = 현재 단계 체크 완료/전체 */
+var PD_TABS = [
+  { k: 'overview',  id: 'pdTabOverview',  icon: '📊', l: '개요' },
+  { k: 'lifecycle', id: 'pdTabLifecycle', icon: '🔄', l: '단계', title: '라이프사이클 — 단계 진행 · 단계별 체크리스트' },
+  { k: 'issues',    id: 'pdTabIssues',    icon: '🎫', l: '이슈', title: '미해결 이슈 수' },
+  { k: 'dev',       id: 'pdTabDev',       icon: '🧩', l: '개발', title: '개발 백로그 — 미완료 수' },
+  { k: 'meeting',   id: 'pdTabMeeting',   icon: '🗓', l: '회의' },
+  { k: 'work',      id: 'pdTabWork',      icon: '⏱', l: '투입', title: '투입실적 — 담당자 · 마일스톤별 투입 시간' },
+  { k: 'spec',      id: 'pdTabSpec',      icon: '📐', l: '사양', title: '장비 표준 사양서' }
+];
 function _pdDetailTabBarHtml(id) {
-  var pdTabStyle = 'padding:6px 10px;font-size:11px;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--t5);font-weight:600;background:none;cursor:pointer';
-  var pdTabActiveStyle = 'padding:6px 10px;font-size:11px;border:none;border-bottom:2px solid var(--ac);margin-bottom:-2px;color:var(--ac);font-weight:700;background:none;cursor:pointer';
-  return '<div style="display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid var(--bd)">' +
-    '<button class="btn" id="pdTabOverview" style="' + pdTabActiveStyle + '" onclick="pdSwitchTab(\'overview\')">개요</button>' +
-    '<button class="btn" id="pdTabLifecycle" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'lifecycle\')">라이프사이클</button>' +
-    '<button class="btn" id="pdTabIssues" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'issues\',\'' + id + '\')">이슈</button>' +
-    '<button class="btn" id="pdTabWork" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'work\',\'' + id + '\')">투입실적</button>' +
-    '<button class="btn" id="pdTabSpec" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'spec\',\'' + id + '\')">사양</button>' +
-    '<button class="btn" id="pdTabDev" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'dev\',\'' + id + '\')">개발</button>' +
-    '<button class="btn" id="pdTabMeeting" style="' + pdTabStyle + '" onclick="pdSwitchTab(\'meeting\',\'' + id + '\')">회의</button>' +
-  '</div>';
+  var idA = eA(id);
+  return '<div class="pd-tabs" role="tablist">' + PD_TABS.map(function (t) {
+    return '<button class="pd-tab' + (t.k === 'overview' ? ' on' : '') + '" id="' + t.id + '" role="tab" onclick="pdSwitchTab(\'' + t.k + '\',\'' + idA + '\')"' + (t.title ? ' title="' + t.title + '"' : '') + '>' +
+      '<span class="pd-tab-i">' + t.icon + '</span>' + t.l + '<span class="pd-tab-n" data-pd-n="' + t.k + '"></span></button>';
+  }).join('') + '</div>';
+}
+/* 탭 개수 — n 이 비면(0 · null) 숨김. 이슈 · 개발은 0 이면 안 보임, 단계는 'done/total' 문자열 */
+function pdSetTabCount(tab, n) {
+  var el = document.querySelector('#projDetailPanel [data-pd-n="' + tab + '"]');
+  if (el) el.textContent = n ? String(n) : '';
+}
+/* 패널을 열 때 이슈 · 개발 · 회의 개수를 미리 받음 — 탭을 열면 각 탭이 다시 받아 고침 */
+function _pdLoadTabCounts(projId) {
+  var same = function () { return window._pdProj && window._pdProj.id === projId; };
+  if (typeof issueGetByProject === 'function') issueGetByProject(projId).then(function (a) { if (same()) pdSetTabCount('issues', _pdOpenIssueN(a)); }).catch(function () {});
+  if (typeof devItemsByProject === 'function') devItemsByProject(projId).then(function (a) { if (same()) pdSetTabCount('dev', _pdOpenDevN(a)); }).catch(function () {});
+  if (typeof apiFetch === 'function') apiFetch('/api/meetings?projectId=' + encodeURIComponent(projId)).then(function (r) { if (same()) pdSetTabCount('meeting', ((r && r.data) || []).length); }).catch(function () {});
+}
+function _pdOpenIssueN(a) { return (a || []).filter(function (x) { return x.status !== 'resolved' && x.status !== 'closed'; }).length; }
+function _pdOpenDevN(a) { return (a || []).filter(function (x) { return x.status !== 'done'; }).length; }
+function _pdPhaseCountText(proj, phaseProgress) {
+  var pp = phaseProgress[(proj && proj.currentPhase) || 'order'];
+  return pp && pp.total ? pp.done + '/' + pp.total : '';
 }
 
 /* ── 개요 탭 ── 기간·진척·담당자·수주·메모·마일스톤·요소기술·현재 단계 체크리스트 */
@@ -367,15 +396,14 @@ function _pdDetailLazyTabsHtml() {
     '<div id="pdMeeting" style="display:none">' + _PD_LOADING_HTML + '</div>';
 }
 
-/* 하단(체크리스트가 하나도 없을 때만 [체크리스트 생성]) + 진척 히스토리·코멘트 섹션.
-   편집 · 삭제는 헤더의 ✏️ · ⋯ 로 옮김 (C4) */
-function _pdDetailFooterHtml(id, chkCount) {
-  return (chkCount ? '' : '<div class="pd-edit-only" style="display:flex;gap:8px;margin-top:16px">' +
-    '<button class="btn btn-g btn-s" onclick="pdGenerateChecklists(\'' + eA(id) + '\')">📋 체크리스트 생성</button>' +
-  '</div>') +
-  '<div id="progressHistorySection" style="margin-top:16px"></div>' +
-  '<div id="pdCommentsSection" style="margin-top:16px"></div>' +
-  '<div id="pdMindmapSection" style="margin-top:16px"></div>';
+/* 개요 아래 — 진척 히스토리 · 코멘트 · 관련 마인드맵 (개요 탭에서만 보임, pdSwitchTab).
+   체크리스트 생성은 개요 체크리스트 칸의 [기본 체크리스트 생성] 하나로 (v13.290) */
+function _pdDetailFooterHtml() {
+  return '<div id="pdOvFoot">' +
+    '<div id="progressHistorySection" style="margin-top:16px"></div>' +
+    '<div id="pdCommentsSection" style="margin-top:16px"></div>' +
+    '<div id="pdMindmapSection" style="margin-top:16px"></div>' +
+  '</div>';
 }
 
 /* 우측 슬라이드 패널 + 백드롭 부착, 비동기 섹션(진척 히스토리·요소기술·코멘트) 로드 */
@@ -496,17 +524,19 @@ function pdLoadTechUsed(projId) {
 function pdSwitchTab(tab, projId) {
   var tabs = ['overview', 'lifecycle', 'issues', 'work', 'spec', 'dev', 'meeting'];
   var ids = { overview: 'pdOverview', lifecycle: 'pdLifecycle', issues: 'pdIssues', work: 'pdWork', spec: 'pdSpec', dev: 'pdDev', meeting: 'pdMeeting' };
-  var btnIds = { overview: 'pdTabOverview', lifecycle: 'pdTabLifecycle', issues: 'pdTabIssues', work: 'pdTabWork', spec: 'pdTabSpec', dev: 'pdTabDev', meeting: 'pdTabMeeting' };
+  if (tabs.indexOf(tab) < 0) tab = 'overview';
+  if (!projId && window._pdProj) projId = window._pdProj.id;
   tabs.forEach(function (t) {
     var el = document.getElementById(ids[t]);
-    var btn = document.getElementById(btnIds[t]);
     if (el) el.style.display = t === tab ? '' : 'none';
-    if (btn) {
-      btn.style.borderBottomColor = t === tab ? 'var(--ac)' : 'transparent';
-      btn.style.color = t === tab ? 'var(--ac)' : 'var(--t5)';
-      btn.style.fontWeight = t === tab ? '700' : '600';
-    }
   });
+  PD_TABS.forEach(function (t) {
+    var btn = document.getElementById(t.id);
+    if (btn && btn.classList) { btn.classList.toggle('on', t.k === tab); btn.setAttribute('aria-selected', t.k === tab); }
+  });
+  // 진척 히스토리 · 코멘트 · 관련 마인드맵은 개요 아래에만 (v13.290 — 예전엔 모든 탭 아래에 붙었음)
+  var foot = document.getElementById('pdOvFoot'); if (foot) foot.style.display = tab === 'overview' ? '' : 'none';
+  try { localStorage.setItem('pd-last-tab', tab); } catch (e) {}   // 다음에 열면 이 탭으로
   // 이슈 탭 로딩
   if (tab === 'issues' && projId) pdLoadIssues(projId);
   // 투입실적 탭 로딩
@@ -549,11 +579,12 @@ function _pdLoadFailHtml(what, fnName, projId, err) {
 function pdRenderDev(items) {
   var el = document.getElementById('pdDev'); if (!el) return;
   items = items || [];
+  pdSetTabCount('dev', _pdOpenDevN(items));
 
   // 추가 폼
   var catOpts = Object.keys(PD_DEV_CAT).map(function (k) { return '<option value="' + k + '">' + PD_DEV_CAT[k].l + '</option>'; }).join('');
   var prioOpts = Object.keys(PD_DEV_PRIO).map(function (k) { return '<option value="' + k + '"' + (k === 'normal' ? ' selected' : '') + '>' + PD_DEV_PRIO[k].l + '</option>'; }).join('');
-  var html = '<div style="display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap">' +
+  var html = '<div class="pd-dev-add pd-edit-only">' +
     '<input id="pdDevTitle" placeholder="개발 아이템 제목" style="flex:1;min-width:140px;font-size:11px;padding:5px 8px" onkeydown="if(event.key===\'Enter\')pdDevAdd()">' +
     '<select id="pdDevCat" class="si" style="font-size:11px;padding:4px">' + catOpts + '</select>' +
     '<select id="pdDevPrio" class="si" style="font-size:11px;padding:4px">' + prioOpts + '</select>' +
@@ -634,6 +665,7 @@ function pdLoadIssues(projId) {
   var seq = _pdNextSeq('issues');
   issueGetByProject(projId).then(function (issues) {
     if (_pdIsStale('issues', seq, projId)) return;
+    pdSetTabCount('issues', _pdOpenIssueN(issues));
     if (!issues || issues.length === 0) {
       wrap.innerHTML = '<div style="text-align:center;color:var(--t6);font-size:11px;padding:20px 0">등록된 이슈가 없습니다.' +
         '<br><button class="btn btn-g btn-s pd-edit-only" style="margin-top:8px;font-size:10px" onclick="pdNewIssue(\'' + eA(projId) + '\')">+ 이슈 등록</button></div>';
@@ -1954,6 +1986,7 @@ function _pdChkResync(projId) {
         lc.innerHTML = buildPhaseChecklistHtml(projId, lcPhase, allChk, phases);
       }
       var info = _pdPhaseInfo(allChk);
+      pdSetTabCount('lifecycle', _pdPhaseCountText(window._pdProj, info.phaseProgress));
       document.querySelectorAll('#projDetailPanel .pdPhPill').forEach(function (el) {
         var pp = info.phaseProgress[el.getAttribute('data-phase')];
         el.textContent = (pp && pp.total > 0) ? pp.done + '/' + pp.total : '';
