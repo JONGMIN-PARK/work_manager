@@ -80,6 +80,7 @@ DELETE /api/workflows/:id
 GET *
 GET /
 GET /api/ai/config
+GET /api/ai/insights
 GET /api/ai/status
 GET /api/anyworks/health
 GET /api/anyworks/jobs/:id
@@ -228,6 +229,7 @@ GET /api/users/lookup
 GET /api/users/operator-list
 GET /api/users/pending
 GET /api/v1/ai/config
+GET /api/v1/ai/insights
 GET /api/v1/ai/status
 GET /api/v1/anyworks/health
 GET /api/v1/anyworks/jobs/:id

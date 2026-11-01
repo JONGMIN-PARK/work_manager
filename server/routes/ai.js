@@ -7,6 +7,7 @@ var config = require('../config');
 var db = require('../config/db');
 var aiService = require('../services/ai.service');
 var aiProvider = require('../services/ai-provider');
+var aiInsights = require('../services/ai-insights');
 var { authenticate } = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var planGate = require('../middleware/plan-gate');
@@ -129,7 +130,7 @@ router.post('/query', queryLimiter, checkAIQuota, async function (req, res) {
     var out = await aiService.answerWeb(question, {
       userId: req.user.sub, role: req.user.role, departmentId: req.user.departmentId || null,
       tenantId: req.tenant.id, name: req.user.name || '사용자'
-    });
+    }, { history: Array.isArray(req.body.history) ? req.body.history.slice(-3) : [] });
     if (!out) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI API 키가 설정되지 않았습니다. (GEMINI_API_KEY 또는 ANTHROPIC_API_KEY)' });
 
     await logUsage(req.tenant.id, req.user.sub, question, out.provider);
@@ -140,6 +141,10 @@ router.post('/query', queryLimiter, checkAIQuota, async function (req, res) {
         answer: out.answer,
         note: out.note || '',
         sources: out.sources,
+        charts: out.charts,
+        tools: out.tools,
+        followups: out.followups,
+        planned: out.planned,
         context: out.context,
         intents: out.intents,
         provider: aiProvider.label(out.provider),
@@ -149,6 +154,19 @@ router.post('/query', queryLimiter, checkAIQuota, async function (req, res) {
     });
   } catch (err) {
     aiProvider.sendAiError(res, '[AI Route] query', err, 'AI 질의 실패');
+  }
+});
+
+// ─── GET /api/ai/insights — 💡 자동 인사이트 카드 (v13.299, AI 호출 없음 · 묻는 사람 권한 범위) ───
+router.get('/insights', async function (req, res) {
+  try {
+    var cards = await aiInsights.computeInsights({
+      userId: req.user.sub, role: req.user.role, departmentId: req.user.departmentId || null,
+      tenantId: req.tenant.id, name: req.user.name || ''
+    });
+    res.json({ data: cards });
+  } catch (e) {
+    httpErr.serverError(res, '[ai/insights]', e);
   }
 });
 

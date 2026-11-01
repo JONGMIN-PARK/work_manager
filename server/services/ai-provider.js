@@ -180,7 +180,7 @@ async function generateText(opts) {
     } catch (e) {
       if (e.code === 'CREDIT_LOW' && config.ai.geminiKey) {
         console.warn('[AI] Claude 크레딧 부족 → Gemini 로 폴백');
-        var g0 = await geminiGenerate({ key: config.ai.geminiKey, model: defaultModel('gemini'), system: opts.system, prompt: opts.prompt });
+        var g0 = await geminiGenerate({ key: config.ai.geminiKey, model: defaultModel('gemini'), system: opts.system, prompt: opts.prompt, json: opts.json });
         return { text: g0.text, provider: 'gemini', model: g0.model, usage: g0.usage, note: 'Claude 크레딧 부족 — Gemini 로 대신 답했습니다' };
       }
       if (e.code === 'CREDIT_LOW') {
@@ -190,7 +190,7 @@ async function generateText(opts) {
       throw e;
     }
   }
-  var g = await geminiGenerate({ key: r.key, model: r.model, system: opts.system, prompt: opts.prompt, maxTokens: opts.maxTokens });
+  var g = await geminiGenerate({ key: r.key, model: r.model, system: opts.system, prompt: opts.prompt, maxTokens: opts.maxTokens, json: opts.json });
   return { text: g.text, provider: 'gemini', model: g.model, usage: g.usage, note: g.fellBack ? r.model + ' 이(가) 붐벼 ' + g.model + ' 로 답했습니다' : '' };
 }
 

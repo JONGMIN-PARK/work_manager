@@ -39,6 +39,7 @@ docker compose -f docker-compose.onprem.yml up -d
 | `GEMINI_API_KEY` · `ANTHROPIC_API_KEY` | - | - | 둘 중 하나만 있어도 모든 AI 기능(업무 분석·마인드맵·A/S·텔레그램) 동작 |
 | `GEMINI_MODEL` | - | gemini-2.5-flash | 더 높은 모델: gemini-2.5-pro 등 |
 | `GEMINI_FALLBACK_MODEL` | - | gemini-2.5-flash(-lite) | 기본 모델이 붐비거나 없을 때 대신 쓸 모델 |
+| `AI_QUERY_PLANNER` | - | 1 | 0 이면 ✨ AI에게 묻기에서 AI 의 조회 도구 고르기를 끄고 낱말 의도 묶음만 씀 (AI 호출 1회로 줄음) |
 | `ANTHROPIC_MODEL` | - | claude-opus-4-7 | Claude 모델 |
 | `LICENSE_KEY` | - | - | 엔터프라이즈 라이선스 키 |
 

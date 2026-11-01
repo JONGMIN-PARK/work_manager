@@ -27,6 +27,7 @@ module.exports = {
   sendWeeklyDigest: jobs.sendWeeklyDigest,
   sendProgressWarnings: jobs.sendProgressWarnings,
   sendOverloadWarnings: jobs.sendOverloadWarnings,
+  sendAiInsightBrief: jobs.sendAiInsightBrief,
   sendActionItemReminders: jobs.sendActionItemReminders,
   sendPrestudyReminders: jobs.sendPrestudyReminders,
   sendTechStaleReminders: jobs.sendTechStaleReminders,

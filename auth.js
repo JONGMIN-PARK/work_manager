@@ -1071,6 +1071,7 @@ async function loadTelegramPrefs(container) {
     order_delivery_d7: '납품 D-7',
     order_delivery_d3: '납품 D-3',
     weekly_digest: '주간 다이제스트 (월)',
+    ai_insights: '💡 이번 주 살펴볼 것 (월)',
     progress_warning: '진행률 경고'
   };
 

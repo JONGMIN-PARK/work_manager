@@ -587,6 +587,40 @@ async function sendWeeklyDigest() {
   console.log('[Notification] Weekly digest sent');
 }
 
+/**
+ * 💡 월요일 인사이트 브리핑 (v13.299) — 텔레그램 연동 사용자마다 "본인이 볼 수 있는 범위"로 규칙 인사이트를 계산해 보냄.
+ * AI 호출 없음. 알림 설정 ai_insights 를 끈 사람 · 살펴볼 것이 없는 사람은 건너뜀.
+ */
+async function sendAiInsightBrief() {
+  var aiInsights = require('../ai-insights');
+  var users = await db.query(
+    "SELECT tl.chat_id, tl.user_id, u.name, u.role, u.department_id, u.tenant_id FROM telegram_links tl JOIN users u ON u.id = tl.user_id " +
+    "WHERE tl.is_active = TRUE AND u.status = 'active' AND u.tenant_id IS NOT NULL"
+  );
+  if (!users.rows.length) return;
+  var off = {};
+  var prefR = await db.query(
+    "SELECT user_id FROM notification_prefs WHERE user_id = ANY($1) AND channel = 'telegram' AND event_type = 'ai_insights' AND is_enabled = FALSE",
+    [users.rows.map(function (u) { return u.user_id; })]
+  );
+  prefR.rows.forEach(function (p) { off[p.user_id] = true; });
+  var sent = 0;
+  for (var i = 0; i < users.rows.length; i++) {
+    var u = users.rows[i];
+    if (off[u.user_id]) continue;
+    try {
+      var cards = await aiInsights.computeInsights({ userId: u.user_id, role: u.role, departmentId: u.department_id, tenantId: u.tenant_id, name: u.name });
+      var text = aiInsights.briefText(cards, u.name, escHtml);
+      if (!text) continue;
+      await telegramService.sendMessage(u.chat_id, text);
+      sent++;
+    } catch (err) {
+      console.error('[AiInsightBrief] Error for user', u.name, err.message);
+    }
+  }
+  console.log('[Notification] AI insight brief sent to ' + sent + ' users');
+}
+
 /** 진행률 경고 (매일 실행) — 기대 진행률보다 20%p 이상 뒤처진 프로젝트 */
 async function sendProgressWarnings() {
   var today = new Date();
@@ -781,6 +815,7 @@ module.exports = {
   sendWeeklyDigest: sendWeeklyDigest,
   sendProgressWarnings: sendProgressWarnings,
   sendOverloadWarnings: sendOverloadWarnings,
+  sendAiInsightBrief: sendAiInsightBrief,
   sendActionItemReminders: sendActionItemReminders,
   sendPrestudyReminders: sendPrestudyReminders,
   sendMindmapDueReminders: sendMindmapDueReminders,

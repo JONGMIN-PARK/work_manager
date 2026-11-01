@@ -71,7 +71,7 @@ describe('gatherContext — 권한 범위', function () {
 
   test('묻는 사람 정보가 없으면 아무것도 안 봄', async function () {
     var ctx = await ai.gatherContext(['general'], { tenantId: T });
-    expect(ctx).toEqual({ text: '', sources: [] });
+    expect(ctx).toMatchObject({ text: '', sources: [], charts: [], ran: [] });
     expect(db.query).not.toHaveBeenCalled();
   });
 
@@ -97,7 +97,9 @@ describe('answerWeb — 근거 표시', function () {
     expect(out.answer).toBe('B 가 늦습니다 [P2]. 근거 없음 .');
     expect(out.sources[0]).toMatchObject({ key: 'P2', cited: true });
     expect(out.sources[1]).toMatchObject({ key: 'P1', cited: false });
-    var prompt = aiProvider.generateText.mock.calls[0][0].prompt;
+    var calls = aiProvider.generateText.mock.calls;
+    expect(calls[0][0].json).toBe(true);   // 1) 도구 고르기 (JSON 아님 → 기본 묶음)
+    var prompt = calls[calls.length - 1][0].prompt;
     expect(prompt).toMatch(/\[P1\]/);
     expect(prompt).toMatch(/질문자: 홍길동/);
   });

@@ -289,6 +289,8 @@ if (telegramService.isConfigured()) {
   scheduler.scheduleDaily(23, 30, function () { return notificationService.sendDailyBriefing(); }, 'Daily briefing');
   scheduler.scheduleDaily(0, 10, function () { return notificationService.sendOrderDeliveryReminders(); }, 'Order delivery reminder');
   scheduler.scheduleWeekly(1, 0, 30, function () { return notificationService.sendWeeklyDigest(); }, 'Weekly digest');
+  // 💡 월요일 인사이트 브리핑 — 사람마다 볼 수 있는 범위 (KST 월 09:40 = UTC 월 00:40, v13.299)
+  scheduler.scheduleWeekly(1, 0, 40, function () { return notificationService.sendAiInsightBrief(); }, 'AI insight brief');
   scheduler.scheduleDaily(8, 0, function () { return notificationService.sendProgressWarnings(); }, 'Progress warning');
   scheduler.scheduleDaily(9, 0, function () { return notificationService.sendOverloadWarnings(); }, 'Overload warning');
   scheduler.scheduleDaily(0, 5, function () { return notificationService.sendActionItemReminders(); }, 'Action item D-1 reminder');
