@@ -42,6 +42,24 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check((await badge(ids.a)) === '💬1', '주제에 💬1');
     check(await page.evaluate(function () { return document.querySelector('#mmPnCmt .mm-cmt-at').textContent === '@김팀원' && document.getElementById('mmCmtIn').value === ''; }), '@이름 강조 · 입력칸 비움');
     await page.screenshot({ path: path.join(SHOT, 'comments.png') });
+    // 💬 마우스 올리면 미리보기 (v13.306) — 잠깐 머물러야 뜨고, 벗어나면 닫힘, 글자는 막힌 HTML
+    await page.evaluate(function () { _mm.comments.push({ id: 'x-tip', node_id: _mm.comments[0].node_id, body: '<img src=x onerror=alert(1)> 두번째', resolved: false, created_at: new Date().toISOString(), author_name: '<b>홍</b>' }); });
+    await page.mouse.move(5, 5); await wait(100);
+    var nb = await page.evaluate(function (id) { var r = document.querySelector('#mmStage .mm-node[data-id="' + id + '"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, right: r.right }; }, ids.a);
+    await page.mouse.move(nb.x, nb.y); await wait(120);
+    check(!(await page.$('#mmCmtTip')), '바로는 안 뜸 (잠깐 머물러야)');
+    await wait(450);
+    var tip = await page.evaluate(function () {
+      var t = document.getElementById('mmCmtTip'); if (!t) return null;
+      var r = t.getBoundingClientRect();
+      return { h: t.querySelector('.mm-tip-h').textContent, n: t.querySelectorAll('.mm-tip-i').length, first: t.querySelector('.mm-tip-b').textContent, img: !!t.querySelector('img'), boldName: !!t.querySelector('.mm-tip-a b b'), left: r.left, inView: r.right <= innerWidth && r.bottom <= innerHeight };
+    });
+    check(tip && /댓글 2/.test(tip.h) && tip.n === 2, '미리보기 — 댓글 2개 ' + JSON.stringify(tip));
+    check(tip && !tip.img && !tip.boldName && tip.first.indexOf('<img') >= 0, '미리보기 글은 막힌 HTML · 최신이 먼저');
+    check(tip && tip.left >= nb.right && tip.inView, '주제 오른쪽 · 화면 안');
+    await page.mouse.move(5, 5); await wait(150);
+    check(!(await page.$('#mmCmtTip')), '벗어나면 닫힘');
+    await page.evaluate(function () { _mm.comments = _mm.comments.filter(function (c) { return c.id !== 'x-tip'; }); _mmPaint(); });
     // 지울 주제에 댓글 → 주제 삭제 → 중심 주제 패널에 모음
     await page.click('#mmStage .mm-node[data-id="' + ids.b + '"] .mm-txt'); await wait(200);
     await page.type('#mmCmtIn', '이건 빼죠');

@@ -3594,3 +3594,14 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 .tgg-steps{margin:6px 0 10px;padding-left:18px;font-size:12px;line-height:1.9;color:var(--t2)}
 .tgg-code{user-select:all}
 @media (max-width:600px){.tgg-row{flex-wrap:wrap}.tgg-t{white-space:normal}}
+
+/* ═══ 💬 마인드맵 댓글 미리보기 (v13.306, mindmap-comments.js) ═══ */
+.mm-tip{position:fixed;z-index:10050;max-height:60vh;overflow:hidden;padding:9px 11px;border-radius:10px;background:var(--bg-p);border:1px solid var(--bd);box-shadow:0 8px 24px rgba(0,0,0,.22);color:var(--t2);font-size:12px;pointer-events:none;animation:mmTipIn .12s ease}
+@keyframes mmTipIn{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
+.mm-tip-h{font-size:11.5px;font-weight:700;color:var(--t1);margin-bottom:6px}
+.mm-tip-i{padding:6px 0;border-top:1px solid var(--bd)}
+.mm-tip-a{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--t2)}
+.mm-tip-b{margin-top:2px;line-height:1.5;word-break:break-word;color:var(--t2)}
+.mm-tip-more{padding-top:4px}
+.mm-tip-f{margin-top:6px;padding-top:6px;border-top:1px solid var(--bd);font-size:10.5px}
+@media (hover:none){.mm-tip{display:none}}

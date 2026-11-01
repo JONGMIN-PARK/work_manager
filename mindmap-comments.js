@@ -148,3 +148,68 @@ document.addEventListener('click', function (e) {
     if (sec) { sec.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); var t = _mmEl('mmCmtIn'); if (t) t.focus({ preventScroll: true }); }
   }, 60);
 });
+
+/* ── 💬 마우스를 올리면 댓글 미리보기 (v13.306) ──
+ * 해결 안 된 댓글이 있는 주제에 0.35초 머물면 주제 옆에 최근 3개 · 해결된 수. 누르면 지금처럼 패널 댓글 칸.
+ * 끌기 · 글 고치는 중 · 터치(마우스 아님)에서는 띄우지 않음. 스크롤 · 확대 · 누르기 · 맵 닫기에 바로 닫힘. */
+var _mmTip = { timer: 0, id: null, wait: null };
+function _mmCmtTipHtml(id) {
+  var all = (_mm.comments || []).filter(function (c) { return c.node_id === id; });
+  var open = all.filter(function (c) { return !c.resolved; });
+  if (!open.length) return '';
+  var done = all.length - open.length;
+  var recent = open.slice().sort(function (a, b) { return String(b.created_at).localeCompare(String(a.created_at)); }).slice(0, 3);
+  return '<div class="mm-tip-h">💬 댓글 ' + open.length + (done ? ' <span class="mm-hint">· 해결 ' + done + '</span>' : '') + '</div>' +
+    recent.map(function (c) {
+      var body = String(c.body || '');
+      if (body.length > 140) body = body.slice(0, 140) + '…';
+      return '<div class="mm-tip-i"><div class="mm-tip-a"><b>' + _mmEsc(c.author_name || '알 수 없음') + '</b><span class="mm-hint">' + _mmEsc(_mmCmtTime(c.created_at)) + '</span></div>' +
+        '<div class="mm-tip-b">' + _mmCmtBody(body) + '</div></div>';
+    }).join('') +
+    (open.length > 3 ? '<div class="mm-hint mm-tip-more">… 외 ' + (open.length - 3) + '개</div>' : '') +
+    '<div class="mm-hint mm-tip-f">💬 를 누르면 모두 보기 · 답글</div>';
+}
+function _mmCmtTipHide() {
+  clearTimeout(_mmTip.timer); _mmTip.timer = 0; _mmTip.id = null; _mmTip.wait = null;
+  var t = document.getElementById('mmCmtTip'); if (t) t.remove();
+}
+function _mmCmtTipShow(el) {
+  var id = el.getAttribute('data-id');
+  if (!document.body.contains(el) || (typeof _mm !== 'undefined' && _mm.editing)) return;
+  var html = _mmCmtTipHtml(id);
+  if (!html) return;
+  var t = document.getElementById('mmCmtTip');
+  if (!t) { t = document.createElement('div'); t.id = 'mmCmtTip'; t.className = 'mm-tip'; t.setAttribute('role', 'tooltip'); document.body.appendChild(t); }
+  t.innerHTML = html;
+  _mmTip.id = id;
+  // 주제 오른쪽에 — 자리가 없으면 왼쪽, 위아래는 화면 안으로
+  var r = el.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+  var w = Math.min(300, vw - 16);
+  t.style.width = w + 'px';
+  var left = r.right + 8;
+  if (left + w > vw - 8) left = r.left - w - 8;
+  if (left < 8) left = Math.max(8, Math.min(vw - w - 8, r.left));
+  var h = t.offsetHeight;
+  var top = left === r.right + 8 || left === r.left - w - 8 ? r.top : r.bottom + 6;
+  if (top + h > vh - 8) top = Math.max(8, vh - h - 8);
+  t.style.left = Math.round(left) + 'px';
+  t.style.top = Math.round(top) + 'px';
+}
+document.addEventListener('mouseover', function (e) {
+  if (!e.target.closest) return;
+  var el = e.target.closest('#mmStage .mm-node');
+  if (!el) { if (_mmTip.id || _mmTip.timer) _mmCmtTipHide(); return; }
+  var id = el.getAttribute('data-id');
+  if (id === _mmTip.id || id === _mmTip.wait) return;   // 같은 주제 안에서 움직임
+  _mmCmtTipHide();
+  if (e.buttons || (typeof _mm !== 'undefined' && _mm.editing) || !_mmCmtOpenCount(id)) return;
+  _mmTip.wait = id;
+  _mmTip.timer = setTimeout(function () { _mmTip.timer = 0; _mmTip.wait = null; _mmCmtTipShow(el); }, 350);
+});
+document.addEventListener('mouseout', function (e) {
+  if (!e.relatedTarget && (_mmTip.id || _mmTip.timer)) _mmCmtTipHide();   // 창 밖으로
+});
+['pointerdown', 'wheel', 'keydown'].forEach(function (ev) {
+  document.addEventListener(ev, function () { if (_mmTip.id || _mmTip.timer) _mmCmtTipHide(); }, true);
+});
+window.addEventListener('scroll', function () { if (_mmTip.id) _mmCmtTipHide(); }, true);
