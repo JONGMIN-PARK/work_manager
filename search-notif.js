@@ -61,8 +61,11 @@ function gsLocalGroups(kl) {
 /* 결과 → 드롭다운 HTML. groups = [{key,total,items}], only = 범주 칩으로 고른 것 */
 function gsRenderResults(groups, kw, only) {
   var total = groups.reduce(function (s, g) { return s + g.total; }, 0);
-  if (!total) return '<div class="gs-empty">「' + eH(kw) + '」 검색 결과 없음</div>';
+  var ask = typeof wmAiRowHtml === 'function' ? wmAiRowHtml(kw) : '';   // v13.297 ✨ AI에게 묻기 — 문장 같으면 맨 위, 아니면 맨 아래
+  var q = typeof wmAiLooksQuestion === 'function' && wmAiLooksQuestion(kw);
+  if (!total) return ask + '<div class="gs-empty">「' + eH(kw) + '」 검색 결과 없음</div>';
   var h = '<div class="gs-head"><span>' + total + '건</span><span class="gs-keys">↑↓ 이동 · Enter 열기 · Esc 닫기</span></div>';
+  if (q) h += ask;
   // 범주 칩 — 누르면 그 범주만 더 많이
   h += '<div class="gs-chips"><button class="gs-chip' + (only ? '' : ' on') + '" onclick="gsOnly(null)">전체</button>' +
     groups.map(function (g) { var c = GS_CATS[g.key] || { label: g.key }; return '<button class="gs-chip' + (only === g.key ? ' on' : '') + '" onclick="gsOnly(\'' + g.key + '\')">' + c.label + ' <b>' + g.total + '</b></button>'; }).join('') + '</div>';
@@ -80,7 +83,7 @@ function gsRenderResults(groups, kw, only) {
     });
     if (!only && g.total > g.items.length) h += '<div class="gs-more" onclick="gsOnly(\'' + g.key + '\')">+' + (g.total - g.items.length) + '건 더 보기</div>';
   });
-  return h + '</div>';
+  return h + '</div>' + (q ? '' : ask);
 }
 /* 최근 검색어 (입력칸이 비었을 때) */
 function gsRecentHtml() {
@@ -102,6 +105,7 @@ function gsUseRecent(q) {
 }
 
 function gsOnFocus(v) {
+  if (typeof wmAiCheck === 'function') wmAiCheck();
   var dd = document.getElementById('globalSearchDropdown');
   if (dd && dd.style.display === 'flex' && (v || '').trim() === _gs.q) return;
   globalSearch(v);
@@ -111,7 +115,7 @@ async function globalSearch(kw, only) {
   if (!dd) return;
   kw = (kw || '').trim();
   _gsActiveIdx = -1;
-  if (!kw) { var rc = gsRecentHtml(); dd.innerHTML = rc; dd.style.display = rc ? 'flex' : 'none'; return; }
+  if (!kw) { ++_gs.seq; _gs.q = ''; var rc = /* 늦게 온 앞 검색 결과가 덮지 않게 */ (typeof wmAiRecentRow === 'function' ? wmAiRecentRow() : '') + gsRecentHtml(); dd.innerHTML = rc; dd.style.display = rc ? 'flex' : 'none'; return; }
   var seq = ++_gs.seq;
   if (_gs.q !== kw) { _gs.only = null; dd.innerHTML = '<div class="gs-empty">찾는 중…</div>'; dd.style.display = 'flex'; }
   _gs.only = only || null;   // 입력칸에서 다시 치면 전체로 (칩은 gsOnly 가 넘김)
@@ -426,6 +430,9 @@ function gsKeyNav(e) {
   if (!dd || dd.style.display === 'none') {
     if (e.key === 'Escape') { e.target.blur(); return; }
     return;
+  }
+  if (e.key === 'Enter' && _gsActiveIdx < 0 && typeof _wmAi !== 'undefined' && _wmAi.ready && wmAiLooksQuestion(e.target.value)) {   // v13.297 문장 + Enter → AI 에게
+    e.preventDefault(); gsAskAi(); return;
   }
   var items = dd.querySelectorAll('.gs-item');
   if (!items.length) return;

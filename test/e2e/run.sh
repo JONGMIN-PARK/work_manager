@@ -98,6 +98,7 @@ else
   run_batch e2e46-search.js
   run_batch e2e47-toolbar-proj.js
   run_batch e2e48-toolbar-mw.js
+  run_batch e2e49-ai-ask.js
 fi
 
 # 이 실행이 띄운 Postgres 면 정상 종료 (start.mjs 가 .pgstop 을 보고 멈춤)

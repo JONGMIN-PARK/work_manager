@@ -110,27 +110,26 @@ router.post('/summary', checkAIQuota, async function (req, res) {
 });
 
 // ─── POST /api/ai/query — 자연어 질의 (RAG) ───
-router.post('/query', checkAIQuota, async function (req, res) {
+// 웹 "✨ AI에게 묻기" — 사용자당 시간당 60회
+var queryLimiter = require('express-rate-limit')({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  keyGenerator: function (req) { return (req.user && req.user.sub) || req.ip; },
+  message: { error: 'RATE_LIMIT', message: 'AI 질문 한도(시간당 60회)를 넘었습니다. 잠시 후 다시 시도하세요.' },
+  standardHeaders: true, legacyHeaders: false
+});
+router.post('/query', queryLimiter, checkAIQuota, async function (req, res) {
   try {
     var question = (req.body.question || '').trim();
     if (!question) return res.status(400).json({ error: 'BAD_REQUEST', message: '질문을 입력하세요.' });
 
-    // RAG: 의도 분석 → DB 데이터 수집 → AI 응답
-    var intents = aiService.analyzeQuery(question);
-    var contextData = await aiService.gatherContext(intents, req.user.name || '사용자', req.tenant.id);
+    if (question.length > 1000) question = question.slice(0, 1000);
 
-    var systemPrompt = '당신은 "Work Manager"라는 업무 관리 시스템의 AI 어시스턴트입니다.\n' +
-      '아래 실제 데이터를 기반으로 사용자의 질문에 한국어로 답변하세요.\n' +
-      '마크다운 포맷을 사용할 수 있습니다.\n' +
-      '데이터에 없는 내용은 추측하지 말고 "해당 데이터가 없습니다"라고 답하세요.\n\n';
-
-    if (contextData) {
-      systemPrompt += '=== 현재 데이터 ===\n' + contextData + '\n=== 데이터 끝 ===\n\n';
-    }
-
-    systemPrompt += '질문: ' + question;
-
-    var out = await callAIWithPrompt(systemPrompt, req.tenant.id);
+    // v13.297: 묻는 사람이 화면에서 볼 수 있는 것만 AI 에 넘김 (ai.service.gatherContext)
+    var out = await aiService.answerWeb(question, {
+      userId: req.user.sub, role: req.user.role, departmentId: req.user.departmentId || null,
+      tenantId: req.tenant.id, name: req.user.name || '사용자'
+    });
     if (!out) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI API 키가 설정되지 않았습니다. (GEMINI_API_KEY 또는 ANTHROPIC_API_KEY)' });
 
     await logUsage(req.tenant.id, req.user.sub, question, out.provider);
@@ -138,8 +137,11 @@ router.post('/query', checkAIQuota, async function (req, res) {
 
     res.json({
       data: {
-        answer: out.note ? '[ℹ️ ' + out.note + ']\n\n' + out.text : out.text,
-        intents: intents,
+        answer: out.answer,
+        note: out.note || '',
+        sources: out.sources,
+        context: out.context,
+        intents: out.intents,
         provider: aiProvider.label(out.provider),
         model: out.model,
         quota: { used: (quota.used || 0) + 1, limit: quota.limit }
