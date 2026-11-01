@@ -79,7 +79,9 @@ async function cleanup() {
     'tech_logs', 'tech_usages', 'tech_assets',
     'meeting_action_items', 'meetings', 'project_dev_items', 'prestudies', 'comments',
     // v13.196 표준 사양서
-    'project_spec_files', 'spec_template_versions', 'spec_templates'
+    'project_spec_files', 'spec_template_versions', 'spec_templates',
+    // v13.301~305 텔레그램 업무 창구
+    'telegram_refs', 'telegram_group_links'
   ];
   for (var i = 0; i < byTenant.length; i++) {
     await tryDel('DELETE FROM ' + byTenant[i] + ' WHERE tenant_id = $1');
@@ -89,7 +91,7 @@ async function cleanup() {
   // 2) users 를 FK로 참조하는 로그성 테이블 —
   //    tenant_id 가 NULL이거나 다른 값인 행이 남아 users 삭제를 막던 원인.
   //    tenant_id 조건이 아니라 user_id 로 지운다.
-  var byUser = ['audit_logs', 'refresh_tokens', 'in_app_notifications', 'notification_logs', 'notification_prefs'];
+  var byUser = ['audit_logs', 'refresh_tokens', 'in_app_notifications', 'notification_logs', 'notification_prefs', 'telegram_auth_codes', 'telegram_links'];
   for (var j = 0; j < byUser.length; j++) {
     await tryDel('DELETE FROM ' + byUser[j] + ' WHERE user_id IN (SELECT id FROM users WHERE tenant_id = $1)');
   }

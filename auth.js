@@ -1106,6 +1106,16 @@ async function loadTelegramPrefs(container) {
       + (recOn.some(function (t) { return ['10:00', '13:30', '16:30'].indexOf(t) < 0; }) ? '<span style="color:var(--t4,#8090B0)">' + recOn.join(' · ') + '</span>' : '')
       + (recOn.length ? '' : '<span style="color:var(--t5,#6070A0)">꺼짐</span>')
       + '<button type="button" data-recnow="1" style="margin-left:auto;padding:3px 9px;border-radius:99px;font-size:11px;cursor:pointer;border:1px solid var(--bd,#222C44);background:transparent;color:var(--t2,#D8DEE8)">📨 지금 받아 보기</button></div>';
+    // 🌙 방해 금지 (v13.305) — 그 시간엔 알림이 소리 없이 (빠지지는 않음)
+    var qS = data.quietStart || '', qE = data.quietEnd || '';
+    var QUIET = [['', '', '끄기'], ['22:00', '07:00', '22~07시'], ['20:00', '08:00', '20~08시'], ['18:00', '09:00', '퇴근 후']];
+    html += '<div id="tgQuietRow" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--t2,#D8DEE8);margin-bottom:6px" title="이 시간에 오는 알림은 소리 · 진동 없이 도착합니다 (한국 시각)">🌙 방해 금지 '
+      + QUIET.map(function (q) {
+          var on = q[0] === qS && q[1] === qE;
+          return '<button type="button" data-quiet="' + q[0] + '|' + q[1] + '" style="padding:3px 9px;border-radius:99px;font-size:11px;cursor:pointer;border:1px solid ' + (on ? '#0088CC;background:#0088CC;color:#fff' : 'var(--bd,#222C44);background:transparent;color:var(--t3,#A0AACC)') + '">' + q[2] + '</button>';
+        }).join('')
+      + (qS && !QUIET.some(function (q) { return q[0] === qS && q[1] === qE; }) ? '<span style="color:var(--t4,#8090B0)">' + qS + '~' + qE + '</span>' : '')
+      + '</div>';
     html += boxes(myLabels);
     html += '<div style="font-size:11px;font-weight:700;color:var(--t3,#A0AACC);margin:10px 0 6px">그 밖의 알림</div>';
     html += boxes(eventLabels);
@@ -1116,6 +1126,17 @@ async function loadTelegramPrefs(container) {
         var t = b.dataset.rec, next = recOn.indexOf(t) >= 0 ? recOn.filter(function (x) { return x !== t; }) : recOn.concat([t]);
         try {
           await apiFetch('/api/telegram/prefs/rec', { method: 'PUT', body: JSON.stringify({ slots: next.sort().join(',') }) });
+          loadTelegramPrefs(container);
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('설정 변경 실패 — ' + ((e && e.message) || ''), 'error');
+        }
+      };
+    });
+    prefsArea.querySelectorAll('[data-quiet]').forEach(function (b) {
+      b.onclick = async function () {
+        var p = b.dataset.quiet.split('|');
+        try {
+          await apiFetch('/api/telegram/prefs/quiet', { method: 'PUT', body: JSON.stringify({ start: p[0], end: p[1] }) });
           loadTelegramPrefs(container);
         } catch (e) {
           if (typeof showToast === 'function') showToast('설정 변경 실패 — ' + ((e && e.message) || ''), 'error');

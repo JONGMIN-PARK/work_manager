@@ -334,6 +334,14 @@ function buildTelegramSendOpts(eventType, payload) {
       inline_keyboard: [[{ text: '✅ 완료', callback_data: 'action_done:' + payload.actionId }]]
     });
   }
+  if (eventType === 'as_assigned' && payload.asgId) {
+    sendOpts.reply_markup = JSON.stringify({
+      inline_keyboard: [[
+        { text: '🛠 작업 시작', callback_data: 'asg_start:' + payload.asgId },
+        { text: '✅ 완료', callback_data: 'asg_done:' + payload.asgId }
+      ]]
+    });
+  }
   if (eventType === 'user_pending' && payload.pendingUserId) {
     sendOpts.reply_markup = JSON.stringify({
       inline_keyboard: [

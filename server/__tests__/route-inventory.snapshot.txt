@@ -52,6 +52,7 @@ DELETE /api/sso/config/:id
 DELETE /api/tech/:id
 DELETE /api/tech/:id/logs/:logId
 DELETE /api/tech/:id/usages/:usageId
+DELETE /api/telegram/groups/:id
 DELETE /api/telegram/unlink
 DELETE /api/v1/archives/:id
 DELETE /api/v1/archives/records
@@ -74,6 +75,7 @@ DELETE /api/v1/orders/:orderNo
 DELETE /api/v1/projects/:id
 DELETE /api/v1/projects/:id/images/:imgId
 DELETE /api/v1/projects/:id/members/:userId
+DELETE /api/v1/telegram/groups/:id
 DELETE /api/v1/telegram/unlink
 DELETE /api/weekly-reports/:id
 DELETE /api/workflows/:id
@@ -220,6 +222,7 @@ GET /api/tech/members
 GET /api/tech/stacks
 GET /api/tech/usages
 GET /api/telegram/debug
+GET /api/telegram/groups
 GET /api/telegram/prefs
 GET /api/telegram/status
 GET /api/tenants/me
@@ -284,6 +287,7 @@ GET /api/v1/stats/by-team
 GET /api/v1/stats/summary
 GET /api/v1/stats/weekly
 GET /api/v1/telegram/debug
+GET /api/v1/telegram/groups
 GET /api/v1/telegram/prefs
 GET /api/v1/telegram/status
 GET /api/v1/tenants/me
@@ -409,6 +413,7 @@ POST /api/tech
 POST /api/tech/:id/logs
 POST /api/tech/:id/usages
 POST /api/telegram/auth-code
+POST /api/telegram/group-code
 POST /api/telegram/mywork-send
 POST /api/telegram/setup-webhook
 POST /api/telegram/webhook
@@ -460,6 +465,7 @@ POST /api/v1/projects/:id/transfer
 POST /api/v1/projects/full
 POST /api/v1/projects/reorder
 POST /api/v1/telegram/auth-code
+POST /api/v1/telegram/group-code
 POST /api/v1/telegram/mywork-send
 POST /api/v1/telegram/setup-webhook
 POST /api/v1/telegram/webhook
@@ -525,6 +531,7 @@ PUT /api/tech/:id
 PUT /api/tech/:id/logs/:logId
 PUT /api/telegram/prefs
 PUT /api/telegram/prefs/lead
+PUT /api/telegram/prefs/quiet
 PUT /api/telegram/prefs/rec
 PUT /api/tenants/me
 PUT /api/users/:id/approve
@@ -549,6 +556,7 @@ PUT /api/v1/projects/:id/specs
 PUT /api/v1/settings/:key
 PUT /api/v1/telegram/prefs
 PUT /api/v1/telegram/prefs/lead
+PUT /api/v1/telegram/prefs/quiet
 PUT /api/v1/telegram/prefs/rec
 PUT /api/v1/tenants/me
 PUT /api/v1/users/:id/approve

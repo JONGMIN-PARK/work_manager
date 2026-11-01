@@ -15,15 +15,27 @@ var planGate = require('../middleware/plan-gate');
 var escHtmlTg = require('../telegram/util/escape').escHtml;
 var httpErr = require('../lib/http-errors');
 
-/** 인라인 버튼 콜백 처리 */
+/**
+ * 인라인 버튼 콜백 처리 (v13.301 다시 짬)
+ *   누른 사람 = query.from (예전엔 메시지가 있던 방으로 찾아 그룹방 투표 · 버튼이 안 됐다)
+ *   이슈 · 체크리스트 · 액션 · 개발 · A/S 는 telegram/actions.js — 웹과 같은 권한 확인 · 같은 알림
+ *   바뀐 게 없으면 "이미 …" 로 답한다 (예전엔 없는 항목도 "완료!")
+ */
+var tgActions = require('../telegram/actions');
+
+function answer(callbackId, text) {
+  return telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: String(text || '').slice(0, 190) });
+}
+
 async function handleCallbackQuery(query) {
+  if (!query || !query.message) return;
   var chatId = query.message.chat.id;
   var data = query.data || '';
   var callbackId = query.id;
 
-  var user = await telegramService.getUserByChatId(chatId);
+  var user = query.from ? await telegramService.getUserByChatId(query.from.id) : null;
   if (!user) {
-    await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '계정 연동이 필요합니다.' });
+    await answer(callbackId, '계정 연동이 필요합니다 — 봇과 1:1 대화에서 연동하세요.');
     return;
   }
 
@@ -36,94 +48,74 @@ async function handleCallbackQuery(query) {
       await require('../telegram/commands/mywork').handleCallback(telegramService, chatId, user, data, callbackId);
       return;
     }
-    if (action === 'issue_start') {
-      // 이슈 상태 → inProgress (테넌트 격리 가드)
-      var issueId = parts[1];
-      await db.query("UPDATE issues SET status = 'inProgress', updated_at = NOW(), updated_by = $1, version = version + 1 WHERE id = $2 AND tenant_id = $3", [user.user_id, issueId, user.tenant_id]);
-      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ 대응 시작!' });
-      await telegramService.sendMessage(chatId, '🔵 이슈 상태가 <b>대응중</b>으로 변경되었습니다.');
+    // 📋 메뉴 (v13.305) — 누른 사람의 1:1 대화에서만
+    if (action === 'mn') {
+      await answer(callbackId, '');
+      if (query.message.chat.type !== 'private') return;
+      await telegramService.runMenu(parts[1], chatId, user);
+      return;
     }
-    else if (action === 'issue_resolve') {
-      var issueId2 = parts[1];
-      await db.query("UPDATE issues SET status = 'resolved', resolved_date = $1, updated_at = NOW(), updated_by = $2, version = version + 1 WHERE id = $3 AND tenant_id = $4", [new Date().toISOString().slice(0,10), user.user_id, issueId2, user.tenant_id]);
-      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ 해결 완료!' });
-      await telegramService.sendMessage(chatId, '✅ 이슈가 <b>해결</b> 처리되었습니다.');
+    // 📝 말로 등록 확인 (v13.303) — cp:<ok|x|todo|event|log|ask>:<키>
+    if (action === 'cp') {
+      var mid = query.message.message_id;
+      var toast = await require('../telegram/compose').onButton({
+        chatId: chatId, user: user, messageId: mid, action: parts[1], key: parts[2],
+        send: telegramService.sendMessage,
+        edit: function (text, markup) {
+          return telegramService.callApi('editMessageText', {
+            chat_id: chatId, message_id: mid, text: text, parse_mode: 'HTML',
+            reply_markup: markup ? JSON.stringify(markup) : JSON.stringify({ inline_keyboard: [] })
+          });
+        },
+        run: telegramService.composeRun()
+      });
+      await answer(callbackId, toast);
+      return;
     }
-    else if (action === 'checklist_done') {
-      var clId = parts[1];
-      var itemIdx = parseInt(parts[2]);
-      // 테넌트 격리 가드: 호출자 테넌트 소속 체크리스트만 조회/수정
-      var clR = await db.query('SELECT items FROM checklists WHERE id = $1 AND tenant_id = $2', [clId, user.tenant_id]);
-      if (clR.rows.length > 0) {
-        var items = typeof clR.rows[0].items === 'string' ? JSON.parse(clR.rows[0].items) : clR.rows[0].items;
-        if (items[itemIdx]) {
-          items[itemIdx].done = true;
-          await db.query('UPDATE checklists SET items = $1, version = version + 1 WHERE id = $2 AND tenant_id = $3', [JSON.stringify(items), clId, user.tenant_id]);
-          await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ 완료!' });
-          await telegramService.sendMessage(chatId, '✅ <b>' + (items[itemIdx].title || items[itemIdx].text || items[itemIdx].name || '항목') + '</b> 완료 처리됨');
-        }
-      }
+
+    var out = null;
+    if (action === 'issue_start') out = await tgActions.issueStatus(user, parts[1], 'inProgress');
+    else if (action === 'issue_resolve') out = await tgActions.issueStatus(user, parts[1], 'resolved');
+    else if (action === 'issue_urgent') out = await tgActions.issueUrgent(user, parts[1]);
+    else if (action === 'checklist_done') out = await tgActions.checklistDone(user, parts[1], parseInt(parts[2], 10));
+    else if (action === 'dev_start') out = await tgActions.devStart(user, parts[1]);
+    else if (action === 'action_done') out = await tgActions.actionDone(user, parts[1]);
+    else if (action === 'asg_start') out = await tgActions.asAssign(user, parts[1], 'start');
+    else if (action === 'asg_done') out = await tgActions.asAssign(user, parts[1], 'done');
+    if (out) {
+      await answer(callbackId, out.toast);
+      if (out.text) await telegramService.sendMessage(chatId, out.text);
+      return;
     }
-    else if (action === 'approve_user') {
-      var pendingId = parts[1];
+
+    if (action === 'approve_user' || action === 'reject_user') {
       if (user.role !== 'admin') {
-        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '관리자만 승인 가능합니다.' });
+        await answer(callbackId, '관리자만 처리할 수 있습니다.');
         return;
       }
-      // 테넌트 격리: 다른 테넌트의 pending 사용자를 승인하지 못하도록 가드
-      await db.query("UPDATE users SET status = 'active', role = 'member', approved_by = $1, approved_at = NOW(), updated_at = NOW() WHERE id = $2 AND status = 'pending' AND tenant_id = $3", [user.user_id, pendingId, user.tenant_id]);
-      var approvedUser = await db.query('SELECT name FROM users WHERE id = $1 AND tenant_id = $2', [pendingId, user.tenant_id]);
-      var approvedName = approvedUser.rows[0] ? approvedUser.rows[0].name : '?';
-      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ ' + approvedName + ' 승인 완료!' });
-      await telegramService.sendMessage(chatId, '✅ <b>' + approvedName + '</b>님의 가입이 승인되었습니다.');
-    }
-    else if (action === 'reject_user') {
-      var rejectId = parts[1];
-      if (user.role !== 'admin') {
-        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '관리자만 반려 가능합니다.' });
+      var approve = action === 'approve_user';
+      // 테넌트 격리 + 대기 중인 사람만 (이미 처리된 것은 그대로)
+      var ur = await db.query(
+        approve
+          ? "UPDATE users SET status = 'active', role = 'member', approved_by = $1, approved_at = NOW(), updated_at = NOW() WHERE id = $2 AND status = 'pending' AND tenant_id = $3 RETURNING name"
+          : "UPDATE users SET status = 'rejected', approved_by = $1, approved_at = NOW(), updated_at = NOW() WHERE id = $2 AND status = 'pending' AND tenant_id = $3 RETURNING name",
+        [user.user_id, parts[1], user.tenant_id]);
+      if (!ur.rows.length) {
+        await answer(callbackId, '이미 처리된 가입 요청입니다.');
         return;
       }
-      // 테넌트 격리: 다른 테넌트의 pending 사용자를 반려하지 못하도록 가드
-      await db.query("UPDATE users SET status = 'rejected', approved_by = $1, approved_at = NOW(), updated_at = NOW() WHERE id = $2 AND status = 'pending' AND tenant_id = $3", [user.user_id, rejectId, user.tenant_id]);
-      var rejectedUser = await db.query('SELECT name FROM users WHERE id = $1 AND tenant_id = $2', [rejectId, user.tenant_id]);
-      var rejectedName = rejectedUser.rows[0] ? rejectedUser.rows[0].name : '?';
-      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '❌ ' + rejectedName + ' 반려' });
-      await telegramService.sendMessage(chatId, '❌ <b>' + rejectedName + '</b>님의 가입이 반려되었습니다.');
+      var nm = escHtmlTg(ur.rows[0].name || '?');
+      await answer(callbackId, (approve ? '✅ 승인: ' : '❌ 반려: ') + ur.rows[0].name);
+      await telegramService.sendMessage(chatId, approve ? '✅ <b>' + nm + '</b>님의 가입을 승인했습니다.' : '❌ <b>' + nm + '</b>님의 가입을 반려했습니다.');
+      return;
     }
-    else if (action === 'dev_start') {
-      // 개발 아이템 → 진행(doing) (테넌트 격리)
-      var devId = parts[1];
-      var dR = await db.query("UPDATE project_dev_items SET status = 'doing', updated_by = $1, updated_at = NOW(), version = version + 1 WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL RETURNING title", [user.user_id, devId, user.tenant_id]);
-      if (dR.rows.length) {
-        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '🔵 진행 시작!' });
-        await telegramService.sendMessage(chatId, '🔵 <b>' + escHtmlTg(dR.rows[0].title) + '</b> — 진행중으로 변경');
-      } else {
-        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '항목을 찾을 수 없습니다.' });
-      }
-    }
-    else if (action === 'action_done') {
-      // 회의 액션아이템 → 완료 (테넌트 격리)
-      var actId = parts[1];
-      var aR = await db.query("UPDATE meeting_action_items SET status = 'done' WHERE id = $1 AND tenant_id = $2 RETURNING title", [actId, user.tenant_id]);
-      if (aR.rows.length) {
-        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ 완료!' });
-        await telegramService.sendMessage(chatId, '✅ <b>' + escHtmlTg(aR.rows[0].title) + '</b> — 완료 처리됨');
-      } else {
-        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '항목을 찾을 수 없습니다.' });
-      }
-    }
-    else if (action === 'issue_urgent') {
-      var urgentIssueId = parts[1];
-      await db.query("UPDATE issues SET urgency = 'urgent', updated_at = NOW(), updated_by = $1, version = version + 1 WHERE id = $2 AND tenant_id = $3", [user.user_id, urgentIssueId, user.tenant_id]);
-      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '🔴 긴급으로 변경!' });
-      await telegramService.sendMessage(chatId, '🔴 이슈 긴급도가 <b>긴급</b>으로 변경되었습니다.');
-    }
-    else if (action === 'vote') {
+
+    if (action === 'vote') {
       // vote:{voteId}:{optionIndex} — DB(telegram_votes) 기반 영속 투표
       var voteId = parts[1];
-      var optIdx = parseInt(parts[2]);
+      var optIdx = parseInt(parts[2], 10);
       if (!voteId || isNaN(optIdx)) {
-        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '잘못된 투표 형식' });
+        await answer(callbackId, '잘못된 투표 형식');
         return;
       }
       // 테넌트 격리: 다른 테넌트 투표 접근 차단
@@ -132,17 +124,17 @@ async function handleCallbackQuery(query) {
         [voteId, user.tenant_id]
       );
       if (vR.rows.length === 0) {
-        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '투표를 찾을 수 없습니다.' });
+        await answer(callbackId, '투표를 찾을 수 없습니다.');
         return;
       }
       if (vR.rows[0].is_closed) {
-        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '종료된 투표입니다.' });
+        await answer(callbackId, '종료된 투표입니다.');
         return;
       }
       var options = vR.rows[0].options;
       if (typeof options === 'string') options = JSON.parse(options);
       if (optIdx < 0 || optIdx >= options.length) {
-        await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '잘못된 옵션' });
+        await answer(callbackId, '잘못된 옵션');
         return;
       }
       // 1인 1표(같은 vote 내 갱신) — UNIQUE(vote_id, user_id)
@@ -150,14 +142,13 @@ async function handleCallbackQuery(query) {
         "INSERT INTO telegram_vote_responses (vote_id, user_id, user_name, option_index) VALUES ($1, $2, $3, $4) ON CONFLICT (vote_id, user_id) DO UPDATE SET option_index = $4, voted_at = NOW()",
         [voteId, user.user_id, user.name, optIdx]
       );
-      // 집계 후 inline keyboard 갱신 (스팸 방지: 별도 채팅 메시지는 발송하지 않음)
       var aggR = await db.query(
         "SELECT option_index, COUNT(*)::int AS c FROM telegram_vote_responses WHERE vote_id = $1 GROUP BY option_index",
         [voteId]
       );
       var counts = {};
-      aggR.rows.forEach(function(row){ counts[row.option_index] = row.c; });
-      var keyboard = options.map(function(opt, i){
+      aggR.rows.forEach(function (row) { counts[row.option_index] = row.c; });
+      var keyboard = options.map(function (opt, i) {
         return [{ text: opt + ' (' + (counts[i] || 0) + ')', callback_data: 'vote:' + voteId + ':' + i }];
       });
       if (vR.rows[0].message_id) {
@@ -167,14 +158,14 @@ async function handleCallbackQuery(query) {
           reply_markup: { inline_keyboard: keyboard }
         });
       }
-      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '✅ 투표 완료' });
+      await answer(callbackId, '✅ 투표 완료');
+      return;
     }
-    else {
-      await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '알 수 없는 액션' });
-    }
+
+    await answer(callbackId, '알 수 없는 버튼입니다');
   } catch (err) {
     console.error('[Callback]', err.message);
-    await telegramService.callApi('answerCallbackQuery', { callback_query_id: callbackId, text: '오류 발생: ' + err.message });
+    await answer(callbackId, '처리하지 못했습니다. 잠시 후 다시 눌러 주세요.');
   }
 }
 
@@ -183,9 +174,10 @@ async function handleCallbackQuery(query) {
  * Telegram이 호출하는 Webhook 엔드포인트 (인증 불필요)
  */
 router.post('/webhook', function (req, res) {
-  if (config.telegram.webhookSecret) {
+  // 비밀값 검사 — 환경변수가 없어도 봇 토큰에서 만든 값으로 (v13.301, telegram.service.webhookSecret)
+  if (telegramService.secretActive()) {
     var token = req.headers['x-telegram-bot-api-secret-token'];
-    if (token !== config.telegram.webhookSecret) {
+    if (token !== telegramService.webhookSecret()) {
       return res.sendStatus(403);
     }
   }
@@ -289,8 +281,9 @@ router.get('/prefs', authenticate, tenant.tenantScope, planGate('telegram'), asy
     );
     var prefs = {};
     r.rows.forEach(function (row) { prefs[row.event_type] = row.is_enabled; });
-    var lk = await db.query('SELECT remind_lead, rec_slots FROM telegram_links WHERE user_id = $1 AND is_active = TRUE LIMIT 1', [req.user.sub]);
-    res.json({ data: prefs, remindLead: lk.rows.length ? lk.rows[0].remind_lead : 30, recSlots: lk.rows.length ? lk.rows[0].rec_slots : null });
+    var lk = await db.query('SELECT remind_lead, rec_slots, quiet_start, quiet_end FROM telegram_links WHERE user_id = $1 AND is_active = TRUE LIMIT 1', [req.user.sub]);
+    var l0 = lk.rows[0] || {};
+    res.json({ data: prefs, remindLead: lk.rows.length ? l0.remind_lead : 30, recSlots: lk.rows.length ? l0.rec_slots : null, quietStart: l0.quiet_start || '', quietEnd: l0.quiet_end || '' });
   } catch (err) {
     httpErr.serverError(res, '[telegram]', err, '설정 조회 실패');
   }
@@ -393,15 +386,7 @@ router.get('/debug', authenticate, tenant.tenantScope, planGate('telegram'), asy
 
     if (whInfo.ok && !whInfo.result.url && config.telegram.webhookUrl) {
       // Webhook 자동 등록
-      var setBody = { url: config.telegram.webhookUrl };
-      if (config.telegram.webhookSecret) setBody.secret_token = config.telegram.webhookSecret;
-      var setRes = await fetch('https://api.telegram.org/bot' + config.telegram.botToken + '/setWebhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(setBody)
-      });
-      var setResult = await setRes.json();
-      result.webhookSetup = setResult;
+      result.webhookSetup = await telegramService.setWebhook();   // 비밀값 · 명령 목록 함께
 
       // 등록 후 다시 확인
       var whRes2 = await fetch('https://api.telegram.org/bot' + config.telegram.botToken + '/getWebhookInfo');
@@ -422,7 +407,7 @@ router.get('/debug', authenticate, tenant.tenantScope, planGate('telegram'), asy
     result.config = {
       webhookUrl: config.telegram.webhookUrl || '(미설정)',
       botUsername: config.telegram.botUsername || '(미설정)',
-      webhookSecret: config.telegram.webhookSecret ? '****' + config.telegram.webhookSecret.slice(-4) : '(미설정)'
+      webhookSecret: config.telegram.webhookSecret ? '****' + config.telegram.webhookSecret.slice(-4) : (telegramService.secretActive() ? '(봇 토큰에서 자동 생성 — 사용 중)' : '(자동 생성 — 웹훅 재등록 후 사용)')
     };
 
     // 테이블 존재 여부
@@ -462,4 +447,74 @@ router.post('/setup-webhook', authenticate, tenant.tenantScope, planGate('telegr
   }
 });
 
+/** PUT /api/telegram/prefs/quiet — { start: '22:00', end: '07:00' } · 둘 다 '' 이면 끔 (v13.305)
+ *  방해 금지 시간에는 알림이 소리 없이 온다 (빠지지는 않음) */
+router.put('/prefs/quiet', authenticate, tenant.tenantScope, planGate('telegram'), async function (req, res) {
+  try {
+    var b = req.body || {};
+    var st = String(b.start || ''), en = String(b.end || '');
+    var hm = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (!(st === '' && en === '') && !(hm.test(st) && hm.test(en) && st !== en)) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: '시작 · 끝 시각을 HH:MM 으로 (서로 다르게) 넣거나 둘 다 비우세요.' });
+    }
+    var r = await db.query('UPDATE telegram_links SET quiet_start = $1, quiet_end = $2 WHERE user_id = $3 AND is_active = TRUE RETURNING user_id', [st || null, en || null, req.user.sub]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '텔레그램 연동이 없습니다.' });
+    res.json({ data: { quietStart: st, quietEnd: en } });
+  } catch (err) {
+    httpErr.serverError(res, '[telegram/quiet]', err, '설정 변경 실패');
+  }
+});
+
+/* ── 그룹방 = 프로젝트방 (v13.304) ── 프로젝트 편집권(관리자 · 임원 · 생성자 · 참여자)이 있어야 연결 · 해제 */
+var pa = require('../lib/project-access');
+
+/** POST /api/telegram/group-code { projectId } → { code, link } — 봇을 그룹에 추가하면서 연결하는 링크 (30분) */
+router.post('/group-code', authenticate, tenant.tenantScope, planGate('telegram'), async function (req, res) {
+  try {
+    if (!telegramService.isConfigured()) return res.status(503).json({ error: 'TELEGRAM_NOT_CONFIGURED', message: '텔레그램 봇이 설정되지 않았습니다.' });
+    var pid = req.body && (req.body.projectId || req.body.project_id);
+    if (!await pa.gateEdit(req, res, pid, '프로젝트 참여자 · 관리자만 그룹방을 연결할 수 있습니다.')) return;
+    var pr = await db.query('SELECT name FROM projects WHERE id = $1 AND tenant_id = $2', [pid, req.tenant.id]);
+    var code = await require('../telegram/refs').putGroupCode({ tenantId: req.tenant.id, userId: req.user.sub }, pid, pr.rows.length ? pr.rows[0].name : '');
+    var bot = config.telegram.botUsername;
+    res.json({ data: {
+      code: code, botUsername: bot || null, expiresInSeconds: 1800,
+      link: bot ? 'https://t.me/' + bot + '?startgroup=' + code : null
+    } });
+  } catch (err) {
+    httpErr.serverError(res, '[telegram/group-code]', err, '연결 코드를 만들지 못했습니다');
+  }
+});
+
+/** GET /api/telegram/groups?projectId= — 이 프로젝트에 연결된 그룹방 (볼 수 있는 사람) */
+router.get('/groups', authenticate, tenant.tenantScope, planGate('telegram'), async function (req, res) {
+  try {
+    var pid = req.query.projectId;
+    if (!await pa.gateRead(req, res, pid)) return;
+    var r = await db.query(
+      "SELECT g.id, g.title, g.linked_at, u.name AS linked_by_name FROM telegram_group_links g LEFT JOIN users u ON u.id = g.linked_by " +
+      "WHERE g.tenant_id = $1 AND g.link_type = 'project' AND g.link_id = $2 AND g.is_active = TRUE ORDER BY g.linked_at",
+      [req.tenant.id, pid]);
+    var canEdit = await pa.canEditById(req, pid);
+    res.json({ data: r.rows, canEdit: !!canEdit, configured: telegramService.isConfigured() });
+  } catch (err) {
+    httpErr.serverError(res, '[telegram/groups]', err);
+  }
+});
+
+/** DELETE /api/telegram/groups/:id?projectId= — 연결 해제 (편집권) */
+router.delete('/groups/:id', authenticate, tenant.tenantScope, planGate('telegram'), async function (req, res) {
+  try {
+    var g = await db.query("SELECT id, link_id, chat_id FROM telegram_group_links WHERE id = $1 AND tenant_id = $2 AND link_type = 'project'", [req.params.id, req.tenant.id]);
+    if (!g.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    if (!await pa.gateEdit(req, res, g.rows[0].link_id, '프로젝트 참여자 · 관리자만 해제할 수 있습니다.')) return;
+    await db.query('DELETE FROM telegram_group_links WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    telegramService.sendMessage(g.rows[0].chat_id, '🔓 웹에서 이 방의 프로젝트 연결을 해제했습니다.').catch(function () {});
+    res.json({ data: { removed: true } });
+  } catch (err) {
+    httpErr.serverError(res, '[telegram/groups/delete]', err);
+  }
+});
+
 module.exports = router;
+module.exports.handleCallbackQuery = handleCallbackQuery;

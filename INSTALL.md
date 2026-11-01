@@ -35,6 +35,10 @@ docker compose -f docker-compose.onprem.yml up -d
 | `CORS_ORIGIN` | - | http://localhost:8080 | CORS 허용 도메인 |
 | `SMTP_HOST` | - | - | 이메일 발송 서버 |
 | `TELEGRAM_BOT_TOKEN` | - | - | 텔레그램 봇 토큰 |
+| `TELEGRAM_BOT_USERNAME` | - | - | 봇 아이디(@ 없이) — 연동 QR · 그룹방 연결 링크(t.me/봇?startgroup=) |
+| `TELEGRAM_WEBHOOK_URL` | - | - | `https://<서버>/api/telegram/webhook` — 있으면 기동 시 웹훅 · 명령 목록 등록 |
+| `TELEGRAM_WEBHOOK_SECRET` | - | 봇 토큰에서 자동 | 웹훅 비밀값. 비우면 봇 토큰으로 만들어 웹훅 등록 때 함께 등록하고 검사 (v13.301) |
+| `APP_URL` | - | `CORS_ORIGIN` 첫 값 | 텔레그램 알림의 [🌐 웹에서 열기] 주소 (https 일 때만 버튼이 붙음). `APP_PAGE` 로 첫 화면 파일 이름 변경 가능 |
 | `AI_PROVIDER` | - | - | AI 제공자 (gemini/anthropic). 비우면 있는 키를 씀 — 키가 하나뿐이면 그쪽 |
 | `GEMINI_API_KEY` · `ANTHROPIC_API_KEY` | - | - | 둘 중 하나만 있어도 모든 AI 기능(업무 분석·마인드맵·A/S·텔레그램) 동작 |
 | `GEMINI_MODEL` | - | gemini-2.5-flash | 더 높은 모델: gemini-2.5-pro 등 |

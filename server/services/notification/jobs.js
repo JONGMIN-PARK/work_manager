@@ -146,7 +146,7 @@ async function sendDailyBriefing() {
     if (!tid || !rows.length) return '';
     var b = '📅 <b>오늘 일정</b>\n';
     rows.forEach(function(e) {
-      b += '  ' + (typeIcons[e.type] || '📌') + ' ' + e.title + '\n';
+      b += '  ' + (typeIcons[e.type] || '📌') + ' ' + escHtml(e.title) + '\n';   // 예전엔 그대로 넣어 < 가 든 제목이면 브리핑 전체가 거부됐다
     });
     return b + '\n';
   }
@@ -154,7 +154,7 @@ async function sendDailyBriefing() {
     var rows = dlByTenant[tid] || [];
     if (!tid || !rows.length) return '';
     var b = '🏁 <b>오늘 납기</b>\n';
-    rows.forEach(function(r) { b += '  · ' + (r.order_no || '') + ' ' + r.name + '\n'; });
+    rows.forEach(function(r) { b += '  · ' + escHtml(r.order_no || '') + ' ' + escHtml(r.name) + '\n'; });
     return b + '\n';
   }
 
@@ -189,8 +189,11 @@ async function sendDailyBriefing() {
         msg = '✨ 오늘은 특별한 일정이 없습니다. 좋은 하루 되세요!';
       }
 
-      var fullMsg = '☀️ <b>' + usr.name + '님, 좋은 아침입니다!</b>\n\n' + msg;
-      await telegramService.sendMessage(usr.chat_id, fullMsg);
+      var fullMsg = '☀️ <b>' + escHtml(usr.name) + '님, 좋은 아침입니다!</b>\n\n' + msg;
+      // 바로 이어서 볼 것 — 버튼 (v13.305)
+      await telegramService.sendMessage(usr.chat_id, fullMsg, { reply_markup: JSON.stringify({ inline_keyboard: [[
+        { text: '🎯 내 업무', callback_data: 'mn:mywork' }, { text: '💡 지금 할 일', callback_data: 'mn:rec' }, { text: '📋 메뉴', callback_data: 'mn:menu' }
+      ]] }) });
 
     } catch (err) {
       console.error('[DailyBriefing] Error for user', usr.name, err.message);

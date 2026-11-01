@@ -3580,3 +3580,17 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 .ai-acts .ai-meta{margin:0 0 0 auto}
 .ai-retry{font:inherit;font-size:11px;margin-left:6px;padding:2px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);cursor:pointer}
 @media (max-width:600px){.ai-ins{grid-template-columns:1fr}.ai-bar{grid-template-columns:80px 1fr auto}.ai-acts{flex-wrap:wrap}}
+
+/* ═══ 💬 텔레그램 그룹방 연결 (v13.304, telegram-ui.js) ═══ */
+.tgg-intro{font-size:12px;color:var(--t3,var(--t2));line-height:1.6;margin-bottom:12px}
+.tgg-intro code,.tgg-steps code{font-size:11px;padding:1px 5px;border-radius:4px;background:var(--bg-i);color:var(--t1)}
+.tgg-list{margin-bottom:12px;font-size:12px}
+.tgg-h{font-size:11px;font-weight:700;color:var(--t3,var(--t2));margin:4px 0 6px}
+.tgg-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:6px;background:var(--bg-i)}
+.tgg-t{font-weight:600;color:var(--t1);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tgg-s{font-size:11px;color:var(--t5)}
+.tgg-empty{font-size:12px;color:var(--t5);padding:6px 0}
+.tgg-new{border-top:1px solid var(--bd);padding-top:12px}
+.tgg-steps{margin:6px 0 10px;padding-left:18px;font-size:12px;line-height:1.9;color:var(--t2)}
+.tgg-code{user-select:all}
+@media (max-width:600px){.tgg-row{flex-wrap:wrap}.tgg-t{white-space:normal}}

@@ -75,40 +75,47 @@ router.get('/', async function (req, res) {
 });
 
 // POST /api/messages — 메시지 전송 {toUserId, body, contextType?, contextId?}
+/**
+ * 쪽지 보내기 — 웹 POST / 와 텔레그램 답장(v13.302)이 같이 쓴다. 반환 { status, body }
+ * 받는 사람 알림에는 replyRef 를 실어, 텔레그램에서 그 알림에 답장하면 다시 쪽지로 돌아온다.
+ */
+async function sendSiteMessage(req, b) {
+  b = b || {};
+  var toUserId = b.toUserId || b.to_user_id;
+  var body = (b.body != null) ? String(b.body).trim() : '';
+  if (!toUserId) return { status: 400, body: { error: 'BAD_REQUEST', message: 'toUserId 필수' } };
+  if (!body) return { status: 400, body: { error: 'BAD_REQUEST', message: '내용은 비어 있을 수 없습니다.' } };
+  if (toUserId === req.user.sub) return { status: 400, body: { error: 'BAD_REQUEST', message: '자신에게는 보낼 수 없습니다.' } };
+  if (!await _peerInTenant(req, toUserId)) return { status: 404, body: { error: 'NOT_FOUND', message: '대상 사용자를 찾을 수 없습니다.' } };
+
+  var fromName = req.user.name || '';
+  try {
+    var ar = await db.query('SELECT name, display_name FROM users WHERE id = $1', [req.user.sub]);
+    if (ar.rows.length) fromName = ar.rows[0].display_name || ar.rows[0].name || fromName;
+  } catch (_) {}
+
+  var id = 'msg-' + crypto.randomUUID().slice(0, 12);
+  var r = await db.query(
+    'INSERT INTO messages (id, tenant_id, from_user_id, to_user_id, body, context_type, context_id) ' +
+    'VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+    [id, req.tenant.id, req.user.sub, toUserId, body, b.contextType || b.context_type || null, b.contextId || b.context_id || null]
+  );
+  try {
+    notificationService.notify('message_received', {
+      fromName: fromName, body: body, fromUserId: req.user.sub,
+      replyRef: { kind: 'message', id: req.user.sub }
+    }, [toUserId]).catch(function (e) { console.error('[messages/notify]', e.message); });
+  } catch (_) {}
+  try { authService.auditLog(req.user.sub, 'message.send', 'user', toUserId, { len: body.length }, req).catch(function () {}); } catch (_) {}
+  return { status: 201, body: { data: r.rows[0] } };
+}
+
 router.post('/', async function (req, res) {
   try {
-    var b = req.body || {};
-    var toUserId = b.toUserId || b.to_user_id;
-    var body = (b.body != null) ? String(b.body).trim() : '';
-    if (!toUserId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'toUserId 필수' });
-    if (!body) return res.status(400).json({ error: 'BAD_REQUEST', message: '내용은 비어 있을 수 없습니다.' });
-    if (toUserId === req.user.sub) return res.status(400).json({ error: 'BAD_REQUEST', message: '자신에게는 보낼 수 없습니다.' });
-    if (!await _peerInTenant(req, toUserId)) return res.status(404).json({ error: 'NOT_FOUND', message: '대상 사용자를 찾을 수 없습니다.' });
-
-    // 보낸 사람 이름
-    var fromName = req.user.name || '';
-    try {
-      var ar = await db.query('SELECT name, display_name FROM users WHERE id = $1', [req.user.sub]);
-      if (ar.rows.length) fromName = ar.rows[0].display_name || ar.rows[0].name || fromName;
-    } catch (_) {}
-
-    var id = 'msg-' + crypto.randomUUID().slice(0, 12);
-    var r = await db.query(
-      'INSERT INTO messages (id, tenant_id, from_user_id, to_user_id, body, context_type, context_id) ' +
-      'VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-      [id, req.tenant.id, req.user.sub, toUserId, body, b.contextType || b.context_type || null, b.contextId || b.context_id || null]
-    );
-    res.status(201).json({ data: r.rows[0] });
-
-    // 알림(텔레그램·인앱·메일) — best-effort
-    try {
-      notificationService.notify('message_received', {
-        fromName: fromName, body: body
-      }, [toUserId]).catch(function (e) { console.error('[messages/notify]', e.message); });
-    } catch (_) {}
-    try { authService.auditLog(req.user.sub, 'message.send', 'user', toUserId, { len: body.length }, req); } catch (_) {}
+    var out = await sendSiteMessage(req, req.body || {});
+    return res.status(out.status).json(out.body);
   } catch (e) {
-    httpErr.serverError(res, '[messages/send]', e);
+    return httpErr.serverError(res, '[messages/send]', e);
   }
 });
 
@@ -129,3 +136,4 @@ router.post('/read', async function (req, res) {
 });
 
 module.exports = router;
+module.exports.sendSiteMessage = sendSiteMessage;

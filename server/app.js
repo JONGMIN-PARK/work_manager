@@ -301,6 +301,8 @@ if (telegramService.isConfigured()) {
   // 시각 있는 일정 30분 전 알림 (v13.252)
   scheduler.scheduleEvery(5, function () { return notificationService.sendEventSoonReminders(); }, 'Event soon reminder');
   scheduler.scheduleDaily(9, 0, function () { return notificationService.sendTomorrowPreview(); }, 'Tomorrow preview');   // KST 18:00
+  // 답장 연결 · 등록 확인 대기 기록 30일 지난 것 정리 (v13.302) — KST 04:20
+  scheduler.scheduleDaily(19, 20, function () { return require('./telegram/refs').cleanup(); }, 'Telegram refs cleanup');
   // 💡 내 업무 추천 — 사람마다 정한 시각 (기본 평일 13:30, v13.274)
   scheduler.scheduleEvery(5, function () { return notificationService.sendMyWorkRecs(); }, 'My-work recommendations');
 

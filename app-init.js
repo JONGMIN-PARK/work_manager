@@ -11,6 +11,8 @@
  *   ⑥ _wmBindUploadUI       — AI 프리셋·파일 입력·드래그앤드롭
  * 단계 사이에 공유하는 상태는 ctx = {dataLoaded, authReadyHandled, cutoff60} */
 var _initDone=false;
+// ?go= 는 로그인 화면을 거쳐도 남도록 처음 읽을 때 잡아 둔다 (구글 로그인 콜백이 주소를 바꾼다)
+var _wmGoParam=(function(){try{return new URLSearchParams(location.search).get('go')}catch(_){return null}})();
 // 서버 레코드 → camelCase
 function _wmToCamel(row){if(!row)return row;var out={};for(var k in row){var ck=k.replace(/_([a-z])/g,function(m,c){return c.toUpperCase()});out[ck]=row[k]}return out}
 // 레코드 정규화 (camelCase + hours/date 타입)
@@ -190,6 +192,8 @@ async function _postAuthInit(){
     try{_wmFinishLoading(ctx);_wmBindUploadUI();
       // 데이터를 새로 받은 뒤 마지막으로 보던 화면으로 (그 화면도 처음 그리므로 내용은 새로 받음)
       if(typeof wmRestoreLastView==='function')wmRestoreLastView();
+      // 텔레그램 [🌐 웹에서 열기] — ?go=issue:id 면 마지막 화면 대신 그 항목 (telegram-ui.js, v13.305)
+      if(_wmGoParam&&typeof wmDeepGo==='function'){var _g=_wmGoParam;_wmGoParam=null;setTimeout(function(){wmDeepGo(_g)},400)}
     }catch(e){console.error('[init finish]',e)}
     if(window.wmSplash)wmSplash.done();
   }

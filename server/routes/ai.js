@@ -16,38 +16,11 @@ var httpErr = require('../lib/http-errors');
 router.use(authenticate);
 router.use(tenant.tenantScope);
 
-/** 플랜별 월간 AI 쿼리 한도 */
-var PLAN_LIMITS = { free: 0, pro: 100, business: 500, enterprise: 999999 };
-
-/** 이번 달 사용량 확인 — 테이블 없으면 0 반환 (v13.75 fail-safe) */
-async function getMonthlyUsage(tenantId) {
-  try {
-    var r = await db.query(
-      "SELECT COUNT(*) as cnt FROM ai_query_usage WHERE tenant_id = $1 AND created_at >= date_trunc('month', now())",
-      [tenantId]
-    );
-    return parseInt(r.rows[0].cnt, 10);
-  } catch (e) {
-    if (/relation .* does not exist/i.test(e.message || '')) {
-      console.warn('[AI] ai_query_usage 테이블 미생성 — 029 마이그레이션 적용 필요. 사용량 추적 비활성');
-      return 0;
-    }
-    throw e;
-  }
-}
-
-/** 사용량 기록 — 테이블 없으면 무시 (v13.75 fail-safe) */
-async function logUsage(tenantId, userId, queryText, provider) {
-  try {
-    await db.query(
-      'INSERT INTO ai_query_usage (tenant_id, user_id, query_text, provider) VALUES ($1, $2, $3, $4)',
-      [tenantId, userId, (queryText || '').slice(0, 500), provider]
-    );
-  } catch (e) {
-    if (/relation .* does not exist/i.test(e.message || '')) return; // 무시
-    console.warn('[AI] logUsage 실패:', e.message);
-  }
-}
+/* 한도 · 사용량 기록은 텔레그램과 같은 규칙 (lib/ai-usage, v13.301) */
+var aiUsage = require('../lib/ai-usage');
+var PLAN_LIMITS = aiUsage.PLAN_LIMITS;
+var getMonthlyUsage = aiUsage.getMonthlyUsage;
+var logUsage = aiUsage.logUsage;
 
 /** 테넌트 키 → AI_PROVIDER → 있는 키 순으로 골라 호출 (공용 ai-provider, v13.296)
  *  → { text, provider, model, note } · 키가 없으면 null */
@@ -57,37 +30,14 @@ function callAIWithPrompt(prompt, tenantId) {
 
 /** 쿼리 한도 체크 미들웨어 */
 async function checkAIQuota(req, res, next) {
-  try {
-    // v13.75: 단일 테넌트/관리자 환경에선 한도 체크 우회 가능
-    if (process.env.AI_QUOTA_DISABLED === '1' || process.env.AI_QUOTA_DISABLED === 'true') {
-      req.aiQuota = { used: 0, limit: 999999, plan: 'unlimited' };
-      return next();
-    }
-    var planR = await db.query('SELECT plan FROM tenants WHERE id = $1', [req.tenant.id]);
-    var plan = planR.rows.length ? planR.rows[0].plan : 'free';
-    var limit = PLAN_LIMITS[plan] || 0;
-
-    if (limit === 0) {
-      return res.status(403).json({
-        error: 'PLAN_REQUIRED',
-        message: 'AI 기능은 Pro 플랜 이상에서 사용할 수 있습니다. (단일 테넌트 환경이면 서버에 AI_QUOTA_DISABLED=1 설정)'
-      });
-    }
-
-    var usage = await getMonthlyUsage(req.tenant.id);
-    if (usage >= limit) {
-      return res.status(429).json({
-        error: 'AI_QUOTA_EXCEEDED',
-        message: '이번 달 AI 쿼리 한도(' + limit + '회)를 초과했습니다. 플랜 업그레이드를 고려하세요.',
-        data: { used: usage, limit: limit }
-      });
-    }
-
-    req.aiQuota = { used: usage, limit: limit, plan: plan };
-    next();
-  } catch (e) {
-    next(); // 쿼리 실패 시 통과
+  var q = await aiUsage.checkQuota(req.tenant.id);
+  if (!q.ok) {
+    var body = { error: q.error, message: q.message };
+    if (q.used != null) body.data = { used: q.used, limit: q.limit };
+    return res.status(q.status).json(body);
   }
+  req.aiQuota = { used: q.used, limit: q.limit, plan: q.plan };
+  next();
 }
 
 // ─── POST /api/ai/summary — AI 요약 ───

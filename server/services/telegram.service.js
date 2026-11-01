@@ -53,7 +53,7 @@ async function sendMessage(chatId, text, opts) {
 }
 
 /* ── Command modules (lazy-initialized) ── */
-var myWorkCmds, personalCmds, analysisCmds, scheduleCmds, projectCmds, docsCmds, teamCmds, utilityCmds, helpCmds, weeklyCmds, pmextCmds, techCmds;
+var menuCmds, myWorkCmds, personalCmds, analysisCmds, scheduleCmds, projectCmds, docsCmds, teamCmds, utilityCmds, helpCmds, weeklyCmds, pmextCmds, techCmds;
 
 function initCommands() {
   if (personalCmds) return;
@@ -69,56 +69,35 @@ function initCommands() {
   weeklyCmds   = require('../telegram/commands/weekly').create(sendMessage);
   pmextCmds    = require('../telegram/commands/pmext').create(sendMessage);
   techCmds     = require('../telegram/commands/tech').create(sendMessage);
+  menuCmds     = require('../telegram/commands/menu').create(sendMessage);
 }
 
 /** 봇 명령어 자동완성 등록 (BotFather 대체) */
 async function setMyCommands() {
+  // v13.305: 자주 쓰는 것만 (예전 44개는 고르기 어려웠다). 나머지는 /menu · /help 에서. 그룹방은 그룹 전용 목록
   var commands = [
+    { command: 'menu', description: '📋 버튼 메뉴' },
     { command: 'today', description: '오늘 브리핑' },
-    { command: 'my', description: '내 현황 (이슈+납기)' },
-    { command: 'mywork', description: '🎯 내 업무 전체 (지연 · 오늘 · 이번 주) + ✅ 완료' },
-    { command: 'rec', description: '💡 지금 하면 좋은 일 · 추천 시각 설정' },
-    { command: 'myproj', description: '📁 내 프로젝트 (기간 · 진행률 · 남은 일)' },
-    { command: 'board', description: '🗂 내 보드 (칸별)' },
+    { command: 'mywork', description: '🎯 내 업무 (지연 · 오늘 · 이번 주)' },
+    { command: 'rec', description: '💡 지금 하면 좋은 일' },
     { command: 'todo', description: '할 일 등록 (내일 14:00 !긴급 …)' },
-    { command: 'todos', description: '내 개인 할 일 목록' },
-    { command: 'event', description: '개인 일정 등록 (#회의 금요일 3시 …)' },
-    { command: 'issues', description: '미해결 이슈 목록' },
-    { command: 'tasks', description: '미완료 작업' },
-    { command: 'done', description: '작업 완료 처리' },
-    { command: 'log', description: '업무일지 빠른 등록' },
-    { command: 'summary', description: '금주 업무시간 요약' },
-    { command: 'report', description: '월간 리포트' },
-    { command: 'weekly_report', description: '주간보고 생성(개인)' },
-    { command: 'wr', description: '주간업무보고(팀)' },
-    { command: 'wr_stats', description: '주간보고 추이' },
-    { command: 'wr_me', description: '내 주간보고 항목' },
-    { command: 'progress', description: '프로젝트 진척률' },
-    { command: 'devitems', description: '내 개발 아이템' },
-    { command: 'prestudy', description: '사전검토 현황' },
-    { command: 'actions', description: '내 액션아이템' },
-    { command: 'meeting', description: '회의 조회' },
-    { command: 'tech', description: '요소기술 카탈로그' },
-    { command: 'techlog', description: '요소기술 개발일지' },
-    { command: 'mytech', description: '내 요소기술' },
-    { command: 'my_stats', description: '내 월간 통계' },
-    { command: 'overdue', description: '지연/긴급 현황' },
-    { command: 'project', description: '프로젝트 현황' },
-    { command: 'checklist', description: '체크리스트' },
-    { command: 'calendar', description: '이번 주 일정' },
-    { command: 'orders', description: '수주 목록' },
-    { command: 'order', description: '수주 상세' },
-    { command: 'deliveries', description: '납품 예정' },
-    { command: 'team', description: '팀원별 금주 투입' },
-    { command: 'remind', description: '리마인더 설정' },
-    { command: 'vote', description: '팀 투표' },
-    { command: 'docs', description: '문서 목록' },
-    { command: 'search_doc', description: '문서 검색' },
-    { command: 'help', description: '명령어 안내' },
-    { command: 'cancelremind', description: '리마인더 취소' },
-    { command: 'closevote', description: '투표 종료' },
-    { command: 'unlink', description: '연동 해제' }
+    { command: 'todos', description: '내 할 일 목록' },
+    { command: 'event', description: '일정 등록 (#회의 금요일 3시 …)' },
+    { command: 'log', description: '업무일지 (8h D B2024-001 내용)' },
+    { command: 'issues', description: '내 이슈' },
+    { command: 'myproj', description: '📁 내 프로젝트' },
+    { command: 'overdue', description: '지연 · 긴급 현황' },
+    { command: 'summary', description: '이번 주 업무시간' },
+    { command: 'help', description: '전체 명령어' }
   ];
+  var groupCommands = [
+    { command: 'project', description: '이 프로젝트 요약' },
+    { command: 'issues', description: '이 프로젝트 열린 이슈' },
+    { command: 'vote', description: '투표 (질문 + 줄마다 선택지)' },
+    { command: 'closevote', description: '투표 종료' },
+    { command: 'help', description: '그룹방 명령' }
+  ];
+  await callApi('setMyCommands', { commands: groupCommands, scope: { type: 'all_group_chats' } });
   var result = await callApi('setMyCommands', { commands: commands });
   if (result && result.ok) {
     console.log('[Telegram] Bot commands registered (' + commands.length + ')');
@@ -128,18 +107,29 @@ async function setMyCommands() {
   return result;
 }
 
+/**
+ * 웹훅 비밀값 (v13.301) — TELEGRAM_WEBHOOK_SECRET 이 없으면 봇 토큰에서 만든다.
+ * 예전엔 비밀값이 없으면 누구나 /webhook 에 가짜 메시지를 보내 연동된 직원 행세를 할 수 있었다.
+ * 만든 값은 setWebhook 이 성공해 텔레그램이 그 값을 붙여 보내기 시작한 뒤에만 검사한다 (secretActive).
+ */
+var _secretRegistered = false;
+function webhookSecret() {
+  if (config.telegram.webhookSecret) return config.telegram.webhookSecret;
+  if (!config.telegram.botToken) return '';
+  return require('crypto').createHash('sha256').update('wm-telegram-webhook:' + config.telegram.botToken).digest('hex').slice(0, 48);
+}
+function secretActive() { return !!config.telegram.webhookSecret || _secretRegistered; }
+
 /** Webhook 등록 */
 async function setWebhook() {
   if (!config.telegram.webhookUrl) {
     console.log('[Telegram] TELEGRAM_WEBHOOK_URL not set, skipping webhook setup');
     return null;
   }
-  var body = { url: config.telegram.webhookUrl };
-  if (config.telegram.webhookSecret) {
-    body.secret_token = config.telegram.webhookSecret;
-  }
+  var body = { url: config.telegram.webhookUrl, secret_token: webhookSecret(), allowed_updates: ['message', 'callback_query'] };
   var result = await callApi('setWebhook', body);
   if (result && result.ok) {
+    _secretRegistered = true;
     console.log('[Telegram] Webhook registered:', config.telegram.webhookUrl);
     // 명령어 자동완성도 등록
     await setMyCommands();
@@ -213,8 +203,8 @@ async function verifyAndLink(code, chatId, tgUsername) {
 
 /** 연동 해제 */
 async function unlink(userId) {
+  // 알림 설정은 남겨 둔다 — 다시 연결하면 예전 설정 그대로 (예전엔 지워져 처음 상태로 돌아갔다)
   await db.query('DELETE FROM telegram_links WHERE user_id = $1', [userId]);
-  await db.query('DELETE FROM notification_prefs WHERE user_id = $1 AND channel = \'telegram\'', [userId]);
 }
 
 /** 연동 상태 조회 */
@@ -232,125 +222,214 @@ async function getUserByChatId(chatId) {
   return r.rows[0] || null;
 }
 
-/* ── Photo → Issue ── */
+/* ── 메시지 처리 (v13.301 다시 짬) ──
+ * 사람 확인은 보낸 사람(from.id)으로 — 예전엔 대화방 번호(chat.id)로 찾아 그룹방에서는 아무 명령도 안 됐다.
+ * 1:1 대화: 답장 → 명령 → 자연어 바로가기 → 말로 등록(②) → AI 질답
+ * 그룹방: telegram/group.js (프로젝트방)
+ */
+var BOT_SUFFIX_RE = /^(\/[A-Za-z0-9_가-힣]+)@[A-Za-z0-9_]+/;
 
-/** 사진 → 이슈 자동 등록 */
-async function handlePhotoIssue(chatId, user, msg) {
-  var caption = (msg.caption || '').trim();
-  if (!caption) {
-    return sendMessage(chatId, '📸 사진과 함께 설명을 입력하면 이슈로 등록됩니다.\n\n예: 사진 + "SK하이닉스 카메라 보정 불량"');
+/** "/help@MyBot 인자" → "/help 인자" */
+function stripBotName(text) {
+  return String(text || '').replace(BOT_SUFFIX_RE, '$1');
+}
+
+var AI_ERR_SHOW = { CREDIT_LOW: 1, AI_KEY_INVALID: 1, AI_OVERLOADED: 1 };
+function aiErrText(e) {
+  if (e && AI_ERR_SHOW[e.code]) return '🤖 ' + escHtml(e.message);
+  return '🤖 AI 응답을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.';
+}
+
+/** AI 한도 확인 (월 · 시간당) → 막히면 안내 문구, 통과하면 null */
+async function aiGate(user) {
+  var aiUsage = require('../lib/ai-usage');
+  if (!aiUsage.takeHourly(user.user_id)) return '⏳ AI 질문은 한 시간에 ' + aiUsage.HOURLY + '번까지입니다. 잠시 후 다시 물어보세요.';
+  var q = await aiUsage.checkQuota(user.tenant_id);
+  if (!q.ok) return '🤖 ' + escHtml(q.message);
+  return null;
+}
+
+/** AI 질답 — 웹과 같은 권한 범위 · 같은 한도 · 사용량 기록 */
+async function askAi(chatId, user, text) {
+  var blocked = await aiGate(user);
+  if (blocked) return sendMessage(chatId, blocked);
+  await sendMessage(chatId, '🤖 분석 중...');
+  try {
+    var answer = await aiService.answerQuestion(text, user);
+    require('../lib/ai-usage').logUsage(user.tenant_id, user.user_id, text, 'telegram');
+    return sendMessage(chatId, answer);
+  } catch (aiErr) {
+    console.error('[AI] Error:', aiErr.message);
+    return sendMessage(chatId, aiErrText(aiErr));
   }
+}
 
-  // 가장 큰 해상도의 사진 file_id
-  var photo = msg.photo[msg.photo.length - 1];
-  var fileId = photo.file_id;
-
-  // 이슈 생성
-  var crypto = require('crypto');
-  var issueId = 'iss-' + crypto.randomUUID().slice(0, 12);
-  var today = new Date().toISOString().slice(0, 10);
-
-  // 멀티테넌트 격리: 보고자 tenant_id 강제 포함
-  await db.query(
-    "INSERT INTO issues (id, tenant_id, title, description, urgency, status, report_date, reporter, reporter_id, assignees, tags, created_by, updated_by) VALUES ($1, $2, $3, $4, 'normal', 'open', $5, $6, $7, $8, $9, $7, $7)",
-    [issueId, user.tenant_id, caption, '텔레그램 사진 첨부 (file_id: ' + fileId + ')', today, user.name, user.user_id, JSON.stringify([user.name]), JSON.stringify(['telegram', 'photo'])]
-  );
-
-  var response = '📸 <b>이슈 등록 완료</b>\n\n' +
-    '제목: ' + escHtml(caption) + '\n' +
-    '상태: 접수 (open)\n' +
-    '긴급도: 보통\n' +
-    '등록자: ' + escHtml(user.name) + '\n' +
-    '날짜: ' + today;
-
-  return sendMessage(chatId, response, {
-    reply_markup: JSON.stringify({
-      inline_keyboard: [
-        [
-          { text: '🔴 긴급으로 변경', callback_data: 'issue_urgent:' + issueId },
-          { text: '🔵 대응 시작', callback_data: 'issue_start:' + issueId }
-        ]
-      ]
-    })
+/** 말로 등록 — AI 로 종류 고르기 (한도 안에서만, 아니면 AI 없이 규칙으로) */
+async function proposeEntry(chatId, user, text) {
+  var compose = require('../telegram/compose');
+  var aiProvider = require('./ai-provider');
+  var blocked = await aiGate(user);
+  return compose.propose({
+    chatId: chatId, user: user, text: text, send: sendMessage,
+    ai: blocked ? null : async function (prompt) {
+      var out = await aiProvider.generateText({ prompt: prompt, tenantId: user.tenant_id, maxTokens: 512, json: true });
+      if (out) require('../lib/ai-usage').logUsage(user.tenant_id, user.user_id, '[등록] ' + text, out.provider);
+      return out ? out.text : null;
+    }
   });
 }
 
-/* ── Message dispatcher ── */
+/** 말로 등록 확인 버튼이 실제로 부르는 것 */
+function composeRun() {
+  initCommands();
+  return {
+    todo: function (chatId, user, t) { return myWorkCmds.cmdTodo(chatId, user, t); },
+    event: function (chatId, user, t) { return myWorkCmds.cmdEvent(chatId, user, t); },
+    log: function (chatId, user, e) { return personalCmds.logEntry(chatId, user, e); },
+    ask: function (chatId, user, t) { return askAi(chatId, user, t); }
+  };
+}
+
+/** 메뉴 버튼(mn:키) → 명령 */
+function runMenu(key, chatId, user) {
+  initCommands();
+  switch (key) {
+    case 'mywork': return myWorkCmds.cmdMyWork(chatId, user, '');
+    case 'rec': return myWorkCmds.cmdRec(chatId, user, '');
+    case 'today': return scheduleCmds.cmdToday(chatId, user);
+    case 'cal': return scheduleCmds.cmdCalendar(chatId, user, 7);
+    case 'todos': return myWorkCmds.cmdTodos(chatId, user);
+    case 'myproj': return myWorkCmds.cmdMyProj(chatId, user, '');
+    case 'issues': return personalCmds.cmdIssues(chatId, user);
+    case 'overdue': return analysisCmds.cmdOverdue(chatId, user);
+    case 'summary': return analysisCmds.cmdSummary(chatId, user);
+    case 'team': return teamCmds.cmdTeam(chatId, user);
+    case 'howto': return sendMessage(chatId, menuCmds.HOWTO);
+    case 'help': return helpCmds.cmdHelp(chatId, null);
+    case 'menu': return menuCmds.cmdMenu(chatId);
+    default: return sendMessage(chatId, '❓ 알 수 없는 메뉴입니다. /menu');
+  }
+}
+
+/** 음성 메모 → 글 (Gemini). 실패하면 null 과 안내 */
+async function voiceToText(chatId, user, msg) {
+  var v = msg.voice || msg.audio;
+  if (!v) return null;
+  if (v.duration && v.duration > 300) { await sendMessage(chatId, '🎙 5분 넘는 음성은 받지 않습니다.'); return null; }
+  var blocked = await aiGate(user);
+  if (blocked) { await sendMessage(chatId, blocked); return null; }
+  try {
+    var got = await require('../telegram/files').download(v.file_id);
+    var t = await require('./ai-provider').transcribe({ tenantId: user.tenant_id, data: got.buf.toString('base64'), mimeType: v.mime_type || 'audio/ogg' });
+    if (!t) { await sendMessage(chatId, '🎙 음성을 글로 바꾸려면 Gemini 키(GEMINI_API_KEY)가 필요합니다.'); return null; }
+    require('../lib/ai-usage').logUsage(user.tenant_id, user.user_id, '[음성]', 'gemini');
+    if (!t.text) { await sendMessage(chatId, '🎙 알아듣지 못했습니다. 다시 말씀해 주세요.'); return null; }
+    await sendMessage(chatId, '🎙 <i>' + escHtml(t.text) + '</i>');
+    return t.text;
+  } catch (e) {
+    console.error('[Telegram] voice', e.message);
+    await sendMessage(chatId, e.code === 'TOO_BIG' ? '🎙 파일이 너무 큽니다 (20MB 이하).' : aiErrText(e));
+    return null;
+  }
+}
+
+/** /start 코드 — 1:1 대화에서만 계정 연동 */
+async function handleStart(msg, chatId, text, isPrivate) {
+  var parts = text.split(/\s+/);
+  if (!isPrivate) {
+    if (parts[1] && /^G[0-9A-F]{8}$/i.test(parts[1])) return null;   // 그룹방 연결 코드 → group.js
+    // 그룹방에서 계정 코드를 받으면 그 방 전체가 한 사람 계정이 된다 → 거부
+    return sendMessage(chatId, '🔒 계정 연동은 봇과의 1:1 대화에서만 할 수 있습니다.');
+  }
+  if (parts.length < 2) {
+    return sendMessage(chatId, '🔗 Work Manager 연동을 시작하려면 웹에서 QR코드를 스캔하거나 인증코드를 입력해주세요.\n\n사용법: /start &lt;인증코드&gt;');
+  }
+  // 브루트포스 방어: 같은 chat_id가 최근 10분간 실패 5회 이상이면 거부
+  var attR = await db.query(
+    "SELECT COUNT(*)::int AS c FROM telegram_auth_attempts WHERE chat_id = $1 AND success = FALSE AND attempted_at > NOW() - INTERVAL '10 minutes'",
+    [chatId]
+  );
+  if (attR.rows[0].c >= 5) {
+    return sendMessage(chatId, '⏸ 잠시 후 다시 시도해주세요. (10분간 5회 실패)');
+  }
+  var code = parts[1].toUpperCase();
+  var result = await verifyAndLink(code, chatId, msg.from ? msg.from.username : null);
+  try {
+    await db.query('INSERT INTO telegram_auth_attempts (chat_id, code_input, success) VALUES ($1, $2, $3)', [chatId, code, !!result.ok]);
+  } catch (logErr) {
+    console.error('[Telegram] auth attempt log error:', logErr.message);
+  }
+  if (!result.ok) return sendMessage(chatId, '❌ 인증코드가 만료되었거나 유효하지 않습니다.\n웹에서 새 코드를 발급받아 주세요.');
+  return sendMessage(chatId, '✅ <b>연동 완료!</b>\n\n' + escHtml(result.userName) + '님, 환영합니다! 🎉\n\n' +
+    '<b>📋 /menu</b> — 버튼으로 고르기\n\n' +
+    '<b>📝 그냥 말로 쓰세요</b>\n' +
+    '"내일 3시 SK 미팅" → 일정 · "금요일까지 견적 회신" → 할 일\n' +
+    '"B2024-001 배선 3시간" → 업무일지 (✅ 눌러야 저장)\n\n' +
+    '<b>💬 물어보세요</b>\n"이번 주 누가 제일 바빠?"\n\n' +
+    '<b>↩️ 알림에 답장</b>하면 이슈 대응 이력 · 쪽지 답장 · 피드백 답글로 남습니다.', { reply_markup: JSON.stringify(require('../telegram/commands/menu').keyboard()) });
+}
 
 /** Webhook으로 들어온 메시지 처리 */
 async function handleUpdate(update) {
-  if (!update.message) return;
-  if (!update.message.text && !update.message.photo) return;
-
-  var msg = update.message;
+  var msg = update && update.message;
+  if (!msg || !msg.chat) return;
   var chatId = msg.chat.id;
+  var isPrivate = msg.chat.type === 'private';
+  var fromId = msg.from && !msg.from.is_bot ? msg.from.id : null;
+  var text = stripBotName(String(msg.text || '').trim());
+  var hasFile = !!((msg.photo && msg.photo.length) || msg.document);
+  var hasVoice = !!(msg.voice || msg.audio);
+  if (!text && !hasFile && !hasVoice && !msg.caption) return;
 
-  // 사진 → 이슈 등록
-  if (msg.photo && msg.photo.length > 0) {
-    var user = await getUserByChatId(chatId);
-    if (!user) return sendMessage(chatId, '🔒 먼저 계정 연동이 필요합니다.');
-    return handlePhotoIssue(chatId, user, msg);
+  if (/^\/start(\s|$)/.test(text)) {
+    var st = await handleStart(msg, chatId, text, isPrivate);
+    if (st !== null) return st;
   }
 
-  var text = msg.text || '';
-  if (!text) return;
-  text = text.trim();
-  var tgUsername = msg.from ? msg.from.username : null;
+  // 보낸 사람 = 연동된 계정 (1:1 대화방 번호 = 그 사람 번호)
+  var user = fromId ? await getUserByChatId(fromId) : null;
+  initCommands();
 
-  // /start <인증코드>
-  if (text.startsWith('/start')) {
-    var parts = text.split(/\s+/);
-    if (parts.length < 2) {
-      return sendMessage(chatId, '🔗 Work Manager 연동을 시작하려면 웹에서 QR코드를 스캔하거나 인증코드를 입력해주세요.\n\n사용법: /start <인증코드>');
-    }
-    // 브루트포스 방어: 같은 chat_id가 최근 10분간 실패 5회 이상이면 거부
-    var attR = await db.query(
-      "SELECT COUNT(*)::int AS c FROM telegram_auth_attempts WHERE chat_id = $1 AND success = FALSE AND attempted_at > NOW() - INTERVAL '10 minutes'",
-      [chatId]
-    );
-    if (attR.rows[0].c >= 5) {
-      return sendMessage(chatId, '⏸ 잠시 후 다시 시도해주세요. (10분간 5회 실패)');
-    }
-    var code = parts[1].toUpperCase();
-    var result = await verifyAndLink(code, chatId, tgUsername);
-    // 시도 기록 (성공/실패 모두)
-    try {
-      await db.query(
-        'INSERT INTO telegram_auth_attempts (chat_id, code_input, success) VALUES ($1, $2, $3)',
-        [chatId, code, !!result.ok]
-      );
-    } catch (logErr) {
-      console.error('[Telegram] auth attempt log error:', logErr.message);
-    }
-    if (result.ok) {
-      return sendMessage(chatId, '✅ <b>연동 완료!</b>\n\n' +
-        result.userName + '님, 환영합니다! 🎉\n\n' +
-        '<b>🚀 바로 시작해보세요</b>\n' +
-        '/today — 오늘 할 일 한눈에\n' +
-        '/issues — 내 이슈 확인\n' +
-        '/tasks — 미완료 작업\n\n' +
-        '<b>⚡ 빠른 업무 등록</b>\n' +
-        '<code>8h D B2024-001 업무내용</code>\n' +
-        '→ 바로 업무일지 등록!\n\n' +
-        '<b>💬 AI에게 물어보세요</b>\n' +
-        '"이번 주 누가 제일 바빠?"\n' +
-        '"SK하이닉스 프로젝트 요약해줘"\n\n' +
-        '💡 /help 로 전체 명령어, /help log 로 상세 설명');
-    } else {
-      return sendMessage(chatId, '❌ 인증코드가 만료되었거나 유효하지 않습니다.\n웹에서 새 코드를 발급받아 주세요.');
-    }
+  if (!isPrivate) {
+    return require('../telegram/group').handle({
+      chatId: chatId, user: user, msg: msg, text: text, send: sendMessage,
+      cmds: { vote: utilityCmds.cmdVote, closeVote: utilityCmds.cmdCloseVote }
+    });
   }
 
-  // 연동된 사용자만 사용 가능한 명령어
-  var user = await getUserByChatId(chatId);
   if (!user) {
     return sendMessage(chatId, '🔒 먼저 계정 연동이 필요합니다.\n웹 → 프로필 → 텔레그램 연동에서 QR코드를 스캔해주세요.');
   }
 
-  // Initialize command modules on first use
-  initCommands();
+  // 음성 → 글 (그 글로 아래를 그대로 진행)
+  if (hasVoice) {
+    var said = await voiceToText(chatId, user, msg);
+    if (!said) return;
+    text = said;
+  }
+
+  // ↩️ 알림에 답장 (명령이 아닌 글 · 사진 · 파일 · 음성)
+  if (msg.reply_to_message && text.charAt(0) !== '/') {
+    var done = await require('../telegram/reply').handle({ chatId: chatId, user: user, msg: msg, text: text || msg.caption || '', send: sendMessage });
+    if (done) return;
+  }
+
+  // 사진 · 파일
+  if (hasFile && !text) {
+    var caption = String(msg.caption || '').trim();
+    if (msg.photo && msg.photo.length) {
+      if (!caption) return sendMessage(chatId, '📸 사진과 함께 설명을 입력하면 이슈로 등록됩니다.\n\n예: 사진 + "SK하이닉스 카메라 보정 불량"\n<i>알림에 답장으로 보내면 그 이슈에 첨부됩니다.</i>');
+      return require('../telegram/group').photoIssue({ chatId: chatId, user: user, msg: msg, send: sendMessage }, null, caption);
+    }
+    var file = require('../telegram/files').pickFile(msg);
+    var saved = await require('../telegram/files').saveToDocs(user, file, null, caption || '텔레그램에서 올림');
+    return sendMessage(chatId, saved.ok
+      ? '📎 <b>' + escHtml(saved.name) + '</b> — 문서관리(내 문서)에 저장했습니다.\n<i>이슈 알림에 답장으로 보내면 그 이슈에 붙습니다.</i>'
+      : '⚠️ ' + require('../telegram/files').failText(saved.reason));
+  }
 
   // Command dispatch
+  if (text === '/menu' || text === '/메뉴') return menuCmds.cmdMenu(chatId);
   if (text === '/my') return personalCmds.cmdMy(chatId, user);
   // 내 업무 (v13.253) — /todos 를 /todo 보다 먼저
   if (text === '/todos' || text === '/할일목록') return myWorkCmds.cmdTodos(chatId, user);
@@ -366,32 +445,32 @@ async function handleUpdate(update) {
   if (text === '/report') return analysisCmds.cmdReport(chatId, user);
   if (text === '/overdue') return analysisCmds.cmdOverdue(chatId, user);
   if (text === '/team') return teamCmds.cmdTeam(chatId, user);
-  if (text.startsWith('/project')) {
+  if (/^\/project(\s|$)/.test(text)) {
     var projQuery = text.replace(/^\/project\s*/, '').trim();
     return projectCmds.cmdProject(chatId, user, projQuery || null);
   }
   if (text === '/today') return scheduleCmds.cmdToday(chatId, user);
-  if (text.startsWith('/calendar')) {
+  if (/^\/calendar(\s|$)/.test(text)) {
     var calDays = parseInt(text.replace(/^\/calendar\s*/, '')) || 7;
     return scheduleCmds.cmdCalendar(chatId, user, calDays);
   }
   if (text === '/tasks') return personalCmds.cmdTasks(chatId, user);
-  if (text.startsWith('/done')) {
+  if (/^\/done(\s|$)/.test(text)) {
     var doneNum = parseInt(text.replace(/^\/done\s*/, ''));
     return personalCmds.cmdDone(chatId, user, doneNum);
   }
   if (text === '/orders') return scheduleCmds.cmdOrders(chatId, user);
-  if (text.startsWith('/order ') && !text.startsWith('/orders')) {
+  if (text.startsWith('/order ')) {
     var orderQuery = text.replace(/^\/order\s+/, '').trim();
     return scheduleCmds.cmdOrder(chatId, user, orderQuery);
   }
   if (text === '/deliveries') return scheduleCmds.cmdDeliveries(chatId, user);
   if (text === '/my-stats' || text === '/mystats' || text === '/my_stats') return personalCmds.cmdMyStats(chatId, user);
-  if (text.startsWith('/checklist')) {
+  if (/^\/checklist(\s|$)/.test(text)) {
     var clQuery = text.replace(/^\/checklist\s*/, '').trim();
     return projectCmds.cmdChecklist(chatId, user, clQuery || null);
   }
-  if (text.startsWith('/docs')) {
+  if (/^\/docs(\s|$)/.test(text)) {
     var docQuery = text.replace(/^\/docs\s*/, '').trim();
     return docsCmds.cmdDocs(chatId, user, docQuery || null);
   }
@@ -403,53 +482,43 @@ async function handleUpdate(update) {
   if (text.startsWith('/log ')) {
     return personalCmds.cmdLog(chatId, user, text.replace(/^\/log\s+/, ''));
   }
-  if (/^\d+\.?\d*\s*h\s+[ABDGMRS]/i.test(text)) {
+  if (/^\d+\.?\d*\s*h\s+[ABDGMRSV](\s|$)/i.test(text)) {
     return personalCmds.cmdLog(chatId, user, text);
   }
   if (text.startsWith('/remind ')) {
     return utilityCmds.cmdRemind(chatId, user, text.replace(/^\/remind\s+/, ''));
   }
   if (text.startsWith('/cancelremind')) {
-    var crArg = text.replace(/^\/cancelremind\s*/, '').trim();
-    return utilityCmds.cmdCancelRemind(chatId, user, crArg);
+    return utilityCmds.cmdCancelRemind(chatId, user, text.replace(/^\/cancelremind\s*/, '').trim());
   }
   if (text.startsWith('/closevote')) {
-    var cvArg = text.replace(/^\/closevote\s*/, '').trim();
-    return utilityCmds.cmdCloseVote(chatId, user, cvArg);
+    return utilityCmds.cmdCloseVote(chatId, user, text.replace(/^\/closevote\s*/, '').trim());
   }
-  if (text.startsWith('/vote')) {
-    var voteText = text.replace(/^\/vote\s*/, '').trim();
-    return utilityCmds.cmdVote(chatId, user, voteText);
+  if (/^\/vote(\s|$)/.test(text)) {
+    return utilityCmds.cmdVote(chatId, user, text.replace(/^\/vote\s*/, '').trim());
   }
   if (text === '/weekly-report' || text === '/weeklyreport' || text === '/weekly_report') {
     return analysisCmds.cmdWeeklyReport(chatId, user);
   }
   // 주간업무보고(팀) — weekly_reports 테이블 기반
-  if (text === '/wr-stats' || text === '/wr_stats' || text === '/wrstats') {
-    return weeklyCmds.cmdWeeklyStats(chatId, user);
-  }
-  if (text === '/wr-me' || text === '/wr_me' || text === '/wrme') {
-    return weeklyCmds.cmdWeeklyMine(chatId, user);
-  }
+  if (text === '/wr-stats' || text === '/wr_stats' || text === '/wrstats') return weeklyCmds.cmdWeeklyStats(chatId, user);
+  if (text === '/wr-me' || text === '/wr_me' || text === '/wrme') return weeklyCmds.cmdWeeklyMine(chatId, user);
   if (text === '/wr' || text.startsWith('/wr ') || text === '/주간업무보고' || text.startsWith('/주간업무보고 ')) {
     var wrArg = text.replace(/^\/(wr|주간업무보고)\s*/, '').trim();
     return weeklyCmds.cmdWeekly(chatId, user, wrArg || null);
   }
   // 프로젝트 진척률 (마일스톤 달성률)
   if (text === '/progress' || text.startsWith('/progress ')) {
-    var progArg = text.replace(/^\/progress\s*/, '').trim();
-    return projectCmds.cmdProgress(chatId, user, progArg || null);
+    return projectCmds.cmdProgress(chatId, user, text.replace(/^\/progress\s*/, '').trim() || null);
   }
   // 프로젝트 관리 확장 (개발/검토/액션/회의)
   if (text === '/devitems' || text === '/devs' || text === '/dev') return pmextCmds.cmdDevItems(chatId, user);
   if (text === '/prestudy' || text === '/prestudies' || text.startsWith('/prestudy ')) {
-    var psArg = text.replace(/^\/prestud(y|ies)\s*/, '').trim();
-    return pmextCmds.cmdPrestudy(chatId, user, psArg || null);
+    return pmextCmds.cmdPrestudy(chatId, user, text.replace(/^\/prestud(y|ies)\s*/, '').trim() || null);
   }
   if (text === '/actions' || text === '/action') return pmextCmds.cmdActions(chatId, user);
   if (text === '/meeting' || text === '/meetings' || text.startsWith('/meeting ')) {
-    var mtgArg = text.replace(/^\/meetings?\s*/, '').trim();
-    return pmextCmds.cmdMeeting(chatId, user, mtgArg || null);
+    return pmextCmds.cmdMeeting(chatId, user, text.replace(/^\/meetings?\s*/, '').trim() || null);
   }
   // 요소기술 — /mytech·/techlog 를 /tech 보다 먼저 매칭(접두어 충돌 방지)
   if (text === '/mytech' || text === '/my-tech' || text === '/my_tech') return techCmds.cmdMyTech(chatId, user);
@@ -468,98 +537,49 @@ async function handleUpdate(update) {
     await unlink(user.user_id);
     return sendMessage(chatId, '🔓 연동이 해제되었습니다.\n다시 연동하려면 웹에서 QR코드를 스캔해주세요.');
   }
-
-  // 그룹 채팅방 연동 (관리자 전용)
-  if (text.startsWith('/linkgroup') && msg.chat.type !== 'private') {
-    if (user.role !== 'admin' && user.role !== 'manager') {
-      return sendMessage(chatId, '🔒 관리자/팀장만 그룹 연동이 가능합니다.');
-    }
-    var lgParts = text.replace(/^\/linkgroup\s*/, '').trim().split(/\s+/);
-    var lgType = lgParts[0] || '';
-    var lgId = lgParts[1] || '';
-    if (!lgType || !['project', 'team', 'announce'].includes(lgType)) {
-      return sendMessage(chatId, '사용법: /linkgroup project &lt;프로젝트ID&gt;\n/linkgroup team &lt;부서ID&gt;\n/linkgroup announce');
-    }
-    // 멀티테넌트 권한 검증: lgId 가 호출자 tenant 소속인지 확인
-    if (lgType === 'project') {
-      if (!lgId) return sendMessage(chatId, '❌ 프로젝트ID가 필요합니다.');
-      var ownR = await db.query('SELECT id FROM projects WHERE id = $1 AND tenant_id = $2', [lgId, user.tenant_id]);
-      if (ownR.rows.length === 0) return sendMessage(chatId, '❌ 해당 프로젝트에 대한 권한이 없습니다.');
-    } else if (lgType === 'team') {
-      if (!lgId) return sendMessage(chatId, '❌ 부서ID가 필요합니다.');
-      var deptR = await db.query('SELECT id FROM departments WHERE id = $1 AND tenant_id = $2', [lgId, user.tenant_id]);
-      if (deptR.rows.length === 0) return sendMessage(chatId, '❌ 해당 부서에 대한 권한이 없습니다.');
-    }
-    // 'announce' 는 lgId 불필요 — user.tenant_id 를 그대로 사용
-    try {
-      await db.query('DELETE FROM telegram_group_links WHERE chat_id = $1', [chatId]);
-      await db.query(
-        'INSERT INTO telegram_group_links (chat_id, tenant_id, link_type, link_id, linked_by) VALUES ($1, $2, $3, $4, $5)',
-        [chatId, user.tenant_id, lgType, lgId || null, user.user_id]
-      );
-      return sendMessage(chatId, '✅ 그룹 연동 완료! (' + lgType + (lgId ? ': ' + lgId : '') + ')');
-    } catch (e) {
-      return sendMessage(chatId, '❌ 그룹 연동 실패: ' + e.message);
-    }
-  }
-
-  if (text === '/unlinkgroup' && msg.chat.type !== 'private') {
-    await db.query('DELETE FROM telegram_group_links WHERE chat_id = $1', [chatId]);
-    return sendMessage(chatId, '🔓 그룹 연동이 해제되었습니다.');
+  if (/^\/(linkgroup|unlinkgroup)/.test(text)) {
+    return sendMessage(chatId, '👥 그룹방 연결은 그룹방 안에서 합니다 — 웹 프로젝트 화면 → [텔레그램 그룹방 연결]을 누르면 봇을 그룹에 넣는 링크가 나옵니다.');
   }
 
   // 알 수 없는 명령어
   if (text.startsWith('/')) {
-    return sendMessage(chatId, '❓ 알 수 없는 명령어입니다.\n/help 로 사용 가능한 명령어를 확인하세요.');
+    return sendMessage(chatId, '❓ 알 수 없는 명령어입니다.\n/menu 로 버튼 메뉴, /help 로 전체 명령어를 확인하세요.');
   }
 
-  // 자연어 → 명령어 매핑
-  var nlMap = [
-    { patterns: [/내\s*이슈/, /이슈\s*보여/, /이슈\s*목록/, /이슈\s*뭐/], cmd: function() { return personalCmds.cmdIssues(chatId, user); } },
-    { patterns: [/내\s*현황/, /나\s*현황/, /내\s*상태/], cmd: function() { return personalCmds.cmdMy(chatId, user); } },
-    { patterns: [/오늘\s*일정/, /오늘\s*뭐/, /오늘\s*브리핑/], cmd: function() { return scheduleCmds.cmdToday(chatId, user); } },
-    { patterns: [/할\s*일/, /미완료/, /남은\s*작업/], cmd: function() { return personalCmds.cmdTasks(chatId, user); } },
-    { patterns: [/이번\s*주\s*일정/, /주간\s*일정/, /캘린더/], cmd: function() { return scheduleCmds.cmdCalendar(chatId, user, 7); } },
-    { patterns: [/수주\s*목록/, /수주\s*현황/, /수주\s*보여/], cmd: function() { return scheduleCmds.cmdOrders(chatId, user); } },
-    { patterns: [/납품\s*예정/, /납품\s*일정/], cmd: function() { return scheduleCmds.cmdDeliveries(chatId, user); } },
-    { patterns: [/주간업무보고/, /팀\s*보고/, /팀\s*주간/], cmd: function() { return weeklyCmds.cmdWeekly(chatId, user, null); } },
-    { patterns: [/내\s*주간보고/, /내\s*보고\s*항목/], cmd: function() { return weeklyCmds.cmdWeeklyMine(chatId, user); } },
-    { patterns: [/주간\s*보고/, /주간\s*리포트/], cmd: function() { return analysisCmds.cmdWeeklyReport(chatId, user); } },
-    { patterns: [/진척률/, /진행\s*현황/, /마일스톤\s*현황/], cmd: function() { return projectCmds.cmdProgress(chatId, user, null); } },
-    { patterns: [/개발\s*아이템/, /개발\s*백로그/, /내\s*개발/], cmd: function() { return pmextCmds.cmdDevItems(chatId, user); } },
-    { patterns: [/액션\s*아이템/, /내\s*액션/, /할당된\s*액션/], cmd: function() { return pmextCmds.cmdActions(chatId, user); } },
-    { patterns: [/사전\s*검토/, /검토\s*현황/, /검토\s*목록/, /\ubb38\uc758\s*\ud604\ud669/], cmd: function() { return pmextCmds.cmdPrestudy(chatId, user, null); } },
-    { patterns: [/회의\s*록/, /회의\s*목록/, /최근\s*회의/], cmd: function() { return pmextCmds.cmdMeeting(chatId, user, null); } },
-    { patterns: [/요소\s*기술/, /보유\s*기술/, /기반\s*기술/, /기술\s*카탈로그/, /기술\s*스택/], cmd: function() { return techCmds.cmdTech(chatId, user, null); } },
-    { patterns: [/내\s*기술/, /담당\s*기술/], cmd: function() { return techCmds.cmdMyTech(chatId, user); } },
-    { patterns: [/월간\s*보고/, /월간\s*리포트/, /월간\s*통계/], cmd: function() { return analysisCmds.cmdReport(chatId, user); } },
-    { patterns: [/내\s*통계/, /나\s*통계/, /개인\s*통계/], cmd: function() { return personalCmds.cmdMyStats(chatId, user); } },
-    { patterns: [/지연/, /긴급\s*현황/, /오버듀/], cmd: function() { return analysisCmds.cmdOverdue(chatId, user); } },
-    { patterns: [/팀\s*현황/, /팀원\s*투입/, /누가\s*바빠/], cmd: function() { return teamCmds.cmdTeam(chatId, user); } },
-    { patterns: [/도움말/, /명령어\s*목록/, /뭐\s*할\s*수/, /사용법/], cmd: function() { return helpCmds.cmdHelp(chatId, null); } }
-  ];
-
-  for (var ni = 0; ni < nlMap.length; ni++) {
-    var nl = nlMap[ni];
-    for (var pi = 0; pi < nl.patterns.length; pi++) {
-      if (nl.patterns[pi].test(text)) {
-        return nl.cmd();
+  // 자연어 → 명령어 바로가기 (짧고 분명한 말만 — 긴 글은 등록 · 질문으로)
+  if (text.length <= 20) {
+    for (var ni = 0; ni < NL_MAP.length; ni++) {
+      for (var pi = 0; pi < NL_MAP[ni][0].length; pi++) {
+        if (NL_MAP[ni][0][pi].test(text)) return runMenu(NL_MAP[ni][1], chatId, user);
       }
     }
   }
 
-  // 일반 텍스트 → AI 자연어 질답
-  if (text.length >= 2) {
-    await sendMessage(chatId, '🤖 분석 중...');
+  if (text.length < 2) return;
+  // 📝 말로 등록 (②) — 등록처럼 보이면 미리보기 + 확인 버튼, 아니면 AI 질답
+  if (require('../telegram/compose').classify(text) === 'entry') {
     try {
-      var answer = await aiService.answerQuestion(text, user);
-      return sendMessage(chatId, answer);
-    } catch (aiErr) {
-      console.error('[AI] Error:', aiErr.message);
-      return sendMessage(chatId, '🤖 AI 응답 생성에 실패했습니다.\n' + aiErr.message);
+      var proposed = await proposeEntry(chatId, user, text);
+      if (proposed) return;
+    } catch (e) {
+      console.error('[Telegram] compose', e.message);
+      return sendMessage(chatId, aiErrText(e));
     }
   }
+  return askAi(chatId, user, text);
 }
+
+/* 짧은 말 → 메뉴 키 (예전 nlMap 을 runMenu 로 통일 — 긴 글은 말로 등록 · AI 질답이 받는다) */
+var NL_MAP = [
+  [[/^(내\s*)?이슈(\s*(보여|목록|뭐))?/], 'issues'],
+  [[/^오늘\s*(일정|뭐|브리핑)/], 'today'],
+  [[/^(이번\s*주\s*일정|주간\s*일정|캘린더)/], 'cal'],
+  [[/^(할\s*일\s*(목록)?|미완료|남은\s*작업)$/], 'todos'],
+  [[/^내\s*업무/], 'mywork'],
+  [[/^(지연|긴급\s*현황|오버듀)/], 'overdue'],
+  [[/^(팀\s*현황|팀원\s*투입)/], 'team'],
+  [[/^(메뉴|도움말|명령어\s*목록|사용법)/], 'menu']
+];
 
 /* ── Metrics ── */
 
@@ -618,6 +638,8 @@ module.exports = {
   isConfigured: isConfigured,
   sendMessage: sendMessage,
   setWebhook: setWebhook,
+  webhookSecret: webhookSecret,
+  secretActive: secretActive,
   setMyCommands: setMyCommands,
   createAuthCode: createAuthCode,
   verifyAndLink: verifyAndLink,
@@ -625,6 +647,10 @@ module.exports = {
   getLinkStatus: getLinkStatus,
   getUserByChatId: getUserByChatId,
   handleUpdate: handleUpdate,
+  stripBotName: stripBotName,
+  askAi: askAi,
+  composeRun: composeRun,
+  runMenu: runMenu,
   generateAuthCode: generateAuthCode,
   cmdCalendar: function(chatId, user, days) { initCommands(); return scheduleCmds.cmdCalendar(chatId, user, days); },
   cmdToday: function(chatId, user) { initCommands(); return scheduleCmds.cmdToday(chatId, user); },

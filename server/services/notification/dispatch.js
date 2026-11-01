@@ -7,6 +7,23 @@ var telegramService = require('../telegram.service');
 var emailService = require('../email.service');
 var templates = require('./templates');
 var groups = require('./groups');
+var tgRefs = require('../../telegram/refs');
+var tgLinks = require('../../telegram/links');
+
+/* 답장 안내 — 텔레그램에서 이 알림에 답장하면 어디로 가는지 (v13.302) */
+var REPLY_HINT = {
+  issue: '↩️ 답장하면 이 이슈의 대응 이력으로 · 사진 · 파일은 첨부로',
+  message: '↩️ 답장하면 쪽지로 보냅니다',
+  comment: '↩️ 답장하면 이 피드백에 답글로 남깁니다'
+};
+
+/** 방해 금지 시간인지 — 'HH:MM' 두 개, 자정을 넘는 구간(22:00~07:00)도 됨. KST 기준 */
+function inQuiet(start, end, now) {
+  if (!start || !end || start === end) return false;
+  var d = new Date((now || Date.now()) + 9 * 3600000);
+  var hm = ('0' + d.getUTCHours()).slice(-2) + ':' + ('0' + d.getUTCMinutes()).slice(-2);
+  return start < end ? (hm >= start && hm < end) : (hm >= start || hm < end);
+}
 
 var TEMPLATES = templates.TEMPLATES;
 var EVENT_TITLES = templates.EVENT_TITLES;
@@ -92,13 +109,15 @@ async function resolveTelegramTargets(targetUserIds, eventType, payloadStr, user
   });
 
   var linkR = await db.query(
-    'SELECT user_id, chat_id, tenant_id FROM telegram_links WHERE user_id = ANY($1) AND is_active = TRUE',
+    'SELECT user_id, chat_id, tenant_id, quiet_start, quiet_end FROM telegram_links WHERE user_id = ANY($1) AND is_active = TRUE',
     [targetUserIds]
   );
   var chatMap = {};
+  var quietSet = {};
   linkR.rows.forEach(function (r) {
     if (!tenantOk(r.user_id, r.tenant_id)) return;
     chatMap[r.user_id] = r.chat_id;
+    if (inQuiet(r.quiet_start, r.quiet_end)) quietSet[r.user_id] = true;
   });
 
   var dupR = await db.query(
@@ -111,7 +130,7 @@ async function resolveTelegramTargets(targetUserIds, eventType, payloadStr, user
     dupSet[r.user_id] = true;
   });
 
-  return { disabledSet: disabledSet, chatMap: chatMap, dupSet: dupSet };
+  return { disabledSet: disabledSet, chatMap: chatMap, dupSet: dupSet, quietSet: quietSet };
 }
 
 async function notify(eventType, payload, targetUserIds) {
@@ -156,6 +175,12 @@ async function notify(eventType, payload, targetUserIds) {
 
     // 인라인 버튼 생성 (이벤트별)
     var sendOpts = buildTelegramSendOpts(eventType, payload);
+    // 🌐 웹에서 열기 (APP_URL 이 https 일 때만) · 답장 안내 (v13.302 · v13.305)
+    var tgt = tgLinks.targetOf(eventType, payload);
+    if (tgt) sendOpts = tgLinks.addRow(sendOpts, tgLinks.webRow(tgt[0], tgt[1]));
+    var ref = payload && payload.replyRef && REPLY_HINT[payload.replyRef.kind] ? payload.replyRef : null;
+    var tgText = ref ? text + '\n\n<i>' + REPLY_HINT[ref.kind] + '</i>' : text;
+    var quietSet = targets.quietSet || {};
 
     // 병렬 발송
     var sendPromises = targetUserIds.map(function (userId) {
@@ -165,8 +190,11 @@ async function notify(eventType, payload, targetUserIds) {
       if (dupSet[userId]) return Promise.resolve();
       var tId = userTenantMap[userId] || null;
 
-      return telegramService.sendMessage(chatId, text, sendOpts).then(function (result) {
+      var opts = quietSet[userId] ? Object.assign({ disable_notification: true }, sendOpts) : sendOpts;   // 방해 금지: 소리 없이
+      return telegramService.sendMessage(chatId, tgText, opts).then(async function (result) {
         var status = (result && result.ok) ? 'sent' : 'failed';
+        // 답장 연결은 알림이 끝나기 전에 남긴다 — 곧바로 답장해도 찾을 수 있게
+        if (ref && result && result.ok) await tgRefs.remember(result, { tenantId: tId, userId: userId, kind: ref.kind, refId: ref.id });
         var errorDetail = (result && !result.ok) ? result.description : null;
 
         // 403 (봇 차단) → 비활성화
@@ -309,5 +337,6 @@ module.exports = {
   resolveStakeholders: resolveStakeholders,
   createInAppNotification: createInAppNotification,
   sendEmailNotification: sendEmailNotification,
-  resolveTelegramTargets: resolveTelegramTargets
+  resolveTelegramTargets: resolveTelegramTargets,
+  inQuiet: inQuiet
 };

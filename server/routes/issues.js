@@ -107,10 +107,16 @@ router.post('/', rbac.checkPermission('issue.create'), async function (req, res)
       if (assigneeNames.length > 0) {
         var uR = await db.query("SELECT id FROM users WHERE name = ANY($1) AND status = 'active' AND tenant_id = $2", [assigneeNames, req.tenant.id]);
         var targetIds = uR.rows.map(function(u) { return u.id; });
+        // 알림에는 프로젝트 이름 (예전엔 프로젝트 id 가 그대로 나갔다)
+        var pjName = '';
+        if (b.projectId) {
+          var pjR = await db.query('SELECT name FROM projects WHERE id = $1 AND tenant_id = $2', [b.projectId, req.tenant.id]);
+          pjName = pjR.rows.length ? pjR.rows[0].name : '';
+        }
         notificationService.notify('issue_assigned', {
           title: b.title, urgency: b.urgency || 'normal',
-          assignee: assigneeNames.join(', '), projectName: b.projectId || '',
-          issueId: id
+          assignee: assigneeNames.join(', '), projectName: pjName,
+          issueId: id, replyRef: { kind: 'issue', id: id }
         }, targetIds).catch(function(e) { console.error('[noti]', e.message); });
       }
     } catch (_) { /* 알림 실패해도 이슈 생성은 성공 */ }
@@ -161,7 +167,8 @@ router.put('/:id', async function (req, res) {
             uR.rows.forEach(function(u) { targets.add(u.id); });
           }
           await notificationService.notify('issue_status_changed', {
-            title: prev.title, fromStatus: prev.status, toStatus: clean.status
+            title: prev.title, fromStatus: prev.status, toStatus: clean.status,
+            issueId: req.params.id, replyRef: { kind: 'issue', id: req.params.id }
           }, Array.from(targets));
         } catch (e) { console.error('[noti]', e.message); }
       })();

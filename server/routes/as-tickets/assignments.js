@@ -69,6 +69,7 @@ router.post('/:id/assignments', async function (req, res) {
           notificationService.notify('as_assigned', {
             ticketNo: t.ticket_no, priority: t.priority, customerName: t.customer_name,
             assignee: asg.assignee_name || '-', dept: asg.dept,
+            ticketId: req.params.id, asgId: asg.id,   // 텔레그램 [작업 시작][완료] 버튼 (v13.305)
             promisedAt: asg.promised_at ? new Date(asg.promised_at).toISOString().replace('T', ' ').slice(0, 16) : null
           }, [asg.assignee_id]).catch(function (e) { console.error('[as/noti]', e.message); });
         } catch (e) { /* 무시 */ }

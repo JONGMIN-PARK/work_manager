@@ -5,7 +5,7 @@ var db = require('../../config/db');
 var escHtml = require('../util/escape').escHtml;
 
 /** 업무분장 코드 매핑 */
-var AM = { A: 'A(CS현장)', B: 'B(수주)', D: 'D(개발)', G: 'G(공통)', M: 'M(양산)', R: 'R(제안)', S: 'S(영업지원)' };
+var AM = { A: 'A(CS현장)', B: 'B(수주)', D: 'D(개발)', G: 'G(공통)', M: 'M(양산)', R: 'R(제안)', S: 'S(영업지원)', V: 'V(휴가)' };
 
 /** 텍스트 바 차트 생성 */
 function textBar(value, max, width) {
@@ -180,25 +180,36 @@ function create(sendMessage) {
 
   /** 봇 명령어: /log — 업무일지 빠른 등록 */
   async function cmdLog(chatId, user, text) {
-    var match = text.match(/^\/?(log\s+)?(\d+\.?\d*)\s*h\s+([ABDGMRS])\s*([\w-]*\d[\w-]*)?\s*(.*)/i);
+    // 수주번호는 영문으로 시작하고 숫자가 있는 낱말만 (예전엔 '2차' 같은 내용 첫 낱말이 수주번호로 잡혔다)
+    var match = text.match(/^\/?(log\s+)?(\d+\.?\d*)\s*h\s+([ABDGMRSV])(?:\s+([A-Za-z][\w-]*\d[\w-]*)(?=\s|$))?\s*(.*)/i);
     if (!match) return sendMessage(chatId, '❌ 형식: 8h D B2024-001 업무내용\n예: 4.5h A 현장점검');
-    var hours = parseFloat(match[2]);
-    var abbr = match[3].toUpperCase();
-    var orderNo = (match[4] || '').trim() || null;
-    var content = (match[5] || '').trim() || '(내용 없음)';
+    return logEntry(chatId, user, {
+      hours: parseFloat(match[2]), abbr: match[3].toUpperCase(),
+      orderNo: (match[4] || '').trim(), content: (match[5] || '').trim()
+    });
+  }
 
-    var today = new Date();
-    var dateStr = today.getFullYear() + ('0' + (today.getMonth() + 1)).slice(-2) + ('0' + today.getDate()).slice(-2);
-    var dateDisplay = today.toISOString().slice(0, 10);
+  /** 업무일지 한 줄 저장 — /log · 말로 등록(v13.303) 공용 { hours, abbr, orderNo, content } */
+  async function logEntry(chatId, user, e) {
+    var hours = parseFloat(e.hours);
+    if (!(hours > 0 && hours <= 24)) return sendMessage(chatId, '❌ 시간은 0~24 사이로 적어 주세요.');
+    var abbr = String(e.abbr || '').toUpperCase();
+    var orderNo = String(e.orderNo || '').trim() || null;
+    var content = String(e.content || '').trim() || '(내용 없음)';
 
+    // 오늘 = 한국 날짜 (서버는 UTC — 예전엔 아침 9시 전 기록이 어제 날짜로 들어갔다)
+    var dateDisplay = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+    var dateStr = dateDisplay.replace(/-/g, '');
+
+    // 회사(tenant_id) 를 꼭 넣는다 — 예전엔 빠져서 기본 회사로 저장됐다
     await db.query(
-      'INSERT INTO work_records (date, name, hours, abbr, order_no, content, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [dateStr, user.name, hours, abbr, orderNo, content, user.user_id]
+      'INSERT INTO work_records (date, name, hours, abbr, order_no, content, user_id, tenant_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+      [dateStr, user.name, hours, abbr, orderNo, content, user.user_id, user.tenant_id]
     );
 
     var totalR = await db.query(
-      'SELECT COALESCE(SUM(hours),0) as total FROM work_records WHERE name = $1 AND date = $2',
-      [user.name, dateStr]
+      'SELECT COALESCE(SUM(hours),0) as total FROM work_records WHERE tenant_id = $1 AND user_id = $2 AND date = $3',
+      [user.tenant_id, user.user_id, dateStr]
     );
     var total = parseFloat(totalR.rows[0].total);
 
@@ -281,6 +292,7 @@ function create(sendMessage) {
     cmdTasks: cmdTasks,
     cmdDone: cmdDone,
     cmdLog: cmdLog,
+    logEntry: logEntry,
     cmdMyStats: cmdMyStats
   };
 }

@@ -100,6 +100,7 @@ function _pdDetailHeaderHtml(proj, stInfo) {
         '<div class="pd-more-menu" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;min-width:150px;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:4px;z-index:5">' +
           _pdMoreItem('👥 공유 관리', 'showProjectShareModal(\'' + idA + '\')', 'pd-edit-only') +
           _pdMoreItem('📄 복사', 'showProjectCopyModal(\'' + idA + '\')', '') +
+          _pdMoreItem('💬 텔레그램 그룹방', 'pdTgGroupModal(\'' + idA + '\')', '') +
           _pdMoreItem('🔁 소유권 이관', 'showProjectTransferModal(\'' + idA + '\')', 'pd-edit-only') +
           _pdMoreItem('🗑 삭제', _PD_CLOSE_JS + ';deleteProjectUI(\'' + idA + '\')', 'pd-edit-only', true) +
           // 패널 폭 (v13.290 머리 줄에서 옮김) — 왼쪽 경계를 끌어도 조절

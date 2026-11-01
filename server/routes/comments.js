@@ -128,24 +128,27 @@ async function resolveRecipients(req, targetType, targetId, projectId, recipient
 }
 
 // ─── POST /api/comments — 코멘트 작성 + 알림 발송 ───
-router.post('/', async function (req, res) {
-  try {
-    var b = req.body || {};
+/**
+ * 댓글 등록 — 웹 POST / 와 텔레그램 답장(v13.302)이 같은 규칙 · 같은 알림을 쓴다.
+ * onCreated(comment) 는 저장 직후(알림 전) 불림 → 웹은 여기서 응답. 반환 { status, body }
+ */
+async function createComment(req, b, onCreated) {
+  {
     var targetType = b.targetType || b.target_type;
     var targetId = b.targetId || b.target_id;
     var body = (b.body != null) ? String(b.body).trim() : '';
     if (['project', 'milestone', 'prestudy', 'tech'].indexOf(targetType) === -1) {
-      return res.status(400).json({ error: 'BAD_REQUEST', message: "targetType은 'project', 'milestone', 'prestudy', 'tech' 중 하나여야 합니다." });
+      return _r(400, { error: 'BAD_REQUEST', message: "targetType은 'project', 'milestone', 'prestudy', 'tech' 중 하나여야 합니다." });
     }
-    if (!targetId) return res.status(400).json({ error: 'BAD_REQUEST', message: 'targetId 필수' });
-    if (!body) return res.status(400).json({ error: 'BAD_REQUEST', message: '본문은 비어 있을 수 없습니다.' });
+    if (!targetId) return _r(400, { error: 'BAD_REQUEST', message: 'targetId 필수' });
+    if (!body) return _r(400, { error: 'BAD_REQUEST', message: '본문은 비어 있을 수 없습니다.' });
 
     var tgt = await resolveTarget(req, targetType, targetId);
-    if (!tgt.exists) return res.status(404).json({ error: 'NOT_FOUND', message: '대상을 찾을 수 없습니다.' });
+    if (!tgt.exists) return _r(404, { error: 'NOT_FOUND', message: '대상을 찾을 수 없습니다.' });
     var projectId = tgt.projectId;
 
     if (!tgt.tenantShared && !await canAccessProject(req, projectId)) {
-      return res.status(403).json({ error: 'FORBIDDEN', message: '이 프로젝트에 코멘트 권한이 없습니다.' });
+      return _r(403, { error: 'FORBIDDEN', message: '이 프로젝트에 코멘트 권한이 없습니다.' });
     }
 
     var sendEmail = b.sendEmail !== false;
@@ -171,7 +174,7 @@ router.post('/', async function (req, res) {
     var comment = ir.rows[0];
 
     // 응답 먼저 (알림은 best-effort, 응답 차단 안 함)
-    res.status(201).json({ data: comment });
+    if (onCreated) onCreated(comment);
 
     // 대상 표시명 (이메일/텔레그램 제목용)
     var targetName = '';
@@ -231,7 +234,8 @@ router.post('/', async function (req, res) {
         var targetUserIds = recipients.map(function (r) { return r.userId; }).filter(Boolean);
         if (targetUserIds.length > 0) {
           notificationService.notify('comment_added', {
-            targetName: targetName, orderNo: orderNo, authorName: authorName, body: body
+            targetName: targetName, orderNo: orderNo, authorName: authorName, body: body,
+            replyRef: { kind: 'comment', id: comment.id }   // 텔레그램에서 이 알림에 답장하면 답글 (v13.302)
           }, targetUserIds).catch(function (e) { console.error('[comments/telegram]', e.message); });
         }
       } catch (e) {
@@ -245,8 +249,19 @@ router.post('/', async function (req, res) {
         { project_id: projectId, recipients: recipients.length, bodyLength: body.length }, req
       ).catch(function () {});
     } catch (_) {}
+  }
+  return { status: 201, body: { data: comment } };
+}
+function _r(status, body) { return { status: status, body: body }; }
+
+router.post('/', async function (req, res) {
+  try {
+    var sent = false;
+    var out = await createComment(req, req.body || {}, function (c) { sent = true; res.status(201).json({ data: c }); });
+    if (!sent) res.status(out.status).json(out.body);
   } catch (e) {
-    httpErr.serverError(res, '[comments/create]', e);
+    if (!res.headersSent) httpErr.serverError(res, '[comments/create]', e);
+    else console.error('[comments/create]', e.message);
   }
 });
 
@@ -292,3 +307,4 @@ router.delete('/:id', async function (req, res) {
 });
 
 module.exports = router;
+module.exports.createComment = createComment;

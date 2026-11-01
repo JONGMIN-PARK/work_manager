@@ -86,7 +86,9 @@ async function geminiGenerate(opts) {
     // Gemini 3 는 temperature 기본값(1.0) 유지 권장 — 낮추면 답이 맴돌 수 있음
     if (!/^gemini-3/.test(model)) gen.temperature = 0.3;
     if (opts.json) gen.responseMimeType = 'application/json';
-    var body = { contents: [{ role: 'user', parts: [{ text: opts.prompt }] }], generationConfig: gen };
+    var parts = [{ text: opts.prompt }];
+    if (opts.inline && opts.inline.data) parts.push({ inline_data: { mime_type: opts.inline.mimeType, data: opts.inline.data } });   // 음성 · 사진 (v13.303)
+    var body = { contents: [{ role: 'user', parts: parts }], generationConfig: gen };
     if (opts.system) body.systemInstruction = { parts: [{ text: opts.system }] };
     for (var attempt = 0; attempt < 3; attempt++) {
       var status = 0, msg = '';
@@ -195,6 +197,23 @@ async function generateText(opts) {
 }
 
 /**
+ * 음성 → 글 (텔레그램 음성 메모, v13.303). Gemini 만 들을 수 있다 — 회사 Gemini 키 → 환경변수 Gemini 키.
+ * Gemini 키가 없으면 null.
+ */
+async function transcribe(opts) {
+  var t = await loadTenantCfg(opts.tenantId);
+  var key = t && t.provider !== 'anthropic' && t.api_key ? t.api_key : config.ai.geminiKey;
+  var model = t && t.provider !== 'anthropic' && t.model ? t.model : defaultModel('gemini');
+  if (!key) return null;
+  var g = await geminiGenerate({
+    key: key, model: model, maxTokens: 2048,
+    prompt: '이 음성 메모를 한국어 글로 그대로 받아 적으세요. 말한 내용만 적고 설명 · 따옴표 · 머리말은 붙이지 마세요. 들리지 않으면 빈 줄.',
+    inline: { mimeType: opts.mimeType || 'audio/ogg', data: opts.data }
+  });
+  return { text: String(g.text || '').trim(), model: g.model, provider: 'gemini' };
+}
+
+/**
  * AI 오류 → 응답. 화면에서 왜 안 됐는지 알 수 있게 원인을 그대로 보여 준다.
  * DB 오류(e.severity 있음)는 내용을 숨기고 일반 문구로.
  */
@@ -222,5 +241,6 @@ module.exports = {
   geminiGenerate: geminiGenerate,
   anthropicText: anthropicText,
   generateText: generateText,
+  transcribe: transcribe,
   isCreditLow: isCreditLow
 };
