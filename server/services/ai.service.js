@@ -2,18 +2,14 @@
  * AI 서비스 — 텔레그램 자연어 질답
  * 질문 분석 → 관련 DB 데이터 조회 (RAG) → AI 응답 생성
  */
-var config = require('../config');
 var db = require('../config/db');
 var pd = require('../lib/project-defaults');
+var aiProvider = require('./ai-provider');
 
 var AM = { A: 'A(CS현장)', B: 'B(수주)', D: 'D(개발)', G: 'G(공통)', M: 'M(양산)', R: 'R(제안)', S: 'S(영업지원)' };
 
-function isConfigured() {
-  var ai = config.ai;
-  if (ai.provider === 'gemini') return !!ai.geminiKey;
-  if (ai.provider === 'anthropic') return !!ai.anthropicKey;
-  return false;
-}
+/** AI 를 쓸 수 있는지 (환경변수 키 기준 — 하나만 있어도 됨, v13.296) */
+function isConfigured() { return !!aiProvider.resolveEnv(); }
 
 /** 질문에서 키워드/의도 추출 */
 function analyzeQuery(text) {
@@ -44,16 +40,17 @@ function analyzeQuery(text) {
 }
 
 /** 의도에 따라 DB 데이터 수집 */
-async function gatherContext(intents, userName) {
+async function gatherContext(intents, userName, tenantId) {
   var context = [];
+  // v13.296: 회사(테넌트) 데이터만 — 예전에는 다른 회사 데이터까지 섞여 AI 에 들어갈 수 있었음
+  if (!tenantId) return '';
 
-  // 기간 계산
-  var now = new Date();
+  // 기간 계산 — 한국 날짜 기준
+  var now = new Date(pd.todayKST() + 'T00:00:00');
   var day = now.getDay();
   var diffMon = day === 0 ? -6 : 1 - day;
 
   function fmt(d) { return d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2); }
-  function fmtISO(d) { return d.toISOString().slice(0, 10); }
 
   var weekStart = new Date(now); weekStart.setDate(now.getDate() + diffMon);
   var weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
@@ -84,8 +81,8 @@ async function gatherContext(intents, userName) {
     // 인원/통계 데이터
     if (intents.includes('people') || intents.includes('stats') || intents.includes('general')) {
       var peopleR = await db.query(
-        'SELECT name, COALESCE(SUM(hours),0) as hours, COUNT(DISTINCT date) as days, COUNT(DISTINCT order_no) as orders FROM work_records WHERE date >= $1 AND date <= $2 GROUP BY name ORDER BY hours DESC LIMIT 15',
-        [dateStart, dateEnd]
+        'SELECT name, COALESCE(SUM(hours),0) as hours, COUNT(DISTINCT date) as days, COUNT(DISTINCT order_no) as orders FROM work_records WHERE tenant_id = $3 AND date >= $1 AND date <= $2 GROUP BY name ORDER BY hours DESC LIMIT 15',
+        [dateStart, dateEnd, tenantId]
       );
       if (peopleR.rows.length > 0) {
         context.push('[인원별 투입시간 (' + dateStart + '~' + dateEnd + ')]\n' +
@@ -97,8 +94,8 @@ async function gatherContext(intents, userName) {
 
       // 업무분장별
       var abbrR = await db.query(
-        'SELECT abbr, COALESCE(SUM(hours),0) as hours FROM work_records WHERE date >= $1 AND date <= $2 GROUP BY abbr ORDER BY hours DESC',
-        [dateStart, dateEnd]
+        'SELECT abbr, COALESCE(SUM(hours),0) as hours FROM work_records WHERE tenant_id = $3 AND date >= $1 AND date <= $2 GROUP BY abbr ORDER BY hours DESC',
+        [dateStart, dateEnd, tenantId]
       );
       if (abbrR.rows.length > 0) {
         context.push('[업무분장별 시간]\n' +
@@ -110,7 +107,7 @@ async function gatherContext(intents, userName) {
     if (intents.includes('projects') || intents.includes('general')) {
       var projR = await db.query(
         // 대기 · 지연은 날짜로 계산 (v13.283) — 지연 먼저
-        "SELECT name, order_no, " + pd.computeStatusSql('', '$1') + " AS status, progress, end_date, assignees FROM projects WHERE status NOT IN ('done') ORDER BY CASE " + pd.computeStatusSql('', '$1') + " WHEN 'delayed' THEN 0 WHEN 'active' THEN 1 ELSE 2 END LIMIT 10", [pd.todayKST()]
+        "SELECT name, order_no, " + pd.computeStatusSql('', '$1') + " AS status, progress, end_date, assignees FROM projects WHERE tenant_id = $2 AND status NOT IN ('done') ORDER BY CASE " + pd.computeStatusSql('', '$1') + " WHEN 'delayed' THEN 0 WHEN 'active' THEN 1 ELSE 2 END LIMIT 10", [pd.todayKST(), tenantId]
       );
       if (projR.rows.length > 0) {
         context.push('[진행중 프로젝트]\n' +
@@ -125,7 +122,7 @@ async function gatherContext(intents, userName) {
     // 이슈 데이터
     if (intents.includes('issues') || intents.includes('general')) {
       var issR = await db.query(
-        "SELECT title, urgency, status, assignees, due_date FROM issues WHERE status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 10"
+        "SELECT title, urgency, status, assignees, due_date FROM issues WHERE tenant_id = $1 AND status NOT IN ('resolved','closed') ORDER BY CASE urgency WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 10", [tenantId]
       );
       if (issR.rows.length > 0) {
         context.push('[미해결 이슈]\n' +
@@ -140,7 +137,7 @@ async function gatherContext(intents, userName) {
     // 수주 데이터
     if (intents.includes('orders')) {
       var ordR = await db.query(
-        'SELECT order_no, client, name, amount, manager, delivery FROM orders ORDER BY delivery DESC NULLS LAST LIMIT 10'
+        'SELECT order_no, client, name, amount, manager, delivery FROM orders WHERE tenant_id = $1 ORDER BY delivery DESC NULLS LAST LIMIT 10', [tenantId]
       );
       if (ordR.rows.length > 0) {
         context.push('[수주 목록]\n' +
@@ -153,8 +150,8 @@ async function gatherContext(intents, userName) {
     // 일정 데이터
     if (intents.includes('events')) {
       var evtR = await db.query(
-        'SELECT title, type, start_date, end_date, assignees FROM events WHERE end_date >= $1 ORDER BY start_date LIMIT 10',
-        [fmtISO(now)]
+        'SELECT title, type, start_date, end_date, assignees FROM events WHERE tenant_id = $2 AND end_date >= $1 ORDER BY start_date LIMIT 10',
+        [pd.todayKST(), tenantId]
       );
       if (evtR.rows.length > 0) {
         context.push('[예정 일정]\n' +
@@ -171,65 +168,15 @@ async function gatherContext(intents, userName) {
   return context.join('\n\n');
 }
 
-/** Gemini API 호출 */
-async function callGemini(prompt) {
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + config.ai.geminiModel + ':generateContent?key=' + config.ai.geminiKey;
-  var res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 1000, temperature: 0.3 }
-    })
-  });
-  var data = await res.json();
-  if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-    return data.candidates[0].content.parts[0].text;
-  }
-  if (data.error) throw new Error(data.error.message);
-  return null;
-}
-
-/** Claude API 호출 */
-async function callAnthropic(prompt) {
-  var res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': config.ai.anthropicKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: config.ai.anthropicModel,
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-  var data = await res.json();
-  if (data.content && data.content[0]) return data.content[0].text;
-  if (data.error) throw new Error(data.error.message);
-  return null;
-}
-
-/** AI 응답 생성 */
-async function callAI(prompt) {
-  if (config.ai.provider === 'anthropic' && config.ai.anthropicKey) {
-    return callAnthropic(prompt);
-  }
-  if (config.ai.geminiKey) {
-    return callGemini(prompt);
-  }
-  return null;
-}
-
 /**
  * 텔레그램 자연어 질문 처리
  * @param {string} question - 사용자 질문
  * @param {string} userName - 질문자 이름
+ * @param {string} tenantId - 질문자 회사 (이 회사 데이터만 봄)
  * @returns {string} AI 응답 텍스트
  */
-async function answerQuestion(question, userName) {
-  if (!isConfigured()) {
+async function answerQuestion(question, userName, tenantId) {
+  if (!(await aiProvider.resolve(tenantId))) {
     return '🤖 AI 기능을 사용하려면 관리자가 GEMINI_API_KEY 또는 ANTHROPIC_API_KEY를 설정해야 합니다.';
   }
 
@@ -237,7 +184,7 @@ async function answerQuestion(question, userName) {
   var intents = analyzeQuery(question);
 
   // 2. 관련 데이터 수집
-  var contextData = await gatherContext(intents, userName);
+  var contextData = await gatherContext(intents, userName, tenantId);
 
   // 3. 프롬프트 구성
   var systemPrompt = '당신은 "Work Manager"라는 업무 관리 시스템의 AI 어시스턴트입니다.\n' +
@@ -257,7 +204,8 @@ async function answerQuestion(question, userName) {
   systemPrompt += '질문: ' + question;
 
   // 4. AI 호출
-  var answer = await callAI(systemPrompt);
+  var out = await aiProvider.generateText({ prompt: systemPrompt, tenantId: tenantId, maxTokens: 2048 });
+  var answer = out && out.text;
   if (!answer) return '🤖 AI 응답을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.';
 
   // 5. 텔레그램 HTML로 정리 (마크다운 제목(#)·표·코드펜스 등 "태그" 제거, **굵게**→<b> 등)

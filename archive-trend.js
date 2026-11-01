@@ -1,7 +1,7 @@
 /* archive-trend.js — AI 요약 · 주차 저장 · 아카이브 · 트렌드
  * 업무일지_분석기.html 인라인 <script> 에서 분리. 동기 <script src> 로 원래 자리·순서대로 로드(defer/async 금지 — 최상위 let/function 을 다른 파일이 전역으로 공유하고, 로드 시점 코드의 의존 순서가 고정돼 있음). */
 /* ═══ AI ═══ */
-var _aiConfigured=false;var _aiProvider='';
+var _aiConfigured=false;var _aiProvider='';var _aiModel='';
 function initAk(){checkAiStatus()}
 async function checkAiStatus(){
   var iconEl=document.getElementById('aiStatusIcon');var textEl=document.getElementById('aiStatusText');
@@ -10,7 +10,7 @@ async function checkAiStatus(){
   try{
     var d=await apiFetch('/api/ai/status');
     if(d&&d.data&&d.data.configured){
-      _aiConfigured=true;_aiProvider=d.data.provider;
+      _aiConfigured=true;_aiProvider=d.data.provider;_aiModel=d.data.model||'';
       iconEl.textContent='✅';
       // v13.71: 모델·키 출처도 함께 노출 (진단 용이)
       var detail=' · 모델 <code style="font-size:10px;color:var(--ac-t);background:var(--ac-bg);padding:1px 5px;border-radius:3px">'+
@@ -46,7 +46,7 @@ function buildPmt(f,extra){
 
 async function callAI(prompt){
   if(!_aiConfigured){return null}
-  // v13.72: AI 호출은 120초 타임아웃 (Claude opus-4-7 + 긴 프롬프트 대응)
+  // v13.72: AI 호출은 120초 타임아웃 (긴 프롬프트 대응)
   const d=await apiFetch('/api/ai/summary',{method:'POST',body:JSON.stringify({prompt:prompt}),timeoutMs:120000});
   if(d&&d.data&&d.data.text)return d.data.text;
   return null;
@@ -61,7 +61,7 @@ async function reqSum(){
   el.innerHTML=`<div class="sld"><div class="sp"></div>${pl} 분석 중...</div>`;
   // v13.72: 화려한 진행 모달 (AI는 응답까지 길 수 있어 명확한 피드백)
   if(window.wmProgress){
-    wmProgress.show({icon:'🤖',title:pl+' AI 분석 중',sub:'주간 업무 데이터를 분석해 요약·인사이트를 작성합니다.',tip:'평균 10~30초 소요 · 모델: '+(document.getElementById('aiStatusText')?.innerText.match(/\[([^\]]+)\]/)?.[1] || 'claude-opus-4-7')});
+    wmProgress.show({icon:'🤖',title:pl+' AI 분석 중',sub:'주간 업무 데이터를 분석해 요약·인사이트를 작성합니다.',tip:'평균 10~30초 소요'+(_aiModel?' · 모델: '+_aiModel:'')});
     wmProgress.autoSteps(['📝 업무 분장 집계','👥 인원별 패턴 분석','🎯 프로젝트별 리소스 배분','💡 인사이트 도출','✅ 결과 정리'],3000);
   }
   try{

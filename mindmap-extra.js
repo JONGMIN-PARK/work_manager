@@ -13,7 +13,7 @@ var MM_DEFAULT_TEXTS = ['', '중심 주제', '주요 주제', '하위 주제', '
 
 /* ═══ AI ═══ */
 var _mmAiStatusP = null;
-/** AI 사용 가능 여부 (서버 ANTHROPIC_API_KEY) — 한 번만 묻고 기억 */
+/** AI 사용 가능 여부 (서버 GEMINI_API_KEY 또는 ANTHROPIC_API_KEY) — 한 번만 묻고 기억 */
 function mmAiCheck() {
   function show(v) { var w = _mmEl('mmAiWrap'); if (w) w.classList.toggle('hidden', !v); return v; }
   if (_mm.aiReady != null) return Promise.resolve(show(_mm.aiReady));

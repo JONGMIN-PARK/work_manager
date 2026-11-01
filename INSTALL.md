@@ -35,7 +35,11 @@ docker compose -f docker-compose.onprem.yml up -d
 | `CORS_ORIGIN` | - | http://localhost:8080 | CORS 허용 도메인 |
 | `SMTP_HOST` | - | - | 이메일 발송 서버 |
 | `TELEGRAM_BOT_TOKEN` | - | - | 텔레그램 봇 토큰 |
-| `AI_PROVIDER` | - | - | AI 제공자 (gemini/anthropic) |
+| `AI_PROVIDER` | - | - | AI 제공자 (gemini/anthropic). 비우면 있는 키를 씀 — 키가 하나뿐이면 그쪽 |
+| `GEMINI_API_KEY` · `ANTHROPIC_API_KEY` | - | - | 둘 중 하나만 있어도 모든 AI 기능(업무 분석·마인드맵·A/S·텔레그램) 동작 |
+| `GEMINI_MODEL` | - | gemini-2.5-flash | 더 높은 모델: gemini-2.5-pro 등 |
+| `GEMINI_FALLBACK_MODEL` | - | gemini-2.5-flash(-lite) | 기본 모델이 붐비거나 없을 때 대신 쓸 모델 |
+| `ANTHROPIC_MODEL` | - | claude-opus-4-7 | Claude 모델 |
 | `LICENSE_KEY` | - | - | 엔터프라이즈 라이선스 키 |
 
 ### JWT 시크릿 생성

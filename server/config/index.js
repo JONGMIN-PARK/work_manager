@@ -62,7 +62,7 @@ var config = {
   },
 
   ai: {
-    // v13.65: 기본 provider를 Claude로 — Gemini는 AI_PROVIDER=gemini 로 폴백 가능
+    // AI_PROVIDER 가 가리키는 키가 없으면 있는 키를 씀 (ai-provider.js, v13.296)
     provider: process.env.AI_PROVIDER || 'anthropic',
     geminiKey: process.env.GEMINI_API_KEY || '',
     geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',

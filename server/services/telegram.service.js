@@ -552,7 +552,7 @@ async function handleUpdate(update) {
   if (text.length >= 2) {
     await sendMessage(chatId, '🤖 분석 중...');
     try {
-      var answer = await aiService.answerQuestion(text, user.name);
+      var answer = await aiService.answerQuestion(text, user.name, user.tenant_id);
       return sendMessage(chatId, answer);
     } catch (aiErr) {
       console.error('[AI] Error:', aiErr.message);

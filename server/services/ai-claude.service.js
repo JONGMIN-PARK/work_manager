@@ -1,8 +1,8 @@
 /**
- * Claude AI 서비스 (A/S 모듈 전용) — v13.65
+ * AI 구조화 응답 서비스 (A/S · 마인드맵) — v13.65, v13.296 Gemini 지원
  *
- * 공식 Anthropic SDK 사용. 모델: claude-opus-4-7 (config로 override 가능).
- * 어댑티브 thinking + 응답 캐싱(prompt cache) 적용.
+ * 어떤 AI 를 쓸지는 ai-provider.js 규칙(테넌트 키 → AI_PROVIDER → 있는 키).
+ * Claude: 공식 SDK + 어댑티브 thinking + JSON 스키마 출력. Gemini: JSON 모드 + 스키마를 글로 안내.
  *
  * 기능:
  *   1) analyzeTicket({issueSummary, customerName, equipmentModel, categories})
@@ -16,56 +16,116 @@
  */
 
 var config = require('../config');
+var aiProvider = require('./ai-provider');
 
-// SDK lazy-load (의존성 미설치 시에도 서버 부팅에 영향 없도록)
-var _client = null;
-var _clientLoadErr = null;
-function getClient() {
-  if (_client) return _client;
-  if (_clientLoadErr) return null;
+/* v13.296: Claude 전용이던 것을 공용 규칙(ai-provider)으로 — Gemini 키만 있어도 동작.
+   테넌트 전용 키(관리 → AI 설정)도 따른다. */
+
+// SDK lazy-load (의존성 미설치 시에도 서버 부팅에 영향 없도록) — 키마다 클라이언트 하나
+var _clients = new Map();
+var _sdk = null, _sdkErr = null;
+function getClient(key) {
+  if (!key) return null;
+  if (_clients.has(key)) return _clients.get(key);
+  if (_sdkErr) return null;
   try {
-    var Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk');
-    if (!config.ai.anthropicKey) {
-      _clientLoadErr = new Error('ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.');
-      return null;
-    }
-    _client = new Anthropic({ apiKey: config.ai.anthropicKey });
-    return _client;
+    if (!_sdk) _sdk = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk');
+    var c = new _sdk({ apiKey: key });
+    _clients.set(key, c);
+    return c;
   } catch (e) {
-    _clientLoadErr = e;
+    _sdkErr = e;
     console.warn('[ai-claude] SDK 로드 실패:', e.message);
     return null;
   }
 }
 
-function isReady() { return !!getClient(); }
+/** 환경변수 기준 사용 가능 여부 (테넌트 키까지 보려면 isReadyFor) */
+function isReady() { return !!aiProvider.resolveEnv(); }
+async function isReadyFor(tenantId) { return !!(await aiProvider.resolve(tenantId)); }
+/** 지금 쓰일 AI 이름 (사용량 기록용) */
+async function providerFor(tenantId) { var r = await aiProvider.resolve(tenantId); return r ? r.provider : ''; }
+function providerName() { var r = aiProvider.resolveEnv(); return r ? r.provider : ''; }
+
+/** 응답 글에서 JSON 꺼내기 (```json 울타리 · 앞뒤 군말 허용) */
+function parseJsonText(t) {
+  var s = String(t || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  try { return JSON.parse(s); } catch (_) { /* 아래에서 다시 */ }
+  var a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a >= 0 && b > a) {
+    try { return JSON.parse(s.slice(a, b + 1)); } catch (_) { /* 아래 */ }
+  }
+  throw new Error('AI 답이 JSON 형식이 아닙니다');
+}
+
+function messagesText(messages) {
+  return (messages || []).map(function (m) {
+    return typeof m.content === 'string' ? m.content : (m.content || []).map(function (c) { return c.text || ''; }).join('\n');
+  }).join('\n\n');
+}
+
+/** Gemini 로 JSON 구조화 응답 — 스키마는 글로 넣고 JSON 모드로 받음. 형식이 틀리면 한 번 더 */
+async function callGeminiJson(key, model, opts) {
+  var prompt = messagesText(opts.messages) +
+    '\n\n## 답 형식\n아래 JSON 스키마를 따르는 JSON 객체 하나만 답하세요. 설명 글이나 ``` 는 쓰지 마세요.\n' + JSON.stringify(opts.schema);
+  var lastErr = null;
+  for (var i = 0; i < 2; i++) {
+    var g = await aiProvider.geminiGenerate({ key: key, model: model, system: opts.system, prompt: prompt, json: true, maxTokens: opts.maxTokens });
+    try {
+      return { data: parseJsonText(g.text), usage: Object.assign({ model: g.model, provider: 'gemini' }, g.usage) };
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+/** Claude 로 JSON 구조화 응답 */
+async function callClaudeJson(key, model, opts) {
+  var client = getClient(key);
+  if (!client) throw new Error('Claude SDK 를 불러오지 못했습니다' + (_sdkErr ? ' (' + _sdkErr.message + ')' : ''));
+  var resp;
+  try {
+    resp = await client.messages.create({
+      model: model,
+      // 어댑티브 thinking 은 생각 토큰도 max_tokens 에서 빠짐 — 작게 잡으면 답(text)이 비어 온다
+      max_tokens: Math.max(opts.maxTokens || 0, 16000),
+      thinking: { type: 'adaptive' },
+      system: opts.system,
+      messages: opts.messages,
+      output_config: { format: { type: 'json_schema', schema: opts.schema } }
+    });
+  } catch (e) {
+    var em = (e && e.message) || 'Claude API 오류';
+    var err = new Error(em);
+    if (aiProvider.isCreditLow(em)) err.code = 'CREDIT_LOW';
+    else if (e && (e.status === 429 || e.status === 529)) err.code = 'AI_OVERLOADED';
+    else if (e && e.status === 401) { err.code = 'AI_KEY_INVALID'; err.message = em + ' — ANTHROPIC_API_KEY 확인'; }
+    throw err;
+  }
+  var textBlock = (resp.content || []).find(function (b) { return b.type === 'text'; });
+  if (!textBlock) throw new Error('AI 응답이 비어 있습니다' + (resp.stop_reason ? ' (' + resp.stop_reason + ')' : ''));
+  return { data: parseJsonText(textBlock.text), usage: Object.assign({ model: model, provider: 'anthropic' }, resp.usage) };
+}
 
 // ───────────────────────────────────────────────────────────────
-// 공통: JSON 구조화 응답 helper
+// 공통: JSON 구조화 응답 helper — opts: { system, messages, schema, maxTokens, tenantId? }
 // ───────────────────────────────────────────────────────────────
 async function callJson(opts) {
-  var client = getClient();
-  if (!client) throw new Error('Claude API 미연결 (ANTHROPIC_API_KEY 또는 SDK 누락)');
-  var resp = await client.messages.create({
-    model: config.ai.anthropicModel || 'claude-opus-4-7',
-    max_tokens: opts.maxTokens || 4096,
-    thinking: { type: 'adaptive' },
-    system: opts.system,
-    messages: opts.messages,
-    output_config: {
-      format: {
-        type: 'json_schema',
-        schema: opts.schema
-      }
-    }
-  });
-  // 첫 번째 text 블록을 파싱 (output_config.format이 JSON을 보장)
-  var textBlock = resp.content.find(function (b) { return b.type === 'text'; });
-  if (!textBlock) throw new Error('AI 응답에 텍스트 블록이 없습니다.');
+  var r = await aiProvider.resolve(opts.tenantId);
+  if (!r) {
+    var ne = new Error('AI 미설정 — 서버의 GEMINI_API_KEY 또는 ANTHROPIC_API_KEY 를 채운 뒤 재시작하세요.');
+    ne.code = 'AI_NOT_READY';
+    throw ne;
+  }
+  if (r.provider === 'gemini') return callGeminiJson(r.key, r.model, opts);
   try {
-    return { data: JSON.parse(textBlock.text), usage: resp.usage };
+    return await callClaudeJson(r.key, r.model, opts);
   } catch (e) {
-    throw new Error('AI JSON 파싱 실패: ' + e.message);
+    // Claude 크레딧 부족 → Gemini 키가 있으면 넘김 (업무 관리 AI 와 같은 동작)
+    if (e.code === 'CREDIT_LOW' && config.ai.geminiKey) {
+      console.warn('[ai-claude] Claude 크레딧 부족 → Gemini 로 폴백');
+      return callGeminiJson(config.ai.geminiKey, aiProvider.defaultModel('gemini'), opts);
+    }
+    throw e;
   }
 }
 
@@ -114,6 +174,7 @@ async function analyzeTicket(input) {
   };
 
   return callJson({
+    tenantId: input.tenantId,
     system: system,
     messages: [{ role: 'user', content: userText }],
     schema: schema,
@@ -124,7 +185,7 @@ async function analyzeTicket(input) {
 // ───────────────────────────────────────────────────────────────
 // 2) 주간 통계 → 자연어 인사이트
 // ───────────────────────────────────────────────────────────────
-async function summarizeWeeklyStats(stats) {
+async function summarizeWeeklyStats(stats, tenantId) {
   var system =
     '당신은 A/S 운영 데이터를 분석하는 시니어 매니저입니다. ' +
     '주간 통계 숫자를 보고 한국어로 핵심 인사이트와 다음 주 액션을 작성합니다. ' +
@@ -149,6 +210,7 @@ async function summarizeWeeklyStats(stats) {
   };
 
   return callJson({
+    tenantId: tenantId,
     system: system,
     messages: [{ role: 'user', content: userText }],
     schema: schema,
@@ -159,7 +221,7 @@ async function summarizeWeeklyStats(stats) {
 // ───────────────────────────────────────────────────────────────
 // 3) 유사 사례 추천 — SQL 후보를 받아서 점수·이유 부여
 // ───────────────────────────────────────────────────────────────
-async function recommendSimilarCases(current, candidates) {
+async function recommendSimilarCases(current, candidates, tenantId) {
   if (!candidates || !candidates.length) return { data: { top: [], summary: '비교할 과거 사례가 없습니다.' }, usage: null };
 
   var system =
@@ -212,6 +274,7 @@ async function recommendSimilarCases(current, candidates) {
   };
 
   return callJson({
+    tenantId: tenantId,
     system: system,
     messages: [{ role: 'user', content: userText }],
     schema: schema,
@@ -221,6 +284,10 @@ async function recommendSimilarCases(current, candidates) {
 
 module.exports = {
   isReady: isReady,
+  isReadyFor: isReadyFor,
+  providerFor: providerFor,
+  providerName: providerName,
+  parseJsonText: parseJsonText,
   callJson: callJson,
   analyzeTicket: analyzeTicket,
   summarizeWeeklyStats: summarizeWeeklyStats,

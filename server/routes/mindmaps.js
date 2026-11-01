@@ -26,6 +26,7 @@ var httpErr = require('../lib/http-errors');
 var mmData = require('../lib/mindmap-data');
 var mmVisible = require('../lib/mindmap-visible');
 var aiMindmap = require('../services/ai-mindmap.service');
+var aiProvider = require('../services/ai-provider');
 var rateLimit = require('express-rate-limit');
 var notificationService = require('../services/notification.service');
 var assignNotify = require('../lib/assign-notify');
@@ -309,50 +310,54 @@ var aiLimiter = rateLimit({
 });
 
 // GET /api/mindmaps/ai/status — AI 사용 가능 여부 (버튼 표시용)
-router.get('/ai/status', function (req, res) {
-  res.json({ data: { ready: aiMindmap.isReady() } });
+router.get('/ai/status', async function (req, res) {
+  var ready = false;
+  try { ready = await aiMindmap.isReadyFor(req.tenant && req.tenant.id); } catch (_) { ready = aiMindmap.isReady(); }
+  res.json({ data: { ready: ready } });
 });
 
 // POST /api/mindmaps/ai — { action: expand|fromText|wbs|summarize, ... }
 router.post('/ai', aiLimiter, async function (req, res) {
   try {
-    if (!aiMindmap.isReady()) return httpErr.sendError(res, 503, 'AI_NOT_READY', 'AI 기능 미설정 — 서버의 ANTHROPIC_API_KEY 환경변수를 채운 뒤 재시작하세요.');
+    if (!await aiMindmap.isReadyFor(req.tenant.id)) return httpErr.sendError(res, 503, 'AI_NOT_READY', 'AI 기능 미설정 — 서버의 GEMINI_API_KEY 또는 ANTHROPIC_API_KEY 환경변수를 채운 뒤 재시작하세요.');
     var b = req.body || {};
     var result;
     if (b.action === 'expand') {
       if (!Array.isArray(b.path) || !b.path.length) return httpErr.sendError(res, 400, 'VALIDATION', 'path 필수');
-      result = await aiMindmap.expand({ path: b.path.slice(0, 20), siblings: (b.siblings || []).slice(0, 30), existing: (b.existing || []).slice(0, 50), note: b.note });
+      result = await aiMindmap.expand({ tenantId: req.tenant.id, path: b.path.slice(0, 20), siblings: (b.siblings || []).slice(0, 30), existing: (b.existing || []).slice(0, 50), note: b.note });
     } else if (b.action === 'fromText') {
       if (!b.text || !String(b.text).trim()) return httpErr.sendError(res, 400, 'VALIDATION', '정리할 내용을 입력하세요.');
-      result = await aiMindmap.fromText({ text: String(b.text), title: b.title });
+      result = await aiMindmap.fromText({ tenantId: req.tenant.id, text: String(b.text), title: b.title });
     } else if (b.action === 'wbs') {
       var pid = b.projectId;
       if (!pid) return httpErr.sendError(res, 400, 'VALIDATION', '프로젝트를 선택하세요.');
       if (!await pa.gateRead(req, res, pid)) return;
       var pr = (await db.query('SELECT name, order_no, start_date, end_date, current_phase, memo, specs FROM projects WHERE id = $1 AND tenant_id = $2', [pid, req.tenant.id])).rows[0];
+      if (!pr) return httpErr.sendError(res, 404, 'NOT_FOUND', '프로젝트를 찾을 수 없습니다.');
       var ms = (await db.query('SELECT name FROM milestones WHERE project_id = $1 AND tenant_id = $2 ORDER BY sort_order LIMIT 60', [pid, req.tenant.id])).rows;
       var specs = pr.specs ? JSON.stringify(pr.specs) : '';
       result = await aiMindmap.wbs({
+        tenantId: req.tenant.id,
         project: { name: pr.name, orderNo: pr.order_no, start: pr.start_date, end: pr.end_date, phase: pr.current_phase, memo: pr.memo, specs: specs && specs !== '{}' && specs !== 'null' ? specs : '' },
         milestones: ms.map(function (m) { return m.name; }),
         extra: b.extra
       });
     } else if (b.action === 'summarize') {
       if (!b.outline || !String(b.outline).trim()) return httpErr.sendError(res, 400, 'VALIDATION', '요약할 내용이 없습니다.');
-      result = await aiMindmap.summarize({ outline: String(b.outline) });
+      result = await aiMindmap.summarize({ tenantId: req.tenant.id, outline: String(b.outline) });
     } else if (b.action === 'risk') {
       if (!b.outline || !String(b.outline).trim()) return httpErr.sendError(res, 400, 'VALIDATION', '점검할 내용이 없습니다.');
-      result = await aiMindmap.riskReview({ outline: String(b.outline), findings: String(b.findings || ''), today: String(b.today || '').slice(0, 10) });
+      result = await aiMindmap.riskReview({ tenantId: req.tenant.id, outline: String(b.outline), findings: String(b.findings || ''), today: String(b.today || '').slice(0, 10) });
     } else {
       return httpErr.sendError(res, 400, 'VALIDATION', '알 수 없는 AI 동작입니다.');
     }
     db.query('INSERT INTO ai_query_usage (tenant_id, user_id, query_text, provider) VALUES ($1, $2, $3, $4)',
-      [req.tenant.id, req.user.sub, ('mindmap.' + b.action).slice(0, 500), 'anthropic']).catch(function () {});
+      [req.tenant.id, req.user.sub, ('mindmap.' + b.action).slice(0, 500), (result.usage && result.usage.provider) || 'ai']).catch(function () {});
     authService.auditLog(req.user.sub, 'mindmap.ai_' + b.action, 'mindmap', b.mapId || null, { usage: result.usage }, req).catch(function () {});
     delete result.usage;
     res.json({ data: result });
   } catch (e) {
-    httpErr.serverError(res, '[mindmaps/ai]', e);
+    aiProvider.sendAiError(res, '[mindmaps/ai]', e, 'AI 실패');
   }
 });
 

@@ -315,7 +315,7 @@ function _asStatsLoadAiInsight() {
   card.innerHTML =
     '<div class="pnl" style="padding:14px 18px;background:linear-gradient(135deg,#8B5CF61A,transparent);border-left:3px solid #8B5CF6">' +
     '<div style="display:flex;justify-content:space-between;align-items:center">' +
-    '<div style="font-size:11px;font-weight:700;color:#8B5CF6">🤖 Claude AI 인사이트</div>' +
+    '<div style="font-size:11px;font-weight:700;color:#8B5CF6">🤖 AI 인사이트</div>' +
     '<div style="font-size:10px;color:var(--t5)">⏳ 분석 중…</div></div></div>';
 
   asAiWeeklyInsight().then(function (r) {
@@ -323,7 +323,7 @@ function _asStatsLoadAiInsight() {
     if (!d) { card.innerHTML = ''; return; }
     var html = '<div class="pnl" style="padding:16px 20px;background:linear-gradient(135deg,#8B5CF61A,transparent);border-left:3px solid #8B5CF6">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">';
-    html += '<div style="font-size:11px;font-weight:700;color:#8B5CF6">🤖 Claude AI 인사이트</div>';
+    html += '<div style="font-size:11px;font-weight:700;color:#8B5CF6">🤖 AI 인사이트</div>';
     html += '<div style="font-size:9px;color:var(--t6)">';
     if (r.usage) html += '토큰 ' + (r.usage.input_tokens || 0) + '+' + (r.usage.output_tokens || 0) + ' · ';
     html += '캐시 1h · 생성 ' + (r.generatedAt ? new Date(r.generatedAt).toLocaleTimeString('ko-KR') : '-');

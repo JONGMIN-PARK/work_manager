@@ -66,7 +66,7 @@ async function expand(input) {
     (input.siblings && input.siblings.length ? '## 같은 단계의 다른 주제 (참고)\n' + input.siblings.map(function (s) { return '- ' + clip(s, 60); }).join('\n') + '\n\n' : '') +
     (input.existing && input.existing.length ? '## 이미 있는 하위 주제 (겹치지 말 것)\n' + input.existing.map(function (s) { return '- ' + clip(s, 60); }).join('\n') + '\n\n' : '') +
     (input.note ? '## 선택 주제 노트\n' + clip(input.note, 800) + '\n' : '');
-  var r = await aiClaude.callJson({ system: SYSTEM, messages: [{ role: 'user', content: user }], schema: FLAT_SCHEMA, maxTokens: 2048 });
+  var r = await aiClaude.callJson({ tenantId: input.tenantId, system: SYSTEM, messages: [{ role: 'user', content: user }], schema: FLAT_SCHEMA, maxTokens: 2048 });
   return { nodes: cleanFlat(r.data.nodes, 7).map(function (n) { n.parent = -1; return n; }), usage: r.usage };
 }
 
@@ -76,7 +76,7 @@ async function fromText(input) {
     '할 일은 "누가 · 무엇" 이 드러나게, 결정 사항은 결정 내용 그대로.\n\n' +
     (input.title ? '## 맵 제목\n' + clip(input.title, 100) + '\n\n' : '') +
     '## 원문\n' + clip(input.text, 12000);
-  var r = await aiClaude.callJson({ system: SYSTEM, messages: [{ role: 'user', content: user }], schema: FLAT_SCHEMA, maxTokens: 6000 });
+  var r = await aiClaude.callJson({ tenantId: input.tenantId, system: SYSTEM, messages: [{ role: 'user', content: user }], schema: FLAT_SCHEMA, maxTokens: 6000 });
   return { nodes: cleanFlat(r.data.nodes, 80), usage: r.usage };
 }
 
@@ -94,7 +94,7 @@ async function wbs(input) {
     (p.specs ? '\n## 사양 요약\n' + clip(p.specs, 3000) + '\n' : '') +
     (input.milestones && input.milestones.length ? '\n## 이미 있는 마일스톤\n' + input.milestones.map(function (m) { return '- ' + clip(m, 80); }).join('\n') + '\n' : '') +
     (input.extra ? '\n## 추가 요청\n' + clip(input.extra, 1000) + '\n' : '');
-  var r = await aiClaude.callJson({ system: SYSTEM, messages: [{ role: 'user', content: user }], schema: FLAT_SCHEMA, maxTokens: 6000 });
+  var r = await aiClaude.callJson({ tenantId: input.tenantId, system: SYSTEM, messages: [{ role: 'user', content: user }], schema: FLAT_SCHEMA, maxTokens: 6000 });
   return { nodes: cleanFlat(r.data.nodes, 60), usage: r.usage };
 }
 
@@ -106,7 +106,7 @@ async function summarize(input) {
     additionalProperties: false
   };
   var user = '아래 마인드맵 가지를 한두 문장으로 요약하세요. 핵심 결론·할 일이 드러나게.\n\n' + clip(input.outline, 8000);
-  var r = await aiClaude.callJson({ system: SYSTEM, messages: [{ role: 'user', content: user }], schema: schema, maxTokens: 1024 });
+  var r = await aiClaude.callJson({ tenantId: input.tenantId, system: SYSTEM, messages: [{ role: 'user', content: user }], schema: schema, maxTokens: 1024 });
   return { summary: String(r.data.summary || '').trim().slice(0, 200), usage: r.usage };
 }
 
@@ -136,7 +136,7 @@ async function riskReview(input) {
   var user = '오늘은 ' + (input.today || '') + ' 입니다. 아래는 업무 마인드맵(담당 · 마감 · 진행률 포함)과 규칙 점검 결과입니다.\n' +
     '일정 · 인력 · 선후 관계 관점에서 가장 중요한 위험을 우선순위대로 골라, 이유와 이번 주 대응을 제안하세요. 맵에 없는 사실을 지어내지 마세요.\n\n' +
     '[규칙 점검]\n' + (clip(input.findings, 6000) || '(걸린 것 없음)') + '\n\n[맵]\n' + clip(input.outline, 12000);
-  var r = await aiClaude.callJson({ system: SYSTEM, messages: [{ role: 'user', content: user }], schema: schema, maxTokens: 2048 });
+  var r = await aiClaude.callJson({ tenantId: input.tenantId, system: SYSTEM, messages: [{ role: 'user', content: user }], schema: schema, maxTokens: 2048 });
   var d = r.data || {};
   return {
     summary: String(d.summary || '').trim().slice(0, 300),
@@ -147,4 +147,4 @@ async function riskReview(input) {
   };
 }
 
-module.exports = { isReady: aiClaude.isReady, expand: expand, fromText: fromText, wbs: wbs, summarize: summarize, riskReview: riskReview, cleanFlat: cleanFlat };
+module.exports = { isReady: aiClaude.isReady, isReadyFor: aiClaude.isReadyFor, providerFor: aiClaude.providerFor, expand: expand, fromText: fromText, wbs: wbs, summarize: summarize, riskReview: riskReview, cleanFlat: cleanFlat };

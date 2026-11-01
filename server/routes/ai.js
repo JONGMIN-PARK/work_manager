@@ -6,6 +6,7 @@ var router = express.Router();
 var config = require('../config');
 var db = require('../config/db');
 var aiService = require('../services/ai.service');
+var aiProvider = require('../services/ai-provider');
 var { authenticate } = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var planGate = require('../middleware/plan-gate');
@@ -47,122 +48,10 @@ async function logUsage(tenantId, userId, queryText, provider) {
   }
 }
 
-/** 테넌트 AI 키 또는 글로벌 키로 AI 호출 */
-async function callAIWithPrompt(prompt, tenantId) {
-  // 1. 테넌트 전용 키 확인
-  var tenantCfg = null;
-  try {
-    var tr = await db.query('SELECT * FROM tenant_ai_configs WHERE tenant_id = $1', [tenantId]);
-    if (tr.rows.length && tr.rows[0].api_key) tenantCfg = tr.rows[0];
-  } catch (_) { /* table may not exist */ }
-
-  var provider = tenantCfg ? tenantCfg.provider : config.ai.provider;
-  var apiKey = tenantCfg ? tenantCfg.api_key : (provider === 'anthropic' ? config.ai.anthropicKey : config.ai.geminiKey);
-  var model = tenantCfg ? tenantCfg.model : (provider === 'anthropic' ? config.ai.anthropicModel : config.ai.geminiModel);
-
-  if (!apiKey) return null;
-
-  if (provider === 'anthropic') {
-    // v13.71/72/73: 모델명 검증 + adaptive thinking text 추출 + 크레딧 부족 시 Gemini 자동 폴백
-    var safeModel = model || 'claude-opus-4-7';
-    var res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: safeModel,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    var data = await res.json();
-    if (data.error) {
-      var em = (data.error && (data.error.message || data.error.type)) || 'Claude API 오류';
-      // v13.73: 크레딧 부족 자동 감지 → Gemini 키 있으면 폴백
-      if (/credit balance|insufficient.*credit|low.*balance/i.test(em)) {
-        if (config.ai.geminiKey) {
-          console.warn('[AI] Claude 크레딧 부족 → Gemini로 폴백');
-          // Gemini로 재시도 (재귀 대신 직접 호출)
-          var fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-            (config.ai.geminiModel || 'gemini-2.5-flash') + ':generateContent?key=' + config.ai.geminiKey;
-          var fRes = await fetch(fallbackUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 8192, temperature: 0.3 } })
-          });
-          var fData = await fRes.json();
-          if (fData.candidates && fData.candidates[0] && fData.candidates[0].content) {
-            var text = fData.candidates[0].content.parts.map(function (p) { return p.text || ''; }).join('\n');
-            return '[ℹ️ Claude 크레딧 부족 — Gemini로 자동 폴백]\n\n' + text;
-          }
-        }
-        // Gemini도 없으면 친화적 에러
-        var bErr = new Error('Anthropic API 크레딧이 부족합니다. Console → Plans & Billing에서 크레딧을 충전하거나 Gemini로 폴백 가능합니다(GEMINI_API_KEY 설정).');
-        bErr.code = 'CREDIT_LOW';
-        bErr.action = 'https://console.anthropic.com/settings/plans';
-        throw bErr;
-      }
-      var hint = '';
-      if (/not_found|model/i.test(em)) hint = ' — 모델명 확인 (현재 "' + safeModel + '"). 권장: claude-opus-4-7';
-      else if (/authentication|invalid api key/i.test(em)) hint = ' — ANTHROPIC_API_KEY 확인';
-      else if (/rate_limit/i.test(em)) hint = ' — 잠시 후 재시도';
-      throw new Error(em + hint);
-    }
-    if (!data.content || !Array.isArray(data.content)) return null;
-    // content 배열에서 text 블록만 추출 (thinking 블록 등 무시)
-    var textParts = data.content
-      .filter(function (b) { return b && b.type === 'text' && typeof b.text === 'string'; })
-      .map(function (b) { return b.text; });
-    return textParts.length ? textParts.join('\n') : null;
-  }
-
-  // Gemini — v13.74: 과부하(503/overloaded) 자동 재시도 + 폴백 모델
-  var primaryModel = model || 'gemini-2.5-flash';
-  var fallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.0-flash';
-  var modelsToTry = primaryModel === fallbackModel ? [primaryModel] : [primaryModel, fallbackModel];
-  var lastErr = null;
-
-  for (var mi = 0; mi < modelsToTry.length; mi++) {
-    var currentModel = modelsToTry[mi];
-    // 같은 모델로 최대 3회 지수 백오프 재시도 (500ms → 1500ms → 4500ms)
-    for (var attempt = 0; attempt < 3; attempt++) {
-      try {
-        var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + currentModel + ':generateContent?key=' + apiKey;
-        var res2 = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 8192, temperature: 0.3 } })
-        });
-        var data2 = await res2.json();
-        if (data2.candidates && data2.candidates[0] && data2.candidates[0].content) {
-          var resultText = data2.candidates[0].content.parts.map(function (p) { return p.text || ''; }).join('\n');
-          // 폴백 모델로 성공한 경우 헤드에 안내 prepend
-          if (mi > 0) resultText = '[ℹ️ ' + primaryModel + ' 과부하 → ' + currentModel + '로 폴백]\n\n' + resultText;
-          return resultText;
-        }
-        var em = data2.error && (data2.error.message || data2.error.status) || 'Gemini 응답 없음';
-        var status = (data2.error && data2.error.code) || res2.status;
-        // 503 (UNAVAILABLE) / 429 (RESOURCE_EXHAUSTED) / "overloaded"|"high demand"|"unavailable" → 재시도
-        var retryable = status === 503 || status === 429 ||
-                        /overloaded|high demand|unavailable|rate.*limit|busy/i.test(em);
-        lastErr = new Error(em);
-        if (!retryable) throw lastErr;
-        if (attempt < 2) {
-          var delay = 500 * Math.pow(3, attempt); // 500ms, 1500ms
-          console.warn('[Gemini] ' + currentModel + ' 과부하/한도 — ' + delay + 'ms 후 재시도 (' + (attempt + 1) + '/3)');
-          await new Promise(function (r) { setTimeout(r, delay); });
-        }
-      } catch (e) {
-        lastErr = e;
-        if (!/overloaded|high demand|unavailable|rate.*limit|busy|fetch/i.test(e.message || '')) break;
-        if (attempt < 2) await new Promise(function (r) { setTimeout(r, 500 * Math.pow(3, attempt)); });
-      }
-    }
-    console.warn('[Gemini] ' + currentModel + ' 3회 재시도 모두 실패 — 다음 모델로');
-  }
-  // 최종 친화 에러
-  var finalErr = new Error('Gemini API 과부하 — 잠시 후 다시 시도하세요. (시도한 모델: ' + modelsToTry.join(', ') + ')');
-  finalErr.code = 'AI_OVERLOADED';
-  throw finalErr;
+/** 테넌트 키 → AI_PROVIDER → 있는 키 순으로 골라 호출 (공용 ai-provider, v13.296)
+ *  → { text, provider, model, note } · 키가 없으면 null */
+function callAIWithPrompt(prompt, tenantId) {
+  return aiProvider.generateText({ prompt: prompt, tenantId: tenantId });
 }
 
 /** 쿼리 한도 체크 미들웨어 */
@@ -207,28 +96,16 @@ router.post('/summary', checkAIQuota, async function (req, res) {
     if (!prompt) return res.status(400).json({ error: 'BAD_REQUEST', message: '프롬프트가 필요합니다.' });
     if (prompt.length > 15000) prompt = prompt.slice(0, 15000) + '\n...(이하 생략)';
 
-    var answer = await callAIWithPrompt(prompt, req.tenant.id);
-    if (!answer) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI API 키가 설정되지 않았습니다.' });
+    var out = await callAIWithPrompt(prompt, req.tenant.id);
+    if (!out) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI API 키가 설정되지 않았습니다. (GEMINI_API_KEY 또는 ANTHROPIC_API_KEY)' });
 
-    await logUsage(req.tenant.id, req.user.sub, prompt, config.ai.provider);
+    await logUsage(req.tenant.id, req.user.sub, prompt, out.provider);
     var quota = req.aiQuota || {};
+    var text = out.note ? '[ℹ️ ' + out.note + ']\n\n' + out.text : out.text;
 
-    res.json({ data: { text: answer, provider: config.ai.provider, quota: { used: (quota.used || 0) + 1, limit: quota.limit } } });
+    res.json({ data: { text: text, provider: aiProvider.label(out.provider), model: out.model, quota: { used: (quota.used || 0) + 1, limit: quota.limit } } });
   } catch (err) {
-    console.error('[AI Route] summary error:', err.message);
-    // v13.73: 크레딧 부족은 402(Payment Required) + action URL
-    if (err.code === 'CREDIT_LOW') {
-      return res.status(402).json({
-        error: 'CREDIT_LOW',
-        message: err.message,
-        action: { label: 'Anthropic Console 열기', url: err.action }
-      });
-    }
-    // v13.74: Gemini 과부하 503 (Service Unavailable)
-    if (err.code === 'AI_OVERLOADED') {
-      return res.status(503).json({ error: 'AI_OVERLOADED', message: err.message });
-    }
-    res.status(500).json({ error: 'AI_ERROR', message: 'AI 요약 실패' + (err && !err.severity && err.message ? ': ' + err.message : '') });
+    aiProvider.sendAiError(res, '[AI Route] summary', err, 'AI 요약 실패');
   }
 });
 
@@ -240,7 +117,7 @@ router.post('/query', checkAIQuota, async function (req, res) {
 
     // RAG: 의도 분석 → DB 데이터 수집 → AI 응답
     var intents = aiService.analyzeQuery(question);
-    var contextData = await aiService.gatherContext(intents, req.user.name || '사용자');
+    var contextData = await aiService.gatherContext(intents, req.user.name || '사용자', req.tenant.id);
 
     var systemPrompt = '당신은 "Work Manager"라는 업무 관리 시스템의 AI 어시스턴트입니다.\n' +
       '아래 실제 데이터를 기반으로 사용자의 질문에 한국어로 답변하세요.\n' +
@@ -253,48 +130,38 @@ router.post('/query', checkAIQuota, async function (req, res) {
 
     systemPrompt += '질문: ' + question;
 
-    var answer = await callAIWithPrompt(systemPrompt, req.tenant.id);
-    if (!answer) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI API 키가 설정되지 않았습니다.' });
+    var out = await callAIWithPrompt(systemPrompt, req.tenant.id);
+    if (!out) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI API 키가 설정되지 않았습니다. (GEMINI_API_KEY 또는 ANTHROPIC_API_KEY)' });
 
-    await logUsage(req.tenant.id, req.user.sub, question, config.ai.provider);
+    await logUsage(req.tenant.id, req.user.sub, question, out.provider);
     var quota = req.aiQuota || {};
 
     res.json({
       data: {
-        answer: answer,
+        answer: out.note ? '[ℹ️ ' + out.note + ']\n\n' + out.text : out.text,
         intents: intents,
-        provider: config.ai.provider,
+        provider: aiProvider.label(out.provider),
+        model: out.model,
         quota: { used: (quota.used || 0) + 1, limit: quota.limit }
       }
     });
   } catch (err) {
-    console.error('[AI Route] query error:', err.message);
-    res.status(500).json({ error: 'AI_ERROR', message: 'AI 질의 실패' + (err && !err.severity && err.message ? ': ' + err.message : '') });
+    aiProvider.sendAiError(res, '[AI Route] query', err, 'AI 질의 실패');
   }
 });
 
 // ─── GET /api/ai/status — AI 상태 ───
 router.get('/status', async function (req, res) {
-  // v13.71: 진단 정보 풍부화 — 어떤 provider/model/key 출처가 사용되는지 명확히
-  var provider = config.ai.provider || 'gemini';
-  var configured = aiService.isConfigured();
-  var modelInUse = provider === 'anthropic' ? config.ai.anthropicModel : config.ai.geminiModel;
-  var keySource = 'env';
+  // v13.296: 실제로 쓰일 AI 를 공용 규칙으로 — 키가 하나뿐이어도 그쪽으로 잡힘
+  var r = null;
+  try { r = await aiProvider.resolve(req.tenant.id); } catch (_) { r = aiProvider.resolveEnv(); }
+  var configured = !!r;
+  var provider = r ? r.provider : (config.ai.provider || '');
+  var modelInUse = r ? r.model : null;
+  var keySource = r ? r.source : 'env';
+  var tenantKey = keySource === 'tenant';
   var globalAnthropicKeySet = !!config.ai.anthropicKey;
   var globalGeminiKeySet = !!config.ai.geminiKey;
-
-  // 테넌트 전용 키 확인
-  var tenantKey = false;
-  try {
-    var tr = await db.query('SELECT provider, model FROM tenant_ai_configs WHERE tenant_id = $1 AND api_key IS NOT NULL', [req.tenant.id]);
-    if (tr.rows.length) {
-      tenantKey = true;
-      provider = tr.rows[0].provider;
-      if (tr.rows[0].model) modelInUse = tr.rows[0].model;
-      configured = true;
-      keySource = 'tenant';
-    }
-  } catch (_) { }
 
   var usage = 0;
   try { usage = await getMonthlyUsage(req.tenant.id); } catch (_) { }
@@ -306,7 +173,7 @@ router.get('/status', async function (req, res) {
   res.json({
     data: {
       configured: configured,
-      provider: configured ? (provider === 'anthropic' ? 'Claude' : 'Gemini') : null,
+      provider: configured ? aiProvider.label(provider) : null,
       providerCode: provider,
       model: modelInUse,
       keySource: keySource,           // 'tenant' | 'env'
@@ -338,6 +205,7 @@ router.put('/config', require('../middleware/auth').requireRole('admin'), async 
       'ON CONFLICT (tenant_id) DO UPDATE SET provider = $2, api_key = $3, model = $4, updated_at = now() RETURNING id, provider, model',
       [req.tenant.id, b.provider || 'gemini', b.api_key || null, b.model || null]
     );
+    aiProvider.clearTenantCache(req.tenant.id);
     res.json({ data: r.rows[0], message: 'AI 설정이 저장되었습니다.' });
   } catch (e) {
     httpErr.serverError(res, '[ai/config]', e);

@@ -1,5 +1,5 @@
 /**
- * A/S AI 보조 라우터 (Claude opus-4-7 기반) — v13.65
+ * A/S AI 보조 라우터 — v13.65 (v13.296: Gemini/Claude 공용 규칙 ai-provider)
  *
  * POST /api/as-ai/analyze              — 신고 내용 → 카테고리·RCA·재발방지 초안
  * POST /api/as-ai/similar/:ticketId    — 유사 과거 사례 추천 (SQL 후보 + AI 점수)
@@ -15,6 +15,7 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var rateLimit = require('express-rate-limit');
 var aiClaude = require('../services/ai-claude.service');
+var aiProvider = require('../services/ai-provider');
 var authService = require('../services/auth.service');
 
 router.use(auth.authenticate);
@@ -29,11 +30,11 @@ var aiLimiter = rateLimit({
   standardHeaders: true, legacyHeaders: false
 });
 
-function checkReady(res) {
-  if (!aiClaude.isReady()) {
+async function checkReady(req, res) {
+  if (!await aiClaude.isReadyFor(req.tenant && req.tenant.id)) {
     res.status(503).json({
       error: 'AI_NOT_READY',
-      message: 'AI 기능 미설정 — 서버의 ANTHROPIC_API_KEY 환경변수를 채운 뒤 재시작하세요.'
+      message: 'AI 기능 미설정 — 서버의 GEMINI_API_KEY 또는 ANTHROPIC_API_KEY 환경변수를 채운 뒤 재시작하세요.'
     });
     return false;
   }
@@ -46,7 +47,7 @@ function checkReady(res) {
 // ────────────────────────────────────────────────────────────
 router.post('/analyze', aiLimiter, async function (req, res) {
   try {
-    if (!checkReady(res)) return;
+    if (!await checkReady(req, res)) return;
     var b = req.body || {};
     if (!b.issueSummary || !b.issueSummary.trim()) {
       return res.status(400).json({ error: 'VALIDATION', message: '신고 내용(issueSummary)을 입력하세요.' });
@@ -67,7 +68,8 @@ router.post('/analyze', aiLimiter, async function (req, res) {
       frequency: b.frequency,
       frequencyCount: b.frequencyCount,
       impactScope: b.impactScope,
-      categories: catR.rows
+      categories: catR.rows,
+      tenantId: req.tenant.id
     });
 
     // audit (실패해도 응답엔 영향 없음)
@@ -78,8 +80,7 @@ router.post('/analyze', aiLimiter, async function (req, res) {
 
     res.json({ data: result.data, usage: result.usage });
   } catch (e) {
-    console.error('[as-ai/analyze]', e);
-    res.status(500).json({ error: 'AI_FAILED', message: 'AI 분석 실패' + (e && !e.severity && e.message ? ': ' + e.message : '') });
+    aiProvider.sendAiError(res, '[as-ai]', e, 'AI 분석 실패');
   }
 });
 
@@ -90,7 +91,7 @@ router.post('/analyze', aiLimiter, async function (req, res) {
 // ────────────────────────────────────────────────────────────
 router.post('/similar/:ticketId', aiLimiter, async function (req, res) {
   try {
-    if (!checkReady(res)) return;
+    if (!await checkReady(req, res)) return;
     var tR = await db.query(
       "SELECT id, ticket_no, customer_name, equipment_model, category, issue_summary, serial_no, equipment_no " +
       "FROM as_tickets WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
@@ -137,7 +138,8 @@ router.post('/similar/:ticketId', aiLimiter, async function (req, res) {
           rca: c.rca,
           closure: c.closure
         };
-      })
+      }),
+      req.tenant.id
     );
 
     authService.auditLog(
@@ -147,8 +149,7 @@ router.post('/similar/:ticketId', aiLimiter, async function (req, res) {
 
     res.json({ data: result.data, candidates: candR.rows.length, usage: result.usage });
   } catch (e) {
-    console.error('[as-ai/similar]', e);
-    res.status(500).json({ error: 'AI_FAILED', message: 'AI 유사 사례 분석 실패' + (e && !e.severity && e.message ? ': ' + e.message : '') });
+    aiProvider.sendAiError(res, '[as-ai]', e, 'AI 유사 사례 분석 실패');
   }
 });
 
@@ -161,7 +162,7 @@ var _insightCache = ttlCache.create({ ttlMs: 60 * 60 * 1000, max: 50 });
 
 router.get('/weekly-insight', aiLimiter, async function (req, res) {
   try {
-    if (!checkReady(res)) return;
+    if (!await checkReady(req, res)) return;
     var ck = req.tenant.id + '|' + (req.query.from || '') + '|' + (req.query.to || '');
     var cached = _insightCache.get(ck);
     if (cached) { res.setHeader('X-Cache', 'HIT'); return res.json(cached); }
@@ -199,7 +200,7 @@ router.get('/weekly-insight', aiLimiter, async function (req, res) {
       p1p2_open: openR.rows
     };
 
-    var result = await aiClaude.summarizeWeeklyStats(stats);
+    var result = await aiClaude.summarizeWeeklyStats(stats, req.tenant.id);
     var payload = { data: result.data, stats: stats, usage: result.usage, generatedAt: new Date().toISOString() };
     _insightCache.set(ck, payload);
 
@@ -207,16 +208,18 @@ router.get('/weekly-insight', aiLimiter, async function (req, res) {
 
     res.json(payload);
   } catch (e) {
-    console.error('[as-ai/weekly-insight]', e);
-    res.status(500).json({ error: 'AI_FAILED', message: 'AI 코멘트 생성 실패' + (e && !e.severity && e.message ? ': ' + e.message : '') });
+    aiProvider.sendAiError(res, '[as-ai]', e, 'AI 코멘트 생성 실패');
   }
 });
 
 // 상태 확인 (관리자 디버그용)
-router.get('/_status', function (req, res) {
+router.get('/_status', async function (req, res) {
+  var r = null;
+  try { r = await aiProvider.resolve(req.tenant && req.tenant.id); } catch (_) {}
   res.json({
-    ready: aiClaude.isReady(),
-    model: require('../config').ai.anthropicModel,
+    ready: !!r,
+    provider: r ? r.provider : null,
+    model: r ? r.model : null,
     cacheStats: _insightCache.stats()
   });
 });

@@ -110,7 +110,7 @@ function _asBuildModal(editId) {
     h += '<div style="margin-bottom:14px">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
     h += '<label style="font-size:11px;color:var(--t4)">1차 분석 (CS/공정 메모)</label>';
-    h += '<button type="button" onclick="_asAiAnalyzeClick()" style="font-size:10px;padding:3px 10px;border:1px solid #8B5CF6;border-radius:4px;background:transparent;color:#8B5CF6;cursor:pointer;font-weight:600" title="Claude AI가 신고 내용으로 카테고리·RCA·재발방지 초안을 작성합니다">🤖 AI 분석 (Claude)</button>';
+    h += '<button type="button" onclick="_asAiAnalyzeClick()" style="font-size:10px;padding:3px 10px;border:1px solid #8B5CF6;border-radius:4px;background:transparent;color:#8B5CF6;cursor:pointer;font-weight:600" title="AI가 신고 내용으로 카테고리·RCA·재발방지 초안을 작성합니다">🤖 AI 분석</button>';
     h += '</div>';
     h += '<textarea id="asM_initialAnalysis" rows="2" placeholder="첫 통화/원격 진단 결과를 메모 (선택)" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);font-size:11px;resize:vertical">' + _asEsc(existing && existing.initialAnalysis || '') + '</textarea>';
     h += '<div id="asM_aiStatus" style="font-size:10px;color:var(--t5);margin-top:4px;min-height:14px"></div>';
@@ -260,7 +260,7 @@ function _asEquipLookup(serial) {
   }).catch(function () { /* 없으면 무시 */ });
 }
 
-/* ─── AI 분석 (Claude) — 신고 내용 → 카테고리·RCA·재발방지 초안 자동 채움 ───
+/* ─── AI 분석 — 신고 내용 → 카테고리·RCA·재발방지 초안 자동 채움 ───
  * "1차 분석" 텍스트박스에 AI 요약 + checkPoints 표시
  * 카테고리·긴급도 빈 필드는 AI 추정값으로 자동 채움 (이미 입력된 값은 보존)
  * RCA·재발방지는 ④보고 탭(상세)에 들어가므로, 여기서는 1차 분석 영역에 요약 형태로 출력
@@ -278,15 +278,15 @@ function _asAiAnalyzeClick() {
     status.innerHTML = '<span style="color:' + SEM_COLOR.danger + '">⚠ AI API 미연결 (project-data.js)</span>';
     return;
   }
-  status.innerHTML = '<span style="color:#8B5CF6">⏳ Claude가 분석 중…</span>';
+  status.innerHTML = '<span style="color:#8B5CF6">⏳ AI가 분석 중…</span>';
 
   // 화려한 진행 모달 + 단계 메시지 시퀀스
   if (window.wmProgress) {
     wmProgress.show({
       icon: '🤖',
-      title: 'Claude AI 분석 중',
+      title: 'AI 분석 중',
       sub: '신고 내용을 분석하고 카테고리·RCA·재발방지 초안을 작성합니다.',
-      tip: '평균 5~15초 소요됩니다. 모델: claude-opus-4-7 · adaptive thinking'
+      tip: '평균 5~15초 소요됩니다.'
     });
     wmProgress.autoSteps([
       '📝 신고 내용 검토',
@@ -343,8 +343,9 @@ function _asAiAnalyzeClick() {
 
     var conf = d.categoryConfidence != null ? Math.round(d.categoryConfidence * 100) + '%' : '-';
     var usage = r.usage || {};
-    status.innerHTML = '<span style="color:' + SEM_COLOR.ok + '">✅ Claude 분석 완료</span> · 카테고리 ' +
+    status.innerHTML = '<span style="color:' + SEM_COLOR.ok + '">✅ AI 분석 완료</span> · 카테고리 ' +
       _asEsc(d.category || '-') + ' (신뢰도 ' + conf + ') · 긴급도 ' + _asEsc(d.priority || '-') +
+      (usage.model ? ' · 모델 ' + _asEsc(usage.model) : '') +
       ' · 토큰 in=' + (usage.input_tokens || 0) + ' out=' + (usage.output_tokens || 0);
   }).catch(function (err) {
     if (window.wmProgress) wmProgress.hide();

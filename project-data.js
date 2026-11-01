@@ -1496,7 +1496,7 @@ function asRecurrencesGet(ticketId) {
     .then(function (r) { return { data: toCamelArray(r.data), context: toCamel(r.context), total: r.total }; });
 }
 
-/* ─── A/S AI 분석 (Claude) — v13.72: 120s 타임아웃 (Claude opus-4-7 응답 시간 대응) ─── */
+/* ─── A/S AI 분석 — v13.72: 120s 타임아웃 (AI 응답 시간 대응) ─── */
 function asAiAnalyze(payload) {
   return apiFetch('/api/as-ai/analyze', { method: 'POST', body: JSON.stringify(payload || {}), timeoutMs: 120000 })
     .then(function (r) { return r; });
