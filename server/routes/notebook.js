@@ -395,25 +395,22 @@ router.put('/notes/:id/shares', async function (req, res) {
 });
 
 /* ─── 🖨 출력 머리글 (v13.319) — 회사 이름 · 로고. 누구나 읽고 관리자만 고침 ─── */
-var LOGO_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+var printSettings = require('../lib/print-settings');
 function isAdmin(req) { return req.user.role === 'admin'; }
 router.get('/print-settings', async function (req, res) {
   try {
-    var r = await db.query('SELECT company, logo, updated_at FROM doc_print_settings WHERE tenant_id = $1', [req.tenant.id]);
-    var x = r.rows[0] || {};
-    res.json({ data: { company: x.company || '', logo: x.logo || '', updatedAt: x.updated_at || null, canEdit: isAdmin(req) } });
+    var x = await printSettings.get(req.tenant.id);
+    x.canEdit = isAdmin(req);
+    res.json({ data: x });
   } catch (e) { httpErr.serverError(res, '[notebook/print-settings]', e); }
 });
 router.put('/print-settings', async function (req, res) {
   try {
     if (!isAdmin(req)) return res.status(403).json({ error: 'FORBIDDEN', message: '회사 머리글은 관리자만 바꿀 수 있습니다.' });
-    var b = req.body || {};
-    var company = String(b.company || '').trim().slice(0, 120);
-    var logo = String(b.logo || '');
-    if (logo && (!LOGO_RE.test(logo) || logo.length > 400000)) return bad(res, '로고는 PNG · JPG · WEBP · GIF 그림, 300KB 까지입니다.');
-    await db.query('INSERT INTO doc_print_settings (tenant_id, company, logo, updated_by, updated_at) VALUES ($1, $2, $3, $4, NOW()) ' +
-      'ON CONFLICT (tenant_id) DO UPDATE SET company = $2, logo = $3, updated_by = $4, updated_at = NOW()', [req.tenant.id, company || null, logo || null, me(req)]);
-    res.json({ data: { company: company, logo: logo, canEdit: true }, message: '출력 머리글을 저장했습니다.' });
+    var r = await printSettings.save(req.tenant.id, me(req), req.body);
+    if (r.error) return bad(res, r.error);
+    r.canEdit = true;
+    res.json({ data: r, message: '출력 머리글을 저장했습니다.' });
   } catch (e) { httpErr.serverError(res, '[notebook/print-settings/save]', e); }
 });
 /* 묶어 출력 — src=daily (일일 노트, 날짜) | notes (내 노트, 고친 날 · 폴더 · 태그). 날짜 순, 62개까지 */

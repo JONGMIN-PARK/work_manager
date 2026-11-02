@@ -1003,7 +1003,7 @@ function _nbMoreMenu(anchor) {
   if (NB.cur.ink && NB.cur.ink.over && NB.cur.ink.over.s && NB.cur.ink.over.s.length) items.push([NB.overHide ? '🖍 마커 표시 보이기' : '🖍 마커 표시 숨기기', function () { NB.overHide = !NB.overHide; _nbDrawOver(); }]);
   items.push('-');
   items.push(['⬇️ Markdown(.md) 내려받기', _nbExportMd]);
-  items.push(['📝 Word(.doc) 내려받기', _nbExportDoc]);
+  items.push(['📝 Word(.doc) 내려받기', nbPrintQuickWord]);
   items.push(['🖨 출력 미리 보기 · 양식 (Ctrl+P)', nbPrintOpen]);
   items.push(['📚 여러 노트 묶어 출력', function () { nbPrintBundle('notes'); }]);
   items.push(['📋 서식째 복사 (메일 · 메신저에 붙여넣기)', function () { _nbCopyRich(_nbSrc().value, NB.cur.title); }]);
@@ -1269,72 +1269,18 @@ function _nbExportMd() {
   var md = (n.title && !/^#\s/.test(body) ? '# ' + n.title + '\n\n' : '') + body;
   _nbSaveBlob(new Blob([md], { type: 'text/markdown;charset=utf-8' }), _nbFileName('md'));
 }
-/** 내보낼 HTML — 사진은 data URL 로 넣고 손글씨는 SVG 그대로 */
-function _nbExportHtml() {
-  var n = _nbDoc();
-  var doc = document.getElementById('nbDoc').cloneNode(true);
-  doc.querySelectorAll('.nb-ink-go, .nb-code-copy').forEach(function (x) { x.remove(); });
-  doc.querySelectorAll('input[type=checkbox]').forEach(function (x) { var s = document.createElement('span'); s.textContent = x.checked ? '☑ ' : '☐ '; x.parentNode.replaceChild(s, x); });
-  var imgs = [].slice.call(doc.querySelectorAll('img[data-nbfid]'));
-  return Promise.all(imgs.map(function (img) {
-    return _nbBlob(img.getAttribute('data-nbfid')).then(function (u) { return fetch(u); }).then(function (r) { return r.blob(); }).then(function (b) {
-      return new Promise(function (res) { var fr = new FileReader(); fr.onload = function () { img.src = fr.result; res(); }; fr.onerror = function () { res(); }; fr.readAsDataURL(b); });
-    }).catch(function () {});
-  })).then(function () {
-    var over = document.getElementById('nbOver');
-    return { title: n.title || '노트', html: doc.innerHTML, over: over && over.classList.contains('has') ? over.innerHTML : '' };
-  });
-}
-var NB_EXPORT_CSS = 'body{font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#1f2937;line-height:1.7;max-width:780px;margin:32px auto;padding:0 24px;font-size:14.5px}' +
-  'h1{font-size:26px;border-bottom:2px solid #e5e7eb;padding-bottom:6px}h2{font-size:20px;margin-top:28px}h3{font-size:16.5px}' +
-  'table{border-collapse:collapse;width:100%;margin:10px 0}th,td{border:1px solid #d1d5db;padding:6px 10px;text-align:left}th{background:#f3f4f6}' +
-  'blockquote{border-left:4px solid #cbd5e1;margin:10px 0;padding:4px 14px;color:#475569}code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-family:Consolas,monospace;font-size:.92em}' +
-  'pre{background:#0f172a;color:#e2e8f0;padding:12px 14px;border-radius:8px;overflow:auto}pre code{background:none;color:inherit}mark{background:#fef08a}' +
-  '.nb-callout{border:1px solid #cbd5e1;border-left:4px solid #3b82f6;border-radius:8px;padding:8px 14px;margin:10px 0;background:#f8fafc}.nb-co-t{font-weight:700;margin-bottom:4px}' +
-  '.nb-co-warning,.nb-co-caution{border-left-color:#f59e0b;background:#fffbeb}.nb-co-tip,.nb-co-done{border-left-color:#10b981;background:#ecfdf5}.nb-co-important{border-left-color:#8b5cf6;background:#f5f3ff}' +
-  'ul.nb-tasks{list-style:none;padding-left:4px}.nb-task.done>div{color:#9ca3af;text-decoration:line-through}.nb-task{display:flex;gap:4px}.nb-chk span{display:none}' +
-  'img{max-width:100%;border-radius:6px}.nb-ink{border:1px solid #e5e7eb;border-radius:8px;margin:10px 0}.nb-ink svg{width:100%;height:auto;display:block}.nb-code-lang{display:none}' +
-  '.nb-doc-w{position:relative}.nb-over{position:absolute;inset:0;pointer-events:none}.nb-over svg{width:100%;height:auto}a{color:#2563eb}';
-function _nbPrint() {
-  _nbExportHtml().then(function (x) {
-    var f = document.createElement('iframe'); f.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
-    document.body.appendChild(f);
-    var d = f.contentDocument;
-    d.open();
-    d.write('<!doctype html><html><head><meta charset="utf-8"><title>' + _nbE(x.title) + '</title><style>' + NB_EXPORT_CSS + '@page{margin:16mm}</style></head><body>' +
-      (x.title && !/^<h1/.test(x.html) ? '<h1>' + _nbE(x.title) + '</h1>' : '') + '<div class="nb-doc-w"><div>' + x.html + '</div>' + (x.over ? '<div class="nb-over">' + x.over + '</div>' : '') + '</div></body></html>');
-    d.close();
-    setTimeout(function () { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(function () { f.remove(); }, 2000); }, 400);
-  });
-}
-function _nbExportDoc() {
-  _nbExportHtml().then(function (x) {
-    var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>' + _nbE(x.title) + '</title><style>' + NB_EXPORT_CSS + '</style></head><body>' +
-      (x.title && !/^<h1/.test(x.html) ? '<h1>' + _nbE(x.title) + '</h1>' : '') + x.html + '</body></html>';
-    _nbSaveBlob(new Blob(['﻿' + html], { type: 'application/msword' }), _nbFileName('doc'));
-  });
-}
 function _nbCopy(text) {
   if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).catch(function () { _nbCopyOld(text); });
   _nbCopyOld(text); return Promise.resolve();
 }
 function _nbCopyOld(text) { var t = document.createElement('textarea'); t.value = text; t.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (_) {} t.remove(); }
 /** 서식째 복사 — 메일(Outlook) · 메신저에 붙이면 제목 · 표 · 목록이 그대로 */
-function _nbCopyRich(md, title) {
-  var html = '<div style="font-family:\'Malgun Gothic\',sans-serif;font-size:10.5pt;line-height:1.6;color:#1f2937">' +
-    NbMd.render(md).html.replace(/<label class="nb-chk"><input type="checkbox" checked[^>]*><span><\/span><\/label>/g, '☑ ').replace(/<label class="nb-chk"><input type="checkbox"[^>]*><span><\/span><\/label>/g, '☐ ')
-      .replace(/<table>/g, '<table style="border-collapse:collapse" border="1" cellpadding="6">').replace(/<th/g, '<th style="background:#f3f4f6;border:1px solid #d1d5db"').replace(/<td/g, '<td style="border:1px solid #d1d5db"')
-      .replace(/<button[^>]*>[^<]*<\/button>/g, '').replace(/<span class="nb-code-lang">[^<]*<\/span>/g, '')
-      .replace(/<blockquote/g, '<blockquote style="border-left:3px solid #cbd5e1;margin:6px 0;padding:2px 12px;color:#475569"')
-      .replace(/<div class="nb-callout[^"]*"/g, '<div style="border-left:3px solid #3b82f6;background:#f8fafc;padding:6px 12px;margin:6px 0"') + '</div>';
-  var plain = md.replace(/^::ink\[[^\]]*\]$/gm, '[손글씨]').replace(/!\[([^\]]*)\]\(nbf:[^)]*\)/g, '[사진: $1]').replace(/\[([^\]]*)\]\(nbf:[^)]*\)/g, '$1');
-  try {
-    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
-      return navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([plain], { type: 'text/plain' }) })])
-        .then(function () { _nbToast('📋 서식째 복사했습니다 — 메일 · 문서에 붙여넣으세요'); }, function () { _nbCopy(plain).then(function () { _nbToast('📋 글자로 복사했습니다'); }); });
-    }
-  } catch (_) {}
-  return _nbCopy(plain).then(function () { _nbToast('📋 글자로 복사했습니다'); });
+function _nbCopyRich(md) {
+  // 출력 양식과 같은 꾸밈(notebook-print.js) — 체크 ☑/☐ · 표 테두리 · 강조 상자 · 업무 칩
+  var prefs = typeof wmPrintPrefs === 'function' ? wmPrintPrefs() : {};
+  return wmCopyHtml(NbPrint.richMd(md, prefs), NbPrint.plainMd(md)).then(function (rich) {
+    _nbToast(rich ? '📋 서식째 복사했습니다 — 메일 · 문서에 붙여넣으세요' : '📋 복사했습니다');
+  });
 }
 
 /* ═══ 고친 기록 ═══ */

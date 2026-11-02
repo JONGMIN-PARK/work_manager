@@ -166,3 +166,78 @@ describe('회의록 API', function () {
     expect(no.status).toBe(403);
   });
 });
+
+/* v13.320 — 노트 출력과 같은 모양 · 머리글 · 결재란 칸 · 묶음 */
+describe('회의록 모양 · 묶음 (v13.320)', function () {
+  var M = { id: 'mtg-x1y2', title: '설계 검토', meet_date: '2026-10-01', attendees: ['가'], form: { decisions: '결정 A' }, action_items: [{ title: '할 일', status: 'open' }] };
+  test('기본 모양은 예전 글자 그대로 · 공문 · 간결 · 결재란 칸 · 문서 번호 끄기', function () {
+    var basic = minutes.renderMinutes(M, {}).html;
+    expect(basic).toContain('border-left:4px solid #3b82f6');
+    expect(minutes.renderMinutes(M, { theme: 'basic', accent: 'teal' }).html).toContain('border-left:4px solid #0f766e');
+    var formal = minutes.renderMinutes(M, { theme: 'formal' }).html;
+    expect(formal).toContain('■ 1. 회의 개요');
+    expect(formal).toContain("font-family:'Batang'");
+    expect(minutes.renderMinutes(M, { theme: 'clean' }).html).toContain('border-bottom:2px solid #2563eb');
+    var s = minutes.renderMinutes(M, { signs: ['담당', '<b>팀장</b>', '부서장', '', '대표', '이사', '사장', '회장'] }).html;
+    expect(s).toContain('>담당</th>'); expect(s).toContain('&lt;b&gt;팀장'); expect(s).not.toContain('>회장<');
+    expect(minutes.renderMinutes(M, { docNo: false }).html).not.toContain('문서번호');
+    expect(minutes.renderMinutes(M, { theme: 'nope' }).html).toBe(basic);
+  });
+  test('회사 머리글 — 켤 때만 · 이름 이스케이프', function () {
+    var h1 = minutes.renderMinutes(M, { header: true, company: '<회사>', logo: 'data:image/png;base64,AAAA' }).html;
+    expect(h1).toContain('&lt;회사&gt;'); expect(h1).toContain('<img src="data:image/png;base64,AAAA"');
+    expect(minutes.renderMinutes(M, { header: false, company: 'X사', logo: 'data:image/png;base64,AAAA' }).html).not.toContain('<img');
+  });
+  test('묶음 — 표지 · 목차 · 쪽 나눔 · 결재란은 표지에만', function () {
+    var list = [{ m: M, projectName: 'P1' }, { m: Object.assign({}, M, { id: 'mtg-2', title: '둘째', meet_date: '2026-10-08', action_items: [] }), projectName: 'P1' }];
+    var b = minutes.renderBundle(list, { signs: ['작성', '승인'], title: 'P1 회의록 모음' });
+    expect(b.subject).toBe('P1 회의록 모음');
+    expect(b.html).toContain('목차'); expect(b.html).toContain('2026-10-01 ~ 2026-10-08');
+    expect((b.html.match(/class="pg-brk"/g) || []).length).toBe(2);
+    expect((b.html.match(/>승인</g) || []).length).toBe(1);
+    var c = minutes.renderBundle(list, { perPage: false, toc: false });
+    expect((c.html.match(/class="pg-brk"/g) || []).length).toBe(0);
+    expect(c.html).not.toContain('목차');
+  });
+});
+
+describe('회의록 묶음 API (v13.320)', function () {
+  var admin, member, p1, p2, m1, m2, m3;
+  function as(u) { return { post: function (url, b) { return h.request(h.app).post(url).set('Authorization', 'Bearer ' + u.token).send(b || {}); } }; }
+  beforeAll(async function () {
+    await h.createTestTenant('mtgb-' + Date.now());
+    admin = await h.createTestUser({ role: 'admin', email: 'mtgb-admin@test.com', name: '관리자' });
+    member = await h.createTestUser({ role: 'member', email: 'mtgb-mem@test.com', name: '팀원' });
+    p1 = (await h.request(h.app).post('/api/projects').set('Authorization', 'Bearer ' + member.token).send({ name: '공개 장비', status: 'active', visibility: 'tenant' })).body.data.id;
+    p2 = (await h.request(h.app).post('/api/projects').set('Authorization', 'Bearer ' + admin.token).send({ name: '비공개 장비', status: 'active', visibility: 'private' })).body.data.id;
+    m1 = (await as(member).post('/api/meetings', { projectId: p1, title: '둘째 회의', meetDate: '2026-10-08' })).body.data.id;
+    m2 = (await as(member).post('/api/meetings', { projectId: p1, title: '첫 회의', meetDate: '2026-10-01' })).body.data.id;
+    m3 = (await as(admin).post('/api/meetings', { projectId: p2, title: '비밀 회의', meetDate: '2026-10-02' })).body.data.id;
+    await h.db.query("INSERT INTO doc_print_settings (tenant_id, company, logo) VALUES ($1, '(주)묶음', 'data:image/png;base64,AAAA') ON CONFLICT (tenant_id) DO UPDATE SET company = EXCLUDED.company, logo = EXCLUDED.logo", [h.TEST_TENANT_ID]);
+  });
+  afterAll(async function () { await h.cleanup(); });
+  test('날짜 순 · 볼 수 없는 회의는 빼고 알림 · 머리글', async function () {
+    var r = await as(member).post('/api/meetings/bundle', { ids: [m1, m3, m2, m1, 'nope'], header: true, theme: 'formal' });
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({ count: 2, skipped: 2, subject: '공개 장비 회의록 모음' });
+    var html = r.body.data.html;
+    expect(html.indexOf('첫 회의')).toBeLessThan(html.indexOf('둘째 회의'));
+    expect(html).not.toContain('비밀 회의');
+    expect(html).toContain('(주)묶음');
+    expect(html).toContain('■ 목차');
+  });
+  test('하나도 못 보면 403 · 비면 400 · 40건 넘으면 400', async function () {
+    expect((await as(member).post('/api/meetings/bundle', { ids: [m3] })).status).toBe(403);
+    expect((await as(member).post('/api/meetings/bundle', { ids: [] })).status).toBe(400);
+    var many = []; for (var i = 0; i < 41; i++) many.push('x' + i);
+    expect((await as(member).post('/api/meetings/bundle', { ids: many })).status).toBe(400);
+  });
+  test('미리 보기 — 모양 · 머리글 · 메일용은 로고 뺌', async function () {
+    var r = await as(member).post('/api/meetings/' + m2 + '/render', { theme: 'clean', header: true, signs: ['담당', '팀장'] });
+    expect(r.body.data.html).toContain('<img src="data:image/png;base64,AAAA"');
+    expect(r.body.data.html).toContain('>팀장</th>');
+    var mail = await as(member).post('/api/meetings/' + m2 + '/render', { header: true, mail: true });
+    expect(mail.body.data.html).toContain('(주)묶음');
+    expect(mail.body.data.html).not.toContain('<img');
+  });
+});

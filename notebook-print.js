@@ -470,7 +470,11 @@
   }
   /** 메일 · 메신저 붙여넣기 — 겉 글꼴만 씌움 */
   function rich(inner, opts) { var o = norm(opts), S = sty(o); return '<div style="font-family:' + S.font + ';color:' + S.ink + ';font-size:' + S.fs + 'px;line-height:1.65">' + inner.replace(/<div class="pg-brk"[^>]*><\/div>/g, '<hr>') + '</div>'; }
+  /** 마크다운 한 덩이 → 서식째 복사용 HTML (양식 없이 본문만 — 노트 ⋯ 서식째 복사 · AI 결과 복사) */
+  function richMd(md, opts) { var o = norm(opts), S = sty(o); return rich(mdHtml(md, S, o, null), o); }
+  /** 복사할 때 함께 넣는 글자판 — 손글씨 · 사진 · 첨부는 이름만 */
+  function plainMd(md) { return String(md || '').replace(/^::ink\[[^\]]*\]$/gm, '[손글씨]').replace(/!\[([^\]]*)\]\(nbf:[^)]*\)/g, '[사진: $1]').replace(/\[([^\]]*)\]\((?:nbf|wm):[^)]*\)/g, '$1').replace(/\s*⟦[^⟧]*⟧/g, ''); }
 
-  return { build: build, page: page, word: word, rich: rich, parseMeeting: parseMeeting, parseDaily: parseDaily, parseWhen: parseWhen, todoOf: todoOf, detectForm: detectForm,
+  return { build: build, page: page, word: word, rich: rich, richMd: richMd, plainMd: plainMd, parseMeeting: parseMeeting, parseDaily: parseDaily, parseWhen: parseWhen, todoOf: todoOf, detectForm: detectForm,
     sections: sections, THEMES: THEMES, ACCENTS: ACCENTS, FORMS: FORMS, SIGNS: SIGNS, MARGIN: MARGIN, DEF: DEF, mm: mm };
 });

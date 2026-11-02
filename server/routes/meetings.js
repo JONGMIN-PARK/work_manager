@@ -87,18 +87,32 @@ async function resolveUserId(name, tenantId) {
 /** 회의 한 건 + 권한 (v13.202) — 프로젝트 회의: 읽기 canRead · 쓰기 canEdit(생성자·참여자·관리자·임원), 일반 회의: 작성자만.
  *  실패 시 응답(404/403)을 보내고 null. 성공 시 { m, proj } */
 async function _meetingGate(req, res, needEdit, meetingId) {
-  var r = await db.query('SELECT * FROM meetings WHERE id = $1 AND tenant_id = $2', [meetingId || req.params.id, req.tenant.id]);
-  if (!r.rows.length) { res.status(404).json({ error: 'NOT_FOUND', message: '회의를 찾을 수 없습니다.' }); return null; }
+  var x = await _meetingAccess(req, meetingId || req.params.id, needEdit);
+  if (x.status === 404) { res.status(404).json({ error: 'NOT_FOUND', message: '회의를 찾을 수 없습니다.' }); return null; }
+  if (x.status === 403) { res.status(403).json({ error: 'FORBIDDEN', message: needEdit && x.m.project_id ? '프로젝트 생성자·참여자·관리자만 회의를 수정할 수 있습니다.' : '접근 권한이 없습니다.' }); return null; }
+  return x;
+}
+/** 응답 없이 권한만 — { m, proj } 또는 { status: 404|403 } (묶음 출력은 볼 수 없는 회의를 조용히 뺀다) */
+async function _meetingAccess(req, id, needEdit) {
+  var r = await db.query('SELECT * FROM meetings WHERE id = $1 AND tenant_id = $2', [id, req.tenant.id]);
+  if (!r.rows.length) return { status: 404 };
   var m = r.rows[0], proj = null;
   if (m.project_id) {
     var pr = await db.query('SELECT id, name, order_no, owner_id, visibility, department_id FROM projects WHERE id = $1 AND tenant_id = $2', [m.project_id, req.tenant.id]);
     proj = pr.rows[0] || null;
     var ok = proj && (needEdit ? await ps.canEdit(req, proj) : await ps.canRead(req, proj));
-    if (!ok) { res.status(403).json({ error: 'FORBIDDEN', message: needEdit ? '프로젝트 생성자·참여자·관리자만 회의를 수정할 수 있습니다.' : '접근 권한이 없습니다.' }); return null; }
-  } else if (m.created_by !== req.user.sub) {
-    res.status(403).json({ error: 'FORBIDDEN', message: '접근 권한이 없습니다.' }); return null;
-  }
+    if (!ok) return { status: 403, m: m };
+  } else if (m.created_by !== req.user.sub) return { status: 403, m: m };
   return { m: m, proj: proj };
+}
+/** 문서 설정(모양 · 결재란 · 머리글) — 머리글을 켜면 회사 이름 · 로고. 메일에는 로고를 넣지 않음(대부분 메일 앱이 data: 그림을 막음) */
+async function _docOpts(req, forMail) {
+  var o = minutesDoc.docOptions(req.body || {});
+  if (o.header) {
+    var x = await printSettings.get(req.tenant.id);
+    o.company = x.company; o.logo = forMail ? '' : x.logo;
+  }
+  return o;
 }
 
 /** 회의에 액션아이템 배열 첨부 */
@@ -246,6 +260,7 @@ router.delete('/:id', async function (req, res) {
 
 /* ── 회의록 문서: 미리 보기 · 받는 사람 · 메일 (v13.198) ── */
 var minutesDoc = require('../lib/meeting-minutes');
+var printSettings = require('../lib/print-settings');
 var emailService = require('../services/email.service');
 
 /** 회의 + 액션 + 프로젝트 이름. 프로젝트 회의는 프로젝트 읽기 권한, 일반 회의는 작성자만. 실패 시 응답 후 null */
@@ -271,11 +286,40 @@ async function _senderName(req) {
   return { name: req.user.name || '', email: null };
 }
 
-// POST /api/meetings/:id/render — 회의록 문서 HTML (저장된 내용 기준). body: { message? }
+// POST /api/meetings/bundle — 여러 회의록을 한 문서로 (v13.320). body: { ids[], theme, accent, signs[], header, docNo, perPage, toc }
+//  볼 수 없는 회의는 조용히 빼고 skipped 로 알림. 날짜 순. 40건까지
+router.post('/bundle', async function (req, res) {
+  try {
+    var ids = (Array.isArray(req.body && req.body.ids) ? req.body.ids : []).map(String).filter(Boolean);
+    ids = ids.filter(function (id, i) { return ids.indexOf(id) === i; });
+    if (!ids.length) return res.status(400).json({ error: 'VALIDATION', message: '묶을 회의를 골라 주세요.' });
+    if (ids.length > 40) return res.status(400).json({ error: 'VALIDATION', message: '한 번에 40건까지 묶을 수 있습니다.' });
+    var list = [], skipped = 0;
+    for (var i = 0; i < ids.length; i++) {
+      var x = await _meetingAccess(req, ids[i], false);
+      if (x.status) { skipped++; continue; }
+      list.push({ m: x.m, projectName: x.proj && x.proj.name, orderNo: x.proj && x.proj.order_no });
+    }
+    if (!list.length) return res.status(403).json({ error: 'FORBIDDEN', message: '볼 수 있는 회의가 없습니다.' });
+    await attachActions(list.map(function (x) { return x.m; }), req.tenant.id);
+    list.sort(function (a, b) { return String(a.m.meet_date || '9999').localeCompare(String(b.m.meet_date || '9999')); });
+    var o = await _docOpts(req, false);
+    o.perPage = req.body.perPage !== false; o.toc = req.body.toc !== false;
+    var projs = list.map(function (x) { return x.projectName; }).filter(function (p, k, a) { return p && a.indexOf(p) === k; });
+    o.title = projs.length === 1 ? projs[0] + ' 회의록 모음' : '회의록 모음';
+    var doc = minutesDoc.renderBundle(list, o);
+    res.json({ data: { subject: doc.subject, html: doc.html, count: list.length, skipped: skipped } });
+  } catch (e) {
+    httpErr.serverError(res, '[meetings/bundle]', e);
+  }
+});
+
+// POST /api/meetings/:id/render — 회의록 문서 HTML (저장된 내용 기준). body: { message?, theme, accent, signs[]|sign, header, docNo }
 router.post('/:id/render', async function (req, res) {
   try {
     var x = await _meetingForDoc(req, res); if (!x) return;
-    var doc = minutesDoc.renderMinutes(x.m, { projectName: x.proj && x.proj.name, orderNo: x.proj && x.proj.order_no, message: (req.body && req.body.message) || '', sign: !!(req.body && req.body.sign) });
+    var o = await _docOpts(req, !!(req.body && req.body.mail));   // mail: 메일에 넣을 문서(로고 그림 뺌)
+    var doc = minutesDoc.renderMinutes(x.m, Object.assign(o, { projectName: x.proj && x.proj.name, orderNo: x.proj && x.proj.order_no, message: (req.body && req.body.message) || '' }));
     var smtpCfg = require('../config').smtp || {};
     res.json({ data: { subject: doc.subject, html: doc.html, docNo: doc.docNo, mailedAt: x.m.mailed_at, mailedByName: x.m.mailed_by_name, mailedTo: x.m.mailed_to || [], smtp: !!(smtpCfg.user && smtpCfg.pass) } });
   } catch (e) {
@@ -318,7 +362,8 @@ router.post('/:id/mail', async function (req, res) {
     if (!smtp.user || !smtp.pass) return res.status(503).json({ error: 'MAIL_DISABLED', message: '메일 서버(SMTP)가 설정되지 않아 보낼 수 없습니다. 관리자에게 SMTP 설정을 요청하세요.' });
     var me = await _senderName(req);
     var sender = me.display_name || me.name || '';
-    var doc = minutesDoc.renderMinutes(x.m, { projectName: x.proj && x.proj.name, orderNo: x.proj && x.proj.order_no, message: String(b.message || '').slice(0, 2000), sender: sender });
+    var o = await _docOpts(req, true);
+    var doc = minutesDoc.renderMinutes(x.m, Object.assign(o, { projectName: x.proj && x.proj.name, orderNo: x.proj && x.proj.order_no, message: String(b.message || '').slice(0, 2000), sender: sender }));
     var opts = { subjectPrefix: '' };
     if (me.email && minutesDoc.isEmail(me.email)) { opts.replyTo = me.email; if (b.ccMe) opts.cc = [me.email]; }
     // 받는 사람끼리 주소가 보이지 않게 — 본인(또는 첫 주소)을 To, 나머지는 BCC

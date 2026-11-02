@@ -209,39 +209,56 @@ function _nbpToTodo(line) {
     _nbToast('✏️ 내 할 일로 — ' + (q.title || raw) + (q.due ? ' · ' + (+q.due.slice(5, 7)) + '/' + (+q.due.slice(8, 10)) : ''));
   }).catch(function (e) { _nbToast('❌ 할 일로 올리지 못했습니다 — ' + _nbErr(e), 'error'); });
 }
+/* ═══ 📁 프로젝트 고르기 (이슈로 올리기 · 프로젝트 회의로 올리기 공용) ═══ */
+/** 노트 본문에 연결된 프로젝트 [{ id, title }] — 칩 상태를 받아 둔 것은 이름으로 */
+function nbpLinkedProjects(body) {
+  var pre = [];
+  (String(body || '').match(/\(wm:project:[A-Za-z0-9_.:-]+\)/g) || []).forEach(function (m) {
+    var id = m.slice(12, -1), c = NBP.refs['project:' + id];
+    if (!pre.some(function (p) { return p.id === id; })) pre.push({ id: id, title: c && c.v && c.v.title ? c.v.title : id });
+  });
+  return pre;
+}
+function nbpProjPickHtml(pre) {
+  return '<label class="nb-fl">프로젝트<input class="mw-input nb-in" data-pp="q" placeholder="프로젝트 이름 · 수주번호로 찾기" autocomplete="off"></label>' +
+    '<div class="nb-pick" data-pp="list">' + pre.map(function (p, i) { return '<button type="button" class="nb-pick-i' + (i === 0 ? ' on' : '') + '" data-pid="' + _nbE(p.id) + '">📁 ' + _nbE(p.title) + ' <small>이 노트에 연결됨</small></button>'; }).join('') + '</div>';
+}
+/** 창 안의 고르기 칸을 살림 → { get(): 고른 프로젝트 id | null } */
+function nbpProjPick(box, pre) {
+  var pid = pre[0] ? pre[0].id : null, qT = null, list = box.querySelector('[data-pp="list"]');
+  box.querySelector('[data-pp="q"]').addEventListener('input', function (e) {
+    clearTimeout(qT); var v = e.target.value.trim();
+    qT = setTimeout(function () {
+      if (!v) return;
+      apiFetch('/api/search?cat=project&limit=12&q=' + encodeURIComponent(v)).then(function (r) {
+        var g = (r.data.groups || [])[0], items = g ? g.items : [];
+        list.innerHTML = items.length ? items.map(function (it) { return '<button type="button" class="nb-pick-i" data-pid="' + _nbE(it.id) + '">📁 ' + _nbE(it.title) + (it.sub ? ' <small>' + _nbE(it.sub) + '</small>' : '') + '</button>'; }).join('') : '<div class="nb-empty-s">찾는 프로젝트가 없습니다</div>';
+        pid = null;
+      });
+    }, 250);
+  });
+  list.addEventListener('click', function (e) {
+    var p = e.target.closest('[data-pid]'); if (!p) return;
+    pid = p.getAttribute('data-pid');
+    list.querySelectorAll('.nb-pick-i').forEach(function (b) { b.classList.toggle('on', b === p); });
+  });
+  return { get: function () { return pid; } };
+}
+
 function _nbpToIssue(line) {
   var raw = _nbpLineText(line);
   if (!raw) { _nbToast('이슈로 올릴 내용을 적어 주세요', 'warn'); return; }
-  // 노트에 연결한 프로젝트가 있으면 먼저 고름
-  var pre = [];
-  (_nbSrc().value.match(/\(wm:project:[A-Za-z0-9_.:-]+\)/g) || []).forEach(function (m) {
-    var id = m.slice(12, -1), c = NBP.refs['project:' + id];
-    if (c && c.v && c.v.title && !pre.some(function (p) { return p.id === id; })) pre.push({ id: id, title: c.v.title });
-  });
+  var pre = nbpLinkedProjects(_nbSrc().value);   // 노트에 연결한 프로젝트가 있으면 먼저 고름
   return wmGuardedModal('nbIssue', function () {
     var md = createModal({ id: 'nbIssueModal', titleText: '🐞 이슈로 올리기', width: '480px', closeOnEsc: true,
-      html: '<label class="nb-fl">제목<input class="mw-input nb-in" id="nbIsT" maxlength="200" value="' + _nbE(raw) + '"></label>' +
-        '<label class="nb-fl">프로젝트<input class="mw-input nb-in" id="nbIsQ" placeholder="프로젝트 이름 · 수주번호로 찾기" autocomplete="off"></label>' +
-        '<div class="nb-pick" id="nbIsL">' + pre.map(function (p, i) { return '<button type="button" class="nb-pick-i' + (i === 0 ? ' on' : '') + '" data-pid="' + _nbE(p.id) + '">📁 ' + _nbE(p.title) + ' <small>이 노트에 연결됨</small></button>'; }).join('') + '</div>' +
+      html: '<label class="nb-fl">제목<input class="mw-input nb-in" id="nbIsT" maxlength="200" value="' + _nbE(raw) + '"></label>' + nbpProjPickHtml(pre) +
         '<label class="nb-fl">긴급도<select class="mw-input nb-in" id="nbIsU"><option value="normal">보통</option><option value="high">높음</option><option value="urgent">🔥 긴급</option></select></label>' +
         '<div class="nb-mfoot"><button class="nb-btn" data-x="cancel">취소</button><button class="nb-btn pri" data-x="ok">이슈 만들기</button></div>' });
-    var pid = pre[0] ? pre[0].id : null, qT = null;
-    md.box.querySelector('#nbIsQ').addEventListener('input', function (e) {
-      clearTimeout(qT); var v = e.target.value.trim();
-      qT = setTimeout(function () {
-        if (!v) return;
-        apiFetch('/api/search?cat=project&limit=12&q=' + encodeURIComponent(v)).then(function (r) {
-          var g = (r.data.groups || [])[0], items = g ? g.items : [];
-          md.box.querySelector('#nbIsL').innerHTML = items.length ? items.map(function (it) { return '<button type="button" class="nb-pick-i" data-pid="' + _nbE(it.id) + '">📁 ' + _nbE(it.title) + (it.sub ? ' <small>' + _nbE(it.sub) + '</small>' : '') + '</button>'; }).join('') : '<div class="nb-empty-s">찾는 프로젝트가 없습니다</div>';
-          pid = null;
-        });
-      }, 250);
-    });
+    var pick = nbpProjPick(md.box, pre);
     md.box.addEventListener('click', function (e) {
-      var p = e.target.closest('[data-pid]');
-      if (p) { pid = p.getAttribute('data-pid'); md.box.querySelectorAll('.nb-pick-i').forEach(function (b) { b.classList.toggle('on', b === p); }); return; }
       var x = e.target.closest('[data-x]'); if (!x) return;
       if (x.getAttribute('data-x') === 'cancel') return md.close();
+      var pid = pick.get();
       if (!pid) { _nbToast('프로젝트를 골라 주세요', 'warn'); return; }
       var title = md.box.querySelector('#nbIsT').value.trim(); if (!title) return;
       x.disabled = true;
@@ -253,7 +270,7 @@ function _nbpToIssue(line) {
         _nbToast('🐞 이슈를 만들었습니다 — ' + title);
       }).catch(function (e2) { x.disabled = false; _nbToast('❌ ' + _nbErr(e2), 'error'); });
     });
-  }, 'nbIssueModal', { onOpen: function () { var i = document.getElementById(pre.length ? 'nbIsT' : 'nbIsQ'); if (i) i.focus(); } });
+  }, 'nbIssueModal', { onOpen: function () { var i = pre.length ? document.getElementById('nbIsT') : document.querySelector('#nbIssueModal [data-pp="q"]'); if (i) i.focus(); } });
 }
 
 /* ═══ 🔗 업무 연결 고르기 ═══ */

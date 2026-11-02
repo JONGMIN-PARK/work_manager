@@ -320,6 +320,30 @@ function createModal(opts) {
   return { overlay: ov, box: box, close: _close };
 }
 
+/* ═══ 서식째 복사 (v13.320 공용) — 메일 · 메신저 · 문서에 붙이면 표 · 서식이 그대로 ═══
+   ClipboardItem 이 안 되면 숨은 편집 영역을 선택해 복사. → Promise<boolean> (서식째 복사됐는지) */
+function wmCopyHtml(html, plain) {
+  if (navigator.clipboard && window.ClipboardItem && window.isSecureContext) {
+    try {
+      return navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([plain || ''], { type: 'text/plain' }) })])
+        .then(function () { return true; }, function () { return _wmCopyHtmlOld(html); });
+    } catch (e) { /* 아래로 */ }
+  }
+  return Promise.resolve(_wmCopyHtmlOld(html));
+}
+function _wmCopyHtmlOld(html) {
+  var box = document.createElement('div');
+  box.setAttribute('contenteditable', 'true');
+  box.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff';
+  box.innerHTML = html;
+  document.body.appendChild(box);
+  var range = document.createRange(); range.selectNodeContents(box);
+  var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  var ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  sel.removeAllRanges(); box.remove();
+  return ok;
+}
+
 /* ═══ 토스트 알림 ═══ */
 function showToast(msg, type) {
   var existing = document.querySelectorAll('.wa-toast');

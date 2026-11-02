@@ -87,6 +87,7 @@ function pdRenderMeetings() {
     '<span id="pmtSummary" class="pmt-summary">' + _pmtSummaryHtml(all.length, acts.length, overdue) + '</span>' +
     '<span class="pmt-row">' +
       (acts.length ? '<button class="btn btn-g btn-s pmt-btn" onclick="pmtToggleActs()">' + (_pmt.showActs ? '▾' : '▸') + ' 미완료 액션 모아보기</button>' : '') +
+      (all.length ? '<button class="btn btn-g btn-s pmt-btn" id="pmtBundleBtn" onclick="pmtBundle()" title="여러 회의록을 표지 · 목차와 함께 한 문서로 (인쇄 · PDF · Word)">🖨 묶어 출력</button>' : '') +
       (_pmt.canEdit ? '<button class="btn btn-p btn-s pmt-btn" onclick="pmtToggleAdd()">+ 새 회의</button>' : '') +
     '</span></div>';
   if (!_pmt.canEdit) h += '<div class="pmt-readonly">👁 보기 전용 — 회의 등록·수정은 프로젝트 생성자·참여자·관리자만 할 수 있습니다.</div>';
@@ -378,7 +379,10 @@ function _pmtDocViewHtml(m) {
 }
 /* 서버가 만든 회의록 문서 한 벌 — opts: { sign?, message? } → { subject, html, docNo, mailedAt, … } */
 function _pmtRender(mid, opts) {
-  return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/render', { method: 'POST', body: JSON.stringify(opts || {}) }).then(function (r) { return r.data; });
+  // 모양 · 결재란 · 머리글은 노트 출력과 같은 설정 (v13.320) — 회사 머리글(쪽 위 글)도 미리 받아 둠
+  var body = Object.assign(typeof wmPrintDocBody === 'function' ? wmPrintDocBody() : {}, opts || {});
+  var ps = typeof _nbprSettings === 'function' ? _nbprSettings() : Promise.resolve();
+  return Promise.all([apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/render', { method: 'POST', body: JSON.stringify(body) }), ps]).then(function (r) { return r[0].data; });
 }
 /* 카드 안 문서 보기 — 같은 내용(key)을 받는 중이면 다시 요청하지 않고, 늦게 온 옛 문서는 버린다 */
 function _pmtLoadDoc(mid) {
@@ -546,7 +550,7 @@ function pmtPreview(mid, focusMail) {
     return pmtSaveForm(mid, true).then(function (ok) {
       if (!ok) throw new Error('회의록을 저장하지 못해 미리 볼 수 없습니다.');
       return Promise.all([
-        _pmtRender(mid, { sign: _pmtSignOn() }),
+        _pmtRender(mid),
         apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/mail-recipients').catch(function () { return { data: [] }; })
       ]);
     }).then(function (res) { _pmtBuildPreview(mid, res[0], res[1].data || [], focusMail); });
@@ -561,11 +565,12 @@ function _pmtBuildPreview(mid, doc, recips, focusMail) {
   }).join('');
   var html =
     '<div style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:12px">' +
-      // 종이 미리 보기 — 회색 바탕 위 A4 폭(794px) 한 장, 높이는 문서 길이에 맞춤
-      '<div style="background:#e5e7eb;border-radius:8px;padding:14px;max-height:76vh;overflow:auto"><iframe id="pmtPreviewFrame" style="display:block;width:794px;max-width:100%;height:600px;margin:0 auto;border:0;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.18)"></iframe></div>' +
+      // 종이 미리 보기 — 노트 출력과 같은 종이(쪽 나뉨 빨간 선 · 창 폭에 맞춰 줄임)
+      _pmtPaperHtml('pmt') +
       '<div style="display:flex;flex-direction:column;gap:8px;position:sticky;top:0;align-self:start">' +
-        '<div style="display:flex;gap:6px;align-items:center"><button class="btn btn-g btn-s" style="flex:1;font-size:11px" onclick="pmtPrint()">🖨 인쇄 / PDF 저장</button>' +
-          '<label style="font-size:10.5px;color:var(--t4);white-space:nowrap;cursor:pointer" title="작성·검토·승인 서명란"><input type="checkbox" id="pmtSignChk"' + (_pmtSignOn() ? ' checked' : '') + ' onchange="pmtToggleSign(\'' + _pmtJs(mid) + '\',this.checked)"> 결재란</label></div>' +
+        '<button class="btn btn-p btn-s" style="font-size:11px" onclick="pmtPrint()">🖨 인쇄 / PDF 저장</button>' +
+        '<div class="nbpr-pages" id="pmtPages"></div>' +
+        _pmtPrefsHtml('pmtDocPref(\'' + _pmtJs(mid) + '\',this)') +
         '<div style="border:1px solid var(--bd);border-radius:8px;padding:8px 10px">' +
           '<div style="font-size:11.5px;font-weight:700;color:var(--t2);margin-bottom:6px">✉ 메일 보내기</div>' +
           '<div style="font-size:10px;color:var(--t5);margin-bottom:3px">참석자</div>' +
@@ -603,33 +608,12 @@ function _pmtPickedEmails() {
 }
 /* 머리말을 넣은 문서 — 서버가 만든 한 벌 그대로 */
 function _pmtDocWithMessage(mid) {
-  return _pmtRender(mid, { message: (document.getElementById('pmtMailMsg') || {}).value || '' });
+  return _pmtRender(mid, { message: (document.getElementById('pmtMailMsg') || {}).value || '', mail: true });
 }
 function _pmtMailLog(mid, to, method) {
   return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/mail-log', { method: 'POST', body: JSON.stringify({ to: to, method: method }) }).then(function (r) {
     var m = _pmtFind(mid); if (m) { m.mailedAt = r.data.mailedAt; _pmtPaintCard(mid); }
   }).catch(function () {});
-}
-/* 서식 있는 HTML 을 클립보드로 — ClipboardItem 이 안 되면 문서 영역을 선택해 복사 */
-function _pmtCopyHtml(html, plain) {
-  if (navigator.clipboard && window.ClipboardItem && window.isSecureContext) {
-    try {
-      return navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([plain], { type: 'text/plain' }) })]).then(function () { return true; }, function () { return _pmtCopyFallback(html); });
-    } catch (e) { /* 아래로 */ }
-  }
-  return Promise.resolve(_pmtCopyFallback(html));
-}
-function _pmtCopyFallback(html) {
-  var box = document.createElement('div');
-  box.setAttribute('contenteditable', 'true');
-  box.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff';
-  box.innerHTML = html;
-  document.body.appendChild(box);
-  var range = document.createRange(); range.selectNodeContents(box);
-  var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-  var ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
-  sel.removeAllRanges(); box.remove();
-  return ok;
 }
 function _pmtPlainOf(html) { var d = document.createElement('div'); d.innerHTML = html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(tr|p|div|li|h1)>/gi, '\n'); return (d.textContent || '').replace(/\n{3,}/g, '\n\n').trim(); }
 
@@ -640,7 +624,7 @@ function pmtMailApp(mid) {
   var msg = (document.getElementById('pmtMailMsg') || {}).value || '';
   var docP = msg.trim() ? _pmtDocWithMessage(mid) : Promise.resolve(window._pmtDoc);
   docP.then(function (doc) {
-    return _pmtCopyHtml(doc.html, _pmtPlainOf(doc.html)).then(function (copied) {
+    return wmCopyHtml(doc.html, _pmtPlainOf(doc.html)).then(function (copied) {
       var url = 'mailto:' + r.to.map(encodeURIComponent).join(',') + '?subject=' + encodeURIComponent(doc.subject) +
         '&body=' + encodeURIComponent(copied ? '(여기에 Ctrl+V 로 회의록을 붙여넣으세요)\n\n' : _pmtPlainOf(doc.html).slice(0, 1500));
       window.location.href = url;
@@ -686,26 +670,109 @@ function pmtMailEml(mid) {
   }).catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '메일 파일 만들기 실패'), 'error'); });
 }
 
-/* 미리 보기 문서 그리기 — A4 인쇄 설정, 배경색 인쇄, 높이 자동 */
-function _pmtPaintFrame(doc) {
-  var fr = document.getElementById('pmtPreviewFrame'); if (!fr) return;
-  fr.onload = function () {
-    try { var b = fr.contentDocument.body; fr.style.height = Math.max(400, b.scrollHeight + 8) + 'px'; } catch (e) { /* 무시 */ }
-  };
-  fr.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><title>' + _pmtEsc(doc.subject) + '</title>' +
-    '<style>@page{size:A4;margin:14mm 12mm}html,body{margin:0;background:#fff}body{padding:28px 30px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-    '@media print{body{padding:0}}</style></head><body>' + doc.html + '</body></html>';
+/* ═══ 🖨 종이 · 출력 설정 (v13.320) — 노트 출력과 같은 설정(브라우저에 기억)을 같이 씀 ═══ */
+function _pmtPrefs() { return typeof wmPrintPrefs === 'function' ? wmPrintPrefs() : { theme: 'basic', sign: '', header: true, docNo: true, pageNo: true, margin: 'normal' }; }
+/** 회색 바탕 위 A4 한 장 — 창이 좁으면 줄임 (id: <p>Pv · <p>Wrap · <p>Paper · <p>PreviewFrame) */
+function _pmtPaperHtml(p) {
+  return '<div class="nbpr-pv" id="' + p + 'Pv" style="max-height:78vh"><div class="nbpr-wrap" id="' + p + 'Wrap"><div class="nbpr-paper" id="' + p + 'Paper"><iframe id="' + p + 'PreviewFrame" title="회의록 미리 보기"></iframe></div></div></div>';
 }
-function _pmtSignOn() { try { return localStorage.getItem('pmtSign') === '1'; } catch (e) { return false; } }
-function pmtToggleSign(mid, on) {
-  try { localStorage.setItem('pmtSign', on ? '1' : '0'); } catch (e) { /* 무시 */ }
-  _pmtRender(mid, { sign: on })
-    .then(function (doc) { window._pmtDoc = doc; _pmtPaintFrame(doc); })
+/** 모양 · 결재란 · 머리글 · 문서 번호 · 쪽 번호 — onchange 는 그대로 넣을 JS 호출 글 */
+function _pmtPrefsHtml(onchange) {
+  var o = _pmtPrefs(), SIGNS = (typeof NbPrint !== 'undefined' && NbPrint.SIGNS) || { '': '없음', '작성,검토,승인': '작성 · 검토 · 승인' };
+  var sel = function (k, map, cur) { return '<select class="si pmt-pp" data-k="' + k + '" onchange="' + onchange + '">' + Object.keys(map).map(function (v) { return '<option value="' + _pmtEsc(v) + '"' + (String(cur) === v ? ' selected' : '') + '>' + _pmtEsc(map[v]) + '</option>'; }).join('') + '</select>'; };
+  var signMap = Object.assign({}, SIGNS); if (o.sign && !signMap.hasOwnProperty(o.sign)) signMap[o.sign] = o.sign.split(',').join(' · ');
+  var chk = function (k, label) { return '<label class="nbpr-ck"><input type="checkbox" class="pmt-pp" data-k="' + k + '"' + (o[k] ? ' checked' : '') + ' onchange="' + onchange + '"> ' + label + '</label>'; };
+  return '<div class="nbpr-g pmt-prefs"><div class="nbpr-gt">🎨 문서 모양 <small style="color:var(--t5);font-weight:400">노트 출력과 같은 설정</small></div>' +
+    '<div class="nbpr-row">' + sel('theme', { basic: '모양: 기본', formal: '모양: 공문', clean: '모양: 간결' }, o.theme) + sel('sign', signMap, o.sign) + '</div>' +
+    '<div class="nbpr-ckrow">' + chk('header', '회사 머리글') + chk('docNo', '문서 번호') + chk('pageNo', '쪽 번호') + '</div></div>';
+}
+/** 설정 하나 바꿈 → 기억 → 카드 문서 캐시 비움 */
+function _pmtPrefSet(el) {
+  var o = _pmtPrefs(), k = el.getAttribute('data-k');
+  o[k] = el.type === 'checkbox' ? el.checked : el.value;
+  if (typeof wmPrintPrefsSave === 'function') wmPrintPrefsSave(o);
+  if (_pmt) _pmt.docs = {};   // 카드 안 문서 보기도 새 모양으로
+  return o;
+}
+function pmtDocPref(mid, el) {
+  _pmtPrefSet(el);
+  _pmtRender(mid).then(function (doc) { window._pmtDoc = doc; _pmtPaintFrame(doc); })
     .catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '미리 보기 실패'), 'error'); });
 }
-function pmtPrint() {
-  var fr = document.getElementById('pmtPreviewFrame');
+/** 종이 한 장(인쇄용 @page — 머리글 · 문서 번호 · 쪽 번호)으로 감싸 그림 */
+function _pmtPaintPaper(p, html, title, docNo) {
+  var o = _pmtPrefs(), fr = document.getElementById(p + 'PreviewFrame'); if (!fr) return;
+  if (o.header && typeof NBPR !== 'undefined' && NBPR.ps) o.company = NBPR.ps.company || '';
+  var full = typeof NbPrint !== 'undefined' ? NbPrint.page(html, o, title, docNo)
+    : '<!doctype html><html><head><meta charset="utf-8"><title>' + _pmtEsc(title) + '</title><style>@page{size:A4;margin:14mm 12mm}html,body{margin:0;background:#fff}body{padding:28px 30px}@media print{body{padding:0}}</style></head><body>' + html + '</body></html>';
+  if (typeof wmPaperPaint === 'function') {
+    wmPaperPaint({ frame: fr, wrap: document.getElementById(p + 'Wrap'), paper: document.getElementById(p + 'Paper'), scroller: document.getElementById(p + 'Pv'), o: o, html: full,
+      onPages: function (n) { var el = document.getElementById(p + 'Pages'); if (el) el.textContent = wmPaperHint(n, o); } });
+  } else { fr.style.width = '794px'; fr.style.height = '1123px'; fr.srcdoc = full; }
+}
+/* 미리 보기 문서 그리기 */
+function _pmtPaintFrame(doc) { _pmtPaintPaper('pmt', doc.html, doc.subject, doc.docNo); }
+function pmtPrint(p) {
+  var fr = document.getElementById((p || 'pmt') + 'PreviewFrame');
   if (fr && fr.contentWindow) { fr.contentWindow.focus(); fr.contentWindow.print(); }
+}
+
+/* ═══ 📚 회의록 묶어 출력 (v13.320) — 고른 회의를 표지 · 목차와 함께 한 문서로 ═══ */
+function pmtBundle() {
+  if (!_pmt || !_pmt.list.length) return;
+  return wmGuardedModal('pmtBundle', function () {
+    var t = _pmtToday();
+    var list = _pmt.list.filter(function (m) { return _pmt.filter === 'upcoming' ? m.meetDate && m.meetDate >= t : _pmt.filter === 'past' ? !m.meetDate || m.meetDate < t : true; })
+      .slice().sort(function (a, b) { return String(a.meetDate || '9999').localeCompare(String(b.meetDate || '9999')); });
+    var o = _pmtPrefs();
+    var rows = list.map(function (m) {
+      var open = (m.actionItems || []).filter(function (a) { return a.status !== 'done'; }).length;
+      return '<label class="pmt-bd-it"><input type="checkbox" class="pmt-bd-c" value="' + _pmtEsc(m.id) + '" checked onchange="_pmtBundleRun()"> <span class="pmt-bd-d">' + _pmtEsc(m.meetDate || '날짜 없음') + '</span> <span class="pmt-bd-t">' + _pmtEsc(m.title) + '</span>' +
+        (open ? ' <small style="color:#d97706">미완료 ' + open + '</small>' : '') + '</label>';
+    }).join('');
+    var html = '<div class="nbpr">' + _pmtPaperHtml('pmtB') +
+      '<div class="nbpr-side">' +
+        '<div class="nbpr-act"><button class="nb-btn pri" onclick="pmtPrint(\'pmtB\')">🖨 인쇄 · PDF 저장</button>' +
+          '<div class="nbpr-act2"><button class="nb-btn" onclick="_pmtBundleWord()">📝 Word</button><button class="nb-btn" onclick="_pmtBundleCopy()">📋 서식째 복사</button></div>' +
+          '<div class="nbpr-pages" id="pmtBPages"></div></div>' +
+        '<div class="nbpr-g"><div class="nbpr-gt">🤝 묶을 회의 <button type="button" class="nbpr-link" onclick="_pmtBundleAll(true)">모두</button><button type="button" class="nbpr-link" style="margin-left:6px" onclick="_pmtBundleAll(false)">비우기</button></div>' +
+          '<div class="pmt-bd-list">' + rows + '</div><div class="nbpr-msg" id="pmtBMsg"></div>' +
+          '<div class="nbpr-ckrow"><label class="nbpr-ck"><input type="checkbox" id="pmtBPer"' + (o.perPage ? ' checked' : '') + ' onchange="_pmtBundleOpt(this,\'perPage\')"> 한 건씩 새 쪽</label>' +
+          '<label class="nbpr-ck"><input type="checkbox" id="pmtBToc"' + (o.toc ? ' checked' : '') + ' onchange="_pmtBundleOpt(this,\'toc\')"> 표지 · 목차</label></div></div>' +
+        _pmtPrefsHtml('_pmtPrefSet(this);_pmtBundleRun()') +
+      '</div></div>';
+    createModal({ id: 'pmtBundleModal', titleText: '📚 회의록 묶어 출력', html: html, width: '1240px', boxStyle: 'max-height:95vh;padding:16px 18px', closeOnEsc: true });
+    _pmtBundleRun();
+  }, 'pmtBundleModal');
+}
+function _pmtBundleAll(on) { document.querySelectorAll('#pmtBundleModal .pmt-bd-c').forEach(function (c) { c.checked = on; }); _pmtBundleRun(); }
+function _pmtBundleOpt(el, k) { var o = _pmtPrefs(); o[k] = el.checked; if (typeof wmPrintPrefsSave === 'function') wmPrintPrefsSave(o); _pmtBundleRun(); }
+function _pmtBundleRun() {
+  var ids = [].slice.call(document.querySelectorAll('#pmtBundleModal .pmt-bd-c:checked')).map(function (c) { return c.value; });
+  var msg = document.getElementById('pmtBMsg'), o = _pmtPrefs();
+  if (!ids.length) { _pmt.bundleDoc = null; if (msg) msg.textContent = '묶을 회의를 골라 주세요'; _pmtPaintPaper('pmtB', '<div style="color:#94a3b8;text-align:center;padding:80px 0">고른 회의가 없습니다</div>', '회의록 모음', ''); return; }
+  if (ids.length > 40) { if (msg) msg.textContent = '한 번에 40건까지 — 일부를 빼 주세요'; return; }
+  if (msg) msg.textContent = '만드는 중…';
+  var seq = (_pmt.bundleSeq = (_pmt.bundleSeq || 0) + 1);
+  var body = Object.assign(typeof wmPrintDocBody === 'function' ? wmPrintDocBody(o) : {}, { ids: ids, perPage: o.perPage !== false, toc: o.toc !== false });
+  apiFetch('/api/meetings/bundle', { method: 'POST', body: JSON.stringify(body), timeoutMs: 30000 }).then(function (r) {
+    if (seq !== _pmt.bundleSeq || !document.getElementById('pmtBundleModal')) return;
+    _pmt.bundleDoc = r.data;
+    if (msg) msg.textContent = r.data.count + '건' + (r.data.skipped ? ' · 볼 수 없는 ' + r.data.skipped + '건은 뺌' : '');
+    _pmtPaintPaper('pmtB', r.data.html, r.data.subject, '');
+  }).catch(function (e) { if (msg) msg.textContent = '❌ ' + _pmtErr(e, '묶음 실패'); });
+}
+function _pmtBundleWord() {
+  var d = _pmt && _pmt.bundleDoc; if (!d) return;
+  var html = typeof NbPrint !== 'undefined' ? NbPrint.word(d.html, _pmtPrefs(), d.subject) : '<html><head><meta charset="utf-8"></head><body>' + d.html + '</body></html>';
+  var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + html], { type: 'application/msword' }));
+  a.download = d.subject.replace(/[\\\/:*?"<>|]/g, '_').slice(0, 80) + '.doc'; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+  _pmtToast('📝 Word 파일로 내려받았습니다', 'success');
+}
+function _pmtBundleCopy() {
+  var d = _pmt && _pmt.bundleDoc; if (!d) return;
+  wmCopyHtml(d.html.replace(/<div class="pg-brk"[^>]*><\/div>/g, '<hr>'), _pmtPlainOf(d.html)).then(function (ok) { _pmtToast(ok ? '📋 서식째 복사했습니다 — 메일에 붙여 넣으세요' : '❌ 복사하지 못했습니다', ok ? 'success' : 'error'); });
 }
 function pmtSendMail(mid) {
   var names = Array.prototype.slice.call(document.querySelectorAll('#pmtPreviewModal .pmt-rc:checked')).map(function (c) { return c.getAttribute('data-name'); });
@@ -715,7 +782,7 @@ function pmtSendMail(mid) {
   if (!confirm((names.length + emails.length) + '곳에 회의록을 보낼까요?')) return;
   var btn = document.getElementById('pmtMailBtn'), label = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '보내는 중...'; }
-  apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/mail', { method: 'POST', body: JSON.stringify({ attendees: names, emails: emails, message: msg }), timeoutMs: 45000 }).then(function (r) {
+  apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/mail', { method: 'POST', body: JSON.stringify(Object.assign(typeof wmPrintDocBody === 'function' ? wmPrintDocBody() : {}, { attendees: names, emails: emails, message: msg })), timeoutMs: 45000 }).then(function (r) {
     var m = _pmtFind(mid); if (m) { m.mailedAt = r.data.mailedAt; _pmtPaintCard(mid); }
     var ov = document.getElementById('pmtPreviewModal'); if (ov) ov.remove();
     _pmtToast('✉ ' + (r.message || '보냈습니다.'), 'success');
