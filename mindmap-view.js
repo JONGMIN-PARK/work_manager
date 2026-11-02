@@ -657,8 +657,18 @@ function _mmSelect(id, opts) {
   _mmPaintPanel();
 }
 
+/* 방금 손가락으로 만졌는지 (v13.308) — 터치 뒤 1.5초 안의 마우스 이벤트는 손가락이 만든 것으로 본다
+ * (브라우저가 톡 누름을 mousedown · click 으로, wmTouchDrag 가 끌기를 mouse 이벤트로 바꿔 보냄) */
+var _mmTouchT = 0;
+['touchstart', 'touchmove', 'touchend'].forEach(function (ev) {
+  document.addEventListener(ev, function () { _mmTouchT = Date.now(); }, { passive: true, capture: true });
+});
+function _mmIsTouch() { return Date.now() - _mmTouchT < 1500; }
+
 function _mmFocusCanvas() {
   // 키 입력은 캔버스 안의 투명한 입력칸(mmSink)이 받는다 — 한글 IME 가 켜지려면 입력 가능한 요소여야 함
   var sink = _mmEl('mmSink');
+  // 손가락으로 누를 때는 초점을 주지 않음 — 휴대폰에서 누를 때마다 글자판이 올라오던 것 (v13.308)
+  if (_mmIsTouch()) { if (sink && document.activeElement === sink) sink.blur(); return; }
   if (sink && !_mm.outline && !_mm.gantt && !_mm.editing) { try { sink.focus({ preventScroll: true }); } catch (_) { sink.focus(); } }
 }

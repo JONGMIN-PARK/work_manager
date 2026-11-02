@@ -610,7 +610,14 @@ function _mmBindCanvas() {
       e.preventDefault();
       return;
     }
-    if (node) {
+    if (node && _mmIsTouch()) {
+      // 손가락: 주제는 고르기만 하고, 끌면 화면 이동 (주제 옮기기 · 글 고치기는 마우스로, v13.308)
+      var tid = node.getAttribute('data-id');
+      if (_mm.multi.indexOf(tid) < 0) _mmClearMulti();
+      _mmSelect(tid, { scroll: false });
+      drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, px: _mm.panX, py: _mm.panY };
+      cv.classList.add('mm-panning');
+    } else if (node) {
       var id = node.getAttribute('data-id');
       if (_mm.multi.indexOf(id) < 0) _mmClearMulti();
       _mmSelect(id, { scroll: false });
@@ -752,6 +759,7 @@ function _mmBindCanvas() {
   cv.addEventListener('dblclick', function (e) {
     var imgEl = e.target.closest('.mm-blk-img[data-img]');
     if (imgEl && typeof mmImageView === 'function') { mmImageView(imgEl.getAttribute('data-img')); return; }
+    if (_mmIsTouch()) { e.preventDefault(); return; }   // 두 번 톡 — 글 고치기 · 주제 추가 안 함 (글자판이 뜸, v13.308)
     var node = e.target.closest('.mm-node');
     if (node && !e.target.closest('.mm-fold')) _mmEdit(node.getAttribute('data-id'), null);
     else if (!node && !_mm.readOnly && _mmSheet().root && !e.target.closest('.mm-fbar,.mm-zoom,.mm-minimap,.mm-pitch-hud')) {
@@ -805,6 +813,7 @@ function _mmBindCanvas() {
   cv.addEventListener('contextmenu', function (e) {
     if (_mm.editing || typeof mmContextMenu !== 'function') return;
     e.preventDefault();
+    if (_mmIsTouch()) return;   // 길게 누르기 — 편집 메뉴 안 띄움 (터치는 이동 · 확대만, v13.308)
     var node = e.target.closest('.mm-node');
     if (node) {
       var id = node.getAttribute('data-id');
