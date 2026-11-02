@@ -260,8 +260,9 @@ function globalSearchNav(type, it, kw) {
     setPage('weekly_report');
     setTimeout(function () { var b = document.querySelector('#wrSubTabs [data-wt="list"]'); if (b) b.click(); hit('#mWeeklyReport'); }, 300);
   } else if (type === 'message') {
-    setPage('messages');
-    setTimeout(function () { if (typeof msgOpenThread === 'function') msgOpenThread(n.peerId); hit('#mMessages'); }, 300);
+    // v13.315 메신저 — 그 방 · 그 메시지로 (예전 링크는 상대와의 1:1)
+    if (n.roomId && typeof chatOpenRoom === 'function') chatOpenRoom(n.roomId, false, n.messageId || null);
+    else { setPage('messages'); setTimeout(function () { if (typeof msgOpenThread === 'function') msgOpenThread(n.peerId); hit('#mMessages'); }, 300); }
   } else if (type === 'member') {
     setPage('team'); setMode('weekly');
     setTimeout(function () {

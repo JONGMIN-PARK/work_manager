@@ -33,7 +33,7 @@ function remember(sent, o) {
 async function findByMessage(chatId, messageId) {
   if (!chatId || !messageId) return null;
   var r = await db.query(
-    "SELECT * FROM telegram_refs WHERE chat_id = $1 AND message_id = $2 AND kind IN ('issue','message','comment') ORDER BY id DESC LIMIT 1",
+    "SELECT * FROM telegram_refs WHERE chat_id = $1 AND message_id = $2 AND kind IN ('issue','message','comment','chat') ORDER BY id DESC LIMIT 1",
     [chatId, messageId]
   );
   return r.rows[0] || null;

@@ -222,13 +222,15 @@ var CATS = [
     map: function (r, q) { return { id: r.id, title: r.name, sub: [r.team, r.week_label].filter(Boolean).join(' · '), snippet: firstSnip(q, [[r.cur_text, '금주'], [r.last_text, '지난주']], r.name), nav: { reportId: r.id } }; } },
   { key: 'message',
     run: async function (req, c) {
-      return db.query('SELECT ms.id, ms.body, ms.created_at, ms.from_user_id, ms.to_user_id, uf.name AS from_name, ut.name AS to_name, COUNT(*) OVER() AS _total FROM messages ms' +
-        ' LEFT JOIN users uf ON uf.id = ms.from_user_id LEFT JOIN users ut ON ut.id = ms.to_user_id' +
-        ' WHERE ms.tenant_id = $1 AND (ms.from_user_id = $4 OR ms.to_user_id = $4) AND ms.body ILIKE $2 ORDER BY ms.created_at DESC LIMIT $3', [req.tenant.id, c.like, c.limit, req.user.sub]);
+      // v13.315 💬 메신저 — 내가 들어가 있는 방의 메시지 (예전 1:1 쪽지도 옮겨 와 있음)
+      return db.query("SELECT m.id, m.body, m.created_at, m.room_id, m.user_id, r.kind, COALESCE(r.name, p.name) AS room_name, COALESCE(u.display_name, u.name) AS from_name, " +
+        "(SELECT COALESCE(u2.display_name, u2.name) FROM chat_members m2 JOIN users u2 ON u2.id = m2.user_id WHERE m2.room_id = r.id AND m2.user_id <> $4 LIMIT 1) AS peer_name, COUNT(*) OVER() AS _total " +
+        'FROM chat_messages m JOIN chat_members cm ON cm.room_id = m.room_id AND cm.user_id = $4 AND cm.left_at IS NULL JOIN chat_rooms r ON r.id = m.room_id LEFT JOIN projects p ON p.id = r.project_id LEFT JOIN users u ON u.id = m.user_id ' +
+        'WHERE m.tenant_id = $1 AND m.deleted_at IS NULL AND m.body ILIKE $2 ORDER BY m.id DESC LIMIT $3', [req.tenant.id, c.like, c.limit, req.user.sub]);
     },
     map: function (r, q, req) {
-      var mine = String(r.from_user_id) === String(req.user.sub);
-      return { id: r.id, title: snippetOf(r.body, q) || '', sub: mine ? '→ ' + (r.to_name || '') : (r.from_name || '') + ' →', nav: { peerId: mine ? r.to_user_id : r.from_user_id } };
+      var where = r.kind === 'dm' ? (r.peer_name || '') : (r.room_name || '대화방');
+      return { id: String(r.id), title: snippetOf(r.body, q) || '', sub: '💬 ' + where + ' · ' + (r.from_name || ''), nav: { roomId: r.room_id, messageId: +r.id } };
     } },
   { key: 'member',
     run: async function (req, c) {

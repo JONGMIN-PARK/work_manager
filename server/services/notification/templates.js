@@ -239,6 +239,11 @@ var TEMPLATES = {
       (p.authorName ? '작성: ' + escHtml(p.authorName) + '\n' : '') +
       escHtml((p.body || '').slice(0, 300));
   },
+  chat_message: function (p) {
+    return (p.mention ? '📣 <b>' + escHtml(p.roomName || '대화방') + '</b>에서 나를 불렀어요\n' : '💬 <b>새 메시지</b>\n') +
+      (p.fromName ? escHtml(p.fromName) + ' 님\n' : '') +
+      escHtml((p.body || '').slice(0, 300)) + '\n<i>답장하면 메신저로 갑니다</i>';
+  },
   message_received: function (p) {
     return '✉️ <b>새 메시지</b>\n' +
       (p.fromName ? escHtml(p.fromName) + ' 님\n' : '') +
@@ -271,6 +276,7 @@ var TEMPLATES = {
 /** 이벤트별 제목 (이메일/인앱용) */
 var EVENT_TITLES = {
   message_received: '새 메시지가 도착했습니다',
+  chat_message: '메신저 — 새 메시지',
   issue_assigned: '이슈가 배정되었습니다',
   issue_status_changed: '이슈 상태가 변경되었습니다',
   project_delayed: '프로젝트가 지연되고 있습니다',

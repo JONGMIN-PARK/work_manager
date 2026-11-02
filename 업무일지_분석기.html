@@ -72,7 +72,8 @@
 <script defer src="my-work-timeline.js?v=9" onerror="console.warn('my-work-timeline.js 로드 실패')"></script>
 <script defer src="my-work-notes.js?v=5" onerror="console.warn('my-work-notes.js 로드 실패')"></script>
 <script defer src="my-work-proj.js?v=3" onerror="console.warn('my-work-proj.js 로드 실패')"></script>
-<script defer src="messages-ui.js?v=3" onerror="console.warn('messages-ui.js 로드 실패')"></script>
+<script defer src="chat-ui.js?v=1" onerror="console.warn('chat-ui.js 로드 실패')"></script>
+<script defer src="chat-rtc.js?v=1" onerror="console.warn('chat-rtc.js 로드 실패')"></script>
 <script defer src="project-images.js?v=3" onerror="console.warn('project-images.js 로드 실패')"></script>
 <script defer src="project-meetings.js?v=11" onerror="console.warn('project-meetings.js 로드 실패')"></script>
 <script defer src="spec-schema.js?v=3" onerror="console.warn('spec-schema.js 로드 실패')"></script>
@@ -112,7 +113,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.314';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.315';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -126,8 +127,8 @@
       <button id="notifBtn" class="hdr-ic" onclick="toggleNotifPanel()" title="알림 센터">🔔<span id="notifBadge" style="display:none">0</span></button>
       <div id="notifDropdown" style="display:none"></div>
     </div>
-    <!-- 메시지 (v13.287 상위 탭에서 옮김) -->
-    <button class="hdr-ic" id="hdrMsgBtn" data-page="messages" onclick="setPage('messages')" title="메시지" aria-label="메시지">✉️<span id="msgBadge" style="display:none">0</span></button>
+    <!-- 💬 메신저 (v13.315 — 예전 쪽지 자리) -->
+    <button class="hdr-ic" id="hdrMsgBtn" data-page="messages" onclick="setPage('messages')" title="💬 메신저" aria-label="메신저">💬<span id="msgBadge" style="display:none">0</span></button>
     <!-- 🎨 화면 설정 — 테마 · 글씨체 -->
     <div class="hdr-pop" id="hdrLookWrap">
       <button class="hdr-ic" onclick="wmHdrPop('hdrLookWrap')" title="화면 설정 — 테마 · 글씨체" aria-label="화면 설정" aria-haspopup="true" aria-expanded="false">🎨<i class="hdr-look-dot" id="hdrLookDot"></i></button>

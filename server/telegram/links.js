@@ -3,7 +3,7 @@
  *   APP_URL (없으면 CORS_ORIGIN 첫 값) + ?go=종류:id  → 웹이 로그인 뒤 그 항목을 연다 (app-init.js wmDeepGo)
  *   https 주소일 때만 만든다 — 텔레그램은 localhost · http 링크 버튼을 거부해 메시지 전체가 실패한다.
  */
-var TYPES = { issue: 1, project: 1, as: 1, message: 1, todo: 1, mywork: 1 };
+var TYPES = { issue: 1, project: 1, as: 1, message: 1, todo: 1, mywork: 1, chat: 1 };
 
 function appUrl() {
   var raw = process.env.APP_URL || String(process.env.CORS_ORIGIN || '').split(',')[0];
@@ -34,6 +34,7 @@ function targetOf(eventType, p) {
   if (p.issueId) return ['issue', p.issueId];
   if (p.ticketId) return ['as', p.ticketId];
   if (eventType === 'message_received' && p.fromUserId) return ['message', p.fromUserId];
+  if (eventType === 'chat_message' && p.roomId) return ['chat', p.roomId];   // v13.315 메신저 대화방
   if (p.projectId) return ['project', p.projectId];
   return null;
 }

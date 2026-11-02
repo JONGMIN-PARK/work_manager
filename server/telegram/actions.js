@@ -148,12 +148,22 @@ async function asAssign(user, asgId, what) {
   return { ok: true, toast: label, text: label + ' — A/S <b>' + escHtml(a.ticket_no || '') + '</b> 내 배정' };
 }
 
-/* ── 쪽지 · 댓글 답장 — 웹 라우트와 같은 함수 ── */
+/* ── 쪽지 · 댓글 답장 — 웹 라우트와 같은 함수 ──
+ * v13.315 쪽지는 메신저 1:1 방으로 (예전 쪽지 알림에 답장해도 메신저에 남음) */
 async function sendMessage(user, toUserId, body) {
-  var out = await require('../routes/messages').sendSiteMessage(asReq(user), { toUserId: toUserId, body: body });
-  if (out.status !== 201) return no((out.body && out.body.message) || '보내지 못했습니다');
-  var nm = await db.query('SELECT COALESCE(display_name, name) AS n FROM users WHERE id = $1', [toUserId]);
-  return { ok: true, toast: '보냈습니다', text: '✉️ ' + escHtml(nm.rows.length ? nm.rows[0].n : '') + ' 님께 쪽지를 보냈습니다' };
+  var ok = await db.query("SELECT COALESCE(display_name, name) AS n FROM users WHERE id = $1 AND tenant_id = $2 AND status = 'active'", [toUserId, user.tenant_id]);
+  if (!ok.rows.length) return no('받는 사람을 찾을 수 없습니다');
+  var chat = require('../routes/chat');
+  var room = await chat.dmRoom(user.tenant_id, user.user_id, toUserId, user.user_id);
+  await chat.postMessage({ tenantId: user.tenant_id }, room, { userId: user.user_id, kind: 'text', body: String(body || '').slice(0, 8000) });
+  return { ok: true, toast: '보냈습니다', text: '💬 ' + escHtml(ok.rows[0].n) + ' 님께 메신저로 보냈습니다' };
+}
+async function chatReply(user, roomId, body) {
+  var chat = require('../routes/chat');
+  var room = await chat.membership(user.tenant_id, roomId, user.user_id);
+  if (!room || room.last_read_id == null || room.left_at) return no('이 대화방의 멤버가 아닙니다');
+  await chat.postMessage({ tenantId: user.tenant_id }, room, { userId: user.user_id, kind: 'text', body: String(body || '').slice(0, 8000) });
+  return { ok: true, toast: '보냈습니다', text: '💬 메신저에 보냈습니다' };
 }
 
 async function replyComment(user, commentId, body) {
@@ -173,5 +183,5 @@ module.exports = {
   asReq: asReq, gateIssue: gateIssue,
   issueStatus: issueStatus, issueUrgent: issueUrgent, issueLog: issueLog,
   checklistDone: checklistDone, actionDone: actionDone, devStart: devStart, asAssign: asAssign,
-  sendMessage: sendMessage, replyComment: replyComment
+  sendMessage: sendMessage, chatReply: chatReply, replyComment: replyComment
 };

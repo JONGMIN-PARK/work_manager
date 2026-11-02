@@ -1,3 +1,4 @@
+process.env.CHAT_FALLBACK_MS = process.env.CHAT_FALLBACK_MS || '200';   // v13.315 메신저 못 본 알림을 빨리
 /**
  * 텔레그램 업무 창구 (v13.301~305) — 실제 DB · 텔레그램 API 는 가짜(fetch)
  *  ① 고친 것: 보낸 사람(from.id)으로 사람 확인 · 그룹방 /start 계정 코드 거부 · 웹훅 비밀값 · 버튼 권한 · /log 회사 · 한국 날짜
@@ -163,15 +164,15 @@ describe('② 답장으로 일하기', function () {
     expect(last(CH_VIEWER)).toMatch(/알림을 받은 사람만/);
   });
 
-  test('쪽지 알림에 답장 → 보낸 사람에게 쪽지', async function () {
+  test('쪽지 알림에 답장 → 보낸 사람과의 메신저 1:1 방으로 (v13.315)', async function () {
     var out = await require('../routes/messages').sendSiteMessage(require('../telegram/actions').asReq({ user_id: admin.user.id, tenant_id: T, role: 'admin', name: admin.user.name }), { toUserId: owner.user.id, body: '점검 언제?' });
     expect(out.status).toBe(201);
-    await new Promise(function (r) { setTimeout(r, 300); });   // 알림은 기다리지 않고 나감
-    var ref = await db.query("SELECT message_id FROM telegram_refs WHERE kind = 'message' AND user_id = $1 ORDER BY id DESC LIMIT 1", [owner.user.id]);
+    await new Promise(function (r) { setTimeout(r, 900); });   // 메신저가 잠깐 기다렸다 못 봤으면 텔레그램으로 (v13.315)
+    var ref = await db.query("SELECT message_id FROM telegram_refs WHERE kind = 'chat' AND user_id = $1 ORDER BY id DESC LIMIT 1", [owner.user.id]);
     expect(ref.rows.length).toBe(1);
     await tg.handleUpdate(priv(CH_OWNER, '내일 오전요', { reply_to_message: { message_id: +ref.rows[0].message_id, from: { id: 1, is_bot: true } } }));
-    var m = await db.query('SELECT from_user_id, to_user_id, body FROM messages WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1', [T]);
-    expect(m.rows[0]).toMatchObject({ from_user_id: owner.user.id, to_user_id: admin.user.id, body: '내일 오전요' });
+    var m = await db.query("SELECT m.user_id, m.body, r.dm_key FROM chat_messages m JOIN chat_rooms r ON r.id = m.room_id WHERE m.tenant_id = $1 AND r.kind = 'dm' ORDER BY m.id DESC LIMIT 1", [T]);
+    expect(m.rows[0]).toMatchObject({ user_id: owner.user.id, body: '내일 오전요', dm_key: [owner.user.id, admin.user.id].sort().join(':') });
   });
 });
 

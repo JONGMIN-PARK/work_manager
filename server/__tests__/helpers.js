@@ -81,7 +81,9 @@ async function cleanup() {
     // v13.196 표준 사양서
     'project_spec_files', 'spec_template_versions', 'spec_templates',
     // v13.301~305 텔레그램 업무 창구
-    'telegram_refs', 'telegram_group_links'
+    'telegram_refs', 'telegram_group_links',
+    // v13.315 메신저 (방을 지우면 멤버 · 메시지 · 파일도)
+    'chat_rooms'
   ];
   for (var i = 0; i < byTenant.length; i++) {
     await tryDel('DELETE FROM ' + byTenant[i] + ' WHERE tenant_id = $1');

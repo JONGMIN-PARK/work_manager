@@ -100,12 +100,18 @@ async function sendSiteMessage(req, b) {
     'VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
     [id, req.tenant.id, req.user.sub, toUserId, body, b.contextType || b.context_type || null, b.contextId || b.context_id || null]
   );
+  // v13.315 쪽지는 메신저 1:1 방에도 (화면은 메신저) — 알림도 메신저가 (못 보면 텔레그램) · legacy_id 로 다음 기동 옮김과 겹치지 않게
   try {
+    var chat = require('./chat');
+    var room = await chat.dmRoom(req.tenant.id, req.user.sub, toUserId, req.user.sub);
+    await chat.postMessage({ tenantId: req.tenant.id }, room, { userId: req.user.sub, kind: 'text', body: body, legacyId: id });
+  } catch (e) {
+    console.error('[messages→chat]', e.message);
     notificationService.notify('message_received', {
       fromName: fromName, body: body, fromUserId: req.user.sub,
       replyRef: { kind: 'message', id: req.user.sub }
-    }, [toUserId]).catch(function (e) { console.error('[messages/notify]', e.message); });
-  } catch (_) {}
+    }, [toUserId]).catch(function (e2) { console.error('[messages/notify]', e2.message); });
+  }
   try { authService.auditLog(req.user.sub, 'message.send', 'user', toUserId, { len: body.length }, req).catch(function () {}); } catch (_) {}
   return { status: 201, body: { data: r.rows[0] } };
 }

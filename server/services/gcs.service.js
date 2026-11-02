@@ -70,6 +70,18 @@ async function signDownloadUrl(key, downloadName, expiresMs) {
   return res[0];
 }
 
+// 서버가 가진 바이트를 바로 올림 (텔레그램 첨부 · 메신저 파일) — v13.315 (예전엔 부르는 곳만 있고 함수가 없어 텔레그램 문서 저장이 늘 실패)
+async function uploadBuffer(key, buf, mimeType) {
+  _init();
+  if (!_bucket) throw _initErr || new Error('GCS not enabled');
+  await _bucket.file(key).save(buf, { contentType: mimeType || 'application/octet-stream', resumable: false });
+}
+async function copyObject(fromKey, toKey) {
+  _init();
+  if (!_bucket) throw _initErr || new Error('GCS not enabled');
+  await _bucket.file(fromKey).copy(_bucket.file(toKey));
+}
+
 async function deleteObject(key) {
   _init();
   if (!_bucket || !key) return;
@@ -80,5 +92,7 @@ module.exports = {
   isEnabled: isEnabled,
   signUploadUrl: signUploadUrl,
   signDownloadUrl: signDownloadUrl,
-  deleteObject: deleteObject
+  deleteObject: deleteObject,
+  uploadBuffer: uploadBuffer,
+  copyObject: copyObject
 };

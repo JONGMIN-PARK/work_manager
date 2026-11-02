@@ -41,6 +41,9 @@ async function handle(c) {
   } else if (ref.kind === 'message') {
     if (!text) { await c.send(c.chatId, '✉️ 쪽지에는 글만 보낼 수 있습니다.'); return true; }
     out = await actions.sendMessage(c.user, ref.ref_id, text);
+  } else if (ref.kind === 'chat') {   // v13.315 메신저 알림에 답장 → 그 대화방으로
+    if (!text) { await c.send(c.chatId, '💬 메신저에는 글로 답장해 주세요.'); return true; }
+    out = await actions.chatReply(c.user, ref.ref_id, text);
   } else if (ref.kind === 'comment') {
     if (!text) { await c.send(c.chatId, '💬 답글은 글로 적어 주세요.'); return true; }
     out = await actions.replyComment(c.user, ref.ref_id, text);
