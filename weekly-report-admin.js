@@ -1638,7 +1638,7 @@
       d.flags.forEach(function (f) { go.push(f); h += wrcRow(f.kind, f, go.length - 1); });
       d.quality.forEach(function (q) { go.push(q); h += wrcRow('quality', q, go.length - 1); });
       if (wf.length) {
-        h += '<div class="wrc-g">✍️ 글쓰기 — 누르면 금주 칸의 그 자리로 · 왜 그런지는 📓 노트북의 ✍️ 코치에서</div>';
+        h += '<div class="wrc-g">✍️ 글쓰기 — 누르면 금주 칸의 그 자리로 · 왜 그런지는 <a href="#" onclick="event.preventDefault();if(window.nbWriteStart)nbWriteStart()">✍️ 코치와 글쓰기 (Alt+W)</a></div>';
         wf.slice(0, 15).forEach(function (f, i) {
           var L = NbCoach.LABELS[f.k] || ['•', f.k];
           h += '<div class="wrc-r" data-wrc-w="' + i + '" title="' + esc(f.why + ' → ' + f.hint) + '"><span class="wrc-k">' + L[0] + ' ' + esc(L[1]) + '</span><b>' + esc(f.msg) + '</b>'

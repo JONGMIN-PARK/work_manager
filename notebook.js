@@ -116,6 +116,7 @@ function _nbDrawSide() {
   }
   var h = '<div class="nb-side-top">' +
     '<div class="nb-new"><button class="nb-new-b" data-nb="new" title="새 노트 (Alt+Shift+N)"><span>＋</span> 새 노트</button><button class="nb-new-m" data-nb="tpl" title="양식으로 시작" aria-label="양식으로 시작">▾</button></div>' +
+    '<button class="nb-write-b" data-nb="write" title="글 종류를 고르면 양식 + ✍️ 코치가 켜진 채로 바로 (어느 화면에서든 Alt+W)">✍️ 글쓰기 · 코치와 함께 <kbd>Alt+W</kbd></button>' +
     '<button class="nb-quick-b" data-nb="quick" title="어느 화면에서든 Alt+N">📥 낙서장에 빨리 적기 <kbd>Alt+N</kbd></button>' +
     '<label class="nb-search"><span aria-hidden="true">🔍</span><input id="nbQ" type="search" placeholder="노트 찾기 — 제목 · 본문 · 태그" value="' + _nbE(NB.q) + '" autocomplete="off"></label></div>';
   h += '<div class="nb-side-sc nb-scroll"><nav class="nb-navs">' +
@@ -292,8 +293,9 @@ function _nbDrawMain() {
   if (root) root.classList.toggle('nb-focus', !!NB.focus);
   if (!n) {
     m.innerHTML = '<div class="nb-blank"><div class="nb-blank-i">📓</div><b>노트를 고르거나 새로 쓰세요</b>' +
+      '<button class="nb-btn pri nb-blank-w" data-nb="write">✍️ 글쓰기 시작 — 코치와 함께</button>' +
       '<div class="nb-blank-g">' + NB_TEMPLATES.map(function (t) { return '<button class="nb-tplc" data-tpl="' + t.k + '"><span>' + t.icon + '</span>' + _nbE(t.name) + '</button>'; }).join('') + '</div>' +
-      '<small>Alt+N 낙서장 · / 로 명령 · 펜이 있으면 ✍️ 손글씨</small></div>';
+      '<small>Alt+W 글쓰기 · Alt+N 낙서장 · / 로 명령 · 펜이 있으면 ✍️ 손글씨</small></div>';
     return;
   }
   var daily = !!NB.daily1, shared = !!(NB.cur && NB.cur.readOnly), trash = !!(NB.cur && NB.cur.deletedAt) || shared;   // trash = 고칠 수 없음 (휴지통 · 공유받음)
@@ -532,6 +534,7 @@ function _nbClick(e) {
   if (k === 'new') nbNewFromTemplate('blank');
   else if (k === 'tpl') _nbTplMenu(x);
   else if (k === 'quick') nbQuickOpen();
+  else if (k === 'write') nbWriteStart();
   else if (k === 'fold-add') _nbFolderEdit(null);
   else if (k === 'to-list') { _nbFlush(); _nbSetPane('list'); }
   else if (k === 'to-side') _nbSetPane('side');

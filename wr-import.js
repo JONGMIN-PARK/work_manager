@@ -708,8 +708,9 @@ async function hFile(file,enc){if(!file)return;document.getElementById('fnDisp')
 /* 여러 파일 순차 처리 */
 async function hFiles(fileList){
   if(!fileList||!fileList.length)return;
-  if(typeof wmLib==='function')await wmLib('xlsx').catch(function(){});  // 엑셀 도구는 처음 쓸 때 받음 (v13.310)
+  // 먼저 복사 — 부르는 쪽이 곧바로 input.value='' 로 비우면 FileList 도 비므로, 엑셀 도구를 기다리기 전에 (v13.322)
   var files=Array.from(fileList).filter(function(f){return/\.(xls|xlsx|html?|csv)$/i.test(f.name)});
+  if(typeof wmLib==='function')await wmLib('xlsx').catch(function(){});  // 엑셀 도구는 처음 쓸 때 받음 (v13.310)
   if(!files.length){showToast('지원하지 않는 파일 형식입니다.','error');return}
   if(files.length===1){hFile(files[0]);return}
   showToast('📂 '+files.length+'개 파일 로드 중...');

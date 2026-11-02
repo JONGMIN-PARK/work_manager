@@ -645,3 +645,52 @@ function _nbpStats(c) {
 document.addEventListener('change', function (e) {
   if (e.target && e.target.id === 'nbCKind') { NBP.kindOver = e.target.value; NBP.ai = null; _nbpCoachRun(); }
 });
+
+/* ═══ ✍️ 글쓰기 시작 (v13.322) — 어디서든 Alt+W · 글 종류 하나 고르면 양식 + 코치 켜진 채로 바로 쓰기 ═══
+   예전: 📓 → 노트 고르기 / 새 노트 ▾ 양식 → ✍️ 코치 누르기 (세 단계) */
+var NBP_WRITE = [
+  ['meeting', '🤝', '회의록', '일시 · 참석 · 안건 · 결정 · 할 일'],
+  ['daily', '📋', '업무 일지', '오늘 일정 · 할 일로 채워 시작'],
+  ['review', '🔍', '기술 검토', '배경 · 요구 · 검토 안 · 결론'],
+  ['trip', '✈️', '출장 보고', '개요 · 결과 · 후속 조치'],
+  ['why', '🧩', '문제 분석', '현상 · 5 Why · 대책'],
+  ['mail', '✉️', '업무 메일', '용건 · 전할 내용 · 요청'],
+  ['blank', '📄', '자유 글', '빈 종이에서 시작']
+];
+function nbWriteStart() {
+  if (typeof currentUser === 'undefined' || !currentUser) return;
+  var coachOn = _nbLS('writeCoach'); coachOn = coachOn == null ? true : !!coachOn;
+  return wmGuardedModal('nbWrite', function () {
+    var src = NB.list && NB.list.length && NB.view !== 'trash' && NB.view !== 'shared' ? Promise.resolve(NB.list) : apiFetch('/api/notebook/notes?view=all&sort=updated').then(function (r) { return r.data || []; }).catch(function () { return []; });
+    return src.then(function (list) { _nbpWriteModal(coachOn, list.filter(function (n) { return !n.deletedAt && !n.readOnly && !n.ownerName; }).slice(0, 3)); });
+  }, 'nbWriteModal', { onOpen: function () { var b = document.querySelector('#nbWriteModal .nbw-c'); if (b) b.focus(); } });
+}
+function _nbpWriteModal(coachOn, recent) {
+  var md = createModal({ id: 'nbWriteModal', titleText: '✍️ 무엇을 쓸까요?', width: '560px', closeOnEsc: true,
+    html: '<div class="nbw-g">' + NBP_WRITE.map(function (w) {
+        return '<button class="nbw-c" data-w="' + w[0] + '"><span class="nbw-i">' + w[1] + '</span><b>' + _nbE(w[2]) + '</b><small>' + _nbE(w[3]) + '</small></button>';
+      }).join('') + '</div>' +
+      (recent.length ? '<div class="nbw-st">이어 쓰기</div><div class="nbw-r">' + recent.map(function (n) {
+        return '<button class="nbw-ri" data-wn="' + _nbE(n.id) + '"><span>📝</span><b>' + _nbE(_nbTitleOf(n)) + '</b><small>' + _nbE(_nbWhen(n.updatedAt)) + '</small></button>';
+      }).join('') + '</div>' : '') +
+      '<div class="nbw-f"><label class="nbpr-ck"><input type="checkbox" id="nbwCoach"' + (coachOn ? ' checked' : '') + '> ✍️ 글쓰기 코치 켜고 쓰기 <small>(고칠 곳을 이유 · 힌트 · 예시로)</small></label><span class="nb-sp"></span><small class="nbw-k">어디서든 <kbd>Alt+W</kbd></small></div>' });
+  md.box.addEventListener('click', function (e) {
+    var x = e.target.closest('[data-w],[data-wn]'); if (!x) return;
+    var on = md.box.querySelector('#nbwCoach').checked;
+    _nbLS('writeCoach', on);
+    md.close();
+    var p = x.hasAttribute('data-w') ? nbNewFromTemplate(x.getAttribute('data-w')) : _nbpOpenAnywhere(x.getAttribute('data-wn'));
+    Promise.resolve(p).then(function () { if (on !== !!NBP.coach) nbpCoachToggle(on); else if (on) _nbpCoachRun(true); });
+  });
+}
+/** 다른 화면에 있어도 노트 열기 */
+function _nbpOpenAnywhere(id) {
+  nbOpenNote(id);
+  return new Promise(function (res) { var n = 0; (function wait() { if ((NB.cur && NB.cur.id === id && document.getElementById('nbSrc')) || ++n > 50) return res(); setTimeout(wait, 100); })(); });
+}
+document.addEventListener('keydown', function (e) {
+  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 'w' || e.key === 'W' || e.code === 'KeyW')) {
+    if (typeof currentUser === 'undefined' || !currentUser || document.getElementById('nbWriteModal')) return;
+    e.preventDefault(); nbWriteStart();
+  }
+});
