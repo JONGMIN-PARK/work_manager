@@ -303,8 +303,8 @@ function _nbDrawMain() {
     (daily ? '<span class="nb-crumb">📅 일일 노트</span>' : shared ? '<span class="nb-crumb">👥 ' + _nbE(NB.cur.ownerName || '') + '</span>' :
       '<button class="nb-crumb" data-nb="folder-pick" title="폴더 옮기기">' + (NB.cur.inbox ? '📥 낙서장' : f ? '<i style="background:' + _nbE(f.color || 'var(--ac)') + '"></i>' + _nbE(f.name) : '📁 폴더 없음') + ' ▾</button>') +
     '<span class="nb-state" id="nbState" aria-live="polite"></span><span class="nb-sp"></span>' +
-    (shared ? '' : '<div class="nb-seg" role="tablist" aria-label="보기">' + [['edit', '✏️', '편집'], ['split', '◫', '나란히'], ['view', '👁', '보기']].map(function (x) {
-      return '<button role="tab" aria-selected="' + (NB.mode === x[0]) + '" class="' + (NB.mode === x[0] ? 'on' : '') + '" data-mode="' + x[0] + '" title="' + x[2] + ' (Ctrl+Alt+' + ({ edit: 1, split: 2, view: 3 })[x[0]] + ')">' + x[1] + '<span> ' + x[2] + '</span></button>';
+    (shared ? '' : '<div class="nb-seg" role="tablist" aria-label="보기">' + [['edit', '✏️', '편집'], ['split', '◫', '나란히'], ['view', '👁', '보기'], ['paper', '🖨', '출력 모양']].map(function (x) {
+      return '<button role="tab" aria-selected="' + (NB.mode === x[0]) + '" class="' + (NB.mode === x[0] ? 'on' : '') + '" data-mode="' + x[0] + '" title="' + (x[0] === 'paper' ? '🖨 출력 모양 — 쓰면서 인쇄될 종이 그대로 보기' : x[2]) + ' (Ctrl+Alt+' + ({ edit: 1, split: 2, view: 3, paper: 4 })[x[0]] + ')">' + x[1] + '<span> ' + x[2] + '</span></button>';
     }).join('') + '</div>') +
     (trash ? '' : '<button class="nb-ib nb-ai" data-nb="ai" title="✨ AI — 메일 초안 · 번역 · 다듬기 · 요약">✨<span> AI</span></button>') +
     '<button class="nb-ib nb-cbtn' + (typeof NBP !== 'undefined' && NBP.coach ? ' on' : '') + '" data-nb="coach" title="✍️ 글쓰기 코치 — 고칠 곳을 이유 · 힌트 · 예시로" aria-pressed="' + !!(typeof NBP !== 'undefined' && NBP.coach) + '">✍️<span> 코치</span></button>' +
@@ -322,6 +322,7 @@ function _nbDrawMain() {
   h += '<div class="nb-ed nb-m-' + (shared ? 'view' : NB.mode) + '" id="nbEd">' +
     '<textarea class="nb-src nb-scroll" id="nbSrc" spellcheck="false" placeholder="여기에 쓰세요 — 마크다운 · / 명령 · [[ 노트 잇기 · 사진은 붙여넣기" aria-label="본문"' + (trash ? ' readonly' : '') + '></textarea>' +
     '<div class="nb-prev nb-scroll" id="nbPrev"><div class="nb-doc-w"><article class="nb-doc" id="nbDoc"></article><div class="nb-over" id="nbOver"></div><div class="nb-bl" id="nbBL"></div></div></div>' +
+    (typeof nbPaperPaneHtml === 'function' ? nbPaperPaneHtml() : '') +
     '</div>';
   h += '<div class="nb-foot" id="nbFoot"></div>';
   m.innerHTML = h;
@@ -358,7 +359,7 @@ function _nbFoot() {
   var n = _nbDoc();
   el.innerHTML = '<span>글자 ' + chars.toLocaleString() + '</span><span>읽기 약 ' + mins + '분</span>' +
     (NB.cur ? '<span>만든 날 ' + new Date(NB.cur.createdAt).toLocaleDateString() + '</span><span id="nbUpd">고침 ' + _nbWhen(NB.cur.updatedAt) + '</span>' : '<span>' + _nbE(n.date) + '</span>') +
-    '<span class="nb-sp"></span><span class="nb-foot-k">/ 명령 · Ctrl+S 저장 · Ctrl+Alt+1·2·3 보기</span>';
+    '<span class="nb-sp"></span><span class="nb-foot-k">/ 명령 · Ctrl+S 저장 · Ctrl+Alt+1~4 보기</span>';
 }
 function _nbState(s, msg) {
   var el = document.getElementById('nbState'); if (!el) return;
@@ -388,6 +389,7 @@ function _nbRenderPrev() {
   if (NB.inkId && NB.cur) { var host = doc.querySelector('.nb-ink[data-ink="' + NB.inkId + '"]'); if (host) _nbInkStart(NB.inkId, true); else _nbInkStop(); }
   _nbDrawOver();
   if (typeof _nbAfterRender === 'function') _nbAfterRender(doc);   // 🔗 링크 · 칩 · 체크 단추 · 가리키는 노트 (notebook-plus.js)
+  if (NB.mode === 'paper' && typeof nbPaperLive === 'function') nbPaperLive();   // 🖨 출력 모양 — 쓰는 대로 종이에 (v13.321)
 }
 /* 🖍 덮어 그린 표시 */
 function _nbDrawOver() {
@@ -416,7 +418,7 @@ function _nbBind(root) {
       clearTimeout(prevT); prevT = setTimeout(function () { _nbRenderPrev(); _nbFoot(); }, NB.mode === 'edit' ? 400 : 120);
       if (!(typeof _nbWikiCheck === 'function' && _nbWikiCheck())) _nbSlashCheck();
       if (typeof _nbCoachSchedule === 'function') _nbCoachSchedule();
-    } else if (e.target.id === 'nbTitle') _nbChanged('title');
+    } else if (e.target.id === 'nbTitle') { _nbChanged('title'); if (NB.mode === 'paper' && typeof nbPaperLive === 'function') nbPaperLive(); }
     else if (e.target.id === 'nbQ') {
       clearTimeout(NB.qT);
       var v = e.target.value.trim();
@@ -579,7 +581,7 @@ function _nbKey(e) {
     return;
   }
   if (t.id === 'nbTitle' && e.key === 'Enter') { e.preventDefault(); var s0 = document.getElementById('nbSrc'); if (NB.mode === 'view') _nbSetMode('split'); if (s0) { s0.focus(); s0.setSelectionRange(0, 0); } return; }
-  if (ctrl && e.altKey && /^[123]$/.test(e.key)) { e.preventDefault(); _nbSetMode(['edit', 'split', 'view'][+e.key - 1]); return; }
+  if (ctrl && e.altKey && /^[1234]$/.test(e.key)) { e.preventDefault(); _nbSetMode(['edit', 'split', 'view', 'paper'][+e.key - 1]); return; }
   if (ctrl && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); _nbToggleFocus(); return; }
   if (e.key === 'Escape' && NB.focus) { _nbToggleFocus(); return; }
   if (ctrl && (e.key === 's' || e.key === 'S')) { e.preventDefault(); _nbFlush(true); return; }

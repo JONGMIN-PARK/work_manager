@@ -75,21 +75,22 @@
 <script defer src="notebook-md.js?v=2" onerror="console.warn('notebook-md.js 로드 실패')"></script>
 <script defer src="notebook-ink.js?v=1" onerror="console.warn('notebook-ink.js 로드 실패')"></script>
 <script defer src="notebook-coach.js?v=1" onerror="console.warn('notebook-coach.js 로드 실패')"></script>
-<script defer src="notebook.js?v=4" onerror="console.warn('notebook.js 로드 실패')"></script>
+<script defer src="notebook.js?v=5" onerror="console.warn('notebook.js 로드 실패')"></script>
 <script defer src="notebook-plus.js?v=2" onerror="console.warn('notebook-plus.js 로드 실패')"></script>
 <script defer src="notebook-print.js?v=2" onerror="console.warn('notebook-print.js 로드 실패')"></script>
-<script defer src="notebook-print-ui.js?v=2" onerror="console.warn('notebook-print-ui.js 로드 실패')"></script>
+<script defer src="notebook-print-ui.js?v=3" onerror="console.warn('notebook-print-ui.js 로드 실패')"></script>
 <script defer src="chat-ui.js?v=2" onerror="console.warn('chat-ui.js 로드 실패')"></script>
 <script defer src="chat-rtc.js?v=1" onerror="console.warn('chat-rtc.js 로드 실패')"></script>
 <script defer src="project-images.js?v=3" onerror="console.warn('project-images.js 로드 실패')"></script>
-<script defer src="project-meetings.js?v=12" onerror="console.warn('project-meetings.js 로드 실패')"></script>
+<script defer src="meeting-minutes.js?v=1" onerror="console.warn('meeting-minutes.js 로드 실패')"></script>
+<script defer src="project-meetings.js?v=13" onerror="console.warn('project-meetings.js 로드 실패')"></script>
 <script defer src="spec-schema.js?v=3" onerror="console.warn('spec-schema.js 로드 실패')"></script>
 <script defer src="project-spec.js?v=6" onerror="console.warn('project-spec.js 로드 실패')"></script>
 <script defer src="spec-template-admin.js?v=2" onerror="console.warn('spec-template-admin.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <!-- v13.310 엑셀 · 워드 · PDF · 캡처 · 압축 라이브러리는 ui-helpers.js wmLib 가 첫 화면 뒤에 받음 -->
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=87">
+<link rel="stylesheet" href="style.css?v=88">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -120,7 +121,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.320';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.321';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->

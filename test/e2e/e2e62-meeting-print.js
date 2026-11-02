@@ -39,7 +39,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     // 1) 미리 보기 — 옛 결재란 설정 이어받기 · 종이 · 쪽 수
     await p.evaluate(function (id) { pmtPreview(id); }, ids[1]);
     check(await frame('pmtPreviewFrame', '회의록') && await frame('pmtPreviewFrame', '>승인<'), '미리 보기 — 옛 "결재란" 설정을 이어받아 작성 · 검토 · 승인');
-    check(await until(function () { return /약 \d+쪽/.test((document.getElementById('pmtPages') || {}).textContent || ''); }), '종이 미리 보기 — 쪽 수 표시 (노트 출력과 같은 종이)');
+    check(await until(function () { return /\d+쪽 · 인쇄되는 모습/.test((document.getElementById('pmtPages') || {}).textContent || ''); }), '종이 미리 보기 — 쪽 수 표시 (노트 출력과 같은 종이)');
     check(await frame('pmtPreviewFrame', '\\(주\\)회의출력'), '회사 머리글 (기본 켜짐)');
 
     // 2) 모양 · 결재란 바꾸기 → 노트 출력과 같은 설정에 기억

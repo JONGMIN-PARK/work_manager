@@ -29,9 +29,18 @@ function wmPrintDocBody(o) {
   return { theme: o.theme, accent: o.accent, signs: String(o.sign || '').split(/[,·]/).map(function (s) { return s.trim(); }).filter(Boolean), header: !!o.header, docNo: o.docNo !== false };
 }
 /**
- * 종이 미리 보기 — iframe 에 한 장(HTML 전체)을 그리고, 창 폭에 맞게 줄이고, 쪽이 나뉘는 곳에 빨간 선 · 쪽 수
- * p: { frame, wrap, paper, scroller, html, o, onPages(n) }
+ * 종이 미리 보기 (v13.321 — 인쇄되는 그대로) — A4 종이를 한 장씩 따로 그리고, 쪽이 넘어가는 줄(표 줄 · 문단 · 그림)은
+ * 인쇄처럼 다음 장으로 넘기고, 매 장 위아래에 머리글 · 문서 번호 · 쪽 번호를 그대로 보여 준다. 창 폭에 맞게 줄임.
+ * 화면용 꾸밈(.pv-*)은 인쇄 때 모두 빠진다 — 인쇄는 @page 가 같은 자리에 붙인다.
+ * p: { frame, wrap, paper, scroller, html, o, title, docNo, live, onPages(n) }
+ *    live: 같은 머리(설정)면 iframe 을 다시 싣지 않고 본문만 바꿈 — 쓰는 동안 깜빡임 · 스크롤 튐 없이
  */
+var WM_PV_CSS = '@media screen{html{background:transparent!important}body{background:transparent!important}' +
+  '.pv-sheet{position:absolute;left:0;right:0;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.12),0 6px 18px rgba(15,23,42,.14);z-index:-1}' +
+  '.pv-mb{position:absolute;font:8pt \'Malgun Gothic\',\'Apple SD Gothic Neo\',sans-serif;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}' +
+  '.pv-pn{color:#64748b;font-size:8.5pt;left:0;right:0;text-align:center;max-width:none}}' +
+  '@media print{.pv-sp,.pv-sheet,.pv-mb{display:none!important}}';
+var WM_PV_GAP = 18;
 function wmPaperPaint(p) {
   var fr = p.frame; if (!fr) return;
   var o = p.o || {}, pv = p.scroller, st = pv ? pv.scrollTop : 0;
@@ -41,35 +50,123 @@ function wmPaperPaint(p) {
   var fit = pv ? Math.min(1, (pv.clientWidth - 28) / W) : 1;
   if (p.paper) { p.paper.style.transform = fit < 1 ? 'scale(' + fit.toFixed(3) + ')' : ''; p.paper.style.width = W + 'px'; }
   if (p.wrap) p.wrap.style.width = Math.floor(W * fit) + 'px';
-  fr.onload = function () {
+  var html = String(p.html || '').replace('</head>', '<style>' + WM_PV_CSS + '</style></head>');
+  var cut = html.indexOf('<body>'), head = cut < 0 ? html : html.slice(0, cut), inner = cut < 0 ? '' : html.slice(cut + 6).replace(/<\/body>\s*<\/html>\s*$/, '');
+  function done() {
     try {
-      var d = fr.contentDocument, M = NbPrint.MARGIN[o.margin] || NbPrint.MARGIN.normal;
-      var pageH = NbPrint.mm((o.landscape ? 210 : 297) - 2 * M[0]), top = NbPrint.mm(M[0]);
-      var bodyH = d.body.scrollHeight - 2 * top;
-      // 강제 쪽 나눔(묶음)마다 새로 셈 — 쪽 수 · 나뉨 선은 대략
-      var cuts = [0].concat([].slice.call(d.querySelectorAll('.pg-brk')).map(function (x) { return x.offsetTop - top; })).concat([bodyH]);
-      var pages = 0, html = '';
-      for (var i = 0; i + 1 < cuts.length; i++) {
-        var len = Math.max(1, cuts[i + 1] - cuts[i]), n = Math.max(1, Math.ceil(len / pageH));
-        pages += n;
-        if (i > 0) html += '<div class="pv-guide" style="top:' + (top + cuts[i]) + 'px;border-top-style:solid"><span>' + (pages - n + 1) + '쪽</span></div>';
-        for (var k = 1; k < n; k++) html += '<div class="pv-guide" style="top:' + (top + cuts[i] + k * pageH) + 'px"><span>' + (pages - n + k + 1) + '쪽 ↓</span></div>';
-      }
-      if (html) d.body.insertAdjacentHTML('beforeend', html);
-      var H = Math.max(o.landscape ? 794 : 1123, d.documentElement.scrollHeight);
+      var d = fr.contentDocument;
+      var pages = _wmPaginate(d, o, p.title, p.docNo);
+      var H = Math.max(1, pages * ((o.landscape ? 794 : 1123) + WM_PV_GAP) - WM_PV_GAP);
       fr.style.height = H + 'px';
       if (p.paper) p.paper.style.height = H + 'px';
       if (p.wrap) p.wrap.style.height = Math.ceil(H * fit) + 'px';
       if (pv) pv.scrollTop = st;
       if (p.onPages) p.onPages(pages);
     } catch (e) { /* 미리 보기만 */ }
-  };
-  fr.srcdoc = p.html;
+  }
+  var d0 = fr.contentDocument;
+  if (p.live && fr._wmHead === head && d0 && d0.body && d0.readyState === 'complete') { d0.body.innerHTML = inner; done(); return; }
+  fr._wmHead = head;
+  fr.onload = done;
+  fr.srcdoc = html;
 }
-function wmPaperHint(pages, o) { return '약 ' + pages + '쪽 · 빨간 선이 쪽이 나뉘는 곳(대략)' + (o && o.pageNo ? ' · 쪽 번호와 머리글은 인쇄할 때 매 쪽에 붙습니다' : ''); }
+/** 인쇄처럼 쪽 나누기 — 넘치는 줄은 다음 장으로 밀고(.pv-sp 빈칸), 장마다 흰 종이 · 머리글 · 쪽 번호. 쪽 수 */
+function _wmPaginate(d, o, title, docNo) {
+  var M = NbPrint.MARGIN[o.margin] || NbPrint.MARGIN.normal;
+  var PH = o.landscape ? 794 : 1123, G = WM_PV_GAP, S = PH + G, top = NbPrint.mm(M[0]), side = NbPrint.mm(M[1]), CH = PH - 2 * top;
+  var body = d.body, win = d.defaultView;
+  var ATOM = 'tr,img,svg,p,li,h1,h2,h3,h4,h5,h6,pre,blockquote,figure,hr,.nb-ink';
+  function y(el) { return el.getBoundingClientRect().top + (win.scrollY || 0); }
+  function lim(k) { return k * S + top + CH; }
+  function beg(k) { return k * S + top; }
+  function pageOf(v) { var k = Math.max(0, Math.floor((v - top) / S)); return k; }
+  function blockKids(el) { return [].filter.call(el.children, function (c) { var ds = win.getComputedStyle(c).display; return ds !== 'none' && ds.indexOf('inline') !== 0 && !/^pv-/.test(c.className || ''); }); }
+  function push(el, to) {
+    var tr = el.tagName === 'TR', sp = d.createElement(tr ? 'tr' : 'div');
+    sp.className = 'pv-sp';
+    if (tr) sp.innerHTML = '<td colspan="60" style="padding:0;border:0;background:transparent"></td>';
+    var cell = tr ? sp.firstChild : sp;
+    cell.style.height = '0px'; if (!tr) sp.style.cssText = 'height:0;margin:0;padding:0';
+    el.parentNode.insertBefore(sp, el);
+    var need = to - y(el);
+    if (need > 0) { cell.style.height = need + 'px'; var over = y(el) - to; if (over > 0) cell.style.height = Math.max(0, need - over) + 'px'; }
+  }
+  function walk(box) {
+    blockKids(box).forEach(function (el) {
+      if (/(^|\s)pg-brk(\s|$)/.test(el.className || '')) { var k0 = pageOf(y(el)); if (y(el) > beg(k0) + 2) push(el, beg(k0 + 1)); return; }
+      var t = y(el), h = el.getBoundingClientRect().height, k = pageOf(t);
+      if (t >= lim(k)) { push(el, beg(k + 1)); t = y(el); k = pageOf(t); }   // 바닥 여백 · 틈에 걸림
+      if (t + h <= lim(k) + 1) return;
+      var kids = el.matches(ATOM) ? [] : blockKids(el);
+      if (!kids.length || el.tagName === 'TR') {
+        if (t > beg(k) + 2 && h <= CH) {
+          // 바로 앞 제목(break-after:avoid)은 혼자 바닥에 남기지 않고 같이 넘김 — 인쇄와 같게
+          //   표 머리 줄(th 만)도 첫 줄과 같이, 표의 첫 줄이면 표 앞 제목까지
+          var mv = el;
+          for (var g = 0; g < 3; g++) {
+            var pr = mv.previousElementSibling;
+            if (!pr && mv.tagName === 'TR') { var tb = mv.closest('table'); pr = tb && tb.rows[0] === mv ? tb.previousElementSibling : null; }
+            if (!pr || /^pv-/.test(pr.className || '') || pageOf(y(pr)) !== k || y(pr) <= beg(k) + 2) break;
+            var head = pr.tagName === 'TR' ? !pr.querySelector('td') : win.getComputedStyle(pr).breakAfter === 'avoid';
+            if (!head) break;
+            mv = pr;
+          }
+          push(mv, beg(k + 1));
+        }
+        return;
+      }
+      walk(el.tagName === 'TABLE' && el.tBodies.length === 1 && !el.tHead ? el.tBodies[0] : el);
+    });
+  }
+  walk(body);
+  var end = body.scrollHeight - top, n = Math.max(1, pageOf(Math.max(top, end - 1)) + 1);
+  var hd = o.header ? [o.company, title].filter(Boolean).join(' · ') : '', h = '';
+  var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); };
+  for (var i = 0; i < n; i++) {
+    var y0 = i * S;
+    h += '<div class="pv-sheet" style="top:' + y0 + 'px;height:' + PH + 'px"></div>';
+    if (hd) h += '<div class="pv-mb" style="top:' + (y0 + Math.round(top / 2) - 6) + 'px;left:' + side + 'px">' + esc(hd) + '</div>';
+    if (o.docNo && docNo) h += '<div class="pv-mb" style="top:' + (y0 + Math.round(top / 2) - 6) + 'px;right:' + side + 'px">' + esc(docNo) + '</div>';
+    if (o.pageNo) h += '<div class="pv-mb pv-pn" style="top:' + (y0 + PH - Math.round(top / 2) - 6) + 'px">' + (i + 1) + ' / ' + n + '</div>';
+  }
+  body.insertAdjacentHTML('beforeend', h);
+  return n;
+}
+function wmPaperHint(pages, o) { return pages + '쪽 · 인쇄되는 모습 그대로' + (o && o.pageNo ? ' (머리글 · 쪽 번호 포함)' : ''); }
+
+/* ═══ 🖨 출력 모양 보기 (v13.321) — 노트를 쓰는 동안 옆에 인쇄될 종이 그대로 ═══ */
+function nbPaperPaneHtml() {
+  return '<div class="nb-paper" id="nbPaper"><div class="nb-paper-bar"><span id="nbPaperInfo">출력 모양</span><span class="nb-sp"></span>' +
+    '<button class="nb-btn sm" data-nb="print" title="모양 · 결재란 · 머리글 바꾸기 · 인쇄 · PDF · Word">🖨 설정 · 인쇄</button></div>' +
+    '<div class="nbpr-pv nb-paper-pv" id="nbPaperPv"><div class="nbpr-wrap" id="nbPaperWrap"><div class="nbpr-paper" id="nbPaperPaper"><iframe id="nbPaperFrame" title="출력 모양"></iframe></div></div></div></div>';
+}
+function nbPaperLive(delay) {
+  if (typeof NB === 'undefined' || NB.mode !== 'paper' || !document.getElementById('nbPaperFrame')) return;
+  clearTimeout(NBPR.liveT);
+  NBPR.liveT = setTimeout(function () {
+    var seq = (NBPR.liveSeq = (NBPR.liveSeq || 0) + 1);
+    _nbprSettings().then(function (ps) {
+      if (!NB.cur && !NB.daily1) return;
+      var o = wmPrintPrefs(); o.company = ps.company || ''; o.logo = ps.logo || '';
+      var it = _nbprCurItem(), ti = document.getElementById('nbTitle');
+      if (ti && !NB.daily1) it.title = ti.value;
+      var r = NbPrint.build([it], o);
+      return _nbprImgs(r.inner).then(function (inner) {
+        var fr = document.getElementById('nbPaperFrame'); if (!fr || seq !== NBPR.liveSeq) return;
+        wmPaperPaint({ frame: fr, wrap: document.getElementById('nbPaperWrap'), paper: document.getElementById('nbPaperPaper'), scroller: document.getElementById('nbPaperPv'), o: o, live: true,
+          html: NbPrint.page(inner, o, r.title, r.docNo), title: r.title, docNo: r.docNo,
+          onPages: function (n) {
+            var el = document.getElementById('nbPaperInfo');
+            if (el) el.innerHTML = '📄 <b>' + _nbE(NbPrint.FORMS[r.forms[0]] || '') + '</b> 양식 · ' + n + '쪽 · 모양 ' + _nbE({ basic: '기본', formal: '공문', clean: '간결' }[o.theme] || o.theme) + (o.sign ? ' · 결재란' : '');
+          } });
+      });
+    }).catch(function () { /* 미리 보기만 */ });
+  }, delay == null ? 200 : delay);
+}
+window.addEventListener('resize', function () { nbPaperLive(150); if (typeof _pmtLiveResize === 'function') _pmtLiveResize(); });
 
 function _nbprLoadOpts() { return wmPrintPrefs(); }
-function _nbprSaveOpts() { wmPrintPrefsSave(NBPR.o); }
+function _nbprSaveOpts() { wmPrintPrefsSave(NBPR.o); nbPaperLive(); }
 function _nbprSettings() {
   if (NBPR.ps) return Promise.resolve(NBPR.ps);
   return apiFetch('/api/notebook/print-settings').then(function (r) { NBPR.ps = r.data || {}; return NBPR.ps; }).catch(function () { NBPR.ps = { company: '', logo: '', canEdit: false }; return NBPR.ps; });
@@ -235,7 +332,7 @@ function _nbprImgs(inner) {
 function _nbprPaint(inner) {
   var o = NBPR.o;
   wmPaperPaint({ frame: document.getElementById('nbprFrame'), wrap: document.getElementById('nbprWrap'), paper: document.getElementById('nbprPaper'), scroller: document.getElementById('nbprPv'), o: o,
-    html: NbPrint.page(inner, o, NBPR.last ? NBPR.last.title : '', NBPR.last ? NBPR.last.docNo : ''),
+    html: NbPrint.page(inner, o, NBPR.last ? NBPR.last.title : '', NBPR.last ? NBPR.last.docNo : ''), title: NBPR.last ? NBPR.last.title : '', docNo: NBPR.last ? NBPR.last.docNo : '',
     onPages: function (n) { NBPR.pages = n; var pg = document.getElementById('nbprPages'); if (pg) pg.textContent = wmPaperHint(n, o); } });
 }
 

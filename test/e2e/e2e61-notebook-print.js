@@ -57,7 +57,7 @@ var MEET = '## 개요\n- **일시**: 2026-11-03 14:00~15:30\n- **장소**: 3층 
     check(await until(function () { return /→ 회의록/.test(document.getElementById('nbprSide').textContent); }), '양식 "자동 → 회의록" 으로 알아봄');
     var t1 = await frameText();
     check(/3층 회의실/.test(t1) && /김철수/.test(t1) && /이영희/.test(t1) && /11\/12/.test(t1), '개요 표 (장소 · 참석자) · 목록 할 일 (@담당 ~기한)');
-    check(await until(function () { return /약 \d+쪽/.test(document.getElementById('nbprPages').textContent); }), '쪽 수 표시');
+    check(await until(function () { return /\d+쪽 · 인쇄되는 모습/.test(document.getElementById('nbprPages').textContent); }), '쪽 수 표시');
 
     // 2) 모양 · 결재란 · 기억
     await p.click('#nbprSide [data-o="theme"][data-v="formal"]');

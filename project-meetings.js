@@ -45,7 +45,7 @@ function _pmtRefetch(mid) {
 function pdLoadMeetings(projId) {
   var el = document.getElementById('pdMeeting'); if (!el) return;
   var keep = (_pmt && _pmt.projId === projId) ? _pmt : null;   // 같은 프로젝트면 펼침·초안 유지
-  _pmt = keep || { projId: projId, list: [], open: {}, drafts: {}, filter: 'all', showActs: false, adding: false, editing: {}, docs: {}, docLoading: {}, canEdit: true, firstOpenDone: false };
+  _pmt = keep || { projId: projId, list: [], open: {}, drafts: {}, filter: 'all', showActs: false, adding: false, editing: {}, canEdit: true, firstOpenDone: false };
   el.innerHTML = '<div class="pmt-note">로딩 중...</div>';
   apiFetch('/api/meetings?projectId=' + encodeURIComponent(projId)).then(function (r) {
     if (!_pmt || _pmt.projId !== projId) return;
@@ -103,6 +103,7 @@ function pdRenderMeetings() {
   else if (!list.length) h += '<div class="pmt-empty short">해당하는 회의가 없습니다.</div>';
   h += list.map(function (m) { return '<div id="pmt-card-' + _pmtEsc(m.id) + '">' + _pmtCardHtml(m, t) + '</div>'; }).join('');
   el.innerHTML = h;
+  _pmtLiveAll();
   if (_pmt.adding) { var ti = document.getElementById('pmtNewTitle'); if (ti) ti.focus(); }
 }
 
@@ -199,7 +200,9 @@ function _pmtCardHtml(m, t) {
         '<br><span style="color:var(--t5)">안건 추가·체크·삭제와 액션 아이템은 누르는 즉시 저장되며, 취소해도 되돌아가지 않습니다.</span></span>' +
       '<button class="btn btn-g btn-s" style="font-size:10px;white-space:nowrap" onclick="pmtEditCancel(\'' + mid + '\')">취소 (문서 보기)</button></div>';
   }
-  var agNow = _pmtAgendaOf(m);
+  var agNow = _pmtAgendaOf(m), live = _pmtLiveOn();
+  // 왼쪽 양식 · 오른쪽 인쇄될 종이 그대로 (v13.321) — 칸에 쓰는 대로 종이에 바로 보임
+  h += '<div class="pmt-live' + (live ? '' : ' off') + '"><div class="pmt-live-form">';
   h += _pmtSectionTitle('1. 회의 개요', '');
   h += _pmtFormInfoHtml(m);
   h += _pmtSectionTitle('2. 안건 및 논의', agNow.length ? '완료 ' + agNow.filter(function (g) { return g.done; }).length + '/' + agNow.length : '');
@@ -212,12 +215,14 @@ function _pmtCardHtml(m, t) {
   h += _pmtActsHtml(m, t);
   h += _pmtSectionTitle('5. 다음 회의', '');
   h += '<div class="pmt-wrap">' + _pmtInput(m, 'nextDate', '', 'date', 'flex:0 0 auto') + _pmtInput(m, 'nextNote', '다음 회의 안건·메모', 'text', 'flex:1 1 160px') + '</div>';
+  h += '</div>' + (live ? _pmtLivePaneHtml(m) : '') + '</div>';
   // 하단 버튼
   h += '<div class="pmt-foot">' +
     '<button class="btn btn-d btn-s pmt-btn" onclick="pmtDelete(\'' + mid + '\')">회의 삭제</button>' +
     '<span class="pmt-row mid">' +
       '<span id="pmtDirtyTxt-' + _pmtEsc(m.id) + '" style="font-size:9.5px;color:' + SEM_COLOR.warn + ';display:' + (dirty ? 'inline' : 'none') + '">● 저장 안 됨</span>' +
-      '<button class="btn btn-g btn-s pmt-btn" onclick="pmtPreview(\'' + mid + '\')" title="회의록 양식으로 보기 · 인쇄(PDF) · 메일">🖨 출력 미리보기</button>' +
+      '<button class="btn btn-g btn-s pmt-btn" onclick="pmtLiveToggle(\'' + mid + '\')" title="작성하면서 옆에 인쇄될 종이 그대로 보기">' + (live ? '📄 종이 숨기기' : '📄 종이 보며 쓰기') + '</button>' +
+      '<button class="btn btn-g btn-s pmt-btn" onclick="pmtPreview(\'' + mid + '\')" title="회의록 양식으로 보기 · 인쇄(PDF) · 메일">🖨 인쇄 · 메일</button>' +
       (_pmtDone(m)
         ? '<button class="btn btn-p btn-s pmt-btn" onclick="pmtSaveAndView(\'' + mid + '\')">💾 저장 후 문서 보기</button>'
         : '<button class="btn btn-g btn-s pmt-btn" onclick="pmtSaveForm(\'' + mid + '\')">💾 저장</button>' +
@@ -275,6 +280,7 @@ function _pmtSetAttendees(mid, list) {
   var box = document.getElementById('pmtAtt-' + mid); if (box) box.innerHTML = _pmtAttendeesHtml(m);
   var n = document.getElementById('pmtAttN-' + mid); if (n) n.textContent = list.length + '명';
   _pmtMarkDirty(mid);
+  _pmtLiveSoon(mid);
   var inp = document.getElementById('pmtAttIn-' + mid); if (inp) inp.focus();
 }
 function pmtAttAdd(mid) {
@@ -318,6 +324,7 @@ function pmtAgendaNote(mid, i, field, v) {
   var d = _pmt.drafts[mid] = _pmt.drafts[mid] || {};
   d.agenda = JSON.stringify(ag);
   _pmtMarkDirty(mid);
+  _pmtLiveSoon(mid);
 }
 
 function _pmtActsHtml(m, t) {
@@ -351,9 +358,7 @@ function _pmtActsHtml(m, t) {
 
 /* ═══ 작성 완료 — 완성된 회의록 문서로 표시, 편집을 누르면 양식 (v13.201) ═══
    완료 여부 = form.completedAt (+ completedBy). _pmt.editing[mid] = 완료된 회의를 양식으로 여는 중
-   문서는 서버가 만든 한 벌(미리 보기·메일과 같음) — _pmt.docs[mid] = { key: updatedAt, html } */
-/* 문서 캐시 키 — 회의 수정 시각 + 액션(액션 변경은 회의 updated_at 을 바꾸지 않는다) */
-function _pmtDocKey(m) { return (m.updatedAt || '') + '|' + (m.actionItems || []).map(function (a) { return a.id + ':' + a.status + ':' + a.title + ':' + (a.assigneeName || '') + ':' + (a.dueDate || ''); }).join(','); }
+   문서 보기 = 인쇄될 종이 그대로 (v13.321 — 브라우저에서 meeting-minutes.js 로 바로 그림) */
 function _pmtDone(m) { return !!(m && m.form && m.form.completedAt); }
 function _pmtFmtWhen(t) { if (!t) return ''; var d = new Date(t); return isNaN(d) ? String(t) : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function _pmtDocViewHtml(m) {
@@ -370,38 +375,86 @@ function _pmtDocViewHtml(m) {
       (typeof mmFromMeeting === 'function' && typeof mmHasAccess === 'function' && mmHasAccess() ? '<button class="btn btn-g btn-s pmt-btn" onclick="mmFromMeeting(\'' + mid + '\',this)" title="안건 · 결정 사항 · 액션 아이템을 가지로">🧠 맵으로</button>' : '') +
       (_pmt.canEdit ? '<button class="btn btn-g btn-s pmt-btn" onclick="pmtUncomplete(\'' + mid + '\')" title="완료 표시를 풀고 작성 중으로">작성 중으로</button>' : '') +
     '</span></div>';
-  var doc = _pmt.docs && _pmt.docs[m.id];
-  var fresh = doc && doc.key === _pmtDocKey(m);
-  if (!fresh) setTimeout(function () { _pmtLoadDoc(m.id); }, 0);
-  // 문서는 종이처럼 흰 바탕 — 다크 모드에서도 출력물과 같은 모습
-  return bar + '<div class="pmt-paper-bg"><div id="pmtDoc-' + _pmtEsc(m.id) + '" class="pmt-doc pmt-paper">' +
-    (fresh ? doc.html : '<div class="pmt-paper-msg">회의록 문서를 불러오는 중...</div>') + '</div></div>';
+  // 인쇄될 종이 그대로 (v13.321) — A4 장마다 · 머리글 · 쪽 번호. 그림은 카드를 그린 뒤 _pmtLiveAll
+  return bar + '<div class="pmt-docview">' + _pmtPaperHtml(_pmtPid('pmtD-', m.id)).replace(' style="max-height:78vh"', '') + '</div>';
 }
+/* ═══ 📄 인쇄될 종이 그대로 — 브라우저에서 바로 그림 (서버 메일 문서와 같은 meeting-minutes.js) ═══ */
+function _pmtPid(pre, id) { return pre + String(id).replace(/[^A-Za-z0-9_-]/g, '_'); }
+function _pmtLiveOn() { try { return localStorage.getItem('pmt-live') !== '0'; } catch (e) { return true; } }
+function pmtLiveToggle(mid) {
+  try { localStorage.setItem('pmt-live', _pmtLiveOn() ? '0' : '1'); } catch (e) { /* */ }
+  _pmtPaintCard(mid);
+  if (!_pmtLiveOn()) _pmtFitPanel(false);
+}
+/** 프로젝트 상세 패널이 좁으면 양식과 종이가 나란히 들어가게 잠깐 넓힘(기억한 폭은 그대로) · 끄면 되돌림 */
+var PMT_LIVE_W = 1120;
+function _pmtFitPanel(on) {
+  var panel = document.getElementById('projDetailPanel'); if (!panel || typeof _pdApplyPanelFrac !== 'function') return;
+  var base = typeof _pdPanelFrac === 'function' ? _pdPanelFrac() : 0.34, W = window.innerWidth;
+  if (on && panel.offsetWidth < PMT_LIVE_W - 10 && W * 0.9 >= PMT_LIVE_W) _pdApplyPanelFrac(panel, Math.min(0.9, Math.max(base, PMT_LIVE_W / W)));
+  else if (!on && Math.abs(parseFloat(panel.style.getPropertyValue('--pd-frac')) - base) > 0.01) _pdApplyPanelFrac(panel, base);
+}
+function _pmtLivePaneHtml(m) {
+  var p = _pmtPid('pmtL-', m.id);
+  return '<div class="pmt-live-pv"><div class="pmt-live-bar">📄 <b>인쇄될 모습</b><span id="' + p + 'Pages"></span><span style="flex:1"></span>' +
+    '<button class="btn btn-g btn-s pmt-btn-xs" onclick="pmtPreview(\'' + _pmtJs(m.id) + '\')" title="모양 · 결재란 · 머리글 바꾸기 · 인쇄 · 메일">🎨 모양</button></div>' +
+    _pmtPaperHtml(p).replace(' style="max-height:78vh"', '') + '</div>';
+}
+/** 양식(쓰는 중인 초안 포함) → 문서 행(서버 meetings 행 모양) */
+function _pmtRow(m) {
+  var form = {}; PMT_FORM_KEYS.forEach(function (k) { form[k] = _pmtVal(m, k); });
+  return { id: m.id, title: _pmtVal(m, 'title'), meet_date: _pmtVal(m, 'meetDate') || null, attendees: _pmtSplit(_pmtVal(m, 'attendees')), agenda: _pmtAgendaOf(m),
+    minutes: _pmtVal(m, 'minutes'), form: form, updated_at: m.updatedAt,
+    action_items: (m.actionItems || []).map(function (a) { return { title: a.title, status: a.status, assignee_name: a.assigneeName, due_date: a.dueDate }; }) };
+}
+function _pmtLocalDoc(m) {
+  if (typeof MeetingMinutes === 'undefined' || typeof wmPrintDocBody !== 'function') return null;
+  var o = _pmtPrefs(), ps = (typeof NBPR !== 'undefined' && NBPR.ps) || {};
+  var proj = window._pdProj && _pmt && String(window._pdProj.id) === String(_pmt.projId) ? window._pdProj : {};
+  var opt = Object.assign(wmPrintDocBody(o), { projectName: proj.name || '', orderNo: proj.orderNo || '' });
+  if (opt.header) { opt.company = ps.company || ''; opt.logo = ps.logo || ''; }
+  return MeetingMinutes.renderMinutes(_pmtRow(m), opt);
+}
+/** 회의 하나의 종이(작성 옆 · 문서 보기) 다시 그림 */
+function _pmtLivePaint(mid) {
+  var m = _pmt && _pmtFind(mid); if (!m) return;
+  if (document.getElementById(_pmtPid('pmtL-', mid) + 'PreviewFrame')) _pmtFitPanel(true);
+  // 패널 폭을 끌어 바꾸면 종이 크기도 맞춤
+  var panel = document.getElementById('projDetailPanel');
+  if (panel && typeof ResizeObserver === 'function' && panel._pmtRO !== true) {
+    panel._pmtRO = true;
+    var w0 = panel.offsetWidth;
+    new ResizeObserver(function () { if (Math.abs(panel.offsetWidth - w0) > 4) { w0 = panel.offsetWidth; _pmtLiveResize(); } }).observe(panel);
+  }
+  var ps = typeof _nbprSettings === 'function' ? _nbprSettings() : Promise.resolve();
+  ps.then(function () {
+    var doc = _pmtLocalDoc(m); if (!doc) return;
+    ['pmtL-', 'pmtD-'].forEach(function (pre) {
+      var p = _pmtPid(pre, mid);
+      if (document.getElementById(p + 'PreviewFrame')) _pmtPaintPaper(p, doc.html, doc.subject, doc.docNo, true);
+    });
+  });
+}
+function _pmtLiveSoon(mid) {
+  _pmt.liveT = _pmt.liveT || {};
+  clearTimeout(_pmt.liveT[mid]);
+  _pmt.liveT[mid] = setTimeout(function () { _pmtLivePaint(mid); }, 160);
+}
+/** 화면에 있는 종이 모두 */
+function _pmtLiveAll() {
+  if (!_pmt) return;
+  (_pmt.list || []).forEach(function (m) {
+    if (document.getElementById(_pmtPid('pmtL-', m.id) + 'PreviewFrame') || document.getElementById(_pmtPid('pmtD-', m.id) + 'PreviewFrame')) _pmtLivePaint(m.id);
+  });
+}
+var _pmtResizeT = null;
+function _pmtLiveResize() { clearTimeout(_pmtResizeT); _pmtResizeT = setTimeout(_pmtLiveAll, 150); }
 /* 서버가 만든 회의록 문서 한 벌 — opts: { sign?, message? } → { subject, html, docNo, mailedAt, … } */
 function _pmtRender(mid, opts) {
   // 모양 · 결재란 · 머리글은 노트 출력과 같은 설정 (v13.320) — 회사 머리글(쪽 위 글)도 미리 받아 둠
   var body = Object.assign(typeof wmPrintDocBody === 'function' ? wmPrintDocBody() : {}, opts || {});
   var ps = typeof _nbprSettings === 'function' ? _nbprSettings() : Promise.resolve();
   return Promise.all([apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/render', { method: 'POST', body: JSON.stringify(body) }), ps]).then(function (r) { return r[0].data; });
-}
-/* 카드 안 문서 보기 — 같은 내용(key)을 받는 중이면 다시 요청하지 않고, 늦게 온 옛 문서는 버린다 */
-function _pmtLoadDoc(mid) {
-  var m = _pmtFind(mid); if (!m) return;
-  var key = _pmtDocKey(m);
-  if (_pmt.docLoading[mid] === key) return;
-  _pmt.docLoading[mid] = key;
-  _pmtRender(mid).then(function (doc) {
-    if (_pmt.docLoading[mid] === key) delete _pmt.docLoading[mid];
-    var cur = _pmtFind(mid);
-    if (!cur || _pmtDocKey(cur) !== key) return;   // 그사이 내용이 바뀜 — 새 요청이 그린다
-    _pmt.docs[mid] = { key: key, html: doc.html };
-    var box = document.getElementById('pmtDoc-' + mid);
-    if (box) box.innerHTML = doc.html;
-  }).catch(function (e) {
-    if (_pmt.docLoading[mid] === key) delete _pmt.docLoading[mid];
-    var box = document.getElementById('pmtDoc-' + mid);
-    if (box) box.innerHTML = '<div class="pmt-paper-msg">문서를 불러오지 못했습니다. ' + _pmtEsc(_pmtErr(e, '')) + '</div>';
-  });
 }
 function _pmtMe() { return (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.displayName || currentUser.name || '') : ''; }
 /* 작성 완료 — 양식 저장과 완료 표시를 한 번에 → 문서 보기 */
@@ -447,6 +500,7 @@ function _pmtPaintCard(mid) {
   var m = _pmtFind(mid);
   if (!box || !m) { pdRenderMeetings(); return; }
   box.innerHTML = _pmtCardHtml(m, _pmtToday());
+  _pmtLivePaint(mid);
 }
 
 /* ═══ 동작 ═══ */
@@ -487,6 +541,7 @@ function pmtFormInput(el) {
   var d = _pmt.drafts[mid] = _pmt.drafts[mid] || {};
   d[k] = el.value;
   _pmtMarkDirty(mid);
+  _pmtLiveSoon(mid);
 }
 /* 양식 저장 — 제목·일시·참석자·논의 내용·양식 칸을 한 번에. 성공 여부 */
 /* 양식(초안 + 저장된 값) → PUT 본문. 완료 표시는 그대로 유지. 회의명이 비었으면 null */
@@ -691,7 +746,7 @@ function _pmtPrefSet(el) {
   var o = _pmtPrefs(), k = el.getAttribute('data-k');
   o[k] = el.type === 'checkbox' ? el.checked : el.value;
   if (typeof wmPrintPrefsSave === 'function') wmPrintPrefsSave(o);
-  if (_pmt) _pmt.docs = {};   // 카드 안 문서 보기도 새 모양으로
+  _pmtLiveAll();   // 카드 안 종이도 새 모양으로
   return o;
 }
 function pmtDocPref(mid, el) {
@@ -700,13 +755,13 @@ function pmtDocPref(mid, el) {
     .catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '미리 보기 실패'), 'error'); });
 }
 /** 종이 한 장(인쇄용 @page — 머리글 · 문서 번호 · 쪽 번호)으로 감싸 그림 */
-function _pmtPaintPaper(p, html, title, docNo) {
+function _pmtPaintPaper(p, html, title, docNo, live) {
   var o = _pmtPrefs(), fr = document.getElementById(p + 'PreviewFrame'); if (!fr) return;
   if (o.header && typeof NBPR !== 'undefined' && NBPR.ps) o.company = NBPR.ps.company || '';
   var full = typeof NbPrint !== 'undefined' ? NbPrint.page(html, o, title, docNo)
     : '<!doctype html><html><head><meta charset="utf-8"><title>' + _pmtEsc(title) + '</title><style>@page{size:A4;margin:14mm 12mm}html,body{margin:0;background:#fff}body{padding:28px 30px}@media print{body{padding:0}}</style></head><body>' + html + '</body></html>';
   if (typeof wmPaperPaint === 'function') {
-    wmPaperPaint({ frame: fr, wrap: document.getElementById(p + 'Wrap'), paper: document.getElementById(p + 'Paper'), scroller: document.getElementById(p + 'Pv'), o: o, html: full,
+    wmPaperPaint({ frame: fr, wrap: document.getElementById(p + 'Wrap'), paper: document.getElementById(p + 'Paper'), scroller: document.getElementById(p + 'Pv'), o: o, html: full, title: title, docNo: docNo, live: !!live,
       onPages: function (n) { var el = document.getElementById(p + 'Pages'); if (el) el.textContent = wmPaperHint(n, o); } });
   } else { fr.style.width = '794px'; fr.style.height = '1123px'; fr.srcdoc = full; }
 }
