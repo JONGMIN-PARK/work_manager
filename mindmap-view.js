@@ -34,7 +34,7 @@ function _mmRenderEditor() {
     '<div class="mm-seg"><button data-act="view-map" id="mmVMap" title="맵">맵</button><button data-act="view-outline" id="mmVOut" title="아웃라인 (Alt+O)">아웃라인</button>' +
     '<button data-act="view-gantt" id="mmVGantt" title="간트 (Alt+J)">간트</button></div>' +
     '<select id="mmStructure" class="mm-select mm-edit-only" title="구조 (Ctrl+Shift+L)">' + MM_STRUCTURES.map(function (s) { return '<option value="' + s.k + '"' + (s.k === st ? ' selected' : '') + '>' + s.l + '</option>'; }).join('') + '</select>' +
-    menuBtn('mmAlignMenu', 'align', '정렬', '같은 단계 맞춤 · 글자 정렬 (Alt+G)', ' mm-edit-only') + '<div class="mm-menu hidden" id="mmAlignMenu"></div></div>' +
+    menuBtn('mmAlignMenu', 'align', '정렬', '같은 단계 맞춤 · 시간 순 정렬 · 글자 정렬 (Alt+G)', ' mm-edit-only') + '<div class="mm-menu hidden" id="mmAlignMenu"></div></div>' +
     menuBtn('mmBgMenu', 'bg', '테마', '색 테마 · 캔버스 배경 (이 시트)', ' mm-edit-only') + '<div class="mm-menu mm-bgmenu hidden" id="mmBgMenu"></div></div>' +
     (_mm.doc.meta && _mm.doc.meta.gen ? tb('resync', 'sync', '원본과 맞추기', '원본 데이터에 새로 생긴 항목을 맵에 추가', ' mm-edit-only') : '') +
     '<span class="mm-tsep"></span>' +
@@ -172,6 +172,9 @@ function _mmPaintAlignMenu() {
   m.innerHTML = '<div class="mm-menu-h">같은 단계 맞춤 <span class="mm-hint">폭은 가장 넓은 주제 기준</span></div>' +
     '<button data-act="cmd" data-cmd="alignAll">' + chk(root.alignLevels) + '맵 전체 <span class="mm-hint">Alt+G (중심 주제)</span></button>' +
     (f && f.parent && (f.node.children || []).length ? '<button data-act="cmd" data-cmd="alignLevels">' + chk(f.node.alignLevels) + '선택한 가지의 하위만 <span class="mm-hint">Alt+G</span></button>' : '') +
+    '<div class="mm-menu-h">시간 순 정렬 <span class="mm-hint">시작일 · 마감일 기준</span></div>' +
+    '<button data-act="cmd" data-cmd="timeSort">🕒 지금 시간 순으로 정렬 <span class="mm-hint">날짜 없는 주제는 제자리</span></button>' +
+    (_mmSheet().structure === 'timeline' ? '<button data-act="cmd" data-cmd="timeSortAuto">' + chk(_mmSheet().timeSort !== false) + '날짜 바꾸면 자동 정렬 <span class="mm-hint">타임라인</span></button>' : '') +
     '<div class="mm-menu-h">글자 정렬 <span class="mm-hint">이 시트</span></div>' +
     MM_TEXT_ALIGNS.map(function (a) { return '<button data-act="cmd" data-cmd="textAlign:' + a.k + '">' + chk(ta === a.k) + a.l + '</button>'; }).join('');
 }

@@ -369,6 +369,8 @@ var MM_COMMANDS = [
   { id: 'summary', group: '구조', label: '요약 켜기 / 끄기', keys: ['Alt+S'], edit: true, when: _mmkHasKids, run: _mmkSingle(_mmkToggleSummary) },
   { id: 'numbering', group: '구조', label: '하위 번호 켜기 / 끄기', keys: ['Alt+N'], edit: true, when: _mmkHasKids, run: _mmkToggleNumbering },
   { id: 'alignLevels', group: '구조', label: '같은 단계 맞춤 켜기 / 끄기 (선택 가지 · 중심 주제면 맵 전체)', keys: ['Alt+G'], edit: true, when: _mmkHasKids, run: _mmkAlign },
+  { id: 'timeSort', group: '구조', label: '시간 순 정렬 (날짜 있는 주제끼리 · 하위까지)', keys: [], edit: true, run: function () { mmTimeSortNow(); } },
+  { id: 'timeSortAuto', group: '구조', label: '타임라인 — 날짜 바꾸면 자동 시간 순 정렬 켜기/끄기', keys: [], edit: true, run: function () { mmToggleTimeSort(); } },
   { id: 'alignAll', group: '구조', label: '맵 전체 같은 단계 맞춤', keys: [], edit: true, run: _mmkAlignAll },
   { id: 'textAlign:auto', group: '구조', label: '글자 정렬 — 자동 (오른쪽 가지 왼쪽 · 왼쪽 가지 오른쪽)', keys: [], edit: true, run: function () { _mmkTextAlign('auto'); } },
   { id: 'textAlign:left', group: '구조', label: '글자 정렬 — 왼쪽', keys: [], edit: true, run: function () { _mmkTextAlign('left'); } },
@@ -464,7 +466,7 @@ var MM_CTX_NODE = ['addChild', 'addSibling', 'addBefore', 'addParent', 'edit', '
   'moveUp', 'moveDown', 'indent', 'outdent', 'splitSiblings', 'splitChildren', 'mergeChildren', 'toggleFloat', '|', 'relation', 'boundary', 'summary', 'numbering', 'alignLevels', '|',
   'linkRef', 'openRef', 'promoteMs', 'promoteIssue', '|', 'addImage', 'addLine', 'done', 'colorCycle', 'copyStyle', 'pasteStyle', 'progress', 'note', 'fold', 'foldDeep', '|', 'aiExpand', 'aiSummary'];
 var MM_CTX_MULTI = ['delete', 'duplicate', '|', 'done', 'colorCycle', 'pasteStyle', 'bold', 'progress', 'boundary', 'alignLevels', 'fold', '|', 'priority:1', 'priorityClear'];
-var MM_CTX_CANVAS = ['addFloating', 'fit', 'unfoldAll', 'foldLevel1', 'selectAll', '|', 'alignAll', 'textAlign:auto', 'textAlign:left', 'textAlign:right', '|', 'addSheet', 'outline', 'zen', 'structure', '|', 'palette', 'help'];
+var MM_CTX_CANVAS = ['addFloating', 'fit', 'unfoldAll', 'foldLevel1', 'selectAll', '|', 'alignAll', 'timeSort', 'textAlign:auto', 'textAlign:left', 'textAlign:right', '|', 'addSheet', 'outline', 'zen', 'structure', '|', 'palette', 'help'];
 
 function _mmCloseCtx() {
   var m = document.getElementById('mmCtxMenu');

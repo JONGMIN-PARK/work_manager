@@ -12,11 +12,46 @@ function _mmMutate(fn, opts) {
   _mm.undo.push(_mmSnapshot());
   if (_mm.undo.length > 50) _mm.undo.shift();
   _mm.redo = [];
+  var sh0 = _mmSheet(), wasTl = sh0.structure === 'timeline', sig0 = wasTl ? _mmDateSig(sh0.root) : '';
   fn();
+  _mmTimeAutoSort(sh0, wasTl, sig0);
   _mmMarkDirty();
   if (!opts || opts.paint !== false) _mmPaint();
   return true;
 }
+/* ═══ 시간 순 정렬 (v13.324) ═══
+ * 타임라인 시트는 날짜(시작 · 마감, 없으면 연결 데이터 날짜)를 넣거나 바꾸면 그 자리에서 바로 시간 순으로 옮긴다.
+ * 날짜 없는 주제는 제자리. 시트마다 끌 수 있음(sheet.timeSort === false). 손으로는 정렬 메뉴 · 명령 'timeSort'
+ */
+function _mmTimeKey(n) {
+  if (typeof _mmgSpan !== 'function') return null;
+  var sp = _mmgSpan(n);
+  return sp ? { s: sp.s, e: sp.e } : null;
+}
+function _mmDateSig(root) {
+  var a = [];
+  mmWalk(root, function (n) { if (n.startDate || n.dueDate || n.ref) a.push(n.id + ':' + (n.startDate || '') + ':' + (n.dueDate || '') + ':' + (n.ref ? n.ref.type + n.ref.id : '')); });
+  return a.sort().join('|');   // 순서와 무관하게 — 끌어 옮기기만 한 건 날짜 변경이 아님
+}
+function _mmTimeAutoSort(sh, wasTl, sig0) {
+  if (!sh || sh !== _mmSheet() || sh.structure !== 'timeline' || sh.timeSort === false) return;
+  if (wasTl && _mmDateSig(sh.root) === sig0) return;   // 날짜가 안 바뀌었으면 손으로 둔 순서 그대로
+  if (mmSortByDate(sh.root, _mmTimeKey)) _mmToast('🕒 시간 순으로 자리를 옮겼습니다');
+}
+/** 손으로 시간 순 정렬 — 어느 구조에서나 */
+function mmTimeSortNow() {
+  if (_mm.readOnly) return;
+  if (!mmSortByDate(JSON.parse(JSON.stringify(_mmRoot())), _mmTimeKey)) { _mmToast('이미 시간 순입니다 (날짜 있는 주제 기준)'); return; }
+  _mmMutate(function () { mmSortByDate(_mmRoot(), _mmTimeKey); });
+  _mmToast('🕒 시간 순으로 정렬했습니다');
+}
+function mmToggleTimeSort() {
+  var on = _mmSheet().timeSort === false;
+  _mmMutate(function () { if (on) { delete _mmSheet().timeSort; mmSortByDate(_mmRoot(), _mmTimeKey); } else _mmSheet().timeSort = false; });
+  _mmToast(on ? '날짜를 바꾸면 자동으로 시간 순 정렬합니다' : '자동 시간 순 정렬을 껐습니다');
+  if (_mmEl('mmAlignMenu')) _mmPaintAlignMenu();
+}
+
 function _mmRestore(snap) {
   var s = JSON.parse(snap);
   _mm.doc.sheets = s.sheets;

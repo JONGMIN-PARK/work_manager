@@ -348,3 +348,21 @@ test('떠있는 주제 — 정한 자리 · 하위는 오른쪽 · 다른 배치
   const bf = back.children.filter((c) => c.float)[0];
   assert.ok(bf && bf.text === '메모' && bf.float.x === 500 && bf.children[0].text === '메모1');
 });
+
+test('시간 순 정렬 — 날짜 있는 주제끼리만 · 날짜 없는 주제/떠있는 주제는 제자리 · 하위까지', () => {
+  const D = (s) => (s ? Date.parse(s) / 864e5 : null);
+  const key = (n) => { const s = D(n.startDate || n.dueDate), e = D(n.dueDate || n.startDate); return s == null ? null : { s, e }; };
+  const ids = (n) => n.children.map((c) => c.id);
+  const t = { id: 'r', children: [
+    { id: 'c', startDate: '2026-03-01', children: [] },
+    { id: 'x', children: [] },                                   // 날짜 없음 → 제자리
+    { id: 'a', startDate: '2026-01-10', children: [
+      { id: 'a2', dueDate: '2026-02-01', children: [] }, { id: 'a1', startDate: '2026-01-11', dueDate: '2026-01-12', children: [] }] },
+    { id: 'f', float: { x: 1, y: 1 }, startDate: '2025-01-01', children: [] },   // 떠있는 주제 → 제자리
+    { id: 'b', startDate: '2026-01-10', dueDate: '2026-02-01', children: [] },
+  ] };
+  assert.strictEqual(L.mmSortByDate(t, key), true);
+  assert.deepStrictEqual(ids(t), ['a', 'x', 'b', 'f', 'c']);   // a·b 같은 시작 → 끝 빠른 a 먼저
+  assert.deepStrictEqual(ids(t.children[0]), ['a1', 'a2']);
+  assert.strictEqual(L.mmSortByDate(t, key), false, '다시 하면 바뀐 것 없음');
+});

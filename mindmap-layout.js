@@ -817,8 +817,35 @@ function mmFromPlainTree(t, depth) {
   return n;
 }
 
+/**
+ * 시간 순 정렬 (v13.324 · 타임라인) — 같은 부모 아래에서 날짜 있는 주제끼리만 자리를 바꾼다.
+ * 날짜 없는 주제 · 떠있는 주제는 제자리 (손으로 둔 자리 유지). 하위 목록까지 모두.
+ * keyFn(node) → { s, e } (숫자 · 작을수록 앞) 또는 null. 순서가 바뀌었으면 true
+ */
+function mmSortByDate(root, keyFn) {
+  var changed = false;
+  (function go(n) {
+    var ks = n.children || [];
+    var slots = [], items = [];
+    ks.forEach(function (c, i) {
+      if (_mmIsFloat(c)) return;
+      var k = keyFn(c);
+      if (!k || k.s == null || !isFinite(k.s)) return;
+      slots.push(i);
+      items.push({ n: c, s: k.s, e: (k.e != null && isFinite(k.e)) ? k.e : k.s, i: i });
+    });
+    if (items.length > 1) {
+      items.sort(function (a, b) { return (a.s - b.s) || (a.e - b.e) || (a.i - b.i); });
+      items.forEach(function (it, j) { if (ks[slots[j]] !== it.n) { ks[slots[j]] = it.n; changed = true; } });
+    }
+    ks.forEach(go);
+  })(root);
+  return changed;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    mmSortByDate: mmSortByDate,
     mmUid: mmUid, mmNewNode: mmNewNode, mmWalk: mmWalk, mmFind: mmFind, mmCount: mmCount,
     mmIsAncestor: mmIsAncestor, mmRemoveNode: mmRemoveNode, mmMoveNode: mmMoveNode, mmCloneBranch: mmCloneBranch,
     mmLayout: mmLayout, mmEdgePath: mmEdgePath, mmEdgeShape: mmEdgeShape, mmToMarkdown: mmToMarkdown, mmFromMarkdown: mmFromMarkdown,
