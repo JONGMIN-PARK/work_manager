@@ -1,4 +1,4 @@
-// 내 업무 타임라인 — 긴 프로젝트 막대 (v13.312): 뒤쪽 달로 옮겨도 이름 · 진행률이 보이는 자리에 따라옴 · 막대 안 진행률 채움 · 끝 날짜 · 휴대폰
+// 내 업무 타임라인 — 긴 프로젝트 막대 (v13.312) · 줄 이름 → 항목 목록 · 이동 (v13.313): 뒤쪽 달로 옮겨도 이름 · 진행률이 보이는 자리에 따라옴 · 막대 안 진행률 채움 · 끝 날짜 · 휴대폰
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:pw@localhost:54329/wm';
 var path = require('path');
 var puppeteer = require(path.join(__dirname, '../../server/node_modules/puppeteer'));
@@ -51,6 +51,34 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check(at[1].endIn && /^~\d\d\/\d\d$/.test(at[1].end), '끝 날짜가 오른쪽 끝에 ' + at[1].end);
     check(at[0].fill === '40%', '막대 안 진행률 채움 40%');
     await page.screenshot({ path: path.join(SHOT, 'mtl-longbar.png') });
+
+    // v13.313 줄 이름에 마우스 → 그 줄 항목 목록 · 누르면 그 항목으로 이동 · 반짝
+    await page.evaluate(function (d) { _mtlMain.goDate(d); }, kst(300));
+    await wait(250);
+    await page.waitForNetworkIdle({ idleTime: 300, timeout: 5000 }).catch(function () {});
+    var lr = await page.evaluate(function () { var e = document.querySelector('.mtl-ln[data-ln="pj:mlb-1"]'); e.scrollIntoView({ block: 'nearest' }); var r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 10 }; });
+    await page.mouse.move(lr.x - 300, lr.y); await page.mouse.move(lr.x, lr.y, { steps: 3 });
+    await page.waitForSelector('#mtlLanePop .mtl-lp-r', { timeout: 3000 }).catch(function () {});
+    var pop = await page.evaluate(function () { var p = document.getElementById('mtlLanePop'); return p && { h: p.querySelector('.mtl-lp-h').textContent, rows: Array.prototype.map.call(p.querySelectorAll('.mtl-lp-r'), function (r) { return r.textContent; }) }; });
+    check(pop && /긴막대 장비 개조 프로젝트/.test(pop.h) && pop.rows.length === 1 && /40%/.test(pop.rows[0]) && /진행 중/.test(pop.rows[0]), '줄 이름 마우스 → 항목 목록 ' + JSON.stringify(pop));
+    await page.screenshot({ path: path.join(SHOT, 'mtl-lanepop.png') });
+    await page.evaluate(function () { document.querySelector('#mtlLanePop .mtl-lp-r').click(); });
+    await wait(300);
+    var j = await look();
+    var fl = await page.evaluate(function (s) { return !!document.querySelector(s + '.mtl-flash') && !document.getElementById('mtlLanePop'); }, BAR);
+    check(j && j.inView && fl, '누르면 그 항목으로 이동 · 반짝 · 목록 닫힘 ' + JSON.stringify([j && j.inView, fl]));
+    // 키보드 — Enter 로 열고 Esc 로 닫기
+    await page.evaluate(function () { document.querySelector('.mtl-ln[data-ln="pj:mlb-1"]').focus(); });
+    await page.keyboard.press('Enter');
+    var kb = await page.evaluate(function () { return !!document.getElementById('mtlLanePop') && document.activeElement.classList.contains('mtl-lp-r'); });
+    await page.keyboard.press('Escape');
+    check(kb && await page.evaluate(function () { return !document.getElementById('mtlLanePop'); }), '키보드 — Enter 열기 · 첫 줄 초점 · Esc 닫기');
+    // ↗ 자세히 — 상세 패널
+    await page.evaluate(function () { document.querySelector('.mtl-ln[data-ln="pj:mlb-1"]').click(); });
+    await page.waitForSelector('#mtlLanePop [data-open]', { timeout: 3000 });
+    await page.evaluate(function () { document.querySelector('#mtlLanePop [data-open]').click(); });
+    check(await page.waitForFunction(function () { return /긴막대 장비 개조 프로젝트/.test((document.querySelector('.mwp') || {}).textContent || ''); }, { timeout: 5000 }).then(function () { return true; }, function () { return false; }), '↗ → 상세 패널');
+    await page.evaluate(function () { if (typeof mwProjClose === 'function') mwProjClose(); });
     var short = await page.evaluate(function () { var b = document.querySelector('.mtl-proj[data-tk="pj:mlb-2"]'); return b && { short: b.classList.contains('is-short') || b.offsetWidth >= 60, txt: b.textContent }; });
     check(short && /긴막대 짧은 일/.test(short.txt) && /70%/.test(short.txt), '짧은 막대 — 옆 글자에 진행률 ' + JSON.stringify(short));
     // 휴대폰
@@ -62,6 +90,11 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check(m && m.inView && /40%/.test(m.txt), '휴대폰 — 뒤쪽 달에서도 이름 · 진행률 ' + JSON.stringify(m));
     await page.evaluate(function (s) { document.querySelector(s).scrollIntoView({ block: 'center' }); }, BAR);
     await page.screenshot({ path: path.join(SHOT, 'mtl-longbar-phone.png') });
+    await page.tap('.mtl-ln[data-ln="pj:mlb-1"]');
+    await wait(400);
+    var mp = await page.evaluate(function () { var p = document.getElementById('mtlLanePop'); if (!p) return null; var r = p.getBoundingClientRect(); return { l: r.left, r: r.right, rows: p.querySelectorAll('.mtl-lp-r').length }; });
+    check(mp && mp.l >= 0 && mp.r <= 402 && mp.rows === 1, '휴대폰 — 줄 이름 누르면 목록 · 화면 안 ' + JSON.stringify(mp));
+    await page.screenshot({ path: path.join(SHOT, 'mtl-lanepop-phone.png') });
     check(!errs.length, '페이지 오류 없음 ' + JSON.stringify(errs.slice(0, 3)));
   } catch (e) {
     fail++; console.log('FAIL 예외', e && e.stack);

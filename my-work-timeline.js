@@ -153,6 +153,8 @@ MwTimeline.prototype.layout = function (lanes) {
   this.items.forEach(function (t) { (byLane[t.lane] = byLane[t.lane] || []).push(t); });
   var used = lanes.filter(function (l) { return byLane[l.id] || l.keep; });
   if (!used.length) used = lanes.slice(0, 1);
+  this._laneItems = {};   // v13.313 줄 이름에 마우스 → 그 줄 항목 목록 (묶음 · +n 으로 가려진 것까지)
+  used.forEach(function (l) { self._laneItems[l.id] = { lane: l, items: (byLane[l.id] || []).slice() }; });
   var h = '';
   used.forEach(function (l) {
     var list = (byLane[l.id] || []).slice().sort(function (a, b) { return a.x0 - b.x0 || a.x1 - b.x1; });
@@ -210,9 +212,96 @@ MwTimeline.prototype.layout = function (lanes) {
     var nrows = Math.max(1, rows.length) + (Object.keys(over).length ? 1 : 0);
     var cnt = list.length;
     h += '<div class="mtl-lane" data-lane="' + _mwEsc(l.id) + '" style="height:' + (nrows * MWT_ROW + 8) + 'px;--c:' + (l.color || '#94A3B8') + '">' +
-      '<div class="mtl-ln" title="' + _mwEsc(l.name) + '"><i></i><span>' + (l.icon ? _mwEsc(l.icon) + ' ' : '') + _mwEsc(l.name) + '</span><b>' + (cnt || '') + '</b></div>' + out + '</div>';
+      '<div class="mtl-ln" tabindex="0" role="button" aria-haspopup="true" data-ln="' + _mwEsc(l.id) + '" aria-label="' + _mwEsc(l.name + ' — 항목 목록') + '"><i></i><span>' + (l.icon ? _mwEsc(l.icon) + ' ' : '') + _mwEsc(l.name) + '</span><b>' + (cnt || '') + '</b></div>' + out + '</div>';
   });
   this.cv.querySelector('.mtl-lanes').innerHTML = h;
+};
+
+/* ── 줄 이름 → 항목 목록 · 그 항목으로 이동 (v13.313) ─────────────────── */
+MwTimeline.prototype.laneMenu = function (ln, focus) {
+  var self = this, id = ln.getAttribute('data-ln'), info = this._laneItems && this._laneItems[id];
+  if (!info) return;
+  this.laneMenuHide(0);
+  var tn = _mtlNum(mwToday());
+  // 순서: 지연 → 진행 중 · 다가오는 것(가까운 날 먼저) → 지난 · 끝낸 것
+  var its = info.items.slice().sort(function (a, b) {
+    function g(t) { return t.done ? 3 : t.late ? 0 : (t.bar ? t.n1 : t.n1) >= tn ? 1 : 2; }
+    return g(a) - g(b) || (g(a) === 2 ? b.n1 - a.n1 : a.n0 - b.n0);
+  });
+  var lateN = its.filter(function (t) { return t.late && !t.done; }).length;
+  function dt(t) {
+    var a = _mtlYmd(t.n0).slice(5).replace('-', '/'), b = _mtlYmd(t.n1).slice(5).replace('-', '/');
+    return t.bar && t.n1 > t.n0 ? a + '~' + b : b;
+  }
+  function row(t, i) {
+    var dd = t.n1 - tn, rel = t.done ? '' : t.late ? 'D+' + Math.max(1, -dd) : (t.bar && t.n0 <= tn && t.n1 >= tn) ? '진행 중' : dd === 0 ? '오늘' : dd > 0 ? 'D-' + dd : '';
+    return '<div class="mtl-lp-r' + (t.late && !t.done ? ' is-late' : '') + (t.done ? ' is-done' : '') + '" role="menuitem" tabindex="-1" data-i="' + i + '">' +
+      '<span class="mtl-lp-k" style="--c:' + (t.color || info.lane.color || '#94A3B8') + '">' + (t.bar ? '<i class="b"></i>' : '<i></i>') + '</span>' +
+      '<span class="mtl-lp-t">' + (t.icon ? '<em>' + _mwEsc(t.icon) + '</em>' : '') + _mwEsc(t.title) + (t.prog != null ? ' <b class="mtl-lp-p">' + t.prog + '%</b>' : '') + '</span>' +
+      '<span class="mtl-lp-d">' + dt(t) + (rel ? ' <b>' + rel + '</b>' : '') + '</span>' +
+      (self.o.onOpen ? '<button type="button" class="mtl-lp-o" data-open="' + i + '" title="자세히 열기" aria-label="자세히 열기">↗</button>' : '') + '</div>';
+  }
+  var p = document.createElement('div');
+  p.id = 'mtlLanePop'; p.className = 'mtl-lp'; p.setAttribute('role', 'menu');
+  p.innerHTML = '<div class="mtl-lp-h"><i style="background:' + (info.lane.color || '#94A3B8') + '"></i><b>' + (info.lane.icon ? _mwEsc(info.lane.icon) + ' ' : '') + _mwEsc(info.lane.name) + '</b><span>' + its.length + '개' + (lateN ? ' · <em>지연 ' + lateN + '</em>' : '') + '</span></div>' +
+    (its.length > 8 ? '<input class="mtl-lp-q" type="search" placeholder="찾기" aria-label="이 줄에서 찾기">' : '') +
+    '<div class="mtl-lp-l">' + (its.length ? its.map(row).join('') : '<div class="mtl-lp-e">이 기간에 항목이 없습니다</div>') + '</div>' +
+    '<div class="mtl-lp-f">누르면 그 날짜로 이동 · ↗ 자세히</div>';
+  document.body.appendChild(p);
+  var r = ln.getBoundingClientRect(), pw = p.offsetWidth, ph = p.offsetHeight;
+  var x = r.right + 6; if (x + pw > window.innerWidth - 8) x = Math.max(8, window.innerWidth - pw - 8);
+  var y = Math.max(8, Math.min(window.innerHeight - ph - 8, r.top - 6));
+  p.style.left = x + 'px'; p.style.top = y + 'px';
+  this._lpFor = id;
+  p.addEventListener('mouseenter', function () { clearTimeout(self._lpHide); });
+  p.addEventListener('mouseleave', function () { if (!(self._touchAt && Date.now() - self._touchAt < 1200)) self.laneMenuHide(200); });
+  p.addEventListener('click', function (e) {
+    var o = e.target.closest('[data-open]');
+    if (o) { var t0 = its[+o.getAttribute('data-open')]; self.laneMenuHide(0); if (t0) self.o.onOpen(t0, self); return; }
+    var rw = e.target.closest('.mtl-lp-r'); if (!rw) return;
+    self._lpPicked = Date.now();
+    var t = its[+rw.getAttribute('data-i')]; self.laneMenuHide(0); if (t) self.jumpTo(t);
+  });
+  p.addEventListener('keydown', function (e) {
+    var rows = [].slice.call(p.querySelectorAll('.mtl-lp-r:not([hidden])')), cur = rows.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); self.laneMenuHide(0); ln.focus(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); var n = rows[Math.max(0, Math.min(rows.length - 1, cur + (e.key === 'ArrowDown' ? 1 : -1)))]; if (n) n.focus(); }
+    else if (e.key === 'Enter' && cur >= 0) { e.preventDefault(); rows[cur].click(); }
+  });
+  var q = p.querySelector('.mtl-lp-q');
+  if (q) q.addEventListener('input', function () {
+    var s = q.value.trim().toLowerCase();
+    p.querySelectorAll('.mtl-lp-r').forEach(function (rw) { var t = its[+rw.getAttribute('data-i')]; rw.hidden = !!s && String(t.title).toLowerCase().indexOf(s) < 0; });
+  });
+  if (!this._lpDoc) {   // 바깥을 누르면 닫기
+    this._lpDoc = function (e) { var pp = document.getElementById('mtlLanePop'); if (pp && !pp.contains(e.target) && !(e.target.closest && e.target.closest('.mtl-ln'))) self.laneMenuHide(0); };
+    document.addEventListener('pointerdown', this._lpDoc, true);
+  }
+  if (focus) { var f = q || p.querySelector('.mtl-lp-r'); if (f) f.focus(); }
+};
+MwTimeline.prototype.laneMenuHide = function (ms) {
+  var self = this;
+  clearTimeout(this._lpHide);
+  function go() { var p = document.getElementById('mtlLanePop'); if (p) p.remove(); self._lpFor = null; }
+  if (ms) this._lpHide = setTimeout(go, ms); else go();
+};
+/* 그 항목이 보이게 — 날짜로 옮기고(년 줌이면 월로) · 묶음 · +n 에 가려 있으면 주 줌까지 · 반짝 */
+MwTimeline.prototype.jumpTo = function (t) {
+  var self = this, n = t.bar ? Math.max(t.n0, Math.min(t.n1, _mtlNum(mwToday()))) : t.n1;
+  if (t.bar && (t.n1 - t.n0) * this.st.ppd < this.sc.clientWidth - this.L) n = (t.n0 + t.n1) / 2;   // 다 들어오면 막대 가운데
+  if (this.st.collapsed) { this.st.collapsed = false; this.save(true); this.el.querySelector('.mtl-dens').hidden = true; }
+  if (this.st.ppd < 6) this.st.ppd = MWT_PPD.month;
+  this.st.center = n + 0.5; this.update(); this.save(true);
+  function el() { return self.cv.querySelector('[data-tk="' + String(t.key).replace(/"/g, '\\"') + '"]'); }
+  var node = el();
+  if (!node && this.st.ppd < MWT_PPD.week) { this.st.ppd = MWT_PPD.week; this.st.center = n + 0.5; this.update(); this.save(true); node = el(); }
+  if (!node) { if (typeof showToast === 'function') showToast('그 날짜로 옮겼어요 — 같은 날 항목이 많아 묶여 있어요', 'info'); return; }
+  node.scrollIntoView({ block: 'nearest' });
+  // 반짝 — 곧바로 다시 그려져도(뒤에서 더 받기 등) 이어지게 열쇠로 기억
+  this._flash = { key: t.key, until: Date.now() + 1800 };
+  node.classList.remove('mtl-flash'); void node.offsetWidth; node.classList.add('mtl-flash');
+  setTimeout(function () { self._flash = null; var nn = el(); if (nn) nn.classList.remove('mtl-flash'); }, 1800);
+  if (!t.bar) this.setPick(_mtlYmd(t.n1));
 };
 
 MwTimeline.prototype.itemHtml = function (t, r) {
@@ -222,7 +311,7 @@ MwTimeline.prototype.itemHtml = function (t, r) {
       (t.bar ? '' : '<i></i>') + '<b>' + t.cluster.length + '</b><span class="mtl-tx">' + _mwEsc(t.title) + '</span></div>';
   }
   var cls = 'mtl-it ' + (t.bar ? 'mtl-bar' : 'mtl-pt') + (t.late ? ' is-late' : '') + (t.done ? ' is-done' : '') + (t.pri === 1 ? ' is-urg' : t.pri === 2 ? ' is-hi' : '') +
-    (t.drag ? ' can-drag' : '') + (t.key === _mw.sel ? ' mw-picked' : '') + (t.pending ? ' is-pending' : '') + (t.proj ? ' mtl-proj' : t.pjms ? ' mtl-pjms' : '');
+    (t.drag ? ' can-drag' : '') + (this._flash && this._flash.key === t.key && Date.now() < this._flash.until ? ' mtl-flash' : '') + (t.key === _mw.sel ? ' mw-picked' : '') + (t.pending ? ' is-pending' : '') + (t.proj ? ' mtl-proj' : t.pjms ? ' mtl-pjms' : '');
   var top = r * MWT_ROW + 4;
   var tip = t.title + '\n' + (t.tip || '');
   var lbl = '<span class="mtl-tx">' + (t.icon ? '<em>' + _mwEsc(t.icon) + '</em>' : '') + _mwEsc(t.title) + '</span>';
@@ -401,6 +490,28 @@ MwTimeline.prototype.bind = function () {
   // 마우스 — 안내선
   sc.addEventListener('mousemove', function (e) { if (!self._drag && !self._pan) self.hoverAt(e.clientX); });
   sc.addEventListener('mouseleave', function () { el.querySelector('.mtl-guide.is-hover').hidden = true; self.hover = null; });
+  // v13.313 줄 이름 — 마우스를 올리면(손가락은 누르면) 그 줄 항목 목록, 누르면 그 항목으로 이동
+  // 손가락으로 누른 뒤 따라오는 가짜 마우스 이벤트는 무시 (누르면 열고, 바깥을 누르면 닫음)
+  sc.addEventListener('touchstart', function () { self._touchAt = Date.now(); }, { passive: true });
+  function viaTouch() { return self._touchAt && Date.now() - self._touchAt < 1200; }
+  sc.addEventListener('mouseover', function (e) {
+    var ln = e.target.closest && e.target.closest('.mtl-ln');
+    if (!ln || self._drag || self._pan || viaTouch() || (self._lpPicked && Date.now() - self._lpPicked < 900)) return;   // 고른 뒤 다시 그려져 마우스 밑에 새로 온 줄 이름은 무시
+    clearTimeout(self._lpHide);
+    if (self._lpFor === ln.getAttribute('data-ln') && document.getElementById('mtlLanePop')) return;
+    clearTimeout(self._lpT);
+    self._lpT = setTimeout(function () { if (ln.isConnected) self.laneMenu(ln); }, 220);
+  });
+  sc.addEventListener('mouseout', function (e) {
+    var ln = e.target.closest && e.target.closest('.mtl-ln');
+    if (!ln || (e.relatedTarget && ln.contains(e.relatedTarget)) || viaTouch()) return;
+    clearTimeout(self._lpT);
+    self.laneMenuHide(250);
+  });
+  sc.addEventListener('keydown', function (e) {
+    var ln = e.target.closest && e.target.closest('.mtl-ln');
+    if (ln && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); self.laneMenu(ln, true); }
+  });
   // 회의 일정에 마우스를 올리면 회의록 미리보기 카드 (v13.272, my-work-notes.js)
   sc.addEventListener('mouseover', function (e) {
     var n = e.target.closest && e.target.closest('.mtl-it');
@@ -486,7 +597,8 @@ MwTimeline.prototype.bind = function () {
     if (mo) { self.goDate(mo.getAttribute('data-more'), true); if (self.st.ppd < 60) self.zoomTo(MWT_PPD.week); return; }
     var it = e.target.closest('.mtl-it');
     if (it) { var t = self.find(it.getAttribute('data-tk')); if (t) self.o.onOpen(t, self); return; }
-    if (e.target.closest('.mtl-ln')) return;
+    var lnc = e.target.closest('.mtl-ln');
+    if (lnc) { if (self._lpFor === lnc.getAttribute('data-ln') && document.getElementById('mtlLanePop')) self.laneMenuHide(0); else self.laneMenu(lnc, true); return; }
     var d = self.hoverAt(e.clientX);
     if (d) {
       if (self.o.calendar && self.st.link) self.setPick(d);
