@@ -4560,3 +4560,43 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
   .nb-top [data-nb="share"]{display:none}
   .nb-rep-row .mw-input{max-width:140px}
 }
+
+/* ═══ v13.319 🖨 출력 미리 보기 · 양식 (notebook-print-ui.js) ═══ */
+.nbpr{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;min-height:0}
+.nbpr-pv{background:#d4d8de;border-radius:10px;padding:14px;max-height:calc(95vh - 90px);overflow:auto;overflow-x:hidden}
+.nbpr-wrap{margin:0 auto;position:relative}
+.nbpr-paper{transform-origin:0 0;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.22)}
+.nbpr-paper iframe{display:block;border:0;background:#fff;height:1123px}
+.nbpr-side{display:flex;flex-direction:column;gap:10px;max-height:calc(95vh - 90px);overflow:auto;padding-right:2px}
+.nbpr-act{display:flex;flex-direction:column;gap:6px;position:sticky;top:0;background:var(--bg-ps,var(--bg-p));padding-bottom:6px;z-index:1}
+.nbpr-act .nb-btn{width:100%;justify-content:center}
+.nbpr-act2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.nbpr-pages{font-size:10.5px;color:var(--t5);line-height:1.5}
+.nbpr-g{border:1px solid var(--bd);border-radius:10px;padding:9px 10px;display:flex;flex-direction:column;gap:7px}
+.nbpr-gt{font-size:11.5px;font-weight:700;color:var(--t2);display:flex;align-items:center;gap:6px}
+.nbpr-gt small{font-weight:600;color:var(--ac)}
+.nbpr-link{margin-left:auto;background:none;border:0;color:var(--ac);font-size:10.5px;cursor:pointer;padding:0}
+.nbpr-seg{display:flex;flex-wrap:wrap;gap:3px}
+.nbpr-seg button{flex:1 1 auto;border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);border-radius:7px;padding:4px 7px;font-size:11px;cursor:pointer;white-space:nowrap}
+.nbpr-seg button.on{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:700}
+.nbpr-dots{display:flex;gap:7px}
+.nbpr-dots button{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;box-shadow:0 0 0 1px var(--bd)}
+.nbpr-dots button.on{border-color:var(--bg-p);box-shadow:0 0 0 2px var(--t2)}
+.nbpr-row{display:flex;gap:6px;align-items:center}
+.nbpr-row>*{flex:1;min-width:0}.nbpr-row>span{flex:0}
+.nbpr-in{font-size:11.5px!important;padding:5px 7px!important;box-sizing:border-box;width:100%}
+.nbpr-ck{font-size:11px;color:var(--t3);display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.nbpr-ckrow{display:flex;flex-wrap:wrap;gap:4px 12px}
+.nbpr-quick{display:flex;gap:4px;flex-wrap:wrap}
+.nbpr-quick button{border:1px solid var(--bd);background:none;color:var(--t4);border-radius:12px;padding:2px 9px;font-size:10.5px;cursor:pointer}
+.nbpr-quick button:hover{color:var(--ac);border-color:var(--ac)}
+.nbpr-msg{font-size:11px;color:var(--t5);min-height:14px}
+.nbpr-logo{border:1px dashed var(--bd);border-radius:8px;min-height:60px;display:flex;align-items:center;justify-content:center;background:#fff;margin:4px 0 8px}
+.nbpr-logo img{max-height:60px;max-width:100%}.nbpr-logo span{color:#94a3b8;font-size:12px}
+.nbpr-sum{font-size:12px;line-height:1.6;background:var(--bg-i);border-radius:8px;padding:8px 10px;margin:8px 0}
+@media (max-width:820px){
+  .nbpr{grid-template-columns:1fr}
+  .nbpr-side{max-height:none}
+  .nbpr-pv{max-height:55vh}
+  .nb-top .nb-prb{display:none}
+}

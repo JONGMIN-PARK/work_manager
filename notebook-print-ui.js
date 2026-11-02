@@ -1,0 +1,364 @@
+/* notebook-print-ui.js — 🖨 출력 미리 보기 창 (v13.319)
+   nbPrintOpen()            지금 노트(또는 일일 노트) 한 장
+   nbPrintBundle(src)       여러 날 · 여러 노트 묶어 출력 (src: 'daily' | 'notes')
+   왼쪽 A4 종이(쪽 나뉨 표시) · 오른쪽 설정 — 고르는 즉시 다시 그림. 설정은 브라우저에 기억(양식 칸 제외)
+   🖨 인쇄 · PDF / 📝 Word / 📋 서식째 복사 / 🤝 프로젝트 회의로 올리기(회의록 양식) */
+var NBPR = { items: [], mode: 'one', o: null, ps: null, img: {}, timer: null, last: null, bundle: null, pages: 0 };
+var NBPR_KEEP = ['theme', 'accent', 'size', 'landscape', 'margin', 'header', 'docNo', 'pageNo', 'sign', 'ink', 'writer', 'dept', 'perPage', 'toc'];
+
+function _nbprLoadOpts() {
+  var o = {};
+  try { o = JSON.parse(localStorage.getItem('nb-print-v1') || '{}') || {}; } catch (e) { o = {}; }
+  var me = typeof currentUser !== 'undefined' && currentUser ? currentUser : {};
+  var x = {}; NBPR_KEEP.forEach(function (k) { if (o[k] != null) x[k] = o[k]; });
+  if (x.writer == null) x.writer = me.displayName || me.name || '';
+  if (x.dept == null) x.dept = me.department || me.dept || '';
+  x.form = 'auto';
+  return Object.assign({}, NbPrint.DEF, x);
+}
+function _nbprSaveOpts() {
+  var x = {}; NBPR_KEEP.forEach(function (k) { x[k] = NBPR.o[k]; });
+  try { localStorage.setItem('nb-print-v1', JSON.stringify(x)); } catch (e) { /* 기억 못 해도 출력은 됨 */ }
+}
+function _nbprSettings() {
+  if (NBPR.ps) return Promise.resolve(NBPR.ps);
+  return apiFetch('/api/notebook/print-settings').then(function (r) { NBPR.ps = r.data || {}; return NBPR.ps; }).catch(function () { NBPR.ps = { company: '', logo: '', canEdit: false }; return NBPR.ps; });
+}
+/** 지금 열린 노트 → 출력 항목 하나 */
+function _nbprCurItem() {
+  var src = document.getElementById('nbSrc'), body = src ? src.value : '';
+  if (NB.daily1) return { kind: 'daily', date: NB.daily1.date, ref: NB.daily1.ref || '', title: NB.daily1.ref ? NB.daily1.title : '', body: body };
+  var n = NB.cur || {};
+  var t = n.updatedAt ? new Date(new Date(n.updatedAt).getTime() + 9 * 3600000).toISOString().slice(0, 10) : _nbToday();
+  return { kind: 'note', id: n.id, title: n.title || '', body: body, date: t, ink: n.ink || null, tags: n.tags || [] };
+}
+
+/* ═══ 열기 ═══ */
+function nbPrintOpen() {
+  if (!NB.cur && !NB.daily1) { _nbToast('출력할 노트를 먼저 여세요', 'warn'); return; }
+  NBPR.mode = 'one'; NBPR.items = [_nbprCurItem()]; NBPR.bundle = null;
+  return _nbprShow();
+}
+function nbPrintBundle(src) {
+  NBPR.mode = 'bundle'; NBPR.items = [];
+  // 기본은 최근 7일 — '이번 주'로 하면 월요일엔 하루뿐
+  var t = _nbToday(), from = new Date(new Date(t + 'T00:00:00Z').getTime() - 6 * 86400000).toISOString().slice(0, 10);
+  NBPR.bundle = { src: src === 'notes' ? 'notes' : 'daily', from: from, to: t, folderId: NB.folder || '', tag: NB.tag || '', loading: false, msg: '' };
+  return _nbprShow().then(function (ok) { if (ok) _nbprLoadBundle(); return ok; });
+}
+function _nbprShow() {
+  return wmGuardedModal('nbPrint', function () {
+    return _nbprSettings().then(function (ps) {
+      NBPR.o = _nbprLoadOpts();
+      NBPR.o.company = ps.company || ''; NBPR.o.logo = ps.logo || '';
+      var md = createModal({ id: 'nbPrintModal', titleText: NBPR.mode === 'bundle' ? '🖨 묶어 출력' : '🖨 출력 미리 보기', width: '1240px', boxStyle: 'max-height:95vh;padding:16px 18px', closeOnEsc: true,
+        html: '<div class="nbpr">' +
+          '<div class="nbpr-pv" id="nbprPv"><div class="nbpr-wrap" id="nbprWrap"><div class="nbpr-paper" id="nbprPaper"><iframe id="nbprFrame" title="출력 미리 보기"></iframe></div></div></div>' +
+          '<div class="nbpr-side" id="nbprSide"></div></div>' });
+      NBPR.modal = md;
+      _nbprDrawSide();
+      md.box.querySelector('#nbprSide').addEventListener('click', _nbprClick);
+      md.box.querySelector('#nbprSide').addEventListener('change', _nbprChange);
+      md.box.querySelector('#nbprSide').addEventListener('input', function (e) { if (e.target.matches('input[type=text][data-o]')) _nbprChange(e); });
+      _nbprRender();
+    });
+  }, 'nbPrintModal', { timeoutMs: 15000 });
+}
+
+/* ═══ 오른쪽 설정 ═══ */
+function _nbprSeg(key, map, cur) {
+  return '<div class="nbpr-seg">' + Object.keys(map).map(function (k) { return '<button type="button" data-o="' + key + '" data-v="' + _nbE(k) + '" class="' + (String(cur) === k ? 'on' : '') + '">' + _nbE(map[k]) + '</button>'; }).join('') + '</div>';
+}
+function _nbprChk(key, label, title) { return '<label class="nbpr-ck"' + (title ? ' title="' + _nbE(title) + '"' : '') + '><input type="checkbox" data-o="' + key + '"' + (NBPR.o[key] ? ' checked' : '') + '> ' + label + '</label>'; }
+function _nbprDrawSide() {
+  var o = NBPR.o, ps = NBPR.ps || {}, b = NBPR.bundle, h = '';
+  h += '<div class="nbpr-act"><button class="nb-btn pri" data-pr="print" title="인쇄 창에서 대상을 \'PDF로 저장\'으로 고르면 PDF 파일">🖨 인쇄 · PDF 저장</button>' +
+    '<div class="nbpr-act2"><button class="nb-btn" data-pr="doc">📝 Word</button><button class="nb-btn" data-pr="copy" title="메일 · 메신저에 붙이면 표 · 서식이 그대로">📋 서식째 복사</button></div>' +
+    '<div class="nbpr-meet" id="nbprMeet"></div><div class="nbpr-pages" id="nbprPages"></div></div>';
+  if (b) {
+    var folders = (NB.meta && NB.meta.folders) || [], tags = (NB.meta && NB.meta.tags) || [];
+    h += '<div class="nbpr-g"><div class="nbpr-gt">📚 무엇을 묶을까요</div>' + _nbprSeg('b-src', { daily: '📅 일일 노트', notes: '📓 내 노트' }, b.src) +
+      '<div class="nbpr-row"><input type="date" class="mw-input nbpr-in" data-b="from" value="' + _nbE(b.from) + '"><span>~</span><input type="date" class="mw-input nbpr-in" data-b="to" value="' + _nbE(b.to) + '"></div>' +
+      '<div class="nbpr-quick"><button type="button" data-pr="r-7">최근 7일</button><button type="button" data-pr="r-week">이번 주</button><button type="button" data-pr="r-last">지난주</button><button type="button" data-pr="r-month">이번 달</button><button type="button" data-pr="r-lmonth">지난달</button></div>' +
+      (b.src === 'notes' ? '<div class="nbpr-row"><select class="mw-input nbpr-in" data-b="folderId"><option value="">📁 모든 폴더</option>' + folders.map(function (f) { return '<option value="' + _nbE(f.id) + '"' + (b.folderId === f.id ? ' selected' : '') + '>' + _nbE(f.name) + '</option>'; }).join('') + '</select>' +
+        '<select class="mw-input nbpr-in" data-b="tag"><option value="">🏷 모든 태그</option>' + tags.map(function (t) { return '<option value="' + _nbE(t.tag) + '"' + (b.tag === t.tag ? ' selected' : '') + '>#' + _nbE(t.tag) + '</option>'; }).join('') + '</select></div>' : '') +
+      '<div class="nbpr-msg" id="nbprBMsg">' + _nbE(b.loading ? '불러오는 중…' : b.msg || '') + '</div>' +
+      '<div class="nbpr-ckrow">' + _nbprChk('perPage', '한 건씩 새 쪽', '끄면 이어 붙여 종이를 아낍니다') + _nbprChk('toc', '표지 · 목차') + '</div></div>';
+  }
+  var det = NBPR.last && NBPR.last.forms && NBPR.last.forms[0] && o.form === 'auto' && NBPR.mode === 'one' ? ' <small>→ ' + _nbE(NbPrint.FORMS[NBPR.last.forms[0]]) + '</small>' : '';
+  h += '<div class="nbpr-g"><div class="nbpr-gt">📄 양식' + det + '</div>' + _nbprSeg('form', NbPrint.FORMS, o.form) + '</div>';
+  h += '<div class="nbpr-g"><div class="nbpr-gt">🎨 모양</div>' + _nbprSeg('theme', { basic: '기본', formal: '공문', clean: '간결' }, o.theme) +
+    (o.theme === 'formal' ? '' : '<div class="nbpr-dots">' + Object.keys(NbPrint.ACCENTS).map(function (k) { return '<button type="button" data-o="accent" data-v="' + k + '" class="' + (o.accent === k ? 'on' : '') + '" style="background:' + NbPrint.ACCENTS[k] + '" title="' + k + '" aria-label="색 ' + k + '"></button>'; }).join('') + '</div>') + '</div>';
+  h += '<div class="nbpr-g"><div class="nbpr-gt">🏢 머리글 ' + (ps.canEdit ? '<button type="button" class="nbpr-link" data-pr="ps">✎ 회사 머리글 설정</button>' : '') + '</div>' +
+    _nbprChk('header', (o.company || o.logo ? _nbE(o.company || '로고') : '회사 이름 없음') + ' 머리글', ps.canEdit ? '' : '회사 이름 · 로고는 관리자가 정합니다') +
+    '<div class="nbpr-row"><input type="text" class="mw-input nbpr-in" data-o="writer" placeholder="작성자" value="' + _nbE(o.writer) + '" maxlength="40"><input type="text" class="mw-input nbpr-in" data-o="dept" placeholder="부서" value="' + _nbE(o.dept) + '" maxlength="40"></div></div>';
+  var signCustom = o.sign && !NbPrint.SIGNS.hasOwnProperty(o.sign);
+  h += '<div class="nbpr-g"><div class="nbpr-gt">✍️ 결재란</div><select class="mw-input nbpr-in" data-o="sign-pick">' +
+    Object.keys(NbPrint.SIGNS).map(function (k) { return '<option value="' + _nbE(k) + '"' + (!signCustom && o.sign === k ? ' selected' : '') + '>' + _nbE(NbPrint.SIGNS[k]) + '</option>'; }).join('') +
+    '<option value="*"' + (signCustom ? ' selected' : '') + '>직접 적기…</option></select>' +
+    (signCustom ? '<input type="text" class="mw-input nbpr-in" data-o="sign" value="' + _nbE(o.sign) + '" placeholder="쉼표로: 담당,과장,부장" maxlength="60">' : '') + '</div>';
+  h += '<div class="nbpr-g"><div class="nbpr-gt">📐 종이</div>' + _nbprSeg('landscape', { 'false': '세로', 'true': '가로' }, o.landscape) + _nbprSeg('size', { s: '글자 작게', m: '보통', l: '크게' }, o.size) + _nbprSeg('margin', { narrow: '여백 좁게', normal: '보통', wide: '넓게' }, o.margin) +
+    '<div class="nbpr-ckrow">' + _nbprChk('docNo', '문서 번호') + _nbprChk('pageNo', '쪽 번호') + _nbprChk('ink', '손글씨 · 사진') + '</div></div>';
+  document.getElementById('nbprSide').innerHTML = h;
+  _nbprMeetBtn();
+}
+function _nbprMeetBtn() {
+  var box = document.getElementById('nbprMeet'); if (!box) return;
+  var ok = NBPR.mode === 'one' && NB.cur && !NB.cur.readOnly && !NB.cur.deletedAt && NBPR.last && NBPR.last.forms[0] === 'meeting';
+  box.innerHTML = ok ? '<button class="nb-btn" data-pr="meet" title="안건 · 결정 · 할 일을 프로젝트 › 회의에 회의록으로 등록 (할 일은 액션 아이템으로)">🤝 프로젝트 회의로 올리기</button>' : '';
+}
+function _nbprClick(e) {
+  var x = e.target.closest('[data-pr],[data-o][data-v]'); if (!x) return;
+  if (x.hasAttribute('data-v')) {
+    var k = x.getAttribute('data-o'), v = x.getAttribute('data-v');
+    if (k === 'b-src') { NBPR.bundle.src = v; _nbprDrawSide(); _nbprLoadBundle(); return; }
+    NBPR.o[k] = v === 'true' ? true : v === 'false' ? false : v;
+    _nbprSaveOpts(); _nbprDrawSide(); _nbprRender(); return;
+  }
+  var a = x.getAttribute('data-pr');
+  if (a === 'print') _nbprPrint();
+  else if (a === 'doc') _nbprWord();
+  else if (a === 'copy') _nbprCopy();
+  else if (a === 'meet') _nbprToMeeting();
+  else if (a === 'ps') _nbprPsEdit();
+  else if (/^r-/.test(a)) _nbprRange(a.slice(2));
+}
+function _nbprChange(e) {
+  var t = e.target;
+  if (t.hasAttribute('data-b')) { NBPR.bundle[t.getAttribute('data-b')] = t.value; _nbprLoadBundle(); return; }
+  var k = t.getAttribute('data-o'); if (!k) return;
+  if (k === 'sign-pick') { NBPR.o.sign = t.value === '*' ? '담당,과장,부장' : t.value; _nbprSaveOpts(); _nbprDrawSide(); _nbprRender(); return; }
+  NBPR.o[k] = t.type === 'checkbox' ? t.checked : t.value;
+  _nbprSaveOpts();
+  if (t.type === 'checkbox') _nbprDrawSide();
+  _nbprRender(t.type === 'text' ? 250 : 0);
+}
+function _nbprRange(k) {
+  var t = _nbToday(), d = new Date(t + 'T00:00:00Z'), day = 86400000, iso = function (x) { return new Date(x).toISOString().slice(0, 10); };
+  var mon = d.getTime() - ((d.getUTCDay() + 6) % 7) * day, b = NBPR.bundle;
+  if (k === '7') { b.from = iso(d.getTime() - 6 * day); b.to = t; }
+  else if (k === 'week') { b.from = iso(mon); b.to = t; }
+  else if (k === 'last') { b.from = iso(mon - 7 * day); b.to = iso(mon - day); }
+  else if (k === 'month') { b.from = t.slice(0, 8) + '01'; b.to = t; }
+  else if (k === 'lmonth') { var f = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)); b.from = iso(f); b.to = iso(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0)); }
+  _nbprDrawSide(); _nbprLoadBundle();
+}
+function _nbprLoadBundle() {
+  var b = NBPR.bundle; if (!b) return;
+  b.loading = true; var m = document.getElementById('nbprBMsg'); if (m) m.textContent = '불러오는 중…';
+  var seq = (NBPR.bseq = (NBPR.bseq || 0) + 1);
+  var q = '?src=' + b.src + '&from=' + b.from + '&to=' + b.to + (b.src === 'notes' && b.folderId ? '&folderId=' + encodeURIComponent(b.folderId) : '') + (b.src === 'notes' && b.tag ? '&tag=' + encodeURIComponent(b.tag) : '');
+  apiFetch('/api/notebook/bundle' + q).then(function (r) {
+    if (seq !== NBPR.bseq) return;
+    NBPR.items = r.data || []; b.loading = false;
+    b.msg = NBPR.items.length ? NBPR.items.length + '건' + (NBPR.items.length >= 62 ? ' (62건까지만 — 기간을 줄여 주세요)' : '') : '이 기간에 ' + (b.src === 'daily' ? '일일 노트가' : '노트가') + ' 없습니다';
+    var mm = document.getElementById('nbprBMsg'); if (mm) mm.textContent = b.msg;
+    _nbprRender();
+  }).catch(function (e) { b.loading = false; b.msg = '❌ ' + _nbErr(e); var mm = document.getElementById('nbprBMsg'); if (mm) mm.textContent = b.msg; });
+}
+
+/* ═══ 그리기 ═══ */
+function _nbprRender(delay) {
+  clearTimeout(NBPR.timer);
+  NBPR.timer = setTimeout(function () {
+    if (!document.getElementById('nbprFrame')) return;
+    if (!NBPR.items.length) { NBPR.last = { inner: '', forms: [], title: '' }; _nbprPaint('<div style="color:#94a3b8;text-align:center;padding:80px 0;font:14px sans-serif">출력할 내용이 없습니다</div>'); return; }
+    var res = NbPrint.build(NBPR.items, NBPR.o);
+    var prevForm = NBPR.last && NBPR.last.forms && NBPR.last.forms[0];
+    NBPR.last = res;
+    if (NBPR.mode === 'one' && NBPR.o.form === 'auto' && prevForm !== res.forms[0]) _nbprDrawSide(); else _nbprMeetBtn();
+    _nbprImgs(res.inner).then(function (inner) { res.innerResolved = inner; _nbprPaint(inner); });
+  }, delay || 0);
+}
+/** 첨부 사진(인증 필요)을 data URL 로 — 인쇄 창 · Word 에서도 보이게 */
+function _nbprImgs(inner) {
+  var ids = []; inner.replace(/data-nbf="([^"]+)"/g, function (_, id) { if (ids.indexOf(id) < 0) ids.push(id); });
+  return Promise.all(ids.map(function (id) {
+    if (NBPR.img[id]) return null;
+    return _nbBlob(id).then(function (u) { return fetch(u); }).then(function (r) { return r.blob(); }).then(function (b) {
+      return new Promise(function (res) { var fr = new FileReader(); fr.onload = function () { NBPR.img[id] = fr.result; res(); }; fr.onerror = function () { res(); }; fr.readAsDataURL(b); });
+    }).catch(function () { NBPR.img[id] = ''; });
+  })).then(function () {
+    return inner.replace(/<img class="nb-img"([^>]*?) data-nbf="([^"]+)"/g, function (m, pre, id) { return NBPR.img[id] ? '<img class="nb-img"' + pre + ' src="' + NBPR.img[id] + '"' : '<span style="color:#94a3b8">[사진]</span><img hidden' + pre; });
+  });
+}
+function _nbprPaint(inner) {
+  var fr = document.getElementById('nbprFrame'), pv = document.getElementById('nbprPv'); if (!fr) return;
+  var o = NBPR.o, st = pv ? pv.scrollTop : 0;
+  var W = o.landscape ? 1123 : 794;
+  fr.style.width = W + 'px';
+  var paper = document.getElementById('nbprPaper'), wrap = document.getElementById('nbprWrap');
+  // 창이 좁으면 종이를 줄여서 (가로 스크롤 없이) 한눈에
+  var fit = pv ? Math.min(1, (pv.clientWidth - 28) / W) : 1;
+  if (paper) { paper.style.transform = fit < 1 ? 'scale(' + fit.toFixed(3) + ')' : ''; paper.style.width = W + 'px'; }
+  if (wrap) wrap.style.width = Math.floor(W * fit) + 'px';
+  fr.onload = function () {
+    try {
+      var d = fr.contentDocument, M = NbPrint.MARGIN[o.margin] || NbPrint.MARGIN.normal;
+      var pageH = NbPrint.mm((o.landscape ? 210 : 297) - 2 * M[0]), top = NbPrint.mm(M[0]);
+      var bodyH = d.body.scrollHeight - 2 * top;
+      // 강제 쪽 나눔(묶음)마다 새로 셈 — 쪽 수 · 나뉨 선은 대략
+      var cuts = [0].concat([].slice.call(d.querySelectorAll('.pg-brk')).map(function (x) { return x.offsetTop - top; })).concat([bodyH]);
+      var pages = 0, html = '';
+      for (var i = 0; i + 1 < cuts.length; i++) {
+        var len = Math.max(1, cuts[i + 1] - cuts[i]), n = Math.max(1, Math.ceil(len / pageH));
+        pages += n;
+        if (i > 0) html += '<div class="pv-guide" style="top:' + (top + cuts[i]) + 'px;border-top-style:solid"><span>' + (pages - n + 1) + '쪽</span></div>';
+        for (var k = 1; k < n; k++) html += '<div class="pv-guide" style="top:' + (top + cuts[i] + k * pageH) + 'px"><span>' + (pages - n + k + 1) + '쪽 ↓</span></div>';
+      }
+      if (html) d.body.insertAdjacentHTML('beforeend', html);
+      var H = Math.max(o.landscape ? 794 : 1123, d.documentElement.scrollHeight);
+      fr.style.height = H + 'px';
+      if (paper) paper.style.height = H + 'px';
+      if (wrap) wrap.style.height = Math.ceil(H * fit) + 'px';
+      NBPR.pages = pages;
+      var pg = document.getElementById('nbprPages'); if (pg) pg.textContent = '약 ' + pages + '쪽 · 빨간 선이 쪽이 나뉘는 곳(대략)' + (o.pageNo ? ' · 쪽 번호와 머리글은 인쇄할 때 매 쪽에 붙습니다' : '');
+      if (pv) pv.scrollTop = st;
+    } catch (e) { /* 미리 보기만 */ }
+  };
+  fr.srcdoc = NbPrint.page(inner, o, NBPR.last ? NBPR.last.title : '', NBPR.last ? NBPR.last.docNo : '');
+}
+
+/* ═══ 내보내기 ═══ */
+function _nbprReady() {
+  var r = NBPR.last;
+  if (!r || !r.inner) { _nbToast('출력할 내용이 없습니다', 'warn'); return null; }
+  return r;
+}
+function _nbprFile(ext) { var r = NBPR.last; return String(r.title || '노트').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80) + '.' + ext; }
+function _nbprPrint() {
+  var r = _nbprReady(); if (!r) return;
+  var fr = document.getElementById('nbprFrame');
+  if (fr && fr.contentWindow) { fr.contentWindow.focus(); fr.contentWindow.print(); }
+}
+function _nbprWord() {
+  var r = _nbprReady(); if (!r) return;
+  _nbprImgs(r.inner).then(function (inner) {
+    _nbSaveBlob(new Blob(['﻿' + NbPrint.word(inner, NBPR.o, r.title)], { type: 'application/msword' }), _nbprFile('doc'));
+    _nbToast('📝 Word 파일로 내려받았습니다');
+  });
+}
+function _nbprCopy() {
+  var r = _nbprReady(); if (!r) return;
+  _nbprImgs(r.inner).then(function (inner) {
+    var html = NbPrint.rich(inner, NBPR.o);
+    var plain = NBPR.items.map(function (it) { return it.body; }).join('\n\n────────\n\n');
+    var done = function () { _nbToast('📋 서식째 복사했습니다 — 메일 · 메신저에 붙여 넣으세요'); };
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([plain], { type: 'text/plain' }) })]).then(done).catch(function () { _nbprCopyOld(html); done(); });
+    } else { _nbprCopyOld(html); done(); }
+  });
+}
+function _nbprCopyOld(html) {
+  var d = document.createElement('div'); d.contentEditable = 'true'; d.style.cssText = 'position:fixed;left:-9999px;top:0'; d.innerHTML = html; document.body.appendChild(d);
+  var rg = document.createRange(); rg.selectNodeContents(d); var s = window.getSelection(); s.removeAllRanges(); s.addRange(rg);
+  try { document.execCommand('copy'); } catch (e) { /* 무시 */ }
+  s.removeAllRanges(); d.remove();
+}
+
+/* ═══ 🏢 회사 머리글 (관리자) ═══ */
+function _nbprPsEdit() {
+  var ps = NBPR.ps || {};
+  return wmGuardedModal('nbPrintPs', function () {
+    var logo = ps.logo || '';
+    var md = createModal({ id: 'nbPrintPsModal', titleText: '🏢 회사 머리글', width: '460px', closeOnEsc: true,
+      html: '<div class="nb-hint">모든 사람의 출력물 맨 위에 붙습니다. (관리자만 바꿀 수 있음)</div>' +
+        '<label class="nb-fl">회사 이름<input class="mw-input nb-in" id="nbPsC" maxlength="120" value="' + _nbE(ps.company || '') + '" placeholder="예: (주)애니모션"></label>' +
+        '<div class="nb-fl">로고 <small>PNG · JPG — 가로로 긴 그림이 잘 어울립니다</small></div>' +
+        '<div class="nbpr-logo" id="nbPsL">' + (logo ? '<img src="' + _nbE(logo) + '" alt="로고">' : '<span>로고 없음</span>') + '</div>' +
+        '<div class="nbpr-row"><label class="nb-btn" style="cursor:pointer">🖼 그림 고르기<input type="file" id="nbPsF" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label><button class="nb-btn" data-x="rm">로고 지우기</button></div>' +
+        '<div class="nb-mfoot"><button class="nb-btn" data-x="cancel">취소</button><button class="nb-btn pri" data-x="ok">저장</button></div>' });
+    md.box.querySelector('#nbPsF').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0]; if (!f) return;
+      if (f.size > 5 * 1024 * 1024) { _nbToast('5MB 이하 그림을 골라 주세요', 'warn'); return; }
+      var img = new Image(), url = URL.createObjectURL(f);
+      img.onload = function () {
+        // 높이 120px · 너비 600px 안으로 줄여 PNG — 출력물에는 30px 높이로 들어감
+        var k = Math.min(1, 120 / img.height, 600 / img.width), c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        logo = c.toDataURL('image/png'); URL.revokeObjectURL(url);
+        if (logo.length > 400000) { logo = c.toDataURL('image/jpeg', .85); }
+        md.box.querySelector('#nbPsL').innerHTML = '<img src="' + logo + '" alt="로고">';
+      };
+      img.onerror = function () { _nbToast('그림을 읽지 못했습니다', 'error'); };
+      img.src = url;
+    });
+    md.box.addEventListener('click', function (e) {
+      var x = e.target.closest('[data-x]'); if (!x) return;
+      var a = x.getAttribute('data-x');
+      if (a === 'cancel') return md.close();
+      if (a === 'rm') { logo = ''; md.box.querySelector('#nbPsL').innerHTML = '<span>로고 없음</span>'; return; }
+      x.disabled = true;
+      apiFetch('/api/notebook/print-settings', { method: 'PUT', body: JSON.stringify({ company: md.box.querySelector('#nbPsC').value, logo: logo }) }).then(function (r) {
+        NBPR.ps = r.data; NBPR.o.company = r.data.company || ''; NBPR.o.logo = r.data.logo || ''; NBPR.o.header = true;
+        md.close(); _nbprDrawSide(); _nbprRender();
+        _nbToast('🏢 회사 머리글을 저장했습니다');
+      }).catch(function (e2) { x.disabled = false; _nbToast('❌ ' + _nbErr(e2), 'error'); });
+    });
+  }, 'nbPrintPsModal', { onOpen: function () { var i = document.getElementById('nbPsC'); if (i) i.focus(); } });
+}
+
+/* ═══ 🤝 회의록 노트 → 프로젝트 회의 ═══ */
+function _nbprToMeeting() {
+  var it = NBPR.items[0]; if (!it || !NB.cur) return;
+  var p = NbPrint.parseMeeting(it.body, it.title, it.date);
+  var pre = [];
+  (it.body.match(/\(wm:project:[A-Za-z0-9_.:-]+\)/g) || []).forEach(function (m) {
+    var id = m.slice(12, -1), c = typeof NBP !== 'undefined' && NBP.refs ? NBP.refs['project:' + id] : null;
+    if (!pre.some(function (x) { return x.id === id; })) pre.push({ id: id, title: c && c.v && c.v.title ? c.v.title : id });
+  });
+  return wmGuardedModal('nbPrintMeet', function () {
+    var md = createModal({ id: 'nbPrintMeetModal', titleText: '🤝 프로젝트 회의로 올리기', width: '500px', closeOnEsc: true,
+      html: '<div class="nb-hint">이 회의록을 프로젝트 › 회의에 등록합니다. 할 일은 <b>액션 아이템</b>으로, 날짜가 있으면 캘린더 일정도 생깁니다.</div>' +
+        '<div class="nbpr-sum"><b>' + _nbE(p.title) + '</b><br>' + _nbE([p.when.date || '날짜 없음', p.fields.place, p.att.length ? '참석 ' + p.att.length + '명' : ''].filter(Boolean).join(' · ')) +
+          '<br>안건 ' + p.agenda.length + ' · 결정 ' + (p.decide ? '있음' : '없음') + ' · 할 일 ' + p.todos.length + '</div>' +
+        '<label class="nb-fl">프로젝트<input class="mw-input nb-in" id="nbMtQ" placeholder="프로젝트 이름 · 수주번호로 찾기" autocomplete="off"></label>' +
+        '<div class="nb-pick" id="nbMtL">' + pre.map(function (x, i) { return '<button type="button" class="nb-pick-i' + (i === 0 ? ' on' : '') + '" data-pid="' + _nbE(x.id) + '">📁 ' + _nbE(x.title) + ' <small>이 노트에 연결됨</small></button>'; }).join('') + '</div>' +
+        '<div class="nb-mfoot"><button class="nb-btn" data-x="cancel">취소</button><button class="nb-btn pri" data-x="ok">회의 만들기</button></div>' });
+    var pid = pre[0] ? pre[0].id : null, qT = null;
+    md.box.querySelector('#nbMtQ').addEventListener('input', function (e) {
+      clearTimeout(qT); var v = e.target.value.trim();
+      qT = setTimeout(function () {
+        if (!v) return;
+        apiFetch('/api/search?cat=project&limit=12&q=' + encodeURIComponent(v)).then(function (r) {
+          var g = (r.data.groups || [])[0], items = g ? g.items : [];
+          md.box.querySelector('#nbMtL').innerHTML = items.length ? items.map(function (x) { return '<button type="button" class="nb-pick-i" data-pid="' + _nbE(x.id) + '">📁 ' + _nbE(x.title) + (x.sub ? ' <small>' + _nbE(x.sub) + '</small>' : '') + '</button>'; }).join('') : '<div class="nb-empty-s">찾는 프로젝트가 없습니다</div>';
+          pid = null;
+        });
+      }, 250);
+    });
+    md.box.addEventListener('click', function (e) {
+      var pk = e.target.closest('[data-pid]');
+      if (pk) { pid = pk.getAttribute('data-pid'); md.box.querySelectorAll('.nb-pick-i').forEach(function (b) { b.classList.toggle('on', b === pk); }); return; }
+      var x = e.target.closest('[data-x]'); if (!x) return;
+      if (x.getAttribute('data-x') === 'cancel') return md.close();
+      if (!pid) { _nbToast('프로젝트를 골라 주세요', 'warn'); return; }
+      x.disabled = true; x.textContent = '만드는 중…';
+      var nextMd = p.next || '', nw = NbPrint.parseWhen(nextMd, p.when.date || it.date);
+      var body = { projectId: pid, title: p.title, meetDate: p.when.date || null, attendees: p.att,
+        agenda: p.agenda.map(function (a) { return { text: a.text.replace(/[*_`]/g, ''), done: !!a.done, note: '', result: '' }; }),
+        minutes: [p.discuss, p.others.map(function (o) { return '■ ' + o.head + '\n' + o.md; }).join('\n\n')].filter(Boolean).join('\n\n') || null,
+        form: { timeStart: p.when.start || '', timeEnd: p.when.end || '', place: p.fields.place || '', writer: p.fields.writer || NBPR.o.writer || '', purpose: p.fields.purpose || '',
+          decisions: p.decide || '', nextDate: nw.date || '', nextNote: nextMd.replace(/^\s*[-*]\s+/gm, '').trim() } };
+      apiFetch('/api/meetings', { method: 'POST', body: JSON.stringify(body) }).then(function (r) {
+        var mid = r.data.id, fails = 0;
+        // 액션 아이템은 차례로 (순서 유지)
+        return p.todos.reduce(function (pr, t, i) {
+          return pr.then(function () {
+            return apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions', { method: 'POST', body: JSON.stringify({ title: t.title.replace(/[*_`]/g, '').slice(0, 300), assigneeName: t.who || null, dueDate: NbPrint.parseWhen(t.due, p.when.date || it.date).date, sortOrder: i }) })
+              .catch(function () { fails++; });
+          });
+        }, Promise.resolve()).then(function () { return { mid: mid, fails: fails }; });
+      }).then(function (res) {
+        md.close();
+        var s = document.getElementById('nbSrc');
+        if (s && NB.cur && NBPR.items[0] && NB.cur.id === NBPR.items[0].id) {
+          s.value = s.value.replace(/\s+$/, '') + '\n\n[🤝 프로젝트 회의록](wm:meeting:' + res.mid + ')\n';
+          _nbChanged('body'); _nbRenderPrev(); _nbFoot();
+        }
+        _nbToast('🤝 프로젝트 회의로 올렸습니다' + (p.todos.length ? ' — 액션 아이템 ' + (p.todos.length - res.fails) + '개' : '') + (res.fails ? ' (' + res.fails + '개 실패)' : ''), res.fails ? 'warn' : undefined);
+      }).catch(function (e2) { x.disabled = false; x.textContent = '회의 만들기'; _nbToast('❌ ' + _nbErr(e2), 'error'); });
+    });
+  }, 'nbPrintMeetModal', { onOpen: function () { var i = document.getElementById('nbMtQ'); if (i && !pre.length) i.focus(); } });
+}

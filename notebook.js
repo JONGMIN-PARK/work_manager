@@ -163,6 +163,7 @@ function _nbDrawList() {
   var n = daily ? NB.daily.length : NB.list.length;
   lh.innerHTML = '<button class="nb-back" data-nb="to-side" aria-label="메뉴">☰</button><b class="nb-lh-t">' + _nbE(_nbListTitle()) + '</b><span class="nb-lh-n">' + n + '</span>' +
     (NB.view === 'trash' && n ? '<button class="nb-lh-b" data-nb="empty-trash">비우기</button>' : '') +
+    (daily && n ? '<button class="nb-lh-b" data-nb="print-bundle" title="여러 날 일일 노트를 일일 업무 보고 양식으로 묶어 출력">🖨 묶어 출력</button>' : '') +
     (daily || NB.view === 'trash' ? '' : '<select class="nb-sort" id="nbSort" aria-label="정렬"><option value="updated"' + (NB.sort === 'updated' ? ' selected' : '') + '>고친 순</option><option value="created"' + (NB.sort === 'created' ? ' selected' : '') + '>만든 순</option><option value="title"' + (NB.sort === 'title' ? ' selected' : '') + '>제목 순</option></select>') +
     (daily || NB.view === 'trash' ? '' : '<button class="nb-lh-new" data-nb="new" title="새 노트" aria-label="새 노트">＋</button>');
   var h = '';
@@ -309,6 +310,7 @@ function _nbDrawMain() {
     '<button class="nb-ib nb-cbtn' + (typeof NBP !== 'undefined' && NBP.coach ? ' on' : '') + '" data-nb="coach" title="✍️ 글쓰기 코치 — 고칠 곳을 이유 · 힌트 · 예시로" aria-pressed="' + !!(typeof NBP !== 'undefined' && NBP.coach) + '">✍️<span> 코치</span></button>' +
     (daily || trash ? '' : '<button class="nb-ib nb-shb' + (NB.cur.shareN ? ' on' : '') + '" data-nb="share" title="👥 공유 (읽기 전용)">👥' + (NB.cur.shareN ? '<small>' + NB.cur.shareN + '</small>' : '') + '</button>' +
       '<button class="nb-ib' + (NB.cur.pinned ? ' on' : '') + '" data-nb="pin" title="고정" aria-pressed="' + NB.cur.pinned + '">📌</button><button class="nb-ib' + (NB.cur.starred ? ' on' : '') + '" data-nb="star" title="즐겨찾기" aria-pressed="' + NB.cur.starred + '">' + (NB.cur.starred ? '★' : '☆') + '</button>') +
+    (NB.cur && NB.cur.deletedAt ? '' : '<button class="nb-ib nb-prb" data-nb="print" title="🖨 출력 미리 보기 · 양식 (Ctrl+P)" aria-label="출력 미리 보기">🖨</button>') +
     '<button class="nb-ib" data-nb="focus" title="집중 모드 (Ctrl+Shift+F)">⤢</button>' +
     '<button class="nb-ib" data-nb="more" title="더 보기" aria-label="더 보기">⋯</button></div>';
   if (shared) h += '<div class="nb-bar info">👥 <b>' + _nbE(NB.cur.ownerName || '') + '</b> 님이 공유한 노트 — 읽기 전용 <button class="nb-btn sm" data-nb="copy-mine">📓 내 노트로 복사</button></div>';
@@ -536,6 +538,8 @@ function _nbClick(e) {
   else if (k === 'star') _nbPatch(NB.cur.id, { starred: !NB.cur.starred });
   else if (k === 'focus') _nbToggleFocus();
   else if (k === 'more') _nbMoreMenu(x);
+  else if (k === 'print') nbPrintOpen();
+  else if (k === 'print-bundle') nbPrintBundle(NB.view === 'daily' ? 'daily' : 'notes');
   else if (k === 'ai') nbAiOpen();
   else if (k === 'coach') nbpCoachToggle();
   else if (k === 'share') nbpShare();
@@ -579,6 +583,7 @@ function _nbKey(e) {
   if (ctrl && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); _nbToggleFocus(); return; }
   if (e.key === 'Escape' && NB.focus) { _nbToggleFocus(); return; }
   if (ctrl && (e.key === 's' || e.key === 'S')) { e.preventDefault(); _nbFlush(true); return; }
+  if (ctrl && !e.shiftKey && !e.altKey && (e.key === 'p' || e.key === 'P') && (NB.cur || NB.daily1)) { e.preventDefault(); nbPrintOpen(); return; }
   if (NB.inkEd || NB.overEd) {
     var ed = NB.inkEd || NB.overEd;
     if (ctrl && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); ed.undoOne(); return; }
@@ -980,10 +985,11 @@ function _nbMenu(anchor, items) {
 function _nbMoreMenu(anchor) {
   var n = NB.cur, items = [];
   if (NB.daily1) {
-    items = [['📓 노트북 노트로 복사', function () { nbNewFrom(NB.daily1.body, NB.daily1.title, {}); }], ['⬇️ Markdown(.md) 내려받기', _nbExportMd], ['🖨 인쇄 · PDF', _nbPrint]];
+    items = [['📓 노트북 노트로 복사', function () { nbNewFrom(NB.daily1.body, NB.daily1.title, {}); }], ['⬇️ Markdown(.md) 내려받기', _nbExportMd], '-',
+      ['🖨 출력 미리 보기 · 일일 업무 보고 양식', nbPrintOpen], ['📚 여러 날 묶어 출력', function () { nbPrintBundle('daily'); }]];
     return _nbMenu(anchor, items);
   }
-  if (n.readOnly) return _nbMenu(anchor, [['📓 내 노트로 복사', function () { nbNewFrom(n.body, (n.title || '노트') + ' (' + (n.ownerName || '공유') + ')', {}); }], ['⬇️ Markdown(.md) 내려받기', _nbExportMd], ['🖨 인쇄 · PDF 저장', _nbPrint], ['📋 서식째 복사', function () { _nbCopyRich(_nbSrc().value, n.title); }]]);
+  if (n.readOnly) return _nbMenu(anchor, [['📓 내 노트로 복사', function () { nbNewFrom(n.body, (n.title || '노트') + ' (' + (n.ownerName || '공유') + ')', {}); }], ['⬇️ Markdown(.md) 내려받기', _nbExportMd], ['🖨 출력 미리 보기 · 양식', nbPrintOpen], ['📋 서식째 복사', function () { _nbCopyRich(_nbSrc().value, n.title); }]]);
   if (n.deletedAt) return _nbMenu(anchor, [['♻️ 되살리기', function () { _nbRestore(n.id); }], ['🗑 영구 삭제', function () { _nbPurge(n.id); }, 'danger']]);
   items.push(['👥 공유 (읽기 전용)' + (n.shareN ? ' — ' + n.shareN + '명' : ''), nbpShare]);
   items.push(['📊 리포트 만들기', nbpReport]);
@@ -998,7 +1004,8 @@ function _nbMoreMenu(anchor) {
   items.push('-');
   items.push(['⬇️ Markdown(.md) 내려받기', _nbExportMd]);
   items.push(['📝 Word(.doc) 내려받기', _nbExportDoc]);
-  items.push(['🖨 인쇄 · PDF 저장', _nbPrint]);
+  items.push(['🖨 출력 미리 보기 · 양식 (Ctrl+P)', nbPrintOpen]);
+  items.push(['📚 여러 노트 묶어 출력', function () { nbPrintBundle('notes'); }]);
   items.push(['📋 서식째 복사 (메일 · 메신저에 붙여넣기)', function () { _nbCopyRich(_nbSrc().value, NB.cur.title); }]);
   items.push('-');
   items.push(['🗑 휴지통으로', function () { _nbTrash(n.id); }, 'danger']);

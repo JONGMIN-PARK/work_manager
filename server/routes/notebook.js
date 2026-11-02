@@ -17,6 +17,8 @@
  *   POST   /files?name=&noteId=  (본문 그대로) · GET /files/:id
  *   GET    /daily                        📅 일일 노트 목록
  *   GET    /template/daily?date=         그날 일정 · 할 일로 채운 일일 업무 양식
+ *   GET|PUT /print-settings              🖨 출력 머리글(회사 이름 · 로고) — 고치기는 관리자 (v13.319)
+ *   GET    /bundle?src=daily|notes&from&to[&folderId&tag]   묶어 출력할 노트 (62개까지)
  */
 var express = require('express');
 var router = express.Router();
@@ -390,6 +392,50 @@ router.put('/notes/:id/shares', async function (req, res) {
     }
     res.json({ data: { userIds: ok, added: added.length } });
   } catch (e) { httpErr.serverError(res, '[notebook/share]', e); }
+});
+
+/* ─── 🖨 출력 머리글 (v13.319) — 회사 이름 · 로고. 누구나 읽고 관리자만 고침 ─── */
+var LOGO_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+function isAdmin(req) { return req.user.role === 'admin'; }
+router.get('/print-settings', async function (req, res) {
+  try {
+    var r = await db.query('SELECT company, logo, updated_at FROM doc_print_settings WHERE tenant_id = $1', [req.tenant.id]);
+    var x = r.rows[0] || {};
+    res.json({ data: { company: x.company || '', logo: x.logo || '', updatedAt: x.updated_at || null, canEdit: isAdmin(req) } });
+  } catch (e) { httpErr.serverError(res, '[notebook/print-settings]', e); }
+});
+router.put('/print-settings', async function (req, res) {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'FORBIDDEN', message: '회사 머리글은 관리자만 바꿀 수 있습니다.' });
+    var b = req.body || {};
+    var company = String(b.company || '').trim().slice(0, 120);
+    var logo = String(b.logo || '');
+    if (logo && (!LOGO_RE.test(logo) || logo.length > 400000)) return bad(res, '로고는 PNG · JPG · WEBP · GIF 그림, 300KB 까지입니다.');
+    await db.query('INSERT INTO doc_print_settings (tenant_id, company, logo, updated_by, updated_at) VALUES ($1, $2, $3, $4, NOW()) ' +
+      'ON CONFLICT (tenant_id) DO UPDATE SET company = $2, logo = $3, updated_by = $4, updated_at = NOW()', [req.tenant.id, company || null, logo || null, me(req)]);
+    res.json({ data: { company: company, logo: logo, canEdit: true }, message: '출력 머리글을 저장했습니다.' });
+  } catch (e) { httpErr.serverError(res, '[notebook/print-settings/save]', e); }
+});
+/* 묶어 출력 — src=daily (일일 노트, 날짜) | notes (내 노트, 고친 날 · 폴더 · 태그). 날짜 순, 62개까지 */
+router.get('/bundle', async function (req, res) {
+  try {
+    var q = req.query, D = /^\d{4}-\d{2}-\d{2}$/;
+    var from = D.test(String(q.from || '')) ? q.from : null, to = D.test(String(q.to || '')) ? q.to : null;
+    if (!from || !to || from > to) return bad(res, '기간을 골라 주세요.');
+    if ((Date.parse(to) - Date.parse(from)) / 86400000 > 92) return bad(res, '한 번에 석 달(92일)까지 묶을 수 있습니다.');
+    var T = req.tenant.id, U = me(req), r;
+    if (q.src === 'daily') {
+      r = await db.query("SELECT note_date, ref, body FROM my_notes WHERE tenant_id = $1 AND user_id = $2 AND body <> '' AND note_date BETWEEN $3 AND $4 ORDER BY note_date, ref LIMIT 62", [T, U, from, to]);
+      return res.json({ data: r.rows.map(function (x) { return { kind: 'daily', date: x.note_date, ref: x.ref || '', title: '', body: x.body, ink: null }; }) });
+    }
+    var p = [T, U, from, to], w = '';
+    if (q.folderId) { p.push(String(q.folderId)); w += ' AND folder_id = $' + p.length; }
+    if (q.tag) { p.push(String(q.tag)); w += ' AND tags ? $' + p.length; }
+    r = await db.query("SELECT id, title, body, ink, tags, to_char(updated_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS day FROM nb_notes " +
+      "WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL AND (updated_at AT TIME ZONE 'Asia/Seoul')::date BETWEEN $3::date AND $4::date" + w +
+      ' ORDER BY updated_at LIMIT 62', p);
+    res.json({ data: r.rows.map(function (x) { return { kind: 'note', id: x.id, date: x.day, title: x.title || nb.titleFrom(x.body) || '', body: x.body, ink: x.ink || null, tags: x.tags || [] }; }) });
+  } catch (e) { httpErr.serverError(res, '[notebook/bundle]', e); }
 });
 
 /* [[노트]] — 내 노트 제목 목록 (자동 완성 · 링크 찾기) */
