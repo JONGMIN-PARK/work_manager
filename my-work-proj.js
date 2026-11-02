@@ -603,7 +603,8 @@ function mwProjTimelineTasks(grp, numFn, today, showDone) {
     var s = p.start || p.end, d = p.end || p.start;
     var st = mwProjStats(p), lane = grp === 'proj' ? 'pj:' + p.id : '__pj';
     var dd = _mwjDday(p, today);
-    out.push({ key: 'pj:' + p.id, proj: p, title: mwProjTitle(p) + (st.prog != null ? ' · ' + st.prog + '%' : ''), icon: p.icon || '📁', lane: lane, color: mwProjColor(p),
+    // v13.312 진행률은 제목 뒤 글자가 아니라 막대 안 채움 + 작은 배지로 (긴 프로젝트도 어디서 보든 보이게) · 끝 날짜는 오른쪽 끝에
+    out.push({ key: 'pj:' + p.id, proj: p, title: mwProjTitle(p), prog: st.prog, endYmd: d, icon: p.icon || '📁', lane: lane, color: mwProjColor(p),
       bar: true, n0: numFn(s), n1: numFn(d), f0: 0, f1: 1, late: dd.cls === 'is-late', done: mwProjSt(p) === 'done', pri: 3,
       drag: p.link ? null : 'bar',
       tip: '📁 내 프로젝트' + (p.link ? ' · 🔗 연계' : '') + '\n' + (s || '') + ' ~ ' + (d || '') + (dd.t ? ' · ' + dd.t : '') + ' · 남은 항목 ' + st.open });

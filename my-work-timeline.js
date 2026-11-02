@@ -227,9 +227,17 @@ MwTimeline.prototype.itemHtml = function (t, r) {
   var tip = t.title + '\n' + (t.tip || '');
   var lbl = '<span class="mtl-tx">' + (t.icon ? '<em>' + _mwEsc(t.icon) + '</em>' : '') + _mwEsc(t.title) + '</span>';
   if (t.bar) {
-    var w = Math.max(6, t.x1 - t.x0);
-    return '<div class="' + cls + (w < 60 ? ' is-short' : '') + '" data-tk="' + _mwEsc(t.key) + '" style="left:' + t.x0 + 'px;width:' + w + 'px;top:' + top + 'px;--c:' + t.color + '" aria-label="' + _mwEsc(tip) + '">' +
-      (t.drag === 'bar' ? '<b class="mtl-h is-l" data-edge="l"></b><b class="mtl-h is-r" data-edge="r"></b>' : '') + lbl + '</div>';
+    var w = Math.max(6, t.x1 - t.x0), short = w < 60;
+    var pc = t.prog != null ? Math.max(0, Math.min(100, +t.prog)) : null;
+    if (pc != null) tip = t.title + ' · 진행 ' + pc + '%\n' + (t.tip || '');
+    /* v13.312 긴 막대 — 이름(+진행률)은 지금 보이는 자리 왼쪽에 붙어 따라오고(.mtl-stk sticky), 끝 날짜는 오른쪽 끝에.
+     * 예전엔 막대 맨 앞에만 써서, 몇 달짜리 프로젝트를 뒤쪽 달에서 보면 이름 없는 띠만 보였다 */
+    var inner = short ? (pc != null ? lbl.replace('</span>', ' · ' + pc + '%</span>') : lbl)
+      : '<span class="mtl-stk">' + lbl + (pc != null ? '<b class="mtl-pc">' + pc + '%</b>' : '') + '</span>'
+        + (t.endYmd && w >= 220 ? '<span class="mtl-end">~' + _mwEsc(String(t.endYmd).slice(5).replace('-', '/')) + '</span>' : '');
+    return '<div class="' + cls + (short ? ' is-short' : '') + '" data-tk="' + _mwEsc(t.key) + '" style="left:' + t.x0 + 'px;width:' + w + 'px;top:' + top + 'px;--c:' + t.color + '" aria-label="' + _mwEsc(tip) + '">' +
+      (pc != null ? '<i class="mtl-pf" style="width:' + pc + '%"></i>' : '') +
+      (t.drag === 'bar' ? '<b class="mtl-h is-l" data-edge="l"></b><b class="mtl-h is-r" data-edge="r"></b>' : '') + inner + '</div>';
   }
   return '<div class="' + cls + '" data-tk="' + _mwEsc(t.key) + '" style="left:' + (t.x0 - 7) + 'px;top:' + top + 'px;--c:' + t.color + '" aria-label="' + _mwEsc(tip) + '"><i></i>' + lbl + '</div>';
 };

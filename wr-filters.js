@@ -207,9 +207,14 @@ function pickWeek(sunStart){
  *           ④ 데이터 자체가 없으면 전체 (=null)
  * 사용자가 '전체'를 명시적으로 누르면 그 때만 selWeek=null 로 풀림.
  */
+var _wsInited=false;
 function initWeekSelector(){
   const weeks=buildWeekList();
   if(!weeks.length){selWeek=null;renderWeekSelector();return}
+  /* v13.312 기록을 다시 받을 때(뒤에서 새로 고침 · 파일 더 넣기)마다 이 함수가 다시 불려 고른 기간이 이번 주로 돌아가던 것
+   * → 처음 한 번만 정하고, 그 뒤엔 지금 고른 기간(전체 포함)에 기록이 있으면 그대로 둠 */
+  if(_wsInited&&_wvPendWeek===undefined&&(selWeek===null||aD.some(function(r){return r.date>=selWeek.start&&r.date<=selWeek.end}))){renderWeekSelector();gfInvalidate();return}
+  _wsInited=true;
   // ⓪ v13.265 마지막으로 보던 기간 그대로 (전체 · 한 주 · 연도/분기/월 · 날짜 범위)
   var p=_wvPendWeek;_wvPendWeek=undefined;
   if(p===null){pickWeek(null);return}
@@ -458,6 +463,18 @@ function gF(){
   if(sN.size===0){_gfCache=[];_gfDirty=false;return _gfCache}
   let r=aD.filter(r=>sN.has(r.name));
   if(selWeek)r=r.filter(x=>x.date>=selWeek.start&&x.date<=selWeek.end);
+  _gfCache=_gfRest(r).sort((a,b)=>{
+    const n=a.name.localeCompare(b.name,'ko');
+    return n!==0?n:a.date.localeCompare(b.date)
+  });
+  _gfDirty=false;return _gfCache
+}
+/* v13.312 같은 필터(팀원 · 수주 · 분장 · 업체 · 부서 · 검색 · 휴가 제외)를 다른 기간에 — 📊 분석의 지난 기간 비교 · 월별 추이 */
+function gfRange(s,e){
+  if(sN.size===0)return[];
+  return _gfRest(aD.filter(x=>sN.has(x.name)&&(!s||x.date>=s)&&(!e||x.date<=e)));
+}
+function _gfRest(r){
   if(sO.size>0)r=r.filter(x=>sO.has(x.orderNo));
   if(sT.size>0)r=r.filter(x=>sT.has(x.abbr));
   if(sON.size>0)r=r.filter(x=>{
@@ -488,11 +505,7 @@ function gF(){
     });
   }
   if(excludeVac&&!sT.has('V'))r=r.filter(x=>!_isVac(x));
-  _gfCache=r.sort((a,b)=>{
-    const n=a.name.localeCompare(b.name,'ko');
-    return n!==0?n:a.date.localeCompare(b.date)
-  });
-  _gfDirty=false;return _gfCache
+  return r;
 }
 function hAF(){return sO.size>0||sT.size>0||sON.size>0||sCL.size>0||sDV.size>0||!!cKw||!!selWeek}
 function rAFT(){const t=[];sO.forEach(o=>t.push({y:'o',l:'수주:'+o,v:o}));sT.forEach(x=>t.push({y:'t',l:AM[x]||x,v:x}));sON.forEach(x=>t.push({y:'on',l:'수주명:'+x,v:x}));sCL.forEach(x=>t.push({y:'cl',l:'거래처:'+x,v:x}));sDV.forEach(x=>t.push({y:'dv',l:'사업부:'+x,v:x}));if(cKw)t.push({y:'s',l:'검색:"'+cKw+'"',v:''});document.getElementById('afTags').innerHTML=t.map(x=>`<span class="ft">${eH(x.l)}<span class="tx" onclick="rmFT('${x.y}','${eA(x.v)}')">&times;</span></span>`).join('');document.getElementById('resetBtn').classList.toggle('hidden',t.length===0);var fn=document.getElementById('wqFilterN');if(fn){var n=sO.size+sT.size+sON.size+sCL.size+sDV.size;fn.textContent=n?n:''}}
