@@ -114,7 +114,7 @@ function _mwnRender() {
   if (!el) return;
   var d = _mwn.date;
   var h = '<div class="mwp-h mwn-h"><b class="mwn-ttl">📝 노트</b><span class="mwp-save" id="mwnSave" aria-live="polite"></span>' +
-    '<button class="mwn-ib" data-n="find" title="노트 검색">🔍</button><button class="mwp-x" data-n="close" title="닫기 (Esc)">✕</button></div>';
+    (typeof renderNotebook === 'function' ? '<button class="mwn-ib" onclick="nbOpenDailyView()" title="📓 노트북에서 크게 보기 (일일 노트)">📓</button>' : '') + '<button class="mwn-ib" data-n="find" title="노트 검색">🔍</button><button class="mwp-x" data-n="close" title="닫기 (Esc)">✕</button></div>';
   h += '<div class="mwn-nav"><button data-n="prev" title="전날">‹</button><label class="mwn-date" title="날짜 고르기"><span>' + _mwEsc(_mwnLabel(d)) + '</span><input type="date" data-n="date" value="' + d + '"></label>' +
     '<button data-n="next" title="다음날">›</button>' + (d !== mwToday() ? '<button data-n="today" class="mwn-tod">오늘</button>' : '') + '</div>';
   if (_mwn.find) {

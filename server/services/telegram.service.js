@@ -434,6 +434,7 @@ async function handleUpdate(update) {
   // 내 업무 (v13.253) — /todos 를 /todo 보다 먼저
   if (text === '/todos' || text === '/할일목록') return myWorkCmds.cmdTodos(chatId, user);
   if (text === '/todo' || text.startsWith('/todo ') || text === '/할일' || text.startsWith('/할일 ')) return myWorkCmds.cmdTodo(chatId, user, text.replace(/^\/(todo|할일)\s*/, ''));
+  if (/^\/(memo|메모)(\s|$)/.test(text)) return myWorkCmds.cmdMemo(chatId, user, text.replace(/^\/(memo|메모)\s*/, ''));   // 📓 낙서장 (v13.316)
   if (text === '/event' || text.startsWith('/event ') || text === '/일정' || text.startsWith('/일정 ')) return myWorkCmds.cmdEvent(chatId, user, text.replace(/^\/(event|일정)\s*/, ''));
   // 내 업무 조회 · 추천 (v13.274)
   if (/^\/(mywork|내업무)(\s|$)/.test(text)) return myWorkCmds.cmdMyWork(chatId, user, text.replace(/^\/(mywork|내업무)\s*/, ''));

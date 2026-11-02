@@ -263,6 +263,7 @@ app.use('/api/tech', techRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/chat', require('./routes/chat'));   // 💬 사내 메신저 (v13.315)
+app.use('/api/notebook', require('./routes/notebook'));   // 📓 노트북 (v13.316)
 app.use('/api/mindmaps', mindmapRoutes);
 app.use('/api/my-work', myWorkRoutes);
 app.use('/api/search', searchRoutes);

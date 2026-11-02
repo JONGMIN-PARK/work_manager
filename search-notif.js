@@ -219,6 +219,8 @@ function globalSearchNav(type, it, kw) {
       else if (++tries < 30) setTimeout(open, 150);
       else if (typeof showToast === 'function') showToast('내 업무 목록에 없는 할 일입니다 — 완료 · 보관된 것이면 필터를 바꿔 보세요', 'info');
     })();
+  } else if (type === 'note' && n.nbId) {   // 📓 노트북 노트 (v13.316)
+    if (typeof nbOpenNote === 'function') nbOpenNote(n.nbId, kw);
   } else if (type === 'note') {
     setPage('mywork');
     setTimeout(function () { if (typeof mwNotesOpen === 'function') mwNotesOpen(n.noteDate); hit('#mwNotes, .mwn'); }, 400);

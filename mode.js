@@ -48,6 +48,7 @@ function setPage(page){
     page='team';
   }
   if(curPage==='mindmap'&&page!=='mindmap'&&typeof mmOnLeave==='function')mmOnLeave();  // 저장 마무리 · 편집 잠금 해제
+  if(curPage==='notebook'&&page!=='notebook'&&typeof _nbFlush==='function')_nbFlush();  // 노트북 — 남은 저장 마저
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwOnLeave==='function')mwOnLeave();  // 지금 상태 기억 — 다시 오면 그대로 (v13.286)
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwPanelClose==='function')mwPanelClose();  // 내 업무 상세 패널 — 남은 저장 마저 하고 닫음 (다른 화면을 가리지 않게)
   curPage=page;
@@ -57,7 +58,7 @@ function setPage(page){
   document.getElementById('modeTabs').classList.toggle('hidden',page!=='team');
   document.getElementById('modeTabsProj').classList.toggle('hidden',page!=='project');
   // 모든 모드 숨기기
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap','mMyWork','mWorkload'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mNotebook','mMindmap','mMyWork','mWorkload'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   // 해당 페이지의 첫 탭 활성화
   if(page==='useradmin'){
     document.getElementById('modeTabs').classList.add('hidden');
@@ -79,6 +80,11 @@ function setPage(page){
     document.getElementById('modeTabsProj').classList.add('hidden');
     var mwe=document.getElementById('mMyWork');if(mwe)mwe.classList.remove('hidden');
     if(typeof renderMyWork==='function')renderMyWork();
+  }else if(page==='notebook'){  // 📓 노트북 (v13.316)
+    document.getElementById('modeTabs').classList.add('hidden');
+    document.getElementById('modeTabsProj').classList.add('hidden');
+    var nbe=document.getElementById('mNotebook');if(nbe)nbe.classList.remove('hidden');
+    if(typeof renderNotebook==='function')renderNotebook();
   }else if(page==='messages'){
     document.getElementById('modeTabs').classList.add('hidden');
     document.getElementById('modeTabsProj').classList.add('hidden');
@@ -132,7 +138,7 @@ function setMode(m){
   // 운영자 탭은 사용자 메뉴 ⚙️ 관리로 들어왔을 때만 보임 (v13.288) — 권한은 setPage 가 확인
   var _opTab=document.querySelector('#modeTabsProj .tab[data-m="operator"]');if(_opTab)_opTab.classList.toggle('hidden',m!=='operator');
   var _opItem=document.getElementById('hdrOperatorItem');if(_opItem)_opItem.classList.toggle('on',m==='operator'&&curPage==='project');
-  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mMindmap','mWorkload'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
+  ['mWeekly','mArchive','mTrend','mPipeline','mCalendar','mTimeline','mOrders','mPrestudy','mTech','mIssues','mDocs','mAs','mOperator','mUserAdmin','mWeeklyReport','mPatchNotes','mMessages','mNotebook','mMindmap','mWorkload'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
   var modeMap={weekly_report:'mWeeklyReport',workload:'mWorkload',weekly:'mWeekly',archive:'mArchive',trend:'mTrend',pipeline:'mPipeline',calendar:'mCalendar',timeline:'mTimeline',orders:'mOrders',prestudy:'mPrestudy',tech:'mTech',issues:'mIssues',docs:'mDocs',as:'mAs',operator:'mOperator'};
   var target=document.getElementById(modeMap[m]);if(target)target.classList.remove('hidden');
   _wmSaveView();

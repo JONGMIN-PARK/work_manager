@@ -485,6 +485,10 @@ function _cxMsgMenu(btn, m) {
     ['↪ 전달', function () { chatForwardModal(m); }],
     ['📢 공지로', function () { apiFetch('/api/chat/rooms/' + CX.room + '/notice', { method: 'POST', body: JSON.stringify({ messageId: m.id }) }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }],
     m.body ? ['✅ 내 할 일로', function () { apiFetch('/api/chat/rooms/' + CX.room + '/messages', { method: 'POST', body: JSON.stringify({ body: '/todo ' + m.body.split('\n')[0].slice(0, 200), replyTo: m.id }) }).then(function () { _cxToast('✅ 내 할 일에 넣었습니다', 'success'); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null,
+    m.body && typeof nbSendToInbox === 'function' ? ['📓 노트로 (낙서장)', function () {   // v13.316
+      var who = m.userName || '', when = m.createdAt ? new Date(m.createdAt).toLocaleString() : '';
+      nbSendToInbox('> 💬 ' + (CX.info && CX.info.name ? CX.info.name + ' · ' : '') + who + (when ? ' · ' + when : '') + '\n\n' + m.body, 'chat');
+    }] : null,
     mine && m.body && m.kind === 'text' ? ['✏️ 수정', function () { _cxStartEdit(m); }] : null,
     mine ? ['🗑 삭제', function () { if (confirm('이 메시지를 지울까요? 모두에게서 지워집니다.')) apiFetch('/api/chat/messages/' + m.id, { method: 'DELETE' }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
   ].filter(Boolean));

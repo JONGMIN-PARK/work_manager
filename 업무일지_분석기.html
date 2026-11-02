@@ -62,7 +62,7 @@
 <script defer src="operator-mode.js?v=3" onerror="console.warn('operator-mode.js 로드 실패')"></script>
 <script defer src="operator-analytics.js?v=3" onerror="console.warn('operator-analytics.js 로드 실패')"></script>
 <script defer src="comments-ui.js?v=1" onerror="console.warn('comments-ui.js 로드 실패')"></script>
-<script defer src="my-work.js?v=16" onerror="console.warn('my-work.js 로드 실패')"></script>
+<script defer src="my-work.js?v=17" onerror="console.warn('my-work.js 로드 실패')"></script>
 <script defer src="quick-parse.js?v=1" onerror="console.warn('quick-parse.js 로드 실패')"></script>
 <script defer src="my-work-cal.js?v=10" onerror="console.warn('my-work-cal.js 로드 실패')"></script>
 <script defer src="my-work-task.js?v=8" onerror="console.warn('my-work-task.js 로드 실패')"></script>
@@ -70,9 +70,12 @@
 <script defer src="my-work-board.js?v=5" onerror="console.warn('my-work-board.js 로드 실패')"></script>
 <script defer src="my-work-io.js?v=6" onerror="console.warn('my-work-io.js 로드 실패')"></script>
 <script defer src="my-work-timeline.js?v=9" onerror="console.warn('my-work-timeline.js 로드 실패')"></script>
-<script defer src="my-work-notes.js?v=5" onerror="console.warn('my-work-notes.js 로드 실패')"></script>
+<script defer src="my-work-notes.js?v=6" onerror="console.warn('my-work-notes.js 로드 실패')"></script>
 <script defer src="my-work-proj.js?v=3" onerror="console.warn('my-work-proj.js 로드 실패')"></script>
-<script defer src="chat-ui.js?v=1" onerror="console.warn('chat-ui.js 로드 실패')"></script>
+<script defer src="notebook-md.js?v=1" onerror="console.warn('notebook-md.js 로드 실패')"></script>
+<script defer src="notebook-ink.js?v=1" onerror="console.warn('notebook-ink.js 로드 실패')"></script>
+<script defer src="notebook.js?v=1" onerror="console.warn('notebook.js 로드 실패')"></script>
+<script defer src="chat-ui.js?v=2" onerror="console.warn('chat-ui.js 로드 실패')"></script>
 <script defer src="chat-rtc.js?v=1" onerror="console.warn('chat-rtc.js 로드 실패')"></script>
 <script defer src="project-images.js?v=3" onerror="console.warn('project-images.js 로드 실패')"></script>
 <script defer src="project-meetings.js?v=11" onerror="console.warn('project-meetings.js 로드 실패')"></script>
@@ -82,7 +85,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <!-- v13.310 엑셀 · 워드 · PDF · 캡처 · 압축 라이브러리는 ui-helpers.js wmLib 가 첫 화면 뒤에 받음 -->
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=83">
+<link rel="stylesheet" href="style.css?v=84">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -113,7 +116,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.315';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.316';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -128,6 +131,7 @@
       <div id="notifDropdown" style="display:none"></div>
     </div>
     <!-- 💬 메신저 (v13.315 — 예전 쪽지 자리) -->
+    <button class="hdr-ic" id="hdrNbBtn" data-page="notebook" onclick="setPage('notebook')" title="📓 노트북 — 낙서장은 어디서든 Alt+N" aria-label="노트북">📓</button>
     <button class="hdr-ic" id="hdrMsgBtn" data-page="messages" onclick="setPage('messages')" title="💬 메신저" aria-label="메신저">💬<span id="msgBadge" style="display:none">0</span></button>
     <!-- 🎨 화면 설정 — 테마 · 글씨체 -->
     <div class="hdr-pop" id="hdrLookWrap">
@@ -470,6 +474,7 @@
   <!-- 패치노트 -->
   <div id="mPatchNotes" class="hidden"></div>
   <div id="mMessages" class="hidden"></div>
+  <div id="mNotebook" class="hidden"></div>
   <div id="mMyWork" class="hidden"></div>
   <div id="mWorkload" class="hidden"></div>
   <div id="mMindmap" class="hidden"><div id="mindmapWrap"></div></div>
@@ -543,7 +548,7 @@
 <script src="wm-fallbacks.js?v=4" onerror="console.warn('wm-fallbacks.js 로드 실패')"></script>
 <script src="wm-state.js?v=6" onerror="console.warn('wm-state.js 로드 실패')"></script>
 <script src="wr-import.js?v=6" onerror="console.warn('wr-import.js 로드 실패')"></script>
-<script src="mode.js?v=10" onerror="console.warn('mode.js 로드 실패')"></script>
+<script src="mode.js?v=11" onerror="console.warn('mode.js 로드 실패')"></script>
 <script src="wr-filters.js?v=4" onerror="console.warn('wr-filters.js 로드 실패')"></script>
 <script src="order-map.js?v=3" onerror="console.warn('order-map.js 로드 실패')"></script>
 <script src="wr-view.js?v=4" onerror="console.warn('wr-view.js 로드 실패')"></script>
@@ -552,7 +557,7 @@
 <script src="wr-charts.js?v=5" onerror="console.warn('wr-charts.js 로드 실패')"></script>
 <script src="wr-analytics.js?v=1" onerror="console.warn('wr-analytics.js 로드 실패')"></script>
 <script src="archive-trend.js?v=2" onerror="console.warn('archive-trend.js 로드 실패')"></script>
-<script src="search-notif.js?v=5" onerror="console.warn('search-notif.js 로드 실패')"></script>
+<script src="search-notif.js?v=6" onerror="console.warn('search-notif.js 로드 실패')"></script>
 <script src="ai-ask.js?v=2" onerror="console.warn('ai-ask.js 로드 실패')"></script>
 <script src="telegram-ui.js?v=1" onerror="console.warn('telegram-ui.js 로드 실패')"></script>
 <script src="anyworks-import.js?v=1" onerror="console.warn('anyworks-import.js 로드 실패')"></script>

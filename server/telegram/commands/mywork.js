@@ -181,6 +181,14 @@ function create(sendMessage) {
       (q.time && !q.due ? '\n💡 시각은 날짜와 같이 적어야 마감 시각이 됩니다 (예: 오늘 15:00)' : ''));
   }
 
+  /* 📓 /memo — 노트북 낙서장에 한 장 (v13.316) */
+  async function cmdMemo(chatId, user, text) {
+    var arg = String(text || '').trim();
+    if (!arg) return sendMessage(chatId, '📓 <b>낙서장에 적기</b>\n<code>/memo 내용</code> — 웹 📓 노트북의 📥 낙서장에 들어갑니다.\n여러 줄도 됩니다.');
+    var n = await require('../../lib/notebook').addInbox(user.tenant_id, user.user_id, arg.slice(0, 20000), 'telegram');
+    return sendMessage(chatId, '📥 낙서장에 적었습니다 — ' + escHtml(require('../../lib/notebook').titleFrom(n.body).slice(0, 60)) + '\n<i>웹 📓 노트북에서 정리할 수 있습니다.</i>');
+  }
+
   async function cmdTodos(chatId, user) {
     var rows = await openTodos(user);
     if (!rows.length) return sendMessage(chatId, '🎉 남은 개인 할 일이 없습니다.\n<code>/todo 내일 견적 회신</code> 으로 추가하세요.');
@@ -362,7 +370,7 @@ function create(sendMessage) {
     return sendMessage(chatId, out.text, { reply_markup: out.markup });
   }
 
-  return { cmdTodo: cmdTodo, cmdTodos: cmdTodos, cmdEvent: cmdEvent, cmdMyWork: cmdMyWork, cmdMyProj: cmdMyProj, cmdBoard: cmdBoard, cmdRec: cmdRec, finishDone: finishDone };
+  return { cmdTodo: cmdTodo, cmdMemo: cmdMemo, cmdTodos: cmdTodos, cmdEvent: cmdEvent, cmdMyWork: cmdMyWork, cmdMyProj: cmdMyProj, cmdBoard: cmdBoard, cmdRec: cmdRec, finishDone: finishDone };
 }
 
 /** 인라인 버튼 — mwd:<src>:<id> · mwd#<번호> 완료, mwl 내 업무, mwr 추천, mwp 프로젝트 (routes/telegram.js 에서 부름) */

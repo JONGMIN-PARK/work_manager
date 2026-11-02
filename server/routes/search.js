@@ -144,9 +144,16 @@ var CATS = [
     map: function (r, q) { return { id: r.id, title: r.title, sub: (r.done_at ? '✅ 완료' : '') + (r.due_date ? (r.done_at ? ' · ' : '') + r.due_date : ''), snippet: firstSnip(q, [[r.memo, '메모']], r.title), nav: { todoId: r.id } }; } },
   { key: 'note',
     run: async function (req, c) {
-      return db.query('SELECT note_date, ref, body, COUNT(*) OVER() AS _total FROM my_notes WHERE tenant_id = $1 AND user_id = $4 AND body ILIKE $2 ORDER BY note_date DESC LIMIT $3', [req.tenant.id, c.like, c.limit, req.user.sub]);
+      // v13.316 📓 노트북 노트(제목 · 본문 · 태그)도 — 고친 순서로 일일 노트와 섞어서
+      return db.query('SELECT * , COUNT(*) OVER() AS _total FROM (' +
+        "SELECT NULL::text AS nb_id, NULL::text AS nb_title, note_date, ref, body, updated_at FROM my_notes WHERE tenant_id = $1 AND user_id = $4 AND body ILIKE $2 " +
+        "UNION ALL SELECT id, title, NULL, NULL, body, updated_at FROM nb_notes WHERE tenant_id = $1 AND user_id = $4 AND deleted_at IS NULL AND (title ILIKE $2 OR body ILIKE $2 OR tags::text ILIKE $2)" +
+        ') x ORDER BY updated_at DESC LIMIT $3', [req.tenant.id, c.like, c.limit, req.user.sub]);
     },
-    map: function (r, q) { return { id: r.note_date + '|' + (r.ref || ''), title: snippetOf(r.body, q) || '', sub: r.note_date + ' 노트', nav: { noteDate: r.note_date } }; } },
+    map: function (r, q) {
+      if (r.nb_id) return { id: r.nb_id, title: r.nb_title || snippetOf(r.body, q) || '제목 없음', sub: '📓 노트북', snippet: firstSnip(q, [[r.body, '본문']], r.nb_title), nav: { nbId: r.nb_id } };
+      return { id: r.note_date + '|' + (r.ref || ''), title: snippetOf(r.body, q) || '', sub: r.note_date + ' 노트', nav: { noteDate: r.note_date } };
+    } },
   { key: 'mindmap',
     run: async function (req, c) {
       var p = [req.tenant.id, c.like, c.limit];

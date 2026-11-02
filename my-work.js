@@ -280,6 +280,7 @@ function _mwPaintNow(el) {
     }).join('') + '</select>' : '') +
     (r.self && typeof mwNotesOpen === 'function' ? '<button class="mw-btn mwn-btn' + (typeof mwNotesIsOpen === 'function' && mwNotesIsOpen() ? ' on' : '') + ((r.noteDays || []).indexOf(today) >= 0 ? ' has' : '') +
       '" data-mwn="open" title="📝 노트 — 끄적 메모 · 회의 메모 (줄을 할 일로 올리기)">📝 노트</button>' : '') +
+    (r.self && typeof renderNotebook === 'function' ? '<button class="mw-btn" onclick="setPage(\'notebook\')" title="📓 노트북 — 마크다운 · 손글씨 · 폴더 · AI 메일 초안 · 번역 (낙서장은 어디서든 Alt+N)">📓 노트북</button>' : '') +
     '<div class="hdr-pop" id="mwMoreWrap"><button class="btn btn-g wm-more" onclick="wmHdrPop(\'mwMoreWrap\')" title="내보내기 · 맵으로 · 달력 구독 · 텔레그램 · 휴지통" aria-haspopup="true" aria-expanded="false">⋯' + (r.self && r.trashN ? '<span class="wm-flt-n" title="휴지통">' + r.trashN + '</span>' : '') + '</button>' +
       '<div class="hdr-pop-menu" role="menu">' +
         (typeof mwIoToolsHtml === 'function' ? mwIoToolsHtml(r) : '') +
