@@ -32,11 +32,12 @@ function analyzeQuery(text) {
   if (/A\/S|\bAS\b|에이에스|고장|수리|클레임|불량|서비스/i.test(text)) intents.push('as');
   if (/시간|통계|분석|비교|추이|평균|합계|요약/.test(text)) intents.push('stats');
   if (/일정|회의|출장|연차|스케줄|캘린더/.test(text)) intents.push('events');
+  if (/주간\s*(업무|보고)|주간보고|정체|목표|효율|납기\s*(연기|지남)|밀린|진척/.test(text)) intents.push('weekly');   // v13.310 주간 보고 분석
   if (/이번\s*주|금주/.test(text)) intents.push('this_week');
   if (/이번\s*달|이달|이번달/.test(text)) intents.push('this_month');
   if (/지난\s*주|저번\s*주/.test(text)) intents.push('last_week');
   if (/지난\s*달|저번\s*달/.test(text)) intents.push('last_month');
-  if (!intents.some(function (i) { return ['people', 'projects', 'milestones', 'issues', 'orders', 'as', 'stats', 'events'].indexOf(i) >= 0; })) intents.push('general');
+  if (!intents.some(function (i) { return ['people', 'projects', 'milestones', 'issues', 'orders', 'as', 'stats', 'events', 'weekly'].indexOf(i) >= 0; })) intents.push('general');
   return intents;
 }
 

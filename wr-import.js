@@ -710,6 +710,7 @@ async function hFile(file,enc){if(!file)return;document.getElementById('fnDisp')
 /* 여러 파일 순차 처리 */
 async function hFiles(fileList){
   if(!fileList||!fileList.length)return;
+  if(typeof wmLib==='function')await wmLib('xlsx').catch(function(){});  // 엑셀 도구는 처음 쓸 때 받음 (v13.310)
   var files=Array.from(fileList).filter(function(f){return/\.(xls|xlsx|html?|csv)$/i.test(f.name)});
   if(!files.length){showToast('지원하지 않는 파일 형식입니다.','error');return}
   if(files.length===1){hFile(files[0]);return}

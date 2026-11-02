@@ -82,3 +82,73 @@ function wmTouchDrag(el, opt) {
   el.addEventListener('touchend', end, { passive: false });
   el.addEventListener('touchcancel', end, { passive: false });
 }
+
+/* ═══ 무거운 라이브러리는 나중에 (v13.310) ═══
+ * 엑셀(xlsx 861KB) · 워드(mammoth 628KB) · PDF(jspdf · pdf.js) · 캡처(html2canvas) · 압축(jszip) 을
+ * 첫 화면에서 받지 않는다 (모두 2.3MB+ — 휴대폰 첫 화면이 늦던 주원인).
+ *  · 첫 화면을 그린 뒤 브라우저가 한가할 때 뒤에서 받아 둠 (wmLibsIdle) → 대부분 누를 때는 이미 있음
+ *  · 그 전에 누르면 wmLibRetry 가 받고 나서 같은 함수를 다시 부름
+ */
+var WM_LIBS = {
+  xlsx: { url: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', ok: function () { return typeof XLSX !== 'undefined'; } },
+  html2canvas: { url: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', ok: function () { return typeof html2canvas !== 'undefined'; } },
+  jspdf: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', ok: function () { return !!window.jspdf; } },
+  pdfjs: { url: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', ok: function () { return typeof pdfjsLib !== 'undefined'; },
+    after: function () { try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (_) {} } },
+  jszip: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', ok: function () { return typeof JSZip !== 'undefined'; } },
+  mammoth: { url: 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', ok: function () { return typeof mammoth !== 'undefined'; } }
+};
+var _wmLibP = {};
+/** 라이브러리 받기 → Promise (이미 있으면 바로) · 이름 여러 개도 됨 */
+function wmLib(name) {
+  if (Array.isArray(name)) return Promise.all(name.map(wmLib));
+  var L = WM_LIBS[name];
+  if (!L) return Promise.reject(new Error('모르는 라이브러리 ' + name));
+  if (L.ok()) return Promise.resolve();
+  if (_wmLibP[name]) return _wmLibP[name];
+  _wmLibP[name] = new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.src = L.url; s.async = true;
+    s.onload = function () { if (L.after) L.after(); resolve(); };
+    s.onerror = function () { delete _wmLibP[name]; reject(new Error(name + ' 을(를) 불러오지 못했습니다 — 인터넷 연결을 확인하세요')); };
+    document.head.appendChild(s);
+  });
+  return _wmLibP[name];
+}
+/** 함수 첫머리에서: if (wmLibRetry('xlsx', fn, this, arguments)) return; — 없으면 받고 나서 fn 을 다시 부르고 true */
+function wmLibRetry(name, fn, self, args) {
+  var names = Array.isArray(name) ? name : [name];
+  if (names.every(function (n) { return WM_LIBS[n] && WM_LIBS[n].ok(); })) return false;
+  if (typeof showToast === 'function') showToast('⏳ 도구를 불러오는 중…', 'info');
+  wmLib(names).then(function () { fn.apply(self, args); })
+    .catch(function (e) { if (typeof showToast === 'function') showToast('❌ ' + e.message, 'error'); });
+  return true;
+}
+/** 첫 화면 뒤 한가할 때 하나씩 받아 둠 */
+function wmLibsIdle() {
+  var order = ['xlsx', 'jszip', 'html2canvas', 'pdfjs', 'jspdf', 'mammoth'];
+  var idle = window.requestIdleCallback || function (f) { return setTimeout(f, 1200); };
+  (function next() {
+    var n = order.shift(); if (!n) return;
+    idle(function () { wmLib(n).catch(function () {}).then(next); }, { timeout: 4000 });
+  })();
+}
+
+/** 붙여넣은 파일 목록 → 이름 붙이기 (화면 캡처는 이름이 'image.png' 라 '붙여넣기-날짜-시각.png' 로) — 문서 화면 · 프로젝트 문서 탭 공용 (v13.310) */
+function wmPastedFiles(e) {
+  var files = (e && e.clipboardData && e.clipboardData.files) || [];
+  if (!files.length) return [];
+  var d = new Date(), p2 = function (n) { return ('0' + n).slice(-2); };
+  var stamp = d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '-' + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds());
+  return Array.prototype.map.call(files, function (f, i) {
+    if (f.name && f.name !== 'image.png') return f;
+    var ext = ((f.type || '').split('/')[1] || 'png').replace('jpeg', 'jpg');
+    try { return new File([f], '붙여넣기-' + stamp + (i ? '-' + i : '') + '.' + ext, { type: f.type }); } catch (_) { return f; }
+  });
+}
+/** 입력 칸 · 창이 열려 있으면 붙여넣기를 가로채지 않음 */
+function wmPasteTargetFree(e) {
+  var t = e && e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return false;
+  return !document.querySelector('.wa-modal-overlay');
+}

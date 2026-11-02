@@ -7,6 +7,7 @@
 
 /* ═══ ⑥ 보고서 — 엑셀 6시트 다운로드 (SheetJS) + 인쇄 미리보기 ═══ */
 function asExportExcel(ticketId) {
+  if (typeof wmLibRetry === 'function' && wmLibRetry('xlsx', asExportExcel, this, arguments)) return;   // 무거운 도구는 처음 쓸 때 받음 (v13.310)
   if (typeof XLSX === 'undefined') {
     if (typeof showToast === 'function') showToast('SheetJS(xlsx) 라이브러리를 불러올 수 없습니다.', 'error');
     return;
@@ -486,6 +487,10 @@ function _asReportHtmlForPdf(t, opts) {
 
 /* 보고서 PDF를 생성해서 Blob/Base64로 반환. 미리보기·다운로드·메일에 공통 사용 */
 function _asGeneratePdf(t) {
+  var libs = typeof wmLib === 'function' ? wmLib(['jspdf', 'html2canvas']).catch(function () {}) : Promise.resolve();   // v13.310 처음 쓸 때 받음
+  return libs.then(function () { return _asGeneratePdfNow(t); });
+}
+function _asGeneratePdfNow(t) {
   return new Promise(function (resolve, reject) {
     if (!window.jspdf || !window.html2canvas) {
       reject(new Error('PDF 라이브러리(jsPDF/html2canvas)가 로드되지 않았습니다. 페이지를 새로고침 후 다시 시도하세요.'));

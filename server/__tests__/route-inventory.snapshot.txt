@@ -298,6 +298,7 @@ GET /api/v1/users/operator-list
 GET /api/v1/users/pending
 GET /api/weekly-reports
 GET /api/weekly-reports/:id
+GET /api/weekly-reports/insights
 GET /api/weekly-reports/next-name
 GET /api/weekly-reports/search
 GET /api/weekly-reports/stats

@@ -149,6 +149,25 @@ async function computeInsights(actor) {
     });
   });
 
+  // 10) 주간 업무 보고 경과 (관리자 — 주간 보고는 관리자 화면, v13.310) — 보고서를 주를 넘어 이어 붙여 본 납기 지남 · 정체 · 뒤처짐
+  if (actor.role === 'admin') await safe('weekly-report', async function () {
+    var wi = require('../lib/weekly-insights');
+    var w = wi.compute(await wi.load(db, actor.tenantId, { weeks: 8 }));
+    if (!w.weekly.length) return;
+    var bad = w.risks.overdue.concat(w.risks.stalled, w.risks.atRisk);
+    if (!bad.length) return;
+    var k = w.kpi;
+    cards.push({
+      id: 'weekly-report', level: k.overdue ? 'risk' : 'warn', icon: '📅',
+      title: '주간 보고 — ' + [k.overdue ? '납기 지남 ' + k.overdue : '', k.stalled ? '정체 ' + k.stalled : '', k.atRisk ? '뒤처짐 ' + k.atRisk : ''].filter(Boolean).join(' · '),
+      detail: '최근 8주 주간 업무 보고를 이어 본 결과 — 📅 주간 업무 › 📈 분석에서 자세히.',
+      items: bad.slice(0, 5).map(function (i) {
+        return { label: i.client + ' ' + i.name, sub: ({ overdue: '납기 지남', stalled: '정체', at_risk: '뒤처짐' }[i.state] || '') + (i.members.length ? ' · ' + i.members.join(',') : '') + (i.pct != null ? ' · ' + i.pct + '%' : ''), nav: null };
+      }),
+      ask: '최근 주간 업무 보고에서 납기가 지났거나 정체된 일들의 원인과 다음 주 목표를 정리해줘'
+    });
+  });
+
   var RANK = { risk: 0, warn: 1, info: 2 };
   return cards.sort(function (a, b) { return RANK[a.level] - RANK[b.level]; });
 }

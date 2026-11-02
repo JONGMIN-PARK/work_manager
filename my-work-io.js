@@ -189,6 +189,7 @@ function mwExport(kind) {
   var items = _mwioSort(mwVisibleItems());
   var rows = _mwioRows(items);
   if (kind === 'text') return _mwioCopyText(items);
+  if (kind === 'xlsx' && typeof wmLibRetry === 'function' && wmLibRetry('xlsx', mwExport, this, arguments)) return;   // 처음 쓸 때 받음 (v13.310)
   if (kind === 'xlsx' && typeof XLSX === 'undefined') { _mwToast('엑셀 도구를 아직 못 불러와 CSV 로 받습니다', 'warn'); kind = 'csv'; }
   if (kind === 'csv') {
     var esc = function (v) { v = String(v == null ? '' : v); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };

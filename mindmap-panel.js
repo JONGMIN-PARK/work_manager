@@ -298,6 +298,7 @@ function mmExportMarkdown() {
 }
 
 function mmExportPng() {
+  if (typeof wmLibRetry === 'function' && wmLibRetry('html2canvas', mmExportPng, this, arguments)) return;   // 무거운 도구는 처음 쓸 때 받음 (v13.310)
   if (typeof html2canvas !== 'function') { _mmToast('이미지 모듈을 불러오지 못했습니다', 'error'); return; }
   var stage = _mmEl('mmStage');
   if (!stage || !_mm.layout) return;

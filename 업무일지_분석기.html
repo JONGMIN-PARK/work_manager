@@ -9,9 +9,6 @@
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>var ORDER_MAP={};/* 수주맵: 엑셀 기반 — order.js 대체 */</script>
 <!-- core-bus.js: wmProgress · wmDataBus · WM_TAB_DEPS — 다른 모든 스크립트보다 먼저 동기 로드 -->
 <script src="core-bus.js?v=6" onerror="console.warn('core-bus.js 로드 실패')"></script>
@@ -20,16 +17,16 @@
 <script src="settings.js?v=6" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="auth.js?v=19" onerror="console.warn('auth.js 로드 실패')"></script>
 <script defer src="weekly-report-parse.js?v=1" onerror="console.warn('weekly-report-parse.js 로드 실패')"></script>
-<script defer src="weekly-report-admin.js?v=16" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
+<script defer src="weekly-report-admin.js?v=22" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
 <script src="project-data.js?v=17" onerror="console.warn('project-data.js 로드 실패')"></script>
-<script src="ui-helpers.js?v=6" onerror="console.warn('ui-helpers.js 로드 실패')"></script>
+<script src="ui-helpers.js?v=8" onerror="console.warn('ui-helpers.js 로드 실패')"></script>
 <!-- 렌더러 (defer — 초기 표시 이후 실행돼도 무방) -->
 <script defer src="kr-holidays.js?v=1" onerror="console.warn('kr-holidays.js 로드 실패')"></script>
 <script defer src="calendar.js?v=13" onerror="console.warn('calendar.js 로드 실패')"></script>
 <script defer src="timeline.js?v=19" onerror="console.warn('timeline.js 로드 실패')"></script>
 <script defer src="project-detail.js?v=13" onerror="console.warn('project-detail.js 로드 실패')"></script>
 <script defer src="dashboard.js?v=7" onerror="console.warn('dashboard.js 로드 실패')"></script>
-<script defer src="pipeline.js?v=10" onerror="console.warn('pipeline.js 로드 실패')"></script>
+<script defer src="pipeline.js?v=11" onerror="console.warn('pipeline.js 로드 실패')"></script>
 <script defer src="prestudy.js?v=8" onerror="console.warn('prestudy.js 로드 실패')"></script>
 <script defer src="tech.js?v=5" onerror="console.warn('tech.js 로드 실패')"></script>
 <script defer src="mindmap-layout.js?v=14" onerror="console.warn('mindmap-layout.js 로드 실패')"></script>
@@ -38,8 +35,8 @@
 <script defer src="mindmap-list.js?v=7" onerror="console.warn('mindmap-list.js 로드 실패')"></script>
 <script defer src="mindmap-view.js?v=25" onerror="console.warn('mindmap-view.js 로드 실패')"></script>
 <script defer src="mindmap-edit.js?v=17" onerror="console.warn('mindmap-edit.js 로드 실패')"></script>
-<script defer src="mindmap-panel.js?v=10" onerror="console.warn('mindmap-panel.js 로드 실패')"></script>
-<script defer src="mindmap-extra.js?v=5" onerror="console.warn('mindmap-extra.js 로드 실패')"></script>
+<script defer src="mindmap-panel.js?v=11" onerror="console.warn('mindmap-panel.js 로드 실패')"></script>
+<script defer src="mindmap-extra.js?v=6" onerror="console.warn('mindmap-extra.js 로드 실패')"></script>
 <script defer src="mindmap-keys.js?v=14" onerror="console.warn('mindmap-keys.js 로드 실패')"></script>
 <script defer src="mindmap-media.js?v=1" onerror="console.warn('mindmap-media.js 로드 실패')"></script>
 <script defer src="mindmap-gantt.js?v=4" onerror="console.warn('mindmap-gantt.js 로드 실패')"></script>
@@ -51,19 +48,19 @@
 <script defer src="mindmap-risk.js?v=2" onerror="console.warn('mindmap-risk.js 로드 실패')"></script>
 <script defer src="mindmap-files.js?v=2" onerror="console.warn('mindmap-files.js 로드 실패')"></script>
 <script defer src="order-view.js?v=9" onerror="console.warn('order-view.js 로드 실패')"></script>
-<script defer src="issue-manager.js?v=8" onerror="console.warn('issue-manager.js 로드 실패')"></script>
-<script defer src="document-manager.js?v=9" onerror="console.warn('document-manager.js 로드 실패')"></script>
-<script defer src="project-docs.js?v=1" onerror="console.warn('project-docs.js 로드 실패')"></script>
+<script defer src="issue-manager.js?v=9" onerror="console.warn('issue-manager.js 로드 실패')"></script>
+<script defer src="document-manager.js?v=11" onerror="console.warn('document-manager.js 로드 실패')"></script>
+<script defer src="project-docs.js?v=2" onerror="console.warn('project-docs.js 로드 실패')"></script>
 <script defer src="as-core.js?v=6" onerror="console.warn('as-core.js 로드 실패')"></script>
-<script defer src="as-list.js?v=7" onerror="console.warn('as-list.js 로드 실패')"></script>
+<script defer src="as-list.js?v=8" onerror="console.warn('as-list.js 로드 실패')"></script>
 <script defer src="as-form.js?v=7" onerror="console.warn('as-form.js 로드 실패')"></script>
 <script defer src="as-detail.js?v=6" onerror="console.warn('as-detail.js 로드 실패')"></script>
 <script defer src="as-detail-actions.js?v=6" onerror="console.warn('as-detail-actions.js 로드 실패')"></script>
-<script defer src="as-report.js?v=6" onerror="console.warn('as-report.js 로드 실패')"></script>
+<script defer src="as-report.js?v=7" onerror="console.warn('as-report.js 로드 실패')"></script>
 <script defer src="as-category-admin.js?v=6" onerror="console.warn('as-category-admin.js 로드 실패')"></script>
-<script defer src="as-stats.js?v=4" onerror="console.warn('as-stats.js 로드 실패')"></script>
+<script defer src="as-stats.js?v=5" onerror="console.warn('as-stats.js 로드 실패')"></script>
 <script defer src="operator-mode.js?v=3" onerror="console.warn('operator-mode.js 로드 실패')"></script>
-<script defer src="operator-analytics.js?v=2" onerror="console.warn('operator-analytics.js 로드 실패')"></script>
+<script defer src="operator-analytics.js?v=3" onerror="console.warn('operator-analytics.js 로드 실패')"></script>
 <script defer src="comments-ui.js?v=1" onerror="console.warn('comments-ui.js 로드 실패')"></script>
 <script defer src="my-work.js?v=16" onerror="console.warn('my-work.js 로드 실패')"></script>
 <script defer src="quick-parse.js?v=1" onerror="console.warn('quick-parse.js 로드 실패')"></script>
@@ -71,22 +68,20 @@
 <script defer src="my-work-task.js?v=8" onerror="console.warn('my-work-task.js 로드 실패')"></script>
 <script defer src="my-work-panel.js?v=8" onerror="console.warn('my-work-panel.js 로드 실패')"></script>
 <script defer src="my-work-board.js?v=5" onerror="console.warn('my-work-board.js 로드 실패')"></script>
-<script defer src="my-work-io.js?v=5" onerror="console.warn('my-work-io.js 로드 실패')"></script>
-<script defer src="my-work-timeline.js?v=8" onerror="console.warn('my-work-timeline.js 로드 실패')"></script>
+<script defer src="my-work-io.js?v=6" onerror="console.warn('my-work-io.js 로드 실패')"></script>
+<script defer src="my-work-timeline.js?v=9" onerror="console.warn('my-work-timeline.js 로드 실패')"></script>
 <script defer src="my-work-notes.js?v=5" onerror="console.warn('my-work-notes.js 로드 실패')"></script>
 <script defer src="my-work-proj.js?v=3" onerror="console.warn('my-work-proj.js 로드 실패')"></script>
 <script defer src="messages-ui.js?v=3" onerror="console.warn('messages-ui.js 로드 실패')"></script>
 <script defer src="project-images.js?v=3" onerror="console.warn('project-images.js 로드 실패')"></script>
 <script defer src="project-meetings.js?v=11" onerror="console.warn('project-meetings.js 로드 실패')"></script>
 <script defer src="spec-schema.js?v=3" onerror="console.warn('spec-schema.js 로드 실패')"></script>
-<script defer src="project-spec.js?v=5" onerror="console.warn('project-spec.js 로드 실패')"></script>
+<script defer src="project-spec.js?v=6" onerror="console.warn('project-spec.js 로드 실패')"></script>
 <script defer src="spec-template-admin.js?v=2" onerror="console.warn('spec-template-admin.js 로드 실패')"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" onerror="console.warn('pdf.js 로드 실패')"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('jszip 로드 실패')"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" onerror="console.warn('mammoth.js 로드 실패')"></script>
+<!-- v13.310 엑셀 · 워드 · PDF · 캡처 · 압축 라이브러리는 ui-helpers.js wmLib 가 첫 화면 뒤에 받음 -->
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=73">
+<link rel="stylesheet" href="style.css?v=83">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -117,7 +112,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.308';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.310';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -546,19 +541,19 @@
 <!-- 앱 스크립트 — 예전 인라인 <script> 를 나눈 파일들. 동기 로드(defer 금지) · 이 순서 그대로 (app-init.js 가 마지막) -->
 <script src="wm-fallbacks.js?v=4" onerror="console.warn('wm-fallbacks.js 로드 실패')"></script>
 <script src="wm-state.js?v=6" onerror="console.warn('wm-state.js 로드 실패')"></script>
-<script src="wr-import.js?v=5" onerror="console.warn('wr-import.js 로드 실패')"></script>
-<script src="mode.js?v=9" onerror="console.warn('mode.js 로드 실패')"></script>
+<script src="wr-import.js?v=6" onerror="console.warn('wr-import.js 로드 실패')"></script>
+<script src="mode.js?v=10" onerror="console.warn('mode.js 로드 실패')"></script>
 <script src="wr-filters.js?v=3" onerror="console.warn('wr-filters.js 로드 실패')"></script>
-<script src="order-map.js?v=2" onerror="console.warn('order-map.js 로드 실패')"></script>
+<script src="order-map.js?v=3" onerror="console.warn('order-map.js 로드 실패')"></script>
 <script src="wr-view.js?v=4" onerror="console.warn('wr-view.js 로드 실패')"></script>
 <script src="wr-drill.js?v=1" onerror="console.warn('wr-drill.js 로드 실패')"></script>
-<script src="manual-input.js?v=3" onerror="console.warn('manual-input.js 로드 실패')"></script>
-<script src="wr-charts.js?v=3" onerror="console.warn('wr-charts.js 로드 실패')"></script>
+<script src="manual-input.js?v=4" onerror="console.warn('manual-input.js 로드 실패')"></script>
+<script src="wr-charts.js?v=4" onerror="console.warn('wr-charts.js 로드 실패')"></script>
 <script src="archive-trend.js?v=2" onerror="console.warn('archive-trend.js 로드 실패')"></script>
 <script src="search-notif.js?v=5" onerror="console.warn('search-notif.js 로드 실패')"></script>
 <script src="ai-ask.js?v=2" onerror="console.warn('ai-ask.js 로드 실패')"></script>
 <script src="telegram-ui.js?v=1" onerror="console.warn('telegram-ui.js 로드 실패')"></script>
 <script src="anyworks-import.js?v=1" onerror="console.warn('anyworks-import.js 로드 실패')"></script>
-<script src="app-init.js?v=8" onerror="console.warn('app-init.js 로드 실패')"></script>
+<script src="app-init.js?v=9" onerror="console.warn('app-init.js 로드 실패')"></script>
 </body>
 </html>

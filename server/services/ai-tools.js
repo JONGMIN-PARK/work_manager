@@ -78,6 +78,11 @@ var TOOLS = {
     label: '일정',
     desc: '앞으로 days 일(기본 14) 안의 일정 (회의 · 출장 · 연차 등).',
     args: { days: { i: [1, 90] } }
+  },
+  weekly_report_trend: {
+    label: '주간 업무 보고 분석',
+    desc: '주간 업무 보고서를 주를 넘어 이어 붙인 분석 — 주별 완료율 · 새로/끝낸 일, 납기 지남 · 일정보다 뒤처짐 · 3주째 정체 · 납기 연기 · 사라진 일, 사람 · 분야 · 업체별 처리량 · 끝내는 데 걸린 주 · 기한 안 완료율. 주간 보고 · 팀 진척 · 목표 · 효율 · 누가 밀렸는지 물을 때. (관리자만)',
+    args: { weeks: { i: [2, 52] }, team: 'str' }
   }
 };
 
@@ -398,6 +403,17 @@ RUN.events = async function (c, a) {
   return r.rows.length;
 };
 
+RUN.weekly_report_trend = async function (c, a) {
+  if (c.actor.role !== 'admin') { c.add('주간 업무 보고 분석', ['(주간 업무 보고는 관리자만 볼 수 있어 조회하지 않았습니다)']); return 0; }
+  var wi = require('../lib/weekly-insights');
+  var rows = await wi.load(db, c.actor.tenantId, { weeks: a.weeks || 12, team: a.team || '' });
+  var out = wi.compute(rows);
+  if (!out.weekly.length) { c.add('주간 업무 보고 분석', ['(이 기간에 저장된 주간 보고가 없음)']); return 0; }
+  c.add('주간 업무 보고 분석 · 최근 ' + (a.weeks || 12) + '주' + (a.team ? ' · ' + a.team : ''), wi.toText(out).split('\n').concat(out.findings.map(function (f) { return '결론: ' + f.text; })));
+  c.chart('주별 완료율', out.weekly.map(function (w) { return { label: w.week.slice(5), value: w.completionRate }; }), '%');
+  return out.weekly.length;
+};
+
 /* ─── 실행 ─── */
 /**
  * @param {Array<{tool, args}>} calls
@@ -438,6 +454,7 @@ function callsForIntents(intents) {
   if (intents.indexOf('orders') >= 0) calls.push({ tool: 'orders', args: {} });
   if (intents.indexOf('as') >= 0) { calls.push({ tool: 'as_tickets', args: { status: 'open' } }); calls.push({ tool: 'as_repeats', args: {} }); }
   if (intents.indexOf('events') >= 0) calls.push({ tool: 'events', args: { days: 14 } });
+  if (intents.indexOf('weekly') >= 0) calls.unshift({ tool: 'weekly_report_trend', args: { weeks: 8 } });   // v13.310
   return calls.slice(0, 8);
 }
 

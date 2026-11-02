@@ -216,6 +216,7 @@ async function resetOcmtOclient(){
 }
 
 function exportXlsx(){
+  if (typeof wmLibRetry === 'function' && wmLibRetry('xlsx', exportXlsx, this, arguments)) return;   // 무거운 도구는 처음 쓸 때 받음 (v13.310)
   const f=typeof wdExportRows==='function'?wdExportRows():gF();   // v13.266 부분 필터 반영 (위 조건 전체도 고를 수 있음)if(!f.length){showToast('데이터 없음','warn');return}
   const rows=f.map(r=>{
     const em=editMap[lastFiltered.indexOf(r)]||{};

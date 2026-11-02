@@ -442,7 +442,7 @@ function _asStatsHtmlKpi(kpi) {
     { k: 'partsCost',    l: '부품 비용',     val: (kpi.partsCost.value || 0).toLocaleString(),                              unit: '원',  color: '#8B5CF6' }
   ];
 
-  var h = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px">';
+  var h = '<div class="is-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px">';
   cards.forEach(function (c) {
     var deltaTxt = '';
     if (c.delta != null && c.delta !== 0 && !isNaN(c.delta)) {

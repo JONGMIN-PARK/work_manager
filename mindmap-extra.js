@@ -471,6 +471,7 @@ function _mmOpmlToTree(xmlText) {
 
 /** XMind 파일로 내보내기 (content.json · metadata.json · manifest.json) — 이미지 · 댓글 · 거르기는 빠짐 */
 function mmExportXmind() {
+  if (typeof wmLibRetry === 'function' && wmLibRetry('jszip', mmExportXmind, this, arguments)) return;   // 무거운 도구는 처음 쓸 때 받음 (v13.310)
   if (typeof JSZip === 'undefined') { _mmToast('압축 모듈(JSZip)을 불러오지 못했습니다', 'error'); return; }
   var zip = new JSZip();
   zip.file('content.json', JSON.stringify(mmToXmindSheets(_mm.doc, _mmAssigneeName)));
@@ -484,6 +485,8 @@ function mmExportXmind() {
 /** .xmind · .opml 파일 → { title, doc } */
 function mmReadImportFile(file) {
   var name = file.name || '';
+  // 압축 도구는 처음 쓸 때 받음 (v13.310)
+  if (/\.xmind$/i.test(name) && typeof JSZip === 'undefined' && typeof wmLib === 'function') return wmLib('jszip').then(function () { return mmReadImportFile(file); });
   if (/\.xmind$/i.test(name)) {
     if (typeof JSZip === 'undefined') return Promise.reject(new Error('압축 모듈(JSZip)을 불러오지 못했습니다'));
     return JSZip.loadAsync(file).then(function (zip) {

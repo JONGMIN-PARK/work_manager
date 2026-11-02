@@ -142,16 +142,9 @@ document.addEventListener('drop', function (e) {
 }, true);
 document.addEventListener('paste', function (e) {
   if (!_pdDocsActive()) return;
-  var t = e.target;
-  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-  if (document.querySelector('.wa-modal-overlay')) return;
-  var files = (e.clipboardData && e.clipboardData.files) || [];
+  if (!wmPasteTargetFree(e)) return;
+  var files = wmPastedFiles(e);   // ui-helpers.js 공용
   if (!files.length) return;
   e.preventDefault();
-  var d = new Date(), p2 = function (n) { return ('0' + n).slice(-2); };
-  pdDocsUpload(Array.prototype.map.call(files, function (f, i) {
-    if (f.name && f.name !== 'image.png') return f;
-    var nm = '붙여넣기-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '-' + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds()) + (i ? '-' + i : '') + '.' + ((f.type.split('/')[1] || 'png').replace('jpeg', 'jpg'));
-    try { return new File([f], nm, { type: f.type }); } catch (_) { return f; }
-  }));
+  pdDocsUpload(files);
 });

@@ -24,7 +24,7 @@ var ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
     await createMilestone({ projectId: p.id, name: '설계', startDate: '2026-10-01', endDate: '2026-10-20', order: 0 });
     return p.id;
   });
-  function clean() { return page.evaluate(function () { document.querySelectorAll('.wa-modal-overlay,#projModal,#evtModal,.pd-overlay,#pdOverlay,#issueModal,#asModal,#mwPanel.on').forEach(function (e) { e.remove(); }); try { if (typeof mwPanelClose === 'function') mwPanelClose(); } catch (_) {} try { if (typeof pdCloseDetail === 'function') pdCloseDetail(); } catch (_) {} var h = document.querySelector('.hdr'); if (h) h.classList.remove('more-on'); var nd = document.getElementById('notifDropdown'); if (nd) nd.style.display = 'none'; window.scrollTo(0, 0); }); }
+  function clean() { return page.evaluate(function () { try { pdSwitchTab('overview'); } catch (_) {} document.querySelectorAll('.wa-modal-overlay,#projModal,#evtModal,.pd-overlay,#pdOverlay,#issueModal,#asModal,#mwPanel.on').forEach(function (e) { e.remove(); }); try { if (typeof mwPanelClose === 'function') mwPanelClose(); } catch (_) {} try { if (typeof pdCloseDetail === 'function') pdCloseDetail(); } catch (_) {} var h = document.querySelector('.hdr'); if (h) h.classList.remove('more-on'); var nd = document.getElementById('notifDropdown'); if (nd) nd.style.display = 'none'; window.scrollTo(0, 0); }); }
   var screens = [
     ['mywork', function () { setPage('mywork'); }],
     ['mywork-month', function () { setPage('mywork'); var b = document.querySelector('#mMyWork [data-mwc-view="month"]'); if (b) b.click(); }],
@@ -62,7 +62,19 @@ var ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
     ['header-look', function () { wmHdrPop('hdrLookWrap'); }],
     ['header-user', function () { wmHdrPop('hdrUserWrap'); }],
     ['header-search', function () { document.getElementById('globalSearchInput').focus(); }],
-    ['notif', function () { if (typeof toggleNotifPanel === 'function') toggleNotifPanel(); }]
+    ['notif', function () { if (typeof toggleNotifPanel === 'function') toggleNotifPanel(); }],
+    // v13.297~308 에서 생긴 화면
+    ['ai-ask', function () { return wmAiAsk(); }],
+    ['tg-group', function (pid) { return pdTgGroupModal(pid); }],
+    ['pd-lifecycle', function (pid) { return showProjectDetail(pid).then(function () { pdSwitchTab('lifecycle', pid); }); }],
+    ['pd-issues', function (pid) { return showProjectDetail(pid).then(function () { pdSwitchTab('issues', pid); }); }],
+    ['pd-dev', function (pid) { return showProjectDetail(pid).then(function () { pdSwitchTab('dev', pid); }); }],
+    ['pd-meeting', function (pid) { return showProjectDetail(pid).then(function () { pdSwitchTab('meeting', pid); }); }],
+    ['pd-docs', function (pid) { return showProjectDetail(pid).then(function () { pdSwitchTab('docs', pid); }); }],
+    ['pd-work', function (pid) { return showProjectDetail(pid).then(function () { pdSwitchTab('work', pid); }); }],
+    ['pd-spec', function (pid) { return showProjectDetail(pid).then(function () { pdSwitchTab('spec', pid); }); }],
+    ['profile', function () { return showProfileModal(); }],
+    ['mindmap-map', function () { setPage('mindmap'); return apiFetch('/api/mindmaps').then(function (r) { var m = (r.data || [])[0]; if (m) { mmOpen(m.id); setTimeout(function () { _mmSetView('map'); }, 900); } }); }]
   ];
   var report = [];
   var orients = [['P', 402, 874], ['L', 874, 402]];

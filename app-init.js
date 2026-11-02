@@ -197,6 +197,8 @@ async function _postAuthInit(){
       if(_wmGoParam&&typeof wmDeepGo==='function'){var _g=_wmGoParam;_wmGoParam=null;setTimeout(function(){wmDeepGo(_g)},400)}
     }catch(e){console.error('[init finish]',e)}
     if(window.wmSplash)wmSplash.done();
+    // 엑셀 · PDF · 워드 · 캡처 도구는 첫 화면 뒤 한가할 때 받아 둠 (v13.310, ui-helpers.js)
+    if(typeof wmLibsIdle==='function')setTimeout(wmLibsIdle,1500);
   }
 }
 

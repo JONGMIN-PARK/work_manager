@@ -1057,6 +1057,7 @@ function psCopyFrom(srcId) {
 
 /* ═══ XLSX 내보내기 ═══ */
 function psExportXlsx() {
+  if (typeof wmLibRetry === 'function' && wmLibRetry('xlsx', psExportXlsx, this, arguments)) return;   // 무거운 도구는 처음 쓸 때 받음 (v13.310)
   if (!_ps) return;
   if (typeof XLSX === 'undefined') { _specToast('SheetJS(xlsx) 라이브러리를 불러올 수 없습니다.', 'error'); return; }
   var sheet = _psCollect(true), name = _ps.proj.name || _ps.projId;

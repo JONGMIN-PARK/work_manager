@@ -110,7 +110,7 @@ function renderAS(opts) {
     html += '</div>';
 
     // 요약 카드
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,260px));justify-content:start;gap:10px;margin-bottom:12px">';
+    html += '<div class="is-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,260px));justify-content:start;gap:10px;margin-bottom:12px">';
     html += _asStatCard('대기/할당', cnt.received, '#6366F1');
     html += _asStatCard('P1·P2 긴급', cnt.urgent, SEM_COLOR.danger);
     html += _asStatCard('처리중', cnt.in_progress, SEM_COLOR.info);

@@ -19,6 +19,7 @@ document.addEventListener('click',function(e){
 });
 
 function saveChartImg(targetId,mode){
+  if (typeof wmLibRetry === 'function' && wmLibRetry('html2canvas', saveChartImg, this, arguments)) return;   // 무거운 도구는 처음 쓸 때 받음 (v13.310)
   document.querySelectorAll('.cht-save-menu.show').forEach(function(m){m.classList.remove('show')});
   var el=document.getElementById(targetId);if(!el)return;
   var title=el.querySelector('h3,h4');

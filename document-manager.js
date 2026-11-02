@@ -3,6 +3,13 @@
  * 3-Panel: 폴더 트리 | 파일 목록 | 미리보기/AI요약
  */
 
+/* 형식별 도구 받기 (ui-helpers.js wmLib) — 실패해도 미리보기 · 글 뽑기만 건너뜀 */
+function _docNeedLib(ext) {
+  if (typeof wmLib !== 'function') return Promise.resolve();
+  var need = ext === 'pdf' ? ['pdfjs'] : (ext === 'xlsx' || ext === 'xls') ? ['xlsx'] : ext === 'docx' ? ['jszip', 'mammoth'] : (ext === 'pptx' || ext === 'hwpx') ? ['jszip'] : null;
+  return need ? wmLib(need).catch(function () {}) : Promise.resolve();
+}
+
 /* ═══ PDF.js 워커 설정 ═══ */
 if (typeof pdfjsLib !== 'undefined') {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -456,6 +463,8 @@ async function extractTextFromFile(fileRecord) {
   var ext = fileRecord.ext;
   var data = fileRecord.data;
   if (!data) return '';
+  // 미리보기 · 글 뽑기에 필요한 도구는 처음 쓸 때 받음 (v13.310)
+  await _docNeedLib(ext);
 
   try {
     // 텍스트 파일
@@ -534,6 +543,8 @@ async function showFilePreview(fileRecord) {
 
   var ext = fileRecord.ext;
   var data = fileRecord.data;
+  // 미리보기 · 글 뽑기에 필요한 도구는 처음 쓸 때 받음 (v13.310)
+  await _docNeedLib(ext);
 
   // 파일 정보 사이드바
   var icon = getDocIcon(ext);
@@ -1369,19 +1380,10 @@ document.addEventListener('paste', function (e) {
   var wrap = document.getElementById('mDocs');
   if (!wrap || !wrap.offsetParent || !docSelProject) return;
   if (document.getElementById('projDetailPanel')) return;   // 프로젝트 상세가 위에 떠 있으면 그쪽(📂 문서 탭)이 받음
-  var t = e.target;
-  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-  if (document.querySelector('.wa-modal-overlay')) return;
-  var items = (e.clipboardData && e.clipboardData.files) || [];
-  if (!items.length) return;
+  if (!wmPasteTargetFree(e)) return;
+  var named = wmPastedFiles(e);   // ui-helpers.js 공용
+  if (!named.length) return;
   e.preventDefault();
-  var stamp = new Date(); var p2 = function (n) { return ('0' + n).slice(-2); };
-  var named = Array.prototype.map.call(items, function (f, i) {
-    if (f.name && f.name !== 'image.png') return f;
-    var ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-    var nm = '붙여넣기-' + stamp.getFullYear() + p2(stamp.getMonth() + 1) + p2(stamp.getDate()) + '-' + p2(stamp.getHours()) + p2(stamp.getMinutes()) + p2(stamp.getSeconds()) + (i ? '-' + i : '') + '.' + ext;
-    try { return new File([f], nm, { type: f.type }); } catch (_) { return f; }
-  });
   docUploadWithVersion(named);
 });
 

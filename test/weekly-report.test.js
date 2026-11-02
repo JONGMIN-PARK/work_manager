@@ -93,12 +93,12 @@ test('buildPreviewHTML: 완료율 구간별 히트색', () => {
 test('buildPreviewHTML: 사이트 배지 폭 통일(전 항목 동일 width)', () => {
   const html = client.buildPreviewHTML(client.clientParseText(
     '[개발]\n- [짧] a @x\n- [아주긴사이트명] b @y'));
-  const widths = [...html.matchAll(/box-sizing:border-box;width:(\d+)px/g)].map(m => m[1]);
+  const widths = [...html.matchAll(/--sw:(\d+)px/g)].map(m => m[1]);   // v13.309 격자 — 사이트 칸 폭을 --sw 로
   assert.strictEqual(widths.length, 2);
   assert.strictEqual(widths[0], widths[1]);
 });
 
-test('buildPreviewHTML: 담당자는 배지 title 툴팁으로', () => {
+test('buildPreviewHTML: 담당자는 보이게 (2명 넘으면 "외 N") + title 에 전체', () => {
   const html = client.buildPreviewHTML(client.clientParseText('[개발]\n- [사이트] 업무 @박종민 @심정현'));
   assert.match(html, /title="담당자: @박종민, @심정현"/);
 });
@@ -192,4 +192,12 @@ test('dday: 반년 넘게 차이 나면 해를 넘긴 것으로', () => {
   const behind = new Date(); behind.setDate(behind.getDate() - 250);
   assert.match(client.dday(md(ahead)).label, /^D\+/);   // 250일 뒤 날짜 = 실은 지난해의 그 날
   assert.match(client.dday(md(behind)).label, /^D-/);   // 250일 전 날짜 = 실은 내년의 그 날
+});
+
+test('buildPreviewHTML (v13.309): 2줄 맞춤 — 위 정렬 격자 · 세부 줄은 상태 칸부터 · 3명 이상은 "외 N"', () => {
+  const html = client.buildPreviewHTML(client.clientParseText('[개발]\n- [A사] 긴 업무 ~12/04 30% @가 @나 @다\n  : 세부 하나'));
+  assert.match(html, /\.wrp-it\{display:grid;[^}]*align-items:start/);
+  assert.match(html, /\.wrp-det\{grid-column:2\/4/);
+  assert.match(html, /👤 가 외 2/);
+  assert.match(html, /class="wrp-it has-d"/);
 });

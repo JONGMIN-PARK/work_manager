@@ -50,7 +50,8 @@ function MwTimeline(o) {
   var s = null;
   try { s = JSON.parse(localStorage.getItem('mtl-' + o.ls) || 'null'); } catch (_) {}
   s = s || {};
-  this.st = { ppd: s.ppd || (_mtlNarrow() ? MWT_PPD.week : MWT_PPD.month), center: s.center || null, collapsed: !!s.collapsed,
+  this.st = { ppd: s.ppd || (_mtlNarrow() ? MWT_PPD.week : MWT_PPD.month), center: s.center || null, collapsed: s.collapsed != null ? !!s.collapsed : _mtlNarrow(),   // 휴대폰은 접힌 채 시작 (직접 펴면 기억, v13.309)
+   
     height: s.height || 260, group: s.group || 'cat', cal: s.cal !== false, link: s.link !== false, calOpen: false };
   this.L = MWT_LABEL;
   this.el = null; this.pick = null; this.hover = null; this.calMonth = null; this.items = []; this.byDay = {};

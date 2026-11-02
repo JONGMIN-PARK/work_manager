@@ -39,6 +39,8 @@ function wmOpenOperator(){
   setPage('project');
 }
 function wmCanSeePatchNotes(){return typeof currentUser!=='undefined'&&!!currentUser&&currentUser.role==='admin'}
+/* 한 줄로 밀어 보는 메뉴에서 단추가 가려져 있으면 가로로만 옮겨 보이게 (세로 스크롤은 건드리지 않음) */
+function wmTabIntoView(t){var p=t&&t.parentElement;if(!p||p.scrollWidth<=p.clientWidth+1)return;var l=t.offsetLeft-p.offsetLeft,r=l+t.offsetWidth;if(l<p.scrollLeft)p.scrollLeft=Math.max(0,l-8);else if(r>p.scrollLeft+p.clientWidth)p.scrollLeft=r-p.clientWidth+8}
 function setPage(page){
   if(page==='patchnotes'&&!wmCanSeePatchNotes())return;  // 패치노트는 관리자만
   if(WM_TEAM_SUB[page]){  // 업무 관리 › 주간 업무 · 업무 부하
@@ -126,6 +128,7 @@ function setMode(m){
   var teamModes=['weekly','archive','trend','weekly_report','workload'];
   var tabBar=teamModes.includes(m)?'#modeTabs':'#modeTabsProj';
   document.querySelectorAll(tabBar+' .tab').forEach(function(t){var sel=t.dataset.m===m;t.classList.toggle('on',sel);t.setAttribute('aria-selected',sel)});
+  wmTabIntoView(document.querySelector(tabBar+' .tab.on'));  // 휴대폰 — 한 줄 메뉴에서 고른 단추가 보이게 (v13.309)
   // 운영자 탭은 사용자 메뉴 ⚙️ 관리로 들어왔을 때만 보임 (v13.288) — 권한은 setPage 가 확인
   var _opTab=document.querySelector('#modeTabsProj .tab[data-m="operator"]');if(_opTab)_opTab.classList.toggle('hidden',m!=='operator');
   var _opItem=document.getElementById('hdrOperatorItem');if(_opItem)_opItem.classList.toggle('on',m==='operator'&&curPage==='project');

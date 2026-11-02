@@ -445,7 +445,7 @@ function _oaRenderOverview(rows) {
     { l: '공수 초과', val: overN, unit: '개', color: overN > 0 ? SEM_COLOR.danger : SEM_COLOR.ok },
     { l: '진척 정체', val: staleN, unit: '개', sub: '최근 ' + _OA_STALE_DAYS + '일', color: staleN > 0 ? '#EC4899' : SEM_COLOR.ok }
   ];
-  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">';
+  h += '<div class="is-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">';
   cards.forEach(function (c) {
     h += '<div class="pnl" style="padding:14px 16px;border-top:3px solid ' + c.color + '">';
     h += '<div style="font-size:10px;color:var(--t5);margin-bottom:6px;font-weight:600">' + _oaEsc(c.l) + '</div>';

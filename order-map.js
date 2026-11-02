@@ -53,6 +53,7 @@ function saveOCmt(orderNo){
 /* ═══ 수주맵 엑셀 불러오기 / 저장하기 ═══ */
 function importOrderExcel(){document.getElementById('orderExcelInput').click()}
 function handleOrderExcel(input){
+  if (typeof wmLibRetry === 'function' && wmLibRetry('xlsx', handleOrderExcel, this, arguments)) return;   // 무거운 도구는 처음 쓸 때 받음 (v13.310)
   var file=input.files[0];if(!file)return;
   var reader=new FileReader();
   reader.onload=function(e){
@@ -172,6 +173,7 @@ function handleOrderExcel(input){
   input.value='';
 }
 function exportOrderExcel(){
+  if (typeof wmLibRetry === 'function' && wmLibRetry('xlsx', exportOrderExcel, this, arguments)) return;   // 무거운 도구는 처음 쓸 때 받음 (v13.310)
   var details=getAllOrderDetails();
   var keys=Object.keys(details).sort();
   if(keys.length===0){

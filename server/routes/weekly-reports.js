@@ -347,8 +347,12 @@ router.get('/stats', async function (req, res) {
     var sql =
       'SELECT id, name, team, week_label, week_start, week_end, parsed->\'stats\' AS stats ' +
       'FROM weekly_reports WHERE ' + where.join(' AND ') +
-      ' ORDER BY week_start ASC NULLS LAST, name ASC';
+      ' ORDER BY week_start ASC NULLS LAST, updated_at ASC NULLS LAST';
     var r = await db.query(sql, params);
+    // 같은 팀 · 주차의 여러 버전(R1, R2 …)은 마지막 것만 — 예전엔 모두 더해 두 번 셌다 (v13.310)
+    var lastOf = {};
+    r.rows.forEach(function (row) { lastOf[(row.team || '') + '|' + String(row.week_start)] = row; });
+    r = { rows: r.rows.filter(function (row) { return lastOf[(row.team || '') + '|' + String(row.week_start)] === row; }) };
 
     var weekly = [];
     var totalByMember = {};
@@ -404,6 +408,23 @@ router.get('/stats', async function (req, res) {
     });
   } catch (e) {
     httpErr.serverError(res, '[weekly-reports/stats]', e);
+  }
+});
+
+// ─── GET /api/weekly-reports/insights — 📈 분석 (v13.310) ───
+// ?team= · ?weeks=12 (최근 N주, 기본 12, 최대 104) 또는 ?from=&to= · ?items=1 이면 일 목록 전체도
+// 같은 팀 · 주차의 여러 버전은 가장 최근 것만 (lib/weekly-insights)
+var weeklyInsights = require('../lib/weekly-insights');
+router.get('/insights', async function (req, res) {
+  try {
+    var rows = await weeklyInsights.load(db, req.tenant.id, req.query);
+    var teamsR = await db.query('SELECT DISTINCT team FROM weekly_reports WHERE tenant_id = $1 AND team IS NOT NULL ORDER BY team', [req.tenant.id]);
+    var out = weeklyInsights.compute(rows, { withItems: req.query.items === '1' });
+    out.teams = teamsR.rows.map(function (t) { return t.team; });
+    if (req.query.text === '1') out.text = weeklyInsights.toText(out);   // ✨ AI 해석용 요약 글
+    res.json({ data: out });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/insights]', e);
   }
 });
 

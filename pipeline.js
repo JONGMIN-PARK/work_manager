@@ -405,6 +405,7 @@ function pipelineLoadAllChecklists() {
 
 /* ═══ 프로젝트 보고서 엑셀 내보내기 ═══ */
 function exportProjectReport() {
+  if (typeof wmLibRetry === 'function' && wmLibRetry('xlsx', exportProjectReport, this, arguments)) return;   // 무거운 도구는 처음 쓸 때 받음 (v13.310)
   var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
   var depts = typeof DEPT !== 'undefined' ? DEPT : {};
   var phaseKeys = Object.keys(phases).sort(function (a, b) { return (phases[a].seq || 0) - (phases[b].seq || 0); });
