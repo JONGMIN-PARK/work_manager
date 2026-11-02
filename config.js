@@ -6,6 +6,11 @@
 /* ═══ 테마 (시인성 강화 — 라이트/다크/하이콘트라스트/특수) ═══ */
 var TH = [
   // g: 🎨 화면 설정 창의 무리 (v13.287) — 같은 무리끼리 붙여 둔다
+  // ✨ 시그니처 (v13.314) — 색만이 아니라 바탕 질감 · 모서리 · 숫자 글씨 · 탭 모양까지. d = 고르는 창의 한 줄 설명
+  { id: 'command',      l: '관제실',       g: '시그니처',   c: 'linear-gradient(135deg,#05080D 55%,#22D3EE)', d: '어두운 격자 · 고정폭 숫자 · 분석용' },
+  { id: 'studio',       l: '스튜디오',      g: '시그니처',   c: 'linear-gradient(135deg,#F4F3EF 55%,#121110)', d: '또렷한 흰 카드 · 잉크 탭 · 차분함' },
+  { id: 'holo',         l: '홀로그램',      g: '시그니처',   c: 'linear-gradient(135deg,#07061A 40%,#8B5CF6 70%,#22D3EE)', d: '흐린 유리 · 빛 번짐 · 미래적' },
+  { id: 'focus',        l: '포커스',       g: '시그니처',   c: 'linear-gradient(135deg,#ECEEF1 55%,#0F766E)', d: '촘촘한 배치 · 표 줄무늬 · 많이 보기' },
   { id: 'auto',         l: '시스템',       g: '자동 · 접근성', c: 'linear-gradient(135deg,#F5F7FA 50%,#0C0F1A 50%)' },
   { id: 'highcontrast', l: '고대비',       g: '자동 · 접근성', c: 'linear-gradient(135deg,#000,#FFF)' },
   { id: 'light',        l: '라이트',       g: '라이트',     c: '#F5F7FA' },

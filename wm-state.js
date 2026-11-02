@@ -3,7 +3,11 @@
 /* ═══ THEME (TH → config.js) ═══ */
 let cTh='auto';
 function gSysTh(){return matchMedia('(prefers-color-scheme:dark)').matches?'midnight':'light'}
-function aTh(id){cTh=id;document.documentElement.setAttribute('data-theme',id==='auto'?gSysTh():id);rTh();lsSet('wa-theme',id);if(_wmFontReady)aFnt(cFnt)}  // 테마별 기본 글씨체(_wmFontFor) 반영 — 폰트 초기화 전(부팅 첫 호출)엔 건너뜀
+function aTh(id,anim){
+  var go=function(){cTh=id;document.documentElement.setAttribute('data-theme',id==='auto'?gSysTh():id);rTh();lsSet('wa-theme',id);if(_wmFontReady)aFnt(cFnt)};
+  // v13.314 고를 때는 부드럽게 넘어가게 (View Transitions 지원 브라우저 · 움직임 줄이기 설정이면 바로)
+  if(anim&&document.startViewTransition&&!matchMedia('(prefers-reduced-motion: reduce)').matches){document.documentElement.setAttribute('data-theme',cTh==='auto'?gSysTh():cTh);document.startViewTransition(go)}else go();
+}  // 테마별 기본 글씨체(_wmFontFor) 반영 — 폰트 초기화 전(부팅 첫 호출)엔 건너뜀
 var _wmFontReady=false;
 /* 🎨 화면 설정 — 테마를 무리(TH.g)별 이름 있는 칸으로. 올리면 미리 보기, 누르면 적용 (v13.287) */
 function rTh(){
@@ -12,8 +16,12 @@ function rTh(){
   var bar=document.getElementById('themeBar');if(!bar)return;
   var html='',g=null;
   TH.forEach(function(t){
-    if(t.g!==g){if(g!==null)html+='</div>';g=t.g;html+='<div class="thg-t">'+(g||'')+'</div><div class="thg">'}
-    html+='<button class="thc'+(cTh===t.id?' on':'')+'" onclick="aTh(\''+t.id+'\')" onmouseenter="wmThPeek(\''+t.id+'\')" onmouseleave="wmThPeek()" title="'+t.l+'"><i class="thd" style="background:'+t.c+'"></i>'+t.l+'</button>';
+    var sig=t.g==='시그니처',dt=t.id==='auto'?gSysTh():t.id;
+    if(t.g!==g){if(g!==null)html+='</div>';g=t.g;html+='<div class="thg-t">'+(sig?'✨ ':'')+(g||'')+'</div><div class="'+(sig?'thsig':'thg')+'">'}
+    var ev=' onclick="aTh(\''+t.id+'\',true)" onmouseenter="wmThPeek(\''+t.id+'\')" onmouseleave="wmThPeek()"';
+    // v13.314 미리보기 — 카드(칩)에 그 테마를 붙여 그 테마 색 · 모양으로 칠함
+    if(sig)html+='<button class="thx'+(cTh===t.id?' on':'')+'" data-theme="'+dt+'"'+ev+' title="'+t.l+' — '+(t.d||'')+'"><span class="thx-pv"><i></i><b></b><em></em><s></s></span><span class="thx-tx"><b>'+t.l+'</b><span>'+(t.d||'')+'</span></span></button>';
+    else html+='<button class="thc'+(cTh===t.id?' on':'')+'"'+ev+' title="'+t.l+'"><i class="thd" data-theme="'+dt+'"></i>'+t.l+'</button>';
   });
   bar.innerHTML=html+(g!==null?'</div>':'');
 }
@@ -25,7 +33,7 @@ aTh(cTh);matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=
 let cFnt='noto';
 /* 테마별 기본 글씨체 — 기본(노토)을 고른 상태에서 글래스 테마면 프리텐다드(흐린 배경에서 작은 글자가 더 또렷).
    사용자가 노토 외 글씨체를 직접 고르면 그대로. 저장값(wa-font)은 고른 글씨체 id 그대로 둔다 */
-function _wmFontFor(id){ return (id==='noto' && document.documentElement.getAttribute('data-theme')==='glass') ? 'pretendard' : id; }
+function _wmFontFor(id){ return (id==='noto' && /^(glass|studio|holo|focus|command)$/.test(document.documentElement.getAttribute('data-theme')||'')) ? 'pretendard' : id; }   // v13.314 시그니처도 프리텐다드
 function aFnt(id){
   var FF = (typeof FONTS!=='undefined')?FONTS:[];
   var chosen = FF.find(function(x){return x.id===id}) || FF[0];
