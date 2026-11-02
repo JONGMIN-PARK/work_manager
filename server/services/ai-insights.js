@@ -152,7 +152,7 @@ async function computeInsights(actor) {
   // 10) 주간 업무 보고 경과 (관리자 — 주간 보고는 관리자 화면, v13.310) — 보고서를 주를 넘어 이어 붙여 본 납기 지남 · 정체 · 뒤처짐
   if (actor.role === 'admin') await safe('weekly-report', async function () {
     var wi = require('../lib/weekly-insights');
-    var w = wi.compute(await wi.load(db, actor.tenantId, { weeks: 8 }));
+    var w = wi.compute(await wi.load(db, actor.tenantId, { weeks: 8 }), { links: await wi.loadLinks(db, actor.tenantId) });
     if (!w.weekly.length) return;
     var bad = w.risks.overdue.concat(w.risks.stalled, w.risks.atRisk);
     if (!bad.length) return;

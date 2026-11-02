@@ -415,16 +415,134 @@ router.get('/stats', async function (req, res) {
 // ?team= · ?weeks=12 (최근 N주, 기본 12, 최대 104) 또는 ?from=&to= · ?items=1 이면 일 목록 전체도
 // 같은 팀 · 주차의 여러 버전은 가장 최근 것만 (lib/weekly-insights)
 var weeklyInsights = require('../lib/weekly-insights');
+/* v13.311 손으로 묶고 나눈 것 · 목표 (lib — AI 도구 · 살펴볼 것 카드도 같은 것을 씀) */
+function loadLinks(tenantId) { return weeklyInsights.loadLinks(db, tenantId); }
+function loadGoals(tenantId, team) { return weeklyInsights.loadGoals(db, tenantId, team); }
+
 router.get('/insights', async function (req, res) {
   try {
     var rows = await weeklyInsights.load(db, req.tenant.id, req.query);
     var teamsR = await db.query('SELECT DISTINCT team FROM weekly_reports WHERE tenant_id = $1 AND team IS NOT NULL ORDER BY team', [req.tenant.id]);
-    var out = weeklyInsights.compute(rows, { withItems: req.query.items === '1' });
+    var links = await loadLinks(req.tenant.id);
+    var goals = await loadGoals(req.tenant.id, req.query.team);
+    var out = weeklyInsights.compute(rows, { withItems: req.query.items === '1', links: links, goals: goals });
     out.teams = teamsR.rows.map(function (t) { return t.team; });
     if (req.query.text === '1') out.text = weeklyInsights.toText(out);   // ✨ AI 해석용 요약 글
     res.json({ data: out });
   } catch (e) {
     httpErr.serverError(res, '[weekly-reports/insights]', e);
+  }
+});
+
+// ─── GET /api/weekly-reports/insights/item?key=&team=&weeks= — 일 하나의 주별 경과 (v13.311) ───
+router.get('/insights/item', async function (req, res) {
+  try {
+    var key = String(req.query.key || '');
+    if (!key) return res.status(400).json({ error: 'VALIDATION', message: 'key 가 필요합니다.' });
+    var q = Object.assign({}, req.query, { team: req.query.team || key.split('|')[0] });
+    if (!q.from && !q.to) q.weeks = Math.max(parseInt(q.weeks, 10) || 0, 26);   // 경과는 넉넉히 반년
+    var rows = await weeklyInsights.load(db, req.tenant.id, q);
+    var out = weeklyInsights.compute(rows, { links: await loadLinks(req.tenant.id), histKey: key });
+    if (!out.item) return res.status(404).json({ error: 'NOT_FOUND', message: '이 기간에 그 일이 없습니다.' });
+    res.json({ data: out.item });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/insights/item]', e);
+  }
+});
+
+// ─── POST /api/weekly-reports/item-links — 같은 일 묶기 · 나누기 · 되돌리기 (v13.311) ───
+// { kind:'merge', keys:[…], target } · { kind:'split', key } · { kind:'reset', key }
+router.post('/item-links', async function (req, res) {
+  try {
+    var b = req.body || {}, uid = req.user && req.user.id || null;
+    function okKey(k) { return typeof k === 'string' && k.length > 2 && k.length <= 400 && k.indexOf('|') > 0; }
+    if (b.kind === 'merge') {
+      var keys = (Array.isArray(b.keys) ? b.keys : []).filter(okKey);
+      if (!okKey(b.target) || !keys.length) return res.status(400).json({ error: 'VALIDATION', message: '묶을 일을 두 개 이상 고르세요.' });
+      keys = keys.filter(function (k) { return k !== b.target; });
+      if (!keys.length) return res.status(400).json({ error: 'VALIDATION', message: '묶을 일을 두 개 이상 고르세요.' });
+      await db.query('DELETE FROM weekly_item_links WHERE tenant_id = $1 AND item_key = $2', [req.tenant.id, b.target]);   // 기준 일은 다른 데로 묶이지 않게
+      for (var i = 0; i < keys.length; i++) {
+        await db.query(
+          "INSERT INTO weekly_item_links (tenant_id, item_key, kind, target_key, created_by) VALUES ($1, $2, 'merge', $3, $4) " +
+          "ON CONFLICT (tenant_id, item_key) DO UPDATE SET kind = 'merge', target_key = EXCLUDED.target_key, created_by = EXCLUDED.created_by, created_at = now()",
+          [req.tenant.id, keys[i], b.target, uid]);
+        // 이 일로 묶여 있던 것들도 새 기준으로 (고리 방지)
+        await db.query("UPDATE weekly_item_links SET target_key = $3 WHERE tenant_id = $1 AND kind = 'merge' AND target_key = $2", [req.tenant.id, keys[i], b.target]);
+      }
+      return res.json({ data: { merged: keys.length, target: b.target } });
+    }
+    if (b.kind === 'split' || b.kind === 'reset') {
+      if (!okKey(b.key)) return res.status(400).json({ error: 'VALIDATION', message: 'key 가 필요합니다.' });
+      if (b.kind === 'reset') await db.query('DELETE FROM weekly_item_links WHERE tenant_id = $1 AND item_key = $2', [req.tenant.id, b.key]);
+      else await db.query(
+        "INSERT INTO weekly_item_links (tenant_id, item_key, kind, target_key, created_by) VALUES ($1, $2, 'split', NULL, $3) " +
+        "ON CONFLICT (tenant_id, item_key) DO UPDATE SET kind = 'split', target_key = NULL, created_by = EXCLUDED.created_by, created_at = now()",
+        [req.tenant.id, b.key, uid]);
+      return res.json({ data: { kind: b.kind, key: b.key } });
+    }
+    res.status(400).json({ error: 'VALIDATION', message: 'kind 는 merge · split · reset' });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/item-links]', e);
+  }
+});
+
+// ─── GET/PUT /api/weekly-reports/goals?team= — 목표 (v13.311) ───
+router.get('/goals', async function (req, res) {
+  try {
+    res.json({ data: await loadGoals(req.tenant.id, req.query.team), metrics: weeklyInsights.GOAL_METRICS });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/goals]', e);
+  }
+});
+// { team, goals:[{ member, metric, target }] } — 그 팀의 목표를 통째로 바꾼다 (빈 목록 = 모두 지움)
+router.put('/goals', async function (req, res) {
+  try {
+    var b = req.body || {}, team = String(b.team || '').slice(0, 100);
+    var list = Array.isArray(b.goals) ? b.goals : [];
+    if (list.length > 100) return res.status(400).json({ error: 'VALIDATION', message: '목표가 너무 많습니다.' });
+    var seen = {}, clean = [];
+    for (var i = 0; i < list.length; i++) {
+      var g = list[i] || {}, def = weeklyInsights.GOAL_METRICS[g.metric], member = String(g.member || '').trim().slice(0, 60), t = Number(g.target);
+      if (!def) return res.status(400).json({ error: 'VALIDATION', message: '모르는 목표 항목: ' + g.metric });
+      if (member && !def.member) return res.status(400).json({ error: 'VALIDATION', message: def.label + ' 은(는) 팀 목표로만 정할 수 있습니다.' });
+      if (g.target === '' || g.target == null || !isFinite(t) || t < 0 || t > 10000) return res.status(400).json({ error: 'VALIDATION', message: def.label + ' 목표값을 확인하세요.' });
+      if (def.unit === '%' && t > 100) return res.status(400).json({ error: 'VALIDATION', message: def.label + ' 은(는) 100% 이하로.' });
+      var k = member + '|' + g.metric;
+      if (seen[k]) continue;
+      seen[k] = true; clean.push({ member: member, metric: g.metric, target: t });
+    }
+    await db.transaction(async function (client) {
+      await client.query('DELETE FROM weekly_goals WHERE tenant_id = $1 AND team = $2', [req.tenant.id, team]);
+      for (var j = 0; j < clean.length; j++) {
+        await client.query('INSERT INTO weekly_goals (tenant_id, team, member, metric, target, updated_by) VALUES ($1, $2, $3, $4, $5, $6)',
+          [req.tenant.id, team, clean[j].member, clean[j].metric, clean[j].target, req.user && req.user.id || null]);
+      }
+    });
+    res.json({ data: clean });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/goals/put]', e);
+  }
+});
+
+// ─── POST /api/weekly-reports/check — 작성 중 점검 (v13.311) ───
+// { team, weekStart, lastText, curText } → 지난 보고서에 있던 일이 빠짐 · 납기 지남 · 정체 · 연기 · 납기/담당 없음
+router.post('/check', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var team = String(b.team || '').trim(), ws = String(b.weekStart || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ws)) return res.status(400).json({ error: 'VALIDATION', message: '주차(weekStart)가 필요합니다.' });
+    if (String(b.lastText || '').length + String(b.curText || '').length > 200000) return res.status(413).json({ error: 'TOO_LARGE', message: '내용이 너무 깁니다.' });
+    var mon = new Date(ws + 'T00:00:00Z'); mon.setUTCDate(mon.getUTCDate() - ((mon.getUTCDay() + 6) % 7));
+    var W = mon.toISOString().slice(0, 10);
+    var before = new Date(mon.getTime() - 86400000).toISOString().slice(0, 10);
+    var from = new Date(mon.getTime() - 56 * 86400000).toISOString().slice(0, 10);
+    var rows = team ? await weeklyInsights.load(db, req.tenant.id, { team: team, from: from, to: before }) : [];
+    var parsed = parser.buildParsed({ lastText: b.lastText || '', curText: b.curText || '' });
+    var out = weeklyInsights.check(rows, { team: team, week_start: W, parsed: { last: parsed.last, cur: parsed.cur } }, { links: await loadLinks(req.tenant.id) });
+    res.json({ data: out });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/check]', e);
   }
 });
 

@@ -496,12 +496,12 @@
   function td(html) { return '<td>' + html + '</td>'; }
 
   /* ─── 📈 분석 (v13.310) — 보고서를 주를 넘어 이어 붙여 추세 · 경과 · 효율 · 목표 (server/lib/weekly-insights) ─── */
-  var WRI = { weeks: 12, team: '', risk: 'overdue', data: null };
+  var WRI = { weeks: 12, team: '', risk: 'overdue', data: null, q: '', sel: {} };
   var WRI_STATE = {
     done: ['✅', '완료', '#1a8a40'], done_late: ['✅', '늦게 완료', '#c8730a'], overdue: ['⛔', '납기 지남', '#d21f1f'],
     at_risk: ['⚠️', '뒤처짐', '#c8730a'], stalled: ['⏸', '정체', '#7c5cff'], on_track: ['🟢', '순조', '#1a8a40'], open: ['•', '진행', 'var(--t5)'], dropped: ['❔', '사라짐', 'var(--t5)']
   };
-  var WRI_RISK = [['overdue', '⛔ 납기 지남'], ['atRisk', '⚠️ 뒤처짐'], ['stalled', '⏸ 정체'], ['slipped', '📅 납기 연기'], ['dropped', '❔ 사라짐']];
+  var WRI_RISK = [['overdue', '⛔ 납기 지남'], ['atRisk', '⚠️ 뒤처짐'], ['stalled', '⏸ 정체'], ['slipped', '📅 납기 연기'], ['dropped', '❔ 사라짐'], ['all', '📋 모든 일']];
 
   function renderStats() {
     $('wrPanel').innerHTML = ''
@@ -541,7 +541,9 @@
         box.innerHTML = '<div class="wr-msg wr-box">이 기간에 저장된 주간 보고가 없습니다 — 기간을 늘리거나 ✍️ 작성 · 📤 업로드로 보고서를 넣어 주세요</div>';
         return;
       }
+      WRI.sel = {};
       box.innerHTML = insightHtml(d);
+      var ge = $('wriGoalEdit'); if (ge) ge.addEventListener('click', openGoalEditor);
       box.querySelectorAll('[data-risk]').forEach(function (b) {
         b.addEventListener('click', function () {
           WRI.risk = b.dataset.risk;
@@ -560,6 +562,210 @@
     el.querySelectorAll('[data-rt]').forEach(function (b) {
       b.addEventListener('click', function () { WRI.risk = b.dataset.rt; el.outerHTML = riskHtml(WRI.data); bindRiskTabs(); });
     });
+    // 일 누르기 → 주별 경과 (v13.311)
+    el.querySelectorAll('.wri-ri[data-key]').forEach(function (r) {
+      r.addEventListener('click', function (e) { if (e.target.closest('input,button,label')) return; openItemHistory(r.dataset.key); });
+    });
+    var q = $('wriQ');
+    if (q) q.addEventListener('input', function () {
+      WRI.q = q.value; var pos = q.selectionStart;
+      var box = $('wriRisk'); box.outerHTML = riskHtml(WRI.data); bindRiskTabs();
+      var q2 = $('wriQ'); if (q2) { q2.focus(); try { q2.setSelectionRange(pos, pos); } catch (x) {} }
+    });
+    el.querySelectorAll('input[data-sel]').forEach(function (c) {
+      c.addEventListener('change', function () { if (c.checked) WRI.sel[c.dataset.sel] = true; else delete WRI.sel[c.dataset.sel]; drawMergeBar(); });
+    });
+    var mb = $('wriMerge'); if (mb) mb.addEventListener('click', mergeSelected);
+    var mc = $('wriMergeClr'); if (mc) mc.addEventListener('click', function () { WRI.sel = {}; el.querySelectorAll('input[data-sel]').forEach(function (c) { c.checked = false; }); drawMergeBar(); });
+    drawMergeBar();
+  }
+  function drawMergeBar() {
+    var bar = $('wriMergeBar'); if (!bar) return;
+    var n = Object.keys(WRI.sel).length;
+    bar.hidden = n < 1;
+    var t = $('wriMergeN'); if (t) t.textContent = n + '개 고름' + (n < 2 ? ' — 하나 더 고르세요' : '');
+    var mb = $('wriMerge'); if (mb) mb.disabled = n < 2;
+  }
+  /* 같은 일로 묶기 — 가장 먼저 나온 일을 기준으로, 나머지(자동으로 이어 붙은 이름까지)를 그쪽으로 */
+  async function mergeSelected() {
+    var d = WRI.data; if (!d || !d.items) return;
+    var picked = d.items.filter(function (i) { return WRI.sel[i.key]; });
+    if (picked.length < 2) return;
+    if (picked.some(function (i) { return i.team !== picked[0].team; })) { if (typeof showToast === 'function') showToast('같은 팀의 일끼리만 묶을 수 있습니다', 'warn'); return; }
+    picked.sort(function (a, b) { return a.firstWeek < b.firstWeek ? -1 : a.firstWeek > b.firstWeek ? 1 : 0; });
+    var target = picked[0], keys = [];
+    picked.slice(1).forEach(function (i) { (i.variants || [{ key: i.key }]).forEach(function (v) { keys.push(v.key); }); });
+    if (!confirm('아래 ' + picked.length + '개를 같은 일로 셉니다 (경과가 이어지고 납기 연기도 셈)\n\n' + picked.map(function (i) { return '· [' + i.client + '] ' + i.name + ' (' + i.firstWeek.slice(5) + '~)'; }).join('\n') + '\n\n나중에 일을 눌러 [따로 세기]로 되돌릴 수 있습니다.')) return;
+    try {
+      await apiFetch('/api/weekly-reports/item-links', { method: 'POST', body: JSON.stringify({ kind: 'merge', keys: keys, target: target.key }) });
+      if (typeof showToast === 'function') showToast('🔗 같은 일로 묶었습니다', 'ok');
+      WRI.sel = {};
+      runStats();
+    } catch (e) { if (typeof showToast === 'function') showToast('묶기 실패: ' + ((e && e.data && e.data.message) || e.message || e), 'error'); }
+  }
+
+  /* ─── 🎯 목표 (v13.311) — 정해 둔 값과 이 기간 실적 ─── */
+  var WRI_METRICS = {
+    throughput: ['주당 끝낸 일', '건', 'ge', true], completionRate: ['완료율 (최근 4주 평균)', '%', 'ge', false], onTimeRate: ['기한 안 완료율', '%', 'ge', true],
+    cycle: ['끝내는 데 걸린 주 (평균)', '주', 'le', true], overdue: ['납기 지난 일', '건', 'le', true], stalled: ['정체된 일', '건', 'le', true], active: ['동시에 진행 중', '건', 'le', true]
+  };
+  function goalHtml(d) {
+    var gs = d.goals || [];
+    var h = '<div class="wr-card wri-sec" id="wriGoals"><div class="wri-h">🎯 목표 <span class="wri-ks">' + esc(WRI.team || '모든 팀') + ' · 이 기간 실적과 비교</span>'
+      + '<button class="btn btn-g btn-s wri-gedit" id="wriGoalEdit" type="button">✏️ 목표 정하기</button></div>';
+    if (!gs.length) return h + '<div class="wri-ks">주당 끝낼 일 · 기한 안 완료율 · 한 사람이 동시에 맡을 일 수 같은 목표를 정해 두면 여기서 실적과 비교합니다.</div></div>';
+    var okN = gs.filter(function (g) { return g.ok; }).length;
+    h = h.replace('이 기간 실적과 비교</span>', '이 기간 실적과 비교 · 달성 ' + okN + '/' + gs.length + '</span>');
+    return h + '<div class="wri-goals">' + gs.map(function (g) {
+      var col = g.ok == null ? 'var(--t5)' : g.ok ? '#1a8a40' : g.ratio >= 80 ? '#c8730a' : '#d21f1f';
+      return '<div class="wri-g"><div class="wri-g1"><span class="wri-gl">' + (g.member ? '👤 ' + esc(g.member) + ' · ' : '') + esc(g.label) + '</span>'
+        + '<b style="color:' + col + '">' + (g.actual == null ? '-' : esc(String(g.actual)) + g.unit) + '</b>'
+        + '<span class="wri-ks">목표 ' + (g.dir === 'ge' ? '≥ ' : '≤ ') + esc(String(g.target)) + g.unit + (g.ok == null ? '' : g.ok ? ' ✅' : ' ❌') + '</span></div>'
+        + '<div class="wri-gbar"><i style="width:' + (g.ratio || 0) + '%;background:' + col + '"></i></div></div>';
+    }).join('') + '</div></div>';
+  }
+  function openGoalEditor() {
+    var d = WRI.data || {};
+    var members = (d.byMember || []).map(function (m) { return m.key; }).filter(function (k) { return k && k !== '(담당 없음)'; });
+    var rows = (d.goals || []).map(function (g) { return { member: g.member, metric: g.metric, target: g.target }; });
+    if (!rows.length) rows = [{ member: '', metric: 'throughput', target: '' }, { member: '', metric: 'onTimeRate', target: 80 }];
+    return wmGuardedModal('wriGoals', function () {
+      var m = createModal({ id: 'wriGoalModal', title: '🎯 목표 정하기 — ' + esc(WRI.team || '모든 팀'), width: '560px', closeOnEsc: true,
+        html: '<div class="wri-ks" style="margin:-6px 0 8px">분석 탭에서 고른 기간의 실적과 비교합니다. 팀을 바꾸면 그 팀 목표를 따로 정합니다.</div>'
+          + '<div id="wriGoalRows" class="wri-grs"></div>'
+          + '<button type="button" class="btn btn-g btn-s" id="wriGoalAdd">＋ 목표 추가</button>'
+          + '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:12px"><button type="button" class="btn btn-g" id="wriGoalCancel">취소</button><button type="button" class="wm-pri" id="wriGoalSave">💾 저장</button></div>' });
+      function rowHtml(g, i) {
+        var mem = '<select data-f="member" class="wr-inp"><option value="">팀 전체</option>' + members.concat(g.member && members.indexOf(g.member) < 0 ? [g.member] : []).map(function (n) { return '<option' + (n === g.member ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
+        var met = '<select data-f="metric" class="wr-inp">' + Object.keys(WRI_METRICS).map(function (k) { var x = WRI_METRICS[k]; return '<option value="' + k + '"' + (k === g.metric ? ' selected' : '') + (g.member && !x[3] ? ' disabled' : '') + '>' + x[0] + '</option>'; }).join('') + '</select>';
+        var u = WRI_METRICS[g.metric] || WRI_METRICS.throughput;
+        return '<div class="wri-gr" data-i="' + i + '">' + mem + met + '<span class="wri-gv"><span class="wri-gop">' + (u[2] === 'ge' ? '≥' : '≤') + '</span>'
+          + '<input data-f="target" class="wr-inp" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.target === '' || g.target == null ? '' : String(g.target)) + '"><span class="wri-gu">' + u[1] + '</span>'
+          + '<button type="button" class="btn btn-g btn-s" data-del="' + i + '" title="빼기">✕</button></span></div>';
+      }
+      function read() {
+        rows = [].map.call(document.querySelectorAll('#wriGoalRows .wri-gr'), function (r) {
+          return { member: r.querySelector('[data-f=member]').value, metric: r.querySelector('[data-f=metric]').value, target: r.querySelector('[data-f=target]').value };
+        });
+      }
+      function draw() {
+        var box = $('wriGoalRows'); if (!box) return;
+        box.innerHTML = rows.length ? rows.map(rowHtml).join('') : '<div class="wri-ks">목표가 없습니다 — 저장하면 모두 지웁니다</div>';
+        box.querySelectorAll('select').forEach(function (s) { s.addEventListener('change', function () { read(); if (s.dataset.f === 'member' && s.value) rows.forEach(function (r) { if (r.member && WRI_METRICS[r.metric] && !WRI_METRICS[r.metric][3]) r.metric = 'throughput'; }); draw(); }); });
+        box.querySelectorAll('[data-del]').forEach(function (b) { b.addEventListener('click', function () { read(); rows.splice(+b.dataset.del, 1); draw(); }); });
+      }
+      draw();
+      $('wriGoalAdd').addEventListener('click', function () { read(); rows.push({ member: '', metric: 'throughput', target: '' }); draw(); });
+      $('wriGoalCancel').addEventListener('click', m.close);
+      $('wriGoalSave').addEventListener('click', async function () {
+        read();
+        var list = rows.filter(function (r) { return String(r.target).trim() !== ''; });
+        var b = this; b.disabled = true;
+        try {
+          await apiFetch('/api/weekly-reports/goals', { method: 'PUT', body: JSON.stringify({ team: WRI.team || '', goals: list }) });
+          m.close();
+          if (typeof showToast === 'function') showToast('🎯 목표 저장', 'ok');
+          runStats();
+        } catch (e) {
+          b.disabled = false;
+          if (typeof showToast === 'function') showToast('저장 실패: ' + ((e && e.data && e.data.message) || e.message || e), 'error');
+        }
+      });
+    }, 'wriGoalModal');
+  }
+
+  /* ─── 일 하나의 주별 경과 (v13.311) — 이름 · 진행률 · 납기 · 세부가 주마다 어떻게 바뀌었나 ─── */
+  function openItemHistory(key) {
+    return wmGuardedModal('wriItem', async function () {
+      var r = await apiFetch('/api/weekly-reports/insights/item?key=' + encodeURIComponent(key) + '&weeks=' + Math.max(WRI.weeks, 26));
+      var it = r.data;
+      var st = WRI_STATE[it.state] || WRI_STATE.open;
+      var m = createModal({ id: 'wriItemModal', width: '760px', closeOnEsc: true, closeOnOverlay: true,
+        title: '<span style="color:' + st[2] + ';font-size:12px">' + st[0] + ' ' + st[1] + '</span> <b>' + esc(it.client) + '</b> ' + esc(it.name),
+        html: itemHistHtml(it) });
+      m.box.querySelectorAll('[data-lk]').forEach(function (b) {
+        b.addEventListener('click', async function () {
+          var kind = b.dataset.lk, k = b.dataset.k;
+          if (kind === 'split' && !confirm('[' + (b.dataset.n || '') + '] 을(를) 이 일과 따로 셉니다. 계속할까요?')) return;
+          try {
+            await apiFetch('/api/weekly-reports/item-links', { method: 'POST', body: JSON.stringify({ kind: kind, key: k }) });
+            m.close();
+            if (typeof showToast === 'function') showToast(kind === 'split' ? '✂ 따로 셉니다' : '↺ 자동 잇기로 되돌렸습니다', 'ok');
+            runStats();
+          } catch (e) { if (typeof showToast === 'function') showToast('실패: ' + ((e && e.data && e.data.message) || e.message || e), 'error'); }
+        });
+      });
+    }, 'wriItemModal');
+  }
+  function itemHistHtml(it) {
+    function md(s) { return s ? s.slice(5).replace('-', '/') : '-'; }
+    var dl = it.deadline ? (it.deadlineFirst && it.deadlineFirst !== it.deadline ? '<s>' + md(it.deadlineFirst) + '</s> → ' : '') + md(it.deadline) : '-';
+    var h = '<div class="wri-ih">'
+      + '<span>👤 ' + esc(it.members.join(' · ') || '-') + '</span><span>📅 ' + dl + (it.slips ? ' <em>연기 ' + it.slips + '번</em>' : '') + '</span>'
+      + '<span>⏱ ' + md(it.firstWeek) + ' ~ ' + md(it.lastWeek) + ' · ' + it.weeks + '주' + (it.cycleWeeks ? ' · ' + it.cycleWeeks + '주 만에 끝냄' : '') + '</span>'
+      + '<span>' + esc(it.sectionLabel) + '</span>'
+      + (it.expected != null && !it.doneWeek ? '<span>진행률 ' + (it.pct == null ? '-' : it.pct + '%') + ' · 일정상 ' + it.expected + '%</span>' : '') + '</div>';
+    h += histChart(it);
+    var prev = null;
+    h += '<div class="wri-hl">' + it.hist.map(function (x) {
+      var chg = [];
+      if (prev) {
+        if (x.name !== prev.name || x.client !== prev.client) chg.push('이름 바뀜');
+        if (x.deadline && prev.deadline && x.deadline !== prev.deadline) chg.push('납기 ' + esc(prev.deadline) + ' → ' + esc(x.deadline));
+        if (x.pct != null && prev.pct != null && x.pct === prev.pct && x.status !== 'done') chg.push('진행률 그대로');
+      }
+      prev = x;
+      var row = '<div class="wri-hr"><div class="wri-hw">' + md(x.w) + '<span>' + (x.kind === 'result' ? '결과' : '계획') + '</span></div><div class="wri-hb">'
+        + '<div class="wri-h1">' + iconSlot(statusIcon(x.status === 'none' ? 'planned' : x.status)) + '<span class="wri-hn">' + esc(x.name) + '</span>'
+        + (x.pct != null ? pctBadge(x.pct) : '') + (x.deadline ? '<span class="wri-hd">' + esc(x.deadline) + '</span>' : '')
+        + (x.members.length ? '<span class="wri-hm">@' + esc(x.members.join(' @')) + '</span>' : '') + '</div>'
+        + (chg.length ? '<div class="wri-hc">' + chg.map(function (c) { return '<em>' + c + '</em>'; }).join('') + '</div>' : '')
+        + (x.details.length ? '<ul class="wri-hdt">' + x.details.map(function (dd) { return '<li>' + esc(dd.text) + (dd.status === 'done' ? ' ✓' : '') + '</li>'; }).join('') + '</ul>' : '')
+        + '</div></div>';
+      return row;
+    }).reverse().join('') + '</div>';
+    // 이어 붙인 이름 · 묶기 / 나누기
+    var v = it.variants || [];
+    if (v.length > 1 || it.split) {
+      h += '<div class="wri-vs"><div class="wri-h" style="font-size:12px">🔗 이 일로 센 이름 ' + (it.linked === 'manual' ? '<span class="wri-ks">손으로 묶음 포함</span>' : it.linked === 'auto' ? '<span class="wri-ks">이름이 비슷해서 자동으로 이음</span>' : '') + '</div>';
+      v.forEach(function (x) {
+        h += '<div class="wri-v"><span>' + esc(x.name) + (x.key === it.key ? ' <span class="wri-ks">(기준)</span>' : '') + '</span>'
+          + (x.key === it.key ? '' : '<button type="button" class="btn btn-g btn-s" data-lk="split" data-k="' + esc(x.key) + '" data-n="' + esc(x.name) + '">✂ 따로 세기</button>') + '</div>';
+      });
+      if (it.split) h += '<div class="wri-v"><span class="wri-ks">이 일은 비슷한 이름과 잇지 않고 따로 셉니다</span><button type="button" class="btn btn-g btn-s" data-lk="reset" data-k="' + esc(it.key) + '">↺ 자동 잇기로</button></div>';
+      h += '</div>';
+    } else {
+      h += '<div class="wri-ks" style="margin-top:8px">이름을 크게 바꿔 다른 일로 세어졌다면 — 📋 모든 일 탭에서 두 일을 골라 [🔗 같은 일로 묶기]</div>';
+    }
+    return h;
+  }
+  /* 경과 그림 — 진행률(실선) · 일정상 진행률(점선) · 납기 바뀐 주 */
+  function histChart(it) {
+    var hs = it.hist.filter(function (x) { return x.pct != null; });
+    if (hs.length < 2) return '';
+    var W = 680, H = 110, L = 28, R = 8, T = 8, B = 20, n = it.hist.length, cw = W - L - R, ch = H - T - B;
+    function xOf(i) { return L + (n === 1 ? cw / 2 : i / (n - 1) * cw); }
+    function yOf(p) { return T + ch - p / 100 * ch; }
+    var s = '<div class="wri-chart"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="max-width:' + W + 'px;height:auto">';
+    [0, 50, 100].forEach(function (g) { s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + yOf(g) + '" y2="' + yOf(g) + '" stroke="var(--bd)" stroke-dasharray="3 3"/><text x="' + (L - 4) + '" y="' + (yOf(g) + 3) + '" font-size="9" text-anchor="end" fill="var(--t5)">' + g + '</text>'; });
+    var pts = [];
+    it.hist.forEach(function (x, i) {
+      if (x.pct != null) pts.push(xOf(i).toFixed(1) + ',' + yOf(x.pct).toFixed(1));
+      s += '<text x="' + xOf(i).toFixed(1) + '" y="' + (H - 6) + '" font-size="9" text-anchor="' + (i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle') + '" fill="var(--t5)">' + x.w.slice(5).replace('-', '/') + '</text>';
+    });
+    // 일정상 — 처음 주 0% 에서 마지막 납기 100% 까지 곧게
+    if (it.deadline && it.firstWeek < it.deadline) {
+      var t0 = Date.parse(it.firstWeek), span = Date.parse(it.deadline) - t0;
+      var ep = it.hist.map(function (x, i) { return xOf(i).toFixed(1) + ',' + yOf(Math.max(0, Math.min(100, (Date.parse(x.w) - t0) / span * 100))).toFixed(1); });
+      s += '<polyline points="' + ep.join(' ') + '" fill="none" stroke="#c8730a" stroke-width="1.4" stroke-dasharray="4 3"><title>일정상 진행률</title></polyline>';
+    }
+    (it.dlHist || []).slice(1).forEach(function (dh) {
+      var i = it.hist.map(function (x) { return x.w; }).indexOf(dh.w); if (i < 0) return;
+      s += '<line x1="' + xOf(i) + '" x2="' + xOf(i) + '" y1="' + T + '" y2="' + (T + ch) + '" stroke="#d21f1f" stroke-width="1" opacity=".5"><title>납기 → ' + dh.d + '</title></line>';
+    });
+    s += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="var(--ac)" stroke-width="2.2"/>';
+    pts.forEach(function (p) { var xy = p.split(','); s += '<circle cx="' + xy[0] + '" cy="' + xy[1] + '" r="2.6" fill="var(--ac)"/>'; });
+    return s + '</svg></div><div class="wri-ks">실선 = 진행률 · 주황 점선 = 일정상(처음 본 주 → 납기) · 빨간 세로선 = 납기 바뀐 주</div>';
   }
 
   function kpiTile(label, val, sub, color, risk) {
@@ -581,13 +787,14 @@
       + kpiTile('정체', k.stalled, '3주째 그대로', k.stalled ? '#7c5cff' : '', 'stalled')
       + kpiTile('납기 연기', k.slipped, k.slipsTotal ? '모두 ' + k.slipsTotal + '번' : '', k.slipped ? '#c8730a' : '', 'slipped')
       + '</div>';
+    h += goalHtml(d);
     if (d.findings && d.findings.length) {
       var dot = { risk: '#d21f1f', warn: '#c8730a', good: '#1a8a40', info: 'var(--t5)' };
       h += '<div class="wr-card wri-sec"><div class="wri-h">🔎 결론</div><ul class="wri-find">'
         + d.findings.map(function (f) { return '<li><span style="background:' + (dot[f.level] || dot.info) + '"></span>' + esc(f.text) + '</li>'; }).join('')
         + '</ul><div id="wriAiOut"></div></div>';
     } else h += '<div id="wriAiOut"></div>';
-    h += '<div class="wr-card wri-sec"><div class="wri-h">📊 주별 추세 <span class="wri-legend"><i style="background:#1a8a40"></i>완료 <i style="background:#d21f1f"></i>진행 <i style="background:#8fa7d8"></i>예정 <i class="ln"></i>완료율</span></div>' + trendSvg(d.weekly) + '</div>';
+    h += '<div class="wr-card wri-sec"><div class="wri-h">📊 주별 추세 <span class="wri-legend"><i style="background:#1a8a40"></i>완료 <i style="background:#d21f1f"></i>진행 <i style="background:#8fa7d8"></i>예정 <i class="ln"></i>완료율' + (goalRate(d) != null ? ' <i class="ln gl"></i>목표' : '') + '</span></div>' + trendSvg(d.weekly, goalRate(d)) + '</div>';
     h += riskHtml(d);
     h += '<div class="wr-card wri-sec"><div class="wri-h">👤 사람별 효율</div><div class="wr-tbl-wrap"><table class="wr-tbl wri-tbl"><thead><tr>'
       + ['담당', '전체', '끝냄', '진행', '지남', '정체', '뒤처짐', '끝내는 데', '기한 안', '주당'].map(th).join('') + '</tr></thead><tbody>'
@@ -610,21 +817,38 @@
     }).join('') + '<div class="wri-ks" style="margin-top:4px">진한 색 = 끝낸 일 · 숫자 = 끝냄/전체 · 끝내는 데 걸린 평균 주</div></div>';
   }
 
+  function goalRate(d) {
+    var g = (d.goals || []).filter(function (x) { return x.metric === 'completionRate' && !x.member; })[0];
+    return g ? g.target : null;
+  }
+  function riskList(d) {
+    if (WRI.risk !== 'all') return d.risks[WRI.risk] || [];
+    var q = String(WRI.q || '').trim().toLowerCase();
+    var ord = { overdue: 0, at_risk: 1, stalled: 2, on_track: 3, open: 4, dropped: 5, done_late: 6, done: 7 };
+    return (d.items || []).filter(function (i) { return !q || (i.client + ' ' + i.name + ' ' + i.members.join(' ')).toLowerCase().indexOf(q) >= 0; })
+      .sort(function (a, b) { return (ord[a.state] - ord[b.state]) || (a.lastWeek < b.lastWeek ? 1 : a.lastWeek > b.lastWeek ? -1 : 0); });
+  }
   function riskHtml(d) {
-    var list = d.risks[WRI.risk] || [];
-    var h = '<div class="wr-card wri-sec" id="wriRisk"><div class="wri-h">🚦 경과 체크</div><div class="wri-rtabs">'
-      + WRI_RISK.map(function (r) { var n = (d.risks[r[0]] || []).length; return '<button data-rt="' + r[0] + '" class="' + (WRI.risk === r[0] ? 'on' : '') + '">' + r[1] + ' <b>' + n + '</b></button>'; }).join('') + '</div>';
-    if (!list.length) return h + '<div class="wr-msg">해당 없음 👍</div></div>';
-    h += '<div class="wri-rl">' + list.map(function (i) {
+    var all = WRI.risk === 'all', list = riskList(d);
+    var h = '<div class="wr-card wri-sec" id="wriRisk"><div class="wri-h">🚦 경과 체크 <span class="wri-ks">일을 누르면 주별 경과</span></div><div class="wri-rtabs">'
+      + WRI_RISK.map(function (r) { var n = r[0] === 'all' ? (d.items || []).length : (d.risks[r[0]] || []).length; return '<button data-rt="' + r[0] + '" class="' + (WRI.risk === r[0] ? 'on' : '') + '">' + r[1] + ' <b>' + n + '</b></button>'; }).join('') + '</div>';
+    if (all) h += '<div class="wri-allbar"><input id="wriQ" class="wr-inp" type="search" placeholder="업체 · 일 · 담당 찾기" value="' + esc(WRI.q || '') + '">'
+      + '<span class="wri-ks">이름을 크게 바꿔 둘로 세어진 일은 둘 다 고르고 묶으세요</span></div>'
+      + '<div class="wri-merge" id="wriMergeBar" hidden><span id="wriMergeN"></span><button type="button" class="wm-pri" id="wriMerge">🔗 같은 일로 묶기</button><button type="button" class="btn btn-g btn-s" id="wriMergeClr">고르기 취소</button></div>';
+    if (!list.length) return h + '<div class="wr-msg">' + (all && WRI.q ? '찾는 일이 없습니다' : '해당 없음 👍') + '</div></div>';
+    var more = all && list.length > 200 ? list.length - 200 : 0;
+    h += '<div class="wri-rl">' + list.slice(0, all ? 200 : list.length).map(function (i) {
       var st = WRI_STATE[i.state] || WRI_STATE.open;
       var dl = i.deadline ? (i.deadlineFirst && i.deadlineFirst !== i.deadline ? '<s>' + esc(i.deadlineFirst.slice(5)) + '</s> → ' : '') + esc(i.deadline.slice(5)) : '-';
-      return '<div class="wri-ri">'
-        + '<div class="wri-r1"><span class="wri-st" style="color:' + st[2] + '">' + st[0] + ' ' + st[1] + '</span><b class="wri-cl">' + esc(i.client) + '</b><span class="wri-nm">' + esc(i.name) + '</span></div>'
+      return '<div class="wri-ri" data-key="' + esc(i.key) + '" title="눌러서 주별 경과">'
+        + '<div class="wri-r1">' + (all ? '<input type="checkbox" data-sel="' + esc(i.key) + '"' + (WRI.sel[i.key] ? ' checked' : '') + ' aria-label="묶을 일로 고르기">' : '')
+        + '<span class="wri-st" style="color:' + st[2] + '">' + st[0] + ' ' + st[1] + '</span><b class="wri-cl">' + esc(i.client) + '</b><span class="wri-nm">' + esc(i.name) + '</span>'
+        + (i.linked ? '<span class="wri-lk" title="' + (i.linked === 'manual' ? '손으로 묶은 이름 포함' : '비슷한 이름을 자동으로 이음') + '">🔗' + (i.variants ? i.variants.length : '') + '</span>' : '') + '</div>'
         + '<div class="wri-r2">' + (i.members.length ? '<span>👤 ' + esc(i.members.join('·')) + '</span>' : '')
         + '<span>📅 ' + dl + (i.slips ? ' <em>연기 ' + i.slips + '번</em>' : '') + '</span>'
         + '<span>' + spark(i.pctHist) + (i.pct == null ? '' : ' ' + i.pct + '%') + (i.expected != null && ['at_risk', 'stalled', 'on_track', 'open'].indexOf(i.state) >= 0 ? ' <em title="처음 본 주부터 납기까지 고르게 했다면 지금쯤">일정상 ' + i.expected + '%</em>' : '') + '</span>'
         + '<span>⏱ ' + i.weeks + '주째 · ' + esc(i.sectionLabel) + '</span></div></div>';
-    }).join('') + '</div></div>';
+    }).join('') + '</div>' + (more ? '<div class="wri-ks" style="margin-top:4px">… ' + more + '개 더 — 찾기로 좁혀 보세요</div>' : '') + '</div>';
     return h;
   }
 
@@ -637,7 +861,7 @@
   }
 
   /* 주별 막대(완료 · 진행 · 예정) + 완료율 선 + 새로/끝냄 */
-  function trendSvg(ws) {
+  function trendSvg(ws, goal) {
     // 늘려 그리면 글자가 찌그러진다 → 지금 칸 폭을 재서 그 폭에 맞게 (좁으면 옆으로 밀어 봄)
     var box = $('wriBody'), avail = box ? box.clientWidth - 28 : 600;
     var n = ws.length, W = Math.max(avail, n * 44, 280), H = 170, top = 14, bot = 34, ch = H - top - bot;
@@ -656,6 +880,10 @@
       s += '<text x="' + (i * step + step / 2).toFixed(1) + '" y="' + (H - 18) + '" text-anchor="middle" font-size="10" fill="var(--t5)">' + w.week.slice(5).replace('-', '/') + '</text>';
       s += '<text x="' + (i * step + step / 2).toFixed(1) + '" y="' + (H - 5) + '" text-anchor="middle" font-size="9.5" fill="var(--t5)">+' + w.newItems + ' ✓' + w.closed + '</text>';
     });
+    if (goal != null) {   // 🎯 완료율 목표선
+      var gy = (top + ch - goal / 100 * ch).toFixed(1);
+      s += '<line x1="0" x2="' + W + '" y1="' + gy + '" y2="' + gy + '" stroke="#1a8a40" stroke-width="1.4" stroke-dasharray="6 4"/><text x="' + (W - 2) + '" y="' + (gy - 3) + '" text-anchor="end" font-size="9.5" fill="#1a8a40">목표 ' + goal + '%</text>';
+    }
     if (line.length > 1) s += '<polyline points="' + line.join(' ') + '" fill="none" stroke="var(--ac)" stroke-width="2"/>';
     line.forEach(function (p, i) { var xy = p.split(','); s += '<circle cx="' + xy[0] + '" cy="' + xy[1] + '" r="2.6" fill="var(--ac)"><title>완료율 ' + ws[i].completionRate + '%</title></circle>'; });
     return s + '</svg></div><div class="wri-ks">막대 = 그 주 일 수 · 선 = 완료율 · 아래 +새로 생긴 일 ✓끝낸 일</div>';
@@ -669,7 +897,7 @@
     try {
       var r = await apiFetch('/api/weekly-reports/insights' + insightQs(false) + '&text=1');
       var prompt = '다음은 우리 팀 주간 업무 보고를 주를 넘어 이어 붙여 계산한 분석 결과입니다. 숫자에 근거해서만 한국어로 답하세요.\n' +
-        '1) 핵심 3줄  2) 위험한 일과 그 원인 추정(정체 · 연기 · 지남)  3) 다음 주 목표 제안 — 사람 · 일 이름을 넣어 구체적으로 3~5개  4) 효율을 높일 방법 2~3개\n' +
+        '1) 핵심 3줄 (정해 둔 목표가 있으면 달성 · 미달 먼저)  2) 위험한 일과 그 원인 추정(정체 · 연기 · 지남)  3) 다음 주 목표 제안 — 사람 · 일 이름을 넣어 구체적으로 3~5개  4) 효율을 높일 방법 2~3개\n' +
         '소제목은 ## 로, 목록은 - 로. 모르는 것은 지어내지 마세요.\n\n' + (r.data.text || '');
       var a = await apiFetch('/api/ai/summary', { method: 'POST', body: JSON.stringify({ prompt: prompt }) });
       var t = (a && a.data && a.data.text) || '';
@@ -882,7 +1110,7 @@
       +     '</span>'
       +     '<span class="wm-seg"><button id="wrAuPvToggle" class="' + (_authorState.showPreview ? 'on' : '') + '" title="미리보기를 숨기면 편집창이 전체 폭을 씁니다">👁 미리보기</button></span>'
       +     '<div class="wm-tb-sp"></div>'
-      +     '<span id="wrAuStatusBadge" style="font-size:11px;color:var(--t5)"></span>'
+      +     '<span id="wrAuStatusBadge" style="font-size:11px;color:var(--t5);flex:1 1 120px;min-width:0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
       +     '<button id="wrAuLoadList" class="btn btn-g" title="저장된 보고서 열기">📂 불러오기</button>'
       +     '<button id="wrAuOverwrite" class="btn btn-g" style="display:none">💾 덮어쓰기</button>'
       +     '<button id="wrAuSave" class="wm-pri">💾 저장 (R+1)</button>'
@@ -899,6 +1127,7 @@
       +   '<div id="wrAuExportPanel" style="display:none;margin-top:8px;padding:10px;background:var(--bg-i);border:1px solid var(--bd);border-radius:6px"></div>'
       +   '<div id="wrAuLoadDropdown" style="display:none;margin-top:8px"></div>'
       + '</div>'
+      + '<div id="wrAuCheck"></div>'
       + '<div id="wrAuWork" class="wr-au-work' + (_authorState.src.collapsed ? ' src-off' : '') + '" style="--wr-src-w:' + _authorState.src.width + 'px">'
       +   '<div id="wrAuEditArea" class="wr-au-edit">' + (_authorState.viewMode === 'compare' ? renderAuthorCompare() : renderAuthorSingle()) + '</div>'
       +   '<div id="wrSrcResizer" class="wr-src-resizer" title="드래그: 패널 폭 조절 · 더블클릭: 기본 폭"></div>'
@@ -907,8 +1136,8 @@
 
     applyResponsiveAuthor();
 
-    $('wrAuTeam').addEventListener('input', function (e) { _authorState.team = e.target.value.trim(); });
-    $('wrAuStart').addEventListener('change', function (e) { _authorState.weekStart = e.target.value; loadWorkRecords(); });
+    $('wrAuTeam').addEventListener('input', function (e) { _authorState.team = e.target.value.trim(); scheduleCheck(); });
+    $('wrAuStart').addEventListener('change', function (e) { _authorState.weekStart = e.target.value; loadWorkRecords(); scheduleCheck(300); });
     $('wrAuEnd').addEventListener('change', function (e) { _authorState.weekEnd = e.target.value; loadWorkRecords(); });
 
     box.querySelectorAll('[data-vm]').forEach(function (b) {
@@ -958,6 +1187,7 @@
 
     updateAuthorPreview();
     updateAuthorStatusBadge();
+    drawCheck(); scheduleCheck(400);
     // 마지막 보고서를 불러올 거면 그 주차로 한 번만 읽는다 (예전엔 이번 주를 읽고 곧바로 다시 읽음)
     var pending = autoLoadIfEmpty();
     if (pending) pending.then(function (loaded) { if (!loaded) ensureSrcRecords(); });
@@ -1129,6 +1359,7 @@
       updatePaneDirtyBadges();   // 제목 '변경 중'은 바로 (미리보기만 디바운스)
       clearTimeout(debounceT);
       debounceT = setTimeout(function () { updateAuthorPreview(p); updateAuthorStatusBadge(); if (p === _authorState.src.target) refreshSrcMarks(); }, 200);
+      scheduleCheck();
     });
     ed.addEventListener('focus', function () {
       var p = ed.dataset.pane || paneKey;
@@ -1193,6 +1424,7 @@
     updatePaneDirtyBadges();
     if (_authorState.loadedId) {
       el.innerHTML = '✏️ 편집 중: <strong style="color:var(--t3)">' + esc(_authorState.loadedName) + '</strong>' + dirty;
+      el.title = '편집 중: ' + _authorState.loadedName;
       var ow = $('wrAuOverwrite'); if (ow) ow.style.display = '';
     } else {
       el.innerHTML = '<span style="color:var(--t6)">새 보고서 (저장 시 자동 R 부여)</span>' + dirty;
@@ -1326,6 +1558,103 @@
     } finally {
       _saving = false;
     }
+  }
+
+  /* ─── v13.311 작성 중 점검 — 분석 탭에서 보기 전에, 쓰는 순간 잡는다 ───
+   * 바로 앞 주 보고서에 있던 일이 빠짐(끝냈나요?) · 납기 지남 · 3주째 정체 · 뒤처짐 · 이번에 납기 미룸 · 납기/담당 없음
+   * 서버 POST /api/weekly-reports/check (분석과 같은 계산 · 손으로 묶은 것 반영) */
+  var WRC = { seq: 0, t: null, data: null, open: lsGet('wr.chk.open') !== '0' };
+  var WRC_KIND = { missing: ['❔', '빠짐', '#7a6a2a'], overdue: ['⛔', '납기 지남', '#d21f1f'], stalled: ['⏸', '정체', '#7c5cff'], at_risk: ['⚠️', '뒤처짐', '#c8730a'], slipped: ['📅', '납기 연기', '#c8730a'], quality: ['✎', '빠진 정보', 'var(--t5)'] };
+  function scheduleCheck(ms) { clearTimeout(WRC.t); WRC.t = setTimeout(runCheck, ms == null ? 1200 : ms); }
+  async function runCheck() {
+    if (!$('wrAuCheck')) return;
+    syncAuthorEditorsToState();
+    var st = _authorState;
+    if ((!(st.lastText || '').trim() && !(st.curText || '').trim()) || !st.weekStart) { WRC.data = null; drawCheck(); return; }
+    var my = ++WRC.seq;
+    try {
+      var r = await apiFetch('/api/weekly-reports/check', { method: 'POST', body: JSON.stringify({ team: st.team, weekStart: st.weekStart, lastText: st.lastText || '', curText: st.curText || '' }) });
+      if (my !== WRC.seq) return;
+      WRC.data = r.data;
+    } catch (e) { if (my !== WRC.seq) return; WRC.data = null; }
+    drawCheck();
+  }
+  function wrcRow(kind, i, idx, acts) {
+    var k = WRC_KIND[kind];
+    return '<div class="wrc-r" data-wrc-go="' + idx + '" title="눌러서 편집창의 그 줄로">'
+      + '<span class="wrc-k" style="color:' + k[2] + '">' + k[0] + ' ' + k[1] + '</span>'
+      + '<span class="wrc-n"><b>' + esc(i.client) + '</b> ' + esc(i.name) + '</span>'
+      + '<span class="wrc-t">' + esc(i.text || '') + '</span>' + (acts || '') + '</div>';
+  }
+  function drawCheck() {
+    var box = $('wrAuCheck'); if (!box) return;
+    var d = WRC.data;
+    if (!d) { box.innerHTML = ''; return; }
+    var go = WRC.go = [];
+    var cnt = { missing: d.missing.length, quality: d.quality.length };
+    d.flags.forEach(function (f) { cnt[f.kind] = (cnt[f.kind] || 0) + 1; });
+    var total = d.missing.length + d.flags.length + d.quality.length;
+    if (!total) {
+      box.innerHTML = d.prevWeeks ? '<div class="wrc wrc-ok">✅ 점검 — 앞 주 보고서와 비교해 빠진 일 · 납기 · 정체 문제 없음</div>' : '';
+      return;
+    }
+    var chips = ['missing', 'overdue', 'stalled', 'at_risk', 'slipped', 'quality'].filter(function (k) { return cnt[k]; }).map(function (k) {
+      return '<span class="wrc-c" style="color:' + WRC_KIND[k][2] + '">' + WRC_KIND[k][0] + ' ' + WRC_KIND[k][1] + ' <b>' + cnt[k] + '</b></span>';
+    }).join('');
+    var h = '<div class="wrc' + (WRC.open ? ' open' : '') + '"><button type="button" class="wrc-sum" data-wrc-tog aria-expanded="' + WRC.open + '">'
+      + '<span class="wrc-ttl">🔎 점검</span>' + chips + '<span class="wrc-car">' + (WRC.open ? '▴' : '▾') + '</span></button>';
+    if (WRC.open) {
+      h += '<div class="wrc-body">';
+      if (d.missing.length) {
+        h += '<div class="wrc-g">' + (d.lastEmpty ? '지난주 칸이 비어 있어요 — 앞 주 보고서에 있던 일이 금주에도 없습니다. 끝냈으면 완료로, 계속하면 다시 넣으세요' : '앞 주 보고서에 있던 일이 이번 보고서에 없습니다 — 끝냈나요?') + '</div>';
+        d.missing.forEach(function (m, n) {
+          go.push(null);
+          h += wrcRow('missing', { client: m.client, name: m.name, text: [m.pct != null ? m.pct + '%' : '', m.deadline ? '~' + m.deadline.slice(5).replace('-', '/') : '', (m.members || []).join('·')].filter(Boolean).join(' · ') }, go.length - 1,
+            '<span class="wrc-acts"><button type="button" class="btn btn-g btn-s" data-wrc-done="' + n + '" title="지난주 칸에 #완료 로 넣기">✅ 완료로</button>'
+            + '<button type="button" class="btn btn-g btn-s" data-wrc-keep="' + n + '" title="금주 칸에 그대로 다시 넣기">↩ 금주에</button></span>');
+        });
+      }
+      d.flags.forEach(function (f) { go.push(f); h += wrcRow(f.kind, f, go.length - 1); });
+      d.quality.forEach(function (q) { go.push(q); h += wrcRow('quality', q, go.length - 1); });
+      h += '</div>';
+    }
+    box.innerHTML = h + '</div>';
+    box.querySelector('[data-wrc-tog]').addEventListener('click', function () { WRC.open = !WRC.open; lsSet('wr.chk.open', WRC.open ? '1' : '0'); drawCheck(); });
+    box.querySelectorAll('[data-wrc-done],[data-wrc-keep]').forEach(function (b) {
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var done = b.hasAttribute('data-wrc-done'), m = d.missing[+(done ? b.dataset.wrcDone : b.dataset.wrcKeep)]; if (!m) return;
+        var o = {}; o[SECTIONS[m.section] ? m.section : 'etc'] = [m.line + (done ? ' #완료' : '')];
+        insertBlocksBySection(done ? 'last' : 'cur', o);
+        runCheck();
+      });
+    });
+    box.querySelectorAll('[data-wrc-go]').forEach(function (r) {
+      r.addEventListener('click', function (e) { if (e.target.closest('button')) return; var f = go[+r.dataset.wrcGo]; if (f) jumpToItem(f.client, f.name); });
+    });
+  }
+  // 편집창에서 그 일의 줄을 찾아 고르기 (금주 칸 먼저)
+  function jumpToItem(client, name) {
+    syncAuthorEditorsToState();
+    var pane = null, idx = -1;
+    ['cur', 'last'].some(function (p) {
+      var lines = String(_authorState[paneKeyText(p)] || '').split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].indexOf(name) >= 0 && (!client || lines[i].indexOf(client) >= 0)) { pane = p; idx = i; return true; }
+      }
+      return false;
+    });
+    if (!pane) { if (typeof showToast === 'function') showToast('편집창에서 그 줄을 찾지 못했습니다', 'warn'); return; }
+    var id = _authorState.viewMode === 'compare' ? (pane === 'last' ? 'wrAuEditorLast' : 'wrAuEditorCur') : 'wrAuEditor';
+    if (_authorState.viewMode !== 'compare' && _authorState.editPane !== pane) { _authorState.editPane = pane; renderAuthor(); }
+    var ta = $(id); if (!ta) return;
+    var lines = ta.value.split('\n'), s = 0;
+    for (var j = 0; j < idx; j++) s += lines[j].length + 1;
+    ta.focus();
+    ta.setSelectionRange(s, s + (lines[idx] || '').length);
+    var lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
+    ta.scrollTop = Math.max(0, (idx - 3) * lh);
+    ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   // 저장 안 한 변경 — 불러오기 · 새로 만들기 · 창 닫기 전에 묻는다

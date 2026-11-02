@@ -407,7 +407,7 @@ RUN.weekly_report_trend = async function (c, a) {
   if (c.actor.role !== 'admin') { c.add('주간 업무 보고 분석', ['(주간 업무 보고는 관리자만 볼 수 있어 조회하지 않았습니다)']); return 0; }
   var wi = require('../lib/weekly-insights');
   var rows = await wi.load(db, c.actor.tenantId, { weeks: a.weeks || 12, team: a.team || '' });
-  var out = wi.compute(rows);
+  var out = wi.compute(rows, { links: await wi.loadLinks(db, c.actor.tenantId), goals: await wi.loadGoals(db, c.actor.tenantId, a.team || '') });   // 손으로 묶은 것 · 목표도 (v13.311)
   if (!out.weekly.length) { c.add('주간 업무 보고 분석', ['(이 기간에 저장된 주간 보고가 없음)']); return 0; }
   c.add('주간 업무 보고 분석 · 최근 ' + (a.weeks || 12) + '주' + (a.team ? ' · ' + a.team : ''), wi.toText(out).split('\n').concat(out.findings.map(function (f) { return '결론: ' + f.text; })));
   c.chart('주별 완료율', out.weekly.map(function (w) { return { label: w.week.slice(5), value: w.completionRate }; }), '%');

@@ -31,6 +31,8 @@ beforeAll(async function () {
 });
 afterAll(async function () {
   await db.query('DELETE FROM weekly_reports WHERE tenant_id = $1', [T]);
+  await db.query('DELETE FROM weekly_item_links WHERE tenant_id = $1', [T]);
+  await db.query('DELETE FROM weekly_goals WHERE tenant_id = $1', [T]);
   await h.cleanup();
 });
 
@@ -55,4 +57,65 @@ test('/stats 도 같은 주차는 마지막 버전만 (예전엔 두 번 셌다)
   var r = await api('get', '/api/weekly-reports/stats?team=' + encodeURIComponent(TEAM), admin);
   expect(r.body.data.totals.weeks).toBe(2);
   expect(r.body.data.totals.items).toBe(3);
+});
+
+/* ─── v13.311 묶기 · 나누기 · 경과 · 목표 · 작성 중 점검 ─── */
+test('일 하나의 경과 — 주마다 진행률', async function () {
+  var key = TEAM + '|a사|검사기';
+  var r = await api('get', '/api/weekly-reports/insights/item?key=' + encodeURIComponent(key), admin);
+  expect(r.status).toBe(200);
+  expect(r.body.data.hist.map(function (h) { return h.pct; })).toEqual([20, 40]);
+  var nf = await api('get', '/api/weekly-reports/insights/item?key=' + encodeURIComponent(TEAM + '|x|없음'), admin);
+  expect(nf.status).toBe(404);
+});
+
+test('같은 일 묶기 → 하나로 · 되돌리기 → 다시 둘', async function () {
+  var ka = TEAM + '|a사|검사기', kb = TEAM + '|b사|셋업';
+  var bad = await api('post', '/api/weekly-reports/item-links', admin).send({ kind: 'merge', keys: [ka], target: ka });
+  expect(bad.status).toBe(400);
+  var m = await api('post', '/api/weekly-reports/item-links', admin).send({ kind: 'merge', keys: [kb], target: ka });
+  expect(m.status).toBe(200);
+  var r = await api('get', '/api/weekly-reports/insights?weeks=8&items=1&team=' + encodeURIComponent(TEAM), admin);
+  expect(r.body.data.items.length).toBe(1);
+  expect(r.body.data.items[0].linked).toBe('manual');
+  await api('post', '/api/weekly-reports/item-links', admin).send({ kind: 'reset', key: kb });
+  r = await api('get', '/api/weekly-reports/insights?weeks=8&items=1&team=' + encodeURIComponent(TEAM), admin);
+  expect(r.body.data.items.length).toBe(2);
+  var sp = await api('post', '/api/weekly-reports/item-links', admin).send({ kind: 'split', key: kb });
+  expect(sp.status).toBe(200);
+  var row = await db.query('SELECT kind FROM weekly_item_links WHERE tenant_id = $1 AND item_key = $2', [T, kb]);
+  expect(row.rows[0].kind).toBe('split');
+  var no = await api('post', '/api/weekly-reports/item-links', member).send({ kind: 'split', key: kb });
+  expect(no.status).toBe(403);
+});
+
+test('목표 — 저장 · 검사 · 분석에 실적과 함께', async function () {
+  var bad = await api('put', '/api/weekly-reports/goals', admin).send({ team: TEAM, goals: [{ metric: 'onTimeRate', target: 150 }] });
+  expect(bad.status).toBe(400);
+  var bad2 = await api('put', '/api/weekly-reports/goals', admin).send({ team: TEAM, goals: [{ member: '홍', metric: 'completionRate', target: 50 }] });
+  expect(bad2.status).toBe(400);
+  var ok = await api('put', '/api/weekly-reports/goals', admin).send({ team: TEAM, goals: [{ metric: 'completionRate', target: 40 }, { member: '홍', metric: 'active', target: 1 }] });
+  expect(ok.status).toBe(200);
+  var g = await api('get', '/api/weekly-reports/goals?team=' + encodeURIComponent(TEAM), admin);
+  expect(g.body.data.length).toBe(2);
+  expect(g.body.metrics.throughput.label).toBeTruthy();
+  var r = await api('get', '/api/weekly-reports/insights?weeks=8&team=' + encodeURIComponent(TEAM), admin);
+  var cr = r.body.data.goals.filter(function (x) { return x.metric === 'completionRate'; })[0];
+  expect(cr.target).toBe(40);
+  expect(cr.actual).toBe(25);          // 0% · 50% 평균
+  expect(cr.ok).toBe(false);
+  var hong = r.body.data.goals.filter(function (x) { return x.member === '홍'; })[0];
+  expect(hong).toMatchObject({ actual: 1, ok: true });
+  // 다른 팀(모든 팀) 목표는 따로
+  var all = await api('get', '/api/weekly-reports/insights?weeks=8', admin);
+  expect(all.body.data.goals).toEqual([]);
+});
+
+test('작성 중 점검 — 지난주 보고서에 있던 일이 빠지면 알려줌', async function () {
+  var r = await api('post', '/api/weekly-reports/check', admin).send({ team: TEAM, weekStart: monday(0), lastText: '', curText: '[개발]\n- [C사] 새 일 #진행중' });
+  expect(r.status).toBe(200);
+  expect(r.body.data.missing.map(function (m) { return m.client; })).toEqual(['A사']);   // B사 셋업은 끝낸 일
+  expect(r.body.data.quality[0].text).toMatch(/납기 · 담당 없음/);
+  var bad = await api('post', '/api/weekly-reports/check', admin).send({ team: TEAM, weekStart: 'x' });
+  expect(bad.status).toBe(400);
 });

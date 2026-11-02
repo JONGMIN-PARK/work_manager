@@ -298,7 +298,9 @@ GET /api/v1/users/operator-list
 GET /api/v1/users/pending
 GET /api/weekly-reports
 GET /api/weekly-reports/:id
+GET /api/weekly-reports/goals
 GET /api/weekly-reports/insights
+GET /api/weekly-reports/insights/item
 GET /api/weekly-reports/next-name
 GET /api/weekly-reports/search
 GET /api/weekly-reports/stats
@@ -475,6 +477,8 @@ POST /api/v1/tenants/invite
 POST /api/v1/tenants/join/:token
 POST /api/v1/users/:id/reset-password
 POST /api/weekly-reports
+POST /api/weekly-reports/check
+POST /api/weekly-reports/item-links
 POST /api/workflows
 POST /api/workflows/:id/validate
 PUT /api/ai/config
@@ -566,5 +570,6 @@ PUT /api/v1/users/:id/operator-mode
 PUT /api/v1/users/:id/reject
 PUT /api/v1/users/:id/role
 PUT /api/v1/users/:id/status
+PUT /api/weekly-reports/goals
 PUT /api/white-label
 PUT /api/workflows/:id

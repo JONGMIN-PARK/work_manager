@@ -14,6 +14,13 @@
  *   risks      overdue(납기 지남) · atRisk(진행률이 일정보다 뒤짐) · stalled(3주째 그대로) · slipped(납기 미룸) · dropped(끝내지 않고 사라짐)
  *   byMember · bySection · byClient   사람 · 분야 · 업체별 효율
  *   findings[] 규칙으로 뽑은 한 줄 결론 (AI 없이)
+ *
+ * v13.311 opts:
+ *   links   { merge: { 열쇠: 묶을 열쇠 }, split: { 열쇠: true } } — 사람이 손으로 묶고 나눈 것 (weekly_item_links)
+ *           merge 는 글자 비교보다 먼저, split 은 글자 비교로 잇지 않고 따로 셈
+ *   draftId 작성 중인 보고서(저장 전) 행 id — 그 보고서에서 본 일은 inDraft
+ *   histKey 이 열쇠의 일만 주마다 기록(hist)까지 — 경과 기록 창
+ *   goals   [{ member, metric, target }] — 목표 대비 실적 (goals[])
  */
 var SECTION_LABEL = { dev: '개발', setup: '셋업', cs: 'C/S', etc: '기타' };
 var DAY = 86400000;
@@ -67,10 +74,10 @@ function snapshots(rows) {
     var last = (p.last && p.last.items) || [], cur = (p.cur && p.cur.items) || [];
     if (last.length) {
       var k1 = team + '|' + addDays(r.week_start, -7);
-      by[k1] = { team: team, week: addDays(r.week_start, -7), kind: 'result', items: last };   // 결과가 계획보다 우선
+      by[k1] = { team: team, week: addDays(r.week_start, -7), kind: 'result', items: last, rowId: r.id };   // 결과가 계획보다 우선
     }
     var k2 = team + '|' + r.week_start;
-    if (cur.length && !(by[k2] && by[k2].kind === 'result')) by[k2] = { team: team, week: r.week_start, kind: 'plan', items: cur };
+    if (cur.length && !(by[k2] && by[k2].kind === 'result')) by[k2] = { team: team, week: r.week_start, kind: 'plan', items: cur, rowId: r.id };
   });
   return Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return a.week < b.week ? -1 : a.week > b.week ? 1 : 0; });
 }
@@ -84,22 +91,42 @@ function compute(rows, opts) {
   weeks.sort();
   var tracks = [];          // 일마다
   var byKey = {};           // team|client|norm(name) → track
+  var links = opts.links || {}, merge = links.merge || {}, split = links.split || {};
 
+  function canon(k) {       // 손으로 묶은 것 따라가기 (A→B→C, 고리 방지)
+    for (var i = 0; i < 6 && merge[k] && merge[k] !== k; i++) k = merge[k];
+    return k;
+  }
+  function addKey(t, k, name) {
+    if (t.keys.indexOf(k) < 0) { t.keys.push(k); t.names.push(name || ''); }
+  }
   function find(team, it, week) {
-    var k = team + '|' + norm(it.client) + '|' + norm(it.name);
-    if (byKey[k]) return byKey[k];
-    // 이름이 조금 바뀐 같은 일 — 같은 팀 · 업체, 최근 4주 안에 본 것 중 가장 비슷한 것
+    var k = itemKey(team, it);
+    if (byKey[k]) { addKey(byKey[k], k, it.name); return byKey[k]; }
+    var c = canon(k);
+    if (c !== k && byKey[c]) { byKey[k] = byKey[c]; addKey(byKey[c], k, it.name); byKey[c].manual = true; return byKey[c]; }
+    if (c !== k) {        // 묶을 곳이 아직 안 나왔다 — 그 열쇠로 새로 만든다
+      var tm = newTrack(c, team, it, week); tm.manual = true;
+      byKey[k] = tm; addKey(tm, k, it.name);
+      return tm;
+    }
+    // 이름이 조금 바뀐 같은 일 — 같은 팀 · 업체, 최근 4주 안에 본 것 중 가장 비슷한 것 (나눈 일은 빼고)
     var n = norm(it.name), best = null, bs = 0;
-    tracks.forEach(function (t) {
-      if (t.team !== team || norm(t.client) !== norm(it.client)) return;
+    if (!split[k]) tracks.forEach(function (t) {
+      if (t.noFuzzy || t.team !== team || norm(t.client) !== norm(it.client)) return;
       if (Date.parse(week) - Date.parse(t.lastWeek) > 28 * DAY || t.lastWeek === week) return;
       var s = dice(norm(t.name), n);
       if (s > bs) { bs = s; best = t; }
     });
-    if (best && bs >= 0.6) { byKey[k] = best; return best; }
+    if (best && bs >= 0.6) { byKey[k] = best; addKey(best, k, it.name); best.fuzzy = true; return best; }
+    var t = newTrack(k, team, it, week);
+    if (split[k]) t.noFuzzy = true;
+    return t;
+  }
+  function newTrack(k, team, it, week) {
     var t = { key: k, team: team, client: it.client || '', name: it.name || '', section: it.section || 'etc', members: [], firstWeek: week, lastWeek: week,
-      seen: [], pctHist: [], dlHist: [], statusHist: [], doneWeek: null };
-    tracks.push(t); byKey[k] = t;
+      seen: [], pctHist: [], dlHist: [], statusHist: [], doneWeek: null, keys: [], names: [], hist: [], inDraft: false, slipWeek: null };
+    tracks.push(t); byKey[k] = t; addKey(t, k, it.name);
     return t;
   }
 
@@ -117,10 +144,18 @@ function compute(rows, opts) {
       var isNew = !t.seen.length;
       t.seen.push(s.week); t.lastWeek = s.week;
       t.name = it.name || t.name;
+      t.client = it.client || t.client;
+      if (opts.draftId && s.rowId === opts.draftId) t.inDraft = true;
+      if (opts.histKey) t.hist.push({ w: s.week, kind: s.kind, client: it.client || '', name: it.name || '', pct: typeof it.pct === 'number' ? it.pct : null,
+        deadline: it.deadline || '', status: it.status || 'none', members: it.members || [],
+        details: (it.details || []).slice(0, 8).map(function (d) { return { text: String(d.text || '').slice(0, 200), status: d.status || 'none' }; }) });
       (it.members || []).forEach(function (m) { if (t.members.indexOf(m) < 0) t.members.push(m); });
       if (typeof it.pct === 'number' && it.pct >= 0) t.pctHist.push({ w: s.week, p: it.pct });
       var dl = deadlineDate(it.deadline, s.week);
-      if (dl && (!t.dlHist.length || t.dlHist[t.dlHist.length - 1].d !== dl)) t.dlHist.push({ w: s.week, d: dl });
+      if (dl && (!t.dlHist.length || t.dlHist[t.dlHist.length - 1].d !== dl)) {
+        if (t.dlHist.length && dl > t.dlHist[t.dlHist.length - 1].d) t.slipWeek = s.week;
+        t.dlHist.push({ w: s.week, d: dl });
+      }
       var st = it.status === 'done' ? 'done' : it.status === 'in_progress' ? 'doing' : 'planned';
       t.statusHist.push({ w: s.week, s: st });
       W.total++;
@@ -170,7 +205,11 @@ function compute(rows, opts) {
       members: t.members, firstWeek: t.firstWeek, lastWeek: t.lastWeek, weeks: t.seen.length,
       status: done ? 'done' : last.s || 'planned', pct: pct, expected: expected,
       pctHist: t.pctHist, deadline: dl, deadlineFirst: t.dlHist.length ? t.dlHist[0].d : null, slips: slips,
-      doneWeek: t.doneWeek, cycleWeeks: cycle, onTime: onTime, state: state
+      doneWeek: t.doneWeek, cycleWeeks: cycle, onTime: onTime, state: state,
+      slipWeek: t.slipWeek, inDraft: t.inDraft || undefined,
+      variants: t.keys.length > 1 ? t.keys.map(function (k, i) { return { key: k, name: t.names[i] }; }) : undefined,
+      linked: t.manual ? 'manual' : t.fuzzy ? 'auto' : undefined, split: t.noFuzzy || undefined,
+      hist: opts.histKey && t.keys.indexOf(opts.histKey) >= 0 ? t.hist : undefined, dlHist: opts.histKey && t.keys.indexOf(opts.histKey) >= 0 ? t.dlHist : undefined
     };
   });
 
@@ -226,12 +265,104 @@ function compute(rows, opts) {
   var bySection = groupBy(function (i) { return [i.section]; }).map(function (e) { e.label = SECTION_LABEL[e.key] || e.key; return e; });
   var byClient = groupBy(function (i) { return [i.client || '(없음)']; }).slice(0, 15);
 
-  return {
+  var out = {
     range: { from: weeks[0] || null, to: lastWeek, asOf: asOf, weeks: weeks.length, reports: reps.length },
     weekly: weekly, kpi: kpi, risks: risks, byMember: byMember, bySection: bySection, byClient: byClient,
     findings: findings(weekly, kpi, risks, byMember, bySection),
     items: opts.withItems ? items : undefined
   };
+  if (opts.histKey) out.item = items.filter(function (i) { return i.hist; })[0] || null;
+  if (opts.goals) out.goals = evalGoals(opts.goals, out);
+  if (opts.draftId) Object.defineProperty(out, '_items', { value: items, enumerable: false });
+  return out;
+}
+
+function itemKey(team, it) { return (team || '') + '|' + norm(it.client) + '|' + norm(it.name); }
+
+/* ─── 목표 (v13.311) — 정해 둔 값과 지금 기간의 실적 ─── */
+var GOAL_METRICS = {
+  throughput:     { label: '주당 끝낸 일', unit: '건', dir: 'ge', member: true },
+  completionRate: { label: '완료율 (최근 4주 평균)', unit: '%', dir: 'ge', member: false },
+  onTimeRate:     { label: '기한 안 완료율', unit: '%', dir: 'ge', member: true },
+  cycle:          { label: '끝내는 데 걸린 주 (평균)', unit: '주', dir: 'le', member: true },
+  overdue:        { label: '납기 지난 일', unit: '건', dir: 'le', member: true },
+  stalled:        { label: '정체된 일', unit: '건', dir: 'le', member: true },
+  active:         { label: '동시에 진행 중', unit: '건', dir: 'le', member: true }
+};
+function goalActual(metric, out, member) {
+  if (member) {
+    var m = out.byMember.filter(function (x) { return x.key === member; })[0];
+    if (!m) return null;
+    return { throughput: m.throughput, onTimeRate: m.onTimeRate, cycle: m.cycleAvg, overdue: m.overdue, stalled: m.stalled, active: m.active }[metric];
+  }
+  var k = out.kpi;
+  if (metric === 'completionRate') {
+    var ws = out.weekly.slice(-4);
+    return ws.length ? r1(avg(ws.map(function (w) { return w.completionRate; }))) : null;
+  }
+  return { throughput: k.throughput, onTimeRate: k.onTimeRate, cycle: k.cycleAvg, overdue: k.overdue, stalled: k.stalled, active: k.active }[metric];
+}
+function evalGoals(goals, out) {
+  return (goals || []).filter(function (g) { return GOAL_METRICS[g.metric] && (!g.member || GOAL_METRICS[g.metric].member); }).map(function (g) {
+    var def = GOAL_METRICS[g.metric], target = Number(g.target);
+    var actual = goalActual(g.metric, out, g.member || '');
+    if (actual === undefined) actual = null;
+    var ok = null, ratio = null;
+    if (actual != null && !isNaN(target)) {
+      ok = def.dir === 'ge' ? actual >= target : actual <= target;
+      ratio = def.dir === 'ge' ? (target > 0 ? actual / target : 1) : (actual > 0 ? target / actual : 1);
+      ratio = Math.max(0, Math.min(1, ratio));
+    }
+    return { member: g.member || '', metric: g.metric, label: def.label, unit: def.unit, dir: def.dir, target: target, actual: actual, ok: ok, ratio: ratio == null ? null : Math.round(ratio * 100) };
+  });
+}
+
+/* ─── 작성 중 점검 (v13.311) — 분석 탭에서 보기 전에, 쓰는 순간 잡는다 ───
+ * rows: 작성 주차 앞 보고서들 · draft: { team, week_start, parsed: { last, cur } }
+ * 돌려줌: missing(바로 앞 주 보고서에 있던 일이 빠짐) · flags(지남 · 정체 · 뒤처짐 · 연기) · quality(납기 · 담당 없음) */
+function check(rows, draft, opts) {
+  opts = opts || {};
+  var W = draft.week_start, DRAFT = '__draft';
+  var last = (draft.parsed.last && draft.parsed.last.items) || [], cur = (draft.parsed.cur && draft.parsed.cur.items) || [];
+  var res = { week: W, missing: [], flags: [], quality: [], lastEmpty: !last.length, prevWeeks: 0 };
+  if (!last.length && !cur.length) return res;
+  var all = (rows || []).concat([Object.assign({}, draft, { id: DRAFT, updated_at: '9999-12-31T00:00:00Z' })]);
+  var out = compute(all, { links: opts.links, draftId: DRAFT });
+  var items = out._items;
+  res.prevWeeks = out.range.weeks;
+  var since = addDays(W, -7);    // 바로 앞 주에 있던 일만 (더 전에 빠진 건 분석 탭 '사라짐')
+  // 빠진 일 — 앞 보고서들만으로 본 일 중, 작성 중인 보고서에 (열쇠로도 · 비슷한 이름으로도) 없는 것
+  // (지난주 칸 결과가 그 주 계획을 덮어써서 전체 계산에선 계획에만 있던 일이 안 보이므로 따로 계산)
+  var inKeys = {}, inDraft = items.filter(function (i) { return i.inDraft; });
+  inDraft.forEach(function (i) { (i.variants || [{ key: i.key }]).forEach(function (v) { inKeys[v.key] = true; }); });
+  var prev = rows && rows.length ? compute(rows, { links: opts.links, withItems: true }).items : [];
+  prev.forEach(function (i) {
+    if (i.doneWeek || i.lastWeek < since) return;
+    if ((i.variants || [{ key: i.key }]).some(function (v) { return inKeys[v.key]; })) return;
+    if (!i.split && inDraft.some(function (d) { return norm(d.client) === norm(i.client) && dice(norm(d.name), norm(i.name)) >= 0.6; })) return;
+    res.missing.push({ key: i.key, section: i.section, client: i.client, name: i.name, members: i.members, pct: i.pct, deadline: i.deadline, lastWeek: i.lastWeek, line: itemLine(i) });
+  });
+  items.forEach(function (i) {
+    if (!i.inDraft || i.doneWeek) return;
+    var base = { key: i.key, client: i.client, name: i.name };
+    if (i.deadline && i.deadline < W) res.flags.push(Object.assign({ kind: 'overdue', text: '납기 ' + md(i.deadline) + ' 지남 — 끝냈으면 #완료, 아니면 새 납기로' }, base));
+    else if (i.state === 'stalled') res.flags.push(Object.assign({ kind: 'stalled', text: '3주째 진행률 ' + (i.pct == null ? '' : i.pct + '% ') + '그대로 — 막힌 곳을 세부 줄로' }, base));
+    else if (i.state === 'at_risk') res.flags.push(Object.assign({ kind: 'at_risk', text: '진행률 ' + i.pct + '% · 일정상 ' + i.expected + '% — 뒤처짐' }, base));
+    if (i.slipWeek && i.slipWeek >= addDays(W, -7)) res.flags.push(Object.assign({ kind: 'slipped', text: '납기 미룸 ' + md(i.deadlineFirst) + ' → ' + md(i.deadline) + (i.slips > 1 ? ' (모두 ' + i.slips + '번)' : '') }, base));
+  });
+  cur.forEach(function (it) {
+    if (it.status === 'done') return;
+    var miss = [];
+    if (!it.deadline && it.status === 'in_progress') miss.push('납기');
+    if (!(it.members || []).length) miss.push('담당');
+    if (miss.length) res.quality.push({ key: itemKey(draft.team, it), client: it.client || '', name: it.name || '', text: miss.join(' · ') + ' 없음' });
+  });
+  return res;
+}
+function md(d) { return d ? d.slice(5).replace('-', '/') : ''; }
+function itemLine(i) {
+  return '- [' + (i.client || '') + '] ' + i.name + (i.deadline ? ' ~' + md(i.deadline) : '') + (i.pct != null ? ' ' + i.pct + '%' : '')
+    + (i.members || []).map(function (m) { return ' @' + m; }).join('');
 }
 
 /** 규칙으로 뽑은 결론 — AI 없이도 무엇을 봐야 하는지 */
@@ -267,6 +398,7 @@ function toText(r) {
   var k = r.kpi, L = [];
   L.push('기간 ' + r.range.from + ' ~ ' + r.range.to + ' (' + r.range.weeks + '주, 보고서 ' + r.range.reports + '개)');
   L.push('일 ' + k.items + '개 · 끝냄 ' + k.done + ' · 진행 중 ' + k.active + ' · 주당 처리 ' + k.throughput + ' · 완료까지 중앙 ' + k.cycleMedian + '주 · 납기 안 완료율 ' + (k.onTimeRate == null ? '-' : k.onTimeRate + '%'));
+  if (r.goals && r.goals.length) L.push('목표 대비: ' + r.goals.map(function (g) { return (g.member ? g.member + ' ' : '팀 ') + g.label + ' 목표 ' + (g.dir === 'ge' ? '≥' : '≤') + g.target + g.unit + ' · 실적 ' + (g.actual == null ? '-' : g.actual + g.unit) + (g.ok == null ? '' : g.ok ? ' 달성' : ' 미달'); }).join(' | '));
   L.push('위험: 납기 지남 ' + k.overdue + ' · 뒤처짐 ' + k.atRisk + ' · 정체 ' + k.stalled + ' · 납기 연기 ' + k.slipped + ' · 사라짐 ' + k.dropped);
   L.push('주별: ' + r.weekly.map(function (w) { return w.week.slice(5) + ' 전체' + w.total + '/완료' + w.done + '/새' + w.newItems + '/끝냄' + w.closed + '(' + w.completionRate + '%)'; }).join(' | '));
   ['overdue', 'atRisk', 'stalled', 'slipped'].forEach(function (key) {
@@ -298,4 +430,17 @@ async function load(db, tenantId, q) {
   return r.rows;
 }
 
-module.exports = { load: load, compute: compute, toText: toText, latestPerWeek: latestPerWeek, snapshots: snapshots, deadlineDate: deadlineDate, dice: dice, norm: norm };
+/** 손으로 묶고 나눈 것 (v13.311) — compute 의 opts.links 모양으로 */
+async function loadLinks(db, tenantId) {
+  var r = await db.query('SELECT item_key, kind, target_key FROM weekly_item_links WHERE tenant_id = $1', [tenantId]);
+  var out = { merge: {}, split: {} };
+  r.rows.forEach(function (x) { if (x.kind === 'merge' && x.target_key) out.merge[x.item_key] = x.target_key; else if (x.kind === 'split') out.split[x.item_key] = true; });
+  return out;
+}
+/** 팀(빈 값 = 모든 팀) 목표 */
+async function loadGoals(db, tenantId, team) {
+  var r = await db.query('SELECT member, metric, target::float AS target FROM weekly_goals WHERE tenant_id = $1 AND team = $2 ORDER BY member, metric', [tenantId, team || '']);
+  return r.rows;
+}
+
+module.exports = { loadLinks: loadLinks, loadGoals: loadGoals, GOAL_METRICS: GOAL_METRICS, check: check, itemKey: itemKey, itemLine: itemLine, load: load, compute: compute, toText: toText, latestPerWeek: latestPerWeek, snapshots: snapshots, deadlineDate: deadlineDate, dice: dice, norm: norm };
