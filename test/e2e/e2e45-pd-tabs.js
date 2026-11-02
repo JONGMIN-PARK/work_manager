@@ -34,7 +34,7 @@ var SHOTS = path.join(__dirname, '.shots');
     await page.evaluate(function (pid) { return showProjectDetail(pid); }, pid); await wait(1500);
 
     var order = await page.$$eval('#projDetailPanel .pd-tab', function (a) { return a.map(function (b) { return b.id.replace('pdTab', '') + ':' + b.childNodes[1].textContent; }).join(','); });
-    check(order === 'Overview:개요,Lifecycle:단계,Issues:이슈,Dev:개발,Meeting:회의,Work:투입,Spec:사양', '탭 순서 · 이름 ' + order);
+    check(order === 'Overview:개요,Lifecycle:단계,Issues:이슈,Dev:개발,Meeting:회의,Docs:문서,Work:투입,Spec:사양', '탭 순서 · 이름 ' + order);
     var c0 = await cnt();
     check(c0.issues === '1' && c0.dev === '1' && c0.meeting === '' && c0.lifecycle !== undefined, '탭 개수 — 이슈 미해결 1 · 개발 미완료 1 · 회의 0은 숨김 ' + JSON.stringify(c0));
     var head = await page.evaluate(function () { var h = document.querySelector('#projDetailPanel .pd-sticky'); return { sizeOut: !!h.querySelector('.pd-size:not(.pd-more-menu .pd-size)'), sizeIn: !!h.querySelector('.pd-more-menu .pd-size [data-pd-size]'), gen: Array.from(document.querySelectorAll('#projDetailPanel button')).filter(function (b) { return /^📋 체크리스트 생성$/.test(b.textContent.trim()); }).length }; });

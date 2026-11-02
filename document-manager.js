@@ -78,22 +78,28 @@ async function renderDocManager(opts) {
   if (_stale()) return;
   docRevokeBlobUrls();
   projects.sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); });
+  _docProjList = projects;
+  var personal = docSelProject === DOC_PERSONAL;   // 📥 내 문서 (v13.307)
 
   // 프로젝트 미선택 시 첫 번째 자동 선택
   if (!docSelProject && projects.length) docSelProject = projects[0].id;
   // 선택된 docSelProject가 가시성 필터로 사라진 경우(공유 회수 등) — 초기화 후 첫 번째 자동 선택
-  if (docSelProject && !projects.find(function (p) { return p.id === docSelProject; })) {
+  if (docSelProject && !personal && !projects.find(function (p) { return p.id === docSelProject; })) {
     docSelProject = projects.length ? projects[0].id : '';
     docSelFolder = null; docSelFile = null; docFilePage = 1;
   }
 
-  var proj = projects.find(function (p) { return p.id === docSelProject; });
+  var proj = personal ? { id: DOC_PERSONAL, name: '📥 내 문서', _personal: true } : projects.find(function (p) { return p.id === docSelProject; });
   var projId = docSelProject;   // 아래 await 동안 docSelProject 가 바뀌어도 이 렌더는 이 프로젝트 기준
 
   // 폴더 + 파일 로드 (캐시) — 폴더/메뉴 선택 시 매번 재조회하던 것이 느림의 핵심.
   // opts.useCache && 같은 프로젝트면 직전에 받아둔 folders/allFiles를 그대로 재사용한다.
   var folders = [], allFiles = [];
-  if (proj) {
+  if (proj && personal) {
+    allFiles = await fileGetPersonal();
+    if (_stale()) return;
+    _docDataCache = { projId: projId, folders: [], allFiles: allFiles };
+  } else if (proj) {
     var _useCache = opts && opts.useCache && _docDataCache.projId === projId && _docDataCache.allFiles;
     if (_useCache) {
       folders = _docDataCache.folders;
@@ -125,6 +131,7 @@ async function renderDocManager(opts) {
     projects.forEach(function (p) {
       html += '<option value="' + eH(p.id) + '"' + (p.id === docSelProject ? ' selected' : '') + '>' + eH(p.name || p.orderNo || p.id) + '</option>';
     });
+    html += '<option value="' + DOC_PERSONAL + '"' + (personal ? ' selected' : '') + '>📥 내 문서 (프로젝트 없음)</option>';
     html += '</select>';
     html += '<span class="wm-tb-n">' + projects.length + '개 접근 가능</span>';
   } else {
@@ -132,7 +139,7 @@ async function renderDocManager(opts) {
   }
   html += '<span class="wm-tb-sp"></span>';
   // 용량 표시 (위에서 받은 allFiles로 계산 — 추가 네트워크 호출 없음)
-  if (proj) {
+  if (proj && !personal) {
     var pct = Math.round(_storageTotal / DOC_MAX_PROJECT * 100);
     html += '<span style="display:inline-flex;align-items:center;gap:8px;font-size:11px;color:var(--t4)" title="이 프로젝트 문서 용량">';
     html += '<span>💾 ' + formatFileSize(_storageTotal) + ' / ' + formatFileSize(DOC_MAX_PROJECT) + '</span>';
@@ -205,6 +212,10 @@ function docSelectProject(projId) {
 /* ═══ 폴더 트리 렌더 ═══ */
 function renderFolderTree(folders, allFiles) {
   var html = '<div class="pnl" style="padding:10px;overflow-y:auto">';
+  if (docSelProject === DOC_PERSONAL) {
+    return html + '<div style="font-size:11px;font-weight:600;padding:6px 10px;border-radius:6px;background:var(--ac-bg);color:var(--ac-t)">📥 내 문서 <span class="badge" style="background:var(--bg-i);color:var(--t4);font-size:9px">' + allFiles.length + '</span></div>' +
+      '<div style="font-size:10.5px;color:var(--t5);line-height:1.6;padding:8px 6px">프로젝트 없이 내가 올린 파일 — 텔레그램으로 보낸 사진 · 파일도 여기 모입니다. 나만 볼 수 있습니다.<br>📁 을 눌러 프로젝트로 옮기세요.</div></div>';
+  }
   html += '<div style="font-size:10px;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding:0 6px">폴더</div>';
 
   // 전체 파일
@@ -269,7 +280,10 @@ function renderFileList(folders, allFiles) {
     if (selFolderObj) folderName = selFolderObj.name;
   }
 
-  var html = '<div class="pnl" style="padding:12px;display:flex;flex-direction:column;overflow:hidden">';
+  // 파일 목록 어디에 끌어다 놓아도 올라감 (v13.307 — 예전엔 빈 폴더에서만)
+  var html = '<div class="pnl doc-drop" style="padding:12px;display:flex;flex-direction:column;overflow:hidden" ondragover="docDragOver(event,this)" ondragleave="docDragLeave(event,this)" ondrop="docDropOn(event,this)">';
+  var personal = docSelProject === DOC_PERSONAL;
+  var upTo = personal ? '📥 내 문서' : selFolderObj ? selFolderObj.name : (function () { var p = _docProjOf(docSelProject); var fo = docPickFolder(folders, p && p.currentPhase); return fo ? fo.name : ''; })();
 
   // 헤더
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">';
@@ -301,15 +315,16 @@ function renderFileList(folders, allFiles) {
   }
 
   if (!files.length) {
-    html += '<div id="docDropZone" class="dz" style="margin-bottom:12px" onclick="document.getElementById(\'docFileInput\').click()" ondragover="event.preventDefault();this.classList.add(\'active\')" ondragleave="this.classList.remove(\'active\')" ondrop="event.preventDefault();this.classList.remove(\'active\');docHandleDrop(event)">';
+    html += '<div id="docDropZone" class="dz" style="margin-bottom:12px" onclick="document.getElementById(\'docFileInput\').click()">';   // 끌어다 놓기는 바깥 패널이 받음 (두 번 올라가지 않게)
     html += '<div style="font-size:32px;margin-bottom:8px;opacity:.7">📂</div>';
-    html += '<div style="font-size:12px;color:var(--t4);margin-bottom:4px">파일을 드래그하거나 클릭하여 업로드</div>';
-    html += '<div style="font-size:10px;color:var(--t5)">PDF, Excel, PPT, Word, 텍스트, 이미지 지원 (최대 50MB)</div>';
+    html += '<div style="font-size:12px;color:var(--t4);margin-bottom:4px">파일을 끌어다 놓거나 눌러서 올리기' + (upTo ? ' → 📁 ' + eH(upTo) : '') + '</div>';
+    html += '<div style="font-size:10px;color:var(--t5)">모든 형식 (PDF · 오피스 · 한글 · 도면 · 이미지 · 압축 …) · 파일당 50MB · 화면 캡처는 Ctrl+V</div>';
     html += '</div>';
   } else {
     // 업로드 버튼
     html += '<div style="margin-bottom:10px;display:flex;gap:6px">';
-    html += '<button class="btn btn-p btn-s" onclick="document.getElementById(\'docFileInput\').click()">📤 파일 업로드</button>';
+    html += '<button class="btn btn-p btn-s" onclick="document.getElementById(\'docFileInput\').click()">📤 파일 올리기' + (upTo ? ' → ' + eH(upTo) : '') + '</button>';
+    html += '<span class="doc-drop-hint">끌어다 놓기 · Ctrl+V 붙여넣기도 됩니다</span>';
     html += '</div>';
 
     // 파일 카드 / 리스트
@@ -342,7 +357,7 @@ function renderFileList(folders, allFiles) {
         html += '<td>' + eH((f.ext || '').toUpperCase()) + '</td>';
         html += '<td style="font-size:10px">' + (f.createdAt ? new Date(f.createdAt).toLocaleDateString('ko') : '') + '</td>';
         html += '<td style="white-space:nowrap">';
-        html += '<span onclick="event.stopPropagation();docMoveFile(\'' + eA(f.id) + '\')" style="cursor:pointer;color:var(--t5);font-size:12px;margin-right:4px" title="이동">📁</span>';
+        html += '<span onclick="event.stopPropagation();' + (personal ? 'docMoveToProject' : 'docMoveFile') + '(\'' + eA(f.id) + '\')" style="cursor:pointer;color:var(--t5);font-size:12px;margin-right:4px" title="' + (personal ? '프로젝트로 옮기기' : '이동') + '">📁</span>';
         html += '<span onclick="event.stopPropagation();docDeleteFile(\'' + eA(f.id) + '\')" style="cursor:pointer;color:var(--t5);font-size:12px" title="삭제">🗑️</span>';
         html += '</td></tr>';
       });
@@ -357,7 +372,8 @@ function renderFileList(folders, allFiles) {
   html += '</div>';
 
   // hidden file input
-  html += '<input type="file" id="docFileInput" multiple style="display:none" accept=".txt,.csv,.md,.json,.xml,.log,.pdf,.png,.jpg,.jpeg,.gif,.bmp,.svg,.xls,.xlsx,.ppt,.pptx,.doc,.docx" onchange="docUploadWithVersion(this.files)">';
+  // 형식 제한 없음 (v13.307 — 한글 · 도면 · 압축도). 같은 파일을 다시 고를 수 있게 값 비움
+  html += '<input type="file" id="docFileInput" multiple style="display:none" onchange="docUploadWithVersion(this.files);this.value=\'\'">';
   html += '</div>';
   return html;
 }
@@ -420,6 +436,11 @@ function docHandleDrop(e) {
   var files = e.dataTransfer ? e.dataTransfer.files : [];
   if (files.length) docUploadWithVersion(files);
 }
+/* 끌어다 놓기 표시 — 파일을 끌 때만 (글 · 카드 끌기는 무시) */
+function _docIsFileDrag(e) { return !!(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0); }
+function docDragOver(e, el) { if (!_docIsFileDrag(e)) return; e.preventDefault(); el.classList.add('doc-drop-on'); }
+function docDragLeave(e, el) { if (!el.contains(e.relatedTarget)) el.classList.remove('doc-drop-on'); }
+function docDropOn(e, el) { el.classList.remove('doc-drop-on'); if (!_docIsFileDrag(e)) return; e.preventDefault(); docHandleDrop(e); }
 
 function readFileAsArrayBuffer(file) {
   return new Promise(function (res) {
@@ -428,22 +449,6 @@ function readFileAsArrayBuffer(file) {
     reader.onerror = function () { res(new ArrayBuffer(0)); };
     reader.readAsArrayBuffer(file);
   });
-}
-
-// 원본 바이너리를 GCS에 직접 업로드(서명 URL)하고 storageKey 반환
-async function docUploadBinary(file, mime, ext, projectId) {
-  var sign = await apiFetch('/api/docs/files/upload-url', {
-    method: 'POST',
-    body: JSON.stringify({ name: file.name, mimeType: mime, ext: ext, projectId: projectId || null })
-  });
-  var up = sign.data;
-  var putRes = await fetch(up.uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': mime },
-    body: file
-  });
-  if (!putRes.ok) throw new Error('스토리지 업로드 실패 (' + putRes.status + ')');
-  return up.storageKey;
 }
 
 /* ═══ 텍스트 추출 ═══ */
@@ -480,6 +485,15 @@ async function extractTextFromFile(fileRecord) {
         text += content.items.map(function (item) { return item.str; }).join(' ') + '\n';
       }
       return text.slice(0, 50000);
+    }
+
+    // 한글 HWPX (zip 안 Contents/section*.xml, v13.307)
+    if (ext === 'hwpx' && typeof JSZip !== 'undefined') {
+      var hz = await JSZip.loadAsync(data);
+      var secs = Object.keys(hz.files).filter(function (n) { return /^Contents\/section\d+\.xml$/i.test(n); }).sort();
+      var ht = '';
+      for (var hi = 0; hi < secs.length; hi++) ht += (await hz.file(secs[hi]).async('string')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() + '\n';
+      return ht.slice(0, 50000);
     }
 
     // PPTX / DOCX (JSZip 필요)
@@ -541,7 +555,9 @@ async function showFilePreview(fileRecord) {
   infoHtml += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
   infoHtml += '<button class="btn btn-g btn-s" onclick="docDownloadFile(\'' + eA(fileRecord.id) + '\')">💾 다운로드</button>';
   infoHtml += '<button class="btn btn-g btn-s" onclick="docEditFileMeta(\'' + eA(fileRecord.id) + '\')">✏️ 편집</button>';
-  infoHtml += '<button class="btn btn-g btn-s" onclick="docMoveFile(\'' + eA(fileRecord.id) + '\')">📁 이동</button>';
+  infoHtml += (docSelProject === DOC_PERSONAL
+    ? '<button class="btn btn-p btn-s" onclick="docMoveToProject(\'' + eA(fileRecord.id) + '\')">📁 프로젝트로 옮기기</button>'
+    : '<button class="btn btn-g btn-s" onclick="docMoveFile(\'' + eA(fileRecord.id) + '\')">📁 이동</button>');
   infoHtml += '<button class="btn btn-d btn-s" onclick="docDeleteFile(\'' + eA(fileRecord.id) + '\')">🗑️ 삭제</button>';
   infoHtml += '</div></div>';
 
@@ -1146,6 +1162,7 @@ async function _docBuildMoveFile(fileId) {
     html += '</div>';
   });
   html += '</div>';
+  html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);text-align:right"><button class="btn btn-g btn-s" onclick="_docCloseTopModal();docMoveToProject(\'' + eA(fileId) + '\')">↗ 다른 프로젝트로</button></div>';
 
   createModal({ id: 'docMoveFileModal', title: '📁 파일 이동: ' + eH(f.name), html: html, width: '360px' });
 }
@@ -1201,86 +1218,215 @@ function docToggleDeepSearch() {
   renderDocManager({ useCache: true });
 }
 
-/* ═══ Phase 3: 파일 버전 관리 ═══ */
-async function docUploadWithVersion(fileList) {
-  if (!docSelProject) { showToast('프로젝트를 먼저 선택하세요.', 'warn'); return; }
+/* ═══ 파일 올리기 — 문서 화면 · 프로젝트 📂 문서 탭 · 붙여넣기 공용 (v13.307) ═══
+ * docUploadFiles(files, { projectId, folderId, phase, onDone })
+ *   폴더를 안 고르면 프로젝트의 지금 단계 폴더(설계 단계면 '설계') → 없으면 첫 폴더. 어디에 넣었는지 알려 줌
+ *   같은 이름이 있으면 한 번만 묻는다 (새 버전으로 교체 · 이전 것은 _v날짜 로 보관 / 건너뛰기)
+ *   진행 표시(오른쪽 아래) · 파일마다 올린 %
+ *   형식 제한 없음 (한글 · 도면 · 압축 …) — 실행 파일만 막음. 본문 검색용 글은 읽을 수 있는 형식만 뽑음 (20MB 이하) */
+var DOC_BLOCK_EXT = ['exe', 'msi', 'bat', 'cmd', 'com', 'scr', 'vbs', 'ps1', 'jar'];
+var _docUpBusy = false;
 
+/** 프로젝트에서 올릴 폴더 고르기 — 지금 단계 폴더 → 첫 최상위 폴더 */
+function docPickFolder(folders, phase) {
+  var roots = (folders || []).filter(function (f) { return !f.parentId; });
+  var byPhase = phase ? roots.filter(function (f) { return f.phase === phase; })[0] : null;
+  return byPhase || roots[0] || (folders || [])[0] || null;
+}
+
+/** 진행 표시 (오른쪽 아래) — st: { i, n, name, pct } · null 이면 닫음 */
+function _docProg(st) {
+  var el = document.getElementById('docUpProg');
+  if (!st) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div'); el.id = 'docUpProg'; el.className = 'doc-up-prog'; el.setAttribute('role', 'status');
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<div class="doc-up-t">📤 올리는 중 ' + st.i + ' / ' + st.n + '</div>' +
+    '<div class="doc-up-n">' + eH(st.name || '') + '</div>' +
+    '<div class="doc-up-bar"><span style="width:' + Math.max(2, Math.min(100, st.pct || 0)) + '%"></span></div>';
+}
+
+/** 저장소(GCS)에 올리기 — 서명 URL 에 PUT, 진행률 콜백 */
+function _docPutWithProgress(url, file, mime, onPct) {
+  return new Promise(function (resolve, reject) {
+    var x = new XMLHttpRequest();
+    x.open('PUT', url);
+    x.setRequestHeader('Content-Type', mime);
+    if (x.upload) x.upload.onprogress = function (e) { if (e.lengthComputable && onPct) onPct(Math.round(e.loaded * 100 / e.total)); };
+    x.onload = function () { if (x.status >= 200 && x.status < 300) resolve(); else reject(new Error('스토리지 업로드 실패 (' + x.status + ')')); };
+    x.onerror = function () { reject(new Error('스토리지 연결 실패')); };
+    x.send(file);
+  });
+}
+
+async function _docUploadOne(file, mime, ext, projectId, onPct) {
+  var sign = await apiFetch('/api/docs/files/upload-url', {
+    method: 'POST',
+    body: JSON.stringify({ name: file.name, mimeType: mime, ext: ext, projectId: projectId || null })
+  });
+  await _docPutWithProgress(sign.data.uploadUrl, file, mime, onPct);
+  return sign.data.storageKey;
+}
+
+async function docUploadFiles(fileList, opts) {
+  opts = opts || {};
+  var files = Array.prototype.slice.call(fileList || []);
+  if (!files.length) return 0;
+  if (_docUpBusy) { showToast('다른 파일을 올리는 중입니다. 끝난 뒤 다시 올려 주세요.', 'warn'); return 0; }
+  var projectId = opts.projectId || null;
+  _docUpBusy = true;
+  var count = 0, tooBig = [], blocked = [], failed = [];
   try {
-    var targetFolder = docSelFolder;
-    if (!targetFolder) {
-      var folders = await folderGetByProject(docSelProject);
-      if (folders.length) targetFolder = folders[0].id;
-      else { showToast('폴더가 없습니다.', 'error'); return; }
+    // 넣을 폴더
+    var folderId = opts.folderId || null, folderName = '';
+    if (projectId) {
+      var folders = await folderGetByProject(projectId);
+      if (!folders.length) { await createDefaultFolders(projectId); folders = await folderGetByProject(projectId); }
+      var fo = folderId ? folders.filter(function (f) { return f.id === folderId; })[0] : docPickFolder(folders, opts.phase);
+      if (fo) { folderId = fo.id; folderName = fo.name; } else folderId = null;
     }
-
-    var existingFiles = await fileGetByFolder(targetFolder);
-    var count = 0;
-    var tooBig = [];
-
-    for (var i = 0; i < fileList.length; i++) {
-      var file = fileList[i];
-      if (file.size > DOC_MAX_FILE) { tooBig.push(file.name); continue; }   // 예전엔 말없이 건너뛰었다
-
-      var ext = (file.name.split('.').pop() || '').toLowerCase();
-      var buf = await readFileAsArrayBuffer(file);
-
-      // 동일 이름 파일 확인
-      var existing = existingFiles.find(function (f) { return f.name === file.name; });
-      if (existing) {
-        var action = confirm('"' + file.name + '" 파일이 이미 존재합니다.\n\n[확인] 새 버전으로 교체 (이전 버전 보관)\n[취소] 건너뛰기');
-        if (!action) continue;
-      }
-
+    // 같은 이름 — 한 번에 묻기
+    var existing = projectId ? (folderId ? await fileGetByFolder(folderId) : []) : await fileGetPersonal();
+    var dupNames = files.filter(function (f) { return existing.some(function (x) { return x.name === f.name; }); }).map(function (f) { return f.name; });
+    var replaceDup = false;
+    if (dupNames.length) {
+      replaceDup = confirm('이미 있는 파일 ' + dupNames.length + '개: ' + dupNames.slice(0, 5).join(', ') + (dupNames.length > 5 ? ' …' : '') +
+        '\n\n[확인] 새 버전으로 교체 (이전 것은 _v날짜 이름으로 보관)\n[취소] 같은 이름은 건너뛰기');
+    }
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      var ext = (file.name.indexOf('.') >= 0 ? file.name.split('.').pop() : '').toLowerCase();
+      if (DOC_BLOCK_EXT.indexOf(ext) >= 0) { blocked.push(file.name); continue; }
+      if (file.size > DOC_MAX_FILE) { tooBig.push(file.name); continue; }
+      var old = existing.filter(function (x) { return x.name === file.name; })[0];
+      if (old && !replaceDup) continue;
+      _docProg({ i: i + 1, n: files.length, name: file.name, pct: 0 });
       var mime = file.type || 'application/octet-stream';
       var record = {
-        id: 'file-' + uuid(),
-        projectId: docSelProject,
-        folderId: targetFolder,
-        name: file.name,
-        type: mime,
-        mimeType: mime,
-        ext: ext,
-        size: file.size,
-        data: buf,
-        textCache: '',
-        memo: '',
-        tags: [],
-        uploadedBy: '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        _isNew: true
+        id: 'file-' + uuid(), projectId: projectId, folderId: folderId,
+        name: file.name, type: mime, mimeType: mime, ext: ext, size: file.size,
+        textCache: '', memo: '', tags: [], uploadedBy: '',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), _isNew: true
       };
-      record.textCache = await extractTextFromFile(record);
+      // 본문 검색 · AI 요약용 글 (읽을 수 있는 형식 · 20MB 이하만 — 큰 PDF 가 화면을 멈추지 않게)
+      if (file.size <= 20 * 1024 * 1024) {
+        try { record.data = await readFileAsArrayBuffer(file); record.textCache = await extractTextFromFile(record); } catch (_) {}
+        delete record.data;
+      }
       try {
-        record.storageKey = await docUploadBinary(file, mime, ext, docSelProject);
+        record.storageKey = await _docUploadOne(file, mime, ext, projectId, function (p) { _docProg({ i: i + 1, n: files.length, name: file.name, pct: p }); });
       } catch (upErr) {
-        console.error('[docUploadVersion] GCS', file.name, upErr);
-        var upMsg = (upErr && upErr.data && upErr.data.error === 'STORAGE_DISABLED') ? '스토리지 미설정' : _docErrMsg(upErr);
-        showToast('❌ ' + file.name + ' 업로드 실패: ' + upMsg, 'error');
+        console.error('[docUploadFiles]', file.name, upErr);
+        failed.push(file.name + ' — ' + ((upErr && upErr.data && upErr.data.error === 'STORAGE_DISABLED') ? '저장소(GCS) 미설정' : _docErrMsg(upErr)));
         continue;
       }
-      // 이전 버전은 새 원본이 올라간 뒤에 이름을 바꿔 보관 — 예전엔 먼저 바꿔서, 업로드가 실패하면 원본만 '_v…' 로 남았다
-      if (existing) {
+      // 이전 버전은 새 원본이 올라간 뒤에 이름을 바꿔 보관
+      if (old) {
         var ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-        var baseName = existing.name.replace(/\.[^.]+$/, '');
-        var oldExt = existing.ext || '';
-        existing.name = baseName + '_v' + ts + (oldExt ? '.' + oldExt : '');
-        existing.tags = (existing.tags || []).concat(['이전버전']);
-        existing.updatedAt = new Date().toISOString();
-        await filePut(existing);
+        old.name = old.name.replace(/\.[^.]+$/, '') + '_v' + ts + (old.ext ? '.' + old.ext : '');
+        old.tags = (old.tags || []).concat(['이전버전']);
+        old.updatedAt = new Date().toISOString();
+        await filePut(old);
       }
-      delete record.data;
       await filePut(record);
       count++;
     }
-
-    if (count) showToast('📤 ' + count + '개 파일 업로드 완료');
-    if (tooBig.length) showToast('⚠️ 50MB 초과로 건너뜀: ' + tooBig.join(', '), 'warn');
-    renderDocManager();
   } catch (err) {
-    console.error('[docUploadWithVersion]', err);
-    showToast('❌ 오류: ' + ((err && err.message) || '알 수 없는 오류'), 'error');
+    console.error('[docUploadFiles]', err);
+    showToast('❌ 올리지 못했습니다: ' + _docErrMsg(err), 'error');
+  } finally {
+    _docUpBusy = false;
+    _docProg(null);
   }
+  if (count) showToast('📤 ' + count + '개 올림' + (folderName ? ' → 📁 ' + folderName : (projectId ? '' : ' → 📥 내 문서')), 'success');
+  if (tooBig.length) showToast('⚠️ 50MB 넘어서 건너뜀: ' + tooBig.join(', '), 'warn');
+  if (blocked.length) showToast('⛔ 실행 파일은 올릴 수 없습니다: ' + blocked.join(', '), 'warn');
+  if (failed.length) showToast('❌ 올리지 못함: ' + failed.join(' · '), 'error');
+  if (typeof opts.onDone === 'function') opts.onDone(count);
+  return count;
+}
+
+/** 문서 화면에서 올리기 — 고른 폴더, 없으면 지금 단계 폴더 */
+function docUploadWithVersion(fileList) {
+  if (!docSelProject) { showToast('프로젝트를 먼저 선택하세요.', 'warn'); return Promise.resolve(0); }
+  var personal = docSelProject === DOC_PERSONAL;
+  var proj = personal ? null : _docProjOf(docSelProject);
+  return docUploadFiles(fileList, {
+    projectId: personal ? null : docSelProject,
+    folderId: personal ? null : docSelFolder,
+    phase: proj && proj.currentPhase,
+    onDone: function (n) { if (n) renderDocManager(); }
+  });
+}
+
+/* 화면의 프로젝트 목록 캐시에서 한 건 */
+var _docProjList = [];
+function _docProjOf(id) { return _docProjList.filter(function (p) { return p.id === id; })[0] || null; }
+
+/** Ctrl+V — 문서 화면이 보일 때 복사한 파일 · 화면 캡처를 지금 폴더로 */
+document.addEventListener('paste', function (e) {
+  var wrap = document.getElementById('mDocs');
+  if (!wrap || !wrap.offsetParent || !docSelProject) return;
+  if (document.getElementById('projDetailPanel')) return;   // 프로젝트 상세가 위에 떠 있으면 그쪽(📂 문서 탭)이 받음
+  var t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (document.querySelector('.wa-modal-overlay')) return;
+  var items = (e.clipboardData && e.clipboardData.files) || [];
+  if (!items.length) return;
+  e.preventDefault();
+  var stamp = new Date(); var p2 = function (n) { return ('0' + n).slice(-2); };
+  var named = Array.prototype.map.call(items, function (f, i) {
+    if (f.name && f.name !== 'image.png') return f;
+    var ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+    var nm = '붙여넣기-' + stamp.getFullYear() + p2(stamp.getMonth() + 1) + p2(stamp.getDate()) + '-' + p2(stamp.getHours()) + p2(stamp.getMinutes()) + p2(stamp.getSeconds()) + (i ? '-' + i : '') + '.' + ext;
+    try { return new File([f], nm, { type: f.type }); } catch (_) { return f; }
+  });
+  docUploadWithVersion(named);
+});
+
+/* ═══ 📥 내 문서 — 프로젝트 없이 내가 올린 것 (텔레그램 사진 · 파일 등) · 프로젝트로 옮기기 (v13.307) ═══ */
+var DOC_PERSONAL = '__mine';
+function fileGetPersonal() { return apiFetch('/api/docs/files?all=true&limit=5000&personal=1').then(function (r) { return toCamelArray(r.data); }); }
+
+function docMoveToProject(fileId) {
+  return wmGuardedModal('docMoveProj', function () { return _docBuildMoveToProject(fileId); }, 'docMoveProjModal');
+}
+async function _docBuildMoveToProject(fileId) {
+  var projects = (_docProjList || []).slice();
+  var m = createModal({ id: 'docMoveProjModal', width: '420px', closeOnEsc: true, title: '📁 프로젝트로 옮기기' });
+  m.box.insertAdjacentHTML('beforeend',
+    '<div style="display:grid;gap:10px;font-size:12px">' +
+      '<select id="docMvProj" class="wm-tb-sel" style="width:100%"><option value="">프로젝트 고르기…</option>' +
+      projects.map(function (p) { return '<option value="' + eA(p.id) + '">' + eH(p.name || p.orderNo || p.id) + '</option>'; }).join('') + '</select>' +
+      '<select id="docMvFolder" class="wm-tb-sel" style="width:100%" disabled><option value="">폴더</option></select>' +
+      '<div style="display:flex;justify-content:flex-end;gap:6px"><button class="btn btn-g btn-s" onclick="_docCloseTopModal()">취소</button>' +
+      '<button class="btn btn-p btn-s" id="docMvGo" disabled>옮기기</button></div>' +
+    '</div>');
+  var ps = document.getElementById('docMvProj'), fs = document.getElementById('docMvFolder'), go = document.getElementById('docMvGo');
+  ps.onchange = async function () {
+    go.disabled = true; fs.disabled = true; fs.innerHTML = '<option>불러오는 중…</option>';
+    if (!ps.value) { fs.innerHTML = '<option value="">폴더</option>'; return; }
+    var folders = await folderGetByProject(ps.value);
+    if (!folders.length) { try { await createDefaultFolders(ps.value); folders = await folderGetByProject(ps.value); } catch (_) {} }
+    _docSortFolders(folders);
+    var pick = docPickFolder(folders, (_docProjOf(ps.value) || {}).currentPhase);
+    fs.innerHTML = folders.map(function (f) { return '<option value="' + eA(f.id) + '"' + (pick && pick.id === f.id ? ' selected' : '') + '>' + (f.parentId ? '└ ' : '📁 ') + eH(f.name) + '</option>'; }).join('');
+    fs.disabled = false; go.disabled = false;
+  };
+  go.onclick = async function () {
+    go.disabled = true;
+    try {
+      await apiFetch('/api/docs/files/' + encodeURIComponent(fileId), { method: 'PUT', body: JSON.stringify({ projectId: ps.value, folderId: fs.value || null }) });
+      _docCloseTopModal();
+      showToast('📁 옮겼습니다 — ' + (ps.options[ps.selectedIndex] || {}).text, 'success');
+      if (docSelFile === fileId) docSelFile = null;
+      renderDocManager();
+    } catch (e) {
+      go.disabled = false;
+      showToast('❌ ' + _docErrMsg(e), 'error');
+    }
+  };
 }
 
 /* ═══ Phase 3: 요약 이력 관리 ═══ */

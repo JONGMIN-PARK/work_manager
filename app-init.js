@@ -164,11 +164,12 @@ function _wmBindUploadUI(){
   function _dragHasFiles(e){var t=e&&e.dataTransfer&&e.dataTransfer.types;if(!t)return false;try{for(var i=0;i<t.length;i++){if(t[i]==='Files')return true;}}catch(_){}return !!(t.contains&&t.contains('Files'));}
   document.body.addEventListener('dragover',e=>{
     if(!_dragHasFiles(e))return;  // 내부 드래그(카드 순서변경 등)는 무시
+    if(e.defaultPrevented){if(_dragOverlay){_dragOverlay.remove();_dragOverlay=null}return}  // 문서 화면 · 📂 문서 탭처럼 자기가 받는 곳 위 (v13.307)
     e.preventDefault();
     if(!_dragOverlay){_dragOverlay=document.createElement('div');_dragOverlay.id='dropOverlay';_dragOverlay.style.cssText='position:fixed;inset:0;z-index:9990;background:rgba(6,182,212,.12);border:3px dashed #06B6D4;display:flex;align-items:center;justify-content:center;pointer-events:none';_dragOverlay.innerHTML='<div style="font-size:16px;font-weight:700;color:#22D3EE;background:var(--bg-p);padding:16px 32px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3)">📂 파일을 여기에 놓으세요</div>';document.body.appendChild(_dragOverlay)}
   });
   document.body.addEventListener('dragleave',e=>{if(e.relatedTarget===null&&_dragOverlay){_dragOverlay.remove();_dragOverlay=null}});
-  document.body.addEventListener('drop',e=>{if(_dragOverlay){_dragOverlay.remove();_dragOverlay=null}if(!_dragHasFiles(e))return;e.preventDefault();if(e.dataTransfer.files.length)hFiles(e.dataTransfer.files)});
+  document.body.addEventListener('drop',e=>{if(_dragOverlay){_dragOverlay.remove();_dragOverlay=null}if(!_dragHasFiles(e)||e.defaultPrevented)return;e.preventDefault();if(e.dataTransfer.files.length)hFiles(e.dataTransfer.files)});
 }
 
 async function _postAuthInit(){

@@ -3605,3 +3605,35 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 .mm-tip-more{padding-top:4px}
 .mm-tip-f{margin-top:6px;padding-top:6px;border-top:1px solid var(--bd);font-size:10.5px}
 @media (hover:none){.mm-tip{display:none}}
+
+/* ═══ 📂 문서 넣기 (v13.307 — document-manager.js · project-docs.js) ═══ */
+.doc-drop{transition:box-shadow .15s,border-color .15s}
+.doc-drop-on{border-color:var(--ac)!important;box-shadow:0 0 0 2px var(--ac-g),inset 0 0 0 9999px var(--ac-g)}
+.doc-drop-hint{font-size:10.5px;color:var(--t5);align-self:center}
+.doc-up-prog{position:fixed;right:16px;bottom:16px;z-index:10060;width:min(320px,calc(100vw - 32px));padding:10px 12px;border-radius:10px;background:var(--bg-p);border:1px solid var(--bd);box-shadow:0 8px 24px rgba(0,0,0,.22);font-size:12px;color:var(--t2)}
+.doc-up-t{font-weight:700;color:var(--t1)}
+.doc-up-n{font-size:11px;color:var(--t4);margin:3px 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-up-bar{height:5px;border-radius:3px;background:var(--bg-i);overflow:hidden}
+.doc-up-bar span{display:block;height:100%;background:var(--ac);transition:width .2s}
+#pdDocs{border-radius:10px;transition:box-shadow .15s}
+#pdDocs.pdd-on{box-shadow:0 0 0 2px var(--ac),inset 0 0 0 9999px var(--ac-g)}
+.pdd-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.pdd-up{display:flex;align-items:center;gap:6px}
+.pdd-to{font-size:11px;color:var(--t4);display:inline-flex;align-items:center;gap:4px}
+.pdd-to select{font:inherit;font-size:11px;padding:3px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t2);max-width:170px}
+.pdd-q{flex:1;min-width:120px;height:28px;font-size:11px;padding:0 9px}
+.pdd-hint{font-size:10.5px;color:var(--t5);margin-bottom:10px}
+.pdd-empty{text-align:center;padding:28px 10px;font-size:12px;color:var(--t4);border:2px dashed var(--bd);border-radius:10px}
+.pdd-grp{margin-bottom:10px}
+.pdd-gh{font-size:11px;font-weight:700;color:var(--t3,var(--t2));margin-bottom:4px}
+.pdd-gh span{font-weight:400;color:var(--t5)}
+.pdd-row{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;font-size:12px}
+.pdd-row:hover{background:var(--bg-i)}
+.pdd-old{opacity:.55}
+.pdd-ic{flex:none}
+.pdd-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2);cursor:pointer}
+.pdd-nm:hover{color:var(--ac-t);text-decoration:underline}
+.pdd-mt{flex:none;font-size:10.5px;color:var(--t5)}
+.pdd-b{flex:none;border:1px solid var(--bd);background:var(--bg-p);color:var(--t3,var(--t2));border-radius:5px;font-size:11px;padding:1px 6px;cursor:pointer}
+.pdd-b:hover{border-color:var(--ac);color:var(--ac-t)}
+@media (max-width:600px){.pdd-mt{display:none}.pdd-to select{max-width:120px}}

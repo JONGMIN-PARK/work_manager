@@ -166,6 +166,8 @@ router.get('/files', async function (req, res) {
     var idx = 2;
     if (req.query.projectId) { sql += ' AND project_id = $' + idx++; params.push(req.query.projectId); }
     if (req.query.folderId) { sql += ' AND folder_id = $' + idx++; params.push(req.query.folderId); }
+    // ?personal=1 — 📥 내 문서: 프로젝트 없이 내가 올린 것 (텔레그램 등, v13.307)
+    if (req.query.personal === '1' || req.query.personal === 'true') sql += ' AND project_id IS NULL';
     var meIdx = idx++;
     params.push(req.user.sub);
     var sub = ps.accessibleProjectsSubquery(req, idx);
@@ -279,6 +281,18 @@ router.put('/files/:id', async function (req, res) {
     var params = [];
     var idx = 1;
 
+    // 다른 프로젝트로 옮기기 (v13.307) — 📥 내 문서 → 프로젝트 · 프로젝트 → 프로젝트. 옮겨 갈 프로젝트도 편집권이 있어야
+    var pidIn = b.projectId !== undefined ? b.projectId : b.project_id;
+    if (pidIn !== undefined && (pidIn || null) !== (cur.project_id || null)) {
+      var toPid = pidIn || null;
+      if (toPid && !await _gateNewDoc(req, res, toPid)) return;
+      if (!toPid && cur._owner !== req.user.sub && req.user.role !== 'admin') return res.status(403).json({ error: 'FORBIDDEN', message: '올린 사람만 내 문서로 옮길 수 있습니다.' });
+      var toFolder = b.folderId || b.folder_id || null;
+      if (!await _checkFolder(req, res, toFolder, toPid)) return;
+      sets.push('project_id=$' + idx++); params.push(toPid);
+      sets.push('folder_id=$' + idx++); params.push(toFolder);
+      b.folderId = undefined; b.folder_id = undefined;   // 아래 폴더 검사는 건너뜀 (위에서 함)
+    }
     if (b.name !== undefined) { sets.push('name=$' + idx++); params.push(b.name); }
     if (b.ext !== undefined) { sets.push('ext=$' + idx++); params.push(String(b.ext || '').slice(0, 20)); }
     if (b.folderId !== undefined || b.folder_id !== undefined) {

@@ -111,7 +111,13 @@ var DOC_ICONS = {
   json: { icon: '📄', color: '' }, xml: { icon: '📄', color: '' }, log: { icon: '📄', color: '' },
   png: { icon: '🖼️', color: '#8B5CF6' }, jpg: { icon: '🖼️', color: '#8B5CF6' },
   jpeg: { icon: '🖼️', color: '#8B5CF6' }, gif: { icon: '🖼️', color: '#8B5CF6' },
-  svg: { icon: '🖼️', color: '#8B5CF6' }, bmp: { icon: '🖼️', color: '#8B5CF6' }
+  svg: { icon: '🖼️', color: '#8B5CF6' }, bmp: { icon: '🖼️', color: '#8B5CF6' }, webp: { icon: '🖼️', color: '#8B5CF6' }, heic: { icon: '🖼️', color: '#8B5CF6' },
+  // v13.307 — 한글 · 도면 · 3D · 압축 · 동영상
+  hwp: { icon: '📘', color: '#0EA5E9' }, hwpx: { icon: '📘', color: '#0EA5E9' },
+  dwg: { icon: '📐', color: '#F97316' }, dxf: { icon: '📐', color: '#F97316' },
+  step: { icon: '🧊', color: '#64748B' }, stp: { icon: '🧊', color: '#64748B' }, igs: { icon: '🧊', color: '#64748B' }, iges: { icon: '🧊', color: '#64748B' }, stl: { icon: '🧊', color: '#64748B' },
+  zip: { icon: '🗜️', color: '#78716C' }, '7z': { icon: '🗜️', color: '#78716C' }, rar: { icon: '🗜️', color: '#78716C' },
+  mp4: { icon: '🎬', color: '#EC4899' }, mov: { icon: '🎬', color: '#EC4899' }
 };
 function getDocIcon(ext) { return DOC_ICONS[ext] || { icon: '📎', color: '' }; }
 

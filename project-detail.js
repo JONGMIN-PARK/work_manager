@@ -181,6 +181,7 @@ var PD_TABS = [
   { k: 'issues',    id: 'pdTabIssues',    icon: '🎫', l: '이슈', title: '미해결 이슈 수' },
   { k: 'dev',       id: 'pdTabDev',       icon: '🧩', l: '개발', title: '개발 백로그 — 미완료 수' },
   { k: 'meeting',   id: 'pdTabMeeting',   icon: '🗓', l: '회의' },
+  { k: 'docs',      id: 'pdTabDocs',      icon: '📂', l: '문서', title: '프로젝트 문서 — 넣기 · 찾기 · 내려받기' },
   { k: 'work',      id: 'pdTabWork',      icon: '⏱', l: '투입', title: '투입실적 — 담당자 · 마일스톤별 투입 시간' },
   { k: 'spec',      id: 'pdTabSpec',      icon: '📐', l: '사양', title: '장비 표준 사양서' }
 ];
@@ -202,6 +203,7 @@ function _pdLoadTabCounts(projId) {
   if (typeof issueGetByProject === 'function') issueGetByProject(projId).then(function (a) { if (same()) pdSetTabCount('issues', _pdOpenIssueN(a)); }).catch(function () {});
   if (typeof devItemsByProject === 'function') devItemsByProject(projId).then(function (a) { if (same()) pdSetTabCount('dev', _pdOpenDevN(a)); }).catch(function () {});
   if (typeof apiFetch === 'function') apiFetch('/api/meetings?projectId=' + encodeURIComponent(projId)).then(function (r) { if (same()) pdSetTabCount('meeting', ((r && r.data) || []).length); }).catch(function () {});
+  if (typeof fileGetByProject === 'function') fileGetByProject(projId).then(function (a) { if (same()) pdSetTabCount('docs', (a || []).length); }).catch(function () {});
 }
 function _pdOpenIssueN(a) { return (a || []).filter(function (x) { return x.status !== 'resolved' && x.status !== 'closed'; }).length; }
 function _pdOpenDevN(a) { return (a || []).filter(function (x) { return x.status !== 'done'; }).length; }
@@ -394,7 +396,8 @@ function _pdDetailLazyTabsHtml() {
     '<div id="pdWork" style="display:none">' + _PD_LOADING_HTML + '</div>' +
     '<div id="pdSpec" style="display:none"></div>' +
     '<div id="pdDev" style="display:none">' + _PD_LOADING_HTML + '</div>' +
-    '<div id="pdMeeting" style="display:none">' + _PD_LOADING_HTML + '</div>';
+    '<div id="pdMeeting" style="display:none">' + _PD_LOADING_HTML + '</div>' +
+    '<div id="pdDocs" style="display:none">' + _PD_LOADING_HTML + '</div>';
 }
 
 /* 개요 아래 — 진척 히스토리 · 코멘트 · 관련 마인드맵 (개요 탭에서만 보임, pdSwitchTab).
@@ -523,8 +526,8 @@ function pdLoadTechUsed(projId) {
 
 /* ═══ 프로젝트 상세 패널: 탭 전환 ═══ */
 function pdSwitchTab(tab, projId) {
-  var tabs = ['overview', 'lifecycle', 'issues', 'work', 'spec', 'dev', 'meeting'];
-  var ids = { overview: 'pdOverview', lifecycle: 'pdLifecycle', issues: 'pdIssues', work: 'pdWork', spec: 'pdSpec', dev: 'pdDev', meeting: 'pdMeeting' };
+  var tabs = ['overview', 'lifecycle', 'issues', 'work', 'spec', 'dev', 'meeting', 'docs'];
+  var ids = { overview: 'pdOverview', lifecycle: 'pdLifecycle', issues: 'pdIssues', work: 'pdWork', spec: 'pdSpec', dev: 'pdDev', meeting: 'pdMeeting', docs: 'pdDocs' };
   if (tabs.indexOf(tab) < 0) tab = 'overview';
   if (!projId && window._pdProj) projId = window._pdProj.id;
   tabs.forEach(function (t) {
@@ -548,6 +551,8 @@ function pdSwitchTab(tab, projId) {
   if (tab === 'dev' && projId) pdLoadDev(projId);
   // 회의 탭
   if (tab === 'meeting' && projId) pdLoadMeetings(projId);
+  // 문서 탭 (v13.307, project-docs.js)
+  if (tab === 'docs' && projId && typeof pdLoadDocs === 'function') pdLoadDocs(projId);
 }
 
 /* ═══ 개발 백로그 (칸반) — PRD Phase 1 UI ═══ */
