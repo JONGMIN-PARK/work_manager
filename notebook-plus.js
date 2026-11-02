@@ -549,6 +549,7 @@ function _nbpCoachDraw(c, r) {
       (o >= 1 ? '<div class="nb-co-why">💭 ' + _nbE(f.why) + '</div>' : '') + (o >= 2 ? '<div class="nb-co-hint">💡 ' + _nbE(f.hint) + '</div>' : '') + (o >= 3 && f.ex ? '<div class="nb-co-ex">✍️ 예: ' + _nbE(f.ex) + '</div>' : '') +
       '<div class="nb-co-a">' + (o < 1 ? '<button data-cstep="1">왜?</button>' : o < 2 ? '<button data-cstep="2">힌트</button>' : o < 3 && f.ex ? '<button data-cstep="3">예시 보기</button>' : '') + '</div></div>';
   }).join('') + (list.length > 40 ? '<div class="nb-empty-s">… ' + (list.length - 40) + '개 더 — 위 버릇 칩으로 거르세요</div>' : '') + '</div>';
+  h += _nbpSpellHtml();
   // ✨ AI 코치
   h += '<div class="nb-co-ai"><div class="nb-co-st">✨ AI 코치</div>';
   if (!A) h += '<p class="nb-co-desc">규칙으로 못 찾는 흐름 · 논리 · 빠진 근거를 봅니다. 고쳐 주지 않고 짚어 주니 직접 고쳐 보세요.</p><button class="nb-btn pri" data-cai="1"' + (_nbRO() ? ' disabled' : '') + '>✨ AI 코치 받기</button><span class="nb-ai-st" id="nbCoSt"></span>';
@@ -577,6 +578,7 @@ function _nbpCoachClick(e) {
     if (z === 'stats') _nbpStats(c); else _nbpCoachRun();
     return;
   }
+  if ((x = t.closest('[data-csp]'))) { _nbpSpellAct(x.getAttribute('data-csp')); return; }
   if ((x = t.closest('[data-cf]'))) { NBP.filter = x.getAttribute('data-cf'); _nbpCoachRun(); return; }
   if ((x = t.closest('[data-cstep]'))) { var it = x.closest('[data-ck]'); NBP.open[it.getAttribute('data-ck')] = +x.getAttribute('data-cstep'); _nbpCoachRun(); return; }
   if ((x = t.closest('[data-cgo]'))) { var p = x.getAttribute('data-cgo').split(':'); _nbpSelect(+p[0], +p[1]); return; }
@@ -694,3 +696,103 @@ document.addEventListener('keydown', function (e) {
     e.preventDefault(); nbWriteStart();
   }
 });
+
+/* ═══ 🔤 AI 맞춤법 · 띄어쓰기 (v13.323) — 코치 칸 안 · ⋯ 메뉴 · 틀린 곳 → 바른 말 · 규칙 한 줄 · 하나씩 / 모두 고치기 (Ctrl+Z 로 되돌림) ═══
+   NBP.sp = { loading, err, items:[{wrong, right, type, why, done:false|true|'skip'}], cut } — 노트를 바꾸면 비움 */
+var NBP_SP_LABEL = { spell: '✏️ 맞춤법', space: '␣ 띄어쓰기', grammar: '📐 문법' };
+function nbpSpellCheck() {
+  if (!NB.cur || _nbRO()) { _nbToast('고칠 수 있는 노트를 먼저 여세요', 'warn'); return; }
+  NBP.coachTab = 'now';
+  if (!NBP.coach) nbpCoachToggle(true);
+  _nbpSpellAct('run');
+  var c = document.getElementById('nbCoach'), box = c && c.querySelector('.nb-sp-box');
+  if (box && box.scrollIntoView) box.scrollIntoView({ block: 'start' });
+}
+/** 바뀐 곳만 표시 — 앞뒤 같은 글자는 그대로, 빠지는 것은 줄 긋고 들어가는 것은 칠함 (띄어쓰기는 ␣) */
+function _nbpSpDiff(a, b) {
+  // 글자 단위 가장 긴 공통 부분(LCS) — "설치 하는것 → 설치하는 것" 을 설치[␣]하는[+␣]것 처럼 최소로
+  var n = a.length, m = b.length, L = [], i, j;
+  for (i = 0; i <= n; i++) { L.push(new Array(m + 1).fill(0)); }
+  for (i = n - 1; i >= 0; i--) for (j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  var ops = [], push = function (k, ch) { var t = ops[ops.length - 1]; if (t && t.k === k) t.s += ch; else ops.push({ k: k, s: ch }); };
+  i = 0; j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) { push('=', a[i]); i++; j++; }
+    // 같으면: 띄어쓰기를 빼거나 넣는 쪽 먼저 (다음[+␣]주[-␣]에), 아니면 빠지는 것 먼저 ("몇일 → 며칠")
+    else if (i < n && (j >= m || L[i + 1][j] > L[i][j + 1] || (L[i + 1][j] === L[i][j + 1] && (a[i] === ' ' || b[j] !== ' ')))) { push('-', a[i]); i++; }
+    else { push('+', b[j]); j++; }
+  }
+  var v = function (x) { return _nbE(x).replace(/ /g, '<i class="nb-sp-sp">␣</i>'); };
+  return ops.map(function (o) { return o.k === '=' ? _nbE(o.s) : o.k === '-' ? '<del>' + v(o.s) + '</del>' : '<ins>' + v(o.s) + '</ins>'; }).join('');
+}
+function _nbpSpellHtml() {
+  var S = NBP.sp, src = (_nbSrc() || {}).value || '', ro = _nbRO();
+  var h = '<div class="nb-sp-box"><div class="nb-co-st">🔤 맞춤법 · 띄어쓰기 <small>AI</small></div>';
+  if (!S || S.loading || S.err) {
+    return h + (S && S.loading ? '' : '<p class="nb-co-desc">틀린 글자 · 띄어쓰기 · 조사를 찾아 바른 말과 규칙을 알려 줍니다. 하나씩 보고 고치거나 한 번에 고치기.</p>') +
+      '<button class="nb-btn pri" data-csp="run"' + (ro || (S && S.loading) ? ' disabled' : '') + '>' + (S && S.loading ? '<span class="nb-spin"></span> 검사하는 중…' : '🔤 맞춤법 검사') + '</button>' +
+      (S && S.err ? '<span class="nb-ai-st">❌ ' + _nbE(S.err) + '</span>' : '') + '</div>';
+  }
+  _nbpSpSync(src);
+  var live = [], done = 0;
+  S.items.forEach(function (it, i) { if (it.done === true) done++; else if (!it.done && src.indexOf(it.wrong) >= 0) live.push(i); });
+  if (!S.items.length) h += '<div class="nb-co-good">👏 틀린 곳을 찾지 못했습니다</div>';
+  else h += '<div class="nb-sp-sum"><span><b>' + live.length + '</b>곳 남음' + (done ? ' · 고침 ' + done : '') + '</span><span class="nb-sp"></span>' +
+    (live.length > 1 && !ro ? '<button class="nb-btn sm pri" data-csp="all">모두 고치기 ' + live.length + '</button>' : '') + '</div>';
+  h += '<div class="nb-sp-list">' + S.items.map(function (it, i) {
+    var gone = !it.done && src.indexOf(it.wrong) < 0, st = it.done === true ? ' done' : it.done || gone ? ' off' : '';
+    return '<div class="nb-sp-i t-' + it.type + st + '"><div class="nb-sp-top"><span class="nb-co-tag">' + (NBP_SP_LABEL[it.type] || '✏️') + '</span>' +
+      '<button class="nb-sp-d" data-csp="go:' + i + '"' + (gone || it.done === true ? ' disabled' : '') + ' title="이 자리로">' + _nbpSpDiff(it.wrong, it.right) + '</button></div>' +
+      (it.why ? '<div class="nb-sp-why">' + _nbE(it.why) + '</div>' : '') +
+      '<div class="nb-co-a">' + (it.done === true ? '<span class="nb-sp-st">✓ 고침</span>' : it.done ? '<span class="nb-sp-st">무시함</span>' : gone ? '<span class="nb-sp-st">글이 바뀜</span>' :
+        (ro ? '' : '<button data-csp="fix:' + i + '">고치기</button><button data-csp="skip:' + i + '">무시</button>')) + '</div></div>';
+  }).join('') + '</div>' +
+    '<div class="nb-sp-foot"><button class="nb-btn sm" data-csp="run"' + (ro ? ' disabled' : '') + '>🔤 다시 검사</button>' +
+    (S.cut ? '<small>앞 8,000자까지만 봤습니다</small>' : '') + (S.provider ? '<small>' + _nbE(S.provider) + '</small>' : '') + '</div></div>';
+  return h;
+}
+/** 고친 곳을 Ctrl+Z 로 되돌려 틀린 말이 다시 있으면 다시 남은 곳으로 */
+function _nbpSpSync(src) { (NBP.sp && NBP.sp.items || []).forEach(function (it) { if (it.done === true && src.indexOf(it.wrong) >= 0) it.done = false; }); }
+/** 한 곳 고치기 — 지금 글에서 다시 찾아 바꿈. 성공 여부 */
+function _nbpSpFix(it) {
+  var s = _nbSrc(), at = s ? s.value.indexOf(it.wrong) : -1;
+  if (at < 0) return false;
+  s.focus(); s.setSelectionRange(at, at + it.wrong.length);
+  _nbInsert(it.right);
+  it.done = true;
+  return true;
+}
+function _nbpSpellAct(a) {
+  var S = NBP.sp, p = a.split(':'), it = S && S.items && S.items[+p[1]];
+  if (p[0] === 'run') {
+    var s = _nbSrc(); if (!s || _nbRO()) return;
+    if (!s.value.replace(/\s/g, '')) { _nbToast('검사할 글이 없습니다', 'warn'); return; }
+    var seq = (NBP.spSeq = (NBP.spSeq || 0) + 1), nid = NB.cur && NB.cur.id;
+    NBP.sp = { loading: true }; _nbpCoachRun();
+    apiFetch('/api/notebook/spell', { method: 'POST', timeoutMs: 120000, body: JSON.stringify({ text: s.value }) }).then(function (r) {
+      if (seq !== NBP.spSeq || !NB.cur || NB.cur.id !== nid) return;
+      NBP.sp = r.data; _nbpCoachRun();
+    }).catch(function (e) {
+      if (seq !== NBP.spSeq) return;
+      NBP.sp = { err: _nbErr(e) }; _nbpCoachRun();
+    });
+    return;
+  }
+  if (p[0] === 'all') {
+    if (!S || !S.items || _nbRO()) return;
+    if (NB.mode === 'view') _nbSetMode('split');
+    _nbpSpSync(_nbSrc().value);
+    var n = 0;
+    S.items.forEach(function (x) { if (!x.done && _nbpSpFix(x)) n++; });
+    _nbToast('🔤 ' + n + '곳 고쳤습니다 — Ctrl+Z 로 하나씩 되돌릴 수 있습니다');
+    _nbpCoachRun(); return;
+  }
+  if (!it) return;
+  if (p[0] === 'go') { var at = _nbSrc().value.indexOf(it.wrong); if (at >= 0) _nbpSelect(at, at + it.wrong.length); return; }
+  if (p[0] === 'skip') { it.done = 'skip'; _nbpCoachRun(); return; }
+  if (p[0] === 'fix') {
+    if (NB.mode === 'view') _nbSetMode('split');
+    if (!_nbpSpFix(it)) _nbToast('글이 바뀌어 그 자리를 찾지 못했습니다', 'warn');
+    _nbpCoachRun(); return;
+  }
+}

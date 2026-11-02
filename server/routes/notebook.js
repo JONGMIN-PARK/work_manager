@@ -553,6 +553,25 @@ router.post('/coach', async function (req, res) {
     try { require('../services/ai-provider').sendAiError(res, '[notebook/coach]', e, 'AI 코치 실패'); } catch (_) { httpErr.serverError(res, '[notebook/coach]', e); }
   }
 });
+/* v13.323 🔤 AI 맞춤법 · 띄어쓰기 — body: { text } → { items:[{wrong,right,type,why}], cut, provider } */
+router.post('/spell', async function (req, res) {
+  try {
+    var text = String((req.body || {}).text || '');
+    if (text.replace(/\s/g, '').length < 2) return bad(res, '검사할 글이 없습니다.');
+    var aiUsage = require('../lib/ai-usage'), aiProvider = require('../services/ai-provider');
+    var q = await aiUsage.checkQuota(req.tenant.id);
+    if (!q.ok) return res.status(q.status).json({ error: q.error, message: q.message });
+    var out = await aiProvider.generateText({ prompt: nb.spellPrompt(text), tenantId: req.tenant.id });
+    if (!out) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI 키가 설정되지 않았습니다 — 관리자에게 AI 설정을 부탁하세요.' });
+    await aiUsage.logUsage(req.tenant.id, me(req), 'notebook:spell', out.provider);
+    var r = nb.parseSpell(out.text, text);
+    if (!r) return res.status(502).json({ error: 'AI_FORMAT', message: 'AI 답을 읽지 못했습니다. 다시 눌러 주세요.' });
+    r.provider = aiProvider.label(out.provider);
+    res.json({ data: r });
+  } catch (e) {
+    try { require('../services/ai-provider').sendAiError(res, '[notebook/spell]', e, '맞춤법 검사 실패'); } catch (_) { httpErr.serverError(res, '[notebook/spell]', e); }
+  }
+});
 /* 규칙 검사 결과 기록 — 버릇 개수 · 규칙 점수 (AI 점수가 있으면 그대로 둠) */
 router.post('/coach/log', async function (req, res) {
   try {

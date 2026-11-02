@@ -207,6 +207,35 @@ function parseCoach(out, text) {
   return { scores: scores, summary: String(j.summary || '').slice(0, 500), items: items, task: String(j.task || '').slice(0, 200) };
 }
 
-module.exports = { aiPrompt: aiPrompt, parseMail: parseMail, LANGS: LANGS, reportRaw: reportRaw, reportPrompt: reportPrompt, kstDay: kstDay, KIND_LABEL: KIND_LABEL,
+/* ═══ v13.323 🔤 AI 맞춤법 · 띄어쓰기 — 틀린 곳만 짚고 바른 말 · 규칙 한 줄 (문장을 바꿔 쓰지 않음) ═══ */
+var SPELL_MAX = 8000;
+function spellPrompt(text) {
+  return '당신은 한국어 맞춤법 · 띄어쓰기 · 문법 검사기입니다. 업무 글을 보고 틀린 곳만 찾으세요.\n' +
+    '- 고치지 말 것: 마크다운 기호(#, -, *, |, >, [ ], ``` 등), 코드 블록 안, 링크 주소, 영어 · 숫자 · 단위, 사람 이름 · 회사 · 제품 · 전문 용어 · 약어, 표의 칸 구분.\n' +
+    '- 문체 다듬기 · 문장 바꿔 쓰기 · 높임말 바꾸기는 하지 말 것 — 맞춤법 · 띄어쓰기 · 명백한 문법(조사 · 어미)만.\n' +
+    '- 개조식(~함 · ~임 · 명사로 끝남)은 업무 글 관례이므로 틀린 것이 아님.\n' +
+    '- wrong 은 원문에서 글자 하나 다르지 않게 그대로 옮기고, 같은 말이 여러 번 나와도 찾을 수 있게 앞뒤 낱말을 1개씩 넣어 40자 이내로. right 는 wrong 과 같은 범위를 고친 것.\n' +
+    'JSON 하나만 답하세요 (코드 블록 없이):\n' +
+    '{"items":[{"wrong":"원문 그대로","right":"고친 것","type":"spell|space|grammar","why":"규칙 한 줄 (예: 의존 명사 \'수\'는 띄어 씀)"}]}\n' +
+    '틀린 것이 없으면 {"items":[]}. 많아야 40개, 글 앞쪽부터.\n\n--- 글 ---\n' + String(text).slice(0, SPELL_MAX);
+}
+function parseSpell(out, text) {
+  var t = String(out || '').replace(/^```(?:json)?\s*|```\s*$/g, '').trim();
+  var s = t.indexOf('{'), e = t.lastIndexOf('}');
+  var j = null;
+  try { j = JSON.parse(t.slice(s, e + 1)); } catch (_) { return null; }
+  var seen = {}, src = String(text);
+  var items = (Array.isArray(j.items) ? j.items : []).map(function (x) {
+    var w = String((x && x.wrong) || '').slice(0, 120), r = String((x && x.right) || '').slice(0, 160);
+    var type = ['spell', 'space', 'grammar'].indexOf(x && x.type) >= 0 ? x.type : (w.replace(/\s/g, '') === r.replace(/\s/g, '') ? 'space' : 'spell');
+    return { wrong: w, right: r, type: type, why: String((x && x.why) || '').slice(0, 200) };
+  }).filter(function (x) {
+    if (!x.wrong || !x.right || x.wrong === x.right || src.indexOf(x.wrong) < 0 || seen[x.wrong]) return false;
+    seen[x.wrong] = true; return true;
+  }).slice(0, 40);
+  return { items: items, cut: src.length > SPELL_MAX };
+}
+
+module.exports = { spellPrompt: spellPrompt, parseSpell: parseSpell, SPELL_MAX: SPELL_MAX, aiPrompt: aiPrompt, parseMail: parseMail, LANGS: LANGS, reportRaw: reportRaw, reportPrompt: reportPrompt, kstDay: kstDay, KIND_LABEL: KIND_LABEL,
   coachPrompt: coachPrompt, parseCoach: parseCoach, COACH_KINDS: COACH_KINDS, rid: rid, kstToday: kstToday, countWords: countWords, titleFrom: titleFrom, snippet: snippet, cleanTags: cleanTags, cleanInk: cleanInk,
   create: create, addInbox: addInbox, snapshot: snapshot, out: out, MAX_BODY: MAX_BODY, MAX_TITLE: MAX_TITLE };

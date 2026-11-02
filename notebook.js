@@ -254,7 +254,7 @@ function _nbOpen(id, kw, quiet) {
   _nbInkStop();
   return apiFetch('/api/notebook/notes/' + encodeURIComponent(id)).then(function (r) {
     NB.cur = r.data; NB.daily1 = null; NB.conflict = null; NB.dirty = {};
-    if (typeof NBP !== 'undefined') { NBP.ai = null; NBP.open = {}; NBP.kindOver = null; NBP.filter = ''; }
+    if (typeof NBP !== 'undefined') { NBP.ai = null; NBP.sp = null; NBP.open = {}; NBP.kindOver = null; NBP.filter = ''; }
     _nbLS('last', id);
     _nbDrawMain();
     _nbMarkList();
@@ -950,7 +950,7 @@ function nbNewFrom(body, title, o) {
   var go = function () {
     return apiFetch('/api/notebook/notes', { method: 'POST', body: JSON.stringify({ title: title || '', body: body || '', folderId: o.folderId || null, inbox: !!o.inbox, tags: o.tags || [], ink: o.ink || undefined }) }).then(function (r) {
       NB.cur = r.data; NB.daily1 = null; NB.dirty = {};
-      if (typeof NBP !== 'undefined') { NBP.titles = null; NBP.ai = null; NBP.open = {}; NBP.kindOver = null; }
+      if (typeof NBP !== 'undefined') { NBP.titles = null; NBP.ai = null; NBP.sp = null; NBP.open = {}; NBP.kindOver = null; }
       if (NB.view === 'trash' || NB.view === 'shared' || NB.view === 'daily' || (NB.view === 'inbox' && !o.inbox)) { NB.view = o.inbox ? 'inbox' : 'all'; NB.folder = o.folderId || null; }
       NB.list.unshift(Object.assign({ snippet: NbMd.render(body || '').html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) }, r.data));
       _nbDrawList(); _nbLoadMeta();
@@ -998,6 +998,7 @@ function _nbMoreMenu(anchor) {
   if (n.deletedAt) return _nbMenu(anchor, [['♻️ 되살리기', function () { _nbRestore(n.id); }], ['🗑 영구 삭제', function () { _nbPurge(n.id); }, 'danger']]);
   items.push(['👥 공유 (읽기 전용)' + (n.shareN ? ' — ' + n.shareN + '명' : ''), nbpShare]);
   items.push(['📊 리포트 만들기', nbpReport]);
+  items.push(['🔤 맞춤법 · 띄어쓰기 검사 (AI)', nbpSpellCheck]);
   items.push('-');
   items.push(['🕘 고친 기록 · 되돌리기', nbVersions]);
   items.push(['🏷 지금 모습에 이름 붙여 남기기', _nbSnapNamed]);

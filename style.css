@@ -4639,3 +4639,21 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
 .nbw-ri:hover{border-color:var(--ac)}
 .nbw-f{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:10px;border-top:1px solid var(--bd)}
 .nbw-f small{color:var(--t5)}
+
+/* ═══ v13.323 🔤 AI 맞춤법 · 띄어쓰기 (notebook-plus.js _nbpSpellHtml — 코치 칸) ═══ */
+.nb-sp-box{border:1px solid var(--bd);border-radius:12px;padding:10px 11px;margin:10px 0;display:flex;flex-direction:column;gap:7px;background:var(--bg)}
+.nb-sp-box .nb-co-st small{font-weight:600;color:var(--ac);margin-left:4px}
+.nb-sp-sum{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t3)}
+.nb-sp-list{display:flex;flex-direction:column;gap:5px;max-height:420px;overflow:auto}
+.nb-sp-i{border:1px solid var(--bd);border-left:3px solid #f43f5e;border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:3px}
+.nb-sp-i.t-space{border-left-color:#0ea5e9}.nb-sp-i.t-grammar{border-left-color:#a855f7}
+.nb-sp-i.done,.nb-sp-i.off{opacity:.55}
+.nb-sp-top{display:flex;align-items:flex-start;gap:6px}
+.nb-sp-d{flex:1;min-width:0;text-align:left;background:none;border:0;padding:0;font-size:13px;color:var(--t1);cursor:pointer;line-height:1.55;word-break:keep-all;overflow-wrap:anywhere}
+.nb-sp-d:disabled{cursor:default}
+.nb-sp-d del{color:#e11d48;background:rgba(244,63,94,.12);text-decoration:line-through;border-radius:3px;padding:0 1px}
+.nb-sp-d ins{color:#047857;background:rgba(16,185,129,.16);text-decoration:none;font-weight:700;border-radius:3px;padding:0 1px}
+.nb-sp-sp{font-style:normal;font-size:10px;opacity:.85}
+.nb-sp-why{font-size:11px;color:var(--t5);line-height:1.5}
+.nb-sp-st{font-size:10.5px;color:var(--t5)}
+.nb-sp-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.nb-sp-foot small{font-size:10px;color:var(--t6)}
