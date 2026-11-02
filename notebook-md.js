@@ -21,6 +21,7 @@ var NbMd = (function () {
     u = String(u || '').trim();
     if (/^(https?:|mailto:|tel:)/i.test(u) || /^#[\w가-힣-]*$/.test(u) || /^nbf:[A-Za-z0-9-]+$/.test(u)) return u;
     if (/^www\./i.test(u)) return 'https://' + u;
+    if (/^wm:(project|issue|milestone|meeting|todo|note):[A-Za-z0-9_.:-]{1,100}$/.test(u)) return u;   // 🔗 업무 연결 (v13.317)
     return null;
   }
 
@@ -36,9 +37,14 @@ var NbMd = (function () {
       if (/^nbf:/.test(u)) return '<img class="nb-img" data-nbf="' + u.slice(4) + '" alt="' + alt + '"' + (ttl ? ' title="' + ttl + '"' : '') + ' loading="lazy">';
       return '<img class="nb-img" src="' + u + '" alt="' + alt + '"' + (ttl ? ' title="' + ttl + '"' : '') + ' loading="lazy" referrerpolicy="no-referrer">';
     });
+    // [[노트 제목]] · [[노트 제목|보일 글]] — 노트끼리 잇기 (v13.317)
+    s = s.replace(/\[\[([^\]|\n]{1,120})(?:\|([^\]\n]{1,120}))?\]\]/g, function (_, t, label) {
+      return '<a class="nb-wl" data-wl="' + t.trim() + '" href="#">' + (label || t).trim() + '</a>';
+    });
     // 링크 [글](url)
     s = s.replace(/\[([^\]]+)\]\(\s*([^)\s]+)\s*\)/g, function (m, t, url) {
       var u = safeUrl(url); if (!u) return m;
+      if (/^wm:/.test(u)) return '<a class="nb-ref" data-ref="' + u.slice(3) + '" href="#">' + t + '</a>';
       if (/^nbf:/.test(u)) return '<a class="nb-file" data-nbf="' + u.slice(4) + '" href="#">' + t + '</a>';
       if (u.charAt(0) === '#') return '<a href="' + u + '" data-anchor="1">' + t + '</a>';
       return '<a href="' + u + '" target="_blank" rel="noopener noreferrer">' + t + '</a>';

@@ -67,6 +67,7 @@ function _nbGroup(t) {
 }
 function _nbToday() { var d = new Date(Date.now() + 9 * 3600000); return d.toISOString().slice(0, 10); }
 function _nbRid() { return 'k' + Math.random().toString(36).slice(2, 9); }
+function _nbRO() { return !!(NB.cur && (NB.cur.deletedAt || NB.cur.readOnly)); }   // 고칠 수 없는 노트 (휴지통 · 공유받음)
 function _nbTitleOf(n) { return n.title || (n.snippet ? n.snippet.slice(0, 40) : '') || '제목 없음'; }
 
 /* ═══ 시작 ═══ */
@@ -76,6 +77,7 @@ function renderNotebook() {
   if (!NB.inited) {
     NB.inited = true;
     var p = _nbLS('p') || {};
+    if (typeof NBP !== 'undefined') NBP.coach = !!_nbLS('coach');
     NB.mode = p.mode || (window.innerWidth < 900 ? 'view' : 'split');
     NB.sort = p.sort || 'updated';
     NB.view = p.view || 'all'; NB.folder = p.folder || null; NB.tag = p.tag || null;
@@ -118,7 +120,8 @@ function _nbDrawSide() {
     '<label class="nb-search"><span aria-hidden="true">🔍</span><input id="nbQ" type="search" placeholder="노트 찾기 — 제목 · 본문 · 태그" value="' + _nbE(NB.q) + '" autocomplete="off"></label></div>';
   h += '<div class="nb-side-sc nb-scroll"><nav class="nb-navs">' +
     nav('all', '📚', '모든 노트', c.all) + nav('inbox', '📥', '낙서장', c.inbox) + nav('pinned', '📌', '고정', c.pinned) + nav('starred', '⭐', '즐겨찾기', c.starred) +
-    nav('daily', '📅', '일일 노트', c.daily) + nav('trash', '🗑', '휴지통', c.trash) + '</nav>';
+    nav('daily', '📅', '일일 노트', c.daily) + (c.shared ? nav('shared', '👥', '공유받은 노트', c.shared) : '') + nav('trash', '🗑', '휴지통', c.trash) + '</nav>' +
+    '<button class="nb-rep-b" data-nb="report" title="기간 · 폴더 · 태그의 노트를 모아 보고서로 — 주간 업무 형식 · 요약 (✨ AI)">📊 리포트 만들기</button>';
   h += '<div class="nb-sec"><span>폴더</span><button class="nb-sec-b" data-nb="fold-add" title="폴더 만들기" aria-label="폴더 만들기">＋</button></div><div class="nb-folds" id="nbFolds">';
   (NB.meta.folders || []).forEach(function (f) {
     h += '<div class="nb-fold' + (NB.folder === f.id ? ' on' : '') + '" data-folder="' + _nbE(f.id) + '" draggable="true" tabindex="0" role="button">' +
@@ -141,7 +144,7 @@ function _nbListTitle() {
   if (NB.q) return '🔍 “' + NB.q + '”';
   if (NB.tag) return '#' + NB.tag;
   if (NB.folder) { var f = (NB.meta && NB.meta.folders || []).filter(function (x) { return x.id === NB.folder; })[0]; return f ? f.name : '폴더'; }
-  return { all: '📚 모든 노트', inbox: '📥 낙서장', pinned: '📌 고정', starred: '⭐ 즐겨찾기', daily: '📅 일일 노트', trash: '🗑 휴지통' }[NB.view] || '노트';
+  return { all: '📚 모든 노트', inbox: '📥 낙서장', pinned: '📌 고정', starred: '⭐ 즐겨찾기', daily: '📅 일일 노트', trash: '🗑 휴지통', shared: '👥 공유받은 노트' }[NB.view] || '노트';
 }
 function _nbLoadList() {
   var seq = ++NB.seq;
@@ -186,11 +189,11 @@ function _nbDrawList() {
     if (g && g !== lastG2) { h += '<div class="nb-grp">' + _nbE(g) + '</div>'; lastG2 = g; }
     var on = NB.cur && NB.cur.id === it.id;
     var f = it.folderId && NB.meta ? (NB.meta.folders || []).filter(function (x) { return x.id === it.folderId; })[0] : null;
-    h += '<div class="nb-it' + (on ? ' on' : '') + '" role="option" aria-selected="' + on + '" tabindex="0" draggable="' + (NB.view !== 'trash') + '" data-id="' + _nbE(it.id) + '">' +
+    h += '<div class="nb-it' + (on ? ' on' : '') + '" role="option" aria-selected="' + on + '" tabindex="0" draggable="' + (NB.view !== 'trash' && NB.view !== 'shared') + '" data-id="' + _nbE(it.id) + '">' +
       (it.thumb ? '<img class="nb-it-th" data-nbf="' + _nbE(it.thumb) + '" alt="">' : '') +
       '<div class="nb-it-t">' + (it.starred ? '<span class="nb-star">★</span>' : '') + _nbE(_nbTitleOf(it)) + '</div>' +
       '<div class="nb-it-s">' + (it.hit ? '…' + _nbHl(it.hit, NB.q) + '…' : _nbE(it.snippet || '')) + '</div>' +
-      '<div class="nb-it-m"><span>' + _nbWhen(NB.view === 'trash' ? it.deletedAt : it.updatedAt) + '</span>' + (f ? '<span class="nb-it-f"><i style="background:' + _nbE(f.color || 'var(--ac)') + '"></i>' + _nbE(f.name) + '</span>' : '') +
+      '<div class="nb-it-m">' + (it.ownerName ? '<span class="nb-it-own">👥 ' + _nbE(it.ownerName) + '</span>' : '') + '<span>' + _nbWhen(NB.view === 'trash' ? it.deletedAt : it.updatedAt) + '</span>' + (f ? '<span class="nb-it-f"><i style="background:' + _nbE(f.color || 'var(--ac)') + '"></i>' + _nbE(f.name) + '</span>' : '') +
       (it.hasInk ? '<span title="손글씨">✍️</span>' : '') + (it.source === 'telegram' ? '<span title="텔레그램에서">✈️</span>' : it.source === 'chat' ? '<span title="메신저에서">💬</span>' : '') +
       (it.tags || []).slice(0, 3).map(function (t) { return '<span class="nb-it-tag">#' + _nbE(t) + '</span>'; }).join('') + '</div>' +
       (NB.view === 'trash' ? '<div class="nb-it-act"><button class="nb-btn sm" data-restore="' + _nbE(it.id) + '">되살리기</button><button class="nb-btn sm danger" data-purge="' + _nbE(it.id) + '">영구 삭제</button></div>' : '') +
@@ -249,6 +252,7 @@ function _nbOpen(id, kw, quiet) {
   _nbInkStop();
   return apiFetch('/api/notebook/notes/' + encodeURIComponent(id)).then(function (r) {
     NB.cur = r.data; NB.daily1 = null; NB.conflict = null; NB.dirty = {};
+    if (typeof NBP !== 'undefined') { NBP.ai = null; NBP.open = {}; NBP.kindOver = null; NBP.filter = ''; }
     _nbLS('last', id);
     _nbDrawMain();
     _nbMarkList();
@@ -291,28 +295,31 @@ function _nbDrawMain() {
       '<small>Alt+N 낙서장 · / 로 명령 · 펜이 있으면 ✍️ 손글씨</small></div>';
     return;
   }
-  var daily = !!NB.daily1, trash = NB.cur && NB.cur.deletedAt;
+  var daily = !!NB.daily1, shared = !!(NB.cur && NB.cur.readOnly), trash = !!(NB.cur && NB.cur.deletedAt) || shared;   // trash = 고칠 수 없음 (휴지통 · 공유받음)
   var f = NB.cur && NB.cur.folderId && NB.meta ? (NB.meta.folders || []).filter(function (x) { return x.id === NB.cur.folderId; })[0] : null;
   var h = '<div class="nb-top">' +
     '<button class="nb-back" data-nb="to-list" aria-label="목록으로">‹</button>' +
-    (daily ? '<span class="nb-crumb">📅 일일 노트</span>' :
+    (daily ? '<span class="nb-crumb">📅 일일 노트</span>' : shared ? '<span class="nb-crumb">👥 ' + _nbE(NB.cur.ownerName || '') + '</span>' :
       '<button class="nb-crumb" data-nb="folder-pick" title="폴더 옮기기">' + (NB.cur.inbox ? '📥 낙서장' : f ? '<i style="background:' + _nbE(f.color || 'var(--ac)') + '"></i>' + _nbE(f.name) : '📁 폴더 없음') + ' ▾</button>') +
     '<span class="nb-state" id="nbState" aria-live="polite"></span><span class="nb-sp"></span>' +
-    '<div class="nb-seg" role="tablist" aria-label="보기">' + [['edit', '✏️', '편집'], ['split', '◫', '나란히'], ['view', '👁', '보기']].map(function (x) {
+    (shared ? '' : '<div class="nb-seg" role="tablist" aria-label="보기">' + [['edit', '✏️', '편집'], ['split', '◫', '나란히'], ['view', '👁', '보기']].map(function (x) {
       return '<button role="tab" aria-selected="' + (NB.mode === x[0]) + '" class="' + (NB.mode === x[0] ? 'on' : '') + '" data-mode="' + x[0] + '" title="' + x[2] + ' (Ctrl+Alt+' + ({ edit: 1, split: 2, view: 3 })[x[0]] + ')">' + x[1] + '<span> ' + x[2] + '</span></button>';
-    }).join('') + '</div>' +
+    }).join('') + '</div>') +
     (trash ? '' : '<button class="nb-ib nb-ai" data-nb="ai" title="✨ AI — 메일 초안 · 번역 · 다듬기 · 요약">✨<span> AI</span></button>') +
-    (daily ? '' : '<button class="nb-ib' + (NB.cur.pinned ? ' on' : '') + '" data-nb="pin" title="고정" aria-pressed="' + NB.cur.pinned + '">📌</button><button class="nb-ib' + (NB.cur.starred ? ' on' : '') + '" data-nb="star" title="즐겨찾기" aria-pressed="' + NB.cur.starred + '">' + (NB.cur.starred ? '★' : '☆') + '</button>') +
+    '<button class="nb-ib nb-cbtn' + (typeof NBP !== 'undefined' && NBP.coach ? ' on' : '') + '" data-nb="coach" title="✍️ 글쓰기 코치 — 고칠 곳을 이유 · 힌트 · 예시로" aria-pressed="' + !!(typeof NBP !== 'undefined' && NBP.coach) + '">✍️<span> 코치</span></button>' +
+    (daily || trash ? '' : '<button class="nb-ib nb-shb' + (NB.cur.shareN ? ' on' : '') + '" data-nb="share" title="👥 공유 (읽기 전용)">👥' + (NB.cur.shareN ? '<small>' + NB.cur.shareN + '</small>' : '') + '</button>' +
+      '<button class="nb-ib' + (NB.cur.pinned ? ' on' : '') + '" data-nb="pin" title="고정" aria-pressed="' + NB.cur.pinned + '">📌</button><button class="nb-ib' + (NB.cur.starred ? ' on' : '') + '" data-nb="star" title="즐겨찾기" aria-pressed="' + NB.cur.starred + '">' + (NB.cur.starred ? '★' : '☆') + '</button>') +
     '<button class="nb-ib" data-nb="focus" title="집중 모드 (Ctrl+Shift+F)">⤢</button>' +
     '<button class="nb-ib" data-nb="more" title="더 보기" aria-label="더 보기">⋯</button></div>';
-  if (trash) h += '<div class="nb-bar warn">🗑 휴지통에 있는 노트입니다 <button class="nb-btn sm" data-restore="' + _nbE(NB.cur.id) + '">되살리기</button></div>';
+  if (shared) h += '<div class="nb-bar info">👥 <b>' + _nbE(NB.cur.ownerName || '') + '</b> 님이 공유한 노트 — 읽기 전용 <button class="nb-btn sm" data-nb="copy-mine">📓 내 노트로 복사</button></div>';
+  else if (trash) h += '<div class="nb-bar warn">🗑 휴지통에 있는 노트입니다 <button class="nb-btn sm" data-restore="' + _nbE(NB.cur.id) + '">되살리기</button></div>';
   h += '<div id="nbBars"></div>';
   h += '<div class="nb-head"><input class="nb-title" id="nbTitle" placeholder="제목" maxlength="300" value="' + _nbE(daily ? NB.daily1.title : NB.cur.title) + '"' + (daily || trash ? ' readonly' : '') + ' aria-label="제목">' +
     (daily ? '' : '<div class="nb-tagrow" id="nbTagRow">' + _nbTagsHtml() + '</div>') + '</div>';
-  h += '<div class="nb-tb" id="nbTb" role="toolbar" aria-label="서식">' + _nbTbHtml(daily) + '</div>';
-  h += '<div class="nb-ed nb-m-' + NB.mode + '" id="nbEd">' +
-    '<textarea class="nb-src nb-scroll" id="nbSrc" spellcheck="false" placeholder="여기에 쓰세요 — 마크다운 · / 명령 · 사진은 붙여넣기" aria-label="본문"' + (trash ? ' readonly' : '') + '></textarea>' +
-    '<div class="nb-prev nb-scroll" id="nbPrev"><div class="nb-doc-w"><article class="nb-doc" id="nbDoc"></article><div class="nb-over" id="nbOver"></div></div></div>' +
+  if (!shared) h += '<div class="nb-tb" id="nbTb" role="toolbar" aria-label="서식">' + _nbTbHtml(daily) + '</div>';
+  h += '<div class="nb-ed nb-m-' + (shared ? 'view' : NB.mode) + '" id="nbEd">' +
+    '<textarea class="nb-src nb-scroll" id="nbSrc" spellcheck="false" placeholder="여기에 쓰세요 — 마크다운 · / 명령 · [[ 노트 잇기 · 사진은 붙여넣기" aria-label="본문"' + (trash ? ' readonly' : '') + '></textarea>' +
+    '<div class="nb-prev nb-scroll" id="nbPrev"><div class="nb-doc-w"><article class="nb-doc" id="nbDoc"></article><div class="nb-over" id="nbOver"></div><div class="nb-bl" id="nbBL"></div></div></div>' +
     '</div>';
   h += '<div class="nb-foot" id="nbFoot"></div>';
   m.innerHTML = h;
@@ -321,6 +328,7 @@ function _nbDrawMain() {
   _nbRenderPrev();
   _nbFoot();
   _nbState(NB.saving ? 'saving' : 'saved');
+  if (typeof NBP !== 'undefined' && NBP.coach) { m.classList.add('coach-on'); _nbpCoachRun(true); }
   if (!daily && !trash && NB.mode !== 'view' && !src.value && !NB.cur.title) document.getElementById('nbTitle').focus();
 }
 function _nbTbHtml(daily) {
@@ -330,12 +338,14 @@ function _nbTbHtml(daily) {
     b('b', '<b>B</b>', '굵게 (Ctrl+B)') + b('i', '<i>I</i>', '기울임 (Ctrl+I)') + b('s', '<s>S</s>', '취소선 (Ctrl+Shift+X)') + b('mark', '<span class="nb-tb-hl">H</span>', '형광펜 (Ctrl+Shift+H)') + b('code', '&lt;/&gt;', '코드 (Ctrl+E)') + sep +
     b('ul', '•', '글머리 목록') + b('ol', '1.', '번호 목록') + b('todo', '☑', '체크리스트 (Ctrl+Shift+C)') + b('quote', '❝', '인용') + b('callout', '💡', '알림 상자') + b('table', '▦', '표') + b('hr', '―', '구분선') + sep +
     b('link', '🔗', '링크 (Ctrl+K)') + b('file', '🖼', '사진 · 파일 넣기') +
+    (daily ? '' : sep + '<button class="nb-tbb nb-tb-ink" data-fmt="wm" title="🔗 업무 연결 — 프로젝트 · 이슈 · 마일스톤 · 회의 · 할 일 (지금 상태가 칩으로)">📌<span> 업무</span></button>' +
+      '<button class="nb-tbb nb-tb-ink" data-fmt="wl" title="📄 노트 잇기 — [[ 를 쳐도 됩니다">[[ ]]</button>') +
     (daily ? '' : sep + '<button class="nb-tbb nb-tb-ink" data-fmt="ink" title="✍️ 손글씨 칸 넣기 — 펜 · 마우스 · 손가락">✍️<span> 손글씨</span></button><button class="nb-tbb nb-tb-ink" data-fmt="over" title="🖍 마커 — 노트 위에 동그라미 · 밑줄 · 형광 표시">🖍<span> 마커</span></button>');
 }
 function _nbTagsHtml() {
   var tags = NB.cur.tags || [];
   return tags.map(function (t, i) { return '<span class="nb-chip">#' + _nbE(t) + '<button data-untag="' + i + '" aria-label="태그 빼기">×</button></span>'; }).join('') +
-    (NB.cur.deletedAt ? '' : '<input class="nb-tagin" id="nbTagIn" list="nbTagDl" placeholder="' + (tags.length ? '+ 태그' : '+ 태그 달기') + '" aria-label="태그 추가"><datalist id="nbTagDl">' +
+    (_nbRO() ? '' : '<input class="nb-tagin" id="nbTagIn" list="nbTagDl" placeholder="' + (tags.length ? '+ 태그' : '+ 태그 달기') + '" aria-label="태그 추가"><datalist id="nbTagDl">' +
       ((NB.meta && NB.meta.tags) || []).map(function (t) { return '<option value="' + _nbE(t.tag) + '">'; }).join('') + '</datalist>');
 }
 function _nbFoot() {
@@ -366,7 +376,7 @@ function _nbRenderPrev() {
     if (NB.inkId === id && NB.inkEd) { NB.inkEd.destroy(); NB.inkEd = null; }
     el.innerHTML = blk ? NbInk.svg(blk) : '<div class="nb-ink-miss">✍️ 손글씨 칸 (비어 있음)</div>';
     if (blk) el.style.aspectRatio = NbInk.W + ' / ' + Math.max(40, blk.h || 300);
-    if (NB.cur && !NB.cur.deletedAt) {
+    if (NB.cur && !_nbRO()) {
       var b = document.createElement('button');
       b.className = 'nb-ink-go'; b.type = 'button'; b.setAttribute('data-inkgo', id); b.textContent = '✍️ 그리기';
       el.appendChild(b);
@@ -375,6 +385,7 @@ function _nbRenderPrev() {
   _nbLoadImgs(doc);
   if (NB.inkId && NB.cur) { var host = doc.querySelector('.nb-ink[data-ink="' + NB.inkId + '"]'); if (host) _nbInkStart(NB.inkId, true); else _nbInkStop(); }
   _nbDrawOver();
+  if (typeof _nbAfterRender === 'function') _nbAfterRender(doc);   // 🔗 링크 · 칩 · 체크 단추 · 가리키는 노트 (notebook-plus.js)
 }
 /* 🖍 덮어 그린 표시 */
 function _nbDrawOver() {
@@ -393,7 +404,7 @@ function _nbBind(root) {
   root.addEventListener('click', _nbClick);
   root.addEventListener('dblclick', function (e) {
     var blk = e.target.closest('#nbDoc [data-line]');
-    if (!blk || NB.mode !== 'view' || !_nbDoc() || (NB.cur && NB.cur.deletedAt) || e.target.closest('.nb-ink')) return;
+    if (!blk || NB.mode !== 'view' || !_nbDoc() || _nbRO() || e.target.closest('.nb-ink, a, button')) return;
     _nbSetMode('split');
     _nbCaretToLine(+blk.getAttribute('data-line'));
   });
@@ -401,7 +412,8 @@ function _nbBind(root) {
     if (e.target.id === 'nbSrc') {
       _nbChanged('body');
       clearTimeout(prevT); prevT = setTimeout(function () { _nbRenderPrev(); _nbFoot(); }, NB.mode === 'edit' ? 400 : 120);
-      _nbSlashCheck();
+      if (!(typeof _nbWikiCheck === 'function' && _nbWikiCheck())) _nbSlashCheck();
+      if (typeof _nbCoachSchedule === 'function') _nbCoachSchedule();
     } else if (e.target.id === 'nbTitle') _nbChanged('title');
     else if (e.target.id === 'nbQ') {
       clearTimeout(NB.qT);
@@ -479,6 +491,7 @@ function _nbDrawSideOn() {
 
 function _nbClick(e) {
   var t = e.target, x;
+  if (typeof _nbPlusClick === 'function' && _nbPlusClick(e)) return;
   if ((x = t.closest('[data-view]')) && x.closest('#nbSide')) {
     NB.view = x.getAttribute('data-view'); NB.folder = null; NB.tag = null; NB.q = ''; var qi = document.getElementById('nbQ'); if (qi) qi.value = '';
     _nbSavePrefs(); _nbDrawSideOn(); _nbLoadList(); _nbSetPane('list'); return;
@@ -498,9 +511,11 @@ function _nbClick(e) {
   if ((x = t.closest('[data-ink-t]'))) { _nbInkTool(x); return; }
   if ((x = t.closest('input[data-task]'))) {
     e.preventDefault();
-    if (NB.cur && NB.cur.deletedAt) return;
-    var src = document.getElementById('nbSrc');
-    src.value = NbMd.toggleTask(src.value, +x.getAttribute('data-task'));
+    if (_nbRO()) return;
+    var src = document.getElementById('nbSrc'), tl = +x.getAttribute('data-task');
+    var wasOn = /^\s*(?:[-*+]|\d+[.)])\s+\[[xX]\]/.test(src.value.split('\n')[tl] || '');
+    src.value = NbMd.toggleTask(src.value, tl);
+    if (typeof _nbpTaskToggled === 'function') _nbpTaskToggled(tl, !wasOn);   // 할 일이 걸린 줄이면 할 일도
     _nbChanged('body'); _nbRenderPrev(); _nbFoot(); return;
   }
   if ((x = t.closest('.nb-code-copy'))) { var code = x.parentElement.querySelector('code'); _nbCopy(code ? code.textContent : ''); x.textContent = '✓ 복사됨'; setTimeout(function () { x.textContent = '복사'; }, 1200); return; }
@@ -522,6 +537,10 @@ function _nbClick(e) {
   else if (k === 'focus') _nbToggleFocus();
   else if (k === 'more') _nbMoreMenu(x);
   else if (k === 'ai') nbAiOpen();
+  else if (k === 'coach') nbpCoachToggle();
+  else if (k === 'share') nbpShare();
+  else if (k === 'report') nbpReport();
+  else if (k === 'copy-mine') nbNewFrom(NB.cur.body, (NB.cur.title || '노트') + ' (' + (NB.cur.ownerName || '공유') + ')', {});
   else if (k === 'folder-pick') _nbFolderPick(x);
   else if (k === 'draft-use') _nbDraftUse();
   else if (k === 'draft-drop') { _nbDraft(NB.cur.id, null); document.getElementById('nbBars').innerHTML = ''; }
@@ -549,6 +568,7 @@ function _nbToggleFocus() {
 function _nbKey(e) {
   var t = e.target, ctrl = e.ctrlKey || e.metaKey;
   if (NB.slash && t.id === 'nbSrc' && _nbSlashKey(e)) return;
+  if (NB.wiki && t.id === 'nbSrc' && _nbWikiKey(e)) return;
   if (t.id === 'nbTagIn') {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); _nbAddTag(t.value); }
     else if (e.key === 'Backspace' && !t.value && NB.cur.tags.length) { _nbSetTags(NB.cur.tags.slice(0, -1)); }
@@ -659,6 +679,8 @@ function _nbFmt(k) {
     case 'file': return _nbPickFile();
     case 'ink': return _nbInkNew();
     case 'over': return _nbOverToggle();
+    case 'wm': return nbpLinkPick();
+    case 'wl': { _nbInsert('[['); return _nbWikiCheck(); }
   }
 }
 /** 줄 처음에 블록 넣기 (앞뒤 빈 줄 맞춤) */
@@ -918,7 +940,8 @@ function nbNewFrom(body, title, o) {
   var go = function () {
     return apiFetch('/api/notebook/notes', { method: 'POST', body: JSON.stringify({ title: title || '', body: body || '', folderId: o.folderId || null, inbox: !!o.inbox, tags: o.tags || [], ink: o.ink || undefined }) }).then(function (r) {
       NB.cur = r.data; NB.daily1 = null; NB.dirty = {};
-      if (NB.view === 'trash' || NB.view === 'daily' || (NB.view === 'inbox' && !o.inbox)) { NB.view = o.inbox ? 'inbox' : 'all'; NB.folder = o.folderId || null; }
+      if (typeof NBP !== 'undefined') { NBP.titles = null; NBP.ai = null; NBP.open = {}; NBP.kindOver = null; }
+      if (NB.view === 'trash' || NB.view === 'shared' || NB.view === 'daily' || (NB.view === 'inbox' && !o.inbox)) { NB.view = o.inbox ? 'inbox' : 'all'; NB.folder = o.folderId || null; }
       NB.list.unshift(Object.assign({ snippet: NbMd.render(body || '').html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) }, r.data));
       _nbDrawList(); _nbLoadMeta();
       if (NB.mode === 'view') NB.mode = 'split';
@@ -960,7 +983,11 @@ function _nbMoreMenu(anchor) {
     items = [['📓 노트북 노트로 복사', function () { nbNewFrom(NB.daily1.body, NB.daily1.title, {}); }], ['⬇️ Markdown(.md) 내려받기', _nbExportMd], ['🖨 인쇄 · PDF', _nbPrint]];
     return _nbMenu(anchor, items);
   }
+  if (n.readOnly) return _nbMenu(anchor, [['📓 내 노트로 복사', function () { nbNewFrom(n.body, (n.title || '노트') + ' (' + (n.ownerName || '공유') + ')', {}); }], ['⬇️ Markdown(.md) 내려받기', _nbExportMd], ['🖨 인쇄 · PDF 저장', _nbPrint], ['📋 서식째 복사', function () { _nbCopyRich(_nbSrc().value, n.title); }]]);
   if (n.deletedAt) return _nbMenu(anchor, [['♻️ 되살리기', function () { _nbRestore(n.id); }], ['🗑 영구 삭제', function () { _nbPurge(n.id); }, 'danger']]);
+  items.push(['👥 공유 (읽기 전용)' + (n.shareN ? ' — ' + n.shareN + '명' : ''), nbpShare]);
+  items.push(['📊 리포트 만들기', nbpReport]);
+  items.push('-');
   items.push(['🕘 고친 기록 · 되돌리기', nbVersions]);
   items.push(['🏷 지금 모습에 이름 붙여 남기기', _nbSnapNamed]);
   items.push('-');
@@ -1115,7 +1142,7 @@ function _nbZoomImg(img) {
 /* ═══ ✍️ 손글씨 ═══ */
 function _nbInk() { if (!NB.cur.ink || typeof NB.cur.ink !== 'object') NB.cur.ink = {}; if (!NB.cur.ink.blocks) NB.cur.ink.blocks = {}; return NB.cur.ink; }
 function _nbInkNew() {
-  if (!NB.cur || NB.cur.deletedAt) return;
+  if (!NB.cur || _nbRO()) return;
   var id = _nbRid();
   _nbInk().blocks[id] = { h: 360, s: [] };
   if (NB.mode === 'view') { var s = _nbSrc(); s.setSelectionRange(s.value.length, s.value.length); }
@@ -1393,7 +1420,7 @@ function nbAiOpen(preset) {
         '<div class="nb-ai-go"><button class="nb-btn pri" data-x="run">✨ 만들기</button><span class="nb-ai-st" id="nbAiSt"></span></div>' +
         '<div class="nb-ai-out hidden" id="nbAiOut">' +
           '<div class="nb-ai-subj hidden" id="nbAiSubjW"><label>제목</label><input class="mw-input nb-in" id="nbAiSubj"></div>' +
-          '<div class="nb-seg nb-ai-v"><button class="on" data-v="prev">미리보기</button><button data-v="edit">고치기</button></div>' +
+          '<div class="nb-seg nb-ai-v"><button class="on" data-v="prev">미리보기</button><button data-v="diff" id="nbAiDiffB" title="원문과 비교 — 무엇이 바뀌었는지">↔ 바뀐 곳</button><button data-v="edit">고치기</button></div>' +
           '<article class="nb-doc nb-ai-prev nb-scroll" id="nbAiPrev"></article><textarea class="nb-ai-ta hidden" id="nbAiTa"></textarea>' +
           '<div class="nb-ai-act">' +
             '<button class="nb-btn" data-x="copy">📋 서식째 복사</button><button class="nb-btn" data-x="mailto" id="nbAiMailto">✉️ 메일 앱으로</button>' +
@@ -1421,16 +1448,18 @@ function nbAiOpen(preset) {
       var sw = md.box.querySelector('#nbAiSubjW'); sw.classList.toggle('hidden', k !== 'mail');
       md.box.querySelector('#nbAiSubj').value = subj || '';
       md.box.querySelector('#nbAiMailto').classList.toggle('hidden', k !== 'mail');
+      md.box.querySelector('#nbAiDiffB').classList.toggle('hidden', k !== 'polish');
     }
     md.box.addEventListener('click', function (e) {
       var x = e.target.closest('[data-k]');
       if (x) { k = x.getAttribute('data-k'); md.box.querySelectorAll('[data-k]').forEach(function (b2) { b2.classList.toggle('on', b2 === x); }); opt(); return; }
       x = e.target.closest('[data-v]');
       if (x) {
-        var ed = x.getAttribute('data-v') === 'edit';
+        var ed = x.getAttribute('data-v') === 'edit', df = x.getAttribute('data-v') === 'diff';
         md.box.querySelectorAll('[data-v]').forEach(function (b2) { b2.classList.toggle('on', b2 === x); });
         md.box.querySelector('#nbAiTa').classList.toggle('hidden', !ed); md.box.querySelector('#nbAiPrev').classList.toggle('hidden', ed);
-        if (!ed) md.box.querySelector('#nbAiPrev').innerHTML = NbMd.render(result()).html;
+        if (df) md.box.querySelector('#nbAiPrev').innerHTML = '<div class="nb-ai-diffnote">다듬기 전 → 후 — 줄마다 바뀐 곳 (✍️ 코치에서 왜 바꾸는지 배워 보세요)</div>' + _nbDiffHtml(text, result());
+        else if (!ed) md.box.querySelector('#nbAiPrev').innerHTML = NbMd.render(result()).html;
         return;
       }
       x = e.target.closest('[data-x]'); if (!x) return;

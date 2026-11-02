@@ -317,6 +317,23 @@
     setTab(STATE.tab);
   }
   window.renderWeeklyReportPage = renderWeeklyReportPage;
+  /* 📓 노트북 리포트 → 주간 업무 작성 금주 칸 커서 자리에 넣기 (v13.317) */
+  window.wrAuthorInsert = function (text) {
+    STATE.tab = 'author';
+    if (typeof setPage === 'function') setPage('weekly_report');
+    var tries = 0;
+    (function put() {
+      var id = _authorState.viewMode === 'compare' ? 'wrAuEditorCur' : 'wrAuEditor';
+      if ($(id) && STATE.tab === 'author') {
+        if (_authorState.viewMode !== 'compare' && _authorState.editPane !== 'cur') { _authorState.editPane = 'cur'; renderAuthor(); }
+        var ta = $(id), v = ta.value;
+        if (ta.selectionStart === 0 && ta.selectionEnd === 0 && v) ta.setSelectionRange(v.length, v.length);   // 커서가 없으면 끝에
+        insertAtCursor(id, (v && !/\n$/.test(v.slice(0, ta.selectionStart)) ? '\n' : '') + String(text || '').replace(/\n*$/, '\n'));
+        return;
+      }
+      if (++tries < 40) setTimeout(put, 150);
+    })();
+  };
 
   function setTab(name) {
     STATE.tab = name;
@@ -1593,14 +1610,18 @@
     var go = WRC.go = [];
     var cnt = { missing: d.missing.length, quality: d.quality.length };
     d.flags.forEach(function (f) { cnt[f.kind] = (cnt[f.kind] || 0) + 1; });
-    var total = d.missing.length + d.flags.length + d.quality.length;
+    // ✍️ 글쓰기 — 📓 노트북 코치와 같은 규칙 (v13.318) · 진척 · 빠진 칸은 위 점검이 보므로 빼고 문장만
+    var wr = typeof NbCoach !== 'undefined' ? NbCoach.check(_authorState.curText || '', { kind: 'weekly' }) : null;
+    var wf = WRC.wf = wr ? wr.findings.filter(function (f) { return ['long', 'filler', 'passive', 'vague', 'double', 'spell', 'repeat'].indexOf(f.k) >= 0; }) : [];
+    if (wr && wr.chars >= 30) wrCoachLog(wr, wf);
+    var total = d.missing.length + d.flags.length + d.quality.length + wf.length;
     if (!total) {
       box.innerHTML = d.prevWeeks ? '<div class="wrc wrc-ok">✅ 점검 — 앞 주 보고서와 비교해 빠진 일 · 납기 · 정체 문제 없음</div>' : '';
       return;
     }
     var chips = ['missing', 'overdue', 'stalled', 'at_risk', 'slipped', 'quality'].filter(function (k) { return cnt[k]; }).map(function (k) {
       return '<span class="wrc-c" style="color:' + WRC_KIND[k][2] + '">' + WRC_KIND[k][0] + ' ' + WRC_KIND[k][1] + ' <b>' + cnt[k] + '</b></span>';
-    }).join('');
+    }).join('') + (wf.length ? '<span class="wrc-c" style="color:var(--ac)">✍️ 글쓰기 <b>' + wf.length + '</b></span>' : '');
     var h = '<div class="wrc' + (WRC.open ? ' open' : '') + '"><button type="button" class="wrc-sum" data-wrc-tog aria-expanded="' + WRC.open + '">'
       + '<span class="wrc-ttl">🔎 점검</span>' + chips + '<span class="wrc-car">' + (WRC.open ? '▴' : '▾') + '</span></button>';
     if (WRC.open) {
@@ -1616,6 +1637,14 @@
       }
       d.flags.forEach(function (f) { go.push(f); h += wrcRow(f.kind, f, go.length - 1); });
       d.quality.forEach(function (q) { go.push(q); h += wrcRow('quality', q, go.length - 1); });
+      if (wf.length) {
+        h += '<div class="wrc-g">✍️ 글쓰기 — 누르면 금주 칸의 그 자리로 · 왜 그런지는 📓 노트북의 ✍️ 코치에서</div>';
+        wf.slice(0, 15).forEach(function (f, i) {
+          var L = NbCoach.LABELS[f.k] || ['•', f.k];
+          h += '<div class="wrc-r" data-wrc-w="' + i + '" title="' + esc(f.why + ' → ' + f.hint) + '"><span class="wrc-k">' + L[0] + ' ' + esc(L[1]) + '</span><b>' + esc(f.msg) + '</b>'
+            + (f.quote ? '<span class="wrc-t">“' + esc(f.quote) + '”</span>' : '') + '</div>';
+        });
+      }
       h += '</div>';
     }
     box.innerHTML = h + '</div>';
@@ -1632,6 +1661,32 @@
     box.querySelectorAll('[data-wrc-go]').forEach(function (r) {
       r.addEventListener('click', function (e) { if (e.target.closest('button')) return; var f = go[+r.dataset.wrcGo]; if (f) jumpToItem(f.client, f.name); });
     });
+    box.querySelectorAll('[data-wrc-w]').forEach(function (r) {
+      r.addEventListener('click', function () {
+        var f = WRC.wf[+r.dataset.wrcW]; if (!f) return;
+        syncAuthorEditorsToState();
+        var id = _authorState.viewMode === 'compare' ? 'wrAuEditorCur' : 'wrAuEditor';
+        if (_authorState.viewMode !== 'compare' && _authorState.editPane !== 'cur') { _authorState.editPane = 'cur'; renderAuthor(); }
+        var ta = $(id); if (!ta) return;
+        var at = ta.value.indexOf(f.quote.slice(0, 30)), end = at >= 0 ? at + (f.end - f.start) : -1;
+        if (at < 0) { at = f.start; end = f.end; }
+        ta.focus(); ta.setSelectionRange(at, Math.min(end, ta.value.length));
+        var lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
+        ta.scrollTop = Math.max(0, (ta.value.slice(0, at).split('\n').length - 4) * lh);
+        if (typeof showToast === 'function') showToast('✍️ ' + f.hint, 'info');
+      });
+    });
+  }
+  // 주간 업무 글쓰기 버릇도 📈 나의 글쓰기에 (1분에 한 번 · 바뀌었을 때)
+  function wrCoachLog(wr, wf) {
+    var cnt = {}; wf.forEach(function (f) { cnt[f.k] = (cnt[f.k] || 0) + 1; });
+    var sig = JSON.stringify(cnt) + wr.chars;
+    if (sig === WRC.logSig) return;
+    clearTimeout(WRC.logT);
+    WRC.logT = setTimeout(function () {
+      WRC.logSig = sig;
+      apiFetch('/api/notebook/coach/log', { method: 'POST', body: JSON.stringify({ noteId: 'weekly-' + (_authorState.weekStart || ''), kind: 'weekly', counts: cnt, scores: NbCoach.score(cnt, wr.chars, null), chars: wr.chars }) }).catch(function () {});
+    }, 60000);
   }
   // 편집창에서 그 일의 줄을 찾아 고르기 (금주 칸 먼저)
   function jumpToItem(client, name) {

@@ -192,14 +192,18 @@ GET /api/my-work/people
 GET /api/my-work/projects
 GET /api/my-work/projects/pick
 GET /api/my-work/trash
+GET /api/notebook/coach/stats
 GET /api/notebook/daily
 GET /api/notebook/files/:id
 GET /api/notebook/meta
 GET /api/notebook/notes
 GET /api/notebook/notes/:id
+GET /api/notebook/notes/:id/backlinks
+GET /api/notebook/notes/:id/shares
 GET /api/notebook/notes/:id/versions
 GET /api/notebook/notes/:id/versions/:vid
 GET /api/notebook/template/daily
+GET /api/notebook/titles
 GET /api/notifications
 GET /api/notifications/preferences
 GET /api/notifications/unread-count
@@ -427,6 +431,8 @@ POST /api/my-work/projects/:id/restore
 POST /api/my-work/todos
 POST /api/my-work/todos/:id/restore
 POST /api/notebook/ai
+POST /api/notebook/coach
+POST /api/notebook/coach/log
 POST /api/notebook/files
 POST /api/notebook/folders
 POST /api/notebook/notes
@@ -434,6 +440,8 @@ POST /api/notebook/notes/:id/duplicate
 POST /api/notebook/notes/:id/restore
 POST /api/notebook/notes/:id/versions
 POST /api/notebook/notes/:id/versions/:vid/restore
+POST /api/notebook/refs
+POST /api/notebook/report
 POST /api/notebook/trash/empty
 POST /api/orders
 POST /api/orders/:orderNo/renumber
@@ -569,6 +577,7 @@ PUT /api/my-work/todos/:id
 PUT /api/notebook/folders-order
 PUT /api/notebook/folders/:id
 PUT /api/notebook/notes/:id
+PUT /api/notebook/notes/:id/shares
 PUT /api/notifications/:id/read
 PUT /api/notifications/preferences
 PUT /api/notifications/read-all

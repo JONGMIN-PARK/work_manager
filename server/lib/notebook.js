@@ -142,5 +142,71 @@ function parseMail(out) {
   return m ? { subject: m[1].trim(), body: m[2].trim() } : { subject: '', body: t };
 }
 
-module.exports = { aiPrompt: aiPrompt, parseMail: parseMail, LANGS: LANGS, rid: rid, kstToday: kstToday, countWords: countWords, titleFrom: titleFrom, snippet: snippet, cleanTags: cleanTags, cleanInk: cleanInk,
+/* ─── 📊 리포트 — 기간 노트 모으기 ─── */
+var KIND_LABEL = { weekly: '주간 업무 보고', summary: '요약 보고서', worklog: '업무 일지 모음' };
+/** 노트들을 날짜 순으로 그대로 묶은 마크다운 (AI 없이) */
+function reportRaw(notes, daily, o) {
+  o = o || {};
+  var all = [];
+  notes.forEach(function (n) { all.push({ at: n.updated_at, day: kstDay(n.updated_at), title: n.title || titleFrom(n.body) || '제목 없음', body: n.body, tags: n.tags || [] }); });
+  (daily || []).forEach(function (d) { all.push({ at: d.updated_at, day: d.note_date, title: (+d.note_date.slice(5, 7)) + '/' + (+d.note_date.slice(8, 10)) + (d.ref ? ' 회의 메모' : ' 일일 노트'), body: String(d.body || '').replace(/ ⟦[^⟧]*⟧/g, ''), tags: [] }); });
+  all.sort(function (a, b) { return a.day === b.day ? new Date(a.at) - new Date(b.at) : a.day < b.day ? -1 : 1; });
+  var md = '# ' + (o.title || '노트 모음') + '\n\n> [!NOTE] ' + o.from + ' ~ ' + o.to + ' · 노트 ' + all.length + '개\n\n';
+  var lastDay = '';
+  all.forEach(function (x) {
+    if (x.day !== lastDay) { md += '## 📅 ' + x.day + ' (' + '일월화수목금토'[new Date(x.day + 'T00:00:00Z').getUTCDay()] + ')\n\n'; lastDay = x.day; }
+    // 노트 안 제목은 한 단계씩 내려서 (리포트의 날짜 제목 아래로)
+    var body = String(x.body || '').replace(/^::ink\[[^\]]*\]\s*$/gm, '*(✍️ 손글씨)*').replace(/^(#{1,4})\s/gm, '$1## ').trim();
+    md += '### ' + x.title + (x.tags.length ? ' `' + x.tags.map(function (t) { return '#' + t; }).join(' ') + '`' : '') + '\n\n' + body + '\n\n';
+  });
+  return { md: md, count: all.length };
+}
+function kstDay(t) { return new Date(new Date(t).getTime() + 9 * 3600000).toISOString().slice(0, 10); }
+function reportPrompt(style, raw, o) {
+  var head = '아래는 ' + o.from + ' ~ ' + o.to + ' 동안 쓴 업무 노트입니다.\n';
+  var keep = '\n규칙: 노트에 없는 사실 · 숫자 · 날짜를 지어내지 마세요. 애매하면 [확인 필요].';
+  if (style === 'weekly') {
+    return head + '이 노트로 주간 업무 보고를 아래 형식 그대로 쓰세요 (다른 설명 없이 보고 본문만).\n' +
+      '형식:\n[개발]\n- [고객사/사이트] 업무명 ~MM/DD 50% #진행중\n  : 세부 내용\n[셋업]\n…\n[C/S]\n…\n[기타]\n…\n' +
+      '- 섹션은 개발 · 셋업 · C/S · 기타 중 해당하는 것만. 진척률 · 마감은 노트에 있을 때만. 상태 태그는 #진행중 #완료 #지연 #대기 중 하나.' + keep + '\n\n--- 노트 ---\n' + raw;
+  }
+  if (style === 'summary') {
+    return head + '팀장에게 올릴 요약 보고서를 마크다운으로 쓰세요.\n## 한 줄 요약\n## 주요 성과\n## 진행 중 · 위험\n## 결정 사항\n## 다음 할 일\n- [ ] …\n해당 없는 칸은 빼고, 두괄식으로 짧게.' + keep + '\n\n--- 노트 ---\n' + raw;
+  }
+  return null;
+}
+
+/* ─── ✍️ 글쓰기 코치 (AI) — 고쳐 주지 않고 이유 → 힌트 → 예시 순서로 가르침 ─── */
+var COACH_KINDS = { weekly: '주간 업무 보고', meeting: '회의록', review: '기술 검토', trip: '출장 보고', why: '문제 분석', mail: '업무 메일', daily: '업무 일지', note: '업무 노트' };
+function coachPrompt(text, kind, rules) {
+  return '당신은 제조 · 설비 회사 직원에게 업무 글쓰기를 가르치는 코치입니다. 대신 써 주지 말고, 스스로 고칠 수 있게 짚어 주세요.\n' +
+    '글 종류: ' + (COACH_KINDS[kind] || '업무 노트') + '\n' +
+    (rules && rules.length ? '규칙 검사가 이미 찾은 것(겹치지 않게 다른 것을 찾으세요): ' + rules.slice(0, 12).join(' · ') + '\n' : '') +
+    '아래 글을 보고 JSON 하나만 답하세요 (코드 블록 없이):\n' +
+    '{"scores":{"clarity":0-100,"concise":0-100,"structure":0-100,"evidence":0-100},' +
+    '"summary":"총평 두 문장 (잘한 점 하나 + 가장 먼저 고칠 점 하나)",' +
+    '"items":[{"quote":"원문에서 그대로 옮긴 짧은 부분(30자 이내)","issue":"무엇이 문제인지 한 줄","why":"왜 문제인지 — 읽는 사람 입장에서","hint":"고치는 방향 힌트 (답을 주지 말 것)","example":"고친 예시 한 문장"}],' +
+    '"task":"이번 주 연습 과제 하나 — 구체적으로 (예: 보고 첫 줄에 결론부터)"}\n' +
+    '- items 는 중요한 순서로 3~7개. quote 는 반드시 원문에 있는 그대로.\n' +
+    '- 기준: 명확성(한 문장 한 뜻 · 주어 · 모호어), 간결성(군더더기 · 중복), 구조(두괄식 · 순서 · 빠진 칸), 근거(숫자 · 날짜 · 담당).\n\n--- 글 ---\n' + String(text).slice(0, 12000);
+}
+function parseCoach(out, text) {
+  var t = String(out || '').replace(/^```(?:json)?\s*|```\s*$/g, '').trim();
+  var s = t.indexOf('{'), e = t.lastIndexOf('}');
+  var j = null;
+  try { j = JSON.parse(t.slice(s, e + 1)); } catch (_) { return null; }
+  function n(v) { if (v == null || v === '') return null; v = Math.round(+v); return isFinite(v) ? Math.max(0, Math.min(100, v)) : null; }
+  var sc = j.scores || {};
+  var scores = { clarity: n(sc.clarity), concise: n(sc.concise), structure: n(sc.structure), evidence: n(sc.evidence) };
+  var vals = Object.keys(scores).map(function (k) { return scores[k]; }).filter(function (v) { return v != null; });
+  scores.total = vals.length ? Math.round(vals.reduce(function (a, b) { return a + b; }, 0) / vals.length) : null;
+  var items = (Array.isArray(j.items) ? j.items : []).slice(0, 10).map(function (x) {
+    var q = String(x.quote || '').slice(0, 120);
+    return { quote: q, found: !!q && String(text).indexOf(q) >= 0, issue: String(x.issue || '').slice(0, 200), why: String(x.why || '').slice(0, 400), hint: String(x.hint || '').slice(0, 300), example: String(x.example || '').slice(0, 300) };
+  }).filter(function (x) { return x.issue; });
+  return { scores: scores, summary: String(j.summary || '').slice(0, 500), items: items, task: String(j.task || '').slice(0, 200) };
+}
+
+module.exports = { aiPrompt: aiPrompt, parseMail: parseMail, LANGS: LANGS, reportRaw: reportRaw, reportPrompt: reportPrompt, kstDay: kstDay, KIND_LABEL: KIND_LABEL,
+  coachPrompt: coachPrompt, parseCoach: parseCoach, COACH_KINDS: COACH_KINDS, rid: rid, kstToday: kstToday, countWords: countWords, titleFrom: titleFrom, snippet: snippet, cleanTags: cleanTags, cleanInk: cleanInk,
   create: create, addInbox: addInbox, snapshot: snapshot, out: out, MAX_BODY: MAX_BODY, MAX_TITLE: MAX_TITLE };

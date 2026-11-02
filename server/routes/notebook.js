@@ -58,6 +58,8 @@ router.get('/meta', async function (req, res) {
       'COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)::int AS trash FROM nb_notes WHERE tenant_id = $1 AND user_id = $2', [T, U]);
     var d = await db.query("SELECT COUNT(DISTINCT note_date)::int AS n FROM my_notes WHERE tenant_id = $1 AND user_id = $2 AND body <> ''", [T, U]);
     var counts = c.rows[0]; counts.daily = d.rows[0].n;
+    var sc = await db.query('SELECT COUNT(*)::int AS n FROM nb_shares s JOIN nb_notes n ON n.id = s.note_id AND n.deleted_at IS NULL WHERE s.tenant_id = $1 AND s.user_id = $2', [T, U]);
+    counts.shared = sc.rows[0].n;
     res.json({ data: { folders: f.rows, tags: t.rows, counts: counts } });
   } catch (e) { httpErr.serverError(res, '[notebook/meta]', e); }
 });
@@ -67,6 +69,12 @@ router.get('/notes', async function (req, res) {
   try {
     var q = req.query, p = [req.tenant.id, me(req)], w = ['n.tenant_id = $1', 'n.user_id = $2'];
     var view = String(q.view || 'all');
+    if (view === 'shared') {   // 👥 공유받은 노트 (v13.317)
+      var sr = await db.query("SELECT n.id, n.title, n.tags, n.words, n.rev, n.created_at, n.updated_at, LEFT(n.body, 3000) AS body, (n.ink ? 'blocks' AND n.ink->'blocks' <> '{}'::jsonb) AS has_ink, " +
+        'COALESCE(u.display_name, u.name) AS owner_name FROM nb_shares s JOIN nb_notes n ON n.id = s.note_id AND n.deleted_at IS NULL LEFT JOIN users u ON u.id = n.user_id ' +
+        'WHERE s.tenant_id = $1 AND s.user_id = $2 ORDER BY n.updated_at DESC LIMIT 500', [req.tenant.id, me(req)]);
+      return res.json({ data: sr.rows.map(function (n) { var o = nb.out(n); o.readOnly = true; o.ownerName = n.owner_name || ''; o.folderId = null; o.pinned = false; o.starred = false; o.inbox = false; return o; }) });
+    }
     if (view === 'trash') w.push('n.deleted_at IS NOT NULL'); else w.push('n.deleted_at IS NULL');
     if (view === 'inbox') w.push('n.inbox');
     else if (view === 'pinned') w.push('n.pinned');
@@ -110,8 +118,17 @@ router.post('/notes', async function (req, res) {
 router.get('/notes/:id', async function (req, res) {
   try {
     var n = await noteOf(req, req.params.id);
-    if (!n) return notFound(res);
-    res.json({ data: nb.out(n, true) });
+    if (!n) {   // 👥 공유받은 노트 — 읽기 전용 (v13.317)
+      var sh = await db.query('SELECT n.*, COALESCE(u.display_name, u.name) AS owner_name FROM nb_notes n JOIN nb_shares s ON s.note_id = n.id AND s.user_id = $2 LEFT JOIN users u ON u.id = n.user_id WHERE n.id = $1 AND n.tenant_id = $3 AND n.deleted_at IS NULL', [req.params.id, me(req), req.tenant.id]);
+      if (!sh.rows.length) return notFound(res);
+      var o = nb.out(sh.rows[0], true);
+      o.readOnly = true; o.ownerName = sh.rows[0].owner_name || ''; o.folderId = null; o.pinned = false; o.starred = false;
+      return res.json({ data: o });
+    }
+    var out = nb.out(n, true);
+    var shc = await db.query('SELECT COUNT(*)::int AS n FROM nb_shares WHERE note_id = $1', [n.id]);
+    out.shareN = shc.rows[0].n;
+    res.json({ data: out });
   } catch (e) { httpErr.serverError(res, '[notebook/get]', e); }
 });
 
@@ -292,7 +309,8 @@ router.post('/files', express.raw({ type: function () { return true; }, limit: M
 });
 router.get('/files/:id', async function (req, res) {
   try {
-    var r = await db.query('SELECT * FROM nb_files WHERE id = $1 AND tenant_id = $2 AND user_id = $3', [req.params.id, req.tenant.id, me(req)]);
+    // 내 첨부 · 또는 나에게 공유된 노트 본문에 들어 있는 첨부 (v13.317)
+    var r = await db.query("SELECT f.* FROM nb_files f WHERE f.id = $1 AND f.tenant_id = $2 AND (f.user_id = $3 OR EXISTS (SELECT 1 FROM nb_shares s JOIN nb_notes n ON n.id = s.note_id WHERE s.user_id = $3 AND n.deleted_at IS NULL AND n.user_id = f.user_id AND POSITION(('nbf:' || f.id) IN n.body) > 0))", [req.params.id, req.tenant.id, me(req)]);
     var f = r.rows[0];
     if (!f) return res.status(404).json({ error: 'NOT_FOUND', message: '파일이 없습니다.' });
     if (f.storage_key) {
@@ -336,6 +354,198 @@ router.post('/ai', async function (req, res) {
   } catch (e) {
     try { require('../services/ai-provider').sendAiError(res, '[notebook/ai]', e, 'AI 처리 실패'); } catch (_) { httpErr.serverError(res, '[notebook/ai]', e); }
   }
+});
+
+/* ═══ v13.317 연결 · 공유 · 리포트 ═══ */
+
+/* 👥 공유 (읽기 전용) — 새로 받은 사람에게 메신저 1:1 로 카드 */
+router.get('/notes/:id/shares', async function (req, res) {
+  try {
+    var n = await noteOf(req, req.params.id);
+    if (!n) return notFound(res);
+    var r = await db.query('SELECT s.user_id, COALESCE(u.display_name, u.name) AS name FROM nb_shares s JOIN users u ON u.id = s.user_id WHERE s.note_id = $1 ORDER BY 2', [n.id]);
+    res.json({ data: r.rows.map(function (x) { return { id: x.user_id, name: x.name }; }) });
+  } catch (e) { httpErr.serverError(res, '[notebook/shares]', e); }
+});
+router.put('/notes/:id/shares', async function (req, res) {
+  try {
+    var n = await noteOf(req, req.params.id);
+    if (!n) return notFound(res);
+    if (n.deleted_at) return bad(res, '휴지통의 노트는 공유할 수 없습니다.');
+    var want = Array.isArray((req.body || {}).userIds) ? req.body.userIds.map(String).filter(function (u) { return u !== me(req); }).slice(0, 100) : [];
+    var ok = want.length ? (await db.query("SELECT id FROM users WHERE tenant_id = $1 AND status = 'active' AND id::text = ANY($2)", [req.tenant.id, want])).rows.map(function (x) { return x.id; }) : [];
+    var before = (await db.query('SELECT user_id FROM nb_shares WHERE note_id = $1', [n.id])).rows.map(function (x) { return x.user_id; });
+    await db.query('DELETE FROM nb_shares WHERE note_id = $1 AND NOT (user_id = ANY($2::uuid[]))', [n.id, ok]);
+    for (var i = 0; i < ok.length; i++) await db.query('INSERT INTO nb_shares (note_id, user_id, tenant_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [n.id, ok[i], req.tenant.id]);
+    var added = ok.filter(function (u) { return before.indexOf(u) < 0; });
+    if (added.length && (req.body || {}).notify !== false) {
+      var chat = require('./chat'), title = n.title || nb.titleFrom(n.body) || '제목 없음';
+      for (var k = 0; k < added.length; k++) {
+        try {
+          var room = await chat.dmRoom(req.tenant.id, me(req), added[k], me(req));
+          await chat.postMessage({ tenantId: req.tenant.id }, room, { userId: me(req), kind: 'text', body: '📓 노트를 공유했습니다 (읽기 전용)' + (req.body.message ? '\n' + String(req.body.message).slice(0, 500) : ''),
+            cards: [{ type: 'note', id: n.id, title: title, sub: '📓 노트북 · 읽기 전용', nav: { nbId: n.id } }] });
+        } catch (e2) { console.warn('[notebook/share→chat]', e2.message); }
+      }
+    }
+    res.json({ data: { userIds: ok, added: added.length } });
+  } catch (e) { httpErr.serverError(res, '[notebook/share]', e); }
+});
+
+/* [[노트]] — 내 노트 제목 목록 (자동 완성 · 링크 찾기) */
+router.get('/titles', async function (req, res) {
+  try {
+    var r = await db.query("SELECT id, title, LEFT(body, 200) AS body, updated_at FROM nb_notes WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 3000", [req.tenant.id, me(req)]);
+    res.json({ data: r.rows.map(function (x) { return { id: x.id, title: x.title || nb.titleFrom(x.body) || '', updatedAt: x.updated_at }; }).filter(function (x) { return x.title; }) });
+  } catch (e) { httpErr.serverError(res, '[notebook/titles]', e); }
+});
+/* 이 노트를 가리키는 노트 — [[제목]] 또는 (wm:note:id) */
+router.get('/notes/:id/backlinks', async function (req, res) {
+  try {
+    var n = await noteOf(req, req.params.id);
+    if (!n) return notFound(res);
+    var title = n.title || nb.titleFrom(n.body);
+    var p = [req.tenant.id, me(req), n.id, 'wm:note:' + n.id + ')'];
+    var cond = 'POSITION($4 IN body) > 0';
+    if (title) { p.push('[[' + title + ']]', '[[' + title + '|'); cond = '(' + cond + ' OR POSITION($5 IN body) > 0 OR POSITION($6 IN body) > 0)'; }
+    var r = await db.query('SELECT id, title, LEFT(body, 3000) AS body, updated_at FROM nb_notes WHERE tenant_id = $1 AND user_id = $2 AND id <> $3 AND deleted_at IS NULL AND ' + cond + ' ORDER BY updated_at DESC LIMIT 50', p);
+    res.json({ data: r.rows.map(function (x) {
+      var i = x.body.indexOf('[[' + title), j = i >= 0 ? i : x.body.indexOf('wm:note:' + n.id);
+      return { id: x.id, title: x.title || nb.titleFrom(x.body) || '제목 없음', updatedAt: x.updated_at, ctx: j >= 0 ? nb.snippet(x.body.slice(Math.max(0, j - 50), j + 70), 120) : '' };
+    }) });
+  } catch (e) { httpErr.serverError(res, '[notebook/backlinks]', e); }
+});
+
+/* 🔗 업무 연결 칩 — 지금 상태 (권한 그대로: 볼 수 없으면 locked) */
+router.post('/refs', async function (req, res) {
+  try {
+    var pa = require('../lib/project-access');
+    var list = Array.isArray((req.body || {}).refs) ? req.body.refs.slice(0, 80) : [];
+    var T = req.tenant.id, out = {};
+    async function projOk(pid) { return !pid || await pa.canReadById(req, pid); }
+    for (var i = 0; i < list.length; i++) {
+      var t = String(list[i].t || ''), id = String(list[i].id || '').slice(0, 100), key = t + ':' + id, r, x;
+      if (!id || out[key]) continue;
+      try {
+        if (t === 'project') {
+          r = await db.query('SELECT id, name, progress, status, end_date FROM projects WHERE id = $1 AND tenant_id = $2', [id, T]); x = r.rows[0];
+          out[key] = !x ? { missing: true } : !(await projOk(x.id)) ? { locked: true } : { title: x.name, progress: x.progress, status: x.status, due: x.end_date, nav: { projectId: x.id } };
+        } else if (t === 'issue') {
+          r = await db.query('SELECT id, title, status, urgency, project_id, created_by, due_date FROM issues WHERE id = $1 AND tenant_id = $2', [id, T]); x = r.rows[0];
+          var okI = x && (x.project_id ? await projOk(x.project_id) : (x.created_by === me(req) || req.user.role === 'admin'));
+          out[key] = !x ? { missing: true } : !okI ? { locked: true } : { title: x.title, status: x.status, urgency: x.urgency, due: x.due_date, done: ['resolved', 'closed'].indexOf(x.status) >= 0, nav: { issueId: x.id } };
+        } else if (t === 'milestone') {
+          r = await db.query('SELECT id, name, progress, status, end_date, project_id FROM milestones WHERE id = $1 AND tenant_id = $2', [id, T]); x = r.rows[0];
+          out[key] = !x ? { missing: true } : !(await projOk(x.project_id)) ? { locked: true } : { title: x.name, progress: x.progress, status: x.status, due: x.end_date, nav: { projectId: x.project_id, tab: 'work' } };
+        } else if (t === 'meeting') {
+          r = await db.query('SELECT id, title, meet_date, project_id, created_by FROM meetings WHERE id = $1 AND tenant_id = $2', [id, T]); x = r.rows[0];
+          var okM = x && (x.project_id ? await projOk(x.project_id) : x.created_by === me(req));
+          out[key] = !x ? { missing: true } : !okM ? { locked: true } : { title: x.title || '회의', due: x.meet_date, nav: { projectId: x.project_id, meetingId: x.id } };
+        } else if (t === 'todo') {
+          r = await db.query('SELECT id, title, due_date, done_at, deleted_at FROM my_todos WHERE id = $1 AND tenant_id = $2 AND user_id = $3', [id, T, me(req)]); x = r.rows[0];
+          out[key] = !x || x.deleted_at ? { missing: true } : { title: x.title, due: x.due_date, done: !!x.done_at, nav: { todoId: x.id } };
+        } else if (t === 'note') {
+          r = await db.query('SELECT id, title, LEFT(body, 200) AS body FROM nb_notes WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL AND (user_id = $3 OR EXISTS (SELECT 1 FROM nb_shares s WHERE s.note_id = nb_notes.id AND s.user_id = $3))', [id, T, me(req)]); x = r.rows[0];
+          out[key] = !x ? { missing: true } : { title: x.title || nb.titleFrom(x.body) || '노트', nav: { nbId: x.id } };
+        }
+      } catch (e1) { out[key] = { error: true }; }
+    }
+    res.json({ data: out });
+  } catch (e) { httpErr.serverError(res, '[notebook/refs]', e); }
+});
+
+/* 📊 리포트 — { from, to, folderId, tag, inbox, daily, style: raw|weekly|summary } */
+router.post('/report', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var ymd = /^\d{4}-\d{2}-\d{2}$/;
+    if (!ymd.test(b.from || '') || !ymd.test(b.to || '') || b.from > b.to) return bad(res, '기간을 바르게 골라 주세요.');
+    var p = [req.tenant.id, me(req), b.from, b.to], w = ["n.tenant_id = $1", "n.user_id = $2", "n.deleted_at IS NULL", "(n.updated_at AT TIME ZONE 'Asia/Seoul')::date BETWEEN $3::date AND $4::date"];
+    if (!b.inbox) w.push('NOT n.inbox');
+    if (b.folderId) { p.push(String(b.folderId)); w.push('n.folder_id = $' + p.length); }
+    if (b.tag) { p.push(JSON.stringify([String(b.tag)])); w.push('n.tags @> $' + p.length + '::jsonb'); }
+    if (Array.isArray(b.noteIds) && b.noteIds.length) { p.push(b.noteIds.map(String).slice(0, 200)); w.push('n.id = ANY($' + p.length + ')'); }
+    var notes = (await db.query('SELECT n.* FROM nb_notes n WHERE ' + w.join(' AND ') + ' ORDER BY n.updated_at LIMIT 300', p)).rows;
+    var daily = b.daily && !b.folderId && !b.tag ? (await db.query("SELECT note_date, ref, body, updated_at FROM my_notes WHERE tenant_id = $1 AND user_id = $2 AND body <> '' AND note_date BETWEEN $3 AND $4 ORDER BY note_date, ref", [req.tenant.id, me(req), b.from, b.to])).rows : [];
+    if (!notes.length && !daily.length) return bad(res, '이 기간 · 범위에 노트가 없습니다.');
+    var style = ['raw', 'weekly', 'summary'].indexOf(b.style) >= 0 ? b.style : 'raw';
+    var title = (b.title || (style === 'weekly' ? '주간 업무 보고' : style === 'summary' ? '요약 보고서' : '노트 모음')) + ' (' + b.from.slice(5).replace('-', '/') + '~' + b.to.slice(5).replace('-', '/') + ')';
+    var raw = nb.reportRaw(notes, daily, { title: title, from: b.from, to: b.to });
+    if (style === 'raw') return res.json({ data: { title: title, body: raw.md, count: raw.count, style: style } });
+    var aiUsage = require('../lib/ai-usage'), aiProvider = require('../services/ai-provider');
+    var q = await aiUsage.checkQuota(req.tenant.id);
+    if (!q.ok) return res.status(q.status).json({ error: q.error, message: q.message });
+    var outAi = await aiProvider.generateText({ prompt: nb.reportPrompt(style, raw.md.slice(0, 30000), b), tenantId: req.tenant.id });
+    if (!outAi) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI 키가 설정되지 않았습니다. (관리자에게 문의) — "그대로 모으기" 는 쓸 수 있습니다.' });
+    await aiUsage.logUsage(req.tenant.id, me(req), 'notebook:report', outAi.provider);
+    var text = String(outAi.text || '').replace(/^```[a-z]*\n?|```\s*$/g, '').trim();
+    res.json({ data: { title: title, body: style === 'summary' && !/^#\s/.test(text) ? '# ' + title + '\n\n' + text : text, count: raw.count, style: style, provider: aiProvider.label(outAi.provider) } });
+  } catch (e) {
+    try { require('../services/ai-provider').sendAiError(res, '[notebook/report]', e, '리포트 만들기 실패'); } catch (_) { httpErr.serverError(res, '[notebook/report]', e); }
+  }
+});
+
+/* ═══ v13.318 ✍️ 글쓰기 코치 ═══ */
+router.post('/coach', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var text = String(b.text || '').trim();
+    if (text.replace(/\s/g, '').length < 30) return bad(res, '코치를 받으려면 30자 넘게 써 주세요.');
+    var aiUsage = require('../lib/ai-usage'), aiProvider = require('../services/ai-provider');
+    var q = await aiUsage.checkQuota(req.tenant.id);
+    if (!q.ok) return res.status(q.status).json({ error: q.error, message: q.message });
+    var out = await aiProvider.generateText({ prompt: nb.coachPrompt(text, String(b.kind || 'note'), Array.isArray(b.rules) ? b.rules.map(String) : []), tenantId: req.tenant.id });
+    if (!out) return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'AI 키가 설정되지 않았습니다 — 규칙 검사는 그대로 쓸 수 있습니다.' });
+    await aiUsage.logUsage(req.tenant.id, me(req), 'notebook:coach', out.provider);
+    var c = nb.parseCoach(out.text, text);
+    if (!c) return res.status(502).json({ error: 'AI_FORMAT', message: 'AI 답을 읽지 못했습니다. 다시 눌러 주세요.' });
+    c.provider = aiProvider.label(out.provider);
+    if (b.noteId) {
+      await db.query("INSERT INTO nb_coach_logs (tenant_id, user_id, note_id, day, kind, scores, chars, ai, task) VALUES ($1,$2,$3,(NOW() AT TIME ZONE 'Asia/Seoul')::date,$4,$5,$6,TRUE,$7) " +
+        'ON CONFLICT (user_id, note_id, day) DO UPDATE SET scores = EXCLUDED.scores, ai = TRUE, task = EXCLUDED.task, kind = EXCLUDED.kind',
+        [req.tenant.id, me(req), String(b.noteId).slice(0, 60), String(b.kind || 'note').slice(0, 20), JSON.stringify(c.scores), text.replace(/\s/g, '').length, c.task || null]);
+    }
+    res.json({ data: c });
+  } catch (e) {
+    try { require('../services/ai-provider').sendAiError(res, '[notebook/coach]', e, 'AI 코치 실패'); } catch (_) { httpErr.serverError(res, '[notebook/coach]', e); }
+  }
+});
+/* 규칙 검사 결과 기록 — 버릇 개수 · 규칙 점수 (AI 점수가 있으면 그대로 둠) */
+router.post('/coach/log', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var noteId = String(b.noteId || '').slice(0, 60);
+    if (!noteId) return bad(res, 'noteId 필요');
+    var counts = {};
+    Object.keys(b.counts || {}).slice(0, 40).forEach(function (k) { var v = +b.counts[k]; if (v > 0 && v < 10000) counts[String(k).slice(0, 30)] = Math.round(v); });
+    var sc = {}; ['clarity', 'concise', 'structure', 'evidence', 'total'].forEach(function (k) { var v = +((b.scores || {})[k]); if (isFinite(v)) sc[k] = Math.max(0, Math.min(100, Math.round(v))); });
+    await db.query("INSERT INTO nb_coach_logs (tenant_id, user_id, note_id, day, kind, scores, counts, chars) VALUES ($1,$2,$3,(NOW() AT TIME ZONE 'Asia/Seoul')::date,$4,$5,$6,$7) " +
+      'ON CONFLICT (user_id, note_id, day) DO UPDATE SET counts = EXCLUDED.counts, chars = EXCLUDED.chars, kind = EXCLUDED.kind, scores = CASE WHEN nb_coach_logs.ai THEN nb_coach_logs.scores ELSE EXCLUDED.scores END',
+      [req.tenant.id, me(req), noteId, String(b.kind || 'note').slice(0, 20), JSON.stringify(sc), JSON.stringify(counts), Math.max(0, Math.min(1000000, +b.chars || 0))]);
+    res.json({ data: { ok: true } });
+  } catch (e) { httpErr.serverError(res, '[notebook/coach-log]', e); }
+});
+/* 📈 나의 글쓰기 — 최근 8주 (주 = 월요일 시작) */
+router.get('/coach/stats', async function (req, res) {
+  try {
+    var r = await db.query("SELECT to_char(date_trunc('week', day), 'YYYY-MM-DD') AS wk, COUNT(*)::int AS n, SUM(chars)::int AS chars, " +
+      "ROUND(AVG((scores->>'total')::numeric))::int AS total, ROUND(AVG((scores->>'clarity')::numeric))::int AS clarity, ROUND(AVG((scores->>'concise')::numeric))::int AS concise, " +
+      "ROUND(AVG((scores->>'structure')::numeric))::int AS structure, ROUND(AVG((scores->>'evidence')::numeric))::int AS evidence " +
+      "FROM nb_coach_logs WHERE tenant_id = $1 AND user_id = $2 AND day >= (NOW() AT TIME ZONE 'Asia/Seoul')::date - 56 GROUP BY 1 ORDER BY 1", [req.tenant.id, me(req)]);
+    var h = await db.query("SELECT to_char(date_trunc('week', day), 'YYYY-MM-DD') AS wk, k, SUM(v::int)::int AS n FROM nb_coach_logs, jsonb_each_text(counts) AS e(k, v) " +
+      "WHERE tenant_id = $1 AND user_id = $2 AND day >= (NOW() AT TIME ZONE 'Asia/Seoul')::date - 14 GROUP BY 1, 2", [req.tenant.id, me(req)]);
+    var t = await db.query("SELECT task, to_char(day, 'YYYY-MM-DD') AS day FROM nb_coach_logs WHERE tenant_id = $1 AND user_id = $2 AND task IS NOT NULL ORDER BY nb_coach_logs.day DESC, id DESC LIMIT 1", [req.tenant.id, me(req)]);
+    var thisWk = await db.query("SELECT to_char(date_trunc('week', (NOW() AT TIME ZONE 'Asia/Seoul')::date), 'YYYY-MM-DD') AS wk");
+    var cur = thisWk.rows[0].wk;   // 글자로 받음 — Date 로 받으면 시간대 따라 하루 밀림
+    function wk(x) { return String(x instanceof Date ? new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString() : x).slice(0, 10); }
+    var habits = {};
+    h.rows.forEach(function (x) { var w0 = wk(x.wk); habits[x.k] = habits[x.k] || { k: x.k, now: 0, prev: 0 }; if (w0 === cur) habits[x.k].now += x.n; else habits[x.k].prev += x.n; });
+    res.json({ data: {
+      weeks: r.rows.map(function (x) { return { wk: wk(x.wk), n: x.n, chars: x.chars, total: x.total, clarity: x.clarity, concise: x.concise, structure: x.structure, evidence: x.evidence }; }),
+      habits: Object.keys(habits).map(function (k) { return habits[k]; }).sort(function (a, b) { return b.now - a.now || b.prev - a.prev; }).slice(0, 12),
+      task: t.rows[0] ? { text: t.rows[0].task, day: wk(t.rows[0].day) } : null, week: cur
+    } });
+  } catch (e) { httpErr.serverError(res, '[notebook/coach-stats]', e); }
 });
 
 /* ─── 데이터로 채운 양식 — 📋 일일 업무 ─── */
