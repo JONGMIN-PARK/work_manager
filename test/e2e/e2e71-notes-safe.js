@@ -90,6 +90,17 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.click('#mwNotes [data-n="prev"]');
     check(await until(function () { var t = _mwn.rows.map(function (r) { return r.t; }).join('\n'); return /다른 기기에서 고친 글/.test(t) && /저장 못 한 글/.test(t) && /이 기기에서 못 보낸 글/.test(t); }), '되살림 — 그새 바뀌었으면 둘 다 남김');
 
+    // 4-2. (v13.333) 동시 편집 — 다른 곳에서 덧붙인 줄과 서랍에서 덧붙인 줄을 합쳐 둘 다 남김
+    await until(function () { return !_mwn.inflight && !_mwn.timer; }, null, 8000);
+    var b0 = await body(d1);
+    await c.query("UPDATE my_notes SET body = $3 WHERE user_id = $1 AND note_date = $2 AND ref = ''", [me.id, d1, b0 + '\n노트북에서 쓴 줄']);
+    await ev(function () { var ts = document.querySelectorAll('#mwnEd .mwn-t'); ts[ts.length - 1].focus(); });
+    await page.keyboard.press('End'); await page.keyboard.press('Enter'); await page.keyboard.type('서랍에서 쓴 줄');
+    var both = false, bb = '';
+    for (var q = 0; q < 25 && !both; q++) { await wait(300); bb = await body(d1) || ''; both = /노트북에서 쓴 줄/.test(bb) && /서랍에서 쓴 줄/.test(bb); }
+    check(both, '동시 편집 → 두 곳 글 다 남음 (' + JSON.stringify(bb.slice(-60)) + ')');
+    check(await ev(function () { return _mwn.rows.some(function (r) { return r.t === '노트북에서 쓴 줄'; }); }), '합친 글이 서랍에도 보임');
+
     // 5. 찾기 칸 Esc — 찾기만 닫히고 서랍은 그대로
     await page.click('#mwNotes [data-n="find"]');
     await until(function () { return document.activeElement && document.activeElement.id === 'mwnQ'; });

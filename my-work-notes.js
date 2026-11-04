@@ -279,14 +279,39 @@ function _mwnSave() {
   _mwnSaveRaw(date, ref, body);
 }
 var MWN_RETRY = [3000, 10000, 30000, 60000];
-/** 그 날 · 그 장을 저장 — 앞 저장이 끝난 뒤 차례로 (v13.275) · 실패하면 조금씩 늦춰 다시 (v13.331) */
+/** 세 갈래 합치기 — base(둘 다 알던 글) · mine(이 기기) · theirs(다른 곳에서 고친 지금 서버 글) (v13.333)
+ *  한쪽만 고쳤으면 그쪽 · 둘 다 끝에 덧붙였으면 이어 붙임 · 그 밖엔 서버 글 아래에 이 기기에만 있는 줄을 붙여 둘 다 남김 (지우지 않음) */
+function wmMergeNote(base, mine, theirs) {
+  base = base || ''; mine = mine || ''; theirs = theirs || '';
+  if (mine === theirs || mine === base) return theirs;
+  if (theirs === base) return mine;
+  if (mine.indexOf(base) === 0 && theirs.indexOf(base) === 0) {
+    var add = mine.slice(base.length);
+    return theirs + (add.charAt(0) === '\n' || !theirs || theirs.slice(-1) === '\n' ? '' : '\n') + add;
+  }
+  var have = {}; theirs.split('\n').forEach(function (l) { have[l] = 1; });
+  var extra = mine.split('\n').filter(function (l) { return l.trim() && !have[l]; });
+  if (!extra.length) return theirs;
+  return (theirs ? theirs + '\n' : '') + '— 이 기기에서 쓴 글 (' + new Date().toTimeString().slice(0, 5) + ') —\n' + extra.join('\n');
+}
+/** 그 날 · 그 장을 저장 — 앞 저장이 끝난 뒤 차례로 (v13.275) · 실패하면 조금씩 늦춰 다시 (v13.331)
+ *  v13.333: 보낼 때 그 장의 가장 새 글(want)을 보냄 · 서버 글 기준(base)을 함께 → 다른 곳에서 고쳤으면 합쳐서 다시 */
+function _mwnBaseOf(date, ref) { var k = date + '|' + ref; return k in _mwn.srv ? _mwn.srv[k] : _mwn.loaded === date ? '' : undefined; }
 function _mwnSaveRaw(date, ref, body) {
+  var key = date + '|' + ref;
+  _mwn.want = _mwn.want || {};
+  _mwn.want[key] = body;
   if (_mwn.date === date && _mwn.ref === ref) { _mwn.state = 'saving'; _mwnShowState(); }
-  var prev = _mwn.inflight || Promise.resolve();
+  var prev = _mwn.inflight || Promise.resolve(), sentBase;
   var p = _mwn.inflight = prev.catch(function () {}).then(function () {
-    return apiFetch('/api/my-work/notes', { method: 'PUT', body: JSON.stringify({ date: date, ref: ref, body: body }) });
+    body = _mwn.want[key] != null ? _mwn.want[key] : body;   // 줄 서 있는 사이 더 쓴 것 · 합친 것
+    sentBase = _mwnBaseOf(date, ref);
+    if (sentBase === body) return null;   // 이미 서버와 같음
+    var req = { date: date, ref: ref, body: body }; if (sentBase !== undefined) req.base = sentBase;
+    return apiFetch('/api/my-work/notes', { method: 'PUT', body: JSON.stringify(req) });
   }).then(function () {
     if (_mwn.inflight === p) _mwn.inflight = null;
+    if (_mwn.want[key] === body) delete _mwn.want[key];
     _mwn.srv[date + '|' + ref] = body;
     _mwnDraftDrop(date, ref, body);
     _mwn.retryN = 0;
@@ -299,6 +324,17 @@ function _mwnSaveRaw(date, ref, body) {
     if (typeof _mtlMain !== 'undefined' && _mtlMain && _mtlMain.el && _mtlMain.el.isConnected) { _mtlMain.drawAxis(); if (_mtlMain.o.calendar) _mtlMain.drawCal(); }
   }).catch(function (e) {
     if (_mwn.inflight === p) _mwn.inflight = null;
+    if (e && e.status === 409 && e.data && e.data.data) {   // 다른 곳(노트북 · 다른 창 · 기기)에서 먼저 고침 → 합쳐서 다시
+      var theirs = e.data.data.body || '', live = _mwn.date === date && _mwn.ref === ref && _mwn.loaded === date;
+      var merged = wmMergeNote(sentBase, live ? _mwnBody() : (_mwn.want[key] != null ? _mwn.want[key] : body), theirs);
+      _mwn.srv[key] = theirs;
+      if (_mwn.date === date) _mwn.notes[ref] = merged;
+      if (live) { var ae = document.activeElement, idx = ae && ae.getAttribute ? ae.getAttribute('data-i') : null; _mwn.rows = _mwnParse(merged); _mwnPaintRows(false); if (idx != null) { var t = document.querySelector('#mwnEd .mwn-t[data-i="' + idx + '"]'); if (t) t.focus(); } }
+      _mwnDraftPut(date, ref, merged, theirs);
+      if (merged !== theirs) { _mwToast('🔀 다른 곳에서 고친 글과 합쳤습니다', 'info'); _mwnSaveRaw(date, ref, merged); }
+      else { delete _mwn.want[key]; _mwnDraftDrop(date, ref, merged); if (live) { _mwn.state = 'saved'; _mwnShowState(); } }
+      return;
+    }
     if (_mwn.date === date && _mwn.ref === ref) { _mwn.state = 'error'; _mwnShowState(); }
     // 글은 이 기기에 남아 있음(임시 보관). 서버 · 연결 문제면 조금 뒤 저절로 다시 — 글 자체가 잘못(4xx)이면 알리기만
     var st = e && e.status, again = !st || st >= 500 || st === 408 || st === 429;
@@ -575,7 +611,7 @@ function _mwnFlushNow() {
     fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/my-work/notes', {
       method: 'PUT', keepalive: true,
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (typeof _accessToken !== 'undefined' ? _accessToken : '') },
-      body: JSON.stringify({ date: date, ref: ref, body: body })
+      body: JSON.stringify(Object.assign({ date: date, ref: ref, body: body }, _mwnBaseOf(date, ref) !== undefined ? { base: _mwnBaseOf(date, ref) } : {}))
     }).then(function (r) { if (r.ok) { _mwn.srv[date + '|' + ref] = body; _mwnDraftDrop(date, ref, body); } }).catch(function () {});
   } catch (_) {}
 }

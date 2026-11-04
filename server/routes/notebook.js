@@ -108,10 +108,14 @@ router.get('/notes', async function (req, res) {
     if (qs) { p.push('%' + qs.replace(/[\\%_]/g, '\\$&') + '%'); w.push('(n.title ILIKE $' + p.length + ' OR n.body ILIKE $' + p.length + ' OR n.tags::text ILIKE $' + p.length + ')'); }
     var sort = { created: 'n.created_at DESC', title: "NULLIF(n.title, '') ASC NULLS LAST, n.updated_at DESC", updated: 'n.updated_at DESC' }[q.sort] || 'n.updated_at DESC';
     if (view === 'trash') sort = 'n.deleted_at DESC';
+    // 쪽 나누기 (v13.333) — 한 번에 200개, 더 보기로 이어 받음 · id 로 순서를 굳혀 쪽 사이에 빠지거나 겹치지 않게
+    var limit = Math.min(500, Math.max(1, parseInt(q.limit, 10) || 200)), offset = Math.min(100000, Math.max(0, parseInt(q.offset, 10) || 0));
     var r = await db.query('SELECT n.id, n.folder_id, n.title, n.tags, n.pinned, n.starred, n.inbox, n.source, n.words, n.rev, n.created_at, n.updated_at, n.deleted_at, ' +
       "LEFT(n.body, 3000) AS body, (n.ink ? 'blocks' AND n.ink->'blocks' <> '{}'::jsonb) AS has_ink, " +
       "SUBSTRING(n.body FROM '!\\[[^\\]]*\\]\\(nbf:([A-Za-z0-9-]+)\\)') AS thumb " +
-      'FROM nb_notes n WHERE ' + w.join(' AND ') + ' ORDER BY ' + (view === 'trash' ? '' : 'n.pinned DESC, ') + sort + ' LIMIT 1000', p);
+      'FROM nb_notes n WHERE ' + w.join(' AND ') + ' ORDER BY ' + (view === 'trash' ? '' : 'n.pinned DESC, ') + sort + ', n.id' +
+      ' LIMIT ' + (limit + 1) + ' OFFSET ' + offset, p);
+    var more = r.rows.length > limit; if (more) r.rows.pop();
     var hits = null;
     if (qs) {   // 찾은 자리 한 조각
       var low = qs.toLowerCase();
@@ -121,7 +125,7 @@ router.get('/notes', async function (req, res) {
         if (i >= 0) hits[n.id] = String(n.body).slice(Math.max(0, i - 30), i + qs.length + 60).replace(/\s+/g, ' ');
       });
     }
-    res.json({ data: r.rows.map(function (n) { var o = nb.out(n); if (hits && hits[n.id]) o.hit = hits[n.id]; return o; }) });
+    res.json({ data: r.rows.map(function (n) { var o = nb.out(n); if (hits && hits[n.id]) o.hit = hits[n.id]; return o; }), more: more });
   } catch (e) { httpErr.serverError(res, '[notebook/list]', e); }
 });
 

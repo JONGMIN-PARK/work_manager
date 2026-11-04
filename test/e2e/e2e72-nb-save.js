@@ -129,6 +129,40 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check(await ev(function () { return _nbSnippet('- **납기**는 다음 주') === '납기는 다음 주'; }), '목록 미리보기 — 굵게 자리 빈칸 없음');
     await page.setViewport({ width: 1440, height: 900 });
 
+    // 10. (v13.333) 일일 노트 동시 편집 — 다른 곳에서 덧붙인 줄과 내가 덧붙인 줄을 합침
+    await ev(function (d) { return _nbOpenDaily(d, ''); }, dd);
+    await until(function () { return NB.daily1 && !Object.keys(NB.pend).length && !NB.saving; });
+    var base1 = (await c.query("SELECT body FROM my_notes WHERE user_id = $1 AND note_date = $2 AND ref = ''", [me.id, dd])).rows[0].body;
+    await c.query("UPDATE my_notes SET body = $3 WHERE user_id = $1 AND note_date = $2 AND ref = ''", [me.id, dd, base1 + '\n서랍에서 쓴 줄']);
+    await typeEnd('\n노트북에서 쓴 줄');
+    var mg = null;
+    for (var k = 0; k < 30; k++) { mg = (await c.query("SELECT body FROM my_notes WHERE user_id = $1 AND note_date = $2 AND ref = ''", [me.id, dd])).rows[0].body; if (/노트북에서 쓴 줄/.test(mg)) break; await wait(300); }
+    check(mg === base1 + '\n서랍에서 쓴 줄\n노트북에서 쓴 줄', '일일 노트 동시 편집 → 두 줄 다 남김 (' + JSON.stringify(mg) + ')');
+    check(await ev(function () { return /서랍에서 쓴 줄/.test(document.getElementById('nbSrc').value); }), '합친 글이 편집 칸에도');
+    check(await ev(function () { return typeof wmMergeNote === 'function' && wmMergeNote('a', 'a' + String.fromCharCode(10) + 'b', 'a' + String.fromCharCode(10) + 'c') === ['a', 'c', 'b'].join(String.fromCharCode(10)); }), '합치기 — 둘 다 덧붙였으면 이어 붙임');
+
+    // 11. (v13.333) 한글 입력 중 Enter(Mac) — 목록 이어짐
+    await open(B);
+    await ev(function () {
+      var s = document.getElementById('nbSrc'); s.focus(); s.value = '- 첫 항목'; s.setSelectionRange(s.value.length, s.value.length);
+      NB.imeEnter = Date.now();
+      s.value = s.value + '\n'; s.setSelectionRange(s.value.length, s.value.length);
+      s.dispatchEvent(new InputEvent('input', { inputType: 'insertLineBreak', bubbles: true }));
+    });
+    check(await ev(function () { return document.getElementById('nbSrc').value === '- 첫 항목\n- '; }), '한글 입력 중 Enter → 목록 이어짐 (' + JSON.stringify(await ev(function () { return document.getElementById('nbSrc').value; })) + ')');
+
+    // 12. (v13.333) 줄 → 할 일 — 기다리는 사이 위에 줄을 넣어도 그 줄에 ⟦id⟧
+    await ev(function () { var s = document.getElementById('nbSrc'); s.value = '- [ ] 센서 교체\n- [ ] 모터 점검'; _nbChanged('body'); _nbRenderPrev(); _nbpToTodo(1); s.value = '맨 위에 넣은 줄\n' + s.value; _nbChanged('body'); });
+    check(await until(function () { var l = document.getElementById('nbSrc').value.split('\n'); return /⟦/.test(l[2]) && /모터 점검/.test(l[2]) && !/⟦/.test(l[1]); }, null, 6000), '할 일 표시가 원래 줄(모터 점검)에 붙음');
+
+    // 13. (v13.333) 목록 쪽 나누기 — 200개씩 · 끝에서 더 받음
+    await c.query("INSERT INTO nb_notes (id, tenant_id, user_id, title, body) SELECT 'e72p' || g, $1, $2, 'E72 쪽 ' || g, 'x' FROM generate_series(1, 230) g", [me.tenant_id, me.id]);
+    await ev(function () { NB.view = 'all'; NB.folder = null; NB.tag = null; NB.q = ''; return _nbLoadList(); });
+    check(await ev(function () { return NB.list.length === 200 && NB.more && !!document.querySelector('#nbItems .nb-more'); }), '목록 첫 쪽 200개 · 더 보기');
+    await ev(function () { var b = document.getElementById('nbItems'); b.scrollTop = b.scrollHeight; });
+    check(await until(function () { return NB.list.length > 200 && !NB.more; }, null, 8000), '끝까지 내리면 저절로 다음 쪽 (' + await ev(function () { return NB.list.length; }) + ')');
+    await c.query("DELETE FROM nb_notes WHERE id LIKE 'e72p%'");
+
     // 9. 로그아웃 — 노트북 화면 · 기억 비움
     await ev(function () { return authLogout(); });
     check(await ev(function () { return !NB.cur && !NB.inited && !document.querySelector('#mNotebook .nb') && !Object.keys(NB.pend).length; }), '로그아웃 → 노트북 화면 · 기억 비움');
@@ -137,6 +171,8 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
   } catch (e) { fail++; console.log('FAIL 예외', e.message); }
   await c.query("DELETE FROM nb_notes WHERE user_id = $1 AND (title LIKE 'E72%' OR body = 'E72 낙서 한 번')", [me.id]);
   await c.query("DELETE FROM my_notes WHERE user_id = $1 AND note_date = $2", [me.id, dd]);
+  await c.query("DELETE FROM nb_notes WHERE id LIKE 'e72p%'");
+  await c.query("DELETE FROM my_todos WHERE user_id = $1 AND title IN ('모터 점검', '센서 교체')", [me.id]).catch(function () {});
   await c.end(); await browser.close();
   console.log(fail ? 'FAILED ' + fail + ' (ok ' + ok + ')' : 'ALL PASS ' + ok);
   process.exit(fail ? 1 : 0);

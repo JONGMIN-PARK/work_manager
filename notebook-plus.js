@@ -45,7 +45,10 @@ function _nbAfterRender(doc) {
   var keys = [];
   doc.querySelectorAll('a.nb-ref[data-ref]').forEach(function (a) { keys.push(a.getAttribute('data-ref')); });
   doc.querySelectorAll('a.nb-todo-ref[data-todo]').forEach(function (a) { keys.push('todo:' + a.getAttribute('data-todo')); });
-  if (keys.length) _nbpRefs(keys).then(function () { _nbpPaintRefs(doc); _nbpSyncTodos(); if (NBP.coach) _nbpCoachRun(); });
+  if (keys.length) {
+    _nbpPaintRefs(doc);   // 받아 둔 상태는 바로 (다시 그릴 때 칩이 깜빡이지 않게)
+    _nbpRefs(keys).then(function (got) { if (!got || !doc.isConnected) return; _nbpPaintRefs(doc); _nbpSyncTodos(); if (typeof _nbCoachSchedule === 'function') _nbCoachSchedule(); });   // 코치는 쉬었다가 (v13.333)
+  }
   // 체크 줄 → 할 일 · 이슈 단추
   if (NB.cur && !_nbRO()) {
     doc.querySelectorAll('li.nb-task').forEach(function (li) {
@@ -63,11 +66,14 @@ function _nbAfterRender(doc) {
 var _nbpRefQ = null;
 function _nbpRefs(keys) {
   var now = Date.now(), need = [];
-  keys.forEach(function (k) { var c = NBP.refs[k]; if ((!c || now - c.t > 60000) && need.indexOf(k) < 0) need.push(k); });
-  if (!need.length) return Promise.resolve();
+  NBP.refsBusy = NBP.refsBusy || {};
+  keys.forEach(function (k) { var c = NBP.refs[k]; if ((!c || now - c.t > 60000) && need.indexOf(k) < 0 && !NBP.refsBusy[k]) need.push(k); });
+  if (!need.length) return Promise.resolve(false);   // 다 받아 두었거나 받는 중 — 같은 것을 키마다 다시 묻지 않음
+  need.forEach(function (k) { NBP.refsBusy[k] = 1; });
   return apiFetch('/api/notebook/refs', { method: 'POST', body: JSON.stringify({ refs: need.map(function (k) { var i = k.indexOf(':'); return { t: k.slice(0, i), id: k.slice(i + 1) }; }) }) }).then(function (r) {
     Object.keys(r.data || {}).forEach(function (k) { NBP.refs[k] = { v: r.data[k], t: Date.now() }; });
-  }).catch(function () {});
+    return true;
+  }).catch(function () { return false; }).then(function (ok) { need.forEach(function (k) { delete NBP.refsBusy[k]; }); return ok; });
 }
 function _nbpDday(d) {
   if (!d) return '';
@@ -190,22 +196,41 @@ function _nbpLineText(line) {
   var l = (_nbSrc().value.split('\n')[line] || '');
   return l.replace(/^\s*(?:[-*+]|\d+[.)])\s+\[[ xX]\]\s+/, '').replace(/ ?⟦[^⟧]*⟧/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_=~`]/g, '').trim();
 }
-function _nbpAppendToLine(line, add) {
-  var s = _nbSrc(), lines = s.value.split('\n');
-  if (lines[line] == null) return;
-  lines[line] = lines[line].replace(/\s+$/, '') + add;
-  var a = s.selectionStart;
-  s.value = lines.join('\n'); s.setSelectionRange(a, a);
-  _nbChanged('body'); _nbRenderPrev(); _nbFoot();
+/** 누른 그 줄을 기억 — 서버 답을 기다리는 사이 위에 줄을 넣거나 다른 노트로 가도 같은 줄을 찾게 (v13.333) */
+function _nbpLineRef(line) { var d = _nbDoc(); return { key: d ? _nbKeyOf(d) : '', line: line, text: (_nbSrc().value.split('\n')[line] || '') }; }
+function _nbpFindLine(lines, ref) {
+  if (lines[ref.line] === ref.text) return ref.line;
+  var best = -1;
+  lines.forEach(function (l, i) { if (l === ref.text && (best < 0 || Math.abs(i - ref.line) < Math.abs(best - ref.line))) best = i; });
+  return best;
+}
+function _nbpAppendToLine(ref, add) {
+  if (typeof ref === 'number') ref = _nbpLineRef(ref);
+  function edit(body) {
+    var lines = body.split('\n'), i = _nbpFindLine(lines, ref); if (i < 0) return null;
+    lines[i] = lines[i].replace(/\s+$/, '') + add; return { body: lines.join('\n') };
+  }
+  var d = _nbDoc(), s = _nbSrc();
+  if (d && s && _nbKeyOf(d) === ref.key) {
+    var lines = s.value.split('\n'), i = _nbpFindLine(lines, ref);
+    if (i < 0) { _nbToast('⚠️ 그 줄이 바뀌어 표시를 붙이지 못했습니다 — 만든 것은 그대로 있습니다', 'warn'); return; }
+    var old = lines[i]; lines[i] = old.replace(/\s+$/, '') + add;
+    var end = lines.slice(0, i).join('\n').length + (i ? 1 : 0) + old.length, dl = lines[i].length - old.length;
+    var a = s.selectionStart, b = s.selectionEnd;
+    s.value = lines.join('\n'); s.setSelectionRange(a >= end ? a + dl : a, b >= end ? b + dl : b);
+    _nbChanged('body'); _nbRenderPrev(); _nbFoot();
+    return;
+  }
+  _nbEditAway(ref.key, function (body) { var r = edit(body); return r ? r.body : null; }, '그 노트의 줄을 찾지 못해 표시를 붙이지 못했습니다 — 만든 것은 그대로 있습니다');
 }
 function _nbpToTodo(line) {
-  var raw = _nbpLineText(line);
+  var raw = _nbpLineText(line), ref = _nbpLineRef(line), title = NB.cur ? NB.cur.title : '';
   if (!raw) { _nbToast('할 일로 올릴 내용을 적어 주세요', 'warn'); return; }
   var q = typeof QuickParse !== 'undefined' ? QuickParse.parse(raw, _nbToday()) : { title: raw };
   apiFetch('/api/my-work/todos', { method: 'POST', body: JSON.stringify({ title: q.title || raw, dueDate: q.due || null, dueTime: q.due && q.time ? q.time : null, priority: q.priority || 3,
-    memo: '📓 노트 "' + (NB.cur.title || '제목 없음') + '" 에서' }) }).then(function (r) {
+    memo: '📓 노트 "' + (title || '제목 없음') + '" 에서' }) }).then(function (r) {
     NBP.refs['todo:' + r.data.id] = { v: { title: r.data.title, due: r.data.due_date, done: false, nav: { todoId: r.data.id } }, t: Date.now() };
-    _nbpAppendToLine(line, ' ⟦' + r.data.id + '⟧');
+    _nbpAppendToLine(ref, ' ⟦' + r.data.id + '⟧');
     _nbToast('✏️ 내 할 일로 — ' + (q.title || raw) + (q.due ? ' · ' + (+q.due.slice(5, 7)) + '/' + (+q.due.slice(8, 10)) : ''));
   }).catch(function (e) { _nbToast('❌ 할 일로 올리지 못했습니다 — ' + _nbErr(e), 'error'); });
 }
@@ -246,7 +271,7 @@ function nbpProjPick(box, pre) {
 }
 
 function _nbpToIssue(line) {
-  var raw = _nbpLineText(line);
+  var raw = _nbpLineText(line), ref = _nbpLineRef(line);
   if (!raw) { _nbToast('이슈로 올릴 내용을 적어 주세요', 'warn'); return; }
   var pre = nbpLinkedProjects(_nbSrc().value);   // 노트에 연결한 프로젝트가 있으면 먼저 고름
   return wmGuardedModal('nbIssue', function () {
@@ -266,7 +291,7 @@ function _nbpToIssue(line) {
         description: '📓 노트 "' + (NB.cur.title || '제목 없음') + '" 에서 올림' }) }).then(function (r) {
         var id = (r.data && r.data.id) || (r.id);
         md.close();
-        _nbpAppendToLine(line, ' [🐞 이슈](wm:issue:' + id + ')');
+        _nbpAppendToLine(ref, ' [🐞 이슈](wm:issue:' + id + ')');
         _nbToast('🐞 이슈를 만들었습니다 — ' + title);
       }).catch(function (e2) { x.disabled = false; _nbToast('❌ ' + _nbErr(e2), 'error'); });
     });
@@ -663,7 +688,7 @@ function nbWriteStart() {
   if (typeof currentUser === 'undefined' || !currentUser) return;
   var coachOn = _nbLS('writeCoach'); coachOn = coachOn == null ? true : !!coachOn;
   return wmGuardedModal('nbWrite', function () {
-    var src = NB.list && NB.list.length && NB.view !== 'trash' && NB.view !== 'shared' ? Promise.resolve(NB.list) : apiFetch('/api/notebook/notes?view=all&sort=updated').then(function (r) { return r.data || []; }).catch(function () { return []; });
+    var src = NB.list && NB.list.length && NB.view !== 'trash' && NB.view !== 'shared' ? Promise.resolve(NB.list) : apiFetch('/api/notebook/notes?view=all&sort=updated&limit=500').then(function (r) { return r.data || []; }).catch(function () { return []; });
     return src.then(function (list) { _nbpWriteModal(coachOn, list.filter(function (n) { return !n.deletedAt && !n.readOnly && !n.ownerName; }).slice(0, 3)); });
   }, 'nbWriteModal', { onOpen: function () { var b = document.querySelector('#nbWriteModal .nbw-c'); if (b) b.focus(); } });
 }

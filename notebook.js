@@ -168,8 +168,11 @@ function _nbListTitle() {
   if (NB.folder) { var f = (NB.meta && NB.meta.folders || []).filter(function (x) { return x.id === NB.folder; })[0]; return f ? f.name : '폴더'; }
   return { all: '📚 모든 노트', inbox: '📥 낙서장', pinned: '📌 고정', starred: '⭐ 즐겨찾기', daily: '📅 일일 노트', trash: '🗑 휴지통', shared: '👥 공유받은 노트' }[NB.view] || '노트';
 }
-function _nbLoadList() {
-  var seq = ++NB.seq;
+var NB_PAGE = 200;
+/** 목록 받기 — more 면 이어서 다음 쪽 (v13.333: 한 번에 200개씩) */
+function _nbLoadList(more) {
+  if (more && (NB.listBusy || !NB.more)) return Promise.resolve();
+  var seq = more ? NB.seq : ++NB.seq;
   if (NB.view === 'daily' && !NB.q && !NB.folder && !NB.tag) {
     return apiFetch('/api/notebook/daily').then(function (r) { if (seq !== NB.seq) return; NB.daily = r.data || []; NB.list = []; _nbDrawList(); }).catch(function (e) { _nbToast('❌ ' + _nbErr(e), 'error'); });
   }
@@ -177,13 +180,22 @@ function _nbLoadList() {
   if (NB.folder) qs += '&folder=' + encodeURIComponent(NB.folder);
   if (NB.tag) qs += '&tag=' + encodeURIComponent(NB.tag);
   if (NB.q) qs += '&q=' + encodeURIComponent(NB.q);
-  return apiFetch('/api/notebook/notes' + qs).then(function (r) { if (seq !== NB.seq) return; NB.list = r.data || []; _nbDrawList(); }).catch(function (e) { _nbToast('❌ ' + _nbErr(e), 'error'); });
+  qs += '&limit=' + NB_PAGE + '&offset=' + (more ? NB.list.length : 0);
+  NB.listBusy = true;
+  return apiFetch('/api/notebook/notes' + qs).then(function (r) {
+    if (seq !== NB.seq) return;
+    var rows = r.data || [];
+    if (more) { var have = {}; NB.list.forEach(function (x) { have[x.id] = 1; }); NB.list = NB.list.concat(rows.filter(function (x) { return !have[x.id]; })); }
+    else NB.list = rows;
+    NB.more = !!r.more;
+    if (more) { var box = document.getElementById('nbItems'), st = box ? box.scrollTop : 0; _nbDrawList(); if (box) box.scrollTop = st; } else _nbDrawList();
+  }).catch(function (e) { _nbToast('❌ ' + _nbErr(e), 'error'); }).then(function () { if (seq === NB.seq || more) NB.listBusy = false; });
 }
 function _nbDrawList() {
   var lh = document.getElementById('nbLH'), box = document.getElementById('nbItems'); if (!lh || !box) return;
   var daily = NB.view === 'daily' && !NB.q && !NB.folder && !NB.tag;
   var n = daily ? NB.daily.length : NB.list.length;
-  lh.innerHTML = '<button class="nb-back" data-nb="to-side" aria-label="메뉴">☰</button><b class="nb-lh-t">' + _nbE(_nbListTitle()) + '</b><span class="nb-lh-n">' + n + '</span>' +
+  lh.innerHTML = '<button class="nb-back" data-nb="to-side" aria-label="메뉴">☰</button><b class="nb-lh-t">' + _nbE(_nbListTitle()) + '</b><span class="nb-lh-n">' + n + (NB.more && !daily ? '+' : '') + '</span>' +
     (NB.view === 'trash' && n ? '<button class="nb-lh-b" data-nb="empty-trash">비우기</button>' : '') +
     (n && typeof wmBookOpen === 'function' ? '<button class="nb-lh-b" data-nb="book" title="📖 펼쳐 보기 — 노트 · 일일 노트 · 업무일지 · 회의록을 책처럼 2~4장 나란히">📖</button>' : '') +
     (daily && n ? '<button class="nb-lh-b" data-nb="print-bundle" title="여러 날 일일 노트를 일일 업무 보고 양식으로 묶어 출력">🖨 묶어 출력</button>' : '') +
@@ -223,8 +235,13 @@ function _nbDrawList() {
       (NB.view === 'trash' ? '<div class="nb-it-act"><button class="nb-btn sm" data-restore="' + _nbE(it.id) + '">되살리기</button><button class="nb-btn sm danger" data-purge="' + _nbE(it.id) + '">영구 삭제</button></div>' : '') +
       '</div>';
   });
+  if (NB.more) h += '<button class="nb-more" data-nb="more-list">아래로 더 보기</button>';
   box.innerHTML = h;
   _nbLoadImgs(box);
+  // 끝에 닿으면 저절로 다음 쪽
+  if (NB.moreIO) NB.moreIO.disconnect();
+  var mb = box.querySelector('.nb-more');
+  if (mb && typeof IntersectionObserver !== 'undefined') { NB.moreIO = new IntersectionObserver(function (es) { if (es[0].isIntersecting) _nbLoadList(true); }, { root: box, rootMargin: '200px' }); NB.moreIO.observe(mb); }
 }
 function _nbHl(s, q) {
   var e = _nbE(s); if (!q) return e;
@@ -428,6 +445,8 @@ function _nbRenderPrev() {
   var doc = document.getElementById('nbDoc'), src = document.getElementById('nbSrc'); if (!doc || !src) return;
   var r = NbMd.render(src.value);
   NB.toc = r.toc;
+  var keepImg = null;   // 이미 받아 둔 사진 요소 — 새로 그린 자리에 옮겨 씀 (다시 그릴 때 깜빡이지 않게 · v13.333)
+  doc.querySelectorAll('img[data-nbfid]').forEach(function (img) { if (!img.getAttribute('src')) return; keepImg = keepImg || {}; var id = img.getAttribute('data-nbfid'); (keepImg[id] = keepImg[id] || []).push(img); });
   doc.innerHTML = r.html || '<p class="nb-ph">' + (NB.mode === 'view' ? '비어 있는 노트 — ✏️ 편집 을 누르거나 더블클릭해서 쓰세요' : '미리보기') + '</p>';
   var ink = NB.cur && NB.cur.ink && NB.cur.ink.blocks || {};
   doc.querySelectorAll('.nb-ink').forEach(function (el) {
@@ -440,6 +459,10 @@ function _nbRenderPrev() {
       b.className = 'nb-ink-go'; b.type = 'button'; b.setAttribute('data-inkgo', id); b.textContent = '✍️ 그리기';
       el.appendChild(b);
     }
+  });
+  if (keepImg) doc.querySelectorAll('img[data-nbf]').forEach(function (img) {
+    var k = keepImg[img.getAttribute('data-nbf')], old = k && k.shift();
+    if (old) { old.alt = img.alt; if (img.title) old.title = img.title; else old.removeAttribute('title'); img.replaceWith(old); }
   });
   _nbLoadImgs(doc);
   if (NB.inkId && NB.cur) { var host = doc.querySelector('.nb-ink[data-ink="' + NB.inkId + '"]'); if (host) _nbInkStart(NB.inkId, true); else _nbInkStop(); }
@@ -469,9 +492,12 @@ function _nbBind(root) {
     _nbCaretToLine(+blk.getAttribute('data-line'));
   });
   root.addEventListener('input', function (e) {
+    if (e.target.id === 'nbSrc' && _nbImeEnter(e)) return;
+    if (e.target.id === 'nbSrc' && NB.inserting) return;   // _nbInsert 가 바로 이어서 처리 (두 번 그리지 않게)
     if (e.target.id === 'nbSrc') {
       _nbChanged('body');
-      clearTimeout(prevT); prevT = setTimeout(function () { _nbRenderPrev(); _nbFoot(); }, NB.mode === 'edit' ? 400 : 120);
+      var len = e.target.value.length;
+      clearTimeout(prevT); prevT = setTimeout(function () { _nbRenderPrev(); _nbFoot(); }, (NB.mode === 'edit' ? 400 : 120) + Math.min(600, Math.floor(len / 500)));
       if (!(typeof _nbWikiCheck === 'function' && _nbWikiCheck())) _nbSlashCheck();
       if (typeof _nbCoachSchedule === 'function') _nbCoachSchedule();
     } else if (e.target.id === 'nbTitle') { _nbChanged('title'); if (NB.mode === 'paper' && typeof nbPaperLive === 'function') nbPaperLive(); }
@@ -608,6 +634,7 @@ function _nbClick(e) {
   else if (k === 'draft-use') _nbDraftUse();
   else if (k === 'draft-drop') { _nbDraft(NB.cur.id, null); NB._draft = null; document.getElementById('nbBars').innerHTML = ''; }
   else if (k === 'draft-copy') _nbDraftCopy();
+  else if (k === 'more-list') _nbLoadList(true);
   else if (k === 'cf-reload') _nbConflict('reload');
   else if (k === 'cf-mine') _nbConflict('mine');
   else if (k === 'cf-copy') _nbConflict('copy');
@@ -631,14 +658,15 @@ function _nbToggleFocus() {
 /* ═══ 키 ═══ */
 function _nbKey(e) {
   var t = e.target, ctrl = e.ctrlKey || e.metaKey;
+  if (e.key === 'Enter' && e.isComposing && t.id === 'nbSrc' && !e.shiftKey) NB.imeEnter = Date.now();   // Mac: 이 Enter 하나로 줄이 바뀜 → input 에서 이어 처리
   if (NB.slash && t.id === 'nbSrc' && _nbSlashKey(e)) return;
   if (NB.wiki && t.id === 'nbSrc' && _nbWikiKey(e)) return;
   if (t.id === 'nbTagIn') {
-    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); _nbAddTag(t.value); }
+    if ((e.key === 'Enter' || e.key === ',') && !e.isComposing) { e.preventDefault(); _nbAddTag(t.value); }
     else if (e.key === 'Backspace' && !t.value && NB.cur.tags.length) { _nbSetTags(NB.cur.tags.slice(0, -1)); }
     return;
   }
-  if (t.id === 'nbTitle' && e.key === 'Enter') { e.preventDefault(); var s0 = document.getElementById('nbSrc'); if (NB.mode === 'view') _nbSetMode('split'); if (s0) { s0.focus(); s0.setSelectionRange(0, 0); } return; }
+  if (t.id === 'nbTitle' && e.key === 'Enter' && !e.isComposing) { e.preventDefault(); var s0 = document.getElementById('nbSrc'); if (NB.mode === 'view') _nbSetMode('split'); if (s0) { s0.focus(); s0.setSelectionRange(0, 0); } return; }
   if (ctrl && e.altKey && /^[1234]$/.test(e.key)) { e.preventDefault(); _nbSetMode(['edit', 'split', 'view', 'paper'][+e.key - 1]); return; }
   if (ctrl && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); _nbToggleFocus(); return; }
   if (e.key === 'Escape' && NB.focus) { _nbToggleFocus(); return; }
@@ -681,7 +709,9 @@ function _nbInsert(text, selStart, selEnd) {
   var s = _nbSrc(); if (!s || s.readOnly) return;
   s.focus();
   var ok = false;
+  NB.inserting = true;
   try { ok = text === '' ? (s.selectionStart === s.selectionEnd || document.execCommand('delete')) : document.execCommand('insertText', false, text); } catch (_) {}
+  NB.inserting = false;
   if (!ok) { var a = s.selectionStart; s.setRangeText(text, a, s.selectionEnd, 'end'); }
   if (selStart != null) { var base = s.selectionEnd - text.length; s.setSelectionRange(base + selStart, base + (selEnd != null ? selEnd : selStart)); }
   _nbChanged('body');
@@ -775,6 +805,19 @@ function _nbIndent(out) {
   s.setSelectionRange(Math.max(r[0], a0 + first), Math.max(r[0], b0 + delta));
 }
 /** Enter — 목록 · 체크 · 인용 이어 쓰기 (빈 항목에서 Enter 면 목록 끝) */
+/** 한글 입력 중 Enter 로 줄이 바로 바뀐 경우(Mac) — 그 줄바꿈을 거두고 목록 잇기 · / 명령으로 (v13.333)
+ *  Windows 는 글자 마무리 Enter 뒤에 보통 Enter 가 한 번 더 와서 keydown 에서 처리됨 */
+function _nbImeEnter(e) {
+  if (!NB.imeEnter || Date.now() - NB.imeEnter > 400) return false;
+  if (e.inputType !== 'insertLineBreak' && e.inputType !== 'insertParagraph') return false;
+  NB.imeEnter = 0;
+  var s = _nbSrc(), a = s.selectionStart;
+  if (a < 1 || s.value.charAt(a - 1) !== '\n' || s.selectionEnd !== a) return false;
+  s.value = s.value.slice(0, a - 1) + s.value.slice(a); s.setSelectionRange(a - 1, a - 1);
+  if (NB.slash) { _nbSlashRun(); return true; }
+  if (!_nbListEnter()) { s.value = s.value.slice(0, a - 1) + '\n' + s.value.slice(a - 1); s.setSelectionRange(a, a); return false; }
+  return true;
+}
 function _nbListEnter() {
   var s = _nbSrc(); if (s.selectionStart !== s.selectionEnd) return false;
   var v = s.value, a = s.selectionStart, ls = v.lastIndexOf('\n', a - 1) + 1, line = v.slice(ls, a);
@@ -822,6 +865,7 @@ function _nbSlashCheck() {
 function _nbSlashKey(e) {
   var S = NB.slash;
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); S.i = (S.i + (e.key === 'ArrowDown' ? 1 : -1) + S.items.length) % S.items.length; document.querySelectorAll('#nbSlash .nb-pop-i').forEach(function (el, i) { el.classList.toggle('on', i === S.i); if (i === S.i) el.scrollIntoView({ block: 'nearest' }); }); return true; }
+  if ((e.key === 'Enter' || e.key === 'Tab') && e.isComposing) return true;   // 글자 마무리만 — 뒤따르는 Enter(또는 Mac 은 input)에서 실행
   if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); _nbSlashRun(); return true; }
   if (e.key === 'Escape') { e.preventDefault(); _nbSlashClose(); return true; }
   return false;
@@ -894,7 +938,7 @@ function _nbDraftPut(p) {
 }
 /** 보낼 주소 · 내용 */
 function _nbReq(j) {
-  if (j.k === 'd') return { url: '/api/my-work/notes', body: { date: j.date, ref: j.ref, body: j.body } };
+  if (j.k === 'd') return { url: '/api/my-work/notes', body: { date: j.date, ref: j.ref, body: j.body, base: j.base || '' } };
   var b = { baseRev: NB.revs[j.id] };
   if (j.force) { b.force = true; b.title = j.title; b.body = j.body; b.ink = j.ink; }
   else { if (j.f.title) b.title = j.title; if (j.f.body) b.body = j.body; if (j.f.ink) b.ink = j.ink; }
@@ -952,6 +996,20 @@ function _nbFail(j, e) {
     if (NB.cur && NB.cur.id === j.id) { NB.conflictKey = j.key; _nbShowConflict(srv); }
     else { NB.err[j.key] = '다른 곳에서 고침'; _nbToast('⚠️ ' + name + ' 노트를 다른 곳에서 먼저 고쳐 저장하지 못했습니다 — 다시 열면 고를 수 있습니다', 'warn'); }
     return false;
+  }
+  if (j.k === 'd' && st === 409 && srv) {   // 일일 노트를 다른 곳(📝 서랍 · 다른 창)에서 먼저 고침 → 합쳐서 다시 (v13.333)
+    var theirs = srv.body || '', live = !!(NB.daily1 && _nbKeyOf(NB.daily1) === j.key), p2 = NB.pend[j.key];
+    var mine = live ? NB.daily1.body : p2 ? p2.body : j.body;
+    var merged = typeof wmMergeNote === 'function' ? wmMergeNote(j.base || '', mine, theirs) : mine;
+    if (live) {
+      NB.daily1.srv = theirs; NB.daily1.body = merged;
+      var sr = _nbSrc(); if (sr && sr.value !== merged) { var ca = sr.selectionStart; sr.value = merged; sr.setSelectionRange(Math.min(ca, merged.length), Math.min(ca, merged.length)); _nbRenderPrev(); _nbFoot(); }
+    }
+    if (merged === theirs) { delete NB.pend[j.key]; _nbDDraft(j.date, j.ref, null); return false; }
+    var q2 = p2 || (NB.pend[j.key] = { key: j.key, k: 'd', date: j.date, ref: j.ref, f: {} });
+    q2.body = merged; q2.base = theirs; _nbDraftPut(q2);
+    _nbToast('🔀 다른 곳에서 고친 일일 노트와 합쳤습니다', 'info');
+    _nbQueue(50); return false;   // 기다리지 않고 바로 다시
   }
   _nbBack(j); _nbDraftPut(NB.pend[j.key]);
   if (j.k === 'n' && (st === 410 || st === 404 || st === 403)) {
@@ -1364,23 +1422,28 @@ function _nbUpload(f) {
 }
 /** 올리는 사이 다른 노트로 갔을 때 — 그 노트(대기 중인 글 또는 서버 글)의 자리표를 바꿈 */
 function _nbFixAway(key, mark, rep) {
+  _nbEditAway(key, function (b) { return b.indexOf(mark) >= 0 ? b.replace(mark, rep) : null; }, '올린 파일 자리를 그 노트에 넣지 못했습니다 — 그 노트에서 다시 붙여 주세요');
+}
+/** 지금 열려 있지 않은 노트(일일 노트)의 글을 고침 — 못 보낸 글이 있으면 거기에, 없으면 서버 글을 받아 고쳐 보냄
+ *  fn(body) → 새 글 (null 이면 고칠 곳 없음) · 돌려주는 약속은 고쳤으면 true */
+function _nbEditAway(key, fn, failMsg) {
   var p = NB.pend[key];
-  if (p && p.body != null && p.body.indexOf(mark) >= 0) { p.body = p.body.replace(mark, rep); if (p.k === 'n') p.f.body = 1; _nbDraftPut(p); _nbQueue(300); return; }
-  (NB.saving || Promise.resolve()).then(function () {
+  if (p && p.body != null) { var nb = fn(p.body); if (nb != null) { p.body = nb; if (p.k === 'n') p.f.body = 1; _nbDraftPut(p); _nbQueue(300); return Promise.resolve(true); } }
+  return (NB.saving || Promise.resolve()).then(function () {
     if (key.charAt(0) === 'n') {
       var id = key.slice(2);
       return apiFetch('/api/notebook/notes/' + encodeURIComponent(id)).then(function (r) {
-        var n = r.data; if (!n || (n.body || '').indexOf(mark) < 0) return;
-        return apiFetch('/api/notebook/notes/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify({ baseRev: n.rev, body: n.body.replace(mark, rep) }) }).then(function (r2) { NB.revs[id] = r2.data.rev; _nbListUpdate(r2.data); });
+        var n = r.data, nb2 = n ? fn(n.body || '') : null; if (nb2 == null) return false;
+        return apiFetch('/api/notebook/notes/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify({ baseRev: n.rev, body: nb2 }) }).then(function (r2) { NB.revs[id] = r2.data.rev; _nbListUpdate(r2.data, { body: nb2 }); return true; });
       });
     }
-    var m = /^d:(\d{4}-\d{2}-\d{2})\|(.*)$/.exec(key); if (!m) return;
+    var m = /^d:(\d{4}-\d{2}-\d{2})\|(.*)$/.exec(key); if (!m) return false;
     return apiFetch('/api/my-work/notes?date=' + m[1]).then(function (r) {
       var b = null; (r.data.notes || []).forEach(function (n) { if (n.ref === m[2]) b = n.body; });
-      if (b == null || b.indexOf(mark) < 0) return;
-      return apiFetch('/api/my-work/notes', { method: 'PUT', body: JSON.stringify({ date: m[1], ref: m[2], body: b.replace(mark, rep) }) });
+      var nb3 = b == null ? null : fn(b); if (nb3 == null) return false;
+      return apiFetch('/api/my-work/notes', { method: 'PUT', body: JSON.stringify({ date: m[1], ref: m[2], body: nb3 }) }).then(function () { return true; });
     });
-  }).catch(function () { _nbToast('⚠️ 올린 파일 자리를 그 노트에 넣지 못했습니다 — 그 노트에서 다시 붙여 주세요', 'warn'); });
+  }).then(function (ok) { if (!ok && failMsg) _nbToast('⚠️ ' + failMsg, 'warn'); return ok; }, function () { if (failMsg) _nbToast('⚠️ ' + failMsg, 'warn'); return false; });
 }
 function _nbZoomImg(img) {
   if (!img.src) return;

@@ -4852,3 +4852,5 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
   .nb-main.coach-on .nb-ed.nb-m-split .nb-prev{display:none}
   .nb-main.coach-on .nb-ed.nb-m-split .nb-src{border-right:0}
 }
+.nb-more{display:block;width:calc(100% - 24px);margin:8px 12px 14px;padding:8px;border:1px dashed var(--bd);border-radius:9px;background:none;color:var(--t4);font-size:12px;cursor:pointer}
+.nb-more:hover{background:var(--bg-hv);color:var(--t2)}

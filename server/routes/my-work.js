@@ -353,14 +353,27 @@ router.put('/notes', async function (req, res) {
     if (!d || ref == null) return httpErr.sendError(res, 400, 'VALIDATION', '날짜 · 회의가 맞지 않습니다.');
     var body = String(b.body == null ? '' : b.body);
     if (body.length > NOTE_MAX) return httpErr.sendError(res, 400, 'VALIDATION', '노트는 ' + NOTE_MAX + '자까지입니다.');
+    // v13.333 동시 편집 — base(이 기기가 마지막으로 안 서버 글)를 보내면 그새 다른 곳에서 바뀌었을 때 덮지 않고 409 + 지금 글
+    //   (같은 글을 다시 보낸 것은 통과 · base 를 안 보내는 옛 클라이언트 · 텔레그램은 예전처럼 덮음)
+    var hasBase = typeof b.base === 'string', base = hasBase ? b.base.slice(0, NOTE_MAX + 1) : null;
+    async function conflict() {
+      var cur = (await db.query('SELECT body, updated_at FROM my_notes WHERE user_id = $1 AND note_date = $2 AND ref = $3 AND tenant_id = $4', [req.user.sub, d, ref, req.tenant.id])).rows[0];
+      return res.status(409).json({ error: 'CONFLICT', message: '다른 곳에서 이 노트를 먼저 고쳤습니다.', data: { date: d, ref: ref, body: cur ? cur.body : '', updatedAt: cur ? cur.updated_at : null } });
+    }
     if (!body.trim()) {
-      await db.query('DELETE FROM my_notes WHERE user_id = $1 AND note_date = $2 AND ref = $3 AND tenant_id = $4', [req.user.sub, d, ref, req.tenant.id]);
+      var del = await db.query('DELETE FROM my_notes WHERE user_id = $1 AND note_date = $2 AND ref = $3 AND tenant_id = $4' + (hasBase ? " AND (body = $5 OR btrim(body) = '')" : ''), hasBase ? [req.user.sub, d, ref, req.tenant.id, base] : [req.user.sub, d, ref, req.tenant.id]);
+      if (hasBase && !del.rowCount) {
+        var ex = (await db.query('SELECT 1 FROM my_notes WHERE user_id = $1 AND note_date = $2 AND ref = $3 AND tenant_id = $4', [req.user.sub, d, ref, req.tenant.id])).rows.length;
+        if (ex) return conflict();
+      }
       return res.json({ data: { date: d, ref: ref, updatedAt: null, empty: true } });
     }
     var r = await db.query(
       'INSERT INTO my_notes (user_id, note_date, ref, tenant_id, body) VALUES ($1, $2, $3, $4, $5) ' +
-      'ON CONFLICT (user_id, note_date, ref) DO UPDATE SET body = EXCLUDED.body, updated_at = now() RETURNING updated_at',
-      [req.user.sub, d, ref, req.tenant.id, body]);
+      'ON CONFLICT (user_id, note_date, ref) DO UPDATE SET body = EXCLUDED.body, updated_at = now()' +
+      (hasBase ? ' WHERE my_notes.body = $6 OR my_notes.body = EXCLUDED.body' : '') + ' RETURNING updated_at',
+      hasBase ? [req.user.sub, d, ref, req.tenant.id, body, base] : [req.user.sub, d, ref, req.tenant.id, body]);
+    if (!r.rows.length) return conflict();
     res.json({ data: { date: d, ref: ref, updatedAt: r.rows[0].updated_at } });
   } catch (e) { httpErr.serverError(res, '[my-work/notes-put]', e); }
 });
