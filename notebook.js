@@ -436,7 +436,7 @@ function _nbFoot() {
 function _nbState(s, msg) {
   var el = document.getElementById('nbState'); if (!el) return;
   el.className = 'nb-state ' + s;
-  el.textContent = s === 'saving' ? '저장 중…' : s === 'dirty' ? '고치는 중' : s === 'error' ? '⚠️ ' + (msg || '저장 안 됨') : s === 'offline' ? '⚠️ ' + (msg || '연결 끊김 — 이 기기에 보관 중') : '✓ 저장됨';
+  el.textContent = s === 'saving' ? '저장 중…' : s === 'dirty' ? '고치는 중' : s === 'error' ? '⚠️ ' + (msg || '저장 안 됨') : s === 'offline' ? '⚠️ ' + (msg || '연결 끊김 — 이 기기에 보관 중') : '저장됨';
   el.title = s === 'offline' || s === 'error' ? '못 보낸 글은 이 기기에 남아 있습니다 — Ctrl+S 로 바로 다시 보낼 수 있습니다' : '';
 }
 
@@ -1087,7 +1087,7 @@ function _nbSnippet(body) {
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '🖼 ')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/^#{1,6}\s+|^>\s*(\[![A-Z]+\]\s*)?|^\s*[-*+]\s+(\[[ xX]\]\s+)?|^\s*\d+\.\s+/gm, '')
-    .replace(/[*_`~=|]/g, '')
+    .replace(/\*\*|__|~~|==|`+/g, '').replace(/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?!\w)/g, '$1$2').replace(/\s*\|\s*/g, ' ')
     .replace(/\s+/g, ' ').trim().slice(0, 160);
 }
 /** 목록 한 줄만 고치기 (다시 받지 않고) */

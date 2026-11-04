@@ -4839,7 +4839,7 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
   .nb-crumb{max-width:130px}
   .nb-foot-k{display:none}
   .nb-tb{padding-left:12px;padding-right:12px}
-  .nb-tbb span{display:none}
+  .nb-tbb span:not(.nb-tb-hl){display:none}
 }
 @container nbmain (max-width:760px){
   .nb-top{gap:3px;padding-left:8px;padding-right:8px}
@@ -4854,3 +4854,59 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
 }
 .nb-more{display:block;width:calc(100% - 24px);margin:8px 12px 14px;padding:8px;border:1px dashed var(--bd);border-radius:9px;background:none;color:var(--t4);font-size:12px;cursor:pointer}
 .nb-more:hover{background:var(--bg-hv);color:var(--t2)}
+
+/* ═══ v13.334 📓 노트북 다듬기 — 차분한 종이 느낌 · 단추 묶음 · 카드형 목록 · 저장 표시 ═══ */
+/* 목록 — 줄 대신 둥근 카드 */
+#mNotebook .nb-items{padding:2px 8px 8px}
+#mNotebook .nb-grp{padding:12px 8px 4px;margin:0 -8px;padding-left:16px;text-transform:none}
+#mNotebook .nb-it{border-bottom:0;border-radius:10px;margin:2px 0;padding:10px 12px;transition:background .12s,box-shadow .12s}
+#mNotebook .nb-it:hover{background:var(--bg-hv)}
+#mNotebook .nb-it.on{background:var(--ac-bg);box-shadow:inset 0 0 0 1px var(--ac-g)}
+#mNotebook .nb-it.on::before{display:none}
+#mNotebook .nb-it-t{letter-spacing:-.01em}
+#mNotebook .nb-it-m{gap:7px}
+#mNotebook .nb-it-tag{background:var(--bg-i);color:var(--t3);border-radius:999px;padding:0 7px;font-size:10.5px;line-height:17px}
+#mNotebook .nb-it.on .nb-it-tag{background:var(--bg-p);color:var(--ac)}
+/* 머리 — 저장 표시는 점 하나 · 단추는 차분하게 · ✨ AI 는 빛나는 알약 */
+#mNotebook .nb-state{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:var(--bg-i);font-size:10.5px;font-weight:600}
+#mNotebook .nb-state::before{content:'';width:6px;height:6px;border-radius:50%;background:#22c55e;flex:none}
+#mNotebook .nb-state.dirty::before{background:#f59e0b}
+#mNotebook .nb-state.saving::before{background:var(--ac);animation:nbPulse 1s ease-in-out infinite}
+#mNotebook .nb-state.error::before,#mNotebook .nb-state.offline::before{background:#ef4444}
+#mNotebook .nb-state.error,#mNotebook .nb-state.offline{background:rgba(239,68,68,.1)}
+@keyframes nbPulse{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){#mNotebook .nb-state.saving::before{animation:none}}
+#mNotebook .nb-ib{color:var(--t4);border-radius:8px;transition:background .12s,color .12s}
+#mNotebook .nb-ib:hover{color:var(--t1);background:var(--bg-hv)}
+#mNotebook .nb-ib.on{color:#f59e0b;background:rgba(245,158,11,.1)}
+#mNotebook .nb-ib.nb-ai{background:linear-gradient(135deg,var(--ac),#8b5cf6);border-color:transparent;color:#fff;box-shadow:0 2px 8px -2px rgba(99,102,241,.55)}
+#mNotebook .nb-ib.nb-ai:hover{filter:brightness(1.08);color:#fff}
+#mNotebook .nb-ib.nb-cbtn.on{color:var(--ac);background:var(--ac-bg)}
+#mNotebook .nb-seg{margin-right:4px}
+/* 제목 · 서식 줄 */
+#mNotebook .nb-head{padding:18px 26px 6px}
+#mNotebook .nb-title{letter-spacing:-.02em}
+#mNotebook .nb-tb{background:linear-gradient(var(--bg-p),var(--bg-p)) padding-box;border-top:1px solid transparent;padding-top:5px;padding-bottom:5px}
+#mNotebook .nb-tbb{border-radius:7px;color:var(--t4)}
+#mNotebook .nb-tbb:hover{color:var(--t1)}
+/* 쓰는 칸 · 보는 칸 — 나란히 볼 때 쓰는 쪽은 살짝 톤 다운, 보는 쪽은 종이 */
+#mNotebook .nb-m-split .nb-src{background:var(--bg);color:var(--t2)}
+#mNotebook .nb-m-split .nb-src:focus{color:var(--t1)}
+#mNotebook .nb-src::selection,#mNotebook .nb-doc ::selection{background:var(--ac-g)}
+#mNotebook .nb-doc h1{border-bottom-color:var(--bd)}
+#mNotebook .nb-doc h2{padding-bottom:.18em;border-bottom:1px solid var(--bd)}
+#mNotebook .nb-doc h2::before{content:'';display:inline-block;width:4px;height:.9em;border-radius:2px;background:var(--ac);opacity:.7;margin-right:.45em;vertical-align:-.08em}
+#mNotebook .nb-doc blockquote:not([class]){border-left:3px solid var(--ac-g);color:var(--t3);background:var(--bg);border-radius:0 8px 8px 0;padding:.5em .9em}
+#mNotebook .nb-doc hr{border:0;height:1px;background:linear-gradient(90deg,transparent,var(--bd) 20%,var(--bd) 80%,transparent);margin:1.6em 0}
+#mNotebook .nb-tbl{box-shadow:0 1px 2px rgba(0,0,0,.04)}
+#mNotebook .nb-foot{background:var(--bg);color:var(--t5)}
+/* 빈 화면 — 양식 카드 */
+#mNotebook .nb-blank{max-width:620px;gap:14px}
+#mNotebook .nb-blank-i{width:76px;height:76px;border-radius:22px;display:grid;place-items:center;font-size:40px;background:linear-gradient(145deg,var(--ac-bg),var(--bg-i));box-shadow:0 10px 30px -12px rgba(99,102,241,.45),inset 0 0 0 1px var(--ac-g)}
+#mNotebook .nb-blank b{font-size:18px;letter-spacing:-.02em}
+#mNotebook .nb-blank-g{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+#mNotebook .nb-tplc{background:var(--bg-p);border-radius:12px;padding:12px 14px;gap:10px;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:transform .15s,border-color .15s,box-shadow .15s}
+#mNotebook .nb-tplc span{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--bg-i);font-size:17px;flex:none}
+#mNotebook .nb-tplc:hover{transform:translateY(-2px);box-shadow:0 8px 20px -10px rgba(0,0,0,.25);color:var(--t1)}
+#mNotebook .nb-tplc:hover span{background:var(--ac-bg)}
+
