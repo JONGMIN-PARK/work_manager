@@ -90,6 +90,12 @@ app.use('/api', apiLimiter);
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/v1/billing/webhook', express.raw({ type: 'application/json' }));
 
+// ─── 📓 노트북 첨부 — 본문 그대로 (JSON 파서보다 먼저: .json 파일 · 10MB 넘는 파일이 JSON 으로 읽히지 않게 · v13.330) ───
+app.use('/api/notebook/files', function (req, res, next) {
+  if (req.method !== 'POST') return next();
+  express.raw({ type: function () { return true; }, limit: 25 * 1024 * 1024 })(req, res, next);
+});
+
 // ─── JSON 파싱 ───
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -372,6 +378,8 @@ app.get('*', function (req, res) {
 
 // ─── 글로벌 에러 핸들러 ───
 app.use(function (err, req, res, next) {
+  // 보낸 내용이 너무 큼 — 서버 오류가 아니라 413 으로 알기 쉽게 (v13.330)
+  if (err && err.type === 'entity.too.large') return res.status(413).json({ error: 'TOO_LARGE', message: /\/api\/notebook\/files/.test(req.originalUrl || '') ? '25MB 까지 올릴 수 있습니다.' : '보낸 내용이 너무 큽니다.' });
   console.error('[ERROR]', err);
   res.status(err.status || 500).json({
     error: 'SERVER_ERROR',

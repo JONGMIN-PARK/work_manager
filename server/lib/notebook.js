@@ -4,7 +4,17 @@
 var crypto = require('crypto');
 var db = require('../config/db');
 
-var MAX_BODY = 400000, MAX_TITLE = 300, MAX_TAGS = 20, KEEP_VERSIONS = 60, SNAP_GAP_MS = 10 * 60 * 1000;
+var MAX_BODY = 400000, MAX_TITLE = 300, MAX_TAGS = 20, KEEP_VERSIONS = 60, KEEP_NAMED = 50, SNAP_GAP_MS = 10 * 60 * 1000, MAX_NOTES = 20000;
+
+/** jsonb ::text 는 키 순서 · 공백이 JSON.stringify 와 다를 수 있어 객체로 비교 */
+function sameJson(a, b) {
+  try { return JSON.stringify(canon(JSON.parse(a || '{}'))) === JSON.stringify(canon(JSON.parse(b || '{}'))); } catch (_) { return a === b; }
+}
+function canon(v) {
+  if (Array.isArray(v)) return v.map(canon);
+  if (v && typeof v === 'object') { var o = {}; Object.keys(v).sort().forEach(function (k) { o[k] = canon(v[k]); }); return o; }
+  return v;
+}
 
 function rid(p) { return p + '-' + crypto.randomUUID().replace(/-/g, '').slice(0, 16); }
 function kstToday() { return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); }
@@ -65,7 +75,11 @@ function cleanInk(ink) {
 async function create(tenantId, userId, o) {
   o = o || {};
   var id = rid('nb');
-  var body = String(o.body || '').slice(0, MAX_BODY);
+  var body = String(o.body || '');
+  // 말없이 자르지 않음 — 고치기(PUT)와 같게 413 (v13.330) · 개수 한도도 만들기 길 하나에서 (복제 · 낙서장 포함)
+  if (body.length > MAX_BODY) { var e1 = new Error('노트 한 장은 40만 자까지입니다. 나눠서 써 주세요.'); e1.status = 413; throw e1; }
+  var cnt = await db.query('SELECT COUNT(*)::int AS n FROM nb_notes WHERE tenant_id = $1 AND user_id = $2', [tenantId, userId]);
+  if (cnt.rows[0].n >= MAX_NOTES) { var e2 = new Error('노트는 20,000개까지입니다. 휴지통을 비우거나 정리해 주세요.'); e2.status = 400; throw e2; }
   var title = String(o.title || '').slice(0, MAX_TITLE);
   if (o.folderId) {
     var f = await db.query('SELECT 1 FROM nb_folders WHERE id = $1 AND tenant_id = $2 AND user_id = $3', [o.folderId, tenantId, userId]);
@@ -86,13 +100,18 @@ async function addInbox(tenantId, userId, body, source, title) {
 
 /** 고친 기록 남기기 — 마지막 기록보다 10분 넘게 지났거나 직접 남길 때 (오래된 자동 기록은 정리) */
 async function snapshot(note, label, force) {
+  var ink = JSON.stringify(note.ink || {});
   if (!force) {
-    var last = await db.query('SELECT created_at, body FROM nb_versions WHERE note_id = $1 ORDER BY id DESC LIMIT 1', [note.id]);
-    if (last.rows.length && (Date.now() - new Date(last.rows[0].created_at).getTime() < SNAP_GAP_MS || last.rows[0].body === note.body)) return null;
+    // 같은 모습(제목 · 본문 · 손글씨 모두 같음)이면 또 남기지 않음 — 손글씨만 고친 것도 기록 (v13.330)
+    var last = await db.query('SELECT created_at, title, body, ink::text AS ink FROM nb_versions WHERE note_id = $1 ORDER BY id DESC LIMIT 1', [note.id]);
+    var L = last.rows[0];
+    if (L && (Date.now() - new Date(L.created_at).getTime() < SNAP_GAP_MS || (L.body === (note.body || '') && L.title === (note.title || '') && sameJson(L.ink, ink)))) return null;
   }
   var r = await db.query('INSERT INTO nb_versions (note_id, title, body, ink, words, label) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, created_at',
-    [note.id, note.title || '', note.body || '', JSON.stringify(note.ink || {}), note.words || 0, label || null]);
-  await db.query('DELETE FROM nb_versions WHERE note_id = $1 AND label IS NULL AND id NOT IN (SELECT id FROM nb_versions WHERE note_id = $1 ORDER BY id DESC LIMIT $2)', [note.id, KEEP_VERSIONS]);
+    [note.id, note.title || '', note.body || '', ink, note.words || 0, label || null]);
+  await db.query('DELETE FROM nb_versions WHERE note_id = $1 AND label IS NULL AND id NOT IN (SELECT id FROM nb_versions WHERE note_id = $1 AND label IS NULL ORDER BY id DESC LIMIT $2)', [note.id, KEEP_VERSIONS]);
+  // 이름 붙인 기록도 노트마다 KEEP_NAMED 개까지 — 끝없이 쌓이지 않게 (오래된 것부터)
+  await db.query('DELETE FROM nb_versions WHERE note_id = $1 AND label IS NOT NULL AND id NOT IN (SELECT id FROM nb_versions WHERE note_id = $1 AND label IS NOT NULL ORDER BY id DESC LIMIT $2)', [note.id, KEEP_NAMED]);
   return r.rows[0];
 }
 
@@ -236,6 +255,37 @@ function parseSpell(out, text) {
   return { items: items, cut: src.length > SPELL_MAX };
 }
 
+/* ─── 첨부 정리 (v13.330) ─── */
+var MAX_FILES_PER_USER = 1024 * 1024 * 1024;   // 사람마다 첨부 합계 1GB
+var SAFE_INLINE = /^(image\/(png|jpeg|gif|webp|bmp|avif)|application\/pdf|text\/plain|audio\/[a-z0-9.+-]+|video\/(mp4|webm|ogg))(;|$)/i;
+
+/** 어느 노트(휴지통 · 고친 기록 · 일일 노트 포함)에도 'nbf:<id>' 로 안 쓰이는 첨부를 지움 — 올린 지 1시간 안 된 건 남김(아직 저장 전일 수 있음) */
+async function sweepFiles(tenantId, userId) {
+  var r = await db.query(
+    "DELETE FROM nb_files f WHERE f.tenant_id = $1 AND f.user_id = $2 AND f.created_at < NOW() - INTERVAL '1 hour' " +
+    "AND NOT EXISTS (SELECT 1 FROM nb_notes n WHERE n.tenant_id = $1 AND n.user_id = $2 AND POSITION(('nbf:' || f.id) IN n.body) > 0) " +
+    "AND NOT EXISTS (SELECT 1 FROM nb_versions v JOIN nb_notes n ON n.id = v.note_id WHERE n.tenant_id = $1 AND n.user_id = $2 AND POSITION(('nbf:' || f.id) IN v.body) > 0) " +
+    "AND NOT EXISTS (SELECT 1 FROM my_notes m WHERE m.tenant_id = $1 AND m.user_id = $2 AND POSITION(('nbf:' || f.id) IN m.body) > 0) " +
+    'RETURNING f.storage_key', [tenantId, userId]);
+  var keys = r.rows.map(function (x) { return x.storage_key; }).filter(Boolean);
+  if (keys.length) {
+    var gcs = require('../services/gcs.service');
+    for (var i = 0; i < keys.length; i++) { try { await gcs.deleteObject(keys[i]); } catch (e) { console.warn('[notebook] gcs delete', keys[i], e && e.message); } }
+  }
+  return r.rowCount;
+}
+
+/** 휴지통 30일 지난 노트 영구 삭제 + 첨부 정리 — 하루에 한 번 사람마다 (목록 열 때 매번 돌지 않게) */
+var _purgedAt = {};
+async function purgeOld(tenantId, userId) {
+  var k = tenantId + ':' + userId, now = Date.now();
+  if (_purgedAt[k] && now - _purgedAt[k] < 24 * 3600000) return;
+  _purgedAt[k] = now;
+  var d = await db.query("DELETE FROM nb_notes WHERE tenant_id = $1 AND user_id = $2 AND deleted_at < NOW() - INTERVAL '30 days'", [tenantId, userId]);
+  if (d.rowCount) await sweepFiles(tenantId, userId);
+}
+
 module.exports = { spellPrompt: spellPrompt, parseSpell: parseSpell, SPELL_MAX: SPELL_MAX, aiPrompt: aiPrompt, parseMail: parseMail, LANGS: LANGS, reportRaw: reportRaw, reportPrompt: reportPrompt, kstDay: kstDay, KIND_LABEL: KIND_LABEL,
   coachPrompt: coachPrompt, parseCoach: parseCoach, COACH_KINDS: COACH_KINDS, rid: rid, kstToday: kstToday, countWords: countWords, titleFrom: titleFrom, snippet: snippet, cleanTags: cleanTags, cleanInk: cleanInk,
-  create: create, addInbox: addInbox, snapshot: snapshot, out: out, MAX_BODY: MAX_BODY, MAX_TITLE: MAX_TITLE };
+  create: create, addInbox: addInbox, snapshot: snapshot, out: out, MAX_BODY: MAX_BODY, MAX_TITLE: MAX_TITLE,
+  MAX_FILES_PER_USER: MAX_FILES_PER_USER, SAFE_INLINE: SAFE_INLINE, sweepFiles: sweepFiles, purgeOld: purgeOld };
