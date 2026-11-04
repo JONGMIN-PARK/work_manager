@@ -19,44 +19,49 @@ var NbMd = (function () {
   /** 이미 escape 된 주소 — 허용된 것만 */
   function safeUrl(u) {
     u = String(u || '').trim();
+    if (/[\u0000-\u0003]/.test(u)) return null;   // 자리표 글자가 섞인 주소는 받지 않음 (v13.331)
     if (/^(https?:|mailto:|tel:)/i.test(u) || /^#[\w가-힣-]*$/.test(u) || /^nbf:[A-Za-z0-9-]+$/.test(u)) return u;
     if (/^www\./i.test(u)) return 'https://' + u;
     if (/^wm:(project|issue|milestone|meeting|todo|note):[A-Za-z0-9_.:-]{1,100}$/.test(u)) return u;   // 🔗 업무 연결 (v13.317)
     return null;
   }
 
-  /* ─── 줄 안 꾸밈 (입력은 escape 전 원문) ─── */
+  /* ─── 줄 안 꾸밈 (입력은 escape 전 원문) ───
+     v13.331 보안: 만든 태그는 만드는 즉시 자리표(\u0001n\u0001 · 여는 a 는 \u0002n\u0002, 닫는 a 는 \u0003)로 빼 둠
+       → 뒤의 정규식이 이미 만든 태그의 속성 안 글자('[' 등)를 다시 잡아 따옴표를 열고 닫는 일이 없음
+       · 속성에 들어갈 값(주소 · alt · 제목 · id)에 자리표가 섞여 있으면 태그로 바꾸지 않음 */
+  var CTRL = /[\u0000-\u0003]/;
   function inline(src) {
-    var codes = [];
-    var s = esc(String(src).replace(/[\u0000\u0001]/g, ''));
+    var codes = [], tags = [];
+    function ph(h) { tags.push(h); return '\u0001' + (tags.length - 1) + '\u0001'; }
+    function open(h) { tags.push(h); return '\u0002' + (tags.length - 1) + '\u0002'; }
+    var s = esc(String(src).replace(/[\u0000-\u0003]/g, ''));
     // `코드` 먼저 빼 두기 — 안의 기호는 그대로
     s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, function (_, t, c) { codes.push('<code>' + c.trim() + '</code>'); return '\u0000' + (codes.length - 1) + '\u0000'; });
     // 사진 ![alt](url "title")
     s = s.replace(/!\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+&quot;([^)]*)&quot;)?\s*\)/g, function (m, alt, url, ttl) {
-      var u = safeUrl(url); if (!u) return m;
-      if (/^nbf:/.test(u)) return '<img class="nb-img" data-nbf="' + u.slice(4) + '" alt="' + alt + '"' + (ttl ? ' title="' + ttl + '"' : '') + ' loading="lazy">';
-      return '<img class="nb-img" src="' + u + '" alt="' + alt + '"' + (ttl ? ' title="' + ttl + '"' : '') + ' loading="lazy" referrerpolicy="no-referrer">';
+      var u = safeUrl(url); if (!u || CTRL.test(alt + (ttl || ''))) return m;
+      if (/^nbf:/.test(u)) return ph('<img class="nb-img" data-nbf="' + u.slice(4) + '" alt="' + alt + '"' + (ttl ? ' title="' + ttl + '"' : '') + ' loading="lazy">');
+      return ph('<img class="nb-img" src="' + u + '" alt="' + alt + '"' + (ttl ? ' title="' + ttl + '"' : '') + ' loading="lazy" referrerpolicy="no-referrer">');
     });
     // [[노트 제목]] · [[노트 제목|보일 글]] — 노트끼리 잇기 (v13.317)
-    s = s.replace(/\[\[([^\]|\n]{1,120})(?:\|([^\]\n]{1,120}))?\]\]/g, function (_, t, label) {
-      return '<a class="nb-wl" data-wl="' + t.trim() + '" href="#">' + (label || t).trim() + '</a>';
+    s = s.replace(/\[\[([^\]|\n]{1,120})(?:\|([^\]\n]{1,120}))?\]\]/g, function (m, t, label) {
+      if (CTRL.test(t)) return m;
+      return open('<a class="nb-wl" data-wl="' + t.trim() + '" href="#">') + (label || t).trim() + '\u0003';
     });
     // 링크 [글](url)
     s = s.replace(/\[([^\]]+)\]\(\s*([^)\s]+)\s*\)/g, function (m, t, url) {
       var u = safeUrl(url); if (!u) return m;
-      if (/^wm:/.test(u)) return '<a class="nb-ref" data-ref="' + u.slice(3) + '" href="#">' + t + '</a>';
-      if (/^nbf:/.test(u)) return '<a class="nb-file" data-nbf="' + u.slice(4) + '" href="#">' + t + '</a>';
-      if (u.charAt(0) === '#') return '<a href="' + u + '" data-anchor="1">' + t + '</a>';
-      return '<a href="' + u + '" target="_blank" rel="noopener noreferrer">' + t + '</a>';
+      if (/^wm:/.test(u)) return open('<a class="nb-ref" data-ref="' + u.slice(3) + '" href="#">') + t + '\u0003';
+      if (/^nbf:/.test(u)) return open('<a class="nb-file" data-nbf="' + u.slice(4) + '" href="#">') + t + '\u0003';
+      if (u.charAt(0) === '#') return open('<a href="' + u + '" data-anchor="1">') + t + '\u0003';
+      return open('<a href="' + u + '" target="_blank" rel="noopener noreferrer">') + t + '\u0003';
     });
-    // 자동 링크 (이미 a/img 안의 것은 건너뜀)
-    s = s.replace(/(<a [^>]*>[\s\S]*?<\/a>|<img [^>]*>)|(\bhttps?:\/\/(?:(?!&(?:quot|lt|gt|#39);)[^\s<])*(?:(?!&(?:quot|lt|gt|#39);)[^\s<.,;:!?)\]]))/g, function (m, tag, url) {
-      if (tag) return tag;
-      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+    // 자동 링크 — 이미 만든 링크(\u0002…\u0003) 안은 건너뜀 · 주소에 자리표 글자는 들지 않음
+    s = s.replace(/(\u0002\d+\u0002[\s\S]*?\u0003)|(\bhttps?:\/\/(?:(?!&(?:quot|lt|gt|#39);)[^\s<\u0000-\u0003])*(?:(?!&(?:quot|lt|gt|#39);)[^\s<.,;:!?)\]\u0000-\u0003]))/g, function (m, done, url) {
+      if (done) return done;
+      return open('<a href="' + url + '" target="_blank" rel="noopener noreferrer">') + url + '\u0003';
     });
-    // 만든 태그의 속성(주소 안 _ * == 등)은 꾸밈에서 빼 두기
-    var tags = [];
-    s = s.replace(/<(?:a|img) [^>]*>/g, function (t) { tags.push(t); return '\u0001' + (tags.length - 1) + '\u0001'; });
     s = s.replace(/\*\*\*([^*\n]+?)\*\*\*/g, '<strong><em>$1</em></strong>')
       .replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>')
       .replace(/__([^_\n]+?)__/g, '<strong>$1</strong>')
@@ -64,8 +69,9 @@ var NbMd = (function () {
       .replace(/(^|[^_\w가-힣])_([^_\s][^_\n]*?)_(?![_\w가-힣])/g, '$1<em>$2</em>')
       .replace(/~~([^~\n]+?)~~/g, '<del>$1</del>')
       .replace(/==([^=\n]+?)==/g, '<mark>$1</mark>');
-    // 일일 노트 할 일 표시 ⟦id⟧
-    s = s.replace(/\s?⟦([^⟧]{1,80})⟧/g, function (_, id) { return ' <a class="nb-todo-ref" data-todo="' + id + '" href="#" title="할 일 열기">↗</a>'; });
+    // 일일 노트 할 일 표시 ⟦id⟧ — id 는 영문 · 숫자 · - · _ 만
+    s = s.replace(/\s?⟦([A-Za-z0-9_-]{1,80})⟧/g, function (_, id) { return ' <a class="nb-todo-ref" data-todo="' + id + '" href="#" title="할 일 열기">↗</a>'; });
+    s = s.replace(/\u0002(\d+)\u0002/g, function (_, i) { return tags[+i]; }).replace(/\u0003/g, '</a>');
     s = s.replace(/\u0001(\d+)\u0001/g, function (_, i) { return tags[+i]; });
     s = s.replace(/\u0000(\d+)\u0000/g, function (_, i) { return codes[+i]; });
     return s;

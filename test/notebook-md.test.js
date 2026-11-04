@@ -73,3 +73,35 @@ test('✍️ 손글씨 — SVG · 형광펜은 아래 · 이상한 색은 막음
   assert.strictEqual(K.snapShape({ t: 'pen', c: '#000', w: 4, p: [0, 0, 50, 5, 30, 50, 9, 2, 50, 20, 40, 50, 33, 1, 50] }), null, '꼬불꼬불은 그대로');
   assert.ok(K.hitStroke({ w: 4, p: [0, 0, 50, 100, 0, 50] }, 50, 3, 2), '선분 중간도 지우개에 걸림');
 });
+
+/* v13.331 — 만든 태그 속성 안에서 다시 꾸밈이 일어나 따옴표를 빠져나가던 것 (사진 alt · [[ ]] · 할 일 표시) */
+function strictTags(h) {   // 모든 태그가 <이름 속성="값"...> 꼴 · 값 안에 < " 없음 · on* 속성 없음
+  var bad = [];
+  (h.match(/<[a-z][^>]*>/gi) || []).forEach(function (t) {
+    if (!/^<[a-z0-9]+(\s+[a-z-]+(="[^"<]*")?)*\s*\/?>$/i.test(t) || /\son[a-z]+=/i.test(t)) bad.push(t);
+  });
+  return bad;
+}
+test('속성 탈출 XSS — 사진 alt · [[링크]] · 링크 글 · 자동 링크 · 할 일 표시', function () {
+  var cases = [
+    '![[x](http://y)](https://q/onerror=onerror=alert;throw/1///)',
+    '[[[z|w]](https://q/onmouseover=alert;//)',
+    '![[[a]]](https://q/x) [[![i](https://z/a.png)]]',
+    '[https://a.com/"x](https://b.com) https://c.com/[d](https://e.com)',
+    '- [x] 일 ⟦a" onclick="alert(1)⟧ ⟦![i](https://x/y)⟧',
+    '![a `b"c` d](https://x/y.png "t [u](https://v)")',
+    '**[a](https://x) _[b](https://y)_** ==https://z.com/q_w_e==',
+    '[`code`](https://x) `[c](https://y)` ![x](nbf:abc-123)'
+  ];
+  cases.forEach(function (c) {
+    var h = H(c);
+    assert.deepStrictEqual(strictTags(h), [], c + ' → ' + h);
+  });
+  // 정상 동작은 그대로
+  var ok = H('![사진](nbf:f-1) [[노트|보기]] [글](https://a.com) https://b.com **굵게** - [x] 끝 ⟦t-1⟧');
+  assert.ok(/<img class="nb-img" data-nbf="f-1"/.test(ok));
+  assert.ok(/<a class="nb-wl" data-wl="노트" href="#">보기<\/a>/.test(ok));
+  assert.ok(/<a href="https:\/\/a.com"[^>]*>글<\/a>/.test(ok));
+  assert.ok(/<a href="https:\/\/b.com"[^>]*>https:\/\/b.com<\/a>/.test(ok));
+  assert.ok(/<strong>굵게<\/strong>/.test(ok) && /data-todo="t-1"/.test(ok));
+});

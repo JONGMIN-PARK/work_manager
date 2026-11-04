@@ -2258,6 +2258,23 @@ button.mw-pill:hover{border-color:var(--ac)}
 .mwn-tip code{background:var(--bg-i);border-radius:4px;padding:0 4px}
 .mwn-old summary{cursor:pointer;font-size:12px;color:var(--t4);font-weight:600}
 @media (hover:none){.mwn-up{opacity:.8}}
+/* v13.331 📝 노트 서랍 — 불러오는 동안 잠금 · 제목 줄 · 체크 칸 · 빈 줄 */
+.mwn-lock{display:flex;flex-direction:column;gap:10px;padding:10px 4px}
+.mwn-lock i{display:block;height:12px;border-radius:6px;background:linear-gradient(90deg,var(--bg-i) 0%,var(--bg-hv) 50%,var(--bg-i) 100%);background-size:200% 100%;animation:mwnShim 1.1s ease-in-out infinite}
+.mwn-lock i:nth-child(2){width:78%}.mwn-lock i:nth-child(3){width:52%}
+@keyframes mwnShim{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@media (prefers-reduced-motion:reduce){.mwn-lock i{animation:none}}
+.mwn-lock.is-err{flex-direction:row;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--t3);background:var(--bg);border:1px dashed var(--bd2,var(--bd));border-radius:10px;padding:12px 14px}
+.mwn-r.is-h{margin-top:8px}
+.mwn-r.is-h:first-child{margin-top:0}
+.mwn-r.is-h .mwn-t{font-weight:800;font-size:calc(var(--mwn-fs) + 1px);letter-spacing:-.01em;color:var(--t1)}
+.mwn-r.is-h .mwn-dot{width:4px;height:calc(var(--mwn-fs) + 2px);margin:0 6px 0 6px;border-radius:2px;background:var(--ac);opacity:.75}
+.mwn-box{flex:none;width:16px;display:flex;justify-content:center}
+.mwn-box::before{content:'';width:12px;height:12px;border:1.5px solid var(--t5);border-radius:3px;box-sizing:border-box}
+.mwn-r.is-pend .mwn-t{color:var(--t2)}
+.mwn-r.is-todo .mwn-t{text-decoration:line-through;text-decoration-color:var(--t6)}
+.mwn-r.is-empty .mwn-up{display:none}
+.mwn-ok{display:flex;align-items:center;justify-content:center}
 /* 타임라인 · 달력의 노트 점 */
 .mtl-nd{position:absolute;top:30px;width:6px;height:6px;border-radius:50%;background:#F59E0B;cursor:pointer;z-index:1}
 .mtl-cd.has-note span{text-decoration:underline;text-decoration-color:#F59E0B;text-decoration-thickness:2px;text-underline-offset:3px}

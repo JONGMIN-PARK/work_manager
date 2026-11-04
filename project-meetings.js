@@ -730,7 +730,7 @@ function pmtMailEml(mid) {
 function _pmtPrefs() { return typeof wmPrintPrefs === 'function' ? wmPrintPrefs() : { theme: 'basic', sign: '', header: true, docNo: true, pageNo: true, margin: 'normal' }; }
 /** 회색 바탕 위 A4 한 장 — 창이 좁으면 줄임 (id: <p>Pv · <p>Wrap · <p>Paper · <p>PreviewFrame) */
 function _pmtPaperHtml(p) {
-  return '<div class="nbpr-pv" id="' + p + 'Pv" style="max-height:78vh"><div class="nbpr-wrap" id="' + p + 'Wrap"><div class="nbpr-paper" id="' + p + 'Paper"><iframe id="' + p + 'PreviewFrame" title="회의록 미리 보기"></iframe></div></div></div>';
+  return '<div class="nbpr-pv" id="' + p + 'Pv" style="max-height:78vh"><div class="nbpr-wrap" id="' + p + 'Wrap"><div class="nbpr-paper" id="' + p + 'Paper"><iframe sandbox="allow-same-origin allow-modals" id="' + p + 'PreviewFrame" title="회의록 미리 보기"></iframe></div></div></div>';
 }
 /** 모양 · 결재란 · 머리글 · 문서 번호 · 쪽 번호 — onchange 는 그대로 넣을 JS 호출 글 */
 function _pmtPrefsHtml(onchange) {

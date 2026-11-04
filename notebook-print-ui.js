@@ -138,7 +138,7 @@ function wmPaperHint(pages, o) { return pages + '쪽 · 인쇄되는 모습 그�
 function nbPaperPaneHtml() {
   return '<div class="nb-paper" id="nbPaper"><div class="nb-paper-bar"><span id="nbPaperInfo">출력 모양</span><span class="nb-sp"></span>' +
     '<button class="nb-btn sm" data-nb="print" title="모양 · 결재란 · 머리글 바꾸기 · 인쇄 · PDF · Word">🖨 설정 · 인쇄</button></div>' +
-    '<div class="nbpr-pv nb-paper-pv" id="nbPaperPv"><div class="nbpr-wrap" id="nbPaperWrap"><div class="nbpr-paper" id="nbPaperPaper"><iframe id="nbPaperFrame" title="출력 모양"></iframe></div></div></div></div>';
+    '<div class="nbpr-pv nb-paper-pv" id="nbPaperPv"><div class="nbpr-wrap" id="nbPaperWrap"><div class="nbpr-paper" id="nbPaperPaper"><iframe sandbox="allow-same-origin allow-modals" id="nbPaperFrame" title="출력 모양"></iframe></div></div></div></div>';
 }
 function nbPaperLive(delay) {
   if (typeof NB === 'undefined' || NB.mode !== 'paper' || !document.getElementById('nbPaperFrame')) return;
@@ -200,7 +200,7 @@ function _nbprShow() {
       NBPR.o.company = ps.company || ''; NBPR.o.logo = ps.logo || '';
       var md = createModal({ id: 'nbPrintModal', titleText: NBPR.mode === 'bundle' ? '🖨 묶어 출력' : '🖨 출력 미리 보기', width: '1240px', boxStyle: 'max-height:95vh;padding:16px 18px', closeOnEsc: true,
         html: '<div class="nbpr">' +
-          '<div class="nbpr-pv" id="nbprPv"><div class="nbpr-wrap" id="nbprWrap"><div class="nbpr-paper" id="nbprPaper"><iframe id="nbprFrame" title="출력 미리 보기"></iframe></div></div></div>' +
+          '<div class="nbpr-pv" id="nbprPv"><div class="nbpr-wrap" id="nbprWrap"><div class="nbpr-paper" id="nbprPaper"><iframe sandbox="allow-same-origin allow-modals" id="nbprFrame" title="출력 미리 보기"></iframe></div></div></div>' +
           '<div class="nbpr-side" id="nbprSide"></div></div>' });
       NBPR.modal = md;
       _nbprDrawSide();

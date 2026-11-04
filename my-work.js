@@ -29,7 +29,10 @@ var MW_MOVE_SRC = ['mindmap', 'issue', 'action', 'dev', 'prestudy'];
 var _mw = { sel: null, userId: null, people: null, canLoad: false, data: null, src: 'all', open: null, load: null, loadSel: null, weeks: 8, dept: '',
   view: null, anchor: null, ev: null };   // view: list · week · month — anchor: 달력에서 보고 있는 날 — ev: 내 일정 { from, to, userId, rows }
 
-function _mwEsc(s) { return (typeof eH === 'function') ? eH(s == null ? '' : String(s)) : String(s == null ? '' : s); }
+function _mwEsc(s) {   // eH 가 아직 없을 때도 꼭 escape (v13.331 — 예전엔 그대로 돌려줌)
+  s = s == null ? '' : String(s);
+  return (typeof eH === 'function') ? eH(s) : s.replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+}
 function _mwToast(m, t) { if (typeof showToast === 'function') showToast(m, t); }
 /** 오늘 (서버가 준 날 → 이 PC 날짜). 달력 · 타임라인 · 패널 · 노트가 모두 이것 (v13.275 — 다섯 벌이던 것, UTC 대체값 없앰) */
 function mwToday() { return (_mw.data && _mw.data.today) || localDate(); }

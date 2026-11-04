@@ -118,7 +118,8 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     // 7. 회의 미리보기 카드 (타임라인 회의 일정에 마우스)
     await page.click('#mwNotes [data-n="close"]');
     await page.waitForNetworkIdle({ idleTime: 400, timeout: 8000 }).catch(function () {});
-    await ev(function () { _mtlMain.st.center = null; _mtlMain.update(); });
+    // 테스트 DB 에 다른 시험이 남긴 오늘 일정이 많으면 회의가 '+n' 안에 숨음 — 칸을 넉넉히 (v13.331)
+    await ev(function () { MWT_MAXROWS = 40; _mtlMain.st.center = null; _mtlMain.update(); });
     var mb = await ev(function () { var x = Array.from(document.querySelectorAll('#mwTimeline .mtl-it')).filter(function (e) { return /노트화면 설계 회의/.test(e.textContent); })[0]; if (!x) return null; var sc = _mtlMain.sc, lr = x.closest('.mtl-lane'); sc.scrollTop = Math.max(0, lr.offsetTop - 40); var r = x.getBoundingClientRect(); return { x: r.left + 6, y: r.top + r.height / 2 }; });
     if (mb) { await page.mouse.move(mb.x, mb.y); }
     check(mb && await until(function () { var c = document.getElementById('mwnCard'); return c && c.style.display === 'block' && /노트화면 납기 확인/.test(c.textContent) && !!c.querySelector('[data-cm="open"]'); }), '회의 일정에 마우스 → 회의록 미리보기 카드');
