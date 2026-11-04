@@ -71,9 +71,13 @@ function _nbRO() { return !!(NB.cur && (NB.cur.deletedAt || NB.cur.readOnly)); }
 function _nbTitleOf(n) { return n.title || (n.snippet ? n.snippet.slice(0, 40) : '') || '제목 없음'; }
 
 /* ═══ 시작 ═══ */
+/** 글자 크기 — '' 보통 · 's' 작게 · 'l' 크게 (이 브라우저에만 기억 · v13.328) */
+function _nbFs() { try { var v = localStorage.getItem('wm.nb.fs'); return v === 's' || v === 'l' ? v : ''; } catch (_) { return ''; } }
+function _nbApplyFs() { var r = document.getElementById('mNotebook'); if (!r) return; var f = _nbFs(); r.classList.toggle('nb-fs-s', f === 's'); r.classList.toggle('nb-fs-l', f === 'l'); }
 function renderNotebook() {
   var root = document.getElementById('mNotebook');
   if (!root) return;
+  _nbApplyFs();
   if (!NB.inited) {
     NB.inited = true;
     var p = _nbLS('p') || {};
@@ -315,6 +319,7 @@ function _nbDrawMain() {
       '<button class="nb-ib' + (NB.cur.pinned ? ' on' : '') + '" data-nb="pin" title="고정" aria-pressed="' + NB.cur.pinned + '">📌</button><button class="nb-ib' + (NB.cur.starred ? ' on' : '') + '" data-nb="star" title="즐겨찾기" aria-pressed="' + NB.cur.starred + '">' + (NB.cur.starred ? '★' : '☆') + '</button>') +
     (shared || trash || typeof wmBookOpen !== 'function' ? '' : '<button class="nb-ib" data-nb="book" title="📖 펼쳐 보기 — 이 노트와 다른 노트를 책처럼 나란히" aria-label="펼쳐 보기">📖</button>') +
     (NB.cur && NB.cur.deletedAt ? '' : '<button class="nb-ib nb-prb" data-nb="print" title="🖨 출력 미리 보기 · 양식 (Ctrl+P)" aria-label="출력 미리 보기">🖨</button>') +
+    '<button class="nb-ib nb-fsb" data-nb="fs" title="글자 크기 — 작게 · 보통 · 크게 (누를 때마다)">가' + ({ s: '⁻', l: '⁺' }[_nbFs()] || '') + '</button>' +
     '<button class="nb-ib" data-nb="focus" title="집중 모드 (Ctrl+Shift+F)">⤢</button>' +
     '<button class="nb-ib" data-nb="more" title="더 보기" aria-label="더 보기">⋯</button></div>';
   if (shared) h += '<div class="nb-bar info">👥 <b>' + _nbE(NB.cur.ownerName || '') + '</b> 님이 공유한 노트 — 읽기 전용 <button class="nb-btn sm" data-nb="copy-mine">📓 내 노트로 복사</button></div>';
@@ -544,6 +549,7 @@ function _nbClick(e) {
   else if (k === 'pin') _nbPatch(NB.cur.id, { pinned: !NB.cur.pinned });
   else if (k === 'star') _nbPatch(NB.cur.id, { starred: !NB.cur.starred });
   else if (k === 'focus') _nbToggleFocus();
+  else if (k === 'fs') { var f = { s: '', '': 'l', l: 's' }[_nbFs()]; try { localStorage.setItem('wm.nb.fs', f); } catch (_) {} _nbApplyFs(); x.innerHTML = '가' + ({ s: '⁻', l: '⁺' }[f] || ''); }
   else if (k === 'more') _nbMoreMenu(x);
   else if (k === 'print') nbPrintOpen();
   else if (k === 'book') nbBookOpen();
