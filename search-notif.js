@@ -85,18 +85,64 @@ function gsRenderResults(groups, kw, only) {
   });
   return h + '</div>' + (q ? '' : ask);
 }
-/* 최근 검색어 (입력칸이 비었을 때) */
+/* 최근 검색어 (입력칸이 비었을 때) — v13.325 하나씩 ✕ · [골라서 지우기] 체크 · [모두 지우기] */
+var GS_RECENT_MAX = 10;
+var _gsSel = null;   // 골라서 지우기 중이면 { 검색어: true }, 아니면 null
+function gsRecentList() { return (typeof lsGetJSON === 'function' ? lsGetJSON(GS_RECENT, []) : []) || []; }
 function gsRecentHtml() {
-  var r = (typeof lsGetJSON === 'function' ? lsGetJSON(GS_RECENT, []) : []) || [];
-  if (!r.length) return '';
-  return '<div class="gs-head"><span>최근 검색</span></div><div class="gs-list">' + r.map(function (q) {
-    return '<div class="gs-item" onclick="gsUseRecent(this.dataset.q)" data-q="' + eA(q) + '"><span class="gs-icon">🕘</span><span class="gs-main"><span class="gs-name">' + eH(q) + '</span></span></div>';
-  }).join('') + '</div>';
+  var r = gsRecentList();
+  if (!r.length) { _gsSel = null; return ''; }
+  var sel = _gsSel, n = sel ? r.filter(function (q) { return sel[q]; }).length : 0;
+  var tools = sel
+    ? '<label class="gs-rtool"><input type="checkbox" onclick="gsRecentSelAll(this.checked)"' + (n === r.length ? ' checked' : '') + '> 전체</label>' +
+      '<button type="button" class="gs-rtool gs-rdel" onclick="gsRecentDelSel()"' + (n ? '' : ' disabled') + '>🗑 선택 삭제' + (n ? ' (' + n + ')' : '') + '</button>' +
+      '<button type="button" class="gs-rtool" onclick="gsRecentSelMode(false)">취소</button>'
+    : '<button type="button" class="gs-rtool" onclick="gsRecentSelMode(true)" title="지울 검색어를 골라서 한꺼번에 지웁니다">골라서 지우기</button>' +
+      '<button type="button" class="gs-rtool gs-rdel" onclick="gsRecentClear()">모두 지우기</button>';
+  return '<div class="gs-head gs-rhead"><span>최근 검색 <b>' + r.length + '</b></span><span class="gs-rtools">' + tools + '</span></div>' +
+    '<div class="gs-list gs-recent' + (sel ? ' sel' : '') + '">' + r.map(function (q) {
+      var on = sel && sel[q];
+      return '<div class="gs-item' + (on ? ' gs-on' : '') + '" data-q="' + eA(q) + '" onclick="' + (sel ? 'gsRecentToggle(this.dataset.q)' : 'gsUseRecent(this.dataset.q)') + '">' +
+        (sel ? '<input type="checkbox" class="gs-rchk" tabindex="-1"' + (on ? ' checked' : '') + '>' : '<span class="gs-icon">🕘</span>') +
+        '<span class="gs-main"><span class="gs-name">' + eH(q) + '</span></span>' +
+        (sel ? '' : '<button type="button" class="gs-rx" title="이 검색어 지우기 (Delete)" onclick="event.stopPropagation();gsForget(this.parentNode.dataset.q)">✕</button>') + '</div>';
+    }).join('') + '</div>';
 }
 function gsRemember(q) {
   if (typeof lsGetJSON !== 'function') return;
-  var r = (lsGetJSON(GS_RECENT, []) || []).filter(function (x) { return x !== q; });
-  r.unshift(q); lsSetJSON(GS_RECENT, r.slice(0, 5));
+  var r = gsRecentList().filter(function (x) { return x !== q; });
+  r.unshift(q); lsSetJSON(GS_RECENT, r.slice(0, GS_RECENT_MAX));
+}
+/* 지운 뒤 — 입력칸이 비어 있을 때의 목록을 다시 그림 (입력칸 포커스는 그대로) */
+function _gsRecentRedraw() {
+  var dd = document.getElementById('globalSearchDropdown');
+  if (!dd) return;
+  var rc = (typeof wmAiRecentRow === 'function' ? wmAiRecentRow() : '') + gsRecentHtml();
+  dd.innerHTML = rc; dd.style.display = rc ? 'flex' : 'none';
+  _gsActiveIdx = -1;
+}
+function gsRecentSave(r) { if (typeof lsSetJSON === 'function') lsSetJSON(GS_RECENT, r); }
+function gsForget(q) {
+  gsRecentSave(gsRecentList().filter(function (x) { return x !== q; }));
+  if (_gsSel) delete _gsSel[q];
+  _gsRecentRedraw();
+}
+function gsRecentSelMode(on) { _gsSel = on ? {} : null; _gsRecentRedraw(); }
+function gsRecentToggle(q) { if (!_gsSel) return; if (_gsSel[q]) delete _gsSel[q]; else _gsSel[q] = true; _gsRecentRedraw(); }
+function gsRecentSelAll(on) { if (!_gsSel) return; _gsSel = {}; if (on) gsRecentList().forEach(function (q) { _gsSel[q] = true; }); _gsRecentRedraw(); }
+function gsRecentDelSel() {
+  if (!_gsSel) return;
+  var sel = _gsSel, r = gsRecentList(), left = r.filter(function (q) { return !sel[q]; }), n = r.length - left.length;
+  if (!n) return;
+  gsRecentSave(left); _gsSel = null; _gsRecentRedraw();
+  if (typeof showToast === 'function') showToast('🗑 최근 검색어 ' + n + '개를 지웠습니다', 'success');
+}
+function gsRecentClear() {
+  var r = gsRecentList();
+  if (!r.length) return;
+  if (!confirm('최근 검색어 ' + r.length + '개를 모두 지울까요?')) return;
+  gsRecentSave([]); _gsSel = null; _gsRecentRedraw();
+  if (typeof showToast === 'function') showToast('🗑 최근 검색어를 모두 지웠습니다', 'success');
 }
 function gsUseRecent(q) {
   var inp = document.getElementById('globalSearchInput');
@@ -451,7 +497,14 @@ function gsKeyNav(e) {
   } else if (e.key === 'Enter' && _gsActiveIdx >= 0 && _gsActiveIdx < items.length) {
     e.preventDefault();
     items[_gsActiveIdx].click();
+  } else if (e.key === 'Delete' && !e.target.value && _gsActiveIdx >= 0 && items[_gsActiveIdx] && items[_gsActiveIdx].dataset.q != null) {   // v13.325 최근 검색어 지우기
+    e.preventDefault();
+    var keep = _gsActiveIdx;
+    gsForget(items[_gsActiveIdx].dataset.q);
+    var left = dd.querySelectorAll('.gs-item');
+    if (left.length) { _gsActiveIdx = Math.min(keep, left.length - 1); gsHighlightActive(left); }
   } else if (e.key === 'Escape') {
+    if (_gsSel) { gsRecentSelMode(false); return; }
     dd.style.display = 'none';
     _gsActiveIdx = -1;
   }
@@ -478,7 +531,8 @@ document.addEventListener('keydown', function(e) {
 // close search dropdown on outside click
 document.addEventListener('click', function(e) {
   const wrap = document.getElementById('globalSearchWrap');
-  if (wrap && !wrap.contains(e.target)) {
+  // 안에서 누른 단추가 다시 그려져 떨어져 나가도(최근 검색 지우기 · 칩) 안쪽 클릭으로 본다
+  if (wrap && !wrap.contains(e.target) && (e.composedPath ? e.composedPath().indexOf(wrap) < 0 : e.target.isConnected)) {
     const dd = document.getElementById('globalSearchDropdown');
     if (dd) dd.style.display = 'none';
   }

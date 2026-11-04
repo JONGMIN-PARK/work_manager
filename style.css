@@ -3267,6 +3267,20 @@ label.hdr-mi input{margin:0}
 .gs-more{padding:5px 12px 7px 38px;font-size:11px;color:var(--ac-t);cursor:pointer}
 .gs-more:hover{text-decoration:underline}
 .gs-empty{padding:16px;text-align:center;font-size:12px;color:var(--t5)}
+/* v13.325 최근 검색어 지우기 — ✕ · 골라서 지우기 · 모두 지우기 */
+.gs-rhead b{color:var(--t3);font-weight:700;margin-left:2px}
+.gs-rtools{display:flex;align-items:center;gap:4px}
+.gs-rtool{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border:1px solid var(--bd);border-radius:10px;background:var(--bg-i);color:var(--t4);font:inherit;font-size:10.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.gs-rtool:hover:not(:disabled){border-color:var(--ac);color:var(--ac-t)}
+.gs-rtool:disabled{opacity:.45;cursor:default}
+.gs-rtool.gs-rdel:hover:not(:disabled){border-color:#ef4444;color:#ef4444}
+.gs-rtool input{margin:0;width:12px;height:12px}
+.gs-rx{flex-shrink:0;width:22px;height:22px;border:0;border-radius:50%;background:none;color:var(--t6);font-size:11px;cursor:pointer;opacity:0;transition:opacity .1s}
+.gs-item:hover .gs-rx,.gs-rx:focus-visible{opacity:1}
+.gs-rx:hover{background:var(--bg-hv);color:#ef4444}
+@media (hover:none){.gs-rx{opacity:1}}
+.gs-rchk{margin:0 3px;flex-shrink:0;pointer-events:none}
+.gs-recent.sel .gs-item.gs-on{background:var(--ac-bg)}
 /* 찾은 자리 — 글자는 형광, 그 줄 · 카드는 잠깐 깜빡 */
 mark.wm-hit{background:#FDE047;color:#1F2937;padding:0 1px;border-radius:2px;box-shadow:0 0 0 1px rgba(234,179,8,.6)}
 .wm-hit-box{animation:wmHitPulse 1.6s ease-out 2}
@@ -4657,3 +4671,86 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
 .nb-sp-why{font-size:11px;color:var(--t5);line-height:1.5}
 .nb-sp-st{font-size:10.5px;color:var(--t5)}
 .nb-sp-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.nb-sp-foot small{font-size:10px;color:var(--t6)}
+/* ═══ v13.325 📖 노트 펼쳐 보기 — 책처럼 2~4장 나란히 (my-work-notes.js _mwns) ═══ */
+.mwns{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.mwns-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mwns-seg{display:inline-flex;border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+.mwns-seg button{border:0;background:var(--bg-i);color:var(--t4);font:inherit;font-size:12px;padding:5px 11px;cursor:pointer}
+.mwns-seg button+button{border-left:1px solid var(--bd)}
+.mwns-seg button.on{background:var(--ac-bg);color:var(--ac-t);font-weight:700}
+.mwns-cnt{font-size:11px;color:var(--t5);margin-left:4px}
+.mwns-main{display:flex;gap:12px;flex:1;min-height:0}
+.mwns-side{width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;min-height:0}
+.mwns.no-side .mwns-side{display:none}
+.mwns-side .mw-input{width:100%;box-sizing:border-box}
+.mwns-list{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:2px}
+.mwns-it{display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:auto auto;column-gap:6px;align-items:center;padding:6px 6px;border-radius:7px;cursor:pointer;font-size:12px;color:var(--t2)}
+.mwns-it:hover{background:var(--bg-hv)}
+.mwns-it.on{background:var(--ac-bg)}
+.mwns-it input{grid-row:1/3;margin:0;pointer-events:none}
+.mwns-it b{font-size:11px;color:var(--t3);white-space:nowrap;grid-column:2;grid-row:1}
+.mwns-it i{font-style:normal;font-size:10px;color:var(--t6);grid-column:3;grid-row:1}
+.mwns-it span{grid-column:2/4;grid-row:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t4);font-size:11.5px}
+.mwns-book{flex:1;min-width:0;display:grid;grid-template-columns:repeat(var(--mwns-n,2),minmax(240px,1fr));grid-template-rows:minmax(0,1fr);gap:14px;overflow:auto;padding:4px 4px 8px;scroll-snap-type:x mandatory}
+.mwns-book.is-pair{gap:0}
+.mwns-empty{grid-column:1/-1;align-self:center;text-align:center;color:var(--t5);font-size:13px;padding:40px}
+.mwns-page{scroll-snap-align:start;display:flex;flex-direction:column;min-height:0;background:#fffdf7;color:#2b2b2b;border:1px solid #e7e0cf;border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.12);overflow:hidden}
+.mwns-book.is-pair .mwns-page:first-child{border-radius:6px 0 0 6px;box-shadow:-3px 3px 12px rgba(0,0,0,.12),inset -14px 0 18px -14px rgba(0,0,0,.22)}
+.mwns-book.is-pair .mwns-page:last-child{border-radius:0 6px 6px 0;border-left:0;box-shadow:3px 3px 12px rgba(0,0,0,.12),inset 14px 0 18px -14px rgba(0,0,0,.22)}
+.mwns-page header{display:flex;align-items:center;gap:4px;padding:10px 12px 8px 16px;border-bottom:2px solid #e9c46a}
+.mwns-ph{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.mwns-ph b{font-size:14px;font-weight:800}
+.mwns-ph span{font-size:11px;color:#8a6d1f}
+.mwns-ph:hover b{text-decoration:underline}
+.mwns-x{border:0;background:none;color:#a8a29e;cursor:pointer;font-size:12px;width:24px;height:24px;border-radius:50%}
+.mwns-x:hover{background:#f5efe0;color:#dc2626}
+.mwns-lines{flex:1;overflow-y:auto;padding:6px 16px 10px 40px;background-image:linear-gradient(to right,transparent 30px,rgba(239,68,68,.25) 30px,rgba(239,68,68,.25) 31px,transparent 31px),repeating-linear-gradient(to bottom,transparent 0,transparent 25px,#e5edf7 25px,#e5edf7 26px);background-attachment:local}
+.mwns-l{font-size:13px;line-height:26px;min-height:26px;white-space:pre-wrap;word-break:break-word}
+.mwns-l.is-todo{color:#4b5563}
+.mwns-l i{font-style:normal;color:#16a34a;font-weight:800;margin-right:5px}
+.mwns-page .mwn-e{color:#9ca3af;font-size:12px;padding:10px 0}
+.mwns-page footer{display:flex;justify-content:space-between;padding:5px 14px 7px;font-size:10.5px;color:#a8a29e;border-top:1px solid #f0ead9}
+/* 책장 넘기기 — 두 장: 한 장이 등을 축으로 넘어감 (앞면 = 넘어가는 장, 뒷면 = 새 장) */
+.mwns-book{position:relative;perspective:2400px}
+.mwns-book.is-turning{overflow:hidden}
+.mwns-page{position:relative}
+.mwns-cover{position:absolute;z-index:2;display:flex}
+.mwns-cover>.mwns-page,.mwns-face>.mwns-page{flex:1;height:100%;box-sizing:border-box}
+.mwns-leaf{position:absolute;z-index:3;transform-style:preserve-3d;will-change:transform}
+.mwns-leaf.to-l{transform-origin:left center}
+.mwns-leaf.to-r{transform-origin:right center}
+.mwns-leaf.to-l.go{animation:mwnsTurnL .78s cubic-bezier(.45,.05,.25,1) forwards}
+.mwns-leaf.to-r.go{animation:mwnsTurnR .78s cubic-bezier(.45,.05,.25,1) forwards}
+@keyframes mwnsTurnL{0%{transform:rotateY(0)}45%{transform:rotateY(-80deg) skewY(-2deg)}100%{transform:rotateY(-180deg)}}
+@keyframes mwnsTurnR{0%{transform:rotateY(0)}45%{transform:rotateY(80deg) skewY(2deg)}100%{transform:rotateY(180deg)}}
+.mwns-face{position:absolute;inset:0;display:flex;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.mwns-face.back{transform:rotateY(180deg)}
+.mwns-face .mwns-page{border-radius:0!important}
+.mwns-shade{position:absolute;inset:0;pointer-events:none;opacity:0}
+.mwns-leaf.to-l .front .mwns-shade{background:linear-gradient(to left,rgba(0,0,0,.28),rgba(0,0,0,0) 60%)}
+.mwns-leaf.to-l .back .mwns-shade{background:linear-gradient(to left,rgba(0,0,0,.22),rgba(0,0,0,0) 55%)}
+.mwns-leaf.to-r .front .mwns-shade{background:linear-gradient(to right,rgba(0,0,0,.28),rgba(0,0,0,0) 60%)}
+.mwns-leaf.to-r .back .mwns-shade{background:linear-gradient(to right,rgba(0,0,0,.22),rgba(0,0,0,0) 55%)}
+.mwns-leaf.go .front .mwns-shade{animation:mwnsShadeF .78s ease-in forwards}
+.mwns-leaf.go .back .mwns-shade{animation:mwnsShadeB .78s ease-out forwards}
+@keyframes mwnsShadeF{0%{opacity:0}50%{opacity:1}100%{opacity:1}}
+@keyframes mwnsShadeB{0%{opacity:1}50%{opacity:1}100%{opacity:0}}
+/* 3 · 4장 — 종이가 차례로 넘어가며 바뀜 */
+.mwns-page.mwns-in-r{transform-origin:left center;animation:mwnsInR .5s cubic-bezier(.3,.1,.25,1) both}
+.mwns-page.mwns-in-l{transform-origin:right center;animation:mwnsInL .5s cubic-bezier(.3,.1,.25,1) both}
+@keyframes mwnsInR{0%{transform:rotateY(70deg);opacity:0}60%{opacity:1}100%{transform:none;opacity:1}}
+@keyframes mwnsInL{0%{transform:rotateY(-70deg);opacity:0}60%{opacity:1}100%{transform:none;opacity:1}}
+/* 끝 장에서 더 넘기려 하면 살짝 들림 */
+.mwns-page.mwns-bump-r{transform-origin:left center;animation:mwnsBumpR .45s ease-out}
+.mwns-page.mwns-bump-l{transform-origin:right center;animation:mwnsBumpL .45s ease-out}
+@keyframes mwnsBumpR{40%{transform:rotateY(-14deg)}100%{transform:none}}
+@keyframes mwnsBumpL{40%{transform:rotateY(14deg)}100%{transform:none}}
+/* 바깥 모서리 — 올리면 접힌 귀퉁이 */
+.mwns-corner{position:absolute;bottom:0;width:34px;height:34px;border:0;padding:0;cursor:pointer;background:transparent;z-index:1;transition:width .18s,height .18s}
+.mwns-corner.r{right:0;background:linear-gradient(315deg,transparent 50%,rgba(0,0,0,0) 50%)}
+.mwns-corner.l{left:0}
+.mwns-corner.r:hover,.mwns-corner.r:focus-visible{width:46px;height:46px;background:linear-gradient(315deg,var(--bg-p) 0,var(--bg-p) 50%,#efe6cf 50%,#fbf6e8 72%,#d9cfb5 100%);box-shadow:-2px -2px 5px rgba(0,0,0,.12);border-radius:0 0 4px 0}
+.mwns-corner.l:hover,.mwns-corner.l:focus-visible{width:46px;height:46px;background:linear-gradient(45deg,var(--bg-p) 0,var(--bg-p) 50%,#efe6cf 50%,#fbf6e8 72%,#d9cfb5 100%);box-shadow:2px -2px 5px rgba(0,0,0,.12);border-radius:0 0 0 4px}
+.mwns-page footer{position:relative}
+@media (prefers-reduced-motion:reduce){.mwns-leaf.go,.mwns-page.mwns-in-r,.mwns-page.mwns-in-l,.mwns-page.mwns-bump-r,.mwns-page.mwns-bump-l{animation:none}}
+@media (max-width:700px){.mwns-book{grid-template-columns:repeat(var(--mwns-n,2),85%)}.mwns-side{width:100%}.mwns:not(.no-side) .mwns-book{display:none}.mwns-main{flex-direction:column}}

@@ -13,7 +13,7 @@
  *   PUT    /api/my-work/categories-order { ids } · POST /api/my-work/categories-reset 기본 4칸으로
  *   GET    /api/my-work/notes?date=      📝 그날 노트들 (v13.272 — ref '' = 그날 노트, 'ev:<일정 id>' = 회의 메모). 본인만
  *   PUT    /api/my-work/notes            { date, ref, body } — 빈 글이면 지움
- *   GET    /api/my-work/notes/find?q=    검색 (q 없으면 최근)
+ *   GET    /api/my-work/notes/find?q=&book=1    검색 (q 없으면 최근 · book=1 날짜 순 200개)
  *   GET    /api/my-work/meeting-brief?eventId=   회의 일정 → 회의록 요약 (안건 · 회의록 앞부분 · 내 액션). 회의 화면과 같은 권한
  *   GET    /api/my-work/load?weeks=&deptId=   업무 부하 (관리자 · 임원 · 팀장)
  *   PUT    /api/my-work/reassign         { src, id, fromUserId, toUserId } — 담당 바꾸기 (관리자 · 임원 · 팀장)
@@ -365,13 +365,14 @@ router.put('/notes', async function (req, res) {
   } catch (e) { httpErr.serverError(res, '[my-work/notes-put]', e); }
 });
 
-// GET /notes/find?q= — 맞은 줄 조각 (q 없으면 최근 고친 것)
+// GET /notes/find?q=&book=1 — 맞은 줄 조각 (q 없으면 최근 고친 것 · book=1 이면 날짜 순 200개 — 📖 펼쳐 보기 고르기)
 router.get('/notes/find', async function (req, res) {
   try {
     var q = String(req.query.q || '').trim().slice(0, 100);
+    var book = req.query.book === '1';
     var params = [req.tenant.id, req.user.sub], cond = '';
     if (q) { params.push('%' + q.replace(/[\\%_]/g, function (c) { return '\\' + c; }) + '%'); cond = ' AND body ILIKE $3'; }
-    var r = await db.query("SELECT note_date, ref, body, updated_at FROM my_notes WHERE tenant_id = $1 AND user_id = $2 AND body <> ''" + cond + ' ORDER BY ' + (q ? 'note_date DESC' : 'updated_at DESC') + ' LIMIT 30', params);
+    var r = await db.query("SELECT note_date, ref, body, updated_at FROM my_notes WHERE tenant_id = $1 AND user_id = $2 AND body <> ''" + cond + ' ORDER BY ' + (q || book ? 'note_date DESC, ref DESC' : 'updated_at DESC') + ' LIMIT ' + (book ? 200 : 30), params);
     var ql = q.toLowerCase();
     res.json({ data: r.rows.map(function (x) {
       var lines = x.body.split('\n').map(function (l) { return l.replace(/⟦[^⟧]*⟧/g, '').replace(/^- \[[ x]\] /, '').trim(); }).filter(Boolean);
