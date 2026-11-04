@@ -70,7 +70,7 @@ var ANS = { items: [
     await p.click('#nbCoach [data-csp="all"]');
     var s2 = await src();
     check(/며칠 뒤에 할 수 있다/.test(s2) && /설치하는 것 확인함/.test(s2) && /다음주 에/.test(s2), '[모두 고치기] — 무시한 것은 그대로');
-    check(await until(function () { return NB.dirty && (NB.dirty.body || document.getElementById('nbState').className.indexOf('saved') >= 0 || /저장/.test(document.getElementById('nbState').textContent)); }), '고친 글은 저장으로 이어짐');
+    check(await until(function () { return NB.pend && (Object.keys(NB.pend).length || document.getElementById('nbState').className.indexOf('saved') >= 0 || /저장/.test(document.getElementById('nbState').textContent)); }), '고친 글은 저장으로 이어짐');
     // 노트 바꾸면 비움
     var n2 = await p.evaluate(function () { return apiFetch('/api/notebook/notes', { method: 'POST', body: JSON.stringify({ title: '다른 노트', body: '글' }) }).then(function (r) { return r.data.id; }); });
     await p.evaluate(function (id) { return nbOpenNote(id); }, n2);

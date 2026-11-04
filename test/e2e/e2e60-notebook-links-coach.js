@@ -33,7 +33,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
   }
   var A, K, p;
   function until(fn, arg, ms) { return p.waitForFunction(fn, { timeout: ms || 8000 }, arg).then(function () { return true; }, function () { return false; }); }
-  function saved() { return until(function () { var s = document.getElementById('nbState'); return s && /저장됨/.test(s.textContent) && !Object.keys(NB.dirty).length && !NB.saving && !NB.timer; }, null, 10000); }
+  function saved() { return until(function () { var s = document.getElementById('nbState'); return s && /저장됨/.test(s.textContent) && !Object.keys(NB.pend).length && !NB.saving && !NB.timer; }, null, 10000); }
   async function endOfSrc() { await p.evaluate(function () { var s = document.getElementById('nbSrc'); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }); }
   try {
     A = await open('admin@t.com'); p = A.p;

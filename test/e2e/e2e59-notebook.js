@@ -20,7 +20,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
   p.on('pageerror', function (e) { errs.push(e.message); });
   p.on('dialog', function (d) { d.accept(d.type() === 'prompt' ? '고객 전달본' : undefined); });
   function until(fn, arg, ms) { return p.waitForFunction(fn, { timeout: ms || 8000 }, arg).then(function () { return true; }, function () { return false; }); }
-  function saved() { return until(function () { var s = document.getElementById('nbState'); return s && /저장됨/.test(s.textContent) && !Object.keys(NB.dirty).length && !NB.saving && !NB.timer; }, null, 10000); }
+  function saved() { return until(function () { var s = document.getElementById('nbState'); return s && /저장됨/.test(s.textContent) && !Object.keys(NB.pend).length && !NB.saving && !NB.timer; }, null, 10000); }
   try {
     await p.setViewport({ width: 1440, height: 900 });
     await p.goto('http://localhost:3000/', { waitUntil: 'networkidle2' });

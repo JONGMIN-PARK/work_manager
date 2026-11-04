@@ -14,7 +14,9 @@
 
 var NB = {
   inited: false, meta: null, view: 'all', folder: null, tag: null, q: '', sort: 'updated', list: [], daily: [],
-  cur: null, daily1: null, mode: 'split', pane: 'list', saving: null, timer: null, dirty: {}, conflict: null,
+  cur: null, daily1: null, mode: 'split', pane: 'list', saving: null, timer: null, conflict: null, conflictKey: null,
+  // v13.332 저장 — 노트(일일 노트)마다 따로 대기: pend[key] = 그때 값 · revs[id] = 마지막으로 안 서버 rev · err[key] = 다시 보내지 않을 오류
+  pend: {}, revs: {}, err: {}, sending: {}, retryN: 0, retryT: null, dtimer: null, openSeq: 0,
   inkEd: null, inkId: null, overEd: null, overHide: false, blobs: {}, focus: false, seq: 0
 };
 var NB_LS = 'nb-prefs';
@@ -45,10 +47,25 @@ function _nbLS(k, v) {
     o[k] = v; localStorage.setItem(NB_LS, JSON.stringify(o));
   } catch (_) { return undefined; }
 }
+function _nbUid() { return (typeof currentUser !== 'undefined' && currentUser) ? String(currentUser.sub || currentUser.id || '') : ''; }
+/** 못 보낸 노트 글 임시 보관 — 사람마다 따로 (v13.332: 공용 PC 에서 다음 사람에게 보이지 않게) */
 function _nbDraft(id, v) {
+  var k = 'nb-draft:' + _nbUid() + ':' + id;
   try {
-    if (v === undefined) return JSON.parse(localStorage.getItem('nb-draft:' + id) || 'null');
-    if (v === null) localStorage.removeItem('nb-draft:' + id); else localStorage.setItem('nb-draft:' + id, JSON.stringify(v));
+    if (v === undefined) {
+      var raw = localStorage.getItem(k);
+      if (raw == null && (raw = localStorage.getItem('nb-draft:' + id)) != null) { localStorage.removeItem('nb-draft:' + id); localStorage.setItem(k, raw); }   // 옛 이름 → 새 이름
+      return JSON.parse(raw || 'null');
+    }
+    if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v));
+  } catch (_) { return null; }
+}
+/** 일일 노트 임시 보관 — 📝 서랍과 같은 이름 · 모양({body, base, at}) 이라 어느 쪽에서 열어도 되살아남 */
+function _nbDDraft(date, ref, v) {
+  try {
+    var k = 'wm.mwn.draft:' + _nbUid() + ':' + date + '|' + (ref || '');
+    if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null');
+    if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v));
   } catch (_) { return null; }
 }
 function _nbWhen(t) {
@@ -92,7 +109,7 @@ function renderNotebook() {
     if (NB.pendingOpen) { var po = NB.pendingOpen; NB.pendingOpen = null; _nbOpen(po.id, po.kw); return; }
     if (!NB.cur && !NB.daily1) {
       _nbDrawMain();   // 빈 화면 (양식 카드)
-      var last = _nbLS('last');
+      var last = _nbLS('last:' + _nbUid());
       if (last && window.innerWidth > 760) _nbOpen(last, null, true);
     }
   });
@@ -215,10 +232,18 @@ function _nbHl(s, q) {
   return e.replace(new RegExp(qe, 'gi'), function (m) { return '<mark>' + m + '</mark>'; });
 }
 
+/** 인증 붙은 받기 — 토큰이 끝났으면(401) 갱신 뒤 한 번 더 (v13.332) */
+function _nbAuthFetch(path) {
+  function go() { return fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + path, { headers: { Authorization: 'Bearer ' + (typeof _accessToken !== 'undefined' ? _accessToken : '') } }); }
+  return go().then(function (res) {
+    if (res.status === 401 && typeof _tryRefresh === 'function') return _tryRefresh().then(function (ok) { return ok ? go() : res; });
+    return res;
+  });
+}
 /* 첨부 사진 — 인증이 필요한 주소라 받아서 blob */
 function _nbBlob(fid) {
   if (NB.blobs[fid]) return NB.blobs[fid];
-  NB.blobs[fid] = fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/notebook/files/' + encodeURIComponent(fid), { headers: { Authorization: 'Bearer ' + (typeof _accessToken !== 'undefined' ? _accessToken : '') } }).then(function (res) {
+  NB.blobs[fid] = _nbAuthFetch('/api/notebook/files/' + encodeURIComponent(fid)).then(function (res) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     var ct = res.headers.get('content-type') || '';
     if (ct.indexOf('application/json') >= 0) return res.json().then(function (j) { return j.data.url; });
@@ -234,7 +259,8 @@ function _nbLoadImgs(root) {
   });
 }
 function _nbDownload(fid, name) {
-  fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/notebook/files/' + encodeURIComponent(fid) + '?dl=1', { headers: { Authorization: 'Bearer ' + _accessToken } }).then(function (res) {
+  _nbAuthFetch('/api/notebook/files/' + encodeURIComponent(fid) + '?dl=1').then(function (res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     var ct = res.headers.get('content-type') || '';
     if (ct.indexOf('application/json') >= 0) return res.json().then(function (j) { window.open(j.data.url, '_blank', 'noopener'); });
     return res.blob().then(function (b) { _nbSaveBlob(b, name || 'file'); });
@@ -254,29 +280,49 @@ function nbOpenNote(id, kw) {
   _nbOpen(id, kw);
 }
 function _nbOpen(id, kw, quiet) {
-  if (NB.cur && NB.cur.id === id) { _nbSetPane('note'); return; }
-  _nbFlush();
+  if (NB.cur && NB.cur.id === id) { _nbSetPane('note'); return Promise.resolve(); }
+  var seq = ++NB.openSeq;   // 빨리 여러 개를 누르면 마지막 것만 그림
   _nbInkStop();
-  return apiFetch('/api/notebook/notes/' + encodeURIComponent(id)).then(function (r) {
-    NB.cur = r.data; NB.daily1 = null; NB.conflict = null; NB.dirty = {};
+  // 보내던 글이 다 닿은 뒤에 받음 — 방금 고친 것이 옛 글로 보이지 않게
+  return _nbFlush().then(function () { return apiFetch('/api/notebook/notes/' + encodeURIComponent(id)); }).then(function (r) {
+    if (seq !== NB.openSeq) return;
+    var n = r.data, key = 'n:' + id, p = NB.pend[key];
+    if (p) {   // 아직 못 보낸 글 — 그 위에 얹고 기준 rev 는 그대로 (그새 다른 곳에서 고쳤으면 충돌로 알림)
+      if (p.f.title || p.force) n.title = p.title;
+      if (p.f.body || p.force) n.body = p.body;
+      if (p.f.ink || p.force) n.ink = p.ink;
+      if (NB.revs[id] == null) NB.revs[id] = n.rev;
+      delete NB.err[key]; if (NB.conflictKey === key) NB.conflictKey = null;
+    } else NB.revs[id] = n.rev;
+    NB.cur = n; NB.daily1 = null; NB.conflict = null;
     if (typeof NBP !== 'undefined') { NBP.ai = null; NBP.sp = null; NBP.open = {}; NBP.kindOver = null; NBP.filter = ''; }
-    _nbLS('last', id);
+    _nbLS('last:' + _nbUid(), id);
     _nbDrawMain();
     _nbMarkList();
     _nbSetPane('note');
-    var d = _nbDraft(id);
-    if (d && d.rev === NB.cur.rev && (d.body !== NB.cur.body || d.title !== NB.cur.title)) _nbShowDraftBar(d);
-    else if (d) _nbDraft(id, null);
+    if (p) _nbQueue(10); else _nbDraftCheck(n);
     if (kw) setTimeout(function () { _nbFindInDoc(kw); }, 60);
-  }).catch(function (e) { if (!quiet) _nbToast('❌ 노트를 열지 못했습니다 — ' + _nbErr(e), 'error'); else _nbLS('last', null); });
+  }).catch(function (e) { if (seq !== NB.openSeq) return; if (!quiet) _nbToast('❌ 노트를 열지 못했습니다 — ' + _nbErr(e), 'error'); else _nbLS('last:' + _nbUid(), null); });
 }
 function _nbOpenDaily(date, ref) {
-  _nbFlush(); _nbInkStop();
-  return apiFetch('/api/my-work/notes?date=' + encodeURIComponent(date)).then(function (r) {
-    var b = ''; (r.data.notes || []).forEach(function (n) { if (n.ref === ref) b = n.body; });
-    NB.cur = null; NB.daily1 = { date: date, ref: ref, body: b, title: (+date.slice(5, 7)) + '/' + (+date.slice(8, 10)) + (ref ? ' 회의 메모' : ' 일일 노트') };
+  ref = ref || '';
+  var seq = ++NB.openSeq;
+  _nbInkStop();
+  return _nbFlush().then(function () { return apiFetch('/api/my-work/notes?date=' + encodeURIComponent(date)); }).then(function (r) {
+    if (seq !== NB.openSeq) return;
+    var srv = ''; (r.data.notes || []).forEach(function (n) { if (n.ref === ref) srv = n.body; });
+    var p = NB.pend['d:' + date + '|' + ref], b = p ? p.body : srv, back = false;
+    if (!p) {   // 이 기기에 남은 못 보낸 글 (📝 서랍 · 노트북 같이 씀)
+      var d = _nbDDraft(date, ref);
+      if (d && d.body !== srv) { b = d.base === srv ? d.body : (srv ? srv + '\n\n' : '') + '— 저장 못 한 글 (' + new Date(d.at).toTimeString().slice(0, 5) + ') —\n' + d.body; back = true; }
+      else if (d) _nbDDraft(date, ref, null);
+    }
+    NB.cur = null; NB.conflict = null;
+    NB.daily1 = { date: date, ref: ref, body: b, srv: srv, title: (+date.slice(5, 7)) + '/' + (+date.slice(8, 10)) + (ref ? ' 회의 메모' : ' 일일 노트') };
     _nbDrawMain(); _nbMarkList(); _nbSetPane('note');
-  }).catch(function (e) { _nbToast('❌ ' + _nbErr(e), 'error'); });
+    if (back) { _nbPendOf(NB.daily1); _nbQueue(10); _nbToast('↩️ 저장 못 했던 글을 되살렸습니다'); }
+    else if (p) _nbQueue(10);
+  }).catch(function (e) { if (seq === NB.openSeq) _nbToast('❌ ' + _nbErr(e), 'error'); });
 }
 function _nbMarkList() {
   document.querySelectorAll('#nbItems .nb-it').forEach(function (el) {
@@ -339,7 +385,7 @@ function _nbDrawMain() {
   src.value = daily ? NB.daily1.body : NB.cur.body;
   _nbRenderPrev();
   _nbFoot();
-  _nbState(NB.saving ? 'saving' : 'saved');
+  _nbStateCur();
   if (typeof NBP !== 'undefined' && NBP.coach) { m.classList.add('coach-on'); _nbpCoachRun(true); }
   if (!daily && !trash && NB.mode !== 'view' && !src.value && !NB.cur.title) document.getElementById('nbTitle').focus();
 }
@@ -356,7 +402,7 @@ function _nbTbHtml(daily) {
 }
 function _nbTagsHtml() {
   var tags = NB.cur.tags || [];
-  return tags.map(function (t, i) { return '<span class="nb-chip">#' + _nbE(t) + '<button data-untag="' + i + '" aria-label="태그 빼기">×</button></span>'; }).join('') +
+  return tags.map(function (t, i) { return '<span class="nb-chip">#' + _nbE(t) + (_nbRO() ? '' : '<button data-untag="' + i + '" aria-label="태그 빼기">×</button>') + '</span>'; }).join('') +
     (_nbRO() ? '' : '<input class="nb-tagin" id="nbTagIn" list="nbTagDl" placeholder="' + (tags.length ? '+ 태그' : '+ 태그 달기') + '" aria-label="태그 추가"><datalist id="nbTagDl">' +
       ((NB.meta && NB.meta.tags) || []).map(function (t) { return '<option value="' + _nbE(t.tag) + '">'; }).join('') + '</datalist>');
 }
@@ -373,7 +419,8 @@ function _nbFoot() {
 function _nbState(s, msg) {
   var el = document.getElementById('nbState'); if (!el) return;
   el.className = 'nb-state ' + s;
-  el.textContent = s === 'saving' ? '저장 중…' : s === 'dirty' ? '고치는 중' : s === 'error' ? '⚠️ ' + (msg || '저장 안 됨') : s === 'offline' ? '⚠️ 연결 끊김 — 이 기기에 보관 중' : '✓ 저장됨';
+  el.textContent = s === 'saving' ? '저장 중…' : s === 'dirty' ? '고치는 중' : s === 'error' ? '⚠️ ' + (msg || '저장 안 됨') : s === 'offline' ? '⚠️ ' + (msg || '연결 끊김 — 이 기기에 보관 중') : '✓ 저장됨';
+  el.title = s === 'offline' || s === 'error' ? '못 보낸 글은 이 기기에 남아 있습니다 — Ctrl+S 로 바로 다시 보낼 수 있습니다' : '';
 }
 
 /* 미리보기 */
@@ -493,8 +540,6 @@ function _nbBind(root) {
   root.addEventListener('focusout', function (e) {
     if (e.target.id === 'nbTagIn' && e.target.value.trim()) _nbAddTag(e.target.value);
   });
-  window.addEventListener('beforeunload', function (e) { if (Object.keys(NB.dirty).length || NB.saving) { _nbFlush(); e.preventDefault(); e.returnValue = ''; } });
-  window.addEventListener('online', function () { if (Object.keys(NB.dirty).length) _nbQueue(10); });
 }
 function _nbDrawSideOn() {
   document.querySelectorAll('#nbSide .nb-nav').forEach(function (b) { b.classList.toggle('on', !NB.q && !NB.folder && !NB.tag && b.getAttribute('data-view') === NB.view); });
@@ -561,7 +606,8 @@ function _nbClick(e) {
   else if (k === 'copy-mine') nbNewFrom(NB.cur.body, (NB.cur.title || '노트') + ' (' + (NB.cur.ownerName || '공유') + ')', {});
   else if (k === 'folder-pick') _nbFolderPick(x);
   else if (k === 'draft-use') _nbDraftUse();
-  else if (k === 'draft-drop') { _nbDraft(NB.cur.id, null); document.getElementById('nbBars').innerHTML = ''; }
+  else if (k === 'draft-drop') { _nbDraft(NB.cur.id, null); NB._draft = null; document.getElementById('nbBars').innerHTML = ''; }
+  else if (k === 'draft-copy') _nbDraftCopy();
   else if (k === 'cf-reload') _nbConflict('reload');
   else if (k === 'cf-mine') _nbConflict('mine');
   else if (k === 'cf-copy') _nbConflict('copy');
@@ -808,60 +854,190 @@ function _nbCaretXY(ta) {
 }
 
 /* ═══ 저장 ═══ */
+var NB_RETRY = [3000, 10000, 30000, 60000];
+function _nbKeyOf(d) { return d.id ? 'n:' + d.id : 'd:' + d.date + '|' + (d.ref || ''); }
+/** 그 노트(일일 노트)의 대기 칸 — 지금 값을 담음. 보낼 때는 그때 담긴 값을 보냄 (그새 다른 노트로 가도 섞이지 않음) */
+function _nbPendOf(d) {
+  var k = _nbKeyOf(d), p = NB.pend[k];
+  if (!p) p = NB.pend[k] = d.id ? { key: k, k: 'n', id: d.id, f: {} } : { key: k, k: 'd', date: d.date, ref: d.ref || '', f: {} };
+  delete NB.err[k];
+  if (d.id) { p.title = d.title; p.body = d.body; p.ink = d.ink; } else { p.body = d.body; p.base = d.srv || ''; }
+  return p;
+}
 function _nbChanged(what) {
-  if (NB.daily1) { NB.dirty.daily = true; NB.daily1.body = _nbSrc().value; }
-  else if (NB.cur) {
-    if (what === 'body') NB.cur.body = _nbSrc().value;
-    if (what === 'title') NB.cur.title = document.getElementById('nbTitle').value;
-    NB.dirty[what] = true;
-    _nbDraft(NB.cur.id, { rev: NB.cur.rev, title: NB.cur.title, body: NB.cur.body, t: Date.now() });
-  } else return;
-  _nbState('dirty');
+  var d = _nbDoc(); if (!d) return;
+  if (NB.daily1) d.body = _nbSrc().value;
+  else {
+    if (what === 'body') d.body = _nbSrc().value;
+    if (what === 'title') d.title = document.getElementById('nbTitle').value;
+  }
+  var p = _nbPendOf(d);
+  if (d.id) p.f[what] = 1;
+  _nbDraftSoon();
+  _nbStateCur();
   _nbQueue(what === 'ink' ? 1200 : 800);
 }
+function _nbHasPend() { return Object.keys(NB.pend).length > 0; }
+function _nbSendable() { return Object.keys(NB.pend).filter(function (k) { return k !== NB.conflictKey && !NB.err[k]; }); }
 function _nbQueue(ms) { clearTimeout(NB.timer); NB.timer = setTimeout(function () { NB.timer = null; _nbSave(); }, ms); }
-function _nbFlush(now) { if (NB.timer || now) { clearTimeout(NB.timer); NB.timer = null; return _nbSave(); } return NB.saving || Promise.resolve(); }
+/** 지금 바로 보내기 — 늘 끝나는(실패해도 resolve) 약속을 돌려줌 */
+function _nbFlush() { clearTimeout(NB.timer); NB.timer = null; return _nbSave(); }
+/* 임시 보관 — 치는 동안 0.7초에 한 번만 (40만 자를 키마다 쓰지 않게) */
+function _nbDraftSoon() { if (!NB.dtimer) NB.dtimer = setTimeout(_nbDraftAll, 700); }
+function _nbDraftAll() { clearTimeout(NB.dtimer); NB.dtimer = null; Object.keys(NB.pend).forEach(function (k) { _nbDraftPut(NB.pend[k]); }); }
+function _nbDraftPut(p) {
+  if (!p) return;
+  if (p.k === 'd') { _nbDDraft(p.date, p.ref, { body: p.body, base: p.base || '', at: Date.now() }); return; }
+  var o = { rev: NB.revs[p.id], title: p.title, body: p.body, t: Date.now() };
+  if (p.f.ink || p.force) o.ink = p.ink;
+  _nbDraft(p.id, o);
+}
+/** 보낼 주소 · 내용 */
+function _nbReq(j) {
+  if (j.k === 'd') return { url: '/api/my-work/notes', body: { date: j.date, ref: j.ref, body: j.body } };
+  var b = { baseRev: NB.revs[j.id] };
+  if (j.force) { b.force = true; b.title = j.title; b.body = j.body; b.ink = j.ink; }
+  else { if (j.f.title) b.title = j.title; if (j.f.body) b.body = j.body; if (j.f.ink) b.ink = j.ink; }
+  return { url: '/api/notebook/notes/' + encodeURIComponent(j.id), body: b };
+}
 function _nbSave() {
-  if (NB.saving) { return NB.saving.then(function () { if (Object.keys(NB.dirty).length) return _nbSave(); }); }
-  var keys = Object.keys(NB.dirty);
-  if (!keys.length || NB.conflict) { if (!NB.conflict) _nbState('saved'); return Promise.resolve(); }
-  NB.dirty = {};
-  var p;
-  if (NB.daily1 && keys.indexOf('daily') >= 0) {
-    var d = NB.daily1;
-    p = apiFetch('/api/my-work/notes', { method: 'PUT', body: JSON.stringify({ date: d.date, ref: d.ref, body: d.body }) });
-  } else if (NB.cur) {
-    var n = NB.cur, body = { baseRev: n.rev };
-    if (keys.indexOf('title') >= 0) body.title = n.title;
-    if (keys.indexOf('body') >= 0) body.body = n.body;
-    if (keys.indexOf('ink') >= 0) body.ink = n.ink;
-    var id = n.id;
-    p = apiFetch('/api/notebook/notes/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(body) }).then(function (r) {
-      var o = r.data;
-      if (NB.cur && NB.cur.id === id) { NB.cur.rev = o.rev; NB.cur.updatedAt = o.updatedAt; NB.cur.words = o.words; var u = document.getElementById('nbUpd'); if (u) u.textContent = '고침 ' + _nbWhen(o.updatedAt); }
-      if (!Object.keys(NB.dirty).length) _nbDraft(id, null);
-      _nbListUpdate(o, body);
+  if (NB.saving) return NB.saving.then(function () { return _nbSendable().length ? _nbSave() : null; });
+  var keys = _nbSendable();
+  if (!keys.length) { _nbStateCur(); return Promise.resolve(); }
+  clearTimeout(NB.retryT); NB.retryT = null;
+  var jobs = keys.map(function (k) { var j = NB.pend[k]; delete NB.pend[k]; NB.sending[k] = 1; return j; });
+  var again = false;
+  _nbStateCur();
+  NB.saving = jobs.reduce(function (pr, j) {
+    return pr.then(function () {
+      var q = _nbReq(j);
+      return apiFetch(q.url, { method: 'PUT', body: JSON.stringify(q.body) }).then(function (r) {
+        if (!r) throw new Error('로그인이 끝났습니다');
+        _nbDone(j, r.data, q.body);
+      }).catch(function (e) { if (_nbFail(j, e)) again = true; }).then(function () { delete NB.sending[j.key]; });
     });
-  } else p = Promise.resolve();
-  _nbState('saving');
-  NB.saving = p.then(function () {
+  }, Promise.resolve()).then(function () {
     NB.saving = null;
-    _nbState(Object.keys(NB.dirty).length ? 'dirty' : 'saved');
-  }, function (e) {
-    NB.saving = null;
-    if (e && e.status === 409) { _nbShowConflict(e.data && e.data.data); return; }
-    keys.forEach(function (k) { NB.dirty[k] = true; });   // 다시 시도할 수 있게
-    if (!navigator.onLine || !e.status) { _nbState('offline'); _nbQueue(8000); }
-    else { _nbState('error', _nbErr(e)); }
+    if (again) {
+      var ms = NB_RETRY[Math.min(NB.retryN++, NB_RETRY.length - 1)];
+      NB.retryT = setTimeout(function () { NB.retryT = null; _nbSave(); }, ms);
+    } else if (!_nbHasPend()) NB.retryN = 0;
+    _nbStateCur();
   });
   return NB.saving;
+}
+/** 잘 닿음 */
+function _nbDone(j, o, sent) {
+  if (j.k === 'd') {
+    if (NB.daily1 && _nbKeyOf(NB.daily1) === j.key) NB.daily1.srv = j.body;
+    if (NB.pend[j.key]) NB.pend[j.key].base = j.body;
+    var dd = _nbDDraft(j.date, j.ref); if (dd && (!NB.pend[j.key] || dd.body === j.body)) _nbDDraft(j.date, j.ref, null);
+    return;
+  }
+  NB.revs[j.id] = o.rev;
+  if (!NB.pend[j.key]) _nbDraft(j.id, null);
+  if (j.force) _nbToast('✓ 내 것으로 저장했습니다');
+  try {
+    if (NB.cur && NB.cur.id === j.id) { NB.cur.rev = o.rev; NB.cur.updatedAt = o.updatedAt; NB.cur.words = o.words; var u = document.getElementById('nbUpd'); if (u) u.textContent = '고침 ' + _nbWhen(o.updatedAt); }
+    _nbListUpdate(o, sent);
+  } catch (_) {}
+}
+/** 못 닿음 — 다시 보낼 것이면 true */
+function _nbFail(j, e) {
+  var st = e && e.status, srv = e && e.data && e.data.data, cur = !!(_nbDoc() && _nbKeyOf(_nbDoc()) === j.key);
+  var name = j.k === 'd' ? (+j.date.slice(5, 7)) + '/' + (+j.date.slice(8, 10)) + ' 일일 노트' : '"' + (j.title || '제목 없음').slice(0, 30) + '"';
+  if (j.k === 'n' && st === 409) {
+    if (srv && _nbSameAs(srv, j)) { _nbDone(j, srv, {}); return false; }   // 시간 초과 뒤 다시 보낸 것 — 실은 이미 저장됨
+    _nbBack(j); _nbDraftPut(NB.pend[j.key]);   // 임시 보관은 지우지 않음
+    if (NB.cur && NB.cur.id === j.id) { NB.conflictKey = j.key; _nbShowConflict(srv); }
+    else { NB.err[j.key] = '다른 곳에서 고침'; _nbToast('⚠️ ' + name + ' 노트를 다른 곳에서 먼저 고쳐 저장하지 못했습니다 — 다시 열면 고를 수 있습니다', 'warn'); }
+    return false;
+  }
+  _nbBack(j); _nbDraftPut(NB.pend[j.key]);
+  if (j.k === 'n' && (st === 410 || st === 404 || st === 403)) {
+    delete NB.pend[j.key];   // 다시 보내도 안 됨 — 글은 이 기기 임시 보관에 남음
+    _nbToast('❌ ' + name + ' — ' + (st === 410 ? '휴지통에 있는 노트라' : '고칠 수 없는 노트라') + ' 저장하지 않았습니다 (쓴 글은 이 기기에 남겨 둠)', 'error');
+    return false;
+  }
+  if (!st || st >= 500 || st === 408 || st === 429) {
+    if (!NB.retryN) _nbToast('⚠️ 노트 저장이 잠깐 안 됩니다 — 이 기기에 두고 곧 다시 보냅니다', 'warn');
+    return true;
+  }
+  NB.err[j.key] = _nbErr(e);   // 고쳐 쓰기 전엔 다시 보내지 않음 (예: 너무 긺)
+  if (!cur) _nbToast('❌ ' + name + ' 저장 못 함 — ' + _nbErr(e) + ' (글은 이 기기에 남아 있습니다)', 'error');
+  return false;
+}
+/** 못 보낸 것을 다시 대기열로 — 그새 더 쓴 게 있으면 그 값이 이기고 고친 칸 표시만 합침 */
+function _nbBack(j) {
+  var p = NB.pend[j.key];
+  if (!p) { NB.pend[j.key] = j; return; }
+  Object.keys(j.f).forEach(function (f) { p.f[f] = 1; });
+  if (j.force) p.force = true;
+}
+function _nbCanon(v) {
+  if (Array.isArray(v)) return v.map(_nbCanon);
+  if (v && typeof v === 'object') { var o = {}; Object.keys(v).sort().forEach(function (k) { o[k] = _nbCanon(v[k]); }); return o; }
+  return v;
+}
+function _nbSameAs(s, j) {
+  var all = !!j.force;
+  return ((!all && !j.f.title) || (s.title || '') === (j.title || '')) && ((!all && !j.f.body) || (s.body || '') === (j.body || '')) &&
+    ((!all && !j.f.ink) || JSON.stringify(_nbCanon(s.ink || {})) === JSON.stringify(_nbCanon(j.ink || {})));
+}
+/** 지금 보는 노트의 저장 표시 */
+function _nbStateCur() {
+  var d = _nbDoc(); if (!d) return;
+  var k = _nbKeyOf(d);
+  if (NB.conflict && NB.conflictKey === k) return _nbState('error', '다른 곳에서 고침');
+  if (NB.err[k]) return _nbState('error', NB.err[k]);
+  if (NB.sending[k]) return _nbState('saving');
+  if (NB.pend[k]) return NB.retryT ? _nbState('offline', navigator.onLine === false ? '연결 끊김 — 이 기기에 보관 중' : '저장 안 됨 — 곧 다시 보냄') : _nbState('dirty');
+  _nbState('saved');
+}
+/** 창을 닫을 때 — 남은 글을 keepalive 로 (64KB 넘는 글은 임시 보관으로만) */
+function _nbFlushNow() {
+  clearTimeout(NB.timer); NB.timer = null;
+  _nbDraftAll();
+  if (typeof _accessToken === 'undefined' || !_accessToken) return;
+  _nbSendable().forEach(function (k) {
+    var j = NB.pend[k], q = _nbReq(j), s = JSON.stringify(q.body);
+    if (typeof Blob !== 'undefined' && new Blob([s]).size > 60000) return;
+    try {
+      fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + q.url, { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _accessToken }, body: s })
+        .then(function (r) { return r.ok ? r.json() : null; }).then(function (o) { if (o && NB.pend[k] === j) { delete NB.pend[k]; _nbDone(j, o.data, q.body); } }).catch(function () {});
+    } catch (_) {}
+  });
+}
+/** 로그아웃 — 화면 · 기억을 비움 (다음 사람에게 보이지 않게). 못 보낸 글은 그 사람 이름의 임시 보관에 남음 */
+function nbReset() {
+  try { _nbFlushNow(); } catch (_) {}
+  try { _nbInkStop(); _nbOverStop(); } catch (_) {}
+  clearTimeout(NB.timer); clearTimeout(NB.retryT); clearTimeout(NB.dtimer);
+  Object.keys(NB.blobs).forEach(function (k) { Promise.resolve(NB.blobs[k]).then(function (u) { if (/^blob:/.test(u)) URL.revokeObjectURL(u); }).catch(function () {}); });
+  Object.assign(NB, { inited: false, meta: null, list: [], daily: [], q: '', cur: null, daily1: null, saving: null, timer: null, conflict: null, conflictKey: null,
+    pend: {}, revs: {}, err: {}, sending: {}, retryN: 0, retryT: null, dtimer: null, openSeq: NB.openSeq + 1, blobs: {}, pendingOpen: null, toc: null, _draft: null, inkEd: null, inkId: null, overEd: null });
+  if (typeof NBP !== 'undefined') { NBP.ai = null; NBP.sp = null; NBP.open = {}; NBP.titles = null; NBP.kindOver = null; NBP.filter = ''; }
+  var r = document.getElementById('mNotebook'); if (r) r.innerHTML = '';
+  var q = document.getElementById('nbQuick'); if (q) q.remove();
+}
+/** 목록 미리보기 — 서버 snippet() 과 같은 방식 (v13.332: 꾸밈 기호 자리에 빈칸이 생기지 않게) */
+function _nbSnippet(body) {
+  return String(body || '').slice(0, 6000)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s*\|?[\s:|-]*-{3,}[\s:|-]*\|?\s*$/gm, ' ')
+    .replace(/^::ink\[[^\]]*\]\s*$/gm, '✍️ ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '🖼 ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+|^>\s*(\[![A-Z]+\]\s*)?|^\s*[-*+]\s+(\[[ xX]\]\s+)?|^\s*\d+\.\s+/gm, '')
+    .replace(/[*_`~=|]/g, '')
+    .replace(/\s+/g, ' ').trim().slice(0, 160);
 }
 /** 목록 한 줄만 고치기 (다시 받지 않고) */
 function _nbListUpdate(o, sent) {
   var it = NB.list.filter(function (x) { return x.id === o.id; })[0];
   if (!it) return;
   Object.assign(it, { title: o.title, updatedAt: o.updatedAt, rev: o.rev, pinned: o.pinned, starred: o.starred, tags: o.tags, folderId: o.folderId, inbox: o.inbox, words: o.words, hasInk: o.hasInk });
-  if (sent && sent.body != null) it.snippet = NbMd.render(sent.body).html.replace(/<[^>]*>/g, ' ').replace(/&[a-z#0-9]+;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+  if (sent && sent.body != null) it.snippet = _nbSnippet(sent.body);
   var el = document.querySelector('#nbItems .nb-it[data-id="' + o.id + '"]');
   if (el) {
     var t = el.querySelector('.nb-it-t'); if (t) t.innerHTML = (it.starred ? '<span class="nb-star">★</span>' : '') + _nbE(_nbTitleOf(it));
@@ -905,42 +1081,64 @@ function _nbSetTags(tags, refocus) {
 /* 충돌 · 임시 보관 */
 function _nbShowConflict(server) {
   NB.conflict = server || true;
-  _nbState('error', '다른 곳에서 고침');
+  _nbStateCur();
   var b = document.getElementById('nbBars'); if (!b) return;
-  b.innerHTML = '<div class="nb-bar err" role="alert">⚠️ 다른 창이나 기기에서 이 노트를 먼저 고쳤습니다' + (server && server.updatedAt ? ' (' + _nbWhen(server.updatedAt) + ')' : '') + '.' +
+  b.innerHTML = '<div class="nb-bar err" role="alert">⚠️ 다른 창이나 기기에서 이 노트를 먼저 고쳤습니다' + (server && server.updatedAt ? ' (' + _nbWhen(server.updatedAt) + ')' : '') + '. 내 글은 이 기기에 남아 있습니다.' +
     '<button class="nb-btn sm" data-nb="cf-reload">그쪽 것 불러오기</button><button class="nb-btn sm" data-nb="cf-mine">내 것으로 덮기</button><button class="nb-btn sm" data-nb="cf-copy">내 것을 사본으로</button></div>';
 }
 function _nbConflict(how) {
-  var server = NB.conflict && NB.conflict.id ? NB.conflict : null, mine = NB.cur;
-  NB.conflict = null;
+  var server = NB.conflict && NB.conflict.id ? NB.conflict : null, mine = NB.cur; if (!mine) return;
+  var key = 'n:' + mine.id;
+  NB.conflict = null; NB.conflictKey = null; delete NB.err[key];
   var bars = document.getElementById('nbBars'); if (bars) bars.innerHTML = '';
   if (how === 'reload') {
-    _nbDraft(mine.id, null); NB.dirty = {};
-    if (server) { NB.cur = server; _nbDrawMain(); } else { var id = mine.id; NB.cur = null; _nbOpen(id); }
+    delete NB.pend[key]; _nbDraft(mine.id, null);
+    if (server) { NB.cur = server; NB.revs[server.id] = server.rev; _nbDrawMain(); } else { NB.cur = null; _nbOpen(mine.id); }
     return;
   }
-  if (how === 'mine') {
-    NB.dirty = { title: true, body: true, ink: true };
-    apiFetch('/api/notebook/notes/' + encodeURIComponent(mine.id), { method: 'PUT', body: JSON.stringify({ title: mine.title, body: mine.body, ink: mine.ink, force: true }) }).then(function (r) {
-      NB.dirty = {}; NB.cur.rev = r.data.rev; _nbDraft(mine.id, null); _nbState('saved'); _nbToast('✓ 내 것으로 저장했습니다');
-    }).catch(function (e) { _nbToast('❌ ' + _nbErr(e), 'error'); });
-    return;
+  if (how === 'mine') {   // 대기열로 — 앞 저장이 끝난 뒤 차례로 (따로 보내 엇갈리지 않게)
+    var p = _nbPendOf(mine); p.force = true; p.f = { title: 1, body: 1, ink: 1 };
+    _nbFlush(); return;
   }
+  delete NB.pend[key];
   apiFetch('/api/notebook/notes', { method: 'POST', body: JSON.stringify({ title: (mine.title || '제목 없음') + ' (내 사본)', body: mine.body, ink: mine.ink, tags: mine.tags, folderId: mine.folderId }) }).then(function (r) {
-    _nbDraft(mine.id, null); NB.dirty = {};
+    _nbDraft(mine.id, null);
     NB.cur = null; _nbToast('✓ 사본으로 저장했습니다'); _nbLoadList(); _nbOpen(r.data.id);
-  }).catch(function (e) { _nbToast('❌ ' + _nbErr(e), 'error'); });
+  }).catch(function (e) {
+    _nbPendOf(mine).f = { title: 1, body: 1, ink: 1 }; NB.conflictKey = key; _nbShowConflict(server);   // 다시 고를 수 있게
+    _nbToast('❌ ' + _nbErr(e), 'error');
+  });
 }
-function _nbShowDraftBar(d) {
+/** 열 때 이 기기에 남은 글이 있으면 — 서버 글과 같으면 지우고, 다르면 고르게 */
+function _nbDraftCheck(n) {
+  var d = _nbDraft(n.id); if (!d) return;
+  var same = (d.title == null || d.title === n.title) && (d.body == null || d.body === n.body) && (!d.ink || JSON.stringify(_nbCanon(d.ink)) === JSON.stringify(_nbCanon(n.ink || {})));
+  if (same || _nbRO()) { _nbDraft(n.id, null); return; }
+  _nbShowDraftBar(d, d.rev != null && d.rev !== n.rev);
+}
+function _nbShowDraftBar(d, moved) {
   var b = document.getElementById('nbBars'); if (!b) return;
   NB._draft = d;
-  b.innerHTML = '<div class="nb-bar warn">💾 저장되지 못한 글이 이 기기에 남아 있습니다 (' + _nbWhen(d.t) + ').<button class="nb-btn sm" data-nb="draft-use">되살리기</button><button class="nb-btn sm" data-nb="draft-drop">버리기</button></div>';
+  b.innerHTML = '<div class="nb-bar warn" role="alert">💾 저장되지 못한 글이 이 기기에 남아 있습니다 (' + _nbWhen(d.t) + ')' +
+    (moved ? ' — 그 뒤 다른 곳에서 고친 글이 있어, 되살리면 그 글을 덮습니다' : '') + '.' +
+    '<button class="nb-btn sm" data-nb="draft-use">되살리기</button>' + (moved ? '<button class="nb-btn sm" data-nb="draft-copy">사본으로</button>' : '') +
+    '<button class="nb-btn sm" data-nb="draft-drop">버리기</button></div>';
 }
 function _nbDraftUse() {
   var d = NB._draft; if (!d || !NB.cur) return;
-  NB.cur.title = d.title; NB.cur.body = d.body;
+  if (d.title != null) NB.cur.title = d.title;
+  if (d.body != null) NB.cur.body = d.body;
+  if (d.ink) NB.cur.ink = d.ink;
+  NB._draft = null;
   _nbDrawMain();
-  NB.dirty.title = true; NB.dirty.body = true; _nbQueue(10);
+  var p = _nbPendOf(NB.cur); p.f.title = 1; p.f.body = 1; if (d.ink) p.f.ink = 1;
+  _nbQueue(10);
+}
+function _nbDraftCopy() {
+  var d = NB._draft, n = NB.cur; if (!d || !n) return;
+  apiFetch('/api/notebook/notes', { method: 'POST', body: JSON.stringify({ title: (d.title || n.title || '제목 없음') + ' (이 기기에 남은 글)', body: d.body != null ? d.body : n.body, ink: d.ink || n.ink, tags: n.tags, folderId: n.folderId }) }).then(function (r) {
+    _nbDraft(n.id, null); NB._draft = null; _nbToast('✓ 사본으로 저장했습니다'); _nbLoadList(); _nbOpen(r.data.id);
+  }).catch(function (e) { _nbToast('❌ ' + _nbErr(e), 'error'); });
 }
 
 /* ═══ 새 노트 · 양식 ═══ */
@@ -958,13 +1156,13 @@ function nbNewFrom(body, title, o) {
   _nbFlush();
   var go = function () {
     return apiFetch('/api/notebook/notes', { method: 'POST', body: JSON.stringify({ title: title || '', body: body || '', folderId: o.folderId || null, inbox: !!o.inbox, tags: o.tags || [], ink: o.ink || undefined }) }).then(function (r) {
-      NB.cur = r.data; NB.daily1 = null; NB.dirty = {};
+      NB.cur = r.data; NB.daily1 = null; NB.revs[r.data.id] = r.data.rev; NB.openSeq++;
       if (typeof NBP !== 'undefined') { NBP.titles = null; NBP.ai = null; NBP.sp = null; NBP.open = {}; NBP.kindOver = null; }
       if (NB.view === 'trash' || NB.view === 'shared' || NB.view === 'daily' || (NB.view === 'inbox' && !o.inbox)) { NB.view = o.inbox ? 'inbox' : 'all'; NB.folder = o.folderId || null; }
-      NB.list.unshift(Object.assign({ snippet: NbMd.render(body || '').html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) }, r.data));
+      NB.list.unshift(Object.assign({ snippet: _nbSnippet(body) }, r.data));
       _nbDrawList(); _nbLoadMeta();
       if (NB.mode === 'view') NB.mode = 'split';
-      _nbDrawMain(); _nbSetPane('note'); _nbLS('last', r.data.id);
+      _nbDrawMain(); _nbSetPane('note'); _nbLS('last:' + _nbUid(), r.data.id);
       var tt = document.getElementById('nbTitle'), s = _nbSrc();
       if (title && /— $/.test(title)) { tt.focus(); tt.setSelectionRange(tt.value.length, tt.value.length); }
       else if (!title) tt.focus();
@@ -1085,8 +1283,7 @@ function _nbFolderMenu(fid, anchor) {
 
 /* ═══ 휴지통 ═══ */
 function _nbTrash(id) {
-  _nbFlush();
-  apiFetch('/api/notebook/notes/' + encodeURIComponent(id), { method: 'DELETE' }).then(function () {
+  _nbFlush().then(function () { return apiFetch('/api/notebook/notes/' + encodeURIComponent(id), { method: 'DELETE' }); }).then(function () {
     _nbToastUndo('🗑 휴지통으로 옮겼습니다', function () { _nbRestore(id); });
     if (NB.cur && NB.cur.id === id) { NB.cur = null; _nbDrawMain(); _nbSetPane('list'); }
     _nbLoadMeta(); _nbLoadList();
@@ -1131,28 +1328,59 @@ function _nbUpload(f) {
   var name = f.name && f.name !== 'image.png' ? f.name : '사진-' + new Date().toTimeString().slice(0, 8).replace(/:/g, '') + '.png';
   var ph = '⏳ ' + name + ' 올리는 중…';
   _nbInsert((img ? '![' : '[') + ph + '](uploading)' + (img ? '\n' : ''));
-  var noteId = NB.cur ? NB.cur.id : '';
-  var xhr = new XMLHttpRequest();
-  xhr.open('POST', (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/notebook/files?name=' + encodeURIComponent(name) + (noteId ? '&noteId=' + encodeURIComponent(noteId) : ''));
-  xhr.setRequestHeader('Authorization', 'Bearer ' + _accessToken);
-  xhr.setRequestHeader('Content-Type', f.type || 'application/octet-stream');
-  xhr.upload.onprogress = function (e) { if (e.lengthComputable) _nbState('saving'); };
-  xhr.onload = function () {
-    var src = _nbSrc(); if (!src) return;
-    var mark = (img ? '![' : '[') + ph + '](uploading)';
-    var at = src.value.indexOf(mark);
-    if (xhr.status >= 200 && xhr.status < 300) {
-      var d = JSON.parse(xhr.responseText).data;
-      var rep = img ? '![' + name.replace(/[[\]]/g, '') + '](nbf:' + d.id + ')' : '[📎 ' + name.replace(/[[\]]/g, '') + '](nbf:' + d.id + ')';
-      if (at >= 0) { var a0 = src.selectionStart, b0 = src.selectionEnd; src.setSelectionRange(at, at + mark.length); _nbInsert(rep); var dl = rep.length - mark.length; src.setSelectionRange(a0 > at ? a0 + dl : a0, b0 > at ? b0 + dl : b0); }
-    } else {
-      var msg = '올리지 못했습니다'; try { msg = JSON.parse(xhr.responseText).message || msg; } catch (_) {}
-      _nbToast('❌ ' + name + ' — ' + msg, 'error');
-      if (at >= 0) { src.setSelectionRange(at, at + mark.length + (img ? 1 : 0)); _nbInsert(''); }
+  var noteId = NB.cur ? NB.cur.id : '', key0 = _nbKeyOf(_nbDoc());
+  var mark = (img ? '![' : '[') + ph + '](uploading)';
+  function finish(rep) {   // rep: 바꿀 글 ('' 이면 자리표 지움)
+    var d = _nbDoc(), src = _nbSrc();
+    if (!d || _nbKeyOf(d) !== key0 || !src) { _nbFixAway(key0, mark + (rep ? '' : img ? '\n' : ''), rep); return; }
+    var at = src.value.indexOf(mark); if (at < 0) return;
+    var len = mark.length + (!rep && img && src.value.charAt(at + mark.length) === '\n' ? 1 : 0);
+    var a0 = src.selectionStart, b0 = src.selectionEnd, keep = document.activeElement === src;
+    src.setSelectionRange(at, at + len); _nbInsert(rep);
+    var dl = rep.length - len; src.setSelectionRange(a0 > at ? a0 + dl : a0, b0 > at ? b0 + dl : b0);
+    if (!keep) src.blur();
+  }
+  var tried = false;
+  function send() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/notebook/files?name=' + encodeURIComponent(name) + (noteId ? '&noteId=' + encodeURIComponent(noteId) : ''));
+    xhr.setRequestHeader('Authorization', 'Bearer ' + (typeof _accessToken !== 'undefined' ? _accessToken : ''));
+    xhr.setRequestHeader('Content-Type', f.type || 'application/octet-stream');
+    xhr.onload = function () {
+      if (xhr.status === 401 && !tried && typeof _tryRefresh === 'function') { tried = true; _tryRefresh().then(function (ok) { if (ok) send(); else { _nbToast('❌ 로그인이 끝나 ' + name + ' 을(를) 올리지 못했습니다', 'error'); finish(''); } }); return; }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        var d = JSON.parse(xhr.responseText).data, nm = name.replace(/[[\]]/g, '');
+        finish(img ? '![' + nm + '](nbf:' + d.id + ')' : '[📎 ' + nm + '](nbf:' + d.id + ')');
+      } else {
+        var msg = '올리지 못했습니다'; try { msg = JSON.parse(xhr.responseText).message || msg; } catch (_) {}
+        _nbToast('❌ ' + name + ' — ' + msg, 'error');
+        finish('');
+      }
+    };
+    xhr.onerror = function () { _nbToast('❌ 연결이 끊겨 ' + name + ' 을(를) 올리지 못했습니다', 'error'); finish(''); };
+    xhr.send(f);
+  }
+  send();
+}
+/** 올리는 사이 다른 노트로 갔을 때 — 그 노트(대기 중인 글 또는 서버 글)의 자리표를 바꿈 */
+function _nbFixAway(key, mark, rep) {
+  var p = NB.pend[key];
+  if (p && p.body != null && p.body.indexOf(mark) >= 0) { p.body = p.body.replace(mark, rep); if (p.k === 'n') p.f.body = 1; _nbDraftPut(p); _nbQueue(300); return; }
+  (NB.saving || Promise.resolve()).then(function () {
+    if (key.charAt(0) === 'n') {
+      var id = key.slice(2);
+      return apiFetch('/api/notebook/notes/' + encodeURIComponent(id)).then(function (r) {
+        var n = r.data; if (!n || (n.body || '').indexOf(mark) < 0) return;
+        return apiFetch('/api/notebook/notes/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify({ baseRev: n.rev, body: n.body.replace(mark, rep) }) }).then(function (r2) { NB.revs[id] = r2.data.rev; _nbListUpdate(r2.data); });
+      });
     }
-  };
-  xhr.onerror = function () { _nbToast('❌ 연결이 끊겨 ' + name + ' 을(를) 올리지 못했습니다', 'error'); };
-  xhr.send(f);
+    var m = /^d:(\d{4}-\d{2}-\d{2})\|(.*)$/.exec(key); if (!m) return;
+    return apiFetch('/api/my-work/notes?date=' + m[1]).then(function (r) {
+      var b = null; (r.data.notes || []).forEach(function (n) { if (n.ref === m[2]) b = n.body; });
+      if (b == null || b.indexOf(mark) < 0) return;
+      return apiFetch('/api/my-work/notes', { method: 'PUT', body: JSON.stringify({ date: m[1], ref: m[2], body: b.replace(mark, rep) }) });
+    });
+  }).catch(function () { _nbToast('⚠️ 올린 파일 자리를 그 노트에 넣지 못했습니다 — 그 노트에서 다시 붙여 주세요', 'warn'); });
 }
 function _nbZoomImg(img) {
   if (!img.src) return;
@@ -1169,7 +1397,7 @@ function _nbInkNew() {
   _nbInk().blocks[id] = { h: 360, s: [] };
   if (NB.mode === 'view') { var s = _nbSrc(); s.setSelectionRange(s.value.length, s.value.length); }
   _nbBlock('::ink[' + id + ']\n');
-  NB.dirty.ink = true;
+  _nbChanged('ink');
   if (NB.mode === 'edit') _nbSetMode('split');
   setTimeout(function () { _nbInkStart(id); }, 30);
 }
@@ -1329,7 +1557,7 @@ function nbVersions() {
         if (e.target.closest('[data-x="restore"]') && cur) {
           if (!confirm('이 모습으로 되돌릴까요? 지금 모습도 기록에 남아서 다시 돌아올 수 있습니다.')) return;
           apiFetch('/api/notebook/notes/' + encodeURIComponent(id) + '/versions/' + cur + '/restore', { method: 'POST' }).then(function (r) {
-            md.close(); NB.cur = r.data; NB.dirty = {}; _nbDraft(id, null); _nbDrawMain(); _nbLoadList(); _nbToast('🕘 되돌렸습니다');
+            md.close(); delete NB.pend['n:' + id]; NB.revs[id] = r.data.rev; NB.cur = r.data; _nbDraft(id, null); _nbDrawMain(); _nbLoadList(); _nbToast('🕘 되돌렸습니다');
           }).catch(function (e2) { _nbToast('❌ ' + _nbErr(e2), 'error'); });
         }
       });
@@ -1473,20 +1701,24 @@ function nbQuickOpen() {
     '<div class="nb-quick-f"><small>Alt+N · 텔레그램 /memo</small><span class="nb-sp"></span><button class="nb-btn" data-q="open">📓 노트북</button><button class="nb-btn pri" data-q="save">저장</button></div>';
   document.body.appendChild(el);
   var ta = el.querySelector('textarea'), ink = null, blk = { h: 260, s: [] };
-  try { var dr = localStorage.getItem('nb-quick-draft'); if (dr) ta.value = dr; } catch (_) {}
-  ta.addEventListener('input', function () { try { localStorage.setItem('nb-quick-draft', ta.value); } catch (_) {} });
+  var qk = 'nb-quick-draft:' + _nbUid(), busy = false;
+  try { localStorage.removeItem('nb-quick-draft'); } catch (_) {}   // 옛 이름 (사람 구분 없음) 은 지움
+  try { var dr = localStorage.getItem(qk); if (dr) ta.value = dr; } catch (_) {}
+  ta.addEventListener('input', function () { try { localStorage.setItem(qk, ta.value); } catch (_) {} });
   function close() { if (ink) ink.destroy(); el.remove(); document.removeEventListener('keydown', key, true); }
   function save() {
     var body = ta.value.trim(), has = blk.s.length > 0;
     if (!body && !has) { close(); return; }
+    if (busy) return; busy = true;
+    var sb = el.querySelector('[data-q="save"]'); if (sb) { sb.disabled = true; sb.textContent = '저장 중…'; }
     var id = _nbRid(), data = { inbox: true, source: 'quick', body: body + (has ? (body ? '\n\n' : '') + '::ink[' + id + ']\n' : '') };
     if (has) { data.ink = { blocks: {} }; data.ink.blocks[id] = blk; }
     apiFetch('/api/notebook/notes', { method: 'POST', body: JSON.stringify(data) }).then(function () {
-      try { localStorage.removeItem('nb-quick-draft'); } catch (_) {}
+      try { localStorage.removeItem(qk); } catch (_) {}
       _nbToast('📥 낙서장에 적었습니다');
       close();
       if (NB.inited) { _nbLoadMeta(); if (NB.view === 'inbox') _nbLoadList(); }
-    }).catch(function (e) { _nbToast('❌ 저장하지 못했습니다 — ' + _nbErr(e) + ' (글은 이 기기에 남겨 두었습니다)', 'error'); });
+    }).catch(function (e) { busy = false; if (sb) { sb.disabled = false; sb.textContent = '저장'; } _nbToast('❌ 저장하지 못했습니다 — ' + _nbErr(e) + ' (글은 이 기기에 남겨 두었습니다)', 'error'); });
   }
   function key(e) {
     if (!el.isConnected) return;
@@ -1508,8 +1740,14 @@ function nbQuickOpen() {
   });
   ta.focus();
 }
+/** Mac 에서는 Option+글자가 글자 입력(˜ · ∑ …) — 쓰는 칸 안에서는 단축키로 가로채지 않음 (v13.332) */
+function nbAltTyping(e) {
+  if (e.isComposing) return true;
+  if (!/Mac|iPhone|iPad/.test(navigator.platform || '')) return false;
+  var t = e.target; return !!(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)));
+}
 document.addEventListener('keydown', function (e) {
-  if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN')) {
+  if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN') && !nbAltTyping(e)) {
     if (typeof currentUser === 'undefined' || !currentUser) return;
     e.preventDefault();
     if (e.shiftKey && typeof curPage !== 'undefined' && curPage === 'notebook') nbNewFromTemplate('blank');
@@ -1541,3 +1779,9 @@ function nbBookOpen() {
   var cur = NB.daily1 ? 'daily:' + NB.daily1.date + '|' + (NB.daily1.ref || '') : NB.cur && NB.cur.id && !NB.cur.readOnly ? 'note:' + NB.cur.id : null;
   return wmBookOpen({ cur: cur, kind: cur ? null : NB.view === 'daily' ? 'daily' : 'note' });
 }
+
+/* 창 이벤트 (v13.332) — 닫을 때 남은 글 보내기 · 숨길 때 바로 저장 · 다시 연결되면 바로 */
+window.addEventListener('pagehide', function () { try { _nbFlushNow(); } catch (_) {} });
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { _nbDraftAll(); if (_nbSendable().length) _nbFlush(); } });
+window.addEventListener('beforeunload', function (e) { if (_nbSendable().length || NB.saving) { _nbDraftAll(); _nbFlush(); e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('online', function () { if (_nbHasPend()) { NB.retryN = 0; _nbFlush(); } });

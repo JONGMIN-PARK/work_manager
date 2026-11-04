@@ -691,7 +691,7 @@ function _nbpOpenAnywhere(id) {
   return new Promise(function (res) { var n = 0; (function wait() { if ((NB.cur && NB.cur.id === id && document.getElementById('nbSrc')) || ++n > 50) return res(); setTimeout(wait, 100); })(); });
 }
 document.addEventListener('keydown', function (e) {
-  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 'w' || e.key === 'W' || e.code === 'KeyW')) {
+  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 'w' || e.key === 'W' || e.code === 'KeyW') && !(typeof nbAltTyping === 'function' && nbAltTyping(e))) {
     if (typeof currentUser === 'undefined' || !currentUser || document.getElementById('nbWriteModal')) return;
     e.preventDefault(); nbWriteStart();
   }

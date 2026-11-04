@@ -185,12 +185,16 @@ function _wbBodyHtml(pg) {
   if (pg === null) return '<div class="mwn-e">지워졌거나 볼 수 없는 글입니다</div>';
   if (!String(pg.text || '').trim()) return '<div class="mwn-e">빈 노트</div>';
   if (pg.mode === 'md' && typeof NbMd !== 'undefined') return '<div class="mwns-md">' + NbMd.render(pg.text).html + '</div>';
+  // 일일 노트 줄 — ## 은 제목, - [ ] 은 빈 칸, - [x] 는 ✓ (v13.332: 기호를 그대로 보이지 않게)
   var lines = String(pg.text).split('\n').map(function (l) {
-    var m = /^- \[x\] (.*?)(?: ⟦[^⟧]*⟧)?$/.exec(l);
-    return m ? { t: m[1], todo: true } : { t: l };
+    var m = /^- \[[xX]\] (.*?)(?: ⟦[^⟧]*⟧)?$/.exec(l);
+    if (m) return { t: m[1], c: 'is-todo', i: '<i>✓</i>' };
+    if ((m = /^- \[ \] (.*?)(?: ⟦[^⟧]*⟧)?$/.exec(l))) return { t: m[1], c: 'is-pend', i: '<i class="mwns-box"></i>' };
+    if ((m = /^#{1,3}\s+(.*)$/.exec(l))) return { t: m[1], c: 'is-h' };
+    return { t: l };
   });
   while (lines.length && !lines[lines.length - 1].t) lines.pop();
-  return lines.map(function (r) { return '<div class="mwns-l' + (r.todo ? ' is-todo' : '') + '">' + (r.todo ? '<i>✓</i>' : '') + (_wbEsc(r.t) || '&nbsp;') + '</div>'; }).join('');
+  return lines.map(function (r) { return '<div class="mwns-l' + (r.c ? ' ' + r.c : '') + '">' + (r.i || '') + (_wbEsc(r.t) || '&nbsp;') + '</div>'; }).join('');
 }
 function _wbPaintBook() {
   var book = document.getElementById('mwnsBook');

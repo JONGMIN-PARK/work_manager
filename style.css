@@ -4739,6 +4739,8 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
 .mwns-l{font-size:13px;line-height:26px;min-height:26px;white-space:pre-wrap;word-break:break-word}
 .mwns-l.is-todo{color:#4b5563}
 .mwns-l i{font-style:normal;color:#16a34a;font-weight:800;margin-right:5px}
+.mwns-l.is-h{font-weight:800;color:#1f2937}
+.mwns-l i.mwns-box{display:inline-block;width:11px;height:11px;border:1.5px solid #9ca3af;border-radius:3px;vertical-align:-1px;margin-right:6px;box-sizing:border-box}
 .mwns-page .mwn-e{color:#9ca3af;font-size:12px;padding:10px 0}
 .mwns-page footer{display:flex;justify-content:space-between;padding:5px 14px 7px;font-size:10.5px;color:#a8a29e;border-top:1px solid #f0ead9}
 /* 책장 넘기기 — 두 장: 한 장이 등을 축으로 넘어감 (앞면 = 넘어가는 장, 뒷면 = 새 장) */
@@ -4820,3 +4822,33 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
 .mwns-md table{border-collapse:collapse;font-size:12px}
 .mwns-md td,.mwns-md th{border:1px solid #e7e0cf;padding:0 6px}
 .mwns-md hr{border:0;border-top:1px dashed #d6cfbd;margin:12px 0}
+
+/* v13.332 📓 노트북 — 좁은 화면(1366 노트북 · 코치 열림)에서 머리 단추가 겹치거나 서식 줄이 잘리지 않게: 편집 칸 폭 기준 */
+.nb-main{container-type:inline-size;container-name:nbmain}
+.nb-top>*{flex:none}
+.nb-top>.nb-crumb{flex:0 1 auto;min-width:0}
+.nb-top>.nb-state{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.nb-top>.nb-sp{flex:1 1 0;min-width:4px}
+.nb-tb{flex-wrap:wrap;row-gap:2px;overflow:visible}
+/* 보기 모드 — 글 꾸밈 단추는 숨기고 ✍️ 손글씨 · 🖍 마커만 */
+.nb-main:has(.nb-ed.nb-m-view) .nb-tb{justify-content:flex-end;padding-top:4px;padding-bottom:4px}
+.nb-main:has(.nb-ed.nb-m-view) .nb-tb>:not([data-fmt="ink"]):not([data-fmt="over"]){display:none}
+@container nbmain (max-width:900px){
+  .nb-seg button span,.nb-ib.nb-ai span,.nb-ib.nb-cbtn span{display:none}
+  .nb-seg button{padding:4px 8px}
+  .nb-crumb{max-width:130px}
+  .nb-foot-k{display:none}
+  .nb-tb{padding-left:12px;padding-right:12px}
+  .nb-tbb span{display:none}
+}
+@container nbmain (max-width:760px){
+  .nb-top{gap:3px;padding-left:8px;padding-right:8px}
+  .nb-ib{min-width:28px;padding:0 4px}
+  .nb-crumb{max-width:96px}
+}
+/* 코치를 열어 글 칸이 좁아지면 나란히 대신 쓰는 칸만 (미리보기는 코치가 짚어 줌) */
+@container nbmain (max-width:1000px){
+  .nb-main.coach-on .nb-ed.nb-m-split{grid-template-columns:minmax(0,1fr)}
+  .nb-main.coach-on .nb-ed.nb-m-split .nb-prev{display:none}
+  .nb-main.coach-on .nb-ed.nb-m-split .nb-src{border-right:0}
+}
