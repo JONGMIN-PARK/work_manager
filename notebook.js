@@ -164,6 +164,7 @@ function _nbDrawList() {
   var n = daily ? NB.daily.length : NB.list.length;
   lh.innerHTML = '<button class="nb-back" data-nb="to-side" aria-label="메뉴">☰</button><b class="nb-lh-t">' + _nbE(_nbListTitle()) + '</b><span class="nb-lh-n">' + n + '</span>' +
     (NB.view === 'trash' && n ? '<button class="nb-lh-b" data-nb="empty-trash">비우기</button>' : '') +
+    (n && typeof wmBookOpen === 'function' ? '<button class="nb-lh-b" data-nb="book" title="📖 펼쳐 보기 — 노트 · 일일 노트 · 업무일지 · 회의록을 책처럼 2~4장 나란히">📖</button>' : '') +
     (daily && n ? '<button class="nb-lh-b" data-nb="print-bundle" title="여러 날 일일 노트를 일일 업무 보고 양식으로 묶어 출력">🖨 묶어 출력</button>' : '') +
     (daily || NB.view === 'trash' ? '' : '<select class="nb-sort" id="nbSort" aria-label="정렬"><option value="updated"' + (NB.sort === 'updated' ? ' selected' : '') + '>고친 순</option><option value="created"' + (NB.sort === 'created' ? ' selected' : '') + '>만든 순</option><option value="title"' + (NB.sort === 'title' ? ' selected' : '') + '>제목 순</option></select>') +
     (daily || NB.view === 'trash' ? '' : '<button class="nb-lh-new" data-nb="new" title="새 노트" aria-label="새 노트">＋</button>');
@@ -312,6 +313,7 @@ function _nbDrawMain() {
     '<button class="nb-ib nb-cbtn' + (typeof NBP !== 'undefined' && NBP.coach ? ' on' : '') + '" data-nb="coach" title="✍️ 글쓰기 코치 — 고칠 곳을 이유 · 힌트 · 예시로" aria-pressed="' + !!(typeof NBP !== 'undefined' && NBP.coach) + '">✍️<span> 코치</span></button>' +
     (daily || trash ? '' : '<button class="nb-ib nb-shb' + (NB.cur.shareN ? ' on' : '') + '" data-nb="share" title="👥 공유 (읽기 전용)">👥' + (NB.cur.shareN ? '<small>' + NB.cur.shareN + '</small>' : '') + '</button>' +
       '<button class="nb-ib' + (NB.cur.pinned ? ' on' : '') + '" data-nb="pin" title="고정" aria-pressed="' + NB.cur.pinned + '">📌</button><button class="nb-ib' + (NB.cur.starred ? ' on' : '') + '" data-nb="star" title="즐겨찾기" aria-pressed="' + NB.cur.starred + '">' + (NB.cur.starred ? '★' : '☆') + '</button>') +
+    (shared || trash || typeof wmBookOpen !== 'function' ? '' : '<button class="nb-ib" data-nb="book" title="📖 펼쳐 보기 — 이 노트와 다른 노트를 책처럼 나란히" aria-label="펼쳐 보기">📖</button>') +
     (NB.cur && NB.cur.deletedAt ? '' : '<button class="nb-ib nb-prb" data-nb="print" title="🖨 출력 미리 보기 · 양식 (Ctrl+P)" aria-label="출력 미리 보기">🖨</button>') +
     '<button class="nb-ib" data-nb="focus" title="집중 모드 (Ctrl+Shift+F)">⤢</button>' +
     '<button class="nb-ib" data-nb="more" title="더 보기" aria-label="더 보기">⋯</button></div>';
@@ -544,6 +546,7 @@ function _nbClick(e) {
   else if (k === 'focus') _nbToggleFocus();
   else if (k === 'more') _nbMoreMenu(x);
   else if (k === 'print') nbPrintOpen();
+  else if (k === 'book') nbBookOpen();
   else if (k === 'print-bundle') nbPrintBundle(NB.view === 'daily' ? 'daily' : 'notes');
   else if (k === 'ai') nbAiOpen();
   else if (k === 'coach') nbpCoachToggle();
@@ -1523,4 +1526,12 @@ function nbSendToInbox(body, source) {
     if (NB.inited) { _nbLoadMeta(); if (NB.view === 'inbox') _nbLoadList(); }
     return r.data;
   }).catch(function (e) { _nbToast('❌ ' + _nbErr(e), 'error'); });
+}
+
+/* 📖 펼쳐 보기 (v13.326) — 보던 노트(일일 노트)부터, 목록이면 그 종류부터 */
+function nbBookOpen() {
+  if (typeof wmBookOpen !== 'function') return;
+  if (typeof _nbFlush === 'function') _nbFlush();
+  var cur = NB.daily1 ? 'daily:' + NB.daily1.date + '|' + (NB.daily1.ref || '') : NB.cur && NB.cur.id && !NB.cur.readOnly ? 'note:' + NB.cur.id : null;
+  return wmBookOpen({ cur: cur, kind: cur ? null : NB.view === 'daily' ? 'daily' : 'note' });
 }

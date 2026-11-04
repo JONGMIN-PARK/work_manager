@@ -4754,3 +4754,38 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
 .mwns-page footer{position:relative}
 @media (prefers-reduced-motion:reduce){.mwns-leaf.go,.mwns-page.mwns-in-r,.mwns-page.mwns-in-l,.mwns-page.mwns-bump-r,.mwns-page.mwns-bump-l{animation:none}}
 @media (max-width:700px){.mwns-book{grid-template-columns:repeat(var(--mwns-n,2),85%)}.mwns-side{width:100%}.mwns:not(.no-side) .mwns-book{display:none}.mwns-main{flex-direction:column}}
+/* ═══ v13.326 📖 펼쳐 보기 — 모든 노트 (note-book.js): 종류 칩 · 종류 표시 · 마크다운 종이 ═══ */
+.mwns-kinds{display:flex;flex-wrap:wrap;gap:4px}
+.mwns-kinds button{border:1px solid var(--bd);background:var(--bg-i);color:var(--t4);font:inherit;font-size:11px;padding:3px 8px;border-radius:12px;cursor:pointer;white-space:nowrap}
+.mwns-kinds button b{color:var(--t2);font-weight:700;margin-left:2px}
+.mwns-kinds button.on{border-color:var(--ac);background:var(--ac-bg);color:var(--ac-t)}
+.mwns-it b{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.mwns-it b em{font-style:normal}
+.mwns-it i{white-space:nowrap}
+.mwns-ph{align-items:center;gap:6px}
+.mwns-ph em{font-style:normal;font-size:14px}
+.mwns-ph b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.mwns-ph span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0}
+/* 종류마다 종이 머리 띠 색 */
+.mwns-page.k-note header{border-bottom-color:#93c5fd}
+.mwns-page.k-log header{border-bottom-color:#86efac}
+.mwns-page.k-meeting header{border-bottom-color:#c4b5fd}
+/* 마크다운 글 (노트 · 업무일지 · 회의록) — 공책 줄(26px)에 맞춤 */
+.mwns-md{font-size:13px;line-height:26px;color:#2b2b2b;word-break:break-word}
+.mwns-md>*:first-child{margin-top:0}
+.mwns-md p,.mwns-md ul,.mwns-md ol,.mwns-md blockquote,.mwns-md pre,.mwns-md table{margin:0 0 0}
+.mwns-md h1,.mwns-md h2,.mwns-md h3,.mwns-md h4{font-size:13.5px;line-height:26px;margin:0;font-weight:800;color:#7c5a0b}
+.mwns-md h1{font-size:15px}
+.mwns-md ul,.mwns-md ol{padding-left:18px}
+.mwns-md li{line-height:26px}
+.mwns-md input[type=checkbox]{pointer-events:none;margin:0 5px 0 0;vertical-align:-1px}
+.mwns-md em{color:#78716c}
+.mwns-md a{color:#2563eb}
+.mwns-md code{background:#f3eee0;border-radius:3px;padding:0 3px;font-size:12px}
+.mwns-md pre{background:#f7f2e4;padding:0 8px;overflow-x:auto}
+.mwns-md blockquote{border-left:3px solid #e9c46a;padding-left:8px;color:#57534e}
+.mwns-md mark{background:#fde68a}
+.mwns-md img{max-width:100%;height:auto}
+.mwns-md table{border-collapse:collapse;font-size:12px}
+.mwns-md td,.mwns-md th{border:1px solid #e7e0cf;padding:0 6px}
+.mwns-md hr{border:0;border-top:1px dashed #d6cfbd;margin:12px 0}

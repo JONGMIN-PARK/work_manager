@@ -223,6 +223,7 @@ function _pmtCardHtml(m, t) {
       '<span id="pmtDirtyTxt-' + _pmtEsc(m.id) + '" style="font-size:9.5px;color:' + SEM_COLOR.warn + ';display:' + (dirty ? 'inline' : 'none') + '">● 저장 안 됨</span>' +
       '<button class="btn btn-g btn-s pmt-btn" onclick="pmtLiveToggle(\'' + mid + '\')" title="작성하면서 옆에 인쇄될 종이 그대로 보기">' + (live ? '📄 종이 숨기기' : '📄 종이 보며 쓰기') + '</button>' +
       '<button class="btn btn-g btn-s pmt-btn" onclick="pmtPreview(\'' + mid + '\')" title="회의록 양식으로 보기 · 인쇄(PDF) · 메일">🖨 인쇄 · 메일</button>' +
+      (typeof wmBookOpen === 'function' ? '<button class="btn btn-g btn-s pmt-btn" data-pmt-book="' + mid + '" onclick="wmBookOpen({ cur: \'meeting:\' + this.getAttribute(\'data-pmt-book\') })" title="📖 펼쳐 보기 — 다른 회의록 · 노트와 책처럼 나란히">📖 펼쳐 보기</button>' : '') +
       (_pmtDone(m)
         ? '<button class="btn btn-p btn-s pmt-btn" onclick="pmtSaveAndView(\'' + mid + '\')">💾 저장 후 문서 보기</button>'
         : '<button class="btn btn-g btn-s pmt-btn" onclick="pmtSaveForm(\'' + mid + '\')">💾 저장</button>' +

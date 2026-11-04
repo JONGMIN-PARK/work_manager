@@ -19,6 +19,7 @@
  *   GET    /template/daily?date=         그날 일정 · 할 일로 채운 일일 업무 양식
  *   GET|PUT /print-settings              🖨 출력 머리글(회사 이름 · 로고) — 고치기는 관리자 (v13.319)
  *   GET    /bundle?src=daily|notes&from&to[&folderId&tag]   묶어 출력할 노트 (62개까지)
+ *   GET    /shelf?src= · POST /shelf/pages { keys }  📖 펼쳐 보기 — 일일 노트 · 노트 · 업무일지 · 회의록 (v13.326)
  */
 var express = require('express');
 var router = express.Router();
@@ -27,6 +28,7 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var httpErr = require('../lib/http-errors');
 var nb = require('../lib/notebook');
+var pa = require('../lib/project-access');
 
 var MAX_FILE = 25 * 1024 * 1024;
 
@@ -433,6 +435,114 @@ router.get('/bundle', async function (req, res) {
       ' ORDER BY updated_at LIMIT 62', p);
     res.json({ data: r.rows.map(function (x) { return { kind: 'note', id: x.id, date: x.day, title: x.title || nb.titleFrom(x.body) || '', body: x.body, ink: x.ink || null, tags: x.tags || [] }; }) });
   } catch (e) { httpErr.serverError(res, '[notebook/bundle]', e); }
+});
+
+/* ─── 📖 책장 (v13.326) — 펼쳐 보기에 올릴 수 있는 글 전부: 📝 일일 노트 · 📓 노트 · 📋 업무일지(내 것, 날마다 한 장) · 🤝 회의록(볼 수 있는 프로젝트)
+ *   GET  /shelf?src=all|daily|note|log|meeting   → [{ key, kind, date, title, sub, snip, lines }]  (종류마다 최근 200개, 날짜 ↓)
+ *   POST /shelf/pages { keys: [...] }             → { key: { kind, date, title, sub, mode: 'lines'|'md', text } }  (8장까지 · 못 보는 것은 빠짐)
+ *   key = daily:<날짜>|<ref> · note:<id> · log:<날짜> · meeting:<id> */
+var SHELF_KINDS = ['daily', 'note', 'log', 'meeting'];
+var SHELF_N = 200;
+function _shelfLines(s) { return String(s || '').split('\n').map(function (l) { return l.replace(/ ?⟦[^⟧]*⟧/g, '').replace(/^\s*[-*] \[[ xX]\] /, '').replace(/^::ink\[[^\]]*\]\s*$/, '').trim(); }).filter(Boolean); }
+function _meetVisible(req, p) {
+  var sub = pa.accessibleProjectsSubquery(req, p.length + 1);
+  p.push.apply(p, sub.params);
+  p.push(req.user.sub);
+  return '(mt.project_id IN (' + sub.sql + ') OR (mt.project_id IS NULL AND mt.created_by = $' + p.length + '))';
+}
+var SHELF_LIST = {
+  daily: async function (req) {
+    var r = await db.query("SELECT note_date, ref, body FROM my_notes WHERE tenant_id = $1 AND user_id = $2 AND body <> '' ORDER BY note_date DESC, ref DESC LIMIT " + SHELF_N, [req.tenant.id, me(req)]);
+    return r.rows.map(function (x) { var ls = _shelfLines(x.body); return { key: 'daily:' + x.note_date + '|' + (x.ref || ''), kind: 'daily', date: x.note_date, title: x.ref ? '회의 메모' : '일일 노트', sub: '', snip: (ls[0] || '').slice(0, 120), lines: ls.length }; });
+  },
+  note: async function (req) {
+    var r = await db.query("SELECT id, title, LEFT(body, 3000) AS body, to_char(updated_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS day FROM nb_notes WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL AND (body <> '' OR title <> '') ORDER BY updated_at DESC LIMIT " + SHELF_N, [req.tenant.id, me(req)]);
+    return r.rows.map(function (x) { var ls = _shelfLines(x.body); return { key: 'note:' + x.id, kind: 'note', date: x.day, title: x.title || nb.titleFrom(x.body) || '제목 없음', sub: '', snip: nb.snippet(x.body, 120), lines: ls.length }; });
+  },
+  log: async function (req) {
+    var r = await db.query("SELECT date, COUNT(*)::int AS n, COALESCE(SUM(hours), 0)::float AS h, (ARRAY_AGG(content ORDER BY id))[1] AS first FROM work_records WHERE tenant_id = $1 AND user_id = $2 AND date IS NOT NULL AND date <> '' GROUP BY date ORDER BY date DESC LIMIT " + SHELF_N, [req.tenant.id, me(req)]);
+    return r.rows.map(function (x) { return { key: 'log:' + x.date, kind: 'log', date: String(x.date).slice(0, 10), title: '업무일지', sub: x.n + '건' + (x.h ? ' · ' + Math.round(x.h * 10) / 10 + '시간' : ''), snip: String(x.first || '').replace(/\s+/g, ' ').slice(0, 120), lines: x.n }; });
+  },
+  meeting: async function (req) {
+    var p = [req.tenant.id];
+    var w = _meetVisible(req, p);
+    var r = await db.query('SELECT mt.id, mt.title, mt.meet_date, LEFT(COALESCE(mt.minutes, \'\'), 300) AS minutes, pr.name AS proj FROM meetings mt LEFT JOIN projects pr ON pr.id = mt.project_id AND pr.tenant_id = mt.tenant_id' +
+      ' WHERE mt.tenant_id = $1 AND ' + w + ' ORDER BY mt.meet_date DESC NULLS LAST, mt.updated_at DESC LIMIT ' + SHELF_N, p);
+    return r.rows.map(function (x) { return { key: 'meeting:' + x.id, kind: 'meeting', date: x.meet_date || '', title: x.title || '회의', sub: x.proj || '', snip: String(x.minutes || '').replace(/\s+/g, ' ').slice(0, 120), lines: _shelfLines(x.minutes).length }; });
+  }
+};
+router.get('/shelf', async function (req, res) {
+  try {
+    var src = SHELF_KINDS.indexOf(req.query.src) >= 0 ? [req.query.src] : SHELF_KINDS;
+    var out = [];
+    for (var i = 0; i < src.length; i++) {
+      try { out = out.concat(await SHELF_LIST[src[i]](req)); } catch (e) { console.warn('[notebook/shelf] ' + src[i] + ' 빠짐:', e.message); }   // 한 종류가 실패해도 나머지는
+    }
+    var order = { daily: 0, log: 1, meeting: 2, note: 3 };
+    out.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (order[a.kind] - order[b.kind]) || (a.key < b.key ? 1 : -1); });
+    res.json({ data: out });
+  } catch (e) { httpErr.serverError(res, '[notebook/shelf]', e); }
+});
+function _mdLine(s) { return String(s || '').replace(/\r/g, '').replace(/\n+/g, ' / ').trim(); }
+var SHELF_PAGE = {
+  daily: async function (req, id) {
+    var at = id.indexOf('|'), d = at >= 0 ? id.slice(0, at) : id, ref = at >= 0 ? id.slice(at + 1) : '';
+    var r = await db.query('SELECT body FROM my_notes WHERE tenant_id = $1 AND user_id = $2 AND note_date = $3 AND ref = $4', [req.tenant.id, me(req), d, ref]);
+    if (!r.rows[0]) return null;
+    return { kind: 'daily', date: d, title: ref ? '회의 메모' : '일일 노트', sub: '', mode: 'lines', text: r.rows[0].body };
+  },
+  note: async function (req, id) {
+    var n = await noteOf(req, id);
+    if (!n || n.deleted_at) return null;
+    var day = new Date(new Date(n.updated_at).getTime() + 9 * 3600000).toISOString().slice(0, 10);
+    var body = String(n.body || '').split('\n').map(function (l) { return /^::ink\[[^\]]*\]\s*$/.test(l) ? '_✍️ 손글씨 — 노트북에서 보기_' : l; }).join('\n');
+    return { kind: 'note', date: day, title: n.title || nb.titleFrom(n.body) || '제목 없음', sub: (n.tags || []).map(function (t) { return '#' + t; }).join(' '), mode: 'md', text: body };
+  },
+  log: async function (req, d) {
+    var r = await db.query('SELECT order_no, content, ocmt, hours FROM work_records WHERE tenant_id = $1 AND user_id = $2 AND date = $3 ORDER BY id', [req.tenant.id, me(req), d]);
+    if (!r.rows.length) return null;
+    var h = 0;
+    var text = r.rows.map(function (x) {
+      h += +x.hours || 0;
+      var tail = [x.hours ? (+x.hours) + 'h' : '', x.order_no || ''].filter(Boolean).join(' · ');
+      return '- ' + (_mdLine(x.content) || '(내용 없음)') + (tail ? ' _(' + tail + ')_' : '') + (x.ocmt ? '\n  - 💬 ' + _mdLine(x.ocmt) : '');
+    }).join('\n');
+    return { kind: 'log', date: d, title: '업무일지', sub: r.rows.length + '건' + (h ? ' · ' + Math.round(h * 10) / 10 + '시간' : ''), mode: 'md', text: text };
+  },
+  meeting: async function (req, id) {
+    var p = [req.tenant.id, id];
+    var w = _meetVisible(req, p);
+    var r = await db.query('SELECT mt.*, pr.name AS proj FROM meetings mt LEFT JOIN projects pr ON pr.id = mt.project_id AND pr.tenant_id = mt.tenant_id WHERE mt.tenant_id = $1 AND mt.id = $2 AND ' + w, p);
+    var m = r.rows[0];
+    if (!m) return null;
+    var a = await db.query('SELECT title, assignee_name, due_date, status FROM meeting_action_items WHERE tenant_id = $1 AND meeting_id = $2 ORDER BY created_at NULLS LAST, id', [req.tenant.id, id]).catch(function () { return { rows: [] }; });
+    var f = m.form && typeof m.form === 'object' ? m.form : {};
+    var att = (Array.isArray(m.attendees) ? m.attendees : []).map(function (x) { return typeof x === 'string' ? x : (x && (x.name || x.label)) || ''; }).filter(Boolean);
+    var md = [];
+    var meta = [f.timeStart ? '🕘 ' + f.timeStart + (f.timeEnd ? '~' + f.timeEnd : '') : '', f.place ? '📍 ' + _mdLine(f.place) : '', att.length ? '👥 ' + att.join(', ') : ''].filter(Boolean);
+    if (meta.length) md.push(meta.join(' · '), '');
+    if (f.purpose) md.push('**목적** ' + _mdLine(f.purpose), '');
+    var ag = (Array.isArray(m.agenda) ? m.agenda : []).map(function (g) { return typeof g === 'string' ? { text: g } : g || {}; }).filter(function (g) { return g.text; });
+    if (ag.length) { md.push('## 안건'); ag.forEach(function (g) { md.push('- [' + (g.done ? 'x' : ' ') + '] ' + _mdLine(g.text) + (g.result ? ' → ' + _mdLine(g.result) : '')); }); md.push(''); }
+    if (m.minutes && String(m.minutes).trim()) md.push('## 회의 내용', String(m.minutes).trim(), '');
+    if (f.decisions) md.push('## 결정 사항', String(f.decisions).trim(), '');
+    if (a.rows.length) { md.push('## 할 일'); a.rows.forEach(function (x) { md.push('- [' + (x.status === 'done' ? 'x' : ' ') + '] ' + _mdLine(x.title) + ([x.assignee_name, x.due_date].filter(Boolean).length ? ' _(' + [x.assignee_name, x.due_date].filter(Boolean).join(' · ') + ')_' : '')); }); md.push(''); }
+    if (f.nextDate || f.nextNote) md.push('**다음 회의** ' + [f.nextDate, _mdLine(f.nextNote)].filter(Boolean).join(' — '));
+    return { kind: 'meeting', date: m.meet_date || '', title: m.title || '회의', sub: m.proj || '', mode: 'md', text: md.join('\n').trim(), nav: { projectId: m.project_id, meetingId: m.id } };
+  }
+};
+router.post('/shelf/pages', async function (req, res) {
+  try {
+    var keys = Array.isArray(req.body && req.body.keys) ? req.body.keys.slice(0, 8) : [];
+    var out = {};
+    for (var i = 0; i < keys.length; i++) {
+      var k = String(keys[i] || ''), at = k.indexOf(':'), kind = k.slice(0, at), id = k.slice(at + 1);
+      if (at < 0 || !SHELF_PAGE[kind] || !id || id.length > 120) continue;
+      var pg = await SHELF_PAGE[kind](req, id).catch(function (e) { console.warn('[notebook/shelf/pages]', k, e.message); return null; });
+      if (pg) out[k] = pg;
+    }
+    res.json({ data: out });
+  } catch (e) { httpErr.serverError(res, '[notebook/shelf/pages]', e); }
 });
 
 /* [[노트]] — 내 노트 제목 목록 (자동 완성 · 링크 찾기) */

@@ -204,6 +204,7 @@ GET /api/notebook/notes/:id/shares
 GET /api/notebook/notes/:id/versions
 GET /api/notebook/notes/:id/versions/:vid
 GET /api/notebook/print-settings
+GET /api/notebook/shelf
 GET /api/notebook/template/daily
 GET /api/notebook/titles
 GET /api/notifications
@@ -445,6 +446,7 @@ POST /api/notebook/notes/:id/versions
 POST /api/notebook/notes/:id/versions/:vid/restore
 POST /api/notebook/refs
 POST /api/notebook/report
+POST /api/notebook/shelf/pages
 POST /api/notebook/spell
 POST /api/notebook/trash/empty
 POST /api/orders

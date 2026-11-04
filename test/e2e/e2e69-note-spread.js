@@ -26,7 +26,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
   async function until(fn, arg, ms) { return page.waitForFunction(fn, { timeout: ms || 8000 }, arg).then(function () { return true; }, function () { return false; }); }
   var ev = function (fn, arg) { return page.evaluate(fn, arg); };
   var pages = function () { return ev(function () { return Array.prototype.map.call(document.querySelectorAll('#mwnsBook > .mwns-page'), function (p) { return p.getAttribute('data-k'); }); }); };
-  var idle = function () { return until(function () { return !_mwns.flipping && !document.querySelector('#mwnsBook .mwns-leaf'); }, null, 4000); };
+  var idle = function () { return until(function () { return !_wb.flipping && !document.querySelector('#mwnsBook .mwns-leaf'); }, null, 4000); };
   try {
     await page.setViewport({ width: 1440, height: 1000 });
     await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'no-preference' }]);   // headless 는 기본이 reduce — 넘김 애니메이션 보려고
@@ -48,7 +48,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.click('#mwNotes .mwn-ib[onclick="mwNotesSpread()"]');
     check(await until(function () { return document.querySelectorAll('#mwnsBook > .mwns-page').length === 2 && !/불러오는 중/.test(document.getElementById('mwnsBook').textContent); }), '📖 → 두 장 펼침');
     var p = await pages();
-    check(p[0] === kst(-1) + '|' && p[1] === kst(0) + '|', '왼쪽 어제 · 오른쪽 오늘 ' + JSON.stringify(p));
+    check(p[0] === 'daily:' + kst(-1) + '|' && p[1] === 'daily:' + kst(0) + '|', '왼쪽 어제 · 오른쪽 오늘 ' + JSON.stringify(p));
     var txt = await ev(function () { return document.getElementById('mwnsBook').innerText; });
     check(/펼침노트 0일 전 첫 줄/.test(txt) && /할 일 0/.test(txt) && !/⟦/.test(txt), '본문 · 할 일 줄 보임 (표시 기호 없이)');
     check(await ev(function () { return document.getElementById('mwnsBook').classList.contains('is-pair') && !!document.querySelector('#mwnsBook .mwns-corner.l') && !!document.querySelector('#mwnsBook .mwns-corner.r'); }), '두 장 = 책 펼침면 · 바깥 모서리 둘');
@@ -63,30 +63,30 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.screenshot({ path: path.join(SHOT, 'e2e69-turning.png') });
     check(await idle(), '넘김 끝 → 넘어가는 장 · 덮개 사라짐');
     p = await pages();
-    check(p[0] === kst(-3) + '|ev:x1' && p[1] === kst(-2) + '|', '앞 장 = 3일 전 회의 메모 · 2일 전 ' + JSON.stringify(p));
+    check(p[0] === 'daily:' + kst(-3) + '|ev:x1' && p[1] === 'daily:' + kst(-2) + '|', '앞 장 = 3일 전 회의 메모 · 2일 전 ' + JSON.stringify(p));
     // 3. ← 키 · → 키
     await page.keyboard.press('ArrowRight'); await idle();
     p = await pages();
-    check(p[0] === kst(-1) + '|' && p[1] === kst(0) + '|', '→ 키 = 새 쪽으로 ' + JSON.stringify(p));
+    check(p[0] === 'daily:' + kst(-1) + '|' && p[1] === 'daily:' + kst(0) + '|', '→ 키 = 새 쪽으로 ' + JSON.stringify(p));
     // 4. 가장 최근에서 더 → 끝 (들썩 + 알림)
     await page.keyboard.press('ArrowRight');
     check(await until(function () { return !!document.querySelector('#mwnsBook .mwns-page.mwns-bump-r'); }, null, 1500), '최근 끝에서 더 넘기면 종이가 살짝 들썩');
     p = await pages();
-    check(p[1] === kst(0) + '|', '끝에선 그대로');
+    check(p[1] === 'daily:' + kst(0) + '|', '끝에선 그대로');
 
     // 5. 장 수 3 · 4 — 목록에서 더 고르면 늘어남, 5번째는 막힘
     await page.click('#mwnSpreadModal .mwns-seg [data-v="3"]');
     check(await until(function () { return document.querySelectorAll('#mwnsBook > .mwns-page').length === 3 && !/불러오는 중/.test(document.getElementById('mwnsBook').textContent); }), '3장 → 옛 쪽 한 장 더 채움');
     p = await pages();
-    check(p[0] === kst(-2) + '|', '3장 = 2일 전 · 어제 · 오늘 ' + JSON.stringify(p));
+    check(p[0] === 'daily:' + kst(-2) + '|', '3장 = 2일 전 · 어제 · 오늘 ' + JSON.stringify(p));
     check(await ev(function () { return !document.getElementById('mwnsBook').classList.contains('is-pair'); }), '3장은 펼침면 아님(따로 놓인 종이)');
-    await page.click('#mwnsList [data-pk="' + kst(-5) + '|"]');
+    await page.click('#mwnsList [data-pk="' + 'daily:' + kst(-5) + '|"]');
     check(await until(function () { return document.querySelectorAll('#mwnsBook > .mwns-page').length === 4; }), '목록에서 하나 더 고르면 4장으로');
     check(await ev(function () { return document.querySelector('#mwnSpreadModal .mwns-seg .on').getAttribute('data-v') === '4'; }), '장 수 단추도 4');
-    await page.click('#mwnsList [data-pk="' + kst(-4) + '|"]');
+    await page.click('#mwnsList [data-pk="' + 'daily:' + kst(-4) + '|"]');
     p = await pages();
-    check(p.length === 4 && p.indexOf(kst(-4) + '|') < 0, '4장 넘으면 더 안 고름');
-    await page.click('#mwnsList [data-pk="' + kst(-5) + '|"]');   // 빼기
+    check(p.length === 4 && p.indexOf('daily:' + kst(-4) + '|') < 0, '4장 넘으면 더 안 고름');
+    await page.click('#mwnsList [data-pk="' + 'daily:' + kst(-5) + '|"]');   // 빼기
     check((await pages()).length === 3, '다시 누르면 뺌');
     await page.click('#mwnsBook .mwns-x');
     check((await pages()).length === 2, '종이 ✕ 로 빼기');
@@ -120,17 +120,10 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     // 8. 종이 머리 → 서랍에서 그 노트 열기
     var k = after[0];
     await page.click('#mwnsBook > .mwns-page .mwns-ph');
-    check(await until(function (kk) { return !document.getElementById('mwnSpreadModal') && _mwn.open && _mwn.date === kk.split('|')[0]; }, k), '종이 머리 → 창 닫고 📝 서랍에서 그 날 노트');
-
-    // 9. 노트가 없으면 안 열림
-    await c.query('DELETE FROM my_notes WHERE user_id = $1', [me.id]);
-    await ev(function () { mwNotesSpread(); });
-    await wait(800);
-    check(!(await page.$('#mwnSpreadModal')), '노트 없으면 창 대신 안내');
+    check(await until(function (kk) { return !document.getElementById('mwnSpreadModal') && _mwn.open && _mwn.date === kk.split('|')[0].slice(6); }, k), '종이 머리 → 창 닫고 📝 서랍에서 그 날 노트');
 
     // 10. 휴대폰 — 목록 접힌 채 종이부터
     await page.setViewport({ width: 402, height: 874 });
-    for (i = 0; i < 2; i++) await c.query('INSERT INTO my_notes (user_id, note_date, ref, tenant_id, body) VALUES ($1, $2, \'\', $3, $4)', [me.id, kst(-i), me.tenant_id, '폰 노트 ' + i]);
     await wait(300);
     await ev(function () { mwNotesSpread(); });
     check(await until(function () { var m = document.querySelector('#mwnSpreadModal .mwns'); return m && m.classList.contains('no-side') && document.querySelectorAll('#mwnsBook > .mwns-page').length === 2; }), '휴대폰 → 목록 접고 종이 보임');
