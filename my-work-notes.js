@@ -20,6 +20,9 @@ var MWN_TODO_RE = /^- \[x\] (.*?)(?: ⟦([^⟧]*)⟧)?$/;
 var MWN_PEND_RE = /^(?:- )?\[ ?\]\s+/;
 
 function mwNotesIsOpen() { return _mwn.open; }
+/** 글자 크기 — '' 보통 · 's' 작게 · 'l' 크게 (이 브라우저에만 기억 · v13.327) */
+function _mwnFs() { try { var v = localStorage.getItem('wm.mwn.fs'); return v === 's' || v === 'l' ? v : ''; } catch (_) { return ''; } }
+function _mwnApplyFs(el) { var f = _mwnFs(); el.classList.toggle('fs-s', f === 's'); el.classList.toggle('fs-l', f === 'l'); }
 function _mwnLabel(d) {
   var t = mwToday(), n = _mtlNum(d) - _mtlNum(t);
   return (+d.slice(5, 7)) + '/' + (+d.slice(8, 10)) + ' (' + '일월화수목금토'[new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10))).getUTCDay()] + ')' +
@@ -52,6 +55,7 @@ function mwNotesOpen(date, ref) {
     document.body.appendChild(el);
     _mwnBind(el);
   }
+  _mwnApplyFs(el);
   _mwn.open = true;
   document.body.classList.add('mwp-open');
   requestAnimationFrame(function () { el.classList.add('on'); });
@@ -115,7 +119,7 @@ function _mwnRender() {
   if (!el) return;
   var d = _mwn.date;
   var h = '<div class="mwp-h mwn-h"><b class="mwn-ttl">📝 노트</b><span class="mwp-save" id="mwnSave" aria-live="polite"></span>' +
-    (typeof renderNotebook === 'function' ? '<button class="mwn-ib" onclick="nbOpenDailyView()" title="📓 노트북에서 크게 보기 (일일 노트)">📓</button>' : '') + '<button class="mwn-ib" onclick="mwNotesSpread()" title="📖 펼쳐 보기 — 노트 여러 장(2~4)을 골라 책처럼 나란히">📖</button><button class="mwn-ib" data-n="find" title="노트 검색">🔍</button><button class="mwp-x" data-n="close" title="닫기 (Esc)">✕</button></div>';
+    (typeof renderNotebook === 'function' ? '<button class="mwn-ib" onclick="nbOpenDailyView()" title="📓 노트북에서 크게 보기 (일일 노트)">📓</button>' : '') + '<button class="mwn-ib" onclick="mwNotesSpread()" title="📖 펼쳐 보기 — 노트 여러 장(2~4)을 골라 책처럼 나란히">📖</button><button class="mwn-ib mwn-fs" data-n="fs" title="글자 크기 — 작게 · 보통 · 크게 (누를 때마다)">가' + ({ s: '⁻', l: '⁺' }[_mwnFs()] || '') + '</button><button class="mwn-ib" data-n="find" title="노트 검색">🔍</button><button class="mwp-x" data-n="close" title="닫기 (Esc)">✕</button></div>';
   h += '<div class="mwn-nav"><button data-n="prev" title="전날">‹</button><label class="mwn-date" title="날짜 고르기"><span>' + _mwEsc(_mwnLabel(d)) + '</span><input type="date" data-n="date" value="' + d + '"></label>' +
     '<button data-n="next" title="다음날">›</button>' + (d !== mwToday() ? '<button data-n="today" class="mwn-tod">오늘</button>' : '') + '</div>';
   if (_mwn.find) {
@@ -352,6 +356,7 @@ function _mwnBind(el) {
       if (k === 'prev' || k === 'next') return mwNotesGo(_mtlYmd(_mtlNum(_mwn.date) + (k === 'prev' ? -1 : 1)));
       if (k === 'today') return mwNotesGo(mwToday());
       if (k === 'back') return mwNotesGo(_mwn.date, '');
+      if (k === 'fs') { var f = { s: '', '': 'l', l: 's' }[_mwnFs()]; try { localStorage.setItem('wm.mwn.fs', f); } catch (_) {} _mwnApplyFs(el); _mwnFlush(); _mwnRender(); return; }
       if (k === 'find') { _mwnFlush(); _mwn.find = !_mwn.find; _mwnRender(); return; }
     }
     var mt = t.closest('[data-mt]');

@@ -2207,7 +2207,7 @@ button.mw-pill:hover{border-color:var(--ac)}
 .mwn-nav{display:flex;align-items:center;gap:4px;padding:8px 12px;border-bottom:1px solid var(--bd)}
 .mwn-nav>button{background:var(--bg-i);border:1px solid var(--bd);border-radius:7px;color:var(--t3);cursor:pointer;padding:4px 10px;font-size:13px;font-family:inherit}
 .mwn-nav>button:hover{color:var(--t1)}
-.mwn-date{position:relative;flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--t1);cursor:pointer;padding:4px 0;border-radius:7px}
+.mwn-date{position:relative;flex:1;text-align:center;font-size:var(--mwn-fs);font-weight:700;color:var(--t1);cursor:pointer;padding:4px 0;border-radius:7px}
 .mwn-date:hover{background:var(--bg-hv)}
 .mwn-date input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
 .mwn-tod{font-size:12px!important}
@@ -2220,14 +2220,15 @@ button.mw-pill:hover{border-color:var(--ac)}
 .mwn-fi span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mwn-fi i{font-style:normal;font-size:10px;color:var(--t6)}
 .mwn-e{font-size:12px;color:var(--t6);padding:8px 4px}
-.mwn-b{gap:10px}
+.mwn-b{gap:8px}
+.mwn-fs{font-weight:800;font-size:12px!important}
 .mwn-mt{display:flex;flex-direction:column;gap:4px}
-.mwn-mtr{display:flex;align-items:center;gap:8px;border:1px solid var(--bd);background:var(--bg);border-radius:8px;padding:7px 10px;cursor:pointer;font-family:inherit;color:var(--t2);font-size:13px;text-align:left}
+.mwn-mtr{display:flex;align-items:center;gap:8px;border:1px solid var(--bd);background:var(--bg);border-radius:8px;padding:5px 10px;cursor:pointer;font-family:inherit;color:var(--t2);font-size:calc(var(--mwn-fs) - 1px);text-align:left}
 .mwn-mtr:hover{border-color:#06B6D4}
 .mwn-mtr b{font-size:12px;color:#0891B2}
 .mwn-mtr span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mwn-mtr i{font-style:normal;font-size:11px;color:var(--t5);white-space:nowrap}
-.mwn-ref{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--t1)}
+.mwn-ref{display:flex;align-items:center;gap:6px;font-size:var(--mwn-fs);font-weight:700;color:var(--t1)}
 .mwn-ref button{background:var(--bg-i);border:1px solid var(--bd);border-radius:7px;cursor:pointer;color:var(--t3);padding:2px 9px}
 .mwn-ref b{color:#0891B2}
 .mwn-bf{border:1px solid var(--bd);border-radius:9px;padding:6px 10px;background:var(--bg)}
@@ -2244,7 +2245,10 @@ button.mw-pill:hover{border-color:var(--ac)}
 .mwn-r{display:flex;align-items:center;gap:6px;border-radius:6px;padding:0 2px}
 .mwn-r:hover,.mwn-r:focus-within{background:var(--bg-hv)}
 .mwn-dot{width:16px;text-align:center;color:var(--t6);flex:none;font-size:12px}
-.mwn-t{flex:1;min-width:0;border:none;background:transparent;color:var(--t1);font-size:14px;padding:6px 2px;font-family:inherit;outline:none;line-height:1.5}
+.mwn{--mwn-fs:13px;--mwn-py:3px}
+.mwn.fs-s{--mwn-fs:12px;--mwn-py:2px}
+.mwn.fs-l{--mwn-fs:14px;--mwn-py:6px}
+.mwn-t{flex:1;min-width:0;border:none;background:transparent;color:var(--t1);font-size:var(--mwn-fs);padding:var(--mwn-py) 2px;font-family:inherit;outline:none;line-height:1.5}
 .mwn-r.is-todo .mwn-t{color:var(--t4)}
 .mwn-up{flex:none;border:none;background:none;color:var(--ac-t);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:5px;opacity:0}
 .mwn-r:hover .mwn-up,.mwn-r:focus-within .mwn-up{opacity:.85}
