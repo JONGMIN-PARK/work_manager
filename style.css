@@ -4266,9 +4266,14 @@ button.nb-crumb:hover{background:var(--bg-hv)}
 .nb-tplc span{font-size:18px}.nb-tplc:hover{border-color:var(--ac);color:var(--ac);transform:translateY(-1px)}
 /* 문서 (미리보기 · 보기) */
 /* 글자 크기 (v13.328) — 노트북 화면 안에서만 · 작게/보통/크게 [가] · 휴대폰 16px 규칙은 아래 @media 가 이김 */
-#mNotebook{--nb-fs-title:20px;--nb-fs-src:13px;--nb-fs-doc:14px;--nb-lh:1.65}
-#mNotebook.nb-fs-s{--nb-fs-title:18px;--nb-fs-src:12px;--nb-fs-doc:13px;--nb-lh:1.6}
-#mNotebook.nb-fs-l{--nb-fs-title:24px;--nb-fs-src:14px;--nb-fs-doc:15px;--nb-lh:1.75}
+#mNotebook{--nb-fs-title:18px;--nb-fs-src:12.5px;--nb-fs-doc:13.5px;--nb-lh:1.6}
+#mNotebook.nb-fs-s{--nb-fs-title:16px;--nb-fs-src:12px;--nb-fs-doc:12.5px;--nb-lh:1.55}
+#mNotebook.nb-fs-l{--nb-fs-title:22px;--nb-fs-src:14px;--nb-fs-doc:15px;--nb-lh:1.75}
+/* 노트북 화면 안 보기 — 제목 비율도 작게 (v13.329) · 다른 곳(공유 보기 · 펼쳐 보기)은 그대로 */
+#mNotebook .nb-src{font-family:var(--app-font),"Malgun Gothic",sans-serif}
+#mNotebook .nb-doc h1{font-size:1.45em;margin:1em 0 .45em}
+#mNotebook .nb-doc h2{font-size:1.2em;margin:1.15em 0 .35em}
+#mNotebook .nb-doc h3{font-size:1.08em;margin:1em 0 .3em}
 .nb-ib.nb-fsb{font-weight:800;font-size:12.5px}
 .nb-doc{color:var(--t1);font-size:var(--nb-fs-doc,15px);line-height:var(--nb-lh,1.78);word-break:keep-all;overflow-wrap:anywhere}
 .nb-doc>*:first-child{margin-top:0}
