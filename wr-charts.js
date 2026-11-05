@@ -149,26 +149,18 @@ function rContentSum(){
     const tagStr=diffTags.length?diffTags.slice(0,4).join(', '):'일반';
     const diffLine=`${diffIcon} 난이도: <b>${diffLabel}</b> — ${tagStr} (건당 평균 ${Math.round(avgHPerTask*10)/10}h)`;
 
-    html+='<div style="margin-bottom:14px;padding:12px;background:var(--bg-i);border-radius:8px;border-left:3px solid '+c+'">';
+    // v13.341 한 사람 = 카드 한 장: 머리(이름 · 시간 · 3줄 요약을 한 줄 알약) + 수주별 칸 격자 (예전: 화면 폭 다 쓰는 세로 상자 줄)
+    html+='<div class="cs-p" style="--cs-c:'+c+'">';
     const dnCS=typeof shortName==='function'?shortName(name):name;
-    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:12px;font-weight:700;color:'+c+'" title="'+eH(name)+'">'+eH(dnCS)+'</span><span style="font-size:11px;color:var(--t4)">'+Math.round(info.h*10)/10+'h</span></div>';
-
-    // 3줄 요약 박스
-    html+='<div style="margin-bottom:10px;padding:8px 10px;background:var(--bg-p);border-radius:6px;border:1px solid var(--bd);font-size:11px;line-height:1.8;color:var(--t3)">';
-    html+=focusLine+'<br>'+spreadLine+'<br>'+diffLine;
-    html+='</div>';
-
-    // 수주별 상세
+    html+='<div class="cs-h"><span class="cs-n" title="'+eH(name)+'">'+eH(dnCS)+'</span><span class="cs-hr">'+Math.round(info.h*10)/10+'h</span>'+
+      '<span class="cs-k">'+focusLine+'</span><span class="cs-k">'+spreadLine+'</span><span class="cs-k">'+diffLine+'</span></div>';
+    html+='<div class="cs-g">';
     Object.entries(info.byOrder).sort(([,a],[,b])=>b.h-a.h).forEach(([oNo,oInfo])=>{
       const ocmt=getOCmt(oNo);const uniqueItems=[...new Set(oInfo.items)];
-      html+='<div style="margin-bottom:6px;padding:6px 8px;background:var(--bg-p);border-radius:5px">';
-      html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span class="mono" style="font-size:10px;color:var(--ac-t);font-weight:600">'+eH(oNo)+'</span>';
-      if(ocmt)html+='<span style="font-size:9px;color:var(--t5);font-style:italic">'+eH(ocmt)+'</span>';
-      html+='<span class="mono" style="font-size:9px;color:var(--t6);margin-left:auto">'+Math.round(oInfo.h*10)/10+'h</span></div>';
-      html+='<div style="font-size:11px;color:var(--t3);line-height:1.6">';
-      uniqueItems.forEach(item=>{html+='<div style="padding:1px 0;display:flex;align-items:baseline;gap:4px"><span style="color:var(--ac);flex-shrink:0">·</span><span>'+eH(item)+'</span></div>'});
-      html+='</div></div>';
+      html+='<div class="cs-o"><div class="cs-oh"><span class="mono cs-on">'+eH(oNo)+'</span>'+(ocmt?'<span class="cs-om">'+eH(ocmt)+'</span>':'')+'<span class="mono cs-oh-h">'+Math.round(oInfo.h*10)/10+'h</span></div>';
+      html+='<ul class="cs-ul">'+uniqueItems.map(item=>'<li>'+eH(item)+'</li>').join('')+'</ul></div>';
     });
+    html+='</div>';
     html+='</div>';
   });
   el.innerHTML=html;

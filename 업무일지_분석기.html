@@ -91,7 +91,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <!-- v13.310 엑셀 · 워드 · PDF · 캡처 · 압축 라이브러리는 ui-helpers.js wmLib 가 첫 화면 뒤에 받음 -->
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=95">
+<link rel="stylesheet" href="style.css?v=96">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -122,7 +122,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.340';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.341';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -338,17 +338,18 @@
 
       <!-- Stats — v13.69 sticky KPI 카드 (상단 고정) -->
       <div id="statsS" class="hidden">
-        <div class="sg sg-sticky" id="kpiSticky">
+        <!-- v13.341 상세 · 분석 · AI 요약 · 내용요약 탭과 숫자 4개를 한 줄 띠로 (예전: 큰 카드 줄 + 탭 줄) -->
+        <div class="sg sg-sticky ws-strip" id="kpiSticky">
+          <div class="tabs ws-tabs">
+            <button class="tab on" data-t="tbl" onclick="sTab('tbl')">📋 상세</button>
+            <button class="tab" data-t="cht" onclick="sTab('cht')" title="업무 시간 · 부하 · 업체/수주 · 월별 추이 — 지난 기간과 비교">📊 분석</button>
+            <button class="tab" data-t="ai" onclick="sTab('ai')">🤖 AI 요약</button>
+            <button class="tab" data-t="sum" onclick="sTab('sum')">📝 내용요약</button>
+          </div>
           <div class="sc"><div class="sl">필터 결과</div><div class="sv" id="sC">0</div><div style="font-size:9px;color:var(--t6);margin-top:2px">건</div></div>
           <div class="sc"><div class="sl">총 투입시간</div><div class="sv bl" id="sH">0h</div></div>
           <div class="sc"><div class="sl">기간</div><div class="sv sm" id="sP">-</div></div>
           <div class="sc" title="총 투입시간 ÷ 기록이 있는 날 수 (팀 합계) — 1인 기준은 📊 분석의 인당 하루 평균"><div class="sl">팀 하루 평균</div><div class="sv gr" id="sA">0h</div></div>
-        </div>
-        <div class="tabs">
-          <button class="tab on" data-t="tbl" onclick="sTab('tbl')">📋 상세</button>
-          <button class="tab" data-t="cht" onclick="sTab('cht')" title="업무 시간 · 부하 · 업체/수주 · 월별 추이 — 지난 기간과 비교">📊 분석</button>
-          <button class="tab" data-t="ai" onclick="sTab('ai')">🤖 AI 요약</button>
-          <button class="tab" data-t="sum" onclick="sTab('sum')">📝 내용요약</button>
         </div>
         <!-- Table -->
         <div id="tTbl"><div class="pnl" style="padding:0;overflow:hidden"><div style="padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span style="font-size:12px;color:var(--t4);font-weight:600" id="tInfo"></span><div class="edit-bar"><span id="editStatus" style="font-size:10px;color:#F59E0B;display:none">● 수정 중</span><button class="btn btn-g btn-s" id="editTogBtn" onclick="togEdit()">✏️ 편집모드</button><button class="btn btn-w btn-s hidden" id="editApplyBtn" onclick="applyEdits()">💾 수정 적용</button><button class="btn btn-d btn-s hidden" id="editCancelBtn" onclick="cancelEdits()">↩️ 취소</button><span class="del-bar" id="delBar"><span class="del-count" id="delCount">0건 선택</span><button class="btn btn-d btn-s" onclick="deleteSelected()">🗑️ 선택 삭제</button></span><span class="mob-sep" style="color:var(--bd2)">│</span><button class="btn btn-p btn-s" id="cpBtn" onclick="cpTSV()">📋 TSV복사</button><button class="btn btn-g btn-s" onclick="exportXlsx()">📥 엑셀저장</button><button class="btn btn-p btn-s" onclick="openManualInput()" title="수동 입력">➕ 수동입력</button></div></div><div id="wdBar" class="wd-bar2"><div class="wd-seg" role="group" aria-label="묶음"><button type="button" data-g="name" onclick="wdSetGroup('name')">👤 사람</button><button type="button" data-g="date" onclick="wdSetGroup('date')">📅 날짜</button><button type="button" data-g="order" onclick="wdSetGroup('order')">📁 수주</button><button type="button" data-g="none" onclick="wdSetGroup('none')">☰ 낱개</button><button type="button" data-g="grid" onclick="wdSetGroup('grid')">▦ 격자</button></div><span id="wdOC" class="wd-oc"><button type="button" class="btn btn-g btn-s" onclick="wdOpenAll(true)">모두 펼치기</button><button type="button" class="btn btn-g btn-s" onclick="wdOpenAll(false)">모두 접기</button></span><select id="wdSortSel" class="msel" onchange="wdSetSort(this.value)" title="정렬"><option value="">정렬: 기본</option><option value="hours:-1">시간 많은 순</option><option value="hours:1">시간 적은 순</option><option value="date:1">날짜 빠른 순</option><option value="date:-1">날짜 늦은 순</option><option value="name:1">이름순</option><option value="order:1">수주번호순</option></select><button type="button" class="btn btn-g btn-s wd-fbtn" onclick="wdColMenu('name',this)" title="값 목록으로 거르기">⚙ 거르기</button><span class="wd-find"><input id="wdFind" type="search" placeholder="결과 안에서 찾기" oninput="wdFindInput(this.value)" aria-label="결과 안에서 찾기"><span id="wdFindN" class="wd-fn"></span><button type="button" onclick="wdFindGo(-1)" title="이전">▲</button><button type="button" onclick="wdFindGo(1)" title="다음">▼</button></span></div><div id="wdPath" class="wd-path hidden"></div><div id="wdGrid" class="hidden"></div><div class="tw"><table id="wrTbl" style="table-layout:fixed;width:100%;min-width:1040px"><thead><tr><th id="thChk" style="width:30px;display:none"><input type="checkbox" class="del-chk" onchange="toggleSelectAll(this)" title="전체 선택"></th><th class="c-nm" data-sk="name" data-fk="name" style="width:70px;white-space:nowrap"><span class="wd-sk" onclick="wdSortBy('name')">이름<i class="wd-arr"></i></span><button class="wd-th" type="button" onclick="event.stopPropagation();wdColMenu('name',this)" title="거르기">▾</button></th><th class="c-dt" data-sk="date" data-fk="date" style="width:75px;white-space:nowrap"><span class="wd-sk" onclick="wdSortBy('date')">날짜<i class="wd-arr"></i></span><button class="wd-th" type="button" onclick="event.stopPropagation();wdColMenu('date',this)" title="거르기">▾</button></th><th class="c-on" data-sk="order" data-fk="order" style="width:110px;white-space:nowrap"><span class="wd-sk" onclick="wdSortBy('order')">수주번호<i class="wd-arr"></i></span><button class="wd-th" type="button" onclick="event.stopPropagation();wdColMenu('order',this)" title="거르기">▾</button></th><th class="oc-th" data-fk="ocmt" style="width:21%;white-space:nowrap">수주명<button class="wd-th" type="button" onclick="event.stopPropagation();wdColMenu('ocmt',this)" title="거르기">▾</button> · 거래처<button class="wd-th" type="button" onclick="event.stopPropagation();wdColMenu('client',this)" title="거르기">▾</button></th><th class="oc-th2" style="width:10%"></th><th class="c-hr" data-sk="hours" style="width:78px;text-align:right;white-space:nowrap"><span class="wd-sk" onclick="wdSortBy('hours')">시간<i class="wd-arr"></i></span></th><th class="c-task" style="width:88px;white-space:nowrap">업무분장</th><th class="c-ab" data-fk="abbr" style="width:56px;white-space:nowrap">약자<button class="wd-th" type="button" onclick="event.stopPropagation();wdColMenu('abbr',this)" title="거르기">▾</button></th><th style="width:auto">업무내용</th></tr></thead><tbody id="tBody"></tbody></table></div><div id="wdCards" class="wd-cards hidden"></div></div>
@@ -365,11 +366,11 @@
         <!-- AI -->
         <div id="tAi" class="hidden"><div class="pnl">
           <div class="pnl-h"><h3 class="pnl-t">🤖 AI 요약 & 인사이트</h3><button class="btn btn-p btn-s" onclick="reqSum()" id="sumBtn">요약 생성</button></div>
-          <div style="margin-bottom:12px;padding:10px 12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:7px;display:flex;align-items:center;gap:8px">
+          <div style="margin-bottom:8px;padding:5px 10px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:7px;display:flex;align-items:center;gap:8px">
             <span id="aiStatusIcon" style="font-size:14px">🤖</span>
             <span id="aiStatusText" style="font-size:11px;color:var(--t4)">AI 상태 확인 중...</span>
           </div>
-          <div style="margin-bottom:12px;padding:12px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:7px">
+          <div style="margin-bottom:8px;padding:8px 10px;background:var(--bg-i);border:1px solid var(--bd-i);border-radius:7px">
             <div class="fl" style="margin-bottom:4px"><span>💬 추가 지시사항</span><span id="cmCnt"></span></div>
             <textarea id="sumCmt" rows="2" style="width:100%;background:var(--lb);border:1px solid var(--bd);border-radius:7px;padding:8px 10px;font-size:11px;color:var(--t2);font-family:inherit;outline:none;resize:vertical;line-height:1.5" placeholder="예: 과부하 분석, 수주별 분석..." oninput="upCmCnt()"></textarea>
             <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
@@ -378,7 +379,7 @@
               <span class="chip co" style="padding:2px 8px;font-size:9px" onclick="document.getElementById('sumCmt').value='';upCmCnt()">✕</span>
             </div>
           </div>
-          <div id="sumOut"><div style="text-align:center;color:var(--t6);padding:30px;font-size:12px">위 "요약 생성" 버튼을 눌러주세요.</div></div>
+          <div id="sumOut"><div style="text-align:center;color:var(--t6);padding:14px;font-size:12px">위 "요약 생성" 버튼을 눌러주세요.</div></div>
         </div></div>
       </div>
       <!-- Compare Panel -->
@@ -563,8 +564,8 @@
 <script src="wr-view.js?v=4" onerror="console.warn('wr-view.js 로드 실패')"></script>
 <script src="wr-drill.js?v=1" onerror="console.warn('wr-drill.js 로드 실패')"></script>
 <script src="manual-input.js?v=4" onerror="console.warn('manual-input.js 로드 실패')"></script>
-<script src="wr-charts.js?v=5" onerror="console.warn('wr-charts.js 로드 실패')"></script>
-<script src="wr-analytics.js?v=1" onerror="console.warn('wr-analytics.js 로드 실패')"></script>
+<script src="wr-charts.js?v=6" onerror="console.warn('wr-charts.js 로드 실패')"></script>
+<script src="wr-analytics.js?v=2" onerror="console.warn('wr-analytics.js 로드 실패')"></script>
 <script src="archive-trend.js?v=2" onerror="console.warn('archive-trend.js 로드 실패')"></script>
 <script src="search-notif.js?v=7" onerror="console.warn('search-notif.js 로드 실패')"></script>
 <script src="ai-ask.js?v=2" onerror="console.warn('ai-ask.js 로드 실패')"></script>

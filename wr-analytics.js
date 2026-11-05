@@ -283,6 +283,8 @@ function _waDaily(A, gapOn) {
   var tick = _waNice(max / 4), top = Math.ceil(max / tick) * tick;
   function y(v) { return T + ch - v / top * ch; }
   var codes = _waCodes().filter(function (k) { return B.some(function (b) { return b.ab[k]; }); });
+  // v13.341 분장 설정에 없는 약자도 쌓음 (예전엔 빠져서 막대가 비어 보임 — 시간 구성 카드엔 나오는데)
+  B.forEach(function (b) { Object.keys(b.ab).forEach(function (k) { if (codes.indexOf(k) < 0) codes.push(k); }); });
   var s = '<svg class="wa-svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="날짜별 투입 시간">';
   for (var t = 0; t <= top + 0.001; t += tick) s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(t).toFixed(1) + '" y2="' + y(t).toFixed(1) + '" class="wa-grid"/><text x="' + (L - 6) + '" y="' + (y(t) + 3.5).toFixed(1) + '" class="wa-ax" text-anchor="end">' + _waR1(t) + '</text>';
   var lblEvery = Math.ceil(n / Math.max(1, Math.floor(cw / 46)));
