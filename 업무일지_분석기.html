@@ -62,12 +62,12 @@
 <script defer src="operator-mode.js?v=3" onerror="console.warn('operator-mode.js 로드 실패')"></script>
 <script defer src="operator-analytics.js?v=3" onerror="console.warn('operator-analytics.js 로드 실패')"></script>
 <script defer src="comments-ui.js?v=1" onerror="console.warn('comments-ui.js 로드 실패')"></script>
-<script defer src="my-work.js?v=17" onerror="console.warn('my-work.js 로드 실패')"></script>
+<script defer src="my-work.js?v=18" onerror="console.warn('my-work.js 로드 실패')"></script>
 <script defer src="quick-parse.js?v=1" onerror="console.warn('quick-parse.js 로드 실패')"></script>
 <script defer src="my-work-cal.js?v=10" onerror="console.warn('my-work-cal.js 로드 실패')"></script>
 <script defer src="my-work-task.js?v=8" onerror="console.warn('my-work-task.js 로드 실패')"></script>
 <script defer src="my-work-panel.js?v=8" onerror="console.warn('my-work-panel.js 로드 실패')"></script>
-<script defer src="my-work-board.js?v=5" onerror="console.warn('my-work-board.js 로드 실패')"></script>
+<script defer src="my-work-board.js?v=6" onerror="console.warn('my-work-board.js 로드 실패')"></script>
 <script defer src="my-work-io.js?v=6" onerror="console.warn('my-work-io.js 로드 실패')"></script>
 <script defer src="my-work-timeline.js?v=9" onerror="console.warn('my-work-timeline.js 로드 실패')"></script>
 <script defer src="my-work-notes.js?v=7" onerror="console.warn('my-work-notes.js 로드 실패')"></script>
@@ -91,7 +91,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <!-- v13.310 엑셀 · 워드 · PDF · 캡처 · 압축 라이브러리는 ui-helpers.js wmLib 가 첫 화면 뒤에 받음 -->
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=91">
+<link rel="stylesheet" href="style.css?v=92">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -122,7 +122,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.334';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.335';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -176,12 +176,15 @@
 
 <div class="con" role="main">
   <!-- 상위 페이지 탭 -->
+  <span id="pageTabsHome" hidden></span>
   <div class="tabs page-tabs" id="pageTabs" role="tablist" aria-label="메인 탭">
     <button class="tab" data-page="mywork" onclick="setPage('mywork')" role="tab" aria-selected="false" id="tabMyWork" title="담당 · 마감이 있는 일을 한곳에 — 맵 · 이슈 · 회의 액션 · 사전검토 · 일정 · 개발">🎯 내 업무</button>
     <button class="tab" data-page="mindmap" onclick="setPage('mindmap')" role="tab" aria-selected="false" id="tabMindmap" style="display:none" title="생각 정리 · 업무 분장 · 프로젝트 구조 (관리자가 지정한 사용자)">🧠 마인드맵</button>
     <button class="tab on" data-page="team" onclick="setPage('team')" role="tab" aria-selected="true" aria-controls="modeTabs" title="업무일지 분석 · 주간 업무 · 업무 부하">📒 업무 관리</button>
     <button class="tab" data-page="project" onclick="setPage('project')" role="tab" aria-selected="false" aria-controls="modeTabsProj">📁 프로젝트 관리</button>
   </div>
+  <script>/* v13.335 — 넓은 화면(>1100px)은 대메뉴를 맨 위 머리 줄(제목 옆)로 올려 내용 높이 확보. 좁으면 원래 자리 */
+  (function(){var mq=window.matchMedia('(min-width:1101px) and (min-height:501px)');function place(){var t=document.getElementById('pageTabs'),b=document.querySelector('.hdr-brand'),home=document.getElementById('pageTabsHome');if(!t||!b||!home)return;if(mq.matches){if(t.parentNode!==b.parentNode){b.parentNode.insertBefore(t,b.nextSibling);document.body.classList.add('wm-tabs-top')}}else if(t.previousSibling!==home){home.parentNode.insertBefore(t,home.nextSibling);document.body.classList.remove('wm-tabs-top')}}place();if(mq.addEventListener)mq.addEventListener('change',place);else if(mq.addListener)mq.addListener(place)})();</script>
   <!-- 하위 모드 탭 — 묶음(.tab-grp 이름 · .tab-sep 구분선)으로 나눔 (v13.288) -->
   <div class="tabs sub-tabs" id="modeTabs" role="tablist" aria-label="업무 관리 하위 탭">
     <span class="tab-grp">업무일지</span>

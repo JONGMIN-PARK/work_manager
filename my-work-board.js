@@ -54,16 +54,20 @@ function mwBoardItems(items) {
 }
 
 /* ═══ 그리기 ═══ */
-function mwBoardHtml(items, today) {
+/** 보드 거르기 알약 · 다 한 것 · 칸 관리 — v13.335 부터 내 업무 한 줄 도구 막대 안에 들어감 */
+function mwBoardBarHtml(items, today) {
   var self = _mw.data.self, f = _mwbFilter();
   var open = items.filter(function (it) { return !it.done; });
   var cnt = {};
   MW_BF.forEach(function (b) { cnt[b[0]] = open.filter(function (it) { return _mwbPass(it, b[0], today); }).length; });
-  var h = '<div class="mwb-bar"><div class="mwb-sum">' + MW_BF.map(function (b) {
+  return '<div class="mwb-bar"><div class="mwb-sum">' + MW_BF.map(function (b) {
     return '<button class="mwb-pill' + (f === b[0] ? ' on' : '') + (b[0] === 'late' && cnt.late ? ' is-late' : '') + '" data-bf="' + b[0] + '">' + b[1] + ' <b>' + cnt[b[0]] + '</b></button>';
   }).join('') + (f ? '<button class="mwb-pill mwb-clear" data-bf="">✕ 모두 보기</button>' : '') + '</div>' +
     '<label class="mwb-tg"><input type="checkbox" data-bact="done"' + (_mwbShowDone() ? ' checked' : '') + '> 다 한 것도</label>' +
     (self ? '<button class="mw-btn" data-bact="cats" title="칸 추가 · 이름 · 색 · 순서 · 삭제">⚙ 칸 관리</button>' : '') + '</div>';
+}
+function mwBoardHtml(items, today) {
+  var self = _mw.data.self, h = '';
   var cols = mwBoardCols().slice();
   var by = {};
   mwBoardItems(items).forEach(function (it) { var c = mwBoardColOf(it); (by[c.id] = by[c.id] || []).push(it); });

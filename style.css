@@ -1777,6 +1777,41 @@ button.mw-pill:hover{border-color:var(--ac)}
 .mw-add{display:flex;gap:6px;margin-bottom:14px}
 .mw-add .mw-input:first-child{flex:1}
 .mw-date{width:136px;flex:none}
+/* v13.335 한 줄 도구 막대 + 옆 칸 — 타임라인 바로 아래에 목록 · 보드 · 주 · 월 */
+.mw-bar2{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin:0 0 10px}
+.mw-bar2 .mw-chips,.mw-bar2 .mw-ltools,.mw-bar2 .mwb-bar,.mw-bar2 .mw-add{margin:0}
+.mw-bar2 .mw-chips{gap:4px}
+.mw-bar2 .mw-chip{padding:3px 9px}
+.mw-bar2 .mwb-sum{margin-right:0;gap:4px}
+.mw-bar2 .mwb-pill{padding:3px 10px;font-size:12px}
+.mw-bar2 .mwb-bar{gap:6px}
+.mw-bar2-sp{flex:1 1 0;min-width:0}
+.mw-bar2 .mw-add{flex:0 1 560px;min-width:320px;gap:4px}
+.mw-bar2 .mw-add .mw-input,.mw-bar2 .mw-add .mw-btn{padding:4px 8px}
+.mw-bar2 .mw-date{width:118px}
+.mw-side-tg{padding:4px 9px;white-space:nowrap}
+.mw-side-tg.on{border-color:var(--ac);color:var(--ac-t)}
+.mw-body{display:grid;grid-template-columns:minmax(0,1fr) 288px;gap:12px;align-items:start}
+.mw-body.no-side{grid-template-columns:minmax(0,1fr)}
+.mw-main{min-width:0}
+.mw-side{position:sticky;top:8px;max-height:calc(100vh - 16px);overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-width:0}
+.mw-side[hidden]{display:none}
+.mw-side .mwc-todaybar{margin:0;flex-direction:column;align-items:stretch}
+.mw-side .mwc-todaybar .mwc-chip{max-width:none}
+.mw-side .mwj{margin:0}
+.mw-side .mwj-tg{margin-left:0}
+.mw-side .mwj-l{flex-direction:column;overflow:visible;scroll-snap-type:none}
+.mw-side .mwj-c{flex:none}
+@media (max-width:1100px){
+  .mw-body{grid-template-columns:minmax(0,1fr)}
+  .mw-side{position:static;max-height:none;order:-1}
+  .mw-side .mwj-l{flex-direction:row;overflow-x:auto}
+  .mw-side .mwj-c{flex:0 0 232px}
+}
+@media (max-width:768px){
+  .mw-bar2 .mw-add{flex-basis:100%;min-width:0}
+  .mw-bar2-sp{display:none}
+}
 .mw-grp{background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;margin-bottom:10px;overflow:hidden}
 .mw-grp-h{padding:9px 12px;font-size:13px;font-weight:600;color:var(--t3);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
 .mw-grp-h b{color:var(--t5);font-weight:500}
@@ -4910,3 +4945,11 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
 #mNotebook .nb-tplc:hover{transform:translateY(-2px);box-shadow:0 8px 20px -10px rgba(0,0,0,.25);color:var(--t1)}
 #mNotebook .nb-tplc:hover span{background:var(--ac-bg)}
 
+
+/* ═══ v13.335 — 대메뉴를 머리 줄로 (넓은 화면, 업무일지_분석기.html 의 place()) · 내용 높이 확보 ═══ */
+body.wm-tabs-top .hdr{padding-top:9px;padding-bottom:9px}
+.hdr .page-tabs{margin:0 0 0 8px;flex-wrap:nowrap;flex:0 0 auto;gap:4px;background:transparent;border:none;padding:0}
+.hdr .page-tabs .tab{padding:6px 14px!important;font-size:13px;border-radius:8px;box-shadow:none;white-space:nowrap}
+.hdr .page-tabs .tab.on{box-shadow:none}
+body.wm-tabs-top .con{padding-top:12px}
+@media (max-width:1400px){.hdr .page-tabs .tab{padding:6px 10px!important;font-size:12.5px}}

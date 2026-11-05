@@ -292,29 +292,43 @@ function _mwPaintNow(el) {
       '</div></div>' +
   '</div>';
   h += '<div id="mwtSlot"></div>';   // 🕒 타임라인 · 옆 달력 (v13.271, my-work-timeline.js — 다시 그려도 그 띠는 그대로 옮겨 붙임)
-  // 출처 거르기
-  h += '<div class="mw-chips"><button class="mw-chip' + (_mw.src === 'all' ? ' on' : '') + '" data-src="all">전체 ' + items.filter(function (x) { return !x.done; }).length + '</button>' +
+  // v13.335 한 줄 도구 막대 — 출처 · 정렬/거르기(목록) · 보드 알약 · 할 일 바로 등록 · 옆 칸 열기 (예전엔 5줄로 쌓여 목록이 화면 아래로 밀림)
+  var cal = _mw.view === 'week' || _mw.view === 'month', board = _mw.view === 'matrix' && typeof mwBoardBarHtml === 'function';
+  var sideOn = _mwSideOn();
+  var bar = '<div class="mw-bar2"><div class="mw-chips"><button class="mw-chip' + (_mw.src === 'all' ? ' on' : '') + '" data-src="all">전체 ' + items.filter(function (x) { return !x.done; }).length + '</button>' +
     Object.keys(MW_SRC).filter(function (k) { return counts[k]; }).map(function (k) {
       return '<button class="mw-chip' + (_mw.src === k ? ' on' : '') + '" data-src="' + k + '">' + MW_SRC[k].icon + ' ' + MW_SRC[k].label + ' ' + counts[k] + '</button>';
     }).join('') + (typeof mwCalChipHtml === 'function' ? mwCalChipHtml() : '') + '</div>';
+  if (!cal && typeof mwListToolsHtml === 'function') bar += mwListToolsHtml();
+  if (board) bar += mwBoardBarHtml(shown, today);
+  bar += '<span class="mw-bar2-sp"></span>';
+  if (r.self) {
+    bar += '<form class="mw-add" id="mwAdd"><input id="mwAddTitle" class="mw-input" maxlength="500" placeholder="+ 할 일 — &quot;내일 14:00 !긴급 견적&quot;" title="&quot;내일 14:00 !긴급 견적 회신&quot; 처럼 적으면 마감 · 중요도까지" autocomplete="off">' +
+      '<input id="mwAddDue" type="date" class="mw-input mw-date" title="마감 (없어도 됨)"><button class="mw-btn mw-btn-p" type="submit">추가</button>' +
+      '<button class="mw-btn" type="button" data-mwt="new" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅 일정…</button></form>';
+  }
+  var side = (typeof mwCalTodayHtml === 'function' ? mwCalTodayHtml(today) : '') + (typeof mwProjStripHtml === 'function' ? mwProjStripHtml(today) : '');
+  if (side) {
+    var pjn = typeof mwProjs === 'function' && r.self ? mwProjs().filter(function (p) { return mwProjSt(p) !== 'done'; }).length : 0;
+    bar += '<button class="mw-btn mw-side-tg' + (sideOn ? ' on' : '') + '" data-mw-side="1" title="옆 칸 (오늘 일정 · 📁 내 프로젝트) ' + (sideOn ? '접기' : '펴기') + '">📁 프로젝트 ' + (pjn ? '<b>' + pjn + '</b> ' : '') + (sideOn ? '▸' : '◂') + '</button>';
+  }
+  bar += '</div>';
+  var top = h + bar;
+  var wrap = function (main, cls) {
+    return '<div class="mw-wrap' + (cls || '') + '">' + top + '<div class="mw-body' + (side && sideOn ? '' : ' no-side') + '"><div class="mw-main">' + main + '</div>' +
+      (side ? '<aside class="mw-side"' + (sideOn ? '' : ' hidden') + '>' + side + '</aside>' : '') + '</div></div>';
+  };
   // 달력 보기 — 목록 대신 주 · 월 달력
-  if (_mw.view === 'week' || _mw.view === 'month') {
-    el.innerHTML = '<div class="mw-wrap">' + h + mwCalHtml(items, today) + '</div>';
+  if (cal) {
+    el.innerHTML = wrap(mwCalHtml(items, today));
     _mwBind(el);
+    if (typeof mwProjBind === 'function') mwProjBind(el);
     mwCalBind(el);
     if (typeof mwPanelSync === 'function') mwPanelSync();
     return;
   }
-  if (typeof mwCalTodayHtml === 'function') h += mwCalTodayHtml(today);
-  if (r.self) {
-    h += '<form class="mw-add" id="mwAdd"><input id="mwAddTitle" class="mw-input" maxlength="500" placeholder="+ 할 일 — &quot;내일 14:00 !긴급 견적 회신&quot; 처럼 적으면 마감 · 중요도까지" autocomplete="off">' +
-      '<input id="mwAddDue" type="date" class="mw-input mw-date" title="마감 (없어도 됨)"><button class="mw-btn mw-btn-p" type="submit">추가</button>' +
-      '<button class="mw-btn" type="button" data-mwt="new" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅 일정 등록…</button></form>';
-  }
-  if (typeof mwProjStripHtml === 'function') h += mwProjStripHtml(today);   // 📁 내 프로젝트 (v13.273)
-  if (typeof mwListToolsHtml === 'function') h += mwListToolsHtml();
   if (_mw.view === 'matrix' && typeof mwBoardHtml === 'function') {   // 보드 — 내 칸 (v13.268, 예전 4칸)
-    el.innerHTML = '<div class="mw-wrap mw-wrap-board">' + h + mwBoardHtml(shown, today) + '</div>';
+    el.innerHTML = wrap(mwBoardHtml(shown, today), ' mw-wrap-board');
     _mwBind(el);
     if (typeof mwProjBind === 'function') mwProjBind(el);
     mwBindBoard(el);
@@ -322,6 +336,7 @@ function _mwPaintNow(el) {
     if (typeof mwPanelSync === 'function') mwPanelSync();
     return;
   }
+  h = '';
   var any = false;
   MW_GROUPS.forEach(function (g) {
     var list = by[g.key] || [];
@@ -333,12 +348,15 @@ function _mwPaintNow(el) {
       '<div class="mw-rows">' + _mwRowsHtml(g.key, list, today) + '</div></section>';
   });
   if (!any) h += '<div class="mw-empty">' + (r.self ? '🎉 담당한 일이 없습니다. 마인드맵 주제 · 이슈 · 회의 액션에 담당과 마감을 넣으면 여기에 모입니다.' : '담당한 일이 없습니다.') + '</div>';
-  el.innerHTML = '<div class="mw-wrap">' + h + '</div>';
+  el.innerHTML = wrap(h);
   _mwBind(el);
   if (typeof mwProjBind === 'function') mwProjBind(el);
   if (typeof mwBindOrder === 'function') mwBindOrder(el);
   if (typeof mwPanelSync === 'function') mwPanelSync();
 }
+
+/** 옆 칸(오늘 일정 · 내 프로젝트) 펴 둠 — 기본 폄, 사람마다 기억 (v13.335) */
+function _mwSideOn() { var v = _mwLS('side'); return v == null ? true : !!v; }
 
 /** 묶음이 길면 앞 MW_ROW_CAP 줄만 — 나머지는 '＋ N개 더 보기' (v13.275, 지연 수십 개가 화면을 다 덮던 것) */
 var MW_ROW_CAP = 15;
@@ -476,6 +494,7 @@ function _mwBind(el) {
     if (chip) { _mw.src = chip.getAttribute('data-src'); _mwPaint(); return; }
     var jump = t.closest('[data-mw-jump]');
     if (jump) { _mwJump(jump.getAttribute('data-mw-jump')); return; }
+    if (t.closest('[data-mw-side]')) { _mwLS('side', !_mwSideOn()); _mwPaint(); return; }
     var more = t.closest('[data-mw-more]');
     if (more) { _mw.more = _mw.more || {}; _mw.more[more.getAttribute('data-mw-more')] = true; _mwPaint(); return; }
     var fold = t.closest('[data-fold]');
