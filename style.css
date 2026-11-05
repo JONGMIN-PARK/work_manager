@@ -4953,3 +4953,36 @@ body.wm-tabs-top .hdr{padding-top:9px;padding-bottom:9px}
 .hdr .page-tabs .tab.on{box-shadow:none}
 body.wm-tabs-top .con{padding-top:12px}
 @media (max-width:1400px){.hdr .page-tabs .tab{padding:6px 10px!important;font-size:12.5px}}
+
+/* ═══ v13.336 — 내 업무 촘촘히: 타임라인 줄 20px · 아래 목록 · 보드 · 달력 글씨 한 단계 작게 ═══ */
+.mtl-it,.mtl-cl{height:17px;font-size:11.5px}
+.mtl-it em{font-size:10.5px}
+.mtl-pt i,.mtl-cl i{width:8px;height:8px}
+.mtl-pt .mtl-tx,.mtl-cl .mtl-tx{padding:0 4px}
+.mtl-cl b{font-size:9.5px;min-width:14px;height:14px;line-height:14px;padding:0 3px}
+.mtl-pc{font-size:10px;line-height:13px}
+.mtl-more{height:15px;font-size:9.5px;line-height:13px}
+.mtl-ln{padding-top:4px;font-size:11.5px}
+.mtl-ln i{margin-top:-4px}
+.mtl-cd{min-height:28px;font-size:11.5px;padding:2px 0 1px}
+.mtl-cd.is-today span{width:18px;height:18px;line-height:18px}
+.mtl-cal{padding:6px 8px}
+.mtl-cal-hd{margin-bottom:4px}
+#mMyWork .mw-grp{margin-bottom:8px}
+#mMyWork .mw-grp-h{padding:6px 10px;font-size:12.5px;position:sticky;top:0;z-index:2;background:var(--bg-ps,var(--bg-p))}
+#mMyWork .mw-grp{overflow:visible}
+#mMyWork .mw-row{padding:3px 10px;min-height:29px;font-size:12.5px;gap:7px}
+#mMyWork .mw-row:nth-child(even){background:color-mix(in srgb,var(--bg-hv) 45%,transparent)}
+#mMyWork .mw-row:hover{background:var(--bg-hv)}
+#mMyWork .mw-src,#mMyWork .mw-ctx,#mMyWork .mw-due{font-size:11.5px}
+#mMyWork .mw-src{width:64px}
+#mMyWork .mw-chk{width:14px;height:14px}
+#mMyWork .mw-prog{height:12px}
+#mMyWork .mwb-h{padding:8px 12px 6px;font-size:13.5px}
+#mMyWork .mwb-l{gap:5px;padding:2px 8px 8px}
+#mMyWork .mwb-i{padding:6px 9px;gap:3px;font-size:12.5px}
+#mMyWork .mwb-m{font-size:11.5px}
+#mMyWork .mwc-chip{font-size:11px}
+#mMyWork .mw-row.mw-picked{background:var(--ac-bg)}
+#mMyWork .mw-row.mw-row-drag{background:var(--ac-bg)}
+#mMyWork .mw-prog em{line-height:12px;font-size:9.5px}

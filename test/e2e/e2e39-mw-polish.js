@@ -44,9 +44,9 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.waitForSelector('#mwAdd'); await idle();
     await ev(function () { var b = document.querySelector('[data-mwc-view="list"]'); if (b) b.click(); }); await idle();
 
-    // 1. 긴 묶음 — 15줄 + 더 보기
+    // 1. 긴 묶음 — 30줄 + 더 보기 (v13.336)
     var late = await ev(function () { var s = document.querySelector('.mw-grp[data-grp="late"]'); return { rows: s.querySelectorAll('.mw-row').length, more: (s.querySelector('[data-mw-more]') || {}).textContent }; });
-    check(late.rows === 15 && /개 더 보기/.test(late.more || ''), '지연 묶음 15줄 + 더 보기 ' + JSON.stringify(late));
+    check(late.rows === 30 && /개 더 보기/.test(late.more || ''), '지연 묶음 30줄 + 더 보기 ' + JSON.stringify(late));
     await ev(function () { document.querySelector('[data-mw-more="late"]').click(); });
     check(await until(function () { var s = document.querySelector('.mw-grp[data-grp="late"]'); return s.querySelectorAll('.mw-row').length >= 20 && !s.querySelector('[data-mw-more]'); }), '더 보기 → 전부');
 

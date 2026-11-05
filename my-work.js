@@ -359,7 +359,7 @@ function _mwPaintNow(el) {
 function _mwSideOn() { var v = _mwLS('side'); return v == null ? true : !!v; }
 
 /** 묶음이 길면 앞 MW_ROW_CAP 줄만 — 나머지는 '＋ N개 더 보기' (v13.275, 지연 수십 개가 화면을 다 덮던 것) */
-var MW_ROW_CAP = 15;
+var MW_ROW_CAP = 30;   // v13.336 줄을 촘촘히 해서 15→30
 function _mwRowsHtml(key, list, today) {
   var all = (_mw.more || {})[key] || list.length <= MW_ROW_CAP + 3;
   var shown = all ? list : list.slice(0, MW_ROW_CAP);

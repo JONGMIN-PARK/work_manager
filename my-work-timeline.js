@@ -21,8 +21,8 @@
 var MWT_PPD = { week: 120, month: 30, year: 2.6 };   // 하루 폭(px)
 var MWT_MIN = 1.4, MWT_MAX = 320;
 var MWT_LABEL = 118;   // 왼쪽 줄 이름 폭 (휴대폰 92 — CSS 와 같게, 인스턴스마다 this.L)
-var MWT_ROW = 24;      // 한 줄 높이
-var MWT_MAXROWS = 6;   // 한 칸 안 쌓기 — 넘치면 +n
+var MWT_ROW = 20;      // 한 줄 높이 (v13.336 24→20 촘촘하게)
+var MWT_MAXROWS = 5;   // 한 칸 안 쌓기 — 넘치면 +n (v13.336 6→5, 줄 이름에 마우스 · +n 으로 나머지)
 var MWT_WD = '일월화수목금토';
 
 function _mtlNum(d) { return Math.floor(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 864e5); }
@@ -144,6 +144,15 @@ MwTimeline.prototype.update = function () {
   this.drawPick();
   if (st.collapsed) this.drawDensity();
   if (o.calendar) this.drawCal();
+  this.fitHeight();
+};
+/** v13.336 높이 = min(정한 높이, 내용 높이) — 항목이 적으면 빈 칸 없이 줄여 아래 목록이 위로 */
+MwTimeline.prototype.fitHeight = function () {
+  var main = this.el.querySelector('.mtl-main');
+  if (!main || this.st.collapsed) return;
+  main.style.height = 'auto';
+  var nat = main.offsetHeight;
+  main.style.height = (nat > 0 ? Math.min(this.st.height, nat) : this.st.height) + 'px';
 };
 
 /** 줄마다 쌓기 · 그리기 */
@@ -198,6 +207,10 @@ MwTimeline.prototype.layout = function (lanes) {
         t.row = r;
         out += self.itemHtml(t, r);
       });
+      // 가까운 +n 은 하나로 (v13.336 — 줄이 낮아져 단추끼리 겹치던 것)
+      var ok = Object.keys(over).sort(function (a, b) { return over[a].x - over[b].x; }), merged = {}, last = null;
+      ok.forEach(function (k) { var v = over[k]; if (last && v.x - last.x < 34) { last.n += v.n; last.ts = last.ts.concat(v.ts); } else { merged[k] = last = v; } });
+      over = merged;
       Object.keys(over).forEach(function (k) {
         var v = over[k];
         out += '<button class="mtl-more" data-more="' + _mtlYmd(v.ts[0].n1) + '" style="left:' + (v.x - 4) + 'px;top:' + (MWT_MAXROWS * MWT_ROW + 2) + 'px" title="' + _mwEsc(v.ts.map(function (t) { return '· ' + t.title; }).join('\n')) + '">+' + v.n + '</button>';
@@ -211,7 +224,7 @@ MwTimeline.prototype.layout = function (lanes) {
     }
     var nrows = Math.max(1, rows.length) + (Object.keys(over).length ? 1 : 0);
     var cnt = list.length;
-    h += '<div class="mtl-lane" data-lane="' + _mwEsc(l.id) + '" style="height:' + (nrows * MWT_ROW + 8) + 'px;--c:' + (l.color || '#94A3B8') + '">' +
+    h += '<div class="mtl-lane" data-lane="' + _mwEsc(l.id) + '" style="height:' + (nrows * MWT_ROW + 6) + 'px;--c:' + (l.color || '#94A3B8') + '">' +
       '<div class="mtl-ln" tabindex="0" role="button" aria-haspopup="true" data-ln="' + _mwEsc(l.id) + '" aria-label="' + _mwEsc(l.name + ' — 항목 목록') + '"><i></i><span>' + (l.icon ? _mwEsc(l.icon) + ' ' : '') + _mwEsc(l.name) + '</span><b>' + (cnt || '') + '</b></div>' + out + '</div>';
   });
   this.cv.querySelector('.mtl-lanes').innerHTML = h;
@@ -438,6 +451,17 @@ MwTimeline.prototype.hoverAt = function (clientX) {
     this._hovT = setTimeout(function () { if (self.hover === d) { self.calMonth = d.slice(0, 7); self.drawCal(); } }, 220);
   }
   return d;
+};
+
+/** 날짜 하나에 마우스 안내선 (달력 → 타임라인 연동) */
+MwTimeline.prototype.guideAt = function (d) {
+  var g = this.el.querySelector('.mtl-guide.is-hover');
+  if (!g || !this.X) return;
+  var n = _mtlNum(d);
+  if (n < this.from || n > this.to) { g.hidden = true; return; }
+  g.hidden = false;
+  g.style.left = (this.X(n) + this.st.ppd / 2) + 'px';
+  g.querySelector('span').textContent = _mtlFmt(n, this.st.ppd);
 };
 
 /* ═══ 이벤트 묶기 ═══ */
@@ -798,6 +822,30 @@ MwTimeline.prototype.bindCal = function () {
       if (self.st.link) self.goDate(d, true);   // 🔗 연동 — 타임라인이 그날로
       else { self.pick = d; self.drawCal(); self.drawPick(); }
     }
+  });
+  // v13.336 🔗 연동 — 달력 날짜에 마우스 → 타임라인에 그날 세로선 (안 보이는 날이면 잠깐 머문 뒤 그리로 밀어 줌)
+  cal.addEventListener('mouseover', function (e) {
+    var cd = e.target.closest('[data-cd]');
+    if (!cd || !self.st.link) return;
+    var d = cd.getAttribute('data-cd');
+    if (self._calHov === d) return;
+    self._calHov = d;
+    cal.querySelectorAll('.mtl-cd.is-hover').forEach(function (x) { x.classList.remove('is-hover'); });
+    cd.classList.add('is-hover');
+    self.guideAt(d);
+    clearTimeout(self._calHovT);
+    self._calHovT = setTimeout(function () {
+      if (self._calHov !== d) return;
+      var x = self.X(_mtlNum(d)) + self.st.ppd / 2, sl = self.sc.scrollLeft, w = self.sc.clientWidth;
+      if (x < sl + self.L + 20 || x > sl + w - 20) {
+        self.sc.scrollTo({ left: Math.max(0, x - self.L - (w - self.L) / 2), behavior: 'smooth' });
+      }
+    }, 350);
+  });
+  cal.addEventListener('mouseleave', function () {
+    self._calHov = null; clearTimeout(self._calHovT);
+    cal.querySelectorAll('.mtl-cd.is-hover').forEach(function (x) { x.classList.remove('is-hover'); });
+    var g = self.el.querySelector('.mtl-guide.is-hover'); if (g) g.hidden = true;
   });
   cal.addEventListener('dblclick', function (e) {
     var cd = e.target.closest('[data-cd]');
