@@ -35,7 +35,16 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
   var ok = 0, fail = 0;
   function check(cnd, m) { if (cnd) { ok++; console.log('✔', m); } else { fail++; console.log('FAIL', m); } }
   async function until(fn, arg, ms) { return page.waitForFunction(fn, { timeout: ms || 8000 }, arg).then(function () { return true; }, function () { return false; }); }
-  function rowOf(title) { return page.evaluate(function (t) { var r = Array.from(document.querySelectorAll('#mMyWork .mw-row')).filter(function (x) { return x.querySelector('.mw-title') && x.querySelector('.mw-title').textContent === t; })[0]; return r ? { key: r.getAttribute('data-key'), txt: r.textContent, grp: r.closest('[data-grp]') && r.closest('[data-grp]').getAttribute('data-grp') } : null; }, title); }
+  // 묶음이 30줄을 넘으면 「더 보기」 뒤로 숨음 — 같은 실행의 앞 테스트가 남긴 맵 할 일이 많을 때 (v13.342)
+  async function rowOf(title) {
+    var r0 = await rowOf0(title); if (r0) return r0;
+    await page.evaluate(function () { document.querySelectorAll('#mMyWork .mw-grp.mw-folded:not([data-grp="done"]) [data-fold]').forEach(function (b) { b.click(); }); });
+    await wait(300);
+    await page.evaluate(function () { document.querySelectorAll('#mMyWork [data-mw-more]').forEach(function (b) { b.click(); }); });
+    await wait(300);
+    return rowOf0(title);
+  }
+  function rowOf0(title) { return page.evaluate(function (t) { var r = Array.from(document.querySelectorAll('#mMyWork .mw-row')).filter(function (x) { return x.querySelector('.mw-title') && x.querySelector('.mw-title').textContent === t; })[0]; return r ? { key: r.getAttribute('data-key'), txt: r.textContent, grp: r.closest('[data-grp]') && r.closest('[data-grp]').getAttribute('data-grp') } : null; }, title); }
   try {
     await page.setViewport({ width: 1400, height: 900 });
     await page.goto('http://localhost:3000/', { waitUntil: 'networkidle2' });
@@ -198,7 +207,15 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await page.select('#mwSort', 'manual');
     await wait(200);
     check(await page.evaluate(function () { return document.querySelectorAll('#mMyWork .mw-row[data-ord][draggable="true"]').length > 1; }), '직접 순서 — 줄을 끌 수 있음');
-    // 같은 묶음 두 줄 순서 바꾸기
+    // 같은 묶음에 줄 2개 이상 — 깨끗한 DB 에선 묶음마다 1줄뿐이라 오늘 마감 2개를 넣고 다시 그림 (v13.342)
+    await c.query("INSERT INTO my_todos (id, tenant_id, user_id, title, due_date) VALUES ('mtw-o1', $1, $2, '할일화면 순서1', $3), ('mtw-o2', $1, $2, '할일화면 순서2', $3) ON CONFLICT (id) DO NOTHING", [tid, me.id, kst(0)]);
+    await page.evaluate(function () { renderMyWork(); });
+    await page.waitForNetworkIdle({ idleTime: 400, timeout: 8000 }).catch(function () {});
+    await page.select('#mwSort', 'manual').catch(function () {});
+    await wait(300);
+    // 같은 묶음 두 줄 순서 바꾸기 — 접힌 묶음(나중에 · 마감 없음)은 줄을 안 그리므로 펼쳐 둠 (깨끗한 DB 에선 할 일이 거기만 있음)
+    await page.evaluate(function () { document.querySelectorAll('#mMyWork .mw-grp.mw-folded:not([data-grp="done"]) [data-fold]').forEach(function (b) { b.click(); }); });
+    await wait(300);
     var swapped = await page.evaluate(function () {
       var g = Array.from(document.querySelectorAll('#mMyWork .mw-grp')).filter(function (s) { return s.querySelectorAll('.mw-row[data-ord]').length >= 2; })[0];
       if (!g) return null;

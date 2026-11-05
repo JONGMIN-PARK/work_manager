@@ -1153,9 +1153,9 @@
 
     applyResponsiveAuthor();
 
-    $('wrAuTeam').addEventListener('input', function (e) { _authorState.team = e.target.value.trim(); scheduleCheck(); });
-    $('wrAuStart').addEventListener('change', function (e) { _authorState.weekStart = e.target.value; loadWorkRecords(); scheduleCheck(300); });
-    $('wrAuEnd').addEventListener('change', function (e) { _authorState.weekEnd = e.target.value; loadWorkRecords(); });
+    $('wrAuTeam').addEventListener('input', function (e) { _authorTouch(); _authorState.team = e.target.value.trim(); scheduleCheck(); });
+    $('wrAuStart').addEventListener('change', function (e) { _authorTouch(); _authorState.weekStart = e.target.value; loadWorkRecords(); scheduleCheck(300); });
+    $('wrAuEnd').addEventListener('change', function (e) { _authorTouch(); _authorState.weekEnd = e.target.value; loadWorkRecords(); });
 
     box.querySelectorAll('[data-vm]').forEach(function (b) {
       b.addEventListener('click', function () { syncAuthorEditorsToState(); _authorState.viewMode = b.dataset.vm; renderAuthor(); });
@@ -1370,6 +1370,7 @@
     else ed.value = paneKey === 'last' ? _authorState.lastText : _authorState.curText;
     var debounceT = null;
     ed.addEventListener('input', function () {
+      _authorTouch();
       var p = ed.dataset.pane || paneKey;
       _authorState[p === 'last' ? 'lastText' : 'curText'] = ed.value;
       _authorState.editPane = p; // 마지막 편집 페인 추적 (툴바 타겟 추정용)
@@ -1512,8 +1513,11 @@
     }
   }
 
-  async function authorLoadById(id) {
+  // v13.342 사용자가 팀 · 주차 · 글을 건드린 횟수 — 처음 열 때 자동 불러오기가 늦게 오면 그사이 바꾼 것을 덮지 않게
+  function _authorTouch() { _authorState._touch = (_authorState._touch || 0) + 1; }
+  async function authorLoadById(id, stillOk) {
     var r = await apiFetch('/api/weekly-reports/' + encodeURIComponent(id));
+    if (stillOk && !stillOk()) return false;
     var d = r.data;
     // 주차는 이름(팀_26W17_04/20~04/24)에서 읽는다 — DATE 칼럼은 서버 시간대에 따라 하루 밀려 올 수 있다
     var meta = WRP.parseName(d.name);
@@ -1810,14 +1814,16 @@
     _authorState._autoLoadTried = true;
     var stored = null;
     try { stored = localStorage.getItem(LS_LAST_ID); } catch (e) {}
+    var t0 = _authorState._touch || 0, stillOk = function () { return (_authorState._touch || 0) === t0; };
     return (async function () {
       try {
         if (stored) {
-          try { await authorLoadById(stored); return true; }
+          try { return (await authorLoadById(stored, stillOk)) !== false; }
           catch (e) { forgetLoaded(); }
         }
         var r = await apiFetch('/api/weekly-reports?limit=1');
-        if (r.data && r.data.length) { await authorLoadById(r.data[0].id); return true; }
+        if (!stillOk()) return false;
+        if (r.data && r.data.length) return (await authorLoadById(r.data[0].id, stillOk)) !== false;
       } catch (e) { /* silent */ }
       return false;
     })();

@@ -306,9 +306,10 @@ async function waitSaved(page) {
     check('최신본 불러오기 → 김의 변경 보임', (await nodes(page)).indexOf('김 추가') >= 0);
 
     // ── 가져오기 (Markdown) ──
-    await page.click('[data-act="back"]');
+    await page.waitForNetworkIdle({ idleTime: 400, timeout: 8000 }).catch(function () {}); await page.click('[data-act="back"]');   // 다시 불러온 뒤 잠금 · 그림 · 댓글을 받는 동안 편집기를 한 번 더 그림
     await page.waitForSelector('#mindmapWrap [data-act="import"]');
-    await page.click('#mindmapWrap [data-act="import"]');
+    await page.waitForNetworkIdle({ idleTime: 400, timeout: 8000 }).catch(function () {});   // 목록은 받은 뒤 한 번 더 그림
+    await page.click('#mmListMore .wm-more'); await page.click('#mindmapWrap [data-act="import"]');   // v13.295 ⋯ 메뉴 안
     await page.waitForSelector('#mmImpText');
     await page.type('#mmImpText', '# 가져온 회의\n## 안건\n- 일정\n  - 납기\n## 결정\n- 외주');
     await page.click('#mmImpOk');

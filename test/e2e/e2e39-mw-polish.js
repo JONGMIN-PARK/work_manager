@@ -16,8 +16,8 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await c.query("DELETE FROM my_projects WHERE user_id = $1 AND title LIKE '점검%'", [me.id]);
   }
   await clean();
-  // 지연 20개 — 더 보기 확인용
-  for (var i = 0; i < 20; i++) {
+  // 지연 40개 — 더 보기 확인용 (v13.336 한도 30줄보다 많게 — 예전 20개는 쌓인 DB 덕에 통과하던 것)
+  for (var i = 0; i < 40; i++) {
     await c.query("INSERT INTO my_todos (id, tenant_id, user_id, title, due_date) VALUES ($1, $2, $3, $4, $5)", ['mtp-' + i, me.tenant_id, me.id, '점검 지연 ' + String(i).padStart(2, '0'), kst(-3)]);
   }
   await c.query("INSERT INTO my_todos (id, tenant_id, user_id, title, due_date) VALUES ('mtp-a', $1, $2, '점검 A', $3), ('mtp-b', $1, $2, '점검 B', $3)", [me.tenant_id, me.id, kst(5)]);

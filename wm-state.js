@@ -99,6 +99,16 @@ function wmHdrPop(id){
   _wmPopOpen=on?id:null;
   var b=w.querySelector('[aria-expanded]');if(b)b.setAttribute('aria-expanded',on?'true':'false');
   if(on&&id==='hdrLookWrap'){var l=document.getElementById('fontBar'),c=l&&l.querySelector('.fnd.on');if(c)l.scrollTop=Math.max(0,c.offsetTop-l.clientHeight/2)}  // 고른 글씨체가 보이게
+  if(on)_wmPopKeepIn(w);
+}
+/* v13.342 펼친 메뉴가 화면 밖으로 나가면 안쪽으로 — 막대가 두 줄로 접혀 ⋯ 이 왼쪽에 오면 오른쪽 맞춤 메뉴가 왼쪽 밖으로 잘리던 것 */
+function _wmPopKeepIn(w){
+  var m=w.querySelector('.hdr-pop-menu');if(!m)return;
+  m.style.translate='';
+  var r=m.getBoundingClientRect(),vw=document.documentElement.clientWidth,dx=0;
+  if(!r.width)return;
+  if(r.left<8)dx=8-r.left;else if(r.right>vw-8)dx=vw-8-r.right;
+  if(dx)m.style.translate=Math.round(dx)+'px 0';
 }
 document.addEventListener('click',function(e){
   // 테마 · 글씨체를 누르면 목록을 다시 그려 누른 칸이 문서에서 빠짐 — 그때는 닫지 않고 계속 골라 보게

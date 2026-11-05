@@ -40,7 +40,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.click('#tabMyWork');
     await page.waitForSelector('#mMyWork [data-mwn="open"]');
     await page.waitForNetworkIdle({ idleTime: 400, timeout: 10000 }).catch(function () {});
-    await page.click('#mMyWork [data-mwn="open"]');
+    await page.click('#mwMoreWrap .wm-more'); await page.click('#mMyWork [data-mwn="open"]');   // v13.338 ⋯ 메뉴 안
     await until(function () { var n = document.getElementById('mwNotes'); return n && n.classList.contains('on'); });
     await wait(400);
 

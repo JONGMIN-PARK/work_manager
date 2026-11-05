@@ -39,7 +39,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await wait(400);
     await page.click('#tabMyWork');
     await page.waitForSelector('#mMyWork [data-mwn="open"]');
-    await page.click('#mMyWork [data-mwn="open"]');
+    await page.click('#mwMoreWrap .wm-more'); await page.click('#mMyWork [data-mwn="open"]');   // v13.338 ⋯ 메뉴 안
     await until(function () { return !!document.querySelector('#mwNotes.on .mwn-t'); });
     await ev(function (d) { mwNotesGo(d, ''); }, d0);   // 🔗 연동이면 타임라인 날짜로 열리므로 오늘부터
     await until(function (d) { return _mwn.loaded === d; }, d0);

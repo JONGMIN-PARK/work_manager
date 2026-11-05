@@ -1,3 +1,12 @@
+# v13.342 모든 글 파일은 LF 로 고정 — 커밋마다 "LF will be replaced by CRLF" 경고 · 작업 폴더 CRLF/LF 뒤섞임 정리
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+*.xlsx binary
+*.xls binary
+*.pdf binary
 # 스냅샷 픽스처는 바이트 비교 — Windows(core.autocrlf)에서도 LF 로 체크아웃되게 고정
 test/fixtures/** text eol=lf
 server/__tests__/*.snapshot.txt text eol=lf

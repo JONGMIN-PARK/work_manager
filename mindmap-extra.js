@@ -293,8 +293,9 @@ function mmLinkModal() {
     var type = types[0], seq = 0, timer = null;
     function run() {
       var my = ++seq;
-      var list = _mmEl('mmLinkList');
-      apiFetch('/api/mindmaps/search-refs?type=' + type + '&q=' + encodeURIComponent(_mmEl('mmLinkQ').value.trim())).then(function (r) {
+      var list = _mmEl('mmLinkList'), qEl = _mmEl('mmLinkQ');
+      if (!list || !qEl) return;   // v13.342 찾기 글자를 치고 창을 바로 닫으면 늦게 도는 찾기가 없어진 칸을 읽어 오류
+      apiFetch('/api/mindmaps/search-refs?type=' + type + '&q=' + encodeURIComponent(qEl.value.trim())).then(function (r) {
         if (my !== seq || !list) return;
         var rows = (r && r.data) || [];
         list.innerHTML = rows.length ? rows.map(function (x) {

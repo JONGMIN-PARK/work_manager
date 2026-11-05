@@ -65,7 +65,19 @@ function overlap(page) {
   });
 }
 
+// 부서 준비 — 김 · 이 = 설계팀 (api-phase2 와 같은 값 · 혼자 돌려도 되게, v13.342)
+async function seedDept() {
+  var pg = require(path.join(__dirname, '../../server/node_modules/pg'));
+  var c = new pg.Client(process.env.DATABASE_URL || 'postgres://postgres:pw@localhost:54329/wm'); await c.connect();
+  var T = (await c.query("SELECT tenant_id FROM users WHERE email = 'kim@t.com'")).rows[0].tenant_id;
+  var d = (await c.query("SELECT id FROM departments WHERE name = '설계팀' AND tenant_id = $1", [T])).rows[0];
+  if (!d) d = (await c.query("INSERT INTO departments (name, tenant_id) VALUES ('설계팀', $1) RETURNING id", [T])).rows[0];
+  await c.query("UPDATE users SET department_id = $1 WHERE email IN ('kim@t.com','lee@t.com')", [d.id]);
+  await c.end();
+}
+
 (async function () {
+  await seedDept();
   var browser = await puppeteer.launch({ headless: 'shell', pipe: true, args: ['--no-sandbox'], userDataDir: path.join(require('os').tmpdir(), 'wm-e2e-chrome-' + Date.now()) });
   try {
     var page = await loginPage(browser, 'admin@t.com');
@@ -222,6 +234,7 @@ function overlap(page) {
     await waitSaved(page);
     await page.click('[data-act="back"]');
     await page.waitForSelector('#mindmapWrap .mm-card[data-id="' + mapId + '"]');
+    await page.waitForNetworkIdle({ idleTime: 400, timeout: 8000 }).catch(function () {});   // 목록은 받은 뒤 한 번 더 그림
     await page.click('#mindmapWrap .mm-card[data-id="' + mapId + '"]');
     await page.waitForSelector('#mmStage .mm-root');
     await wait(500);
@@ -236,8 +249,9 @@ function overlap(page) {
     // ── 9. AI (응답 흉내) — 미리보기 · 채택 · 버리기 · 저장 제외 ──
     aiMock = true;
     await page.evaluate(function () { _mm.aiReady = null; });
-    await page.click('[data-act="back"]');
+    await page.waitForNetworkIdle({ idleTime: 400, timeout: 8000 }).catch(function () {}); await page.click('[data-act="back"]');   // 다시 불러온 뒤 잠금 · 그림 · 댓글을 받는 동안 편집기를 한 번 더 그림
     await page.waitForSelector('#mindmapWrap .mm-card[data-id="' + mapId + '"]');
+    await page.waitForNetworkIdle({ idleTime: 400, timeout: 8000 }).catch(function () {});   // 목록은 받은 뒤 한 번 더 그림
     await page.click('#mindmapWrap .mm-card[data-id="' + mapId + '"]');
     await page.waitForSelector('#mmStage .mm-root');
     await page.waitForFunction(function () { var w = document.getElementById('mmAiWrap'); return w && !w.classList.contains('hidden'); }, { timeout: 5000 });

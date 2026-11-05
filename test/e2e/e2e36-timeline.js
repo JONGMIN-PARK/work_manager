@@ -27,6 +27,8 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
   await ins('todo-tl2', '타임 지연', null, kst(-1), 3);
   await ins('todo-tl3', '타임 설계 기간', kst(4), kst(8), 3);
   await ins('todo-tl4', '타임 다음달', null, kst(40), 3);
+  // 같은 날 4개 — 묶음(.mtl-cl) 확인용 (예전엔 쌓인 DB 의 다른 항목에 기대어 통과)
+  for (var q = 1; q <= 4; q++) await ins('todo-tlc' + q, '타임 같은날 ' + q, null, kst(16), 3);   // kst(9) 는 '빈 날 두 번' 시험 자리
   await c.query("INSERT INTO projects (id, name, status, visibility, owner_id, tenant_id) VALUES ('tl-p1', '타임 프로젝트', 'active', 'tenant', $1, $2)", [me.id, tid]);
   await c.query("INSERT INTO milestones (id, project_id, name, start_date, end_date, status, tenant_id) VALUES ('tl-ms1', 'tl-p1', '타임 마일스톤', $1, $2, 'progress', $3)", [kst(1), kst(12), tid]);
   await c.query("INSERT INTO milestone_assignments (id, tenant_id, milestone_id, project_id, user_id) VALUES ('tl-ma1', $1, 'tl-ms1', 'tl-p1', $2)", [tid, me.id]);

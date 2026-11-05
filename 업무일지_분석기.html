@@ -17,7 +17,7 @@
 <script src="settings.js?v=6" onerror="console.warn('settings.js 로드 실패: 인라인 폴백 사용')"></script>
 <script src="auth.js?v=19" onerror="console.warn('auth.js 로드 실패')"></script>
 <script defer src="weekly-report-parse.js?v=1" onerror="console.warn('weekly-report-parse.js 로드 실패')"></script>
-<script defer src="weekly-report-admin.js?v=24" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
+<script defer src="weekly-report-admin.js?v=25" onerror="console.warn('weekly-report-admin.js 로드 실패')"></script>
 <script src="project-data.js?v=19" onerror="console.warn('project-data.js 로드 실패')"></script>
 <script src="ui-helpers.js?v=8" onerror="console.warn('ui-helpers.js 로드 실패')"></script>
 <!-- 렌더러 (defer — 초기 표시 이후 실행돼도 무방) -->
@@ -36,7 +36,7 @@
 <script defer src="mindmap-view.js?v=26" onerror="console.warn('mindmap-view.js 로드 실패')"></script>
 <script defer src="mindmap-edit.js?v=18" onerror="console.warn('mindmap-edit.js 로드 실패')"></script>
 <script defer src="mindmap-panel.js?v=11" onerror="console.warn('mindmap-panel.js 로드 실패')"></script>
-<script defer src="mindmap-extra.js?v=6" onerror="console.warn('mindmap-extra.js 로드 실패')"></script>
+<script defer src="mindmap-extra.js?v=7" onerror="console.warn('mindmap-extra.js 로드 실패')"></script>
 <script defer src="mindmap-keys.js?v=15" onerror="console.warn('mindmap-keys.js 로드 실패')"></script>
 <script defer src="mindmap-media.js?v=1" onerror="console.warn('mindmap-media.js 로드 실패')"></script>
 <script defer src="mindmap-gantt.js?v=4" onerror="console.warn('mindmap-gantt.js 로드 실패')"></script>
@@ -91,7 +91,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <!-- v13.310 엑셀 · 워드 · PDF · 캡처 · 압축 라이브러리는 ui-helpers.js wmLib 가 첫 화면 뒤에 받음 -->
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=96">
+<link rel="stylesheet" href="style.css?v=97">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -122,7 +122,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.341';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.342';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -556,7 +556,7 @@
 
 <!-- 앱 스크립트 — 예전 인라인 <script> 를 나눈 파일들. 동기 로드(defer 금지) · 이 순서 그대로 (app-init.js 가 마지막) -->
 <script src="wm-fallbacks.js?v=4" onerror="console.warn('wm-fallbacks.js 로드 실패')"></script>
-<script src="wm-state.js?v=6" onerror="console.warn('wm-state.js 로드 실패')"></script>
+<script src="wm-state.js?v=7" onerror="console.warn('wm-state.js 로드 실패')"></script>
 <script src="wr-import.js?v=7" onerror="console.warn('wr-import.js 로드 실패')"></script>
 <script src="mode.js?v=11" onerror="console.warn('mode.js 로드 실패')"></script>
 <script src="wr-filters.js?v=4" onerror="console.warn('wr-filters.js 로드 실패')"></script>

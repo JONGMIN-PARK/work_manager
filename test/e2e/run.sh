@@ -2,6 +2,7 @@
 # 마인드맵 통합 테스트 — 임시 Postgres(:54329) + 서버(:3000) 를 띄우고 API · 브라우저 테스트 실행.
 #   bash test/e2e/run.sh              # 전부
 #   bash test/e2e/run.sh e2e3.js ...  # 고른 파일만 (한 묶음)
+#   KEEP=1 bash test/e2e/run.sh ...   # DB 를 깨끗하게 되돌리지 않고 그대로 (기본은 실행마다 wm_tpl 에서 새로 — reset.js)
 # 처음 한 번: 이 폴더에서 npm install (embedded-postgres). puppeteer · pg 는 server/node_modules 것을 씀.
 # 서버는 묶음마다 다시 켠다 — 로그인 횟수 제한(10회) 때문.
 cd "$(dirname "$0")"
@@ -32,17 +33,35 @@ kill_stale_pg
 
 PG_PID=
 if ! port_open 54329; then
-  FRESH=; [ -d .pgdata ] || FRESH=1
   node start.mjs > pg.log 2>&1 &
   PG_PID=$!
   for i in $(seq 1 60); do grep -q "PG READY" pg.log 2>/dev/null && break; sleep 1; done
-  if [ -n "$FRESH" ]; then node setup.js > setup.log 2>&1 || { echo "setup 실패 — setup.log 참고"; exit 1; }; fi
 fi
-port_open 3000 && { echo "포트 3000 이 이미 쓰이고 있습니다 — 띄워 둔 서버를 끄고 다시 실행하세요"; exit 1; }
+
+# 지난 실행이 남긴 테스트 서버(.srv.pid 에 적어 둔 것)면 끄고 시작 — 출력을 head 로 자르는 등 중간에 끊기면 남던 것
+SRV_PID_FILE="$DIR/.srv.pid"
+listen_pids() { netstat -ano 2>/dev/null | grep ":$1 .*LISTENING" | awk '{print $5}' | sort -u; }
+if port_open 3000 && [ -f "$SRV_PID_FILE" ]; then
+  kill_port 3000; sleep 1
+fi
+rm -f "$SRV_PID_FILE"
+port_open 3000 && { echo "포트 3000 을 다른 서버(PID $(listen_pids 3000 | tr '
+' ' '))가 쓰고 있습니다 — 끄고 다시 실행하세요"; exit 1; }
+
+# 어떻게 끝나든(Ctrl+C · 파이프 끊김 포함) 테스트 서버는 정리
+cleanup() { port_open 3000 && [ -f "$SRV_PID_FILE" ] && kill_port 3000; rm -f "$SRV_PID_FILE"; }
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT TERM PIPE
+
+# 실행마다 깨끗한 DB (KEEP=1 이면 그대로)
+if [ -z "$KEEP" ]; then
+  node reset.js || exit 1
+fi
 
 FAILED=0
 run_batch() {
   (cd "$SRV" && DATABASE_URL=$DB PORT=3000 CORS_ORIGIN=http://localhost:3000 node server.js > "$DIR/server.log" 2>&1) &
+  echo $! > "$SRV_PID_FILE"
   curl -s -o /dev/null --retry 20 --retry-connrefused --retry-delay 1 http://localhost:3000/
   sleep 3   # 시작 직후 마이그레이션 확인이 끝날 때까지 — 첫 테스트가 가끔 목록을 못 받던 것
   for f in "$@"; do
@@ -54,6 +73,7 @@ run_batch() {
     printf "%-20s %s\n" "$f" "$res"
   done
   kill_port 3000
+  rm -f "$SRV_PID_FILE"
   sleep 1
 }
 
@@ -99,6 +119,30 @@ else
   run_batch e2e47-toolbar-proj.js
   run_batch e2e48-toolbar-mw.js
   run_batch e2e49-ai-ask.js
+  # v13.342 빠져 있던 것들 — 로그인 횟수 제한(서버당 10회) 때문에 하나씩
+  run_batch e2e50-telegram.js
+  run_batch e2e51-docs.js
+  run_batch e2e52-mm-touch.js
+  run_batch e2e53-wr-insights.js
+  run_batch e2e54-lazy-libs.js
+  run_batch e2e55-wr-goals.js
+  run_batch e2e56-wr-analytics.js
+  run_batch e2e57-mtl-longbar.js
+  run_batch e2e58-chat.js
+  run_batch e2e59-notebook.js
+  run_batch e2e60-notebook-links-coach.js
+  run_batch e2e61-notebook-print.js
+  run_batch e2e62-meeting-print.js
+  run_batch e2e63-live-paper.js
+  run_batch e2e64-file-open.js
+  run_batch e2e65-write-start.js
+  run_batch e2e66-spell.js
+  run_batch e2e67-mm-timesort.js
+  run_batch e2e68-search-recent.js
+  run_batch e2e69-note-spread.js
+  run_batch e2e70-book-all.js
+  run_batch e2e71-notes-safe.js
+  run_batch e2e72-nb-save.js
 fi
 
 # 이 실행이 띄운 Postgres 면 정상 종료 (start.mjs 가 .pgstop 을 보고 멈춤)
