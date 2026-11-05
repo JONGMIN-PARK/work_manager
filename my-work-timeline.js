@@ -408,7 +408,8 @@ MwTimeline.prototype.zoomTo = function (ppd, clientX) {
   this.save(true);
 };
 MwTimeline.prototype.goDate = function (d, pick) {
-  this.st.center = _mtlNum(d) + 0.5;
+  // 오늘이면 머리 '오늘' 단추와 같은 자리(오늘이 왼쪽 1/4) — v13.337, 예전엔 달력 오늘은 가운데라 서로 어긋남
+  this.st.center = d === mwToday() ? null : _mtlNum(d) + 0.5;
   this.update();
   if (pick) this.setPick(d);
 };
