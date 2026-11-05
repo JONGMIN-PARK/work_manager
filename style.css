@@ -1796,6 +1796,20 @@ button.mw-pill:hover{border-color:var(--ac)}
 .mw-bar2 .mw-sum .mw-pill{padding:3px 9px;font-size:12px}
 .mw-bar2 select.wm-tb-sel{max-width:150px;font-size:12px;padding:4px 6px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-i);color:var(--t3);font-family:inherit}
 .mw-bar2 .wm-more{padding:4px 9px;min-height:0}
+/* v13.340 넓은 화면(≥1600px · FHD)은 끝까지 한 줄 — [목록·보드·주·월] … [할 일] [📁 프로젝트] [사람] [⋯] · 모자라면 할 일 입력 · 출처 칩이 줄어듦 */
+@media (min-width:1600px){
+  .mw-bar2{flex-wrap:nowrap;gap:6px}
+  .mw-bar2>*{flex-shrink:0}
+  .mw-bar2 .mw-chips,.mw-bar2 .mwb-sum,.mw-bar2 .mwb-bar,.mw-bar2 .mw-ltools{flex-wrap:nowrap}
+  .mw-bar2 .mw-chips{flex-shrink:1;min-width:min-content}
+  .mw-bar2 .mw-chip,.mw-bar2 .mw-pill,.mw-bar2 .mwb-pill{white-space:nowrap;flex-shrink:0}
+  .mw-bar2-sp{display:none}
+  .mw-bar2 .mw-add{flex:1 1 420px;min-width:180px;margin-left:auto}
+  .mw-bar2 .mw-add .mw-input:first-child{flex:1 1 auto;min-width:60px;width:auto}
+  .mw-bar2 .mw-ltools select{max-width:110px}
+  .mw-bar2 .mw-date{width:112px}
+  .mw-bar2 select.wm-tb-sel{max-width:130px}
+}
 .mw-body{display:grid;grid-template-columns:minmax(0,1fr) 288px;gap:12px;align-items:start}
 .mw-body.no-side{grid-template-columns:minmax(0,1fr)}
 .mw-main{min-width:0}
