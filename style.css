@@ -1791,6 +1791,11 @@ button.mw-pill:hover{border-color:var(--ac)}
 .mw-bar2 .mw-date{width:118px}
 .mw-side-tg{padding:4px 9px;white-space:nowrap}
 .mw-side-tg.on{border-color:var(--ac);color:var(--ac-t)}
+/* v13.339 머리 줄 없앰 — 지연 · 오늘 · 이번 주 · 사람 · ⋯ 이 도구 막대 안으로 */
+.mw-bar2 .mw-sum{flex:0 0 auto;gap:4px;order:0;flex-basis:auto}
+.mw-bar2 .mw-sum .mw-pill{padding:3px 9px;font-size:12px}
+.mw-bar2 select.wm-tb-sel{max-width:150px;font-size:12px;padding:4px 6px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-i);color:var(--t3);font-family:inherit}
+.mw-bar2 .wm-more{padding:4px 9px;min-height:0}
 .mw-body{display:grid;grid-template-columns:minmax(0,1fr) 288px;gap:12px;align-items:start}
 .mw-body.no-side{grid-template-columns:minmax(0,1fr)}
 .mw-main{min-width:0}

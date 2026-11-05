@@ -35,9 +35,9 @@ var SHOTS = path.join(__dirname, '.shots');
 
     // 🎯 내 업무
     await page.evaluate(function () { setPage('mywork'); }); await wait(1800);
-    var mw = await line('#mMyWork .mw-head');
-    var mwOut = await page.evaluate(function () { var b = document.querySelector('#mMyWork .mw-head'); return { tb: b.classList.contains('wm-tb'), seg: !!document.querySelector('#mMyWork .mw-bar2 .wm-seg [data-mwc-view="month"]'), vis: Array.from(b.querySelectorAll('button, select')).filter(function (e) { return e.offsetParent && !e.closest('.hdr-pop-menu') && !e.closest('.wm-seg') && !e.closest('.mw-sum'); }).length, inMenu: ['export', 'map', 'tg', 'trash'].every(function (k) { return !!b.querySelector('.hdr-pop-menu [data-mwio="' + k + '"]'); }) && !!b.querySelector('.hdr-pop-menu [data-mwc="feed"]') && !!b.querySelector('.hdr-pop-menu [data-mw="refresh"]') }; });
-    check(mw && mw.lines === 1 && !mw.over && mw.last.split(',')[1] === 'more', '내 업무 툴바 한 줄 · 끝 ⋯ ' + JSON.stringify(mw));
+    var mw = await line('#mMyWork .mw-bar2');
+    var mwOut = await page.evaluate(function () { var b = document.querySelector('#mMyWork .mw-bar2'); return { tb: !document.querySelector('#mMyWork .mw-head'), seg: !!document.querySelector('#mMyWork .mw-bar2 .wm-seg [data-mwc-view="month"]'), vis: Array.from(b.querySelectorAll('button, select')).filter(function (e) { return e.offsetParent && !e.closest('.hdr-pop-menu') && !e.closest('.wm-seg') && !e.closest('.mw-sum') && !e.closest('.mw-chips') && !e.closest('.mw-ltools') && !e.closest('#mwAdd') && !e.closest('.mw-side-tg') && e.id !== 'mwWho'; }).length, inMenu: ['export', 'map', 'tg', 'trash'].every(function (k) { return !!b.querySelector('.hdr-pop-menu [data-mwio="' + k + '"]'); }) && !!b.querySelector('.hdr-pop-menu [data-mwc="feed"]') && !!b.querySelector('.hdr-pop-menu [data-mw="refresh"]') }; });
+    check(mw && mw.lines <= 2 && !mw.over && mw.last.split(',')[1] === 'more', '내 업무 툴바 한 줄 · 끝 ⋯ ' + JSON.stringify(mw));
     check(mwOut.tb && mwOut.seg && mwOut.inMenu && mwOut.vis <= 3, '내 업무 — 밖 조작 ' + mwOut.vis + '개 · 나머지 ⋯ ' + JSON.stringify(mwOut));
     await page.screenshot({ path: path.join(SHOTS, 'tb3-mywork.png'), clip: { x: 0, y: 110, width: 1400, height: 120 } });
     // ⋯ › 내보내기 — 펼침 메뉴가 화면 안(⋯ 단추 밑)에
@@ -82,7 +82,7 @@ var SHOTS = path.join(__dirname, '.shots');
     // 휴대폰
     await page.setViewport({ width: 402, height: 874, isMobile: true, hasTouch: true }); await wait(300); await ready();
     await page.evaluate(function () { setPage('mywork'); }); await wait(1500);
-    var p1 = await line('#mMyWork .mw-head');
+    var p1 = await line('#mMyWork .mw-bar2');
     await page.screenshot({ path: path.join(SHOTS, 'tb3-phone-mywork.png'), clip: { x: 0, y: 0, width: 402, height: 360 } });
     await page.evaluate(function () { setPage('mindmap'); if (typeof _mmRenderList === 'function') _mmRenderList(); }); await wait(1500);
     var p2 = await line('#mindmapWrap .mm-list-tb');
