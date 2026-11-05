@@ -62,7 +62,7 @@
 <script defer src="operator-mode.js?v=3" onerror="console.warn('operator-mode.js 로드 실패')"></script>
 <script defer src="operator-analytics.js?v=3" onerror="console.warn('operator-analytics.js 로드 실패')"></script>
 <script defer src="comments-ui.js?v=1" onerror="console.warn('comments-ui.js 로드 실패')"></script>
-<script defer src="my-work.js?v=19" onerror="console.warn('my-work.js 로드 실패')"></script>
+<script defer src="my-work.js?v=20" onerror="console.warn('my-work.js 로드 실패')"></script>
 <script defer src="quick-parse.js?v=1" onerror="console.warn('quick-parse.js 로드 실패')"></script>
 <script defer src="my-work-cal.js?v=10" onerror="console.warn('my-work-cal.js 로드 실패')"></script>
 <script defer src="my-work-task.js?v=8" onerror="console.warn('my-work-task.js 로드 실패')"></script>
@@ -122,7 +122,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.337';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.338';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -137,7 +137,6 @@
       <div id="notifDropdown" style="display:none"></div>
     </div>
     <!-- 💬 메신저 (v13.315 — 예전 쪽지 자리) -->
-    <button class="hdr-ic" id="hdrNbBtn" data-page="notebook" onclick="setPage('notebook')" title="📓 노트북 — ✍️ 글쓰기 Alt+W · 낙서장 Alt+N" aria-label="노트북">📓</button>
     <button class="hdr-ic" id="hdrMsgBtn" data-page="messages" onclick="setPage('messages')" title="💬 메신저" aria-label="메신저">💬<span id="msgBadge" style="display:none">0</span></button>
     <!-- 🎨 화면 설정 — 테마 · 글씨체 -->
     <div class="hdr-pop" id="hdrLookWrap">
@@ -182,6 +181,7 @@
     <button class="tab" data-page="mindmap" onclick="setPage('mindmap')" role="tab" aria-selected="false" id="tabMindmap" style="display:none" title="생각 정리 · 업무 분장 · 프로젝트 구조 (관리자가 지정한 사용자)">🧠 마인드맵</button>
     <button class="tab on" data-page="team" onclick="setPage('team')" role="tab" aria-selected="true" aria-controls="modeTabs" title="업무일지 분석 · 주간 업무 · 업무 부하">📒 업무 관리</button>
     <button class="tab" data-page="project" onclick="setPage('project')" role="tab" aria-selected="false" aria-controls="modeTabsProj">📁 프로젝트 관리</button>
+    <button class="tab" data-page="notebook" onclick="setPage('notebook')" role="tab" aria-selected="false" id="hdrNbBtn" title="📓 노트 — 노트북 · 일일 노트 · ✍️ 글쓰기 Alt+W · 낙서장 Alt+N">📓 노트</button>
   </div>
   <script>/* v13.335 — 넓은 화면(>1100px)은 대메뉴를 맨 위 머리 줄(제목 옆)로 올려 내용 높이 확보. 좁으면 원래 자리 */
   (function(){var mq=window.matchMedia('(min-width:1101px) and (min-height:501px)');function place(){var t=document.getElementById('pageTabs'),b=document.querySelector('.hdr-brand'),home=document.getElementById('pageTabsHome');if(!t||!b||!home)return;if(mq.matches){if(t.parentNode!==b.parentNode){b.parentNode.insertBefore(t,b.nextSibling);document.body.classList.add('wm-tabs-top')}}else if(t.previousSibling!==home){home.parentNode.insertBefore(t,home.nextSibling);document.body.classList.remove('wm-tabs-top')}}place();if(mq.addEventListener)mq.addEventListener('change',place);else if(mq.addListener)mq.addListener(place)})();</script>

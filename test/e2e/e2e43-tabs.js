@@ -34,7 +34,7 @@ var SHOTS = path.join(__dirname, '.shots');
   try {
     await page.setViewport({ width: 1400, height: 900 });
     await login('admin@t.com');
-    check(await bar('#pageTabs') === 'mywork mindmap team project', '상위 탭 4개 ' + await bar('#pageTabs'));
+    check(await bar('#pageTabs') === 'mywork mindmap team project notebook', '상위 탭 5개 (v13.338 📓 노트) ' + await bar('#pageTabs'));
     var team = await bar('#modeTabs');
     check(team === '#업무일지 weekly archive trend | #보고 · 부하 weekly_report workload', '업무 관리 묶음 ' + team);
     await page.click('#pageTabs [data-page="project"]'); await wait(400);

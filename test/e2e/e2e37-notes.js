@@ -53,7 +53,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
 
     // 1. 평소엔 버튼 하나 — 열면 오른쪽 서랍
     check(await ev(function () { return !document.getElementById('mwNotes') || !document.getElementById('mwNotes').classList.contains('on'); }), '평소엔 노트 안 보임 (버튼 하나)');
-    await page.click('#mMyWork [data-mwn="open"]');
+    await page.click('#mwMoreWrap .wm-more'); await page.click('#mMyWork [data-mwn="open"]');   // v13.338 ⋯ 메뉴 안
     check(await until(function () { var n = document.getElementById('mwNotes'); return n && n.classList.contains('on') && /오늘/.test(n.querySelector('.mwn-date').textContent) && !!n.querySelector('.mwn-t'); }), '📝 노트 → 오른쪽 서랍 · 오늘');
     check(await ev(function () { return document.querySelector('#mMyWork [data-mwn="open"]').classList.contains('on'); }), '버튼 켜짐 표시');
     await wait(350);
@@ -92,7 +92,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.click('#mwPanel [data-p="close"]');
 
     // 4. 그날 회의 → 회의 메모 · 회의록 요약
-    await page.click('#mMyWork [data-mwn="open"]');
+    await page.click('#mwMoreWrap .wm-more'); await page.click('#mMyWork [data-mwn="open"]');   // v13.338 ⋯ 메뉴 안
     await page.waitForSelector('#mwNotes.on .mwn-mtr');
     await wait(350);   // 서랍이 미끄러져 들어오는 중엔 누르기가 빗나감
     check(await ev(function () { return /14:00/.test(document.querySelector('#mwNotes .mwn-mtr').textContent) && /노트화면 설계 회의/.test(document.querySelector('#mwNotes .mwn-mtr').textContent); }), '🤝 그날 회의 한 줄');
@@ -145,7 +145,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     // 9. 패널과 하나만 · Esc
     await page.keyboard.press('Escape');
     check(await until(function () { return !_mwn.open; }), 'Esc → 닫힘');
-    await page.click('#mMyWork [data-mwn="open"]');
+    await page.click('#mwMoreWrap .wm-more'); await page.click('#mMyWork [data-mwn="open"]');   // v13.338 ⋯ 메뉴 안
     await until(function () { return _mwn.open; });
     await ev(function () { mwPanelOpen(_mw.data.data.filter(function (x) { return x.src === 'todo'; })[0]); });
     check(await until(function () { return !_mwn.open && document.getElementById('mwPanel').classList.contains('on'); }), '상세 패널을 열면 노트는 닫힘 (같은 자리)');
