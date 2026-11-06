@@ -296,7 +296,8 @@
     + '.wrp-it+.wrp-it{border-top:1px solid rgba(127,127,127,.16)}'
     + '.wrp-site{grid-column:1;grid-row:1;max-width:100px;font-size:12px;font-weight:700;line-height:20px;padding:0 7px;border-radius:5px;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}'
     + '.wrp-ic{grid-column:2;grid-row:1;height:20px;display:flex;align-items:center}'
-    + '.wrp-name{grid-column:3;grid-row:1;min-width:0;font-size:13px;color:var(--t2);line-height:20px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere}'
+    // v13.348 이름은 늘 한 줄 — 넘치면 … (전체는 마우스를 올리면 title 로)
+    + '.wrp-name{grid-column:3;grid-row:1;min-width:0;font-size:13px;color:var(--t2);line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
     + '.wrp-it.has-d .wrp-name{grid-column:2/4}'
     + '.wrp-it.dn .wrp-name{color:var(--t3)}'
     + '.wrp-mem{grid-column:4;grid-row:1;font-size:11px;color:var(--t5);line-height:20px;white-space:nowrap;max-width:96px;overflow:hidden;text-overflow:ellipsis;text-align:right}'
