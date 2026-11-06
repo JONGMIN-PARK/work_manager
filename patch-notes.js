@@ -3,7 +3,7 @@
  * — test/patch-notes.test.js 가 형식·내림차순·WM_VERSION 일치를 검사한다. */
 var WM_PATCHES=[
     {ver:'13.345',date:'2026-11-06',title:'💳 주간 분석 AI 요약 — Gemini 크레딧 소진 안내 바로잡음',tag:'fix',items:[
-      '업무일지 주간 분석의 AI 요약이 Gemini 선불 크레딧 소진으로 실패할 때 'Anthropic 크레딧 부족' 으로 잘못 안내하던 것 — Gemini 안내 · Google AI Studio 바로가기 · 무료 키 교체 방법으로'
+      '업무일지 주간 분석의 AI 요약이 Gemini 선불 크레딧 소진으로 실패할 때 「Anthropic 크레딧 부족」 으로 잘못 안내하던 것 — Gemini 안내 · Google AI Studio 바로가기 · 무료 키 교체 방법으로'
     ]},
     {ver:'13.344',date:'2026-11-06',title:'📄 A/S 보고서 PDF 선명하게 — 진짜 글자 PDF · 새 디자인 · AI 크레딧 안내',tag:'feat',items:[
       'A/S 보고서 PDF: 화면을 그림으로 찍어 붙이던 방식(뿌옇고 확대하면 번짐) → 한글 글꼴(나눔고딕)을 넣은 진짜 글자 PDF. 확대해도 또렷하고 글자 선택 · 검색 · 복사 가능, 파일 크기도 약 1/7',
