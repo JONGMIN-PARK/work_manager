@@ -77,6 +77,16 @@ async function reqSum(){
     // v13.73: 크레딧 부족 친화 안내
     if(errData.error==='CREDIT_LOW' || /credit balance|insufficient.*credit/i.test(msg)){
       var url=(errData.action&&errData.action.url)||'https://console.anthropic.com/settings/plans';
+      // v13.345 Gemini 선불 크레딧 소진도 CREDIT_LOW 로 옴 — 그때는 서버가 준 안내 + AI Studio 바로가기
+      if(/ai\.studio/.test(url)){
+        msg='💳 '+(errData.message||'Gemini API 이용 크레딧이 바닥났습니다.');
+        actionHtml=`<div style="margin-top:8px;padding:10px 12px;background:var(--bg-i);border-radius:6px;font-size:11px;color:var(--t3);line-height:1.7">
+        <div style="font-weight:600;margin-bottom:6px">해결 방법 중 하나 (관리자):</div>
+        <div>① <a href="${eH(url)}" target="_blank" style="color:var(--ac-t);text-decoration:underline">Google AI Studio → 프로젝트 결제</a>에서 크레딧 충전</div>
+        <div>② 결제를 연결하지 않은 프로젝트의 무료 키로 서버 <code style="background:var(--bg-p);padding:1px 5px;border-radius:3px;font-size:10px">GEMINI_API_KEY</code> 교체 (호출 횟수 제한 있음)</div>
+        <div>③ 그동안은 아래 <b>로컬 분석 결과</b> 활용</div>
+      </div>`;
+      } else {
       msg='💳 Anthropic API 크레딧이 부족합니다.';
       actionHtml=`<div style="margin-top:8px;padding:10px 12px;background:var(--bg-i);border-radius:6px;font-size:11px;color:var(--t3);line-height:1.7">
         <div style="font-weight:600;margin-bottom:6px">해결 방법 중 하나:</div>
@@ -84,6 +94,7 @@ async function reqSum(){
         <div>② 서버에 <code style="background:var(--bg-p);padding:1px 5px;border-radius:3px;font-size:10px">GEMINI_API_KEY</code>를 설정하면 자동 폴백 (무료)</div>
         <div>③ 환경변수 <code style="background:var(--bg-p);padding:1px 5px;border-radius:3px;font-size:10px">AI_PROVIDER=gemini</code> 로 전환</div>
       </div>`;
+      }
     }
     else if(errData.error==='AI_OVERLOADED' || /overloaded|high demand|unavailable/i.test(msg)){
       msg='🌐 AI 모델이 현재 과부하 상태입니다. 1~2분 후 다시 시도하세요. (서버에서 3회 자동 재시도 + 폴백 모델까지 시도했습니다)';
