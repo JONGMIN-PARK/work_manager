@@ -37,6 +37,14 @@ var TH = [
  * fallback: 시스템 폰트로 자동 폴백
  */
 var FONTS = [
+  // ─── 화면 선명 — 윈도우 FHD 에서 작은 글자가 덜 뭉개지는 것 (v13.343) ───
+  // 맑은 고딕: 윈도우 기본 글꼴 · 작은 크기용 힌팅(ClearType) 이 들어 있어 11~13px 에서 가장 또렷. 받을 것 없음(local)
+  { id: 'malgun',      group: '화면 선명 (윈도우 추천)', l: '맑은 고딕 (가장 선명)',  family: "'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',sans-serif", local: true },
+  // 스포카 한 산스 Neo: 화면용으로 만든 글꼴 · 굵기별 고정 파일(가변 글꼴보다 윈도우에서 또렷)
+  { id: 'spoqa',       group: '화면 선명 (윈도우 추천)', l: '스포카 한 산스 Neo (깔끔)', family: "'Spoqa Han Sans Neo',sans-serif", url: 'https://spoqa.github.io/spoqa-han-sans/css/SpoqaHanSansNeo.css' },
+  // SUIT: 획이 단정한 고딕 · 고정 굵기 파일 사용
+  { id: 'suit',        group: '화면 선명 (윈도우 추천)', l: 'SUIT (단정)',            family: "'SUIT',sans-serif", url: 'https://cdn.jsdelivr.net/gh/sun-typeface/SUIT@2/fonts/static/woff2/SUIT.css' },
+
   // ─── 산세리프 (UI · 본문) ───
   { id: 'noto',        group: '산세리프', l: '노토 산스 (기본)',     family: "'Noto Sans KR',-apple-system,sans-serif", weight: '300;400;500;700;900' },
   { id: 'pretendard',  group: '산세리프', l: '프리텐다드 (모던 추천)', family: "'Pretendard Variable','Pretendard',-apple-system,sans-serif", url: 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css' },

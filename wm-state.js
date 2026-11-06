@@ -41,7 +41,7 @@ function aFnt(id){
   var f = FF.find(function(x){return x.id===_wmFontFor(chosen.id)}) || chosen;
   cFnt = chosen.id;
   // 동적 <link> 로드 (한 번만)
-  if(!document.getElementById('fontLink_'+f.id)){
+  if(!f.local && !document.getElementById('fontLink_'+f.id)){   // local: 컴퓨터에 깔린 글꼴(맑은 고딕) — 받을 것 없음
     var link = document.createElement('link');
     link.id = 'fontLink_'+f.id;
     link.rel = 'stylesheet';
@@ -81,6 +81,54 @@ function rFnt(){
 }
 var _fnt=lsGet('wa-font');if(_fnt)aFnt(_fnt);else aFnt('noto');
 _wmFontReady=true;
+/* v13.343 작은 글자 키우기 — FHD 에서 9~10px 한글은 획이 겹쳐 뭉개짐. 켜면 10.5px 이하 글자를 모두 11px 로.
+   style.css · 화면이 넣은 <style> 의 규칙을 훑어 같은 선택자로 11px 규칙을 만들어 맨 뒤에 붙이고,
+   HTML 에 직접 쓴 style="font-size:10px" 는 속성 선택자로 덮는다. 나중에 붙는 <style> 도 따라 다시 만든다 */
+var _wmCrispRE=/^(7|7\.5|8|8\.5|9|9\.5|10|10\.5)px$/, _wmCrispT=0, _wmCrispObs=null;
+function _wmCrispCss(){
+  var out=[];
+  function walk(rules){
+    for(var i=0;i<rules.length;i++){
+      var r=rules[i];
+      if(r.type===4 && r.cssRules){ var sub=[]; var keep=out; out=sub; walk(r.cssRules); out=keep; if(sub.length) out.push('@media '+r.conditionText+'{'+sub.join('')+'}'); }
+      else if(r.cssRules && r.type!==1){ walk(r.cssRules); }   // @supports · @layer 등은 조건 없이 안쪽만
+      else if(r.style && r.selectorText && _wmCrispRE.test(r.style.fontSize)) out.push(r.selectorText+'{font-size:11px}');
+    }
+  }
+  for(var i=0;i<document.styleSheets.length;i++){
+    var sh=document.styleSheets[i]; if(sh.ownerNode && sh.ownerNode.id==='wmCrispCss') continue;
+    try{ walk(sh.cssRules); }catch(e){}   // 다른 곳(Google Fonts 등) 스타일시트는 읽을 수 없음 — 건너뜀
+  }
+  var sz=['7','7.5','8','8.5','9','9.5','10','10.5'], at=[];
+  sz.forEach(function(n){ at.push('[style*="font-size:'+n+'px"]','[style*="font-size: '+n+'px"]'); });
+  out.push(at.join(',')+'{font-size:11px!important}');
+  return out.join('\n');
+}
+function _wmCrispBuild(){
+  var el=document.getElementById('wmCrispCss');
+  if(!el){ el=document.createElement('style'); el.id='wmCrispCss'; }
+  el.textContent=_wmCrispCss();
+  document.head.appendChild(el);   // 늘 맨 뒤 — 같은 무게 규칙끼리는 뒤가 이김
+}
+function aCrisp(on){
+  on=!!on;
+  document.documentElement.toggleAttribute('data-crisp',on);
+  lsSet('wa-crisp',on?'1':'');
+  var c=document.getElementById('crispChk'); if(c) c.checked=on;
+  var el=document.getElementById('wmCrispCss');
+  if(!on){ if(el) el.remove(); if(_wmCrispObs){_wmCrispObs.disconnect();_wmCrispObs=null} return; }
+  _wmCrispBuild();
+  if(!_wmCrispObs && window.MutationObserver){   // 화면이 나중에 넣는 <style>/<link> 도 반영
+    _wmCrispObs=new MutationObserver(function(ms){
+      for(var i=0;i<ms.length;i++) for(var j=0;j<ms[i].addedNodes.length;j++){
+        var n=ms[i].addedNodes[j]; if(n.id==='wmCrispCss') continue;
+        if(n.tagName==='STYLE'||n.tagName==='LINK'){ clearTimeout(_wmCrispT); _wmCrispT=setTimeout(_wmCrispBuild,150); if(n.tagName==='LINK') n.addEventListener('load',function(){clearTimeout(_wmCrispT);_wmCrispT=setTimeout(_wmCrispBuild,50)}); return; }
+      }
+    });
+    _wmCrispObs.observe(document.head,{childList:true});
+  }
+}
+if(lsGet('wa-crisp')==='1'){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){aCrisp(true)}); else aCrisp(true); window.addEventListener('load',function(){ if(document.getElementById('wmCrispCss')) _wmCrispBuild(); }); }
 /* 헤더 · 툴바 펼침 메뉴(.hdr-pop) — 한 번에 하나만, 바깥 누르기 · Esc 로 닫음 (v13.287) */
 var _wmPopOpen=null;   // 지금 펼친 메뉴 id — 필터(.wm-flt)는 화면을 다시 그려도 다시 펼침(wmHdrPopRestore)
 function wmHdrPopClose(except){
