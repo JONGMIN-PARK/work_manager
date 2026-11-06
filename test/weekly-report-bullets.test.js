@@ -74,11 +74,20 @@ test('알 수 없는 [xxx] 단독 줄은 항목으로 오인하지 않음', () =
 });
 
 test('미리보기: 기본 도형이 두 번째 세부 줄에도 적용, 하위 줄만 └', () => {
-  const parsed = client.clientParseText('[셋업]\n- [A] 업무 ~09/15\n  : 첫 세부\n  : 두 번째 세부\n  └ 하위 줄');
+  // 완료 항목이 하나 섞여 있어야 도형을 그림 (v13.349 — 칸 전체가 예정뿐이면 도형을 뺌)
+  const parsed = client.clientParseText('[셋업]\n- [A] 업무 ~09/15\n  : 첫 세부\n  : 두 번째 세부\n  └ 하위 줄\n- [B] 끝난 일 #완료');
   const html = client.buildPreviewHTML(parsed);
-  const planned = (html.match(/border:2px solid/g) || []).length;
+  const planned = (html.match(/wrp-st-planned/g) || []).length;
   assert.strictEqual(planned, 2, '무태그 세부 2줄 모두 예정(○) 도형');
   assert.ok(html.includes('└'), '하위 줄은 └ 마커');
+});
+
+test('미리보기: 칸 전체가 예정뿐이면 세부 줄은 점 · 하위 줄은 └', () => {
+  const parsed = client.clientParseText('[셋업]\n- [A] 업무 ~09/15\n  : 첫 세부\n  : 두 번째 세부\n  └ 하위 줄');
+  const html = client.buildPreviewHTML(parsed);
+  assert.strictEqual((html.match(/class="wrp-dot"/g) || []).length, 2);
+  assert.ok(!/wrp-st-planned/.test(html));
+  assert.ok(html.includes('└'));
 });
 
 test('세부 줄 자체 상태 태그는 도형에 그대로 반영', () => {

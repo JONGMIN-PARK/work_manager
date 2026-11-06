@@ -74,12 +74,35 @@ test('clientParseText: 별칭 CS → cs', () => {
 test('buildPreviewHTML: 3색 상태 아이콘 + 13px 통일', () => {
   const html = client.buildPreviewHTML(client.clientParseText(
     '[개발]\n- [A] 예정건 @김\n- [B] 진행건 30% @박 #진행중\n[C/S]\n- [C] 완료건 @이 #완료'));
-  // 예정=파랑 빈 원
-  assert.match(html, /width:13px;height:13px;border-radius:50%;box-sizing:border-box;border:2px solid #3B82F6/);
-  // 진행중=빨간 원
-  assert.match(html, /width:13px;height:13px;border-radius:50%;box-sizing:border-box;background:#E5484D/);
-  // 완료=녹색 체크(원 + svg)
-  assert.match(html, /width:13px;height:13px;border-radius:50%;box-sizing:border-box;background:#16A34A"><svg/);
+  // v13.349 SVG 도형 — 예정=파랑 빈 원
+  assert.match(html, /class="wrp-st wrp-st-planned" width="13" height="13"[^>]*><circle[^>]*fill="none" stroke="#3B82F6"/);
+  // 진행중=빨간 테 + 반쯤 찬 원
+  assert.match(html, /class="wrp-st wrp-st-in_progress" width="13" height="13"[^>]*><circle[^>]*stroke="#E5484D"[^>]*\/><path[^>]*fill="#E5484D"/);
+  // 완료=초록 원 + 흰 체크
+  assert.match(html, /class="wrp-st wrp-st-done" width="13" height="13"[^>]*><circle[^>]*fill="#16A34A"\/><path[^>]*stroke="#fff"/);
+});
+
+test('buildPreviewHTML (v13.349): 칸이 전부 예정이면 도형 없음 · 섞이면 그대로', () => {
+  const allPlan = client.buildPreviewHTML(client.clientParseText('[개발]\n- [A] 하나 @김\n- [B] 둘 @박\n  : 세부'));
+  assert.match(allPlan, /class="wrp np"/);
+  assert.ok(!/wrp-st-planned/.test(allPlan), '예정 동그라미 없음');
+  assert.match(allPlan, /class="wrp-dot"/);               // 세부 줄은 작은 점
+  assert.match(allPlan, /class="wrp-rule"/);              // 절 머리 막대 대신 가는 줄
+  const mixed = client.buildPreviewHTML(client.clientParseText('[개발]\n- [A] 하나 @김\n- [B] 둘 @박 #완료'));
+  assert.match(mixed, /class="wrp"/);
+  assert.match(mixed, /wrp-st-planned/);
+});
+
+test('buildPreviewHTML (v13.349): 테마 — 절 색 · 바탕색이 테마를 따름, 모르는 테마는 라이트', () => {
+  const parsed = client.clientParseText('[개발]\n- [A] 하나 @김 #완료');
+  const mid = client.inlineThemeVars(client.buildPreviewHTML(parsed, 'midnight'), 'midnight');
+  assert.match(mid, /border-left-color:#60A5FA/);        // 미드나잇 개발 색
+  assert.match(mid, /\.wrp-card\{background:#111A2E/);   // 미드나잇 카드 바탕
+  const unk = client.inlineThemeVars(client.buildPreviewHTML(parsed, 'nope'), 'nope');
+  assert.match(unk, /\.wrp-card\{background:#FFFFFF/);
+  const doc = client.buildStandaloneHTML(parsed, { theme: 'paper' });
+  assert.match(doc, /data-report-theme="paper"/);
+  assert.match(doc, /--bg:#F5F0E6/);
 });
 
 test('buildPreviewHTML: 완료율 구간별 히트색', () => {
@@ -199,7 +222,8 @@ test('buildPreviewHTML (v13.346): 위 정렬 격자 · 담당 칸 고정 · 진�
   assert.match(html, /\.wrp-it\{display:grid;grid-template-columns:var\(--sw,auto\) 14px minmax\(0,1fr\) auto;[^}]*align-items:start/);
   assert.match(html, /\.wrp-mem\{grid-column:4;grid-row:1/);   // 담당은 늘 첫 줄 오른쪽
   assert.match(html, /\.wrp-det\{grid-column:2\/5/);
-  assert.match(html, />가 외 2</);
+  assert.match(html, />가<\/span><span[^>]*> 외 2<\/span>/);
+  assert.match(html, /class="wrp-av wrp-av-more">\+1</);   // 동그라미는 2개 + 나머지 수
   assert.match(html, /class="wrp-it has-d"/);
   assert.match(html, /class="wrp-pg"><span class="wrp-bar">/);   // 기한 · 진행률 → 진행 줄
 });

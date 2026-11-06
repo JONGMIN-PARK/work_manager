@@ -89,8 +89,8 @@
     out = out.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     out = out.replace(/~~(.*?)~~/g, '<del>$1</del>');
     // #완료/#진행중 도형만 (원본 정책 — 라벨 제거)
-    out = out.replace(/#완료/g, '<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;background:#1a8a40;border-radius:50%;vertical-align:middle;margin:0 2px"><svg width="8" height="6" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>');
-    out = out.replace(/#진행중?/g, '<span style="display:inline-block;width:8px;height:8px;background:#d03030;border-radius:50%;box-shadow:0 0 0 2px rgba(208,48,48,.2);vertical-align:middle;margin:0 4px"></span>');
+    out = out.replace(/#완료/g, '<span style="margin:0 2px">' + statusIcon('done') + '</span>');
+    out = out.replace(/#진행중?/g, '<span style="margin:0 2px">' + statusIcon('in_progress') + '</span>');
     out = out.replace(/#%(\d+)/g, function (_, p) {
       var v = Math.min(100, Math.max(0, parseInt(p, 10)));
       return '<span style="display:inline-flex;align-items:center;gap:4px;padding:1px 5px;border:1px solid var(--bd);border-radius:10px;font-size:10px;color:var(--ac);vertical-align:middle;margin:0 3px"><span style="font-weight:700">' + v + '%</span><span style="width:14px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;width:' + v + '%;background:linear-gradient(90deg,var(--ac),#7aaade)"></span></span></span>';
@@ -98,11 +98,51 @@
     return out;
   }
 
-  // iframe 임베드용 자립 HTML — CSS 변수와 폰트를 인라인 포함
-  var THEME_VARS = {
-    light: { bgPage: '#F4F5FB', bgP: '#FFFFFF', bgI: '#E2E5F0', bd: '#C8CDE0', ac: '#5865F2', t2: '#2A3048', t3: '#424862', t5: '#8890A6', t6: '#B0B6C8' },
-    dark:  { bgPage: '#0B0E14', bgP: '#111620', bgI: '#0D1018', bd: '#222C44', ac: '#5B8DEF', t2: '#D8DEE8', t3: '#B8C0D4', t5: '#6070A0', t6: '#404C70' }
-  };
+  // ── 보고서 테마 (v13.349) — 미리보기 · 복사 · 내보내기 공통. v: 바탕 · 글자색, sec: 절 색(없으면 기본) ──
+  //   앱 테마와 따로 고름 — 붙여 넣을 곳(메일 · 게시판 · 문서)에 맞춰. 고른 값은 기억(wr-pv-theme)
+  var REPORT_THEMES = [
+    { id: 'light', l: '라이트', v: { bgPage: '#F4F5FB', bgP: '#FFFFFF', bgI: '#E2E5F0', bd: '#D5DAE8', ac: '#5865F2', t2: '#1F2433', t3: '#454B63', t5: '#7C849C', t6: '#A9AFC2' } },
+    { id: 'dark', l: '다크', dark: true, v: { bgPage: '#0B0E14', bgP: '#121722', bgI: '#0D1018', bd: '#232C42', ac: '#5B8DEF', t2: '#DCE2EC', t3: '#B8C0D4', t5: '#7482A6', t6: '#46527A' },
+      sec: { dev: '#5B8DEF', setup: '#A779F0', cs: '#F08A3C', etc: '#8C9BB0' } },
+    { id: 'paper', l: '종이', v: { bgPage: '#F5F0E6', bgP: '#FFFDF7', bgI: '#EFE7D7', bd: '#E3D8C4', ac: '#B4532A', t2: '#2B241B', t3: '#584C3C', t5: '#8A7D69', t6: '#B7AB96' },
+      sec: { dev: '#2F6690', setup: '#7B4B94', cs: '#B4532A', etc: '#6B705C' } },
+    { id: 'ocean', l: '오션', v: { bgPage: '#E9F3FA', bgP: '#FFFFFF', bgI: '#D8E8F4', bd: '#CADDEB', ac: '#0284C7', t2: '#0F2A3D', t3: '#33536A', t5: '#6A8599', t6: '#9FB4C4' },
+      sec: { dev: '#0284C7', setup: '#4F46E5', cs: '#0D9488', etc: '#5B7083' } },
+    { id: 'forest', l: '포레스트', v: { bgPage: '#EDF3EC', bgP: '#FFFFFF', bgI: '#DDE8DB', bd: '#CFDECC', ac: '#2E7D5B', t2: '#1C2B22', t3: '#3F5447', t5: '#6F8576', t6: '#A3B4A7' },
+      sec: { dev: '#2E7D5B', setup: '#8A6D1F', cs: '#C2571A', etc: '#5E6B62' } },
+    { id: 'rose', l: '로즈', v: { bgPage: '#FBF0F3', bgP: '#FFFFFF', bgI: '#F5E0E7', bd: '#EFD3DC', ac: '#BE185D', t2: '#2E1720', t3: '#5C3B48', t5: '#93707D', t6: '#C2A5B0' },
+      sec: { dev: '#BE185D', setup: '#7C3AED', cs: '#D9480F', etc: '#7A6870' } },
+    { id: 'lavender', l: '라벤더', v: { bgPage: '#F3F1FB', bgP: '#FFFFFF', bgI: '#E7E3F7', bd: '#DCD6F0', ac: '#6D28D9', t2: '#221B3A', t3: '#4A4266', t5: '#7D7699', t6: '#ADA8C4' },
+      sec: { dev: '#4F46E5', setup: '#7C3AED', cs: '#DB2777', etc: '#6B6785' } },
+    { id: 'midnight', l: '미드나잇', dark: true, v: { bgPage: '#0A1020', bgP: '#111A2E', bgI: '#0D1527', bd: '#1F2B47', ac: '#818CF8', t2: '#E3E8F2', t3: '#B5C0D6', t5: '#7587A8', t6: '#475673' },
+      sec: { dev: '#60A5FA', setup: '#C084FC', cs: '#FB923C', etc: '#94A3B8' } },
+    { id: 'mono', l: '모노 (차분)', v: { bgPage: '#FFFFFF', bgP: '#FFFFFF', bgI: '#F2F2F2', bd: '#D4D4D4', ac: '#111111', t2: '#111111', t3: '#3A3A3A', t5: '#6E6E6E', t6: '#A0A0A0' },
+      sec: { dev: '#1F1F1F', setup: '#3D3D3D', cs: '#575757', etc: '#7A7A7A' } },
+    { id: 'contrast', l: '고대비', v: { bgPage: '#FFFFFF', bgP: '#FFFFFF', bgI: '#EDEDED', bd: '#1A1A1A', ac: '#0033CC', t2: '#000000', t3: '#111111', t5: '#2E2E2E', t6: '#555555' },
+      sec: { dev: '#0040C0', setup: '#6A00B8', cs: '#A33F00', etc: '#2E2E2E' } }
+  ];
+  var THEME_VARS = {};
+  REPORT_THEMES.forEach(function (t) { THEME_VARS[t.id] = t.v; });
+  function reportTheme(id) {
+    for (var i = 0; i < REPORT_THEMES.length; i++) if (REPORT_THEMES[i].id === id) return REPORT_THEMES[i];
+    return REPORT_THEMES[0];
+  }
+  function hexA(hex, a) {
+    var n = parseInt(String(hex).slice(1), 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  // 절 색 — 테마에 절 색이 있으면 그것, 없으면 기본(SECTIONS)
+  function secOfTheme(type, themeId) {
+    var base = secOf(type), th = themeId ? reportTheme(themeId) : null;
+    var main = th && th.sec && th.sec[type];
+    if (!main) return base;
+    return { label: base.label, num: base.num, main: main, bg: hexA(main, th.dark ? .18 : .11) };
+  }
+  // 고른 보고서 테마 (기억)
+  var _pvTheme = (function () { try { return localStorage.getItem('wr-pv-theme') || 'light'; } catch (e) { return 'light'; } })();
+  function themeOptions(sel) {
+    return REPORT_THEMES.map(function (t) { return '<option value="' + t.id + '"' + (t.id === sel ? ' selected' : '') + '>' + esc(t.l) + '</option>'; }).join('');
+  }
   // CSS 변수명 ↔ THEME_VARS 키 매핑 (단일 소스). :root 생성·치환 모두 여기서 파생
   var CSS_VARS = { '--bg': 'bgPage', '--bg-p': 'bgP', '--bg-i': 'bgI', '--bd': 'bd', '--ac': 'ac', '--t2': 't2', '--t3': 't3', '--t5': 't5', '--t6': 't6' };
   function themeRootCss(v) {
@@ -110,7 +150,7 @@
   }
   function buildStandaloneHTML(parsedPane, opts) {
     opts = opts || {};
-    var theme = opts.theme === 'dark' ? 'dark' : 'light';
+    var theme = reportTheme(opts.theme).id;
     var v = THEME_VARS[theme];
     var title = opts.title || '주간 업무 보고';
     var headerHtml = '';
@@ -126,14 +166,14 @@
       parsedPane.forEach(function (p, i) {
         body += (i > 0 ? '<div style="margin:10px 0;border-top:1px dashed var(--bd)"></div>' : '')
           + (p.label ? '<div style="font-size:12px;font-weight:700;color:var(--ac);margin-bottom:6px">' + esc(p.label) + '</div>' : '')
-          + buildPreviewHTML(p.parsed);
+          + buildPreviewHTML(p.parsed, theme);
       });
     } else {
-      body = buildPreviewHTML(parsedPane);
+      body = buildPreviewHTML(parsedPane, theme);
     }
     return ''
       + '<!DOCTYPE html>\n'
-      + '<html lang="ko" data-theme="' + theme + '">\n'
+      + '<html lang="ko" data-theme="' + (reportTheme(theme).dark ? 'dark' : 'light') + '" data-report-theme="' + theme + '">\n'
       + '<head>\n'
       + '<meta charset="UTF-8">\n'
       + '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
@@ -156,7 +196,7 @@
 
   // 프리뷰 HTML의 var(--xxx)를 실제 색상값으로 치환 — 외부 페이지 임베드용
   function inlineThemeVars(html, theme) {
-    var v = THEME_VARS[theme === 'dark' ? 'dark' : 'light'];
+    var v = reportTheme(theme).v;
     Object.keys(CSS_VARS).forEach(function (n) {
       html = html.replace(new RegExp('var\\(' + n + '\\)', 'g'), v[CSS_VARS[n]]);
     });
@@ -166,12 +206,13 @@
   // ── 미리보기 렌더 헬퍼 (buildPreviewHTML 구성요소) ──
   var ICON_SLOT = 14; // 상태 아이콘 고정 슬롯(px) — 이름/세부 시작 위치 정렬
 
-  // 상태 아이콘(도형): 예정=파랑 빈 원, 진행중=빨간 원, 완료=녹색 체크. 3종 동일 크기 원
+  // 상태 아이콘(v13.349 SVG): 완료=초록 원 + 체크 · 진행중=빨간 테 + 반쯤 찬 원(하고 있는 중) · 예정=파란 빈 원
+  //   벡터라 확대 · 고해상도 화면 · 다른 페이지에 붙여도 또렷. 3종 같은 지름(ICON_PX)
   function statusIcon(st) {
-    var base = 'display:inline-flex;align-items:center;justify-content:center;width:' + ICON_PX + 'px;height:' + ICON_PX + 'px;border-radius:50%;box-sizing:border-box';
-    if (st === 'done') return '<span style="' + base + ';background:' + STATUS_COLORS.done + '"><svg width="7" height="5.5" viewBox="0 0 9 7"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>';
-    if (st === 'in_progress') return '<span style="' + base + ';background:' + STATUS_COLORS.in_progress + '"></span>';
-    if (st === 'planned') return '<span style="' + base + ';border:2px solid ' + STATUS_COLORS.planned + '"></span>';
+    var o = '<svg class="wrp-st wrp-st-' + st + '" width="' + ICON_PX + '" height="' + ICON_PX + '" viewBox="0 0 16 16" aria-hidden="true" style="display:inline-block;vertical-align:middle;flex-shrink:0">';
+    if (st === 'done') return o + '<circle cx="8" cy="8" r="8" fill="' + STATUS_COLORS.done + '"/><path d="M4.4 8.4l2.4 2.4 4.9-5.1" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    if (st === 'in_progress') return o + '<circle cx="8" cy="8" r="6.9" fill="none" stroke="' + STATUS_COLORS.in_progress + '" stroke-width="2.2"/><path d="M8 3.6a4.4 4.4 0 0 1 0 8.8z" fill="' + STATUS_COLORS.in_progress + '"/></svg>';
+    if (st === 'planned') return o + '<circle cx="8" cy="8" r="6.9" fill="none" stroke="' + STATUS_COLORS.planned + '" stroke-width="2"/></svg>';
     return '';
   }
   // 상태/마커를 고정폭 슬롯에 담아 뒤 텍스트 시작 위치를 통일
@@ -194,29 +235,42 @@
   //   · 세부 줄은 상태 칸부터 — 다른 항목의 상태 · 이름 시작과 오와 열이 맞음
   //   · 절 머리: 번호 · 이름 · 건수 + 완료/진행/예정 비율 막대
   // 선 아이콘(SVG) — 이모지는 컴퓨터마다 모양 · 색이 달라(보라 👤 등) 붙여 넣은 곳에서 튐. currentColor 로 글자색을 따름
-  function svgIco(w, body, fill) {
-    return '<svg class="wrp-ico" width="' + w + '" height="' + w + '" viewBox="0 0 16 16" ' + (fill ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"') + ' aria-hidden="true">' + body + '</svg>';
+  //   v13.349: 24 격자 · 둥근 끝 · 2px 선 (Lucide 계열 모양, ISC) — 고해상도에서도 또렷
+  function svgIco(w, body, sw) {
+    return '<svg class="wrp-ico" width="' + w + '" height="' + w + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (sw || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + body + '</svg>';
   }
   var ICO = {
-    user: svgIco(11, '<circle cx="8" cy="4.8" r="3"/><path d="M2.2 14.5c0-3.3 2.6-5.3 5.8-5.3s5.8 2 5.8 5.3z"/>', true),
-    cal: svgIco(11, '<rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.8h12M5.2 1.6v2.8M10.8 1.6v2.8"/>'),
-    // 절 아이콘: 개발 </> · 셋업 렌치 · C/S 헤드셋 · 기타 점 셋
-    dev: svgIco(14, '<path d="M5.5 4L2 8l3.5 4M10.5 4L14 8l-3.5 4M9.2 2.8L6.8 13.2"/>'),
-    setup: svgIco(14, '<path d="M10.6 1.9a3.6 3.6 0 0 0-3.4 4.8L2.4 11.5a1.4 1.4 0 0 0 2 2l4.8-4.8a3.6 3.6 0 0 0 4.8-3.4l-2 2-2-.6-.6-2z"/>'),
-    cs: svgIco(14, '<path d="M2.8 9.5V8a5.2 5.2 0 0 1 10.4 0v1.5"/><rect x="1.8" y="9" width="3" height="4.6" rx="1.2"/><rect x="11.2" y="9" width="3" height="4.6" rx="1.2"/><path d="M13 13.6c0 1-1.2 1.6-3.4 1.6"/>'),
-    etc: svgIco(14, '<circle cx="3.2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="12.8" cy="8" r="1.5"/>', true)
+    cal: svgIco(11, '<rect x="3" y="4" width="18" height="18" rx="3"/><path d="M8 2v4M16 2v4M3 10h18"/>', 2.2),
+    dev: svgIco(14, '<path d="m18 16 4-4-4-4M6 8l-4 4 4 4M14.5 4l-5 16"/>'),
+    setup: svgIco(14, '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/>'),
+    cs: svgIco(14, '<path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2zM21 16v2a4 4 0 0 1-4 4h-5"/>'),
+    etc: svgIco(14, '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83zM22 17.65l-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65M22 12.65l-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>')
   };
-  function membersText(ms) {
-    ms = ms || [];
-    if (!ms.length) return '';
-    return ms.length > 2 ? ms[0] + ' 외 ' + (ms.length - 1) : ms.join('·');
+  // 담당자 — 사람마다 고정 색(이름으로 정함) 동그라미 + 같은 색 이름. 보고서 어디서나 같은 사람은 같은 색
+  var PERSON_COLORS = ['#2563EB', '#DB2777', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DC2626', '#65A30D', '#C026D3', '#EA580C', '#0D9488', '#4F46E5'];
+  function personColor(name) {
+    var h = 0; name = String(name || '');
+    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return PERSON_COLORS[h % PERSON_COLORS.length];
+  }
+  function membersHtml(ms) {
+    if (!ms || !ms.length) return '';
+    // 동그라미 글자는 이름 첫 글자(성 다음) — 김민수 · 김경우처럼 성이 같아도 '민' · '경' 으로 갈림. 두 글자 이름은 첫 글자
+    var ch = function (m) { m = String(m); return m.length >= 3 ? m.charAt(1) : m.charAt(0); };
+    var av = ms.slice(0, 2).map(function (m, i) {
+      return '<span class="wrp-av" style="background:' + personColor(m) + (i ? ';margin-left:-5px' : '') + '">' + esc(ch(m)) + '</span>';
+    }).join('') + (ms.length > 2 ? '<span class="wrp-av wrp-av-more">+' + (ms.length - 2) + '</span>' : '');
+    var names = ms.length > 2
+      ? '<span style="color:' + personColor(ms[0]) + '">' + esc(ms[0]) + '</span><span style="color:var(--t5);font-weight:500"> 외 ' + (ms.length - 1) + '</span>'
+      : ms.map(function (m) { return '<span style="color:' + personColor(m) + '">' + esc(m) + '</span>'; }).join('<i>·</i>');
+    return '<span class="wrp-avs">' + av + '</span><span class="wrp-mn">' + names + '</span>';
   }
   // 세부 한 줄: 상태 도형(무태그=항목 상태, 없으면 예정) · 하위 줄(└ ↳ → 또는 들여쓰기)은 └
-  function renderDetail(d, di, itemStatus) {
+  function renderDetail(d, di, itemStatus, np) {
     var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
     var own = (d.status && d.status !== 'none') ? d.status : null;
     var lineSt = own || (d.sub ? 'none' : (itemStatus === 'none' ? 'planned' : itemStatus));
-    var inner = statusIcon(lineSt) || '<span style="color:var(--t6);font-size:11px">└</span>';
+    var inner = np && lineSt === 'planned' ? '<span class="wrp-dot"></span>' : (statusIcon(lineSt) || '<span style="color:var(--t6);font-size:11px">└</span>');
     return '<div class="wrp-dl' + (d.sub ? ' sub' : '') + (lineSt === 'done' ? ' dn' : '') + '">'
       + '<span class="wrp-dic">' + inner + '</span>'
       + '<span class="wrp-dt" title="' + esc(dText) + '">' + inlineMarkup(dText) + '</span>'
@@ -242,8 +296,8 @@
     return 'planned';
   }
   // 절 머리: 01 개발  3건 ━━━━━━ 완료 2 · 진행 1
-  function renderSectionHeader(sec) {
-    var cl = secOf(sec.type), items = sec.items || [];
+  function renderSectionHeader(sec, themeId, np) {
+    var cl = secOfTheme(sec.type, themeId), items = sec.items || [];
     var n = { done: 0, in_progress: 0, planned: 0 };
     items.forEach(function (it) { n[itemState(it)]++; });
     var tot = items.length || 1;
@@ -256,23 +310,25 @@
       + '<span class="wrp-no" style="background:' + cl.main + '">' + cl.num + '</span>'
       + '<span class="wrp-sl"><span class="wrp-sic" style="color:' + cl.main + '">' + (ICO[sec.type] || ICO.etc) + '</span>' + esc(secLabel(sec.type)) + '</span>'
       + '<span class="wrp-cnt">' + items.length + '건</span>'
-      + '<span class="wrp-sbar" title="완료 ' + n.done + ' · 진행 ' + n.in_progress + ' · 예정 ' + n.planned + '">' + seg('done') + seg('in_progress') + seg('planned') + '</span>'
-      + '<span class="wrp-stx">' + txt.join('<i>·</i>') + '</span>'
+      // 전부 예정인 칸(다음 주 등)은 막대 · 개수가 다 '예정' 이라 뜻이 없음 — 가는 줄만
+      + (np ? '<span class="wrp-rule"></span>'
+          : '<span class="wrp-sbar" title="완료 ' + n.done + ' · 진행 ' + n.in_progress + ' · 예정 ' + n.planned + '">' + seg('done') + seg('in_progress') + seg('planned') + '</span>'
+          + '<span class="wrp-stx">' + txt.join('<i>·</i>') + '</span>')
       + '</div>';
   }
-  function renderItemRow(it, cl, uniformSiteW) {
+  function renderItemRow(it, cl, uniformSiteW, np) {
     var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
     var ms = it.members || [];
     var hasDetails = !!(it.details && it.details.length);
-    var detailsHtml = hasDetails ? it.details.map(function (d, di) { return renderDetail(d, di, it.status); }).join('') : '';
+    var detailsHtml = hasDetails ? it.details.map(function (d, di) { return renderDetail(d, di, it.status, np); }).join('') : '';
     var st = it.status === 'none' ? 'planned' : it.status;
     // 기한(=D-day)이 박힌 항목은 제목을 굵게 — 날짜가 걸린 일이 목록에서 먼저 눈에 띄도록
     var titleWeight = it.deadline ? '700' : '500';
     return '<div class="wrp-it' + (hasDetails ? ' has-d' : '') + (!hasDetails && st === 'done' ? ' dn' : '') + '"' + (uniformSiteW ? ' style="--sw:' + uniformSiteW + 'px"' : '') + '>'
       +   '<span class="wrp-site" title="' + esc(it.client || '') + '" style="background:' + cl.bg + ';color:' + cl.main + '">' + esc(it.client || '') + '</span>'
-      +   (hasDetails ? '' : '<span class="wrp-ic">' + statusIcon(st) + '</span>')
+      +   (hasDetails || np ? '' : '<span class="wrp-ic">' + statusIcon(st) + '</span>')
       +   '<span class="wrp-name" style="font-weight:' + titleWeight + '" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
-      +   '<span class="wrp-mem"' + (ms.length ? ' title="담당자: ' + esc(ms.map(function (m) { return '@' + m; }).join(', ')) + '"' : '') + '>' + (ms.length ? ICO.user : '') + esc(membersText(ms)) + '</span>'
+      +   '<span class="wrp-mem"' + (ms.length ? ' title="담당자: ' + esc(ms.map(function (m) { return '@' + m; }).join(', ')) + '"' : '') + '>' + membersHtml(ms) + '</span>'
       +   (progressLine(it, pct) ? '<div class="wrp-pgw">' + progressLine(it, pct) + '</div>' : '')
       +   (hasDetails ? '<div class="wrp-det">' + detailsHtml + '</div>' : '')
       + '</div>';
@@ -300,8 +356,16 @@
     + '.wrp-name{grid-column:3;grid-row:1;min-width:0;font-size:13px;color:var(--t2);line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
     + '.wrp-it.has-d .wrp-name{grid-column:2/4}'
     + '.wrp-it.dn .wrp-name{color:var(--t3)}'
-    + '.wrp-mem{grid-column:4;grid-row:1;font-size:11px;color:var(--t5);line-height:20px;white-space:nowrap;max-width:96px;overflow:hidden;text-overflow:ellipsis;text-align:right}'
-    + '.wrp-mem .wrp-ico,.wrp-due .wrp-ico{margin-right:3px;opacity:.75}'
+    + '.wrp-mem{grid-column:4;grid-row:1;height:20px;display:flex;align-items:center;justify-content:flex-end;gap:4px;max-width:132px;min-width:0}'
+    + '.wrp-avs{display:inline-flex;flex-shrink:0}'
+    + '.wrp-av{width:16px;height:16px;border-radius:50%;color:#fff;font-size:9.5px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 1.5px var(--bg-p);display:inline-block}'
+    + '.wrp-av-more{background:rgba(127,127,127,.35);margin-left:-5px;font-size:8.5px;letter-spacing:-.3px}'
+    + '.wrp-mn{font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.wrp-mn i{font-style:normal;color:var(--t6);margin:0 2px}'
+    + '.wrp-due .wrp-ico{margin-right:3px;opacity:.75}'
+    + '.wrp-rule{flex:1;height:1px;background:rgba(127,127,127,.22)}'
+    + '.wrp-dot{width:5px;height:5px;border-radius:50%;background:var(--t6);margin-left:4px}'
+    + '.wrp.np .wrp-it{grid-template-columns:var(--sw,auto) 0 minmax(0,1fr) auto;column-gap:4px}'
+    + '.wrp.np .wrp-name{padding-left:4px}'
     + '.wrp-pgw{grid-column:2/5;grid-row:2;min-width:0}'
     + '.wrp-pg{display:flex;align-items:center;gap:6px;height:18px;font-size:10.5px}'
     + '.wrp-bar{width:84px;height:6px;border-radius:3px;background:rgba(127,127,127,.18);overflow:hidden;flex-shrink:0}'
@@ -314,7 +378,8 @@
     + '.wrp-dl.sub{padding-left:14px}.wrp-dl.dn .wrp-dt{color:var(--t3)}'
     + '.wrp-dic{flex-shrink:0;width:14px;height:19px;display:inline-flex;align-items:center}'
     + '.wrp-dt{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere}'
-    + '@media (max-width:600px){.wrp-it{grid-template-columns:min(var(--sw,90px),27vw) 14px minmax(0,1fr) auto;padding:5px 7px}.wrp-stx{display:none}}'
+    + '@media (max-width:600px){.wrp-it{grid-template-columns:min(var(--sw,90px),27vw) 14px minmax(0,1fr) auto;padding:5px 7px}.wrp.np .wrp-it{grid-template-columns:min(var(--sw,90px),27vw) 0 minmax(0,1fr) auto}}'
+    + '@media (max-width:380px){.wrp-stx{display:none}}'
     + '</style>';
   // 사이트명 표시 폭 근사(배지 12px/700 기준 — 한글/전각 ≈ 12.5px, 그 외 ≈ 7.6px) — 배지 폭 통일용
   function siteWidth(s) {
@@ -327,7 +392,7 @@
   }
 
   // 파싱된 sections/items 배열을 보기용 HTML로 빌드
-  function buildPreviewHTML(parsedPane) {
+  function buildPreviewHTML(parsedPane, themeId) {
     if (!parsedPane || !parsedPane.sections || !parsedPane.sections.length) {
       return '<div class="wr-msg">내용 없음</div>';
     }
@@ -337,12 +402,18 @@
       (sec.items || []).forEach(function (it) { maxSiteW = Math.max(maxSiteW, siteWidth(it.client)); });
     });
     var uniformSiteW = maxSiteW ? Math.min(100, Math.ceil(maxSiteW) + 16) : 0; // 좌우 패딩 14 + 여유 2
-    return PREVIEW_CSS + '<div class="wrp">' + parsedPane.sections.map(function (sec) {
-      var cl = secOf(sec.type);
+    // 칸 전체가 예정뿐(완료 · 진행 하나도 없음)이면 도형을 빼고 그 자리를 당김 — 다음 주 칸처럼 모두 빈 동그라미면 정보가 없으니
+    var np = parsedPane.sections.every(function (sec) {
+      return (sec.items || []).every(function (it) {
+        return itemState(it) === 'planned' && (it.details || []).every(function (d) { return !d.status || d.status === 'none' || d.status === 'planned'; });
+      });
+    });
+    return PREVIEW_CSS + '<div class="wrp' + (np ? ' np' : '') + '">' + parsedPane.sections.map(function (sec) {
+      var cl = secOfTheme(sec.type, themeId);
       return '<div class="wrp-sec">'
-        + renderSectionHeader(sec)
+        + renderSectionHeader(sec, themeId, np)
         + '<div class="wrp-card" style="border-left-color:' + cl.main + '">'
-        + (sec.items || []).map(function (it) { return renderItemRow(it, cl, uniformSiteW); }).join('')
+        + (sec.items || []).map(function (it) { return renderItemRow(it, cl, uniformSiteW, np); }).join('')
         + '</div></div>';
     }).join('') + '</div>';
   }
@@ -1231,7 +1302,10 @@
       b.addEventListener('click', function () { _authorState.previewPane = b.dataset.pv; renderAuthor(); });
     });
     box.querySelectorAll('[data-pv-copy]').forEach(function (b) {
-      b.addEventListener('click', function () { copyPreviewInner(b.dataset.pvCopy, b.dataset.pvTheme); });
+      b.addEventListener('click', function () { copyPreviewInner(b.dataset.pvCopy, _pvTheme); });
+    });
+    box.querySelectorAll('[data-pv-th]').forEach(function (el) {
+      el.addEventListener('change', function () { setPreviewTheme(el.value); });
     });
 
     bindAuthorEditor('wrAuEditorLast', 'last');
@@ -1383,10 +1457,23 @@
       + '</div>';
   }
 
-  // 프리뷰 헤더에 들어가는 인라인 복사 버튼 (라이트/다크)
+  // 프리뷰 헤더 — 보고서 테마 고르기(미리보기에 바로 반영 · 기억) + 그 테마로 HTML 복사 (v13.349)
   function previewCopyButtons(paneKey) {
-    return '<button class="tab" data-pv-copy="' + paneKey + '" data-pv-theme="light" title="라이트 테마 HTML 내용 복사" style="padding:3px 8px;font-size:10.5px">📋 라이트</button>'
-      + '<button class="tab" data-pv-copy="' + paneKey + '" data-pv-theme="dark" title="다크 테마 HTML 내용 복사" style="padding:3px 8px;font-size:10.5px">📋 다크</button>';
+    return '<select data-pv-th title="보고서 테마 — 미리보기 · 복사 · 내보내기에 함께 쓰임" style="padding:3px 6px;font-size:11px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-p);color:var(--t2)">' + themeOptions(_pvTheme) + '</select>'
+      + '<button class="tab" data-pv-copy="' + paneKey + '" title="고른 테마로 HTML 내용 복사" style="padding:3px 8px;font-size:10.5px">📋 복사</button>';
+  }
+  function setPreviewTheme(id) {
+    _pvTheme = reportTheme(id).id;
+    try { localStorage.setItem('wr-pv-theme', _pvTheme); } catch (e) {}
+    document.querySelectorAll('[data-pv-th]').forEach(function (el) { el.value = _pvTheme; });
+    var ex = $('wrAuExpTheme'); if (ex) ex.value = _pvTheme;
+    updateAuthorPreview();
+  }
+  // 미리보기 칸에 고른 테마 그대로 (복사 · 내보내기와 같은 모양)
+  function paintPreview(pv, parsed) {
+    var th = reportTheme(_pvTheme);
+    pv.style.background = th.v.bgPage;
+    pv.innerHTML = inlineThemeVars(buildPreviewHTML(parsed, th.id), th.id);
   }
 
   async function copyPreviewInner(paneKey, theme) {
@@ -1396,11 +1483,11 @@
       alert('내용이 없습니다.');
       return;
     }
-    var raw = buildPreviewHTML(clientParseText(text));
+    var raw = buildPreviewHTML(clientParseText(text), theme);
     var html = inlineThemeVars(raw, theme);
     try {
       await navigator.clipboard.writeText(html);
-      if (typeof showToast === 'function') showToast('미리보기 HTML 복사됨 (' + (paneKey === 'last' ? '지난주' : '금주') + ' · ' + theme + ')', 'ok');
+      if (typeof showToast === 'function') showToast('미리보기 HTML 복사됨 (' + (paneKey === 'last' ? '지난주' : '금주') + ' · ' + reportTheme(theme).l + ')', 'ok');
     } catch (e) {
       alert('복사 실패: ' + (e.message || e));
     }
@@ -1466,7 +1553,7 @@
       if (!text || !text.trim()) {
         pv.innerHTML = '<div style="color:var(--t6);text-align:center;padding:32px">내용을 입력하면 여기에 미리보기가 표시됩니다</div>';
       } else {
-        pv.innerHTML = buildPreviewHTML(clientParseText(text));
+        paintPreview(pv, clientParseText(text));
       }
     }
     if (_authorState.viewMode === 'compare') {
@@ -1804,8 +1891,7 @@
       + '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
       +   '<span style="font-size:11.5px;color:var(--t5);margin-right:6px">테마</span>'
       +   '<select id="wrAuExpTheme" style="padding:5px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-p);color:var(--t2);font-size:11.5px">'
-      +     '<option value="light">라이트</option>'
-      +     '<option value="dark">다크</option>'
+      +     themeOptions(_pvTheme)
       +   '</select>'
       +   '<span style="width:6px"></span>'
       +   (hasCur  ? '<button class="tab" data-exp="cur"   data-act="copy" style="padding:5px 12px">📋 복사 (금주)</button>' : '')
