@@ -6,10 +6,11 @@
 (function () {
   // ── 섹션 설정: 라벨/번호/색상/파싱 별칭의 단일 소스 ──
   var SECTIONS = {
-    dev:   { label: '개발', num: '01', main: '#3a6ab0', bg: 'rgba(58,106,176,.12)', bar: 'linear-gradient(90deg,#3a6ab0,#7aaade)' },
-    setup: { label: '셋업', num: '02', main: '#7030b0', bg: 'rgba(112,48,176,.12)', bar: 'linear-gradient(90deg,#7030b0,#a878d6)' },
-    cs:    { label: 'C/S',  num: '03', main: '#c06000', bg: 'rgba(192,96,0,.12)',   bar: 'linear-gradient(90deg,#c06000,#e09850)' },
-    etc:   { label: '기타', num: '04', main: '#506070', bg: 'rgba(80,96,112,.12)',  bar: 'linear-gradient(90deg,#506070,#80909a)' }
+    // v13.346 색 새로 — 라이트 · 다크 둘 다에서 글자로 읽히는 중간 밝기
+    dev:   { label: '개발', num: '01', main: '#3366E0', bg: 'rgba(51,102,224,.11)',  bar: 'linear-gradient(90deg,#3366E0,#7FA2F0)' },
+    setup: { label: '셋업', num: '02', main: '#8B44E0', bg: 'rgba(139,68,224,.11)',  bar: 'linear-gradient(90deg,#8B44E0,#BC93F0)' },
+    cs:    { label: 'C/S',  num: '03', main: '#E0670F', bg: 'rgba(224,103,15,.12)',  bar: 'linear-gradient(90deg,#E0670F,#F2A566)' },
+    etc:   { label: '기타', num: '04', main: '#64788F', bg: 'rgba(100,120,143,.14)', bar: 'linear-gradient(90deg,#64788F,#9AA8BA)' }
   };
   // 텍스트 파서는 서버와 같은 파일 (weekly-report-parse.js → 전역 WeeklyReportParse)
   var WRP = WeeklyReportParse;
@@ -18,9 +19,9 @@
   function secLabel(t) { return (SECTIONS[t] || {}).label || t; }
 
   // ── 상태/진행률 상수 (색·크기·임계값 단일 소스) ──
-  var STATUS_COLORS = { planned: '#4f74c9', in_progress: '#d03030', done: '#1a8a40' };
-  var ICON_PX = 12; // 상태 아이콘 지름(px)
-  var HEAT = { midAt: 30, highAt: 70, low: '#d21f1f', mid: '#c8730a', high: '#1a8a40' };
+  var STATUS_COLORS = { planned: '#3B82F6', in_progress: '#E5484D', done: '#16A34A' };
+  var ICON_PX = 13; // 상태 아이콘 지름(px)
+  var HEAT = { midAt: 30, highAt: 70, low: '#E5484D', mid: '#D97706', high: '#16A34A' };
   function heatColor(p) { return p >= HEAT.highAt ? HEAT.high : (p >= HEAT.midAt ? HEAT.mid : HEAT.low); }
 
   // ── D-day 임계값·색 (기한 임박도) ──
@@ -69,7 +70,7 @@
   function ddayBadge(deadline) {
     var d = dday(deadline);
     if (!d) return '';
-    return '<span style="font-family:ui-monospace,monospace;font-size:9.5px;font-weight:700;color:' + d.color + ';background:' + d.bg + ';border-radius:4px;padding:1px 5px;white-space:nowrap;margin-left:4px">' + esc(d.label) + '</span>';
+    return '<span class="wrp-dd" style="font-family:ui-monospace,monospace;font-size:10px;font-weight:800;color:' + d.color + ';background:' + d.bg + ';border-radius:9px;padding:1px 7px;white-space:nowrap;margin-left:4px;line-height:15px">' + esc(d.label) + '</span>';
   }
 
   // 인라인 마크업 (=y{...}, **bold**, ~~strike~~, {bold})
@@ -163,7 +164,7 @@
   }
 
   // ── 미리보기 렌더 헬퍼 (buildPreviewHTML 구성요소) ──
-  var ICON_SLOT = 12; // 상태 아이콘 고정 슬롯(px) — 이름/세부 시작 위치 정렬
+  var ICON_SLOT = 14; // 상태 아이콘 고정 슬롯(px) — 이름/세부 시작 위치 정렬
 
   // 상태 아이콘(도형): 예정=파랑 빈 원, 진행중=빨간 원, 완료=녹색 체크. 3종 동일 크기 원
   function statusIcon(st) {
@@ -186,83 +187,124 @@
       + '<span style="font-size:11.5px;font-weight:800;font-family:ui-monospace,monospace;color:' + heat + '">' + pct + '%</span>'
       + '</span>';
   }
-  // 우측 메타 3열(날짜·진행률·D-day) 고정폭 — 행 간 오와열 정렬. 하나라도 있으면 3열 모두 예약
-  // 실측 기준 최소 폭(+여유 2px): 날짜 '~09/15' 38px · 진행률 '100%'+바 37px · D-day 'D-365'/'D+123' 43px.
-  // 이보다 좁히면 날짜가 두 줄로 접혀 행 높이가 튄다.
-  var META_W = { date: 40, pct: 40, dday: 44, gap: 4 };
-  function metaCols(it, pct) {
-    if (!it.deadline && pct === null) return '';
-    var dateCell = '<span style="width:' + META_W.date + 'px;flex-shrink:0;text-align:right;font-size:10.5px;color:var(--t5);font-family:ui-monospace,monospace;white-space:nowrap">' + (it.deadline ? esc(it.deadline) : '') + '</span>';
-    var pctCell = '<span style="width:' + META_W.pct + 'px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:flex-end">' + pctBadge(pct) + '</span>';
-    var ddayCell = '<span style="width:' + META_W.dday + 'px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:flex-end">' + (it.deadline ? ddayBadge(it.deadline) : '') + '</span>';
-    return '<span style="display:inline-flex;align-items:center;gap:' + META_W.gap + 'px;flex-shrink:0">' + dateCell + pctCell + ddayCell + '</span>';
-  }
-  // 세부 한 줄: 앞에 고정폭 슬롯(상태 아이콘/└), 텍스트 말줄임.
-  // 기본 도형(무태그=항목 상태, 없으면 예정)은 첫 줄뿐 아니라 모든 세부 줄에 적용.
-  // 하위 줄(└ ↳ → 또는 4칸 이상 들여쓰기)만 계층 마커 └ 로 표시 — 자체 태그가 있으면 그 도형 우선.
-  function renderDetail(d, di, itemStatus) {
-    var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
-    var own = (d.status && d.status !== 'none') ? d.status : null;
-    var lineSt = own || (d.sub ? 'none' : (itemStatus === 'none' ? 'planned' : itemStatus));
-    var inner = statusIcon(lineSt) || '<span style="color:var(--t6)">└</span>';
-    return '<div style="display:flex;align-items:flex-start;gap:6px;font-size:13px;color:var(--t2);line-height:1.45;padding:0 0 0 ' + (d.sub ? '14' : '0') + 'px">'
-      + iconSlot(inner)
-      + '<span style="flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word" title="' + esc(dText) + '">' + inlineMarkup(dText) + '</span>'
-      + '</div>';
-  }
-  // 섹션 헤더: 번호 배지 + 라벨
-  function renderSectionHeader(sec) {
-    var cl = secOf(sec.type);
-    return '<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">'
-      + '<span style="background:' + cl.main + ';color:#fff;font-weight:800;font-size:10px;padding:2px 6px;border-radius:4px;font-family:ui-monospace,monospace">' + cl.num + '</span>'
-      + '<span style="font-size:13px;font-weight:800;color:var(--t2)">' + esc(secLabel(sec.type)) + '</span>'
-      + '</div>';
-  }
-  // 항목 한 줄 (v13.309 다시 짬) — 격자: [사이트] [상태] [이름 (2줄까지)] [담당 · 기한 · 진행률 · D-day]
-  //   · 이름이 2줄이어도 사이트 · 상태 · 오른쪽 정보는 첫 줄에 맞춤 (예전엔 세로 가운데로 내려갔다)
-  //   · 세부 줄은 사이트 배지 아래가 아니라 상태 칸부터 — 다른 항목의 상태 · 이름 시작과 오와 열이 맞음
-  //   · 담당자는 마우스를 올리지 않아도 보이게 (2명 넘으면 "홍길동 외 2")
-  //   · 이름과 오른쪽 정보는 한 줄에 — 자리가 모자라면 오른쪽 정보만 아래 줄 오른쪽으로 (이름이 눌리지 않게, 칸 폭에 따라 저절로)
+  // ── 미리보기 v13.346 — 절마다 카드 하나 · 항목은 가는 줄로 나눔 · 오른쪽 담당자 칸 고정 · 진행 막대 줄 ──
+  //   격자: [사이트 --sw] [상태 14px] [이름 1fr] [담당 auto]
+  //   · 이름이 길어도 담당자는 첫 줄 오른쪽 그 자리 (예전엔 칸이 모자라면 담당 · 날짜가 통째로 다음 줄로 밀렸다)
+  //   · 기한 · 진행률이 있는 항목만 이름 아래 '진행 줄' — 막대 · % · 기한 · D-day 를 한 줄에 (우연히 꺾이는 줄 대신 정해진 자리)
+  //   · 세부 줄은 상태 칸부터 — 다른 항목의 상태 · 이름 시작과 오와 열이 맞음
+  //   · 절 머리: 번호 · 이름 · 건수 + 완료/진행/예정 비율 막대
   function membersText(ms) {
     ms = ms || [];
     if (!ms.length) return '';
     return ms.length > 2 ? ms[0] + ' 외 ' + (ms.length - 1) : ms.join('·');
+  }
+  // 세부 한 줄: 상태 도형(무태그=항목 상태, 없으면 예정) · 하위 줄(└ ↳ → 또는 들여쓰기)은 └
+  function renderDetail(d, di, itemStatus) {
+    var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
+    var own = (d.status && d.status !== 'none') ? d.status : null;
+    var lineSt = own || (d.sub ? 'none' : (itemStatus === 'none' ? 'planned' : itemStatus));
+    var inner = statusIcon(lineSt) || '<span style="color:var(--t6);font-size:11px">└</span>';
+    return '<div class="wrp-dl' + (d.sub ? ' sub' : '') + (lineSt === 'done' ? ' dn' : '') + '">'
+      + '<span class="wrp-dic">' + inner + '</span>'
+      + '<span class="wrp-dt" title="' + esc(dText) + '">' + inlineMarkup(dText) + '</span>'
+      + '</div>';
+  }
+  // 진행 줄: [막대] 40% · ~12/04 ········ D-28
+  function progressLine(it, pct) {
+    if (!it.deadline && pct === null) return '';
+    var h = '<div class="wrp-pg">';
+    if (pct !== null) {
+      var heat = heatColor(pct);
+      h += '<span class="wrp-bar"><span style="width:' + pct + '%;background:' + heat + '"></span></span>'
+        + '<span class="wrp-pct" style="color:' + heat + '">' + pct + '%</span>';
+    }
+    if (it.deadline) h += '<span class="wrp-due">' + esc(it.deadline) + '</span>' + ddayBadge(it.deadline);
+    return h + '</div>';
+  }
+  function itemState(it) {
+    if (it.status === 'done' || it.status === 'in_progress') return it.status;
+    var ds = (it.details || []).map(function (d) { return d.status; });
+    if (ds.length && ds.every(function (s) { return s === 'done'; })) return 'done';
+    if (ds.some(function (s) { return s === 'in_progress' || s === 'done'; })) return 'in_progress';
+    return 'planned';
+  }
+  // 절 머리: 01 개발  3건 ━━━━━━ 완료 2 · 진행 1
+  function renderSectionHeader(sec) {
+    var cl = secOf(sec.type), items = sec.items || [];
+    var n = { done: 0, in_progress: 0, planned: 0 };
+    items.forEach(function (it) { n[itemState(it)]++; });
+    var tot = items.length || 1;
+    var seg = function (k) { return n[k] ? '<span style="width:' + (n[k] * 100 / tot) + '%;background:' + STATUS_COLORS[k] + '"></span>' : ''; };
+    var txt = [];
+    if (n.done) txt.push('<b style="color:' + STATUS_COLORS.done + '">완료 ' + n.done + '</b>');
+    if (n.in_progress) txt.push('<b style="color:' + STATUS_COLORS.in_progress + '">진행 ' + n.in_progress + '</b>');
+    if (n.planned) txt.push('<b style="color:' + STATUS_COLORS.planned + '">예정 ' + n.planned + '</b>');
+    return '<div class="wrp-sh">'
+      + '<span class="wrp-no" style="background:' + cl.main + '">' + cl.num + '</span>'
+      + '<span class="wrp-sl">' + esc(secLabel(sec.type)) + '</span>'
+      + '<span class="wrp-cnt">' + items.length + '건</span>'
+      + '<span class="wrp-sbar" title="완료 ' + n.done + ' · 진행 ' + n.in_progress + ' · 예정 ' + n.planned + '">' + seg('done') + seg('in_progress') + seg('planned') + '</span>'
+      + '<span class="wrp-stx">' + txt.join('<i>·</i>') + '</span>'
+      + '</div>';
   }
   function renderItemRow(it, cl, uniformSiteW) {
     var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
     var ms = it.members || [];
     var hasDetails = !!(it.details && it.details.length);
     var detailsHtml = hasDetails ? it.details.map(function (d, di) { return renderDetail(d, di, it.status); }).join('') : '';
+    var st = it.status === 'none' ? 'planned' : it.status;
     // 기한(=D-day)이 박힌 항목은 제목을 굵게 — 날짜가 걸린 일이 목록에서 먼저 눈에 띄도록
-    var titleWeight = it.deadline ? '700' : '400';
-    var meta = (ms.length ? '<span class="wrp-mem" title="담당자: ' + esc(ms.map(function (m) { return '@' + m; }).join(', ')) + '">👤 ' + esc(membersText(ms)) + '</span>' : '') + metaCols(it, pct);
-    return '<div class="wrp-it' + (hasDetails ? ' has-d' : '') + '" style="border-left-color:' + cl.main + (uniformSiteW ? ';--sw:' + uniformSiteW + 'px' : '') + '">'
+    var titleWeight = it.deadline ? '700' : '500';
+    return '<div class="wrp-it' + (hasDetails ? ' has-d' : '') + (!hasDetails && st === 'done' ? ' dn' : '') + '"' + (uniformSiteW ? ' style="--sw:' + uniformSiteW + 'px"' : '') + '>'
       +   '<span class="wrp-site" title="' + esc(it.client || '') + '" style="background:' + cl.bg + ';color:' + cl.main + '">' + esc(it.client || '') + '</span>'
-      +   (hasDetails ? '' : '<span class="wrp-ic">' + statusIcon(it.status === 'none' ? 'planned' : it.status) + '</span>')
-      +   '<span class="wrp-head"><span class="wrp-name" style="font-weight:' + titleWeight + '" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
-      +   (meta ? '<span class="wrp-meta">' + meta + '</span>' : '') + '</span>'
+      +   (hasDetails ? '' : '<span class="wrp-ic">' + statusIcon(st) + '</span>')
+      +   '<span class="wrp-name" style="font-weight:' + titleWeight + '" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
+      +   '<span class="wrp-mem"' + (ms.length ? ' title="담당자: ' + esc(ms.map(function (m) { return '@' + m; }).join(', ')) + '"' : '') + '>' + esc(membersText(ms)) + '</span>'
+      +   (progressLine(it, pct) ? '<div class="wrp-pgw">' + progressLine(it, pct) + '</div>' : '')
       +   (hasDetails ? '<div class="wrp-det">' + detailsHtml + '</div>' : '')
       + '</div>';
   }
   // 미리보기 모양 — 내보내기 HTML 에도 그대로 들어감 (var(--…) 는 inlineThemeVars 가 색으로 바꿈)
+  //   줄 · 옅은 바탕은 테마와 상관없이 보이게 반투명 회색 (라이트 · 다크 · 다른 페이지에 붙여도 같음)
   var PREVIEW_CSS = '<style>'
-    + '.wrp-it{display:grid;grid-template-columns:var(--sw,auto) 12px minmax(0,1fr);column-gap:6px;row-gap:1px;align-items:start;background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid;border-radius:4px;padding:3px 8px;margin-bottom:2px}'
-    + '.wrp-site{grid-column:1;grid-row:1;max-width:40vw;font-size:13px;font-weight:800;line-height:1.35;padding:1px 6px;border-radius:4px;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}'
+    + '.wrp{font-size:13px;line-height:1.45}'
+    + '.wrp-sec{margin-bottom:12px}'
+    + '.wrp-sh{display:flex;align-items:center;gap:7px;margin:0 0 5px;min-width:0}'
+    + '.wrp-no{color:#fff;font:800 10px/1 ui-monospace,Consolas,monospace;padding:3px 5px;border-radius:5px;flex-shrink:0}'
+    + '.wrp-sl{font-size:13.5px;font-weight:800;color:var(--t2);white-space:nowrap}'
+    + '.wrp-cnt{font-size:11px;color:var(--t5);white-space:nowrap}'
+    + '.wrp-sbar{flex:1;min-width:30px;height:5px;border-radius:3px;background:rgba(127,127,127,.16);overflow:hidden;display:flex}'
+    + '.wrp-sbar>span{display:block;height:100%}'
+    + '.wrp-stx{font-size:10.5px;white-space:nowrap;flex-shrink:0}.wrp-stx b{font-weight:700}.wrp-stx i{font-style:normal;color:var(--t6);margin:0 3px}'
+    + '.wrp-card{background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid;border-radius:7px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.05)}'
+    + '.wrp-it{display:grid;grid-template-columns:var(--sw,auto) 14px minmax(0,1fr) auto;column-gap:7px;row-gap:2px;align-items:start;padding:5px 9px 5px 8px}'
+    + '.wrp-it+.wrp-it{border-top:1px solid rgba(127,127,127,.16)}'
+    + '.wrp-site{grid-column:1;grid-row:1;max-width:100px;font-size:12px;font-weight:700;line-height:20px;padding:0 7px;border-radius:5px;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}'
     + '.wrp-ic{grid-column:2;grid-row:1;height:20px;display:flex;align-items:center}'
-    + '.wrp-head{grid-column:3;grid-row:1;min-width:0;display:flex;flex-wrap:wrap;align-items:flex-start;column-gap:6px;row-gap:1px}'
-    + '.wrp-it.has-d .wrp-head{grid-column:2/4}'
-    + '.wrp-name{flex:1 1 auto;min-width:min(100%,120px);font-size:13px;color:var(--t2);line-height:1.35;padding-top:1px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}'
-    + '.wrp-meta{flex:0 0 auto;margin-left:auto;height:20px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}'
-    + '.wrp-mem{font-size:11px;color:var(--t5);max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-    + '.wrp-det{grid-column:2/4;grid-row:2;min-width:0}'
-    + '@media (max-width:600px){.wrp-it{grid-template-columns:min(var(--sw,90px),27vw) 12px minmax(0,1fr);padding:3px 6px}}'
+    + '.wrp-name{grid-column:3;grid-row:1;min-width:0;font-size:13px;color:var(--t2);line-height:20px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere}'
+    + '.wrp-it.has-d .wrp-name{grid-column:2/4}'
+    + '.wrp-it.dn .wrp-name{color:var(--t3)}'
+    + '.wrp-mem{grid-column:4;grid-row:1;font-size:11px;color:var(--t5);line-height:20px;white-space:nowrap;max-width:84px;overflow:hidden;text-overflow:ellipsis;text-align:right}'
+    + '.wrp-pgw{grid-column:2/5;grid-row:2;min-width:0}'
+    + '.wrp-pg{display:flex;align-items:center;gap:6px;height:18px;font-size:10.5px}'
+    + '.wrp-bar{width:84px;height:6px;border-radius:3px;background:rgba(127,127,127,.18);overflow:hidden;flex-shrink:0}'
+    + '.wrp-bar>span{display:block;height:100%;border-radius:3px}'
+    + '.wrp-pct{font:800 11px/1 ui-monospace,Consolas,monospace;min-width:30px}'
+    + '.wrp-due{color:var(--t5);font-family:ui-monospace,Consolas,monospace;margin-left:auto}'
+    + '.wrp-pg .wrp-dd{margin-left:0}'
+    + '.wrp-det{grid-column:2/5;min-width:0}'
+    + '.wrp-dl{display:flex;align-items:flex-start;gap:7px;font-size:12.5px;color:var(--t2);line-height:19px}'
+    + '.wrp-dl.sub{padding-left:14px}.wrp-dl.dn .wrp-dt{color:var(--t3)}'
+    + '.wrp-dic{flex-shrink:0;width:14px;height:19px;display:inline-flex;align-items:center}'
+    + '.wrp-dt{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere}'
+    + '@media (max-width:600px){.wrp-it{grid-template-columns:min(var(--sw,90px),27vw) 14px minmax(0,1fr) auto;padding:5px 7px}.wrp-stx{display:none}}'
     + '</style>';
-  // 사이트명 표시 폭 근사(배지 폰트 13px/800 기준 — 한글/전각 ≈ 13px, 그 외 ≈ 8px) — 배지 폭 통일용
+  // 사이트명 표시 폭 근사(배지 12px/700 기준 — 한글/전각 ≈ 12.5px, 그 외 ≈ 7.6px) — 배지 폭 통일용
   function siteWidth(s) {
     var w = 0; s = String(s || '');
     for (var i = 0; i < s.length; i++) {
       var c = s.charCodeAt(i);
-      w += ((c >= 0x1100 && c <= 0x11FF) || (c >= 0x2E80 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFF00 && c <= 0xFFEF)) ? 13 : 8;
+      w += ((c >= 0x1100 && c <= 0x11FF) || (c >= 0x2E80 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFF00 && c <= 0xFFEF)) ? 12.5 : 7.6;
     }
     return w;
   }
@@ -272,18 +314,19 @@
     if (!parsedPane || !parsedPane.sections || !parsedPane.sections.length) {
       return '<div class="wr-msg">내용 없음</div>';
     }
-    // 전 섹션에서 사이트명 최대 폭 → 배지 폭 통일(이름 시작 위치 정렬)
+    // 전 섹션에서 사이트명 최대 폭 → 배지 폭 통일(이름 시작 위치 정렬) — 너무 긴 이름은 100px 에서 … (전체는 title)
     var maxSiteW = 0;
     parsedPane.sections.forEach(function (sec) {
       (sec.items || []).forEach(function (it) { maxSiteW = Math.max(maxSiteW, siteWidth(it.client)); });
     });
-    var uniformSiteW = maxSiteW ? Math.ceil(maxSiteW) + 14 : 0; // 좌우 패딩 12 + 여유 2
+    var uniformSiteW = maxSiteW ? Math.min(100, Math.ceil(maxSiteW) + 16) : 0; // 좌우 패딩 14 + 여유 2
     return PREVIEW_CSS + '<div class="wrp">' + parsedPane.sections.map(function (sec) {
       var cl = secOf(sec.type);
-      return '<div style="margin-bottom:9px">'
+      return '<div class="wrp-sec">'
         + renderSectionHeader(sec)
+        + '<div class="wrp-card" style="border-left-color:' + cl.main + '">'
         + (sec.items || []).map(function (it) { return renderItemRow(it, cl, uniformSiteW); }).join('')
-        + '</div>';
+        + '</div></div>';
     }).join('') + '</div>';
   }
 

@@ -71,23 +71,23 @@ test('clientParseText: 별칭 CS → cs', () => {
 });
 
 // ─────────────────────── 미리보기 렌더 ───────────────────────
-test('buildPreviewHTML: 3색 상태 아이콘 + 12px 통일', () => {
+test('buildPreviewHTML: 3색 상태 아이콘 + 13px 통일', () => {
   const html = client.buildPreviewHTML(client.clientParseText(
     '[개발]\n- [A] 예정건 @김\n- [B] 진행건 30% @박 #진행중\n[C/S]\n- [C] 완료건 @이 #완료'));
   // 예정=파랑 빈 원
-  assert.match(html, /width:12px;height:12px;border-radius:50%;box-sizing:border-box;border:2px solid #4f74c9/);
+  assert.match(html, /width:13px;height:13px;border-radius:50%;box-sizing:border-box;border:2px solid #3B82F6/);
   // 진행중=빨간 원
-  assert.match(html, /width:12px;height:12px;border-radius:50%;box-sizing:border-box;background:#d03030/);
+  assert.match(html, /width:13px;height:13px;border-radius:50%;box-sizing:border-box;background:#E5484D/);
   // 완료=녹색 체크(원 + svg)
-  assert.match(html, /width:12px;height:12px;border-radius:50%;box-sizing:border-box;background:#1a8a40"><svg/);
+  assert.match(html, /width:13px;height:13px;border-radius:50%;box-sizing:border-box;background:#16A34A"><svg/);
 });
 
 test('buildPreviewHTML: 완료율 구간별 히트색', () => {
   const html = client.buildPreviewHTML(client.clientParseText(
     '[개발]\n- [A] x 90% @a #진행중\n- [B] y 50% @b #진행중\n- [C] z 10% @c #진행중'));
-  assert.match(html, /color:#1a8a40">90%/); // high
-  assert.match(html, /color:#c8730a">50%/); // mid
-  assert.match(html, /color:#d21f1f">10%/); // low
+  assert.match(html, /color:#16A34A">90%/); // high
+  assert.match(html, /color:#D97706">50%/); // mid
+  assert.match(html, /color:#E5484D">10%/); // low
 });
 
 test('buildPreviewHTML: 사이트 배지 폭 통일(전 항목 동일 width)', () => {
@@ -194,10 +194,21 @@ test('dday: 반년 넘게 차이 나면 해를 넘긴 것으로', () => {
   assert.match(client.dday(md(behind)).label, /^D-/);   // 250일 전 날짜 = 실은 내년의 그 날
 });
 
-test('buildPreviewHTML (v13.309): 2줄 맞춤 — 위 정렬 격자 · 세부 줄은 상태 칸부터 · 3명 이상은 "외 N"', () => {
+test('buildPreviewHTML (v13.346): 위 정렬 격자 · 담당 칸 고정 · 진행 줄 · 세부 줄은 상태 칸부터 · 3명 이상은 "외 N"', () => {
   const html = client.buildPreviewHTML(client.clientParseText('[개발]\n- [A사] 긴 업무 ~12/04 30% @가 @나 @다\n  : 세부 하나'));
-  assert.match(html, /\.wrp-it\{display:grid;[^}]*align-items:start/);
-  assert.match(html, /\.wrp-det\{grid-column:2\/4/);
-  assert.match(html, /👤 가 외 2/);
+  assert.match(html, /\.wrp-it\{display:grid;grid-template-columns:var\(--sw,auto\) 14px minmax\(0,1fr\) auto;[^}]*align-items:start/);
+  assert.match(html, /\.wrp-mem\{grid-column:4;grid-row:1/);   // 담당은 늘 첫 줄 오른쪽
+  assert.match(html, /\.wrp-det\{grid-column:2\/5/);
+  assert.match(html, />가 외 2</);
   assert.match(html, /class="wrp-it has-d"/);
+  assert.match(html, /class="wrp-pg"><span class="wrp-bar">/);   // 기한 · 진행률 → 진행 줄
+});
+
+test('buildPreviewHTML (v13.346): 절 머리 — 건수 · 완료/진행/예정 개수 · 비율 막대', () => {
+  const html = client.buildPreviewHTML(client.clientParseText('[셋업]\n- [A] 하나 #완료\n- [B] 둘 #완료\n- [C] 셋 #진행중\n- [D] 넷'));
+  assert.match(html, /class="wrp-cnt">4건/);
+  assert.match(html, /완료 2<\/b>/);
+  assert.match(html, /진행 1<\/b>/);
+  assert.match(html, /예정 1<\/b>/);
+  assert.match(html, /class="wrp-sbar"[^>]*><span style="width:50%;background:#16A34A">/);
 });

@@ -84,6 +84,6 @@ test('미리보기: 기본 도형이 두 번째 세부 줄에도 적용, 하위 
 test('세부 줄 자체 상태 태그는 도형에 그대로 반영', () => {
   const parsed = client.clientParseText('[셋업]\n- [A] 업무\n  : 첫 세부 #완료\n  : 두 번째 세부 #진행중');
   const html = client.buildPreviewHTML(parsed);
-  assert.ok(html.includes('#1a8a40'), '완료 도형');
-  assert.ok(html.includes('#d03030'), '진행중 도형');
+  assert.ok(html.includes('#16A34A'), '완료 도형');
+  assert.ok(html.includes('#E5484D'), '진행중 도형');
 });
