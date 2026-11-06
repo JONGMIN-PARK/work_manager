@@ -280,19 +280,20 @@
     if (it.deadline) h += '<span class="wrp-due">' + ICO.cal + esc(it.deadline) + '</span>' + ddayBadge(it.deadline);
     return h + '</div>';
   }
-  function itemState(it) {
-    if (it.status === 'done' || it.status === 'in_progress') return it.status;
-    var ds = (it.details || []).map(function (d) { return d.status; });
-    if (ds.length && ds.every(function (s) { return s === 'done'; })) return 'done';
-    if (ds.some(function (s) { return s === 'in_progress' || s === 'done'; })) return 'in_progress';
-    return 'planned';
+  // 할 일 단위 상태 (v13.352) — 세부 줄이 있으면 그 한 줄 한 줄이 할 일, 없으면 항목 자체가 할 일 하나.
+  //   세부 줄 상태 = 자기 태그 → 없으면 항목 태그 → 없으면 예정 (미리보기 도형과 같은 규칙). 들여 쓴 하위 줄(└)은 앞 할 일의 설명이라 세지 않음
+  function taskStates(it) {
+    var norm = function (s) { return s === 'done' || s === 'in_progress' ? s : 'planned'; };
+    var lines = (it.details || []).filter(function (d) { return !d.sub; });
+    if (!lines.length) return [norm(it.status)];
+    return lines.map(function (d) { return norm(d.status && d.status !== 'none' ? d.status : it.status); });
   }
   // 절 머리: 01 개발  3건 ━━━━━━ 완료 2 · 진행 1
   function renderSectionHeader(sec, themeId, np) {
     var cl = secOfTheme(sec.type, themeId), items = sec.items || [];
-    var n = { done: 0, in_progress: 0, planned: 0 };
-    items.forEach(function (it) { n[itemState(it)]++; });
-    var tot = items.length || 1;
+    var n = { done: 0, in_progress: 0, planned: 0 }, tot = 0;
+    items.forEach(function (it) { taskStates(it).forEach(function (st) { n[st]++; tot++; }); });
+    var cnt = tot; tot = tot || 1;
     var seg = function (k) { return n[k] ? '<span style="width:' + (n[k] * 100 / tot) + '%;background:' + STATUS_COLORS[k] + '"></span>' : ''; };
     var txt = [];
     if (n.done) txt.push('<b style="color:' + STATUS_COLORS.done + '">완료 ' + n.done + '</b>');
@@ -301,7 +302,7 @@
     return '<div class="wrp-sh">'
       + '<span class="wrp-no" style="background:' + cl.main + '">' + cl.num + '</span>'
       + '<span class="wrp-sl"><span class="wrp-sic" style="color:' + cl.main + '">' + (ICO[sec.type] || ICO.etc) + '</span>' + esc(secLabel(sec.type)) + '</span>'
-      + '<span class="wrp-cnt">' + items.length + '건</span>'
+      + '<span class="wrp-cnt" title="할 일 ' + cnt + '건 (업무 ' + items.length + '개)">' + cnt + '건</span>'
       // 전부 예정인 칸(다음 주 등)은 막대 · 개수가 다 '예정' 이라 뜻이 없음 — 가는 줄만
       + (np ? '<span class="wrp-rule"></span>'
           : '<span class="wrp-sbar" title="완료 ' + n.done + ' · 진행 ' + n.in_progress + ' · 예정 ' + n.planned + '">' + seg('done') + seg('in_progress') + seg('planned') + '</span>'
@@ -397,7 +398,7 @@
     // 칸 전체가 예정뿐(완료 · 진행 하나도 없음)이면 도형을 빼고 그 자리를 당김 — 다음 주 칸처럼 모두 빈 동그라미면 정보가 없으니
     var np = parsedPane.sections.every(function (sec) {
       return (sec.items || []).every(function (it) {
-        return itemState(it) === 'planned' && (it.details || []).every(function (d) { return !d.status || d.status === 'none' || d.status === 'planned'; });
+        return taskStates(it).every(function (st) { return st === 'planned'; }) && (it.details || []).every(function (d) { return !d.status || d.status === 'none' || d.status === 'planned'; });
       });
     });
     return PREVIEW_CSS + '<div class="wrp' + (np ? ' np' : '') + '">' + parsedPane.sections.map(function (sec) {

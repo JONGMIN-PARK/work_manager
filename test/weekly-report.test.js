@@ -231,9 +231,23 @@ test('buildPreviewHTML (v13.346): 위 정렬 격자 · 담당 칸 고정 · 진�
 
 test('buildPreviewHTML (v13.346): 절 머리 — 건수 · 완료/진행/예정 개수 · 비율 막대', () => {
   const html = client.buildPreviewHTML(client.clientParseText('[셋업]\n- [A] 하나 #완료\n- [B] 둘 #완료\n- [C] 셋 #진행중\n- [D] 넷'));
-  assert.match(html, /class="wrp-cnt">4건/);
+  assert.match(html, /class="wrp-cnt"[^>]*>4건/);
   assert.match(html, /완료 2<\/b>/);
   assert.match(html, /진행 1<\/b>/);
   assert.match(html, /예정 1<\/b>/);
   assert.match(html, /class="wrp-sbar"[^>]*><span style="width:50%;background:#16A34A">/);
+});
+
+test('buildPreviewHTML (v13.352): 절 머리는 할 일(세부 줄) 단위로 셈 — 하위 줄 └ 은 세지 않음', () => {
+  const html = client.buildPreviewHTML(client.clientParseText(
+    '[기타]\n- [SDC] 챔퍼링 @박성민 @정재훈\n  : UV 대구경 셋업 #진행중\n  : Hole Align, QC 검사 개선 작업 #진행중\n    └ 하위 설명\n'
+    + '- [애플트리] 이니셜 프로세스 대응 @김민수 #완료\n- [대덕전자] EES 업체 선정 @김민수 #완료'));
+  assert.match(html, /class="wrp-cnt" title="할 일 4건 \(업무 3개\)">4건/);
+  assert.match(html, /완료 2<\/b>/);
+  assert.match(html, /진행 2<\/b>/);
+  assert.ok(!/예정 \d+<\/b>/.test(html));
+  // 세부 줄에 태그가 없으면 항목 태그를 따름
+  const inh = client.buildPreviewHTML(client.clientParseText('[개발]\n- [A] 업무 #진행중\n  : 하나\n  : 둘 #완료'));
+  assert.match(inh, /진행 1<\/b>/);
+  assert.match(inh, /완료 1<\/b>/);
 });
