@@ -93,6 +93,8 @@ var WM_LIBS = {
   xlsx: { url: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', ok: function () { return typeof XLSX !== 'undefined'; } },
   html2canvas: { url: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', ok: function () { return typeof html2canvas !== 'undefined'; } },
   jspdf: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', ok: function () { return !!window.jspdf; } },
+  // 표 그리기 — jspdf 다음에 받아야 함 (v13.344 A/S 보고서 벡터 PDF)
+  jspdfAutotable: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js', ok: function () { return !!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable); } },
   pdfjs: { url: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', ok: function () { return typeof pdfjsLib !== 'undefined'; },
     after: function () { try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (_) {} } },
   jszip: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', ok: function () { return typeof JSZip !== 'undefined'; } },

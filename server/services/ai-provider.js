@@ -119,6 +119,12 @@ async function geminiGenerate(opts) {
       }
       lastErr = new Error(msg);
       lastErr.status = status;
+      // 선불 크레딧 소진 · 결제 문제 — 다시 해도 같으니 바로 한글 안내로 (v13.344)
+      if (isGeminiBilling(msg)) {
+        var be = new Error('Gemini API 이용 크레딧이 바닥났습니다. 관리자가 Google AI Studio(ai.studio/projects)에서 충전하거나, 결제를 연결하지 않은 프로젝트의 무료 키로 GEMINI_API_KEY 를 바꿔 주세요.');
+        be.code = 'CREDIT_LOW'; be.action = 'https://ai.studio/projects';
+        throw be;
+      }
       if (status === 404 || /not found|not supported/i.test(msg)) {
         lastErr = new Error('Gemini 모델 "' + model + '" 을(를) 찾을 수 없습니다 — GEMINI_MODEL 값을 확인하세요. (' + msg + ')');
         break;   // 다음 모델로
@@ -165,6 +171,7 @@ async function anthropicText(opts) {
   return { text: text, model: model, usage: data.usage };
 }
 
+function isGeminiBilling(msg) { return /prepayment credits|credits are depleted|billing (is )?(not enabled|account)|exceeded your current quota.*billing/i.test(msg || ''); }
 function isCreditLow(msg) { return /credit balance|insufficient.*credit|low.*balance/i.test(msg || ''); }
 
 /**
@@ -224,7 +231,7 @@ function sendAiError(res, tag, e, prefix) {
   var msg = (e && !e.severity && e.message) ? e.message : '';
   var head = prefix || 'AI 요청 실패';
   if (code === 'AI_NOT_READY') return res.status(503).json({ error: code, message: msg });
-  if (code === 'CREDIT_LOW') return res.status(402).json({ error: code, message: msg, action: e.action ? { label: 'Anthropic Console 열기', url: e.action } : undefined });
+  if (code === 'CREDIT_LOW') return res.status(402).json({ error: code, message: msg, action: e.action ? { label: /ai\.studio/.test(e.action) ? 'Google AI Studio 열기' : 'Anthropic Console 열기', url: e.action } : undefined });
   if (code === 'AI_OVERLOADED') return res.status(503).json({ error: code, message: msg || 'AI 가 붐빕니다. 잠시 후 다시 시도하세요.' });
   if (code === 'AI_KEY_INVALID') return res.status(502).json({ error: code, message: msg });
   return res.status(500).json({ error: 'AI_ERROR', message: head + (msg ? ': ' + msg : '') });
@@ -242,5 +249,6 @@ module.exports = {
   anthropicText: anthropicText,
   generateText: generateText,
   transcribe: transcribe,
-  isCreditLow: isCreditLow
+  isCreditLow: isCreditLow,
+  isGeminiBilling: isGeminiBilling
 };

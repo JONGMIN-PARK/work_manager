@@ -485,11 +485,360 @@ function _asReportHtmlForPdf(t, opts) {
   return html;
 }
 
-/* 보고서 PDF를 생성해서 Blob/Base64로 반환. 미리보기·다운로드·메일에 공통 사용 */
+/* 보고서 PDF를 생성해서 Blob/Base64로 반환. 미리보기·다운로드·메일에 공통 사용
+ * v13.344: 글자를 그림으로 찍던 방식(뿌옇고 확대하면 번짐) → 진짜 글자(벡터) PDF.
+ *   나눔고딕을 PDF 에 넣고(쓴 글자만 담김) jsPDF + autotable 로 직접 그림. 글꼴을 못 받으면 예전 그림 방식으로 */
 function _asGeneratePdf(t) {
-  var libs = typeof wmLib === 'function' ? wmLib(['jspdf', 'html2canvas']).catch(function () {}) : Promise.resolve();   // v13.310 처음 쓸 때 받음
-  return libs.then(function () { return _asGeneratePdfNow(t); });
+  return _asGeneratePdfVector(t).catch(function (e) {
+    console.warn('[as-pdf] 벡터 PDF 실패 → 그림 방식으로', e && e.message);
+    var libs = typeof wmLib === 'function' ? wmLib(['jspdf', 'html2canvas']).catch(function () {}) : Promise.resolve();
+    return libs.then(function () { return _asGeneratePdfNow(t); });
+  });
 }
+
+/* 한글 글꼴(나눔고딕 보통·굵게) — 처음 한 번 받아 base64 로 들고 있음 (각 2MB, 브라우저 캐시도 탐) */
+var AS_PDF_FONT_URL = {
+  normal: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumgothic/NanumGothic-Regular.ttf',
+  bold: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumgothic/NanumGothic-Bold.ttf'
+};
+var _asPdfFontP = null;
+function _asPdfFonts() {
+  if (_asPdfFontP) return _asPdfFontP;
+  function b64(url) {
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error('글꼴을 받지 못했습니다 (' + r.status + ')');
+      return r.blob();
+    }).then(function (blob) {
+      return new Promise(function (res, rej) {
+        var fr = new FileReader();
+        fr.onload = function () { res(String(fr.result).split(',')[1]); };
+        fr.onerror = function () { rej(new Error('글꼴 읽기 실패')); };
+        fr.readAsDataURL(blob);
+      });
+    });
+  }
+  _asPdfFontP = Promise.all([b64(AS_PDF_FONT_URL.normal), b64(AS_PDF_FONT_URL.bold)])
+    .then(function (a) { return { normal: a[0], bold: a[1] }; })
+    .catch(function (e) { _asPdfFontP = null; throw e; });
+  return _asPdfFontP;
+}
+
+/* 사진·서명 → JPEG data URL (흰 바탕, 긴 변 1600px 이하). 못 읽으면 null (다른 곳 이미지가 막힌 경우 등) */
+function _asPdfLoadImage(url) {
+  return new Promise(function (resolve) {
+    if (!url) return resolve(null);
+    var img = new Image(), done = false;
+    var fin = function (v) { if (!done) { done = true; resolve(v); } };
+    if (!/^data:/i.test(url)) img.crossOrigin = 'anonymous';
+    img.onload = function () {
+      try {
+        var w = img.naturalWidth, h = img.naturalHeight;
+        if (!w || !h) return fin(null);
+        var k = Math.min(1, 1600 / Math.max(w, h));
+        var c = document.createElement('canvas');
+        c.width = Math.round(w * k); c.height = Math.round(h * k);
+        var g = c.getContext('2d');
+        g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+        g.drawImage(img, 0, 0, c.width, c.height);
+        fin({ data: c.toDataURL('image/jpeg', 0.9), w: c.width, h: c.height });
+      } catch (e) { fin(null); }
+    };
+    img.onerror = function () { fin(null); };
+    setTimeout(function () { fin(null); }, 10000);
+    img.src = url;
+  });
+}
+
+/* PDF 에 쓸 글 — 글꼴에 없는 그림 글자(이모지)는 빼고, 빈 값은 '-' */
+function _asPdfTxt(v, dash) {
+  var s = (v == null ? '' : String(v)).replace(/\r\n?/g, '\n')
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}\u{20E3}]/gu, '')
+    .replace(/[ \t]+\n/g, '\n').trim();
+  return s || (dash === false ? '' : '-');
+}
+function _asHexRgb(hex) {
+  var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return [100, 116, 139];
+  var n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function _asGeneratePdfVector(t) {
+  if (typeof wmLib !== 'function') return Promise.reject(new Error('wmLib 없음'));
+  var photos = (t.attachments || []).filter(_asAttIsImage);
+  var sigs = (t.signatures || []);
+  var imgUrls = photos.map(function (a) { return a.fileUrl; }).concat(sigs.map(function (s) { return s.signatureUrl; }));
+  return Promise.all([
+    wmLib('jspdf').then(function () { return wmLib('jspdfAutotable'); }),
+    _asPdfFonts(),
+    Promise.all(imgUrls.map(_asPdfLoadImage))
+  ]).then(function (r) {
+    var IMG = {};
+    imgUrls.forEach(function (u, i) { if (u) IMG[u] = r[2][i]; });
+    return _asBuildVectorPdf(t, r[1], IMG, photos);
+  });
+}
+
+function _asBuildVectorPdf(t, F, IMG, photos) {
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+  doc.addFileToVFS('NanumGothic-Regular.ttf', F.normal); doc.addFont('NanumGothic-Regular.ttf', 'NG', 'normal');
+  doc.addFileToVFS('NanumGothic-Bold.ttf', F.bold); doc.addFont('NanumGothic-Bold.ttf', 'NG', 'bold');
+  doc.setFont('NG', 'normal');
+  doc.setLineHeightFactor(1.5);
+
+  var CAT = _asCats();
+  var DEPT_MAP = typeof DEPT !== 'undefined' ? DEPT : {};
+  var WT = typeof AS_WORK_TYPE !== 'undefined' ? AS_WORK_TYPE : {};
+  var BILL = typeof AS_BILLING !== 'undefined' ? AS_BILLING : {};
+  var CSAT = typeof AS_CSAT !== 'undefined' ? AS_CSAT : {};
+  var ATT_CAT = typeof AS_ATTACH_CATEGORY !== 'undefined' ? AS_ATTACH_CATEGORY : {};
+  var ST = typeof AS_STATUS !== 'undefined' ? AS_STATUS : {};
+  var PR = typeof AS_PRIORITY !== 'undefined' ? AS_PRIORITY : {};
+
+  // ── 판형 · 색
+  var W = 210, H = 297, M = 16, CW = W - M * 2;
+  var TOP = 20, BOTTOM = H - 19;
+  var INK = [15, 23, 42], SUB = [100, 116, 139], FAINT = [148, 163, 184], LINE = [226, 232, 240], SOFT = [248, 250, 252];
+  var ACC = [217, 119, 6], HEAD = [30, 41, 59];
+  var PT = 0.3528;   // 1pt = 0.3528mm
+  var y = 0;
+  var X = function (v) { return _asPdfTxt(v); };
+
+  function font(size, bold, color) { doc.setFont('NG', bold ? 'bold' : 'normal'); doc.setFontSize(size); doc.setTextColor(color ? color[0] : INK[0], color ? color[1] : INK[1], color ? color[2] : INK[2]); }
+  function fill(c) { doc.setFillColor(c[0], c[1], c[2]); }
+  function stroke(c, w) { doc.setDrawColor(c[0], c[1], c[2]); if (w != null) doc.setLineWidth(w); }
+  function lh(size) { return size * PT * 1.5; }
+  function newPage() { doc.addPage(); y = TOP; }
+  function ensure(h) { if (y + h > BOTTOM) newPage(); }
+  function fit(text, maxW) {   // 한 줄에 안 들어가면 … 로 줄임
+    text = String(text);
+    if (doc.getTextWidth(text) <= maxW) return text;
+    while (text.length > 1 && doc.getTextWidth(text + '…') > maxW) text = text.slice(0, -1);
+    return text + '…';
+  }
+
+  // ── 첫 쪽 머리
+  fill(ACC); doc.rect(0, 0, W, 2.4, 'F');
+  font(8, true, ACC); doc.setCharSpace(0.6); doc.text('AFTER-SERVICE REPORT', M, 15); doc.setCharSpace(0);
+  font(20, true); doc.text('A/S 작업 보고서', M, 24.5);
+  font(7.5, false, SUB); doc.text('접수번호', W - M, 13.5, { align: 'right' });
+  font(13, true); doc.text(X(t.ticketNo), W - M, 20, { align: 'right' });
+  font(8, false, SUB); doc.text('작성일 ' + _asFmtDate(new Date().toISOString()), W - M, 25.5, { align: 'right' });
+  stroke(INK, 0.5); doc.line(M, 30, W - M, 30);
+  y = 35;
+
+  // ── 요약 카드 4칸: 고객사 · 장비 · 긴급도 · 상태
+  (function () {
+    var gap = 3, cw = (CW - gap * 3) / 4, ch = 17;
+    var st = ST[t.status] || {}, pr = PR[t.priority] || {};
+    [
+      { k: '고객사', v: X(t.customerName) },
+      { k: '장비 모델', v: X(t.equipmentModel) },
+      { k: '긴급도', v: X(pr.label || t.priority), dot: pr.color },
+      { k: '진행 상태', v: X(st.label || t.status), dot: st.color }
+    ].forEach(function (c, i) {
+      var x = M + i * (cw + gap);
+      fill(SOFT); stroke(LINE, 0.25); doc.roundedRect(x, y, cw, ch, 2, 2, 'FD');
+      font(7.5, false, SUB); doc.text(c.k, x + 4, y + 5.6);
+      var tx = x + 4;
+      if (c.dot) { fill(_asHexRgb(c.dot)); doc.circle(x + 5.2, y + 11.2, 1.2, 'F'); tx = x + 8; }
+      font(10.5, true); doc.text(fit(c.v, cw - (tx - x) - 3), tx, y + 12.4);
+    });
+    y += ch + 8;
+  })();
+
+  // ── 공통 조각
+  var secNo = 0;
+  function section(title, extra, need) {
+    ensure(10.5 + (need || 14));   // 제목만 쪽 끝에 홀로 남지 않게 — 바로 뒤 내용 첫 덩어리 높이까지
+    secNo++;
+    font(10, true, ACC); doc.text((secNo < 10 ? '0' : '') + secNo, M, y + 4);
+    font(11.5, true); doc.text(title, M + 8, y + 4);
+    if (extra) { var tw = doc.getTextWidth(title); font(8, false, SUB); doc.text(extra, M + 8 + tw + 2.5, y + 4); }
+    stroke(LINE, 0.3); doc.line(M, y + 7, W - M, y + 7);
+    y += 10.5;
+  }
+  function merge(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
+  var baseTable = {
+    margin: { left: M, right: M, top: TOP, bottom: H - BOTTOM },
+    styles: { font: 'NG', fontStyle: 'normal', fontSize: 9, textColor: INK, cellPadding: { top: 2.1, bottom: 2.1, left: 2.8, right: 2.8 }, lineColor: LINE, lineWidth: 0, valign: 'middle', overflow: 'linebreak' },
+    rowPageBreak: 'avoid'
+  };
+  function kv(pairs) {   // 이름·값 두 쌍씩 한 줄
+    var body = [];
+    for (var i = 0; i < pairs.length; i += 2) {
+      var a = pairs[i], b = pairs[i + 1] || ['', ''];
+      body.push([a[0], X(a[1]), b[0], b[0] ? X(b[1]) : '']);
+    }
+    var lab = { fontStyle: 'bold', textColor: SUB, fillColor: SOFT, cellWidth: 25, fontSize: 8.5 };
+    doc.autoTable(merge(baseTable, {
+      startY: y, theme: 'plain', body: body,
+      columnStyles: { 0: lab, 1: { cellWidth: CW / 2 - 25 }, 2: lab, 3: { cellWidth: CW / 2 - 25 } },
+      didParseCell: function (d) { d.cell.styles.lineWidth = { bottom: 0.2 }; d.cell.styles.lineColor = LINE; }
+    }));
+    y = doc.lastAutoTable.finalY + 7;
+  }
+  function grid(head, body, colStyles, foot) {
+    doc.autoTable(merge(baseTable, {
+      startY: y, theme: 'striped', head: [head], body: body, foot: foot ? [foot] : undefined, showFoot: 'lastPage',
+      headStyles: { fillColor: HEAD, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
+      footStyles: { fillColor: [241, 245, 249], textColor: INK, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: SOFT },
+      columnStyles: colStyles || {}
+    }));
+    y = doc.lastAutoTable.finalY + 7;
+  }
+  function textBlock(label, text, tone) {   // 왼쪽 색 띠가 있는 글 상자 — 길면 다음 쪽으로 이어짐
+    var size = 9.5, L = lh(size), padX = 5, padY = 3.4, labelH = label ? 5.4 : 0, first = true;
+    tone = tone || ACC;
+    font(size, false);
+    var lines = doc.splitTextToSize(X(text), CW - padX * 2 - 1.5);
+    while (lines.length) {
+      var head = first ? labelH : 0;
+      ensure(padY * 2 + head + L * Math.min(2, lines.length));
+      var room = Math.max(1, Math.floor((BOTTOM - y - padY * 2 - head) / L));
+      var chunk = lines.splice(0, room);
+      var h = padY * 2 + head + L * chunk.length;
+      fill(SOFT); doc.rect(M, y, CW, h, 'F');
+      fill(tone); doc.rect(M, y, 1.2, h, 'F');
+      var yy = y + padY;
+      if (head) { font(8, true, tone); doc.text(label, M + padX, yy + 3); yy += labelH; }
+      font(size, false);
+      chunk.forEach(function (ln, i) { doc.text(ln, M + padX, yy + L * i + L * 0.72); });
+      y += h;
+      if (lines.length) newPage(); else y += 4;
+      first = false;
+    }
+  }
+
+  // 01 고객 및 장비
+  section('고객 및 장비');
+  kv([['고객사', t.customerName], ['사이트 / 라인', t.siteLine], ['장비 모델', t.equipmentModel], ['Serial No.', t.serialNo],
+      ['장비 번호', t.equipmentNo], ['수주 번호', t.orderNo], ['보증 여부', t.warrantyStatus], ['설치일', _asFmtDate(t.installDate)]]);
+
+  // 02 접수 정보
+  section('접수 정보');
+  kv([['접수 일시', _asFmtDT(t.receivedAt)], ['긴급도', (PR[t.priority] || {}).label || t.priority],
+      ['카테고리', (CAT[t.category] || {}).label || t.category], ['재현', _asEnumLabel('AS_REPRODUCTION', t.reproduction)],
+      ['발생 빈도', _asFreqDisplay(t.frequency, t.frequencyCount)], ['영향 범위', t.impactScope]]);
+
+  // 03 고객 신고 내용
+  section('고객 신고 내용');
+  textBlock('', t.issueSummary, HEAD);
+  if (t.initialAnalysis) textBlock('1차 분석', t.initialAnalysis, [99, 102, 241]);
+
+  // 04 처리 이력
+  if ((t.activityLogs || []).length) {
+    var totalH = 0;
+    var logs = t.activityLogs.map(function (l) {
+      totalH += Number(l.durationH || 0);
+      return [String(l.seq == null ? '' : l.seq), X(_asFmtDT(l.workedAt)), X((DEPT_MAP[l.dept] || {}).label || l.dept),
+              X((WT[l.workType] || {}).label || l.workType), X(l.actionTaken), String(l.durationH || 0)];
+    });
+    section('처리 이력', t.activityLogs.length + '건');
+    grid(['#', '일시', '부서', '유형', '조치 내용', '소요(h)'], logs,
+      { 0: { cellWidth: 10, halign: 'center', textColor: SUB }, 1: { cellWidth: 34 }, 2: { cellWidth: 20 }, 3: { cellWidth: 20 }, 5: { cellWidth: 16, halign: 'right' } },
+      ['', '', '', '', { content: '합계', styles: { halign: 'right' } }, { content: String(Math.round(totalH * 10) / 10), styles: { halign: 'right' } }]);
+  }
+
+  // 05 사용 부품
+  if ((t.parts || []).length) {
+    var grand = 0;
+    var parts = t.parts.map(function (p) {
+      var amt = Number(p.amount || (Number(p.qty || 0) * Number(p.unitPrice || 0)));
+      grand += amt;
+      return [X(p.itemName), X(p.partNo), String(p.qty || 0), Number(p.unitPrice || 0).toLocaleString(), amt.toLocaleString(), X((BILL[p.billing] || {}).label || p.billing)];
+    });
+    section('사용 부품 · 소모품', t.parts.length + '건');
+    var R = { halign: 'right' };
+    grid(['품목', 'Part No.', '수량', '단가', '금액', '청구'], parts,
+      { 1: { cellWidth: 28 }, 2: { cellWidth: 13, halign: 'right' }, 3: { cellWidth: 22, halign: 'right' }, 4: { cellWidth: 24, halign: 'right' }, 5: { cellWidth: 26 } },
+      [{ content: '합계', colSpan: 4, styles: R }, { content: grand.toLocaleString(), styles: R }, '']);
+  }
+
+  // 06 근본원인 · 재발방지
+  section('근본원인 · 재발방지 · 최종 상태');
+  textBlock('근본원인 (RCA)', t.rca, [220, 38, 38]);
+  textBlock('재발방지 대책', t.prevention, [5, 150, 105]);
+  kv([['장비 최종 상태', t.finalEquipStatus], ['모니터링', t.monitoring], ['완료 분류', t.closure], ['', '']]);
+
+  // 07 첨부 자료
+  if ((t.attachments || []).length) {
+    section('첨부 자료', t.attachments.length + '개', photos.length ? 57 : 14);
+    if (photos.length) {
+      var gap = 4, cols = 3, cw = (CW - gap * (cols - 1)) / cols, ih = 44, capH = 10;
+      for (var i = 0; i < photos.length; i += cols) {
+        ensure(ih + capH + 3);
+        photos.slice(i, i + cols).forEach(function (a, j) {
+          var x = M + j * (cw + gap), im = IMG[a.fileUrl];
+          fill(SOFT); stroke(LINE, 0.25); doc.roundedRect(x, y, cw, ih, 1.5, 1.5, 'FD');
+          if (im) {
+            var k = Math.min((cw - 3) / im.w, (ih - 3) / im.h), dw = im.w * k, dh = im.h * k;
+            doc.addImage(im.data, 'JPEG', x + (cw - dw) / 2, y + (ih - dh) / 2, dw, dh, undefined, 'FAST');
+          } else { font(8, false, FAINT); doc.text('이미지를 불러오지 못함', x + cw / 2, y + ih / 2, { align: 'center' }); }
+          var cat = ATT_CAT[a.category] || {};
+          font(7, false, SUB); doc.text(fit(X(cat.label || '사진'), cw), x, y + ih + 3.8);
+          font(7.5, true); doc.text(fit(X(a.fileName), cw), x, y + ih + 7.6);
+        });
+        y += ih + capH + 3;
+      }
+    }
+    var others = (t.attachments || []).filter(function (a) { return !_asAttIsImage(a); });
+    if (others.length) {
+      grid(['구분', '파일 이름', '메모'], others.map(function (a) { return [X((ATT_CAT[a.category] || {}).label || a.category), X(a.fileName), X(a.note)]; }),
+        { 0: { cellWidth: 28 }, 2: { cellWidth: 55 } });
+    }
+  }
+
+  // 08 고객 확인 · 서명
+  var cust = (t.signatures || []).find(function (s) { return s.role === 'customer_field'; });
+  var eng = (t.signatures || []).find(function (s) { return s.role === 'engineer'; });
+  section('고객 확인 · 서명', '', 42);
+  (function () {
+    var gap = 6, bw = (CW - gap) / 2, bh = 40;
+    [['현장 담당자 (고객)', cust], ['담당 엔지니어', eng]].forEach(function (pair, i) {
+      var s = pair[1], x = M + i * (bw + gap), im = s && s.signatureUrl ? IMG[s.signatureUrl] : null;
+      stroke(LINE, 0.3); doc.roundedRect(x, y, bw, bh, 2, 2, 'S');
+      font(8, true, SUB); doc.text(pair[0], x + 4, y + 6);
+      if (im) {
+        var k = Math.min(56 / im.w, 17 / im.h), dw = im.w * k, dh = im.h * k;
+        doc.addImage(im.data, 'JPEG', x + (bw - dw) / 2, y + 8.5 + (17 - dh) / 2, dw, dh, undefined, 'FAST');
+      } else { font(8.5, false, FAINT); doc.text('(서명 없음)', x + bw / 2, y + 18.5, { align: 'center' }); }
+      stroke(LINE, 0.3); doc.line(x + 8, y + 27.5, x + bw - 8, y + 27.5);
+      font(10, true); doc.text(X(s && s.signerName), x + bw / 2, y + 32.8, { align: 'center' });
+      font(7.5, false, SUB); doc.text(s && s.signedAt ? _asFmtDate(s.signedAt) : '-', x + bw / 2, y + 37, { align: 'center' });
+    });
+    y += bh + 6;
+  })();
+  if (cust && (cust.csatSpeed || cust.csatQuality || cust.csatOverall || cust.comment)) {
+    var cs = function (v) { return X((CSAT[v] || {}).label || v); };
+    var csat = '응답 속도  ' + cs(cust.csatSpeed) + '      품질  ' + cs(cust.csatQuality) + '      전반  ' + cs(cust.csatOverall);
+    if (cust.comment) csat += '\n“' + _asPdfTxt(cust.comment) + '”';
+    textBlock('고객 만족도 (CSAT)', csat, [37, 99, 235]);
+  }
+
+  // ── 쪽마다 머리 · 꼬리 (총 쪽수는 다 그린 뒤에 앎)
+  var n = doc.getNumberOfPages();
+  for (var pg = 1; pg <= n; pg++) {
+    doc.setPage(pg);
+    if (pg > 1) {
+      fill(ACC); doc.rect(0, 0, W, 1.2, 'F');
+      font(7.5, true, SUB); doc.text('A/S 작업 보고서', M, 11);
+      font(7.5, false, SUB); doc.text(X(t.ticketNo) + '  ·  ' + X(t.customerName), W - M, 11, { align: 'right' });
+      stroke(LINE, 0.25); doc.line(M, 13.5, W - M, 13.5);
+    }
+    stroke(LINE, 0.25); doc.line(M, H - 13, W - M, H - 13);
+    font(7, false, FAINT); doc.text('업무 관리자 · A/S 작업 보고서 · ' + X(t.ticketNo), M, H - 8.5);
+    font(7.5, true, SUB); doc.text(pg + ' / ' + n, W - M, H - 8.5, { align: 'right' });
+  }
+
+  doc.setProperties({ title: 'A/S 작업 보고서 ' + X(t.ticketNo), subject: X(t.customerName) + ' ' + X(t.equipmentModel), creator: '업무 관리자' });
+  var fileName = (t.ticketNo || 'AS_Report') + '_' + _asFmtDate(new Date().toISOString()) + '.pdf';
+  return { blob: doc.output('blob'), dataUrl: doc.output('datauristring'), fileName: fileName, pdf: doc };
+}
+
+/* 예전 방식(화면을 그림으로) — 글꼴을 못 받을 때만 */
 function _asGeneratePdfNow(t) {
   return new Promise(function (resolve, reject) {
     if (!window.jspdf || !window.html2canvas) {
@@ -503,7 +852,7 @@ function _asGeneratePdfNow(t) {
     document.body.appendChild(holder);
     var root = holder.querySelector('#asPdfRoot');
 
-    window.html2canvas(root, { scale: 2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true, logging: false, width: 794, windowWidth: 794 }).then(function (canvas) {
+    window.html2canvas(root, { scale: 3, backgroundColor: '#ffffff', useCORS: true, allowTaint: true, logging: false, width: 794, windowWidth: 794 }).then(function (canvas) {
       try {
         var jsPDF = window.jspdf.jsPDF;
         var pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
@@ -513,7 +862,7 @@ function _asGeneratePdfNow(t) {
         var imgW = pageW - margin * 2;
         // canvas → 비율 유지 + 페이지 분할
         var imgH = canvas.height * imgW / canvas.width;
-        var imgData = canvas.toDataURL('image/jpeg', 0.92);
+        var imgData = canvas.toDataURL('image/jpeg', 0.97);
         if (imgH <= pageH - margin * 2) {
           pdf.addImage(imgData, 'JPEG', margin, margin, imgW, imgH);
         } else {
@@ -528,7 +877,7 @@ function _asGeneratePdfNow(t) {
             slice.width = canvas.width;
             slice.height = sliceH;
             slice.getContext('2d').drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-            var sliceImg = slice.toDataURL('image/jpeg', 0.92);
+            var sliceImg = slice.toDataURL('image/jpeg', 0.97);
             if (y > 0) pdf.addPage();
             pdf.addImage(sliceImg, 'JPEG', margin, margin, imgW, sliceH / pxPerMm);
             y += sliceH;
@@ -593,8 +942,8 @@ function _asBuildPdfPreview(ticketId) {
       '🛠️ 처리이력 + 부품 집계',
       '🖼️ 첨부 사진 인라인 임베드',
       '✍️ 서명·CSAT 렌더',
-      '📸 html2canvas 캡처',
-      '📄 jsPDF 생성 + 페이지 분할'
+      '🔤 한글 글꼴 담기',
+      '📄 선명한 PDF 조립 + 쪽 나누기'
     ], 1500);
   }
   return asGetExpand(ticketId).then(function (t) {
