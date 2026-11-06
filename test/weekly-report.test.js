@@ -86,7 +86,8 @@ test('buildPreviewHTML (v13.349): 칸이 전부 예정이면 도형 없음 · �
   const allPlan = client.buildPreviewHTML(client.clientParseText('[개발]\n- [A] 하나 @김\n- [B] 둘 @박\n  : 세부'));
   assert.match(allPlan, /class="wrp np"/);
   assert.ok(!/wrp-st-planned/.test(allPlan), '예정 동그라미 없음');
-  assert.match(allPlan, /class="wrp-dot"/);               // 세부 줄은 작은 점
+  assert.ok(!/class="wrp-dic"/.test(allPlan), '세부 줄 앞 표시 없음');
+  assert.match(allPlan, /\.wrp\.np \.wrp-pgw,\.wrp\.np \.wrp-det\{grid-column:3\/5\}/);   // 이름과 같은 칸에서 시작
   assert.match(allPlan, /class="wrp-rule"/);              // 절 머리 막대 대신 가는 줄
   const mixed = client.buildPreviewHTML(client.clientParseText('[개발]\n- [A] 하나 @김\n- [B] 둘 @박 #완료'));
   assert.match(mixed, /class="wrp"/);

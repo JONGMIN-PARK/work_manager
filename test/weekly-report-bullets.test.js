@@ -82,10 +82,11 @@ test('미리보기: 기본 도형이 두 번째 세부 줄에도 적용, 하위 
   assert.ok(html.includes('└'), '하위 줄은 └ 마커');
 });
 
-test('미리보기: 칸 전체가 예정뿐이면 세부 줄은 점 · 하위 줄은 └', () => {
+test('미리보기: 칸 전체가 예정뿐이면 세부 줄 앞 표시 없음 · 하위 줄만 └', () => {
   const parsed = client.clientParseText('[셋업]\n- [A] 업무 ~09/15\n  : 첫 세부\n  : 두 번째 세부\n  └ 하위 줄');
   const html = client.buildPreviewHTML(parsed);
-  assert.strictEqual((html.match(/class="wrp-dot"/g) || []).length, 2);
+  assert.strictEqual((html.match(/class="wrp-dic"/g) || []).length, 1, '└ 하위 줄 하나만 표시 칸');
+  assert.match(html, /<div class="wrp-dl"><span class="wrp-dt" title="첫 세부">/);
   assert.ok(!/wrp-st-planned/.test(html));
   assert.ok(html.includes('└'));
 });

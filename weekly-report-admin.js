@@ -260,9 +260,11 @@
     var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
     var own = (d.status && d.status !== 'none') ? d.status : null;
     var lineSt = own || (d.sub ? 'none' : (itemStatus === 'none' ? 'planned' : itemStatus));
-    var inner = np && lineSt === 'planned' ? '<span class="wrp-dot"></span>' : (statusIcon(lineSt) || '<span style="color:var(--t6);font-size:11px">└</span>');
+    // 칸 전체가 예정뿐(np)이면 세부 줄 앞에 아무 표시도 없이 — 글자가 업무 이름과 같은 자리에서 시작 (하위 줄 └ 는 그대로)
+    var bare = np && lineSt === 'planned';
+    var inner = statusIcon(lineSt) || '<span style="color:var(--t6);font-size:11px">└</span>';
     return '<div class="wrp-dl' + (d.sub ? ' sub' : '') + (lineSt === 'done' ? ' dn' : '') + '">'
-      + '<span class="wrp-dic">' + inner + '</span>'
+      + (bare ? '' : '<span class="wrp-dic">' + inner + '</span>')
       + '<span class="wrp-dt" title="' + esc(dText) + '">' + inlineMarkup(dText) + '</span>'
       + '</div>';
   }
@@ -351,9 +353,11 @@
     + '.wrp-mn{font-size:11.5px;font-weight:500;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.wrp-mn i{font-style:normal;color:var(--t6);margin:0 2px}.wrp-mx{color:var(--t5);font-weight:500}'
     + '.wrp-due .wrp-ico{margin-right:3px;opacity:.75}'
     + '.wrp-rule{flex:1;height:1px;background:rgba(127,127,127,.22)}'
-    + '.wrp-dot{width:5px;height:5px;border-radius:50%;background:var(--t6);margin-left:4px}'
+    // 예정뿐인 칸: 상태 칸을 0 으로 접고 이름 · 진행 줄 · 세부 줄을 모두 3번째 칸에서 시작 (세 줄의 글자 시작이 같음)
     + '.wrp.np .wrp-it{grid-template-columns:var(--sw,auto) 0 minmax(0,1fr) auto;column-gap:4px}'
-    + '.wrp.np .wrp-name{padding-left:4px}'
+    + '.wrp.np .wrp-it .wrp-name,.wrp.np .wrp-it.has-d .wrp-name{grid-column:3}'
+    + '.wrp.np .wrp-pgw,.wrp.np .wrp-det{grid-column:3/5}'
+    + '.wrp.np .wrp-dl{color:var(--t3)}'
     + '.wrp-pgw{grid-column:2/5;grid-row:2;min-width:0}'
     + '.wrp-pg{display:flex;align-items:center;gap:6px;height:18px;font-size:10.5px}'
     + '.wrp-bar{width:84px;height:6px;border-radius:3px;background:rgba(127,127,127,.18);overflow:hidden;flex-shrink:0}'
