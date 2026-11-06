@@ -241,29 +241,19 @@
   }
   var ICO = {
     cal: svgIco(11, '<rect x="3" y="4" width="18" height="18" rx="3"/><path d="M8 2v4M16 2v4M3 10h18"/>', 2.2),
+    user: svgIco(12, '<circle cx="12" cy="8" r="4.2"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>', 2.2),
     dev: svgIco(14, '<path d="m18 16 4-4-4-4M6 8l-4 4 4 4M14.5 4l-5 16"/>'),
     setup: svgIco(14, '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/>'),
     cs: svgIco(14, '<path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2zM21 16v2a4 4 0 0 1-4 4h-5"/>'),
     etc: svgIco(14, '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83zM22 17.65l-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65M22 12.65l-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>')
   };
-  // 담당자 — 사람마다 고정 색(이름으로 정함) 동그라미 + 같은 색 이름. 보고서 어디서나 같은 사람은 같은 색
-  var PERSON_COLORS = ['#2563EB', '#DB2777', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DC2626', '#65A30D', '#C026D3', '#EA580C', '#0D9488', '#4F46E5'];
-  function personColor(name) {
-    var h = 0; name = String(name || '');
-    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-    return PERSON_COLORS[h % PERSON_COLORS.length];
-  }
+  // 담당자 — 사람 아이콘 하나 + 이름 (v13.350: 사람별 색 동그라미는 어색하다고 해서 뺌). 3명 이상은 '첫 사람 외 N'
   function membersHtml(ms) {
     if (!ms || !ms.length) return '';
-    // 동그라미 글자는 이름 첫 글자(성 다음) — 김민수 · 김경우처럼 성이 같아도 '민' · '경' 으로 갈림. 두 글자 이름은 첫 글자
-    var ch = function (m) { m = String(m); return m.length >= 3 ? m.charAt(1) : m.charAt(0); };
-    var av = ms.slice(0, 2).map(function (m, i) {
-      return '<span class="wrp-av" style="background:' + personColor(m) + (i ? ';margin-left:-5px' : '') + '">' + esc(ch(m)) + '</span>';
-    }).join('') + (ms.length > 2 ? '<span class="wrp-av wrp-av-more">+' + (ms.length - 2) + '</span>' : '');
     var names = ms.length > 2
-      ? '<span style="color:' + personColor(ms[0]) + '">' + esc(ms[0]) + '</span><span style="color:var(--t5);font-weight:500"> 외 ' + (ms.length - 1) + '</span>'
-      : ms.map(function (m) { return '<span style="color:' + personColor(m) + '">' + esc(m) + '</span>'; }).join('<i>·</i>');
-    return '<span class="wrp-avs">' + av + '</span><span class="wrp-mn">' + names + '</span>';
+      ? esc(ms[0]) + '<span class="wrp-mx"> 외 ' + (ms.length - 1) + '</span>'
+      : ms.map(esc).join('<i>·</i>');
+    return ICO.user + '<span class="wrp-mn">' + names + '</span>';
   }
   // 세부 한 줄: 상태 도형(무태그=항목 상태, 없으면 예정) · 하위 줄(└ ↳ → 또는 들여쓰기)은 └
   function renderDetail(d, di, itemStatus, np) {
@@ -356,11 +346,9 @@
     + '.wrp-name{grid-column:3;grid-row:1;min-width:0;font-size:13px;color:var(--t2);line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
     + '.wrp-it.has-d .wrp-name{grid-column:2/4}'
     + '.wrp-it.dn .wrp-name{color:var(--t3)}'
-    + '.wrp-mem{grid-column:4;grid-row:1;height:20px;display:flex;align-items:center;justify-content:flex-end;gap:4px;max-width:132px;min-width:0}'
-    + '.wrp-avs{display:inline-flex;flex-shrink:0}'
-    + '.wrp-av{width:16px;height:16px;border-radius:50%;color:#fff;font-size:9.5px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 1.5px var(--bg-p);display:inline-block}'
-    + '.wrp-av-more{background:rgba(127,127,127,.35);margin-left:-5px;font-size:8.5px;letter-spacing:-.3px}'
-    + '.wrp-mn{font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.wrp-mn i{font-style:normal;color:var(--t6);margin:0 2px}'
+    + '.wrp-mem{grid-column:4;grid-row:1;height:20px;display:flex;align-items:center;justify-content:flex-end;gap:3px;max-width:132px;min-width:0}'
+    + '.wrp-mem .wrp-ico{color:var(--t5);flex-shrink:0}'
+    + '.wrp-mn{font-size:11.5px;font-weight:500;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.wrp-mn i{font-style:normal;color:var(--t6);margin:0 2px}.wrp-mx{color:var(--t5);font-weight:500}'
     + '.wrp-due .wrp-ico{margin-right:3px;opacity:.75}'
     + '.wrp-rule{flex:1;height:1px;background:rgba(127,127,127,.22)}'
     + '.wrp-dot{width:5px;height:5px;border-radius:50%;background:var(--t6);margin-left:4px}'

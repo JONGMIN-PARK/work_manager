@@ -222,8 +222,8 @@ test('buildPreviewHTML (v13.346): 위 정렬 격자 · 담당 칸 고정 · 진�
   assert.match(html, /\.wrp-it\{display:grid;grid-template-columns:var\(--sw,auto\) 14px minmax\(0,1fr\) auto;[^}]*align-items:start/);
   assert.match(html, /\.wrp-mem\{grid-column:4;grid-row:1/);   // 담당은 늘 첫 줄 오른쪽
   assert.match(html, /\.wrp-det\{grid-column:2\/5/);
-  assert.match(html, />가<\/span><span[^>]*> 외 2<\/span>/);
-  assert.match(html, /class="wrp-av wrp-av-more">\+1</);   // 동그라미는 2개 + 나머지 수
+  assert.match(html, /<span class="wrp-mn">가<span class="wrp-mx"> 외 2<\/span>/);   // v13.350 사람 아이콘 하나 + 보통 글자색 이름
+  assert.ok(!/wrp-av/.test(html), '사람별 색 동그라미 없음');
   assert.match(html, /class="wrp-it has-d"/);
   assert.match(html, /class="wrp-pg"><span class="wrp-bar">/);   // 기한 · 진행률 → 진행 줄
 });
