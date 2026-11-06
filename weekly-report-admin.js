@@ -193,6 +193,19 @@
   //   · 기한 · 진행률이 있는 항목만 이름 아래 '진행 줄' — 막대 · % · 기한 · D-day 를 한 줄에 (우연히 꺾이는 줄 대신 정해진 자리)
   //   · 세부 줄은 상태 칸부터 — 다른 항목의 상태 · 이름 시작과 오와 열이 맞음
   //   · 절 머리: 번호 · 이름 · 건수 + 완료/진행/예정 비율 막대
+  // 선 아이콘(SVG) — 이모지는 컴퓨터마다 모양 · 색이 달라(보라 👤 등) 붙여 넣은 곳에서 튐. currentColor 로 글자색을 따름
+  function svgIco(w, body, fill) {
+    return '<svg class="wrp-ico" width="' + w + '" height="' + w + '" viewBox="0 0 16 16" ' + (fill ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"') + ' aria-hidden="true">' + body + '</svg>';
+  }
+  var ICO = {
+    user: svgIco(11, '<circle cx="8" cy="4.8" r="3"/><path d="M2.2 14.5c0-3.3 2.6-5.3 5.8-5.3s5.8 2 5.8 5.3z"/>', true),
+    cal: svgIco(11, '<rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.8h12M5.2 1.6v2.8M10.8 1.6v2.8"/>'),
+    // 절 아이콘: 개발 </> · 셋업 렌치 · C/S 헤드셋 · 기타 점 셋
+    dev: svgIco(14, '<path d="M5.5 4L2 8l3.5 4M10.5 4L14 8l-3.5 4M9.2 2.8L6.8 13.2"/>'),
+    setup: svgIco(14, '<path d="M10.6 1.9a3.6 3.6 0 0 0-3.4 4.8L2.4 11.5a1.4 1.4 0 0 0 2 2l4.8-4.8a3.6 3.6 0 0 0 4.8-3.4l-2 2-2-.6-.6-2z"/>'),
+    cs: svgIco(14, '<path d="M2.8 9.5V8a5.2 5.2 0 0 1 10.4 0v1.5"/><rect x="1.8" y="9" width="3" height="4.6" rx="1.2"/><rect x="11.2" y="9" width="3" height="4.6" rx="1.2"/><path d="M13 13.6c0 1-1.2 1.6-3.4 1.6"/>'),
+    etc: svgIco(14, '<circle cx="3.2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="12.8" cy="8" r="1.5"/>', true)
+  };
   function membersText(ms) {
     ms = ms || [];
     if (!ms.length) return '';
@@ -218,7 +231,7 @@
       h += '<span class="wrp-bar"><span style="width:' + pct + '%;background:' + heat + '"></span></span>'
         + '<span class="wrp-pct" style="color:' + heat + '">' + pct + '%</span>';
     }
-    if (it.deadline) h += '<span class="wrp-due">' + esc(it.deadline) + '</span>' + ddayBadge(it.deadline);
+    if (it.deadline) h += '<span class="wrp-due">' + ICO.cal + esc(it.deadline) + '</span>' + ddayBadge(it.deadline);
     return h + '</div>';
   }
   function itemState(it) {
@@ -241,7 +254,7 @@
     if (n.planned) txt.push('<b style="color:' + STATUS_COLORS.planned + '">예정 ' + n.planned + '</b>');
     return '<div class="wrp-sh">'
       + '<span class="wrp-no" style="background:' + cl.main + '">' + cl.num + '</span>'
-      + '<span class="wrp-sl">' + esc(secLabel(sec.type)) + '</span>'
+      + '<span class="wrp-sl"><span class="wrp-sic" style="color:' + cl.main + '">' + (ICO[sec.type] || ICO.etc) + '</span>' + esc(secLabel(sec.type)) + '</span>'
       + '<span class="wrp-cnt">' + items.length + '건</span>'
       + '<span class="wrp-sbar" title="완료 ' + n.done + ' · 진행 ' + n.in_progress + ' · 예정 ' + n.planned + '">' + seg('done') + seg('in_progress') + seg('planned') + '</span>'
       + '<span class="wrp-stx">' + txt.join('<i>·</i>') + '</span>'
@@ -259,7 +272,7 @@
       +   '<span class="wrp-site" title="' + esc(it.client || '') + '" style="background:' + cl.bg + ';color:' + cl.main + '">' + esc(it.client || '') + '</span>'
       +   (hasDetails ? '' : '<span class="wrp-ic">' + statusIcon(st) + '</span>')
       +   '<span class="wrp-name" style="font-weight:' + titleWeight + '" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
-      +   '<span class="wrp-mem"' + (ms.length ? ' title="담당자: ' + esc(ms.map(function (m) { return '@' + m; }).join(', ')) + '"' : '') + '>' + esc(membersText(ms)) + '</span>'
+      +   '<span class="wrp-mem"' + (ms.length ? ' title="담당자: ' + esc(ms.map(function (m) { return '@' + m; }).join(', ')) + '"' : '') + '>' + (ms.length ? ICO.user : '') + esc(membersText(ms)) + '</span>'
       +   (progressLine(it, pct) ? '<div class="wrp-pgw">' + progressLine(it, pct) + '</div>' : '')
       +   (hasDetails ? '<div class="wrp-det">' + detailsHtml + '</div>' : '')
       + '</div>';
@@ -271,7 +284,9 @@
     + '.wrp-sec{margin-bottom:12px}'
     + '.wrp-sh{display:flex;align-items:center;gap:7px;margin:0 0 5px;min-width:0}'
     + '.wrp-no{color:#fff;font:800 10px/1 ui-monospace,Consolas,monospace;padding:3px 5px;border-radius:5px;flex-shrink:0}'
-    + '.wrp-sl{font-size:13.5px;font-weight:800;color:var(--t2);white-space:nowrap}'
+    + '.wrp-ico{display:inline-block;vertical-align:-1px;flex-shrink:0}'
+    + '.wrp-sl{font-size:13.5px;font-weight:800;color:var(--t2);white-space:nowrap;display:inline-flex;align-items:center;gap:5px}'
+    + '.wrp-sic{display:inline-flex}.wrp-sic .wrp-ico{vertical-align:0}'
     + '.wrp-cnt{font-size:11px;color:var(--t5);white-space:nowrap}'
     + '.wrp-sbar{flex:1;min-width:30px;height:5px;border-radius:3px;background:rgba(127,127,127,.16);overflow:hidden;display:flex}'
     + '.wrp-sbar>span{display:block;height:100%}'
@@ -284,7 +299,8 @@
     + '.wrp-name{grid-column:3;grid-row:1;min-width:0;font-size:13px;color:var(--t2);line-height:20px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere}'
     + '.wrp-it.has-d .wrp-name{grid-column:2/4}'
     + '.wrp-it.dn .wrp-name{color:var(--t3)}'
-    + '.wrp-mem{grid-column:4;grid-row:1;font-size:11px;color:var(--t5);line-height:20px;white-space:nowrap;max-width:84px;overflow:hidden;text-overflow:ellipsis;text-align:right}'
+    + '.wrp-mem{grid-column:4;grid-row:1;font-size:11px;color:var(--t5);line-height:20px;white-space:nowrap;max-width:96px;overflow:hidden;text-overflow:ellipsis;text-align:right}'
+    + '.wrp-mem .wrp-ico,.wrp-due .wrp-ico{margin-right:3px;opacity:.75}'
     + '.wrp-pgw{grid-column:2/5;grid-row:2;min-width:0}'
     + '.wrp-pg{display:flex;align-items:center;gap:6px;height:18px;font-size:10.5px}'
     + '.wrp-bar{width:84px;height:6px;border-radius:3px;background:rgba(127,127,127,.18);overflow:hidden;flex-shrink:0}'
