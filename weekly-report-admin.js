@@ -257,7 +257,7 @@
   }
   // 세부 한 줄: 상태 도형(무태그=항목 상태, 없으면 예정) · 하위 줄(└ ↳ → 또는 들여쓰기)은 └
   function renderDetail(d, di, itemStatus, np) {
-    var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').trim();
+    var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').replace(/#예정/g, '').trim();
     var own = (d.status && d.status !== 'none') ? d.status : null;
     var lineSt = own || (d.sub ? 'none' : (itemStatus === 'none' ? 'planned' : itemStatus));
     // 칸 전체가 예정뿐(np)이면 세부 줄 앞에 아무 표시도 없이 — 글자가 업무 이름과 같은 자리에서 시작 (하위 줄 └ 는 그대로)
@@ -286,7 +286,8 @@
     var norm = function (s) { return s === 'done' || s === 'in_progress' ? s : 'planned'; };
     var lines = (it.details || []).filter(function (d) { return !d.sub; });
     if (!lines.length) return [norm(it.status)];
-    return lines.map(function (d) { return norm(d.status && d.status !== 'none' ? d.status : it.status); });
+    var own = it.ownStatus != null ? it.ownStatus : it.status;   // v13.353 업무 줄에 직접 붙은 태그만 물려받음 (세부에서 올린 상태는 아님)
+    return lines.map(function (d) { return norm(d.status && d.status !== 'none' ? d.status : own); });
   }
   // 절 머리: 01 개발  3건 ━━━━━━ 완료 2 · 진행 1
   function renderSectionHeader(sec, themeId, np) {
@@ -313,7 +314,7 @@
     var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
     var ms = it.members || [];
     var hasDetails = !!(it.details && it.details.length);
-    var detailsHtml = hasDetails ? it.details.map(function (d, di) { return renderDetail(d, di, it.status, np); }).join('') : '';
+    var detailsHtml = hasDetails ? it.details.map(function (d, di) { return renderDetail(d, di, it.ownStatus != null ? it.ownStatus : it.status, np); }).join('') : '';
     var st = it.status === 'none' ? 'planned' : it.status;
     // 기한(=D-day)이 박힌 항목은 제목을 굵게 — 날짜가 걸린 일이 목록에서 먼저 눈에 띄도록
     var titleWeight = it.deadline ? '700' : '500';
@@ -1311,6 +1312,15 @@
         insertAtCursor(targetId, b.dataset.insert);
       });
     });
+    box.querySelectorAll('[data-status]').forEach(function (b) {
+      b.addEventListener('mousedown', function (e) { e.preventDefault(); });   // 누를 때 글 칸 커서 · 선택이 풀리지 않게
+      b.addEventListener('click', function () {
+        var ta = $(b.dataset.target || pickInsertTarget());
+        if (!ta) return;
+        ta.focus();
+        toggleStatusTag(ta, b.dataset.status);
+      });
+    });
 
     $('wrAuNew').addEventListener('click', authorNew);
     $('wrAuLoadList').addEventListener('click', toggleLoadDropdown);
@@ -1367,7 +1377,11 @@
     function btn(label, insert, title) {
       return '<button class="tab"' + t + ' data-insert="' + esc(insert) + '" title="' + esc(title || '') + '" style="padding:4px 8px;font-size:11px">' + esc(label) + '</button>';
     }
-    return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">'
+    // 상태 버튼은 커서 자리에 끼워 넣지 않고 줄 끝 태그를 바꿈 (v13.353)
+    function sbtn(label, key, title) {
+      return '<button class="tab"' + t + ' data-status="' + key + '" title="' + esc(title) + '" style="padding:4px 8px;font-size:11px">' + esc(label) + '</button>';
+    }
+    return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px" title="Enter: 다음 줄 머리 이어 쓰기 · Tab/Shift+Tab: 들여쓰기 · Alt+1/2/3/0: 상태">'
       + btn('[개발]', '\n[개발]\n')
       + btn('[셋업]', '\n[셋업]\n')
       + btn('[C/S]', '\n[C/S]\n')
@@ -1376,8 +1390,9 @@
       + btn('- 항목', '- [사이트] 업무명 ~MM/DD 50% @담당자\n')
       + btn(': 세부', '  : ')
       + '<span style="width:8px"></span>'
-      + btn('#완료', ' #완료 ')
-      + btn('#진행중', ' #진행중 ')
+      + sbtn('#완료', 'done', '지금 줄(고른 줄들)을 완료로 — 다시 누르면 지움 · Alt+1')
+      + sbtn('#진행중', 'in_progress', '지금 줄(고른 줄들)을 진행중으로 — 다시 누르면 지움 · Alt+2')
+      + sbtn('#예정', 'planned', '지금 줄(고른 줄들)을 예정으로 — 다시 누르면 지움 · Alt+3 (Alt+0 은 태그 지움)')
       + btn('#%50', ' #%50 ')
       + '<span style="width:8px"></span>'
       + btn('{굵게}', '{}')
@@ -1413,7 +1428,7 @@
     }
     return row('last', '지난주') + row('cur', '금주')
       + '<div style="font-size:10.5px;color:var(--t6);margin:-4px 0 8px;line-height:1.5">'
-      +   '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 세부: <code>: 세부내용</code> · 태그: <code>#완료 #진행중 #%70 {bold} =y{형광}</code>'
+      +   '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 세부: <code>: 세부내용</code> · 태그: <code>#완료 #진행중 #예정 #%70 {bold} =y{형광}</code> · 단축키: <b>Enter</b> 다음 줄 머리 · <b>Tab</b>/<b>Shift+Tab</b> 들여쓰기 · <b>Alt+1/2/3/0</b> 완료/진행/예정/지움'
       + '</div>';
   }
 
@@ -1431,7 +1446,7 @@
       +   authorToolbar('wrAuEditor')
       +   '<textarea id="wrAuEditor" data-pane="' + _authorState.editPane + '" spellcheck="false" placeholder="[개발]\n- [사이트] 업무명 ~MM/DD 50% @담당자\n..." style="flex:1;width:100%;min-height:380px;padding:10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12.5px;font-family:ui-monospace,Consolas,monospace;line-height:1.6;resize:vertical"></textarea>'
       +   '<div style="font-size:10.5px;color:var(--t6);margin-top:6px;line-height:1.5">'
-      +     '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 태그: <code>#완료 #진행중 #%70 {bold} =y{형광}</code>'
+      +     '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 태그: <code>#완료 #진행중 #예정 #%70 {bold} =y{형광}</code> · 단축키: <b>Enter</b> 다음 줄 머리 · <b>Tab</b>/<b>Shift+Tab</b> 들여쓰기 · <b>Alt+1/2/3/0</b> 완료/진행/예정/지움'
       +   '</div>'
       + '</div>'
       + (!_authorState.showPreview ? '' : '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:10px;min-height:480px">'
@@ -1524,7 +1539,8 @@
       _authorState.editPane = p;
     });
     ed.addEventListener('keydown', function (e) {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveAuthor(false); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveAuthor(false); return; }
+      onEditorKeydown(e);
     });
   }
 
@@ -1537,6 +1553,78 @@
     ta.focus();
     ta.selectionStart = ta.selectionEnd = s + text.length;
     ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  // ── 입력 도우미 (v13.353) — 글 형식을 손으로 덜 치게 ──
+  //   Enter      : 항목 줄 다음엔 '  : ' 세부 머리, 세부 줄 다음엔 같은 머리 · 들여쓰기, 섹션 줄 다음엔 '- [' (빈 머리에서 Enter 면 머리를 지우고 끝냄)
+  //   Tab / Shift+Tab : 고른 줄들 들여쓰기 · 내어쓰기 (2칸) — 세부 ↔ 하위 줄
+  //   Alt+1 · Alt+2 · Alt+3 · Alt+0 : 지금 줄(고른 줄들) 상태 #완료 · #진행중 · #예정 · 지움 (같은 태그를 또 누르면 지움)
+  //   한글 입력 조합 중(e.isComposing)엔 아무것도 하지 않음
+  var STATUS_TAGS = { done: '#완료', in_progress: '#진행중', planned: '#예정' };
+  var STATUS_TAG_RE = /\s*#(?:완료|진행중?|예정)(?=\s|$)/g;
+  function lineBounds(v, pos) {
+    var s = v.lastIndexOf('\n', pos - 1) + 1, e = v.indexOf('\n', pos);
+    return { s: s, e: e < 0 ? v.length : e };
+  }
+  // 고른 줄들(커서 줄 포함)을 fn 으로 바꿔 끼움 — 되돌리기(Ctrl+Z)가 되게 execCommand('insertText') 먼저
+  function replaceLines(ta, fn) {
+    var v = ta.value, a = lineBounds(v, ta.selectionStart), b = lineBounds(v, Math.max(ta.selectionStart, ta.selectionEnd - (ta.selectionEnd > ta.selectionStart && v[ta.selectionEnd - 1] === '\n' ? 1 : 0)));
+    var block = v.slice(a.s, b.e), out = block.split('\n').map(fn).join('\n');
+    if (out === block) return;
+    ta.setSelectionRange(a.s, b.e);
+    var ok = false;
+    try { ok = document.execCommand && document.execCommand('insertText', false, out); } catch (e) { ok = false; }
+    if (!ok) { ta.value = v.slice(0, a.s) + out + v.slice(b.e); ta.dispatchEvent(new Event('input', { bubbles: true })); }
+    ta.setSelectionRange(a.s, a.s + out.length);
+  }
+  function insertText(ta, text) {
+    var ok = false;
+    try { ok = document.execCommand && document.execCommand('insertText', false, text); } catch (e) { ok = false; }
+    if (!ok) insertAtCursor(ta.id, text);
+  }
+  // 줄 상태 태그 바꾸기 — 같은 태그면 지움(켜고 끄기), 다른 태그면 바꿔 끼움. 섹션 줄 · 빈 줄은 그대로
+  function setLineStatus(line, key) {
+    if (!line.trim() || WRP.sectionOfLine(line.trim())) return line;
+    var had = (line.match(STATUS_TAG_RE) || []).map(function (t) { t = t.trim(); return t === '#진행' ? '#진행중' : t; });
+    var base = line.replace(STATUS_TAG_RE, '').replace(/\s+$/, '');
+    var tag = STATUS_TAGS[key];
+    if (!tag || (had.length === 1 && had[0] === tag)) return base;   // 지움 · 같은 태그 다시 누름 = 끄기
+    return base + ' ' + tag;
+  }
+  function toggleStatusTag(ta, key) { replaceLines(ta, function (ln) { return setLineStatus(ln, key); }); }
+
+  function onEditorKeydown(e) {
+    var ta = e.target;
+    if (e.isComposing || e.keyCode === 229) return;
+    // 상태 단축키
+    if (e.altKey && !e.ctrlKey && !e.metaKey && /^[0-3]$/.test(e.key)) {
+      e.preventDefault();
+      toggleStatusTag(ta, { '1': 'done', '2': 'in_progress', '3': 'planned', '0': '' }[e.key]);
+      return;
+    }
+    // 들여쓰기 · 내어쓰기
+    if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault();
+      replaceLines(ta, e.shiftKey
+        ? function (ln) { return ln.replace(/^ {1,2}|^\t/, ''); }
+        : function (ln) { return ln.trim() ? '  ' + ln : ln; });
+      return;
+    }
+    // Enter — 다음 줄 머리 이어 쓰기
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && ta.selectionStart === ta.selectionEnd) {
+      var v = ta.value, pos = ta.selectionStart, lb = lineBounds(v, pos);
+      if (pos !== lb.e) return;   // 줄 가운데서 누르면 보통 Enter
+      var line = v.slice(lb.s, lb.e), t = line.trim();
+      var head = line.match(/^(\s*)(:|[-–—]\.|[-*+·•○●□■▶►◆◇>]|[└┗┕ㄴ↳➔→⇒]|\d{1,2}[.)]|)\s*/);
+      if (WRP.sectionOfLine(t)) { e.preventDefault(); insertText(ta, '\n- ['); return; }
+      if (WRP.ITEM_LINE_RE.test(t)) { e.preventDefault(); insertText(ta, '\n  : '); return; }
+      if (head && head[2] && lb.s < lb.e) {
+        // 머리만 있고 글이 없으면 머리를 지우고 끝냄 (목록 빠져나오기)
+        if (!t.slice(head[2].length).trim()) { e.preventDefault(); ta.setSelectionRange(lb.s, lb.e); insertText(ta, ''); return; }
+        var mark = /^\d{1,2}[.)]$/.test(head[2]) ? (parseInt(head[2], 10) + 1) + head[2].slice(-1) : head[2];
+        e.preventDefault(); insertText(ta, '\n' + head[1] + mark + ' ');
+      }
+    }
   }
 
   function updateAuthorPreview(paneKey) {
