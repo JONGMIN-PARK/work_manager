@@ -167,9 +167,22 @@
 /* ═══ 공통 — 모든 화면에서 모달 푸터 버튼바 자동 줄바꿈 안전망 (v13.99) ═══ */
 .modal-actions,.modal-footer,[data-modal-actions]{display:flex;flex-wrap:wrap;gap:8px;row-gap:8px;justify-content:flex-end}
 /* ═══ 파이프라인 칸반 — 모바일·iPad 가로 스크롤 (v13.99→v13.103) ═══ */
+/* v13.354 단계 탭 줄 — 평소엔 숨김, 가로로 미는 화면에서만 */
+.pipe-tabs{display:none}
+.pipe-mv{display:none}
 @media (max-width:900px), (any-pointer:coarse) and (max-width:1366px){
-  .pipeline-board{display:flex!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:6px}
-  .pipeline-board>.pipeline-lane{flex:0 0 220px;scroll-snap-align:start}
+  .pipeline-board{display:flex!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:6px;scroll-snap-type:x mandatory;scroll-padding-left:0}
+  .pipeline-board>.pipeline-lane{flex:0 0 260px;scroll-snap-align:start;scroll-snap-stop:always}
+  .pipe-chips{display:none!important}
+  .pipe-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;position:sticky;top:0;z-index:5;margin:0 0 8px;padding:6px 0;background:var(--bg)}
+  .pipe-tabs::-webkit-scrollbar{display:none}
+  .pipe-tab{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:18px;border:1px solid var(--bd);background:var(--bg-p);color:var(--t4);font-size:12.5px;font-weight:600;line-height:1;font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,border-color .15s}
+  .pipe-tab b{font-size:11px;font-weight:700;padding:2px 6px;border-radius:9px;background:var(--bg-i);color:var(--t5)}
+  .pipe-tab.on{background:var(--pc);border-color:var(--pc);color:#fff}
+  .pipe-tab.on b{background:rgba(255,255,255,.25);color:#fff}
+  .pipe-mv{display:flex;justify-content:space-between;gap:6px;margin-top:8px}
+  .pipe-mv button{flex:0 1 auto;min-height:34px;padding:6px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:12px;font-weight:600;cursor:pointer;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pipe-mv button:active{background:var(--ac-bg);color:var(--ac-t)}
 }
 /* 캘린더 — 모바일에서 7열 최소폭 유지 + 부모 가로 스크롤 (v13.99) */
 @media (max-width:480px){
@@ -3156,8 +3169,8 @@ mark.wd-hl{background:var(--ac-g);color:var(--ac-t);outline:1px solid var(--ac);
 }
 /* 세로 휴대폰 — 파이프라인 칸을 한 칸씩 넘겨 보기 · 칸반 끝에 걸리지 않게 */
 @media (max-width:600px){
-  .pipeline-board{scroll-snap-type:x proximity}
-  .pipeline-board>.pipeline-lane{flex:0 0 min(300px,80vw)!important}   /* 한 칸 + 옆 칸 살짝 — 넘길 칸이 있다는 걸 보이게 */
+  /* v13.354 한 칸씩 넘기기 — 한 단계가 화면을 거의 채우고 옆 칸은 살짝(넘길 칸이 있다는 표시) */
+  .pipeline-board>.pipeline-lane{flex:0 0 calc(100% - 26px)!important}
   .con{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
   /* 넓은 표의 '없음' 안내 — 표 가운데(화면 밖)가 아니라 보이는 자리에 */
   .pnl table td[colspan]{text-align:left!important}

@@ -45,7 +45,7 @@ function renderPipeline() {
     // v13.292 공통 툴바 — [제목 · 건수 · 단계별 수] … [펼치기 · 접기] [➕ 프로젝트] [⋯ 보고서]
     html += '<div class="wm-tb">';
     html += '<h3 class="wm-tb-t">🔀 파이프라인</h3><span class="wm-tb-n">전체 ' + projects.length + '건</span>';
-    html += '<span class="wm-tb-chips">';
+    html += '<span class="wm-tb-chips pipe-chips">';
     phaseKeys.forEach(function (k) {
       var ph = phases[k];
       var cnt = buckets[k].length;
@@ -55,6 +55,15 @@ function renderPipeline() {
     html += '<span class="wm-seg"><button onclick="pipelineSetAll(true)" title="모든 카드 펼치기">⊞ 펼치기</button><button onclick="pipelineSetAll(false)" title="모든 카드를 제목만 보이게 접기">⊟ 접기</button></span>';
     html += '<button class="wm-pri" onclick="showProjectModal()">➕ 프로젝트</button>';
     html += wmMoreHtml('pipeMoreWrap', [['📊 프로젝트 보고서', 'exportProjectReport()']]);
+    html += '</div>';
+
+    // v13.354 단계 탭 줄 — 휴대폰 · 패드(가로로 밀어 보는 화면)에서만 보임. 누르면 그 단계로, 밀면 지금 단계에 불
+    html += '<div class="pipe-tabs" id="pipeTabs" role="tablist">';
+    phaseKeys.forEach(function (k, i) {
+      var ph = phases[k];
+      html += '<button class="pipe-tab' + (i === 0 ? ' on' : '') + '" role="tab" data-phase="' + k + '" style="--pc:' + ph.color + '" onclick="pipelineGoLane(\'' + k + '\')">'
+        + '<span class="pipe-tab-i">' + ph.icon + '</span><span class="pipe-tab-l">' + ph.label + '</span><b>' + buckets[k].length + '</b></button>';
+    });
     html += '</div>';
 
     // 칸반 보드
@@ -152,6 +161,15 @@ function renderPipeline() {
           html += '<div style="font-size:9px;color:#EF4444;font-weight:600;margin-top:3px">⚠️ ' + overDays + '일 초과</div>';
         }
 
+        if (canDrag) {
+          var ki = phaseKeys.indexOf(k), prevK = phaseKeys[ki - 1], nextK = phaseKeys[ki + 1];
+          if (prevK || nextK) {
+            html += '<div class="pipe-mv">'
+              + (prevK ? '<button onclick="event.stopPropagation();pipelineMoveTo(\'' + pidA + '\',\'' + prevK + '\')" title="' + eH(phases[prevK].label) + ' 단계로 옮기기">◀ ' + eH(phases[prevK].label) + '</button>' : '<span></span>')
+              + (nextK ? '<button onclick="event.stopPropagation();pipelineMoveTo(\'' + pidA + '\',\'' + nextK + '\')" title="' + eH(phases[nextK].label) + ' 단계로 옮기기">' + eH(phases[nextK].label) + ' ▶</button>' : '')
+              + '</div>';
+          }
+        }
         html += '<button class="pipe-open-btn" onclick="event.stopPropagation();pipelineCardClick(\'' + pidA + '\')">🔍 상세 보기</button>';
         html += '</div>'; // pipe-det end
         html += '</div>'; // card end
@@ -163,6 +181,7 @@ function renderPipeline() {
     html += '</div>'; // grid end
 
     wrap.innerHTML = html;
+    _pipeBindTabs();
     // 삭제된 프로젝트의 펼침 기록 정리
     Object.keys(_pipeOpen).forEach(function (id) { if (!liveIds[id]) delete _pipeOpen[id]; });
     _pipeSaveOpen();
@@ -172,6 +191,52 @@ function renderPipeline() {
     wrap.innerHTML = '<div class="pnl" style="padding:24px;text-align:center;color:var(--t5)">파이프라인을 불러오지 못했습니다: ' + eH((err && err.message) || '알 수 없는 오류') +
       '<br><button class="btn btn-g btn-s" style="margin-top:8px" onclick="renderPipeline()">다시 시도</button></div>';
   });
+}
+
+/* ── v13.354 휴대폰 · 패드 — 단계 탭 줄 ↔ 가로로 미는 보드 ── */
+var _pipeLane = (function () { try { return localStorage.getItem('pipe-lane') || ''; } catch (e) { return ''; } })();
+function _pipeBoard() { return document.querySelector('#pipelineWrap .pipeline-board'); }
+function _pipeIsSwipe(board) { return board && board.scrollWidth > board.clientWidth + 4; }   // 가로로 넘치는 화면일 때만 (데스크톱은 한 화면에 다 보임)
+function pipelineGoLane(phase, instant) {
+  var board = _pipeBoard();
+  var lane = board && board.querySelector('.pipeline-lane[data-phase="' + phase + '"]');
+  if (!lane) return;
+  _pipeMarkTab(phase);
+  if (!_pipeIsSwipe(board)) { lane.scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'nearest' }); return; }
+  board.scrollTo({ left: lane.offsetLeft - board.offsetLeft, behavior: instant ? 'auto' : 'smooth' });
+}
+function _pipeMarkTab(phase) {
+  _pipeLane = phase;
+  try { localStorage.setItem('pipe-lane', phase); } catch (e) {}
+  var tabs = document.querySelectorAll('#pipeTabs .pipe-tab');
+  for (var i = 0; i < tabs.length; i++) {
+    var on = tabs[i].getAttribute('data-phase') === phase;
+    tabs[i].classList.toggle('on', on);
+    tabs[i].setAttribute('aria-selected', on ? 'true' : 'false');
+    if (on && tabs[i].scrollIntoView) { var bar = tabs[i].parentNode; if (bar.scrollWidth > bar.clientWidth) bar.scrollTo({ left: tabs[i].offsetLeft - (bar.clientWidth - tabs[i].offsetWidth) / 2, behavior: 'smooth' }); }
+  }
+}
+function _pipeBindTabs() {
+  var board = _pipeBoard();
+  if (!board) return;
+  var raf = 0;
+  board.addEventListener('scroll', function () {
+    if (raf) return;
+    raf = requestAnimationFrame(function () {
+      raf = 0;
+      var lanes = board.querySelectorAll('.pipeline-lane'), best = null, bd = 1e9, x = board.scrollLeft + board.offsetLeft;
+      for (var i = 0; i < lanes.length; i++) { var d = Math.abs(lanes[i].offsetLeft - x); if (d < bd) { bd = d; best = lanes[i]; } }
+      if (best && best.getAttribute('data-phase') !== _pipeLane) _pipeMarkTab(best.getAttribute('data-phase'));
+    });
+  }, { passive: true });
+  if (_pipeLane && _pipeIsSwipe(board)) pipelineGoLane(_pipeLane, true);   // 다시 그려도 보던 단계 그대로
+  else { var first = board.querySelector('.pipeline-lane'); if (first) _pipeMarkTab(_pipeLane && board.querySelector('.pipeline-lane[data-phase="' + _pipeLane + '"]') ? _pipeLane : first.getAttribute('data-phase')); }
+}
+/* 카드 단계 옮기기 버튼 — 옮긴 뒤 그 단계 칸으로 따라감 */
+function pipelineMoveTo(projId, phase) {
+  _pipeLane = phase;
+  try { localStorage.setItem('pipe-lane', phase); } catch (e) {}
+  _pipeMovePhase(projId, phase);
 }
 
 /* 카드 요약 줄 (C5/B8) — 접힌 카드에서도 보이게.
