@@ -167,3 +167,47 @@ test('못 본 1:1 메시지 → 잠시 뒤 알림 (읽었으면 안 감)', async
   await new Promise(function (r) { setTimeout(r, 600); });
   expect((await db.query("SELECT COUNT(*)::int AS n FROM in_app_notifications WHERE user_id = $1", [a.user.id])).rows[0].n).toBe(0);
 });
+
+test('🖼 사진 칠판 (v13.356) — 표시 더하기 · 지우기 · 회전 · 자르기 · 다듬기 · 방 밖 사람 · 사진만 · 실시간', async function () {
+  var png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  var up = await api('post', '/api/chat/rooms/' + dm + '/files?name=p.png', a).set('Content-Type', 'image/png').send(png);
+  expect(up.status).toBe(201);
+  var fid = up.body.data.file.id;
+  var got = [], conn = { write: function (s) { got.push(s); }, on: function () {}, setHeader: function () {}, flushHeaders: function () {} };
+  var off = hub.add(b.user.id, conn);
+  var r = await api('post', '/api/chat/files/' + fid + '/annot', b).send({ add: [
+    { id: 'x1', t: 'pen', c: '#ff0000', w: 3, p: [1, 2, 3, 4], by: 'someone-else' },
+    { id: 'x2', t: 'text', c: 'red; background:url(x)', s: '  ', x: 1, y: 1 },     // 빈 글자 → 버림
+    { id: 'x3', t: 'script', x: 1 },                                              // 모르는 종류 → 버림
+    { id: 'x4', t: 'rect', c: '#00ff00', x: 0, y: 0, x2: 10, y2: 10, w: 9999 }
+  ], rot: 91 });
+  expect(r.status).toBe(200);
+  expect(r.body.data).toMatchObject({ rot: 90, n: 2 });
+  var g = await api('get', '/api/chat/files/' + fid + '/annot', a);
+  expect(g.body.data.shapes.map(function (s) { return s.id; })).toEqual(['x1', 'x4']);
+  expect(g.body.data.shapes[0].by).toBe(b.user.id);          // 누가 그렸는지는 서버가
+  expect(g.body.data.shapes[1].w).toBe(200);                  // 굵기 한도
+  expect(g.body.byName).toBe('라마바');
+  await api('post', '/api/chat/files/' + fid + '/annot', a).send({ remove: ['x1'], crop: { x: 0, y: 0, w: 50, h: 40 } });
+  var g2 = (await api('get', '/api/chat/files/' + fid + '/annot', b)).body.data;
+  expect(g2.shapes.map(function (s) { return s.id; })).toEqual(['x4']);
+  expect(g2.crop).toEqual({ x: 0, y: 0, w: 50, h: 40 });
+  // 메시지 목록에 요약
+  var ms = await api('get', '/api/chat/rooms/' + dm + '/messages', b);
+  var fm = ms.body.data.filter(function (m) { return m.file && m.file.id === fid; })[0];
+  expect(fm.file.annot).toEqual({ rot: 90, n: 1, crop: true });
+  // 방 밖 사람 · 사진 아닌 파일
+  expect((await api('post', '/api/chat/files/' + fid + '/annot', x).send({ add: [] })).status).toBe(403);
+  expect((await api('get', '/api/chat/files/' + fid + '/annot', x)).status).toBe(403);
+  expect((await api('post', '/api/chat/files/' + fid + '/cursor', x).send({ x: 1, y: 1 })).status).toBe(403);
+  var txt = await api('post', '/api/chat/rooms/' + dm + '/files?name=t.txt', a).set('Content-Type', 'text/plain').send(Buffer.from('t'));
+  expect((await api('post', '/api/chat/files/' + txt.body.data.file.id + '/annot', a).send({ add: [] })).status).toBe(400);
+  // 실시간 — 받는 사람에게 바뀐 것만
+  expect(got.join('')).toMatch(/event: annot\n/);
+  await api('post', '/api/chat/files/' + fid + '/cursor', a).send({ x: 5, y: 6, live: [1, 2, 3, 4], lt: 'pen', c: '#123456', w: 2 });
+  expect(got.join('')).toMatch(/event: annot-cur\n.*"x":5/);
+  off();
+  // 모두 지우기
+  await api('post', '/api/chat/files/' + fid + '/annot', b).send({ clear: true });
+  expect((await api('get', '/api/chat/files/' + fid + '/annot', a)).body.data.shapes).toEqual([]);
+});

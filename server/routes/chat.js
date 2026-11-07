@@ -56,6 +56,7 @@ async function userNames(tenantId, ids) {
 /* ─── 메시지 모양 ─── */
 var MSG_SQL = 'SELECT m.id, m.room_id, m.user_id, m.kind, m.body, m.cards, m.mentions, m.reply_to, m.edited_at, m.deleted_at, m.created_at, m.reactions, ' +
   'COALESCE(u.display_name, u.name) AS user_name, f.id AS f_id, f.name AS f_name, f.mime AS f_mime, f.size AS f_size, ' +
+  "(f.annot->>'rot')::int AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, " +
   '(SELECT COUNT(*)::int FROM chat_messages t WHERE t.reply_to = m.id AND t.deleted_at IS NULL) AS replies, ' +
   '(SELECT MAX(t.created_at) FROM chat_messages t WHERE t.reply_to = m.id AND t.deleted_at IS NULL) AS last_reply_at ' +
   'FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN chat_files f ON f.id = m.file_id ';
@@ -63,8 +64,10 @@ function shape(r) {
   return { id: +r.id, roomId: r.room_id, userId: r.user_id, userName: r.user_name || (r.kind === 'ai' ? 'AI' : ''), kind: r.kind,
     body: r.deleted_at ? '' : r.body, deleted: !!r.deleted_at, edited: !!r.edited_at, cards: r.deleted_at ? null : r.cards, mentions: r.mentions || [],
     replyTo: r.reply_to ? +r.reply_to : null, replies: r.replies || 0, lastReplyAt: r.last_reply_at, reactions: r.deleted_at ? null : r.reactions || null,
-    file: r.f_id && !r.deleted_at ? { id: r.f_id, name: r.f_name, mime: r.f_mime, size: r.f_size } : null, at: r.created_at };
+    file: r.f_id && !r.deleted_at ? annSum({ id: r.f_id, name: r.f_name, mime: r.f_mime, size: r.f_size }, r) : null, at: r.created_at };
 }
+// 사진 칠판 요약 — 목록에선 회전 · 표시 수 · 자름 여부만 (전체는 /files/:fid/annot)
+function annSum(f, r) { if (r.f_rot || r.f_n || r.f_crop) f.annot = { rot: r.f_rot || 0, n: r.f_n || 0, crop: !!r.f_crop }; return f; }
 async function loadMsg(id) { var r = await db.query(MSG_SQL + 'WHERE m.id = $1', [id]); return r.rows.length ? shape(r.rows[0]) : null; }
 
 /* @이름 → 멤버 id */
@@ -477,6 +480,79 @@ router.get('/files/:fid', async function (req, res) {
     res.end(f.data);
   } catch (e) { httpErr.serverError(res, '[chat/file/get]', e); }
 });
+/* ─── 🖼 사진 칠판 (v13.356) — 원본은 그대로, 표시 · 자르기 · 회전은 따로 · 방 사람 모두 같이 그림 ─── */
+var ANN_TYPES = ['pen', 'hl', 'text', 'arrow', 'line', 'rect', 'ellipse', 'blur', 'box'];
+var ANN_MAX = 600, ANN_BYTES = 400000;
+function annNum(v) { v = +v; return isFinite(v) ? Math.round(v * 10) / 10 : 0; }
+function annShape(s, uid) {
+  if (!s || ANN_TYPES.indexOf(s.t) < 0) return null;
+  var o = { id: String(s.id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || rid('s'), t: s.t, by: uid,
+    c: /^#[0-9a-fA-F]{3,8}$/.test(s.c || '') ? s.c : '#EF4444', w: Math.max(1, Math.min(200, annNum(s.w) || 4)) };
+  if (s.t === 'pen' || s.t === 'hl') {
+    if (!Array.isArray(s.p) || s.p.length < 2) return null;
+    o.p = s.p.slice(0, 8000).map(annNum);
+  } else {
+    o.x = annNum(s.x); o.y = annNum(s.y); o.x2 = annNum(s.x2); o.y2 = annNum(s.y2);
+  }
+  if (s.t === 'text') { o.s = String(s.s || '').slice(0, 500); if (!o.s.trim()) return null; o.fs = Math.max(8, Math.min(400, annNum(s.fs) || 32)); }
+  if (s.fill) o.fill = true;
+  return o;
+}
+function annRect(c) {
+  if (!c || typeof c !== 'object') return null;
+  var o = { x: annNum(c.x), y: annNum(c.y), w: annNum(c.w), h: annNum(c.h) };
+  return o.w > 4 && o.h > 4 ? o : null;
+}
+router.get('/files/:fid/annot', async function (req, res) {
+  try {
+    var f = await fileFor(req, res); if (!f) return;
+    var by = f.annot_by ? await userNames(req.tenant.id, [f.annot_by]) : {};
+    res.json({ data: f.annot || { rot: 0, crop: null, shapes: [] }, at: f.annot_at, byName: by[f.annot_by] || '' });
+  } catch (e) { httpErr.serverError(res, '[chat/annot/get]', e); }
+});
+/* 바꾸기: { add:[shape], remove:[id], rot, crop(null=풀기), clear } — 여럿이 같이 그려도 서로 안 지우게 '바뀐 것만' 보냄 */
+router.post('/files/:fid/annot', async function (req, res) {
+  try {
+    var f = await fileFor(req, res); if (!f) return;
+    if (!/^image\//i.test(f.mime || '')) return bad(res, '사진에만 표시할 수 있습니다.');
+    var b = req.body || {}, uid = me(req);
+    var add = (Array.isArray(b.add) ? b.add : []).slice(0, 50).map(function (s) { return annShape(s, uid); }).filter(Boolean);
+    var remove = (Array.isArray(b.remove) ? b.remove : []).slice(0, 600).map(String);
+    var op = { add: add, remove: remove };
+    var out = await db.transaction(async function (cl) {
+      var r = await cl.query('SELECT annot FROM chat_files WHERE id = $1 FOR UPDATE', [f.id]);
+      var a = r.rows[0].annot || { rot: 0, crop: null, shapes: [] };
+      a.shapes = Array.isArray(a.shapes) ? a.shapes : [];
+      if (b.clear) { a.shapes = []; op.clear = true; }
+      if (remove.length) a.shapes = a.shapes.filter(function (s) { return remove.indexOf(s.id) < 0; });
+      add.forEach(function (s) { a.shapes = a.shapes.filter(function (x) { return x.id !== s.id; }); a.shapes.push(s); });
+      if (b.rot != null) { a.rot = ((Math.round((+b.rot || 0) / 90) * 90) % 360 + 360) % 360; op.rot = a.rot; }
+      if ('crop' in b) { a.crop = annRect(b.crop); op.crop = a.crop; }
+      if (a.shapes.length > ANN_MAX) throw Object.assign(new Error('표시는 ' + ANN_MAX + '개까지입니다.'), { status: 400 });
+      var json = JSON.stringify(a);
+      if (json.length > ANN_BYTES) throw Object.assign(new Error('표시가 너무 많습니다. 몇 개 지워 주세요.'), { status: 400 });
+      await cl.query('UPDATE chat_files SET annot = $2, annot_at = now(), annot_by = $3 WHERE id = $1', [f.id, json, uid]);
+      return a;
+    });
+    var nm = await userNames(req.tenant.id, [uid]);
+    hub.publish(await memberIds(f.room_id), 'annot', { fileId: f.id, roomId: f.room_id, by: uid, byName: nm[uid] || '', op: op, sum: { rot: out.rot || 0, n: out.shapes.length, crop: !!out.crop } });
+    res.json({ data: { rot: out.rot || 0, crop: out.crop || null, n: out.shapes.length } });
+  } catch (e) {
+    if (e && e.status === 400) return bad(res, e.message);
+    httpErr.serverError(res, '[chat/annot]', e);
+  }
+});
+/* 칠판에서 같이 보는 중 — 누가 어디를 가리키는지 (저장 안 함, 그대로 전달) */
+router.post('/files/:fid/cursor', async function (req, res) {
+  try {
+    var f = await fileFor(req, res); if (!f) return;
+    var b = req.body || {}, uid = me(req), nm = await userNames(req.tenant.id, [uid]);
+    var ids = (await memberIds(f.room_id)).filter(function (u) { return u !== uid; });
+    hub.publish(ids, 'annot-cur', { fileId: f.id, by: uid, byName: nm[uid] || '', x: annNum(b.x), y: annNum(b.y), live: b.live == null ? null : (Array.isArray(b.live) ? b.live.slice(0, 2000).map(annNum) : null), lt: ANN_TYPES.indexOf(b.lt) >= 0 ? b.lt : null, c: /^#[0-9a-fA-F]{3,8}$/.test(b.c || '') ? b.c : null, w: annNum(b.w), bye: !!b.bye });
+    res.json({ ok: true });
+  } catch (e) { httpErr.serverError(res, '[chat/annot/cur]', e); }
+});
+
 /* 방의 파일 모음 */
 router.get('/rooms/:id/files', async function (req, res) {
   try {

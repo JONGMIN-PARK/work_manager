@@ -122,6 +122,8 @@ function chatOnEvent(ev, d) {
     _cxDrawRooms(); _cxDrawHead(); _cxDrawAside();
   } else if (ev === 'notice') {
     if (CX.room === d.roomId && CX.info) { CX.info.notice = d.notice; _cxDrawNotice(); }
+  } else if (ev === 'annot' || ev === 'annot-cur') {
+    if (typeof chatBoardOnEvent === 'function') chatBoardOnEvent(ev, d);
   } else if (ev === 'rtc') {
     if (typeof chatRtcOnSignal === 'function') chatRtcOnSignal(d);
   }
@@ -430,7 +432,11 @@ function _cxBlob(fid) {
 function _cxLoadBlobs(root) {
   root.querySelectorAll('img[data-blob]').forEach(function (img) {
     var id = img.dataset.blob; img.removeAttribute('data-blob');
-    _cxBlob(id).then(function (u) { img.src = u; }).catch(function () { img.alt = '사진을 불러오지 못했습니다'; });
+    _cxBlob(id).then(function (u) {
+      img.src = u;
+      var holder = img.closest('[data-mid]'), m = holder && _cxFindMsg(+holder.dataset.mid);
+      if (typeof chatBoardThumb === 'function' && m && m.file) chatBoardThumb(img, m.file);   // 표시 · 자르기 · 회전한 모습으로
+    }).catch(function () { img.alt = '사진을 불러오지 못했습니다'; });
   });
 }
 function _cxDownload(fid, name) {
@@ -509,6 +515,7 @@ function _cxMenu(anchor, items, cls) {
   mnu.addEventListener('keydown', function (e) { if (e.key === 'Escape') mnu.remove(); });
 }
 function _cxViewImage(fid, name) {
+  if (typeof chatBoardOpen === 'function') return chatBoardOpen(fid, name, CX.room);   // v13.356 🖼 사진 칠판 (원본 · 표시 보기 · 같이 그리기)
   _cxBlob(fid).then(function (u) {
     var ov = document.createElement('div'); ov.className = 'cx-lightbox'; ov.innerHTML = '<img alt=""><div class="cx-lb-a"><button type="button" data-dl>⬇ 받기</button><button type="button" data-x>✕ 닫기</button></div>';
     ov.querySelector('img').src = u; ov.querySelector('img').alt = name || '';
@@ -521,10 +528,12 @@ function _cxViewImage(fid, name) {
 }
 
 /* ─── 입력칸 (본 대화 · 답글 줄기 공용) ─── */
+function _cxCanCapture() { return !!((window.wmDesktop && window.wmDesktop.captureScreen) || (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && !/Android|iPhone|iPad/i.test(navigator.userAgent))); }
 function _cxComposerHtml(taId, wrapId) {
   return '<div class="cx-comp" id="' + wrapId + '"><div class="cx-chips" data-chips></div><div class="cx-reply" data-replybar hidden></div>' +
     '<div class="cx-comp-r"><button type="button" class="cx-ib" data-c="attach" title="파일 · 사진 (끌어 놓기 · 붙여넣기도 됨)">📎</button>' +
     '<button type="button" class="cx-ib" data-c="card" title="업무 카드 붙이기 — 이슈 · 프로젝트 · 마일스톤 · 문서 …">＋</button>' +
+    (_cxCanCapture() ? '<button type="button" class="cx-ib" data-c="cap" title="화면 캡처 — 잘라서 표시하고 보내기">📸</button>' : '') +
     '<textarea id="' + taId + '" rows="1" placeholder="메시지 · @사람 · /명령" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
     '<button type="button" class="cx-send" data-c="send" title="보내기" aria-label="보내기">➤</button>' +
     '<input type="file" data-c="file" multiple hidden></div><div class="cx-sugg" data-sugg hidden></div></div>';
@@ -569,12 +578,17 @@ function _cxBindComposer(taId, wrapId, inThread) {
   });
   ta.addEventListener('paste', function (e) {
     var files = typeof wmPastedFiles === 'function' ? wmPastedFiles(e) : Array.prototype.slice.call((e.clipboardData && e.clipboardData.files) || []);
-    if (files.length) { e.preventDefault(); _cxUpload(files, inThread ? CX.thread : null); }
+    if (!files.length) return;
+    e.preventDefault();
+    // 사진 한 장 붙여넣기 → 칠판에서 표시 · 자르고 Enter 로 보내기 (v13.356)
+    if (files.length === 1 && /^image\/(png|jpe?g|gif|webp|bmp)$/i.test(files[0].type) && typeof chatBoardDraft === 'function') return chatBoardDraft(files[0], { replyTo: inThread ? CX.thread : null, hint: '표시하고 Enter 로 보내기 · 그대로 보내도 됩니다' });
+    _cxUpload(files, inThread ? CX.thread : null);
   });
   wrap.addEventListener('click', function (e) {
     var b = e.target.closest('[data-c]'); if (!b) return;
     if (b.dataset.c === 'attach') fileIn.click();
     else if (b.dataset.c === 'card') chatCardPicker(inThread);
+    else if (b.dataset.c === 'cap' && typeof chatBoardCapture === 'function') chatBoardCapture(inThread ? CX.thread : null);
     else if (b.dataset.c === 'send') _go();
   });
   wrap.addEventListener('click', function (e) { var x = e.target.closest('[data-unchip]'); if (x) { CX.cards.splice(+x.dataset.unchip, 1); _cxDrawChips(); } var rc = e.target.closest('[data-unreply]'); if (rc) _cxCancelEdit(); });

@@ -131,6 +131,21 @@ ipcMain.on('wm:badge', (_e, o) => {
   refreshTray();
 });
 ipcMain.on('wm:retry', () => loadApp());
+// 📸 화면 캡처 — 우리 창을 잠깐 숨기고, 마우스가 있는 화면을 원래 해상도로 찍는다 → 웹 화면이 잘라서 표시 · 보내기
+ipcMain.handle('wm:capture', async () => {
+  const { screen } = require('electron');
+  const wasVisible = win && win.isVisible();
+  try {
+    if (wasVisible) { win.hide(); await new Promise((r) => setTimeout(r, 280)); }
+    const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const size = { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor) };
+    const srcs = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
+    const s = srcs.find((x) => String(x.display_id) === String(d.id)) || srcs[0];
+    return s ? s.thumbnail.toDataURL() : '';
+  } finally {
+    if (wasVisible) { win.show(); win.focus(); }
+  }
+});
 
 /* ─── 시작 ─── */
 app.whenReady().then(() => {
