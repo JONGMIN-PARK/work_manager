@@ -211,3 +211,77 @@ test('🖼 사진 칠판 (v13.356) — 표시 더하기 · 지우기 · 회전 �
   await api('post', '/api/chat/files/' + fid + '/annot', b).send({ clear: true });
   expect((await api('get', '/api/chat/files/' + fid + '/annot', a)).body.data.shapes).toEqual([]);
 });
+
+test('📌 게시판 · 🛠 요청함 (v13.358) — 글 · 상태 흐름 · 담당 · 고치기 권한 · 이슈로 · 방 밖 사람', async function () {
+  var g = await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '장비-프로그램', userIds: [b.user.id, c.user.id] });
+  var gid = g.body.data.id;
+  expect((await api('post', '/api/chat/rooms/' + gid + '/posts', a).send({ cat: 'req', title: '' })).status).toBe(400);
+  expect((await api('post', '/api/chat/rooms/' + gid + '/posts', a).send({ cat: 'req', title: 'x', assignee: x.user.id })).status).toBe(400);   // 방 밖 담당
+  var p = await api('post', '/api/chat/rooms/' + gid + '/posts', a).send({ cat: 'req', title: 'PLC 통신 끊김', body: '현상: 10분마다 끊김\n```\nERR 0x21\n```', equip: '조립기 #3', urgency: 'urgent', assignee: b.user.id, due: '2026-11-10' });
+  expect(p.status).toBe(201);
+  var post = p.body.data;
+  expect(post.kind).toBe('post');
+  expect(post.post).toMatchObject({ title: 'PLC 통신 끊김', cat: 'req', status: 'open', equip: '조립기 #3', urgency: 'urgent', assignee: b.user.id, due: '2026-11-10' });
+  expect(post.mentions).toEqual([b.user.id]);
+  // 요청함
+  var inbox = await api('get', '/api/chat/requests?open=1', b);
+  expect(inbox.body.data.map(function (m) { return m.id; })).toContain(post.id);
+  expect(inbox.body.data[0].roomName).toBe('장비-프로그램');
+  expect((await api('get', '/api/chat/requests?who=mine', a)).body.data.map(function (m) { return m.id; })).toContain(post.id);
+  expect((await api('get', '/api/chat/requests', x)).body.data.length).toBe(0);
+  // 상태: 처리 중 → 완료 (방 사람 누구나) · 답글 줄기에 기록
+  var s1 = await api('post', '/api/chat/messages/' + post.id + '/post', b).send({ status: 'doing' });
+  expect(s1.body.data.post.status).toBe('doing');
+  expect((await api('post', '/api/chat/messages/' + post.id + '/post', b).send({ status: 'solved' })).status).toBe(400);
+  await api('post', '/api/chat/messages/' + post.id + '/post', c).send({ status: 'done' });
+  var th = await api('get', '/api/chat/rooms/' + gid + '/messages?thread=' + post.id, a);
+  expect(th.body.data.filter(function (m) { return m.kind === 'system'; }).map(function (m) { return m.body; }).join('|')).toMatch(/처리 중.*\|.*완료/);
+  expect((await api('get', '/api/chat/requests?open=1', b)).body.data.map(function (m) { return m.id; })).not.toContain(post.id);
+  // 고치기 — 쓴 사람만
+  expect((await api('post', '/api/chat/messages/' + post.id + '/post', b).send({ title: '바꿈' })).status).toBe(403);
+  var e1 = await api('post', '/api/chat/messages/' + post.id + '/post', a).send({ title: 'PLC 통신 끊김 (해결)', equip: '' });
+  expect(e1.body.data.post).toMatchObject({ title: 'PLC 통신 끊김 (해결)', equip: null });
+  // 방 밖 사람
+  expect((await api('post', '/api/chat/messages/' + post.id + '/post', x).send({ status: 'open' })).status).toBe(403);
+  expect((await api('get', '/api/chat/rooms/' + gid + '/posts', x)).status).toBe(403);
+  // 목록 · 거르기 · 방 목록 미리보기
+  await api('post', '/api/chat/rooms/' + gid + '/posts', c).send({ cat: 'qna', title: '펌웨어 버전?' });
+  var all = await api('get', '/api/chat/rooms/' + gid + '/posts', a);
+  expect(all.body.data.map(function (m) { return m.post.cat; })).toEqual(['qna', 'req']);
+  expect((await api('get', '/api/chat/rooms/' + gid + '/posts?cat=req', a)).body.data.length).toBe(1);
+  expect((await api('get', '/api/chat/rooms/' + gid + '/posts?open=1', a)).body.data.map(function (m) { return m.post.cat; })).toEqual(['qna']);
+  var rl = (await api('get', '/api/chat/rooms', b)).body.data.filter(function (r) { return r.id === gid; })[0];
+  expect(rl.last.body).toBe('📌 펌웨어 버전?');
+  // 이슈로 — 프로젝트 방에서만
+  expect((await api('post', '/api/chat/messages/' + post.id + '/post', a).send({ toIssue: true })).status).toBe(400);
+});
+
+test('📁 내 폴더 (v13.358) — 만들기 · 담기 · 보기 · 남은 못 봄 · 방에서 나가면 안 보임 · 지우기', async function () {
+  var g = await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '폴더시험', userIds: [b.user.id] });
+  var gid = g.body.data.id;
+  var m1 = (await api('post', '/api/chat/rooms/' + gid + '/messages', a).send({ body: '배선도 최종본은 이것' })).body.data;
+  expect((await api('post', '/api/chat/folders', b).send({ name: ' ' })).status).toBe(400);
+  var f = (await api('post', '/api/chat/folders', b).send({ name: '조립기 자료', icon: '🛠' })).body.data;
+  expect(f).toMatchObject({ name: '조립기 자료', icon: '🛠', n: 0 });
+  expect((await api('post', '/api/chat/folders/' + f.id + '/items', b).send({ messageId: m1.id, note: '최종' })).status).toBe(201);
+  expect((await api('post', '/api/chat/folders/' + f.id + '/items', b).send({ messageId: m1.id })).status).toBe(201);   // 두 번 담아도 하나
+  var items = (await api('get', '/api/chat/folders/' + f.id + '/items', b)).body.data;
+  expect(items.length).toBe(1);
+  expect(items[0]).toMatchObject({ id: m1.id, body: '배선도 최종본은 이것', roomName: '폴더시험', savedNote: '최종' });
+  expect((await api('get', '/api/chat/messages/' + m1.id + '/folders', b)).body.data).toEqual([f.id]);
+  expect((await api('get', '/api/chat/folders', b)).body.data[0].n).toBe(1);
+  // 남의 폴더 · 방 밖 메시지
+  expect((await api('get', '/api/chat/folders/' + f.id + '/items', a)).status).toBe(404);
+  expect((await api('post', '/api/chat/folders/' + f.id + '/items', a).send({ messageId: m1.id })).status).toBe(404);
+  var fx = (await api('post', '/api/chat/folders', x).send({ name: '엿보기' })).body.data;
+  expect((await api('post', '/api/chat/folders/' + fx.id + '/items', x).send({ messageId: m1.id })).status).toBe(403);
+  // 이름 바꾸기 · 방에서 나가면 안 보임 · 빼기 · 폴더 지우기
+  await api('put', '/api/chat/folders/' + f.id, b).send({ name: '조립기 #3' });
+  expect((await api('get', '/api/chat/folders', b)).body.data[0].name).toBe('조립기 #3');
+  await api('delete', '/api/chat/rooms/' + gid + '/members/me', b);
+  expect((await api('get', '/api/chat/folders/' + f.id + '/items', b)).body.data.length).toBe(0);
+  expect((await api('get', '/api/chat/folders', b)).body.data[0].n).toBe(0);
+  await api('delete', '/api/chat/folders/' + f.id + '/items/' + m1.id, b);
+  expect((await api('delete', '/api/chat/folders/' + f.id, b)).status).toBe(200);
+  expect((await api('get', '/api/chat/folders', b)).body.data.length).toBe(0);
+});

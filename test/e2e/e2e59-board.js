@@ -133,8 +133,8 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var sentPart = await until(a, function (n) { return CX.msgs.length > n && /부분/.test(CX.msgs[CX.msgs.length - 1].file && CX.msgs[CX.msgs.length - 1].file.name); }, nBefore, 10000);
     check(sentPart, '잘라서 보내기 — 새 사진');
     await a.click('#cbBoard [data-cm="apply"]');
-    await wait(700);
-    var cr = (await srvAnnot(fid)).crop;
+    var cr = null;
+    for (var tt = 0; tt < 40 && !cr; tt++) { await wait(150); cr = (await srvAnnot(fid)).crop; }   // 저장될 때까지
     check(cr && cr.w > 500 && cr.h > 400, '이대로 자르기 저장 — ' + (cr && cr.w + '×' + cr.h));
     var vw = await a.evaluate(function () { var c = _cbView(); return [c.width, c.height]; });
     check(Math.abs(vw[0] - cr.w) < 2 && Math.abs(vw[1] - cr.h) < 2, '표시 보기 = 자른 부분');
