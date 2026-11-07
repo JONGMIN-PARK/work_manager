@@ -44,20 +44,25 @@ function _ciName(uid) {
   var m = ms.filter(function (x) { return x.id === uid; })[0];
   return m ? m.name : '';
 }
-function _ciCanDraw() { return CI.role === 'host' || (CI.role === 'view' && CI.allow === 'all'); }
+function _ciCanDraw() { return CI.role === 'host' || (CI.role === 'view' && (CI.allow === 'all' || !!(CI.pres && CI.pres.grant && CI.pres.grant[_ciMe()]))); }
 function _ciHostId() { return CI.role === 'host' ? _ciMe() : (typeof CRT !== 'undefined' && CRT.watch ? CRT.watch.from : null); }
 
 /* ─── 연결 ─── */
 function chatInkHostDc(uid, dc) {   // 발표자: 보는 사람마다
   CI.role = 'host';
   CI.dcs[uid] = dc;
-  dc.onopen = function () { _ciTx(dc, { t: 'sync', strokes: CI.strokes.filter(function (s) { return !s.f && s.done; }), allow: CI.allow }); };
+  dc.onopen = function () {
+    _ciTx(dc, { t: 'sync', strokes: CI.strokes.filter(function (s) { return !s.f && s.done; }), allow: CI.allow });
+    if (CI.pres && typeof _cpState === 'function') _ciTx(dc, _cpState());   // 🎤 발표 모드 상태
+    if (typeof chatPresSeen === 'function') chatPresSeen(uid);
+  };
   dc.onclose = function () { if (CI.dcs[uid] === dc) delete CI.dcs[uid]; delete CI.ptr[uid]; _ciKick(); };
   dc.onmessage = function (e) {
     var m; try { m = JSON.parse(e.data); } catch (_) { return; }
-    if (CI.allow !== 'all') return;   // 발표자만 — 보는 사람 잉크는 받지 않음
+    if (typeof chatPresFromViewer === 'function' && chatPresFromViewer(uid, m)) return;   // ✋ · 💬 · 👏
+    if (m.t === 'p' || m.t === 'pe') { m.by = uid; _ciApply(m); _ciCast(m, uid); return; }   // 참여자 포인터(Alt)는 늘 됨
+    if (CI.allow !== 'all' && !(CI.pres && CI.pres.grant && CI.pres.grant[uid])) return;   // 발표자만 — 펜 받은 사람 것만
     if (m.t === 's' && m.s) { m.s.by = uid; m.s.id = uid + ':' + String(m.s.id).split(':').pop(); }
-    else if (m.t === 'p' || m.t === 'pe') m.by = uid;
     else if (m.t === 'u') { if (String(m.id).indexOf(uid + ':') !== 0) return; }
     else if (m.t === 'clr') { m.by = uid; }
     else return;
@@ -65,7 +70,8 @@ function chatInkHostDc(uid, dc) {   // 발표자: 보는 사람마다
   };
 }
 function chatInkViewDc(dc) {   // 보는 사람: 발표자와 하나
-  CI.role = 'view'; CI.dc = dc; CI.strokes = []; CI.ptr = {}; CI.allow = 'host';
+  CI.role = 'view'; CI.dc = dc; CI.strokes = []; CI.ptr = {}; CI.allow = 'host'; CI.pres = null;
+  dc.onopen = function () { _ciToolbars(); };
   dc.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (_) { return; } _ciApply(m); };
   dc.onclose = function () { if (CI.dc === dc) CI.dc = null; };
   _ciToolbars();
@@ -80,6 +86,7 @@ function _ciSend(m) { if (CI.relay) return CI.relay(m); if (CI.role === 'host') 
 
 /* ─── 받은 것 반영 ─── */
 function _ciApply(m) {
+  if (typeof chatPresApply === 'function' && chatPresApply(m)) return;   // 🎤 발표 모드
   if (m.t === 'sync') { CI.strokes = m.strokes || []; CI.allow = m.allow || 'host'; _ciToolbars(); }
   else if (m.t === 'st') {
     CI.allow = m.allow || 'host'; if (!_ciCanDraw()) chatInkSetTool(null); _ciToolbars();
@@ -396,6 +403,7 @@ function _ciTbHtml() {
     '<button type="button" class="ci-b ci-host" data-call title="모두 지우기 (C)" aria-label="모두 지우기">' + _ciSvg('trash') + '</button>' +
     '<button type="button" class="ci-b ci-host ci-tg" data-cauto title="화면이 바뀌면 자동으로 지우기 — 슬라이드를 넘기면 남는 잉크를 지움" aria-label="화면이 바뀌면 자동으로 지우기">' + _ciSvg('auto') + '</button>' +
     '<button type="button" class="ci-b ci-host ci-allow" data-callow title="보는 사람도 그리기 — 끄면 발표자만" aria-label="보는 사람도 그리기">' + _ciSvg('users') + '</button></div>' +
+    (typeof chatPresTbHtml === 'function' ? chatPresTbHtml() : '') +
     '<span class="ci-sep ci-always"></span><div class="ci-g ci-always"><button type="button" class="ci-b" data-csnap title="그림까지 캡처 → 이 방에 사진으로 (나중에 계속 표시 가능)" aria-label="그림까지 캡처">' + _ciSvg('snap') + '</button></div>';
   return h;
 }
@@ -404,6 +412,7 @@ function _ciToolbar(el) {
   el.innerHTML = _ciTbHtml();
   el.addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
+    if (typeof chatPresTbClick === 'function' && chatPresTbClick(b)) return;
     if (b.dataset.ct) chatInkSetTool(b.dataset.ct === 'none' ? null : b.dataset.ct);
     else if (b.dataset.cc) { CI.color = b.dataset.cc; if (!CI.tool || CI.tool === 'laser') chatInkSetTool('pen'); _ciToolbars(); }
     else if (b.dataset.cs) { CI.size = +b.dataset.cs; _ciToolbars(); }
@@ -427,8 +436,9 @@ function _ciSync(el) {
   var q = function (s) { return el.querySelector(s); };
   q('[data-cbold]').classList.toggle('on', CI.bold); q('[data-cfade]').classList.toggle('on', CI.fade); q('[data-callow]').classList.toggle('on', CI.allow === 'all'); q('[data-cauto]').classList.toggle('on', !!CI.auto);
   ['[data-cbold]', '[data-cfade]', '[data-cundo]', '[data-cmine]'].forEach(function (s) { q(s).disabled = !can; });
+  if (typeof chatPresSync === 'function') chatPresSync(el);
   var st = el.parentNode && el.parentNode.querySelector('.ci-state');
-  if (st) st.textContent = CI.role === 'host' ? (CI.allow === 'all' ? '모두 그리기' : '발표자만 그리기') : (can ? '그리기 허용됨' : '발표자만 그립니다');
+  if (st) st.textContent = CI.role === 'host' ? (CI.allow === 'all' ? '모두 그리기' : '발표자만 그리기') : (can ? (CI.allow === 'all' ? '그리기 허용됨' : '✎ 펜을 받았습니다') : '발표자만 그립니다');
 }
 function _ciToolbars() { document.querySelectorAll('.ci-tb').forEach(_ciSync); }
 
@@ -437,7 +447,16 @@ function chatInkViewLayer(win) {
   var v = win.querySelector('video'); if (!v || win.querySelector('.ci-tb')) return;
   var tb = document.createElement('div'); win.insertBefore(tb, v); _ciToolbar(tb);
   var st = document.createElement('span'); st.className = 'ci-state'; tb.appendChild(st); _ciSync(tb);
-  _ciLayer(win, v, 'view');
+  var L = _ciLayer(win, v, 'view'), altOn = false, lastA = 0;
+  win.addEventListener('pointermove', function (e) {   // Alt + 움직이기 = 내 이름표 포인터 (펜이 없어도)
+    if (!CI.dc || CI.tool) return;
+    if (!e.altKey) { if (altOn) { altOn = false; _ciTx(CI.dc, { t: 'pe' }); } return; }
+    var n = performance.now(); if (n - lastA < 33) return; lastA = n;
+    var r = L.cv.getBoundingClientRect(), R = _ciRect(L), x = (e.clientX - r.left - R.x) / R.w, y = (e.clientY - r.top - R.y) / R.h;
+    if (x < 0 || y < 0 || x > 1 || y > 1) return;
+    altOn = true; _ciTx(CI.dc, { t: 'p', x: r4(x), y: r4(y) });
+  });
+  document.addEventListener('keyup', function (e) { if (e.key === 'Alt' && altOn && CI.dc) { altOn = false; _ciTx(CI.dc, { t: 'pe' }); } });
 }
 
 /* ─── 발표자: 내 공유 화면 미리보기 창에서 그리기 ─── */
@@ -478,12 +497,14 @@ function _ciDragHead(el) {
 /* 끝 — 공유를 마치거나 보기를 닫으면 */
 function chatInkEnd(role) {
   if (role && CI.role && role !== CI.role) return;
+  if (typeof chatPresEnd === 'function') chatPresEnd();   // 🎤 발표 정리를 방에
+  var cpp = document.getElementById('cpPanel'); if (cpp) cpp.remove();
   if (CI.ovl && window.wmDesktop && window.wmDesktop.inkClose) window.wmDesktop.inkClose();
   chatInkAuto(false, true);
   if (CI.hv) { CI.hv.srcObject = null; CI.hv = null; }
   CI.layers.forEach(function (L) { if (L.ro) L.ro.disconnect(); if (L.cv.parentNode) L.cv.remove(); });
   var h = document.getElementById('ciHost'); if (h) { if (document.fullscreenElement === h) document.exitFullscreen().catch(function () {}); h.remove(); }
-  CI.layers = []; CI.strokes = []; CI.ptr = {}; CI.spot = null; CI.mag = null; CI.dcs = {}; CI.dc = null; CI.tool = null; CI.live = null; CI.role = null; CI.allow = 'host'; CI.ovl = false;
+  CI.layers = []; CI.strokes = []; CI.ptr = {}; CI.spot = null; CI.mag = null; CI.dcs = {}; CI.dc = null; CI.tool = null; CI.live = null; CI.role = null; CI.allow = 'host'; CI.ovl = false; CI.pres = null;
 }
 
 /* 단축키 — 발표 펜 창이나 공유 창이 열려 있고, 글 입력 중이 아닐 때 */
@@ -510,7 +531,8 @@ function _ciOvlBind() {
   CI.ovlBound = true;
   window.wmDesktop.onInk(function (m) {
     if (!m || typeof m !== 'object') return;
-    if (m.t === 'ready') { window.wmDesktop.inkSend({ t: 'sync', strokes: CI.strokes.filter(function (x) { return !x.f && x.done; }), allow: CI.allow }); window.wmDesktop.inkSend({ t: 'cfg', auto: CI.auto }); return; }
+    if (m.t === 'ready') { window.wmDesktop.inkSend({ t: 'sync', strokes: CI.strokes.filter(function (x) { return !x.f && x.done; }), allow: CI.allow }); window.wmDesktop.inkSend({ t: 'cfg', auto: CI.auto }); if (CI.pres && typeof _cpState === 'function') window.wmDesktop.inkSend(_cpState()); return; }
+    if (m.t === 'hcmd') { if (typeof chatPresHostCmd === 'function') chatPresHostCmd(m); return; }
     if (m.t === 'ovl-closed') { CI.ovl = false; CI.spot = null; CI.mag = null; _ciCast({ t: 'spe', by: _ciMe() }); _ciCast({ t: 'mge', by: _ciMe() }); if (typeof _crtBar === 'function') _crtBar(); return; }
     if (m.t === 'st') { chatInkAllow(m.allow); return; }
     if (m.t === 'auto') { chatInkAuto(!!m.on); return; }
@@ -569,7 +591,7 @@ function chatInkSnap() {
       if (!b) return;
       var d = new Date(), nm = '발표 캡처 ' + ('0' + d.getHours()).slice(-2) + ('0' + d.getMinutes()).slice(-2) + ('0' + d.getSeconds()).slice(-2) + '.png';
       fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/rooms/' + encodeURIComponent(room) + '/files?name=' + encodeURIComponent(nm), { method: 'POST', headers: { Authorization: 'Bearer ' + (typeof _accessToken !== 'undefined' ? _accessToken : ''), 'Content-Type': 'image/png' }, body: b })
-        .then(function (r) { if (!r.ok) throw new Error(r.status); if (typeof _cxToast === 'function') _cxToast('📸 그림까지 캡처해 방에 올렸습니다 — 사진 칠판에서 계속 표시할 수 있어요', 'success'); })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); if (CI.pres && CI.role === 'host') CI.pres.snaps = (CI.pres.snaps || 0) + 1; if (typeof _cxToast === 'function') _cxToast('📸 그림까지 캡처해 방에 올렸습니다 — 사진 칠판에서 계속 표시할 수 있어요', 'success'); })
         .catch(function () { if (typeof _cxToast === 'function') _cxToast('캡처를 올리지 못했습니다', 'error'); });
     }, 'image/png');
   }

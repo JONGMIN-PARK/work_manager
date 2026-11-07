@@ -39,12 +39,16 @@
   var q = new URLSearchParams(location.search), me = q.get('me') || '';
   if (!window.wmInk) window.wmInk = { send: function () {}, onMsg: function () {}, onCmd: function () {}, mouse: function () {}, close: function () { window.close(); } };   // PC 앱 밖에서 열면 그냥 보기만
   var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/style.css?ink=1'; document.head.appendChild(css);
-  var js = document.createElement('script'); js.src = '/chat-ink.js?ink=' + Date.now(); js.onload = init; js.onerror = function () { document.getElementById('fail').style.display = 'block'; wmInk.mouse(true, false); };
+  var js = document.createElement('script'); js.src = '/chat-ink.js?ink=' + Date.now();
+  js.onload = function () { var p = document.createElement('script'); p.src = '/chat-present.js?ink=' + Date.now(); p.onload = init; p.onerror = init; document.head.appendChild(p); }; js.onerror = function () { document.getElementById('fail').style.display = 'block'; wmInk.mouse(true, false); };
   document.head.appendChild(js);
   window._cxMe = function () { return me; };
   var overBar = false, hintT = 0;
   function hint(t) { var h = document.getElementById('hint'); h.textContent = t; h.classList.add('on'); clearTimeout(hintT); hintT = setTimeout(function () { h.classList.remove('on'); }, 2200); }
-  function mouse() { wmInk.mouse(!!(CI.tool || overBar || document.querySelector('.ci-txt')), !!CI.tool); }
+  function mouse() { wmInk.mouse(!!(CI.tool || overBar || document.querySelector('.ci-txt') || overPanel), !!CI.tool); }
+  var overPanel = false;
+  document.addEventListener('mouseover', function (e) { var p = !!(e.target.closest && e.target.closest('#cpPanel')); if (p !== overPanel) { overPanel = p; mouse(); } });
+  document.addEventListener('click', function () { setTimeout(function () { if (!document.getElementById('cpPanel')) overPanel = false; mouse(); }, 0); });
   function init() {
     document.body.style.background = 'transparent';
     CI.role = 'host'; CI.relay = function (m) { wmInk.send(m); };

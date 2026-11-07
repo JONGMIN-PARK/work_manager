@@ -4761,6 +4761,44 @@ html.wm-focus-big:has(#mMessages:not(.hidden)) #mMessages{--cx-h:calc(100dvh - 7
 .crt-win:fullscreen video{flex:1;min-height:0;max-height:none;height:100%;object-fit:contain}
 .crt-win:fullscreen .crt-h{cursor:default}
 
+/* ═══ v13.370 🎤 발표 모드 (chat-present.js) — 손들기 · 질문 · 반응 · 참여자 패널 ═══ */
+.ci-tb.is-host .ci-vonly{display:none!important}
+.ci-tb.off:not(.is-host) .ci-g.ci-always.ci-vonly{display:flex}
+.ci-b.ci-rx{font-size:15px;line-height:1}
+.ci-b[data-pr=hand].on{background:rgba(250,204,21,.22);color:#FDE68A;box-shadow:inset 0 0 0 1px rgba(250,204,21,.6)}
+.ci-pn{position:relative}
+.ci-pn em{position:absolute;top:1px;right:0;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#EF4444;color:#fff;font-style:normal;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.ci-pn em[hidden]{display:none}
+.cp-ask{position:absolute;z-index:6;display:flex;gap:6px;width:320px;padding:8px;border-radius:12px;background:#151B2B;box-shadow:0 12px 32px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.08)}
+.cp-ask input{flex:1;min-width:0;height:32px;padding:0 10px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:#0B0F19;color:#F1F5F9;font:inherit;font-size:12.5px;outline:none}
+.cp-ask input:focus{border-color:#818CF8}
+.cp-ask button{border:0;border-radius:8px;padding:0 12px;background:#6366F1;color:#fff;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.cp-fly{position:absolute;z-index:5;display:flex;flex-direction:column;align-items:center;pointer-events:none;animation:cpFly 2.5s cubic-bezier(.2,.7,.3,1) forwards}
+.cp-fly b{font-size:34px;line-height:1;filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
+.cp-fly i{margin-top:3px;padding:1px 7px;border-radius:8px;background:rgba(15,20,34,.8);color:#E2E8F0;font-style:normal;font-size:10.5px;font-weight:600;white-space:nowrap}
+@keyframes cpFly{0%{opacity:0;transform:translateY(10px) scale(.6)}12%{opacity:1;transform:translateY(0) scale(1.1)}25%{transform:translateY(-20px) scale(1)}100%{opacity:0;transform:translateY(-190px) scale(.95)}}
+.cp-panel{position:absolute;z-index:20;width:330px;max-height:min(70vh,560px);overflow:auto;padding:4px 0 8px;border-radius:14px;background:#0F1422;color:#E2E8F0;font-size:12.5px;box-shadow:0 18px 44px rgba(2,6,23,.55),0 0 0 1px rgba(255,255,255,.08);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.cp-h{display:flex;align-items:center;justify-content:space-between;padding:6px 8px 4px 14px}
+.cp-h b{font-size:13px;color:#F8FAFC}
+.cp-sec{padding:6px 14px}
+.cp-sec+.cp-sec{border-top:1px solid rgba(255,255,255,.07)}
+.cp-sec h5{display:flex;align-items:center;gap:6px;margin:2px 0 6px;font-size:11.5px;font-weight:700;color:#94A3B8}
+.cp-sec h5 i{font-style:normal;color:#CBD5E1}
+.cp-row{display:flex;align-items:center;gap:8px;padding:5px 0}
+.cp-av{flex:none;width:24px;height:24px;border-radius:50%;background:#334155;color:#F1F5F9;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.cp-row b{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp-act{display:flex;gap:4px}
+.cp-panel button:not(.ci-b){border:0;border-radius:7px;padding:4px 9px;background:#6366F1;color:#fff;font:inherit;font-size:11.5px;font-weight:700;cursor:pointer}
+.cp-panel button.g{background:rgba(255,255,255,.08);color:#CBD5E1}
+.cp-panel button:not(.ci-b):hover{filter:brightness(1.12)}
+.cp-q{padding:7px 9px;margin-bottom:5px;border-radius:9px;background:rgba(255,255,255,.04)}
+.cp-q p{margin:0 0 4px;color:#F1F5F9;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere}
+.cp-q span{display:flex;align-items:center;justify-content:space-between}
+.cp-q span i{font-style:normal;font-size:11px;color:#94A3B8}
+.cp-q.done{opacity:.5}
+.cp-q.done p{text-decoration:line-through}
+.cp-empty{padding:2px 0 4px;color:#64748B;font-size:11.5px}
+
 .mm-sink{font-size:16px!important}   /* v13.310 숨은 키 입력칸 — 혹시 초점을 받아도 iOS 가 화면을 확대하지 않게 */
 
 

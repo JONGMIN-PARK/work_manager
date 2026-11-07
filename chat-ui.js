@@ -375,6 +375,7 @@ function _cxDrawHead() {
     '<span class="cx-h-t"><b>' + _cxE(name) + '</b><span class="' + (i.kind === 'dm' && others[0] && others[0].online ? 'on' : '') + '">' + _cxE(sub) + '</span></span>' +
     '<span class="cx-h-a">' +
       (typeof chatCallStart === 'function' && i.myRole !== 'readonly' ? '<button type="button" class="cx-ib" data-h="call" title="음성 통화">📞</button><button type="button" class="cx-ib" data-h="vcall" title="영상 통화">🎥</button>' : '') +
+      (typeof chatPresStart === 'function' && i.myRole !== 'readonly' ? '<button type="button" class="cx-ib" data-h="present" title="🎤 발표 시작 — 화면 공유 + 음성 + 발표 펜 · 끝나면 정리를 방에">🎤</button>' : '') +
       '<button type="button" class="cx-ib" data-h="share" title="화면 공유">🖥</button>' +
       (typeof chatFindOpen === 'function' ? '<button type="button" class="cx-ib" data-h="find" title="이 방에서 찾기 (Ctrl+F)">🔍</button>' : '') +
       '<button type="button" class="cx-ib" data-h="files" title="파일 모음">📎</button>' +
@@ -389,6 +390,7 @@ function _cxHeadAct(k, btn) {
   if (k === 'files') { CX.aside = true; CX.asideTab = 'files'; document.querySelector('#mMessages .cx').classList.remove('no-aside'); _cxDrawAside(); return; }
   if (k === 'share') { if (typeof chatRtcShare === 'function') chatRtcShare(CX.room); return; }
   if (k === 'find' && typeof chatFindOpen === 'function') { chatFindOpen(); return; }
+  if (k === 'present' && typeof chatPresStart === 'function') { chatPresStart(CX.room); return; }   // v13.370
   if (k === 'more') {
     var r = CX.rooms.filter(function (x) { return x.id === CX.room; })[0] || {};
     _cxMenu(btn, [
