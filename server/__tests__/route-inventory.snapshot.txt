@@ -131,6 +131,7 @@ GET /api/chat/docs/:did/versions
 GET /api/chat/docs/:did/versions/:vid
 GET /api/chat/files/:fid
 GET /api/chat/files/:fid/annot
+GET /api/chat/focus
 GET /api/chat/folders
 GET /api/chat/folders/:fid/items
 GET /api/chat/messages/:mid/folders
@@ -590,6 +591,7 @@ PUT /api/as-tickets/:id/logs/:lid
 PUT /api/as-tickets/:id/parts/:pid
 PUT /api/auth/change-password
 PUT /api/chat/docs/:did
+PUT /api/chat/focus
 PUT /api/chat/folders/:fid
 PUT /api/chat/messages/:mid
 PUT /api/chat/rooms/:id

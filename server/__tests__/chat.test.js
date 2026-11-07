@@ -497,3 +497,37 @@ test('⏰ 예약 보내기 · 다시 알림 · 요청 재알림 (v13.362)', asyn
   expect(pp.autoNudged).toBeTruthy();
   expect(await timers.nudgeStaleRequests()).toBe(0);   // 한 번만
 });
+
+test('🎯 집중 모드 (v13.363) — 푸시 미룸 · @멘션은 받기 · 받기 끔 · 상대에게 표시 · 끄기', async function () {
+  var push = require('../services/push.service'), sent = [];
+  push._setSender(function (sub, body) { sent.push(JSON.parse(body)); });
+  await db.query('DELETE FROM push_subs WHERE user_id = $1', [b.user.id]);
+  await api('post', '/api/push/subscribe', b).send({ subscription: { endpoint: 'https://push.example/focus-' + S, keys: { p256dh: 'P', auth: 'A' } } });
+  expect((await api('put', '/api/chat/focus', b).send({})).status).toBe(400);
+  var f = (await api('put', '/api/chat/focus', b).send({ minutes: 60 })).body.data;
+  expect(new Date(f.until) - Date.now()).toBeGreaterThan(55 * 60000);
+  expect((await api('get', '/api/chat/focus', b)).body.data.allow).toBe(true);
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '집중방', userIds: [b.user.id] })).body.data.id;
+  var wait = function () { return new Promise(function (r) { setTimeout(r, 300); }); };
+  sent.length = 0;
+  await api('post', '/api/chat/rooms/' + dm + '/messages', a).send({ body: '집중 중엔 안 감' }); await wait();
+  expect(sent.length).toBe(0);
+  await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '@라마바 급해요' }); await wait();
+  expect(sent.length).toBe(1);   // @멘션은 받기
+  // 상대 화면 표시
+  var info = (await api('get', '/api/chat/rooms/' + g, a)).body.data;
+  expect(info.members.filter(function (m) { return m.id === b.user.id; })[0].focusUntil).toBeTruthy();
+  var rl = (await api('get', '/api/chat/rooms', a)).body.data.filter(function (r) { return r.id === dm; })[0];
+  expect(rl.peerFocus).toBeTruthy();
+  // 받기 끔 → 멘션도 미룸
+  await api('put', '/api/chat/focus', b).send({ minutes: 30, allow: false });
+  sent.length = 0;
+  await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '@라마바 그래도?' }); await wait();
+  expect(sent.length).toBe(0);
+  // 끄기 → 다시 옴
+  expect((await api('put', '/api/chat/focus', b).send({ off: true })).body.data.until).toBeNull();
+  await api('post', '/api/chat/rooms/' + dm + '/messages', a).send({ body: '이제 감' }); await wait();
+  expect(sent.length).toBe(1);
+  expect((await api('get', '/api/chat/rooms', a)).body.data.filter(function (r) { return r.id === dm; })[0].peerFocus).toBeNull();
+  push._setSender(null);
+});

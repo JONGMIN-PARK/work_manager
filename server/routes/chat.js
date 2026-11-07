@@ -54,6 +54,18 @@ async function canManage(req, room) {
   var o = await db.query("SELECT 1 FROM chat_members WHERE room_id = $1 AND role = 'owner' AND left_at IS NULL", [room.id]);
   return !o.rows.length && room.created_by === me(req);
 }
+/** 🎯 집중 중인 사람 (v13.363) → { uid: { until, allow } } */
+async function focusOf(ids) {
+  if (!ids || !ids.length) return {};
+  var r = await db.query('SELECT user_id, focus_until, focus_allow FROM chat_user_state WHERE user_id = ANY($1) AND focus_until > now()', [ids]);
+  var o = {}; r.rows.forEach(function (x) { o[x.user_id] = { until: x.focus_until, allow: x.focus_allow }; }); return o;
+}
+/** 집중 중이어도 받을 것: '받기' 켰고 @멘션이거나 나에게 온 긴급 요청 */
+function focusPass(f, uid, msg, mentions) {
+  if (!f) return true;
+  if (!f.allow) return false;
+  return (mentions || []).indexOf(uid) >= 0 || !!(msg && msg.post && msg.post.urgency === 'urgent' && msg.post.assignee === uid);
+}
 async function memberIds(roomId) {
   var r = await db.query('SELECT user_id FROM chat_members WHERE room_id = $1 AND left_at IS NULL', [roomId]);
   return r.rows.map(function (x) { return x.user_id; });
@@ -137,9 +149,13 @@ function pushOffline(room, msg, others, mentions) {
   db.query('SELECT user_id FROM chat_members WHERE room_id = $1 AND user_id = ANY($2) AND left_at IS NULL AND (muted = FALSE OR user_id = ANY($3))', [room.id, off, mentions || []]).then(function (r) {
     var ids = r.rows.map(function (x) { return x.user_id; });
     if (!ids.length) return;
+    return focusOf(ids).then(function (fo) {
+    ids = ids.filter(function (u) { return focusPass(fo[u], u, msg, mentions); });   // 🎯 집중 중이면 미룸
+    if (!ids.length) return;
     var who = msg.userName || 'AI';
     var body = msg.post ? '📌 ' + msg.post.title : msg.file && !msg.body ? '📎 ' + msg.file.name : String(msg.body || '').replace(/```[\s\S]*?```/g, '[코드]').slice(0, 200);
     return require('../services/push.service').sendToUsers(ids, { title: room.kind === 'dm' ? '💬 ' + who : '💬 ' + (room.name || '대화방') + ' · ' + who, body: body, tag: 'chat-' + room.id, go: 'chat:' + room.id });
+    });
   }).catch(function (e) { console.error('[chat] push', e.message); });
 }
 
@@ -152,6 +168,8 @@ function scheduleFallback(tenantId, room, msg, others, mentions) {
       var r = await db.query('SELECT user_id FROM chat_members WHERE room_id = $1 AND user_id = ANY($2) AND last_read_id < $3 AND left_at IS NULL AND (muted = FALSE OR user_id = ANY($4))',
         [room.id, targets, msg.id, mentions]);
       var ids = r.rows.map(function (x) { return x.user_id; });
+      var fo = await focusOf(ids);
+      ids = ids.filter(function (u) { return focusPass(fo[u], u, msg, mentions); });   // 🎯 집중 중이면 미룸
       if (!ids.length) return;
       var title = room.kind === 'dm' ? '' : (room.name || '');
       await require('../services/notification.service').notify('chat_message', {
@@ -207,13 +225,13 @@ router.get('/rooms', async function (req, res) {
       'WHERE m.user_id = $1 AND m.tenant_id = $2 AND m.left_at IS NULL AND r.archived_at IS NULL ORDER BY m.pinned DESC, r.last_msg_at DESC LIMIT 300', [me(req), req.tenant.id]);
     var all = [];
     r.rows.forEach(function (x) { (x.others || []).forEach(function (o) { all.push(o.id); }); });
-    var on = hub.onlineSet(all);
+    var on = hub.onlineSet(all), fo = await focusOf(all);
     res.json({ data: r.rows.map(function (x) {
       var others = x.others || [];
       var name = x.kind === 'dm' ? (others[0] ? others[0].name : '(나간 사람)') : x.kind === 'project' ? (x.name || x.project_name || '프로젝트') : (x.name || others.map(function (o) { return o.name; }).slice(0, 4).join(', '));
       var l = x.last;
       return { id: x.id, kind: x.kind, name: name, projectId: x.project_id, unread: x.unread, mentioned: x.mentioned, muted: x.muted, pinned: x.pinned, lastAt: x.last_msg_at,
-        peerId: x.kind === 'dm' && others[0] ? others[0].id : null, online: x.kind === 'dm' && others[0] ? !!on[others[0].id] : others.some(function (o) { return on[o.id]; }), members: others.length + 1,
+        peerId: x.kind === 'dm' && others[0] ? others[0].id : null, peerFocus: x.kind === 'dm' && others[0] && fo[others[0].id] ? fo[others[0].id].until : null, online: x.kind === 'dm' && others[0] ? !!on[others[0].id] : others.some(function (o) { return on[o.id]; }), members: others.length + 1,
         last: l ? { userName: l.user_name || '', body: l.deleted_at ? '(지운 메시지)' : l.ptitle ? '📌 ' + l.ptitle : l.file_id && !l.body ? '📎 파일' : (l.body || '').slice(0, 120), mine: l.user_id === me(req), kind: l.kind } : null };
     }) });
   } catch (e) { httpErr.serverError(res, '[chat/rooms]', e); }
@@ -283,10 +301,11 @@ router.get('/rooms/:id', async function (req, res) {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
     var m = await db.query('SELECT m.user_id, m.role, m.last_read_id, COALESCE(u.display_name, u.name) AS name, d.name AS dept FROM chat_members m JOIN users u ON u.id = m.user_id LEFT JOIN departments d ON d.id = u.department_id WHERE m.room_id = $1 AND m.left_at IS NULL ORDER BY 4', [room.id]);
     var on = hub.onlineSet(m.rows.map(function (x) { return x.user_id; }));
+    var fo = await focusOf(m.rows.map(function (x) { return x.user_id; }));
     var notice = room.notice_id ? await loadMsg(room.notice_id) : null;
     res.json({ data: { id: room.id, kind: room.kind, name: room.name, projectId: room.project_id, muted: room.muted, pinned: room.pinned, lastReadId: +room.last_read_id, notice: notice && !notice.deleted && !(room.hist_from && notice.id <= +room.hist_from) ? notice : null,
       myRole: room.role || 'member', canManage: room.kind !== 'dm' && await canManage(req, room), histFrom: room.hist_from ? +room.hist_from : null,
-      members: m.rows.map(function (x) { return { id: x.user_id, name: x.name, dept: x.dept || '', role: x.role, online: !!on[x.user_id], readId: +x.last_read_id, me: x.user_id === me(req) }; }) } });
+      members: m.rows.map(function (x) { return { id: x.user_id, name: x.name, dept: x.dept || '', role: x.role, online: !!on[x.user_id], focusUntil: fo[x.user_id] ? fo[x.user_id].until : null, readId: +x.last_read_id, me: x.user_id === me(req) }; }) } });
   } catch (e) { httpErr.serverError(res, '[chat/room]', e); }
 });
 router.put('/rooms/:id', async function (req, res) {
@@ -1111,6 +1130,31 @@ router.post('/messages/:mid/nudge', async function (req, res) {
     await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: '📣 ' + (req.user.name || '') + ' 님이 담당자에게 다시 알렸습니다', replyTo: m.id });
     res.json({ ok: true });
   } catch (e) { httpErr.serverError(res, '[chat/nudge]', e); }
+});
+
+/* ─── 🎯 집중 모드 (v13.363) ─── */
+router.get('/focus', async function (req, res) {
+  try {
+    var r = await db.query('SELECT focus_until, focus_allow FROM chat_user_state WHERE user_id = $1', [me(req)]);
+    var x = r.rows[0];
+    res.json({ data: x && x.focus_until && new Date(x.focus_until) > new Date() ? { until: x.focus_until, allow: x.focus_allow } : { until: null, allow: x ? x.focus_allow : true } });
+  } catch (e) { httpErr.serverError(res, '[chat/focus]', e); }
+});
+router.put('/focus', async function (req, res) {
+  try {
+    var b = req.body || {}, until = null;
+    if (!b.off) {
+      if (b.minutes) until = new Date(Date.now() + Math.max(5, Math.min(24 * 60, +b.minutes || 0)) * 60000);
+      else if (b.until) { until = new Date(b.until); if (isNaN(until) || until < new Date() || until > new Date(Date.now() + 7 * 86400000)) return bad(res, '집중은 지금부터 7일 안까지입니다.'); }
+      else return bad(res, '얼마나 집중할지 고르세요.');
+    }
+    var allow = b.allow !== false;
+    await db.query('INSERT INTO chat_user_state (user_id, tenant_id, focus_until, focus_allow, updated_at) VALUES ($1,$2,$3,$4,now()) ON CONFLICT (user_id) DO UPDATE SET focus_until = EXCLUDED.focus_until, focus_allow = EXCLUDED.focus_allow, updated_at = now()', [me(req), req.tenant.id, until, allow]);
+    // 같은 방 사람들 화면에 '🎯 집중 중' 표시
+    var peers = await db.query('SELECT DISTINCT m2.user_id FROM chat_members m1 JOIN chat_members m2 ON m2.room_id = m1.room_id AND m2.left_at IS NULL WHERE m1.user_id = $1 AND m1.left_at IS NULL LIMIT 2000', [me(req)]);
+    hub.publish(peers.rows.map(function (x) { return x.user_id; }), 'focus', { userId: me(req), until: until });
+    res.json({ data: { until: until, allow: allow } });
+  } catch (e) { httpErr.serverError(res, '[chat/focus/put]', e); }
 });
 
 /* ─── 프로젝트 방 옆 현황 (데이터 기반) ─── */
