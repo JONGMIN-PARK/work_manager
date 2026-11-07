@@ -137,6 +137,7 @@ GET /api/chat/folders/:fid/items
 GET /api/chat/messages/:mid/folders
 GET /api/chat/reminders
 GET /api/chat/requests
+GET /api/chat/requests/brief
 GET /api/chat/rooms
 GET /api/chat/rooms/:id
 GET /api/chat/rooms/:id/call
@@ -413,7 +414,9 @@ POST /api/chat/messages/:mid/nudge
 POST /api/chat/messages/:mid/post
 POST /api/chat/messages/:mid/react
 POST /api/chat/messages/:mid/remind
+POST /api/chat/posts/suggest
 POST /api/chat/rooms
+POST /api/chat/rooms/:id/catchup
 POST /api/chat/rooms/:id/docs
 POST /api/chat/rooms/:id/files
 POST /api/chat/rooms/:id/members

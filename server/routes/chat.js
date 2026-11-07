@@ -1132,6 +1132,37 @@ router.post('/messages/:mid/nudge', async function (req, res) {
   } catch (e) { httpErr.serverError(res, '[chat/nudge]', e); }
 });
 
+/* ─── ✨ AI 정리 (v13.364) — 결과는 부른 사람에게만 · AI 없으면 규칙으로 (lib/chat-ai.js) ─── */
+var chatAi = require('../lib/chat-ai');
+function aiCtx(req) { return { tenantId: req.tenant.id, userId: me(req), name: req.user.name || '나' }; }
+router.post('/rooms/:id/catchup', async function (req, res) {
+  try {
+    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    var since = Math.max(+(req.body || {}).sinceId || 0, room.hist_from ? +room.hist_from : 0);
+    var r = await db.query(MSG_SQL + 'WHERE m.room_id = $1 AND m.id > $2 AND m.reply_to IS NULL AND m.deleted_at IS NULL AND (m.user_id IS NULL OR m.user_id <> $3) ORDER BY m.id LIMIT 300', [room.id, since, me(req)]);
+    var rows = r.rows.map(shape).map(function (m) { return { who: m.userName || 'AI', body: m.body, kind: m.kind, post: m.post, file: m.file && m.file.name, at: m.at, mentionsMe: (m.mentions || []).indexOf(me(req)) >= 0 }; });
+    if (!rows.filter(function (x) { return x.kind !== 'system'; }).length) return res.json({ data: { text: '새 메시지가 없습니다.', ai: false, count: 0 } });
+    var out = await chatAi.catchup(aiCtx(req), rows);
+    res.json({ data: Object.assign(out, { count: rows.length }) });
+  } catch (e) { httpErr.serverError(res, '[chat/catchup]', e); }
+});
+router.post('/posts/suggest', async function (req, res) {
+  try {
+    var text = String((req.body || {}).text || '').slice(0, 8000);
+    if (!text.trim()) return bad(res, '내용을 먼저 적으세요.');
+    res.json({ data: await chatAi.suggest(aiCtx(req), text) });
+  } catch (e) { httpErr.serverError(res, '[chat/suggest]', e); }
+});
+router.get('/requests/brief', async function (req, res) {
+  try {
+    var r = await db.query(MSG_SQL.replace('FROM chat_messages m', ', COALESCE(rr.name, pp.name) AS room_name, rr.kind AS room_kind FROM chat_messages m JOIN chat_rooms rr ON rr.id = m.room_id LEFT JOIN projects pp ON pp.id = rr.project_id') +
+      "WHERE m.post->>'cat' = 'req' AND m.deleted_at IS NULL AND m.tenant_id = $2 AND m.post->>'assignee' = $1::text AND COALESCE(m.post->>'status', 'open') <> 'done' " +
+      'AND EXISTS (SELECT 1 FROM chat_members cm WHERE cm.room_id = m.room_id AND cm.user_id = $1::uuid AND cm.left_at IS NULL AND (cm.hist_from IS NULL OR m.id > cm.hist_from)) ORDER BY m.id DESC LIMIT 100', [me(req), req.tenant.id]);
+    var items = r.rows.map(function (x) { var o = shape(x); o.roomName = x.room_name || (x.room_kind === 'dm' ? '1:1 대화' : '대화방'); return o; });
+    res.json({ data: Object.assign(await chatAi.brief(aiCtx(req), items), { count: items.length }) });
+  } catch (e) { httpErr.serverError(res, '[chat/brief]', e); }
+});
+
 /* ─── 🎯 집중 모드 (v13.363) ─── */
 router.get('/focus', async function (req, res) {
   try {

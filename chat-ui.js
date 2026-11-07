@@ -250,9 +250,11 @@ function chatOpenRoom(id, keep, focusMid) {
     CX.info = rs[0].data; CX.msgs = rs[1].data || []; CX.more = !!rs[1].more;
     CX.reads = {}; (rs[1].reads || []).forEach(function (x) { CX.reads[x.userId] = x.id; });
     if (CX.info.myRole === 'readonly') _cxDrawMain();   // 읽기만 — 입력칸 대신 안내
+    var _readBefore = CX.info.lastReadId || 0;
     _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(false, focusMid); _cxMarkRead(); _cxDrawAside();
     if (CX.openThread) { var th = CX.openThread; CX.openThread = null; chatOpenThread(th); }
-    if (typeof chatTimeStrip === 'function') chatTimeStrip();   // ⏰ 이 방 예약   // 요청함 · 폴더에서 글 열기
+    if (typeof chatTimeStrip === 'function') chatTimeStrip();   // ⏰ 이 방 예약
+    if (typeof chatSmartCatchup === 'function' && !focusMid) chatSmartCatchup(_readBefore);   // ✨ 안 읽은 게 많으면 요약 띠   // 요청함 · 폴더에서 글 열기
     if (CX.info.kind === 'project') apiFetch('/api/chat/rooms/' + encodeURIComponent(id) + '/context').then(function (c) { if (CX.room === my) { CX.ctx = c.data; _cxDrawAside(); } }).catch(function () {});
     var ta = document.getElementById('cxIn'); if (ta && window.innerWidth > 760) ta.focus();
   }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });

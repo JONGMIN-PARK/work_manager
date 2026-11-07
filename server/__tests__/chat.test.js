@@ -531,3 +531,33 @@ test('🎯 집중 모드 (v13.363) — 푸시 미룸 · @멘션은 받기 · 받
   expect((await api('get', '/api/chat/rooms', a)).body.data.filter(function (r) { return r.id === dm; })[0].peerFocus).toBeNull();
   push._setSender(null);
 });
+
+test('✨ AI 정리 (v13.364) — 안 읽은 요약 · 요청 채우기 · 오늘 정리 (AI 없으면 규칙)', async function () {
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '요약방', userIds: [b.user.id] })).body.data.id;
+  var since = (await api('get', '/api/chat/rooms/' + g + '/messages', b)).body.data.slice(-1)[0].id;
+  await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '오늘 오후에 라인 B 점검합니다' });
+  await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '@라마바 펌웨어 버전 확인해 줄 수 있나요?' });
+  await api('post', '/api/chat/rooms/' + g + '/posts', a).send({ cat: 'req', title: '조립기 #3 토크 재설정', assignee: b.user.id, urgency: 'urgent', due: new Date(Date.now() - 86400000).toISOString().slice(0, 10) });
+  var cu = (await api('post', '/api/chat/rooms/' + g + '/catchup', b).send({ sinceId: since })).body.data;
+  expect(cu.count).toBe(3);
+  expect(typeof cu.ai).toBe('boolean');
+  if (!cu.ai) {
+    expect(cu.text).toMatch(/메시지 3개/);
+    expect(cu.text).toMatch(/나를 부른 것[\s\S]*펌웨어/);
+    expect(cu.text).toMatch(/조립기 #3 토크 재설정 \(🔴 긴급\)/);
+    expect(cu.text).toMatch(/질문[\s\S]*확인해 줄 수 있나요/);
+  }
+  expect((await api('post', '/api/chat/rooms/' + g + '/catchup', x).send({})).status).toBe(403);
+  // 요청 채우기
+  var sg = (await api('post', '/api/chat/posts/suggest', b).send({ text: '2호기 사출기 온도 알람이 계속 떠서 라인 정지했습니다' })).body.data;
+  if (!sg.ai) expect(sg).toMatchObject({ cat: 'req', equip: '2호기 사출기', urgency: 'urgent' });
+  expect((await api('post', '/api/chat/posts/suggest', b).send({ text: ' ' })).status).toBe(400);
+  // 오늘 정리 — 긴급 · 기한 지난 것 먼저
+  await api('post', '/api/chat/rooms/' + g + '/posts', a).send({ cat: 'req', title: '여유 있는 일', assignee: b.user.id });
+  var brr = await api('get', '/api/chat/requests/brief', b); if (!brr.body.data) console.log('BRIEF', brr.status, JSON.stringify(brr.body)); var br = brr.body.data;
+  expect(br.count).toBeGreaterThanOrEqual(2);
+  if (!br.ai) {
+    expect(br.text).toMatch(/1\. 🔴 조립기 #3 토크 재설정/);
+    expect(br.text).toMatch(/기한 지남 1/);
+  }
+});

@@ -152,7 +152,7 @@ function _ccPostModal(edit) {
       '<label class="cc-l">📅 기한<input id="ccDue" type="date"></label>' +
       '<label class="cc-chk"><input type="checkbox" id="ccUrg"> 🔴 긴급</label>' +
     '</div>' +
-    '<label class="cc-l">내용 <i>``` 로 감싸면 코드 · 로그</i><textarea id="ccBody" rows="9" maxlength="8000"></textarea></label>' +
+    '<label class="cc-l">내용 <i>``` 로 감싸면 코드 · 로그</i>' + (typeof chatSmartSuggest === 'function' && !edit ? '<button type="button" class="cs-fill" data-fill title="쓴 내용을 보고 제목 · 종류 · 장비 · 긴급을 채움">✨ 내용으로 채우기</button>' : '') + '<textarea id="ccBody" rows="9" maxlength="8000"></textarea></label>' +
     '<div class="cc-foot"><span class="cc-tip">💬 댓글은 글의 답글로 · 🛠 요청은 접수 → 처리 중 → 완료</span><button type="button" class="btn btn-g" data-x>취소</button><button type="button" class="btn btn-p" data-ok>' + (edit ? '고치기' : '올리기') + '</button></div>';
   var modal = createModal({ title: edit ? '✏️ 글 고치기' : '✍️ 게시판에 글쓰기', content: div, width: '640px' });
   var $ = function (s) { return div.querySelector(s); };
@@ -171,6 +171,16 @@ function _ccPostModal(edit) {
     var b = e.target.closest('[data-cat]'); if (b && !edit) setCat(b.dataset.cat);
     if (e.target.closest('[data-x]')) modal.close();
     if (e.target.closest('[data-ok]')) save(e.target.closest('[data-ok]'));
+    var fb = e.target.closest('[data-fill]');
+    if (fb) {
+      e.preventDefault();
+      var tx = $('#ccBody').value === TPL[cat] ? '' : $('#ccBody').value;
+      chatSmartSuggest(($('#ccTitle').value ? $('#ccTitle').value + '\n' : '') + tx, fb, function (sg) {
+        setCat(sg.cat);
+        if (!$('#ccTitle').value.trim() && sg.title) $('#ccTitle').value = sg.title;
+        if (sg.cat === 'req') { if (sg.equip && !$('#ccEquip').value.trim()) $('#ccEquip').value = sg.equip; $('#ccUrg').checked = sg.urgency === 'urgent'; }
+      });
+    }
   });
   div.addEventListener('keydown', function (e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save($('[data-ok]')); } });
   function save(btn) {
@@ -369,9 +379,10 @@ function _ccDrawItems(box) {
 /* 🛠 요청함 */
 function _ccReqsView(box) {
   box.innerHTML = '<div class="cc-reqs"><div class="cc-fi-h"><div class="cc-chips"><button type="button" data-rw="me">📥 나에게 온 요청</button><button type="button" data-rw="mine">📤 내가 올린 요청</button></div>' +
-    '<label class="cc-chk"><input type="checkbox" data-ro' + (CC.reqOpen ? ' checked' : '') + '> 끝나지 않은 것만</label><span class="cc-rsum" data-rsum></span></div><div class="cc-rlist" data-rlist><div class="cx-loading">불러오는 중…</div></div></div>';
+    '<label class="cc-chk"><input type="checkbox" data-ro' + (CC.reqOpen ? ' checked' : '') + '> 끝나지 않은 것만</label>' + (typeof chatSmartBrief === 'function' ? '<button type="button" class="btn btn-g btn-s" data-brief title="나에게 온 요청을 오늘 할 순서로">✨ 오늘 정리</button>' : '') + '<span class="cc-rsum" data-rsum></span></div><div class="cc-rlist" data-rlist><div class="cx-loading">불러오는 중…</div></div></div>';
   box.querySelectorAll('[data-rw]').forEach(function (b) { b.classList.toggle('on', b.dataset.rw === CC.reqWho); b.addEventListener('click', function () { CC.reqWho = b.dataset.rw; _ccReqsView(box); }); });
   box.querySelector('[data-ro]').addEventListener('change', function (e) { CC.reqOpen = e.target.checked; _ccLoadReqs(box); });
+  var bb = box.querySelector('[data-brief]'); if (bb) bb.addEventListener('click', function () { chatSmartBrief(box.querySelector('.cc-reqs')); });
   CC.reqBox = box;
   _ccLoadReqs(box);
 }
