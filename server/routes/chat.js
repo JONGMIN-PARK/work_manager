@@ -896,6 +896,110 @@ router.get('/messages/:mid/folders', async function (req, res) {
   } catch (e) { httpErr.serverError(res, '[chat/msg/folders]', e); }
 });
 
+/* ─── 📝 방 공동 문서 (v13.360) — 방 사람 모두가 같이 고침 · rev 로 겹침 확인(409 → 클라가 세 갈래 합치기) · 실시간 'doc' ─── */
+var DOC_MAX = 200000;
+function docShape(d, names) {
+  return { id: d.id, roomId: d.room_id, title: d.title || '', body: d.body, rev: d.rev, chars: (d.body || '').length,
+    updatedAt: d.updated_at, updatedBy: d.updated_by, updatedByName: (names || {})[d.updated_by] || d.ub_name || '', createdBy: d.created_by };
+}
+async function docFor(req, res, write) {
+  var r = await db.query('SELECT * FROM chat_docs WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [req.params.did, req.tenant.id]);
+  var d = r.rows[0];
+  if (!d) { res.status(404).json({ error: 'NOT_FOUND', message: '문서가 없습니다.' }); return null; }
+  var room = await roomFor(req, res, d.room_id); if (!room) return null;
+  if (room.hist_from) {   // 초대 전 문서는 '이전 대화 안 보여 주기'면 안 보임
+    var first = await db.query("SELECT 1 FROM chat_messages WHERE room_id = $1 AND id <= $2 AND cards @> $3::jsonb LIMIT 1", [room.id, +room.hist_from, JSON.stringify([{ type: 'cdoc', id: d.id }])]);
+    if (first.rows.length) { res.status(404).json({ error: 'NOT_FOUND', message: '문서가 없습니다.' }); return null; }
+  }
+  if (write && readOnly(res, room)) return null;
+  d._room = room;
+  return d;
+}
+router.get('/rooms/:id/docs', async function (req, res) {
+  try {
+    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    var r = await db.query('SELECT d.id, d.room_id, d.title, LEFT(d.body, 200) AS body, LENGTH(d.body) AS len, d.rev, d.updated_at, d.updated_by, d.created_by, COALESCE(u.display_name, u.name) AS ub_name FROM chat_docs d LEFT JOIN users u ON u.id = d.updated_by ' +
+      'WHERE d.room_id = $1 AND d.deleted_at IS NULL ' + (room.hist_from ? "AND NOT EXISTS (SELECT 1 FROM chat_messages x WHERE x.room_id = d.room_id AND x.id <= $2 AND x.cards @> jsonb_build_array(jsonb_build_object('type', 'cdoc', 'id', d.id))) " : '') +
+      'ORDER BY d.updated_at DESC LIMIT 200', room.hist_from ? [room.id, +room.hist_from] : [room.id]);
+    res.json({ data: r.rows.map(function (d) { var o = docShape(d); o.chars = +d.len; o.preview = (d.body || '').replace(/\s+/g, ' ').slice(0, 120); delete o.body; return o; }) });
+  } catch (e) { httpErr.serverError(res, '[chat/docs]', e); }
+});
+router.post('/rooms/:id/docs', async function (req, res) {
+  try {
+    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    if (readOnly(res, room)) return;
+    var b = req.body || {}, title = String(b.title || '').trim().slice(0, 200) || '제목 없는 문서', body = String(b.body || '').slice(0, DOC_MAX);
+    var id = rid('doc');
+    await db.query('INSERT INTO chat_docs (id, tenant_id, room_id, title, body, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$6)', [id, req.tenant.id, room.id, title, body, me(req)]);
+    // 방에 카드로 알림 — 누르면 같이 고치기
+    await postMessage({ tenantId: req.tenant.id }, room, { userId: me(req), kind: 'text', body: '📝 공동 문서를 만들었습니다 — 같이 고쳐요', cards: [{ type: 'cdoc', id: id, title: title, sub: '📝 공동 문서 · 방 사람 모두 고칠 수 있음' }] });
+    var d = (await db.query('SELECT * FROM chat_docs WHERE id = $1', [id])).rows[0];
+    res.status(201).json({ data: docShape(d, await userNames(req.tenant.id, [me(req)])) });
+  } catch (e) { httpErr.serverError(res, '[chat/docs/new]', e); }
+});
+router.get('/docs/:did', async function (req, res) {
+  try {
+    var d = await docFor(req, res); if (!d) return;
+    res.json({ data: Object.assign(docShape(d, await userNames(req.tenant.id, [d.updated_by])), { readOnly: d._room.role === 'readonly' }) });
+  } catch (e) { httpErr.serverError(res, '[chat/doc]', e); }
+});
+router.put('/docs/:did', async function (req, res) {
+  try {
+    var d = await docFor(req, res, true); if (!d) return;
+    var b = req.body || {};
+    if (b.body != null && String(b.body).length > DOC_MAX) return bad(res, '문서는 20만 자까지입니다.', 413);
+    var title = b.title != null ? String(b.title).trim().slice(0, 200) || '제목 없는 문서' : d.title;
+    var body = b.body != null ? String(b.body) : d.body;
+    if (title === d.title && body === d.body) return res.json({ data: docShape(d, await userNames(req.tenant.id, [d.updated_by])) });
+    if (b.baseRev == null || +b.baseRev !== d.rev) return res.status(409).json({ error: 'CONFLICT', message: '다른 사람이 먼저 고쳤습니다 — 합쳐서 다시 저장합니다.', data: docShape(d, await userNames(req.tenant.id, [d.updated_by])) });
+    // 10분에 한 번, 다른 사람이 고친 글이면 바로 — 고치기 전 모습을 남김
+    var last = await db.query('SELECT created_at, by_user FROM chat_doc_versions WHERE doc_id = $1 ORDER BY id DESC LIMIT 1', [d.id]);
+    var lv = last.rows[0];
+    if (d.body && (!lv || Date.now() - new Date(lv.created_at).getTime() > 600000 || d.updated_by !== me(req))) {
+      await db.query('INSERT INTO chat_doc_versions (doc_id, rev, title, body, by_user) VALUES ($1,$2,$3,$4,$5)', [d.id, d.rev, d.title, d.body, d.updated_by]);
+      await db.query('DELETE FROM chat_doc_versions WHERE doc_id = $1 AND id NOT IN (SELECT id FROM chat_doc_versions WHERE doc_id = $1 ORDER BY id DESC LIMIT 100)', [d.id]);
+    }
+    var u = await db.query('UPDATE chat_docs SET title = $2, body = $3, rev = rev + 1, updated_by = $4, updated_at = now() WHERE id = $1 AND rev = $5 RETURNING *', [d.id, title, body, me(req), d.rev]);
+    if (!u.rows.length) { var now = (await db.query('SELECT * FROM chat_docs WHERE id = $1', [d.id])).rows[0]; return res.status(409).json({ error: 'CONFLICT', message: '다른 사람이 먼저 고쳤습니다.', data: docShape(now, await userNames(req.tenant.id, [now.updated_by])) }); }
+    var out = docShape(u.rows[0], await userNames(req.tenant.id, [me(req)]));
+    hub.publish(await memberIds(d.room_id), 'doc', Object.assign({ clientId: String(b.clientId || '').slice(0, 40) }, out));
+    res.json({ data: out });
+  } catch (e) { httpErr.serverError(res, '[chat/doc/put]', e); }
+});
+router.delete('/docs/:did', async function (req, res) {
+  try {
+    var d = await docFor(req, res, true); if (!d) return;
+    if (d.created_by !== me(req) && d._room.role !== 'owner' && req.user.role !== 'admin') return res.status(403).json({ error: 'FORBIDDEN', message: '만든 사람이나 방장만 지울 수 있습니다.' });
+    await db.query('UPDATE chat_docs SET deleted_at = now() WHERE id = $1', [d.id]);
+    hub.publish(await memberIds(d.room_id), 'doc', { id: d.id, roomId: d.room_id, gone: true });
+    res.json({ ok: true });
+  } catch (e) { httpErr.serverError(res, '[chat/doc/del]', e); }
+});
+router.get('/docs/:did/versions', async function (req, res) {
+  try {
+    var d = await docFor(req, res); if (!d) return;
+    var r = await db.query('SELECT v.id, v.rev, v.title, LENGTH(v.body) AS len, v.created_at, COALESCE(u.display_name, u.name) AS by_name FROM chat_doc_versions v LEFT JOIN users u ON u.id = v.by_user WHERE v.doc_id = $1 ORDER BY v.id DESC LIMIT 100', [d.id]);
+    res.json({ data: r.rows.map(function (v) { return { id: +v.id, rev: v.rev, title: v.title, chars: +v.len, at: v.created_at, byName: v.by_name || '' }; }) });
+  } catch (e) { httpErr.serverError(res, '[chat/doc/versions]', e); }
+});
+router.get('/docs/:did/versions/:vid', async function (req, res) {
+  try {
+    var d = await docFor(req, res); if (!d) return;
+    var r = await db.query('SELECT id, rev, title, body, created_at FROM chat_doc_versions WHERE id = $1 AND doc_id = $2', [+req.params.vid, d.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '없는 기록입니다.' });
+    res.json({ data: r.rows[0] });
+  } catch (e) { httpErr.serverError(res, '[chat/doc/version]', e); }
+});
+/* 누가 어디(몇째 줄)를 고치는 중인지 — 저장 안 함, 그대로 전달 */
+router.post('/docs/:did/cursor', async function (req, res) {
+  try {
+    var d = await docFor(req, res); if (!d) return;
+    var b = req.body || {}, nm = await userNames(req.tenant.id, [me(req)]);
+    hub.publish((await memberIds(d.room_id)).filter(function (u) { return u !== me(req); }), 'doc-cur', { id: d.id, by: me(req), byName: nm[me(req)] || '', line: Math.max(0, parseInt(b.line, 10) || 0), bye: !!b.bye });
+    res.json({ ok: true });
+  } catch (e) { httpErr.serverError(res, '[chat/doc/cur]', e); }
+});
+
 /* ─── 프로젝트 방 옆 현황 (데이터 기반) ─── */
 router.get('/rooms/:id/context', async function (req, res) {
   try {
@@ -932,11 +1036,16 @@ router.post('/rooms/:id/rtc', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
     var b = req.body || {}, ids = await memberIds(room.id);
-    if (['offer', 'answer', 'ice', 'join', 'leave', 'stop'].indexOf(b.type) < 0) return bad(res, '모르는 신호');
+    if (['offer', 'answer', 'ice', 'join', 'leave', 'stop', 'ctl-req', 'ctl-ok', 'ctl-no', 'ctl-end'].indexOf(b.type) < 0) return bad(res, '모르는 신호');
     var payload = { roomId: room.id, from: me(req), fromName: req.user.name || '', type: b.type, sid: String(b.sid || '').slice(0, 60), data: b.data || null };
     if (JSON.stringify(payload).length > 60000) return bad(res, '신호가 너무 큽니다.');
     var to = b.to ? [b.to].filter(function (u) { return ids.indexOf(u) >= 0; }) : ids.filter(function (u) { return u !== me(req); });
     hub.publish(to, 'rtc', payload);
+    // v13.360 🖱 원격 제어 — 허락 · 끝은 방에 남김 (누가 누구 화면을 조작했는지)
+    if ((b.type === 'ctl-ok' || b.type === 'ctl-end') && to.length === 1) {
+      var nm = await userNames(req.tenant.id, [to[0]]);
+      await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: b.type === 'ctl-ok' ? '🖱 ' + (req.user.name || '') + ' 님이 ' + (nm[to[0]] || '') + ' 님에게 화면 제어를 허락했습니다' : '🖱 화면 제어가 끝났습니다 (' + (req.user.name || '') + ')' });
+    }
     res.json({ data: { ok: true } });
   } catch (e) { httpErr.serverError(res, '[chat/rtc]', e); }
 });

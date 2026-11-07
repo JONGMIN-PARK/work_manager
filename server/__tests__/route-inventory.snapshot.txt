@@ -11,6 +11,7 @@ DELETE /api/as-tickets/:id/hard
 DELETE /api/as-tickets/:id/logs/:lid
 DELETE /api/as-tickets/:id/parts/:pid
 DELETE /api/as-tickets/:id/signatures/:sid
+DELETE /api/chat/docs/:did
 DELETE /api/chat/folders/:fid
 DELETE /api/chat/folders/:fid/items/:mid
 DELETE /api/chat/messages/:mid
@@ -123,6 +124,9 @@ GET /api/auth/google/callback
 GET /api/auth/me
 GET /api/billing/status
 GET /api/bootstrap
+GET /api/chat/docs/:did
+GET /api/chat/docs/:did/versions
+GET /api/chat/docs/:did/versions/:vid
 GET /api/chat/files/:fid
 GET /api/chat/files/:fid/annot
 GET /api/chat/folders
@@ -132,6 +136,7 @@ GET /api/chat/requests
 GET /api/chat/rooms
 GET /api/chat/rooms/:id
 GET /api/chat/rooms/:id/context
+GET /api/chat/rooms/:id/docs
 GET /api/chat/rooms/:id/files
 GET /api/chat/rooms/:id/messages
 GET /api/chat/rooms/:id/posts
@@ -390,6 +395,7 @@ POST /api/auth/register
 POST /api/billing/checkout
 POST /api/billing/portal
 POST /api/billing/webhook
+POST /api/chat/docs/:did/cursor
 POST /api/chat/files/:fid/annot
 POST /api/chat/files/:fid/cursor
 POST /api/chat/files/:fid/to-docs
@@ -400,6 +406,7 @@ POST /api/chat/messages/:mid/forward
 POST /api/chat/messages/:mid/post
 POST /api/chat/messages/:mid/react
 POST /api/chat/rooms
+POST /api/chat/rooms/:id/docs
 POST /api/chat/rooms/:id/files
 POST /api/chat/rooms/:id/members
 POST /api/chat/rooms/:id/messages
@@ -573,6 +580,7 @@ PUT /api/as-tickets/:id/assignments/:aid
 PUT /api/as-tickets/:id/logs/:lid
 PUT /api/as-tickets/:id/parts/:pid
 PUT /api/auth/change-password
+PUT /api/chat/docs/:did
 PUT /api/chat/folders/:fid
 PUT /api/chat/messages/:mid
 PUT /api/chat/rooms/:id

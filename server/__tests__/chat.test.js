@@ -390,3 +390,48 @@ test('📲 푸시 (v13.359) — 구독 · 접속 안 한 사람에게 바로 · 
   expect((await api('get', '/api/push/key', b)).body.data.subs).toBe(0);
   push._setSender(null);
 });
+
+test('📝 공동 문서 (v13.360) — 만들기 · 카드 · 같이 고치기 · 겹치면 409 · 실시간 · 기록 · 권한', async function () {
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '문서방', userIds: [b.user.id] })).body.data.id;
+  var got = [], off = hub.add(b.user.id, { write: function (s) { got.push(s); }, on: function () {} });
+  var d = (await api('post', '/api/chat/rooms/' + g + '/docs', a).send({ title: '조립기 #3 시운전 체크리스트', body: '1. 전원\n2. 통신\n' })).body.data;
+  expect(d).toMatchObject({ title: '조립기 #3 시운전 체크리스트', rev: 1 });
+  var ms = (await api('get', '/api/chat/rooms/' + g + '/messages', b)).body.data;
+  expect(ms.some(function (m) { return (m.cards || []).some(function (c) { return c.type === 'cdoc' && c.id === d.id; }); })).toBe(true);
+  // b 가 고침 (rev 1 → 2) · 실시간
+  var p1 = await api('put', '/api/chat/docs/' + d.id, b).send({ body: '1. 전원 ✔\n2. 통신\n', baseRev: 1, clientId: 'tabB' });
+  expect(p1.body.data).toMatchObject({ rev: 2, updatedByName: '라마바' });
+  var docEv = got.join('').split('\n\n').filter(function (x) { return /event: doc\n/.test(x); })[0] || '';
+  expect(docEv).toMatch(/"rev":2/); expect(docEv).toMatch(/"clientId":"tabB"/);
+  // a 는 예전 rev 로 → 409 + 지금 글
+  var p2 = await api('put', '/api/chat/docs/' + d.id, a).send({ body: '1. 전원\n2. 통신\n3. 비상 정지\n', baseRev: 1 });
+  expect(p2.status).toBe(409);
+  expect(p2.body.data).toMatchObject({ rev: 2, body: '1. 전원 ✔\n2. 통신\n' });
+  // 합친 글로 다시 → rev 3 · 고치기 전 모습 기록
+  expect((await api('put', '/api/chat/docs/' + d.id, a).send({ body: '1. 전원 ✔\n2. 통신\n3. 비상 정지\n', baseRev: 2 })).body.data.rev).toBe(3);
+  var vs = (await api('get', '/api/chat/docs/' + d.id + '/versions', b)).body.data;
+  expect(vs.length).toBeGreaterThanOrEqual(1);
+  var v = (await api('get', '/api/chat/docs/' + d.id + '/versions/' + vs[0].id, b)).body.data;
+  expect(v.body).toBe('1. 전원 ✔\n2. 통신\n');
+  // 목록 · 방 밖 · 읽기만 · 지우기 권한
+  var list = (await api('get', '/api/chat/rooms/' + g + '/docs', b)).body.data;
+  expect(list[0]).toMatchObject({ id: d.id, rev: 3 });
+  expect(list[0].body).toBeUndefined();
+  expect((await api('get', '/api/chat/docs/' + d.id, x)).status).toBe(403);
+  expect((await api('put', '/api/chat/docs/' + d.id, b).send({ body: 'x'.repeat(200001), baseRev: 3 })).status).toBe(413);
+  await api('put', '/api/chat/rooms/' + g + '/members/' + b.user.id, a).send({ role: 'readonly' });
+  expect((await api('put', '/api/chat/docs/' + d.id, b).send({ body: 'y', baseRev: 3 })).status).toBe(403);
+  expect((await api('get', '/api/chat/docs/' + d.id, b)).body.data.readOnly).toBe(true);
+  expect((await api('delete', '/api/chat/docs/' + d.id, b)).status).toBe(403);
+  // 이전 대화 안 보여 주고 초대된 c 는 그 앞 문서를 못 봄
+  await api('post', '/api/chat/rooms/' + g + '/members', a).send({ userIds: [c.user.id], history: false });
+  expect((await api('get', '/api/chat/docs/' + d.id, c)).status).toBe(404);
+  expect((await api('get', '/api/chat/rooms/' + g + '/docs', c)).body.data.length).toBe(0);
+  // 손가락(줄) 전달
+  got.length = 0;
+  await api('post', '/api/chat/docs/' + d.id + '/cursor', a).send({ line: 7 });
+  expect(got.join('')).toMatch(/event: doc-cur\ndata: [^\n]*"line":7/);
+  expect((await api('delete', '/api/chat/docs/' + d.id, a)).status).toBe(200);
+  expect((await api('get', '/api/chat/docs/' + d.id, a)).status).toBe(404);
+  off();
+});

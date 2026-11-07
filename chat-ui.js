@@ -7,7 +7,7 @@
  * 의존(전역): apiFetch, API_BASE, _accessToken, currentUser, eH, showToast, createModal, wmGuardedModal, globalSearchNav, setPage, rMD */
 var CX = { rooms: [], room: null, info: null, msgs: [], reads: {}, more: false, users: null, cards: [], replyTo: null, editId: null, thread: null, threadMsgs: [], typing: {}, ctx: null, aside: true, q: '', loading: false, blobs: {} };
 var CX_REACTS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '✅', '👀'];
-var CX_ICON = { project: '📁', milestone: '🚩', issue: '🐞', order: '📦', meeting: '🗓', mindmap: '🧠', doc: '📄', dev: '🛠', checklist: '☑️', as: '🔧', todo: '✅', note: '📝', weekly: '📅', prestudy: '🔍', tech: '🧪', work: '📒', comment: '💬', member: '👤', message: '✉️' };
+var CX_ICON = { project: '📁', milestone: '🚩', issue: '🐞', order: '📦', meeting: '🗓', mindmap: '🧠', doc: '📄', dev: '🛠', checklist: '☑️', as: '🔧', todo: '✅', note: '📝', weekly: '📅', prestudy: '🔍', tech: '🧪', work: '📒', comment: '💬', member: '👤', message: '✉️', cdoc: '📝' };
 var CX_ISSUE = { open: '접수', inProgress: '대응중', resolved: '해결', closed: '종결' };
 
 function _cxMe() { return (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.id || currentUser.sub) : null; }
@@ -128,6 +128,8 @@ function chatOnEvent(ev, d) {
   } else if (ev === 'room') {   // v13.359 역할 · 내보내기
     if (d.removed && d.removed === _cxMe()) { CX.rooms = CX.rooms.filter(function (r) { return r.id !== d.roomId; }); if (CX.room === d.roomId) { CX.room = null; _cxDrawMain(); } _cxDrawRooms(); _cxToast('대화방에서 내보내졌습니다', 'warn'); return; }
     if (CX.room === d.roomId) apiFetch('/api/chat/rooms/' + encodeURIComponent(d.roomId)).then(function (r) { if (CX.room !== d.roomId) return; var was = CX.info && CX.info.myRole; CX.info = r.data; _cxDrawHead(); _cxDrawAside(); if (was !== CX.info.myRole) { _cxDrawMain(); _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(); } }).catch(function () {});
+  } else if (ev === 'doc' || ev === 'doc-cur') {   // v13.360 📝 공동 문서
+    if (typeof chatDocOnEvent === 'function') chatDocOnEvent(ev, d);
   } else if (ev === 'folder') {
     if (typeof chatCollabOnFolder === 'function') chatCollabOnFolder(d);
   } else if (ev === 'annot' || ev === 'annot-cur') {
@@ -492,6 +494,7 @@ function _cxMsgClick(e) {
   if (w && typeof chatRtcWatch === 'function') { chatRtcWatch(CX.room, w.dataset.watch, w.dataset.from); return; }
 }
 function _cxOpenCard(c) {
+  if (c.type === 'cdoc' && typeof chatDocOpen === 'function') { chatDocOpen(c.id); return; }   // v13.360 📝 공동 문서
   if (c.type === 'todo') { if (typeof setPage === 'function') setPage('mywork'); return; }
   if (typeof globalSearchNav === 'function') globalSearchNav(c.type, { id: c.id, title: c.title, sub: c.sub, nav: c.nav || {} }, '');
 }
@@ -698,13 +701,14 @@ function _cxDrawAside() {
     return;
   }
   var tab = CX.asideTab || (CX.info && CX.info.kind === 'project' ? 'ctx' : 'people');
-  var tabs = (CX.info && CX.info.kind === 'project' ? [['ctx', '📊 현황']] : []).concat([['board', '📌 게시판'], ['people', '👤 멤버'], ['files', '📎 파일']]);
+  var tabs = (CX.info && CX.info.kind === 'project' ? [['ctx', '📊 현황']] : []).concat([['board', '📌 게시판'], ['docs', '📝 문서'], ['people', '👤 멤버'], ['files', '📎 파일']]);
   a.innerHTML = '<div class="cx-as-tabs">' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '<button type="button" class="cx-ib" data-x aria-label="닫기">✕</button></div><div class="cx-as-b" id="cxAsB"></div>';
   a.querySelectorAll('[data-tab]').forEach(function (b) { b.addEventListener('click', function () { CX.asideTab = b.dataset.tab; _cxDrawAside(); }); });
   a.querySelector('[data-x]').addEventListener('click', function () { CX.aside = false; _cxDrawAside(); _cxDrawHead(); });
   var b = a.querySelector('#cxAsB');
   if (tab === 'ctx') b.innerHTML = _cxCtxHtml();
   else if (tab === 'board' && typeof chatPostsTab === 'function') chatPostsTab(b);
+  else if (tab === 'docs' && typeof chatDocsTab === 'function') chatDocsTab(b);
   else if (tab === 'people') {
     var ms = (CX.info && CX.info.members) || [];
     var mg = CX.info && CX.info.canManage;

@@ -14,6 +14,8 @@ const ICON = path.join(__dirname, 'build', 'icon.png');
 const TRAY_ICON = path.join(__dirname, 'build', 'tray.png');
 
 let win = null, tray = null, quitting = false, retryTimer = null, unread = 0;
+let sharedDisplayId = null, ctlOn = false;   // 🖱 원격 제어 (v13.360)
+const remote = require('./remote-input');
 
 /* ─── 설정 ─── */
 const cfgPath = () => path.join(app.getPath('userData'), 'config.json');
@@ -120,6 +122,8 @@ function buildTrayMenu() {
     { label: '윈도우 시작할 때 실행', type: 'checkbox', checked: login, click: (m) => app.setLoginItemSettings({ openAtLogin: m.checked, args: ['--hidden'] }) },
     { label: '새로 고침', click: () => { showWin(); loadApp(); } },
     { label: '서버: ' + SERVER(), enabled: false },
+    upd.ready ? { label: '⬆ 새 버전 ' + upd.ready + ' — 설치하고 다시 시작', click: () => { quitting = true; ctlStop(false); require('electron-updater').autoUpdater.quitAndInstall(true, true); } }
+      : { label: upd.busy ? '업데이트 받는 중… ' + (upd.pct || 0) + '%' : '업데이트 확인', enabled: app.isPackaged && !upd.busy, click: () => checkUpdate(true) },
     { label: '버전 ' + app.getVersion(), enabled: false },
     { type: 'separator' },
     { label: '끝내기', click: () => { quitting = true; app.quit(); } }
@@ -130,6 +134,29 @@ function refreshTray() {
   tray.setToolTip('업무 관리자' + (unread ? ' — 안 읽은 메시지 ' + unread : ''));
   tray.setContextMenu(buildTrayMenu());
 }
+
+/* ─── ⬆ 자동 업데이트 (v13.360) — GitHub Releases 의 latest.yml 을 보고 뒤에서 받아 두었다가, 끝낼 때 또는 트레이에서 바로 설치 ─── */
+const upd = { busy: false, ready: null, pct: 0, manual: false };
+function setupUpdater() {
+  const au = require('electron-updater').autoUpdater;
+  au.autoDownload = true; au.autoInstallOnAppQuit = true;
+  au.on('update-available', (i) => { upd.busy = true; refreshTray(); if (upd.manual) toast('⬆ 새 버전 ' + i.version + ' 을 받는 중입니다'); });
+  au.on('update-not-available', () => { upd.busy = false; refreshTray(); if (upd.manual) toast('✅ 최신 버전입니다 (' + app.getVersion() + ')'); upd.manual = false; });
+  au.on('download-progress', (p) => { upd.pct = Math.round(p.percent || 0); refreshTray(); });
+  au.on('update-downloaded', (i) => {
+    upd.busy = false; upd.ready = i.version; refreshTray();
+    const n = new Notification({ title: '⬆ 업무 관리자 ' + i.version + ' 준비됨', body: '누르면 바로 설치하고 다시 시작합니다 (그냥 두면 끝낼 때 설치)', icon: ICON });
+    n.on('click', () => { quitting = true; ctlStop(false); au.quitAndInstall(true, true); });
+    n.show();
+  });
+  au.on('error', (e) => { upd.busy = false; refreshTray(); if (upd.manual) toast('업데이트를 확인하지 못했습니다: ' + (e && e.message ? e.message.slice(0, 80) : '')); upd.manual = false; });
+}
+function checkUpdate(manual) {
+  if (!app.isPackaged || upd.busy || upd.ready) { if (manual && upd.ready) toast('⬆ ' + upd.ready + ' 이 준비돼 있습니다 — 트레이 메뉴에서 설치'); return; }
+  upd.manual = manual;
+  try { require('electron-updater').autoUpdater.checkForUpdates().catch(() => {}); } catch (e) { console.warn('[update]', e.message); }
+}
+function toast(body) { if (Notification.isSupported()) new Notification({ title: '업무 관리자', body: body, icon: ICON }).show(); }
 
 /* ─── 웹 화면 ↔ 앱 ─── */
 ipcMain.on('wm:notify', (_e, o) => {
@@ -151,6 +178,29 @@ ipcMain.on('wm:badge', (_e, o) => {
   refreshTray();
 });
 ipcMain.on('wm:retry', () => loadApp());
+/* 🖱 원격 제어 — 화면 공유 중 내가 '허락'했을 때만 (웹 화면이 알려 줌) · Ctrl+Alt+End 로 언제든 끝 */
+function ctlStop(fromKey) {
+  if (!ctlOn) return;
+  ctlOn = false; remote.stop();
+  try { globalShortcut.unregister('Control+Alt+End'); } catch (_) {}
+  if (fromKey && win) win.webContents.send('wm:ctl-stop');
+}
+ipcMain.on('wm:ctl', (e, on) => {
+  if (!win || e.sender !== win.webContents) return;
+  if (on && !ctlOn) {
+    ctlOn = true; remote.start();
+    try { globalShortcut.register('Control+Alt+End', () => ctlStop(true)); } catch (_) {}
+  } else if (!on) ctlStop(false);
+});
+function sharedArea() {
+  const { screen } = require('electron');
+  const d = screen.getAllDisplays().find((x) => String(x.id) === String(sharedDisplayId)) || screen.getPrimaryDisplay();
+  return process.platform === 'win32' ? screen.dipToScreenRect(null, d.bounds) : d.bounds;   // 실제 화면 픽셀
+}
+ipcMain.on('wm:input', (e, ev) => {
+  if (!ctlOn || !win || e.sender !== win.webContents) return;
+  remote.input(ev, sharedArea());
+});
 // 구글 로그인 — 앱 안 창은 구글이 '안전하지 않은 브라우저'로 막는다 → 기본 브라우저로
 ipcMain.on('wm:google', () => { shell.openExternal(SERVER() + '/api/auth/google?app=desktop'); });
 // 📸 화면 캡처 — 우리 창을 잠깐 숨기고, 마우스가 있는 화면을 원래 해상도로 찍는다 → 웹 화면이 잘라서 표시 · 보내기
@@ -179,7 +229,7 @@ app.whenReady().then(() => {
   });
   // 화면 공유(getDisplayMedia) — 주 화면을 바로 보냄
   ses.setDisplayMediaRequestHandler((_req, cb) => {
-    desktopCapturer.getSources({ types: ['screen'] }).then((s) => cb(s[0] ? { video: s[0] } : {})).catch(() => cb({}));
+    desktopCapturer.getSources({ types: ['screen'] }).then((s) => { sharedDisplayId = s[0] ? s[0].display_id : null; cb(s[0] ? { video: s[0] } : {}); }).catch(() => cb({}));
   });
 
   createWindow();
@@ -190,10 +240,12 @@ app.whenReady().then(() => {
   globalShortcut.register('CommandOrControl+Shift+M', () => (win.isVisible() && win.isFocused() ? win.hide() : showWin()));
 
   if (app.isPackaged) {
-    try { require('electron-updater').autoUpdater.checkForUpdatesAndNotify(); } catch (e) { console.warn('[update]', e.message); }
+    setupUpdater();
+    checkUpdate(false);
+    setInterval(() => checkUpdate(false), 4 * 3600 * 1000);   // 4시간마다
   }
 });
 
-app.on('before-quit', () => { quitting = true; });
+app.on('before-quit', () => { quitting = true; ctlStop(false); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', () => { /* 트레이에 남음 */ });
