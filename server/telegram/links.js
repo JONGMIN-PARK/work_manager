@@ -34,7 +34,7 @@ function targetOf(eventType, p) {
   if (p.issueId) return ['issue', p.issueId];
   if (p.ticketId) return ['as', p.ticketId];
   if (eventType === 'message_received' && p.fromUserId) return ['message', p.fromUserId];
-  if (eventType === 'chat_message' && p.roomId) return ['chat', p.roomId];   // v13.315 메신저 대화방
+  if ((eventType === 'chat_message' || eventType === 'chat_remind' || eventType === 'chat_req_nudge') && p.roomId) return ['chat', p.roomId];   // v13.315 메신저 대화방 · v13.362 다시 알림
   if (p.projectId) return ['project', p.projectId];
   return null;
 }

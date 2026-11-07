@@ -435,3 +435,65 @@ test('📝 공동 문서 (v13.360) — 만들기 · 카드 · 같이 고치기 �
   expect((await api('get', '/api/chat/docs/' + d.id, a)).status).toBe(404);
   off();
 });
+
+test('⏰ 예약 보내기 · 다시 알림 · 요청 재알림 (v13.362)', async function () {
+  var timers = require('../lib/chat-timers');
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '예약방', userIds: [b.user.id] })).body.data.id;
+  var soon = new Date(Date.now() + 3600000).toISOString();
+  expect((await api('post', '/api/chat/rooms/' + g + '/scheduled', a).send({ body: 'x', sendAt: new Date(Date.now() - 1000).toISOString() })).status).toBe(400);   // 지난 때
+  expect((await api('post', '/api/chat/rooms/' + g + '/scheduled', a).send({ body: '', sendAt: soon })).status).toBe(400);
+  var s1 = (await api('post', '/api/chat/rooms/' + g + '/scheduled', a).send({ body: '내일 아침 점검 시작합니다', sendAt: soon })).body.data;
+  expect(s1).toMatchObject({ roomId: g, body: '내일 아침 점검 시작합니다' });
+  expect(timers._timers['s:' + s1.id]).toBeDefined();   // 70분 안이면 바로 메모리 타이머
+  timers.disarm('s', s1.id);   // 시험에선 아래에서 직접 부름
+  var mine = (await api('get', '/api/chat/scheduled?room=' + g, a)).body.data;
+  expect(mine.map(function (x) { return x.id; })).toEqual([s1.id]);
+  expect((await api('get', '/api/chat/scheduled', b)).body.data.length).toBe(0);   // 남의 예약은 안 보임
+  expect((await api('delete', '/api/chat/scheduled/' + s1.id, b)).status).toBe(404);
+  // 고치기 → 때가 되면 보냄 (타이머 대신 직접 부름) → 한 번만
+  await api('put', '/api/chat/scheduled/' + s1.id, a).send({ body: '내일 아침 9시 점검 시작합니다' });
+  var sent = await timers.fireScheduled(s1.id);
+  expect(sent).toMatchObject({ userId: a.user.id, body: '내일 아침 9시 점검 시작합니다', roomId: g });
+  expect(await timers.fireScheduled(s1.id)).toBeNull();
+  expect((await api('get', '/api/chat/scheduled?room=' + g, a)).body.data.length).toBe(0);
+  // 지금 바로 · 취소
+  var s2 = (await api('post', '/api/chat/rooms/' + g + '/scheduled', a).send({ body: '바로', sendAt: soon })).body.data;
+  expect((await api('post', '/api/chat/scheduled/' + s2.id + '/now', a)).body.data.body).toBe('바로');
+  var s3 = (await api('post', '/api/chat/rooms/' + g + '/scheduled', a).send({ body: '취소할 것', sendAt: soon })).body.data;
+  expect((await api('delete', '/api/chat/scheduled/' + s3.id, a)).status).toBe(200);
+  expect(await timers.fireScheduled(s3.id)).toBeNull();
+  // 방에서 나가면 안 보냄
+  var s4 = (await api('post', '/api/chat/rooms/' + g + '/scheduled', b).send({ body: '나가면 안 감', sendAt: soon })).body.data;
+  await api('delete', '/api/chat/rooms/' + g + '/members/me', b);
+  expect(await timers.fireScheduled(s4.id)).toBeNull();
+  expect((await db.query('SELECT fail FROM chat_scheduled WHERE id = $1', [s4.id])).rows[0].fail).toBe('방에서 나감');
+  await api('post', '/api/chat/rooms/' + g + '/members', a).send({ userIds: [b.user.id] });
+
+  // ⏰ 다시 알림 — 나에게만 · 인앱 알림 · 실시간
+  var m = (await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '견적서 금요일까지 회신' })).body.data;
+  expect((await api('post', '/api/chat/messages/' + m.id + '/remind', x).send({ at: soon })).status).toBe(403);
+  var rm = (await api('post', '/api/chat/messages/' + m.id + '/remind', b).send({ at: soon, note: '견적 확인' })).body.data;
+  var list = (await api('get', '/api/chat/reminders', b)).body.data;
+  expect(list[0]).toMatchObject({ id: rm.id, note: '견적 확인', body: '견적서 금요일까지 회신', who: '가나다', roomName: '예약방' });
+  var got = [], off = hub.add(b.user.id, { write: function (s) { got.push(s); }, on: function () {} });
+  await db.query('DELETE FROM in_app_notifications WHERE user_id = $1', [b.user.id]).catch(function () {});
+  var fired = await timers.fireReminder(rm.id);
+  expect(fired).toMatchObject({ roomId: g, body: '견적서 금요일까지 회신', note: '견적 확인' });
+  expect(got.join('')).toMatch(/event: remind\n/);
+  var ia = await db.query("SELECT body FROM in_app_notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1", [b.user.id]);
+  expect(ia.rows[0].body).toMatch(/견적 확인/);
+  expect(await timers.fireReminder(rm.id)).toBeNull();
+  expect((await api('get', '/api/chat/reminders', b)).body.data.length).toBe(0);
+  off();
+
+  // 📣 요청 다시 알림 — 담당에게 · 한 시간에 한 번 · 자동(4시간 넘은 접수)
+  var post = (await api('post', '/api/chat/rooms/' + g + '/posts', a).send({ cat: 'req', title: '비전 검사기 캘리브레이션', assignee: b.user.id })).body.data;
+  expect((await api('post', '/api/chat/messages/' + post.id + '/nudge', b)).status).toBe(400);   // 내가 담당
+  expect((await api('post', '/api/chat/messages/' + post.id + '/nudge', a)).status).toBe(200);
+  expect((await api('post', '/api/chat/messages/' + post.id + '/nudge', a)).status).toBe(429);
+  await db.query("UPDATE chat_messages SET created_at = now() - interval '5 hours' WHERE id = $1", [post.id]);
+  expect(await timers.nudgeStaleRequests()).toBeGreaterThanOrEqual(1);
+  var pp = (await db.query('SELECT post FROM chat_messages WHERE id = $1', [post.id])).rows[0].post;
+  expect(pp.autoNudged).toBeTruthy();
+  expect(await timers.nudgeStaleRequests()).toBe(0);   // 한 번만
+});

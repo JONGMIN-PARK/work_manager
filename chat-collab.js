@@ -60,6 +60,7 @@ function _ccActs(m, compact) {
     if (p.status !== 'done') a += '<button type="button" data-pst="done">✅ 완료</button>';
     else a += '<button type="button" data-pst="open">↺ 다시 열기</button>';
     if (p.status !== 'done' && p.assignee !== me) a += '<button type="button" data-pasg="me">🙋 내가 맡기</button>';
+    if (p.status !== 'done' && p.assignee && p.assignee !== me) a += '<button type="button" data-pnudge title="담당자에게 다시 알림 (한 시간에 한 번)">📣 다시 알림</button>';
     if (!compact && typeof CX !== 'undefined' && CX.info && CX.info.kind === 'project' && CX.room === m.roomId && !(m.cards || []).some(function (c) { return c.type === 'issue'; })) a += '<button type="button" data-pissue>🐞 이슈로</button>';
   } else if (p.cat === 'qna') {
     a += p.status === 'solved' ? '<button type="button" data-pst="open">↺ 다시 열기</button>' : '<button type="button" data-pst="solved">✅ 해결됨</button>';
@@ -108,6 +109,7 @@ document.addEventListener('click', function (e) {
   var st = t.closest('[data-pst]'), asg = t.closest('[data-pasg]');
   if (st) { e.stopPropagation(); _ccUpdate(mid, { status: st.dataset.pst }, st); return; }
   if (asg) { e.stopPropagation(); _ccUpdate(mid, { assignee: _ccMe() }, asg); return; }
+  if (t.closest('[data-pnudge]')) { e.stopPropagation(); var nb = t.closest('[data-pnudge]'); nb.disabled = true; apiFetch('/api/chat/messages/' + mid + '/nudge', { method: 'POST', body: '{}' }).then(function () { _ccToast('📣 담당자에게 다시 알렸습니다', 'success'); }).catch(function (er) { nb.disabled = false; _ccToast(_ccErr(er), 'error'); }); return; }
   if (t.closest('[data-pissue]')) { e.stopPropagation(); _ccUpdate(mid, { toIssue: true }, t.closest('[data-pissue]')).then(function (r) { if (r) _ccToast('🐞 이슈로 올렸습니다', 'success'); }); return; }
   if (t.closest('[data-pedit]') && m) { e.stopPropagation(); chatPostModal(m); return; }
   if (t.closest('[data-pthread]')) { e.stopPropagation(); _ccOpenPost(m || { id: mid }); return; }
@@ -263,7 +265,7 @@ function chatLibrary(tab) {
 }
 function _ccLibOpen() {
   var div = document.createElement('div'); div.id = 'cxLib'; div.className = 'cc-lib';
-  div.innerHTML = '<div class="cc-lib-tabs"><button type="button" data-lt="folders">📁 폴더</button><button type="button" data-lt="reqs">🛠 요청함</button></div><div class="cc-lib-b" data-lb></div>';
+  div.innerHTML = '<div class="cc-lib-tabs"><button type="button" data-lt="folders">📁 폴더</button><button type="button" data-lt="reqs">🛠 요청함</button><button type="button" data-lt="times">⏰ 알림 · 예약</button></div><div class="cc-lib-b" data-lb></div>';
   var modal = createModal({ title: '🗂 모아 보기', content: div, width: '1080px', boxStyle: 'max-height:88vh' });
   CC.libModal = modal;
   div.querySelectorAll('[data-lt]').forEach(function (b) { b.addEventListener('click', function () { CC.libTab = b.dataset.lt; _ccLibDraw(); }); });
@@ -275,6 +277,7 @@ function _ccLibDraw() {
   div.querySelectorAll('[data-lt]').forEach(function (b) { b.classList.toggle('on', b.dataset.lt === CC.libTab); });
   var b = div.querySelector('[data-lb]');
   if (CC.libTab === 'reqs') return _ccReqsView(b);
+  if (CC.libTab === 'times' && typeof chatTimeList === 'function') return chatTimeList(b);
   _ccFolderView(b);
 }
 function _ccFolderView(box) {

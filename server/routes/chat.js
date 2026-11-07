@@ -1000,6 +1000,119 @@ router.post('/docs/:did/cursor', async function (req, res) {
   } catch (e) { httpErr.serverError(res, '[chat/doc/cur]', e); }
 });
 
+/* ─── ⏰ 예약 보내기 · 다시 알림 (v13.362) — 타이머는 lib/chat-timers.js (메모리 + 한 시간에 한 번 DB) ─── */
+var timers = require('../lib/chat-timers');
+function whenOk(v, maxDays) {
+  var t = new Date(v); if (isNaN(t)) return null;
+  if (t.getTime() < Date.now() + 30000 || t.getTime() > Date.now() + maxDays * 86400000) return null;
+  return t;
+}
+function schedShape(x) { return { id: +x.id, roomId: x.room_id, roomName: x.room_name || null, body: x.body, sendAt: x.send_at, createdAt: x.created_at }; }
+router.post('/rooms/:id/scheduled', async function (req, res) {
+  try {
+    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    if (readOnly(res, room)) return;
+    var b = req.body || {}, body = String(b.body || '').trim();
+    if (!body) return bad(res, '보낼 글을 적으세요.');
+    if (body.length > MAX_BODY) return bad(res, '너무 깁니다.');
+    var at = whenOk(b.sendAt, 60); if (!at) return bad(res, '보낼 때는 지금부터 60일 안이어야 합니다.');
+    var n = await db.query('SELECT COUNT(*)::int AS n FROM chat_scheduled WHERE user_id = $1 AND sent_at IS NULL AND canceled_at IS NULL', [me(req)]);
+    if (n.rows[0].n >= 100) return bad(res, '예약은 100개까지입니다.');
+    var r = await db.query('INSERT INTO chat_scheduled (tenant_id, room_id, user_id, body, send_at) VALUES ($1,$2,$3,$4,$5) RETURNING *', [req.tenant.id, room.id, me(req), body, at]);
+    timers.arm('s', r.rows[0]);
+    res.status(201).json({ data: schedShape(r.rows[0]) });
+  } catch (e) { httpErr.serverError(res, '[chat/sched]', e); }
+});
+/* 내 예약 — 이 방(room=) 또는 전체 */
+router.get('/scheduled', async function (req, res) {
+  try {
+    var p = [me(req), req.tenant.id], w = '';
+    if (req.query.room) { p.push(String(req.query.room)); w = ' AND s.room_id = $3'; }
+    var r = await db.query('SELECT s.*, COALESCE(rr.name, pp.name) AS room_name FROM chat_scheduled s JOIN chat_rooms rr ON rr.id = s.room_id LEFT JOIN projects pp ON pp.id = rr.project_id WHERE s.user_id = $1 AND s.tenant_id = $2 AND s.sent_at IS NULL AND s.canceled_at IS NULL' + w + ' ORDER BY s.send_at LIMIT 200', p);
+    res.json({ data: r.rows.map(schedShape) });
+  } catch (e) { httpErr.serverError(res, '[chat/sched/list]', e); }
+});
+router.put('/scheduled/:sid', async function (req, res) {
+  try {
+    var b = req.body || {}, set = [], p = [+req.params.sid, me(req)];
+    if (b.body != null) { var body = String(b.body).trim(); if (!body) return bad(res, '보낼 글을 적으세요.'); p.push(body.slice(0, MAX_BODY)); set.push('body = $' + p.length); }
+    if (b.sendAt != null) { var at = whenOk(b.sendAt, 60); if (!at) return bad(res, '보낼 때는 지금부터 60일 안이어야 합니다.'); p.push(at); set.push('send_at = $' + p.length); }
+    if (!set.length) return bad(res, '바꿀 것이 없습니다.');
+    var r = await db.query('UPDATE chat_scheduled SET ' + set.join(', ') + ' WHERE id = $1 AND user_id = $2 AND sent_at IS NULL AND canceled_at IS NULL RETURNING *', p);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '예약이 없습니다 (이미 보냈거나 취소).' });
+    timers.disarm('s', r.rows[0].id); timers.arm('s', r.rows[0]);
+    res.json({ data: schedShape(r.rows[0]) });
+  } catch (e) { httpErr.serverError(res, '[chat/sched/put]', e); }
+});
+router.delete('/scheduled/:sid', async function (req, res) {
+  try {
+    var r = await db.query('UPDATE chat_scheduled SET canceled_at = now() WHERE id = $1 AND user_id = $2 AND sent_at IS NULL AND canceled_at IS NULL RETURNING id', [+req.params.sid, me(req)]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '예약이 없습니다.' });
+    timers.disarm('s', +req.params.sid);
+    res.json({ ok: true });
+  } catch (e) { httpErr.serverError(res, '[chat/sched/del]', e); }
+});
+/* 지금 바로 보내기 */
+router.post('/scheduled/:sid/now', async function (req, res) {
+  try {
+    var own = await db.query('SELECT id FROM chat_scheduled WHERE id = $1 AND user_id = $2', [+req.params.sid, me(req)]);
+    if (!own.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '예약이 없습니다.' });
+    timers.disarm('s', +req.params.sid);
+    var msg = await timers.fireScheduled(+req.params.sid);
+    if (!msg) return bad(res, '보낼 수 없습니다 (이미 보냈거나 방에서 나감).');
+    res.json({ data: msg });
+  } catch (e) { httpErr.serverError(res, '[chat/sched/now]', e); }
+});
+
+router.post('/messages/:mid/remind', async function (req, res) {
+  try {
+    var m = (await db.query('SELECT id, room_id FROM chat_messages WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [+req.params.mid, req.tenant.id])).rows[0];
+    if (!m) return res.status(404).json({ error: 'NOT_FOUND', message: '메시지가 없습니다.' });
+    var room = await roomFor(req, res, m.room_id); if (!room) return;
+    if (room.hist_from && m.id <= +room.hist_from) return res.status(404).json({ error: 'NOT_FOUND', message: '메시지가 없습니다.' });
+    var at = whenOk((req.body || {}).at, 365); if (!at) return bad(res, '알릴 때는 지금부터 1년 안이어야 합니다.');
+    var n = await db.query('SELECT COUNT(*)::int AS n FROM chat_reminders WHERE user_id = $1 AND done_at IS NULL', [me(req)]);
+    if (n.rows[0].n >= 200) return bad(res, '다시 알림은 200개까지입니다.');
+    var r = await db.query('INSERT INTO chat_reminders (tenant_id, user_id, room_id, msg_id, remind_at, note) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *', [req.tenant.id, me(req), m.room_id, m.id, at, String((req.body || {}).note || '').slice(0, 300) || null]);
+    timers.arm('r', r.rows[0]);
+    res.status(201).json({ data: { id: +r.rows[0].id, remindAt: r.rows[0].remind_at } });
+  } catch (e) { httpErr.serverError(res, '[chat/remind]', e); }
+});
+router.get('/reminders', async function (req, res) {
+  try {
+    var r = await db.query("SELECT x.id, x.remind_at, x.note, x.msg_id, x.room_id, COALESCE(rr.name, pp.name) AS room_name, m.body, m.post->>'title' AS ptitle, COALESCE(u.display_name, u.name) AS who " +
+      'FROM chat_reminders x JOIN chat_messages m ON m.id = x.msg_id JOIN chat_rooms rr ON rr.id = x.room_id LEFT JOIN projects pp ON pp.id = rr.project_id LEFT JOIN users u ON u.id = m.user_id ' +
+      'WHERE x.user_id = $1 AND x.tenant_id = $2 AND x.done_at IS NULL ORDER BY x.remind_at LIMIT 200', [me(req), req.tenant.id]);
+    res.json({ data: r.rows.map(function (x) { return { id: +x.id, remindAt: x.remind_at, note: x.note || '', msgId: +x.msg_id, roomId: x.room_id, roomName: x.room_name || '', body: x.ptitle ? '📌 ' + x.ptitle : x.body || '', who: x.who || '' }; }) });
+  } catch (e) { httpErr.serverError(res, '[chat/reminders]', e); }
+});
+router.delete('/reminders/:rid', async function (req, res) {
+  try {
+    var r = await db.query('UPDATE chat_reminders SET done_at = now() WHERE id = $1 AND user_id = $2 AND done_at IS NULL RETURNING id', [+req.params.rid, me(req)]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '알림이 없습니다.' });
+    timers.disarm('r', +req.params.rid);
+    res.json({ ok: true });
+  } catch (e) { httpErr.serverError(res, '[chat/reminders/del]', e); }
+});
+/* 📣 요청 다시 알림 — 담당자에게 (같은 글은 한 시간에 한 번) */
+router.post('/messages/:mid/nudge', async function (req, res) {
+  try {
+    var m = (await db.query("SELECT * FROM chat_messages WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL AND post->>'cat' = 'req'", [+req.params.mid, req.tenant.id])).rows[0];
+    if (!m) return res.status(404).json({ error: 'NOT_FOUND', message: '요청 글이 없습니다.' });
+    var room = await roomFor(req, res, m.room_id); if (!room) return;
+    if (readOnly(res, room)) return;
+    var p = m.post;
+    if (!p.assignee) return bad(res, '담당자가 없습니다 — 먼저 담당을 정하세요.');
+    if (p.status === 'done') return bad(res, '이미 완료된 요청입니다.');
+    if (p.assignee === me(req)) return bad(res, '내가 담당입니다.');
+    if (p.nudgedAt && Date.now() - new Date(p.nudgedAt).getTime() < 3600000) return bad(res, '한 시간 안에 이미 알렸습니다.', 429);
+    await db.query("UPDATE chat_messages SET post = jsonb_set(post, '{nudgedAt}', to_jsonb(now()::text)) WHERE id = $1", [m.id]);
+    await require('../services/notification.service').notify('chat_req_nudge', { roomId: room.id, roomName: room.name || '', title: p.title, equip: p.equip, fromName: req.user.name || '' }, [p.assignee]);
+    await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: '📣 ' + (req.user.name || '') + ' 님이 담당자에게 다시 알렸습니다', replyTo: m.id });
+    res.json({ ok: true });
+  } catch (e) { httpErr.serverError(res, '[chat/nudge]', e); }
+});
+
 /* ─── 프로젝트 방 옆 현황 (데이터 기반) ─── */
 router.get('/rooms/:id/context', async function (req, res) {
   try {

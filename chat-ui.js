@@ -128,6 +128,8 @@ function chatOnEvent(ev, d) {
   } else if (ev === 'room') {   // v13.359 역할 · 내보내기
     if (d.removed && d.removed === _cxMe()) { CX.rooms = CX.rooms.filter(function (r) { return r.id !== d.roomId; }); if (CX.room === d.roomId) { CX.room = null; _cxDrawMain(); } _cxDrawRooms(); _cxToast('대화방에서 내보내졌습니다', 'warn'); return; }
     if (CX.room === d.roomId) apiFetch('/api/chat/rooms/' + encodeURIComponent(d.roomId)).then(function (r) { if (CX.room !== d.roomId) return; var was = CX.info && CX.info.myRole; CX.info = r.data; _cxDrawHead(); _cxDrawAside(); if (was !== CX.info.myRole) { _cxDrawMain(); _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(); } }).catch(function () {});
+  } else if (ev === 'remind' || ev === 'sched') {   // v13.362 ⏰
+    if (typeof chatTimeOnEvent === 'function') chatTimeOnEvent(ev, d);
   } else if (ev === 'doc' || ev === 'doc-cur') {   // v13.360 📝 공동 문서
     if (typeof chatDocOnEvent === 'function') chatDocOnEvent(ev, d);
   } else if (ev === 'folder') {
@@ -244,7 +246,8 @@ function chatOpenRoom(id, keep, focusMid) {
     CX.reads = {}; (rs[1].reads || []).forEach(function (x) { CX.reads[x.userId] = x.id; });
     if (CX.info.myRole === 'readonly') _cxDrawMain();   // 읽기만 — 입력칸 대신 안내
     _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(false, focusMid); _cxMarkRead(); _cxDrawAside();
-    if (CX.openThread) { var th = CX.openThread; CX.openThread = null; chatOpenThread(th); }   // 요청함 · 폴더에서 글 열기
+    if (CX.openThread) { var th = CX.openThread; CX.openThread = null; chatOpenThread(th); }
+    if (typeof chatTimeStrip === 'function') chatTimeStrip();   // ⏰ 이 방 예약   // 요청함 · 폴더에서 글 열기
     if (CX.info.kind === 'project') apiFetch('/api/chat/rooms/' + encodeURIComponent(id) + '/context').then(function (c) { if (CX.room === my) { CX.ctx = c.data; _cxDrawAside(); } }).catch(function () {});
     var ta = document.getElementById('cxIn'); if (ta && window.innerWidth > 760) ta.focus();
   }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
@@ -511,6 +514,7 @@ function _cxMsgMenu(btn, m) {
     m.body ? ['📋 복사', function () { try { navigator.clipboard.writeText(m.body); _cxToast('복사했습니다', 'success'); } catch (e) {} }] : null,
     ['↪ 전달', function () { chatForwardModal(m); }],
     typeof chatSaveMenu === 'function' ? ['📁 폴더에 담기', function () { chatSaveMenu(btn, m); }] : null,
+    typeof chatRemindMenu === 'function' ? ['⏰ 다시 알림…', function () { chatRemindMenu(btn, m); }] : null,
     ['📢 공지로', function () { apiFetch('/api/chat/rooms/' + CX.room + '/notice', { method: 'POST', body: JSON.stringify({ messageId: m.id }) }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }],
     m.body ? ['✅ 내 할 일로', function () { apiFetch('/api/chat/rooms/' + CX.room + '/messages', { method: 'POST', body: JSON.stringify({ body: '/todo ' + m.body.split('\n')[0].slice(0, 200), replyTo: m.id }) }).then(function () { _cxToast('✅ 내 할 일에 넣었습니다', 'success'); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null,
     m.body && typeof nbSendToInbox === 'function' ? ['📓 노트로 (낙서장)', function () {   // v13.316
@@ -553,6 +557,7 @@ function _cxComposerHtml(taId, wrapId) {
   return '<div class="cx-comp" id="' + wrapId + '"><div class="cx-chips" data-chips></div><div class="cx-reply" data-replybar hidden></div>' +
     '<div class="cx-comp-r"><button type="button" class="cx-ib" data-c="attach" title="파일 · 사진 (끌어 놓기 · 붙여넣기도 됨)">📎</button>' +
     '<button type="button" class="cx-ib" data-c="card" title="업무 카드 붙이기 — 이슈 · 프로젝트 · 마일스톤 · 문서 …">＋</button>' +
+    (wrapId === 'cxComp' && typeof chatTimeComposer === 'function' ? '<button type="button" class="cx-ib" data-c="sched" title="⏰ 예약 보내기 — 글을 쓰고 누르면 그때 보냄">⏰</button>' : '') +
     (wrapId === 'cxComp' && typeof chatPostModal === 'function' ? '<button type="button" class="cx-ib" data-c="post" title="게시판 글쓰기 — 공지 · 자료 · 질문 · 🛠 요청">✍️</button>' : '') +
     (_cxCanCapture() ? '<button type="button" class="cx-ib" data-c="cap" title="화면 캡처 — 잘라서 표시하고 보내기">📸</button>' : '') +
     '<textarea id="' + taId + '" rows="1" placeholder="메시지 · @사람 · /명령" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
@@ -610,6 +615,7 @@ function _cxBindComposer(taId, wrapId, inThread) {
     if (b.dataset.c === 'attach') fileIn.click();
     else if (b.dataset.c === 'card') chatCardPicker(inThread);
     else if (b.dataset.c === 'post' && typeof chatPostModal === 'function') chatPostModal();
+    else if (b.dataset.c === 'sched' && typeof chatTimeComposer === 'function') chatTimeComposer(b, ta);
     else if (b.dataset.c === 'cap' && typeof chatBoardCapture === 'function') chatBoardCapture(inThread ? CX.thread : null);
     else if (b.dataset.c === 'send') _go();
   });

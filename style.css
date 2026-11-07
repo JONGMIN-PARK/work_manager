@@ -4576,6 +4576,21 @@ html.wm-desktop #mMessages{--cx-h:calc(100dvh - 96px)}
 .cl-ci{font-size:20px}
 @media (max-width:760px){.cl-win{right:6px;left:6px;bottom:6px;width:auto}.cl-ring{left:10px;right:10px;top:10px}}
 
+/* ═══ v13.362 ⏰ 예약 보내기 · 다시 알림 (chat-time.js) ═══ */
+.ct-strip{display:flex;align-items:center;gap:6px;width:100%;margin:0 0 6px;padding:5px 10px;border:1px dashed color-mix(in srgb,var(--ac) 45%,var(--bd));border-radius:10px;background:color-mix(in srgb,var(--ac) 6%,var(--bg-i));color:var(--t3);font:inherit;font-size:12px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden}
+.ct-strip b{color:var(--ac-t)}
+.ct-strip span{color:var(--t5);overflow:hidden;text-overflow:ellipsis}
+.ct-pop{border-left:4px solid #F59E0B}
+.ct-ic{font-size:22px}
+.ct-list h4{display:flex;align-items:baseline;gap:6px;margin:4px 0 8px;font-size:13px;color:var(--t2)}
+.ct-list h4 i{font-style:normal;font-size:11.5px;color:var(--t5)}
+.ct-list h4~h4{margin-top:18px}
+.ct-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--bg-i);margin-bottom:6px}
+.ct-when{flex:none;min-width:118px;font-size:12px;font-weight:700;color:#B45309}
+.ct-what{flex:1;min-width:0;display:flex;flex-direction:column}
+.ct-what b{font-size:13px;color:var(--t1);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ct-what i{font-style:normal;font-size:11.5px;color:var(--t5)}
+
 .mm-sink{font-size:16px!important}   /* v13.310 숨은 키 입력칸 — 혹시 초점을 받아도 iOS 가 화면을 확대하지 않게 */
 
 

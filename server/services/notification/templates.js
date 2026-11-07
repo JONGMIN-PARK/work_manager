@@ -244,6 +244,14 @@ var TEMPLATES = {
       (p.fromName ? escHtml(p.fromName) + ' 님\n' : '') +
       escHtml((p.body || '').slice(0, 300)) + '\n<i>답장하면 메신저로 갑니다</i>';
   },
+  chat_remind: function (p) {   // v13.362 ⏰ 다시 알림 (메시지에 걸어 둔 것)
+    return '⏰ <b>다시 알림</b>' + (p.roomName ? ' · ' + escHtml(p.roomName) : '') + '\n' + (p.note ? '📝 ' + escHtml(p.note) + '\n' : '') +
+      (p.fromName ? escHtml(p.fromName) + ': ' : '') + escHtml((p.body || '').slice(0, 300));
+  },
+  chat_req_nudge: function (p) {   // v13.362 🛠 요청 다시 알림 (아직 접수 상태)
+    return '📣 <b>요청 확인 부탁</b>' + (p.roomName ? ' · ' + escHtml(p.roomName) : '') + '\n' + escHtml(p.title || '') + (p.equip ? ' (🏭 ' + escHtml(p.equip) + ')' : '') +
+      '\n' + (p.auto ? '<i>올린 지 ' + (p.hours || 4) + '시간 넘게 접수 상태입니다</i>' : escHtml(p.fromName || '') + ' 님이 다시 알렸습니다');
+  },
   message_received: function (p) {
     return '✉️ <b>새 메시지</b>\n' +
       (p.fromName ? escHtml(p.fromName) + ' 님\n' : '') +
@@ -277,6 +285,8 @@ var TEMPLATES = {
 var EVENT_TITLES = {
   message_received: '새 메시지가 도착했습니다',
   chat_message: '메신저 — 새 메시지',
+  chat_remind: '⏰ 다시 알림',
+  chat_req_nudge: '📣 요청 확인 부탁',
   issue_assigned: '이슈가 배정되었습니다',
   issue_status_changed: '이슈 상태가 변경되었습니다',
   project_delayed: '프로젝트가 지연되고 있습니다',

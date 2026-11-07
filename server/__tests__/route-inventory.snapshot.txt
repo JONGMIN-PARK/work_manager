@@ -15,8 +15,10 @@ DELETE /api/chat/docs/:did
 DELETE /api/chat/folders/:fid
 DELETE /api/chat/folders/:fid/items/:mid
 DELETE /api/chat/messages/:mid
+DELETE /api/chat/reminders/:rid
 DELETE /api/chat/rooms/:id/members/:uid
 DELETE /api/chat/rooms/:id/members/me
+DELETE /api/chat/scheduled/:sid
 DELETE /api/checklists/:id
 DELETE /api/comments/:id
 DELETE /api/custom-fields/definitions/:id
@@ -132,6 +134,7 @@ GET /api/chat/files/:fid/annot
 GET /api/chat/folders
 GET /api/chat/folders/:fid/items
 GET /api/chat/messages/:mid/folders
+GET /api/chat/reminders
 GET /api/chat/requests
 GET /api/chat/rooms
 GET /api/chat/rooms/:id
@@ -141,6 +144,7 @@ GET /api/chat/rooms/:id/docs
 GET /api/chat/rooms/:id/files
 GET /api/chat/rooms/:id/messages
 GET /api/chat/rooms/:id/posts
+GET /api/chat/scheduled
 GET /api/chat/search
 GET /api/chat/stream
 GET /api/chat/unread-count
@@ -404,8 +408,10 @@ POST /api/chat/folders
 POST /api/chat/folders/:fid/items
 POST /api/chat/messages/:mid/action
 POST /api/chat/messages/:mid/forward
+POST /api/chat/messages/:mid/nudge
 POST /api/chat/messages/:mid/post
 POST /api/chat/messages/:mid/react
+POST /api/chat/messages/:mid/remind
 POST /api/chat/rooms
 POST /api/chat/rooms/:id/docs
 POST /api/chat/rooms/:id/files
@@ -415,8 +421,10 @@ POST /api/chat/rooms/:id/notice
 POST /api/chat/rooms/:id/posts
 POST /api/chat/rooms/:id/read
 POST /api/chat/rooms/:id/rtc
+POST /api/chat/rooms/:id/scheduled
 POST /api/chat/rooms/:id/share
 POST /api/chat/rooms/:id/typing
+POST /api/chat/scheduled/:sid/now
 POST /api/checklists
 POST /api/comments
 POST /api/custom-fields/definitions
@@ -586,6 +594,7 @@ PUT /api/chat/folders/:fid
 PUT /api/chat/messages/:mid
 PUT /api/chat/rooms/:id
 PUT /api/chat/rooms/:id/members/:uid
+PUT /api/chat/scheduled/:sid
 PUT /api/checklists/:id
 PUT /api/custom-fields/definitions/:id
 PUT /api/custom-fields/values/:entityType/:entityId
