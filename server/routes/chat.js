@@ -304,7 +304,7 @@ router.get('/rooms/:id', async function (req, res) {
     var fo = await focusOf(m.rows.map(function (x) { return x.user_id; }));
     var notice = room.notice_id ? await loadMsg(room.notice_id) : null;
     res.json({ data: { id: room.id, kind: room.kind, name: room.name, projectId: room.project_id, muted: room.muted, pinned: room.pinned, lastReadId: +room.last_read_id, notice: notice && !notice.deleted && !(room.hist_from && notice.id <= +room.hist_from) ? notice : null,
-      myRole: room.role || 'member', canManage: room.kind !== 'dm' && await canManage(req, room), histFrom: room.hist_from ? +room.hist_from : null,
+      myRole: room.role || 'member', equipKey: room.equip_key || null, canManage: room.kind !== 'dm' && await canManage(req, room), histFrom: room.hist_from ? +room.hist_from : null,
       members: m.rows.map(function (x) { return { id: x.user_id, name: x.name, dept: x.dept || '', role: x.role, online: !!on[x.user_id], focusUntil: fo[x.user_id] ? fo[x.user_id].until : null, readId: +x.last_read_id, me: x.user_id === me(req) }; }) } });
   } catch (e) { httpErr.serverError(res, '[chat/room]', e); }
 });
@@ -716,6 +716,10 @@ router.post('/rooms/:id/posts', async function (req, res) {
     if (POST_STATUS[cat]) post.status = 'open';
     if (cat === 'req') {
       post.equip = String(b.equip || '').trim().slice(0, 120) || null;
+      if (b.equipId) {   // v13.365 🏭 장비 마스터와 이어 둠
+        var em = (await db.query('SELECT id, serial_no, equipment_model FROM as_equipment_master WHERE id = $1 AND tenant_id = $2', [String(b.equipId), req.tenant.id])).rows[0];
+        if (em) { post.equipId = em.id; if (!post.equip) post.equip = [em.equipment_model, em.serial_no].filter(Boolean).join(' · ').slice(0, 120); }
+      }
       post.due = cleanDate(b.due);
       if (b.assignee) {
         if (!await memberOf(room.id, b.assignee)) return bad(res, '담당자는 이 방 사람이어야 합니다.');
@@ -1161,6 +1165,104 @@ router.get('/requests/brief', async function (req, res) {
     var items = r.rows.map(function (x) { var o = shape(x); o.roomName = x.room_name || (x.room_kind === 'dm' ? '1:1 대화' : '대화방'); return o; });
     res.json({ data: Object.assign(await chatAi.brief(aiCtx(req), items), { count: items.length }) });
   } catch (e) { httpErr.serverError(res, '[chat/brief]', e); }
+});
+
+/* ─── 🏭 장비 단위 연결 (v13.365) — 장비마다 요청 · A/S 이력 · 문서 · 사진 · 언급 · 장비 방을 한데 ─── */
+function eqNorm(s) { return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 120); }
+function eqLike(s) { return '%' + String(s).replace(/[\\%_]/g, function (c) { return '\\' + c; }) + '%'; }
+// 내가 볼 수 있는 메시지 (방 멤버 · 초대 전 대화 가림)
+var EQ_VIS = 'EXISTS (SELECT 1 FROM chat_members cm WHERE cm.room_id = m.room_id AND cm.user_id = $1 AND cm.left_at IS NULL AND (cm.hist_from IS NULL OR m.id > cm.hist_from))';
+async function eqResolve(req, key) {
+  key = String(key || '');
+  if (/^m:/.test(key)) {
+    var r = await db.query('SELECT * FROM as_equipment_master WHERE id = $1 AND tenant_id = $2', [key.slice(2), req.tenant.id]);
+    var m = r.rows[0]; if (!m) return null;
+    var label = [m.equipment_model, m.serial_no].filter(Boolean).join(' · ') || m.serial_no;
+    return { key: 'm:' + m.id, master: m, label: label, names: [m.serial_no, m.equipment_no, m.equipment_model].filter(function (x) { return x && String(x).trim().length >= 3; }).map(eqNorm) };
+  }
+  if (/^n:/.test(key) && eqNorm(key.slice(2)).length >= 2) { var n = eqNorm(key.slice(2)); return { key: 'n:' + n, master: null, label: key.slice(2).trim(), names: [n] }; }
+  return null;
+}
+router.get('/equipment', async function (req, res) {
+  try {
+    var q = String(req.query.q || '').trim(), out = [];
+    var mp = [req.tenant.id], mw = '';
+    if (q) { mp.push(eqLike(q)); mw = ' AND (serial_no ILIKE $2 OR equipment_no ILIKE $2 OR equipment_model ILIKE $2 OR customer_name ILIKE $2 OR site_line ILIKE $2)'; }
+    var ms = await db.query('SELECT id, serial_no, equipment_no, equipment_model, customer_name, site_line, warranty_status FROM as_equipment_master WHERE tenant_id = $1 AND active = TRUE' + mw + ' ORDER BY updated_at DESC LIMIT 30', mp);
+    ms.rows.forEach(function (m) { out.push({ key: 'm:' + m.id, type: 'master', label: [m.equipment_model, m.serial_no].filter(Boolean).join(' · '), sub: [m.customer_name, m.site_line, m.equipment_no].filter(Boolean).join(' · '), warranty: m.warranty_status || '' }); });
+    // 요청 글에 적힌 장비 이름 (내가 볼 수 있는 것) — 남은 · 전체 수
+    var np = [me(req), req.tenant.id], nw = '';
+    if (q) { np.push(eqLike(q)); nw = " AND m.post->>'equip' ILIKE $3"; }
+    var ns = await db.query("SELECT lower(trim(m.post->>'equip')) AS k, MIN(trim(m.post->>'equip')) AS label, COUNT(*)::int AS n, COUNT(*) FILTER (WHERE COALESCE(m.post->>'status', 'open') <> 'done')::int AS open, MAX(m.post->>'equipId') AS eid, MAX(m.created_at) AS last " +
+      "FROM chat_messages m WHERE m.post IS NOT NULL AND m.deleted_at IS NULL AND m.tenant_id = $2 AND COALESCE(m.post->>'equip', '') <> '' AND " + EQ_VIS + nw + ' GROUP BY 1 ORDER BY MAX(m.created_at) DESC LIMIT 40', np);
+    ns.rows.forEach(function (x) {
+      var hit = x.eid && out.filter(function (o) { return o.key === 'm:' + x.eid; })[0];
+      if (hit) { hit.open = (hit.open || 0) + x.open; hit.n = (hit.n || 0) + x.n; return; }
+      out.push({ key: 'n:' + x.k, type: 'name', label: x.label, sub: '요청 ' + x.n + '개', open: x.open, n: x.n, last: x.last });
+    });
+    res.json({ data: out });
+  } catch (e) { httpErr.serverError(res, '[chat/equip]', e); }
+});
+router.get('/equipment/card', async function (req, res) {
+  try {
+    var eq = await eqResolve(req, req.query.key);
+    if (!eq) return res.status(404).json({ error: 'NOT_FOUND', message: '장비를 찾지 못했습니다.' });
+    var uid = me(req), t = req.tenant.id, names = eq.names, likes = names.map(eqLike);
+    // 🛠 요청 (장비 마스터 연결 · 이름 같음)
+    var rq = await db.query(MSG_SQL.replace('FROM chat_messages m', ', COALESCE(rr.name, pp.name) AS room_name, rr.kind AS room_kind FROM chat_messages m JOIN chat_rooms rr ON rr.id = m.room_id LEFT JOIN projects pp ON pp.id = rr.project_id') +
+      "WHERE m.post IS NOT NULL AND m.deleted_at IS NULL AND m.tenant_id = $2 AND ((m.post->>'equipId') = $3 OR lower(trim(m.post->>'equip')) = ANY($4)) AND " + EQ_VIS +
+      " ORDER BY (COALESCE(m.post->>'status', 'open') IN ('done', 'solved')), m.id DESC LIMIT 60", [uid, t, eq.master ? eq.master.id : '-', names]);
+    var reqs = rq.rows.map(function (x) { var o = shape(x); o.roomName = x.room_name || (x.room_kind === 'dm' ? '1:1 대화' : '대화방'); return o; });
+    // 🔧 A/S 이력
+    var asr = { rows: [] };
+    if (likes.length) {
+      var ap = [t], aw = [];
+      if (eq.master) { ap.push(eq.master.serial_no); aw.push('serial_no = $2'); if (eq.master.equipment_no) { ap.push(eq.master.equipment_no); aw.push('equipment_no = $' + ap.length); } }
+      else { ap.push(likes); aw.push('(equipment_model ILIKE ANY($2) OR serial_no ILIKE ANY($2) OR equipment_no ILIKE ANY($2) OR site_line ILIKE ANY($2))'); }
+      asr = await db.query('SELECT id, ticket_no, customer_name, equipment_model, serial_no, issue_summary, status, priority, received_at, project_id FROM as_tickets WHERE tenant_id = $1 AND deleted_at IS NULL AND (' + aw.join(' OR ') + ') ORDER BY received_at DESC LIMIT 30', ap);
+    }
+    // 📝 공동 문서 · 🖼 사진 · 💬 언급
+    var reqIds = reqs.map(function (r) { return r.id; });
+    var docs = await db.query('SELECT d.id, d.title, d.room_id, d.updated_at, COALESCE(rr.name, pp.name) AS room_name FROM chat_docs d JOIN chat_rooms rr ON rr.id = d.room_id LEFT JOIN projects pp ON pp.id = rr.project_id ' +
+      'WHERE d.tenant_id = $2 AND d.deleted_at IS NULL AND (d.title ILIKE ANY($3) OR d.body ILIKE ANY($3)) AND EXISTS (SELECT 1 FROM chat_members cm WHERE cm.room_id = d.room_id AND cm.user_id = $1 AND cm.left_at IS NULL) ORDER BY d.updated_at DESC LIMIT 12', [uid, t, likes]);
+    var photos = await db.query(MSG_SQL + "WHERE m.deleted_at IS NULL AND m.tenant_id = $2 AND f.mime LIKE 'image/%' AND (m.body ILIKE ANY($3) OR m.reply_to = ANY($4::bigint[])) AND " + EQ_VIS + ' ORDER BY m.id DESC LIMIT 12', [uid, t, likes, reqIds]);
+    var talk = await db.query(MSG_SQL.replace('FROM chat_messages m', ', COALESCE(rr.name, pp.name) AS room_name FROM chat_messages m JOIN chat_rooms rr ON rr.id = m.room_id LEFT JOIN projects pp ON pp.id = rr.project_id') +
+      "WHERE m.deleted_at IS NULL AND m.tenant_id = $2 AND m.post IS NULL AND m.kind IN ('text', 'ai') AND m.body ILIKE ANY($3) AND " + EQ_VIS + ' ORDER BY m.id DESC LIMIT 15', [uid, t, likes]);
+    var room = await db.query('SELECT r.id, (SELECT COUNT(*)::int FROM chat_members x WHERE x.room_id = r.id AND x.left_at IS NULL) AS n, EXISTS (SELECT 1 FROM chat_members x WHERE x.room_id = r.id AND x.user_id = $3 AND x.left_at IS NULL) AS mine FROM chat_rooms r WHERE r.tenant_id = $1 AND r.equip_key = $2', [t, eq.key, uid]);
+    var m = eq.master;
+    res.json({ data: {
+      key: eq.key, label: eq.label,
+      master: m ? { id: m.id, serial: m.serial_no, no: m.equipment_no, model: m.equipment_model, customer: m.customer_name, line: m.site_line, installDate: m.install_date, warrantyUntil: m.warranty_until, warranty: m.warranty_status, note: m.note } : null,
+      requests: reqs,
+      as: asr.rows.map(function (a) { return { id: a.id, no: a.ticket_no, summary: a.issue_summary, status: a.status, priority: a.priority, at: a.received_at, customer: a.customer_name, model: a.equipment_model, serial: a.serial_no, projectId: a.project_id }; }),
+      docs: docs.rows.map(function (d) { return { id: d.id, title: d.title, roomId: d.room_id, roomName: d.room_name || '', at: d.updated_at }; }),
+      photos: photos.rows.map(shape),
+      mentions: talk.rows.map(function (x) { var o = shape(x); o.roomName = x.room_name || ''; return o; }),
+      room: room.rows[0] ? { id: room.rows[0].id, members: room.rows[0].n, mine: room.rows[0].mine } : null
+    } });
+  } catch (e) { httpErr.serverError(res, '[chat/equip/card]', e); }
+});
+/* 💬 장비 방 — 장비마다 하나. 없으면 만들고(나 + 이 장비 요청을 올리거나 맡은 사람), 있으면 들어감 */
+router.post('/equipment/room', async function (req, res) {
+  try {
+    var eq = await eqResolve(req, (req.body || {}).key);
+    if (!eq) return res.status(404).json({ error: 'NOT_FOUND', message: '장비를 찾지 못했습니다.' });
+    var t = req.tenant.id, uid = me(req);
+    var ex = (await db.query('SELECT * FROM chat_rooms WHERE tenant_id = $1 AND equip_key = $2', [t, eq.key])).rows[0];
+    if (ex) {
+      await db.query("INSERT INTO chat_members (room_id, user_id, tenant_id, last_read_id, role) VALUES ($1,$2,$3,0,'member') ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL", [ex.id, uid, t]);
+      return res.json({ data: { id: ex.id, created: false } });
+    }
+    var ppl = await db.query("SELECT DISTINCT u FROM (SELECT m.user_id AS u FROM chat_messages m WHERE m.tenant_id = $1 AND m.post IS NOT NULL AND ((m.post->>'equipId') = $2 OR lower(trim(m.post->>'equip')) = ANY($3)) " +
+      "UNION SELECT (m.post->>'assignee')::uuid FROM chat_messages m WHERE m.tenant_id = $1 AND m.post IS NOT NULL AND m.post->>'assignee' IS NOT NULL AND ((m.post->>'equipId') = $2 OR lower(trim(m.post->>'equip')) = ANY($3))) z JOIN users us ON us.id = z.u AND us.status = 'active' LIMIT 30", [t, eq.master ? eq.master.id : '-', eq.names]);
+    var id = rid('grp');
+    await db.query("INSERT INTO chat_rooms (id, tenant_id, kind, name, created_by, equip_key) VALUES ($1,$2,'group',$3,$4,$5)", [id, t, '🏭 ' + eq.label.slice(0, 100), uid, eq.key]);
+    var ids = [uid].concat(ppl.rows.map(function (x) { return x.u; }).filter(function (x) { return x && x !== uid; }));
+    for (var u of ids) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id, role) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [id, u, t, u === uid ? 'owner' : 'member']);
+    var room = (await db.query('SELECT * FROM chat_rooms WHERE id = $1', [id])).rows[0];
+    await postMessage({ tenantId: t }, room, { kind: 'system', body: '🏭 ' + eq.label + ' 장비 방이 열렸습니다 — 이 장비의 요청 · A/S · 문서 · 사진은 옆 칸 🏭 장비 탭에서' });
+    res.status(201).json({ data: { id: id, created: true, members: ids.length } });
+  } catch (e) { httpErr.serverError(res, '[chat/equip/room]', e); }
 });
 
 /* ─── 🎯 집중 모드 (v13.363) ─── */

@@ -75,7 +75,7 @@ function chatPostHtml(m, opt) {
   opt = opt || {};
   var p = m.post || {}, c = CC_CAT[p.cat] || CC_CAT.data;
   var meta = [];
-  if (p.equip) meta.push('<span>🏭 ' + _ccE(p.equip) + '</span>');
+  if (p.equip) meta.push(typeof chatEquipKeyOf === 'function' ? '<button type="button" class="cc-eq" data-equip="' + _ccE(chatEquipKeyOf(p)) + '" title="장비 카드 — 요청 · A/S · 문서 · 사진">🏭 ' + _ccE(p.equip) + '</button>' : '<span>🏭 ' + _ccE(p.equip) + '</span>');
   if (p.cat === 'req') meta.push('<span>👤 ' + (p.assigneeName ? _ccE(p.assigneeName) : '<i>담당 없음</i>') + '</span>');
   if (p.due) meta.push(_ccDue(p.due));
   if (opt.room) meta.push('<span>💬 ' + _ccE(opt.room) + '</span>');
@@ -167,6 +167,7 @@ function _ccPostModal(edit) {
   }
   if (edit) { $('#ccTitle').value = p.title || ''; $('#ccBody').value = edit.body || ''; $('#ccEquip').value = p.equip || ''; $('#ccDue').value = p.due || ''; $('#ccUrg').checked = p.urgency === 'urgent'; $('#ccAsg').value = p.assignee || ''; $('#ccAsg').disabled = true; }
   setCat(cat);
+  if (typeof chatEquipSuggest === 'function') chatEquipSuggest($('#ccEquip'));   // 🏭 장비 마스터 · 쓰던 이름 고르기
   div.addEventListener('click', function (e) {
     var b = e.target.closest('[data-cat]'); if (b && !edit) setCat(b.dataset.cat);
     if (e.target.closest('[data-x]')) modal.close();
@@ -189,7 +190,7 @@ function _ccPostModal(edit) {
     var body = $('#ccBody').value;
     if (body === TPL[cat]) body = '';
     var data = { title: title, body: body };
-    if (cat === 'req') { data.equip = $('#ccEquip').value.trim(); data.due = $('#ccDue').value || null; data.urgency = $('#ccUrg').checked ? 'urgent' : 'normal'; if (!edit) data.assignee = $('#ccAsg').value || null; }
+    if (cat === 'req') { data.equip = $('#ccEquip').value.trim(); if (!edit && typeof chatEquipIdOf === 'function') data.equipId = chatEquipIdOf(data.equip) || undefined; data.due = $('#ccDue').value || null; data.urgency = $('#ccUrg').checked ? 'urgent' : 'normal'; if (!edit) data.assignee = $('#ccAsg').value || null; }
     btn.disabled = true;
     var req = edit ? apiFetch('/api/chat/messages/' + edit.id + '/post', { method: 'POST', body: JSON.stringify(data) })
       : apiFetch('/api/chat/rooms/' + encodeURIComponent(CX.room) + '/posts', { method: 'POST', body: JSON.stringify(Object.assign({ cat: cat }, data)) });
@@ -275,7 +276,7 @@ function chatLibrary(tab) {
 }
 function _ccLibOpen() {
   var div = document.createElement('div'); div.id = 'cxLib'; div.className = 'cc-lib';
-  div.innerHTML = '<div class="cc-lib-tabs"><button type="button" data-lt="folders">📁 폴더</button><button type="button" data-lt="reqs">🛠 요청함</button><button type="button" data-lt="times">⏰ 알림 · 예약</button></div><div class="cc-lib-b" data-lb></div>';
+  div.innerHTML = '<div class="cc-lib-tabs"><button type="button" data-lt="folders">📁 폴더</button><button type="button" data-lt="reqs">🛠 요청함</button><button type="button" data-lt="times">⏰ 알림 · 예약</button><button type="button" data-lt="equip">🏭 장비</button></div><div class="cc-lib-b" data-lb></div>';
   var modal = createModal({ title: '🗂 모아 보기', content: div, width: '1080px', boxStyle: 'max-height:88vh' });
   CC.libModal = modal;
   div.querySelectorAll('[data-lt]').forEach(function (b) { b.addEventListener('click', function () { CC.libTab = b.dataset.lt; _ccLibDraw(); }); });
@@ -288,6 +289,7 @@ function _ccLibDraw() {
   var b = div.querySelector('[data-lb]');
   if (CC.libTab === 'reqs') return _ccReqsView(b);
   if (CC.libTab === 'times' && typeof chatTimeList === 'function') return chatTimeList(b);
+  if (CC.libTab === 'equip' && typeof chatEquipList === 'function') return chatEquipList(b);
   _ccFolderView(b);
 }
 function _ccFolderView(box) {

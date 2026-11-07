@@ -717,8 +717,8 @@ function _cxDrawAside() {
     _cxDrawThread();
     return;
   }
-  var tab = CX.asideTab || (CX.info && CX.info.kind === 'project' ? 'ctx' : 'people');
-  var tabs = (CX.info && CX.info.kind === 'project' ? [['ctx', '📊 현황']] : []).concat([['board', '📌 게시판'], ['docs', '📝 문서'], ['people', '👤 멤버'], ['files', '📎 파일']]);
+  var tab = CX.asideTab || (CX.info && CX.info.kind === 'project' ? 'ctx' : CX.info && CX.info.equipKey ? 'equip' : 'people');
+  var tabs = (CX.info && CX.info.kind === 'project' ? [['ctx', '📊 현황']] : []).concat(CX.info && CX.info.equipKey ? [['equip', '🏭 장비']] : []).concat([['board', '📌 게시판'], ['docs', '📝 문서'], ['people', '👤 멤버'], ['files', '📎 파일']]);
   a.innerHTML = '<div class="cx-as-tabs">' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '<button type="button" class="cx-ib" data-x aria-label="닫기">✕</button></div><div class="cx-as-b" id="cxAsB"></div>';
   a.querySelectorAll('[data-tab]').forEach(function (b) { b.addEventListener('click', function () { CX.asideTab = b.dataset.tab; _cxDrawAside(); }); });
   a.querySelector('[data-x]').addEventListener('click', function () { CX.aside = false; _cxDrawAside(); _cxDrawHead(); });
@@ -726,6 +726,7 @@ function _cxDrawAside() {
   if (tab === 'ctx') b.innerHTML = _cxCtxHtml();
   else if (tab === 'board' && typeof chatPostsTab === 'function') chatPostsTab(b);
   else if (tab === 'docs' && typeof chatDocsTab === 'function') chatDocsTab(b);
+  else if (tab === 'equip' && typeof chatEquipAside === 'function') chatEquipAside(b);
   else if (tab === 'people') {
     var ms = (CX.info && CX.info.members) || [];
     var mg = CX.info && CX.info.canManage;

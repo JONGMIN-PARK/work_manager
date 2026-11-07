@@ -129,6 +129,8 @@ GET /api/bootstrap
 GET /api/chat/docs/:did
 GET /api/chat/docs/:did/versions
 GET /api/chat/docs/:did/versions/:vid
+GET /api/chat/equipment
+GET /api/chat/equipment/card
 GET /api/chat/files/:fid
 GET /api/chat/files/:fid/annot
 GET /api/chat/focus
@@ -403,6 +405,7 @@ POST /api/billing/checkout
 POST /api/billing/portal
 POST /api/billing/webhook
 POST /api/chat/docs/:did/cursor
+POST /api/chat/equipment/room
 POST /api/chat/files/:fid/annot
 POST /api/chat/files/:fid/cursor
 POST /api/chat/files/:fid/to-docs

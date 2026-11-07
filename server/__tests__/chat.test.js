@@ -508,7 +508,7 @@ test('🎯 집중 모드 (v13.363) — 푸시 미룸 · @멘션은 받기 · 받
   expect(new Date(f.until) - Date.now()).toBeGreaterThan(55 * 60000);
   expect((await api('get', '/api/chat/focus', b)).body.data.allow).toBe(true);
   var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '집중방', userIds: [b.user.id] })).body.data.id;
-  var wait = function () { return new Promise(function (r) { setTimeout(r, 300); }); };
+  var wait = function () { return new Promise(function (r) { setTimeout(r, 800); }); };   // 푸시는 응답 뒤에 따로 감
   sent.length = 0;
   await api('post', '/api/chat/rooms/' + dm + '/messages', a).send({ body: '집중 중엔 안 감' }); await wait();
   expect(sent.length).toBe(0);
@@ -560,4 +560,46 @@ test('✨ AI 정리 (v13.364) — 안 읽은 요약 · 요청 채우기 · 오�
     expect(br.text).toMatch(/1\. 🔴 조립기 #3 토크 재설정/);
     expect(br.text).toMatch(/기한 지남 1/);
   }
+});
+
+test('🏭 장비 단위 연결 (v13.365) — 마스터 · 이름 · 요청 · A/S · 문서 · 언급 · 장비 방 · 권한', async function () {
+  var eid = 'eqm-' + S;
+  await db.query("INSERT INTO as_equipment_master (id, tenant_id, serial_no, equipment_no, equipment_model, customer_name, site_line, warranty_status) VALUES ($1,$2,$3,'PRJ-77','VS-200 비전검사기','한빛전자','2라인','보증내')", [eid, T, 'SN-' + S]);
+  await db.query("INSERT INTO as_tickets (id, ticket_no, tenant_id, customer_name, serial_no, equipment_model, issue_summary, status, priority) VALUES ($1,$2,$3,'한빛전자',$4,'VS-200 비전검사기','조명 깜빡임','received','P2')", ['ast-' + S, 'AS-T-' + String(S).slice(-4), T, 'SN-' + S]);
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '설비팀2', userIds: [b.user.id] })).body.data.id;
+  var p1 = (await api('post', '/api/chat/rooms/' + g + '/posts', a).send({ cat: 'req', title: '조명 밝기 재설정', equipId: eid, assignee: b.user.id })).body.data;
+  expect(p1.post).toMatchObject({ equipId: eid, equip: 'VS-200 비전검사기 · SN-' + S });
+  await api('post', '/api/chat/rooms/' + g + '/posts', a).send({ cat: 'req', title: '온도 알람', equip: '2호기 사출기' });
+  await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '2호기 사출기 히터 교체했어요' });
+  await api('post', '/api/chat/rooms/' + g + '/docs', a).send({ title: '2호기 사출기 점검표' });
+  // 목록 · 찾기
+  var list = (await api('get', '/api/chat/equipment', b)).body.data;
+  var m = list.filter(function (x) { return x.key === 'm:' + eid; })[0];
+  expect(m).toMatchObject({ type: 'master', open: 1 });
+  expect(list.some(function (x) { return x.key === 'n:2호기 사출기' && x.open === 1; })).toBe(true);
+  expect((await api('get', '/api/chat/equipment?q=' + encodeURIComponent('한빛'), b)).body.data.map(function (x) { return x.key; })).toContain('m:' + eid);
+  expect((await api('get', '/api/chat/equipment', x)).body.data.some(function (z) { return z.type === 'name'; })).toBe(false);   // 방 밖 사람은 이름(글) 안 보임
+  // 마스터 카드
+  var cm = (await api('get', '/api/chat/equipment/card?key=' + encodeURIComponent('m:' + eid), b)).body.data;
+  expect(cm.master).toMatchObject({ model: 'VS-200 비전검사기', customer: '한빛전자', line: '2라인' });
+  expect(cm.requests.map(function (r) { return r.post.title; })).toEqual(['조명 밝기 재설정']);
+  expect(cm.as.map(function (r) { return r.summary; })).toEqual(['조명 깜빡임']);
+  // 이름 카드
+  var cn = (await api('get', '/api/chat/equipment/card?key=' + encodeURIComponent('n:2호기 사출기'), b)).body.data;
+  expect(cn.requests.length).toBe(1);
+  expect(cn.docs.map(function (d) { return d.title; })).toEqual(['2호기 사출기 점검표']);
+  expect(cn.mentions.map(function (z) { return z.body; })).toContain('2호기 사출기 히터 교체했어요');
+  expect(cn.room).toBeNull();
+  var cx = (await api('get', '/api/chat/equipment/card?key=' + encodeURIComponent('n:2호기 사출기'), x)).body.data;
+  expect(cx.requests.length + cx.docs.length + cx.mentions.length).toBe(0);   // 방 밖 사람
+  expect((await api('get', '/api/chat/equipment/card?key=zz', b)).status).toBe(404);
+  // 장비 방 — 만들고(글 쓴 사람 · 담당 같이) · 두 번째는 같은 방
+  var r1 = (await api('post', '/api/chat/equipment/room', b).send({ key: 'm:' + eid })).body.data;
+  expect(r1.created).toBe(true);
+  var info = (await api('get', '/api/chat/rooms/' + r1.id, a)).body.data;
+  expect(info).toMatchObject({ kind: 'group', equipKey: 'm:' + eid });
+  expect(info.members.map(function (z) { return z.id; }).sort()).toEqual([a.user.id, b.user.id].sort());
+  var r2 = (await api('post', '/api/chat/equipment/room', c).send({ key: 'm:' + eid })).body.data;
+  expect(r2).toMatchObject({ id: r1.id, created: false });
+  expect((await api('get', '/api/chat/equipment/card?key=' + encodeURIComponent('m:' + eid), c)).body.data.room).toMatchObject({ id: r1.id, mine: true });
 });

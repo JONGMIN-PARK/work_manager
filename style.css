@@ -4619,6 +4619,50 @@ html.wm-focus-big:has(#mMessages:not(.hidden)) #mMessages{--cx-h:calc(100dvh - 7
 .cs-fill{float:right;margin-top:-3px;border:1px solid color-mix(in srgb,#8B5CF6 40%,var(--bd));border-radius:8px;background:color-mix(in srgb,#8B5CF6 8%,var(--bg-i));color:#7C3AED;font:inherit;font-size:11.5px;font-weight:700;padding:2px 9px;cursor:pointer}
 .cs-brief{grid-column:1/-1;margin-bottom:10px;padding:12px 14px;border-radius:12px;background:linear-gradient(135deg,color-mix(in srgb,#8B5CF6 8%,var(--bg-p)),var(--bg-p));border:1px solid color-mix(in srgb,#8B5CF6 25%,var(--bd))}
 
+/* ═══ v13.365 🏭 장비 단위 연결 (chat-equip.js) ═══ */
+.cc-eq{border:0;border-radius:7px;background:color-mix(in srgb,#10B981 10%,var(--bg-i));color:var(--t3);font:inherit;font-size:11.5px;padding:1px 7px;cursor:pointer}
+.cc-eq:hover{color:var(--t1);background:color-mix(in srgb,#10B981 20%,var(--bg-i))}
+.ce-v{display:grid;grid-template-columns:270px minmax(0,1fr);gap:14px;min-height:58vh}
+.ce-l{display:flex;flex-direction:column;gap:6px;padding-right:12px;border-right:1px solid var(--bd);max-height:66vh;overflow:auto}
+.ce-l input{height:32px;padding:0 12px;border:1px solid var(--bd);border-radius:16px;background:var(--bg-i);color:var(--t2);font:inherit;font-size:12.5px}
+.ce-it{position:relative;display:flex;flex-direction:column;gap:1px;width:100%;padding:8px 34px 8px 10px;border:0;border-radius:10px;background:none;text-align:left;font:inherit;cursor:pointer;color:var(--t2)}
+.ce-it:hover{background:var(--bg-hv)}
+.ce-it.on{background:color-mix(in srgb,#10B981 14%,transparent)}
+.ce-it b{font-size:12.5px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ce-it i{font-style:normal;font-size:11px;color:var(--t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ce-it em{position:absolute;right:8px;top:50%;transform:translateY(-50%);min-width:20px;height:20px;border-radius:10px;background:#10B981;color:#fff;font-style:normal;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.ce-r{min-width:0;max-height:68vh;overflow:auto;scrollbar-width:thin}
+.ce-card{display:flex;flex-direction:column;gap:12px}
+.ce-h{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;padding:14px 16px;border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,#10B981 12%,var(--bg-p)),var(--bg-p));border:1px solid color-mix(in srgb,#10B981 30%,var(--bd))}
+.ce-t{flex:1;min-width:200px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.ce-t b{font-size:16px;color:var(--t1)}
+.ce-t span{flex-basis:100%;font-size:12px;color:var(--t4)}
+.ce-w{font-style:normal;font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:9px;background:var(--bg-i);color:var(--t4)}
+.ce-w.in{background:#DCFCE7;color:#166534}.ce-w.out{background:#FEE2E2;color:#B91C1C}
+.ce-a{display:flex;gap:6px;flex-wrap:wrap}
+.ce-stats{display:flex;gap:8px;flex-wrap:wrap}
+.ce-stats span{flex:1;min-width:90px;padding:8px 10px;border-radius:10px;background:var(--bg-i);font-size:11.5px;color:var(--t4)}
+.ce-stats b{display:block;font-size:17px;color:var(--t1)}
+.ce-sec h4{display:flex;align-items:baseline;gap:6px;margin:4px 0 6px;font-size:13px;color:var(--t2)}
+.ce-sec h4 i{font-style:normal;font-size:11.5px;color:var(--t5)}
+.ce-reqs{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}
+.ce-reqs .cc-post{max-width:none;min-width:0}
+.ce-row{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:0;border-radius:9px;background:var(--bg-i);margin-bottom:4px;text-align:left;font:inherit;cursor:pointer;color:var(--t2)}
+.ce-row:hover{background:var(--bg-hv)}
+.ce-no{flex:none;font:600 11.5px "JetBrains Mono",monospace;color:var(--t4)}
+.ce-sum{flex:1;min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ce-row i{flex:none;font-style:normal;font-size:11px;color:var(--t5)}
+.ce-st{flex:none;font-style:normal;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:9px;background:#DBEAFE;color:#1E40AF}
+.ce-st.st-closed,.ce-st.st-cancelled{background:var(--bg-p);color:var(--t5)}
+.ce-ph{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.ce-ph button{border:0;padding:0;border-radius:10px;overflow:hidden;aspect-ratio:1;background:var(--bg-i);cursor:zoom-in}
+.ce-ph img{width:100%;height:100%;object-fit:cover;display:block}
+.ce-empty{font-size:12px;color:var(--t5);padding:4px 2px}
+.ce-card.compact .ce-h{padding:10px 12px}
+.ce-card.compact .ce-reqs{grid-template-columns:1fr}
+.ce-card.compact .ce-stats span{min-width:70px}
+@media (max-width:760px){.ce-v{grid-template-columns:1fr}.ce-l{border-right:0;border-bottom:1px solid var(--bd);max-height:30vh;padding:0 0 8px}}
+
 .mm-sink{font-size:16px!important}   /* v13.310 숨은 키 입력칸 — 혹시 초점을 받아도 iOS 가 화면을 확대하지 않게 */
 
 
