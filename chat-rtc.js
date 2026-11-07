@@ -48,9 +48,9 @@ function _crtBar() {
   }
   bar.className = 'crt-bar' + (CRT.ctl ? ' ctl' : '');
   bar.innerHTML = '<span class="crt-dot"></span><b>' + (CRT.ctl ? '🖱 ' + _cxE(CRT.ctlName || '') + ' 님이 내 화면을 제어 중' : '화면 공유 중') + '</b><span>' + (CRT.ctl ? 'Ctrl+Alt+End 로 바로 끝내기' : n ? '보는 사람 ' + n + '명' : '아직 보는 사람 없음') + '</span>' +
-    (CRT.ctl ? '<button type="button" data-ctlx>제어 끝내기</button>' : '') + (typeof chatInkHostOpen === 'function' && !CRT.ctl ? '<button type="button" class="crt-ink" data-ink title="내 공유 화면 위에 레이저 · 펜 · 형광펜 · 도형으로 표시 — 보는 사람 화면에 바로">✎ 발표 펜</button>' : '') + '<button type="button" data-stop>공유 끝내기</button>';
+    (CRT.ctl ? '<button type="button" data-ctlx>제어 끝내기</button>' : '') + (typeof chatInkHostOpen === 'function' && !CRT.ctl ? '<button type="button" class="crt-ink' + (typeof CI !== 'undefined' && CI.ovl ? ' on' : '') + '" data-ink title="내 공유 화면 위에 레이저 · 펜 · 형광펜 · 도형으로 표시 — 보는 사람 화면에 바로">' + (typeof CI !== 'undefined' && CI.ovl ? '✎ 발표 펜 끄기' : '✎ 발표 펜') + '</button>' : '') + '<button type="button" data-stop>공유 끝내기</button>';
   bar.querySelector('[data-stop]').addEventListener('click', chatRtcStop);
-  var ink = bar.querySelector('[data-ink]'); if (ink) ink.addEventListener('click', chatInkHostOpen);
+  var ink = bar.querySelector('[data-ink]'); if (ink) ink.addEventListener('click', typeof chatInkHostToggle === 'function' ? chatInkHostToggle : chatInkHostOpen);
   var cx = bar.querySelector('[data-ctlx]'); if (cx) cx.addEventListener('click', function () { _crtCtlEnd(); });
 }
 function _crtOfferTo(userId) {

@@ -1,7 +1,7 @@
 {
   "name": "work-manager-desktop",
   "productName": "업무 관리자",
-  "version": "13.360.0",
+  "version": "13.369.0",
   "description": "업무 관리자 PC 앱 — 메신저 · 알림 · 트레이",
   "main": "main.js",
   "author": "Jongmin Park",
@@ -32,6 +32,7 @@
       "main.js",
       "preload.js",
       "remote-input.js",
+      "ink-preload.js",
       "offline.html",
       "build/tray*.png",
       "build/icon.png",

@@ -366,6 +366,7 @@ GET /health
 GET /icons/:name
 GET /index
 GET /index.html
+GET /ink-overlay
 GET /manifest.webmanifest
 GET /sw.js
 PATCH /api/archives/records/batch

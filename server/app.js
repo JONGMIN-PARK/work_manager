@@ -191,6 +191,11 @@ app.get('/icons/:name', function (req, res, next) {
   res.setHeader('Cache-Control', 'public, max-age=604800');
   res.sendFile(path.join(PWA_DIR, 'icons', req.params.name), function (err) { if (err) res.status(404).end(); });
 });
+// 🎤 발표 펜 투명 창 (v13.369) — PC 앱이 공유 화면 위에 띄움. 같은 출처라 chat-ink.js · style.css 를 그대로 불러 씀
+app.get('/ink-overlay', function (req, res) {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(PWA_DIR, 'ink-overlay.html'));
+});
 app.get('/favicon.ico', function (req, res) { res.redirect(301, '/icons/icon-192.png'); });
 
 // ─── API 라우트 ───

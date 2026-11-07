@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>발표 펜</title>
+<!-- 🎤 발표 펜 투명 창 (v13.369) — 공유하는 모니터 전체를 덮는 투명 창. 이 화면은 서버(/ink-overlay)에서 받고 그리기 · 도구 막대는
+     chat-ink.js · style.css 를 그대로 씀 (펜 기능 · 이 화면을 고쳐도 PC 앱을 다시 깔 필요 없음 — 같은 출처라 보안 설정에도 안 막힘). 이 창은 화면 캡처에서 빠지므로 보는 사람에겐 웹 쪽 층으로만 보임.
+     도구가 꺼져 있으면 마우스가 아래 프로그램(파워포인트 등)으로 그대로 감 — 막대 위에 올리면 잠깐 잡음 -->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent !important; }
+  body { font-family: "Pretendard", "Malgun Gothic", "Segoe UI", sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  #stage .ci-cv { position: absolute; pointer-events: none; touch-action: none; }
+  #stage .ci-cv.on { pointer-events: auto; cursor: crosshair; }
+  #stage .ci-cv[data-tool=laser], #stage .ci-cv[data-tool=spot], #stage .ci-cv[data-tool=mag] { cursor: none; }
+  #stage .ci-cv[data-tool=text] { cursor: text; }
+  #bar { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; align-items: stretch; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 14px 40px rgba(2, 6, 23, .45), 0 0 0 1px rgba(255, 255, 255, .08); background: #0F1422; max-width: calc(100vw - 24px); }
+  #bar .ci-tb { border-bottom: 0; background: transparent; padding: 6px 8px; flex-wrap: nowrap; }
+  #grip { display: flex; align-items: center; justify-content: center; width: 22px; cursor: grab; color: #64748B; background: #151B2B; user-select: none; font-size: 13px; letter-spacing: -2px; }
+  #grip:active { cursor: grabbing; }
+  #live { display: flex; align-items: center; gap: 6px; padding: 0 10px 0 12px; color: #FCA5A5; font-size: 11.5px; font-weight: 700; white-space: nowrap; background: #151B2B; }
+  #live i { width: 7px; height: 7px; border-radius: 50%; background: #EF4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, .25); }
+  #end { border: 0; background: #DC2626; color: #fff; font: inherit; font-size: 12px; font-weight: 700; padding: 0 14px; cursor: pointer; white-space: nowrap; }
+  #end:hover { background: #B91C1C; }
+  #bar.min .ci-tb { display: none; }
+  #hint { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); padding: 8px 14px; border-radius: 10px; background: rgba(15, 20, 34, .88); color: #E2E8F0; font-size: 12px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #hint.on { opacity: 1; }
+  #fail { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 12px; background: #7F1D1D; color: #fff; font-size: 13px; display: none; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="bar" hidden><span id="grip" title="끌어서 옮기기">⋮⋮</span><span id="live"><i></i>발표 중</span><div class="ci-tb"></div><button id="end" type="button" title="발표 펜 끄기 (Ctrl+Alt+X)">끝내기</button></div>
+<div id="hint"></div>
+<div id="fail">발표 펜을 불러오지 못했습니다 — 인터넷 연결을 확인하세요 <button type="button" onclick="wmInk.close()">닫기</button></div>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search), me = q.get('me') || '';
+  if (!window.wmInk) window.wmInk = { send: function () {}, onMsg: function () {}, onCmd: function () {}, mouse: function () {}, close: function () { window.close(); } };   // PC 앱 밖에서 열면 그냥 보기만
+  var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/style.css?ink=1'; document.head.appendChild(css);
+  var js = document.createElement('script'); js.src = '/chat-ink.js?ink=' + Date.now(); js.onload = init; js.onerror = function () { document.getElementById('fail').style.display = 'block'; wmInk.mouse(true, false); };
+  document.head.appendChild(js);
+  window._cxMe = function () { return me; };
+  var overBar = false, hintT = 0;
+  function hint(t) { var h = document.getElementById('hint'); h.textContent = t; h.classList.add('on'); clearTimeout(hintT); hintT = setTimeout(function () { h.classList.remove('on'); }, 2200); }
+  function mouse() { wmInk.mouse(!!(CI.tool || overBar || document.querySelector('.ci-txt')), !!CI.tool); }
+  function init() {
+    document.body.style.background = 'transparent';
+    CI.role = 'host'; CI.relay = function (m) { wmInk.send(m); };
+    var stage = document.getElementById('stage');
+    var L = _ciLayer(stage, stage, 'ovl'); L.fixed = true; _ciFit(L);
+    var bar = document.getElementById('bar'); bar.hidden = false;
+    _ciToolbar(bar.querySelector('.ci-tb'));
+    CI.onTool = function (t) { mouse(); if (t) hint('그리는 중 — Esc 또는 V 를 누르면 아래 화면을 다시 조작합니다'); };
+    bar.addEventListener('mouseenter', function () { overBar = true; mouse(); });
+    bar.addEventListener('mouseleave', function () { overBar = false; mouse(); });
+    document.getElementById('end').addEventListener('click', function () { wmInk.close(); });
+    // 막대 옮기기
+    var grip = document.getElementById('grip');
+    grip.addEventListener('pointerdown', function (e) {
+      var r = bar.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top; grip.setPointerCapture(e.pointerId);
+      function mv(ev) { bar.style.left = Math.max(0, Math.min(innerWidth - r.width, ev.clientX - sx)) + 'px'; bar.style.top = Math.max(0, Math.min(innerHeight - r.height, ev.clientY - sy)) + 'px'; bar.style.transform = 'none'; }
+      function up() { grip.removeEventListener('pointermove', mv); grip.removeEventListener('pointerup', up); }
+      grip.addEventListener('pointermove', mv); grip.addEventListener('pointerup', up);
+    });
+    wmInk.onMsg(function (m) { if (m && typeof m === 'object') _ciApply(m); });
+    wmInk.onCmd(function (c) {
+      if (c === 'pen') chatInkSetTool(CI.tool === 'pen' ? null : 'pen');
+      else if (c === 'laser') chatInkSetTool(CI.tool === 'laser' ? null : 'laser');
+      else if (c === 'spot') chatInkSetTool(CI.tool === 'spot' ? null : 'spot');
+      else if (c === 'clear') chatInkClear(true);
+      else if (c === 'none') chatInkSetTool(null);
+    });
+    document.addEventListener('focusin', mouse); document.addEventListener('focusout', function () { setTimeout(mouse, 0); });
+    wmInk.send({ t: 'ready' });
+    hint('발표 펜 — 위 막대에서 도구를 고르세요 · Ctrl+Alt+P 펜 · Ctrl+Alt+L 레이저 · Ctrl+Alt+X 끝');
+    mouse();
+  }
+})();
+</script>
+</body>
+</html>

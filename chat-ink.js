@@ -5,8 +5,11 @@
  *   좌표는 화면(영상) 안의 비율 0~1, 굵기는 화면 너비 1000 기준 → 창 크기가 달라도 같은 자리 · 같은 굵기
  *   그리는 곳: 보는 사람은 화면 공유 창(#crtWin) 위, 발표자는 "발표 펜" 창(#ciHost — 내 공유 화면 미리보기) 위
  *   chat-rtc.js 가 부르는 것: chatInkHostDc · chatInkViewDc · chatInkViewLayer · chatInkHostOpen · chatInkEnd · chatInkSetTool
+ *   2단계(v13.369): 🔦 스포트라이트 · 🔍 돋보기 · ① 번호 · 화면이 바뀌면 자동 지움 · 📸 그림까지 캡처 → 방에 사진
+ *     PC 앱이면 "발표 펜" = 공유하는 모니터 위 투명 창(desktop/ink-overlay.html — 이 파일을 서버에서 불러 씀)에 바로 그림
+ *     투명 창은 화면 캡처에서 빠지므로(윈도우 10 2004+) 보는 쪽엔 영상 + 이 층으로 한 번만 보임. 창 ↔ 웹 화면은 IPC 로 중계(CI.ovl)
  */
-var CI = { role: null, strokes: [], ptr: {}, tool: null, color: '#EF4444', size: 1, bold: false, fade: true, allow: 'host', dcs: {}, dc: null, layers: [], seq: 0, raf: 0, sendT: 0, live: null, lastP: 0 };
+var CI = { role: null, strokes: [], ptr: {}, spot: null, mag: null, auto: false, ovl: false, relay: null, tool: null, color: '#EF4444', size: 1, bold: false, fade: true, allow: 'host', dcs: {}, dc: null, layers: [], seq: 0, raf: 0, sendT: 0, live: null, lastP: 0 };
 var CI_COLORS = [['#EF4444', '빨강'], ['#F59E0B', '주황'], ['#FACC15', '노랑'], ['#22C55E', '초록'], ['#3B82F6', '파랑'], ['#FFFFFF', '흰색']];
 var CI_W = [3, 6, 11], CI_FONT = [22, 30, 42], CI_FADE_MS = 2600, CI_TRAIL_MS = 650;
 var CI_IC = {
@@ -26,7 +29,12 @@ var CI_IC = {
   trash: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
-  expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>'
+  expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
+  spot: '<circle cx="12" cy="12" r="5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  mag: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M11 8v6M8 11h6"/>',
+  num: '<circle cx="12" cy="12" r="9"/><path d="M10.5 9 12.5 7.5V16.5"/>',
+  auto: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M9 9.5l2 2 4-4"/>',
+  snap: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3.5"/>'
 };
 function _ciSvg(k) { return '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + CI_IC[k] + '</svg>'; }
 function _ciMe() { return typeof _cxMe === 'function' ? _cxMe() : null; }
@@ -63,11 +71,12 @@ function chatInkViewDc(dc) {   // 보는 사람: 발표자와 하나
   _ciToolbars();
 }
 function _ciTx(dc, m) { try { if (dc && dc.readyState === 'open') dc.send(typeof m === 'string' ? m : JSON.stringify(m)); } catch (e) {} }
-function _ciCast(m, except) {   // 발표자 → 모두 (보낸 사람 빼고)
+function _ciCast(m, except) {   // 발표자 → 모두 (보낸 사람 빼고) · PC 앱 투명 창에도
   var j = JSON.stringify(m);
   Object.keys(CI.dcs).forEach(function (u) { if (u !== except) _ciTx(CI.dcs[u], j); });
+  if (CI.ovl && except !== '__ovl' && window.wmDesktop && window.wmDesktop.inkSend) window.wmDesktop.inkSend(m);
 }
-function _ciSend(m) { if (CI.role === 'host') _ciCast(m); else if (CI.dc) _ciTx(CI.dc, m); }
+function _ciSend(m) { if (CI.relay) return CI.relay(m); if (CI.role === 'host') _ciCast(m); else if (CI.dc) _ciTx(CI.dc, m); }
 
 /* ─── 받은 것 반영 ─── */
 function _ciApply(m) {
@@ -87,6 +96,11 @@ function _ciApply(m) {
   else if (m.t === 'clr') CI.strokes = m.by ? CI.strokes.filter(function (s) { return s.by !== m.by; }) : [];
   else if (m.t === 'p') _ciPtr(m.by, m.x, m.y);
   else if (m.t === 'pe') delete CI.ptr[m.by];
+  else if (m.t === 'sp') CI.spot = { by: m.by, x: m.x, y: m.y, r: m.r || 0.13 };
+  else if (m.t === 'spe') CI.spot = null;
+  else if (m.t === 'mg') CI.mag = { by: m.by, x: m.x, y: m.y, z: m.z || 2.2 };
+  else if (m.t === 'mge') CI.mag = null;
+  else if (m.t === 'cfg') { CI.auto = !!m.auto; _ciToolbars(); }
   _ciKick();
 }
 function _ciIdx(id) { for (var i = CI.strokes.length - 1; i >= 0; i--) if (CI.strokes[i].id === id) return i; return -1; }
@@ -119,6 +133,7 @@ function _ciFit(L) {
   _ciDraw(L);
 }
 function _ciRect(L) {   // 영상 안 실제 화면(검은 띠 빼고)
+  if (L.fixed) return { x: 0, y: 0, w: L.video.offsetWidth, h: L.video.offsetHeight };
   var W = L.video.offsetWidth, H = L.video.offsetHeight, vw = L.video.videoWidth || 16, vh = L.video.videoHeight || 9;
   var k = Math.min(W / vw, H / vh), w = vw * k, h = vh * k;
   return { x: (W - w) / 2, y: (H - h) / 2, w: w, h: h };
@@ -131,7 +146,7 @@ function _ciKick() {
     CI.strokes = CI.strokes.filter(function (s) { return !(s.f && s.end && now - s.end > CI_FADE_MS); });
     Object.keys(CI.ptr).forEach(function (k) { var p = CI.ptr[k]; p.pts = p.pts.filter(function (q) { return now - q.t < CI_TRAIL_MS; }); if (now - p.at > 2500) delete CI.ptr[k]; });
     CI.layers.forEach(_ciDraw);
-    if (CI.strokes.some(function (s) { return s.f && s.end; }) || Object.keys(CI.ptr).length) more = true;
+    if (CI.strokes.some(function (s) { return s.f && s.end; }) || Object.keys(CI.ptr).length || CI.mag) more = true;
     if (more) _ciKick();
   });
 }
@@ -145,7 +160,36 @@ function _ciDraw(L) {
     if (a > 0) _ciShape(g, s, R, a);
   });
   if (CI.live && CI.live.L === L && CI.live.box) { var b = CI.live.box; g.setLineDash([5, 4]); g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1; g.strokeRect(b.x, b.y, b.w, b.h); g.setLineDash([]); }
+  if (CI.spot) _ciSpot(g, R, L);
+  if (CI.mag) _ciMag(g, R, L);
   Object.keys(CI.ptr).forEach(function (k) { _ciLaser(g, CI.ptr[k], R, k, now); });
+  g.restore();
+}
+/* 🔦 스포트라이트 — 동그라미만 밝게 */
+function _ciSpot(g, R, L) {
+  var sp = CI.spot, cx = R.x + sp.x * R.w, cy = R.y + sp.y * R.h, r = sp.r * R.w;
+  g.save();
+  g.fillStyle = 'rgba(2,6,23,.68)';
+  g.beginPath(); g.rect(R.x, R.y, R.w, R.h); g.arc(cx, cy, r, 0, Math.PI * 2, true); g.fill('evenodd');
+  var gr = g.createRadialGradient(cx, cy, r * 0.86, cx, cy, r * 1.06);
+  gr.addColorStop(0, 'rgba(2,6,23,0)'); gr.addColorStop(1, 'rgba(2,6,23,.35)');
+  g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r * 1.06, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.5; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  g.restore();
+}
+/* 🔍 돋보기 — 보는 쪽은 영상을 크게, 투명 창은 테두리만(발표자는 실제 화면을 봄) */
+function _ciMag(g, R, L) {
+  var m = CI.mag, cx = R.x + m.x * R.w, cy = R.y + m.y * R.h, r = Math.max(60, 0.12 * R.w), v = L.video;
+  g.save();
+  if (!L.fixed && v.videoWidth) {
+    var vw = v.videoWidth, vh = v.videoHeight, sr = r / m.z / R.w * vw;
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.clip();
+    try { g.drawImage(v, m.x * vw - sr, m.y * vh - sr, sr * 2, sr * 2, cx - r, cy - r, r * 2, r * 2); } catch (e) {}
+    g.restore(); g.save();
+  }
+  g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 14;
+  g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  g.shadowBlur = 0; g.strokeStyle = 'rgba(15,23,42,.55)'; g.lineWidth = 1; g.beginPath(); g.arc(cx, cy, r + 2.5, 0, Math.PI * 2); g.stroke();
   g.restore();
 }
 function _ciShape(g, s, R, alpha) {
@@ -176,6 +220,13 @@ function _ciShape(g, s, R, alpha) {
     if (s.t === 'rect') { var rr = Math.min(6 * u * 3, rw / 4, rh / 4); g.moveTo(rx + rr, ry); g.arcTo(rx + rw, ry, rx + rw, ry + rh, rr); g.arcTo(rx + rw, ry + rh, rx, ry + rh, rr); g.arcTo(rx, ry + rh, rx, ry, rr); g.arcTo(rx, ry, rx + rw, ry, rr); g.closePath(); }
     else g.ellipse(rx + rw / 2, ry + rh / 2, Math.max(1, rw / 2), Math.max(1, rh / 2), 0, 0, Math.PI * 2);
     g.stroke();
+  } else if (s.t === 'num') {
+    var nr = (CI_FONT[s.w] || 30) * u * 0.62 * (s.b ? 1.25 : 1), nx = X(s.x), ny = Y(s.y);
+    g.beginPath(); g.arc(nx, ny, nr, 0, Math.PI * 2); g.fill();
+    g.shadowBlur = 0; g.lineWidth = Math.max(1.5, nr / 7); g.strokeStyle = s.c === '#FFFFFF' ? '#0F172A' : '#fff'; g.stroke();
+    g.fillStyle = s.c === '#FFFFFF' || s.c === '#FACC15' ? '#0F172A' : '#fff';
+    g.font = '800 ' + (nr * 1.15) + 'px "Pretendard","Malgun Gothic",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(s.n), nx, ny + nr * 0.06);
   } else if (s.t === 'text' && s.s) {
     var fs = (CI_FONT[s.w] || 30) * u * (s.b ? 1.2 : 1);
     g.font = '700 ' + fs + 'px "Pretendard","Malgun Gothic",sans-serif'; g.textBaseline = 'top';
@@ -220,7 +271,14 @@ function _ciBindDraw(L) {
     e.preventDefault(); cv.setPointerCapture(e.pointerId);
     var p = pos(e), me = _ciMe();
     if (CI.tool === 'laser') { CI.live = { L: L, laser: true }; _ciPtr(me, p.x, p.y); _ciSend({ t: 'p', by: me, x: p.x, y: p.y }); _ciKick(); return; }
+    if (CI.tool === 'spot' || CI.tool === 'mag') return;
     if (CI.tool === 'text') { _ciTextAt(L, p); return; }
+    if (CI.tool === 'num') {
+      var nn = CI.strokes.reduce(function (a, x) { return x.t === 'num' ? Math.max(a, x.n || 0) : a; }, 0) + 1;
+      var ns = { id: me + ':' + (++CI.seq) + Date.now().toString(36).slice(-3), by: me, t: 'num', n: nn, c: CI.color, w: CI.size, b: CI.bold || undefined, f: CI.fade || undefined, x: r4(p.x), y: r4(p.y), done: true };
+      if (ns.f) ns.end = performance.now();
+      CI.strokes.push(ns); _ciSend({ t: 's', s: ns }); _ciKick(); return;
+    }
     var s = { id: me + ':' + (++CI.seq) + Date.now().toString(36).slice(-3), by: me, t: CI.tool, c: CI.color, w: CI.size, b: CI.bold || undefined, f: CI.fade || undefined };
     if (s.t === 'pen' || s.t === 'hl') s.p = [r4(p.x), r4(p.y)]; else { s.x = s.x2 = r4(p.x); s.y = s.y2 = r4(p.y); }
     CI.strokes.push(s); CI.live = { L: L, s: s };
@@ -228,7 +286,8 @@ function _ciBindDraw(L) {
   });
   cv.addEventListener('pointermove', function (e) {
     var lv = CI.live;
-    if (!lv || lv.L !== L) {   // 레이저 도구는 누르지 않아도 따라감
+    if (!lv || lv.L !== L) {   // 레이저 · 스포트라이트 · 돋보기는 누르지 않아도 따라감
+      if ((CI.tool === 'spot' || CI.tool === 'mag') && CI.role === 'host') { var hq = pos(e), hn = performance.now(); if (hn - CI.lastP > 30) { CI.lastP = hn; _ciHover(hq.x, hq.y); } return; }
       if (CI.tool === 'laser' && _ciCanDraw()) { var q = pos(e), n = performance.now(); if (n - CI.lastP > 30) { CI.lastP = n; _ciPtr(_ciMe(), q.x, q.y); _ciSend({ t: 'p', by: _ciMe(), x: r4(q.x), y: r4(q.y) }); _ciKick(); } }
       return;
     }
@@ -257,6 +316,17 @@ function _ciBindDraw(L) {
   }
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
   cv.addEventListener('pointerleave', function () { if (CI.tool === 'laser' && !CI.live) _ciSend({ t: 'pe', by: _ciMe() }); });
+  cv.addEventListener('wheel', function (e) {   // 스포트라이트 크기 · 돋보기 배율
+    if (CI.role !== 'host' || (CI.tool !== 'spot' && CI.tool !== 'mag')) return;
+    e.preventDefault();
+    if (CI.tool === 'spot') CI.spotR = Math.max(0.05, Math.min(0.35, (CI.spotR || 0.13) * (e.deltaY > 0 ? 0.9 : 1.1)));
+    else CI.magZ = Math.max(1.5, Math.min(4, (CI.magZ || 2.2) * (e.deltaY > 0 ? 0.9 : 1.1)));
+    var q = pos(e); _ciHover(q.x, q.y);
+  }, { passive: false });
+}
+function _ciHover(x, y) {
+  var me = _ciMe(), m = CI.tool === 'spot' ? { t: 'sp', by: me, x: r4(x), y: r4(y), r: r4(CI.spotR || 0.13) } : { t: 'mg', by: me, x: r4(x), y: r4(y), z: Math.round((CI.magZ || 2.2) * 10) / 10 };
+  _ciApply(m); _ciSend(m);
 }
 function r4(v) { return Math.round(v * 10000) / 10000; }
 function _ciSendLive() {   // 그리는 동안 40ms 마다 이어 보냄
@@ -287,7 +357,10 @@ function _ciTextAt(L, p) {
 function chatInkSetTool(t) {
   if (t && !_ciCanDraw()) return;
   if (CI.tool === 'laser' && t !== 'laser') _ciSend({ t: 'pe', by: _ciMe() });
+  if (CI.tool === 'spot' && t !== 'spot') { CI.spot = null; _ciSend({ t: 'spe', by: _ciMe() }); _ciKick(); }
+  if (CI.tool === 'mag' && t !== 'mag') { CI.mag = null; _ciSend({ t: 'mge', by: _ciMe() }); _ciKick(); }
   CI.tool = t || null;
+  if (typeof CI.onTool === 'function') CI.onTool(CI.tool);
   CI.layers.forEach(function (L) { L.cv.classList.toggle('on', !!CI.tool); L.cv.dataset.tool = CI.tool || ''; });
   _ciToolbars();
 }
@@ -302,16 +375,17 @@ function chatInkClear(all) {
 }
 function chatInkAllow(mode) {
   if (CI.role !== 'host') return;
+  if (CI.relay) { CI.allow = mode === 'all' ? 'all' : 'host'; CI.relay({ t: 'st', allow: CI.allow }); _ciToolbars(); return; }
   CI.allow = mode === 'all' ? 'all' : 'host';
   _ciCast({ t: 'st', allow: CI.allow }); _ciToolbars();
   if (typeof _cxToast === 'function') _cxToast(CI.allow === 'all' ? '모두 그릴 수 있습니다' : '발표자만 그립니다', 'info');
 }
-var CI_TOOLS = [['none', '선택 · 끄기', 'V'], ['laser', '레이저 포인터', 'L'], null, ['pen', '펜', 'P'], ['hl', '형광펜', 'H'], null, ['line', '직선', 'I'], ['arrow', '화살표', 'A'], ['rect', '사각형', 'R'], ['ellipse', '원', 'O'], ['text', '글자', 'T']];
+var CI_TOOLS = [['none', '선택 · 끄기', 'V'], ['laser', '레이저 포인터', 'L'], ['spot', '스포트라이트 — 휠로 크기', 'S', 1], ['mag', '돋보기 — 휠로 배율', 'G', 1], null, ['pen', '펜', 'P'], ['hl', '형광펜', 'H'], null, ['line', '직선', 'I'], ['arrow', '화살표', 'A'], ['rect', '사각형', 'R'], ['ellipse', '원', 'O'], ['text', '글자', 'T'], ['num', '번호 ①②③', 'N']];
 function _ciTbHtml() {
   var h = '<div class="ci-g">';
   CI_TOOLS.forEach(function (t) {
     if (!t) { h += '</div><span class="ci-sep"></span><div class="ci-g">'; return; }
-    h += '<button type="button" class="ci-b" data-ct="' + t[0] + '" title="' + t[1] + ' (' + t[2] + ')" aria-label="' + t[1] + '">' + _ciSvg(t[0]) + '</button>';
+    h += '<button type="button" class="ci-b' + (t[3] ? ' ci-host' : '') + '" data-ct="' + t[0] + '" title="' + t[1] + ' (' + t[2] + ')" aria-label="' + t[1] + '">' + _ciSvg(t[0]) + '</button>';
   });
   h += '</div><span class="ci-sep"></span><div class="ci-g ci-sw">' + CI_COLORS.map(function (c, i) { return '<button type="button" class="ci-c" data-cc="' + c[0] + '" style="--c:' + c[0] + '" title="' + c[1] + ' (' + (i + 1) + ')" aria-label="' + c[1] + '"></button>'; }).join('') + '</div>' +
     '<span class="ci-sep"></span><div class="ci-g">' + [0, 1, 2].map(function (i) { return '<button type="button" class="ci-b ci-sz" data-cs="' + i + '" title="굵기 ' + (i + 1) + '" aria-label="굵기 ' + (i + 1) + '"><i style="--d:' + (4 + i * 4) + 'px"></i></button>'; }).join('') +
@@ -320,7 +394,9 @@ function _ciTbHtml() {
     '<span class="ci-sep"></span><div class="ci-g"><button type="button" class="ci-b" data-cundo title="되돌리기 (Z)" aria-label="되돌리기">' + _ciSvg('undo') + '</button>' +
     '<button type="button" class="ci-b" data-cmine title="내 잉크 지우기 (E)" aria-label="내 잉크 지우기">' + _ciSvg('erase') + '</button>' +
     '<button type="button" class="ci-b ci-host" data-call title="모두 지우기 (C)" aria-label="모두 지우기">' + _ciSvg('trash') + '</button>' +
-    '<button type="button" class="ci-b ci-host ci-allow" data-callow title="보는 사람도 그리기 — 끄면 발표자만" aria-label="보는 사람도 그리기">' + _ciSvg('users') + '</button></div>';
+    '<button type="button" class="ci-b ci-host ci-tg" data-cauto title="화면이 바뀌면 자동으로 지우기 — 슬라이드를 넘기면 남는 잉크를 지움" aria-label="화면이 바뀌면 자동으로 지우기">' + _ciSvg('auto') + '</button>' +
+    '<button type="button" class="ci-b ci-host ci-allow" data-callow title="보는 사람도 그리기 — 끄면 발표자만" aria-label="보는 사람도 그리기">' + _ciSvg('users') + '</button></div>' +
+    '<span class="ci-sep ci-always"></span><div class="ci-g ci-always"><button type="button" class="ci-b" data-csnap title="그림까지 캡처 → 이 방에 사진으로 (나중에 계속 표시 가능)" aria-label="그림까지 캡처">' + _ciSvg('snap') + '</button></div>';
   return h;
 }
 function _ciToolbar(el) {
@@ -337,6 +413,8 @@ function _ciToolbar(el) {
     else if ('cmine' in b.dataset) chatInkClear(false);
     else if ('call' in b.dataset) chatInkClear(true);
     else if ('callow' in b.dataset) chatInkAllow(CI.allow === 'all' ? 'host' : 'all');
+    else if ('cauto' in b.dataset) chatInkAuto(!CI.auto);
+    else if ('csnap' in b.dataset) chatInkSnap();
   });
   _ciSync(el);
 }
@@ -347,7 +425,7 @@ function _ciSync(el) {
   el.querySelectorAll('[data-cc]').forEach(function (b) { b.classList.toggle('on', b.dataset.cc === CI.color); b.disabled = !can; });
   el.querySelectorAll('[data-cs]').forEach(function (b) { b.classList.toggle('on', +b.dataset.cs === CI.size); b.disabled = !can; });
   var q = function (s) { return el.querySelector(s); };
-  q('[data-cbold]').classList.toggle('on', CI.bold); q('[data-cfade]').classList.toggle('on', CI.fade); q('[data-callow]').classList.toggle('on', CI.allow === 'all');
+  q('[data-cbold]').classList.toggle('on', CI.bold); q('[data-cfade]').classList.toggle('on', CI.fade); q('[data-callow]').classList.toggle('on', CI.allow === 'all'); q('[data-cauto]').classList.toggle('on', !!CI.auto);
   ['[data-cbold]', '[data-cfade]', '[data-cundo]', '[data-cmine]'].forEach(function (s) { q(s).disabled = !can; });
   var st = el.parentNode && el.parentNode.querySelector('.ci-state');
   if (st) st.textContent = CI.role === 'host' ? (CI.allow === 'all' ? '모두 그리기' : '발표자만 그리기') : (can ? '그리기 허용됨' : '발표자만 그립니다');
@@ -366,6 +444,12 @@ function chatInkViewLayer(win) {
 function chatInkHostOpen() {
   if (typeof CRT === 'undefined' || !CRT.share) return;
   CI.role = 'host';
+  if (window.wmDesktop && window.wmDesktop.inkOverlay && !CI.noOvl) {   // PC 앱 — 공유 화면 위에 바로
+    _ciOvlBind();
+    CI.ovl = true; window.wmDesktop.inkOverlay({ me: _ciMe() });
+    if (typeof _crtBar === 'function') _crtBar();
+    return;
+  }
   var el = document.getElementById('ciHost');
   if (el) { el.hidden = false; return; }
   el = document.createElement('div'); el.id = 'ciHost'; el.className = 'crt-win big ci-host-win';
@@ -394,9 +478,12 @@ function _ciDragHead(el) {
 /* 끝 — 공유를 마치거나 보기를 닫으면 */
 function chatInkEnd(role) {
   if (role && CI.role && role !== CI.role) return;
+  if (CI.ovl && window.wmDesktop && window.wmDesktop.inkClose) window.wmDesktop.inkClose();
+  chatInkAuto(false, true);
+  if (CI.hv) { CI.hv.srcObject = null; CI.hv = null; }
   CI.layers.forEach(function (L) { if (L.ro) L.ro.disconnect(); if (L.cv.parentNode) L.cv.remove(); });
   var h = document.getElementById('ciHost'); if (h) { if (document.fullscreenElement === h) document.exitFullscreen().catch(function () {}); h.remove(); }
-  CI.layers = []; CI.strokes = []; CI.ptr = {}; CI.dcs = {}; CI.dc = null; CI.tool = null; CI.live = null; CI.role = null; CI.allow = 'host';
+  CI.layers = []; CI.strokes = []; CI.ptr = {}; CI.spot = null; CI.mag = null; CI.dcs = {}; CI.dc = null; CI.tool = null; CI.live = null; CI.role = null; CI.allow = 'host'; CI.ovl = false;
 }
 
 /* 단축키 — 발표 펜 창이나 공유 창이 열려 있고, 글 입력 중이 아닐 때 */
@@ -404,7 +491,8 @@ document.addEventListener('keydown', function (e) {
   if (!CI.layers.some(function (L) { return L.host.isConnected && !L.host.hidden; }) || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
   var t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
   if (!_ciCanDraw()) return;
-  var k = e.key.toLowerCase(), map = { v: null, l: 'laser', p: 'pen', h: 'hl', i: 'line', a: 'arrow', r: 'rect', o: 'ellipse', t: 'text' };
+  var k = e.key.toLowerCase(), map = { v: null, l: 'laser', p: 'pen', h: 'hl', i: 'line', a: 'arrow', r: 'rect', o: 'ellipse', t: 'text', n: 'num' };
+  if (CI.role === 'host') { map.s = 'spot'; map.g = 'mag'; }
   if (k in map) { e.preventDefault(); chatInkSetTool(map[k]); }
   else if (k === 'b') { CI.bold = !CI.bold; _ciToolbars(); }
   else if (k === 'f') { CI.fade = !CI.fade; _ciToolbars(); }
@@ -414,3 +502,76 @@ document.addEventListener('keydown', function (e) {
   else if (/^[1-6]$/.test(k)) { CI.color = CI_COLORS[+k - 1][0]; if (!CI.tool || CI.tool === 'laser') chatInkSetTool('pen'); _ciToolbars(); }
   else if (k === 'escape' && CI.tool) { e.preventDefault(); chatInkSetTool(null); }
 });
+
+function chatInkHostToggle() { if (CI.ovl && window.wmDesktop && window.wmDesktop.inkClose) window.wmDesktop.inkClose(); else chatInkHostOpen(); }
+/* ─── PC 앱 투명 창 ↔ 웹 화면 (웹 화면 쪽) ─── */
+function _ciOvlBind() {
+  if (CI.ovlBound || !window.wmDesktop || !window.wmDesktop.onInk) return;
+  CI.ovlBound = true;
+  window.wmDesktop.onInk(function (m) {
+    if (!m || typeof m !== 'object') return;
+    if (m.t === 'ready') { window.wmDesktop.inkSend({ t: 'sync', strokes: CI.strokes.filter(function (x) { return !x.f && x.done; }), allow: CI.allow }); window.wmDesktop.inkSend({ t: 'cfg', auto: CI.auto }); return; }
+    if (m.t === 'ovl-closed') { CI.ovl = false; CI.spot = null; CI.mag = null; _ciCast({ t: 'spe', by: _ciMe() }); _ciCast({ t: 'mge', by: _ciMe() }); if (typeof _crtBar === 'function') _crtBar(); return; }
+    if (m.t === 'st') { chatInkAllow(m.allow); return; }
+    if (m.t === 'auto') { chatInkAuto(!!m.on); return; }
+    if (m.t === 'snap') { chatInkSnap(); return; }
+    if (CI.role !== 'host') return;
+    if (['s', 'u', 'clr', 'p', 'pe', 'sp', 'spe', 'mg', 'mge'].indexOf(m.t) < 0) return;
+    _ciApply(m); _ciCast(m, '__ovl');
+  });
+}
+
+/* ─── 화면이 바뀌면 자동으로 지우기 (발표자 웹 화면이 공유 영상을 작게 떠서 비교) ─── */
+function _ciHostVideo() {
+  if (typeof CRT === 'undefined' || !CRT.share) return null;
+  var hv = document.querySelector('#ciHost video');
+  if (hv && hv.srcObject === CRT.share.stream) return hv;
+  if (!CI.hv || CI.hv.srcObject !== CRT.share.stream) { CI.hv = document.createElement('video'); CI.hv.muted = true; CI.hv.playsInline = true; CI.hv.srcObject = CRT.share.stream; CI.hv.play().catch(function () {}); }
+  return CI.hv;
+}
+function chatInkAuto(on, quiet) {
+  if (CI.relay) { CI.auto = !!on; CI.relay({ t: 'auto', on: !!on }); _ciToolbars(); return; }
+  CI.auto = !!on && CI.role === 'host';
+  clearInterval(CI.autoT); CI.autoT = null; CI.autoPrev = null;
+  if (CI.auto) {
+    var cv = document.createElement('canvas'); cv.width = 48; cv.height = 27;
+    var g = cv.getContext('2d', { willReadFrequently: true });
+    CI.autoT = setInterval(function () {
+      var v = _ciHostVideo(); if (!v || !v.videoWidth) return;
+      try { g.drawImage(v, 0, 0, 48, 27); } catch (e) { return; }
+      var d = g.getImageData(0, 0, 48, 27).data, cur = new Uint8Array(48 * 27);
+      for (var i = 0, j = 0; i < d.length; i += 4, j++) cur[j] = (d[i] * 3 + d[i + 1] * 6 + d[i + 2]) / 10;
+      var prev = CI.autoPrev; CI.autoPrev = cur;
+      if (!prev) return;
+      var ch = 0; for (var k = 0; k < cur.length; k++) if (Math.abs(cur[k] - prev[k]) > 28) ch++;
+      if (ch / cur.length > 0.22 && CI.strokes.some(function (s) { return !s.f; })) { chatInkClear(true); if (typeof _cxToast === 'function') _cxToast('화면이 바뀌어 잉크를 지웠습니다', 'info'); }
+    }, 700);
+  }
+  if (CI.ovl && window.wmDesktop && window.wmDesktop.inkSend) window.wmDesktop.inkSend({ t: 'cfg', auto: CI.auto });
+  _ciToolbars();
+  if (!quiet && typeof _cxToast === 'function') _cxToast(CI.auto ? '화면이 바뀌면 잉크를 자동으로 지웁니다' : '자동 지우기를 껐습니다', 'info');
+}
+
+/* ─── 📸 그림까지 캡처 → 이 방에 사진 ─── */
+function chatInkSnap() {
+  if (CI.relay) { CI.relay({ t: 'snap' }); return; }
+  var v = CI.role === 'view' ? document.querySelector('#crtWin video') : _ciHostVideo();
+  var room = typeof CRT !== 'undefined' ? (CI.role === 'view' ? CRT.watch && CRT.watch.roomId : CRT.share && CRT.share.roomId) : null;
+  if (!v || !room) return;
+  function go() {
+    var vw = v.videoWidth, vh = v.videoHeight; if (!vw) return;
+    var cv = document.createElement('canvas'); cv.width = vw; cv.height = vh;
+    var g = cv.getContext('2d'); g.drawImage(v, 0, 0, vw, vh);
+    var R = { x: 0, y: 0, w: vw, h: vh };
+    CI.strokes.forEach(function (s) { _ciShape(g, s, R, 1); });
+    if (CI.spot) _ciSpot(g, R, { fixed: true, video: { offsetWidth: vw, offsetHeight: vh } });
+    cv.toBlob(function (b) {
+      if (!b) return;
+      var d = new Date(), nm = '발표 캡처 ' + ('0' + d.getHours()).slice(-2) + ('0' + d.getMinutes()).slice(-2) + ('0' + d.getSeconds()).slice(-2) + '.png';
+      fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/rooms/' + encodeURIComponent(room) + '/files?name=' + encodeURIComponent(nm), { method: 'POST', headers: { Authorization: 'Bearer ' + (typeof _accessToken !== 'undefined' ? _accessToken : ''), 'Content-Type': 'image/png' }, body: b })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); if (typeof _cxToast === 'function') _cxToast('📸 그림까지 캡처해 방에 올렸습니다 — 사진 칠판에서 계속 표시할 수 있어요', 'success'); })
+        .catch(function () { if (typeof _cxToast === 'function') _cxToast('캡처를 올리지 못했습니다', 'error'); });
+    }, 'image/png');
+  }
+  if (v.videoWidth) go(); else v.addEventListener('loadeddata', go, { once: true });
+}

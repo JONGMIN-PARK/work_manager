@@ -4749,7 +4749,9 @@ html.wm-focus-big:has(#mMessages:not(.hidden)) #mMessages{--cx-h:calc(100dvh - 7
 .ci-tb.is-host .ci-host{display:inline-flex!important}
 .ci-state{margin-left:auto;padding:0 6px;font-size:11px;color:#94A3B8;white-space:nowrap}
 .ci-tb.off:not(.is-host){padding:4px 10px}
-.ci-tb.off:not(.is-host) .ci-g,.ci-tb.off:not(.is-host) .ci-sep{display:none}
+.ci-tb.off:not(.is-host) .ci-g:not(.ci-always),.ci-tb.off:not(.is-host) .ci-sep{display:none}
+.ci-tb.off:not(.is-host) .ci-always{order:2}
+.ci-tb .ci-g.ci-always .ci-b{color:#E2E8F0}
 .ci-tb.off:not(.is-host) .ci-state{margin-left:0}
 .ci-txt{position:absolute;z-index:4;min-width:140px;padding:2px 4px;border:1px dashed rgba(255,255,255,.7);border-radius:4px;background:rgba(15,20,34,.55);font-weight:700;line-height:1.25;resize:none;outline:none;font-family:"Pretendard","Malgun Gothic",sans-serif}
 .ci-host-win{right:auto;left:50%;top:64px;bottom:auto;transform:none;margin-left:max(-550px,calc(-50vw + 16px))}

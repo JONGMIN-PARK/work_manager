@@ -219,6 +219,49 @@ ipcMain.handle('wm:capture', async () => {
   }
 });
 
+/* ─── 🎤 발표 펜 투명 창 (v13.369) — 공유하는 모니터 전체 · 항상 위 · 화면 캡처에서 빠짐 · 도구가 꺼져 있으면 마우스는 아래로 ─── */
+let inkWin = null;
+const INK_KEYS = { 'Control+Alt+P': 'pen', 'Control+Alt+L': 'laser', 'Control+Alt+S': 'spot', 'Control+Alt+C': 'clear' };
+function inkOpen(me) {
+  if (inkWin && !inkWin.isDestroyed()) { inkWin.showInactive(); return; }
+  const { screen } = require('electron');
+  const d = screen.getAllDisplays().find((x) => String(x.id) === String(sharedDisplayId)) || screen.getPrimaryDisplay();
+  inkWin = new BrowserWindow({
+    x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
+    transparent: true, frame: false, resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
+    skipTaskbar: true, hasShadow: false, alwaysOnTop: true, focusable: true, show: false, backgroundColor: '#00000000', title: '발표 펜',
+    webPreferences: { preload: path.join(__dirname, 'ink-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false }
+  });
+  inkWin.setAlwaysOnTop(true, 'screen-saver');
+  inkWin.setContentProtection(true);   // 화면 공유 · 캡처에 안 찍힘 (보는 쪽은 웹 층으로 봄)
+  inkWin.setIgnoreMouseEvents(true, { forward: true });
+  inkWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  inkWin.loadURL(SERVER() + '/ink-overlay?me=' + encodeURIComponent(me || '')).catch(() => {});   // 화면은 서버에서 — 고쳐도 다시 안 깔아도 됨
+  // 윈도우는 처음 크기를 작업 영역(작업 표시줄 뺀 곳)으로 줄임 → 보여 준 뒤 화면 전체로 다시 (공유 영상과 좌표가 맞게)
+  const fit = () => { if (inkWin && !inkWin.isDestroyed()) { inkWin.setBounds(d.bounds); if (inkWin.getBounds().height < d.bounds.height) inkWin.setSize(d.bounds.width, d.bounds.height); } };
+  inkWin.once('ready-to-show', () => { if (inkWin) { inkWin.showInactive(); fit(); setTimeout(fit, 300); } });
+  inkWin.on('closed', () => {
+    inkWin = null;
+    Object.keys(INK_KEYS).concat(['Control+Alt+X']).forEach((k) => { try { globalShortcut.unregister(k); } catch (_) {} });
+    if (win && !win.isDestroyed()) win.webContents.send('wm:ink', { t: 'ovl-closed' });
+  });
+  Object.keys(INK_KEYS).forEach((k) => { try { globalShortcut.register(k, () => { if (inkWin) inkWin.webContents.send('wm:ink-cmd', INK_KEYS[k]); }); } catch (_) {} });
+  try { globalShortcut.register('Control+Alt+X', inkClose); } catch (_) {}
+}
+function inkClose() { if (inkWin && !inkWin.isDestroyed()) inkWin.close(); }
+ipcMain.on('wm:ink-open', (e, o) => { if (win && e.sender === win.webContents) inkOpen(o && o.me); });
+ipcMain.on('wm:ink-close', (e) => { if ((win && e.sender === win.webContents) || (inkWin && e.sender === inkWin.webContents)) inkClose(); });
+ipcMain.on('wm:ink', (e, m) => {   // 웹 화면 ↔ 투명 창 중계 (잉크 메시지만)
+  if (!m || typeof m !== 'object' || typeof m.t !== 'string') return;
+  if (win && e.sender === win.webContents) { if (inkWin && !inkWin.isDestroyed()) inkWin.webContents.send('wm:ink', m); }
+  else if (inkWin && e.sender === inkWin.webContents) { if (win && !win.isDestroyed()) win.webContents.send('wm:ink', m); }
+});
+ipcMain.on('wm:ink-mouse', (e, o) => {   // 그리는 중 · 막대 위 = 잡음, 아니면 아래 프로그램으로
+  if (!inkWin || e.sender !== inkWin.webContents) return;
+  inkWin.setIgnoreMouseEvents(!(o && o.on), { forward: true });
+  if (o && o.focus) inkWin.focus();
+});
+
 /* ─── 시작 ─── */
 app.whenReady().then(() => {
   const ses = session.fromPartition('persist:wm');
@@ -246,6 +289,6 @@ app.whenReady().then(() => {
   }
 });
 
-app.on('before-quit', () => { quitting = true; ctlStop(false); });
+app.on('before-quit', () => { quitting = true; ctlStop(false); inkClose(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', () => { /* 트레이에 남음 */ });

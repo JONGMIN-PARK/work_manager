@@ -27,5 +27,10 @@ contextBridge.exposeInMainWorld('wmDesktop', {
   googleLogin: () => ipcRenderer.send('wm:google'),
   remoteControl: (on) => ipcRenderer.send('wm:ctl', !!on),
   remoteInput: (ev) => { if (ev && typeof ev === 'object') ipcRenderer.send('wm:input', { t: String(ev.t || ''), x: +ev.x || 0, y: +ev.y || 0, b: ev.b | 0, dy: +ev.dy || 0, k: String(ev.k || '').slice(0, 30), s: String(ev.s || '').slice(0, 500) }); },
-  onCtlStop: (cb) => { ipcRenderer.on('wm:ctl-stop', () => { try { cb(); } catch (_) {} }); }
+  onCtlStop: (cb) => { ipcRenderer.on('wm:ctl-stop', () => { try { cb(); } catch (_) {} }); },
+  // 🎤 발표 펜 투명 창 (v13.369)
+  inkOverlay: (o) => ipcRenderer.send('wm:ink-open', { me: String((o && o.me) || '').slice(0, 80) }),
+  inkClose: () => ipcRenderer.send('wm:ink-close'),
+  inkSend: (m) => { if (m && typeof m === 'object') ipcRenderer.send('wm:ink', m); },
+  onInk: (cb) => { ipcRenderer.on('wm:ink', (_e, m) => { try { cb(m); } catch (_) {} }); }
 });
