@@ -4704,6 +4704,26 @@ html.wm-focus-big:has(#mMessages:not(.hidden)) #mMessages{--cx-h:calc(100dvh - 7
 .cp-fr mark{background:#FDE68A;color:#78350F;border-radius:3px;padding:0 1px}
 @media (max-width:760px){.cp-find select{max-width:100px}.cp-fr{left:6px;right:6px}}
 
+/* ═══ v13.367 💬 메신저 스크롤바 — 테마 강조색 · 둥근 손잡이 · 평소 옅게 / 올리면 진하게 · 대화 위 끝 흐리게 ═══ */
+.cx :is(.cx-rooms,.cx-msgs,.cx-as-b,.cx-plist,.cx-code pre),.cc-lib :is(.cc-grid,.cc-rlist,.cc-lib-b),.ce-l,.ce-r,.cp-fr,.cp-qs,.cx-plist{
+  --cxs-t:color-mix(in srgb,var(--ac) 22%,transparent);--cxs-h:color-mix(in srgb,var(--ac) 55%,transparent);--cxs-a:var(--ac);
+  scrollbar-width:auto;scrollbar-color:auto}
+@supports not selector(::-webkit-scrollbar){
+  .cx :is(.cx-rooms,.cx-msgs,.cx-as-b,.cx-plist,.cx-code pre),.cc-lib :is(.cc-grid,.cc-rlist,.cc-lib-b),.ce-l,.ce-r,.cp-fr,.cp-qs,.cx-plist{scrollbar-width:thin;scrollbar-color:var(--cxs-t) transparent}
+  .cx :is(.cx-rooms,.cx-msgs,.cx-as-b):hover{scrollbar-color:var(--cxs-h) transparent}
+}
+.cx :is(.cx-rooms,.cx-msgs,.cx-as-b,.cx-plist,.cx-code pre)::-webkit-scrollbar,.cc-lib :is(.cc-grid,.cc-rlist,.cc-lib-b)::-webkit-scrollbar,.ce-l::-webkit-scrollbar,.ce-r::-webkit-scrollbar,.cp-fr::-webkit-scrollbar,.cp-qs::-webkit-scrollbar,.cx-plist::-webkit-scrollbar{width:10px;height:10px}
+.cx :is(.cx-rooms,.cx-msgs,.cx-as-b,.cx-plist,.cx-code pre)::-webkit-scrollbar-track,.cc-lib :is(.cc-grid,.cc-rlist,.cc-lib-b)::-webkit-scrollbar-track,.ce-l::-webkit-scrollbar-track,.ce-r::-webkit-scrollbar-track,.cp-fr::-webkit-scrollbar-track,.cp-qs::-webkit-scrollbar-track,.cx-plist::-webkit-scrollbar-track{background:transparent;margin:6px 0}
+.cx :is(.cx-rooms,.cx-msgs,.cx-as-b,.cx-plist,.cx-code pre)::-webkit-scrollbar-thumb,.cc-lib :is(.cc-grid,.cc-rlist,.cc-lib-b)::-webkit-scrollbar-thumb,.ce-l::-webkit-scrollbar-thumb,.ce-r::-webkit-scrollbar-thumb,.cp-fr::-webkit-scrollbar-thumb,.cp-qs::-webkit-scrollbar-thumb,.cx-plist::-webkit-scrollbar-thumb{
+  background:var(--cxs-t);border:3px solid transparent;background-clip:padding-box;border-radius:10px;min-height:36px;transition:background-color .2s}
+.cx :is(.cx-rooms,.cx-msgs,.cx-as-b,.cx-plist,.cx-code pre):hover::-webkit-scrollbar-thumb,.cc-lib :is(.cc-grid,.cc-rlist,.cc-lib-b):hover::-webkit-scrollbar-thumb,.ce-l:hover::-webkit-scrollbar-thumb,.ce-r:hover::-webkit-scrollbar-thumb,.cp-fr:hover::-webkit-scrollbar-thumb,.cp-qs:hover::-webkit-scrollbar-thumb,.cx-plist:hover::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 70%,#fff),var(--cxs-h)) padding-box;border-width:2px}
+.cx :is(.cx-rooms,.cx-msgs,.cx-as-b,.cx-plist,.cx-code pre)::-webkit-scrollbar-thumb:hover,.cc-lib :is(.cc-grid,.cc-rlist,.cc-lib-b)::-webkit-scrollbar-thumb:hover,.ce-l::-webkit-scrollbar-thumb:hover,.ce-r::-webkit-scrollbar-thumb:hover,.cp-fr::-webkit-scrollbar-thumb:hover,.cp-qs::-webkit-scrollbar-thumb:hover,.cx-plist::-webkit-scrollbar-thumb:hover{background:var(--cxs-a) padding-box;border-width:2px}
+.cx :is(.cx-rooms,.cx-msgs,.cx-as-b,.cx-plist,.cx-code pre)::-webkit-scrollbar-thumb:active,.cp-fr::-webkit-scrollbar-thumb:active{background:color-mix(in srgb,var(--ac) 85%,#000) padding-box}
+.cx :is(.cx-rooms,.cx-msgs,.cx-as-b,.cx-plist,.cx-code pre)::-webkit-scrollbar-corner{background:transparent}
+.cx .cx-code pre::-webkit-scrollbar{height:8px}
+.cx .cx-msgs{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 18px);mask-image:linear-gradient(180deg,transparent 0,#000 18px)}
+
 .mm-sink{font-size:16px!important}   /* v13.310 숨은 키 입력칸 — 혹시 초점을 받아도 iOS 가 화면을 확대하지 않게 */
 
 
