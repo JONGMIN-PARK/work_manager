@@ -2,6 +2,7 @@
  * 💬 사내 메신저 (v13.315) — 방 · 권한 · 읽음 · 멘션 · 답글 · 공감 · 공지 · 전달 · 파일 · 카드 버튼 · 명령 · 프로젝트 현황 · 찾기 · 실시간
  */
 process.env.CHAT_FALLBACK_MS = '200';
+process.env.CHAT_READ_MS = '100';
 var h = require('./helpers');
 var db = h.db;
 var T = h.TEST_TENANT_ID;
@@ -602,4 +603,49 @@ test('🏭 장비 단위 연결 (v13.365) — 마스터 · 이름 · 요청 · A
   var r2 = (await api('post', '/api/chat/equipment/room', c).send({ key: 'm:' + eid })).body.data;
   expect(r2).toMatchObject({ id: r1.id, created: false });
   expect((await api('get', '/api/chat/equipment/card?key=' + encodeURIComponent('m:' + eid), c)).body.data.room).toMatchObject({ id: r1.id, mine: true });
+});
+
+test('⚡ 100명+ 대비 (v13.366) — 읽음 모아 보내기 · 같은 읽음 무시 · 입력 중 줄이기 · 내보낸 사람 바로 끊김 · 방 안 찾기 · 시스템 메시지 안 셈', async function () {
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '규모방', userIds: [b.user.id, c.user.id] })).body.data.id;
+  var got = { a: [], c: [] };
+  function fake(k) { return { write: function (s) { got[k].push(s); } }; }
+  var offA = hub.add(a.user.id, fake('a')), offC = hub.add(c.user.id, fake('c'));
+  var m1 = (await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '규모 확인 메시지' })).body.data;
+  got.a = [];
+  // b · c 가 읽음 → 1번만 'reads' (둘 다 담김)
+  await api('post', '/api/chat/rooms/' + g + '/read', b).send({ lastId: m1.id });
+  await api('post', '/api/chat/rooms/' + g + '/read', c).send({ lastId: m1.id });
+  await new Promise(function (r) { setTimeout(r, 250); });
+  var reads = got.a.filter(function (s) { return /event: reads/.test(s); });
+  expect(reads.length).toBe(1);
+  var pl = JSON.parse(reads[0].split('data: ')[1]);
+  expect(pl.list.map(function (z) { return z.userId; }).sort()).toEqual([b.user.id, c.user.id].sort());
+  // 같은 위치 다시 읽음 → 알림 없음
+  got.a = [];
+  await api('post', '/api/chat/rooms/' + g + '/read', b).send({ lastId: m1.id });
+  await new Promise(function (r) { setTimeout(r, 250); });
+  expect(got.a.some(function (s) { return /event: reads?\n/.test(s) || /event: reads/.test(s); })).toBe(false);
+  // 입력 중 — 곧바로 두 번이면 한 번만
+  got.a = [];
+  await api('post', '/api/chat/rooms/' + g + '/typing', b).send({});
+  await api('post', '/api/chat/rooms/' + g + '/typing', b).send({});
+  expect(got.a.filter(function (s) { return /event: typing/.test(s); }).length).toBe(1);
+  // 내보내면 바로 안 받음 (멤버 목록 담아 둔 것 지움)
+  await api('delete', '/api/chat/rooms/' + g + '/members/' + c.user.id, a);
+  got.c = [];
+  await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '내보낸 뒤 메시지' });
+  expect(got.c.some(function (s) { return /내보낸 뒤 메시지/.test(s); })).toBe(false);
+  offA(); offC();
+  // 방 안 찾기 — 방 · 보낸 사람 · 파일만
+  await api('post', '/api/chat/rooms/' + g + '/messages', b).send({ body: '규모 확인 답장' });
+  var all = (await api('get', '/api/chat/search?q=' + encodeURIComponent('규모 확인'), a)).body.data;
+  expect(all.length).toBeGreaterThanOrEqual(2);
+  var inRoom = (await api('get', '/api/chat/search?q=' + encodeURIComponent('규모 확인') + '&room=' + g + '&from=' + b.user.id, a)).body.data;
+  expect(inRoom.map(function (m) { return m.body; })).toEqual(['규모 확인 답장']);
+  expect((await api('get', '/api/chat/search?q=' + encodeURIComponent('규모 확인') + '&room=' + g + '&has=file', a)).body.data.length).toBe(0);
+  // 방 목록 안 읽음 — 시스템 메시지(초대 · 내보냄)는 안 셈
+  await api('post', '/api/chat/rooms/' + g + '/read', b).send({ lastId: 99999999 });
+  await api('post', '/api/chat/rooms/' + g + '/members', a).send({ userIds: [x.user.id] });
+  var rb = (await api('get', '/api/chat/rooms', b)).body.data.filter(function (r) { return r.id === g; })[0];
+  expect(rb.unread).toBe(0);
 });

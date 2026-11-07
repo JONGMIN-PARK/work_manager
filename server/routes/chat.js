@@ -37,7 +37,7 @@ async function roomFor(req, res, roomId) {
   if (!room) { res.status(404).json({ error: 'NOT_FOUND', message: '대화방이 없습니다.' }); return null; }
   var isMember = room.last_read_id != null && !room.left_at;
   if (!isMember && room.kind === 'project' && room.project_id && await pa.canReadById(req, room.project_id)) {
-    await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id) VALUES ($1,$2,$3) ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL', [room.id, me(req), req.tenant.id]);
+    await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id) VALUES ($1,$2,$3) ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL', [room.id, me(req), req.tenant.id]); _midDrop(room.id);
     return membership(req.tenant.id, roomId, me(req));
   }
   if (!isMember) { res.status(403).json({ error: 'FORBIDDEN', message: '이 대화방의 멤버가 아닙니다.' }); return null; }
@@ -66,10 +66,18 @@ function focusPass(f, uid, msg, mentions) {
   if (!f.allow) return false;
   return (mentions || []).indexOf(uid) >= 0 || !!(msg && msg.post && msg.post.urgency === 'urgent' && msg.post.assignee === uid);
 }
+/* v13.366 100명+ — 방 멤버 목록은 메시지 · 읽음 · 입력 중마다 쓰므로 잠깐 담아 둠(멤버가 바뀌면 바로 지움) */
+var MID = new Map(), MID_TTL = 15000;
 async function memberIds(roomId) {
+  var c = MID.get(roomId);
+  if (c && c.exp > Date.now()) return c.ids.slice();
   var r = await db.query('SELECT user_id FROM chat_members WHERE room_id = $1 AND left_at IS NULL', [roomId]);
-  return r.rows.map(function (x) { return x.user_id; });
+  var ids = r.rows.map(function (x) { return x.user_id; });
+  MID.set(roomId, { ids: ids, exp: Date.now() + MID_TTL });
+  if (MID.size > 5000) MID.delete(MID.keys().next().value);
+  return ids.slice();
 }
+function _midDrop(roomId) { MID.delete(roomId); }
 async function userNames(tenantId, ids) {
   if (!ids.length) return {};
   var r = await db.query('SELECT id, COALESCE(display_name, name) AS n FROM users WHERE id = ANY($1) AND tenant_id = $2', [ids, tenantId]);
@@ -81,9 +89,9 @@ var MSG_SQL = 'SELECT m.id, m.room_id, m.user_id, m.kind, m.body, m.cards, m.men
   'COALESCE(u.display_name, u.name) AS user_name, f.id AS f_id, f.name AS f_name, f.mime AS f_mime, f.size AS f_size, ' +
   "CASE WHEN m.post IS NULL THEN NULL ELSE (SELECT COALESCE(ua.display_name, ua.name) FROM users ua WHERE ua.id::text = m.post->>'assignee') END AS asg_name, " +
   "(f.annot->>'rot')::int AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, " +
-  '(SELECT COUNT(*)::int FROM chat_messages t WHERE t.reply_to = m.id AND t.deleted_at IS NULL) AS replies, ' +
-  '(SELECT MAX(t.created_at) FROM chat_messages t WHERE t.reply_to = m.id AND t.deleted_at IS NULL) AS last_reply_at ' +
-  'FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN chat_files f ON f.id = m.file_id ';
+  'rp.replies, rp.last_reply_at ' +
+  'FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN chat_files f ON f.id = m.file_id ' +
+  'LEFT JOIN LATERAL (SELECT COUNT(*)::int AS replies, MAX(t.created_at) AS last_reply_at FROM chat_messages t WHERE t.reply_to = m.id AND t.deleted_at IS NULL) rp ON TRUE ';
 function shape(r) {
   return { id: +r.id, roomId: r.room_id, userId: r.user_id, userName: r.user_name || (r.kind === 'ai' ? 'AI' : ''), kind: r.kind,
     body: r.deleted_at ? '' : r.body, deleted: !!r.deleted_at, edited: !!r.edited_at, cards: r.deleted_at ? null : r.cards, mentions: r.mentions || [],
@@ -131,10 +139,12 @@ async function postMessage(ctx, room, m) {
     'INSERT INTO chat_messages (room_id, tenant_id, user_id, kind, body, cards, file_id, mentions, reply_to, legacy_id, post) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
     [room.id, ctx.tenantId, m.userId || null, m.kind || 'text', body, m.cards ? JSON.stringify(m.cards) : null, m.fileId || null, JSON.stringify(mentions), m.replyTo || null, m.legacyId || null, m.post ? JSON.stringify(m.post) : null]);
   var id = +ins.rows[0].id;
-  await db.query('UPDATE chat_rooms SET last_msg_at = now() WHERE id = $1', [room.id]);
-  if (m.userId) await db.query('UPDATE chat_members SET last_read_id = GREATEST(last_read_id, $3) WHERE room_id = $1 AND user_id = $2', [room.id, m.userId, id]);
-  var msg = await loadMsg(id);
-  var ids = await memberIds(room.id);
+  var par = await Promise.all([
+    db.query('UPDATE chat_rooms SET last_msg_at = now() WHERE id = $1', [room.id]),
+    m.userId ? db.query('UPDATE chat_members SET last_read_id = GREATEST(last_read_id, $3) WHERE room_id = $1 AND user_id = $2', [room.id, m.userId, id]) : null,
+    loadMsg(id), memberIds(room.id)
+  ]);
+  var msg = par[2], ids = par[3];
   hub.publish(ids, 'msg', msg);
   if (m.replyTo) { var parent = await loadMsg(m.replyTo); if (parent) hub.publish(ids, 'upd', parent); }
   if (m.userId && (m.kind || 'text') !== 'system') pushOffline(room, msg, ids.filter(function (u) { return u !== m.userId; }), mentions);
@@ -143,11 +153,13 @@ async function postMessage(ctx, room, m) {
 }
 
 /* 📲 접속 안 한 사람에게 바로 휴대폰 푸시 (v13.359) — 음소거 방은 @멘션만 */
+var PUSH_GATE = new Map(), PUSH_GAP_MS = +(process.env.CHAT_PUSH_GAP_MS || 60000);
 function pushOffline(room, msg, others, mentions) {
   var off = others.filter(function (u) { return !hub.online(u); });
   if (!off.length) return;
   db.query('SELECT user_id FROM chat_members WHERE room_id = $1 AND user_id = ANY($2) AND left_at IS NULL AND (muted = FALSE OR user_id = ANY($3))', [room.id, off, mentions || []]).then(function (r) {
     var ids = r.rows.map(function (x) { return x.user_id; });
+    if (room.kind !== 'dm') { var now = Date.now(); ids = ids.filter(function (u) { if ((mentions || []).indexOf(u) >= 0) return true; var k = room.id + ':' + u; if (PUSH_GATE.get(k) > now - PUSH_GAP_MS) return false; PUSH_GATE.set(k, now); return true; }); if (PUSH_GATE.size > 20000) PUSH_GATE.clear(); }   // v13.366
     if (!ids.length) return;
     return focusOf(ids).then(function (fo) {
     ids = ids.filter(function (u) { return focusPass(fo[u], u, msg, mentions); });   // 🎯 집중 중이면 미룸
@@ -185,16 +197,24 @@ function scheduleFallback(tenantId, room, msg, others, mentions) {
 router.get('/stream', auth.authenticate, tenant.tenantScope, function (req, res) {
   res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.write('retry: 3000\n\n');
-  var uid = me(req), wasOnline = hub.online(uid);
+  var uid = me(req), wasOnline = hub.online(uid) || (LAST_OFF.get(uid) || 0) > Date.now() - PRESENCE_OFF_MS;
   var off = hub.add(uid, res);
   hub.write(res, 'hello', { at: Date.now() });
   if (!wasOnline) presence(req.tenant.id, uid, true);
   var ping = setInterval(function () { try { res.write(': ping\n\n'); if (res.flush) res.flush(); } catch (e) {} }, 25000);
-  req.on('close', function () { clearInterval(ping); off(); if (!hub.online(uid)) presence(req.tenant.id, uid, false); });
+  req.on('close', function () {
+    clearInterval(ping); off();
+    if (hub.online(uid)) return;
+    LAST_OFF.set(uid, Date.now()); if (LAST_OFF.size > 5000) LAST_OFF.clear();
+    var t = setTimeout(function () { if (!hub.online(uid)) presence(req.tenant.id, uid, false); }, PRESENCE_OFF_MS);   // v13.366 잠깐 끊김은 접속 그대로
+    if (t.unref) t.unref();
+  });
 });
 /* 접속 표시 — 같은 방을 쓰는 사람들에게 */
+var PRESENCE_OFF_MS = +(process.env.CHAT_PRESENCE_OFF_MS || 8000), LAST_OFF = new Map();
 async function presence(tenantId, uid, on) {
   try {
+    if (!on) LAST_OFF.delete(uid);
     var r = await db.query('SELECT DISTINCT m2.user_id FROM chat_members m1 JOIN chat_members m2 ON m2.room_id = m1.room_id WHERE m1.user_id = $1 AND m1.tenant_id = $2 AND m2.left_at IS NULL AND m1.left_at IS NULL', [uid, tenantId]);
     hub.publish(r.rows.map(function (x) { return x.user_id; }).filter(function (x) { return x !== uid; }), 'presence', { userId: uid, online: on });
   } catch (e) {}
@@ -217,7 +237,7 @@ router.get('/rooms', async function (req, res) {
   try {
     var r = await db.query(
       'SELECT r.id, r.kind, r.name, r.project_id, r.last_msg_at, m.last_read_id, m.muted, m.pinned, p.name AS project_name, ' +
-      '(SELECT COUNT(*)::int FROM chat_messages x WHERE x.room_id = r.id AND x.id > m.last_read_id AND x.deleted_at IS NULL AND (x.user_id IS NULL OR x.user_id <> $1) AND x.reply_to IS NULL) AS unread, ' +
+      '(SELECT COUNT(*)::int FROM chat_messages x WHERE x.room_id = r.id AND x.id > m.last_read_id AND x.deleted_at IS NULL AND (x.user_id IS NULL OR x.user_id <> $1) AND x.reply_to IS NULL AND x.kind <> \'system\') AS unread, ' +
       '(SELECT COUNT(*)::int FROM chat_messages x WHERE x.room_id = r.id AND x.id > m.last_read_id AND x.deleted_at IS NULL AND x.mentions @> to_jsonb($1::text)) AS mentioned, ' +
       '(SELECT row_to_json(l) FROM (SELECT x.id, x.kind, x.body, x.user_id, x.deleted_at, x.file_id, x.post->>\'title\' AS ptitle, COALESCE(u.display_name, u.name) AS user_name FROM chat_messages x LEFT JOIN users u ON u.id = x.user_id WHERE x.room_id = r.id AND x.reply_to IS NULL ORDER BY x.id DESC LIMIT 1) l) AS last, ' +
       "(SELECT json_agg(json_build_object('id', u2.id, 'name', COALESCE(u2.display_name, u2.name))) FROM chat_members m2 JOIN users u2 ON u2.id = m2.user_id WHERE m2.room_id = r.id AND m2.left_at IS NULL AND m2.user_id <> $1) AS others " +
@@ -246,7 +266,7 @@ async function dmRoom(tenantId, a, b, by) {
     var ins = await db.query("INSERT INTO chat_rooms (id, tenant_id, kind, dm_key, created_by) VALUES ($1,$2,'dm',$3,$4) ON CONFLICT DO NOTHING RETURNING *", [rid('dm'), tenantId, key, by]);
     room = ins.rows[0] || (await db.query('SELECT * FROM chat_rooms WHERE tenant_id = $1 AND dm_key = $2', [tenantId, key])).rows[0];
   }
-  for (var u of [a, b]) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id) VALUES ($1,$2,$3) ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL', [room.id, u, tenantId]);
+  for (var u of [a, b]) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id) VALUES ($1,$2,$3) ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL', [room.id, u, tenantId]); _midDrop(room.id);
   return room;
 }
 
@@ -267,7 +287,7 @@ router.post('/rooms', async function (req, res) {
       ids = v.rows.map(function (x) { return x.id; });
       var id = rid('grp');
       await db.query("INSERT INTO chat_rooms (id, tenant_id, kind, name, created_by) VALUES ($1,$2,'group',$3,$4)", [id, t, String(b.name || '').trim().slice(0, 120) || null, me(req)]);
-      for (var u of [me(req)].concat(ids)) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id, role) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [id, u, t, u === me(req) ? 'owner' : 'member']);
+      for (var u of [me(req)].concat(ids)) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id, role) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [id, u, t, u === me(req) ? 'owner' : 'member']); _midDrop(id);
       var r0 = (await db.query('SELECT * FROM chat_rooms WHERE id = $1', [id])).rows[0];
       await postMessage({ tenantId: t }, r0, { kind: 'system', body: (req.user.name || '') + ' 님이 대화방을 만들었습니다' });
       return res.status(201).json({ data: { id: id } });
@@ -285,9 +305,9 @@ router.post('/rooms', async function (req, res) {
         // 프로젝트 담당 · 참여자를 처음부터 멤버로
         var pm = await db.query('SELECT user_id FROM project_members WHERE project_id = $1 AND released_at IS NULL', [p.id]).catch(function () { return { rows: [] }; });
         var mem = pm.rows.map(function (x) { return x.user_id; }).concat([p.owner_id, me(req)]).filter(Boolean);
-        for (var mu of mem.filter(function (x, i, a) { return a.indexOf(x) === i; })) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [ex.id, mu, t]);
+        for (var mu of mem.filter(function (x, i, a) { return a.indexOf(x) === i; })) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [ex.id, mu, t]); _midDrop(ex.id);
       }
-      await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id) VALUES ($1,$2,$3) ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL', [ex.id, me(req), t]);
+      await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id) VALUES ($1,$2,$3) ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL', [ex.id, me(req), t]); _midDrop(ex.id);
       if (created) await postMessage({ tenantId: t }, ex, { kind: 'system', body: '📁 프로젝트 방이 열렸습니다 — 진척 · 이슈 · 마일스톤이 오른쪽에 보이고, /issue 로 바로 이슈를 올릴 수 있어요' });
       return res.status(201).json({ data: { id: ex.id } });
     }
@@ -332,7 +352,7 @@ router.post('/rooms/:id/members', async function (req, res) {
     var v = await db.query("SELECT id, COALESCE(display_name, name) AS n FROM users WHERE id = ANY($1) AND tenant_id = $2 AND status = 'active'", [ids, req.tenant.id]);
     for (var u of v.rows) await db.query("INSERT INTO chat_members (room_id, user_id, tenant_id, last_read_id, hist_from, role) VALUES ($1,$2,$3,$4,$5,'member') " +
       'ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL, hist_from = EXCLUDED.hist_from, last_read_id = GREATEST(chat_members.last_read_id, EXCLUDED.last_read_id)',
-      [room.id, u.id, req.tenant.id, mx, hist ? null : mx]);
+      [room.id, u.id, req.tenant.id, mx, hist ? null : mx]); _midDrop(room.id);
     if (v.rows.length) await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (req.user.name || '') + ' 님이 ' + v.rows.map(function (u) { return u.n; }).join(', ') + ' 님을 초대했습니다' + (hist ? '' : ' (이전 대화는 안 보임)') });
     res.json({ data: { added: v.rows.length } });
   } catch (e) { httpErr.serverError(res, '[chat/members]', e); }
@@ -368,7 +388,7 @@ router.delete('/rooms/:id/members/:uid', async function (req, res, next) {
     var t = await db.query('SELECT COALESCE(u.display_name, u.name) AS n FROM chat_members m JOIN users u ON u.id = m.user_id WHERE m.room_id = $1 AND m.user_id = $2 AND m.left_at IS NULL', [room.id, req.params.uid]);
     if (!t.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '이 방 사람이 아닙니다.' });
     var ids = await memberIds(room.id);
-    await db.query('UPDATE chat_members SET left_at = now() WHERE room_id = $1 AND user_id = $2', [room.id, req.params.uid]);
+    await db.query('UPDATE chat_members SET left_at = now() WHERE room_id = $1 AND user_id = $2', [room.id, req.params.uid]); _midDrop(room.id);
     await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (req.user.name || '') + ' 님이 ' + t.rows[0].n + ' 님을 내보냈습니다' });
     hub.publish(ids, 'room', { roomId: room.id, removed: req.params.uid });
     res.json({ ok: true });
@@ -378,7 +398,7 @@ router.delete('/rooms/:id/members/me', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
     if (room.kind === 'dm') { await db.query('UPDATE chat_members SET pinned = FALSE WHERE room_id = $1 AND user_id = $2', [room.id, me(req)]); return bad(res, '1:1 대화는 나갈 수 없습니다 — 알림 끄기를 쓰세요.'); }
-    await db.query('UPDATE chat_members SET left_at = now() WHERE room_id = $1 AND user_id = $2', [room.id, me(req)]);
+    await db.query('UPDATE chat_members SET left_at = now() WHERE room_id = $1 AND user_id = $2', [room.id, me(req)]); _midDrop(room.id);
     await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (req.user.name || '') + ' 님이 나갔습니다' });
     res.json({ data: { ok: true } });
   } catch (e) { httpErr.serverError(res, '[chat/leave]', e); }
@@ -505,21 +525,38 @@ router.post('/messages/:mid/forward', async function (req, res) {
   } catch (e) { httpErr.serverError(res, '[chat/forward]', e); }
 });
 
+/* v13.366 100명 방 — 메시지 하나에 100명이 읽으면 읽음 알림이 100×100 번 → 방마다 READ_MS 동안 모아 한 번('reads')만 */
+var READQ = new Map(), READ_MS = +(process.env.CHAT_READ_MS || 1000);
+function readQueue(roomId, uid, id) {
+  var q = READQ.get(roomId);
+  if (!q) { q = { list: {} }; READQ.set(roomId, q); q.t = setTimeout(function () { readFlush(roomId); }, READ_MS); if (q.t.unref) q.t.unref(); }
+  q.list[uid] = Math.max(q.list[uid] || 0, id);
+}
+async function readFlush(roomId) {
+  var q = READQ.get(roomId); READQ.delete(roomId); if (!q) return;
+  var list = Object.keys(q.list).map(function (u) { return { userId: u, id: q.list[u] }; });
+  try { hub.publish(await memberIds(roomId), 'reads', { roomId: roomId, list: list }); } catch (e) {}
+}
 router.post('/rooms/:id/read', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
     var id = +((req.body || {}).lastId) || 0;
+    if (id <= +room.last_read_id) return res.json({ data: { lastReadId: +room.last_read_id } });   // v13.366 이미 읽음 — DB · 알림 없이
     var r = await db.query('UPDATE chat_members SET last_read_id = GREATEST(last_read_id, LEAST($3, (SELECT COALESCE(MAX(id),0) FROM chat_messages WHERE room_id = $1))) WHERE room_id = $1 AND user_id = $2 RETURNING last_read_id', [room.id, me(req), id]);
     var lr = r.rows.length ? +r.rows[0].last_read_id : 0;
-    hub.publish(await memberIds(room.id), 'read', { roomId: room.id, userId: me(req), id: lr });
+    if (lr > +room.last_read_id) readQueue(room.id, me(req), lr);
     res.json({ data: { lastReadId: lr } });
   } catch (e) { httpErr.serverError(res, '[chat/read]', e); }
 });
 
 /* 입력 중 … (보내기만, 저장 안 함) */
+var TYPING = new Map();
 router.post('/rooms/:id/typing', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
+    var tk = room.id + ':' + me(req), now = Date.now();
+    if (TYPING.get(tk) > now - 2500) return res.json({ data: { ok: true } });   // v13.366 너무 잦으면 건너뜀
+    TYPING.set(tk, now); if (TYPING.size > 5000) TYPING.clear();
     hub.publish((await memberIds(room.id)).filter(function (u) { return u !== me(req); }), 'typing', { roomId: room.id, userId: me(req), name: req.user.name || '' });
     res.json({ data: { ok: true } });
   } catch (e) { httpErr.serverError(res, '[chat/typing]', e); }
@@ -1250,7 +1287,7 @@ router.post('/equipment/room', async function (req, res) {
     var t = req.tenant.id, uid = me(req);
     var ex = (await db.query('SELECT * FROM chat_rooms WHERE tenant_id = $1 AND equip_key = $2', [t, eq.key])).rows[0];
     if (ex) {
-      await db.query("INSERT INTO chat_members (room_id, user_id, tenant_id, last_read_id, role) VALUES ($1,$2,$3,0,'member') ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL", [ex.id, uid, t]);
+      await db.query("INSERT INTO chat_members (room_id, user_id, tenant_id, last_read_id, role) VALUES ($1,$2,$3,0,'member') ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL", [ex.id, uid, t]); _midDrop(ex.id);
       return res.json({ data: { id: ex.id, created: false } });
     }
     var ppl = await db.query("SELECT DISTINCT u FROM (SELECT m.user_id AS u FROM chat_messages m WHERE m.tenant_id = $1 AND m.post IS NOT NULL AND ((m.post->>'equipId') = $2 OR lower(trim(m.post->>'equip')) = ANY($3)) " +
@@ -1258,7 +1295,7 @@ router.post('/equipment/room', async function (req, res) {
     var id = rid('grp');
     await db.query("INSERT INTO chat_rooms (id, tenant_id, kind, name, created_by, equip_key) VALUES ($1,$2,'group',$3,$4,$5)", [id, t, '🏭 ' + eq.label.slice(0, 100), uid, eq.key]);
     var ids = [uid].concat(ppl.rows.map(function (x) { return x.u; }).filter(function (x) { return x && x !== uid; }));
-    for (var u of ids) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id, role) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [id, u, t, u === uid ? 'owner' : 'member']);
+    for (var u of ids) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id, role) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [id, u, t, u === uid ? 'owner' : 'member']); _midDrop(id);
     var room = (await db.query('SELECT * FROM chat_rooms WHERE id = $1', [id])).rows[0];
     await postMessage({ tenantId: t }, room, { kind: 'system', body: '🏭 ' + eq.label + ' 장비 방이 열렸습니다 — 이 장비의 요청 · A/S · 문서 · 사진은 옆 칸 🏭 장비 탭에서' });
     res.status(201).json({ data: { id: id, created: true, members: ids.length } });
@@ -1315,8 +1352,12 @@ router.get('/search', async function (req, res) {
     var q = String(req.query.q || '').trim();
     if (q.length < 2) return res.json({ data: [] });
     var like = '%' + q.replace(/[\\%_]/g, function (c) { return '\\' + c; }) + '%';
+    var prm = [me(req), req.tenant.id, like], ex = '';
+    if (req.query.room) { prm.push(String(req.query.room)); ex += ' AND m.room_id = $' + prm.length; }   // v13.366 이 방에서만
+    if (req.query.from) { prm.push(String(req.query.from)); ex += ' AND m.user_id = $' + prm.length; }   // 보낸 사람
+    if (req.query.has === 'file') ex += ' AND m.file_id IS NOT NULL';
     var r = await db.query(MSG_SQL + 'JOIN chat_members cm ON cm.room_id = m.room_id AND cm.user_id = $1 AND cm.left_at IS NULL ' +
-      'WHERE m.tenant_id = $2 AND m.deleted_at IS NULL AND (cm.hist_from IS NULL OR m.id > cm.hist_from) AND (m.body ILIKE $3 OR f.name ILIKE $3) ORDER BY m.id DESC LIMIT 60', [me(req), req.tenant.id, like]);
+      'WHERE m.tenant_id = $2 AND m.deleted_at IS NULL AND (cm.hist_from IS NULL OR m.id > cm.hist_from) AND (m.body ILIKE $3 OR f.name ILIKE $3)' + ex + ' ORDER BY m.id DESC LIMIT 60', prm);
     res.json({ data: r.rows.map(shape) });
   } catch (e) { httpErr.serverError(res, '[chat/search]', e); }
 });

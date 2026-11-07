@@ -19,7 +19,12 @@ function write(res, event, data) {
 }
 /** userIds 에게 event 보내기 (exceptRes: 보낸 탭은 빼고 싶을 때) */
 function publish(userIds, event, data) {
-  (userIds || []).forEach(function (u) { var s = conns[u]; if (s) s.forEach(function (res) { write(res, event, data); }); });
+  var json = null;   // v13.366 100명 방 — JSON 은 한 번만 만들고 같은 글을 나눠 씀
+  (userIds || []).forEach(function (u) {
+    var s = conns[u]; if (!s) return;
+    if (json == null) json = JSON.stringify(data);
+    s.forEach(function (res) { try { res.write('id: ' + (++seq) + '\nevent: ' + event + '\ndata: ' + json + '\n\n'); if (res.flush) res.flush(); } catch (e) {} });
+  });
 }
 function count() { var n = 0; Object.keys(conns).forEach(function (k) { n += conns[k].size; }); return n; }
 function _reset() { conns = {}; }

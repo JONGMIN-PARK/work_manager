@@ -4663,6 +4663,47 @@ html.wm-focus-big:has(#mMessages:not(.hidden)) #mMessages{--cx-h:calc(100dvh - 7
 .ce-card.compact .ce-stats span{min-width:70px}
 @media (max-width:760px){.ce-v{grid-template-columns:1fr}.ce-l{border-right:0;border-bottom:1px solid var(--bd);max-height:30vh;padding:0 0 8px}}
 
+/* ═══ v13.366 💬 메신저 고도화 — 바뀐 것만 그리기 · 거르기 · 새 메시지 · 보내는 중 · 빠른 이동 · 방 안 찾기 ═══ */
+.cx-mw{display:contents}
+.cx-rf{display:flex;gap:3px;padding:0 10px 8px;overflow-x:auto;scrollbar-width:none}
+.cx-rf::-webkit-scrollbar{display:none}
+.cx-rf button{flex:none;position:relative;border:1px solid var(--bd);background:var(--bg-i);color:var(--t4);border-radius:14px;padding:2px 7px;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+.cx-rf button:hover{color:var(--t1)}
+.cx-rf button.on{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:700}
+.cx-rf button[data-n]:not([data-n=""])::after{content:attr(data-n);margin-left:4px;font-weight:800;color:#EF4444}
+.cx-rf button.on[data-n]:not([data-n=""])::after{color:#fff}
+.cx-r-t span.cx-r-dr{color:#D97706;font-style:italic}
+.cx-unl{display:flex;align-items:center;gap:10px;margin:14px 0 8px;color:#EF4444;font-size:11.5px;font-weight:700}
+.cx-unl::before,.cx-unl::after{content:'';flex:1;height:1px;background:color-mix(in srgb,#EF4444 45%,transparent)}
+.cx-newb{position:absolute;left:50%;transform:translateX(-50%);z-index:6;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--bd);background:var(--bg-p);color:var(--t2);border-radius:18px;padding:6px 14px;font:inherit;font-size:12.5px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.14);cursor:pointer;animation:cxNewIn .18s ease-out}
+.cx-newb.has-new{background:var(--ac);border-color:var(--ac);color:#fff}
+.cx-newb[hidden]{display:none}
+@keyframes cxNewIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+.cx-m.cx-pend .cx-bw{opacity:.62}
+.cx-m.cx-pend.failed .cx-bw{opacity:1;outline:1.5px dashed #EF4444;outline-offset:2px;border-radius:14px}
+.cx-sending{font-style:normal;color:var(--t5);animation:cxSpin 1.2s linear infinite;display:inline-block}
+@keyframes cxSpin{to{transform:rotate(360deg)}}
+.cx-fail{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#EF4444;font-weight:700;white-space:nowrap}
+.cx-fail button{border:0;border-radius:8px;padding:1px 7px;font:inherit;font-size:11px;cursor:pointer;background:color-mix(in srgb,#EF4444 14%,var(--bg-i));color:#B91C1C}
+.cp-qs{display:flex;flex-direction:column;gap:2px;max-height:52vh;overflow:auto;margin-top:8px}
+.cp-qs .cx-pp.on{background:color-mix(in srgb,var(--ac) 14%,transparent)}
+.cp-qs .cp-n{margin-left:auto;flex:none;min-width:20px;height:20px;border-radius:10px;background:#EF4444;color:#fff;font-style:normal;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 6px}
+.cp-qs-f{margin-top:8px;font-size:11px;color:var(--t5)}
+.cp-find{position:relative;display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--bd);background:var(--bg-p);flex-wrap:wrap}
+.cp-find input[type=search]{flex:1;min-width:140px;height:30px;padding:0 12px;border:1px solid var(--bd);border-radius:15px;background:var(--bg-i);color:var(--t1);font:inherit;font-size:12.5px}
+.cp-find select{height:30px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t2);font:inherit;font-size:12px;max-width:130px}
+.cp-ff{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--t3);white-space:nowrap;cursor:pointer}
+.cp-fn{font-size:11.5px;color:var(--t5);min-width:34px}
+.cp-fr{position:absolute;left:12px;right:12px;top:calc(100% + 4px);z-index:8;max-height:46vh;overflow:auto;background:var(--bg-p);border:1px solid var(--bd);border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.16);padding:4px}
+.cp-fr[hidden]{display:none}
+.cp-fr button{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:baseline;width:100%;border:0;background:none;padding:7px 10px;border-radius:8px;text-align:left;font:inherit;font-size:12.5px;color:var(--t2);cursor:pointer}
+.cp-fr button:hover,.cp-fr button.on{background:var(--bg-hv)}
+.cp-fr b{color:var(--t1);font-size:12px;white-space:nowrap}
+.cp-fr span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp-fr i{font-style:normal;font-size:11px;color:var(--t5);white-space:nowrap}
+.cp-fr mark{background:#FDE68A;color:#78350F;border-radius:3px;padding:0 1px}
+@media (max-width:760px){.cp-find select{max-width:100px}.cp-fr{left:6px;right:6px}}
+
 .mm-sink{font-size:16px!important}   /* v13.310 숨은 키 입력칸 — 혹시 초점을 받아도 iOS 가 화면을 확대하지 않게 */
 
 
