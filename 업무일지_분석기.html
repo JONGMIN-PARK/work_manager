@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>업무 관리자</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#2563EB">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="업무관리">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -80,7 +88,7 @@
 <script defer src="notebook-plus.js?v=4" onerror="console.warn('notebook-plus.js 로드 실패')"></script>
 <script defer src="notebook-print.js?v=2" onerror="console.warn('notebook-print.js 로드 실패')"></script>
 <script defer src="notebook-print-ui.js?v=3" onerror="console.warn('notebook-print-ui.js 로드 실패')"></script>
-<script defer src="chat-ui.js?v=2" onerror="console.warn('chat-ui.js 로드 실패')"></script>
+<script defer src="chat-ui.js?v=3" onerror="console.warn('chat-ui.js 로드 실패')"></script>
 <script defer src="chat-rtc.js?v=1" onerror="console.warn('chat-rtc.js 로드 실패')"></script>
 <script defer src="project-images.js?v=3" onerror="console.warn('project-images.js 로드 실패')"></script>
 <script defer src="meeting-minutes.js?v=1" onerror="console.warn('meeting-minutes.js 로드 실패')"></script>
@@ -122,7 +130,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.354';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.355';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -167,6 +175,7 @@
         <button class="hdr-mi" role="menuitem" data-m="operator" id="hdrOperatorItem" style="display:none" onclick="wmHdrPopClose();wmOpenOperator()" title="전체 프로젝트 가시성·접근 관리">🛡️ 운영자</button>
         <button class="hdr-mi" role="menuitem" data-page="patchnotes" id="tabPatchNotes" style="display:none" onclick="wmHdrPopClose();setPage('patchnotes')">📋 패치노트</button>
         <div class="hdr-mi-sep"></div>
+        <button class="hdr-mi" role="menuitem" onclick="wmHdrPopClose();wmGuardedModal('appInstall',wmAppInstall,'wmAppInstall')">📲 앱 설치 (PC · 휴대폰)</button>
         <button class="hdr-mi" role="menuitem" onclick="wmHdrPopClose();authLogout()">🚪 로그아웃</button>
         <div class="hdr-mi-foot">Developed by Jongmin, Park</div>
       </div>
@@ -570,8 +579,9 @@
 <script src="archive-trend.js?v=2" onerror="console.warn('archive-trend.js 로드 실패')"></script>
 <script src="search-notif.js?v=7" onerror="console.warn('search-notif.js 로드 실패')"></script>
 <script src="ai-ask.js?v=2" onerror="console.warn('ai-ask.js 로드 실패')"></script>
-<script src="telegram-ui.js?v=1" onerror="console.warn('telegram-ui.js 로드 실패')"></script>
+<script src="telegram-ui.js?v=2" onerror="console.warn('telegram-ui.js 로드 실패')"></script>
 <script src="anyworks-import.js?v=1" onerror="console.warn('anyworks-import.js 로드 실패')"></script>
+<script src="wm-app.js?v=1" onerror="console.warn('wm-app.js 로드 실패')"></script>
 <script src="app-init.js?v=9" onerror="console.warn('app-init.js 로드 실패')"></script>
 </body>
 </html>

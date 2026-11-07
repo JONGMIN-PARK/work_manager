@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <!-- 말풍선 -->
+  <path d="M120 150 h272 a40 40 0 0 1 40 40 v136 a40 40 0 0 1 -40 40 h-150 l-74 58 v-58 h-48 a40 40 0 0 1 -40 -40 v-136 a40 40 0 0 1 40 -40 z" fill="#fff"/>
+  <!-- 업무 관리자 ◆ -->
+  <polygon points="256,186 330,258 256,330 182,258" fill="#2563EB"/>
+  <polygon points="256,222 294,258 256,294 218,258" fill="#fff" opacity=".9"/>
+</svg>

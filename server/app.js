@@ -173,6 +173,26 @@ app.get(['/', '/index', '/index.html'], function (req, res) {
   res.send(html);
 });
 
+// ─── 앱으로 설치 (v13.355): manifest · 서비스 워커 · 아이콘 — pwa/ 폴더 ───
+var PWA_DIR = path.join(__dirname, '..', 'pwa');
+app.get('/manifest.webmanifest', function (req, res) {
+  res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.sendFile(path.join(PWA_DIR, 'manifest.webmanifest'));
+});
+app.get('/sw.js', function (req, res) {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache');   // 서비스 워커는 늘 새 것 확인
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.sendFile(path.join(PWA_DIR, 'sw.js'));
+});
+app.get('/icons/:name', function (req, res, next) {
+  if (!/^[a-z0-9-]+\.png$/.test(req.params.name)) return next();
+  res.setHeader('Cache-Control', 'public, max-age=604800');
+  res.sendFile(path.join(PWA_DIR, 'icons', req.params.name), function (err) { if (err) res.status(404).end(); });
+});
+app.get('/favicon.ico', function (req, res) { res.redirect(301, '/icons/icon-192.png'); });
+
 // ─── API 라우트 ───
 var authRoutes = require('./routes/auth');
 var userRoutes = require('./routes/users');

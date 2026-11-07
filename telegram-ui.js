@@ -89,6 +89,7 @@ function wmDeepGo(go) {
   if (!m) return false;
   var type = m[1], id = m[2] || '';
   if (type === 'mywork') { if (typeof setPage === 'function') setPage('mywork'); return true; }
+  if (type === 'messages') { if (typeof setPage === 'function') setPage('messages'); return true; }   // v13.355 앱 바로 가기 · PC 앱 트레이
   if (type === 'chat' && id && typeof chatOpenRoom === 'function') { chatOpenRoom(id); return true; }   // v13.315 메신저 대화방
   if (!WM_GO_NAV[type] || !id || typeof globalSearchNav !== 'function') return false;
   var it = WM_GO_NAV[type](id);

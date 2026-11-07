@@ -1,0 +1,23 @@
+{
+  "id": "/",
+  "name": "업무 관리자",
+  "short_name": "업무관리",
+  "description": "업무 · 프로젝트 · 메신저 — 사내 협업",
+  "start_url": "/?src=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#0f1220",
+  "theme_color": "#2563EB",
+  "orientation": "any",
+  "lang": "ko",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "메신저", "short_name": "메신저", "url": "/?go=messages&src=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "내 업무", "short_name": "내 업무", "url": "/?go=mywork&src=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

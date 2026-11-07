@@ -1,0 +1,58 @@
+{
+  "name": "work-manager-desktop",
+  "productName": "업무 관리자",
+  "version": "13.355.0",
+  "description": "업무 관리자 PC 앱 — 메신저 · 알림 · 트레이",
+  "main": "main.js",
+  "author": "Jongmin Park",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "start:local": "electron . --server=http://localhost:3000",
+    "icons": "node scripts/make-icons.js",
+    "dist": "electron-builder --win nsis",
+    "dist:publish": "electron-builder --win nsis --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "kr.co.animotion.workmanager",
+    "productName": "업무 관리자",
+    "artifactName": "WorkManager-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "offline.html",
+      "build/tray*.png",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "업무 관리자",
+      "runAfterFinish": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "JONGMIN-PARK",
+        "repo": "work_manager"
+      }
+    ]
+  }
+}

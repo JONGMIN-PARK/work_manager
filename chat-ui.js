@@ -138,6 +138,8 @@ function _cxUpsert(m, onlyReplace) {
 function _cxNotify(d, r) {
   var title = (r && r.kind !== 'dm' ? r.name + ' · ' : '') + (d.userName || 'AI');
   var body = d.file && !d.body ? '📎 ' + d.file.name : (d.body || '').slice(0, 120);
+  // v13.355 PC 앱: 창이 앞에 없으면(다른 프로그램 작업 중 · 트레이) 윈도우 알림 — 누르면 창이 앞으로 + 그 방으로
+  if (typeof wmIsDesktopApp === 'function' && wmIsDesktopApp() && !document.hasFocus()) { wmAppNotify('💬 ' + title, body, 'chat:' + d.roomId); return; }
   if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
     try { var n = new Notification('💬 ' + title, { body: body, tag: 'chat-' + d.roomId, renotify: true }); n.onclick = function () { window.focus(); chatOpenRoom(d.roomId); n.close(); }; } catch (e) {}
     return;
@@ -157,7 +159,7 @@ function _cxNotify(d, r) {
 function chatBadge() {
   var b = document.getElementById('msgBadge'); if (!b) return;
   var n = CX.rooms.length ? CX.rooms.reduce(function (s, r) { return s + (r.muted && !r.mentioned ? 0 : r.unread || 0); }, 0) : null;
-  function set(k) { if (k > 0) { b.textContent = k > 99 ? '99+' : k; b.style.display = 'inline-flex'; } else b.style.display = 'none'; }
+  function set(k) { if (typeof wmAppBadge === 'function') wmAppBadge(k); if (k > 0) { b.textContent = k > 99 ? '99+' : k; b.style.display = 'inline-flex'; } else b.style.display = 'none'; }
   if (n != null) return set(n);
   if (typeof apiFetch === 'function' && _cxMe()) apiFetch('/api/chat/unread-count').then(function (r) { set((r && r.count) || 0); }).catch(function () {});
 }
