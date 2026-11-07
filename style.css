@@ -4444,6 +4444,39 @@ html.wm-desktop #mMessages{--cx-h:calc(100dvh - 96px)}
   .cc-post{min-width:0}
 }
 
+/* ═══ v13.359 메신저 참여자 · 방 폴더 · 🔔 푸시 ═══ */
+.cx-hist{display:flex;gap:8px;align-items:flex-start;margin:10px 0 2px;padding:9px 10px;border-radius:10px;background:var(--bg-i);cursor:pointer}
+.cx-hist input{margin-top:3px}
+.cx-hist span{display:flex;flex-direction:column;gap:1px}
+.cx-hist b{font-size:12.5px;color:var(--t1)}
+.cx-hist i{font-style:normal;font-size:11.5px;color:var(--t5)}
+.cx-roles{font-size:11.5px;color:var(--t4);padding:2px 4px 8px}
+.cx-role{font-style:normal;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:4px;vertical-align:1px}
+.cx-role.own{background:#FEF3C7;color:#92400E}
+.cx-role.ro{background:var(--bg-i);color:var(--t4)}
+.cx-ro{margin:6px 14px 12px;padding:11px 14px;border-radius:14px;background:var(--bg-i);border:1px dashed var(--bd);color:var(--t4);font-size:12.5px;text-align:center}
+.cc-fsec{display:flex;align-items:baseline;gap:6px;margin:10px 4px 4px;font-size:11.5px;font-weight:800;color:var(--t4)}
+.cc-fsec:first-child{margin-top:0}
+.cc-fsec i{font-style:normal;font-weight:500;color:var(--t5)}
+.cc-f b small{display:block;font-size:10.5px;font-weight:500;color:var(--t5);overflow:hidden;text-overflow:ellipsis}
+.cc-rf{margin:0 0 10px;padding:9px 10px;border-radius:12px;background:color-mix(in srgb,var(--ac) 6%,var(--bg-i));border:1px solid color-mix(in srgb,var(--ac) 18%,var(--bd))}
+.cc-rf-h{display:flex;align-items:center;gap:6px}
+.cc-rf-h b{font-size:12.5px;color:var(--t1)}
+.cc-rf-h i{flex:1;font-style:normal;font-size:11px;color:var(--t5)}
+.cc-rf-h .cx-ib{min-width:26px;height:26px}
+.cc-rf-l{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.cc-rf-l button{border:1px solid var(--bd);border-radius:10px;background:var(--bg-p);color:var(--t2);font:inherit;font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer}
+.cc-rf-l button:hover{border-color:var(--ac)}
+.cc-rf-l i{font-style:normal;color:var(--t5);font-weight:500}
+.cc-rf-e{font-size:11.5px;color:var(--t5);margin-top:5px}
+.wm-push{border:1px solid color-mix(in srgb,var(--ac) 35%,var(--bd));border-radius:12px;padding:12px 16px;margin-bottom:12px;background:linear-gradient(135deg,color-mix(in srgb,var(--ac) 8%,var(--bg-i)),var(--bg-i))}
+.wm-push-h{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--t1)}
+.wm-push-h b{margin-left:auto;font-size:12px;color:var(--ac-t)}
+.wm-push[data-st="denied"] .wm-push-h b{color:#DC2626}
+.wm-push p{margin:6px 0 8px;font-size:12.5px;color:var(--t4);line-height:1.55}
+.wm-push-a{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.wm-push-tip{font-size:12px;color:var(--t4)}
+
 .mm-sink{font-size:16px!important}   /* v13.310 숨은 키 입력칸 — 혹시 초점을 받아도 iOS 가 화면을 확대하지 않게 */
 
 

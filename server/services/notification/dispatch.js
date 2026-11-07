@@ -163,6 +163,11 @@ async function notify(eventType, payload, targetUserIds) {
     createInAppNotification(userId, eventType, inAppTitle, plainText, null, tId);
     sendEmailNotification(userId, eventType, payload, tId);
   });
+  // 📲 휴대폰 · 브라우저 푸시 (v13.359) — 메신저 메시지는 chat.js 가 받는 순간 따로 보냄(접속 안 한 사람에게)
+  if (eventType !== 'chat_message') {
+    var go = tgLinks.targetOf(eventType, payload);
+    require('../push.service').sendToUsers(targetUserIds, { title: inAppTitle, body: plainText.slice(0, 240), tag: eventType, go: go ? go[0] + ':' + go[1] : '' }).catch(function () {});
+  }
 
   // 텔레그램 미설정 시 스킵
   if (!telegramService.isConfigured()) return;

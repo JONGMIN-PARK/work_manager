@@ -285,3 +285,108 @@ test('📁 내 폴더 (v13.358) — 만들기 · 담기 · 보기 · 남은 못 
   expect((await api('delete', '/api/chat/folders/' + f.id, b)).status).toBe(200);
   expect((await api('get', '/api/chat/folders', b)).body.data.length).toBe(0);
 });
+
+test('👥 참여자 (v13.359) — 이전 대화 안 보여 주고 초대 · 방장 · 읽기만 · 내보내기', async function () {
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '참여자시험', userIds: [b.user.id] })).body.data.id;
+  var old = (await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '예전 비밀 이야기' })).body.data;
+  await api('post', '/api/chat/rooms/' + g + '/posts', a).send({ cat: 'req', title: '예전 요청', assignee: b.user.id });
+  // c: 이전 대화 안 보여 줌 · x: 보여 줌
+  await api('post', '/api/chat/rooms/' + g + '/members', a).send({ userIds: [c.user.id], history: false });
+  await api('post', '/api/chat/rooms/' + g + '/members', a).send({ userIds: [x.user.id] });
+  var cm = (await api('get', '/api/chat/rooms/' + g + '/messages', c)).body.data.map(function (m) { return m.body; });
+  expect(cm.join('|')).not.toMatch(/예전 비밀/);
+  expect(cm.join('|')).toMatch(/이전 대화는 안 보임/);
+  expect((await api('get', '/api/chat/rooms/' + g + '/messages', x)).body.data.map(function (m) { return m.body; })).toContain('예전 비밀 이야기');
+  expect((await api('get', '/api/chat/rooms/' + g + '/posts', c)).body.data.length).toBe(0);
+  expect((await api('get', '/api/chat/search?q=' + encodeURIComponent('예전 비밀'), c)).body.data.length).toBe(0);
+  expect((await api('get', '/api/chat/search?q=' + encodeURIComponent('예전 비밀'), x)).body.data.length).toBe(1);
+  expect((await api('get', '/api/chat/rooms/' + g + '/messages?thread=' + old.id, c)).body.data.length).toBe(0);
+  var info = (await api('get', '/api/chat/rooms/' + g, c)).body.data;
+  expect(info).toMatchObject({ myRole: 'member', canManage: false });
+  expect(info.histFrom).toBeGreaterThan(0);
+  var ia = (await api('get', '/api/chat/rooms/' + g, a)).body.data;
+  expect(ia).toMatchObject({ myRole: 'owner', canManage: true });
+  // 역할: 방장만 · 읽기만은 못 씀
+  expect((await api('put', '/api/chat/rooms/' + g + '/members/' + c.user.id, b).send({ role: 'readonly' })).status).toBe(403);
+  expect((await api('put', '/api/chat/rooms/' + g + '/members/' + c.user.id, a).send({ role: 'king' })).status).toBe(400);
+  expect((await api('put', '/api/chat/rooms/' + g + '/members/' + c.user.id, a).send({ role: 'readonly' })).status).toBe(200);
+  var ro = await api('post', '/api/chat/rooms/' + g + '/messages', c).send({ body: '써도 되나요' });
+  expect(ro.status).toBe(403);
+  expect(ro.body.error).toBe('READONLY');
+  expect((await api('post', '/api/chat/rooms/' + g + '/posts', c).send({ cat: 'qna', title: 'q' })).status).toBe(403);
+  expect((await api('get', '/api/chat/rooms/' + g + '/messages', c)).status).toBe(200);   // 읽기는 됨
+  // 방장 넘기기 · 마지막 방장은 못 내림
+  expect((await api('put', '/api/chat/rooms/' + g + '/members/' + a.user.id, a).send({ role: 'member' })).status).toBe(400);
+  await api('put', '/api/chat/rooms/' + g + '/members/' + b.user.id, a).send({ role: 'owner' });
+  expect((await api('put', '/api/chat/rooms/' + g + '/members/' + a.user.id, b).send({ role: 'member' })).status).toBe(200);
+  expect((await api('get', '/api/chat/rooms/' + g, a)).body.data.canManage).toBe(true);   // a 는 관리자(admin)라 여전히
+  // 내보내기
+  expect((await api('delete', '/api/chat/rooms/' + g + '/members/' + x.user.id, c)).status).toBe(403);
+  expect((await api('delete', '/api/chat/rooms/' + g + '/members/' + x.user.id, b)).status).toBe(200);
+  expect((await api('get', '/api/chat/rooms/' + g + '/messages', x)).status).toBe(403);
+  var sys = (await api('get', '/api/chat/rooms/' + g + '/messages', b)).body.data.filter(function (m) { return m.kind === 'system'; }).map(function (m) { return m.body; }).join('|');
+  expect(sys).toMatch(/읽기만/); expect(sys).toMatch(/내보냈습니다/);
+  expect((await api('delete', '/api/chat/rooms/' + dm + '/members/' + b.user.id, a)).status).toBe(400);   // 1:1 은 안 됨
+});
+
+test('🗂 방 폴더 (v13.359) — 방 사람 모두 같이 · 그 방 메시지만 · 만든 사람/방장만 지움 · 밖 사람 못 봄', async function () {
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '방폴더', userIds: [b.user.id, c.user.id] })).body.data.id;
+  var m1 = (await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '도면 v3' })).body.data;
+  var other = (await api('post', '/api/chat/rooms/' + dm + '/messages', a).send({ body: '다른 방' })).body.data;
+  var f = (await api('post', '/api/chat/folders', b).send({ name: '도면', roomId: g })).body.data;
+  expect(f).toMatchObject({ roomId: g, roomName: '방폴더', icon: '🗂' });
+  expect((await api('post', '/api/chat/folders', x).send({ name: '몰래', roomId: g })).status).toBe(403);
+  expect((await api('post', '/api/chat/folders/' + f.id + '/items', c).send({ messageId: m1.id })).status).toBe(201);   // 다른 멤버도 담음
+  expect((await api('post', '/api/chat/folders/' + f.id + '/items', b).send({ messageId: other.id })).status).toBe(400);   // 다른 방 메시지
+  var la = (await api('get', '/api/chat/folders', a)).body.data.filter(function (z) { return z.id === f.id; })[0];
+  expect(la).toMatchObject({ n: 1, roomId: g });
+  var items = (await api('get', '/api/chat/folders/' + f.id + '/items', a)).body.data;
+  expect(items[0]).toMatchObject({ body: '도면 v3', savedBy: '사아자' });
+  expect((await api('get', '/api/chat/folders/' + f.id + '/items', x)).status).toBe(404);
+  expect((await api('get', '/api/chat/folders?room=' + g, c)).body.data.map(function (z) { return z.id; })).toEqual([f.id]);
+  expect((await api('get', '/api/chat/messages/' + m1.id + '/folders', a)).body.data).toEqual([f.id]);
+  expect((await api('put', '/api/chat/folders/' + f.id, c).send({ name: '바꿈' })).status).toBe(403);   // 만든 사람 · 방장만
+  expect((await api('put', '/api/chat/folders/' + f.id, a).send({ name: '도면 모음' })).status).toBe(200);   // a = 방장
+  expect((await api('delete', '/api/chat/folders/' + f.id, b)).status).toBe(200);   // 만든 사람
+});
+
+test('📲 푸시 (v13.359) — 구독 · 접속 안 한 사람에게 바로 · 음소거는 멘션만 · 만료 구독 지움 · 다른 알림도', async function () {
+  var push = require('../services/push.service');
+  var sent = [];
+  push._setSender(function (sub, body) { sent.push({ ep: sub.endpoint, body: JSON.parse(body) }); if (/gone/.test(sub.endpoint)) { var e = new Error('gone'); e.statusCode = 410; throw e; } });
+  var k = await api('get', '/api/push/key', b);
+  expect(k.body.data.publicKey.length).toBeGreaterThan(60);
+  expect((await api('get', '/api/push/key', c)).body.data.publicKey).toBe(k.body.data.publicKey);   // 같은 키
+  expect((await api('post', '/api/push/subscribe', b).send({ subscription: { endpoint: 'http://x' } })).status).toBe(400);
+  var sub = { endpoint: 'https://push.example/b-' + S, keys: { p256dh: 'P', auth: 'A' } };
+  expect((await api('post', '/api/push/subscribe', b).send({ subscription: sub })).status).toBe(201);
+  await api('post', '/api/push/subscribe', c).send({ subscription: { endpoint: 'https://push.example/gone-' + S, keys: { p256dh: 'P', auth: 'A' } } });
+  // 1:1 — b 는 접속 안 함 → 바로
+  await api('post', '/api/chat/rooms/' + dm + '/messages', a).send({ body: '내일 10시 점검 가능?' });
+  await new Promise(function (r) { setTimeout(r, 300); });
+  var got = sent.filter(function (s) { return s.ep === sub.endpoint; });
+  expect(got.length).toBe(1);
+  expect(got[0].body).toMatchObject({ title: '💬 가나다', body: '내일 10시 점검 가능?', go: 'chat:' + dm });
+  // 접속 중이면 안 보냄
+  sent.length = 0;
+  var off = hub.add(b.user.id, { write: function () {}, on: function () {} });
+  await api('post', '/api/chat/rooms/' + dm + '/messages', a).send({ body: '접속 중' });
+  await new Promise(function (r) { setTimeout(r, 300); });
+  expect(sent.length).toBe(0);
+  off();
+  // 만료 구독은 지움
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '푸시', userIds: [c.user.id] })).body.data.id;
+  await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: 'hi' });
+  await new Promise(function (r) { setTimeout(r, 400); });
+  expect((await db.query('SELECT COUNT(*)::int AS n FROM push_subs WHERE user_id = $1', [c.user.id])).rows[0].n).toBe(0);
+  // 다른 알림(notify)도 푸시로
+  sent.length = 0;
+  await require('../services/notification.service').notify('issue_assigned', { issueId: 'i1', projectName: 'P', title: '센서', assigneeName: 'x' }, [b.user.id]);
+  await new Promise(function (r) { setTimeout(r, 300); });
+  expect(sent.length).toBe(1);
+  expect(sent[0].body.go).toBe('issue:i1');
+  // 해지
+  await api('post', '/api/push/unsubscribe', b).send({ endpoint: sub.endpoint });
+  expect((await api('get', '/api/push/key', b)).body.data.subs).toBe(0);
+  push._setSender(null);
+});

@@ -27,7 +27,7 @@ function kstToday() { return new Date(Date.now() + 9 * 3600000).toISOString().sl
 
 async function membership(tenantId, roomId, userId) {
   var r = await db.query(
-    'SELECT r.*, m.last_read_id, m.muted, m.pinned, m.left_at FROM chat_rooms r LEFT JOIN chat_members m ON m.room_id = r.id AND m.user_id = $3 ' +
+    'SELECT r.*, m.last_read_id, m.muted, m.pinned, m.left_at, m.role, m.hist_from FROM chat_rooms r LEFT JOIN chat_members m ON m.room_id = r.id AND m.user_id = $3 ' +
     'WHERE r.id = $1 AND r.tenant_id = $2', [roomId, tenantId, userId]);
   return r.rows[0] || null;
 }
@@ -42,6 +42,17 @@ async function roomFor(req, res, roomId) {
   }
   if (!isMember) { res.status(403).json({ error: 'FORBIDDEN', message: '이 대화방의 멤버가 아닙니다.' }); return null; }
   return room;
+}
+/** 읽기만 하는 멤버는 쓰기 막음 (v13.359) */
+function readOnly(res, room) {
+  if (room && room.role === 'readonly') { res.status(403).json({ error: 'READONLY', message: '읽기만 하는 멤버입니다 — 방장에게 말해 주세요.' }); return true; }
+  return false;
+}
+/** 방 관리(역할 · 내보내기): 방장 · 관리자 · 방장이 없는 방은 만든 사람 */
+async function canManage(req, room) {
+  if (req.user.role === 'admin' || room.role === 'owner') return true;
+  var o = await db.query("SELECT 1 FROM chat_members WHERE room_id = $1 AND role = 'owner' AND left_at IS NULL", [room.id]);
+  return !o.rows.length && room.created_by === me(req);
 }
 async function memberIds(roomId) {
   var r = await db.query('SELECT user_id FROM chat_members WHERE room_id = $1 AND left_at IS NULL', [roomId]);
@@ -114,8 +125,22 @@ async function postMessage(ctx, room, m) {
   var ids = await memberIds(room.id);
   hub.publish(ids, 'msg', msg);
   if (m.replyTo) { var parent = await loadMsg(m.replyTo); if (parent) hub.publish(ids, 'upd', parent); }
+  if (m.userId && (m.kind || 'text') !== 'system') pushOffline(room, msg, ids.filter(function (u) { return u !== m.userId; }), mentions);
   if (m.userId && (m.kind || 'text') !== 'system') scheduleFallback(ctx.tenantId, room, msg, ids.filter(function (u) { return u !== m.userId; }), mentions);
   return msg;
+}
+
+/* 📲 접속 안 한 사람에게 바로 휴대폰 푸시 (v13.359) — 음소거 방은 @멘션만 */
+function pushOffline(room, msg, others, mentions) {
+  var off = others.filter(function (u) { return !hub.online(u); });
+  if (!off.length) return;
+  db.query('SELECT user_id FROM chat_members WHERE room_id = $1 AND user_id = ANY($2) AND left_at IS NULL AND (muted = FALSE OR user_id = ANY($3))', [room.id, off, mentions || []]).then(function (r) {
+    var ids = r.rows.map(function (x) { return x.user_id; });
+    if (!ids.length) return;
+    var who = msg.userName || 'AI';
+    var body = msg.post ? '📌 ' + msg.post.title : msg.file && !msg.body ? '📎 ' + msg.file.name : String(msg.body || '').replace(/```[\s\S]*?```/g, '[코드]').slice(0, 200);
+    return require('../services/push.service').sendToUsers(ids, { title: room.kind === 'dm' ? '💬 ' + who : '💬 ' + (room.name || '대화방') + ' · ' + who, body: body, tag: 'chat-' + room.id, go: 'chat:' + room.id });
+  }).catch(function (e) { console.error('[chat] push', e.message); });
 }
 
 /* 못 본 사람에게 알림 — 1:1 이거나 @멘션된 사람만, FALLBACK_MS 뒤에도 안 읽었으면 (음소거 방은 멘션만) */
@@ -259,7 +284,8 @@ router.get('/rooms/:id', async function (req, res) {
     var m = await db.query('SELECT m.user_id, m.role, m.last_read_id, COALESCE(u.display_name, u.name) AS name, d.name AS dept FROM chat_members m JOIN users u ON u.id = m.user_id LEFT JOIN departments d ON d.id = u.department_id WHERE m.room_id = $1 AND m.left_at IS NULL ORDER BY 4', [room.id]);
     var on = hub.onlineSet(m.rows.map(function (x) { return x.user_id; }));
     var notice = room.notice_id ? await loadMsg(room.notice_id) : null;
-    res.json({ data: { id: room.id, kind: room.kind, name: room.name, projectId: room.project_id, muted: room.muted, pinned: room.pinned, lastReadId: +room.last_read_id, notice: notice && !notice.deleted ? notice : null,
+    res.json({ data: { id: room.id, kind: room.kind, name: room.name, projectId: room.project_id, muted: room.muted, pinned: room.pinned, lastReadId: +room.last_read_id, notice: notice && !notice.deleted && !(room.hist_from && notice.id <= +room.hist_from) ? notice : null,
+      myRole: room.role || 'member', canManage: room.kind !== 'dm' && await canManage(req, room), histFrom: room.hist_from ? +room.hist_from : null,
       members: m.rows.map(function (x) { return { id: x.user_id, name: x.name, dept: x.dept || '', role: x.role, online: !!on[x.user_id], readId: +x.last_read_id, me: x.user_id === me(req) }; }) } });
   } catch (e) { httpErr.serverError(res, '[chat/room]', e); }
 });
@@ -280,12 +306,54 @@ router.post('/rooms/:id/members', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
     if (room.kind === 'dm') return bad(res, '1:1 대화에는 사람을 더할 수 없습니다 — 새 그룹 대화를 만드세요.');
+    if (readOnly(res, room)) return;
     var ids = Array.isArray((req.body || {}).userIds) ? req.body.userIds.slice(0, 100) : [];
+    var hist = (req.body || {}).history !== false;   // v13.359 이전 대화 보여 주기 (기본 예)
+    var mx = (await db.query('SELECT COALESCE(MAX(id),0) AS mx FROM chat_messages WHERE room_id = $1', [room.id])).rows[0].mx;
     var v = await db.query("SELECT id, COALESCE(display_name, name) AS n FROM users WHERE id = ANY($1) AND tenant_id = $2 AND status = 'active'", [ids, req.tenant.id]);
-    for (var u of v.rows) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id, last_read_id) VALUES ($1,$2,$3,(SELECT COALESCE(MAX(id),0) FROM chat_messages WHERE room_id = $1)) ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL', [room.id, u.id, req.tenant.id]);
-    if (v.rows.length) await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (req.user.name || '') + ' 님이 ' + v.rows.map(function (u) { return u.n; }).join(', ') + ' 님을 초대했습니다' });
+    for (var u of v.rows) await db.query("INSERT INTO chat_members (room_id, user_id, tenant_id, last_read_id, hist_from, role) VALUES ($1,$2,$3,$4,$5,'member') " +
+      'ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL, hist_from = EXCLUDED.hist_from, last_read_id = GREATEST(chat_members.last_read_id, EXCLUDED.last_read_id)',
+      [room.id, u.id, req.tenant.id, mx, hist ? null : mx]);
+    if (v.rows.length) await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (req.user.name || '') + ' 님이 ' + v.rows.map(function (u) { return u.n; }).join(', ') + ' 님을 초대했습니다' + (hist ? '' : ' (이전 대화는 안 보임)') });
     res.json({ data: { added: v.rows.length } });
   } catch (e) { httpErr.serverError(res, '[chat/members]', e); }
+});
+/* 👑 역할 바꾸기 — owner(방장) · member · readonly(읽기만) (v13.359) */
+router.put('/rooms/:id/members/:uid', async function (req, res) {
+  try {
+    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    if (room.kind === 'dm') return bad(res, '1:1 대화에는 역할이 없습니다.');
+    if (!await canManage(req, room)) return res.status(403).json({ error: 'FORBIDDEN', message: '방장만 역할을 바꿀 수 있습니다.' });
+    var role = (req.body || {}).role;
+    if (['owner', 'member', 'readonly'].indexOf(role) < 0) return bad(res, '모르는 역할입니다.');
+    var t = await db.query('SELECT m.role, COALESCE(u.display_name, u.name) AS n FROM chat_members m JOIN users u ON u.id = m.user_id WHERE m.room_id = $1 AND m.user_id = $2 AND m.left_at IS NULL', [room.id, req.params.uid]);
+    if (!t.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '이 방 사람이 아닙니다.' });
+    if (t.rows[0].role === 'owner' && role !== 'owner') {
+      var o = await db.query("SELECT COUNT(*)::int AS n FROM chat_members WHERE room_id = $1 AND role = 'owner' AND left_at IS NULL", [room.id]);
+      if (o.rows[0].n <= 1) return bad(res, '방장이 한 명은 있어야 합니다 — 다른 사람을 먼저 방장으로.');
+    }
+    await db.query('UPDATE chat_members SET role = $3 WHERE room_id = $1 AND user_id = $2', [room.id, req.params.uid, role]);
+    await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (req.user.name || '') + ' 님이 ' + t.rows[0].n + ' 님을 ' + ({ owner: '👑 방장', member: '멤버', readonly: '👁 읽기만' })[role] + '(으)로 바꿨습니다' });
+    hub.publish(await memberIds(room.id), 'room', { roomId: room.id });
+    res.json({ ok: true });
+  } catch (e) { httpErr.serverError(res, '[chat/role]', e); }
+});
+/* 내보내기 — 방장만 */
+router.delete('/rooms/:id/members/:uid', async function (req, res, next) {
+  if (req.params.uid === 'me') return next();
+  try {
+    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    if (room.kind === 'dm') return bad(res, '1:1 대화에서는 내보낼 수 없습니다.');
+    if (!await canManage(req, room)) return res.status(403).json({ error: 'FORBIDDEN', message: '방장만 내보낼 수 있습니다.' });
+    if (req.params.uid === me(req)) return bad(res, '나가기를 쓰세요.');
+    var t = await db.query('SELECT COALESCE(u.display_name, u.name) AS n FROM chat_members m JOIN users u ON u.id = m.user_id WHERE m.room_id = $1 AND m.user_id = $2 AND m.left_at IS NULL', [room.id, req.params.uid]);
+    if (!t.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '이 방 사람이 아닙니다.' });
+    var ids = await memberIds(room.id);
+    await db.query('UPDATE chat_members SET left_at = now() WHERE room_id = $1 AND user_id = $2', [room.id, req.params.uid]);
+    await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (req.user.name || '') + ' 님이 ' + t.rows[0].n + ' 님을 내보냈습니다' });
+    hub.publish(ids, 'room', { roomId: room.id, removed: req.params.uid });
+    res.json({ ok: true });
+  } catch (e) { httpErr.serverError(res, '[chat/kick]', e); }
 });
 router.delete('/rooms/:id/members/me', async function (req, res) {
   try {
@@ -303,6 +371,7 @@ router.get('/rooms/:id/messages', async function (req, res) {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
     var lim = Math.min(Math.max(parseInt(req.query.limit, 10) || PAGE, 1), 200);
     var where = ['m.room_id = $1'], params = [room.id];
+    if (room.hist_from) { params.push(+room.hist_from); where.push('m.id > $' + params.length); }   // 초대 때 이전 대화 안 보여 줌
     if (req.query.thread) { params.push(+req.query.thread); where.push('(m.reply_to = $' + params.length + ' OR m.id = $' + params.length + ')'); }
     else where.push('m.reply_to IS NULL');
     if (req.query.before) { params.push(+req.query.before); where.push('m.id < $' + params.length); }
@@ -318,6 +387,7 @@ router.get('/rooms/:id/messages', async function (req, res) {
 router.post('/rooms/:id/messages', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
+    if (readOnly(res, room)) return;
     var b = req.body || {}, body = String(b.body || '').trim();
     var cards = await cleanCards(req, b.cards);
     if (!body && !cards) return bad(res, '내용을 적으세요.');
@@ -440,6 +510,7 @@ router.post('/rooms/:id/typing', async function (req, res) {
 router.post('/rooms/:id/files', express.raw({ type: function () { return true; }, limit: MAX_FILE }), async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
+    if (readOnly(res, room)) return;
     var buf = req.body;
     if (!Buffer.isBuffer(buf) || !buf.length) return bad(res, '파일이 비었습니다.');
     var name = String(req.query.name || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 200) || 'file';
@@ -516,6 +587,7 @@ router.post('/files/:fid/annot', async function (req, res) {
   try {
     var f = await fileFor(req, res); if (!f) return;
     if (!/^image\//i.test(f.mime || '')) return bad(res, '사진에만 표시할 수 있습니다.');
+    if (readOnly(res, await membership(req.tenant.id, f.room_id, me(req)))) return;
     var b = req.body || {}, uid = me(req);
     var add = (Array.isArray(b.add) ? b.add : []).slice(0, 50).map(function (s) { return annShape(s, uid); }).filter(Boolean);
     var remove = (Array.isArray(b.remove) ? b.remove : []).slice(0, 600).map(String);
@@ -558,7 +630,8 @@ router.post('/files/:fid/cursor', async function (req, res) {
 router.get('/rooms/:id/files', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
-    var r = await db.query('SELECT f.id, f.name, f.mime, f.size, f.created_at, COALESCE(u.display_name, u.name) AS user_name FROM chat_files f LEFT JOIN users u ON u.id = f.user_id WHERE f.room_id = $1 ORDER BY f.created_at DESC LIMIT 200', [room.id]);
+    var r = await db.query('SELECT f.id, f.name, f.mime, f.size, f.created_at, COALESCE(u.display_name, u.name) AS user_name FROM chat_files f LEFT JOIN users u ON u.id = f.user_id WHERE f.room_id = $1 ' +
+      'AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM chat_messages x WHERE x.file_id = f.id AND x.id > $2)) ORDER BY f.created_at DESC LIMIT 200', [room.id, room.hist_from || null]);
     res.json({ data: r.rows.map(function (f) { return { id: f.id, name: f.name, mime: f.mime, size: f.size, at: f.created_at, userName: f.user_name }; }) });
   } catch (e) { httpErr.serverError(res, '[chat/files]', e); }
 });
@@ -615,6 +688,7 @@ async function memberOf(roomId, uid) {
 router.post('/rooms/:id/posts', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
+    if (readOnly(res, room)) return;
     var b = req.body || {};
     var cat = POST_CATS[b.cat] ? b.cat : 'data';
     var title = String(b.title || '').trim().slice(0, 200), body = String(b.body || '').slice(0, MAX_BODY);
@@ -641,6 +715,7 @@ router.get('/rooms/:id/posts', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
     var where = ['m.room_id = $1', 'm.post IS NOT NULL', 'm.deleted_at IS NULL'], params = [room.id];
+    if (room.hist_from) { params.push(+room.hist_from); where.push('m.id > $' + params.length); }
     if (POST_CATS[req.query.cat]) { params.push(req.query.cat); where.push("m.post->>'cat' = $" + params.length); }
     if (req.query.open) where.push("COALESCE(m.post->>'status', 'open') NOT IN ('done', 'solved')");
     var r = await db.query(MSG_SQL + 'WHERE ' + where.join(' AND ') + ' ORDER BY m.id DESC LIMIT 300', params);
@@ -653,7 +728,7 @@ router.get('/requests', async function (req, res) {
     var who = req.query.who === 'mine' ? 'mine' : 'me';
     var params = [me(req), req.tenant.id];
     var where = ["m.post->>'cat' = 'req'", 'm.deleted_at IS NULL', 'm.tenant_id = $2',
-      'EXISTS (SELECT 1 FROM chat_members cm WHERE cm.room_id = m.room_id AND cm.user_id = $1 AND cm.left_at IS NULL)',
+      'EXISTS (SELECT 1 FROM chat_members cm WHERE cm.room_id = m.room_id AND cm.user_id = $1 AND cm.left_at IS NULL AND (cm.hist_from IS NULL OR m.id > cm.hist_from))',
       who === 'mine' ? 'm.user_id = $1' : "m.post->>'assignee' = $1::text"];
     if (req.query.open) where.push("COALESCE(m.post->>'status', 'open') <> 'done'");
     var r = await db.query(MSG_SQL.replace('FROM chat_messages m', ', COALESCE(rr.name, pp.name) AS room_name, rr.kind AS room_kind FROM chat_messages m JOIN chat_rooms rr ON rr.id = m.room_id LEFT JOIN projects pp ON pp.id = rr.project_id') +
@@ -667,6 +742,7 @@ router.post('/messages/:mid/post', async function (req, res) {
     var r = await db.query('SELECT * FROM chat_messages WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL AND post IS NOT NULL', [+req.params.mid, req.tenant.id]);
     var m = r.rows[0]; if (!m) return res.status(404).json({ error: 'NOT_FOUND', message: '글이 없습니다.' });
     var room = await roomFor(req, res, m.room_id); if (!room) return;
+    if (readOnly(res, room)) return;
     var b = req.body || {}, post = m.post, notes = [], body = m.body, cards = m.cards;
     var mineOrAdmin = m.user_id === me(req) || req.user.role === 'admin';
     if (b.status != null) {
@@ -713,77 +789,109 @@ router.post('/messages/:mid/post', async function (req, res) {
   } catch (e) { httpErr.serverError(res, '[chat/post/upd]', e); }
 });
 
-/* ─── 📁 내 폴더 (v13.358) — 메시지 · 사진 · 파일 · 글을 내 폴더에 모아 둠. 남은 못 봄 ─── */
-async function myFolder(req, res) {
-  var r = await db.query('SELECT * FROM chat_folders WHERE id = $1 AND user_id = $2 AND tenant_id = $3', [req.params.fid, me(req), req.tenant.id]);
-  if (!r.rows.length) { res.status(404).json({ error: 'NOT_FOUND', message: '폴더가 없습니다.' }); return null; }
-  return r.rows[0];
+/* ─── 📁 폴더 (v13.358 내 폴더 · v13.359 방 폴더) — 메시지 · 사진 · 파일 · 글을 모아 둠
+ *   내 폴더(room_id 없음): 나만 봄 · 방 폴더(room_id): 그 방 사람 모두가 같이 담고 봄 (그 방 메시지만)
+ *   방에서 나가면 그 방 것은 안 보임 · 초대 때 '이전 대화 안 보여 주기'면 그 앞 메시지도 안 보임 */
+async function folderFor(req, res, write) {
+  var r = await db.query('SELECT f.*, m.role AS my_role, m.hist_from AS my_hist FROM chat_folders f LEFT JOIN chat_members m ON m.room_id = f.room_id AND m.user_id = $2 AND m.left_at IS NULL WHERE f.id = $1 AND f.tenant_id = $3', [req.params.fid, me(req), req.tenant.id]);
+  var f = r.rows[0];
+  var ok = f && (f.room_id ? f.my_role != null : f.user_id === me(req));
+  if (!ok) { res.status(404).json({ error: 'NOT_FOUND', message: '폴더가 없습니다.' }); return null; }
+  if (write && f.room_id && f.my_role === 'readonly') { res.status(403).json({ error: 'FORBIDDEN', message: '읽기만 하는 멤버입니다.' }); return null; }
+  return f;
 }
+function folderShape(f) { return { id: f.id, name: f.name, icon: f.icon || (f.room_id ? '🗂' : '📁'), n: f.n || 0, roomId: f.room_id || null, roomName: f.room_id ? (f.room_name || '대화방') : null, mine: f.user_id === f.me }; }
 router.get('/folders', async function (req, res) {
   try {
-    var r = await db.query('SELECT f.id, f.name, f.icon, f.sort, f.created_at, (SELECT COUNT(*)::int FROM chat_saved s JOIN chat_messages m ON m.id = s.msg_id JOIN chat_members cm ON cm.room_id = m.room_id AND cm.user_id = $1 AND cm.left_at IS NULL WHERE s.folder_id = f.id AND m.deleted_at IS NULL) AS n ' +
-      'FROM chat_folders f WHERE f.user_id = $1 AND f.tenant_id = $2 ORDER BY f.sort, f.created_at', [me(req), req.tenant.id]);
-    res.json({ data: r.rows.map(function (f) { return { id: f.id, name: f.name, icon: f.icon || '📁', n: f.n }; }) });
+    var params = [me(req), req.tenant.id], where = '(f.user_id = $1 AND f.room_id IS NULL)';
+    if (req.query.room) { params.push(String(req.query.room)); where = 'f.room_id = $3'; }
+    else if (req.query.shared !== '0') where += ' OR f.room_id IN (SELECT room_id FROM chat_members WHERE user_id = $1 AND left_at IS NULL)';
+    var r = await db.query('SELECT f.*, $1::uuid AS me, COALESCE(rr.name, pp.name, CASE WHEN rr.kind = \'dm\' THEN \'1:1 대화\' END) AS room_name, ' +
+      '(SELECT COUNT(*)::int FROM chat_saved s JOIN chat_messages m ON m.id = s.msg_id JOIN chat_members cm ON cm.room_id = m.room_id AND cm.user_id = $1 AND cm.left_at IS NULL WHERE s.folder_id = f.id AND m.deleted_at IS NULL AND (cm.hist_from IS NULL OR m.id > cm.hist_from)) AS n ' +
+      'FROM chat_folders f LEFT JOIN chat_rooms rr ON rr.id = f.room_id LEFT JOIN projects pp ON pp.id = rr.project_id ' +
+      'WHERE f.tenant_id = $2 AND (' + where + ') AND (f.room_id IS NULL OR EXISTS (SELECT 1 FROM chat_members x WHERE x.room_id = f.room_id AND x.user_id = $1 AND x.left_at IS NULL)) ORDER BY (f.room_id IS NOT NULL), f.sort, f.created_at', params);
+    res.json({ data: r.rows.map(folderShape) });
   } catch (e) { httpErr.serverError(res, '[chat/folders]', e); }
 });
 router.post('/folders', async function (req, res) {
   try {
-    var name = String((req.body || {}).name || '').trim().slice(0, 80);
+    var b = req.body || {}, name = String(b.name || '').trim().slice(0, 80);
     if (!name) return bad(res, '폴더 이름을 적으세요.');
-    var c = await db.query('SELECT COUNT(*)::int AS n, COALESCE(MAX(sort), 0) AS mx FROM chat_folders WHERE user_id = $1', [me(req)]);
+    var roomId = null, roomName = null;
+    if (b.roomId) {
+      var room = await roomFor(req, res, String(b.roomId)); if (!room) return;
+      if (room.role === 'readonly') return res.status(403).json({ error: 'FORBIDDEN', message: '읽기만 하는 멤버입니다.' });
+      roomId = room.id; roomName = room.name;
+    }
+    var c = await db.query('SELECT COUNT(*)::int AS n, COALESCE(MAX(sort), 0) AS mx FROM chat_folders WHERE ' + (roomId ? 'room_id = $1' : 'user_id = $1 AND room_id IS NULL'), [roomId || me(req)]);
     if (c.rows[0].n >= 100) return bad(res, '폴더는 100개까지 만들 수 있습니다.');
-    var id = rid('fd');
-    await db.query('INSERT INTO chat_folders (id, tenant_id, user_id, name, icon, sort) VALUES ($1,$2,$3,$4,$5,$6)', [id, req.tenant.id, me(req), name, String((req.body || {}).icon || '📁').slice(0, 16), c.rows[0].mx + 1]);
-    res.status(201).json({ data: { id: id, name: name, icon: String((req.body || {}).icon || '📁').slice(0, 16), n: 0 } });
+    var id = rid('fd'), icon = String(b.icon || (roomId ? '🗂' : '📁')).slice(0, 16);
+    await db.query('INSERT INTO chat_folders (id, tenant_id, user_id, name, icon, sort, room_id) VALUES ($1,$2,$3,$4,$5,$6,$7)', [id, req.tenant.id, me(req), name, icon, c.rows[0].mx + 1, roomId]);
+    if (roomId) hub.publish(await memberIds(roomId), 'folder', { roomId: roomId, folderId: id });
+    res.status(201).json({ data: { id: id, name: name, icon: icon, n: 0, roomId: roomId, roomName: roomName, mine: true } });
   } catch (e) { httpErr.serverError(res, '[chat/folders/new]', e); }
 });
+/* 이름 · 지우기: 내 폴더는 나, 방 폴더는 만든 사람 · 방장 · 관리자 */
+async function folderManage(req, res) {
+  var f = await folderFor(req, res, true); if (!f) return null;
+  if (f.room_id && f.user_id !== me(req) && f.my_role !== 'owner' && req.user.role !== 'admin') { res.status(403).json({ error: 'FORBIDDEN', message: '방 폴더는 만든 사람이나 방장만 바꿀 수 있습니다.' }); return null; }
+  return f;
+}
 router.put('/folders/:fid', async function (req, res) {
   try {
-    var f = await myFolder(req, res); if (!f) return;
+    var f = await folderManage(req, res); if (!f) return;
     var b = req.body || {}, name = b.name != null ? String(b.name).trim().slice(0, 80) : f.name;
     if (!name) return bad(res, '폴더 이름을 적으세요.');
     await db.query('UPDATE chat_folders SET name = $2, icon = $3, sort = $4 WHERE id = $1', [f.id, name, b.icon != null ? String(b.icon).slice(0, 16) : f.icon, b.sort != null ? +b.sort || 0 : f.sort]);
+    if (f.room_id) hub.publish(await memberIds(f.room_id), 'folder', { roomId: f.room_id, folderId: f.id });
     res.json({ ok: true });
   } catch (e) { httpErr.serverError(res, '[chat/folders/put]', e); }
 });
 router.delete('/folders/:fid', async function (req, res) {
   try {
-    var f = await myFolder(req, res); if (!f) return;
+    var f = await folderManage(req, res); if (!f) return;
     await db.query('DELETE FROM chat_folders WHERE id = $1', [f.id]);
+    if (f.room_id) hub.publish(await memberIds(f.room_id), 'folder', { roomId: f.room_id, folderId: f.id, gone: true });
     res.json({ ok: true });
   } catch (e) { httpErr.serverError(res, '[chat/folders/del]', e); }
 });
 router.get('/folders/:fid/items', async function (req, res) {
   try {
-    var f = await myFolder(req, res); if (!f) return;
-    var r = await db.query(MSG_SQL.replace('FROM chat_messages m', ', s.note AS saved_note, s.created_at AS saved_at, COALESCE(rr.name, pp.name) AS room_name, rr.kind AS room_kind FROM chat_saved s JOIN chat_messages m ON m.id = s.msg_id JOIN chat_rooms rr ON rr.id = m.room_id LEFT JOIN projects pp ON pp.id = rr.project_id') +
-      'WHERE s.folder_id = $1 AND m.deleted_at IS NULL AND EXISTS (SELECT 1 FROM chat_members cm WHERE cm.room_id = m.room_id AND cm.user_id = $2 AND cm.left_at IS NULL) ORDER BY s.created_at DESC LIMIT 500', [f.id, me(req)]);
-    res.json({ data: r.rows.map(function (x) { var o = shape(x); o.roomName = x.room_name || (x.room_kind === 'dm' ? '1:1 대화' : '대화방'); o.savedNote = x.saved_note || ''; o.savedAt = x.saved_at; return o; }) });
+    var f = await folderFor(req, res); if (!f) return;
+    var r = await db.query(MSG_SQL.replace('FROM chat_messages m', ', s.note AS saved_note, s.created_at AS saved_at, COALESCE(us.display_name, us.name) AS saved_by, COALESCE(rr.name, pp.name) AS room_name, rr.kind AS room_kind FROM chat_saved s JOIN chat_messages m ON m.id = s.msg_id JOIN chat_rooms rr ON rr.id = m.room_id LEFT JOIN projects pp ON pp.id = rr.project_id LEFT JOIN users us ON us.id = s.user_id') +
+      'JOIN chat_members cm ON cm.room_id = m.room_id AND cm.user_id = $2 AND cm.left_at IS NULL ' +
+      'WHERE s.folder_id = $1 AND m.deleted_at IS NULL AND (cm.hist_from IS NULL OR m.id > cm.hist_from) ORDER BY s.created_at DESC LIMIT 500', [f.id, me(req)]);
+    res.json({ data: r.rows.map(function (x) { var o = shape(x); o.roomName = x.room_name || (x.room_kind === 'dm' ? '1:1 대화' : '대화방'); o.savedNote = x.saved_note || ''; o.savedAt = x.saved_at; o.savedBy = x.saved_by || ''; return o; }) });
   } catch (e) { httpErr.serverError(res, '[chat/folders/items]', e); }
 });
 router.post('/folders/:fid/items', async function (req, res) {
   try {
-    var f = await myFolder(req, res); if (!f) return;
+    var f = await folderFor(req, res, true); if (!f) return;
     var mid = +(req.body || {}).messageId;
     var r = await db.query('SELECT id, room_id FROM chat_messages WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [mid, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '메시지가 없습니다.' });
-    if (!await roomFor(req, res, r.rows[0].room_id)) return;
+    var room = await roomFor(req, res, r.rows[0].room_id); if (!room) return;
+    if (room.hist_from && mid <= +room.hist_from) return res.status(404).json({ error: 'NOT_FOUND', message: '메시지가 없습니다.' });
+    if (f.room_id && f.room_id !== room.id) return bad(res, '방 폴더에는 그 방 메시지만 담을 수 있습니다.');
     await db.query('INSERT INTO chat_saved (folder_id, msg_id, user_id, tenant_id, note) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (folder_id, msg_id) DO UPDATE SET note = COALESCE(EXCLUDED.note, chat_saved.note)',
       [f.id, mid, me(req), req.tenant.id, (req.body || {}).note ? String(req.body.note).slice(0, 500) : null]);
+    if (f.room_id) hub.publish(await memberIds(f.room_id), 'folder', { roomId: f.room_id, folderId: f.id });
     res.status(201).json({ ok: true });
   } catch (e) { httpErr.serverError(res, '[chat/folders/add]', e); }
 });
 router.delete('/folders/:fid/items/:mid', async function (req, res) {
   try {
-    var f = await myFolder(req, res); if (!f) return;
+    var f = await folderFor(req, res, true); if (!f) return;
     await db.query('DELETE FROM chat_saved WHERE folder_id = $1 AND msg_id = $2', [f.id, +req.params.mid]);
+    if (f.room_id) hub.publish(await memberIds(f.room_id), 'folder', { roomId: f.room_id, folderId: f.id });
     res.json({ ok: true });
   } catch (e) { httpErr.serverError(res, '[chat/folders/rm]', e); }
 });
-/* 이 메시지가 담긴 내 폴더 (메뉴에 ✓) */
+/* 이 메시지가 담긴 폴더 (메뉴에 ✓) — 내 폴더 + 그 방 폴더 */
 router.get('/messages/:mid/folders', async function (req, res) {
   try {
-    var r = await db.query('SELECT folder_id FROM chat_saved WHERE msg_id = $1 AND user_id = $2', [+req.params.mid, me(req)]);
+    var r = await db.query('SELECT s.folder_id FROM chat_saved s JOIN chat_folders f ON f.id = s.folder_id JOIN chat_messages m ON m.id = s.msg_id ' +
+      'WHERE s.msg_id = $1 AND f.tenant_id = $3 AND ((f.room_id IS NULL AND f.user_id = $2) OR (f.room_id = m.room_id AND EXISTS (SELECT 1 FROM chat_members x WHERE x.room_id = f.room_id AND x.user_id = $2 AND x.left_at IS NULL)))', [+req.params.mid, me(req), req.tenant.id]);
     res.json({ data: r.rows.map(function (x) { return x.folder_id; }) });
   } catch (e) { httpErr.serverError(res, '[chat/msg/folders]', e); }
 });
@@ -814,7 +922,7 @@ router.get('/search', async function (req, res) {
     if (q.length < 2) return res.json({ data: [] });
     var like = '%' + q.replace(/[\\%_]/g, function (c) { return '\\' + c; }) + '%';
     var r = await db.query(MSG_SQL + 'JOIN chat_members cm ON cm.room_id = m.room_id AND cm.user_id = $1 AND cm.left_at IS NULL ' +
-      'WHERE m.tenant_id = $2 AND m.deleted_at IS NULL AND (m.body ILIKE $3 OR f.name ILIKE $3) ORDER BY m.id DESC LIMIT 60', [me(req), req.tenant.id, like]);
+      'WHERE m.tenant_id = $2 AND m.deleted_at IS NULL AND (cm.hist_from IS NULL OR m.id > cm.hist_from) AND (m.body ILIKE $3 OR f.name ILIKE $3) ORDER BY m.id DESC LIMIT 60', [me(req), req.tenant.id, like]);
     res.json({ data: r.rows.map(shape) });
   } catch (e) { httpErr.serverError(res, '[chat/search]', e); }
 });

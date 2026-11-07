@@ -3,6 +3,7 @@
  *   ① 휴대폰 · PC 브라우저: 서비스 워커 등록 → "앱 설치"(안드로이드 · 아이폰 · PC 크롬/엣지)
  *   ② PC 앱(Electron, desktop/): window.wmDesktop 다리 — 윈도우 알림 · 작업 표시줄 숫자 · 트레이에서 바로 가기
  *   ③ 앱 아이콘 숫자(navigator.setAppBadge) — 설치한 앱에서 안 읽은 메시지 수
+ *   ④ 🔔 푸시(v13.359): wmPushEnable · wmPushState — 앱을 닫아도 알림 (서버 /api/push)
  *   공통 진입: wmAppInstall() — 내 메뉴 › 📲 앱 설치
  */
 var WM_DESKTOP_DOWNLOAD = 'https://github.com/JONGMIN-PARK/work_manager/releases/latest';
@@ -68,7 +69,7 @@ function wmAppInstall() {
   };
   var installed = wmIsStandalone();
   div.innerHTML =
-    (installed ? '<p style="margin:0 0 12px;color:var(--ok,#22c55e);font-weight:600">✅ 지금 앱으로 쓰고 있습니다.</p>' : '') +
+    (installed ? '<p style="margin:0 0 12px;color:var(--ok,#22c55e);font-weight:600">✅ 지금 앱으로 쓰고 있습니다.</p>' : '') + _wmPushCard() +
     card('pc', '🖥️', 'PC (윈도우) — 메신저 앱',
       '<p style="margin:0 0 8px;font-size:13px;color:var(--t4)">창을 닫아도 트레이에 남아 메시지 알림을 받습니다. 작업 표시줄에 안 읽은 수 · <b>Ctrl+Shift+M</b> 로 바로 열기.</p>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn btn-p" style="text-decoration:none" href="' + WM_DESKTOP_DOWNLOAD + '" target="_blank" rel="noopener">⬇ PC 앱 받기</a>' +
@@ -80,6 +81,7 @@ function wmAppInstall() {
       '<ol style="margin:0;padding-left:4px;list-style:none;font-size:13px">' + step('1', '<b>Safari</b> 로 이 주소를 엽니다 (다른 브라우저는 안 됩니다)') + step('2', '아래 <b>공유 ⬆</b> 단추 → <b>홈 화면에 추가</b>') + step('3', '홈 화면의 <b>업무관리</b> 아이콘으로 엽니다 — 알림은 iOS 16.4 이상') + '</ol>') +
     '<p style="margin:4px 0 0;font-size:12px;color:var(--t5)">주소: <code>' + location.origin + '</code> · 모든 기기가 같은 서버 · 같은 데이터를 씁니다.</p>';
   var modal = createModal({ title: '📲 앱으로 설치', content: div, width: '520px' });
+  _wmPushCardFill(div);
   function prompt() {
     if (!_wmInstallEvt) return;
     _wmInstallEvt.prompt();
@@ -89,4 +91,81 @@ function wmAppInstall() {
   if (a) a.onclick = prompt;
   if (p) p.onclick = prompt;
   return true;
+}
+
+/* ─── 🔔 휴대폰 · 브라우저 푸시 (v13.359) — 앱을 닫아 두어도 메신저 · 업무 알림 ─── */
+function wmPushSupported() { return !wmIsDesktopApp() && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && location.protocol !== 'file:'; }
+/** 'on' · 'off' · 'denied' · 'ios-install'(아이폰은 홈 화면 앱에서만) · 'unsupported' · 'desktop'(PC 앱은 트레이로 받음) */
+function wmPushState() {
+  if (wmIsDesktopApp()) return Promise.resolve('desktop');
+  if (_wmOs() === 'ios' && !wmIsStandalone()) return Promise.resolve('ios-install');
+  if (!wmPushSupported()) return Promise.resolve('unsupported');
+  if (Notification.permission === 'denied') return Promise.resolve('denied');
+  return navigator.serviceWorker.getRegistration('/').then(function (reg) { return reg ? reg.pushManager.getSubscription() : null; })
+    .then(function (sub) { return sub && Notification.permission === 'granted' ? 'on' : 'off'; }).catch(function () { return 'off'; });
+}
+function _wmB64(s) {
+  var pad = '='.repeat((4 - s.length % 4) % 4), raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/')), out = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+function _wmPushSubscribe() {
+  return Promise.all([navigator.serviceWorker.ready, apiFetch('/api/push/key')]).then(function (r) {
+    var reg = r[0], key = r[1].data.publicKey;
+    return reg.pushManager.getSubscription().then(function (sub) {
+      return sub || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _wmB64(key) });
+    });
+  }).then(function (sub) {
+    return apiFetch('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription: sub.toJSON ? sub.toJSON() : sub }) });
+  });
+}
+/** 알림 켜기 — 반드시 누름(사용자 동작) 안에서 부를 것 (아이폰 규칙) */
+function wmPushEnable() {
+  if (!wmPushSupported()) { if (typeof showToast === 'function') showToast(_wmOs() === 'ios' && !wmIsStandalone() ? '아이폰은 Safari → 공유 → 홈 화면에 추가한 앱에서 알림을 켤 수 있어요' : '이 브라우저는 알림을 받을 수 없습니다', 'warn'); return Promise.resolve(false); }
+  return Notification.requestPermission().then(function (p) {
+    if (p !== 'granted') { if (typeof showToast === 'function') showToast('알림이 막혀 있습니다 — 브라우저 · 휴대폰 설정에서 허용해 주세요', 'warn'); return false; }
+    return _wmPushSubscribe().then(function () { if (typeof showToast === 'function') showToast('🔔 이 기기에서 알림을 받습니다', 'success'); return true; });
+  }).catch(function (e) { console.warn('[push]', e); if (typeof showToast === 'function') showToast('알림을 켜지 못했습니다', 'error'); return false; });
+}
+function wmPushDisable() {
+  return navigator.serviceWorker.getRegistration('/').then(function (reg) { return reg && reg.pushManager.getSubscription(); }).then(function (sub) {
+    if (!sub) return;
+    var ep = sub.endpoint;
+    return sub.unsubscribe().then(function () { return apiFetch('/api/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint: ep }) }); });
+  }).then(function () { if (typeof showToast === 'function') showToast('이 기기 알림을 껐습니다', 'info'); });
+}
+function wmPushTest() {
+  return apiFetch('/api/push/test', { method: 'POST', body: '{}' }).then(function (r) { if (typeof showToast === 'function') showToast(r.data.sent ? '🔔 시험 알림을 보냈습니다 (' + r.data.sent + '대)' : '알림 받을 기기가 없습니다 — 먼저 켜 주세요', r.data.sent ? 'success' : 'warn'); });
+}
+/* 로그인되면: 이미 허용한 기기는 조용히 다시 등록 (다른 사람이 로그인했거나 서버 키가 바뀌었을 때) */
+(function () {
+  if (!wmPushSupported()) return;
+  var tries = 0;
+  (function wait() {
+    if (typeof currentUser !== 'undefined' && currentUser && currentUser.id && typeof apiFetch === 'function') {
+      if (Notification.permission === 'granted') _wmPushSubscribe().catch(function (e) { console.warn('[push] sync', e && e.message); });
+      return;
+    }
+    if (++tries < 90) setTimeout(wait, 2000);
+  })();
+})();
+function _wmPushCard() {
+  return '<section class="wm-push" id="wmPushCard"><div class="wm-push-h">🔔 이 기기 알림 <b data-pst>확인 중…</b></div><p>앱을 닫아 두어도 새 메시지 · 요청 · 이슈 알림이 옵니다. 메신저에 접속해 있는 동안은 화면 안에서만 알려 줍니다.</p><div class="wm-push-a" data-pa></div></section>';
+}
+function _wmPushCardFill(box) {
+  var card = box.querySelector('#wmPushCard'); if (!card) return;
+  wmPushState().then(function (st) {
+    var label = { on: '✅ 켜짐', off: '꺼짐', denied: '⛔ 막힘', 'ios-install': '홈 화면 앱에서', unsupported: '지원 안 함', desktop: 'PC 앱 — 트레이로 받음' }[st];
+    card.querySelector('[data-pst]').textContent = label;
+    card.dataset.st = st;
+    var a = card.querySelector('[data-pa]');
+    a.innerHTML = st === 'on' ? '<button type="button" class="btn btn-g" data-pt>시험 알림</button><button type="button" class="btn btn-g" data-poff>이 기기 끄기</button>' :
+      st === 'off' ? '<button type="button" class="btn btn-p" data-pon>🔔 알림 켜기</button>' :
+      st === 'denied' ? '<span class="wm-push-tip">브라우저 · 휴대폰 설정 › 알림 에서 이 사이트를 허용해 주세요</span>' :
+      st === 'ios-install' ? '<span class="wm-push-tip">아래 🍎 방법으로 홈 화면에 추가한 뒤, 그 앱에서 켜 주세요 (iOS 16.4 이상)</span>' : '';
+    var on = a.querySelector('[data-pon]'), off = a.querySelector('[data-poff]'), t = a.querySelector('[data-pt]');
+    if (on) on.onclick = function () { wmPushEnable().then(function () { _wmPushCardFill(box); }); };
+    if (off) off.onclick = function () { wmPushDisable().then(function () { _wmPushCardFill(box); }); };
+    if (t) t.onclick = wmPushTest;
+  });
 }

@@ -125,6 +125,11 @@ function chatOnEvent(ev, d) {
     _cxDrawRooms(); _cxDrawHead(); _cxDrawAside();
   } else if (ev === 'notice') {
     if (CX.room === d.roomId && CX.info) { CX.info.notice = d.notice; _cxDrawNotice(); }
+  } else if (ev === 'room') {   // v13.359 역할 · 내보내기
+    if (d.removed && d.removed === _cxMe()) { CX.rooms = CX.rooms.filter(function (r) { return r.id !== d.roomId; }); if (CX.room === d.roomId) { CX.room = null; _cxDrawMain(); } _cxDrawRooms(); _cxToast('대화방에서 내보내졌습니다', 'warn'); return; }
+    if (CX.room === d.roomId) apiFetch('/api/chat/rooms/' + encodeURIComponent(d.roomId)).then(function (r) { if (CX.room !== d.roomId) return; var was = CX.info && CX.info.myRole; CX.info = r.data; _cxDrawHead(); _cxDrawAside(); if (was !== CX.info.myRole) { _cxDrawMain(); _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(); } }).catch(function () {});
+  } else if (ev === 'folder') {
+    if (typeof chatCollabOnFolder === 'function') chatCollabOnFolder(d);
   } else if (ev === 'annot' || ev === 'annot-cur') {
     if (typeof chatBoardOnEvent === 'function') chatBoardOnEvent(ev, d);
   } else if (ev === 'rtc') {
@@ -177,7 +182,7 @@ function renderMessages() {
     el.innerHTML = '<div class="cx no-aside' + (CX.room ? ' has-room' : '') + '">' +
       '<aside class="cx-side"><div class="cx-side-h"><b>💬 메신저</b><span class="cx-side-a"><button type="button" class="cx-ib" id="cxReqs" title="🛠 요청함 — 나에게 온 · 내가 올린 요청">🛠</button><button type="button" class="cx-ib" id="cxFolders" title="📁 내 폴더 — 모아 둔 메시지 · 사진 · 파일">📂</button><button type="button" class="cx-ib" id="cxNew" title="새 대화 (사람 · 그룹 · 프로젝트 방)">＋</button></span></div>' +
       '<div class="cx-sq"><input id="cxQ" type="search" placeholder="대화방 · 메시지 찾기" aria-label="대화방 · 메시지 찾기"></div>' +
-      '<div class="cx-perm" id="cxPerm" hidden><span>🔔 다른 탭에 있어도 새 메시지 알림을 받을까요?</span><button type="button" id="cxPermOn">알림 켜기</button></div>' +
+      '<div class="cx-perm" id="cxPerm" hidden><span>🔔 앱을 닫아 두어도 새 메시지 알림을 받을까요?</span><button type="button" id="cxPermOn">알림 켜기</button></div>' +
       '<div class="cx-rooms" id="cxRooms" role="list"></div></aside>' +
       '<section class="cx-main" id="cxMain"></section>' +
       '<aside class="cx-aside" id="cxAside"></aside></div>';
@@ -186,7 +191,7 @@ function renderMessages() {
     var q = el.querySelector('#cxQ'), qt;
     q.addEventListener('input', function () { CX.q = q.value.trim(); clearTimeout(qt); qt = setTimeout(_cxSearch, 250); _cxDrawRooms(); });
     if ('Notification' in window && Notification.permission === 'default') el.querySelector('#cxPerm').hidden = false;
-    el.querySelector('#cxPermOn').addEventListener('click', function () { Notification.requestPermission().then(function () { el.querySelector('#cxPerm').hidden = true; }); });
+    el.querySelector('#cxPermOn').addEventListener('click', function () { (typeof wmPushEnable === 'function' ? wmPushEnable() : Notification.requestPermission()).then(function () { el.querySelector('#cxPerm').hidden = true; }); });   // v13.359 앱을 닫아도 오게 푸시까지
   }
   var want = CX.pending || CX.room, wantMid = CX.pendingMid; CX.pending = null; CX.pendingMid = null;
   _cxLoadRooms().then(function () { if (want) chatOpenRoom(want, false, wantMid); else if (window.innerWidth > 760 && CX.rooms[0]) chatOpenRoom(CX.rooms[0].id); else _cxDrawMain(); });
@@ -234,6 +239,7 @@ function chatOpenRoom(id, keep, focusMid) {
     if (CX.room !== my) return;
     CX.info = rs[0].data; CX.msgs = rs[1].data || []; CX.more = !!rs[1].more;
     CX.reads = {}; (rs[1].reads || []).forEach(function (x) { CX.reads[x.userId] = x.id; });
+    if (CX.info.myRole === 'readonly') _cxDrawMain();   // 읽기만 — 입력칸 대신 안내
     _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(false, focusMid); _cxMarkRead(); _cxDrawAside();
     if (CX.openThread) { var th = CX.openThread; CX.openThread = null; chatOpenThread(th); }   // 요청함 · 폴더에서 글 열기
     if (CX.info.kind === 'project') apiFetch('/api/chat/rooms/' + encodeURIComponent(id) + '/context').then(function (c) { if (CX.room === my) { CX.ctx = c.data; _cxDrawAside(); } }).catch(function () {});
@@ -256,7 +262,7 @@ function _cxDrawMain() {
   if (!CX.room) { m.innerHTML = '<div class="cx-blank"><div>💬</div><b>대화를 고르거나 새로 시작하세요</b><span>업무 카드 · 프로젝트 방 현황 · /ai 로 데이터에 바로 묻기</span></div>'; return; }
   m.innerHTML = '<header class="cx-h" id="cxHead"></header><div class="cx-notice" id="cxNotice" hidden></div>' +
     '<div class="cx-msgs" id="cxMsgs" tabindex="0" aria-live="polite"><div class="cx-loading">불러오는 중…</div></div>' +
-    '<div class="cx-typing" id="cxTyping"></div>' + _cxComposerHtml('cxIn', 'cxComp') +
+    '<div class="cx-typing" id="cxTyping"></div>' + (CX.info && CX.info.myRole === 'readonly' ? '<div class="cx-ro">👁 읽기만 하는 멤버입니다 — 글 · 파일을 올리려면 방장에게 말해 주세요</div>' : _cxComposerHtml('cxIn', 'cxComp')) +
     '<div class="cx-drop" id="cxDrop" hidden>여기에 놓으면 보냅니다</div>';
   _cxBindComposer('cxIn', 'cxComp', false);
   var box = m.querySelector('#cxMsgs');
@@ -701,18 +707,35 @@ function _cxDrawAside() {
   else if (tab === 'board' && typeof chatPostsTab === 'function') chatPostsTab(b);
   else if (tab === 'people') {
     var ms = (CX.info && CX.info.members) || [];
-    b.innerHTML = ms.map(function (m) { return '<div class="cx-pp">' + _cxAv(m.id, m.name, m.online) + '<span><b>' + _cxE(m.name) + (m.me ? ' (나)' : '') + '</b><i>' + _cxE(m.dept || '') + '</i></span>' + (!m.me ? '<button type="button" class="cx-ib" data-dm="' + _cxE(m.id) + '" title="1:1 대화">💬</button>' : '') + '</div>'; }).join('') +
-      (CX.info && CX.info.kind !== 'dm' ? '<button type="button" class="btn btn-g btn-s cx-inv">➕ 사람 초대</button>' : '');
+    var mg = CX.info && CX.info.canManage;
+    b.innerHTML = (CX.info && CX.info.kind !== 'dm' ? '<div class="cx-roles">👑 방장 ' + ms.filter(function (m) { return m.role === 'owner'; }).length + ' · 멤버 ' + ms.length + (ms.some(function (m) { return m.role === 'readonly'; }) ? ' · 👁 읽기만 ' + ms.filter(function (m) { return m.role === 'readonly'; }).length : '') + '</div>' : '') +
+      ms.map(function (m) { return '<div class="cx-pp">' + _cxAv(m.id, m.name, m.online) + '<span><b>' + _cxE(m.name) + (m.me ? ' (나)' : '') + (m.role === 'owner' ? ' <em class="cx-role own">👑 방장</em>' : m.role === 'readonly' ? ' <em class="cx-role ro">👁 읽기만</em>' : '') + '</b><i>' + _cxE(m.dept || '') + '</i></span>' +
+        (!m.me ? '<button type="button" class="cx-ib" data-dm="' + _cxE(m.id) + '" title="1:1 대화">💬</button>' : '') +
+        (mg && CX.info.kind !== 'dm' ? '<button type="button" class="cx-ib" data-role="' + _cxE(m.id) + '" title="역할 · 내보내기">⋯</button>' : '') + '</div>'; }).join('') +
+      (CX.info && CX.info.kind !== 'dm' && CX.info.myRole !== 'readonly' ? '<button type="button" class="btn btn-g btn-s cx-inv">➕ 사람 초대</button>' : '');
     b.querySelectorAll('[data-dm]').forEach(function (x) { x.addEventListener('click', function () { chatStartDm(x.dataset.dm); }); });
+    b.querySelectorAll('[data-role]').forEach(function (x) { x.addEventListener('click', function () { _cxRoleMenu(x, ms.filter(function (m) { return m.id === x.dataset.role; })[0]); }); });
     var inv = b.querySelector('.cx-inv'); if (inv) inv.addEventListener('click', chatInviteModal);
   } else {
     b.innerHTML = '<div class="cx-loading">불러오는 중…</div>';
     apiFetch('/api/chat/rooms/' + CX.room + '/files').then(function (r) {
       var fs = (r && r.data) || [];
       b.innerHTML = fs.length ? fs.map(function (f) { return '<button type="button" class="cx-af" data-f="' + _cxE(f.id) + '" data-n="' + _cxE(f.name) + '" data-img="' + (/^image\//.test(f.mime || '') ? 1 : '') + '"><span class="cx-fx">' + _cxE(((/\.([A-Za-z0-9]{1,6})$/.exec(f.name) || [])[1] || 'FILE').toUpperCase()) + '</span><span><b>' + _cxE(f.name) + '</b><i>' + _cxSize(f.size) + ' · ' + _cxE(f.userName || '') + ' · ' + _cxRel(f.at) + '</i></span></button>'; }).join('') : '<div class="cx-empty">주고받은 파일이 없습니다</div>';
+      if (typeof chatRoomFolders === 'function') chatRoomFolders(b);
       b.querySelectorAll('[data-f]').forEach(function (x) { x.addEventListener('click', function () { if (x.dataset.img) _cxViewImage(x.dataset.f, x.dataset.n); else _cxDownload(x.dataset.f, x.dataset.n); }); });
     }).catch(function () { b.innerHTML = '<div class="cx-empty">불러오지 못했습니다</div>'; });
   }
+}
+/* 👑 역할 · 내보내기 (방장) — v13.359 */
+function _cxRoleMenu(btn, u) {
+  if (!u) return;
+  function set(role) { apiFetch('/api/chat/rooms/' + CX.room + '/members/' + u.id, { method: 'PUT', body: JSON.stringify({ role: role }) }).then(function () { chatOpenRoom(CX.room, true); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }
+  _cxMenu(btn, [
+    u.role !== 'owner' ? ['👑 방장으로', function () { set('owner'); }] : null,
+    u.role !== 'member' ? ['🙂 멤버로', function () { set('member'); }] : null,
+    u.role !== 'readonly' ? ['👁 읽기만 (글 · 파일 못 올림)', function () { set('readonly'); }] : null,
+    !u.me ? ['🚪 내보내기', function () { if (!confirm(u.name + ' 님을 이 방에서 내보낼까요?')) return; apiFetch('/api/chat/rooms/' + CX.room + '/members/' + u.id, { method: 'DELETE' }).then(function () { chatOpenRoom(CX.room, true); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
+  ].filter(Boolean));
 }
 /* 프로젝트 방 옆 현황 다시 받기 — 이슈 카드가 오가거나 상태가 바뀌면 (잠깐 모아서 한 번) */
 function _cxCtxRefresh() {
@@ -811,11 +834,13 @@ function chatInviteModal() {
   if (!CX.info) return;
   return wmGuardedModal('chatInvite', function () {
     var m = createModal({ id: 'chatInvModal', title: '➕ 사람 초대', width: '420px', closeOnEsc: true, closeOnOverlay: true,
-      html: '<input class="wr-inp cx-mq" data-q placeholder="이름 · 부서 찾기"><div class="cx-plist" data-list></div><div class="cx-mfoot"><span data-n>0명</span><button type="button" class="wm-pri" data-go disabled>초대</button></div>' });
+      html: '<input class="wr-inp cx-mq" data-q placeholder="이름 · 부서 찾기"><div class="cx-plist" data-list></div>' +
+        '<label class="cx-hist"><input type="checkbox" data-hist checked> <span><b>이전 대화도 보여 주기</b><i>끄면 초대한 다음부터만 보입니다 (게시판 · 파일 · 찾기도)</i></span></label>' +
+        '<div class="cx-mfoot"><span data-n>0명</span><button type="button" class="wm-pri" data-go disabled>초대</button></div>' });
     var picked = [];
     _cxPeoplePick(m.box, true, CX.info.members.map(function (x) { return x.id; }), function (ids) { picked = ids; m.box.querySelector('[data-n]').textContent = ids.length + '명'; m.box.querySelector('[data-go]').disabled = !ids.length; });
     m.box.querySelector('[data-go]').addEventListener('click', function () {
-      apiFetch('/api/chat/rooms/' + CX.room + '/members', { method: 'POST', body: JSON.stringify({ userIds: picked }) }).then(function () { m.close(); chatOpenRoom(CX.room, true); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
+      apiFetch('/api/chat/rooms/' + CX.room + '/members', { method: 'POST', body: JSON.stringify({ userIds: picked, history: m.box.querySelector('[data-hist]').checked }) }).then(function () { m.close(); chatOpenRoom(CX.room, true); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
     });
   }, 'chatInvModal');
 }

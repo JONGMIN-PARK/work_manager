@@ -232,22 +232,24 @@ function _ccFolders(force) {
 }
 function chatSaveMenu(anchor, m) {
   Promise.all([_ccFolders(true), apiFetch('/api/chat/messages/' + m.id + '/folders').then(function (r) { return r.data || []; }).catch(function () { return []; })]).then(function (rs) {
-    var fs = rs[0], inF = rs[1];
+    var fs = rs[0].filter(function (f) { return !f.roomId || f.roomId === m.roomId; }), inF = rs[1];
     var items = fs.map(function (f) {
       var on = inF.indexOf(f.id) >= 0;
-      return [(on ? '✓ ' : '') + (f.icon || '📁') + ' ' + f.name, function () {
+      return [(on ? '✓ ' : '') + (f.icon || '📁') + ' ' + f.name + (f.roomId ? '  · 방 폴더' : ''), function () {
         (on ? apiFetch('/api/chat/folders/' + f.id + '/items/' + m.id, { method: 'DELETE' }) : apiFetch('/api/chat/folders/' + f.id + '/items', { method: 'POST', body: JSON.stringify({ messageId: m.id }) }))
           .then(function () { _ccToast(on ? '폴더에서 뺐습니다' : '📁 "' + f.name + '" 에 담았습니다', 'success'); CC.folders = null; })
           .catch(function (e) { _ccToast(_ccErr(e), 'error'); });
       }];
     });
-    items.push(['＋ 새 폴더에 담기', function () {
-      var nm = prompt('새 폴더 이름', ''); if (!nm || !nm.trim()) return;
-      apiFetch('/api/chat/folders', { method: 'POST', body: JSON.stringify({ name: nm.trim() }) })
+    function newIn(roomId) {
+      var nm = prompt(roomId ? '새 방 폴더 이름 (이 방 사람 모두가 봄)' : '새 내 폴더 이름 (나만 봄)', ''); if (!nm || !nm.trim()) return;
+      apiFetch('/api/chat/folders', { method: 'POST', body: JSON.stringify({ name: nm.trim(), roomId: roomId || undefined }) })
         .then(function (r) { return apiFetch('/api/chat/folders/' + r.data.id + '/items', { method: 'POST', body: JSON.stringify({ messageId: m.id }) }).then(function () { return r.data; }); })
-        .then(function (f) { CC.folders = null; _ccToast('📁 "' + f.name + '" 에 담았습니다', 'success'); })
+        .then(function (f) { CC.folders = null; _ccToast((roomId ? '🗂 ' : '📁 ') + '"' + f.name + '" 에 담았습니다', 'success'); })
         .catch(function (e) { _ccToast(_ccErr(e), 'error'); });
-    }]);
+    }
+    items.push(['＋ 새 내 폴더에 담기', function () { newIn(null); }]);
+    if (m.roomId) items.push(['＋ 새 방 폴더에 담기 (같이 봄)', function () { newIn(m.roomId); }]);
     items.push(['📂 내 폴더 열기', function () { chatLibrary('folders'); }]);
     if (typeof _cxMenu === 'function') _cxMenu(anchor, items);
   }).catch(function (e) { _ccToast(_ccErr(e), 'error'); });
@@ -261,7 +263,7 @@ function chatLibrary(tab) {
 }
 function _ccLibOpen() {
   var div = document.createElement('div'); div.id = 'cxLib'; div.className = 'cc-lib';
-  div.innerHTML = '<div class="cc-lib-tabs"><button type="button" data-lt="folders">📁 내 폴더</button><button type="button" data-lt="reqs">🛠 요청함</button></div><div class="cc-lib-b" data-lb></div>';
+  div.innerHTML = '<div class="cc-lib-tabs"><button type="button" data-lt="folders">📁 폴더</button><button type="button" data-lt="reqs">🛠 요청함</button></div><div class="cc-lib-b" data-lb></div>';
   var modal = createModal({ title: '🗂 모아 보기', content: div, width: '1080px', boxStyle: 'max-height:88vh' });
   CC.libModal = modal;
   div.querySelectorAll('[data-lt]').forEach(function (b) { b.addEventListener('click', function () { CC.libTab = b.dataset.lt; _ccLibDraw(); }); });
@@ -276,12 +278,17 @@ function _ccLibDraw() {
   _ccFolderView(b);
 }
 function _ccFolderView(box) {
-  box.innerHTML = '<div class="cc-fv"><aside class="cc-fl"><div class="cc-fl-h"><b>내 폴더</b><button type="button" class="cx-ib" data-fnew title="새 폴더">＋</button></div><div data-flist></div><p class="cc-tip">메시지 ⋯ → 📁 폴더에 담기<br>나만 보는 폴더입니다</p></aside>' +
+  box.innerHTML = '<div class="cc-fv"><aside class="cc-fl"><div class="cc-fl-h"><b>폴더</b><button type="button" class="cx-ib" data-fnew title="새 폴더">＋</button></div><div data-flist></div><p class="cc-tip">메시지 ⋯ → 📁 폴더에 담기<br>📁 내 폴더는 나만 · 🗂 방 폴더는 그 방 사람 모두</p></aside>' +
     '<section class="cc-fi"><div class="cc-fi-h"><div class="cc-chips">' + [['', '전체'], ['img', '🖼 사진'], ['file', '📎 파일'], ['post', '📌 글'], ['msg', '💬 메시지']].map(function (c) { return '<button type="button" data-fk="' + c[0] + '" class="' + (CC.libKind === c[0] ? 'on' : '') + '">' + c[1] + '</button>'; }).join('') + '</div>' +
     '<input type="search" data-fq placeholder="폴더 안에서 찾기" value="' + _ccE(CC.libQ) + '"><span class="cc-facts" data-facts></span></div><div class="cc-grid" data-fitems></div></section></div>';
-  box.querySelector('[data-fnew]').addEventListener('click', function () {
-    var nm = prompt('새 폴더 이름', ''); if (!nm || !nm.trim()) return;
-    apiFetch('/api/chat/folders', { method: 'POST', body: JSON.stringify({ name: nm.trim() }) }).then(function (r) { CC.libFolder = r.data.id; _ccFolderList(box); }).catch(function (e) { _ccToast(_ccErr(e), 'error'); });
+  box.querySelector('[data-fnew]').addEventListener('click', function (e) {
+    function mk(roomId) {
+      var nm = prompt(roomId ? '새 방 폴더 이름 (이 방 사람 모두가 봄)' : '새 내 폴더 이름 (나만 봄)', ''); if (!nm || !nm.trim()) return;
+      apiFetch('/api/chat/folders', { method: 'POST', body: JSON.stringify({ name: nm.trim(), roomId: roomId || undefined }) }).then(function (r) { CC.libFolder = r.data.id; _ccFolderList(box); }).catch(function (er) { _ccToast(_ccErr(er), 'error'); });
+    }
+    var room = typeof CX !== 'undefined' && CX.room && CX.info ? CX.info : null;
+    if (!room || typeof _cxMenu !== 'function') return mk(null);
+    _cxMenu(e.currentTarget, [['📁 새 내 폴더 (나만 봄)', function () { mk(null); }], ['🗂 새 방 폴더 — ' + (CX.rooms.filter(function (r) { return r.id === CX.room; })[0] || {}).name, function () { mk(CX.room); }]]);
   });
   box.querySelectorAll('[data-fk]').forEach(function (b) { b.addEventListener('click', function () { CC.libKind = b.dataset.fk; box.querySelectorAll('[data-fk]').forEach(function (x) { x.classList.toggle('on', x === b); }); _ccDrawItems(box); }); });
   box.querySelector('[data-fq]').addEventListener('input', function (e) { CC.libQ = e.target.value.trim(); _ccDrawItems(box); });
@@ -291,7 +298,10 @@ function _ccFolderList(box) {
   _ccFolders(true).then(function (fs) {
     var l = box.querySelector('[data-flist]'); if (!l) return;
     if (!fs.some(function (f) { return f.id === CC.libFolder; })) CC.libFolder = fs[0] ? fs[0].id : null;
-    l.innerHTML = fs.length ? fs.map(function (f) { return '<button type="button" class="cc-f' + (f.id === CC.libFolder ? ' on' : '') + '" data-fid="' + _ccE(f.id) + '"><span>' + _ccE(f.icon || '📁') + '</span><b>' + _ccE(f.name) + '</b><i>' + f.n + '</i></button>'; }).join('') : '<div class="cx-empty">폴더가 없습니다<br><small>＋ 로 만들어 보세요</small></div>';
+    function row(f) { return '<button type="button" class="cc-f' + (f.id === CC.libFolder ? ' on' : '') + '" data-fid="' + _ccE(f.id) + '"><span>' + _ccE(f.icon || '📁') + '</span><b>' + _ccE(f.name) + (f.roomId ? '<small>' + _ccE(f.roomName || '') + '</small>' : '') + '</b><i>' + f.n + '</i></button>'; }
+    var mine = fs.filter(function (f) { return !f.roomId; }), shared = fs.filter(function (f) { return f.roomId; });
+    l.innerHTML = fs.length ? (mine.length ? '<div class="cc-fsec">📁 내 폴더 <i>나만 봄</i></div>' + mine.map(row).join('') : '') + (shared.length ? '<div class="cc-fsec">🗂 방 폴더 <i>방 사람 모두</i></div>' + shared.map(row).join('') : '') :
+      '<div class="cx-empty">폴더가 없습니다<br><small>＋ 로 만들어 보세요</small></div>';
     l.querySelectorAll('[data-fid]').forEach(function (b) { b.addEventListener('click', function () { CC.libFolder = b.dataset.fid; l.querySelectorAll('.cc-f').forEach(function (x) { x.classList.toggle('on', x === b); }); _ccLoadItems(box); }); });
     _ccLoadItems(box);
   });
@@ -327,7 +337,7 @@ function _ccDrawItems(box) {
     else inner = '<div class="cc-msgtxt">' + chatCodeText(m.body) + '</div>';
     return '<div class="cc-it k-' + k + '" data-imid="' + m.id + '">' + inner +
       (m.savedNote ? '<div class="cc-note">📝 ' + _ccE(m.savedNote) + '</div>' : '') +
-      '<div class="cc-it-f"><span>💬 ' + _ccE(m.roomName) + ' · ' + _ccE(m.userName || '') + ' · ' + (typeof _cxRel === 'function' ? _cxRel(m.at) : '') + '</span>' +
+      '<div class="cc-it-f"><span>' + (m.savedBy && (CC.folders || []).some(function (f) { return f.id === CC.libFolder && f.roomId; }) ? '📥 ' + _ccE(m.savedBy) + ' · ' : '') + '💬 ' + _ccE(m.roomName) + ' · ' + _ccE(m.userName || '') + ' · ' + (typeof _cxRel === 'function' ? _cxRel(m.at) : '') + '</span>' +
       (k === 'file' ? '<button type="button" class="cx-ib" data-idl title="받기">⬇</button>' : '') +
       '<button type="button" class="cx-ib" data-igo title="대화에서 보기">↗</button><button type="button" class="cx-ib" data-irm title="폴더에서 빼기">✕</button></div></div>';
   }).join('') : '<div class="cx-empty">' + (CC.items.length ? '맞는 것이 없습니다' : '비어 있습니다<br><small>대화의 메시지 ⋯ → 📁 폴더에 담기</small>') + '</div>';
@@ -376,7 +386,35 @@ function _ccDrawReqs() {
     '<div class="cx-empty">' + (CC.reqWho === 'me' ? '나에게 온 요청이 없습니다 🎉' : '올린 요청이 없습니다') + '<br><small>대화방 ✍️ → 🛠 요청 으로 장비 · 현상 · 담당을 정해 올려요</small></div>';
 }
 
+/* 옆 칸 📎 파일 탭 위 — 이 방 폴더 (v13.359) */
+function chatRoomFolders(box) {
+  if (typeof CX === 'undefined' || !CX.room) return;
+  var room = CX.room;
+  apiFetch('/api/chat/folders?room=' + encodeURIComponent(room)).then(function (r) {
+    if (CX.room !== room || !document.body.contains(box)) return;
+    var fs = (r && r.data) || [], old = box.querySelector('.cc-rf'); if (old) old.remove();
+    var ro = CX.info && CX.info.myRole === 'readonly';
+    box.insertAdjacentHTML('afterbegin', '<div class="cc-rf"><div class="cc-rf-h"><b>🗂 방 폴더</b><i>방 사람 모두가 같이 담고 봄</i>' + (ro ? '' : '<button type="button" class="cx-ib" data-rfnew title="새 방 폴더">＋</button>') + '</div>' +
+      (fs.length ? '<div class="cc-rf-l">' + fs.map(function (f) { return '<button type="button" data-rf="' + _ccE(f.id) + '">' + _ccE(f.icon || '🗂') + ' ' + _ccE(f.name) + ' <i>' + f.n + '</i></button>'; }).join('') + '</div>' : '<div class="cc-rf-e">아직 없음 — 메시지 ⋯ → 폴더에 담기에서도 만들 수 있어요</div>') + '</div>');
+    box.querySelectorAll('[data-rf]').forEach(function (b) { b.addEventListener('click', function () { CC.libFolder = b.dataset.rf; chatLibrary('folders'); }); });
+    var nb = box.querySelector('[data-rfnew]');
+    if (nb) nb.addEventListener('click', function () {
+      var nm = prompt('새 방 폴더 이름 (이 방 사람 모두가 봄)', ''); if (!nm || !nm.trim()) return;
+      apiFetch('/api/chat/folders', { method: 'POST', body: JSON.stringify({ name: nm.trim(), roomId: room }) }).then(function () { chatRoomFolders(box); }).catch(function (e) { _ccToast(_ccErr(e), 'error'); });
+    });
+  }).catch(function () {});
+}
+/** 방 폴더가 바뀜 (누가 담거나 만들거나 지움) — 열린 화면만 새로 */
+function chatCollabOnFolder(d) {
+  CC.folders = null;
+  var lib = document.getElementById('cxLib');
+  if (lib && CC.libTab === 'folders') { var b = lib.querySelector('[data-lb]'); if (b && b.querySelector('[data-flist]')) _ccFolderList(b); }
+  var as = document.getElementById('cxAsB');
+  if (as && typeof CX !== 'undefined' && CX.room === d.roomId && as.querySelector('.cc-rf')) chatRoomFolders(as);
+}
+
 if (typeof window !== 'undefined') {
+  window.chatRoomFolders = chatRoomFolders; window.chatCollabOnFolder = chatCollabOnFolder;
   window.chatCodeText = chatCodeText; window.chatPostHtml = chatPostHtml; window.chatPostModal = chatPostModal; window.chatPostsTab = chatPostsTab;
   window.chatSaveMenu = chatSaveMenu; window.chatLibrary = chatLibrary; window.chatCollabOnUpd = chatCollabOnUpd;
 }
