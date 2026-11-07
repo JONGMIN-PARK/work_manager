@@ -23,5 +23,6 @@ contextBridge.exposeInMainWorld('wmDesktop', {
   setBadge: (n) => { n = Math.max(0, n | 0); ipcRenderer.send('wm:badge', { n: n, png: n > 0 ? badgePng(n) : '' }); },
   onGo: (cb) => { ipcRenderer.on('wm:go', (_e, go) => { try { cb(go); } catch (_) {} }); },
   retry: () => ipcRenderer.send('wm:retry'),
-  captureScreen: () => ipcRenderer.invoke('wm:capture')
+  captureScreen: () => ipcRenderer.invoke('wm:capture'),
+  googleLogin: () => ipcRenderer.send('wm:google')
 });

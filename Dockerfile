@@ -22,6 +22,8 @@ COPY migrations/ migrations/
 
 # 프론트엔드 정적 파일 (*.css 포함 — 누락 시 style.css 미배포로 반응형 CSS 미적용)
 COPY *.html *.js *.css ./
+# 앱으로 설치 (v13.355): manifest · 서비스 워커 · 아이콘
+COPY pwa/ pwa/
 
 EXPOSE 3000
 

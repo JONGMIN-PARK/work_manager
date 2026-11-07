@@ -474,6 +474,12 @@ async function handleRegister() {
 }
 
 function googleLogin() {
+  // v13.357 PC 앱: 구글이 앱 안 창 로그인을 막으므로 기본 브라우저에서 → 끝나면 앱으로 돌아옴
+  if (window.wmDesktop && window.wmDesktop.googleLogin) {
+    window.wmDesktop.googleLogin();
+    if (typeof showToast === 'function') showToast('🌐 브라우저에서 구글 로그인을 마치면 앱으로 돌아옵니다', 'info');
+    return;
+  }
   location.href = API_BASE + '/api/auth/google';
 }
 

@@ -4,6 +4,7 @@ const { app } = require('electron');
 const path = require('path'), fs = require('fs');
 require('../main.js');
 app.on('browser-window-created', (_e, w) => {
+  w.webContents.on('did-start-navigation', (_e, url, _inPage, isMain) => { if (isMain) console.log('SMOKE nav ' + url); });
   w.webContents.on('did-finish-load', () => {
     const u = w.webContents.getURL();
     if (!/^https?:/.test(u)) return;

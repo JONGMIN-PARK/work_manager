@@ -303,6 +303,32 @@ router.put('/change-password', authMiddleware.authenticate, async function (req,
   }
 });
 
+// ─── v13.357 PC 앱 구글 로그인 — 앱 안 창은 구글이 막으므로 기본 브라우저에서 하고, 한 번 쓰는 코드로 앱에 넘김 ───
+//   브라우저 → workmanager://auth?code=… → 앱이 /api/auth/desktop-exchange?code=… 를 열면 그때 토큰을 줌 (2분 · 한 번만)
+var _desktopCodes = new Map();
+function desktopHandoff(res, tokens) {
+  var now = Date.now();
+  _desktopCodes.forEach(function (v, k) { if (v.exp < now) _desktopCodes.delete(k); });
+  var code = require('crypto').randomBytes(24).toString('hex');
+  _desktopCodes.set(code, { tokens: tokens, exp: now + 120000 });
+  var link = 'workmanager://auth?code=' + code;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send('<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>업무 관리자 — 로그인 완료</title>' +
+    '<style>body{font-family:"Malgun Gothic",sans-serif;background:#0f1220;color:#e5e7eb;display:grid;place-items:center;height:100vh;margin:0;text-align:center}' +
+    'a{display:inline-block;margin-top:14px;padding:11px 22px;border-radius:10px;background:linear-gradient(135deg,#2563EB,#7C3AED);color:#fff;text-decoration:none;font-weight:700}p{color:#9ca3af}</style></head>' +
+    '<body><div><div style="font-size:52px">✅</div><h2>로그인했습니다</h2><p>업무 관리자 앱으로 돌아갑니다. 이 창은 닫아도 됩니다.</p>' +
+    '<a href="' + link + '">앱으로 돌아가기</a></div><script>location.href=' + JSON.stringify(link) + '</script></body></html>');
+}
+router._desktopHandoff = desktopHandoff;   // 시험용
+router.get('/desktop-exchange', function (req, res) {
+  var c = _desktopCodes.get(String(req.query.code || ''));
+  _desktopCodes.delete(String(req.query.code || ''));
+  if (!c || c.exp < Date.now()) return res.redirect('/?error=google_auth_failed');
+  res.setHeader('Cache-Control', 'no-store');
+  res.redirect('/?googleAuth=' + encodeURIComponent(c.tokens));
+});
+
 // ─── GET /api/auth/google — Google OAuth2 시작 ───
 router.get('/google', function (req, res) {
   if (!config.google.clientId) {
@@ -316,7 +342,7 @@ router.get('/google', function (req, res) {
     'scope=' + encodeURIComponent('openid email profile'),
     'access_type=offline',
     'prompt=select_account'
-  ].join('&');
+  ].concat(req.query.app === 'desktop' ? ['state=desktop'] : []).join('&');   // v13.357 PC 앱: 기본 브라우저에서 로그인 → 앱으로 돌아감
 
   res.redirect('https://accounts.google.com/o/oauth2/v2/auth?' + params);
 });
@@ -403,10 +429,9 @@ router.get('/google/callback', async function (req, res) {
     await authService.auditLog(user.id, 'login_google', 'user', user.id, null, req);
 
     // 5) 프론트엔드로 토큰 전달 (URL fragment)
-    res.redirect('/?googleAuth=' + encodeURIComponent(JSON.stringify({
-      accessToken: accessToken,
-      refreshToken: refreshToken
-    })));
+    var tokens = JSON.stringify({ accessToken: accessToken, refreshToken: refreshToken });
+    if (req.query.state === 'desktop') return desktopHandoff(res, tokens);
+    res.redirect('/?googleAuth=' + encodeURIComponent(tokens));
 
   } catch (e) {
     console.error('[google/callback]', e);

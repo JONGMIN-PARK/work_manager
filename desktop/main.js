@@ -28,7 +28,24 @@ function sameOrigin(u) { try { return new URL(u).origin === new URL(SERVER()).or
 
 /* ─── 하나만 실행 ─── */
 if (!app.requestSingleInstanceLock()) app.quit();
-else app.on('second-instance', () => showWin());
+else app.on('second-instance', (_e, argv) => { showWin(); const l = deepLink(argv); if (l) handleLink(l); });
+
+/* ─── workmanager:// — 기본 브라우저에서 구글 로그인을 마치면 이 주소로 앱에 돌아온다 (v13.357) ─── */
+const PROTO = 'workmanager';
+if (app.isPackaged) app.setAsDefaultProtocolClient(PROTO);   // 개발 실행(npm start)은 등록 안 함 — 설치한 앱의 등록을 덮지 않게
+function deepLink(argv) { return (argv || []).find((a) => String(a).startsWith(PROTO + '://')) || null; }
+let pendingLink = deepLink(process.argv);
+function handleLink(link) {
+  if (!win) { pendingLink = link; return; }
+  try {
+    const u = new URL(link);
+    const code = u.searchParams.get('code');
+    if (u.hostname === 'auth' && /^[a-f0-9]{20,100}$/.test(code || '')) {
+      win.loadURL(SERVER() + '/api/auth/desktop-exchange?code=' + code).catch(() => {});
+      showWin();
+    }
+  } catch (_) {}
+}
 
 app.setAppUserModelId(APP_ID);   // 윈도우 알림에 앱 이름 · 아이콘
 
@@ -57,7 +74,10 @@ function createWindow() {
   // 구글 로그인은 'Electron' 이 든 브라우저 이름을 막는다 → 보통 크롬 이름으로
   win.webContents.setUserAgent(win.webContents.getUserAgent().replace(/\s(Electron|work-manager-desktop|업무 관리자)\/\S+/g, ''));
   win.loadFile(path.join(__dirname, 'offline.html'), { query: { server: SERVER() } });   // 서버가 깨어나는 동안 보이는 화면
-  win.once('ready-to-show', () => { if (!process.argv.includes('--hidden')) win.show(); loadApp(); });
+  win.once('ready-to-show', () => {
+    if (!process.argv.includes('--hidden') || pendingLink) win.show();
+    if (pendingLink) { const l = pendingLink; pendingLink = null; handleLink(l); } else loadApp();
+  });
 
   // 서버에 못 닿으면 안내 화면 + 15초마다 다시
   win.webContents.on('did-fail-load', (_e, code, _desc, url, isMain) => {
@@ -131,6 +151,8 @@ ipcMain.on('wm:badge', (_e, o) => {
   refreshTray();
 });
 ipcMain.on('wm:retry', () => loadApp());
+// 구글 로그인 — 앱 안 창은 구글이 '안전하지 않은 브라우저'로 막는다 → 기본 브라우저로
+ipcMain.on('wm:google', () => { shell.openExternal(SERVER() + '/api/auth/google?app=desktop'); });
 // 📸 화면 캡처 — 우리 창을 잠깐 숨기고, 마우스가 있는 화면을 원래 해상도로 찍는다 → 웹 화면이 잘라서 표시 · 보내기
 ipcMain.handle('wm:capture', async () => {
   const { screen } = require('electron');

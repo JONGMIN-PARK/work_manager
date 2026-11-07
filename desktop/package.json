@@ -1,7 +1,7 @@
 {
   "name": "work-manager-desktop",
   "productName": "업무 관리자",
-  "version": "13.356.0",
+  "version": "13.357.0",
   "description": "업무 관리자 PC 앱 — 메신저 · 알림 · 트레이",
   "main": "main.js",
   "author": "Jongmin Park",
@@ -52,6 +52,14 @@
         "provider": "github",
         "owner": "JONGMIN-PARK",
         "repo": "work_manager"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "업무 관리자",
+        "schemes": [
+          "workmanager"
+        ]
       }
     ]
   }

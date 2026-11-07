@@ -127,3 +127,21 @@ describe('Auth API', () => {
   });
 
 });
+
+describe('v13.357 PC 앱 구글 로그인 넘겨주기', function () {
+  var h2 = require('./helpers');
+  var authRouter = require('../routes/auth');
+  test('한 번 쓰는 코드 → 토큰 (두 번째는 안 됨 · 모르는 코드 안 됨)', async function () {
+    var html = '';
+    authRouter._desktopHandoff({ setHeader: function () {}, send: function (s) { html = s; } }, JSON.stringify({ accessToken: 'AT', refreshToken: 'RT' }));
+    var code = /workmanager:\/\/auth\?code=([a-f0-9]+)/.exec(html)[1];
+    expect(html).toMatch(/로그인했습니다/);
+    var r1 = await h2.request(h2.app).get('/api/auth/desktop-exchange?code=' + code);
+    expect(r1.status).toBe(302);
+    expect(decodeURIComponent(r1.headers.location)).toBe('/?googleAuth={"accessToken":"AT","refreshToken":"RT"}');
+    var r2 = await h2.request(h2.app).get('/api/auth/desktop-exchange?code=' + code);
+    expect(r2.headers.location).toBe('/?error=google_auth_failed');
+    var r3 = await h2.request(h2.app).get('/api/auth/desktop-exchange?code=nope');
+    expect(r3.headers.location).toBe('/?error=google_auth_failed');
+  });
+});
