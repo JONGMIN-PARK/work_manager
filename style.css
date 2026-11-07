@@ -4724,6 +4724,41 @@ html.wm-focus-big:has(#mMessages:not(.hidden)) #mMessages{--cx-h:calc(100dvh - 7
 .cx .cx-code pre::-webkit-scrollbar{height:8px}
 .cx .cx-msgs{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 18px);mask-image:linear-gradient(180deg,transparent 0,#000 18px)}
 
+/* ═══ v13.368 🎤 발표 펜 (chat-ink.js) — 어두운 반투명 막대 · 선 아이콘 ═══ */
+.crt-bar button.crt-ink{background:rgba(255,255,255,.14);color:#fff;font-weight:600;letter-spacing:.01em}
+.crt-bar button.crt-ink:hover{background:rgba(255,255,255,.24)}
+.crt-win .ci-cv{position:absolute;z-index:2;pointer-events:none;touch-action:none}
+.crt-win .ci-cv.on{pointer-events:auto;cursor:crosshair}
+.crt-win .ci-cv[data-tool=laser]{cursor:none}
+.crt-win .ci-cv[data-tool=text]{cursor:text}
+.ci-tb{position:relative;z-index:3;display:flex;align-items:center;gap:2px;flex-wrap:wrap;padding:6px 8px;background:linear-gradient(180deg,#151B2B,#0F1422);border-bottom:1px solid rgba(255,255,255,.08);color:#CBD5E1;font-size:11.5px;user-select:none}
+.ci-g{display:flex;align-items:center;gap:2px}
+.ci-sep{width:1px;height:20px;background:rgba(255,255,255,.12);margin:0 5px}
+.ci-b{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:8px;background:transparent;color:#CBD5E1;cursor:pointer;transition:background .12s,color .12s}
+.ci-b:hover:not(:disabled){background:rgba(255,255,255,.09);color:#fff}
+.ci-b.on{background:#E2E8F0;color:#0F172A}
+.ci-b:disabled{opacity:.35;cursor:default}
+.ci-b[data-cbold].on,.ci-b[data-cfade].on{background:rgba(99,102,241,.28);color:#C7D2FE;box-shadow:inset 0 0 0 1px rgba(129,140,248,.6)}
+.ci-allow.on{background:rgba(34,197,94,.22)!important;color:#86EFAC!important;box-shadow:inset 0 0 0 1px rgba(74,222,128,.55)}
+.ci-sz i{display:block;width:var(--d);height:var(--d);border-radius:50%;background:currentColor}
+.ci-c{width:20px;height:20px;margin:0 2px;border-radius:50%;border:0;background:var(--c);cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25);transition:transform .12s}
+.ci-c:hover:not(:disabled){transform:scale(1.12)}
+.ci-c.on{box-shadow:0 0 0 2px #0F1422,0 0 0 4px #E2E8F0}
+.ci-c:disabled{opacity:.35;cursor:default}
+.ci-host{display:none!important}
+.ci-tb.is-host .ci-host{display:inline-flex!important}
+.ci-state{margin-left:auto;padding:0 6px;font-size:11px;color:#94A3B8;white-space:nowrap}
+.ci-tb.off:not(.is-host){padding:4px 10px}
+.ci-tb.off:not(.is-host) .ci-g,.ci-tb.off:not(.is-host) .ci-sep{display:none}
+.ci-tb.off:not(.is-host) .ci-state{margin-left:0}
+.ci-txt{position:absolute;z-index:4;min-width:140px;padding:2px 4px;border:1px dashed rgba(255,255,255,.7);border-radius:4px;background:rgba(15,20,34,.55);font-weight:700;line-height:1.25;resize:none;outline:none;font-family:"Pretendard","Malgun Gothic",sans-serif}
+.ci-host-win{right:auto;left:50%;top:64px;bottom:auto;transform:none;margin-left:max(-550px,calc(-50vw + 16px))}
+.ci-host-win[hidden]{display:none}
+.crt-win .crt-h button svg{display:block}
+.crt-win:fullscreen{width:100vw!important;height:100vh;border-radius:0;display:flex;flex-direction:column;margin:0}
+.crt-win:fullscreen video{flex:1;min-height:0;max-height:none;height:100%;object-fit:contain}
+.crt-win:fullscreen .crt-h{cursor:default}
+
 .mm-sink{font-size:16px!important}   /* v13.310 숨은 키 입력칸 — 혹시 초점을 받아도 iOS 가 화면을 확대하지 않게 */
 
 

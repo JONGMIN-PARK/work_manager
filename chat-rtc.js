@@ -33,6 +33,7 @@ function chatRtcStop() {
   _crtSig(s.roomId, { type: 'stop', sid: s.sid });
   apiFetch('/api/chat/rooms/' + s.roomId + '/share', { method: 'POST', body: JSON.stringify({ sid: s.sid, on: false }) }).catch(function () {});
   var bar = document.getElementById('crtBar'); if (bar) bar.remove();
+  if (typeof chatInkEnd === 'function') chatInkEnd('host');   // v13.368 발표 펜
 }
 function _crtBar() {
   var bar = document.getElementById('crtBar');
@@ -47,8 +48,9 @@ function _crtBar() {
   }
   bar.className = 'crt-bar' + (CRT.ctl ? ' ctl' : '');
   bar.innerHTML = '<span class="crt-dot"></span><b>' + (CRT.ctl ? '🖱 ' + _cxE(CRT.ctlName || '') + ' 님이 내 화면을 제어 중' : '화면 공유 중') + '</b><span>' + (CRT.ctl ? 'Ctrl+Alt+End 로 바로 끝내기' : n ? '보는 사람 ' + n + '명' : '아직 보는 사람 없음') + '</span>' +
-    (CRT.ctl ? '<button type="button" data-ctlx>제어 끝내기</button>' : '') + '<button type="button" data-stop>공유 끝내기</button>';
+    (CRT.ctl ? '<button type="button" data-ctlx>제어 끝내기</button>' : '') + (typeof chatInkHostOpen === 'function' && !CRT.ctl ? '<button type="button" class="crt-ink" data-ink title="내 공유 화면 위에 레이저 · 펜 · 형광펜 · 도형으로 표시 — 보는 사람 화면에 바로">✎ 발표 펜</button>' : '') + '<button type="button" data-stop>공유 끝내기</button>';
   bar.querySelector('[data-stop]').addEventListener('click', chatRtcStop);
+  var ink = bar.querySelector('[data-ink]'); if (ink) ink.addEventListener('click', chatInkHostOpen);
   var cx = bar.querySelector('[data-ctlx]'); if (cx) cx.addEventListener('click', function () { _crtCtlEnd(); });
 }
 function _crtOfferTo(userId) {
@@ -60,6 +62,7 @@ function _crtOfferTo(userId) {
   var dc = pc.createDataChannel('ctl', { ordered: true });
   CRT.dcs[userId] = dc;
   dc.onopen = function () { try { dc.send(JSON.stringify({ t: 'hello', ctl: _crtCanCtl() })); } catch (e) {} };
+  if (typeof chatInkHostDc === 'function') chatInkHostDc(userId, pc.createDataChannel('ink', { ordered: true }));   // v13.368 발표 펜
   dc.onmessage = function (e) {
     if (CRT.ctl !== userId || !_crtCanCtl()) return;   // 허락한 사람 것만
     var ev; try { ev = JSON.parse(e.data); } catch (_) { return; }
@@ -105,7 +108,8 @@ function chatRtcLeave() {
   CRT.watch = null;
   if (w.pc) try { w.pc.close(); } catch (e) {}
   _crtSig(w.roomId, { type: 'leave', to: w.from, sid: w.sid });
-  var el = document.getElementById('crtWin'); if (el) el.remove();
+  var el = document.getElementById('crtWin'); if (el) { if (document.fullscreenElement === el) document.exitFullscreen().catch(function () {}); el.remove(); }
+  if (typeof chatInkEnd === 'function') chatInkEnd('view');
 }
 function _crtWin(msg) {
   var el = document.getElementById('crtWin');
@@ -123,7 +127,8 @@ function _crtWin(msg) {
       _crtSig(w.roomId, { type: 'ctl-req', to: w.from, sid: w.sid });
       _crtWin('상대가 허락하기를 기다리는 중…');
     });
-    el.querySelector('[data-fs]').addEventListener('click', function () { var v = el.querySelector('video'); (v.requestFullscreen || v.webkitRequestFullscreen || function () {}).call(v); });
+    el.querySelector('[data-fs]').addEventListener('click', function () { if (document.fullscreenElement) { document.exitFullscreen(); return; } (el.requestFullscreen || el.webkitRequestFullscreen || function () {}).call(el); });   // 창째로 — 발표 펜 그림도 같이
+    if (typeof chatInkViewLayer === 'function') chatInkViewLayer(el);
     // 머리를 잡고 옮기기
     var h = el.querySelector('.crt-h');
     h.addEventListener('pointerdown', function (e) {
@@ -159,6 +164,7 @@ function chatRtcOnSignal(d) {
       if (w.pc) try { w.pc.close(); } catch (e) {}
       var pc = w.pc = new RTCPeerConnection({ iceServers: _crtIce() });
       pc.ondatachannel = function (e) {
+        if (e.channel.label === 'ink') { if (typeof chatInkViewDc === 'function') chatInkViewDc(e.channel); return; }   // v13.368 발표 펜
         w.dc = e.channel;
         w.dc.onmessage = function (m) { var d; try { d = JSON.parse(m.data); } catch (_) { return; } if (d.t === 'hello') { w.canCtl = !!d.ctl; _crtCtlBtn(); } };
       };
@@ -207,6 +213,7 @@ function _crtViewCtl(on) {
   var v = el.querySelector('video');
   if (w.off) { w.off(); w.off = null; }
   w.ctl = !!on; _crtCtlBtn();
+  if (on && typeof chatInkSetTool === 'function') chatInkSetTool(null);   // 제어 중엔 펜 끔 (영상 위 누르기는 상대 PC 로)
   if (!on) return;
   if (!el.classList.contains('big')) el.classList.add('big');
   var sink = document.createElement('textarea');   // 키보드 · 한글 입력(IME)을 받는 숨은 칸
