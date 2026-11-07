@@ -135,6 +135,7 @@ function chatOnEvent(ev, d) {
   } else if (ev === 'annot' || ev === 'annot-cur') {
     if (typeof chatBoardOnEvent === 'function') chatBoardOnEvent(ev, d);
   } else if (ev === 'rtc') {
+    if (typeof chatCallOnSignal === 'function' && chatCallOnSignal(d)) return;   // v13.361 📞 통화 신호
     if (typeof chatRtcOnSignal === 'function') chatRtcOnSignal(d);
   }
 }
@@ -288,6 +289,7 @@ function _cxDrawHead() {
     (i.kind === 'project' ? '<span class="cx-av cx-av-p">📁</span>' : i.kind === 'group' ? '<span class="cx-av cx-av-g">👥</span>' : _cxAv(others[0] && others[0].id, name, others[0] && others[0].online)) +
     '<span class="cx-h-t"><b>' + _cxE(name) + '</b><span class="' + (i.kind === 'dm' && others[0] && others[0].online ? 'on' : '') + '">' + _cxE(sub) + '</span></span>' +
     '<span class="cx-h-a">' +
+      (typeof chatCallStart === 'function' && i.myRole !== 'readonly' ? '<button type="button" class="cx-ib" data-h="call" title="음성 통화">📞</button><button type="button" class="cx-ib" data-h="vcall" title="영상 통화">🎥</button>' : '') +
       '<button type="button" class="cx-ib" data-h="share" title="화면 공유">🖥</button>' +
       '<button type="button" class="cx-ib" data-h="files" title="파일 모음">📎</button>' +
       '<button type="button" class="cx-ib' + (CX.aside ? ' on' : '') + '" data-h="aside" title="' + (i.kind === 'project' ? '프로젝트 현황' : '대화 정보') + '">' + (i.kind === 'project' ? '📊' : 'ⓘ') + '</button>' +
@@ -295,6 +297,7 @@ function _cxDrawHead() {
   h.querySelectorAll('[data-h]').forEach(function (b) { b.addEventListener('click', function () { _cxHeadAct(b.dataset.h, b); }); });
 }
 function _cxHeadAct(k, btn) {
+  if ((k === 'call' || k === 'vcall') && typeof chatCallStart === 'function') { chatCallStart(CX.room, k === 'vcall'); return; }   // v13.361
   if (k === 'back') { var root = document.querySelector('#mMessages .cx'); if (root) { root.classList.remove('has-room'); root.classList.add('no-aside'); } CX.room = null; CX.thread = null; _cxDrawRooms(); return; }
   if (k === 'aside') { CX.aside = !CX.aside; document.querySelector('#mMessages .cx').classList.toggle('no-aside', !CX.aside); _cxDrawHead(); _cxDrawAside(); return; }
   if (k === 'files') { CX.aside = true; CX.asideTab = 'files'; document.querySelector('#mMessages .cx').classList.remove('no-aside'); _cxDrawAside(); return; }
@@ -384,6 +387,7 @@ function _cxFileHtml(f) {
     (CX.info && CX.info.kind === 'project' ? '<button type="button" class="cx-ib" data-todoc="' + _cxE(f.id) + '" title="프로젝트 문서로 보내기">📂</button>' : '') + '</div>';
 }
 function _cxCardHtml(c, i, m) {
+  if (c.type === 'call' && typeof chatCallCardHtml === 'function') return chatCallCardHtml(c, m);
   if (c.type === 'share') {
     var live = c.on && typeof chatRtcIsLive === 'function' && chatRtcIsLive(c.id);
     return '<div class="cx-card cx-share"><span>🖥</span><span class="cx-card-t"><b>' + (c.on ? '화면 공유' : '화면 공유 끝남') + '</b><i>' + _cxE(m.userName) + '</i></span>' +

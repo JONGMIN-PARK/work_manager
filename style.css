@@ -4531,6 +4531,51 @@ html.wm-desktop #mMessages{--cx-h:calc(100dvh - 96px)}
   .cd-src{padding:14px;font-size:16px}
 }
 
+/* ═══ v13.361 📞 음성 · 🎥 영상 통화 (chat-call.js) ═══ */
+.cl-ring{position:fixed;right:20px;top:20px;z-index:10095;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:20px;background:linear-gradient(135deg,#111827,#1e1b4b);color:#fff;box-shadow:0 24px 60px -16px rgba(0,0,0,.6);animation:clRing 1s ease-in-out infinite alternate}
+@keyframes clRing{from{transform:translateY(0)}to{transform:translateY(-3px);box-shadow:0 28px 70px -14px rgba(124,58,237,.7)}}
+.cl-ring .cx-av{width:46px;height:46px;font-size:18px;border-radius:50%}
+.cl-ring-t{display:flex;flex-direction:column;min-width:120px}
+.cl-ring-t b{font-size:15px}
+.cl-ring-t span{font-size:12px;color:#c7d2fe}
+.cl-ring button{width:46px;height:46px;border:0;border-radius:50%;font-size:20px;cursor:pointer;color:#fff}
+.cl-ring .cl-no{background:#EF4444}
+.cl-ring .cl-yes{background:#22C55E}
+.cl-win{position:fixed;right:20px;bottom:20px;z-index:10078;width:min(720px,calc(100vw - 24px));border-radius:18px;overflow:hidden;background:#0b0f19;color:#fff;box-shadow:0 30px 70px -20px rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.08)}
+.cl-h{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:move;user-select:none;background:rgba(255,255,255,.04)}
+.cl-dot{width:9px;height:9px;border-radius:50%;background:#22C55E;animation:cxDot 1.4s infinite}
+.cl-h b{flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-time{font:600 12px "JetBrains Mono",monospace;color:#9ca3af}
+.cl-h button{border:0;border-radius:6px;background:rgba(255,255,255,.1);color:#fff;padding:2px 9px;cursor:pointer}
+.cl-grid{position:relative;display:grid;gap:6px;padding:6px;grid-template-columns:repeat(2,minmax(0,1fr));min-height:220px}
+.cl-grid[data-n="1"]{grid-template-columns:1fr}
+.cl-grid[data-n="2"]{grid-template-columns:1fr}
+.cl-grid[data-n="2"] .cl-tile.me{position:absolute;right:14px;bottom:14px;width:26%;z-index:2;box-shadow:0 8px 24px rgba(0,0,0,.6)}
+.cl-grid[data-wait]::after{content:attr(data-wait);position:absolute;left:0;right:0;top:12px;text-align:center;font-size:12.5px;color:#9ca3af;pointer-events:none}
+.cl-tile{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#1f2937,#0b0f19);outline:2px solid transparent;transition:outline-color .15s}
+.cl-tile.talk{outline-color:#22C55E}
+.cl-tile video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.cl-tile.me video{transform:scaleX(-1)}
+.cl-tile.novid video{visibility:hidden}
+.cl-av{position:absolute;inset:0;display:none;align-items:center;justify-content:center}
+.cl-tile.novid .cl-av{display:flex}
+.cl-av .cx-av{width:64px;height:64px;font-size:24px;border-radius:50%}
+.cl-nm{position:absolute;left:8px;bottom:6px;padding:2px 8px;border-radius:10px;background:rgba(0,0,0,.55);font-size:11.5px}
+.cl-bar{display:flex;justify-content:center;gap:10px;padding:10px}
+.cl-bar button{min-width:46px;height:42px;border:0;border-radius:21px;background:rgba(255,255,255,.12);color:#fff;font:inherit;font-size:17px;cursor:pointer;padding:0 14px}
+.cl-bar button.off{background:#4b5563;text-decoration:line-through}
+.cl-bar button.on{background:#2563EB}
+.cl-bar .cl-end{background:#EF4444;font-size:13.5px;font-weight:700}
+.cl-win.small{width:260px}
+.cl-win.small .cl-grid{grid-template-columns:1fr;min-height:0}
+.cl-win.small .cl-tile:not(.me){display:none}
+.cl-win.small .cl-tile.me{position:static;width:auto}
+.cl-win.small .cl-bar button{min-width:36px;height:34px;font-size:14px;padding:0 10px}
+.cl-card{display:flex;align-items:center;gap:8px;padding:8px 10px;border-left-color:#22C55E}
+.cl-card:not(.live){border-left-color:var(--t5)}
+.cl-ci{font-size:20px}
+@media (max-width:760px){.cl-win{right:6px;left:6px;bottom:6px;width:auto}.cl-ring{left:10px;right:10px;top:10px}}
+
 .mm-sink{font-size:16px!important}   /* v13.310 숨은 키 입력칸 — 혹시 초점을 받아도 iOS 가 화면을 확대하지 않게 */
 
 

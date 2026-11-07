@@ -1036,11 +1036,13 @@ router.post('/rooms/:id/rtc', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
     var b = req.body || {}, ids = await memberIds(room.id);
-    if (['offer', 'answer', 'ice', 'join', 'leave', 'stop', 'ctl-req', 'ctl-ok', 'ctl-no', 'ctl-end'].indexOf(b.type) < 0) return bad(res, '모르는 신호');
+    if (['offer', 'answer', 'ice', 'join', 'leave', 'stop', 'ctl-req', 'ctl-ok', 'ctl-no', 'ctl-end', 'call', 'call-join', 'call-leave', 'call-no'].indexOf(b.type) < 0) return bad(res, '모르는 신호');
     var payload = { roomId: room.id, from: me(req), fromName: req.user.name || '', type: b.type, sid: String(b.sid || '').slice(0, 60), data: b.data || null };
     if (JSON.stringify(payload).length > 60000) return bad(res, '신호가 너무 큽니다.');
     var to = b.to ? [b.to].filter(function (u) { return ids.indexOf(u) >= 0; }) : ids.filter(function (u) { return u !== me(req); });
+    if (/^call/.test(b.type) && !/^call-[a-z0-9]{6,40}$/.test(payload.sid)) return bad(res, '통화 번호가 올바르지 않습니다.');
     hub.publish(to, 'rtc', payload);
+    if (/^call/.test(b.type)) await callTrack(req, room, b, payload, ids);   // v13.361 📞 통화 — 누가 들어와 있는지 · 시작/끝 기록 · 푸시
     // v13.360 🖱 원격 제어 — 허락 · 끝은 방에 남김 (누가 누구 화면을 조작했는지)
     if ((b.type === 'ctl-ok' || b.type === 'ctl-end') && to.length === 1) {
       var nm = await userNames(req.tenant.id, [to[0]]);
@@ -1049,6 +1051,41 @@ router.post('/rooms/:id/rtc', async function (req, res) {
     res.json({ data: { ok: true } });
   } catch (e) { httpErr.serverError(res, '[chat/rtc]', e); }
 });
+/* ─── 📞 통화 (v13.361) — 영상 · 음성은 브라우저끼리(WebRTC). 서버는 누가 들어와 있는지만 기억(메모리)하고 시작 · 끝을 방에 남김 ─── */
+var CALLS = {};   // callId → { roomId, video, by, at, users: { uid: true }, msgId }
+function callOf(roomId) { var k = Object.keys(CALLS).filter(function (id) { return CALLS[id].roomId === roomId; })[0]; return k ? Object.assign({ id: k }, CALLS[k], { users: Object.keys(CALLS[k].users) }) : null; }
+async function callTrack(req, room, b, p, ids) {
+  Object.keys(CALLS).forEach(function (k) { if (Date.now() - CALLS[k].at > 12 * 3600000) delete CALLS[k]; });   // 끊긴 채 남은 것 정리
+  var c = CALLS[p.sid], uid = me(req);
+  if (b.type === 'call') {
+    if (c) { c.users[uid] = true; return; }
+    if (Object.keys(CALLS).length > 500) return;
+    c = CALLS[p.sid] = { roomId: room.id, video: !!(b.data && b.data.video), by: uid, at: Date.now(), users: {} };
+    c.users[uid] = true;
+    var m = await postMessage({ tenantId: req.tenant.id }, room, { userId: uid, kind: 'text', body: (c.video ? '🎥 영상' : '📞 음성') + ' 통화를 시작했습니다', cards: [{ type: 'call', id: p.sid, on: true, video: c.video, from: uid }] });
+    c.msgId = m.id;
+    // 접속 안 한 사람에게 휴대폰 푸시
+    var off = ids.filter(function (u) { return u !== uid && !hub.online(u); });
+    if (off.length) require('../services/push.service').sendToUsers(off, { title: (c.video ? '🎥 ' : '📞 ') + (req.user.name || '') + ' 님의 통화', body: (room.kind === 'dm' ? '' : (room.name || '대화방') + ' — ') + '눌러서 받기', tag: 'call-' + p.sid, go: 'chat:' + room.id }).catch(function () {});
+  } else if (b.type === 'call-join' && c) c.users[uid] = true;
+  else if (b.type === 'call-leave' && c) {
+    delete c.users[uid];
+    if (!Object.keys(c.users).length) {   // 마지막 사람이 나감 → 끝
+      delete CALLS[p.sid];
+      var mins = Math.max(1, Math.round((Date.now() - c.at) / 60000));
+      if (c.msgId) {
+        await db.query('UPDATE chat_messages SET cards = $2 WHERE id = $1', [c.msgId, JSON.stringify([{ type: 'call', id: p.sid, on: false, video: c.video, from: c.by, mins: mins }])]);
+        var upd = await loadMsg(c.msgId); if (upd) hub.publish(await memberIds(room.id), 'upd', upd);
+      }
+      await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (c.video ? '🎥' : '📞') + ' 통화가 끝났습니다 · ' + mins + '분' });
+    }
+  }
+}
+router.get('/rooms/:id/call', async function (req, res) {
+  try { var room = await roomFor(req, res, req.params.id); if (!room) return; res.json({ data: callOf(room.id) }); }
+  catch (e) { httpErr.serverError(res, '[chat/call]', e); }
+});
+
 /* 화면 공유 시작 · 끝 알림 메시지 (누르면 보기) */
 router.post('/rooms/:id/share', async function (req, res) {
   try {

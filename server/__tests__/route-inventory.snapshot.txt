@@ -135,6 +135,7 @@ GET /api/chat/messages/:mid/folders
 GET /api/chat/requests
 GET /api/chat/rooms
 GET /api/chat/rooms/:id
+GET /api/chat/rooms/:id/call
 GET /api/chat/rooms/:id/context
 GET /api/chat/rooms/:id/docs
 GET /api/chat/rooms/:id/files
