@@ -55,6 +55,7 @@ function showWin(go) {
   if (!win) return;
   if (win.isMinimized()) win.restore();
   win.show(); win.focus(); win.flashFrame(false);
+  if (readCfg().onTop && !win.isAlwaysOnTop()) applyOnTop(true);   // v13.383 트레이에서 다시 열 때도 맨 위 유지
   if (go) win.webContents.send('wm:go', go);
 }
 
@@ -73,7 +74,7 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, partition: 'persist:wm', spellcheck: false, backgroundThrottling: false }   // v13.382 창을 숨겨 둬도 실시간 연결 · 통화 울림이 늦지 않게
   });
   if (st.max) win.maximize();
-  if (readCfg().onTop) win.setAlwaysOnTop(true, 'floating');   // v13.382 📌 항상 위
+  if (readCfg().onTop) applyOnTop(true);   // v13.382 📌 항상 위
   // 창 안 단축키: Ctrl+Alt+T 📌 항상 위 켜기 · 끄기
   win.webContents.on('before-input-event', (e, i) => { if (i.type === 'keyDown' && i.control && i.alt && !i.shift && (i.key === 't' || i.key === 'T')) { e.preventDefault(); setOnTop(!win.isAlwaysOnTop()); } });
   // 구글 로그인은 'Electron' 이 든 브라우저 이름을 막는다 → 보통 크롬 이름으로
@@ -107,9 +108,14 @@ function createWindow() {
 }
 
 /* v13.382 📌 항상 위 — 다른 프로그램을 써도 이 창이 위에 (기억해 둠) */
+/* v13.383 윈도우는 단계('floating' 등)를 붙이면 맨 위가 걸리지 않음(Electron 33 실측) → 단계 없이. 맥만 'floating' */
+function applyOnTop(on) {
+  if (!win) return;
+  if (process.platform === 'darwin') win.setAlwaysOnTop(!!on, 'floating'); else win.setAlwaysOnTop(!!on);
+}
 function setOnTop(on) {
   if (!win) return;
-  win.setAlwaysOnTop(!!on, 'floating');
+  applyOnTop(on);
   writeCfg(Object.assign(readCfg(), { onTop: !!on }));
   refreshTray();
   try { win.webContents.send('wm:ontop', !!on); } catch (_) {}
@@ -252,7 +258,7 @@ function inkOpen(me) {
     skipTaskbar: true, hasShadow: false, alwaysOnTop: true, focusable: true, show: false, backgroundColor: '#00000000', title: '발표 펜',
     webPreferences: { preload: path.join(__dirname, 'ink-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false }
   });
-  inkWin.setAlwaysOnTop(true, 'screen-saver');
+  if (process.platform === 'darwin') inkWin.setAlwaysOnTop(true, 'screen-saver'); else inkWin.setAlwaysOnTop(true);   // v13.383 윈도우는 단계를 붙이면 맨 위가 풀림
   inkWin.setContentProtection(true);   // 화면 공유 · 캡처에 안 찍힘 (보는 쪽은 웹 층으로 봄)
   inkWin.setIgnoreMouseEvents(true, { forward: true });
   inkWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
