@@ -810,3 +810,50 @@ test('🔑 키워드 알림 · 📝 나와의 채팅 (v13.380)', async function 
   expect(rl[0]).toMatchObject({ id: s1, self: true, pinned: true });
   expect((await api('get', '/api/chat/rooms/' + s1, a)).status).toBe(403);
 });
+
+test('🗳 투표 · 📅 약속 잡기 · ✔ 확인 요청 · 📤 내보내기 (v13.381)', async function () {
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '업무도구방', userIds: [b.user.id, c.user.id] })).body.data.id;
+  // 투표 — 하나 고르기 · 바꾸기 · 방 밖 못 함 · 마감
+  expect((await api('post', '/api/chat/rooms/' + g + '/polls', a).send({ q: '점심', opts: [{ t: '한식' }] })).status).toBe(400);
+  var p = (await api('post', '/api/chat/rooms/' + g + '/polls', a).send({ q: '점심 메뉴', opts: [{ t: '한식' }, { t: '중식' }, { t: '' }] })).body.data;
+  expect(p.poll.opts.length).toBe(2); expect(p.body).toMatch(/투표/);
+  var o1 = p.poll.opts[0].id, o2 = p.poll.opts[1].id;
+  await api('post', '/api/chat/messages/' + p.id + '/vote', b).send({ opts: [o1, o2] });   // 하나만 → 앞 것
+  var v = (await api('post', '/api/chat/messages/' + p.id + '/vote', c).send({ opts: [o2] })).body.data.poll;
+  expect(v.votes[o1]).toEqual([b.user.id]); expect(v.votes[o2]).toEqual([c.user.id]);
+  v = (await api('post', '/api/chat/messages/' + p.id + '/vote', b).send({ opts: [o2] })).body.data.poll;
+  expect(v.votes[o1]).toEqual([]); expect(v.votes[o2].length).toBe(2);
+  expect((await api('post', '/api/chat/messages/' + p.id + '/vote', x).send({ opts: [o1] })).status).toBe(403);
+  expect((await api('post', '/api/chat/messages/' + p.id + '/poll-close', b).send({})).status).toBe(403);
+  expect((await api('post', '/api/chat/messages/' + p.id + '/poll-close', a).send({})).body.data.poll.closed).toBe(true);
+  expect((await api('post', '/api/chat/messages/' + p.id + '/vote', b).send({ opts: [o1] })).status).toBe(400);
+  // 약속 잡기 — 일정 겹침 · 정하면 달력
+  var bn = (await db.query('SELECT COALESCE(display_name, name) AS n FROM users WHERE id = $1', [b.user.id])).rows[0].n;
+  await db.query("INSERT INTO events (id, title, type, start_date, end_date, assignees, tenant_id, start_time, end_time) VALUES ($1,'비밀 회의','meeting','2031-03-03','2031-03-03',$2,$3,'10:00','11:00')", ['evt-t' + S, JSON.stringify([bn]), a.user.tenantId || (await db.query('SELECT tenant_id FROM users WHERE id = $1', [a.user.id])).rows[0].tenant_id]);
+  var t = (await api('post', '/api/chat/rooms/' + g + '/polls', a).send({ q: '3호기 점검 회의', kind: 'time', opts: [{ at: '2031-03-03', from: '10:30', to: '11:30' }, { at: '2031-03-03', from: '14:00', to: '15:00' }] })).body.data;
+  expect(t.poll.kind).toBe('time'); expect(t.poll.multi).toBe(true);
+  expect(t.poll.opts[0].busy).toEqual([bn]); expect(t.poll.opts[1].busy).toEqual([]);
+  await api('post', '/api/chat/messages/' + t.id + '/vote', b).send({ opts: [t.poll.opts[1].id] });
+  var cl = (await api('post', '/api/chat/messages/' + t.id + '/poll-close', a).send({ pick: t.poll.opts[1].id })).body;
+  expect(cl.eventId).toBeTruthy();
+  var ev = (await db.query('SELECT title, type, start_date, start_time, end_time, assignees FROM events WHERE id = $1', [cl.eventId])).rows[0];
+  expect(ev).toMatchObject({ title: '3호기 점검 회의', type: 'meeting', start_date: '2031-03-03', start_time: '14:00', end_time: '15:00' });
+  expect(ev.assignees).toContain(bn);
+  // 확인 요청 — 글에 붙음 · 누르면 · 다음 날 아침 안 누른 사람에게
+  var am = (await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '내일 정전 — 꼭 확인', ack: true })).body.data;
+  expect(am.ack).toMatchObject({ req: true });
+  var ak = (await api('post', '/api/chat/messages/' + am.id + '/ack', b).send({})).body.data;
+  expect(Object.keys(ak.ack.by)).toEqual([b.user.id]);
+  await db.query("UPDATE chat_messages SET created_at = now() - interval '13 hours' WHERE id = $1", [am.id]);
+  var noti = require('../services/notification.service'), spy = jest.spyOn(noti, 'notify').mockResolvedValue({});
+  var n = await require('../routes/chat')._ackNudge();
+  expect(n).toBeGreaterThanOrEqual(1);
+  var call = spy.mock.calls.filter(function (cc) { return cc[0] === 'chat_remind' && /확인 요청/.test(cc[1].note); })[0];
+  expect(call[2]).toEqual([c.user.id]);   // b 는 눌렀음
+  spy.mockRestore();
+  // 내보내기 — 텍스트 · 방 밖 못 받음
+  var ex = await h.request(h.app).get('/api/chat/rooms/' + g + '/export').set('Authorization', 'Bearer ' + a.token);
+  expect(ex.status).toBe(200); expect(ex.headers['content-type']).toMatch(/text\/plain/);
+  expect(ex.text).toMatch(/내일 정전/); expect(ex.text).toMatch(/한식 0표 · 중식 2표/);
+  expect((await h.request(h.app).get('/api/chat/rooms/' + g + '/export').set('Authorization', 'Bearer ' + x.token)).status).toBe(403);
+});

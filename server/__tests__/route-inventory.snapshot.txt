@@ -152,6 +152,7 @@ GET /api/chat/rooms/:id
 GET /api/chat/rooms/:id/call
 GET /api/chat/rooms/:id/context
 GET /api/chat/rooms/:id/docs
+GET /api/chat/rooms/:id/export
 GET /api/chat/rooms/:id/files
 GET /api/chat/rooms/:id/messages
 GET /api/chat/rooms/:id/posts
@@ -422,12 +423,15 @@ POST /api/chat/files/:fid/to-docs
 POST /api/chat/folders
 POST /api/chat/folders/:fid/items
 POST /api/chat/me/avatar
+POST /api/chat/messages/:mid/ack
 POST /api/chat/messages/:mid/action
 POST /api/chat/messages/:mid/forward
 POST /api/chat/messages/:mid/nudge
+POST /api/chat/messages/:mid/poll-close
 POST /api/chat/messages/:mid/post
 POST /api/chat/messages/:mid/react
 POST /api/chat/messages/:mid/remind
+POST /api/chat/messages/:mid/vote
 POST /api/chat/posts/suggest
 POST /api/chat/rooms
 POST /api/chat/rooms/:id/catchup
@@ -436,6 +440,7 @@ POST /api/chat/rooms/:id/files
 POST /api/chat/rooms/:id/members
 POST /api/chat/rooms/:id/messages
 POST /api/chat/rooms/:id/notice
+POST /api/chat/rooms/:id/polls
 POST /api/chat/rooms/:id/posts
 POST /api/chat/rooms/:id/read
 POST /api/chat/rooms/:id/rtc

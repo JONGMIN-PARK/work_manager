@@ -87,6 +87,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await tool(a, 'text');
     var tp = await at(a, 0.6, 0.78); await a.mouse.click(tp.x, tp.y);
     await a.waitForSelector('#cbBoard .cb-text');
+    await a.waitForFunction(function () { return document.activeElement && document.activeElement.classList.contains('cb-text'); });   // 글자 칸은 한 박자 뒤에 잡힘 — 잡힌 뒤 치기
     await a.keyboard.type('여기 확인');
     await a.keyboard.press('Enter');
     await wait(900);

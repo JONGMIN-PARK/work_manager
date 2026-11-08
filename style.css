@@ -5914,3 +5914,74 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cx-fail.wait{color:var(--t4)}
 /* 화면 밖 말풍선은 그리기를 미룸 — 수천 개 방도 스크롤 가볍게 */
 .cx-msgs .cx-m{content-visibility:auto;contain-intrinsic-size:auto 56px}
+
+/* ═══ v13.381 🗳 투표 · 📅 약속 · ✔ 확인 요청 · 🏢 조직도 · 도구판 새 짜임 (chat-more.js) ═══ */
+/* 도구판 — 넓은 칸: 자주 쓰는 것(.cx-tools-k)은 줄에, 나머지는 ＋. 좁은 칸: 전부 ＋ */
+.cx-tools-t{display:inline-flex!important;font-size:20px;font-weight:300}
+.cx-tools-k{display:contents}
+.cx-tools{display:none}
+.cx-comp.tools-open .cx-tools{position:absolute;left:8px;right:8px;bottom:calc(100% + 6px);z-index:6;display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;padding:10px;border:1px solid var(--bd);border-radius:16px;background:var(--bg-p);box-shadow:0 -14px 34px -16px rgba(15,23,42,.45);animation:cxIn .18s ease-out}
+.cx-comp.tools-open .cx-tools .cx-ib{flex-direction:column;gap:4px;height:auto!important;min-width:0;padding:10px 4px;border-radius:12px!important;background:var(--bg-i);font-size:20px}
+.cx-comp.tools-open .cx-tools .cx-ib.on{background:var(--ac-bg);color:var(--ac-t);box-shadow:inset 0 0 0 1.5px var(--ac)}
+.cx-comp.tools-open .cx-tools .cx-tl{display:block;font-size:11.5px;color:var(--t3);white-space:nowrap}
+.cx-tools .cx-k2{display:none!important}
+@container (min-width:621px){.cx-comp.tools-open .cx-tools{right:auto;width:min(440px,92%)}}
+@container (max-width:620px){.cx-tools-k{display:none}.cx-comp.tools-open .cx-tools .cx-k2{display:flex!important}}
+@media (max-width:760px){.cx-tools-k{display:none}.cx-comp.tools-open .cx-tools .cx-k2{display:flex!important}}
+.cx-ackchip{display:flex;align-items:center;gap:6px;margin:0 4px 6px;padding:3px 4px 3px 10px;border-radius:10px;background:color-mix(in srgb,#16A34A 12%,var(--bg-i));color:#15803D;font-size:12px;font-weight:600;width:max-content}
+.cx-ackchip[hidden]{display:none}
+.cx-comp.ack-on .cx-comp-r{border-color:#16A34A}
+/* 🗳 투표 · 📅 약속 */
+.cx-poll{width:min(320px,74vw);padding:12px;border:1px solid var(--bd);border-radius:16px;background:var(--bg-p);display:grid;gap:6px;box-shadow:0 8px 22px -16px rgba(15,23,42,.6)}
+.cx-poll-h{font-size:11.5px;font-weight:700;color:var(--ac-t)}
+.cx-poll-h b{color:var(--t4)}
+.cx-poll-q{font-size:14px;font-weight:700;color:var(--t1);margin-bottom:2px}
+.cx-poll-o{position:relative;display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg-i);color:var(--t2);font:inherit;font-size:13px;text-align:left;cursor:pointer;overflow:hidden}
+.cx-poll-o:hover:not(:disabled){border-color:var(--ac)}
+.cx-poll-o.on{border-color:var(--ac);color:var(--ac-t);font-weight:600}
+.cx-poll-o.win{border-color:#16A34A;box-shadow:inset 0 0 0 1px #16A34A}
+.cx-poll-o:disabled{cursor:default}
+.cx-poll-bar{position:absolute;left:0;top:0;bottom:0;background:color-mix(in srgb,var(--ac) 14%,transparent);transition:width .3s}
+.cx-poll-o.win .cx-poll-bar{background:color-mix(in srgb,#16A34A 16%,transparent)}
+.cx-poll-t{position:relative;flex:1;min-width:0;display:flex;flex-direction:column}
+.cx-poll-t i{font-style:normal;font-size:11px;font-weight:500}
+.cx-poll-busy{color:#B45309}
+.cx-poll-free{color:#15803D}
+.cx-poll-o>b{position:relative;font-variant-numeric:tabular-nums}
+.cx-poll-f{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--t5);margin-top:2px}
+.cx-poll-f button{border:1px solid var(--bd);border-radius:8px;background:var(--bg-p);color:var(--t2);font:inherit;font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer}
+.cx-poll-f button:hover{border-color:var(--ac);color:var(--ac-t)}
+.cx-m.mine .cx-poll{margin-left:auto}
+/* ✔ 확인 요청 */
+.cx-ack{display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:4px 10px;border-radius:12px;font:inherit;font-size:12px;font-weight:600;border:1px solid transparent;cursor:pointer}
+.cx-ack.need{background:#16A34A;color:#fff;box-shadow:0 4px 12px -6px rgba(22,163,74,.8)}
+.cx-ack.need:hover{filter:brightness(1.08)}
+.cx-ack.ok{background:color-mix(in srgb,#16A34A 12%,var(--bg-i));color:#15803D;cursor:default}
+.cx-ack.mine{background:var(--bg-i);color:var(--t3);border-color:var(--bd)}
+.cx-ack.mine.all{color:#15803D;border-color:#16A34A}
+.cx-m.mine .cx-ack{margin-left:auto;display:flex;width:max-content}
+/* 🏢 조직도 */
+.cx-side.org-on .cx-rooms,.cx-side.org-on .cx-rf,.cx-side.org-on .cx-sq,.cx-side.org-on .cx-perm{display:none!important}
+.cx-org{flex:1;min-height:0;overflow-y:auto;padding:0 8px 10px}
+.cx-org-h{position:sticky;top:0;z-index:1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 4px 8px;background:var(--bg-ps,var(--bg-p));font-size:13px;font-weight:700;color:var(--t1)}
+.cx-org-h span{font-size:11.5px;font-weight:500;color:var(--t5)}
+.cx-org-q{flex:1 1 100%;height:32px;border-radius:16px;border:1px solid var(--bd);background:var(--bg-i);padding:0 12px;font:inherit;font-size:13px;color:var(--t2)}
+.cx-org-d summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--t4);padding:8px 4px 4px;list-style:none}
+.cx-org-d summary::-webkit-details-marker{display:none}
+.cx-org-d summary i{font-style:normal;font-weight:500;color:var(--t6)}
+.cx-org-u{display:flex;align-items:center;gap:8px;padding:5px 4px;border-radius:10px}
+.cx-org-u:hover{background:var(--bg-hv)}
+.cx-org-u .cx-av{width:32px;height:32px;font-size:12px}
+.cx-org-u>span{flex:1;min-width:0;display:flex;flex-direction:column}
+.cx-org-u b{font-size:13px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cx-org-u i{font-style:normal;font-size:11px;color:var(--t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#cxOrgBtn.on{background:var(--ac-bg);color:var(--ac-t)}
+/* 만들기 창 */
+.cxm{display:grid;gap:10px}
+.cxm-opts{display:grid;gap:6px}
+.cxm-opt{display:flex;gap:6px;align-items:center}
+.cxm-opt .wr-inp{flex:1;min-width:0}
+.cxm-opt input[type=time]{flex:0 0 96px}
+.cxm-chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)}
+.cxm-chk[hidden]{display:none}
+.cxm-note{margin:0;font-size:12px;color:var(--t5)}
