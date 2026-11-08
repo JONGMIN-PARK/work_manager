@@ -1476,13 +1476,32 @@ function _cxDrawThread(append) {
 }
 
 /* ─── 오른쪽: 답글 줄기 · 프로젝트 현황 · 멤버 · 파일 ─── */
+/* v13.389 옆 칸 닫기 — 휴대폰은 옆 칸이 화면을 다 덮으므로 ‹ 대화 단추 · 뒤로 가기(아이폰 밀기 · 안드로이드 뒤로)로 닫힘 */
+function _cxAsideClose(fromPop) {
+  if (CX.thread) { CX.thread = null; if (_cxIsPhone()) CX.aside = false; } else CX.aside = false;
+  _cxDrawAside(); _cxDrawHead();
+}
+/** 휴대폰에서 옆 칸이 열리면 기록 한 칸을 넣어 뒤로 가기가 옆 칸을 닫게, 닫히면 그 칸을 뺌 */
+function _cxAsideHist(open) {
+  if (open) {
+    if (!_cxIsPhone() || CX.histAside) return;
+    CX.histAside = true; try { history.pushState({ cxAside: 1 }, ''); } catch (e) {}
+  } else if (CX.histAside) {
+    CX.histAside = false; CX.histSkip = true; try { history.back(); } catch (e) { CX.histSkip = false; }
+  }
+}
+window.addEventListener('popstate', function () {
+  if (CX.histSkip) { CX.histSkip = false; return; }
+  if (CX.histAside) { CX.histAside = false; _cxAsideClose(true); }
+});
 function _cxDrawAside() {
   var a = document.getElementById('cxAside'); if (!a) return;
   var root = document.querySelector('#mMessages .cx'); if (root) root.classList.toggle('no-aside', !CX.aside || !CX.room);
-  if (!CX.room || !CX.aside) { a.innerHTML = ''; return; }
+  if (!CX.room || !CX.aside) { a.innerHTML = ''; _cxAsideHist(false); return; }
+  _cxAsideHist(true);
   if (CX.thread) {
-    a.innerHTML = '<div class="cx-as-h"><b>💬 답글</b><button type="button" class="cx-ib" data-x aria-label="닫기">✕</button></div><div class="cx-msgs cx-th-msgs" id="cxThMsgs"></div>' + _cxComposerHtml('cxThIn', 'cxThComp');
-    a.querySelector('[data-x]').addEventListener('click', function () { CX.thread = null; _cxDrawAside(); });
+    a.innerHTML = '<div class="cx-as-h">' + '<button type="button" class="cx-ib cx-as-back" data-x aria-label="대화로 돌아가기">‹ 대화</button>' + '<b>💬 답글</b><button type="button" class="cx-ib" data-x aria-label="닫기">✕</button></div><div class="cx-msgs cx-th-msgs" id="cxThMsgs"></div>' + _cxComposerHtml('cxThIn', 'cxThComp');
+    a.querySelectorAll('[data-x]').forEach(function (x) { x.addEventListener('click', function () { _cxAsideClose(); }); });
     a.querySelector('#cxThMsgs').addEventListener('click', _cxMsgClick); _cxLongPress(a.querySelector('#cxThMsgs'));
     _cxBindComposer('cxThIn', 'cxThComp', true);
     _cxDrawThread();
@@ -1490,9 +1509,9 @@ function _cxDrawAside() {
   }
   var tab = _cxAsideTab();
   var tabs = (CX.info && CX.info.kind === 'project' ? [['ctx', '📊 현황']] : []).concat(CX.info && CX.info.equipKey ? [['equip', '🏭 장비']] : []).concat([['board', '📌 게시판'], ['docs', '📝 문서'], ['people', '👤 멤버'], ['files', '📎 파일']]);
-  a.innerHTML = '<div class="cx-as-tabs">' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '<button type="button" class="cx-ib" data-x aria-label="닫기">✕</button></div><div class="cx-as-b" id="cxAsB"></div>';
+  a.innerHTML = '<div class="cx-as-tabs">' + '<button type="button" class="cx-ib cx-as-back" data-x aria-label="대화로 돌아가기">‹ 대화</button>' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '<button type="button" class="cx-ib" data-x aria-label="닫기">✕</button></div><div class="cx-as-b" id="cxAsB"></div>';
   a.querySelectorAll('[data-tab]').forEach(function (b) { b.addEventListener('click', function () { CX.asideTab = b.dataset.tab; _cxDrawAside(); }); });
-  a.querySelector('[data-x]').addEventListener('click', function () { CX.aside = false; _cxDrawAside(); _cxDrawHead(); });
+  a.querySelectorAll('[data-x]').forEach(function (x) { x.addEventListener('click', function () { _cxAsideClose(); }); });
   var b = a.querySelector('#cxAsB');
   if (tab === 'ctx') b.innerHTML = _cxCtxHtml();
   else if (tab === 'board' && typeof chatPostsTab === 'function') chatPostsTab(b);

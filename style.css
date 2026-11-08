@@ -6106,3 +6106,13 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
   /* 입력 줄은 홈 막대 바로 위까지 (예전 34−12=22pt + 위아래 여백 → 이제 약 14pt) */
   html.cx-full:has(#mMessages:not(.hidden)) .cx-comp{padding-bottom:max(6px,calc(env(safe-area-inset-bottom,0px) - 20px))!important}
 }
+/* v13.389 휴대폰 옆 칸(ⓘ · 답글) — 화면을 다 덮으므로 맨 왼쪽에 ‹ 대화 단추를 늘 보이게, 상태 표시줄만큼 내려서 */
+.cx-as-back{display:none}
+@media (max-width:760px){
+  .cx-as-back{display:inline-flex;flex:none;gap:2px;font-weight:700;color:var(--ac-t,var(--ac));padding:0 10px 0 4px;height:36px;font-size:14px}
+  .cx-as-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .cx-as-tabs::-webkit-scrollbar{display:none}
+  .cx-as-tabs>button{flex:none}
+  .cx-as-tabs [data-x]:not(.cx-as-back),.cx-as-h [data-x]:not(.cx-as-back){display:none}
+  html.cx-full:has(#mMessages:not(.hidden)) .cx-aside{padding-top:env(safe-area-inset-top,0px)}
+}
