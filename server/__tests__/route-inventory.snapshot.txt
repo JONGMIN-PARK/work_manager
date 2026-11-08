@@ -126,6 +126,7 @@ GET /api/auth/google/callback
 GET /api/auth/me
 GET /api/billing/status
 GET /api/bootstrap
+GET /api/build
 GET /api/chat/docs/:did
 GET /api/chat/docs/:did/versions
 GET /api/chat/docs/:did/versions/:vid

@@ -94,6 +94,7 @@ function _cxVisibleRoom(id) {
 function chatOnEvent(ev, d) {
   if (ev === 'hello') {   // (다시) 붙으면 놓친 것 반영 — 열린 방 메시지도
     if (typeof chatAlertOnHello === 'function') chatAlertOnHello();   // v13.371 가려짐 상태 맞추기
+    if (CX.hadHello && typeof wmUpdateCheck === 'function') setTimeout(function () { wmUpdateCheck(true); }, 1500);   // v13.374 다시 붙음 = 서버가 다시 켜졌을 수 있음(새 배포)
     if (CX.rooms.length) _cxLoadRooms(); else chatBadge();
     if (CX.hadHello && CX.room && CX.msgs.length) _cxCatchUp();
     CX.hadHello = true; return;
@@ -269,16 +270,32 @@ function _cxFit() {
   var ta = document.getElementById('cxIn'), cp = ta && ta.closest('.cx-comp');   // v13.373 칸 너비 따라 안내 글 길이
   if (cp && cp.offsetWidth) ta.placeholder = cp.offsetWidth < 620 ? '메시지 입력' : '메시지 · @사람 · /명령';
   if (!_cxIsPhone()) { page.style.removeProperty('--cx-h'); return; }
+  if (_cxKbOpen()) return;   // v13.374 키보드가 떠 있는 동안은 줄이지 않음(_cxKb 가 맡음) — 줄이면 아이폰이 페이지를 밀어 올려 입력칸이 위로 감
   var vv = window.visualViewport, vh = vv ? vv.height : window.innerHeight;
   var top = cx.getBoundingClientRect().top + (window.scrollY || 0);   // 문서 안 자리 (머리 · 탭 아래)
   page.style.setProperty('--cx-h', Math.max(300, Math.round(vh - top - 6)) + 'px');
 }
 /* v13.372 휴대폰 키보드 — 키보드가 올라오면 메신저를 보이는 화면에 딱 붙임(입력칸이 키보드 바로 위).
  *   예전: 페이지가 밀려 올라가며 입력칸이 키보드에서 멀리 떠 있거나 위로 사라짐 */
+/* v13.374 키보드가 떠 있나 — 아이폰 홈 화면 앱은 키보드가 뜨면 innerHeight 도 같이 줄어(예전 판단이 안 맞음),
+ *   키보드 없을 때 본 화면 높이(CX.vvBase)와 비교. 방향이 바뀌면 다시 잼 */
+function _cxTextFocused() { var a = document.activeElement; return !!(a && (/^(TEXTAREA|SELECT)$/.test(a.tagName) || (a.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|range|color|file)$/i.test(a.type)) || a.isContentEditable)); }
+function _cxVvBaseNote() {
+  var vv = window.visualViewport; if (!vv) return;
+  var o = window.innerWidth > window.innerHeight ? 'l' : 'p';
+  if (CX.vvO !== o) { CX.vvO = o; CX.vvBase = 0; }
+  if (!_cxTextFocused()) CX.vvBase = Math.max(CX.vvBase || 0, vv.height, window.innerHeight);
+}
+function _cxKbOpen() {
+  var vv = window.visualViewport; if (!vv || !_cxIsPhone() || !_cxTextFocused()) return false;
+  var base = CX.vvBase || 0;
+  return (base && base - vv.height > 120) || window.innerHeight - vv.height > 120;
+}
 function _cxKb() {
   var cx = document.querySelector('#mMessages .cx'); if (!cx) return;
+  _cxVvBaseNote();
   var vv = window.visualViewport, a = document.activeElement;
-  var on = !!(vv && _cxIsPhone() && a && cx.contains(a) && /^(TEXTAREA|INPUT)$/.test(a.tagName) && window.innerHeight - vv.height > 120);
+  var on = !!(vv && a && cx.contains(a) && _cxKbOpen());
   var box = document.getElementById('cxMsgs'), atB = box && box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   if (on) {
     cx.classList.add('cx-kb'); document.documentElement.classList.add('cx-kb-on');
@@ -291,7 +308,8 @@ function _cxKb() {
 }
 (function () {
   var t, raf = 0;
-  function on() { clearTimeout(t); t = setTimeout(_cxFit, 60); kb(); }
+  function on() { _cxVvBaseNote(); clearTimeout(t); t = setTimeout(_cxFit, 60); kb(); }
+  setTimeout(_cxVvBaseNote, 0); window.addEventListener('load', _cxVvBaseNote);
   function kb() { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; _cxKb(); }); }
   window.addEventListener('resize', on);
   if (window.visualViewport) { window.visualViewport.addEventListener('resize', on); window.visualViewport.addEventListener('scroll', kb); }
@@ -879,7 +897,7 @@ function _cxComposerHtml(taId, wrapId) {
     (wrapId === 'cxComp' && typeof chatTimeComposer === 'function' ? '<button type="button" class="cx-ib" data-c="sched" title="⏰ 예약 보내기 — 글을 쓰고 누르면 그때 보냄">⏰<span class="cx-tl">예약 보내기</span></button>' : '') +
     (wrapId === 'cxComp' && typeof chatPostModal === 'function' ? '<button type="button" class="cx-ib" data-c="post" title="게시판 글쓰기 — 공지 · 자료 · 질문 · 🛠 요청">✍️<span class="cx-tl">게시판 글</span></button>' : '') +
     (_cxCanCapture() ? '<button type="button" class="cx-ib" data-c="cap" title="화면 캡처 — 잘라서 표시하고 보내기">📸<span class="cx-tl">화면 캡처</span></button>' : '') + '</span>' +
-    '<textarea id="' + taId + '" rows="1" placeholder="' + (_cxIsPhone() ? '메시지 입력' : '메시지 · @사람 · /명령') + '" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
+    '<textarea id="' + taId + '" rows="1" autocomplete="off" enterkeyhint="send" placeholder="' + (_cxIsPhone() ? '메시지 입력' : '메시지 · @사람 · /명령') + '" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
     '<button type="button" class="cx-send" data-c="send" title="보내기" aria-label="보내기">➤</button>' +
     '<input type="file" data-c="file" multiple hidden>' + (_cxIsPhone() ? '<input type="file" data-c="cam" accept="image/*" capture="environment" hidden>' : '') + '</div><div class="cx-sugg" data-sugg hidden></div></div>';
 }

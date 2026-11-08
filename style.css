@@ -5749,3 +5749,17 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cx-side-h b{white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .cx-side-a{display:flex;gap:0;flex:none}
 @media (max-width:1200px) and (min-width:761px){.cx-side-a .cx-ib{min-width:28px;padding:0 4px}}
+
+/* ═══ v13.374 ⬆ 새 버전 알림 띠 (wm-app.js) ═══ */
+.wm-upd{position:fixed;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));z-index:10060;display:flex;align-items:center;gap:10px;width:max-content;max-width:calc(100vw - 20px);box-sizing:border-box;padding:8px 8px 8px 14px;border:1px solid color-mix(in srgb,var(--ac) 45%,var(--bd));border-radius:14px;background:var(--bg-p);box-shadow:0 14px 36px -14px rgba(15,23,42,.55);animation:wmUpdIn .3s ease-out}
+@keyframes wmUpdIn{from{opacity:0;transform:translate(-50%,-10px)}to{opacity:1;transform:translate(-50%,0)}}
+.wm-upd-i{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--ac-bg);color:var(--ac-t);font-weight:800;flex:none}
+.wm-upd-t{display:flex;flex-direction:column;min-width:0}
+.wm-upd-t b{font-size:13px;color:var(--t1)}
+.wm-upd-t i{font-style:normal;font-size:11.5px;color:var(--t4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46ch}
+.wm-upd button{flex:none;border-radius:9px;font:inherit;font-size:12.5px;cursor:pointer;padding:7px 12px}
+.wm-upd-go{border:0;background:var(--ac);color:#fff;font-weight:700}
+.wm-upd-go:hover{filter:brightness(1.08)}
+.wm-upd-x{border:1px solid var(--bd);background:none;color:var(--t3)}
+@media (max-width:600px){.wm-upd{left:8px;right:8px;transform:none;width:auto;flex-wrap:wrap}.wm-upd-t{flex:1 1 calc(100% - 40px)}.wm-upd-t i{max-width:none;white-space:normal}.wm-upd button{flex:1}@keyframes wmUpdIn{from{opacity:0}to{opacity:1}}}
+@media (prefers-reduced-motion:reduce){.wm-upd{animation:none}}

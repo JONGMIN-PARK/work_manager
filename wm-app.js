@@ -169,3 +169,53 @@ function _wmPushCardFill(box) {
     if (t) t.onclick = wmPushTest;
   });
 }
+
+/* ─── ⬆ 새 버전 알림 (v13.374) — 켜 둔 채로 있는 화면(PC 앱 트레이 · 휴대폰 앱 · 브라우저 탭)이 새 배포를 알아챔 ───
+ *   닫았다 다시 열면 원래 늘 새 것(HTML 은 저장 안 함, 스크립트는 빌드 번호 주소). 켜 둔 화면만 옛 것이라
+ *   앱으로 돌아올 때 · 창을 다시 볼 때 · 10분마다 · 서버가 다시 켜진 뒤(메신저 연결이 다시 붙음) 서버 빌드와 비교 → 띠를 띄워 확인받고 새로 고침 */
+var WMU = { mine: '', t: 0, busy: false, shown: '' };
+(function () {
+  var m = document.querySelector('meta[name="wm-build"]'); WMU.mine = m ? m.getAttribute('content') || '' : '';
+  if (!WMU.mine || location.protocol === 'file:') return;   // 서버가 내려준 화면에서만 (GitHub Pages · 파일은 건너뜀)
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) wmUpdateCheck(); });
+  window.addEventListener('focus', function () { wmUpdateCheck(); });
+  window.addEventListener('online', function () { wmUpdateCheck(true); });
+  setInterval(function () { if (!document.hidden) wmUpdateCheck(); }, 10 * 60000);
+})();
+/** 서버 빌드와 비교 — force 가 아니면 1분에 한 번만 */
+function wmUpdateCheck(force) {
+  if (!WMU.mine || WMU.busy || location.protocol === 'file:') return;
+  var now = Date.now(); if (!force && now - WMU.t < 60000) return;
+  WMU.t = now; WMU.busy = true;
+  fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/build', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { var d = j && j.data; if (d && d.build && d.build !== WMU.mine) _wmUpdateShow(d); })
+    .catch(function () {})
+    .then(function () { WMU.busy = false; });
+}
+function _wmUpdateShow(d) {
+  var later = null; try { later = JSON.parse(localStorage.getItem('wm-upd-later') || 'null'); } catch (_) {}
+  if (later && later.build === d.build && later.until > Date.now()) return;   // '나중에' 누른 것은 1시간 조용히
+  if (WMU.shown === d.build && document.getElementById('wmUpd')) return;
+  WMU.shown = d.build;
+  var old = document.getElementById('wmUpd'); if (old) old.remove();
+  var bar = document.createElement('div'); bar.id = 'wmUpd'; bar.className = 'wm-upd'; bar.setAttribute('role', 'status');
+  bar.innerHTML = '<span class="wm-upd-i">⬆</span><span class="wm-upd-t"><b></b><i></i></span><button type="button" class="wm-upd-go">지금 새로 고침</button><button type="button" class="wm-upd-x" title="1시간 뒤에 다시 알림">나중에</button>';
+  bar.querySelector('b').textContent = '새 버전' + (d.version ? ' v' + d.version : '') + '이 나왔습니다';
+  bar.querySelector('i').textContent = d.title || '새로 고치면 바로 적용됩니다 — 쓰던 메시지는 그대로 남습니다';
+  bar.querySelector('.wm-upd-go').onclick = wmUpdateApply;
+  bar.querySelector('.wm-upd-x').onclick = function () { try { localStorage.setItem('wm-upd-later', JSON.stringify({ build: d.build, until: Date.now() + 3600000 })); } catch (_) {} bar.remove(); };
+  document.body.appendChild(bar);
+}
+/** 새로 고침 — 서비스 워커도 새 것으로 */
+function wmUpdateApply() {
+  var go = function () { location.reload(); };
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+      navigator.serviceWorker.getRegistration('/').then(function (r) { return r && r.update(); }).catch(function () {}).then(go);
+      setTimeout(go, 1500);   // 서비스 워커가 늦어도
+      return;
+    }
+  } catch (_) {}
+  go();
+}

@@ -108,6 +108,7 @@ try {
   var execSync = require('child_process').execSync;
   BUILD_VERSION = execSync('git rev-parse --short HEAD', { cwd: path.join(__dirname, '..') }).toString().trim() || BUILD_VERSION;
 } catch (e) { /* git 없으면 타임스탬프 사용 */ }
+if (process.env.RENDER_GIT_COMMIT) BUILD_VERSION = String(process.env.RENDER_GIT_COMMIT).slice(0, 7);   // Render 는 .git 이 없을 수 있음 — 배포 커밋
 console.log('[Server] Build version:', BUILD_VERSION);
 
 // ─── 정적 파일 서빙 (프론트엔드) ───
@@ -155,7 +156,8 @@ var htmlPath = path.join(__dirname, '..', '업무일지_분석기.html');
 
 function loadHtml() {
   try {
-    return fs.readFileSync(htmlPath, 'utf8').replace(/\?v=\d+[a-f0-9]*"/gi, '?v=' + BUILD_VERSION + '"');
+    return fs.readFileSync(htmlPath, 'utf8').replace(/\?v=\d+[a-f0-9]*"/gi, '?v=' + BUILD_VERSION + '"')
+      .replace('<head>', '<head>\n<meta name="wm-build" content="' + BUILD_VERSION + '">');   // v13.374 화면이 자기 빌드를 앎 → 새 배포 알림
   } catch (e) {
     console.error('[Server] HTML 로드 실패:', e.message);
     return null;
@@ -164,6 +166,25 @@ function loadHtml() {
 
 // 프로덕션: 캐시, 개발: 매번 읽기
 var cachedHtml = loadHtml();
+
+/* ⬆ 새 버전 알림 (v13.374) — 켜 둔 화면(PC 앱 트레이 · 휴대폰 앱)이 지금 서버 빌드와 비교. 로그인 필요 없음(버전 · 패치노트 제목만) */
+var BUILD_INFO = null;
+function buildInfo() {
+  if (BUILD_INFO && process.env.NODE_ENV === 'production') return BUILD_INFO;
+  var ver = '', title = '';
+  try { ver = (/var WM_VERSION='([^']+)'/.exec(fs.readFileSync(htmlPath, 'utf8')) || [])[1] || ''; } catch (e) {}
+  try {
+    var pn = fs.readFileSync(path.join(__dirname, '..', 'patch-notes.js'), 'utf8');
+    var m = /\{ver:'([^']+)',date:'[^']*',title:'((?:[^'\\]|\\.)*)'/.exec(pn);
+    if (m && m[1] === ver) title = m[2].replace(/\\'/g, "'");
+  } catch (e) {}
+  BUILD_INFO = { build: BUILD_VERSION, version: ver, title: title };
+  return BUILD_INFO;
+}
+app.get('/api/build', function (req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ data: buildInfo() });
+});
 
 app.get(['/', '/index', '/index.html'], function (req, res) {
   var html = process.env.NODE_ENV === 'production' ? cachedHtml : loadHtml();
