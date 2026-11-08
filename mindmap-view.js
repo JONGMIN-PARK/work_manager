@@ -83,6 +83,7 @@ function _mmRenderEditor() {
     '<div class="mm-hist hidden" id="mmHist"></div>' +
     '</div></div>';
   wrap.innerHTML = h;
+  mmEdFitH();
   wrap.onclick = _mmEdClick;
   var title = _mmEl('mmTitle');
   title.onchange = function () {
@@ -674,4 +675,18 @@ function _mmFocusCanvas() {
   // 손가락으로 누를 때는 초점을 주지 않음 — 휴대폰에서 누를 때마다 글자판이 올라오던 것 (v13.308)
   if (_mmIsTouch()) { if (sink && document.activeElement === sink) sink.blur(); return; }
   if (sink && !_mm.outline && !_mm.gantt && !_mm.editing) { try { sink.focus({ preventScroll: true }); } catch (_) { sink.focus(); } }
+}
+
+/* v13.391 편집 창 높이 — 예전엔 100vh - 170px 고정이라 헤더가 한 줄로 줄어든 뒤 FHD 에서 아래가 100px 남짓 비었다.
+   창 위치를 재서 창 아래 끝(여백 20px — 아래 바깥 여백 포함, 페이지 스크롤 안 생기게)까지 채움. 못 재면 CSS 의 170px 그대로 */
+function mmEdFitH() {
+  var ed = document.getElementById('mmEd');
+  if (!ed || !ed.offsetParent) return;
+  var top = ed.getBoundingClientRect().top + (window.scrollY || 0);
+  if (top > 0 && top < 400) document.documentElement.style.setProperty('--mm-ed-off', Math.round(top + 20) + 'px');
+}
+if (!window._mmEdFitBound) {
+  window._mmEdFitBound = true;
+  var _mmEdFitT = null;
+  window.addEventListener('resize', function () { clearTimeout(_mmEdFitT); _mmEdFitT = setTimeout(mmEdFitH, 120); });
 }
