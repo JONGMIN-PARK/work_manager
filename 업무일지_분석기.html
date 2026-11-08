@@ -125,14 +125,17 @@
   <div class="wm-sp-aurora"><i></i><i></i><i></i></div>
   <div class="wm-sp-grid"></div>
   <div class="wm-sp-main">
-    <div class="wm-sp-logo">
-      <div class="wm-sp-ring"></div>
-      <div class="wm-sp-orbit o1"><b></b></div>
-      <div class="wm-sp-orbit o2"><b></b></div>
-      <div class="wm-sp-orbit o3"><b></b></div>
-      <div class="wm-sp-core"><span>◆</span></div>
+    <!-- v13.384 새 인트로 — 선으로 그려지는 로고 · 글자 하나씩 · 인사 · 마디 진행 -->
+    <div class="wm-sp-logo" aria-hidden="true">
+      <div class="wm-sp-glow"></div>
+      <svg class="wm-mark" viewBox="0 0 96 96"><defs><linearGradient id="wmSpG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="s1"/><stop offset=".55" class="s2"/><stop offset="1" class="s3"/></linearGradient></defs>
+        <g transform="rotate(45 48 48)"><rect class="wm-mk-fill" x="22" y="22" width="52" height="52" rx="14"/></g>
+        <rect class="wm-mk-line" x="22" y="22" width="52" height="52" rx="14" transform="rotate(45 48 48)" pathLength="100"/>
+        <path class="wm-mk-tick" d="M36 49 l8 8 l17 -18" pathLength="100"/>
+      </svg>
     </div>
-    <div class="wm-sp-name">업무 관리자 <em id="wmSpVer"></em></div>
+    <div class="wm-sp-name" aria-label="업무 관리자"><span>업</span><span>무</span><span class="sp"> </span><span>관</span><span>리</span><span>자</span><em id="wmSpVer"></em></div>
+    <div class="wm-sp-tag" id="wmSpHi">업무 · 프로젝트 · 대화를 한곳에서</div>
     <div class="wm-sp-msg" id="wmSpMsg">작업 공간을 준비하고 있어요</div>
     <div class="wm-sp-bar"><div class="wm-sp-bar-fill" id="wmSpBar"></div></div>
     <ol class="wm-sp-steps" id="wmSpSteps">
@@ -146,7 +149,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.383';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.384';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->

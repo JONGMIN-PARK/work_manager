@@ -71,54 +71,67 @@
 #wmProgOverlay .wm-prog-cancel{color:var(--t4)!important;border-color:var(--bd)!important}
 /* v13.263 — 시작 화면 (로그인 확인 → 수주·설정 → 업무일지·프로젝트 → 화면 준비). 테마 색(--bg · --ac · --t*)을 따름
    로그인 창(#loginOverlay 99999) · 처리 중 창(#wmProgOverlay 10005) 보다 아래 */
-.wm-splash{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:var(--bg);overflow:hidden;transition:opacity .45s ease,transform .45s ease,filter .45s ease}
-.wm-splash.out{opacity:0;transform:scale(1.04);filter:blur(6px);pointer-events:none}
-.wm-sp-aurora{position:absolute;inset:-20%;filter:blur(70px);opacity:.55}
-.wm-sp-aurora i{position:absolute;width:46vmax;height:46vmax;border-radius:50%;mix-blend-mode:screen;animation:wmSpDrift 16s ease-in-out infinite alternate}
-.wm-sp-aurora i:nth-child(1){left:8%;top:12%;background:radial-gradient(circle,var(--ac) 0%,transparent 65%)}
-.wm-sp-aurora i:nth-child(2){right:4%;top:28%;background:radial-gradient(circle,var(--stat-purple,#8B5CF6) 0%,transparent 65%);animation-duration:20s;animation-delay:-6s}
-.wm-sp-aurora i:nth-child(3){left:30%;bottom:0;background:radial-gradient(circle,var(--stat-cyan,#06B6D4) 0%,transparent 65%);animation-duration:24s;animation-delay:-12s}
-[data-theme="light"] .wm-sp-aurora,[data-theme="paper"] .wm-sp-aurora,[data-theme="mint"] .wm-sp-aurora,[data-theme="sand"] .wm-sp-aurora,[data-theme="glass"] .wm-sp-aurora{opacity:.28}
+/* v13.384 시작 화면(인트로) — 선으로 그려지는 로고 · 글자 하나씩 떠오름 · 인사 · 단계 알약. 테마 색(--ac)을 따름 */
+.wm-splash{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px 16px calc(24px + env(safe-area-inset-bottom));background:radial-gradient(120% 90% at 50% 38%,color-mix(in srgb,var(--ac) 9%,var(--bg)) 0%,var(--bg) 62%);overflow:hidden;transition:opacity .5s ease,transform .6s cubic-bezier(.2,.8,.2,1),filter .5s ease}
+.wm-splash.out{opacity:0;transform:scale(1.06);filter:blur(8px);pointer-events:none}
+.wm-splash.out .wm-sp-logo{transform:translateY(-6px) scale(1.12);transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.wm-sp-aurora{position:absolute;inset:-20%;filter:blur(80px);opacity:.42}
+.wm-sp-aurora i{position:absolute;width:44vmax;height:44vmax;border-radius:50%;mix-blend-mode:screen;animation:wmSpDrift 18s ease-in-out infinite alternate}
+.wm-sp-aurora i:nth-child(1){left:6%;top:8%;background:radial-gradient(circle,var(--ac) 0%,transparent 64%)}
+.wm-sp-aurora i:nth-child(2){right:2%;top:30%;background:radial-gradient(circle,var(--stat-purple,#8B5CF6) 0%,transparent 64%);animation-duration:22s;animation-delay:-7s}
+.wm-sp-aurora i:nth-child(3){left:28%;bottom:-6%;background:radial-gradient(circle,var(--stat-cyan,#06B6D4) 0%,transparent 64%);animation-duration:26s;animation-delay:-13s}
+[data-theme="light"] .wm-sp-aurora,[data-theme="paper"] .wm-sp-aurora,[data-theme="mint"] .wm-sp-aurora,[data-theme="sand"] .wm-sp-aurora,[data-theme="glass"] .wm-sp-aurora{opacity:.22}
 [data-theme="light"] .wm-sp-aurora i,[data-theme="paper"] .wm-sp-aurora i,[data-theme="mint"] .wm-sp-aurora i,[data-theme="sand"] .wm-sp-aurora i,[data-theme="glass"] .wm-sp-aurora i{mix-blend-mode:multiply}
-.wm-sp-grid{position:absolute;inset:0;background-image:linear-gradient(var(--bd) 1px,transparent 1px),linear-gradient(90deg,var(--bd) 1px,transparent 1px);background-size:44px 44px;opacity:.18;-webkit-mask-image:radial-gradient(ellipse at center,#000 10%,transparent 70%);mask-image:radial-gradient(ellipse at center,#000 10%,transparent 70%)}
-.wm-sp-main{position:relative;width:100%;max-width:400px;text-align:center;animation:wmSpIn .7s cubic-bezier(.2,.8,.2,1)}
-.wm-sp-logo{position:relative;width:112px;height:112px;margin:0 auto 22px}
-.wm-sp-ring{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 55%,var(--ac) 80%,var(--stat-cyan,#06B6D4) 100%);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2px));mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2px));animation:wmProgRing 1.4s linear infinite}
-.wm-sp-orbit{position:absolute;border-radius:50%;border:1px dashed color-mix(in srgb,var(--t5) 45%,transparent);animation:wmProgRing linear infinite}
-.wm-sp-orbit b{position:absolute;top:-4px;left:50%;width:8px;height:8px;margin-left:-4px;border-radius:50%;box-shadow:0 0 12px currentColor}
-.wm-sp-orbit.o1{inset:12px;animation-duration:3.2s;color:var(--stat-purple,#8B5CF6)}
-.wm-sp-orbit.o2{inset:22px;animation-duration:2.4s;animation-direction:reverse;color:var(--stat-cyan,#06B6D4)}
-.wm-sp-orbit.o3{inset:-10px;animation-duration:6s;color:var(--stat-green,#10B981);border-color:transparent}
-.wm-sp-orbit b{background:currentColor}
-.wm-sp-core{position:absolute;inset:34px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--ac),var(--stat-purple,#8B5CF6));box-shadow:0 0 0 1px rgba(255,255,255,.12) inset,0 10px 30px var(--ac-g),0 0 40px var(--ac-g);animation:wmSpBreath 2.4s ease-in-out infinite;transform:rotate(45deg)}
-.wm-sp-core span{transform:rotate(-45deg);color:#fff;font-size:20px;text-shadow:0 1px 6px rgba(0,0,0,.3)}
-.wm-sp-name{font-size:20px;font-weight:800;letter-spacing:-.4px;color:var(--t1)}
-.wm-sp-name em{font-style:normal;font-size:10px;font-weight:600;color:var(--t4);background:var(--bg-i);border:1px solid var(--bd);border-radius:20px;padding:2px 8px;margin-left:6px;vertical-align:middle}
+.wm-sp-grid{position:absolute;inset:0;background-image:radial-gradient(color-mix(in srgb,var(--t5) 55%,transparent) 1px,transparent 1.4px);background-size:26px 26px;opacity:.22;-webkit-mask-image:radial-gradient(ellipse at 50% 42%,#000 0%,transparent 60%);mask-image:radial-gradient(ellipse at 50% 42%,#000 0%,transparent 60%);animation:wmSpGrid 2.4s ease both}
+.wm-sp-main{position:relative;width:100%;max-width:420px;text-align:center}
+/* 로고 — 테두리가 그려지고 → 안이 차오르고 → 체크가 그어짐, 그 뒤엔 천천히 떠 있음 */
+.wm-sp-logo{position:relative;width:104px;height:104px;margin:0 auto 26px;animation:wmSpFloat 4.8s ease-in-out 1.6s infinite}
+.wm-sp-glow{position:absolute;inset:-26px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--ac) 45%,transparent) 0%,transparent 66%);opacity:0;animation:wmSpGlow 3.2s ease-in-out .9s infinite}
+.wm-mark{position:relative;width:100%;height:100%;overflow:visible}
+.wm-mark .s1{stop-color:var(--ac)}.wm-mark .s2{stop-color:var(--stat-purple,#8B5CF6)}.wm-mark .s3{stop-color:var(--stat-cyan,#06B6D4)}
+.wm-mk-line{fill:none;stroke:url(#wmSpG);stroke-width:3;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;animation:wmSpDraw 1s cubic-bezier(.65,0,.35,1) .1s forwards}
+.wm-mk-fill{fill:url(#wmSpG);opacity:0;transform-box:fill-box;transform-origin:center;animation:wmSpFill .6s cubic-bezier(.2,.8,.2,1) .85s forwards;filter:drop-shadow(0 10px 22px color-mix(in srgb,var(--ac) 55%,transparent))}
+.wm-mk-tick{fill:none;stroke:#fff;stroke-width:6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:100;stroke-dashoffset:100;animation:wmSpDraw .5s cubic-bezier(.65,0,.35,1) 1.25s forwards}
+/* 이름 — 글자마다 아래에서 떠오름 */
+.wm-sp-name{font-size:24px;font-weight:800;letter-spacing:-.6px;color:var(--t1);line-height:1.2}
+.wm-sp-name span{display:inline-block;opacity:0;transform:translateY(12px);filter:blur(4px);animation:wmSpChar .55s cubic-bezier(.2,.8,.2,1) forwards}
+.wm-sp-name span.sp{width:.3em}
+.wm-sp-name span:nth-child(1){animation-delay:.55s}.wm-sp-name span:nth-child(2){animation-delay:.62s}.wm-sp-name span:nth-child(4){animation-delay:.69s}.wm-sp-name span:nth-child(5){animation-delay:.76s}.wm-sp-name span:nth-child(6){animation-delay:.83s}
+.wm-sp-name em{font-style:normal;font-size:10px;font-weight:600;color:var(--t4);background:color-mix(in srgb,var(--bg-i) 70%,transparent);border:1px solid var(--bd);border-radius:20px;padding:2px 8px;margin-left:8px;vertical-align:middle;opacity:0;animation:wmSpFade .5s ease 1.1s forwards}
 .wm-sp-name em:empty{display:none}
-.wm-sp-msg{margin-top:8px;font-size:12px;color:var(--t4);min-height:17px;animation:wmProgPop .35s ease}
-.wm-sp-bar{position:relative;margin:20px auto 0;height:4px;max-width:300px;border-radius:4px;background:color-mix(in srgb,var(--t6) 35%,transparent);overflow:hidden}
-.wm-sp-bar-fill{position:absolute;left:0;top:0;bottom:0;width:4%;border-radius:4px;background:linear-gradient(90deg,var(--stat-purple,#8B5CF6),var(--ac),var(--stat-cyan,#06B6D4));transition:width .6s cubic-bezier(.2,.8,.2,1);box-shadow:0 0 12px var(--ac-g)}
-.wm-sp-bar-fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);transform:translateX(-100%);animation:wmSpShine 1.6s ease-in-out infinite}
-.wm-sp-steps{list-style:none;margin:20px auto 0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-width:360px}
-.wm-sp-steps li{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10px;color:var(--t5);transition:color .3s}
-.wm-sp-steps li i{position:relative;width:18px;height:18px;border-radius:50%;border:2px solid color-mix(in srgb,var(--t6) 70%,transparent);transition:all .3s}
-.wm-sp-steps li.on{color:var(--t2);font-weight:600}
+.wm-sp-tag{margin-top:8px;font-size:13px;font-weight:500;color:var(--t4);opacity:0;animation:wmSpUp .6s cubic-bezier(.2,.8,.2,1) 1s forwards}
+.wm-sp-tag.hi{color:var(--t2);font-weight:600}
+.wm-sp-msg{margin-top:22px;font-size:11.5px;color:var(--t5);min-height:16px;opacity:0;animation:wmSpFade .5s ease 1.25s forwards}
+.wm-sp-bar{position:relative;margin:10px auto 0;height:3px;max-width:240px;border-radius:3px;background:color-mix(in srgb,var(--t6) 30%,transparent);overflow:hidden;opacity:0;animation:wmSpFade .5s ease 1.25s forwards}
+.wm-sp-bar-fill{position:absolute;left:0;top:0;bottom:0;width:4%;border-radius:3px;background:linear-gradient(90deg,var(--stat-purple,#8B5CF6),var(--ac),var(--stat-cyan,#06B6D4));transition:width .6s cubic-bezier(.2,.8,.2,1);box-shadow:0 0 10px color-mix(in srgb,var(--ac) 70%,transparent)}
+.wm-sp-bar-fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent);transform:translateX(-100%);animation:wmSpShine 1.5s ease-in-out infinite}
+/* 단계 — 작은 알약 4개 */
+.wm-sp-steps{list-style:none;margin:16px auto 0;padding:0;display:flex;justify-content:center;flex-wrap:wrap;gap:6px;max-width:400px;opacity:0;animation:wmSpFade .5s ease 1.35s forwards}
+.wm-sp-steps li{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--t5);padding:4px 9px 4px 6px;border-radius:20px;border:1px solid color-mix(in srgb,var(--bd) 80%,transparent);background:color-mix(in srgb,var(--bg-p) 55%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);transition:color .3s,border-color .3s,background .3s}
+.wm-sp-steps li i{position:relative;flex:none;width:12px;height:12px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--t6) 80%,transparent);transition:all .3s}
+.wm-sp-steps li.on{color:var(--t1);font-weight:600;border-color:color-mix(in srgb,var(--ac) 55%,transparent);background:color-mix(in srgb,var(--ac) 12%,var(--bg-p))}
 .wm-sp-steps li.on i{border-color:var(--ac);border-top-color:transparent;animation:wmProgRing .8s linear infinite}
-.wm-sp-steps li.done{color:var(--t4)}
+.wm-sp-steps li.done{color:var(--t3)}
 .wm-sp-steps li.done i{border-color:var(--stat-green,#10B981);background:var(--stat-green,#10B981);animation:wmSpPop .35s ease}
-.wm-sp-steps li.done i::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
-.wm-sp-wake{display:none;margin:18px auto 0;max-width:340px;font-size:11px;line-height:1.6;color:var(--mk-t);background:var(--mk);border-radius:10px;padding:8px 12px;animation:wmProgPop .35s ease}
+.wm-sp-steps li.done i::after{content:"";position:absolute;left:2.5px;top:.5px;width:3px;height:6px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+.wm-sp-wake{display:none;margin:18px auto 0;max-width:340px;font-size:11px;line-height:1.6;color:var(--mk-t);background:var(--mk);border-radius:12px;padding:8px 12px;animation:wmProgPop .35s ease}
 .wm-sp-wake.show{display:block}
 .wm-sp-wake span{font-variant-numeric:tabular-nums;opacity:.8;margin-left:4px}
-.wm-sp-tip{margin:16px auto 0;max-width:340px;min-height:34px;font-size:11px;line-height:1.6;color:var(--t5);transition:opacity .35s}
-.wm-sp-tip.fade{opacity:0}
+.wm-sp-tip{margin:18px auto 0;max-width:340px;min-height:34px;font-size:11px;line-height:1.6;color:var(--t5);transition:opacity .35s;opacity:0;animation:wmSpFade .6s ease 1.8s forwards}
+.wm-sp-tip.fade{opacity:0!important}
 @keyframes wmSpDrift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(6vmax,-4vmax) scale(1.15)}100%{transform:translate(-5vmax,5vmax) scale(.95)}}
-@keyframes wmSpIn{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
-@keyframes wmSpBreath{0%,100%{transform:rotate(45deg) scale(1)}50%{transform:rotate(45deg) scale(1.07)}}
+@keyframes wmSpDraw{to{stroke-dashoffset:0}}
+@keyframes wmSpFill{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:scale(1)}}
+@keyframes wmSpGlow{0%,100%{opacity:.35;transform:scale(.92)}50%{opacity:.8;transform:scale(1.06)}}
+@keyframes wmSpFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes wmSpChar{to{opacity:1;transform:none;filter:none}}
+@keyframes wmSpUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes wmSpFade{to{opacity:1}}
+@keyframes wmSpGrid{from{opacity:0;transform:scale(1.08)}to{opacity:.22;transform:none}}
 @keyframes wmSpShine{to{transform:translateX(100%)}}
 @keyframes wmSpPop{0%{transform:scale(.5)}70%{transform:scale(1.2)}100%{transform:scale(1)}}
-@media (max-width:420px){.wm-sp-logo{width:96px;height:96px}.wm-sp-core{inset:29px}.wm-sp-name{font-size:18px}.wm-sp-steps li{font-size:9px}}
-@media (prefers-reduced-motion:reduce){.wm-splash *,.wm-splash *::after,#wmProgOverlay *{animation:none!important;transition:none!important}}
+@media (max-width:420px){.wm-sp-logo{width:92px;height:92px}.wm-sp-name{font-size:22px}.wm-sp-steps li{font-size:10px}}
+@media (prefers-reduced-motion:reduce){.wm-splash *,.wm-splash *::after,#wmProgOverlay *{animation:none!important;transition:none!important}.wm-sp-name span,.wm-sp-name em,.wm-sp-tag,.wm-sp-msg,.wm-sp-bar,.wm-sp-steps,.wm-sp-tip,.wm-mk-fill{opacity:1!important;transform:none!important;filter:none!important}.wm-mk-line,.wm-mk-tick{stroke-dashoffset:0!important}}
 /* Week card in archive */
 /* #5 리팩토링: 추출된 공용 인라인 스타일 클래스 */
 /* #15 리팩토링: 접근성 포커스 스타일 */
@@ -5998,3 +6011,65 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
   html:has(#mMessages:not(.hidden)),html:has(#mMessages:not(.hidden)) body{overflow:hidden;height:100%}
   .cx-msgs,.cx-rooms,.cx-aside,.cx-side{overscroll-behavior:contain}
 }
+/* v13.384 로그인 — 시작 화면과 같은 배경 · 로고 · 유리 카드 */
+#loginOverlay.wm-login{background:radial-gradient(120% 90% at 50% 38%,color-mix(in srgb,var(--ac) 10%,var(--bg)) 0%,var(--bg) 62%)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;overflow:hidden auto;padding:24px 16px calc(24px + env(safe-area-inset-bottom))}
+.wm-li-card{position:relative;width:380px;max-width:100%;margin:auto;padding:34px 30px 26px;border-radius:22px;border:1px solid color-mix(in srgb,var(--bd) 80%,transparent);background:color-mix(in srgb,var(--bg-p) 78%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.3);backdrop-filter:blur(18px) saturate(1.3);box-shadow:0 30px 80px -30px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.04) inset;color:var(--t2);animation:wmSpUp .6s cubic-bezier(.2,.8,.2,1)}
+.wm-li-logo{width:64px;height:64px;margin:0 auto 14px;filter:drop-shadow(0 10px 22px color-mix(in srgb,var(--ac) 50%,transparent));animation:wmSpFloat 4.8s ease-in-out infinite}
+.wm-li-logo .wm-mark{width:100%;height:100%}
+.wm-li-t{margin:0;text-align:center;font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--t1)}
+.wm-li-msg{margin:6px 0 22px;text-align:center;font-size:13px;color:var(--t4)}
+.wm-li-f{position:relative;display:block;margin-bottom:10px}
+.wm-li-ic{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:13px;opacity:.6;pointer-events:none;filter:grayscale(.4)}
+.wm-li-f input{width:100%;box-sizing:border-box;height:46px;padding:0 14px 0 38px;border-radius:12px;border:1px solid var(--bd);background:color-mix(in srgb,var(--bg-i) 85%,transparent);color:var(--t1);font:inherit;font-size:15px;outline:none;transition:border-color .15s,box-shadow .15s,background .15s}
+.wm-li-f input:focus{border-color:var(--ac);box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 18%,transparent);background:var(--bg-p)}
+.wm-li-keep{display:inline-flex;align-items:center;gap:7px;margin:4px 0 16px;font-size:13px;color:var(--t3);cursor:pointer;user-select:none}
+.wm-li-keep input{width:16px;height:16px;accent-color:var(--ac);margin:0}
+.wm-li-go{width:100%;height:48px;border:0;border-radius:12px;background:linear-gradient(135deg,var(--ac),color-mix(in srgb,var(--ac) 55%,#7C3AED));color:#fff;font:inherit;font-size:15px;font-weight:700;letter-spacing:.2px;cursor:pointer;box-shadow:0 12px 26px -12px color-mix(in srgb,var(--ac) 90%,transparent);transition:transform .12s,filter .15s,box-shadow .15s}
+.wm-li-go:hover{filter:brightness(1.08);box-shadow:0 16px 30px -12px color-mix(in srgb,var(--ac) 95%,transparent)}
+.wm-li-go:active{transform:scale(.98)}
+.wm-li-go.ok{background:linear-gradient(135deg,#10B981,#059669);box-shadow:0 12px 26px -12px rgba(16,185,129,.8)}
+.wm-li-or{display:flex;align-items:center;gap:10px;margin:18px 0 14px;font-size:12px;color:var(--t5)}
+.wm-li-or::before,.wm-li-or::after{content:"";flex:1;height:1px;background:var(--bd)}
+.wm-li-g{width:100%;height:46px;display:flex;align-items:center;justify-content:center;gap:9px;border:1px solid var(--bd);border-radius:12px;background:color-mix(in srgb,var(--bg-i) 85%,transparent);color:var(--t1);font:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:border-color .15s,background .15s}
+.wm-li-g:hover{border-color:color-mix(in srgb,var(--ac) 60%,var(--bd));background:var(--bg-p)}
+.wm-li-foot{margin:18px 0 0;text-align:center;font-size:13px}
+.wm-li-foot a{color:var(--ac-t,var(--ac));text-decoration:none;font-weight:600}
+.wm-li-foot a:hover{text-decoration:underline}
+@media (max-width:420px){.wm-li-card{padding:28px 20px 22px;border-radius:20px}.wm-li-f input{font-size:16px}}
+/* v13.384 입력 줄 — ＋ · 📎 · 😊 · ➤ 를 같은 크기 칸에 넣어 가운데 줄을 맞춤(예전: 34px · 38px 이 아래 끝으로 맞춰져 2px 어긋남) */
+.cx-comp-r>.cx-ib,.cx-comp-r>.cx-tools-k>.cx-ib{height:38px;min-width:36px;padding:0 6px;border-radius:50%;line-height:1}
+.cx-comp-r>.cx-emo-t{width:38px;padding:0;font-size:19px}
+.cx-comp-r>.cx-send{display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;font-size:16px}
+.cx-comp-r>.cx-send::before{content:"";display:none}
+.cx-comp-r>.cx-tools-t{width:38px;padding:0}
+.cx-comp textarea{min-height:38px;padding-top:9px;padding-bottom:9px;line-height:20px}
+/* 빈 칸이면 보내기 단추를 살짝 가라앉힘 — 쓰기 시작하면 또렷하게 */
+.cx-comp-r:has(textarea:placeholder-shown) .cx-send{opacity:.5;transform:scale(.9);box-shadow:none}
+.cx-comp-r .cx-send{transition:opacity .15s,transform .15s,box-shadow .15s}
+.cx-comp-r:focus-within{border-color:color-mix(in srgb,var(--ac) 55%,var(--bd));box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 12%,transparent)}
+@media (max-width:760px){
+  .cx-comp-r>.cx-ib,.cx-comp-r>.cx-tools-k>.cx-ib{height:36px;min-width:34px}
+  .cx-comp-r>.cx-emo-t,.cx-comp-r>.cx-tools-t{width:36px}
+  .cx-comp-r>.cx-send{width:36px;height:36px}
+  .cx-comp textarea{min-height:36px;padding-top:8px!important;padding-bottom:8px!important;line-height:20px}
+}
+/* v13.384 말풍선 묶음 — 같은 사람이 이어 보낸 말풍선은 맞닿는 쪽 모서리를 작게(한 덩어리로 보이게) */
+/* (메시지마다 .cx-mw{display:contents} 로 싸여 있어 형제는 .cx-mw 끼리) */
+.cx-mw:has(> .cx-m.mine):has(+ .cx-mw > .cx-m.mine.cont) .cx-b{border-bottom-right-radius:6px}
+.cx-m.mine.cont .cx-b{border-top-right-radius:6px}
+.cx-mw:has(> .cx-m:not(.mine)):has(+ .cx-mw > .cx-m.cont:not(.mine)) .cx-b{border-bottom-left-radius:6px}
+.cx-m.cont:not(.mine) .cx-b{border-top-left-radius:6px}
+/* 말풍선 그림자가 네모로 잘리던 것 — content-visibility 는 칸 밖을 잘라 내므로 그림자 들어갈 여백을 칸 안에 두고 같은 만큼 바깥 여백을 빼 자리는 그대로 */
+.cx-msgs .cx-m{padding:0 12px 14px;margin-left:-12px;margin-right:-12px;margin-bottom:-14px}
+.cx-m:not(.cont){margin-top:14px}
+.cx-m.cont{margin-top:3px}
+/* v13.384 아이폰 — 화면 틀은 그대로, 목록 · 대화는 내용이 짧아도 끝에서 살짝 튕김(앱처럼). 1px 넘치게 해서 iOS 가 튕김을 줌 */
+@media (hover:none) and (pointer:coarse){
+  .cx-msgs::before,.cx-rooms::before{content:"";float:left;width:0;height:calc(100% + 1px)}
+  .cx-msgs,.cx-rooms{-webkit-overflow-scrolling:touch}
+}
+/* v13.384 휴대폰 메신저 — 카드처럼 떠 있지 않고 화면 양옆 · 아래 끝까지(앱처럼). 입력 줄은 홈 막대 위 */
+@media (max-width:760px){
+  #mMessages .cx{position:relative;width:100vw;left:50%;margin-left:-50vw;border-radius:0;border-width:1px 0 0;box-shadow:none;min-height:0}
+}
+@media (max-width:760px){#mMessages .cx-main,#mMessages .cx-side{border-radius:0}}

@@ -318,7 +318,7 @@ function _cxFit() {
   if (_cxKbOpen()) return;   // v13.374 키보드가 떠 있는 동안은 줄이지 않음(_cxKb 가 맡음) — 줄이면 아이폰이 페이지를 밀어 올려 입력칸이 위로 감
   var vv = window.visualViewport, vh = vv ? vv.height : window.innerHeight;
   var top = cx.getBoundingClientRect().top + (window.scrollY || 0);   // 문서 안 자리 (머리 · 탭 아래)
-  page.style.setProperty('--cx-h', Math.max(300, Math.round(vh - top - 6)) + 'px');
+  page.style.setProperty('--cx-h', Math.max(300, Math.round(vh - top)) + 'px');   // v13.384 휴대폰은 화면 끝까지 (아래 틈 없이 — 앱처럼)
 }
 /* v13.372 휴대폰 키보드 — 키보드가 올라오면 메신저를 보이는 화면에 딱 붙임(입력칸이 키보드 바로 위).
  *   예전: 페이지가 밀려 올라가며 입력칸이 키보드에서 멀리 떠 있거나 위로 사라짐 */

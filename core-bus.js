@@ -235,6 +235,7 @@ window.wmSplash = (function () {
     for (var j = 0; j < lis.length; j++) { lis[j].classList.remove('on'); lis[j].classList.add('done'); }
     var b = $('wmSpBar'); if (b) b.style.width = '100%';
     clearInterval(timer); clearInterval(tipTimer);
+    try { if (typeof currentUser !== 'undefined' && currentUser && currentUser.name) localStorage.setItem('wm_sp_name', currentUser.name); } catch (e) {}   // v13.384 다음 인트로 인사
     setTimeout(function () {
       el.classList.add('out');
       setTimeout(function () { if (el.parentNode) el.remove(); }, 460);
@@ -244,6 +245,11 @@ window.wmSplash = (function () {
     if (!alive()) return;
     var v = $('wmSpVer'); if (v && typeof WM_VERSION !== 'undefined') v.textContent = 'v' + WM_VERSION;
     var tip = $('wmSpTip'); if (tip) tip.textContent = TIPS[tipI++ % TIPS.length];
+    // v13.384 인사 — 지난번 쓴 사람 이름 · 때에 맞는 말
+    try {
+      var nm = localStorage.getItem('wm_sp_name'), hi = $('wmSpHi');
+      if (nm && hi) { var h = new Date().getHours(); hi.textContent = (h < 5 ? '늦은 시간까지 수고 많아요' : h < 11 ? '좋은 아침이에요' : h < 14 ? '점심은 드셨어요?' : h < 18 ? '오후도 힘내요' : '오늘도 수고했어요') + ', ' + nm + ' 님'; hi.classList.add('hi'); }
+    } catch (e) {}
     if (cur < 0) stage('auth');
     timer = setInterval(tick, 400);
     tipTimer = setInterval(showTip, 4200);

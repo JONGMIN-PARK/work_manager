@@ -197,6 +197,7 @@ async function authRegister(email, password, name, position, phone) {
 
 /* ═══ 로그아웃 ═══ */
 async function authLogout() {
+  try { localStorage.removeItem('wm_sp_name'); } catch (e) {}   // v13.384 인트로 인사 이름
   // v13.332 노트 — 남은 글을 보내고(임시 보관은 그 사람 이름으로) 화면 · 기억을 비움 (공용 PC 에서 다음 사람에게 보이지 않게)
   try { if (typeof _mwnFlushNow === 'function') _mwnFlushNow(); if (typeof mwNotesClose === 'function') mwNotesClose(); } catch (_) {}
   try { if (typeof nbReset === 'function') nbReset(); } catch (_) {}
@@ -366,7 +367,7 @@ function can(action, resource) {
 function showLoginOverlay() {
   var el = document.getElementById('loginOverlay');
   if (!el) return;
-  el.style.display = 'flex';
+  el.style.display = 'flex'; el.classList.add('wm-login');
   el.innerHTML = buildLoginHTML();
 }
 
@@ -377,29 +378,32 @@ function hideLoginOverlay() {
 }
 
 function buildLoginHTML() {
-  return '<div style="background:var(--bg-p,#111620);border-radius:16px;padding:40px;width:380px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.5);color:var(--t2,#D8DEE8)">' +
-    '<h2 style="margin:0 0 8px;text-align:center;font-size:22px">업무 관리자</h2>' +
-    '<p id="loginMsg" style="text-align:center;font-size:13px;color:var(--t5,#6070A0);margin:0 0 24px">로그인하여 시작하세요</p>' +
+  // v13.384 시작 화면과 같은 꾸밈 — 오로라 배경 · 로고 · 유리 카드 (id · 동작은 그대로)
+  function inp(id, type, ph, ic, extra) { return '<label class="wm-li-f"><span class="wm-li-ic" aria-hidden="true">' + ic + '</span><input id="' + id + '" type="' + type + '" placeholder="' + ph + '"' + (extra || '') + '></label>'; }
+  return '<div class="wm-sp-aurora" aria-hidden="true"><i></i><i></i><i></i></div><div class="wm-sp-grid" aria-hidden="true"></div>' +
+  '<div class="wm-li-card" role="dialog" aria-labelledby="wmLiTitle">' +
+    '<div class="wm-li-logo" aria-hidden="true"><svg class="wm-mark" viewBox="0 0 96 96"><defs><linearGradient id="wmLiG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="s1"/><stop offset=".55" class="s2"/><stop offset="1" class="s3"/></linearGradient></defs>' +
+      '<g transform="rotate(45 48 48)"><rect x="22" y="22" width="52" height="52" rx="14" fill="url(#wmLiG)"/></g><path d="M36 49 l8 8 l17 -18" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
+    '<h2 id="wmLiTitle" class="wm-li-t">업무 관리자</h2>' +
+    '<p id="loginMsg" class="wm-li-msg">로그인하여 시작하세요</p>' +
     '<div id="loginForm">' +
-      '<input id="loginEmail" type="email" placeholder="이메일" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
-      '<input id="loginPw" type="password" placeholder="비밀번호" style="width:100%;padding:10px 12px;margin-bottom:12px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
-      '<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:16px;cursor:pointer"><input id="loginRemember" type="checkbox" checked> 로그인 유지</label>' +
-      '<button onclick="handleLogin()" style="width:100%;padding:12px;border:none;border-radius:8px;background:' + SEM_COLOR.info + ';color:#fff;font-size:15px;font-weight:600;cursor:pointer">로그인</button>' +
-      '<div style="display:flex;align-items:center;gap:8px;margin:16px 0 12px"><hr style="flex:1;border:none;border-top:1px solid var(--bd,#222C44)"><span style="font-size:12px;color:var(--t5,#6070A0)">또는</span><hr style="flex:1;border:none;border-top:1px solid var(--bd,#222C44)"></div>' +
-      '<button onclick="googleLogin()" style="width:100%;padding:10px;border:1px solid var(--bd,#222C44);border-radius:8px;background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">' +
-        '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
-        'Google로 로그인</button>' +
-      '<p style="text-align:center;margin:16px 0 0;font-size:13px"><a href="javascript:void(0)" onclick="showRegisterForm()" style="color:' + SEM_COLOR.info + ';text-decoration:none">가입 요청</a></p>' +
+      inp('loginEmail', 'email', '이메일', '✉', ' autocomplete="username" inputmode="email"') +
+      inp('loginPw', 'password', '비밀번호', '🔒', ' autocomplete="current-password"') +
+      '<label class="wm-li-keep"><input id="loginRemember" type="checkbox" checked> 로그인 유지</label>' +
+      '<button type="button" class="wm-li-go" onclick="handleLogin()">로그인</button>' +
+      '<div class="wm-li-or"><span>또는</span></div>' +
+      '<button type="button" class="wm-li-g" onclick="googleLogin()">' + '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' + 'Google로 로그인</button>' +
+      '<p class="wm-li-foot"><a href="javascript:void(0)" onclick="showRegisterForm()">처음이세요? 가입 요청</a></p>' +
     '</div>' +
     '<div id="registerForm" style="display:none">' +
-      '<input id="regEmail" type="email" placeholder="이메일" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
-      '<input id="regName" type="text" placeholder="이름 (실명)" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
-      '<input id="regPw" type="password" placeholder="비밀번호 (8자 이상, 2종 조합)" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
-      '<input id="regPw2" type="password" placeholder="비밀번호 확인" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
-      '<input id="regPosition" type="text" placeholder="직급 (선택)" style="width:100%;padding:10px 12px;margin-bottom:10px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
-      '<input id="regPhone" type="tel" placeholder="연락처 (선택)" style="width:100%;padding:10px 12px;margin-bottom:16px;border-radius:8px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:14px;box-sizing:border-box">' +
-      '<button onclick="handleRegister()" style="width:100%;padding:12px;border:none;border-radius:8px;background:' + SEM_COLOR.ok + ';color:#fff;font-size:15px;font-weight:600;cursor:pointer">가입 요청</button>' +
-      '<p style="text-align:center;margin:16px 0 0;font-size:13px"><a href="javascript:void(0)" onclick="showLoginForm()" style="color:' + SEM_COLOR.info + ';text-decoration:none">로그인으로 돌아가기</a></p>' +
+      inp('regEmail', 'email', '이메일', '✉', ' autocomplete="email"') +
+      inp('regName', 'text', '이름 (실명)', '👤', ' autocomplete="name"') +
+      inp('regPw', 'password', '비밀번호 (8자 이상, 2종 조합)', '🔒', ' autocomplete="new-password"') +
+      inp('regPw2', 'password', '비밀번호 확인', '🔒', ' autocomplete="new-password"') +
+      inp('regPosition', 'text', '직급 (선택)', '🏷', '') +
+      inp('regPhone', 'tel', '연락처 (선택)', '📞', ' autocomplete="tel"') +
+      '<button type="button" class="wm-li-go ok" onclick="handleRegister()">가입 요청</button>' +
+      '<p class="wm-li-foot"><a href="javascript:void(0)" onclick="showLoginForm()">← 로그인으로 돌아가기</a></p>' +
     '</div>' +
   '</div>';
 }
