@@ -670,3 +670,26 @@ test('⚡ 100명+ 대비 (v13.366) — 읽음 모아 보내기 · 같은 읽음 
   var rb = (await api('get', '/api/chat/rooms', b)).body.data.filter(function (r) { return r.id === g; })[0];
   expect(rb.unread).toBe(0);
 });
+
+test('↩ 인용 답장 (v13.376) — 원문 요약 · 같은 방만 · 지운 원문 · 파일도', async function () {
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '인용방', userIds: [b.user.id] })).body.data.id;
+  var other = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '다른방', userIds: [b.user.id] })).body.data.id;
+  var orig = (await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '내일 10시 3호기 점검 어때요?' })).body.data;
+  var far = (await api('post', '/api/chat/rooms/' + other + '/messages', a).send({ body: '다른 방 글' })).body.data;
+  var r1 = (await api('post', '/api/chat/rooms/' + g + '/messages', b).send({ body: '좋습니다', quoteId: orig.id })).body.data;
+  expect(r1.quote).toMatchObject({ id: orig.id, body: '내일 10시 3호기 점검 어때요?', deleted: false });
+  expect(r1.quote.userName).toBeTruthy();
+  expect(r1.replyTo).toBeNull();
+  // 다른 방 메시지는 인용 안 됨
+  var r2 = (await api('post', '/api/chat/rooms/' + g + '/messages', b).send({ body: '이건?', quoteId: far.id })).body.data;
+  expect(r2.quote).toBeNull();
+  // 원문을 지우면 표시만
+  await api('delete', '/api/chat/messages/' + orig.id, a);
+  var list = (await api('get', '/api/chat/rooms/' + g + '/messages', b)).body.data;
+  var q = list.filter(function (m) { return m.id === r1.id; })[0].quote;
+  expect(q).toMatchObject({ id: orig.id, deleted: true, body: '' });
+  // 파일 보내기에도
+  var res = await h.request(h.app).post('/api/chat/rooms/' + g + '/files?name=memo.txt&quoteId=' + r1.id).set('Authorization', 'Bearer ' + b.token).set('Content-Type', 'text/plain').send(Buffer.from('hello'));
+  expect(res.status).toBe(201);
+  expect(res.body.data.quote).toMatchObject({ id: r1.id, body: '좋습니다' });
+});

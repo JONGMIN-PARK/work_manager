@@ -5771,3 +5771,50 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cs-prior .cs-h b{flex:1}
 @media (max-width:600px){.cs-prior:not(.open){flex-wrap:wrap}.cs-prior .cs-p-t{flex:1 1 100%}}
 .cx-hist-note{font-size:12px;color:var(--t5);padding:6px 2px 0}
+
+/* ═══ v13.376 💬 인용 답장 · 밀어서 답장 · 😊 이모티콘 판 · 두 번 눌러 공감 ═══ */
+.cx-q{display:flex;align-items:center;gap:8px;width:100%;max-width:340px;margin:0 0 4px;padding:6px 10px 6px 8px;border:0;border-left:3px solid var(--ac);border-radius:8px;background:color-mix(in srgb,var(--ac) 9%,var(--bg-i));color:var(--t2);font:inherit;text-align:left;cursor:pointer;box-sizing:border-box}
+.cx-q:hover{background:color-mix(in srgb,var(--ac) 15%,var(--bg-i))}
+.cx-q img{width:34px;height:34px;object-fit:cover;border-radius:6px;flex:none;background:var(--bg-i)}
+.cx-q>span{display:flex;flex-direction:column;min-width:0}
+.cx-q b{font-size:11.5px;color:var(--ac-t)}
+.cx-q i{font-style:normal;font-size:12px;color:var(--t4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cx-q.del i{font-style:italic}
+.cx-m.mine .cx-q{margin-left:auto}
+.cx-reply.is-quote{display:flex;align-items:center;gap:8px;border-left:3px solid var(--ac);background:color-mix(in srgb,var(--ac) 8%,var(--bg-i))}
+.cx-reply.is-quote[hidden]{display:none}
+.cx-rq{flex:1;min-width:0;display:flex;flex-direction:column;font-size:12px;color:var(--t3)}
+.cx-rq b{color:var(--ac-t)}
+.cx-rq i{font-style:normal;color:var(--t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 밀어서 답장 */
+.cx-msgs{touch-action:pan-y}
+.cx-m.cx-swiping{position:relative}
+.cx-m.cx-swiping::before{content:'↩';position:absolute;left:-30px;top:50%;transform:translateY(-50%) scale(.7);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--bg-i);color:var(--t5);font-size:14px;transition:transform .15s,background .15s,color .15s}
+.cx-m.cx-swipe-ok::before{transform:translateY(-50%) scale(1);background:var(--ac);color:#fff}
+/* 두 번 눌러 공감 */
+.cx-rxpop{position:fixed;z-index:10050;font-size:34px;pointer-events:none;transform:translate(-50%,-50%);animation:cxRxPop .8s ease-out forwards}
+@keyframes cxRxPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.4)}25%{opacity:1;transform:translate(-50%,-60%) scale(1.25)}100%{opacity:0;transform:translate(-50%,-150%) scale(1)}}
+/* 😊 이모티콘 판 */
+.cx-emo-t{font-size:17px}
+.cx-emo{position:fixed;z-index:10020;max-height:min(360px,55vh);display:flex;flex-direction:column;border:1px solid var(--bd);border-radius:14px;background:var(--bg-p);box-shadow:0 16px 40px -16px rgba(15,23,42,.55);overflow:hidden}
+.cx-emo-tabs{display:flex;gap:2px;padding:6px;border-bottom:1px solid var(--bd);overflow-x:auto;scrollbar-width:none;flex:none}
+.cx-emo-tabs::-webkit-scrollbar{display:none}
+.cx-emo-tabs button{flex:none;border:0;border-radius:8px;background:none;color:var(--t4);font:inherit;font-size:12px;padding:5px 9px;cursor:pointer;white-space:nowrap}
+.cx-emo-tabs button.on{background:var(--ac-bg);color:var(--ac-t);font-weight:700}
+.cx-emo-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:2px;padding:6px;overflow-y:auto;min-height:0}
+.cx-emo-g button{border:0;border-radius:8px;background:none;font-size:22px;line-height:1;padding:6px 0;cursor:pointer}
+.cx-emo-g button:hover{background:var(--bg-hv)}
+.cx-emo-g.qr{grid-template-columns:1fr 1fr}
+.cx-emo-g.qr button{font-size:13px;text-align:left;padding:9px 10px;background:var(--bg-i);color:var(--t2)}
+.cx-emo-e{grid-column:1/-1;font-size:12px;color:var(--t6);padding:12px 6px}
+.cx-emo-f{flex:none;display:flex;align-items:center;gap:6px;padding:6px 10px;border-top:1px solid var(--bd);font-size:11.5px;color:var(--t5)}
+.cx-emo-f button{border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);font-size:16px;padding:1px 6px;cursor:pointer}
+.cx-emo-f i{font-style:normal;color:var(--t6)}
+/* 인용 — 말풍선 안 위쪽 (v13.376) */
+.cx-b.has-q{min-width:min(220px,60vw)}
+.cx-b .cx-q{display:flex;max-width:none;margin:-1px -3px 7px;padding:5px 9px 5px 7px;background:color-mix(in srgb,var(--t1) 7%,transparent);border-left-color:color-mix(in srgb,var(--ac) 70%,transparent)}
+.cx-b .cx-q:hover{background:color-mix(in srgb,var(--t1) 11%,transparent)}
+.cx-m.mine .cx-b .cx-q{margin-left:-3px;background:rgba(255,255,255,.16);border-left-color:rgba(255,255,255,.75)}
+.cx-m.mine .cx-b .cx-q:hover{background:rgba(255,255,255,.24)}
+.cx-m.mine .cx-b .cx-q b{color:#fff}
+.cx-m.mine .cx-b .cx-q i{color:rgba(255,255,255,.82)}

@@ -386,6 +386,7 @@ function chatOpenRoom(id, keep, focusMid) {
   CX.room = id;
   // 방이 바뀌면 그 방 것만 — 예전 방의 답글 줄기 · 고른 카드 · 수정 중 · 옆 탭은 비움
   CX.fwd = false;
+  if (changed) { CX.quote = null; }
   if (changed) { CX.msgs = []; CX.info = null; CX.ctx = null; CX.cards = []; CX.replyTo = null; CX.editId = null; CX.thread = null; CX.threadMsgs = []; CX.asideTab = null; CX.readMark = null; CX.newBelow = 0; }
   var cached = changed && !focusMid && CX.cache[id];
   var reuse = !changed && !!CX.info && !!document.getElementById('cxMsgs');   // v13.366 같은 방 다시 열기 — 화면은 그대로, 내용만 새로
@@ -594,7 +595,7 @@ function _cxUnreadOf(m, sorted) {
   if (CX.info.members.some(function (u) { return u.id === m.userId; }) && (CX.reads[m.userId] || 0) < m.id) n--;   // 쓴 사람은 빼고
   return Math.max(0, n);
 }
-function _cxMsgHtml(m, prev, inThread) {
+function _cxMsgHtml(m, prev, inThread, next) {
   var mine = m.userId === _cxMe(), h = '';
   if (!prev || new Date(prev.at).toDateString() !== new Date(m.at).toDateString()) h += '<div class="cx-day"><span>' + _cxDay(m.at) + '</span></div>';
   if (!inThread && CX.readMark != null && typeof m.id === 'number' && m.id > CX.readMark && (!prev || (typeof prev.id === 'number' && prev.id <= CX.readMark)) && !mine) h += '<div class="cx-unl"><span>여기부터 안 읽음</span></div>';
@@ -604,23 +605,32 @@ function _cxMsgHtml(m, prev, inThread) {
   var body = '';
   if (m.deleted) body = '<div class="cx-b cx-del">삭제된 메시지입니다</div>';
   else {
+    // v13.376 인용 답장 — 글이 있으면 말풍선 안 위쪽에(카톡처럼), 파일 · 게시판 글이면 그 위에 따로
+    var qh = m.quote ? _cxQuoteHtml(m.quote) : '', qIn = qh && m.body && !m.post;
+    if (qh && !qIn) body += qh;
     if (m.post && typeof chatPostHtml === 'function') body += chatPostHtml(m, { full: inThread });   // v13.358 📌 게시판 글
-    else if (m.body) body += '<div class="cx-b' + (ai ? ' cx-ai' : '') + '">' + (ai ? '<div class="cx-ai-h">🤖 AI · 내가 볼 수 있는 데이터로 답함</div>' + (typeof rMD === 'function' ? rMD(_cxE(m.body)) : _cxText(m.body)) : _cxText(m.body)) + (m.edited ? '<i class="cx-ed">수정됨</i>' : '') + '</div>';
+    else if (m.body) body += '<div class="cx-b' + (ai ? ' cx-ai' : '') + (qIn ? ' has-q' : '') + '">' + (qIn ? qh : '') + (ai ? '<div class="cx-ai-h">🤖 AI · 내가 볼 수 있는 데이터로 답함</div>' + (typeof rMD === 'function' ? rMD(_cxE(m.body)) : _cxText(m.body)) : _cxText(m.body)) + (m.edited ? '<i class="cx-ed">수정됨</i>' : '') + '</div>';
     if (m.file) body += _cxFileHtml(m.file);
     if (m.cards && m.cards.length) body += '<div class="cx-cards">' + m.cards.map(function (c, i) { return _cxCardHtml(c, i, m); }).join('') + '</div>';
   }
   var rx = m.reactions ? Object.keys(m.reactions).map(function (e) { var l = m.reactions[e]; return '<button type="button" class="cx-rx' + (l.indexOf(_cxMe()) >= 0 ? ' on' : '') + '" data-rx="' + e + '" title="' + _cxE(_cxNames(l)) + '">' + e + ' ' + l.length + '</button>'; }).join('') : '';
   var meta = m.pending ? '<span class="cx-meta">' + (m.failed ? '<span class="cx-fail">⚠ 못 보냄 <button type="button" data-retry="' + m.id + '">다시 보내기</button><button type="button" data-drop="' + m.id + '">지우기</button></span>' : '<i class="cx-sending" title="보내는 중">◷</i>') + '</span>'
-    : '<span class="cx-meta"><em class="cx-un" data-un="' + m.id + '"></em><i>' + _cxT(m.at) + '</i></span>';   // 읽음 숫자는 _cxDrawReadCounts 가 채움
+    : '<span class="cx-meta"><em class="cx-un" data-un="' + m.id + '"></em>' + (_cxSameMin(m, next) ? '' : '<i>' + _cxT(m.at) + '</i>') + '</span>';   // 읽음 숫자는 _cxDrawReadCounts 가 채움 · v13.376 같은 사람 같은 분에 이어 보낸 건 마지막에만 시각
   h += '<div class="cx-m' + (mine ? ' mine' : '') + (cont ? ' cont' : '') + (ai ? ' is-ai' : '') + (m.pending ? ' cx-pend' + (m.failed ? ' failed' : '') : '') + '" data-mid="' + m.id + '">' +
     (!mine && !cont ? (ai ? '<span class="cx-av cx-av-ai">🤖</span>' : _cxAv(m.userId, m.userName)) : (!mine ? '<span class="cx-av-sp"></span>' : '')) +
     '<div class="cx-col">' + (!mine && !cont ? '<div class="cx-who">' + _cxE(ai ? 'AI' : m.userName) + '</div>' : '') +
     '<div class="cx-row">' + (mine ? meta : '') + '<div class="cx-bw">' + body + '</div>' + (!mine ? meta : '') +
-    (m.deleted || m.pending ? '' : '<span class="cx-acts"><button type="button" data-a="react" title="공감">😊</button>' + (inThread ? '' : '<button type="button" data-a="reply" title="답글">↩</button>') + '<button type="button" data-a="more" title="더보기">⋯</button></span>') + '</div>' +
+    (m.deleted || m.pending ? '' : '<span class="cx-acts"><button type="button" data-a="react" title="공감">😊</button>' + (inThread ? '' : '<button type="button" data-a="quote" title="답장 — 원문을 붙여 이 대화에서 답함">↩</button><button type="button" data-a="reply" title="답글 줄기 — 옆 칸에서 따로 이어 감">💬</button>') + '<button type="button" data-a="more" title="더보기">⋯</button></span>') + '</div>' +
     (rx ? '<div class="cx-rxs">' + rx + '</div>' : '') +
     (!inThread && m.replies ? '<button type="button" class="cx-th" data-a="reply">💬 답글 ' + m.replies + ' · ' + _cxRel(m.lastReplyAt) + '</button>' : '') +
     '</div></div>';
   return h;
+}
+/** 다음 메시지가 같은 사람 · 같은 분이면 시각은 다음에 (카톡처럼 묶음 끝에만) */
+function _cxSameMin(m, next) {
+  if (!next || next.pending || m.pending || next.kind === 'system' || next.userId !== m.userId) return false;
+  var a = new Date(m.at), b = new Date(next.at);
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate() && a.getHours() === b.getHours() && a.getMinutes() === b.getMinutes();
 }
 function _cxNames(ids) {
   var mm = (CX.info && CX.info.members) || [];
@@ -654,7 +664,7 @@ function _cxDrawMsgs(append, focusMid) {
   var box = document.getElementById('cxMsgs'); if (!box) return;
   var atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   var n = CX.msgs.length, hs = new Array(n), ids = new Array(n);
-  for (var i = 0; i < n; i++) { hs[i] = _cxMsgHtml(CX.msgs[i], CX.msgs[i - 1], false); ids[i] = CX.msgs[i].id; }
+  for (var i = 0; i < n; i++) { hs[i] = _cxMsgHtml(CX.msgs[i], CX.msgs[i - 1], false, CX.msgs[i + 1]); ids[i] = CX.msgs[i].id; }
   var pIds = box._ids, pHs = box._hs, L = pIds ? pIds.length : 0, f = 0;
   var inc = append !== 'older' && !focusMid && L > 0 && n > 0 && box._room === CX.room && box._more === CX.more;
   if (inc) { while (f < L && f < n && pIds[f] === ids[f]) f++; if (f === 0) inc = false; }
@@ -787,7 +797,7 @@ function _cxBlobImg(img) {
   _cxBlob(id).then(function (u) {
     if (sc) sc._stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
     img.src = u;
-    var holder = img.closest('[data-mid]'), m = holder && _cxFindMsg(+holder.dataset.mid);
+    var holder = !img.closest('.cx-q') && img.closest('[data-mid]'), m = holder && _cxFindMsg(+holder.dataset.mid);   // 인용 상자 속 사진은 그대로
     if (typeof chatBoardThumb === 'function' && m && m.file) chatBoardThumb(img, m.file);   // 표시 · 자르기 · 회전한 모습으로
   }).catch(function () { img.alt = '사진을 불러오지 못했습니다'; });
 }
@@ -808,10 +818,12 @@ function _cxMsgClick(e) {
   if (rt || dp) {
     var pid = (rt || dp).dataset[rt ? 'retry' : 'drop'], pm = CX.msgs.filter(function (x) { return String(x.id) === pid; })[0];
     CX.msgs = CX.msgs.filter(function (x) { return String(x.id) !== pid; });
-    if (rt && pm) { _cxSend(pm.body, null, pm.cards); } else _cxDrawMsgs(true);
+    if (rt && pm) { _cxSend(pm.body, null, pm.cards, pm.quote && pm.quote.id); } else _cxDrawMsgs(true);
     return;
   }
   var mel = t.closest('[data-mid]'), m = mel && _cxFindMsg(+mel.dataset.mid);
+  var qj = t.closest('[data-qjump]');
+  if (qj) { _cxJump(+qj.dataset.qjump); return; }   // v13.376 인용 → 원문 자리
   var un = t.closest('[data-un]');
   if (un && un.textContent && m) { _cxReadersPop(un, m); return; }   // v13.372 숫자 누르면 누가 읽었나
   var rx = t.closest('[data-rx]');
@@ -820,6 +832,7 @@ function _cxMsgClick(e) {
   if (a && m) {
     if (a.dataset.a === 'react') _cxMenu(a, CX_REACTS.map(function (em) { return [em, function () { _cxReact(m.id, em); }]; }), 'cx-rxpick');
     else if (a.dataset.a === 'reply') chatOpenThread(m.id);
+    else if (a.dataset.a === 'quote') _cxStartQuote(m);
     else if (a.dataset.a === 'more') _cxMsgMenu(a, m);
     return;
   }
@@ -875,19 +888,102 @@ function _cxLongPress(box) {
       var inTh = !!b.closest('#cxThMsgs');
       _cxMsgMenu(b, m, [
         ['😊 공감…', function () { _cxMenu(b, CX_REACTS.map(function (em) { return [em, function () { _cxReact(m.id, em); }]; }), 'cx-rxpick'); }],
-        inTh ? null : ['↩ 답글', function () { chatOpenThread(m.id); }]
+        inTh ? null : ['↩ 답장', function () { _cxStartQuote(m); }],
+        inTh ? null : ['💬 답글 줄기', function () { chatOpenThread(m.id); }]
       ].filter(Boolean));
     }, 480);
   }, { passive: true });
   function cancel(e) { if (!t) return; if (e && e.touches && e.touches[0] && Math.abs(e.touches[0].clientX - sx) < 8 && Math.abs(e.touches[0].clientY - sy) < 8) return; clearTimeout(t); t = null; }
   box.addEventListener('touchmove', cancel, { passive: true });
-  box.addEventListener('touchend', function () { clearTimeout(t); t = null; });
+  // v13.376 오른쪽으로 밀면 답장 (카톡처럼) · 같은 말풍선 두 번 누르면 👍
+  var sw = null, lastTap = { t: 0, id: null, x: 0, y: 0 };
+  box.addEventListener('touchstart', function (e) {
+    sw = null; if (e.touches.length > 1 || box.id === 'cxThMsgs') return;
+    var mel = e.target.closest('.cx-m[data-mid]'); if (!mel || e.target.closest('a,button,img,[data-file],textarea,input')) return;
+    sw = { el: mel, x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, lock: 0 };
+  }, { passive: true });
+  box.addEventListener('touchmove', function (e) {
+    if (!sw) return;
+    var dx = e.touches[0].clientX - sw.x, dy = e.touches[0].clientY - sw.y;
+    if (!sw.lock) { if (Math.abs(dx) > 10 || Math.abs(dy) > 10) sw.lock = Math.abs(dx) > Math.abs(dy) * 1.3 && dx > 0 ? 1 : -1; }
+    if (sw.lock !== 1) return;
+    sw.dx = Math.max(0, Math.min(84, dx));
+    sw.el.style.transform = 'translateX(' + sw.dx + 'px)'; sw.el.classList.add('cx-swiping'); sw.el.classList.toggle('cx-swipe-ok', sw.dx >= 56);
+  }, { passive: true });
+  box.addEventListener('touchend', function (e) {
+    clearTimeout(t); t = null;
+    if (sw && sw.lock === 1) {
+      var el = sw.el, ok = sw.dx >= 56;
+      el.style.transition = 'transform .18s'; el.style.transform = ''; el.classList.remove('cx-swipe-ok');
+      setTimeout(function () { el.style.transition = ''; el.classList.remove('cx-swiping'); }, 200);
+      if (ok) { var m0 = _cxFindMsg(+el.dataset.mid); if (m0 && !m0.pending && !m0.deleted) { if (navigator.vibrate) try { navigator.vibrate(10); } catch (er) {} _cxStartQuote(m0); } }
+      sw = null; return;
+    }
+    // 두 번 눌러 공감
+    var ct = e.changedTouches && e.changedTouches[0], bw = e.target.closest('.cx-bw'), mel2 = bw && bw.closest('.cx-m[data-mid]');
+    if (sw && !sw.lock && ct && mel2 && !e.target.closest('a,button,img,[data-file]')) {
+      var now = Date.now();
+      if (lastTap.id === mel2.dataset.mid && now - lastTap.t < 320 && Math.abs(ct.clientX - lastTap.x) < 30 && Math.abs(ct.clientY - lastTap.y) < 30) {
+        lastTap = { t: 0, id: null };
+        var m1 = _cxFindMsg(+mel2.dataset.mid);
+        if (m1 && !m1.pending && !m1.deleted) { var em = _cxLsGet('wm-cx-dbl') || '👍'; _cxReact(m1.id, em); _cxPop(bw, em); }
+      } else lastTap = { t: now, id: mel2.dataset.mid, x: ct.clientX, y: ct.clientY };
+    }
+    sw = null;
+  });
   box.addEventListener('touchcancel', function () { clearTimeout(t); t = null; });
   box.addEventListener('contextmenu', function (e) { if (e.target.closest('.cx-bw') && matchMedia('(pointer:coarse)').matches) e.preventDefault(); });
+}
+/* v13.376 😊 이모티콘 판 — 자주 쓴 것 · 빠른 답(누르면 바로 보냄) · 분류 */
+var CX_EMO = {
+  '빠른 답': ['확인했습니다 ✅', '검토 중입니다 👀', '완료했습니다 🙆', '잠시만요 🙏', '감사합니다 🙇', '통화 가능할까요? 📞', '지금 확인해 볼게요 🔍', '내일 처리하겠습니다 📅'],
+  '표정': '😀 😄 😁 😆 😅 🤣 😂 🙂 😉 😊 😇 🥰 😍 🤩 😘 😋 😜 🤪 🤗 🤭 🤔 🤐 😐 😑 😶 😏 😒 🙄 😬 😌 😔 😪 😴 😷 🤒 🤕 🤧 🥵 🥶 😵 🤯 🥳 😎 🤓 😕 😟 🙁 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 😤 😡 😠'.split(' '),
+  '손 · 사람': '👍 👎 👌 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐 🖖 👋 👏 🙌 👐 🤲 🙏 💪 🙇 🙆 🙅 🤷 🤦 💁 🙋'.split(' '),
+  '업무': '✅ ☑️ ❌ ⭕ ❗ ❓ ⚠️ 🚨 🔥 💯 📌 📎 📝 📋 📅 ⏰ ⏳ 📞 💻 🖥 🖨 🔧 🔩 ⚙️ 🛠 🏭 📦 🚚 📈 📉 💡 🔍 🔒 🔑 📢 🎯 🚀 🏁'.split(' '),
+  '기호': '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 ⭐ 🌟 ✨ ⚡ 🎉 🎊 🎁 ☕ 🍚 🍺 🌧 ☀️ ⛄ 👀 💬 💭 ➡️ ⬅️ ⬆️ ⬇️ 🔄 ➕ ➖ ✖️'.split(' ')
+};
+function _cxEmoRecent() { try { return JSON.parse(_cxLsGet('wm-cx-emo') || '[]') || []; } catch (e) { return []; } }
+function _cxEmojiPick(btn, ta, inThread, go) {
+  var old = document.getElementById('cxEmo'); if (old) { old.remove(); return; }
+  var tabs = ['자주'].concat(Object.keys(CX_EMO)), cur = _cxEmoRecent().length ? '자주' : '빠른 답';
+  var p = document.createElement('div'); p.id = 'cxEmo'; p.className = 'cx-emo'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', '이모티콘');
+  function draw() {
+    var list = cur === '자주' ? _cxEmoRecent() : CX_EMO[cur];
+    p.innerHTML = '<div class="cx-emo-tabs">' + tabs.map(function (t) { return '<button type="button" data-tab="' + t + '" class="' + (t === cur ? 'on' : '') + '">' + t + '</button>'; }).join('') + '</div>' +
+      '<div class="cx-emo-g' + (cur === '빠른 답' ? ' qr' : '') + '">' + (list.length ? list.map(function (x) { return '<button type="button" data-e="' + _cxE(x) + '">' + _cxE(x) + '</button>'; }).join('') : '<div class="cx-emo-e">아직 없습니다 — 쓰면 여기 모입니다</div>') + '</div>' +
+      '<div class="cx-emo-f">두 번 눌러 공감: <button type="button" data-dbl>' + (_cxLsGet('wm-cx-dbl') || '👍') + '</button> <i>휴대폰에서 말풍선을 두 번 누르면</i></div>';
+  }
+  draw();
+  document.body.appendChild(p);
+  var r = btn.getBoundingClientRect(), w = Math.min(340, window.innerWidth - 12);
+  p.style.width = w + 'px'; p.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, r.right - w)) + 'px';
+  p.style.bottom = (window.innerHeight - r.top + 6) + 'px';
+  var pickDbl = false;
+  p.addEventListener('mousedown', function (e) { e.preventDefault(); });   // 입력칸 포커스 유지 (휴대폰 키보드 안 내려감)
+  p.addEventListener('click', function (e) {
+    var tb = e.target.closest('[data-tab]'); if (tb) { cur = tb.dataset.tab; pickDbl = false; draw(); return; }
+    if (e.target.closest('[data-dbl]')) { pickDbl = true; cur = '손 · 사람'; draw(); p.querySelector('.cx-emo-f i').textContent = '← 바꿀 공감을 고르세요'; return; }
+    var b = e.target.closest('[data-e]'); if (!b) return;
+    var x = b.dataset.e;
+    if (pickDbl) { _cxLsSet('wm-cx-dbl', x); pickDbl = false; draw(); return; }
+    var rec = _cxEmoRecent().filter(function (y) { return y !== x; }); rec.unshift(x); _cxLsSet('wm-cx-emo', JSON.stringify(rec.slice(0, 24)));
+    if (CX_EMO['빠른 답'].indexOf(x) >= 0) { ta.value = x; p.remove(); go(); return; }   // 빠른 답은 바로 보냄
+    var s0 = ta.selectionStart || ta.value.length, s1 = ta.selectionEnd || s0;
+    ta.value = ta.value.slice(0, s0) + x + ta.value.slice(s1); ta.selectionStart = ta.selectionEnd = s0 + x.length;
+    ta.dispatchEvent(new Event('input'));
+  });
+  setTimeout(function () { document.addEventListener('pointerdown', function off(e) { if (!p.contains(e.target) && e.target !== btn) { p.remove(); document.removeEventListener('pointerdown', off, true); } }, true); }, 0);
+}
+/** 공감 떠오름 (두 번 누름) */
+function _cxPop(anchor, em) {
+  var r = anchor.getBoundingClientRect(), p = document.createElement('span');
+  p.className = 'cx-rxpop'; p.textContent = em; p.style.left = (r.left + r.width / 2) + 'px'; p.style.top = (r.top + r.height / 2) + 'px';
+  document.body.appendChild(p); setTimeout(function () { p.remove(); }, 800);
 }
 function _cxMsgMenu(btn, m, pre) {
   var mine = m.userId === _cxMe();
   _cxMenu(btn, (pre || []).concat([
+    !pre && typeof m.id === 'number' && !m.replyTo ? ['↩ 답장', function () { _cxStartQuote(m); }] : null,
     m.body ? ['📋 복사', function () { try { navigator.clipboard.writeText(m.body); _cxToast('복사했습니다', 'success'); } catch (e) {} }] : null,
     ['↪ 전달', function () { chatForwardModal(m); }],
     typeof chatSaveMenu === 'function' ? ['📁 폴더에 담기', function () { chatSaveMenu(btn, m); }] : null,
@@ -942,6 +1038,7 @@ function _cxComposerHtml(taId, wrapId) {
     (wrapId === 'cxComp' && typeof chatPostModal === 'function' ? '<button type="button" class="cx-ib" data-c="post" title="게시판 글쓰기 — 공지 · 자료 · 질문 · 🛠 요청">✍️<span class="cx-tl">게시판 글</span></button>' : '') +
     (_cxCanCapture() ? '<button type="button" class="cx-ib" data-c="cap" title="화면 캡처 — 잘라서 표시하고 보내기">📸<span class="cx-tl">화면 캡처</span></button>' : '') + '</span>' +
     '<textarea id="' + taId + '" rows="1" autocomplete="off" enterkeyhint="send" placeholder="' + (_cxIsPhone() ? '메시지 입력' : '메시지 · @사람 · /명령') + '" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
+    '<button type="button" class="cx-ib cx-emo-t" data-c="emoji" title="이모티콘 · 빠른 답" aria-label="이모티콘">😊</button>' +
     '<button type="button" class="cx-send" data-c="send" title="보내기" aria-label="보내기">➤</button>' +
     '<input type="file" data-c="file" multiple hidden>' + (_cxIsPhone() ? '<input type="file" data-c="cam" accept="image/*" capture="environment" hidden>' : '') + '</div><div class="cx-sugg" data-sugg hidden></div></div>';
 }
@@ -983,6 +1080,7 @@ function _cxBindComposer(taId, wrapId, inThread) {
     }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); _go(); }
     else if (e.key === 'Escape' && CX.editId && !inThread) { _cxCancelEdit(); }
+    else if (e.key === 'Escape' && CX.quote && !inThread) { _cxEndQuote(); }
     else if (e.key === 'ArrowUp' && !ta.value && !inThread) { var last = CX.msgs.slice().reverse().filter(function (m) { return m.userId === _cxMe() && m.kind === 'text' && !m.deleted && !m.pending; })[0]; if (last) { e.preventDefault(); _cxStartEdit(last); } }
   });
   ta.addEventListener('paste', function (e) {
@@ -1004,8 +1102,9 @@ function _cxBindComposer(taId, wrapId, inThread) {
     else if (b.dataset.c === 'sched' && typeof chatTimeComposer === 'function') chatTimeComposer(b, ta);
     else if (b.dataset.c === 'cap' && typeof chatBoardCapture === 'function') chatBoardCapture(inThread ? CX.thread : null);
     else if (b.dataset.c === 'send') _go();
+    else if (b.dataset.c === 'emoji') _cxEmojiPick(b, ta, inThread, _go);
   });
-  wrap.addEventListener('click', function (e) { var x = e.target.closest('[data-unchip]'); if (x) { CX.cards.splice(+x.dataset.unchip, 1); _cxDrawChips(); } var rc = e.target.closest('[data-unreply]'); if (rc) _cxCancelEdit(); });
+  wrap.addEventListener('click', function (e) { var x = e.target.closest('[data-unchip]'); if (x) { CX.cards.splice(+x.dataset.unchip, 1); _cxDrawChips(); } var rc = e.target.closest('[data-unreply]'); if (rc) _cxCancelEdit(); if (e.target.closest('[data-unquote]')) _cxEndQuote(); });
   function _tools(on) {
     wrap.classList.toggle('tools-open', on);
     var t = wrap.querySelector('[data-c="tools"]'); if (t) t.setAttribute('aria-expanded', on ? 'true' : 'false');
@@ -1029,12 +1128,15 @@ function _cxBindComposer(taId, wrapId, inThread) {
     if (!inThread) { CX.cards = []; _cxDrawChips(); }
   }
 }
-function _cxSend(body, replyTo, cards) {
+function _cxSend(body, replyTo, cards, quoteId) {
   var room = CX.room, pid = null;
+  if (quoteId === undefined && !replyTo && CX.quote) { quoteId = CX.quote.id; }
+  var quote = quoteId ? (CX.quote && CX.quote.id === quoteId ? CX.quote.q : _cxQuoteOf(_cxFindMsg(quoteId))) : null;
+  if (!replyTo && CX.quote) _cxEndQuote();
   if (CX.fwd && !replyTo) _cxToLatest();   // v13.375 옛 대화를 읽다가 보내면 최근으로
   if (!replyTo && body && body[0] !== '/') {   // v13.366 보내는 중 — 바로 보이게
     pid = 'p' + (++CX.pendSeq);
-    CX.msgs.push({ id: pid, pending: true, roomId: room, userId: _cxMe(), userName: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || '', kind: 'text', body: body, cards: cards && cards.length ? cards : null, mentions: [], at: new Date().toISOString() });
+    CX.msgs.push({ id: pid, pending: true, roomId: room, userId: _cxMe(), userName: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || '', kind: 'text', body: body, cards: cards && cards.length ? cards : null, mentions: [], at: new Date().toISOString(), quote: quote });
     _cxDrawMsgs(true);
     var bx = document.getElementById('cxMsgs'); if (bx) bx.scrollTop = bx.scrollHeight;
   }
@@ -1049,15 +1151,44 @@ function _cxSend(body, replyTo, cards) {
     if (real) { _cxUpsert(real, true); _cxDrawMsgs(true); }   // 실시간으로 먼저 바뀌어 있음
     return true;
   }
-  return apiFetch('/api/chat/rooms/' + room + '/messages', { method: 'POST', body: JSON.stringify({ body: body, replyTo: replyTo || null, cards: cards && cards.length ? cards : undefined }), timeoutMs: /^\/(ai|요약|summary)/.test(body) ? 120000 : 15000 })
+  return apiFetch('/api/chat/rooms/' + room + '/messages', { method: 'POST', body: JSON.stringify({ body: body, replyTo: replyTo || null, cards: cards && cards.length ? cards : undefined, quoteId: quoteId || undefined }), timeoutMs: /^\/(ai|요약|summary)/.test(body) ? 120000 : 15000 })
     .then(function (r) { if (settle(r && r.data, false)) return; if (r && r.data && CX.room === room) { if (r.data.replyTo) { if (CX.thread === r.data.replyTo && !CX.threadMsgs.some(function (m) { return m.id === r.data.id; })) { CX.threadMsgs.push(r.data); _cxDrawThread(true); } } else if (_cxAddIfNew(r.data)) _cxDrawMsgs(true); } })
     .catch(function (e) { if (settle(null, true)) { _cxToast(/fetch|network|timeout|시간/i.test(_cxErr(e)) ? '연결이 끊겨 못 보냈습니다 — 메시지 옆 ⚠ 다시 보내기' : _cxErr(e), 'error'); return; } _cxToast(_cxErr(e), 'error'); var ta = document.getElementById(replyTo ? 'cxThIn' : 'cxIn'); if (ta && !ta.value) ta.value = body; });
+}
+/* v13.376 💬 인용 답장 — 카톡 '답장' */
+function _cxQuoteOf(m) {
+  if (!m) return null;
+  return { id: m.id, userName: m.userName || (m.kind === 'ai' ? 'AI' : ''), body: String(m.post ? '📌 ' + m.post.title : m.body || '').slice(0, 200), file: m.file ? { id: m.file.id, name: m.file.name, mime: m.file.mime } : null, deleted: !!m.deleted };
+}
+function _cxQuoteHtml(q) {
+  var img = q.file && /^image\//i.test(q.file.mime || '');
+  var txt = q.deleted ? '삭제된 메시지' : q.body ? q.body.replace(/\s+/g, ' ') : q.file ? (img ? '📷 사진' : '📎 ' + q.file.name) : '';
+  return '<button type="button" class="cx-q' + (q.deleted ? ' del' : '') + '" data-qjump="' + q.id + '" title="원문으로 가기">' +
+    (img && !q.deleted ? '<img alt="" data-blob="' + _cxE(q.file.id) + '">' : '') +
+    '<span><b>' + _cxE(q.userName || '') + '</b><i>' + _cxE(txt) + '</i></span></button>';
+}
+function _cxStartQuote(m) {
+  if (!m || typeof m.id !== 'number') return;
+  if (CX.editId) _cxCancelEdit();
+  CX.quote = { id: m.id, q: _cxQuoteOf(m) };
+  var rb = document.querySelector('#cxComp [data-replybar]'); if (!rb) return;
+  rb.hidden = false; rb.className = 'cx-reply is-quote';
+  rb.innerHTML = '<span class="cx-rq">↩ <b></b> 에게 답장<i></i></span><button type="button" class="cx-ib" data-unquote title="답장 그만 (Esc)">✕</button>';
+  rb.querySelector('b').textContent = CX.quote.q.userName || '';
+  rb.querySelector('i').textContent = CX.quote.q.body || (CX.quote.q.file ? '📎 ' + CX.quote.q.file.name : '');
+  var ta = document.getElementById('cxIn'); if (ta) ta.focus();
+}
+function _cxEndQuote() {
+  CX.quote = null;
+  var rb = document.querySelector('#cxComp [data-replybar]');
+  if (rb && rb.classList.contains('is-quote')) { rb.hidden = true; rb.className = 'cx-reply'; rb.innerHTML = ''; }
 }
 function _cxStartEdit(m) {
   CX.editId = m.id;
   var ta = document.getElementById('cxIn'); if (!ta) return;
   ta.value = m.body; ta.focus(); ta.dispatchEvent(new Event('input'));
-  var rb = document.querySelector('#cxComp [data-replybar]'); rb.hidden = false;
+  if (CX.quote) _cxEndQuote();
+  var rb = document.querySelector('#cxComp [data-replybar]'); rb.hidden = false; rb.className = 'cx-reply';
   rb.innerHTML = '<span>✏️ 메시지 수정 중 — Enter 저장 · Esc 취소</span><button type="button" class="cx-ib" data-unreply>✕</button>';
 }
 /* 방마다 쓰다 만 글 — 방을 옮겨도 남음 */
@@ -1080,14 +1211,15 @@ function _cxDrawChips() {
 /* 파일 올리기 — 하나씩 · 진행 표시 */
 function _cxUpload(files, replyTo) {
   if (!files || !files.length || !CX.room) return;
-  var room = CX.room;
+  var room = CX.room, qid = !replyTo && CX.quote ? CX.quote.id : null;
+  if (qid) _cxEndQuote();
   files.slice(0, 10).forEach(function (f) {
     if (f.size > 25 * 1024 * 1024) { _cxToast(f.name + ' — 25MB 까지 올릴 수 있습니다', 'warn'); return; }
     var tip = document.createElement('div'); tip.className = 'cx-upl'; tip.innerHTML = '<span></span><i><b style="width:0%"></b></i>';
     tip.querySelector('span').textContent = '📎 ' + f.name;
     var host = document.getElementById('cxTyping'); if (host) host.parentNode.insertBefore(tip, host);
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/rooms/' + encodeURIComponent(room) + '/files?name=' + encodeURIComponent(f.name) + (replyTo ? '&replyTo=' + replyTo : ''));
+    xhr.open('POST', (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/rooms/' + encodeURIComponent(room) + '/files?name=' + encodeURIComponent(f.name) + (replyTo ? '&replyTo=' + replyTo : '') + (!replyTo && qid ? '&quoteId=' + qid : ''));
     xhr.setRequestHeader('Authorization', 'Bearer ' + _accessToken);
     xhr.setRequestHeader('Content-Type', f.type || 'application/octet-stream');
     xhr.upload.onprogress = function (e) { if (e.lengthComputable) tip.querySelector('b').style.width = Math.round(e.loaded / e.total * 100) + '%'; };

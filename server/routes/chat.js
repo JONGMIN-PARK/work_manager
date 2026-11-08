@@ -89,14 +89,18 @@ var MSG_SQL = 'SELECT m.id, m.room_id, m.user_id, m.kind, m.body, m.cards, m.men
   'COALESCE(u.display_name, u.name) AS user_name, f.id AS f_id, f.name AS f_name, f.mime AS f_mime, f.size AS f_size, ' +
   "CASE WHEN m.post IS NULL THEN NULL ELSE (SELECT COALESCE(ua.display_name, ua.name) FROM users ua WHERE ua.id::text = m.post->>'assignee') END AS asg_name, " +
   "(f.annot->>'rot')::int AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, " +
-  'rp.replies, rp.last_reply_at ' +
+  'rp.replies, rp.last_reply_at, ' +
+  // v13.376 인용 답장 — 원문 한 줄 (지웠으면 표시만)
+  "m.quote_id, qm.body AS q_body, qm.deleted_at AS q_del, qm.kind AS q_kind, qm.post->>'title' AS q_ptitle, COALESCE(qu.display_name, qu.name) AS q_user, qf.id AS q_fid, qf.name AS q_fname, qf.mime AS q_fmime " +
   'FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN chat_files f ON f.id = m.file_id ' +
+  'LEFT JOIN chat_messages qm ON qm.id = m.quote_id LEFT JOIN users qu ON qu.id = qm.user_id LEFT JOIN chat_files qf ON qf.id = qm.file_id ' +
   'LEFT JOIN LATERAL (SELECT COUNT(*)::int AS replies, MAX(t.created_at) AS last_reply_at FROM chat_messages t WHERE t.reply_to = m.id AND t.deleted_at IS NULL) rp ON TRUE ';
 function shape(r) {
   return { id: +r.id, roomId: r.room_id, userId: r.user_id, userName: r.user_name || (r.kind === 'ai' ? 'AI' : ''), kind: r.kind,
     body: r.deleted_at ? '' : r.body, deleted: !!r.deleted_at, edited: !!r.edited_at, cards: r.deleted_at ? null : r.cards, mentions: r.mentions || [],
     replyTo: r.reply_to ? +r.reply_to : null, replies: r.replies || 0, lastReplyAt: r.last_reply_at, reactions: r.deleted_at ? null : r.reactions || null,
-    post: r.deleted_at || !r.post ? null : Object.assign({}, r.post, { assigneeName: r.asg_name || null }), file: r.f_id && !r.deleted_at ? annSum({ id: r.f_id, name: r.f_name, mime: r.f_mime, size: r.f_size }, r) : null, at: r.created_at };
+    post: r.deleted_at || !r.post ? null : Object.assign({}, r.post, { assigneeName: r.asg_name || null }), file: r.f_id && !r.deleted_at ? annSum({ id: r.f_id, name: r.f_name, mime: r.f_mime, size: r.f_size }, r) : null, at: r.created_at,
+    quote: r.quote_id && !r.deleted_at ? { id: +r.quote_id, userName: r.q_user || (r.q_kind === 'ai' ? 'AI' : ''), deleted: !!r.q_del, body: r.q_del ? '' : String(r.q_ptitle ? '📌 ' + r.q_ptitle : r.q_body || '').slice(0, 200), file: r.q_fid && !r.q_del ? { id: r.q_fid, name: r.q_fname, mime: r.q_fmime } : null } : null };
 }
 // 사진 칠판 요약 — 목록에선 회전 · 표시 수 · 자름 여부만 (전체는 /files/:fid/annot)
 function annSum(f, r) { if (r.f_rot || r.f_n || r.f_crop) f.annot = { rot: r.f_rot || 0, n: r.f_n || 0, crop: !!r.f_crop }; return f; }
@@ -136,8 +140,8 @@ async function postMessage(ctx, room, m) {
   var body = String(m.body || '').slice(0, MAX_BODY);
   var mentions = m.mentions || (m.kind === 'text' || !m.kind ? await findMentions(ctx.tenantId, room.id, body) : []);
   var ins = await db.query(
-    'INSERT INTO chat_messages (room_id, tenant_id, user_id, kind, body, cards, file_id, mentions, reply_to, legacy_id, post) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
-    [room.id, ctx.tenantId, m.userId || null, m.kind || 'text', body, m.cards ? JSON.stringify(m.cards) : null, m.fileId || null, JSON.stringify(mentions), m.replyTo || null, m.legacyId || null, m.post ? JSON.stringify(m.post) : null]);
+    'INSERT INTO chat_messages (room_id, tenant_id, user_id, kind, body, cards, file_id, mentions, reply_to, legacy_id, post, quote_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id',
+    [room.id, ctx.tenantId, m.userId || null, m.kind || 'text', body, m.cards ? JSON.stringify(m.cards) : null, m.fileId || null, JSON.stringify(mentions), m.replyTo || null, m.legacyId || null, m.post ? JSON.stringify(m.post) : null, m.quoteId || null]);
   var id = +ins.rows[0].id;
   var par = await Promise.all([
     db.query('UPDATE chat_rooms SET last_msg_at = now() WHERE id = $1', [room.id]),
@@ -152,6 +156,12 @@ async function postMessage(ctx, room, m) {
   return msg;
 }
 
+/** 인용할 원문 — 같은 방 메시지만 (v13.376) */
+async function quoteOk(room, qid) {
+  qid = +qid || 0; if (!qid) return null;
+  var r = await db.query('SELECT id FROM chat_messages WHERE id = $1 AND room_id = $2', [qid, room.id]);
+  return r.rows.length ? qid : null;
+}
 /* 📲 접속 안 한 사람에게 바로 휴대폰 푸시 (v13.359) — 음소거 방은 @멘션만 */
 var PUSH_GATE = new Map(), PUSH_GAP_MS = +(process.env.CHAT_PUSH_GAP_MS || 60000);
 function pushOffline(room, msg, others, mentions) {
@@ -458,7 +468,7 @@ router.post('/rooms/:id/messages', async function (req, res) {
       replyTo = pr.rows[0].reply_to || +pr.rows[0].id;   // 답글의 답글은 같은 줄기로
     }
     if (body[0] === '/' && !cards) { var cmd = await runCommand(req, room, body, replyTo); if (cmd) return res.status(201).json({ data: cmd }); }
-    var msg = await postMessage({ tenantId: req.tenant.id }, room, { userId: me(req), kind: 'text', body: body, cards: cards, replyTo: replyTo });
+    var msg = await postMessage({ tenantId: req.tenant.id }, room, { userId: me(req), kind: 'text', body: body, cards: cards, replyTo: replyTo, quoteId: replyTo ? null : await quoteOk(room, b.quoteId) });
     res.status(201).json({ data: msg });
   } catch (e) { httpErr.serverError(res, '[chat/send]', e); }
 });
@@ -614,7 +624,7 @@ router.post('/rooms/:id/files', express.raw({ type: function () { return true; }
     await db.query('INSERT INTO chat_files (id, tenant_id, room_id, user_id, name, mime, size, storage_key, data) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
       [fid, req.tenant.id, room.id, me(req), name, mime, buf.length, key, key ? null : buf]);
     var caption = String(req.query.caption || '').slice(0, 2000);
-    var msg = await postMessage({ tenantId: req.tenant.id }, room, { userId: me(req), kind: 'file', body: caption, fileId: fid, replyTo: req.query.replyTo ? +req.query.replyTo : null });
+    var msg = await postMessage({ tenantId: req.tenant.id }, room, { userId: me(req), kind: 'file', body: caption, fileId: fid, replyTo: req.query.replyTo ? +req.query.replyTo : null, quoteId: req.query.replyTo ? null : await quoteOk(room, req.query.quoteId) });
     res.status(201).json({ data: msg });
   } catch (e) {
     if (e && e.type === 'entity.too.large') return bad(res, '25MB 까지 올릴 수 있습니다.', 413);
