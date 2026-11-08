@@ -149,13 +149,14 @@ function _clRing(r) {
       n++;
     }, 1500);
   } catch (_) {}
-  if (typeof wmAppNotify === 'function') wmAppNotify((r.video ? '🎥 ' : '📞 ') + r.fromName + ' 님의 통화', '눌러서 받기', 'chat:' + r.roomId);
+  if (typeof wmAppNotify === 'function') wmAppNotify((r.video ? '🎥 ' : '📞 ') + r.fromName + ' 님의 통화', '눌러서 받기', 'chat:' + r.roomId, { urgent: true, tag: r.sid });   // v13.382 받거나 끊길 때까지 남음
   r.timer = setTimeout(_clStopRing, 45000);   // 45초 지나면 그침
 }
 function _clStopRing() {
   var r = CALL_RING; if (!r) return;
   CALL_RING = null;
   clearInterval(r.beep); clearTimeout(r.timer); if (r.ac) try { r.ac.close(); } catch (_) {}
+  if (typeof wmAppNotifyClose === 'function') wmAppNotifyClose(r.sid);
   var el = document.getElementById('clRing'); if (el) el.remove();
 }
 

@@ -47,9 +47,28 @@ function wmAppBadge(n) {
 }
 
 /* ─── 알림: PC 앱이면 윈도우 알림 (누르면 창이 앞으로 + 그 자리로) ─── */
-function wmAppNotify(title, body, go) {
+/** opt: { urgent: 사라지지 않음(📞 통화), tag: 같은 tag 는 바꿔 끼움 · wmAppNotifyClose 로 닫기 } */
+function wmAppNotify(title, body, go, opt) {
   if (!wmIsDesktopApp()) return false;
-  try { window.wmDesktop.notify({ title: title, body: body, go: go || '' }); return true; } catch (_) { return false; }
+  try { window.wmDesktop.notify({ title: title, body: body, go: go || '', urgent: !!(opt && opt.urgent), tag: (opt && opt.tag) || '' }); return true; } catch (_) { return false; }
+}
+function wmAppNotifyClose(tag) { try { if (wmIsDesktopApp() && window.wmDesktop.notifyClose) window.wmDesktop.notifyClose(tag); } catch (_) {} }
+/* v13.382 📌 항상 위 (PC 앱) — 머리 단추 · 트레이 메뉴 · Ctrl+Alt+T 가 같은 상태 */
+function _wmOnTopShow(on) {
+  var b = document.getElementById('hdrOnTop'); if (!b) return;
+  b.hidden = false; b.classList.toggle('on', !!on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.title = on ? '📌 항상 위 — 켜짐 (누르면 끔 · Ctrl+Alt+T)' : '📌 항상 위에 두기 — 다른 프로그램을 써도 이 창이 위에 (Ctrl+Alt+T)';
+}
+function wmOnTopToggle() {
+  if (!wmIsDesktopApp() || !window.wmDesktop.setOnTop) return;
+  var on = !document.getElementById('hdrOnTop').classList.contains('on');
+  window.wmDesktop.setOnTop(on); _wmOnTopShow(on);
+  if (typeof showToast === 'function') showToast(on ? '📌 항상 위에 둡니다' : '📌 항상 위를 껐습니다', 'info');
+}
+if (wmIsDesktopApp() && window.wmDesktop.getOnTop) {
+  var _wmOnTopInit = function () { window.wmDesktop.getOnTop().then(_wmOnTopShow).catch(function () {}); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wmOnTopInit); else _wmOnTopInit();
+  if (window.wmDesktop.onOnTop) window.wmDesktop.onOnTop(_wmOnTopShow);
 }
 if (wmIsDesktopApp() && window.wmDesktop.onGo) {
   window.wmDesktop.onGo(function (go) { if (go && typeof wmDeepGo === 'function') wmDeepGo(go); });

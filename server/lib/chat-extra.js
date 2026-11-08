@@ -93,16 +93,19 @@ var BUSY = { meeting: ['🤝', '회의 중'], review: ['🔍', '검토 중'], tr
 function kstNow() { var d = new Date(Date.now() + 9 * 36e5); return { date: d.toISOString().slice(0, 10), hm: d.toISOString().slice(11, 16) }; }
 var CAL = new Map();
 /** tenantId, [{id, names:[이름들]}] → { uid: {icon,label,until} } (1분 담아 둠) */
+/** 오늘 바쁜 일정 (1분 담아 둠 · 같은 때 여러 요청은 한 번만) — v13.382 방 열기와 같이 미리 받기 */
+function calRows(tenantId) {
+  var now = kstNow(), key = tenantId + ':' + now.date + now.hm;
+  var c = CAL.get(tenantId);
+  if (c && c.key === key) return c.p;
+  var p = db.query("SELECT type, start_time, end_time, assignees FROM events WHERE tenant_id = $1 AND type = ANY($2) AND start_date <= $3 AND COALESCE(NULLIF(end_date, ''), start_date) >= $3",
+    [tenantId, Object.keys(BUSY), now.date]).then(function (r) { return r.rows; }, function () { return []; });
+  CAL.set(tenantId, { key: key, p: p }); if (CAL.size > 500) CAL.clear();
+  return p;
+}
 async function calStatus(tenantId, users) {
   if (!users || !users.length) return {};
-  var now = kstNow(), key = tenantId + ':' + now.date + now.hm, rows;
-  var c = CAL.get(tenantId);
-  if (c && c.key === key) rows = c.rows;
-  else {
-    var r = await db.query("SELECT type, start_time, end_time, assignees FROM events WHERE tenant_id = $1 AND type = ANY($2) AND start_date <= $3 AND COALESCE(NULLIF(end_date, ''), start_date) >= $3",
-      [tenantId, Object.keys(BUSY), now.date]).catch(function () { return { rows: [] }; });
-    rows = r.rows; CAL.set(tenantId, { key: key, rows: rows }); if (CAL.size > 500) CAL.clear();
-  }
+  var now = kstNow(), rows = await calRows(tenantId);
   var out = {};
   users.forEach(function (u) {
     var names = (u.names || []).filter(Boolean);
@@ -124,4 +127,4 @@ async function calStatus(tenantId, users) {
   return out;
 }
 
-module.exports = { linkPreview: linkPreview, linkImage: linkImage, firstUrl: firstUrl, calStatus: calStatus, _privateIp: privateIp, _safeUrl: safeUrl, BUSY: BUSY };
+module.exports = { linkPreview: linkPreview, linkImage: linkImage, firstUrl: firstUrl, calStatus: calStatus, calRows: calRows, _privateIp: privateIp, _safeUrl: safeUrl, BUSY: BUSY };

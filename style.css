@@ -5985,3 +5985,16 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cxm-chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)}
 .cxm-chk[hidden]{display:none}
 .cxm-note{margin:0;font-size:12px;color:var(--t5)}
+/* v13.382 📌 항상 위 (PC 앱) */
+.hdr-ic[hidden]{display:none!important}
+.hdr-ontop:not(.on){filter:grayscale(1);opacity:.65}
+.hdr-ontop.on{transform:rotate(-20deg)}
+/* v13.382 말풍선 위 도구 막대(😊 ↩ 💬 ⋯)가 잘리던 것 — content-visibility 는 칸 밖을 잘라 내므로 올려 둔 · 고른 말풍선은 풀어 줌 */
+.cx-msgs .cx-m:hover,.cx-msgs .cx-m:focus-within,.cx-msgs .cx-m.cx-pressed{content-visibility:visible;position:relative;z-index:3}
+/* v13.382 휴대폰 — 화면 틀 고정: 끌어도 머리 · 틀이 출렁이거나 밀려 올라가지 않게.
+ *   모든 화면: 끝에서 더 끌 때 튕김(고무줄) 없음. 메신저: 페이지 자체는 안 움직이고 안쪽(목록 · 대화)만 움직임 */
+@media (max-width:760px){
+  html,body{overscroll-behavior-y:none}
+  html:has(#mMessages:not(.hidden)),html:has(#mMessages:not(.hidden)) body{overflow:hidden;height:100%}
+  .cx-msgs,.cx-rooms,.cx-aside,.cx-side{overscroll-behavior:contain}
+}

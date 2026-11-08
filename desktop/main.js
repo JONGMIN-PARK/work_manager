@@ -4,7 +4,7 @@
  *   트레이 상주 · 윈도우 알림 · 작업 표시줄 숫자/깜빡임 · Ctrl+Shift+M · 자동 실행 · 화면 공유 · 자동 업데이트
  *   서버 주소: --server=URL  >  환경변수 WM_SERVER  >  설정 파일(userData/config.json)  >  기본값
  */
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, nativeImage, shell, globalShortcut, session, desktopCapturer } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, nativeImage, shell, globalShortcut, session, desktopCapturer, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -70,9 +70,12 @@ function createWindow() {
     width: st.width || 1280, height: st.height || 820, x: st.x, y: st.y,
     minWidth: 380, minHeight: 520,
     title: '업무 관리자', icon: ICON, show: false, backgroundColor: '#0f1220', autoHideMenuBar: true,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, partition: 'persist:wm', spellcheck: false }
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, partition: 'persist:wm', spellcheck: false, backgroundThrottling: false }   // v13.382 창을 숨겨 둬도 실시간 연결 · 통화 울림이 늦지 않게
   });
   if (st.max) win.maximize();
+  if (readCfg().onTop) win.setAlwaysOnTop(true, 'floating');   // v13.382 📌 항상 위
+  // 창 안 단축키: Ctrl+Alt+T 📌 항상 위 켜기 · 끄기
+  win.webContents.on('before-input-event', (e, i) => { if (i.type === 'keyDown' && i.control && i.alt && !i.shift && (i.key === 't' || i.key === 'T')) { e.preventDefault(); setOnTop(!win.isAlwaysOnTop()); } });
   // 구글 로그인은 'Electron' 이 든 브라우저 이름을 막는다 → 보통 크롬 이름으로
   win.webContents.setUserAgent(win.webContents.getUserAgent().replace(/\s(Electron|work-manager-desktop|업무 관리자)\/\S+/g, ''));
   win.loadFile(path.join(__dirname, 'offline.html'), { query: { server: SERVER() } });   // 서버가 깨어나는 동안 보이는 화면
@@ -103,6 +106,17 @@ function createWindow() {
   win.on('focus', () => win.flashFrame(false));
 }
 
+/* v13.382 📌 항상 위 — 다른 프로그램을 써도 이 창이 위에 (기억해 둠) */
+function setOnTop(on) {
+  if (!win) return;
+  win.setAlwaysOnTop(!!on, 'floating');
+  writeCfg(Object.assign(readCfg(), { onTop: !!on }));
+  refreshTray();
+  try { win.webContents.send('wm:ontop', !!on); } catch (_) {}
+}
+ipcMain.on('wm:ontop-set', (e, on) => { if (win && e.sender === win.webContents) setOnTop(on); });
+ipcMain.handle('wm:ontop-get', () => !!(win && win.isAlwaysOnTop()));
+
 function trayHint() {
   const c = readCfg();
   if (c.trayHinted) return;
@@ -119,6 +133,7 @@ function buildTrayMenu() {
     { label: '💬 메신저' + (unread ? '  (' + unread + ')' : ''), click: () => showWin('messages') },
     { label: '📋 내 업무', click: () => showWin('mywork') },
     { type: 'separator' },
+    { label: '📌 항상 위에 두기  (Ctrl+Alt+T)', type: 'checkbox', checked: !!(win && win.isAlwaysOnTop()), click: (m) => setOnTop(m.checked) },
     { label: '윈도우 시작할 때 실행', type: 'checkbox', checked: login, click: (m) => app.setLoginItemSettings({ openAtLogin: m.checked, args: ['--hidden'] }) },
     { label: '새로 고침', click: () => { showWin(); loadApp(); } },
     { label: '서버: ' + SERVER(), enabled: false },
@@ -159,13 +174,18 @@ function checkUpdate(manual) {
 function toast(body) { if (Notification.isSupported()) new Notification({ title: '업무 관리자', body: body, icon: ICON }).show(); }
 
 /* ─── 웹 화면 ↔ 앱 ─── */
+const NOTES = new Map();   // v13.382 tag → 알림 (📞 통화가 끝나면 닫기)
 ipcMain.on('wm:notify', (_e, o) => {
   if (!Notification.isSupported()) return;
-  const n = new Notification({ title: String(o.title || '업무 관리자').slice(0, 120), body: String(o.body || '').slice(0, 300), icon: ICON });
+  const urgent = !!o.urgent, tag = String(o.tag || '').slice(0, 80);
+  // 📞 통화는 사라지지 않고 남음(받거나 끊길 때까지) · 소리
+  const n = new Notification({ title: String(o.title || '업무 관리자').slice(0, 120), body: String(o.body || '').slice(0, 300), icon: ICON, urgency: urgent ? 'critical' : 'normal', timeoutType: urgent ? 'never' : 'default', silent: false });
   n.on('click', () => showWin(o.go || ''));
+  if (tag) { const old = NOTES.get(tag); if (old) try { old.close(); } catch (_) {} NOTES.set(tag, n); n.on('close', () => { if (NOTES.get(tag) === n) NOTES.delete(tag); }); }
   n.show();
   if (win && !win.isFocused()) win.flashFrame(true);
 });
+ipcMain.on('wm:notify-close', (_e, tag) => { const n = NOTES.get(String(tag || '')); if (n) { NOTES.delete(String(tag)); try { n.close(); } catch (_) {} } });
 ipcMain.on('wm:badge', (_e, o) => {
   const n = Math.max(0, o.n | 0), before = unread;
   unread = n;
@@ -280,6 +300,9 @@ app.whenReady().then(() => {
   tray.on('click', () => (win.isVisible() && win.isFocused() ? win.hide() : showWin()));
   refreshTray();
 
+  // v13.382 잠자기에서 깨면 실시간 연결을 바로 다시 (죽은 연결로 통화 · 메시지를 놓치지 않게)
+  const wake = () => { if (win) win.webContents.executeJavaScript("typeof _cxsRevive === 'function' && _cxsRevive(true)").catch(() => {}); };
+  powerMonitor.on('resume', wake); powerMonitor.on('unlock-screen', wake);
   globalShortcut.register('CommandOrControl+Shift+M', () => (win.isVisible() && win.isFocused() ? win.hide() : showWin()));
 
   if (app.isPackaged) {

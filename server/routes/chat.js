@@ -177,9 +177,10 @@ function linkLater(room, id, body) {
   }).catch(function (e) { console.warn('[chat] link', e.message); });
 }
 /* 🙂 상태 (v13.378) — 내가 정한 것(기한 안) 이 먼저, 없으면 오늘 달력 */
-async function statusOf(tenantId, ids) {
+async function statusOf(tenantId, ids, rows0) {
   if (!ids || !ids.length) return {};
-  var r = await db.query('SELECT u.id, u.name, u.display_name, s.status_emoji, s.status_text, s.status_until FROM users u LEFT JOIN chat_user_state s ON s.user_id = u.id ' +
+  cxx.calRows(tenantId);   // v13.382 달력은 사용자와 동시에
+  var r = rows0 ? { rows: rows0 } : await db.query('SELECT u.id, u.name, u.display_name, s.status_emoji, s.status_text, s.status_until FROM users u LEFT JOIN chat_user_state s ON s.user_id = u.id ' +
     'WHERE u.id = ANY($1) AND u.tenant_id = $2', [ids, tenantId]);
   var out = {}, cal = await cxx.calStatus(tenantId, r.rows.map(function (u) { return { id: u.id, names: [u.name, u.display_name] }; }));
   r.rows.forEach(function (u) {
@@ -378,6 +379,7 @@ router.get('/users', async function (req, res) {
 /* ─── 방 목록 ─── */
 router.get('/rooms', async function (req, res) {
   try {
+    cxx.calRows(req.tenant.id);   // v13.382 상태용 달력은 목록과 동시에
     var r = await db.query(
       'SELECT r.id, r.kind, r.name, r.project_id, r.last_msg_at, r.dm_key, m.last_read_id, m.muted, m.pinned, p.name AS project_name, ' +
       '(SELECT COUNT(*)::int FROM chat_messages x WHERE x.room_id = r.id AND x.id > m.last_read_id AND x.deleted_at IS NULL AND (x.user_id IS NULL OR x.user_id <> $1) AND x.reply_to IS NULL AND x.kind <> \'system\') AS unread, ' +
@@ -388,9 +390,8 @@ router.get('/rooms', async function (req, res) {
       'WHERE m.user_id = $1 AND m.tenant_id = $2 AND m.left_at IS NULL AND r.archived_at IS NULL ORDER BY m.pinned DESC, r.last_msg_at DESC LIMIT 300', [me(req), req.tenant.id]);
     var all = [];
     r.rows.forEach(function (x) { (x.others || []).forEach(function (o) { all.push(o.id); }); });
-    var on = hub.onlineSet(all), fo = await focusOf(all);
     var dmPeers = r.rows.filter(function (x) { return x.kind === 'dm' && x.others && x.others[0]; }).map(function (x) { return x.others[0].id; });
-    var pst = await statusOf(req.tenant.id, dmPeers);
+    var on = hub.onlineSet(all), fp = await Promise.all([focusOf(all), statusOf(req.tenant.id, dmPeers)]), fo = fp[0], pst = fp[1];   // v13.382 동시에
     res.json({ data: r.rows.map(function (x) {
       var others = x.others || [];
       var name = x.kind === 'dm' ? (others[0] ? others[0].name : '(나간 사람)') : x.kind === 'project' ? (x.name || x.project_name || '프로젝트') : (x.name || others.map(function (o) { return o.name; }).slice(0, 4).join(', '));
@@ -476,16 +477,17 @@ router.get('/rooms/:id', async function (req, res) {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
     // v13.372 한꺼번에 — 멤버(집중 상태 같이) · 공지 · 방장 여부를 차례로 묻던 것(DB 왕복 3~5번)을 동시에
     var all = await Promise.all([
-      db.query('SELECT m.user_id, m.role, m.last_read_id, COALESCE(u.display_name, u.name) AS name, d.name AS dept, CASE WHEN s.focus_until > now() THEN s.focus_until END AS focus_until FROM chat_members m JOIN users u ON u.id = m.user_id LEFT JOIN departments d ON d.id = u.department_id LEFT JOIN chat_user_state s ON s.user_id = m.user_id WHERE m.room_id = $1 AND m.left_at IS NULL ORDER BY 4', [room.id]),
+      db.query('SELECT m.user_id, m.role, m.last_read_id, COALESCE(u.display_name, u.name) AS name, u.name AS uname, u.display_name, s.status_emoji, s.status_text, s.status_until, d.name AS dept, CASE WHEN s.focus_until > now() THEN s.focus_until END AS focus_until FROM chat_members m JOIN users u ON u.id = m.user_id LEFT JOIN departments d ON d.id = u.department_id LEFT JOIN chat_user_state s ON s.user_id = m.user_id WHERE m.room_id = $1 AND m.left_at IS NULL ORDER BY 4', [room.id]),
       room.notice_id ? loadMsg(room.notice_id) : null,
       room.kind !== 'dm' ? canManage(req, room) : false,
       // v13.375 들어오기 전 대화 — 최근 30일 안에 들어왔으면 그 앞 대화 수 (👋 요약 · 처음부터 읽기 띠)
       room.kind !== 'dm' && room.joined_at && Date.now() - new Date(room.joined_at) < 30 * 864e5 ?
-        db.query("SELECT COUNT(*)::int AS n, MAX(id) AS up FROM chat_messages WHERE room_id = $1 AND created_at < $2 AND kind <> 'system' AND reply_to IS NULL AND deleted_at IS NULL", [room.id, room.joined_at]) : null
+        db.query("SELECT COUNT(*)::int AS n, MAX(id) AS up FROM chat_messages WHERE room_id = $1 AND created_at < $2 AND kind <> 'system' AND reply_to IS NULL AND deleted_at IS NULL", [room.id, room.joined_at]) : null,
+      cxx.calRows(req.tenant.id)   // v13.382 상태용 달력도 같이 (예전엔 멤버 다음에 상태 · 달력을 차례로 — DB 왕복 2번 더)
     ]);
     var m = all[0], notice = all[1], pr = all[3] && all[3].rows[0];
     var on = hub.onlineSet(m.rows.map(function (x) { return x.user_id; }));
-    var st = await statusOf(req.tenant.id, m.rows.map(function (x) { return x.user_id; }));
+    var st = await statusOf(req.tenant.id, m.rows.map(function (x) { return x.user_id; }), m.rows.map(function (x) { return { id: x.user_id, name: x.uname, display_name: x.display_name, status_emoji: x.status_emoji, status_text: x.status_text, status_until: x.status_until }; }));
     res.json({ data: { id: room.id, kind: room.kind, name: room.name, self: !!(room.dm_key && room.dm_key.indexOf('self:') === 0), projectId: room.project_id, muted: room.muted, pinned: room.pinned, lastReadId: +room.last_read_id, notice: notice && !notice.deleted && !(room.hist_from && notice.id <= +room.hist_from) ? notice : null,
       myRole: room.role || 'member', equipKey: room.equip_key || null, canManage: !!all[2], histFrom: room.hist_from ? +room.hist_from : null, prior: pr && pr.n ? { n: pr.n, upTo: +pr.up, joinedAt: room.joined_at } : null,
       members: m.rows.map(function (x) { return { id: x.user_id, name: x.name, dept: x.dept || '', role: x.role, online: !!on[x.user_id], focusUntil: x.focus_until || null, status: st[x.user_id] || null, readId: +x.last_read_id, me: x.user_id === me(req) }; }) } });

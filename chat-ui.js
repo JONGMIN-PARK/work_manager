@@ -56,11 +56,12 @@ function chatStreamStart() {
     .then(function (res) {
       if (res.status === 401) { CXS.on = false; return apiFetch('/api/chat/unread-count').then(function () { CXS.timer = setTimeout(chatStreamStart, 500); }); }   // 토큰 새로 받고 다시
       if (!res.ok || !res.body) throw new Error('stream ' + res.status);
-      CXS.backoff = 1000;
+      CXS.backoff = 1000; CXS.seen = Date.now();
       var reader = res.body.getReader(), dec = new TextDecoder(), buf = '';
       function pump() {
         return reader.read().then(function (r) {
           if (r.done) throw new Error('closed');
+          CXS.seen = Date.now();
           buf += dec.decode(r.value, { stream: true });
           var i;
           while ((i = buf.indexOf('\n\n')) >= 0) {
@@ -84,6 +85,16 @@ function chatStreamStart() {
     });
 }
 function chatStreamStop() { CXS.on = false; clearTimeout(CXS.timer); if (CXS.ctrl) CXS.ctrl.abort(); }
+/* v13.382 조용히 끊긴 연결 살리기 — 서버는 25초마다 신호를 보냄. 70초 넘게 아무것도 안 오면(잠자기 · 망 바뀜 · 중간 장비가 끊음)
+ *   새로 붙음. 예전엔 죽은 연결을 붙든 채 기다려 📞 통화 · 메시지를 못 받았음(창을 숨겨 둔 PC 앱에서 특히) */
+function _cxsRevive(force) {
+  if (!CXS.on || !CXS.ctrl || CXS.ctrl.signal.aborted) { if (force && !CXS.on && _cxMe()) { clearTimeout(CXS.timer); CXS.backoff = 1000; chatStreamStart(); } return; }
+  if (!force && !(CXS.seen && Date.now() - CXS.seen > 70000)) return;
+  var c = CXS.ctrl; CXS.ctrl = null; CXS.on = false; c.abort(); clearTimeout(CXS.timer); CXS.backoff = 1000; chatStreamStart();
+}
+setInterval(function () { _cxsRevive(false); }, 20000);
+window.addEventListener('online', function () { _cxsRevive(true); });   // 망이 돌아오면 바로
+document.addEventListener('visibilitychange', function () { if (!document.hidden) _cxsRevive(false); });
 /* 로그인되면 붙고, 나가면 끊고 */
 setInterval(function () { if (_cxMe()) { if (!CXS.on) chatStreamStart(); } else if (CXS.on) chatStreamStop(); }, 2000);
 
@@ -288,7 +299,14 @@ function renderMessages() {
   }
   var want = CX.pending || CX.room, wantMid = CX.pendingMid; CX.pending = null; CX.pendingMid = null;
   // v13.372 목록을 받는 사이 다른 곳에서 방을 열었으면(알림 · 검색 · 바로 가기) 그대로 둠 — 예전엔 다시 열거나 빈 화면으로 덮어 "불러오는 중" 에 멈춤
-  _cxLoadRooms().then(function () { if (want) chatOpenRoom(want, false, wantMid); else if (CX.room) return; else if (window.innerWidth > 760 && CX.rooms[0]) chatOpenRoom(CX.rooms[0].id); else _cxDrawMain(); });
+  // v13.382 열 방(부른 방 · PC 는 마지막에 보던 방)은 목록을 기다리지 않고 같이 받기 — 예전: 목록 → 방 내용 차례로(왕복 2번)
+  var wide = window.innerWidth > 760, last = wide ? _cxLsGet('wm-cx-last') : null, guess = want && !wantMid ? want : !want && !CX.room ? last : null;
+  if (guess && !CX.cache[guess] && !(CX.pf[guess] && Date.now() - CX.pf[guess].t < 15000)) { var gp = _cxFetchRoomNow(guess); CX.pf[guess] = { t: Date.now(), p: gp }; gp.catch(function () { if (CX.pf[guess] && CX.pf[guess].p === gp) delete CX.pf[guess]; }); }
+  _cxLoadRooms().then(function () {
+    if (want) chatOpenRoom(want, false, wantMid); else if (CX.room) return;
+    else if (wide && CX.rooms[0]) chatOpenRoom(last && CX.rooms.some(function (r) { return r.id === last; }) ? last : CX.rooms[0].id);
+    else _cxDrawMain();
+  });
 }
 /* v13.371 휴대폰 — 메신저를 보이는 화면 높이에 딱 맞춤(주소창 · 키보드가 올라와도 입력칸이 가려지지 않게) */
 function _cxFit() {
@@ -408,7 +426,7 @@ function chatOpenRoom(id, keep, focusMid) {
   if (typeof setPage === 'function' && document.getElementById('mMessages') && document.getElementById('mMessages').classList.contains('hidden')) { CX.pending = id; CX.pendingMid = focusMid || null; setPage('messages'); return; }
   var changed = CX.room !== id;
   if (changed && CX.room) { _cxDraftSave(); _cxCacheTouch(); }
-  CX.room = id;
+  CX.room = id; if (changed) _cxLsSet('wm-cx-last', id);   // v13.382 다음에 열 때 이 방부터
   // 방이 바뀌면 그 방 것만 — 예전 방의 답글 줄기 · 고른 카드 · 수정 중 · 옆 탭은 비움
   CX.fwd = false;
   if (changed) { CX.quote = null; }
@@ -470,7 +488,7 @@ function _cxPfDrop(id) { delete CX.pf[id]; }
 /** 한가할 때 안 읽은 방 3곳까지 미리 */
 function _cxPrefetchIdle() {
   var run = function () { CX.rooms.filter(function (r) { return r.unread && r.id !== CX.room && !CX.cache[r.id]; }).slice(0, 3).forEach(function (r, i) { setTimeout(function () { _cxPrefetch(r.id); }, i * 300); }); };
-  if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 3000 }); else setTimeout(run, 1500);
+  setTimeout(function () { if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 3000 }); else run(); }, 1500);   // v13.382 지금 여는 방이 먼저 (예전엔 같이 나가 DB 를 나눠 씀)
 }
 /** 열자마자 읽음 — 목록이 아는 마지막 번호로 (서버가 실제 마지막을 넘지 않게 자름) */
 function _cxReadEarly(id) {

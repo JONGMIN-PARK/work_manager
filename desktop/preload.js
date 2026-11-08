@@ -19,7 +19,11 @@ function badgePng(n) {
 contextBridge.exposeInMainWorld('wmDesktop', {
   isDesktop: true,
   platform: process.platform,
-  notify: (o) => ipcRenderer.send('wm:notify', { title: o && o.title, body: o && o.body, go: o && o.go }),
+  notify: (o) => ipcRenderer.send('wm:notify', { title: o && o.title, body: o && o.body, go: o && o.go, urgent: !!(o && o.urgent), tag: o && o.tag ? String(o.tag) : '' }),
+  notifyClose: (tag) => ipcRenderer.send('wm:notify-close', String(tag || '')),
+  setOnTop: (on) => ipcRenderer.send('wm:ontop-set', !!on),
+  getOnTop: () => ipcRenderer.invoke('wm:ontop-get'),
+  onOnTop: (cb) => { ipcRenderer.on('wm:ontop', (_e, on) => { try { cb(!!on); } catch (_) {} }); },
   setBadge: (n) => { n = Math.max(0, n | 0); ipcRenderer.send('wm:badge', { n: n, png: n > 0 ? badgePng(n) : '' }); },
   onGo: (cb) => { ipcRenderer.on('wm:go', (_e, go) => { try { cb(go); } catch (_) {} }); },
   retry: () => ipcRenderer.send('wm:retry'),
