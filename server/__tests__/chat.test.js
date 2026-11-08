@@ -857,3 +857,42 @@ test('🗳 투표 · 📅 약속 잡기 · ✔ 확인 요청 · 📤 내보내�
   expect(ex.text).toMatch(/내일 정전/); expect(ex.text).toMatch(/한식 0표 · 중식 2표/);
   expect((await h.request(h.app).get('/api/chat/rooms/' + g + '/export').set('Authorization', 'Bearer ' + x.token)).status).toBe(403);
 });
+
+test('📦 큰 파일 직접 올리기 (v13.386) — 허가 · 나눠 올리기 · 받은 양 묻기 · 마무리 · 막기', async function () {
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '큰 파일', userIds: [b.user.id] })).body.data.id;
+  var SIZE = 600 * 1024, buf = Buffer.alloc(SIZE, 7); buf[0] = 1; buf[SIZE - 1] = 9;
+  // 막기 — 실행 파일 · 빈 파일 · 한도 넘음 · 방 밖 사람
+  expect((await api('post', '/api/chat/rooms/' + g + '/files/init', a).send({ name: 'x.exe', mime: 'application/octet-stream', size: 10 })).status).toBe(400);
+  expect((await api('post', '/api/chat/rooms/' + g + '/files/init', a).send({ name: 'a.zip', size: 0 })).status).toBe(400);
+  expect((await api('post', '/api/chat/rooms/' + g + '/files/init', a).send({ name: 'a.zip', size: 3 * 1024 * 1024 * 1024 })).status).toBe(413);
+  expect((await api('post', '/api/chat/rooms/' + g + '/files/init', x).send({ name: 'a.zip', size: 10 })).status).toBe(403);
+  // 허가 (시험에선 가짜 GCS 세션)
+  var ini = await api('post', '/api/chat/rooms/' + g + '/files/init', a).send({ name: '도면 묶음.zip', mime: 'application/zip', size: SIZE });
+  expect(ini.status).toBe(201); expect(ini.body.data).toMatchObject({ direct: true });
+  var path = ini.body.data.url.replace(/^https?:\/\/[^/]+/, ''), fid = ini.body.data.fid;
+  // 다 안 올렸는데 마무리 → 거절
+  var early = await api('post', '/api/chat/rooms/' + g + '/files/' + fid + '/done', a).send({});
+  expect(early.status).toBe(400); expect(early.body.message).toMatch(/다 올라가지/);
+  // 첫 조각(256KB) → 308 + Range
+  var p1 = await h.request(h.app).put(path).set('Content-Range', 'bytes 0-262143/' + SIZE).set('Content-Type', 'application/octet-stream').send(buf.subarray(0, 262144));
+  expect(p1.status).toBe(308); expect(p1.headers.range).toBe('bytes=0-262143');
+  // 받은 양 묻기
+  var q = await h.request(h.app).put(path).set('Content-Range', 'bytes */' + SIZE);
+  expect(q.status).toBe(308); expect(q.headers.range).toBe('bytes=0-262143');
+  // 어긋난 자리 → 거절, 나머지 → 200
+  expect((await h.request(h.app).put(path).set('Content-Range', 'bytes 0-9/' + SIZE).set('Content-Type', 'application/octet-stream').send(buf.subarray(0, 10))).status).toBe(400);
+  var p2 = await h.request(h.app).put(path).set('Content-Range', 'bytes 262144-' + (SIZE - 1) + '/' + SIZE).set('Content-Type', 'application/octet-stream').send(buf.subarray(262144));
+  expect(p2.status).toBe(200);
+  // 남의 마무리 → 없음, 내 마무리 → 방에 메시지
+  expect((await api('post', '/api/chat/rooms/' + g + '/files/' + fid + '/done', b).send({})).status).toBe(404);
+  var done = await api('post', '/api/chat/rooms/' + g + '/files/' + fid + '/done', a).send({ caption: '설비 도면입니다' });
+  expect(done.status).toBe(201);
+  expect(done.body.data).toMatchObject({ kind: 'file', body: '설비 도면입니다' });
+  expect(done.body.data.file).toMatchObject({ name: '도면 묶음.zip', size: SIZE });
+  // 받는 사람이 그대로 받음
+  var dl = await h.request(h.app).get('/api/chat/files/' + fid).set('Authorization', 'Bearer ' + b.token).buffer(true).parse(function (res, cb) { var d = []; res.on('data', function (c) { d.push(c); }); res.on('end', function () { cb(null, Buffer.concat(d)); }); });
+  expect(dl.status).toBe(200); expect(dl.body.length).toBe(SIZE); expect(dl.body[0]).toBe(1); expect(dl.body[SIZE - 1]).toBe(9);
+  // 한 번 마무리한 건 다시 못 씀 · 세션 주소도 끝남
+  expect((await api('post', '/api/chat/rooms/' + g + '/files/' + fid + '/done', a).send({})).status).toBe(404);
+  expect((await h.request(h.app).put(path).set('Content-Range', 'bytes */' + SIZE)).status).toBe(404);
+});

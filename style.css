@@ -6090,3 +6090,11 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
   .cx.cx-kb .cx-comp{padding-bottom:6px!important}
 }
 .cx-unup[hidden]{display:none!important}
+/* v13.386 📦 큰 파일 올리는 중 — 크기 · 취소 */
+.cx-upl{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;column-gap:8px}
+.cx-upl>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cx-upl>i{grid-column:1/-1;grid-row:2}
+.cx-upl>em{font-style:normal;font-size:11px;color:var(--t5);font-variant-numeric:tabular-nums}
+.cx-upl>em:empty{display:none}
+.cx-upl-x{border:0;background:none;color:var(--t4);cursor:pointer;font-size:12px;padding:0 2px;border-radius:4px}
+.cx-upl-x:hover{color:var(--danger,#EF4444);background:var(--bg-hv)}

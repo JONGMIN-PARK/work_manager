@@ -1417,25 +1417,45 @@ function _cxUpload(files, replyTo) {
 function _cxUploadOne(f0, room, replyTo, qid, grp) {
   return _cxPrepPhoto(f0).then(function (prep) { return new Promise(function (done) {
     var f = prep.file;
-    if (f.size > 25 * 1024 * 1024) { _cxToast(f.name + ' — 25MB 까지 올릴 수 있습니다', 'warn'); done(); return; }
-    var tip = document.createElement('div'); tip.className = 'cx-upl'; tip.innerHTML = '<span></span><i><b style="width:0%"></b></i>';
+    var tip = document.createElement('div'); tip.className = 'cx-upl'; tip.innerHTML = '<span></span><i><b style="width:0%"></b></i><em></em>';
     tip.querySelector('span').textContent = '📎 ' + f.name;
     var host = document.getElementById('cxTyping'); if (host) host.parentNode.insertBefore(tip, host);
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/rooms/' + encodeURIComponent(room) + '/files?name=' + encodeURIComponent(f.name) + (replyTo ? '&replyTo=' + replyTo : '') + (!replyTo && qid ? '&quoteId=' + qid : '') + (grp ? '&grp=' + grp : '') + (f0._dur ? '&dur=' + f0._dur : ''));
-    xhr.setRequestHeader('Authorization', 'Bearer ' + _accessToken);
-    xhr.setRequestHeader('Content-Type', f.type || 'application/octet-stream');
-    xhr.upload.onprogress = function (e) { if (e.lengthComputable) tip.querySelector('b').style.width = Math.round(e.loaded / e.total * 100) + '%'; };
-    xhr.onload = function () {
+    function prog(p) { tip.querySelector('b').style.width = Math.round(p * 100) + '%'; tip.querySelector('em').textContent = f.size > 5 * 1048576 ? _cxSize(f.size * p) + ' / ' + _cxSize(f.size) : ''; }
+    function ok(d) {
       tip.remove();
-      if (xhr.status >= 300) { var m = '올리지 못했습니다'; try { m = JSON.parse(xhr.responseText).message || m; } catch (e) {} _cxToast(f.name + ' — ' + m, 'error'); done(); return; }
-      var d = null; try { d = JSON.parse(xhr.responseText).data; } catch (e) {}
       if (d && prep.thumb && d.file) { CX.blobs[d.file.id + ':t'] = Promise.resolve(URL.createObjectURL(prep.thumb)); _cxPutThumb(d.file.id, prep.thumb); }   // 내 화면은 바로 미리보기
       if (d && CX.room === room && !d.replyTo && _cxAddIfNew(d)) _cxDrawMsgs(true);
       done();
-    };
-    xhr.onerror = function () { tip.remove(); _cxToast(f.name + ' — 올리지 못했습니다', 'error'); done(); };
-    xhr.send(f);
+    }
+    function fail(m) { tip.remove(); _cxToast(f.name + ' — ' + (m || '올리지 못했습니다'), 'error'); done(); }
+    // v13.386 📦 8MB 넘는 파일 — GCS 로 바로 · 나눠서 · 끊기면 이어서 (chat-upload.js). 못 쓰면 예전 길(25MB 까지)
+    if (typeof chatUploadWantsDirect === 'function' && chatUploadWantsDirect(f)) {
+      var sig = {}, x = document.createElement('button'); x.type = 'button'; x.className = 'cx-upl-x'; x.title = '올리기 취소'; x.textContent = '✕';
+      x.addEventListener('click', function () { if (sig.cancel) sig.cancel(); });
+      tip.appendChild(x);
+      chatUploadDirect(f, room, { replyTo: replyTo || null, quoteId: !replyTo && qid ? qid : null, grp: grp, onProgress: prog, signal: sig }).then(ok, function (e) {
+        if (e && e.cancel) { tip.remove(); _cxToast(f.name + ' — 올리기를 취소했습니다', 'info'); done(); return; }
+        if (e && e.fallback && f.size <= 25 * 1024 * 1024) { x.remove(); legacy(); return; }
+        fail(e && e.fallback ? '큰 파일 바로 올리기를 쓸 수 없어 25MB 까지만 올릴 수 있습니다' : (e && e.message) || (e && e.net ? '연결이 끊겨 올리지 못했습니다 — 다시 보내 주세요' : ''));
+      });
+      return;
+    }
+    legacy();
+    function legacy() {
+      if (f.size > 25 * 1024 * 1024) { fail('25MB 까지 올릴 수 있습니다'); return; }
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/rooms/' + encodeURIComponent(room) + '/files?name=' + encodeURIComponent(f.name) + (replyTo ? '&replyTo=' + replyTo : '') + (!replyTo && qid ? '&quoteId=' + qid : '') + (grp ? '&grp=' + grp : '') + (f0._dur ? '&dur=' + f0._dur : ''));
+      xhr.setRequestHeader('Authorization', 'Bearer ' + _accessToken);
+      xhr.setRequestHeader('Content-Type', f.type || 'application/octet-stream');
+      xhr.upload.onprogress = function (e) { if (e.lengthComputable) prog(e.loaded / e.total); };
+      xhr.onload = function () {
+        if (xhr.status >= 300) { var m = '올리지 못했습니다'; try { m = JSON.parse(xhr.responseText).message || m; } catch (e) {} fail(m); return; }
+        var d = null; try { d = JSON.parse(xhr.responseText).data; } catch (e) {}
+        ok(d);
+      };
+      xhr.onerror = function () { fail(); };
+      xhr.send(f);
+    }
   }); });
 }
 

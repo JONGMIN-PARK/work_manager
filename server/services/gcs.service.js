@@ -88,7 +88,40 @@ async function deleteObject(key) {
   await _bucket.file(key).delete({ ignoreNotFound: true });
 }
 
+/* v13.386 💬 큰 파일 — 브라우저가 GCS 로 바로 · 나눠서 · 끊기면 이어서 올림(서버는 허가만). 이어 올리기 세션 주소를 돌려줌
+ *   origin 을 주면 GCS 가 그 출처에 CORS 헤더를 붙여 줌 */
+async function createResumable(key, mimeType, origin) {
+  _init();
+  if (!_bucket) throw _initErr || new Error('GCS not enabled');
+  var r = await _bucket.file(key).createResumableUpload({ origin: origin || undefined, metadata: { contentType: mimeType || 'application/octet-stream' } });
+  return r[0];
+}
+async function objectSize(key) {
+  _init();
+  if (!_bucket) throw _initErr || new Error('GCS not enabled');
+  var m = await _bucket.file(key).getMetadata();
+  return +((m && m[0] && m[0].size) || 0);
+}
+/** 버킷 CORS 에 우리 출처 PUT 이 없으면 덧붙임(있던 설정은 그대로). 권한이 없으면 기록만 — 한 출처당 한 번 */
+var _corsDone = {};
+async function ensureCors(origin) {
+  _init();
+  if (!_bucket || !origin || _corsDone[origin]) return;
+  _corsDone[origin] = true;
+  try {
+    var md = (await _bucket.getMetadata())[0] || {}, cors = Array.isArray(md.cors) ? md.cors.slice() : [];
+    var ok = cors.some(function (c) { return (c.origin || []).some(function (o) { return o === '*' || o === origin; }) && (c.method || []).indexOf('PUT') >= 0; });
+    if (ok) return;
+    cors.push({ origin: [origin], method: ['GET', 'HEAD', 'PUT', 'POST', 'OPTIONS'], responseHeader: ['Content-Type', 'Content-Range', 'Range', 'x-goog-resumable', 'Location'], maxAgeSeconds: 3600 });
+    await _bucket.setCorsConfiguration(cors);
+    console.log('[GCS] CORS 에 출처 추가: ' + origin);
+  } catch (e) { console.warn('[GCS] CORS 확인 실패(직접 올리기가 막히면 버킷 CORS 에 ' + origin + ' PUT 허용 필요):', e.message); }
+}
+
 module.exports = {
+  createResumable: createResumable,
+  objectSize: objectSize,
+  ensureCors: ensureCors,
   isEnabled: isEnabled,
   signUploadUrl: signUploadUrl,
   signDownloadUrl: signDownloadUrl,

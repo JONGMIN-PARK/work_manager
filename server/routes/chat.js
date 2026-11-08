@@ -10,6 +10,7 @@ var express = require('express');
 var router = express.Router();
 var crypto = require('crypto');
 var db = require('../config/db');
+var config = require('../config');
 var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var httpErr = require('../lib/http-errors');
@@ -277,6 +278,25 @@ async function presence(tenantId, uid, on) {
     hub.publish(r.rows.map(function (x) { return x.user_id; }).filter(function (x) { return x !== uid; }), 'presence', { userId: uid, online: on });
   } catch (e) {}
 }
+
+/* v13.386 시험용 가짜 GCS 이어 올리기 — NODE_ENV=test 이고 GCS 가 꺼져 있을 때만. GCS 세션 주소처럼 토큰만으로 받음
+ *   PUT Content-Range: bytes a-b/total → 끝이면 200, 아니면 308 + Range · bytes * /total 은 지금까지 받은 양 묻기 */
+var FAKEUP = new Map();
+function fakeGcsOn() { return process.env.NODE_ENV === 'test' && !require('../services/gcs.service').isEnabled(); }
+router.put('/_fakeup/:tok', express.raw({ type: function () { return true; }, limit: 64 * 1024 * 1024 }), function (req, res) {
+  var u = fakeGcsOn() && FAKEUP.get(req.params.tok); if (!u) return res.status(404).end();
+  if (process.env.CHAT_FAKEUP_FAIL_ONCE && !u.failed && u.got > 0) { u.failed = true; return res.status(503).end(); }   // 잠깐 오류 흉내 (이어 올리기 시험)
+  var cr = /^bytes (\*|(\d+)-(\d+))\/(\d+)$/.exec(String(req.headers['content-range'] || ''));
+  if (!cr) return res.status(400).end();
+  if (cr[1] !== '*') {
+    var a = +cr[2], b = +cr[3], buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (a !== u.got || b - a + 1 !== buf.length) return res.status(400).end();
+    u.parts.push(buf); u.got += buf.length;
+  }
+  if (u.got >= +cr[4]) return res.status(200).json({ size: u.got });
+  if (u.got) res.setHeader('Range', 'bytes=0-' + (u.got - 1));
+  res.status(308).end();
+});
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -753,26 +773,83 @@ router.post('/rooms/:id/files', express.raw({ type: function () { return true; }
     if (readOnly(res, room)) return;
     var buf = req.body;
     if (!Buffer.isBuffer(buf) || !buf.length) return bad(res, '파일이 비었습니다.');
-    var name = String(req.query.name || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 200) || 'file';
+    var name = safeName(req.query.name);
     var mime = String(req.headers['content-type'] || 'application/octet-stream').slice(0, 120);
-    if (/^(text\/html|application\/x-msdownload)/i.test(mime) || /\.(exe|bat|cmd|com|scr|js|vbs|ps1|msi)$/i.test(name)) return bad(res, '실행 파일 · 스크립트는 올릴 수 없습니다.');
+    if (blockedFile(name, mime)) return bad(res, '실행 파일 · 스크립트는 올릴 수 없습니다.');
     var fid = rid('cf'), key = null, gcs = require('../services/gcs.service');
     if (gcs.isEnabled() && gcs.uploadBuffer) {
       key = 'tenants/' + req.tenant.id + '/chat/' + room.id + '/' + fid + (/\.[A-Za-z0-9]{1,8}$/.exec(name) || [''])[0].toLowerCase();
       await gcs.uploadBuffer(key, buf, mime);
     }
-    var audio = /^audio\//i.test(mime), dur = audio ? Math.max(0, Math.min(900, +req.query.dur || 0)) || null : null;   // v13.379 🎤 음성 메시지 길이
-    await db.query('INSERT INTO chat_files (id, tenant_id, room_id, user_id, name, mime, size, storage_key, data, dur) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-      [fid, req.tenant.id, room.id, me(req), name, mime, buf.length, key, key ? null : buf, dur]);
-    var caption = String(req.query.caption || '').slice(0, 2000);
-    var msg = await postMessage({ tenantId: req.tenant.id }, room, { userId: me(req), kind: 'file', body: caption, fileId: fid, grp: /^[A-Za-z0-9_-]{4,40}$/.test(req.query.grp || '') ? req.query.grp : null, replyTo: req.query.replyTo ? +req.query.replyTo : null, quoteId: req.query.replyTo ? null : await quoteOk(room, req.query.quoteId) });
+    var msg = await fileSaved(req, room, { fid: fid, name: name, mime: mime, size: buf.length, key: key, buf: key ? null : buf, q: req.query });
     res.status(201).json({ data: msg });
-    if (audio && buf.length < 8 * 1024 * 1024) transcribeLater(req.tenant.id, room, msg.id, fid, buf, mime);   // 받아쓰기는 뒤에서
+    if (/^audio\//i.test(mime) && buf.length < 8 * 1024 * 1024) transcribeLater(req.tenant.id, room, msg.id, fid, buf, mime);   // 받아쓰기는 뒤에서
   } catch (e) {
     if (e && e.type === 'entity.too.large') return bad(res, '25MB 까지 올릴 수 있습니다.', 413);
     httpErr.serverError(res, '[chat/file]', e);
   }
 });
+/** 올린 파일 저장 + 방에 메시지 (예전 경로 · 직접 올리기 같이 씀). q: caption · grp · replyTo · quoteId · dur */
+async function fileSaved(req, room, o) {
+  var q = o.q || {}, audio = /^audio\//i.test(o.mime), dur = audio ? Math.max(0, Math.min(900, +q.dur || 0)) || null : null;   // v13.379 🎤 음성 메시지 길이
+  await db.query('INSERT INTO chat_files (id, tenant_id, room_id, user_id, name, mime, size, storage_key, data, dur) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+    [o.fid, req.tenant.id, room.id, me(req), o.name, o.mime, o.size, o.key, o.buf || null, dur]);
+  return postMessage({ tenantId: req.tenant.id }, room, { userId: me(req), kind: 'file', body: String(q.caption || '').slice(0, 2000), fileId: o.fid, grp: /^[A-Za-z0-9_-]{4,40}$/.test(q.grp || '') ? q.grp : null, replyTo: q.replyTo ? +q.replyTo : null, quoteId: q.replyTo ? null : await quoteOk(room, q.quoteId) });
+}
+function safeName(n) { return String(n || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 200) || 'file'; }
+function blockedFile(name, mime) { return /^(text\/html|application\/x-msdownload)/i.test(mime) || /\.(exe|bat|cmd|com|scr|js|vbs|ps1|msi)$/i.test(name); }
+
+/* v13.386 📦 큰 파일 — 브라우저가 GCS 에 바로(서버를 안 거침) · 8MB 씩 나눠 · 끊기면 이어서. 서버는 허가(이어 올리기 세션)와 마무리만
+ *   1) POST /rooms/:id/files/init { name, mime, size } → { fid, url, chunk }   (GCS 가 꺼져 있으면 { direct: false } — 예전 25MB 경로로)
+ *   2) 브라우저가 url 에 PUT (Content-Range) — 308 이면 다음 조각, 끊기면 bytes * /size 로 받은 양 묻고 이어서
+ *   3) POST /rooms/:id/files/:fid/done { caption, grp, replyTo, quoteId } → 크기 확인 후 방에 메시지
+ *   한도: CHAT_MAX_FILE_MB (기본 2048MB) */
+var MAX_DIRECT = (+process.env.CHAT_MAX_FILE_MB || 2048) * 1024 * 1024, UPS = new Map();
+function upOrigin(req) {
+  var o = String(req.headers.origin || ''); if (!o) return null;
+  try { var u = new URL(o); if (u.host === req.get('host')) return o; } catch (e) { return null; }
+  return String(config.cors.origin || '').split(',').map(function (x) { return x.trim(); }).indexOf(o) >= 0 ? o : null;
+}
+router.post('/rooms/:id/files/init', async function (req, res) {
+  try {
+    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    if (readOnly(res, room)) return;
+    var b = req.body || {}, name = safeName(b.name), mime = String(b.mime || 'application/octet-stream').slice(0, 120), size = Math.floor(+b.size || 0);
+    if (!size) return bad(res, '파일이 비었습니다.');
+    if (blockedFile(name, mime)) return bad(res, '실행 파일 · 스크립트는 올릴 수 없습니다.');
+    if (size > MAX_DIRECT) return bad(res, Math.round(MAX_DIRECT / 1048576) + 'MB 까지 올릴 수 있습니다.', 413);
+    var gcs = require('../services/gcs.service'), fid = rid('cf'), url, key = null;
+    if (gcs.isEnabled() && gcs.createResumable) {
+      key = 'tenants/' + req.tenant.id + '/chat/' + room.id + '/' + fid + (/\.[A-Za-z0-9]{1,8}$/.exec(name) || [''])[0].toLowerCase();
+      var origin = upOrigin(req);
+      await gcs.ensureCors(origin);
+      url = await gcs.createResumable(key, mime, origin);
+    } else if (fakeGcsOn()) {
+      var tok = crypto.randomBytes(16).toString('hex');
+      FAKEUP.set(tok, { got: 0, parts: [] });
+      url = (req.protocol + '://' + req.get('host')) + '/api/chat/_fakeup/' + tok; key = 'fake:' + tok;
+    } else return res.json({ data: { direct: false } });
+    UPS.forEach(function (v, k) { if (Date.now() - v.at > 24 * 3600000) UPS.delete(k); });   // 하루 지난 것 정리
+    UPS.set(fid, { room: room.id, user: me(req), tenant: req.tenant.id, name: name, mime: mime, size: size, key: key, at: Date.now() });
+    res.status(201).json({ data: { direct: true, fid: fid, url: url, chunk: 8 * 1024 * 1024 } });
+  } catch (e) { httpErr.serverError(res, '[chat/file-init]', e); }
+});
+router.post('/rooms/:id/files/:fid/done', async function (req, res) {
+  try {
+    var u = UPS.get(req.params.fid);
+    if (!u || u.user !== me(req) || u.room !== req.params.id || u.tenant !== req.tenant.id) return bad(res, '올리던 파일을 찾지 못했습니다 — 다시 보내 주세요.', 404);
+    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    var buf = null, size;
+    if (/^fake:/.test(u.key)) {
+      var f = FAKEUP.get(u.key.slice(5)); size = f ? f.got : 0; buf = f ? Buffer.concat(f.parts) : null;
+    } else size = await require('../services/gcs.service').objectSize(u.key).catch(function () { return 0; });
+    if (size !== u.size) return bad(res, '파일이 다 올라가지 않았습니다 (' + size + ' / ' + u.size + ' 바이트) — 다시 보내 주세요.');
+    UPS.delete(req.params.fid); if (/^fake:/.test(u.key)) FAKEUP.delete(u.key.slice(5));
+    var msg = await fileSaved(req, room, { fid: req.params.fid, name: u.name, mime: u.mime, size: size, key: /^fake:/.test(u.key) ? null : u.key, buf: buf, q: req.body || {} });
+    res.status(201).json({ data: msg });
+  } catch (e) { httpErr.serverError(res, '[chat/file-done]', e); }
+});
+
 /* 파일 + 방 멤버 확인을 한 번에 (v13.373). cols 를 주면 그 칸만 — 사진 칠판은 파일 본문(data, 수 MB)을 안 읽음
  *   f._room = { id, role } (읽기만 확인용). 멤버가 아니면 원래 길(roomFor — 프로젝트 방 자동 가입 · 403) */
 var FILE_META = 'f.id, f.room_id, f.tenant_id, f.name, f.mime, f.size, f.storage_key, f.annot, f.annot_at, f.annot_by, COALESCE(ab.display_name, ab.name) AS annot_by_name';
