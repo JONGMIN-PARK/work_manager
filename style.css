@@ -6073,3 +6073,20 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
   #mMessages .cx{position:relative;width:100vw;left:50%;margin-left:-50vw;border-radius:0;border-width:1px 0 0;box-shadow:none;min-height:0}
 }
 @media (max-width:760px){#mMessages .cx-main,#mMessages .cx-side{border-radius:0}}
+/* v13.385 ↑ 안 읽은 메시지 N개부터 보기 — 방에 들어가면 늘 맨 아래(최근), 처음부터 읽고 싶을 때 */
+.cx-unup{position:absolute;left:50%;transform:translateX(-50%);z-index:6;display:inline-flex;align-items:center;gap:6px;border:1px solid color-mix(in srgb,var(--ac) 45%,var(--bd));background:color-mix(in srgb,var(--ac) 10%,var(--bg-p));color:var(--ac-t,var(--ac));border-radius:18px;padding:6px 14px;font:inherit;font-size:12.5px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.14);cursor:pointer;animation:cxNewIn .18s ease-out;white-space:nowrap}
+.cx-unup:hover{background:color-mix(in srgb,var(--ac) 16%,var(--bg-p))}
+/* v13.385 휴대폰 대화방 — 앱 머리 · 탭 줄을 숨겨 세로를 다 씀, 위는 상태 표시줄(노치)만 비우고 아래는 둥근 모서리 쪽까지 */
+@media (max-width:760px){
+  html.cx-full:has(#mMessages:not(.hidden)) .hdr,
+  html.cx-full:has(#mMessages:not(.hidden)) #pageTabs,
+  html.cx-full:has(#mMessages:not(.hidden)) .sub-tabs{display:none!important}
+  html.cx-full:has(#mMessages:not(.hidden)) .con{padding-top:0!important;padding-bottom:0!important}
+  html.cx-full:has(#mMessages:not(.hidden)) body{padding-bottom:0!important}
+  html.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx{border-top:0}
+  html.cx-full:has(#mMessages:not(.hidden)) #cxHead{padding-top:calc(8px + env(safe-area-inset-top,0px))}
+  /* 입력 줄 — 홈 막대만큼 다 띄우던 것(8px+34px)을 줄여 둥근 아래쪽까지 내려감 */
+  .cx-comp{padding-bottom:max(8px,calc(env(safe-area-inset-bottom,0px) - 12px))!important}
+  .cx.cx-kb .cx-comp{padding-bottom:6px!important}
+}
+.cx-unup[hidden]{display:none!important}

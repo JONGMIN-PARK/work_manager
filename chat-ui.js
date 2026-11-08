@@ -287,7 +287,7 @@ function renderMessages() {
     else if ('Notification' in window && Notification.permission === 'default') { el.querySelector('#cxPerm').hidden = false; el.querySelector('#cxPermOn').addEventListener('click', function () { Notification.requestPermission().then(function () { el.querySelector('#cxPerm').hidden = true; }); }); }
   }
   if (typeof _cfBar === 'function') _cfBar();
-  _cxFit();
+  _cxFull();
   if (!CX.rooms.length && typeof chatLocalLoad === 'function' && !CX.localTried) {   // v13.380 열자마자 — 담아 둔 목록 · 최근 방
     CX.localTried = true;
     chatLocalLoad().then(function (v) {
@@ -302,11 +302,21 @@ function renderMessages() {
   // v13.382 열 방(부른 방 · PC 는 마지막에 보던 방)은 목록을 기다리지 않고 같이 받기 — 예전: 목록 → 방 내용 차례로(왕복 2번)
   var wide = window.innerWidth > 760, last = wide ? _cxLsGet('wm-cx-last') : null, guess = want && !wantMid ? want : !want && !CX.room ? last : null;
   if (guess && !CX.cache[guess] && !(CX.pf[guess] && Date.now() - CX.pf[guess].t < 15000)) { var gp = _cxFetchRoomNow(guess); CX.pf[guess] = { t: Date.now(), p: gp }; gp.catch(function () { if (CX.pf[guess] && CX.pf[guess].p === gp) delete CX.pf[guess]; }); }
+  var room0 = CX.room;
   _cxLoadRooms().then(function () {
+    if (CX.room !== room0) return;   // v13.385 목록을 받는 사이 다른 방을 열었으면 그대로 (예전: 처음 방을 다시 열어 덮음)
     if (want) chatOpenRoom(want, false, wantMid); else if (CX.room) return;
     else if (wide && CX.rooms[0]) chatOpenRoom(last && CX.rooms.some(function (r) { return r.id === last; }) ? last : CX.rooms[0].id);
     else _cxDrawMain();
   });
+}
+/* v13.385 휴대폰 — 대화방에 들어가면 앱 머리 · 탭 줄을 숨겨 세로를 다 씀(카톡처럼). 목록으로 나오면 다시 보임.
+ *   CSS 는 메신저 화면일 때만 적용(html.cx-full:has(#mMessages:not(.hidden))) → 다른 탭으로 가면 저절로 돌아옴 */
+function _cxFull() {
+  var root = document.querySelector('#mMessages .cx');
+  var on = !!(root && _cxIsPhone() && root.classList.contains('has-room'));
+  if (document.documentElement.classList.contains('cx-full') !== on) document.documentElement.classList.toggle('cx-full', on);
+  _cxFit();
 }
 /* v13.371 휴대폰 — 메신저를 보이는 화면 높이에 딱 맞춤(주소창 · 키보드가 올라와도 입력칸이 가려지지 않게) */
 function _cxFit() {
@@ -348,12 +358,12 @@ function _cxKb() {
   } else if (cx.classList.contains('cx-kb')) {
     cx.classList.remove('cx-kb'); document.documentElement.classList.remove('cx-kb-on'); cx.style.top = ''; cx.style.height = '';
   } else return;
-  if (atB) box.scrollTop = box.scrollHeight;
+  if (atB) _cxToBottom();   // v13.385
   if (typeof _cxNewBtn === 'function') _cxNewBtn();
 }
 (function () {
   var t, raf = 0;
-  function on() { _cxVvBaseNote(); clearTimeout(t); t = setTimeout(_cxFit, 60); kb(); }
+  function on() { _cxVvBaseNote(); clearTimeout(t); t = setTimeout(_cxFull, 60); kb(); }
   setTimeout(_cxVvBaseNote, 0); window.addEventListener('load', _cxVvBaseNote);
   function kb() { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; _cxKb(); }); }
   window.addEventListener('resize', on);
@@ -429,7 +439,7 @@ function chatOpenRoom(id, keep, focusMid) {
   CX.room = id; if (changed) _cxLsSet('wm-cx-last', id);   // v13.382 다음에 열 때 이 방부터
   // 방이 바뀌면 그 방 것만 — 예전 방의 답글 줄기 · 고른 카드 · 수정 중 · 옆 탭은 비움
   CX.fwd = false;
-  if (changed) { CX.quote = null; }
+  if (changed) { CX.quote = null; if (CX.readFrom && CX.readFrom.room !== id) CX.readFrom = null; }
   if (changed) { CX.msgs = []; CX.info = null; CX.ctx = null; CX.cards = []; CX.replyTo = null; CX.editId = null; CX.thread = null; CX.threadMsgs = []; CX.asideTab = null; CX.readMark = null; CX.newBelow = 0; }
   var cached = changed && !focusMid && CX.cache[id];
   var reuse = !changed && !!CX.info && !!document.getElementById('cxMsgs');   // v13.366 같은 방 다시 열기 — 화면은 그대로, 내용만 새로
@@ -437,6 +447,7 @@ function chatOpenRoom(id, keep, focusMid) {
   if (cached) { CX.info = cached.info; CX.msgs = cached.msgs.slice(); CX.more = cached.more; CX.reads = Object.assign({}, cached.reads); }   // v13.366 바로 보이기
   if (changed && window.innerWidth <= 980) CX.aside = false;   // 좁은 화면은 옆 칸이 대화를 덮으므로 닫고 시작 (📊 · ⓘ 로 열기)
   var root = document.querySelector('#mMessages .cx'); if (root) root.classList.add('has-room');
+  _cxFull();   // v13.385 휴대폰 — 대화방은 화면 전체
   _cxDrawRooms(); if (!reuse) _cxDrawMain();
   if (cached) { _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(false); _cxDrawAside(); }
   var my = id;
@@ -447,10 +458,10 @@ function chatOpenRoom(id, keep, focusMid) {
     CX.reads = {}; (rs[1].reads || []).forEach(function (x) { CX.reads[x.userId] = x.id; });
     if ((drawnRole === 'readonly') !== (CX.info.myRole === 'readonly')) _cxDrawMain();   // 읽기만 — 입력칸 대신 안내
     var _readBefore = CX.info.lastReadId || 0;
-    if (CX.readFrom && CX.readFrom.room === my) { _readBefore = Math.min(_readBefore, CX.readFrom.id); if (!reuse) CX.readFrom = null; }   // v13.372 먼저 보낸 읽음이 앞질렀을 때
+    if (CX.readFrom && CX.readFrom.room === my) _readBefore = Math.min(_readBefore, CX.readFrom.id);   // v13.372 먼저 보낸 읽음이 앞질렀을 때 · v13.385 방에 있는 동안 간직(같은 방을 곧바로 다시 열면 안 읽음 줄이 사라지던 것)
     if (!focusMid && !(!changed && CX.readMark != null)) { var me0 = _cxMe(); CX.readMark = CX.msgs.some(function (m) { return typeof m.id === 'number' && m.id > _readBefore && m.userId !== me0 && m.kind !== 'system'; }) ? _readBefore : null; }
     _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(cached || reuse ? true : false, focusMid); _cxMarkRead(); _cxDrawAside(); _cxCacheTouch();
-    if (CX.readMark != null && !focusMid) { var ln = document.querySelector('#cxMsgs .cx-unl'); var bx = document.getElementById('cxMsgs'); if (ln && bx) { var lt = ln.getBoundingClientRect().top - bx.getBoundingClientRect().top + bx.scrollTop; if (lt < bx.scrollHeight - bx.clientHeight) bx.scrollTop = Math.max(0, lt - 60); } }   // 안 읽은 첫 줄로
+    if (!focusMid && !reuse) { CX.unUpOff = false; setTimeout(_cxUnUp, 600); setTimeout(_cxUnUp, 2100); }   // v13.385 늘 맨 아래(최근)부터 — 안 읽은 첫 줄은 ↑ 단추로 (예전: 안 읽은 첫 줄로 가 있음)
     if (focusMid) { var rr0 = CX.rooms.filter(function (x) { return x.id === my; })[0]; CX.fwd = !!(rr0 && rr0.lastId > _cxLastId()); if (CX.fwd) _cxNewBtn(); }   // v13.375 옛 자리 — 아래로 내리면 이어서
     if (typeof chatSmartPrior === 'function' && !focusMid) chatSmartPrior(CX.info);   // 👋 들어오기 전 대화
     if (CX.openThread) { var th = CX.openThread; CX.openThread = null; chatOpenThread(th); }
@@ -539,7 +550,8 @@ function _cxDrawMain() {
     '<div class="cx-msgs" id="cxMsgs" tabindex="0" aria-live="polite"><div class="cx-loading">불러오는 중…</div></div>' +
     '<div class="cx-typing" id="cxTyping"></div>' + (CX.info && CX.info.myRole === 'readonly' ? '<div class="cx-ro">👁 읽기만 하는 멤버입니다 — 글 · 파일을 올리려면 방장에게 말해 주세요</div>' : _cxComposerHtml('cxIn', 'cxComp')) +
     '<div class="cx-drop" id="cxDrop" hidden>여기에 놓으면 보냅니다</div>' +
-    '<button type="button" class="cx-newb" id="cxNewB" hidden>↓ <span></span></button>';
+    '<button type="button" class="cx-newb" id="cxNewB" hidden>↓ <span></span></button>' +
+    '<button type="button" class="cx-unup" id="cxUnUp" hidden>↑ <span></span></button>';
   _cxBindComposer('cxIn', 'cxComp', false);
   var ta0 = m.querySelector('#cxIn'); if (ta0 && CX.drafts[CX.room]) { ta0.value = CX.drafts[CX.room]; ta0.style.height = 'auto'; ta0.style.height = Math.min(160, ta0.scrollHeight) + 'px'; }
   var box = m.querySelector('#cxMsgs');
@@ -547,7 +559,17 @@ function _cxDrawMain() {
     if (box.scrollTop < 60 && CX.more && !CX.loading) _cxLoadOlder();
     if (CX.fwd && !CX.loading && box.scrollHeight - box.scrollTop - box.clientHeight < 200) _cxLoadNewer();   // v13.375 앞으로 읽기
     _cxSoon('newb', _cxNewBtn);
+    if (!CX.unUpOff) _cxSoon('unup', _cxUnUp);
   }, { passive: true });
+  ['wheel', 'touchstart', 'mousedown', 'keydown'].forEach(function (ev) { box.addEventListener(ev, _cxUnstick, { passive: true }); });   // v13.385 직접 굴리면 맨 아래 붙이기 그만
+  m.querySelector('#cxUnUp').addEventListener('click', function () {
+    var ln = box.querySelector('.cx-unl'); _cxUnstick(); CX.unUpOff = true; this.hidden = true;
+    if (ln) { var fr = 0; (function fix() {   // 화면 밖 말풍선 높이가 어림이라 한 번에 안 맞음 → 맞을 때까지 몇 번 고침
+      var d = ln.getBoundingClientRect().top - box.getBoundingClientRect().top - 60;
+      if (Math.abs(d) > 2) box.scrollTop += d;
+      if (++fr < 40) requestAnimationFrame(fix);
+    })(); }
+  });
   m.querySelector('#cxNewB').addEventListener('click', function () { if (CX.fwd) { _cxToLatest(); return; } CX.newBelow = 0; box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); _cxNewBtn(); });
   box.addEventListener('click', _cxMsgClick);
   _cxLongPress(box);
@@ -583,7 +605,7 @@ function _cxDrawHead() {
 }
 function _cxHeadAct(k, btn) {
   if ((k === 'call' || k === 'vcall') && typeof chatCallStart === 'function') { chatCallStart(CX.room, k === 'vcall'); return; }   // v13.361
-  if (k === 'back') { var root = document.querySelector('#mMessages .cx'); if (root) { root.classList.remove('has-room'); root.classList.add('no-aside'); } CX.room = null; CX.thread = null; _cxDrawRooms(); return; }
+  if (k === 'back') { var root = document.querySelector('#mMessages .cx'); if (root) { root.classList.remove('has-room'); root.classList.add('no-aside'); } CX.room = null; CX.thread = null; _cxDrawRooms(); _cxFull(); return; }
   if (k === 'side') { chatSideToggle(); return; }   // v13.373
   if (k === 'aside') { CX.aside = !CX.aside; document.querySelector('#mMessages .cx').classList.toggle('no-aside', !CX.aside); _cxDrawHead(); _cxDrawAside(); return; }
   if (k === 'files') { CX.aside = true; CX.asideTab = 'files'; document.querySelector('#mMessages .cx').classList.remove('no-aside'); _cxDrawAside(); return; }
@@ -769,9 +791,39 @@ function _cxDrawMsgs(append, focusMid) {
   if (focusMid) { _cxJump(focusMid); return; }
   if (append === 'older') box.scrollTop = box.scrollHeight - prevH + prevTop;
   else if (append === 'newer' || append === 'top') { if (append === 'top') box.scrollTop = 0; }
-  else if (!append || atBottom || (n && CX.msgs[n - 1].userId === _cxMe() && added === 0)) { box.scrollTop = box.scrollHeight; CX.newBelow = 0; }
+  else if (!append || atBottom || (n && CX.msgs[n - 1].userId === _cxMe() && added === 0)) { _cxToBottom(); CX.newBelow = 0; }
   else if (added) CX.newBelow += added;   // 위를 보고 있을 때 온 것 — ↓ 단추로 알려 줌
   _cxNewBtn();
+}
+/* v13.385 맨 아래로 붙이기 — 화면 밖 말풍선은 높이를 어림(content-visibility)으로 두어, 한 번 내리면 실제 높이가 잡히며
+ *   위로 밀려 381~1092px 덜 내려가 있었음. 2초 동안(또는 사람이 직접 굴릴 때까지) 높이가 바뀔 때마다 다시 맨 아래로 */
+function _cxToBottom() {
+  var box = document.getElementById('cxMsgs'); if (!box) return;
+  CX.stickUntil = Date.now() + 2000; box.scrollTop = box.scrollHeight; CX.stickTop = box.scrollTop;
+  if (CX.stickRaf) return;
+  (function loop() {
+    CX.stickRaf = 0;
+    var b = document.getElementById('cxMsgs'); if (!b || Date.now() > (CX.stickUntil || 0)) return;
+    if (CX.stickTop != null && b.scrollTop < CX.stickTop - 40) { CX.stickUntil = 0; return; }   // 누가 위로 올렸으면 그만
+    if (b.scrollHeight - b.scrollTop - b.clientHeight > 1) b.scrollTop = b.scrollHeight;
+    CX.stickTop = b.scrollTop;
+    CX.stickRaf = requestAnimationFrame(loop);
+  })();
+}
+function _cxUnstick() { CX.stickUntil = 0; }
+/** v13.385 안 읽은 게 화면 위로 지나가 있으면 ↑ 단추 — 들어가면 늘 맨 아래(최근)부터, 처음부터 읽고 싶으면 이걸로 */
+function _cxUnUp() {
+  var b = document.getElementById('cxUnUp'), box = document.getElementById('cxMsgs'); if (!b || !box) return;
+  var ln = box.querySelector('.cx-unl');
+  if (!ln || CX.readMark == null) { b.hidden = true; return; }
+  var top = ln.getBoundingClientRect().top - box.getBoundingClientRect().top;
+  if (top >= 0) { b.hidden = true; CX.unUpOff = true; return; }
+  if (CX.unUpOff) return;
+  var me = _cxMe(), n = CX.msgs.filter(function (m) { return typeof m.id === 'number' && m.id > CX.readMark && m.userId !== me && m.kind !== 'system' && !m.replyTo; }).length;
+  var f0 = CX.msgs.filter(function (m) { return typeof m.id === 'number'; })[0], more = CX.more && f0 && f0.id > CX.readMark;   // 앞쪽을 아직 안 받았으면 'N개 넘게'
+  b.querySelector('span').textContent = '안 읽은 메시지 ' + n + (more ? '개 넘게' : '개') + ' — 처음부터 보기'; b.hidden = !n;
+  var hd = document.getElementById('cxHead'), nt = document.getElementById('cxNotice');
+  b.style.top = ((hd ? hd.offsetHeight : 56) + (nt && !nt.hidden ? nt.offsetHeight : 0) + 10) + 'px';
 }
 /* ↓ 새 메시지 N개 · 맨 아래로 */
 function _cxNewBtn() {
