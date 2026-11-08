@@ -6098,3 +6098,11 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cx-upl>em:empty{display:none}
 .cx-upl-x{border:0;background:none;color:var(--t4);cursor:pointer;font-size:12px;padding:0 2px;border-radius:4px}
 .cx-upl-x:hover{color:var(--danger,#EF4444);background:var(--bg-hv)}
+/* v13.387 휴대폰 대화방 — 화면에 붙박이(position:fixed; inset:0). 아이폰이 입력칸을 누를 때 페이지를 밀어 올려도 틀은 그대로,
+ *   위 메뉴가 상태 표시줄 밑으로 가지 않음. 키보드가 뜨면 .cx-kb 가 보이는 영역에 맞춤(인라인 top · height) */
+@media (max-width:760px){
+  html.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx{position:fixed!important;inset:0;left:0;width:auto;margin:0;height:auto;min-height:0!important;z-index:60}
+  html.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx.cx-kb{bottom:auto}
+  /* 입력 줄은 홈 막대 바로 위까지 (예전 34−12=22pt + 위아래 여백 → 이제 약 14pt) */
+  html.cx-full:has(#mMessages:not(.hidden)) .cx-comp{padding-bottom:max(6px,calc(env(safe-area-inset-bottom,0px) - 20px))!important}
+}

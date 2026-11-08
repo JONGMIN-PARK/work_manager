@@ -356,7 +356,7 @@ function _cxKb() {
     cx.classList.add('cx-kb'); document.documentElement.classList.add('cx-kb-on');
     cx.style.top = Math.round(vv.offsetTop) + 'px'; cx.style.height = Math.round(vv.height) + 'px';
   } else if (cx.classList.contains('cx-kb')) {
-    cx.classList.remove('cx-kb'); document.documentElement.classList.remove('cx-kb-on'); cx.style.top = ''; cx.style.height = '';
+    cx.classList.remove('cx-kb'); document.documentElement.classList.remove('cx-kb-on'); cx.style.top = ''; cx.style.height = ''; if (document.documentElement.classList.contains('cx-full')) window.scrollTo(0, 0);   // v13.387 아이폰이 밀어 올린 화면 되돌림(위 메뉴가 상태 표시줄 밑으로 가 안 눌리던 것)
   } else return;
   if (atB) _cxToBottom();   // v13.385
   if (typeof _cxNewBtn === 'function') _cxNewBtn();
@@ -370,7 +370,7 @@ function _cxKb() {
   if (window.visualViewport) { window.visualViewport.addEventListener('resize', on); window.visualViewport.addEventListener('scroll', kb); }
   window.addEventListener('orientationchange', on);
   document.addEventListener('focusin', function () { kb(); setTimeout(_cxKb, 350); });   // 키보드가 다 올라온 뒤 한 번 더
-  document.addEventListener('focusout', function () { setTimeout(_cxKb, 80); });
+  document.addEventListener('focusout', function () { setTimeout(_cxKb, 80); setTimeout(function () { if (document.documentElement.classList.contains('cx-full') && !_cxTextFocused() && window.scrollY) window.scrollTo(0, 0); }, 350); });
 })();
 /* v13.373 PC — 대화방 목록 접기(대화에만 집중 · 창을 좁혀 둘 때). 기억해 둠 */
 function chatSideToggle(on) {
