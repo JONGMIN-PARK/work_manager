@@ -15,6 +15,7 @@ var tenant = require('../middleware/tenant');
 var httpErr = require('../lib/http-errors');
 var hub = require('../lib/chat-hub');
 var pa = require('../lib/project-access');
+var cxx = require('../lib/chat-extra');   // v13.378 링크 미리보기 · 달력 상태
 
 var MAX_BODY = 8000, MAX_FILE = 25 * 1024 * 1024, PAGE = 50;
 var FALLBACK_MS = +(process.env.CHAT_FALLBACK_MS || 60000);   // 이만큼 지나도 안 읽으면 알림(텔레그램 · 앱 알림)
@@ -91,7 +92,7 @@ var MSG_SQL = 'SELECT m.id, m.room_id, m.user_id, m.kind, m.body, m.cards, m.men
   "(f.annot->>'rot')::int AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, " +
   'rp.replies, rp.last_reply_at, ' +
   // v13.376 인용 답장 — 원문 한 줄 (지웠으면 표시만)
-  "m.grp, m.quote_id, qm.body AS q_body, qm.deleted_at AS q_del, qm.kind AS q_kind, qm.post->>'title' AS q_ptitle, COALESCE(qu.display_name, qu.name) AS q_user, qf.id AS q_fid, qf.name AS q_fname, qf.mime AS q_fmime " +
+  "m.grp, m.link, m.quote_id, qm.body AS q_body, qm.deleted_at AS q_del, qm.kind AS q_kind, qm.post->>'title' AS q_ptitle, COALESCE(qu.display_name, qu.name) AS q_user, qf.id AS q_fid, qf.name AS q_fname, qf.mime AS q_fmime " +
   'FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN chat_files f ON f.id = m.file_id ' +
   'LEFT JOIN chat_messages qm ON qm.id = m.quote_id LEFT JOIN users qu ON qu.id = qm.user_id LEFT JOIN chat_files qf ON qf.id = qm.file_id ' +
   'LEFT JOIN LATERAL (SELECT COUNT(*)::int AS replies, MAX(t.created_at) AS last_reply_at FROM chat_messages t WHERE t.reply_to = m.id AND t.deleted_at IS NULL) rp ON TRUE ';
@@ -100,7 +101,7 @@ function shape(r) {
     body: r.deleted_at ? '' : r.body, deleted: !!r.deleted_at, edited: !!r.edited_at, cards: r.deleted_at ? null : r.cards, mentions: r.mentions || [],
     replyTo: r.reply_to ? +r.reply_to : null, replies: r.replies || 0, lastReplyAt: r.last_reply_at, reactions: r.deleted_at ? null : r.reactions || null,
     post: r.deleted_at || !r.post ? null : Object.assign({}, r.post, { assigneeName: r.asg_name || null }), file: r.f_id && !r.deleted_at ? annSum({ id: r.f_id, name: r.f_name, mime: r.f_mime, size: r.f_size }, r) : null, at: r.created_at,
-    grp: r.grp || null,
+    grp: r.grp || null, link: r.deleted_at ? null : r.link || null,
     quote: r.quote_id && !r.deleted_at ? { id: +r.quote_id, userName: r.q_user || (r.q_kind === 'ai' ? 'AI' : ''), deleted: !!r.q_del, body: r.q_del ? '' : String(r.q_ptitle ? '📌 ' + r.q_ptitle : r.q_body || '').slice(0, 200), file: r.q_fid && !r.q_del ? { id: r.q_fid, name: r.q_fname, mime: r.q_fmime } : null } : null };
 }
 // 사진 칠판 요약 — 목록에선 회전 · 표시 수 · 자름 여부만 (전체는 /files/:fid/annot)
@@ -153,10 +154,39 @@ async function postMessage(ctx, room, m) {
   hub.publish(ids, 'msg', msg);
   if (m.replyTo) { var parent = await loadMsg(m.replyTo); if (parent) hub.publish(ids, 'upd', parent); }
   if (m.userId && (m.kind || 'text') !== 'system') pushOffline(room, msg, ids.filter(function (u) { return u !== m.userId; }), mentions);
+  if ((m.kind || 'text') === 'text' && m.userId) linkLater(room, id, body);   // v13.378 🔗 미리보기는 뒤에서
   if (m.userId && (m.kind || 'text') !== 'system') scheduleFallback(ctx.tenantId, room, msg, ids.filter(function (u) { return u !== m.userId; }), mentions);
   return msg;
 }
 
+/** 🔗 링크 미리보기 (v13.378) — 보낸 뒤 뒤에서 읽어 붙이고 'upd' 로 알림 */
+function linkLater(room, id, body) {
+  var u = cxx.firstUrl(body); if (!u) return;
+  cxx.linkPreview(u).then(async function (v) {
+    if (!v) return;
+    await db.query('UPDATE chat_messages SET link = $2 WHERE id = $1 AND deleted_at IS NULL', [id, JSON.stringify(v)]);
+    var msg = await loadMsg(id); if (msg) hub.publish(await memberIds(room.id), 'upd', msg);
+  }).catch(function (e) { console.warn('[chat] link', e.message); });
+}
+/* 🙂 상태 (v13.378) — 내가 정한 것(기한 안) 이 먼저, 없으면 오늘 달력 */
+async function statusOf(tenantId, ids) {
+  if (!ids || !ids.length) return {};
+  var r = await db.query('SELECT u.id, u.name, u.display_name, s.status_emoji, s.status_text, s.status_until FROM users u LEFT JOIN chat_user_state s ON s.user_id = u.id ' +
+    'WHERE u.id = ANY($1) AND u.tenant_id = $2', [ids, tenantId]);
+  var out = {}, cal = await cxx.calStatus(tenantId, r.rows.map(function (u) { return { id: u.id, names: [u.name, u.display_name] }; }));
+  r.rows.forEach(function (u) {
+    if ((u.status_text || u.status_emoji) && (!u.status_until || new Date(u.status_until) > new Date())) out[u.id] = { icon: u.status_emoji || '', label: u.status_text || '', until: u.status_until || null, auto: false };
+    else if (cal[u.id]) out[u.id] = cal[u.id];
+  });
+  return out;
+}
+/** 같은 방 사람들에게 알림 (상태 · 프로필 사진) */
+async function peersPublish(tenantId, uid, ev, data) {
+  try {
+    var r = await db.query('SELECT DISTINCT m2.user_id FROM chat_members m1 JOIN chat_members m2 ON m2.room_id = m1.room_id WHERE m1.user_id = $1 AND m1.tenant_id = $2 AND m2.left_at IS NULL AND m1.left_at IS NULL', [uid, tenantId]);
+    hub.publish(r.rows.map(function (x) { return x.user_id; }).concat([uid]), ev, data);
+  } catch (e) {}
+}
 /** 인용할 원문 — 같은 방 메시지만 (v13.376) */
 async function quoteOk(room, qid) {
   qid = +qid || 0; if (!qid) return null;
@@ -242,12 +272,79 @@ router.post('/away', function (req, res) {
   res.json({ data: { ok: true, conns: n } });
 });
 
+/* ─── 🙂 내 상태 · 🖼 프로필 사진 (v13.378) ─── */
+router.get('/me/profile', async function (req, res) {
+  try {
+    var r = await db.query('SELECT s.status_emoji, s.status_text, s.status_until, a.v FROM users u LEFT JOIN chat_user_state s ON s.user_id = u.id LEFT JOIN chat_avatars a ON a.user_id = u.id WHERE u.id = $1', [me(req)]);
+    var x = r.rows[0] || {}, st = await statusOf(req.tenant.id, [me(req)]);
+    res.json({ data: { emoji: x.status_emoji || '', text: x.status_text || '', until: x.status_until || null, avatarV: x.v || 0, now: st[me(req)] || null } });
+  } catch (e) { httpErr.serverError(res, '[chat/me]', e); }
+});
+router.put('/me/status', async function (req, res) {
+  try {
+    var b = req.body || {}, emoji = String(b.emoji || '').slice(0, 16), text = String(b.text || '').trim().slice(0, 60);
+    var until = b.until ? new Date(b.until) : null; if (until && (isNaN(until) || until < new Date())) until = null;
+    await db.query('INSERT INTO chat_user_state (user_id, tenant_id, status_emoji, status_text, status_until, updated_at) VALUES ($1,$2,$3,$4,$5,now()) ON CONFLICT (user_id) DO UPDATE SET status_emoji = EXCLUDED.status_emoji, status_text = EXCLUDED.status_text, status_until = EXCLUDED.status_until, updated_at = now()',
+      [me(req), req.tenant.id, emoji || null, text || null, until]);
+    var st = (await statusOf(req.tenant.id, [me(req)]))[me(req)] || null;
+    peersPublish(req.tenant.id, me(req), 'status', { userId: me(req), status: st });
+    res.json({ data: { status: st } });
+  } catch (e) { httpErr.serverError(res, '[chat/status]', e); }
+});
+router.get('/avatars', async function (req, res) {
+  try {
+    var r = await db.query('SELECT user_id, v FROM chat_avatars WHERE tenant_id = $1', [req.tenant.id]);
+    var o = {}; r.rows.forEach(function (x) { o[x.user_id] = x.v; });
+    res.json({ data: o });
+  } catch (e) { httpErr.serverError(res, '[chat/avatars]', e); }
+});
+router.get('/avatar/:uid', async function (req, res) {
+  try {
+    var r = await db.query('SELECT img FROM chat_avatars WHERE user_id = $1 AND tenant_id = $2', [req.params.uid, req.tenant.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '사진이 없습니다.' });
+    res.setHeader('Content-Type', 'image/jpeg'); res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');   // 주소에 ?v= 버전
+    res.end(r.rows[0].img);
+  } catch (e) { httpErr.serverError(res, '[chat/avatar]', e); }
+});
+router.post('/me/avatar', express.raw({ type: function () { return true; }, limit: 120 * 1024 }), async function (req, res) {
+  try {
+    var buf = req.body;
+    if (!Buffer.isBuffer(buf) || buf.length < 100 || buf[0] !== 0xFF || buf[1] !== 0xD8) return bad(res, 'JPEG 사진만 받습니다.');
+    var r = await db.query('INSERT INTO chat_avatars (user_id, tenant_id, img, v, updated_at) VALUES ($1,$2,$3,1,now()) ON CONFLICT (user_id) DO UPDATE SET img = EXCLUDED.img, v = chat_avatars.v + 1, updated_at = now() RETURNING v', [me(req), req.tenant.id, buf]);
+    peersPublish(req.tenant.id, me(req), 'avatar', { userId: me(req), v: r.rows[0].v });
+    res.json({ data: { v: r.rows[0].v } });
+  } catch (e) {
+    if (e && e.type === 'entity.too.large') return bad(res, '사진이 너무 큽니다.', 413);
+    httpErr.serverError(res, '[chat/avatar/put]', e);
+  }
+});
+router.delete('/me/avatar', async function (req, res) {
+  try {
+    await db.query('DELETE FROM chat_avatars WHERE user_id = $1', [me(req)]);
+    peersPublish(req.tenant.id, me(req), 'avatar', { userId: me(req), v: 0 });
+    res.json({ data: { v: 0 } });
+  } catch (e) { httpErr.serverError(res, '[chat/avatar/del]', e); }
+});
+/* 🔗 링크 미리보기 사진 — 바깥 사진은 화면 보안 정책상 바로 못 띄워 서버가 대신 받음. 내가 볼 수 있는 방의 미리보기 사진만 */
+router.get('/link-img', async function (req, res) {
+  try {
+    var u = String(req.query.u || '').slice(0, 600);
+    var ok = await db.query("SELECT 1 FROM chat_messages m JOIN chat_members cm ON cm.room_id = m.room_id AND cm.user_id = $2 AND cm.left_at IS NULL WHERE m.tenant_id = $3 AND m.link->>'image' = $1 LIMIT 1", [u, me(req), req.tenant.id]);
+    if (!ok.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '사진이 없습니다.' });
+    var img = await cxx.linkImage(u);
+    if (!img) return res.status(404).json({ error: 'NOT_FOUND', message: '사진을 가져오지 못했습니다.' });
+    res.setHeader('Content-Type', img.type); res.setHeader('Cache-Control', 'private, max-age=86400'); res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.end(img.buf);
+  } catch (e) { httpErr.serverError(res, '[chat/link-img]', e); }
+});
+
 /* ─── 사람 목록 (새 대화 · 멘션) ─── */
 router.get('/users', async function (req, res) {
   try {
     var r = await db.query("SELECT u.id, COALESCE(u.display_name, u.name) AS name, u.role, d.name AS dept FROM users u LEFT JOIN departments d ON d.id = u.department_id WHERE u.tenant_id = $1 AND u.status = 'active' ORDER BY 2", [req.tenant.id]);
     var on = hub.onlineSet(r.rows.map(function (u) { return u.id; }));
-    res.json({ data: r.rows.map(function (u) { return { id: u.id, name: u.name, dept: u.dept || '', online: !!on[u.id], me: u.id === me(req) }; }) });
+    var st = await statusOf(req.tenant.id, r.rows.map(function (u) { return u.id; }));
+    res.json({ data: r.rows.map(function (u) { return { id: u.id, name: u.name, dept: u.dept || '', role: u.role, online: !!on[u.id], status: st[u.id] || null, me: u.id === me(req) }; }) });
   } catch (e) { httpErr.serverError(res, '[chat/users]', e); }
 });
 
@@ -265,12 +362,14 @@ router.get('/rooms', async function (req, res) {
     var all = [];
     r.rows.forEach(function (x) { (x.others || []).forEach(function (o) { all.push(o.id); }); });
     var on = hub.onlineSet(all), fo = await focusOf(all);
+    var dmPeers = r.rows.filter(function (x) { return x.kind === 'dm' && x.others && x.others[0]; }).map(function (x) { return x.others[0].id; });
+    var pst = await statusOf(req.tenant.id, dmPeers);
     res.json({ data: r.rows.map(function (x) {
       var others = x.others || [];
       var name = x.kind === 'dm' ? (others[0] ? others[0].name : '(나간 사람)') : x.kind === 'project' ? (x.name || x.project_name || '프로젝트') : (x.name || others.map(function (o) { return o.name; }).slice(0, 4).join(', '));
       var l = x.last;
       return { id: x.id, kind: x.kind, name: name, projectId: x.project_id, unread: x.unread, mentioned: x.mentioned, muted: x.muted, pinned: x.pinned, lastAt: x.last_msg_at,
-        peerId: x.kind === 'dm' && others[0] ? others[0].id : null, peerFocus: x.kind === 'dm' && others[0] && fo[others[0].id] ? fo[others[0].id].until : null, online: x.kind === 'dm' && others[0] ? !!on[others[0].id] : others.some(function (o) { return on[o.id]; }), members: others.length + 1,
+        peerId: x.kind === 'dm' && others[0] ? others[0].id : null, peerFocus: x.kind === 'dm' && others[0] && fo[others[0].id] ? fo[others[0].id].until : null, peerStatus: x.kind === 'dm' && others[0] ? pst[others[0].id] || null : null, online: x.kind === 'dm' && others[0] ? !!on[others[0].id] : others.some(function (o) { return on[o.id]; }), members: others.length + 1,
         lastId: l ? +l.id : 0, readId: +x.last_read_id, last: l ? { userName: l.user_name || '', body: l.deleted_at ? '(지운 메시지)' : l.ptitle ? '📌 ' + l.ptitle : l.file_id && !l.body ? (/^image\//.test(l.fmime || '') ? '📷 사진' : '📎 파일') : (l.body || '').slice(0, 120), mine: l.user_id === me(req), kind: l.kind } : null };
     }) });
   } catch (e) { httpErr.serverError(res, '[chat/rooms]', e); }
@@ -349,9 +448,10 @@ router.get('/rooms/:id', async function (req, res) {
     ]);
     var m = all[0], notice = all[1], pr = all[3] && all[3].rows[0];
     var on = hub.onlineSet(m.rows.map(function (x) { return x.user_id; }));
+    var st = await statusOf(req.tenant.id, m.rows.map(function (x) { return x.user_id; }));
     res.json({ data: { id: room.id, kind: room.kind, name: room.name, projectId: room.project_id, muted: room.muted, pinned: room.pinned, lastReadId: +room.last_read_id, notice: notice && !notice.deleted && !(room.hist_from && notice.id <= +room.hist_from) ? notice : null,
       myRole: room.role || 'member', equipKey: room.equip_key || null, canManage: !!all[2], histFrom: room.hist_from ? +room.hist_from : null, prior: pr && pr.n ? { n: pr.n, upTo: +pr.up, joinedAt: room.joined_at } : null,
-      members: m.rows.map(function (x) { return { id: x.user_id, name: x.name, dept: x.dept || '', role: x.role, online: !!on[x.user_id], focusUntil: x.focus_until || null, readId: +x.last_read_id, me: x.user_id === me(req) }; }) } });
+      members: m.rows.map(function (x) { return { id: x.user_id, name: x.name, dept: x.dept || '', role: x.role, online: !!on[x.user_id], focusUntil: x.focus_until || null, status: st[x.user_id] || null, readId: +x.last_read_id, me: x.user_id === me(req) }; }) } });
   } catch (e) { httpErr.serverError(res, '[chat/room]', e); }
 });
 router.put('/rooms/:id', async function (req, res) {

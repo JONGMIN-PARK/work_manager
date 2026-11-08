@@ -5837,3 +5837,41 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cx-q-orig.on{color:var(--ac-t);background:var(--ac-bg)}
 .cx-alb .cx-alb-i{box-shadow:none!important;transform:none!important;line-height:0}
 .cx-alb .cx-alb-i img{min-width:0!important;min-height:0!important;border:0!important}
+
+/* ═══ v13.378 🖼 프로필 사진 · 🙂 상태 · 🔗 링크 미리보기 (chat-profile.js) ═══ */
+.cx-av.has-img{background-size:cover!important;background-position:center!important;color:transparent!important;text-shadow:none!important}
+.cx-me{flex:none;border:0;background:none;padding:0;margin-right:2px;cursor:pointer;border-radius:50%;line-height:0}
+.cx-me .cx-av{width:30px;height:30px;font-size:12px}
+.cx-me:hover .cx-av{box-shadow:0 0 0 2px var(--ac)}
+.cx-side-h{justify-content:flex-start!important}
+.cx-side-h>b{flex:1}
+.cx-stc{font-style:normal;font-size:10.5px;font-weight:600;color:var(--t4);background:var(--bg-i);border-radius:8px;padding:0 6px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:1px}
+/* 내 프로필 창 */
+.cxp{display:grid;gap:12px}
+.cxp-top{display:flex;gap:14px;align-items:center}
+.cxp-av .cx-av.big{width:72px;height:72px;font-size:26px;border-radius:22px}
+.cxp-who{display:flex;flex-direction:column;gap:4px;min-width:0}
+.cxp-who b{font-size:16px;color:var(--t1)}
+.cxp-who>span{font-size:12.5px;color:var(--t4)}
+.cxp-avb{display:flex;gap:6px;margin-top:2px}
+.cxp-h{font-size:12px;font-weight:700;color:var(--t4)}
+.cxp-pre{display:flex;flex-wrap:wrap;gap:6px}
+.cxp-pre button{border:1px solid var(--bd);border-radius:16px;background:var(--bg-i);color:var(--t2);font:inherit;font-size:12.5px;padding:5px 11px;cursor:pointer}
+.cxp-pre button.on,.cxp-pre button:hover{border-color:var(--ac);color:var(--ac-t)}
+.cxp-row{display:flex;gap:8px;align-items:center}
+.cxp-row .wr-inp{flex:1;min-width:0}
+.cxp-row .cxp-emo{flex:0 0 58px;text-align:center;font-size:18px}
+.cxp-row label{font-size:12.5px;color:var(--t4);flex:none}
+.cxp-note{margin:0;font-size:11.5px;color:var(--t5)}
+/* 🔗 링크 미리보기 */
+.cx-lk{display:flex;flex-direction:column;width:min(300px,68vw);margin-top:5px;border:1px solid var(--bd);border-radius:14px;overflow:hidden;background:var(--bg-p);color:var(--t2);text-decoration:none;box-shadow:0 6px 18px -12px rgba(15,23,42,.5)}
+.cx-lk:hover{border-color:var(--ac)}
+.cx-lk-img{display:block;aspect-ratio:1.91/1;background:var(--bg-i);overflow:hidden}
+.cx-lk-img img{width:100%;height:100%;object-fit:cover;display:block}
+.cx-lk-t{display:flex;flex-direction:column;gap:3px;padding:9px 12px 10px;min-width:0}
+.cx-lk-t b{font-size:13px;color:var(--t1);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cx-lk-t i{font-style:normal;font-size:12px;color:var(--t4);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cx-lk-t em{font-style:normal;font-size:11px;color:var(--t6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cx-m.mine .cx-lk{margin-left:auto}
+.cx-side{container-type:inline-size}
+@container (max-width:300px){.cx-side-h>b{visibility:hidden;width:0;flex:1}}

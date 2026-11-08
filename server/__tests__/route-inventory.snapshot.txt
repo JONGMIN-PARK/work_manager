@@ -14,6 +14,7 @@ DELETE /api/as-tickets/:id/signatures/:sid
 DELETE /api/chat/docs/:did
 DELETE /api/chat/folders/:fid
 DELETE /api/chat/folders/:fid/items/:mid
+DELETE /api/chat/me/avatar
 DELETE /api/chat/messages/:mid
 DELETE /api/chat/reminders/:rid
 DELETE /api/chat/rooms/:id/members/:uid
@@ -127,6 +128,8 @@ GET /api/auth/me
 GET /api/billing/status
 GET /api/bootstrap
 GET /api/build
+GET /api/chat/avatar/:uid
+GET /api/chat/avatars
 GET /api/chat/docs/:did
 GET /api/chat/docs/:did/versions
 GET /api/chat/docs/:did/versions/:vid
@@ -137,6 +140,8 @@ GET /api/chat/files/:fid/annot
 GET /api/chat/focus
 GET /api/chat/folders
 GET /api/chat/folders/:fid/items
+GET /api/chat/link-img
+GET /api/chat/me/profile
 GET /api/chat/messages/:mid/folders
 GET /api/chat/reminders
 GET /api/chat/requests
@@ -415,6 +420,7 @@ POST /api/chat/files/:fid/thumb
 POST /api/chat/files/:fid/to-docs
 POST /api/chat/folders
 POST /api/chat/folders/:fid/items
+POST /api/chat/me/avatar
 POST /api/chat/messages/:mid/action
 POST /api/chat/messages/:mid/forward
 POST /api/chat/messages/:mid/nudge
@@ -603,6 +609,7 @@ PUT /api/auth/change-password
 PUT /api/chat/docs/:did
 PUT /api/chat/focus
 PUT /api/chat/folders/:fid
+PUT /api/chat/me/status
 PUT /api/chat/messages/:mid
 PUT /api/chat/rooms/:id
 PUT /api/chat/rooms/:id/members/:uid

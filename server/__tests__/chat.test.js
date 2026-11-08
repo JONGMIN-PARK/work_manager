@@ -717,3 +717,47 @@ test('🖼 사진 묶음 · 미리보기 (v13.377) — grp · thumb 올리기(JP
   var full = await h.request(h.app).get('/api/chat/files/' + p1.file.id).set('Authorization', 'Bearer ' + a.token);
   expect(full.body.length).toBe(2000);
 });
+
+test('🙂 상태 · 🖼 프로필 사진 · 🔗 링크 미리보기 (v13.378)', async function () {
+  var cxx = require('../lib/chat-extra');
+  // 사설 주소 막기
+  expect(cxx._privateIp('10.0.0.5')).toBe(true); expect(cxx._privateIp('192.168.1.1')).toBe(true); expect(cxx._privateIp('172.20.0.1')).toBe(true);
+  expect(cxx._privateIp('127.0.0.1')).toBe(true); expect(cxx._privateIp('169.254.169.254')).toBe(true); expect(cxx._privateIp('::1')).toBe(true);
+  expect(cxx._privateIp('8.8.8.8')).toBe(false);
+  expect(await cxx._safeUrl('http://localhost:3000/x')).toBeNull();
+  expect(await cxx._safeUrl('http://127.0.0.1/x')).toBeNull();
+  expect(await cxx._safeUrl('file:///etc/passwd')).toBeNull();
+  expect(await cxx._safeUrl('http://user:pw@8.8.8.8/')).toBeNull();
+  // 상태 — 정함 · 같은 방 사람에게 보임 · 지움
+  var dm = (await api('post', '/api/chat/rooms', a).send({ kind: 'dm', userId: b.user.id })).body.data.id;
+  var st = (await api('put', '/api/chat/me/status', b).send({ emoji: '🍚', text: '점심 중', until: new Date(Date.now() + 3600000).toISOString() })).body.data.status;
+  expect(st).toMatchObject({ icon: '🍚', label: '점심 중', auto: false });
+  var info = (await api('get', '/api/chat/rooms/' + dm, a)).body.data;
+  expect(info.members.filter(function (m) { return m.id === b.user.id; })[0].status).toMatchObject({ label: '점심 중' });
+  var rl = (await api('get', '/api/chat/rooms', a)).body.data.filter(function (r) { return r.id === dm; })[0];
+  expect(rl.peerStatus).toMatchObject({ icon: '🍚' });
+  expect((await api('get', '/api/chat/me/profile', b)).body.data).toMatchObject({ emoji: '🍚', text: '점심 중' });
+  await api('put', '/api/chat/me/status', b).send({ emoji: '', text: '' });
+  expect((await api('get', '/api/chat/rooms/' + dm, a)).body.data.members.filter(function (m) { return m.id === b.user.id; })[0].status).toBeNull();
+  // 프로필 사진 — JPEG 만 · 버전 · 같은 회사만 · 지우기
+  var jpg = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(500, 4)]);
+  expect((await h.request(h.app).post('/api/chat/me/avatar').set('Authorization', 'Bearer ' + b.token).set('Content-Type', 'image/jpeg').send(Buffer.alloc(500, 1))).status).toBe(400);
+  var v1 = (await h.request(h.app).post('/api/chat/me/avatar').set('Authorization', 'Bearer ' + b.token).set('Content-Type', 'image/jpeg').send(jpg)).body.data.v;
+  var v2 = (await h.request(h.app).post('/api/chat/me/avatar').set('Authorization', 'Bearer ' + b.token).set('Content-Type', 'image/jpeg').send(jpg)).body.data.v;
+  expect(v2).toBe(v1 + 1);
+  expect((await api('get', '/api/chat/avatars', a)).body.data[b.user.id]).toBe(v2);
+  var av = await h.request(h.app).get('/api/chat/avatar/' + b.user.id + '?v=' + v2).set('Authorization', 'Bearer ' + a.token);
+  expect(av.status).toBe(200); expect(av.body.length).toBe(jpg.length);
+  await api('delete', '/api/chat/me/avatar', b);
+  expect((await api('get', '/api/chat/avatars', a)).body.data[b.user.id]).toBeUndefined();
+  // 링크 미리보기 — 바깥 읽기는 흉내 · 보낸 뒤 붙고 'upd'
+  var spy = jest.spyOn(cxx, 'linkPreview').mockResolvedValue({ url: 'https://example.com/a', title: '예시 문서', desc: '설명', site: 'Example', image: 'https://example.com/i.png' });
+  var msg = (await api('post', '/api/chat/rooms/' + dm + '/messages', a).send({ body: '이거 보세요 https://example.com/a' })).body.data;
+  await new Promise(function (r) { setTimeout(r, 300); });
+  var got = (await api('get', '/api/chat/rooms/' + dm + '/messages', b)).body.data.filter(function (m) { return m.id === msg.id; })[0];
+  expect(got.link).toMatchObject({ title: '예시 문서', site: 'Example' });
+  spy.mockRestore();
+  // 링크 사진 대신 받기 — 내 방 미리보기 사진이 아니면 404
+  expect((await h.request(h.app).get('/api/chat/link-img?u=' + encodeURIComponent('https://evil.example/x.png')).set('Authorization', 'Bearer ' + b.token)).status).toBe(404);
+  expect((await h.request(h.app).get('/api/chat/link-img?u=' + encodeURIComponent('https://example.com/i.png')).set('Authorization', 'Bearer ' + x.token)).status).toBe(404);
+});

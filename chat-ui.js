@@ -36,7 +36,7 @@ function _cxRel(iso) {
 function _cxSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : n >= 1024 ? Math.round(n / 1024) + 'KB' : n + 'B'; }
 function _cxInit(name) { return String(name || '?').trim().slice(0, 1) || '?'; }
 function _cxHue(id) { var h = 0; String(id || '').split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) % 360; }); return h; }
-function _cxAv(id, name, on) { return '<span class="cx-av" style="--h:' + _cxHue(id) + '">' + _cxE(_cxInit(name)) + (on ? '<i class="cx-on"></i>' : '') + '</span>'; }
+function _cxAv(id, name, on) { if (typeof chatAvHtml === 'function') return chatAvHtml(id, name, on); return '<span class="cx-av" style="--h:' + _cxHue(id) + '">' + _cxE(_cxInit(name)) + (on ? '<i class="cx-on"></i>' : '') + '</span>'; }   // v13.378 프로필 사진
 /* 글 → HTML (이스케이프 뒤 링크 · @멘션 · 줄바꿈) */
 function _cxText(s) {
   if (typeof chatCodeText === 'function') return chatCodeText(s);   // v13.358 ``` 코드 블록 · `한 줄 코드`
@@ -150,6 +150,8 @@ function chatOnEvent(ev, d) {
   } else if (ev === 'room') {   // v13.359 역할 · 내보내기
     if (d.removed && d.removed === _cxMe()) { CX.rooms = CX.rooms.filter(function (r) { return r.id !== d.roomId; }); if (CX.room === d.roomId) { CX.room = null; _cxDrawMain(); } _cxDrawRooms(); _cxToast('대화방에서 내보내졌습니다', 'warn'); return; }
     if (CX.room === d.roomId) apiFetch('/api/chat/rooms/' + encodeURIComponent(d.roomId)).then(function (r) { if (CX.room !== d.roomId) return; var was = CX.info && CX.info.myRole; CX.info = r.data; _cxDrawHead(); _cxDrawAside(); if (was !== CX.info.myRole) { _cxDrawMain(); _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(); } }).catch(function () {});
+  } else if (ev === 'status' || ev === 'avatar') {   // v13.378 🙂 상태 · 🖼 프로필 사진
+    if (typeof chatProfileOnEvent === 'function') chatProfileOnEvent(ev, d);
   } else if (ev === 'focus') {   // v13.363 🎯
     if (typeof chatFocusOnEvent === 'function') chatFocusOnEvent(d);
   } else if (ev === 'remind' || ev === 'sched') {   // v13.362 ⏰
@@ -243,7 +245,7 @@ function renderMessages() {
   var el = document.getElementById('mMessages'); if (!el) return;
   if (!el.querySelector('.cx')) {
     el.innerHTML = '<div class="cx no-aside' + (CX.room ? ' has-room' : '') + (_cxLsGet('wm-cx-side-off') ? ' side-off' : '') + '">' +
-      '<aside class="cx-side"><div class="cx-side-h"><b>💬 메신저</b><span class="cx-side-a"><button type="button" class="cx-ib" id="cxFocus" title="🎯 집중 모드 — 방해 금지 · 메신저만 크게">🎯</button><button type="button" class="cx-ib" id="cxReqs" title="🛠 요청함 — 나에게 온 · 내가 올린 요청">🛠</button><button type="button" class="cx-ib" id="cxFolders" title="📁 내 폴더 — 모아 둔 메시지 · 사진 · 파일">📂</button><button type="button" class="cx-ib" id="cxAlertBtn" title="🔔 알림 — 소리 · 진동 · 휴대폰 알림">🔔</button><button type="button" class="cx-ib" id="cxNew" title="새 대화 (사람 · 그룹 · 프로젝트 방)">＋</button></span></div>' +
+      '<aside class="cx-side"><div class="cx-side-h"><button type="button" class="cx-me" id="cxMe" title="🙂 내 프로필 · 상태">' + _cxAv(_cxMe(), (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || '') + '</button><b>💬 메신저</b><span class="cx-side-a"><button type="button" class="cx-ib" id="cxFocus" title="🎯 집중 모드 — 방해 금지 · 메신저만 크게">🎯</button><button type="button" class="cx-ib" id="cxReqs" title="🛠 요청함 — 나에게 온 · 내가 올린 요청">🛠</button><button type="button" class="cx-ib" id="cxFolders" title="📁 내 폴더 — 모아 둔 메시지 · 사진 · 파일">📂</button><button type="button" class="cx-ib" id="cxAlertBtn" title="🔔 알림 — 소리 · 진동 · 휴대폰 알림">🔔</button><button type="button" class="cx-ib" id="cxNew" title="새 대화 (사람 · 그룹 · 프로젝트 방)">＋</button></span></div>' +
       '<div class="cx-sq"><input id="cxQ" type="search" placeholder="대화방 · 메시지 찾기  (Ctrl+K 방 이동)" aria-label="대화방 · 메시지 찾기"></div>' +
       '<div class="cx-rf" id="cxRf" role="tablist">' + [['all', '전체'], ['unread', '안 읽음'], ['at', '@나'], ['dm', '1:1'], ['group', '그룹'], ['project', '프로젝트']].map(function (f) { return '<button type="button" data-rf="' + f[0] + '" class="' + (CX.rf === f[0] ? 'on' : '') + '">' + f[1] + '</button>'; }).join('') + '</div>' +
       '<div class="cx-perm" id="cxPerm" hidden><span data-pt>🔔 앱을 닫아 두어도 새 메시지 알림을 받을까요?</span><button type="button" id="cxPermOn">알림 켜기</button><button type="button" class="cx-perm-x" id="cxPermX" title="닫기" aria-label="닫기">✕</button></div>' +
@@ -251,6 +253,8 @@ function renderMessages() {
       '<section class="cx-main" id="cxMain"></section>' +
       '<aside class="cx-aside" id="cxAside"></aside></div>';
     el.querySelector('#cxNew').addEventListener('click', chatNewModal);
+    el.querySelector('#cxMe').addEventListener('click', function () { if (typeof chatProfileModal === 'function') chatProfileModal(); });
+    if (typeof chatAvatarsLoad === 'function' && !CX.avInit) { CX.avInit = true; chatAvatarsLoad(); }
     if (typeof chatFocusMenu === 'function') { el.querySelector('#cxFocus').addEventListener('click', function (e) { chatFocusMenu(e.currentTarget); }); if (!CX.focusInit) { CX.focusInit = true; chatFocusInit(); } }
     if (typeof chatLibrary === 'function') { el.querySelector('#cxReqs').addEventListener('click', function () { chatLibrary('reqs'); }); el.querySelector('#cxFolders').addEventListener('click', function () { chatLibrary('folders'); }); }
     el.querySelector('#cxRf').addEventListener('click', function (e) { var b = e.target.closest('[data-rf]'); if (!b) return; CX.rf = b.dataset.rf; _cxLsSet('wm-cx-rf', CX.rf); el.querySelectorAll('#cxRf [data-rf]').forEach(function (x) { x.classList.toggle('on', x === b); }); _cxDrawRoomsNow(); });
@@ -353,7 +357,7 @@ function _cxDrawRoomsNow() {
     var last = r.last ? (r.kind !== 'dm' && r.last.kind !== 'system' && !r.last.mine ? r.last.userName + ': ' : r.last.mine ? '나: ' : '') + (r.last.body || '') : '';
     var dr = r.id !== CX.room && CX.drafts[r.id] ? CX.drafts[r.id].replace(/\s+/g, ' ').slice(0, 60) : '';
     return '<button type="button" class="cx-r' + (r.id === CX.room ? ' on' : '') + (r.unread ? ' has-un' : '') + '" data-room="' + _cxE(r.id) + '" role="listitem">' + ic +
-      '<span class="cx-r-t"><b>' + _cxE(r.name) + (r.kind !== 'dm' ? ' <i>' + r.members + '</i>' : '') + (r.pinned ? ' 📌' : '') + (r.muted ? ' 🔕' : '') + (r.peerFocus && new Date(r.peerFocus) > new Date() ? ' <em class="cf-tag" title="' + _cxE(typeof chatFocusLabel === 'function' ? chatFocusLabel(r.peerFocus) : '') + '">🎯</em>' : '') + '</b>' + (dr ? '<span class="cx-r-dr">✏️ ' + _cxE(dr) + '</span>' : '<span>' + _cxE(last) + '</span>') + '</span>' +
+      '<span class="cx-r-t"><b>' + _cxE(r.name) + (r.kind !== 'dm' ? ' <i>' + r.members + '</i>' : '') + (r.pinned ? ' 📌' : '') + (r.muted ? ' 🔕' : '') + (r.peerStatus && typeof chatStatusText === 'function' ? ' <em class="cx-stc" title="' + _cxE(chatStatusText(r.peerStatus)) + '">' + _cxE(chatStatusText(r.peerStatus, true)) + '</em>' : '') + (r.peerFocus && new Date(r.peerFocus) > new Date() ? ' <em class="cf-tag" title="' + _cxE(typeof chatFocusLabel === 'function' ? chatFocusLabel(r.peerFocus) : '') + '">🎯</em>' : '') + '</b>' + (dr ? '<span class="cx-r-dr">✏️ ' + _cxE(dr) + '</span>' : '<span>' + _cxE(last) + '</span>') + '</span>' +
       '<span class="cx-r-m"><i>' + (r.lastAt ? _cxRel(r.lastAt) : '') + '</i>' + (r.mentioned ? '<em class="cx-at-b">@</em>' : '') + (r.unread ? '<em class="' + (r.muted ? 'mute' : '') + '">' + (r.unread > 99 ? '99+' : r.unread) + '</em>' : '') + '</span></button>';
   }).join('');
   if (CX.q && CX.found) h += '<div class="cx-found-h">메시지 ' + CX.found.length + '건</div>' + CX.found.map(function (m) {
@@ -511,7 +515,8 @@ function _cxDrawHead() {
   var i = CX.info, others = i.members.filter(function (m) { return !m.me; });
   var on = others.filter(function (m) { return m.online; }).length;
   var name = i.kind === 'dm' ? (others[0] ? others[0].name : '') : (i.name || r.name || '');
-  var sub = i.kind === 'dm' ? (others[0] ? (others[0].focusUntil && typeof chatFocusLabel === 'function' && chatFocusLabel(others[0].focusUntil) ? chatFocusLabel(others[0].focusUntil) + ' — 급하면 @멘션' : (others[0].online ? '● 접속 중' : '접속 안 함')) + (others[0].dept ? ' · ' + others[0].dept : '') : '') : i.members.length + '명 · 접속 ' + (on + 1) + (others.some(function (m) { return m.focusUntil && new Date(m.focusUntil) > new Date(); }) ? ' · 🎯 집중 ' + others.filter(function (m) { return m.focusUntil && new Date(m.focusUntil) > new Date(); }).length : '');
+  var pst = i.kind === 'dm' && others[0] && others[0].status && typeof chatStatusText === 'function' ? chatStatusText(others[0].status) : '';
+  var sub = i.kind === 'dm' ? (others[0] ? (pst ? pst + ' · ' : '') + (others[0].focusUntil && typeof chatFocusLabel === 'function' && chatFocusLabel(others[0].focusUntil) ? chatFocusLabel(others[0].focusUntil) + ' — 급하면 @멘션' : (others[0].online ? '● 접속 중' : '접속 안 함')) + (others[0].dept ? ' · ' + others[0].dept : '') : '') : i.members.length + '명 · 접속 ' + (on + 1) + (others.some(function (m) { return m.focusUntil && new Date(m.focusUntil) > new Date(); }) ? ' · 🎯 집중 ' + others.filter(function (m) { return m.focusUntil && new Date(m.focusUntil) > new Date(); }).length : '');
   var sideOff = !!(document.querySelector('#mMessages .cx.side-off'));
   h.innerHTML = '<button type="button" class="cx-ib cx-back" data-h="back" aria-label="목록으로">‹</button>' +
     '<button type="button" class="cx-ib cx-sidet" data-h="side" title="' + (sideOff ? '대화방 목록 펴기' : '대화방 목록 접기 — 대화에만 집중') + ' (Alt+L)" aria-label="대화방 목록 접기 · 펴기">' + (sideOff ? '»' : '«') + '</button>' +
@@ -616,6 +621,7 @@ function _cxMsgHtml(m, prev, inThread, next) {
     if (qh && !qIn) body += qh;
     if (m.post && typeof chatPostHtml === 'function') body += chatPostHtml(m, { full: inThread });   // v13.358 📌 게시판 글
     else if (m.body) body += '<div class="cx-b' + (ai ? ' cx-ai' : '') + (qIn ? ' has-q' : '') + '">' + (qIn ? qh : '') + (ai ? '<div class="cx-ai-h">🤖 AI · 내가 볼 수 있는 데이터로 답함</div>' + (typeof rMD === 'function' ? rMD(_cxE(m.body)) : _cxText(m.body)) : _cxText(m.body)) + (m.edited ? '<i class="cx-ed">수정됨</i>' : '') + '</div>';
+    if (m.link && typeof chatLinkHtml === 'function') body += chatLinkHtml(m.link);   // v13.378 🔗
     if (alb) body += _cxAlbumHtml(alb);
     else if (m.file) body += _cxFileHtml(m.file);
     if (m.cards && m.cards.length) body += '<div class="cx-cards">' + m.cards.map(function (c, i) { return _cxCardHtml(c, i, m); }).join('') + '</div>';
@@ -805,6 +811,7 @@ function _cxBackfillThumb(fid, src) {
 }
 /* v13.371 사진은 화면 가까이 올 때만 받음(사진 많은 방도 열자마자 수십 개 받지 않게) · 맨 아래를 보던 중이면 사진이 커져도 맨 아래 유지 */
 function _cxLoadBlobs(root) {
+  if (typeof chatLinkImgs === 'function') chatLinkImgs(root);   // v13.378 🔗 미리보기 사진
   var imgs = root.querySelectorAll('img[data-blob]'); if (!imgs.length) return;
   if (typeof IntersectionObserver !== 'function') { imgs.forEach(_cxBlobImg); return; }
   imgs.forEach(function (img) {
@@ -1347,7 +1354,7 @@ function _cxDrawAside() {
     var ms = (CX.info && CX.info.members) || [];
     var mg = CX.info && CX.info.canManage;
     b.innerHTML = (CX.info && CX.info.kind !== 'dm' ? '<div class="cx-roles">👑 방장 ' + ms.filter(function (m) { return m.role === 'owner'; }).length + ' · 멤버 ' + ms.length + (ms.some(function (m) { return m.role === 'readonly'; }) ? ' · 👁 읽기만 ' + ms.filter(function (m) { return m.role === 'readonly'; }).length : '') + '</div>' : '') +
-      ms.map(function (m) { return '<div class="cx-pp">' + _cxAv(m.id, m.name, m.online) + '<span><b>' + _cxE(m.name) + (m.me ? ' (나)' : '') + (m.role === 'owner' ? ' <em class="cx-role own">👑 방장</em>' : m.role === 'readonly' ? ' <em class="cx-role ro">👁 읽기만</em>' : '') + '</b><i>' + _cxE(m.dept || '') + '</i></span>' +
+      ms.map(function (m) { return '<div class="cx-pp">' + _cxAv(m.id, m.name, m.online) + '<span><b>' + _cxE(m.name) + (m.me ? ' (나)' : '') + (m.role === 'owner' ? ' <em class="cx-role own">👑 방장</em>' : m.role === 'readonly' ? ' <em class="cx-role ro">👁 읽기만</em>' : '') + '</b><i>' + _cxE([m.status && typeof chatStatusText === 'function' ? chatStatusText(m.status) : '', m.dept || ''].filter(Boolean).join(' · ')) + '</i></span>' +
         (!m.me ? '<button type="button" class="cx-ib" data-dm="' + _cxE(m.id) + '" title="1:1 대화">💬</button>' : '') +
         (mg && CX.info.kind !== 'dm' ? '<button type="button" class="cx-ib" data-role="' + _cxE(m.id) + '" title="역할 · 내보내기">⋯</button>' : '') + '</div>'; }).join('') +
       (CX.info && CX.info.kind !== 'dm' && CX.info.myRole !== 'readonly' ? '<button type="button" class="btn btn-g btn-s cx-inv">➕ 사람 초대</button>' : '');
