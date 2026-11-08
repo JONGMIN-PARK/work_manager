@@ -5875,3 +5875,32 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cx-m.mine .cx-lk{margin-left:auto}
 .cx-side{container-type:inline-size}
 @container (max-width:300px){.cx-side-h>b{visibility:hidden;width:0;flex:1}}
+
+/* ═══ v13.379 🎤 음성 메시지 (chat-voice.js) ═══ */
+.cx-comp.rec-on .cx-comp-r{visibility:hidden}
+.cx-rec{position:absolute;left:10px;right:10px;bottom:10px;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border:1px solid #F87171;border-radius:24px;background:var(--bg-p);box-shadow:0 0 0 3px color-mix(in srgb,#EF4444 14%,transparent)}
+.cx-rec-dot{width:10px;height:10px;border-radius:50%;background:#EF4444;animation:cxRecBlink 1s infinite;flex:none}
+@keyframes cxRecBlink{50%{opacity:.25}}
+.cx-rec b{font-variant-numeric:tabular-nums;font-size:14px;color:var(--t1)}
+.cx-rec-l{font-size:12px;color:var(--t5);white-space:nowrap}
+.cx-rec-wave{flex:1;display:flex;gap:3px;align-items:center;justify-content:center;height:20px}
+.cx-rec-wave i{width:3px;height:6px;border-radius:2px;background:#F87171;animation:cxWave .9s ease-in-out infinite}
+.cx-rec-wave i:nth-child(2){animation-delay:.15s}.cx-rec-wave i:nth-child(3){animation-delay:.3s}.cx-rec-wave i:nth-child(4){animation-delay:.45s}.cx-rec-wave i:nth-child(5){animation-delay:.6s}
+@keyframes cxWave{50%{height:18px}}
+.cx-rec .wm-pri{border-radius:18px}
+@media (max-width:600px){.cx-rec-l{display:none}.cx-rec{left:6px;right:6px;bottom:calc(6px + env(safe-area-inset-bottom))}}
+@media (prefers-reduced-motion:reduce){.cx-rec-dot,.cx-rec-wave i{animation:none}}
+.cx-voice{display:flex;align-items:center;gap:8px;width:min(240px,62vw);padding:8px 10px 8px 8px;border-radius:18px;background:var(--bg-p);border:1px solid var(--bd)}
+.cx-m.mine .cx-voice{background:linear-gradient(135deg,var(--ac),color-mix(in srgb,var(--ac) 60%,#7C3AED));border-color:transparent;color:#fff}
+.cx-vp{flex:none;width:32px;height:32px;border-radius:50%;border:0;background:var(--ac);color:#fff;font-size:12px;cursor:pointer}
+.cx-m.mine .cx-vp{background:rgba(255,255,255,.95);color:var(--ac)}
+.cx-vbar{flex:1;height:6px;border-radius:3px;background:color-mix(in srgb,var(--t1) 12%,transparent);overflow:hidden;cursor:pointer}
+.cx-m.mine .cx-vbar{background:rgba(255,255,255,.3)}
+.cx-vbar i{display:block;height:100%;width:0;background:var(--ac);transition:width .2s linear}
+.cx-m.mine .cx-vbar i{background:#fff}
+.cx-voice em{font-style:normal;font-size:12px;font-variant-numeric:tabular-nums;color:var(--t4);min-width:30px}
+.cx-m.mine .cx-voice em{color:rgba(255,255,255,.9)}
+.cx-vs{flex:none;border:0;border-radius:8px;background:color-mix(in srgb,var(--t1) 8%,transparent);color:inherit;font:inherit;font-size:11px;font-weight:700;padding:2px 6px;cursor:pointer}
+.cx-m.mine .cx-vs{background:rgba(255,255,255,.2);color:#fff}
+.cx-vtx{max-width:min(300px,70vw);margin-top:4px;padding:6px 10px;border-radius:10px;background:var(--bg-i);font-size:12.5px;color:var(--t3);line-height:1.5}
+.cx-m.mine .cx-vtx{margin-left:auto}

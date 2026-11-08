@@ -761,3 +761,20 @@ test('🙂 상태 · 🖼 프로필 사진 · 🔗 링크 미리보기 (v13.378)
   expect((await h.request(h.app).get('/api/chat/link-img?u=' + encodeURIComponent('https://evil.example/x.png')).set('Authorization', 'Bearer ' + b.token)).status).toBe(404);
   expect((await h.request(h.app).get('/api/chat/link-img?u=' + encodeURIComponent('https://example.com/i.png')).set('Authorization', 'Bearer ' + x.token)).status).toBe(404);
 });
+
+test('🎤 음성 메시지 (v13.379) — 길이 · 받아쓰기(AI 흉내) · 찾기에 걸림', async function () {
+  var ai = require('../services/ai-provider');
+  var spy = jest.spyOn(ai, 'transcribe').mockResolvedValue({ text: '내일 3호기 온도센서 쿠루룩 교체 부탁드립니다', provider: 'gemini' });
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '음성방', userIds: [b.user.id] })).body.data.id;
+  var res = await h.request(h.app).post('/api/chat/rooms/' + g + '/files?name=' + encodeURIComponent('음성 메시지 1530.webm') + '&dur=12.4').set('Authorization', 'Bearer ' + a.token).set('Content-Type', 'audio/webm').send(Buffer.alloc(3000, 5));
+  expect(res.status).toBe(201);
+  expect(res.body.data.file).toMatchObject({ mime: 'audio/webm', dur: 12.4 });
+  await new Promise(function (r) { setTimeout(r, 300); });
+  expect(spy).toHaveBeenCalledWith(expect.objectContaining({ mimeType: 'audio/webm' }));
+  var m = (await api('get', '/api/chat/rooms/' + g + '/messages', b)).body.data.filter(function (x) { return x.file; })[0];
+  expect(m.file.transcript).toBe('내일 3호기 온도센서 쿠루룩 교체 부탁드립니다');
+  expect((await api('get', '/api/chat/search?q=' + encodeURIComponent('쿠루룩'), b)).body.data.length).toBe(1);
+  var rl = (await api('get', '/api/chat/rooms', b)).body.data.filter(function (r) { return r.id === g; })[0];
+  expect(rl.last.body).toBe('🎤 음성 메시지');
+  spy.mockRestore();
+});

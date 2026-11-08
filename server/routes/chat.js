@@ -87,7 +87,7 @@ async function userNames(tenantId, ids) {
 
 /* ─── 메시지 모양 ─── */
 var MSG_SQL = 'SELECT m.id, m.room_id, m.user_id, m.kind, m.body, m.cards, m.mentions, m.reply_to, m.edited_at, m.deleted_at, m.created_at, m.reactions, m.post, ' +
-  'COALESCE(u.display_name, u.name) AS user_name, f.id AS f_id, f.name AS f_name, f.mime AS f_mime, f.size AS f_size, ' +
+  'COALESCE(u.display_name, u.name) AS user_name, f.id AS f_id, f.name AS f_name, f.mime AS f_mime, f.size AS f_size, f.dur AS f_dur, f.transcript AS f_tx, ' +
   "CASE WHEN m.post IS NULL THEN NULL ELSE (SELECT COALESCE(ua.display_name, ua.name) FROM users ua WHERE ua.id::text = m.post->>'assignee') END AS asg_name, " +
   "(f.annot->>'rot')::int AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, " +
   'rp.replies, rp.last_reply_at, ' +
@@ -100,7 +100,7 @@ function shape(r) {
   return { id: +r.id, roomId: r.room_id, userId: r.user_id, userName: r.user_name || (r.kind === 'ai' ? 'AI' : ''), kind: r.kind,
     body: r.deleted_at ? '' : r.body, deleted: !!r.deleted_at, edited: !!r.edited_at, cards: r.deleted_at ? null : r.cards, mentions: r.mentions || [],
     replyTo: r.reply_to ? +r.reply_to : null, replies: r.replies || 0, lastReplyAt: r.last_reply_at, reactions: r.deleted_at ? null : r.reactions || null,
-    post: r.deleted_at || !r.post ? null : Object.assign({}, r.post, { assigneeName: r.asg_name || null }), file: r.f_id && !r.deleted_at ? annSum({ id: r.f_id, name: r.f_name, mime: r.f_mime, size: r.f_size }, r) : null, at: r.created_at,
+    post: r.deleted_at || !r.post ? null : Object.assign({}, r.post, { assigneeName: r.asg_name || null }), file: r.f_id && !r.deleted_at ? annSum(Object.assign({ id: r.f_id, name: r.f_name, mime: r.f_mime, size: r.f_size }, r.f_dur ? { dur: +r.f_dur } : {}, r.f_tx ? { transcript: r.f_tx } : {}), r) : null, at: r.created_at,
     grp: r.grp || null, link: r.deleted_at ? null : r.link || null,
     quote: r.quote_id && !r.deleted_at ? { id: +r.quote_id, userName: r.q_user || (r.q_kind === 'ai' ? 'AI' : ''), deleted: !!r.q_del, body: r.q_del ? '' : String(r.q_ptitle ? '📌 ' + r.q_ptitle : r.q_body || '').slice(0, 200), file: r.q_fid && !r.q_del ? { id: r.q_fid, name: r.q_fname, mime: r.q_fmime } : null } : null };
 }
@@ -159,6 +159,14 @@ async function postMessage(ctx, room, m) {
   return msg;
 }
 
+/** 🎤 음성 메시지 받아쓰기 (v13.379) — AI(Gemini) 있으면 글로 붙이고 'upd'. 없으면 그냥 소리만 */
+function transcribeLater(tenantId, room, mid, fid, buf, mime) {
+  require('../services/ai-provider').transcribe({ tenantId: tenantId, data: buf.toString('base64'), mimeType: String(mime).split(';')[0] }).then(async function (t) {
+    if (!t || !t.text) return;
+    await db.query('UPDATE chat_files SET transcript = $2 WHERE id = $1', [fid, t.text.slice(0, 4000)]);
+    var msg = await loadMsg(mid); if (msg) hub.publish(await memberIds(room.id), 'upd', msg);
+  }).catch(function (e) { console.warn('[chat] transcribe', e.message); });
+}
 /** 🔗 링크 미리보기 (v13.378) — 보낸 뒤 뒤에서 읽어 붙이고 'upd' 로 알림 */
 function linkLater(room, id, body) {
   var u = cxx.firstUrl(body); if (!u) return;
@@ -370,7 +378,7 @@ router.get('/rooms', async function (req, res) {
       var l = x.last;
       return { id: x.id, kind: x.kind, name: name, projectId: x.project_id, unread: x.unread, mentioned: x.mentioned, muted: x.muted, pinned: x.pinned, lastAt: x.last_msg_at,
         peerId: x.kind === 'dm' && others[0] ? others[0].id : null, peerFocus: x.kind === 'dm' && others[0] && fo[others[0].id] ? fo[others[0].id].until : null, peerStatus: x.kind === 'dm' && others[0] ? pst[others[0].id] || null : null, online: x.kind === 'dm' && others[0] ? !!on[others[0].id] : others.some(function (o) { return on[o.id]; }), members: others.length + 1,
-        lastId: l ? +l.id : 0, readId: +x.last_read_id, last: l ? { userName: l.user_name || '', body: l.deleted_at ? '(지운 메시지)' : l.ptitle ? '📌 ' + l.ptitle : l.file_id && !l.body ? (/^image\//.test(l.fmime || '') ? '📷 사진' : '📎 파일') : (l.body || '').slice(0, 120), mine: l.user_id === me(req), kind: l.kind } : null };
+        lastId: l ? +l.id : 0, readId: +x.last_read_id, last: l ? { userName: l.user_name || '', body: l.deleted_at ? '(지운 메시지)' : l.ptitle ? '📌 ' + l.ptitle : l.file_id && !l.body ? (/^image\//.test(l.fmime || '') ? '📷 사진' : /^audio\//.test(l.fmime || '') ? '🎤 음성 메시지' : '📎 파일') : (l.body || '').slice(0, 120), mine: l.user_id === me(req), kind: l.kind } : null };
     }) });
   } catch (e) { httpErr.serverError(res, '[chat/rooms]', e); }
 });
@@ -722,11 +730,13 @@ router.post('/rooms/:id/files', express.raw({ type: function () { return true; }
       key = 'tenants/' + req.tenant.id + '/chat/' + room.id + '/' + fid + (/\.[A-Za-z0-9]{1,8}$/.exec(name) || [''])[0].toLowerCase();
       await gcs.uploadBuffer(key, buf, mime);
     }
-    await db.query('INSERT INTO chat_files (id, tenant_id, room_id, user_id, name, mime, size, storage_key, data) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-      [fid, req.tenant.id, room.id, me(req), name, mime, buf.length, key, key ? null : buf]);
+    var audio = /^audio\//i.test(mime), dur = audio ? Math.max(0, Math.min(900, +req.query.dur || 0)) || null : null;   // v13.379 🎤 음성 메시지 길이
+    await db.query('INSERT INTO chat_files (id, tenant_id, room_id, user_id, name, mime, size, storage_key, data, dur) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+      [fid, req.tenant.id, room.id, me(req), name, mime, buf.length, key, key ? null : buf, dur]);
     var caption = String(req.query.caption || '').slice(0, 2000);
     var msg = await postMessage({ tenantId: req.tenant.id }, room, { userId: me(req), kind: 'file', body: caption, fileId: fid, grp: /^[A-Za-z0-9_-]{4,40}$/.test(req.query.grp || '') ? req.query.grp : null, replyTo: req.query.replyTo ? +req.query.replyTo : null, quoteId: req.query.replyTo ? null : await quoteOk(room, req.query.quoteId) });
     res.status(201).json({ data: msg });
+    if (audio && buf.length < 8 * 1024 * 1024) transcribeLater(req.tenant.id, room, msg.id, fid, buf, mime);   // 받아쓰기는 뒤에서
   } catch (e) {
     if (e && e.type === 'entity.too.large') return bad(res, '25MB 까지 올릴 수 있습니다.', 413);
     httpErr.serverError(res, '[chat/file]', e);
@@ -1562,7 +1572,7 @@ router.get('/search', async function (req, res) {
     if (req.query.from) { prm.push(String(req.query.from)); ex += ' AND m.user_id = $' + prm.length; }   // 보낸 사람
     if (req.query.has === 'file') ex += ' AND m.file_id IS NOT NULL';
     var r = await db.query(MSG_SQL + 'JOIN chat_members cm ON cm.room_id = m.room_id AND cm.user_id = $1 AND cm.left_at IS NULL ' +
-      'WHERE m.tenant_id = $2 AND m.deleted_at IS NULL AND (cm.hist_from IS NULL OR m.id > cm.hist_from) AND (m.body ILIKE $3 OR f.name ILIKE $3)' + ex + ' ORDER BY m.id DESC LIMIT 60', prm);
+      'WHERE m.tenant_id = $2 AND m.deleted_at IS NULL AND (cm.hist_from IS NULL OR m.id > cm.hist_from) AND (m.body ILIKE $3 OR f.name ILIKE $3 OR f.transcript ILIKE $3)' + ex + ' ORDER BY m.id DESC LIMIT 60', prm);
     res.json({ data: r.rows.map(shape) });
   } catch (e) { httpErr.serverError(res, '[chat/search]', e); }
 });

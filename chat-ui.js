@@ -105,7 +105,7 @@ function chatOnEvent(ev, d) {
     if (r) {
       if (!d.replyTo && typeof d.id === 'number') r.lastId = Math.max(r.lastId || 0, d.id);
       _cxPfDrop(d.roomId);
-      r.lastAt = d.at; r.last = { userName: d.userName, body: d.deleted ? '(지운 메시지)' : d.post ? '📌 ' + d.post.title : d.file && !d.body ? (_cxIsPhoto(d.file) ? '📷 사진' : '📎 ' + d.file.name) : d.body, mine: mine, kind: d.kind };
+      r.lastAt = d.at; r.last = { userName: d.userName, body: d.deleted ? '(지운 메시지)' : d.post ? '📌 ' + d.post.title : d.file && !d.body ? (_cxIsPhoto(d.file) ? '📷 사진' : /^audio\//.test(d.file.mime || '') ? '🎤 음성 메시지' : '📎 ' + d.file.name) : d.body, mine: mine, kind: d.kind };
       if (!mine && !d.replyTo && d.kind !== 'system' && !_cxVisibleRoom(d.roomId)) { r.unread = (r.unread || 0) + 1; if ((d.mentions || []).indexOf(_cxMe()) >= 0) r.mentioned = (r.mentioned || 0) + 1; }
       CX.rooms.sort(function (a, b) { return (b.pinned - a.pinned) || (new Date(b.lastAt) - new Date(a.lastAt)); });
     } else _cxLoadRooms();
@@ -650,6 +650,7 @@ function _cxNames(ids) {
   return ids.map(function (id) { var u = mm.filter(function (x) { return x.id === id; })[0]; return u ? u.name : ''; }).filter(Boolean).join(', ');
 }
 function _cxFileHtml(f) {
+  if (/^audio\//i.test(f.mime || '') && typeof chatVoiceHtml === 'function') return chatVoiceHtml(f);   // v13.379 🎤
   var img = /^image\/(png|jpe?g|gif|webp|bmp)$/i.test(f.mime || '');
   if (img) return '<button type="button" class="cx-img" data-file="' + _cxE(f.id) + '" data-img="1" title="' + _cxE(f.name) + '"><img alt="' + _cxE(f.name) + '" data-blob="' + _cxE(f.id) + '" data-small="1"></button>';
   var ext = ((/\.([A-Za-z0-9]{1,6})$/.exec(f.name) || [])[1] || 'FILE').toUpperCase();
@@ -812,6 +813,7 @@ function _cxBackfillThumb(fid, src) {
 /* v13.371 사진은 화면 가까이 올 때만 받음(사진 많은 방도 열자마자 수십 개 받지 않게) · 맨 아래를 보던 중이면 사진이 커져도 맨 아래 유지 */
 function _cxLoadBlobs(root) {
   if (typeof chatLinkImgs === 'function') chatLinkImgs(root);   // v13.378 🔗 미리보기 사진
+  if (typeof chatVoiceWarm === 'function') chatVoiceWarm(root);   // v13.379 🎤
   var imgs = root.querySelectorAll('img[data-blob]'); if (!imgs.length) return;
   if (typeof IntersectionObserver !== 'function') { imgs.forEach(_cxBlobImg); return; }
   imgs.forEach(function (img) {
@@ -853,6 +855,7 @@ function _cxMsgClick(e) {
     return;
   }
   var mel = t.closest('[data-mid]'), m = mel && _cxFindMsg(+mel.dataset.mid);
+  if (t.closest('[data-voice]') && typeof chatVoiceClick === 'function' && chatVoiceClick(t, e)) return;   // v13.379 🎤
   var qj = t.closest('[data-qjump]');
   if (qj) { _cxJump(+qj.dataset.qjump); return; }   // v13.376 인용 → 원문 자리
   var un = t.closest('[data-un]');
@@ -1015,6 +1018,7 @@ function _cxMsgMenu(btn, m, pre) {
   var mine = m.userId === _cxMe();
   _cxMenu(btn, (pre || []).concat([
     !pre && typeof m.id === 'number' && !m.replyTo ? ['↩ 답장', function () { _cxStartQuote(m); }] : null,
+    m.file ? ['⬇ 받기', function () { _cxDownload(m.file.id, m.file.name); }] : null,
     m.body ? ['📋 복사', function () { try { navigator.clipboard.writeText(m.body); _cxToast('복사했습니다', 'success'); } catch (e) {} }] : null,
     ['↪ 전달', function () { chatForwardModal(m); }],
     typeof chatSaveMenu === 'function' ? ['📁 폴더에 담기', function () { chatSaveMenu(btn, m); }] : null,
@@ -1064,6 +1068,7 @@ function _cxComposerHtml(taId, wrapId) {
     '<div class="cx-comp-r"><button type="button" class="cx-ib cx-tools-t" data-c="tools" title="파일 · 업무 카드 · 예약 · 게시판" aria-label="도구 열기" aria-expanded="false">＋</button><span class="cx-tools" data-tools>' +
     '<button type="button" class="cx-ib" data-c="attach" title="파일 · 사진 (끌어 놓기 · 붙여넣기도 됨)">📎<span class="cx-tl">파일 · 사진</span></button>' +
     (_cxIsPhone() ? '<button type="button" class="cx-ib" data-c="camera" title="사진 찍어 보내기">📷<span class="cx-tl">카메라</span></button>' : '') +
+    (typeof chatVoiceCan === 'function' && chatVoiceCan() ? '<button type="button" class="cx-ib" data-c="voice" title="🎤 음성 메시지 — 말로 보내기 (AI 가 글로도 받아씀)">🎤<span class="cx-tl">음성 메시지</span></button>' : '') +
     '<button type="button" class="cx-ib" data-c="card" title="업무 카드 붙이기 — 이슈 · 프로젝트 · 마일스톤 · 문서 …">＋<span class="cx-tl">업무 카드</span></button>' +
     (wrapId === 'cxComp' && typeof chatTimeComposer === 'function' ? '<button type="button" class="cx-ib" data-c="sched" title="⏰ 예약 보내기 — 글을 쓰고 누르면 그때 보냄">⏰<span class="cx-tl">예약 보내기</span></button>' : '') +
     (wrapId === 'cxComp' && typeof chatPostModal === 'function' ? '<button type="button" class="cx-ib" data-c="post" title="게시판 글쓰기 — 공지 · 자료 · 질문 · 🛠 요청">✍️<span class="cx-tl">게시판 글</span></button>' : '') +
@@ -1135,6 +1140,7 @@ function _cxBindComposer(taId, wrapId, inThread) {
     else if (b.dataset.c === 'cap' && typeof chatBoardCapture === 'function') chatBoardCapture(inThread ? CX.thread : null);
     else if (b.dataset.c === 'send') _go();
     else if (b.dataset.c === 'emoji') _cxEmojiPick(b, ta, inThread, _go);
+    else if (b.dataset.c === 'voice' && typeof chatVoiceStart === 'function') chatVoiceStart(wrap, inThread ? CX.thread : null);   // v13.379 🎤
     else if (b.dataset.c === 'orig') {   // v13.377 사진 화질
       var on = !_cxPhotoOrig(); _cxLsSet('wm-cx-photo', on ? 'orig' : null);
       document.querySelectorAll('[data-c="orig"]').forEach(function (x) { x.classList.toggle('on', on); x.title = '사진 화질 — 지금: ' + (on ? '원본 그대로' : '줄여서(빠름)'); x.firstChild.textContent = on ? '🅾' : '🖼'; var tl = x.querySelector('.cx-tl'); if (tl) tl.textContent = on ? '원본 화질' : '사진 줄여서'; });
@@ -1294,7 +1300,7 @@ function _cxUploadOne(f0, room, replyTo, qid, grp) {
     tip.querySelector('span').textContent = '📎 ' + f.name;
     var host = document.getElementById('cxTyping'); if (host) host.parentNode.insertBefore(tip, host);
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/rooms/' + encodeURIComponent(room) + '/files?name=' + encodeURIComponent(f.name) + (replyTo ? '&replyTo=' + replyTo : '') + (!replyTo && qid ? '&quoteId=' + qid : '') + (grp ? '&grp=' + grp : ''));
+    xhr.open('POST', (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/rooms/' + encodeURIComponent(room) + '/files?name=' + encodeURIComponent(f.name) + (replyTo ? '&replyTo=' + replyTo : '') + (!replyTo && qid ? '&quoteId=' + qid : '') + (grp ? '&grp=' + grp : '') + (f0._dur ? '&dur=' + f0._dur : ''));
     xhr.setRequestHeader('Authorization', 'Bearer ' + _accessToken);
     xhr.setRequestHeader('Content-Type', f.type || 'application/octet-stream');
     xhr.upload.onprogress = function (e) { if (e.lengthComputable) tip.querySelector('b').style.width = Math.round(e.loaded / e.total * 100) + '%'; };
