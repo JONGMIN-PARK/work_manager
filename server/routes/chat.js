@@ -260,7 +260,7 @@ router.get('/rooms', async function (req, res) {
       var l = x.last;
       return { id: x.id, kind: x.kind, name: name, projectId: x.project_id, unread: x.unread, mentioned: x.mentioned, muted: x.muted, pinned: x.pinned, lastAt: x.last_msg_at,
         peerId: x.kind === 'dm' && others[0] ? others[0].id : null, peerFocus: x.kind === 'dm' && others[0] && fo[others[0].id] ? fo[others[0].id].until : null, online: x.kind === 'dm' && others[0] ? !!on[others[0].id] : others.some(function (o) { return on[o.id]; }), members: others.length + 1,
-        last: l ? { userName: l.user_name || '', body: l.deleted_at ? '(지운 메시지)' : l.ptitle ? '📌 ' + l.ptitle : l.file_id && !l.body ? '📎 파일' : (l.body || '').slice(0, 120), mine: l.user_id === me(req), kind: l.kind } : null };
+        lastId: l ? +l.id : 0, readId: +x.last_read_id, last: l ? { userName: l.user_name || '', body: l.deleted_at ? '(지운 메시지)' : l.ptitle ? '📌 ' + l.ptitle : l.file_id && !l.body ? '📎 파일' : (l.body || '').slice(0, 120), mine: l.user_id === me(req), kind: l.kind } : null };
     }) });
   } catch (e) { httpErr.serverError(res, '[chat/rooms]', e); }
 });
@@ -327,13 +327,17 @@ router.post('/rooms', async function (req, res) {
 router.get('/rooms/:id', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
-    var m = await db.query('SELECT m.user_id, m.role, m.last_read_id, COALESCE(u.display_name, u.name) AS name, d.name AS dept FROM chat_members m JOIN users u ON u.id = m.user_id LEFT JOIN departments d ON d.id = u.department_id WHERE m.room_id = $1 AND m.left_at IS NULL ORDER BY 4', [room.id]);
+    // v13.372 한꺼번에 — 멤버(집중 상태 같이) · 공지 · 방장 여부를 차례로 묻던 것(DB 왕복 3~5번)을 동시에
+    var all = await Promise.all([
+      db.query('SELECT m.user_id, m.role, m.last_read_id, COALESCE(u.display_name, u.name) AS name, d.name AS dept, CASE WHEN s.focus_until > now() THEN s.focus_until END AS focus_until FROM chat_members m JOIN users u ON u.id = m.user_id LEFT JOIN departments d ON d.id = u.department_id LEFT JOIN chat_user_state s ON s.user_id = m.user_id WHERE m.room_id = $1 AND m.left_at IS NULL ORDER BY 4', [room.id]),
+      room.notice_id ? loadMsg(room.notice_id) : null,
+      room.kind !== 'dm' ? canManage(req, room) : false
+    ]);
+    var m = all[0], notice = all[1];
     var on = hub.onlineSet(m.rows.map(function (x) { return x.user_id; }));
-    var fo = await focusOf(m.rows.map(function (x) { return x.user_id; }));
-    var notice = room.notice_id ? await loadMsg(room.notice_id) : null;
     res.json({ data: { id: room.id, kind: room.kind, name: room.name, projectId: room.project_id, muted: room.muted, pinned: room.pinned, lastReadId: +room.last_read_id, notice: notice && !notice.deleted && !(room.hist_from && notice.id <= +room.hist_from) ? notice : null,
-      myRole: room.role || 'member', equipKey: room.equip_key || null, canManage: room.kind !== 'dm' && await canManage(req, room), histFrom: room.hist_from ? +room.hist_from : null,
-      members: m.rows.map(function (x) { return { id: x.user_id, name: x.name, dept: x.dept || '', role: x.role, online: !!on[x.user_id], focusUntil: fo[x.user_id] ? fo[x.user_id].until : null, readId: +x.last_read_id, me: x.user_id === me(req) }; }) } });
+      myRole: room.role || 'member', equipKey: room.equip_key || null, canManage: !!all[2], histFrom: room.hist_from ? +room.hist_from : null,
+      members: m.rows.map(function (x) { return { id: x.user_id, name: x.name, dept: x.dept || '', role: x.role, online: !!on[x.user_id], focusUntil: x.focus_until || null, readId: +x.last_read_id, me: x.user_id === me(req) }; }) } });
   } catch (e) { httpErr.serverError(res, '[chat/room]', e); }
 });
 router.put('/rooms/:id', async function (req, res) {
@@ -424,9 +428,12 @@ router.get('/rooms/:id/messages', async function (req, res) {
     if (req.query.before) { params.push(+req.query.before); where.push('m.id < $' + params.length); }
     if (req.query.around) { params.push(+req.query.around + 25); where.push('m.id <= $' + params.length); }
     params.push(lim);
-    var r = await db.query(MSG_SQL + 'WHERE ' + where.join(' AND ') + ' ORDER BY m.id DESC LIMIT $' + params.length, params);
+    var both = await Promise.all([   // v13.372 메시지 · 읽은 위치 동시에
+      db.query(MSG_SQL + 'WHERE ' + where.join(' AND ') + ' ORDER BY m.id DESC LIMIT $' + params.length, params),
+      db.query('SELECT user_id, last_read_id FROM chat_members WHERE room_id = $1 AND left_at IS NULL', [room.id])
+    ]);
+    var r = both[0], reads = both[1];
     var rows = r.rows.map(shape).reverse();
-    var reads = await db.query('SELECT user_id, last_read_id FROM chat_members WHERE room_id = $1 AND left_at IS NULL', [room.id]);
     res.json({ data: rows, more: r.rows.length === lim, reads: reads.rows.map(function (x) { return { userId: x.user_id, id: +x.last_read_id }; }) });
   } catch (e) { httpErr.serverError(res, '[chat/messages]', e); }
 });
@@ -537,7 +544,11 @@ router.post('/messages/:mid/forward', async function (req, res) {
 var READQ = new Map(), READ_MS = +(process.env.CHAT_READ_MS || 1000);
 function readQueue(roomId, uid, id) {
   var q = READQ.get(roomId);
-  if (!q) { q = { list: {} }; READQ.set(roomId, q); q.t = setTimeout(function () { readFlush(roomId); }, READ_MS); if (q.t.unref) q.t.unref(); }
+  if (!q) {
+    // v13.372 작은 방(20명 이하)은 거의 바로(0.1초) — 보낸 사람 화면의 "1" 이 늦게 사라지던 것. 큰 방은 그대로 모아서
+    var c = MID.get(roomId), small = c && c.exp > Date.now() && c.ids.length <= 20;
+    q = { list: {} }; READQ.set(roomId, q); q.t = setTimeout(function () { readFlush(roomId); }, small ? Math.min(READ_MS, 100) : READ_MS); if (q.t.unref) q.t.unref();
+  }
   q.list[uid] = Math.max(q.list[uid] || 0, id);
 }
 async function readFlush(roomId) {
@@ -547,7 +558,17 @@ async function readFlush(roomId) {
 }
 router.post('/rooms/:id/read', async function (req, res) {
   try {
-    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    // v13.372 빠른 길 — 멤버면 한 문장으로 바로 (예전: 방 확인 + 고치기 = DB 왕복 2번)
+    var lid = +((req.body || {}).lastId) || 0;
+    var f = await db.query('WITH o AS (SELECT last_read_id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND tenant_id = $4 AND left_at IS NULL) ' +
+      'UPDATE chat_members SET last_read_id = GREATEST(last_read_id, LEAST($3, (SELECT COALESCE(MAX(id),0) FROM chat_messages WHERE room_id = $1))) ' +
+      'WHERE room_id = $1 AND user_id = $2 AND tenant_id = $4 AND left_at IS NULL RETURNING last_read_id, (SELECT last_read_id FROM o) AS old', [req.params.id, me(req), lid, req.tenant.id]);
+    if (f.rows.length) {
+      var nw = +f.rows[0].last_read_id, old = +f.rows[0].old;
+      if (nw > old) { var rid0 = req.params.id, u0 = me(req); memberIds(rid0).then(function () { readQueue(rid0, u0, nw); }, function () { readQueue(rid0, u0, nw); }); }   // 방 크기를 알고 나서 (보통 담아 둔 것)
+      return res.json({ data: { lastReadId: nw } });
+    }
+    var room = await roomFor(req, res, req.params.id); if (!room) return;   // 멤버가 아니면(프로젝트 방 자동 가입 · 403) 원래 길
     var id = +((req.body || {}).lastId) || 0;
     if (id <= +room.last_read_id) return res.json({ data: { lastReadId: +room.last_read_id } });   // v13.366 이미 읽음 — DB · 알림 없이
     var r = await db.query('UPDATE chat_members SET last_read_id = GREATEST(last_read_id, LEAST($3, (SELECT COALESCE(MAX(id),0) FROM chat_messages WHERE room_id = $1))) WHERE room_id = $1 AND user_id = $2 RETURNING last_read_id', [room.id, me(req), id]);

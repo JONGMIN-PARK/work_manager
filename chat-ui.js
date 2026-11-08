@@ -102,6 +102,8 @@ function chatOnEvent(ev, d) {
     var mine = d.userId === _cxMe();
     var r = CX.rooms.filter(function (x) { return x.id === d.roomId; })[0];
     if (r) {
+      if (!d.replyTo && typeof d.id === 'number') r.lastId = Math.max(r.lastId || 0, d.id);
+      _cxPfDrop(d.roomId);
       r.lastAt = d.at; r.last = { userName: d.userName, body: d.deleted ? '(지운 메시지)' : d.post ? '📌 ' + d.post.title : d.file && !d.body ? '📎 ' + d.file.name : d.body, mine: mine, kind: d.kind };
       if (!mine && !d.replyTo && d.kind !== 'system' && !_cxVisibleRoom(d.roomId)) { r.unread = (r.unread || 0) + 1; if ((d.mentions || []).indexOf(_cxMe()) >= 0) r.mentioned = (r.mentioned || 0) + 1; }
       CX.rooms.sort(function (a, b) { return (b.pinned - a.pinned) || (new Date(b.lastAt) - new Date(a.lastAt)); });
@@ -118,6 +120,7 @@ function chatOnEvent(ev, d) {
     if (d.post && CX.aside && CX.asideTab === 'board' && CX.room === d.roomId && typeof chatPostsTab === 'function') chatPostsTab();
     if (!mine && d.kind !== 'system' && !_cxVisibleRoom(d.roomId) && !(r && r.muted && (d.mentions || []).indexOf(_cxMe()) < 0)) _cxNotify(d, r);
   } else if (ev === 'upd') {
+    _cxPfDrop(d.roomId);
     if (d.post && typeof chatCollabOnUpd === 'function') chatCollabOnUpd(d);
     if (CX.room === d.roomId && (d.cards || []).some(function (c) { return c.type === 'issue'; })) _cxCtxRefresh();
     if (CX.room === d.roomId) {
@@ -257,7 +260,8 @@ function renderMessages() {
   if (typeof _cfBar === 'function') _cfBar();
   _cxFit();
   var want = CX.pending || CX.room, wantMid = CX.pendingMid; CX.pending = null; CX.pendingMid = null;
-  _cxLoadRooms().then(function () { if (want) chatOpenRoom(want, false, wantMid); else if (window.innerWidth > 760 && CX.rooms[0]) chatOpenRoom(CX.rooms[0].id); else _cxDrawMain(); });
+  // v13.372 목록을 받는 사이 다른 곳에서 방을 열었으면(알림 · 검색 · 바로 가기) 그대로 둠 — 예전엔 다시 열거나 빈 화면으로 덮어 "불러오는 중" 에 멈춤
+  _cxLoadRooms().then(function () { if (want) chatOpenRoom(want, false, wantMid); else if (CX.room) return; else if (window.innerWidth > 760 && CX.rooms[0]) chatOpenRoom(CX.rooms[0].id); else _cxDrawMain(); });
 }
 /* v13.371 휴대폰 — 메신저를 보이는 화면 높이에 딱 맞춤(주소창 · 키보드가 올라와도 입력칸이 가려지지 않게) */
 function _cxFit() {
@@ -268,14 +272,34 @@ function _cxFit() {
   var top = cx.getBoundingClientRect().top + (window.scrollY || 0);   // 문서 안 자리 (머리 · 탭 아래)
   page.style.setProperty('--cx-h', Math.max(300, Math.round(vh - top - 6)) + 'px');
 }
+/* v13.372 휴대폰 키보드 — 키보드가 올라오면 메신저를 보이는 화면에 딱 붙임(입력칸이 키보드 바로 위).
+ *   예전: 페이지가 밀려 올라가며 입력칸이 키보드에서 멀리 떠 있거나 위로 사라짐 */
+function _cxKb() {
+  var cx = document.querySelector('#mMessages .cx'); if (!cx) return;
+  var vv = window.visualViewport, a = document.activeElement;
+  var on = !!(vv && _cxIsPhone() && a && cx.contains(a) && /^(TEXTAREA|INPUT)$/.test(a.tagName) && window.innerHeight - vv.height > 120);
+  var box = document.getElementById('cxMsgs'), atB = box && box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  if (on) {
+    cx.classList.add('cx-kb'); document.documentElement.classList.add('cx-kb-on');
+    cx.style.top = Math.round(vv.offsetTop) + 'px'; cx.style.height = Math.round(vv.height) + 'px';
+  } else if (cx.classList.contains('cx-kb')) {
+    cx.classList.remove('cx-kb'); document.documentElement.classList.remove('cx-kb-on'); cx.style.top = ''; cx.style.height = '';
+  } else return;
+  if (atB) box.scrollTop = box.scrollHeight;
+  if (typeof _cxNewBtn === 'function') _cxNewBtn();
+}
 (function () {
-  var t; function on() { clearTimeout(t); t = setTimeout(_cxFit, 60); }
+  var t, raf = 0;
+  function on() { clearTimeout(t); t = setTimeout(_cxFit, 60); kb(); }
+  function kb() { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; _cxKb(); }); }
   window.addEventListener('resize', on);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', on);
+  if (window.visualViewport) { window.visualViewport.addEventListener('resize', on); window.visualViewport.addEventListener('scroll', kb); }
   window.addEventListener('orientationchange', on);
+  document.addEventListener('focusin', function () { kb(); setTimeout(_cxKb, 350); });   // 키보드가 다 올라온 뒤 한 번 더
+  document.addEventListener('focusout', function () { setTimeout(_cxKb, 80); });
 })();
 function _cxLoadRooms() {
-  return apiFetch('/api/chat/rooms').then(function (r) { CX.rooms = (r && r.data) || []; _cxDrawRooms(); chatBadge(); }).catch(function () {});
+  return apiFetch('/api/chat/rooms').then(function (r) { CX.rooms = (r && r.data) || []; _cxDrawRooms(); chatBadge(); if (document.getElementById('cxRooms')) _cxPrefetchIdle(); }).catch(function () {});
 }
 function _cxDrawRooms() { _cxSoon('rooms', _cxDrawRoomsNow); }   // v13.366 이벤트가 몰려도 한 번만
 function _cxRfPass(r) {
@@ -307,7 +331,14 @@ function _cxDrawRoomsNow() {
   if (!h) h = '<div class="cx-empty">' + (CX.q ? '찾는 대화가 없습니다' : CX.rf && CX.rf !== 'all' && CX.rooms.length ? '이 조건의 대화가 없습니다 — <b>전체</b> 를 눌러 보세요' : '아직 대화가 없습니다 — ＋ 로 시작해 보세요') + '</div>';
   if (box._h === h) return;   // 같은 모습이면 다시 안 그림
   box._h = h; box.innerHTML = h;
-  if (!box._bound) { box._bound = true; box.addEventListener('click', function (e) { var b = e.target.closest('[data-room]'); if (b) chatOpenRoom(b.dataset.room, false, b.dataset.mid ? +b.dataset.mid : null); }); }
+  if (!box._bound) {
+    box._bound = true;
+    box.addEventListener('click', function (e) { var b = e.target.closest('[data-room]'); if (b) chatOpenRoom(b.dataset.room, false, b.dataset.mid ? +b.dataset.mid : null); });
+    // v13.372 누르기 직전(손가락 닿음 · 마우스 올림 0.1초)에 미리 받기 — 열면 거의 바로
+    var hv = null;
+    box.addEventListener('pointerdown', function (e) { var b = e.target.closest('.cx-r[data-room]'); if (b) _cxPrefetch(b.dataset.room); }, { passive: true });
+    box.addEventListener('pointerover', function (e) { if (e.pointerType !== 'mouse') return; var b = e.target.closest('.cx-r[data-room]'); clearTimeout(hv); if (b) hv = setTimeout(function () { _cxPrefetch(b.dataset.room); }, 100); });
+  }
 }
 function _cxSearch() {
   if (CX.q.length < 2) { CX.found = null; _cxDrawRooms(); return; }
@@ -332,13 +363,15 @@ function chatOpenRoom(id, keep, focusMid) {
   _cxDrawRooms(); if (!reuse) _cxDrawMain();
   if (cached) { _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(false); _cxDrawAside(); }
   var my = id;
-  Promise.all([apiFetch('/api/chat/rooms/' + encodeURIComponent(id)), apiFetch('/api/chat/rooms/' + encodeURIComponent(id) + '/messages' + (focusMid ? '?around=' + focusMid : ''))]).then(function (rs) {
+  if (changed && !focusMid) _cxReadEarly(id);   // v13.372 열자마자 읽음 — 내용 받기를 기다리지 않음
+  (focusMid ? _cxFetchRoomNow(id, focusMid) : _cxFetchRoom(id)).then(function (rs) {
     if (CX.room !== my) return;
     CX.info = rs[0].data; CX.msgs = (rs[1].data || []).concat(CX.msgs.filter(function (m) { return m.pending; })); CX.more = !!rs[1].more;
     CX.reads = {}; (rs[1].reads || []).forEach(function (x) { CX.reads[x.userId] = x.id; });
     if ((drawnRole === 'readonly') !== (CX.info.myRole === 'readonly')) _cxDrawMain();   // 읽기만 — 입력칸 대신 안내
     var _readBefore = CX.info.lastReadId || 0;
-    if (!focusMid && !(reuse && CX.readMark != null)) { var me0 = _cxMe(); CX.readMark = CX.msgs.some(function (m) { return typeof m.id === 'number' && m.id > _readBefore && m.userId !== me0 && m.kind !== 'system'; }) ? _readBefore : null; }
+    if (CX.readFrom && CX.readFrom.room === my) { _readBefore = Math.min(_readBefore, CX.readFrom.id); if (!reuse) CX.readFrom = null; }   // v13.372 먼저 보낸 읽음이 앞질렀을 때
+    if (!focusMid && !(!changed && CX.readMark != null)) { var me0 = _cxMe(); CX.readMark = CX.msgs.some(function (m) { return typeof m.id === 'number' && m.id > _readBefore && m.userId !== me0 && m.kind !== 'system'; }) ? _readBefore : null; }
     _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(cached || reuse ? true : false, focusMid); _cxMarkRead(); _cxDrawAside(); _cxCacheTouch();
     if (CX.readMark != null && !focusMid) { var ln = document.querySelector('#cxMsgs .cx-unl'); var bx = document.getElementById('cxMsgs'); if (ln && bx) { var lt = ln.getBoundingClientRect().top - bx.getBoundingClientRect().top + bx.scrollTop; if (lt < bx.scrollHeight - bx.clientHeight) bx.scrollTop = Math.max(0, lt - 60); } }   // 안 읽은 첫 줄로
     if (CX.openThread) { var th = CX.openThread; CX.openThread = null; chatOpenThread(th); }
@@ -348,6 +381,44 @@ function chatOpenRoom(id, keep, focusMid) {
     var ta = document.getElementById('cxIn'); if (ta && window.innerWidth > 760) ta.focus();
   }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
 }
+/* v13.372 방 내용 받기 — 미리 받기(목록에 손가락 · 마우스가 올라가면, 안 읽은 방은 한가할 때)와 열기가 같은 요청을 나눠 씀 */
+CX.pf = {};
+function _cxFetchRoomNow(id, around) {
+  var e = encodeURIComponent(id);
+  return Promise.all([apiFetch('/api/chat/rooms/' + e), apiFetch('/api/chat/rooms/' + e + '/messages' + (around ? '?around=' + around : ''))]);
+}
+function _cxFetchRoom(id) {
+  var f = CX.pf[id];
+  if (f && Date.now() - f.t < 15000) { delete CX.pf[id]; return f.p; }   // 한 번만 씀 — 다음 열기는 새로
+  return _cxFetchRoomNow(id);
+}
+function _cxPrefetch(id) {
+  if (!id || id === CX.room || (CX.pf[id] && Date.now() - CX.pf[id].t < 15000) || typeof apiFetch !== 'function') return;
+  var p = _cxFetchRoomNow(id);
+  CX.pf[id] = { t: Date.now(), p: p };
+  p.then(function (rs) {   // 열기 전에도 담아 두면 열 때 바로 그려짐
+    if (CX.room === id || !CX.pf[id] || CX.pf[id].p !== p) return;
+    var rd = {}; (rs[1].reads || []).forEach(function (x) { rd[x.userId] = x.id; });
+    CX.cache[id] = { info: rs[0].data, msgs: rs[1].data || [], more: !!rs[1].more, reads: rd };
+    CX.cacheOrder = CX.cacheOrder.filter(function (x) { return x !== id; }); CX.cacheOrder.push(id);
+    while (CX.cacheOrder.length > 12) delete CX.cache[CX.cacheOrder.shift()];
+  }, function () { delete CX.pf[id]; });
+}
+/** 새 소식이 온 방은 미리 받은 것을 버림(옛 내용을 보여 주지 않게) */
+function _cxPfDrop(id) { delete CX.pf[id]; }
+/** 한가할 때 안 읽은 방 3곳까지 미리 */
+function _cxPrefetchIdle() {
+  var run = function () { CX.rooms.filter(function (r) { return r.unread && r.id !== CX.room && !CX.cache[r.id]; }).slice(0, 3).forEach(function (r, i) { setTimeout(function () { _cxPrefetch(r.id); }, i * 300); }); };
+  if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 3000 }); else setTimeout(run, 1500);
+}
+/** 열자마자 읽음 — 목록이 아는 마지막 번호로 (서버가 실제 마지막을 넘지 않게 자름) */
+function _cxReadEarly(id) {
+  var r = CX.rooms.filter(function (x) { return x.id === id; })[0];
+  if (!r || !r.lastId || !(r.unread || r.mentioned)) return;
+  CX.readFrom = { room: id, id: r.readId || 0 };   // "여기부터 안 읽음" 줄은 읽기 전 위치로
+  r.unread = 0; r.mentioned = 0; r.readId = r.lastId; _cxDrawRooms(); chatBadge();
+  apiFetch('/api/chat/rooms/' + encodeURIComponent(id) + '/read', { method: 'POST', body: JSON.stringify({ lastId: r.lastId }) }).catch(function () {});
+}
 function _cxLastId() { for (var i = CX.msgs.length - 1; i >= 0; i--) if (typeof CX.msgs[i].id === 'number') return CX.msgs[i].id; return 0; }
 function _cxMarkRead() {
   var last = _cxLastId();
@@ -355,9 +426,12 @@ function _cxMarkRead() {
   if (!last || (CX.reads[_cxMe()] || 0) >= last) { if (r && r.unread) { r.unread = 0; _cxDrawRooms(); chatBadge(); } return; }
   CX.reads[_cxMe()] = last;
   if (r) { r.unread = 0; r.mentioned = 0; _cxDrawRooms(); chatBadge(); }
-  clearTimeout(CX.readT);
+  // v13.372 첫 번은 바로 보내고, 0.4초 안에 또 오면 끝에 한 번 (예전: 늘 0.4초 기다림)
   var room = CX.room;
-  CX.readT = setTimeout(function () { apiFetch('/api/chat/rooms/' + encodeURIComponent(room) + '/read', { method: 'POST', body: JSON.stringify({ lastId: last }) }).catch(function () {}); }, 400);   // v13.366 모아서
+  function send(rm, id) { apiFetch('/api/chat/rooms/' + encodeURIComponent(rm) + '/read', { method: 'POST', body: JSON.stringify({ lastId: id }) }).catch(function () {}); }
+  if (CX.readT) { CX.readNext = { room: room, id: last }; return; }
+  send(room, last);
+  CX.readT = setTimeout(function () { CX.readT = null; var n = CX.readNext; CX.readNext = null; if (n) send(n.room, n.id); }, 400);
 }
 document.addEventListener('visibilitychange', function () { if (!document.hidden && CX.room && _cxVisibleRoom(CX.room)) _cxMarkRead(); });
 
@@ -376,6 +450,7 @@ function _cxDrawMain() {
   box.addEventListener('scroll', function () { if (box.scrollTop < 60 && CX.more && !CX.loading) _cxLoadOlder(); _cxSoon('newb', _cxNewBtn); }, { passive: true });
   m.querySelector('#cxNewB').addEventListener('click', function () { CX.newBelow = 0; box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); _cxNewBtn(); });
   box.addEventListener('click', _cxMsgClick);
+  _cxLongPress(box);
   // 끌어 놓기
   var dz = m.querySelector('#cxDrop'), dc = 0;
   m.addEventListener('dragenter', function (e) { if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { dc++; dz.hidden = false; e.preventDefault(); } });
@@ -652,6 +727,8 @@ function _cxMsgClick(e) {
     return;
   }
   var mel = t.closest('[data-mid]'), m = mel && _cxFindMsg(+mel.dataset.mid);
+  var un = t.closest('[data-un]');
+  if (un && un.textContent && m) { _cxReadersPop(un, m); return; }   // v13.372 숫자 누르면 누가 읽었나
   var rx = t.closest('[data-rx]');
   if (rx && m) { _cxReact(m.id, rx.dataset.rx); return; }
   var a = t.closest('[data-a]');
@@ -686,9 +763,46 @@ function _cxOpenCard(c) {
 function _cxReact(mid, emoji) {
   apiFetch('/api/chat/messages/' + mid + '/react', { method: 'POST', body: JSON.stringify({ emoji: emoji }) }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
 }
-function _cxMsgMenu(btn, m) {
+/* v13.372 읽은 사람 · 안 읽은 사람 — 메시지 옆 숫자를 누르면 */
+function _cxReadersPop(anchor, m) {
+  var ms = ((CX.info && CX.info.members) || []).filter(function (u) { return u.id !== m.userId; });
+  var yes = ms.filter(function (u) { return (CX.reads[u.id] || 0) >= m.id; }), no = ms.filter(function (u) { return (CX.reads[u.id] || 0) < m.id; });
+  var old = document.getElementById('cxMenu'); if (old) old.remove();
+  var p = document.createElement('div'); p.id = 'cxMenu'; p.className = 'cx-menu cx-readers'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', '읽음 확인');
+  function list(t, arr, cls) { return '<div class="cx-rd-h ' + cls + '">' + t + ' <b>' + arr.length + '</b></div>' + (arr.length ? arr.map(function (u) { return '<div class="cx-rd-u">' + _cxAv(u.id, u.name, u.online) + '<span>' + _cxE(u.name) + (u.dept ? ' <i>' + _cxE(u.dept) + '</i>' : '') + '</span></div>'; }).join('') : '<div class="cx-rd-e">없음</div>'); }
+  p.innerHTML = list('안 읽음', no, 'no') + list('읽음', yes, 'yes');
+  document.body.appendChild(p);
+  var r = anchor.getBoundingClientRect(), w = p.offsetWidth, hh = p.offsetHeight;
+  p.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, r.left - w / 2)) + 'px';
+  p.style.top = (r.bottom + hh + 6 > window.innerHeight ? Math.max(6, r.top - hh - 4) : r.bottom + 4) + 'px';
+  setTimeout(function () { document.addEventListener('pointerdown', function off(e) { if (!p.contains(e.target)) { p.remove(); document.removeEventListener('pointerdown', off, true); } }, true); }, 0);
+}
+/* v13.372 휴대폰 — 메시지를 길게 누르면 메뉴(답글 · 공감 · 복사 …). 터치 화면엔 마우스 올림 단추가 없어서 */
+function _cxLongPress(box) {
+  var t = null, sx = 0, sy = 0;
+  box.addEventListener('touchstart', function (e) {
+    var b = e.target.closest('.cx-bw'); if (!b || e.touches.length > 1 || e.target.closest('a,button,img,[data-file]')) return;
+    var mel = b.closest('[data-mid]'), m = mel && _cxFindMsg(+mel.dataset.mid); if (!m || m.pending || m.deleted) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    clearTimeout(t); t = setTimeout(function () {
+      t = null; if (navigator.vibrate) try { navigator.vibrate(15); } catch (er) {}
+      mel.classList.add('cx-press'); setTimeout(function () { mel.classList.remove('cx-press'); }, 400);
+      var inTh = !!b.closest('#cxThMsgs');
+      _cxMsgMenu(b, m, [
+        ['😊 공감…', function () { _cxMenu(b, CX_REACTS.map(function (em) { return [em, function () { _cxReact(m.id, em); }]; }), 'cx-rxpick'); }],
+        inTh ? null : ['↩ 답글', function () { chatOpenThread(m.id); }]
+      ].filter(Boolean));
+    }, 480);
+  }, { passive: true });
+  function cancel(e) { if (!t) return; if (e && e.touches && e.touches[0] && Math.abs(e.touches[0].clientX - sx) < 8 && Math.abs(e.touches[0].clientY - sy) < 8) return; clearTimeout(t); t = null; }
+  box.addEventListener('touchmove', cancel, { passive: true });
+  box.addEventListener('touchend', function () { clearTimeout(t); t = null; });
+  box.addEventListener('touchcancel', function () { clearTimeout(t); t = null; });
+  box.addEventListener('contextmenu', function (e) { if (e.target.closest('.cx-bw') && matchMedia('(pointer:coarse)').matches) e.preventDefault(); });
+}
+function _cxMsgMenu(btn, m, pre) {
   var mine = m.userId === _cxMe();
-  _cxMenu(btn, [
+  _cxMenu(btn, (pre || []).concat([
     m.body ? ['📋 복사', function () { try { navigator.clipboard.writeText(m.body); _cxToast('복사했습니다', 'success'); } catch (e) {} }] : null,
     ['↪ 전달', function () { chatForwardModal(m); }],
     typeof chatSaveMenu === 'function' ? ['📁 폴더에 담기', function () { chatSaveMenu(btn, m); }] : null,
@@ -701,7 +815,7 @@ function _cxMsgMenu(btn, m) {
     }] : null,
     mine && m.body && m.kind === 'text' ? ['✏️ 수정', function () { _cxStartEdit(m); }] : null,
     mine ? ['🗑 삭제', function () { if (confirm('이 메시지를 지울까요? 모두에게서 지워집니다.')) apiFetch('/api/chat/messages/' + m.id, { method: 'DELETE' }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
-  ].filter(Boolean));
+  ]).filter(Boolean));
 }
 /* 작은 메뉴 (공용) */
 function _cxMenu(anchor, items, cls) {
@@ -924,7 +1038,7 @@ function _cxDrawAside() {
   if (CX.thread) {
     a.innerHTML = '<div class="cx-as-h"><b>💬 답글</b><button type="button" class="cx-ib" data-x aria-label="닫기">✕</button></div><div class="cx-msgs cx-th-msgs" id="cxThMsgs"></div>' + _cxComposerHtml('cxThIn', 'cxThComp');
     a.querySelector('[data-x]').addEventListener('click', function () { CX.thread = null; _cxDrawAside(); });
-    a.querySelector('#cxThMsgs').addEventListener('click', _cxMsgClick);
+    a.querySelector('#cxThMsgs').addEventListener('click', _cxMsgClick); _cxLongPress(a.querySelector('#cxThMsgs'));
     _cxBindComposer('cxThIn', 'cxThComp', true);
     _cxDrawThread();
     return;
