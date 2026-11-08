@@ -27,7 +27,7 @@ function kstToday() { return new Date(Date.now() + 9 * 3600000).toISOString().sl
 
 async function membership(tenantId, roomId, userId) {
   var r = await db.query(
-    'SELECT r.*, m.last_read_id, m.muted, m.pinned, m.left_at, m.role, m.hist_from FROM chat_rooms r LEFT JOIN chat_members m ON m.room_id = r.id AND m.user_id = $3 ' +
+    'SELECT r.*, m.last_read_id, m.muted, m.pinned, m.left_at, m.role, m.hist_from, m.joined_at FROM chat_rooms r LEFT JOIN chat_members m ON m.room_id = r.id AND m.user_id = $3 ' +
     'WHERE r.id = $1 AND r.tenant_id = $2', [roomId, tenantId, userId]);
   return r.rows[0] || null;
 }
@@ -331,12 +331,15 @@ router.get('/rooms/:id', async function (req, res) {
     var all = await Promise.all([
       db.query('SELECT m.user_id, m.role, m.last_read_id, COALESCE(u.display_name, u.name) AS name, d.name AS dept, CASE WHEN s.focus_until > now() THEN s.focus_until END AS focus_until FROM chat_members m JOIN users u ON u.id = m.user_id LEFT JOIN departments d ON d.id = u.department_id LEFT JOIN chat_user_state s ON s.user_id = m.user_id WHERE m.room_id = $1 AND m.left_at IS NULL ORDER BY 4', [room.id]),
       room.notice_id ? loadMsg(room.notice_id) : null,
-      room.kind !== 'dm' ? canManage(req, room) : false
+      room.kind !== 'dm' ? canManage(req, room) : false,
+      // v13.375 들어오기 전 대화 — 최근 30일 안에 들어왔으면 그 앞 대화 수 (👋 요약 · 처음부터 읽기 띠)
+      room.kind !== 'dm' && room.joined_at && Date.now() - new Date(room.joined_at) < 30 * 864e5 ?
+        db.query("SELECT COUNT(*)::int AS n, MAX(id) AS up FROM chat_messages WHERE room_id = $1 AND created_at < $2 AND kind <> 'system' AND reply_to IS NULL AND deleted_at IS NULL", [room.id, room.joined_at]) : null
     ]);
-    var m = all[0], notice = all[1];
+    var m = all[0], notice = all[1], pr = all[3] && all[3].rows[0];
     var on = hub.onlineSet(m.rows.map(function (x) { return x.user_id; }));
     res.json({ data: { id: room.id, kind: room.kind, name: room.name, projectId: room.project_id, muted: room.muted, pinned: room.pinned, lastReadId: +room.last_read_id, notice: notice && !notice.deleted && !(room.hist_from && notice.id <= +room.hist_from) ? notice : null,
-      myRole: room.role || 'member', equipKey: room.equip_key || null, canManage: !!all[2], histFrom: room.hist_from ? +room.hist_from : null,
+      myRole: room.role || 'member', equipKey: room.equip_key || null, canManage: !!all[2], histFrom: room.hist_from ? +room.hist_from : null, prior: pr && pr.n ? { n: pr.n, upTo: +pr.up, joinedAt: room.joined_at } : null,
       members: m.rows.map(function (x) { return { id: x.user_id, name: x.name, dept: x.dept || '', role: x.role, online: !!on[x.user_id], focusUntil: x.focus_until || null, readId: +x.last_read_id, me: x.user_id === me(req) }; }) } });
   } catch (e) { httpErr.serverError(res, '[chat/room]', e); }
 });
@@ -359,11 +362,11 @@ router.post('/rooms/:id/members', async function (req, res) {
     if (room.kind === 'dm') return bad(res, '1:1 대화에는 사람을 더할 수 없습니다 — 새 그룹 대화를 만드세요.');
     if (readOnly(res, room)) return;
     var ids = Array.isArray((req.body || {}).userIds) ? req.body.userIds.slice(0, 100) : [];
-    var hist = (req.body || {}).history !== false;   // v13.359 이전 대화 보여 주기 (기본 예)
+    var hist = true;   // v13.375 업무용 — 들어온 사람도 늘 처음부터 봄 (예전 '이전 대화 안 보여 주기' 없앰)
     var mx = (await db.query('SELECT COALESCE(MAX(id),0) AS mx FROM chat_messages WHERE room_id = $1', [room.id])).rows[0].mx;
     var v = await db.query("SELECT id, COALESCE(display_name, name) AS n FROM users WHERE id = ANY($1) AND tenant_id = $2 AND status = 'active'", [ids, req.tenant.id]);
     for (var u of v.rows) await db.query("INSERT INTO chat_members (room_id, user_id, tenant_id, last_read_id, hist_from, role) VALUES ($1,$2,$3,$4,$5,'member') " +
-      'ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL, hist_from = EXCLUDED.hist_from, last_read_id = GREATEST(chat_members.last_read_id, EXCLUDED.last_read_id)',
+      'ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL, hist_from = NULL, joined_at = CASE WHEN chat_members.left_at IS NOT NULL THEN now() ELSE chat_members.joined_at END, last_read_id = GREATEST(chat_members.last_read_id, EXCLUDED.last_read_id)',
       [room.id, u.id, req.tenant.id, mx, hist ? null : mx]); _midDrop(room.id);
     if (v.rows.length) await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (req.user.name || '') + ' 님이 ' + v.rows.map(function (u) { return u.n; }).join(', ') + ' 님을 초대했습니다' + (hist ? '' : ' (이전 대화는 안 보임)') });
     res.json({ data: { added: v.rows.length } });
@@ -427,13 +430,15 @@ router.get('/rooms/:id/messages', async function (req, res) {
     else where.push('m.reply_to IS NULL');
     if (req.query.before) { params.push(+req.query.before); where.push('m.id < $' + params.length); }
     if (req.query.around) { params.push(+req.query.around + 25); where.push('m.id <= $' + params.length); }
+    var fwd = req.query.after != null && req.query.after !== '';   // v13.375 앞으로 읽기 — after 다음부터 오래된 순
+    if (fwd) { params.push(Math.max(0, +req.query.after || 0)); where.push('m.id > $' + params.length); }
     params.push(lim);
     var both = await Promise.all([   // v13.372 메시지 · 읽은 위치 동시에
-      db.query(MSG_SQL + 'WHERE ' + where.join(' AND ') + ' ORDER BY m.id DESC LIMIT $' + params.length, params),
+      db.query(MSG_SQL + 'WHERE ' + where.join(' AND ') + ' ORDER BY m.id ' + (fwd ? 'ASC' : 'DESC') + ' LIMIT $' + params.length, params),
       db.query('SELECT user_id, last_read_id FROM chat_members WHERE room_id = $1 AND left_at IS NULL', [room.id])
     ]);
     var r = both[0], reads = both[1];
-    var rows = r.rows.map(shape).reverse();
+    var rows = r.rows.map(shape); if (!fwd) rows.reverse();
     res.json({ data: rows, more: r.rows.length === lim, reads: reads.rows.map(function (x) { return { userId: x.user_id, id: +x.last_read_id }; }) });
   } catch (e) { httpErr.serverError(res, '[chat/messages]', e); }
 });
@@ -1243,8 +1248,10 @@ function aiCtx(req) { return { tenantId: req.tenant.id, userId: me(req), name: r
 router.post('/rooms/:id/catchup', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
-    var since = Math.max(+(req.body || {}).sinceId || 0, room.hist_from ? +room.hist_from : 0);
-    var r = await db.query(MSG_SQL + 'WHERE m.room_id = $1 AND m.id > $2 AND m.reply_to IS NULL AND m.deleted_at IS NULL AND (m.user_id IS NULL OR m.user_id <> $3) ORDER BY m.id LIMIT 300', [room.id, since, me(req)]);
+    var since = Math.max(+(req.body || {}).sinceId || 0, room.hist_from ? +room.hist_from : 0), upTo = +(req.body || {}).upTo || 0;
+    // v13.375 upTo — 들어오기 전 대화(그때까지 최근 300개) 정리
+    var r = upTo ? await db.query('SELECT * FROM (' + MSG_SQL + 'WHERE m.room_id = $1 AND m.id <= $2 AND m.reply_to IS NULL AND m.deleted_at IS NULL ORDER BY m.id DESC LIMIT 300) z ORDER BY id', [room.id, upTo])
+      : await db.query(MSG_SQL + 'WHERE m.room_id = $1 AND m.id > $2 AND m.reply_to IS NULL AND m.deleted_at IS NULL AND (m.user_id IS NULL OR m.user_id <> $3) ORDER BY m.id LIMIT 300', [room.id, since, me(req)]);
     var rows = r.rows.map(shape).map(function (m) { return { who: m.userName || 'AI', body: m.body, kind: m.kind, post: m.post, file: m.file && m.file.name, at: m.at, mentionsMe: (m.mentions || []).indexOf(me(req)) >= 0 }; });
     if (!rows.filter(function (x) { return x.kind !== 'system'; }).length) return res.json({ data: { text: '새 메시지가 없습니다.', ai: false, count: 0 } });
     var out = await chatAi.catchup(aiCtx(req), rows);

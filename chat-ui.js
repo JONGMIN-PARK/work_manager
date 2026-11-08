@@ -111,6 +111,8 @@ function chatOnEvent(ev, d) {
     } else _cxLoadRooms();
     if (CX.room === d.roomId) {
       if (d.replyTo) { if (CX.thread === d.replyTo) { CX.threadMsgs.push(d); _cxDrawThread(true); } }
+      else if (CX.fwd && !mine) { CX.newBelow++; _cxNewBtn(); }   // v13.375 옛 대화를 읽는 중 — 최근으로 가면 보임
+      else if (CX.fwd && mine) { _cxToLatest(); }
       else { if (!(d.userId === _cxMe() && _cxSettlePending(d))) _cxUpsert(d); _cxDrawMsgs(true); _cxCacheTouch(); }
       if (_cxVisibleRoom(d.roomId)) _cxMarkRead();
     }
@@ -383,6 +385,7 @@ function chatOpenRoom(id, keep, focusMid) {
   if (changed && CX.room) { _cxDraftSave(); _cxCacheTouch(); }
   CX.room = id;
   // 방이 바뀌면 그 방 것만 — 예전 방의 답글 줄기 · 고른 카드 · 수정 중 · 옆 탭은 비움
+  CX.fwd = false;
   if (changed) { CX.msgs = []; CX.info = null; CX.ctx = null; CX.cards = []; CX.replyTo = null; CX.editId = null; CX.thread = null; CX.threadMsgs = []; CX.asideTab = null; CX.readMark = null; CX.newBelow = 0; }
   var cached = changed && !focusMid && CX.cache[id];
   var reuse = !changed && !!CX.info && !!document.getElementById('cxMsgs');   // v13.366 같은 방 다시 열기 — 화면은 그대로, 내용만 새로
@@ -404,6 +407,8 @@ function chatOpenRoom(id, keep, focusMid) {
     if (!focusMid && !(!changed && CX.readMark != null)) { var me0 = _cxMe(); CX.readMark = CX.msgs.some(function (m) { return typeof m.id === 'number' && m.id > _readBefore && m.userId !== me0 && m.kind !== 'system'; }) ? _readBefore : null; }
     _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(cached || reuse ? true : false, focusMid); _cxMarkRead(); _cxDrawAside(); _cxCacheTouch();
     if (CX.readMark != null && !focusMid) { var ln = document.querySelector('#cxMsgs .cx-unl'); var bx = document.getElementById('cxMsgs'); if (ln && bx) { var lt = ln.getBoundingClientRect().top - bx.getBoundingClientRect().top + bx.scrollTop; if (lt < bx.scrollHeight - bx.clientHeight) bx.scrollTop = Math.max(0, lt - 60); } }   // 안 읽은 첫 줄로
+    if (focusMid) { var rr0 = CX.rooms.filter(function (x) { return x.id === my; })[0]; CX.fwd = !!(rr0 && rr0.lastId > _cxLastId()); if (CX.fwd) _cxNewBtn(); }   // v13.375 옛 자리 — 아래로 내리면 이어서
+    if (typeof chatSmartPrior === 'function' && !focusMid) chatSmartPrior(CX.info);   // 👋 들어오기 전 대화
     if (CX.openThread) { var th = CX.openThread; CX.openThread = null; chatOpenThread(th); }
     if (typeof chatTimeStrip === 'function') chatTimeStrip();   // ⏰ 이 방 예약
     if (typeof chatSmartCatchup === 'function' && !focusMid && !(reuse && document.getElementById('csCatch'))) chatSmartCatchup(_readBefore);   // ✨ 안 읽은 게 많으면 요약 띠   // 요청함 · 폴더에서 글 열기
@@ -484,8 +489,12 @@ function _cxDrawMain() {
   _cxBindComposer('cxIn', 'cxComp', false);
   var ta0 = m.querySelector('#cxIn'); if (ta0 && CX.drafts[CX.room]) { ta0.value = CX.drafts[CX.room]; ta0.style.height = 'auto'; ta0.style.height = Math.min(160, ta0.scrollHeight) + 'px'; }
   var box = m.querySelector('#cxMsgs');
-  box.addEventListener('scroll', function () { if (box.scrollTop < 60 && CX.more && !CX.loading) _cxLoadOlder(); _cxSoon('newb', _cxNewBtn); }, { passive: true });
-  m.querySelector('#cxNewB').addEventListener('click', function () { CX.newBelow = 0; box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); _cxNewBtn(); });
+  box.addEventListener('scroll', function () {
+    if (box.scrollTop < 60 && CX.more && !CX.loading) _cxLoadOlder();
+    if (CX.fwd && !CX.loading && box.scrollHeight - box.scrollTop - box.clientHeight < 200) _cxLoadNewer();   // v13.375 앞으로 읽기
+    _cxSoon('newb', _cxNewBtn);
+  }, { passive: true });
+  m.querySelector('#cxNewB').addEventListener('click', function () { if (CX.fwd) { _cxToLatest(); return; } CX.newBelow = 0; box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); _cxNewBtn(); });
   box.addEventListener('click', _cxMsgClick);
   _cxLongPress(box);
   // 끌어 놓기
@@ -674,6 +683,7 @@ function _cxDrawMsgs(append, focusMid) {
   _cxDrawReadCounts();
   if (focusMid) { _cxJump(focusMid); return; }
   if (append === 'older') box.scrollTop = box.scrollHeight - prevH + prevTop;
+  else if (append === 'newer' || append === 'top') { if (append === 'top') box.scrollTop = 0; }
   else if (!append || atBottom || (n && CX.msgs[n - 1].userId === _cxMe() && added === 0)) { box.scrollTop = box.scrollHeight; CX.newBelow = 0; }
   else if (added) CX.newBelow += added;   // 위를 보고 있을 때 온 것 — ↓ 단추로 알려 줌
   _cxNewBtn();
@@ -683,10 +693,10 @@ function _cxNewBtn() {
   var b = document.getElementById('cxNewB'), box = document.getElementById('cxMsgs'); if (!b || !box) return;
   var gap = box.scrollHeight - box.scrollTop - box.clientHeight;
   if (gap < 80) CX.newBelow = 0;
-  var show = CX.newBelow > 0 || gap > box.clientHeight * 1.5;
+  var show = CX.newBelow > 0 || CX.fwd || gap > box.clientHeight * 1.5;
   b.hidden = !show; if (!show) return;
   b.classList.toggle('has-new', CX.newBelow > 0);
-  b.querySelector('span').textContent = CX.newBelow > 0 ? '새 메시지 ' + CX.newBelow + '개' : '맨 아래로';
+  b.querySelector('span').textContent = CX.newBelow > 0 ? '새 메시지 ' + CX.newBelow + '개' : CX.fwd ? '최근 대화로' : '맨 아래로';
   var comp = document.getElementById('cxComp') || document.querySelector('#cxMain .cx-ro'), ty = document.getElementById('cxTyping');
   b.style.bottom = ((comp ? comp.offsetHeight : 60) + (ty ? ty.offsetHeight : 0) + 12) + 'px';
 }
@@ -708,9 +718,43 @@ function _cxLoadOlder() {
     _cxDrawMsgs('older');
   }).catch(function () { CX.loading = false; });
 }
+/* v13.375 앞으로 읽기 — 처음부터 읽거나 찾기로 옛 자리에 갔을 때, 아래로 내리면 다음 것을 이어 받음 */
+function _cxLoadNewer() {
+  var last = _cxLastId(); if (!last || !CX.room) return;
+  CX.loading = true; var my = CX.room;
+  apiFetch('/api/chat/rooms/' + encodeURIComponent(my) + '/messages?after=' + last).then(function (r) {
+    CX.loading = false; if (CX.room !== my) return;
+    var add = (r.data || []).filter(function (m) { return !CX.msgs.some(function (x) { return x.id === m.id; }); });
+    CX.msgs = CX.msgs.filter(function (m) { return !m.pending; }).concat(add); CX.fwd = !!r.more;
+    if (!CX.fwd) CX.newBelow = 0;
+    _cxDrawMsgs('newer'); _cxMarkRead();
+  }).catch(function () { CX.loading = false; });
+}
+/** 👋 처음부터 읽기 */
+function chatReadFromStart() {
+  if (!CX.room) return;
+  CX.loading = true; var my = CX.room;
+  apiFetch('/api/chat/rooms/' + encodeURIComponent(my) + '/messages?after=0').then(function (r) {
+    CX.loading = false; if (CX.room !== my) return;
+    CX.msgs = r.data || []; CX.more = false; CX.fwd = !!r.more; CX.readMark = null; CX.newBelow = 0;
+    var box = document.getElementById('cxMsgs'); if (box) { box._ids = null; }
+    _cxDrawMsgs('top'); _cxNewBtn();
+  }).catch(function (e) { CX.loading = false; _cxToast(_cxErr(e), 'error'); });
+}
+/** 최근 대화로 (앞으로 읽던 중) */
+function _cxToLatest() {
+  if (!CX.room) return;
+  var my = CX.room; CX.loading = true;
+  apiFetch('/api/chat/rooms/' + encodeURIComponent(my) + '/messages').then(function (r) {
+    CX.loading = false; if (CX.room !== my) return;
+    CX.msgs = (r.data || []).concat(CX.msgs.filter(function (m) { return m.pending; })); CX.more = !!r.more; CX.fwd = false; CX.newBelow = 0;
+    var box = document.getElementById('cxMsgs'); if (box) { box._ids = null; }
+    _cxDrawMsgs(false); _cxMarkRead(); _cxCacheTouch();
+  }).catch(function () { CX.loading = false; });
+}
 function _cxJump(id) {
   var el = document.querySelector('#cxMsgs [data-mid="' + id + '"]');
-  if (!el) { if (CX.more) { CX.loading = true; apiFetch('/api/chat/rooms/' + CX.room + '/messages?around=' + id + '&limit=120').then(function (r) { CX.loading = false; CX.msgs = r.data || []; CX.more = !!r.more; _cxDrawMsgs(false, null); var e2 = document.querySelector('#cxMsgs [data-mid="' + id + '"]'); if (e2) { e2.scrollIntoView({ block: 'center' }); e2.classList.add('cx-hl'); } }).catch(function () { CX.loading = false; }); } return; }
+  if (!el) { if (CX.more) { CX.loading = true; apiFetch('/api/chat/rooms/' + CX.room + '/messages?around=' + id + '&limit=120').then(function (r) { CX.loading = false; CX.msgs = r.data || []; CX.more = !!r.more; var rr1 = CX.rooms.filter(function (x) { return x.id === CX.room; })[0]; CX.fwd = !!(rr1 && rr1.lastId > _cxLastId()); _cxDrawMsgs('newer', null); var e2 = document.querySelector('#cxMsgs [data-mid="' + id + '"]'); if (e2) { e2.scrollIntoView({ block: 'center' }); e2.classList.add('cx-hl'); } }).catch(function () { CX.loading = false; }); } return; }
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   el.classList.remove('cx-hl'); void el.offsetWidth; el.classList.add('cx-hl');
 }
@@ -987,6 +1031,7 @@ function _cxBindComposer(taId, wrapId, inThread) {
 }
 function _cxSend(body, replyTo, cards) {
   var room = CX.room, pid = null;
+  if (CX.fwd && !replyTo) _cxToLatest();   // v13.375 옛 대화를 읽다가 보내면 최근으로
   if (!replyTo && body && body[0] !== '/') {   // v13.366 보내는 중 — 바로 보이게
     pid = 'p' + (++CX.pendSeq);
     CX.msgs.push({ id: pid, pending: true, roomId: room, userId: _cxMe(), userName: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || '', kind: 'text', body: body, cards: cards && cards.length ? cards : null, mentions: [], at: new Date().toISOString() });
@@ -1225,12 +1270,12 @@ function chatInviteModal() {
   return wmGuardedModal('chatInvite', function () {
     var m = createModal({ id: 'chatInvModal', title: '➕ 사람 초대', width: '420px', closeOnEsc: true, closeOnOverlay: true,
       html: '<input class="wr-inp cx-mq" data-q placeholder="이름 · 부서 찾기"><div class="cx-plist" data-list></div>' +
-        '<label class="cx-hist"><input type="checkbox" data-hist checked> <span><b>이전 대화도 보여 주기</b><i>끄면 초대한 다음부터만 보입니다 (게시판 · 파일 · 찾기도)</i></span></label>' +
+        '<div class="cx-hist-note">초대한 사람도 이 방의 대화를 처음부터 모두 봅니다</div>' +
         '<div class="cx-mfoot"><span data-n>0명</span><button type="button" class="wm-pri" data-go disabled>초대</button></div>' });
     var picked = [];
     _cxPeoplePick(m.box, true, CX.info.members.map(function (x) { return x.id; }), function (ids) { picked = ids; m.box.querySelector('[data-n]').textContent = ids.length + '명'; m.box.querySelector('[data-go]').disabled = !ids.length; });
     m.box.querySelector('[data-go]').addEventListener('click', function () {
-      apiFetch('/api/chat/rooms/' + CX.room + '/members', { method: 'POST', body: JSON.stringify({ userIds: picked, history: m.box.querySelector('[data-hist]').checked }) }).then(function () { m.close(); chatOpenRoom(CX.room, true); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
+      apiFetch('/api/chat/rooms/' + CX.room + '/members', { method: 'POST', body: JSON.stringify({ userIds: picked }) }).then(function () { m.close(); chatOpenRoom(CX.room, true); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
     });
   }, 'chatInvModal');
 }

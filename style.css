@@ -5763,3 +5763,11 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .wm-upd-x{border:1px solid var(--bd);background:none;color:var(--t3)}
 @media (max-width:600px){.wm-upd{left:8px;right:8px;transform:none;width:auto;flex-wrap:wrap}.wm-upd-t{flex:1 1 calc(100% - 40px)}.wm-upd-t i{max-width:none;white-space:normal}.wm-upd button{flex:1}@keyframes wmUpdIn{from{opacity:0}to{opacity:1}}}
 @media (prefers-reduced-motion:reduce){.wm-upd{animation:none}}
+
+/* ═══ v13.375 👋 들어오기 전 대화 · 초대 안내 ═══ */
+.cs-prior .cs-p-t{flex:1;font-size:13px;font-weight:600;color:var(--t1);padding:5px 6px;min-width:0}
+.cs-prior>button:not(.cx-ib),.cs-prior .cs-h>button:not(.cx-ib){flex:none;border:1px solid color-mix(in srgb,#8B5CF6 35%,var(--bd));border-radius:9px;background:var(--bg-p);color:var(--t2);font:inherit;font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer}
+.cs-prior>button:not(.cx-ib):hover,.cs-prior .cs-h>button:not(.cx-ib):hover{border-color:#8B5CF6}
+.cs-prior .cs-h b{flex:1}
+@media (max-width:600px){.cs-prior:not(.open){flex-wrap:wrap}.cs-prior .cs-p-t{flex:1 1 100%}}
+.cx-hist-note{font-size:12px;color:var(--t5);padding:6px 2px 0}

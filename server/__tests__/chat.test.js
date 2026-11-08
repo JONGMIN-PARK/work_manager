@@ -287,24 +287,32 @@ test('📁 내 폴더 (v13.358) — 만들기 · 담기 · 보기 · 남은 못 
   expect((await api('get', '/api/chat/folders', b)).body.data.length).toBe(0);
 });
 
-test('👥 참여자 (v13.359) — 이전 대화 안 보여 주고 초대 · 방장 · 읽기만 · 내보내기', async function () {
+test('👥 참여자 (v13.359 · v13.375) — 초대해도 처음부터 다 봄 · 들어오기 전 대화 · 앞으로 읽기 · 방장 · 읽기만 · 내보내기', async function () {
   var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '참여자시험', userIds: [b.user.id] })).body.data.id;
   var old = (await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '예전 비밀 이야기' })).body.data;
   await api('post', '/api/chat/rooms/' + g + '/posts', a).send({ cat: 'req', title: '예전 요청', assignee: b.user.id });
-  // c: 이전 대화 안 보여 줌 · x: 보여 줌
+  // v13.375 업무용 — '이전 대화 안 보여 주기'를 보내도 무시, 들어온 사람도 처음부터 다 봄
+  await new Promise(function (r) { setTimeout(r, 30); });
   await api('post', '/api/chat/rooms/' + g + '/members', a).send({ userIds: [c.user.id], history: false });
   await api('post', '/api/chat/rooms/' + g + '/members', a).send({ userIds: [x.user.id] });
   var cm = (await api('get', '/api/chat/rooms/' + g + '/messages', c)).body.data.map(function (m) { return m.body; });
-  expect(cm.join('|')).not.toMatch(/예전 비밀/);
-  expect(cm.join('|')).toMatch(/이전 대화는 안 보임/);
-  expect((await api('get', '/api/chat/rooms/' + g + '/messages', x)).body.data.map(function (m) { return m.body; })).toContain('예전 비밀 이야기');
-  expect((await api('get', '/api/chat/rooms/' + g + '/posts', c)).body.data.length).toBe(0);
-  expect((await api('get', '/api/chat/search?q=' + encodeURIComponent('예전 비밀'), c)).body.data.length).toBe(0);
-  expect((await api('get', '/api/chat/search?q=' + encodeURIComponent('예전 비밀'), x)).body.data.length).toBe(1);
-  expect((await api('get', '/api/chat/rooms/' + g + '/messages?thread=' + old.id, c)).body.data.length).toBe(0);
+  expect(cm).toContain('예전 비밀 이야기');
+  expect((await api('get', '/api/chat/rooms/' + g + '/posts', c)).body.data.length).toBe(1);
+  expect((await api('get', '/api/chat/search?q=' + encodeURIComponent('예전 비밀'), c)).body.data.length).toBe(1);
   var info = (await api('get', '/api/chat/rooms/' + g, c)).body.data;
-  expect(info).toMatchObject({ myRole: 'member', canManage: false });
-  expect(info.histFrom).toBeGreaterThan(0);
+  expect(info).toMatchObject({ myRole: 'member', canManage: false, histFrom: null });
+  expect(info.prior).toMatchObject({ n: 2 });   // 들어오기 전 대화 (글 · 게시판 글)
+  expect(info.prior.upTo).toBeGreaterThanOrEqual(old.id);
+  expect((await api('get', '/api/chat/rooms/' + g, a)).body.data.prior).toBeNull();   // 만든 사람은 들어오기 전 대화 없음
+  // 앞으로 읽기 — after=0 은 오래된 순, more
+  var fw = (await api('get', '/api/chat/rooms/' + g + '/messages?after=0&limit=2', c)).body;
+  expect(fw.data.length).toBe(2); expect(fw.more).toBe(true);
+  expect(fw.data[0].id).toBeLessThan(fw.data[1].id);
+  var fw2 = (await api('get', '/api/chat/rooms/' + g + '/messages?after=' + fw.data[1].id + '&limit=200', c)).body;
+  expect(fw2.data[0].id).toBeGreaterThan(fw.data[1].id); expect(fw2.more).toBe(false);
+  // 들어오기 전 대화 정리 (AI 없으면 규칙)
+  var pc = (await api('post', '/api/chat/rooms/' + g + '/catchup', c).send({ upTo: info.prior.upTo })).body.data;
+  expect(pc.count).toBeGreaterThanOrEqual(2);
   var ia = (await api('get', '/api/chat/rooms/' + g, a)).body.data;
   expect(ia).toMatchObject({ myRole: 'owner', canManage: true });
   // 역할: 방장만 · 읽기만은 못 씀
@@ -437,10 +445,10 @@ test('📝 공동 문서 (v13.360) — 만들기 · 카드 · 같이 고치기 �
   expect((await api('put', '/api/chat/docs/' + d.id, b).send({ body: 'y', baseRev: 3 })).status).toBe(403);
   expect((await api('get', '/api/chat/docs/' + d.id, b)).body.data.readOnly).toBe(true);
   expect((await api('delete', '/api/chat/docs/' + d.id, b)).status).toBe(403);
-  // 이전 대화 안 보여 주고 초대된 c 는 그 앞 문서를 못 봄
+  // v13.375 나중에 초대된 c 도 그 앞 문서를 봄 (history:false 는 무시)
   await api('post', '/api/chat/rooms/' + g + '/members', a).send({ userIds: [c.user.id], history: false });
-  expect((await api('get', '/api/chat/docs/' + d.id, c)).status).toBe(404);
-  expect((await api('get', '/api/chat/rooms/' + g + '/docs', c)).body.data.length).toBe(0);
+  expect((await api('get', '/api/chat/docs/' + d.id, c)).status).toBe(200);
+  expect((await api('get', '/api/chat/rooms/' + g + '/docs', c)).body.data.length).toBe(1);
   // 손가락(줄) 전달
   got.length = 0;
   await api('post', '/api/chat/docs/' + d.id + '/cursor', a).send({ line: 7 });

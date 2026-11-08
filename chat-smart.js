@@ -36,6 +36,32 @@ function chatSmartCatchup(sinceId) {
   };
 }
 
+/* ①-2 👋 들어오기 전 대화 (v13.375) — 새로 들어온 사람이 화제를 파악하게: 요약 · 처음부터 읽기 */
+function chatSmartPrior(info) {
+  var old = document.getElementById('csPrior'); if (old) old.remove();
+  if (!info || !info.prior || !info.prior.n) return;
+  var key = 'wm-cs-prior-' + info.id;
+  try { if (localStorage.getItem(key)) return; } catch (e) {}
+  var host = document.getElementById('cxMsgs'); if (!host) return;
+  var el = document.createElement('div'); el.id = 'csPrior'; el.className = 'cs-catch cs-prior';
+  el.innerHTML = '<span class="cs-p-t">👋 들어오기 전 대화 <b>' + info.prior.n + '</b>개</span><button type="button" data-sum>✨ 요약 보기</button><button type="button" data-start>⇡ 처음부터 읽기</button><button type="button" class="cx-ib" data-x title="닫기 — 다시 안 보임">✕</button>';
+  host.parentNode.insertBefore(el, host);
+  var room = info.id;
+  function close() { el.remove(); try { localStorage.setItem(key, '1'); } catch (e) {} }
+  el.querySelector('[data-x]').onclick = close;
+  el.querySelector('[data-start]').onclick = function () { if (typeof chatReadFromStart === 'function') chatReadFromStart(); };
+  el.querySelector('[data-sum]').onclick = function () {
+    var b = el.querySelector('[data-sum]'); b.disabled = true; b.textContent = '✨ 정리하는 중…';
+    apiFetch('/api/chat/rooms/' + encodeURIComponent(room) + '/catchup', { method: 'POST', body: JSON.stringify({ upTo: info.prior.upTo }), timeoutMs: 90000 }).then(function (r) {
+      if (CX.room !== room) return;
+      el.className = 'cs-catch open cs-prior';
+      el.innerHTML = '<div class="cs-h"><b>👋 들어오기 전 대화 정리' + (r.data.count >= 300 ? ' (최근 300개)' : '') + '</b>' + _csTag(r.data.ai) + '<button type="button" data-start>⇡ 처음부터 읽기</button><button type="button" class="cx-ib" data-x title="닫기">✕</button></div><div class="cs-body nb-doc">' + _csMd(r.data.text) + '</div>';
+      el.querySelector('[data-x]').onclick = close;
+      el.querySelector('[data-start]').onclick = function () { if (typeof chatReadFromStart === 'function') chatReadFromStart(); };
+    }).catch(function (e) { b.disabled = false; b.textContent = '✨ 다시 시도'; _csToast(_csErr(e), 'error'); });
+  };
+}
+
 /* ② 글쓰기 창 채우기 — apply(s) 로 창에 넣음 */
 function chatSmartSuggest(text, btn, apply) {
   if (!String(text || '').trim()) { _csToast('먼저 내용을 적어 주세요 — 증상 · 상황을 그대로 적으면 됩니다', 'info'); return; }
@@ -58,4 +84,4 @@ function chatSmartBrief(host) {
   }).catch(function (e) { el.remove(); _csToast(_csErr(e), 'error'); });
 }
 
-if (typeof window !== 'undefined') { window.chatSmartCatchup = chatSmartCatchup; window.chatSmartSuggest = chatSmartSuggest; window.chatSmartBrief = chatSmartBrief; }
+if (typeof window !== 'undefined') { window.chatSmartCatchup = chatSmartCatchup; window.chatSmartPrior = chatSmartPrior; window.chatSmartSuggest = chatSmartSuggest; window.chatSmartBrief = chatSmartBrief; }
