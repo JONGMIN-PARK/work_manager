@@ -6084,7 +6084,7 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
   html.cx-full:has(#mMessages:not(.hidden)) .con{padding-top:0!important;padding-bottom:0!important}
   html.cx-full:has(#mMessages:not(.hidden)) body{padding-bottom:0!important}
   html.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx{border-top:0}
-  html.cx-full:has(#mMessages:not(.hidden)) #cxHead{padding-top:calc(8px + env(safe-area-inset-top,0px))}
+  html.cx-full:has(#mMessages:not(.hidden)) #cxHead{padding-top:calc(8px + env(safe-area-inset-top,0px))!important}   /* v13.388 휴대폰 .cx-h{padding:6px!important} 가 덮어 위 메뉴가 상태 표시줄 밑에 깔렸던 것 */
   /* 입력 줄 — 홈 막대만큼 다 띄우던 것(8px+34px)을 줄여 둥근 아래쪽까지 내려감 */
   .cx-comp{padding-bottom:max(8px,calc(env(safe-area-inset-bottom,0px) - 12px))!important}
   .cx.cx-kb .cx-comp{padding-bottom:6px!important}
