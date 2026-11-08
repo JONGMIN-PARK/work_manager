@@ -3580,7 +3580,9 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
  * 머리 · 대메뉴 · 하위 메뉴 · 툴바의 빈 공간을 줄이고, 한 줄에 들어가게. 넘치면 옆으로 밀어서 봄.
  * 세로 휴대폰(≤600px)과 가로 휴대폰(높이 ≤500px) 둘 다. */
 @media (max-width:600px), (max-height:500px) and (orientation:landscape){
-  .hdr{padding:4px 8px!important}
+  /* 위 · 좌우는 노치 · 다이내믹 아일랜드 · 상태 표시줄 안전 영역만큼 띄움 — 홈 화면 앱(투명 상태 표시줄)에서 메뉴가 상태 표시줄 밑으로 올라가 눌리지 않던 것 (v13.371) */
+  .hdr{padding:max(4px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) 4px max(8px,env(safe-area-inset-left))!important}
+  #globalSearchWrap:focus-within{top:max(4px,env(safe-area-inset-top))!important;left:max(8px,env(safe-area-inset-left))!important;right:max(8px,env(safe-area-inset-right))!important}
   .hdr-in{gap:6px!important}
   .hdr-brand h1{font-size:15px!important}
   #wmVerBadge{display:none!important}
@@ -3936,7 +3938,7 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 
 /* ─ 포커스 focus — 촘촘 · 표 줄무늬 · 줄 강조 ─ */
 [data-theme="focus"] body{background:#ECEEF1}
-[data-theme="focus"] .hdr{background:#FFFFFF!important;border-bottom:1px solid var(--bd);padding-top:10px;padding-bottom:10px}
+[data-theme="focus"] .hdr{background:#FFFFFF!important;border-bottom:1px solid var(--bd);padding-top:max(10px,env(safe-area-inset-top));padding-bottom:10px}
 [data-theme="focus"] .hdr::after{display:none}
 [data-theme="focus"] .pnl{padding:12px 14px;border-radius:8px;box-shadow:none;margin-bottom:10px}
 [data-theme="focus"] .wm-tb{padding:7px 10px;border-radius:8px;margin-bottom:8px}
@@ -5646,3 +5648,45 @@ body.wm-tabs-top .con{padding-top:12px}
 .cs-oh-h{font-size:10.5px;color:var(--t4);margin-left:auto;font-weight:600;white-space:nowrap}
 .cs-ul{margin:0;padding:0 0 0 15px;font-size:11.5px;color:var(--t3);line-height:1.55}
 @media (max-width:700px){ .cs-g{grid-template-columns:minmax(0,1fr)} }
+
+/* ═══ v13.371 💬 메신저 — 🔔 새 메시지 알림 · 휴대폰 입력칸 · 머리 정리 (chat-ui.js · chat-alert.js) ═══ */
+/* 머리 💬 — 새 메시지가 오면 흔들고 숫자가 톡 튐 */
+@keyframes cxPing{0%,100%{transform:rotate(0)}15%{transform:rotate(-14deg) scale(1.08)}30%{transform:rotate(12deg) scale(1.08)}45%{transform:rotate(-8deg)}60%{transform:rotate(5deg)}75%{transform:rotate(-2deg)}}
+@keyframes cxBadgePop{0%{transform:scale(.6)}55%{transform:scale(1.35)}100%{transform:scale(1)}}
+#hdrMsgBtn.cx-ping{animation:cxPing .9s ease-in-out;border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 22%,transparent)}
+#hdrMsgBtn.cx-ping #msgBadge{animation:cxBadgePop .45s ease-out}
+#msgBadge{box-shadow:0 0 0 2px var(--bg-h,var(--bg-p))}
+@media (prefers-reduced-motion:reduce){#hdrMsgBtn.cx-ping,#hdrMsgBtn.cx-ping #msgBadge{animation:none}}
+/* 알림 켜기 띠 — 닫기 ✕ */
+.cx-perm{line-height:1.4}
+.cx-perm>span{flex:1;min-width:0}
+.cx-perm .cx-perm-x{background:none;color:var(--ac-t);padding:3px 5px;opacity:.7}
+.cx-perm .cx-perm-x:hover{opacity:1}
+/* 입력칸 도구 — PC 는 그대로 한 줄, 휴대폰은 ＋ 하나로 접고 위로 도구판 */
+.cx-tools{display:contents}
+.cx-tools-t,.cx-tl{display:none}
+.cx-tools-t{transition:transform .2s}
+.cx-comp.tools-open .cx-tools-t{transform:rotate(45deg);background:var(--ac-bg);color:var(--ac-t)}
+@media (max-width:760px){
+  .cx-tools-t{display:inline-flex;font-size:20px;font-weight:300}
+  .cx-tools{display:none}
+  .cx-comp.tools-open .cx-tools{position:absolute;left:8px;right:8px;bottom:calc(100% + 6px);z-index:6;display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:6px;padding:10px;border:1px solid var(--bd);border-radius:16px;background:var(--bg-p);box-shadow:0 -14px 34px -16px rgba(15,23,42,.45);animation:cxIn .18s ease-out}
+  .cx-comp.tools-open .cx-tools .cx-ib{flex-direction:column;gap:4px;height:auto!important;min-width:0;padding:10px 4px;border-radius:12px!important;background:var(--bg-i);font-size:22px}
+  .cx-comp.tools-open .cx-tl{display:block;font-size:11.5px;color:var(--t3);white-space:nowrap}
+  /* 입력 줄 — [＋] [입력칸 넓게] [➤] */
+  .cx-comp{padding:6px 8px calc(8px + env(safe-area-inset-bottom))!important}
+  .cx-comp-r{gap:4px!important;padding:3px 3px 3px 4px!important}
+  .cx-comp textarea{padding:8px 6px!important}
+  .cx-send{width:36px;height:36px}
+  /* 대화방 머리 — 이름이 보이게. 📞 · ⓘ · ⋯ 만 남기고 나머지는 ⋯ 안으로 */
+  .cx-h{gap:6px!important;padding:6px 6px!important}
+  .cx-h-a [data-h="vcall"],.cx-h-a [data-h="present"],.cx-h-a [data-h="share"],.cx-h-a [data-h="find"],.cx-h-a [data-h="files"]{display:none}
+  .cx-h-t b,.cx-h-t span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cx-h .cx-av{width:32px;height:32px;font-size:13px}
+  /* 메신저는 화면 끝까지 — 높이는 chat-ui _cxFit 이 맞춤 */
+  .cx{min-height:300px!important;border-radius:12px!important}
+  /* 화면 안 새 메시지 알림 — 휴대폰은 위에서 (입력칸 · 키보드 안 가리게) */
+  .cx-pops{left:8px;right:8px;bottom:auto;top:calc(8px + env(safe-area-inset-top));align-items:stretch}
+  .cx-pop{width:auto;max-width:none}
+  .cx-pop.out{transform:translateY(-16px)}
+}

@@ -155,7 +155,7 @@ async function postMessage(ctx, room, m) {
 /* 📲 접속 안 한 사람에게 바로 휴대폰 푸시 (v13.359) — 음소거 방은 @멘션만 */
 var PUSH_GATE = new Map(), PUSH_GAP_MS = +(process.env.CHAT_PUSH_GAP_MS || 60000);
 function pushOffline(room, msg, others, mentions) {
-  var off = others.filter(function (u) { return !hub.online(u); });
+  var off = others.filter(function (u) { return !hub.awake(u); });   // v13.371 접속해 있어도 화면을 내려 둔(가려진) 사람에게는 푸시
   if (!off.length) return;
   db.query('SELECT user_id FROM chat_members WHERE room_id = $1 AND user_id = ANY($2) AND left_at IS NULL AND (muted = FALSE OR user_id = ANY($3))', [room.id, off, mentions || []]).then(function (r) {
     var ids = r.rows.map(function (x) { return x.user_id; });
@@ -198,6 +198,7 @@ router.get('/stream', auth.authenticate, tenant.tenantScope, function (req, res)
   res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.write('retry: 3000\n\n');
   var uid = me(req), wasOnline = hub.online(uid) || (LAST_OFF.get(uid) || 0) > Date.now() - PRESENCE_OFF_MS;
+  res.wmCid = String(req.query.cid || '').slice(0, 40) || null; res.wmAway = req.query.away === '1';   // v13.371 이 화면(탭 · 앱) 표시
   var off = hub.add(uid, res);
   hub.write(res, 'hello', { at: Date.now() });
   if (!wasOnline) presence(req.tenant.id, uid, true);
@@ -222,6 +223,13 @@ async function presence(tenantId, uid, on) {
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
+
+/* v13.371 이 화면이 가려졌다 · 다시 보인다 — 가려진 동안 새 메시지는 휴대폰 · 브라우저 푸시로 */
+router.post('/away', function (req, res) {
+  var b = req.body || {};
+  var n = hub.setAway(me(req), String(b.cid || '').slice(0, 40), !!b.away);
+  res.json({ data: { ok: true, conns: n } });
+});
 
 /* ─── 사람 목록 (새 대화 · 멘션) ─── */
 router.get('/users', async function (req, res) {

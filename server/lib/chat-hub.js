@@ -12,6 +12,14 @@ function add(userId, res) {
   return function () { var s = conns[userId]; if (!s) return; s.delete(res); if (!s.size) delete conns[userId]; };
 }
 function online(userId) { return !!(conns[userId] && conns[userId].size); }
+/* v13.371 화면을 보고 있는 연결이 하나라도 있나 — 휴대폰은 앱을 내리면(화면 가려짐) 연결이 한동안 살아 있어도
+ *   그 사이 화면 코드가 멈춰 알림을 못 띄움 → 가려진 연결만 남으면 푸시를 보냄 */
+function awake(userId) { var s = conns[userId]; if (!s) return false; for (var r of s) if (!r.wmAway) return true; return false; }
+function setAway(userId, cid, away) {
+  var s = conns[userId], n = 0; if (!s || !cid) return 0;
+  s.forEach(function (r) { if (r.wmCid === cid) { r.wmAway = !!away; n++; } });
+  return n;
+}
 function onlineSet(ids) { var o = {}; (ids || []).forEach(function (id) { if (online(id)) o[id] = true; }); return o; }
 
 function write(res, event, data) {
@@ -29,4 +37,4 @@ function publish(userIds, event, data) {
 function count() { var n = 0; Object.keys(conns).forEach(function (k) { n += conns[k].size; }); return n; }
 function _reset() { conns = {}; }
 
-module.exports = { add: add, online: online, onlineSet: onlineSet, publish: publish, write: write, count: count, _reset: _reset };
+module.exports = { add: add, online: online, awake: awake, setAway: setAway, onlineSet: onlineSet, publish: publish, write: write, count: count, _reset: _reset };

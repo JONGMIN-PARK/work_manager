@@ -375,6 +375,19 @@ test('📲 푸시 (v13.359) — 구독 · 접속 안 한 사람에게 바로 · 
   await new Promise(function (r) { setTimeout(r, 300); });
   expect(sent.length).toBe(0);
   off();
+  // v13.371 접속은 살아 있어도 화면을 내려 둔(가려진) 연결뿐이면 보냄 · 다시 보이면 안 보냄
+  var awayConn = { write: function () {}, on: function () {}, wmCid: 'cid-away-' + S };
+  off = hub.add(b.user.id, awayConn);
+  expect((await api('post', '/api/chat/away', b).send({ cid: 'cid-away-' + S, away: true })).body.data.conns).toBe(1);
+  await api('post', '/api/chat/rooms/' + dm + '/messages', a).send({ body: '앱 내려 둠' });
+  await new Promise(function (r) { setTimeout(r, 300); });
+  expect(sent.filter(function (s) { return s.ep === sub.endpoint; }).length).toBe(1);
+  sent.length = 0;
+  await api('post', '/api/chat/away', b).send({ cid: 'cid-away-' + S, away: false });
+  await api('post', '/api/chat/rooms/' + dm + '/messages', a).send({ body: '다시 봄' });
+  await new Promise(function (r) { setTimeout(r, 300); });
+  expect(sent.length).toBe(0);
+  off();
   // 만료 구독은 지움
   var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '푸시', userIds: [c.user.id] })).body.data.id;
   await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: 'hi' });

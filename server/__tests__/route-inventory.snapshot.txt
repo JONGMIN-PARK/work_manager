@@ -405,6 +405,7 @@ POST /api/auth/register
 POST /api/billing/checkout
 POST /api/billing/portal
 POST /api/billing/webhook
+POST /api/chat/away
 POST /api/chat/docs/:did/cursor
 POST /api/chat/equipment/room
 POST /api/chat/files/:fid/annot

@@ -47,12 +47,12 @@ function _cxText(s) {
 }
 
 /* ─── 실시간 스트림 ─── */
-var CXS = { ctrl: null, on: false, backoff: 1000, timer: null };
+var CXS = { ctrl: null, on: false, backoff: 1000, timer: null, cid: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) };   // cid — 이 탭 · 앱 (v13.371 가려짐 알리기)
 function chatStreamStart() {
   if (CXS.on || typeof apiFetch !== 'function' || !_cxMe() || (typeof AUTH_SKIP !== 'undefined' && AUTH_SKIP)) return;
   CXS.on = true;
   var ctrl = CXS.ctrl = new AbortController();
-  fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/stream', { headers: { Authorization: 'Bearer ' + (typeof _accessToken !== 'undefined' ? _accessToken : '') }, signal: ctrl.signal, cache: 'no-store' })
+  fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/stream?cid=' + CXS.cid + (document.hidden ? '&away=1' : ''), { headers: { Authorization: 'Bearer ' + (typeof _accessToken !== 'undefined' ? _accessToken : '') }, signal: ctrl.signal, cache: 'no-store' })
     .then(function (res) {
       if (res.status === 401) { CXS.on = false; return apiFetch('/api/chat/unread-count').then(function () { CXS.timer = setTimeout(chatStreamStart, 500); }); }   // 토큰 새로 받고 다시
       if (!res.ok || !res.body) throw new Error('stream ' + res.status);
@@ -93,6 +93,7 @@ function _cxVisibleRoom(id) {
 }
 function chatOnEvent(ev, d) {
   if (ev === 'hello') {   // (다시) 붙으면 놓친 것 반영 — 열린 방 메시지도
+    if (typeof chatAlertOnHello === 'function') chatAlertOnHello();   // v13.371 가려짐 상태 맞추기
     if (CX.rooms.length) _cxLoadRooms(); else chatBadge();
     if (CX.hadHello && CX.room && CX.msgs.length) _cxCatchUp();
     CX.hadHello = true; return;
@@ -203,9 +204,12 @@ function _cxNotify(d, r) {
   var title = (r && r.kind !== 'dm' ? r.name + ' · ' : '') + (d.userName || 'AI');
   var body = d.file && !d.body ? '📎 ' + d.file.name : (d.body || '').slice(0, 120);
   // v13.355 PC 앱: 창이 앞에 없으면(다른 프로그램 작업 중 · 트레이) 윈도우 알림 — 누르면 창이 앞으로 + 그 방으로
-  if (typeof wmIsDesktopApp === 'function' && wmIsDesktopApp() && !document.hasFocus()) { wmAppNotify('💬 ' + title, body, 'chat:' + d.roomId); return; }
-  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-    try { var n = new Notification('💬 ' + title, { body: body, tag: 'chat-' + d.roomId, renotify: true }); n.onclick = function () { window.focus(); chatOpenRoom(d.roomId); n.close(); }; } catch (e) {}
+  var at = (d.mentions || []).indexOf(_cxMe()) >= 0;
+  if (typeof wmIsDesktopApp === 'function' && wmIsDesktopApp() && !document.hasFocus()) { wmAppNotify('💬 ' + title, body, 'chat:' + d.roomId); if (typeof chatAlertPing === 'function') chatAlertPing({ mention: at, silent: true }); return; }
+  if (typeof chatAlertPing === 'function') chatAlertPing({ mention: at });   // v13.371 🔔 소리 · 진동 · 💬 아이콘 흔들기
+  if (document.hidden) {
+    // 푸시를 켠 기기는 서버가 보냄(가려진 화면 → 푸시) — 여기서 또 띄우면 두 번
+    if (typeof chatAlertSysNotify === 'function') chatAlertSysNotify('💬 ' + title, body, d.roomId);
     return;
   }
   var box = document.getElementById('cxPop');
@@ -223,7 +227,7 @@ function _cxNotify(d, r) {
 function chatBadge() {
   var b = document.getElementById('msgBadge'); if (!b) return;
   var n = CX.rooms.length ? CX.rooms.reduce(function (s, r) { return s + (r.muted && !r.mentioned ? 0 : r.unread || 0); }, 0) : null;
-  function set(k) { if (typeof wmAppBadge === 'function') wmAppBadge(k); if (k > 0) { b.textContent = k > 99 ? '99+' : k; b.style.display = 'inline-flex'; } else b.style.display = 'none'; }
+  function set(k) { if (typeof wmAppBadge === 'function') wmAppBadge(k); if (typeof chatAlertTitle === 'function') chatAlertTitle(k); if (k > 0) { b.textContent = k > 99 ? '99+' : k; b.style.display = 'inline-flex'; } else b.style.display = 'none'; }
   if (n != null) return set(n);
   if (typeof apiFetch === 'function' && _cxMe()) apiFetch('/api/chat/unread-count').then(function (r) { set((r && r.count) || 0); }).catch(function () {});
 }
@@ -234,10 +238,10 @@ function renderMessages() {
   var el = document.getElementById('mMessages'); if (!el) return;
   if (!el.querySelector('.cx')) {
     el.innerHTML = '<div class="cx no-aside' + (CX.room ? ' has-room' : '') + '">' +
-      '<aside class="cx-side"><div class="cx-side-h"><b>💬 메신저</b><span class="cx-side-a"><button type="button" class="cx-ib" id="cxFocus" title="🎯 집중 모드 — 방해 금지 · 메신저만 크게">🎯</button><button type="button" class="cx-ib" id="cxReqs" title="🛠 요청함 — 나에게 온 · 내가 올린 요청">🛠</button><button type="button" class="cx-ib" id="cxFolders" title="📁 내 폴더 — 모아 둔 메시지 · 사진 · 파일">📂</button><button type="button" class="cx-ib" id="cxNew" title="새 대화 (사람 · 그룹 · 프로젝트 방)">＋</button></span></div>' +
+      '<aside class="cx-side"><div class="cx-side-h"><b>💬 메신저</b><span class="cx-side-a"><button type="button" class="cx-ib" id="cxFocus" title="🎯 집중 모드 — 방해 금지 · 메신저만 크게">🎯</button><button type="button" class="cx-ib" id="cxReqs" title="🛠 요청함 — 나에게 온 · 내가 올린 요청">🛠</button><button type="button" class="cx-ib" id="cxFolders" title="📁 내 폴더 — 모아 둔 메시지 · 사진 · 파일">📂</button><button type="button" class="cx-ib" id="cxAlertBtn" title="🔔 알림 — 소리 · 진동 · 휴대폰 알림">🔔</button><button type="button" class="cx-ib" id="cxNew" title="새 대화 (사람 · 그룹 · 프로젝트 방)">＋</button></span></div>' +
       '<div class="cx-sq"><input id="cxQ" type="search" placeholder="대화방 · 메시지 찾기  (Ctrl+K 방 이동)" aria-label="대화방 · 메시지 찾기"></div>' +
       '<div class="cx-rf" id="cxRf" role="tablist">' + [['all', '전체'], ['unread', '안 읽음'], ['at', '@나'], ['dm', '1:1'], ['group', '그룹'], ['project', '프로젝트']].map(function (f) { return '<button type="button" data-rf="' + f[0] + '" class="' + (CX.rf === f[0] ? 'on' : '') + '">' + f[1] + '</button>'; }).join('') + '</div>' +
-      '<div class="cx-perm" id="cxPerm" hidden><span>🔔 앱을 닫아 두어도 새 메시지 알림을 받을까요?</span><button type="button" id="cxPermOn">알림 켜기</button></div>' +
+      '<div class="cx-perm" id="cxPerm" hidden><span data-pt>🔔 앱을 닫아 두어도 새 메시지 알림을 받을까요?</span><button type="button" id="cxPermOn">알림 켜기</button><button type="button" class="cx-perm-x" id="cxPermX" title="닫기" aria-label="닫기">✕</button></div>' +
       '<div class="cx-rooms" id="cxRooms" role="list"></div></aside>' +
       '<section class="cx-main" id="cxMain"></section>' +
       '<aside class="cx-aside" id="cxAside"></aside></div>';
@@ -247,13 +251,29 @@ function renderMessages() {
     el.querySelector('#cxRf').addEventListener('click', function (e) { var b = e.target.closest('[data-rf]'); if (!b) return; CX.rf = b.dataset.rf; _cxLsSet('wm-cx-rf', CX.rf); el.querySelectorAll('#cxRf [data-rf]').forEach(function (x) { x.classList.toggle('on', x === b); }); _cxDrawRoomsNow(); });
     var q = el.querySelector('#cxQ'), qt;
     q.addEventListener('input', function () { CX.q = q.value.trim(); clearTimeout(qt); qt = setTimeout(_cxSearch, 250); _cxDrawRooms(); });
-    if ('Notification' in window && Notification.permission === 'default') el.querySelector('#cxPerm').hidden = false;
-    el.querySelector('#cxPermOn').addEventListener('click', function () { (typeof wmPushEnable === 'function' ? wmPushEnable() : Notification.requestPermission()).then(function () { el.querySelector('#cxPerm').hidden = true; }); });   // v13.359 앱을 닫아도 오게 푸시까지
+    if (typeof chatAlertBindUi === 'function') chatAlertBindUi(el);   // v13.371 🔔 알림 설정 · 켜기 안내 (chat-alert.js)
+    else if ('Notification' in window && Notification.permission === 'default') { el.querySelector('#cxPerm').hidden = false; el.querySelector('#cxPermOn').addEventListener('click', function () { Notification.requestPermission().then(function () { el.querySelector('#cxPerm').hidden = true; }); }); }
   }
   if (typeof _cfBar === 'function') _cfBar();
+  _cxFit();
   var want = CX.pending || CX.room, wantMid = CX.pendingMid; CX.pending = null; CX.pendingMid = null;
   _cxLoadRooms().then(function () { if (want) chatOpenRoom(want, false, wantMid); else if (window.innerWidth > 760 && CX.rooms[0]) chatOpenRoom(CX.rooms[0].id); else _cxDrawMain(); });
 }
+/* v13.371 휴대폰 — 메신저를 보이는 화면 높이에 딱 맞춤(주소창 · 키보드가 올라와도 입력칸이 가려지지 않게) */
+function _cxFit() {
+  var page = document.getElementById('mMessages'), cx = page && page.querySelector('.cx');
+  if (!cx || page.classList.contains('hidden')) return;
+  if (!_cxIsPhone()) { page.style.removeProperty('--cx-h'); return; }
+  var vv = window.visualViewport, vh = vv ? vv.height : window.innerHeight;
+  var top = cx.getBoundingClientRect().top + (window.scrollY || 0);   // 문서 안 자리 (머리 · 탭 아래)
+  page.style.setProperty('--cx-h', Math.max(300, Math.round(vh - top - 6)) + 'px');
+}
+(function () {
+  var t; function on() { clearTimeout(t); t = setTimeout(_cxFit, 60); }
+  window.addEventListener('resize', on);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', on);
+  window.addEventListener('orientationchange', on);
+})();
 function _cxLoadRooms() {
   return apiFetch('/api/chat/rooms').then(function (r) { CX.rooms = (r && r.data) || []; _cxDrawRooms(); chatBadge(); }).catch(function () {});
 }
@@ -393,7 +413,13 @@ function _cxHeadAct(k, btn) {
   if (k === 'present' && typeof chatPresStart === 'function') { chatPresStart(CX.room); return; }   // v13.370
   if (k === 'more') {
     var r = CX.rooms.filter(function (x) { return x.id === CX.room; })[0] || {};
+    var ro = CX.info.myRole === 'readonly', ph = _cxIsPhone();   // v13.371 휴대폰은 머리 단추를 줄이고 여기로
     _cxMenu(btn, [
+      ph && typeof chatCallStart === 'function' && !ro ? ['🎥 영상 통화', function () { chatCallStart(CX.room, true); }] : null,
+      ph && typeof chatFindOpen === 'function' ? ['🔍 이 방에서 찾기', chatFindOpen] : null,
+      ph ? ['📎 파일 모음', function () { _cxHeadAct('files'); }] : null,
+      ph && typeof chatPresStart === 'function' && !ro ? ['🎤 발표 시작', function () { chatPresStart(CX.room); }] : null,
+      ph ? ['🖥 화면 공유', function () { _cxHeadAct('share'); }] : null,
       [r.pinned ? '📌 고정 풀기' : '📌 맨 위에 고정', function () { _cxRoomPut({ pinned: !r.pinned }); }],
       [r.muted ? '🔔 알림 켜기' : '🔕 알림 끄기 (@멘션만)', function () { _cxRoomPut({ muted: !r.muted }); }],
       CX.info.kind !== 'dm' ? ['➕ 사람 초대', chatInviteModal] : null,
@@ -583,15 +609,27 @@ function _cxBlob(fid) {
   CX.blobs[fid].catch(function () { delete CX.blobs[fid]; });
   return CX.blobs[fid];
 }
+/* v13.371 사진은 화면 가까이 올 때만 받음(사진 많은 방도 열자마자 수십 개 받지 않게) · 맨 아래를 보던 중이면 사진이 커져도 맨 아래 유지 */
 function _cxLoadBlobs(root) {
-  root.querySelectorAll('img[data-blob]').forEach(function (img) {
-    var id = img.dataset.blob; img.removeAttribute('data-blob');
-    _cxBlob(id).then(function (u) {
-      img.src = u;
-      var holder = img.closest('[data-mid]'), m = holder && _cxFindMsg(+holder.dataset.mid);
-      if (typeof chatBoardThumb === 'function' && m && m.file) chatBoardThumb(img, m.file);   // 표시 · 자르기 · 회전한 모습으로
-    }).catch(function () { img.alt = '사진을 불러오지 못했습니다'; });
+  var imgs = root.querySelectorAll('img[data-blob]'); if (!imgs.length) return;
+  if (typeof IntersectionObserver !== 'function') { imgs.forEach(_cxBlobImg); return; }
+  imgs.forEach(function (img) {
+    var sc = img.closest('.cx-msgs,.cx-as-b') || null, key = sc || document;
+    if (!key._cxIO) key._cxIO = new IntersectionObserver(function (es, io) { es.forEach(function (e) { if (e.isIntersecting) { io.unobserve(e.target); _cxBlobImg(e.target); } }); }, { root: sc, rootMargin: '600px 0px' });
+    key._cxIO.observe(img);
   });
+}
+function _cxBlobImg(img) {
+  if (!img.dataset.blob) return;
+  var id = img.dataset.blob; img.removeAttribute('data-blob');
+  var sc = img.closest('.cx-msgs');
+  img.addEventListener('load', function () { if (sc && sc._stick) sc.scrollTop = sc.scrollHeight; }, { once: true });
+  _cxBlob(id).then(function (u) {
+    if (sc) sc._stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
+    img.src = u;
+    var holder = img.closest('[data-mid]'), m = holder && _cxFindMsg(+holder.dataset.mid);
+    if (typeof chatBoardThumb === 'function' && m && m.file) chatBoardThumb(img, m.file);   // 표시 · 자르기 · 회전한 모습으로
+  }).catch(function () { img.alt = '사진을 불러오지 못했습니다'; });
 }
 function _cxDownload(fid, name) {
   fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/files/' + encodeURIComponent(fid) + '?dl=1', { headers: { Authorization: 'Bearer ' + _accessToken } }).then(function (res) {
@@ -692,17 +730,21 @@ function _cxViewImage(fid, name) {
 }
 
 /* ─── 입력칸 (본 대화 · 답글 줄기 공용) ─── */
+function _cxIsPhone() { return window.innerWidth <= 760; }
 function _cxCanCapture() { return !!((window.wmDesktop && window.wmDesktop.captureScreen) || (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && !/Android|iPhone|iPad/i.test(navigator.userAgent))); }
 function _cxComposerHtml(taId, wrapId) {
   return '<div class="cx-comp" id="' + wrapId + '"><div class="cx-chips" data-chips></div><div class="cx-reply" data-replybar hidden></div>' +
-    '<div class="cx-comp-r"><button type="button" class="cx-ib" data-c="attach" title="파일 · 사진 (끌어 놓기 · 붙여넣기도 됨)">📎</button>' +
-    '<button type="button" class="cx-ib" data-c="card" title="업무 카드 붙이기 — 이슈 · 프로젝트 · 마일스톤 · 문서 …">＋</button>' +
-    (wrapId === 'cxComp' && typeof chatTimeComposer === 'function' ? '<button type="button" class="cx-ib" data-c="sched" title="⏰ 예약 보내기 — 글을 쓰고 누르면 그때 보냄">⏰</button>' : '') +
-    (wrapId === 'cxComp' && typeof chatPostModal === 'function' ? '<button type="button" class="cx-ib" data-c="post" title="게시판 글쓰기 — 공지 · 자료 · 질문 · 🛠 요청">✍️</button>' : '') +
-    (_cxCanCapture() ? '<button type="button" class="cx-ib" data-c="cap" title="화면 캡처 — 잘라서 표시하고 보내기">📸</button>' : '') +
-    '<textarea id="' + taId + '" rows="1" placeholder="메시지 · @사람 · /명령" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
+    // v13.371 휴대폰은 도구 단추를 ＋ 하나로 접음(누르면 위로 도구판) — 입력칸을 넓게. PC 는 그대로 한 줄
+    '<div class="cx-comp-r"><button type="button" class="cx-ib cx-tools-t" data-c="tools" title="파일 · 업무 카드 · 예약 · 게시판" aria-label="도구 열기" aria-expanded="false">＋</button><span class="cx-tools" data-tools>' +
+    '<button type="button" class="cx-ib" data-c="attach" title="파일 · 사진 (끌어 놓기 · 붙여넣기도 됨)">📎<span class="cx-tl">파일 · 사진</span></button>' +
+    (_cxIsPhone() ? '<button type="button" class="cx-ib" data-c="camera" title="사진 찍어 보내기">📷<span class="cx-tl">카메라</span></button>' : '') +
+    '<button type="button" class="cx-ib" data-c="card" title="업무 카드 붙이기 — 이슈 · 프로젝트 · 마일스톤 · 문서 …">＋<span class="cx-tl">업무 카드</span></button>' +
+    (wrapId === 'cxComp' && typeof chatTimeComposer === 'function' ? '<button type="button" class="cx-ib" data-c="sched" title="⏰ 예약 보내기 — 글을 쓰고 누르면 그때 보냄">⏰<span class="cx-tl">예약 보내기</span></button>' : '') +
+    (wrapId === 'cxComp' && typeof chatPostModal === 'function' ? '<button type="button" class="cx-ib" data-c="post" title="게시판 글쓰기 — 공지 · 자료 · 질문 · 🛠 요청">✍️<span class="cx-tl">게시판 글</span></button>' : '') +
+    (_cxCanCapture() ? '<button type="button" class="cx-ib" data-c="cap" title="화면 캡처 — 잘라서 표시하고 보내기">📸<span class="cx-tl">화면 캡처</span></button>' : '') + '</span>' +
+    '<textarea id="' + taId + '" rows="1" placeholder="' + (_cxIsPhone() ? '메시지 입력' : '메시지 · @사람 · /명령') + '" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
     '<button type="button" class="cx-send" data-c="send" title="보내기" aria-label="보내기">➤</button>' +
-    '<input type="file" data-c="file" multiple hidden></div><div class="cx-sugg" data-sugg hidden></div></div>';
+    '<input type="file" data-c="file" multiple hidden>' + (_cxIsPhone() ? '<input type="file" data-c="cam" accept="image/*" capture="environment" hidden>' : '') + '</div><div class="cx-sugg" data-sugg hidden></div></div>';
 }
 function _cxBindComposer(taId, wrapId, inThread) {
   var wrap = document.getElementById(wrapId), ta = document.getElementById(taId); if (!wrap || !ta) return;
@@ -753,7 +795,10 @@ function _cxBindComposer(taId, wrapId, inThread) {
   });
   wrap.addEventListener('click', function (e) {
     var b = e.target.closest('[data-c]'); if (!b) return;
+    if (b.dataset.c === 'tools') { _tools(!wrap.classList.contains('tools-open')); return; }
+    if (b.closest('[data-tools]')) _tools(false);   // 도구 하나 고르면 판은 닫음
     if (b.dataset.c === 'attach') fileIn.click();
+    else if (b.dataset.c === 'camera') { var cam = wrap.querySelector('[data-c="cam"]'); if (cam) cam.click(); }
     else if (b.dataset.c === 'card') chatCardPicker(inThread);
     else if (b.dataset.c === 'post' && typeof chatPostModal === 'function') chatPostModal();
     else if (b.dataset.c === 'sched' && typeof chatTimeComposer === 'function') chatTimeComposer(b, ta);
@@ -761,6 +806,14 @@ function _cxBindComposer(taId, wrapId, inThread) {
     else if (b.dataset.c === 'send') _go();
   });
   wrap.addEventListener('click', function (e) { var x = e.target.closest('[data-unchip]'); if (x) { CX.cards.splice(+x.dataset.unchip, 1); _cxDrawChips(); } var rc = e.target.closest('[data-unreply]'); if (rc) _cxCancelEdit(); });
+  function _tools(on) {
+    wrap.classList.toggle('tools-open', on);
+    var t = wrap.querySelector('[data-c="tools"]'); if (t) t.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (on) setTimeout(function () { document.addEventListener('pointerdown', function off(ev) { if (!wrap.contains(ev.target)) { _tools(false); } document.removeEventListener('pointerdown', off, true); }, true); }, 0);
+  }
+  var camIn = wrap.querySelector('[data-c="cam"]');
+  if (camIn) camIn.addEventListener('change', function () { _cxUpload(Array.prototype.slice.call(camIn.files || []), inThread ? CX.thread : null); camIn.value = ''; });
+  ta.addEventListener('focus', function () { if (wrap.classList.contains('tools-open')) _tools(false); });
   fileIn.addEventListener('change', function () { _cxUpload(Array.prototype.slice.call(fileIn.files || []), inThread ? CX.thread : null); fileIn.value = ''; });
   function _go() {
     var v = ta.value.trim();

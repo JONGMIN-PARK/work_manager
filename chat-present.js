@@ -6,7 +6,7 @@
  *     보는 사람 → 발표자: hand · q · rx   발표자 → 모두: pres · rx   투명 창 → 웹 화면: hcmd
  */
 var CP_RX = ['👏', '👍', '❤️', '😮'];
-function _cpE(s) { return typeof _ciE === 'function' ? _ciE(s) : String(s == null ? '' : s); }
+function _cprE(s) { return typeof _ciE === 'function' ? _ciE(s) : String(s == null ? '' : s); }
 function _cpToast(m, t) { if (typeof _cxToast === 'function') _cxToast(m, t); }
 function _cpNew() { return { on: true, hands: {}, qs: [], grant: {}, rx: {}, seen: {} }; }
 function _cpState() { var p = CI.pres || {}; return { t: 'pres', hands: p.hands || {}, qs: p.qs || [], grant: p.grant || {} }; }
@@ -123,7 +123,7 @@ function _cpFloat(m) {
     if (!L.host || !L.host.isConnected || L.host.hidden) return;
     var f = document.createElement('div'); f.className = 'cp-fly';
     var nm = m.by && m.by !== _ciMe() ? _ciName(m.by) : '';
-    f.innerHTML = '<b>' + _cpE(m.e) + '</b>' + (nm ? '<i>' + _cpE(nm) + '</i>' : '');
+    f.innerHTML = '<b>' + _cprE(m.e) + '</b>' + (nm ? '<i>' + _cprE(nm) + '</i>' : '');
     f.style.left = (L.cv.offsetLeft + 28 + Math.random() * 70) + 'px';   // 왼쪽 아래에서 — 오른쪽 아래 통화 창에 안 가림
     f.style.top = (L.cv.offsetTop + L.cv.offsetHeight - 70) + 'px';
     L.host.appendChild(f);
@@ -179,9 +179,9 @@ function _cpPanel(btn) {
 function _cpPanelDraw() {
   var pn = document.getElementById('cpPanel'); if (!pn) return;
   var p = CI.pres || {}, hands = Object.keys(p.hands || {}), grant = Object.keys(p.grant || {}), qs = p.qs || [];
-  var row = function (uid, nm, btns) { return '<div class="cp-row"><span class="cp-av">' + _cpE(String(nm || '?').slice(0, 1)) + '</span><b>' + _cpE(nm || '') + '</b><span class="cp-act">' + btns + '</span></div>'; };
+  var row = function (uid, nm, btns) { return '<div class="cp-row"><span class="cp-av">' + _cprE(String(nm || '?').slice(0, 1)) + '</span><b>' + _cprE(nm || '') + '</b><span class="cp-act">' + btns + '</span></div>'; };
   pn.innerHTML = '<div class="cp-h"><b>참여자</b><button type="button" class="ci-b" data-px aria-label="닫기">' + _ciSvg('x') + '</button></div>' +
-    '<div class="cp-sec"><h5>✋ 손든 사람 <i>' + hands.length + '</i></h5>' + (hands.map(function (u) { return row(u, p.hands[u], '<button type="button" data-pc="grant" data-uid="' + _cpE(u) + '">펜 주기</button><button type="button" class="g" data-pc="lower" data-uid="' + _cpE(u) + '">내리기</button>'); }).join('') || '<div class="cp-empty">없음</div>') + '</div>' +
-    '<div class="cp-sec"><h5>✎ 펜을 가진 사람 <i>' + grant.length + '</i></h5>' + (grant.map(function (u) { return row(u, _ciName(u), '<button type="button" class="g" data-pc="ungrant" data-uid="' + _cpE(u) + '">회수</button>'); }).join('') || '<div class="cp-empty">발표자만</div>') + '</div>' +
-    '<div class="cp-sec"><h5>💬 질문 <i>' + qs.filter(function (q) { return !q.done; }).length + ' / ' + qs.length + '</i></h5>' + (qs.slice().reverse().map(function (q) { return '<div class="cp-q' + (q.done ? ' done' : '') + '"><p>' + _cpE(q.text) + '</p><span><i>' + _cpE(q.name) + '</i><button type="button" class="g" data-pc="qdone" data-id="' + _cpE(q.id) + '">' + (q.done ? '다시' : '답함 ✓') + '</button></span></div>'; }).join('') || '<div class="cp-empty">아직 없음</div>') + '</div>';
+    '<div class="cp-sec"><h5>✋ 손든 사람 <i>' + hands.length + '</i></h5>' + (hands.map(function (u) { return row(u, p.hands[u], '<button type="button" data-pc="grant" data-uid="' + _cprE(u) + '">펜 주기</button><button type="button" class="g" data-pc="lower" data-uid="' + _cprE(u) + '">내리기</button>'); }).join('') || '<div class="cp-empty">없음</div>') + '</div>' +
+    '<div class="cp-sec"><h5>✎ 펜을 가진 사람 <i>' + grant.length + '</i></h5>' + (grant.map(function (u) { return row(u, _ciName(u), '<button type="button" class="g" data-pc="ungrant" data-uid="' + _cprE(u) + '">회수</button>'); }).join('') || '<div class="cp-empty">발표자만</div>') + '</div>' +
+    '<div class="cp-sec"><h5>💬 질문 <i>' + qs.filter(function (q) { return !q.done; }).length + ' / ' + qs.length + '</i></h5>' + (qs.slice().reverse().map(function (q) { return '<div class="cp-q' + (q.done ? ' done' : '') + '"><p>' + _cprE(q.text) + '</p><span><i>' + _cprE(q.name) + '</i><button type="button" class="g" data-pc="qdone" data-id="' + _cprE(q.id) + '">' + (q.done ? '다시' : '답함 ✓') + '</button></span></div>'; }).join('') || '<div class="cp-empty">아직 없음</div>') + '</div>';
 }
