@@ -178,8 +178,7 @@ function _cxCatchUp() {
   var my = CX.room;
   apiFetch('/api/chat/rooms/' + encodeURIComponent(my) + '/messages').then(function (r) {
     if (CX.room !== my) return;
-    var pend = CX.msgs.filter(function (m) { return m.pending; });
-    CX.msgs = (r.data || []).concat(pend); CX.more = !!r.more;
+    CX.msgs = _cxMergeNewer(r.data || [], true); CX.more = !!r.more;
     (r.reads || []).forEach(function (x) { CX.reads[x.userId] = Math.max(CX.reads[x.userId] || 0, x.id); });
     _cxDrawMsgs(true); _cxCacheTouch();
     if (_cxVisibleRoom(my)) _cxMarkRead();
@@ -240,7 +239,7 @@ function refreshMsgBadge() { if (!CX.rooms.length) chatBadge(); else _cxLoadRoom
 function renderMessages() {
   var el = document.getElementById('mMessages'); if (!el) return;
   if (!el.querySelector('.cx')) {
-    el.innerHTML = '<div class="cx no-aside' + (CX.room ? ' has-room' : '') + '">' +
+    el.innerHTML = '<div class="cx no-aside' + (CX.room ? ' has-room' : '') + (_cxLsGet('wm-cx-side-off') ? ' side-off' : '') + '">' +
       '<aside class="cx-side"><div class="cx-side-h"><b>💬 메신저</b><span class="cx-side-a"><button type="button" class="cx-ib" id="cxFocus" title="🎯 집중 모드 — 방해 금지 · 메신저만 크게">🎯</button><button type="button" class="cx-ib" id="cxReqs" title="🛠 요청함 — 나에게 온 · 내가 올린 요청">🛠</button><button type="button" class="cx-ib" id="cxFolders" title="📁 내 폴더 — 모아 둔 메시지 · 사진 · 파일">📂</button><button type="button" class="cx-ib" id="cxAlertBtn" title="🔔 알림 — 소리 · 진동 · 휴대폰 알림">🔔</button><button type="button" class="cx-ib" id="cxNew" title="새 대화 (사람 · 그룹 · 프로젝트 방)">＋</button></span></div>' +
       '<div class="cx-sq"><input id="cxQ" type="search" placeholder="대화방 · 메시지 찾기  (Ctrl+K 방 이동)" aria-label="대화방 · 메시지 찾기"></div>' +
       '<div class="cx-rf" id="cxRf" role="tablist">' + [['all', '전체'], ['unread', '안 읽음'], ['at', '@나'], ['dm', '1:1'], ['group', '그룹'], ['project', '프로젝트']].map(function (f) { return '<button type="button" data-rf="' + f[0] + '" class="' + (CX.rf === f[0] ? 'on' : '') + '">' + f[1] + '</button>'; }).join('') + '</div>' +
@@ -267,6 +266,8 @@ function renderMessages() {
 function _cxFit() {
   var page = document.getElementById('mMessages'), cx = page && page.querySelector('.cx');
   if (!cx || page.classList.contains('hidden')) return;
+  var ta = document.getElementById('cxIn'), cp = ta && ta.closest('.cx-comp');   // v13.373 칸 너비 따라 안내 글 길이
+  if (cp && cp.offsetWidth) ta.placeholder = cp.offsetWidth < 620 ? '메시지 입력' : '메시지 · @사람 · /명령';
   if (!_cxIsPhone()) { page.style.removeProperty('--cx-h'); return; }
   var vv = window.visualViewport, vh = vv ? vv.height : window.innerHeight;
   var top = cx.getBoundingClientRect().top + (window.scrollY || 0);   // 문서 안 자리 (머리 · 탭 아래)
@@ -298,6 +299,17 @@ function _cxKb() {
   document.addEventListener('focusin', function () { kb(); setTimeout(_cxKb, 350); });   // 키보드가 다 올라온 뒤 한 번 더
   document.addEventListener('focusout', function () { setTimeout(_cxKb, 80); });
 })();
+/* v13.373 PC — 대화방 목록 접기(대화에만 집중 · 창을 좁혀 둘 때). 기억해 둠 */
+function chatSideToggle(on) {
+  var cx = document.querySelector('#mMessages .cx'); if (!cx) return;
+  var off = on == null ? !cx.classList.contains('side-off') : !on;
+  cx.classList.toggle('side-off', off); _cxLsSet('wm-cx-side-off', off ? '1' : null);
+  _cxDrawHead();
+  var ta = document.getElementById('cxIn'); if (ta && ta.offsetWidth) { ta.placeholder = ta.closest('.cx-comp').offsetWidth < 620 ? '메시지 입력' : '메시지 · @사람 · /명령'; }
+}
+document.addEventListener('keydown', function (e) {
+  if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L' || e.code === 'KeyL') && document.querySelector('#mMessages:not(.hidden) .cx') && !_cxIsPhone()) { e.preventDefault(); chatSideToggle(); }
+});
 function _cxLoadRooms() {
   return apiFetch('/api/chat/rooms').then(function (r) { CX.rooms = (r && r.data) || []; _cxDrawRooms(); chatBadge(); if (document.getElementById('cxRooms')) _cxPrefetchIdle(); }).catch(function () {});
 }
@@ -366,7 +378,7 @@ function chatOpenRoom(id, keep, focusMid) {
   if (changed && !focusMid) _cxReadEarly(id);   // v13.372 열자마자 읽음 — 내용 받기를 기다리지 않음
   (focusMid ? _cxFetchRoomNow(id, focusMid) : _cxFetchRoom(id)).then(function (rs) {
     if (CX.room !== my) return;
-    CX.info = rs[0].data; CX.msgs = (rs[1].data || []).concat(CX.msgs.filter(function (m) { return m.pending; })); CX.more = !!rs[1].more;
+    CX.info = rs[0].data; CX.msgs = _cxMergeNewer(rs[1].data || [], !focusMid); CX.more = !!rs[1].more;
     CX.reads = {}; (rs[1].reads || []).forEach(function (x) { CX.reads[x.userId] = x.id; });
     if ((drawnRole === 'readonly') !== (CX.info.myRole === 'readonly')) _cxDrawMain();   // 읽기만 — 입력칸 대신 안내
     var _readBefore = CX.info.lastReadId || 0;
@@ -419,6 +431,13 @@ function _cxReadEarly(id) {
   r.unread = 0; r.mentioned = 0; r.readId = r.lastId; _cxDrawRooms(); chatBadge();
   apiFetch('/api/chat/rooms/' + encodeURIComponent(id) + '/read', { method: 'POST', body: JSON.stringify({ lastId: r.lastId }) }).catch(function () {});
 }
+/* v13.373 받은 목록으로 바꿀 때 — 요청이 오가는 사이 실시간으로 먼저 온 더 새 메시지는 살림(안 그러면 방금 온 메시지가 사라짐) · 보내는 중도 */
+function _cxMergeNewer(got, keepNewer) {
+  var mx = 0; got.forEach(function (m) { if (typeof m.id === 'number' && m.id > mx) mx = m.id; });
+  var have = {}; got.forEach(function (m) { have[m.id] = 1; });
+  var newer = keepNewer ? CX.msgs.filter(function (m) { return typeof m.id === 'number' && m.id > mx && !have[m.id] && m.roomId === CX.room && !m.replyTo; }) : [];
+  return got.concat(newer, CX.msgs.filter(function (m) { return m.pending; }));
+}
 function _cxLastId() { for (var i = CX.msgs.length - 1; i >= 0; i--) if (typeof CX.msgs[i].id === 'number') return CX.msgs[i].id; return 0; }
 function _cxMarkRead() {
   var last = _cxLastId();
@@ -465,7 +484,9 @@ function _cxDrawHead() {
   var on = others.filter(function (m) { return m.online; }).length;
   var name = i.kind === 'dm' ? (others[0] ? others[0].name : '') : (i.name || r.name || '');
   var sub = i.kind === 'dm' ? (others[0] ? (others[0].focusUntil && typeof chatFocusLabel === 'function' && chatFocusLabel(others[0].focusUntil) ? chatFocusLabel(others[0].focusUntil) + ' — 급하면 @멘션' : (others[0].online ? '● 접속 중' : '접속 안 함')) + (others[0].dept ? ' · ' + others[0].dept : '') : '') : i.members.length + '명 · 접속 ' + (on + 1) + (others.some(function (m) { return m.focusUntil && new Date(m.focusUntil) > new Date(); }) ? ' · 🎯 집중 ' + others.filter(function (m) { return m.focusUntil && new Date(m.focusUntil) > new Date(); }).length : '');
+  var sideOff = !!(document.querySelector('#mMessages .cx.side-off'));
   h.innerHTML = '<button type="button" class="cx-ib cx-back" data-h="back" aria-label="목록으로">‹</button>' +
+    '<button type="button" class="cx-ib cx-sidet" data-h="side" title="' + (sideOff ? '대화방 목록 펴기' : '대화방 목록 접기 — 대화에만 집중') + ' (Alt+L)" aria-label="대화방 목록 접기 · 펴기">' + (sideOff ? '»' : '«') + '</button>' +
     (i.kind === 'project' ? '<span class="cx-av cx-av-p">📁</span>' : i.kind === 'group' ? '<span class="cx-av cx-av-g">👥</span>' : _cxAv(others[0] && others[0].id, name, others[0] && others[0].online)) +
     '<span class="cx-h-t"><b>' + _cxE(name) + '</b><span class="' + (i.kind === 'dm' && others[0] && others[0].online ? 'on' : '') + '">' + _cxE(sub) + '</span></span>' +
     '<span class="cx-h-a">' +
@@ -481,6 +502,7 @@ function _cxDrawHead() {
 function _cxHeadAct(k, btn) {
   if ((k === 'call' || k === 'vcall') && typeof chatCallStart === 'function') { chatCallStart(CX.room, k === 'vcall'); return; }   // v13.361
   if (k === 'back') { var root = document.querySelector('#mMessages .cx'); if (root) { root.classList.remove('has-room'); root.classList.add('no-aside'); } CX.room = null; CX.thread = null; _cxDrawRooms(); return; }
+  if (k === 'side') { chatSideToggle(); return; }   // v13.373
   if (k === 'aside') { CX.aside = !CX.aside; document.querySelector('#mMessages .cx').classList.toggle('no-aside', !CX.aside); _cxDrawHead(); _cxDrawAside(); return; }
   if (k === 'files') { CX.aside = true; CX.asideTab = 'files'; document.querySelector('#mMessages .cx').classList.remove('no-aside'); _cxDrawAside(); return; }
   if (k === 'share') { if (typeof chatRtcShare === 'function') chatRtcShare(CX.room); return; }
@@ -488,13 +510,14 @@ function _cxHeadAct(k, btn) {
   if (k === 'present' && typeof chatPresStart === 'function') { chatPresStart(CX.room); return; }   // v13.370
   if (k === 'more') {
     var r = CX.rooms.filter(function (x) { return x.id === CX.room; })[0] || {};
-    var ro = CX.info.myRole === 'readonly', ph = _cxIsPhone();   // v13.371 휴대폰은 머리 단추를 줄이고 여기로
+    // v13.371~373 대화 칸이 좁아 머리에서 숨긴 단추는 여기로 (휴대폰 · 좁힌 PC 창)
+    var hid = function (k) { var b = document.querySelector('#cxHead [data-h="' + k + '"]'); return !!b && getComputedStyle(b).display === 'none'; };
     _cxMenu(btn, [
-      ph && typeof chatCallStart === 'function' && !ro ? ['🎥 영상 통화', function () { chatCallStart(CX.room, true); }] : null,
-      ph && typeof chatFindOpen === 'function' ? ['🔍 이 방에서 찾기', chatFindOpen] : null,
-      ph ? ['📎 파일 모음', function () { _cxHeadAct('files'); }] : null,
-      ph && typeof chatPresStart === 'function' && !ro ? ['🎤 발표 시작', function () { chatPresStart(CX.room); }] : null,
-      ph ? ['🖥 화면 공유', function () { _cxHeadAct('share'); }] : null,
+      hid('vcall') ? ['🎥 영상 통화', function () { chatCallStart(CX.room, true); }] : null,
+      hid('find') ? ['🔍 이 방에서 찾기', chatFindOpen] : null,
+      hid('files') ? ['📎 파일 모음', function () { _cxHeadAct('files'); }] : null,
+      hid('present') ? ['🎤 발표 시작', function () { chatPresStart(CX.room); }] : null,
+      hid('share') ? ['🖥 화면 공유', function () { _cxHeadAct('share'); }] : null,
       [r.pinned ? '📌 고정 풀기' : '📌 맨 위에 고정', function () { _cxRoomPut({ pinned: !r.pinned }); }],
       [r.muted ? '🔔 알림 켜기' : '🔕 알림 끄기 (@멘션만)', function () { _cxRoomPut({ muted: !r.muted }); }],
       CX.info.kind !== 'dm' ? ['➕ 사람 초대', chatInviteModal] : null,
@@ -864,6 +887,7 @@ function _cxBindComposer(taId, wrapId, inThread) {
   var wrap = document.getElementById(wrapId), ta = document.getElementById(taId); if (!wrap || !ta) return;
   var fileIn = wrap.querySelector('[data-c="file"]'), sugg = wrap.querySelector('[data-sugg]'), lastTyping = 0, sel = 0;
   function grow() { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight) + 'px'; }
+  if (wrap.offsetWidth && wrap.offsetWidth < 620) ta.placeholder = '메시지 입력';   // v13.373 좁은 대화 칸 — 긴 안내는 두 줄로 꺾임
   ta.addEventListener('input', function () {
     grow();
     if (!inThread && !CX.editId) _cxDraftSave(ta.value);

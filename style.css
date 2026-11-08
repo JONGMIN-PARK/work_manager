@@ -5711,3 +5711,41 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 /* 길게 누름 — 눌린 말풍선 살짝 */
 .cx-mw .cx-press .cx-bw,.cx-m.cx-press .cx-bw{transform:scale(.97);transition:transform .15s}
 @media (pointer:coarse){.cx-bw{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}}
+
+/* ═══ v13.373 PC 좁은 창 — 대화 칸 너비 기준으로 입력칸 · 머리 맞춤 (화면 너비가 아니라 칸 너비) ═══ */
+.cx-main,.cx-aside{container-type:inline-size}
+.cx-sidet{display:none;font-size:15px;color:var(--t4)}
+@media (min-width:761px){
+  .cx-sidet{display:inline-flex}
+  /* 대화방 목록 접기 — 대화에만 집중 */
+  .cx.cx.side-off{grid-template-columns:0 minmax(0,1fr) 320px}
+  .cx.cx.side-off.no-aside{grid-template-columns:0 minmax(0,1fr) 0}
+  .cx.side-off .cx-side{display:none}
+  .cx.side-off>.cx-main{grid-column:2}   /* 목록이 빠져도 대화 칸은 둘째 칸에 (안 그러면 0 폭 첫 칸으로 밀림) */
+  .cx.side-off>.cx-aside{grid-column:3}
+}
+@media (min-width:761px) and (max-width:1200px){.cx.cx.side-off{grid-template-columns:0 minmax(0,1fr) 280px}}
+@media (min-width:761px) and (max-width:980px){.cx.cx.side-off,.cx.cx.side-off.no-aside{grid-template-columns:0 minmax(0,1fr) 0}}
+/* 입력칸 — 칸이 620px 보다 좁으면 도구 단추를 ＋ 하나로 접음 (PC 에서 창을 좁혀 둘 때 · 답글 옆 칸) */
+@container (max-width:620px){
+  .cx-tools-t{display:inline-flex;font-size:20px;font-weight:300}
+  .cx-tools{display:none}
+  .cx-comp.tools-open .cx-tools{position:absolute;left:8px;right:8px;bottom:calc(100% + 6px);z-index:6;display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;padding:10px;border:1px solid var(--bd);border-radius:16px;background:var(--bg-p);box-shadow:0 -14px 34px -16px rgba(15,23,42,.45);animation:cxIn .18s ease-out}
+  .cx-comp.tools-open .cx-tools .cx-ib{flex-direction:column;gap:4px;height:auto!important;min-width:0;padding:10px 4px;border-radius:12px!important;background:var(--bg-i);font-size:20px}
+  .cx-comp.tools-open .cx-tl{display:block;font-size:11.5px;color:var(--t3);white-space:nowrap}
+  .cx-comp{padding:8px 10px 10px}
+  .cx-comp-r{gap:4px;padding:3px 3px 3px 4px}
+}
+/* 머리 — 칸이 640px 보다 좁으면 📞 · ⓘ · ⋯ 만 (나머지는 ⋯ 안) */
+@container (max-width:640px){
+  .cx-h-a [data-h="vcall"],.cx-h-a [data-h="present"],.cx-h-a [data-h="share"],.cx-h-a [data-h="find"],.cx-h-a [data-h="files"]{display:none}
+  .cx-h-t b,.cx-h-t span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cx-h{gap:6px;padding:8px 8px}
+}
+/* 아주 좁으면(420px 이하) 말풍선 폭 넓게 */
+@container (max-width:420px){.cx-col{max-width:88%}}
+/* 목록 머리 — 좁은 목록 칸에서 "💬 메신저" 가 두 줄로 꺾이지 않게 */
+.cx-side-h{gap:6px}
+.cx-side-h b{white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.cx-side-a{display:flex;gap:0;flex:none}
+@media (max-width:1200px) and (min-width:761px){.cx-side-a .cx-ib{min-width:28px;padding:0 4px}}

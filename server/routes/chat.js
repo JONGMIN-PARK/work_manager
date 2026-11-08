@@ -77,7 +77,7 @@ async function memberIds(roomId) {
   if (MID.size > 5000) MID.delete(MID.keys().next().value);
   return ids.slice();
 }
-function _midDrop(roomId) { MID.delete(roomId); }
+function _midDrop(roomId) { MID.delete(roomId); if (typeof FACL !== 'undefined') FACL.clear(); }
 async function userNames(tenantId, ids) {
   if (!ids.length) return {};
   var r = await db.query('SELECT id, COALESCE(display_name, name) AS n FROM users WHERE id = ANY($1) AND tenant_id = $2', [ids, tenantId]);
@@ -616,12 +616,27 @@ router.post('/rooms/:id/files', express.raw({ type: function () { return true; }
     httpErr.serverError(res, '[chat/file]', e);
   }
 });
-async function fileFor(req, res) {
-  var r = await db.query('SELECT f.* FROM chat_files f WHERE f.id = $1 AND f.tenant_id = $2', [req.params.fid, req.tenant.id]);
+/* 파일 + 방 멤버 확인을 한 번에 (v13.373). cols 를 주면 그 칸만 — 사진 칠판은 파일 본문(data, 수 MB)을 안 읽음
+ *   f._room = { id, role } (읽기만 확인용). 멤버가 아니면 원래 길(roomFor — 프로젝트 방 자동 가입 · 403) */
+var FILE_META = 'f.id, f.room_id, f.tenant_id, f.name, f.mime, f.size, f.storage_key, f.annot, f.annot_at, f.annot_by, COALESCE(ab.display_name, ab.name) AS annot_by_name';
+async function fileFor(req, res, cols) {
+  var r = await db.query('SELECT ' + (cols || 'f.*') + ', m.role AS m_role, m.left_at AS m_left, m.last_read_id AS m_lr FROM chat_files f ' +
+    'LEFT JOIN chat_members m ON m.room_id = f.room_id AND m.user_id = $3 ' + (cols === FILE_META ? 'LEFT JOIN users ab ON ab.id = f.annot_by ' : '') +
+    'WHERE f.id = $1 AND f.tenant_id = $2', [req.params.fid, req.tenant.id, me(req)]);
   var f = r.rows[0];
   if (!f) { res.status(404).json({ error: 'NOT_FOUND', message: '파일이 없습니다.' }); return null; }
-  if (!await roomFor(req, res, f.room_id)) return null;
-  return f;
+  if (f.m_lr != null && !f.m_left) { f._room = { id: f.room_id, role: f.m_role }; return f; }
+  var room = await roomFor(req, res, f.room_id); if (!room) return null;
+  f._room = room; return f;
+}
+/* 칠판 손가락 · 그리는 중 — 0.1초마다 오므로 권한 · 이름은 잠깐 담아 둠 (멤버가 바뀌면 _midDrop 이 비움) */
+var FACL = new Map(), NAMEC = new Map();
+async function myName(req) {
+  var uid = me(req), c = NAMEC.get(uid);
+  if (c && c.exp > Date.now()) return c.n;
+  var n = (await userNames(req.tenant.id, [uid]))[uid] || req.user.name || '';
+  NAMEC.set(uid, { n: n, exp: Date.now() + 600000 }); if (NAMEC.size > 5000) NAMEC.clear();
+  return n;
 }
 router.get('/files/:fid', async function (req, res) {
   try {
@@ -662,24 +677,22 @@ function annRect(c) {
 }
 router.get('/files/:fid/annot', async function (req, res) {
   try {
-    var f = await fileFor(req, res); if (!f) return;
-    var by = f.annot_by ? await userNames(req.tenant.id, [f.annot_by]) : {};
-    res.json({ data: f.annot || { rot: 0, crop: null, shapes: [] }, at: f.annot_at, byName: by[f.annot_by] || '' });
+    var f = await fileFor(req, res, FILE_META); if (!f) return;   // v13.373 본문 없이 · 이름 같이 (DB 한 번)
+    res.json({ data: f.annot || { rot: 0, crop: null, shapes: [] }, at: f.annot_at, byName: f.annot_by_name || '' });
   } catch (e) { httpErr.serverError(res, '[chat/annot/get]', e); }
 });
 /* 바꾸기: { add:[shape], remove:[id], rot, crop(null=풀기), clear } — 여럿이 같이 그려도 서로 안 지우게 '바뀐 것만' 보냄 */
 router.post('/files/:fid/annot', async function (req, res) {
   try {
-    var f = await fileFor(req, res); if (!f) return;
+    var f = await fileFor(req, res, FILE_META); if (!f) return;
     if (!/^image\//i.test(f.mime || '')) return bad(res, '사진에만 표시할 수 있습니다.');
-    if (readOnly(res, await membership(req.tenant.id, f.room_id, me(req)))) return;
+    if (readOnly(res, f._room)) return;
     var b = req.body || {}, uid = me(req);
     var add = (Array.isArray(b.add) ? b.add : []).slice(0, 50).map(function (s) { return annShape(s, uid); }).filter(Boolean);
     var remove = (Array.isArray(b.remove) ? b.remove : []).slice(0, 600).map(String);
     var op = { add: add, remove: remove };
-    var out = await db.transaction(async function (cl) {
-      var r = await cl.query('SELECT annot FROM chat_files WHERE id = $1 FOR UPDATE', [f.id]);
-      var a = r.rows[0].annot || { rot: 0, crop: null, shapes: [] };
+    async function apply(a0, write) {
+      var a = a0 ? JSON.parse(JSON.stringify(a0)) : { rot: 0, crop: null, shapes: [] };
       a.shapes = Array.isArray(a.shapes) ? a.shapes : [];
       if (b.clear) { a.shapes = []; op.clear = true; }
       if (remove.length) a.shapes = a.shapes.filter(function (s) { return remove.indexOf(s.id) < 0; });
@@ -689,11 +702,18 @@ router.post('/files/:fid/annot', async function (req, res) {
       if (a.shapes.length > ANN_MAX) throw Object.assign(new Error('표시는 ' + ANN_MAX + '개까지입니다.'), { status: 400 });
       var json = JSON.stringify(a);
       if (json.length > ANN_BYTES) throw Object.assign(new Error('표시가 너무 많습니다. 몇 개 지워 주세요.'), { status: 400 });
-      await cl.query('UPDATE chat_files SET annot = $2, annot_at = now(), annot_by = $3 WHERE id = $1', [f.id, json, uid]);
-      return a;
+      return (await write(json)) ? a : null;
+    }
+    // v13.373 보통은 한 문장 — 읽은 그대로일 때만 바꿈(그사이 누가 바꿨으면 0줄 → 예전처럼 잠그고 다시)
+    var out = await apply(f.annot, async function (json) {
+      var u = await db.query('UPDATE chat_files SET annot = $2, annot_at = now(), annot_by = $3 WHERE id = $1 AND annot IS NOT DISTINCT FROM $4::jsonb', [f.id, json, uid, f.annot == null ? null : JSON.stringify(f.annot)]);
+      return u.rowCount > 0;
     });
-    var nm = await userNames(req.tenant.id, [uid]);
-    hub.publish(await memberIds(f.room_id), 'annot', { fileId: f.id, roomId: f.room_id, by: uid, byName: nm[uid] || '', op: op, sum: { rot: out.rot || 0, n: out.shapes.length, crop: !!out.crop } });
+    if (!out) out = await db.transaction(async function (cl) {
+      var r = await cl.query('SELECT annot FROM chat_files WHERE id = $1 FOR UPDATE', [f.id]);
+      return apply(r.rows[0].annot, async function (json) { await cl.query('UPDATE chat_files SET annot = $2, annot_at = now(), annot_by = $3 WHERE id = $1', [f.id, json, uid]); return true; });
+    });
+    hub.publish(await memberIds(f.room_id), 'annot', { fileId: f.id, roomId: f.room_id, by: uid, byName: await myName(req), op: op, sum: { rot: out.rot || 0, n: out.shapes.length, crop: !!out.crop } });
     res.json({ data: { rot: out.rot || 0, crop: out.crop || null, n: out.shapes.length } });
   } catch (e) {
     if (e && e.status === 400) return bad(res, e.message);
@@ -703,10 +723,25 @@ router.post('/files/:fid/annot', async function (req, res) {
 /* 칠판에서 같이 보는 중 — 누가 어디를 가리키는지 (저장 안 함, 그대로 전달) */
 router.post('/files/:fid/cursor', async function (req, res) {
   try {
-    var f = await fileFor(req, res); if (!f) return;
-    var b = req.body || {}, uid = me(req), nm = await userNames(req.tenant.id, [uid]);
-    var ids = (await memberIds(f.room_id)).filter(function (u) { return u !== uid; });
-    hub.publish(ids, 'annot-cur', { fileId: f.id, by: uid, byName: nm[uid] || '', x: annNum(b.x), y: annNum(b.y), live: b.live == null ? null : (Array.isArray(b.live) ? b.live.slice(0, 2000).map(annNum) : null), lt: ANN_TYPES.indexOf(b.lt) >= 0 ? b.lt : null, c: /^#[0-9a-fA-F]{3,8}$/.test(b.c || '') ? b.c : null, w: annNum(b.w), bye: !!b.bye });
+    // v13.373 권한은 처음 한 번만 DB 로 (60초 담아 둠) — 예전엔 0.14초마다 파일 본문까지 읽음
+    var uid = me(req), k = uid + '|' + req.params.fid, c = FACL.get(k);
+    if (!c || c.exp < Date.now()) {
+      var f = await fileFor(req, res, 'f.id, f.room_id'); if (!f) return;
+      c = { room: f.room_id, ro: f._room && f._room.role === 'readonly', exp: Date.now() + 60000 }; FACL.set(k, c); if (FACL.size > 20000) FACL.clear();
+    }
+    var b = req.body || {};
+    var ids = (await memberIds(c.room)).filter(function (u) { return u !== uid; });
+    // 끝낸 표시 · 지우기 같은 바뀐 것(op)도 같이 — 받는 쪽이 저장을 기다리지 않고 바로 그림(저장 뒤 'annot' 는 같은 내용이라 겹쳐도 그대로)
+    var op = null;
+    if (b.op && typeof b.op === 'object' && !c.ro) {
+      op = { add: (Array.isArray(b.op.add) ? b.op.add : []).slice(0, 50).map(function (s) { return annShape(s, uid); }).filter(Boolean), remove: (Array.isArray(b.op.remove) ? b.op.remove : []).slice(0, 600).map(String) };
+      if (b.op.clear) op.clear = true;
+      if (b.op.rot != null) op.rot = ((Math.round((+b.op.rot || 0) / 90) * 90) % 360 + 360) % 360;
+      if ('crop' in b.op) op.crop = annRect(b.op.crop);
+    }
+    var live = null, from = 0;
+    if (Array.isArray(b.live)) { live = b.live.slice(0, 2000).map(annNum); from = Math.max(0, Math.min(20000, parseInt(b.from, 10) || 0)); }
+    hub.publish(ids, 'annot-cur', { fileId: req.params.fid, by: uid, byName: await myName(req), x: annNum(b.x), y: annNum(b.y), live: live, from: from, lid: typeof b.lid === 'string' ? b.lid.slice(0, 40) : null, lt: ANN_TYPES.indexOf(b.lt) >= 0 ? b.lt : null, c: /^#[0-9a-fA-F]{3,8}$/.test(b.c || '') ? b.c : null, w: annNum(b.w), bye: !!b.bye, op: op });
     res.json({ ok: true });
   } catch (e) { httpErr.serverError(res, '[chat/annot/cur]', e); }
 });

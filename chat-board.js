@@ -174,9 +174,20 @@ function _cbDraw() {
     var m = _cbViewM();
     g.setTransform(m[0] * dpr, m[1] * dpr, m[2] * dpr, m[3] * dpr, m[4] * dpr, m[5] * dpr);
     var area = _cbArea();
-    // 그림자 판
-    g.save(); g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 30 / CB.zoom; g.fillStyle = '#fff'; g.fillRect(area.x, area.y, area.w, area.h); g.restore();
-    _cbPaint(g, CB.img, CB.mode === 'orig' ? { shapes: [] } : CB.a, { area: area, marks: CB.mode !== 'orig' });
+    // v13.373 바탕(그림자 판 + 사진 + 끝낸 표시)은 한 장 담아 두고 — 같이 보는 사람 손가락 · 그리는 중인 선만 바뀌면 그것만 다시
+    var key = m.join(',') + '|' + (CB.rev || 0) + '|' + CB.mode + '|' + cv.width + 'x' + cv.height + '|' + area.x + ',' + area.y + ',' + area.w + ',' + area.h;
+    if (!CB.base || CB.baseKey !== key) {
+      var bc = CB.base || (CB.base = document.createElement('canvas'));
+      if (bc.width !== cv.width || bc.height !== cv.height) { bc.width = cv.width; bc.height = cv.height; }
+      var bg = bc.getContext('2d');
+      bg.setTransform(1, 0, 0, 1, 0, 0); bg.clearRect(0, 0, bc.width, bc.height);
+      bg.setTransform(m[0] * dpr, m[1] * dpr, m[2] * dpr, m[3] * dpr, m[4] * dpr, m[5] * dpr);
+      bg.save(); bg.shadowColor = 'rgba(0,0,0,.45)'; bg.shadowBlur = 30 / CB.zoom; bg.fillStyle = '#fff'; bg.fillRect(area.x, area.y, area.w, area.h); bg.restore();
+      _cbPaint(bg, CB.img, CB.mode === 'orig' ? { shapes: [] } : CB.a, { area: area, marks: CB.mode !== 'orig' });
+      CB.baseKey = key;
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(CB.base, 0, 0);
+    g.setTransform(m[0] * dpr, m[1] * dpr, m[2] * dpr, m[3] * dpr, m[4] * dpr, m[5] * dpr);
     // 그리는 중 (나 · 다른 사람)
     if (CB.mode !== 'orig') {
       g.save(); g.beginPath(); g.rect(area.x, area.y, area.w, area.h); g.clip();
@@ -232,13 +243,20 @@ function _cbZoomAt(f, sx, sy) {
 function _cbZoomLabel() { var z = CB && CB.el.querySelector('[data-zl]'); if (z) z.textContent = Math.round(CB.zoom * 100) + '%'; }
 
 /* ─── 바꾸기 (내가 한 것 → 저장 · 되돌리기) ─── */
-function _cbDo(op, fromUndo) {
+/** 바뀐 것을 CB.a 에 — 같은 것을 두 번 받아도 그대로(표시 id 기준) */
+function _cbApplyOp(op) {
   var a = CB.a;
-  if (op.remove) a.shapes = a.shapes.filter(function (s) { return op.remove.indexOf(s.id) < 0; });
+  if (op.clear) a.shapes = [];
+  if (op.remove && op.remove.length) a.shapes = a.shapes.filter(function (s) { return op.remove.indexOf(s.id) < 0; });
   if (op.add) op.add.forEach(function (s) { a.shapes = a.shapes.filter(function (x) { return x.id !== s.id; }); a.shapes.push(s); });
   if ('rot' in op) a.rot = op.rot;
   if ('crop' in op) a.crop = op.crop;
+  CB.rev = (CB.rev || 0) + 1;
+}
+function _cbDo(op, fromUndo) {
+  _cbApplyOp(op);
   if (!fromUndo) { CB.redo = []; }
+  if (CB.fid) _cbCursor({ op: op, live: null }, true);   // v13.373 같이 보는 사람에게 바로 (저장은 뒤에서)
   _cbSave(op);
   _cbInfo();
   _cbDraw();
@@ -337,7 +355,7 @@ function chatBoardOpen(fid, name, roomId) {
   ]).then(function (r) {
     if (CB !== my) return;
     var an = r[1] && r[1].data;
-    if (an) { CB.a = { rot: an.rot || 0, crop: an.crop || null, shapes: an.shapes || [] }; CB.by = r[1].byName || ''; CB.at = r[1].at; }
+    if (an) { CB.a = { rot: an.rot || 0, crop: an.crop || null, shapes: an.shapes || [] }; CB.rev = (CB.rev || 0) + 1; CB.by = r[1].byName || ''; CB.at = r[1].at; }
     _cbReady(r[0]);
   }).catch(function (e) { if (CB === my) { CB.el.querySelector('[data-loading]').textContent = (e && e.message) || '사진을 불러오지 못했습니다'; } });
   return true;
@@ -552,8 +570,8 @@ function _cbUp(e) {
   if (!ok) { _cbDraw(); return; }
   if (!s.p) { s.x = r1(s.x); s.y = r1(s.y); s.x2 = r1(s.x2); s.y2 = r1(s.y2); }
   s.by = _cbMe();
-  _cbCommit({ add: [s] });
-  if (CB.fid) _cbCursor({ live: null }, true);
+  CB.liveSent = null;
+  _cbCommit({ add: [s] });   // _cbDo 가 op + live:null 을 바로 보냄
   function r1(v) { return Math.round(v * 10) / 10; }
 }
 /* 지우개 — 누른 곳의 맨 위 표시 */
@@ -689,21 +707,33 @@ function _cbSendDraft() {
 }
 
 /* ─── 같이 보기: 손가락 · 그리는 중인 선 ─── */
-var _cbCurT = 0, _cbCurQ = null, _cbCurTimer = 0;
+var _cbCurT = 0, _cbCurQ = null, _cbCurTimer = 0, _cbCurPend = 0;
 function _cbCursor(o, now) {
   if (!CB || !CB.fid) return;
   var body = { x: o.x, y: o.y, bye: o.bye };
-  if ('live' in o) { var s = o.live; body.live = s && s.p ? s.p.slice(-2000) : s ? [s.x, s.y, s.x2, s.y2] : null; body.lt = s ? s.t : null; body.c = s ? s.c : CB.color; body.w = s ? s.w : 0; }
+  if (o.op) body.op = { add: o.op.add, remove: o.op.remove, clear: o.op.clear, rot: o.op.rot, crop: o.op.crop };
+  if (o.op && !('crop' in o.op)) delete body.op.crop;
+  if ('live' in o) {
+    var s = o.live; body.lt = s ? s.t : null; body.c = s ? s.c : CB.color; body.w = s ? s.w : 0;
+    if (s && s.p) {   // v13.373 펜 · 형광펜은 새로 그은 점만 (6번에 한 번은 전부 — 빠진 게 있어도 맞춰짐)
+      var ls = CB.liveSent && CB.liveSent.id === s.id ? CB.liveSent : (CB.liveSent = { id: s.id, n: 0, k: 0 });
+      var full = ls.n === 0 || ++ls.k % 6 === 0 || ls.n > s.p.length;
+      body.from = full ? 0 : ls.n; body.live = s.p.slice(body.from); body.lid = s.id;
+      if (body.live.length > 2000) { body.from = Math.max(0, s.p.length - 2000); body.live = s.p.slice(body.from); }
+      _cbCurPend = s.p.length;
+    } else body.live = s ? [s.x, s.y, s.x2, s.y2] : null;
+  }
   if (o.x === undefined && CB.lastXY) { body.x = CB.lastXY.x; body.y = CB.lastXY.y; }
   if (o.x != null) CB.lastXY = { x: o.x, y: o.y };
   _cbCurQ = { fid: CB.fid, body: body };
   var gap = Date.now() - _cbCurT;
   clearTimeout(_cbCurTimer);
-  var every = body.live ? 140 : 450;   // 그리는 중엔 자주, 손가락만 움직일 땐 드물게
+  var every = body.op ? 0 : body.live ? 70 : 300;   // 그리는 중엔 자주, 손가락만 움직일 땐 드물게, 끝낸 표시는 바로
   if (now || gap > every) flush(); else _cbCurTimer = setTimeout(flush, every - gap);
   function flush() {
     if (!_cbCurQ) return;
     var q = _cbCurQ; _cbCurQ = null; _cbCurT = Date.now();
+    if (q.body.lid && CB && CB.liveSent && CB.liveSent.id === q.body.lid) CB.liveSent.n = q.body.from + q.body.live.length;   // 보낸 데까지
     if (typeof apiFetch === 'function') apiFetch('/api/chat/files/' + encodeURIComponent(q.fid) + '/cursor', { method: 'POST', body: JSON.stringify(q.body) }).catch(function () {});
   }
 }
@@ -725,11 +755,8 @@ function chatBoardOnEvent(ev, d) {
     }
     if (!CB || CB.fid !== d.fileId || d.by === _cbMe()) return;
     var op = d.op || {};
-    if (op.clear) CB.a.shapes = [];
-    if (op.remove && op.remove.length) CB.a.shapes = CB.a.shapes.filter(function (s) { return op.remove.indexOf(s.id) < 0; });
-    (op.add || []).forEach(function (s) { CB.a.shapes = CB.a.shapes.filter(function (x) { return x.id !== s.id; }); CB.a.shapes.push(s); });
-    if ('rot' in op) { CB.a.rot = op.rot; _cbFit(); }
-    if ('crop' in op) { CB.a.crop = op.crop; _cbFit(); }
+    var fit = ('rot' in op && op.rot !== CB.a.rot) || ('crop' in op && JSON.stringify(op.crop) !== JSON.stringify(CB.a.crop));
+    _cbApplyOp(op); if (fit) _cbFit();
     if (CB.peers[d.by]) CB.peers[d.by].live = null;
     CB.by = d.byName;
     _cbInfo(); _cbDraw();
@@ -738,8 +765,18 @@ function chatBoardOnEvent(ev, d) {
     if (d.bye) { delete CB.peers[d.by]; _cbDrawPeers(); _cbDraw(); return; }
     var p = CB.peers[d.by] || (CB.peers[d.by] = { name: d.byName, c: _cbPeerColor(d.by) });
     if (d.x != null) { p.x = d.x; p.y = d.y; }
+    if (d.op) {   // v13.373 끝낸 표시 · 지우기 · 돌리기를 저장 전에 바로
+      var fit2 = ('rot' in d.op && d.op.rot !== CB.a.rot) || ('crop' in d.op && JSON.stringify(d.op.crop) !== JSON.stringify(CB.a.crop));
+      _cbApplyOp(d.op); if (fit2) _cbFit(); _cbInfo();
+    }
     if (d.live === null) p.live = null;
-    else if (d.live && d.lt) p.live = (d.lt === 'pen' || d.lt === 'hl') ? { t: d.lt, c: d.c, w: d.w, p: d.live } : { t: d.lt, c: d.c, w: d.w, x: d.live[0], y: d.live[1], x2: d.live[2], y2: d.live[3], id: 'live' + d.by };
+    else if (d.live && d.lt) {
+      if (d.lt === 'pen' || d.lt === 'hl') {   // 새 점만 온 것 — 이어 붙임 (순서가 어긋나면 다음 전체를 기다림)
+        if (!d.from || !p.live || p.live.lid !== d.lid) { if (!d.from) p.live = { t: d.lt, c: d.c, w: d.w, p: d.live.slice(), lid: d.lid }; }
+        else if (p.live.p.length === d.from) p.live.p = p.live.p.concat(d.live);
+        else if (p.live.p.length > d.from) p.live.p = p.live.p.slice(0, d.from).concat(d.live);
+      } else p.live = { t: d.lt, c: d.c, w: d.w, x: d.live[0], y: d.live[1], x2: d.live[2], y2: d.live[3], id: 'live' + d.by };
+    }
     clearTimeout(p.tm); p.tm = setTimeout(function () { if (CB && CB.peers[d.by] === p) { delete CB.peers[d.by]; _cbDrawPeers(); _cbDraw(); } }, 15000);
     _cbDrawPeers(); _cbDraw();
   }

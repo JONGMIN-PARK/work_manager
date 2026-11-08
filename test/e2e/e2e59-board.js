@@ -118,7 +118,9 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     // 회전 (저장 · 상대 반영)
     await a.click('#cbBoard [data-a="rotr"]');
     var rot = await until(k, function () { return CB.a.rot === 90; }, null, 5000);
-    check(rot && (await srvAnnot(fid)).rot === 90, '회전 90° 저장 · 상대 반영');
+    // v13.373 상대 화면은 저장보다 먼저 바뀜(바로 보내기) — 저장은 잠깐 기다려 확인
+    var srot = 0; for (var tr = 0; tr < 40 && srot !== 90; tr++) { srot = (await srvAnnot(fid)).rot; if (srot !== 90) await wait(150); }
+    check(rot && srot === 90, '회전 90° 저장 · 상대 반영');
     var kw = await k.evaluate(function () { var c = _cbView(); return [c.width, c.height]; });
     check(kw[0] === 800 && kw[1] === 1200, '회전된 그림 크기 ' + kw.join('×'));
     await a.click('#cbBoard [data-a="rotl"]');
