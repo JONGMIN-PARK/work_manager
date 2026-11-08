@@ -131,8 +131,29 @@ function chatAlertMenu(btn) {
         else if (st === 'denied') _cxToast('브라우저 · 휴대폰 설정 › 알림에서 이 사이트(앱)를 허용해 주세요', 'warn');
         else if (st === 'on' && typeof wmPushDisable === 'function' && confirm('이 기기 알림을 끌까요?')) wmPushDisable().then(function () { CXA.push = null; });
       }],
-      st === 'on' && typeof wmPushTest === 'function' ? ['🔔 시험 알림 보내기', wmPushTest] : null
+      st === 'on' && typeof wmPushTest === 'function' ? ['🔔 시험 알림 보내기', wmPushTest] : null,
+      ['🔑 키워드 알림' + (CX.kw && CX.kw.length ? ' (' + CX.kw.length + ')' : '') + '…', chatKeywordModal]
     ].filter(Boolean);
     _cxMenu(btn, items);
   });
 }
+
+/* 🔑 키워드 알림 (v13.380) — 이 낱말이 나오면 알림 꺼 둔 방이라도 알림 (휴대폰 푸시 포함) */
+function chatKeywordModal() {
+  if (typeof wmGuardedModal !== 'function' || typeof createModal !== 'function') return;
+  return wmGuardedModal('chatKeywords', function () {
+    var m = createModal({ id: 'chatKwModal', title: '🔑 키워드 알림', width: '420px', closeOnEsc: true, closeOnOverlay: true,
+      html: '<p class="cxp-note" style="margin:0 0 8px">장비 이름 · 내 프로젝트 · 거래처처럼 꼭 알아야 하는 낱말. 이 낱말이 나오면 알림을 꺼 둔 방이라도 알려 줍니다. 두 글자 이상, 20개까지.</p>' +
+        '<textarea class="wr-inp" id="cxKwIn" rows="4" placeholder="쉼표나 줄바꿈으로 — 예: 3호기, 조립기, 삼성전자" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>' +
+        '<div class="cx-mfoot"><span class="cxp-note" data-n></span><button type="button" class="wm-pri" data-save>저장</button></div>' });
+    var ta = m.box.querySelector('#cxKwIn');
+    ta.value = (CX.kw || []).join(', ');
+    function list() { return ta.value.split(/[,\n]/).map(function (x) { return x.trim(); }).filter(function (x) { return x.length >= 2; }); }
+    function cnt() { m.box.querySelector('[data-n]').textContent = list().length + '개'; }
+    ta.addEventListener('input', cnt); cnt();
+    m.box.querySelector('[data-save]').addEventListener('click', function () {
+      apiFetch('/api/chat/me/keywords', { method: 'PUT', body: JSON.stringify({ keywords: list() }) }).then(function (r) { CX.kw = r.data || []; _cxToast('🔑 키워드 ' + CX.kw.length + '개를 저장했습니다', 'success'); m.close(); }).catch(function (e) { _cxToast((e && e.message) || '저장하지 못했습니다', 'error'); });
+    });
+  }, 'chatKwModal');
+}
+if (typeof window !== 'undefined') window.chatKeywordModal = chatKeywordModal;

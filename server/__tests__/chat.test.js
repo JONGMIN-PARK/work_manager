@@ -778,3 +778,35 @@ test('🎤 음성 메시지 (v13.379) — 길이 · 받아쓰기(AI 흉내) · �
   expect(rl.last.body).toBe('🎤 음성 메시지');
   spy.mockRestore();
 });
+
+test('🔑 키워드 알림 · 📝 나와의 채팅 (v13.380)', async function () {
+  var push = require('../services/push.service'), sent = [];
+  push._setSender(function (sub, body) { sent.push(JSON.parse(body)); });
+  await db.query('DELETE FROM push_subs WHERE user_id = $1', [b.user.id]);
+  await api('post', '/api/push/subscribe', b).send({ subscription: { endpoint: 'https://push.example/kw-' + S, keys: { p256dh: 'P', auth: 'A' } } });
+  await api('put', '/api/chat/focus', b).send({ minutes: 0 }).catch(function () {});
+  await db.query('UPDATE chat_user_state SET focus_until = NULL WHERE user_id = $1', [b.user.id]);
+  expect((await api('put', '/api/chat/me/keywords', b).send({ keywords: ['3호기', 'a', '3호기', ' 조립기 '] })).body.data).toEqual(['3호기', '조립기']);
+  expect((await api('get', '/api/chat/me/keywords', b)).body.data).toEqual(['3호기', '조립기']);
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '키워드방', userIds: [b.user.id] })).body.data.id;
+  await api('put', '/api/chat/rooms/' + g, b).send({ muted: true });
+  var wait = function () { return new Promise(function (r) { setTimeout(r, 600); }); };
+  sent.length = 0;
+  await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '오늘 점심 뭐 먹지' }); await wait();
+  expect(sent.length).toBe(0);   // 알림 꺼 둔 방
+  await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '3호기 알람 떴어요' }); await wait();
+  expect(sent.length).toBe(1);   // 키워드는 옴
+  await api('post', '/api/chat/rooms/' + g + '/messages', a).send({ body: '조립기도 확인 부탁' }); await wait();
+  expect(sent.length).toBe(2);   // 키워드는 1분 간격도 무시
+  push._setSender(null);
+  // 나와의 채팅 — 하나만 · 나만 · 맨 위 고정
+  var s1 = (await api('post', '/api/chat/rooms', b).send({ kind: 'self' })).body.data.id;
+  var s2 = (await api('post', '/api/chat/rooms', b).send({ kind: 'self' })).body.data.id;
+  expect(s2).toBe(s1);
+  var info = (await api('get', '/api/chat/rooms/' + s1, b)).body.data;
+  expect(info).toMatchObject({ self: true, name: '나와의 채팅' });
+  expect(info.members.length).toBe(1);
+  var rl = (await api('get', '/api/chat/rooms', b)).body.data;
+  expect(rl[0]).toMatchObject({ id: s1, self: true, pinned: true });
+  expect((await api('get', '/api/chat/rooms/' + s1, a)).status).toBe(403);
+});

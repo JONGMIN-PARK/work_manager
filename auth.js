@@ -200,6 +200,7 @@ async function authLogout() {
   // v13.332 노트 — 남은 글을 보내고(임시 보관은 그 사람 이름으로) 화면 · 기억을 비움 (공용 PC 에서 다음 사람에게 보이지 않게)
   try { if (typeof _mwnFlushNow === 'function') _mwnFlushNow(); if (typeof mwNotesClose === 'function') mwNotesClose(); } catch (_) {}
   try { if (typeof nbReset === 'function') nbReset(); } catch (_) {}
+  try { if (typeof chatLocalClear === 'function') chatLocalClear(); } catch (_) {}   // v13.380 메신저 — 휴대폰에 담아 둔 대화 지움
   try {
     if (_accessToken) {
       await fetch(API_BASE + '/api/auth/logout', {
