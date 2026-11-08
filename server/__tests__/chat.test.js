@@ -693,3 +693,27 @@ test('↩ 인용 답장 (v13.376) — 원문 요약 · 같은 방만 · 지운 �
   expect(res.status).toBe(201);
   expect(res.body.data.quote).toMatchObject({ id: r1.id, body: '좋습니다' });
 });
+
+test('🖼 사진 묶음 · 미리보기 (v13.377) — grp · thumb 올리기(JPEG 만) · ?thumb=1 · 남이 덮어쓰기 안 됨', async function () {
+  var g = (await api('post', '/api/chat/rooms', a).send({ kind: 'group', name: '사진방', userIds: [b.user.id] })).body.data.id;
+  function up(who, name, grp) { return h.request(h.app).post('/api/chat/rooms/' + g + '/files?name=' + name + (grp ? '&grp=' + grp : '')).set('Authorization', 'Bearer ' + who.token).set('Content-Type', 'image/png').send(Buffer.alloc(2000, 1)); }
+  var p1 = (await up(a, 'a.png', 'gTest1234')).body.data, p2 = (await up(a, 'b.png', 'gTest1234')).body.data, p3 = (await up(a, 'c.png', 'bad grp!')).body.data;
+  expect(p1.grp).toBe('gTest1234'); expect(p2.grp).toBe('gTest1234'); expect(p3.grp).toBeNull();
+  var jpg = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(300, 2)]);
+  // 미리보기 없을 때 ?thumb=1 → 원본
+  var r0 = await h.request(h.app).get('/api/chat/files/' + p1.file.id + '?thumb=1').set('Authorization', 'Bearer ' + b.token);
+  expect(r0.headers['x-thumb']).toBeUndefined(); expect(r0.body.length).toBe(2000);
+  // JPEG 아니면 거절 · 방 사람이 채움(예전 사진) · 이미 있으면 남은 못 바꿈 · 보낸 사람은 바꿈
+  expect((await h.request(h.app).post('/api/chat/files/' + p1.file.id + '/thumb').set('Authorization', 'Bearer ' + b.token).set('Content-Type', 'image/jpeg').send(Buffer.alloc(300, 3))).status).toBe(400);
+  expect((await h.request(h.app).post('/api/chat/files/' + p1.file.id + '/thumb').set('Authorization', 'Bearer ' + b.token).set('Content-Type', 'image/jpeg').send(jpg)).status).toBe(200);
+  var r1 = await h.request(h.app).get('/api/chat/files/' + p1.file.id + '?thumb=1').set('Authorization', 'Bearer ' + a.token);
+  expect(r1.headers['x-thumb']).toBe('1'); expect(r1.body.length).toBe(jpg.length);
+  var other = Buffer.concat([Buffer.from([0xFF, 0xD8]), Buffer.alloc(500, 9)]);
+  expect((await h.request(h.app).post('/api/chat/files/' + p1.file.id + '/thumb').set('Authorization', 'Bearer ' + b.token).set('Content-Type', 'image/jpeg').send(other)).body.data.kept).toBe(true);
+  expect((await h.request(h.app).post('/api/chat/files/' + p1.file.id + '/thumb').set('Authorization', 'Bearer ' + a.token).set('Content-Type', 'image/jpeg').send(other)).status).toBe(200);
+  // 방 밖 사람은 못 받음
+  expect((await h.request(h.app).get('/api/chat/files/' + p1.file.id + '?thumb=1').set('Authorization', 'Bearer ' + x.token)).status).toBe(403);
+  // 원본은 그대로
+  var full = await h.request(h.app).get('/api/chat/files/' + p1.file.id).set('Authorization', 'Bearer ' + a.token);
+  expect(full.body.length).toBe(2000);
+});

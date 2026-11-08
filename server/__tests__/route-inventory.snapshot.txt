@@ -411,6 +411,7 @@ POST /api/chat/docs/:did/cursor
 POST /api/chat/equipment/room
 POST /api/chat/files/:fid/annot
 POST /api/chat/files/:fid/cursor
+POST /api/chat/files/:fid/thumb
 POST /api/chat/files/:fid/to-docs
 POST /api/chat/folders
 POST /api/chat/folders/:fid/items

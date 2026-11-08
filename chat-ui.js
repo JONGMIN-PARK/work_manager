@@ -105,7 +105,7 @@ function chatOnEvent(ev, d) {
     if (r) {
       if (!d.replyTo && typeof d.id === 'number') r.lastId = Math.max(r.lastId || 0, d.id);
       _cxPfDrop(d.roomId);
-      r.lastAt = d.at; r.last = { userName: d.userName, body: d.deleted ? '(지운 메시지)' : d.post ? '📌 ' + d.post.title : d.file && !d.body ? '📎 ' + d.file.name : d.body, mine: mine, kind: d.kind };
+      r.lastAt = d.at; r.last = { userName: d.userName, body: d.deleted ? '(지운 메시지)' : d.post ? '📌 ' + d.post.title : d.file && !d.body ? (_cxIsPhoto(d.file) ? '📷 사진' : '📎 ' + d.file.name) : d.body, mine: mine, kind: d.kind };
       if (!mine && !d.replyTo && d.kind !== 'system' && !_cxVisibleRoom(d.roomId)) { r.unread = (r.unread || 0) + 1; if ((d.mentions || []).indexOf(_cxMe()) >= 0) r.mentioned = (r.mentioned || 0) + 1; }
       CX.rooms.sort(function (a, b) { return (b.pinned - a.pinned) || (new Date(b.lastAt) - new Date(a.lastAt)); });
     } else _cxLoadRooms();
@@ -600,6 +600,12 @@ function _cxMsgHtml(m, prev, inThread, next) {
   if (!prev || new Date(prev.at).toDateString() !== new Date(m.at).toDateString()) h += '<div class="cx-day"><span>' + _cxDay(m.at) + '</span></div>';
   if (!inThread && CX.readMark != null && typeof m.id === 'number' && m.id > CX.readMark && (!prev || (typeof prev.id === 'number' && prev.id <= CX.readMark)) && !mine) h += '<div class="cx-unl"><span>여기부터 안 읽음</span></div>';
   if (m.kind === 'system') return h + '<div class="cx-sys" data-mid="' + m.id + '">' + _cxText(m.body) + '</div>';
+  var alb = null;   // v13.377 🖼 앨범
+  if (!inThread && m.grp && m.file && !m.deleted) {
+    alb = CX.msgs.filter(function (x) { return x.grp === m.grp && x.file && !x.deleted && !x.replyTo; });
+    if (alb.length < 2) alb = null;
+    else if (alb[0].id !== m.id) return h + '<div class="cx-gh" hidden></div>';
+  }
   var cont = prev && prev.userId === m.userId && prev.kind !== 'system' && (new Date(m.at) - new Date(prev.at)) < 5 * 60000 && new Date(prev.at).toDateString() === new Date(m.at).toDateString();
   var ai = m.kind === 'ai';
   var body = '';
@@ -610,12 +616,13 @@ function _cxMsgHtml(m, prev, inThread, next) {
     if (qh && !qIn) body += qh;
     if (m.post && typeof chatPostHtml === 'function') body += chatPostHtml(m, { full: inThread });   // v13.358 📌 게시판 글
     else if (m.body) body += '<div class="cx-b' + (ai ? ' cx-ai' : '') + (qIn ? ' has-q' : '') + '">' + (qIn ? qh : '') + (ai ? '<div class="cx-ai-h">🤖 AI · 내가 볼 수 있는 데이터로 답함</div>' + (typeof rMD === 'function' ? rMD(_cxE(m.body)) : _cxText(m.body)) : _cxText(m.body)) + (m.edited ? '<i class="cx-ed">수정됨</i>' : '') + '</div>';
-    if (m.file) body += _cxFileHtml(m.file);
+    if (alb) body += _cxAlbumHtml(alb);
+    else if (m.file) body += _cxFileHtml(m.file);
     if (m.cards && m.cards.length) body += '<div class="cx-cards">' + m.cards.map(function (c, i) { return _cxCardHtml(c, i, m); }).join('') + '</div>';
   }
   var rx = m.reactions ? Object.keys(m.reactions).map(function (e) { var l = m.reactions[e]; return '<button type="button" class="cx-rx' + (l.indexOf(_cxMe()) >= 0 ? ' on' : '') + '" data-rx="' + e + '" title="' + _cxE(_cxNames(l)) + '">' + e + ' ' + l.length + '</button>'; }).join('') : '';
   var meta = m.pending ? '<span class="cx-meta">' + (m.failed ? '<span class="cx-fail">⚠ 못 보냄 <button type="button" data-retry="' + m.id + '">다시 보내기</button><button type="button" data-drop="' + m.id + '">지우기</button></span>' : '<i class="cx-sending" title="보내는 중">◷</i>') + '</span>'
-    : '<span class="cx-meta"><em class="cx-un" data-un="' + m.id + '"></em>' + (_cxSameMin(m, next) ? '' : '<i>' + _cxT(m.at) + '</i>') + '</span>';   // 읽음 숫자는 _cxDrawReadCounts 가 채움 · v13.376 같은 사람 같은 분에 이어 보낸 건 마지막에만 시각
+    : '<span class="cx-meta"><em class="cx-un" data-un="' + m.id + '"></em>' + (!alb && _cxSameMin(m, next) ? '' : '<i>' + _cxT(m.at) + '</i>') + '</span>';   // 읽음 숫자는 _cxDrawReadCounts 가 채움 · v13.376 같은 사람 같은 분에 이어 보낸 건 마지막에만 시각
   h += '<div class="cx-m' + (mine ? ' mine' : '') + (cont ? ' cont' : '') + (ai ? ' is-ai' : '') + (m.pending ? ' cx-pend' + (m.failed ? ' failed' : '') : '') + '" data-mid="' + m.id + '">' +
     (!mine && !cont ? (ai ? '<span class="cx-av cx-av-ai">🤖</span>' : _cxAv(m.userId, m.userName)) : (!mine ? '<span class="cx-av-sp"></span>' : '')) +
     '<div class="cx-col">' + (!mine && !cont ? '<div class="cx-who">' + _cxE(ai ? 'AI' : m.userName) + '</div>' : '') +
@@ -638,11 +645,18 @@ function _cxNames(ids) {
 }
 function _cxFileHtml(f) {
   var img = /^image\/(png|jpe?g|gif|webp|bmp)$/i.test(f.mime || '');
-  if (img) return '<button type="button" class="cx-img" data-file="' + _cxE(f.id) + '" data-img="1" title="' + _cxE(f.name) + '"><img alt="' + _cxE(f.name) + '" data-blob="' + _cxE(f.id) + '"></button>';
+  if (img) return '<button type="button" class="cx-img" data-file="' + _cxE(f.id) + '" data-img="1" title="' + _cxE(f.name) + '"><img alt="' + _cxE(f.name) + '" data-blob="' + _cxE(f.id) + '" data-small="1"></button>';
   var ext = ((/\.([A-Za-z0-9]{1,6})$/.exec(f.name) || [])[1] || 'FILE').toUpperCase();
   return '<div class="cx-file"><span class="cx-fx">' + _cxE(ext) + '</span><span class="cx-fn"><b>' + _cxE(f.name) + '</b><i>' + _cxSize(f.size || 0) + '</i></span>' +
     '<button type="button" class="cx-ib" data-file="' + _cxE(f.id) + '" data-dl="1" title="받기">⬇</button>' +
     (CX.info && CX.info.kind === 'project' ? '<button type="button" class="cx-ib" data-todoc="' + _cxE(f.id) + '" title="프로젝트 문서로 보내기">📂</button>' : '') + '</div>';
+}
+function _cxAlbumHtml(list) {
+  var n = list.length, shown = list.slice(0, 9);
+  return '<div class="cx-alb n' + Math.min(n, 9) + '">' + shown.map(function (x, i) {
+    var more = i === 8 && n > 9 ? '<span class="cx-alb-more">+' + (n - 9) + '</span>' : '';
+    return '<button type="button" class="cx-img cx-alb-i" data-file="' + _cxE(x.file.id) + '" data-img="1" data-amid="' + x.id + '" title="' + _cxE(x.file.name) + '"><img alt="' + _cxE(x.file.name) + '" data-blob="' + _cxE(x.file.id) + '" data-small="1">' + more + '</button>';
+  }).join('') + '</div><div class="cx-alb-n">🖼 사진 ' + n + '장</div>';
 }
 function _cxCardHtml(c, i, m) {
   if (c.type === 'call' && typeof chatCallCardHtml === 'function') return chatCallCardHtml(c, m);
@@ -769,15 +783,25 @@ function _cxJump(id) {
   el.classList.remove('cx-hl'); void el.offsetWidth; el.classList.add('cx-hl');
 }
 /* 사진 — 인증이 필요한 주소라 받아서 blob 으로 */
-function _cxBlob(fid) {
-  if (CX.blobs[fid]) return CX.blobs[fid];
-  CX.blobs[fid] = fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/files/' + encodeURIComponent(fid), { headers: { Authorization: 'Bearer ' + _accessToken } }).then(function (res) {
+function _cxBlob(fid, thumb) {
+  var key = thumb ? fid + ':t' : fid;
+  if (CX.blobs[key]) return CX.blobs[key];
+  if (thumb && CX.blobs[fid]) return CX.blobs[fid];   // 원본을 이미 받았으면 그것
+  CX.blobs[key] = fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/files/' + encodeURIComponent(fid) + (thumb ? '?thumb=1' : ''), { headers: { Authorization: 'Bearer ' + _accessToken } }).then(function (res) {
     var ct = res.headers.get('content-type') || '';
-    if (ct.indexOf('application/json') >= 0) return res.json().then(function (j) { return j.data.url; });   // GCS 서명 주소
-    return res.blob().then(function (b) { return URL.createObjectURL(b); });
+    if (ct.indexOf('application/json') >= 0) return res.json().then(function (j) { if (thumb) _cxBackfillThumb(fid, j.data.url); return j.data.url; });   // GCS 서명 주소
+    var isThumb = res.headers.get('X-Thumb') === '1';
+    return res.blob().then(function (b) { if (thumb && !isThumb) _cxBackfillThumb(fid, b); return URL.createObjectURL(b); });
   });
-  CX.blobs[fid].catch(function () { delete CX.blobs[fid]; });
-  return CX.blobs[fid];
+  CX.blobs[key].catch(function () { delete CX.blobs[key]; });
+  return CX.blobs[key];
+}
+/** 예전 사진 — 처음 본 사람이 미리보기를 만들어 올려 둠 (다음부터 모두 작게 받음) */
+var _cxBackfilled = {};
+function _cxBackfillThumb(fid, src) {
+  if (_cxBackfilled[fid]) return; _cxBackfilled[fid] = 1;
+  var get = typeof src === 'string' ? fetch(src).then(function (r) { return r.blob(); }) : Promise.resolve(src);
+  get.then(function (b) { if (!b || b.size < 150 * 1024 || !_cxIsPhoto({ type: b.type || 'image/jpeg' })) return; return _cxBitmap(b).then(function (bmp) { return _cxJpeg(_cxCanvasOf(bmp, CX_THUMB), 0.72); }).then(function (t) { return _cxPutThumb(fid, t); }); }).catch(function () {});
 }
 /* v13.371 사진은 화면 가까이 올 때만 받음(사진 많은 방도 열자마자 수십 개 받지 않게) · 맨 아래를 보던 중이면 사진이 커져도 맨 아래 유지 */
 function _cxLoadBlobs(root) {
@@ -792,12 +816,12 @@ function _cxLoadBlobs(root) {
 function _cxBlobImg(img) {
   if (!img.dataset.blob) return;
   var id = img.dataset.blob; img.removeAttribute('data-blob');
-  var sc = img.closest('.cx-msgs');
+  var sc = img.closest('.cx-msgs'), small = img.dataset.small === '1';
   img.addEventListener('load', function () { if (sc && sc._stick) sc.scrollTop = sc.scrollHeight; }, { once: true });
-  _cxBlob(id).then(function (u) {
+  _cxBlob(id, small).then(function (u) {
     if (sc) sc._stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
     img.src = u;
-    var holder = !img.closest('.cx-q') && img.closest('[data-mid]'), m = holder && _cxFindMsg(+holder.dataset.mid);   // 인용 상자 속 사진은 그대로
+    var ai0 = img.closest('[data-amid]'), holder = !img.closest('.cx-q') && (ai0 || img.closest('[data-mid]')), m = holder && _cxFindMsg(+(ai0 ? ai0.dataset.amid : holder.dataset.mid));   // 인용 상자 속 사진은 그대로 · 앨범은 그 사진의 메시지
     if (typeof chatBoardThumb === 'function' && m && m.file) chatBoardThumb(img, m.file);   // 표시 · 자르기 · 회전한 모습으로
   }).catch(function () { img.alt = '사진을 불러오지 못했습니다'; });
 }
@@ -847,7 +871,7 @@ function _cxMsgClick(e) {
     return;
   }
   var fl = t.closest('[data-file]');
-  if (fl && m) { if (fl.dataset.img) _cxViewImage(fl.dataset.file, m.file && m.file.name); else _cxDownload(fl.dataset.file, m.file && m.file.name); return; }
+  if (fl && m) { var fm = fl.dataset.amid ? _cxFindMsg(+fl.dataset.amid) || m : m; if (fl.dataset.img) _cxViewImage(fl.dataset.file, fm.file && fm.file.name); else _cxDownload(fl.dataset.file, fm.file && fm.file.name); return; }
   var td = t.closest('[data-todoc]');
   if (td) { apiFetch('/api/chat/files/' + td.dataset.todoc + '/to-docs', { method: 'POST', body: JSON.stringify({ projectId: CX.info && CX.info.projectId }) }).then(function () { _cxToast('📂 프로젝트 문서로 보냈습니다', 'success'); }).catch(function (err) { _cxToast(_cxErr(err), 'error'); }); return; }
   var w = t.closest('[data-watch]');
@@ -1036,7 +1060,8 @@ function _cxComposerHtml(taId, wrapId) {
     '<button type="button" class="cx-ib" data-c="card" title="업무 카드 붙이기 — 이슈 · 프로젝트 · 마일스톤 · 문서 …">＋<span class="cx-tl">업무 카드</span></button>' +
     (wrapId === 'cxComp' && typeof chatTimeComposer === 'function' ? '<button type="button" class="cx-ib" data-c="sched" title="⏰ 예약 보내기 — 글을 쓰고 누르면 그때 보냄">⏰<span class="cx-tl">예약 보내기</span></button>' : '') +
     (wrapId === 'cxComp' && typeof chatPostModal === 'function' ? '<button type="button" class="cx-ib" data-c="post" title="게시판 글쓰기 — 공지 · 자료 · 질문 · 🛠 요청">✍️<span class="cx-tl">게시판 글</span></button>' : '') +
-    (_cxCanCapture() ? '<button type="button" class="cx-ib" data-c="cap" title="화면 캡처 — 잘라서 표시하고 보내기">📸<span class="cx-tl">화면 캡처</span></button>' : '') + '</span>' +
+    (_cxCanCapture() ? '<button type="button" class="cx-ib" data-c="cap" title="화면 캡처 — 잘라서 표시하고 보내기">📸<span class="cx-tl">화면 캡처</span></button>' : '') +
+    '<button type="button" class="cx-ib cx-q-orig' + (_cxPhotoOrig() ? ' on' : '') + '" data-c="orig" title="사진 화질 — 지금: ' + (_cxPhotoOrig() ? '원본 그대로' : '줄여서(빠름)') + '">' + (_cxPhotoOrig() ? '🅾' : '🖼') + '<span class="cx-tl">' + (_cxPhotoOrig() ? '원본 화질' : '사진 줄여서') + '</span></button></span>' +
     '<textarea id="' + taId + '" rows="1" autocomplete="off" enterkeyhint="send" placeholder="' + (_cxIsPhone() ? '메시지 입력' : '메시지 · @사람 · /명령') + '" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
     '<button type="button" class="cx-ib cx-emo-t" data-c="emoji" title="이모티콘 · 빠른 답" aria-label="이모티콘">😊</button>' +
     '<button type="button" class="cx-send" data-c="send" title="보내기" aria-label="보내기">➤</button>' +
@@ -1103,6 +1128,11 @@ function _cxBindComposer(taId, wrapId, inThread) {
     else if (b.dataset.c === 'cap' && typeof chatBoardCapture === 'function') chatBoardCapture(inThread ? CX.thread : null);
     else if (b.dataset.c === 'send') _go();
     else if (b.dataset.c === 'emoji') _cxEmojiPick(b, ta, inThread, _go);
+    else if (b.dataset.c === 'orig') {   // v13.377 사진 화질
+      var on = !_cxPhotoOrig(); _cxLsSet('wm-cx-photo', on ? 'orig' : null);
+      document.querySelectorAll('[data-c="orig"]').forEach(function (x) { x.classList.toggle('on', on); x.title = '사진 화질 — 지금: ' + (on ? '원본 그대로' : '줄여서(빠름)'); x.firstChild.textContent = on ? '🅾' : '🖼'; var tl = x.querySelector('.cx-tl'); if (tl) tl.textContent = on ? '원본 화질' : '사진 줄여서'; });
+      _cxToast(on ? '🅾 사진을 원본 그대로 보냅니다 (도면 · 측정값 사진에)' : '🖼 사진을 줄여서 보냅니다 (빠르고 데이터 적게)', 'info');
+    }
   });
   wrap.addEventListener('click', function (e) { var x = e.target.closest('[data-unchip]'); if (x) { CX.cards.splice(+x.dataset.unchip, 1); _cxDrawChips(); } var rc = e.target.closest('[data-unreply]'); if (rc) _cxCancelEdit(); if (e.target.closest('[data-unquote]')) _cxEndQuote(); });
   function _tools(on) {
@@ -1164,7 +1194,7 @@ function _cxQuoteHtml(q) {
   var img = q.file && /^image\//i.test(q.file.mime || '');
   var txt = q.deleted ? '삭제된 메시지' : q.body ? q.body.replace(/\s+/g, ' ') : q.file ? (img ? '📷 사진' : '📎 ' + q.file.name) : '';
   return '<button type="button" class="cx-q' + (q.deleted ? ' del' : '') + '" data-qjump="' + q.id + '" title="원문으로 가기">' +
-    (img && !q.deleted ? '<img alt="" data-blob="' + _cxE(q.file.id) + '">' : '') +
+    (img && !q.deleted ? '<img alt="" data-blob="' + _cxE(q.file.id) + '" data-small="1">' : '') +
     '<span><b>' + _cxE(q.userName || '') + '</b><i>' + _cxE(txt) + '</i></span></button>';
 }
 function _cxStartQuote(m) {
@@ -1209,28 +1239,69 @@ function _cxDrawChips() {
 }
 
 /* 파일 올리기 — 하나씩 · 진행 표시 */
+/* v13.377 🖼 사진 — 보내기 전에 줄이고(긴 변 2048 · 방향 바로) 작은 미리보기(360)를 만듦. '원본 화질'이면 그대로 */
+var CX_PHOTO_MAX = 2048, CX_THUMB = 360;
+function _cxIsPhoto(f) { return /^image\/(jpeg|png|webp|bmp)$/i.test((f && (f.type || f.mime)) || ''); }
+function _cxPhotoOrig() { return _cxLsGet('wm-cx-photo') === 'orig'; }
+function _cxBitmap(file) {
+  if (typeof createImageBitmap === 'function') return createImageBitmap(file, { imageOrientation: 'from-image' }).catch(function () { return createImageBitmap(file); });
+  return new Promise(function (ok, no) { var u = URL.createObjectURL(file), im = new Image(); im.onload = function () { ok(im); }; im.onerror = no; im.src = u; });
+}
+function _cxCanvasOf(bmp, max) {
+  var w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight, k = Math.min(1, max / Math.max(w, h));
+  var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+  var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingQuality = 'high'; g.drawImage(bmp, 0, 0, c.width, c.height);
+  return c;
+}
+function _cxJpeg(c, q) { return new Promise(function (ok) { c.toBlob(function (b) { ok(b); }, 'image/jpeg', q); }); }
+/** → { file: 보낼 것, thumb: 미리보기 Blob|null } */
+function _cxPrepPhoto(f) {
+  if (!_cxIsPhoto(f)) return Promise.resolve({ file: f, thumb: null });
+  return _cxBitmap(f).then(function (bmp) {
+    var w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight;
+    var big = _cxPhotoOrig() || (f.size < 500 * 1024 && Math.max(w, h) <= CX_PHOTO_MAX) ? Promise.resolve(f)
+      : _cxJpeg(_cxCanvasOf(bmp, CX_PHOTO_MAX), 0.85).then(function (b) { return b && b.size < f.size ? new File([b], f.name.replace(/\.[A-Za-z0-9]{1,5}$/, '') + '.jpg', { type: 'image/jpeg' }) : f; });
+    var th = Math.max(w, h) > CX_THUMB * 1.3 ? _cxJpeg(_cxCanvasOf(bmp, CX_THUMB), 0.72) : Promise.resolve(null);
+    return Promise.all([big, th]).then(function (r) { if (bmp.close) try { bmp.close(); } catch (e) {} return { file: r[0], thumb: r[1] }; });
+  }).catch(function () { return { file: f, thumb: null }; });
+}
+function _cxPutThumb(fid, blob) {
+  if (!fid || !blob) return Promise.resolve();
+  return fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/files/' + encodeURIComponent(fid) + '/thumb', { method: 'POST', headers: { Authorization: 'Bearer ' + _accessToken, 'Content-Type': 'image/jpeg' }, body: blob }).catch(function () {});
+}
 function _cxUpload(files, replyTo) {
   if (!files || !files.length || !CX.room) return;
   var room = CX.room, qid = !replyTo && CX.quote ? CX.quote.id : null;
   if (qid) _cxEndQuote();
-  files.slice(0, 10).forEach(function (f) {
-    if (f.size > 25 * 1024 * 1024) { _cxToast(f.name + ' — 25MB 까지 올릴 수 있습니다', 'warn'); return; }
+  var photos = files.filter(_cxIsPhoto);
+  files = photos.slice(0, 30).concat(files.filter(function (f) { return !_cxIsPhoto(f); }).slice(0, 10));
+  var grp = !replyTo && photos.length > 1 ? 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : null;   // 여러 장 = 앨범
+  var chain = Promise.resolve();   // 차례로 — 앨범 순서 · 휴대폰 부담
+  files.forEach(function (f0) { chain = chain.then(function () { return _cxUploadOne(f0, room, replyTo, qid, _cxIsPhoto(f0) ? grp : null); }); });
+}
+function _cxUploadOne(f0, room, replyTo, qid, grp) {
+  return _cxPrepPhoto(f0).then(function (prep) { return new Promise(function (done) {
+    var f = prep.file;
+    if (f.size > 25 * 1024 * 1024) { _cxToast(f.name + ' — 25MB 까지 올릴 수 있습니다', 'warn'); done(); return; }
     var tip = document.createElement('div'); tip.className = 'cx-upl'; tip.innerHTML = '<span></span><i><b style="width:0%"></b></i>';
     tip.querySelector('span').textContent = '📎 ' + f.name;
     var host = document.getElementById('cxTyping'); if (host) host.parentNode.insertBefore(tip, host);
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/rooms/' + encodeURIComponent(room) + '/files?name=' + encodeURIComponent(f.name) + (replyTo ? '&replyTo=' + replyTo : '') + (!replyTo && qid ? '&quoteId=' + qid : ''));
+    xhr.open('POST', (typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/rooms/' + encodeURIComponent(room) + '/files?name=' + encodeURIComponent(f.name) + (replyTo ? '&replyTo=' + replyTo : '') + (!replyTo && qid ? '&quoteId=' + qid : '') + (grp ? '&grp=' + grp : ''));
     xhr.setRequestHeader('Authorization', 'Bearer ' + _accessToken);
     xhr.setRequestHeader('Content-Type', f.type || 'application/octet-stream');
     xhr.upload.onprogress = function (e) { if (e.lengthComputable) tip.querySelector('b').style.width = Math.round(e.loaded / e.total * 100) + '%'; };
     xhr.onload = function () {
       tip.remove();
-      if (xhr.status >= 300) { var m = '올리지 못했습니다'; try { m = JSON.parse(xhr.responseText).message || m; } catch (e) {} _cxToast(f.name + ' — ' + m, 'error'); return; }
-      try { var d = JSON.parse(xhr.responseText).data; if (CX.room === room && !d.replyTo && _cxAddIfNew(d)) _cxDrawMsgs(true); } catch (e) {}
+      if (xhr.status >= 300) { var m = '올리지 못했습니다'; try { m = JSON.parse(xhr.responseText).message || m; } catch (e) {} _cxToast(f.name + ' — ' + m, 'error'); done(); return; }
+      var d = null; try { d = JSON.parse(xhr.responseText).data; } catch (e) {}
+      if (d && prep.thumb && d.file) { CX.blobs[d.file.id + ':t'] = Promise.resolve(URL.createObjectURL(prep.thumb)); _cxPutThumb(d.file.id, prep.thumb); }   // 내 화면은 바로 미리보기
+      if (d && CX.room === room && !d.replyTo && _cxAddIfNew(d)) _cxDrawMsgs(true);
+      done();
     };
-    xhr.onerror = function () { tip.remove(); _cxToast(f.name + ' — 올리지 못했습니다', 'error'); };
+    xhr.onerror = function () { tip.remove(); _cxToast(f.name + ' — 올리지 못했습니다', 'error'); done(); };
     xhr.send(f);
-  });
+  }); });
 }
 
 /* ─── 답글 줄기 ─── */

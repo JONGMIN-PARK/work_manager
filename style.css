@@ -5818,3 +5818,22 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cx-m.mine .cx-b .cx-q:hover{background:rgba(255,255,255,.24)}
 .cx-m.mine .cx-b .cx-q b{color:#fff}
 .cx-m.mine .cx-b .cx-q i{color:rgba(255,255,255,.82)}
+
+/* ═══ v13.377 🖼 사진 앨범 · 화질 ═══ */
+.cx-alb{display:grid;gap:3px;width:min(300px,70vw);border-radius:14px;overflow:hidden}
+.cx-alb.n2{grid-template-columns:1fr 1fr}
+.cx-alb.n3{grid-template-columns:2fr 1fr;grid-template-rows:1fr 1fr}
+.cx-alb.n3 .cx-alb-i:first-child{grid-row:span 2}
+.cx-alb.n4{grid-template-columns:1fr 1fr}
+.cx-alb.n5,.cx-alb.n6,.cx-alb.n7,.cx-alb.n8,.cx-alb.n9{grid-template-columns:1fr 1fr 1fr}
+.cx-alb.n5 .cx-alb-i:nth-child(-n+2),.cx-alb.n8 .cx-alb-i:nth-child(-n+2){grid-column:span 1}
+.cx-alb .cx-alb-i{position:relative;display:block;padding:0;margin:0;border:0;border-radius:0!important;background:var(--bg-i);aspect-ratio:1/1;overflow:hidden;cursor:zoom-in;max-width:none!important;max-height:none!important}
+.cx-alb.n2 .cx-alb-i{aspect-ratio:3/4}
+.cx-alb .cx-alb-i img{width:100%;height:100%;object-fit:cover;display:block;max-width:none!important;max-height:none!important;border-radius:0!important}
+.cx-alb .cx-alb-i:hover img{filter:brightness(1.06)}
+.cx-alb-more{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);color:#fff;font-size:20px;font-weight:700}
+.cx-alb-n{font-size:11px;color:var(--t5);margin-top:3px}
+.cx-m.mine .cx-alb-n{text-align:right}
+.cx-q-orig.on{color:var(--ac-t);background:var(--ac-bg)}
+.cx-alb .cx-alb-i{box-shadow:none!important;transform:none!important;line-height:0}
+.cx-alb .cx-alb-i img{min-width:0!important;min-height:0!important;border:0!important}
