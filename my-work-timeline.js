@@ -104,6 +104,16 @@ MwTimeline.prototype.mount = function (slot) {
   if (!slot) return;
   if (!this.el) this.build();
   slot.replaceWith(this.el);
+  // v13.392 새로 열 때(접속 · 새로 고침 · 새 버전) · 날이 바뀐 뒤 처음 — 오늘로 가서 오늘을 고름 (달력 · 아래 목록도 오늘).
+  // 같은 날 탭만 오가면 보던 자리 그대로
+  var today = mwToday();
+  if (this._day !== today) {
+    this._day = today;
+    this.st.center = null; this.calMonth = null;
+    this.update();
+    if (this.o.calendar) this.setPick(today);
+    return;
+  }
   this.update();
 };
 
