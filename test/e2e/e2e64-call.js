@@ -30,6 +30,14 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await p.waitForFunction(function () { return typeof CXS !== 'undefined' && CXS.on; }, { timeout: 10000 }).catch(function () {});
     return { b: b, p: p };
   }
+  // 🎥 · 📞 — 대화 칸이 640px 보다 좁으면 머리 단추가 ⋯ 안으로 들어감(앱 정상 동작) → 보이면 바로, 아니면 ⋯ 메뉴에서
+  async function headBtn(p, h, label) {
+    var shown = await p.evaluate(function (h) { var b = document.querySelector('#cxHead [data-h="' + h + '"]'); return !!b && getComputedStyle(b).display !== 'none'; }, h);
+    if (shown) return p.click('#cxHead [data-h="' + h + '"]');
+    await p.click('#cxHead [data-h="more"]');
+    await p.waitForSelector('.cx-menu button');
+    await p.evaluate(function (label) { var b = [].filter.call(document.querySelectorAll('.cx-menu button'), function (x) { return x.textContent.indexOf(label) >= 0; })[0]; if (!b) throw new Error('메뉴에 없음: ' + label); b.click(); }, label);
+  }
   function until(p, fn, arg, ms) { return p.waitForFunction(fn, { timeout: ms || 8000 }, arg).then(function () { return true; }, function () { return false; }); }
   function videosOk(p, n, ms) { return until(p, function (n) { var vs = document.querySelectorAll('#clWin .cl-tile:not(.me) video'); return vs.length === n && Array.prototype.every.call(vs, function (v) { return v.srcObject && v.srcObject.getAudioTracks().length; }); }, n, ms); }
 
@@ -39,10 +47,10 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var a = A.p, k = K.p, l = L.p;
     var room = await a.evaluate(function (ids) { return apiFetch('/api/chat/rooms', { method: 'POST', body: JSON.stringify({ kind: 'group', name: '현장 통화', userIds: ids }) }).then(function (r) { return r.data.id; }); }, [kim.id, lee.id]);
     for (var p of [a, k, l]) { await p.click('#hdrMsgBtn'); await p.evaluate(function (r) { chatOpenRoom(r); }, room); await until(p, function () { return CX.info; }); }
-    check(await a.evaluate(function () { return !!document.querySelector('#cxHead [data-h="vcall"]'); }), '방 머리 📞 · 🎥 단추');
+    check(await a.evaluate(function () { return !!document.querySelector('#cxHead [data-h="vcall"]') && !!document.querySelector('#cxHead [data-h="call"]'); }), '방 머리 📞 · 🎥 단추 (좁으면 🎥 는 ⋯ 안)');
 
     // 🎥 시작 → 울림
-    await a.click('#cxHead [data-h="vcall"]');
+    await headBtn(a, 'vcall', '영상 통화');
     check(await until(a, function () { return document.getElementById('clWin') && CALL && CALL.video; }), '관리자 통화 창 (영상)');
     var rk = await until(k, function () { var r = document.getElementById('clRing'); return r && /관리자/.test(r.textContent) && /영상 통화/.test(r.textContent); });
     var rl = await until(l, function () { return !!document.getElementById('clRing'); });
@@ -82,7 +90,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(await a.evaluate(function () { return !CALL && !document.getElementById('clWin'); }), '통화 창 닫힘');
 
     // 거절
-    await a.click('#cxHead [data-h="call"]');
+    await headBtn(a, 'call', '음성 통화');
     await until(k, function () { return !!document.getElementById('clRing'); });
     await k.click('#clRing [data-no]');
     check(await until(a, function () { return Array.prototype.some.call(document.querySelectorAll('.wa-toast, .toast, [class*="toast"]'), function (t) { return /받지 않았습니다/.test(t.textContent); }); }, null, 6000), '거절 → "받지 않았습니다" 안내');
