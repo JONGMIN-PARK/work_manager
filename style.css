@@ -4406,13 +4406,36 @@ html.wm-desktop #mMessages{--cx-h:calc(100dvh - 96px)}
 .cb-widths button i{display:block;width:18px;border-radius:4px;background:#e5e7eb}
 .cb-widths button.on{background:rgba(255,255,255,.16)}
 .cb.orig .cb-tools button:not([data-tool="pan"]):not([data-tool="crop"]),.cb.orig .cb-colors,.cb.orig .cb-widths{opacity:.45}
+/* v13.410 좁은 창 — 한 줄로 옆에 밀려 화면 밖에 숨던 도구를 줄 나눠 모두 보이게
+ *   위: 제목 한 줄 + [원본 | 표시 보기] · 복사 · 보내기 · 받기 · ✕ 한 줄
+ *   아래: ① 도구 11개 ② 색 7 + 굵기 3 ③ 되돌리기 · 돌리기 · 📐 · 확대/축소 · 지우기 — 단추는 폭을 나눠 가짐 */
 @media (max-width:760px){
-  .cb-top{padding:8px 10px;gap:8px}
-  .cb-acts button span{display:none}
+  .cb-top{padding:8px 10px;gap:6px 8px;flex-wrap:wrap}
   .cb-ttl{flex-basis:100%;order:-1}
-  .cb-bar{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;padding:8px 8px calc(10px + env(safe-area-inset-bottom));scrollbar-width:none}
-  .cb-bar>div:not(.cb-sep){flex:none}
-  .cb-tools button,.cb-view button{min-width:40px;height:40px}
+  .cb-seg{flex:none}
+  .cb-seg button{padding:6px 11px;font-size:12.5px}
+  .cb-peers{flex:none}
+  .cb-acts{margin-left:auto;gap:4px;flex:none}
+  .cb-acts button{padding:6px 9px}
+  .cb-acts button span{display:none}
+  .cb-acts .cb-send{padding:7px 12px}
+  .cb-bar{flex-wrap:wrap;overflow:visible;gap:5px;padding:6px 8px calc(8px + env(safe-area-inset-bottom))}
+  .cb-sep{display:none}
+  .cb-bar>div:not(.cb-sep){flex:1 1 100%;min-width:0;justify-content:space-between;gap:1px;padding:3px}
+  .cb-bar>.cb-colors:not(.cb-sep){flex:1 1 auto;justify-content:space-around;padding:3px 6px}
+  .cb-bar>.cb-widths:not(.cb-sep){flex:0 0 auto}
+  .cb-ang{gap:5px;padding:6px 8px}
+  .cb-ang button{padding:5px 8px;font-size:12px}
+  .cb-ang output{min-width:56px}
+  .cb-tools button,.cb-view button{flex:1 1 0;min-width:0;height:38px;padding:0;font-size:15px}
+  .cb-view .cb-zl{flex:1.4 1 0;min-width:0;font-size:11.5px}
+  .cb-colors button{width:26px;height:26px;margin:0;flex:none}
+  .cb-widths button{width:32px}
+}
+@media (max-width:380px){
+  .cb-colors button{width:22px;height:22px}
+  .cb-widths button{width:28px}
+  .cb-tools button,.cb-view button{height:36px;font-size:14px}
 }
 
 /* ═══ v13.358 메신저 협업 — </> 코드 · 📌 게시판 글 · 🛠 요청함 · 📁 내 폴더 (chat-collab.js) ═══ */
