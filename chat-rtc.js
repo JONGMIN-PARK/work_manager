@@ -46,17 +46,25 @@ function _crtBar() {
   var n = Object.keys(CRT.viewers).length;
   if (CRT.ctlAsk) {   // 제어 요청 — 허락 · 거절
     bar.className = 'crt-bar ask';
-    bar.innerHTML = '<span class="crt-dot"></span><b>🖱 ' + _cxE(CRT.ctlAsk.name) + ' 님이 내 화면 제어를 요청합니다</b><button type="button" data-ok>허락</button><button type="button" data-always title="이 사람은 다음부터 묻지 않고 바로 허락 (이 PC에만 저장 · 공유 띠의 ⭐ 로 지우기)">항상 허락</button><button type="button" data-no>거절</button>';
+    bar.innerHTML = '<span class="crt-dot"></span><b class="crt-t" title="' + _cxE(CRT.ctlAsk.name) + ' 님이 내 화면 제어를 요청합니다">🖱 ' + _cxE(CRT.ctlAsk.name) + '<span class="crt-w"> 님이 내 화면 제어를 요청합니다</span><span class="crt-n"> 제어 요청</span></b><button type="button" data-ok>허락</button><button type="button" data-always title="이 사람은 다음부터 묻지 않고 바로 허락 (이 PC에만 저장 · 공유 띠의 ⭐ 로 지우기)">항상</button><button type="button" data-no>거절</button>';
+    _crtDrag(bar);
     bar.querySelector('[data-ok]').addEventListener('click', function () { _crtCtlStart(CRT.ctlAsk.id); });
     bar.querySelector('[data-always]').addEventListener('click', function () { var a = CRT.ctlAsk, m = _crtAutoList(); m[a.id] = a.name || a.id; _crtAutoSave(m); _crtCtlStart(a.id); _cxToast('🔓 ' + (a.name || '') + ' 님은 다음부터 바로 허락합니다', 'ok'); });
     bar.querySelector('[data-no]').addEventListener('click', function () { var a = CRT.ctlAsk; CRT.ctlAsk = null; _crtSig(CRT.share.roomId, { type: 'ctl-no', to: a.id, sid: CRT.share.sid }); _crtBar(); });
     return;
   }
   bar.className = 'crt-bar' + (CRT.ctl ? ' ctl' : '');
-  bar.innerHTML = '<span class="crt-dot"></span><b>' + (CRT.ctl ? '🖱 ' + _cxE(CRT.ctlName || '') + ' 님이 내 화면을 제어 중' : '화면 공유 중') + '</b><span>' + (CRT.ctl ? 'Ctrl+Alt+End 로 바로 끝내기' : n ? '보는 사람 ' + n + '명' : '아직 보는 사람 없음') + '</span>' +
+  var ink = typeof chatInkHostOpen === 'function' && !CRT.ctl, inkOn = typeof CI !== 'undefined' && CI.ovl;
+  bar.innerHTML = '<span class="crt-dot"></span>' +
+    (CRT.ctl ? '<b class="crt-t" title="' + _cxE(CRT.ctlName || '') + ' 님이 내 화면을 제어 중 — Ctrl+Alt+End 로 바로 끝내기">🖱 ' + _cxE(CRT.ctlName || '') + '<span class="crt-n"> 님</span> 제어 중</b><span class="crt-s"><kbd>Ctrl+Alt+End</kbd> 끝내기</span>'
+      : '<b class="crt-t">화면 공유 중</b><span class="crt-v" title="' + (n ? '보는 사람 ' + n + '명' : '아직 보는 사람 없음') + '">👁 <span class="crt-w">' + (n ? '보는 사람 ' + n + '명' : '아직 보는 사람 없음') + '</span><span class="crt-n">' + n + '</span></span>') +
+    (CRT.ctl ? '<button type="button" data-ctlx title="제어 끝내기 (Ctrl+Alt+End)">⏹ 제어 끝</button>' : '') + (_crtCanCtl() && !CRT.ctl ? _crtAutoBtns() : '') +
+    (ink ? '<button type="button" class="crt-ink' + (inkOn ? ' on' : '') + '" data-ink title="' + (inkOn ? '발표 펜 끄기' : '발표 펜 — 내 공유 화면 위에 레이저 · 펜 · 형광펜 · 도형으로 표시 (보는 사람 화면에 바로)') + '">✎<span class="crt-l"> ' + (inkOn ? '펜 끄기' : '발표 펜') + '</span></button>' : '') +
+    '<button type="button" data-stop title="화면 공유 끝내기">공유 끝</button>';
+  _crtDrag(bar);
     (CRT.ctl ? '<button type="button" data-ctlx>제어 끝내기</button>' : '') + (_crtCanCtl() && !CRT.ctl ? _crtAutoBtns() : '') + (typeof chatInkHostOpen === 'function' && !CRT.ctl ? '<button type="button" class="crt-ink' + (typeof CI !== 'undefined' && CI.ovl ? ' on' : '') + '" data-ink title="내 공유 화면 위에 레이저 · 펜 · 형광펜 · 도형으로 표시 — 보는 사람 화면에 바로">' + (typeof CI !== 'undefined' && CI.ovl ? '✎ 발표 펜 끄기' : '✎ 발표 펜') + '</button>' : '') + '<button type="button" data-stop>공유 끝내기</button>';
   bar.querySelector('[data-stop]').addEventListener('click', chatRtcStop);
-  var ink = bar.querySelector('[data-ink]'); if (ink) ink.addEventListener('click', typeof chatInkHostToggle === 'function' ? chatInkHostToggle : chatInkHostOpen);
+  var inkB = bar.querySelector('[data-ink]'); if (inkB) inkB.addEventListener('click', typeof chatInkHostToggle === 'function' ? chatInkHostToggle : chatInkHostOpen);
   var cx = bar.querySelector('[data-ctlx]'); if (cx) cx.addEventListener('click', function () { _crtCtlEnd(); });
   var au = bar.querySelector('[data-auto]'); if (au) au.addEventListener('click', function () { CRT.autoAll = !CRT.autoAll; _crtBar(); });
   var tr = bar.querySelector('[data-trust]'); if (tr) tr.addEventListener('click', function () {
@@ -67,8 +75,25 @@ function _crtBar() {
 /* 🔓 공유 띠의 자동 허락 단추 (v13.413) */
 function _crtAutoBtns() {
   var n = Object.keys(_crtAutoList()).length;
-  return '<button type="button" class="crt-auto' + (CRT.autoAll ? ' on' : '') + '" data-auto aria-pressed="' + !!CRT.autoAll + '" title="켜면 이번 공유 동안은 제어 요청을 묻지 않고 바로 허락 (공유가 끝나면 꺼짐)">' + (CRT.autoAll ? '🔓 자동 허락 켬' : '🔒 자동 허락') + '</button>' +
-    (n ? '<button type="button" class="crt-auto" data-trust title="항상 허락하는 사람 보기 · 지우기">⭐ ' + n + '</button>' : '');
+  return '<button type="button" class="crt-auto' + (CRT.autoAll ? ' on' : '') + '" data-auto aria-pressed="' + !!CRT.autoAll + '" title="' + (CRT.autoAll ? '자동 허락 켬 — ' : '자동 허락 — ') + '켜면 이번 공유 동안은 제어 요청을 묻지 않고 바로 허락 (공유가 끝나면 꺼짐)">' + (CRT.autoAll ? '🔓<span class="crt-l"> 자동 허락 켬</span>' : '🔒<span class="crt-l"> 자동 허락</span>') + '</button>' +
+    (n ? '<button type="button" class="crt-auto" data-trust title="항상 허락하는 사람 ' + n + '명 — 보기 · 지우기">⭐ ' + n + '</button>' : '');
+}
+/* 공유 띠 끌어서 옮기기 (v13.414) — 단추 말고 띠 바탕을 잡고 끌기 · 자리는 이번 창에서 기억 */
+var _crtPos = null;
+function _crtDrag(bar) {
+  if (_crtPos) { bar.style.left = _crtPos.x + 'px'; bar.style.top = _crtPos.y + 'px'; bar.style.transform = 'none'; }
+  if (bar._drag) return; bar._drag = 1;
+  bar.addEventListener('pointerdown', function (e) {
+    if (e.button || e.target.closest('button')) return;
+    var r = bar.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+    bar.setPointerCapture(e.pointerId); bar.classList.add('drag');
+    function mv(ev) {
+      var x = Math.max(4, Math.min(innerWidth - r.width - 4, ev.clientX - dx)), y = Math.max(4, Math.min(innerHeight - r.height - 4, ev.clientY - dy));
+      _crtPos = { x: x, y: y }; bar.style.left = x + 'px'; bar.style.top = y + 'px'; bar.style.transform = 'none';
+    }
+    function up() { bar.classList.remove('drag'); bar.removeEventListener('pointermove', mv); bar.removeEventListener('pointerup', up); bar.removeEventListener('pointercancel', up); }
+    bar.addEventListener('pointermove', mv); bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
+  });
 }
 function _crtOfferTo(userId) {
   var s = CRT.share; if (!s) return;

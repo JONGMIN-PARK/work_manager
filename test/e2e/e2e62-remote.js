@@ -63,6 +63,14 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await a.screenshot({ path: path.join(SHOT, 'e2e62-ask.png'), clip: { x: 300, y: 0, width: 800, height: 80 } });
     await a.click('#crtBar [data-ok]');
     check(await until(a, function () { return window.__ctl[0] === true && /제어 중/.test(document.getElementById('crtBar').textContent); }), '허락 → PC 앱 제어 켬 · 막대 "제어 중"');
+    // v13.414 좁은 창에서도 띠는 한 줄 · 화면 안
+    for (var vw of [1400, 516, 360]) {
+      await a.setViewport({ width: vw, height: 900 }); await new Promise(function (r) { setTimeout(r, 150); });
+      var bm = await a.evaluate(function () { var b = document.getElementById('crtBar'), r = b.getBoundingClientRect(); return { h: r.height, l: r.left, r: r.right, w: innerWidth, btn: Array.from(b.querySelectorAll('button')).every(function (x) { return x.getBoundingClientRect().height < 30; }) }; });
+      check(bm.h <= 36 && bm.l >= 0 && bm.r <= bm.w && bm.btn, '제어 중 띠 ' + vw + 'px — 한 줄(' + Math.round(bm.h) + 'px) · 화면 안');
+      await a.screenshot({ path: path.join(SHOT, 'e2e62-ctl-' + vw + '.png'), clip: { x: 0, y: 0, width: vw, height: 60 } });
+    }
+    await a.setViewport({ width: 1400, height: 900 });
     check(await until(k, function () { var w = document.getElementById('crtWin'); return w && w.classList.contains('ctl') && /제어 끝내기/.test(w.querySelector('[data-ctl]').textContent); }), '보는 쪽 — 제어 중 표시');
     var sys = await until(a, function () { return /화면 제어를 허락했습니다/.test(document.getElementById('cxMsgs').textContent); });
     check(sys, '방에 기록 — "화면 제어를 허락했습니다"');

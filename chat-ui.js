@@ -572,7 +572,7 @@ function _cxDrawMain() {
   var ta0 = m.querySelector('#cxIn'); if (ta0 && CX.drafts[CX.room]) { ta0.value = CX.drafts[CX.room]; ta0.style.height = 'auto'; ta0.style.height = Math.min(160, ta0.scrollHeight) + 'px'; }
   var box = m.querySelector('#cxMsgs');
   box.addEventListener('scroll', function () {
-    if (box.scrollTop < 60 && CX.more && !CX.loading) _cxLoadOlder();
+    if (box.scrollTop < Math.max(600, box.clientHeight * 1.5) && CX.more && !CX.loading) _cxLoadOlder();   // v13.414 위 끝에 닿기 전에 미리 받아 둠 (닿고 나서 받으면 휴대폰에서 굴림이 멈칫)
     if (CX.fwd && !CX.loading && box.scrollHeight - box.scrollTop - box.clientHeight < 200) _cxLoadNewer();   // v13.375 앞으로 읽기
     _cxSoon('newb', _cxNewBtn);
     if (!CX.unUpOff) _cxSoon('unup', _cxUnUp);
@@ -807,6 +807,25 @@ function _cxDrawMsgs(append, focusMid) {
   var inc = append !== 'older' && !focusMid && L > 0 && n > 0 && box._room === CX.room && box._more === CX.more;
   if (inc) { while (f < L && f < n && pIds[f] === ids[f]) f++; if (f === 0) inc = false; }
   var prevH = box.scrollHeight, prevTop = box.scrollTop, added = 0;
+  // v13.414 옛 대화 더 받기 — 목록 전체를 다시 그리지 않고 위에만 끼워 넣음 (휴대폰에서 굴리다 멈칫 · 깜빡이던 것)
+  if (append === 'older' && L > 0 && n > L && box._room === CX.room) {
+    var A = n - L, same = true;
+    for (var u = 0; u < L; u++) if (pIds[u] !== ids[A + u]) { same = false; break; }
+    var w0 = same && box.querySelector('.cx-mw[data-k="' + _cxE(String(pIds[0])) + '"]');
+    if (w0) {
+      var t0 = w0.getBoundingClientRect().top, tp = document.createElement('template');
+      if (pHs[0] !== hs[A]) { tp.innerHTML = _cxWrap(CX.msgs[A], hs[A]); var nw = tp.content.firstChild; w0.replaceWith(nw); w0 = nw; }
+      var head = ''; for (var v = 0; v < A; v++) head += _cxWrap(CX.msgs[v], hs[v]);
+      w0.insertAdjacentHTML('beforebegin', head);
+      var ob = box.querySelector('[data-older]');
+      if (!CX.more && ob) ob.remove(); else if (ob && box.firstElementChild !== ob) box.insertBefore(ob, box.firstElementChild);
+      box._ids = ids; box._hs = hs; box._more = CX.more;
+      _cxLoadBlobs(box); _cxDrawReadCounts();
+      var dt = w0.getBoundingClientRect().top - t0;   // 브라우저가 자리를 이미 지켰으면(overflow-anchor) 0 → 손대지 않아 관성 굴림 유지
+      if (Math.abs(dt) >= 1) box.scrollTop += dt;
+      _cxNewBtn(); return;
+    }
+  }
   if (inc) {
     var tpl = document.createElement('template');
     for (var j = 0; j < f && inc; j++) if (pHs[j] !== hs[j]) {
@@ -872,11 +891,13 @@ function _cxNewBtn() {
   var gap = box.scrollHeight - box.scrollTop - box.clientHeight;
   if (gap < 80) CX.newBelow = 0;
   var show = CX.newBelow > 0 || CX.fwd || gap > box.clientHeight * 1.5;
-  b.hidden = !show; if (!show) return;
-  b.classList.toggle('has-new', CX.newBelow > 0);
-  b.querySelector('span').textContent = CX.newBelow > 0 ? '새 메시지 ' + CX.newBelow + '개' : CX.fwd ? '최근 대화로' : '맨 아래로';
+  if (b.hidden !== !show) b.hidden = !show; if (!show) return;
+  // v13.414 굴릴 때마다 불려 — 바뀐 것만 씀 (매번 쓰고 높이를 읽으면 화면을 다시 계산해 휴대폰에서 굴림이 끊김)
+  var lab = CX.newBelow > 0 ? '새 메시지 ' + CX.newBelow + '개' : CX.fwd ? '최근 대화로' : '맨 아래로', sp = b.querySelector('span');
+  if (b._lab !== lab) { b._lab = lab; sp.textContent = lab; b.classList.toggle('has-new', CX.newBelow > 0); }
   var comp = document.getElementById('cxComp') || document.querySelector('#cxMain .cx-ro'), ty = document.getElementById('cxTyping');
-  b.style.bottom = ((comp ? comp.offsetHeight : 60) + (ty ? ty.offsetHeight : 0) + 12) + 'px';
+  var bt = ((comp ? comp.offsetHeight : 60) + (ty ? ty.offsetHeight : 0) + 12) + 'px';
+  if (b._bt !== bt) { b._bt = bt; b.style.bottom = bt; }
 }
 function _cxDrawReadCounts() {
   var els = document.querySelectorAll('#mMessages [data-un]'); if (!els.length) return;
