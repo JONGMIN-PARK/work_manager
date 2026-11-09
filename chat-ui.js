@@ -1126,6 +1126,14 @@ var CX_EMO = {
   '업무': '✅ ☑️ ❌ ⭕ ❗ ❓ ⚠️ 🚨 🔥 💯 📌 📎 📝 📋 📅 ⏰ ⏳ 📞 💻 🖥 🖨 🔧 🔩 ⚙️ 🛠 🏭 📦 🚚 📈 📉 💡 🔍 🔒 🔑 📢 🎯 🚀 🏁'.split(' '),
   '기호': '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 ⭐ 🌟 ✨ ⚡ 🎉 🎊 🎁 ☕ 🍚 🍺 🌧 ☀️ ⛄ 👀 💬 💭 ➡️ ⬅️ ⬆️ ⬇️ 🔄 ➕ ➖ ✖️'.split(' ')
 };
+/* v13.402 '자주' 탭 — 빠른 답 문구(확인했습니다 ✅ …)가 이모지 칸(38px)에 들어가 글자가 세로로 쌓이던 것. 문구는 위에 가로 알약 줄, 이모지는 아래 칸 */
+function _cxEmoCells(list, cur) {
+  var cell = function (x) { return '<button type="button" data-e="' + _cxE(x) + '">' + _cxE(x) + '</button>'; };
+  if (cur !== '자주') return list.map(cell).join('');
+  var isTxt = function (x) { return typeof chatEmojiOnly === 'function' ? !chatEmojiOnly(x) : /[가-힣A-Za-z0-9]/.test(x); };
+  var txt = list.filter(isTxt), emo = list.filter(function (x) { return !isTxt(x); });
+  return (txt.length ? '<div class="cx-emo-qr">' + txt.map(cell).join('') + '</div>' : '') + emo.map(cell).join('');
+}
 function _cxEmoRecent() { try { return JSON.parse(_cxLsGet('wm-cx-emo') || '[]') || []; } catch (e) { return []; } }
 function _cxEmojiPick(btn, ta, inThread, go) {
   var old = document.getElementById('cxEmo'); if (old) { old.remove(); return; }
@@ -1134,7 +1142,7 @@ function _cxEmojiPick(btn, ta, inThread, go) {
   function draw() {
     var list = cur === '자주' ? _cxEmoRecent() : CX_EMO[cur];
     p.innerHTML = '<div class="cx-emo-tabs">' + tabs.map(function (t) { return '<button type="button" data-tab="' + t + '" class="' + (t === cur ? 'on' : '') + '">' + t + '</button>'; }).join('') + '</div>' +
-      '<div class="cx-emo-g' + (cur === '빠른 답' ? ' qr' : '') + '">' + (list.length ? list.map(function (x) { return '<button type="button" data-e="' + _cxE(x) + '">' + _cxE(x) + '</button>'; }).join('') : '<div class="cx-emo-e">아직 없습니다 — 쓰면 여기 모입니다</div>') + '</div>' +
+      '<div class="cx-emo-g' + (cur === '빠른 답' ? ' qr' : '') + '">' + (list.length ? _cxEmoCells(list, cur) : '<div class="cx-emo-e">아직 없습니다 — 쓰면 여기 모입니다</div>') + '</div>' +
       '<div class="cx-emo-f">두 번 눌러 공감: <button type="button" data-dbl>' + (_cxLsGet('wm-cx-dbl') || '👍') + '</button> <i>휴대폰에서 말풍선을 두 번 누르면</i></div>';
   }
   draw();

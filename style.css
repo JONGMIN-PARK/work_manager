@@ -6243,3 +6243,8 @@ html:not([data-cx-depth="0"]) .cx-rx{background-image:linear-gradient(180deg,rgb
 .cxw-depth .cxw-scope{margin:0}
 html:not([data-cx-depth="0"]) .cxw-b{background-image:linear-gradient(180deg,rgba(255,255,255,calc(.07 * var(--cxd))),rgba(255,255,255,0) 55%);box-shadow:inset 0 1px 0 rgba(255,255,255,calc(.22 * var(--cxd))),0 1px 1px rgba(15,23,42,calc(.07 * var(--cxd))),0 8px 14px -10px rgba(15,23,42,calc(.45 * var(--cxd)))}
 html:not([data-cx-depth="0"]) .cxw-b.me{background:linear-gradient(180deg,rgba(255,255,255,calc(.16 * var(--cxd))),rgba(255,255,255,0) 52%),linear-gradient(135deg,var(--cx-mine-a,var(--ac)),var(--cx-mine-b,color-mix(in srgb,var(--ac) 62%,#7C3AED)));box-shadow:inset 0 1px 0 rgba(255,255,255,calc(.34 * var(--cxd))),inset 0 -2px 0 rgba(0,0,0,calc(.13 * var(--cxd))),0 8px 16px -9px color-mix(in srgb,var(--cx-mine-a,var(--ac)) min(100%,calc(75% * var(--cxd))),transparent);text-shadow:0 1px 1px var(--cx-mine-ts)}
+
+/* v13.402 이모티콘 판 '자주' — 빠른 답 문구는 위 가로 알약 줄 */
+.cx-emo-g .cx-emo-qr{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:5px;padding:2px 2px 8px;margin-bottom:2px;border-bottom:1px solid var(--bd)}
+.cx-emo-g .cx-emo-qr button{flex:none;font-size:12.5px;line-height:1.3;padding:5px 10px;border-radius:14px;background:var(--bg-i);color:var(--t2);white-space:nowrap;text-align:left}
+.cx-emo-g .cx-emo-qr button:hover{background:var(--bg-hv)}
