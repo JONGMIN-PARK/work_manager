@@ -181,7 +181,7 @@ test('🖼 사진 칠판 (v13.356) — 표시 더하기 · 지우기 · 회전 �
     { id: 'x2', t: 'text', c: 'red; background:url(x)', s: '  ', x: 1, y: 1 },     // 빈 글자 → 버림
     { id: 'x3', t: 'script', x: 1 },                                              // 모르는 종류 → 버림
     { id: 'x4', t: 'rect', c: '#00ff00', x: 0, y: 0, x2: 10, y2: 10, w: 9999 }
-  ], rot: 91 });
+  ], rot: 450.04 });
   expect(r.status).toBe(200);
   expect(r.body.data).toMatchObject({ rot: 90, n: 2 });
   var g = await api('get', '/api/chat/files/' + fid + '/annot', a);
@@ -211,6 +211,39 @@ test('🖼 사진 칠판 (v13.356) — 표시 더하기 · 지우기 · 회전 �
   // 모두 지우기
   await api('post', '/api/chat/files/' + fid + '/annot', b).send({ clear: true });
   expect((await api('get', '/api/chat/files/' + fid + '/annot', a)).body.data.shapes).toEqual([]);
+});
+
+test('🖼 나만 보는 회전 (v13.409) — 사람마다 따로 · 1° 단위 · 지우기 · 모두에게 비스듬히 · 방 밖 사람 · 사진만', async function () {
+  var png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  var upv = await api('post', '/api/chat/rooms/' + dm + '/files?name=v.png', a).set('Content-Type', 'image/png').send(png);
+  var fid = upv.body.data.file.id;
+  // 처음엔 없음
+  expect((await api('get', '/api/chat/files/' + fid + '/annot', a)).body.mine).toBeNull();
+  // a 가 비스듬히 돌림 → a 에게만
+  var r = await api('put', '/api/chat/files/' + fid + '/view', a).send({ angle: -3.46, fill: true });
+  expect(r.status).toBe(200);
+  expect(r.body.data).toEqual({ a: 356.5, f: true });
+  expect((await api('get', '/api/chat/files/' + fid + '/annot', a)).body.mine).toEqual({ a: 356.5, f: true });
+  expect((await api('get', '/api/chat/files/' + fid + '/annot', b)).body.mine).toBeNull();     // b 화면은 그대로
+  expect((await api('get', '/api/chat/files/' + fid + '/annot', b)).body.data.rot).toBe(0);    // 같이 쓰는 회전도 그대로
+  // 다시 돌리면 덮어씀 · 내 목록
+  await api('put', '/api/chat/files/' + fid + '/view', a).send({ angle: 90 });
+  var mv = (await api('get', '/api/chat/my-views', a)).body.data;
+  expect(mv[fid]).toEqual({ a: 90, f: false });
+  expect((await api('get', '/api/chat/my-views', b)).body.data[fid]).toBeUndefined();
+  // 지우기
+  await api('put', '/api/chat/files/' + fid + '/view', a).send({ angle: null });
+  expect((await api('get', '/api/chat/my-views', a)).body.data[fid]).toBeUndefined();
+  // 👥 모두에게 — 같이 쓰는 회전도 비스듬히(0.1° 단위) · 목록 요약에도
+  var s2 = await api('post', '/api/chat/files/' + fid + '/annot', b).send({ add: [], rot: 2.55 });
+  expect(s2.body.data.rot).toBe(2.6);
+  var ms = await api('get', '/api/chat/rooms/' + dm + '/messages', a);
+  var fm = ms.body.data.filter(function (m) { return m.file && m.file.id === fid; })[0];
+  expect(fm.file.annot.rot).toBe(2.6);
+  // 방 밖 사람 · 사진 아닌 파일
+  expect((await api('put', '/api/chat/files/' + fid + '/view', x).send({ angle: 90 })).status).toBe(403);
+  var txt = await api('post', '/api/chat/rooms/' + dm + '/files?name=t2.txt', a).set('Content-Type', 'text/plain').send(Buffer.from('t'));
+  expect((await api('put', '/api/chat/files/' + txt.body.data.file.id + '/view', a).send({ angle: 90 })).status).toBe(400);
 });
 
 test('📌 게시판 · 🛠 요청함 (v13.358) — 글 · 상태 흐름 · 담당 · 고치기 권한 · 이슈로 · 방 밖 사람', async function () {

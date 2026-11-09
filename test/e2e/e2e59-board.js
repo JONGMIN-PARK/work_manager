@@ -116,16 +116,65 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var undone = await until(k, function () { return CB.a.shapes.length === 5; }, null, 5000);
     check(undone, '되돌리기 (Ctrl+Z) — 상대에게도 반영');
 
-    // 회전 (저장 · 상대 반영)
+    // v13.409 회전 — 내 화면에만 (상대 그대로) · 사람마다 저장
+    function myView() { return c.query('SELECT angle, fill FROM chat_file_views WHERE user_id = $1 AND file_id = $2', [adm.id, fid]).then(function (r) { return r.rows[0] || null; }); }
+    async function myViewUntil(fn) { var v = null; for (var tr = 0; tr < 40; tr++) { v = await myView(); if (fn(v)) return v; await wait(150); } return v; }
     await a.click('#cbBoard [data-a="rotr"]');
-    var rot = await until(k, function () { return CB.a.rot === 90; }, null, 5000);
-    // v13.373 상대 화면은 저장보다 먼저 바뀜(바로 보내기) — 저장은 잠깐 기다려 확인
-    var srot = 0; for (var tr = 0; tr < 40 && srot !== 90; tr++) { srot = (await srvAnnot(fid)).rot; if (srot !== 90) await wait(150); }
-    check(rot && srot === 90, '회전 90° 저장 · 상대 반영');
-    var kw = await k.evaluate(function () { var c = _cbView(); return [c.width, c.height]; });
-    check(kw[0] === 800 && kw[1] === 1200, '회전된 그림 크기 ' + kw.join('×'));
-    await a.click('#cbBoard [data-a="rotl"]');
-    await until(k, function () { return CB.a.rot === 0; }, null, 5000);
+    var mine = await until(a, function () { return CB.my && CB.my.a === 90; }, null, 3000);
+    var sv = await myViewUntil(function (v) { return v && v.angle === 90; });
+    var kr = await k.evaluate(function () { return [CB.a.rot || 0, _cbAng()]; });
+    check(mine && sv && sv.angle === 90 && kr[0] === 0 && kr[1] === 0 && !(await srvAnnot(fid)).rot, '⟳ 내 화면에만 90° — 저장됨 · 상대 · 같이 쓰는 회전은 그대로');
+    var aw = await a.evaluate(function () { var c = _cbView(); return [c.width, c.height]; });
+    check(aw[0] === 800 && aw[1] === 1200, '돌린 그림 크기 ' + aw.join('×'));
+    // 📐 1° 단위 (. 키 세 번) · 비스듬히
+    await a.click('#cbBoard [data-a="angle"]');
+    check(await a.evaluate(function () { return !document.querySelector('#cbBoard [data-ang]').hidden; }), '📐 각도 띠 열림');
+    await a.evaluate(function () { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); });
+    for (var pk = 0; pk < 3; pk++) await a.keyboard.press('Period');
+    var a93 = await until(a, function () { return CB.my && CB.my.a === 93; }, null, 3000);
+    var bw = await a.evaluate(function () { var c = _cbView(); return [c.width, c.height, document.querySelector('#cbBoard [data-angv]').textContent]; });
+    check(a93 && bw[0] > 800 && bw[1] > 1200, '. 키로 1°씩 → 93° · 비스듬히 감싸는 크기 ' + bw.join(' '));
+    // ⬚ 빈 모서리 채우기
+    await a.click('#cbBoard [data-a="fill"]');
+    var fw = await a.evaluate(function () { var c = _cbView(); return [CB.fill, c.width, c.height]; });
+    var sv2 = await myViewUntil(function (v) { return v && v.fill; });
+    check(fw[0] && fw[1] < 800 && fw[2] < 1200 && sv2 && sv2.fill, '빈 모서리 채우기 — 안쪽만 ' + fw.slice(1).join('×') + ' · 저장');
+    await a.screenshot({ path: path.join(SHOT, 'e2e59-skew-fill.png') });
+    await a.click('#cbBoard [data-a="fill"]');
+    await myViewUntil(function (v) { return v && !v.fill; });
+    // 다시 열어도 그대로 (서버에서)
+    await a.keyboard.press('Escape');
+    await a.evaluate(function (f) { _cbViews = null; chatBoardOpen(f, '배선도.png'); }, fid);
+    var kept = await until(a, function () { return CB && CB.img && CB.my && CB.my.a === 93 && !CB.fill; }, null, 8000);
+    check(kept, '닫고 다시 열어도 내 각도 93° 유지');
+    // 대화 속 미리보기도 내 각도로 (비스듬하면 투명 모서리 png)
+    var th = await until(a, function (f) { var i = document.querySelector('#cxMsgs img[data-cbthumb="' + f + '"]'); return i && /^data:image\/png/.test(i.src); }, fid, 6000);
+    check(th, '대화 속 미리보기도 내 각도로');
+    // 📏 수평 맞추기 — 화면에서 오른쪽 아래로 30/300 기울어진 선을 따라 끌면 그만큼 반대로
+    await a.click('#cbBoard [data-a="rot0"]');
+    await until(a, function () { return !CB.my; }, null, 3000);
+    await a.click('#cbBoard [data-a="level"]');
+    var cvr = await a.evaluate(function () { var r = CB.cv.getBoundingClientRect(); return { x: r.left + r.width / 2 - 150, y: r.top + r.height / 2 }; });
+    await a.mouse.move(cvr.x, cvr.y); await a.mouse.down();
+    for (var lv = 1; lv <= 6; lv++) await a.mouse.move(cvr.x + 50 * lv, cvr.y + 5 * lv);
+    await a.mouse.up();
+    var lvA = await a.evaluate(function () { return [CB.my && CB.my.a, CB.tool]; });
+    check(lvA[0] && Math.abs(lvA[0] - (360 - 5.7)) < 0.15 && lvA[1] === 'pan', '📏 수평 맞추기 — ' + lvA.join(' · '));
+    // 비스듬히 본 채로 자르기 — 이대로 자르기는 없고 복사 · 보내기만
+    await tool(a, 'crop');
+    var cr = await a.evaluate(function () { var r = CB.cv.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await a.mouse.move(cr.x - 100, cr.y - 60); await a.mouse.down(); await a.mouse.move(cr.x, cr.y, { steps: 4 }); await a.mouse.move(cr.x + 100, cr.y + 60, { steps: 4 }); await a.mouse.up();
+    var cm = await a.evaluate(function () { var c = _cbCropCanvas(CB.cropSel); return [!!CB.cropSel.v, !!document.querySelector('.cb-cm [data-cm="apply"]'), !!document.querySelector('.cb-cm [data-cm="send"]'), c.width > 50 && c.height > 30]; });
+    check(cm[0] && !cm[1] && cm[2] && cm[3], '비스듬히 자르기 — 돌린 모습 기준 · 이대로 자르기 숨김 ' + cm.join(','));
+    await a.click('.cb-cm [data-cm="cancel"]'); await tool(a, 'pan');
+    // 👥 모두에게 이렇게 → 상대도 같은 각도 · 내 것은 지움
+    await a.click('#cbBoard [data-a="rotshare"]');
+    var shared = await until(k, function () { return Math.abs((CB.a.rot || 0) - 354.3) < 0.01; }, null, 5000);
+    var mineGone = await myViewUntil(function (v) { return !v; });
+    check(shared && !mineGone, '👥 모두에게 — 상대도 354.3° · 내 따로 각도는 지움');
+    await a.evaluate(function () { _cbCommit({ rot: 0 }); _cbFit(); });
+    await until(k, function () { return !CB.a.rot; }, null, 5000);
+    await a.click('#cbBoard [data-a="angle"]');   // 띠 닫기 (다음 시험이 띠에 안 가리게)
 
     // 자르기 → 잘라서 보내기 · 이대로 자르기
     await tool(a, 'crop');
@@ -171,6 +220,16 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await wait(600);
     var la = await srvAnnot(lastF);
     check(sent && la.shapes && la.shapes.length === 1 && la.shapes[0].t === 'ellipse', '표시 후 보내기 — 원본 + 표시 1');
+
+    // v13.409 ◀ ▶ 방 사진 넘겨 보기
+    await a.evaluate(function (f) { chatBoardOpen(f, '배선도.png'); }, fid);
+    var nav = await until(a, function () { return CB && CB.list && !document.querySelector('#cbBoard [data-a="next"]').hidden; }, null, 8000);
+    var p0 = await a.evaluate(function () { return [CB.idx, CB.list.length, document.querySelector('#cbBoard [data-pos]').textContent]; });
+    await a.keyboard.press('ArrowRight');
+    var moved = await until(a, function (f) { return CB && CB.fid !== f && CB.img && CB.list; }, fid, 8000);
+    var p1 = await a.evaluate(function () { return document.querySelector('#cbBoard [data-pos]').textContent; });
+    check(nav && p0[1] >= 2 && moved && p1 === (p0[0] + 2) + ' / ' + p0[1], '◀ ▶ 넘겨 보기 ' + p0[2] + ' → ' + p1);
+    await a.keyboard.press('Escape');
 
     check(!errs.length, '페이지 오류 없음 ' + errs.join(' | '));
   } catch (e) { fail++; console.log('FAIL 예외', e && e.stack); }

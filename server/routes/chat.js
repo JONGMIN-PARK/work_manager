@@ -90,7 +90,7 @@ async function userNames(tenantId, ids) {
 var MSG_SQL = 'SELECT m.id, m.room_id, m.user_id, m.kind, m.body, m.cards, m.mentions, m.reply_to, m.edited_at, m.deleted_at, m.created_at, m.reactions, m.post, ' +
   'COALESCE(u.display_name, u.name) AS user_name, f.id AS f_id, f.name AS f_name, f.mime AS f_mime, f.size AS f_size, f.dur AS f_dur, f.transcript AS f_tx, ' +
   "CASE WHEN m.post IS NULL THEN NULL ELSE (SELECT COALESCE(ua.display_name, ua.name) FROM users ua WHERE ua.id::text = m.post->>'assignee') END AS asg_name, " +
-  "(f.annot->>'rot')::int AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, " +
+  "(f.annot->>'rot')::real AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, " +
   'rp.replies, rp.last_reply_at, ' +
   // v13.376 인용 답장 — 원문 한 줄 (지웠으면 표시만)
   "m.grp, m.link, m.poll, m.ack, m.quote_id, qm.body AS q_body, qm.deleted_at AS q_del, qm.kind AS q_kind, qm.post->>'title' AS q_ptitle, COALESCE(qu.display_name, qu.name) AS q_user, qf.id AS q_fid, qf.name AS q_fname, qf.mime AS q_fmime " +
@@ -106,7 +106,7 @@ function shape(r) {
     quote: r.quote_id && !r.deleted_at ? { id: +r.quote_id, userName: r.q_user || (r.q_kind === 'ai' ? 'AI' : ''), deleted: !!r.q_del, body: r.q_del ? '' : String(r.q_ptitle ? '📌 ' + r.q_ptitle : r.q_body || '').slice(0, 200), file: r.q_fid && !r.q_del ? { id: r.q_fid, name: r.q_fname, mime: r.q_fmime } : null } : null };
 }
 // 사진 칠판 요약 — 목록에선 회전 · 표시 수 · 자름 여부만 (전체는 /files/:fid/annot)
-function annSum(f, r) { if (r.f_rot || r.f_n || r.f_crop) f.annot = { rot: r.f_rot || 0, n: r.f_n || 0, crop: !!r.f_crop }; return f; }
+function annSum(f, r) { if (r.f_rot || r.f_n || r.f_crop) f.annot = { rot: Math.round((r.f_rot || 0) * 10) / 10, n: r.f_n || 0, crop: !!r.f_crop }; return f; }
 async function loadMsg(id) { var r = await db.query(MSG_SQL + 'WHERE m.id = $1', [id]); return r.rows.length ? shape(r.rows[0]) : null; }
 
 /* @이름 → 멤버 id */
@@ -912,6 +912,8 @@ function annShape(s, uid) {
   if (s.fill) o.fill = true;
   return o;
 }
+/* v13.409 회전은 0.1° 단위 (비스듬히 찍힌 사진 바로잡기) — 0 이상 360 미만 */
+function annAng(v) { v = Math.round((+v || 0) * 10) / 10; v = ((v % 360) + 360) % 360; return v >= 359.95 ? 0 : Math.round(v * 10) / 10; }
 function annRect(c) {
   if (!c || typeof c !== 'object') return null;
   var o = { x: annNum(c.x), y: annNum(c.y), w: annNum(c.w), h: annNum(c.h) };
@@ -920,7 +922,8 @@ function annRect(c) {
 router.get('/files/:fid/annot', async function (req, res) {
   try {
     var f = await fileFor(req, res, FILE_META); if (!f) return;   // v13.373 본문 없이 · 이름 같이 (DB 한 번)
-    res.json({ data: f.annot || { rot: 0, crop: null, shapes: [] }, at: f.annot_at, byName: f.annot_by_name || '' });
+    var v = await db.query('SELECT angle, fill FROM chat_file_views WHERE user_id = $1 AND file_id = $2', [me(req), f.id]);
+    res.json({ data: f.annot || { rot: 0, crop: null, shapes: [] }, at: f.annot_at, byName: f.annot_by_name || '', mine: v.rows[0] ? { a: annAng(v.rows[0].angle), f: v.rows[0].fill } : null });
   } catch (e) { httpErr.serverError(res, '[chat/annot/get]', e); }
 });
 /* 바꾸기: { add:[shape], remove:[id], rot, crop(null=풀기), clear } — 여럿이 같이 그려도 서로 안 지우게 '바뀐 것만' 보냄 */
@@ -939,7 +942,7 @@ router.post('/files/:fid/annot', async function (req, res) {
       if (b.clear) { a.shapes = []; op.clear = true; }
       if (remove.length) a.shapes = a.shapes.filter(function (s) { return remove.indexOf(s.id) < 0; });
       add.forEach(function (s) { a.shapes = a.shapes.filter(function (x) { return x.id !== s.id; }); a.shapes.push(s); });
-      if (b.rot != null) { a.rot = ((Math.round((+b.rot || 0) / 90) * 90) % 360 + 360) % 360; op.rot = a.rot; }
+      if (b.rot != null) { a.rot = annAng(b.rot); op.rot = a.rot; }
       if ('crop' in b) { a.crop = annRect(b.crop); op.crop = a.crop; }
       if (a.shapes.length > ANN_MAX) throw Object.assign(new Error('표시는 ' + ANN_MAX + '개까지입니다.'), { status: 400 });
       var json = JSON.stringify(a);
@@ -961,6 +964,27 @@ router.post('/files/:fid/annot', async function (req, res) {
     if (e && e.status === 400) return bad(res, e.message);
     httpErr.serverError(res, '[chat/annot]', e);
   }
+});
+/* 🖼 나만 보는 회전 (v13.409) — 남의 화면은 그대로. angle 이 null 이면 지움(같이 쓰는 회전을 따름) */
+router.put('/files/:fid/view', async function (req, res) {
+  try {
+    var f = await fileFor(req, res, 'f.id, f.room_id, f.mime'); if (!f) return;
+    if (!/^image\//i.test(f.mime || '')) return bad(res, '사진만 돌릴 수 있습니다.');
+    var b = req.body || {};
+    if (b.angle == null) { await db.query('DELETE FROM chat_file_views WHERE user_id = $1 AND file_id = $2', [me(req), f.id]); return res.json({ data: null }); }
+    var a = annAng(b.angle), fill = !!b.fill;
+    await db.query('INSERT INTO chat_file_views (user_id, file_id, tenant_id, angle, fill) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (user_id, file_id) DO UPDATE SET angle = EXCLUDED.angle, fill = EXCLUDED.fill, updated_at = now()',
+      [me(req), f.id, req.tenant.id, a, fill]);
+    res.json({ data: { a: a, f: fill } });
+  } catch (e) { httpErr.serverError(res, '[chat/view]', e); }
+});
+/* 내가 돌려 둔 사진 전부 (앱 켤 때 한 번) — 내 것만이라 방 권한은 필요 없음 */
+router.get('/my-views', async function (req, res) {
+  try {
+    var r = await db.query('SELECT file_id, angle, fill FROM chat_file_views WHERE user_id = $1 AND tenant_id = $2 ORDER BY updated_at DESC LIMIT 5000', [me(req), req.tenant.id]);
+    var out = {}; r.rows.forEach(function (v) { out[v.file_id] = { a: annAng(v.angle), f: v.fill }; });
+    res.json({ data: out });
+  } catch (e) { httpErr.serverError(res, '[chat/my-views]', e); }
 });
 /* 🖼 작은 미리보기 올리기 (v13.377) — 서버에 사진 줄이는 도구가 없어 브라우저가 만들어 올림. 이미 있으면 보낸 사람만 바꿈 */
 router.post('/files/:fid/thumb', express.raw({ type: function () { return true; }, limit: 300 * 1024 }), async function (req, res) {
@@ -993,7 +1017,7 @@ router.post('/files/:fid/cursor', async function (req, res) {
     if (b.op && typeof b.op === 'object' && !c.ro) {
       op = { add: (Array.isArray(b.op.add) ? b.op.add : []).slice(0, 50).map(function (s) { return annShape(s, uid); }).filter(Boolean), remove: (Array.isArray(b.op.remove) ? b.op.remove : []).slice(0, 600).map(String) };
       if (b.op.clear) op.clear = true;
-      if (b.op.rot != null) op.rot = ((Math.round((+b.op.rot || 0) / 90) * 90) % 360 + 360) % 360;
+      if (b.op.rot != null) op.rot = annAng(b.op.rot);
       if ('crop' in b.op) op.crop = annRect(b.op.crop);
     }
     var live = null, from = 0;

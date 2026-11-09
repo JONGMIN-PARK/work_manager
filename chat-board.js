@@ -6,6 +6,7 @@
  *   - 자르기: 이대로 자르기(원본은 그대로) · 잘라서 복사(어디든 붙여넣기) · 잘라서 보내기
  *   - 같이: 방 사람이 그리면 바로 보임 · 그리는 중인 선 · 누가 어디를 가리키는지(칠판처럼)
  *   - 보내기 전에: 붙여넣은 사진 · 📸 화면 캡처를 먼저 표시하고 보냄 (보내면 원본 + 표시 모두 남음)
+ *   - v13.409 나만 보는 회전: ⟲ ⟳ · 📐 1° 단위 바로잡기 · 📏 수평 맞추기 · ⬚ 빈 모서리 채우기 — 사람마다 따로 저장(chat_file_views), 👥 모두에게도 가능 · ◀ ▶ 방 사진 넘겨 보기
  *   chat-ui.js 가 부르는 것: chatBoardOpen · chatBoardDraft · chatBoardCapture · chatBoardOnEvent · chatBoardThumb
  */
 var CB = null;   // 열린 칠판 하나
@@ -50,14 +51,44 @@ function _cbFileImg(fid) {
 
 /* ─── 좌표: 사진 픽셀 → (회전) → (확대 · 옮김) → 화면 ─── */
 function _cbRotM(rot, W, H) {
+  rot = +rot || 0;
   if (rot === 90) return [0, 1, -1, 0, H, 0];
   if (rot === 180) return [-1, 0, 0, -1, W, H];
   if (rot === 270) return [0, -1, 1, 0, 0, W];
-  return [1, 0, 0, 1, 0, 0];
+  if (!rot) return [1, 0, 0, 1, 0, 0];
+  // v13.409 비스듬히 — 돌린 뒤 사진 전체가 (0,0) 오른쪽 아래에 오게
+  var t = rot * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+  var xs = [0, W * c, -H * s, W * c - H * s], ys = [0, W * s, H * c, W * s + H * c];
+  return [c, s, -s, c, -Math.min.apply(null, xs), -Math.min.apply(null, ys)];
 }
+/** 각도 정리 — 0.1° 단위 · 0 이상 360 미만 (서버 annAng 과 같음) */
+function _cbNA(v) { v = Math.round((+v || 0) * 10) / 10; v = ((v % 360) + 360) % 360; return v >= 359.95 ? 0 : Math.round(v * 10) / 10; }
+function _cbSkew(rot) { return Math.abs(((+rot || 0) % 90 + 90) % 90) > 0.01; }
+/** 영역(사진 픽셀)을 돌린 뒤 감싸는 상자 (돌린 공간 좌표) */
+function _cbBoxOf(area, R) {
+  var pts = [[area.x, area.y], [area.x + area.w, area.y], [area.x, area.y + area.h], [area.x + area.w, area.y + area.h]].map(function (p) { return _cbApply(R, p[0], p[1]); });
+  var xs = pts.map(function (p) { return p.x; }), ys = pts.map(function (p) { return p.y; });
+  var x = Math.min.apply(null, xs), y = Math.min.apply(null, ys);
+  return { x: x, y: y, w: Math.max.apply(null, xs) - x, h: Math.max.apply(null, ys) - y };
+}
+/** 비스듬히 돌린 영역 안에서 빈 모서리 없는 가장 큰 직사각형 (돌린 공간 좌표) */
+function _cbInner(area, rot, W, H) {
+  var R = _cbRotM(rot, W, H), c = _cbApply(R, area.x + area.w / 2, area.y + area.h / 2);
+  var t = rot * Math.PI / 180, sa = Math.abs(Math.sin(t)), ca = Math.abs(Math.cos(t)), w = area.w, h = area.h, wr, hr;
+  var lg = Math.max(w, h), sh = Math.min(w, h);
+  if (sh <= 2 * sa * ca * lg || Math.abs(sa - ca) < 1e-10) { var x = 0.5 * sh; if (w >= h) { wr = x / sa; hr = x / ca; } else { wr = x / ca; hr = x / sa; } }
+  else { var c2 = ca * ca - sa * sa; wr = (w * ca - h * sa) / c2; hr = (h * ca - w * sa) / c2; }
+  return { x: c.x - wr / 2, y: c.y - hr / 2, w: wr, h: hr };
+}
+/** 화면에 보일 범위 (돌린 공간) — 빈 모서리 채우기면 안쪽 직사각형 */
+function _cbTarget(area, rot, W, H, fill) { return fill && _cbSkew(rot) ? _cbInner(area, rot, W, H) : _cbBoxOf(area, _cbRotM(rot, W, H)); }
+/* v13.409 지금 보는 각도 — 내가 돌려 둔 게 있으면 그것, 없으면 같이 쓰는 회전 */
+function _cbAng() { return CB.fid && CB.my ? CB.my.a : (CB.a.rot || 0); }
+function _cbFill() { return !!CB.fill && _cbSkew(_cbAng()); }
+function _cbVA(a) { return Object.assign({}, a || CB.a, { rot: _cbAng() }); }
 function _cbApply(m, x, y) { return { x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] }; }
 function _cbViewM() {
-  var r = _cbRotM(CB.a.rot || 0, CB.W, CB.H), z = CB.zoom;
+  var r = _cbRotM(_cbAng(), CB.W, CB.H), z = CB.zoom;
   return [r[0] * z, r[1] * z, r[2] * z, r[3] * z, r[4] * z + CB.panX, r[5] * z + CB.panY];
 }
 function _cbToImg(sx, sy) {
@@ -146,15 +177,13 @@ function _cbFlatten(img, a, opt) {
   opt = opt || {};
   var W = img.naturalWidth, H = img.naturalHeight, rot = a.rot || 0;
   var area = opt.area || (opt.marks !== false && a.crop) || { x: 0, y: 0, w: W, h: H };
-  var max = opt.max || 4096, k = Math.min(1, max / Math.max(area.w, area.h));
-  var sw = (rot % 180 ? area.h : area.w), sh = (rot % 180 ? area.w : area.h);
-  var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+  // 돌린 공간에서 담을 범위 — vsel(비스듬히 보며 고른 곳) · 빈 모서리 채우기 · 아니면 영역 전체를 감싸는 상자
+  var R = _cbRotM(rot, W, H), T = opt.vsel || _cbTarget(area, rot, W, H, opt.fill);
+  var max = opt.max || 4096, k = Math.min(1, max / Math.max(T.w, T.h, 1));
+  var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(T.w * k)); c.height = Math.max(1, Math.round(T.h * k));
   var g = c.getContext('2d');
-  // 영역의 네 모서리를 회전한 뒤 왼쪽 위가 (0,0) 이 되게
-  var R = _cbRotM(rot, W, H);
-  var pts = [[area.x, area.y], [area.x + area.w, area.y], [area.x, area.y + area.h], [area.x + area.w, area.y + area.h]].map(function (p) { return _cbApply(R, p[0], p[1]); });
-  var minX = Math.min.apply(null, pts.map(function (p) { return p.x; })), minY = Math.min.apply(null, pts.map(function (p) { return p.y; }));
-  g.setTransform(R[0] * k, R[1] * k, R[2] * k, R[3] * k, (R[4] - minX) * k, (R[5] - minY) * k);
+  if (opt.bg) { g.fillStyle = opt.bg; g.fillRect(0, 0, c.width, c.height); }
+  g.setTransform(R[0] * k, R[1] * k, R[2] * k, R[3] * k, (R[4] - T.x) * k, (R[5] - T.y) * k);
   var keep = _cbDim;
   _cbPaint(g, img, a, { area: area, marks: opt.marks });
   _cbDim = keep;
@@ -175,15 +204,22 @@ function _cbDraw() {
     g.setTransform(m[0] * dpr, m[1] * dpr, m[2] * dpr, m[3] * dpr, m[4] * dpr, m[5] * dpr);
     var area = _cbArea();
     // v13.373 바탕(그림자 판 + 사진 + 끝낸 표시)은 한 장 담아 두고 — 같이 보는 사람 손가락 · 그리는 중인 선만 바뀌면 그것만 다시
-    var key = m.join(',') + '|' + (CB.rev || 0) + '|' + CB.mode + '|' + cv.width + 'x' + cv.height + '|' + area.x + ',' + area.y + ',' + area.w + ',' + area.h;
+    var key = m.join(',') + '|' + (CB.rev || 0) + '|' + CB.mode + '|' + _cbFill() + CB.tool + '|' + cv.width + 'x' + cv.height + '|' + area.x + ',' + area.y + ',' + area.w + ',' + area.h;
     if (!CB.base || CB.baseKey !== key) {
       var bc = CB.base || (CB.base = document.createElement('canvas'));
       if (bc.width !== cv.width || bc.height !== cv.height) { bc.width = cv.width; bc.height = cv.height; }
       var bg = bc.getContext('2d');
       bg.setTransform(1, 0, 0, 1, 0, 0); bg.clearRect(0, 0, bc.width, bc.height);
+      bg.save();
+      if (_cbFill() && CB.tool !== 'crop') {   // v13.409 빈 모서리 채우기 — 안쪽 직사각형만
+        var T = _cbTarget(area, _cbAng(), CB.W, CB.H, true), z0 = CB.zoom;
+        bg.setTransform(z0 * dpr, 0, 0, z0 * dpr, CB.panX * dpr, CB.panY * dpr);
+        bg.beginPath(); bg.rect(T.x, T.y, T.w, T.h); bg.clip();
+      }
       bg.setTransform(m[0] * dpr, m[1] * dpr, m[2] * dpr, m[3] * dpr, m[4] * dpr, m[5] * dpr);
       bg.save(); bg.shadowColor = 'rgba(0,0,0,.45)'; bg.shadowBlur = 30 / CB.zoom; bg.fillStyle = '#fff'; bg.fillRect(area.x, area.y, area.w, area.h); bg.restore();
       _cbPaint(bg, CB.img, CB.mode === 'orig' ? { shapes: [] } : CB.a, { area: area, marks: CB.mode !== 'orig' });
+      bg.restore();
       CB.baseKey = key;
     }
     g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(CB.base, 0, 0);
@@ -196,7 +232,15 @@ function _cbDraw() {
       g.restore();
     }
     // 자르기 고르는 중
-    if (CB.tool === 'crop') {
+    if (CB.tool === 'crop' && _cbSkew(_cbAng())) {   // v13.409 비스듬히 본 채로 고르기 — 돌린 공간에서
+      var vs = CB.cropSel, FB = _cbBoxOf({ x: 0, y: 0, w: CB.W, h: CB.H }, _cbRotM(_cbAng(), CB.W, CB.H));
+      g.save(); g.setTransform(CB.zoom * dpr, 0, 0, CB.zoom * dpr, CB.panX * dpr, CB.panY * dpr);
+      g.beginPath(); g.rect(FB.x, FB.y, FB.w, FB.h); if (vs) g.rect(vs.x, vs.y, vs.w, vs.h);
+      g.fillStyle = 'rgba(0,0,0,.5)'; g.fill('evenodd');
+      if (vs) { g.setLineDash([8 / CB.zoom, 5 / CB.zoom]); g.lineWidth = 2 / CB.zoom; g.strokeStyle = '#fff'; g.strokeRect(vs.x, vs.y, vs.w, vs.h); }
+      g.restore();
+      g.setTransform(m[0] * dpr, m[1] * dpr, m[2] * dpr, m[3] * dpr, m[4] * dpr, m[5] * dpr);
+    } else if (CB.tool === 'crop') {
       var cs = CB.cropSel || CB.a.crop;
       g.save();
       g.beginPath(); g.rect(0, 0, CB.W, CB.H);
@@ -219,16 +263,34 @@ function _cbDraw() {
       g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.fillText(p.name, s.x + 18, s.y + 23.5);
       g.restore();
     });
+    if (CB.lvl) _cbDrawLevel(g);
     _cbZoomLabel();
   });
+}
+/* 📏 수평 맞추기 — 끄는 중인 선과 바로잡을 각도 */
+function _cbLvlDelta(L) { var phi = Math.atan2(L.y2 - L.y1, L.x2 - L.x1) * 180 / Math.PI; return Math.round(phi / 90) * 90 - phi; }
+function _cbDrawLevel(g) {
+  var L = CB.lvl, d = _cbLvlDelta(L);
+  g.save();
+  g.lineCap = 'round'; g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,.55)';
+  g.beginPath(); g.moveTo(L.x1, L.y1); g.lineTo(L.x2, L.y2); g.stroke();
+  g.lineWidth = 2; g.strokeStyle = '#FACC15'; g.setLineDash([10, 6]); g.stroke(); g.setLineDash([]);
+  [[L.x1, L.y1], [L.x2, L.y2]].forEach(function (p) { g.beginPath(); g.arc(p[0], p[1], 5, 0, Math.PI * 2); g.fillStyle = '#FACC15'; g.fill(); });
+  var t = (d > 0 ? '⟳ ' : '⟲ ') + Math.abs(Math.round(d * 10) / 10) + '° 바로잡기';
+  g.font = '700 12.5px "Malgun Gothic",sans-serif';
+  var tw = g.measureText(t).width;
+  g.fillStyle = 'rgba(15,18,32,.9)'; _cbRound(g, L.x2 + 12, L.y2 - 12, tw + 16, 24, 12); g.fill();
+  g.fillStyle = '#FACC15'; g.textBaseline = 'middle'; g.fillText(t, L.x2 + 20, L.y2);
+  g.restore();
 }
 function _cbRound(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 function _cbFit() {
   if (!CB) return;
-  var area = _cbArea(), R = _cbRotM(CB.a.rot || 0, CB.W, CB.H);
-  var pts = [[area.x, area.y], [area.x + area.w, area.y + area.h]].map(function (p) { return _cbApply(R, p[0], p[1]); });
-  var bx = Math.min(pts[0].x, pts[1].x), by = Math.min(pts[0].y, pts[1].y), bw = Math.abs(pts[1].x - pts[0].x), bh = Math.abs(pts[1].y - pts[0].y);
+  var T = _cbTarget(_cbArea(), _cbAng(), CB.W, CB.H, _cbFill() && CB.tool !== 'crop');
+  var bx = T.x, by = T.y, bw = T.w, bh = T.h;
   var cw = CB.cv.clientWidth, ch = CB.cv.clientHeight, pad = cw < 600 ? 12 : 40;
+  var strip = CB.el.querySelector('[data-ang]');   // v13.409 📐 띠가 열려 있으면 그 위로 맞춤 (사진 아래를 가리지 않게)
+  if (strip && !strip.hidden && strip.offsetHeight) ch = Math.max(120, ch - strip.offsetHeight - 14);
   CB.zoom = Math.min((cw - pad * 2) / bw, (ch - pad * 2) / bh, 4);
   CB.panX = (cw - bw * CB.zoom) / 2 - bx * CB.zoom;
   CB.panY = (ch - bh * CB.zoom) / 2 - by * CB.zoom;
@@ -259,6 +321,7 @@ function _cbDo(op, fromUndo) {
   if (CB.fid) _cbCursor({ op: op, live: null }, true);   // v13.373 같이 보는 사람에게 바로 (저장은 뒤에서)
   _cbSave(op);
   _cbInfo();
+  if ('rot' in op) { if (!CB.my) _cbFit(); _cbAngUi(); }
   _cbDraw();
 }
 function _cbInverse(op, before) {
@@ -311,7 +374,16 @@ function _cbShell(title) {
         '<button type="button" class="cb-x" data-a="close" title="닫기 (Esc)">✕</button>' +
       '</div>' +
     '</div>' +
-    '<div class="cb-stage"><canvas></canvas><div class="cb-hint" data-hint hidden></div><div class="cb-loading" data-loading>사진 불러오는 중…</div></div>' +
+    '<div class="cb-stage"><canvas></canvas><div class="cb-hint" data-hint hidden></div><div class="cb-loading" data-loading>사진 불러오는 중…</div>' +
+      '<button type="button" class="cb-nav cb-prev" data-a="prev" title="이전 사진 (←)" hidden>‹</button><button type="button" class="cb-nav cb-next" data-a="next" title="다음 사진 (→)" hidden>›</button><span class="cb-pos" data-pos hidden></span>' +
+      '<div class="cb-ang" data-ang hidden>' +
+        '<div class="cb-ang-r"><button type="button" data-a="fine-" title="왼쪽으로 1° (,) · Shift 는 0.1°">−1°</button><input type="range" min="-45" max="45" step="0.1" value="0" data-fine aria-label="비스듬히 바로잡기 각도"><button type="button" data-a="fine+" title="오른쪽으로 1° (.) · Shift 는 0.1°">+1°</button><output data-angv>0°</output></div>' +
+        '<div class="cb-ang-b"><button type="button" data-a="level" title="사진 속 수평(또는 수직)이어야 할 선을 따라 끌면 그만큼 바로잡음 (L)">📏 수평 맞추기</button>' +
+        '<button type="button" data-a="fill" title="비스듬히 돌렸을 때 생기는 빈 모서리를 잘라 화면을 채움">⬚ 빈 모서리 채우기</button>' +
+        '<button type="button" data-a="rotshare" title="방 사람 모두 이 각도로 보게 (같이 쓰는 회전)">👥 모두에게 이렇게</button>' +
+        '<button type="button" data-a="rot0" title="내가 돌린 것을 지우고 처음 모습으로">↺ 원래대로</button></div>' +
+        '<i data-angwho></i>' +
+      '</div></div>' +
     '<div class="cb-bar">' +
       '<div class="cb-tools">' + CB_TOOLS.map(function (t) { return '<button type="button" data-tool="' + t[0] + '" title="' + _cbE(t[2]) + ' (' + t[3] + ')"><span>' + t[1] + '</span></button>'; }).join('') + '</div>' +
       '<div class="cb-sep"></div>' +
@@ -320,7 +392,8 @@ function _cbShell(title) {
       '<div class="cb-sep"></div>' +
       '<div class="cb-view">' +
         '<button type="button" data-a="undo" title="되돌리기 (Ctrl+Z)">↶</button><button type="button" data-a="redo" title="다시 (Ctrl+Y)">↷</button>' +
-        '<button type="button" data-a="rotl" title="왼쪽으로 돌리기 — 저장됨 ([)">⟲</button><button type="button" data-a="rotr" title="오른쪽으로 돌리기 — 저장됨 (])">⟳</button>' +
+        '<button type="button" data-a="rotl" title="왼쪽으로 90° — 내 화면에만 · 저장됨 ([)">⟲</button><button type="button" data-a="rotr" title="오른쪽으로 90° — 내 화면에만 · 저장됨 (])">⟳</button>' +
+        '<button type="button" data-a="angle" title="📐 비스듬히 바로잡기 · 수평 맞추기 · 모두에게">📐</button>' +
         '<button type="button" data-a="zout" title="작게 (-)">−</button><button type="button" class="cb-zl" data-a="fit" data-zl title="화면에 맞추기 (0)">100%</button><button type="button" data-a="zin" title="크게 (+)">＋</button>' +
         '<button type="button" data-a="clear" title="표시 모두 지우기">🗑</button>' +
       '</div>' +
@@ -337,12 +410,13 @@ function _cbStart(o) {
   var ov = _cbShell(o.name);
   CB = { el: ov, cv: ov.querySelector('canvas'), fid: o.fid || null, room: o.roomId, name: o.name || 'image.png', draftFile: o.file || null, replyTo: o.replyTo || null,
     a: { rot: 0, crop: null, shapes: [] }, mode: 'mark', tool: o.tool || 'pen', color: '#EF4444', wSel: 4, zoom: 1, panX: 0, panY: 0,
-    undo: [], redo: [], peers: {}, dpr: window.devicePixelRatio || 1, ptrs: {}, by: '', at: null };
+    undo: [], redo: [], peers: {}, dpr: window.devicePixelRatio || 1, ptrs: {}, by: '', at: null, my: null, fill: false };
   try { var pref = JSON.parse(localStorage.getItem('cb-pref') || '{}'); if (pref.color) CB.color = pref.color; if (pref.w) CB.wSel = pref.w; } catch (_) {}
   if (o.fid) ov.classList.add('is-file'); else { ov.classList.add('is-draft'); ov.querySelector('[data-a="send"]').hidden = false; }
   _cbBind();
   _cbResize();
   _cbSyncUi();
+  try { if (localStorage.getItem('cb-ang') === '1') ov.querySelector('[data-ang]').hidden = false; } catch (_) {}
   return ov;
 }
 /** 대화방 사진 열기 — 원본 · 표시 보기 · 같이 그리기 */
@@ -356,9 +430,39 @@ function chatBoardOpen(fid, name, roomId) {
     if (CB !== my) return;
     var an = r[1] && r[1].data;
     if (an) { CB.a = { rot: an.rot || 0, crop: an.crop || null, shapes: an.shapes || [] }; CB.rev = (CB.rev || 0) + 1; CB.by = r[1].byName || ''; CB.at = r[1].at; }
+    var mine = r[1] ? r[1].mine : (_cbViews && _cbViews[fid]) || null;   // v13.409 내가 돌려 둔 각도
+    CB.my = mine ? { a: +mine.a || 0, f: !!mine.f } : null; CB.fill = !!(mine && mine.f);
+    if (_cbViews) { if (CB.my) _cbViews[fid] = CB.my; else delete _cbViews[fid]; }
     _cbReady(r[0]);
   }).catch(function (e) { if (CB === my) { CB.el.querySelector('[data-loading]').textContent = (e && e.message) || '사진을 불러오지 못했습니다'; } });
+  _cbNavLoad(my);
   return true;
+}
+/* ◀ ▶ 그 방 사진 넘겨 보기 (v13.409) — 오래된 것 → 새 것 순서. 열 때마다 새로 받고, 넘길 때는 받아 둔 목록을 그대로 */
+var _cbNavKeep = null;
+function _cbNavLoad(my) {
+  if (!my.room || !my.fid || typeof apiFetch !== 'function') return;
+  var keep = _cbNavKeep && _cbNavKeep.room === my.room ? _cbNavKeep.list : null; _cbNavKeep = null;
+  var p = keep ? Promise.resolve(keep) : apiFetch('/api/chat/rooms/' + encodeURIComponent(my.room) + '/files').then(function (r) {
+    return ((r && r.data) || []).filter(function (f) { return _cbIsImg(f.mime); }).reverse().map(function (f) { return { id: f.id, name: f.name }; });
+  });
+  p.then(function (list) {
+    if (CB !== my) return;
+    var i = list.map(function (f) { return f.id; }).indexOf(my.fid);
+    if (i < 0 || list.length < 2) return;
+    my.list = list; my.idx = i;
+    var pv = my.el.querySelector('[data-a="prev"]'), nx = my.el.querySelector('[data-a="next"]'), pos = my.el.querySelector('[data-pos]');
+    pv.hidden = nx.hidden = pos.hidden = false; pv.disabled = i === 0; nx.disabled = i === list.length - 1;
+    pos.textContent = (i + 1) + ' / ' + list.length;
+  }).catch(function () {});
+}
+function _cbNav(d) {
+  if (!CB || !CB.list || CB.textEl) return;
+  var n = CB.list[CB.idx + d]; if (!n) return;
+  var room = CB.room, mode = CB.mode;
+  _cbNavKeep = { room: room, list: CB.list };
+  chatBoardOpen(n.id, n.name, room);
+  if (CB) { CB.mode = mode; _cbSyncUi(); }
 }
 /** 보내기 전 — 붙여넣은 사진 · 캡처 */
 function chatBoardDraft(file, opt) {
@@ -375,7 +479,7 @@ function _cbReady(img) {
   CB.img = img; CB.W = img.naturalWidth; CB.H = img.naturalHeight;
   CB.el.querySelector('[data-loading]').remove();
   CB.el.classList.add('ready');
-  _cbFit(); _cbInfo(); _cbSyncUi();
+  _cbFit(); _cbInfo(); _cbSyncUi(); _cbAngUi();
 }
 function chatBoardClose() {
   if (!CB) return;
@@ -406,7 +510,8 @@ function _cbInfo() {
   if (CB.W) bits.push(CB.W + '×' + CB.H);
   if (n) bits.push('표시 ' + n);
   if (CB.a.crop) bits.push('잘림');
-  if (CB.a.rot) bits.push(CB.a.rot + '° 돌림');
+  if (CB.fid && CB.my) bits.push('나만 ' + _cbDeg(CB.my.a) + '° 돌려 봄');
+  else if (CB.a.rot) bits.push(_cbDeg(CB.a.rot) + '° 돌림' + (CB.fid ? '(모두)' : ''));
   if (CB.saving) bits.push('저장 중…');
   else if (CB.by && CB.fid) bits.push('마지막 ' + CB.by);
   if (!CB.fid) bits.push('보내기 전 — 원본과 표시가 같이 갑니다');
@@ -429,9 +534,13 @@ function _cbResize() {
 function _cbSetTool(t) {
   if (!CB) return;
   if (CB.textEl) _cbTextDone();
+  var was = CB.tool;
   CB.tool = t; CB.cropSel = null; _cbCropMenu(false);
-  if (t !== 'pan' && t !== 'crop' && CB.mode === 'orig') CB.mode = 'mark';
-  if (t === 'crop') { CB.mode = 'mark'; _cbFit(); _cbHint('잘라낼 곳을 끌어 고르세요 — 원본은 그대로 남습니다'); }
+  if (t !== 'pan' && t !== 'crop' && t !== 'level' && CB.mode === 'orig') CB.mode = 'mark';
+  if (t === 'crop') { CB.mode = 'mark'; _cbFit(); _cbHint(_cbSkew(_cbAng()) ? '비스듬히 돌린 모습 그대로 고르세요 — 잘라서 복사 · 보내기' : '잘라낼 곳을 끌어 고르세요 — 원본은 그대로 남습니다'); }
+  else if (was === 'crop' && _cbFill()) _cbFit();
+  if (t === 'level') _cbHint('📏 사진 속 수평(또는 수직)이어야 할 선을 따라 끌어 주세요', 5000);
+  var lb = CB.el.querySelector('[data-a="level"]'); if (lb) lb.classList.toggle('on', t === 'level');
   _cbSyncUi(); _cbDraw();
 }
 
@@ -452,7 +561,14 @@ function _cbBind() {
     if (a === 'close') chatBoardClose();
     else if (a === 'undo') _cbUndo(false);
     else if (a === 'redo') _cbUndo(true);
-    else if (a === 'rotl' || a === 'rotr') { _cbCommit({ rot: (((CB.a.rot || 0) + (a === 'rotr' ? 90 : 270)) % 360) }); _cbFit(); }
+    else if (a === 'rotl' || a === 'rotr') _cbTurn(a === 'rotr' ? 90 : -90);
+    else if (a === 'fine-' || a === 'fine+') _cbTurn((a === 'fine+' ? 1 : -1) * (e.shiftKey ? 0.1 : 1));
+    else if (a === 'angle') _cbAngToggle();
+    else if (a === 'level') _cbSetTool(CB.tool === 'level' ? 'pan' : 'level');
+    else if (a === 'fill') _cbFillToggle();
+    else if (a === 'rotshare') _cbRotShare();
+    else if (a === 'rot0') _cbRotReset();
+    else if (a === 'prev' || a === 'next') _cbNav(a === 'next' ? 1 : -1);
     else if (a === 'zin' || a === 'zout') _cbZoomAt(a === 'zin' ? 1.25 : 0.8, cv.clientWidth / 2, cv.clientHeight / 2);
     else if (a === 'fit') { if (Math.abs(CB.zoom - 1) < 0.01) _cbFit(); else _cbZoomAt(1 / CB.zoom, cv.clientWidth / 2, cv.clientHeight / 2); }
     else if (a === 'clear') { if (!CB.a.shapes.length) return; if (!confirm('표시 ' + CB.a.shapes.length + '개를 모두 지울까요? (되돌리기 가능)')) return; _cbCommit({ remove: CB.a.shapes.map(function (s) { return s.id; }) }); }
@@ -461,6 +577,9 @@ function _cbBind() {
     else if (a === 'share') _cbShareNew();
     else if (a === 'send') _cbSendDraft();
   });
+  var fine = el.querySelector('[data-fine]');
+  fine.addEventListener('input', function () { var A = _cbAng(), base = Math.round(A / 90) * 90; _cbTurn(base + (+fine.value || 0), true); });
+  fine.addEventListener('keydown', function (e) { if (e.key === 'Escape') fine.blur(); });
   cv.addEventListener('wheel', function (e) {
     e.preventDefault();
     var p = _cbPt(e);
@@ -482,6 +601,7 @@ function _cbKey(e) {
   if (CB.textEl && e.target === CB.textEl) return;
   if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '') && CB.el.contains(e.target)) return;   // 칠판 안 입력칸만 (뒤 대화 입력칸에 초점이 남아 있어도 칠판 단축키는 됨)
   var k = e.key, mod = e.ctrlKey || e.metaKey;
+  if (k === 'Escape' && CB.tool === 'level') { e.preventDefault(); e.stopPropagation(); CB.lvl = null; _cbSetTool('pan'); return; }
   if (k === 'Escape') { e.preventDefault(); e.stopPropagation(); if (CB.tool === 'crop' && CB.cropSel) { CB.cropSel = null; _cbCropMenu(false); _cbDraw(); } else chatBoardClose(); return; }
   if (mod && (k === 'z' || k === 'Z')) { e.preventDefault(); _cbUndo(e.shiftKey); return; }
   if (mod && (k === 'y' || k === 'Y')) { e.preventDefault(); _cbUndo(true); return; }
@@ -493,7 +613,10 @@ function _cbKey(e) {
   if (k === '0') { _cbFit(); return; }
   if (k === '+' || k === '=') { _cbZoomAt(1.25, CB.cv.clientWidth / 2, CB.cv.clientHeight / 2); return; }
   if (k === '-') { _cbZoomAt(0.8, CB.cv.clientWidth / 2, CB.cv.clientHeight / 2); return; }
-  if (k === '[' || k === ']') { _cbCommit({ rot: (((CB.a.rot || 0) + (k === ']' ? 90 : 270)) % 360) }); _cbFit(); return; }
+  if (k === '[' || k === ']') { _cbTurn(k === ']' ? 90 : -90); return; }
+  if (e.code === 'Comma' || e.code === 'Period') { e.preventDefault(); _cbTurn((e.code === 'Period' ? 1 : -1) * (e.shiftKey ? 0.1 : 1)); return; }
+  if (k === 'l' || k === 'L') { e.preventDefault(); _cbSetTool(CB.tool === 'level' ? 'pan' : 'level'); return; }
+  if ((k === 'ArrowLeft' || k === 'ArrowRight') && CB.list) { e.preventDefault(); _cbNav(k === 'ArrowRight' ? 1 : -1); return; }
   if (k === 'Enter' && !CB.fid) { e.preventDefault(); _cbSendDraft(); return; }
   if ((k === 'Delete' || k === 'Backspace') && CB.cropSel) return;
   var t = CB_KEYS[k.toLowerCase()]; if (t) { e.preventDefault(); _cbSetTool(t); }
@@ -511,10 +634,11 @@ function _cbDown(e) {
     _cbDraw(); return;
   }
   if (CB.textEl) { _cbTextDone(); return; }
-  var tool = (CB.space || e.button === 1 || CB.mode === 'orig') ? 'pan' : CB.tool;
+  var tool = (CB.space || e.button === 1 || (CB.mode === 'orig' && CB.tool !== 'level')) ? 'pan' : CB.tool;
   var ip = _cbToImg(p.sx, p.sy);
-  CB.drag = { tool: tool, sx: p.sx, sy: p.sy, px: CB.panX, py: CB.panY, ix: ip.x, iy: ip.y };
+  CB.drag = { tool: tool, sx: p.sx, sy: p.sy, px: CB.panX, py: CB.panY, ix: ip.x, iy: ip.y, rx: (p.sx - CB.panX) / CB.zoom, ry: (p.sy - CB.panY) / CB.zoom };
   if (tool === 'pan') { cv.style.cursor = 'grabbing'; return; }
+  if (tool === 'level') { CB.lvl = { x1: p.sx, y1: p.sy, x2: p.sx, y2: p.sy }; _cbDraw(); return; }
   if (tool === 'erase') { _cbErase(ip); return; }
   if (tool === 'text') { CB.drag = null; _cbText(ip, p); return; }
   if (tool === 'crop') { CB.cropSel = null; _cbCropMenu(false); return; }
@@ -541,6 +665,14 @@ function _cbMove(e) {
   if (!d0) return;
   if (d0.tool === 'pan') { CB.panX = d0.px + p.sx - d0.sx; CB.panY = d0.py + p.sy - d0.sy; _cbDraw(); return; }
   if (d0.tool === 'erase') { _cbErase(ip); return; }
+  if (d0.tool === 'level') { CB.lvl.x2 = p.sx; CB.lvl.y2 = p.sy; _cbDraw(); return; }
+  if (d0.tool === 'crop' && _cbSkew(_cbAng())) {   // v13.409 비스듬히 — 돌린 공간에서 고름
+    var FB = _cbBoxOf({ x: 0, y: 0, w: CB.W, h: CB.H }, _cbRotM(_cbAng(), CB.W, CB.H));
+    var rx = (p.sx - CB.panX) / CB.zoom, ry = (p.sy - CB.panY) / CB.zoom;
+    var a1 = clamp(Math.min(d0.rx, rx), FB.x, FB.x + FB.w), b1 = clamp(Math.min(d0.ry, ry), FB.y, FB.y + FB.h), a2 = clamp(Math.max(d0.rx, rx), FB.x, FB.x + FB.w), b2 = clamp(Math.max(d0.ry, ry), FB.y, FB.y + FB.h);
+    CB.cropSel = { x: Math.round(a1), y: Math.round(b1), w: Math.round(a2 - a1), h: Math.round(b2 - b1), v: 1 };
+    _cbDraw(); return;
+  }
   if (d0.tool === 'crop') {
     var x1 = clamp(Math.min(d0.ix, ip.x), 0, CB.W), y1 = clamp(Math.min(d0.iy, ip.y), 0, CB.H), x2 = clamp(Math.max(d0.ix, ip.x), 0, CB.W), y2 = clamp(Math.max(d0.iy, ip.y), 0, CB.H);
     CB.cropSel = { x: Math.round(x1), y: Math.round(y1), w: Math.round(x2 - x1), h: Math.round(y2 - y1) };
@@ -563,6 +695,12 @@ function _cbUp(e) {
   if (CB.pinch) { if (Object.keys(CB.ptrs).length < 2) CB.pinch = null; return; }
   var d0 = CB.drag; CB.drag = null; CB.cv.style.cursor = '';
   if (!d0) return;
+  if (d0.tool === 'level') {
+    var L = CB.lvl; CB.lvl = null;
+    if (L && Math.hypot(L.x2 - L.x1, L.y2 - L.y1) > 24) { var dl = _cbLvlDelta(L); _cbSetTool('pan'); if (Math.abs(dl) >= 0.05) { _cbTurn(dl); _cbHint('📏 ' + _cbDeg(Math.abs(dl)) + '° 바로잡았습니다' + (CB.fid ? ' — 내 화면에만' : '')); } }
+    else _cbDraw();
+    return;
+  }
   if (d0.tool === 'crop') { if (CB.cropSel && CB.cropSel.w > 4 && CB.cropSel.h > 4) _cbCropMenu(true); else { CB.cropSel = null; _cbDraw(); } return; }
   var s = CB.draft; CB.draft = null;
   if (!s) return;
@@ -624,7 +762,7 @@ function _cbCropMenu(show) {
   if (!show) return;
   var m = document.createElement('div'); m.className = 'cb-cm';
   m.innerHTML = '<b>' + CB.cropSel.w + '×' + CB.cropSel.h + '</b>' +
-    '<button type="button" data-cm="apply" title="원본은 그대로 · 표시 보기에서 이 부분만">✂️ 이대로 자르기</button>' +
+    (CB.cropSel.v ? '' : '<button type="button" data-cm="apply" title="원본은 그대로 · 표시 보기에서 이 부분만">✂️ 이대로 자르기</button>') +
     '<button type="button" data-cm="copy" title="클립보드로 — 어디든 붙여넣기">📋 잘라서 복사</button>' +
     (CB.room ? '<button type="button" data-cm="send" title="이 부분만 새 사진으로 대화방에">📤 잘라서 보내기</button>' : '') +
     (CB.a.crop ? '<button type="button" data-cm="reset">↺ 자르기 풀기</button>' : '') +
@@ -637,21 +775,26 @@ function _cbCropAct(k) {
   if (k === 'reset') { _cbCommit({ crop: null }); CB.cropSel = null; _cbCropMenu(false); _cbSetTool('pan'); _cbFit(); return; }
   if (!sel) return;
   if (k === 'apply') { _cbCommit({ crop: sel }); CB.cropSel = null; _cbCropMenu(false); CB.tool = 'pan'; _cbSyncUi(); _cbFit(); _cbHint('잘랐습니다 — 원본 보기에서 전체를 볼 수 있어요'); return; }
-  var c = _cbFlatten(CB.img, CB.a, { area: sel });
+  var c = _cbCropCanvas(sel);
   if (k === 'copy') _cbClip(c, '잘라서 복사했습니다 — 붙여넣기(Ctrl+V)');
   if (k === 'send') _cbBlob(c).then(function (b) { return _cbUploadBlob(b, _cbBase() + '-부분.png'); }).then(function () { _cbToast('📤 잘라서 보냈습니다', 'success'); });
 }
 
 /* ─── 복사 · 받기 · 보내기 ─── */
 function _cbBase() { return String(CB.name || 'image').replace(/\.[A-Za-z0-9]{1,6}$/, ''); }
-function _cbView() { return _cbFlatten(CB.img, CB.mode === 'orig' ? { rot: CB.a.rot, shapes: [] } : CB.a, { marks: CB.mode !== 'orig' }); }
+function _cbView() { return _cbFlatten(CB.img, CB.mode === 'orig' ? { rot: _cbAng(), shapes: [] } : _cbVA(), { marks: CB.mode !== 'orig', fill: _cbFill() }); }
+/** 고른 부분 — 보통은 사진 픽셀 기준, 비스듬히 본 채로 고른 것(v)은 돌린 공간 기준 */
+function _cbCropCanvas(sel) {
+  if (sel.v) return _cbFlatten(CB.img, _cbVA(), { vsel: sel, area: { x: 0, y: 0, w: CB.W, h: CB.H } });
+  return _cbFlatten(CB.img, _cbVA(), { area: sel });
+}
 function _cbClip(canvas, msg) {
   if (!navigator.clipboard || typeof ClipboardItem === 'undefined') { _cbToast('이 브라우저는 그림 복사를 지원하지 않습니다 — ⬇ 받기를 쓰세요', 'warn'); return; }
   navigator.clipboard.write([new ClipboardItem({ 'image/png': _cbBlob(canvas) })])
     .then(function () { _cbToast(msg || '📋 복사했습니다 — 붙여넣기(Ctrl+V)', 'success'); })
     .catch(function () { _cbToast('복사하지 못했습니다', 'error'); });
 }
-function _cbCopy() { if (CB && CB.img) _cbClip(CB.cropSel ? _cbFlatten(CB.img, CB.a, { area: CB.cropSel }) : _cbView()); }
+function _cbCopy() { if (CB && CB.img) _cbClip(CB.cropSel ? _cbCropCanvas(CB.cropSel) : _cbView()); }
 function _cbDownload() {
   _cbBlob(_cbView()).then(function (b) {
     var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = _cbBase() + (CB.mode === 'orig' ? '' : '-표시') + '.png';
@@ -744,6 +887,79 @@ function _cbDrawPeers() {
   box.innerHTML = ks.length ? '<span class="cb-live">● 같이 보는 중</span>' + ks.map(function (k) { var p = CB.peers[k]; return '<span class="cb-peer" style="--pc:' + p.c + '" title="' + _cbE(p.name) + '">' + _cbE(String(p.name || '?').slice(0, 1)) + '</span>'; }).join('') : '';
 }
 
+/* ─── v13.409 나만 보는 회전 ─── */
+var _cbViews = null, _cbViewsP = null, _cbViewsUid = null, _cbMineT = 0;
+function _cbViewsOk() { return !!_cbViews && _cbViewsUid === _cbMe(); }
+/** 내가 돌려 둔 사진 전부 — 앱 켤 때 한 번 */
+function _cbViewsLoad() {
+  if (_cbViewsOk()) return Promise.resolve(_cbViews);
+  if (_cbViewsP && _cbViewsUid === _cbMe()) return _cbViewsP;
+  _cbViewsUid = _cbMe(); _cbViews = null;
+  // 받는 동안만 담아 둠 — 다 받은 뒤 목록이 비워지면 다시 받음(끝없이 같은 약속을 돌려주며 도는 일 없게)
+  var my = _cbViewsP = (typeof apiFetch === 'function' ? apiFetch('/api/chat/my-views') : Promise.resolve(null)).then(function (r) { return (r && r.data) || {}; }, function () { return {}; }).then(function (v) {
+    if (_cbViewsP === my) { _cbViews = v; _cbViewsP = null; }
+    return v;
+  });
+  return _cbViewsP;
+}
+function _cbDeg(v) { return String(Math.round((+v || 0) * 10) / 10); }
+/** 돌리기 — d 만큼 더하기(abs 면 그 각도로). 보내기 전 사진은 보내는 모습 그대로 모두에게 */
+function _cbTurn(d, abs) {
+  if (!CB || !CB.img) return;
+  var n = _cbNA(abs ? d : _cbAng() + d);
+  if (!CB.fid) { if (n !== (CB.a.rot || 0)) _cbCommit({ rot: n }); _cbFit(); _cbAngUi(); return; }
+  _cbSetMine(n === _cbNA(CB.a.rot) && !CB.fill ? null : { a: n, f: !!CB.fill });
+}
+function _cbSetMine(v) {
+  CB.my = v; CB.fill = !!(v && v.f);
+  if (CB.cropSel) { CB.cropSel = null; _cbCropMenu(false); }
+  if (_cbViews) { if (v) _cbViews[CB.fid] = v; else delete _cbViews[CB.fid]; }
+  _cbFit(); _cbInfo(); _cbAngUi();
+  var fid = CB.fid, sum = { rot: CB.a.rot || 0, n: CB.a.shapes.length, crop: !!CB.a.crop };
+  clearTimeout(_cbMineT);
+  _cbMineT = setTimeout(function () {   // 막대를 끄는 동안은 모아서 한 번
+    apiFetch('/api/chat/files/' + encodeURIComponent(fid) + '/view', { method: 'PUT', body: JSON.stringify(v ? { angle: v.a, fill: v.f } : { angle: null }) })
+      .then(function () { document.querySelectorAll('img[data-cbthumb="' + fid + '"]').forEach(function (img) { chatBoardThumb(img, { id: fid, annot: sum }, true); }); })
+      .catch(function () { _cbToast('돌린 각도를 저장하지 못했습니다', 'error'); });
+  }, 500);
+}
+function _cbFillToggle() {
+  CB.fill = !CB.fill;
+  if (CB.fid) _cbSetMine(CB.fill || _cbAng() !== _cbNA(CB.a.rot) ? { a: _cbAng(), f: CB.fill } : null);
+  else { _cbFit(); _cbAngUi(); }
+}
+function _cbRotShare() {
+  if (!CB.fid) return;
+  var A = _cbAng();
+  if (A !== _cbNA(CB.a.rot)) _cbCommit({ rot: A });
+  _cbSetMine(CB.fill ? { a: A, f: true } : null);
+  _cbHint('👥 방 사람 모두 ' + _cbDeg(A) + '° 로 봅니다');
+}
+function _cbRotReset() {
+  CB.fill = false;
+  if (CB.fid) { _cbSetMine(null); return; }
+  if (CB.a.rot) _cbCommit({ rot: 0 });
+  _cbFit(); _cbAngUi();
+}
+function _cbAngToggle() {
+  var s = CB.el.querySelector('[data-ang]'); s.hidden = !s.hidden;
+  try { localStorage.setItem('cb-ang', s.hidden ? '0' : '1'); } catch (_) {}
+  _cbAngUi(); _cbFit();
+}
+/** 📐 띠 · 버튼 상태 맞추기 */
+function _cbAngUi() {
+  if (!CB) return;
+  var el = CB.el, A = _cbAng(), base = Math.round(A / 90) * 90, fine = Math.round((A - base) * 10) / 10;
+  var r = el.querySelector('[data-fine]'); if (r && document.activeElement !== r) r.value = fine;
+  var o = el.querySelector('[data-angv]'); if (o) o.textContent = (fine > 0 ? '+' : '') + _cbDeg(fine) + '°' + (base % 360 ? ' · ' + (base % 360 + 360) % 360 + '°' : '');
+  var f = el.querySelector('[data-a="fill"]'); if (f) { f.classList.toggle('on', !!CB.fill); f.disabled = !_cbSkew(A) && !CB.fill; }
+  var sh = el.querySelector('[data-a="rotshare"]'); if (sh) { sh.hidden = !CB.fid; sh.disabled = !CB.my || CB.my.a === _cbNA(CB.a.rot); }
+  var z = el.querySelector('[data-a="rot0"]'); if (z) z.disabled = CB.fid ? !CB.my : !CB.a.rot && !CB.fill;
+  var w = el.querySelector('[data-angwho]');
+  if (w) w.textContent = !CB.fid ? '보내면 이 모습 그대로 갑니다' : CB.my ? '🙋 내 화면에만 — 남의 화면은 그대로' : CB.a.rot ? '👥 모두 같이 보는 각도 (' + _cbDeg(CB.a.rot) + '°)' : '돌리면 내 화면에만 저장됩니다';
+  var ab = el.querySelector('[data-a="angle"]'); if (ab) ab.classList.toggle('on', !el.querySelector('[data-ang]').hidden || !!CB.my);
+}
+
 var _cbThumbT = {};
 /** 메신저 실시간 신호 (chat-ui.js chatOnEvent 가 넘겨 줌) */
 function chatBoardOnEvent(ev, d) {
@@ -755,8 +971,8 @@ function chatBoardOnEvent(ev, d) {
     }
     if (!CB || CB.fid !== d.fileId || d.by === _cbMe()) return;
     var op = d.op || {};
-    var fit = ('rot' in op && op.rot !== CB.a.rot) || ('crop' in op && JSON.stringify(op.crop) !== JSON.stringify(CB.a.crop));
-    _cbApplyOp(op); if (fit) _cbFit();
+    var fit = ('rot' in op && op.rot !== CB.a.rot && !CB.my) || ('crop' in op && JSON.stringify(op.crop) !== JSON.stringify(CB.a.crop));
+    _cbApplyOp(op); if (fit) _cbFit(); _cbAngUi();
     if (CB.peers[d.by]) CB.peers[d.by].live = null;
     CB.by = d.byName;
     _cbInfo(); _cbDraw();
@@ -766,7 +982,7 @@ function chatBoardOnEvent(ev, d) {
     var p = CB.peers[d.by] || (CB.peers[d.by] = { name: d.byName, c: _cbPeerColor(d.by) });
     if (d.x != null) { p.x = d.x; p.y = d.y; }
     if (d.op) {   // v13.373 끝낸 표시 · 지우기 · 돌리기를 저장 전에 바로
-      var fit2 = ('rot' in d.op && d.op.rot !== CB.a.rot) || ('crop' in d.op && JSON.stringify(d.op.crop) !== JSON.stringify(CB.a.crop));
+      var fit2 = ('rot' in d.op && d.op.rot !== CB.a.rot && !CB.my) || ('crop' in d.op && JSON.stringify(d.op.crop) !== JSON.stringify(CB.a.crop));
       _cbApplyOp(d.op); if (fit2) _cbFit(); _cbInfo();
     }
     if (d.live === null) p.live = null;
@@ -784,7 +1000,8 @@ function chatBoardOnEvent(ev, d) {
 
 /** 대화 속 사진 미리보기 — 표시 · 자르기 · 회전이 있으면 그 모습으로 + ✏️ 표시 수 */
 function chatBoardThumb(img, f, force) {
-  var an = f.annot;
+  if (!_cbViewsOk() && !(f && f._vw)) { _cbViewsLoad().then(function () { chatBoardThumb(img, Object.assign({}, f, { _vw: 1 }), force); }); return; }   // v13.409 내가 돌려 둔 각도부터 (한 번만 기다림)
+  var an = f.annot, v = (_cbViews || {})[f.id];
   var btn = img.closest('.cx-img');
   if (btn) {
     var tag = btn.querySelector('.cx-img-tag');
@@ -794,11 +1011,12 @@ function chatBoardThumb(img, f, force) {
     } else if (tag) tag.remove();
   }
   img.dataset.cbthumb = f.id;
-  if (!an || (!an.n && !an.rot && !an.crop)) { if (force) _cbFileUrl(f.id).then(function (u) { img.src = u; }); return; }
-  Promise.all([_cbFileImg(f.id), apiFetch('/api/chat/files/' + encodeURIComponent(f.id) + '/annot')]).then(function (r) {
-    var a = (r[1] && r[1].data) || { shapes: [] };
-    var c = _cbFlatten(r[0], a, { max: 640 });
-    img.src = c.toDataURL('image/jpeg', 0.88);
+  var need = !!(an && (an.n || an.crop)), rot = v ? v.a : (an && an.rot) || 0;
+  if (!need && !rot) { if (force) _cbFileUrl(f.id).then(function (u) { img.src = u; }); return; }
+  Promise.all([_cbFileImg(f.id), need ? apiFetch('/api/chat/files/' + encodeURIComponent(f.id) + '/annot') : null]).then(function (r) {
+    var a = Object.assign({ crop: null, shapes: [] }, (r[1] && r[1].data) || {}, { rot: rot });
+    var fill = !!(v && v.f), c = _cbFlatten(r[0], a, { max: 640, fill: fill });
+    img.src = _cbSkew(rot) && !fill ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.88);   // 비스듬한 빈 모서리는 투명하게
   }).catch(function () {});
 }
 
