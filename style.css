@@ -6178,14 +6178,16 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cxw-g{margin-bottom:10px}
 .cxw-g>b{display:block;font-size:11.5px;color:var(--t5);font-weight:700;margin:0 0 5px 2px}
 .cxw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
-.cxw-sw{display:flex;flex-direction:column;gap:4px;padding:0;border:0;background:none;cursor:pointer;font:inherit;text-align:center;min-width:0}
-.cxw-pv{position:relative;display:block;height:58px;border-radius:10px;border:1px solid var(--bd);overflow:hidden;background:var(--bg)}
+.cxw-hint{margin:0 0 10px;font-size:12px;color:var(--t4)}
+/* v13.397 PC 앱에서 미리보기가 폭 0 으로 줄어 세로줄만 보이던 것 — 늘이기(stretch)에 기대지 않고 폭을 못 박음 */
+.cxw-sw{display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%;padding:0;border:0;background:none;cursor:pointer;font:inherit;text-align:center;min-width:0;-webkit-appearance:none;appearance:none}
+.cxw-pv{position:relative;display:block;width:100%;box-sizing:border-box;flex:none;height:58px;border-radius:10px;border:1px solid var(--bd);overflow:hidden;background:var(--bg)}
 .cxw-pv.is-dots{background:radial-gradient(color-mix(in srgb,var(--t5) 16%,transparent) 1px,transparent 1.4px) 0 0/12px 12px,linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--bg) 94%,var(--ac)))}
 .cxw-pv.is-empty::after{content:'＋';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--t5)}
 .cxw-pv.is-empty i{display:none}
 .cxw-pv i{position:absolute;left:7px;top:9px;width:46%;height:12px;border-radius:6px;background:var(--bg-p);box-shadow:0 0 0 1px var(--bd)}
 .cxw-pv i.me{left:auto;right:7px;top:30px;width:40%;background:var(--cx-mine-a,var(--ac));box-shadow:none}
-.cxw-sw em{font-style:normal;font-size:11.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cxw-sw em{display:block;width:100%;font-style:normal;font-size:11.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cxw-sw:hover .cxw-pv{border-color:var(--bd2)}
 .cxw-sw.on .cxw-pv{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac)}
 .cxw-sw.on em{color:var(--ac-t);font-weight:700}
@@ -6195,3 +6197,7 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 @media (max-width:520px){.cxw-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.cxw-pv{height:50px}}
 .cxw-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid var(--bd2);border-radius:7px;background:var(--bg-p);color:var(--t2);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
 .cxw-btn:hover{border-color:var(--ac);color:var(--ac-t)}
+.cxw-live{display:flex;flex-direction:column;gap:6px;box-sizing:border-box;padding:12px 14px;margin:0 0 10px;border-radius:12px;border:1px solid var(--bd);background:var(--bg);overflow:hidden}
+.cxw-live.is-dots{background:radial-gradient(color-mix(in srgb,var(--t5) 16%,transparent) 1px,transparent 1.4px) 0 0/20px 20px,linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--bg) 94%,var(--ac)))}
+.cxw-b{align-self:flex-start;max-width:70%;padding:5px 11px;border-radius:4px 12px 12px 12px;background:var(--bg-p);border:1px solid var(--bd);color:var(--t1);font-size:12.5px;white-space:nowrap}
+.cxw-b.me{align-self:flex-end;border-radius:12px 4px 12px 12px;background:linear-gradient(135deg,var(--cx-mine-a,var(--ac)),var(--cx-mine-b,color-mix(in srgb,var(--ac) 62%,#7C3AED)));border-color:transparent;color:var(--cx-mine-t,#fff)}

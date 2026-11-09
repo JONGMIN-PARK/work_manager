@@ -94,7 +94,9 @@ function chatWallModal(scopeRoom) {
     var groups = [];
     CXW_TPL.forEach(function (t) { if (groups.indexOf(t.g) < 0) groups.push(t.g); });
     var m = createModal({ id: 'chatWallModal', title: '🎨 대화방 배경', width: '560px', closeOnEsc: true, closeOnOverlay: true,
-      html: '<div class="cxw-scope" role="radiogroup">' +
+      html: '<p class="cxw-hint">아래에서 고르면 위 미리보기와 대화방에 바로 바뀝니다 — 닫으면 끝. <b>이 방만</b> 고르면 이 방에만, <b>모든 방</b>은 따로 안 정한 방 전부에.</p>' +
+        '<div class="cxw-live" data-live><span class="cxw-b">안녕하세요 👋</span><span class="cxw-b me">내일 회의 10시 맞죠?</span><span class="cxw-b me">자료 올려 둘게요 ✅</span></div>' +
+        '<div class="cxw-scope" role="radiogroup">' +
           (room ? '<button type="button" data-scope="room">이 방만</button>' : '') + '<button type="button" data-scope="all">모든 방 (기본)</button></div>' +
         '<div class="cxw-body">' + groups.map(function (g) {
           return '<div class="cxw-g"><b>' + g + '</b><div class="cxw-grid">' + CXW_TPL.filter(function (t) { return t.g === g; }).map(function (t) {
@@ -119,6 +121,7 @@ function chatWallModal(scopeRoom) {
       box.querySelector('[data-dimw]').hidden = !s.photo;
       box.querySelector('[data-dim]').value = s.dim;
       box.querySelector('[data-dimv]').textContent = s.dim + '%';
+      var lv = box.querySelector('[data-live]'), lc = chatWallCss(k, s); lv.style.background = lc || ''; lv.classList.toggle('is-dots', !lc);
       chatWallApply();
     }
     function pick(k) {
