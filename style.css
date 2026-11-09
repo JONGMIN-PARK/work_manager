@@ -182,7 +182,7 @@
 /* ═══ 파이프라인 칸반 — 모바일·iPad 가로 스크롤 (v13.99→v13.103) ═══ */
 /* v13.354 단계 탭 줄 — 평소엔 숨김, 가로로 미는 화면에서만 */
 .pipe-tabs{display:none}
-.pipe-mv{display:none}
+.pipe-mvb{display:none}
 @media (max-width:900px), (any-pointer:coarse) and (max-width:1366px){
   .pipeline-board{display:flex!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:6px;scroll-snap-type:x mandatory;scroll-padding-left:0}
   .pipeline-board>.pipeline-lane{flex:0 0 260px;scroll-snap-align:start;scroll-snap-stop:always}
@@ -193,9 +193,9 @@
   .pipe-tab b{font-size:11px;font-weight:700;padding:2px 6px;border-radius:9px;background:var(--bg-i);color:var(--t5)}
   .pipe-tab.on{background:var(--pc);border-color:var(--pc);color:#fff}
   .pipe-tab.on b{background:rgba(255,255,255,.25);color:#fff}
-  .pipe-mv{display:flex;justify-content:space-between;gap:6px;margin-top:8px}
-  .pipe-mv button{flex:0 1 auto;min-height:34px;padding:6px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:12px;font-weight:600;cursor:pointer;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .pipe-mv button:active{background:var(--ac-bg);color:var(--ac-t)}
+  .pipe-mvb{display:block;flex:0 1 auto;min-height:32px;padding:5px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:12px;font-weight:600;cursor:pointer;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:inherit}
+  .pipe-mvb:active{background:var(--ac-bg);color:var(--ac-t)}
+  .pipe-act .pipe-open-btn{min-height:32px;font-size:12px}
 }
 /* 캘린더 — 모바일에서 7열 최소폭 유지 + 부모 가로 스크롤 (v13.99) */
 @media (max-width:480px){
@@ -682,7 +682,28 @@ td.modified::after{content:'';position:absolute;top:2px;right:2px;width:5px;heig
 .pipeline-card.open .pipe-name{white-space:normal;word-break:break-word}
 .pipeline-card .pipe-det{display:none;margin-top:2px}
 .pipeline-card.open .pipe-det{display:block}
-.pipe-open-btn{display:block;width:100%;margin-top:8px;font-size:10px;padding:3px 0;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer}
+.pipe-open-btn{display:block;flex:1 1 0;min-width:0;font-size:10px;padding:3px 0;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer;font-family:inherit;white-space:nowrap}
+/* v13.407 펼친 카드 — 칩으로 이어 붙이고 단계 옮기기 · 상세를 한 줄에 */
+.pipeline-card.open .pipe-title{align-items:flex-start}
+.pipeline-card.open .pipe-caret{margin-top:3px}
+.pipe-meta{display:flex;flex-wrap:wrap;gap:3px 6px;align-items:center;margin-top:6px;font-size:9.5px;color:var(--t5);line-height:1.5;min-width:0}
+.pipe-m{white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.pipe-m-st{padding:0 6px;border-radius:8px}
+.pipe-m-ord{flex:0 1 auto}
+.pipe-m-as{font-size:9.5px;color:var(--t5);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pipe-act{display:flex;gap:6px;margin-top:7px;align-items:stretch}
+/* 단계 머리 — 넓으면 세로 3줄, 좁으면 한 줄 */
+.pipe-lh{text-align:center;margin-bottom:10px;padding-bottom:10px;border-bottom:2px solid}
+.pipe-lh-i{font-size:20px;margin-bottom:4px}
+.pipe-lh-l{font-size:11px;font-weight:700;letter-spacing:-.2px}
+.pipe-lh-n{font-size:10px;color:var(--t5);margin-top:3px;font-weight:600}
+@media (max-width:1400px){
+  .pipe-lh{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;margin-bottom:8px;padding-bottom:7px}
+  .pipe-lh-i{font-size:15px;margin:0;line-height:1}
+  .pipe-lh-l{font-size:12px}
+  .pipe-lh-n{margin:0}
+  .pipeline-lane{padding:8px!important}
+}
 .pipe-open-btn:hover{border-color:var(--ac);color:var(--ac)}
 .pipe-tool-btn{font-size:10px;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer}
 .pipe-tool-btn:hover{border-color:var(--ac);color:var(--ac)}

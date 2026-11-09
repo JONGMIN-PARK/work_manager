@@ -67,7 +67,9 @@ function renderPipeline() {
     html += '</div>';
 
     // 칸반 보드
-    html += '<div class="pipeline-board" style="display:grid;grid-template-columns:repeat(' + phaseKeys.length + ',minmax(0,1fr));gap:10px;min-height:400px">';
+    // v13.407 빈 단계 칸은 좁게 — 카드 있는 칸이 그만큼 넓어져 이름이 덜 꺾임 (끌어 놓을 자리는 남김)
+    var cols = phaseKeys.map(function (k) { return buckets[k].length ? 'minmax(0,1fr)' : 'minmax(0,.55fr)'; }).join(' ');
+    html += '<div class="pipeline-board" style="display:grid;grid-template-columns:' + cols + ';gap:10px;min-height:400px">';
 
     phaseKeys.forEach(function (k) {
       var ph = phases[k];
@@ -75,10 +77,11 @@ function renderPipeline() {
 
       html += '<div class="pipeline-lane" data-phase="' + k + '" ondragover="pipelineDragOver(event)" ondrop="pipelineDrop(event,\'' + k + '\')" ondragenter="pipelineDragEnter(event)" ondragleave="pipelineDragLeave(event)" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:10px;padding:12px;display:flex;flex-direction:column;min-width:0;transition:border-color .2s">';
       // 레인 헤더
-      html += '<div style="text-align:center;margin-bottom:10px;padding-bottom:10px;border-bottom:2px solid ' + ph.color + '">';
-      html += '<div style="font-size:20px;margin-bottom:4px">' + ph.icon + '</div>';
-      html += '<div style="font-size:11px;font-weight:700;color:' + ph.color + ';letter-spacing:-.2px">' + ph.label + '</div>';
-      html += '<div style="font-size:10px;color:var(--t5);margin-top:3px;font-weight:600">' + items.length + '건'
+      // v13.407 단계 머리 — 좁은 창에선 한 줄(아이콘·이름·건수)
+      html += '<div class="pipe-lh" style="border-bottom-color:' + ph.color + '">';
+      html += '<div class="pipe-lh-i">' + ph.icon + '</div>';
+      html += '<div class="pipe-lh-l" style="color:' + ph.color + '">' + ph.label + '</div>';
+      html += '<div class="pipe-lh-n">' + items.length + '건'
         + (items.length ? ' <button class="pipe-lane-tgl" onclick="pipelineLaneToggle(\'' + k + '\')" title="이 단계 카드 전체 펼치기/접기">⇕</button>' : '')
         + '</div>';
       html += '</div>';
@@ -118,59 +121,37 @@ function renderPipeline() {
         html += _pipeSummaryHtml(p, dst, st, progress);
         html += '<div class="pipe-det">';
 
-        // 수주번호 + 거래처
+        // v13.407 펼친 내용 — 한 줄씩 쌓지 않고 칩으로 이어 붙임(좁은 칸에서 세로로 길던 것). 담당은 위 요약 줄에 있어 3명 이상일 때만 전체
+        var meta = [];
         if (p.orderNo) {
           var client = '';
           if (typeof ORDER_MAP !== 'undefined' && ORDER_MAP[p.orderNo]) {
             var oi = ORDER_MAP[p.orderNo];
             client = typeof oi === 'object' ? (oi.client || '') : '';
           }
-          html += '<div style="font-size:9px;color:var(--t5);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + eH(p.orderNo) + (client ? ' · ' + eH(client) : '') + '</div>';
+          meta.push('<span class="pipe-m pipe-m-ord" title="' + eH(p.orderNo + (client ? ' · ' + client : '')) + '">' + eH(p.orderNo) + (client ? ' · ' + eH(client) : '') + '</span>');
         }
-
-        // 상태 (진척 막대는 위 요약 줄에)
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">';
-        html += '<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:' + st.color + '22;color:' + st.color + '">' + st.icon + ' ' + st.label + '</span>';
-        if (p.startDate || p.endDate) html += '<span style="font-size:9px;color:var(--t5)">' + eH((p.startDate || '?').slice(5) + ' ~ ' + (p.endDate || '?').slice(5)) + '</span>';
-        html += '</div>';
-
-        // 체크리스트 완료율
+        meta.push('<span class="pipe-m pipe-m-st" style="background:' + st.color + '22;color:' + st.color + '">' + st.icon + ' ' + st.label + '</span>');
+        if (p.startDate || p.endDate) meta.push('<span class="pipe-m">📅 ' + eH((p.startDate || '?').slice(5) + '~' + (p.endDate || '?').slice(5)) + '</span>');
         if (chkPct >= 0) {
           var chkColor = chkPct === 100 ? SEM_COLOR.ok : chkPct >= 50 ? SEM_COLOR.warn : SEM_COLOR.muted;
-          html += '<div style="display:flex;align-items:center;gap:4px;margin-top:4px">';
-          html += '<span style="font-size:9px;color:' + chkColor + '">☑ ' + chkDone + '/' + chkTotal + '</span>';
-          html += '<div style="flex:1;height:2px;background:var(--bd);border-radius:1px;overflow:hidden"><div style="height:100%;width:' + chkPct + '%;background:' + chkColor + '"></div></div>';
-          html += '<span style="font-size:9px;color:' + chkColor + ';font-weight:600">' + chkPct + '%</span>';
-          html += '</div>';
+          meta.push('<span class="pipe-m" style="color:' + chkColor + ';font-weight:600" title="이 단계 체크리스트 ' + chkDone + '/' + chkTotal + '">☑ ' + chkDone + '/' + chkTotal + '</span>');
         }
-
-        // 이슈 배지
         var pIssueN = issueCount[p.id] || 0;
-        if (pIssueN > 0) {
-          html += '<div style="font-size:9px;color:#EF4444;margin-top:4px;font-weight:600">🎫 미해결 이슈 ' + pIssueN + '건</div>';
+        if (pIssueN > 0) meta.push('<span class="pipe-m" style="color:#EF4444;font-weight:600">🎫 이슈 ' + pIssueN + '</span>');
+        if (isDelayed && p.endDate) meta.push('<span class="pipe-m" style="color:#EF4444;font-weight:600">⚠️ ' + daysDiff(p.endDate, localDate()) + '일 초과</span>');
+        html += '<div class="pipe-meta">' + meta.join('') + '</div>';
+        if (p.assignees && p.assignees.length > 2) {
+          html += '<div class="pipe-m-as">👤 ' + p.assignees.map(function (a) { return eH(typeof displayName === 'function' ? displayName(a) : a); }).join(', ') + '</div>';
         }
 
-        // 담당자
-        if (p.assignees && p.assignees.length) {
-          html += '<div style="font-size:9px;color:var(--t5);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">👤 ' + p.assignees.map(function (a) { return eH(typeof displayName === 'function' ? displayName(a) : a); }).join(', ') + '</div>';
-        }
-
-        // 지연 경고
-        if (isDelayed && p.endDate) {
-          var overDays = daysDiff(p.endDate, localDate());
-          html += '<div style="font-size:9px;color:#EF4444;font-weight:600;margin-top:3px">⚠️ ' + overDays + '일 초과</div>';
-        }
-
-        if (canDrag) {
-          var ki = phaseKeys.indexOf(k), prevK = phaseKeys[ki - 1], nextK = phaseKeys[ki + 1];
-          if (prevK || nextK) {
-            html += '<div class="pipe-mv">'
-              + (prevK ? '<button onclick="event.stopPropagation();pipelineMoveTo(\'' + pidA + '\',\'' + prevK + '\')" title="' + eH(phases[prevK].label) + ' 단계로 옮기기">◀ ' + eH(phases[prevK].label) + '</button>' : '<span></span>')
-              + (nextK ? '<button onclick="event.stopPropagation();pipelineMoveTo(\'' + pidA + '\',\'' + nextK + '\')" title="' + eH(phases[nextK].label) + ' 단계로 옮기기">' + eH(phases[nextK].label) + ' ▶</button>' : '')
-              + '</div>';
-          }
-        }
-        html += '<button class="pipe-open-btn" onclick="event.stopPropagation();pipelineCardClick(\'' + pidA + '\')">🔍 상세 보기</button>';
+        // 단계 옮기기(좁은 화면·터치에서만) + 상세 보기 — 한 줄
+        var ki = phaseKeys.indexOf(k), prevK = canDrag ? phaseKeys[ki - 1] : null, nextK = canDrag ? phaseKeys[ki + 1] : null;
+        html += '<div class="pipe-act">'
+          + (prevK ? '<button class="pipe-mvb" onclick="event.stopPropagation();pipelineMoveTo(\'' + pidA + '\',\'' + prevK + '\')" title="' + eH(phases[prevK].label) + ' 단계로 옮기기">◀ ' + eH(phases[prevK].label) + '</button>' : '')
+          + '<button class="pipe-open-btn" onclick="event.stopPropagation();pipelineCardClick(\'' + pidA + '\')">🔍 상세</button>'
+          + (nextK ? '<button class="pipe-mvb" onclick="event.stopPropagation();pipelineMoveTo(\'' + pidA + '\',\'' + nextK + '\')" title="' + eH(phases[nextK].label) + ' 단계로 옮기기">' + eH(phases[nextK].label) + ' ▶</button>' : '')
+          + '</div>';
         html += '</div>'; // pipe-det end
         html += '</div>'; // card end
       });
