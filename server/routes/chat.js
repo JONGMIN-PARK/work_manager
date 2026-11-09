@@ -260,7 +260,7 @@ router.get('/stream', auth.authenticate, tenant.tenantScope, function (req, res)
   var off = hub.add(uid, res);
   hub.write(res, 'hello', { at: Date.now() });
   if (!wasOnline) presence(req.tenant.id, uid, true);
-  var ping = setInterval(function () { try { res.write(': ping\n\n'); if (res.flush) res.flush(); } catch (e) {} }, 25000);
+  var ping = setInterval(function () { try { res.write(': ping\n\n'); if (res.flush) res.flush(); } catch (e) {} }, 15000);   // v13.400 25초 → 15초 — 휴대폰이 죽은 연결을 40초 안에 알아채게
   req.on('close', function () {
     clearInterval(ping); off();
     if (hub.online(uid)) return;

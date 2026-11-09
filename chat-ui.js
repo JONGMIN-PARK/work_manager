@@ -85,16 +85,25 @@ function chatStreamStart() {
     });
 }
 function chatStreamStop() { CXS.on = false; clearTimeout(CXS.timer); if (CXS.ctrl) CXS.ctrl.abort(); }
-/* v13.382 조용히 끊긴 연결 살리기 — 서버는 25초마다 신호를 보냄. 70초 넘게 아무것도 안 오면(잠자기 · 망 바뀜 · 중간 장비가 끊음)
+/* v13.382 조용히 끊긴 연결 살리기 — 서버는 15초마다 신호를 보냄(v13.400). 40초 넘게 아무것도 안 오면(잠자기 · 망 바뀜 · 중간 장비가 끊음)
  *   새로 붙음. 예전엔 죽은 연결을 붙든 채 기다려 📞 통화 · 메시지를 못 받았음(창을 숨겨 둔 PC 앱에서 특히) */
 function _cxsRevive(force) {
   if (!CXS.on || !CXS.ctrl || CXS.ctrl.signal.aborted) { if (force && !CXS.on && _cxMe()) { clearTimeout(CXS.timer); CXS.backoff = 1000; chatStreamStart(); } return; }
-  if (!force && !(CXS.seen && Date.now() - CXS.seen > 70000)) return;
+  if (!force && !(CXS.seen && Date.now() - CXS.seen > 40000)) return;   // v13.400 70초 → 40초 (서버 신호 15초마다)
   var c = CXS.ctrl; CXS.ctrl = null; CXS.on = false; c.abort(); clearTimeout(CXS.timer); CXS.backoff = 1000; chatStreamStart();
 }
-setInterval(function () { _cxsRevive(false); }, 20000);
+setInterval(function () { _cxsRevive(false); }, 10000);
 window.addEventListener('online', function () { _cxsRevive(true); });   // 망이 돌아오면 바로
-document.addEventListener('visibilitychange', function () { if (!document.hidden) _cxsRevive(false); });
+/* v13.400 휴대폰 — 다른 앱 · 화면 꺼짐에서 돌아오면 연결이 이미 죽어 있기 쉬움. 예전엔 마지막 신호가 70초 안이면 그대로 기다려
+   PC 에서 보낸 메시지가 한참 뒤에 왔다(휴대폰 → PC 는 PC 연결이 살아 있어 빠름). 3초 넘게 가려졌다 돌아오면 바로 새로 붙고 놓친 것 받음 */
+CXS.hidAt = document.hidden ? Date.now() : 0;
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) { CXS.hidAt = Date.now(); return; }
+  var away = CXS.hidAt ? Date.now() - CXS.hidAt : 0; CXS.hidAt = 0;
+  _cxsRevive(away > 3000);
+});
+window.addEventListener('pageshow', function (e) { if (e.persisted) _cxsRevive(true); });   // 아이폰 — 뒤로 가기 캐시에서 되살아남
+if (navigator.connection && navigator.connection.addEventListener) navigator.connection.addEventListener('change', function () { _cxsRevive(true); });   // 와이파이 ↔ 데이터
 /* 로그인되면 붙고, 나가면 끊고 */
 setInterval(function () { if (_cxMe()) { if (!CXS.on) chatStreamStart(); } else if (CXS.on) chatStreamStop(); }, 2000);
 
