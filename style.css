@@ -5665,6 +5665,21 @@ body.wm-tabs-top .con{padding-top:12px}
 .cs-oh-h{font-size:10.5px;color:var(--t4);margin-left:auto;font-weight:600;white-space:nowrap}
 .cs-ul{margin:0;padding:0 0 0 15px;font-size:11.5px;color:var(--t3);line-height:1.55}
 @media (max-width:700px){ .cs-g{grid-template-columns:minmax(0,1fr)} }
+/* v13.395 업무 내용 요약 머리 — AI 요약의 '.cs-h span{flex:1;회색 11.5px}' 이 여기에도 걸려 알약이 폭을 나눠 갖고(좁으면 세로로 쌓여 타원) 이름 색이 빠지던 것 */
+#contentSummary .cs-h span{flex:0 1 auto;min-width:0}
+#contentSummary .cs-h .cs-n{font-size:13px;color:var(--cs-c)}
+#contentSummary .cs-h .cs-hr{font-size:12px;color:var(--t2)}
+#contentSummary .cs-h .cs-k{font-size:11.5px;color:var(--t3);border-radius:10px;overflow-wrap:anywhere;word-break:keep-all}
+#contentSummary .cs-h b{font-size:inherit;color:var(--t1)}
+#contentSummary .cs-o{overflow-wrap:anywhere}
+@media (max-width:640px){
+  #contentSummary .cs-p{padding:8px}
+  #contentSummary .cs-h{gap:4px 8px}
+  #contentSummary .cs-h .cs-k{flex:1 1 100%;padding:4px 10px;line-height:1.45}
+  #contentSummary .cs-oh{flex-wrap:wrap;row-gap:0}
+  #contentSummary .cs-om{flex:1 1 auto;order:3;width:100%;white-space:normal}
+  #contentSummary .cs-ul{padding-left:14px}
+}
 
 /* ═══ v13.371 💬 메신저 — 🔔 새 메시지 알림 · 휴대폰 입력칸 · 머리 정리 (chat-ui.js · chat-alert.js) ═══ */
 /* 머리 💬 — 새 메시지가 오면 흔들고 숫자가 톡 튐 */
