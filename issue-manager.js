@@ -156,7 +156,7 @@ function renderIssues(afterRender) {
     // ─── 테이블 ───
     html += '<div class="pnl" style="padding:0;overflow-x:auto">';
     // v13.189 wide-mode: 고정 레이아웃 — 고정 폭 컬럼은 th width, 제목만 가변(말줄임)
-    html += '<table style="width:100%;min-width:1000px;table-layout:fixed;border-collapse:collapse;font-size:11px">';
+    html += '<table class="is-tbl" style="width:100%;min-width:1000px;table-layout:fixed;border-collapse:collapse;font-size:11px">';   // v13.404 좁은 창은 CSS 로 덜 중요한 칸을 숨겨 제목이 보이게
     html += '<thead><tr style="background:var(--bg-i);border-bottom:2px solid var(--bd)">';
     html += '<th style="padding:8px 6px;width:32px"><input type="checkbox" id="issueBulkAll" onclick="issueToggleAllBulk()" title="전체 선택"></th>';
     var cols = [
@@ -176,7 +176,7 @@ function renderIssues(afterRender) {
       var arrow = issueSortKey === c.key ? (issueSortAsc ? ' ▲' : ' ▼') : '';
       var cursor = sortable ? 'cursor:pointer' : '';
       var onclick = sortable ? ' onclick="issueSort(\'' + c.key + '\')"' : '';
-      html += '<th style="padding:8px 6px;text-align:left;font-size:10px;color:var(--t5);font-weight:600;white-space:nowrap;' + (c.w ? 'width:' + c.w + ';' : '') + cursor + '"' + onclick + '>' + c.label + arrow + '</th>';
+      html += '<th class="c-' + c.key + '" style="padding:8px 6px;text-align:left;font-size:10px;color:var(--t5);font-weight:600;white-space:nowrap;' + (c.w ? 'width:' + c.w + ';' : '') + cursor + '"' + onclick + '>' + c.label + arrow + '</th>';
     });
     html += '</tr></thead><tbody>';
 
@@ -201,16 +201,16 @@ function renderIssues(afterRender) {
       var isChecked = issueBulkSelected[iss.id] ? ' checked' : '';
       html += '<tr style="border-bottom:1px solid var(--bd);background:' + rowBg + ';cursor:pointer" onclick="showIssueDetail(\'' + safeId + '\')" title="' + eH(iss.title) + '">';
       html += '<td style="padding:6px" onclick="event.stopPropagation()"><input type="checkbox" data-bulk-id="' + eH(iss.id) + '" onclick="issueToggleBulk(\'' + safeId + '\')" ' + isChecked + '></td>';
-      html += '<td style="padding:6px;color:var(--t5);font-size:10px">' + (idx + 1) + '</td>';
+      html += '<td class="c-seq" style="padding:6px;color:var(--t5);font-size:10px">' + (idx + 1) + '</td>';
       var ell = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-      html += '<td style="padding:6px;color:var(--t3);' + ell + '">' + eH((iss.reportDate || '').slice(0, 10)) + '</td>';
-      html += '<td style="padding:6px;' + ell + 'color:var(--t2)" title="' + eH(projName) + '">' + eH(projName) + '</td>';
-      html += '<td style="padding:6px;' + ell + '"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + ph.color + '22;color:' + ph.color + ';white-space:nowrap">' + ph.icon + ' ' + ph.label + '</span></td>';
-      html += '<td style="padding:6px;' + ell + '"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + dp.color + '22;color:' + dp.color + ';white-space:nowrap">' + dp.icon + ' ' + dp.label + '</span></td>';
-      html += '<td style="padding:6px;' + ell + '"><span style="font-size:10px;white-space:nowrap">' + tp.icon + ' ' + tp.label + '</span></td>';
-      html += '<td style="padding:6px;' + ell + '"><span style="font-size:10px;white-space:nowrap">' + ug.icon + ' ' + ug.label + '</span></td>';
-      html += '<td style="padding:6px;' + ell + '"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + st.color + '22;color:' + st.color + ';font-weight:600;white-space:nowrap">' + st.label + '</span></td>';
-      html += '<td style="padding:6px;' + ell + 'color:var(--t1);font-weight:500">' + eH(iss.title) + '</td>';
+      html += '<td class="c-reportDate" style="padding:6px;color:var(--t3);' + ell + '">' + eH((iss.reportDate || '').slice(0, 10)) + '</td>';
+      html += '<td class="c-project" style="padding:6px;' + ell + 'color:var(--t2)" title="' + eH(projName) + '">' + eH(projName) + '</td>';
+      html += '<td class="c-phase" style="padding:6px;' + ell + '"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + ph.color + '22;color:' + ph.color + ';white-space:nowrap">' + ph.icon + ' ' + ph.label + '</span></td>';
+      html += '<td class="c-dept" style="padding:6px;' + ell + '"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + dp.color + '22;color:' + dp.color + ';white-space:nowrap">' + dp.icon + ' ' + dp.label + '</span></td>';
+      html += '<td class="c-type" style="padding:6px;' + ell + '"><span style="font-size:10px;white-space:nowrap">' + tp.icon + ' ' + tp.label + '</span></td>';
+      html += '<td class="c-urgency" style="padding:6px;' + ell + '"><span style="font-size:10px;white-space:nowrap">' + ug.icon + ' ' + ug.label + '</span></td>';
+      html += '<td class="c-status" style="padding:6px;' + ell + '"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + st.color + '22;color:' + st.color + ';font-weight:600;white-space:nowrap">' + st.label + '</span></td>';
+      html += '<td class="c-title" style="padding:6px;' + ell + 'color:var(--t1);font-weight:500">' + eH(iss.title) + '</td>';
       html += '<td style="padding:6px;white-space:nowrap" onclick="event.stopPropagation()">';
       html += '<button onclick="showIssueModal(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="편집">✏️</button>';
       html += '<button onclick="confirmDeleteIssue(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="삭제">🗑️</button>';

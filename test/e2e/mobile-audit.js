@@ -22,6 +22,10 @@ var ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
   var pid = await page.evaluate(async function () {
     var p = await createProject({ name: '모바일 점검 장비', startDate: '2026-10-01', endDate: '2026-12-31', status: 'active', assignees: ['관리자'], visibility: 'tenant' });
     await createMilestone({ projectId: p.id, name: '설계', startDate: '2026-10-01', endDate: '2026-10-20', order: 0 });
+    var d = function (n) { var x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+    for (var t of [['EES 미팅 (MITech, DS ENT) 자료 준비와 장비 셋업 일정 조율 — 긴 제목 시험', 2], ['견적서 정리', 0], ['사양서 검토', 1], ['나중 일', 30]]) await apiFetch('/api/my-work/todos', { method: 'POST', body: JSON.stringify({ title: t[0], dueDate: d(t[1]) }) }).catch(function () {});
+    for (var k = 0; k < 4; k++) await apiFetch('/api/issues', { method: 'POST', body: JSON.stringify({ projectId: p.id, title: '현장 이슈 ' + k + ' — 정렬 카메라 인식 오류가 간헐적으로 발생', dueDate: d(k - 2), status: k % 2 ? 'inProgress' : 'open', type: 'bug', urgency: k === 0 ? 'urgent' : 'normal' }) }).catch(function () {});
+    for (var q = 1; q <= 3; q++) await createOrder({ orderNo: 'SP' + (3960 + q) + '-EPN', name: 'UV LASER CUT SYSTEM ' + q + '호기 — 고객사 라인 증설', client: '대덕전자', date: d(-20 * q), amount: 120000000 * q, manager: '관리자', delivery: d(30 * q) }).catch(function () {});
     return p.id;
   });
   function clean() { return page.evaluate(function () { try { pdSwitchTab('overview'); } catch (_) {} document.querySelectorAll('.wa-modal-overlay,#projModal,#evtModal,.pd-overlay,#pdOverlay,#issueModal,#asModal,#mwPanel.on').forEach(function (e) { e.remove(); }); try { if (typeof mwPanelClose === 'function') mwPanelClose(); } catch (_) {} try { if (typeof pdCloseDetail === 'function') pdCloseDetail(); } catch (_) {} var h = document.querySelector('.hdr'); if (h) h.classList.remove('more-on'); var nd = document.getElementById('notifDropdown'); if (nd) nd.style.display = 'none'; window.scrollTo(0, 0); }); }
@@ -32,7 +36,13 @@ var ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
     ['mywork-board', function () { setPage('mywork'); var b = document.querySelector('#mMyWork [data-mwc-view="board"]'); if (b) b.click(); }],
     ['mywork-list', function () { setPage('mywork'); var b = document.querySelector('#mMyWork [data-mwc-view="list"]'); if (b) b.click(); }],
     ['mindmap', function () { setPage('mindmap'); }],
+    ['notebook', function () { setPage('notebook'); }],
     ['team-weekly', function () { setPage('team'); setMode('weekly'); }],
+    // v13.404 데이터가 있는 주간 분석 (zz-team-seed.js 를 앞에 같이 돌리면) — 팀원 전체 고르고 탭마다
+    ['team-weekly-tbl', function () { setPage('team'); setMode('weekly'); try { selAll(); } catch (_) {} if (typeof sTab === 'function') sTab('tbl'); }],
+    ['team-weekly-cht', function () { setPage('team'); setMode('weekly'); try { selAll(); } catch (_) {} if (typeof sTab === 'function') sTab('cht'); }],
+    ['team-weekly-sum', function () { setPage('team'); setMode('weekly'); try { selAll(); } catch (_) {} if (typeof sTab === 'function') sTab('sum'); }],
+    ['team-weekly-cmp', function () { setPage('team'); setMode('weekly'); try { selAll(); var t = document.getElementById('cmpTog'); if (t && !t.checked) { t.checked = true; togCompare(); } } catch (_) {} }],
     ['team-archive', function () { setPage('team'); setMode('archive'); }],
     ['team-trend', function () { setPage('team'); setMode('trend'); }],
     ['team-weekly_report', function () { setPage('team'); setMode('weekly_report'); }],
@@ -77,10 +87,12 @@ var ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
     ['mindmap-map', function () { setPage('mindmap'); return apiFetch('/api/mindmaps').then(function (r) { var m = (r.data || [])[0]; if (m) { mmOpen(m.id); setTimeout(function () { _mmSetView('map'); }, 900); } }); }]
   ];
   var report = [];
-  var orients = [['P', 402, 874], ['L', 874, 402]];
+  // v13.404 D = 줄인 PC 창(480, 마우스) — ORI=P,D 처럼 고름
+  var ALL_OR = { P: ['P', 402, 874, true], L: ['L', 874, 402, true], D: ['D', 480, 890, false] };
+  var orients = (process.env.ORI || 'P,L').split(',').map(function (k) { return ALL_OR[k]; }).filter(Boolean);
   for (var oi = 0; oi < orients.length; oi++) {
     var o = orients[oi];
-    await page.setViewport({ width: o[1], height: o[2], isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+    await page.setViewport({ width: o[1], height: o[2], isMobile: o[3], hasTouch: o[3], deviceScaleFactor: 1 });
     await wait(500);
     for (var i = 0; i < screens.length; i++) {
       var nm = screens[i][0];

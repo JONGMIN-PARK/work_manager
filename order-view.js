@@ -136,7 +136,7 @@ function renderOrders(afterRender) {
     // 테이블
     html += '<div class="pnl" style="overflow-x:auto">';
     // v13.189 wide-mode: 고정 레이아웃 — 고정 폭 컬럼은 th width, 프로젝트명만 가변(말줄임)
-    html += '<table style="width:100%;min-width:980px;table-layout:fixed;border-collapse:collapse;font-size:11px">';
+    html += '<table class="od-tbl" style="width:100%;min-width:980px;table-layout:fixed;border-collapse:collapse;font-size:11px">';   // v13.404 좁은 창은 CSS 로 칸 줄임
     html += '<thead><tr style="border-bottom:2px solid var(--bd)">';
     var cols = [
       { key: 'orderNo', label: '수주번호', w: '100px' },

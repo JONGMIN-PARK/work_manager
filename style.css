@@ -6280,3 +6280,25 @@ html:not([data-cx-depth="0"]) .cxw-b.me{background:linear-gradient(180deg,rgba(2
 }
 /* 아주 좁으면(휴대폰) 날짜 칸은 숨김 — "내일 14:00 …" 처럼 적으면 마감이 들어가고 📅 일정… 도 있음 */
 @media (max-width:420px){ #mMyWork .mw-add .mw-date{display:none} }
+
+/* ═══ v13.404 좁은 창(줄인 PC 창 · 휴대폰) 다듬기 ═══ */
+@media (max-width:768px){
+  /* 이슈 표 — #·등록일·단계·부서·유형·긴급도 칸을 숨겨 상태 · 제목 · 프로젝트가 화면 안에 (긴급은 줄 빨간 바탕으로) */
+  #mIssues .is-tbl{min-width:0!important}
+  #mIssues .is-tbl :is(.c-seq,.c-reportDate,.c-phase,.c-dept,.c-type,.c-urgency){display:none}
+  #mIssues .is-tbl th.c-project{width:96px!important}
+  #mIssues .is-tbl th.c-status{width:62px!important}
+  #mIssues .is-tbl th.c-actions{width:52px!important}
+  #mIssues .is-tbl td.c-title{white-space:normal!important;line-height:1.4;font-size:12px}
+  /* 주간 분석 — 고른 팀원 이름표는 한 줄 가로 굴림 (사람이 많으면 여러 줄로 쌓여 표가 한참 아래로 밀리던 것) */
+  #nameSel.wq-tags{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  #nameSel.wq-tags::-webkit-scrollbar{display:none}
+  #nameSel.wq-tags>*{flex:none}
+  /* 수주대장 표 — 수주번호 · 프로젝트명 · 현재 단계 · 단추만 (수주일 · 거래처 · 수주액 · 담당 · 납품 · 이슈 숨김) */
+  #mOrders .od-tbl{min-width:0!important}
+  #mOrders .od-tbl tr>:is(:nth-child(2),:nth-child(3),:nth-child(5),:nth-child(6),:nth-child(7),:nth-child(9)){display:none}
+  #mOrders .od-tbl th:nth-child(1){width:86px!important}
+  #mOrders .od-tbl th:nth-child(8){width:96px!important}
+  #mOrders .od-tbl th:nth-child(10){width:64px!important}
+  #mOrders .od-tbl td:nth-child(4){white-space:normal!important;line-height:1.4}
+}
