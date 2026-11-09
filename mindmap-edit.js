@@ -522,7 +522,20 @@ function _mmEdClick(e) {
       var mEl = _mmEl(t.getAttribute('data-menu'));
       if (mEl && mEl.id === 'mmAlignMenu') _mmPaintAlignMenu();
       if (mEl && mEl.id === 'mmBgMenu') _mmPaintBgMenu();
-      if (mEl) mEl.classList.toggle('hidden');
+      if (mEl) {
+        mEl.classList.toggle('hidden');
+        // v13.415 좁은 화면 — 둘째 줄이 옆으로 밀리는 칸이라 그 안의 펼침 메뉴가 잘림 → 화면 기준 자리로
+        var top2 = t.closest('.mm-top2');
+        if (!mEl.classList.contains('hidden') && top2 && getComputedStyle(top2).display !== 'contents') {
+          var br = t.getBoundingClientRect(), mw = Math.min(mEl.offsetWidth || 220, innerWidth - 16);
+          mEl.style.position = 'fixed'; mEl.style.top = Math.round(br.bottom + 4) + 'px'; mEl.style.right = 'auto';
+          mEl.style.left = Math.round(Math.max(8, Math.min(innerWidth - mw - 8, br.right - mw))) + 'px';
+          mEl.style.maxHeight = Math.max(160, innerHeight - br.bottom - 16) + 'px'; mEl.style.overflowY = 'auto';
+        } else if (mEl.style.position === 'fixed') { mEl.style.position = mEl.style.top = mEl.style.left = mEl.style.right = mEl.style.maxHeight = mEl.style.overflowY = ''; }
+      }
+      return;
+    case 'panel-sheet':   // v13.415 좁은 화면 — 오른쪽 자세히 칸을 아래에서 올라오는 창으로
+      var edp = _mmEl('mmEd'); if (edp) { var onp = !edp.classList.contains('mm-psheet'); edp.classList.toggle('mm-psheet', onp); var pb = _mmEl('mmPanelBtn'); if (pb) pb.classList.toggle('on', onp); }
       return;
     case 'sheet':
       var si = parseInt(t.getAttribute('data-i'), 10);

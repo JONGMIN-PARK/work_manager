@@ -184,8 +184,18 @@
 .pipe-tabs{display:none}
 .pipe-mvb{display:none}
 @media (max-width:900px), (any-pointer:coarse) and (max-width:1366px){
-  .pipeline-board{display:flex!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:6px;scroll-snap-type:x mandatory;scroll-padding-left:0}
-  .pipeline-board>.pipeline-lane{flex:0 0 260px;scroll-snap-align:start;scroll-snap-stop:always}
+  /* v13.415 가로로 밀기 → 위아래로 쌓기. 칸 높이는 카드 수만큼 · 빈 단계는 머리 한 줄 · 카드는 넓으면 여러 줄로 */
+  .pipeline-board{display:flex!important;flex-direction:column;gap:10px!important;overflow:visible}
+  .pipeline-board>.pipeline-lane{flex:none!important;width:auto}
+  .pipeline-lane .pipe-lh{display:flex;align-items:center;justify-content:flex-start;gap:6px;text-align:left;margin-bottom:8px;padding-bottom:6px}
+  .pipeline-lane .pipe-lh-i{font-size:15px;margin:0;line-height:1}
+  .pipeline-lane .pipe-lh-l{font-size:13px}
+  .pipeline-lane .pipe-lh-n{margin:0 0 0 auto;font-size:11px}
+  .pipeline-lane .pipe-cards{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));align-items:start;gap:8px!important}
+  .pipeline-lane .pipe-hint{grid-column:1/-1}
+  .pipeline-lane:has(.pipe-empty){padding:8px 10px!important}
+  .pipeline-lane:has(.pipe-empty) .pipe-lh{margin:0;padding:0;border-bottom:0!important}
+  .pipeline-lane .pipe-empty{display:none}
   .pipe-chips{display:none!important}
   .pipe-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;position:sticky;top:0;z-index:5;margin:0 0 8px;padding:6px 0;background:var(--bg)}
   .pipe-tabs::-webkit-scrollbar{display:none}
@@ -3205,7 +3215,7 @@ mark.wd-hl{background:var(--ac-g);color:var(--ac-t);outline:1px solid var(--ac);
 /* 세로 휴대폰 — 파이프라인 칸을 한 칸씩 넘겨 보기 · 칸반 끝에 걸리지 않게 */
 @media (max-width:600px){
   /* v13.354 한 칸씩 넘기기 — 한 단계가 화면을 거의 채우고 옆 칸은 살짝(넘길 칸이 있다는 표시) */
-  .pipeline-board>.pipeline-lane{flex:0 0 calc(100% - 26px)!important}
+  /* v13.415 위아래로 쌓으므로 칸 폭은 화면 전체 */
   .con{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
   /* 넓은 표의 '없음' 안내 — 표 가운데(화면 밖)가 아니라 보이는 자리에 */
   .pnl table td[colspan]{text-align:left!important}
@@ -6468,3 +6478,56 @@ html:not([data-cx-depth="0"]) .cxw-b.me{background:linear-gradient(180deg,rgba(2
     box-shadow:inset 0 1px 0 rgba(255,255,255,calc(.3 * var(--cxd))),0 3px 7px -3px color-mix(in srgb,var(--cx-mine-a,var(--ac)) min(100%,calc(60% * var(--cxd))),transparent)}
   .cx-msgs{overscroll-behavior-y:contain;overflow-anchor:auto}
 }
+/* v13.415 마인드맵 편집기 — 작은 폭 (휴대폰 · 좁은 창)
+   머리: ① 뒤로 · 제목 · 보내기 · ⋯ ② 찾기 · 맵/아웃라인/간트 · 구조 · 정렬 · 테마 · AI · 내보내기 (한 줄, 옆으로 밀기)
+   시트 탭 · 도구 줄은 얇게(아이콘만) · 오른쪽 자세히 칸은 [✎ 자세히] 로 아래에서 올라오는 창 */
+.mm-top2{display:contents}
+.mm-narrow-only{display:none!important}
+@media (max-width:760px){
+  .mm-ed{border-radius:12px}
+  .mm-top{gap:4px;padding:6px 8px;min-height:0;flex-wrap:wrap}
+  .mm-top>.mm-tbtn-icon[data-act=back]{order:0;width:32px;height:32px;padding:0}
+  .mm-top>.mm-titlebox{order:1;flex:1 1 0!important;min-width:0;max-width:none}
+  .mm-top>.mm-flex{display:none}
+  .mm-top>.mm-tbtn[data-act=share]{order:2}
+  .mm-top>.mm-tbtn[data-act=share] span{display:none}
+  .mm-top>.mm-menu-wrap{order:3}
+  .mm-top .mm-title{font-size:15px;padding:2px 4px}
+  .mm-top .mm-subline{gap:4px}
+  .mm-top .mm-badge{font-size:10px;padding:1px 6px}
+  .mm-top2{order:4;display:flex;align-items:center;gap:4px;flex:1 0 100%;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px 0 0;margin:0 -8px;padding-left:8px;padding-right:8px;scroll-padding:0 8px}
+  .mm-top2::-webkit-scrollbar{display:none}
+  .mm-top2>*{flex:none}
+  .mm-top2 .mm-tsep{display:none}
+  .mm-top2 .mm-searchbox{width:118px;height:30px;padding:0 8px;transition:width .15s}
+  .mm-top2 .mm-searchbox:focus-within{width:200px}
+  .mm-top2 .mm-searchbox .mm-search{width:100%;min-width:0}
+  .mm-top2 .mm-seg{height:30px}
+  .mm-top2 .mm-seg button{height:24px;padding:0 9px}
+  .mm-top2 .mm-select{height:30px;max-width:112px;font-size:12px;padding:0 4px}
+  .mm-top2 .mm-tbtn{height:30px;padding:0 8px}
+  .mm-sheets{padding:4px 8px 0}
+  .mm-sheet{padding:4px 10px!important;font-size:12px}
+  .mm-tools{padding:3px 6px!important;gap:2px;flex:none}
+  .mm-rail-btn{flex:none;flex-direction:row;padding:6px 7px!important;gap:0}
+  .mm-rail-btn>span{display:none}
+  .mm-tool-sep{margin:4px 3px!important;width:1px;height:auto;align-self:stretch}
+  .mm-narrow-only{display:flex!important}
+  span.mm-narrow-only{display:block!important}
+  .mm-rail-btn.on{background:var(--ac-bg);color:var(--ac-t)}
+  .mm-zoom{transform:scale(.92);transform-origin:right bottom}
+  /* 자세히 — 아래에서 올라오는 창 */
+  .mm-top2{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 22px),transparent)}
+  .mm-ed.mm-psheet .mm-ps-x{display:block;bottom:calc(58% + 6px);right:10px}
+  .mm-ed.mm-psheet .mm-panel{display:flex;position:absolute;left:0;right:0;bottom:0;z-index:40;width:auto;height:58%;border-left:0;border-top:1px solid var(--bd2);border-radius:14px 14px 0 0;box-shadow:0 -10px 30px rgba(15,23,42,.18);padding-bottom:env(safe-area-inset-bottom);animation:mmPsUp .18s ease-out}
+}
+@media (max-width:900px) and (min-width:761px){
+  .mm-narrow-only{display:flex!important}
+  span.mm-narrow-only{display:block!important}
+  .mm-ed.mm-psheet .mm-panel{display:flex;position:absolute;right:0;top:0;bottom:0;z-index:40;width:300px;box-shadow:-10px 0 30px rgba(15,23,42,.16)}
+  .mm-ed.mm-psheet .mm-ps-x{display:block;top:8px;right:308px}
+  .mm-rail-btn.on{background:var(--ac-bg);color:var(--ac-t)}
+}
+.mm-ps-x{display:none;position:absolute;z-index:41;border:1px solid var(--bd2);border-radius:999px;background:var(--bg-ps,var(--bg-p));color:var(--t3);font:inherit;font-size:12px;font-weight:600;padding:5px 12px;box-shadow:0 4px 14px rgba(15,23,42,.16);cursor:pointer}
+@keyframes mmPsUp{from{transform:translateY(30%);opacity:.4}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.mm-ed.mm-psheet .mm-panel{animation:none}}

@@ -69,7 +69,7 @@ function renderPipeline() {
     // 칸반 보드
     // v13.407 빈 단계 칸은 좁게 — 카드 있는 칸이 그만큼 넓어져 이름이 덜 꺾임 (끌어 놓을 자리는 남김)
     var cols = phaseKeys.map(function (k) { return buckets[k].length ? 'minmax(0,1fr)' : 'minmax(0,.55fr)'; }).join(' ');
-    html += '<div class="pipeline-board" style="display:grid;grid-template-columns:' + cols + ';gap:10px;min-height:400px">';
+    html += '<div class="pipeline-board" style="display:grid;grid-template-columns:' + cols + ';gap:10px">';   // v13.415 높이는 카드 수에 맞춤 (예전 최소 400px)
 
     phaseKeys.forEach(function (k) {
       var ph = phases[k];
@@ -87,12 +87,12 @@ function renderPipeline() {
       html += '</div>';
 
       // 카드들 — 레인 안 스크롤 없이 세로로 끝까지 (접힌 카드는 제목 한 줄)
-      html += '<div style="display:flex;flex-direction:column;gap:6px;flex:1">';
+      html += '<div class="pipe-cards" style="display:flex;flex-direction:column;gap:6px;flex:1">';
       if (items.length === 0) {
-        html += '<div style="text-align:center;color:var(--t6);font-size:10px;padding:20px 0">—</div>';
+        html += '<div class="pipe-empty" style="text-align:center;color:var(--t6);font-size:10px;padding:20px 0">—</div>';
       } else if (items.length >= 8 && k !== phaseKeys[phaseKeys.length - 1]) {
         // 한 단계에 카드가 몰려 있으면(대개 '수주') 옮기는 방법 안내
-        html += '<div style="font-size:9px;color:var(--t6);text-align:center;line-height:1.4;padding:0 2px 2px">진행된 프로젝트는 카드를 오른쪽 단계 칸으로 끌어 옮기세요</div>';
+        html += '<div class="pipe-hint" style="font-size:9px;color:var(--t6);text-align:center;line-height:1.4;padding:0 2px 2px">진행된 프로젝트는 카드를 오른쪽 단계 칸으로 끌어 옮기세요</div>';
       }
       items.forEach(function (p) {
         // 표시 상태 = autoProjectStatus (저장은 진행·보류·완료뿐, 대기·지연은 날짜로)
@@ -175,14 +175,23 @@ function renderPipeline() {
 }
 
 /* ── v13.354 휴대폰 · 패드 — 단계 탭 줄 ↔ 가로로 미는 보드 ── */
+var _pipeSpy = null, _pipeSpyHold = 0;
 var _pipeLane = (function () { try { return localStorage.getItem('pipe-lane') || ''; } catch (e) { return ''; } })();
 function _pipeBoard() { return document.querySelector('#pipelineWrap .pipeline-board'); }
 function _pipeIsSwipe(board) { return board && board.scrollWidth > board.clientWidth + 4; }   // 가로로 넘치는 화면일 때만 (데스크톱은 한 화면에 다 보임)
+/* v13.415 작은 화면은 단계 칸을 위아래로 쌓음(가로로 밀기 대신) — 탭 줄이 보이는 동안만 */
+function _pipeIsStack() { var t = document.getElementById('pipeTabs'); return !!(t && t.offsetParent); }
 function pipelineGoLane(phase, instant) {
   var board = _pipeBoard();
   var lane = board && board.querySelector('.pipeline-lane[data-phase="' + phase + '"]');
   if (!lane) return;
   _pipeMarkTab(phase);
+  if (_pipeIsStack()) {   // 위아래로 쌓인 화면 — 그 단계 머리가 탭 줄 바로 아래 오게
+    var tabs = document.getElementById('pipeTabs'), off = tabs ? tabs.offsetHeight + 6 : 0;
+    lane.style.scrollMarginTop = off + 'px';
+    _pipeSpyHold = Date.now() + (instant ? 100 : 700);
+    lane.scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'start' }); return;
+  }
   if (!_pipeIsSwipe(board)) { lane.scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'nearest' }); return; }
   board.scrollTo({ left: lane.offsetLeft - board.offsetLeft, behavior: instant ? 'auto' : 'smooth' });
 }
@@ -210,6 +219,20 @@ function _pipeBindTabs() {
       if (best && best.getAttribute('data-phase') !== _pipeLane) _pipeMarkTab(best.getAttribute('data-phase'));
     });
   }, { passive: true });
+  // v13.415 위아래로 쌓인 화면 — 굴리면 지금 보이는 단계 탭에 불 (탭 줄 바로 아래 걸친 칸)
+  if (window.IntersectionObserver) {
+    if (_pipeSpy) _pipeSpy.disconnect();
+    var tabsEl = document.getElementById('pipeTabs'), seen = {};
+    _pipeSpy = new IntersectionObserver(function (ents) {
+      ents.forEach(function (e) { seen[e.target.getAttribute('data-phase')] = e.isIntersecting ? e.boundingClientRect.top : null; });
+      if (!_pipeIsStack() || Date.now() < _pipeSpyHold) return;
+      var line = tabsEl ? tabsEl.getBoundingClientRect().bottom + 8 : 80, best = null, bt = -1e9;
+      board.querySelectorAll('.pipeline-lane').forEach(function (l) { var r = l.getBoundingClientRect(); if (r.top <= line && r.bottom > line && r.top > bt) { bt = r.top; best = l; } });
+      if (!best) { var fl = board.querySelector('.pipeline-lane'); if (fl && fl.getBoundingClientRect().top > line) best = fl; }
+      if (best && best.getAttribute('data-phase') !== _pipeLane) _pipeMarkTab(best.getAttribute('data-phase'));
+    }, { threshold: [0, .25, .5, .75, 1], rootMargin: '-60px 0px -40% 0px' });
+    board.querySelectorAll('.pipeline-lane').forEach(function (l) { _pipeSpy.observe(l); });
+  }
   if (_pipeLane && _pipeIsSwipe(board)) pipelineGoLane(_pipeLane, true);   // 다시 그려도 보던 단계 그대로
   else { var first = board.querySelector('.pipeline-lane'); if (first) _pipeMarkTab(_pipeLane && board.querySelector('.pipeline-lane[data-phase="' + _pipeLane + '"]') ? _pipeLane : first.getAttribute('data-phase')); }
 }

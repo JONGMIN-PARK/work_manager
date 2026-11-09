@@ -29,7 +29,8 @@ function _mmRenderEditor() {
     '<div class="mm-subline"><span class="mm-badge">' + sc.i + ' ' + sc.l + (row.project_name ? ' · ' + _mmEsc(row.project_name) : '') + '</span>' +
     '<span id="mmStatus" class="mm-status"></span></div></div>' +
     '<span class="mm-flex"></span>' +
-    '<label class="mm-searchbox">' + _mmIcon('search', 14) + '<input id="mmSearch" class="mm-search" placeholder="맵에서 찾기  Ctrl+F"></label>' +
+    '<div class="mm-top2">' +   // v13.415 넓은 화면에선 없는 것처럼(display:contents) · 좁으면 둘째 줄 한 줄로 옆으로 밀기
+    '<label class="mm-searchbox">' + _mmIcon('search', 14) + '<input id="mmSearch" class="mm-search" placeholder="맵에서 찾기' + (window.matchMedia && matchMedia('(pointer:coarse)').matches ? '' : '  Ctrl+F') + '"></label>' +
     '<span class="mm-tsep"></span>' +
     '<div class="mm-seg"><button data-act="view-map" id="mmVMap" title="맵">맵</button><button data-act="view-outline" id="mmVOut" title="아웃라인 (Alt+O)">아웃라인</button>' +
     '<button data-act="view-gantt" id="mmVGantt" title="간트 (Alt+J)">간트</button></div>' +
@@ -47,6 +48,7 @@ function _mmRenderEditor() {
     menuBtn('mmExportMenu', 'download', '', '내보내기') +
     '<div class="mm-menu hidden" id="mmExportMenu"><button data-act="weekly-report">🗓 주간 업무 보고 문장…</button><button data-act="export-png">PNG 이미지</button><button data-act="export-md">Markdown (.md)</button>' +
     '<button data-act="export-opml">OPML (.opml)</button><button data-act="export-xmind">XMind (.xmind)</button></div></div>' +
+    '</div>' +   // mm-top2 끝
     (row.is_owner ? tb('share', 'share', '보내기', '보내기 · 공유 — 고른 사람만 이 맵을 봅니다', ' mm-tbtn-accent') : '') +
     // 가끔 쓰는 것은 더보기 메뉴로 (상단을 가볍게)
     menuBtn('mmMoreMenu', 'more', '', '더보기 — 발표 · 버전 기록 · 집중 모드 · 명령 찾기 · 단축키') +
@@ -67,6 +69,7 @@ function _mmRenderEditor() {
     tool('relation', 'relation', '관계', '관계선 (Alt+R) — 누른 뒤 이을 주제를 클릭, Esc 취소') + tool('link-ref', 'link', '연결', '앱 데이터 연결 (Alt+L) — 프로젝트·마일스톤·이슈·팀원…') +
     tool('refs-refresh', 'refresh', '상태', '연결된 항목 상태 새로고침', true) + '<span class="mm-tool-sep"></span>' +
     tool('fold', 'fold', '접기', '접기/펴기 (Space)', true) + tool('fold-all', 'level1', '1단계', '1단계만 보기', true) + tool('unfold-all', 'unfold', '펴기', '모두 펴기', true) +
+    '<span class="mm-tool-sep mm-narrow-only"></span><button class="mm-rail-btn mm-narrow-only" data-act="panel-sheet" id="mmPanelBtn" title="고른 주제 자세히 — 글 · 메모 · 마커 · 댓글 · 첨부">' + _mmIcon('pen', 18) + '<span>자세히</span></button>' +
     '</div>' +
     '<div class="mm-canvas" id="mmCanvas"><div class="mm-stage" id="mmStage"></div>' +
     '<div class="mm-fbar hidden" id="mmFbar"></div>' +
@@ -80,6 +83,7 @@ function _mmRenderEditor() {
     '<div class="mm-outline hidden" id="mmOutline"></div>' +
     '<div class="mm-gantt hidden" id="mmGantt"></div>' +
     '<div class="mm-panel" id="mmPanel"></div>' +
+    '<button type="button" class="mm-ps-x" data-act="panel-sheet" title="자세히 닫기">✕ 닫기</button>' +
     '<div class="mm-hist hidden" id="mmHist"></div>' +
     '</div></div>';
   wrap.innerHTML = h;
