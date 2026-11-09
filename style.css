@@ -3785,7 +3785,12 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
   .wri-r1 input[type=checkbox]{width:20px;height:20px}
 }
 /* v13.312 업무일지 › 주간 분석 › 📊 분석 (wr-analytics.js) — 가는 막대 · 머리카락 격자 · 글자는 글자색 · 숫자는 표에도 */
-.wa{display:grid;gap:10px;min-width:0}
+/* v13.405 한 칸 너비를 화면 폭에 묶음 — 기본(auto) 칸은 안의 그래프 · 표 · 긴 수주명 폭만큼 넓어져 분석 화면 전체가 옆으로 길어졌다 */
+.wa{display:grid;gap:10px;min-width:0;grid-template-columns:minmax(0,1fr)}
+.wa>*{min-width:0;max-width:100%}
+#waBox{min-width:0;max-width:100%}
+.wa-find li>span:last-child,.wa-find li{overflow-wrap:anywhere}
+.wa-scope{min-width:0;overflow-wrap:anywhere}
 .wa-empty{text-align:center;color:var(--t6);padding:28px;font-size:12px}
 .wa-scope{font-size:11.5px;color:var(--t5);display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
 .wa-vs{color:var(--t6)}

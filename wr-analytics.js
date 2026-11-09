@@ -99,6 +99,17 @@ function waPrevRange(rg) {
 function _waRows(rows) { return typeof wdApply === 'function' ? wdApply(rows) : rows; }
 
 var _waLast = null;
+/* v13.405 창 크기가 바뀌면 그래프를 새 폭으로 다시 그림 — 넓을 때 그린 그래프(고정 px)가 줄인 창에서 그대로 남아 화면이 옆으로 길어지던 것 */
+var _waRO = null, _waW = 0, _waROT = null;
+function _waWatch() {
+  var box = document.getElementById('waBox'); if (!box || typeof ResizeObserver === 'undefined') return;
+  if (!_waRO) _waRO = new ResizeObserver(function (en) {
+    var w = Math.round(en[0].contentRect.width); if (!w || Math.abs(w - _waW) < 40) return;
+    clearTimeout(_waROT);
+    _waROT = setTimeout(function () { var b = document.getElementById('waBox'); if (_waLast && b && b.offsetParent) { _waW = Math.round(b.clientWidth); waRender(_waLast.f); } }, 180);
+  });
+  _waRO.disconnect(); _waRO.observe(box); _waW = Math.round(box.clientWidth);
+}
 /** 📊 분석 그리기 — upV · sTab 에서 (f = 지금 필터 결과) */
 function waRender(f) {
   var box = document.getElementById('waBox'); if (!box) return;
@@ -112,6 +123,7 @@ function waRender(f) {
     if (pr.length) P = waAgg(pr, prg);
   }
   _waLast = { f: f, A: A, P: P, rg: rg, prg: prg };
+  setTimeout(_waWatch, 0);
   var gapOn = _waGapOn();
   box.innerHTML = ''
     + '<div class="wa-scope">' + _waMD(rg.s) + ' ~ ' + _waMD(rg.e) + ' · 평일 ' + A.wd + '일 · ' + A.people + '명 · ' + A.n.toLocaleString() + '건'
