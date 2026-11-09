@@ -132,7 +132,8 @@ function chatAlertMenu(btn) {
         else if (st === 'on' && typeof wmPushDisable === 'function' && confirm('이 기기 알림을 끌까요?')) wmPushDisable().then(function () { CXA.push = null; });
       }],
       st === 'on' && typeof wmPushTest === 'function' ? ['🔔 시험 알림 보내기', wmPushTest] : null,
-      ['🔑 키워드 알림' + (CX.kw && CX.kw.length ? ' (' + CX.kw.length + ')' : '') + '…', chatKeywordModal]
+      ['🔑 키워드 알림' + (CX.kw && CX.kw.length ? ' (' + CX.kw.length + ')' : '') + '…', chatKeywordModal],
+      typeof chatWallModal === 'function' ? ['🎨 대화방 배경…', function () { chatWallModal(false); }] : null
     ].filter(Boolean);
     _cxMenu(btn, items);
   });

@@ -545,6 +545,7 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 function _cxDrawMain() {
   var m = document.getElementById('cxMain'); if (!m) return;
   var root = document.querySelector('#mMessages .cx'); if (root && !CX.room) root.classList.add('no-aside');
+  if (typeof chatWallApply === 'function') chatWallApply();   // v13.396 🎨 대화방 배경 (chat-wall.js)
   if (!CX.room) { m.innerHTML = '<div class="cx-blank"><div>💬</div><b>대화를 고르거나 새로 시작하세요</b><span>업무 카드 · 프로젝트 방 현황 · /ai 로 데이터에 바로 묻기</span></div>'; return; }
   m.innerHTML = '<header class="cx-h" id="cxHead"></header><div class="cx-notice" id="cxNotice" hidden></div>' +
     '<div class="cx-msgs" id="cxMsgs" tabindex="0" aria-live="polite"><div class="cx-loading">불러오는 중…</div></div>' +
@@ -629,6 +630,7 @@ function _cxHeadAct(k, btn) {
       ['✨ 대화 요약 (AI)', function () { _cxSend('/요약'); }],
       typeof chatPollModal === 'function' && CX.info.myRole !== 'readonly' ? ['🗳 투표 만들기', function () { chatPollModal('vote'); }] : null,
       typeof chatPollModal === 'function' && CX.info.myRole !== 'readonly' ? ['📅 약속 잡기', function () { chatPollModal('time'); }] : null,
+      typeof chatWallModal === 'function' ? ['🎨 배경 화면', function () { chatWallModal(true); }] : null,
       typeof chatExportModal === 'function' ? ['📤 대화 내보내기', chatExportModal] : null,
       CX.info.kind !== 'dm' ? ['🚪 나가기', function () { if (!confirm('이 대화방에서 나갈까요?')) return; apiFetch('/api/chat/rooms/' + CX.room + '/members/me', { method: 'DELETE' }).then(function () { CX.room = null; renderMessages(); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
     ].filter(Boolean));
