@@ -4264,7 +4264,7 @@ button.cx-pp:hover{background:var(--bg-hv)}
 .cx-acts{border-radius:10px;border-color:transparent;box-shadow:0 6px 20px -8px rgba(15,23,42,.45)}
 .cx-rx{border-radius:14px;background:var(--bg-p);box-shadow:0 1px 2px rgba(0,0,0,.06)}
 .cx-img{position:relative;border-radius:16px;box-shadow:0 8px 24px -14px rgba(15,23,42,.6);transition:transform .15s,box-shadow .15s}
-.cx-img:hover{transform:translateY(-1px);box-shadow:0 14px 30px -14px rgba(15,23,42,.7)}
+.cx-img:hover{box-shadow:0 14px 30px -14px rgba(15,23,42,.7)}
 .cx-img img{border-radius:16px;border:0}
 .cx-img::after{content:'🔍 크게 보기 · 표시하기';position:absolute;left:8px;bottom:8px;padding:3px 9px;border-radius:12px;background:rgba(15,18,32,.72);color:#fff;font-size:11px;line-height:1.5;opacity:0;transition:opacity .15s;pointer-events:none}
 .cx-img:hover::after{opacity:1}
@@ -6022,7 +6022,7 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .hdr-ontop:not(.on){filter:grayscale(1);opacity:.65}
 .hdr-ontop.on{transform:rotate(-20deg)}
 /* v13.382 말풍선 위 도구 막대(😊 ↩ 💬 ⋯)가 잘리던 것 — content-visibility 는 칸 밖을 잘라 내므로 올려 둔 · 고른 말풍선은 풀어 줌 */
-.cx-msgs .cx-m:hover,.cx-msgs .cx-m:focus-within,.cx-msgs .cx-m.cx-pressed{content-visibility:visible;position:relative;z-index:3}
+/* v13.398 올리면 content-visibility 를 풀던 것 없앰 — 풀릴 때 글자 · 이모지가 다시 그려지며 반 픽셀쯤 떨려 보였다. 툴바 자리는 칸 안 위 여백(14px)에 둠 (아래 .cx-msgs .cx-m) */
 /* v13.382 휴대폰 — 화면 틀 고정: 끌어도 머리 · 틀이 출렁이거나 밀려 올라가지 않게.
  *   모든 화면: 끝에서 더 끌 때 튕김(고무줄) 없음. 메신저: 페이지 자체는 안 움직이고 안쪽(목록 · 대화)만 움직임 */
 @media (max-width:760px){
@@ -6110,9 +6110,16 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 /* ⑥ 내가 보낸 카드 — 왼쪽 띠를 내 말풍선 색으로 */
 .cx-m.mine .cx-card{box-shadow:inset 3px 0 0 var(--cx-mine-a,var(--ac)),0 1px 2px rgba(15,23,42,.08),0 4px 14px -10px rgba(15,23,42,.35)}
 /* 말풍선 그림자가 네모로 잘리던 것 — content-visibility 는 칸 밖을 잘라 내므로 그림자 들어갈 여백을 칸 안에 두고 같은 만큼 바깥 여백을 빼 자리는 그대로 */
-.cx-msgs .cx-m{padding:0 12px 14px;margin-left:-12px;margin-right:-12px;margin-bottom:-14px}
-.cx-m:not(.cont){margin-top:14px}
-.cx-m.cont{margin-top:3px}
+.cx-msgs .cx-m{padding:14px 12px 14px;margin-left:-12px;margin-right:-12px;margin-bottom:-14px}
+/* v13.398 위 여백 14px 를 칸 안에 (마우스 올리면 뜨는 ⋯ 툴바가 잘리지 않게) — 바깥 여백을 그만큼 빼 메시지 사이 간격은 그대로 (14 · 이어 보낸 것 3) */
+.cx-m:not(.cont){margin-top:0}
+.cx-m.cont{margin-top:-25px}
+.cx-day+.cx-m{margin-top:-10px}
+.cx-unl+.cx-m{margin-top:-8px}
+.cx-mw:has(>.cx-sys)+.cx-mw>.cx-m{margin-top:-8px}
+/* 칸이 겹치는 여백은 눌리지 않게 — 윗 메시지 아래 끝을 아랫 메시지 빈 여백이 가로채지 않도록 */
+.cx-msgs .cx-m{pointer-events:none}
+.cx-msgs .cx-m>*{pointer-events:auto}
 /* v13.384 아이폰 — 화면 틀은 그대로, 목록 · 대화는 내용이 짧아도 끝에서 살짝 튕김(앱처럼). 1px 넘치게 해서 iOS 가 튕김을 줌 */
 @media (hover:none) and (pointer:coarse){
   .cx-msgs::before,.cx-rooms::before{content:"";float:left;width:0;height:calc(100% + 1px)}
