@@ -4839,6 +4839,10 @@ html.wm-focus-big:has(#mMessages:not(.hidden)) #mMessages{--cx-h:calc(100dvh - 7
 /* ═══ v13.368 🎤 발표 펜 (chat-ink.js) — 어두운 반투명 막대 · 선 아이콘 ═══ */
 .crt-bar button.crt-ink{background:rgba(255,255,255,.14);color:#fff;font-weight:600;letter-spacing:.01em}
 .crt-bar button.crt-ink:hover{background:rgba(255,255,255,.24)}
+.crt-bar.ask button[data-always]{background:rgba(255,255,255,.9);color:#5B21B6}
+.crt-bar button.crt-auto{background:rgba(255,255,255,.14);color:#fff;font-weight:600}
+.crt-bar button.crt-auto:hover{background:rgba(255,255,255,.24)}
+.crt-bar button.crt-auto.on{background:#F59E0B;color:#111827}
 .crt-win .ci-cv{position:absolute;z-index:2;pointer-events:none;touch-action:none}
 .crt-win .ci-cv.on{pointer-events:auto;cursor:crosshair}
 .crt-win .ci-cv[data-tool=laser]{cursor:none}

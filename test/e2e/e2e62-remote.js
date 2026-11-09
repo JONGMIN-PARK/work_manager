@@ -101,6 +101,35 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await until(a, function () { return document.querySelector('#crtBar [data-no]'); });
     await a.click('#crtBar [data-no]');
     check(await until(k, function () { return /거절/.test(document.querySelector('#crtWin .crt-msg').textContent); }), '거절 → 보는 쪽에 안내');
+    // v13.413 🔓 자동 허락 — ① 이번 공유 동안 모두
+    await a.evaluate(function () { localStorage.removeItem(_crtAutoKey()); });
+    await until(a, function () { return document.querySelector('#crtBar [data-auto]'); });
+    await a.click('#crtBar [data-auto]');
+    check(await until(a, function () { return /자동 허락 켬/.test(document.getElementById('crtBar').textContent); }), '공유 띠 [자동 허락] 켬');
+    await until(k, function () { return /제어 요청/.test(document.querySelector('#crtWin [data-ctl]').textContent) && !/기다리/.test(document.querySelector('#crtWin .crt-msg').textContent); });
+    await k.click('#crtWin [data-ctl]');
+    check(await until(a, function () { return /제어 중/.test(document.getElementById('crtBar').textContent) && window.__ctl[window.__ctl.length - 1] === true; }), '자동 허락 켬 → 묻지 않고 바로 제어 중');
+    await a.click('#crtBar [data-ctlx]');
+    await until(a, function () { return document.querySelector('#crtBar [data-auto]'); });
+    await a.click('#crtBar [data-auto]');   // 끔
+    // ② [항상 허락] → 다음엔 묻지 않음
+    await until(k, function () { var w = document.getElementById('crtWin'); return w && !w.classList.contains('ctl'); });
+    await k.click('#crtWin [data-ctl]');
+    check(await until(a, function () { return document.querySelector('#crtBar [data-always]'); }), '자동 허락 끄면 다시 물어봄 · [항상 허락] 단추');
+    await a.click('#crtBar [data-always]');
+    check(await until(a, function () { return /제어 중/.test(document.getElementById('crtBar').textContent) && Object.keys(_crtAutoList()).length === 1; }), '[항상 허락] → 제어 중 · 목록에 저장');
+    await a.click('#crtBar [data-ctlx]');
+    await until(k, function () { var w = document.getElementById('crtWin'); return w && !w.classList.contains('ctl'); });
+    check(await until(a, function () { return /⭐ 1/.test(document.getElementById('crtBar').textContent); }), '공유 띠에 ⭐ 1 (항상 허락 1명)');
+    await k.click('#crtWin [data-ctl]');
+    check(await until(a, function () { return /제어 중/.test(document.getElementById('crtBar').textContent) && !document.querySelector('#crtBar.ask'); }), '항상 허락한 사람 → 다음 요청은 바로 제어 중');
+    await a.screenshot({ path: path.join(SHOT, 'e2e62-auto.png'), clip: { x: 200, y: 0, width: 1000, height: 80 } });
+    await a.click('#crtBar [data-ctlx]');
+    await until(a, function () { return document.querySelector('#crtBar [data-trust]'); });
+    await a.click('#crtBar [data-trust]');   // confirm → 수락(비움)
+    check(await until(a, function () { return !document.querySelector('#crtBar [data-trust]') && !Object.keys(_crtAutoList()).length; }), '⭐ → 목록 비우기');
+    await a.screenshot({ path: path.join(SHOT, 'e2e62-auto-off.png'), clip: { x: 200, y: 0, width: 1000, height: 80 } });
+
     await a.evaluate(function () { chatRtcStop(); });
     check(!errs.length, '페이지 오류 없음 ' + errs.join(' | '));
   } catch (e) { fail++; console.log('FAIL 예외', e && e.stack); }

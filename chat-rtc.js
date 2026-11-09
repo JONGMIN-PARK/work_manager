@@ -4,11 +4,16 @@
  *   신호는 서버를 거쳐 전달만(POST /api/chat/rooms/:id/rtc · 실시간 스트림 'rtc'), 영상은 브라우저끼리 바로
  *   STUN 은 공개 서버 · 회사 방화벽 뒤에서 안 붙으면 window.WM_TURN = [{ urls, username, credential }] 로 TURN 추가
  *   🖱 원격 제어(v13.360): 보내는 쪽이 PC 앱이면 보는 사람이 [제어 요청] → 보내는 사람이 허락 → 마우스 · 키보드가
- *     데이터 채널(브라우저끼리 바로)로 가서 PC 앱이 윈도우 입력으로 넣음. 보내는 쪽은 언제든 끝내기 · Ctrl+Alt+End */
+ *     데이터 채널(브라우저끼리 바로)로 가서 PC 앱이 윈도우 입력으로 넣음. 보내는 쪽은 언제든 끝내기 · Ctrl+Alt+End
+ *   🔓 자동 허락(v13.413): 요청 띠의 [항상 허락] → 그 사람은 다음부터 묻지 않고 바로 허락(이 PC · 내 계정에만 저장 wm_crt_auto_<나>)
+ *     · 공유 띠의 [자동 허락] → 이번 공유 동안은 누가 요청하든 바로 허락(공유 끝나면 꺼짐). 자동이어도 띠는 빨갛게 · Ctrl+Alt+End 그대로 */
 var CRT = { share: null, viewers: {}, dcs: {}, watch: null, ctl: null, ctlAsk: null };
 function _crtCanCtl() { return !!(window.wmDesktop && window.wmDesktop.remoteInput); }
 function _crtIce() { return [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }].concat(window.WM_TURN || []); }
 function _crtSig(roomId, body) { return apiFetch('/api/chat/rooms/' + encodeURIComponent(roomId) + '/rtc', { method: 'POST', body: JSON.stringify(body) }).catch(function () {}); }
+function _crtAutoKey() { return 'wm_crt_auto_' + (typeof _cxMe === 'function' ? _cxMe() : ''); }
+function _crtAutoList() { try { return JSON.parse(localStorage.getItem(_crtAutoKey()) || '{}') || {}; } catch (e) { return {}; } }
+function _crtAutoSave(m) { try { localStorage.setItem(_crtAutoKey(), JSON.stringify(m)); } catch (e) {} }
 function chatRtcIsLive(sid) { return !!(CRT.watch && CRT.watch.sid === sid); }
 
 /* 보내기 */
@@ -26,7 +31,7 @@ function chatRtcShare(roomId) {
 function chatRtcStop() {
   var s = CRT.share; if (!s) return;
   if (CRT.ctl) _crtCtlEnd(true);
-  CRT.share = null; CRT.ctlAsk = null; CRT.dcs = {};
+  CRT.share = null; CRT.ctlAsk = null; CRT.dcs = {}; CRT.autoAll = false;
   s.stream.getTracks().forEach(function (t) { t.stop(); });
   Object.keys(CRT.viewers).forEach(function (u) { try { CRT.viewers[u].close(); } catch (e) {} });
   CRT.viewers = {};
@@ -41,17 +46,29 @@ function _crtBar() {
   var n = Object.keys(CRT.viewers).length;
   if (CRT.ctlAsk) {   // 제어 요청 — 허락 · 거절
     bar.className = 'crt-bar ask';
-    bar.innerHTML = '<span class="crt-dot"></span><b>🖱 ' + _cxE(CRT.ctlAsk.name) + ' 님이 내 화면 제어를 요청합니다</b><button type="button" data-ok>허락</button><button type="button" data-no>거절</button>';
+    bar.innerHTML = '<span class="crt-dot"></span><b>🖱 ' + _cxE(CRT.ctlAsk.name) + ' 님이 내 화면 제어를 요청합니다</b><button type="button" data-ok>허락</button><button type="button" data-always title="이 사람은 다음부터 묻지 않고 바로 허락 (이 PC에만 저장 · 공유 띠의 ⭐ 로 지우기)">항상 허락</button><button type="button" data-no>거절</button>';
     bar.querySelector('[data-ok]').addEventListener('click', function () { _crtCtlStart(CRT.ctlAsk.id); });
+    bar.querySelector('[data-always]').addEventListener('click', function () { var a = CRT.ctlAsk, m = _crtAutoList(); m[a.id] = a.name || a.id; _crtAutoSave(m); _crtCtlStart(a.id); _cxToast('🔓 ' + (a.name || '') + ' 님은 다음부터 바로 허락합니다', 'ok'); });
     bar.querySelector('[data-no]').addEventListener('click', function () { var a = CRT.ctlAsk; CRT.ctlAsk = null; _crtSig(CRT.share.roomId, { type: 'ctl-no', to: a.id, sid: CRT.share.sid }); _crtBar(); });
     return;
   }
   bar.className = 'crt-bar' + (CRT.ctl ? ' ctl' : '');
   bar.innerHTML = '<span class="crt-dot"></span><b>' + (CRT.ctl ? '🖱 ' + _cxE(CRT.ctlName || '') + ' 님이 내 화면을 제어 중' : '화면 공유 중') + '</b><span>' + (CRT.ctl ? 'Ctrl+Alt+End 로 바로 끝내기' : n ? '보는 사람 ' + n + '명' : '아직 보는 사람 없음') + '</span>' +
-    (CRT.ctl ? '<button type="button" data-ctlx>제어 끝내기</button>' : '') + (typeof chatInkHostOpen === 'function' && !CRT.ctl ? '<button type="button" class="crt-ink' + (typeof CI !== 'undefined' && CI.ovl ? ' on' : '') + '" data-ink title="내 공유 화면 위에 레이저 · 펜 · 형광펜 · 도형으로 표시 — 보는 사람 화면에 바로">' + (typeof CI !== 'undefined' && CI.ovl ? '✎ 발표 펜 끄기' : '✎ 발표 펜') + '</button>' : '') + '<button type="button" data-stop>공유 끝내기</button>';
+    (CRT.ctl ? '<button type="button" data-ctlx>제어 끝내기</button>' : '') + (_crtCanCtl() && !CRT.ctl ? _crtAutoBtns() : '') + (typeof chatInkHostOpen === 'function' && !CRT.ctl ? '<button type="button" class="crt-ink' + (typeof CI !== 'undefined' && CI.ovl ? ' on' : '') + '" data-ink title="내 공유 화면 위에 레이저 · 펜 · 형광펜 · 도형으로 표시 — 보는 사람 화면에 바로">' + (typeof CI !== 'undefined' && CI.ovl ? '✎ 발표 펜 끄기' : '✎ 발표 펜') + '</button>' : '') + '<button type="button" data-stop>공유 끝내기</button>';
   bar.querySelector('[data-stop]').addEventListener('click', chatRtcStop);
   var ink = bar.querySelector('[data-ink]'); if (ink) ink.addEventListener('click', typeof chatInkHostToggle === 'function' ? chatInkHostToggle : chatInkHostOpen);
   var cx = bar.querySelector('[data-ctlx]'); if (cx) cx.addEventListener('click', function () { _crtCtlEnd(); });
+  var au = bar.querySelector('[data-auto]'); if (au) au.addEventListener('click', function () { CRT.autoAll = !CRT.autoAll; _crtBar(); });
+  var tr = bar.querySelector('[data-trust]'); if (tr) tr.addEventListener('click', function () {
+    var m = _crtAutoList(), names = Object.keys(m).map(function (k) { return m[k]; });
+    if (confirm('🔓 항상 허락하는 사람 (' + names.length + '명)\n' + names.join(', ') + '\n\n목록을 비울까요? 다음부터는 다시 물어봅니다.')) { _crtAutoSave({}); _crtBar(); }
+  });
+}
+/* 🔓 공유 띠의 자동 허락 단추 (v13.413) */
+function _crtAutoBtns() {
+  var n = Object.keys(_crtAutoList()).length;
+  return '<button type="button" class="crt-auto' + (CRT.autoAll ? ' on' : '') + '" data-auto aria-pressed="' + !!CRT.autoAll + '" title="켜면 이번 공유 동안은 제어 요청을 묻지 않고 바로 허락 (공유가 끝나면 꺼짐)">' + (CRT.autoAll ? '🔓 자동 허락 켬' : '🔒 자동 허락') + '</button>' +
+    (n ? '<button type="button" class="crt-auto" data-trust title="항상 허락하는 사람 보기 · 지우기">⭐ ' + n + '</button>' : '');
 }
 function _crtOfferTo(userId) {
   var s = CRT.share; if (!s) return;
@@ -153,6 +170,12 @@ function chatRtcOnSignal(d) {
     else if (d.type === 'leave' && CRT.viewers[d.from]) { if (CRT.ctl === d.from) _crtCtlEnd(true); try { CRT.viewers[d.from].close(); } catch (e) {} delete CRT.viewers[d.from]; delete CRT.dcs[d.from]; _crtBar(); }
     else if (d.type === 'ctl-req' && CRT.viewers[d.from]) {
       if (!_crtCanCtl()) { _crtSig(s.roomId, { type: 'ctl-no', to: d.from, sid: s.sid }); return; }
+      if (CRT.autoAll || _crtAutoList()[d.from]) {   // v13.413 🔓 자동 허락
+        if (CRT.ctl === d.from) return;
+        CRT.ctlAsk = { id: d.from, name: d.fromName || '' }; _crtCtlStart(d.from);
+        if (window.wmDesktop && window.wmDesktop.notify) window.wmDesktop.notify({ title: '🖱 화면 제어 자동 허락', body: (d.fromName || '') + ' 님이 내 화면을 제어합니다 — Ctrl+Alt+End 로 바로 끝내기', go: '' });
+        return;
+      }
       CRT.ctlAsk = { id: d.from, name: d.fromName || '' }; _crtBar();
       if (window.wmDesktop && window.wmDesktop.notify) window.wmDesktop.notify({ title: '🖱 화면 제어 요청', body: (d.fromName || '') + ' 님이 내 화면 제어를 요청합니다', go: '' });
     }
