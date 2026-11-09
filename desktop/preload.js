@@ -16,6 +16,33 @@ function badgePng(n) {
   } catch (_) { return ''; }
 }
 
+// 트레이 아이콘 + 빨간 숫자 (v13.401) — 16px · 32px 두 크기 (화면 배율마다 또렷하게)
+let trayBase = null;
+function trayPngs(n) {
+  if (!trayBase) trayBase = ipcRenderer.invoke('wm:tray-base').catch(() => '');
+  return trayBase.then((url) => new Promise((ok) => {
+    if (!url) return ok(null);
+    const img = new Image();
+    img.onload = () => {
+      const out = {};
+      [16, 32].forEach((S) => {
+        const c = document.createElement('canvas'); c.width = c.height = S;
+        const g = c.getContext('2d');
+        g.drawImage(img, 0, 0, S, S);
+        const t = n > 9 ? '9+' : String(n), r = S * (n > 9 ? 0.36 : 0.32), cx = S - r, cy = r;
+        g.fillStyle = '#EF4444'; g.strokeStyle = '#fff'; g.lineWidth = Math.max(1, S / 16);
+        g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill(); g.stroke();
+        g.fillStyle = '#fff'; g.font = 'bold ' + Math.round(r * (n > 9 ? 1.15 : 1.4)) + 'px "Segoe UI",sans-serif';
+        g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, cx, cy + S / 32);
+        out[S] = c.toDataURL('image/png');
+      });
+      ok(out);
+    };
+    img.onerror = () => ok(null);
+    img.src = url;
+  }));
+}
+
 contextBridge.exposeInMainWorld('wmDesktop', {
   isDesktop: true,
   platform: process.platform,
@@ -24,7 +51,11 @@ contextBridge.exposeInMainWorld('wmDesktop', {
   setOnTop: (on) => ipcRenderer.send('wm:ontop-set', !!on),
   getOnTop: () => ipcRenderer.invoke('wm:ontop-get'),
   onOnTop: (cb) => { ipcRenderer.on('wm:ontop', (_e, on) => { try { cb(!!on); } catch (_) {} }); },
-  setBadge: (n) => { n = Math.max(0, n | 0); ipcRenderer.send('wm:badge', { n: n, png: n > 0 ? badgePng(n) : '' }); },
+  setBadge: (n) => {
+    n = Math.max(0, n | 0);
+    ipcRenderer.send('wm:badge', { n: n, png: n > 0 ? badgePng(n) : '' });
+    if (n > 0) trayPngs(n).then((p) => ipcRenderer.send('wm:tray-img', { n: n, p16: p && p[16], p32: p && p[32] })); else ipcRenderer.send('wm:tray-img', { n: 0 });
+  },
   onGo: (cb) => { ipcRenderer.on('wm:go', (_e, go) => { try { cb(go); } catch (_) {} }); },
   retry: () => ipcRenderer.send('wm:retry'),
   captureScreen: () => ipcRenderer.invoke('wm:capture'),

@@ -109,8 +109,13 @@ setInterval(function () { if (_cxMe()) { if (!CXS.on) chatStreamStart(); } else 
 
 function _cxVisibleRoom(id) {
   var page = document.getElementById('mMessages');
-  return CX.room === id && page && !page.classList.contains('hidden') && !document.hidden;
+  if (!(CX.room === id && page && !page.classList.contains('hidden') && !document.hidden)) return false;
+  // v13.401 PC 앱 — 창이 다른 창 뒤에 있으면 화면엔 '보임' 이지만 안 보는 것. 예전엔 열린 방이면 바로 읽음 처리돼 알림 · 숫자가 안 떴다
+  if (typeof wmIsDesktopApp === 'function' && wmIsDesktopApp() && !document.hasFocus()) return false;
+  return true;
 }
+/* 창으로 돌아오면(앞으로 · 눌러서) 열린 방을 읽음으로 */
+window.addEventListener('focus', function () { if (CX.room && _cxVisibleRoom(CX.room)) setTimeout(function () { if (CX.room && _cxVisibleRoom(CX.room)) _cxMarkRead(); }, 150); });
 function chatOnEvent(ev, d) {
   if (ev === 'hello') {   // (다시) 붙으면 놓친 것 반영 — 열린 방 메시지도
     if (typeof chatAlertOnHello === 'function') chatAlertOnHello();   // v13.371 가려짐 상태 맞추기

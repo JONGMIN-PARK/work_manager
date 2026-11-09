@@ -203,6 +203,24 @@ ipcMain.on('wm:badge', (_e, o) => {
   app.setBadgeCount(n);
   refreshTray();
 });
+/* v13.401 트레이 아이콘에 빨간 숫자 — 창이 숨어 트레이에만 있어도 안 읽은 수가 보이게 */
+ipcMain.handle('wm:tray-base', () => {
+  const p2 = path.join(__dirname, 'build', 'tray@2x.png');
+  try { return nativeImage.createFromPath(require('fs').existsSync(p2) ? p2 : TRAY_ICON).toDataURL(); } catch (_) { return ''; }
+});
+ipcMain.on('wm:tray-img', (_e, o) => {
+  if (!tray) return;
+  const n = Math.max(0, (o && o.n) | 0);
+  if (n !== unread && n > 0) return;   // 늦게 온 옛 그림은 버림
+  try {
+    if (n > 0 && o.p16) {
+      const im = nativeImage.createEmpty();
+      im.addRepresentation({ scaleFactor: 1, width: 16, height: 16, dataURL: o.p16 });
+      if (o.p32) im.addRepresentation({ scaleFactor: 2, width: 32, height: 32, dataURL: o.p32 });
+      tray.setImage(im);
+    } else tray.setImage(nativeImage.createFromPath(TRAY_ICON));
+  } catch (_) {}
+});
 ipcMain.on('wm:retry', () => loadApp());
 /* 🖱 원격 제어 — 화면 공유 중 내가 '허락'했을 때만 (웹 화면이 알려 줌) · Ctrl+Alt+End 로 언제든 끝 */
 function ctlStop(fromKey) {
