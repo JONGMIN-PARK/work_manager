@@ -6307,3 +6307,13 @@ html:not([data-cx-depth="0"]) .cxw-b.me{background:linear-gradient(180deg,rgba(2
   #mOrders .od-tbl th:nth-child(10){width:64px!important}
   #mOrders .od-tbl td:nth-child(4){white-space:normal!important;line-height:1.4}
 }
+
+/* v13.406 고른 팀원 이름표 이동 단추 — 넘칠 때만 (.has-ovf) */
+.wq-nmw{display:flex;align-items:center;gap:3px;min-width:0;max-width:100%}
+.wq-nmw .wq-tags{min-width:0;flex:1 1 auto}
+.wq-nn{display:none;flex:none;width:26px;height:26px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-p);color:var(--t3);font:inherit;font-size:13px;line-height:1;cursor:pointer;padding:0;align-items:center;justify-content:center}
+.wq-nn:hover:not(:disabled){border-color:var(--ac);color:var(--ac-t)}
+.wq-nn:disabled{opacity:.35;cursor:default}
+.wq-nmw.has-ovf .wq-nn{display:inline-flex}
+.wq-nmw:has(#nameSel:empty){display:none}
+@media (max-width:768px){ .wq-sel>.wq-nmw{flex:1 1 100%} }

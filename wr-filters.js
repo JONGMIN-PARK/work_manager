@@ -341,6 +341,7 @@ function rNC(){
   }
   if(typeof updateGroupButtons==='function')updateGroupButtons();
   renderDeptBtns();
+  wqNameNavSync();   // v13.406 이동 단추
 }
 let multiSel=true;   // v13.264 팀원 목록은 체크 목록 — 늘 여러 명 (한 명만은 줄의 '만')
 let cmpMode=false;
@@ -512,3 +513,31 @@ function rAFT(){const t=[];sO.forEach(o=>t.push({y:'o',l:'수주:'+o,v:o}));sT.f
 function rmFT(y,v){if(y==='w'){selWeek=null;weekYearFilter='';weekQtrFilter='';weekMonthFilter='';var ys=document.getElementById('weekYearSel');if(ys)ys.value='';var qs=document.getElementById('weekQtrSel');if(qs)qs.value='';var ms=document.getElementById('weekMonthSel');if(ms)ms.value='';renderWeekSelector()}if(y==='o'){sO.delete(v);rOL()}if(y==='t'){sT.delete(v);rTL()}if(y==='on'){sON.delete(v);rONL()}if(y==='cl'){sCL.delete(v);rCLL()}if(y==='dv'){sDV.delete(v);rDVL()}if(y==='s')clrS();gfInvalidate();upV()}
 function gTC(){const s=getComputedStyle(document.documentElement);return{g:s.getPropertyValue('--cg').trim(),t:s.getPropertyValue('--ct').trim(),l:s.getPropertyValue('--cl').trim()}}
 
+
+/* v13.406 고른 팀원 이름표 — 한 줄 가로 굴림일 때(좁은 창) ⏮ ‹ › ⏭ 이동 단추. 넘칠 때만 보이고 끝에서는 흐리게 */
+function wqNameNavSync(){
+  var ns=document.getElementById('nameSel'),w=document.getElementById('nameSelW');if(!ns||!w)return;
+  requestAnimationFrame(function(){
+    var ovf=ns.scrollWidth>ns.clientWidth+2;
+    w.classList.toggle('has-ovf',ovf);
+    if(!ovf)return;
+    var atS=ns.scrollLeft<=2,atE=ns.scrollLeft+ns.clientWidth>=ns.scrollWidth-2;
+    w.querySelectorAll('[data-nn="first"],[data-nn="prev"]').forEach(function(b){b.disabled=atS});
+    w.querySelectorAll('[data-nn="next"],[data-nn="last"]').forEach(function(b){b.disabled=atE});
+  });
+}
+/** 한 명씩 · 처음 · 끝 — 이름표 왼쪽 끝에 맞춰 멈춤 */
+function wqNameNav(dir){
+  var ns=document.getElementById('nameSel');if(!ns)return;
+  var kids=[].slice.call(ns.children),L=ns.scrollLeft,base=ns.firstElementChild?ns.firstElementChild.offsetLeft:0,x;
+  if(dir==='first')x=0;
+  else if(dir==='last')x=ns.scrollWidth;
+  else if(dir==='next'){var n=kids.filter(function(k){return k.offsetLeft-base>L+4})[0];x=n?n.offsetLeft-base:ns.scrollWidth}
+  else{var p=kids.filter(function(k){return k.offsetLeft-base<L-4}).pop();x=p?p.offsetLeft-base:0}
+  ns.scrollTo({left:x,behavior:'smooth'});
+}
+(function(){
+  document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('#nameSelW [data-nn]');if(b)wqNameNav(b.getAttribute('data-nn'))});
+  document.addEventListener('scroll',function(e){if(e.target&&e.target.id==='nameSel')wqNameNavSync()},true);
+  var t=null;window.addEventListener('resize',function(){clearTimeout(t);t=setTimeout(wqNameNavSync,150)});
+})();
