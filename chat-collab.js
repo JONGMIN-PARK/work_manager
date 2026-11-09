@@ -36,9 +36,23 @@ function _ccPlain(t, inline) {
     var h = _ccE(p);
     h = h.replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
     h = h.replace(/(^|\s)@([^\s@<]{1,20})/g, '$1<b class="cx-at">@$2</b>');
+    h = chatEmoWrap(h);
     return inline ? h.replace(/\n/g, ' ') : h.replace(/\n/g, '<br>');
   }).join('');
 }
+/* v13.393 이모지 — 그림 이모지(색 있는 것)만 <span class="cx-ej"> 로 감쌈 (cx-emo 는 이모티콘 판 이름). 내 말풍선에서 흰 테두리를 둘러 말풍선 색에 묻히지 않게.
+   ✔ ★ → 같은 글자 모양 기호는 글자색을 따르므로 빼고(Emoji_Presentation 이거나 FE0F 붙은 것만), 태그 안(링크 주소 등)은 건드리지 않음 */
+var CX_EMO_ONE = '(?:\\p{Emoji_Presentation}|\\p{Extended_Pictographic}\\uFE0F|[0-9#*]\\uFE0F?\\u20E3)(?:[\\u{1F3FB}-\\u{1F3FF}]|\\uFE0F|\\u200D(?:\\p{Emoji_Presentation}|\\p{Extended_Pictographic}\\uFE0F?))*';
+var CX_EMO_RE = null, CX_EMO_ONLY = null;
+try { CX_EMO_RE = new RegExp('(?:' + CX_EMO_ONE + ')+', 'gu'); CX_EMO_ONLY = new RegExp('^\\s*(?:' + CX_EMO_ONE + ')(?:\\s*(?:' + CX_EMO_ONE + ')){0,2}\\s*$', 'u'); } catch (_) {}
+function chatEmoWrap(h) {
+  if (!CX_EMO_RE || !h) return h;
+  return h.split(/(<[^>]*>)/).map(function (p) { return p.charAt(0) === '<' ? p : p.replace(CX_EMO_RE, '<span class="cx-ej">$&</span>'); }).join('');
+}
+/** 이모지만 1~3개인 글 — 말풍선 없이 크게 (카톡처럼) */
+function chatEmojiOnly(s) { return !!(CX_EMO_ONLY && s && s.length <= 40 && CX_EMO_ONLY.test(s)); }
+/** 코드 블록 하나뿐인 글 — 말풍선 색 없이 코드 상자만 */
+function chatCodeOnly(s) { s = String(s || ''); return /^\s*```[\s\S]*```\s*$/.test(s) && s.split('```').length === 3; }
 document.addEventListener('click', function (e) {
   var b = e.target.closest && e.target.closest('[data-copycode]'); if (!b) return;
   var c = b.closest('.cx-code').querySelector('code');

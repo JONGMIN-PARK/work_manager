@@ -695,7 +695,8 @@ function _cxMsgHtml(m, prev, inThread, next) {
     if (qh && !qIn) body += qh;
     if (m.poll && typeof chatPollHtml === 'function') body += chatPollHtml(m);   // v13.381 🗳 · 📅
     else if (m.post && typeof chatPostHtml === 'function') body += chatPostHtml(m, { full: inThread });   // v13.358 📌 게시판 글
-    else if (m.body) body += '<div class="cx-b' + (ai ? ' cx-ai' : '') + (qIn ? ' has-q' : '') + '">' + (qIn ? qh : '') + (ai ? '<div class="cx-ai-h">🤖 AI · 내가 볼 수 있는 데이터로 답함</div>' + (typeof rMD === 'function' ? rMD(_cxE(m.body)) : _cxText(m.body)) : _cxText(m.body)) + (m.edited ? '<i class="cx-ed">수정됨</i>' : '') + '</div>';
+    else if (m.body) body += '<div class="cx-b' + (ai ? ' cx-ai' : '') + (qIn ? ' has-q' : '') +
+      (!ai && !qIn && typeof chatEmojiOnly === 'function' ? (chatEmojiOnly(m.body) ? ' cx-jumbo' : chatCodeOnly(m.body) ? ' cx-codeonly' : '') : '') + '">' + (qIn ? qh : '') + (ai ? '<div class="cx-ai-h">🤖 AI · 내가 볼 수 있는 데이터로 답함</div>' + (typeof rMD === 'function' ? rMD(_cxE(m.body)) : _cxText(m.body)) : _cxText(m.body)) + (m.edited ? '<i class="cx-ed">수정됨</i>' : '') + '</div>';
     if (m.link && typeof chatLinkHtml === 'function') body += chatLinkHtml(m.link);   // v13.378 🔗
     if (m.ack && !m.pending && typeof chatAckHtml === 'function') body += chatAckHtml(m);   // v13.381 ✔
     if (alb) body += _cxAlbumHtml(alb);
@@ -753,7 +754,7 @@ function _cxCardHtml(c, i, m) {
     (c.status !== 'inProgress' && c.status !== 'resolved' && c.status !== 'closed' ? '<button type="button" data-act="inProgress" data-ci="' + i + '">대응 시작</button>' : '') +
     (c.status !== 'resolved' && c.status !== 'closed' ? '<button type="button" data-act="resolved" data-ci="' + i + '">해결</button>' : '<button type="button" data-act="open" data-ci="' + i + '">다시 열기</button>') +
     (c.urgency !== 'urgent' && c.status !== 'resolved' && c.status !== 'closed' ? '<button type="button" data-act="urgent" data-ci="' + i + '">🔴 긴급</button>' : '') + '</span>' : '';
-  return '<div class="cx-card" data-card="' + i + '"><button type="button" class="cx-card-o" data-open="' + i + '"><span class="cx-card-i">' + (CX_ICON[c.type] || '🔗') + '</span><span class="cx-card-t"><b>' + _cxE(c.title || c.id) + '</b><i>' + _cxE(c.sub || '') + '</i></span>' + st + '</button>' + acts + '</div>';
+  return '<div class="cx-card" data-card="' + i + '"><button type="button" class="cx-card-o" data-open="' + i + '"><span class="cx-card-i">' + (CX_ICON[c.type] || '🔗') + '</span><span class="cx-card-t"><b>' + _cxE(c.title || c.id) + '</b>' + (c.sub && !(typeof chatEmojiOnly === 'function' && chatEmojiOnly(c.sub)) ? '<i>' + _cxE(c.sub) + '</i>' : '') + '</span>' + st + '</button>' + acts + '</div>';
 }
 /* v13.366 메시지 목록 — 앞쪽이 같으면 바뀐 메시지만 바꾸고 새 것만 덧붙임(사진 · 스크롤 그대로, 100명 방도 가볍게) */
 function _cxWrap(m, html) { return '<div class="cx-mw" data-k="' + _cxE(String(m.id)) + '">' + html + '</div>'; }

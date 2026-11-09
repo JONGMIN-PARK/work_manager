@@ -4068,12 +4068,12 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 .cx-m.mine .cx-bw{align-items:flex-end}
 .cx-b{padding:8px 11px;border-radius:4px 14px 14px 14px;background:var(--bg-p);border:1px solid var(--bd);color:var(--t1);font-size:13.5px;line-height:1.55;word-break:break-word;overflow-wrap:anywhere;white-space:normal}
 .cx-m.cont .cx-b{border-radius:14px}
-.cx-m.mine .cx-b{border-radius:14px 4px 14px 14px;background:var(--ac);border-color:var(--ac);color:#fff}
+.cx-m.mine .cx-b{border-radius:14px 4px 14px 14px;background:var(--cx-mine-a,var(--ac));border-color:var(--cx-mine-a,var(--ac));color:var(--cx-mine-t,#fff)}
 .cx-m.mine.cont .cx-b{border-radius:14px}
-.cx-m.mine .cx-b a{color:#fff}
+.cx-m.mine .cx-b a{color:var(--cx-mine-t,#fff)}
 .cx-b a{color:var(--ac-t);text-decoration:underline;text-underline-offset:2px}
 .cx-at{color:var(--ac-t);font-weight:700}
-.cx-m.mine .cx-at{color:#fff;text-decoration:underline}
+.cx-m.mine .cx-at{color:var(--cx-mine-t,#fff);text-decoration:underline}
 .cx-ed{font-style:normal;font-size:10.5px;opacity:.7;margin-left:6px}
 .cx-del{color:var(--t5)!important;background:none!important;border-style:dashed!important;font-style:italic}
 .cx-ai{background:linear-gradient(135deg,color-mix(in srgb,#8B5CF6 10%,var(--bg-p)),color-mix(in srgb,#22D3EE 8%,var(--bg-p)))!important;border-color:color-mix(in srgb,#8B5CF6 35%,var(--bd))!important;color:var(--t2)!important;max-width:640px}
@@ -4081,7 +4081,7 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 .cx-meta{display:flex;flex-direction:column;align-items:flex-end;flex:none;gap:1px;padding-bottom:1px}
 .cx-m:not(.mine) .cx-meta{align-items:flex-start}
 .cx-meta i{font-style:normal;font-size:10.5px;color:var(--t5);white-space:nowrap}
-.cx-un{font-style:normal;font-size:10.5px;font-weight:800;color:#E5A500;min-height:12px}
+.cx-un{font-style:normal;font-size:10.5px;font-weight:800;color:color-mix(in srgb,#E5A500 50%,var(--t1));min-height:12px}
 .cx-acts{position:absolute;top:-14px;display:none;gap:1px;padding:2px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-p);box-shadow:0 4px 12px -6px rgba(0,0,0,.35);z-index:2}
 .cx-m:not(.mine) .cx-acts{right:-6px}
 .cx-m.mine .cx-acts{left:-6px}
@@ -4259,7 +4259,7 @@ button.cx-pp:hover{background:var(--bg-hv)}
 .cx-who{font-size:12px;color:var(--t2)}
 .cx-b{border-radius:6px 18px 18px 18px;padding:9px 13px;border-color:transparent;box-shadow:0 1px 2px rgba(15,23,42,.08),0 4px 14px -10px rgba(15,23,42,.35)}
 .cx-m.cont .cx-b{border-radius:18px}
-.cx-m.mine .cx-b{border-radius:18px 6px 18px 18px;background:linear-gradient(135deg,var(--ac),color-mix(in srgb,var(--ac) 62%,#7C3AED));border-color:transparent;box-shadow:0 6px 18px -10px color-mix(in srgb,var(--ac) 80%,transparent)}
+.cx-m.mine .cx-b{border-radius:18px 6px 18px 18px;background:linear-gradient(135deg,var(--cx-mine-a,var(--ac)),var(--cx-mine-b,color-mix(in srgb,var(--ac) 62%,#7C3AED)));border-color:transparent;box-shadow:0 6px 18px -10px color-mix(in srgb,var(--ac) 80%,transparent)}
 .cx-m.mine.cont .cx-b{border-radius:18px}
 .cx-acts{border-radius:10px;border-color:transparent;box-shadow:0 6px 20px -8px rgba(15,23,42,.45)}
 .cx-rx{border-radius:14px;background:var(--bg-p);box-shadow:0 1px 2px rgba(0,0,0,.06)}
@@ -5833,8 +5833,8 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cx-b .cx-q:hover{background:color-mix(in srgb,var(--t1) 11%,transparent)}
 .cx-m.mine .cx-b .cx-q{margin-left:-3px;background:rgba(255,255,255,.16);border-left-color:rgba(255,255,255,.75)}
 .cx-m.mine .cx-b .cx-q:hover{background:rgba(255,255,255,.24)}
-.cx-m.mine .cx-b .cx-q b{color:#fff}
-.cx-m.mine .cx-b .cx-q i{color:rgba(255,255,255,.82)}
+.cx-m.mine .cx-b .cx-q b{color:var(--cx-mine-t,#fff)}
+.cx-m.mine .cx-b .cx-q i{color:color-mix(in srgb,var(--cx-mine-t,#fff) 82%,transparent)}
 
 /* ═══ v13.377 🖼 사진 앨범 · 화질 ═══ */
 .cx-alb{display:grid;gap:3px;width:min(300px,70vw);border-radius:14px;overflow:hidden}
@@ -5908,17 +5908,17 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 @media (max-width:600px){.cx-rec-l{display:none}.cx-rec{left:6px;right:6px;bottom:calc(6px + env(safe-area-inset-bottom))}}
 @media (prefers-reduced-motion:reduce){.cx-rec-dot,.cx-rec-wave i{animation:none}}
 .cx-voice{display:flex;align-items:center;gap:8px;width:min(240px,62vw);padding:8px 10px 8px 8px;border-radius:18px;background:var(--bg-p);border:1px solid var(--bd)}
-.cx-m.mine .cx-voice{background:linear-gradient(135deg,var(--ac),color-mix(in srgb,var(--ac) 60%,#7C3AED));border-color:transparent;color:#fff}
+.cx-m.mine .cx-voice{background:linear-gradient(135deg,var(--cx-mine-a,var(--ac)),var(--cx-mine-b,color-mix(in srgb,var(--ac) 60%,#7C3AED)));border-color:transparent;color:var(--cx-mine-t,#fff)}
 .cx-vp{flex:none;width:32px;height:32px;border-radius:50%;border:0;background:var(--ac);color:#fff;font-size:12px;cursor:pointer}
 .cx-m.mine .cx-vp{background:rgba(255,255,255,.95);color:var(--ac)}
 .cx-vbar{flex:1;height:6px;border-radius:3px;background:color-mix(in srgb,var(--t1) 12%,transparent);overflow:hidden;cursor:pointer}
 .cx-m.mine .cx-vbar{background:rgba(255,255,255,.3)}
 .cx-vbar i{display:block;height:100%;width:0;background:var(--ac);transition:width .2s linear}
-.cx-m.mine .cx-vbar i{background:#fff}
+.cx-m.mine .cx-vbar i{background:var(--cx-mine-t,#fff)}
 .cx-voice em{font-style:normal;font-size:12px;font-variant-numeric:tabular-nums;color:var(--t4);min-width:30px}
-.cx-m.mine .cx-voice em{color:rgba(255,255,255,.9)}
+.cx-m.mine .cx-voice em{color:color-mix(in srgb,var(--cx-mine-t,#fff) 90%,transparent)}
 .cx-vs{flex:none;border:0;border-radius:8px;background:color-mix(in srgb,var(--t1) 8%,transparent);color:inherit;font:inherit;font-size:11px;font-weight:700;padding:2px 6px;cursor:pointer}
-.cx-m.mine .cx-vs{background:rgba(255,255,255,.2);color:#fff}
+.cx-m.mine .cx-vs{background:rgba(255,255,255,.2);color:var(--cx-mine-t,#fff)}
 .cx-vtx{max-width:min(300px,70vw);margin-top:4px;padding:6px 10px;border-radius:10px;background:var(--bg-i);font-size:12.5px;color:var(--t3);line-height:1.5}
 .cx-m.mine .cx-vtx{margin-left:auto}
 
@@ -6063,6 +6063,37 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cx-m.mine.cont .cx-b{border-top-right-radius:6px}
 .cx-mw:has(> .cx-m:not(.mine)):has(+ .cx-mw > .cx-m.cont:not(.mine)) .cx-b{border-bottom-left-radius:6px}
 .cx-m.cont:not(.mine) .cx-b{border-top-left-radius:6px}
+/* ═══ v13.393 내 말풍선 — 아이콘 · 글자가 말풍선 색에 묻히지 않게 ═══
+   ① 테마마다 말풍선 색 · 글자색 (흰 글자 대비 4.5 이상 — 모자란 테마는 조금 진하게, 밝은 강조색 테마는 진한 글자) */
+:root{--cx-mine-a:#4B74C4;--cx-mine-b:#5E5ED4;--cx-mine-t:#FFFFFF}
+[data-theme="midnight"]{--cx-mine-a:#606DC7;--cx-mine-b:#6B5AD5;--cx-mine-t:#FFFFFF}
+[data-theme="forest"]{--cx-mine-a:#34D399;--cx-mine-b:#9CEBCB;--cx-mine-t:#10131C}
+[data-theme="sand"]{--cx-mine-a:#AD621D;--cx-mine-b:#9A536C;--cx-mine-t:#FFFFFF}
+[data-theme="rose"]{--cx-mine-a:#D5385C;--cx-mine-b:#B33993;--cx-mine-t:#FFFFFF}
+[data-theme="slate"]{--cx-mine-a:#5173BD;--cx-mine-b:#615DCF;--cx-mine-t:#FFFFFF}
+[data-theme="ocean"]{--cx-mine-a:#188191;--cx-mine-b:#3E66B4;--cx-mine-t:#FFFFFF}
+[data-theme="nord"]{--cx-mine-a:#88C0D0;--cx-mine-b:#C3DFE7;--cx-mine-t:#10131C}
+[data-theme="amethyst"]{--cx-mine-a:#8063CC;--cx-mine-b:#7E53D9;--cx-mine-t:#FFFFFF}
+[data-theme="sunset"]{--cx-mine-a:#B85C2E;--cx-mine-b:#A14F77;--cx-mine-t:#FFFFFF}
+[data-theme="highcontrast"]{--cx-mine-a:#FFD60A;--cx-mine-b:#FFDD36;--cx-mine-t:#10131C}
+[data-theme="aurora"]{--cx-mine-a:#10D8A8;--cx-mine-b:#8CEDD6;--cx-mine-t:#10131C}
+[data-theme="cyber"]{--cx-mine-a:#DB2780;--cx-mine-b:#B72EA9;--cx-mine-t:#FFFFFF}
+[data-theme="command"]{--cx-mine-a:#22D3EE;--cx-mine-b:#4ADBF1;--cx-mine-t:#10131C}
+[data-theme="holo"]{--cx-mine-a:#8558EC;--cx-mine-b:#824DEC;--cx-mine-t:#FFFFFF}
+/* 원래 대비가 충분한 테마는 :root 값을 물려받지 않게 비움 → 강조색 그대로 */
+[data-theme="light"],[data-theme="paper"],[data-theme="mint"],[data-theme="glass"],[data-theme="linear"],[data-theme="studio"],[data-theme="focus"]{--cx-mine-a:initial;--cx-mine-b:initial;--cx-mine-t:initial}
+/* ② 그림 이모지에 흰 테두리 (chatEmoWrap 이 .cx-ej 로 감쌈) — 파란 말풍선에 🔵 ➡️ 처럼 같은 색이 묻히던 것 */
+.cx-m.mine .cx-b:not(.cx-jumbo) .cx-ej{filter:drop-shadow(0 0 .6px #fff) drop-shadow(0 0 .6px #fff);font-size:1.1em;line-height:1}
+/* ③ 이모지만 1~3개 — 말풍선 없이 크게 */
+.cx-b.cx-jumbo{background:none!important;border:0!important;box-shadow:none!important;padding:0 2px;font-size:34px;line-height:1.15}
+/* ④ 코드 블록뿐인 글 — 말풍선 색 없이 코드 상자만 */
+.cx-b.cx-codeonly{background:none!important;border:0!important;box-shadow:none!important;padding:0;min-width:240px}
+.cx-b.cx-codeonly .cx-code{margin:0;border-color:var(--bd2)}
+.cx-b.cx-jumbo .cx-ed,.cx-b.cx-codeonly .cx-ed{color:var(--t5)}
+/* ⑤ 한 줄 코드 — 한글은 앱 글꼴로 (고정폭 한글 글꼴로 넘어가 글자 사이가 벌어지던 것) */
+.cx-ic{font-family:"JetBrains Mono",Consolas,var(--app-font),monospace}
+/* ⑥ 내가 보낸 카드 — 왼쪽 띠를 내 말풍선 색으로 */
+.cx-m.mine .cx-card{box-shadow:inset 3px 0 0 var(--cx-mine-a,var(--ac)),0 1px 2px rgba(15,23,42,.08),0 4px 14px -10px rgba(15,23,42,.35)}
 /* 말풍선 그림자가 네모로 잘리던 것 — content-visibility 는 칸 밖을 잘라 내므로 그림자 들어갈 여백을 칸 안에 두고 같은 만큼 바깥 여백을 빼 자리는 그대로 */
 .cx-msgs .cx-m{padding:0 12px 14px;margin-left:-12px;margin-right:-12px;margin-bottom:-14px}
 .cx-m:not(.cont){margin-top:14px}
