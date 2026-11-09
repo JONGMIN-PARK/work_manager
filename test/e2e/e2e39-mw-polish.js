@@ -130,6 +130,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check(await ev(function () { return _mw.src === 'all' && !mwPanelIsOpen(); }), '닫고 전체로 바꾼 뒤 새로고침 — 그대로 닫힘 · 전체');
 
     await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await idle(); await wait(500);
+    await wait(400); await page.evaluate(function () { if (typeof _mtlMain !== 'undefined' && _mtlMain && _mtlMain.st.collapsed) { _mtlMain.st.collapsed = false; _mtlMain.save(true); _mtlMain.update(); } });   // v13.403 좁은 창은 접힌 채 시작 — 펴고 시험
     await ev(function () { _mwPaint(); }); await wait(300);
     var w = await ev(function () { var l = document.querySelector('#mMyWork .mtl-ln'); return { L: _mtlMain.L, w: l ? l.getBoundingClientRect().width : 0 }; });
     check(w.L === 92 && Math.abs(w.w - 92) < 2, '휴대폰 줄 이름 92 ' + JSON.stringify(w));

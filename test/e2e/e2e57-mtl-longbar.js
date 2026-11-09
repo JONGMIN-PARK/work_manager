@@ -84,6 +84,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     // 휴대폰
     await page.setViewport({ width: 402, height: 874, isMobile: true, hasTouch: true });
     await wait(500);
+    await wait(400); await page.evaluate(function () { if (typeof _mtlMain !== 'undefined' && _mtlMain && _mtlMain.st.collapsed) { _mtlMain.st.collapsed = false; _mtlMain.save(true); _mtlMain.update(); } });   // v13.403 좁은 창은 접힌 채 시작 — 펴고 시험
     await page.evaluate(function (d) { _mtlMain.update(); _mtlMain.goDate(d); }, kst(60));
     await wait(300);
     var m = await look();

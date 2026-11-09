@@ -50,10 +50,11 @@ function MwTimeline(o) {
   var s = null;
   try { s = JSON.parse(localStorage.getItem('mtl-' + o.ls) || 'null'); } catch (_) {}
   s = s || {};
-  this.st = { ppd: s.ppd || (_mtlNarrow() ? MWT_PPD.week : MWT_PPD.month), center: s.center || null, collapsed: s.collapsed != null ? !!s.collapsed : _mtlNarrow(),   // 휴대폰은 접힌 채 시작 (직접 펴면 기억, v13.309)
+  this.st = { ppd: s.ppd || (_mtlNarrow() ? MWT_PPD.week : MWT_PPD.month), center: s.center || null, collapsed: _mtlNarrow() ? (s.collapsedN != null ? !!s.collapsedN : true) : !!s.collapsed,   // v13.403 좁은 창(휴대폰 · 줄인 PC 창)은 접힌 채 시작 — 넓을 때 · 좁을 때 따로 기억 (넓은 창에서 펴 둔 게 좁힌 창에서도 펴져 화면을 다 차지하던 것)
    
     height: s.height || 260, group: s.group || 'cat', cal: s.cal !== false, link: s.link !== false, calOpen: false };
   this.L = MWT_LABEL;
+  this._fold = { w: !!s.collapsed, n: s.collapsedN != null ? !!s.collapsedN : true }; this._nw = _mtlNarrow();
   this.el = null; this.pick = null; this.hover = null; this.calMonth = null; this.items = []; this.byDay = {};
 }
 /** 기억 — 고른 설정은 바로, 스크롤 위치는 잠깐 모아서 (now) */
@@ -62,7 +63,8 @@ MwTimeline.prototype.save = function (now) {
   clearTimeout(this._saveT);
   function w() {
     var s = self.st;
-    try { localStorage.setItem('mtl-' + self.o.ls, JSON.stringify({ ppd: s.ppd, center: s.center, collapsed: s.collapsed, height: s.height, group: s.group, cal: s.cal, link: s.link })); } catch (_) {}
+    self._fold[_mtlNarrow() ? 'n' : 'w'] = !!s.collapsed;
+    try { localStorage.setItem('mtl-' + self.o.ls, JSON.stringify({ ppd: s.ppd, center: s.center, collapsed: self._fold.w, collapsedN: self._fold.n, height: s.height, group: s.group, cal: s.cal, link: s.link })); } catch (_) {}
   }
   if (now) w(); else this._saveT = setTimeout(w, 300);
 };
@@ -104,6 +106,7 @@ MwTimeline.prototype.mount = function (slot) {
   if (!slot) return;
   if (!this.el) this.build();
   slot.replaceWith(this.el);
+  this._fitFold();
   // v13.392 새로 열 때(접속 · 새로 고침 · 새 버전) · 날이 바뀐 뒤 처음 — 오늘로 가서 오늘을 고름 (달력 · 아래 목록도 오늘).
   // 같은 날 탭만 오가면 보던 자리 그대로
   var today = mwToday();
@@ -117,6 +120,13 @@ MwTimeline.prototype.mount = function (slot) {
   this.update();
 };
 
+/** 좁은 창 ↔ 넓은 창이 바뀌면 그 쪽에서 기억한 접힘으로 (v13.403) */
+MwTimeline.prototype._fitFold = function () {
+  var nw = _mtlNarrow(); if (nw === this._nw) return false;
+  this._nw = nw; this.st.collapsed = this._fold[nw ? 'n' : 'w'];
+  var d = this.el && this.el.querySelector('.mtl-dens'); if (d && !this.st.collapsed) d.hidden = true;
+  return true;
+};
 /* ── 데이터 → 배치 ───────────────────────────────────────────────── */
 MwTimeline.prototype.update = function () {
   var o = this.o, st = this.st, today = mwToday(), tn = _mtlNum(today);
@@ -1103,3 +1113,16 @@ function mwLoadTimelineMount(el) {
   });
   _mtlLoad.mount(slot);
 }
+
+/* v13.403 창 크기를 줄이거나 늘려 좁은 창 ↔ 넓은 창이 바뀌면 그 쪽에서 기억한 접힘으로 */
+(function () {
+  var t = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(t);
+    t = setTimeout(function () {
+      [typeof _mtlMain !== 'undefined' ? _mtlMain : null, typeof _mtlLoad !== 'undefined' ? _mtlLoad : null].forEach(function (tl) {
+        if (tl && tl.el && tl.el.isConnected && tl._fitFold()) tl.update();
+      });
+    }, 200);
+  });
+})();

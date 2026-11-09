@@ -6248,3 +6248,35 @@ html:not([data-cx-depth="0"]) .cxw-b.me{background:linear-gradient(180deg,rgba(2
 .cx-emo-g .cx-emo-qr{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:5px;padding:2px 2px 8px;margin-bottom:2px;border-bottom:1px solid var(--bd)}
 .cx-emo-g .cx-emo-qr button{flex:none;font-size:12.5px;line-height:1.3;padding:5px 10px;border-radius:14px;background:var(--bg-i);color:var(--t2);white-space:nowrap;text-align:left}
 .cx-emo-g .cx-emo-qr button:hover{background:var(--bg-hv)}
+
+/* ═══ v13.403 🎯 내 업무 — 좁은 창(휴대폰 · 줄인 PC 창) 정리: 할 일 목록이 첫 화면에 보이게 ═══ */
+@media (max-width:768px){
+  /* 옆 칸(오늘 일정 · 📁 내 프로젝트)은 목록 아래로 — 예전엔 목록 위로 올라와 할 일을 밀어냈다 */
+  #mMyWork .mw-side{order:1}
+  /* 도구 막대 — 보기 · 칩 → 정렬 · 거르기 · 📁 · 사람 · ⋯ → 할 일 넣기(맨 아래 한 줄) */
+  #mMyWork .mw-bar2{gap:6px;margin-bottom:8px}
+  #mMyWork .mw-bar2-sp{display:none}
+  #mMyWork .mw-bar2 .mw-chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0;max-width:100%}
+  #mMyWork .mw-bar2 .mw-chips::-webkit-scrollbar{display:none}
+  #mMyWork .mw-bar2 .mw-chip{white-space:nowrap;flex:none}
+  #mMyWork .mw-ltools{margin:0;flex:1 1 200px;flex-wrap:nowrap;min-width:0}
+  #mMyWork .mw-ltools select{flex:1 1 0;min-width:0;height:30px;padding:3px 6px;font-size:12px}
+  #mMyWork .mw-bar2 .mw-btn,#mMyWork .mw-bar2 select{height:30px;font-size:12px}
+  #mMyWork .mw-ltools{flex:1 1 150px}
+  #mMyWork .mw-bar2>select,#mMyWork .mw-bar2 select.wm-tb-sel{max-width:118px;min-width:0}
+  #mMyWork .mw-bar2 .mw-side-tg{padding:0 8px}
+  #mMyWork .mw-bar2>.mw-add{order:9;flex:1 1 100%;flex-wrap:nowrap;gap:5px}
+  #mMyWork .mw-add .mw-input:first-child{flex:1 1 auto;min-width:0;height:32px}
+  #mMyWork .mw-add .mw-date{flex:none;width:124px;height:32px;padding:4px 6px}
+  #mMyWork .mw-add .mw-btn{flex:none;height:32px;padding:0 10px}
+  #mMyWork .mw-add [data-mwt="new"]{font-size:0;width:34px;padding:0;justify-content:center}
+  #mMyWork .mw-add [data-mwt="new"]::before{content:'📅';font-size:14px}
+  /* 목록 줄 — 한 줄로 (제목이 길면 …), 마감 · ✕ 는 오른쪽 */
+  #mMyWork .mw-row{flex-wrap:nowrap;gap:6px;padding:4px 8px;min-height:34px}
+  #mMyWork .mw-title{flex:1 1 auto;min-width:0}
+  #mMyWork .mw-row .mw-pri3{display:none}
+  #mMyWork .mw-src{width:18px;flex:none}
+  #mMyWork .mw-due{flex:none;font-size:11px}
+}
+/* 아주 좁으면(휴대폰) 날짜 칸은 숨김 — "내일 14:00 …" 처럼 적으면 마감이 들어가고 📅 일정… 도 있음 */
+@media (max-width:420px){ #mMyWork .mw-add .mw-date{display:none} }
