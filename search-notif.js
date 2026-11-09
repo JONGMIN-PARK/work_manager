@@ -576,18 +576,30 @@ function dashDrill(type, value) {
 /* ═══════════════════════════════════════════════════════════
    Feature 6: 알림 센터 (Notification Center)
    ══════════════════════════════════════════════════════════ */
+/* v13.394 빨리 뜨게 — 누르면 바로 열고 지난 결과(또는 불러오는 중)부터 보여 준 뒤 늘 새로 받아 바꿈.
+   예전엔 이슈 전체(최대 2만 건)를 받은 뒤에야 열려 한참 걸렸다. 🔔 에 마우스를 올리면 미리 받기 시작 */
+var _ncLast = null, _ncAt = 0, _ncP = null;
+function _ncLoad(force) {
+  if (_ncP) return _ncP;
+  if (!force && _ncLast && Date.now() - _ncAt < 2000) return Promise.resolve(_ncLast);   // 2초 안 (마우스 올려 미리 받은 것) 은 그대로
+  _ncP = loadNotifications().then(function (items) { _ncLast = items; _ncAt = Date.now(); _ncP = null; return items; }, function (e) { _ncP = null; throw e; });
+  return _ncP;
+}
 function toggleNotifPanel() {
   const dd = document.getElementById('notifDropdown');
   if (!dd) return;
   if (dd.style.display === 'none' || !dd.style.display) {
-    loadNotifications().then(items => {
-      renderNotificationPanel(items);
-      dd.style.display = 'block';
-    });
+    if (_ncLast) renderNotificationPanel(_ncLast);
+    else dd.innerHTML = '<div class="notif-hdr"><span>🔔 알림 센터</span></div><div class="notif-empty">불러오는 중…</div>';
+    dd.style.display = 'block';
+    _ncLoad(false).then(function (items) { if (dd.style.display !== 'none') renderNotificationPanel(items); }).catch(function () {});
   } else {
     dd.style.display = 'none';
   }
 }
+document.addEventListener('pointerover', function (e) {
+  if (e.target && e.target.closest && e.target.closest('#notifBtn')) _ncLoad(false).catch(function () {});
+}, { passive: true });
 
 async function loadNotifications() {
   const today = typeof localDate === 'function' ? localDate() : new Date().toISOString().slice(0,10);
@@ -600,7 +612,8 @@ async function loadNotifications() {
     const [projects, milestones, issues] = await Promise.all([
       typeof projGetAll === 'function' ? projGetAll() : Promise.resolve([]),
       typeof msGetAll === 'function' ? msGetAll() : Promise.resolve([]),
-      typeof issueGetAll === 'function' ? issueGetAll() : Promise.resolve([])
+      // 안 끝난 · 마감 3일 안쪽까지만 서버에서 거름 (v13.394)
+      typeof apiFetch === 'function' ? apiFetch('/api/issues?open=1&dueBefore=' + d3s + '&limit=200').then(function (r) { return toCamelArray(r.data); }) : Promise.resolve([])
     ]);
 
     // Overdue issues (dueDate < today, not resolved/closed)
@@ -701,7 +714,7 @@ function renderNotificationPanel(items) {
 // Update notification badge on page load and after data changes
 async function refreshNotifBadge() {
   try {
-    const items = await loadNotifications();
+    const items = await _ncLoad(true);
     const badge = document.getElementById('notifBadge');
     if (!badge) return;
     if (items.length > 0) {

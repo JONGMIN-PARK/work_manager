@@ -48,6 +48,9 @@ router.get('/', async function (req, res) {
     if (q.urgency) { sql += ' AND urgency = $' + idx++; params.push(q.urgency); }
     if (q.phase) { sql += ' AND phase = $' + idx++; params.push(q.phase); }
     if (q.dept) { sql += ' AND dept = $' + idx++; params.push(q.dept); }
+    // 🔔 알림 센터 (v13.394) — 안 끝난 것 · 마감 이 날까지만 (예전엔 전체 2만 건을 받아 거름)
+    if (q.open === '1') sql += " AND status NOT IN ('resolved', 'closed')";
+    if (q.dueBefore && /^\d{4}-\d{2}-\d{2}$/.test(q.dueBefore)) { sql += ' AND due_date IS NOT NULL AND due_date <= $' + idx++; params.push(q.dueBefore); }
     // 가시성: project_id 있는 이슈 → 접근 가능한 프로젝트만 / project_id NULL → 작성자만
     var meIdx = idx++;
     params.push(req.user.sub);

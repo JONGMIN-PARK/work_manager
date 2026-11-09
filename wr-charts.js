@@ -224,23 +224,32 @@ function rCmp(f){
       plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true,pointStyle:'rectRounded'}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'h'}}}}
   });
 
-  // Line chart: daily compare
-  const dailyByP={};names.forEach(n=>{dailyByP[n]={};f.filter(r=>r.name===n).forEach(r=>{dailyByP[n][r.date]=(dailyByP[n][r.date]||0)+r.hours})});
+  // Line chart: daily compare — v13.394 기간이 길면 주별 · 월별로 묶음 (10달을 하루 단위로 그려 점 · 점선이 뒤엉키던 것)
+  const _ymd=d=>new Date(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8));
+  const _key=d=>d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  const spanD=sortedDates.length?Math.round((_ymd(sortedDates[sortedDates.length-1])-_ymd(sortedDates[0]))/864e5)+1:0;
+  const unit=spanD<=62?'day':spanD<=366?'week':'month';   // 두 달까지 일별 · 한 해까지 주별 · 그 넘으면 월별
+  const bucketOf=d=>{if(unit==='day')return d;if(unit==='month')return d.slice(0,6)+'01';const x=_ymd(d);x.setDate(x.getDate()-((x.getDay()+6)%7));return _key(x)};
+  const buckets=[...new Set(sortedDates.map(bucketOf))].sort();
+  const bLabel=k=>unit==='month'?k.slice(0,4)+'-'+k.slice(4,6):unit==='week'?(+k.slice(4,6))+'/'+(+k.slice(6,8))+'주':fD(k);
+  const dailyByP={};names.forEach(n=>{dailyByP[n]={};f.filter(r=>r.name===n).forEach(r=>{const k=bucketOf(r.date);dailyByP[n][k]=(dailyByP[n][k]||0)+r.hours})});
+  const lh=document.querySelector('#cmpLineCS h4');if(lh)lh.textContent='📈 '+(unit==='day'?'일별':unit==='week'?'주별':'월별')+' 투입 비교'+(unit==='day'?'':' (기간이 길어 '+(unit==='week'?'주':'달')+' 단위 합계)');
+  const nb=buckets.length,pr=nb<=31?4:nb<=60?2.5:0;
   if(cmpLineChart)cmpLineChart.destroy();
   cmpLineChart=new Chart(document.getElementById('cmpLineC').getContext('2d'),{
     type:'line',
-    data:{labels:sortedDates.map(d=>fD(d)),datasets:names.map((name,i)=>({
-      label:name,data:sortedDates.map(d=>Math.round((dailyByP[name][d]||0)*10)/10),
+    data:{labels:buckets.map(bLabel),datasets:names.map((name,i)=>({
+      label:name,data:buckets.map(k=>Math.round((dailyByP[name][k]||0)*10)/10),
       borderColor:pCol[name],backgroundColor:pCol[name]+'44',
-      borderWidth:2.5,borderDash:CMP_DASH[i%CMP_DASH.length],
-      pointRadius:5,pointHoverRadius:8,pointStyle:CMP_PT[i%CMP_PT.length],
-      pointBackgroundColor:pCol[name],pointBorderColor:'#fff',pointBorderWidth:1.5,
-      tension:0.3,fill:false
+      borderWidth:nb>60?1.6:2.2,borderDash:names.length>4&&nb>31?[]:CMP_DASH[i%CMP_DASH.length],
+      pointRadius:pr,pointHoverRadius:6,pointStyle:CMP_PT[i%CMP_PT.length],
+      pointBackgroundColor:pCol[name],pointBorderColor:'#fff',pointBorderWidth:1.2,
+      tension:0.25,fill:false
     }))},
     options:{responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      scales:{x:{ticks:{color:tc.t,font:{size:9}},grid:{color:tc.g}},y:{ticks:{color:tc.t,font:{size:10},callback:v=>v+'h'},grid:{color:tc.g}}},
-      plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'h'}}}}
+      scales:{x:{ticks:{color:tc.t,font:{size:9},autoSkip:true,maxTicksLimit:12,maxRotation:0},grid:{color:tc.g}},y:{beginAtZero:true,ticks:{color:tc.t,font:{size:10},callback:v=>v+'h'},grid:{color:tc.g}}},
+      plugins:{legend:{labels:{color:tc.l,font:{size:10},usePointStyle:true,boxWidth:8,boxHeight:8}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'h'}}}}
   });
 
   // Per-person pie charts
