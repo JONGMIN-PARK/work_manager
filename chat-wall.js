@@ -38,6 +38,7 @@ function _cxwGet() {
   CXW.s = s && typeof s === 'object' ? s : {};
   if (!CXW.s.rooms) CXW.s.rooms = {};
   if (CXW.s.dim == null) CXW.s.dim = 35;
+  if (CXW.s.depth == null) CXW.s.depth = 1;   // v13.399 💎 입체감 0 끄기 · 1 은은하게 · 2 또렷하게
   return CXW.s;
 }
 function _cxwSave() {
@@ -62,6 +63,7 @@ function chatWallCss(k, s) {
 function chatWallFor(room) { var s = _cxwGet(); return (room && s.rooms[room]) || s.all || 'dots'; }
 /** 대화 칸에 입힘 — _cxDrawMain 뒤 · 고른 뒤 */
 function chatWallApply() {
+  document.documentElement.setAttribute('data-cx-depth', String(_cxwGet().depth));
   var m = document.getElementById('cxMain'); if (!m) return;
   var k = (typeof CX !== 'undefined' && CX.room) ? chatWallFor(CX.room) : 'dots';
   var css = chatWallCss(k);
@@ -96,6 +98,7 @@ function chatWallModal(scopeRoom) {
     var m = createModal({ id: 'chatWallModal', title: '🎨 대화방 배경', width: '560px', closeOnEsc: true, closeOnOverlay: true,
       html: '<p class="cxw-hint">아래에서 고르면 위 미리보기와 대화방에 바로 바뀝니다 — 닫으면 끝. <b>이 방만</b> 고르면 이 방에만, <b>모든 방</b>은 따로 안 정한 방 전부에.</p>' +
         '<div class="cxw-live" data-live><span class="cxw-b">안녕하세요 👋</span><span class="cxw-b me">내일 회의 10시 맞죠?</span><span class="cxw-b me">자료 올려 둘게요 ✅</span></div>' +
+        '<div class="cxw-depth">💎 말풍선 입체감 <span class="cxw-scope" role="radiogroup">' + ['끄기', '은은하게', '또렷하게'].map(function (n, i) { return '<button type="button" data-depth="' + i + '">' + n + '</button>'; }).join('') + '</span></div>' +
         '<div class="cxw-scope" role="radiogroup">' +
           (room ? '<button type="button" data-scope="room">이 방만</button>' : '') + '<button type="button" data-scope="all">모든 방 (기본)</button></div>' +
         '<div class="cxw-body">' + groups.map(function (g) {
@@ -109,6 +112,7 @@ function chatWallModal(scopeRoom) {
     var box = m.box;
     function cur() { return scope === 'room' ? (s.rooms[room] || s.all || 'dots') : (s.all || 'dots'); }
     function paint() {
+      box.querySelectorAll('[data-depth]').forEach(function (b) { b.classList.toggle('on', +b.getAttribute('data-depth') === s.depth); });
       box.querySelectorAll('[data-scope]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-scope') === scope); b.setAttribute('aria-checked', b.getAttribute('data-scope') === scope); });
       var k = cur();
       box.querySelectorAll('.cxw-sw').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-k') === k); });
@@ -130,6 +134,7 @@ function chatWallModal(scopeRoom) {
       _cxwSave(); paint();
     }
     box.addEventListener('click', function (e) {
+      var dp = e.target.closest('[data-depth]'); if (dp) { s.depth = +dp.getAttribute('data-depth'); _cxwSave(); paint(); return; }
       var sc = e.target.closest('[data-scope]'); if (sc) { scope = sc.getAttribute('data-scope'); paint(); return; }
       var sw = e.target.closest('.cxw-sw');
       if (sw) { var k = sw.getAttribute('data-k'); if (k === 'photo' && !s.photo) { box.querySelector('[data-file]').click(); return; } pick(k); return; }

@@ -978,6 +978,7 @@ function _cxMsgClick(e) {
     else if (a.dataset.a === 'reply') chatOpenThread(m.id);
     else if (a.dataset.a === 'quote') _cxStartQuote(m);
     else if (a.dataset.a === 'more') _cxMsgMenu(a, m);
+    _cxActsClose();
     return;
   }
   var op = t.closest('[data-open]');
@@ -996,7 +997,32 @@ function _cxMsgClick(e) {
   if (td) { apiFetch('/api/chat/files/' + td.dataset.todoc + '/to-docs', { method: 'POST', body: JSON.stringify({ projectId: CX.info && CX.info.projectId }) }).then(function () { _cxToast('📂 프로젝트 문서로 보냈습니다', 'success'); }).catch(function (err) { _cxToast(_cxErr(err), 'error'); }); return; }
   var w = t.closest('[data-watch]');
   if (w && typeof chatRtcWatch === 'function') { chatRtcWatch(CX.room, w.dataset.watch, w.dataset.from); return; }
+  // v13.399 마우스로 말풍선 · 사람(얼굴 · 이름)을 누르면 공감 · 답장 · 답글 · ⋯ 띠 (예전엔 마우스만 올려도 떴다). 휴대폰은 길게 누르기 그대로
+  if (mel && m && !m.pending && !m.deleted && CXP.type !== 'touch' && t.closest('.cx-bw,.cx-av,.cx-who') && !t.closest('a,button,img,input,textarea,[data-file],.cx-code')) {
+    var sel = window.getSelection ? String(window.getSelection()) : '';
+    if (sel.trim()) return;   // 글을 끌어 고르는 중이면 그대로
+    _cxActsOpen(mel);
+  }
 }
+/* 누르면 뜨는 띠 — 마우스가 메시지 밖으로 나가거나 Esc · 굴리기 · 다른 곳 누르기로 닫힘 */
+var CXP = { type: 'mouse', el: null, t: null };
+document.addEventListener('pointerdown', function (e) { CXP.type = e.pointerType || 'mouse'; }, true);
+function _cxActsClose() {
+  clearTimeout(CXP.t);
+  if (CXP.el) { CXP.el.classList.remove('cx-acton'); CXP.el.removeEventListener('pointerleave', _cxActsLeave); CXP.el.removeEventListener('pointerenter', _cxActsEnter); }
+  CXP.el = null;
+}
+function _cxActsLeave() { clearTimeout(CXP.t); CXP.t = setTimeout(_cxActsClose, 350); }
+function _cxActsEnter() { clearTimeout(CXP.t); }
+function _cxActsOpen(mel) {
+  if (CXP.el === mel) { _cxActsClose(); return; }   // 한 번 더 누르면 닫힘
+  _cxActsClose();
+  CXP.el = mel; mel.classList.add('cx-acton');
+  mel.addEventListener('pointerleave', _cxActsLeave); mel.addEventListener('pointerenter', _cxActsEnter);
+}
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && CXP.el) _cxActsClose(); });
+document.addEventListener('pointerdown', function (e) { if (CXP.el && !CXP.el.contains(e.target) && !(e.target.closest && e.target.closest('.cx-menu'))) _cxActsClose(); }, true);
+document.addEventListener('scroll', function (e) { if (CXP.el && e.target && e.target.contains && e.target.contains(CXP.el)) _cxActsClose(); }, true);
 function _cxOpenCard(c) {
   if (c.type === 'cdoc' && typeof chatDocOpen === 'function') { chatDocOpen(c.id); return; }   // v13.360 📝 공동 문서
   if (c.type === 'todo') { if (typeof setPage === 'function') setPage('mywork'); return; }

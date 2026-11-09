@@ -4085,7 +4085,11 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 .cx-acts{position:absolute;top:-14px;display:none;gap:1px;padding:2px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-p);box-shadow:0 4px 12px -6px rgba(0,0,0,.35);z-index:2}
 .cx-m:not(.mine) .cx-acts{right:-6px}
 .cx-m.mine .cx-acts{left:-6px}
-.cx-m:hover .cx-acts,.cx-m:focus-within .cx-acts{display:flex}
+/* v13.399 마우스 올림 대신 누르면(.cx-acton) — chat-ui.js _cxActsOpen. 키보드로 안에 들어가면(:focus-visible)도 */
+.cx-m.cx-acton .cx-acts,.cx-m:has(:focus-visible) .cx-acts{display:flex}
+.cx-m.cx-acton .cx-b{outline:2px solid color-mix(in srgb,var(--ac) 45%,transparent);outline-offset:2px}
+.cx-m.cx-acton .cx-av{box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 55%,transparent)}
+.cx-msgs .cx-av,.cx-msgs .cx-who{cursor:pointer}
 .cx-acts button{border:0;background:none;border-radius:6px;padding:2px 6px;font-size:13px;cursor:pointer;color:var(--t3)}
 .cx-acts button:hover{background:var(--bg-hv)}
 .cx-rxs{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
@@ -6208,3 +6212,34 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cxw-live.is-dots{background:radial-gradient(color-mix(in srgb,var(--t5) 16%,transparent) 1px,transparent 1.4px) 0 0/20px 20px,linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--bg) 94%,var(--ac)))}
 .cxw-b{align-self:flex-start;max-width:70%;padding:5px 11px;border-radius:4px 12px 12px 12px;background:var(--bg-p);border:1px solid var(--bd);color:var(--t1);font-size:12.5px;white-space:nowrap}
 .cxw-b.me{align-self:flex-end;border-radius:12px 4px 12px 12px;background:linear-gradient(135deg,var(--cx-mine-a,var(--ac)),var(--cx-mine-b,color-mix(in srgb,var(--ac) 62%,#7C3AED)));border-color:transparent;color:var(--cx-mine-t,#fff)}
+
+/* ═══ v13.399 💎 말풍선 · 이모지 입체감 — html[data-cx-depth] 0 끄기 · 1 은은하게(기본) · 2 또렷하게 (🎨 배경 창에서) ═══
+   빛은 위에서: 위쪽 광택(겹친 흰 그라데이션) + 위 테두리 하이라이트 + 아래 안쪽 그늘 + 바닥 두 겹 그림자(가까운 · 먼). 움직임(hover)은 없음
+   그림자는 아래로 12px 안 — 메시지 칸 아래 여백(14px) 밖은 content-visibility 가 잘라 네모 자국이 남음 */
+:root{--cxd:1;--cx-mine-ts:rgba(0,0,0,.22)}
+html[data-cx-depth="0"]{--cxd:0}
+html[data-cx-depth="2"]{--cxd:1.8}
+[data-theme="highcontrast"],[data-theme="aurora"],[data-theme="forest"],[data-theme="nord"],[data-theme="command"]{--cx-mine-ts:rgba(255,255,255,.4)}
+html:not([data-cx-depth="0"]) .cx-msgs .cx-b:not(.cx-del):not(.cx-jumbo):not(.cx-codeonly):not(.cx-ai){
+  background-image:linear-gradient(180deg,rgba(255,255,255,calc(.07 * var(--cxd))),rgba(255,255,255,0) 55%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,calc(.22 * var(--cxd))),inset 0 -1.5px 0 rgba(0,0,0,calc(.05 * var(--cxd))),
+    0 1px 1px rgba(15,23,42,calc(.07 * var(--cxd))),0 2px 4px -1px rgba(15,23,42,calc(.08 * var(--cxd))),0 7px 13px -8px rgba(15,23,42,calc(.4 * var(--cxd)))}
+html:not([data-cx-depth="0"]) .cx-msgs .cx-m.mine .cx-b:not(.cx-del):not(.cx-jumbo):not(.cx-codeonly){
+  background:linear-gradient(180deg,rgba(255,255,255,calc(.16 * var(--cxd))),rgba(255,255,255,0) 52%),
+    linear-gradient(135deg,var(--cx-mine-a,var(--ac)),var(--cx-mine-b,color-mix(in srgb,var(--ac) 62%,#7C3AED)));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,calc(.34 * var(--cxd))),inset 0 -2px 0 rgba(0,0,0,calc(.13 * var(--cxd))),inset 0 0 0 1px rgba(255,255,255,calc(.05 * var(--cxd))),
+    0 1px 2px color-mix(in srgb,var(--cx-mine-a,var(--ac)) min(100%,calc(40% * var(--cxd))),transparent),
+    0 7px 13px -8px color-mix(in srgb,var(--cx-mine-a,var(--ac)) min(100%,calc(70% * var(--cxd))),transparent);
+  text-shadow:0 1px 1px var(--cx-mine-ts)}
+html[data-cx-depth="0"] .cx-msgs .cx-m.mine .cx-b{text-shadow:none}
+/* 이모지 — 바닥 그림자로 도드라지게 (내 말풍선은 흰 테두리와 함께) */
+html:not([data-cx-depth="0"]) .cx-msgs .cx-ej{filter:drop-shadow(0 1.5px 1px rgba(15,23,42,calc(.28 * var(--cxd))))}
+html:not([data-cx-depth="0"]) .cx-m.mine .cx-b:not(.cx-jumbo) .cx-ej{filter:drop-shadow(0 0 .6px #fff) drop-shadow(0 0 .6px #fff) drop-shadow(0 1.5px 1px rgba(15,23,42,calc(.3 * var(--cxd))))}
+html:not([data-cx-depth="0"]) .cx-b.cx-jumbo .cx-ej{filter:drop-shadow(0 1px 0 rgba(255,255,255,calc(.5 * var(--cxd)))) drop-shadow(0 4px 4px rgba(15,23,42,calc(.3 * var(--cxd)))) drop-shadow(0 6px 6px rgba(15,23,42,calc(.14 * var(--cxd))))}
+/* 공감 알약 */
+html:not([data-cx-depth="0"]) .cx-rx{background-image:linear-gradient(180deg,rgba(255,255,255,calc(.1 * var(--cxd))),rgba(255,255,255,0));box-shadow:inset 0 1px 0 rgba(255,255,255,calc(.3 * var(--cxd))),0 1px 2px rgba(15,23,42,calc(.12 * var(--cxd))),0 3px 6px -3px rgba(15,23,42,calc(.2 * var(--cxd)))}
+/* 🎨 창 — 입체감 고르기 */
+.cxw-depth{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;color:var(--t4);flex-wrap:wrap}
+.cxw-depth .cxw-scope{margin:0}
+html:not([data-cx-depth="0"]) .cxw-b{background-image:linear-gradient(180deg,rgba(255,255,255,calc(.07 * var(--cxd))),rgba(255,255,255,0) 55%);box-shadow:inset 0 1px 0 rgba(255,255,255,calc(.22 * var(--cxd))),0 1px 1px rgba(15,23,42,calc(.07 * var(--cxd))),0 8px 14px -10px rgba(15,23,42,calc(.45 * var(--cxd)))}
+html:not([data-cx-depth="0"]) .cxw-b.me{background:linear-gradient(180deg,rgba(255,255,255,calc(.16 * var(--cxd))),rgba(255,255,255,0) 52%),linear-gradient(135deg,var(--cx-mine-a,var(--ac)),var(--cx-mine-b,color-mix(in srgb,var(--ac) 62%,#7C3AED)));box-shadow:inset 0 1px 0 rgba(255,255,255,calc(.34 * var(--cxd))),inset 0 -2px 0 rgba(0,0,0,calc(.13 * var(--cxd))),0 8px 16px -9px color-mix(in srgb,var(--cx-mine-a,var(--ac)) min(100%,calc(75% * var(--cxd))),transparent);text-shadow:0 1px 1px var(--cx-mine-ts)}
