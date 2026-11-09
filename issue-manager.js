@@ -867,7 +867,7 @@ function buildIssueStats(issues, projMap, phases, depts, types, statuses, urgenc
   var h = '<div class="pnl" style="margin-top:12px;padding:18px">';
   h += '<div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:14px">📊 이슈 통계</div>';
   // wide-mode: 섹션을 가로로 배치 (좁은 화면에서는 자동으로 1열)
-  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:16px 24px;align-items:start">';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px 24px;align-items:start">';
 
   // 1. 부서 × 상태 히트맵
   var deptKeys = Object.keys(depts);

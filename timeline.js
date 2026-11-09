@@ -529,7 +529,7 @@ function _tlProjLabelHtml(p, st, pMs, labelW) {
     '<div style="display:flex;align-items:center;gap:6px">' +
       '<span class="dot" style="background:' + eC(p.color) + ';width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>' +
       (pMs.length > 0 ? '<button class="tl-collapse-toggle" data-collapse-proj="' + eH(p.id) + '" onclick="event.stopPropagation();tlToggleCollapse(\'' + eA(p.id) + '\')" style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;color:var(--t4);width:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="마일스톤 ' + (tlCollapsed.has(p.id) ? '펼치기' : '접기') + '">' + (tlCollapsed.has(p.id) ? '▸' : '▾') + '</button>' : '<span style="width:16px;flex-shrink:0"></span>') +
-      '<span style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap' + (st === 'done' ? ';text-decoration:line-through;text-decoration-thickness:1px;text-decoration-color:var(--t5)' : '') + '">' + eH(p.name || p.orderNo) + '</span>' +
+      '<span class="tl-l-name" style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap' + (st === 'done' ? ';text-decoration:line-through;text-decoration-thickness:1px;text-decoration-color:var(--t5)' : '') + '">' + eH(p.name || p.orderNo) + '</span>' +
     '</div>' +
     '<div style="display:flex;align-items:center;gap:4px;margin-top:2px">' +
       '<span class="badge" style="background:' + stBg(st) + ';color:' + stColor(st) + '">' + PROJ_STATUS[st].icon + ' ' + PROJ_STATUS[st].label + '</span>' +
@@ -554,7 +554,7 @@ function _tlAssigneeLineHtml(p) {
   } else {
     _label = _shortList.slice(0, 2).join(', ') + ' 외 ' + (_shortList.length - 2) + '명';
   }
-  return '<div style="display:flex;align-items:center;gap:4px;margin-top:1px;font-size:9px;color:var(--t4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + eH(_full) + '">' +
+  return '<div class="tl-l-asg" style="display:flex;align-items:center;gap:4px;margin-top:1px;font-size:9px;color:var(--t4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + eH(_full) + '">' +
     '<span style="opacity:.7">👤</span>' +
     '<span style="overflow:hidden;text-overflow:ellipsis">' + eH(_label) + '</span>' +
   '</div>';
@@ -581,7 +581,7 @@ function _tlPhaseStepsHtml(p) {
     return '<span title="' + ph.label + (isCurrent ? ' (현재)' : isDone ? ' (완료)' : '') + '" '
       + 'style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;font-size:8px;line-height:1;background:' + bg + ';color:' + fg + ';border:' + brd + ';box-sizing:border-box;flex-shrink:0">' + ph.icon + '</span>';
   }).join('');
-  return '<div style="display:flex;align-items:center;gap:3px;margin-top:3px;font-size:9px;color:var(--t5);white-space:nowrap" title="라이프사이클 — 현재: ' + _curLabel + '">' + _stepIcons + '</div>';
+  return '<div class="tl-l-steps" style="display:flex;align-items:center;gap:3px;margin-top:3px;font-size:9px;color:var(--t5);white-space:nowrap" title="라이프사이클 — 현재: ' + _curLabel + '">' + _stepIcons + '</div>';
 }
 
 // [순수] v13.133 D-Day 배지 (막대 클릭 가로채지 않음 — pointer-events:none). 기준일 없으면 ''
@@ -1168,7 +1168,8 @@ function calcLabelWidth(projects, milestones, msWorkH) {
   var base = Math.max(160, Math.min(Math.ceil(maxW), 400));
   base += _tlThumbColW();
   // 휴대폰 — 이름 칸이 화면을 다 차지해 막대가 안 보이던 것. 화면 폭의 42% 까지만 (v13.257)
-  if (window.innerWidth <= 600) base = Math.min(base, Math.max(130, Math.round(window.innerWidth * 0.42)));
+  // v13.416 더 좁게(34%) — 이름은 두 줄로 꺾고 담당 · 단계 아이콘 줄은 CSS 로 숨김 → 막대 칸이 넓어짐
+  if (window.innerWidth <= 600) base = Math.min(base, Math.max(118, Math.round(window.innerWidth * 0.34)));
   return base;
 }
 

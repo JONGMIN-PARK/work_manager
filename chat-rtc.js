@@ -11,6 +11,41 @@ var CRT = { share: null, viewers: {}, dcs: {}, watch: null, ctl: null, ctlAsk: n
 function _crtCanCtl() { return !!(window.wmDesktop && window.wmDesktop.remoteInput); }
 function _crtIce() { return [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }].concat(window.WM_TURN || []); }
 function _crtSig(roomId, body) { return apiFetch('/api/chat/rooms/' + encodeURIComponent(roomId) + '/rtc', { method: 'POST', body: JSON.stringify(body) }).catch(function () {}); }
+/* v13.416 화면 공유 화질 · 속도
+ *   ① 해상도는 그대로(최대 1920 폭) · 줄여야 하면 초당 장 수를 먼저 줄임 — 예전엔 1920×1080 화면이 480×270 으로 줄어 글자가 뭉개졌다
+ *   ② 최대 비트레이트 4Mbps(제어 중 6Mbps) · 평소 15fps, 제어 중 30fps(마우스 · 스크롤이 매끄럽게)
+ *   ③ 코덱은 화면 글자에 강한 VP9 → H.264 → VP8 순 (지원하는 것만) */
+var CRT_MAXW = 1920;
+function _crtCodecPref(pc) {
+  try {
+    var caps = RTCRtpSender.getCapabilities && RTCRtpSender.getCapabilities('video'); if (!caps) return;
+    var rank = function (c) { var m = (c.mimeType || '').toLowerCase(); return m === 'video/vp9' ? 0 : m === 'video/h264' ? 1 : m === 'video/vp8' ? 2 : 3; };
+    var cs = caps.codecs.slice().sort(function (a, b) { return rank(a) - rank(b); });
+    pc.getTransceivers().forEach(function (t) { if (t.sender && t.sender.track && t.sender.track.kind === 'video' && t.setCodecPreferences) t.setCodecPreferences(cs); });
+  } catch (e) {}
+}
+function _crtTune(pc) {
+  try {
+    var ctl = !!CRT.ctl;
+    pc.getSenders().forEach(function (sd) {
+      if (!sd.track || sd.track.kind !== 'video') return;
+      var st = sd.track.getSettings ? sd.track.getSettings() : {}, w = st.width || 0;
+      var p = sd.getParameters(); if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+      var e = p.encodings[0];
+      e.maxBitrate = ctl ? 6000000 : 4000000;
+      e.maxFramerate = ctl ? 30 : 15;
+      e.scaleResolutionDownBy = w > CRT_MAXW ? w / CRT_MAXW : 1;
+      p.degradationPreference = ctl ? 'balanced' : 'maintain-resolution';
+      sd.setParameters(p).catch(function () {});
+    });
+  } catch (e) {}
+}
+function _crtTuneAll() {
+  var s = CRT.share; if (!s) return;
+  var vt = s.stream.getVideoTracks()[0];
+  if (vt && vt.applyConstraints) vt.applyConstraints({ frameRate: CRT.ctl ? 30 : 15 }).catch(function () {});
+  Object.keys(CRT.viewers).forEach(function (u) { _crtTune(CRT.viewers[u]); });
+}
 function _crtAutoKey() { return 'wm_crt_auto_' + (typeof _cxMe === 'function' ? _cxMe() : ''); }
 function _crtAutoList() { try { return JSON.parse(localStorage.getItem(_crtAutoKey()) || '{}') || {}; } catch (e) { return {}; } }
 function _crtAutoSave(m) { try { localStorage.setItem(_crtAutoKey(), JSON.stringify(m)); } catch (e) {} }
@@ -23,7 +58,9 @@ function chatRtcShare(roomId) {
   navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false }).then(function (stream) {
     var sid = 'sh-' + Math.random().toString(36).slice(2, 10);
     CRT.share = { roomId: roomId, sid: sid, stream: stream };
-    stream.getVideoTracks()[0].addEventListener('ended', chatRtcStop);
+    var vt = stream.getVideoTracks()[0];
+    try { vt.contentHint = 'detail'; } catch (e) {}   // v13.416 글자 화면 — 줄일 땐 해상도 대신 초당 장 수를 줄여 글자가 또렷하게
+    vt.addEventListener('ended', chatRtcStop);
     apiFetch('/api/chat/rooms/' + roomId + '/share', { method: 'POST', body: JSON.stringify({ sid: sid, on: true }) }).catch(function () {});
     _crtBar();
   }).catch(function (e) { if (e && e.name !== 'NotAllowedError') _cxToast('화면 공유를 시작하지 못했습니다: ' + (e.message || e), 'error'); });
@@ -101,7 +138,11 @@ function _crtOfferTo(userId) {
   var pc = new RTCPeerConnection({ iceServers: _crtIce() });
   CRT.viewers[userId] = pc;
   s.stream.getTracks().forEach(function (t) { pc.addTrack(t, s.stream); });
+  _crtCodecPref(pc);
   var dc = pc.createDataChannel('ctl', { ordered: true });
+  // v13.416 마우스 이동은 순서 · 재전송 없이 (잃어버린 건 다음 것이 덮음 — 끊김 뒤 몰려오는 지연 없음)
+  var dcm = pc.createDataChannel('ctlm', { ordered: false, maxRetransmits: 0 });
+  dcm.onmessage = function (e) { if (CRT.ctl !== userId || !_crtCanCtl()) return; var ev; try { ev = JSON.parse(e.data); } catch (_) { return; } window.wmDesktop.remoteInput(ev); };
   CRT.dcs[userId] = dc;
   dc.onopen = function () { try { dc.send(JSON.stringify({ t: 'hello', ctl: _crtCanCtl() })); } catch (e) {} };
   if (typeof chatInkHostDc === 'function') chatInkHostDc(userId, pc.createDataChannel('ink', { ordered: true }));   // v13.368 발표 펜
@@ -112,7 +153,7 @@ function _crtOfferTo(userId) {
   };
   pc.onicecandidate = function (e) { if (e.candidate) _crtSig(s.roomId, { type: 'ice', to: userId, sid: s.sid, data: e.candidate.toJSON ? e.candidate.toJSON() : e.candidate }); };
   pc.onconnectionstatechange = function () { if (['failed', 'closed', 'disconnected'].indexOf(pc.connectionState) >= 0 && CRT.viewers[userId] === pc && pc.connectionState !== 'disconnected') { delete CRT.viewers[userId]; _crtBar(); } };
-  pc.createOffer().then(function (o) { return pc.setLocalDescription(o); }).then(function () { _crtSig(s.roomId, { type: 'offer', to: userId, sid: s.sid, data: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } }); });
+  pc.createOffer().then(function (o) { return pc.setLocalDescription(o); }).then(function () { _crtTune(pc); _crtSig(s.roomId, { type: 'offer', to: userId, sid: s.sid, data: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } }); });
   _crtBar();
 }
 
@@ -123,6 +164,7 @@ function _crtCtlStart(uid) {
   if (CRT.ctl && CRT.ctl !== uid) _crtCtlEnd();
   CRT.ctl = uid; CRT.ctlName = name; CRT.ctlAsk = null;
   window.wmDesktop.remoteControl(true);
+  _crtTuneAll();   // v13.416 제어 중엔 30fps
   _crtSig(s.roomId, { type: 'ctl-ok', to: uid, sid: s.sid });
   _crtBar();
 }
@@ -130,6 +172,7 @@ function _crtCtlEnd(silent) {
   var uid = CRT.ctl; if (!uid) return;
   CRT.ctl = null; CRT.ctlName = '';
   if (_crtCanCtl()) window.wmDesktop.remoteControl(false);
+  _crtTuneAll();
   if (CRT.share) _crtSig(CRT.share.roomId, { type: 'ctl-end', to: uid, sid: CRT.share.sid });
   if (!silent) _crtBar();
 }
@@ -213,10 +256,14 @@ function chatRtcOnSignal(d) {
       var pc = w.pc = new RTCPeerConnection({ iceServers: _crtIce() });
       pc.ondatachannel = function (e) {
         if (e.channel.label === 'ink') { if (typeof chatInkViewDc === 'function') chatInkViewDc(e.channel); return; }   // v13.368 발표 펜
+        if (e.channel.label === 'ctlm') { w.dcm = e.channel; return; }   // v13.416 마우스 이동 전용
         w.dc = e.channel;
         w.dc.onmessage = function (m) { var d; try { d = JSON.parse(m.data); } catch (_) { return; } if (d.t === 'hello') { w.canCtl = !!d.ctl; _crtCtlBtn(); } };
       };
-      pc.ontrack = function (e) { var el = _crtWin(''); var v = el.querySelector('video'); if (v.srcObject !== e.streams[0]) v.srcObject = e.streams[0]; w.connected = true; };
+      pc.ontrack = function (e) {
+        // v13.416 받는 쪽 지연 줄이기 — 영상을 쌓아 두지 말고 오는 대로 (제어할 때 손과 화면이 덜 어긋남)
+        try { if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0; else if ('playoutDelayHint' in e.receiver) e.receiver.playoutDelayHint = 0; } catch (er) {}
+        var el = _crtWin(''); var v = el.querySelector('video'); if (v.srcObject !== e.streams[0]) v.srcObject = e.streams[0]; w.connected = true; };
       pc.onicecandidate = function (e) { if (e.candidate) _crtSig(w.roomId, { type: 'ice', to: w.from, sid: w.sid, data: e.candidate.toJSON ? e.candidate.toJSON() : e.candidate }); };
       pc.onconnectionstatechange = function () { if (pc.connectionState === 'failed') _crtWin('연결이 끊겼습니다 — 다시 [보기] 를 눌러 보세요'); };
       pc.setRemoteDescription(d.data).then(function () {
@@ -249,7 +296,11 @@ function _crtCtlBtn() {
   b.classList.toggle('on', !!w.ctl);
   el.classList.toggle('ctl', !!w.ctl);
 }
-function _crtSend(o) { var w = CRT.watch; if (w && w.ctl && w.dc && w.dc.readyState === 'open') w.dc.send(JSON.stringify(o)); }
+function _crtSend(o) {
+  var w = CRT.watch; if (!w || !w.ctl) return;
+  var ch = o.t === 'mm' && w.dcm && w.dcm.readyState === 'open' ? w.dcm : w.dc;   // v13.416 이동은 빠른 길로
+  if (ch && ch.readyState === 'open') ch.send(JSON.stringify(o));
+}
 function _crtVidPos(v, e) {   // 화면(검은 띠 빼고) 안의 비율 0~1
   var r = v.getBoundingClientRect(), vw = v.videoWidth || 16, vh = v.videoHeight || 9;
   var k = Math.min(r.width / vw, r.height / vh), cw = vw * k, ch = vh * k, ox = r.left + (r.width - cw) / 2, oy = r.top + (r.height - ch) / 2;
@@ -267,7 +318,7 @@ function _crtViewCtl(on) {
   var sink = document.createElement('textarea');   // 키보드 · 한글 입력(IME)을 받는 숨은 칸
   sink.className = 'crt-sink'; sink.setAttribute('aria-label', '원격 키보드'); el.appendChild(sink);
   var lastMove = 0, composing = false;
-  function mv(e) { var n = Date.now(); if (n - lastMove < 30) return; lastMove = n; var p = _crtVidPos(v, e); _crtSend({ t: 'mm', x: p.x, y: p.y }); }
+  function mv(e) { var n = Date.now(); if (n - lastMove < 16) return; lastMove = n; var p = _crtVidPos(v, e); _crtSend({ t: 'mm', x: p.x, y: p.y }); }
   function dn(e) { e.preventDefault(); sink.focus(); var p = _crtVidPos(v, e); _crtSend({ t: 'md', b: e.button, x: p.x, y: p.y }); }
   function up(e) { e.preventDefault(); var p = _crtVidPos(v, e); _crtSend({ t: 'mu', b: e.button, x: p.x, y: p.y }); }
   function wh(e) { e.preventDefault(); _crtSend({ t: 'wh', dy: e.deltaY > 0 ? -120 : 120 }); }

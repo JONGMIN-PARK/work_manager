@@ -51,14 +51,14 @@ function _asRenderDetail(t, CAT) {
   var ct = CAT[t.category] || { label: t.category || '-', icon: '' };
 
   var h = '';
-  h += '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:12px;width:min(1200px,94vw);max-width:100%;color:var(--t2);box-shadow:0 14px 50px rgba(0,0,0,0.5);overflow:hidden">';
+  h += '<div class="asd" style="background:var(--bg);border:1px solid var(--bd);border-radius:12px;width:min(1200px,94vw);max-width:100%;color:var(--t2);box-shadow:0 14px 50px rgba(0,0,0,0.5);overflow:hidden">';
 
   // 헤더
-  h += '<div style="padding:16px 22px;border-bottom:1px solid var(--bd);background:linear-gradient(135deg,' + pr.color + '15,' + st.color + '15)">';
-  h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">';
-  h += '<div style="flex:1">';
+  h += '<div class="asd-h" style="padding:16px 22px;border-bottom:1px solid var(--bd);background:linear-gradient(135deg,' + pr.color + '15,' + st.color + '15)">';
+  h += '<div class="asd-hrow" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">';
+  h += '<div class="asd-hinfo" style="flex:1">';
   h += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
-  h += '<span style="font-family:monospace;font-size:14px;font-weight:700;color:var(--t1)">' + _asEsc(t.ticketNo) + '</span>';
+  h += '<span class="asd-no" style="font-family:monospace;font-size:14px;font-weight:700;color:var(--t1);white-space:nowrap">' + _asEsc(t.ticketNo) + '</span>';
   h += '<span style="padding:2px 8px;border-radius:10px;background:' + pr.color + ';color:#fff;font-size:10px;font-weight:600">' + (pr.icon || '') + ' ' + _asEsc(t.priority) + '</span>';
   h += '<span style="padding:2px 8px;border-radius:10px;background:' + st.color + '22;color:' + st.color + ';font-size:10px;font-weight:700">' + (st.icon || '') + ' ' + _asEsc(st.label) + '</span>';
   if (t.linkedIssueId) h += '<span style="padding:2px 8px;border-radius:10px;background:#6366F122;color:#6366F1;font-size:10px;font-weight:600">🎫 이슈 연결됨</span>';
@@ -67,7 +67,7 @@ function _asRenderDetail(t, CAT) {
        ' · ' + _asEsc(t.equipmentModel || '-') + (t.serialNo ? ' (' + _asEsc(t.serialNo) + ')' : '') + '</div>';
   h += '<div style="margin-top:2px;font-size:11px;color:var(--t5)">' + _asEsc(ct.icon || '') + ' ' + _asEsc(ct.label) + ' · ' + _asFmtDT(t.receivedAt) + '</div>';
   h += '</div>';
-  h += '<div style="display:flex;gap:6px;align-items:flex-start">';
+  h += '<div class="asd-hbtn" style="display:flex;gap:6px;align-items:flex-start">';
   h += '<button onclick="showASModal(\'' + _asEsc(t.id) + '\')" style="font-size:11px;padding:6px 12px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer">✏️ 접수 편집</button>';
   if (!t.linkedIssueId) {
     h += '<button onclick="asTriggerLinkIssue(\'' + _asEsc(t.id) + '\')" style="font-size:11px;padding:6px 12px;border:1px solid #6366F1;border-radius:6px;background:transparent;color:#6366F1;cursor:pointer" title="이 A/S를 이슈관리에 자동 등록">🎫 이슈로 등록</button>';
@@ -84,7 +84,7 @@ function _asRenderDetail(t, CAT) {
     { key: 'customer', label: '⑤ 고객확인', icon: '📞' },
     { key: 'doc',      label: '⑥ 보고서',   icon: '📄' }
   ];
-  h += '<div style="display:flex;border-bottom:1px solid var(--bd);background:var(--bg-i)">';
+  h += '<div class="asd-tabs" style="display:flex;border-bottom:1px solid var(--bd);background:var(--bg-i)">';
   steps.forEach(function (s) {
     var active = _asDetailTab === s.key;
     h += '<button onclick="asDetailTab(\'' + s.key + '\')" ' +
@@ -96,7 +96,7 @@ function _asRenderDetail(t, CAT) {
   h += '</div>';
 
   // 탭 내용
-  h += '<div style="padding:18px 22px;max-height:calc(100vh - 280px);overflow-y:auto">';
+  h += '<div class="asd-b" style="padding:18px 22px;max-height:calc(100vh - 280px);overflow-y:auto">';
   if (_asDetailTab === 'overview')  h += _asTabOverview(t, CAT);
   if (_asDetailTab === 'assign')    h += _asTabAssign(t);
   if (_asDetailTab === 'work')      h += _asTabWork(t);

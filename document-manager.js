@@ -218,16 +218,16 @@ function docSelectProject(projId) {
 
 /* ═══ 폴더 트리 렌더 ═══ */
 function renderFolderTree(folders, allFiles) {
-  var html = '<div class="pnl" style="padding:10px;overflow-y:auto">';
+  var html = '<div class="pnl doc-ftree" style="padding:10px;overflow-y:auto">';   // v13.416 휴대폰은 한 줄 칩(옆으로 밀기)
   if (docSelProject === DOC_PERSONAL) {
     return html + '<div style="font-size:11px;font-weight:600;padding:6px 10px;border-radius:6px;background:var(--ac-bg);color:var(--ac-t)">📥 내 문서 <span class="badge" style="background:var(--bg-i);color:var(--t4);font-size:9px">' + allFiles.length + '</span></div>' +
       '<div style="font-size:10.5px;color:var(--t5);line-height:1.6;padding:8px 6px">프로젝트 없이 내가 올린 파일 — 텔레그램으로 보낸 사진 · 파일도 여기 모입니다. 나만 볼 수 있습니다.<br>📁 을 눌러 프로젝트로 옮기세요.</div></div>';
   }
-  html += '<div style="font-size:10px;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding:0 6px">폴더</div>';
+  html += '<div class="doc-ft-h" style="font-size:10px;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding:0 6px">폴더</div>';
 
   // 전체 파일
   var allSel = docSelFolder === null ? 'background:var(--ac-bg);color:var(--ac-t);border-color:var(--ac)' : '';
-  html += '<div onclick="docSelectFolder(null)" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center;border:1px solid transparent;transition:all .15s;' + allSel + '">';
+  html += '<div class="doc-fi' + (docSelFolder === null ? ' on' : '') + '" onclick="docSelectFolder(null)" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center;border:1px solid transparent;transition:all .15s;' + allSel + '">';
   html += '<span>📁 전체</span><span class="badge" style="background:var(--bg-i);color:var(--t4);font-size:9px">' + allFiles.length + '</span></div>';
 
   // 폴더 (최대 3단계 — docAddFolder 가 3단계까지 만든다)
@@ -236,7 +236,7 @@ function renderFolderTree(folders, allFiles) {
     var sel = docSelFolder === folder.id ? 'background:var(--ac-bg);color:var(--ac-t);border-color:var(--ac)' : '';
     var hasMemo = folder.memo ? 'border-left:2px solid var(--ac);' : '';
     var pad = depth ? 'padding:5px 10px 5px ' + (10 + depth * 16) + 'px;font-size:10px;margin-bottom:1px;' : 'padding:6px 10px;font-size:11px;margin-bottom:2px;';
-    html += '<div onclick="docSelectFolder(\'' + eA(folder.id) + '\')" style="' + pad + 'border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border:1px solid transparent;transition:all .15s;' + hasMemo + sel + '">';
+    html += '<div class="doc-fi' + (docSelFolder === folder.id ? ' on' : '') + '" onclick="docSelectFolder(\'' + eA(folder.id) + '\')" style="' + pad + 'border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border:1px solid transparent;transition:all .15s;' + hasMemo + sel + '">';
     html += '<span>' + (depth ? '📄 ' : '📁 ') + eH(folder.name) + '</span>';
     html += '<span style="display:flex;align-items:center;gap:4px"><span class="badge" style="background:var(--bg-i);color:var(--t4);font-size:9px">' + countOf(folder.id) + '</span>';
     html += '<span onclick="event.stopPropagation();docEditFolderMemo(\'' + eA(folder.id) + '\')" style="cursor:pointer;font-size:10px;color:' + (folder.memo ? 'var(--ac-t)' : 'var(--t5)') + '" title="' + (folder.memo ? eH(folder.memo.slice(0, 60)) : '메모 추가') + '">📝</span>';
@@ -246,7 +246,7 @@ function renderFolderTree(folders, allFiles) {
   };
   folders.filter(function (f) { return !f.parentId; }).forEach(function (f) { drawFolder(f, 0); });
 
-  html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">';
+  html += '<div class="doc-ft-add" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">';
   html += '<button class="btn btn-g btn-s" onclick="docAddFolder()" style="width:100%;justify-content:center">+ 폴더 추가</button>';
   html += '</div>';
   html += '</div>';

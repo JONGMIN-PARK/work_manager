@@ -55,6 +55,16 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await until(k, function () { return !!document.querySelector('#cxMsgs [data-watch]'); });
     await k.evaluate(function () { document.querySelector('#cxMsgs [data-watch]').click(); });
     check(await until(k, function () { var v = document.querySelector('#crtWin video'); return v && v.videoWidth > 0; }, null, 15000), '공유 영상 보임');
+    // v13.416 화질 — 글자 화면(detail) · 해상도 유지 · 비트레이트 상한 · 마우스 이동 전용 채널
+    var q = await a.evaluate(function () {
+      var pc = CRT.viewers[Object.keys(CRT.viewers)[0]], sd = pc.getSenders().filter(function (x) { return x.track && x.track.kind === 'video'; })[0], pr = sd.getParameters();
+      return { hint: sd.track.contentHint, deg: pr.degradationPreference, max: pr.encodings[0].maxBitrate, fps: pr.encodings[0].maxFramerate };
+    });
+    check(q.hint === 'detail' && q.deg === 'maintain-resolution' && q.max === 4000000 && q.fps === 15, '화면 공유 — 해상도 유지 · 4Mbps · 15fps ' + JSON.stringify(q));
+    await new Promise(function (r) { setTimeout(r, 2500); });
+    var rw = await k.evaluate(function () { var v = document.querySelector('#crtWin video'); return v.videoWidth; });
+    check(rw === 1280, '받는 쪽 해상도 그대로 (' + rw + 'px — 예전엔 줄어 보냄)');
+    check(await until(k, function () { return CRT.watch && CRT.watch.dcm && CRT.watch.dcm.readyState === 'open'; }), '마우스 이동 전용 채널(순서 · 재전송 없음) 열림');
     check(await until(k, function () { var b = document.querySelector('#crtWin [data-ctl]'); return b && !b.hidden && /제어 요청/.test(b.textContent); }), '상대가 PC 앱 → [🖱 제어 요청] 단추');
 
     // 요청 → 허락
@@ -63,6 +73,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await a.screenshot({ path: path.join(SHOT, 'e2e62-ask.png'), clip: { x: 300, y: 0, width: 800, height: 80 } });
     await a.click('#crtBar [data-ok]');
     check(await until(a, function () { return window.__ctl[0] === true && /제어 중/.test(document.getElementById('crtBar').textContent); }), '허락 → PC 앱 제어 켬 · 막대 "제어 중"');
+    check(await until(a, function () { var pc = CRT.viewers[Object.keys(CRT.viewers)[0]], sd = pc.getSenders().filter(function (x) { return x.track && x.track.kind === 'video'; })[0], e = sd.getParameters().encodings[0]; return e.maxFramerate === 30 && e.maxBitrate === 6000000; }), '제어 중 — 30fps · 6Mbps 로 올림');
     // v13.414 좁은 창에서도 띠는 한 줄 · 화면 안
     for (var vw of [1400, 516, 360]) {
       await a.setViewport({ width: vw, height: 900 }); await new Promise(function (r) { setTimeout(r, 150); });

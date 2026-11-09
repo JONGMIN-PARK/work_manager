@@ -143,7 +143,7 @@ function renderAS(opts) {
       }
       html += '</div>';
     } else {
-      html += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+      html += '<table class="as-tbl" style="width:100%;border-collapse:collapse;font-size:11px">';   // v13.416 휴대폰은 CSS 로 카드
       html += '<thead><tr style="background:var(--bg-i);border-bottom:1px solid var(--bd)">';
       ['접수번호', '고객사 / 장비', '카테고리', '긴급도', '상태', '신고 내용', '접수', ''].forEach(function (h) {
         html += '<th style="padding:8px 10px;text-align:left;font-weight:600;color:var(--t4);font-size:10px">' + h + '</th>';
@@ -271,10 +271,10 @@ function _asRenderKanban(tickets, CAT) {
     if (grouped[k]) grouped[k].push(t);
   });
 
-  var h = '<div class="pnl" style="padding:14px;overflow-x:auto">';
-  h += '<div style="display:flex;gap:10px">';
+  var h = '<div class="pnl as-kb-wrap" style="padding:14px;overflow-x:auto">';
+  h += '<div class="as-kb" style="display:flex;gap:10px">';   // v13.416 휴대폰은 위아래로 쌓음
   cols.forEach(function (c) {
-    h += '<div style="flex:1 1 240px;min-width:220px;display:flex;flex-direction:column">';
+    h += '<div class="as-kb-lane' + (grouped[c.key].length ? '' : ' empty') + '" style="flex:1 1 240px;min-width:220px;display:flex;flex-direction:column">';
     h += '<div style="padding:8px 10px;background:' + c.color + '15;border-radius:6px;margin-bottom:8px;border-top:3px solid ' + c.color + '">';
     h += '<div style="font-size:11px;font-weight:700;color:' + c.color + '">' + c.label + ' <span style="color:var(--t5);font-weight:500">(' + grouped[c.key].length + ')</span></div>';
     h += '</div>';

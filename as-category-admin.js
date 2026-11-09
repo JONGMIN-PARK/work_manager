@@ -24,7 +24,7 @@ function _asBuildCategoryAdmin() {
     document.querySelectorAll('#asCatAdminOverlay').forEach(function (el) { el.remove(); });
 
     var h = '';
-    h += '<div style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;width:720px;max-width:100%;padding:20px 24px;color:var(--t2);box-shadow:0 10px 40px rgba(0,0,0,0.4)">';
+    h += '<div class="as-cat-box" style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;width:720px;max-width:100%;padding:20px 24px;color:var(--t2);box-shadow:0 10px 40px rgba(0,0,0,0.4)">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bd)">';
     h += '<div><div style="font-size:14px;font-weight:700">⚙️ A/S 카테고리 관리</div>';
     h += '<div style="font-size:10px;color:var(--t5);margin-top:2px">관리자 전용 — 추가·라벨/아이콘/순서 변경·비활성화 가능 (코드는 변경 불가)</div></div>';
@@ -34,7 +34,7 @@ function _asBuildCategoryAdmin() {
     // 추가 폼
     h += '<div style="background:var(--bg-i);border:1px dashed var(--bd);border-radius:8px;padding:12px;margin-bottom:14px">';
     h += '<div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:8px">➕ 새 카테고리 추가</div>';
-    h += '<div style="display:grid;grid-template-columns:1fr 2fr 60px 80px;gap:8px;align-items:end">';
+    h += '<div class="as-cat-new" style="display:grid;grid-template-columns:1fr 2fr 60px 80px;gap:8px;align-items:end">';
     h += _asField('코드 (영소문자_숫자) *', '<input id="asCatNew_code" type="text" placeholder="예: optic_cleaning" pattern="[a-z0-9_]{2,40}" ' + _asInpStyle() + '>');
     h += _asField('라벨 *', '<input id="asCatNew_label" type="text" placeholder="예: Optic Cleaning" ' + _asInpStyle() + '>');
     h += _asField('아이콘', '<input id="asCatNew_icon" type="text" placeholder="🔆" maxlength="4" ' + _asInpStyle() + '>');
@@ -45,7 +45,7 @@ function _asBuildCategoryAdmin() {
 
     // 목록 테이블
     h += '<div style="border:1px solid var(--bd);border-radius:8px;overflow:hidden">';
-    h += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    h += '<table class="as-cat-tbl" style="width:100%;border-collapse:collapse;font-size:11px">';   // v13.416 휴대폰은 카드
     h += '<thead><tr style="background:var(--bg-i);border-bottom:1px solid var(--bd)">';
     ['코드', '라벨', '아이콘', '순서', '활성', '액션'].forEach(function (col) {
       h += '<th style="padding:8px 10px;text-align:left;font-size:10px;color:var(--t4);font-weight:600">' + col + '</th>';

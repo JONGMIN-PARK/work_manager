@@ -123,9 +123,10 @@ async function renderDashboard(projects) {
           weekMs.map(function (m) {
             var mProj = _projMap[m.projectId];
             var mSt = PROJ_STATUS[m.status] || PROJ_STATUS.waiting;
-            return '<div style="font-size:11px;color:var(--t3);padding:2px 0;display:flex;align-items:center;gap:4px">' +
+            // v13.416 이름을 칸으로 감싸 꺾임 허용 — 좁으면 이름 · [프로젝트] · 날짜가 글자 단위로 세로로 쌓이던 것
+            return '<div style="font-size:11px;color:var(--t3);padding:2px 0;display:flex;flex-wrap:wrap;align-items:baseline;gap:1px 4px">' +
               '<span style="color:' + mSt.color + '">' + mSt.icon + '</span> ' +
-              eH(m.name) +
+              '<span style="min-width:0">' + eH(m.name) + '</span>' +
               (mProj ? ' <span style="color:var(--t6);font-size:10px">[' + eH(mProj.name || mProj.orderNo) + ']</span>' : '') +
               ' <span style="color:var(--t6);font-size:10px">' + m.endDate + '</span>' +
             '</div>';
