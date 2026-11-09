@@ -247,9 +247,10 @@ function _cxNotify(d, r) {
   var body = d.file && !d.body ? '📎 ' + d.file.name : (d.body || '').slice(0, 120);
   // v13.355 PC 앱: 창이 앞에 없으면(다른 프로그램 작업 중 · 트레이) 윈도우 알림 — 누르면 창이 앞으로 + 그 방으로
   var at = (d.mentions || []).indexOf(_cxMe()) >= 0 || !!d.kw;
+  var sk = (d.mentions || []).indexOf(_cxMe()) >= 0 ? 'at' : d.kw ? 'kw' : r && r.kind !== 'dm' ? 'room' : 'dm';   // v13.412 🎵 종류별 소리
   if (d.kw) title = '🔑 ' + d.kw + ' · ' + title;
-  if (typeof wmIsDesktopApp === 'function' && wmIsDesktopApp() && !document.hasFocus()) { wmAppNotify('💬 ' + title, body, 'chat:' + d.roomId); if (typeof chatAlertPing === 'function') chatAlertPing({ mention: at, silent: true }); return; }
-  if (typeof chatAlertPing === 'function') chatAlertPing({ mention: at });   // v13.371 🔔 소리 · 진동 · 💬 아이콘 흔들기
+  if (typeof wmIsDesktopApp === 'function' && wmIsDesktopApp() && !document.hasFocus()) { wmAppNotify('💬 ' + title, body, 'chat:' + d.roomId); if (typeof chatAlertPing === 'function') chatAlertPing({ mention: at, kind: sk, silent: true }); return; }
+  if (typeof chatAlertPing === 'function') chatAlertPing({ mention: at, kind: sk });   // v13.371 🔔 소리 · 진동 · 💬 아이콘 흔들기
   if (document.hidden) {
     // 푸시를 켠 기기는 서버가 보냄(가려진 화면 → 푸시) — 여기서 또 띄우면 두 번
     if (typeof chatAlertSysNotify === 'function') chatAlertSysNotify('💬 ' + title, body, d.roomId);
