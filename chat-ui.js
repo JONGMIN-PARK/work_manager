@@ -604,19 +604,42 @@ function _cxDrawHead() {
   var pst = i.kind === 'dm' && others[0] && others[0].status && typeof chatStatusText === 'function' ? chatStatusText(others[0].status) : '';
   var sub = i.kind === 'dm' ? (others[0] ? (pst ? pst + ' · ' : '') + (others[0].focusUntil && typeof chatFocusLabel === 'function' && chatFocusLabel(others[0].focusUntil) ? chatFocusLabel(others[0].focusUntil) + ' — 급하면 @멘션' : (others[0].online ? '● 접속 중' : '접속 안 함')) + (others[0].dept ? ' · ' + others[0].dept : '') : '') : i.members.length + '명 · 접속 ' + (on + 1) + (others.some(function (m) { return m.focusUntil && new Date(m.focusUntil) > new Date(); }) ? ' · 🎯 집중 ' + others.filter(function (m) { return m.focusUntil && new Date(m.focusUntil) > new Date(); }).length : '');
   var sideOff = !!(document.querySelector('#mMessages .cx.side-off'));
-  h.innerHTML = '<button type="button" class="cx-ib cx-back" data-h="back" aria-label="목록으로">‹</button>' +
-    '<button type="button" class="cx-ib cx-sidet" data-h="side" title="' + (sideOff ? '대화방 목록 펴기' : '대화방 목록 접기 — 대화에만 집중') + ' (Alt+L)" aria-label="대화방 목록 접기 · 펴기">' + (sideOff ? '»' : '«') + '</button>' +
+  h.innerHTML = '<button type="button" class="cx-ib cx-back" data-h="back" aria-label="목록으로">' + _cxIco('back') + '</button>' +
+    '<button type="button" class="cx-ib cx-sidet" data-h="side" title="' + (sideOff ? '대화방 목록 펴기' : '대화방 목록 접기 — 대화에만 집중') + ' (Alt+L)" aria-label="대화방 목록 접기 · 펴기">' + _cxIco(sideOff ? 'sideon' : 'sideoff') + '</button>' +
     (i.self ? '<span class="cx-av cx-av-me">📝</span>' : i.kind === 'project' ? '<span class="cx-av cx-av-p">📁</span>' : i.kind === 'group' ? '<span class="cx-av cx-av-g">👥</span>' : _cxAv(others[0] && others[0].id, name, others[0] && others[0].online)) +
     '<span class="cx-h-t"><b>' + _cxE(name) + '</b><span class="' + (i.kind === 'dm' && others[0] && others[0].online ? 'on' : '') + '">' + _cxE(sub) + '</span></span>' +
     '<span class="cx-h-a">' +
-      (typeof chatCallStart === 'function' && i.myRole !== 'readonly' ? '<button type="button" class="cx-ib" data-h="call" title="음성 통화">📞</button><button type="button" class="cx-ib" data-h="vcall" title="영상 통화">🎥</button>' : '') +
-      (typeof chatPresStart === 'function' && i.myRole !== 'readonly' ? '<button type="button" class="cx-ib" data-h="present" title="🎤 발표 시작 — 화면 공유 + 음성 + 발표 펜 · 끝나면 정리를 방에">🎤</button>' : '') +
-      '<button type="button" class="cx-ib" data-h="share" title="화면 공유">🖥</button>' +
-      (typeof chatFindOpen === 'function' ? '<button type="button" class="cx-ib" data-h="find" title="이 방에서 찾기 (Ctrl+F)">🔍</button>' : '') +
-      '<button type="button" class="cx-ib" data-h="files" title="파일 모음">📎</button>' +
-      '<button type="button" class="cx-ib' + (CX.aside ? ' on' : '') + '" data-h="aside" title="' + (i.kind === 'project' ? '프로젝트 현황' : '대화 정보') + '">' + (i.kind === 'project' ? '📊' : 'ⓘ') + '</button>' +
-      '<button type="button" class="cx-ib" data-h="more" title="더보기">⋯</button></span>';
+      (typeof chatCallStart === 'function' && i.myRole !== 'readonly' ? '<button type="button" class="cx-ib" data-h="call" title="음성 통화" aria-label="음성 통화">' + _cxIco('call') + '</button><button type="button" class="cx-ib" data-h="vcall" title="영상 통화" aria-label="영상 통화">' + _cxIco('vcall') + '</button>' : '') +
+      (typeof chatPresStart === 'function' && i.myRole !== 'readonly' ? '<button type="button" class="cx-ib" data-h="present" title="🎤 발표 시작 — 화면 공유 + 음성 + 발표 펜 · 끝나면 정리를 방에" aria-label="발표 시작">' + _cxIco('present') + '</button>' : '') +
+      '<button type="button" class="cx-ib" data-h="share" title="화면 공유" aria-label="화면 공유">' + _cxIco('share') + '</button>' +
+      (typeof chatFindOpen === 'function' ? '<button type="button" class="cx-ib" data-h="find" title="이 방에서 찾기 (Ctrl+F)" aria-label="찾기">' + _cxIco('find') + '</button>' : '') +
+      '<button type="button" class="cx-ib" data-h="files" title="파일 모음" aria-label="파일 모음">' + _cxIco('files') + '</button>' +
+      '<button type="button" class="cx-ib' + (CX.aside ? ' on' : '') + '" data-h="aside" title="' + (i.kind === 'project' ? '프로젝트 현황' : '대화 정보') + '" aria-label="' + (i.kind === 'project' ? '프로젝트 현황' : '대화 정보') + '">' + _cxIco(i.kind === 'project' ? 'stats' : 'info') + '</button>' +
+      '<button type="button" class="cx-ib" data-h="more" title="더보기" aria-label="더보기">' + _cxIco('more') + '</button></span>';
   h.querySelectorAll('[data-h]').forEach(function (b) { b.addEventListener('click', function () { _cxHeadAct(b.dataset.h, b); }); });
+}
+/* v13.408 방 머리 아이콘 — 이모지(글꼴마다 모양·크기 들쭉날쭉, 흐릿)를 같은 굵기 선 아이콘으로 */
+var _CX_ICO = {
+  call: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  vcall: '<path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11"/><rect x="2" y="6" width="14" height="12" rx="2.5"/>',
+  present: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/>',
+  share: '<rect x="2" y="3" width="20" height="14" rx="2.5"/><path d="M8 21h8M12 17v4"/><path d="m9 10 3-3 3 3M12 7v6"/>',
+  find: '<circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.5-4.5"/>',
+  files: '<path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l8.6-8.6a4 4 0 0 1 5.7 5.7l-8.6 8.6a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',
+  info: '<circle cx="12" cy="12" r="9.5"/><path d="M12 16.5v-5"/><circle cx="12" cy="8" r=".6" fill="currentColor"/>',
+  stats: '<path d="M3 3v18h18"/><path d="M8 17v-5M13 17V8M18 17v-3"/>',
+  back: '<path d="m15 18-6-6 6-6"/>',
+  sideoff: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/><path d="m16 10-2 2 2 2"/>',
+  sideon: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/><path d="m14 10 2 2-2 2"/>',
+  pin: '<path d="M12 17v5"/><path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.7l-1.8-.9a2 2 0 0 1-1.1-1.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+  doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
+  people: '<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/><path d="M16 3.3a4 4 0 0 1 0 7.4M22 21v-1a6 6 0 0 0-4-5.6"/>',
+  equip: '<path d="M2 20h20V9l-6 4V9l-6 4V4H4a2 2 0 0 0-2 2z"/><path d="M7 16h1M12 16h1M17 16h1"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>',
+  more: '<circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/>'
+};
+function _cxIco(k) {
+  return '<svg class="cx-svg cx-svg-' + k + '" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (_CX_ICO[k] || '') + '</svg>';
 }
 function _cxHeadAct(k, btn) {
   if ((k === 'call' || k === 'vcall') && typeof chatCallStart === 'function') { chatCallStart(CX.room, k === 'vcall'); return; }   // v13.361
@@ -1559,8 +1582,8 @@ function _cxDrawAside() {
     return;
   }
   var tab = _cxAsideTab();
-  var tabs = (CX.info && CX.info.kind === 'project' ? [['ctx', '📊 현황']] : []).concat(CX.info && CX.info.equipKey ? [['equip', '🏭 장비']] : []).concat([['board', '📌 게시판'], ['docs', '📝 문서'], ['people', '👤 멤버'], ['files', '📎 파일']]);
-  a.innerHTML = '<div class="cx-as-tabs">' + '<button type="button" class="cx-ib cx-as-back" data-x aria-label="대화로 돌아가기">‹ 대화</button>' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '<button type="button" class="cx-ib" data-x aria-label="닫기">✕</button></div><div class="cx-as-b" id="cxAsB"></div>';
+  var tabs = (CX.info && CX.info.kind === 'project' ? [['ctx', '현황', 'stats']] : []).concat(CX.info && CX.info.equipKey ? [['equip', '장비', 'equip']] : []).concat([['board', '게시판', 'pin'], ['docs', '문서', 'doc'], ['people', '멤버', 'people'], ['files', '파일', 'files']]);
+  a.innerHTML = '<div class="cx-as-tabs">' + '<button type="button" class="cx-ib cx-as-back" data-x aria-label="대화로 돌아가기">‹ 대화</button>' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + _cxIco(t[2]) + '<span>' + t[1] + '</span></button>'; }).join('') + '<button type="button" class="cx-ib" data-x aria-label="닫기">' + _cxIco('close') + '</button></div><div class="cx-as-b" id="cxAsB"></div>';
   a.querySelectorAll('[data-tab]').forEach(function (b) { b.addEventListener('click', function () { CX.asideTab = b.dataset.tab; _cxDrawAside(); }); });
   a.querySelectorAll('[data-x]').forEach(function (x) { x.addEventListener('click', function () { _cxAsideClose(); }); });
   var b = a.querySelector('#cxAsB');

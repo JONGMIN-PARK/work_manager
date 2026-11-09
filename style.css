@@ -4032,6 +4032,14 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 .cx-side-h b{font-size:15px;color:var(--t1)}
 .cx-ib{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 6px;border:1px solid transparent;border-radius:8px;background:none;color:var(--t3);font:inherit;font-size:14px;cursor:pointer}
 .cx-ib:hover,.cx-ib.on{background:var(--bg-hv);border-color:var(--bd);color:var(--t1)}
+/* v13.408 방 머리 선 아이콘 */
+.cx-h-a .cx-ib{min-width:34px;height:34px;padding:0;border-radius:10px;color:var(--t3);transition:background .15s,color .15s,border-color .15s,transform .12s}
+.cx-h-a .cx-ib:active{transform:scale(.92)}
+.cx-svg{display:block;flex:none;pointer-events:none}
+.cx-h-a .cx-ib[data-h="call"]:hover{color:#16A34A;background:color-mix(in srgb,#16A34A 12%,transparent);border-color:color-mix(in srgb,#16A34A 30%,transparent)}
+.cx-h-a .cx-ib[data-h="vcall"]:hover{color:#2563EB;background:color-mix(in srgb,#2563EB 12%,transparent);border-color:color-mix(in srgb,#2563EB 30%,transparent)}
+.cx-h-a .cx-ib[data-h="present"]:hover{color:#DB2777;background:color-mix(in srgb,#DB2777 12%,transparent);border-color:color-mix(in srgb,#DB2777 30%,transparent)}
+.cx-h-a .cx-ib.on{color:var(--ac);background:var(--ac-bg);border-color:color-mix(in srgb,var(--ac) 35%,transparent)}
 .cx-sq{padding:0 12px 8px}
 .cx-sq input{width:100%;box-sizing:border-box;height:32px;padding:0 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t2);font:inherit;font-size:12.5px}
 .cx-perm{display:flex;gap:6px;align-items:center;margin:0 12px 8px;padding:6px 8px;border-radius:8px;background:var(--ac-bg);color:var(--ac-t);font-size:11.5px}
@@ -4182,6 +4190,11 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 .cx-as-h b{flex:1;font-size:13.5px;color:var(--t1)}
 .cx-as-tabs button[data-tab]{border:0;border-radius:8px;background:none;font:inherit;font-size:12.5px;font-weight:600;color:var(--t4);padding:5px 9px;cursor:pointer}
 .cx-as-tabs button[data-tab].on{background:var(--ac-bg);color:var(--ac-t)}
+.cx-as-tabs button[data-tab]{display:inline-flex;align-items:center;gap:5px}
+.cx-as-tabs button[data-tab] .cx-svg{width:15px;height:15px;opacity:.85}
+.cx-as-tabs button[data-tab].on .cx-svg{opacity:1}
+.cx-as-tabs button[data-tab]:hover{color:var(--t1);background:var(--bg-hv)}
+.cx-as-tabs button[data-tab].on:hover{background:var(--ac-bg);color:var(--ac-t)}
 .cx-as-tabs [data-x]{margin-left:auto}
 .cx-as-b{flex:1;overflow:auto;padding:10px;scrollbar-width:thin}
 .cx-th-msgs{background:var(--bg)}
