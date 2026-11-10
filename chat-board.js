@@ -550,7 +550,7 @@ function _cbPt(e) { var r = CB.cv.getBoundingClientRect(); return { sx: e.client
 function _cbW() { return Math.max(0.5, Math.round(CB.wSel * 1.6 / CB.zoom * 10) / 10); }
 function _cbBind() {
   var el = CB.el, cv = CB.cv;
-  el.addEventListener('click', function (e) {
+  el.addEventListener('click', async function (e) {
     var b = e.target.closest('button'); if (!b || !CB) return;
     if (b.dataset.mode) { CB.mode = b.dataset.mode; if (CB.mode === 'orig' && CB.tool !== 'pan') CB.tool = 'pan'; _cbFit(); _cbSyncUi(); return; }
     if (b.dataset.tool) return _cbSetTool(b.dataset.tool);
@@ -571,7 +571,7 @@ function _cbBind() {
     else if (a === 'prev' || a === 'next') _cbNav(a === 'next' ? 1 : -1);
     else if (a === 'zin' || a === 'zout') _cbZoomAt(a === 'zin' ? 1.25 : 0.8, cv.clientWidth / 2, cv.clientHeight / 2);
     else if (a === 'fit') { if (Math.abs(CB.zoom - 1) < 0.01) _cbFit(); else _cbZoomAt(1 / CB.zoom, cv.clientWidth / 2, cv.clientHeight / 2); }
-    else if (a === 'clear') { if (!CB.a.shapes.length) return; if (!confirm('표시 ' + CB.a.shapes.length + '개를 모두 지울까요? (되돌리기 가능)')) return; _cbCommit({ remove: CB.a.shapes.map(function (s) { return s.id; }) }); }
+    else if (a === 'clear') { if (!CB.a.shapes.length) return; if (!(await wmConfirm('표시 ' + CB.a.shapes.length + '개를 모두 지울까요? (되돌리기 가능)'))) return; _cbCommit({ remove: CB.a.shapes.map(function (s) { return s.id; }) }); }
     else if (a === 'copy') _cbCopy();
     else if (a === 'dl') _cbDownload();
     else if (a === 'share') _cbShareNew();

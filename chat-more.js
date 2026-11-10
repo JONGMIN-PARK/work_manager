@@ -67,12 +67,12 @@ function _cxmVote(mid, oid, el) {
   var next = m.poll.multi ? (cur.indexOf(oid) >= 0 ? cur.filter(function (x) { return x !== oid; }) : cur.concat([oid])) : (cur[0] === oid ? [] : [oid]);
   apiFetch('/api/chat/messages/' + mid + '/vote', { method: 'POST', body: JSON.stringify({ opts: next }) }).then(function (r) { if (r && r.data && _cxUpsert(r.data, true)) _cxDrawMsgs(true); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
 }
-function _cxmClose(mid, btn) {
+async function _cxmClose(mid, btn) {
   var m = CX.msgs.filter(function (x) { return x.id === mid; })[0]; if (!m || !m.poll) return;
   function go(pick) {
     apiFetch('/api/chat/messages/' + mid + '/poll-close', { method: 'POST', body: JSON.stringify({ pick: pick || null }) }).then(function (r) { if (r && r.data && _cxUpsert(r.data, true)) _cxDrawMsgs(true); if (r.eventId) _cxToast('📅 달력에 일정을 넣었습니다', 'success'); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
   }
-  if (m.poll.kind !== 'time') { if (confirm('투표를 마감할까요?')) go(null); return; }
+  if (m.poll.kind !== 'time') { if ((await wmConfirm('투표를 마감할까요?'))) go(null); return; }
   var sorted = m.poll.opts.slice().sort(function (a, b) { return (m.poll.votes[b.id] || []).length - (m.poll.votes[a.id] || []).length; });
   _cxMenu(btn, sorted.map(function (o) { return ['📅 ' + _cxmTime(o) + ' — ' + (m.poll.votes[o.id] || []).length + '표' + (o.busy && o.busy.length ? ' · 겹침 ' + o.busy.length : ''), function () { go(o.id); }]; }));
 }

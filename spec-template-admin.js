@@ -34,14 +34,14 @@ function _staLoad(t) {
   _sta.currentVersion = t.currentVersion || 0; _sta.isDefault = !!t.isDefault;
   _sta.sel = 0; _sta.openCols = {}; _sta.dirty = false;
 }
-function staPick(id) {
-  if (_sta.dirty && !confirm('저장하지 않은 변경이 있습니다. 버리고 다른 양식을 열까요?')) { _staRender(); return; }
+async function staPick(id) {
+  if (_sta.dirty && !(await wmConfirm('저장하지 않은 변경이 있습니다. 버리고 다른 양식을 열까요?'))) { _staRender(); return; }
   var t = _sta.list.filter(function (x) { return x.id === id; })[0]; if (t) { _staLoad(t); _staRender(); }
 }
 
 /* 새 양식 — from: 'builtin' | 'current' | 'blank' */
-function staCreate(from) {
-  var name = prompt('새 양식 이름', from === 'builtin' ? '회사 표준 사양서' : (from === 'current' && _sta.name ? _sta.name + ' 사본' : '새 사양서 양식'));
+async function staCreate(from) {
+  var name = (await wmPrompt('새 양식 이름', from === 'builtin' ? '회사 표준 사양서' : (from === 'current' && _sta.name ? _sta.name + ' 사본' : '새 사양서 양식')));
   if (name == null || !name.trim()) return;
   var draft = from === 'builtin' ? specClone(SPEC_BUILTIN_TEMPLATE.schema) : from === 'current' && _sta.draft ? specClone(_sta.draft) : { sections: [{ key: 'sec1', label: '새 섹션', discipline: 'design', items: [] }] };
   apiFetch('/api/spec-templates', { method: 'POST', body: JSON.stringify({ name: name.trim(), draft: draft }) }).then(function (r) {
@@ -168,7 +168,7 @@ function _staMove(arr, i, d) { var j = i + d; if (j < 0 || j >= arr.length) retu
 
 function staSelSec(i) { _sta.sel = i; _sta.openCols = {}; _staRender(); }
 function staAddSec() { _sta.draft.sections.push({ key: _staKey('sec'), label: '새 섹션', discipline: 'design', items: [] }); _sta.sel = _sta.draft.sections.length - 1; _staDirty(); _staRender(); }
-function staDelSec() { var s = _staSec(); if (!confirm('섹션 "' + (s.label || '') + '" 과 항목 ' + (s.items || []).length + '개를 삭제할까요?')) return; _sta.draft.sections.splice(_sta.sel, 1); _staDirty(); _staRender(); }
+async function staDelSec() { var s = _staSec(); if (!(await wmConfirm('섹션 "' + (s.label || '') + '" 과 항목 ' + (s.items || []).length + '개를 삭제할까요?'))) return; _sta.draft.sections.splice(_sta.sel, 1); _staDirty(); _staRender(); }
 function staMoveSec(i, d) { if (_staMove(_sta.draft.sections, i, d)) { if (_sta.sel === i) _sta.sel = i + d; else if (_sta.sel === i + d) _sta.sel = i; _staDirty(); _staRender(); } }
 function staAddItem(type) {
   var s = _staSec(); s.items = s.items || [];
@@ -176,7 +176,7 @@ function staAddItem(type) {
   if (type === 'table') { it.columns = [{ key: 'name', label: '이름', type: 'text', owner: it.owner }]; _sta.openCols[s.items.length] = true; }
   s.items.push(it); _staDirty(); _staRender();
 }
-function staDelItem(ii) { var it = _staItem(ii); if (!confirm('항목 "' + (it.label || '') + '" 을 삭제할까요?')) return; _staSec().items.splice(ii, 1); _sta.openCols = {}; _staDirty(); _staRender(); }
+async function staDelItem(ii) { var it = _staItem(ii); if (!(await wmConfirm('항목 "' + (it.label || '') + '" 을 삭제할까요?'))) return; _staSec().items.splice(ii, 1); _sta.openCols = {}; _staDirty(); _staRender(); }
 function staMoveItem(ii, d) { if (_staMove(_staSec().items, ii, d)) { _sta.openCols = {}; _staDirty(); _staRender(); } }
 function staSetType(ii, t) {
   var it = _staItem(ii); it.type = t;
@@ -214,10 +214,10 @@ function staSaveDraft() {
   _staPut().then(function () { _staRender(); _staToast('초안을 저장했습니다. 발행해야 사양서에 반영됩니다.'); })
     .catch(function (e) { _staToast('❌ ' + ((e && e.message) || '저장 실패'), 'error'); });
 }
-function staPublish() {
+async function staPublish() {
   if (staCheck().length) { _staToast('검사에서 문제가 발견되어 발행하지 않았습니다.', 'warn'); return; }
   var ver = (_sta.currentVersion || 0) + 1;
-  if (!confirm('v' + ver + ' 로 발행합니다.\n이미 작성 중인 사양서는 기존 버전을 유지하고, 각 사양서에서 "새 표준 적용"을 눌러야 바뀝니다.')) return;
+  if (!(await wmConfirm('v' + ver + ' 로 발행합니다.\n이미 작성 중인 사양서는 기존 버전을 유지하고, 각 사양서에서 "새 표준 적용"을 눌러야 바뀝니다.'))) return;
   _staPut().then(function () {
     return apiFetch('/api/spec-templates/' + encodeURIComponent(_sta.id) + '/publish', { method: 'POST', body: '{}' });
   }).then(function (r) {
@@ -239,8 +239,8 @@ function staSetDefault() {
     _staToast('기본 양식으로 지정했습니다.');
   }).catch(function (e) { _staToast('❌ ' + ((e && e.message) || '실패'), 'error'); });
 }
-function staDelete() {
-  if (!confirm('양식 "' + _sta.name + '" 을 삭제할까요?\n이 양식으로 작성된 사양서는 발행 버전이 남아 있어 계속 열립니다.')) return;
+async function staDelete() {
+  if (!(await wmConfirm('양식 "' + _sta.name + '" 을 삭제할까요?\n이 양식으로 작성된 사양서는 발행 버전이 남아 있어 계속 열립니다.'))) return;
   apiFetch('/api/spec-templates/' + encodeURIComponent(_sta.id), { method: 'DELETE' }).then(function () {
     _sta.list = _sta.list.filter(function (x) { return x.id !== _sta.id; });
     psInvalidateTemplates();

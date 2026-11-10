@@ -527,8 +527,8 @@ function psMove(id, status) {
     .catch(function (e) { _psToast('상태 변경 실패: ' + _prestudyErrMsg(e), 'error'); });
 }
 
-function psDelete(id) {
-  if (!confirm('이 사전검토를 삭제할까요?')) return;
+async function psDelete(id) {
+  if (!(await wmConfirm('이 사전검토를 삭제할까요?'))) return;
   prestudyDel(id).then(function () {
     _psCloseModal();
     renderPrestudy();
@@ -554,25 +554,25 @@ function _psCheckLinkedProj(projId) {
 }
 
 var _psConverting = false;   // 전환 중 연타 방지 (서버도 한 번만 전환되게 막는다)
-function psConvert(id, target) {
+async function psConvert(id, target) {
   if (_psConverting) return;
   var orderNo = null;
   if (target === 'order') {
-    var no = prompt('생성할 수주번호를 입력하세요. (예: B2026-001)');
+    var no = (await wmPrompt('생성할 수주번호를 입력하세요. (예: B2026-001)'));
     if (!no || !no.trim()) return;
     orderNo = no.trim();
-  } else if (!confirm('이 검토 건을 프로젝트로 전환할까요?')) {
+  } else if (!(await wmConfirm('이 검토 건을 프로젝트로 전환할까요?'))) {
     return;
   }
   _psConverting = true;
-  prestudyConvert(id, target, orderNo).then(function (res) {
+  prestudyConvert(id, target, orderNo).then(async function (res) {
     _psConverting = false;
     _psToast(target === 'order' ? '수주로 전환되었습니다.' : '프로젝트로 전환되었습니다.', 'success');
     _psCloseModal();
     renderPrestudy();
     // 프로젝트로 전환했으면 바로 열 수 있게 — 응답 { target, created: 프로젝트 행 }
     var newId = target === 'project' && res && res.created && res.created.id;
-    if (newId && confirm('새 프로젝트가 만들어졌습니다. 지금 열까요?')) _psOpenProject(newId);
+    if (newId && (await wmConfirm('새 프로젝트가 만들어졌습니다. 지금 열까요?'))) _psOpenProject(newId);
   }).catch(function (e) {
     _psConverting = false;
     _psToast('전환 실패: ' + _prestudyErrMsg(e), 'error');
@@ -640,8 +640,8 @@ function psTechLink(prestudyId) {
     .catch(function (e) { _psToast('연결 실패: ' + _prestudyErrMsg(e), 'error'); });
 }
 
-function psTechUnlink(techId, usageId, prestudyId) {
-  if (!confirm('이 요소기술 연결을 해제할까요?')) return;
+async function psTechUnlink(techId, usageId, prestudyId) {
+  if (!(await wmConfirm('이 요소기술 연결을 해제할까요?'))) return;
   techUsageDel(techId, usageId).then(function () { psLoadTech(prestudyId); })
     .catch(function (e) { _psToast('연결 해제 실패: ' + _prestudyErrMsg(e), 'error'); });
 }

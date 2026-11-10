@@ -472,16 +472,16 @@ function pmtComplete(mid) {
     _pmtToast('✔ 회의록 작성 완료 — 완성된 문서로 표시합니다.', 'success');
   });
 }
-function pmtUncomplete(mid) {
+async function pmtUncomplete(mid) {
   var m = _pmtFind(mid); if (!m) return;
-  if (!confirm('완료 표시를 풀고 "작성 중"으로 되돌릴까요?')) return;
+  if (!(await wmConfirm('완료 표시를 풀고 "작성 중"으로 되돌릴까요?'))) return;
   var form = Object.assign({}, m.form); delete form.completedAt; delete form.completedBy;
   _pmtUpdate(mid, { form: form }).then(function (ok) { if (ok) { _pmt.editing[mid] = false; _pmtPaintCard(mid); _pmtToast('작성 중으로 되돌렸습니다.'); } });
 }
 /* 완료된 회의를 양식으로 열기 / 취소 / 저장 후 문서 보기 */
 function pmtEdit(mid) { if (!_pmt) return; _pmt.editing[mid] = true; _pmtPaintCard(mid); }
-function pmtEditCancel(mid) {
-  if (_pmtDirty(mid) && !confirm('저장하지 않은 수정 내용이 있습니다. 버리고 문서 보기로 돌아갈까요?')) return;
+async function pmtEditCancel(mid) {
+  if (_pmtDirty(mid) && !(await wmConfirm('저장하지 않은 수정 내용이 있습니다. 버리고 문서 보기로 돌아갈까요?'))) return;
   delete _pmt.drafts[mid];
   _pmt.editing[mid] = false;
   _pmtPaintCard(mid);
@@ -589,9 +589,9 @@ function _pmtUpdate(mid, patch) {
     _pmtToast('❌ ' + _pmtErr(e, '저장 실패'), 'error'); return false;
   });
 }
-function pmtDelete(mid) {
+async function pmtDelete(mid) {
   var m = _pmtFind(mid); if (!m) return;
-  if (!confirm('회의 "' + m.title + '" 을(를) 삭제할까요? (연결된 캘린더 일정도 삭제됩니다)')) return;
+  if (!(await wmConfirm('회의 "' + m.title + '" 을(를) 삭제할까요? (연결된 캘린더 일정도 삭제됩니다)'))) return;
   apiFetch('/api/meetings/' + encodeURIComponent(mid), { method: 'DELETE' }).then(function () {
     _pmt.list = _pmt.list.filter(function (x) { return String(x.id) !== String(mid); });
     delete _pmt.drafts[mid];
@@ -830,12 +830,12 @@ function _pmtBundleCopy() {
   var d = _pmt && _pmt.bundleDoc; if (!d) return;
   wmCopyHtml(d.html.replace(/<div class="pg-brk"[^>]*><\/div>/g, '<hr>'), _pmtPlainOf(d.html)).then(function (ok) { _pmtToast(ok ? '📋 서식째 복사했습니다 — 메일에 붙여 넣으세요' : '❌ 복사하지 못했습니다', ok ? 'success' : 'error'); });
 }
-function pmtSendMail(mid) {
+async function pmtSendMail(mid) {
   var names = Array.prototype.slice.call(document.querySelectorAll('#pmtPreviewModal .pmt-rc:checked')).map(function (c) { return c.getAttribute('data-name'); });
   var emails = _pmtSplit((document.getElementById('pmtMailExtra') || {}).value);
   var msg = (document.getElementById('pmtMailMsg') || {}).value || '';
   if (!names.length && !emails.length) { _pmtToast('받는 사람을 고르거나 주소를 입력하세요.', 'warn'); return; }
-  if (!confirm((names.length + emails.length) + '곳에 회의록을 보낼까요?')) return;
+  if (!(await wmConfirm((names.length + emails.length) + '곳에 회의록을 보낼까요?'))) return;
   var btn = document.getElementById('pmtMailBtn'), label = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '보내는 중...'; }
   apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/mail', { method: 'POST', body: JSON.stringify(Object.assign(typeof wmPrintDocBody === 'function' ? wmPrintDocBody() : {}, { attendees: names, emails: emails, message: msg })), timeoutMs: 45000 }).then(function (r) {
@@ -867,10 +867,10 @@ function pmtAgendaToggle(mid, i) {
   ag[i].done = !ag[i].done;
   _pmtSaveAgenda(mid, ag);
 }
-function pmtAgendaDel(mid, i) {
+async function pmtAgendaDel(mid, i) {
   var m = _pmtFind(mid); if (!m) return;
   var ag = _pmtAgendaOf(m); if (!ag[i]) return;
-  if ((ag[i].note || ag[i].result) && !confirm('안건 "' + ag[i].text + '" 과 적어 둔 논의·결과를 삭제할까요?')) return;
+  if ((ag[i].note || ag[i].result) && !(await wmConfirm('안건 "' + ag[i].text + '" 과 적어 둔 논의·결과를 삭제할까요?'))) return;
   ag.splice(i, 1);
   _pmtSaveAgenda(mid, ag);
 }
@@ -920,15 +920,15 @@ function pmtActToggle(mid, aid, status) {
     .then(function () { return _pmtAfterAct(mid); })
     .catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '변경 실패'), 'error'); });
 }
-function pmtActDel(mid, aid) {
-  if (!confirm('이 액션아이템을 삭제할까요?')) return;
+async function pmtActDel(mid, aid) {
+  if (!(await wmConfirm('이 액션아이템을 삭제할까요?'))) return;
   apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions/' + encodeURIComponent(aid), { method: 'DELETE' })
     .then(function () { return _pmtAfterAct(mid); })
     .catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '삭제 실패'), 'error'); });
 }
-function pmtActConvert(mid, aid, target) {
+async function pmtActConvert(mid, aid, target) {
   var label = target === 'dev' ? '개발 아이템' : '이슈';
-  if (!confirm('이 액션아이템을 ' + label + '(으)로 전환할까요?')) return;
+  if (!(await wmConfirm('이 액션아이템을 ' + label + '(으)로 전환할까요?'))) return;
   apiFetch('/api/meetings/' + encodeURIComponent(mid) + '/actions/' + encodeURIComponent(aid) + '/convert', { method: 'POST', body: JSON.stringify({ target: target }) })
     .then(function () { return _pmtAfterAct(mid, label + '(으)로 전환됨'); })
     .catch(function (e) { _pmtToast('❌ ' + _pmtErr(e, '전환 실패'), 'error'); });

@@ -226,8 +226,8 @@ function mmSwitchSheet(i) {
   _mmFit();
   _mmFocusCanvas();
 }
-function mmAddSheet() {
-  var name = prompt('새 시트 이름', '시트 ' + (_mm.doc.sheets.length + 1));
+async function mmAddSheet() {
+  var name = (await wmPrompt('새 시트 이름', '시트 ' + (_mm.doc.sheets.length + 1)));
   if (name == null) return;
   if (_mm.doc.sheets.length >= 20) { _mmToast('시트는 최대 20개까지 만들 수 있습니다', 'error'); return; }
   _mmMutate(function () {
@@ -241,18 +241,18 @@ function mmAddSheet() {
   _mmFit();
   _mmFocusCanvas();   // 이름 입력 창이 가져간 키 입력을 캔버스로
 }
-function mmRenameSheet() {
+async function mmRenameSheet() {
   if (_mm.readOnly) return;
   var cur = _mmSheet();
-  var name = prompt('시트 이름', cur.title || '');
+  var name = (await wmPrompt('시트 이름', cur.title || ''));
   if (name == null || !name.trim() || name.trim() === cur.title) return;
   _mmMutate(function () { cur.title = name.trim().slice(0, 60); }, { paint: false });
   _mmPaintSheets();
 }
-function mmDeleteSheet(i) {
+async function mmDeleteSheet(i) {
   if (_mm.doc.sheets.length <= 1) return;
   var sh = _mm.doc.sheets[i];
-  if (!confirm('"' + (sh.title || '') + '" 시트를 삭제할까요? (되돌리기 가능)')) return;
+  if (!(await wmConfirm('"' + (sh.title || '') + '" 시트를 삭제할까요? (되돌리기 가능)'))) return;
   _mmMutate(function () {
     _mm.doc.sheets.splice(i, 1);
     _mm.sheetIdx = Math.max(0, Math.min(_mm.sheetIdx, _mm.doc.sheets.length - 1));

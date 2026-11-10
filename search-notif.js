@@ -137,10 +137,10 @@ function gsRecentDelSel() {
   gsRecentSave(left); _gsSel = null; _gsRecentRedraw();
   if (typeof showToast === 'function') showToast('🗑 최근 검색어 ' + n + '개를 지웠습니다', 'success');
 }
-function gsRecentClear() {
+async function gsRecentClear() {
   var r = gsRecentList();
   if (!r.length) return;
-  if (!confirm('최근 검색어 ' + r.length + '개를 모두 지울까요?')) return;
+  if (!(await wmConfirm('최근 검색어 ' + r.length + '개를 모두 지울까요?'))) return;
   gsRecentSave([]); _gsSel = null; _gsRecentRedraw();
   if (typeof showToast === 'function') showToast('🗑 최근 검색어를 모두 지웠습니다', 'success');
 }

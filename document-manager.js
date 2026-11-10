@@ -961,7 +961,7 @@ async function docDownloadFile(fileId) {
 
 /* ═══ 파일 삭제 ═══ */
 async function docDeleteFile(fileId) {
-  if (!confirm('이 파일을 삭제하시겠습니까?')) return;
+  if (!(await wmConfirm('이 파일을 삭제하시겠습니까?'))) return;
   try {
     await fileDel(fileId);
     if (docSelFile === fileId) docSelFile = null;
@@ -976,7 +976,7 @@ async function docDeleteFile(fileId) {
 /* ═══ 폴더 추가 ═══ */
 async function docAddFolder() {
   if (!docSelProject) { showToast('프로젝트를 선택하세요.', 'warn'); return; }
-  var name = prompt('새 폴더 이름:');
+  var name = (await wmPrompt('새 폴더 이름:'));
   if (!name || !name.trim()) return;
 
   try {
@@ -1034,7 +1034,7 @@ async function docDeleteFolder(folderId) {
     var sub = ids.length - 1;
     var msg = '"' + folder.name + '" 폴더' + (sub ? '와 하위 폴더 ' + sub + '개' : '') + '를 삭제하시겠습니까?' +
       (files.length ? '\n안에 있는 파일 ' + files.length + '개도 함께 삭제됩니다.' : '');
-    if (!confirm(msg)) return;
+    if (!(await wmConfirm(msg))) return;
 
     await Promise.all(files.map(function (f) { return fileDel(f.id); }));
     for (var i = ids.length - 1; i >= 0; i--) await folderDel(ids[i]);   // 깊은 것부터
@@ -1075,7 +1075,7 @@ async function docRenameFolder(folderId) {
   try {
     var folder = await folderGet(folderId);
     if (!folder) { showToast('폴더를 찾을 수 없습니다 (이미 삭제됐을 수 있습니다).', 'warn'); return; }
-    var newName = prompt('폴더 이름 변경:', folder.name);
+    var newName = (await wmPrompt('폴더 이름 변경:', folder.name));
     if (!newName || !newName.trim() || newName.trim() === folder.name) return;
     folder.name = newName.trim();
     await folderPut(folder);
@@ -1139,7 +1139,7 @@ async function docSaveFolderMemo(folderId) {
 }
 
 async function docClearFolderMemo(folderId) {
-  if (!confirm('이 폴더의 메모를 삭제하시겠습니까?')) return;
+  if (!(await wmConfirm('이 폴더의 메모를 삭제하시겠습니까?'))) return;
   try {
     var folder = await folderGet(folderId);
     if (!folder) return;
@@ -1302,8 +1302,8 @@ async function docUploadFiles(fileList, opts) {
     var dupNames = files.filter(function (f) { return existing.some(function (x) { return x.name === f.name; }); }).map(function (f) { return f.name; });
     var replaceDup = false;
     if (dupNames.length) {
-      replaceDup = confirm('이미 있는 파일 ' + dupNames.length + '개: ' + dupNames.slice(0, 5).join(', ') + (dupNames.length > 5 ? ' …' : '') +
-        '\n\n[확인] 새 버전으로 교체 (이전 것은 _v날짜 이름으로 보관)\n[취소] 같은 이름은 건너뛰기');
+      replaceDup = (await wmConfirm('이미 있는 파일 ' + dupNames.length + '개: ' + dupNames.slice(0, 5).join(', ') + (dupNames.length > 5 ? ' …' : '') +
+        '\n\n[확인] 새 버전으로 교체 (이전 것은 _v날짜 이름으로 보관)\n[취소] 같은 이름은 건너뛰기'));
     }
     for (var i = 0; i < files.length; i++) {
       var file = files[i];

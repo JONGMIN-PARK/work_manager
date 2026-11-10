@@ -508,7 +508,7 @@ function _mmSearch(q, jump, step) {
 }
 
 /* ═══ 이벤트 ═══ */
-function _mmEdClick(e) {
+async function _mmEdClick(e) {
   var t = e.target.closest('[data-act]');
   var act = t && this.contains(t) ? t.getAttribute('data-act') : null;
   // 열린 메뉴는 다른 곳을 누르면 닫음
@@ -586,7 +586,7 @@ function _mmEdClick(e) {
     case 'palette': if (typeof mmPalette === 'function') mmPalette(); return;
     case 'cmd': if (typeof mmRunCommand === 'function') mmRunCommand(t.getAttribute('data-cmd')); break;
     case 'take-lock':
-      if (!confirm((_mm.lockedBy || '다른 사용자') + ' 님이 아직 편집 중일 수 있습니다.\n가져오면 그분이 마지막으로 저장한 내용부터 이어서 편집하고, 그분 화면은 보기 전용으로 바뀝니다.\n가져올까요?')) return;
+      if (!(await wmConfirm((_mm.lockedBy || '다른 사용자') + ' 님이 아직 편집 중일 수 있습니다.\n가져오면 그분이 마지막으로 저장한 내용부터 이어서 편집하고, 그분 화면은 보기 전용으로 바뀝니다.\n가져올까요?'))) return;
       _mmLockAcquire(true); return;
     case 'conflict-reload': _mm.conflict = null; _mm.dirty = false; mmOpen(_mm.mapId); return;
     case 'conflict-overwrite': _mmConflictOverwrite(); return;

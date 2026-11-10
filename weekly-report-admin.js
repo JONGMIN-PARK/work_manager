@@ -737,7 +737,7 @@
     picked.sort(function (a, b) { return a.firstWeek < b.firstWeek ? -1 : a.firstWeek > b.firstWeek ? 1 : 0; });
     var target = picked[0], keys = [];
     picked.slice(1).forEach(function (i) { (i.variants || [{ key: i.key }]).forEach(function (v) { keys.push(v.key); }); });
-    if (!confirm('아래 ' + picked.length + '개를 같은 일로 셉니다 (경과가 이어지고 납기 연기도 셈)\n\n' + picked.map(function (i) { return '· [' + i.client + '] ' + i.name + ' (' + i.firstWeek.slice(5) + '~)'; }).join('\n') + '\n\n나중에 일을 눌러 [따로 세기]로 되돌릴 수 있습니다.')) return;
+    if (!(await wmConfirm('아래 ' + picked.length + '개를 같은 일로 셉니다 (경과가 이어지고 납기 연기도 셈)\n\n' + picked.map(function (i) { return '· [' + i.client + '] ' + i.name + ' (' + i.firstWeek.slice(5) + '~)'; }).join('\n') + '\n\n나중에 일을 눌러 [따로 세기]로 되돌릴 수 있습니다.'))) return;
     try {
       await apiFetch('/api/weekly-reports/item-links', { method: 'POST', body: JSON.stringify({ kind: 'merge', keys: keys, target: target.key }) });
       if (typeof showToast === 'function') showToast('🔗 같은 일로 묶었습니다', 'ok');
@@ -828,7 +828,7 @@
       m.box.querySelectorAll('[data-lk]').forEach(function (b) {
         b.addEventListener('click', async function () {
           var kind = b.dataset.lk, k = b.dataset.k;
-          if (kind === 'split' && !confirm('[' + (b.dataset.n || '') + '] 을(를) 이 일과 따로 셉니다. 계속할까요?')) return;
+          if (kind === 'split' && !(await wmConfirm('[' + (b.dataset.n || '') + '] 을(를) 이 일과 따로 셉니다. 계속할까요?'))) return;
           try {
             await apiFetch('/api/weekly-reports/item-links', { method: 'POST', body: JSON.stringify({ kind: kind, key: k }) });
             m.close();
@@ -1159,7 +1159,7 @@
   }
 
   async function deleteReport(id) {
-    if (!confirm('삭제하시겠습니까?')) return;
+    if (!(await wmConfirm('삭제하시겠습니까?'))) return;
     try {
       await apiFetch('/api/weekly-reports/' + encodeURIComponent(id), { method: 'DELETE' });
       if (typeof showToast === 'function') showToast('삭제됨', 'ok');
@@ -1678,8 +1678,8 @@
     }
   }
 
-  function authorNew() {
-    if (isDirty() && !confirm('저장하지 않은 내용이 사라집니다. 새로 만드시겠습니까?')) return;
+  async function authorNew() {
+    if (isDirty() && !(await wmConfirm('저장하지 않은 내용이 사라집니다. 새로 만드시겠습니까?'))) return;
     _authorState.lastText = '';
     _authorState.curText = '';
     _authorState.loadedId = null;
@@ -1703,7 +1703,7 @@
       var d = await apiFetch('/api/weekly-reports/' + encodeURIComponent(match.id));
       var prevCur = d.data && d.data.cur_text || '';
       if (!prevCur) { alert('이전 주 금주 텍스트가 비어있습니다.'); return; }
-      if (_authorState.lastText && !confirm('현재 [지난주] 텍스트를 덮어씁니다. 진행할까요?')) return;
+      if (_authorState.lastText && !(await wmConfirm('현재 [지난주] 텍스트를 덮어씁니다. 진행할까요?'))) return;
       _authorState.lastText = prevCur;
       _authorState.editPane = 'last';
       renderAuthor();
@@ -1731,7 +1731,7 @@
         + '</div>';
       dd.querySelectorAll('[data-load-id]').forEach(function (b) {
         b.addEventListener('click', async function () {
-          if (isDirty() && !confirm('저장하지 않은 내용이 있습니다. 버리고 불러올까요?')) return;
+          if (isDirty() && !(await wmConfirm('저장하지 않은 내용이 있습니다. 버리고 불러올까요?'))) return;
           try { await authorLoadById(b.dataset.loadId); $('wrAuLoadDropdown').style.display = 'none'; }
           catch (e) { alert('불러오기 실패: ' + (e.message || e)); }
         });
@@ -1796,8 +1796,8 @@
     } catch (e) {
       if (e && e.status === 409) {
         var by = (e.data && e.data.data && e.data.data.by) || '다른 사용자';
-        if (confirm(by + ' 님이 그 사이 [' + _authorState.loadedName + '] 을(를) 저장했습니다.\n\n'
-          + '덮어쓰면 그 내용이 사라집니다. 내 내용을 새 버전(R+1)으로 따로 저장할까요?')) {
+        if ((await wmConfirm(by + ' 님이 그 사이 [' + _authorState.loadedName + '] 을(를) 저장했습니다.\n\n'
+          + '덮어쓰면 그 내용이 사라집니다. 내 내용을 새 버전(R+1)으로 따로 저장할까요?'))) {
           _saving = false;
           return await saveAuthor(true);
         }

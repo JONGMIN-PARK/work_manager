@@ -277,8 +277,8 @@ async function doReparse(){
   showArchDetail(archSel);
 }
 async function archLoad(){if(!archSel)return;const w=await wkGet(archSel);if(!w||!w.data)return;aD=w.data;aN=[...new Set(aD.map(r=>r.name))].sort();vN=[...aN];sN=new Set(w.selectedNames||[]);sO=new Set(w.selectedOrders||[]);sT=new Set(w.selectedTasks||[]);cKw=w.contentKeyword||'';document.getElementById('cSearch').value=cKw;document.getElementById('weekLabel').value=w.label||'';document.getElementById('fnDisp').textContent=w.fileName||'';document.getElementById('rcDisp').textContent=aD.length;document.getElementById('fileInfo').classList.remove('hidden');document.getElementById('uploadZone').classList.add('hidden');document.getElementById('mainArea').classList.remove('hidden');if(w.rawBuffer)lBuf=w.rawBuffer;if(w.encoding)cEnc=w.encoding;rEC();if(w.aiComment&&document.getElementById('sumCmt'))document.getElementById('sumCmt').value=w.aiComment;if(w.aiReport)document.getElementById('sumOut').innerHTML=w.aiReport;rNC();rFL();upV();setMode('weekly')}
-async function archDel(){if(!archSel)return;if(!confirm('이 주차를 삭제하시겠습니까?'))return;await wkDel(archSel);invalidateArchiveCache();archSel=null;renderArch()}
-async function clearAllWeeks(){if(!confirm('저장된 모든 주차를 삭제하시겠습니까?'))return;await wkClear();invalidateArchiveCache();renderArch()}
+async function archDel(){if(!archSel)return;if(!(await wmConfirm('이 주차를 삭제하시겠습니까?')))return;await wkDel(archSel);invalidateArchiveCache();archSel=null;renderArch()}
+async function clearAllWeeks(){if(!(await wmConfirm('저장된 모든 주차를 삭제하시겠습니까?')))return;await wkClear();invalidateArchiveCache();renderArch()}
 
 /* ═══ TREND ═══ */
 var trendGroupFilter=''; // 그룹명 필터 (빈 문자열=전체)

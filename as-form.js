@@ -512,8 +512,8 @@ function _asModalAttachPicked(ev, ticketId) {
 }
 
 /* 편집 모달에서 기존 첨부 삭제 — 서버 즉시 반영 */
-function _asModalAttachRemove(ticketId, aid) {
-  if (!confirm('이 첨부를 삭제하시겠습니까?')) return;
+async function _asModalAttachRemove(ticketId, aid) {
+  if (!(await wmConfirm('이 첨부를 삭제하시겠습니까?'))) return;
   if (typeof asAttachmentDel !== 'function') return;
   asAttachmentDel(ticketId, aid).then(function () {
     if (typeof showToast === 'function') showToast('첨부가 삭제되었습니다.');

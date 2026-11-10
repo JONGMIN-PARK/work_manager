@@ -170,13 +170,13 @@ function pimgOnPick(input, projId) {
   });
 }
 
-function pimgRemove(projId, key) {
+async function pimgRemove(projId, key) {
   if (String(key).indexOf('staged:') === 0) {
     var i = parseInt(key.split(':')[1], 10);
     if (window._pimgStaging && i >= 0) { window._pimgStaging.splice(i, 1); _pimgRenderGrid(''); }
     return;
   }
-  if (!confirm('이 이미지를 삭제할까요?')) return;
+  if (!(await wmConfirm('이 이미지를 삭제할까요?'))) return;
   projImageDel(projId, key).then(function () { _pimgRenderGrid(projId); _pimgToast('삭제됨'); })
     .catch(function () { _pimgToast('삭제 실패', 'error'); });
 }

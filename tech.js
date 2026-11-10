@@ -439,8 +439,8 @@ function techSave(id) {
   }).catch(function (e) { _tToast('저장 실패: ' + _tErrMsg(e), 'error'); });
 }
 
-function techDelete(id) {
-  if (!confirm('이 요소기술을 삭제할까요? (개발일지도 함께 숨겨집니다)')) return;
+async function techDelete(id) {
+  if (!(await wmConfirm('이 요소기술을 삭제할까요? (개발일지도 함께 숨겨집니다)'))) return;
   techDel(id).then(function () { _tCloseModal(); renderTech(); })
     .catch(function (e) { _tToast('삭제 실패: ' + _tErrMsg(e), 'error'); });
 }
@@ -533,8 +533,8 @@ function techUsageAddFromForm(techId) {
     .catch(function () { _tToast('추가 실패', 'error'); });
 }
 
-function techUsageRemove(techId, usageId) {
-  if (!confirm('이 적용 이력을 삭제할까요?')) return;
+async function techUsageRemove(techId, usageId) {
+  if (!(await wmConfirm('이 적용 이력을 삭제할까요?'))) return;
   techUsageDel(techId, usageId).then(function () { techLoadUsages(techId); })
     .catch(function (e) { _tToast('적용 이력 삭제 실패: ' + _tErrMsg(e), 'error'); });
 }
@@ -614,8 +614,8 @@ function techLogSave(techId) {
   }).catch(function () { _tToast('일지 등록 실패', 'error'); });
 }
 
-function techLogDelete(techId, logId) {
-  if (!confirm('이 개발일지를 삭제할까요?')) return;
+async function techLogDelete(techId, logId) {
+  if (!(await wmConfirm('이 개발일지를 삭제할까요?'))) return;
   techLogDel(techId, logId).then(function () {
     techLoadLogs(techId);
     _techRefreshList();

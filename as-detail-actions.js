@@ -194,8 +194,8 @@ function asPartAdd(ticketId) {
   });
 }
 
-function asPartRemove(ticketId, pid) {
-  if (!confirm('이 부품 기록을 삭제하시겠습니까?')) return;
+async function asPartRemove(ticketId, pid) {
+  if (!(await wmConfirm('이 부품 기록을 삭제하시겠습니까?'))) return;
   asPartDel(ticketId, pid).then(function () {
     if (typeof showToast === 'function') showToast('삭제되었습니다.');
     showASDetail(ticketId);
@@ -311,8 +311,8 @@ function asAttachAdd(ticketId) {
   });
 }
 
-function asAttachRemove(ticketId, aid) {
-  if (!confirm('이 첨부를 삭제하시겠습니까?')) return;
+async function asAttachRemove(ticketId, aid) {
+  if (!(await wmConfirm('이 첨부를 삭제하시겠습니까?'))) return;
   asAttachmentDel(ticketId, aid).then(function () {
     if (typeof showToast === 'function') showToast('삭제되었습니다.');
     showASDetail(ticketId);
@@ -408,8 +408,8 @@ function asAssignmentChangeStatus(ticketId, aid, status) {
   });
 }
 
-function asAssignmentRemove(ticketId, aid) {
-  if (!confirm('이 부서 할당을 해제하시겠습니까?\n(이 부서로 기록된 처리이력은 유지됩니다.)')) return;
+async function asAssignmentRemove(ticketId, aid) {
+  if (!(await wmConfirm('이 부서 할당을 해제하시겠습니까?\n(이 부서로 기록된 처리이력은 유지됩니다.)'))) return;
   asAssignmentDel(ticketId, aid).then(function () {
     if (typeof showToast === 'function') showToast('할당이 해제되었습니다.');
     showASDetail(ticketId);
@@ -451,8 +451,8 @@ function asLogAdd(ticketId) {
   });
 }
 
-function asLogRemove(ticketId, lid) {
-  if (!confirm('이 작업 기록을 삭제하시겠습니까?\n(부서별 소요시간이 재계산됩니다.)')) return;
+async function asLogRemove(ticketId, lid) {
+  if (!(await wmConfirm('이 작업 기록을 삭제하시겠습니까?\n(부서별 소요시간이 재계산됩니다.)'))) return;
   asLogDel(ticketId, lid).then(function () {
     if (typeof showToast === 'function') showToast('삭제되었습니다.');
     showASDetail(ticketId);
@@ -493,8 +493,8 @@ function asReportSave(ticketId, finalize) {
 }
 
 /* ─── 휴지통 (soft → hard 2단계 삭제) ─── */
-function asSoftDeleteTicket(ticketId, ticketNo) {
-  if (!confirm('접수 ' + ticketNo + ' 을(를) 휴지통으로 이동하시겠습니까?\n\n• 휴지통에서 언제든 복구 가능\n• 완전 삭제는 휴지통에서 다시 한 번 더 확인 후 가능')) return;
+async function asSoftDeleteTicket(ticketId, ticketNo) {
+  if (!(await wmConfirm('접수 ' + ticketNo + ' 을(를) 휴지통으로 이동하시겠습니까?\n\n• 휴지통에서 언제든 복구 가능\n• 완전 삭제는 휴지통에서 다시 한 번 더 확인 후 가능'))) return;
   if (typeof asDel !== 'function') {
     if (typeof showToast === 'function') showToast('삭제 API 미연결', 'error');
     return;
@@ -522,9 +522,9 @@ function asRestoreTicket(ticketId) {
   });
 }
 
-function asPurgeTicket(ticketId, ticketNo) {
+async function asPurgeTicket(ticketId, ticketNo) {
   // 2단계 확인: 접수번호를 정확히 입력해야 진행
-  var typed = prompt('⚠ 완전 삭제\n\n접수 "' + ticketNo + '"를 완전히 삭제합니다.\n할당·처리이력·부품·첨부·서명까지 모두 영구 제거되며 복구할 수 없습니다.\n\n계속하려면 접수번호 "' + ticketNo + '"를 그대로 입력하세요.');
+  var typed = (await wmPrompt('⚠ 완전 삭제\n\n접수 "' + ticketNo + '"를 완전히 삭제합니다.\n할당·처리이력·부품·첨부·서명까지 모두 영구 제거되며 복구할 수 없습니다.\n\n계속하려면 접수번호 "' + ticketNo + '"를 그대로 입력하세요.'));
   if (typed === null) return;
   if (String(typed).trim() !== ticketNo) {
     if (typeof showToast === 'function') showToast('접수번호가 일치하지 않습니다. 취소되었습니다.', 'warn');
@@ -545,8 +545,8 @@ function asPurgeTicket(ticketId, ticketNo) {
 }
 
 /* ─── 이슈 연계 ─── */
-function asTriggerLinkIssue(ticketId) {
-  if (!confirm('이 A/S를 이슈관리에 새 이슈로 자동 등록하시겠습니까?\n\n• 카테고리·긴급도에 따라 이슈 유형·urgency 자동 매핑\n• 신고내용·RCA·재발방지가 이슈 설명으로 복사\n• 이슈 태그에 from-as / 접수번호 추가')) return;
+async function asTriggerLinkIssue(ticketId) {
+  if (!(await wmConfirm('이 A/S를 이슈관리에 새 이슈로 자동 등록하시겠습니까?\n\n• 카테고리·긴급도에 따라 이슈 유형·urgency 자동 매핑\n• 신고내용·RCA·재발방지가 이슈 설명으로 복사\n• 이슈 태그에 from-as / 접수번호 추가'))) return;
   asLinkIssue(ticketId, null).then(function (res) {
     if (typeof showToast === 'function') showToast('🎫 이슈가 등록되었습니다 (' + res.issueId + ')');
     showASDetail(ticketId);

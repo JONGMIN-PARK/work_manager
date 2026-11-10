@@ -134,8 +134,8 @@ function saveASCategoryEdit(id) {
   });
 }
 
-function deleteASCategory(id, code) {
-  if (!confirm('카테고리 "' + code + '"을(를) 비활성화하시겠습니까?\n\n• 비활성화 → 신규 접수에서 선택 불가 (기존 접수는 그대로 표시)\n• 사용 중이지 않으면 완전 삭제도 가능 (다음 단계에서 안내)')) return;
+async function deleteASCategory(id, code) {
+  if (!(await wmConfirm('카테고리 "' + code + '"을(를) 비활성화하시겠습니까?\n\n• 비활성화 → 신규 접수에서 선택 불가 (기존 접수는 그대로 표시)\n• 사용 중이지 않으면 완전 삭제도 가능 (다음 단계에서 안내)'))) return;
   asCategoryDel(id, false).then(function () {
     _AS_CAT_CACHE = null;
     if (typeof showToast === 'function') showToast('비활성화되었습니다.');

@@ -1336,8 +1336,8 @@ function _nbFolderMenu(fid, anchor) {
     ['✏️ 이름 · 색 바꾸기', function () { _nbFolderEdit(fid); }],
     ['＋ 이 폴더에 새 노트', function () { NB.folder = fid; nbNewFromTemplate('blank'); }],
     '-',
-    ['🗑 폴더 지우기 (노트는 남김)', function () {
-      if (!confirm('"' + f.name + '" 폴더를 지울까요?\n안의 노트 ' + (f.n || 0) + '개는 지워지지 않고 \'폴더 없음\' 으로 갑니다.')) return;
+    ['🗑 폴더 지우기 (노트는 남김)', async function () {
+      if (!(await wmConfirm('"' + f.name + '" 폴더를 지울까요?\n안의 노트 ' + (f.n || 0) + '개는 지워지지 않고 \'폴더 없음\' 으로 갑니다.'))) return;
       apiFetch('/api/notebook/folders/' + encodeURIComponent(fid), { method: 'DELETE' }).then(function () { if (NB.folder === fid) NB.folder = null; _nbLoadMeta(); _nbLoadList(); _nbToast('폴더를 지웠습니다'); });
     }, 'danger']
   ]);
@@ -1357,15 +1357,15 @@ function _nbRestore(id) {
     if (NB.cur && NB.cur.id === id) { NB.cur.deletedAt = null; _nbDrawMain(); }
   }).catch(function (e) { _nbToast('❌ ' + _nbErr(e), 'error'); });
 }
-function _nbPurge(id) {
-  if (!confirm('이 노트를 영구 삭제할까요? 되돌릴 수 없습니다.')) return;
+async function _nbPurge(id) {
+  if (!(await wmConfirm('이 노트를 영구 삭제할까요? 되돌릴 수 없습니다.'))) return;
   apiFetch('/api/notebook/notes/' + encodeURIComponent(id) + '?purge=1', { method: 'DELETE' }).then(function () {
     if (NB.cur && NB.cur.id === id) { NB.cur = null; _nbDrawMain(); }
     _nbLoadMeta(); _nbLoadList();
   }).catch(function (e) { _nbToast('❌ ' + _nbErr(e), 'error'); });
 }
-function _nbEmptyTrash() {
-  if (!confirm('휴지통의 노트 ' + NB.list.length + '개를 모두 영구 삭제할까요?')) return;
+async function _nbEmptyTrash() {
+  if (!(await wmConfirm('휴지통의 노트 ' + NB.list.length + '개를 모두 영구 삭제할까요?'))) return;
   apiFetch('/api/notebook/trash/empty', { method: 'POST' }).then(function (r) { _nbToast('🗑 ' + r.data.n + '개를 지웠습니다'); NB.cur = null; _nbDrawMain(); _nbLoadMeta(); _nbLoadList(); });
 }
 function _nbToastUndo(msg, undo) {
@@ -1513,7 +1513,7 @@ function _nbInkBar(host) {
   wrap.insertBefore(bar, wrap.firstChild);   // 맨 앞 sticky — 스크롤해도 위에 붙어 있게
 }
 function _nbInkBarState() { /* 고르기 상태가 바뀌면 (예: 올가미) — 지금은 표시만 그대로 */ }
-function _nbInkTool(btn) {
+async function _nbInkTool(btn) {
   var v = btn.getAttribute('data-ink-t'), ed = NB.inkEd || NB.overEd, T = NbInk.tool;
   if (!ed) return;
   if (v.indexOf('t:') === 0) {
@@ -1527,7 +1527,7 @@ function _nbInkTool(btn) {
   else if (v === 'undo') ed.undoOne();
   else if (v === 'redo') ed.redoOne();
   else if (v === 'grow') ed.grow(240);
-  else if (v === 'clear') { if (confirm('이 칸의 손글씨를 모두 지울까요? (되돌리기로 살릴 수 있습니다)')) ed.clear(); }
+  else if (v === 'clear') { if ((await wmConfirm('이 칸의 손글씨를 모두 지울까요? (되돌리기로 살릴 수 있습니다)'))) ed.clear(); }
   else if (v === 'done') { _nbInkStop(); _nbOverStop(); return; }
   _nbInkBar(NB.overEd ? document.getElementById('nbOver') : document.querySelector('#nbDoc .nb-ink[data-ink="' + NB.inkId + '"]'));
 }
@@ -1616,13 +1616,13 @@ function nbVersions() {
           else b.innerHTML = _nbDiffHtml((v.title ? '# ' + v.title + '\n' : '') + v.body, (NB.cur.title ? '# ' + NB.cur.title + '\n' : '') + NB.cur.body);
         });
       }
-      md.box.addEventListener('click', function (e) {
+      md.box.addEventListener('click', async function (e) {
         var x = e.target.closest('[data-v]');
         if (x) { cur = +x.getAttribute('data-v'); md.box.querySelectorAll('.nb-ver-i').forEach(function (b) { b.classList.toggle('on', b === x); }); show(); return; }
         x = e.target.closest('[data-vm]');
         if (x) { mode = x.getAttribute('data-vm'); md.box.querySelectorAll('[data-vm]').forEach(function (b) { b.classList.toggle('on', b === x); }); show(); return; }
         if (e.target.closest('[data-x="restore"]') && cur) {
-          if (!confirm('이 모습으로 되돌릴까요? 지금 모습도 기록에 남아서 다시 돌아올 수 있습니다.')) return;
+          if (!(await wmConfirm('이 모습으로 되돌릴까요? 지금 모습도 기록에 남아서 다시 돌아올 수 있습니다.'))) return;
           apiFetch('/api/notebook/notes/' + encodeURIComponent(id) + '/versions/' + cur + '/restore', { method: 'POST' }).then(function (r) {
             md.close(); delete NB.pend['n:' + id]; NB.revs[id] = r.data.rev; NB.cur = r.data; _nbDraft(id, null); _nbDrawMain(); _nbLoadList(); _nbToast('🕘 되돌렸습니다');
           }).catch(function (e2) { _nbToast('❌ ' + _nbErr(e2), 'error'); });
@@ -1632,8 +1632,8 @@ function nbVersions() {
     });
   }, 'nbVerModal');
 }
-function _nbSnapNamed() {
-  var label = prompt('이 모습에 붙일 이름 (예: 고객 전달본 · 1차 검토)', '');
+async function _nbSnapNamed() {
+  var label = (await wmPrompt('이 모습에 붙일 이름 (예: 고객 전달본 · 1차 검토)', ''));
   if (label == null) return;
   _nbFlush().then(function () {
     return apiFetch('/api/notebook/notes/' + encodeURIComponent(NB.cur.id) + '/versions', { method: 'POST', body: JSON.stringify({ label: label }) });

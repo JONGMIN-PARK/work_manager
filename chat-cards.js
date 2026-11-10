@@ -111,22 +111,22 @@ function _cxcRedraw() {
 /* ── ③ 카드 처리 ── */
 function _cxcTomorrow() { var d = new Date(); d.setDate(d.getDate() + 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 var CXC_DO = {
-  phase: function (c, L) { return confirm('"' + L.title + '" — ' + L.st + ' → ' + L.nextL + ' 단계로 넘길까요?') && { url: '/api/projects/' + encodeURIComponent(c.id), body: { currentPhase: L.next }, what: L.nextL + ' 단계로' }; },
+  phase: async function (c, L) { return (await wmConfirm('"' + L.title + '" — ' + L.st + ' → ' + L.nextL + ' 단계로 넘길까요?')) && { url: '/api/projects/' + encodeURIComponent(c.id), body: { currentPhase: L.next }, what: L.nextL + ' 단계로' }; },
   ms_done: function (c) { return { url: '/api/milestones/' + encodeURIComponent(c.id), body: { status: 'done' }, what: '완료' }; },
   ms_open: function (c) { return { url: '/api/milestones/' + encodeURIComponent(c.id), body: { status: 'active' }, what: '다시 열기' }; },
   as_go: function (c, L) { return { url: '/api/as-tickets/' + encodeURIComponent(L.id || c.id), body: { status: 'in_progress' }, what: '진행 시작' }; },
   as_wait: function (c, L) { return { url: '/api/as-tickets/' + encodeURIComponent(L.id || c.id), body: { status: 'customer_wait' }, what: '고객 대기' }; },
-  as_close: function (c, L) { return confirm('"' + L.title + '" A/S 를 종결할까요?\n원인 · 종결 내용은 A/S 화면에서 채울 수 있어요.') && { url: '/api/as-tickets/' + encodeURIComponent(L.id || c.id), body: { status: 'closed' }, what: '종결' }; },
+  as_close: async function (c, L) { return (await wmConfirm('"' + L.title + '" A/S 를 종결할까요?\n원인 · 종결 내용은 A/S 화면에서 채울 수 있어요.')) && { url: '/api/as-tickets/' + encodeURIComponent(L.id || c.id), body: { status: 'closed' }, what: '종결' }; },
   td_done: function (c) { return { url: '/api/my-work/todos/' + encodeURIComponent(c.id), body: { done: true }, what: '완료' }; },
   td_undo: function (c) { return { url: '/api/my-work/todos/' + encodeURIComponent(c.id), body: { done: false }, what: '되돌리기' }; },
   td_tmr: function (c) { return { url: '/api/my-work/todos/' + encodeURIComponent(c.id), body: { dueDate: _cxcTomorrow() }, what: '내일로 미룸' }; }
 };
-function chatCardAct(btn, m) {
+async function chatCardAct(btn, m) {
   var unf = !!btn.dataset.u, ci = +btn.dataset.ci;
   var c = unf ? (CX.unf[m.id] && CX.unf[m.id].l || [])[ci] : (m.cards || [])[ci];
   var L = c && _cxcLive(c), f = c && CXC_DO[btn.dataset.kact];
   if (!c || !L || !f) return;
-  var job = f(c, L); if (!job) return;
+  var job = await f(c, L); if (!job) return;
   var bs = btn.parentNode.querySelectorAll('button'); bs.forEach(function (b) { b.disabled = true; });
   apiFetch(job.url, { method: 'PUT', body: JSON.stringify(job.body) }).then(function () {
     return apiFetch('/api/chat/messages/' + m.id + '/acted', { method: 'POST', body: JSON.stringify({ type: c.type, id: c.id, card: unf ? null : ci, what: job.what }) });

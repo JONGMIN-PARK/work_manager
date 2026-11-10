@@ -339,7 +339,7 @@ function _mwbCatsBuild() {
     var p = {}; p[f] = v; upd(row.getAttribute('data-cid'), p);
   });
   body.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.hasAttribute('data-cf')) { e.preventDefault(); e.target.blur(); } });
-  body.addEventListener('click', function (e) {
+  body.addEventListener('click', async function (e) {
     var t = e.target;
     var sw = t.closest('[data-ccol]');
     if (sw) { upd(sw.closest('[data-cid]').getAttribute('data-cid'), { color: sw.getAttribute('data-ccol') }); paint(); return; }
@@ -348,7 +348,7 @@ function _mwbCatsBuild() {
     var del = t.closest('[data-cdel]');
     if (del) {
       var id = del.getAttribute('data-cdel'), c = mwBoardCols().filter(function (x) { return x.id === id; })[0], n = _mwbCounts()[id] || 0;
-      if (!confirm('"' + c.name + '" 칸을 지울까요?' + (n ? '\n들어 있는 ' + n + '개는 지워지지 않고 자동 분류로 돌아갑니다.' : ''))) return;
+      if (!(await wmConfirm('"' + c.name + '" 칸을 지울까요?' + (n ? '\n들어 있는 ' + n + '개는 지워지지 않고 자동 분류로 돌아갑니다.' : '')))) return;
       apiFetch('/api/my-work/categories/' + encodeURIComponent(id), { method: 'DELETE' }).then(function () {
         ((_mw.data && _mw.data.data) || []).forEach(function (it) { if (it.cat === id) it.cat = null; });
         setCats(mwBoardCols().filter(function (x) { return x.id !== id; }));
@@ -357,7 +357,7 @@ function _mwbCatsBuild() {
       return;
     }
     if (t.closest('[data-creset]')) {
-      if (!confirm('기본 4칸(지금 하기 · 계획하기 · 빨리 끝내기 · 나중에)으로 되돌릴까요?\n만든 칸과 칸 고정이 모두 풀립니다. 항목은 그대로입니다.')) return;
+      if (!(await wmConfirm('기본 4칸(지금 하기 · 계획하기 · 빨리 끝내기 · 나중에)으로 되돌릴까요?\n만든 칸과 칸 고정이 모두 풀립니다. 항목은 그대로입니다.'))) return;
       apiFetch('/api/my-work/categories-reset', { method: 'POST' }).then(function (r) {
         ((_mw.data && _mw.data.data) || []).forEach(function (it) { it.cat = null; });
         setCats((r && r.data) || []);

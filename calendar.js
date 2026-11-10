@@ -469,7 +469,7 @@ function calOpenItem(id) {
 async function calMsDone(id) {
   var it = _calFindItem(id);
   if (!it || it.kind !== 'ms') return;
-  if (!confirm('마일스톤 "' + it.title + '" 을(를) 완료 처리할까요?')) return;
+  if (!(await wmConfirm('마일스톤 "' + it.title + '" 을(를) 완료 처리할까요?'))) return;
   try {
     // 상태만 보낸다 — 예전엔 화면에 들고 있던 옛 마일스톤 전체를 보내 그 사이 바뀐 이름·날짜를 되돌렸다
     await msPut({ id: it.ref.id, status: 'done' });
@@ -874,7 +874,7 @@ async function deleteEventUI(id) {
     var ev = await evtGet(id);
     var msg = '이 일정을 삭제하시겠습니까?';
     if (ev && ev.repeat) msg = '이 반복 일정의 모든 인스턴스가 삭제됩니다. 계속하시겠습니까?';
-    if (!confirm(msg)) return;
+    if (!(await wmConfirm(msg))) return;
     await evtDel(id);
     var _em = document.getElementById('evtModal'); if (_em) _em.remove();   // 저장 중 창을 닫았어도 "실패" 로 보이지 않게
     await _calAfterEvtSave();
@@ -1064,7 +1064,7 @@ async function calDropEvt(e, targetDate) {
     if (!shift) { calDragEvtId = null; calDragEvtDate = null; return; }
     var newStart = _calAddDays(evt.startDate, shift);
     var newEnd = _calAddDays(newStart, duration);
-    if (evt.repeat && !confirm('반복 일정입니다. 모든 회차가 ' + (shift > 0 ? '+' : '') + shift + '일 이동합니다. 계속할까요?')) return;
+    if (evt.repeat && !(await wmConfirm('반복 일정입니다. 모든 회차가 ' + (shift > 0 ? '+' : '') + shift + '일 이동합니다. 계속할까요?'))) return;
 
     await updateEvent(evtId, { startDate: newStart, endDate: newEnd });
     showToast(evt.repeat ? '반복 일정을 ' + (shift > 0 ? '+' : '') + shift + '일 이동했습니다' : '일정을 ' + targetDate + '로 이동했습니다');

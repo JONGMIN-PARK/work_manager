@@ -106,7 +106,7 @@ function _mmBindComments(pn, n) {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); _mmCmtSend(n); }
   };
   pn.querySelectorAll('#mmPnCmt [data-cmt-act]').forEach(function (b) {
-    b.onclick = function () {
+    b.onclick = async function () {
       var act = b.getAttribute('data-cmt-act');
       if (act === 'send') return _mmCmtSend(n);
       if (act === 'reload') return mmLoadComments();
@@ -118,7 +118,7 @@ function _mmBindComments(pn, n) {
         apiFetch(_mmCmtUrl(id), { method: 'PUT', body: JSON.stringify({ resolved: !c.resolved }) }).then(function (r) { _mmCmtReplace(r.data); })
           .catch(function (e) { _mmToast('❌ ' + _mmErr(e), 'error'); });
       } else if (act === 'del') {
-        if (!confirm('이 댓글을 지울까요?')) return;
+        if (!(await wmConfirm('이 댓글을 지울까요?'))) return;
         apiFetch(_mmCmtUrl(id), { method: 'DELETE' }).then(function () {
           _mm.comments = _mm.comments.filter(function (x) { return x.id !== id; });
           _mmPaint();

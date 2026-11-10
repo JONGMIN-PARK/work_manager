@@ -394,8 +394,8 @@ function _orderCreateProj(order, withOrder) {
     _orderAfterSave();
     showToast('⚠️ ' + (withOrder ? '수주는 저장됨 · ' : '') + '프로젝트 생성 실패: ' + msg, 'error');
     // showToast 는 버튼을 못 달아서 확인 창으로 [다시 시도]를 묻는다 (대장의 [＋ 프로젝트]로도 다시 만들 수 있음)
-    setTimeout(function () {
-      if (confirm((withOrder ? '수주 ' + order.orderNo + ' 는 저장됐지만 ' : '') + '프로젝트를 만들지 못했습니다.\n(' + msg + ')\n\n프로젝트 생성을 다시 시도할까요?\n(취소해도 수주 대장의 [＋ 프로젝트] 로 나중에 만들 수 있습니다)')) {
+    setTimeout(async function () {
+      if ((await wmConfirm((withOrder ? '수주 ' + order.orderNo + ' 는 저장됐지만 ' : '') + '프로젝트를 만들지 못했습니다.\n(' + msg + ')\n\n프로젝트 생성을 다시 시도할까요?\n(취소해도 수주 대장의 [＋ 프로젝트] 로 나중에 만들 수 있습니다)'))) {
         _orderCreateProj(order, withOrder);
       }
     }, 50);
@@ -408,13 +408,13 @@ function orderCreateProjFor(orderNo) {
   if (_orderProjBusy[orderNo]) return;
   _orderProjBusy[orderNo] = true;
   var done = function () { delete _orderProjBusy[orderNo]; };
-  orderGet(orderNo).catch(function (err) { if (err && err.status === 404) return null; throw err; }).then(function (o) {
+  orderGet(orderNo).catch(function (err) { if (err && err.status === 404) return null; throw err; }).then(async function (o) {
     if (!o && typeof ORDER_MAP !== 'undefined' && ORDER_MAP[orderNo]) {
       var v = ORDER_MAP[orderNo];
       o = { orderNo: orderNo, date: (typeof v === 'object' ? v.date : '') || '', name: (typeof v === 'object' ? v.name : v) || '', manager: (typeof v === 'object' ? v.manager : '') || '', delivery: (typeof v === 'object' ? v.delivery : '') || '' };
     }
     if (!o) { showToast('수주 ' + orderNo + ' 를 찾지 못했습니다', 'error'); return; }
-    if (!confirm('수주 ' + orderNo + (o.name ? ' (' + o.name + ')' : '') + ' 로 프로젝트를 만들까요?')) return;
+    if (!(await wmConfirm('수주 ' + orderNo + (o.name ? ' (' + o.name + ')' : '') + ' 로 프로젝트를 만들까요?'))) return;
     return _orderCreateProj(o, false);
   }).then(done, function (err) {
     done();
@@ -510,7 +510,7 @@ function _orderBuildRenumber(orderNo, version) {
   });
 }
 
-function submitRenumber(orderNo, version) {
+async function submitRenumber(orderNo, version) {
   var newNo = (document.getElementById('rnNewNo').value || '').trim();
   var reason = (document.getElementById('rnReason').value || '').trim();
 
@@ -518,7 +518,7 @@ function submitRenumber(orderNo, version) {
   if (newNo === orderNo) { showToast('기존 수주번호와 동일합니다', 'warn'); return; }
   if (!/^[\w.\-\/가-힣]+$/.test(newNo)) { showToast('수주번호에 공백·특수문자는 쓸 수 없습니다', 'error'); return; }
   if (reason.length < 2) { showToast('변경 사유를 2자 이상 입력하세요', 'error'); return; }
-  if (!confirm('수주번호를 "' + orderNo + '" → "' + newNo + '" 로 변경합니다.\n연결된 프로젝트·이슈·업무일지·A/S·사전검토가 모두 새 번호로 갱신됩니다.\n\n계속하시겠습니까?')) return;
+  if (!(await wmConfirm('수주번호를 "' + orderNo + '" → "' + newNo + '" 로 변경합니다.\n연결된 프로젝트·이슈·업무일지·A/S·사전검토가 모두 새 번호로 갱신됩니다.\n\n계속하시겠습니까?'))) return;
 
   var btn = document.getElementById('rnSubmit');
   if (btn) { btn.disabled = true; btn.textContent = '변경 중...'; }
@@ -546,8 +546,8 @@ function submitRenumber(orderNo, version) {
 }
 
 /* ═══ 수주 삭제 ═══ */
-function confirmDeleteOrder(orderNo) {
-  if (!confirm('수주 "' + orderNo + '"를 삭제하시겠습니까?\n(연결된 프로젝트는 삭제되지 않습니다)')) return;
+async function confirmDeleteOrder(orderNo) {
+  if (!(await wmConfirm('수주 "' + orderNo + '"를 삭제하시겠습니까?\n(연결된 프로젝트는 삭제되지 않습니다)'))) return;
   deleteOrder(orderNo).then(function () {
     showToast('🗑️ 수주 삭제 완료', 'success');
     renderOrders();

@@ -271,7 +271,7 @@ async function renderCommentThread(targetType, targetId, containerId) {
 
 /* ── 삭제 UI ─────────────────────────────────────────────────────────── */
 async function commentDelUI(id, targetType, targetId, containerId) {
-  if (!confirm('이 코멘트를 삭제하시겠습니까?')) return;
+  if (!(await wmConfirm('이 코멘트를 삭제하시겠습니까?'))) return;
   try {
     await commentDel(id);
     _cmToast('코멘트가 삭제되었습니다');

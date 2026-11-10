@@ -192,11 +192,11 @@ function chatAlertMenu(btn) {
       [(CXA.set.sound ? '✅' : '⬜') + ' 🔊 새 메시지 소리', function () { CXA.set.sound = !CXA.set.sound; _cxaSave(); if (CXA.set.sound) chatAlertSound('dm'); _cxToast(CXA.set.sound ? '🔊 소리를 켰습니다' : '🔇 소리를 껐습니다', 'info'); }],
       navigator.vibrate ? [(CXA.set.vib ? '✅' : '⬜') + ' 📳 진동', function () { CXA.set.vib = !CXA.set.vib; _cxaSave(); if (CXA.set.vib) try { navigator.vibrate([60, 40, 60]); } catch (e) {} }] : null,
       ['🎵 알림 소리 고르기…', chatSoundModal],
-      ['📲 이 기기 알림: ' + lab, function () {
+      ['📲 이 기기 알림: ' + lab, async function () {
         if (st === 'off') wmPushEnable().then(function () { CXA.push = null; });
         else if (st === 'ios-install' && typeof wmAppInstall === 'function') wmAppInstall();
         else if (st === 'denied') _cxToast('브라우저 · 휴대폰 설정 › 알림에서 이 사이트(앱)를 허용해 주세요', 'warn');
-        else if (st === 'on' && typeof wmPushDisable === 'function' && confirm('이 기기 알림을 끌까요?')) wmPushDisable().then(function () { CXA.push = null; });
+        else if (st === 'on' && typeof wmPushDisable === 'function' && (await wmConfirm('이 기기 알림을 끌까요?'))) wmPushDisable().then(function () { CXA.push = null; });
       }],
       st === 'on' && typeof wmPushTest === 'function' ? ['🔔 시험 알림 보내기', wmPushTest] : null,
       ['🔑 키워드 알림' + (CX.kw && CX.kw.length ? ' (' + CX.kw.length + ')' : '') + '…', chatKeywordModal],

@@ -1434,10 +1434,10 @@ function _projModalBindEvents(ov) {
 }
 function _projMarkDirty() { window._projModalDirty = true; }
 /* 편집 창 닫기 — 저장 안 한 변경이 있으면 묻는다(force=true 는 묻지 않음). 닫았으면 true */
-function _projModalClose(force) {
+async function _projModalClose(force) {
   var pm = document.getElementById('projModal');
   if (!pm) return true;
-  if (!force && window._projModalDirty && typeof confirm === 'function' && !confirm('저장하지 않은 변경이 있습니다. 닫을까요?')) return false;
+  if (!force && window._projModalDirty && typeof confirm === 'function' && !(await wmConfirm('저장하지 않은 변경이 있습니다. 닫을까요?'))) return false;
   pm.remove();
   if (window._projModalKeyH) { document.removeEventListener('keydown', window._projModalKeyH); window._projModalKeyH = null; }
   window._projModalDirty = false;
@@ -2031,7 +2031,7 @@ function saveMsTargetsMatrix() {
 }
 
 async function saveProjectUI(existingId) {
-  var form = _projFormRead(existingId);
+  var form = await _projFormRead(existingId);
   if (!form) return;   // 검증 실패 (칸 표시 + 토스트)
   var data = form.data, assignees = form.assignees;
   // 더블클릭 방지 — 저장이 끝날 때까지 버튼 잠금 (예전엔 두 번 눌리면 프로젝트·마일스톤이 두 벌 생겼다)
@@ -2186,7 +2186,7 @@ function _projClearErrs() {
 /* 편집 폼 읽기 + 검증. 실패 시 칸 표시 + 토스트 후 null. 반환: { data(저장 페이로드), assignees }
    v13.283: 이름 필수(예전엔 '미정 프로젝트'로 조용히 저장) · 마일스톤 날짜 앞뒤 · 이름 없는 행(완전히 빈 행만 무시) ·
    선행 순환 금지 · 프로젝트 기간 밖 마일스톤은 확인 후 저장 */
-function _projFormRead(existingId) {
+async function _projFormRead(existingId) {
   _projClearErrs();
   var errs = [];   // [칸, 문구]
   var nameEl = document.getElementById('projName');
@@ -2237,7 +2237,7 @@ function _projFormRead(existingId) {
     return null;
   }
   if (outside.length && typeof confirm === 'function' &&
-      !confirm('마일스톤 ' + outside.length + '개가 프로젝트 기간(' + startDate + ' ~ ' + endDate + ') 밖에 있습니다.\n' + outside.slice(0, 5).join(', ') + (outside.length > 5 ? ' …' : '') + '\n\n그대로 저장할까요?')) return null;
+      !(await wmConfirm('마일스톤 ' + outside.length + '개가 프로젝트 기간(' + startDate + ' ~ ' + endDate + ') 밖에 있습니다.\n' + outside.slice(0, 5).join(', ') + (outside.length > 5 ? ' …' : '') + '\n\n그대로 저장할까요?'))) return null;
 
   var visibilityEl = document.getElementById('projVisibility');
   var data = {
@@ -2454,7 +2454,7 @@ async function projShareAddUI(projId) {
 }
 
 async function projShareRemoveUI(projId, userId) {
-  if (!confirm('이 사용자의 공유를 해제하시겠습니까?')) return;
+  if (!(await wmConfirm('이 사용자의 공유를 해제하시겠습니까?'))) return;
   try {
     await projShareRemove(projId, userId);
     showToast('공유가 해제되었습니다');
@@ -2503,7 +2503,7 @@ async function projTransferDoUI(projId) {
   var sel = document.getElementById('projTransferUser');
   if (!sel || !sel.value) { showToast('새 소유자를 선택하세요.', 'warn'); return; }
   var keep = document.getElementById('projTransferKeep').checked;
-  if (!confirm('정말 소유권을 이관하시겠습니까?')) return;
+  if (!(await wmConfirm('정말 소유권을 이관하시겠습니까?'))) return;
   try {
     await projTransfer(projId, sel.value, { keepPrevAsMember: keep });
     showToast('소유권이 이관되었습니다');
@@ -3111,12 +3111,12 @@ function calcCriticalPathByDuration(projects) {
 }
 
 /* ═══ Integration 6: 현재 담당자를 그룹으로 저장 ═══ */
-function saveAssigneesAsGroup() {
+async function saveAssigneesAsGroup() {
   var inp = document.getElementById('projAssignees');
   if (!inp || !inp.value.trim()) { showToast('담당자를 먼저 입력하세요.','warn'); return; }
   var members = inp.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
   if (!members.length) { showToast('담당자를 먼저 입력하세요.','warn'); return; }
-  var name = prompt('새 그룹 이름을 입력하세요:', '');
+  var name = (await wmPrompt('새 그룹 이름을 입력하세요:', ''));
   if (!name || !name.trim()) return;
   if (typeof createGroup === 'function') {
     createGroup(name.trim(), members);
@@ -3252,11 +3252,11 @@ function memoCompressImages() {
 }
 
 /* 모든 프로젝트의 메모 이미지를 일괄 압축·축소 후 저장 (편집 권한 있는 것만) — v13.150 */
-function tlCompressAllMemoImages() {
+async function tlCompressAllMemoImages() {
   if (typeof projGetAll !== 'function' || typeof pimgCompressMemoHtml !== 'function' || typeof updateProject !== 'function') {
     if (typeof showToast === 'function') showToast('압축 기능을 사용할 수 없습니다.', 'error'); return;
   }
-  if (!confirm('모든 프로젝트의 메모에 들어간 큰 이미지를 압축·축소하고 저장합니다.\n(편집 권한이 있는 프로젝트만 반영, 시간이 걸릴 수 있음)\n\n진행할까요?')) return;
+  if (!(await wmConfirm('모든 프로젝트의 메모에 들어간 큰 이미지를 압축·축소하고 저장합니다.\n(편집 권한이 있는 프로젝트만 반영, 시간이 걸릴 수 있음)\n\n진행할까요?'))) return;
   projGetAll().then(function (list) {
     var targets = (list || []).filter(function (p) { return p.memo && typeof p.memo === 'string' && p.memo.indexOf('data:image') >= 0; });
     if (!targets.length) { if (typeof showToast === 'function') showToast('압축할 메모 이미지가 있는 프로젝트가 없습니다.'); return; }

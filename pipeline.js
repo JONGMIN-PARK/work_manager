@@ -418,7 +418,7 @@ function _pipeMovePhase(projId, targetPhase) {
   var gate = (typeof advancePhase === 'function')
     ? advancePhase(projId, targetPhase)
     : projGet(projId).then(function (proj) { return proj ? { proj: proj, gatePass: true } : null; });
-  gate.then(function (result) {
+  gate.then(async function (result) {
     if (!result) return;
     if (result.proj && guessPhase(result.proj) === targetPhase) return;   // 현재 단계와 같음
     if (result.proj && typeof projCanEdit === 'function' && !projCanEdit(result.proj)) {
@@ -426,7 +426,7 @@ function _pipeMovePhase(projId, targetPhase) {
       return;
     }
     if (result.gatePass === false) {
-      if (!confirm('현재 단계 체크리스트가 미완료입니다 (' + (result.progress ? result.progress.pct : 0) + '%). 강제로 ' + getPhaseName(targetPhase) + ' 단계로 이동하시겠습니까?')) return;
+      if (!(await wmConfirm('현재 단계 체크리스트가 미완료입니다 (' + (result.progress ? result.progress.pct : 0) + '%). 강제로 ' + getPhaseName(targetPhase) + ' 단계로 이동하시겠습니까?'))) return;
     }
     return executePhaseTransition(projId, targetPhase).then(function () {
       if (typeof showToast === 'function') showToast(getPhaseName(targetPhase) + ' 단계로 이동했습니다.');

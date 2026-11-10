@@ -632,7 +632,7 @@ async function deduplicateRecords(){
   aD.forEach(function(r){var k=wrIdKey(r);if(!seen.has(k)){seen.add(k);deduped.push(r)}});
   var removed=aD.length-deduped.length;
   if(!removed){showToast('중복 레코드가 없습니다.','info');return}
-  if(!confirm('총 '+aD.length+'건 중 '+removed+'건의 중복 레코드를 제거합니다.\n(날짜+이름+수주번호 기준)\n\n계속하시겠습니까?'))return;
+  if(!(await wmConfirm('총 '+aD.length+'건 중 '+removed+'건의 중복 레코드를 제거합니다.\n(날짜+이름+수주번호 기준)\n\n계속하시겠습니까?')))return;
   try{
     await wrBulkPut(deduped);
     aD=deduped;
@@ -654,8 +654,8 @@ async function resetAllData(){
   else if(role==='manager'||role==='executive')scopeHint='⚠️ 매니저/임원 권한 — 소속 부서 전체 업무일지가 삭제됩니다 (부서원 모두).';
   else scopeHint='본인 계정의 업무일지 데이터만 삭제됩니다.';
   var msg='⚠️ 업무일지 데이터를 전체 초기화하시겠습니까?\n\n'+scopeHint+'\n현재 화면 표시 '+visibleCount+'건.\n이 작업은 되돌릴 수 없습니다.';
-  if(!confirm(msg))return;
-  if(!confirm('정말 초기화하시겠습니까?\n(한번 더 확인)'))return;
+  if(!(await wmConfirm(msg)))return;
+  if(!(await wmConfirm('정말 초기화하시겠습니까?\n(한번 더 확인)')))return;
   try{
     var _clearResult=null;
     if(typeof wrClear==='function'){

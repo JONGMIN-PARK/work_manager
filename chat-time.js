@@ -26,8 +26,8 @@ function _ctPresets(cb) {
   var toMon = (8 - now.getDay()) % 7 || 7;
   out.push(['📅 다음 월요일 09:00', at(9, 0, toMon)]);
   out = out.map(function (o) { return [o[0] + '  · ' + _ctFmt(o[1]), function () { cb(o[1]); }]; });
-  out.push(['✏️ 직접 고르기…', function () {
-    var def = at(9, 0, 1), v = prompt('언제? (예: 2026-11-10 14:30)', def.getFullYear() + '-' + ('0' + (def.getMonth() + 1)).slice(-2) + '-' + ('0' + def.getDate()).slice(-2) + ' 09:00');
+  out.push(['✏️ 직접 고르기…', async function () {
+    var def = at(9, 0, 1), v = (await wmPrompt('언제? (예: 2026-11-10 14:30)', def.getFullYear() + '-' + ('0' + (def.getMonth() + 1)).slice(-2) + '-' + ('0' + def.getDate()).slice(-2) + ' 09:00'));
     if (!v) return;
     var d = new Date(v.trim().replace(' ', 'T'));
     if (isNaN(d) || d < new Date()) { _ctToast('날짜 · 시각을 다시 확인해 주세요', 'warn'); return; }

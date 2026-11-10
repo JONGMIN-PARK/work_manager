@@ -165,7 +165,7 @@ function upDelBar(){
 }
 async function deleteSelected(){
   if(!delSet.size){showToast('삭제할 항목을 선택하세요.','warn');return}
-  if(!confirm(delSet.size+'건을 삭제합니다.\n이 작업은 되돌릴 수 없습니다.\n\n계속하시겠습니까?'))return;
+  if(!(await wmConfirm(delSet.size+'건을 삭제합니다.\n이 작업은 되돌릴 수 없습니다.\n\n계속하시겠습니까?')))return;
   // 삭제 대상과 남은 레코드 분리
   var toDeleteIds=[];
   var toDeleteRows=[];
@@ -204,7 +204,7 @@ async function resetOcmtOclient(){
   if(!aD.length){showToast('데이터가 없습니다.','warn');return}
   var cnt=aD.filter(function(r){return r.ocmt!==undefined||r.oclient!==undefined}).length;
   if(!cnt){showToast('초기화할 개별 수주명/거래처 값이 없습니다.','info');return}
-  if(!confirm('전체 '+aD.length+'건 중 '+cnt+'건의 개별 수주명·거래처 값을 삭제합니다.\n삭제 후 수주맵(ORDER_MAP) 기본값으로 복원됩니다.\n\n계속하시겠습니까?'))return;
+  if(!(await wmConfirm('전체 '+aD.length+'건 중 '+cnt+'건의 개별 수주명·거래처 값을 삭제합니다.\n삭제 후 수주맵(ORDER_MAP) 기본값으로 복원됩니다.\n\n계속하시겠습니까?')))return;
   aD.forEach(function(r){delete r.ocmt;delete r.oclient});
   await wrBulkPut(aD);
   editMap={};editMode=false;

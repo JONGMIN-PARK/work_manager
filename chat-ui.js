@@ -706,14 +706,14 @@ function _cxHeadAct(k, btn) {
       [r.pinned ? '📌 고정 풀기' : '📌 맨 위에 고정', function () { _cxRoomPut({ pinned: !r.pinned }); }],
       [r.muted ? '🔔 알림 켜기' : '🔕 알림 끄기 (@멘션만)', function () { _cxRoomPut({ muted: !r.muted }); }],
       CX.info.self ? null : ['➕ 사람 초대' + (CX.info.kind === 'dm' ? ' (새 그룹 방)' : ''), chatInviteModal],   // v13.424 1:1 에서도 — 둘 + 고른 사람으로 새 방
-      CX.info.kind === 'group' ? ['✏️ 방 이름 바꾸기', function () { var n = prompt('방 이름', CX.info.name || ''); if (n != null) _cxRoomPut({ name: n }); }] : null,
+      CX.info.kind === 'group' ? ['✏️ 방 이름 바꾸기', async function () { var n = (await wmPrompt('방 이름', CX.info.name || '')); if (n != null) _cxRoomPut({ name: n }); }] : null,
       ['✨ 대화 요약 (AI)', function () { _cxSend('/요약'); }],
       typeof chatDigest === 'function' ? ['✅ 정한 것 · 할 일 뽑기', function () { chatDigest(); }] : null,   // v13.423 ⑤
       typeof chatPollModal === 'function' && CX.info.myRole !== 'readonly' ? ['🗳 투표 만들기', function () { chatPollModal('vote'); }] : null,
       typeof chatPollModal === 'function' && CX.info.myRole !== 'readonly' ? ['📅 약속 잡기', function () { chatPollModal('time'); }] : null,
       typeof chatWallModal === 'function' ? ['🎨 배경 화면', function () { chatWallModal(true); }] : null,
       typeof chatExportModal === 'function' ? ['📤 대화 내보내기', chatExportModal] : null,
-      CX.info.kind !== 'dm' ? ['🚪 나가기', function () { if (!confirm('이 대화방에서 나갈까요?')) return; apiFetch('/api/chat/rooms/' + CX.room + '/members/me', { method: 'DELETE' }).then(function () { CX.room = null; renderMessages(); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
+      CX.info.kind !== 'dm' ? ['🚪 나가기', async function () { if (!(await wmConfirm('이 대화방에서 나갈까요?'))) return; apiFetch('/api/chat/rooms/' + CX.room + '/members/me', { method: 'DELETE' }).then(function () { CX.room = null; renderMessages(); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
     ].filter(Boolean));
   }
 }
@@ -1296,7 +1296,7 @@ function _cxMsgMenu(btn, m, pre) {
     m.body && typeof chatToWork === 'function' && typeof m.id === 'number' ? ['📅 일정으로…', function () { chatToWork(m, 'event'); }] : null,
     '-',
     mine && m.body && m.kind === 'text' ? ['✏️ 수정', function () { _cxStartEdit(m); }] : null,
-    mine ? ['🗑 삭제', function () { if (confirm('이 메시지를 지울까요? 모두에게서 지워집니다.')) apiFetch('/api/chat/messages/' + m.id, { method: 'DELETE' }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
+    mine ? ['🗑 삭제', async function () { if ((await wmConfirm('이 메시지를 지울까요? 모두에게서 지워집니다.'))) apiFetch('/api/chat/messages/' + m.id, { method: 'DELETE' }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
   ]).filter(Boolean), null, { rx: typeof m.id === 'number' && !m.deleted ? m : null });
 }
 /* 작은 메뉴 (공용) — v13.420 '-' 는 구분선 · 앞 이모지는 선 아이콘 · opt.rx 면 맨 위 공감 줄 · 휴대폰은 아래에서 올라오는 판 */
@@ -1770,7 +1770,7 @@ function _cxRoleMenu(btn, u) {
     u.role !== 'owner' ? ['👑 방장으로', function () { set('owner'); }] : null,
     u.role !== 'member' ? ['🙂 멤버로', function () { set('member'); }] : null,
     u.role !== 'readonly' ? ['👁 읽기만 (글 · 파일 못 올림)', function () { set('readonly'); }] : null,
-    !u.me ? ['🚪 내보내기', function () { if (!confirm(u.name + ' 님을 이 방에서 내보낼까요?')) return; apiFetch('/api/chat/rooms/' + CX.room + '/members/' + u.id, { method: 'DELETE' }).then(function () { chatOpenRoom(CX.room, true); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
+    !u.me ? ['🚪 내보내기', async function () { if (!(await wmConfirm(u.name + ' 님을 이 방에서 내보낼까요?'))) return; apiFetch('/api/chat/rooms/' + CX.room + '/members/' + u.id, { method: 'DELETE' }).then(function () { chatOpenRoom(CX.room, true); }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
   ].filter(Boolean));
 }
 /* 프로젝트 방 옆 현황 다시 받기 — 이슈 카드가 오가거나 상태가 바뀌면 (잠깐 모아서 한 번) */
@@ -1897,7 +1897,7 @@ function chatInviteModal() {
     }
     if (dm) { m.box.querySelector('[data-hist]').addEventListener('change', warn); m.box.querySelector('[data-hn]').addEventListener('change', warn); }
     _cxPeoplePick(m.box, true, members.map(function (x) { return x.id; }), function (ids) { picked = ids; m.box.querySelector('[data-n]').textContent = ids.length + '명'; m.box.querySelector('[data-go]').disabled = !ids.length; warn(); });
-    m.box.querySelector('[data-go]').addEventListener('click', function () {
+    m.box.querySelector('[data-go]').addEventListener('click', async function () {
       var btn = this; btn.disabled = true;
       if (dm) {
         var peer = members.filter(function (x) { return !x.me && x.id !== _cxMe(); });
@@ -1905,7 +1905,7 @@ function chatInviteModal() {
         var nm = peer.map(function (x) { return x.name; }).concat(((typeof CX.users !== 'undefined' && CX.users) || []).filter(function (u) { return picked.indexOf(u.id) >= 0; }).map(function (u) { return u.name; }));
         var me0 = (typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || '';
         var hist = m.box.querySelector('[data-hist]').checked, hn = +m.box.querySelector('[data-hn]').value;
-        if (hist && !confirm('🔓 ' + peerName + ' 님과의 1:1 대화 최근 ' + hn + '개를\n' + (pickedNames().join(', ') || '새로 초대한 사람') + ' 님도 보게 됩니다.\n\n되돌릴 수 없습니다. 계속할까요?')) { btn.disabled = false; return; }
+        if (hist && !(await wmConfirm('🔓 ' + peerName + ' 님과의 1:1 대화 최근 ' + hn + '개를\n' + (pickedNames().join(', ') || '새로 초대한 사람') + ' 님도 보게 됩니다.\n\n되돌릴 수 없습니다. 계속할까요?'))) { btn.disabled = false; return; }
         apiFetch('/api/chat/rooms', { method: 'POST', body: JSON.stringify({ kind: 'group', name: [me0].concat(nm).filter(Boolean).slice(0, 4).join(', ') + (nm.length + 1 > 4 ? ' 외' : ''), userIds: ids, fromDm: hist ? { roomId: dmRoom, n: hn } : undefined }) })
           .then(function (r) { m.close(); _cxToast('👥 새 그룹 방을 만들었습니다' + (r.data.copied ? ' — 이전 대화 ' + r.data.copied + '개 함께' : ' — 이전 1:1 대화는 비공개'), 'success'); return _cxLoadRooms().then(function () { chatOpenRoom(r.data.id); }); })
           .catch(function (e) { btn.disabled = false; _cxToast(_cxErr(e), 'error'); });

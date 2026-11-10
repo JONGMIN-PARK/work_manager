@@ -732,7 +732,7 @@ async function approveUser(userId) {
 }
 
 async function rejectUser(userId) {
-  var reason = prompt('거절 사유를 입력하세요 (선택):');
+  var reason = (await wmPrompt('거절 사유를 입력하세요 (선택):'));
   if (reason === null) return;
 
   try {
@@ -750,7 +750,7 @@ async function rejectUser(userId) {
 async function changeUserRole(userId, currentRole) {
   var roles = ['member', 'manager', 'executive', 'admin'];
   var labels = { member: '팀원', manager: '팀장', executive: '임원', admin: '관리자' };
-  var newRole = prompt('새 역할을 입력하세요 (member/manager/executive/admin):\n현재: ' + labels[currentRole], currentRole);
+  var newRole = (await wmPrompt('새 역할을 입력하세요 (member/manager/executive/admin):\n현재: ' + labels[currentRole], currentRole));
   if (!newRole || newRole === currentRole) return;
   if (roles.indexOf(newRole) < 0) {
     if (typeof showToast === 'function') showToast('유효하지 않은 역할입니다.', 'error');
@@ -771,7 +771,7 @@ async function changeUserRole(userId, currentRole) {
 
 async function toggleUserStatus(userId, newStatus) {
   var msg = newStatus === 'inactive' ? '이 사용자를 비활성화하시겠습니까?' : '이 사용자를 재활성화하시겠습니까?';
-  if (!confirm(msg)) return;
+  if (!(await wmConfirm(msg))) return;
 
   try {
     await apiFetch('/api/users/' + userId + '/status', {
@@ -786,7 +786,7 @@ async function toggleUserStatus(userId, newStatus) {
 }
 
 async function resetUserPw(userId) {
-  if (!confirm('이 사용자의 비밀번호를 초기화하시겠습니까?')) return;
+  if (!(await wmConfirm('이 사용자의 비밀번호를 초기화하시겠습니까?'))) return;
 
   try {
     var data = await apiFetch('/api/users/' + userId + '/reset-password', { method: 'POST' });
@@ -915,7 +915,7 @@ async function loadTelegramStatus(container) {
       loadTelegramPrefs(container);
 
       contentEl.querySelector('#tgUnlinkBtn').onclick = async function () {
-        if (!confirm('텔레그램 연동을 해제하시겠습니까?')) return;
+        if (!(await wmConfirm('텔레그램 연동을 해제하시겠습니까?'))) return;
         try {
           await apiFetch('/api/telegram/unlink', { method: 'DELETE' });
           if (typeof showToast === 'function') showToast('텔레그램 연동이 해제되었습니다.');
@@ -1375,7 +1375,7 @@ async function editDept(deptId) {
 }
 
 async function deleteDept(deptId, deptName) {
-  if (!confirm('"' + deptName + '" 부서를 삭제하시겠습니까?\n소속 사용자의 부서가 해제되고, 하위 부서는 최상위로 이동합니다.')) return;
+  if (!(await wmConfirm('"' + deptName + '" 부서를 삭제하시겠습니까?\n소속 사용자의 부서가 해제되고, 하위 부서는 최상위로 이동합니다.'))) return;
   try {
     await apiFetch('/api/departments/' + deptId, { method: 'DELETE' });
     if (typeof showToast === 'function') showToast('부서 삭제 완료');

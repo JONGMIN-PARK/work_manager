@@ -204,8 +204,8 @@ function _asStatsBindControls() {
 
   var weeklyBtn = document.getElementById('asStatsWeeklyBtn');
   if (weeklyBtn) {
-    weeklyBtn.onclick = function () {
-      if (!confirm('관리자에게 텔레그램으로 A/S 주간 요약을 즉시 발송합니다. 계속하시겠습니까?')) return;
+    weeklyBtn.onclick = async function () {
+      if (!(await wmConfirm('관리자에게 텔레그램으로 A/S 주간 요약을 즉시 발송합니다. 계속하시겠습니까?'))) return;
       weeklyBtn.disabled = true;
       weeklyBtn.textContent = '발송 중…';
       asStatsWeeklyDigest(true).then(function (d) {

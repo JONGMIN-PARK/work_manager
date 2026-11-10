@@ -197,7 +197,7 @@ function _mmkSplitToSiblings() {
 }
 var MM_LOSSY = ['assigneeId', 'assigneeName', 'startDate', 'dueDate', 'progress', 'done', 'note', 'link', 'ref', 'markers', 'labels', 'blocks', 'color', 'boundary', 'summary'];
 /** 하위 주제를 이 주제의 줄로 합치기 (하위의 하위가 있으면 못 함) */
-function _mmkMergeChildren() {
+async function _mmkMergeChildren() {
   var f = _mmSelInfo();
   if (!f) return;
   var kids = f.node.children || [];
@@ -206,7 +206,7 @@ function _mmkMergeChildren() {
   var lossy = kids.filter(function (k) {
     return MM_LOSSY.some(function (p) { var v = k[p]; return v != null && v !== '' && v !== false && !(Array.isArray(v) && !v.length); });
   }).length;
-  if (lossy && !confirm('담당 · 진행률 · 일정 · 메모 같은 정보가 있는 하위 주제 ' + lossy + '개가 있습니다.\n줄로 합치면 그 정보는 사라집니다 (Ctrl+Z 로 되돌릴 수 있음). 합칠까요?')) return;
+  if (lossy && !(await wmConfirm('담당 · 진행률 · 일정 · 메모 같은 정보가 있는 하위 주제 ' + lossy + '개가 있습니다.\n줄로 합치면 그 정보는 사라집니다 (Ctrl+Z 로 되돌릴 수 있음). 합칠까요?'))) return;
   var ids = kids.map(function (k) { return k.id; });
   _mmMutate(function () {
     var text = String(f.node.text || '').replace(/\s+$/, '');

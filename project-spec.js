@@ -432,8 +432,8 @@ function psDgAutoArrange() {
   _psDgChanged();
   _specToast('자동 배치로 정리했습니다' + (dg.add.length ? ' (추가한 상자는 오른쪽에 정렬)' : '') + '.');
 }
-function psDgReset() {
-  if (!confirm('구성도에서 옮기고 고친 내용·추가한 상자·화살표를 모두 지우고 자동 계통도로 되돌릴까요?')) return;
+async function psDgReset() {
+  if (!(await wmConfirm('구성도에서 옮기고 고친 내용·추가한 상자·화살표를 모두 지우고 자동 계통도로 되돌릴까요?'))) return;
   _ps.sheet.diagram = null;
   var st = _psDgState(); st.sel = ''; st.source = null;
   _psDgChanged();
@@ -906,11 +906,11 @@ function psStartWithTemplate() {
   var t = psChoosableTemplates().filter(function (x) { return x.id === sel.value; })[0]; if (!t) return;
   _psApplyTpl(t.id, t.version);
 }
-function psUpgradeTemplate() {
+async function psUpgradeTemplate() {
   if (!_ps || !_ps.sheet.templateId) return;
   var latest = psLatestVersion(_ps.sheet.templateId);
   if (!latest) return;
-  if (!confirm('표준 양식 v' + latest + ' 을 적용합니다.\n값은 항목 키 기준으로 유지되고, 새 양식에서 빠진 항목의 값은 화면에 보이지 않게 됩니다(데이터는 남음).')) return;
+  if (!(await wmConfirm('표준 양식 v' + latest + ' 을 적용합니다.\n값은 항목 키 기준으로 유지되고, 새 양식에서 빠진 항목의 값은 화면에 보이지 않게 됩니다(데이터는 남음).'))) return;
   _psApplyTpl(_ps.sheet.templateId, latest);
 }
 function _psApplyTpl(id, ver) {
@@ -1032,10 +1032,10 @@ function _psCopyFilter() {
       '<span style="font-size:10px;color:var(--t5);white-space:nowrap">' + _specEsc(info) + '</span></div>';
   }).join('') : '<div style="font-size:11px;color:var(--t6);padding:14px;text-align:center">사양서가 있는 다른 프로젝트가 없습니다.</div>';
 }
-function psCopyFrom(srcId) {
+async function psCopyFrom(srcId) {
   var src = (window._psCopyCands || []).filter(function (p) { return p.id === srcId; })[0];
   if (!src || !_ps) return;
-  if (!confirm('"' + (src.name || srcId) + '" 의 사양서로 현재 사양서를 덮어씁니다. 계속할까요?')) return;
+  if (!(await wmConfirm('"' + (src.name || srcId) + '" 의 사양서로 현재 사양서를 덮어씁니다. 계속할까요?'))) return;
   var projId = _ps.projId;
   apiFetch('/api/projects/' + encodeURIComponent(projId) + '/specs/copy-from/' + encodeURIComponent(srcId), { method: 'POST', body: JSON.stringify({ specs: specCopySheet(src.specs) }) })
     .then(function (r) {
@@ -1131,24 +1131,24 @@ function psDownloadFile(fid) {
   apiFetch(_psFilesUrl(_ps.projId, fid) + '/download-url').then(function (r) { window.open(r.data.downloadUrl, '_blank', 'noopener'); })
     .catch(function (err) { _specToast('❌ ' + _psErrMsg(err, '다운로드 실패'), 'error'); });
 }
-function psDeleteFile(fid) {
+async function psDeleteFile(fid) {
   var f = _ps.files.filter(function (x) { return x.id === fid; })[0]; if (!f) return;
-  if (!confirm('"' + (f.name || '첨부') + '" 을(를) 삭제할까요?')) return;
+  if (!(await wmConfirm('"' + (f.name || '첨부') + '" 을(를) 삭제할까요?'))) return;
   apiFetch(_psFilesUrl(_ps.projId, fid), { method: 'DELETE' }).then(function () { _psRefreshFiles(f.sectionKey); _specToast('삭제했습니다.'); })
     .catch(function (err) { _specToast('❌ ' + _psErrMsg(err, '삭제 실패'), 'error'); });
 }
 
 /* ═══ draw.io 도면 (embed 모드 — 도면 데이터는 브라우저 안에서만 오가고 diagrams.net 에 저장되지 않는다) ═══ */
-function psDrawioNew(secKey) {
-  var nm = prompt('도면 이름', secKey === PS_HW_SECTION ? '하드웨어 구조도' : '도면');
+async function psDrawioNew(secKey) {
+  var nm = (await wmPrompt('도면 이름', secKey === PS_HW_SECTION ? '하드웨어 구조도' : '도면'));
   if (nm == null) return;
   return psDrawioOpen({ secKey: secKey, name: nm.trim() || '도면', xml: '' });
 }
-function psDrawioFromAuto() {
+async function psDrawioFromAuto() {
   if (!_ps) return;
   var L = _psDgLayout();
   if (L.empty) { _specToast('모션 컨트롤러·축 구성·외부장치 값을 먼저 채우세요.', 'warn'); return; }
-  var nm = prompt('도면 이름', '하드웨어 구조도');
+  var nm = (await wmPrompt('도면 이름', '하드웨어 구조도'));
   if (nm == null) return;
   return psDrawioOpen({ secKey: PS_HW_SECTION, name: nm.trim() || '하드웨어 구조도', xml: specDiagramDrawioXml(L) });
 }
@@ -1196,7 +1196,7 @@ function _psBuildDrawio(o) {
       _specToast('❌ ' + _psErrMsg(err, '도면 저장 실패'), 'error');
     });
   }
-  function onMsg(ev) {
+  async function onMsg(ev) {
     if (!frame || ev.source !== frame.contentWindow || typeof ev.data !== 'string') return;
     var msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
     if (msg.event === 'init') { post({ action: 'load', xml: st.xml, autosave: 0, title: o.name }); status(''); }
@@ -1209,7 +1209,7 @@ function _psBuildDrawio(o) {
     else if (msg.event === 'export') save(msg.data);
     else if (msg.event === 'exit') {
       // 저장하지 않은 변경이 있으면 확인 — 취소하면 편집기를 그대로 둔다
-      if (msg.modified && !confirm('저장하지 않은 변경이 있습니다. 저장하지 않고 닫을까요?')) return;
+      if (msg.modified && !(await wmConfirm('저장하지 않은 변경이 있습니다. 저장하지 않고 닫을까요?'))) return;
       close();
     }
   }

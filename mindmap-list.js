@@ -281,9 +281,9 @@ function _mmDuplicate(id) {
     .then(function () { _mmToast('내 개인 맵으로 복제했습니다'); _mmRenderList(); })
     .catch(function (e) { _mmToast('❌ ' + _mmErr(e), 'error'); });
 }
-function _mmDelete(id) {
+async function _mmDelete(id) {
   var m = _mm.list.filter(function (x) { return x.id === id; })[0];
-  if (!confirm('"' + (m ? m.title : '') + '" 맵을 삭제할까요?')) return;
+  if (!(await wmConfirm('"' + (m ? m.title : '') + '" 맵을 삭제할까요?'))) return;
   apiFetch('/api/mindmaps/' + encodeURIComponent(id), { method: 'DELETE' })
     .then(function () { _mmToast('삭제했습니다'); _mmRenderList(); })
     .catch(function (e) { _mmToast('❌ ' + _mmErr(e), 'error'); });

@@ -98,7 +98,7 @@ function _mmFileGet(f) {
 function _mmBindFiles(pn, n) {
   var sec = pn.querySelector('#mmPnFiles');
   if (!sec) return;
-  sec.onclick = function (e) {
+  sec.onclick = async function (e) {
     var b = e.target.closest('[data-file-act]');
     if (!b) return;
     var act = b.getAttribute('data-file-act');
@@ -114,7 +114,7 @@ function _mmBindFiles(pn, n) {
     if (!f) return;
     if (act === 'get') _mmFileGet(f);
     else if (act === 'del') {
-      if (!confirm('「' + f.name + '」 첨부를 지울까요?')) return;
+      if (!(await wmConfirm('「' + f.name + '」 첨부를 지울까요?'))) return;
       apiFetch(_mmFileUrl(id), { method: 'DELETE' }).then(function () {
         _mm.files = _mm.files.filter(function (x) { return x.id !== id; });
         _mmPaint();

@@ -52,8 +52,8 @@ function _crtAutoSave(m) { try { localStorage.setItem(_crtAutoKey(), JSON.string
 function chatRtcIsLive(sid) { return !!(CRT.watch && CRT.watch.sid === sid); }
 
 /* 보내기 */
-function chatRtcShare(roomId) {
-  if (CRT.share) { if (confirm('화면 공유를 마칠까요?')) chatRtcStop(); return; }
+async function chatRtcShare(roomId) {
+  if (CRT.share) { if ((await wmConfirm('화면 공유를 마칠까요?'))) chatRtcStop(); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { _cxToast('이 브라우저는 화면 공유를 지원하지 않습니다 (PC 크롬 · 엣지 · 파이어폭스)', 'warn'); return; }
   navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false }).then(function (stream) {
     var sid = 'sh-' + Math.random().toString(36).slice(2, 10);
@@ -104,9 +104,9 @@ function _crtBar() {
   var inkB = bar.querySelector('[data-ink]'); if (inkB) inkB.addEventListener('click', typeof chatInkHostToggle === 'function' ? chatInkHostToggle : chatInkHostOpen);
   var cx = bar.querySelector('[data-ctlx]'); if (cx) cx.addEventListener('click', function () { _crtCtlEnd(); });
   var au = bar.querySelector('[data-auto]'); if (au) au.addEventListener('click', function () { CRT.autoAll = !CRT.autoAll; _crtBar(); });
-  var tr = bar.querySelector('[data-trust]'); if (tr) tr.addEventListener('click', function () {
+  var tr = bar.querySelector('[data-trust]'); if (tr) tr.addEventListener('click', async function () {
     var m = _crtAutoList(), names = Object.keys(m).map(function (k) { return m[k]; });
-    if (confirm('🔓 항상 허락하는 사람 (' + names.length + '명)\n' + names.join(', ') + '\n\n목록을 비울까요? 다음부터는 다시 물어봅니다.')) { _crtAutoSave({}); _crtBar(); }
+    if ((await wmConfirm('🔓 항상 허락하는 사람 (' + names.length + '명)\n' + names.join(', ') + '\n\n목록을 비울까요? 다음부터는 다시 물어봅니다.'))) { _crtAutoSave({}); _crtBar(); }
   });
 }
 /* 🔓 공유 띠의 자동 허락 단추 (v13.413) */

@@ -554,9 +554,9 @@ function mmProjectSection(projectId, elId) {
 function mmFromMeeting(meetingId, btn) {
   if (typeof mmHasAccess === 'function' && !mmHasAccess()) { _mmToast('마인드맵 사용 권한이 없습니다 — 관리자에게 요청하세요', 'error'); return; }
   if (btn) btn.disabled = true;
-  apiFetch('/api/mindmaps/by-link?type=meeting&id=' + encodeURIComponent(meetingId)).then(function (r) {
+  apiFetch('/api/mindmaps/by-link?type=meeting&id=' + encodeURIComponent(meetingId)).then(async function (r) {
     var maps = (r && r.data) || [];
-    if (maps.length && confirm('이 회의를 담은 맵이 이미 있습니다 (' + maps[0].title + ').\n그 맵을 열까요? (취소 = 새로 만들기)')) { _mmGoTo(maps[0].id); return; }
+    if (maps.length && (await wmConfirm('이 회의를 담은 맵이 이미 있습니다 (' + maps[0].title + ').\n그 맵을 열까요? (취소 = 새로 만들기)'))) { _mmGoTo(maps[0].id); return; }
     return mmGenerateDoc('meeting', { meetingId: meetingId }).then(function (res) {
       return apiFetch('/api/mindmaps', { method: 'POST', body: JSON.stringify({ title: res.title, scope: res.projectId ? 'project' : 'personal', projectId: res.projectId || null, template: 'gen-meeting', doc: res.doc }) });
     }).then(function (cr) { _mmGoTo(cr.data.id); });

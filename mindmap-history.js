@@ -277,21 +277,21 @@ function _mmHistRename(sid, label) {
     _mmHistPaint();
   }).catch(function (e) { _mmToast('❌ ' + _mmErr(e), 'error'); _mmHistPaint(); });
 }
-function _mmHistDelete(sid) {
+async function _mmHistDelete(sid) {
   var h = _mmHist();
   var cur = (h.list || []).filter(function (s) { return s.id === sid; })[0];
-  if (!cur || !confirm('"' + _mmHistName(cur) + '" 기록을 지울까요? 되돌릴 수 없습니다.')) return;
+  if (!cur || !(await wmConfirm('"' + _mmHistName(cur) + '" 기록을 지울까요? 되돌릴 수 없습니다.'))) return;
   apiFetch(_mmHistUrl(sid), { method: 'DELETE' }).then(function () {
     if (_mm.preview && _mm.preview.snap.id === sid) mmHistClosePreview();
     h.list = h.list.filter(function (s) { return s.id !== sid; });
     _mmHistPaint();
   }).catch(function (e) { _mmToast('❌ ' + _mmErr(e), 'error'); });
 }
-function mmHistRestore() {
+async function mmHistRestore() {
   var p = _mm.preview;
   if (!p) return;
   var s = p.snap;
-  if (!confirm('"' + _mmHistName(s) + '" 버전으로 되돌릴까요?\n지금 상태는 "되돌리기 전 백업"으로 기록에 남아 언제든 다시 돌아올 수 있습니다.')) return;
+  if (!(await wmConfirm('"' + _mmHistName(s) + '" 버전으로 되돌릴까요?\n지금 상태는 "되돌리기 전 백업"으로 기록에 남아 언제든 다시 돌아올 수 있습니다.'))) return;
   var id = _mm.mapId;
   apiFetch(_mmHistUrl(s.id) + '/restore', { method: 'POST', body: JSON.stringify({ version: _mm.version }) }).then(function (r) {
     if (_mm.mapId !== id) return;

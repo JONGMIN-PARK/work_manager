@@ -244,9 +244,9 @@ function _cdHistory() {
     if (!vs.length) { _cdToast('아직 기록이 없습니다 — 고치면 10분마다 · 다른 사람이 고칠 때 남습니다', 'info'); return; }
     var items = vs.slice(0, 30).map(function (v) {
       return [new Date(v.at).toLocaleString() + ' · ' + (v.byName || '') + ' · ' + v.chars + '자', function () {
-        apiFetch('/api/chat/docs/' + encodeURIComponent(my.id) + '/versions/' + v.id).then(function (x) {
+        apiFetch('/api/chat/docs/' + encodeURIComponent(my.id) + '/versions/' + v.id).then(async function (x) {
           if (CD !== my || my.ro) return;
-          if (!confirm('이 때 글로 되돌릴까요? (지금 글도 기록에 남습니다)')) return;
+          if (!(await wmConfirm('이 때 글로 되돌릴까요? (지금 글도 기록에 남습니다)'))) return;
           my.ta.value = x.data.body; if (x.data.title) my.ti.value = x.data.title;
           my.ta.dispatchEvent(new Event('input')); _cdSave(true);
         });
@@ -262,8 +262,8 @@ function chatDocsTab(box) {
   var room = CX.room, ro = CX.info && CX.info.myRole === 'readonly';
   if (!box.querySelector('.cd-list')) box.innerHTML = '<div class="cd-list"><div class="cd-lh"><b>📝 공동 문서</b><i>방 사람 모두가 같이 고침</i>' + (ro ? '' : '<button type="button" class="btn btn-p btn-s" data-dnew>＋ 새 문서</button>') + '</div><div data-dl><div class="cx-loading">불러오는 중…</div></div></div>';
   var nb = box.querySelector('[data-dnew]');
-  if (nb) nb.onclick = function () {
-    var t = prompt('새 문서 제목', '회의 · 점검 · 사양 메모'); if (t == null) return;
+  if (nb) nb.onclick = async function () {
+    var t = (await wmPrompt('새 문서 제목', '회의 · 점검 · 사양 메모')); if (t == null) return;
     apiFetch('/api/chat/rooms/' + encodeURIComponent(room) + '/docs', { method: 'POST', body: JSON.stringify({ title: t }) }).then(function (r) { chatDocsTab(box); chatDocOpen(r.data.id); }).catch(function (e) { _cdToast(_cdErr(e), 'error'); });
   };
   apiFetch('/api/chat/rooms/' + encodeURIComponent(room) + '/docs').then(function (r) {

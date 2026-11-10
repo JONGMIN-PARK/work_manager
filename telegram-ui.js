@@ -65,8 +65,8 @@ function _tggCopy(t) {
   catch (_) { if (typeof showToast === 'function') showToast(t, 'info'); }
 }
 
-function _tggUnlink(projectId, id) {
-  if (!confirm('이 그룹방의 프로젝트 연결을 해제할까요?')) return;
+async function _tggUnlink(projectId, id) {
+  if (!(await wmConfirm('이 그룹방의 프로젝트 연결을 해제할까요?'))) return;
   apiFetch('/api/telegram/groups/' + id, { method: 'DELETE' }).then(function () {
     if (typeof showToast === 'function') showToast('해제했습니다', 'success');
     _tggLoad(projectId);

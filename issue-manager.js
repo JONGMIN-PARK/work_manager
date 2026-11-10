@@ -547,8 +547,8 @@ function saveIssueModal(isEdit, editId, version) {
   });
 }
 
-function confirmDeleteIssue(id) {
-  if (!confirm('이 이슈와 모든 대응 이력을 삭제하시겠습니까?')) return;
+async function confirmDeleteIssue(id) {
+  if (!(await wmConfirm('이 이슈와 모든 대응 이력을 삭제하시겠습니까?'))) return;
   deleteIssueCascade(id).then(function () {
     delete issueBulkSelected[id];
     showToast('이슈가 삭제되었습니다.');
@@ -811,8 +811,8 @@ function issueSaveResolution(id) {
   });
 }
 
-function issueDeleteLog(logId, issueId) {
-  if (!confirm('이 대응 이력을 삭제하시겠습니까?')) return;
+async function issueDeleteLog(logId, issueId) {
+  if (!(await wmConfirm('이 대응 이력을 삭제하시겠습니까?'))) return;
   issueLogDel(logId, issueId).then(function () {
     showToast('이력이 삭제되었습니다.');
     showIssueDetail(issueId);
@@ -1094,12 +1094,12 @@ function renderIssueBulkBar() {
   document.body.appendChild(bar);
 }
 
-function issueBulkAction(action) {
+async function issueBulkAction(action) {
   var ids = Object.keys(issueBulkSelected);
   if (ids.length === 0) return;
 
   if (action === 'delete') {
-    if (!confirm(ids.length + '건의 이슈를 삭제하시겠습니까?')) return;
+    if (!(await wmConfirm(ids.length + '건의 이슈를 삭제하시겠습니까?'))) return;
     var delPromises = ids.map(function (id) {
       return typeof deleteIssueCascade === 'function' ? deleteIssueCascade(id) : deleteIssue(id);
     });

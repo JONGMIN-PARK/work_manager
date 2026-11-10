@@ -650,8 +650,8 @@ function pdDevMove(id, status) {
   devItemMove(id, status).then(function () { pdLoadDev(_pdDevProj); })
     .catch(function () { if (typeof showToast === 'function') showToast('이동 실패', 'error'); });
 }
-function pdDevDel(id) {
-  if (!confirm('이 개발 아이템을 삭제할까요?')) return;
+async function pdDevDel(id) {
+  if (!(await wmConfirm('이 개발 아이템을 삭제할까요?'))) return;
   devItemDel(id).then(function () { pdLoadDev(_pdDevProj); })
     .catch(function (err) { if (typeof showToast === 'function') showToast('삭제 실패: ' + _pdErrMsg(err), 'error'); });
 }
@@ -1344,8 +1344,8 @@ function pdTrashRestore(mid, logId, projId, containerId) {
 }
 
 /* 휴지통 → 완전 삭제 (복구 불가) */
-function pdTrashHardDel(mid, logId, projId, containerId) {
-  if (!confirm('이 이력을 완전 삭제할까요?\n복구할 수 없습니다.')) return;
+async function pdTrashHardDel(mid, logId, projId, containerId) {
+  if (!(await wmConfirm('이 이력을 완전 삭제할까요?\n복구할 수 없습니다.'))) return;
   if (typeof msLogHardDel !== 'function') return;
   msLogHardDel(mid, logId).then(function () {
     if (typeof showToast === 'function') showToast('완전 삭제되었습니다.');
@@ -1354,8 +1354,8 @@ function pdTrashHardDel(mid, logId, projId, containerId) {
 }
 
 /* 휴지통 비우기 (일괄 완전삭제) */
-function pdTrashEmpty(mid, projId, containerId) {
-  if (!confirm('휴지통을 비울까요?\n모든 삭제 이력이 완전 삭제되어 복구할 수 없습니다.')) return;
+async function pdTrashEmpty(mid, projId, containerId) {
+  if (!(await wmConfirm('휴지통을 비울까요?\n모든 삭제 이력이 완전 삭제되어 복구할 수 없습니다.'))) return;
   if (typeof msLogTrashEmpty !== 'function') return;
   msLogTrashEmpty(mid).then(function () {
     if (typeof showToast === 'function') showToast('휴지통을 비웠습니다.');
@@ -1364,8 +1364,8 @@ function pdTrashEmpty(mid, projId, containerId) {
 }
 
 /* 진척률 이력 1건 삭제 (부분) */
-function pdMsLogDelete(mid, logId, projId) {
-  if (!confirm('이 진척률 이력 1건을 삭제할까요?')) return;
+async function pdMsLogDelete(mid, logId, projId) {
+  if (!(await wmConfirm('이 진척률 이력 1건을 삭제할까요?'))) return;
   if (typeof msLogDel !== 'function') return;
   msLogDel(mid, logId).then(function () {
     if (typeof showToast === 'function') showToast('이력 삭제 완료');
@@ -1379,8 +1379,8 @@ function pdMsLogDelete(mid, logId, projId) {
 }
 
 /* 진척률 이력 전체 삭제 */
-function pdMsLogClear(mid, projId) {
-  if (!confirm('이 마일스톤의 진척률 이력을 전체 삭제할까요?\n(되돌릴 수 없습니다)')) return;
+async function pdMsLogClear(mid, projId) {
+  if (!(await wmConfirm('이 마일스톤의 진척률 이력을 전체 삭제할까요?\n(되돌릴 수 없습니다)'))) return;
   if (typeof msLogClear !== 'function') return;
   msLogClear(mid).then(function () {
     if (typeof showToast === 'function') showToast('이력 전체 삭제 완료');
@@ -1719,16 +1719,16 @@ function _pdAssignSubmit() {
   });
 }
 
-function pdAssignCoverEnd(mid, projId, assignmentId) {
-  if (!confirm('이 대체를 종료(원복)할까요? 원담당으로 복귀합니다.')) return;
+async function pdAssignCoverEnd(mid, projId, assignmentId) {
+  if (!(await wmConfirm('이 대체를 종료(원복)할까요? 원담당으로 복귀합니다.'))) return;
   msAssignmentRestore(mid, { assignmentId: assignmentId }).then(function () {
     if (typeof showToast === 'function') showToast('대체 종료(원복)됨');
     renderMsAssignments(mid, projId, 'pdMsAssignSection');
   }).catch(function (err) { if (typeof showToast === 'function') showToast('❌ ' + ((err && err.message) || '원복 실패'), 'error'); });
 }
 
-function pdAssignRelease(mid, projId, assignmentId) {
-  if (!confirm('이 담당 배정을 해제할까요? (이력은 보존)')) return;
+async function pdAssignRelease(mid, projId, assignmentId) {
+  if (!(await wmConfirm('이 담당 배정을 해제할까요? (이력은 보존)'))) return;
   msAssignmentRelease(mid, assignmentId).then(function () {
     if (typeof showToast === 'function') showToast('배정 해제됨');
     renderMsAssignments(mid, projId, 'pdMsAssignSection');
@@ -1756,8 +1756,8 @@ function _pdAssignToggleHistory(mid, projId, containerId) {
   }).catch(function () { hist.innerHTML = '<div style="font-size:10px;color:var(--t6)">이력 로드 실패</div>'; });
 }
 
-function pdAssignReplaceUndo(mid, projId, currentPrimaryId, restoreUserId) {
-  if (!confirm('이 담당으로 복귀할까요? 현재 주담당은 해제됩니다.')) return;
+async function pdAssignReplaceUndo(mid, projId, currentPrimaryId, restoreUserId) {
+  if (!(await wmConfirm('이 담당으로 복귀할까요? 현재 주담당은 해제됩니다.'))) return;
   var body = { restoreUserId: restoreUserId };
   if (currentPrimaryId) body.assignmentId = currentPrimaryId;
   msAssignmentRestore(mid, body).then(function () {
@@ -1810,9 +1810,9 @@ function _pdRenderProgHist(pLogs) {
 }
 
 /* 모달 내 이력 1건 삭제 → 이력 재렌더 + 하위 뷰 갱신 */
-function pdProgHistDel(logId) {
+async function pdProgHistDel(logId) {
   if (!_pdProgCtx || typeof msLogDel !== 'function') return;
-  if (!confirm('이 이력 1건을 삭제할까요?')) return;
+  if (!(await wmConfirm('이 이력 1건을 삭제할까요?'))) return;
   msLogDel(_pdProgCtx.mid, logId).then(function () {
     if (typeof showToast === 'function') showToast('이력 삭제 완료');
     _pdRenderProgHist();
@@ -1826,9 +1826,9 @@ function pdProgHistDel(logId) {
 }
 
 /* 모달 내 이력 전체 삭제 → 이력 재렌더 + 하위 뷰 갱신 */
-function pdProgHistClear() {
+async function pdProgHistClear() {
   if (!_pdProgCtx || typeof msLogClear !== 'function') return;
-  if (!confirm('이 마일스톤의 진척률 이력을 전체 삭제할까요?\n(되돌릴 수 없습니다)')) return;
+  if (!(await wmConfirm('이 마일스톤의 진척률 이력을 전체 삭제할까요?\n(되돌릴 수 없습니다)'))) return;
   msLogClear(_pdProgCtx.mid).then(function () {
     if (typeof showToast === 'function') showToast('이력 전체 삭제 완료');
     _pdRenderProgHist();
@@ -1850,11 +1850,11 @@ function pdSetUnit(u, projId) {
 }
 
 /* 업무일지 레코드를 프로젝트 마일스톤의 날짜 구간으로 자동 태깅 */
-function pdAutoTagWork(projId) {
+async function pdAutoTagWork(projId) {
   if (typeof apiFetch !== 'function') return;
   // [취소] 는 항상 "그만두기" — 예전엔 [취소]가 "기존 태그 덮어쓰기"라 그만두려던 사람이 태그를 덮어썼다
-  if (!confirm('업무일지 레코드를 마일스톤 날짜 구간으로 자동 태깅합니다.\n(태그 없는 레코드만 — 기존 태그는 그대로)\n\n진행할까요?')) return;
-  var overwrite = confirm('기존 태그도 날짜 구간 기준으로 다시 덮어쓸까요?\n\n[확인] 덮어쓰기 · [취소] 태그 없는 것만');
+  if (!(await wmConfirm('업무일지 레코드를 마일스톤 날짜 구간으로 자동 태깅합니다.\n(태그 없는 레코드만 — 기존 태그는 그대로)\n\n진행할까요?'))) return;
+  var overwrite = (await wmConfirm('기존 태그도 날짜 구간 기준으로 다시 덮어쓸까요?\n\n[확인] 덮어쓰기 · [취소] 태그 없는 것만'));
   apiFetch('/api/archives/records/auto-tag-milestones', {
     method: 'POST',
     body: JSON.stringify({ projectId: projId, overwrite: overwrite })
@@ -2180,9 +2180,9 @@ function pdShowPhase(projId, phase) {
 }
 
 function pdGenerateChecklists(projId) {
-  chkGetByProject(projId).then(function (existing) {
+  chkGetByProject(projId).then(async function (existing) {
     if (existing.length > 0) {
-      if (!confirm('이미 ' + existing.length + '개 항목이 있습니다. 기본 체크리스트를 추가 생성하시겠습니까?')) return Promise.reject('cancel');
+      if (!(await wmConfirm('이미 ' + existing.length + '개 항목이 있습니다. 기본 체크리스트를 추가 생성하시겠습니까?'))) return Promise.reject('cancel');
     }
     return createDefaultChecklists(projId);
   }).then(function () {
@@ -2241,7 +2241,7 @@ function pdChkDrop(e) {
 
 /* ═══ 단계 전환 (게이트 체크) ═══ */
 function pdAdvancePhase(projId, targetPhase) {
-  advancePhase(projId, targetPhase).then(function (result) {
+  advancePhase(projId, targetPhase).then(async function (result) {
     if (!result) return;
     var phases = typeof PROJ_PHASE !== 'undefined' ? PROJ_PHASE : {};
     var toPh = phases[targetPhase] ? phases[targetPhase].label : targetPhase;
@@ -2249,7 +2249,7 @@ function pdAdvancePhase(projId, targetPhase) {
     if (!result.gatePass) {
       var prog = result.progress;
       var fromPh = phases[result.fromPhase] ? phases[result.fromPhase].label : result.fromPhase;
-      if (!confirm(fromPh + ' 단계 체크리스트가 미완료입니다 (' + prog.done + '/' + prog.total + ').\n그래도 ' + toPh + ' 단계로 전환하시겠습니까?')) return;
+      if (!(await wmConfirm(fromPh + ' 단계 체크리스트가 미완료입니다 (' + prog.done + '/' + prog.total + ').\n그래도 ' + toPh + ' 단계로 전환하시겠습니까?'))) return;
     }
 
     executePhaseTransition(projId, targetPhase).then(function () {

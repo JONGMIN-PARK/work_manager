@@ -202,7 +202,7 @@ async function applyAliasModal() {
 }
 
 async function clearAllAliases() {
-  if (!confirm('모든 별칭을 삭제하시겠습니까?')) return;
+  if (!(await wmConfirm('모든 별칭을 삭제하시겠습니까?'))) return;
   aliasMap = {};
   await saveAliases();
   document.getElementById('aliasModal').remove();
@@ -361,7 +361,7 @@ function updateGroupMembers(id) { updateGroupMembersUI(id); }
 async function deleteGroupUI(id) {
   const g = getGroup(id);
   if (!g) return;
-  if (!confirm(`"${g.name}" 그룹을 삭제하시겠습니까?`)) return;
+  if (!(await wmConfirm(`"${g.name}" 그룹을 삭제하시겠습니까?`))) return;
   deleteGroupLocal(id);
   var ok = await saveGroupsToServer();
   renderGroupList();
@@ -465,10 +465,10 @@ function dbBackupLoad() {
     if (!d.allowed) return;
     box.innerHTML = dbBackupHtml(d);
     box.style.display = '';
-    box.onclick = function (e) {
+    box.onclick = async function (e) {
       var b = e.target.closest && e.target.closest('[data-dbb-key]');
       if (!b) return;
-      if (!confirm('이 백업 파일에는 모든 데이터가 들어 있습니다. 내려받을까요? (내려받은 기록이 감사 로그에 남습니다)')) return;
+      if (!(await wmConfirm('이 백업 파일에는 모든 데이터가 들어 있습니다. 내려받을까요? (내려받은 기록이 감사 로그에 남습니다)'))) return;
       b.disabled = true;
       apiFetch('/api/data-export/backups/download', { method: 'POST', body: JSON.stringify({ key: b.getAttribute('data-dbb-key') }) }).then(function (x) {
         if (x && x.data && x.data.url) location.href = x.data.url;
@@ -606,7 +606,7 @@ function importBackupJSON(file) {
   reader.onerror = function () {
     if (typeof showToast === 'function') showToast('파일을 읽지 못했습니다.', 'error');
   };
-  reader.onload = function (e) {
+  reader.onload = async function (e) {
     var backup;
     try { backup = parseBackupText(e.target.result); } catch (err) {
       if (typeof showToast === 'function') showToast('파일 파싱 실패: ' + err.message, 'error');
@@ -618,11 +618,11 @@ function importBackupJSON(file) {
       if (typeof showToast === 'function') showToast('복원할 환경설정이 없는 백업 파일입니다. 서버 데이터는 서버 DB 백업으로 복원하세요.', 'error');
       return;
     }
-    if (!confirm('환경설정을 복원하시겠습니까?\n\n' +
+    if (!(await wmConfirm('환경설정을 복원하시겠습니까?\n\n' +
       '복원 대상: 환경설정 ' + prefKeys.length + '개 (별칭·그룹·색상은 서버에도 저장)\n' +
       '백업일: ' + (backup.exportDate || '알 수 없음') + '\n' +
       (storeNames.length ? '※ 파일 안의 서버 데이터(' + _backupCount(backup) + '건)는 복원하지 않습니다 — 서버 DB 가 원본입니다.\n' : '') +
-      '\n⚠️ 이 브라우저의 기존 환경설정이 덮어쓰기됩니다.')) return;
+      '\n⚠️ 이 브라우저의 기존 환경설정이 덮어쓰기됩니다.'))) return;
 
     _backupStatus('<span style="color:' + SEM_COLOR.warn + '">복원 중...</span>');
     applyBackupPrefs(backup).then(function (res) {
@@ -761,8 +761,8 @@ function resetSingleAbbrColor(k) {
 }
 
 /** 전체 색상 기본값 복원 */
-function resetAllAbbrColors() {
-  if (!confirm('모든 색상을 기본값으로 초기화하시겠습니까?')) return;
+async function resetAllAbbrColors() {
+  if (!(await wmConfirm('모든 색상을 기본값으로 초기화하시겠습니까?'))) return;
   Object.keys(ABR_DEFAULT).forEach(function(k) {
     var inp = document.querySelector('#abbrColorModal .abbrColorInput[data-key="' + k + '"]');
     if (inp) { inp.value = ABR_DEFAULT[k]; inp.dispatchEvent(new Event('input')); }

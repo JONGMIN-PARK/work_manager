@@ -248,7 +248,7 @@ function chatEphHtml(m) {
     (m.tok ? '<div class="cx-eph-a"><button type="button" class="wm-pri" data-eshare="' + _cxE(m.id) + '">📢 방에 공유</button><span>공유하면 방 사람 모두가 이 답을 봅니다 (내 권한으로 찾은 내용 포함)</span></div>' : '') +
     '</div>';
 }
-document.addEventListener('click', function (e) {
+document.addEventListener('click', async function (e) {
   var t = e.target; if (!t.closest || !t.closest('.cx-eph')) return;
   function find(id) { return CX.msgs.filter(function (m) { return m.id === id; })[0]; }
   var x = t.closest('[data-ex]');
@@ -258,7 +258,7 @@ document.addEventListener('click', function (e) {
   var s = t.closest('[data-eshare]');
   if (s) {
     var m2 = find(s.dataset.eshare); if (!m2) return;
-    if (!confirm('이 AI 답을 방 사람 모두에게 보여 줄까요?\n내 권한으로 찾은 내용이 들어 있을 수 있어요.')) return;
+    if (!(await wmConfirm('이 AI 답을 방 사람 모두에게 보여 줄까요?\n내 권한으로 찾은 내용이 들어 있을 수 있어요.'))) return;
     s.disabled = true;
     apiFetch('/api/chat/rooms/' + encodeURIComponent(CX.room) + '/eph-share', { method: 'POST', body: JSON.stringify({ tok: m2.tok }) }).then(function (r) {
       var id2 = m2.id; CX.msgs = CX.msgs.filter(function (m) { return m.id !== id2; }); if (CX.eph[CX.room]) CX.eph[CX.room] = CX.eph[CX.room].filter(function (m) { return m.id !== id2; });

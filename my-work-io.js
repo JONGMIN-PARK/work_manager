@@ -121,7 +121,7 @@ function _mwioTrashBuild(rows) {
   }
   paint();
   var busy = false;
-  body.addEventListener('click', function (e) {
+  body.addEventListener('click', async function (e) {
     var b = e.target.closest('[data-tr]');
     if (!b || busy) return;
     var k = b.getAttribute('data-tr'), row = b.closest('[data-tid]'), id = row && row.getAttribute('data-tid');
@@ -130,12 +130,12 @@ function _mwioTrashBuild(rows) {
     if (k === 'restore') {
       p = apiFetch('/api/my-work/todos/' + encodeURIComponent(id) + '/restore', { method: 'POST' }).then(function (r) { rows = rows.filter(function (x) { return x !== t; }); _mwToast('↩ "' + t.title + '" 되살렸습니다'); return [r && r.data]; });
     } else if (k === 'purge') {
-      if (!confirm('"' + t.title + '" 을(를) 영구 삭제할까요? 되돌릴 수 없습니다.')) return;
+      if (!(await wmConfirm('"' + t.title + '" 을(를) 영구 삭제할까요? 되돌릴 수 없습니다.'))) return;
       p = apiFetch('/api/my-work/trash/' + encodeURIComponent(id), { method: 'DELETE' }).then(function () { rows = rows.filter(function (x) { return x !== t; }); });
     } else if (k === 'restoreAll') {
       p = Promise.all(rows.map(function (x) { return apiFetch('/api/my-work/todos/' + encodeURIComponent(x.id) + '/restore', { method: 'POST' }); })).then(function (rs) { _mwToast('↩ ' + rows.length + '개 되살렸습니다'); rows = []; return rs.map(function (r) { return r && r.data; }); });
     } else if (k === 'empty') {
-      if (!confirm('휴지통의 ' + rows.length + '개를 모두 영구 삭제할까요? 되돌릴 수 없습니다.')) return;
+      if (!(await wmConfirm('휴지통의 ' + rows.length + '개를 모두 영구 삭제할까요? 되돌릴 수 없습니다.'))) return;
       p = apiFetch('/api/my-work/trash', { method: 'DELETE' }).then(function () { _mwToast('🗑 휴지통을 비웠습니다'); rows = []; });
     }
     if (!p) return;

@@ -410,7 +410,7 @@ function _mwcMoveTask(x, date, time) {
   }).catch(function (e) { _mwToast('❌ ' + _mwErr(e), 'error'); _mwPaint(); });
 }
 
-function _mwcMoveEvent(x, date, time) {
+async function _mwcMoveEvent(x, date, time) {
   var ev = x.ev;
   var shift = _mwDays(x.occ, date);
   var up = {};
@@ -424,7 +424,7 @@ function _mwcMoveEvent(x, date, time) {
     up.endTime = _mwcHm(Math.min(_mwcMin(time) + dur, 23 * 60 + 59));
   }
   if (!Object.keys(up).length) return;
-  if (ev.repeat && !confirm('반복 일정입니다. 모든 회차가 함께 옮겨집니다. 계속할까요?')) return;
+  if (ev.repeat && !(await wmConfirm('반복 일정입니다. 모든 회차가 함께 옮겨집니다. 계속할까요?'))) return;
   _mwc.selfAt = Date.now();
   updateEvent(ev.id, up, ev.version).then(function () {
     _mwToast('📅 "' + (ev.title || '일정') + '" 을 ' + (+date.slice(5, 7)) + '/' + (+date.slice(8, 10)) + (up.startTime ? ' ' + up.startTime : '') + ' 로 옮겼습니다');
@@ -456,7 +456,7 @@ function _mwcBuildFeed(f) {
       '<p class="mwc-f-note">🔒 주소를 아는 사람은 누구나 볼 수 있으니 다른 사람과 나누지 마세요. 언제든 끄거나 새로 만들 수 있습니다.</p>' +
       '<div class="mwc-q-btns"><span style="flex:1"></span><button class="mw-btn mw-btn-p" data-f="new">구독 주소 만들기</button></div>';
   var ov = createModal({ id: 'mwcFeedModal', width: '520px', titleText: '📤 내 업무 달력 구독', html: body, closeOnEsc: true }).overlay;
-  ov.onclick = function (e) {
+  ov.onclick = async function (e) {
     var b = e.target.closest('[data-f]');
     if (!b) return;
     var k = b.getAttribute('data-f');
@@ -467,8 +467,8 @@ function _mwcBuildFeed(f) {
         .catch(function () { try { document.execCommand('copy'); _mwToast('📋 주소를 복사했습니다'); } catch (_) { _mwToast('주소를 직접 복사해 주세요', 'warn'); } });
       return;
     }
-    if (k === 'new' && f && !confirm('새 주소를 만들면 지금 주소로 구독한 달력은 더 이상 갱신되지 않습니다. 계속할까요?')) return;
-    if (k === 'off' && !confirm('구독을 끌까요? 달력 앱에 추가한 것은 더 이상 갱신되지 않습니다.')) return;
+    if (k === 'new' && f && !(await wmConfirm('새 주소를 만들면 지금 주소로 구독한 달력은 더 이상 갱신되지 않습니다. 계속할까요?'))) return;
+    if (k === 'off' && !(await wmConfirm('구독을 끌까요? 달력 앱에 추가한 것은 더 이상 갱신되지 않습니다.'))) return;
     b.disabled = true;
     apiFetch('/api/my-work/feed', { method: k === 'off' ? 'DELETE' : 'POST' }).then(function (r) {
       ov.remove();

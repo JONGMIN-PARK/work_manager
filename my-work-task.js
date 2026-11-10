@@ -232,9 +232,9 @@ function mwBindOrder(el) {
 /* 창 열기 — 머리(✕)와 Esc 를 직접 묶어 저장 안 한 내용이 있으면 묻는다 (createModal 기본 ✕ · Esc 는 그냥 닫음) */
 function _mwtModal(id, width, title, body, isDirty) {
   var ov = createModal({ id: id, width: width, html: '<div class="mwt-head"><b>' + title + '</b><button type="button" class="mwt-x" data-mwt-close title="닫기 (Esc)">✕</button></div>' + body }).overlay;
-  function close(force) {
+  async function close(force) {
     if (!ov.isConnected) return;
-    if (!force && isDirty() && !confirm('저장하지 않은 내용이 있습니다. 닫을까요?')) return;
+    if (!force && isDirty() && !(await wmConfirm('저장하지 않은 내용이 있습니다. 닫을까요?'))) return;
     ov.remove();
     document.removeEventListener('keydown', onKey, true);
   }
