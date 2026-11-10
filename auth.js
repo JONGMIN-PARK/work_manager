@@ -548,6 +548,12 @@ function updateAuthUI() {
     var any = grpShow[g].some(function (id) { var e = document.getElementById(id); return e && e.style.display !== 'none'; });
     document.querySelectorAll('[data-grp="' + g + '"]').forEach(function (e) { e.style.display = any ? '' : 'none'; });
   });
+  // v13.434 업무 관리 하위 탭이 주간 분석 하나뿐이면(주간 업무 · 업무 부하 권한 없음) 탭 줄째 숨김 — 한 칸짜리 줄이 자리만 차지
+  var mt = document.getElementById('modeTabs');
+  if (mt) {
+    var nTab = Array.prototype.filter.call(mt.querySelectorAll('.tab'), function (b) { return !b.hidden && !b.classList.contains('hidden') && b.style.display !== 'none'; }).length;
+    mt.classList.toggle('wm-one-tab', nTab <= 1);
+  }
   var verB = document.getElementById('wmVerBadge');
   if (verB) { verB.style.cursor = currentUser.role === 'admin' ? 'pointer' : 'default'; verB.title = currentUser.role === 'admin' ? '패치노트 보기' : ''; }
   // 애니웍스 버튼 — 모든 사용자에게 표시

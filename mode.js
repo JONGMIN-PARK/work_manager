@@ -128,7 +128,10 @@ window.refreshCurrentTab = refreshCurrentTab;
 
 // v13.251 모든 탭이 창 너비 전체를 쓴다 — 폭 캡(style.css .con · .hdr-in)을 없애 탭별 넓히기(_applyWideMode) 제거
 
+// v13.434 숨긴 하위 탭 — 저장된 마지막 화면 · 링크로 와도 주간 분석으로 (다시 쓰려면 여기서 빼고 html 의 탭 hidden 을 지움)
+var WM_OFF_MODES = ['archive', 'trend'];
 function setMode(m){
+  if (WM_OFF_MODES.indexOf(m) >= 0) m = 'weekly';
   var prevMode = curMode;
   curMode=m;
   // 해당 페이지의 서브탭만 업데이트

@@ -7129,3 +7129,6 @@ html.cx-locked #mMessages{position:relative}
   #mWeekly .wq-search:has(~ #cmpLabel:not(.hidden)){flex:1 1 0;min-width:96px}
   #mWeekly #cmpLabel{display:inline-flex;align-items:center;gap:4px}
 }
+
+/* v13.434 업무 관리 하위 탭이 하나뿐이면 줄째 숨김 (auth.js) */
+#modeTabs.wm-one-tab{display:none!important}

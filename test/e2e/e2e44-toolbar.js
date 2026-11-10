@@ -53,14 +53,14 @@ var SHOTS = path.join(__dirname, '.shots');
     check(!(await page.evaluate(function () { return document.getElementById('wrToolsWrap').classList.contains('open'); })), '메뉴 항목을 누르면 닫힘');
     await page.evaluate(function () { document.getElementById('mainArea').classList.add('hidden'); });
 
-    // 🗄️ 아카이브 · 📈 트렌드
-    await page.evaluate(function () { setMode('archive'); }); await wait(500);
-    var a = await tb('mArchive');
-    var delOut = await page.evaluate(function () { var b = document.querySelector('#mArchive [onclick*="clearAllWeeks"]'); return b && !b.offsetParent && !!b.closest('.hdr-pop-menu'); });
-    check(a && a.title === '🗄️ 아카이브' && a.last.split(',')[1] === 'more' && delOut, '아카이브 — 전체 삭제는 ⋯ 안 ' + JSON.stringify(a));
-    await page.evaluate(function () { setMode('trend'); }); await wait(500);
-    var t = await tb('mTrend');
-    check(t && t.title === '📈 트렌드' && t.pri === 1 && t.last.split(',')[1] === 'pri' && t.oneLine, '트렌드 — 분석 실행이 오른쪽 끝 ' + JSON.stringify(t));
+    // 🗄️ 아카이브 · 📈 트렌드 — v13.434 숨김: 탭이 안 보이고, 불러도 주간 분석으로
+    var hid = await page.evaluate(function () {
+      var vis = function (m) { var t = document.querySelector('#modeTabs .tab[data-m="' + m + '"]'); return !!(t && t.offsetParent); };
+      setMode('archive'); var a1 = curMode; setMode('trend'); var a2 = curMode;
+      return { arch: vis('archive'), trend: vis('trend'), a1: a1, a2: a2 };
+    }); await wait(300);
+    check(!hid.arch && !hid.trend && hid.a1 === 'weekly' && hid.a2 === 'weekly', '아카이브 · 트렌드 숨김 — 불러도 주간 분석 ' + JSON.stringify(hid));
+    await page.evaluate(function () { document.getElementById('mainArea').classList.add('hidden'); });
 
     // 📅 주간 업무
     await page.evaluate(function () { setMode('weekly_report'); }); await wait(1500);
