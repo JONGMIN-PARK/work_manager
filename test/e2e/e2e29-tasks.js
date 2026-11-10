@@ -171,8 +171,9 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await page.type('#mwAddTitle', '할일화면 끝낸 일');
     await page.keyboard.press('Enter');
     await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '할일화면 끝낸 일'; }) && !document.querySelector('#mMyWork .is-pending'); });
+    await page.evaluate(function () { var g = document.querySelector('#mMyWork [data-grp="later"]'); if (g && g.classList.contains('mw-folded')) g.querySelector('[data-fold]').click(); });   // v13.433 마감 없음 → 나중에 묶음 (처음엔 접힘)
     var dk = (await rowOf('할일화면 끝낸 일')).key;
-    await page.evaluate(function (k) { var g = document.querySelector('#mMyWork [data-grp="nodue"]'); if (g && g.classList.contains('mw-folded')) g.querySelector('[data-fold]').click(); document.querySelector('#mMyWork input[data-done="' + k + '"]').click(); }, dk);
+    await page.evaluate(function (k) { var g = document.querySelector('#mMyWork [data-grp="later"]'); if (g && g.classList.contains('mw-folded')) g.querySelector('[data-fold]').click(); document.querySelector('#mMyWork input[data-done="' + k + '"]').click(); }, dk);
     check(await until(function () { var u = document.getElementById('mwUndo'); return u && /완료/.test(u.textContent); }), '완료 → 되돌리기 알림');
     await wait(400);
     await page.evaluate(function () { var d = document.querySelector('#mMyWork [data-grp="done"]'); if (d && d.classList.contains('mw-folded')) d.querySelector('[data-fold]').click(); });
@@ -308,7 +309,7 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await wait(300);
     check(await page.evaluate(function () { return document.documentElement.scrollWidth <= window.innerWidth + 1; }), '휴대폰 폭 목록 — 가로 스크롤 없음');
     await page.screenshot({ path: path.join(SHOT, 'tasks-list-mobile.png') });
-    await page.click('#mMyWork [data-mwc-view="matrix"]');
+    await page.select('#mwViewSel', 'matrix');   // v13.433 휴대폰 폭은 보기 고르기 칸
     await wait(300);
     check(await page.evaluate(function () { return document.documentElement.scrollWidth <= window.innerWidth + 1; }), '휴대폰 폭 4칸 — 가로 스크롤 없음');
     await page.evaluate(function () { try { ['mw-view', 'mw-sort', 'mw-prif'].forEach(function (k) { localStorage.removeItem(k); }); } catch (_) {} });

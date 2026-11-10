@@ -59,7 +59,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.type('#mwAddTitle', '견적 양식 정리');
     await page.click('#mwAdd button[type=submit]');
     await page.waitForFunction(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '견적 양식 정리'; }) && !document.querySelector('#mMyWork .is-pending'); });
-    check(await page.evaluate(function () { return !!document.querySelector('#mMyWork [data-grp="nodue"]'); }), '마감 없는 할 일 → 마감 없음 묶음');
+    check(await page.evaluate(function () { return !!document.querySelector('#mMyWork [data-grp="later"]'); }), '마감 없는 할 일 → 나중에 묶음 (v13.433 마감 없음을 나중에로 합침)');
     // 완료 체크 → 원래 자리 반영
     var key = await page.evaluate(function () { return _mw.data.data.filter(function (x) { return x.src === 'action'; })[0].key; });
     await page.click('#mMyWork input[data-done="' + key + '"]');

@@ -217,6 +217,7 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await page.waitForNetworkIdle({ idleTime: 400, timeout: 10000 }).catch(function () {});
     await page.evaluate(function () { if (mwPanelIsOpen()) mwPanelClose(); });   // v13.286 — 앞에서 연 상세 패널이 탭을 오가도 복원되므로, 휴대폰 달력을 가리지 않게 닫음
     await wait(400); await page.evaluate(function () { if (typeof _mtlMain !== 'undefined' && _mtlMain && _mtlMain.st.collapsed) { _mtlMain.st.collapsed = false; _mtlMain.save(true); _mtlMain.update(); } });   // v13.403 좁은 창은 접힌 채 시작 — 펴고 시험
+    await page.evaluate(function () { _mwLS('ntl', true); _mwPaint(); });   // v13.433 좁은 폭 타임라인은 ⚙ 보기 → 🕒 타임라인 보기 를 켰을 때만
     await tl(function () { _mtlMain.update(); });
     check(await tl(function () { return document.querySelectorAll('#mwTimeline .mtl-cd').length === 7 && _mtlMain.L === 92; }), '휴대폰 — 달력은 한 주 줄');
     await page.click('#mwTimeline [data-cn="open"]');

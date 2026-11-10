@@ -6981,3 +6981,151 @@ html.cx-locked #mMessages{position:relative}
 .cw-foot .cx-lock-off{color:#DC2626}
 @media (prefers-reduced-motion:reduce){.cx-lock-card.shake{animation:none}}
 .cx-lock-card input::placeholder{letter-spacing:normal;font-size:14px}
+
+/* ═══ v13.433 🎯 내 업무 — 좁은 폭 한 줄 메뉴 · ⚙ 보기 설정 · 묶음을 상자 대신 구획으로 ═══ */
+/* 넓은 화면: 보기 설정 묶음은 펼친 채(display:contents) — 예전 순서 그대로 [보기] … [할 일] [📁] [사람] [⋯] */
+.mw-cfg-wrap,.mw-cfg{display:contents}
+.mw-cfg-btn,.mw-cfg-l,.mw-cfg-ck,.mw-view-sel,.mw-due-pick,.hdr-mi.mw-nar,.hdr-mi-sep.mw-nar{display:none}
+.mw-bar2 .mw-bar2-sp,.mw-bar2 .mw-add{order:1}
+.mw-bar2 .mw-side-tg,.mw-bar2 #mwWho{order:2}
+.mw-bar2 #mwMoreWrap{order:3}
+
+/* 묶음 — 굵은 색 상자 대신: 머리는 바탕 위 글자(오늘 집중 · 지연만 색) · 줄은 차분한 한 판 */
+#mMyWork .mw-grp{background:none;border:none;border-radius:0;box-shadow:none;overflow:visible;margin:0 0 10px}
+#mMyWork .mw-grp-h{background:var(--bg);padding:6px 4px 5px;font-size:12.5px;font-weight:600;color:var(--t3);gap:6px;border-bottom:none}
+#mMyWork .mw-grp-h b{color:var(--t5);font-weight:500;font-variant-numeric:tabular-nums}
+#mMyWork .mw-grp-h .mw-tri{font-size:10px;color:var(--t5)}
+#mMyWork .mw-rows{background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;overflow:clip}
+#mMyWork .mw-rows>.mw-row:first-child{border-top:none}
+#mMyWork .mw-g-focus .mw-grp-h{color:#D97706}
+#mMyWork .mw-g-late .mw-grp-h{color:var(--d-t)}
+#mMyWork .mw-g-late .mw-rows{border-color:color-mix(in srgb,var(--d-bd) 45%,var(--bd))}
+#mMyWork .mw-grp.mw-flash .mw-rows{box-shadow:0 0 0 2px var(--ac)}
+#mMyWork .mw-grp.mw-flash{box-shadow:none}
+#mMyWork .mw-row:nth-child(even){background:none}
+#mMyWork .mw-due{font-variant-numeric:tabular-nums}
+/* ✕(휴지통) — 마우스는 줄에 올렸을 때만 · 터치는 숨김(줄을 눌러 상세 패널의 🗑 휴지통으로) */
+@media (hover:hover){
+  #mMyWork .mw-row .mw-x{opacity:0;transition:opacity .12s}
+  #mMyWork .mw-row:hover .mw-x,#mMyWork .mw-row .mw-x:focus-visible{opacity:1}
+}
+@media (hover:none){ #mMyWork .mw-row .mw-x{display:none} }
+
+@media (max-width:768px){
+  /* 한 줄: [보기] [할 일 ……] [마감] [추가] [📅] [⚙] [⋯] */
+  #mMyWork .mw-bar2{flex-wrap:nowrap;gap:6px;margin:0 0 10px}
+  #mMyWork .mw-bar2>*{flex:none}
+  #mMyWork .mw-bar2 .mw-bar2-sp{display:none}
+  #mMyWork .mw-bar2>.mw-add{order:1;flex:1 1 auto;min-width:0;flex-wrap:nowrap;gap:5px;position:relative}
+  #mMyWork .mw-cfg-wrap{order:2}
+  #mMyWork .mw-bar2 #mwMoreWrap{order:3}
+  #mMyWork .mw-add .mw-input:first-child{flex:1 1 auto;min-width:0;width:auto;height:34px}
+  #mMyWork .mw-add .mw-btn,#mMyWork .mw-bar2>.mw-sel,#mMyWork .mw-cfg-btn,#mMyWork .mw-bar2 .wm-more{height:34px}
+  #mMyWork .mw-add .mw-btn{padding:0 10px}
+  /* 마감 — 날짜 칸은 숨기고(달력만 띄움) 짧은 단추로 */
+  #mMyWork .mw-add .mw-date{position:absolute;right:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;padding:0;border:0;display:block}
+  #mMyWork .mw-due-pick{display:inline-flex;align-items:center;justify-content:center;min-width:46px;padding:0 8px!important;font-size:12px;color:var(--t4);font-variant-numeric:tabular-nums}
+  #mMyWork .mw-due-pick.on{color:var(--ac-t);border-color:var(--ac);background:var(--ac-bg)}
+  #mMyWork .mw-add [data-mwt="new"]{width:34px;padding:0!important;justify-content:center}
+  /* ⚙ 보기 — 바꾼 설정이 있으면 숫자 */
+  #mMyWork .mw-cfg-wrap{display:block;position:relative}
+  #mMyWork .mw-cfg-btn{display:inline-flex;align-items:center;gap:2px;padding:0 10px;font-size:12.5px;white-space:nowrap}
+  #mMyWork .mw-cfg-btn.on{border-color:var(--ac);color:var(--ac-t)}
+  #mMyWork .mw-cfg{display:none}
+  #mMyWork .mw-cfg-wrap.open .mw-cfg{display:flex;flex-direction:column;align-items:stretch;gap:6px;position:absolute;right:0;top:calc(100% + 6px);z-index:40;width:min(320px,calc(100vw - 24px));max-height:min(70vh,560px);overflow:auto;padding:12px;background:var(--bg-ps,var(--bg-p));border:1px solid var(--bd2,var(--bd));border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.24)}
+  #mMyWork .mw-cfg>*{order:0!important}   /* 넓은 화면용 순서(order) 가 팝오버 안 순서를 흩뜨리지 않게 */
+  #mMyWork .mw-cfg-l{display:block;font-size:11px;font-weight:600;color:var(--t5);letter-spacing:.02em;margin:6px 0 0}
+  #mMyWork .mw-cfg-l:first-child{margin-top:0}
+  #mMyWork .mw-cfg .mw-sum,#mMyWork .mw-cfg .mw-chips,#mMyWork .mw-cfg .mw-ltools,#mMyWork .mw-cfg .mwb-bar,#mMyWork .mw-cfg .mwb-sum{display:flex;flex-wrap:wrap;gap:5px;margin:0;order:0;flex-basis:auto;overflow:visible;max-width:none}
+  #mMyWork .mw-cfg .mw-chip,#mMyWork .mw-cfg .mw-pill{white-space:nowrap}
+  #mMyWork .mw-cfg .mw-ltools select,#mMyWork .mw-cfg select{flex:1 1 0;min-width:0;max-width:none;height:34px}
+  #mMyWork .mw-cfg #mwWho{width:100%}
+  #mMyWork .mw-cfg-ck{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--t2);padding:4px 0;cursor:pointer}
+  #mMyWork .mw-cfg .mw-side-tg{align-self:flex-start;height:32px}
+  /* 타임라인 — 좁은 폭은 ⚙ 보기 → 🕒 타임라인 보기 를 켰을 때만 */
+  #mMyWork:not(.mw-ntl-on) :is(#mwtSlot,#mwTimeline){display:none}
+  /* 묶음 머리는 스크롤해도 위에 */
+  #mMyWork .mw-grp-h{position:sticky;top:0;z-index:3}
+}
+/* 휴대폰 폭 — 보기는 고르기 칸 하나 · ⚙ 는 아이콘만 · 📅 일정은 ⋯ 안으로 */
+@media (max-width:600px){
+  #mMyWork .mw-bar2 .mwc-seg{display:none}
+  #mMyWork .mw-view-sel{display:block;order:0;width:auto;max-width:76px;padding:0 6px;font-size:12.5px}
+  #mMyWork .mw-cfg-t{display:none}
+}
+@media (max-width:480px){
+  #mMyWork .mw-add [data-mwt="new"]{display:none}
+  #mMyWork .hdr-mi.mw-nar{display:flex}
+  #mMyWork .hdr-mi-sep.mw-nar{display:block}
+  #mMyWork .mw-due-pick{min-width:40px;padding:0 6px!important}
+  #mMyWork .mw-bar2{gap:5px}
+}
+@media (max-width:380px){ #mMyWork .mw-due-pick{display:none} }
+
+/* ═══ v13.433 📒 주간 분석 — 좁은 폭 알뜰하게: 단추는 아이콘만 · 조회 한두 줄 · 겹치는 이름표 줄 숨김 · 숫자 한 줄 ═══ */
+.wm-tl{display:inline}
+@media (max-width:768px){
+  /* 위 탭 — 묶음 이름(업무일지 · 보고 · 부하)은 숨기고 탭만 */
+  .sub-tabs .tab-grp{display:none!important}
+  /* 제목 줄 — [📋 주간 분석 135건] … [📁] [🌐] [💾 주차 저장] [⋯] */
+  #mWeekly .wm-tb{flex-wrap:nowrap;gap:6px}
+  #mWeekly .wm-tb .wm-tl{display:none}
+  #mWeekly .wm-tb .btn,#mWeekly .wm-tb .wm-pri{flex:none;white-space:nowrap}
+  #mWeekly .wm-tb>*{order:0!important}   /* 공통 좁은 창 규칙(.wm-pri · .hdr-pop 을 앞으로)을 이 화면만 되돌림 — 📁 🌐 다음 주차 저장 · ⋯ */
+  #mWeekly .wm-tb>.wm-tb-t,#mWeekly .wm-tb>.wm-tb-n{order:-1!important}
+  #mWeekly .wm-tb>.wm-pri{order:1!important}
+  #mWeekly .wm-tb>#wrToolsWrap{order:2!important}
+  #mWeekly .wm-tb>.wm-tb-sp{flex:1 1 0!important;height:auto;flex-basis:0!important}
+  #mWeekly .wm-tb-t{white-space:nowrap}
+  #mWeekly #fnDisp{display:none}
+  /* 조회 — 이름표 줄은 팀원 단추(전원 6/6)와 겹쳐 숨김 (고르기 · 빼기는 팀원 단추 안에서) · 라벨 칸은 숨김(값은 그대로 저장에 씀) */
+  #mWeekly .wq-sel>.wq-nmw{display:none}
+  #mWeekly .wq-sel:not(:has(#afTags:not(:empty), #resetBtn:not(.hidden))){display:none}
+  #mWeekly .wq-lbl{display:none}
+  #mWeekly .wq-bar{flex-wrap:nowrap;gap:6px}
+  #mWeekly .wq-bar>*{flex:none;min-width:0}
+  #mWeekly #wqWeek{flex:0 1 auto}
+  #mWeekly .wq-search{flex:1 1 120px;min-width:0}
+  #mWeekly #wqWeek .wq-k,#mWeekly #wqName .wq-k{display:none}
+  #mWeekly .wq-btn{height:34px}
+  #mWeekly .wq-search .si{height:34px}
+  /* 숫자 네 칸 — 탭 아래 한 줄 4칸 (예전 768px 이하에서 두 줄로 흩어짐) */
+  #mWeekly #kpiSticky.ws-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px 4px;padding:2px 0 3px;margin-bottom:6px}
+  #mWeekly #kpiSticky .ws-tabs{grid-column:1/-1;margin:0;padding:2px;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+  #mWeekly #kpiSticky .ws-tabs::-webkit-scrollbar{display:none}
+  #mWeekly #kpiSticky .ws-tabs .tab{flex:1 0 auto;white-space:nowrap;padding:3px 9px;min-height:28px}
+  #mWeekly #kpiSticky .sc{display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:3px 6px 3px 8px;min-width:0}
+  #mWeekly #kpiSticky .sl{font-size:9.5px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  #mWeekly #kpiSticky .sv{font-size:13.5px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  #mWeekly #kpiSticky .sv.sm{font-size:11.5px}
+  #mWeekly #kpiSticky .sc>div:nth-child(3){display:none}
+  /* 표 머리 — [60건·6명] … [✏️ 편집모드] [📋] [📥] [➕] 한 줄 */
+  #mWeekly .wd-hd{flex-wrap:nowrap!important;padding:8px 10px!important;gap:6px!important}
+  #mWeekly .wd-hd #tInfo{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #mWeekly .wd-hd .edit-bar{flex:none;flex-wrap:nowrap;gap:4px}
+  #mWeekly .wd-hd .wm-tl,#mWeekly .wd-hd .mob-sep{display:none}
+  #mWeekly .wd-hd .btn{padding:4px 8px;min-height:30px}
+  /* 묶음 · 정렬 · 찾기 — [사람|날짜|수주|낱개|격자] / [펼치기] [접기] [정렬] [거르기] [찾기 …] */
+  #mWeekly .wd-bar2 .wm-tl{display:none}
+  #mWeekly .wd-bar2{gap:6px;padding:8px 10px}
+  #mWeekly .wd-find{flex:1 1 120px;min-width:0;margin-left:0}
+  #mWeekly .wd-find input{width:100%;min-width:0}
+}
+@media (max-width:600px){
+  /* 조회 — 1줄: [◀ 주차 ▶] [👤 팀원] [🔍 상세 필터] · 2줄: [🔎 검색 ……] [인원 비교] */
+  #mWeekly .wq-bar{flex-wrap:wrap}
+  #mWeekly .wq-bar>.wq-dd,#mWeekly .wq-search{flex:none}
+  #mWeekly #wqWeek{flex:1 1 auto;min-width:0}
+  #mWeekly #wqWeek .wq-wk-nav{width:100%}
+  #mWeekly #wqWeek .wq-btn{flex:1 1 auto;min-width:0}
+  #mWeekly #wqWeek .wq-v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #mWeekly #wqName{flex:0 1 auto;min-width:0}
+  #mWeekly #wqName>.wq-btn{width:auto;max-width:132px}
+  #mWeekly #wqName .wq-v{flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #mWeekly #wqFilterBtn{flex:none;order:2}
+  #mWeekly .wq-search{order:5;flex:1 1 100%}
+  #mWeekly #cmpLabel{order:6;flex:none;padding:0 8px;height:34px;font-size:11.5px;white-space:nowrap}
+  #mWeekly .wq-search{min-width:0}
+  #mWeekly .wq-search:has(~ #cmpLabel:not(.hidden)){flex:1 1 0;min-width:96px}
+  #mWeekly #cmpLabel{display:inline-flex;align-items:center;gap:4px}
+}
