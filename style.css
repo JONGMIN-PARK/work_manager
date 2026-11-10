@@ -3622,7 +3622,7 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
   #globalSearchWrap:focus-within{top:max(4px,env(safe-area-inset-top))!important;left:max(8px,env(safe-area-inset-left))!important;right:max(8px,env(safe-area-inset-right))!important}
   .hdr-in{gap:6px!important}
   .hdr-brand h1{font-size:15px!important}
-  #wmVerBadge{display:none!important}
+  #wmVerBadge{font-size:9px!important;padding:1px 4px!important;margin-left:2px;flex:none}   /* v13.428 좁은 창에서도 버전 표시 (예전엔 숨김) */
   .hdr-ic{width:32px;height:30px}
   .hdr-user-btn{height:30px}
   .con{padding:6px 8px 12px!important}
