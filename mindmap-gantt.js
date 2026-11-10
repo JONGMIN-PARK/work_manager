@@ -15,6 +15,8 @@ var MM_GT_SCALES = [
 ];
 var MM_GT_ROW = 36;
 var MM_GT_LEFT = 440;
+/* v13.418 왼쪽 작업 칸 폭 — 화면 폭에 맞춰 (예전엔 CSS 만 240 으로 줄여 JS 계산과 어긋나 오늘로 굴리기가 엉뚱한 날로 갔다) */
+function _mmgLeft() { var w = window.innerWidth || 1400; return w <= 600 ? 156 : w <= 900 ? 240 : MM_GT_LEFT; }
 var MM_GT_MAX_DAYS = 1500;
 var MM_GT_WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -274,7 +276,7 @@ function _mmPaintGantt() {
   g.setAttribute('data-scale', sc.k);
   g.innerHTML = bar +
     '<div class="mm-gt-scroll" id="mmGtScroll" tabindex="0">' +
-    '<div class="mm-gt-inner" style="width:' + (MM_GT_LEFT + W) + 'px;--gt-left:' + MM_GT_LEFT + 'px">' +
+    '<div class="mm-gt-inner" style="width:' + (_mmgLeft() + W) + 'px;--gt-left:' + _mmgLeft() + 'px">' +
     '<div class="mm-gt-head">' +
     '<div class="mm-gt-lhead"><span>작업</span><span>담당</span><span>기간</span><span>진척</span></div>' +
     '<div class="mm-gt-thead" style="width:' + W + 'px"><div class="mm-gt-t1">' + top.join('') + '</div><div class="mm-gt-t2">' + low.join('') + '</div>' +
@@ -312,7 +314,7 @@ function _mmgRowHtml(it, x, dw, today, ro) {
   var cls = 'mm-gt-row' + (it.depth === 0 ? ' mm-gt-root' : it.depth === 1 ? ' mm-gt-main' : '') + (n.id === _mm.sel ? ' mm-gt-sel' : '') + (done ? ' mm-gt-done' : '') + (late ? ' mm-gt-late' : '');
   var h = '<div class="' + cls + '" data-gt-row="' + _mmEsc(n.id) + '" style="--c:' + it.color + '">' +
     '<div class="mm-gt-l">' +
-    '<div class="mm-gt-name" style="padding-left:' + (it.depth * 16 + 6) + 'px">' +
+    '<div class="mm-gt-name" style="padding-left:' + (it.depth * (window.innerWidth <= 600 ? 9 : 16) + 6) + 'px">' +
     '<span class="mm-gt-tog"' + (kids ? ' data-gt-tog="' + _mmEsc(n.id) + '"' : '') + '>' + (kids ? (n.collapsed ? '▸' : '▾') : '') + '</span>' +
     '<span class="mm-gt-dot"></span>' + (ri ? '<span class="mm-gt-ri">' + ri + '</span>' : '') +
     '<span class="mm-gt-txt" title="' + _mmEsc(n.text || '') + '">' + _mmEsc(name) + '</span>' +
@@ -347,7 +349,7 @@ function _mmgScrollToDay(dn, rg) {
   var scr = _mmEl('mmGtScroll');
   if (!scr) return;
   var sc = _mmgScale();
-  scr.scrollLeft = Math.max(0, (dn - rg.t0) * sc.dw - (scr.clientWidth - MM_GT_LEFT) / 3);
+  scr.scrollLeft = Math.max(0, (dn - rg.t0) * sc.dw - (scr.clientWidth - _mmgLeft()) / 3);
 }
 
 /* ═══ 보기 열기 · 동작 ═══ */
@@ -520,4 +522,18 @@ function _mmSetView(v) {
   if (_mm.outline) _mmPaintOutline();
   else if (_mm.gantt) { _mmPaintGantt(); _mmgFocus(); }
   else { _mmPaint(); _mmFit(); _mmFocusCanvas(); }
+}
+
+/* v13.418 창 폭이 바뀌어 왼쪽 칸 폭 단계(156 · 240 · 440)가 달라지면 다시 그림 */
+if (!window._mmgResizeBound) {
+  window._mmgResizeBound = true;
+  var _mmgLastLeft = _mmgLeft(), _mmgRzT = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(_mmgRzT);
+    _mmgRzT = setTimeout(function () {
+      var l = _mmgLeft(); if (l === _mmgLastLeft) return; _mmgLastLeft = l;
+      var g = document.getElementById('mmGantt');
+      if (g && !g.classList.contains('hidden') && typeof _mmPaintGantt === 'function') _mmPaintGantt();
+    }, 150);
+  });
 }

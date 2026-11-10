@@ -91,6 +91,28 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await p.screenshot({ path: path.join(SHOT, 'e2e74-mm-390.png') });
     await p.click('.mm-ps-x'); await wait(200);
     check(await p.evaluate(function () { return getComputedStyle(document.getElementById('mmPanel')).display === 'none' && !document.getElementById('mmEd').classList.contains('mm-psheet'); }), '닫기 → 창 닫힘');
+    // v13.418 맵 · 간트 — 휴대폰
+    await p.evaluate(function () { document.querySelector('[data-act=view-map]').click(); }); await wait(600);
+    await p.evaluate(function (i) { mmOpen(i); }, id); await wait(1500);
+    await p.evaluate(function () { var v = document.querySelector('[data-act=view-map]'); v && v.click(); _mmFit(); }); await wait(300);
+    var z0 = await p.evaluate(function () { return _mm.zoom; });
+    await p.evaluate(function () { document.querySelector('.mm-zoom [data-act=fit]').click(); }); await wait(300);
+    var z1 = await p.evaluate(function () { return _mm.zoom; });
+    check(z0 >= 0.6 && z1 < z0, '맵 — 처음엔 읽을 수 있는 크기(' + Math.round(z0 * 100) + '%) · [화면 맞춤]은 전체(' + Math.round(z1 * 100) + '%)');
+    await p.evaluate(function () {
+      var r = _mmRoot(), d = 0;
+      (function walk(n) { (n.children || []).forEach(function (c) { d++; c.startDate = _mmgStr(_mmgToday() - 3 + d); c.dueDate = _mmgStr(_mmgToday() + 2 + d); walk(c); }); })(r);
+      document.querySelector('[data-act=view-gantt]').click();
+    });
+    await wait(1200);
+    var gt = await p.evaluate(function () {
+      var l = document.querySelector('.mm-gt-l'), td = document.querySelector('.mm-gt-today'), sc = document.getElementById('mmGtScroll');
+      var tr = td.getBoundingClientRect(), sr = sc.getBoundingClientRect(), bar = document.querySelector('.mm-gt-bar');
+      return { lw: l.getBoundingClientRect().width, todayIn: tr.left > sr.left + l.getBoundingClientRect().width && tr.left < sr.right, barH: bar.offsetHeight };
+    });
+    check(gt.lw <= 160 && gt.todayIn, '간트 — 작업 칸 ' + Math.round(gt.lw) + 'px · 오늘 선이 화면 안');
+    check(gt.barH <= 48, '간트 위 띠 한 줄 (' + gt.barH + 'px)');
+    await p.screenshot({ path: path.join(SHOT, 'e2e74-gantt-390.png') });
     check(!errs.length, '페이지 오류 없음' + (errs.length ? ' — ' + errs.join(' | ') : ''));
   } catch (e) { fail++; console.log('FAIL 예외', e && e.stack || e); }
   if (b) await b.close();

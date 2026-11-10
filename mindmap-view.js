@@ -619,7 +619,7 @@ function _mmApplyTransform() {
   if (z) z.textContent = Math.round(_mm.zoom * 100) + '%';
 }
 
-function _mmFit() {
+function _mmFit(all) {
   var cv = _mmEl('mmCanvas');
   if (!cv || !_mm.layout) return;
   var b = _mm.layout.bounds;
@@ -628,6 +628,15 @@ function _mmFit() {
   _mm.zoom = Math.max(0.25, Math.min(1.1, Math.min(cw / bw, ch / bh)));
   _mm.panX = cw / 2 - ((b.minX + b.maxX) / 2) * _mm.zoom;
   _mm.panY = ch / 2 - ((b.minY + b.maxY) / 2) * _mm.zoom;
+  // v13.418 휴대폰 — 다 맞추면 글자를 못 읽을 만큼 작아짐(30% 안팎) → 처음엔 읽을 수 있는 크기로 중심 주제에 맞춤 · [화면 맞춤] 은 전체
+  if (!all && cw < 600 && _mm.zoom < 0.6) {
+    var rp = _mm.layout.pos && _mm.layout.pos[_mmRoot().id];
+    if (rp) {
+      _mm.zoom = 0.7;
+      var rx = rp.x + (rp.w || 0) / 2, ry = rp.y + (rp.h || 0) / 2;
+      _mm.panX = cw / 2 - rx * _mm.zoom; _mm.panY = ch / 2 - ry * _mm.zoom;
+    }
+  }
   _mmApplyTransform();
 }
 

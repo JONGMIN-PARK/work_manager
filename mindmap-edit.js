@@ -572,7 +572,7 @@ function _mmEdClick(e) {
     case 'unfold-all': _mmFoldAll(null); break;
     case 'zoom-in': _mmZoomAt(1.1); break;
     case 'zoom-out': _mmZoomAt(1 / 1.1); break;
-    case 'fit': _mmFit(); break;
+    case 'fit': _mmFit(true); break;
     case 'minimap': mmToggleMinimap(); break;
     case 'zen': _mmSetZen(!_mm.zen); break;
     case 'view-map': _mmSetOutline(false); return;

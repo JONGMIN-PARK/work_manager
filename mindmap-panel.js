@@ -201,13 +201,13 @@ function _mmPaintOutline(focusId) {
   var rows = [];
   mmWalk(_mmRoot(), function (n, parent, depth) {
     var kids = (n.children || []).length;
-    rows.push('<div class="mm-ol-row' + (depth === 0 ? ' mm-ol-root' : '') + (n.done ? ' mm-done' : '') + '" style="padding-left:' + (depth * 22 + 6) + 'px">' +
+    rows.push('<div class="mm-ol-row' + (depth === 0 ? ' mm-ol-root' : '') + (n.done ? ' mm-done' : '') + '" style="padding-left:' + (depth * (window.innerWidth <= 600 ? 14 : 22) + 6) + 'px">' +   // v13.418 휴대폰은 들여쓰기 좁게
       '<span class="mm-ol-tog" data-tog="' + _mmEsc(n.id) + '">' + (kids ? (n.collapsed ? '▸' : '▾') : '•') + '</span>' +
       '<input class="mm-ol-in" data-id="' + _mmEsc(n.id) + '" value="' + _mmEsc(n.text || '') + '"' + (_mm.readOnly ? ' readonly' : '') + '>' +
       (n.collapsed && kids ? '<span class="mm-hint">+' + kids + '</span>' : '') + '</div>');
     if (n.collapsed) return false;
   });
-  ol.innerHTML = '<div class="mm-sub" style="margin-bottom:8px">Enter 새 줄 · Tab 들여쓰기 · Shift+Tab 내어쓰기 · 빈 줄에서 Backspace 삭제 · ↑↓ 이동</div>' + rows.join('');
+  ol.innerHTML = '<div class="mm-sub mm-ol-hint" style="margin-bottom:8px">Enter 새 줄 · Tab 들여쓰기 · Shift+Tab 내어쓰기 · 빈 줄에서 Backspace 삭제 · ↑↓ 이동</div>' + rows.join('');
   ol.onclick = function (e) {
     var tg = e.target.closest('[data-tog]');
     if (!tg) return;
