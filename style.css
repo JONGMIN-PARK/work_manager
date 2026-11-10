@@ -7132,3 +7132,27 @@ html.cx-locked #mMessages{position:relative}
 
 /* v13.434 업무 관리 하위 탭이 하나뿐이면 줄째 숨김 (auth.js) */
 #modeTabs.wm-one-tab{display:none!important}
+
+/* ═══ v13.436 좁은 화면 · 휴대폰 — 창을 닫을 수 있게 ═══
+   공용 창(createModal): 머리(제목 · ✕)가 스크롤해도 위에 붙어 있고, 창 높이는 주소창을 뺀 실제 화면(dvh) 기준.
+   어떤 창이든 닫기 단추가 화면에 없으면 wm-layer.js 가 오른쪽 위에 ✕ 를 띄운다. */
+.wa-modal-x{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:28px;min-height:28px}
+@media (max-width:768px),(max-height:520px),(pointer:coarse){
+  .wa-modal-box>.wa-modal-hd{position:sticky;top:-24px;z-index:5;background:inherit;margin:-24px -24px 12px!important;padding:14px 12px 10px 24px;border-bottom:1px solid var(--bd);border-radius:14px 14px 0 0;gap:8px}
+  .wa-modal-box>.wa-modal-hd>span:first-child{min-width:0;overflow-wrap:anywhere}
+  .wa-modal-box[style*="padding:0"]>.wa-modal-hd{top:0;margin:0 0 12px!important}
+  .wa-modal-box[style*="padding:20px"]>.wa-modal-hd{top:-20px;margin:-20px -20px 12px!important;padding-left:20px}
+  .wa-modal-box[style*="padding:18px 20px"]>.wa-modal-hd{top:-18px;margin:-18px -20px 12px!important;padding-left:20px}
+  .wa-modal-box[style*="padding:16px 18px"]>.wa-modal-hd{top:-16px;margin:-16px -18px 12px!important;padding-left:18px}
+  .wa-modal-x{min-width:40px;min-height:40px;font-size:18px!important;border-radius:10px!important}
+}
+@media (max-width:600px),(max-height:520px){
+  .wa-modal-overlay{padding:8px!important;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))!important}
+  .wa-modal-overlay>.wa-modal-box{max-height:calc(100vh - 16px)!important;max-height:calc(100dvh - 16px - env(safe-area-inset-bottom,0px))!important}
+}
+
+/* v13.436 💬 옛 대화를 올려 볼 때 밀리던 것 — 화면 밖 말풍선 높이를 어림(56px)으로 두는 content-visibility 는
+   자리 지키기(overflow-anchor)가 되는 브라우저에서만. 아이폰(사파리)은 그게 없어 올릴 때마다 실제 높이로 바뀌며 화면이 튀었다 */
+@supports not (overflow-anchor:auto){.cx-msgs .cx-m{content-visibility:visible;contain-intrinsic-size:auto}}
+/* v13.436 사진 자리 미리 잡기 — 주소가 아직 없는 img 는 글자(대체 문구)처럼 다뤄져 가로 · 세로가 안 먹으므로 칸으로 */
+.cx-img img[data-dim]{display:inline-block;vertical-align:top}

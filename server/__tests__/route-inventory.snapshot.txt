@@ -424,6 +424,7 @@ POST /api/chat/docs/:did/cursor
 POST /api/chat/equipment/room
 POST /api/chat/files/:fid/annot
 POST /api/chat/files/:fid/cursor
+POST /api/chat/files/:fid/dim
 POST /api/chat/files/:fid/thumb
 POST /api/chat/files/:fid/to-docs
 POST /api/chat/folders
@@ -462,6 +463,7 @@ POST /api/chat/rooms/:id/scheduled
 POST /api/chat/rooms/:id/share
 POST /api/chat/rooms/:id/typing
 POST /api/chat/scheduled/:sid/now
+POST /api/chat/thumbs
 POST /api/checklists
 POST /api/comments
 POST /api/custom-fields/definitions

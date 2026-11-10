@@ -288,10 +288,12 @@ function createModal(opts) {
   var titleHtml = opts.titleText != null ? eH(opts.titleText) : opts.title;
   if (titleHtml) {
     var hdr = document.createElement('div');
+    hdr.className = 'wa-modal-hd';   // v13.436 좁은 화면에서 머리(제목 · ✕)가 스크롤해도 위에 붙어 있게 (style.css)
     hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px';
     hdr.innerHTML = '<span style="font-size:15px;font-weight:700;color:var(--t1)">' + titleHtml + '</span>';
     var closeBtn = document.createElement('span');
     closeBtn.textContent = '\u2715';
+    closeBtn.className = 'wa-modal-x'; closeBtn.setAttribute('role', 'button'); closeBtn.setAttribute('aria-label', '닫기'); closeBtn.setAttribute('data-wm-close', '');
     closeBtn.style.cssText = 'cursor:pointer;color:var(--t5);font-size:16px;padding:4px 8px;border-radius:6px;transition:all .15s';
     closeBtn.onmouseover = function () { this.style.color = 'var(--d-t)'; this.style.background = 'var(--d-bg)'; };
     closeBtn.onmouseout = function () { this.style.color = 'var(--t5)'; this.style.background = 'none'; };
@@ -316,6 +318,7 @@ function createModal(opts) {
     };
     document.addEventListener('keydown', _escH);
   }
+  ov._wmClose = _close;   // v13.436 wm-layer.js — 닫기 단추가 안 보일 때 · 뒤로 가기
   document.body.appendChild(ov);
   return { overlay: ov, box: box, close: _close };
 }

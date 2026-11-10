@@ -584,6 +584,7 @@ function _cxDrawMain() {
   var ta0 = m.querySelector('#cxIn'); if (ta0 && CX.drafts[CX.room]) { ta0.value = CX.drafts[CX.room]; ta0.style.height = 'auto'; ta0.style.height = Math.min(160, ta0.scrollHeight) + 'px'; }
   var box = m.querySelector('#cxMsgs');
   box.addEventListener('scroll', function () {
+    if (CX.more && !CX.pre && !CX.loading && box.scrollHeight - box.scrollTop - box.clientHeight > 150) _cxPreOlder();   // v13.436 올리기 시작하면 다음 쪽을 미리
     if (box.scrollTop < Math.max(600, box.clientHeight * 1.5) && CX.more && !CX.loading) _cxLoadOlder();   // v13.414 위 끝에 닿기 전에 미리 받아 둠 (닿고 나서 받으면 휴대폰에서 굴림이 멈칫)
     if (CX.fwd && !CX.loading && box.scrollHeight - box.scrollTop - box.clientHeight < 200) _cxLoadNewer();   // v13.375 앞으로 읽기
     _cxSoon('newb', _cxNewBtn);
@@ -815,10 +816,20 @@ function _cxNames(ids) {
   var mm = (CX.info && CX.info.members) || [];
   return ids.map(function (id) { var u = mm.filter(function (x) { return x.id === id; })[0]; return u ? u.name : ''; }).filter(Boolean).join(', ');
 }
+/* v13.436 사진 자리 미리 잡기 — 사진이 뜨는 순간 높이가 생겨 대화가 밀리던 것. 크기(f.w · f.h)를 알면 뜨기 전부터 같은 크기 칸을 둔다
+ *   (style.css .cx-img img 의 최대 280×260 · 최소 80×60 과 같은 셈). 자르거나 돌린 사진은 모양이 달라 그대로 둠 */
+function _cxImgBox(f) {
+  var w = +f.w, h = +f.h;
+  if (!(w > 0 && h > 0) || (f.annot && (f.annot.crop || f.annot.rot))) return '';
+  try { if (typeof _cbViews !== 'undefined' && _cbViews && _cbViews[f.id]) return ''; } catch (e) {}
+  var k = Math.max(w, h) > CX_THUMB * 1.3 ? CX_THUMB / Math.max(w, h) : 1;
+  var dw = Math.min(w * k, 280), dh = Math.min(dw * h / w, 260);
+  return ' data-dim="1" style="width:' + Math.round(Math.max(dw, 80)) + 'px;height:' + Math.round(Math.max(dh, 60)) + 'px"';
+}
 function _cxFileHtml(f) {
   if (/^audio\//i.test(f.mime || '') && typeof chatVoiceHtml === 'function') return chatVoiceHtml(f);   // v13.379 🎤
   var img = /^image\/(png|jpe?g|gif|webp|bmp)$/i.test(f.mime || '');
-  if (img) return '<button type="button" class="cx-img" data-file="' + _cxE(f.id) + '" data-img="1" title="' + _cxE(f.name) + '"><img alt="' + _cxE(f.name) + '" data-blob="' + _cxE(f.id) + '" data-small="1"></button>';
+  if (img) return '<button type="button" class="cx-img" data-file="' + _cxE(f.id) + '" data-img="1" title="' + _cxE(f.name) + '"><img alt="' + _cxE(f.name) + '" decoding="async" data-blob="' + _cxE(f.id) + '" data-small="1"' + _cxImgBox(f) + '></button>';
   var ext = ((/\.([A-Za-z0-9]{1,6})$/.exec(f.name) || [])[1] || 'FILE').toUpperCase();
   return '<div class="cx-file"><span class="cx-fx">' + _cxE(ext) + '</span><span class="cx-fn"><b>' + _cxE(f.name) + '</b><i>' + _cxSize(f.size || 0) + '</i></span>' +
     '<button type="button" class="cx-ib" data-file="' + _cxE(f.id) + '" data-dl="1" title="받기">⬇</button>' +
@@ -828,7 +839,7 @@ function _cxAlbumHtml(list) {
   var n = list.length, shown = list.slice(0, 9);
   return '<div class="cx-alb n' + Math.min(n, 9) + '">' + shown.map(function (x, i) {
     var more = i === 8 && n > 9 ? '<span class="cx-alb-more">+' + (n - 9) + '</span>' : '';
-    return '<button type="button" class="cx-img cx-alb-i" data-file="' + _cxE(x.file.id) + '" data-img="1" data-amid="' + x.id + '" title="' + _cxE(x.file.name) + '"><img alt="' + _cxE(x.file.name) + '" data-blob="' + _cxE(x.file.id) + '" data-small="1">' + more + '</button>';
+    return '<button type="button" class="cx-img cx-alb-i" data-file="' + _cxE(x.file.id) + '" data-img="1" data-amid="' + x.id + '" title="' + _cxE(x.file.name) + '"><img alt="' + _cxE(x.file.name) + '" decoding="async" data-blob="' + _cxE(x.file.id) + '" data-small="1">' + more + '</button>';
   }).join('') + '</div><div class="cx-alb-n">🖼 사진 ' + n + '장</div>';
 }
 function _cxCardHtml(c, i, m, unf) {
@@ -852,6 +863,7 @@ function _cxWrap(m, html) { return '<div class="cx-mw" data-k="' + _cxE(String(m
 function _cxDrawMsgs(append, focusMid) {
   var box = document.getElementById('cxMsgs'); if (!box) return;
   if (typeof chatEphMerge === 'function') chatEphMerge();
+  _cxWarm(CX.msgs);   // v13.436 사진 미리보기를 한 번에
   var atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   var n = CX.msgs.length, hs = new Array(n), ids = new Array(n);
   for (var i = 0; i < n; i++) { hs[i] = _cxMsgHtml(CX.msgs[i], CX.msgs[i - 1], false, CX.msgs[i + 1]); ids[i] = CX.msgs[i].id; }
@@ -963,12 +975,22 @@ function _cxLoadOlder() {
   CX.loading = true;
   var my = CX.room;
   var first = CX.msgs.filter(function (m) { return typeof m.id === 'number'; })[0]; if (!first) { CX.loading = false; return; }
-  apiFetch('/api/chat/rooms/' + CX.room + '/messages?before=' + first.id).then(function (r) {
+  var pre = CX.pre && CX.pre.room === my && CX.pre.before === first.id ? CX.pre.p : null; CX.pre = null;   // v13.436 미리 받아 둔 쪽이 있으면 바로
+  (pre || apiFetch('/api/chat/rooms/' + my + '/messages?before=' + first.id)).then(function (r) {
     CX.loading = false;
     if (CX.room !== my) return;
     CX.msgs = (r.data || []).concat(CX.msgs); CX.more = !!r.more;
     _cxDrawMsgs('older');
+    setTimeout(_cxPreOlder, 250);
   }).catch(function () { CX.loading = false; });
+}
+/* v13.436 이전 대화 한 쪽 미리 받아 두기 — 위로 올리기 시작하면 다음 쪽(글 + 사진 미리보기)을 뒤에서 받아 두었다가, 위 끝 가까이 오면 기다림 없이 끼움 */
+function _cxPreOlder() {
+  if (!CX.room || !CX.more || CX.loading) return;
+  var first = CX.msgs.filter(function (m) { return typeof m.id === 'number'; })[0]; if (!first) return;
+  if (CX.pre && CX.pre.room === CX.room && CX.pre.before === first.id) return;
+  var pre = CX.pre = { room: CX.room, before: first.id, p: apiFetch('/api/chat/rooms/' + CX.room + '/messages?before=' + first.id) };
+  pre.p.then(function (r) { if (CX.pre === pre) _cxWarm(r.data || []); }).catch(function () { if (CX.pre === pre) CX.pre = null; });
 }
 /* v13.375 앞으로 읽기 — 처음부터 읽거나 찾기로 옛 자리에 갔을 때, 아래로 내리면 다음 것을 이어 받음 */
 function _cxLoadNewer() {
@@ -1015,14 +1037,51 @@ function _cxBlob(fid, thumb) {
   var key = thumb ? fid + ':t' : fid;
   if (CX.blobs[key]) return CX.blobs[key];
   if (thumb && CX.blobs[fid]) return CX.blobs[fid];   // 원본을 이미 받았으면 그것
-  CX.blobs[key] = fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/files/' + encodeURIComponent(fid) + (thumb ? '?thumb=1' : ''), { headers: { Authorization: 'Bearer ' + _accessToken } }).then(function (res) {
+  CX.blobs[key] = _cxBlobFetch(fid, thumb);
+  CX.blobs[key].catch(function () { delete CX.blobs[key]; });
+  return CX.blobs[key];
+}
+/* v13.436 🖼 미리보기 한 번에 — 대화 한 쪽에 든 사진을 모아 ① 기기에 담아 둔 것(IndexedDB) ② 없는 것만 서버에 한 번(40장씩) 요청.
+ *   사진마다 따로 받던 것(장마다 서버 왕복 · 화면 가까이 와야 시작)이라 옛 대화를 올리면 빈 칸이 한참 보였다.
+ *   묶음에 없는 것(미리보기가 아직 없는 예전 사진)은 예전처럼 한 장씩 */
+function _cxWarm(msgs) {
+  var ids = [], seen = {};
+  (msgs || []).forEach(function (m) {
+    var f = m && m.file; if (!f || !f.id || seen[f.id] || !/^image\/(png|jpe?g|gif|webp|bmp)$/i.test(f.mime || '')) return;
+    seen[f.id] = 1; if (!CX.blobs[f.id + ':t'] && !CX.blobs[f.id]) ids.push(f.id);
+  });
+  if (!ids.length) return;
+  var local = typeof chatThumbGet === 'function' ? chatThumbGet(ids) : Promise.resolve({});
+  var all = local.then(function (have) {
+    var out = {}, miss = [];
+    ids.forEach(function (id) { if (have[id]) out[id] = URL.createObjectURL(new Blob([have[id]], { type: 'image/jpeg' })); else miss.push(id); });
+    if (!miss.length) return out;
+    var parts = []; for (var i = 0; i < miss.length; i += 40) parts.push(miss.slice(i, i + 40));
+    return Promise.all(parts.map(function (part) {
+      return apiFetch('/api/chat/thumbs', { method: 'POST', body: JSON.stringify({ ids: part }) }).then(function (r) { return r.data || {}; }).catch(function () { return {}; });
+    })).then(function (rs) {
+      var save = {};
+      rs.forEach(function (d) { Object.keys(d).forEach(function (id) {
+        try { var bin = atob(d[id]), u8 = new Uint8Array(bin.length); for (var j = 0; j < bin.length; j++) u8[j] = bin.charCodeAt(j); out[id] = URL.createObjectURL(new Blob([u8], { type: 'image/jpeg' })); save[id] = u8.buffer; } catch (e) {}
+      }); });
+      if (typeof chatThumbPut === 'function') chatThumbPut(save);
+      return out;
+    });
+  }).catch(function () { return {}; });
+  ids.forEach(function (id) {
+    var key = id + ':t';
+    CX.blobs[key] = all.then(function (m) { return m[id] || _cxBlobFetch(id, true); });
+    CX.blobs[key].catch(function () { delete CX.blobs[key]; });
+  });
+}
+function _cxBlobFetch(fid, thumb) {
+  var _p = fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/files/' + encodeURIComponent(fid) + (thumb ? '?thumb=1' : ''), { headers: { Authorization: 'Bearer ' + _accessToken } }).then(function (res) {
     var ct = res.headers.get('content-type') || '';
     if (ct.indexOf('application/json') >= 0) return res.json().then(function (j) { if (thumb) _cxBackfillThumb(fid, j.data.url); return j.data.url; });   // GCS 서명 주소
     var isThumb = res.headers.get('X-Thumb') === '1';
     return res.blob().then(function (b) { if (thumb && !isThumb) _cxBackfillThumb(fid, b); return URL.createObjectURL(b); });
   });
-  CX.blobs[key].catch(function () { delete CX.blobs[key]; });
-  return CX.blobs[key];
+  return _p;
 }
 /** 예전 사진 — 처음 본 사람이 미리보기를 만들어 올려 둠 (다음부터 모두 작게 받음) */
 var _cxBackfilled = {};
@@ -1039,15 +1098,24 @@ function _cxLoadBlobs(root) {
   if (typeof IntersectionObserver !== 'function') { imgs.forEach(_cxBlobImg); return; }
   imgs.forEach(function (img) {
     var sc = img.closest('.cx-msgs,.cx-as-b') || null, key = sc || document;
-    if (!key._cxIO) key._cxIO = new IntersectionObserver(function (es, io) { es.forEach(function (e) { if (e.isIntersecting) { io.unobserve(e.target); _cxBlobImg(e.target); } }); }, { root: sc, rootMargin: '600px 0px' });
+    if (!key._cxIO) key._cxIO = new IntersectionObserver(function (es, io) { es.forEach(function (e) { if (e.isIntersecting) { io.unobserve(e.target); _cxBlobImg(e.target); } }); }, { root: sc, rootMargin: '1600px 0px' });
     key._cxIO.observe(img);
   });
+}
+/* v13.436 크기를 모르던 사진(예전 것) — 처음 뜬 크기를 적어 두어 다음부터는 자리를 미리 잡음 (서버에도 한 번 알림 → 다른 사람 · 다른 기기도) */
+var _cxDimSent = {};
+function _cxNoteDim(img, fid) {
+  if (img.dataset.dim || img.closest('.cx-alb,.cx-q') || !img.naturalWidth || !img.naturalHeight) return;
+  var w = img.naturalWidth, h = img.naturalHeight;
+  CX.msgs.concat(CX.threadMsgs || []).forEach(function (m) { if (m.file && m.file.id === fid && !m.file.w) { m.file.w = w; m.file.h = h; } });
+  if (_cxDimSent[fid]) return; _cxDimSent[fid] = 1;
+  apiFetch('/api/chat/files/' + encodeURIComponent(fid) + '/dim', { method: 'POST', body: JSON.stringify({ w: w, h: h }) }).catch(function () {});
 }
 function _cxBlobImg(img) {
   if (!img.dataset.blob) return;
   var id = img.dataset.blob; img.removeAttribute('data-blob');
   var sc = img.closest('.cx-msgs'), small = img.dataset.small === '1';
-  img.addEventListener('load', function () { if (sc && sc._stick) sc.scrollTop = sc.scrollHeight; }, { once: true });
+  img.addEventListener('load', function () { if (sc && sc._stick) sc.scrollTop = sc.scrollHeight; _cxNoteDim(img, id); }, { once: true });
   _cxBlob(id, small).then(function (u) {
     if (sc) sc._stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
     img.src = u;
@@ -1620,7 +1688,7 @@ function _cxPrepPhoto(f) {
     var big = _cxPhotoOrig() || (f.size < 500 * 1024 && Math.max(w, h) <= CX_PHOTO_MAX) ? Promise.resolve(f)
       : _cxJpeg(_cxCanvasOf(bmp, CX_PHOTO_MAX), 0.85).then(function (b) { return b && b.size < f.size ? new File([b], f.name.replace(/\.[A-Za-z0-9]{1,5}$/, '') + '.jpg', { type: 'image/jpeg' }) : f; });
     var th = Math.max(w, h) > CX_THUMB * 1.3 ? _cxJpeg(_cxCanvasOf(bmp, CX_THUMB), 0.72) : Promise.resolve(null);
-    return Promise.all([big, th]).then(function (r) { if (bmp.close) try { bmp.close(); } catch (e) {} return { file: r[0], thumb: r[1] }; });
+    return Promise.all([big, th]).then(function (r) { if (bmp.close) try { bmp.close(); } catch (e) {} var kk = r[0] !== f ? Math.min(1, CX_PHOTO_MAX / Math.max(w, h)) : 1; return { file: r[0], thumb: r[1], w: Math.round(w * kk), h: Math.round(h * kk) }; });
   }).catch(function () { return { file: f, thumb: null }; });
 }
 function _cxPutThumb(fid, blob) {
@@ -1647,6 +1715,7 @@ function _cxUploadOne(f0, room, replyTo, qid, grp) {
     function ok(d) {
       tip.remove();
       if (d && prep.thumb && d.file) { CX.blobs[d.file.id + ':t'] = Promise.resolve(URL.createObjectURL(prep.thumb)); _cxPutThumb(d.file.id, prep.thumb); }   // 내 화면은 바로 미리보기
+      if (d && d.file && prep.w && prep.h) { d.file.w = prep.w; d.file.h = prep.h; _cxDimSent[d.file.id] = 1; apiFetch('/api/chat/files/' + encodeURIComponent(d.file.id) + '/dim', { method: 'POST', body: JSON.stringify({ w: prep.w, h: prep.h }) }).catch(function () {}); }   // v13.436 자리 미리 잡기용
       if (d && CX.room === room && !d.replyTo && _cxAddIfNew(d)) _cxDrawMsgs(true);
       done();
     }

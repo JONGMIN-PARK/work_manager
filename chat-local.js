@@ -45,3 +45,30 @@ function chatLocalClear() {
   return _cxlTx('readwrite', function (st) { return st.clear(); }).catch(function () {});
 }
 if (typeof window !== 'undefined') { window.chatLocalLoad = chatLocalLoad; window.chatLocalSave = chatLocalSave; window.chatLocalClear = chatLocalClear; }
+
+/* v13.436 🖼 사진 미리보기 담아 두기 — 같은 'kv' 칸에 't:<파일 id>' = ArrayBuffer(JPEG). 최근 800장까지('tidx' 가 넣은 순서)
+ *   한 번 본 사진은 다음에 서버에 묻지 않고 바로 뜸. 로그아웃하면 chatLocalClear 가 같이 지움 */
+function chatThumbGet(ids) {
+  return _cxlOpen().then(function (db) {
+    return new Promise(function (ok) {
+      var out = {}, tx = db.transaction('kv', 'readonly'), st = tx.objectStore('kv');
+      ids.forEach(function (id) { var r = st.get('t:' + id); r.onsuccess = function () { if (r.result && r.result.byteLength) out[id] = r.result; }; });
+      tx.oncomplete = function () { ok(out); }; tx.onerror = tx.onabort = function () { ok(out); };
+    });
+  }).catch(function () { return {}; });
+}
+function chatThumbPut(map) {
+  var ids = Object.keys(map || {}); if (!ids.length) return Promise.resolve();
+  return _cxlOpen().then(function (db) {
+    return new Promise(function (ok) {
+      var tx = db.transaction('kv', 'readwrite'), st = tx.objectStore('kv'), g = st.get('tidx');
+      g.onsuccess = function () {
+        var idx = Array.isArray(g.result) ? g.result : [];
+        ids.forEach(function (id) { st.put(map[id], 't:' + id); if (idx.indexOf(id) < 0) idx.push(id); });
+        while (idx.length > 800) st.delete('t:' + idx.shift());
+        st.put(idx, 'tidx');
+      };
+      tx.oncomplete = tx.onerror = tx.onabort = function () { ok(); };
+    });
+  }).catch(function () {});
+}

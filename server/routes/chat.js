@@ -88,7 +88,7 @@ async function userNames(tenantId, ids) {
 
 /* ─── 메시지 모양 ─── */
 var MSG_SQL = 'SELECT m.id, m.room_id, m.user_id, m.kind, m.body, m.cards, m.mentions, m.reply_to, m.edited_at, m.deleted_at, m.created_at, m.reactions, m.post, ' +
-  'COALESCE(u.display_name, u.name) AS user_name, f.id AS f_id, f.name AS f_name, f.mime AS f_mime, f.size AS f_size, f.dur AS f_dur, f.transcript AS f_tx, ' +
+  'COALESCE(u.display_name, u.name) AS user_name, f.id AS f_id, f.name AS f_name, f.mime AS f_mime, f.size AS f_size, f.dur AS f_dur, f.transcript AS f_tx, f.w AS f_w, f.h AS f_h, ' +
   "CASE WHEN m.post IS NULL THEN NULL ELSE (SELECT COALESCE(ua.display_name, ua.name) FROM users ua WHERE ua.id::text = m.post->>'assignee') END AS asg_name, " +
   "(f.annot->>'rot')::real AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, " +
   'rp.replies, rp.last_reply_at, ' +
@@ -101,7 +101,7 @@ function shape(r) {
   return { id: +r.id, roomId: r.room_id, userId: r.user_id, userName: r.user_name || (r.kind === 'ai' ? 'AI' : ''), kind: r.kind,
     body: r.deleted_at ? '' : r.body, deleted: !!r.deleted_at, edited: !!r.edited_at, cards: r.deleted_at ? null : r.cards, mentions: r.mentions || [],
     replyTo: r.reply_to ? +r.reply_to : null, replies: r.replies || 0, lastReplyAt: r.last_reply_at, reactions: r.deleted_at ? null : r.reactions || null,
-    post: r.deleted_at || !r.post ? null : Object.assign({}, r.post, { assigneeName: r.asg_name || null }), file: r.f_id && !r.deleted_at ? annSum(Object.assign({ id: r.f_id, name: r.f_name, mime: r.f_mime, size: r.f_size }, r.f_dur ? { dur: +r.f_dur } : {}, r.f_tx ? { transcript: r.f_tx } : {}), r) : null, at: r.created_at,
+    post: r.deleted_at || !r.post ? null : Object.assign({}, r.post, { assigneeName: r.asg_name || null }), file: r.f_id && !r.deleted_at ? annSum(Object.assign({ id: r.f_id, name: r.f_name, mime: r.f_mime, size: r.f_size }, r.f_dur ? { dur: +r.f_dur } : {}, r.f_tx ? { transcript: r.f_tx } : {}, r.f_w && r.f_h ? { w: r.f_w, h: r.f_h } : {}), r) : null, at: r.created_at,
     grp: r.grp || null, link: r.deleted_at ? null : r.link || null, poll: r.deleted_at ? null : r.poll || null, ack: r.deleted_at ? null : r.ack || null,
     quote: r.quote_id && !r.deleted_at ? { id: +r.quote_id, userName: r.q_user || (r.q_kind === 'ai' ? 'AI' : ''), deleted: !!r.q_del, body: r.q_del ? '' : String(r.q_ptitle ? '📌 ' + r.q_ptitle : r.q_body || '').slice(0, 200), file: r.q_fid && !r.q_del ? { id: r.q_fid, name: r.q_fname, mime: r.q_fmime } : null } : null };
 }
@@ -905,7 +905,7 @@ router.get('/files/:fid', async function (req, res) {
       var ft = await fileFor(req, res, 'f.id, f.room_id, f.mime, f.thumb'); if (!ft) return;
       if (ft.thumb) {
         res.setHeader('Content-Type', 'image/jpeg'); res.setHeader('X-Thumb', '1');
-        res.setHeader('Cache-Control', 'private, max-age=86400');
+        res.setHeader('Cache-Control', 'private, max-age=2592000');   // v13.436 미리보기는 바뀌지 않음 — 30일
         return res.end(ft.thumb);
       }
     }
@@ -1012,6 +1012,28 @@ router.get('/my-views', async function (req, res) {
     var out = {}; r.rows.forEach(function (v) { out[v.file_id] = { a: annAng(v.angle), f: v.fill }; });
     res.json({ data: out });
   } catch (e) { httpErr.serverError(res, '[chat/my-views]', e); }
+});
+/* v13.436 🖼 사진 크기 적어 두기 — 처음 본 사람이 알려 줌(예전 사진) · 올린 사람이 바로 알려 줌(새 사진). 이미 있으면 그대로 */
+router.post('/files/:fid/dim', async function (req, res) {
+  try {
+    var f = await fileFor(req, res, 'f.id, f.room_id, f.mime, f.w'); if (!f) return;
+    var w = Math.round(+(req.body || {}).w), h = Math.round(+(req.body || {}).h);
+    if (!/^image\//i.test(f.mime || '') || !(w >= 1 && w <= 30000 && h >= 1 && h <= 30000)) return bad(res, '사진 크기가 올바르지 않습니다.');
+    if (!f.w) await db.query('UPDATE chat_files SET w = $2, h = $3 WHERE id = $1 AND w IS NULL', [f.id, w, h]);
+    res.json({ data: { ok: true } });
+  } catch (e) { httpErr.serverError(res, '[chat/dim]', e); }
+});
+/* v13.436 🖼 미리보기 여러 장 한 번에 — 사진마다 따로 받으면 장마다 왕복이라 옛 대화를 올려 볼 때 느렸다. 내가 들어가 있는 방의 것만 */
+router.post('/thumbs', async function (req, res) {
+  try {
+    var ids = Array.isArray((req.body || {}).ids) ? req.body.ids.filter(function (x) { return typeof x === 'string' && x.length <= 40; }).slice(0, 40) : [];
+    if (!ids.length) return res.json({ data: {} });
+    var r = await db.query('SELECT f.id, f.thumb FROM chat_files f JOIN chat_members m ON m.room_id = f.room_id AND m.user_id = $3 AND m.left_at IS NULL ' +
+      'WHERE f.id = ANY($1) AND f.tenant_id = $2 AND f.thumb IS NOT NULL', [ids, req.tenant.id, me(req)]);
+    var out = {}; r.rows.forEach(function (x) { out[x.id] = x.thumb.toString('base64'); });
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ data: out });
+  } catch (e) { httpErr.serverError(res, '[chat/thumbs]', e); }
 });
 /* 🖼 작은 미리보기 올리기 (v13.377) — 서버에 사진 줄이는 도구가 없어 브라우저가 만들어 올림. 이미 있으면 보낸 사람만 바꿈 */
 router.post('/files/:fid/thumb', express.raw({ type: function () { return true; }, limit: 300 * 1024 }), async function (req, res) {
