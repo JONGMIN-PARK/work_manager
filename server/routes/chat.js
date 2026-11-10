@@ -1054,6 +1054,158 @@ router.post('/files/:fid/to-docs', async function (req, res) {
   } catch (e) { httpErr.serverError(res, '[chat/to-docs]', e); }
 });
 
+/* ─── v13.422 업무 카드 지금 상태 · 글 속 번호 · 이름 자동 펼침 ───
+ * POST /api/chat/peek { refs: [{type,id}], texts: [{k, t, skip:['type:id']}] }
+ *   → { live: { 'type:id': {...} | null }, unf: { k: [card] } }
+ * 보는 사람 권한으로만 — 프로젝트 계열은 lib/project-access, 이슈는 gateIssue, 할 일은 본인 것만, 수주 · A/S 는 테넌트 전체(목록 화면과 같음) */
+var PEEK_TYPES = ['project', 'milestone', 'issue', 'order', 'as', 'todo'];
+var PEEK_PH = { order: '수주', design: '설계', manufacture: '제작', inspect: '검수', deliver: '납품', done: '완료' };
+var PEEK_PH_SEQ = ['order', 'design', 'manufacture', 'inspect', 'deliver', 'done'];
+var PEEK_MS = { waiting: '대기', active: '진행', done: '완료' };
+var PEEK_PJ = { active: '진행', hold: '보류', done: '완료' };
+var PEEK_AS = { received: '접수', assigned: '배정', in_progress: '진행 중', reporting: '보고서', approved: '승인', customer_wait: '고객 대기', closed: '종결', hold: '보류', cancelled: '취소' };
+var PEEK_IS = { open: '접수', inProgress: '대응중', resolved: '해결', closed: '종결' };
+function peekDay(d) {
+  if (!d) return null;
+  if (d instanceof Date) { if (isNaN(d)) return null; return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  var s = String(d).slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
+function peekNames(v) {
+  var a = v; if (typeof a === 'string') { try { a = JSON.parse(a); } catch (_) { a = [a]; } }
+  if (!Array.isArray(a)) return '';
+  a = a.map(function (x) { return typeof x === 'string' ? x : (x && (x.name || x.email)) || ''; }).filter(Boolean);
+  return a.slice(0, 2).join(', ') + (a.length > 2 ? ' 외 ' + (a.length - 2) : '');
+}
+async function peekRefs(req, refs) {
+  var out = {}, by = {};
+  (refs || []).slice(0, 60).forEach(function (r) {
+    if (!r || PEEK_TYPES.indexOf(r.type) < 0 || r.id == null || r.id === '') return;
+    var id = String(r.id).slice(0, 100); (by[r.type] = by[r.type] || []).push(id); out[r.type + ':' + id] = null;
+  });
+  var t = req.tenant.id, pa = require('../lib/project-access'), q;
+  if (by.project) {
+    var v = pa.visibleProjectsSql(req, 'p', 3);
+    q = await db.query('SELECT p.id, p.name, p.order_no, p.status, p.current_phase, p.progress, p.end_date, p.assignees, p.owner_id FROM projects p WHERE p.tenant_id = $1 AND p.id::text = ANY($2) AND ' + v.sql, [t, by.project].concat(v.params));
+    for (var i = 0; i < q.rows.length; i++) {
+      var p = q.rows[i], ph = p.current_phase, k = PEEK_PH_SEQ.indexOf(ph), nx = p.status !== 'done' && k >= 0 && k < PEEK_PH_SEQ.length - 1 ? PEEK_PH_SEQ[k + 1] : null;
+      out['project:' + p.id] = { title: p.name, sub: p.order_no || '', st: PEEK_PH[ph] || PEEK_PJ[p.status] || '', stc: p.status === 'done' ? 'done' : p.status === 'hold' ? 'hold' : 'active',
+        pct: p.progress == null ? null : Math.round(+p.progress), due: peekDay(p.end_date), who: peekNames(p.assignees), next: nx, nextL: nx ? PEEK_PH[nx] : null, ed: await pa.canEdit(req, p), nav: { projectId: p.id } };
+    }
+  }
+  if (by.milestone) {
+    var v2 = pa.visibleProjectsSql(req, 'p', 3);
+    q = await db.query('SELECT m.id, m.name, m.status, m.progress, m.end_date, m.project_id, p.name AS pn, p.owner_id FROM milestones m JOIN projects p ON p.id = m.project_id AND p.tenant_id = m.tenant_id WHERE m.tenant_id = $1 AND m.id::text = ANY($2) AND ' + v2.sql, [t, by.milestone].concat(v2.params));
+    for (var j = 0; j < q.rows.length; j++) {
+      var m = q.rows[j];
+      out['milestone:' + m.id] = { title: m.name, sub: m.pn || '', st: PEEK_MS[m.status] || m.status || '', stc: m.status, pct: m.progress == null ? null : Math.round(+m.progress), due: peekDay(m.end_date),
+        ed: await pa.canEdit(req, { id: m.project_id, owner_id: m.owner_id }), nav: { projectId: m.project_id, tab: 'work' } };
+    }
+  }
+  if (by.issue) {
+    var acts = require('../telegram/actions');
+    for (var x = 0; x < by.issue.length && x < 15; x++) {
+      var row = await acts.gateIssue(actor(req), by.issue[x], 'read');
+      if (row) out['issue:' + row.id] = { title: row.title, st: PEEK_IS[row.status] || row.status, stc: row.status, urg: row.urgency === 'urgent', who: peekNames(row.assignees), nav: { issueId: row.id } };
+    }
+  }
+  if (by.order) {
+    q = await db.query('SELECT order_no, name, client, manager, date FROM orders WHERE tenant_id = $1 AND order_no = ANY($2)', [t, by.order]);
+    q.rows.forEach(function (o) { out['order:' + o.order_no] = { title: o.name || o.order_no, sub: [o.order_no, o.client].filter(Boolean).join(' · '), st: '수주', stc: 'order', who: o.manager || '', nav: { orderNo: o.order_no } }; });
+  }
+  if (by.as) {
+    q = await db.query("SELECT a.id, a.ticket_no, a.issue_summary, a.customer_name, a.status, a.priority, a.promised_visit_at, " +
+      "(SELECT string_agg(COALESCE(u.display_name, u.name), ', ') FROM as_assignments g JOIN users u ON u.id = g.assignee_id WHERE g.ticket_id = a.id AND g.tenant_id = a.tenant_id AND g.status NOT IN ('completed','cancelled')) AS who " +
+      'FROM as_tickets a WHERE a.tenant_id = $1 AND a.deleted_at IS NULL AND (a.id::text = ANY($2) OR a.ticket_no = ANY($2))', [t, by.as]);
+    q.rows.forEach(function (a) {
+      var info = { title: a.issue_summary || a.ticket_no, sub: [a.ticket_no, a.customer_name].filter(Boolean).join(' · '), st: PEEK_AS[a.status] || a.status, stc: a.status, urg: a.priority === 'urgent' || a.priority === 'high', who: a.who || '', due: peekDay(a.promised_visit_at), id: a.id, ed: true, nav: { asId: a.id } };
+      out['as:' + a.id] = info; if (by.as.indexOf(a.ticket_no) >= 0) out['as:' + a.ticket_no] = info;
+    });
+  }
+  if (by.todo) {
+    q = await db.query('SELECT id, title, due_date, done_at, priority FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL AND id::text = ANY($3)', [t, me(req), by.todo]);
+    q.rows.forEach(function (d) { out['todo:' + d.id] = { title: d.title, st: d.done_at ? '완료' : '할 일', stc: d.done_at ? 'done' : 'open', due: peekDay(d.due_date), mine: true, ed: true, nav: { todoId: d.id } }; });
+  }
+  return out;
+}
+/* 글 속 A/S 번호 · 수주번호 · 프로젝트 이름 → 카드 (메시지마다 3개까지) */
+var UNF_AS = /\bAS-\d{4}-\d{2}-\d{3,}\b/g, UNF_NO = /\b[A-Za-z]{1,5}-?\d{3,}(?:-\d{1,6}){0,2}\b/g;
+async function peekUnfurl(req, texts) {
+  var items = (texts || []).slice(0, 40).filter(function (x) { return x && x.k != null && typeof x.t === 'string' && x.t.trim(); })
+    .map(function (x) { return { k: String(x.k).slice(0, 40), t: x.t.slice(0, 2000), skip: Array.isArray(x.skip) ? x.skip.map(String) : [] }; });
+  var res = {}, asNos = [], nos = [];
+  if (!items.length) return res;
+  items.forEach(function (it) {
+    res[it.k] = [];
+    it.as = (it.t.match(UNF_AS) || []).filter(function (v, i, a) { return a.indexOf(v) === i; }).slice(0, 3);
+    it.no = (it.t.replace(UNF_AS, ' ').match(UNF_NO) || []).filter(function (v, i, a) { return a.indexOf(v) === i; }).slice(0, 4);
+    asNos = asNos.concat(it.as); nos = nos.concat(it.no);
+  });
+  var t = req.tenant.id, pa = require('../lib/project-access');
+  var asMap = {}, pjByNo = {}, ordMap = {}, q;
+  if (asNos.length) {
+    q = await db.query('SELECT id, ticket_no, issue_summary, customer_name FROM as_tickets WHERE tenant_id = $1 AND deleted_at IS NULL AND ticket_no = ANY($2)', [t, asNos]);
+    q.rows.forEach(function (a) { asMap[a.ticket_no] = { type: 'as', id: String(a.id), title: a.issue_summary || a.ticket_no, sub: [a.ticket_no, a.customer_name].filter(Boolean).join(' · '), nav: { asId: a.id } }; });
+  }
+  if (nos.length) {
+    var v = pa.visibleProjectsSql(req, 'p', 3);
+    q = await db.query('SELECT p.id, p.name, p.order_no FROM projects p WHERE p.tenant_id = $1 AND p.order_no = ANY($2) AND ' + v.sql + ' ORDER BY p.updated_at DESC NULLS LAST', [t, nos].concat(v.params));
+    q.rows.forEach(function (p) { if (!pjByNo[p.order_no]) pjByNo[p.order_no] = { type: 'project', id: String(p.id), title: p.name, sub: p.order_no, nav: { projectId: p.id } }; });
+    var rest = nos.filter(function (n) { return !pjByNo[n]; });
+    if (rest.length) {
+      q = await db.query('SELECT order_no, name, client FROM orders WHERE tenant_id = $1 AND order_no = ANY($2)', [t, rest]);
+      q.rows.forEach(function (o) { ordMap[o.order_no] = { type: 'order', id: o.order_no, title: o.name || o.order_no, sub: [o.order_no, o.client].filter(Boolean).join(' · '), nav: { orderNo: o.order_no } }; });
+    }
+  }
+  // 프로젝트 이름 — 4글자 이상 이름이 글에 그대로 들어 있으면 (긴 이름부터)
+  var v3 = pa.visibleProjectsSql(req, 'p', 4);
+  q = await db.query('SELECT x.k, p.id, p.name, p.order_no FROM unnest($2::text[], $3::text[]) AS x(k, txt) JOIN projects p ON p.tenant_id = $1 AND length(p.name) >= 4 AND strpos(lower(x.txt), lower(p.name)) > 0 AND ' + v3.sql +
+    ' ORDER BY length(p.name) DESC', [t, items.map(function (i) { return i.k; }), items.map(function (i) { return i.t; })].concat(v3.params));
+  var byName = {};
+  q.rows.forEach(function (r) { (byName[r.k] = byName[r.k] || []).push({ type: 'project', id: String(r.id), title: r.name, sub: r.order_no || '', nav: { projectId: r.id } }); });
+  items.forEach(function (it) {
+    var list = [], seen = it.skip.slice();
+    function add(c) { if (!c || list.length >= 3) return; var key = c.type + ':' + c.id; if (seen.indexOf(key) >= 0) return; seen.push(key); list.push(c); }
+    it.as.forEach(function (n) { add(asMap[n]); });
+    it.no.forEach(function (n) { add(pjByNo[n] || ordMap[n]); });
+    (byName[it.k] || []).forEach(function (c) { if (!list.some(function (l) { return l.type === 'project' && l.title.indexOf(c.title) >= 0; })) add(c); });
+    res[it.k] = list;
+  });
+  return res;
+}
+router.post('/peek', async function (req, res) {
+  try {
+    var b = req.body || {};
+    var unf = await peekUnfurl(req, b.texts);
+    var refs = (Array.isArray(b.refs) ? b.refs : []).slice(0, 60);
+    Object.keys(unf).forEach(function (k) { unf[k].forEach(function (c) { refs.push({ type: c.type, id: c.id }); }); });
+    res.json({ data: { live: await peekRefs(req, refs), unf: unf } });
+  } catch (e) { httpErr.serverError(res, '[chat/peek]', e); }
+});
+/* 카드에서 처리한 뒤(실제 바꾸기는 각 화면과 같은 API · 같은 권한) — 지금 상태를 다시 읽어 카드에 반영하고 방에 한 줄 남김 */
+var PEEK_ICON = { project: '📁', milestone: '🚩', issue: '🐞', order: '📦', as: '🔧', todo: '✅' };
+router.post('/messages/:mid/acted', async function (req, res) {
+  try {
+    var r = await db.query('SELECT * FROM chat_messages WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [+req.params.mid, req.tenant.id]);
+    var m = r.rows[0]; if (!m) return res.status(404).json({ error: 'NOT_FOUND', message: '메시지가 없습니다.' });
+    var room = await roomFor(req, res, m.room_id); if (!room) return;
+    var b = req.body || {};
+    if (PEEK_TYPES.indexOf(b.type) < 0 || b.id == null) return bad(res, '처리할 수 있는 카드가 아닙니다.');
+    var key = b.type + ':' + String(b.id).slice(0, 100), live = (await peekRefs(req, [{ type: b.type, id: b.id }]))[key];
+    if (!live) return res.status(404).json({ error: 'NOT_FOUND', message: '볼 수 없는 항목입니다.' });
+    var cards = m.cards || [], ci = b.card == null ? -1 : +b.card, card = cards[ci];
+    if (card && card.type === b.type && String(card.id) === String(b.id)) {
+      card.title = live.title || card.title;
+      if (b.type === 'issue') { card.status = live.stc; card.urgency = live.urg ? 'urgent' : card.urgency; }
+      await db.query('UPDATE chat_messages SET cards = $2 WHERE id = $1', [m.id, JSON.stringify(cards)]);
+      hub.publish(await memberIds(room.id), 'upd', await loadMsg(m.id));
+    }
+    var what = String(b.what || '').replace(/[<>]/g, '').slice(0, 40);
+    await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (req.user.name || '') + ' 님이 ' + (PEEK_ICON[b.type] || '') + ' "' + String(live.title || '').slice(0, 60) + '" — ' + (what || live.st || '처리'),
+      cards: [{ type: b.type, id: String(b.id).slice(0, 100), title: String(live.title || '').slice(0, 200), sub: '' }], replyTo: m.reply_to || null });
+    res.json({ data: { live: live } });
+  } catch (e) { httpErr.serverError(res, '[chat/acted]', e); }
+});
+
 /* ─── 업무 카드 버튼 — 이슈 상태 · 긴급 (텔레그램과 같은 처리 · 같은 권한) ─── */
 router.post('/messages/:mid/action', async function (req, res) {
   try {

@@ -5,7 +5,7 @@
  *   데이터: ＋업무 카드(통합 검색) · 이슈 카드 버튼 · 프로젝트 방 옆 현황 · /todo /issue /ai /요약
  *   화면 공유는 chat-rtc.js
  * 의존(전역): apiFetch, API_BASE, _accessToken, currentUser, eH, showToast, createModal, wmGuardedModal, globalSearchNav, setPage, rMD */
-var CX = { rooms: [], room: null, info: null, msgs: [], reads: {}, more: false, users: null, cards: [], replyTo: null, editId: null, thread: null, threadMsgs: [], typing: {}, ctx: null, aside: true, q: '', loading: false, blobs: {},
+var CX = { live: {}, unf: {}, rooms: [], room: null, info: null, msgs: [], reads: {}, more: false, users: null, cards: [], replyTo: null, editId: null, thread: null, threadMsgs: [], typing: {}, ctx: null, aside: true, q: '', loading: false, blobs: {},
   cache: {}, cacheOrder: [], readMark: null, newBelow: 0, rf: _cxLsGet('wm-cx-rf') || 'all', drafts: (function () { try { return JSON.parse(_cxLsGet('wm-cx-drafts') || '{}') || {}; } catch (e) { return {}; } })(), pendSeq: 0 };
 /* v13.366 — 브라우저 저장소(없거나 막혀도 그냥 넘어감) · 한 박자 모아 그리기 */
 function _cxLsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -144,6 +144,7 @@ function chatOnEvent(ev, d) {
     }
     if (CX.typing[d.roomId]) { delete CX.typing[d.roomId][d.userId || 'ai']; _cxDrawTyping(); }
     if (CX.room === d.roomId && (d.kind === 'system' || (d.cards || []).some(function (c) { return c.type === 'issue'; }))) _cxCtxRefresh();
+    if (d.kind === 'system' && d.cards && typeof chatLiveDrop === 'function') { chatLiveDrop(d.cards); if (CX.room === d.roomId && typeof chatPeekQueue === 'function') chatPeekQueue(); }   // v13.422 누가 카드에서 처리함 → 다시 받기
     _cxDrawRooms();
     chatBadge();
     if (d.post && CX.aside && CX.asideTab === 'board' && CX.room === d.roomId && typeof chatPostsTab === 'function') chatPostsTab();
@@ -338,7 +339,7 @@ function _cxFit() {
   var page = document.getElementById('mMessages'), cx = page && page.querySelector('.cx');
   if (!cx || page.classList.contains('hidden')) return;
   var ta = document.getElementById('cxIn'), cp = ta && ta.closest('.cx-comp');   // v13.373 칸 너비 따라 안내 글 길이
-  if (cp && cp.offsetWidth) ta.placeholder = cp.offsetWidth < 620 ? '메시지 입력' : '메시지 · @사람 · /명령';
+  if (cp && cp.offsetWidth) ta.placeholder = cp.offsetWidth < 620 ? '메시지 입력' : '메시지 · @사람 · #업무 · /명령';
   if (!_cxIsPhone()) { page.style.removeProperty('--cx-h'); return; }
   if (_cxKbOpen()) return;   // v13.374 키보드가 떠 있는 동안은 줄이지 않음(_cxKb 가 맡음) — 줄이면 아이폰이 페이지를 밀어 올려 입력칸이 위로 감
   var vv = window.visualViewport, vh = vv ? vv.height : window.innerHeight;
@@ -393,7 +394,7 @@ function chatSideToggle(on) {
   var off = on == null ? !cx.classList.contains('side-off') : !on;
   cx.classList.toggle('side-off', off); _cxLsSet('wm-cx-side-off', off ? '1' : null);
   _cxDrawHead();
-  var ta = document.getElementById('cxIn'); if (ta && ta.offsetWidth) { ta.placeholder = ta.closest('.cx-comp').offsetWidth < 620 ? '메시지 입력' : '메시지 · @사람 · /명령'; }
+  var ta = document.getElementById('cxIn'); if (ta && ta.offsetWidth) { ta.placeholder = ta.closest('.cx-comp').offsetWidth < 620 ? '메시지 입력' : '메시지 · @사람 · #업무 · /명령'; }
 }
 document.addEventListener('keydown', function (e) {
   if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L' || e.code === 'KeyL') && document.querySelector('#mMessages:not(.hidden) .cx') && !_cxIsPhone()) { e.preventDefault(); chatSideToggle(); }
@@ -455,7 +456,7 @@ function chatOpenRoom(id, keep, focusMid) {
   // 방이 바뀌면 그 방 것만 — 예전 방의 답글 줄기 · 고른 카드 · 수정 중 · 옆 탭은 비움
   CX.fwd = false;
   if (changed) { CX.quote = null; if (CX.readFrom && CX.readFrom.room !== id) CX.readFrom = null; }
-  if (changed) { CX.msgs = []; CX.info = null; CX.ctx = null; CX.cards = []; CX.replyTo = null; CX.editId = null; CX.thread = null; CX.threadMsgs = []; CX.asideTab = null; CX.readMark = null; CX.newBelow = 0; }
+  if (changed) { CX.unf = {}; CX.msgs = []; CX.info = null; CX.ctx = null; CX.cards = []; CX.replyTo = null; CX.editId = null; CX.thread = null; CX.threadMsgs = []; CX.asideTab = null; CX.readMark = null; CX.newBelow = 0; }
   var cached = changed && !focusMid && CX.cache[id];
   var reuse = !changed && !!CX.info && !!document.getElementById('cxMsgs');   // v13.366 같은 방 다시 열기 — 화면은 그대로, 내용만 새로
   var drawnRole = reuse ? CX.info.myRole : cached && cached.info ? cached.info.myRole : null;
@@ -770,6 +771,7 @@ function _cxMsgHtml(m, prev, inThread, next) {
     if (alb) body += _cxAlbumHtml(alb);
     else if (m.file) body += _cxFileHtml(m.file);
     if (m.cards && m.cards.length) body += '<div class="cx-cards">' + m.cards.map(function (c, i) { return _cxCardHtml(c, i, m); }).join('') + '</div>';
+    if (typeof chatUnfHtml === 'function') body += chatUnfHtml(m);   // v13.422 ② 글 속 A/S · 수주번호 · 프로젝트 이름 펼침
   }
   var rx = m.reactions ? Object.keys(m.reactions).map(function (e) { var l = m.reactions[e]; return '<button type="button" class="cx-rx' + (l.indexOf(_cxMe()) >= 0 ? ' on' : '') + '" data-rx="' + e + '" title="' + _cxE(_cxNames(l)) + '">' + e + ' ' + l.length + '</button>'; }).join('') : '';
   var meta = m.pending ? '<span class="cx-meta">' + (m.failed ? '<span class="cx-fail' + (m.wait ? ' wait' : '') + '">' + (m.wait ? '⏳ 연결되면 보냄' : '⚠ 못 보냄') + ' <button type="button" data-retry="' + m.id + '">' + (m.wait ? '지금' : '다시 보내기') + '</button><button type="button" data-drop="' + m.id + '">지우기</button></span>' : '<i class="cx-sending" title="보내는 중">◷</i>') + '</span>'
@@ -810,7 +812,7 @@ function _cxAlbumHtml(list) {
     return '<button type="button" class="cx-img cx-alb-i" data-file="' + _cxE(x.file.id) + '" data-img="1" data-amid="' + x.id + '" title="' + _cxE(x.file.name) + '"><img alt="' + _cxE(x.file.name) + '" data-blob="' + _cxE(x.file.id) + '" data-small="1">' + more + '</button>';
   }).join('') + '</div><div class="cx-alb-n">🖼 사진 ' + n + '장</div>';
 }
-function _cxCardHtml(c, i, m) {
+function _cxCardHtml(c, i, m, unf) {
   if (c.type === 'call' && typeof chatCallCardHtml === 'function') return chatCallCardHtml(c, m);
   if (c.type === 'share') {
     var live = c.on && typeof chatRtcIsLive === 'function' && chatRtcIsLive(c.id);
@@ -822,7 +824,9 @@ function _cxCardHtml(c, i, m) {
     (c.status !== 'inProgress' && c.status !== 'resolved' && c.status !== 'closed' ? '<button type="button" data-act="inProgress" data-ci="' + i + '">대응 시작</button>' : '') +
     (c.status !== 'resolved' && c.status !== 'closed' ? '<button type="button" data-act="resolved" data-ci="' + i + '">해결</button>' : '<button type="button" data-act="open" data-ci="' + i + '">다시 열기</button>') +
     (c.urgency !== 'urgent' && c.status !== 'resolved' && c.status !== 'closed' ? '<button type="button" data-act="urgent" data-ci="' + i + '">🔴 긴급</button>' : '') + '</span>' : '';
-  return '<div class="cx-card" data-card="' + i + '"><button type="button" class="cx-card-o" data-open="' + i + '"><span class="cx-card-i">' + (CX_ICON[c.type] || '🔗') + '</span><span class="cx-card-t"><b>' + _cxE(c.title || c.id) + '</b>' + (c.sub && !(typeof chatEmojiOnly === 'function' && chatEmojiOnly(c.sub)) ? '<i>' + _cxE(c.sub) + '</i>' : '') + '</span>' + st + '</button>' + acts + '</div>';
+  if (typeof chatCardActsHtml === 'function' && c.type !== 'issue') acts = chatCardActsHtml(c, i, m, unf);   // v13.422 ③ 카드에서 바로 처리
+  var lv = typeof chatCardLiveHtml === 'function' ? chatCardLiveHtml(c) : '';   // v13.422 지금 상태 · 담당 · 마감 · 진행률
+  return '<div class="cx-card' + (lv ? ' has-lv' : '') + '" data-card="' + i + '"><button type="button" class="cx-card-o" data-' + (unf ? 'uopen' : 'open') + '="' + i + '"><span class="cx-card-i">' + (CX_ICON[c.type] || '🔗') + '</span><span class="cx-card-t"><b>' + _cxE(c.title || c.id) + '</b>' + (c.sub && !(typeof chatEmojiOnly === 'function' && chatEmojiOnly(c.sub)) ? '<i>' + _cxE(c.sub) + '</i>' : '') + lv + '</span>' + st + '</button>' + acts + '</div>';
 }
 /* v13.366 메시지 목록 — 앞쪽이 같으면 바뀐 메시지만 바꾸고 새 것만 덧붙임(사진 · 스크롤 그대로, 100명 방도 가볍게) */
 function _cxWrap(m, html) { return '<div class="cx-mw" data-k="' + _cxE(String(m.id)) + '">' + html + '</div>'; }
@@ -851,7 +855,7 @@ function _cxDrawMsgs(append, focusMid) {
       _cxLoadBlobs(box); _cxDrawReadCounts();
       var dt = w0.getBoundingClientRect().top - t0;   // 브라우저가 자리를 이미 지켰으면(overflow-anchor) 0 → 손대지 않아 관성 굴림 유지
       if (Math.abs(dt) >= 1) box.scrollTop += dt;
-      _cxNewBtn(); return;
+      _cxNewBtn(); if (typeof chatPeekQueue === 'function') chatPeekQueue(); return;
     }
   }
   if (inc) {
@@ -882,6 +886,7 @@ function _cxDrawMsgs(append, focusMid) {
   else if (!append || atBottom || (n && CX.msgs[n - 1].userId === _cxMe() && added === 0)) { _cxToBottom(); CX.newBelow = 0; }
   else if (added) CX.newBelow += added;   // 위를 보고 있을 때 온 것 — ↓ 단추로 알려 줌
   _cxNewBtn();
+  if (typeof chatPeekQueue === 'function') chatPeekQueue();   // v13.422 카드 지금 상태 · 펼침
 }
 /* v13.385 맨 아래로 붙이기 — 화면 밖 말풍선은 높이를 어림(content-visibility)으로 두어, 한 번 내리면 실제 높이가 잡히며
  *   위로 밀려 381~1092px 덜 내려가 있었음. 2초 동안(또는 사람이 직접 굴릴 때까지) 높이가 바뀔 때마다 다시 맨 아래로 */
@@ -1070,6 +1075,10 @@ function _cxMsgClick(e) {
   }
   var op = t.closest('[data-open]');
   if (op && m) { var c = m.cards[+op.dataset.open]; if (c) _cxOpenCard(c); return; }
+  var uo = t.closest('[data-uopen]');   // v13.422 ② 펼친 카드
+  if (uo && m) { var uc = CX.unf && CX.unf[m.id] && CX.unf[m.id].l[+uo.dataset.uopen]; if (uc) _cxOpenCard(uc); return; }
+  var ka = t.closest('[data-kact]');   // v13.422 ③ 카드 처리
+  if (ka && m) { if (typeof chatCardAct === 'function') chatCardAct(ka, m); return; }
   var act = t.closest('[data-act]');
   if (act && m) {
     act.disabled = true;
@@ -1353,7 +1362,7 @@ function _cxComposerHtml(taId, wrapId) {
     (main ? '<div class="cx-ackchip" data-ackchip' + (CX.ackNext ? '' : ' hidden') + '>✔ 확인 요청으로 보냄 <button type="button" class="cx-ib" data-c="ack" title="끄기">✕</button></div>' : '') +
     '<div class="cx-comp-r"><button type="button" class="cx-ib cx-tools-t" data-c="tools" title="더 보기 — 음성 · 투표 · 약속 · 확인 요청 …" aria-label="도구 열기" aria-expanded="false">' + _cxIco('plus') + '</button>' +
     '<span class="cx-tools-k">' + keep + '</span><span class="cx-tools" data-tools>' + keep.replace(/class="cx-ib/g, 'class="cx-ib cx-k2') + more + '</span>' +
-    '<textarea id="' + taId + '" rows="1" autocomplete="off" enterkeyhint="send" placeholder="' + (_cxIsPhone() ? '메시지 입력' : '메시지 · @사람 · /명령') + '" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
+    '<textarea id="' + taId + '" rows="1" autocomplete="off" enterkeyhint="send" placeholder="' + (_cxIsPhone() ? '메시지 입력' : '메시지 · @사람 · #업무 · /명령') + '" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
     '<button type="button" class="cx-ib cx-emo-t" data-c="emoji" title="이모티콘 · 빠른 답" aria-label="이모티콘">' + _cxIco('smile') + '</button>' +
     '<button type="button" class="cx-send" data-c="send" title="보내기" aria-label="보내기">' + _cxIco('send') + '</button>' +
     '<input type="file" data-c="file" multiple hidden>' + (_cxIsPhone() ? '<input type="file" data-c="cam" accept="image/*" capture="environment" hidden>' : '') + '</div><div class="cx-sugg" data-sugg hidden></div></div>';
@@ -1373,6 +1382,23 @@ function _cxBindComposer(taId, wrapId, inThread) {
   function _suggest() {
     var v = ta.value, pos = ta.selectionStart, before = v.slice(0, pos), items = [];
     var at = /(^|\s)@([^\s@]{0,15})$/.exec(before);
+    var hs = !at && /(^|\s)#([^\s#]{2,20})$/.exec(before);   // v13.422 ① # 업무 부르기 — 숫자만(#1 안건)은 빼고
+    if (hs && typeof chatHashFind === 'function' && !/^\d+$/.test(hs[2])) {
+      var hq = hs[2];
+      chatHashFind(hq, function (list) {
+        if (ta.value.slice(0, ta.selectionStart) !== before) return;   // 그새 더 침
+        show(list.map(function (c) { return { t: c.title, d: (CX_CAT_L[c.type] || '') + (c.sub ? ' · ' + c.sub : ''), av: '<span class="cx-sugg-cmd cx-sugg-k">' + (CX_ICON[c.type] || '🔗') + '</span>', ins: function () {
+          var head = before.slice(0, before.length - hq.length - 1), tail = v.slice(pos);
+          if (inThread) { ta.value = head + c.title + ' ' + tail; return; }   // 답글 칸은 카드 대신 이름 (펼침이 잡음)
+          ta.value = head.replace(/\s+$/, head.trim() ? ' ' : '') + tail.replace(/^\s+/, '');
+          if (CX.cards.some(function (k) { return k.type === c.type && String(k.id) === String(c.id); })) return;
+          if (CX.cards.length >= 5) { _cxToast('카드는 5개까지', 'warn'); return; }
+          CX.cards.push(c); _cxDrawChips();
+        } }; }), '업무 카드로 붙이기');
+      });
+      return;
+    }
+    if (typeof chatHashCancel === 'function') chatHashCancel();
     if (at && CX.info) {
       var q = at[2];
       items = CX.info.members.filter(function (m) { return !m.me && m.name.indexOf(q) >= 0; }).slice(0, 6).map(function (m) { return { t: '@' + m.name, d: m.dept || '', av: _cxAv(m.id, m.name), ins: function () { ta.value = before.slice(0, before.length - q.length - 1) + '@' + m.name + ' ' + v.slice(pos); } }; });
@@ -1381,10 +1407,13 @@ function _cxBindComposer(taId, wrapId, inThread) {
       items = [['/ai ', '내 권한 데이터로 AI 답 — 예: /ai 이번 주 지연 이슈'], ['/요약', '이 방 대화를 AI 가 정리'], ['/todo ', '내 할 일로 — 예: /todo 내일 15:00 견적 회신'], ['/issue ', '이 프로젝트에 이슈 (프로젝트 방)'], ['/help', '명령 보기']]
         .filter(function (c) { return c[0].indexOf(v.trim()) === 0; }).map(function (c) { return { t: c[0].trim(), d: c[1], ins: function () { ta.value = c[0]; } }; });
     }
+    show(items, at ? '부를 사람' : '명령');
+  }
+  function show(items, head) {
     sel = 0;
     if (!items.length) { sugg.hidden = true; sugg._items = null; return; }
     sugg._items = items;
-    sugg.innerHTML = '<div class="cx-sugg-h">' + (at ? '부를 사람' : '명령') + '<kbd>↑↓</kbd><kbd>Enter</kbd></div>' + items.map(function (it, i) { return '<button type="button" data-si="' + i + '"' + (i === 0 ? ' class="on"' : '') + '>' + (it.av || '<span class="cx-sugg-cmd">/</span>') + '<b>' + _cxE(it.t) + '</b><i>' + _cxE(it.d) + '</i></button>'; }).join('');
+    sugg.innerHTML = '<div class="cx-sugg-h">' + head + '<kbd>↑↓</kbd><kbd>Enter</kbd></div>' + items.map(function (it, i) { return '<button type="button" data-si="' + i + '"' + (i === 0 ? ' class="on"' : '') + '>' + (it.av || '<span class="cx-sugg-cmd">/</span>') + '<b>' + _cxE(it.t) + '</b><i>' + _cxE(it.d) + '</i></button>'; }).join('');
     sugg.hidden = false;
   }
   function pick(i) { var it = sugg._items && sugg._items[i]; if (!it) return; it.ins(); sugg.hidden = true; sugg._items = null; ta.focus(); grow(); }
@@ -1641,6 +1670,7 @@ function _cxDrawThread(append) {
   box.innerHTML = h || '<div class="cx-loading">불러오는 중…</div>';
   _cxLoadBlobs(box); _cxDrawReadCounts();
   box.scrollTop = box.scrollHeight;
+  if (typeof chatPeekQueue === 'function') chatPeekQueue();
 }
 
 /* ─── 오른쪽: 답글 줄기 · 프로젝트 현황 · 멤버 · 파일 ─── */

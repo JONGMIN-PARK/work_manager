@@ -6830,3 +6830,30 @@ html[data-cx-tyfx="0"] .cx-comp-r::before{display:none}
 .mwp-title{font-size:15px}
 .mwp-title.mwp-ro{font-size:14.5px}
 .mwp-ro,.mwp-clt{font-size:12.5px}
+
+/* ═══ v13.422 💬 업무 카드 살리기 — # 부르기 · 자동 펼침 · 지금 상태 줄 · 카드 처리 단추 ═══ */
+.cx-sugg-k{font-size:15px;background:var(--bg-hv)}
+.cx-card-t .cx-lv{display:flex;align-items:center;flex-wrap:wrap;gap:4px 7px;margin-top:4px;font-size:11px;color:var(--t4);line-height:1.3}
+.cx-lv-s{font-style:normal;font-weight:700;font-size:10.5px;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--ac) 13%,transparent);color:var(--ac-t,var(--ac))}
+.cx-lv-s.s-done,.cx-lv-s.s-closed{background:color-mix(in srgb,#10B981 15%,transparent);color:#0F8A63}
+.cx-lv-s.s-hold,.cx-lv-s.s-customer_wait,.cx-lv-s.s-waiting,.cx-lv-s.s-cancelled{background:var(--bg-hv);color:var(--t4)}
+.cx-lv-s.s-urg{background:color-mix(in srgb,#EF4444 14%,transparent);color:#DC2626}
+.cx-lv-w{display:inline-flex;align-items:center;gap:3px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cx-lv-w svg{width:11px;height:11px;flex:none;opacity:.7}
+.cx-lv-d{font-weight:700;color:var(--t3);font-variant-numeric:tabular-nums}
+.cx-lv-d.near{color:#D97706}
+.cx-lv-d.late{color:#DC2626}
+.cx-lv-p{display:inline-block;width:54px;height:5px;border-radius:3px;background:var(--bg-hv);overflow:hidden}
+.cx-lv-p i{display:block;height:100%;border-radius:3px;background:var(--ac)}
+.cx-lv-pn{font-weight:700;font-size:10.5px;color:var(--t3);font-variant-numeric:tabular-nums}
+.cx-card.has-lv .cx-card-o{align-items:flex-start}
+.cx-card.has-lv .cx-card-i{margin-top:1px}
+.cx-card-a button[data-kact]{transition:background .15s,border-color .15s,color .15s}
+.cx-card-a button[data-kact]:disabled{opacity:.5;cursor:progress}
+.cx-card-a button[data-kact^="td_done"],.cx-card-a button[data-kact="ms_done"],.cx-card-a button[data-kact="as_close"],.cx-card-a button[data-kact="phase"]{border-color:color-mix(in srgb,var(--ac) 45%,var(--bd));color:var(--ac-t,var(--ac))}
+.cx-unf{margin-top:4px}
+.cx-unf .cx-card{border-left-style:dashed;border-left-color:color-mix(in srgb,var(--ac) 55%,transparent);background:color-mix(in srgb,var(--bg-p) 70%,transparent);box-shadow:none;border:1px dashed var(--bd)}
+.cx-unf .cx-card-o{padding:6px 9px}
+.cx-unf .cx-card-i{font-size:14px}
+.cx-unf .cx-card-t b{font-size:12px}
+.cx-m.mine .cx-unf .cx-card{background:color-mix(in srgb,var(--bg-p) 85%,transparent)}
