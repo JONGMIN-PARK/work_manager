@@ -637,8 +637,36 @@ var _CX_ICO = {
   people: '<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/><path d="M16 3.3a4 4 0 0 1 0 7.4M22 21v-1a6 6 0 0 0-4-5.6"/>',
   equip: '<path d="M2 20h20V9l-6 4V9l-6 4V4H4a2 2 0 0 0-2 2z"/><path d="M7 16h1M12 16h1M17 16h1"/>',
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
-  more: '<circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/>'
+  more: '<circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/>',
+  /* v13.420 입력 줄 · 메뉴 · 도구판도 같은 선 아이콘 */
+  reply: '<path d="M9 17 4 12l5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
+  thread: '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.5-4.6A8.4 8.4 0 0 1 3.5 12a8.5 8.5 0 0 1 17.5-.5z"/><path d="M8 10.5h8M8 14h5"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  forward: '<path d="m15 17 5-5-5-5"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/>',
+  folder: '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/>',
+  alarm: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/>',
+  notice: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+  todo: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/>',
+  note: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M9 7h6"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/>',
+  trash: '<path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>',
+  down: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
+  smile: '<circle cx="12" cy="12" r="9.5"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>',
+  card: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 9h6M7 13h10M7 17h4"/>',
+  clock: '<circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/><path d="m16 2.5 1.5 1.5"/>',
+  pen: '<path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.6 7.6"/><circle cx="11" cy="11" r="2"/>',
+  capture: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.5"/>',
+  mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8"/>',
+  poll: '<path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="5" rx="1"/><rect x="12" y="7" width="3" height="10" rx="1"/><rect x="17" y="10" width="3" height="7" rx="1"/>',
+  cal: '<rect x="3" y="4" width="18" height="18" rx="2.5"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 15 2 2 4-4"/>',
+  ack: '<path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  send: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>'
 };
+/* 메뉴 글자 앞 이모지 → 선 아이콘 (없으면 이모지 그대로 작은 칸에) */
+var _CX_MI = { '↩': 'reply', '💬': 'thread', '📋': 'copy', '↪': 'forward', '📁': 'folder', '⏰': 'alarm', '📢': 'notice', '✅': 'todo', '📓': 'note', '✏️': 'edit', '🗑': 'trash', '⬇': 'down', '😊': 'smile' };
 function _cxIco(k) {
   return '<svg class="cx-svg cx-svg-' + k + '" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (_CX_ICO[k] || '') + '</svg>';
 }
@@ -1116,7 +1144,6 @@ function _cxLongPress(box) {
       mel.classList.add('cx-press'); setTimeout(function () { mel.classList.remove('cx-press'); }, 400);
       var inTh = !!b.closest('#cxThMsgs');
       _cxMsgMenu(b, m, [
-        ['😊 공감…', function () { _cxMenu(b, CX_REACTS.map(function (em) { return [em, function () { _cxReact(m.id, em); }]; }), 'cx-rxpick'); }],
         inTh ? null : ['↩ 답장', function () { _cxStartQuote(m); }],
         inTh ? null : ['💬 답글 줄기', function () { chatOpenThread(m.id); }]
       ].filter(Boolean));
@@ -1221,9 +1248,11 @@ function _cxMsgMenu(btn, m, pre) {
   var mine = m.userId === _cxMe();
   _cxMenu(btn, (pre || []).concat([
     !pre && typeof m.id === 'number' && !m.replyTo ? ['↩ 답장', function () { _cxStartQuote(m); }] : null,
+    '-',
     m.file ? ['⬇ 받기', function () { _cxDownload(m.file.id, m.file.name); }] : null,
     m.body ? ['📋 복사', function () { try { navigator.clipboard.writeText(m.body); _cxToast('복사했습니다', 'success'); } catch (e) {} }] : null,
     ['↪ 전달', function () { chatForwardModal(m); }],
+    '-',
     typeof chatSaveMenu === 'function' ? ['📁 폴더에 담기', function () { chatSaveMenu(btn, m); }] : null,
     typeof chatRemindMenu === 'function' ? ['⏰ 다시 알림…', function () { chatRemindMenu(btn, m); }] : null,
     ['📢 공지로', function () { apiFetch('/api/chat/rooms/' + CX.room + '/notice', { method: 'POST', body: JSON.stringify({ messageId: m.id }) }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }],
@@ -1232,22 +1261,64 @@ function _cxMsgMenu(btn, m, pre) {
       var who = m.userName || '', when = m.createdAt ? new Date(m.createdAt).toLocaleString() : '';
       nbSendToInbox('> 💬 ' + (CX.info && CX.info.name ? CX.info.name + ' · ' : '') + who + (when ? ' · ' + when : '') + '\n\n' + m.body, 'chat');
     }] : null,
+    '-',
     mine && m.body && m.kind === 'text' ? ['✏️ 수정', function () { _cxStartEdit(m); }] : null,
     mine ? ['🗑 삭제', function () { if (confirm('이 메시지를 지울까요? 모두에게서 지워집니다.')) apiFetch('/api/chat/messages/' + m.id, { method: 'DELETE' }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
-  ]).filter(Boolean));
+  ]).filter(Boolean), null, { rx: typeof m.id === 'number' && !m.deleted ? m : null });
 }
-/* 작은 메뉴 (공용) */
-function _cxMenu(anchor, items, cls) {
+/* 작은 메뉴 (공용) — v13.420 '-' 는 구분선 · 앞 이모지는 선 아이콘 · opt.rx 면 맨 위 공감 줄 · 휴대폰은 아래에서 올라오는 판 */
+function _cxMiHtml(label) {
+  var mt = /^(\S+)\s+(.+)$/.exec(label), ic = mt && !/[0-9A-Za-z가-힣@]/.test(mt[1]) ? mt[1] : '', tx = ic ? mt[2] : label;
+  var k = ic && _CX_MI[ic];
+  return '<span class="cx-mi-i">' + (k ? _cxIco(k) : _cxE(ic)) + '</span><span class="cx-mi-t">' + _cxE(tx) + '</span>';
+}
+function _cxMenu(anchor, items, cls, opt) {
+  opt = opt || {};
   var old = document.getElementById('cxMenu'); if (old) old.remove();
-  var mnu = document.createElement('div'); mnu.id = 'cxMenu'; mnu.className = 'cx-menu' + (cls ? ' ' + cls : ''); mnu.setAttribute('role', 'menu');
-  items.forEach(function (it) { var b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.textContent = it[0]; b.addEventListener('click', function () { mnu.remove(); it[1](); }); mnu.appendChild(b); });
+  var oldBk = document.getElementById('cxMenuBk'); if (oldBk) oldBk.remove();
+  var rxp = cls === 'cx-rxpick', sheet = !rxp && _cxIsPhone() && !!opt.rx;
+  var mnu = document.createElement('div'); mnu.id = 'cxMenu'; mnu.className = 'cx-menu' + (cls ? ' ' + cls : '') + (sheet ? ' sheet' : ''); mnu.setAttribute('role', 'menu');
+  var bk = null;
+  function close() { mnu.remove(); if (bk) bk.remove(); document.removeEventListener('pointerdown', off, true); }
+  function off(e) { if (!mnu.contains(e.target)) close(); }
+  if (sheet) {
+    bk = document.createElement('div'); bk.id = 'cxMenuBk'; bk.className = 'cx-menu-bk'; document.body.appendChild(bk);
+    var m0 = opt.rx, pv = (m0.body || (m0.file && m0.file.name) || '').replace(/\s+/g, ' ').slice(0, 80);
+    mnu.insertAdjacentHTML('beforeend', '<div class="cx-mh"><i></i>' + (pv ? '<p><b>' + _cxE(m0.userName || '') + '</b>' + _cxE(pv) + '</p>' : '') + '</div>');
+  }
+  if (opt.rx) {
+    var rxs = opt.rx.reactions || {}, mine = Object.keys(rxs).filter(function (e) { return (rxs[e] || []).indexOf(_cxMe()) >= 0; });
+    var row = document.createElement('div'); row.className = 'cx-mrx';
+    row.innerHTML = CX_REACTS.map(function (em, i) { return '<button type="button" data-rx="' + em + '" style="--i:' + i + '"' + (mine.indexOf(em) >= 0 ? ' class="on"' : '') + ' title="' + em + ' 공감">' + em + '</button>'; }).join('');
+    row.addEventListener('click', function (e) { var b = e.target.closest('[data-rx]'); if (!b) return; close(); _cxReact(opt.rx.id, b.dataset.rx); });
+    mnu.appendChild(row);
+  }
+  var list = document.createElement('div'); list.className = 'cx-ml';
+  var lastSep = true;
+  items.forEach(function (it, idx) {
+    if (it === '-') { if (!lastSep && idx < items.length - 1) { var hr = document.createElement('i'); hr.className = 'cx-msep'; list.appendChild(hr); lastSep = true; } return; }
+    var b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem');
+    if (rxp) b.textContent = it[0]; else { b.innerHTML = _cxMiHtml(it[0]); if (/^🗑/.test(it[0])) b.className = 'danger'; }
+    b.addEventListener('click', function () { close(); it[1](); }); list.appendChild(b); lastSep = false;
+  });
+  if (list.lastChild && list.lastChild.className === 'cx-msep') list.lastChild.remove();
+  mnu.appendChild(list);
   document.body.appendChild(mnu);
-  var r = anchor.getBoundingClientRect(), w = mnu.offsetWidth, hh = mnu.offsetHeight;
-  mnu.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, r.right - w)) + 'px';
-  mnu.style.top = (r.bottom + hh + 6 > window.innerHeight ? Math.max(6, r.top - hh - 4) : r.bottom + 4) + 'px';
-  setTimeout(function () { document.addEventListener('pointerdown', function off(e) { if (!mnu.contains(e.target)) { mnu.remove(); document.removeEventListener('pointerdown', off, true); } }, true); }, 0);
-  var first = mnu.querySelector('button'); if (first) first.focus();
-  mnu.addEventListener('keydown', function (e) { if (e.key === 'Escape') mnu.remove(); });
+  if (!sheet) {
+    var r = anchor.getBoundingClientRect(), w = mnu.offsetWidth, hh = mnu.offsetHeight, up = r.bottom + hh + 6 > window.innerHeight;
+    mnu.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, r.right - w)) + 'px';
+    mnu.style.top = (up ? Math.max(6, r.top - hh - 4) : r.bottom + 4) + 'px';
+    mnu.style.transformOrigin = (r.right - w > 6 ? 'right ' : 'left ') + (up ? 'bottom' : 'top');
+  }
+  setTimeout(function () { document.addEventListener('pointerdown', off, true); }, 0);
+  if (!sheet) { var first = mnu.querySelector('.cx-ml button,button'); if (first) first.focus({ preventScroll: true }); }
+  mnu.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      var bs = Array.prototype.slice.call(mnu.querySelectorAll('button')), i = bs.indexOf(document.activeElement);
+      e.preventDefault(); bs[(i + (e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length].focus();
+    }
+  });
 }
 function _cxViewImage(fid, name) {
   if (typeof chatBoardOpen === 'function') return chatBoardOpen(fid, name, CX.room);   // v13.356 🖼 사진 칠판 (원본 · 표시 보기 · 같이 그리기)
@@ -1267,24 +1338,24 @@ function _cxIsPhone() { return window.innerWidth <= 760; }
 function _cxCanCapture() { return !!((window.wmDesktop && window.wmDesktop.captureScreen) || (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && !/Android|iPhone|iPad/i.test(navigator.userAgent))); }
 function _cxComposerHtml(taId, wrapId) {
   // v13.381 자주 쓰는 것(k) — 넓은 칸은 입력 줄에, 좁은 칸(휴대폰 · 좁힌 창)은 ＋ 도구판에. 나머지는 늘 도구판
-  function btn(c, ic, tl, title, cls) { return '<button type="button" class="cx-ib' + (cls ? ' ' + cls : '') + '" data-c="' + c + '" title="' + title + '">' + ic + '<span class="cx-tl">' + tl + '</span></button>'; }
+  function btn(c, ic, tl, title, cls) { return '<button type="button" class="cx-ib cx-ti-' + c + (cls ? ' ' + cls : '') + '" data-c="' + c + '" title="' + title + '">' + _cxIco(ic) + '<span class="cx-tl">' + tl + '</span></button>'; }
   var main = wrapId === 'cxComp';
-  var keep = [btn('attach', '📎', '파일 · 사진', '파일 · 사진 (끌어 놓기 · 붙여넣기도 됨)'), btn('card', '🗂', '업무 카드', '업무 카드 붙이기 — 이슈 · 프로젝트 · 마일스톤 · 문서 …'),
-    main && typeof chatTimeComposer === 'function' ? btn('sched', '⏰', '예약 보내기', '⏰ 예약 보내기 — 글을 쓰고 누르면 그때 보냄') : '',
-    main && typeof chatPostModal === 'function' ? btn('post', '✍️', '게시판 글', '게시판 글쓰기 — 공지 · 자료 · 질문 · 🛠 요청') : '',
-    _cxCanCapture() ? btn('cap', '📸', '화면 캡처', '화면 캡처 — 잘라서 표시하고 보내기') : ''].join('');
-  var more = [_cxIsPhone() ? btn('camera', '📷', '카메라', '사진 찍어 보내기') : '',
-    typeof chatVoiceCan === 'function' && chatVoiceCan() ? btn('voice', '🎤', '음성 메시지', '🎤 음성 메시지 — 말로 보내기 (AI 가 글로도 받아씀)') : '',
-    main && typeof chatPollModal === 'function' ? btn('poll', '🗳', '투표', '🗳 투표 만들기') + btn('meet', '📅', '약속 잡기', '📅 약속 잡기 — 후보 시간마다 일정 겹침 보기 · 정하면 달력') : '',
-    main ? btn('ack', '✔', '확인 요청', '✔ 확인 요청 — 받은 사람마다 "확인했어요" 단추, 안 누르면 다음 날 아침 다시 알림', CX.ackNext ? 'on' : '') : '',
-    '<button type="button" class="cx-ib cx-q-orig' + (_cxPhotoOrig() ? ' on' : '') + '" data-c="orig" title="사진 화질 — 지금: ' + (_cxPhotoOrig() ? '원본 그대로' : '줄여서(빠름)') + '">' + (_cxPhotoOrig() ? '🅾' : '🖼') + '<span class="cx-tl">' + (_cxPhotoOrig() ? '원본 화질' : '사진 줄여서') + '</span></button>'].join('');
+  var keep = [btn('attach', 'files', '파일 · 사진', '파일 · 사진 (끌어 놓기 · 붙여넣기도 됨)'), btn('card', 'card', '업무 카드', '업무 카드 붙이기 — 이슈 · 프로젝트 · 마일스톤 · 문서 …'),
+    main && typeof chatTimeComposer === 'function' ? btn('sched', 'clock', '예약 보내기', '⏰ 예약 보내기 — 글을 쓰고 누르면 그때 보냄') : '',
+    main && typeof chatPostModal === 'function' ? btn('post', 'pen', '게시판 글', '게시판 글쓰기 — 공지 · 자료 · 질문 · 🛠 요청') : '',
+    _cxCanCapture() ? btn('cap', 'capture', '화면 캡처', '화면 캡처 — 잘라서 표시하고 보내기') : ''].join('');
+  var more = [_cxIsPhone() ? btn('camera', 'camera', '카메라', '사진 찍어 보내기') : '',
+    typeof chatVoiceCan === 'function' && chatVoiceCan() ? btn('voice', 'mic', '음성 메시지', '🎤 음성 메시지 — 말로 보내기 (AI 가 글로도 받아씀)') : '',
+    main && typeof chatPollModal === 'function' ? btn('poll', 'poll', '투표', '🗳 투표 만들기') + btn('meet', 'cal', '약속 잡기', '📅 약속 잡기 — 후보 시간마다 일정 겹침 보기 · 정하면 달력') : '',
+    main ? btn('ack', 'ack', '확인 요청', '✔ 확인 요청 — 받은 사람마다 "확인했어요" 단추, 안 누르면 다음 날 아침 다시 알림', CX.ackNext ? 'on' : '') : '',
+    '<button type="button" class="cx-ib cx-ti-orig cx-q-orig' + (_cxPhotoOrig() ? ' on' : '') + '" data-c="orig" title="사진 화질 — 지금: ' + (_cxPhotoOrig() ? '원본 그대로' : '줄여서(빠름)') + '">' + _cxIco('image') + '<span class="cx-tl">' + (_cxPhotoOrig() ? '원본 화질' : '사진 줄여서') + '</span></button>'].join('');
   return '<div class="cx-comp' + (main && CX.ackNext ? ' ack-on' : '') + '" id="' + wrapId + '"><div class="cx-chips" data-chips></div><div class="cx-reply" data-replybar hidden></div>' +
     (main ? '<div class="cx-ackchip" data-ackchip' + (CX.ackNext ? '' : ' hidden') + '>✔ 확인 요청으로 보냄 <button type="button" class="cx-ib" data-c="ack" title="끄기">✕</button></div>' : '') +
-    '<div class="cx-comp-r"><button type="button" class="cx-ib cx-tools-t" data-c="tools" title="더 보기 — 음성 · 투표 · 약속 · 확인 요청 …" aria-label="도구 열기" aria-expanded="false">＋</button>' +
+    '<div class="cx-comp-r"><button type="button" class="cx-ib cx-tools-t" data-c="tools" title="더 보기 — 음성 · 투표 · 약속 · 확인 요청 …" aria-label="도구 열기" aria-expanded="false">' + _cxIco('plus') + '</button>' +
     '<span class="cx-tools-k">' + keep + '</span><span class="cx-tools" data-tools>' + keep.replace(/class="cx-ib/g, 'class="cx-ib cx-k2') + more + '</span>' +
     '<textarea id="' + taId + '" rows="1" autocomplete="off" enterkeyhint="send" placeholder="' + (_cxIsPhone() ? '메시지 입력' : '메시지 · @사람 · /명령') + '" title="Enter 보내기 · Shift+Enter 줄바꿈 · @ 사람 부르기 · / 명령(/ai · /요약 · /todo · /issue) · 파일은 끌어 놓거나 붙여넣기" aria-label="메시지 입력"></textarea>' +
-    '<button type="button" class="cx-ib cx-emo-t" data-c="emoji" title="이모티콘 · 빠른 답" aria-label="이모티콘">😊</button>' +
-    '<button type="button" class="cx-send" data-c="send" title="보내기" aria-label="보내기">➤</button>' +
+    '<button type="button" class="cx-ib cx-emo-t" data-c="emoji" title="이모티콘 · 빠른 답" aria-label="이모티콘">' + _cxIco('smile') + '</button>' +
+    '<button type="button" class="cx-send" data-c="send" title="보내기" aria-label="보내기">' + _cxIco('send') + '</button>' +
     '<input type="file" data-c="file" multiple hidden>' + (_cxIsPhone() ? '<input type="file" data-c="cam" accept="image/*" capture="environment" hidden>' : '') + '</div><div class="cx-sugg" data-sugg hidden></div></div>';
 }
 function _cxBindComposer(taId, wrapId, inThread) {
@@ -1304,8 +1375,8 @@ function _cxBindComposer(taId, wrapId, inThread) {
     var at = /(^|\s)@([^\s@]{0,15})$/.exec(before);
     if (at && CX.info) {
       var q = at[2];
-      items = CX.info.members.filter(function (m) { return !m.me && m.name.indexOf(q) >= 0; }).slice(0, 6).map(function (m) { return { t: '@' + m.name, d: m.dept || '', ins: function () { ta.value = before.slice(0, before.length - q.length - 1) + '@' + m.name + ' ' + v.slice(pos); } }; });
-      if (CX.info.kind !== 'dm' && '모두'.indexOf(q) === 0) items.push({ t: '@모두', d: '방 전체', ins: function () { ta.value = before.slice(0, before.length - q.length - 1) + '@모두 ' + v.slice(pos); } });
+      items = CX.info.members.filter(function (m) { return !m.me && m.name.indexOf(q) >= 0; }).slice(0, 6).map(function (m) { return { t: '@' + m.name, d: m.dept || '', av: _cxAv(m.id, m.name), ins: function () { ta.value = before.slice(0, before.length - q.length - 1) + '@' + m.name + ' ' + v.slice(pos); } }; });
+      if (CX.info.kind !== 'dm' && '모두'.indexOf(q) === 0) items.push({ t: '@모두', d: '방 전체 · ' + CX.info.members.length + '명', av: '<span class="cx-av cx-av-all">' + _cxIco('people') + '</span>', ins: function () { ta.value = before.slice(0, before.length - q.length - 1) + '@모두 ' + v.slice(pos); } });
     } else if (/^\/\S*$/.test(v) && !inThread) {
       items = [['/ai ', '내 권한 데이터로 AI 답 — 예: /ai 이번 주 지연 이슈'], ['/요약', '이 방 대화를 AI 가 정리'], ['/todo ', '내 할 일로 — 예: /todo 내일 15:00 견적 회신'], ['/issue ', '이 프로젝트에 이슈 (프로젝트 방)'], ['/help', '명령 보기']]
         .filter(function (c) { return c[0].indexOf(v.trim()) === 0; }).map(function (c) { return { t: c[0].trim(), d: c[1], ins: function () { ta.value = c[0]; } }; });
@@ -1313,14 +1384,14 @@ function _cxBindComposer(taId, wrapId, inThread) {
     sel = 0;
     if (!items.length) { sugg.hidden = true; sugg._items = null; return; }
     sugg._items = items;
-    sugg.innerHTML = items.map(function (it, i) { return '<button type="button" data-si="' + i + '"' + (i === 0 ? ' class="on"' : '') + '><b>' + _cxE(it.t) + '</b><i>' + _cxE(it.d) + '</i></button>'; }).join('');
+    sugg.innerHTML = '<div class="cx-sugg-h">' + (at ? '부를 사람' : '명령') + '<kbd>↑↓</kbd><kbd>Enter</kbd></div>' + items.map(function (it, i) { return '<button type="button" data-si="' + i + '"' + (i === 0 ? ' class="on"' : '') + '>' + (it.av || '<span class="cx-sugg-cmd">/</span>') + '<b>' + _cxE(it.t) + '</b><i>' + _cxE(it.d) + '</i></button>'; }).join('');
     sugg.hidden = false;
   }
   function pick(i) { var it = sugg._items && sugg._items[i]; if (!it) return; it.ins(); sugg.hidden = true; sugg._items = null; ta.focus(); grow(); }
   sugg.addEventListener('mousedown', function (e) { var b = e.target.closest('[data-si]'); if (b) { e.preventDefault(); pick(+b.dataset.si); } });
   ta.addEventListener('keydown', function (e) {
     if (sugg._items && !sugg.hidden) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + sugg._items.length) % sugg._items.length; sugg.querySelectorAll('button').forEach(function (b, i) { b.classList.toggle('on', i === sel); }); return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + sugg._items.length) % sugg._items.length; sugg.querySelectorAll('[data-si]').forEach(function (b, i) { b.classList.toggle('on', i === sel); }); return; }
       if ((e.key === 'Enter' || e.key === 'Tab') && !e.isComposing) { e.preventDefault(); pick(sel); return; }
       if (e.key === 'Escape') { sugg.hidden = true; return; }
     }
@@ -1360,7 +1431,7 @@ function _cxBindComposer(taId, wrapId, inThread) {
     }
     else if (b.dataset.c === 'orig') {   // v13.377 사진 화질
       var on = !_cxPhotoOrig(); _cxLsSet('wm-cx-photo', on ? 'orig' : null);
-      document.querySelectorAll('[data-c="orig"]').forEach(function (x) { x.classList.toggle('on', on); x.title = '사진 화질 — 지금: ' + (on ? '원본 그대로' : '줄여서(빠름)'); x.firstChild.textContent = on ? '🅾' : '🖼'; var tl = x.querySelector('.cx-tl'); if (tl) tl.textContent = on ? '원본 화질' : '사진 줄여서'; });
+      document.querySelectorAll('[data-c="orig"]').forEach(function (x) { x.classList.toggle('on', on); x.title = '사진 화질 — 지금: ' + (on ? '원본 그대로' : '줄여서(빠름)'); var tl = x.querySelector('.cx-tl'); if (tl) tl.textContent = on ? '원본 화질' : '사진 줄여서'; });
       _cxToast(on ? '🅾 사진을 원본 그대로 보냅니다 (도면 · 측정값 사진에)' : '🖼 사진을 줄여서 보냅니다 (빠르고 데이터 적게)', 'info');
     }
   });
@@ -1566,7 +1637,7 @@ function chatOpenThread(mid) {
 function _cxDrawThread(append) {
   var box = document.getElementById('cxThMsgs'); if (!box) return;
   var h = '';
-  CX.threadMsgs.forEach(function (m, i) { h += _cxMsgHtml(m, CX.threadMsgs[i - 1], true); if (i === 0) h += '<div class="cx-th-sep">답글 ' + (CX.threadMsgs.length - 1) + '</div>'; });
+  CX.threadMsgs.forEach(function (m, i) { h += _cxMsgHtml(m, CX.threadMsgs[i - 1], true); if (i === 0) h += '<div class="cx-th-sep"><span>답글 ' + (CX.threadMsgs.length - 1) + '</span></div>' + (CX.threadMsgs.length === 1 ? '<div class="cx-th-empty">' + _cxIco('thread') + '<b>아직 답글이 없습니다</b><span>이 글에만 이어지는 이야기를 남겨 보세요 — 본 대화는 깔끔하게</span></div>' : ''); });
   box.innerHTML = h || '<div class="cx-loading">불러오는 중…</div>';
   _cxLoadBlobs(box); _cxDrawReadCounts();
   box.scrollTop = box.scrollHeight;
