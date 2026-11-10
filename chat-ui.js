@@ -1861,10 +1861,27 @@ function chatInviteModal() {
   return wmGuardedModal('chatInvite', function () {
     var m = createModal({ id: 'chatInvModal', title: dm ? '➕ 사람 초대 — 새 그룹 방' : '➕ 사람 초대', width: '420px', closeOnEsc: true, closeOnOverlay: true,
       html: '<input class="wr-inp cx-mq" data-q placeholder="이름 · 부서 찾기"><div class="cx-plist" data-list></div>' +
-        '<div class="cx-hist-note">' + (dm ? '이 1:1 대화는 그대로 두고, 두 사람 + 고른 사람으로 새 그룹 방을 만듭니다' : '초대한 사람도 이 방의 대화를 처음부터 모두 봅니다') + '</div>' +
+        (dm ? '<div class="cx-inv-dm">' +
+          '<div class="cx-inv-how">이 1:1 대화방은 <b>그대로</b> 두고, 두 사람 + 고른 사람으로 <b>새 그룹 방</b>을 만듭니다</div>' +
+          '<label class="cx-inv-ck"><input type="checkbox" data-hist> 지금까지 1:1 대화도 새 방에 보이기</label>' +
+          '<div class="cx-inv-n" data-histn hidden>최근 <select class="wr-inp" data-hn><option value="20">20개</option><option value="50" selected>50개</option><option value="100">100개</option><option value="200">200개</option></select> 를 새 방 맨 위에</div>' +
+          '<div class="cx-inv-sec off" data-warn>🔒 <b>비공개 유지</b> — 새 방은 빈 대화로 시작합니다. 지금까지 나눈 1:1 대화는 두 분만 봅니다.</div>' +
+          '</div>' : '<div class="cx-hist-note">초대한 사람도 이 방의 대화를 처음부터 모두 봅니다</div>') +
         '<div class="cx-mfoot"><span data-n>0명</span><button type="button" class="wm-pri" data-go disabled>' + (dm ? '새 방 만들기' : '초대') + '</button></div>' });
-    var picked = [], members = CX.info.members.slice();
-    _cxPeoplePick(m.box, true, members.map(function (x) { return x.id; }), function (ids) { picked = ids; m.box.querySelector('[data-n]').textContent = ids.length + '명'; m.box.querySelector('[data-go]').disabled = !ids.length; });
+    var picked = [], members = CX.info.members.slice(), dmRoom = CX.room;
+    var peerName = (members.filter(function (x) { return !x.me && x.id !== _cxMe(); })[0] || {}).name || '상대';
+    function pickedNames() { return ((CX.users || []).filter(function (u) { return picked.indexOf(u.id) >= 0; }).map(function (u) { return u.name; })); }
+    function warn() {   // 보이기 체크 · 고른 사람 · 개수에 따라 안내를 바꿈
+      if (!dm) return;
+      var on = m.box.querySelector('[data-hist]').checked, w = m.box.querySelector('[data-warn]'), nn = m.box.querySelector('[data-hn]').value, who = pickedNames();
+      m.box.querySelector('[data-histn]').hidden = !on;
+      w.className = 'cx-inv-sec ' + (on ? 'on' : 'off');
+      w.innerHTML = on
+        ? '⚠️ <b>' + _cxE(who.length ? who.join(', ') : '새로 초대한 사람') + '</b> 님이 ' + _cxE(peerName) + ' 님과 나눈 <b>최근 ' + nn + '개 대화를 모두 봅니다</b>.<br>사진 · 파일은 이름만 옮겨지고 원래 1:1 방에서만 열립니다. 답글 줄기는 옮기지 않습니다.<br><b>' + _cxE(peerName) + ' 님에게 먼저 괜찮은지 물어보세요.</b>'
+        : '🔒 <b>비공개 유지</b> — 새 방은 빈 대화로 시작합니다. 지금까지 나눈 1:1 대화는 두 분만 봅니다.';
+    }
+    if (dm) { m.box.querySelector('[data-hist]').addEventListener('change', warn); m.box.querySelector('[data-hn]').addEventListener('change', warn); }
+    _cxPeoplePick(m.box, true, members.map(function (x) { return x.id; }), function (ids) { picked = ids; m.box.querySelector('[data-n]').textContent = ids.length + '명'; m.box.querySelector('[data-go]').disabled = !ids.length; warn(); });
     m.box.querySelector('[data-go]').addEventListener('click', function () {
       var btn = this; btn.disabled = true;
       if (dm) {
@@ -1872,8 +1889,10 @@ function chatInviteModal() {
         var ids = peer.map(function (x) { return x.id; }).concat(picked);
         var nm = peer.map(function (x) { return x.name; }).concat(((typeof CX.users !== 'undefined' && CX.users) || []).filter(function (u) { return picked.indexOf(u.id) >= 0; }).map(function (u) { return u.name; }));
         var me0 = (typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || '';
-        apiFetch('/api/chat/rooms', { method: 'POST', body: JSON.stringify({ kind: 'group', name: [me0].concat(nm).filter(Boolean).slice(0, 4).join(', ') + (nm.length + 1 > 4 ? ' 외' : ''), userIds: ids }) })
-          .then(function (r) { m.close(); _cxToast('👥 새 그룹 방을 만들었습니다', 'success'); return _cxLoadRooms().then(function () { chatOpenRoom(r.data.id); }); })
+        var hist = m.box.querySelector('[data-hist]').checked, hn = +m.box.querySelector('[data-hn]').value;
+        if (hist && !confirm('🔓 ' + peerName + ' 님과의 1:1 대화 최근 ' + hn + '개를\n' + (pickedNames().join(', ') || '새로 초대한 사람') + ' 님도 보게 됩니다.\n\n되돌릴 수 없습니다. 계속할까요?')) { btn.disabled = false; return; }
+        apiFetch('/api/chat/rooms', { method: 'POST', body: JSON.stringify({ kind: 'group', name: [me0].concat(nm).filter(Boolean).slice(0, 4).join(', ') + (nm.length + 1 > 4 ? ' 외' : ''), userIds: ids, fromDm: hist ? { roomId: dmRoom, n: hn } : undefined }) })
+          .then(function (r) { m.close(); _cxToast('👥 새 그룹 방을 만들었습니다' + (r.data.copied ? ' — 이전 대화 ' + r.data.copied + '개 함께' : ' — 이전 1:1 대화는 비공개'), 'success'); return _cxLoadRooms().then(function () { chatOpenRoom(r.data.id); }); })
           .catch(function (e) { btn.disabled = false; _cxToast(_cxErr(e), 'error'); });
         return;
       }

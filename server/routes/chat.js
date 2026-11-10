@@ -436,6 +436,31 @@ async function dmRoom(tenantId, a, b, by) {
   return room;
 }
 
+/* v13.425 1:1 → 새 그룹 방 "지금까지 대화도 같이 보이기" (기본은 안 보임 · 고른 사람만)
+ *   조건: 내가 그 1:1 방 사람 · 1:1 두 사람이 모두 새 방에 있음. 최근 n개(최대 200) 글만 — 사진 · 파일은 이름만(원래 방에서만 열림)
+ *   앞뒤로 "여기부터 / 여기까지 이전 1:1 대화" 줄. 옮긴 글은 모두 읽은 것으로 */
+async function copyDmHistory(req, room, memberIds, opt) {
+  try {
+    var t = req.tenant.id, dmId = String(opt.roomId || ''), n = Math.min(Math.max(parseInt(opt.n, 10) || 50, 1), 200);
+    var dm = (await db.query("SELECT r.id, r.kind FROM chat_rooms r JOIN chat_members m ON m.room_id = r.id AND m.user_id = $2 AND m.left_at IS NULL WHERE r.id = $1 AND r.tenant_id = $3", [dmId, me(req), t])).rows[0];
+    if (!dm || dm.kind !== 'dm') return 0;
+    var both = (await db.query('SELECT user_id FROM chat_members WHERE room_id = $1', [dm.id])).rows.map(function (x) { return x.user_id; });
+    if (!both.every(function (u) { return memberIds.indexOf(u) >= 0; })) return 0;   // 상대가 빠진 방엔 안 옮김
+    var rows = (await db.query("SELECT m.user_id, m.kind, m.body, m.cards, m.created_at, f.name AS fname, f.mime FROM chat_messages m LEFT JOIN chat_files f ON f.id = m.file_id WHERE m.room_id = $1 AND m.deleted_at IS NULL AND m.reply_to IS NULL AND m.kind IN ('text','file') ORDER BY m.id DESC LIMIT $2", [dm.id, n])).rows.reverse();
+    if (!rows.length) return 0;
+    var nm = await userNames(t, both);
+    await postMessage({ tenantId: t }, room, { kind: 'system', body: '🔓 여기부터 이전 1:1 대화 (' + both.map(function (u) { return nm[u] || ''; }).join(' ↔ ') + ' · 최근 ' + rows.length + '개) — ' + (req.user.name || '') + ' 님이 함께 보이기로 함' });
+    for (var i = 0; i < rows.length; i++) {
+      var x = rows[i], body = x.body || '';
+      if (x.fname) body = (body ? body + '\n' : '') + (/^image\//.test(x.mime || '') ? '📷 사진 ' : '📎 ') + x.fname + ' (원래 1:1 방에서만 열림)';
+      await db.query("INSERT INTO chat_messages (room_id, tenant_id, user_id, kind, body, cards, created_at) VALUES ($1,$2,$3,'text',$4,$5,$6)", [room.id, t, x.user_id, body.slice(0, MAX_BODY), x.cards ? JSON.stringify(x.cards) : null, x.created_at]);
+    }
+    await postMessage({ tenantId: t }, room, { kind: 'system', body: '🔒 여기까지 이전 1:1 대화 — 이 아래부터 새 대화' });
+    var mx = (await db.query('SELECT MAX(id) AS mx FROM chat_messages WHERE room_id = $1', [room.id])).rows[0].mx;
+    await db.query('UPDATE chat_members SET last_read_id = GREATEST(COALESCE(last_read_id, 0), $2) WHERE room_id = $1', [room.id, mx]); _midDrop(room.id);
+    return rows.length;
+  } catch (e) { console.error('[chat/copyDm]', e.message); return 0; }
+}
 router.post('/rooms', async function (req, res) {
   try {
     var b = req.body || {}, t = req.tenant.id;
@@ -466,7 +491,8 @@ router.post('/rooms', async function (req, res) {
       for (var u of [me(req)].concat(ids)) await db.query('INSERT INTO chat_members (room_id, user_id, tenant_id, role) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [id, u, t, u === me(req) ? 'owner' : 'member']); _midDrop(id);
       var r0 = (await db.query('SELECT * FROM chat_rooms WHERE id = $1', [id])).rows[0];
       await postMessage({ tenantId: t }, r0, { kind: 'system', body: (req.user.name || '') + ' 님이 대화방을 만들었습니다' });
-      return res.status(201).json({ data: { id: id } });
+      var copied = b.fromDm ? await copyDmHistory(req, r0, [me(req)].concat(ids), b.fromDm) : 0;
+      return res.status(201).json({ data: { id: id, copied: copied } });
     }
     if (b.kind === 'project') {
       if (!b.projectId || !await pa.canReadById(req, b.projectId)) return bad(res, '볼 수 있는 프로젝트가 아닙니다.', 403);

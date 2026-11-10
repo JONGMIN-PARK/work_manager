@@ -73,12 +73,14 @@ function kst(n) { return new Date(Date.now() + 9 * 3600000 + (n || 0) * 86400000
     check(await until(a, function () { return document.querySelectorAll('#chatShareModal [data-room]').length >= 2; }, null, 10000), '보내기 창 — 방 목록');
     check(await a.evaluate(function () { return /소식 시험 프로젝트/.test(document.querySelector('#chatShareModal .cw-share-c').textContent); }), '보낼 카드 이름 (peek 로 채움)');
     await a.type('#chatShareModal [data-q]', '보내기');
-    await a.evaluate(function () { document.querySelector('#chatShareModal [data-room]').click(); });
+    await until(a, function () { return Array.from(document.querySelectorAll('#chatShareModal [data-room]')).some(function (x) { return /보내기 시험/.test(x.textContent); }); }, null, 8000);
+    await a.evaluate(function () { Array.from(document.querySelectorAll('#chatShareModal [data-room]')).filter(function (x) { return /보내기 시험/.test(x.textContent); })[0].click(); });
     await a.type('#chatShareModal [data-m]', '이거 확인 부탁해요');
     await a.screenshot({ path: path.join(SHOT, 'e2e76-share.png') });
     await a.click('#chatShareModal [data-go]');
     check(await until(a, function () { return document.getElementById('cwOpenTip') && !document.getElementById('chatShareModal'); }, null, 8000), '보내면 "대화 열기" 알림');
-    var sent = (await c.query("SELECT body, cards FROM chat_messages WHERE room_id = $1 AND kind = 'text' ORDER BY id DESC LIMIT 1", [S.grp])).rows[0];
+    var sent = null;
+    for (var sw = 0; sw < 20 && !(sent && sent.cards); sw++) { sent = (await c.query("SELECT body, cards FROM chat_messages WHERE room_id = $1 AND kind = 'text' ORDER BY id DESC LIMIT 1", [S.grp])).rows[0]; if (!(sent && sent.cards)) await wait(300); }
     check(sent && sent.body === '이거 확인 부탁해요' && sent.cards[0].type === 'project' && sent.cards[0].id === S.pid, '그룹 방에 한마디 + 프로젝트 카드');
     await a.click('#cwOpenTip button');
     check(await until(a, function (r) { return CX.room === r; }, S.grp, 8000), '"대화 열기" → 그 방');
@@ -134,6 +136,30 @@ function kst(n) { return new Date(Date.now() + 9 * 3600000 + (n || 0) * 86400000
     check(await until(a, function (d) { return CX.room && CX.room !== d && CX.info && CX.info.kind === 'group' && CX.info.members.length === 3; }, dmId, 10000), '새 그룹 방 — 나 · 김 · 고른 사람 3명');
     var dmLeft = (await c.query('SELECT COUNT(*)::int AS n FROM chat_members WHERE room_id = $1 AND left_at IS NULL', [dmId])).rows[0].n;
     check(dmLeft === 2, '원래 1:1 은 그대로 (2명)');
+    var g1 = await a.evaluate(function () { return CX.room; });
+    var g1n = (await c.query("SELECT COUNT(*)::int AS n FROM chat_messages WHERE room_id = $1 AND kind <> 'system'", [g1])).rows[0].n;
+    check(g1n === 0, '기본(체크 안 함) — 새 방에 이전 대화 없음');
+
+    // 같이 보이기 체크 → 최근 대화 옮김 · 안내 문구 · 읽음 처리
+    for (var q = 1; q <= 3; q++) await c.query("INSERT INTO chat_messages (tenant_id, room_id, user_id, kind, body) VALUES ($1,$2,$3,'text',$4)", [adm.tenant_id, dmId, q % 2 ? adm.id : kim.id, '비밀 이야기 ' + q]);
+    await a.evaluate(function (r) { chatOpenRoom(r); }, dmId);
+    await until(a, function (r) { return CX.room === r && CX.info && CX.info.kind === 'dm'; }, dmId, 8000);
+    await a.evaluate(function () { chatInviteModal(); });
+    await until(a, function () { return document.querySelector('#chatInvModal [data-u]'); }, null, 8000);
+    var w0 = await a.evaluate(function () { return document.querySelector('#chatInvModal [data-warn]').textContent; });
+    check(/비공개 유지/.test(w0) && /두 분만/.test(w0), '처음엔 "🔒 비공개 유지" 안내');
+    await a.evaluate(function () { document.querySelector('#chatInvModal [data-u]').click(); var ck = document.querySelector('#chatInvModal [data-hist]'); ck.checked = true; ck.dispatchEvent(new Event('change')); var s = document.querySelector('#chatInvModal [data-hn]'); s.value = '20'; s.dispatchEvent(new Event('change')); });
+    var w1 = await a.evaluate(function () { var w = document.querySelector('#chatInvModal [data-warn]'); return { t: w.textContent, cls: w.className, n: !document.querySelector('#chatInvModal [data-histn]').hidden }; });
+    check(/최근 20개 대화를 모두 봅니다/.test(w1.t) && /먼저 괜찮은지 물어보세요/.test(w1.t) && /on/.test(w1.cls) && w1.n, '체크하면 "⚠️ … 최근 20개를 모두 봅니다 · 먼저 물어보세요" ' + w1.t.slice(0, 80));
+    await a.screenshot({ path: path.join(SHOT, 'e2e76-invite.png') });
+    await a.click('#chatInvModal [data-go]');
+    check(await until(a, function (d) { return CX.room && CX.room !== d && CX.info && CX.info.kind === 'group'; }, dmId, 10000), '확인 → 새 그룹 방');
+    var g2 = await a.evaluate(function () { return CX.room; });
+    var cp = (await c.query("SELECT kind, body FROM chat_messages WHERE room_id = $1 ORDER BY id", [g2])).rows;
+    var bodies = cp.map(function (x) { return x.body; }).join('|');
+    check(/여기부터 이전 1:1 대화/.test(bodies) && /비밀 이야기 1\|비밀 이야기 2\|비밀 이야기 3/.test(bodies) && /여기까지 이전 1:1 대화/.test(bodies), '새 방에 "여기부터 … 여기까지" 사이 이전 대화');
+    var unr = (await c.query("SELECT COUNT(*)::int AS n FROM chat_members cm WHERE cm.room_id = $1 AND COALESCE(cm.last_read_id, 0) < (SELECT MAX(id) FROM chat_messages WHERE room_id = $1 AND kind <> 'system')", [g2])).rows[0].n;
+    check(unr === 0, '옮긴 대화는 안 읽음 숫자에 안 잡힘');
 
     // ⑦ 프로젝트 고치기 → (1분 조용하면) 프로젝트 방에 "📁 … 바꿈"
     await a.evaluate(function (pid) { return apiFetch('/api/projects/' + pid, { method: 'PUT', body: JSON.stringify({ name: '소식 시험 프로젝트 2차' }) }); }, S.pid);
