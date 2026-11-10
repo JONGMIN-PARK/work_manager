@@ -64,10 +64,33 @@ app.use(cors({
 // (운영/개발 동작은 그대로 유지)
 function skipInTest() { return config.env === 'test'; }
 
+// v13.430 요청 제한 — 사무실 한 곳(공인 IP 하나)에서 100명이 함께 써도 막히지 않게
+//   · 로그인한 요청: 사람마다 따로 센다 (토큰의 sub) — 예전엔 IP 하나에 1분 200번을 모두가 나눠 썼다
+//   · 로그인 전 요청: IP 마다 넉넉히 · 로그인 시도는 IP+이메일마다 10번 (비밀번호 맞히기 막기)
+var _authSvc = require('./services/auth.service');
+function _rlUser(req) {
+  var h = req.headers.authorization;
+  if (!h || h.indexOf('Bearer ') !== 0) return null;
+  try { var d = _authSvc.verifyAccessToken(h.slice(7)); return d && d.sub ? String(d.sub) : null; } catch (e) { return null; }
+}
+var RL_USER_MAX = parseInt(process.env.RL_USER_MAX, 10) || 300;    // 사람 1명 · 1분
+var RL_IP_MAX = parseInt(process.env.RL_IP_MAX, 10) || 1000;       // 로그인 전 · IP 1개 · 1분
+var RL_LOGIN_IP_MAX = parseInt(process.env.RL_LOGIN_IP_MAX, 10) || 100;  // 로그인 시도 · IP 1개 · 1분
+
 var loginLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 10,
+  max: RL_LOGIN_IP_MAX,
   message: { error: 'RATE_LIMIT', message: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipInTest
+});
+// 같은 이메일로 1분 10번 (본문을 읽은 뒤라 express.json 다음에 붙인다)
+var loginEmailLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 10,
+  keyGenerator: function (req) { var em = req.body && typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : ''; return req.ip + '|' + em; },
+  message: { error: 'RATE_LIMIT', message: '로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요.' },
   standardHeaders: true,
   legacyHeaders: false,
   skip: skipInTest
@@ -75,7 +98,8 @@ var loginLimiter = rateLimit({
 
 var apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 200,
+  max: function (req) { return _rlUser(req) ? RL_USER_MAX : RL_IP_MAX; },
+  keyGenerator: function (req) { var u = _rlUser(req); return u ? 'u:' + u : 'ip:' + req.ip; },
   message: { error: 'RATE_LIMIT', message: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -101,6 +125,7 @@ app.use('/api/notebook/files', function (req, res, next) {
 // ─── JSON 파싱 ───
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(['/api/auth/login', '/api/v1/auth/login'], loginEmailLimiter);
 
 // ─── 캐시 버스팅: 서버 시작 시 빌드 버전 생성 ───
 var BUILD_VERSION = Date.now().toString(36);
