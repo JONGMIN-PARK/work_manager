@@ -108,6 +108,25 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(await until(function () { return /!\[빨강\.png\]\(nbf:nf-[a-z0-9]+\)/.test(document.getElementById('nbSrc').value); }, null, 10000), '사진 올리기 → ![](nbf:…)');
     check(await until(function () { var i = document.querySelector('#nbDoc img.nb-img'); return i && i.naturalWidth === 40; }, null, 10000), '미리보기에 사진 (인증 받아 blob)');
 
+    // 8-1) v13.417 나란히 스크롤 — 옆에 나란히면 따라가고, 좁아서 위아래로 쌓이면 따로
+    async function syncTest() {
+      return p.evaluate(function () {
+        var s = document.getElementById('nbSrc'), v = document.getElementById('nbPrev');
+        s.value = s.value + String.fromCharCode(10) + Array.from({ length: 160 }, function (_, i) { return '줄 ' + i; }).join(String.fromCharCode(10, 10)); s.dispatchEvent(new Event('input', { bubbles: true }));
+        return new Promise(function (res) { setTimeout(function () {
+          v.scrollTop = 0; s.scrollTop = 0;
+          setTimeout(function () { s.scrollTop = 400; s.dispatchEvent(new Event('scroll'));
+            setTimeout(function () { var a = s.getBoundingClientRect(), b = v.getBoundingClientRect(); res({ prev: v.scrollTop, side: a.right <= b.left + 1 || b.right <= a.left + 1 }); }, 120); }, 120);
+        }, 500); });
+      });
+    }
+    var sw = await syncTest();
+    check(!sw.side || sw.prev > 0, '나란히(넓게) — 편집을 굴리면 미리보기도 따라감 (' + JSON.stringify(sw) + ')');
+    await p.setViewport({ width: 420, height: 900 }); await wait(500);
+    var sn = await syncTest();
+    check(sn.side || sn.prev === 0, '좁아서 위아래로 쌓이면 — 따라 움직이지 않음 (' + JSON.stringify(sn) + ')');
+    await p.setViewport({ width: 1400, height: 900 }); await wait(400);
+
     // 9) 태그 · 폴더 (만들어 옮기기)
     await p.click('#nbTagIn'); await p.keyboard.type('설비'); await p.keyboard.press('Enter');
     check(await until(function () { return /#설비/.test(document.getElementById('nbTagRow').textContent); }), '태그 달기');

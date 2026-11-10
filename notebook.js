@@ -559,6 +559,10 @@ function _nbBind(root) {
     if (NB.mode !== 'split' || NB._sync) return;
     var a = e.target, b = a.id === 'nbSrc' ? document.getElementById('nbPrev') : a.id === 'nbPrev' ? document.getElementById('nbSrc') : null;
     if (!b) return;
+    // v13.417 좁아서 위아래로 쌓였으면 맞추지 않음 — 한쪽을 굴리면 다른 쪽도 따라 움직여 읽던 자리를 잃던 것
+    var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    var side = ra.right <= rb.left + 1 || rb.right <= ra.left + 1;   // 옆에 나란히 있을 때만
+    if (!side) return;
     var r = a.scrollTop / Math.max(1, a.scrollHeight - a.clientHeight);
     NB._sync = true; b.scrollTop = r * (b.scrollHeight - b.clientHeight);
     requestAnimationFrame(function () { NB._sync = false; });
