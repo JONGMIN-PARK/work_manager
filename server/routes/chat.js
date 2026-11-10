@@ -120,7 +120,7 @@ async function findMentions(tenantId, roomId, body) {
 }
 
 /* 업무 카드 — 통합 검색 결과 그대로 (최대 5) · 이슈는 서버에서 지금 상태로 */
-var CARD_TYPES = ['project', 'milestone', 'issue', 'order', 'meeting', 'mindmap', 'doc', 'dev', 'checklist', 'as', 'todo', 'note', 'weekly', 'prestudy', 'tech', 'work', 'comment', 'member', 'message'];
+var CARD_TYPES = ['project', 'milestone', 'issue', 'order', 'meeting', 'mindmap', 'doc', 'dev', 'checklist', 'as', 'todo', 'note', 'weekly', 'prestudy', 'tech', 'work', 'comment', 'member', 'message', 'event'];
 async function cleanCards(req, cards) {
   if (!Array.isArray(cards) || !cards.length) return null;
   var out = [];
@@ -1054,6 +1054,125 @@ router.post('/files/:fid/to-docs', async function (req, res) {
   } catch (e) { httpErr.serverError(res, '[chat/to-docs]', e); }
 });
 
+/* ─── v13.423 ④ 메시지 → 업무 (AI 가 칸 채움) · ⑤ 대화 → 정한 것 · 할 일 · 남은 질문 ───
+ * AI 가 없거나(키 · 한도) 실패하면 규칙으로 — 첫 줄 = 제목, 날짜 말(내일 · 11/14 · 금요일 …) = 날짜, '긴급' = 긴급.
+ * body.ai === false 면 처음부터 규칙만 (시험 · 한도 아끼기) */
+function aiJson(text) {
+  var s = String(text || '').replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  var a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a < 0 || b <= a) return null;
+  try { return JSON.parse(s.slice(a, b + 1)); } catch (_) { return null; }
+}
+async function aiAsk(req, prompt, tag, useAi) {
+  if (useAi === false) return null;
+  var ai = require('../lib/ai-usage'), t = req.tenant.id;
+  try {
+    var quota = await ai.checkQuota(t); if (!quota.ok || !ai.takeHourly(me(req))) return null;
+    var g = await require('../services/ai-provider').generateText({ prompt: prompt.slice(0, 15000), tenantId: t, json: true, maxTokens: 1500 });
+    if (!g) return null;
+    await ai.logUsage(t, me(req), tag, g.provider);
+    return aiJson(g.text);
+  } catch (e) { console.warn('[chat/' + tag + ']', e.message); return null; }
+}
+function qpDay(text) {   // '내일까지' · '금요일에' 처럼 붙은 말도 날짜로
+  var QP = require('../../quick-parse');
+  var s = String(text || '').replace(/(오늘|내일|모레|[일월화수목금토]요일|\d{1,2}\/\d{1,2}|\d{1,2}일)(까지|에|중|쯤|전에|부터)/g, '$1 ');
+  return QP.parse(s, kstToday());
+}
+function firstLine(s, n) { return String(s || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean)[0] ? String(s).split('\n').map(function (x) { return x.trim(); }).filter(Boolean)[0].slice(0, n || 80) : ''; }
+var DRAFT_KINDS = {
+  issue: { ask: '{"title":"이슈 제목(40자 이내, 명사형)","description":"무슨 문제인지 · 어디서 · 언제 (원문 근거만)","urgency":"urgent 또는 normal","dueDate":"YYYY-MM-DD 또는 빈칸"}' },
+  as: { ask: '{"customerName":"고객사","siteLine":"현장 · 라인","equipmentModel":"장비 모델","serialNo":"시리얼","issueSummary":"증상 한 줄","reproduction":"재현 조건 · 빈도","priority":"P1(긴급·라인 정지) · P2(높음) · P3(보통) · P4(낮음) 중 하나"}' },
+  event: { ask: '{"title":"일정 제목","startDate":"YYYY-MM-DD","startTime":"HH:MM 또는 빈칸","endTime":"HH:MM 또는 빈칸","location":"장소 또는 빈칸"}' },
+  todo: { ask: '{"title":"할 일(동사로 끝나게)","dueDate":"YYYY-MM-DD 또는 빈칸","dueTime":"HH:MM 또는 빈칸","priority":"1(긴급)~4(낮음)"}' }
+};
+function draftRule(kind, body) {
+  var q = qpDay(body), urgent = /긴급|급함|급해|빨리|asap|!{1,2}(\s|$)/i.test(body), line = firstLine(body, 80);
+  var title = (firstLine(qpDay(line).title, 80) || line).replace(/(^|\s)(긴급|급함|!+)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').replace(/[.!?。\s]+$/, '').trim() || line;
+  if (kind === 'issue') return { title: title, description: body.slice(0, 2000), urgency: urgent ? 'urgent' : 'normal', dueDate: q.due || '' };
+  if (kind === 'as') return { customerName: '', siteLine: '', equipmentModel: '', serialNo: ((/\b(?:S\/?N|시리얼)[:\s-]*([A-Za-z0-9-]{3,})/i.exec(body) || [])[1] || ''), issueSummary: title, reproduction: '', priority: urgent ? 'P1' : 'P3' };
+  if (kind === 'event') return { title: title, startDate: q.due || kstToday(), startTime: q.time || '', endTime: q.timeEnd || '', location: '' };
+  return { title: title, dueDate: q.due || '', dueTime: q.time || '', priority: urgent ? 1 : (q.priority || 3) };
+}
+router.post('/messages/:mid/draft', async function (req, res) {
+  try {
+    var r = await db.query('SELECT * FROM chat_messages WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [+req.params.mid, req.tenant.id]);
+    var m = r.rows[0]; if (!m) return res.status(404).json({ error: 'NOT_FOUND', message: '메시지가 없습니다.' });
+    var room = await roomFor(req, res, m.room_id); if (!room) return;
+    var b = req.body || {}, kind = DRAFT_KINDS[b.kind] ? b.kind : 'issue', body = String(m.body || '').slice(0, 3000);
+    // 앞뒤 대화 몇 줄 — AI 가 고객사 · 장비 같은 걸 앞에서 찾을 수 있게
+    var ctx = await db.query("SELECT COALESCE(u.display_name, u.name, 'AI') AS n, m.body FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id WHERE m.room_id = $1 AND m.id < $2 AND m.id > $2 - 400 AND m.deleted_at IS NULL AND m.kind IN ('text','ai') AND m.reply_to IS NOT DISTINCT FROM $3 ORDER BY m.id DESC LIMIT 6", [room.id, m.id, m.reply_to]);
+    var pj = room.project_id ? (await db.query('SELECT name, order_no FROM projects WHERE id = $1 AND tenant_id = $2', [room.project_id, req.tenant.id])).rows[0] : null;
+    var prompt = '사내 메신저 메시지를 업무 등록 양식으로 옮깁니다. 오늘은 ' + kstToday() + ' (한국 시간).\n' +
+      (pj ? '이 방은 프로젝트 "' + pj.name + '"' + (pj.order_no ? ' (수주 ' + pj.order_no + ')' : '') + ' 의 방입니다.\n' : '') +
+      '원문에 없는 것은 지어내지 말고 빈칸("")으로. JSON 하나만 답하세요:\n' + DRAFT_KINDS[kind].ask + '\n\n' +
+      (ctx.rows.length ? '## 앞 대화 (참고)\n' + ctx.rows.reverse().map(function (x) { return x.n + ': ' + String(x.body || '').slice(0, 300); }).join('\n') + '\n\n' : '') +
+      '## 옮길 메시지\n' + body;
+    var rule = draftRule(kind, body), got = await aiAsk(req, prompt, 'draft-' + kind, b.ai), out = rule;
+    if (got) {
+      out = {};
+      Object.keys(rule).forEach(function (k) { var v = got[k]; out[k] = v == null || v === '' ? rule[k] : typeof rule[k] === 'number' ? (+v || rule[k]) : String(v).slice(0, k === 'description' ? 2000 : 300); });
+      ['dueDate', 'startDate'].forEach(function (k) { if (out[k] && !/^\d{4}-\d{2}-\d{2}$/.test(out[k])) out[k] = rule[k]; });
+      if (out.priority != null && kind === 'as' && !/^P[1-4]$/.test(out.priority)) out.priority = rule.priority;
+      if (kind === 'issue' && out.urgency !== 'urgent') out.urgency = 'normal';
+      ['startTime', 'endTime', 'dueTime'].forEach(function (k) { if (out[k] && !/^\d{2}:\d{2}$/.test(out[k])) out[k] = rule[k] || ''; });
+    }
+    // 프로젝트 고르기 — 이 방 프로젝트 · 내가 고칠 수 있는 최근 프로젝트
+    var ed = pa.editableProjectsSql ? pa.editableProjectsSql(req, 'p', 2) : null, projects = [];
+    if (ed) projects = (await db.query("SELECT p.id, p.name, p.order_no FROM projects p WHERE p.tenant_id = $1 AND COALESCE(p.status, '') <> 'done' AND " + ed.sql + ' ORDER BY p.updated_at DESC NULLS LAST LIMIT 40', [req.tenant.id].concat(ed.params))).rows;
+    var pid0 = room.project_id || null;
+    if (!pid0) { try { var u0 = await peekUnfurl(req, [{ k: 'm', t: body }]); var p0 = (u0.m || []).filter(function (x) { return x.type === 'project'; })[0]; if (p0) pid0 = p0.id; } catch (_) {} }   // 글 속 프로젝트 이름 · 수주번호
+    res.json({ data: { kind: kind, fields: out, ai: !!got, projectId: pid0, projects: projects.map(function (p) { return { id: p.id, name: p.name, orderNo: p.order_no || '' }; }) } });
+  } catch (e) { httpErr.serverError(res, '[chat/draft]', e); }
+});
+
+/* ⑤ 이 방 최근 대화 → 요점 · 정한 것 · 할 일(누가 · 무엇 · 언제) · 남은 질문 */
+function digestRule(rows, names) {
+  var out = { points: [], decisions: [], todos: [], questions: [] };
+  rows.forEach(function (x) {
+    var b = String(x.body || '').trim(); if (!b || b[0] === '/') return;
+    b.split('\n').map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (s) {
+      if (/(하기로|으로 결정|로 결정|확정|정했|결정했|로 가죠|로 갑시다|진행하기로)/.test(s)) out.decisions.push(s.slice(0, 160));
+      else if (/[?？]\s*$/.test(s) && !/(해 ?주실 수|해 ?줄 수|가능할까요|부탁)/.test(s)) out.questions.push({ who: x.n, text: s.slice(0, 160) });
+      if (/(할게요|하겠습니다|해 ?둘게요|해 ?드릴게요|챙길게요|보낼게요|올릴게요|부탁(드립니다|해요|합니다)?|해 ?주세요|해 ?주실 수|까지\s*(해|보내|올려|부탁|완료))/.test(s)) {
+        var at = /@(\S+)/.exec(s), who = at && names.indexOf(at[1]) >= 0 ? at[1] : /(부탁|해 ?주세요|해 ?주실 수)/.test(s) ? '' : x.n;
+        var q = qpDay(s.replace(/@\S+/g, ''));
+        out.todos.push({ who: who, what: (q.title || s).replace(/^(제가|저는|내가|저희가)\s+/, '').replace(/\s*(할게요|하겠습니다|해 ?둘게요|해 ?드릴게요|부탁드립니다|부탁해요|부탁합니다)[.!]?$/, '').slice(0, 120), due: q.due || '' });
+      }
+    });
+  });
+  out.todos = out.todos.slice(0, 15); out.decisions = out.decisions.slice(0, 10); out.questions = out.questions.slice(-8);
+  return out;
+}
+router.post('/rooms/:id/digest', async function (req, res) {
+  try {
+    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    var b = req.body || {}, n = Math.min(Math.max(parseInt(b.n, 10) || 80, 10), 200);
+    var hist = await db.query("SELECT COALESCE(u.display_name, u.name, 'AI') AS n, m.user_id, m.body, m.created_at FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id WHERE m.room_id = $1 AND m.deleted_at IS NULL AND m.reply_to IS NULL AND m.kind IN ('text','ai') AND m.body <> '' ORDER BY m.id DESC LIMIT $2", [room.id, n]);
+    var rows = hist.rows.reverse().filter(function (x) { return !/^📋 대화 정리/.test(x.body || '') && !/^@\S+ 할 일 — /.test(x.body || ''); });   // 정리 · 확인 요청으로 올린 글은 다시 안 뽑음
+    if (!rows.length) return res.json({ data: { points: [], decisions: [], todos: [], questions: [], ai: false, n: 0 } });
+    var mem = (await db.query('SELECT u.id, COALESCE(u.display_name, u.name) AS n FROM chat_members m JOIN users u ON u.id = m.user_id WHERE m.room_id = $1 AND m.left_at IS NULL', [room.id])).rows;
+    var names = mem.map(function (u) { return u.n; });
+    var lines = rows.map(function (x) { return '[' + new Date(x.created_at).toISOString().slice(5, 16).replace('T', ' ') + '] ' + x.n + ': ' + String(x.body).slice(0, 400); }).join('\n');
+    var prompt = '다음은 사내 메신저 대화입니다. 오늘은 ' + kstToday() + ' (한국 시간). 방 사람: ' + names.join(', ') + '\n' +
+      '대화에 실제로 나온 것만 뽑으세요 (지어내지 말 것). JSON 하나만:\n' +
+      '{"points":["요점 3개 이내"],"decisions":["정한 것"],"todos":[{"who":"맡은 사람 이름(방 사람 중, 모르면 빈칸)","what":"할 일","due":"YYYY-MM-DD 또는 빈칸"}],"questions":[{"who":"물은 사람","text":"아직 답이 없는 질문"}]}\n\n' + lines;
+    var got = await aiAsk(req, prompt, 'digest', b.ai), out = digestRule(rows, names);
+    if (got) {
+      out = {
+        points: (Array.isArray(got.points) ? got.points : []).map(String).slice(0, 5),
+        decisions: (Array.isArray(got.decisions) ? got.decisions : []).map(String).slice(0, 10),
+        todos: (Array.isArray(got.todos) ? got.todos : []).filter(function (x) { return x && x.what; }).map(function (x) { return { who: names.indexOf(String(x.who || '')) >= 0 ? String(x.who) : '', what: String(x.what).slice(0, 160), due: /^\d{4}-\d{2}-\d{2}$/.test(x.due || '') ? x.due : '' }; }).slice(0, 15),
+        questions: (Array.isArray(got.questions) ? got.questions : []).map(function (x) { return typeof x === 'string' ? { who: '', text: x } : { who: String(x.who || ''), text: String(x.text || '') }; }).filter(function (x) { return x.text; }).slice(0, 8)
+      };
+    }
+    out.ai = !!got; out.n = rows.length;
+    out.members = mem.map(function (u) { return { id: u.id, name: u.n }; });
+    out.projectId = room.project_id || null;
+    res.json({ data: out });
+  } catch (e) { httpErr.serverError(res, '[chat/digest]', e); }
+});
+
 /* ─── v13.422 업무 카드 지금 상태 · 글 속 번호 · 이름 자동 펼침 ───
  * POST /api/chat/peek { refs: [{type,id}], texts: [{k, t, skip:['type:id']}] }
  *   → { live: { 'type:id': {...} | null }, unf: { k: [card] } }
@@ -1117,7 +1236,7 @@ async function peekRefs(req, refs) {
       "(SELECT string_agg(COALESCE(u.display_name, u.name), ', ') FROM as_assignments g JOIN users u ON u.id = g.assignee_id WHERE g.ticket_id = a.id AND g.tenant_id = a.tenant_id AND g.status NOT IN ('completed','cancelled')) AS who " +
       'FROM as_tickets a WHERE a.tenant_id = $1 AND a.deleted_at IS NULL AND (a.id::text = ANY($2) OR a.ticket_no = ANY($2))', [t, by.as]);
     q.rows.forEach(function (a) {
-      var info = { title: a.issue_summary || a.ticket_no, sub: [a.ticket_no, a.customer_name].filter(Boolean).join(' · '), st: PEEK_AS[a.status] || a.status, stc: a.status, urg: a.priority === 'urgent' || a.priority === 'high', who: a.who || '', due: peekDay(a.promised_visit_at), id: a.id, ed: true, nav: { asId: a.id } };
+      var info = { title: a.issue_summary || a.ticket_no, sub: [a.ticket_no, a.customer_name].filter(Boolean).join(' · '), st: PEEK_AS[a.status] || a.status, stc: a.status, urg: a.priority === 'P1' || a.priority === 'urgent', who: a.who || '', due: peekDay(a.promised_visit_at), id: a.id, ed: true, nav: { asId: a.id } };
       out['as:' + a.id] = info; if (by.as.indexOf(a.ticket_no) >= 0) out['as:' + a.ticket_no] = info;
     });
   }

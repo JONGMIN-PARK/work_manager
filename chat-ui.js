@@ -18,7 +18,7 @@ function _cxSoon(key, fn) {
   if (document.hidden || typeof requestAnimationFrame !== 'function') setTimeout(run, 120); else requestAnimationFrame(run);
 }
 var CX_REACTS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '✅', '👀'];
-var CX_ICON = { project: '📁', milestone: '🚩', issue: '🐞', order: '📦', meeting: '🗓', mindmap: '🧠', doc: '📄', dev: '🛠', checklist: '☑️', as: '🔧', todo: '✅', note: '📝', weekly: '📅', prestudy: '🔍', tech: '🧪', work: '📒', comment: '💬', member: '👤', message: '✉️', cdoc: '📝' };
+var CX_ICON = { project: '📁', milestone: '🚩', issue: '🐞', order: '📦', meeting: '🗓', mindmap: '🧠', doc: '📄', dev: '🛠', checklist: '☑️', as: '🔧', todo: '✅', note: '📝', weekly: '📅', prestudy: '🔍', tech: '🧪', work: '📒', comment: '💬', member: '👤', message: '✉️', cdoc: '📝', event: '📅' };
 var CX_ISSUE = { open: '접수', inProgress: '대응중', resolved: '해결', closed: '종결' };
 
 function _cxMe() { return (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.id || currentUser.sub) : null; }
@@ -647,6 +647,8 @@ var _CX_ICO = {
   folder: '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/>',
   alarm: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/>',
   notice: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+  bug: '<path d="M8 7V5a4 4 0 0 1 8 0v2"/><rect x="6" y="7" width="12" height="13" rx="6"/><path d="M12 11v9M3 13h3M18 13h3M4 7l3 2M20 7l-3 2M4 20l3-2M20 20l-3-2"/>',
+  wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   todo: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/>',
   note: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M9 7h6"/>',
   edit: '<path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/>',
@@ -667,7 +669,7 @@ var _CX_ICO = {
   send: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>'
 };
 /* 메뉴 글자 앞 이모지 → 선 아이콘 (없으면 이모지 그대로 작은 칸에) */
-var _CX_MI = { '↩': 'reply', '💬': 'thread', '📋': 'copy', '↪': 'forward', '📁': 'folder', '⏰': 'alarm', '📢': 'notice', '✅': 'todo', '📓': 'note', '✏️': 'edit', '🗑': 'trash', '⬇': 'down', '😊': 'smile' };
+var _CX_MI = { '↩': 'reply', '💬': 'thread', '📋': 'copy', '↪': 'forward', '📁': 'folder', '⏰': 'alarm', '📢': 'notice', '✅': 'todo', '🐞': 'bug', '🔧': 'wrench', '📅': 'cal', '📓': 'note', '✏️': 'edit', '🗑': 'trash', '⬇': 'down', '😊': 'smile' };
 function _cxIco(k) {
   return '<svg class="cx-svg cx-svg-' + k + '" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (_CX_ICO[k] || '') + '</svg>';
 }
@@ -695,6 +697,7 @@ function _cxHeadAct(k, btn) {
       CX.info.kind !== 'dm' ? ['➕ 사람 초대', chatInviteModal] : null,
       CX.info.kind === 'group' ? ['✏️ 방 이름 바꾸기', function () { var n = prompt('방 이름', CX.info.name || ''); if (n != null) _cxRoomPut({ name: n }); }] : null,
       ['✨ 대화 요약 (AI)', function () { _cxSend('/요약'); }],
+      typeof chatDigest === 'function' ? ['✅ 정한 것 · 할 일 뽑기', function () { chatDigest(); }] : null,   // v13.423 ⑤
       typeof chatPollModal === 'function' && CX.info.myRole !== 'readonly' ? ['🗳 투표 만들기', function () { chatPollModal('vote'); }] : null,
       typeof chatPollModal === 'function' && CX.info.myRole !== 'readonly' ? ['📅 약속 잡기', function () { chatPollModal('time'); }] : null,
       typeof chatWallModal === 'function' ? ['🎨 배경 화면', function () { chatWallModal(true); }] : null,
@@ -1121,7 +1124,7 @@ document.addEventListener('pointerdown', function (e) { if (CXP.el && !CXP.el.co
 document.addEventListener('scroll', function (e) { if (CXP.el && e.target && e.target.contains && e.target.contains(CXP.el)) _cxActsClose(); }, true);
 function _cxOpenCard(c) {
   if (c.type === 'cdoc' && typeof chatDocOpen === 'function') { chatDocOpen(c.id); return; }   // v13.360 📝 공동 문서
-  if (c.type === 'todo') { if (typeof setPage === 'function') setPage('mywork'); return; }
+  if (c.type === 'todo' || c.type === 'event') { if (typeof setPage === 'function') setPage('mywork'); return; }
   if (typeof globalSearchNav === 'function') globalSearchNav(c.type, { id: c.id, title: c.title, sub: c.sub, nav: c.nav || {} }, '');
 }
 function _cxReact(mid, emoji) {
@@ -1271,6 +1274,10 @@ function _cxMsgMenu(btn, m, pre) {
       nbSendToInbox('> 💬 ' + (CX.info && CX.info.name ? CX.info.name + ' · ' : '') + who + (when ? ' · ' + when : '') + '\n\n' + m.body, 'chat');
     }] : null,
     '-',
+    m.body && typeof chatToWork === 'function' && typeof m.id === 'number' ? ['🐞 이슈로…', function () { chatToWork(m, 'issue'); }] : null,   // v13.423 ④ AI 가 칸 채움
+    m.body && typeof chatToWork === 'function' && typeof m.id === 'number' ? ['🔧 A/S 접수로…', function () { chatToWork(m, 'as'); }] : null,
+    m.body && typeof chatToWork === 'function' && typeof m.id === 'number' ? ['📅 일정으로…', function () { chatToWork(m, 'event'); }] : null,
+    '-',
     mine && m.body && m.kind === 'text' ? ['✏️ 수정', function () { _cxStartEdit(m); }] : null,
     mine ? ['🗑 삭제', function () { if (confirm('이 메시지를 지울까요? 모두에게서 지워집니다.')) apiFetch('/api/chat/messages/' + m.id, { method: 'DELETE' }).catch(function (e) { _cxToast(_cxErr(e), 'error'); }); }] : null
   ]).filter(Boolean), null, { rx: typeof m.id === 'number' && !m.deleted ? m : null });
@@ -1404,7 +1411,7 @@ function _cxBindComposer(taId, wrapId, inThread) {
       items = CX.info.members.filter(function (m) { return !m.me && m.name.indexOf(q) >= 0; }).slice(0, 6).map(function (m) { return { t: '@' + m.name, d: m.dept || '', av: _cxAv(m.id, m.name), ins: function () { ta.value = before.slice(0, before.length - q.length - 1) + '@' + m.name + ' ' + v.slice(pos); } }; });
       if (CX.info.kind !== 'dm' && '모두'.indexOf(q) === 0) items.push({ t: '@모두', d: '방 전체 · ' + CX.info.members.length + '명', av: '<span class="cx-av cx-av-all">' + _cxIco('people') + '</span>', ins: function () { ta.value = before.slice(0, before.length - q.length - 1) + '@모두 ' + v.slice(pos); } });
     } else if (/^\/\S*$/.test(v) && !inThread) {
-      items = [['/ai ', '내 권한 데이터로 AI 답 — 예: /ai 이번 주 지연 이슈'], ['/요약', '이 방 대화를 AI 가 정리'], ['/todo ', '내 할 일로 — 예: /todo 내일 15:00 견적 회신'], ['/issue ', '이 프로젝트에 이슈 (프로젝트 방)'], ['/help', '명령 보기']]
+      items = [['/ai ', '내 권한 데이터로 AI 답 — 예: /ai 이번 주 지연 이슈'], ['/요약', '이 방 대화를 AI 가 정리'], ['/정리', '정한 것 · 할 일 뽑아 등록 · 확인 요청'], ['/todo ', '내 할 일로 — 예: /todo 내일 15:00 견적 회신'], ['/issue ', '이 프로젝트에 이슈 (프로젝트 방)'], ['/help', '명령 보기']]
         .filter(function (c) { return c[0].indexOf(v.trim()) === 0; }).map(function (c) { return { t: c[0].trim(), d: c[1], ins: function () { ta.value = c[0]; } }; });
     }
     show(items, at ? '부를 사람' : '명령');
@@ -1482,6 +1489,7 @@ function _cxBindComposer(taId, wrapId, inThread) {
       apiFetch('/api/chat/messages/' + id, { method: 'PUT', body: JSON.stringify({ body: v }) }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
       return;
     }
+    if (!inThread && /^\/(정리|digest)$/i.test(v) && typeof chatDigest === 'function') { ta.value = ''; grow(); sugg.hidden = true; _cxDraftSave(''); chatDigest(); return; }   // v13.423 ⑤
     ta.value = ''; grow(); sugg.hidden = true;
     if (!inThread) { _cxDraftSave(''); if (CX.readMark != null) CX.readMark = null; }
     _cxSend(v, inThread ? CX.thread : null, inThread ? null : CX.cards.slice());

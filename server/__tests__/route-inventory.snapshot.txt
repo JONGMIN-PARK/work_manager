@@ -427,6 +427,7 @@ POST /api/chat/me/avatar
 POST /api/chat/messages/:mid/ack
 POST /api/chat/messages/:mid/acted
 POST /api/chat/messages/:mid/action
+POST /api/chat/messages/:mid/draft
 POST /api/chat/messages/:mid/forward
 POST /api/chat/messages/:mid/nudge
 POST /api/chat/messages/:mid/poll-close
@@ -438,6 +439,7 @@ POST /api/chat/peek
 POST /api/chat/posts/suggest
 POST /api/chat/rooms
 POST /api/chat/rooms/:id/catchup
+POST /api/chat/rooms/:id/digest
 POST /api/chat/rooms/:id/docs
 POST /api/chat/rooms/:id/files
 POST /api/chat/rooms/:id/files/:fid/done
