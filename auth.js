@@ -637,7 +637,7 @@ async function renderUserAdmin() {
       pending.forEach(function (u) {
         html += '<div style="background:var(--bg-p,#111620);border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid var(--bd,#222C44)">';
         html += '<div style="font-size:14px;font-weight:600;margin-bottom:6px">' + eH(u.name) + ' &lt;' + eH(u.email) + '&gt;</div>';
-        html += '<div style="font-size:12px;color:var(--t5,#6070A0);margin-bottom:12px">직급: ' + eH(u.position || '-') + ' · 연락처: ' + eH(u.phone || '-') + ' · 신청: ' + (u.created_at || '').slice(0, 10) + '</div>';
+        html += '<div style="font-size:12px;color:var(--t5,#6070A0);margin-bottom:12px">직급: ' + eH(u.position || '-') + ' · 연락처: ' + eH(u.phone || '-') + ' · 신청: ' + _wmKst(u.created_at, 10) + '</div>';
         html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';   // 휴대폰 — 거절 버튼이 카드 밖으로 밀리던 것
         html += '<select id="approveRole_' + u.id + '" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">';
         html += '<option value="member">팀원</option><option value="manager">팀장</option><option value="executive">임원</option><option value="admin">관리자</option>';
@@ -692,7 +692,7 @@ function renderUserTable(users, depts, isActive) {
     html += '<td style="padding:8px;color:var(--t5,#6070A0)">' + eH(u.email) + '</td>';
     html += '<td style="padding:8px;text-align:center">' + (roleLabels[u.role] || u.role) + '</td>';
     html += '<td style="padding:8px;text-align:center">' + eH(deptMap[u.department_id] || '-') + '</td>';
-    html += '<td style="padding:8px;text-align:center;color:var(--t5,#6070A0)">' + (u.last_login_at ? u.last_login_at.slice(0, 10) : '-') + '</td>';
+    html += '<td style="padding:8px;text-align:center;color:var(--t5,#6070A0)">' + (u.last_login_at ? _wmKst(u.last_login_at, 10) : '-') + '</td>';
     html += '<td style="padding:8px;text-align:center">';
     if (isActive) {
       html += '<button onclick="changeUserRole(\'' + u.id + '\',\'' + u.role + '\')" title="역할 변경" style="background:none;border:none;cursor:pointer;font-size:14px">&#x270F;&#xFE0F;</button> ';
@@ -1429,6 +1429,14 @@ async function viewDeptMembers(deptId, deptName) {
 }
 
 /* ═══ 감사 로그 UI (admin) ═══ */
+/** v13.435 서버 시각(UTC) → 대한민국 시간 'YYYY-MM-DD HH:MM:SS' (n 글자까지). 브라우저 시간대와 상관없이 KST */
+function _wmKst(v, n) {
+  if (!v) return '';
+  var t = new Date(v).getTime();
+  if (isNaN(t)) return String(v).slice(0, n || 19);
+  return new Date(t + 9 * 3600000).toISOString().slice(0, n || 19).replace('T', ' ');
+}
+
 async function renderAuditLog() {
   if (!currentUser || currentUser.role !== 'admin') return;
 
@@ -1489,7 +1497,7 @@ async function renderAuditLog() {
         var html = '<table style="width:100%;border-collapse:collapse;font-size:12px">';
         html += '<tr style="border-bottom:1px solid var(--bd,#222C44);color:var(--t5,#6070A0)"><th style="padding:6px;text-align:left">시간</th><th style="padding:6px;text-align:left">사용자</th><th style="padding:6px;text-align:left">액션</th><th style="padding:6px;text-align:left">대상</th><th style="padding:6px;text-align:left">IP</th></tr>';
         logs.forEach(function (log) {
-          var time = log.created_at ? log.created_at.slice(0, 19).replace('T', ' ') : '';
+          var time = log.created_at ? _wmKst(log.created_at, 19) : '';
           var user = log.user_name || log.user_email || '-';
           var action = actionLabels[log.action] || log.action;
           var target = (log.target_type || '') + (log.target_id ? ' #' + log.target_id.slice(0, 8) : '');

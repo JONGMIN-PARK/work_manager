@@ -25,8 +25,10 @@ router.get('/', async function (req, res) {
     if (q.userId) { where.push('a.user_id = $' + idx++); params.push(q.userId); }
     if (q.action) { where.push('a.action = $' + idx++); params.push(q.action); }
     if (q.targetType) { where.push('a.target_type = $' + idx++); params.push(q.targetType); }
-    if (q.from) { where.push('a.created_at >= $' + idx++); params.push(q.from); }
-    if (q.to) { where.push('a.created_at <= $' + idx++); params.push(q.to + 'T23:59:59Z'); }
+    // v13.435 날짜 조회는 대한민국 하루 기준 (00:00~23:59:59 KST)
+    var isDay = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v)); };
+    if (q.from) { where.push('a.created_at >= $' + idx++); params.push(isDay(q.from) ? q.from + 'T00:00:00+09:00' : q.from); }
+    if (q.to) { where.push('a.created_at <= $' + idx++); params.push(isDay(q.to) ? q.to + 'T23:59:59.999+09:00' : q.to); }
     if (q.search) {
       where.push('(u.name ILIKE $' + idx + ' OR u.email ILIKE $' + idx + ' OR a.action ILIKE $' + idx + ')');
       params.push('%' + q.search + '%');
