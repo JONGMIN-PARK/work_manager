@@ -1292,8 +1292,9 @@ function _cxBindComposer(taId, wrapId, inThread) {
   var fileIn = wrap.querySelector('[data-c="file"]'), sugg = wrap.querySelector('[data-sugg]'), lastTyping = 0, sel = 0;
   function grow() { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight) + 'px'; }
   if (wrap.offsetWidth && wrap.offsetWidth < 620) ta.placeholder = '메시지 입력';   // v13.373 좁은 대화 칸 — 긴 안내는 두 줄로 꺾임
-  ta.addEventListener('input', function () {
+  ta.addEventListener('input', function (e) {
     grow();
+    if (typeof chatTypeFx === 'function') chatTypeFx(ta, e && e.inputType);   // v13.419 ✨ 쓰는 중 효과
     if (!inThread && !CX.editId) _cxDraftSave(ta.value);
     if (Date.now() - lastTyping > 3000 && ta.value.trim() && ta.value[0] !== '/') { lastTyping = Date.now(); apiFetch('/api/chat/rooms/' + CX.room + '/typing', { method: 'POST', body: '{}' }).catch(function () {}); }
     _suggest();

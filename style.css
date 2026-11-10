@@ -6670,3 +6670,27 @@ html:not([data-cx-depth="0"]) .cxw-b.me{background:linear-gradient(180deg,rgba(2
   .mm-fbar>*{flex:none}
 }
 @media (max-width:600px){ .mm-gt-lhead{background:var(--bg-ps,var(--bg-p))} }
+/* ✨ v13.419 글 쓰는 중 효과 — 입력 줄 테두리에 도는 무지개 빛 · 커서 불꽃 · 보내기 단추 깨어남 */
+@property --cxa{syntax:'<angle>';inherits:false;initial-value:0deg}
+.cx-comp-r{position:relative;isolation:isolate}
+.cx-comp-r::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1.5px;pointer-events:none;opacity:0;transition:opacity .35s ease;z-index:1;
+  background:conic-gradient(from var(--cxa),var(--ac),#A855F7,#EC4899,#F59E0B,#22D3EE,var(--ac));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+  animation:cxRing 2.4s linear infinite;animation-play-state:paused}
+.cx-comp-r.cx-ty::before{opacity:.85;animation-play-state:running}
+.cx-comp-r.cx-ty.fx2::before{opacity:1;padding:2px;animation-duration:1.4s;filter:drop-shadow(0 0 6px color-mix(in srgb,var(--ac) 55%,transparent))}
+.cx-comp-r.cx-ty{box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 12%,transparent),0 8px 24px -14px color-mix(in srgb,var(--ac) 80%,transparent)!important}
+.cx-comp-r.cx-ty.fx2{box-shadow:0 0 0 4px color-mix(in srgb,#A855F7 14%,transparent),0 10px 30px -12px color-mix(in srgb,#EC4899 70%,transparent)!important}
+@keyframes cxRing{to{--cxa:360deg}}
+/* 보내기 — 글이 있으면 깨어나고, 칠 때마다 살짝 튐 */
+.cx-comp-r .cx-send{transition:transform .2s cubic-bezier(.34,1.56,.64,1),opacity .2s,filter .2s}
+/* 비었는지는 placeholder 로 판단 — 보낸 뒤 칸을 비워도(입력 사건 없이) 바로 맞음 */
+.cx-comp-r:has(textarea:not(:placeholder-shown)) .cx-send{opacity:1;transform:scale(1.04)}
+.cx-send.kick{animation:cxKick .28s cubic-bezier(.34,1.56,.64,1)}
+@keyframes cxKick{0%{transform:scale(1.04)}40%{transform:scale(1.14) rotate(-10deg)}100%{transform:scale(1.04)}}
+/* 커서 불꽃 */
+.cx-spark{position:fixed;z-index:10070;border-radius:50%;pointer-events:none;margin:-2px 0 0 -2px;box-shadow:0 0 6px currentColor;animation:cxSpark .62s cubic-bezier(.2,.7,.3,1) forwards}
+.cx-spark.big{animation-duration:.8s}
+@keyframes cxSpark{0%{transform:translate(0,0) scale(1);opacity:1}70%{opacity:.9}100%{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+html[data-cx-tyfx="0"] .cx-comp-r::before{display:none}
+@media (prefers-reduced-motion:reduce){.cx-comp-r::before{animation:none}.cx-send.kick{animation:none}.cx-spark{display:none}}

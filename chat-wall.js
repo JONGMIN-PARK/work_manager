@@ -38,7 +38,8 @@ function _cxwGet() {
   CXW.s = s && typeof s === 'object' ? s : {};
   if (!CXW.s.rooms) CXW.s.rooms = {};
   if (CXW.s.dim == null) CXW.s.dim = 35;
-  if (CXW.s.depth == null) CXW.s.depth = 1;   // v13.399 💎 입체감 0 끄기 · 1 은은하게 · 2 또렷하게
+  if (CXW.s.depth == null) CXW.s.depth = 1;
+  if (CXW.s.tyfx == null) CXW.s.tyfx = 1;   // v13.419 ✨ 입력 효과 0 끄기 · 1 은은하게 · 2 화려하게   // v13.399 💎 입체감 0 끄기 · 1 은은하게 · 2 또렷하게
   return CXW.s;
 }
 function _cxwSave() {
@@ -64,6 +65,7 @@ function chatWallFor(room) { var s = _cxwGet(); return (room && s.rooms[room]) |
 /** 대화 칸에 입힘 — _cxDrawMain 뒤 · 고른 뒤 */
 function chatWallApply() {
   document.documentElement.setAttribute('data-cx-depth', String(_cxwGet().depth));
+  document.documentElement.setAttribute('data-cx-tyfx', String(_cxwGet().tyfx));
   var m = document.getElementById('cxMain'); if (!m) return;
   var k = (typeof CX !== 'undefined' && CX.room) ? chatWallFor(CX.room) : 'dots';
   var css = chatWallCss(k);
@@ -98,6 +100,7 @@ function chatWallModal(scopeRoom) {
     var m = createModal({ id: 'chatWallModal', title: '🎨 대화방 배경', width: '560px', closeOnEsc: true, closeOnOverlay: true,
       html: '<p class="cxw-hint">아래에서 고르면 위 미리보기와 대화방에 바로 바뀝니다 — 닫으면 끝. <b>이 방만</b> 고르면 이 방에만, <b>모든 방</b>은 따로 안 정한 방 전부에.</p>' +
         '<div class="cxw-live" data-live><span class="cxw-b">안녕하세요 👋</span><span class="cxw-b me">내일 회의 10시 맞죠?</span><span class="cxw-b me">자료 올려 둘게요 ✅</span></div>' +
+        '<div class="cxw-depth">✨ 글 쓸 때 효과 <span class="cxw-scope" role="radiogroup">' + ['끄기', '은은하게', '화려하게'].map(function (n, i) { return '<button type="button" data-tyfx="' + i + '">' + n + '</button>'; }).join('') + '</span></div>' +
         '<div class="cxw-depth">💎 말풍선 입체감 <span class="cxw-scope" role="radiogroup">' + ['끄기', '은은하게', '또렷하게'].map(function (n, i) { return '<button type="button" data-depth="' + i + '">' + n + '</button>'; }).join('') + '</span></div>' +
         '<div class="cxw-scope" role="radiogroup">' +
           (room ? '<button type="button" data-scope="room">이 방만</button>' : '') + '<button type="button" data-scope="all">모든 방 (기본)</button></div>' +
@@ -113,6 +116,7 @@ function chatWallModal(scopeRoom) {
     function cur() { return scope === 'room' ? (s.rooms[room] || s.all || 'dots') : (s.all || 'dots'); }
     function paint() {
       box.querySelectorAll('[data-depth]').forEach(function (b) { b.classList.toggle('on', +b.getAttribute('data-depth') === s.depth); });
+      box.querySelectorAll('[data-tyfx]').forEach(function (b) { b.classList.toggle('on', +b.getAttribute('data-tyfx') === s.tyfx); });
       box.querySelectorAll('[data-scope]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-scope') === scope); b.setAttribute('aria-checked', b.getAttribute('data-scope') === scope); });
       var k = cur();
       box.querySelectorAll('.cxw-sw').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-k') === k); });
@@ -135,6 +139,7 @@ function chatWallModal(scopeRoom) {
     }
     box.addEventListener('click', function (e) {
       var dp = e.target.closest('[data-depth]'); if (dp) { s.depth = +dp.getAttribute('data-depth'); _cxwSave(); paint(); return; }
+      var tf = e.target.closest('[data-tyfx]'); if (tf) { s.tyfx = +tf.getAttribute('data-tyfx'); _cxwSave(); paint(); var lt = document.querySelector('.cx-comp-r'); if (lt && s.tyfx && typeof chatTypeFx === 'function') chatTypeFx(lt, 'demo'); return; }
       var sc = e.target.closest('[data-scope]'); if (sc) { scope = sc.getAttribute('data-scope'); paint(); return; }
       var sw = e.target.closest('.cxw-sw');
       if (sw) { var k = sw.getAttribute('data-k'); if (k === 'photo' && !s.photo) { box.querySelector('[data-file]').click(); return; } pick(k); return; }
@@ -156,3 +161,52 @@ function chatWallModal(scopeRoom) {
   }, 'chatWallModal');
 }
 if (typeof window !== 'undefined') { window.chatWallModal = chatWallModal; window.chatWallApply = chatWallApply; }
+
+/* ✨ v13.419 글 쓰는 중 효과 — 입력 칸 테두리에 무지개 빛이 돌고 · 글자를 칠 때마다 커서 자리에서 작은 불꽃이 튐 · 보내기 단추가 깨어남
+ *   🎨 대화방 배경 창의 [✨ 글 쓸 때 효과] 끄기 · 은은하게(기본) · 화려하게 — 움직임 줄이기(OS 설정)면 불꽃 · 빛 돌기 없이 색만 */
+var _cxTyCv = null, _cxTyLast = 0, _cxTyN = 0;
+function _cxTyLevel() { var v = document.documentElement.getAttribute('data-cx-tyfx'); return v == null ? 1 : +v; }
+function _cxTyCaret(ta) {
+  var r = ta.getBoundingClientRect(), cs = getComputedStyle(ta);
+  var pl = parseFloat(cs.paddingLeft) || 0, pr = parseFloat(cs.paddingRight) || 0, pb = parseFloat(cs.paddingBottom) || 0, lh = parseFloat(cs.lineHeight) || 20;
+  var avail = Math.max(20, ta.clientWidth - pl - pr), x = r.left + pl, y = r.bottom - pb - lh / 2;
+  if (ta.selectionEnd === ta.value.length) {
+    if (!_cxTyCv) _cxTyCv = document.createElement('canvas');
+    var g = _cxTyCv.getContext('2d'); g.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+    var line = ta.value.slice(ta.value.lastIndexOf('\n') + 1), w = g.measureText(line).width;
+    x += Math.min(avail, w > avail ? w % avail : w);
+  } else x += avail / 2;
+  return { x: x, y: y };
+}
+function _cxTySpark(x, y, big) {
+  if (document.querySelectorAll('.cx-spark').length > 28) return;
+  var cols = ['var(--ac)', '#A855F7', '#EC4899', '#F59E0B', '#22D3EE', '#34D399'];
+  var n = big ? 3 : 1;
+  for (var i = 0; i < n; i++) {
+    var s = document.createElement('i'); s.className = 'cx-spark' + (big ? ' big' : '');
+    var dx = (Math.random() * 2 - 1) * (big ? 22 : 12), dy = -(10 + Math.random() * (big ? 30 : 18)), sz = (big ? 4 : 3) + Math.random() * 3;
+    s.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + sz + 'px;height:' + sz + 'px;--dx:' + dx + 'px;--dy:' + dy + 'px;background:' + cols[(Math.random() * cols.length) | 0];
+    s.addEventListener('animationend', function () { this.remove(); });
+    document.body.appendChild(s);
+  }
+}
+function chatTypeFx(el, kind) {
+  var lvl = _cxTyLevel(); if (!el) return;
+  var row = el.classList && el.classList.contains('cx-comp-r') ? el : el.closest && el.closest('.cx-comp-r'); if (!row) return;
+  var ta = row.querySelector('textarea'), demo = kind === 'demo';
+  row.classList.toggle('has-text', !!(ta && ta.value.trim()));
+  if (!lvl) { row.classList.remove('cx-ty'); return; }
+  row.classList.add('cx-ty'); row.classList.toggle('fx2', lvl === 2);
+  clearTimeout(row._tyT); row._tyT = setTimeout(function () { row.classList.remove('cx-ty'); }, demo ? 1600 : 900);
+  var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (still) return;
+  var now = Date.now(), ins = demo || !kind || /^insert/.test(kind);
+  if (!ins || !ta) return;
+  var send = row.querySelector('.cx-send');
+  if (send && now - _cxTyLast > 110) { send.classList.remove('kick'); void send.offsetWidth; send.classList.add('kick'); }
+  if (now - _cxTyLast < (lvl === 2 ? 40 : 70)) return;
+  _cxTyLast = now; _cxTyN++;
+  if (lvl === 1 && _cxTyN % 2) return;   // 은은하게 — 두 번에 한 번
+  var c = _cxTyCaret(ta);
+  _cxTySpark(c.x, c.y, lvl === 2 || demo);
+}
