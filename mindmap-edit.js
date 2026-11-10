@@ -818,15 +818,16 @@ function _mmBindCanvas() {
   });
   cv.addEventListener('wheel', function (e) {
     e.preventDefault();
-    if (e.ctrlKey || e.metaKey) {
+    // v13.429 휠 = 확대·축소 (위아래 이동 아님) · Shift+휠 · 터치패드 좌우 밀기 = 좌우 이동 · 위아래 이동은 빈 곳 끌기
+    var horiz = e.shiftKey || (!e.ctrlKey && !e.metaKey && Math.abs(e.deltaX) > Math.abs(e.deltaY));
+    if (!horiz) {
       var r = cv.getBoundingClientRect();
       // 휠 한 칸에 약 5% — 움직인 양에 비례(터치패드 핀치는 더 잘게), 한 번에 크게 튀지 않게 상한
       var dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
       dy = Math.max(-60, Math.min(60, dy));
       _mmZoomAt(Math.exp(-dy * 0.0008), e.clientX - r.left, e.clientY - r.top);
     } else {
-      _mm.panX -= e.shiftKey ? e.deltaY : e.deltaX;
-      _mm.panY -= e.shiftKey ? 0 : e.deltaY;
+      _mm.panX -= e.shiftKey ? (e.deltaY || e.deltaX) : e.deltaX;
       _mmApplyTransform();
     }
   }, { passive: false });
