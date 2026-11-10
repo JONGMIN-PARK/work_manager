@@ -49,6 +49,13 @@ async function flush(key) {
   try {
     var pr = await db.query('SELECT name, order_no FROM projects WHERE id = $1 AND tenant_id = $2', [b.projectId, b.tenantId]);
     if (!pr.rows.length) return; // 그 사이 삭제됨
+    // v13.424 ⑦ 프로젝트 방에도 한 줄 (메신저 카드에서 바꾼 것이면 방에 이미 남았으므로 빼기)
+    if (!b.noChat) {
+      try {
+        var chat = require('../../routes/chat');
+        if (chat.projectNote) await chat.projectNote(b.tenantId, b.projectId, '📁 ' + (b.actorName ? b.actorName + ' 님이 ' : '') + '바꿈 — ' + lines.slice(0, 6).join(' · ') + (lines.length > 6 ? ' 외 ' + (lines.length - 6) + '건' : ''));
+      } catch (e) { console.error('[change-feed] chat', e.message); }
+    }
     await dispatch.notifyProjectStakeholders('project_updated', {
       projectName: pr.rows[0].name,
       orderNo: pr.rows[0].order_no,
@@ -95,6 +102,12 @@ function record(req, projectId, entries) {
   }
 }
 
+/** 메신저 카드에서 처리 → 방에 이미 한 줄 남음. 그 묶음은 프로젝트 방엔 다시 안 올림 (텔레그램 · 알림은 그대로) */
+function quietChat(tenantId, projectId, actorId) {
+  var b = _buf.get(tenantId + ':' + projectId + ':' + (actorId || ''));
+  if (b) b.noChat = true;
+}
+
 /** 대기 중인 묶음을 모두 지금 보낸다 (종료 직전·테스트) */
 function flushAll() {
   return Promise.all(Array.from(_buf.keys()).map(flush));
@@ -107,4 +120,4 @@ function _peek(tenantId, projectId, actorId) {
 }
 function _reset() { _buf.forEach(function (b) { clearTimeout(b.timer); }); _buf.clear(); }
 
-module.exports = { record: record, flushAll: flushAll, lineOf: lineOf, _peek: _peek, _reset: _reset };
+module.exports = { record: record, quietChat: quietChat, flushAll: flushAll, lineOf: lineOf, _peek: _peek, _reset: _reset };

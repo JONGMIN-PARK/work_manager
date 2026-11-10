@@ -1319,6 +1319,7 @@ router.post('/messages/:mid/acted', async function (req, res) {
       hub.publish(await memberIds(room.id), 'upd', await loadMsg(m.id));
     }
     var what = String(b.what || '').replace(/[<>]/g, '').slice(0, 40);
+    if (live.nav && live.nav.projectId) try { require('../services/notification/change-feed').quietChat(req.tenant.id, live.nav.projectId, me(req)); } catch (_) {}   // 방에 이미 한 줄 — 프로젝트 방 소식 겹치지 않게
     await postMessage({ tenantId: req.tenant.id }, room, { kind: 'system', body: (req.user.name || '') + ' 님이 ' + (PEEK_ICON[b.type] || '') + ' "' + String(live.title || '').slice(0, 60) + '" — ' + (what || live.st || '처리'),
       cards: [{ type: b.type, id: String(b.id).slice(0, 100), title: String(live.title || '').slice(0, 200), sub: '' }], replyTo: m.reply_to || null });
     res.json({ data: { live: live } });
@@ -2207,12 +2208,164 @@ router.post('/rooms/:id/share', async function (req, res) {
   } catch (e) { httpErr.serverError(res, '[chat/share]', e); }
 });
 
+/* ─── v13.424 ⑦ 프로젝트 방 자동 소식 · ⑧ ☀️ 아침 브리핑 · ⑩ /meet 빈 시간 ─── */
+/** 프로젝트 방이 있으면 한 줄(시스템) — 없으면 만들지 않음. cards 는 show:true 로 줄 아래에 보임 */
+async function projectNote(tenantId, projectId, body, cards) {
+  try {
+    if (!projectId) return null;
+    var r = await db.query("SELECT * FROM chat_rooms WHERE tenant_id = $1 AND project_id = $2 AND kind = 'project' LIMIT 1", [tenantId, projectId]);
+    if (!r.rows.length) return null;
+    return await postMessage({ tenantId: tenantId }, r.rows[0], { kind: 'system', body: String(body).slice(0, 1500), cards: cards && cards.length ? cards.map(function (c) { return Object.assign({ show: true }, c); }) : null });
+  } catch (e) { console.error('[chat/projectNote]', e.message); return null; }
+}
+/** 나와의 채팅 방 (없으면 만듦) */
+async function selfRoom(tenantId, uid) {
+  var sk = 'self:' + uid;
+  var ex = (await db.query('SELECT * FROM chat_rooms WHERE tenant_id = $1 AND dm_key = $2', [tenantId, sk])).rows[0];
+  if (!ex) {
+    await db.query("INSERT INTO chat_rooms (id, tenant_id, kind, name, dm_key, created_by) VALUES ($1,$2,'group','나와의 채팅',$3,$4) ON CONFLICT DO NOTHING", [rid('grp'), tenantId, sk, uid]);
+    ex = (await db.query('SELECT * FROM chat_rooms WHERE tenant_id = $1 AND dm_key = $2', [tenantId, sk])).rows[0];
+  }
+  await db.query("INSERT INTO chat_members (room_id, user_id, tenant_id, role, pinned) VALUES ($1,$2,$3,'owner',TRUE) ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL", [ex.id, uid, tenantId]); _midDrop(ex.id);
+  return ex;
+}
+/** 하루 한 번 표시 — 처음이면 true (서버 여러 대 · 재시작에도 한 번) */
+async function dailyOnce(k) {
+  var r = await db.query('INSERT INTO chat_daily (k) VALUES ($1) ON CONFLICT DO NOTHING RETURNING k', [String(k).slice(0, 160)]);
+  return r.rows.length > 0;
+}
+/* ⑧ 아침 브리핑 — 오늘 할 일 · 오늘 일정 · 늦은 이슈 · 내 A/S · 이번 주 마감 마일스톤 → 나와의 채팅 */
+async function briefFor(tenantId, uid) {
+  var today = kstToday(), u = (await db.query("SELECT id, name, display_name, role, department_id FROM users WHERE id = $1 AND tenant_id = $2 AND COALESCE(status, 'active') = 'active'", [uid, tenantId])).rows[0];
+  if (!u) return null;
+  var names = [u.name, u.display_name].filter(Boolean), cards = [], L = [], wk = new Date(Date.now() + 9 * 36e5 + 6 * 864e5).toISOString().slice(0, 10);
+  var req = { user: { sub: uid, role: u.role, departmentId: u.department_id }, tenant: { id: tenantId } };
+  var td = (await db.query("SELECT id, title, due_date, due_time FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL AND done_at IS NULL AND due_date IS NOT NULL AND due_date <> '' AND left(due_date::text, 10) <= $3 ORDER BY due_date, due_time NULLS LAST LIMIT 8", [tenantId, uid, today])).rows;
+  var ev = (await db.query("SELECT id, title, start_time, location FROM events WHERE tenant_id = $1 AND start_date <= $2 AND COALESCE(NULLIF(end_date, ''), start_date) >= $2 AND (created_by = $3 OR assignees ?| $4::text[] OR assignees @> to_jsonb(ARRAY[$3::text])) ORDER BY start_time NULLS FIRST LIMIT 8", [tenantId, today, uid, names]).catch(function () { return { rows: [] }; })).rows;
+  var sub = pa.accessibleProjectsSubquery(req, 3);
+  var is = (await db.query("SELECT id, title, status, urgency, due_date FROM issues WHERE tenant_id = $1 AND status IN ('open','inProgress') AND (assignees ?| $2::text[]) AND (project_id IS NULL OR project_id IN (" + sub.sql + ')) ORDER BY (urgency = \'urgent\') DESC, due_date NULLS LAST LIMIT 6', [tenantId, names].concat(sub.params)).catch(function () { return { rows: [] }; })).rows;
+  var as = (await db.query("SELECT DISTINCT a.id, a.ticket_no, a.issue_summary, a.customer_name, a.status, a.priority FROM as_tickets a JOIN as_assignments g ON g.ticket_id = a.id AND g.tenant_id = a.tenant_id WHERE a.tenant_id = $1 AND a.deleted_at IS NULL AND g.assignee_id = $2 AND g.status NOT IN ('completed','cancelled') AND a.status NOT IN ('closed','cancelled') LIMIT 6", [tenantId, uid]).catch(function () { return { rows: [] }; })).rows;
+  var ed = pa.editableProjectsSql(req, 'p', 4);
+  var ms = (await db.query("SELECT m.id, m.name, m.end_date, p.name AS pn FROM milestones m JOIN projects p ON p.id = m.project_id AND p.tenant_id = m.tenant_id WHERE m.tenant_id = $1 AND COALESCE(m.status, '') <> 'done' AND m.end_date IS NOT NULL AND left(m.end_date::text, 10) BETWEEN $2 AND $3 AND COALESCE(p.status, '') <> 'done' AND " + ed.sql + ' ORDER BY m.end_date LIMIT 6', [tenantId, today, wk].concat(ed.params)).catch(function () { return { rows: [] }; })).rows;
+  var late = td.filter(function (x) { return String(x.due_date).slice(0, 10) < today; }).length;
+  L.push('☀️ ' + (u.display_name || u.name) + ' 님, 좋은 아침이에요 — ' + today.slice(5).replace('-', '/') + ' 오늘 챙길 것');
+  L.push('', '✅ 할 일 ' + td.length + (late ? ' (지난 것 ' + late + ')' : '') + ' · 📅 일정 ' + ev.length + ' · 🐞 내 이슈 ' + is.length + ' · 🔧 내 A/S ' + as.length + ' · 🚩 이번 주 마감 ' + ms.length);
+  if (ev.length) { L.push('', '📅 오늘 일정'); ev.forEach(function (e) { L.push('· ' + (e.start_time ? String(e.start_time).slice(0, 5) + ' ' : '') + e.title + (e.location ? ' — ' + e.location : '')); }); }
+  if (ms.length) { L.push('', '🚩 이번 주 마감'); ms.forEach(function (m) { L.push('· ' + String(m.end_date).slice(5, 10).replace('-', '/') + ' ' + m.name + ' (' + m.pn + ')'); }); }
+  if (!td.length && !ev.length && !is.length && !as.length && !ms.length) L.push('', '오늘은 급한 게 없어요 — 좋은 하루 보내세요 🙂');
+  td.slice(0, 4).forEach(function (x) { cards.push({ type: 'todo', id: x.id, title: x.title, sub: String(x.due_date).slice(0, 10) + (x.due_time ? ' ' + x.due_time : ''), nav: { todoId: x.id } }); });
+  is.slice(0, 3).forEach(function (x) { cards.push({ type: 'issue', id: x.id, title: x.title, sub: x.urgency === 'urgent' ? '긴급' : '', status: x.status, urgency: x.urgency, nav: { issueId: x.id } }); });
+  as.slice(0, 3).forEach(function (x) { cards.push({ type: 'as', id: String(x.id), title: x.issue_summary || x.ticket_no, sub: [x.ticket_no, x.customer_name].filter(Boolean).join(' · '), nav: { asId: x.id } }); });
+  var room = await selfRoom(tenantId, uid);
+  return postMessage({ tenantId: tenantId }, room, { kind: 'ai', body: L.join('\n'), cards: cards.length ? cards : null });
+}
+/* ⑦ 내일 마감 마일스톤 → 그 프로젝트 방 */
+async function msDueNotes() {
+  var tmr = new Date(Date.now() + 9 * 36e5 + 864e5).toISOString().slice(0, 10), n = 0;
+  var r = await db.query("SELECT m.id, m.name, m.progress, m.tenant_id, m.project_id FROM milestones m JOIN chat_rooms cr ON cr.project_id = m.project_id AND cr.tenant_id = m.tenant_id AND cr.kind = 'project' WHERE COALESCE(m.status, '') <> 'done' AND left(m.end_date::text, 10) = $1 LIMIT 300", [tmr]).catch(function () { return { rows: [] }; });
+  for (var i = 0; i < r.rows.length; i++) {
+    var m = r.rows[i];
+    if (!await dailyOnce('msdue:' + m.id + ':' + tmr)) continue;
+    await projectNote(m.tenant_id, m.project_id, '🚩 내일 마감 — "' + m.name + '"' + (m.progress != null ? ' · 진행 ' + Math.round(m.progress) + '%' : ''), [{ type: 'milestone', id: String(m.id), title: m.name, sub: '내일 마감', nav: { projectId: m.project_id, tab: 'work' } }]);
+    n++;
+  }
+  return n;
+}
+/** 한 시간마다(chat-timers) — 평일 아침 8시대에만. force 면 지금 (관리자 · 시험) */
+async function dailyRun(force) {
+  var k = new Date(Date.now() + 9 * 36e5), h = k.getUTCHours(), dow = k.getUTCDay(), today = k.toISOString().slice(0, 10);
+  if (!force && (h !== 8 || dow === 0 || dow === 6)) return { skipped: true };
+  var out = { brief: 0, msdue: 0 };
+  var us = await db.query('SELECT user_id, tenant_id FROM chat_user_state WHERE brief_on = TRUE LIMIT 2000').catch(function () { return { rows: [] }; });
+  for (var i = 0; i < us.rows.length; i++) {
+    var x = us.rows[i];
+    try { if (await dailyOnce('brief:' + x.user_id + ':' + today)) { await briefFor(x.tenant_id, x.user_id); out.brief++; } } catch (e) { console.error('[chat/brief]', e.message); }
+  }
+  out.msdue = await msDueNotes();
+  return out;
+}
+router._dailyRun = dailyRun;
+router.get('/brief', async function (req, res) {
+  try { var r = await db.query('SELECT brief_on FROM chat_user_state WHERE user_id = $1', [me(req)]); res.json({ data: { on: !!(r.rows[0] && r.rows[0].brief_on) } }); }
+  catch (e) { httpErr.serverError(res, '[chat/brief]', e); }
+});
+router.put('/brief', async function (req, res) {
+  try {
+    var on = !!(req.body || {}).on;
+    await db.query('INSERT INTO chat_user_state (user_id, tenant_id, brief_on) VALUES ($1,$2,$3) ON CONFLICT (user_id) DO UPDATE SET brief_on = $3, updated_at = now()', [me(req), req.tenant.id, on]);
+    res.json({ data: { on: on } });
+  } catch (e) { httpErr.serverError(res, '[chat/brief-put]', e); }
+});
+router.post('/brief/now', async function (req, res) {
+  try { var m = await briefFor(req.tenant.id, me(req)); res.status(201).json({ data: m }); }
+  catch (e) { httpErr.serverError(res, '[chat/brief-now]', e); }
+});
+router.post('/daily-run', async function (req, res) {
+  try { if (req.user.role !== 'admin') return res.status(403).json({ error: 'FORBIDDEN', message: '관리자만' }); res.json({ data: await dailyRun(true) }); }
+  catch (e) { httpErr.serverError(res, '[chat/daily-run]', e); }
+});
+
+/* ⑩ /meet — 방 사람(또는 @부른 사람)의 달력에서 빈 시간 4개 → 📅 약속 잡기 투표 */
+var MEET_HOURS = ['10:00', '14:00', '11:00', '15:00', '16:00', '09:30', '13:30', '16:30', '09:00', '10:30', '14:30', '15:30', '11:30', '17:00'];
+function hmAdd(hm, min) { var t = +hm.slice(0, 2) * 60 + +hm.slice(3, 5) + min; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); }
+async function meetSlots(tenantId, people, dur, fromDay, days) {
+  var dates = [], d = new Date(fromDay + 'T00:00:00Z');
+  while (dates.length < days) { var w = d.getUTCDay(); if (w !== 0 && w !== 6) dates.push(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() + 1); }
+  var ev = (await db.query("SELECT start_date, COALESCE(NULLIF(end_date, ''), start_date) AS end_date, start_time, end_time, assignees, created_by FROM events WHERE tenant_id = $1 AND start_date <= $3 AND COALESCE(NULLIF(end_date, ''), start_date) >= $2", [tenantId, dates[0], dates[dates.length - 1]]).catch(function () { return { rows: [] }; })).rows;
+  var nowK = new Date(Date.now() + 9 * 36e5), todayK = nowK.toISOString().slice(0, 10), nowHm = nowK.toISOString().slice(11, 16);
+  function busyAt(p, at, from, to) {
+    return ev.some(function (e) {
+      if (String(e.start_date).slice(0, 10) > at || String(e.end_date).slice(0, 10) < at) return false;
+      var as = Array.isArray(e.assignees) ? e.assignees : [];
+      if (!(e.created_by === p.id || as.some(function (a) { var s = String(a && a.name || a).trim(); return s === p.id || p.names.indexOf(s) >= 0; }))) return false;
+      if (!e.start_time || !e.end_time) return true;
+      return String(e.start_time).slice(0, 5) < to && String(e.end_time).slice(0, 5) > from;
+    });
+  }
+  var cands = [];
+  dates.forEach(function (at, di) {
+    MEET_HOURS.forEach(function (from, hi) {
+      var to = hmAdd(from, dur);
+      if (to > '18:00' || (from < '13:00' && to > '12:00')) return;   // 점심(12~13)에 걸치면 빼기
+      if (at === todayK && from <= nowHm) return;
+      var busy = people.filter(function (p) { return busyAt(p, at, from, to); }).map(function (p) { return p.n; });
+      cands.push({ at: at, from: from, to: to, busy: busy, di: di, hi: hi });
+    });
+  });
+  cands.sort(function (a, b) { return a.busy.length - b.busy.length || a.di - b.di || a.hi - b.hi; });
+  var pick = [], perDay = {};
+  [1, 2].forEach(function (cap) { cands.forEach(function (c) { if (pick.length < 4 && (perDay[c.at] || 0) < cap && pick.indexOf(c) < 0 && (!pick.length || c.busy.length <= pick[0].busy.length)) { pick.push(c); perDay[c.at] = (perDay[c.at] || 0) + 1; } }); });
+  if (pick.length < 2) cands.forEach(function (c) { if (pick.length < 4 && pick.indexOf(c) < 0) pick.push(c); });
+  return pick.sort(function (a, b) { return a.at < b.at ? -1 : a.at > b.at ? 1 : a.from < b.from ? -1 : 1; });
+}
+async function meetCommand(req, room, arg, replyTo) {
+  var t = req.tenant.id;
+  var mem = (await db.query('SELECT u.id, u.name, u.display_name FROM chat_members m JOIN users u ON u.id = m.user_id WHERE m.room_id = $1 AND m.left_at IS NULL', [room.id])).rows;
+  var people = mem.map(function (u) { return { id: u.id, n: u.display_name || u.name, names: [u.name, u.display_name].filter(Boolean) }; });
+  var named = people.filter(function (p) { return p.names.some(function (n) { return arg.indexOf('@' + n) >= 0; }); });
+  if (named.length) people = named.concat(people.filter(function (p) { return p.id === me(req) && named.indexOf(p) < 0; }));
+  var dm = /(\d+)\s*(분|시간|h|m)(?![A-Za-z])/.exec(arg), dur = 60;
+  if (dm) dur = /시간|h/.test(dm[2]) ? +dm[1] * 60 : +dm[1];
+  dur = Math.min(Math.max(Math.round(dur / 30) * 30 || 60, 30), 240);
+  var today = kstToday(), from = today, days = 5;
+  if (/다음\s*주/.test(arg)) { var d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7 || 7)); from = d.toISOString().slice(0, 10); }
+  else if (/내일/.test(arg)) { var d2 = new Date(today + 'T00:00:00Z'); d2.setUTCDate(d2.getUTCDate() + 1); from = d2.toISOString().slice(0, 10); days = 3; }
+  var title = arg.replace(/@\S+/g, ' ').replace(/(\d+)\s*(분|시간|h|m)(?![A-Za-z])/, ' ').replace(/다음\s*주|이번\s*주|내일/g, ' ').replace(/\s+/g, ' ').trim() || '회의';
+  var slots = await meetSlots(t, people, dur, from, days);
+  if (slots.length < 2) return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ 빈 시간을 찾지 못했습니다 — 기간이나 길이를 바꿔 보세요', replyTo: replyTo });
+  var opts = slots.map(function (s) { return { id: pollId(), at: s.at, from: s.from, to: s.to, t: s.at + ' ' + s.from + '~' + s.to, busy: s.busy }; });
+  var poll = { q: title + ' (' + (dur % 60 ? dur + '분' : dur / 60 + '시간') + ')', kind: 'time', multi: true, opts: opts, votes: {}, until: null, closed: false, by: me(req), meet: { people: people.map(function (p) { return p.n; }), dur: dur } };
+  return postMessage({ tenantId: t }, room, { userId: me(req), kind: 'text', body: '📅 약속 잡기: ' + poll.q + ' — ' + people.map(function (p) { return p.n; }).join(', ') + ' 의 달력에서 빈 시간 ' + opts.length + '개', poll: poll, replyTo: replyTo });
+}
+
 /* ─── / 명령 ─── */
 var HELP = [
   '/todo 내용 — 내 할 일로 (예: /todo 내일 15:00 견적 회신 !)',
   '/issue 제목 — 이 프로젝트에 이슈 올리기 (프로젝트 방)',
   '/ai 질문 — 내가 볼 수 있는 데이터로 AI 가 답함 (예: /ai 이번 주 지연 이슈)',
-  '/요약 — 이 방 최근 대화를 AI 가 정리 (결정 · 할 일 · 남은 질문)'
+  '/요약 — 이 방 최근 대화를 AI 가 정리 (결정 · 할 일 · 남은 질문)',
+  '/정리 — 정한 것 · 할 일 뽑아 등록 · 확인 요청',
+  '/meet 제목 [30분|1시간] [@사람] [내일|다음주] — 달력에서 빈 시간 4개 찾아 약속 잡기'
 ].join('\n');
 async function runCommand(req, room, body, replyTo) {
   var m = /^\/(\S+)\s*([\s\S]*)$/.exec(body); if (!m) return null;
@@ -2235,6 +2388,7 @@ async function runCommand(req, room, body, replyTo) {
       [iid, room.project_id, urgent ? 'urgent' : 'normal', kstToday(), ttl, '💬 메신저 프로젝트 방에서 올림', me(req), JSON.stringify(['메신저']), t]);
     return self('🐞 이슈를 올렸습니다', 'text', [{ type: 'issue', id: iid, title: ttl, sub: urgent ? '긴급' : '', status: 'open', urgency: urgent ? 'urgent' : 'normal', nav: { issueId: iid } }]);
   }
+  if (cmd === 'meet' || cmd === '약속' || cmd === '회의') return meetCommand(req, room, arg, replyTo);   // v13.424 ⑩
   if (cmd === 'ai' || cmd === '요약' || cmd === 'summary') {
     var ai = require('../lib/ai-usage');
     var quota = await ai.checkQuota(t);
@@ -2242,13 +2396,17 @@ async function runCommand(req, room, body, replyTo) {
     if (!ai.takeHourly(me(req))) return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ AI 질문 한도(시간당 60회)를 넘었습니다', replyTo: replyTo });
     await self(body);
     hub.publish(await memberIds(room.id), 'typing', { roomId: room.id, userId: 'ai', name: 'AI' });
-    var text = '';
+    var text = '', aiCards = null;
     try {
       if (cmd === 'ai') {
         if (!arg) return postMessage({ tenantId: t }, room, { kind: 'system', body: '✏️ /ai 다음에 질문을 적어 주세요', replyTo: replyTo });
         var out = await require('../services/ai.service').answerWeb(arg.slice(0, 1000), { userId: me(req), role: req.user.role, departmentId: req.user.departmentId || null, tenantId: t, name: req.user.name || '사용자' }, { history: [] });
         if (!out) return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ AI 가 설정되지 않았습니다', replyTo: replyTo });
         text = out.answer || '';
+        // v13.424 ⑨ 답에 쓴 근거 → 카드 (누르면 그 화면 · 지금 상태 줄)
+        aiCards = (out.sources || []).filter(function (s) { return s.cited && s.id != null && ['project', 'milestone', 'issue', 'order', 'as'].indexOf(s.type) >= 0; }).slice(0, 5)
+          .map(function (s) { return { type: s.type, id: String(s.id), title: String(s.title || '').slice(0, 200), sub: String(s.sub || '').slice(0, 200), nav: s.nav || null }; });
+        if (!aiCards.length) aiCards = null;
         await ai.logUsage(t, me(req), arg, out.provider);
       } else {
         var n = Math.min(Math.max(parseInt(arg, 10) || 80, 10), 200);
@@ -2263,7 +2421,7 @@ async function runCommand(req, room, body, replyTo) {
     } catch (e) {
       return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ AI 응답 실패: ' + (e.message || e), replyTo: replyTo });
     }
-    return postMessage({ tenantId: t }, room, { kind: 'ai', body: text.slice(0, MAX_BODY), replyTo: replyTo });
+    return postMessage({ tenantId: t }, room, { kind: 'ai', body: text.slice(0, MAX_BODY), cards: aiCards, replyTo: replyTo });
   }
   return null;   // 모르는 명령 — 그냥 글로
 }
@@ -2277,5 +2435,6 @@ router.get('/unread-count', async function (req, res) {
 
 module.exports = router;
 module.exports.postMessage = postMessage;
+module.exports.projectNote = projectNote;
 module.exports.dmRoom = dmRoom;
 module.exports.membership = membership;

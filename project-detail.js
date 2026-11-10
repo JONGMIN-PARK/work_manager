@@ -101,6 +101,7 @@ function _pdDetailHeaderHtml(proj, stInfo) {
           _pdMoreItem('👥 공유 관리', 'showProjectShareModal(\'' + idA + '\')', 'pd-edit-only') +
           _pdMoreItem('📄 복사', 'showProjectCopyModal(\'' + idA + '\')', '') +
           _pdMoreItem('💬 프로젝트 방 (메신저)', 'chatOpenProject(\'' + idA + '\')', '') +
+          (typeof chatShareRef === 'function' ? _pdMoreItem('📤 대화로 보내기', 'chatShareRef(\'project\',\'' + idA + '\')', '') : '') +
           _pdMoreItem('✈️ 텔레그램 그룹방', 'pdTgGroupModal(\'' + idA + '\')', '') +
           _pdMoreItem('🔁 소유권 이관', 'showProjectTransferModal(\'' + idA + '\')', 'pd-edit-only') +
           _pdMoreItem('🗑 삭제', _PD_CLOSE_JS + ';deleteProjectUI(\'' + idA + '\')', 'pd-edit-only', true) +

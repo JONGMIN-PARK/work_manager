@@ -95,7 +95,8 @@ function _mwpRender(p) {
   // 바로 하기 줄 — 집중 · 원래 화면
   h += '<div class="mwp-acts">' +
     (_mw.data.self && !it.done ? '<button class="mwp-chip' + (it.focus ? ' on' : '') + '" data-p="focus">' + (it.focus ? '★ 오늘 집중' : '☆ 오늘 집중') + '</button>' : '') +
-    (!todo ? '<button class="mwp-chip" data-p="source">↗ ' + _mwEsc(s.label) + ' 화면에서 열기</button>' : '') + '</div>';
+    (!todo ? '<button class="mwp-chip" data-p="source">↗ ' + _mwEsc(s.label) + ' 화면에서 열기</button>' : '') +
+    (typeof chatShareRef === 'function' && ['todo', 'issue', 'milestone', 'as', 'project'].indexOf(it.src) >= 0 && (it.src !== 'todo' || todo) ? '<button class="mwp-chip" data-p="share" onclick="chatShareRef(\'' + it.src + '\',\'' + String(it.id).replace(/[^\w.:-]/g, '') + '\')">💬 대화로 보내기</button>' : '') + '</div>';
   // 중요도
   h += '<div class="mwp-sec"><div class="mwp-l">중요도' + (!todo && it.canPri ? ' <i>' + _mwEsc(s.label) + '에도 반영</i>' : '') + '</div>' +
     (it.canPri && !it.done ? '<div class="mwp-seg" data-g="pri">' + [1, 2, 3, 4].map(function (v) {

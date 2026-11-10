@@ -608,6 +608,7 @@ function showIssueDetail(id) {
     h += '<div style="font-size:10px;color:var(--t5);margin-top:4px">' + projLinkHtml + (iss.orderNo ? ' (' + eH(iss.orderNo) + ')' : '') + '</div>';
     h += '</div>';
     h += '<div style="display:flex;gap:6px;flex-shrink:0">';
+    if (typeof chatShareRef === 'function') h += '<button onclick="chatShareRef(\'issue\',\'' + safeId + '\')" title="메신저 대화로 보내기 — 카드로 붙음" style="font-size:10px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3);cursor:pointer;padding:4px 8px">💬 보내기</button>';
     h += '<button onclick="showIssueModal(\'' + safeId + '\')" style="font-size:10px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i);color:var(--t3);cursor:pointer;padding:4px 8px">편집</button>';
     h += '<button onclick="document.getElementById(\'issueDetailPanel\').remove()" style="font-size:16px;border:none;background:none;color:var(--t5);cursor:pointer">✕</button>';
     h += '</div></div>';

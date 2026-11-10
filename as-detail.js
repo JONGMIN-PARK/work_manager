@@ -68,6 +68,7 @@ function _asRenderDetail(t, CAT) {
   h += '<div style="margin-top:2px;font-size:11px;color:var(--t5)">' + _asEsc(ct.icon || '') + ' ' + _asEsc(ct.label) + ' · ' + _asFmtDT(t.receivedAt) + '</div>';
   h += '</div>';
   h += '<div class="asd-hbtn" style="display:flex;gap:6px;align-items:flex-start">';
+  if (typeof chatShareRef === 'function') h += '<button onclick="chatShareRef(\'as\',\'' + _asEsc(t.id) + '\')" title="메신저 대화로 보내기 — 카드로 붙음" style="font-size:11px;padding:6px 12px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer">💬 대화로 보내기</button>';
   h += '<button onclick="showASModal(\'' + _asEsc(t.id) + '\')" style="font-size:11px;padding:6px 12px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-i);color:var(--t3);cursor:pointer">✏️ 접수 편집</button>';
   if (!t.linkedIssueId) {
     h += '<button onclick="asTriggerLinkIssue(\'' + _asEsc(t.id) + '\')" style="font-size:11px;padding:6px 12px;border:1px solid #6366F1;border-radius:6px;background:transparent;color:#6366F1;cursor:pointer" title="이 A/S를 이슈관리에 자동 등록">🎫 이슈로 등록</button>';

@@ -154,7 +154,7 @@ function makeCtx(actor) {
     if (c.seen[sk]) return '[' + c.seen[sk] + '] ';
     var key = prefix + (++c.seq[prefix]);
     c.seen[sk] = key;
-    c.sources.push({ key: key, type: type, title: title || '', sub: sub || '', nav: nav });
+    c.sources.push({ key: key, type: type, id: id, title: title || '', sub: sub || '', nav: nav });
     return '[' + key + '] ';
   };
   c.add = function (head, lines) { if (lines && lines.length) c.sections.push('[' + head + ']\n' + lines.join('\n')); };

@@ -6900,3 +6900,25 @@ html[data-cx-tyfx="0"] .cx-comp-r::before{display:none}
   .cw-td{grid-template-columns:auto 1fr 1fr}
   .cw-foot .wm-pri{width:100%;justify-content:center}
 }
+
+/* ═══ v13.424 💬 대화로 보내기 · 프로젝트 방 소식 카드 · 아침 브리핑 ═══ */
+.cw-share-c{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:-4px 0 12px;border-radius:10px;border:1px solid var(--bd);border-left:3px solid var(--ac);background:var(--bg-i)}
+.cw-share-c>span:last-child{display:flex;flex-direction:column;min-width:0}
+.cw-share-c b{font-size:13px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cw-share-c i{font-style:normal;font-size:11.5px;color:var(--t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cw-share-q{width:100%;box-sizing:border-box;font-size:13px;margin-bottom:6px}
+.cw-share-l{max-height:min(300px,40vh);overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
+.cw-share-l .cx-ctx-h{margin:6px 2px 2px}
+.cw-share-i{display:flex;align-items:center;gap:9px;width:100%;padding:7px 9px;border:1px solid transparent;border-radius:9px;background:none;font:inherit;text-align:left;cursor:pointer;color:var(--t2)}
+.cw-share-i:hover{background:var(--bg-hv)}
+.cw-share-i.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 9%,transparent)}
+.cw-share-i b{font-size:13px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cw-share-i i{font-style:normal;font-size:11.5px;color:var(--t5);margin-left:auto}
+.cw-share-av{flex:none;width:28px;height:28px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;background:var(--bg-i);font-size:14px}
+.cw-share-m{width:100%;box-sizing:border-box;font-size:13px;resize:vertical;font-family:inherit;line-height:1.5}
+.cw-open-tip{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:100000;display:flex;align-items:center;gap:12px;padding:9px 10px 9px 16px;border-radius:12px;background:var(--t1);color:var(--bg-p);font-size:13px;box-shadow:0 10px 30px -8px rgba(0,0,0,.45);animation:cxPopIn .18s ease-out}
+.cw-open-tip button{border:0;border-radius:8px;padding:6px 12px;background:var(--ac);color:#fff;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.cx-sys-m{justify-content:center;margin:-2px 0 8px}
+.cx-sys-m .cx-col{align-items:center}
+.cx-sys-cards{min-width:260px;max-width:360px}
+.cx-sys-cards .cx-card{box-shadow:none;border:1px solid var(--bd);border-left:3px solid var(--ac)}

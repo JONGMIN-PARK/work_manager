@@ -74,6 +74,7 @@ function start() {
   hourly = setInterval(function () {
     loadDue().catch(function (e) { console.error('[chat-timers] load', e.message); });
     nudgeStaleRequests().catch(function (e) { console.error('[chat-timers] nudge', e.message); });
+    try { var dr = require('../routes/chat')._dailyRun; if (dr) dr().catch(function (e) { console.error('[chat-timers] daily', e.message); }); } catch (e) {}   // v13.424 ☀️ 아침 브리핑 · 🚩 내일 마감 (평일 8시대)
     try { var ak = require('../routes/chat')._ackNudge; if (ak) ak().catch(function (e) { console.error('[chat-timers] ack', e.message); }); } catch (e) {}   // v13.381 ✔ 확인 요청 아침 알림
   }, 3600000);
   if (hourly.unref) hourly.unref();

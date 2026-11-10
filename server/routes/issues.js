@@ -103,6 +103,8 @@ router.post('/', rbac.checkPermission('issue.create'), async function (req, res)
        req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: r.rows[0] });
+    // v13.424 ⑦ 프로젝트 방에 소식 (메신저에서 만든 것은 거기 이미 카드가 붙음)
+    if (newPid && !b.fromChat) { var i0 = r.rows[0]; require('./chat').projectNote(req.tenant.id, newPid, '🐞 새 이슈' + (i0.urgency === 'urgent' ? ' (긴급)' : '') + ' — ' + i0.title + ' (' + (req.user.name || '') + ')', [{ type: 'issue', id: i0.id, title: i0.title, sub: i0.urgency === 'urgent' ? '긴급' : '', status: i0.status, urgency: i0.urgency, nav: { issueId: i0.id } }]); }
 
     // 텔레그램 알림: 이슈 배정
     try {

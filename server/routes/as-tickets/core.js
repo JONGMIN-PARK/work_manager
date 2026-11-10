@@ -154,6 +154,8 @@ router.post('/', async function (req, res) {
     }
     res.status(201).json({ data: r.rows[0] });
     _invalidateStatsCache(req.tenant.id);
+    // v13.424 ⑦ 프로젝트 방에 소식 (메신저에서 만든 것은 거기 이미 카드가 붙음)
+    if (r.rows[0].project_id && !b.fromChat) { var a0 = r.rows[0]; require('../chat').projectNote(req.tenant.id, a0.project_id, '🔧 A/S 접수 — ' + (a0.customer_name || '') + ' · ' + (a0.issue_summary || '') + ' (' + (req.user.name || '') + ')', [{ type: 'as', id: String(a0.id), title: a0.issue_summary || a0.ticket_no, sub: [a0.ticket_no, a0.customer_name].filter(Boolean).join(' · '), nav: { asId: a0.id } }]); }
 
     // 장비/컨택 마스터 자동 upsert (비동기, 실패 시 무시) — A1: 자연 누적
     var created = r.rows[0];

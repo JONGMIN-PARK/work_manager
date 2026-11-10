@@ -68,10 +68,10 @@ function _cwCreate(m, kind, box, md, btn) {
   var v = _cwVals(box), req;
   if (kind === 'issue') {
     if (!v.title) return _cxToast('제목을 적어 주세요', 'warn');
-    req = ['/api/issues', { title: v.title, description: v.description + '\n\n💬 메신저 대화에서 — ' + (m.userName || ''), urgency: v.urgent ? 'urgent' : 'normal', status: 'open', dueDate: v.dueDate || null, projectId: v.projectId || null, reportDate: _cwToday(), tags: ['메신저'] }];
+    req = ['/api/issues', { title: v.title, description: v.description + '\n\n💬 메신저 대화에서 — ' + (m.userName || ''), urgency: v.urgent ? 'urgent' : 'normal', status: 'open', dueDate: v.dueDate || null, projectId: v.projectId || null, reportDate: _cwToday(), tags: ['메신저'], fromChat: true }];
   } else if (kind === 'as') {
     if (!v.customerName || !v.issueSummary) return _cxToast('고객사 · 증상은 꼭 적어 주세요', 'warn');
-    req = ['/api/as-tickets', { customerName: v.customerName, siteLine: v.siteLine, equipmentModel: v.equipmentModel, serialNo: v.serialNo, issueSummary: v.issueSummary, reproduction: v.reproduction, priority: v.priority, projectId: v.projectId || null }];
+    req = ['/api/as-tickets', { customerName: v.customerName, siteLine: v.siteLine, equipmentModel: v.equipmentModel, serialNo: v.serialNo, issueSummary: v.issueSummary, reproduction: v.reproduction, priority: v.priority, projectId: v.projectId || null, fromChat: true }];
   } else {
     if (!v.title || !v.startDate) return _cxToast('제목 · 날짜를 적어 주세요', 'warn');
     req = ['/api/events', { title: v.title, type: 'etc', startDate: v.startDate, endDate: v.startDate, startTime: v.startTime || null, endTime: v.endTime || null, location: v.location, projectIds: v.projectId ? [v.projectId] : [], memo: '💬 메신저 대화에서 — ' + (m.userName || '') }];
@@ -146,4 +146,82 @@ function _cwRegister(room, list, myName, btn, md) {
     _cxToast('✅ 내 할 일 ' + mine.length + ' · 확인 요청 ' + others.length + (ok < rs.length ? ' · 실패 ' + (rs.length - ok) : ''), ok < rs.length ? 'warn' : 'success');
     if (ok) md.close(); else btn.disabled = false;
   });
+}
+
+/* ⑥ 사이트 → 대화 (v13.424) — 프로젝트 · 이슈 · A/S · 할 일 · 마일스톤 화면의 "💬 대화로 보내기"
+ *   방(최근 순) · 사람 찾기 → 한마디 덧붙여 카드로 보냄 → "대화 열기" */
+function chatShareRef(type, id, title, sub) {
+  if (!id) return;
+  var card = { type: type, id: String(id), title: title || '', sub: sub || '' };
+  if (card.title) return chatShareTo(card);
+  apiFetch('/api/chat/peek', { method: 'POST', body: JSON.stringify({ refs: [{ type: type, id: id }] }) }).then(function (r) {
+    var L = r.data && r.data.live && r.data.live[type + ':' + id];
+    if (!L) return _cxToast('볼 수 없는 항목입니다', 'warn');
+    card.title = L.title; card.sub = L.sub || ''; card.nav = L.nav || null;
+    chatShareTo(card);
+  }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
+}
+function chatShareTo(card) {
+  return wmGuardedModal('chatShare', function () {
+    var md = createModal({ id: 'chatShareModal', title: '💬 대화로 보내기', width: '460px', closeOnEsc: true, closeOnOverlay: true,
+      html: '<div class="cw-share-c"><span class="cx-card-i">' + ((typeof CX_ICON !== 'undefined' && CX_ICON[card.type]) || '🔗') + '</span><span><b>' + _cwE(card.title) + '</b><i>' + _cwE(card.sub || '') + '</i></span></div>' +
+        '<input class="wr-inp cw-share-q" data-q placeholder="방 · 사람 찾기" aria-label="방 · 사람 찾기"><div class="cw-share-l" data-l><div class="cw-wait"><i class="cw-spin"></i>방 목록…</div></div>' +
+        '<textarea class="wr-inp cw-share-m" data-m rows="2" placeholder="한마디 덧붙이기 (없어도 됨) — 예: 이거 확인 부탁해요"></textarea>' +
+        '<div class="cw-foot"><span class="cw-hint" data-pick>보낼 곳을 고르세요</span><button type="button" class="wm-sec" data-x>취소</button><button type="button" class="wm-pri" data-go disabled>보내기</button></div>' });
+    var box = md.box, rooms = [], users = [], pick = null;
+    Promise.all([apiFetch('/api/chat/rooms').catch(function () { return { data: [] }; }), apiFetch('/api/chat/users').catch(function () { return { data: [] }; })]).then(function (rs) {
+      rooms = (rs[0].data || []).filter(function (r) { return r.myRole !== 'readonly'; });
+      users = (rs[1].data || []).filter(function (u) { return !u.me && u.id !== _cxMe(); });
+      draw(box.querySelector('[data-q]').value);
+    });
+    function draw(q) {
+      q = q.trim().toLowerCase();
+      var rl = rooms.filter(function (r) { return !q || String(r.name || '').toLowerCase().indexOf(q) >= 0; }).slice(0, q ? 20 : 8);
+      var have = {}; rooms.forEach(function (r) { if (r.peerId) have[r.peerId] = 1; });
+      var ul = q ? users.filter(function (u) { return !have[u.id] && (String(u.name || '') + ' ' + String(u.dept || '')).toLowerCase().indexOf(q) >= 0; }).slice(0, 8) : [];
+      box.querySelector('[data-l]').innerHTML = ((rl.length ? '<div class="cx-ctx-h">' + (q ? '방' : '최근 대화') + '</div>' + rl.map(function (r) { return '<button type="button" class="cw-share-i' + (pick && pick.room === r.id ? ' on' : '') + '" data-room="' + _cwE(r.id) + '"><span class="cw-share-av">' + (r.self ? '📝' : r.kind === 'project' ? '📁' : r.kind === 'dm' ? '👤' : '👥') + '</span><b>' + _cwE(r.name || '대화') + '</b></button>'; }).join('') : '') +
+        (ul.length ? '<div class="cx-ctx-h">사람 (새 1:1)</div>' + ul.map(function (u) { return '<button type="button" class="cw-share-i' + (pick && pick.user === u.id ? ' on' : '') + '" data-user="' + _cwE(u.id) + '"><span class="cw-share-av">👤</span><b>' + _cwE(u.name) + '</b><i>' + _cwE(u.dept || '') + '</i></button>'; }).join('') : '')) ||
+        '<div class="cw-none">없음</div>';
+    }
+    box.querySelector('[data-q]').addEventListener('input', function () { draw(this.value); });
+    box.querySelector('[data-l]').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-room],[data-user]'); if (!b) return;
+      pick = b.dataset.room ? { room: b.dataset.room, name: b.querySelector('b').textContent } : { user: b.dataset.user, name: b.querySelector('b').textContent };
+      box.querySelectorAll('.cw-share-i').forEach(function (x) { x.classList.toggle('on', x === b); });
+      box.querySelector('[data-pick]').textContent = '→ ' + pick.name;
+      box.querySelector('[data-go]').disabled = false;
+    });
+    box.querySelector('[data-x]').onclick = md.close;
+    box.querySelector('[data-go]').onclick = function () {
+      var btn = this; if (!pick) return; btn.disabled = true;
+      var roomP = pick.room ? Promise.resolve(pick.room) : apiFetch('/api/chat/rooms', { method: 'POST', body: JSON.stringify({ kind: 'dm', userId: pick.user }) }).then(function (r) { return r.data.id; });
+      roomP.then(function (rid) {
+        return apiFetch('/api/chat/rooms/' + encodeURIComponent(rid) + '/messages', { method: 'POST', body: JSON.stringify({ body: box.querySelector('[data-m]').value.trim(), cards: [card] }) }).then(function () { return rid; });
+      }).then(function (rid) {
+        md.close();
+        _cwOpenToast(rid, pick.name);
+      }).catch(function (e) { btn.disabled = false; _cxToast(_cxErr(e), 'error'); });
+    };
+    setTimeout(function () { var q = box.querySelector('[data-q]'); if (q) q.focus(); }, 30);
+  }, 'chatShareModal');
+}
+function _cwOpenToast(rid, name) {
+  var old = document.getElementById('cwOpenTip'); if (old) old.remove();
+  var t = document.createElement('div'); t.id = 'cwOpenTip'; t.className = 'cw-open-tip'; t.setAttribute('role', 'status');
+  t.innerHTML = '<span>💬 ' + _cwE(name) + ' 에 보냈습니다</span><button type="button">대화 열기</button>';
+  t.querySelector('button').onclick = function () { t.remove(); if (typeof setPage === 'function') setPage('messages'); if (typeof chatOpenRoom === 'function') chatOpenRoom(rid); };
+  document.body.appendChild(t);
+  setTimeout(function () { if (t.parentNode) t.remove(); }, 7000);
+}
+/* ⑧ ☀️ 아침 브리핑 — 🔔 메뉴에서 켜기 · 지금 받아 보기 */
+function chatBriefToggle(on) {
+  return apiFetch('/api/chat/brief', { method: 'PUT', body: JSON.stringify({ on: on }) }).then(function () {
+    _cxToast(on ? '☀️ 평일 아침 8시대에 "나와의 채팅"으로 브리핑을 보내 드려요' : '아침 브리핑을 껐습니다', 'success');
+  }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
+}
+function chatBriefNow() {
+  return apiFetch('/api/chat/brief/now', { method: 'POST', body: '{}' }).then(function (r) {
+    var rid = r.data && r.data.roomId;
+    if (rid && typeof chatOpenRoom === 'function') { if (typeof setPage === 'function') setPage('messages'); chatOpenRoom(rid); }
+  }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
 }

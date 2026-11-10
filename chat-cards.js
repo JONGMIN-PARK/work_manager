@@ -78,7 +78,7 @@ function _cxcPeek() {
   for (var i = list.length - 1; i >= 0; i--) {
     var m = list[i]; if (!m || m.deleted) continue;
     (m.cards || []).forEach(function (c) {
-      if (CXC_TYPES.indexOf(c.type) < 0) return;
+      if (CXC_TYPES.indexOf(c.type) < 0 || (m.kind === 'system' && !c.show)) return;
       var k = _cxcKey(c), L = CX.live[k];
       if (seen[k] || (L && (L.f || now - L.t < CXC_TTL))) return;
       seen[k] = 1; refs.push({ type: c.type, id: c.id });

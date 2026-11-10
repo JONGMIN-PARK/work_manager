@@ -185,7 +185,8 @@ function _cxaBanner(el) {
   });
 }
 function chatAlertMenu(btn) {
-  _cxaPushState(true).then(function (st) {
+  Promise.all([_cxaPushState(true), typeof chatBriefToggle === 'function' ? apiFetch('/api/chat/brief').catch(function () { return null; }) : null]).then(function (rs) {
+    var st = rs[0], bOn = !!(rs[1] && rs[1].data && rs[1].data.on);
     var lab = { on: '✅ 켜짐', off: '꺼짐', denied: '⛔ 막힘 (설정에서 허용)', 'ios-install': '홈 화면 앱에서만', unsupported: '이 브라우저는 안 됨', desktop: 'PC 앱 — 윈도우 알림' }[st] || st;
     var items = [
       [(CXA.set.sound ? '✅' : '⬜') + ' 🔊 새 메시지 소리', function () { CXA.set.sound = !CXA.set.sound; _cxaSave(); if (CXA.set.sound) chatAlertSound('dm'); _cxToast(CXA.set.sound ? '🔊 소리를 켰습니다' : '🔇 소리를 껐습니다', 'info'); }],
@@ -199,6 +200,8 @@ function chatAlertMenu(btn) {
       }],
       st === 'on' && typeof wmPushTest === 'function' ? ['🔔 시험 알림 보내기', wmPushTest] : null,
       ['🔑 키워드 알림' + (CX.kw && CX.kw.length ? ' (' + CX.kw.length + ')' : '') + '…', chatKeywordModal],
+      typeof chatBriefToggle === 'function' ? [(bOn ? '✅' : '⬜') + ' ☀️ 아침 브리핑 (평일 8시)', function () { chatBriefToggle(!bOn); }] : null,   // v13.424 ⑧
+      typeof chatBriefNow === 'function' ? ['☀️ 지금 브리핑 받아 보기', chatBriefNow] : null,
       typeof chatWallModal === 'function' ? ['🎨 대화방 배경…', function () { chatWallModal(false); }] : null
     ].filter(Boolean);
     _cxMenu(btn, items);
