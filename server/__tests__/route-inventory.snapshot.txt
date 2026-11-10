@@ -171,6 +171,7 @@ GET /api/custom-fields/definitions
 GET /api/custom-fields/values/:entityType/:entityId
 GET /api/data-export/access-report
 GET /api/data-export/audit
+GET /api/data-export/backups
 GET /api/data-export/full
 GET /api/data-export/retention
 GET /api/data-export/users
@@ -464,6 +465,7 @@ POST /api/chat/scheduled/:sid/now
 POST /api/checklists
 POST /api/comments
 POST /api/custom-fields/definitions
+POST /api/data-export/backups/download
 POST /api/departments
 POST /api/dev-items
 POST /api/docs/files

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * DB 백업 스크립트
+ * DB 백업 스크립트 (옛 방식 · 개발용) — 운영 백업은 v13.431 부터 .github/workflows/db-backup.yml (pg_dump 전체 → GCS). docs/BACKUP.md
  * - CLI: `node scripts/backup-db.js [--output ./backups]`
  * - 모듈: `require('./backup-db').runBackup({ outDir, retentionDays })`
  *   → Promise<{ filePath, tableRows, cleanedCount, retentionDays }>

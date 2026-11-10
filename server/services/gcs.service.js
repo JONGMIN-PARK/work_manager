@@ -118,7 +118,30 @@ async function ensureCors(origin) {
   } catch (e) { console.warn('[GCS] CORS 확인 실패(직접 올리기가 막히면 버킷 CORS 에 ' + origin + ' PUT 허용 필요):', e.message); }
 }
 
+/* v13.431 DB 백업 — 로컬 파일을 그대로 올림(큰 파일은 나눠서) · 접두어 아래 목록 · 작은 글 파일 읽기 */
+async function uploadFile(key, localPath, mimeType) {
+  _init();
+  if (!_bucket) throw _initErr || new Error('GCS not enabled');
+  var size = require('fs').statSync(localPath).size;
+  await _bucket.upload(localPath, { destination: key, resumable: size > 8 * 1024 * 1024, contentType: mimeType || 'application/octet-stream' });
+}
+async function listObjects(prefix) {
+  _init();
+  if (!_bucket) throw _initErr || new Error('GCS not enabled');
+  var r = await _bucket.getFiles({ prefix: prefix, autoPaginate: true });
+  return (r[0] || []).map(function (f) { var m = f.metadata || {}; return { key: f.name, size: +(m.size || 0), updated: m.updated || m.timeCreated || null }; });
+}
+async function readText(key) {
+  _init();
+  if (!_bucket) throw _initErr || new Error('GCS not enabled');
+  try { var r = await _bucket.file(key).download(); return r[0].toString('utf8'); }
+  catch (e) { if (e && e.code === 404) return null; throw e; }
+}
+
 module.exports = {
+  uploadFile: uploadFile,
+  listObjects: listObjects,
+  readText: readText,
   createResumable: createResumable,
   objectSize: objectSize,
   ensureCors: ensureCors,

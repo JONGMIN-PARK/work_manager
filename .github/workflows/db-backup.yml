@@ -1,0 +1,153 @@
+# DB 전체 백업 (v13.431) — 매일 03:30 KST
+#   1) pg_dump 로 운영 DB(Neon) 전체를 한 파일로 (모든 테이블 · 이미지 · bytea 파일 칸 · 구조까지)
+#   2) 시험 DB(이 작업 안의 postgres)에 실제로 복원해 보고 테이블별 행 수를 원본과 맞춰 봄
+#   3) GCS 버킷의 backups/db/ 에 올리고 30일 지난 것은 정리 · latest.json 에 결과 기록 (⚙️ 관리 → 백업 현황)
+# 실패하면 GitHub 가 저장소 주인에게 메일을 보낸다.
+#
+# 필요한 저장소 Secrets (Settings → Secrets and variables → Actions):
+#   BACKUP_DATABASE_URL — Neon 연결 주소 (Render 의 DATABASE_URL 그대로 붙여도 됨: '-pooler' 는 여기서 직접 연결로 바꾼다)
+#   GCS_SA_KEY          — Render 의 GCS_SA_KEY 와 같은 값 (서비스계정 JSON 을 base64)
+#   GCS_BUCKET          — 예: work-manager-docs
+#   GCS_PROJECT_ID      — 예: gcalcli-488210
+# 복원 절차: docs/BACKUP.md
+
+name: DB backup
+
+on:
+  schedule:
+    - cron: '30 18 * * *'   # 18:30 UTC = 03:30 KST
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '시험 실행 — 운영 DB 대신 작은 시험 DB 를 백업 (설정 확인용)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      CHECK_URL: postgres://postgres:pw@localhost:5432
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: PostgreSQL 18 도구 설치 (새 버전 pg_dump 는 옛 버전 DB 도 백업 가능)
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -qq postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+
+      - name: 백업할 DB 정하기
+        env:
+          SRC: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -e
+          if [ "$DRY_RUN" = "true" ]; then
+            # 시험 실행 — 이미지(bytea) · 글자 · JSON 이 섞인 작은 DB 를 만들어 백업해 본다
+            psql "$CHECK_URL/postgres" -q -c "CREATE DATABASE src"
+            psql "$CHECK_URL/src" -q <<'SQL'
+          CREATE TABLE users (id serial PRIMARY KEY, email text, created_at timestamptz DEFAULT now());
+          CREATE TABLE mindmap_images (id serial PRIMARY KEY, src text);
+          CREATE TABLE chat_files (id serial PRIMARY KEY, name text, data bytea, meta jsonb);
+          INSERT INTO users (email) SELECT 'u' || g || '@t.com' FROM generate_series(1, 120) g;
+          INSERT INTO mindmap_images (src) SELECT 'data:image/png;base64,' || encode(decode(repeat(md5(g::text), 188), 'hex'), 'base64') FROM generate_series(1, 30) g;
+          INSERT INTO chat_files (name, data, meta) SELECT 'f' || g || '.bin', decode(repeat(md5(g::text), 3125), 'hex'), jsonb_build_object('g', g) FROM generate_series(1, 20) g;
+          SQL
+            echo "SRC_URL=$CHECK_URL/src" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [ -z "$SRC" ]; then
+            echo "::error::저장소 Secret BACKUP_DATABASE_URL 이 없습니다 — docs/BACKUP.md 의 '처음 한 번' 을 보세요"
+            exit 1
+          fi
+          # Neon 의 pooler 주소(…-pooler.<지역>…)는 pg_dump 와 맞지 않아 직접 연결 주소로 바꾼다
+          DIRECT=$(printf '%s' "$SRC" | sed -E 's/-pooler\./\./')
+          echo "::add-mask::$DIRECT"
+          echo "SRC_URL=$DIRECT" >> "$GITHUB_ENV"
+
+      - name: pg_dump — 전체 백업
+        run: |
+          set -e
+          mkdir -p out
+          STAMP=$(TZ=Asia/Seoul date +%Y-%m-%dT%H%M)
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          echo "DUMP=out/wm-$STAMP.dump" >> "$GITHUB_ENV"
+          echo "서버: $(psql "$SRC_URL" -At -c 'show server_version')"
+          START=$(date +%s)
+          pg_dump "$SRC_URL" --format=custom --compress=6 --no-owner --no-privileges --file="out/wm-$STAMP.dump"
+          echo "DUMP_SEC=$(( $(date +%s) - START ))" >> "$GITHUB_ENV"
+          ls -la out
+
+      - name: 시험 DB 에 복원해 보기 · 행 수 맞춰 보기
+        run: |
+          set -e
+          COUNT_SQL="SELECT table_name || ',' || (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name), false, true, '')))[1]::text FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY 1"
+          psql "$CHECK_URL/postgres" -q -c "CREATE DATABASE restore_check"
+          # 확장(extension) 등 운영 전용 부분에서 나는 오류는 기록만 하고 계속 — 데이터가 다 들어왔는지는 아래에서 행 수로 본다
+          set +e
+          pg_restore --no-owner --no-privileges --dbname="$CHECK_URL/restore_check" "$DUMP" 2> out/restore-errors.txt
+          set -e
+          ERRS=$(grep -c "error:" out/restore-errors.txt || true)
+          psql "$SRC_URL" -At -c "$COUNT_SQL" > out/src-counts.csv
+          psql "$CHECK_URL/restore_check" -At -c "$COUNT_SQL" > out/restored-counts.csv
+          node server/scripts/backup-report.js out/src-counts.csv out/restored-counts.csv "$DUMP" "$ERRS" "$DUMP_SEC" > out/report.json
+          cat out/report.json | head -c 2000; echo
+          # 실패여도 여기서 멈추지 않는다 — 실패 기록을 GCS 에 올린 뒤 마지막 단계에서 작업을 실패로 끝낸다
+          node -e "var r=require('./out/report.json');require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, r.summaryMd);require('fs').appendFileSync(process.env.GITHUB_ENV, 'REPORT_OK='+(r.ok?'true':'false')+'\n');if(!r.ok)console.error('::error::'+r.problem)"
+
+      - name: 복원 오류 내용
+        if: always()
+        run: |
+          if [ -s out/restore-errors.txt ]; then head -50 out/restore-errors.txt; else echo "없음"; fi
+
+      - name: GCS 에 올리기 · 30일 지난 것 정리
+        env:
+          GCS_SA_KEY: ${{ secrets.GCS_SA_KEY }}
+          GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
+          GCS_PROJECT_ID: ${{ secrets.GCS_PROJECT_ID }}
+        run: |
+          set -e
+          if [ -z "$GCS_SA_KEY" ] || [ -z "$GCS_BUCKET" ] || [ -z "$GCS_PROJECT_ID" ]; then
+            if [ "$DRY_RUN" = "true" ]; then echo "시험 실행 — GCS Secret 이 없어 올리기는 건너뜀"; exit 0; fi
+            echo "::error::저장소 Secret GCS_SA_KEY · GCS_BUCKET · GCS_PROJECT_ID 가 필요합니다 — docs/BACKUP.md"
+            exit 1
+          fi
+          cd server && npm ci --omit=dev --no-audit --no-fund > /dev/null && cd ..
+          PREFIX=backups/db/
+          if [ "$DRY_RUN" = "true" ]; then PREFIX=backups/db-test/; fi
+          node server/scripts/backup-gcs.js --file "$DUMP" --report out/report.json --prefix "$PREFIX" --keep-days 30
+
+      - name: 결과
+        run: |
+          if [ "$REPORT_OK" != "true" ]; then echo "::error::백업 확인 실패 — 위 '시험 DB 에 복원해 보기' 단계를 보세요"; exit 1; fi
+          echo "백업 · 복원 확인 성공"

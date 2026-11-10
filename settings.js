@@ -402,10 +402,14 @@ function showBackupRestoreModal() {
   h += '<button onclick="document.getElementById(\'backupOverlay\').remove()" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--t5)">✕</button>';
   h += '</div>';
 
-  h += '<div style="margin-bottom:16px">';
-  h += '<p style="font-size:11px;color:var(--t3);margin-bottom:12px">서버 데이터(프로젝트, 마일스톤, 일정, 수주, 이슈, 업무일지, 문서)와 이 브라우저의 환경설정을 JSON 파일로 백업합니다. 복원은 환경설정만 적용합니다 — 서버 데이터는 서버 DB 백업으로 복원하세요.</p>';
+  // v13.431 서버 DB 전체 백업 현황 — 볼 수 있는 관리자에게만 (서버가 allowed 로 알려 줌)
+  h += '<div id="dbBackupBox" style="display:none;margin-bottom:16px;padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--bg-i)"></div>';
 
-  h += '<button onclick="exportBackupJSON()" style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t2);cursor:pointer;font-size:12px;font-weight:600;margin-bottom:8px">📥 전체 백업 다운로드</button>';
+  h += '<div style="margin-bottom:16px">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">🧩 화면 데이터 · 환경설정 (JSON)</div>';
+  h += '<p style="font-size:11px;color:var(--t3);margin-bottom:12px">프로젝트 · 마일스톤 · 일정 · 수주 · 이슈 · 업무일지 · 문서 목록과 이 브라우저의 환경설정을 JSON 파일로 내려받습니다 (이미지 · 첨부 파일 · 마인드맵 · 메신저 등은 들어가지 않음). 되돌리기는 환경설정만 — 모든 데이터의 백업은 위 ‘DB 전체 백업’ 입니다.</p>';
+
+  h += '<button onclick="exportBackupJSON()" style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t2);cursor:pointer;font-size:12px;font-weight:600;margin-bottom:8px">📥 화면 데이터 · 환경설정 내려받기</button>';
 
   h += '<div style="border:2px dashed var(--bd);border-radius:8px;padding:16px;text-align:center;margin-bottom:8px" id="backupDropZone">';
   h += '<input type="file" id="backupFileInput" accept=".json" style="display:none" onchange="importBackupJSON(this.files[0])">';
@@ -420,6 +424,58 @@ function showBackupRestoreModal() {
   var dialog = createModal({ id: 'backupOverlay', z: MODAL_Z, overlayStyle: 'padding:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px)' }).box;
   dialog.style.cssText = 'background:var(--bg-p);border-radius:12px;padding:24px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)';
   dialog.innerHTML = h;
+  dbBackupLoad();
+}
+
+/* v13.431 💾 DB 전체 백업 현황 — GitHub Actions 가 매일 03:30 pg_dump → GCS (docs/BACKUP.md) */
+function _dbbSize(n) { n = +n || 0; return n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+function _dbbWhen(iso) {
+  var t = Date.parse(iso || ''); if (!t) return '-';
+  var d = new Date(t), p = function (x) { return (x < 10 ? '0' : '') + x; };
+  var ago = (Date.now() - t) / 3600000;
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + (ago < 48 ? ' (' + (ago < 1 ? '방금' : Math.round(ago) + '시간 전') + ')' : ' (' + Math.round(ago / 24) + '일 전)');
+}
+function dbBackupHtml(d) {
+  var esc = typeof eH === 'function' ? eH : function (x) { return String(x == null ? '' : x); };
+  var h = '<div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">🗄 DB 전체 백업 <span style="font-weight:500;color:var(--t4);font-size:11px">· 매일 03:30 · 30일 보관 · 이미지 · 파일 칸 포함</span></div>';
+  if (!d.gcs) return h + '<div style="font-size:11px;color:var(--t3)">파일 저장소(GCS)가 설정되지 않아 백업 현황을 볼 수 없습니다.</div>';
+  var L = d.latest || {}, ok = L.lastOk, run = L.lastRun;
+  if (!run) return h + '<div style="font-size:11px;color:var(--t3)">아직 백업 기록이 없습니다 — GitHub 저장소 Secrets 를 등록하고 Actions 의 ‘DB backup’ 을 한 번 실행하세요 (docs/BACKUP.md).</div>';
+  var stale = !ok || (Date.now() - Date.parse(ok.at || '')) > 36 * 3600000;
+  if (run && !run.ok) h += '<div style="font-size:11px;color:var(--d-t);margin-bottom:6px">❌ 마지막 실행 실패 (' + esc(_dbbWhen(run.at)) + ') — ' + esc(run.problem || '') + (run.runUrl ? ' · <a href="' + esc(run.runUrl) + '" target="_blank" rel="noopener" style="color:var(--ac-t)">기록 보기</a>' : '') + '</div>';
+  if (ok) {
+    h += '<div style="font-size:11px;color:' + (stale ? 'var(--d-t)' : 'var(--t2)') + ';line-height:1.7">' + (stale ? '⚠️' : '✅') + ' 마지막 성공 <b>' + esc(_dbbWhen(ok.at)) + '</b> · ' + esc(_dbbSize(ok.bytes)) + ' · 테이블 ' + (+ok.tables || 0) + '개 · ' + (+ok.rows || 0).toLocaleString() + '줄<br>' +
+      '<span style="color:var(--t4)">시험 DB 에 복원해 행 수 확인 완료' + (ok.restoreErrors ? ' (복원 경고 ' + (+ok.restoreErrors) + '건)' : '') + '</span></div>';
+  }
+  var files = (d.files || []).slice(0, 10);
+  if (files.length) {
+    h += '<div style="margin-top:8px;max-height:150px;overflow:auto;border-top:1px solid var(--bd)">' + files.map(function (f) {
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;color:var(--t3)"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(f.name) + '</span><span style="color:var(--t4)">' + esc(_dbbSize(f.size)) + '</span>' +
+        '<button type="button" data-dbb-key="' + esc(f.key) + '" style="padding:3px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-p);color:var(--t2);cursor:pointer;font-size:11px">내려받기</button></div>';
+    }).join('') + '</div>';
+    h += '<div style="font-size:10.5px;color:var(--t4);margin-top:6px">⚠️ 모든 데이터(비밀번호 해시 포함)가 들어 있습니다 — 안전한 곳에만 보관하세요. 되돌리기는 docs/BACKUP.md 절차대로 시험 DB 에 먼저.</div>';
+  }
+  return h;
+}
+function dbBackupLoad() {
+  var box = document.getElementById('dbBackupBox');
+  if (!box || typeof apiFetch !== 'function') return Promise.resolve();
+  return apiFetch('/api/data-export/backups').then(function (r) {
+    var d = (r && r.data) || {};
+    if (!d.allowed) return;
+    box.innerHTML = dbBackupHtml(d);
+    box.style.display = '';
+    box.onclick = function (e) {
+      var b = e.target.closest && e.target.closest('[data-dbb-key]');
+      if (!b) return;
+      if (!confirm('이 백업 파일에는 모든 데이터가 들어 있습니다. 내려받을까요? (내려받은 기록이 감사 로그에 남습니다)')) return;
+      b.disabled = true;
+      apiFetch('/api/data-export/backups/download', { method: 'POST', body: JSON.stringify({ key: b.getAttribute('data-dbb-key') }) }).then(function (x) {
+        if (x && x.data && x.data.url) location.href = x.data.url;
+      }).catch(function (err) { if (typeof showToast === 'function') showToast('내려받기 실패: ' + err.message, 'error'); })
+        .then(function () { b.disabled = false; });
+    };
+  }).catch(function () { /* 권한 없음 · 서버 오류 — 칸을 숨긴 채로 둔다 */ });
 }
 
 /* 백업 형식 (version 9)

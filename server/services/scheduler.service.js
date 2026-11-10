@@ -57,25 +57,11 @@ function start() {
     sendWeeklyDigests().catch(function (e) { console.error('[Scheduler/digest]', e.message); });
   }, { timezone: tz }));
 
-  // 4) DB 자동 백업 — 매일 03:00 KST (7일 보존)
-  var backupModule;
-  try {
-    backupModule = require('../scripts/backup-db');
-  } catch (e) {
-    console.warn('[Scheduler/backup] backup-db 모듈 로드 실패:', e.message);
-  }
-  if (backupModule && backupModule.runBackup) {
-    _tasks.push(cron.schedule('0 3 * * *', function () {
-      backupModule.runBackup({ retentionDays: 7 }).then(function (result) {
-        console.log('[Scheduler/backup] 완료: ' + result.filePath + ' (정리 ' + result.cleanedCount + '건)');
-      }).catch(function (e) {
-        console.error('[Scheduler/backup] 실패:', e.message);
-      });
-    }, { timezone: tz }));
-  }
+  // 4) DB 백업은 v13.431 부터 GitHub Actions(.github/workflows/db-backup.yml)가 매일 pg_dump → GCS 로 한다.
+  //    (예전 이 자리의 JSON 백업은 Render 의 임시 디스크에 쓰여 배포 · 재시작 때마다 사라졌고, 테이블도 16개뿐이었다)
 
   _started = true;
-  console.log('[Scheduler] ' + _tasks.length + '개 작업 등록됨 (TZ=Asia/Seoul) — SLA(평일 09~18시), 미회신(매일 09:10), 주간(월 08:30), 백업(매일 03:00)');
+  console.log('[Scheduler] ' + _tasks.length + '개 작업 등록됨 (TZ=Asia/Seoul) — SLA(평일 09~18시), 미회신(매일 09:10), 주간(월 08:30)');
 }
 
 function stop() {

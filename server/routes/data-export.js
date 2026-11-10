@@ -170,4 +170,50 @@ router.put('/retention', async function (req, res) {
   }
 });
 
+// ─── v13.431 💾 DB 전체 백업 현황 · 내려받기 (GitHub Actions 가 매일 GCS backups/db/ 에 올린 것) ───
+//   백업 파일에는 모든 회사(테넌트)의 데이터가 들어 있어, 볼 수 있는 사람을 좁힌다:
+//   BACKUP_ADMIN_EMAILS(쉼표로 여러 개)가 있으면 그 사람만, 없으면 기본 회사의 관리자만.
+var BACKUP_PREFIX = 'backups/db/';
+var DEFAULT_TENANT = '00000000-0000-0000-0000-000000000001';
+function canSeeBackups(user) {
+  if (!user || user.role !== 'admin') return false;
+  var list = String(process.env.BACKUP_ADMIN_EMAILS || '').split(',').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
+  if (list.length) return list.indexOf(String(user.email || '').toLowerCase()) >= 0;
+  return user.tenantId === DEFAULT_TENANT;
+}
+
+router.get('/backups', async function (req, res) {
+  try {
+    if (!canSeeBackups(req.user)) return res.json({ data: { allowed: false } });
+    var gcs = require('../services/gcs.service');
+    if (!gcs.isEnabled()) return res.json({ data: { allowed: true, gcs: false } });
+    var latest = null;
+    try { latest = JSON.parse((await gcs.readText(BACKUP_PREFIX + 'latest.json')) || 'null'); } catch (e) { latest = null; }
+    var files = (await gcs.listObjects(BACKUP_PREFIX)).filter(function (o) { return /\.dump$/.test(o.key); })
+      .sort(function (a, b) { return b.key.localeCompare(a.key); })
+      .map(function (o) { return { key: o.key, name: o.key.slice(BACKUP_PREFIX.length), size: o.size, updated: o.updated }; });
+    res.json({ data: { allowed: true, gcs: true, latest: latest, files: files } });
+  } catch (e) {
+    httpErr.serverError(res, '[data-export/backups]', e);
+  }
+});
+
+router.post('/backups/download', async function (req, res) {
+  try {
+    if (!canSeeBackups(req.user)) return res.status(403).json({ error: 'FORBIDDEN', message: '백업을 내려받을 권한이 없습니다.' });
+    var key = String((req.body && req.body.key) || '');
+    if (key.indexOf(BACKUP_PREFIX) !== 0 || !/^backups\/db\/[A-Za-z0-9_.T:-]+\.dump$/.test(key)) return res.status(400).json({ error: 'BAD_KEY', message: '잘못된 백업 이름입니다.' });
+    var gcs = require('../services/gcs.service');
+    if (!gcs.isEnabled()) return res.status(503).json({ error: 'GCS_DISABLED', message: '파일 저장소(GCS)가 설정되지 않았습니다.' });
+    var url = await gcs.signDownloadUrl(key, key.slice(BACKUP_PREFIX.length), 10 * 60 * 1000);
+    try {
+      await db.query('INSERT INTO audit_logs (user_id, action, target_type, target_id, tenant_id) VALUES ($1, $2, $3, $4, $5)', [req.user.sub, 'backup.download', 'backup', key.slice(0, 100), req.tenant.id]);
+    } catch (e) { /* 감사 기록 실패는 내려받기를 막지 않음 */ }
+    res.json({ data: { url: url } });
+  } catch (e) {
+    httpErr.serverError(res, '[data-export/backups/download]', e);
+  }
+});
+
 module.exports = router;
+module.exports.canSeeBackups = canSeeBackups;
