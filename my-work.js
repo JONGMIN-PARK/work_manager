@@ -301,7 +301,7 @@ function _mwPaintNow(el) {
   if (r.self) {
     bar += '<form class="mw-add" id="mwAdd"><input id="mwAddTitle" class="mw-input" maxlength="500" placeholder="+ 할 일 — &quot;내일 14:00 !긴급 견적&quot;" title="&quot;내일 14:00 !긴급 견적 회신&quot; 처럼 적으면 마감 · 중요도까지" autocomplete="off">' +
       '<input id="mwAddDue" type="date" class="mw-input mw-date" title="마감 (없어도 됨)"><button class="mw-btn mw-btn-p" type="submit">추가</button>' +
-      '<button class="mw-btn" type="button" data-mwt="new" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅 일정…</button></form>';
+      '<button class="mw-btn" type="button" data-mwt="new" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅<span class="mw-add-lbl"> 일정…</span></button></form>';
   }
   var side = (typeof mwCalTodayHtml === 'function' ? mwCalTodayHtml(today) : '') + (typeof mwProjStripHtml === 'function' ? mwProjStripHtml(today) : '');
   if (side) {
