@@ -35,7 +35,7 @@ function _ccPlain(t, inline) {
     if (/^`[^`\n]+`$/.test(p)) return '<code class="cx-ic">' + _ccE(p.slice(1, -1)) + '</code>';
     var h = _ccE(p);
     h = h.replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
-    h = h.replace(/(^|\s)@([^\s@<]{1,20})/g, '$1<b class="cx-at">@$2</b>');
+    h = h.replace(/(^|\s)@([^\s@<]{1,20})/g, function (x, a, tok) { return a + (typeof _cxAtHtml === 'function' ? _cxAtHtml(tok) : '<b class="cx-at">@' + tok + '</b>'); });
     h = chatEmoWrap(h);
     return inline ? h.replace(/\n/g, ' ') : h.replace(/\n/g, '<br>');
   }).join('');

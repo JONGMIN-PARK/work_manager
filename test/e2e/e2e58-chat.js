@@ -59,7 +59,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await k.evaluate(function () { document.querySelector('#cxRooms .cx-r').click(); });
     await k.waitForSelector('#cxMsgs .cx-m');
     check(await until(a, function () { var e = document.querySelector('#cxMsgs .cx-m.mine .cx-un'); return e && e.textContent === ''; }), '김팀원이 열면 "1" 사라짐 (읽음)');
-    check(await k.evaluate(function () { return /@김팀원/.test((document.querySelector('#cxMsgs .cx-at') || {}).textContent || '') && document.getElementById('msgBadge').style.display === 'none'; }), '@멘션 강조 · 뱃지 꺼짐');
+    check(await k.evaluate(function () { return /@김팀원/.test((document.querySelector('#cxMsgs .cx-atp, #cxMsgs .cx-at') || {}).textContent || '') && document.getElementById('msgBadge').style.display === 'none'; }), '@멘션 강조 · 뱃지 꺼짐');
     // 입력 중
     await k.type('#cxIn', '네 가능');
     check(await until(a, function () { return /김팀원 님이 입력 중/.test(document.getElementById('cxTyping').textContent); }), '입력 중 표시');
@@ -92,7 +92,8 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(await until(a, function () { var b = document.getElementById('cxAsB'); return b && /메신저 시험 장비/.test(b.textContent) && /진척 42%/.test(b.textContent); }), '프로젝트 방 — 옆에 진척 · 이슈 · 마일스톤');
     await a.type('#cxIn', '/issue 진공 펌프 소음 !');
     await a.keyboard.press('Enter');
-    check(await until(a, function () { var c = document.querySelector('#cxMsgs .cx-card'); return c && /진공 펌프 소음/.test(c.textContent) && /긴급/.test(c.textContent) && c.querySelector('[data-act="inProgress"]'); }), '/issue → 이슈 카드 (긴급 · 버튼)');
+    check(await until(a, function () { return Array.prototype.some.call(document.querySelectorAll('#cxMsgs .cx-sys-cards .cx-card'), function (c) { return /진공 펌프 소음/.test(c.textContent) && /긴급/.test(c.textContent) && c.querySelector('[data-act="inProgress"]'); }); }), '/issue → 방에 이슈 소식 카드 (긴급 · 버튼) · v13.426');
+    check(await until(a, function () { return Array.prototype.some.call(document.querySelectorAll('#cxMsgs .cx-eph'), function (x) { return /이슈를 올렸습니다/.test(x.textContent); }); }), '/issue 확인 글은 나만 보임');
     await k.waitForNetworkIdle({ idleTime: 300, timeout: 5000 }).catch(function () {});
     await until(k, function () { return Array.prototype.some.call(document.querySelectorAll('#cxRooms .cx-r'), function (r) { return /메신저 시험 장비/.test(r.textContent); }); });
     await k.evaluate(function () { Array.prototype.filter.call(document.querySelectorAll('#cxRooms .cx-r'), function (r) { return /메신저 시험 장비/.test(r.textContent); })[0].click(); });
@@ -103,7 +104,8 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var st = await c.query("SELECT status FROM issues WHERE title = '진공 펌프 소음'");
     check(st.rows[0] && st.rows[0].status === 'inProgress', 'DB 이슈 상태도 대응중');
     // 공지
-    await a.evaluate(function () { var m = CX.msgs.filter(function (x) { return x.kind !== 'system'; })[0]; return apiFetch('/api/chat/rooms/' + CX.room + '/notice', { method: 'POST', body: JSON.stringify({ messageId: m.id }) }); });
+    var nid = await a.evaluate(function () { return apiFetch('/api/chat/rooms/' + CX.room + '/messages', { method: 'POST', body: JSON.stringify({ body: '이슈를 올렸습니다 — 확인 부탁' }) }).then(function (r) { return r.data.id; }); });
+    await a.evaluate(function (id) { return apiFetch('/api/chat/rooms/' + CX.room + '/notice', { method: 'POST', body: JSON.stringify({ messageId: id }) }); }, nid);
     check(await until(k, function () { var n = document.getElementById('cxNotice'); return n && !n.hidden && /이슈를 올렸습니다/.test(n.textContent); }), '공지 — 상대 화면 위에 고정');
     await a.screenshot({ path: path.join(SHOT, 'chat-project.png') });
 

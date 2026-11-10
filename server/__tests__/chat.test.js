@@ -122,17 +122,24 @@ test('프로젝트 방 — 볼 수 있으면 들어옴 · 못 보면 403 · 옆 
   // /issue
   var ni = await api('post', '/api/chat/rooms/' + prj + '/messages', b).send({ body: '/issue 진공 펌프 소음 !' });
   expect(ni.status).toBe(201);
-  expect(ni.body.data.cards[0]).toMatchObject({ type: 'issue', title: '진공 펌프 소음', urgency: 'urgent' });
-  expect((await db.query('SELECT urgency, project_id FROM issues WHERE id = $1', [ni.body.data.cards[0].id])).rows[0]).toMatchObject({ urgency: 'urgent', project_id: PID });
+  // v13.426 확인은 나만 보기(eph) · 방에는 이슈 소식 한 줄
+  var ne = ni.body.data.eph[0];
+  expect(ne).toMatchObject({ eph: true, kind: 'text' });
+  expect(ne.cards[0]).toMatchObject({ type: 'issue', title: '진공 펌프 소음', urgency: 'urgent' });
+  expect((await db.query('SELECT urgency, project_id FROM issues WHERE id = $1', [ne.cards[0].id])).rows[0]).toMatchObject({ urgency: 'urgent', project_id: PID });
+  expect((await db.query("SELECT COUNT(*)::int AS n FROM chat_messages WHERE room_id = $1 AND kind = 'system' AND body LIKE '%진공 펌프 소음%'", [prj])).rows[0].n).toBe(1);
+  expect((await db.query("SELECT COUNT(*)::int AS n FROM chat_messages WHERE room_id = $1 AND body LIKE '/issue%'", [prj])).rows[0].n).toBe(0);
   // /issue 는 프로젝트 방에서만
   var no = await api('post', '/api/chat/rooms/' + dm + '/messages', a).send({ body: '/issue 아무거나' });
-  expect(no.body.data).toMatchObject({ kind: 'system' });
+  expect(no.body.data.eph[0]).toMatchObject({ kind: 'system' });
 });
 
 test('/todo → 내 할 일 + 카드 · 모르는 명령은 그냥 글', async function () {
   var r = await api('post', '/api/chat/rooms/' + dm + '/messages', b).send({ body: '/todo 견적서 회신' });
-  expect(r.body.data.cards[0]).toMatchObject({ type: 'todo', title: '견적서 회신' });
-  expect((await db.query('SELECT user_id FROM my_todos WHERE id = $1', [r.body.data.cards[0].id])).rows[0].user_id).toBe(b.user.id);
+  var re = r.body.data.eph[0];   // v13.426 나만 보기
+  expect(re.cards[0]).toMatchObject({ type: 'todo', title: '견적서 회신' });
+  expect((await db.query('SELECT user_id FROM my_todos WHERE id = $1', [re.cards[0].id])).rows[0].user_id).toBe(b.user.id);
+  expect((await db.query("SELECT COUNT(*)::int AS n FROM chat_messages WHERE room_id = $1 AND body LIKE '%견적서 회신%'", [dm])).rows[0].n).toBe(0);
   var t = await api('post', '/api/chat/rooms/' + dm + '/messages', b).send({ body: '/없는명령 그대로' });
   expect(t.body.data).toMatchObject({ kind: 'text', body: '/없는명령 그대로' });
 });

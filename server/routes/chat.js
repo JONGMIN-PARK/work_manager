@@ -711,6 +711,7 @@ router.post('/rooms/:id/notice', async function (req, res) {
   try {
     var room = await roomFor(req, res, req.params.id); if (!room) return;
     var mid = (req.body || {}).messageId ? +req.body.messageId : null;
+    if ((req.body || {}).messageId && !Number.isInteger(mid)) return bad(res, '공지로 올릴 수 없는 글입니다 (나만 보기 글 등).');
     if (mid) { var ok = await db.query('SELECT 1 FROM chat_messages WHERE id = $1 AND room_id = $2 AND deleted_at IS NULL', [mid, room.id]); if (!ok.rows.length) return bad(res, '메시지가 없습니다.'); }
     await db.query('UPDATE chat_rooms SET notice_id = $2 WHERE id = $1', [room.id, mid]);
     var notice = mid ? await loadMsg(mid) : null;
@@ -2378,11 +2379,82 @@ async function meetCommand(req, room, arg, replyTo) {
   else if (/내일/.test(arg)) { var d2 = new Date(today + 'T00:00:00Z'); d2.setUTCDate(d2.getUTCDate() + 1); from = d2.toISOString().slice(0, 10); days = 3; }
   var title = arg.replace(/@\S+/g, ' ').replace(/(\d+)\s*(분|시간|h|m)(?![A-Za-z])/, ' ').replace(/다음\s*주|이번\s*주|내일/g, ' ').replace(/\s+/g, ' ').trim() || '회의';
   var slots = await meetSlots(t, people, dur, from, days);
-  if (slots.length < 2) return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ 빈 시간을 찾지 못했습니다 — 기간이나 길이를 바꿔 보세요', replyTo: replyTo });
+  if (slots.length < 2) return { eph: [ephMake(req, room, 'system', '⚠️ 빈 시간을 찾지 못했습니다 — 기간이나 길이를 바꿔 보세요')] };
   var opts = slots.map(function (s) { return { id: pollId(), at: s.at, from: s.from, to: s.to, t: s.at + ' ' + s.from + '~' + s.to, busy: s.busy }; });
   var poll = { q: title + ' (' + (dur % 60 ? dur + '분' : dur / 60 + '시간') + ')', kind: 'time', multi: true, opts: opts, votes: {}, until: null, closed: false, by: me(req), meet: { people: people.map(function (p) { return p.n; }), dur: dur } };
   return postMessage({ tenantId: t }, room, { userId: me(req), kind: 'text', body: '📅 약속 잡기: ' + poll.q + ' — ' + people.map(function (p) { return p.n; }).join(', ') + ' 의 달력에서 빈 시간 ' + opts.length + '개', poll: poll, replyTo: replyTo });
 }
+
+/* v13.426 / 명령 결과는 나만 보기 — 방에 저장하지 않고 보낸 사람에게만 돌려줌 (새로 고치면 사라짐)
+ *   AI 답(/ai · /요약)은 토큰을 서버 메모리에 6시간 — "📢 방에 공유" 를 누르면 그 내용 그대로 방에 (내용을 바꿔 AI 인 척 못 함) */
+var EPH = new Map(), EPH_TTL = 6 * 3600000;
+function ephMake(req, room, kind, body, cards, extra) {
+  var o = { id: 'e' + crypto.randomBytes(6).toString('hex'), eph: true, roomId: room.id, kind: kind, userId: null, userName: kind === 'ai' ? 'AI' : '', body: String(body || '').slice(0, MAX_BODY), cards: cards || null, at: new Date().toISOString(), q: (extra && extra.q) || null };
+  if (kind === 'ai') {
+    o.tok = o.id;
+    EPH.set(o.id, { uid: me(req), roomId: room.id, body: o.body, cards: o.cards, q: o.q, at: Date.now() });
+    EPH.forEach(function (v, k) { if (Date.now() - v.at > EPH_TTL) EPH.delete(k); });
+    while (EPH.size > 3000) EPH.delete(EPH.keys().next().value);
+  }
+  return o;
+}
+router.post('/rooms/:id/eph-share', async function (req, res) {
+  try {
+    var room = await roomFor(req, res, req.params.id); if (!room) return;
+    if (readOnly(res, room)) return;
+    var tok = String((req.body || {}).tok || ''), e = EPH.get(tok);
+    if (!e || e.uid !== me(req) || e.roomId !== room.id) return bad(res, '공유할 수 없습니다 — 오래돼서 사라졌을 수 있어요. 다시 물어봐 주세요.', 410);
+    var head = '📢 ' + (req.user.name || '') + ' 님이 공유한 AI 답' + (e.q ? ' — ' + (e.q === '/요약' ? '대화 요약' : '질문: ' + e.q) : '');
+    var msg = await postMessage({ tenantId: req.tenant.id }, room, { kind: 'ai', body: (head + '\n\n' + e.body).slice(0, MAX_BODY), cards: e.cards });
+    EPH.delete(tok);
+    res.status(201).json({ data: msg });
+  } catch (e) { httpErr.serverError(res, '[chat/eph-share]', e); }
+});
+
+/* ─── v13.426 🔒 채팅 잠금 — PIN(4~8자리 숫자)은 scrypt 해시로 · 자동 잠금 분 · 틀리면 5번마다 1분 쉬기
+ *   화면 가리개(사생활 보호)이지 권한 경계는 아님 — 잠겨도 로그인 세션은 그대로. PIN 을 잊으면 로그아웃 → 다시 로그인하면 풀림 */
+var LOCK_FAIL = new Map();
+function pinHash(pin) { var salt = crypto.randomBytes(12).toString('hex'); return salt + ':' + crypto.scryptSync(String(pin), salt, 32).toString('hex'); }
+function pinOk(pin, stored) {
+  if (!stored || stored.indexOf(':') < 0) return false;
+  var sp = stored.split(':'), h = crypto.scryptSync(String(pin), sp[0], 32);
+  return crypto.timingSafeEqual(h, Buffer.from(sp[1], 'hex'));
+}
+function pinValid(pin) { return /^\d{4,8}$/.test(String(pin || '')); }
+async function lockRow(uid) { return (await db.query('SELECT lock_pin, lock_auto FROM chat_user_state WHERE user_id = $1', [uid])).rows[0] || {}; }
+function lockWait(uid) { var f = LOCK_FAIL.get(uid); return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0; }
+function lockMiss(uid) { var f = LOCK_FAIL.get(uid) || { n: 0, until: 0 }; f.n++; if (f.n % 5 === 0) f.until = Date.now() + 60000; LOCK_FAIL.set(uid, f); return f; }
+router.get('/lock', async function (req, res) {
+  try { var r = await lockRow(me(req)); res.json({ data: { hasPin: !!r.lock_pin, auto: +r.lock_auto || 0 } }); }
+  catch (e) { httpErr.serverError(res, '[chat/lock]', e); }
+});
+router.put('/lock', async function (req, res) {
+  try {
+    var b = req.body || {}, uid = me(req), r = await lockRow(uid), w = lockWait(uid);
+    if (r.lock_pin && (b.pin !== undefined || b.off)) {   // 바꾸기 · 끄기는 지금 PIN 확인
+      if (w) return bad(res, w + '초 뒤에 다시 해 보세요.', 429);
+      if (!pinOk(b.oldPin, r.lock_pin)) { lockMiss(uid); return bad(res, '지금 PIN 이 맞지 않습니다.', 403); }
+      LOCK_FAIL.delete(uid);
+    }
+    if (b.pin !== undefined && !b.off && !pinValid(b.pin)) return bad(res, 'PIN 은 숫자 4~8자리로 정해 주세요.');
+    var auto = b.auto === undefined ? (+r.lock_auto || 0) : Math.max(0, Math.min(240, parseInt(b.auto, 10) || 0));
+    var hash = b.off ? null : b.pin !== undefined ? pinHash(b.pin) : (r.lock_pin || null);
+    if (!hash) auto = 0;
+    await db.query('INSERT INTO chat_user_state (user_id, tenant_id, lock_pin, lock_auto) VALUES ($1,$2,$3,$4) ON CONFLICT (user_id) DO UPDATE SET lock_pin = $3, lock_auto = $4, updated_at = now()', [uid, req.tenant.id, hash, auto]);
+    res.json({ data: { hasPin: !!hash, auto: auto } });
+  } catch (e) { httpErr.serverError(res, '[chat/lock-put]', e); }
+});
+router.post('/lock/verify', async function (req, res) {
+  try {
+    var uid = me(req), w = lockWait(uid);
+    if (w) return res.status(429).json({ error: 'WAIT', message: w + '초 뒤에 다시 해 보세요.', wait: w });
+    var r = await lockRow(uid);
+    if (!r.lock_pin) return res.json({ data: { ok: true } });
+    if (!pinOk((req.body || {}).pin, r.lock_pin)) { var f = lockMiss(uid); return res.status(403).json({ error: 'WRONG', message: 'PIN 이 맞지 않습니다' + (f.until > Date.now() ? ' — 1분 뒤에 다시' : ' (' + (5 - f.n % 5) + '번 남음)'), wait: lockWait(uid) }); }
+    LOCK_FAIL.delete(uid);
+    res.json({ data: { ok: true } });
+  } catch (e) { httpErr.serverError(res, '[chat/lock-verify]', e); }
+});
 
 /* ─── / 명령 ─── */
 var HELP = [
@@ -2396,38 +2468,39 @@ var HELP = [
 async function runCommand(req, room, body, replyTo) {
   var m = /^\/(\S+)\s*([\s\S]*)$/.exec(body); if (!m) return null;
   var cmd = m[1].toLowerCase(), arg = m[2].trim(), t = req.tenant.id;
+  var E = [], priv = function (kind, text, cards, extra) { E.push(ephMake(req, room, kind, text, cards, extra)); return { eph: E }; };   // v13.426 나만 보기
   var self = function (text, kind, cards) { return postMessage({ tenantId: t }, room, { userId: kind === 'ai' ? null : me(req), kind: kind || 'text', body: text, cards: cards || null, replyTo: replyTo }); };
-  if (cmd === 'help' || cmd === '도움' || cmd === '?') { await self(body); return postMessage({ tenantId: t }, room, { kind: 'system', body: HELP, replyTo: replyTo }); }
+  if (cmd === 'help' || cmd === '도움' || cmd === '?') { return priv('system', HELP); }
   if (cmd === 'todo' || cmd === '할일') {
-    if (!arg) return postMessage({ tenantId: t }, room, { kind: 'system', body: '✏️ /todo 다음에 할 일을 적어 주세요', replyTo: replyTo });
+    if (!arg) return priv('system', '✏️ /todo 다음에 할 일을 적어 주세요');
     var QP = require('../../quick-parse'), q = QP.parse(arg, kstToday()), title = q.title.slice(0, 500), id = 'todo-' + crypto.randomUUID().slice(0, 12);
     await db.query('INSERT INTO my_todos (id, tenant_id, user_id, title, due_date, due_time, priority, memo) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [id, t, me(req), title, q.due, q.due ? q.time : null, q.priority || 3, '💬 메신저에서']);
-    return self('✅ 내 할 일 — ' + title + (q.due ? ' (' + q.due.slice(5).replace('-', '/') + (q.time ? ' ' + q.time : '') + ')' : ''), 'text', [{ type: 'todo', id: id, title: title, sub: q.due || '', nav: { todoId: id } }]);
+    return priv('text', '✅ 내 할 일에 넣었습니다 — ' + title + (q.due ? ' (' + q.due.slice(5).replace('-', '/') + (q.time ? ' ' + q.time : '') + ')' : ''), [{ type: 'todo', id: id, title: title, sub: q.due || '', nav: { todoId: id } }]);
   }
   if (cmd === 'issue' || cmd === '이슈') {
-    if (room.kind !== 'project' || !room.project_id) return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ /issue 는 프로젝트 방에서 씁니다', replyTo: replyTo });
-    if (!arg) return postMessage({ tenantId: t }, room, { kind: 'system', body: '✏️ /issue 다음에 이슈 제목을 적어 주세요', replyTo: replyTo });
-    if (!await pa.canEditById(req, room.project_id)) return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ 이 프로젝트에 이슈를 올릴 권한이 없습니다', replyTo: replyTo });
+    if (room.kind !== 'project' || !room.project_id) return priv('system', '⚠️ /issue 는 프로젝트 방에서 씁니다');
+    if (!arg) return priv('system', '✏️ /issue 다음에 이슈 제목을 적어 주세요');
+    if (!await pa.canEditById(req, room.project_id)) return priv('system', '⚠️ 이 프로젝트에 이슈를 올릴 권한이 없습니다');
     var iid = 'iss-' + crypto.randomUUID().slice(0, 12);
     var urgent = /(^|\s)!(\s|$)|긴급/.test(arg), ttl = arg.replace(/(^|\s)!(\s|$)/, ' ').trim().slice(0, 300);
     await db.query("INSERT INTO issues (id, project_id, urgency, status, report_date, title, description, reporter_id, assignees, tags, created_by, updated_by, tenant_id) VALUES ($1,$2,$3,'open',$4,$5,$6,$7,'[]',$8,$7,$7,$9)",
       [iid, room.project_id, urgent ? 'urgent' : 'normal', kstToday(), ttl, '💬 메신저 프로젝트 방에서 올림', me(req), JSON.stringify(['메신저']), t]);
-    return self('🐞 이슈를 올렸습니다', 'text', [{ type: 'issue', id: iid, title: ttl, sub: urgent ? '긴급' : '', status: 'open', urgency: urgent ? 'urgent' : 'normal', nav: { issueId: iid } }]);
+    projectNote(t, room.project_id, '🐞 새 이슈' + (urgent ? ' (긴급)' : '') + ' — ' + ttl + ' (' + (req.user.name || '') + ')', [{ type: 'issue', id: iid, title: ttl, sub: urgent ? '긴급' : '', status: 'open', urgency: urgent ? 'urgent' : 'normal', nav: { issueId: iid } }]);   // 이슈는 프로젝트 사람 모두의 일 — 방에 소식
+    return priv('text', '🐞 이슈를 올렸습니다 — 방에도 알렸어요', [{ type: 'issue', id: iid, title: ttl, sub: urgent ? '긴급' : '', status: 'open', urgency: urgent ? 'urgent' : 'normal', nav: { issueId: iid } }]);
   }
   if (cmd === 'meet' || cmd === '약속' || cmd === '회의') return meetCommand(req, room, arg, replyTo);   // v13.424 ⑩
   if (cmd === 'ai' || cmd === '요약' || cmd === 'summary') {
     var ai = require('../lib/ai-usage');
     var quota = await ai.checkQuota(t);
-    if (!quota.ok) return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ ' + quota.message, replyTo: replyTo });
-    if (!ai.takeHourly(me(req))) return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ AI 질문 한도(시간당 60회)를 넘었습니다', replyTo: replyTo });
-    await self(body);
-    hub.publish(await memberIds(room.id), 'typing', { roomId: room.id, userId: 'ai', name: 'AI' });
+    if (!quota.ok) return priv('system', '⚠️ ' + quota.message);
+    if (!ai.takeHourly(me(req))) return priv('system', '⚠️ AI 질문 한도(시간당 60회)를 넘었습니다');
+    hub.publish([me(req)], 'typing', { roomId: room.id, userId: 'ai', name: 'AI' });   // 나만 보기 — 쓰는 중도 나에게만
     var text = '', aiCards = null;
     try {
       if (cmd === 'ai') {
-        if (!arg) return postMessage({ tenantId: t }, room, { kind: 'system', body: '✏️ /ai 다음에 질문을 적어 주세요', replyTo: replyTo });
+        if (!arg) return priv('system', '✏️ /ai 다음에 질문을 적어 주세요');
         var out = await require('../services/ai.service').answerWeb(arg.slice(0, 1000), { userId: me(req), role: req.user.role, departmentId: req.user.departmentId || null, tenantId: t, name: req.user.name || '사용자' }, { history: [] });
-        if (!out) return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ AI 가 설정되지 않았습니다', replyTo: replyTo });
+        if (!out) return priv('system', '⚠️ AI 가 설정되지 않았습니다');
         text = out.answer || '';
         // v13.424 ⑨ 답에 쓴 근거 → 카드 (누르면 그 화면 · 지금 상태 줄)
         aiCards = (out.sources || []).filter(function (s) { return s.cited && s.id != null && ['project', 'milestone', 'issue', 'order', 'as'].indexOf(s.type) >= 0; }).slice(0, 5)
@@ -2440,14 +2513,15 @@ async function runCommand(req, room, body, replyTo) {
         var lines = hist.rows.reverse().map(function (x) { return '[' + new Date(x.created_at).toISOString().slice(5, 16).replace('T', ' ') + '] ' + x.n + ': ' + String(x.body || '').slice(0, 400); }).join('\n');
         var prompt = '다음은 사내 메신저 대화입니다. 한국어로 짧게 정리하세요.\n## 요점 (3줄 이내)\n## 정한 것\n## 할 일 (누가 · 무엇을 · 언제)\n## 아직 답이 없는 질문\n없는 항목은 "없음". 지어내지 마세요.\n\n' + lines;
         var g = await require('../services/ai-provider').generateText({ prompt: prompt.slice(0, 15000), tenantId: t });
-        if (!g) return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ AI 가 설정되지 않았습니다', replyTo: replyTo });
+        if (!g) return priv('system', '⚠️ AI 가 설정되지 않았습니다');
         text = g.text || '';
         await ai.logUsage(t, me(req), '/요약', g.provider);
       }
     } catch (e) {
-      return postMessage({ tenantId: t }, room, { kind: 'system', body: '⚠️ AI 응답 실패: ' + (e.message || e), replyTo: replyTo });
+      return priv('system', '⚠️ AI 응답 실패: ' + (e.message || e));
     }
-    return postMessage({ tenantId: t }, room, { kind: 'ai', body: text.slice(0, MAX_BODY), cards: aiCards, replyTo: replyTo });
+    hub.publish([me(req)], 'typing', { roomId: room.id, userId: 'ai', name: 'AI', done: true });
+    return priv('ai', text, aiCards, { q: cmd === 'ai' ? arg.slice(0, 120) : '/요약' });
   }
   return null;   // 모르는 명령 — 그냥 글로
 }

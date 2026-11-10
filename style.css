@@ -6936,3 +6936,55 @@ html[data-cx-tyfx="0"] .cx-comp-r::before{display:none}
 .cx-inv-sec.off b{color:#0F8A63}
 .cx-inv-sec.on{background:color-mix(in srgb,#F59E0B 12%,transparent);border-color:color-mix(in srgb,#F59E0B 50%,transparent);color:var(--t2)}
 .cx-inv-sec.on b{color:#B45309}
+
+/* ═══ v13.426 👁 나만 보기 · 🔒 채팅 잠금 · @부른 사람 강조 ═══ */
+/* @ 알약 — 방 사람이면 색 칸, 나면 노랑 */
+.cx-atp{display:inline-block;padding:0 6px;margin:0 1px;border-radius:6px;line-height:1.45;font-weight:700;background:color-mix(in srgb,var(--ac) 15%,transparent);color:var(--ac-t,var(--ac));white-space:nowrap}
+.cx-atp.me{background:#FDE68A;color:#92400E;box-shadow:0 0 0 1px #F59E0B inset}
+.cx-atp.all{background:color-mix(in srgb,#EF4444 14%,transparent);color:#DC2626}
+.cx-m.mine .cx-atp{background:rgba(255,255,255,.24);color:var(--cx-mine-t,#fff);box-shadow:none}
+.cx-m.mine .cx-atp.me{background:#FDE68A;color:#92400E}
+/* 나를 부른 말풍선 — 노란 테두리 · 이름 옆 꼬리표 */
+.cx-m.at-me .cx-bw>.cx-b{box-shadow:0 0 0 2px #F59E0B,0 6px 16px -10px rgba(245,158,11,.8)}
+.cx-m.at-all .cx-bw>.cx-b{box-shadow:0 0 0 2px color-mix(in srgb,#EF4444 55%,transparent)}
+.cx-atme-tag{font-style:normal;margin-left:6px;padding:0 7px;border-radius:999px;background:#FEF3C7;color:#B45309;font-size:10.5px;font-weight:800;vertical-align:1px}
+.cx-m.at-all .cx-atme-tag{background:#FEE2E2;color:#DC2626}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .cx-atp.me,:root:not([data-theme="light"]) .cx-atme-tag{background:#78350F;color:#FDE68A}}
+:root[data-theme="dark"] .cx-atp.me,:root[data-theme="dark"] .cx-atme-tag{background:#78350F;color:#FDE68A}
+
+/* 👁 나만 보기 */
+.cx-eph{margin:8px auto 10px;max-width:min(640px,92%);border:1px dashed color-mix(in srgb,var(--ac) 50%,var(--bd));border-radius:14px;background:color-mix(in srgb,var(--bg-p) 88%,var(--ac) 4%);padding:10px 12px 12px}
+.cx-eph-h{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11.5px;color:var(--t5)}
+.cx-eph-h i{font-style:normal;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cx-eph-tag{flex:none;padding:1px 8px;border-radius:999px;background:var(--t1);color:var(--bg-p);font-size:10.5px;font-weight:800}
+.cx-eph-x{flex:none;border:0;background:none;color:var(--t5);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:6px}
+.cx-eph-x:hover{background:var(--bg-hv);color:var(--t2)}
+.cx-eph-b{font-size:13px;line-height:1.6;color:var(--t2);word-break:break-word}
+.cx-eph .cx-cards{margin-top:8px;max-width:420px}
+.cx-eph-a{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.cx-eph-a span{font-size:11px;color:var(--t5)}
+
+/* 🔒 채팅 잠금 */
+.cx-lockb.on{color:var(--ac-t,var(--ac))}
+html.cx-locked #mMessages .cx{filter:blur(16px) saturate(.6);pointer-events:none;user-select:none}
+html.cx-locked #mMessages{position:relative}
+.cx-lock-ov{position:absolute;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg-p) 55%,transparent);padding:16px}
+.cx-lock-card{display:flex;flex-direction:column;align-items:center;gap:8px;width:min(320px,100%);padding:26px 22px 20px;border-radius:18px;background:var(--bg-p);border:1px solid var(--bd);box-shadow:0 20px 50px -20px rgba(0,0,0,.45);text-align:center}
+.cx-lock-card.shake{animation:cxLockShake .35s}
+@keyframes cxLockShake{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+.cx-lock-ic{font-size:34px;line-height:1}
+.cx-lock-card>b{font-size:15px;color:var(--t1)}
+.cx-lock-card>span{font-size:12.5px;color:var(--t4)}
+.cx-lock-card form{display:flex;gap:6px;width:100%;margin-top:6px}
+.cx-lock-card input{flex:1;min-width:0;font-size:18px;letter-spacing:.35em;text-align:center;padding:8px;border:1px solid var(--bd);border-radius:10px;background:var(--bg-i);color:var(--t1)}
+.cx-lock-card input:focus{outline:2px solid var(--ac);outline-offset:1px}
+.cx-lock-card em{font-style:normal;font-size:12px;color:#DC2626;min-height:16px}
+.cx-lock-help{font-style:normal;font-size:11px;color:var(--t5)}
+.cx-lock-set{display:flex;flex-direction:column;gap:10px}
+.cx-lock-intro{margin:0;font-size:12.5px;color:var(--t3);line-height:1.6}
+.cx-lock-note{margin:0;font-size:11.5px;color:var(--t5);line-height:1.6}
+.cx-lock-note kbd{font-size:10.5px;padding:0 4px;border:1px solid var(--bd);border-radius:4px;background:var(--bg-i)}
+.cx-lock-err{font-style:normal;font-size:12px;color:#DC2626;min-height:14px}
+.cw-foot .cx-lock-off{color:#DC2626}
+@media (prefers-reduced-motion:reduce){.cx-lock-card.shake{animation:none}}
+.cx-lock-card input::placeholder{letter-spacing:normal;font-size:14px}

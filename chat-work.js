@@ -225,3 +225,45 @@ function chatBriefNow() {
     if (rid && typeof chatOpenRoom === 'function') { if (typeof setPage === 'function') setPage('messages'); chatOpenRoom(rid); }
   }).catch(function (e) { _cxToast(_cxErr(e), 'error'); });
 }
+
+/* v13.426 / 명령 결과 — 나만 보기 (방에 저장 안 됨 · 새로 고치면 사라짐) · AI 답은 "📢 방에 공유" */
+CX.eph = CX.eph || {};
+function chatEphAdd(room, list) {
+  (list || []).forEach(function (o) { o.eph = true; (CX.eph[room] = CX.eph[room] || []).push(o); });
+  if (CX.typing && CX.typing[room]) { delete CX.typing[room].ai; if (typeof _cxDrawTyping === 'function') _cxDrawTyping(); }
+  if (CX.room === room) { chatEphMerge(); _cxDrawMsgs(true); if (typeof _cxToBottom === 'function') _cxToBottom(); }
+}
+/** 방을 다시 열면 그 방의 나만 보기 결과를 맨 뒤에 다시 붙임 */
+function chatEphMerge() {
+  var l = CX.room && CX.eph[CX.room]; if (!l || !l.length) return;
+  l.forEach(function (o) { if (!CX.msgs.some(function (m) { return m.id === o.id; })) CX.msgs.push(o); });
+}
+function chatEphHtml(m) {
+  var ai = m.kind === 'ai', body = ai ? (typeof rMD === 'function' ? rMD(_cxE(m.body)) : _cxText(m.body)) : _cxText(m.body);
+  var cards = (m.cards || []).length ? '<div class="cx-cards">' + m.cards.map(function (c, i) { return _cxCardHtml(c, i, { deleted: true }).replace(/data-open="/g, 'data-eopen="' + _cxE(m.id) + '" data-ei="'); }).join('') + '</div>' : '';
+  return '<div class="cx-eph' + (ai ? ' ai' : '') + '" data-eph="' + _cxE(m.id) + '">' +
+    '<div class="cx-eph-h"><span class="cx-eph-tag">👁 나만 보임</span><i>' + (ai ? (m.q === '/요약' ? '대화 요약' : 'AI 답' + (m.q ? ' — ' + _cxE(m.q) : '')) : '명령 결과') + ' · 방 사람에게는 안 보여요</i>' +
+    '<button type="button" class="cx-eph-x" data-ex="' + _cxE(m.id) + '" title="지우기" aria-label="지우기">✕</button></div>' +
+    '<div class="cx-eph-b' + (ai ? ' cx-ai' : '') + '">' + body + '</div>' + cards +
+    (m.tok ? '<div class="cx-eph-a"><button type="button" class="wm-pri" data-eshare="' + _cxE(m.id) + '">📢 방에 공유</button><span>공유하면 방 사람 모두가 이 답을 봅니다 (내 권한으로 찾은 내용 포함)</span></div>' : '') +
+    '</div>';
+}
+document.addEventListener('click', function (e) {
+  var t = e.target; if (!t.closest || !t.closest('.cx-eph')) return;
+  function find(id) { return CX.msgs.filter(function (m) { return m.id === id; })[0]; }
+  var x = t.closest('[data-ex]');
+  if (x) { var id = x.dataset.ex; CX.msgs = CX.msgs.filter(function (m) { return m.id !== id; }); if (CX.eph[CX.room]) CX.eph[CX.room] = CX.eph[CX.room].filter(function (m) { return m.id !== id; }); _cxDrawMsgs(true); return; }
+  var o = t.closest('[data-eopen]');
+  if (o) { var m = find(o.dataset.eopen), c = m && m.cards && m.cards[+o.dataset.ei]; if (c) _cxOpenCard(c); return; }
+  var s = t.closest('[data-eshare]');
+  if (s) {
+    var m2 = find(s.dataset.eshare); if (!m2) return;
+    if (!confirm('이 AI 답을 방 사람 모두에게 보여 줄까요?\n내 권한으로 찾은 내용이 들어 있을 수 있어요.')) return;
+    s.disabled = true;
+    apiFetch('/api/chat/rooms/' + encodeURIComponent(CX.room) + '/eph-share', { method: 'POST', body: JSON.stringify({ tok: m2.tok }) }).then(function (r) {
+      var id2 = m2.id; CX.msgs = CX.msgs.filter(function (m) { return m.id !== id2; }); if (CX.eph[CX.room]) CX.eph[CX.room] = CX.eph[CX.room].filter(function (m) { return m.id !== id2; });
+      if (r && r.data && typeof _cxAddIfNew === 'function') _cxAddIfNew(r.data);
+      _cxDrawMsgs(true); _cxToast('📢 방에 공유했습니다', 'success');
+    }).catch(function (e2) { s.disabled = false; _cxToast(_cxErr(e2), 'error'); });
+  }
+});
