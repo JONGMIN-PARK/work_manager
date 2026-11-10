@@ -6806,3 +6806,27 @@ html[data-cx-tyfx="0"] .cx-comp-r::before{display:none}
   .cx-sugg{width:auto;right:10px}
 }
 @media (prefers-reduced-motion:reduce){.cx-menu,.cx-emo,.cx-sugg,.cx-comp.tools-open .cx-tools,.cx-mrx button,.cx-menu.cx-rxpick .cx-ml button,.cx-menu.sheet,.cx-menu-bk{animation:none!important}}
+
+/* ═══ v13.421 내 업무 글자 크기 한 줄 맞춤 — 도구 막대(12px) 기준
+   항목 제목 12.5 · 칸/묶음 머리 12.5 굵게 · 띠 제목 13 굵게 · 보조(날짜 · 출처 · 개수) 11.5 · 빈 칸 안내 12
+   예전: 보드 칸 머리 13.5 · 타임라인/내 프로젝트 제목 14 · 빈 칸 안내 13 — 메뉴보다 커서 들쭉날쭉 ═══ */
+#mMyWork .mw-bar2 .mw-chip,#mMyWork .mw-bar2 .mw-btn,#mMyWork .mw-bar2 .mw-input,#mMyWork .mw-bar2 select,#mMyWork .mwc-seg-b{font-size:12px}
+#mMyWork .mw-row,#mMyWork .mwb-i,#mMyWork .mwb-t{font-size:12.5px}
+#mMyWork .mw-grp-h,#mMyWork .mwb-h{font-size:12.5px}
+#mMyWork .mwb-h b,#mMyWork .mw-grp-h b{font-size:11.5px}
+#mMyWork .mwb-h i{font-size:11px}
+#mMyWork .mwb-e{font-size:12px;padding:28px 8px}
+#mMyWork .mw-src,#mMyWork .mw-ctx,#mMyWork .mw-due,#mMyWork .mwb-m{font-size:11.5px}
+.mtl-ttl,.mwj-ttl,.mtl-cal-hd b{font-size:13px}
+.mtl-corner{font-size:12px}
+.mwj-e{font-size:12px}
+.mtl-lp-h span{font-size:11px}
+/* 노트북 — 목록 머리도 같은 단계 */
+.nb-lh-t{font-size:13px}
+.mwc-label{font-size:13px;font-weight:700}
+.mwj-t{font-size:12.5px}
+.mwj-it,.mwj-ck,.mwj-pk{font-size:12px}
+.mwj-lk{font-size:12.5px}
+.mwp-title{font-size:15px}
+.mwp-title.mwp-ro{font-size:14.5px}
+.mwp-ro,.mwp-clt{font-size:12.5px}

@@ -1632,7 +1632,7 @@
       var pv = $(pvId);
       if (!pv) return;
       if (!text || !text.trim()) {
-        pv.innerHTML = '<div style="color:var(--t6);text-align:center;padding:32px">내용을 입력하면 여기에 미리보기가 표시됩니다</div>';
+        pv.innerHTML = '<div style="color:var(--t6);text-align:center;padding:32px;font-size:12.5px">내용을 입력하면 여기에 미리보기가 표시됩니다</div>';
       } else {
         paintPreview(pv, clientParseText(text));
       }
