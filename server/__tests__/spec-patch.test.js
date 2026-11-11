@@ -90,6 +90,18 @@ describe('spec-patch', function () {
 });
 
 describe('spec-patch — 구성도 편집 (v13.200)', function () {
+  test('topo(장치 계층 구성) 통째 교체 · 형식 검사 (v13.449)', function () {
+    var d = { v: 2, values: {}, remarks: {}, extra: {} };
+    var t1 = { v: 1, nodes: [{ id: 'n1', parent: null, kind: 'pc', name: 'PC' }], io: [] };
+    expect(sp.validate([{ path: ['topo'], from: null, to: t1 }])).toBeNull();
+    expect(sp.validate([{ path: ['topo', 'nodes'], from: null, to: [] }])).toBeTruthy();
+    expect(sp.validate([{ path: ['topo'], from: null, to: { nodes: 'x' } }])).toBeTruthy();
+    expect(sp.validate([{ path: ['topo'], from: null, to: { nodes: new Array(601).fill({ id: 'a' }) } }])).toBeTruthy();
+    var r = sp.applyChanges(d, [{ path: ['topo'], from: null, to: t1 }]);
+    expect(r.doc.topo).toEqual(t1);
+    var c = sp.applyChanges(r.doc, [{ path: ['topo'], from: null, to: { v: 1, nodes: [], io: [] } }]);
+    expect(c.conflicts.length).toBe(1);
+  });
   test('diagram 통째 교체·충돌', function () {
     var d = doc();
     var r = sp.applyChanges(d, [{ path: ['diagram'], from: null, to: { pos: { mc: { x: 1, y: 2 } } } }]);

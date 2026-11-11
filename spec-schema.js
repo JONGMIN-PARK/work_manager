@@ -686,6 +686,7 @@ function specDiff(base, next, schema) {
     });
   });
   if (!_specSame(base.diagram || null, next.diagram || null)) out.push({ path: ['diagram'], from: base.diagram || null, to: next.diagram || null, label: '하드웨어 구성도 편집' });
+  if (!_specSame(base.topo || null, next.topo || null)) out.push({ path: ['topo'], from: base.topo || null, to: next.topo || null, label: '장치 계층 구성 · 축 순서 · IO 리스트' });   // v13.449 spec-topo.js
   SPEC_DISCIPLINE_KEYS.forEach(function (d) {
     var b = (base.extra || {})[d] || [], n = (next.extra || {})[d] || [];
     if (!_specSame(b, n)) out.push({ path: ['extra', d], from: b, to: n, label: '기타 사양 › ' + specDisciplineLabel(d) });

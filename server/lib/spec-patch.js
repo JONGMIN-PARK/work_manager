@@ -16,8 +16,10 @@
  *   ['remarks', itemKey] | ['status', itemKey]
  *   ['extra', discipline]               기타 사양(분야별 목록 통째)
  *   ['diagram']                         하드웨어 구성도 편집(위치·이름·화살표) 통째 (v13.200)
+ *   ['topo']                            장치 계층 구성 · 축 순서 · IO 리스트 통째 (v13.449 spec-topo.js)
  */
-var ROOTS = { templateId: 1, templateVersion: 1, values: 1, remarks: 1, status: 1, extra: 1, diagram: 1 };
+var ROOTS = { templateId: 1, templateVersion: 1, values: 1, remarks: 1, status: 1, extra: 1, diagram: 1, topo: 1 };
+var WHOLE = { templateId: 1, templateVersion: 1, diagram: 1, topo: 1 };   // 통째로만 바꾸는 것
 var MAX_CHANGES = 2000;
 
 function _isBlank(v) { return v === undefined || v === null || v === ''; }
@@ -77,8 +79,9 @@ function validate(changes) {
     if (!ROOTS[c.path[0]]) return '경로 오류: ' + c.path[0];
     for (var j = 0; j < c.path.length; j++) if (typeof c.path[j] !== 'string' || !c.path[j] || c.path[j].length > 80 || c.path[j] === '__proto__' || c.path[j] === 'constructor' || c.path[j] === 'prototype') return '경로 오류';
     if (c.path.length > 2 && c.path[0] !== 'values') return '경로 오류';
-    if (c.path[0] === 'diagram' && c.path.length !== 1) return '경로 오류';   // 구성도는 통째로만
-    if (c.path.length === 1 && c.path[0] !== 'templateId' && c.path[0] !== 'templateVersion' && c.path[0] !== 'diagram') return '경로 오류';
+    if ((c.path[0] === 'diagram' || c.path[0] === 'topo') && c.path.length !== 1) return '경로 오류';   // 구성도 · 계층 구성은 통째로만
+    if (c.path.length === 1 && !WHOLE[c.path[0]]) return '경로 오류';
+    if (c.path[0] === 'topo' && c.to != null && (typeof c.to !== 'object' || !Array.isArray(c.to.nodes) || c.to.nodes.length > 600 || (c.to.io && (!Array.isArray(c.to.io) || c.to.io.length > 4000)))) return '장치 계층 구성 형식 오류';
   }
   return null;
 }

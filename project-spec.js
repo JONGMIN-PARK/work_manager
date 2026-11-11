@@ -165,6 +165,7 @@ function _specRender() {
   }
   _psApplyFilter();
   _psRefreshDiagram();
+  if (typeof psTopoRender === 'function') psTopoRender();
   if (typeof renderCommentThread === 'function') renderCommentThread('project', _ps.projId, 'pdSpecComments');
 }
 
@@ -562,6 +563,7 @@ function _psHwCardHtml() {
       '<span id="psChecksBadge" style="font-size:10px"></span>' +
     '</div>' +
     '<div style="padding:8px 10px;display:' + (collapsed ? 'none' : 'block') + '">' +
+      (typeof psTopoHtml === 'function' ? psTopoHtml() + '<div class="pst-auto-t">📐 사양 값으로 그린 자동 계통도</div>' : '') +   // v13.449 🧩 장치 계층 구성 (project-spec-topo.js)
       '<div id="psChecks"></div>' +
       '<div id="psDgTools"></div>' +
       '<div id="psDiagram" style="overflow-x:auto;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:8px;cursor:zoom-in;touch-action:none;user-select:none"></div>' +
