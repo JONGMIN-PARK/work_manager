@@ -352,6 +352,7 @@ function _cbSave(op) {
   if ('rot' in op) body.rot = op.rot;
   if ('crop' in op) body.crop = op.crop;
   if (op.clear) body.clear = true;
+  if (CB.W && CB.H) { body.W = CB.W; body.H = CB.H; }   // v13.455 원본 크기 — 미리보기에 줄여 그릴 기준
   CB.saving = (CB.saving || 0) + 1; _cbInfo();
   apiFetch('/api/chat/files/' + encodeURIComponent(CB.fid) + '/annot', { method: 'POST', body: JSON.stringify(body) })
     .catch(function (e) { _cbToast((e && e.data && e.data.message) || '표시를 저장하지 못했습니다', 'error'); })
@@ -872,7 +873,7 @@ function _cbSendDraft() {
     return chunks.reduce(function (pr, ch, i) {
       return pr.then(function () {
         var body = { add: ch };
-        if (i === 0) { if (a.rot) body.rot = a.rot; if (a.crop) body.crop = a.crop; }
+        if (i === 0) { if (a.rot) body.rot = a.rot; if (a.crop) body.crop = a.crop; if (my.W && my.H) { body.W = my.W; body.H = my.H; } }
         return apiFetch('/api/chat/files/' + encodeURIComponent(fid) + '/annot', { method: 'POST', body: JSON.stringify(body) });
       });
     }, Promise.resolve());
@@ -1107,7 +1108,7 @@ function _cbAnnScale(a, k) {
 var _cbThumbC = {}, _cbThumbKey = {};
 function _cbThumbMake(fid, need, rot, fill, dim, key, at) {
   // v13.451 ① 기기에 담아 둔 완성 그림 ② 없으면 작은 미리보기 위에 표시를 줄여 그림 (원본 크기를 알 때) ③ 모르면 예전처럼 원본으로
-  var dbKey = key ? 'a:' + key : null;
+  var dbKey = key ? 'a2:' + key : null;   // v13.455 'a:' 는 크기를 잘못 알고 그린 것이 섞여 버림
   var cached = dbKey && typeof chatThumbGet === 'function' ? chatThumbGet([dbKey]).then(function (m) { return m[dbKey] || null; }, function () { return null; }) : Promise.resolve(null);
   return cached.then(function (buf) {
     if (buf) return new Promise(function (ok, no) { var b = new Blob([buf]), u = URL.createObjectURL(b), im = new Image(); im.onload = function () { ok({ url: u, w: im.naturalWidth, h: im.naturalHeight }); }; im.onerror = function () { URL.revokeObjectURL(u); no(new Error('cache')); }; im.src = u; });
@@ -1117,15 +1118,20 @@ function _cbThumbMake(fid, need, rot, fill, dim, key, at) {
     });
   });
 }
-function _cbThumbBuild(fid, need, rot, fill, dim, at) {
-  var useSmall = !need || !!dim, small = typeof _cxBlob === 'function';
-  var url = useSmall && small ? _cxBlob(fid, true) : _cbFileUrl(fid);
-  var src = url.then(_cbLoadImg).then(function (im) { return typeof im.decode === 'function' ? im.decode().then(function () { return im; }, function () { return im; }) : im; });
-  return Promise.all([src, need ? _cbAnnGet(fid, at) : null]).then(function (r) {
-    var img = r[0], ann = r[1] || {};
-    if (need && dim && useSmall) {   // 미리보기가 원본과 같은 모양인지 (예전 사진은 미리보기가 없어 원본이 올 수 있음 — 그때는 k=1)
-      var k = img.naturalWidth / dim.w;
-      if (Math.abs(img.naturalHeight / img.naturalWidth - dim.h / dim.w) > 0.03) return _cbThumbBuild(fid, need, rot, fill, null, at);   // 모양이 다르면 원본으로
+function _cbThumbBuild(fid, need, rot, fill, dim, at, forceOrig) {
+  // v13.455 표시는 원본 픽셀 좌표 — 원본 크기(ann.W · H)를 알 때만 작은 미리보기에 줄여 그림. 모르면(예전 표시) 원본으로
+  //   (메시지의 w · h 는 자리 잡기용이라 예전 사진은 미리보기 크기가 적혀 있어 믿으면 표시가 몇 배 커져 밖으로 나갔음)
+  var annP = need ? _cbAnnGet(fid, at) : Promise.resolve(null), small = typeof _cxBlob === 'function';
+  var load = function (u) { return u.then(_cbLoadImg).then(function (im) { return typeof im.decode === 'function' ? im.decode().then(function () { return im; }, function () { return im; }) : im; }); };
+  return annP.then(function (ann0) {
+    var ann = ann0 || {}, okDim = !forceOrig && need && +ann.W > 0 && +ann.H > 0;
+    var useSmall = small && !forceOrig && (!need || okDim);
+    return load(useSmall ? _cxBlob(fid, true) : _cbFileUrl(fid)).then(function (img) { return [img, ann, useSmall]; });
+  }).then(function (r) {
+    var img = r[0], ann = r[1], usedSmall = r[2];
+    if (need && usedSmall) {
+      var k = img.naturalWidth / ann.W;
+      if (Math.abs(img.naturalHeight / img.naturalWidth - ann.H / ann.W) > 0.03) return _cbThumbBuild(fid, need, rot, fill, dim, at, true);   // 모양이 다르면(돌려 찍힌 미리보기 등) 원본으로
       if (Math.abs(k - 1) > 0.01) ann = _cbAnnScale(ann, k);
     }
     var a = Object.assign({ crop: null, shapes: [] }, ann, { rot: rot });

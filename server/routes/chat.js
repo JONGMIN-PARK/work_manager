@@ -983,6 +983,9 @@ router.post('/files/:fid/annot', async function (req, res) {
       add.forEach(function (s) { a.shapes = a.shapes.filter(function (x) { return x.id !== s.id; }); a.shapes.push(s); });
       if (b.rot != null) { a.rot = annAng(b.rot); op.rot = a.rot; }
       if ('crop' in b) { a.crop = annRect(b.crop); op.crop = a.crop; }
+      // v13.455 원본 사진 크기 — 표시 좌표의 기준. 대화 속 작은 미리보기에 줄여 그릴 때 씀 (메시지의 w · h 는 자리 잡기용이라 예전 사진은 미리보기 크기)
+      var W = Math.round(+b.W), H = Math.round(+b.H);
+      if (W > 0 && H > 0 && W <= 20000 && H <= 20000) { a.W = W; a.H = H; }
       if (a.shapes.length > ANN_MAX) throw Object.assign(new Error('표시는 ' + ANN_MAX + '개까지입니다.'), { status: 400 });
       var json = JSON.stringify(a);
       if (json.length > ANN_BYTES) throw Object.assign(new Error('표시가 너무 많습니다. 몇 개 지워 주세요.'), { status: 400 });

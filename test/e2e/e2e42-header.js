@@ -60,7 +60,7 @@ var SHOTS = path.join(__dirname, '.shots');
       var m = document.querySelector('#hdrLookWrap .hdr-pop-menu'), r = m.getBoundingClientRect();
       return { open: getComputedStyle(m).display !== 'none', chips: document.querySelectorAll('#themeBar .thc, #themeBar .thx').length, sig: document.querySelectorAll('#themeBar .thx[data-theme]').length, groups: document.querySelectorAll('#themeBar .thg-t').length, fonts: document.querySelectorAll('#fontBar .fnd').length, inView: r.left >= 0 && r.right <= innerWidth };
     });
-    check(look.open && look.chips === TH_N() && look.groups === 5 && look.sig === 4 && look.fonts > 5 && look.inView, '🎨 열림 — 테마 칸 · 무리 5(✨ 시그니처 미리보기 카드 4) · 글씨체 목록 ' + JSON.stringify(look));
+    check(look.open && look.chips === TH_N() && look.groups === 5 && look.sig === 6 && look.fonts > 5 && look.inView, '🎨 열림 — 테마 칸 · 무리 5(✨ 시그니처 미리보기 카드 4) · 글씨체 목록 ' + JSON.stringify(look));
     await page.screenshot({ path: path.join(SHOTS, 'hdr-pc-look.png') });
     await page.hover('#themeBar .thc[title="포레스트"]'); await wait(100);
     check(await page.evaluate(function () { return document.documentElement.getAttribute('data-theme') === 'forest' && cTh !== 'forest'; }), '올리면 미리 보기 (저장 안 함)');
@@ -132,5 +132,5 @@ var SHOTS = path.join(__dirname, '.shots');
   } catch (e) { console.log('ERR', e.message); try { console.log('STATE', JSON.stringify(await page.evaluate(function () { var o = document.getElementById('loginOverlay'); var em = document.getElementById('loginEmail'); return { user: !!currentUser, ov: o && o.style.display, em: !!em, emVis: em && em.offsetParent !== null, url: location.href }; }))); await page.screenshot({ path: path.join(SHOTS, 'hdr-err.png') }); } catch (e2) {} } finally {
     await browser.close();
   }
-  function TH_N() { return 22; }   // v13.314 시그니처 4 더함
+  function TH_N() { return 24; }   // v13.314 시그니처 4 · v13.455 노바 · 펄
 })();

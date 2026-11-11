@@ -17,7 +17,7 @@ function _pstChanged(redraw) {
   if (typeof _psMarkDirty === 'function') _psMarkDirty();
   if (redraw !== false) psTopoRender();
 }
-function _pstDark() { var t = document.documentElement.getAttribute('data-theme') || ''; return /dark|night|midnight|ocean|neon/.test(t) || (document.body && getComputedStyle(document.body).backgroundColor.match(/\d+/g) || [255]).slice(0, 3).reduce(function (s, v) { return s + +v; }, 0) < 300; }
+function _pstDark() { var t = document.documentElement.getAttribute('data-theme') || ''; return /dark|night|midnight|ocean|neon|nova|holo|command/.test(t) || (document.body && getComputedStyle(document.body).backgroundColor.match(/\d+/g) || [255]).slice(0, 3).reduce(function (s, v) { return s + +v; }, 0) < 300; }
 
 /* ─── 카드 안 틀 ─── */
 function psTopoHtml() {

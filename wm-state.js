@@ -2,7 +2,7 @@
  * 업무일지_분석기.html 인라인 <script> 에서 분리. 동기 <script src> 로 원래 자리·순서대로 로드(defer/async 금지 — 최상위 let/function 을 다른 파일이 전역으로 공유하고, 로드 시점 코드의 의존 순서가 고정돼 있음). */
 /* ═══ THEME (TH → config.js) ═══ */
 let cTh='auto';
-function gSysTh(){return matchMedia('(prefers-color-scheme:dark)').matches?'midnight':'light'}
+function gSysTh(){return matchMedia('(prefers-color-scheme:dark)').matches?'nova':'pearl'}   // v13.455 시스템 자동 = 대표 테마 (예전 midnight · light)
 function aTh(id,anim){
   var go=function(){cTh=id;document.documentElement.setAttribute('data-theme',id==='auto'?gSysTh():id);rTh();lsSet('wa-theme',id);if(_wmFontReady)aFnt(cFnt)};
   // v13.314 고를 때는 부드럽게 넘어가게 (View Transitions 지원 브라우저 · 움직임 줄이기 설정이면 바로)
@@ -33,7 +33,7 @@ aTh(cTh);matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=
 let cFnt='noto';
 /* 테마별 기본 글씨체 — 기본(노토)을 고른 상태에서 글래스 테마면 프리텐다드(흐린 배경에서 작은 글자가 더 또렷).
    사용자가 노토 외 글씨체를 직접 고르면 그대로. 저장값(wa-font)은 고른 글씨체 id 그대로 둔다 */
-function _wmFontFor(id){ return (id==='noto' && /^(glass|studio|holo|focus|command)$/.test(document.documentElement.getAttribute('data-theme')||'')) ? 'pretendard' : id; }   // v13.314 시그니처도 프리텐다드
+function _wmFontFor(id){ return (id==='noto' && /^(glass|studio|holo|focus|command|nova|pearl)$/.test(document.documentElement.getAttribute('data-theme')||'')) ? 'pretendard' : id; }   // v13.314 시그니처도 프리텐다드
 function aFnt(id){
   var FF = (typeof FONTS!=='undefined')?FONTS:[];
   var chosen = FF.find(function(x){return x.id===id}) || FF[0];
