@@ -7642,6 +7642,8 @@ html.wm-tbo .hdr button,html.wm-tbo .hdr input,html.wm-tbo .hdr a,html.wm-tbo .h
 html.wm-tbo.wm-solo #cxHead{-webkit-app-region:drag;padding-right:calc(12px + var(--wm-tbo-r))!important}
 html.wm-tbo.wm-solo #cxHead button,html.wm-tbo.wm-solo #cxHead input{-webkit-app-region:no-drag}
 html.wm-tbo #initLoading{-webkit-app-region:drag}
+/* v13.458 PC 앱은 머리 줄 색을 재서 창 단추 칸도 같은 색으로 칠함(wm-app.js wmTitleBarSync) — 테마 바꿀 때 바탕 · 머리 줄 색이 0.3초 동안 바뀌는 중간값을 재지 않게 전환 효과 끔 */
+html.wm-tbo body,html.wm-tbo .hdr,html.wm-tbo.wm-solo #cxHead{transition:none!important}
 @media(max-width:700px){html.wm-tbo .hdr{padding-right:calc(10px + var(--wm-tbo-r))!important}}
 /* 좁은 PC 창 — 단추가 다 들어가게: 이름 글자는 숨기고(작업 표시줄 · 로고로 충분) 로고 · 버전만, 단추 사이도 좁게 */
 @media(max-width:660px){

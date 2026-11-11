@@ -73,6 +73,8 @@ if (wmIsDesktopApp() && window.wmDesktop.getOnTop) {
 /* v13.454 PC 앱(새 버전) — 윈도우 제목 줄 대신 머리 줄을 끌어 창을 옮기고, 최소화 · 최대화 · 닫기 단추 색을 테마에 맞춤 */
 function _wmHex(c) { var m = String(c || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/); if (!m) return /^#[0-9a-f]{6}$/i.test(c) ? c : ''; if (m[4] != null && +m[4] < 0.5) return ''; return '#' + [m[1], m[2], m[3]].map(function (v) { var h = (+v).toString(16); return h.length < 2 ? '0' + h : h; }).join(''); }
 var _wmTbLast = '';
+/* v13.458 반투명 머리 줄(노바 · 펄 등) — 바탕 위에 섞인 실제 보이는 색으로 창 단추 칸을 칠해 경계가 안 보이게 */
+function _wmMix(fg, bg) { var p = function (c) { var m = String(c || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/); return m ? [+m[1], +m[2], +m[3], m[4] == null ? 1 : +m[4]] : null; }; var f = p(fg), b = p(bg); if (!f || f[3] === 0) return ''; if (!b || b[3] === 0) b = [255, 255, 255, 1]; var a = f[3]; return '#' + [0, 1, 2].map(function (i) { var v = Math.round(f[i] * a + b[i] * (1 - a)).toString(16); return v.length < 2 ? '0' + v : v; }).join(''); }
 /* v13.456 오른쪽 위 창 단추(최소화 · 최대화 · 닫기)가 차지하는 폭 → --wm-tbo-r (CSS 가 그만큼 비워 둠) */
 function wmTitleBarArea() {
   try {
@@ -88,10 +90,20 @@ function wmTitleBarSync() {
   document.documentElement.classList.add('wm-tbo');
   wmTitleBarArea();
   var solo = !!window.WM_SOLO, hd = solo ? document.getElementById('cxHead') : document.querySelector('.hdr');
-  var el = hd && hd.offsetParent !== null ? hd : document.body, cs = getComputedStyle(el);
-  var bg = _wmHex(cs.backgroundColor) || _wmHex(getComputedStyle(document.body).backgroundColor) || '#0b1022';
+  var el = hd && hd.offsetParent !== null ? hd : document.body;
+  /* v13.458 머리 줄을 '지금 보이는 색' 단색으로 칠하고 창 단추 칸도 같은 색 — 반투명(노바 · 펄 · 글라스 …) 머리 줄이라
+     창 단추 칸만 색이 달라 보이던 것. 원래 테마 색을 읽으려고 잠깐 끄고 잼(같은 프레임이라 깜빡임 없음) */
+  var ov = document.getElementById('wmTboBg');
+  if (!ov) { ov = document.createElement('style'); ov.id = 'wmTboBg'; document.head.appendChild(ov); }
+  ov.media = 'not all';
+  var cs = getComputedStyle(el);
+  var bg = _wmMix(cs.backgroundColor, getComputedStyle(document.body).backgroundColor) || _wmHex(getComputedStyle(document.body).backgroundColor) || '#0b1022';
+  var css = 'html.wm-tbo .hdr,html.wm-tbo.wm-solo #cxHead{background:' + bg + '!important}';
+  if (ov.textContent !== css) ov.textContent = css;
+  ov.media = 'all';
   var fg = _wmHex(getComputedStyle(document.body).color) || '#e2e8f0';
-  var h = hd && hd.offsetParent !== null ? Math.min(64, Math.max(32, Math.round(hd.getBoundingClientRect().height))) : 40;
+  // v13.458 머리 줄 아래 구분선(border-bottom · inset 그림자 1px)은 창 단추 영역이 덮지 않게 그 위까지만
+  var h = hd && hd.offsetParent !== null ? Math.min(64, Math.max(32, Math.floor(hd.getBoundingClientRect().height) - 1)) : 40;
   var key = bg + fg + h; if (key === _wmTbLast) return; _wmTbLast = key;
   window.wmDesktop.setTitleBar({ color: bg, symbol: fg, h: h });
 }
