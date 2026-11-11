@@ -1016,13 +1016,38 @@ function chatBoardThumb(img, f, force) {
   }
   img.dataset.cbthumb = f.id;
   var need = !!(an && (an.n || an.crop)), rot = v ? v.a : (an && an.rot) || 0;
-  if (!need && !rot) { if (force) _cbFileUrl(f.id).then(function (u) { img.src = u; }); return; }
-  Promise.all([_cbFileImg(f.id), need ? apiFetch('/api/chat/files/' + encodeURIComponent(f.id) + '/annot') : null]).then(function (r) {
-    var a = Object.assign({ crop: null, shapes: [] }, (r[1] && r[1].data) || {}, { rot: rot });
-    var fill = !!(v && v.f), c = _cbFlatten(r[0], a, { max: 640, fill: fill });
-    // 비스듬한 빈 모서리는 투명하게 · v13.439 비치는(투명한) 사진도 PNG 로 — JPEG 는 투명한 곳이 검게 바뀌어 색이 뒤집혀 보임
-    img.src = (_cbSkew(rot) && !fill) || _cbHasAlpha(r[0]) ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.88);
+  if (!need && !rot) { delete img.dataset.cbkey; if (force) _cbFileUrl(f.id).then(function (u) { img.src = u; }); return; }
+  // v13.440 만든 미리보기는 담아 두고 다시 씀 — 굴릴 때마다 · 목록을 다시 그릴 때마다 새로 만들던 것 (휴대폰 굴림이 끊기던 가장 큰 원인)
+  var fill = !!(v && v.f), key = f.id + '|' + rot + '|' + (fill ? 1 : 0) + '|' + (an ? (an.n || 0) + ':' + (an.crop ? 1 : 0) : '');
+  var old = _cbThumbKey[f.id];
+  if (old && (force || old !== key)) { var op = _cbThumbC[old]; delete _cbThumbC[old]; if (op) op.then(function (t) { setTimeout(function () { URL.revokeObjectURL(t.url); }, 15000); }).catch(function () {}); }
+  _cbThumbKey[f.id] = key;
+  if (!_cbThumbC[key]) { _cbThumbC[key] = _cbThumbMake(f.id, need, rot, fill); _cbThumbC[key].catch(function () { if (_cbThumbKey[f.id] === key) delete _cbThumbKey[f.id]; delete _cbThumbC[key]; }); }
+  img.dataset.cbkey = key;
+  _cbThumbC[key].then(function (t) {
+    if (img.dataset.cbkey !== key) return;
+    if (img.dataset.dim && !img.closest('.cx-alb,.cx-q')) {   // 자리를 미리 잡아 둔 칸 — 돌린 모양에 맞춤 (가로 ↔ 세로)
+      var k = Math.max(t.w, t.h) > 468 ? 360 / Math.max(t.w, t.h) : 1, dw = Math.min(t.w * k, 280), dh = Math.min(dw * t.h / t.w, 260);
+      var sw = Math.round(Math.max(dw, 80)) + 'px', sh = Math.round(Math.max(dh, 60)) + 'px';
+      if (img.style.width !== sw) img.style.width = sw; if (img.style.height !== sh) img.style.height = sh;
+    }
+    img.src = t.url;
   }).catch(function () {});
+}
+/* v13.440 미리보기 만들기 — 화면을 멈추지 않게
+ *   · 돌리기만 한 사진: 작은 미리보기(360px)를 돌림 — 예전엔 원본(수 MB)을 받아 화면을 멈춘 채 풀었다
+ *   · 표시 · 자르기가 있는 사진: 좌표가 원본 기준이라 원본을 쓰되, 푸는 일(decode)은 뒤에서
+ *   · 압축도 뒤에서(toBlob) — toDataURL 은 끝날 때까지 화면이 멈춤 */
+var _cbThumbC = {}, _cbThumbKey = {};
+function _cbThumbMake(fid, need, rot, fill) {
+  var url = !need && typeof _cxBlob === 'function' ? _cxBlob(fid, true) : _cbFileUrl(fid);
+  var src = url.then(_cbLoadImg).then(function (im) { return typeof im.decode === 'function' ? im.decode().then(function () { return im; }, function () { return im; }) : im; });
+  return Promise.all([src, need ? apiFetch('/api/chat/files/' + encodeURIComponent(fid) + '/annot') : null]).then(function (r) {
+    var a = Object.assign({ crop: null, shapes: [] }, (r[1] && r[1].data) || {}, { rot: rot });
+    var c = _cbFlatten(r[0], a, { max: 640, fill: fill });
+    var png = (_cbSkew(rot) && !fill) || _cbHasAlpha(r[0]);   // 비스듬한 빈 모서리 · 비치는 사진은 투명하게 (JPEG 는 투명한 곳이 검게 바뀜)
+    return new Promise(function (ok, no) { c.toBlob(function (b) { if (b) ok({ url: URL.createObjectURL(b), w: c.width, h: c.height }); else no(new Error('blob')); }, png ? 'image/png' : 'image/jpeg', 0.88); });
+  });
 }
 /** 사진에 비치는(투명한) 곳이 있는지 — 작게 줄여 알파만 봄 (사진마다 한 번) */
 var _cbAlphaC = new WeakMap();

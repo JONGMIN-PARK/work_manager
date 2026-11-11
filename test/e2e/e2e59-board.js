@@ -148,7 +148,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var kept = await until(a, function () { return CB && CB.img && CB.my && CB.my.a === 93 && !CB.fill; }, null, 8000);
     check(kept, '닫고 다시 열어도 내 각도 93° 유지');
     // 대화 속 미리보기도 내 각도로 (비스듬하면 투명 모서리 png)
-    var th = await until(a, function (f) { var i = document.querySelector('#cxMsgs img[data-cbthumb="' + f + '"]'); return i && /^data:image\/png/.test(i.src); }, fid, 6000);
+    var th = await until(a, function (f) { var i = document.querySelector('#cxMsgs img[data-cbthumb="' + f + '"]'); return i && /^blob:/.test(i.src) && /\|93\|/.test(i.dataset.cbkey || '') && i.naturalWidth > 0; }, fid, 6000);   // v13.440 만든 미리보기는 blob 주소 (뒤에서 압축)
     check(th, '대화 속 미리보기도 내 각도로');
     // 📏 수평 맞추기 — 화면에서 오른쪽 아래로 30/300 기울어진 선을 따라 끌면 그만큼 반대로
     await a.click('#cbBoard [data-a="rot0"]');
@@ -201,7 +201,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(await a.evaluate(function () { return !document.getElementById('cbBoard') && !CB; }) && await k.evaluate(function () { return !CB; }), 'Esc 로 닫기 (둘 다)');
     var tag = await until(k, function (f) { var t = document.querySelector('#cxMsgs [data-file="' + f + '"] .cx-img-tag'); return t && /표시 5/.test(t.textContent); }, fid, 8000);
     check(tag, '대화 속 미리보기 — ✏️ 표시 5');
-    var thumbW = await k.evaluate(function (f) { var i = document.querySelector('#cxMsgs [data-file="' + f + '"] img'); return /^data:image/.test(i.src) && i.naturalWidth; }, fid);
+    var thumbW = await k.evaluate(function (f) { var i = document.querySelector('#cxMsgs [data-file="' + f + '"] img'); return /^blob:/.test(i.src) && !!i.dataset.cbkey && i.naturalWidth; }, fid);
     check(thumbW > 0, '미리보기가 표시 · 자른 모습으로 (' + thumbW + 'px)');
     await k.screenshot({ path: path.join(SHOT, 'e2e59-chat-kim.png') });
 

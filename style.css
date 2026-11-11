@@ -6469,6 +6469,9 @@ html:not([data-cx-depth="0"]) .cxw-b.me{background:linear-gradient(180deg,rgba(2
   html:not([data-cx-depth="0"]) .cx-msgs .cx-m.mine .cx-b:not(.cx-del):not(.cx-jumbo):not(.cx-codeonly){
     box-shadow:inset 0 1px 0 rgba(255,255,255,calc(.3 * var(--cxd))),0 3px 7px -3px color-mix(in srgb,var(--cx-mine-a,var(--ac)) min(100%,calc(60% * var(--cxd))),transparent)}
   .cx-msgs{overscroll-behavior-y:contain;overflow-anchor:auto}
+  /* v13.440 위 머리 · 아래 입력 줄 · 사진 꼬리표의 뒤 흐림 없앰 — 굴리는 내내 흐림을 다시 계산해 휴대폰 그래픽에 부담 (바탕은 불투명하게) */
+  .cx-h,.cx-comp{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--bg-ps,var(--bg-p))}
+  .cx-img-tag{backdrop-filter:none;-webkit-backdrop-filter:none}
 }
 /* v13.415 마인드맵 편집기 — 작은 폭 (휴대폰 · 좁은 창)
    머리: ① 뒤로 · 제목 · 보내기 · ⋯ ② 찾기 · 맵/아웃라인/간트 · 구조 · 정렬 · 테마 · AI · 내보내기 (한 줄, 옆으로 밀기)

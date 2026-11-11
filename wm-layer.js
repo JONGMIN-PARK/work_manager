@@ -151,12 +151,17 @@
     if (top()) { e.stopImmediatePropagation(); closeTop(); schedule(); }
   });
 
-  var timer = null;
+  /* v13.440 굴리는 동안은 쉬기 — 점검(화면 위 요소 찾기 · 스타일 읽기)은 화면 배치를 다시 계산하게 해서,
+   *   굴릴 때마다(0.14초마다) 돌면 휴대폰에서 굴림이 끊긴다. 열린 창이 없으면 굴림이 멎은 뒤에 한 번만 본다.
+   *   창이 열려 있을 때는 예전처럼 바로 (✕ 가 굴려서 사라졌는지 봐야 하므로) */
+  var timer = null, hasLayer = false, lastScroll = 0;
   function scan() {
     timer = null;
     if (!document.body) return;
-    if (!active()) { if (btn) btn.style.display = 'none'; hist(false); return; }
+    if (!active()) { hasLayer = false; if (btn) btn.style.display = 'none'; hist(false); return; }
+    if (!hasLayer && Date.now() - lastScroll < 300) { schedule(); return; }
     var p = probe();
+    hasLayer = !!p.layer;
     hist(!!p.layer);
     var need = !!p.layer && !p.visible && p.layer.childElementCount > 0;
     if (!need) { if (btn) btn.style.display = 'none'; return; }
@@ -164,7 +169,7 @@
     if (b.parentNode !== document.body || b.nextSibling) document.body.appendChild(b);
     b.style.display = 'flex';
   }
-  function schedule() { if (!timer) timer = setTimeout(scan, 140); }
+  function schedule() { if (!timer) timer = setTimeout(scan, hasLayer ? 140 : 320); }
   function start() {
     try {
       new MutationObserver(function (ms) {
@@ -173,7 +178,7 @@
     } catch (e) {}
     window.addEventListener('resize', schedule);
     window.addEventListener('orientationchange', schedule);
-    document.addEventListener('scroll', schedule, true);
+    document.addEventListener('scroll', function () { lastScroll = Date.now(); if (hasLayer) schedule(); }, { capture: true, passive: true });
     schedule();
   }
   if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);

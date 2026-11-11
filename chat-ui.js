@@ -820,8 +820,12 @@ function _cxNames(ids) {
  *   (style.css .cx-img img 의 최대 280×260 · 최소 80×60 과 같은 셈). 자르거나 돌린 사진은 모양이 달라 그대로 둠 */
 function _cxImgBox(f) {
   var w = +f.w, h = +f.h;
-  if (!(w > 0 && h > 0) || (f.annot && (f.annot.crop || f.annot.rot))) return '';
-  try { if (typeof _cbViews !== 'undefined' && _cbViews && _cbViews[f.id]) return ''; } catch (e) {}
+  if (!(w > 0 && h > 0) || (f.annot && f.annot.crop)) return '';
+  // v13.440 돌려 둔 사진도 자리를 미리 — 90° · 270° 는 가로 ↔ 세로만 바꾸면 됨 (비스듬한 각도는 모양이 달라 그대로 둠)
+  var rot = (f.annot && f.annot.rot) || 0;
+  try { if (typeof _cbViews !== 'undefined' && _cbViews && _cbViews[f.id]) rot = _cbViews[f.id].a || 0; } catch (e) {}
+  if (rot % 90) return '';
+  if (rot % 180) { var t = w; w = h; h = t; }
   var k = Math.max(w, h) > CX_THUMB * 1.3 ? CX_THUMB / Math.max(w, h) : 1;
   var dw = Math.min(w * k, 280), dh = Math.min(dw * h / w, 260);
   return ' data-dim="1" style="width:' + Math.round(Math.max(dw, 80)) + 'px;height:' + Math.round(Math.max(dh, 60)) + 'px"';
@@ -866,8 +870,11 @@ function _cxDrawMsgs(append, focusMid) {
   _cxWarm(CX.msgs);   // v13.436 사진 미리보기를 한 번에
   var atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   var n = CX.msgs.length, hs = new Array(n), ids = new Array(n);
-  for (var i = 0; i < n; i++) { hs[i] = _cxMsgHtml(CX.msgs[i], CX.msgs[i - 1], false, CX.msgs[i + 1]); ids[i] = CX.msgs[i].id; }
   var pIds = box._ids, pHs = box._hs, L = pIds ? pIds.length : 0, f = 0;
+  // v13.440 옛 대화를 위에 붙일 때 — 이미 그려 둔 것은 다시 만들지 않음 (받아 둔 대화가 많을수록 붙일 때마다 멈칫하던 것)
+  var keep = append === 'older' && L > 0 && n > L && box._room === CX.room ? n - L : 0;
+  if (keep) for (var u0 = 0; u0 < L; u0++) if (pIds[u0] !== CX.msgs[keep + u0].id) { keep = 0; break; }
+  for (var i = 0; i < n; i++) { hs[i] = keep && i > keep ? pHs[i - keep] : _cxMsgHtml(CX.msgs[i], CX.msgs[i - 1], false, CX.msgs[i + 1]); ids[i] = CX.msgs[i].id; }
   var inc = append !== 'older' && !focusMid && L > 0 && n > 0 && box._room === CX.room && box._more === CX.more;
   if (inc) { while (f < L && f < n && pIds[f] === ids[f]) f++; if (f === 0) inc = false; }
   var prevH = box.scrollHeight, prevTop = box.scrollTop, added = 0;
@@ -1036,7 +1043,6 @@ function _cxJump(id) {
 function _cxBlob(fid, thumb) {
   var key = thumb ? fid + ':t' : fid;
   if (CX.blobs[key]) return CX.blobs[key];
-  if (thumb && CX.blobs[fid]) return CX.blobs[fid];   // 원본을 이미 받았으면 그것
   CX.blobs[key] = _cxBlobFetch(fid, thumb);
   CX.blobs[key].catch(function () { delete CX.blobs[key]; });
   return CX.blobs[key];
