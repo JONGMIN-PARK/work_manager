@@ -211,3 +211,76 @@ test('아진 베이스보드 — PCIe → 베이스보드 → 모션 모듈 · I
   assert.strictEqual(T.specTopoNode(s, s.nodes.filter(function (n) { return n.kind === 'motion'; })[0].parent).kind, 'baseboard', '초안 — 모션은 베이스보드에');
   assert.strictEqual(T.specTopoNode(s, s.nodes.filter(function (n) { return n.kind === 'iocard'; })[0].parent).kind, 'baseboard');
 });
+
+test('글자 감싸기 · IP 는 늘 보임 (v13.452)', function () {
+  var t = T.specTopoNorm({}), pc = T.specTopoAdd(t, null, 'pc'), e = T.specTopoAdd(t, pc.id, 'eth');
+  e.name = 'Aerotech Comm. Ethernet Port'; e.addr = '192.168.10.101';
+  var c = T.specTopoAdd(t, e.id, 'ctrl'); c.name = '컨트롤러'; c.model = 'Aerotech XA4'; c.addr = '192.168.10.120';
+  var svg = T.specTopoSvg(t);
+  assert.ok(svg.indexOf('192.168.10.101') > 0 && svg.indexOf('192.168.10.120') > 0, 'IP 를 자르지 않음');
+  assert.ok(svg.indexOf('Aerotech Comm.') > 0 && svg.indexOf('Ethernet Port') > 0, '긴 이름은 두 줄로');
+  var L = T.specTopoLayout(t), eb = L.boxes.filter(function (b) { return b.n.id === e.id; })[0];
+  assert.strictEqual(eb.name.length, 2); assert.ok(eb.h > 40, '두 줄 + IP 줄만큼 높아짐');
+});
+
+test('세로 트리 배치 — 들여쓰기 · 한 줄씩 · 포트 · 케이블은 ↳ 줄', function () {
+  var t = T.specTopoNorm({}); T.specTopoPreset(t, 'mondp');
+  var L = T.specTopoLayout(t, 'v');
+  assert.strictEqual(L.mode, 'v'); assert.strictEqual(L.boxes.length, t.nodes.length);
+  for (var i = 1; i < L.boxes.length; i++) assert.ok(L.boxes[i].y > L.boxes[i - 1].y, '아래로 한 줄씩');
+  var mon = L.boxes.filter(function (b) { return b.n.kind === 'monitor'; })[0], pc = L.boxes[0];
+  assert.ok(mon.x > pc.x + 40, '깊을수록 오른쪽');
+  assert.ok(/HDMI 1 · HDMI 3m/.test(mon.via), '↳ 입력 포트 · 케이블 · 길이');
+  assert.ok(L.width < 420, '좁은 폭 (' + L.width + ')');
+  assert.ok(/<svg/.test(T.specTopoSvg(t, { mode: 'v' })));
+});
+
+test('엑셀 왕복 — 내보낸 표를 그대로 다시 불러오면 같은 계층', function () {
+  var b = build(), t = b.t;
+  b.cam.addr = '192.168.0.11'; b.cam.cable = 'LAN Cat6'; b.cam.len = '5m';
+  T.specTopoIoAdd(t, b.mc.id, 'DI', 3); t.io[0].name = '도어 센서';
+  T.specTopoAxisMove(t, b.a2.id, -1);
+  var R = T.specTopoRows(t), r = T.specTopoFromSheets({ devices: R.devices, axes: R.axes, io: R.io });
+  assert.strictEqual(r.stat.nodes, t.nodes.length);
+  var a = T.specTopoFlat(t).map(function (x) { return x.depth + ':' + x.n.kind + ':' + T.specTopoName(x.n); });
+  var z = T.specTopoFlat(r.t).map(function (x) { return x.depth + ':' + x.n.kind + ':' + T.specTopoName(x.n); });
+  assert.deepStrictEqual(z, a);
+  var cam = r.t.nodes.filter(function (n) { return n.kind === 'camera'; })[0];
+  assert.strictEqual(cam.addr, '192.168.0.11'); assert.strictEqual(cam.cable, 'LAN Cat6'); assert.strictEqual(cam.len, '5m');
+  assert.deepStrictEqual(T.specTopoAxes(r.t).map(function (n) { return n.name; }), T.specTopoAxes(t).map(function (n) { return n.name; }), '축 순서 그대로');
+  assert.strictEqual(r.t.io.length, 3); assert.strictEqual(r.t.io[0].name, '도어 센서');
+  assert.strictEqual(r.warn.length, 0, r.warn.join(' / '));
+});
+
+test('엑셀 손으로 쓴 트리 — 들여쓰기 · └ · 상위 칸 · 종류 짐작 · 경고', function () {
+  var rows = [['메모'], ['이름', '모델', 'IP'],
+    ['IPC-610', 'Advantech', ''], ['  └ LAN1', '', '192.168.0.1'], ['    └ 스위칭 허브', 'TL-SG108', ''], ['      └ Basler 카메라', 'acA2440', '192.168.0.11'],
+    ['  └ PCIe 슬롯 1', '', ''], ['    └ Matrox 프레임 그래버', 'Rapixo', ''], ['      └ Sony XCL 카메라', '', ''], ['  └ COM3', '', 'COM3'], ['    └ 레이저 변위센서', 'LK-G5000', ''], ['      └ 이상한 것', '', '']];
+  var r = T.specTopoFromSheets({ devices: rows });
+  var k = T.specTopoFlat(r.t).map(function (x) { return x.depth + x.n.kind; });
+  assert.deepStrictEqual(k, ['0pc', '1eth', '2hub', '3camera', '1pcie', '2grabber', '3camera', '1com', '2device', '3device']);
+  assert.strictEqual(r.t.nodes[1].addr, '192.168.0.1');
+  assert.ok(r.warn.some(function (w) { return /기타 장치/.test(w); }));
+  var p = T.specTopoFromSheets({ devices: [['이름', '상위', '종류'], ['PC', '', 'PC'], ['Ethernet #1', 'PC', ''], ['카메라', 'Ethernet #1', ''], ['고아', '없는 장치', '']] });
+  assert.deepStrictEqual(T.specTopoFlat(p.t).map(function (x) { return x.depth + x.n.kind; }), ['0pc', '1eth', '2camera', '0device']);
+  assert.ok(p.warn.some(function (w) { return /없는 장치/.test(w); }));
+  var jump = T.specTopoFromSheets({ devices: [['레벨', '이름'], [0, 'PC'], [3, '모니터']] });
+  assert.strictEqual(T.specTopoNode(jump.t, jump.t.nodes[1].parent).kind, 'pc', '건너뛴 레벨은 바로 위로');
+  assert.ok(jump.warn.some(function (w) { return /건너뛰어/.test(w); }));
+  assert.ok(T.specTopoFromSheets({ devices: [['아무', '것']] }).warn[0].indexOf('머리글') >= 0);
+  assert.strictEqual(T.specTopoKindGuess('', 'DP to HDMI 젠더'), 'adapter');
+  assert.strictEqual(T.specTopoKindGuess('모션 카드', ''), 'motion');
+  assert.strictEqual(T.specTopoKindGuess('', 'USB to RS485'), 'usbser');
+});
+
+test('가져온 것 붙이기 — 바꾸기 · 지금 PC 아래에 덧붙이기', function () {
+  var b = build(), inc = T.specTopoFromSheets({ devices: T.specTopoTemplateRows() }).t;
+  var rep = T.specTopoMerge(b.t, inc, 'replace');
+  assert.strictEqual(rep.nodes.length, inc.nodes.length);
+  var app = T.specTopoMerge(b.t, inc, 'append');
+  assert.strictEqual(app.nodes.length, b.t.nodes.length + inc.nodes.length - 1, '가져온 PC 는 지금 PC 와 하나로');
+  assert.strictEqual(T.specTopoChildren(app, null).length, 1);
+  assert.ok(T.specTopoChildren(app, b.pc.id).length > T.specTopoChildren(b.t, b.pc.id).length);
+  assert.ok(T.specTopoAxes(app).length >= 3);
+  assert.strictEqual(T.specTopoTemplateRows()[0][0], '레벨');
+});

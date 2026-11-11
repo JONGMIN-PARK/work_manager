@@ -48,10 +48,12 @@ var SHOT = path.join(__dirname, '.shots');
     await page.click('#psTopo [data-pt="seed"]');
     check(await until(function () { return !!document.querySelector('#pstMap svg'); }), '초안 → 구성도');
     var fit = await page.evaluate(function () { var m = document.getElementById('pstMap'), pc = _ps.sheet.topo.nodes.filter(function (n) { return n.kind === 'pc'; })[0], g = m.querySelector('[data-id="' + pc.id + '"]').getBoundingClientRect(), b = m.getBoundingClientRect(); return { z: PST.zoom, inside: g.left >= b.left - 1 && g.right <= b.right + 1 }; });
-    check(fit.z < 1 && fit.inside, '좁은 칸 — 처음엔 폭에 맞춰 PC 가 보임 (' + Math.round(fit.z * 100) + '%)');
+    check(fit.z <= 1 && fit.inside, '좁은 칸 — 처음부터 PC 가 보임 (' + Math.round(fit.z * 100) + '% · ' + await page.evaluate(function () { return _pstMode(); }) + ')');
     var t1 = await topo(), kinds = t1.nodes.map(function (n) { return n.kind; });
     check(['pc', 'eth', 'pcie', 'motion', 'iocard', 'multiport', 'sport', 'hub', 'camera', 'drive', 'axis'].every(function (k) { return kinds.indexOf(k) >= 0; }), '초안 — PC · Ethernet · PCIe · 모션 · IO · 멀티포트 · 허브 · 카메라 · 드라이브 · 축');
-    check(await page.evaluate(function () { return /장치 인터페이스/.test(document.querySelector('#pstMap svg').textContent) && document.getElementById('psDirty').style.display !== 'none'; }), '장치 인터페이스 띠 · 저장 필요 표시');
+    check(await page.evaluate(function () { return (_pstMode() === 'v' || /장치 인터페이스/.test(document.querySelector('#pstMap svg').textContent)) && document.getElementById('psDirty').style.display !== 'none'; }), '구성도 · 저장 필요 표시');
+    await page.evaluate(function () { PST.mode = 'h'; PST.modeSet = true; psTopoRender(); });
+    check(await page.evaluate(function () { return /장치 인터페이스/.test(document.querySelector('#pstMap svg').textContent); }), '⇆ 가로 — 장치 인터페이스 띠');
     await page.screenshot({ path: path.join(SHOT, 'e2e80-map.png') });
 
     // ── 구성도에서 고르기 · 이름 바꾸기 ──
@@ -150,6 +152,41 @@ var SHOT = path.join(__dirname, '.shots');
     var re = await topo();
     check(re.nodes.length === saved.nodes.length && re.io.length === 32 && re.io[0].name === '도어 닫힘 센서' && re.nodes.some(function (n) { return n.name === 'Sony XCL 카메라'; }) && re.nodes.some(function (n) { return n.name === 'Dell 24인치 (작업자)' && n.cable === 'HDMI' && n.len === '3m'; }) && specAxesStr(re) === 'Y1,X2,Z3', '저장한 계층 · 축 순서 · IO 가 그대로 (' + re.nodes.length + '개 · IO ' + re.io.length + ')');
     function specAxesStr(t) { return t.nodes.filter(function (n) { return n.kind === 'axis'; }).sort(function (a, b) { return a.ord - b.ord; }).slice(0, 3).map(function (n) { return n.name + n.ord; }).join(','); }
+
+    // ── v13.452 좁은 칸: 세로 트리 자동 · IP 다 보임 · 목록은 카드 ──
+    await page.evaluate(function () { var c = _ps.sheet.topo.nodes.filter(function (n) { return n.name === 'Sony XCL 카메라'; })[0]; c.addr = '192.168.0.11'; PST.view = 'map'; PST.modeSet = false; PST.zoomSet = false; psTopoRender(); });
+    var nar = await page.evaluate(function () { var b = document.getElementById('psTopo').clientWidth, svgT = document.querySelector('#pstMap svg').textContent; return { w: b, mode: _pstMode(), seg: document.querySelector('#psTopo .pst-seg button.on').dataset.v, ip: /192\.168\.0\.11/.test(svgT) }; });
+    check(nar.mode === 'v' && nar.seg === 'v' && nar.ip, '좁은 상세 패널(' + nar.w + 'px) — 세로 트리 자동 · 카메라 IP 192.168.0.11 다 보임');
+    await page.screenshot({ path: path.join(SHOT, 'e2e80-vtree.png') });
+    await page.evaluate(function () { document.querySelector('#psTopo [data-pt="mode"][data-v="h"]').click(); });
+    check(await page.evaluate(function () { return _pstMode() === 'h' && /장치 인터페이스/.test(document.querySelector('#pstMap svg').textContent); }), '⇆ 가로로 바꾸면 그대로 (고른 것 기억)');
+    await page.evaluate(function () { PST.view = 'list'; psTopoRender(); });
+    var card = await page.evaluate(function () { var tr = document.querySelector('#psTopo .pst-tree-tbl tbody tr:nth-child(3)'), cs = getComputedStyle(tr), ip = tr.querySelector('.pst-ipc'), thead = getComputedStyle(document.querySelector('#psTopo .pst-tree-tbl thead')).display, tw = document.querySelector('#psTopo .pst-tw'); return { disp: cs.display, thead: thead, label: getComputedStyle(ip, '::before').content, noHScroll: tw.scrollWidth <= tw.clientWidth + 2 }; });
+    check(card.disp === 'grid' && card.thead === 'none' && /주소/.test(card.label) && card.noHScroll, '좁은 칸 목록 — 카드 모양 · 칸 이름표 · 옆으로 안 밀림 (' + JSON.stringify(card) + ')');
+    await page.screenshot({ path: path.join(SHOT, 'e2e80-cards.png') });
+
+    // ── 📥 엑셀 가져오기 (내보낸 것을 고쳐 다시) ──
+    var xbuf = await page.evaluate(function () {
+      return new Promise(function (ok) {
+        function go() { var R = specTopoRows(_ps.sheet.topo); R.devices.push([1, '    Ethernet #9', 'Ethernet 포트', 'Ethernet #9', '', '', '10.0.0.1', '', '', '', '', '새 포트', '']); R.devices.push([2, '        Moxa NPort', '', 'Moxa NPort 5150', '', '', '10.0.0.50', 'LAN Cat6', '1m', '', '', '', '']);
+          var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(R.devices), '장치 목록'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(R.axes), '축 순서'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(R.io), 'IO 리스트');
+          ok(Array.from(new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' })))); }
+        if (typeof XLSX !== 'undefined') go(); else { wmLibRetry('xlsx', go, null, []); var n = 0, iv = setInterval(function () { if (typeof XLSX !== 'undefined' || ++n > 80) { clearInterval(iv); go(); } }, 200); }
+      });
+    });
+    var XP = path.join(DL, '가져오기시험.xlsx'); fs.writeFileSync(XP, Buffer.from(xbuf));
+    var before = (await topo()).nodes.length;
+    var [chooser] = await Promise.all([page.waitForFileChooser({ timeout: 8000 }), page.evaluate(function () { psTopoImport(); })]);
+    await chooser.accept([XP]);
+    check(await until(function () { return !!document.querySelector('#psTopoImp [data-imp="replace"]'); }, null, 8000), '가져오기 미리보기 창');
+    var prev = await page.evaluate(function () { return document.querySelector('#psTopoImp .pst-imp-s').textContent + ' | ' + document.querySelectorAll('#psTopoImp .pst-imp-r').length; });
+    check(new RegExp('장치 ' + (before + 2) + '개').test(prev) && /IO 32점/.test(prev), '미리보기 — 장치 ' + (before + 2) + '개 · IO 32점 (' + prev + ')');
+    await page.click('#psTopoImp [data-imp="replace"]');
+    check(await until(function () { return !document.getElementById('psTopoImp') && _ps.sheet.topo.nodes.some(function (n) { return n.name === 'Moxa NPort 5150'; }); }, null, 8000), '바꾸기 → 적용');
+    var imp = await page.evaluate(function () { var t = _ps.sheet.topo, np = t.nodes.filter(function (n) { return n.name === 'Moxa NPort 5150'; })[0], par = specTopoNode(t, np.parent); return { kind: np.kind, addr: np.addr, cable: np.cable, parent: par.name, n: t.nodes.length, io: t.io.length, ax: specTopoAxes(t).map(function (n) { return n.name; }).slice(0, 2).join(','), cam: t.nodes.some(function (n) { return n.name === 'Sony XCL 카메라'; }), dirty: document.getElementById('psDirty').style.display !== 'none' }; });
+    check(imp.kind === 'nport' && imp.addr === '10.0.0.50' && imp.cable === 'LAN Cat6' && imp.parent === 'Ethernet #9' && imp.n === before + 2 && imp.io === 32 && imp.ax === 'Y,X' && imp.cam && imp.dirty, '가져온 계층 — NPort(이름으로 종류 짐작) · IP · 케이블 · 상위 · 축 순서 · IO 그대로 (' + JSON.stringify(imp) + ')');
+    await page.evaluate(function (pid) { return pdSpecSave(pid); }, pid);
+    check(await until(function () { return document.getElementById('psDirty').style.display === 'none'; }, null, 10000), '가져온 뒤 저장');
 
     // ── 파일 ──
     await page.evaluate(function () { psTopoExportImage('svg'); psTopoExportImage('png'); });

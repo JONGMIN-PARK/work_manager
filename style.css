@@ -7512,3 +7512,40 @@ html.wm-embed #cxHead{padding-top:8px!important}
 .pst-in.xs{width:56px}
 .pst{container-type:inline-size}
 @container (max-width:760px){.pst-flt{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-bottom:3px}.pst-flt .pst-q{flex:0 0 150px}.pst-flt .pst-sel{flex:0 0 auto}.pst-sub,.pst-zh{display:none}}
+
+/* v13.452 🧩 구성도 가로 · 세로 · IP 칩 · 좁은 칸 카드 목록 · 가져오기 */
+.pst-seg{display:inline-flex;margin-right:6px;border:1px solid var(--bd);border-radius:7px;overflow:hidden}
+.pst-seg button{height:22px;padding:0 8px;border:0!important;border-radius:0!important;background:var(--bg-i);color:var(--t5);font-size:11px;cursor:pointer}
+.pst-seg button.on{background:var(--ac);color:#fff}
+.pst-in.ip{color:#1d4ed8;background:color-mix(in srgb,#3b82f6 7%,var(--bg-p))}
+[data-theme*="dark"] .pst-in.ip,.dark .pst-in.ip{color:#93c5fd}
+.pst-ipc{min-width:140px}
+.pst-menu hr{border:0;border-top:1px solid var(--bd);margin:3px 4px}
+.pst-imp-s{font-size:12.5px;color:var(--t2,var(--t1));margin-bottom:6px}
+.pst-imp-t{max-height:46vh;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:6px 8px;background:var(--bg-i)}
+.pst-imp-r{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:12px;min-width:0}
+.pst-imp-r b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pst-imp-r i{font-style:normal;color:var(--t6);font-size:10.5px;white-space:nowrap}
+.pst-imp-r code{font-size:10.5px;color:#1d4ed8;background:color-mix(in srgb,#3b82f6 9%,transparent);padding:0 4px;border-radius:3px}
+/* 좁은 칸 — 목록 한 줄을 카드로 (이름 줄 + 칸마다 이름표) · 편집하기 쉽게 */
+@container (max-width:760px){
+  .pst-tree-tbl thead{display:none}
+  .pst-tree-tbl,.pst-tree-tbl tbody{display:block}
+  .pst-tree-tbl tr{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px 6px;padding:6px 8px 7px calc(8px + var(--d,0) * 10px);border-bottom:1px solid var(--bd)}
+  .pst-tree-tbl td[data-l]{grid-column:span 2}
+  .pst-tree-tbl td.pst-cab{grid-column:span 3}
+  .pst-tree-tbl tr.is-root td.pst-cab{display:none}
+  .pst-tree-tbl td[data-l] .pst-in{height:24px;font-size:11px}
+  .pst-tree-tbl td{display:block;padding:0;border:0}
+  .pst-tree-tbl td.pst-tree{grid-column:1/-1;padding-left:0!important;min-width:0;display:flex;align-items:center;gap:4px}
+  .pst-tree-tbl td:nth-child(2) .pst-in{width:100%}
+  .pst-tree-tbl td[data-l]::before{content:attr(data-l);display:block;font-size:9.5px;color:var(--t6);margin-bottom:1px}
+  .pst-tree-tbl td.pst-ipc{grid-column:1/5}.pst-tree-tbl td.pst-notec{grid-column:1/-1}
+  .pst-tree-tbl tr.is-root td.pst-ipc{grid-column:1/-1}
+  .pst-tree-tbl td.pst-act{grid-column:1/-1;display:flex;gap:2px;justify-content:flex-end}
+  .pst-tree-tbl td .pst-in{width:100%}
+  .pst-tree-tbl tr.dim{opacity:.35}.pst-tree-tbl tr.dim td{opacity:1}
+  .pst-tw{max-height:none}
+}
+.pst-in::placeholder{color:var(--t6);opacity:.7;font-weight:400}
+.pst-in.ip::placeholder{color:var(--t6)}

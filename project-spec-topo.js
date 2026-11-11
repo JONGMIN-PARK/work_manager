@@ -3,7 +3,10 @@
  *   보기: 🗺 구성도 · 📋 목록 · 🎯 축 순서 · 🔢 IO 리스트 — 위의 거르기(Ethernet · USB · 시리얼 …)는 구성도 · 목록에 같이 (고른 계통만 선명, 나머지 흐리게)
  *   파일: ⤓ 엑셀(장치 목록 · 축 순서 · IO 리스트 3장) · 구성도 PNG · SVG
  */
-var PST = { view: 'map', sel: null, filter: '', q: '', ioNode: '', ioDir: '', zoom: 1, zoomSet: false, rt: 0 };
+var PST = { view: 'map', sel: null, filter: '', q: '', ioNode: '', ioDir: '', zoom: 1, zoomSet: false, rt: 0, mode: '', modeSet: false };
+/** 구성도 모양 — 사람이 고른 것, 아니면 칸이 좁으면(620px 미만) 세로 트리 */
+function _pstMode() { if (PST.modeSet && PST.mode) return PST.mode; var b = document.getElementById('psTopo'); return b && b.clientWidth && b.clientWidth < 620 ? 'v' : 'h'; }
+function _pstSvg(t, extra) { return specTopoSvg(t, Object.assign({ sel: PST.sel, focus: specTopoFocus(t, PST.filter, PST.q), dark: _pstDark(), mode: _pstMode() }, extra || {})); }
 function _pstE(s) { return typeof _specEsc === 'function' ? _specEsc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function _pstToast(m, t) { if (typeof _specToast === 'function') _specToast(m, t); else if (typeof showToast === 'function') showToast(m, t); }
 function _pstEdit() { return !!(typeof _ps !== 'undefined' && _ps && _ps.canEdit); }
@@ -29,11 +32,12 @@ function psTopoRender() {
   var head = '<div class="pst-h"><b class="pst-t">🧩 장치 계층 구성</b><span class="pst-sub">PC → 포트 → 카드 · 허브 · 변환기 → 컨트롤러 · 드라이브 → 축</span><span class="pst-sp"></span>' +
     (t.nodes.length ? '<div class="pst-tabs" role="tablist">' + [['map', '구성도'], ['list', '목록 ' + t.nodes.length], ['axis', '축 순서 ' + nAx], ['io', 'IO ' + nIo], ['mon', '모니터 ' + specTopoMonitors(t).length]].map(function (v) { return '<button type="button" role="tab" class="' + (PST.view === v[0] ? 'on' : '') + '" data-pt="view" data-v="' + v[0] + '">' + v[1] + '</button>'; }).join('') + '</div>' : '') +
     (t.nodes.length ? '<div class="pst-dd"><button type="button" class="pst-b" data-pt="filemenu" title="파일로 뽑기">⤓ 파일</button><div class="pst-menu" hidden>' +
+      (ed ? '<button type="button" data-pt="imp">📥 엑셀 · CSV 에서 가져오기 (트리 표)</button><button type="button" data-pt="tpl">📄 가져오기 빈 양식 받기</button><hr>' : '') +
       '<button type="button" data-pt="xlsx">📊 엑셀 — 장치 목록 · 축 순서 · IO 리스트 · 모니터 연결</button><button type="button" data-pt="png">🖼 구성도 그림 (PNG)</button><button type="button" data-pt="svg">✏️ 구성도 도면 (SVG)</button></div></div>' +
       '<button type="button" class="pst-b" data-pt="zoombig" title="구성도 크게 보기">⛶</button>' : '') + '</div>';
   if (!t.nodes.length) {
     box.innerHTML = head + '<div class="pst-empty"><div>PC 의 포트에서 갈라지는 제어 장치를 한눈에 — <b>계층 구성도 · 장치 목록 · 축 순서 · IO 리스트</b>를 한 데이터로 관리합니다.</div>' +
-      (ed ? '<div class="pst-empty-a"><button type="button" class="pst-b pri" data-pt="seed">✨ 지금 사양 값으로 초안 만들기</button><button type="button" class="pst-b" data-pt="newpc">🖥 PC 부터 새로</button></div><div class="pst-hint">초안은 IPC · 모션 컨트롤러 · IO · 확장 모듈 · 외부장치 · 축 구성 표의 값으로 만듭니다. 만든 뒤 자유롭게 고치세요.</div>' : '<div class="pst-hint">아직 만든 구성이 없습니다.</div>') + '</div>';
+      (ed ? '<div class="pst-empty-a"><button type="button" class="pst-b pri" data-pt="seed">✨ 지금 사양 값으로 초안 만들기</button><button type="button" class="pst-b" data-pt="newpc">🖥 PC 부터 새로</button><button type="button" class="pst-b" data-pt="imp">📥 엑셀에서 가져오기</button><button type="button" class="pst-b" data-pt="tpl">📄 빈 양식</button></div><div class="pst-hint">초안은 IPC · 모션 컨트롤러 · IO · 확장 모듈 · 외부장치 · 축 구성 표의 값으로 만듭니다. 만든 뒤 자유롭게 고치세요.</div>' : '<div class="pst-hint">아직 만든 구성이 없습니다.</div>') + '</div>';
     return;
   }
   var checks = specTopoChecks(t);
@@ -52,8 +56,9 @@ function psTopoRender() {
 /* ─── 🗺 구성도 ─── */
 function _pstMap(t) {
   var focus = specTopoFocus(t, PST.filter, PST.q);
-  var svg = specTopoSvg(t, { sel: PST.sel, focus: focus, dark: _pstDark() });
-  return '<div class="pst-zbar"><button type="button" data-pt="z" data-v="-1" title="작게">－</button><span>' + Math.round(PST.zoom * 100) + '%</span><button type="button" data-pt="z" data-v="1" title="크게">＋</button><button type="button" data-pt="z" data-v="0" title="칸에 맞춤">맞춤</button>' +
+  var mode = _pstMode(), svg = _pstSvg(t);
+  return '<div class="pst-zbar"><div class="pst-seg" role="group" aria-label="구성도 모양"><button type="button" class="' + (mode === 'h' ? 'on' : '') + '" data-pt="mode" data-v="h" title="가로 펼침 — 위에 PC, 장치 인터페이스 띠에서 포트마다 내려감">⇆ 가로</button><button type="button" class="' + (mode === 'v' ? 'on' : '') + '" data-pt="mode" data-v="v" title="세로 트리 — 한 줄씩 들여쓰기 (좁은 칸에서 읽기 쉬움)">⇅ 세로</button></div>' +
+    '<button type="button" data-pt="z" data-v="-1" title="작게">－</button><span>' + Math.round(PST.zoom * 100) + '%</span><button type="button" data-pt="z" data-v="1" title="크게">＋</button><button type="button" data-pt="z" data-v="0" title="칸에 맞춤">맞춤</button>' +
     '<span class="pst-zh">장치를 누르면 아래에서 고칠 수 있습니다 · 접힌 가지는 ＋N</span></div>' +
     '<div class="pst-map" id="pstMap"><div class="pst-mapin" style="transform:scale(' + PST.zoom + ');transform-origin:0 0">' + svg + '</div></div>' + _pstEditor(t);
 }
@@ -81,7 +86,7 @@ function _pstEditor(t) {
     '<label><span>종류</span><select class="pst-in" data-f="kind" data-id="' + _pstE(n.id) + '"' + dis + '>' + _pstKindOpts(n.kind) + '</select></label>' +
     '<label><span>모델</span><input class="pst-in" data-f="model" data-id="' + _pstE(n.id) + '" value="' + _pstE(n.model) + '" placeholder="제조사 · 모델"' + dis + '></label>' +
     '<label><span>포트 · 채널</span><input class="pst-in sm" data-f="port" data-id="' + _pstE(n.id) + '" value="' + _pstE(n.port) + '" placeholder="' + _pstE(K.portHint || 'CH0 · Port1') + '"' + dis + '></label>' +
-    '<label><span>주소 · IP · COM</span><input class="pst-in sm" data-f="addr" data-id="' + _pstE(n.id) + '" value="' + _pstE(n.addr) + '" placeholder="192.168.0.10 · COM3"' + dis + '></label>' +
+    '<label><span>주소 · IP · COM</span><input class="pst-in sm mono ip" data-f="addr" data-id="' + _pstE(n.id) + '" value="' + _pstE(n.addr) + '" placeholder="192.168.0.10 · COM3"' + dis + '></label>' +
     (n.parent ? '<label><span>케이블 (위와 연결)</span><input class="pst-in sm" data-f="cable" data-id="' + _pstE(n.id) + '" value="' + _pstE(n.cable) + '" placeholder="HDMI · LAN Cat6 · RS-232C" list="pstCables"' + dis + '></label><label><span>길이</span><input class="pst-in xs" data-f="len" data-id="' + _pstE(n.id) + '" value="' + _pstE(n.len) + '" placeholder="3m"' + dis + '></label>' : '') +
     (n.kind === 'axis' ? '<label><span>축 번호</span><input class="pst-in xs" type="number" min="1" data-f="ord" data-id="' + _pstE(n.id) + '" value="' + _pstE(n.ord) + '"' + dis + '></label>' : '') +
     (n.kind === 'iocard' || n.kind === 'iomod' ? '<label><span>점 수</span><input class="pst-in xs" type="number" min="0" data-f="pts" data-id="' + _pstE(n.id) + '" value="' + _pstE(n.pts) + '"' + dis + '></label>' : '') +
@@ -105,17 +110,17 @@ function _pstList(t) {
   var dis = ed ? '' : ' disabled';
   var rows = flat.map(function (x) {
     var n = x.n, K = topoKind(n.kind), C = topoCat(n.kind), id = _pstE(n.id), dim = focus && !focus[n.id];
-    return '<tr class="' + (dim ? 'dim' : '') + (PST.sel === n.id ? ' sel' : '') + '" data-id="' + id + '">' +
-      '<td class="pst-tree" style="padding-left:' + (6 + x.depth * 18) + 'px">' + (x.kids ? '<button type="button" class="pst-fold" data-pt="fold" data-id="' + id + '" title="' + (n.fold ? '펼치기' : '접기') + '">' + (n.fold ? '▸' : '▾') + '</button>' : '<span class="pst-fold0">' + (x.depth ? '└' : '') + '</span>') +
+    return '<tr class="' + (dim ? 'dim' : '') + (PST.sel === n.id ? ' sel' : '') + (n.parent ? '' : ' is-root') + '" data-id="' + id + '" style="--d:' + Math.min(x.depth, 8) + '">' +
+      '<td class="pst-tree" style="--d:' + x.depth + ';padding-left:' + (6 + x.depth * 18) + 'px">' + (x.kids ? '<button type="button" class="pst-fold" data-pt="fold" data-id="' + id + '" title="' + (n.fold ? '펼치기' : '접기') + '">' + (n.fold ? '▸' : '▾') + '</button>' : '<span class="pst-fold0">' + (x.depth ? '└' : '') + '</span>') +
         '<span class="pst-kd ic" style="background:' + C.fill + '" title="' + _pstE(K.label) + '">' + topoIconSvg(n.kind, 13, '#fff') + '</span>' +
         '<input class="pst-in" data-f="name" data-id="' + id + '" value="' + _pstE(n.name) + '" placeholder="' + _pstE(K.dflt) + '"' + dis + '>' + (n.fold && x.kids ? '<i class="pst-more">+' + x.kids + '</i>' : '') + '</td>' +
-      '<td><select class="pst-in" data-f="kind" data-id="' + id + '"' + dis + '>' + _pstKindOpts(n.kind) + '</select></td>' +
-      '<td><input class="pst-in" data-f="model" data-id="' + id + '" value="' + _pstE(n.model) + '"' + dis + '></td>' +
-      '<td><input class="pst-in" data-f="port" data-id="' + id + '" value="' + _pstE(n.port) + '" placeholder="' + _pstE(K.portHint) + '"' + dis + '></td>' +
-      '<td><input class="pst-in" data-f="addr" data-id="' + id + '" value="' + _pstE(n.addr) + '"' + dis + '></td>' +
-      '<td><input class="pst-in" data-f="cable" data-id="' + id + '" value="' + _pstE(n.cable) + '" list="pstCables"' + (n.parent ? '' : ' disabled') + dis + '></td>' +
-      '<td><input class="pst-in xs" data-f="len" data-id="' + id + '" value="' + _pstE(n.len) + '"' + (n.parent ? '' : ' disabled') + dis + '></td>' +
-      '<td><input class="pst-in" data-f="note" data-id="' + id + '" value="' + _pstE(n.note) + '"' + dis + '></td>' +
+      '<td data-l="종류"><select class="pst-in" data-f="kind" data-id="' + id + '"' + dis + '>' + _pstKindOpts(n.kind) + '</select></td>' +
+      '<td data-l="모델"><input class="pst-in" data-f="model" data-id="' + id + '" value="' + _pstE(n.model) + '"' + dis + '></td>' +
+      '<td data-l="포트 · 채널"><input class="pst-in" data-f="port" data-id="' + id + '" value="' + _pstE(n.port) + '" placeholder="' + _pstE(K.portHint) + '"' + dis + '></td>' +
+      '<td data-l="주소 · IP · COM" class="pst-ipc"><input class="pst-in mono ip" data-f="addr" data-id="' + id + '" value="' + _pstE(n.addr) + '" placeholder="192.168.0.10 · COM3"' + dis + '></td>' +
+      '<td data-l="케이블" class="pst-cab"><input class="pst-in" data-f="cable" data-id="' + id + '" value="' + _pstE(n.cable) + '" list="pstCables"' + (n.parent ? '' : ' disabled') + dis + '></td>' +
+      '<td data-l="길이" class="pst-cab"><input class="pst-in xs" data-f="len" data-id="' + id + '" value="' + _pstE(n.len) + '"' + (n.parent ? '' : ' disabled') + dis + '></td>' +
+      '<td data-l="비고" class="pst-notec"><input class="pst-in" data-f="note" data-id="' + id + '" value="' + _pstE(n.note) + '"' + dis + '></td>' +
       (ed ? '<td class="pst-act">' + _pstAddSel(n).replace('pst-sel sm', 'pst-sel xs').replace('＋ 아래에 붙이기', '＋') +
         '<button type="button" data-pt="up" data-id="' + id + '" title="위로">↑</button><button type="button" data-pt="down" data-id="' + id + '" title="아래로">↓</button>' +
         '<button type="button" data-pt="out" data-id="' + id + '" title="한 단계 위로 (내기)">⇤</button><button type="button" data-pt="in" data-id="' + id + '" title="바로 위 장치 아래로 (들이기)">⇥</button>' +
@@ -196,6 +201,9 @@ async function _pstClick(e) {
   if (k === 'flt') { PST.filter = b.dataset.v; psTopoRender(); return; }
   if (k === 'ionode') { PST.ioNode = b.dataset.v; psTopoRender(); return; }
   if (k === 'iodir') { PST.ioDir = b.dataset.v; psTopoRender(); return; }
+  if (k === 'mode') { PST.mode = b.dataset.v; PST.modeSet = true; PST.zoomSet = false; psTopoRender(); return; }
+  if (k === 'imp') return psTopoImport();
+  if (k === 'tpl') return psTopoTemplate();
   if (k === 'z') { var v = +b.dataset.v; PST.zoomSet = !!v; if (!v) { var m = document.getElementById('pstMap'), s = m && m.querySelector('svg'); PST.zoom = s ? Math.max(0.3, Math.min(1, (m.clientWidth - 16) / +s.getAttribute('width'))) : 1; } else PST.zoom = Math.max(0.3, Math.min(2.5, Math.round((PST.zoom + v * 0.15) * 100) / 100)); psTopoRender(); return; }
   if (k === 'filemenu') { var mn = b.parentNode.querySelector('.pst-menu'); mn.hidden = !mn.hidden; return; }
   if (k === 'xlsx') return psTopoExportXlsx();
@@ -233,7 +241,7 @@ function _pstInput(e) {
     if (f === 'ord' || f === 'pts') { var v = el.value === '' ? null : +el.value; if (v == null) delete n[f]; else n[f] = v; }
     else n[f] = el.value;
     _pstChanged(false);
-    if (PST.view === 'map') { clearTimeout(PST.rt); PST.rt = setTimeout(function () { var m = document.getElementById('pstMap'); if (!m) return; var sl = m.scrollLeft, st = m.scrollTop; var inner = m.querySelector('.pst-mapin'); inner.innerHTML = specTopoSvg(_pstT(), { sel: PST.sel, focus: specTopoFocus(_pstT(), PST.filter, PST.q), dark: _pstDark() }); _pstMapAfter(); m.scrollLeft = sl; m.scrollTop = st; }, 250); }   // 그림만 (입력칸은 그대로)
+    if (PST.view === 'map') { clearTimeout(PST.rt); PST.rt = setTimeout(function () { var m = document.getElementById('pstMap'); if (!m) return; var sl = m.scrollLeft, st = m.scrollTop; var inner = m.querySelector('.pst-mapin'); inner.innerHTML = _pstSvg(_pstT()); _pstMapAfter(); m.scrollLeft = sl; m.scrollTop = st; }, 250); }   // 그림만 (입력칸은 그대로)
     return;
   }
   if (el.dataset.iof && el.dataset.io && el.tagName === 'INPUT') {
@@ -265,12 +273,69 @@ function _pstChange(e) {
   if (el.dataset.f === 'ord' || el.dataset.f === 'pts') _pstChanged();   // 축 번호를 바꾸면 순서대로 다시 보이게
 }
 
+/* ─── 📥 엑셀 · CSV 에서 가져오기 (트리 표) ───
+ *   내보낸 엑셀(장치 목록 · 축 순서 · IO 리스트)을 고쳐 다시 넣거나, 손으로 쓴 트리 표(레벨 칸 · 들여쓰기 · 상위 칸)를 읽음 */
+function psTopoImport() {
+  if (!_pstEdit()) return;
+  if (typeof wmLibRetry === 'function' && wmLibRetry('xlsx', psTopoImport, this, arguments)) return;
+  if (typeof XLSX === 'undefined') { _pstToast('엑셀 도구를 불러올 수 없습니다', 'error'); return; }
+  var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.csv,.tsv,text/csv';
+  inp.onchange = function () {
+    var f = inp.files && inp.files[0]; if (!f) return;
+    if (f.size > 8 * 1024 * 1024) { _pstToast('8MB 보다 큰 파일은 읽지 않습니다', 'warn'); return; }
+    f.arrayBuffer().then(function (ab) {
+      var wb = XLSX.read(ab, { type: 'array' }), get = function (re) { var nm = wb.SheetNames.filter(function (n) { return re.test(n); })[0]; return nm ? XLSX.utils.sheet_to_json(wb.Sheets[nm], { header: 1, defval: '', raw: false }) : null; };
+      var dev = get(/장치|device|구성|tree|트리/i) || XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '', raw: false });
+      var r = specTopoFromSheets({ devices: dev, axes: get(/축/) || [], io: get(/^io|io\s*리스트|입출력/i) || [] });
+      if (!r.t) { _pstToast(r.warn[0] || '장치를 찾지 못했습니다', 'error'); return; }
+      _pstImportPreview(r, f.name);
+    }).catch(function (e) { console.error('[topo import]', e); _pstToast('파일을 읽지 못했습니다', 'error'); });
+  };
+  inp.click();
+}
+function _pstImportPreview(r, fname) {
+  var has = _ps.sheet.topo && _ps.sheet.topo.nodes && _ps.sheet.topo.nodes.length, sel = PST.sel && has ? specTopoNode(_pstT(), PST.sel) : null;
+  var flat = specTopoFlat(r.t).slice(0, 40);
+  var tree = flat.map(function (x) { var n = x.n, C = topoCat(n.kind); return '<div class="pst-imp-r" style="padding-left:' + (x.depth * 16) + 'px"><span class="pst-kd ic" style="background:' + C.fill + '">' + topoIconSvg(n.kind, 11, '#fff') + '</span><b>' + _pstE(specTopoName(n)) + '</b><i>' + _pstE(topoKind(n.kind).label) + '</i>' + (n.addr ? '<code>' + _pstE(n.addr) + '</code>' : '') + '</div>'; }).join('') + (r.t.nodes.length > 40 ? '<div class="pst-hint">… 외 ' + (r.t.nodes.length - 40) + '개</div>' : '');
+  var build = function () {
+    var m = createModal({ id: 'psTopoImp', titleText: '📥 장치 구성 가져오기 — ' + fname, width: '640px', closeOnEsc: true,
+      html: '<div class="pst-imp"><div class="pst-imp-s">장치 <b>' + r.stat.nodes + '</b>개 · 축 순서 <b>' + r.stat.axes + '</b> · IO <b>' + r.stat.io + '</b>점</div>' +
+        (r.warn.length ? '<div class="pst-ck">⚠️ ' + r.warn.map(_pstE).join('<br>⚠️ ') + '</div>' : '') +
+        '<div class="pst-imp-t">' + tree + '</div>' +
+        '<div class="nt-foot" style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap">' +
+        (has ? '<button type="button" class="pst-b" data-imp="append">' + (sel ? '「' + _pstE(specTopoName(sel)) + '」 아래에 덧붙이기' : '지금 PC 아래에 덧붙이기') + '</button>' : '') +
+        '<button type="button" class="pst-b pri" data-imp="replace">' + (has ? '지금 구성을 바꾸기' : '가져오기') + '</button></div>' +
+        '<div class="pst-hint">가져온 뒤 💾 저장을 눌러야 반영됩니다 — 마음에 안 들면 저장하지 말고 다시 여세요.</div></div>' });
+    m.box.addEventListener('click', async function (e) {
+      var b = e.target.closest('[data-imp]'); if (!b) return;
+      var mode = b.dataset.imp;
+      if (mode === 'replace' && has && !(await wmConfirm('지금 장치 구성(' + _pstT().nodes.length + '개 · IO ' + (_pstT().io || []).length + '점)을 가져온 것으로 바꿀까요?'))) return;
+      var out = specTopoMerge(has ? _pstT() : null, r.t, mode, sel && sel.id);
+      if (!out) { _pstToast('장치는 600개까지입니다 — 바꾸기로 가져오세요', 'warn'); return; }
+      _ps.sheet.topo = out; PST.sel = null; PST.view = 'list'; m.close(); _pstChanged();
+      _pstToast('📥 ' + r.stat.nodes + '개를 ' + (mode === 'append' ? '덧붙였습니다' : '가져왔습니다') + ' — 💾 저장을 눌러야 반영됩니다', 'success');
+    });
+  };
+  if (typeof wmGuardedModal === 'function') wmGuardedModal('topoImport', build, 'psTopoImp'); else build();
+}
+/** 빈 양식 — 예시 줄이 든 엑셀 (레벨 · 종류만 맞추면 됨) */
+function psTopoTemplate() {
+  if (typeof wmLibRetry === 'function' && wmLibRetry('xlsx', psTopoTemplate, this, arguments)) return;
+  if (typeof XLSX === 'undefined') { _pstToast('엑셀 도구를 불러올 수 없습니다', 'error'); return; }
+  var wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(specTopoTemplateRows());
+  ws['!cols'] = [6, 34, 20, 20, 18, 12, 16, 12, 7, 8, 8, 18, 10].map(function (w) { return { wch: w }; });
+  XLSX.utils.book_append_sheet(wb, ws, '장치 목록');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['장치', '방향', '주소', '이름', '설명', '연결 장치'], ['모션 모듈', 'DI', 'X000', '도어 닫힘', '', '도어 센서'], ['모션 모듈', 'DO', 'Y000', '경광등 적색', '', '타워 램프']]), 'IO 리스트');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['쓰는 법'], ['레벨: 0 = PC, 1 = PC 의 포트 · 슬롯, 2 = 그 아래 장치 … (레벨 대신 「계층」 칸에 들여쓰기로 써도 됨)'], ['종류: 장치 목록의 종류 이름 그대로, 또는 비워 두면 이름으로 짐작 (Ethernet · PCIe · 모션 · 드라이브 · 축 · 카메라 · 모니터 …)'], ['주소 · IP · COM: 192.168.0.10 · COM3 처럼'], ['IO 리스트의 「장치」는 장치 목록의 이름과 같게']]), '쓰는 법');
+  XLSX.writeFile(wb, '장치구성_가져오기_양식.xlsx');
+}
+
 /* ─── 크게 보기 · 파일 ─── */
 function psTopoZoom() {
   var t = _ps.sheet.topo ? _pstT() : null; if (!t || !t.nodes.length) return;
   var name = (_ps.proj && _ps.proj.name) || '';
   createModal({ id: 'psTopoZoom', titleText: '🧩 장치 계층 구성 — ' + name, width: '96vw', closeOnEsc: true,
-    html: '<div style="overflow:auto;max-height:80vh;background:' + (_pstDark() ? '#0f172a' : '#fff') + ';border-radius:8px;padding:10px">' + specTopoSvg(t, { focus: specTopoFocus(t, PST.filter, PST.q), dark: _pstDark() }) + '</div>' });
+    html: '<div style="overflow:auto;max-height:80vh;background:' + (_pstDark() ? '#0f172a' : '#fff') + ';border-radius:8px;padding:10px">' + _pstSvg(t, { sel: null }) + '</div>' });
 }
 function _pstFileBase() { var nm = String((_ps.proj && _ps.proj.name) || _ps.projId || '프로젝트').replace(/[\\\/:*?"<>|]/g, '_'), day = typeof localDate === 'function' ? localDate() : new Date().toISOString().slice(0, 10); return '장치구성_' + nm + '_' + day; }
 function _pstSave(blob, name) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000); }
@@ -287,7 +352,7 @@ function psTopoExportXlsx() {
   XLSX.writeFile(wb, _pstFileBase() + '.xlsx');
 }
 function psTopoExportImage(kind) {
-  var t = _pstT(), svg = specTopoSvg(t, { focus: specTopoFocus(t, PST.filter, PST.q), dark: false });
+  var t = _pstT(), svg = _pstSvg(t, { sel: null, dark: false });
   svg = svg.replace('<svg ', '<svg style="background:#fff" ');
   if (kind === 'svg') return _pstSave(new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + svg], { type: 'image/svg+xml' }), _pstFileBase() + '.svg');
   var w = +(/width="(\d+)"/.exec(svg) || [0, 800])[1], h = +(/height="(\d+)"/.exec(svg) || [0, 600])[1], k = Math.min(3, 6000 / Math.max(w, h));
