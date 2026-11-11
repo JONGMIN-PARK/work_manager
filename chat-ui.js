@@ -622,6 +622,10 @@ function _cxDrawMain() {
   });
   m.querySelector('#cxNewB').addEventListener('click', function () { if (CX.fwd) { _cxToLatest(); return; } CX.newBelow = 0; box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); _cxNewBtn(); });
   box.addEventListener('click', _cxMsgClick);
+  // v13.448 🖼 사진 — 누르기 직전에 원본을 미리 받음 (마우스는 0.15초 올려 두면 · 손가락은 닿는 순간)
+  var pfT = null;
+  box.addEventListener('pointerover', function (e) { if (e.pointerType !== 'mouse') return; var b = e.target.closest('.cx-img[data-file]'); clearTimeout(pfT); if (b && typeof chatBoardPrefetch === 'function') pfT = setTimeout(function () { chatBoardPrefetch(b.dataset.file); }, 150); }, { passive: true });
+  box.addEventListener('pointerdown', function (e) { var b = e.target.closest('.cx-img[data-file]'); if (b && typeof chatBoardPrefetch === 'function') chatBoardPrefetch(b.dataset.file); }, { passive: true });
   _cxLongPress(box);
   // 끌어 놓기
   var dz = m.querySelector('#cxDrop'), dc = 0;

@@ -35,7 +35,8 @@ function _cbLoadImg(src) {
     function load(u, cors) {
       var im = new Image();
       if (cors) im.crossOrigin = 'anonymous';
-      im.onload = function () { ok(im); };
+      im.decoding = 'async';
+      im.onload = function () { if (typeof im.decode === 'function') im.decode().then(function () { ok(im); }, function () { ok(im); }); else ok(im); };   // v13.448 큰 사진은 뒤에서 풀어 둠 — 처음 그릴 때 멈칫하지 않게
       im.onerror = function () { no(new Error('사진을 불러오지 못했습니다')); };
       im.src = u;
     }
@@ -405,8 +406,10 @@ function _cbShell(title) {
   ov.querySelector('[data-title]').textContent = title || '사진';
   ov.tabIndex = -1;
   document.body.appendChild(ov);
-  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();   // 뒤 입력칸에 글자가 들어가지 않게
-  ov.focus({ preventScroll: true });
+  // 뒤 입력칸에 글자가 들어가지 않게 — v13.448 칠판이 먼저 뜨고 나서 (초점 빼기는 화면 전체 스타일을 다시 계산해 휴대폰에서 0.1~0.5초 걸림)
+  //   초점을 옮기는 일(focus · blur)은 화면 전체 스타일을 그 자리에서 다시 계산하게 해 휴대폰에서 0.1~0.5초 걸림 → 칠판이 먼저 그려진 다음에.
+  //   그 사이 눌린 글자는 _cbKey(붙잡기 단계)가 먼저 받음
+  requestAnimationFrame(function () { setTimeout(function () { if (ov.isConnected && !ov.contains(document.activeElement)) ov.focus({ preventScroll: true }); }, 0); });
   return ov;
 }
 function _cbStart(o) {
@@ -427,6 +430,7 @@ function _cbStart(o) {
 function chatBoardOpen(fid, name, roomId) {
   _cbStart({ fid: fid, name: name, roomId: roomId || (typeof CX !== 'undefined' && CX.room), tool: 'pan' });
   var my = CB;
+  _cbPreview(my, fid);   // v13.448 원본을 받는 동안 대화에 떠 있던 미리보기를 먼저 크게
   Promise.all([
     _cbFileImg(fid),
     apiFetch('/api/chat/files/' + encodeURIComponent(fid) + '/annot').catch(function () { return null; })
@@ -442,6 +446,27 @@ function chatBoardOpen(fid, name, roomId) {
   _cbNavLoad(my);
   return true;
 }
+/* v13.448 원본을 받는 동안 미리보기 — 대화에 이미 떠 있는 작은 그림(또는 받아 둔 미리보기)을 칠판 가운데 크게.
+ *   돌리거나 표시한 사진은 원본과 모양이 달라 보일 수 있어, 원래 미리보기(돌리기 전)를 씀 */
+function _cbPreview(my, fid) {
+  var stage = my.el.querySelector('.cb-stage'); if (!stage) return;
+  var src = null;
+  try {
+    var el = document.querySelector('.cx-img[data-file="' + (window.CSS && CSS.escape ? CSS.escape(fid) : fid) + '"] img');
+    if (el && el.complete && el.naturalWidth && !el.dataset.cbkey && el.currentSrc) src = el.currentSrc;   // 돌린 모습으로 바꾼 것은 빼고
+  } catch (e) {}
+  var put = function (u) {
+    if (CB !== my || my.img || !u || stage.querySelector('[data-ph]')) return;
+    var im = document.createElement('img'); im.className = 'cb-ph'; im.setAttribute('data-ph', ''); im.alt = ''; im.decoding = 'async';
+    im.onload = function () { if (CB === my && !my.img) { im.classList.add('on'); var ld = stage.querySelector('[data-loading]'); if (ld) ld.classList.add('has-ph'); } else im.remove(); };
+    im.src = u; stage.insertBefore(im, stage.firstChild.nextSibling);
+  };
+  if (src) return put(src);
+  var p = typeof CX !== 'undefined' && CX.blobs && (CX.blobs[fid + ':t'] || null);
+  if (p && p.then) p.then(put, function () {});
+}
+/** v13.448 누르기 직전에 원본을 미리 받기 — 대화 속 사진에 마우스를 올리거나(0.15초) 손가락이 닿으면 */
+function chatBoardPrefetch(fid) { if (fid) _cbFileImg(fid).catch(function () {}); }
 /* ◀ ▶ 그 방 사진 넘겨 보기 (v13.409) — 오래된 것 → 새 것 순서. 열 때마다 새로 받고, 넘길 때는 받아 둔 목록을 그대로 */
 var _cbNavKeep = null;
 function _cbNavLoad(my) {
@@ -458,6 +483,8 @@ function _cbNavLoad(my) {
     var pv = my.el.querySelector('[data-a="prev"]'), nx = my.el.querySelector('[data-a="next"]'), pos = my.el.querySelector('[data-pos]');
     pv.hidden = nx.hidden = pos.hidden = false; pv.disabled = i === 0; nx.disabled = i === list.length - 1;
     pos.textContent = (i + 1) + ' / ' + list.length;
+    // v13.448 ◀ ▶ 옆 사진 원본도 미리 받아 둠 — 넘기면 바로 (보고 있는 사진을 다 받은 뒤에)
+    _cbFileImg(my.fid).then(function () { if (CB !== my) return; [list[i + 1], list[i - 1]].forEach(function (f) { if (f) _cbFileImg(f.id).catch(function () {}); }); }, function () {});
   }).catch(function () {});
 }
 function _cbNav(d) {
@@ -482,6 +509,7 @@ function chatBoardDraft(file, opt) {
 function _cbReady(img) {
   CB.img = img; CB.W = img.naturalWidth; CB.H = img.naturalHeight;
   CB.el.querySelector('[data-loading]').remove();
+  var ph = CB.el.querySelector('[data-ph]'); if (ph) { ph.classList.add('out'); setTimeout(function () { ph.remove(); }, 260); }   // v13.448 미리보기 → 원본
   CB.el.classList.add('ready');
   _cbFit(); _cbInfo(); _cbSyncUi(); _cbAngUi();
 }
@@ -1342,6 +1370,6 @@ function chatBoardCapture(replyTo) {
 }
 
 if (typeof window !== 'undefined') {
-  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip; window.chatBoardPickSource = _cbPickSource; window.chatBoardGrabWindow = _cbGrabWindow; window.chatBoardProbeScreens = _cbProbeScreens; window.chatBoardSnipState = function () { return _cbSnipOn && _cbSnipOn.state; };
+  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip; window.chatBoardPrefetch = chatBoardPrefetch; window.chatBoardPickSource = _cbPickSource; window.chatBoardGrabWindow = _cbGrabWindow; window.chatBoardProbeScreens = _cbProbeScreens; window.chatBoardSnipState = function () { return _cbSnipOn && _cbSnipOn.state; };
   window.chatBoardOnEvent = chatBoardOnEvent; window.chatBoardThumb = chatBoardThumb; window.chatBoardClose = chatBoardClose;
 }
