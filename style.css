@@ -7379,3 +7379,4 @@ html.cx-locked #mMessages{position:relative}
 .cb-pick-f{padding:9px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:11.5px;color:#9ca3af}
 .cb-pick-f b{color:#FACC15}
 .cb-pick.busy .cb-pick-box{opacity:.6;pointer-events:none}
+.cb-pick-note{display:block;margin-top:4px;color:#FCD34D}

@@ -1238,7 +1238,7 @@ function _cbSnip(blob, replyTo) {
   img.src = url;
 }
 /** PC 앱 — 창 하나를 원래 크기로 한 장 찍기 (desktopCapturer 미리보기는 요청한 크기에 맞춰 늘려져 흐릿함) */
-function _cbGrabWindow(id) {
+function _cbGrabWindow(id, ms) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject(new Error('no gum'));
   var stream = null, stop = function () { if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); };
   var work = navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: String(id), maxWidth: 8192, maxHeight: 8192 } } }).then(function (st) {
@@ -1251,11 +1251,26 @@ function _cbGrabWindow(id) {
       return _cbBlob(c);
     });
   });
-  var timeout = new Promise(function (_, no) { setTimeout(function () { no(new Error('timeout')); }, 4000); });
+  var timeout = new Promise(function (_, no) { setTimeout(function () { no(new Error('timeout')); }, ms || 4000); });
   return Promise.race([work, timeout]).then(function (b) { stop(); if (!b) throw new Error('blob'); return b; }, function (e) { stop(); throw e; });
 }
+/* v13.446 옛 PC 앱(모니터 목록을 주지 않는 버전)에서도 모니터 고르기 — 모니터를 번호로 하나씩 찍어 본다.
+ *   윈도우에서 모니터 주소는 'screen:0:0' · 'screen:1:0' … 차례라, 없는 번호가 나올 때까지 찍으면 연결된 모니터가 다 나온다.
+ *   앱을 새로 깔지 않아도 되지만, 우리 창을 숨기지 못해 앱이 있는 모니터에는 앱 창도 함께 찍힌다 */
+function _cbProbeScreens() {
+  // 번호 0~3 을 한꺼번에 — 차례로 하면 없는 번호를 기다리는 시간까지 4초쯤 걸림
+  var one = function (i) {
+    return _cbGrabWindow('screen:' + i + ':0', 1500).then(function (b) {
+      return (typeof createImageBitmap === 'function' ? createImageBitmap(b).then(function (bm) { var d = [bm.width, bm.height]; if (bm.close) bm.close(); return d; }) : Promise.resolve([0, 0]))
+        .then(function (d) { return { id: 'screen:' + i + ':0', i: i, w: d[0], h: d[1], blob: b, url: URL.createObjectURL(b) }; });
+    }, function () { return null; });
+  };
+  return Promise.all([0, 1, 2, 3].map(one)).then(function (r) {
+    return r.filter(Boolean).sort(function (x, y) { return x.i - y.i; }).map(function (x, k) { x.n = k + 1; return x; });
+  });
+}
 /* v13.445 📸 찍을 곳 고르기 (PC 앱) — 모니터 여러 대는 이미 찍어 온 그림으로 바로, 창은 고르면 그때 크게 찍음 */
-function _cbPickSource(screens, wins, go) {
+function _cbPickSource(screens, wins, go, note) {
   var old = document.getElementById('cbPick'); if (old) old.remove();
   var ov = document.createElement('div'); ov.className = 'cb-pick'; ov.id = 'cbPick';
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -1267,11 +1282,11 @@ function _cbPickSource(screens, wins, go) {
     (wins.length ? '<h5>🪟 열린 창 ' + wins.length + '개</h5><div class="cb-pick-grid win">' + wins.map(function (w, i) {
       return '<button type="button" class="cb-pick-i" data-p="win" data-i="' + i + '" title="' + esc(w.name) + '"><span class="cb-pick-th"><img alt="" src="' + esc(w.thumb) + '"></span><span class="cb-pick-n"><b>' + esc(w.name) + '</b></span></button>';
     }).join('') + '</div>' : '') +
-    '</div><div class="cb-pick-f">숫자 키 <b>1</b>~<b>' + Math.min(9, screens.length) + '</b> = 모니터 고르기 · <b>Esc</b> 취소</div></div>';
+    '</div><div class="cb-pick-f">숫자 키 <b>1</b>~<b>' + Math.min(9, screens.length) + '</b> = 모니터 고르기 · <b>Esc</b> 취소' + (note ? '<span class="cb-pick-note">' + esc(note) + '</span>' : '') + '</div></div>';
   document.body.appendChild(ov);
   var busy = false;
   function close() { document.removeEventListener('keydown', key, true); ov.remove(); }
-  function pickScreen(i) { var s = screens[i]; if (!s || busy) return; close(); go(_cbDataBlob(s.url)); }
+  function pickScreen(i) { var s = screens[i]; if (!s || busy) return; close(); go(s.blob || _cbDataBlob(s.url)); }
   function pickWin(i) {
     var w = wins[i]; if (!w || busy) return;
     busy = true; ov.classList.add('busy');
@@ -1305,9 +1320,13 @@ function chatBoardCapture(replyTo) {
       _cbPickSource(sc, wn, go);
     }).catch(function (e) { _cbToast((e && e.message) || '캡처하지 못했습니다', 'error'); });
   }
-  // PC 앱(옛 버전): 창을 잠깐 숨기고 마우스가 있는 화면 전체를 찍는다
+  // PC 앱(옛 버전): 모니터가 여러 대면 하나씩 찍어 와 고르게 (v13.446) · 한 대면 예전처럼 창을 잠깐 숨기고 그 화면을 찍음
   if (window.wmDesktop && window.wmDesktop.captureScreen) {
-    return window.wmDesktop.captureScreen().then(function (url) { if (!url) throw new Error('캡처하지 못했습니다'); return _cbDataBlob(url); }).then(go).catch(function (e) { _cbToast(e.message || '캡처하지 못했습니다', 'error'); });
+    var oldWay = function () { return window.wmDesktop.captureScreen().then(function (url) { if (!url) throw new Error('캡처하지 못했습니다'); return _cbDataBlob(url); }).then(go); };
+    return _cbProbeScreens().then(function (ps) {
+      if (ps.length >= 2) return _cbPickSource(ps, [], go, '이 앱 창도 함께 찍힙니다 — PC 앱을 새 버전으로 올리면 앱을 숨기고 찍고, 열린 창도 고를 수 있습니다');
+      return oldWay();
+    }, oldWay).catch(function (e) { _cbToast((e && e.message) || '캡처하지 못했습니다', 'error'); });
   }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { _cbToast('이 기기에서는 화면 캡처를 쓸 수 없습니다', 'warn'); return; }
   // 브라우저: 브라우저가 띄우는 창에서 모니터 · 창 · 탭을 고름 (모니터가 여러 대면 모두 나옴)
@@ -1323,6 +1342,6 @@ function chatBoardCapture(replyTo) {
 }
 
 if (typeof window !== 'undefined') {
-  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip; window.chatBoardPickSource = _cbPickSource; window.chatBoardGrabWindow = _cbGrabWindow; window.chatBoardSnipState = function () { return _cbSnipOn && _cbSnipOn.state; };
+  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip; window.chatBoardPickSource = _cbPickSource; window.chatBoardGrabWindow = _cbGrabWindow; window.chatBoardProbeScreens = _cbProbeScreens; window.chatBoardSnipState = function () { return _cbSnipOn && _cbSnipOn.state; };
   window.chatBoardOnEvent = chatBoardOnEvent; window.chatBoardThumb = chatBoardThumb; window.chatBoardClose = chatBoardClose;
 }

@@ -21,10 +21,13 @@ app.on('browser-window-created', (_e, w) => {
           if (s.windows[0] && typeof chatBoardGrabWindow === 'function') {
             try { var b = await chatBoardGrabWindow(s.windows[0].id); out.gum = await dim(URL.createObjectURL(b)); } catch (e) { out.gum = 'ERR ' + (e && e.message); }
           } else out.gum = 'no-fn';
+          // 옛 앱 폴백 — 모니터를 번호로 하나씩 찍어 보기 (chatBoardProbeScreens)
+          out.ids = s.screens.map(function (x) { return x.id; });
+          if (typeof chatBoardProbeScreens === 'function') { try { var t0 = Date.now(); var ps = await chatBoardProbeScreens(); out.probeMs = Date.now() - t0; out.probe = []; for (var k = 0; k < ps.length; k++) out.probe.push(await dim(URL.createObjectURL(ps[k].blob))); } catch (e) { out.probe = 'ERR ' + (e && e.message); } }
           return JSON.stringify(out);
         })()`);
         const o = JSON.parse(r), displays = screen.getAllDisplays();
-        const ok = o.api === 'function/function' && o.screens.length === displays.length && o.screens.every((s) => s.img && s.img[0] === s.w && s.img[1] === s.h) && (!o.windows || (o.win && o.win[0] === o.said[0] && o.win[1] === o.said[1] && o.thumb[0] <= 480 && o.again === ''));   // 창 그림은 알려 준 크기 그대로 · 한 번 주면 비움
+        const ok = o.api === 'function/function' && o.screens.length === displays.length && o.screens.every((s) => s.img && s.img[0] === s.w && s.img[1] === s.h) && Array.isArray(o.probe) && o.probe.length === displays.length && o.probe.every((d, i) => d && d[0] > 0) && (!o.windows || (o.win && o.win[0] === o.said[0] && o.win[1] === o.said[1] && o.thumb[0] <= 480 && o.again === ''));   // 창 그림은 알려 준 크기 그대로 · 한 번 주면 비움
         console.log((ok ? 'CAP OK ' : 'CAP FAIL ') + r + ' displays=' + displays.length + ' visibleAfter=' + w.isVisible());
         app.exit(ok ? 0 : 1);
       } catch (e) { console.log('CAP FAIL ' + (e && e.message)); app.exit(1); }
