@@ -39,8 +39,9 @@ var TOPO_KINDS = {
   poe:       ['PoE 포트',             'port',   '⚡', 'PoE #1',         'NIC · IP',     ['camera', 'device']],
   usb:       ['USB 포트',             'port',   '🔗', 'USB #1',         'USB 2.0/3.0',  ['usbser', 'camera', 'ctrl', 'device']],
   com:       ['COM 포트 (RS-232C)',   'port',   '🔁', 'COM1',           'COM 번호',     ['ctrl', 'device']],
-  pcie:      ['PCIe 슬롯',            'port',   '🧩', 'PCIe #1',        'x1 · x4 · x8', ['motion', 'hyperwire', 'grabber', 'iocard', 'multiport', 'lancard']],
-  pci:       ['PCI 슬롯',             'port',   '🧩', 'PCI #1',         '',             ['motion', 'iocard', 'multiport', 'grabber']],
+  pcie:      ['PCIe 슬롯',            'port',   '🧩', 'PCIe #1',        'x1 · x4 · x8', ['baseboard', 'motion', 'hyperwire', 'grabber', 'iocard', 'multiport', 'lancard']],
+  pci:       ['PCI 슬롯',             'port',   '🧩', 'PCI #1',         '',             ['baseboard', 'motion', 'iocard', 'multiport', 'grabber']],
+  baseboard: ['아진 베이스보드',      'card',   '🧩', '아진 베이스보드', '슬롯',        ['motion', 'iocard', 'drive']],   // v13.450 Ajinextek 베이스보드 — 모션 · IO 모듈을 꽂는 보드
   motion:    ['모션 카드',            'card',   '🎛', '모션 카드',      '슬롯',         ['axisch', 'drive', 'iocard']],
   hyperwire: ['HyperWire 카드',       'card',   '🛰', 'HyperWire 카드', '슬롯',         ['drive', 'ctrl']],
   grabber:   ['프레임 그래버',        'card',   '🎞', 'Frame Grabber',  '슬롯',         ['camera']],
@@ -62,7 +63,7 @@ var TOPO_KINDS = {
   iomod:     ['리모트 IO 모듈',       'io',     '🔢', '리모트 IO',      '국번',         []],
   device:    ['기타 장치',            'etc',    '📦', '장치',           '포트',         []]
 };
-var TOPO_KIND_ORDER = ['pc', 'eth', 'poe', 'usb', 'com', 'pcie', 'pci', 'hdmi', 'dp', 'vga', 'dvi', 'adapter', 'monitor', 'motion', 'hyperwire', 'grabber', 'iocard', 'multiport', 'lancard', 'hub', 'nport', 'usbser', 'sport', 'ectmaster', 'axisch', 'drive', 'axis', 'ctrl', 'plc', 'robot', 'camera', 'iomod', 'device'];
+var TOPO_KIND_ORDER = ['pc', 'eth', 'poe', 'usb', 'com', 'pcie', 'pci', 'hdmi', 'dp', 'vga', 'dvi', 'adapter', 'monitor', 'baseboard', 'motion', 'hyperwire', 'grabber', 'iocard', 'multiport', 'lancard', 'hub', 'nport', 'usbser', 'sport', 'ectmaster', 'axisch', 'drive', 'axis', 'ctrl', 'plc', 'robot', 'camera', 'iomod', 'device'];
 var TOPO_IO_KINDS = { iocard: 1, iomod: 1, motion: 1, plc: 1, ectmaster: 1, ctrl: 1 };   // IO 리스트를 둘 수 있는 장치 (그 밖도 고를 수 있음)
 var TOPO_IO_DIRS = ['DI', 'DO', 'AI', 'AO'];
 var TOPO_IO_PREFIX = { DI: 'X', DO: 'Y', AI: 'AI', AO: 'AO' };
@@ -82,6 +83,7 @@ var TOPO_ICONS = {
   com: 'M3 7h18l-2 10H5z M7 11h.01 M10 11h.01 M13 11h.01 M16 11h.01 M8.5 14h.01 M11.5 14h.01 M14.5 14h.01',
   pcie: 'M3 6h18v10H3z M5 16v3 M9 16v3 M13 16v3 M17 16v3 M7 9h6v4H7z',
   pci: 'M3 6h18v10H3z M6 16v3 M10 16v3 M14 16v3 M7 9h6v4H7z',
+  baseboard: 'M2 5h20v12H2z M5 17v3 M9 17v3 M13 17v3 M17 17v3 M5 8h5v6H5z M12 8h5v6h-5z M19 9v4',
   motion: 'M7 7h10v10H7z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4',
   hyperwire: 'M3 12h4l2-5 4 10 2-5h6',
   grabber: 'M3 5h18v14H3z M7 5v14 M17 5v14 M3 9h4 M3 15h4 M17 9h4 M17 15h4',
@@ -247,6 +249,7 @@ var TOPO_PRESETS = [
   { key: 'vision',  label: '📷 비전 — PCIe → 프레임 그래버 → 카메라',        at: 'pc', n: 1 },
   { key: 'gige',    label: '📷 GigE 카메라 — PoE → 카메라',                    at: 'pc', n: 1 },
   { key: 'motion',  label: '🎛 모션 — PCIe → 모션 카드 → 드라이브 → 축 × 4',   at: 'pc', n: 4 },
+  { key: 'ajin',    label: '🧩 아진 베이스보드 — PCIe → 베이스보드 → 모션 모듈 → 드라이브 → 축 × 4 + IO 모듈', at: 'pc', n: 4 },
   { key: 'hyper',   label: '🛰 HyperWire — PCIe → HyperWire 카드 → 드라이브 → 축 × 2', at: 'pc', n: 2 },
   { key: 'ecat',    label: '🔗 EtherCAT — Ethernet → 마스터 → 드라이브 → 축 × 4', at: 'pc', n: 4 },
   { key: 'serial',  label: '🔀 시리얼 — PCIe → 멀티포트(Moxa) → Port 1~8',     at: 'pc', n: 8 },
@@ -268,6 +271,7 @@ function specTopoPreset(t, key, parentId) {
   function axes(par, n) { for (var i = 0; i < n; i++) { var ch = specTopoChildren(t, par).filter(function (x) { return x.kind === 'drive'; }).length; var d = A(par, 'drive', '드라이브 ' + (ch + 1)); if (!d) break; d.port = 'CH' + ch; A(d.id, 'axis'); } }
   if (key === 'vision') { var s = slot(); first = s; var g = A(s.id, 'grabber'); A(g.id, 'camera'); }
   else if (key === 'gige') { var p = pc.kind === 'pc' ? A(P, 'poe') : pc; first = p; A(p.id, 'camera'); }
+  else if (key === 'ajin') { var s5 = slot(); first = s5; var bb = A(s5.id, 'baseboard'); bb.model = 'Ajinextek'; var mm = A(bb.id, 'motion', '모션 모듈'); axes(mm.id, 4); var im = A(bb.id, 'iocard', 'IO 모듈'); im.pts = 32; }
   else if (key === 'motion' || key === 'hyper') { var s2 = slot(); first = s2; var mc = A(s2.id, key === 'motion' ? 'motion' : 'hyperwire'); axes(mc.id, key === 'motion' ? 4 : 2); }
   else if (key === 'ecat') { var e = pc.kind === 'pc' ? A(P, 'eth') : pc; first = e; var m = A(e.id, 'ectmaster'); axes(m.id, 4); }
   else if (key === 'serial') { var s3 = slot(); first = s3; var mp = A(s3.id, 'multiport', 'Moxa 멀티포트'); for (var i = 0; i < 8; i++) A(mp.id, 'sport'); }
@@ -396,14 +400,15 @@ function specTopoSeed(sheet) {
   for (var i = 0; i < Math.min(lan || 1, 4); i++) eths.push(n(pc.id, 'eth', 'Ethernet #' + (i + 1)));
   var slot = 0;
   function nextSlot(form) { slot++; return n(pc.id, /PCIe/.test(form || '') ? 'pcie' : /PCI/.test(form || '') ? 'pci' : 'pcie', (/PCI(?!e)/.test(form || '') ? 'PCI #' : 'PCIe #') + slot); }
-  var mcQty = num(V.mc_qty, V.mc_model || V.mc_axes ? 1 : 0), cards = [];
+  var mcQty = num(V.mc_qty, V.mc_model || V.mc_axes ? 1 : 0), cards = [], bbs = [];
+  for (var bq = 0; bq < Math.min(num(V.bb_qty, V.bb_model ? 1 : 0), 4); bq++) bbs.push(n(nextSlot('PCIe').id, 'baseboard', '아진 베이스보드' + (num(V.bb_qty, 1) > 1 ? ' #' + (bq + 1) : ''), _tpStr(V.bb_model)));   // v13.450 모션 · IO 모듈은 베이스보드에
   for (var m = 0; m < Math.min(mcQty, 4); m++) {
-    var holder = /EtherCAT/.test(_tpStr(V.mc_form)) ? eths[0] : /단독형/.test(_tpStr(V.mc_form)) ? eths[0] : nextSlot(V.mc_form);
+    var holder = /EtherCAT/.test(_tpStr(V.mc_form)) ? eths[0] : /단독형/.test(_tpStr(V.mc_form)) ? eths[0] : bbs.length ? bbs[m % bbs.length] : nextSlot(V.mc_form);
     var mk = /EtherCAT/.test(_tpStr(V.mc_form)) ? 'ectmaster' : /단독형/.test(_tpStr(V.mc_form)) ? 'ctrl' : 'motion';
     cards.push(n(holder.id, mk, '모션 ' + (mcQty > 1 ? '#' + (m + 1) : (mk === 'motion' ? '카드' : '')), [_tpStr(V.mc_vendor), _tpStr(V.mc_model)].filter(Boolean).join(' ')));
   }
   var ioQty = num(V.io_in_cards, 0) + num(V.io_out_cards, 0) || (V.io_model ? 1 : 0);
-  for (var q = 0; q < Math.min(ioQty, 6); q++) { var io = n(nextSlot(V.io_form).id, 'iocard', 'IO 카드' + (ioQty > 1 ? ' #' + (q + 1) : ''), _tpStr(V.io_model)); io.pts = 32; }
+  for (var q = 0; q < Math.min(ioQty, 6); q++) { var io = n((bbs.length ? bbs[q % bbs.length] : nextSlot(V.io_form)).id, 'iocard', 'IO 카드' + (ioQty > 1 ? ' #' + (q + 1) : ''), _tpStr(V.io_model)); io.pts = 32; }
   if (V.mp_vendor || V.mp_ports) {
     var mpq = num(V.mp_qty, 1);
     for (var p = 0; p < Math.min(mpq, 2); p++) {
@@ -443,7 +448,7 @@ var TOPO_FILTERS = [
   { key: 'usb', label: 'USB', kinds: ['usb'] },
   { key: 'serial', label: '시리얼 (COM · RS-232/485)', kinds: ['com', 'multiport', 'nport', 'usbser', 'sport'] },
   { key: 'slot', label: 'PCI · PCIe', kinds: ['pci', 'pcie'] },
-  { key: 'motion', label: '모션 · 축', kinds: ['motion', 'hyperwire', 'ectmaster', 'axisch', 'drive', 'axis'] },
+  { key: 'motion', label: '모션 · 축', kinds: ['baseboard', 'motion', 'hyperwire', 'ectmaster', 'axisch', 'drive', 'axis'] },
   { key: 'io', label: 'IO', kinds: ['iocard', 'iomod'] },
   { key: 'vision', label: '비전', kinds: ['grabber', 'camera'] },
   { key: 'ctrl', label: '컨트롤러', kinds: ['ctrl', 'plc', 'robot'] },

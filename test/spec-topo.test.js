@@ -195,3 +195,19 @@ test('디스플레이 — HDMI · DP → 변환 잭 → 케이블 · 길이 → 
   assert.ok(!/🖵|📷|🖥/.test(svg), '구성도에 이모지 없음');
   assert.ok(Object.keys(T.TOPO_KINDS).every(function (k) { return T.TOPO_ICONS[k]; }), '모든 종류에 아이콘');
 });
+
+test('아진 베이스보드 — PCIe → 베이스보드 → 모션 모듈 · IO 모듈', function () {
+  var t = T.specTopoNorm({});
+  T.specTopoPreset(t, 'ajin');
+  var ax = T.specTopoAxes(t);
+  assert.strictEqual(ax.length, 4);
+  assert.deepStrictEqual(T.specTopoPath(t, ax[0].id).map(function (n) { return n.kind; }), ['pc', 'pcie', 'baseboard', 'motion', 'drive']);
+  assert.strictEqual(T.specTopoAxisInfo(t, ax[0]).ctrl.kind, 'motion', '제어기는 모션 모듈');
+  assert.ok(t.nodes.some(function (n) { return n.kind === 'iocard' && T.specTopoNode(t, n.parent).kind === 'baseboard'; }));
+  assert.ok(T.topoKind('pcie').next.indexOf('baseboard') === 0, 'PCIe 아래 첫 추천');
+  var s = T.specTopoSeed({ values: { bb_model: 'BPHR', bb_qty: '1', mc_model: 'SMC-2V', mc_qty: '1', io_model: 'SIO-DB32', io_in_cards: '1' } });
+  var bb = s.nodes.filter(function (n) { return n.kind === 'baseboard'; })[0];
+  assert.ok(bb && bb.model === 'BPHR');
+  assert.strictEqual(T.specTopoNode(s, s.nodes.filter(function (n) { return n.kind === 'motion'; })[0].parent).kind, 'baseboard', '초안 — 모션은 베이스보드에');
+  assert.strictEqual(T.specTopoNode(s, s.nodes.filter(function (n) { return n.kind === 'iocard'; })[0].parent).kind, 'baseboard');
+});
