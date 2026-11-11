@@ -71,6 +71,8 @@ function createWindow() {
     width: st.width || 1280, height: st.height || 820, x: st.x, y: st.y,
     minWidth: 380, minHeight: 520,
     title: '업무 관리자', icon: ICON, show: false, backgroundColor: '#0f1220', autoHideMenuBar: true,
+    // v13.454 윈도우 기본 제목 표시줄을 숨기고 웹 머리 줄이 그 자리를 맡음 — 최소화 · 최대화 · 닫기 단추 색은 웹 테마를 따라감 (wm:titlebar)
+    ...(process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#0b1022', symbolColor: '#e2e8f0', height: 40 } } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, partition: 'persist:wm', spellcheck: false, backgroundThrottling: false }   // v13.382 창을 숨겨 둬도 실시간 연결 · 통화 울림이 늦지 않게
   });
   if (st.max) win.maximize();
@@ -299,6 +301,15 @@ ipcMain.handle('wm:capture-window', async (_e, id) => {
   const img = capWinCache.get(String(id));
   capWinCache.clear(); clearTimeout(capWinTimer);
   return img && !img.isEmpty() ? img.toDataURL() : '';
+});
+/* v13.454 창 테두리 · 제목 줄 단추 색 — 웹 화면이 지금 테마의 머리 줄 색 · 글자 색 · 높이를 알려 줌 */
+ipcMain.on('wm:titlebar', (e, o) => {
+  if (!win || e.sender !== win.webContents || process.platform !== 'win32' || !o) return;
+  const hex = (v, d) => (/^#[0-9a-fA-F]{6}$/.test(String(v || '')) ? v : d);
+  try {
+    win.setTitleBarOverlay({ color: hex(o.color, '#0b1022'), symbolColor: hex(o.symbol, '#e2e8f0'), height: Math.max(28, Math.min(80, Math.round(+o.h || 40))) });
+    win.setBackgroundColor(hex(o.color, '#0b1022'));
+  } catch (_) {}
 });
 // 구글 로그인 — 앱 안 창은 구글이 '안전하지 않은 브라우저'로 막는다 → 기본 브라우저로
 ipcMain.on('wm:google', () => { shell.openExternal(SERVER() + '/api/auth/google?app=desktop'); });

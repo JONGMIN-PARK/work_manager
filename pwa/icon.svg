@@ -1,14 +1,44 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- v13.454 업무 관리자 앱 아이콘 — 세 겹으로 쌓인 다이아몬드(업무가 차곡차곡 정리됨) + 체크 · 깊은 남색 바탕에 빛 -->
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2563EB"/>
-      <stop offset="1" stop-color="#7C3AED"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111a33"/>
+      <stop offset=".55" stop-color="#0b1022"/>
+      <stop offset="1" stop-color="#1c1240"/>
     </linearGradient>
+    <radialGradient id="glow" cx=".3" cy=".18" r=".75">
+      <stop offset="0" stop-color="#6366f1" stop-opacity=".55"/>
+      <stop offset=".45" stop-color="#4f46e5" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#4f46e5" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx=".85" cy=".95" r=".6">
+      <stop offset="0" stop-color="#06b6d4" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#06b6d4" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="l1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7dd3fc"/><stop offset=".5" stop-color="#818cf8"/><stop offset="1" stop-color="#c084fc"/></linearGradient>
+    <linearGradient id="l2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient>
+    <linearGradient id="l3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#4c1d95"/></linearGradient>
+    <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".4" stop-color="#fff" stop-opacity=".04"/><stop offset="1" stop-color="#fff" stop-opacity=".1"/></linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14"/></filter>
+    <clipPath id="sq"><rect width="512" height="512" rx="116"/></clipPath>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#g)"/>
-  <!-- 말풍선 -->
-  <path d="M120 150 h272 a40 40 0 0 1 40 40 v136 a40 40 0 0 1 -40 40 h-150 l-74 58 v-58 h-48 a40 40 0 0 1 -40 -40 v-136 a40 40 0 0 1 40 -40 z" fill="#fff"/>
-  <!-- 업무 관리자 ◆ -->
-  <polygon points="256,186 330,258 256,330 182,258" fill="#2563EB"/>
-  <polygon points="256,222 294,258 256,294 218,258" fill="#fff" opacity=".9"/>
+  <g clip-path="url(#sq)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <rect width="512" height="512" fill="url(#glow)"/>
+    <rect width="512" height="512" fill="url(#glow2)"/>
+    <!-- 그림자 -->
+    <ellipse cx="256" cy="436" rx="150" ry="24" fill="#000" opacity=".45" filter="url(#sh)"/>
+    <g transform="translate(256 262) scale(1.18) translate(-256 -262)">
+    <!-- 세 겹 (아래 → 위) -->
+    <rect x="-84" y="-84" width="168" height="168" rx="40" transform="translate(256 318) rotate(45)" fill="url(#l3)" opacity=".9"/>
+    <rect x="-84" y="-84" width="168" height="168" rx="40" transform="translate(256 278) rotate(45)" fill="url(#l2)"/>
+    <rect x="-84" y="-84" width="168" height="168" rx="40" transform="translate(256 236) rotate(45)" fill="url(#l1)"/>
+    <rect x="-84" y="-84" width="168" height="168" rx="40" transform="translate(256 236) rotate(45)" fill="url(#hl)"/>
+    <rect x="-82.5" y="-82.5" width="165" height="165" rx="39" transform="translate(256 236) rotate(45)" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="3"/>
+    <!-- 체크 -->
+    <path d="M204 240 l38 38 l72 -76" fill="none" stroke="#fff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="114.5" fill="none" stroke="url(#rim)" stroke-width="3"/>
 </svg>

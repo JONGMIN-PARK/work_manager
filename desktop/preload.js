@@ -45,6 +45,8 @@ function trayPngs(n) {
 
 contextBridge.exposeInMainWorld('wmDesktop', {
   isDesktop: true,
+  titleBarOverlay: process.platform === 'win32',   // v13.454 제목 줄을 웹 머리 줄이 맡음 (드래그 영역 · 단추 색)
+  setTitleBar: (o) => { if (o && typeof o === 'object') ipcRenderer.send('wm:titlebar', { color: String(o.color || ''), symbol: String(o.symbol || ''), h: +o.h || 0 }); },
   platform: process.platform,
   notify: (o) => ipcRenderer.send('wm:notify', { title: o && o.title, body: o && o.body, go: o && o.go, urgent: !!(o && o.urgent), tag: o && o.tag ? String(o.tag) : '' }),
   notifyClose: (tag) => ipcRenderer.send('wm:notify-close', String(tag || '')),

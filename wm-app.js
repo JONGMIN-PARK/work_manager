@@ -70,6 +70,30 @@ if (wmIsDesktopApp() && window.wmDesktop.getOnTop) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wmOnTopInit); else _wmOnTopInit();
   if (window.wmDesktop.onOnTop) window.wmDesktop.onOnTop(_wmOnTopShow);
 }
+/* v13.454 PC 앱(새 버전) — 윈도우 제목 줄 대신 머리 줄을 끌어 창을 옮기고, 최소화 · 최대화 · 닫기 단추 색을 테마에 맞춤 */
+function _wmHex(c) { var m = String(c || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/); if (!m) return /^#[0-9a-f]{6}$/i.test(c) ? c : ''; if (m[4] != null && +m[4] < 0.5) return ''; return '#' + [m[1], m[2], m[3]].map(function (v) { var h = (+v).toString(16); return h.length < 2 ? '0' + h : h; }).join(''); }
+var _wmTbLast = '';
+function wmTitleBarSync() {
+  if (!(wmIsDesktopApp() && window.wmDesktop.titleBarOverlay && window.wmDesktop.setTitleBar)) return;
+  document.documentElement.classList.add('wm-tbo');
+  var solo = !!window.WM_SOLO, hd = solo ? document.getElementById('cxHead') : document.querySelector('.hdr');
+  var el = hd && hd.offsetParent !== null ? hd : document.body, cs = getComputedStyle(el);
+  var bg = _wmHex(cs.backgroundColor) || _wmHex(getComputedStyle(document.body).backgroundColor) || '#0b1022';
+  var fg = _wmHex(getComputedStyle(document.body).color) || '#e2e8f0';
+  var h = hd && hd.offsetParent !== null ? Math.min(64, Math.max(32, Math.round(hd.getBoundingClientRect().height))) : 40;
+  var key = bg + fg + h; if (key === _wmTbLast) return; _wmTbLast = key;
+  window.wmDesktop.setTitleBar({ color: bg, symbol: fg, h: h });
+}
+if (wmIsDesktopApp() && window.wmDesktop.titleBarOverlay) {
+  document.documentElement.classList.add('wm-tbo');
+  var _wmTbT = 0, _wmTbSoon = function () { clearTimeout(_wmTbT); _wmTbT = setTimeout(wmTitleBarSync, 120); };
+  var _wmTbInit = function () {
+    wmTitleBarSync(); setTimeout(wmTitleBarSync, 1500); setTimeout(wmTitleBarSync, 5000);
+    try { new MutationObserver(_wmTbSoon).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] }); new MutationObserver(_wmTbSoon).observe(document.body, { attributes: true, attributeFilter: ['class', 'style'] }); } catch (e) {}
+    window.addEventListener('resize', _wmTbSoon);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wmTbInit); else _wmTbInit();
+}
 if (wmIsDesktopApp() && window.wmDesktop.onGo) {
   window.wmDesktop.onGo(function (go) { if (go && typeof wmDeepGo === 'function') wmDeepGo(go); });
 }

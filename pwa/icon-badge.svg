@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72">
+  <!-- v13.454 안드로이드 알림 줄 작은 아이콘 — 한 가지 색(흰색) 윤곽만 쓰임: 다이아몬드에 체크를 뚫음 -->
+  <defs><mask id="m"><rect width="72" height="72" fill="#fff"/><path d="M27 35 l6 6 l12 -13" fill="none" stroke="#000" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></mask></defs>
+  <g mask="url(#m)"><rect x="-17" y="-17" width="34" height="34" rx="8" transform="translate(36 34) rotate(45)" fill="#fff"/></g>
+  <rect x="-15" y="-15" width="30" height="30" rx="7" transform="translate(36 44) rotate(45)" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="0 21 60 60" opacity=".9"/>
+</svg>
