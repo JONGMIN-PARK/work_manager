@@ -203,7 +203,14 @@ test('🖼 사진 칠판 (v13.356) — 표시 더하기 · 지우기 · 회전 �
   // 메시지 목록에 요약
   var ms = await api('get', '/api/chat/rooms/' + dm + '/messages', b);
   var fm = ms.body.data.filter(function (m) { return m.file && m.file.id === fid; })[0];
-  expect(fm.file.annot).toEqual({ rot: 90, n: 1, crop: true });
+  expect(fm.file.annot).toMatchObject({ rot: 90, n: 1, crop: true });
+  expect(fm.file.annot.at).toBeGreaterThan(0);   // v13.451 표시를 고친 시각 — 미리보기 다시 만들지 판단
+  // v13.451 표시 묶어 받기 — 방 사람만 · 40개까지
+  var ba = await api('post', '/api/chat/annots', b).send({ ids: [fid, 'nope'] });
+  expect(ba.status).toBe(200);
+  expect(ba.body.data[fid].a.shapes.length).toBe(1);
+  expect(ba.body.data[fid].at).toBe(fm.file.annot.at);
+  expect(ba.body.data.nope).toBeUndefined();
   // 방 밖 사람 · 사진 아닌 파일
   expect((await api('post', '/api/chat/files/' + fid + '/annot', x).send({ add: [] })).status).toBe(403);
   expect((await api('get', '/api/chat/files/' + fid + '/annot', x)).status).toBe(403);

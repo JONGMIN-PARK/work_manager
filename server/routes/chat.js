@@ -90,7 +90,7 @@ async function userNames(tenantId, ids) {
 var MSG_SQL = 'SELECT m.id, m.room_id, m.user_id, m.kind, m.body, m.cards, m.mentions, m.reply_to, m.edited_at, m.deleted_at, m.created_at, m.reactions, m.post, ' +
   'COALESCE(u.display_name, u.name) AS user_name, f.id AS f_id, f.name AS f_name, f.mime AS f_mime, f.size AS f_size, f.dur AS f_dur, f.transcript AS f_tx, f.w AS f_w, f.h AS f_h, ' +
   "CASE WHEN m.post IS NULL THEN NULL ELSE (SELECT COALESCE(ua.display_name, ua.name) FROM users ua WHERE ua.id::text = m.post->>'assignee') END AS asg_name, " +
-  "(f.annot->>'rot')::real AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, " +
+  "(f.annot->>'rot')::real AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, f.annot_at AS f_at, " +
   'rp.replies, rp.last_reply_at, ' +
   // v13.376 인용 답장 — 원문 한 줄 (지웠으면 표시만)
   "m.grp, m.link, m.poll, m.ack, m.quote_id, qm.body AS q_body, qm.deleted_at AS q_del, qm.kind AS q_kind, qm.post->>'title' AS q_ptitle, COALESCE(qu.display_name, qu.name) AS q_user, qf.id AS q_fid, qf.name AS q_fname, qf.mime AS q_fmime " +
@@ -106,7 +106,7 @@ function shape(r) {
     quote: r.quote_id && !r.deleted_at ? { id: +r.quote_id, userName: r.q_user || (r.q_kind === 'ai' ? 'AI' : ''), deleted: !!r.q_del, body: r.q_del ? '' : String(r.q_ptitle ? '📌 ' + r.q_ptitle : r.q_body || '').slice(0, 200), file: r.q_fid && !r.q_del ? { id: r.q_fid, name: r.q_fname, mime: r.q_fmime } : null } : null };
 }
 // 사진 칠판 요약 — 목록에선 회전 · 표시 수 · 자름 여부만 (전체는 /files/:fid/annot)
-function annSum(f, r) { if (r.f_rot || r.f_n || r.f_crop) f.annot = { rot: Math.round((r.f_rot || 0) * 10) / 10, n: r.f_n || 0, crop: !!r.f_crop }; return f; }
+function annSum(f, r) { if (r.f_rot || r.f_n || r.f_crop) f.annot = { rot: Math.round((r.f_rot || 0) * 10) / 10, n: r.f_n || 0, crop: !!r.f_crop, at: r.f_at ? new Date(r.f_at).getTime() : 0 }; return f; }   // v13.451 at — 표시를 고친 시각 (미리보기 다시 만들지 판단)
 async function loadMsg(id) { var r = await db.query(MSG_SQL + 'WHERE m.id = $1', [id]); return r.rows.length ? shape(r.rows[0]) : null; }
 
 /* @이름 → 멤버 id */
@@ -953,6 +953,18 @@ router.get('/files/:fid/annot', async function (req, res) {
     res.json({ data: f.annot || { rot: 0, crop: null, shapes: [] }, at: f.annot_at, byName: f.annot_by_name || '', mine: v.rows[0] ? { a: annAng(v.rows[0].angle), f: v.rows[0].fill } : null });
   } catch (e) { httpErr.serverError(res, '[chat/annot/get]', e); }
 });
+/* v13.451 표시 묶어 받기 — 대화 한 쪽의 표시 있는 사진을 한 번에 (사진마다 따로 받던 것) · 40장씩 */
+router.post('/annots', async function (req, res) {
+  try {
+    var ids = Array.isArray((req.body || {}).ids) ? req.body.ids.filter(function (x) { return typeof x === 'string' && x.length <= 40; }).slice(0, 40) : [];
+    if (!ids.length) return res.json({ data: {} });
+    var r = await db.query('SELECT f.id, f.annot, f.annot_at FROM chat_files f JOIN chat_members m ON m.room_id = f.room_id AND m.user_id = $3 AND m.left_at IS NULL ' +
+      'WHERE f.id = ANY($1) AND f.tenant_id = $2 AND f.annot IS NOT NULL', [ids, req.tenant.id, me(req)]);
+    var out = {}; r.rows.forEach(function (x) { out[x.id] = { a: x.annot, at: x.annot_at ? new Date(x.annot_at).getTime() : 0 }; });
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ data: out });
+  } catch (e) { httpErr.serverError(res, '[chat/annots]', e); }
+});
 /* 바꾸기: { add:[shape], remove:[id], rot, crop(null=풀기), clear } — 여럿이 같이 그려도 서로 안 지우게 '바뀐 것만' 보냄 */
 router.post('/files/:fid/annot', async function (req, res) {
   try {
@@ -985,7 +997,7 @@ router.post('/files/:fid/annot', async function (req, res) {
       var r = await cl.query('SELECT annot FROM chat_files WHERE id = $1 FOR UPDATE', [f.id]);
       return apply(r.rows[0].annot, async function (json) { await cl.query('UPDATE chat_files SET annot = $2, annot_at = now(), annot_by = $3 WHERE id = $1', [f.id, json, uid]); return true; });
     });
-    hub.publish(await memberIds(f.room_id), 'annot', { fileId: f.id, roomId: f.room_id, by: uid, byName: await myName(req), op: op, sum: { rot: out.rot || 0, n: out.shapes.length, crop: !!out.crop } });
+    hub.publish(await memberIds(f.room_id), 'annot', { fileId: f.id, roomId: f.room_id, by: uid, byName: await myName(req), op: op, sum: { rot: out.rot || 0, n: out.shapes.length, crop: !!out.crop, at: Date.now() } });
     res.json({ data: { rot: out.rot || 0, crop: out.crop || null, n: out.shapes.length } });
   } catch (e) {
     if (e && e.status === 400) return bad(res, e.message);

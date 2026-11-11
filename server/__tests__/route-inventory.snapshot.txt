@@ -422,6 +422,7 @@ POST /api/auth/register
 POST /api/billing/checkout
 POST /api/billing/portal
 POST /api/billing/webhook
+POST /api/chat/annots
 POST /api/chat/away
 POST /api/chat/brief/now
 POST /api/chat/daily-run

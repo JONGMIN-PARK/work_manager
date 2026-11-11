@@ -1092,6 +1092,7 @@ function _cxBlob(fid, thumb) {
  *   사진마다 따로 받던 것(장마다 서버 왕복 · 화면 가까이 와야 시작)이라 옛 대화를 올리면 빈 칸이 한참 보였다.
  *   묶음에 없는 것(미리보기가 아직 없는 예전 사진)은 예전처럼 한 장씩 */
 function _cxWarm(msgs) {
+  if (typeof chatBoardWarmAnnots === 'function') chatBoardWarmAnnots(msgs);   // v13.451 ✏️ 표시도 한 번에
   var ids = [], seen = {};
   (msgs || []).forEach(function (m) {
     var f = m && m.file; if (!f || !f.id || seen[f.id] || !/^image\/(png|jpe?g|gif|webp|bmp)$/i.test(f.mime || '')) return;
@@ -1165,9 +1166,12 @@ function _cxBlobImg(img) {
   img.addEventListener('load', function () { if (sc && sc._stick) sc.scrollTop = sc.scrollHeight; _cxNoteDim(img, id); }, { once: true });
   _cxBlob(id, small).then(function (u) {
     if (sc) sc._stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
-    img.src = u;
     var ai0 = img.closest('[data-amid]'), holder = !img.closest('.cx-q') && (ai0 || img.closest('[data-mid]')), m = holder && _cxFindMsg(+(ai0 ? ai0.dataset.amid : holder.dataset.mid));   // 인용 상자 속 사진은 그대로 · 앨범은 그 사진의 메시지
-    if (typeof chatBoardThumb === 'function' && m && m.file) chatBoardThumb(img, m.file);   // 표시 · 자르기 · 회전한 모습으로
+    var an = m && m.file && m.file.annot, marked = !!(an && (an.n || an.crop || an.rot));
+    var p = typeof chatBoardThumb === 'function' && m && m.file ? chatBoardThumb(img, m.file) : null;   // 표시 · 자르기 · 회전한 모습으로
+    // v13.451 표시 있는 사진 — 표시된 그림이 0.35초 안에 되면 그것부터 (표시 없는 그림이 먼저 보였다 바뀌던 것) · 늦으면 일단 미리보기
+    if (marked && p && p.then) { var t0 = setTimeout(function () { if (!img.getAttribute('src')) img.src = u; }, 350); p.then(function () { clearTimeout(t0); }, function () { clearTimeout(t0); if (!img.getAttribute('src')) img.src = u; }); }
+    else img.src = u;
   }).catch(function () { img.alt = '사진을 불러오지 못했습니다'; });
 }
 function _cxDownload(fid, name) {

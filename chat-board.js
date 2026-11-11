@@ -1046,11 +1046,11 @@ function chatBoardThumb(img, f, force) {
   var need = !!(an && (an.n || an.crop)), rot = v ? v.a : (an && an.rot) || 0;
   if (!need && !rot) { delete img.dataset.cbkey; if (force) _cbFileUrl(f.id).then(function (u) { img.src = u; }); return; }
   // v13.440 만든 미리보기는 담아 두고 다시 씀 — 굴릴 때마다 · 목록을 다시 그릴 때마다 새로 만들던 것 (휴대폰 굴림이 끊기던 가장 큰 원인)
-  var fill = !!(v && v.f), key = f.id + '|' + rot + '|' + (fill ? 1 : 0) + '|' + (an ? (an.n || 0) + ':' + (an.crop ? 1 : 0) : '');
+  var fill = !!(v && v.f), key = f.id + '|' + rot + '|' + (fill ? 1 : 0) + '|' + (an ? (an.n || 0) + ':' + (an.crop ? 1 : 0) + ':' + (an.at || 0) : '');
   var old = _cbThumbKey[f.id];
   if (old && (force || old !== key)) { var op = _cbThumbC[old]; delete _cbThumbC[old]; if (op) op.then(function (t) { setTimeout(function () { URL.revokeObjectURL(t.url); }, 15000); }).catch(function () {}); }
   _cbThumbKey[f.id] = key;
-  if (!_cbThumbC[key]) { _cbThumbC[key] = _cbThumbMake(f.id, need, rot, fill); _cbThumbC[key].catch(function () { if (_cbThumbKey[f.id] === key) delete _cbThumbKey[f.id]; delete _cbThumbC[key]; }); }
+  if (!_cbThumbC[key]) { _cbThumbC[key] = _cbThumbMake(f.id, need, rot, fill, _cbDimOf(f), key, an && an.at); _cbThumbC[key].catch(function () { if (_cbThumbKey[f.id] === key) delete _cbThumbKey[f.id]; delete _cbThumbC[key]; }); }
   img.dataset.cbkey = key;
   _cbThumbC[key].then(function (t) {
     if (img.dataset.cbkey !== key) return;
@@ -1061,20 +1061,77 @@ function chatBoardThumb(img, f, force) {
     }
     img.src = t.url;
   }).catch(function () {});
+  return _cbThumbC[key];
+}
+/** 원본 크기 (메시지에 적힌 w · h) — 표시 좌표가 원본 기준이라 미리보기에 줄여 그릴 때 씀 */
+function _cbDimOf(f) {
+  if (f && +f.w > 0 && +f.h > 0) return { w: +f.w, h: +f.h };
+  try { if (typeof CX !== 'undefined') { var all = CX.msgs.concat(CX.threadMsgs || []); for (var i = 0; i < all.length; i++) { var x = all[i].file; if (x && x.id === f.id && +x.w > 0) return { w: +x.w, h: +x.h }; } } } catch (e) {}
+  return null;
+}
+/* v13.451 표시 데이터 — 대화 한 쪽에 든 것을 한 번에 받아 둠 (chat-ui.js _cxWarm 이 부름) · 메모리에 */
+var _cbAnnC = {};
+function chatBoardWarmAnnots(msgs) {
+  if (typeof apiFetch !== 'function') return;
+  if (!_cbViewsOk() && (msgs || []).some(function (m) { return m && m.file && /^image\//i.test(m.file.mime || ''); })) _cbViewsLoad();   // 내가 돌려 둔 각도도 같이 (사진 그릴 차례에 받기 시작하면 한 번 더 기다림)
+  var ids = [];
+  (msgs || []).forEach(function (m) { var f = m && m.file, an = f && f.annot; if (!an || !(an.n || an.crop)) return; var c = _cbAnnC[f.id]; if (c && (c.at >= (an.at || 0) || c.p)) return; if (ids.indexOf(f.id) < 0) ids.push(f.id); });
+  for (var i = 0; i < ids.length; i += 40) (function (part) {
+    var p = apiFetch('/api/chat/annots', { method: 'POST', body: JSON.stringify({ ids: part }) }).then(function (r) { return (r && r.data) || {}; }).catch(function () { return {}; });
+    part.forEach(function (id) { _cbAnnC[id] = { p: p.then(function (d) { var x = d[id]; _cbAnnC[id] = x ? { a: x.a, at: x.at || 0 } : null; if (!x) delete _cbAnnC[id]; return x || null; }) }; });
+  })(ids.slice(i, i + 40));
+}
+function _cbAnnGet(fid, at) {
+  var c = _cbAnnC[fid];
+  if (c && c.p) return c.p.then(function (x) { return x && (x.at || 0) >= (at || 0) ? x.a : _cbAnnFetch(fid); });
+  if (c && c.a && (c.at || 0) >= (at || 0)) return Promise.resolve(c.a);
+  return _cbAnnFetch(fid);
+}
+function _cbAnnFetch(fid) { return apiFetch('/api/chat/files/' + encodeURIComponent(fid) + '/annot').then(function (r) { var a = (r && r.data) || null; if (a) _cbAnnC[fid] = { a: a, at: r.at ? new Date(r.at).getTime() : Date.now() }; return a; }); }
+/** 표시를 k 배로 (원본 좌표 → 미리보기 좌표) */
+function _cbAnnScale(a, k) {
+  var o = JSON.parse(JSON.stringify(a || {}));
+  if (o.crop) o.crop = { x: o.crop.x * k, y: o.crop.y * k, w: o.crop.w * k, h: o.crop.h * k };
+  o.shapes = (o.shapes || []).map(function (s) {
+    if (Array.isArray(s.p)) s.p = s.p.map(function (v) { return v * k; });
+    ['x', 'y', 'x2', 'y2'].forEach(function (c) { if (s[c] != null) s[c] = s[c] * k; });
+    if (s.w != null) s.w = Math.max(1, s.w * k); if (s.fs != null) s.fs = Math.max(6, s.fs * k);
+    return s;
+  });
+  return o;
 }
 /* v13.440 미리보기 만들기 — 화면을 멈추지 않게
  *   · 돌리기만 한 사진: 작은 미리보기(360px)를 돌림 — 예전엔 원본(수 MB)을 받아 화면을 멈춘 채 풀었다
  *   · 표시 · 자르기가 있는 사진: 좌표가 원본 기준이라 원본을 쓰되, 푸는 일(decode)은 뒤에서
  *   · 압축도 뒤에서(toBlob) — toDataURL 은 끝날 때까지 화면이 멈춤 */
 var _cbThumbC = {}, _cbThumbKey = {};
-function _cbThumbMake(fid, need, rot, fill) {
-  var url = !need && typeof _cxBlob === 'function' ? _cxBlob(fid, true) : _cbFileUrl(fid);
+function _cbThumbMake(fid, need, rot, fill, dim, key, at) {
+  // v13.451 ① 기기에 담아 둔 완성 그림 ② 없으면 작은 미리보기 위에 표시를 줄여 그림 (원본 크기를 알 때) ③ 모르면 예전처럼 원본으로
+  var dbKey = key ? 'a:' + key : null;
+  var cached = dbKey && typeof chatThumbGet === 'function' ? chatThumbGet([dbKey]).then(function (m) { return m[dbKey] || null; }, function () { return null; }) : Promise.resolve(null);
+  return cached.then(function (buf) {
+    if (buf) return new Promise(function (ok, no) { var b = new Blob([buf]), u = URL.createObjectURL(b), im = new Image(); im.onload = function () { ok({ url: u, w: im.naturalWidth, h: im.naturalHeight }); }; im.onerror = function () { URL.revokeObjectURL(u); no(new Error('cache')); }; im.src = u; });
+    return _cbThumbBuild(fid, need, rot, fill, dim, at).then(function (t) {
+      if (dbKey && t.blob && typeof chatThumbPut === 'function') t.blob.arrayBuffer().then(function (ab) { var m = {}; m[dbKey] = ab; chatThumbPut(m); }).catch(function () {});
+      return t;
+    });
+  });
+}
+function _cbThumbBuild(fid, need, rot, fill, dim, at) {
+  var useSmall = !need || !!dim, small = typeof _cxBlob === 'function';
+  var url = useSmall && small ? _cxBlob(fid, true) : _cbFileUrl(fid);
   var src = url.then(_cbLoadImg).then(function (im) { return typeof im.decode === 'function' ? im.decode().then(function () { return im; }, function () { return im; }) : im; });
-  return Promise.all([src, need ? apiFetch('/api/chat/files/' + encodeURIComponent(fid) + '/annot') : null]).then(function (r) {
-    var a = Object.assign({ crop: null, shapes: [] }, (r[1] && r[1].data) || {}, { rot: rot });
-    var c = _cbFlatten(r[0], a, { max: 640, fill: fill });
+  return Promise.all([src, need ? _cbAnnGet(fid, at) : null]).then(function (r) {
+    var img = r[0], ann = r[1] || {};
+    if (need && dim && useSmall) {   // 미리보기가 원본과 같은 모양인지 (예전 사진은 미리보기가 없어 원본이 올 수 있음 — 그때는 k=1)
+      var k = img.naturalWidth / dim.w;
+      if (Math.abs(img.naturalHeight / img.naturalWidth - dim.h / dim.w) > 0.03) return _cbThumbBuild(fid, need, rot, fill, null, at);   // 모양이 다르면 원본으로
+      if (Math.abs(k - 1) > 0.01) ann = _cbAnnScale(ann, k);
+    }
+    var a = Object.assign({ crop: null, shapes: [] }, ann, { rot: rot });
+    var c = _cbFlatten(img, a, { max: 640, fill: fill });
     var png = (_cbSkew(rot) && !fill) || _cbHasAlpha(r[0]);   // 비스듬한 빈 모서리 · 비치는 사진은 투명하게 (JPEG 는 투명한 곳이 검게 바뀜)
-    return new Promise(function (ok, no) { c.toBlob(function (b) { if (b) ok({ url: URL.createObjectURL(b), w: c.width, h: c.height }); else no(new Error('blob')); }, png ? 'image/png' : 'image/jpeg', 0.88); });
+    return new Promise(function (ok, no) { c.toBlob(function (b) { if (b) ok({ url: URL.createObjectURL(b), w: c.width, h: c.height, blob: b }); else no(new Error('blob')); }, png ? 'image/png' : 'image/jpeg', 0.88); });
   });
 }
 /** 사진에 비치는(투명한) 곳이 있는지 — 작게 줄여 알파만 봄 (사진마다 한 번) */
@@ -1370,6 +1427,6 @@ function chatBoardCapture(replyTo) {
 }
 
 if (typeof window !== 'undefined') {
-  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip; window.chatBoardPrefetch = chatBoardPrefetch; window.chatBoardPickSource = _cbPickSource; window.chatBoardGrabWindow = _cbGrabWindow; window.chatBoardProbeScreens = _cbProbeScreens; window.chatBoardSnipState = function () { return _cbSnipOn && _cbSnipOn.state; };
+  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip; window.chatBoardWarmAnnots = chatBoardWarmAnnots; window.chatBoardPrefetch = chatBoardPrefetch; window.chatBoardPickSource = _cbPickSource; window.chatBoardGrabWindow = _cbGrabWindow; window.chatBoardProbeScreens = _cbProbeScreens; window.chatBoardSnipState = function () { return _cbSnipOn && _cbSnipOn.state; };
   window.chatBoardOnEvent = chatBoardOnEvent; window.chatBoardThumb = chatBoardThumb; window.chatBoardClose = chatBoardClose;
 }
