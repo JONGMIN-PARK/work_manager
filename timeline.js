@@ -61,6 +61,22 @@ function memoToHtml(memo) {
 }
 
 var tlScale = 'day'; // day, week, month, quarter
+// v13.438 휴대폰은 주 단위로 시작 — 일 단위(하루 32px)는 세로 화면에 열흘 남짓만 보여 흐름이 안 읽힘 (눈금 단추로 바꾸면 그대로 따름)
+try { if (typeof window !== 'undefined' && window.innerWidth && window.innerWidth <= 600) tlScale = 'week'; } catch (e) {}
+/* v13.438 휴대폰 세로 = '쌓기' 배치 — 왼쪽 이름 칸(화면의 1/3)을 없애고 이름 · 상태 · 기간을 막대 위 한 줄로 올림 → 막대가 화면 폭 전체를 씀.
+ *   이름 칸 폭을 0 으로 두면 날짜 → 위치 계산 · 끌기 · 오늘로 가기가 그대로 맞는다. 모양은 style.css .tl-stack */
+function _tlStack() {
+  try { return typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth <= 600 && window.innerHeight >= window.innerWidth; } catch (e) { return false; }
+}
+var _tlStackWas = null;
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('resize', function () {
+    var sc = document.getElementById('tlScroll'); if (!sc || !sc.offsetParent) return;
+    var st = _tlStack();
+    if (_tlStackWas !== null && st !== _tlStackWas) { renderTimeline(); return; }   // 세로 ↔ 가로로 돌리면 배치를 바꿔 다시 그림
+    var c = sc.closest('.tl-container'); if (c && st) c.style.setProperty('--tl-sw', sc.clientWidth + 'px');
+  });
+}
 var tlHideDone = false; // 완료 프로젝트 숨기기
 var tlEditMode = false; // 기간 조정/이동 모드
 var tlMsReorder = false; // v13.136: 마일스톤 순서 변경 모드 — 체크 시에만 드래그 재배열 허용(평상시 순서 고정)
@@ -713,6 +729,10 @@ function _tlAfterMount(ctx, prevScroll) {
 
   // 날짜 이동(오늘/지정)이 있으면 그 날짜를 중앙으로, 아니면 재렌더는 이전 위치 복원, 첫 렌더는 오늘 중앙
   var scrollEl = document.getElementById('tlScroll');
+  // v13.438 휴대폰 세로 쌓기 배치 — 이름 줄 폭 = 보이는 폭 (가로로 밀어도 이름은 제자리)
+  var _stk = _tlStack(), _cont = scrollEl && scrollEl.closest('.tl-container');
+  _tlStackWas = _stk;
+  if (_cont) { _cont.classList.toggle('tl-stack', _stk); if (_stk) _cont.style.setProperty('--tl-sw', scrollEl.clientWidth + 'px'); }
   if (scrollEl) {
     if (_tlJumpDate) {
       var jpos = getDatePosition(_tlJumpDate, ctx.rangeStart, ctx.units);
@@ -1096,6 +1116,7 @@ function tlMsOpenUpdate(ev, msId, projId, prog) {
 
 var _tlMeasureCanvas = null;
 function calcLabelWidth(projects, milestones, msWorkH) {
+  if (_tlStack()) return 0;   // v13.438 휴대폰 세로 — 이름은 막대 위 줄로 (이름 칸 없음)
   // 숨겨진 캔버스로 텍스트 폭 측정 (v13.137 모듈 레벨 캔버스 재사용)
   if (!_tlMeasureCanvas) _tlMeasureCanvas = document.createElement('canvas');
   var ctx = _tlMeasureCanvas.getContext('2d');

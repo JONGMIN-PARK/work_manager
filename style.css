@@ -7161,3 +7161,68 @@ html.cx-locked #mMessages{position:relative}
    브라우저가 화면 전체를 키워 단추까지 같이 커졌다 → 칠판 안에서는 화면 확대(벌리기 · 두 번 두드리기)를 막고 밀기만 허용 */
 .cb{touch-action:pan-x pan-y;overscroll-behavior:contain}
 .cb-stage{touch-action:none}
+
+/* ═══ v13.438 📱 휴대폰 세로 — 타임라인 '쌓기' 배치 · 프로젝트 관리 툴바 정돈 ═══
+   타임라인: 왼쪽 이름 칸을 없애고 [● 이름 · 상태 · 기간 · D-day] 를 막대 위 한 줄로 → 막대가 화면 폭 전체를 씀 (timeline.js _tlStack).
+   세로로는 화면 전체가 굴러가고(안쪽 따로 굴리기 없음), 가로로 밀면 날짜만 움직이고 이름 줄은 제자리 */
+#mTimeline .tl-stack .tl-label-header{display:none}
+#mTimeline .tl-stack .tl-scroll{max-height:none!important;min-height:0!important;overflow-y:hidden;overscroll-behavior-x:contain}
+#mTimeline .tl-stack .tl-row{flex-direction:column}
+#mTimeline .tl-stack .tl-row>.tl-label{width:var(--tl-sw,100vw)!important;min-width:0!important;max-width:none!important;border-right:0;box-shadow:none;background:transparent!important;padding:8px 10px 2px;z-index:5}
+#mTimeline .tl-stack .tl-row-delayed>.tl-label{box-shadow:inset 3px 0 0 0 #EF4444}
+#mTimeline .tl-stack .tl-row>.tl-bars{flex:none;min-height:36px}
+#mTimeline .tl-stack .tl-row-sub>.tl-bars{min-height:24px}
+#mTimeline .tl-stack .tl-row-proj>.tl-label>div:last-child{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;min-width:0}
+#mTimeline .tl-stack .tl-row-proj>.tl-label>div:last-child>div{margin-top:0!important;min-width:0}
+#mTimeline .tl-stack .tl-row-proj>.tl-label>div:last-child>div:first-child{flex:1 1 150px}
+#mTimeline .tl-stack .tl-row-proj>.tl-label .tl-l-name{display:block!important;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;font-size:13.5px!important;line-height:1.35;word-break:normal;min-width:0;flex:1 1 auto}
+#mTimeline .tl-stack .tl-row-proj>.tl-label .badge{font-size:10.5px}
+#mTimeline .tl-stack .tl-row-proj>.tl-label [style*="font-size:9px"]{font-size:11px!important}
+#mTimeline .tl-stack .tl-row-sub>.tl-label{padding:4px 10px 0 26px!important}
+#mTimeline .tl-stack .tl-row-sub>.tl-label span{font-size:11.5px}
+#mTimeline .tl-stack .tl-group-row>.tl-bars{display:none}
+#mTimeline .tl-stack .tl-group-row>.tl-label{padding:5px 10px!important}
+#mTimeline .tl-stack .tl-unit{padding:6px 2px;font-size:11px}
+
+@media (max-width:600px) and (orientation:portrait){
+  /* 타임라인 조작 줄 — [눈금 단추 (폭 가득)] [📍] / [필터] [⚙ 보기] … [➕ 프로젝트] [⋯]. 날짜로 가기는 ⚙ 줄 옆 작은 칸 */
+  #tlControls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  #tlControls>*{order:5!important;margin-left:0!important}
+  #tlControls>.wm-seg{order:1!important;flex:1 1 0;display:flex;min-width:0}
+  #tlControls>.wm-seg>button{flex:1 1 0;padding:0 4px!important;min-height:34px;font-size:13px}
+  #tlControls>.btn{order:2!important;min-height:34px}
+  #tlControls>input[type=date]{order:6!important;flex:1 1 110px!important;max-width:none!important;min-width:0;height:34px}
+  #tlControls>.wm-flt{order:4!important}
+  #tlControls>.wm-pri{order:7!important;margin-left:auto!important;min-height:34px}
+  #tlControls>.hdr-pop:not(.wm-flt){order:8!important}
+  #tlControls>.wm-tb-sp{display:block!important;flex-basis:100%!important;height:0;order:3!important}
+  #timelineWrap.pnl,#timelineWrap>.pnl{padding:8px!important}
+
+  /* 프로젝트 관리 화면 툴바 — 줄을 가지런히: ① 제목 · 개수 … 주 단추 · ⋯  ② 고르기 칸(같은 폭으로 나눠 가득)  ③ 찾기 칸
+     단추 · 고르기 · 찾기 칸 높이를 34px 로 맞춤 (전엔 단추 30 · 고르기 32~40 으로 들쭉날쭉) */
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb{row-gap:6px!important;padding:8px!important}
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb::before{content:'';order:-1;flex:0 0 100%;height:0;margin-bottom:-6px}
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb>.wm-tb-t{font-size:15px!important}
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb>.wm-tb-n{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb :is(.btn,.wm-pri,.wm-more,.wm-flt>button){min-height:34px!important;font-size:13px}
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb>:is(select,.wm-tb-sel,.msel){flex:1 1 0!important;max-width:none!important;min-width:0;height:34px!important;min-height:34px!important}
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb>.wm-seg{flex:1 1 auto;display:flex;min-width:0}
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb>.wm-seg>button{flex:1 1 0;min-height:32px;font-size:13px;white-space:nowrap}
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb-q{height:36px!important}
+}
+@media (max-width:600px) and (orientation:portrait){
+  /* 날짜로 가기 칸은 세로 화면에서 숨김 — 한 줄을 다 차지해 ⋯ 가 혼자 아랫줄로 떨어졌다 (📍 오늘 + 손으로 밀기 · 가로로 돌리면 나옴) */
+  #tlControls>input[type=date]{display:none!important}
+}
+@media (max-width:600px) and (orientation:portrait){
+  /* 보기 전환 묶음은 한 줄을 통째로 — 옆 고르기 칸이 한 글자로 찌그러지던 것 (A/S) */
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb>.wm-seg{flex:1 1 100%!important}
+}
+@media (max-width:600px) and (orientation:portrait){
+  /* 단추 하나짜리 묶음(예: 👤 내 담당)은 제 크기 — 고르기 칸 옆에 */
+  :is(#mPipeline,#mOrders,#mIssues,#mDocs,#mAs,#mPrestudy,#mTech) .wm-tb>.wm-seg:has(>button:only-child){flex:0 0 auto!important}
+}
+@media (max-width:768px){
+  /* 사전검토 · 요소기술 칸반 — 세로로 쌓일 때 빈 칸이 190px 씩 비던 것 (가로용 flex-basis 가 높이로 먹음) */
+  :is(#mPrestudy,#mTech) .pipeline-board>div{flex:none!important;min-width:0!important;max-width:none!important}
+}
