@@ -7262,3 +7262,11 @@ html.cx-locked #mMessages{position:relative}
 .cb-snip-hd[data-hd="s"]{left:50%;top:100%;cursor:ns-resize}
 .cb-snip-hd[data-hd="sw"]{left:0;top:100%;cursor:nesw-resize}
 .cb-snip-hd[data-hd="w"]{left:0;top:50%;cursor:ew-resize}
+/* v13.443 확대 · 축소 — 왼쪽 아래 배율 줄 · 화면 옮기기 손 모양 */
+.cb-snip-zoom{position:absolute;left:14px;bottom:14px;display:flex;align-items:center;gap:4px;padding:5px;border-radius:12px;background:rgba(15,18,32,.95);border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 32px rgba(0,0,0,.5);cursor:default}
+.cb-snip-zoom button{height:30px;min-width:30px;padding:0 9px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#e5e7eb;font-size:12.5px;font-weight:600;cursor:pointer}
+.cb-snip-zoom button:hover{background:rgba(255,255,255,.14)}
+.cb-snip-zv{min-width:50px;text-align:center;color:#fff;font:600 12.5px/1 "Malgun Gothic",sans-serif;font-variant-numeric:tabular-nums}
+.cb-snip.zoomed .cb-snip-zv{color:#FACC15}
+.cb-snip.can-pan,.cb-snip.can-pan .cb-snip-sel,.cb-snip.can-pan .cb-snip-hd{cursor:grab}
+.cb-snip.panning,.cb-snip.panning .cb-snip-sel,.cb-snip.panning .cb-snip-hd{cursor:grabbing}

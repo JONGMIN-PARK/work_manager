@@ -1074,6 +1074,8 @@ function _cbDataBlob(url) {   // data: 주소 → Blob (보안 정책상 fetch(d
 /* v13.441 ✂️ 구역 골라 캡처 — 찍은 화면을 창 가득 띄우고 끌어서 고른 곳만 잘라 보냄.
  *   예전엔 화면 전체를 올리고 '자르기' 표시만 붙여서, 받는 사람이 원본 보기로 화면 전체를 볼 수 있었다 → 이제 고른 구역만 올라감.
  *   끌기 = 구역 · Enter = 보내기(고른 곳, 없으면 화면 전체) · Esc = 취소 · 고른 뒤 [✏️ 표시하기] 로 사진 칠판에서 표시 후 보내기
+ *   v13.443 확대 · 축소 — 휠(마우스 자리 기준) · ＋/－ 키 · 0 = 창에 맞춤 · 1 = 실제 크기 · Space+끌기 / 휠 단추 / 오른쪽 단추 끌기 = 화면 옮기기.
+ *     작은 글자 · 얇은 선을 크게 보고 픽셀 단위로 고를 수 있게. 좌표는 모두 사진 픽셀이라 확대해도 고른 곳은 그대로
  *   v13.442 고른 뒤 다듬기 — 안쪽을 끌면 옮기기 · 모서리 · 변의 손잡이(8개)를 끌면 크기 바꾸기 · 화살표 키 1px(Shift 10px) 옮기기 · Alt+화살표 크기 */
 var _cbSnipOn = null;
 function _cbSnip(blob, replyTo) {
@@ -1082,19 +1084,47 @@ function _cbSnip(blob, replyTo) {
   var ov = document.createElement('div'); ov.className = 'cb-snip'; ov.id = 'cbSnip';
   ov.innerHTML = '<img class="cb-snip-img" alt="찍은 화면" draggable="false"><div class="cb-snip-sel" hidden><span class="cb-snip-sz"></span>' +
     ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(function (h) { return '<i class="cb-snip-hd" data-hd="' + h + '"></i>'; }).join('') + '</div>' +
-    '<div class="cb-snip-hint">✂️ 보낼 구역을 끌어서 고르세요 — 고른 뒤 옮기고 크기를 바꿀 수 있어요 · <b>Enter</b> 화면 전체 · <b>Esc</b> 취소</div>' +
+    '<div class="cb-snip-hint">✂️ 보낼 구역을 끌어서 고르세요 · <b>휠</b> 확대 · <b>Space+끌기</b> 화면 옮기기 · <b>Enter</b> 화면 전체 · <b>Esc</b> 취소</div>' +
+    '<div class="cb-snip-zoom"><button type="button" data-s="zout" title="축소 (－)">－</button><span class="cb-snip-zv" title="지금 배율">100%</span><button type="button" data-s="zin" title="확대 (＋)">＋</button><button type="button" data-s="zfit" title="창에 맞춤 (0)">맞춤</button><button type="button" data-s="z100" title="실제 크기 (1)">1:1</button></div>' +
     '<div class="cb-snip-bar" hidden><button type="button" class="pri" data-s="send">➤ 보내기</button><button type="button" data-s="mark">✏️ 표시하기</button><button type="button" data-s="copy">📋 복사</button><button type="button" data-s="redo">↺ 다시 고르기</button></div>' +
     '<button type="button" class="cb-snip-x" data-s="close" data-wm-close aria-label="캡처 취소" title="취소 (Esc)">✕</button>';
   document.body.appendChild(ov);
   var img = ov.querySelector('img'), selEl = ov.querySelector('.cb-snip-sel'), bar = ov.querySelector('.cb-snip-bar'), hint = ov.querySelector('.cb-snip-hint'), sz = ov.querySelector('.cb-snip-sz');
-  var S = { W: 0, H: 0, k: 1, ox: 0, oy: 0, sel: null, drag: null, busy: false };
+  var S = { W: 0, H: 0, k: 1, fitK: 1, ox: 0, oy: 0, sel: null, drag: null, busy: false, space: false };
+  var zv = ov.querySelector('.cb-snip-zv');
   var url = URL.createObjectURL(blob);
   function fit() {   // 찍은 화면을 창 안에 가득 (비율 유지 · 가운데)
     if (!S.W) return;
     var vw = ov.clientWidth, vh = ov.clientHeight;
-    S.k = Math.min(vw / S.W, vh / S.H); S.ox = (vw - S.W * S.k) / 2; S.oy = (vh - S.H * S.k) / 2;
-    img.style.cssText = 'left:' + S.ox + 'px;top:' + S.oy + 'px;width:' + (S.W * S.k) + 'px;height:' + (S.H * S.k) + 'px';
+    S.fitK = S.k = Math.min(vw / S.W, vh / S.H); S.ox = (vw - S.W * S.k) / 2; S.oy = (vh - S.H * S.k) / 2;
+    place();
+  }
+  /** 사진을 지금 배율 · 자리로 — 창보다 작은 쪽은 가운데, 큰 쪽은 가장자리 너머로 못 나가게 */
+  function place() {
+    var vw = ov.clientWidth, vh = ov.clientHeight, w = S.W * S.k, h = S.H * S.k;
+    S.ox = w <= vw ? (vw - w) / 2 : Math.min(0, Math.max(vw - w, S.ox));
+    S.oy = h <= vh ? (vh - h) / 2 : Math.min(0, Math.max(vh - h, S.oy));
+    img.style.cssText = 'left:' + S.ox + 'px;top:' + S.oy + 'px;width:' + w + 'px;height:' + h + 'px' + (S.k >= 3 ? ';image-rendering:pixelated' : '');
+    zv.textContent = Math.round(S.k * 100) + '%';
+    ov.classList.toggle('zoomed', S.k > S.fitK * 1.01);
     draw();
+  }
+  /** 배율 바꾸기 — (cx, cy) 화면 자리에 있던 사진 점이 그 자리에 그대로 있게 */
+  function zoomTo(k, cx, cy) {
+    if (!S.W) return;
+    var lo = Math.min(S.fitK, 1), hi = Math.max(16, S.fitK);
+    k = Math.max(lo, Math.min(hi, k));
+    if (Math.abs(k - S.fitK) < S.fitK * 0.03) k = S.fitK;   // 맞춤 배율 근처면 딱 맞춤
+    if (cx == null) { cx = ov.clientWidth / 2; cy = ov.clientHeight / 2; }
+    var ix = (cx - S.ox) / S.k, iy = (cy - S.oy) / S.k;
+    S.k = k; S.ox = cx - ix * k; S.oy = cy - iy * k;
+    place();
+  }
+  function wheel(e) {
+    if (e.target.closest('.cb-snip-bar,.cb-snip-zoom')) return;
+    e.preventDefault();
+    var dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+    zoomTo(S.k * Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0018)), e.clientX, e.clientY);
   }
   function draw() {
     var r = S.sel;
@@ -1107,14 +1137,18 @@ function _cbSnip(blob, replyTo) {
     bar.hidden = !!S.drag; if (S.drag) return;
     var bw = bar.offsetWidth, bh = bar.offsetHeight, vw = ov.clientWidth, vh = ov.clientHeight;   // 단추 줄 — 고른 곳 아래 (자리가 없으면 위 · 그것도 없으면 안쪽)
     var by = y + h + 10 + bh <= vh ? y + h + 10 : (y - bh - 10 >= 0 ? y - bh - 10 : y + h - bh - 10);
-    bar.style.left = Math.max(8, Math.min(vw - bw - 8, x + w - bw)) + 'px'; bar.style.top = by + 'px';
+    bar.style.left = Math.max(8, Math.min(vw - bw - 8, x + w - bw)) + 'px'; bar.style.top = Math.max(8, Math.min(vh - bh - 8, by)) + 'px';   // 확대해서 고른 곳이 화면 밖까지 이어져도 단추 줄은 화면 안
   }
-  function pt(e) { return { x: Math.max(0, Math.min(S.W, (e.clientX - S.ox) / S.k)), y: Math.max(0, Math.min(S.H, (e.clientY - S.oy) / S.k)) }; }
+  function pt(e) {
+    var x = Math.max(0, Math.min(S.W, (e.clientX - S.ox) / S.k)), y = Math.max(0, Math.min(S.H, (e.clientY - S.oy) / S.k));
+    return S.k >= 2 ? { x: Math.round(x), y: Math.round(y) } : { x: x, y: y };   // 크게 확대했으면 픽셀 눈금에 딱 붙임 (테두리와 잘리는 곳이 같게)
+  }
   var MIN = 4;   // 가장 작은 구역 (사진 픽셀)
   function down(e) {
-    if (S.busy || !S.W || e.button > 0 || e.target.closest('.cb-snip-bar,.cb-snip-x')) return;
+    if (S.busy || !S.W || e.target.closest('.cb-snip-bar,.cb-snip-x,.cb-snip-zoom')) return;
     e.preventDefault(); try { ov.setPointerCapture(e.pointerId); } catch (_) {}
     var hd = e.target.closest('.cb-snip-hd'), p = pt(e);
+    if (e.button > 0 || S.space) { S.drag = { m: 'pan', cx: e.clientX, cy: e.clientY, ox: S.ox, oy: S.oy }; ov.classList.add('panning'); return; }   // 화면 옮기기 — 고른 곳은 그대로
     if (S.sel && hd) S.drag = { m: 'size', h: hd.dataset.hd, r: S.sel };                                  // 손잡이 — 크기 바꾸기
     else if (S.sel && e.target.closest('.cb-snip-sel')) S.drag = { m: 'move', p: raw(e), r: S.sel };       // 안쪽 — 옮기기
     else { S.drag = { m: 'new', p: p }; S.sel = null; }                                                    // 바깥 — 새로 고르기
@@ -1124,6 +1158,7 @@ function _cbSnip(blob, replyTo) {
   function raw(e) { return { x: (e.clientX - S.ox) / S.k, y: (e.clientY - S.oy) / S.k }; }   // 화면 밖으로 나가도 그대로 (옮길 때 끈 거리 계산용)
   function move(e) {
     var d = S.drag; if (!d) return;
+    if (d.m === 'pan') { S.ox = d.ox + e.clientX - d.cx; S.oy = d.oy + e.clientY - d.cy; place(); return; }
     var p = pt(e);
     if (d.m === 'new') S.sel = { x: Math.min(d.p.x, p.x), y: Math.min(d.p.y, p.y), w: Math.abs(p.x - d.p.x), h: Math.abs(p.y - d.p.y) };
     else if (d.m === 'move') { var q = raw(e); S.sel = { x: Math.max(0, Math.min(S.W - d.r.w, d.r.x + q.x - d.p.x)), y: Math.max(0, Math.min(S.H - d.r.h, d.r.y + q.y - d.p.y)), w: d.r.w, h: d.r.h }; }
@@ -1137,7 +1172,7 @@ function _cbSnip(blob, replyTo) {
     draw();
   }
   function up() {
-    var d = S.drag; if (!d) return; S.drag = null; ov.classList.remove('moving');
+    var d = S.drag; if (!d) return; S.drag = null; ov.classList.remove('moving'); ov.classList.remove('panning');
     if (d.m === 'new' && S.sel && (S.sel.w * S.k < 8 || S.sel.h * S.k < 8)) S.sel = null;   // 그냥 누른 것 — 고른 것 없음
     draw();
   }
@@ -1157,12 +1192,16 @@ function _cbSnip(blob, replyTo) {
   function fileOf(b) { return new File([b], '캡처-' + new Date().toTimeString().slice(0, 8).replace(/:/g, '') + '.png', { type: 'image/png' }); }
   function close() {
     if (_cbSnipOn !== api) return; _cbSnipOn = null;
-    document.removeEventListener('keydown', key, true); window.removeEventListener('resize', fit);
+    document.removeEventListener('keydown', key, true); document.removeEventListener('keyup', keyUp, true); window.removeEventListener('resize', fit);
     ov.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
   }
   function act(k) {
     if (S.busy || !S.W) return;
     if (k === 'close') return close();
+    if (k === 'zin') return zoomTo(S.k * 1.5);
+    if (k === 'zout') return zoomTo(S.k / 1.5);
+    if (k === 'zfit') return fit();
+    if (k === 'z100') return zoomTo(1);
     if (k === 'redo') { S.sel = null; return draw(); }
     if (k === 'copy') return _cbClip(cut(), '📋 고른 구역을 복사했습니다 — 붙여넣기(Ctrl+V)');
     S.busy = true; ov.classList.add('busy');
@@ -1176,13 +1215,21 @@ function _cbSnip(blob, replyTo) {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (S.sel && !S.busy) { S.sel = null; draw(); } else close(); }
     else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); act('send'); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) { e.preventDefault(); e.stopPropagation(); act('copy'); }
+    else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); e.stopPropagation(); if (!S.space) { S.space = true; ov.classList.add('can-pan'); } }
+    else if (e.key === '+' || e.key === '=') { e.preventDefault(); e.stopPropagation(); act('zin'); }
+    else if (e.key === '-' || e.key === '_') { e.preventDefault(); e.stopPropagation(); act('zout'); }
+    else if (e.key === '0') { e.preventDefault(); e.stopPropagation(); act('zfit'); }
+    else if (e.key === '1') { e.preventDefault(); e.stopPropagation(); act('z100'); }
     else if (/^Arrow/.test(e.key) && S.sel && !S.busy) {
       e.preventDefault(); e.stopPropagation();
       var n = e.shiftKey ? 10 : 1;
       nudge(e.key === 'ArrowLeft' ? -n : e.key === 'ArrowRight' ? n : 0, e.key === 'ArrowUp' ? -n : e.key === 'ArrowDown' ? n : 0, e.altKey);
     }
   }
+  function keyUp(e) { if (e.key === ' ' || e.code === 'Space') { S.space = false; ov.classList.remove('can-pan'); } }
   var api = _cbSnipOn = { close: close, el: ov, state: S };
+  ov.addEventListener('wheel', wheel, { passive: false }); ov.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  document.addEventListener('keyup', keyUp, true);
   ov.addEventListener('pointerdown', down); ov.addEventListener('pointermove', move); ov.addEventListener('pointerup', up); ov.addEventListener('pointercancel', up);
   ov.addEventListener('click', function (e) { var b = e.target.closest('[data-s]'); if (b) act(b.dataset.s); });
   document.addEventListener('keydown', key, true); window.addEventListener('resize', fit);
