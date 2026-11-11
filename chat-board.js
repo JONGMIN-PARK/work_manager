@@ -1237,14 +1237,81 @@ function _cbSnip(blob, replyTo) {
   img.onerror = function () { _cbToast('캡처하지 못했습니다', 'error'); close(); };
   img.src = url;
 }
+/** PC 앱 — 창 하나를 원래 크기로 한 장 찍기 (desktopCapturer 미리보기는 요청한 크기에 맞춰 늘려져 흐릿함) */
+function _cbGrabWindow(id) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject(new Error('no gum'));
+  var stream = null, stop = function () { if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); };
+  var work = navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: String(id), maxWidth: 8192, maxHeight: 8192 } } }).then(function (st) {
+    stream = st;
+    var v = document.createElement('video'); v.muted = true; v.srcObject = st;
+    return v.play().then(function () { return new Promise(function (r) { setTimeout(r, 300); }); }).then(function () {
+      if (!v.videoWidth || !v.videoHeight) throw new Error('empty');
+      var c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+      c.getContext('2d').drawImage(v, 0, 0);
+      return _cbBlob(c);
+    });
+  });
+  var timeout = new Promise(function (_, no) { setTimeout(function () { no(new Error('timeout')); }, 4000); });
+  return Promise.race([work, timeout]).then(function (b) { stop(); if (!b) throw new Error('blob'); return b; }, function (e) { stop(); throw e; });
+}
+/* v13.445 📸 찍을 곳 고르기 (PC 앱) — 모니터 여러 대는 이미 찍어 온 그림으로 바로, 창은 고르면 그때 크게 찍음 */
+function _cbPickSource(screens, wins, go) {
+  var old = document.getElementById('cbPick'); if (old) old.remove();
+  var ov = document.createElement('div'); ov.className = 'cb-pick'; ov.id = 'cbPick';
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  ov.innerHTML = '<div class="cb-pick-box" role="dialog" aria-label="찍을 곳 고르기"><div class="cb-pick-h"><b>📸 무엇을 찍을까요?</b><span>모니터나 창을 고르면, 이어서 보낼 구역을 고를 수 있습니다</span><button type="button" class="cb-pick-x" data-p="close" data-wm-close aria-label="닫기" title="닫기 (Esc)">✕</button></div>' +
+    '<div class="cb-pick-body">' +
+    (screens.length ? '<h5>🖥 모니터 ' + screens.length + '대</h5><div class="cb-pick-grid scr">' + screens.map(function (s, i) {
+      return '<button type="button" class="cb-pick-i' + (s.current ? ' cur' : '') + '" data-p="screen" data-i="' + i + '"><span class="cb-pick-th"><img alt="" src="' + esc(s.url) + '"></span><span class="cb-pick-n"><b>모니터 ' + s.n + '</b>' + (s.primary ? '<em>주 모니터</em>' : '') + (s.current ? '<em class="on">마우스가 있는 곳</em>' : '') + '<i>' + s.w + ' × ' + s.h + '</i></span></button>';
+    }).join('') + '</div>' : '') +
+    (wins.length ? '<h5>🪟 열린 창 ' + wins.length + '개</h5><div class="cb-pick-grid win">' + wins.map(function (w, i) {
+      return '<button type="button" class="cb-pick-i" data-p="win" data-i="' + i + '" title="' + esc(w.name) + '"><span class="cb-pick-th"><img alt="" src="' + esc(w.thumb) + '"></span><span class="cb-pick-n"><b>' + esc(w.name) + '</b></span></button>';
+    }).join('') + '</div>' : '') +
+    '</div><div class="cb-pick-f">숫자 키 <b>1</b>~<b>' + Math.min(9, screens.length) + '</b> = 모니터 고르기 · <b>Esc</b> 취소</div></div>';
+  document.body.appendChild(ov);
+  var busy = false;
+  function close() { document.removeEventListener('keydown', key, true); ov.remove(); }
+  function pickScreen(i) { var s = screens[i]; if (!s || busy) return; close(); go(_cbDataBlob(s.url)); }
+  function pickWin(i) {
+    var w = wins[i]; if (!w || busy) return;
+    busy = true; ov.classList.add('busy');
+    // ① 그 창을 원래 크기 그대로 한 장 (가려져 있어도 찍힘) ② 안 되면 목록 받을 때 찍어 둔 그림 ③ 그것도 없으면 미리보기
+    _cbGrabWindow(w.id).catch(function () {
+      var p = window.wmDesktop && window.wmDesktop.captureWindow ? window.wmDesktop.captureWindow(w.id) : Promise.resolve('');
+      return p.then(function (url) { if (!url) _cbToast('창을 크게 찍지 못해 미리보기 그림을 씁니다', 'warn'); return _cbDataBlob(url || w.thumb); });
+    }).then(function (blob) { close(); go(blob); })
+      .catch(function () { busy = false; ov.classList.remove('busy'); _cbToast('캡처하지 못했습니다', 'error'); });
+  }
+  function key(e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    else if (/^[1-9]$/.test(e.key) && screens[+e.key - 1]) { e.preventDefault(); e.stopPropagation(); pickScreen(+e.key - 1); }
+  }
+  ov.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-p]');
+    if (!b) { if (e.target === ov) close(); return; }
+    if (b.dataset.p === 'close') close(); else if (b.dataset.p === 'screen') pickScreen(+b.dataset.i); else pickWin(+b.dataset.i);
+  });
+  document.addEventListener('keydown', key, true);
+  var first = ov.querySelector('.cb-pick-i.cur') || ov.querySelector('.cb-pick-i'); if (first) first.focus();
+}
 function chatBoardCapture(replyTo) {
   function go(blob) { _cbSnip(blob, replyTo); }
-  // PC 앱: 창을 잠깐 숨기고 화면 전체를 찍는다
+  // v13.445 PC 앱(새 버전): 모니터 여러 대 · 열린 창 가운데 고르기
+  if (window.wmDesktop && window.wmDesktop.captureSources) {
+    return window.wmDesktop.captureSources().then(function (src) {
+      var sc = (src && src.screens) || [], wn = (src && src.windows) || [];
+      if (!sc.length && !wn.length) throw new Error('캡처하지 못했습니다');
+      if (sc.length === 1 && !wn.length) return go(_cbDataBlob(sc[0].url));   // 고를 게 없으면 바로
+      _cbPickSource(sc, wn, go);
+    }).catch(function (e) { _cbToast((e && e.message) || '캡처하지 못했습니다', 'error'); });
+  }
+  // PC 앱(옛 버전): 창을 잠깐 숨기고 마우스가 있는 화면 전체를 찍는다
   if (window.wmDesktop && window.wmDesktop.captureScreen) {
     return window.wmDesktop.captureScreen().then(function (url) { if (!url) throw new Error('캡처하지 못했습니다'); return _cbDataBlob(url); }).then(go).catch(function (e) { _cbToast(e.message || '캡처하지 못했습니다', 'error'); });
   }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { _cbToast('이 기기에서는 화면 캡처를 쓸 수 없습니다', 'warn'); return; }
-  navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'never' }, audio: false }).then(function (stream) {
+  // 브라우저: 브라우저가 띄우는 창에서 모니터 · 창 · 탭을 고름 (모니터가 여러 대면 모두 나옴)
+  navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'never' }, audio: false, monitorTypeSurfaces: 'include', selfBrowserSurface: 'include', surfaceSwitching: 'exclude' }).then(function (stream) {
     var v = document.createElement('video'); v.muted = true; v.srcObject = stream;
     return v.play().then(function () { return new Promise(function (r) { setTimeout(r, 350); }); }).then(function () {
       var c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
@@ -1256,6 +1323,6 @@ function chatBoardCapture(replyTo) {
 }
 
 if (typeof window !== 'undefined') {
-  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip; window.chatBoardSnipState = function () { return _cbSnipOn && _cbSnipOn.state; };
+  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip; window.chatBoardPickSource = _cbPickSource; window.chatBoardGrabWindow = _cbGrabWindow; window.chatBoardSnipState = function () { return _cbSnipOn && _cbSnipOn.state; };
   window.chatBoardOnEvent = chatBoardOnEvent; window.chatBoardThumb = chatBoardThumb; window.chatBoardClose = chatBoardClose;
 }

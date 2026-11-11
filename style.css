@@ -7351,3 +7351,31 @@ html.cx-locked #mMessages{position:relative}
   .nt-bar .nt-btn{padding:0 10px}
   .nt-wlist{grid-template-columns:1fr}
 }
+
+/* ═══ v13.445 📸 찍을 곳 고르기 (PC 앱 — 모니터 여러 대 · 열린 창) chat-board.js _cbPickSource ═══ */
+.cb-pick{position:fixed;inset:0;z-index:10094;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(8,10,20,.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.cb-pick-box{display:flex;flex-direction:column;width:min(980px,100%);max-height:100%;border-radius:16px;background:#141a2e;border:1px solid rgba(255,255,255,.12);color:#e5e7eb;box-shadow:0 24px 70px rgba(0,0,0,.6);overflow:hidden}
+.cb-pick-h{display:flex;align-items:baseline;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.cb-pick-h b{font-size:15px;color:#fff;white-space:nowrap}
+.cb-pick-h span{flex:1;min-width:0;font-size:12px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb-pick-x{align-self:center;width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
+.cb-pick-x:hover{background:rgba(255,255,255,.16)}
+.cb-pick-body{padding:12px 16px 16px;overflow:auto}
+.cb-pick-body h5{margin:10px 0 8px;font-size:12.5px;font-weight:700;color:#cbd5e1}
+.cb-pick-body h5:first-child{margin-top:0}
+.cb-pick-grid{display:grid;gap:10px}
+.cb-pick-grid.scr{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.cb-pick-grid.win{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+.cb-pick-i{display:flex;flex-direction:column;gap:7px;padding:8px;border-radius:12px;border:1.5px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:inherit;font:inherit;text-align:left;cursor:pointer;min-width:0}
+.cb-pick-i:hover,.cb-pick-i:focus-visible{border-color:#3B82F6;background:rgba(59,130,246,.12);outline:none}
+.cb-pick-i.cur{border-color:rgba(250,204,21,.6)}
+.cb-pick-th{display:flex;align-items:center;justify-content:center;aspect-ratio:16/10;border-radius:8px;background:#0b0e1a;overflow:hidden}
+.cb-pick-th img{max-width:100%;max-height:100%;object-fit:contain}
+.cb-pick-n{display:flex;align-items:center;gap:6px;min-width:0;font-size:12.5px}
+.cb-pick-n b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff}
+.cb-pick-n em{flex-shrink:0;padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.1);font-style:normal;font-size:10.5px;color:#cbd5e1}
+.cb-pick-n em.on{background:rgba(250,204,21,.18);color:#FACC15}
+.cb-pick-n i{margin-left:auto;flex-shrink:0;font-style:normal;font-size:11px;color:#9ca3af;font-variant-numeric:tabular-nums}
+.cb-pick-f{padding:9px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:11.5px;color:#9ca3af}
+.cb-pick-f b{color:#FACC15}
+.cb-pick.busy .cb-pick-box{opacity:.6;pointer-events:none}

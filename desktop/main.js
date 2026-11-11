@@ -245,6 +245,61 @@ ipcMain.on('wm:input', (e, ev) => {
   if (!ctlOn || !win || e.sender !== win.webContents) return;
   remote.input(ev, sharedArea());
 });
+/* 📸 v13.445 찍을 곳 고르기 — 모니터 여러 대 · 열린 창
+ *   wm:capture-sources → 우리 창을 잠깐 숨기고 ① 모니터 전부를 원래 해상도로 찍어 두고 ② 열린 창 목록(작은 미리보기)을 돌려줌
+ *   wm:capture-window  → 고른 창 그림(간직해 둔 것)을 돌려줌
+ *   옛 wm:capture(마우스가 있는 모니터 하나)는 그대로 둠 — 웹 화면이 새 것을 못 쓰는 경우의 폴백 */
+const capWinCache = new Map(); let capWinTimer = null;
+const CAP_SKIP = /^(작업 전환|Task Switching|Program Manager|Windows 입력 환경|Windows Input Experience)$/;   // 창처럼 잡히지만 창이 아닌 것
+async function capHidden(fn) {
+  const wasVisible = win && win.isVisible();
+  try {
+    if (wasVisible) { win.hide(); await new Promise((r) => setTimeout(r, 280)); }
+    return await fn();
+  } finally {
+    if (wasVisible) { win.show(); win.focus(); }
+  }
+}
+ipcMain.handle('wm:capture-sources', async () => {
+  const { screen } = require('electron');
+  return capHidden(async () => {
+    const all = screen.getAllDisplays().slice().sort((a, b) => (a.bounds.x - b.bounds.x) || (a.bounds.y - b.bounds.y));   // 왼쪽 모니터부터
+    const cur = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()), pri = screen.getPrimaryDisplay();
+    const screens = [];
+    for (let i = 0; i < all.length; i++) {
+      const d = all[i];
+      const size = { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor) };
+      const srcs = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });   // 모니터마다 제 해상도로 (한 번에 받으면 크기가 하나로 맞춰짐)
+      const s = srcs.find((x) => String(x.display_id) === String(d.id)) || (all.length === 1 ? srcs[0] : srcs[i]);
+      if (!s || s.thumbnail.isEmpty()) continue;
+      screens.push({ id: s.id, n: i + 1, w: size.width, h: size.height, primary: d.id === pri.id, current: d.id === cur.id, url: s.thumbnail.toDataURL() });
+    }
+    // 창 — 한 번 숨긴 김에 크게 찍어 간직해 두고(1분), 목록에는 작은 그림만 보냄. 고르면 간직한 것을 그대로 줌
+    //   (고른 뒤 다시 찍으면 우리 창을 또 숨겨야 하고, 그 사이 사라진 창은 못 찍음)
+    let windows = [];
+    capWinCache.clear(); clearTimeout(capWinTimer);
+    try {
+      let mw = 1920, mh = 1080;
+      all.forEach((d) => { mw = Math.max(mw, Math.round(d.size.width * d.scaleFactor)); mh = Math.max(mh, Math.round(d.size.height * d.scaleFactor)); });
+      const srcs = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: mw, height: mh } });
+      srcs.forEach((w) => {
+        if (!w.name || w.thumbnail.isEmpty() || CAP_SKIP.test(w.name)) return;
+        const sz = w.thumbnail.getSize();
+        if (sz.width < 60 || sz.height < 40) return;
+        capWinCache.set(w.id, w.thumbnail);
+        const small = sz.width > 480 ? w.thumbnail.resize({ width: 480, quality: 'good' }) : w.thumbnail;
+        windows.push({ id: w.id, name: String(w.name).slice(0, 120), w: sz.width, h: sz.height, thumb: 'data:image/jpeg;base64,' + small.toJPEG(72).toString('base64') });
+      });
+      capWinTimer = setTimeout(() => capWinCache.clear(), 60000);
+    } catch (_) {}
+    return { screens, windows };
+  });
+});
+ipcMain.handle('wm:capture-window', async (_e, id) => {
+  const img = capWinCache.get(String(id));
+  capWinCache.clear(); clearTimeout(capWinTimer);
+  return img && !img.isEmpty() ? img.toDataURL() : '';
+});
 // 구글 로그인 — 앱 안 창은 구글이 '안전하지 않은 브라우저'로 막는다 → 기본 브라우저로
 ipcMain.on('wm:google', () => { shell.openExternal(SERVER() + '/api/auth/google?app=desktop'); });
 // 📸 화면 캡처 — 우리 창을 잠깐 숨기고, 마우스가 있는 화면을 원래 해상도로 찍는다 → 웹 화면이 잘라서 표시 · 보내기

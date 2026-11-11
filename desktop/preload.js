@@ -59,6 +59,9 @@ contextBridge.exposeInMainWorld('wmDesktop', {
   onGo: (cb) => { ipcRenderer.on('wm:go', (_e, go) => { try { cb(go); } catch (_) {} }); },
   retry: () => ipcRenderer.send('wm:retry'),
   captureScreen: () => ipcRenderer.invoke('wm:capture'),
+  // v13.445 📸 모니터 여러 대 · 창 고르기
+  captureSources: () => ipcRenderer.invoke('wm:capture-sources'),
+  captureWindow: (id) => ipcRenderer.invoke('wm:capture-window', String(id || '')),
   googleLogin: () => ipcRenderer.send('wm:google'),
   remoteControl: (on) => ipcRenderer.send('wm:ctl', !!on),
   remoteInput: (ev) => { if (ev && typeof ev === 'object') ipcRenderer.send('wm:input', { t: String(ev.t || ''), x: +ev.x || 0, y: +ev.y || 0, b: ev.b | 0, dy: +ev.dy || 0, k: String(ev.k || '').slice(0, 30), s: String(ev.s || '').slice(0, 500) }); },
