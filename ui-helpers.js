@@ -154,3 +154,41 @@ function wmPasteTargetFree(e) {
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return false;
   return !document.querySelector('.wa-modal-overlay');
 }
+
+/* ─── v13.441 📱 위쪽을 누르면 맨 위로 ───
+ * 아이폰의 '시계 줄(상태 표시줄)을 누르면 맨 위로'는 페이지 전체가 굴러갈 때만 되고, 이 앱처럼 화면 안쪽 칸(대화방 · 창 · 목록)이
+ * 따로 굴러가면 먹지 않는다. 안드로이드에는 그 동작이 아예 없고, 웹 앱은 상태 표시줄 누름을 알 수도 없다.
+ * → 화면 맨 위 줄(앱 머리 · 대화방 머리 · 창 제목 줄)의 빈 곳을 누르면 지금 보이는 긴 칸을 맨 위로 올린다.
+ *   · 터치 화면만 · 단추 · 링크 · 입력칸처럼 누르면 할 일이 있는 곳은 건드리지 않음 · 이미 맨 위면 아무 일 없음 */
+(function () {
+  if (typeof window === 'undefined' || window.wmTapTop) return;
+  var coarse = false; try { coarse = window.matchMedia('(pointer:coarse)').matches; } catch (e) {}
+  var ACT = 'button,a,input,select,textarea,label,summary,[role="button"],[role="tab"],[onclick],[data-h],[contenteditable=""],[contenteditable="true"]';
+  function scroller() {
+    // 화면 한가운데에 보이는 것에서 위로 올라가며 — 굴러가 있는 칸 중 가장 큰 것 (글 상자 같은 작은 칸보다 화면을 채운 칸)
+    var w = document.documentElement.clientWidth, h = window.innerHeight, best = null;
+    [[w / 2, h * 0.55], [w / 2, h * 0.3], [w / 2, h * 0.8]].forEach(function (p) {
+      for (var n = document.elementFromPoint(p[0], p[1]); n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+        if (n.scrollTop > 0 && n.scrollHeight > n.clientHeight + 40 && /(auto|scroll)/.test(getComputedStyle(n).overflowY) && (!best || n.clientHeight > best.clientHeight)) best = n;
+      }
+    });
+    return best;
+  }
+  function go() {
+    var el = scroller();
+    if (el) { try { el.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { el.scrollTop = 0; } return true; }
+    if ((window.scrollY || document.documentElement.scrollTop) > 0) { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); } return true; }
+    return false;
+  }
+  document.addEventListener('click', function (e) {
+    if (!coarse || e.defaultPrevented || !e.isTrusted && !window.__wmTapTopTest) return;
+    var t = e.target; if (!t || !t.closest) return;
+    var bar = t.closest('.cx-h,.hdr');
+    if (!bar && e.clientY > 52) return;                       // 머리 줄이 아니면 화면 맨 위 줄만
+    if (t.closest(ACT)) return;
+    try { if (getComputedStyle(t).cursor === 'pointer') return; } catch (er) {}
+    var sel = window.getSelection && String(window.getSelection()); if (sel) return;   // 글자를 고르던 중
+    go();
+  });
+  window.wmTapTop = { go: go, scroller: scroller };
+})();

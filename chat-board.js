@@ -805,8 +805,8 @@ function _cbDownload() {
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
   });
 }
-function _cbUploadBlob(blob, name, replyTo) {
-  var room = CB && CB.room;
+function _cbUploadBlob(blob, name, replyTo, roomId) {
+  var room = roomId || (CB && CB.room);
   if (!room) return Promise.reject(new Error('대화방이 없습니다'));
   return new Promise(function (ok, no) {
     var xhr = new XMLHttpRequest();
@@ -1071,8 +1071,96 @@ function _cbDataBlob(url) {   // data: 주소 → Blob (보안 정책상 fetch(d
   for (var k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
   return new Blob([arr], { type: (/data:([^;]+)/.exec(url) || [])[1] || 'image/png' });
 }
+/* v13.441 ✂️ 구역 골라 캡처 — 찍은 화면을 창 가득 띄우고 끌어서 고른 곳만 잘라 보냄.
+ *   예전엔 화면 전체를 올리고 '자르기' 표시만 붙여서, 받는 사람이 원본 보기로 화면 전체를 볼 수 있었다 → 이제 고른 구역만 올라감.
+ *   끌기 = 구역 · Enter = 보내기(고른 곳, 없으면 화면 전체) · Esc = 취소 · 고른 뒤 [✏️ 표시하기] 로 사진 칠판에서 표시 후 보내기 */
+var _cbSnipOn = null;
+function _cbSnip(blob, replyTo) {
+  if (_cbSnipOn) _cbSnipOn.close();
+  var room = typeof CX !== 'undefined' ? CX.room : null;
+  var ov = document.createElement('div'); ov.className = 'cb-snip'; ov.id = 'cbSnip';
+  ov.innerHTML = '<img class="cb-snip-img" alt="찍은 화면" draggable="false"><div class="cb-snip-sel" hidden><span class="cb-snip-sz"></span></div>' +
+    '<div class="cb-snip-hint">✂️ 보낼 구역을 끌어서 고르세요 · <b>Enter</b> 화면 전체 · <b>Esc</b> 취소</div>' +
+    '<div class="cb-snip-bar" hidden><button type="button" class="pri" data-s="send">➤ 보내기</button><button type="button" data-s="mark">✏️ 표시하기</button><button type="button" data-s="copy">📋 복사</button><button type="button" data-s="redo">↺ 다시 고르기</button></div>' +
+    '<button type="button" class="cb-snip-x" data-s="close" data-wm-close aria-label="캡처 취소" title="취소 (Esc)">✕</button>';
+  document.body.appendChild(ov);
+  var img = ov.querySelector('img'), selEl = ov.querySelector('.cb-snip-sel'), bar = ov.querySelector('.cb-snip-bar'), hint = ov.querySelector('.cb-snip-hint'), sz = ov.querySelector('.cb-snip-sz');
+  var S = { W: 0, H: 0, k: 1, ox: 0, oy: 0, sel: null, drag: null, busy: false };
+  var url = URL.createObjectURL(blob);
+  function fit() {   // 찍은 화면을 창 안에 가득 (비율 유지 · 가운데)
+    if (!S.W) return;
+    var vw = ov.clientWidth, vh = ov.clientHeight;
+    S.k = Math.min(vw / S.W, vh / S.H); S.ox = (vw - S.W * S.k) / 2; S.oy = (vh - S.H * S.k) / 2;
+    img.style.cssText = 'left:' + S.ox + 'px;top:' + S.oy + 'px;width:' + (S.W * S.k) + 'px;height:' + (S.H * S.k) + 'px';
+    draw();
+  }
+  function draw() {
+    var r = S.sel;
+    if (!r) { selEl.hidden = true; bar.hidden = true; hint.hidden = false; ov.classList.remove('has-sel'); return; }
+    selEl.hidden = false; ov.classList.add('has-sel');
+    var x = S.ox + r.x * S.k, y = S.oy + r.y * S.k, w = r.w * S.k, h = r.h * S.k;
+    selEl.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px';
+    sz.textContent = Math.round(r.w) + ' × ' + Math.round(r.h);
+    hint.hidden = true;
+    bar.hidden = !!S.drag; if (S.drag) return;
+    var bw = bar.offsetWidth, bh = bar.offsetHeight, vw = ov.clientWidth, vh = ov.clientHeight;   // 단추 줄 — 고른 곳 아래 (자리가 없으면 위 · 그것도 없으면 안쪽)
+    var by = y + h + 10 + bh <= vh ? y + h + 10 : (y - bh - 10 >= 0 ? y - bh - 10 : y + h - bh - 10);
+    bar.style.left = Math.max(8, Math.min(vw - bw - 8, x + w - bw)) + 'px'; bar.style.top = by + 'px';
+  }
+  function pt(e) { return { x: Math.max(0, Math.min(S.W, (e.clientX - S.ox) / S.k)), y: Math.max(0, Math.min(S.H, (e.clientY - S.oy) / S.k)) }; }
+  function down(e) {
+    if (S.busy || !S.W || e.button > 0 || e.target.closest('.cb-snip-bar,.cb-snip-x')) return;
+    e.preventDefault(); S.drag = pt(e); S.sel = null; try { ov.setPointerCapture(e.pointerId); } catch (_) {} draw();
+  }
+  function move(e) {
+    if (!S.drag) return;
+    var p = pt(e), a = S.drag;
+    S.sel = { x: Math.min(a.x, p.x), y: Math.min(a.y, p.y), w: Math.abs(p.x - a.x), h: Math.abs(p.y - a.y) }; draw();
+  }
+  function up() {
+    if (!S.drag) return; S.drag = null;
+    if (S.sel && (S.sel.w * S.k < 8 || S.sel.h * S.k < 8)) S.sel = null;   // 그냥 누른 것 — 고른 것 없음
+    draw();
+  }
+  function cut() {   // 고른 곳(없으면 화면 전체)만 담은 그림
+    var r = S.sel || { x: 0, y: 0, w: S.W, h: S.H };
+    var x = Math.round(r.x), y = Math.round(r.y), w = Math.max(1, Math.round(r.w)), h = Math.max(1, Math.round(r.h));
+    var c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, x, y, w, h, 0, 0, w, h);
+    return c;
+  }
+  function fileOf(b) { return new File([b], '캡처-' + new Date().toTimeString().slice(0, 8).replace(/:/g, '') + '.png', { type: 'image/png' }); }
+  function close() {
+    if (_cbSnipOn !== api) return; _cbSnipOn = null;
+    document.removeEventListener('keydown', key, true); window.removeEventListener('resize', fit);
+    ov.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
+  }
+  function act(k) {
+    if (S.busy || !S.W) return;
+    if (k === 'close') return close();
+    if (k === 'redo') { S.sel = null; return draw(); }
+    if (k === 'copy') return _cbClip(cut(), '📋 고른 구역을 복사했습니다 — 붙여넣기(Ctrl+V)');
+    S.busy = true; ov.classList.add('busy');
+    _cbBlob(cut()).then(function (b) {
+      var f = fileOf(b);
+      if (k === 'mark') { close(); chatBoardDraft(f, { tool: 'pen', replyTo: replyTo, hint: '표시한 뒤 Enter 로 보내기' }); return; }
+      return _cbUploadBlob(f, f.name, replyTo, room).then(function () { close(); _cbToast('📸 캡처를 보냈습니다', 'success'); });
+    }).catch(function () { S.busy = false; ov.classList.remove('busy'); });
+  }
+  function key(e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (S.sel && !S.busy) { S.sel = null; draw(); } else close(); }
+    else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); act('send'); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) { e.preventDefault(); e.stopPropagation(); act('copy'); }
+  }
+  var api = _cbSnipOn = { close: close, el: ov, state: S };
+  ov.addEventListener('pointerdown', down); ov.addEventListener('pointermove', move); ov.addEventListener('pointerup', up); ov.addEventListener('pointercancel', up);
+  ov.addEventListener('click', function (e) { var b = e.target.closest('[data-s]'); if (b) act(b.dataset.s); });
+  document.addEventListener('keydown', key, true); window.addEventListener('resize', fit);
+  img.onload = function () { S.W = img.naturalWidth; S.H = img.naturalHeight; ov.classList.add('ready'); fit(); };
+  img.onerror = function () { _cbToast('캡처하지 못했습니다', 'error'); close(); };
+  img.src = url;
+}
 function chatBoardCapture(replyTo) {
-  function go(blob) { chatBoardDraft(new File([blob], '캡처-' + new Date().toTimeString().slice(0, 8).replace(/:/g, '') + '.png', { type: 'image/png' }), { tool: 'crop', replyTo: replyTo, hint: '보낼 부분을 끌어 고르세요 — 고른 뒤 표시하고 Enter 로 보내기' }); }
+  function go(blob) { _cbSnip(blob, replyTo); }
   // PC 앱: 창을 잠깐 숨기고 화면 전체를 찍는다
   if (window.wmDesktop && window.wmDesktop.captureScreen) {
     return window.wmDesktop.captureScreen().then(function (url) { if (!url) throw new Error('캡처하지 못했습니다'); return _cbDataBlob(url); }).then(go).catch(function (e) { _cbToast(e.message || '캡처하지 못했습니다', 'error'); });
@@ -1090,6 +1178,6 @@ function chatBoardCapture(replyTo) {
 }
 
 if (typeof window !== 'undefined') {
-  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture;
+  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip;
   window.chatBoardOnEvent = chatBoardOnEvent; window.chatBoardThumb = chatBoardThumb; window.chatBoardClose = chatBoardClose;
 }
