@@ -7634,12 +7634,32 @@ html.wm-embed #cxHead{padding-top:8px!important}
 
 /* ═══ v13.454 PC 앱 — 제목 줄을 머리 줄이 맡음 (html.wm-tbo · wm-app.js) ═══
    머리 줄 빈 곳을 끌면 창이 움직이고(두 번 누르면 최대화), 오른쪽 위 최소화 · 최대화 · 닫기 자리는 비워 둠 */
-html.wm-tbo .hdr{-webkit-app-region:drag;padding-right:calc(28px + 100vw - env(titlebar-area-x, 100vw) - env(titlebar-area-width, 0px))}
+/* v13.456 --wm-tbo-r = 오른쪽 위 최소화 · 최대화 · 닫기 단추 폭 (wm-app.js 가 windowControlsOverlay 로 재서 넣음, 모르면 140px)
+   — 휴대폰용 .hdr{padding:…!important}(≤600px) 이 이 여백을 덮어써 좁은 창에서 🎨 · 내 메뉴가 단추 밑에 숨던 것: 더 구체적인 선택자 + !important */
+html.wm-tbo{--wm-tbo-r:140px}
+html.wm-tbo .hdr{-webkit-app-region:drag;padding-right:calc(28px + var(--wm-tbo-r))!important}
 html.wm-tbo .hdr button,html.wm-tbo .hdr input,html.wm-tbo .hdr a,html.wm-tbo .hdr select,html.wm-tbo .hdr label,html.wm-tbo .hdr [onclick],html.wm-tbo .hdr .hdr-pop-menu,html.wm-tbo .hdr #globalSearchWrap,html.wm-tbo .hdr #notifDropdown,html.wm-tbo .hdr #wmVerBadge{-webkit-app-region:no-drag}
-html.wm-tbo.wm-solo #cxHead{-webkit-app-region:drag;padding-right:calc(12px + 100vw - env(titlebar-area-x, 100vw) - env(titlebar-area-width, 0px))!important}
+html.wm-tbo.wm-solo #cxHead{-webkit-app-region:drag;padding-right:calc(12px + var(--wm-tbo-r))!important}
 html.wm-tbo.wm-solo #cxHead button,html.wm-tbo.wm-solo #cxHead input{-webkit-app-region:no-drag}
 html.wm-tbo #initLoading{-webkit-app-region:drag}
-@media(max-width:700px){html.wm-tbo .hdr{padding-right:calc(12px + 100vw - env(titlebar-area-x, 100vw) - env(titlebar-area-width, 0px))}}
+@media(max-width:700px){html.wm-tbo .hdr{padding-right:calc(10px + var(--wm-tbo-r))!important}}
+/* 좁은 PC 창 — 단추가 다 들어가게: 이름 글자는 숨기고(작업 표시줄 · 로고로 충분) 로고 · 버전만, 단추 사이도 좁게 */
+@media(max-width:660px){
+  html.wm-tbo .hdr-brand h1{font-size:0!important;display:flex;align-items:center;gap:4px}
+  html.wm-tbo .hdr-mark{margin:0}
+  html.wm-tbo #wmVerBadge{font-size:9px!important;padding:1px 4px!important}
+  html.wm-tbo .hdr-in{gap:6px!important}
+  html.wm-tbo .hdr-ctl{gap:4px!important}
+  html.wm-tbo .hdr-ic{width:30px}
+  html.wm-tbo .hdr-user-btn{max-width:96px}
+  html.wm-tbo #globalSearchWrap:focus-within{right:calc(8px + var(--wm-tbo-r))!important}
+}
+/* 머리 줄 위로 덮이는 패널 · 창 — 오른쪽 위 창 단추 밑에 ✕ · ⛶ 가 깔리지 않게 그만큼 비우고,
+   밑에 깔린 머리 줄의 '끌기' 영역이 클릭을 가로채지 않게 no-drag */
+html.wm-tbo .pd-panel,html.wm-tbo .wa-modal-overlay,html.wm-tbo #notifDropdown,html.wm-tbo .hdr-pop-menu,html.wm-tbo #globalSearchDropdown{-webkit-app-region:no-drag}
+/* 좁은 창 메신저(cx-full: 메신저가 창을 다 덮음) — PC 앱은 머리 줄은 남겨 둠: 창 끌기 · 창 단추 자리가 그대로이고 대화방 위 메뉴(멤버 · 파일 · ⓘ)가 단추 밑에 깔리지 않음 */
+html.wm-tbo.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx{top:var(--wm-tbo-h,40px)!important}
+html.wm-tbo .pd-panel .pd-sticky{padding-right:max(var(--pdx,20px),calc(var(--wm-tbo-r) + 8px))!important}
 
 /* ═══ v13.455 ✨ 대표 테마 — 노바(nova · 어두움) · 펄(pearl · 밝음) ═══
    인트로 · 로고와 같은 디자인 언어: 남색 무대 · 인디고 → 보라 → 시안 빛 · 세 겹 유리 카드 · 빛나는 선.

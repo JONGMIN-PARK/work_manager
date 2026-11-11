@@ -73,9 +73,20 @@ if (wmIsDesktopApp() && window.wmDesktop.getOnTop) {
 /* v13.454 PC 앱(새 버전) — 윈도우 제목 줄 대신 머리 줄을 끌어 창을 옮기고, 최소화 · 최대화 · 닫기 단추 색을 테마에 맞춤 */
 function _wmHex(c) { var m = String(c || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/); if (!m) return /^#[0-9a-f]{6}$/i.test(c) ? c : ''; if (m[4] != null && +m[4] < 0.5) return ''; return '#' + [m[1], m[2], m[3]].map(function (v) { var h = (+v).toString(16); return h.length < 2 ? '0' + h : h; }).join(''); }
 var _wmTbLast = '';
+/* v13.456 오른쪽 위 창 단추(최소화 · 최대화 · 닫기)가 차지하는 폭 → --wm-tbo-r (CSS 가 그만큼 비워 둠) */
+function wmTitleBarArea() {
+  try {
+    var o = navigator.windowControlsOverlay, r = o && o.visible && o.getTitlebarAreaRect ? o.getTitlebarAreaRect() : null;
+    var w = r && r.width > 0 ? Math.round(window.innerWidth - (r.x + r.width)) : 0;
+    if (w > 40 && w < 400) document.documentElement.style.setProperty('--wm-tbo-r', w + 'px');
+    var hd = document.querySelector('.hdr'), hh = hd ? Math.round(hd.getBoundingClientRect().height) : 0;   // 좁은 창 메신저가 이 아래부터 덮음
+    if (hh > 20 && hh < 200) document.documentElement.style.setProperty('--wm-tbo-h', hh + 'px');
+  } catch (e) {}
+}
 function wmTitleBarSync() {
   if (!(wmIsDesktopApp() && window.wmDesktop.titleBarOverlay && window.wmDesktop.setTitleBar)) return;
   document.documentElement.classList.add('wm-tbo');
+  wmTitleBarArea();
   var solo = !!window.WM_SOLO, hd = solo ? document.getElementById('cxHead') : document.querySelector('.hdr');
   var el = hd && hd.offsetParent !== null ? hd : document.body, cs = getComputedStyle(el);
   var bg = _wmHex(cs.backgroundColor) || _wmHex(getComputedStyle(document.body).backgroundColor) || '#0b1022';
@@ -91,6 +102,7 @@ if (wmIsDesktopApp() && window.wmDesktop.titleBarOverlay) {
     wmTitleBarSync(); setTimeout(wmTitleBarSync, 1500); setTimeout(wmTitleBarSync, 5000);
     try { new MutationObserver(_wmTbSoon).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] }); new MutationObserver(_wmTbSoon).observe(document.body, { attributes: true, attributeFilter: ['class', 'style'] }); } catch (e) {}
     window.addEventListener('resize', _wmTbSoon);
+    try { if (navigator.windowControlsOverlay) navigator.windowControlsOverlay.addEventListener('geometrychange', wmTitleBarArea); } catch (e) {}
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wmTbInit); else _wmTbInit();
 }
