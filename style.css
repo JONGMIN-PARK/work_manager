@@ -7156,3 +7156,8 @@ html.cx-locked #mMessages{position:relative}
 @supports not (overflow-anchor:auto){.cx-msgs .cx-m{content-visibility:visible;contain-intrinsic-size:auto}}
 /* v13.436 사진 자리 미리 잡기 — 주소가 아직 없는 img 는 글자(대체 문구)처럼 다뤄져 가로 · 세로가 안 먹으므로 칸으로 */
 .cx-img img[data-dim]{display:inline-block;vertical-align:top}
+
+/* v13.437 🖼 사진 칠판 — 두 손가락 확대는 사진만. 도구 줄 · 확대 단추 위에서(또는 한 손가락이 거기 걸친 채) 벌리면
+   브라우저가 화면 전체를 키워 단추까지 같이 커졌다 → 칠판 안에서는 화면 확대(벌리기 · 두 번 두드리기)를 막고 밀기만 허용 */
+.cb{touch-action:pan-x pan-y;overscroll-behavior:contain}
+.cb-stage{touch-action:none}

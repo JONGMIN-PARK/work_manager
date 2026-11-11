@@ -361,6 +361,10 @@ function _cbSave(op) {
 function _cbShell(title) {
   var ov = document.createElement('div');
   ov.className = 'cb'; ov.id = 'cbBoard'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', '사진 칠판');
+  // v13.437 화면 전체 확대 막기 — 두 손가락 벌리기는 사진만 키움(도구 줄 · 확대 단추는 그대로). 아이폰 사파리는 touch-action 만으로는
+  //   새는 일이 있어 gesture* · 두 손가락 touchmove 도 막음 (사진 위 벌리기는 pointer 이벤트로 따로 처리 — _cbZoomAt)
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (n) { ov.addEventListener(n, function (e) { e.preventDefault(); }, { passive: false }); });
+  ov.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1 && e.cancelable) e.preventDefault(); }, { passive: false });
   ov.innerHTML =
     '<div class="cb-top">' +
       '<div class="cb-ttl"><b data-title></b><i data-info></i></div>' +
