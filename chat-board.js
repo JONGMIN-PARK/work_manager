@@ -1073,14 +1073,16 @@ function _cbDataBlob(url) {   // data: 주소 → Blob (보안 정책상 fetch(d
 }
 /* v13.441 ✂️ 구역 골라 캡처 — 찍은 화면을 창 가득 띄우고 끌어서 고른 곳만 잘라 보냄.
  *   예전엔 화면 전체를 올리고 '자르기' 표시만 붙여서, 받는 사람이 원본 보기로 화면 전체를 볼 수 있었다 → 이제 고른 구역만 올라감.
- *   끌기 = 구역 · Enter = 보내기(고른 곳, 없으면 화면 전체) · Esc = 취소 · 고른 뒤 [✏️ 표시하기] 로 사진 칠판에서 표시 후 보내기 */
+ *   끌기 = 구역 · Enter = 보내기(고른 곳, 없으면 화면 전체) · Esc = 취소 · 고른 뒤 [✏️ 표시하기] 로 사진 칠판에서 표시 후 보내기
+ *   v13.442 고른 뒤 다듬기 — 안쪽을 끌면 옮기기 · 모서리 · 변의 손잡이(8개)를 끌면 크기 바꾸기 · 화살표 키 1px(Shift 10px) 옮기기 · Alt+화살표 크기 */
 var _cbSnipOn = null;
 function _cbSnip(blob, replyTo) {
   if (_cbSnipOn) _cbSnipOn.close();
   var room = typeof CX !== 'undefined' ? CX.room : null;
   var ov = document.createElement('div'); ov.className = 'cb-snip'; ov.id = 'cbSnip';
-  ov.innerHTML = '<img class="cb-snip-img" alt="찍은 화면" draggable="false"><div class="cb-snip-sel" hidden><span class="cb-snip-sz"></span></div>' +
-    '<div class="cb-snip-hint">✂️ 보낼 구역을 끌어서 고르세요 · <b>Enter</b> 화면 전체 · <b>Esc</b> 취소</div>' +
+  ov.innerHTML = '<img class="cb-snip-img" alt="찍은 화면" draggable="false"><div class="cb-snip-sel" hidden><span class="cb-snip-sz"></span>' +
+    ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(function (h) { return '<i class="cb-snip-hd" data-hd="' + h + '"></i>'; }).join('') + '</div>' +
+    '<div class="cb-snip-hint">✂️ 보낼 구역을 끌어서 고르세요 — 고른 뒤 옮기고 크기를 바꿀 수 있어요 · <b>Enter</b> 화면 전체 · <b>Esc</b> 취소</div>' +
     '<div class="cb-snip-bar" hidden><button type="button" class="pri" data-s="send">➤ 보내기</button><button type="button" data-s="mark">✏️ 표시하기</button><button type="button" data-s="copy">📋 복사</button><button type="button" data-s="redo">↺ 다시 고르기</button></div>' +
     '<button type="button" class="cb-snip-x" data-s="close" data-wm-close aria-label="캡처 취소" title="취소 (Esc)">✕</button>';
   document.body.appendChild(ov);
@@ -1108,18 +1110,42 @@ function _cbSnip(blob, replyTo) {
     bar.style.left = Math.max(8, Math.min(vw - bw - 8, x + w - bw)) + 'px'; bar.style.top = by + 'px';
   }
   function pt(e) { return { x: Math.max(0, Math.min(S.W, (e.clientX - S.ox) / S.k)), y: Math.max(0, Math.min(S.H, (e.clientY - S.oy) / S.k)) }; }
+  var MIN = 4;   // 가장 작은 구역 (사진 픽셀)
   function down(e) {
     if (S.busy || !S.W || e.button > 0 || e.target.closest('.cb-snip-bar,.cb-snip-x')) return;
-    e.preventDefault(); S.drag = pt(e); S.sel = null; try { ov.setPointerCapture(e.pointerId); } catch (_) {} draw();
+    e.preventDefault(); try { ov.setPointerCapture(e.pointerId); } catch (_) {}
+    var hd = e.target.closest('.cb-snip-hd'), p = pt(e);
+    if (S.sel && hd) S.drag = { m: 'size', h: hd.dataset.hd, r: S.sel };                                  // 손잡이 — 크기 바꾸기
+    else if (S.sel && e.target.closest('.cb-snip-sel')) S.drag = { m: 'move', p: raw(e), r: S.sel };       // 안쪽 — 옮기기
+    else { S.drag = { m: 'new', p: p }; S.sel = null; }                                                    // 바깥 — 새로 고르기
+    ov.classList.toggle('moving', S.drag.m === 'move');
+    draw();
   }
+  function raw(e) { return { x: (e.clientX - S.ox) / S.k, y: (e.clientY - S.oy) / S.k }; }   // 화면 밖으로 나가도 그대로 (옮길 때 끈 거리 계산용)
   function move(e) {
-    if (!S.drag) return;
-    var p = pt(e), a = S.drag;
-    S.sel = { x: Math.min(a.x, p.x), y: Math.min(a.y, p.y), w: Math.abs(p.x - a.x), h: Math.abs(p.y - a.y) }; draw();
+    var d = S.drag; if (!d) return;
+    var p = pt(e);
+    if (d.m === 'new') S.sel = { x: Math.min(d.p.x, p.x), y: Math.min(d.p.y, p.y), w: Math.abs(p.x - d.p.x), h: Math.abs(p.y - d.p.y) };
+    else if (d.m === 'move') { var q = raw(e); S.sel = { x: Math.max(0, Math.min(S.W - d.r.w, d.r.x + q.x - d.p.x)), y: Math.max(0, Math.min(S.H - d.r.h, d.r.y + q.y - d.p.y)), w: d.r.w, h: d.r.h }; }
+    else {   // 손잡이가 붙은 변만 움직임 — 반대쪽을 넘어가면 뒤집힘
+      var x1 = d.r.x, y1 = d.r.y, x2 = d.r.x + d.r.w, y2 = d.r.y + d.r.h, h = d.h;
+      if (h.indexOf('w') >= 0) x1 = p.x; if (h.indexOf('e') >= 0) x2 = p.x;
+      if (h.indexOf('n') >= 0) y1 = p.y; if (h.indexOf('s') >= 0) y2 = p.y;
+      S.sel = { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.max(MIN, Math.abs(x2 - x1)), h: Math.max(MIN, Math.abs(y2 - y1)) };
+      if (S.sel.x + S.sel.w > S.W) S.sel.x = S.W - S.sel.w; if (S.sel.y + S.sel.h > S.H) S.sel.y = S.H - S.sel.h;
+    }
+    draw();
   }
   function up() {
-    if (!S.drag) return; S.drag = null;
-    if (S.sel && (S.sel.w * S.k < 8 || S.sel.h * S.k < 8)) S.sel = null;   // 그냥 누른 것 — 고른 것 없음
+    var d = S.drag; if (!d) return; S.drag = null; ov.classList.remove('moving');
+    if (d.m === 'new' && S.sel && (S.sel.w * S.k < 8 || S.sel.h * S.k < 8)) S.sel = null;   // 그냥 누른 것 — 고른 것 없음
+    draw();
+  }
+  /** 화살표 키 — 옮기기(dx, dy) · Alt 와 함께면 오른쪽 · 아래 변을 움직여 크기 */
+  function nudge(dx, dy, size) {
+    var r = S.sel; if (!r || S.drag) return;
+    if (size) S.sel = { x: r.x, y: r.y, w: Math.max(MIN, Math.min(S.W - r.x, r.w + dx)), h: Math.max(MIN, Math.min(S.H - r.y, r.h + dy)) };
+    else S.sel = { x: Math.max(0, Math.min(S.W - r.w, r.x + dx)), y: Math.max(0, Math.min(S.H - r.h, r.y + dy)), w: r.w, h: r.h };
     draw();
   }
   function cut() {   // 고른 곳(없으면 화면 전체)만 담은 그림
@@ -1150,6 +1176,11 @@ function _cbSnip(blob, replyTo) {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (S.sel && !S.busy) { S.sel = null; draw(); } else close(); }
     else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); act('send'); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) { e.preventDefault(); e.stopPropagation(); act('copy'); }
+    else if (/^Arrow/.test(e.key) && S.sel && !S.busy) {
+      e.preventDefault(); e.stopPropagation();
+      var n = e.shiftKey ? 10 : 1;
+      nudge(e.key === 'ArrowLeft' ? -n : e.key === 'ArrowRight' ? n : 0, e.key === 'ArrowUp' ? -n : e.key === 'ArrowDown' ? n : 0, e.altKey);
+    }
   }
   var api = _cbSnipOn = { close: close, el: ov, state: S };
   ov.addEventListener('pointerdown', down); ov.addEventListener('pointermove', move); ov.addEventListener('pointerup', up); ov.addEventListener('pointercancel', up);
@@ -1178,6 +1209,6 @@ function chatBoardCapture(replyTo) {
 }
 
 if (typeof window !== 'undefined') {
-  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip;
+  window.chatBoardOpen = chatBoardOpen; window.chatBoardDraft = chatBoardDraft; window.chatBoardCapture = chatBoardCapture; window.chatBoardSnip = _cbSnip; window.chatBoardSnipState = function () { return _cbSnipOn && _cbSnipOn.state; };
   window.chatBoardOnEvent = chatBoardOnEvent; window.chatBoardThumb = chatBoardThumb; window.chatBoardClose = chatBoardClose;
 }

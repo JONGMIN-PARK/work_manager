@@ -7236,7 +7236,7 @@ html.cx-locked #mMessages{position:relative}
 .cb-snip.ready .cb-snip-img{opacity:.5}
 .cb-snip.busy{cursor:progress}
 /* 고른 곳만 밝게 — 어둡게 깔린 화면을 그 자리만 다시 밝힘 (찍은 화면을 한 번 더 겹쳐 그리지 않음) */
-.cb-snip-sel{position:absolute;box-sizing:border-box;border:1.5px solid #fff;pointer-events:none;backdrop-filter:brightness(2);-webkit-backdrop-filter:brightness(2);box-shadow:0 0 0 1px rgba(0,0,0,.55)}
+.cb-snip-sel{position:absolute;box-sizing:border-box;border:1.5px solid #fff;cursor:move;backdrop-filter:brightness(2);-webkit-backdrop-filter:brightness(2);box-shadow:0 0 0 1px rgba(0,0,0,.55)}
 .cb-snip-sel[hidden],.cb-snip-bar[hidden],.cb-snip-hint[hidden]{display:none}
 .cb-snip-sz{position:absolute;left:0;top:-25px;padding:2px 7px;border-radius:6px;background:rgba(15,18,32,.92);color:#fff;font:600 11.5px/1.5 "Malgun Gothic",sans-serif;white-space:nowrap}
 .cb-snip-hint{position:absolute;left:50%;top:18px;transform:translateX(-50%);padding:8px 16px;border-radius:20px;background:rgba(15,18,32,.92);border:1px solid rgba(255,255,255,.14);color:#fff;font-size:13px;white-space:nowrap;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.4)}
@@ -7249,3 +7249,16 @@ html.cx-locked #mMessages{position:relative}
 .cb-snip.busy .cb-snip-bar{opacity:.5;pointer-events:none}
 .cb-snip-x{position:absolute;right:14px;top:14px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(15,18,32,.85);color:#fff;font-size:15px;cursor:pointer}
 .cb-snip-x:hover{background:rgba(255,255,255,.16)}
+/* v13.442 고른 구역 다듬기 — 안쪽을 끌면 옮기기 · 손잡이 8개로 크기 (손잡이는 보이는 것보다 넓게 잡힘) */
+.cb-snip-sz{pointer-events:none}
+.cb-snip.moving,.cb-snip.moving .cb-snip-sel{cursor:grabbing}
+.cb-snip-hd{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;touch-action:none}
+.cb-snip-hd::after{content:'';position:absolute;left:6px;top:6px;width:10px;height:10px;box-sizing:border-box;border-radius:2px;background:#fff;border:1px solid rgba(0,0,0,.6);box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.cb-snip-hd[data-hd="nw"]{left:0;top:0;cursor:nwse-resize}
+.cb-snip-hd[data-hd="n"]{left:50%;top:0;cursor:ns-resize}
+.cb-snip-hd[data-hd="ne"]{left:100%;top:0;cursor:nesw-resize}
+.cb-snip-hd[data-hd="e"]{left:100%;top:50%;cursor:ew-resize}
+.cb-snip-hd[data-hd="se"]{left:100%;top:100%;cursor:nwse-resize}
+.cb-snip-hd[data-hd="s"]{left:50%;top:100%;cursor:ns-resize}
+.cb-snip-hd[data-hd="sw"]{left:0;top:100%;cursor:nesw-resize}
+.cb-snip-hd[data-hd="w"]{left:0;top:50%;cursor:ew-resize}
