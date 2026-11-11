@@ -35,7 +35,7 @@ var SHOT = path.join(__dirname, '.shots');
       await apiFetch('/api/projects/' + p.id + '/specs', { method: 'PATCH', body: JSON.stringify({ changes: [{ path: [], from: null, to: sheet }] }) });
       return p.id;
     });
-    await page.evaluate(function () { setPage('project'); setMode('pipeline'); });
+    await page.evaluate(function () { try { localStorage.setItem('pd-panel-mode', 'side'); } catch (e) {} setPage('project'); setMode('pipeline'); });   // 좁은 옆 패널에서 시험 (v13.453 기본은 화면 가득)
     await page.evaluate(function (pid) { return showProjectDetail(pid); }, pid); await wait(1200);
     await page.evaluate(function () { var t = document.getElementById('pdTabSpec'); if (t) t.click(); });
     check(await until(function () { return !!document.getElementById('psTopo'); }, null, 15000), '하드웨어 구성도 카드에 🧩 장치 계층 구성');

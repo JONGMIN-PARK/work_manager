@@ -979,7 +979,7 @@ body{line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
 @media(max-width:700px){.pd-resizer{display:none}}
 .pd-resizer::after{content:"";position:absolute;left:3px;top:0;bottom:0;width:2px;background:transparent;transition:background .15s}
 .pd-resizer:hover::after,.pd-resizer.drag::after{background:var(--ac)}
-.pd-sticky{position:sticky;top:-20px;z-index:3;background:var(--bg-ps,var(--bg-p));margin:-20px -20px 0;padding:20px 20px 0}
+.pd-sticky{position:sticky;top:calc(-1 * var(--pdy,20px));z-index:3;background:var(--bg-ps,var(--bg-p));margin:calc(-1 * var(--pdy,20px)) calc(-1 * var(--pdx,20px)) 0;padding:var(--pdy,20px) var(--pdx,20px) 0}   /* v13.453 패널 여백(--pdx · --pdy)과 같이 */
 .pd-size{display:inline-flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden}
 .pd-size button{border:0;background:var(--bg-i);color:var(--t5);font:inherit;font-size:11px;padding:3px 8px;cursor:pointer}
 .pd-size button+button{border-left:1px solid var(--bd)}
@@ -7549,3 +7549,18 @@ html.wm-embed #cxHead{padding-top:8px!important}
 }
 .pst-in::placeholder{color:var(--t6);opacity:.7;font-weight:400}
 .pst-in.ip::placeholder{color:var(--t6)}
+
+/* ═══ v13.453 프로젝트 상세 — 화면 가득(기본) ↔ 옆 패널 ═══ */
+.pd-panel.pd-max{--pdx:max(24px,calc((100vw - 1680px) / 2));left:0;width:auto!important;max-width:none!important;border-left:0!important;box-shadow:none!important;animation:pdMaxIn .16s ease!important;padding:var(--pdy,20px) var(--pdx)!important}
+.pd-panel.pd-max>.pd-resizer,.pd-panel.pd-max .pd-resizer{display:none}
+@keyframes pdMaxIn{from{opacity:.4}to{opacity:1}}
+.pd-maxbtn{padding:2px 8px!important;font-size:13px;line-height:1}
+.pd-maxbtn .pd-ic-side{display:none}
+.pd-panel.pd-max .pd-maxbtn .pd-ic-max{display:none}
+.pd-panel.pd-max .pd-maxbtn .pd-ic-side{display:inline}
+.pd-panel:not(.pd-max) .pd-maxbtn .pd-ic-max{display:inline}
+/* 좁은 화면 — 늘 가득이니 단추는 숨김 · 여백 줄임 */
+@media(max-width:700px){
+  .pd-maxbtn{display:none!important}
+  .pd-panel,.pd-panel.pd-max{--pdx:12px;--pdy:14px;left:0;width:100vw!important;max-width:100vw!important;padding:var(--pdy) var(--pdx) calc(var(--pdy) + env(safe-area-inset-bottom))!important;border-left:0!important}
+}

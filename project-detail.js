@@ -106,7 +106,7 @@ function _pdDetailHeaderHtml(proj, stInfo) {
           _pdMoreItem('🔁 소유권 이관', 'showProjectTransferModal(\'' + idA + '\')', 'pd-edit-only') +
           _pdMoreItem('🗑 삭제', _PD_CLOSE_JS + ';deleteProjectUI(\'' + idA + '\')', 'pd-edit-only', true) +
           // 패널 폭 (v13.290 머리 줄에서 옮김) — 왼쪽 경계를 끌어도 조절
-          '<div class="pd-more-sep"></div><div class="pd-more-lbl">패널 폭</div>' +
+          '<div class="pd-more-sep"></div><div class="pd-more-lbl">패널 폭 <span style="font-weight:400">(누르면 옆 패널로)</span></div>' +
           '<div class="pd-size" title="패널 폭 — 왼쪽 경계를 끌어도 조절됩니다" onclick="event.stopPropagation()">' +
             '<button data-pd-size="0.34" onclick="pdSetPanelSize(0.34)" title="좁게 — 화면의 1/3">좁게</button>' +
             '<button data-pd-size="0.5" onclick="pdSetPanelSize(0.5)" title="보통 — 화면의 절반">보통</button>' +
@@ -116,6 +116,7 @@ function _pdDetailHeaderHtml(proj, stInfo) {
       '</span>' +
     '</div>' +
     '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+      '<button class="btn btn-g btn-s pd-maxbtn" onclick="pdTogglePanelMax()" title="화면 가득 ↔ 옆 패널 (Ctrl+Shift+F)" aria-label="화면 가득 · 옆 패널 바꾸기"><span class="pd-ic-max">⛶</span><span class="pd-ic-side">◧</span></button>' +
       '<button class="btn btn-g btn-s" onclick="' + _PD_CLOSE_JS + '" title="닫기 (Esc)">✕</button>' +
     '</div>' +
   '</div>';
@@ -415,6 +416,22 @@ function _pdDetailFooterHtml() {
 /* 우측 슬라이드 패널 + 백드롭 부착, 비동기 섹션(진척 히스토리·요소기술·코멘트) 로드 */
 /* ═══ 상세 패널 폭 (v13.192) — 기본 화면의 1/3, ⅓·½·⅔ 프리셋 + 왼쪽 경계 드래그, 비율로 기억 ═══ */
 var PD_PANEL_FRAC_DEFAULT = 0.34, PD_PANEL_MIN_PX = 420;
+/* v13.453 기본은 화면 가득(최대화) — ⛶/◧ 단추 · Ctrl+Shift+F 로 옆 패널과 바꿈 (고른 것 기억). 좁은 화면(700px 이하)은 늘 가득 */
+function _pdPanelMax() { var v = null; try { v = localStorage.getItem('pd-panel-mode'); } catch (e) {} return v !== 'side'; }
+function _pdApplyPanelMode(panel, max) {
+  panel.classList.toggle('pd-max', !!max);
+  var b = panel.querySelector('.pd-maxbtn'); if (b) b.title = max ? '옆 패널로 (Ctrl+Shift+F) — 뒤의 목록을 보면서' : '화면 가득 (Ctrl+Shift+F)';
+  try { window.dispatchEvent(new Event('resize')); } catch (e) {}   // 구성도 · 차트 · 표가 새 폭에 맞게
+}
+function pdTogglePanelMax(force) {
+  var panel = document.getElementById('projDetailPanel'); if (!panel) return;
+  var max = force != null ? !!force : !panel.classList.contains('pd-max');
+  try { localStorage.setItem('pd-panel-mode', max ? 'max' : 'side'); } catch (e) {}
+  _pdApplyPanelMode(panel, max);
+}
+document.addEventListener('keydown', function (e) {
+  if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'F' || e.key === 'f' || e.code === 'KeyF') && document.getElementById('projDetailPanel')) { e.preventDefault(); pdTogglePanelMax(); }
+});
 function _pdPanelFrac() {
   var v = NaN;
   try { v = parseFloat(localStorage.getItem('pd-panel-frac')); } catch (e) {}
@@ -429,7 +446,7 @@ function pdSetPanelSize(frac) {
   frac = Math.max(0.2, Math.min(0.9, frac));
   try { localStorage.setItem('pd-panel-frac', String(frac)); } catch (e) {}
   var panel = document.getElementById('projDetailPanel');
-  if (panel) _pdApplyPanelFrac(panel, frac);
+  if (panel) { _pdApplyPanelFrac(panel, frac); if (panel.classList.contains('pd-max')) pdTogglePanelMax(false); }   // 폭을 고르면 옆 패널로
 }
 function pdCloseDetail() {
   var p = document.getElementById('projDetailPanel'); if (p) p.remove();
@@ -480,6 +497,7 @@ function _pdAttachDetailPanel(id, proj, html) {
   panel.style.cssText = 'position:fixed;top:0;right:0;bottom:0;background:var(--bg-p);border-left:1px solid var(--bd);z-index:9998;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);padding:20px;animation:slideIn .2s ease';
   panel.innerHTML = html;
   _pdApplyPanelFrac(panel, _pdPanelFrac());
+  if (_pdPanelMax()) panel.classList.add('pd-max');
   _pdBindPanelResize(panel);
   document.body.appendChild(panel);
 
