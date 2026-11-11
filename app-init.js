@@ -174,6 +174,8 @@ function _wmBindUploadUI(){
 
 async function _postAuthInit(){
   if(_initDone)return;_initDone=true;
+  // v13.447 대화 전용 창(?solo=방) — 업무 데이터는 받지 않고 그 방만 바로 (chat-win.js)
+  if(window.WM_SOLO&&typeof wmSoloInit==='function'){return wmSoloInit()}
   if(window.wmSplash)wmSplash.stage('base');
   var ctx={dataLoaded:false,authReadyHandled:false,cutoff60:_wmCutoffYmd(60)};  // 최근 60일 기준 YYYYMMDD
   // v13.258: 부트스트랩을 수주맵과 동시에 요청 (예전엔 수주맵이 끝난 뒤에야 시작). 실패는 _wmLoadBootstrap 이 처리

@@ -120,8 +120,39 @@ function _tryRefresh() {
   _refreshP = _doRefresh().then(function (ok) { _refreshP = null; return ok; });
   return _refreshP;
 }
-async function _doRefresh() {
+/* v13.447 창 여러 개 — 갱신 토큰은 한 번 쓰면 바뀐다. 창마다 제 것을 들고 따로 갱신하면 먼저 한 창이 다른 창의 것을 못 쓰게 만들어
+ *   30분 뒤 나머지 창이 로그아웃됐다 (탭 여러 개도 같은 문제).
+ *   ① 떼어 낸 대화 창 · 옆 칸은 본 창의 로그인을 그대로 씀 (본 창만 갱신)
+ *   ② 그 밖의 창은 한 번에 한 창만 갱신(Web Locks)하고, 갱신 직전에 다른 창이 바꿔 둔 최신 토큰을 저장소에서 다시 읽음 */
+var _refreshShared = !!_refreshToken;   // 저장소(localStorage)에 두고 창끼리 같이 쓰는 토큰인가 ('로그인 유지' 를 켠 경우)
+function _wmAuthPeer() {
   try {
+    var s = window.WM_SOLO; if (!s) return null;
+    var m = s.embed ? window.parent : window.opener;
+    return m && m !== window && !m.closed && typeof m._tryRefresh === 'function' ? m : null;
+  } catch (e) { return null; }
+}
+function _wmJwtLeft(t) { try { return JSON.parse(atob(String(t).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000 - Date.now(); } catch (e) { return 0; } }
+async function _doRefresh() {
+  var peer = _wmAuthPeer();
+  if (peer) {
+    try {
+      var ok = _wmJwtLeft(peer._accessToken) > 60000 && peer._accessToken !== _accessToken ? true : await peer._tryRefresh();   // 본 창 것이 아직 쓸 만하면 그대로
+      if (ok && peer._accessToken) {
+        _accessToken = peer._accessToken; _refreshToken = peer._refreshToken; _refreshUser = peer._refreshUser || peer.currentUser || null;
+        try { window.dispatchEvent(new CustomEvent('wm:auth-ready')); } catch (_) {}
+        return true;
+      }
+    } catch (e) {}
+  }
+  if (typeof navigator !== 'undefined' && navigator.locks && navigator.locks.request) {
+    try { return await navigator.locks.request('wm-auth-refresh', _doRefreshSelf); } catch (e) {}
+  }
+  return _doRefreshSelf();
+}
+async function _doRefreshSelf() {
+  try {
+    if (_refreshShared) { try { var _ls = localStorage.getItem('wm_refresh'); if (_ls) _refreshToken = _ls; } catch (_) {} }   // 다른 창이 방금 바꿔 둔 것
     var controller = new AbortController();
     // Render Free 플랜 콜드 스타트(30~60초) 대비 — 8s → 35s
     var timer = setTimeout(function () { controller.abort(); }, 35000);
@@ -137,7 +168,8 @@ async function _doRefresh() {
     _accessToken = data.data.accessToken;
     _refreshToken = data.data.refreshToken;
     _refreshUser = data.data.user || null;   // v13.258 서버가 내 정보도 같이 줌 — 시작할 때 /me 를 한 번 덜 부름
-    localStorage.setItem('wm_refresh', _refreshToken);
+    if (_refreshShared || !sessionStorage.getItem('wm_refresh_s')) { localStorage.setItem('wm_refresh', _refreshToken); _refreshShared = true; }
+    else sessionStorage.setItem('wm_refresh_s', _refreshToken);   // '로그인 유지' 를 끈 경우 — 이 창에만
     // 토큰이 늦게 도착해 부트스트랩 race가 이미 종료된 경우라도, 데이터 로드를 다시 시도할 수 있게 신호
     try { window.dispatchEvent(new CustomEvent('wm:auth-ready')); } catch (_) {}
     return true;
@@ -164,6 +196,7 @@ async function authLogin(email, password, remember) {
   // 전체 프로필(operatorMode·plProjects) + 포커스 셋 동기화
   try { await authFetchMe(); } catch (_) {}
 
+  _refreshShared = !!remember;
   if (remember) {
     localStorage.setItem('wm_refresh', _refreshToken);
   } else {

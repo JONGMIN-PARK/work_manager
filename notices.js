@@ -38,6 +38,7 @@ function _ntBadge() {
 }
 /** 로그인 뒤 한 번 (다시 불러도 됨) — 안 읽은 수 + 안 읽은 '중요' 공지는 창으로 */
 function wmNoticeInit() {
+  if (window.WM_SOLO) return Promise.resolve();   // 떼어 낸 대화 창에서는 띄우지 않음 — 본 창만 (v13.447)
   if (typeof apiFetch !== 'function' || typeof _accessToken === 'undefined' || !_accessToken) return Promise.resolve();
   return apiFetch('/api/notices/summary').then(function (r) {
     var d = (r && r.data) || {};
@@ -48,7 +49,7 @@ function wmNoticeInit() {
 }
 /** 실시간 — 게시 · 고침 · 내림 · 작성자 바뀜 */
 function wmNoticeOnEvent(d) {
-  if (!d) return;
+  if (!d || window.WM_SOLO) return;
   var mine = typeof currentUser !== 'undefined' && currentUser && d.by === currentUser.id;
   if (d.op === 'publish' && !mine) {
     _ntToast((d.level === 'important' ? '📢 [중요] 새 공지 — ' : '📢 새 공지 — ') + (d.title || ''), 'info');

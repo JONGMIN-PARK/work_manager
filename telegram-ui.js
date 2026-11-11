@@ -90,6 +90,7 @@ function wmDeepGo(go) {
   var type = m[1], id = m[2] || '';
   if (type === 'mywork') { if (typeof setPage === 'function') setPage('mywork'); return true; }
   if (type === 'messages') { if (typeof setPage === 'function') setPage('messages'); return true; }   // v13.355 앱 바로 가기 · PC 앱 트레이
+  if (type === 'chat' && id && typeof wmChatWinFocus === 'function' && wmChatWinFocus(id)) return true;   // v13.447 그 방이 새 창으로 떠 있으면 그 창을 앞으로
   if (type === 'chat' && id && typeof chatOpenRoom === 'function') { chatOpenRoom(id); return true; }
   if (type === 'notice' && typeof wmNoticeOpen === 'function') { wmNoticeOpen(id); return true; }   // v13.444 📢 공지 알림을 눌렀을 때   // v13.315 메신저 대화방
   if (!WM_GO_NAV[type] || !id || typeof globalSearchNav !== 'function') return false;

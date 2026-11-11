@@ -7380,3 +7380,34 @@ html.cx-locked #mMessages{position:relative}
 .cb-pick-f b{color:#FACC15}
 .cb-pick.busy .cb-pick-box{opacity:.6;pointer-events:none}
 .cb-pick-note{display:block;margin-top:4px;color:#FCD34D}
+
+/* ═══ v13.447 💬 대화창 여러 개 (chat-win.js) ═══
+   ① 대화 전용 화면(html.wm-solo) — 방 하나만: 앱 머리 · 메뉴 · 방 목록을 숨기고 창을 가득 채움 (떼어 낸 창 · 옆 칸 공용) */
+html.wm-solo #initLoading,html.wm-solo .hdr,html.wm-solo #pageTabs,html.wm-solo .sub-tabs,html.wm-solo #modeTabs,html.wm-solo #modeTabsProj,html.wm-solo #uploadZone,html.wm-solo #wmLayerX{display:none!important}
+html.wm-solo,html.wm-solo body{overflow:hidden;background:var(--bg)}
+html.wm-solo body{padding-bottom:0!important}
+html.wm-solo .con{padding:0!important;margin:0!important;max-width:none!important}
+html.wm-solo #mMessages .cx{position:fixed!important;inset:0;width:auto;height:auto!important;min-height:0!important;margin:0;border:0;border-radius:0;box-shadow:none;z-index:60}
+html.wm-solo .cx-back,html.wm-solo .cx-sidet,html.wm-solo .cx-side{display:none!important}
+html.wm-solo #cxHead [data-h="call"],html.wm-solo #cxHead [data-h="vcall"],html.wm-solo #cxHead [data-h="present"],html.wm-solo #cxHead [data-h="share"]{display:none!important}   /* 통화 · 화면 공유는 본 창에서 */
+@media (min-width:761px){html.wm-solo #mMessages .cx-main{border-radius:0}}
+html.wm-embed #cxHead{padding-top:8px!important}
+/* ② 방 목록 줄 — 올리면 ↗ 새 창 · ⫽ 나란히 (터치 화면에는 없음 — 휴대폰은 한 방씩) */
+.cx-r-acts{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);gap:3px;padding:3px;border-radius:9px;background:var(--bg-p);border:1px solid var(--bd);box-shadow:0 4px 12px -6px rgba(15,23,42,.4)}
+.cx-r-acts i{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;color:var(--t4);font-style:normal;cursor:pointer}
+.cx-r-acts i:hover{background:var(--ac-bg);color:var(--ac-t,var(--ac))}
+.cx-r-acts .cx-svg{width:15px;height:15px}
+@media (hover:hover) and (min-width:761px){.cx-r:hover .cx-r-acts{display:inline-flex}}
+@media (max-width:1099px){.cx-r-acts [data-rsplit]{display:none}}
+@media (max-width:760px){.cx-popb{display:none!important}}
+/* ③ 나란히 보기 — 메신저 옆에 칸 (넓은 창에서만 · 좁히면 숨고 다시 넓히면 그대로 보임) */
+#mMessages.has-split{display:flex;gap:8px;align-items:stretch}
+#mMessages.has-split>.cx{flex:1.5 1 0;min-width:0}
+.cx-splitbox{display:flex;gap:8px;flex:1 1 0;min-width:0;height:var(--cx-h);min-height:460px}
+.cx-splitbox[data-n="2"]{flex:1.6 1 0}
+.cx-pane{flex:1 1 0;min-width:0;border:1px solid color-mix(in srgb,var(--bd) 70%,transparent);border-radius:16px;overflow:hidden;background:var(--bg-p);box-shadow:0 18px 48px -32px rgba(15,23,42,.45)}
+.cx-pane iframe{display:block;width:100%;height:100%;border:0;background:var(--bg)}
+.cx-pane.cx-pane-hi{animation:cxPaneHi .9s ease-out}
+@keyframes cxPaneHi{0%,60%{box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 55%,transparent)}100%{box-shadow:0 0 0 0 transparent}}
+@media (max-width:1099px){#mMessages.has-split{display:block}.cx-splitbox{display:none}}
+@media (prefers-reduced-motion:reduce){.cx-pane.cx-pane-hi{animation:none}}
