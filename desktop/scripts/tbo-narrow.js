@@ -1,5 +1,6 @@
 // 🪟 좁은 PC 창 — 오른쪽 위 창 단추(최소화 · 최대화 · 닫기)에 가려지는 것이 없는지 (v13.456)
 //   npx electron scripts/tbo-narrow.js --server=http://localhost:3000 [--shots=폴더]   → 'TBN OK' / 'TBN FAIL …'
+//   TBN_W=1250,1150 (폭) · TBN_V=home,messages (화면) · TBN_T=pearl (테마) 로 골라 돌릴 수 있음. v13.457 머리 줄로 올라간 대메뉴가 오른쪽 단추와 겹치는지(ovl)도 봄
 //   여러 폭 × 여러 화면(머리 줄 · 메신저 · 프로젝트 상세 · 창)에서 눌러야 하는 것(단추 · 입력 · 링크)이 단추 자리와 겹치거나 머리 줄 밖으로 밀려나면 실패
 const { app } = require('electron');
 const path = require('path'), fs = require('fs'), os = require('os');
@@ -21,7 +22,7 @@ async function run(w) {
   const js = (s) => w.webContents.executeJavaScript(s);
   await wait(1500);
   await js(`(function(){var e=document.getElementById('loginEmail'),p=document.getElementById('loginPw');if(!e)return;e.value='admin@t.com';p.value='Test1234!';handleLogin();})()`);
-  console.log('TBN login');
+  console.log('TBN login'); if(process.env.TBN_T) setTimeout(()=>js("aTh('"+process.env.TBN_T+"')").catch(()=>{}),4000);
   for (let i = 0; i < 60; i++) { if (await js(`!!(typeof currentUser!=='undefined'&&currentUser&&currentUser.id&&!document.getElementById('initLoading'))`)) break; await wait(500); }
   await wait(1200);
   // 가려진 것 찾기 — 창 단추 자리(오른쪽 위)와 겹치는, 눈에 보이고 누를 수 있는 것
@@ -38,9 +39,9 @@ async function run(w) {
       if(b.right>bx+1&&b.top<bh-1) bad.push(nm+' ['+Math.round(b.left)+'-'+Math.round(b.right)+','+Math.round(b.top)+']');
     });
     document.querySelectorAll('.hdr .hdr-ctl>*,.hdr .hdr-brand').forEach(function(el){ var b=el.getBoundingClientRect(); if(b.width>0&&(b.right>bx+1||b.left<0)) out.push((el.id||el.className)+' '+Math.round(b.left)+'-'+Math.round(b.right)); });
-    return {W:W, btn:W-bx, bh:bh, cssR:getComputedStyle(document.documentElement).getPropertyValue('--wm-tbo-r'), bad:bad, out:out};
+    var hd=document.querySelector('.hdr'),pt=document.getElementById('pageTabs');return {hdrH:hd.getBoundingClientRect().height,tabsIn:!!(pt&&pt.closest('.hdr')),tabsTop:pt&&pt.getBoundingClientRect().top,ovl:pt&&pt.closest('.hdr')?Math.round(pt.getBoundingClientRect().right-Math.min.apply(null,[].map.call(document.querySelector('.hdr-ctl').children,function(k){var q=k.getBoundingClientRect();return q.width>0?q.left:1e9}))):null,W:W, btn:W-bx, bh:bh, cssR:getComputedStyle(document.documentElement).getPropertyValue('--wm-tbo-r'), bad:bad, out:out};
   })()`;
-  const views = {
+  const ALL = {
     home: `setPage('mywork')`,
     messages: `setPage('messages')`,
     chatroom: `setPage('messages');(async function(){var r=await apiFetch('/api/chat/rooms',{method:'POST',body:JSON.stringify({kind:'self'})});chatOpenRoom(r.data.id)})()`,
@@ -48,15 +49,16 @@ async function run(w) {
     modal: `wmHdrPopClose&&wmHdrPopClose();wmGuardedModal('profile',showProfileModal,'profName')`,
     notices: `typeof wmNoticeOpen==='function'&&wmNoticeOpen()`
   };
+  const views = process.env.TBN_V ? Object.fromEntries(process.env.TBN_V.split(",").map(k=>[k,ALL[k]])) : ALL;
   const res = [];
   let fail = 0;
-  for (const width of [1280, 760, 640, 530, 420]) {
+  for (const width of (process.env.TBN_W||"1600,1250,1150,1000,760,640,530,420").split(",").map(Number)) {
     w.setSize(width, 860); await wait(700);
     for (const [k, code] of Object.entries(views)) {
       await js(`(function(){try{document.querySelectorAll('.wa-modal-overlay').forEach(function(m){m.remove()});document.body.classList.remove('pd-open')}catch(e){}})()`);
       await js(`try{${code}}catch(e){}`); await wait(k === 'chatroom' || k === 'project' ? 1600 : 900);
       const r = await js(PROBE);
-      const ok = !r.err && !r.bad.length && !r.out.length;
+      console.log(JSON.stringify({hdrH:r.hdrH,tabsIn:r.tabsIn,tabsTop:r.tabsTop,ovl:r.ovl,bh:r.bh}));if(r.ovl>0)r.bad.push('tabs overlap '+r.ovl);const ok = !r.err && !r.bad.length && !r.out.length;
       if (!ok) fail++;
       console.log(width + ' ' + k + ' ' + (ok ? 'ok' : 'BAD ' + JSON.stringify(r))); res.push(width + ' ' + k + ' ' + (ok ? 'ok' : 'BAD ' + JSON.stringify(r)));
       if (SHOTS && (!ok || k === 'home' || k === 'project')) { fs.mkdirSync(SHOTS, { recursive: true }); const img = await w.webContents.capturePage(); fs.writeFileSync(path.join(SHOTS, width + '-' + k + '.png'), img.toPNG()); }
