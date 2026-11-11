@@ -51,6 +51,7 @@ DELETE /api/my-work/trash
 DELETE /api/my-work/trash/:id
 DELETE /api/notebook/folders/:id
 DELETE /api/notebook/notes/:id
+DELETE /api/notices/:id
 DELETE /api/notifications/:id
 DELETE /api/orders/:orderNo
 DELETE /api/prestudies/:id
@@ -243,6 +244,10 @@ GET /api/notebook/print-settings
 GET /api/notebook/shelf
 GET /api/notebook/template/daily
 GET /api/notebook/titles
+GET /api/notices
+GET /api/notices/:id/readers
+GET /api/notices/summary
+GET /api/notices/writers
 GET /api/notifications
 GET /api/notifications/preferences
 GET /api/notifications/unread-count
@@ -527,6 +532,11 @@ POST /api/notebook/report
 POST /api/notebook/shelf/pages
 POST /api/notebook/spell
 POST /api/notebook/trash/empty
+POST /api/notices
+POST /api/notices/:id/publish
+POST /api/notices/:id/read
+POST /api/notices/:id/unpublish
+POST /api/notices/read-all
 POST /api/orders
 POST /api/orders/:orderNo/renumber
 POST /api/orders/bulk
@@ -677,6 +687,8 @@ PUT /api/notebook/folders/:id
 PUT /api/notebook/notes/:id
 PUT /api/notebook/notes/:id/shares
 PUT /api/notebook/print-settings
+PUT /api/notices/:id
+PUT /api/notices/writers
 PUT /api/notifications/:id/read
 PUT /api/notifications/preferences
 PUT /api/notifications/read-all

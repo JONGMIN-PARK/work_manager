@@ -199,6 +199,8 @@ async function _postAuthInit(){
     if(window.wmSplash)wmSplash.done();
     // 엑셀 · PDF · 워드 · 캡처 도구는 첫 화면 뒤 한가할 때 받아 둠 (v13.310, ui-helpers.js)
     if(typeof wmLibsIdle==='function')setTimeout(wmLibsIdle,1500);
+    // 📢 공지사항 — 안 읽은 수 · 안 읽은 '중요' 공지 창 (v13.444, notices.js)
+    if(typeof wmNoticeInit==='function')setTimeout(wmNoticeInit,1200);
   }
 }
 

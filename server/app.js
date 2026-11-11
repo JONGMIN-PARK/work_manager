@@ -334,6 +334,7 @@ app.use('/api/white-label', whiteLabelRoutes);
 app.use('/api/license', licenseRoutes);
 app.use('/api/data-export', dataExportRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/notices', require('./routes/notices'));   // 📢 공지사항 (v13.444)
 app.use('/api/weekly-reports', weeklyReportRoutes);
 app.use('/api/dev-items', devItemRoutes);
 app.use('/api/meetings', meetingRoutes);

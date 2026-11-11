@@ -90,7 +90,8 @@
 <script defer src="notebook-plus.js?v=4" onerror="console.warn('notebook-plus.js 로드 실패')"></script>
 <script defer src="notebook-print.js?v=2" onerror="console.warn('notebook-print.js 로드 실패')"></script>
 <script defer src="notebook-print-ui.js?v=3" onerror="console.warn('notebook-print-ui.js 로드 실패')"></script>
-<script defer src="chat-ui.js?v=33" onerror="console.warn('chat-ui.js 로드 실패')"></script>
+<script defer src="notices.js?v=1" onerror="console.warn('notices.js 로드 실패')"></script>
+<script defer src="chat-ui.js?v=34" onerror="console.warn('chat-ui.js 로드 실패')"></script>
 <script defer src="chat-cards.js?v=3" onerror="console.warn('chat-cards.js 로드 실패')"></script>
 <script defer src="chat-work.js?v=3" onerror="console.warn('chat-work.js 로드 실패')"></script>
 <script defer src="chat-lock.js?v=1" onerror="console.warn('chat-lock.js 로드 실패')"></script>
@@ -156,7 +157,7 @@
   </div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.443';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="ac">◆</span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.444';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -170,6 +171,8 @@
       <button id="notifBtn" class="hdr-ic" onclick="toggleNotifPanel()" title="알림 센터">🔔<span id="notifBadge" style="display:none">0</span></button>
       <div id="notifDropdown" style="display:none"></div>
     </div>
+    <!-- 📢 공지사항 (v13.444) -->
+    <button class="hdr-ic" id="hdrNoticeBtn" onclick="if(typeof wmNoticeOpen==='function')wmNoticeOpen()" title="📢 공지사항" aria-label="공지사항">📢<span id="noticeBadge" style="display:none">0</span></button>
     <!-- 💬 메신저 (v13.315 — 예전 쪽지 자리) -->
     <button class="hdr-ic" id="hdrMsgBtn" data-page="messages" onclick="setPage('messages')" title="💬 메신저" aria-label="메신저">💬<span id="msgBadge" style="display:none">0</span></button>
     <!-- 📌 항상 위 — PC 앱에서만 (v13.382) -->

@@ -199,6 +199,8 @@ function chatOnEvent(ev, d) {
     if (typeof chatCollabOnFolder === 'function') chatCollabOnFolder(d);
   } else if (ev === 'annot' || ev === 'annot-cur') {
     if (typeof chatBoardOnEvent === 'function') chatBoardOnEvent(ev, d);
+  } else if (ev === 'wmnotice') {   // v13.444 📢 공지사항 (notices.js) — 같은 실시간 연결로 받음
+    if (typeof wmNoticeOnEvent === 'function') wmNoticeOnEvent(d);
   } else if (ev === 'rtc') {
     if (typeof chatCallOnSignal === 'function' && chatCallOnSignal(d)) return;   // v13.361 📞 통화 신호
     if (typeof chatRtcOnSignal === 'function') chatRtcOnSignal(d);
