@@ -1020,8 +1020,24 @@ function chatBoardThumb(img, f, force) {
   Promise.all([_cbFileImg(f.id), need ? apiFetch('/api/chat/files/' + encodeURIComponent(f.id) + '/annot') : null]).then(function (r) {
     var a = Object.assign({ crop: null, shapes: [] }, (r[1] && r[1].data) || {}, { rot: rot });
     var fill = !!(v && v.f), c = _cbFlatten(r[0], a, { max: 640, fill: fill });
-    img.src = _cbSkew(rot) && !fill ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.88);   // 비스듬한 빈 모서리는 투명하게
+    // 비스듬한 빈 모서리는 투명하게 · v13.439 비치는(투명한) 사진도 PNG 로 — JPEG 는 투명한 곳이 검게 바뀌어 색이 뒤집혀 보임
+    img.src = (_cbSkew(rot) && !fill) || _cbHasAlpha(r[0]) ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.88);
   }).catch(function () {});
+}
+/** 사진에 비치는(투명한) 곳이 있는지 — 작게 줄여 알파만 봄 (사진마다 한 번) */
+var _cbAlphaC = new WeakMap();
+function _cbHasAlpha(img) {
+  if (_cbAlphaC.has(img)) return _cbAlphaC.get(img);
+  var has = false;
+  try {
+    var n = 64, c = document.createElement('canvas'); c.width = n; c.height = n;
+    var g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(img, 0, 0, n, n);
+    var d = g.getImageData(0, 0, n, n).data;
+    for (var i = 3; i < d.length; i += 4) if (d[i] < 250) { has = true; break; }
+  } catch (e) { has = false; }
+  _cbAlphaC.set(img, has);
+  return has;
 }
 
 /* ─── 📸 화면 캡처 → 잘라서 표시 → 보내기 ─── */
