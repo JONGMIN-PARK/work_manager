@@ -8068,3 +8068,28 @@ html.wm-shell .hdr-diag{display:block}
 .pst-mapin .tp-n:hover>rect,.pst-mapin .tp-n:hover>circle{filter:brightness(1.06)}
 @container (max-width:760px){.pst-pal-b{grid-template-columns:1fr;max-height:280px}.pst-pal-at{flex:1 1 100%;order:5}.pst-hist button:last-child{font-size:0;min-width:30px}.pst-hist button:last-child::before{content:'⟲';font-size:14px}}
 .pst-flt .pst-sel[data-pt="preset"]{flex:0 1 150px;max-width:150px}
+
+/* ═══ v13.480 🖥 PC 틀 고정 (wm-shell.js · html.wm-shell-pc) — 머리 줄(대메뉴)과 하위 탭은 제자리, 그 아래 화면만 굴림. 굴림 막대는 창 오른쪽 끝에 ═══ */
+html.wm-shell-pc{--wm-px:28px}
+@media (max-width:900px){html.wm-shell-pc{--wm-px:12px}}
+html.wm-shell-pc .con{padding:20px 0 0!important}
+html.wm-shell-pc body.wm-tabs-top .con{padding-top:12px!important}
+html.wm-shell-pc .con>*{margin-left:var(--wm-px);margin-right:var(--wm-px)}
+html.wm-shell-pc .con>.tabs{flex:none}
+html.wm-shell-pc .con>div[id^="m"]:not(.tabs){margin-left:0;margin-right:0;padding:0 var(--wm-px) 20px;overflow-x:auto}
+html.wm-shell-pc .con>#mMessages{padding-bottom:12px;overflow:hidden}
+html.wm-shell-pc :is(.mw-side,.cal-side){max-height:calc(var(--wm-ph,100dvh) - 16px)}
+html.wm-shell-pc .wr-src{height:calc(var(--wm-ph,100dvh) - 16px)}
+/* ═══ v13.481 📒 공용 업무 데이터 — 담당자가 아니면 보기 전용(body.wl-ro): 넣기 · 고치기 · 지우기 단추(.wl-w) 숨김 ═══ */
+body.wl-ro .wl-w{display:none!important}
+.wl-info{display:inline-flex;align-items:center;gap:6px;min-width:0;font-size:11px;color:var(--t5);white-space:nowrap;cursor:help}
+.wl-info.hidden{display:none}
+.wl-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:999px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-weight:700;font-size:11px}
+.wl-pill.is-mgr{border-color:var(--ac);background:var(--ac-bg);color:var(--ac-t)}
+.wl-when{overflow:hidden;text-overflow:ellipsis}
+@media (max-width:1100px){.wl-when{display:none}}
+.wl-empty{display:none;text-align:center;padding:56px 20px;border:1px dashed var(--bd2);border-radius:14px;background:var(--bg-p)}
+body.wl-ro #mWeekly:has(>#mainArea.hidden) .wl-empty{display:block}   /* 데이터가 없어 본 화면이 안 열렸을 때 */
+.wl-empty-t{font-size:14px;font-weight:700;color:var(--t2);margin-bottom:6px}
+.wl-empty-s{font-size:12px;color:var(--t5);line-height:1.6}
+.ua-wlm{width:16px;height:16px;accent-color:var(--ac);cursor:pointer}

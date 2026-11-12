@@ -33,7 +33,10 @@ router.get('/', async function (req, res) {
     var tid = callerTenant(req);
 
     if (role === 'admin') {
-      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE tenant_id = $1 ORDER BY created_at DESC";
+      // v13.481 worklog_manager = 업무 데이터 담당(업무일지 넣기 · 지우기) 지정 여부
+      sql = "SELECT u.id, u.email, u.name, u.display_name, u.role, u.department_id, u.position, u.phone, u.status, u.created_at, u.last_login_at, " +
+        "COALESCE((s.value->>'enabled')::boolean, false) AS worklog_manager " +
+        "FROM users u LEFT JOIN user_settings s ON s.user_id = u.id AND s.key = 'worklog_manager' WHERE u.tenant_id = $1 ORDER BY u.created_at DESC";
       params = [tid];
     } else if (role === 'manager') {
       sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE department_id = $1 AND tenant_id = $2 ORDER BY name";
@@ -110,6 +113,24 @@ router.put('/:id/operator-mode', authMiddleware.requireRole('admin'), async func
     res.json({ data: { userId: req.params.id, enabled: enabled } });
   } catch (e) {
     httpErr.serverError(res, '[users/operator-mode]', e);
+  }
+});
+
+// ─── PUT /api/users/:id/worklog-manager ─── 업무 데이터 담당 지정/해제 (admin only, v13.481)
+router.put('/:id/worklog-manager', authMiddleware.requireRole('admin'), async function (req, res) {
+  try {
+    var enabled = !!(req.body && req.body.enabled);
+    var ur = await db.query('SELECT id, tenant_id FROM users WHERE id = $1 AND tenant_id = $2', [req.params.id, callerTenant(req)]);
+    if (!ur.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '사용자를 찾을 수 없습니다.' });
+    var tid = ur.rows[0].tenant_id || '00000000-0000-0000-0000-000000000001';
+    await db.query(
+      "INSERT INTO user_settings (user_id, key, value, updated_at, tenant_id) VALUES ($1, 'worklog_manager', $2, NOW(), $3) " +
+      "ON CONFLICT (user_id, key) DO UPDATE SET value = $2, updated_at = NOW()",
+      [req.params.id, JSON.stringify({ enabled: enabled }), tid]
+    );
+    res.json({ data: { userId: req.params.id, enabled: enabled } });
+  } catch (e) {
+    httpErr.serverError(res, '[users/worklog-manager]', e);
   }
 });
 

@@ -73,15 +73,15 @@ describe('ai-tools — 인자 · 기간 · 계획 읽기', function () {
 });
 
 describe('ai-tools — 실행 · 권한', function () {
-  test('일반 직원 work_hours: 본인 것만 + 거르기 인자는 매개변수로 (SQL 에 안 섞임)', async function () {
+  test('일반 직원 work_hours: 회사 전체(v13.481 공용) + 거르기 인자는 매개변수로 (SQL 에 안 섞임)', async function () {
     db.query.mockResolvedValue({ rows: [{ label: 'D', hours: '10', people: 1 }, { label: 'M', hours: '5', people: 1 }] });
     var r = await tools.runCalls([{ tool: 'work_hours', args: { group_by: 'abbr', period: 'last_week', person: "x' OR 1=1 --" } }], member);
     var c = sqlCalls()[0];
-    expect(c.sql).toMatch(/user_id = \$2/);
+    expect(c.sql).not.toMatch(/user_id/);
     expect(c.sql).not.toMatch(/OR 1=1/);
     expect(c.params).toContain("%x' OR 1=1 --%");
-    expect(c.params.slice(0, 2)).toEqual([T, 'u-mem']);
-    expect(r.text).toMatch(/업무분장별 투입시간 · 지난주 .* 범위: 본인 것만/);
+    expect(c.params[0]).toBe(T);
+    expect(r.text).toMatch(/업무분장별 투입시간 · 지난주 .* 범위: 회사 전체/);
     expect(r.charts[0]).toMatchObject({ unit: 'h', rows: [{ label: 'D(개발)', value: 10 }, { label: 'M(양산)', value: 5 }] });
     expect(r.ran).toEqual([{ tool: 'work_hours', label: '업무일지 시간 집계', args: { group_by: 'abbr', period: 'last_week', person: "x' OR 1=1 --" }, rows: 2 }]);
   });
@@ -200,14 +200,14 @@ describe('ai-insights — 규칙 카드', function () {
     expect(txt).toMatch(/🔴 <b>지연 프로젝트 1건<\/b>/);
   });
 
-  test('일반 직원: 업무일지는 본인 범위 · "기록 없는 프로젝트"는 계산 안 함', async function () {
+  test('일반 직원: 업무일지는 회사 전체(v13.481 공용) · "기록 없는 프로젝트"도 계산', async function () {
     db.query.mockResolvedValue({ rows: [] });
     var cards = await ins.computeInsights(member);
     expect(cards).toEqual([]);
     var sql = sqlCalls();
-    expect(sql.some(function (c) { return /NOT EXISTS \(SELECT 1 FROM work_records/.test(c.sql); })).toBe(false);
+    expect(sql.some(function (c) { return /NOT EXISTS \(SELECT 1 FROM work_records/.test(c.sql); })).toBe(true);
     var w = sql.filter(function (c) { return /HAVING SUM\(hours\)/.test(c.sql); })[0];
-    expect(w.sql).toMatch(/user_id = \$2/);
+    expect(w.sql).not.toMatch(/user_id/);
     expect(ins.briefText([], 'x')).toBe('');
   });
 });

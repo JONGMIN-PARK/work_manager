@@ -303,7 +303,8 @@ describe('work records scope (lib/record-scope) — 모든 경로 동일', funct
     await rec('y', 'adminY', TY);
   });
 
-  var EXPECTED_COUNT = { adminX: 5, mgrX: 3, execX: 3, mgrNoDept: 0, memX1: 2, memX2: 1, memX3: 0, adminY: 1 };
+  // v13.481 공용 — 같은 테넌트면 누구나 전부 봄 (예전: admin 전체 · 팀장 부서 · 팀원 본인)
+  var EXPECTED_COUNT = { adminX: 5, mgrX: 5, execX: 5, mgrNoDept: 5, memX1: 5, memX2: 5, memX3: 5, adminY: 1 };
 
   test.each(Object.keys(EXPECTED_COUNT))('%s: /records/count = /records 행 수 = bootstrap archives', async function (key) {
     var c = await h.request(h.app).get('/api/archives/records/count').set('Authorization', authz(key));
@@ -315,58 +316,86 @@ describe('work records scope (lib/record-scope) — 모든 경로 동일', funct
     expect(b.body.archives.data.length).toBe(EXPECTED_COUNT[key]);
   });
 
-  test('manager(부서): 부서원 레코드는 보이고 다른 부서·주인 없는 레코드는 안 보인다', async function () {
-    var l = await h.request(h.app).get('/api/archives/records?all=true&limit=1000').set('Authorization', authz('mgrX'));
-    var got = l.body.data.map(function (r) { return r.id; }).sort(function (a, b) { return a - b; });
-    expect(got).toEqual([ids.x1a, ids.x1b, ids.mgr].sort(function (a, b) { return a - b; }));
+  function upd(id, content) { return { id: id, date: todayCompact(), name: 'RF upd', orderNo: 'RF-WR', hours: 2, taskType: 't', abbr: 'A', content: content }; }
+
+  test('담당자가 아니면 쓰기 전부 403 — 팀원 · 팀장 (본인이 올린 것도)', async function () {
+    for (var key of ['memX1', 'mgrX']) {
+      var A = authz(key);
+      var rs = [
+        await h.request(h.app).patch('/api/archives/records/batch').set('Authorization', A).send({ updates: [upd(ids.x1b, 'hack')] }),
+        await h.request(h.app).delete('/api/archives/records/batch').set('Authorization', A).send({ ids: [ids.x1a] }),
+        await h.request(h.app).post('/api/archives/records/sync').set('Authorization', A).send({ insert: [upd(null, 'new')], update: [], deleteIds: [ids.x1a] }),
+        await h.request(h.app).post('/api/archives/records/bulk').set('Authorization', A).send({ records: [upd(null, 'new')] }),
+        await h.request(h.app).post('/api/archives/records').set('Authorization', A).send(upd(null, 'new')),
+        await h.request(h.app).delete('/api/archives/records').set('Authorization', A)
+      ];
+      expect(rs.map(function (r) { return r.status; })).toEqual([403, 403, 403, 403, 403, 403]);
+    }
+    var n = (await db.query('SELECT COUNT(*)::int AS c FROM work_records WHERE tenant_id = $1', [TX])).rows[0].c;
+    expect(n).toBe(5);
+    expect((await db.query('SELECT content FROM work_records WHERE id = $1', [ids.x1b])).rows[0].content).toBe('orig-x1b');
   });
 
-  test('PATCH /records/batch: 범위 밖 행은 무시, 중복 id 는 마지막 값, count = id 있는 항목 수', async function () {
-    function upd(id, content) { return { id: id, date: todayCompact(), name: 'RF upd', orderNo: 'RF-WR', hours: 2, taskType: 't', abbr: 'A', content: content }; }
-    var r = await h.request(h.app).patch('/api/archives/records/batch').set('Authorization', authz('memX1'))
-      .send({ updates: [upd(ids.x1b, 'first'), upd(ids.x1b, 'last'), upd(ids.x2, 'hack'), { content: 'no id' }] });
+  test('GET /records/info — 건수 · 담당자 · 내가 담당인지', async function () {
+    var m = await h.request(h.app).get('/api/archives/records/info').set('Authorization', authz('memX1'));
+    expect(m.status).toBe(200);
+    expect(m.body.data.count).toBe(5);
+    expect(m.body.data.canManage).toBe(false);
+    expect(m.body.data.managers.some(function (u) { return u.id === U.adminX.id && u.admin; })).toBe(true);
+    expect(m.body.data.managers.some(function (u) { return u.id === U.adminY.id; })).toBe(false);
+    var a = await h.request(h.app).get('/api/archives/records/info').set('Authorization', authz('adminX'));
+    expect(a.body.data.canManage).toBe(true);
+  });
+
+  test('PATCH /records/batch (관리자): 다른 테넌트 행은 무시, 중복 id 는 마지막 값, count = id 있는 항목 수', async function () {
+    var r = await h.request(h.app).patch('/api/archives/records/batch').set('Authorization', authz('adminX'))
+      .send({ updates: [upd(ids.x1b, 'first'), upd(ids.x1b, 'last'), upd(ids.y, 'hack'), { content: 'no id' }] });
     expect(r.status).toBe(200);
     expect(r.body.count).toBe(3);
     var rows = {};
-    (await db.query('SELECT id, content, hours FROM work_records WHERE id = ANY($1)', [[ids.x1b, ids.x2]])).rows.forEach(function (x) { rows[x.id] = x; });
+    (await db.query('SELECT id, content, hours FROM work_records WHERE id = ANY($1)', [[ids.x1b, ids.y]])).rows.forEach(function (x) { rows[x.id] = x; });
     expect(rows[ids.x1b].content).toBe('last');
     expect(Number(rows[ids.x1b].hours)).toBe(2);
-    expect(rows[ids.x2].content).toBe('orig-x2');
-
-    var m = await h.request(h.app).patch('/api/archives/records/batch').set('Authorization', authz('mgrX'))
-      .send({ updates: [upd(ids.x1b, 'by-mgr'), upd(ids.x2, 'by-mgr')] });
-    expect(m.body.count).toBe(2);
-    var after = (await db.query('SELECT id, content FROM work_records WHERE id = ANY($1) ORDER BY id', [[ids.x1b, ids.x2]])).rows;
-    var byId = {}; after.forEach(function (x) { byId[x.id] = x.content; });
-    expect(byId[ids.x1b]).toBe('by-mgr');   // 같은 부서
-    expect(byId[ids.x2]).toBe('orig-x2');   // 다른 부서
-
-    var empty = await h.request(h.app).patch('/api/archives/records/batch').set('Authorization', authz('memX1')).send({ updates: [] });
+    expect(rows[ids.y].content).toBe('orig-y');
+    var empty = await h.request(h.app).patch('/api/archives/records/batch').set('Authorization', authz('adminX')).send({ updates: [] });
     expect(empty.status).toBe(200);
     expect(empty.body.count).toBe(0);
   });
 
-  test('DELETE /records/batch: member 는 주인 없는(user_id NULL) 레코드를 지울 수 없다 (변경점)', async function () {
-    var r = await h.request(h.app).delete('/api/archives/records/batch').set('Authorization', authz('memX1'))
-      .send({ ids: [ids.orphan, ids.x2, ids.y, ids.x1a] });
+  test('지정된 담당자(worklog_manager): 본인이 못 켜고, 관리자가 켜면 테넌트 전체를 고치고 지움 · 다른 테넌트는 불가', async function () {
+    var self = await h.request(h.app).put('/api/settings/worklog_manager').set('Authorization', authz('memX2')).send({ value: { enabled: true } });
+    expect(self.status).toBe(403);
+    var byMem = await h.request(h.app).put('/api/users/' + U.memX2.id + '/worklog-manager').set('Authorization', authz('memX1')).send({ enabled: true });
+    expect(byMem.status).toBe(403);
+    var other = await h.request(h.app).put('/api/users/' + U.adminY.id + '/worklog-manager').set('Authorization', authz('adminX')).send({ enabled: true });
+    expect(other.status).toBe(404);
+    var g = await h.request(h.app).put('/api/users/' + U.memX2.id + '/worklog-manager').set('Authorization', authz('adminX')).send({ enabled: true });
+    expect(g.status).toBe(200);
+    var info = await h.request(h.app).get('/api/archives/records/info').set('Authorization', authz('memX2'));
+    expect(info.body.data.canManage).toBe(true);
+    var r = await h.request(h.app).delete('/api/archives/records/batch').set('Authorization', authz('memX2')).send({ ids: [ids.orphan, ids.y, ids.x1a] });
     expect(r.status).toBe(200);
-    expect(r.body.count).toBe(1);
-    var left = (await db.query('SELECT id FROM work_records WHERE id = ANY($1)', [[ids.orphan, ids.x2, ids.y, ids.x1a]])).rows.map(function (x) { return x.id; });
-    expect(left.sort()).toEqual([ids.orphan, ids.x2, ids.y].sort());
-    var admin = await h.request(h.app).delete('/api/archives/records/batch').set('Authorization', authz('adminX')).send({ ids: [ids.orphan, ids.y] });
-    expect(admin.body.count).toBe(1);   // admin 은 테넌트 전체(주인 없는 행 포함), 다른 테넌트 행은 불가
+    expect(r.body.count).toBe(2);   // 주인 없는 행 · 남이 올린 행도 — 다른 테넌트(y)는 안 됨
+    var left = (await db.query('SELECT id FROM work_records WHERE id = ANY($1)', [[ids.orphan, ids.y, ids.x1a]])).rows.map(function (x) { return x.id; });
+    expect(left).toEqual([ids.y]);
+    var s = await h.request(h.app).post('/api/archives/records/sync').set('Authorization', authz('memX2')).send({ insert: [upd(null, 'by-x2')], update: [upd(ids.mgr, 'x2-edit')], deleteIds: [] });
+    expect(s.status).toBe(200);
+    expect(s.body.inserted.length).toBe(1);
+    ids.x2new = s.body.inserted[0].id;
+    expect((await db.query('SELECT content FROM work_records WHERE id = $1', [ids.mgr])).rows[0].content).toBe('x2-edit');
   });
 
-  test('DELETE /records: ?scope=self 는 manager 도 본인만, 응답 scope 라벨 유지', async function () {
-    var r = await h.request(h.app).delete('/api/archives/records?scope=self').set('Authorization', authz('mgrX'));
+  test('DELETE /records: ?scope=self 는 본인이 올린 것만 · 그냥은 테넌트 전체 · 권한을 빼면 다시 403', async function () {
+    var r = await h.request(h.app).delete('/api/archives/records?scope=self').set('Authorization', authz('memX2'));
     expect(r.status).toBe(200);
-    expect(r.body).toEqual({ message: '전체 삭제 완료', deleted: 1, scope: 'self' });
-    var m3 = await h.request(h.app).delete('/api/archives/records').set('Authorization', authz('memX3'));
-    expect(m3.body.scope).toBe('self');
-    expect(m3.body.deleted).toBe(0);
-    var mgr = await h.request(h.app).delete('/api/archives/records').set('Authorization', authz('mgrX'));
-    expect(mgr.body.scope).toBe('department');
-    expect(mgr.body.deleted).toBe(1);   // 남은 부서원 레코드 x1b
+    expect(r.body).toEqual({ message: '전체 삭제 완료', deleted: 2, scope: 'self' });   // x2 + 방금 넣은 것
+    var off = await h.request(h.app).put('/api/users/' + U.memX2.id + '/worklog-manager').set('Authorization', authz('adminX')).send({ enabled: false });
+    expect(off.status).toBe(200);
+    var denied = await h.request(h.app).delete('/api/archives/records').set('Authorization', authz('memX2'));
+    expect(denied.status).toBe(403);
+    var adm = await h.request(h.app).delete('/api/archives/records').set('Authorization', authz('adminX'));
+    expect(adm.body.scope).toBe('tenant');
+    expect(adm.body.deleted).toBe(2);   // 남은 x1b · mgr
     var y = (await db.query('SELECT 1 FROM work_records WHERE id = $1', [ids.y])).rows.length;
     expect(y).toBe(1);
   });

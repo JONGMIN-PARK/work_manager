@@ -103,6 +103,7 @@ GET /api/archives
 GET /api/archives/:id
 GET /api/archives/records
 GET /api/archives/records/count
+GET /api/archives/records/info
 GET /api/as-ai/_status
 GET /api/as-ai/weekly-insight
 GET /api/as-categories
@@ -311,6 +312,7 @@ GET /api/v1/archives
 GET /api/v1/archives/:id
 GET /api/v1/archives/records
 GET /api/v1/archives/records/count
+GET /api/v1/archives/records/info
 GET /api/v1/audit
 GET /api/v1/audit/actions
 GET /api/v1/auth/desktop-exchange
@@ -716,6 +718,7 @@ PUT /api/users/:id/operator-mode
 PUT /api/users/:id/reject
 PUT /api/users/:id/role
 PUT /api/users/:id/status
+PUT /api/users/:id/worklog-manager
 PUT /api/v1/ai/config
 PUT /api/v1/auth/change-password
 PUT /api/v1/checklists/:id
@@ -741,6 +744,7 @@ PUT /api/v1/users/:id/operator-mode
 PUT /api/v1/users/:id/reject
 PUT /api/v1/users/:id/role
 PUT /api/v1/users/:id/status
+PUT /api/v1/users/:id/worklog-manager
 PUT /api/wa-targets
 PUT /api/weekly-reports/goals
 PUT /api/white-label

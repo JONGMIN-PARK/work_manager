@@ -8,7 +8,7 @@ describe('Work Records API', () => {
 
   beforeAll(async () => {
     await h.createTestTenant();
-    user = await h.createTestUser({ role: 'manager', email: 'wr-test@test.com' });
+    user = await h.createTestUser({ role: 'admin', email: 'wr-test@test.com' });   // v13.481 쓰기는 관리자 · 지정된 담당자만
   });
   afterAll(async () => { await h.cleanup(); });
 

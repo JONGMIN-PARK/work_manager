@@ -4,6 +4,7 @@ var db = require('../config/db');
 var authService = require('../services/auth.service');
 var authMiddleware = require('../middleware/auth');
 var mindmapAccess = require('../middleware/mindmap-access');
+var worklogManager = require('../middleware/worklog-manager');
 var config = require('../config');
 var notificationService = require('../services/notification.service');
 var httpErr = require('../lib/http-errors');
@@ -223,12 +224,15 @@ async function _meData(user) {
     user.role === 'admin' ? true : db.query("SELECT value FROM user_settings WHERE user_id = $1 AND key = 'operator_mode'", [user.id])
       .then(function (x) { return !!(x.rows.length && x.rows[0].value && x.rows[0].value.enabled); }, function () { return false; }),
     // 마인드맵 사용 권한 (admin 자동 또는 user_settings 'mindmap_access' 부여)
-    mindmapAccess.hasMindmapAccessByUser(user.id, user.role)
+    mindmapAccess.hasMindmapAccessByUser(user.id, user.role),
+    // 업무 데이터 담당 (v13.481 — admin 자동 또는 user_settings 'worklog_manager' 부여)
+    worklogManager.isWorklogManagerByUser(user.id, user.role)
   ]);
   var sanitized = authService.sanitizeUser(user);
   sanitized.plProjects = r[0];
   sanitized.operatorMode = r[1];
   sanitized.mindmapAccess = r[2];
+  sanitized.worklogManager = r[3];
   return sanitized;
 }
 

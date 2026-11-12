@@ -7,6 +7,7 @@ var rbac = require('../middleware/rbac');
 var { parsePagination } = require('../middleware/pagination');
 var { recordScope } = require('../lib/record-scope');
 var httpErr = require('../lib/http-errors');
+var wlm = require('../middleware/worklog-manager');
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -18,7 +19,7 @@ router.use(tenant.tenantScope);
 var _hasMs = null;
 router.get('/records', async function (req, res) {
   try {
-    // 역할별 범위: admin=테넌트 / manager·executive(부서)=부서 / 그 외=본인 (lib/record-scope)
+    // 범위: 테넌트 전체 — 모든 사용자가 같은 데이터를 봄 (v13.481, lib/record-scope)
     var sc = recordScope(req);
     var where = 'WHERE ' + sc.where;
     var params = sc.params;
@@ -102,11 +103,30 @@ async function _insertRecords(client, records, userId, tenantId, returning) {
   return returning ? out : n;
 }
 
+// GET /api/archives/records/info — 공용 업무 데이터 현황 (v13.481): 건수 · 기간 · 마지막으로 올린 때/사람 · 담당자 · 내가 담당인지
+router.get('/records/info', async function (req, res) {
+  try {
+    var tid = req.tenant.id;
+    var r = await Promise.all([
+      db.query('SELECT COUNT(*)::int AS cnt, MIN(date) AS d0, MAX(date) AS d1, MAX(created_at) AS last_at FROM work_records WHERE tenant_id = $1', [tid]),
+      db.query('SELECT COALESCE(u.display_name, u.name) AS name FROM work_records w LEFT JOIN users u ON u.id = w.user_id WHERE w.tenant_id = $1 ORDER BY w.created_at DESC NULLS LAST, w.id DESC LIMIT 1', [tid]),
+      db.query("SELECT u.id, COALESCE(u.display_name, u.name) AS name, u.role FROM users u LEFT JOIN user_settings s ON s.user_id = u.id AND s.key = 'worklog_manager' " +
+        "WHERE u.tenant_id = $1 AND u.status = 'active' AND (u.role = 'admin' OR COALESCE((s.value->>'enabled')::boolean, false)) ORDER BY (u.role = 'admin') DESC, name", [tid]),
+      wlm.isWorklogManager(req)
+    ]);
+    var a = r[0].rows[0] || {};
+    res.json({ data: { count: a.cnt || 0, dateFrom: a.d0 || null, dateTo: a.d1 || null, lastAt: a.last_at || null, lastBy: (r[1].rows[0] && r[1].rows[0].name) || null,
+      managers: r[2].rows.map(function (u) { return { id: u.id, name: u.name, admin: u.role === 'admin' }; }), canManage: r[3] } });
+  } catch (e) {
+    httpErr.serverError(res, '[work-records/info]', e);
+  }
+});
+
 // POST /api/archives/records/sync — 바뀐 것만 한 번에 (v13.258). 파일 병합(갱신)용.
 //   body: { insert:[레코드], update:[{id, ...}], deleteIds:[id] } — 한 트랜잭션. 수정 · 삭제는 GET 과 같은 범위(lib/record-scope)만.
 //   예전 병합은 전체를 올려 "내 레코드 전부 삭제 후 재삽입" 했다 — 느리고, 관리자는 남의 레코드를 내 것으로 한 벌 더 넣었으며 마일스톤 연결이 지워졌다.
 //   수정은 milestone_id 를 건드리지 않는다. 응답 inserted 는 넣은 행(새 id 포함)
-router.post('/records/sync', rbac.checkPermission('archive.manage'), async function (req, res) {
+router.post('/records/sync', wlm.requireWorklogManager, async function (req, res) {
   var client;
   try {
     client = await db.pool.connect();
@@ -153,8 +173,8 @@ router.post('/records/sync', rbac.checkPermission('archive.manage'), async funct
   }
 });
 
-// POST /api/archives/records/bulk — 일괄 저장 (해당 사용자 레코드만 삭제 후 삽입, 트랜잭션)
-router.post('/records/bulk', rbac.checkPermission('archive.manage'), async function (req, res) {
+// POST /api/archives/records/bulk — 일괄 저장 (회사 전체를 지우고 삽입, 트랜잭션) — 담당자만
+router.post('/records/bulk', wlm.requireWorklogManager, async function (req, res) {
   var client;
   try {
     client = await db.pool.connect();
@@ -169,8 +189,8 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
 
     await client.query('BEGIN');
 
-    // 해당 사용자의 레코드만 삭제 후 재삽입 (사용자별 데이터 분리)
-    await client.query('DELETE FROM work_records WHERE user_id = $1 AND tenant_id = $2', [userId, req.tenant.id]);
+    // v13.481 공용 한 벌 — 회사 전체를 지우고 다시 넣음 (예전엔 올린 사람 것만 지워 남의 레코드가 한 벌 더 생겼음)
+    await client.query('DELETE FROM work_records WHERE tenant_id = $1', [req.tenant.id]);
 
     var totalInserted = await _insertRecords(client, records, userId, req.tenant.id, false);
 
@@ -185,7 +205,7 @@ router.post('/records/bulk', rbac.checkPermission('archive.manage'), async funct
 });
 
 // PATCH /api/archives/records/batch — 변경된 레코드 배치 업데이트
-router.patch('/records/batch', rbac.checkPermission('archive.manage'), async function (req, res) {
+router.patch('/records/batch', wlm.requireWorklogManager, async function (req, res) {
   var client;
   try {
     client = await db.pool.connect();
@@ -242,7 +262,7 @@ router.patch('/records/batch', rbac.checkPermission('archive.manage'), async fun
 });
 
 // POST /api/archives/records — 단일 레코드 수동 추가
-router.post('/records', rbac.checkPermission('archive.manage'), async function (req, res) {
+router.post('/records', wlm.requireWorklogManager, async function (req, res) {
   try {
     var r = req.body;
     if (!r.date || !r.name) return res.status(400).json({ error: 'INVALID', message: 'date, name 필수' });
@@ -257,7 +277,7 @@ router.post('/records', rbac.checkPermission('archive.manage'), async function (
 });
 
 // DELETE /api/archives/records/batch — 선택 삭제 (ID 배열) — role 스코프 적용
-router.delete('/records/batch', rbac.checkPermission('archive.manage'), async function (req, res) {
+router.delete('/records/batch', wlm.requireWorklogManager, async function (req, res) {
   try {
     var ids = req.body.ids || [];
     if (!ids.length) return res.json({ count: 0 });
@@ -324,7 +344,7 @@ router.post('/records/auto-tag-milestones', rbac.checkPermission('archive.manage
 // manager/executive (부서 있음) : 소속 부서 전체 (본인 포함)
 // member 또는 부서 없음        : 본인 레코드만
 // query ?scope=self 면 강제로 본인만 삭제 (명시적 축소)
-router.delete('/records', rbac.checkPermission('archive.manage'), async function (req, res) {
+router.delete('/records', wlm.requireWorklogManager, async function (req, res) {
   var client;
   try {
     client = await db.pool.connect();

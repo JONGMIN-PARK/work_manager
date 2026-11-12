@@ -628,13 +628,15 @@ function importWorkRecordsJSON(file){
 /* 중복 레코드 제거 */
 async function deduplicateRecords(){
   if(!aD.length){showToast('데이터가 없습니다.','warn');return}
-  var seen=new Set();var deduped=[];
-  aD.forEach(function(r){var k=wrIdKey(r);if(!seen.has(k)){seen.add(k);deduped.push(r)}});
+  if(typeof wlDenyToast==='function'&&wlDenyToast())return;
+  var seen=new Set();var deduped=[];var dupIds=[];var dupNoId=0;
+  aD.forEach(function(r){var k=wrIdKey(r);if(!seen.has(k)){seen.add(k);deduped.push(r)}else if(r.id)dupIds.push(r.id);else dupNoId++});
   var removed=aD.length-deduped.length;
   if(!removed){showToast('중복 레코드가 없습니다.','info');return}
   if(!(await wmConfirm('총 '+aD.length+'건 중 '+removed+'건의 중복 레코드를 제거합니다.\n(날짜+이름+수주번호 기준)\n\n계속하시겠습니까?')))return;
   try{
-    await wrBulkPut(deduped);
+    // v13.481 겹친 것만 id 로 지움 — 예전엔 전체를 지우고 다시 넣어, 아직 다 못 받은 옛 기록이 사라질 수 있었음
+    if(dupIds.length&&!dupNoId)await wrDeleteRecords(deduped,dupIds);else await wrBulkPut(deduped);
     aD=deduped;
     gfInvalidate();rFL();upV();
     showToast('✅ 중복 '+removed+'건 제거 완료 ('+deduped.length+'건 유지)');
@@ -648,11 +650,8 @@ async function deduplicateRecords(){
 async function resetAllData(){
   // 현재 보이는 건수로 사용자에게 실제 영향 범위 미리 표시
   var visibleCount=(typeof aD!=='undefined'&&Array.isArray(aD))?aD.length:0;
-  var role=(typeof currentUser!=='undefined'&&currentUser&&currentUser.role)||'';
-  var scopeHint='';
-  if(role==='admin')scopeHint='⚠️ 관리자 권한 — 테넌트 전체 업무일지가 삭제됩니다.';
-  else if(role==='manager'||role==='executive')scopeHint='⚠️ 매니저/임원 권한 — 소속 부서 전체 업무일지가 삭제됩니다 (부서원 모두).';
-  else scopeHint='본인 계정의 업무일지 데이터만 삭제됩니다.';
+  if(typeof wlDenyToast==='function'&&wlDenyToast())return;
+  var scopeHint='⚠️ 회사 전체가 함께 보는 업무일지가 모두 삭제됩니다 (모든 사용자 화면에서 사라짐).';
   var msg='⚠️ 업무일지 데이터를 전체 초기화하시겠습니까?\n\n'+scopeHint+'\n현재 화면 표시 '+visibleCount+'건.\n이 작업은 되돌릴 수 없습니다.';
   if(!(await wmConfirm(msg)))return;
   if(!(await wmConfirm('정말 초기화하시겠습니까?\n(한번 더 확인)')))return;
@@ -708,6 +707,7 @@ async function hFile(file,enc){if(!file)return;document.getElementById('fnDisp')
 /* 여러 파일 순차 처리 */
 async function hFiles(fileList){
   if(!fileList||!fileList.length)return;
+  if(typeof wlDenyToast==='function'&&wlDenyToast())return;   // v13.481 담당자만
   // 먼저 복사 — 부르는 쪽이 곧바로 input.value='' 로 비우면 FileList 도 비므로, 엑셀 도구를 기다리기 전에 (v13.322)
   var files=Array.from(fileList).filter(function(f){return/\.(xls|xlsx|html?|csv)$/i.test(f.name)});
   if(typeof wmLib==='function')await wmLib('xlsx').catch(function(){});  // 엑셀 도구는 처음 쓸 때 받음 (v13.310)
@@ -722,3 +722,37 @@ async function hFiles(fileList){
 function chEnc(enc){cEnc=enc;rEC();if(lBuf){var newRecords=parseFileBuf(lBuf,enc);if(newRecords.length){aD=newRecords;applyADToUI()}}}
 function rEC(){['encUp','encMain'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.innerHTML=ENC.map(e=>`<span class="chip ${e===cEnc?'cn':'co'}" style="padding:3px 8px;font-size:10px" onclick="event.stopPropagation();chEnc('${e}')">${e}</span>`).join('')})}
 
+/* ═══ v13.481 📒 공용 업무 데이터 — 모두 같은 데이터를 보고, 넣기 · 고치기 · 지우기는 담당자(관리자 + 지정된 사용자)만 ═══ */
+var WL_INFO=null;
+/** 담당자가 아니면 안내를 띄우고 true */
+function wlDenyToast(){
+  if(typeof wmCanWorklog!=='function'||wmCanWorklog())return false;
+  var who=WL_INFO&&WL_INFO.managers&&WL_INFO.managers.length?' (담당: '+WL_INFO.managers.map(function(m){return m.name}).slice(0,5).join(' · ')+')':'';
+  showToast('보기 전용입니다 — 업무 데이터는 관리자와 지정된 담당자만 넣거나 지울 수 있습니다'+who,'warn');
+  return true;
+}
+function _wlWhen(iso){
+  if(!iso)return '';var d=new Date(iso);if(isNaN(d))return '';
+  var k=new Date(d.getTime()+9*3600000),p=function(n){return n<10?'0'+n:''+n};   // KST
+  return (k.getUTCMonth()+1)+'/'+k.getUTCDate()+' '+p(k.getUTCHours())+':'+p(k.getUTCMinutes());
+}
+/** 툴바 알약 · 빈 화면 안내 그리기 */
+function wlInfoRender(){
+  var i=WL_INFO||{},can=typeof wmCanWorklog==='function'&&wmCanWorklog();
+  var names=(i.managers||[]).map(function(m){return m.name+(m.admin?'(관리자)':'')});
+  var el=document.getElementById('wlInfo');
+  if(el){
+    var when=_wlWhen(i.lastAt);
+    el.innerHTML='<span class="wl-pill'+(can?' is-mgr':'')+'">'+(can?'🌐 공용 데이터':'👀 보기 전용')+'</span>'+(when?'<span class="wl-when">'+eH(when)+(i.lastBy?' · '+eH(i.lastBy):'')+' 올림</span>':'');
+    el.title=(can?'이 업무 데이터는 모든 사용자가 함께 봅니다. 넣기 · 고치기 · 지우기는 담당자만.':'모든 사용자가 같은 업무 데이터를 봅니다. 넣기 · 고치기 · 지우기는 담당자만 할 수 있습니다.')+(names.length?'\n담당: '+names.join(' · '):'')+(i.count?'\n전체 '+i.count.toLocaleString()+'건'+(i.dateFrom?' · '+i.dateFrom+' ~ '+i.dateTo:''):'')+(when?'\n마지막으로 올린 때: '+when+(i.lastBy?' ('+i.lastBy+')':''):'');
+    el.classList.remove('hidden');
+  }
+  var em=document.getElementById('wlEmptyWho');
+  if(em)em.textContent=names.length?'담당: '+names.join(' · '):'';
+}
+var _wlInfoBusy=false;
+function wlInfoLoad(){
+  if(_wlInfoBusy||typeof currentUser==='undefined'||!currentUser||!currentUser.id||typeof apiFetch!=='function')return;
+  _wlInfoBusy=true;
+  apiFetch('/api/archives/records/info').then(function(r){WL_INFO=(r&&r.data)||null;wlInfoRender()}).catch(function(){}).then(function(){_wlInfoBusy=false});
+}

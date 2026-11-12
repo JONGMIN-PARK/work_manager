@@ -2,6 +2,7 @@
  * 업무일지_분석기.html 인라인 <script> 에서 분리. 동기 <script src> 로 원래 자리·순서대로 로드(defer/async 금지 — 최상위 let/function 을 다른 파일이 전역으로 공유하고, 로드 시점 코드의 의존 순서가 고정돼 있음). */
 /* ═══ 수동 입력 모달 ═══ */
 function openManualInput(){
+  if(typeof wlDenyToast==='function'&&wlDenyToast())return;   // v13.481 담당자만
   var existing=document.getElementById('manualInputOverlay');
   if(existing)existing.remove();
   var today=new Date();var td=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
@@ -164,6 +165,7 @@ function upDelBar(){
   else{bar.classList.remove('show')}
 }
 async function deleteSelected(){
+  if(typeof wlDenyToast==='function'&&wlDenyToast())return;
   if(!delSet.size){showToast('삭제할 항목을 선택하세요.','warn');return}
   if(!(await wmConfirm(delSet.size+'건을 삭제합니다.\n이 작업은 되돌릴 수 없습니다.\n\n계속하시겠습니까?')))return;
   // 삭제 대상과 남은 레코드 분리

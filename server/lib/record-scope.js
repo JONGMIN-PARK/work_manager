@@ -1,7 +1,8 @@
 /**
  * record-scope.js — 업무일지(work_records) 역할별 조회/수정/삭제 범위(WHERE 조건) 단일 정의.
  *
- * 정책 (v10.1 "사용자별 업무일지 분리" 이후):
+ * 정책 (v13.481 — 공용): 모든 역할이 테넌트 전체를 봄. 쓰기는 관리자 + 지정된 담당자만(middleware/worklog-manager).
+ *   opts.forceSelf(?scope=self) 일 때만 본인이 올린 레코드로 좁힘. 아래는 예전(v10.1 ~ v13.480) 정책 기록:
  *   admin                              : 테넌트 전체
  *   manager / executive (부서 있음)     : 소속 부서 사용자들의 레코드 전체 (본인 포함)
  *   그 외 (member, 부서 없는 manager 등) : 본인 레코드만 (user_id = 본인)
@@ -30,8 +31,6 @@ function recordScope(req, opts) {
   opts = opts || {};
   var col = opts.alias ? function (c) { return opts.alias + '.' + c; } : function (c) { return c; };
   var idx = opts.startIdx || 1;
-  var role = req.user && req.user.role;
-  var deptId = (req.user && req.user.departmentId) || null;
   var tenantId = req.tenant && req.tenant.id;
   var userId = req.user && req.user.sub;
   var hasTenant = opts.hasTenantColumn !== false;
@@ -40,16 +39,9 @@ function recordScope(req, opts) {
   if (!hasTenant) {
     return { where: col('user_id') + ' = $' + idx, params: [userId], nextIdx: idx + 1, scope: 'self' };
   }
-  if (!forceSelf && role === 'admin') {
+  // v13.481 업무일지는 회사가 함께 보는 한 벌 — 역할과 상관없이 테넌트 전체 (넣기 · 지우기 권한은 middleware/worklog-manager)
+  if (!forceSelf) {
     return { where: col('tenant_id') + ' = $' + idx, params: [tenantId], nextIdx: idx + 1, scope: 'tenant' };
-  }
-  if (!forceSelf && (role === 'manager' || role === 'executive') && deptId) {
-    return {
-      where: col('tenant_id') + ' = $' + idx + ' AND ' + col('user_id') + ' IN (SELECT id FROM users WHERE department_id = $' + (idx + 1) + ')',
-      params: [tenantId, deptId],
-      nextIdx: idx + 2,
-      scope: 'department'
-    };
   }
   return {
     where: col('tenant_id') + ' = $' + idx + ' AND ' + col('user_id') + ' = $' + (idx + 1),

@@ -75,12 +75,24 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.tap('#mwAddTitle'); await wait(600);
     a = await st(); real = await page.evaluate(function () { return document.scrollingElement.scrollTop; });
     check(a.hdrTop === 0 && real === 0, '입력 칸을 눌러도 틀 그대로 ' + JSON.stringify([a.hdrTop, real]));
-    // PC 폭 — 예전 그대로(문서 굴림)
-    await page.setViewport({ width: 1400, height: 900 });
+    // PC 폭 — v13.480 PC 도 틀 고정: 머리 줄 · 하위 탭은 제자리, 화면만 굴림 (휴대폰 전용 탭 접기는 안 함)
+    await page.setViewport({ width: 1400, height: 700 });
     await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(800);
-    var pc = await page.evaluate(function () { return { shell: document.documentElement.classList.contains('wm-shell'), pos: getComputedStyle(document.body).position, y: (window.scrollTo(0, 0), window.scrollY) }; });
-    check(!pc.shell && pc.pos !== 'fixed', 'PC — 틀 고정 안 함(예전 그대로) ' + JSON.stringify(pc));
+    await page.evaluate(function () { setPage('project'); setMode('pipeline'); }); await wait(700);
+    var pc = await page.evaluate(function () {
+      var s = wmShellScroller(), pad = document.createElement('div'); pad.id = 'zzPad'; pad.style.height = '3000px'; s.appendChild(pad);
+      window.scrollTo(0, 900);
+      var c = document.documentElement.classList, h = document.querySelector('.hdr').getBoundingClientRect(), t = document.getElementById('modeTabsProj').getBoundingClientRect(), on = document.querySelector('#modeTabsProj .tab.on');
+      return { shell: c.contains('wm-shell'), pc: c.contains('wm-shell-pc'), off: c.contains('wm-tabs-off'), id: s.id, st: s.scrollTop, y: window.scrollY, doc: document.scrollingElement.scrollTop, hdr: Math.round(h.top), tabs: Math.round(t.top), tabsVis: t.height > 20 && t.top >= h.bottom - 1, on: on && on.dataset.m, scTop: Math.round(s.getBoundingClientRect().top), tabsBottom: Math.round(t.bottom), right: Math.round(s.getBoundingClientRect().right), iw: innerWidth };
+    });
+    check(pc.shell && pc.pc && pc.id === 'mPipeline', 'PC — 틀 고정 켜짐 ' + JSON.stringify(pc));
+    check(pc.st === 900 && pc.y === 900 && pc.doc === 0, 'PC — 화면만 굴림(문서는 그대로) ' + JSON.stringify([pc.st, pc.y, pc.doc]));
+    check(pc.hdr === 0 && pc.tabsVis && pc.on === 'pipeline' && pc.scTop >= pc.tabsBottom, 'PC — 굴려도 머리 줄 · 하위 탭(파이프라인 선택) 제자리 ' + JSON.stringify([pc.hdr, pc.tabs, pc.scTop]));
+    check(pc.right === pc.iw, 'PC — 굴림 막대가 창 오른쪽 끝 ' + JSON.stringify([pc.right, pc.iw]));
+    await page.evaluate(function () { var s = wmShellScroller(); s.scrollTop = 1500; }); await wait(400);
+    var pc2 = await page.evaluate(function () { var p = document.getElementById('zzPad'); var r = { off: document.documentElement.classList.contains('wm-tabs-off'), tabs: document.getElementById('modeTabsProj').offsetHeight > 20, ph: getComputedStyle(document.documentElement).getPropertyValue('--wm-ph'), ch: wmShellScroller().clientHeight }; if (p) p.remove(); return r; });
+    check(!pc2.off && pc2.tabs && parseInt(pc2.ph, 10) === pc2.ch, 'PC — 아래로 굴려도 탭 줄 안 접힘 · 화면 높이(--wm-ph) 맞음 ' + JSON.stringify(pc2));
     check(!errs.length, '페이지 오류 없음 ' + JSON.stringify(errs));
   } catch (e) { fail++; console.log('FAIL 예외', e && e.stack || e); }
   await browser.close();

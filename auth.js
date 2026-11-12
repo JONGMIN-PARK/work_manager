@@ -362,6 +362,10 @@ function isPL(projectId) {
 }
 
 /* 운영자 모드 여부 — admin 자동 또는 관리자가 부여한 사용자(operatorMode) */
+/* v13.481 📒 업무 데이터 담당 — 업무일지(파일 열기 · 수동 입력 · 고치기 · 지우기)는 관리자 + 관리자가 지정한 사용자만. 보기는 모두 (서버 middleware/worklog-manager) */
+function wmCanWorklog() {
+  return !!(currentUser && (currentUser.role === 'admin' || currentUser.worklogManager));
+}
 function isOperator() {
   return !!(currentUser && (currentUser.role === 'admin' || currentUser.operatorMode));
 }
@@ -588,7 +592,10 @@ function updateAuthUI() {
   }
   var verB = document.getElementById('wmVerBadge');
   if (verB) { verB.style.cursor = currentUser.role === 'admin' ? 'pointer' : 'default'; verB.title = currentUser.role === 'admin' ? '패치노트 보기' : ''; }
-  // 애니웍스 버튼 — 모든 사용자에게 표시
+  // v13.481 업무 데이터 — 담당자가 아니면 보기 전용 (넣기 · 고치기 · 지우기 단추 .wl-w 숨김)
+  document.body.classList.toggle('wl-ro', !wmCanWorklog());
+  if (typeof wlInfoLoad === 'function') wlInfoLoad();
+  // 애니웍스 버튼 — 담당자에게 표시 (나머지는 .wl-w 로 숨김)
   var awBtns = document.querySelectorAll('.awAdminBtn');
   for (var i = 0; i < awBtns.length; i++) {
     awBtns[i].style.display = '';
@@ -716,7 +723,7 @@ function renderUserTable(users, depts, isActive) {
 
   var html = '<table style="width:100%;border-collapse:collapse;font-size:13px">';
   html += '<tr style="border-bottom:1px solid var(--bd,#222C44);color:var(--t5,#6070A0)">';
-  html += '<th style="padding:8px;text-align:left">이름</th><th style="padding:8px;text-align:left">이메일</th><th style="padding:8px">역할</th><th style="padding:8px">부서</th>' + '<th style="padding:8px">최근 로그인</th><th style="padding:8px">작업</th></tr>';
+  html += '<th style="padding:8px;text-align:left">이름</th><th style="padding:8px;text-align:left">이메일</th><th style="padding:8px">역할</th><th style="padding:8px">부서</th>' + (isActive ? '<th style="padding:8px" title="📒 업무 관리의 업무일지 데이터를 넣고(파일 열기 · 수동 입력) 고치고 지울 수 있는 사람 — 보기는 모든 사용자. 관리자는 항상 가능">업무 데이터</th>' : '') + '<th style="padding:8px">최근 로그인</th><th style="padding:8px">작업</th></tr>';
 
   users.forEach(function (u) {
     html += '<tr style="border-bottom:1px solid var(--bd,#222C44)">';
@@ -724,6 +731,8 @@ function renderUserTable(users, depts, isActive) {
     html += '<td style="padding:8px;color:var(--t5,#6070A0)">' + eH(u.email) + '</td>';
     html += '<td style="padding:8px;text-align:center">' + (roleLabels[u.role] || u.role) + '</td>';
     html += '<td style="padding:8px;text-align:center">' + eH(deptMap[u.department_id] || '-') + '</td>';
+    if (isActive) html += '<td style="padding:8px;text-align:center">' + (u.role === 'admin' ? '<span title="관리자는 항상 가능" style="color:var(--t5)">항상</span>'
+      : '<input type="checkbox" class="ua-wlm" ' + (u.worklog_manager ? 'checked ' : '') + 'onchange="uaWorklog(\'' + u.id + '\',this)" title="업무 데이터 담당으로 지정" aria-label="업무 데이터 담당">') + '</td>';
     html += '<td style="padding:8px;text-align:center;color:var(--t5,#6070A0)">' + (u.last_login_at ? _wmKst(u.last_login_at, 10) : '-') + '</td>';
     html += '<td style="padding:8px;text-align:center">';
     if (isActive) {
@@ -740,6 +749,17 @@ function renderUserTable(users, depts, isActive) {
   return html;
 }
 
+/* v13.481 업무 데이터 담당 지정/해제 — 그 사람은 다음에 들어올 때(새로 고침)부터 적용 */
+async function uaWorklog(id, cb) {
+  var on = !!cb.checked; cb.disabled = true;
+  try {
+    await apiFetch('/api/users/' + encodeURIComponent(id) + '/worklog-manager', { method: 'PUT', body: JSON.stringify({ enabled: on }) });
+    showToast(on ? '✅ 업무 데이터 담당으로 지정했습니다 — 그 사용자는 새로 고치면 파일 열기 · 수정 · 삭제가 됩니다' : '업무 데이터 담당에서 뺐습니다 (보기만 가능)');
+    if (typeof wlInfoLoad === 'function') wlInfoLoad();
+  } catch (e) {
+    cb.checked = !on; showToast('저장 실패: ' + (e.message || '서버 오류'), 'error');
+  } finally { cb.disabled = false; }
+}
 function switchUserTab(tab) {
   var tabs = ['pending', 'active', 'inactive'];
   tabs.forEach(function (t) {

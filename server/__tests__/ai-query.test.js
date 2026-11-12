@@ -30,7 +30,7 @@ beforeEach(function () {
 afterEach(function () { console.error.mockRestore(); });
 
 describe('gatherContext — 권한 범위', function () {
-  test('일반 직원: 프로젝트는 가시성 조건, 업무일지는 본인 것만, 모든 조회에 회사 조건', async function () {
+  test('일반 직원: 프로젝트는 가시성 조건, 업무일지는 회사 전체(v13.481 공용), 모든 조회에 회사 조건', async function () {
     db.query.mockImplementation(async function (sql) {
       if (/FROM projects p WHERE/.test(sql)) return { rows: [{ id: 'p1', name: '설비 A', order_no: 'O-1', status: 'delayed', progress: 30, end_date: '2026-11-10', assignees: '["홍길동"]' }] };
       if (/SELECT name, COALESCE\(SUM\(hours\)/.test(sql)) return { rows: [{ name: '홍길동', hours: '12.5', days: 3, orders: 2 }] };
@@ -44,9 +44,9 @@ describe('gatherContext — 권한 범위', function () {
     expect(proj.sql).toMatch(/owner_id = \$\d+ OR p\.visibility = 'tenant'/);
     expect(proj.params).toContain('u-mem');
     var work = calls.filter(function (c) { return /FROM work_records/.test(c.sql); })[0];
-    expect(work.sql).toMatch(/user_id = \$2/);
-    expect(work.params.slice(0, 2)).toEqual([T, 'u-mem']);
-    expect(ctx.text).toMatch(/범위: 본인 것만/);
+    expect(work.sql).not.toMatch(/user_id/);
+    expect(work.params[0]).toBe(T);
+    expect(ctx.text).toMatch(/범위: 회사 전체/);
     expect(ctx.text).toMatch(/\[P1\] O-1 설비 A/);
     expect(ctx.sources[0]).toMatchObject({ key: 'P1', type: 'project', nav: { projectId: 'p1' } });
   });

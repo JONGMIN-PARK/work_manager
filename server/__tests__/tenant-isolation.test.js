@@ -139,7 +139,7 @@ describe('Tenant Isolation', function () {
     var uniqueContent = 'iso-work-' + Date.now();
     var createRes = await h.request(h.app)
       .post('/api/archives/records')
-      .set('Authorization', 'Bearer ' + memberA.token)
+      .set('Authorization', 'Bearer ' + adminA.token)
       .send({ date: '2026-04-07', name: 'TestWorker', content: uniqueContent, hours: 2 });
 
     expect(createRes.status).toBe(201);

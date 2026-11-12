@@ -1837,22 +1837,33 @@ function wrGetAll() {
 function wrCount() {
   return apiFetch('/api/archives/records/count').then(function (r) { return r.data.count; });
 }
-function _wrWrote(r) { invalidateArchiveCache(); return r; }
+function _wrWrote(r) { invalidateArchiveCache(); if (typeof wlInfoLoad === 'function') setTimeout(wlInfoLoad, 300); return r; }
+/* v13.481 업무 데이터는 담당자(관리자 + 지정된 사용자)만 씀 — 아니면 서버에 보내지 않고 바로 거절 (서버도 403) */
+function _wrDeny() {
+  if (typeof wmCanWorklog !== 'function' || wmCanWorklog()) return null;
+  var e = new Error('보기 전용입니다 — 업무 데이터는 관리자와 지정된 담당자만 넣거나 지울 수 있습니다.'); e.status = 403;
+  return Promise.reject(e);
+}
 function wrBulkPut(records) {
+  var d = _wrDeny(); if (d) return d;
   return apiFetch('/api/archives/records/bulk', { method: 'POST', body: JSON.stringify({ records: records }) }).then(_wrWrote);
 }
 // 바뀐 것만 한 번에 (v13.258 — 파일 병합용). 응답 inserted: 넣은 행(새 id 포함, 화면 레코드 모양으로)
 function wrSync(insert, update, deleteIds) {
+  var d = _wrDeny(); if (d) return d;
   return apiFetch('/api/archives/records/sync', { method: 'POST', timeoutMs: 120000, body: JSON.stringify({ insert: insert, update: update, deleteIds: deleteIds }) })
-    .then(function (r) { invalidateArchiveCache(); return { inserted: ((r && r.inserted) || []).map(_toWrRecord), updated: (r && r.updated) || 0, deleted: (r && r.deleted) || 0 }; });
+    .then(function (r) { _wrWrote(); return { inserted: ((r && r.inserted) || []).map(_toWrRecord), updated: (r && r.updated) || 0, deleted: (r && r.deleted) || 0 }; });
 }
 function wrClear() {
+  var d = _wrDeny(); if (d) return d;
   return apiFetch('/api/archives/records', { method: 'DELETE' }).then(_wrWrote);
 }
 function wrUpdateRecords(records) {
+  var d = _wrDeny(); if (d) return d;
   return apiFetch('/api/archives/records/batch', { method: 'PATCH', body: JSON.stringify({ updates: records }) }).then(_wrWrote);
 }
 function wrDeleteRecords(remainingRecords, deletedIds) {
+  var d = _wrDeny(); if (d) return d;
   if (deletedIds && deletedIds.length) {
     return apiFetch('/api/archives/records/batch', { method: 'DELETE', body: JSON.stringify({ ids: deletedIds }) }).then(_wrWrote);
   }

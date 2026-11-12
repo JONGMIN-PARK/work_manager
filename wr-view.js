@@ -160,6 +160,7 @@ function onCellEdit(cell){
 }
 
 function togEdit(){
+  if(typeof wlDenyToast==='function'&&wlDenyToast())return;   // v13.481 담당자만
   editMode=!editMode;
   delSet=new Set();
   document.getElementById('editTogBtn').textContent=editMode?'🔒 편집종료':'✏️ 편집모드';

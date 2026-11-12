@@ -13,6 +13,9 @@
   var dY = Object.getOwnPropertyDescriptor(window, 'scrollY') || Object.getOwnPropertyDescriptor(Window.prototype, 'scrollY');
   function realY() { try { return dY && dY.get ? dY.get.call(window) : 0; } catch (e) { return 0; } }
   function on() { return docEl.classList.contains('wm-shell'); }
+  /* v13.480 🖥 PC 도 틀 고정(html.wm-shell-pc) — 머리 줄(대메뉴) · 하위 탭은 제자리, 그 아래 화면만 굴림. 휴대폰 전용 동작(키보드 · 탭 줄 접기)은 PC 에선 안 함 */
+  function pcOn() { return docEl.classList.contains('wm-shell-pc'); }
+  var printing = false;
   /** 지금 보이는 화면(굴리는 칸) — 없으면 null */
   function scroller() {
     var c = document.querySelector('.con'); if (!c) return null;
@@ -61,15 +64,24 @@
   };
 
   function apply() {
-    var want = !!(mq && mq.matches) && !window.WM_SOLO && !window.WM_PDWIN;
+    var want = !window.WM_SOLO && !window.WM_PDWIN && !printing, pc = want && !(mq && mq.matches);
     if (want !== on()) docEl.classList.toggle('wm-shell', want);
-    if (want) fit(); else { docEl.style.removeProperty('--wm-vh'); docEl.classList.remove('wm-kb', 'wm-tabs-off'); }
+    if (pc !== pcOn()) docEl.classList.toggle('wm-shell-pc', pc);
+    if (!want || pc) { docEl.style.removeProperty('--wm-vh'); docEl.classList.remove('wm-kb', 'wm-tabs-off'); }
+    if (want) fit();
+    pageH();
+  }
+  /* PC — 화면(굴리는 칸) 높이를 --wm-ph 로 알려 줌: 옆에 붙어 따라오는 칸(.mw-side · .cal-side · .wr-src)이 창 높이(100vh) 대신 이 높이에 맞춤 */
+  function pageH() {
+    if (!pcOn()) { docEl.style.removeProperty('--wm-ph'); return; }
+    var s = scroller(); if (s && s.clientHeight > 0) docEl.style.setProperty('--wm-ph', s.clientHeight + 'px');
   }
   /* 틀 높이 = 지금 보이는 높이(키보드가 올라오면 그만큼 줄어듦) · iOS 가 문서를 밀어 올렸으면 되돌림 */
   /* v13.470 평소엔 틀을 화면 위아래 끝에 그대로 붙임(top:0 · bottom:0) — 홈 화면 바로가기(설치형)에서 아이폰이 '보이는 높이' 를
      실제 화면보다 짧게 알려 줘 맨 아래(둥근 모서리)까지 안 닿던 것. 키보드가 올라왔을 때만(html.wm-kb) 보이는 높이로 줄임 */
   function fit() {
     if (!on()) return;
+    if (pcOn()) { if (realY() > 0) realScrollTo(0, 0); pageH(); return; }
     var vv = window.visualViewport, h = vv ? vv.height : window.innerHeight;
     var full = Math.max(window.innerHeight || 0, docEl.clientHeight || 0);
     var a = document.activeElement, typing = !!(a && a.matches && a.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]),textarea,[contenteditable="true"]'));
@@ -88,6 +100,7 @@
     tAcc = 0; tLock = Date.now() + 250;
   }
   function tabsOnScroll(s) {
+    if (pcOn()) return;
     var y = s.scrollTop;
     if (s !== tS) { tS = s; tY = y; tAcc = 0; tabsSet(false, null); return; }
     var d = y - tY; tY = y; if (!d || Date.now() < tLock) return;
@@ -121,7 +134,16 @@
   // 화면이 바뀌었으면(머리 줄 단추 · 알림 · 바로 가기) 탭 줄을 다시 — 접힌 채 남아 다른 화면으로 못 가는 일이 없게
   function tabsCheck() { if (!on() || !docEl.classList.contains('wm-tabs-off')) return; var s = scroller(); if (s !== tS || !s || s.scrollTop < 24 || s.scrollHeight - s.clientHeight < 120) { tS = s; tY = s ? s.scrollTop : 0; tabsSet(false, null); } }
   document.addEventListener('click', function () { setTimeout(tabsCheck, 60); setTimeout(tabsCheck, 500); }, true);
-  setInterval(tabsCheck, 1500);
+  setInterval(function () { tabsCheck(); pageH(); }, 1500);
+  document.addEventListener('click', function () { setTimeout(pageH, 80); }, true);
+  // 인쇄 — 틀을 풀어 문서 전체가 나오게
+  window.addEventListener('beforeprint', function () { printing = true; apply(); });
+  window.addEventListener('afterprint', function () { printing = false; apply(); });
+  document.addEventListener('DOMContentLoaded', function () {
+    pageH(); if (!window.ResizeObserver) return;
+    var ro = new ResizeObserver(pageH), c = document.querySelector('.con'); if (!c) return;
+    for (var i = 0; i < c.children.length; i++) if (/^m[A-Z]/.test(c.children[i].id || '')) ro.observe(c.children[i]);
+  });
   if (mq) { if (mq.addEventListener) mq.addEventListener('change', apply); else if (mq.addListener) mq.addListener(apply); }
   apply();
   var soon = function () { fit(); setTimeout(fit, 120); setTimeout(fit, 400); };
@@ -132,7 +154,7 @@
   document.addEventListener('focusout', function () { setTimeout(fit, 100); setTimeout(fit, 450); });
   // 입력 칸을 누르면 — 키보드가 올라온 뒤(틀 높이가 줄어든 뒤) 그 칸이 보이게 화면 안에서만 굴림
   document.addEventListener('focusin', function (e) {
-    var t = e.target; if (!on() || !t || !t.matches || !t.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]),textarea,select,[contenteditable="true"]')) return;
+    var t = e.target; if (!on() || pcOn() || !t || !t.matches || !t.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]),textarea,select,[contenteditable="true"]')) return;
     setTimeout(function () {
       fit();
       var s = scroller(); if (!s || !s.contains(t) || document.activeElement !== t) return;
