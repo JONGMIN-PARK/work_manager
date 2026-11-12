@@ -172,6 +172,7 @@ function mondayOf(d) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTC
     await page.keyboard.press('Enter');
     await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-title')).some(function (x) { return x.textContent === '할일화면 끝낸 일'; }) && !document.querySelector('#mMyWork .is-pending'); });
     await page.evaluate(function () { var g = document.querySelector('#mMyWork [data-grp="later"]'); if (g && g.classList.contains('mw-folded')) g.querySelector('[data-fold]').click(); });   // v13.433 마감 없음 → 나중에 묶음 (처음엔 접힘)
+    await until(function () { return Array.from(document.querySelectorAll('#mMyWork .mw-row .mw-title')).some(function (x) { return x.textContent === '할일화면 끝낸 일'; }); });   // 묶음을 펴고 다시 그리는 사이에 찾으면 줄이 없음
     var dk = (await rowOf('할일화면 끝낸 일')).key;
     await page.evaluate(function (k) { var g = document.querySelector('#mMyWork [data-grp="later"]'); if (g && g.classList.contains('mw-folded')) g.querySelector('[data-fold]').click(); document.querySelector('#mMyWork input[data-done="' + k + '"]').click(); }, dk);
     check(await until(function () { var u = document.getElementById('mwUndo'); return u && /완료/.test(u.textContent); }), '완료 → 되돌리기 알림');

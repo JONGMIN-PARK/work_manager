@@ -1,7 +1,7 @@
 /* wm-state.js — 테마·폰트 적용(파싱 시점에 실행) · 주간 분석 전역 상태 · 공용 헬퍼(fD/eH/eA/pNormDate)
  * 업무일지_분석기.html 인라인 <script> 에서 분리. 동기 <script src> 로 원래 자리·순서대로 로드(defer/async 금지 — 최상위 let/function 을 다른 파일이 전역으로 공유하고, 로드 시점 코드의 의존 순서가 고정돼 있음). */
 /* ═══ THEME (TH → config.js) ═══ */
-let cTh='auto';
+let cTh='focus';
 function gSysTh(){return matchMedia('(prefers-color-scheme:dark)').matches?'nova':'pearl'}   // v13.455 시스템 자동 = 대표 테마 (예전 midnight · light)
 function aTh(id,anim){
   var go=function(){cTh=id;document.documentElement.setAttribute('data-theme',id==='auto'?gSysTh():id);rTh();lsSet('wa-theme',id);if(_wmFontReady)aFnt(cFnt)};
@@ -26,7 +26,10 @@ function rTh(){
   bar.innerHTML=html+(g!==null?'</div>':'');
 }
 function wmThPeek(id){var v=id||cTh;document.documentElement.setAttribute('data-theme',v==='auto'?gSysTh():v)}
-var _th=lsGet('wa-theme');if(_th)cTh=_th
+var _th=lsGet('wa-theme');
+/* v13.463 기본 = 포커스 테마 · 맑은 고딕 — 예전엔 처음 열 때 자동 · 노토가 그대로 저장돼 버려 고른 것과 구분이 안 됨 → 자동 · 노토는 한 번 옮김 */
+if(!lsGet('wa-def463')){ if(!_th||_th==='auto')_th='focus'; var _f0=lsGet('wa-font'); if(!_f0||_f0==='noto')lsSet('wa-font','malgun'); lsSet('wa-def463','1'); }
+if(_th)cTh=_th
 aTh(cTh);matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(cTh==='auto')aTh('auto')});
 
 /* ═══ FONT (FONTS → config.js) — 동적 Google Fonts 로드 + body 폰트 변경 ═══ */
@@ -57,6 +60,7 @@ function aFnt(id){
   document.documentElement.style.setProperty('--app-font', f.family + ',-apple-system,sans-serif');
   lsSet('wa-font', cFnt);
   rFnt();
+  if(_wmFontReady){ var ns=_wmFsOf(cFnt); if(ns!==_wmFs.s){ _wmFs.s=ns; _wmFsApply(); } rFsz(); }   // v13.463 글씨체마다 글자 크기 따로
 }
 function rFnt(){
   var bar=document.getElementById('fontBar');if(!bar)return;
@@ -79,29 +83,35 @@ function rFnt(){
   });
   bar.innerHTML = html;
 }
-var _fnt=lsGet('wa-font');if(_fnt)aFnt(_fnt);else aFnt('noto');
+var _fnt=lsGet('wa-font');if(_fnt)aFnt(_fnt);else aFnt('malgun');
 _wmFontReady=true;
-/* v13.343 작은 글자 키우기 — FHD 에서 9~10px 한글은 획이 겹쳐 뭉개짐. 켜면 10.5px 이하 글자를 모두 11px 로.
-   style.css · 화면이 넣은 <style> 의 규칙을 훑어 같은 선택자로 11px 규칙을 만들어 맨 뒤에 붙이고,
-   HTML 에 직접 쓴 style="font-size:10px" 는 속성 선택자로 덮는다. 나중에 붙는 <style> 도 따라 다시 만든다 */
-var _wmCrispRE=/^(7|7\.5|8|8\.5|9|9\.5|10|10\.5)px$/, _wmCrispT=0, _wmCrispObs=null;
+/* v13.343 작은 글자 키우기 + v13.463 글자 크기(전체 %, 글씨체마다 따로 기억)
+   화면 전체 확대(zoom)는 100vh 칸들이 비율만큼 화면 밖으로 넘쳐서 못 씀 → 글자 크기만 바꿈:
+   style.css · 화면이 넣은 <style> 의 px 글자 크기 규칙을 훑어 같은 선택자로 (작은 글자 11px →) × 비율 규칙을 만들어 맨 뒤에 붙이고,
+   HTML 에 직접 쓴 style="font-size:12px" 는 속성 선택자로 덮는다. 나중에 붙는 <style> 도 따라 다시 만든다 */
+var WM_FSZ=[0.85,0.9,1,1.1,1.2,1.3,1.4,1.5];
+var _wmFs={crisp:false,s:1}, _wmCrispT=0, _wmCrispObs=null;
+function _wmFsOf(fid){ var v=parseFloat(lsGet('wa-fsz:'+fid)); return v>=0.8&&v<=1.6?v:1; }
+function _wmFsPx(v){ var n=v; if(_wmFs.crisp&&n>=7&&n<=10.5)n=11; return Math.round(n*_wmFs.s*2)/2; }
 function _wmCrispCss(){
-  var out=[];
+  var out=[], RE=/^(\d+(?:\.\d+)?)px$/;
   function walk(rules){
     for(var i=0;i<rules.length;i++){
       var r=rules[i];
       if(r.type===4 && r.cssRules){ var sub=[]; var keep=out; out=sub; walk(r.cssRules); out=keep; if(sub.length) out.push('@media '+r.conditionText+'{'+sub.join('')+'}'); }
       else if(r.cssRules && r.type!==1){ walk(r.cssRules); }   // @supports · @layer 등은 조건 없이 안쪽만
-      else if(r.style && r.selectorText && _wmCrispRE.test(r.style.fontSize)) out.push(r.selectorText+'{font-size:11px}');
+      else if(r.style && r.selectorText && r.style.fontSize){
+        var m=RE.exec(r.style.fontSize); if(!m) continue;
+        var v=+m[1], t=_wmFsPx(v); if(t!==v) out.push(r.selectorText+'{font-size:'+t+'px'+(r.style.getPropertyPriority('font-size')?'!important':'')+'}');
+      }
     }
   }
   for(var i=0;i<document.styleSheets.length;i++){
     var sh=document.styleSheets[i]; if(sh.ownerNode && sh.ownerNode.id==='wmCrispCss') continue;
     try{ walk(sh.cssRules); }catch(e){}   // 다른 곳(Google Fonts 등) 스타일시트는 읽을 수 없음 — 건너뜀
   }
-  var sz=['7','7.5','8','8.5','9','9.5','10','10.5'], at=[];
-  sz.forEach(function(n){ at.push('[style*="font-size:'+n+'px"]','[style*="font-size: '+n+'px"]'); });
-  out.push(at.join(',')+'{font-size:11px!important}');
+  for(var v=7;v<=40;v+=0.5){ var t=_wmFsPx(v); if(t!==v) out.push('[style*="font-size:'+v+'px"],[style*="font-size: '+v+'px"]{font-size:'+t+'px!important}'); }
+  if(_wmFs.s!==1) out.unshift('html{font-size:'+(16*_wmFs.s)+'px}');
   return out.join('\n');
 }
 function _wmCrispBuild(){
@@ -110,13 +120,12 @@ function _wmCrispBuild(){
   el.textContent=_wmCrispCss();
   document.head.appendChild(el);   // 늘 맨 뒤 — 같은 무게 규칙끼리는 뒤가 이김
 }
-function aCrisp(on){
-  on=!!on;
-  document.documentElement.toggleAttribute('data-crisp',on);
-  lsSet('wa-crisp',on?'1':'');
-  var c=document.getElementById('crispChk'); if(c) c.checked=on;
+function _wmFsApply(){
+  document.documentElement.toggleAttribute('data-crisp',_wmFs.crisp);
+  if(_wmFs.s!==1)document.documentElement.setAttribute('data-fsz',String(_wmFs.s));else document.documentElement.removeAttribute('data-fsz');
   var el=document.getElementById('wmCrispCss');
-  if(!on){ if(el) el.remove(); if(_wmCrispObs){_wmCrispObs.disconnect();_wmCrispObs=null} return; }
+  if(!_wmFs.crisp && _wmFs.s===1){ if(el) el.remove(); if(_wmCrispObs){_wmCrispObs.disconnect();_wmCrispObs=null} return; }
+  if(document.readyState==='loading') return;   // 부팅 — DOMContentLoaded 에서 다시
   _wmCrispBuild();
   if(!_wmCrispObs && window.MutationObserver){   // 화면이 나중에 넣는 <style>/<link> 도 반영
     _wmCrispObs=new MutationObserver(function(ms){
@@ -128,7 +137,34 @@ function aCrisp(on){
     _wmCrispObs.observe(document.head,{childList:true});
   }
 }
-if(lsGet('wa-crisp')==='1'){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){aCrisp(true)}); else aCrisp(true); window.addEventListener('load',function(){ if(document.getElementById('wmCrispCss')) _wmCrispBuild(); }); }
+function aCrisp(on){
+  _wmFs.crisp=!!on;
+  lsSet('wa-crisp',_wmFs.crisp?'1':'');
+  var c=document.getElementById('crispChk'); if(c) c.checked=_wmFs.crisp;
+  _wmFsApply();
+}
+/* 글자 크기 — 지금 글씨체 기준(글씨체마다 따로 기억: 맑은 고딕은 같은 px 에서 작아 보임) */
+function aFsz(s){
+  s=Math.max(WM_FSZ[0],Math.min(WM_FSZ[WM_FSZ.length-1],Math.round((+s||1)*100)/100));
+  _wmFs.s=s; lsSet('wa-fsz:'+cFnt,s===1?'':String(s));
+  rFsz(); _wmFsApply();
+}
+function aFszStep(d){
+  var i=0; WM_FSZ.forEach(function(v,k){ if(Math.abs(v-_wmFs.s)<Math.abs(WM_FSZ[i]-_wmFs.s)) i=k; });
+  aFsz(WM_FSZ[Math.max(0,Math.min(WM_FSZ.length-1,i+d))]);
+}
+function rFsz(){
+  var v=document.getElementById('fszVal'); if(!v) return;
+  v.textContent=Math.round(_wmFs.s*100)+'%';
+  var mi=document.getElementById('fszMinus'), pl=document.getElementById('fszPlus'), rs=document.getElementById('fszReset'), nm=document.getElementById('fszFont');
+  if(mi) mi.disabled=_wmFs.s<=WM_FSZ[0]; if(pl) pl.disabled=_wmFs.s>=WM_FSZ[WM_FSZ.length-1]; if(rs) rs.hidden=_wmFs.s===1;
+  var f=(typeof FONTS!=='undefined'?FONTS:[]).find(function(x){return x.id===cFnt});
+  if(nm) nm.textContent=f?f.l.replace(/\s*\(.*\)$/,''):'';
+  var g=v.parentNode; if(g&&f) g.title='화면 전체 글자 크기 — '+nm.textContent+' 기준 · 글씨체마다 따로 기억';
+}
+_wmFs.crisp=lsGet('wa-crisp')==='1'; _wmFs.s=_wmFsOf(cFnt);
+if(_wmFs.crisp||_wmFs.s!==1){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_wmFsApply); else _wmFsApply(); window.addEventListener('load',function(){ if(document.getElementById('wmCrispCss')) _wmCrispBuild(); }); }
+document.addEventListener('DOMContentLoaded',function(){ rFsz(); var c=document.getElementById('crispChk'); if(c) c.checked=_wmFs.crisp; });
 /* 헤더 · 툴바 펼침 메뉴(.hdr-pop) — 한 번에 하나만, 바깥 누르기 · Esc 로 닫음 (v13.287) */
 var _wmPopOpen=null;   // 지금 펼친 메뉴 id — 필터(.wm-flt)는 화면을 다시 그려도 다시 펼침(wmHdrPopRestore)
 function wmHdrPopClose(except){

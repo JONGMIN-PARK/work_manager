@@ -127,8 +127,8 @@ function _tryRefresh() {
 var _refreshShared = !!_refreshToken;   // 저장소(localStorage)에 두고 창끼리 같이 쓰는 토큰인가 ('로그인 유지' 를 켠 경우)
 function _wmAuthPeer() {
   try {
-    var s = window.WM_SOLO; if (!s) return null;
-    var m = s.embed ? window.parent : window.opener;
+    var s = window.WM_SOLO; if (!s && !window.WM_PDWIN) return null;   // v13.464 프로젝트 창(?pd=)도 본 창 로그인
+    var m = s && s.embed ? window.parent : window.opener;
     return m && m !== window && !m.closed && typeof m._tryRefresh === 'function' ? m : null;
   } catch (e) { return null; }
 }

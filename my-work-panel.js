@@ -60,6 +60,26 @@ function mwPanelClose() {
   _mwpMarkRow();
 }
 function mwPanelIsOpen() { return !!_mwp.key; }
+/* v13.465 Esc · 바깥 누르기로 닫기 — 예전엔 패널 안을 한 번 눌러야 Esc 가 먹고(목록 단축키 처리기는 달력 · 타임라인 보기와
+   다른 입력 칸에선 Esc 를 건너뜀) 바깥을 눌러도 안 닫혔음. 위에 다른 창 · 메뉴가 떠 있으면 그쪽이 먼저 */
+function _mwpOverlayUp() { return !!document.querySelector('.wa-modal-overlay,.wmd-ov,.mw-pmenu:not([hidden]),.hdr-pop.open'); }
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape' || e.isComposing || e.keyCode === 229 || !mwPanelIsOpen()) return;
+  var p = document.getElementById('mwPanel'); if (!p || !p.classList.contains('on')) return;
+  if (_mwpOverlayUp()) return;
+  e.stopPropagation(); e.preventDefault();
+  var a = document.activeElement; if (a && p.contains(a) && a.blur) a.blur();
+  mwPanelClose();
+}, true);
+document.addEventListener('pointerdown', function (e) {
+  if (e.button !== 0 || !mwPanelIsOpen()) return;
+  var p = document.getElementById('mwPanel'); if (!p || !p.classList.contains('on')) return;
+  var t = e.target; if (!t || !t.closest || !t.isConnected) return;
+  if (p.contains(t) || _mwpOverlayUp()) return;
+  // 다른 할 일(줄 · 칸 · 달력 · 타임라인)을 누르면 닫지 않고 그 할 일로 바뀜 (누르기 처리기가 엶)
+  if (t.closest('.mw-row[data-key],[data-qk],[data-key],[data-ck],[data-jopen],.tl-bar,.mw-due-btn,.wa-toast')) return;
+  mwPanelClose();
+}, true);
 /** 목록을 새로 받은 뒤 — 같은 항목으로 다시 이어 붙임 (입력 중이면 칸은 그대로) */
 function mwPanelSync() {
   if (!_mwp.key) { _mwpMarkRow(); return; }

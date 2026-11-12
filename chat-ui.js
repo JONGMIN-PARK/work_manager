@@ -114,7 +114,7 @@ document.addEventListener('visibilitychange', function () {
 window.addEventListener('pageshow', function (e) { if (e.persisted) _cxsRevive(true); });   // 아이폰 — 뒤로 가기 캐시에서 되살아남
 if (navigator.connection && navigator.connection.addEventListener) navigator.connection.addEventListener('change', function () { _cxsRevive(true); });   // 와이파이 ↔ 데이터
 /* 로그인되면 붙고, 나가면 끊고 */
-setInterval(function () { if (_cxMe()) { if (!CXS.on) chatStreamStart(); } else if (CXS.on) chatStreamStop(); }, 2000);
+setInterval(function () { if (window.WM_PDWIN) return; if (_cxMe()) { if (!CXS.on) chatStreamStart(); } else if (CXS.on) chatStreamStop(); }, 2000);   // v13.464 프로젝트 창은 메신저 연결 안 함 (소리 두 번)
 
 function _cxVisibleRoom(id) {
   var page = document.getElementById('mMessages');

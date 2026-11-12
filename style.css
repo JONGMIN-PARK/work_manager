@@ -7943,3 +7943,34 @@ html.wm-tbo .pd-panel .pd-sticky{padding-right:max(var(--pdx,20px),calc(var(--wm
 /* v13.462 메신저 좁은 창 — 목록 위 ← 이전 화면 (메신저에 오기 전 화면으로) */
 .cx-side-back{display:none!important}
 @media (max-width:760px){html:not(.wm-solo) .cx-side-back{display:inline-flex!important;margin-right:-2px}}
+/* v13.463 🎨 글자 크기 — 화면 설정 › 글씨체 위 (−/+ · 지금 글씨체 기준) */
+.hdr-fsz{display:flex;align-items:center;gap:4px;padding:5px 6px 5px 10px;margin:0 0 6px;border-radius:6px;background:var(--bg-i);font-size:12px;color:var(--t3)}
+.hdr-fsz-l{flex:1;font-weight:600;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-fsz-l em{font-style:normal;font-weight:400;color:var(--t5);font-size:11px;margin-left:2px}
+.hdr-fsz button{min-width:34px;height:28px;padding:0 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg-p);color:var(--t2);font-weight:700;font-size:12px;cursor:pointer}
+.hdr-fsz button:hover:not(:disabled){border-color:var(--ac);color:var(--ac)}
+.hdr-fsz button:disabled{opacity:.4;cursor:default}
+.hdr-fsz b{min-width:42px;text-align:center;font-variant-numeric:tabular-nums;color:var(--t1)}
+.hdr-fsz .hdr-fsz-r{min-width:0;font-weight:500;font-size:11px;color:var(--t4)}
+.hdr-fsz-l em{display:none}
+/* v13.464 📁 프로젝트 상세 새 창(?pd=) — 머리 · 탭 · 뒤 화면은 숨기고 상세만 창 가득 */
+html.wm-pdwin .hdr,html.wm-pdwin #pageTabs,html.wm-pdwin .con,html.wm-pdwin #projDetailBackdrop{display:none!important}
+html.wm-pdwin .pd-panel{top:0!important;left:0!important;width:auto!important;max-width:none!important;animation:none!important}
+html.wm-pdwin .pd-maxbtn,html.wm-pdwin .pd-popbtn,html.wm-pdwin .pd-resizer,html.wm-pdwin .pd-more-lbl,html.wm-pdwin .pd-size,html.wm-pdwin .pd-more-sep{display:none!important}
+.pd-popbtn{padding:2px 8px!important;font-size:13px;line-height:1}
+@media (max-width:900px),(pointer:coarse){.pd-popbtn{display:none!important}}   /* PC 에서만 */
+.pdw-empty{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);color:var(--t3);font-size:14px;text-align:center;z-index:1}
+.pdw-empty-a{display:flex;gap:8px;justify-content:center;margin-top:12px}
+/* v13.466 로그인 화면 입력 지연 — 뒤에서 계속 움직이는 번짐 배경(화면 140% 에 blur 80px · 섞기 3겹)을 유리 카드(backdrop-filter)가
+   매 프레임 다시 흐리게 계산해, 글자를 칠 때마다 화면 전체를 다시 그렸음(내장 그래픽 · PC 앱에서 글자가 밀림).
+   → 번짐 덩어리는 멈춘 그라데이션으로(필터 없음) · 카드는 유리 효과 없이 거의 불투명 · 로고는 따로 층으로 */
+#loginOverlay.wm-login{background:
+  radial-gradient(38vmax 38vmax at 18% 20%,color-mix(in srgb,var(--ac) 16%,transparent) 0%,transparent 70%),
+  radial-gradient(40vmax 40vmax at 86% 46%,color-mix(in srgb,var(--stat-purple,#8B5CF6) 13%,transparent) 0%,transparent 70%),
+  radial-gradient(42vmax 42vmax at 44% 96%,color-mix(in srgb,var(--stat-cyan,#06B6D4) 11%,transparent) 0%,transparent 70%),
+  radial-gradient(120% 90% at 50% 38%,color-mix(in srgb,var(--ac) 10%,var(--bg)) 0%,var(--bg) 62%)!important}
+#loginOverlay.wm-login .wm-sp-aurora{display:none}
+#loginOverlay.wm-login .wm-sp-grid{animation:none}
+#loginOverlay.wm-login .wm-li-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:color-mix(in srgb,var(--bg-p) 96%,transparent)}
+#loginOverlay.wm-login .wm-li-logo{will-change:transform}
+#loginOverlay.wm-login .wm-li-f input{transition:border-color .15s,box-shadow .15s}

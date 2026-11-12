@@ -8,7 +8,7 @@ var WM_LAST_VIEW='wm-last-view';
 var _wmNavMoved=false;      // 시작 후 사용자가(또는 알림 링크 등이) 이미 화면을 옮겼으면 복원하지 않음
 var _wmViewRestoring=false;
 function _wmSaveView(){
-  if(window.WM_SOLO)return;  // 떼어 낸 대화 창은 본 창의 '마지막 화면' 을 바꾸지 않음 (v13.447)
+  if(window.WM_SOLO||window.WM_PDWIN)return;  // 떼어 낸 대화 창 · 프로젝트 창은 본 창의 '마지막 화면' 을 바꾸지 않음 (v13.447 · v13.464)
   if(!_wmViewRestoring)_wmNavMoved=true;
   lsSetJSON(WM_LAST_VIEW,{page:curPage,mode:curMode});
 }

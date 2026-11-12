@@ -194,7 +194,8 @@ async function _postAuthInit(){
   finally{
     try{_wmFinishLoading(ctx);_wmBindUploadUI();
       // 데이터를 새로 받은 뒤 마지막으로 보던 화면으로 (그 화면도 처음 그리므로 내용은 새로 받음)
-      if(typeof wmRestoreLastView==='function')wmRestoreLastView();
+      if(window.WM_PDWIN){if(typeof wmPdWinInit==='function')wmPdWinInit()}   // v13.464 프로젝트 창 — 그 상세만
+      else if(typeof wmRestoreLastView==='function')wmRestoreLastView();
       // 텔레그램 [🌐 웹에서 열기] — ?go=issue:id 면 마지막 화면 대신 그 항목 (telegram-ui.js, v13.305)
       if(_wmGoParam&&typeof wmDeepGo==='function'){var _g=_wmGoParam;_wmGoParam=null;setTimeout(function(){wmDeepGo(_g)},400)}
     }catch(e){console.error('[init finish]',e)}
@@ -202,7 +203,7 @@ async function _postAuthInit(){
     // 엑셀 · PDF · 워드 · 캡처 도구는 첫 화면 뒤 한가할 때 받아 둠 (v13.310, ui-helpers.js)
     if(typeof wmLibsIdle==='function')setTimeout(wmLibsIdle,1500);
     // 📢 공지사항 — 안 읽은 수 · 안 읽은 '중요' 공지 창 (v13.444, notices.js)
-    if(typeof wmNoticeInit==='function')setTimeout(wmNoticeInit,1200);
+    if(typeof wmNoticeInit==='function'&&!window.WM_PDWIN)setTimeout(wmNoticeInit,1200);
   }
 }
 

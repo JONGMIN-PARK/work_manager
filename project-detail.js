@@ -116,8 +116,9 @@ function _pdDetailHeaderHtml(proj, stInfo) {
       '</span>' +
     '</div>' +
     '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+      (typeof wmPdPop === 'function' ? '<button class="btn btn-g btn-s pd-popbtn" onclick="wmPdPop(\'' + idA + '\')" title="새 창으로 — 다른 모니터에 띄워 두고 본 창은 따로 (PC)" aria-label="새 창으로">↗</button>' : '') +
       '<button class="btn btn-g btn-s pd-maxbtn" onclick="pdTogglePanelMax()" title="화면 가득 ↔ 옆 패널 (Ctrl+Shift+F)" aria-label="화면 가득 · 옆 패널 바꾸기"><span class="pd-ic-max">⛶</span><span class="pd-ic-side">◧</span></button>' +
-      '<button class="btn btn-g btn-s" onclick="' + _PD_CLOSE_JS + '" title="닫기 (Esc)">✕</button>' +
+      '<button class="btn btn-g btn-s" onclick="' + (typeof pdCloseBtn === 'function' ? 'pdCloseBtn()' : _PD_CLOSE_JS) + '" title="' + (window.WM_PDWIN ? '창 닫기' : '닫기 (Esc)') + '">✕</button>' +
     '</div>' +
   '</div>';
 
@@ -483,7 +484,7 @@ function _pdBindPanelResize(panel) {
 // Esc = 상세 패널 닫기 (위에 모달이 떠 있으면 모달 쪽이 먼저)
 if (typeof document !== 'undefined' && document.addEventListener) {
   document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Escape' || !document.getElementById('projDetailPanel')) return;
+    if (e.key !== 'Escape' || !document.getElementById('projDetailPanel') || window.WM_PDWIN) return;   // 프로젝트 창은 Esc 로 닫지 않음
     if (document.querySelector('.wa-modal-overlay')) return;
     pdCloseDetail();
   });
