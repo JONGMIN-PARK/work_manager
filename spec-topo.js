@@ -61,9 +61,17 @@ var TOPO_KINDS = {
   robot:     ['로봇',                 'ctrl',   '🦾', '로봇',           'IP',           []],
   camera:    ['카메라',               'vision', '📷', '카메라',         'IP · 포트',    []],
   iomod:     ['리모트 IO 모듈',       'io',     '🔢', '리모트 IO',      '국번',         []],
+  light:     ['조명 컨트롤러',        'vision', '💡', '조명 컨트롤러',  '채널 · COM',   []],   // v13.479 자주 쓰는 종류 추가
+  barcode:   ['바코드 리더',          'vision', '▥', '바코드 리더',    'IP · COM',     []],
+  laser:     ['레이저 · 변위 센서',   'vision', '✴', '변위 센서',      'IP · COM',     []],
+  sensor:    ['센서',                 'io',     '◉', '센서',           '채널',         []],
+  valve:     ['밸브 · 실린더',        'io',     '⇵', '솔레노이드 밸브', '채널',        []],
+  lamp:      ['타워 램프 · 부저',     'io',     '🚨', '타워 램프',      '채널',         []],
+  hmi:       ['터치 패널 · HMI',      'display','▣', '터치 패널',      'IP · COM',     []],
+  power:     ['전원 · UPS',           'etc',    '⏻', '전원',           '',             []],
   device:    ['기타 장치',            'etc',    '📦', '장치',           '포트',         []]
 };
-var TOPO_KIND_ORDER = ['pc', 'eth', 'poe', 'usb', 'com', 'pcie', 'pci', 'hdmi', 'dp', 'vga', 'dvi', 'adapter', 'monitor', 'baseboard', 'motion', 'hyperwire', 'grabber', 'iocard', 'multiport', 'lancard', 'hub', 'nport', 'usbser', 'sport', 'ectmaster', 'axisch', 'drive', 'axis', 'ctrl', 'plc', 'robot', 'camera', 'iomod', 'device'];
+var TOPO_KIND_ORDER = ['pc', 'eth', 'poe', 'usb', 'com', 'pcie', 'pci', 'hdmi', 'dp', 'vga', 'dvi', 'adapter', 'monitor', 'baseboard', 'motion', 'hyperwire', 'grabber', 'iocard', 'multiport', 'lancard', 'hub', 'nport', 'usbser', 'sport', 'ectmaster', 'axisch', 'drive', 'axis', 'ctrl', 'plc', 'robot', 'camera', 'light', 'barcode', 'laser', 'iomod', 'sensor', 'valve', 'lamp', 'hmi', 'power', 'device'];
 var TOPO_IO_KINDS = { iocard: 1, iomod: 1, motion: 1, plc: 1, ectmaster: 1, ctrl: 1 };   // IO 리스트를 둘 수 있는 장치 (그 밖도 고를 수 있음)
 var TOPO_IO_DIRS = ['DI', 'DO', 'AI', 'AO'];
 var TOPO_IO_PREFIX = { DI: 'X', DO: 'Y', AI: 'AI', AO: 'AO' };
@@ -73,6 +81,17 @@ function _tpStr(v) { return v == null ? '' : String(v); }
 function _tpId(p) { return (p || 'n') + '-' + Math.random().toString(36).slice(2, 10); }
 function topoKind(k) { var d = TOPO_KINDS[k] || TOPO_KINDS.device; return { key: TOPO_KINDS[k] ? k : 'device', label: d[0], cat: d[1], icon: d[2], dflt: d[3], portHint: d[4], next: d[5] }; }
 function topoCat(k) { return TOPO_CATS[topoKind(k).cat] || TOPO_CATS.etc; }
+/* v13.479 장치마다 바꿀 수 있는 것 — n.kl 종류 이름(직접) · n.cat 분류(색) · n.ico 아이콘. 화면 · 그림은 이것으로 (구조 판단은 여전히 n.kind) */
+function topoKindN(n) {
+  var K = topoKind(n && n.kind);
+  if (n && n.kl) { K.label = n.kl; K.dflt = n.kl; }
+  if (n && n.cat && TOPO_CATS[n.cat]) K.cat = n.cat;
+  K.ico = n && n.ico && TOPO_ICONS[n.ico] ? n.ico : K.key;
+  return K;
+}
+function topoCatN(n) { return TOPO_CATS[topoKindN(n).cat] || TOPO_CATS.etc; }
+/** 분류마다 기본 아이콘 (직접 만든 항목의 처음 아이콘) */
+var TOPO_CAT_ICON = { pc: 'pc', port: 'eth', card: 'pcie', net: 'hub', serial: 'sport', ctrl: 'ctrl', drive: 'drive', axis: 'axis', vision: 'camera', io: 'iomod', dport: 'hdmi', display: 'monitor', etc: 'device' };
 
 /* ── 선 아이콘 (24 칸 · 굵기 1.8) — 화면 · 구성도 · 내려받은 그림이 같은 모양 (이모지는 기기마다 달라 안 씀) ── */
 var TOPO_ICONS = {
@@ -109,12 +128,34 @@ var TOPO_ICONS = {
   vga: 'M3 7h18l-2 10H5z M7 10h.01 M10 10h.01 M13 10h.01 M16 10h.01 M8 12.5h.01 M11 12.5h.01 M14 12.5h.01 M8.5 15h.01 M12 15h.01 M15.5 15h.01',
   dvi: 'M3 8h18v8H3z M6 11h1 M9 11h1 M12 11h1 M6 13h1 M9 13h1 M12 13h1 M16 10v4',
   adapter: 'M2 9h6v6H2z M8 12h8 M16 9h6v6h-6z M11 10l2 2-2 2',
-  monitor: 'M3 4h18v12H3z M9 20h6 M12 16v4'
+  monitor: 'M3 4h18v12H3z M9 20h6 M12 16v4',
+  light: 'M9 18h6 M10 21h4 M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z',
+  barcode: 'M4 6v12 M7 6v12 M10 6v9 M13 6v12 M16 6v9 M20 6v12 M10 18h.01 M16 18h.01',
+  laser: 'M2 9h9v6H2z M11 12h3 M17 12h.01 M21 12h.01 M17 7l1.5 1.5 M17 17l1.5-1.5',
+  sensor: 'M12 10a2 2 0 1 0 .01 0 M7.8 16.2a6 6 0 0 1 0-8.4 M16.2 7.8a6 6 0 0 1 0 8.4 M5 19a10 10 0 0 1 0-14 M19 5a10 10 0 0 1 0 14',
+  valve: 'M3 8l9 4-9 4z M21 8l-9 4 9 4z M12 12V5 M9 5h6',
+  lamp: 'M9 3h6v5H9z M9 8h6v5H9z M9 13h6v5H9z M7 21h10 M12 18v3',
+  hmi: 'M3 4h18v13H3z M8 21h8 M12 17v4 M7 8h4v5H7z M14 8h3 M14 11h3',
+  power: 'M12 3v9 M6.3 6.3a8 8 0 1 0 11.4 0',
+  cylinder: 'M3 9h12v6H3z M15 12h6 M21 9v6 M6 9v6',
+  temp: 'M10 4a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z M12 9v8',
+  scale: 'M4 20h16 M6 20l2-9h8l2 9 M9 11V7h6v4 M12 14v3',
+  stage: 'M3 15h18v4H3z M7 15v-4h10v4 M10 11V7h4v4',
+  dongle: 'M8 12a4 4 0 1 0 .01 0 M11 13l9-9 M16 8l3 3 M14 10l2 2',
+  db: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3z M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6 M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
+  buzzer: 'M4 9h4l5-4v14l-5-4H4z M17 9a4 4 0 0 1 0 6',
+  fan: 'M12 12a1.5 1.5 0 1 0 .01 0 M12 10.5c-1-4 1-7 4-7 1 3-1 6-4 7z M13.5 12c4-1 7 1 7 4-3 1-6-1-7-4z M12 13.5c1 4-1 7-4 7-1-3 1-6 4-7z M10.5 12c-4 1-7-1-7-4 3-1 6 1 7 4z',
+  gear: 'M12 9a3 3 0 1 0 .01 0 M12 2v3 M12 19v3 M2 12h3 M19 12h3 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2',
+  cloud: 'M7 18a4 4 0 0 1-.5-8A6 6 0 0 1 18 9.5 4.2 4.2 0 0 1 17.5 18z',
+  wifi: 'M2 9a15 15 0 0 1 20 0 M5.5 12.5a10 10 0 0 1 13 0 M9 16a5 5 0 0 1 6 0 M12 19.5h.01',
+  keyboard: 'M2 6h20v12H2z M6 10h.01 M10 10h.01 M14 10h.01 M18 10h.01 M7 14h10',
+  printer: 'M6 9V3h12v6 M6 18H3V9h18v9h-3 M6 14h12v7H6z',
+  safety: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z M9 12l2 2 4-4'
 };
 /** 아이콘 SVG — x · y 왼쪽 위 · s 크기(px) · c 색 (구성도 안에 넣을 때는 opt.g, 화면에 따로 쓸 때는 svg 로 감쌈) */
 function topoIconSvg(kind, s, c, x, y, inG) {
   var d = TOPO_ICONS[kind] || TOPO_ICONS.device, k = (s || 16) / 24;
-  var p = '<path d="' + d + '" fill="none" stroke="' + (c || 'currentColor') + '" stroke-width="' + (1.7 / Math.max(k, .55)).toFixed(2) + '" stroke-linecap="round" stroke-linejoin="round"/>';
+  var p = '<path d="' + d + '" fill="none" stroke="' + (c || 'currentColor') + '" stroke-width="' + (1.95 / Math.max(k, .5)).toFixed(2) + '" stroke-linecap="round" stroke-linejoin="round"/>';
   if (inG) return '<g transform="translate(' + (x || 0) + ' ' + (y || 0) + ') scale(' + k.toFixed(3) + ')">' + p + '</g>';
   return '<svg class="tp-ic" viewBox="0 0 24 24" width="' + (s || 16) + '" height="' + (s || 16) + '" aria-hidden="true">' + p + '</svg>';
 }
@@ -130,6 +171,9 @@ function specTopoNorm(t) {
     if (n.ord != null && n.ord !== '' && isFinite(+n.ord)) o.ord = +n.ord;
     if (n.pts != null && n.pts !== '' && isFinite(+n.pts)) o.pts = Math.max(0, Math.min(9999, Math.round(+n.pts)));
     if (n.fold) o.fold = true;
+    if (n.kl && _tpStr(n.kl).trim()) o.kl = _tpStr(n.kl).trim().slice(0, 30);
+    if (n.cat && TOPO_CATS[n.cat]) o.cat = n.cat;
+    if (n.ico && TOPO_ICONS[n.ico]) o.ico = n.ico;
     return o;
   });
   var byId = {}; nodes.forEach(function (n) { byId[n.id] = n; });
@@ -147,7 +191,7 @@ function specTopoEmpty(t) { return !t || !t.nodes || !t.nodes.length; }
 function specTopoChildren(t, id) { return t.nodes.filter(function (n) { return (n.parent || null) === (id || null); }); }
 function specTopoNode(t, id) { for (var i = 0; i < t.nodes.length; i++) if (t.nodes[i].id === id) return t.nodes[i]; return null; }
 /** 이름 — 비었으면 종류의 기본 이름 */
-function specTopoName(n) { return _tpStr(n && n.name).trim() || topoKind(n && n.kind).dflt; }
+function specTopoName(n) { return _tpStr(n && n.name).trim() || topoKindN(n).dflt; }
 /** 위에서부터 차례 (들여쓰기 깊이 포함) — 목록 · 내보내기 */
 function specTopoFlat(t, opt) {
   var out = [], fold = opt && opt.fold;
@@ -461,7 +505,7 @@ function specTopoFocus(t, key, q) {
   if (!f && !q) return null;
   var hit = t.nodes.filter(function (n) {
     if (f && f.kinds.indexOf(n.kind) < 0) return false;
-    if (q && [specTopoName(n), n.model, n.port, n.addr, n.note, topoKind(n.kind).label].join(' ').toLowerCase().indexOf(q) < 0) return false;
+    if (q && [specTopoName(n), n.model, n.port, n.addr, n.note, topoKindN(n).label].join(' ').toLowerCase().indexOf(q) < 0) return false;
     return true;
   });
   var on = {};
@@ -502,12 +546,12 @@ function _tpFit(s, maxPx, fs) { s = _tpStr(s); if (_tpTextW(s, fs) <= maxPx) ret
 function _tpEdgeLabel(c) { return [c.port, [c.cable, c.len].filter(Boolean).join(' ')].filter(Boolean).join(' · '); }
 /** 상자 안 글 준비 + 높이 — kind: pc · port · box · small */
 function _tpBoxText(n, type, w, via) {
-  var pad = type === 'small' ? 25 : type === 'port' ? 30 : type === 'pc' ? 56 : 8, inner = w - pad - 8;
+  var pad = type === 'small' ? 29 : type === 'port' ? 34 : type === 'pc' ? 62 : 9, inner = w - pad - 8;
   var b = { name: _tpWrapPx(specTopoName(n), inner, type === 'pc' ? 15 : 12, 2), model: n.model ? _tpFit(n.model, inner, 9.5) : '', addr: n.addr ? _tpFit(n.addr, inner - 8, 9.5) : '', via: via ? _tpFit('↳ ' + via, inner, 9.5) : '' };
-  if (type === 'pc') { b.h = 26 + b.name.length * 18 + (b.model ? 14 : 0) + (b.addr ? 17 : 0); b.h = Math.max(b.h, 64); }
+  if (type === 'pc') { b.h = 26 + b.name.length * 18 + 14 + (b.addr ? 17 : 0); b.h = Math.max(b.h, 66); }
   else if (type === 'port') b.h = 10 + b.name.length * 14 + (b.addr ? 16 : 0) + (b.via ? 13 : 0) + 4;
-  else if (type === 'small') b.h = 9 + b.name.length * 13 + (b.model ? 12 : 0) + (b.addr ? 15 : 0) + (b.via ? 12 : 0) + 4;
-  else b.h = 22 + b.name.length * 15 + (b.model ? 13 : 0) + (b.addr ? 16 : 0) + (b.via ? 13 : 0) + 4;
+  else if (type === 'small') b.h = Math.max(27, 9 + b.name.length * 13 + (b.model ? 12 : 0) + (b.addr ? 15 : 0) + (b.via ? 12 : 0) + 4);
+  else b.h = 28 + b.name.length * 15 + (b.model ? 13 : 0) + (b.addr ? 16 : 0) + (b.via ? 13 : 0) + 5;
   return b;
 }
 function specTopoLayout(t, mode) {
@@ -584,7 +628,7 @@ function specTopoSvg(t, opts) {
   var ink = dk ? '#e5e7eb' : '#1f2937', sub = dk ? '#9ca3af' : '#6b7280', line = dk ? '#64748b' : '#94a3b8', bg = dk ? '#0f172a' : '#ffffff';
   var ipBg = dk ? '#172554' : '#eff6ff', ipInk = dk ? '#93c5fd' : '#1d4ed8', MONO = 'Consolas, Menlo, monospace';
   var o = ['<svg xmlns="http://www.w3.org/2000/svg" class="tp-svg" viewBox="0 0 ' + Math.round(L.width) + ' ' + Math.round(L.height) + '" width="' + Math.round(L.width) + '" height="' + Math.round(L.height) + '" font-family="Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, sans-serif">'];
-  o.push('<defs><marker id="tpArr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="' + line + '"/></marker></defs>');
+  o.push('<defs><marker id="tpArr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="' + line + '"/></marker><filter id="tpSh" x="-8%" y="-8%" width="116%" height="130%"><feDropShadow dx="0" dy="1.5" stdDeviation="1.8" flood-color="#0f172a" flood-opacity="' + (dk ? '.5' : '.16') + '"/></filter></defs>');
   var F = opts.focus || null, DIM = ' opacity=".16"';
   if (L.bus) {   // 장치 인터페이스 띠 (PPT 의 노란 화살표)
     var b = L.bus, y = b.y + oy, x1 = b.x1 + ox, x2 = b.x2 + ox, pc = b.pc;
@@ -620,40 +664,45 @@ function specTopoSvg(t, opts) {
   }
   function lines(arr, x, y, fs, lh, fw, col) { return arr.map(function (s, i) { return '<text x="' + x + '" y="' + (y + i * lh) + '" font-size="' + fs + '"' + (fw ? ' font-weight="' + fw + '"' : '') + ' fill="' + col + '">' + _tpEsc(s) + '</text>'; }).join(''); }
   L.boxes.forEach(function (bx) {
-    var n = bx.n, K = topoKind(n.kind), C = topoCat(n.kind), x = bx.x + ox, y = bx.y + oy, sel = opts.sel === n.id;
-    var fill = dk ? '#111827' : '#ffffff', stroke = sel ? '#2563eb' : C.fill, sw = sel ? 2.6 : 1.3, w = bx.w, cy2;
+    var n = bx.n, K = topoKindN(n), C = topoCatN(n), x = bx.x + ox, y = bx.y + oy, sel = opts.sel === n.id;
+    var fill = dk ? '#111827' : '#ffffff', stroke = sel ? '#2563eb' : C.fill, sw = sel ? 2.4 : 1.3, w = bx.w, cy2;
     var kidN = t.nodes.filter(function (q) { return q.parent === n.id; }).length;
-    o.push('<g class="tp-n" data-id="' + _tpEsc(n.id) + '" style="cursor:pointer"' + (F && !F[n.id] ? DIM : '') + '>');
+    o.push('<g class="tp-n' + (sel ? ' sel' : '') + '" data-id="' + _tpEsc(n.id) + '" style="cursor:pointer"' + (F && !F[n.id] ? DIM : '') + '>');
+    var rx = bx.type === 'pc' ? 13 : bx.type === 'port' ? Math.min(15, bx.h / 2) : bx.type === 'small' ? 7 : 10;
+    if (sel) o.push('<rect x="' + (x - 3.5) + '" y="' + (y - 3.5) + '" width="' + (w + 7) + '" height="' + (bx.h + 7) + '" rx="' + (rx + 3.5) + '" fill="none" stroke="#2563eb" stroke-opacity=".28" stroke-width="3"/>');   // 고른 장치 — 바깥 테
     if (bx.type === 'pc') {
-      o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + bx.h + '" rx="12" fill="' + (dk ? '#1e293b' : '#f8fafc') + '" stroke="' + stroke + '" stroke-width="' + (sel ? 2.6 : 2) + '"/>');
-      o.push(topoIconSvg(n.kind, 30, C.fill, x + 14, y + 16, true));
-      o.push(lines(bx.name, x + 56, y + 26, 15, 18, 800, ink)); cy2 = y + 26 + (bx.name.length - 1) * 18;
-      o.push('<text x="' + (x + 56) + '" y="' + (cy2 + 15) + '" font-size="10" fill="' + sub + '">' + _tpEsc(bx.model || 'PC · IPC') + '</text>'); cy2 += 15;
-      if (bx.addr) o.push(ipChip(x + 56, cy2 + 5, w - 64, bx.addr));
+      o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + bx.h + '" rx="13" fill="' + (dk ? '#1e293b' : '#f8fafc') + '" stroke="' + stroke + '" stroke-width="' + (sel ? 2.6 : 2) + '" filter="url(#tpSh)"/>');
+      o.push('<rect x="' + (x + 10) + '" y="' + (y + 12) + '" width="42" height="42" rx="11" fill="' + C.fill + '"/>');
+      o.push(topoIconSvg(K.ico, 28, '#fff', x + 17, y + 19, true));
+      o.push(lines(bx.name, x + 62, y + 27, 15, 18, 800, ink)); cy2 = y + 27 + (bx.name.length - 1) * 18;
+      o.push('<text x="' + (x + 62) + '" y="' + (cy2 + 15) + '" font-size="10" fill="' + sub + '">' + _tpEsc(bx.model || K.label) + '</text>'); cy2 += 15;
+      if (bx.addr) o.push(ipChip(x + 62, cy2 + 5, w - 70, bx.addr));
     } else if (bx.type === 'port') {
-      o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + bx.h + '" rx="' + Math.min(15, bx.h / 2) + '" fill="' + (dk ? '#1f1a12' : C.soft) + '" stroke="' + stroke + '" stroke-width="' + sw + '"/>');
-      o.push(topoIconSvg(n.kind, 15, C.fill, x + 10, y + 7, true));
-      o.push(lines(bx.name, x + 30, y + 18, 11.5, 14, 700, ink)); cy2 = y + 18 + (bx.name.length - 1) * 14;
-      if (bx.addr) { o.push(ipChip(x + 30, cy2 + 5, w - 38, bx.addr)); cy2 += 16; }
-      if (bx.via) o.push('<text x="' + (x + 30) + '" y="' + (cy2 + 13) + '" font-size="9.5" fill="' + sub + '">' + _tpEsc(bx.via) + '</text>');
+      o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + bx.h + '" rx="' + rx + '" fill="' + (dk ? '#1f1a12' : C.soft) + '" stroke="' + stroke + '" stroke-width="' + sw + '"/>');
+      o.push('<circle cx="' + (x + 15) + '" cy="' + (y + 14) + '" r="10.5" fill="' + C.fill + '"/>');
+      o.push(topoIconSvg(K.ico, 14, '#fff', x + 8, y + 7, true));
+      o.push(lines(bx.name, x + 32, y + 18, 11.5, 14, 700, ink)); cy2 = y + 18 + (bx.name.length - 1) * 14;
+      if (bx.addr) { o.push(ipChip(x + 32, cy2 + 5, w - 40, bx.addr)); cy2 += 16; }
+      if (bx.via) o.push('<text x="' + (x + 32) + '" y="' + (cy2 + 13) + '" font-size="9.5" fill="' + sub + '">' + _tpEsc(bx.via) + '</text>');
     } else if (bx.type === 'small') {
-      o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + bx.h + '" rx="7" fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + (sel ? 2.4 : 1) + '"/>');
-      o.push('<rect x="' + x + '" y="' + y + '" width="4" height="' + bx.h + '" rx="2" fill="' + C.fill + '"/>');
-      o.push(topoIconSvg(n.kind, 12, C.fill, x + 9, y + 6, true));
-      o.push(lines(bx.name, x + 25, y + 16, 10.5, 13, 600, ink)); cy2 = y + 16 + (bx.name.length - 1) * 13;
-      if (bx.model) { o.push('<text x="' + (x + 25) + '" y="' + (cy2 + 12) + '" font-size="9.5" fill="' + sub + '">' + _tpEsc(bx.model) + '</text>'); cy2 += 12; }
-      if (bx.addr) { o.push(ipChip(x + 25, cy2 + 3, w - 30, bx.addr)); cy2 += 15; }
-      if (bx.via) o.push('<text x="' + (x + 25) + '" y="' + (cy2 + 11) + '" font-size="9" fill="' + sub + '">' + _tpEsc(bx.via) + '</text>');
-    } else {
-      o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + bx.h + '" rx="9" fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + sw + '"/>');
-      o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="17" rx="9" fill="' + C.fill + '"/><rect x="' + x + '" y="' + (y + 9) + '" width="' + w + '" height="8" fill="' + C.fill + '"/>');
-      o.push(topoIconSvg(n.kind, 11, '#fff', x + 6, y + 3, true));
-      o.push('<text x="' + (x + 21) + '" y="' + (y + 12.5) + '" font-size="9.5" font-weight="700" fill="#fff">' + _tpEsc(_tpFit(K.label, w - 50, 9.5)) + (n.kind === 'axis' && n.ord ? '  #' + n.ord : '') + '</text>');
-      if (n.fold && kidN) o.push('<text x="' + (x + w - 7) + '" y="' + (y + 12.5) + '" text-anchor="end" font-size="9.5" font-weight="800" fill="#fff">＋' + kidN + '</text>');
-      o.push(lines(bx.name, x + 8, y + 32, 12, 15, 700, ink)); cy2 = y + 32 + (bx.name.length - 1) * 15;
-      if (bx.model) { o.push('<text x="' + (x + 8) + '" y="' + (cy2 + 13) + '" font-size="9.5" fill="' + sub + '">' + _tpEsc(bx.model) + '</text>'); cy2 += 13; }
-      if (bx.addr) { o.push(ipChip(x + 8, cy2 + 4, w - 16, bx.addr)); cy2 += 16; }
-      if (bx.via) o.push('<text x="' + (x + 8) + '" y="' + (cy2 + 13) + '" font-size="9.5" fill="' + sub + '">' + _tpEsc(bx.via) + '</text>');
+      o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + bx.h + '" rx="7" fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + (sel ? 2.2 : 1) + '"/>');
+      o.push('<rect x="' + (x + 4.5) + '" y="' + (y + 4.5) + '" width="18" height="18" rx="5" fill="' + C.fill + '"/>');
+      o.push(topoIconSvg(K.ico, 12, '#fff', x + 7.5, y + 7.5, true));
+      o.push(lines(bx.name, x + 28, y + 17, 10.5, 13, 600, ink)); cy2 = y + 17 + (bx.name.length - 1) * 13;
+      if (bx.model) { o.push('<text x="' + (x + 28) + '" y="' + (cy2 + 12) + '" font-size="9.5" fill="' + sub + '">' + _tpEsc(bx.model) + '</text>'); cy2 += 12; }
+      if (bx.addr) { o.push(ipChip(x + 28, cy2 + 3, w - 33, bx.addr)); cy2 += 15; }
+      if (bx.via) o.push('<text x="' + (x + 28) + '" y="' + (cy2 + 11) + '" font-size="9" fill="' + sub + '">' + _tpEsc(bx.via) + '</text>');
+    } else {   // 카드 — 위에 분류 색 띠(아이콘 + 종류), 아래 이름 · 모델 · 주소
+      o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + bx.h + '" rx="10" fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + sw + '" filter="url(#tpSh)"/>');
+      o.push('<path d="M' + x + ' ' + (y + 22) + 'V' + (y + 10) + 'a10 10 0 0 1 10 -10h' + (w - 20) + 'a10 10 0 0 1 10 10V' + (y + 22) + 'z" fill="' + C.fill + '"/>');
+      o.push(topoIconSvg(K.ico, 15, '#fff', x + 7, y + 3.5, true));
+      o.push('<text x="' + (x + 27) + '" y="' + (y + 15) + '" font-size="10.5" font-weight="700" fill="#fff">' + _tpEsc(_tpFit(K.label, w - (n.fold && kidN ? 62 : n.kind === 'axis' && n.ord ? 56 : 34), 10.5)) + '</text>');
+      if (n.fold && kidN) o.push('<rect x="' + (x + w - 31) + '" y="' + (y + 4) + '" width="26" height="14" rx="7" fill="#fff" fill-opacity=".92"/><text x="' + (x + w - 18) + '" y="' + (y + 14.5) + '" text-anchor="middle" font-size="9.5" font-weight="800" fill="' + C.fill + '">＋' + kidN + '</text>');
+      else if (n.kind === 'axis' && n.ord) o.push('<rect x="' + (x + w - 27) + '" y="' + (y + 4) + '" width="22" height="14" rx="7" fill="#fff" fill-opacity=".92"/><text x="' + (x + w - 16) + '" y="' + (y + 14.5) + '" text-anchor="middle" font-size="9.5" font-weight="800" fill="' + C.fill + '">#' + n.ord + '</text>');
+      o.push(lines(bx.name, x + 9, y + 39, 12, 15, 700, ink)); cy2 = y + 39 + (bx.name.length - 1) * 15;
+      if (bx.model) { o.push('<text x="' + (x + 9) + '" y="' + (cy2 + 13) + '" font-size="9.5" fill="' + sub + '">' + _tpEsc(bx.model) + '</text>'); cy2 += 13; }
+      if (bx.addr) { o.push(ipChip(x + 9, cy2 + 4, w - 18, bx.addr)); cy2 += 16; }
+      if (bx.via) o.push('<text x="' + (x + 9) + '" y="' + (cy2 + 13) + '" font-size="9.5" fill="' + sub + '">' + _tpEsc(bx.via) + '</text>');
     }
     o.push('</g>');
   });
@@ -667,7 +716,7 @@ function specTopoRows(t) {
   var dev = [TOPO_ROW_HEAD.slice()];
   specTopoFlat(t).forEach(function (x) {
     var n = x.n;
-    dev.push([x.depth, new Array(x.depth + 1).join('    ') + specTopoName(n), topoKind(n.kind).label, specTopoName(n), n.model, n.port, n.addr, n.cable || '', n.len || '', n.kind === 'axis' && n.ord != null ? n.ord : '', n.pts != null ? n.pts : '', n.note, specTopoPath(t, n.id).map(specTopoName).join(' › ')]);
+    dev.push([x.depth, new Array(x.depth + 1).join('    ') + specTopoName(n), topoKindN(n).label, specTopoName(n), n.model, n.port, n.addr, n.cable || '', n.len || '', n.kind === 'axis' && n.ord != null ? n.ord : '', n.pts != null ? n.pts : '', n.note, specTopoPath(t, n.id).map(specTopoName).join(' › ')]);
   });
   var ax = [['축 번호', '축 이름', '모델 · 모터', '드라이브', '채널', '제어기', '포트', '용도 · 비고']];
   specTopoAxes(t).forEach(function (n) { var i = specTopoAxisInfo(t, n); ax.push([n.ord, specTopoName(n), n.model, i.drive ? specTopoName(i.drive) + (i.drive.model ? ' (' + i.drive.model + ')' : '') : '', i.ch, i.ctrl ? specTopoName(i.ctrl) : '', i.port ? specTopoName(i.port) : '', n.note]); });
@@ -773,6 +822,7 @@ function specTopoFromSheets(sheets) {
     }
     var kind = specTopoKindGuess(cell(row, 'kind'), name);
     var n = { id: _tpId('n'), parent: parentId, kind: kind, name: name.slice(0, 80), model: _tpStr(cell(row, 'model')).trim().slice(0, 80), port: _tpStr(cell(row, 'port')).trim().slice(0, 40), addr: _tpStr(cell(row, 'addr')).trim().slice(0, 60), note: _tpStr(cell(row, 'note')).trim().slice(0, 200) };
+    var kt = _tpStr(cell(row, 'kind')).trim(); if (kind === 'device' && kt && kt !== TOPO_KINDS.device[0]) n.kl = kt.slice(0, 30);   // v13.479 모르는 종류 이름은 그대로 둠(직접 만든 항목)
     var cb = _tpStr(cell(row, 'cable')).trim(), ln = _tpStr(cell(row, 'len')).trim();
     if (cb) n.cable = cb.slice(0, 40); if (ln) n.len = ln.slice(0, 20);
     var od = cell(row, 'ord'); if (od !== '' && od != null && isFinite(+od)) n.ord = +od;
@@ -826,7 +876,7 @@ function specTopoMerge(t, inc, mode, atId) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { TOPO_KINDS: TOPO_KINDS, TOPO_CATS: TOPO_CATS, topoKind: topoKind, specTopoNorm: specTopoNorm, specTopoEmpty: specTopoEmpty, specTopoChildren: specTopoChildren, specTopoNode: specTopoNode, specTopoName: specTopoName, specTopoFlat: specTopoFlat, specTopoPath: specTopoPath,
+  module.exports = { TOPO_KINDS: TOPO_KINDS, TOPO_CATS: TOPO_CATS, topoKind: topoKind, topoKindN: topoKindN, topoCatN: topoCatN, TOPO_CAT_ICON: TOPO_CAT_ICON, TOPO_KIND_ORDER: TOPO_KIND_ORDER, specTopoNorm: specTopoNorm, specTopoEmpty: specTopoEmpty, specTopoChildren: specTopoChildren, specTopoNode: specTopoNode, specTopoName: specTopoName, specTopoFlat: specTopoFlat, specTopoPath: specTopoPath,
     specTopoAdd: specTopoAdd, specTopoRemove: specTopoRemove, specTopoDup: specTopoDup, specTopoMove: specTopoMove, specTopoIndent: specTopoIndent, specTopoOutdent: specTopoOutdent, specTopoReparent: specTopoReparent,
     specTopoAxes: specTopoAxes, specTopoAxisMove: specTopoAxisMove, specTopoAxisInfo: specTopoAxisInfo, specTopoIoNodes: specTopoIoNodes, specTopoIoAdd: specTopoIoAdd, specTopoIoSummary: specTopoIoSummary, specTopoIoDup: specTopoIoDup,
     TOPO_PRESETS: TOPO_PRESETS, specTopoPreset: specTopoPreset, specTopoMonitors: specTopoMonitors, TOPO_ICONS: TOPO_ICONS, topoIconSvg: topoIconSvg, specTopoChecks: specTopoChecks, TOPO_FILTERS: TOPO_FILTERS, specTopoFocus: specTopoFocus, specTopoFilterCount: specTopoFilterCount, specTopoSeed: specTopoSeed, specTopoLayout: specTopoLayout, specTopoSvg: specTopoSvg, specTopoRows: specTopoRows, specTopoTemplateRows: specTopoTemplateRows, specTopoFromSheets: specTopoFromSheets, specTopoMerge: specTopoMerge, specTopoKindGuess: specTopoKindGuess, TOPO_ROW_HEAD: TOPO_ROW_HEAD };

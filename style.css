@@ -8014,3 +8014,57 @@ html.wm-shell .con>#mMessages>.cx:not(.cx-kb){flex:1 1 auto;height:auto!importan
 .wm-diag-p{position:fixed;left:0;height:14px;z-index:99999;font:700 10px/14px ui-monospace,monospace;color:#fff;padding:0 6px;pointer-events:none}
 .hdr-diag{display:none;width:100%;margin-top:8px;padding:8px;border:1px dashed var(--bd);border-radius:8px;background:transparent;color:var(--t4);font-size:12px}
 html.wm-shell .hdr-diag{display:block}
+/* v13.479 🧩 장치 계층 구성 — ↶↷⟲ · ＋ 장치 추가 팔레트 · 아이콘 칸 · 분류 범례 (project-spec-topo.js) */
+.pst-hist{display:inline-flex;border:1px solid var(--bd);border-radius:8px;overflow:hidden;background:var(--bg-i)}
+.pst-hist button{height:26px;min-width:30px;padding:0 8px;border:0;border-right:1px solid var(--bd);background:none;color:var(--t1);font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.pst-hist button:last-child{border-right:0;font-size:11.5px;font-weight:600}
+.pst-hist button:hover:not(:disabled){background:color-mix(in srgb,var(--ac) 12%,transparent);color:var(--ac-t,var(--ac))}
+.pst-hist button:disabled{opacity:.35;cursor:default}
+.pst-ti{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:28px;height:28px;border-radius:8px;color:#fff}
+.pst-ti svg{display:block}
+.pst-ti.plus{background:none;border:1.5px dashed var(--bd);color:var(--t5);font-size:15px;font-weight:700}
+.pst-palbtn.on{box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 28%,transparent)}
+.pst-pal{margin-top:8px;border:1px solid color-mix(in srgb,var(--ac) 45%,var(--bd));border-radius:10px;background:var(--bg-i);box-shadow:0 10px 26px -16px rgba(15,23,42,.5)}
+.pst-pal-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid var(--bd);font-size:12px;color:var(--t1)}
+.pst-pal-at{font-size:11px;color:var(--ac-t,var(--ac));font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pst-stay{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--t4,var(--t5));white-space:nowrap;cursor:pointer}
+.pst-pal-b{max-height:330px;overflow:auto;padding:6px 10px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px 16px}
+.pst-pal-s{min-width:0;break-inside:avoid}.pst-pal-s[hidden]{display:none}
+.pst-pal-s.rec{grid-column:1/-1;padding-bottom:6px;border-bottom:1px dashed var(--bd)}
+.pst-pal-st{display:flex;align-items:center;gap:6px;margin:6px 0 4px;font-size:11px;font-weight:700;color:var(--t2,var(--t1))}
+.pst-pal-st i{width:10px;height:10px;border-radius:3px}
+.pst-pal-g{display:flex;flex-wrap:wrap;gap:5px}
+.pst-tile,.pst-tile-b{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 10px 0 4px;border:1px solid var(--bd);border-radius:9px;background:var(--bg-p);color:var(--t1);font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
+.pst-tile[hidden]{display:none}
+.pst-tile:hover,.pst-tile.mine:hover{border-color:var(--ac);box-shadow:0 2px 8px -3px rgba(15,23,42,.35)}
+.pst-tile:active{transform:translateY(1px)}
+.pst-tile.mine{padding:0;gap:0;cursor:default}
+.pst-tile-b{border:0;background:none;height:34px}
+.pst-tx{width:20px;height:34px;padding:0;border:0;border-left:1px solid var(--bd);background:none;color:var(--t6);font-size:10px;cursor:pointer;border-radius:0 9px 9px 0}
+.pst-tx:hover{color:#dc2626;background:color-mix(in srgb,#dc2626 9%,transparent)}
+.pst-tile.add{border-style:dashed;color:var(--t5);font-weight:500}.pst-tile.add.on{border-color:var(--ac);color:var(--ac-t,var(--ac))}
+.pst-tile.pre{padding:0 12px;height:30px;font-weight:500}
+.pst-mine{margin-top:6px;padding:8px;border:1px solid var(--ac);border-radius:9px;background:var(--bg-p)}
+.pst-mine-a{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px}.pst-mine-a .pst-hint{margin:0}
+.pst-icg{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px}
+.pst-icg.ed{margin:7px 0 0;padding:7px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-p);align-items:center}
+.pst-icg button:not(.pst-b){width:30px;height:30px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:7px;background:none;color:var(--t2,var(--t1));cursor:pointer}
+.pst-icg button:not(.pst-b):hover{border-color:var(--bd);background:var(--bg-i)}
+.pst-icg button.on{background:var(--c,var(--ac));color:#fff}
+.pst-icb{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border:0;border-radius:8px;color:#fff;cursor:pointer;box-shadow:0 1px 3px rgba(15,23,42,.25)}
+.pst-icb:hover,.pst-icb.on{outline:2px solid var(--ac);outline-offset:2px}
+.pst-ed-h .pst-kd{padding:3px 8px;font-size:11px}
+.pst-recs{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:7px}
+.pst-rec{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px 0 3px;border:1px solid var(--bd);border-radius:13px;background:var(--bg-p);color:var(--t1);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
+.pst-rec .pst-ti{width:20px;height:20px;border-radius:10px}
+.pst-rec:hover{border-color:var(--ac)}
+.pst-rec.more{padding:0 10px;color:var(--t5);font-weight:500;border-style:dashed}
+.pst-lgd{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.pst-lg{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border:1px solid var(--bd);border-radius:11px;background:var(--bg-p);color:var(--t2,var(--t1));font-size:10.5px;cursor:pointer;white-space:nowrap;font-family:inherit}
+.pst-lg i{width:9px;height:9px;border-radius:3px;background:var(--c)}
+.pst-lg b{font-weight:700;color:var(--t5)}
+.pst-lg.on{background:var(--c);border-color:var(--c);color:#fff}.pst-lg.on i{background:#fff}.pst-lg.on b{color:rgba(255,255,255,.85)}
+.pst-kd.ic{padding:4px;border-radius:7px}
+.pst-mapin .tp-n:hover>rect,.pst-mapin .tp-n:hover>circle{filter:brightness(1.06)}
+@container (max-width:760px){.pst-pal-b{grid-template-columns:1fr;max-height:280px}.pst-pal-at{flex:1 1 100%;order:5}.pst-hist button:last-child{font-size:0;min-width:30px}.pst-hist button:last-child::before{content:'⟲';font-size:14px}}
+.pst-flt .pst-sel[data-pt="preset"]{flex:0 1 150px;max-width:150px}
