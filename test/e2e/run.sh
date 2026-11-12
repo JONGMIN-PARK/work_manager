@@ -130,6 +130,7 @@ else
   run_batch e2e56-wr-analytics.js e2e82-wa-kpi.js e2e83-wa-p2.js
   run_batch e2e57-mtl-longbar.js
   run_batch e2e58-chat.js
+  run_batch e2e85-cx-back.js
   run_batch e2e59-notebook.js
   run_batch e2e60-notebook-links-coach.js
   run_batch e2e61-notebook-print.js

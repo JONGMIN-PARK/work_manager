@@ -44,6 +44,7 @@ function wmCanSeePatchNotes(){return typeof currentUser!=='undefined'&&!!current
 function wmTabIntoView(t){var p=t&&t.parentElement;if(!p||p.scrollWidth<=p.clientWidth+1)return;var l=t.offsetLeft-p.offsetLeft,r=l+t.offsetWidth;if(l<p.scrollLeft)p.scrollLeft=Math.max(0,l-8);else if(r>p.scrollLeft+p.clientWidth)p.scrollLeft=r-p.clientWidth+8}
 function setPage(page){
   if(page==='patchnotes'&&!wmCanSeePatchNotes())return;  // 패치노트는 관리자만
+  if(page==='messages'&&curPage!=='messages')window.wmPrevPage=curPage;  // v13.462 메신저 ← 이전 화면 (좁은 창)
   if(WM_TEAM_SUB[page]){  // 업무 관리 › 주간 업무 · 업무 부하
     document.querySelectorAll('#modeTabs .tab').forEach(function(t){t.classList.toggle('on',t.dataset.m===page)});
     page='team';

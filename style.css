@@ -7940,3 +7940,6 @@ html.wm-tbo .pd-panel .pd-sticky{padding-right:max(var(--pdx,20px),calc(var(--wm
   .wr-sgrid{grid-template-columns:1fr 1fr!important}
   .wr-sgrid #wrSQ{grid-column:1/-1}
 }
+/* v13.462 메신저 좁은 창 — 목록 위 ← 이전 화면 (메신저에 오기 전 화면으로) */
+.cx-side-back{display:none!important}
+@media (max-width:760px){html:not(.wm-solo) .cx-side-back{display:inline-flex!important;margin-right:-2px}}

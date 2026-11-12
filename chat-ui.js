@@ -304,7 +304,7 @@ function renderMessages() {
   var el = document.getElementById('mMessages'); if (!el) return;
   if (!el.querySelector('.cx')) {
     el.innerHTML = '<div class="cx no-aside' + (CX.room ? ' has-room' : '') + (_cxLsGet('wm-cx-side-off') || window.WM_SOLO ? ' side-off' : '') + '">' +
-      '<aside class="cx-side"><div class="cx-side-h"><button type="button" class="cx-me" id="cxMe" title="🙂 내 프로필 · 상태">' + _cxAv(_cxMe(), (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || '') + '</button><b>💬 메신저</b><span class="cx-side-a"><button type="button" class="cx-ib" id="cxFocus" title="🎯 집중 모드 — 방해 금지 · 메신저만 크게">🎯</button><button type="button" class="cx-ib" id="cxReqs" title="🛠 요청함 — 나에게 온 · 내가 올린 요청">🛠</button><button type="button" class="cx-ib" id="cxFolders" title="📁 내 폴더 — 모아 둔 메시지 · 사진 · 파일">📂</button><button type="button" class="cx-ib" id="cxOrgBtn" title="🏢 조직도 — 부서별 사람 · 접속 · 상태">🏢</button><button type="button" class="cx-ib" id="cxAlertBtn" title="🔔 알림 — 소리 · 진동 · 휴대폰 알림">🔔</button><button type="button" class="cx-ib cx-lockb" id="cxLockBtn" title="🔒 채팅 잠금">🔒</button><button type="button" class="cx-ib" id="cxNew" title="새 대화 (사람 · 그룹 · 프로젝트 방)">＋</button></span></div>' +
+      '<aside class="cx-side"><div class="cx-side-h"><button type="button" class="cx-ib cx-side-back" id="cxSideBack" aria-label="이전 화면으로" title="이전 화면으로">' + _cxIco('back') + '</button><button type="button" class="cx-me" id="cxMe" title="🙂 내 프로필 · 상태">' + _cxAv(_cxMe(), (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || '') + '</button><b>💬 메신저</b><span class="cx-side-a"><button type="button" class="cx-ib" id="cxFocus" title="🎯 집중 모드 — 방해 금지 · 메신저만 크게">🎯</button><button type="button" class="cx-ib" id="cxReqs" title="🛠 요청함 — 나에게 온 · 내가 올린 요청">🛠</button><button type="button" class="cx-ib" id="cxFolders" title="📁 내 폴더 — 모아 둔 메시지 · 사진 · 파일">📂</button><button type="button" class="cx-ib" id="cxOrgBtn" title="🏢 조직도 — 부서별 사람 · 접속 · 상태">🏢</button><button type="button" class="cx-ib" id="cxAlertBtn" title="🔔 알림 — 소리 · 진동 · 휴대폰 알림">🔔</button><button type="button" class="cx-ib cx-lockb" id="cxLockBtn" title="🔒 채팅 잠금">🔒</button><button type="button" class="cx-ib" id="cxNew" title="새 대화 (사람 · 그룹 · 프로젝트 방)">＋</button></span></div>' +
       '<div class="cx-sq"><input id="cxQ" type="search" placeholder="대화방 · 메시지 찾기  (Ctrl+K 방 이동)" aria-label="대화방 · 메시지 찾기"></div>' +
       '<div class="cx-rf" id="cxRf" role="tablist">' + [['all', '전체'], ['unread', '안 읽음'], ['at', '@나'], ['dm', '1:1'], ['group', '그룹'], ['project', '프로젝트']].map(function (f) { return '<button type="button" data-rf="' + f[0] + '" class="' + (CX.rf === f[0] ? 'on' : '') + '">' + f[1] + '</button>'; }).join('') + '</div>' +
       '<div class="cx-perm" id="cxPerm" hidden><span data-pt>🔔 앱을 닫아 두어도 새 메시지 알림을 받을까요?</span><button type="button" id="cxPermOn">알림 켜기</button><button type="button" class="cx-perm-x" id="cxPermX" title="닫기" aria-label="닫기">✕</button></div>' +
@@ -312,6 +312,7 @@ function renderMessages() {
       '<section class="cx-main" id="cxMain"></section>' +
       '<aside class="cx-aside" id="cxAside"></aside></div>';
     el.querySelector('#cxNew').addEventListener('click', chatNewModal);
+    el.querySelector('#cxSideBack').addEventListener('click', _cxGoPrev);
     el.querySelector('#cxOrgBtn').addEventListener('click', function () { if (typeof chatOrgToggle === 'function') chatOrgToggle(); });
     el.querySelector('#cxMe').addEventListener('click', function () { if (typeof chatProfileModal === 'function') chatProfileModal(); });
     if (typeof chatAvatarsLoad === 'function' && !CX.avInit) { CX.avInit = true; chatAvatarsLoad(); chatKeywordsLoad(); }
@@ -481,8 +482,9 @@ function _cxSearch() {
 
 /* ─── 방 열기 ─── */
 function chatOpenRoom(id, keep, focusMid) {
-  if (typeof setPage === 'function' && document.getElementById('mMessages') && document.getElementById('mMessages').classList.contains('hidden')) { CX.pending = id; CX.pendingMid = focusMid || null; setPage('messages'); return; }
+  if (typeof setPage === 'function' && document.getElementById('mMessages') && document.getElementById('mMessages').classList.contains('hidden')) { CX.pending = id; CX.pendingMid = focusMid || null; CX._direct = true; setPage('messages'); return; }
   var changed = CX.room !== id;
+  if (CX._direct) { CX.direct = true; CX._direct = false; } else if (changed) CX.direct = false;   // v13.462 다른 화면(알림 · 바로 가기)에서 곧장 들어온 방 — ← 가 이전 화면으로
   if (changed && CX.room) { _cxDraftSave(); _cxCacheTouch(); }
   CX.room = id; if (changed) _cxLsSet('wm-cx-last', id);   // v13.382 다음에 열 때 이 방부터
   // 방이 바뀌면 그 방 것만 — 예전 방의 답글 줄기 · 고른 카드 · 수정 중 · 옆 탭은 비움
@@ -643,7 +645,7 @@ function _cxDrawHead() {
   var pst = i.kind === 'dm' && others[0] && others[0].status && typeof chatStatusText === 'function' ? chatStatusText(others[0].status) : '';
   var sub = i.kind === 'dm' ? (others[0] ? (pst ? pst + ' · ' : '') + (others[0].focusUntil && typeof chatFocusLabel === 'function' && chatFocusLabel(others[0].focusUntil) ? chatFocusLabel(others[0].focusUntil) + ' — 급하면 @멘션' : (others[0].online ? '● 접속 중' : '접속 안 함')) + (others[0].dept ? ' · ' + others[0].dept : '') : '') : i.members.length + '명 · 접속 ' + (on + 1) + (others.some(function (m) { return m.focusUntil && new Date(m.focusUntil) > new Date(); }) ? ' · 🎯 집중 ' + others.filter(function (m) { return m.focusUntil && new Date(m.focusUntil) > new Date(); }).length : '');
   var sideOff = !!(document.querySelector('#mMessages .cx.side-off'));
-  h.innerHTML = '<button type="button" class="cx-ib cx-back" data-h="back" aria-label="목록으로">' + _cxIco('back') + '</button>' +
+  h.innerHTML = '<button type="button" class="cx-ib cx-back" data-h="back" aria-label="' + (CX.direct && _cxIsPhone() && _cxPrevOk() ? '이전 화면으로' : '목록으로') + '" title="' + (CX.direct && _cxIsPhone() && _cxPrevOk() ? '이전 화면으로' : '목록으로') + '">' + _cxIco('back') + '</button>' +
     '<button type="button" class="cx-ib cx-sidet" data-h="side" title="' + (sideOff ? '대화방 목록 펴기' : '대화방 목록 접기 — 대화에만 집중') + ' (Alt+L)" aria-label="대화방 목록 접기 · 펴기">' + _cxIco(sideOff ? 'sideon' : 'sideoff') + '</button>' +
     (i.self ? '<span class="cx-av cx-av-me">📝</span>' : i.kind === 'project' ? '<span class="cx-av cx-av-p">📁</span>' : i.kind === 'group' ? '<span class="cx-av cx-av-g">👥</span>' : _cxAv(others[0] && others[0].id, name, others[0] && others[0].online)) +
     '<span class="cx-h-t"><b>' + _cxE(name) + '</b><span class="' + (i.kind === 'dm' && others[0] && others[0].online ? 'on' : '') + '">' + _cxE(sub) + '</span></span>' +
@@ -718,6 +720,7 @@ function _cxIco(k) {
 }
 function _cxHeadAct(k, btn) {
   if ((k === 'call' || k === 'vcall') && typeof chatCallStart === 'function') { chatCallStart(CX.room, k === 'vcall'); return; }   // v13.361
+  if (k === 'back' && _cxIsPhone() && CX.direct && _cxPrevOk()) { CX.direct = false; var r0 = document.querySelector('#mMessages .cx'); if (r0) { r0.classList.remove('has-room'); r0.classList.add('no-aside'); } CX.room = null; CX.thread = null; _cxDrawRooms(); _cxFull(); _cxGoPrev(); return; }
   if (k === 'back') { var root = document.querySelector('#mMessages .cx'); if (root) { root.classList.remove('has-room'); root.classList.add('no-aside'); } CX.room = null; CX.thread = null; _cxDrawRooms(); _cxFull(); return; }
   if (k === 'side') { chatSideToggle(); return; }   // v13.373
   if (k === 'pop') {   // v13.447 ↗ 새 창으로 — 옆 칸에서 누르면 그 칸은 닫고 창으로
@@ -1488,6 +1491,9 @@ function _cxViewImage(fid, name) {
 
 /* ─── 입력칸 (본 대화 · 답글 줄기 공용) ─── */
 function _cxIsPhone() { return window.innerWidth <= 760; }
+/* v13.462 좁은 창 — 메신저에 오기 전 화면으로 (대화방은 머리 · 탭 줄을 숨겨 다른 화면으로 갈 길이 없던 것) */
+function _cxPrevOk() { return typeof setPage === 'function' && !!window.wmPrevPage && window.wmPrevPage !== 'messages' && !(window.WM_SOLO); }
+function _cxGoPrev() { if (_cxPrevOk()) setPage(window.wmPrevPage); }
 function _cxCanCapture() { return !!((window.wmDesktop && window.wmDesktop.captureScreen) || (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && !/Android|iPhone|iPad/i.test(navigator.userAgent))); }
 function _cxComposerHtml(taId, wrapId) {
   // v13.381 자주 쓰는 것(k) — 넓은 칸은 입력 줄에, 좁은 칸(휴대폰 · 좁힌 창)은 ＋ 도구판에. 나머지는 늘 도구판
