@@ -23,7 +23,7 @@
 <script src="wm-layer.js?v=1" onerror="console.warn('wm-layer.js 로드 실패')"></script>
 <script src="chat-win.js?v=1" onerror="console.warn('chat-win.js 로드 실패')"></script>
 <script src="pd-win.js?v=1" onerror="console.warn('pd-win.js 로드 실패')"></script>
-<script src="wm-shell.js?v=5" onerror="console.warn('wm-shell.js 로드 실패')"></script>
+<script src="wm-shell.js?v=6" onerror="console.warn('wm-shell.js 로드 실패')"></script>
 <script src="core-bus.js?v=6" onerror="console.warn('core-bus.js 로드 실패')"></script>
 <!-- core (동기 로드 필수 — 인라인 폴백 typeof 체크가 파싱 중에 실행됨) -->
 <script src="config.js?v=9" onerror="console.warn('config.js 로드 실패: 인라인 폴백 사용')"></script>
@@ -128,7 +128,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 로드 실패')"></script>
 <!-- v13.310 엑셀 · 워드 · PDF · 캡처 · 압축 라이브러리는 ui-helpers.js wmLib 가 첫 화면 뒤에 받음 -->
 <!-- 외부 스타일시트 — v13.189 부터 유일한 스타일 소스 (예전 인라인 <style> 사본을 style.css 로 합침) -->
-<link rel="stylesheet" href="style.css?v=141">
+<link rel="stylesheet" href="style.css?v=142">
 </head>
 <body>
 <!-- 로그인 오버레이 -->
@@ -161,7 +161,7 @@
   <div class="sp2-foot" aria-hidden="true">Tasks · Projects · Team</div>
 </div>
 <div class="hdr"><div class="hdr-in">
-  <div class="hdr-brand"><h1><span class="hdr-mark" aria-hidden="true"><svg class="wm-mark2" viewBox="0 0 96 96" aria-hidden="true"><defs><linearGradient id="wmHdM1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7dd3fc"/><stop offset=".5" stop-color="#818cf8"/><stop offset="1" stop-color="#c084fc"/></linearGradient><linearGradient id="wmHdM2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient><linearGradient id="wmHdM3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#4c1d95"/></linearGradient><linearGradient id="wmHdM4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient><linearGradient id="wmHdM5" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><g class="mk-l3"><rect x="-20" y="-20" width="40" height="40" rx="9.5" transform="translate(48 56) rotate(45)" fill="url(#wmHdM3)" opacity=".92"/></g><g class="mk-l2"><rect x="-20" y="-20" width="40" height="40" rx="9.5" transform="translate(48 46) rotate(45)" fill="url(#wmHdM2)"/></g><g class="mk-l1"><rect x="-20" y="-20" width="40" height="40" rx="9.5" transform="translate(48 36) rotate(45)" fill="url(#wmHdM1)"/><rect x="-20" y="-20" width="40" height="40" rx="9.5" transform="translate(48 36) rotate(45)" fill="url(#wmHdM4)"/></g><path class="mk-tk" d="M37.5 37.5 l7 7 l14 -14.5" fill="none" stroke="#fff" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round" pathLength="100"/></svg></span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.474';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
+  <div class="hdr-brand"><h1><span class="hdr-mark" aria-hidden="true"><svg class="wm-mark2" viewBox="0 0 96 96" aria-hidden="true"><defs><linearGradient id="wmHdM1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7dd3fc"/><stop offset=".5" stop-color="#818cf8"/><stop offset="1" stop-color="#c084fc"/></linearGradient><linearGradient id="wmHdM2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient><linearGradient id="wmHdM3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#4c1d95"/></linearGradient><linearGradient id="wmHdM4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient><linearGradient id="wmHdM5" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><g class="mk-l3"><rect x="-20" y="-20" width="40" height="40" rx="9.5" transform="translate(48 56) rotate(45)" fill="url(#wmHdM3)" opacity=".92"/></g><g class="mk-l2"><rect x="-20" y="-20" width="40" height="40" rx="9.5" transform="translate(48 46) rotate(45)" fill="url(#wmHdM2)"/></g><g class="mk-l1"><rect x="-20" y="-20" width="40" height="40" rx="9.5" transform="translate(48 36) rotate(45)" fill="url(#wmHdM1)"/><rect x="-20" y="-20" width="40" height="40" rx="9.5" transform="translate(48 36) rotate(45)" fill="url(#wmHdM4)"/></g><path class="mk-tk" d="M37.5 37.5 l7 7 l14 -14.5" fill="none" stroke="#fff" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round" pathLength="100"/></svg></span> 업무 관리자 <span style="font-size:10px;font-weight:500;color:var(--t6);background:var(--bg-i);padding:2px 6px;border-radius:4px;vertical-align:middle;cursor:default" onclick="if(typeof wmCanSeePatchNotes==='function'&&wmCanSeePatchNotes())setPage('patchnotes')" id="wmVerBadge" title="Developed by Jongmin, Park"></span><script>var WM_VERSION='13.475';document.getElementById('wmVerBadge').textContent='v'+WM_VERSION</script></h1></div>
   <!-- v13.287 헤더 — 검색 · 알림 · 메시지 · 🎨 화면 설정 · 사용자 메뉴 (휴대폰도 같은 구성) -->
   <div class="hdr-ctl">
     <!-- 통합 검색 — 휴대폰은 🔎 만 보이다 누르면 헤더 폭으로 펼침 -->
@@ -194,6 +194,7 @@
           <div class="hdr-fsz" role="group" aria-label="글자 크기" title="화면 전체 글자 크기 — 지금 글씨체 기준, 글씨체마다 따로 기억"><span class="hdr-fsz-l">글자 크기 <em id="fszFont"></em></span><button type="button" id="fszMinus" onclick="aFszStep(-1)" aria-label="글자 작게">가−</button><b id="fszVal">100%</b><button type="button" id="fszPlus" onclick="aFszStep(1)" aria-label="글자 크게">가+</button><button type="button" id="fszReset" class="hdr-fsz-r" onclick="aFsz(1)" hidden>기본</button></div>
           <label class="hdr-crisp" title="9~10px 처럼 아주 작은 글자를 11px 로 키워 뭉개짐을 줄입니다"><input type="checkbox" id="crispChk" onchange="aCrisp(this.checked)"> 작은 글자 키우기 <span>10px 이하 → 11px</span></label>
           <div class="hdr-font-list" id="fontBar"></div>
+          <button type="button" class="hdr-fill" id="hdrFillBtn" onclick="wmShellFill()">📱 맨 아래까지 채우기</button>
           <button type="button" class="hdr-diag" onclick="wmHdrPopClose();wmShellDiag()">📐 화면 진단 (휴대폰 — 높이 값 보기)</button>
         </div>
       </div>
