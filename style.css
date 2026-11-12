@@ -8004,3 +8004,9 @@ html.wm-shell .con>div[id^="m"]:not(.tabs){padding-bottom:calc(8px + env(safe-ar
 html.wm-shell .con>#mMessages{-webkit-overflow-scrolling:auto}
 html.wm-shell.cx-full .con>#mMessages{overflow:visible!important}
 html.wm-shell.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx:not(.cx-kb){top:0!important;bottom:0!important;height:auto!important}
+/* v13.472 📱 아이폰 설치형 — 화면 높이가 짧게 잡힌 만큼(--wm-short, wm-shell.js) 틀 · 대화방을 아래로 늘림 · 메신저는 계산한 높이 대신 틀이 준 높이를 그대로 채움 */
+html.wm-shell body{bottom:calc(-1 * var(--wm-short,0px))}
+html.wm-shell.wm-kb body{bottom:auto}
+html.wm-shell.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx:not(.cx-kb){bottom:calc(-1 * var(--wm-short,0px))!important}
+html.wm-shell .con>#mMessages:not(.hidden){display:flex;flex-direction:column}
+html.wm-shell .con>#mMessages>.cx{flex:1 1 auto;height:auto!important;min-height:0!important}

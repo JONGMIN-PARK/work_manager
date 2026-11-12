@@ -39,6 +39,18 @@
     var a = document.activeElement, typing = !!(a && a.matches && a.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]),textarea,[contenteditable="true"]'));
     var kb = typing && h > 100 && full - h > 120;   // 입력 중이고 보이는 높이가 눈에 띄게 줄었을 때만
     docEl.classList.toggle('wm-kb', kb);
+    /* v13.472 아이폰 홈 화면 바로가기(설치형) — 화면 높이를 상태 표시줄만큼 짧게 잡는 경우가 있어(맨 아래가 그만큼 빔)
+       기기 화면 높이와 견줘 모자란 만큼(--wm-short) 틀을 아래로 늘림. 아이폰 설치형일 때만(navigator.standalone) · 16~90px 일 때만 */
+    if (!kb) {
+      var sh = 0;
+      if (window.navigator.standalone === true && window.screen) {
+        var land = window.innerWidth > window.innerHeight;
+        var scr = land ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
+        var d = scr - full;
+        if (d >= 16 && d <= 90) sh = Math.round(d);
+      }
+      docEl.style.setProperty('--wm-short', sh + 'px');
+    }
     if (kb) docEl.style.setProperty('--wm-vh', Math.round(h) + 'px'); else docEl.style.removeProperty('--wm-vh');
     if (realY() > 0 || (vv && vv.offsetTop > 0 && !kb) || (kb && vv && vv.offsetTop > 0)) realScrollTo(0, 0);
   }
