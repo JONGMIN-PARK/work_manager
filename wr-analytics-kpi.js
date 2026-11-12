@@ -48,6 +48,7 @@ function wsRefresh() {
   _wsRe('waTopC', _waTop(L.A, L.P));
   _wsRe('waSctC', waqCard(L.A));
   _wsRe('waDirC', wadCard());
+  if (typeof wa2Re === 'function') wa2Re('sel', true);
   wsApply(box);
 }
 function wsApply(box) {
@@ -100,7 +101,7 @@ function wsBind(box) {
       if (_waLast) { _wsRe('waKpiC', wakCard(_waLast.A, _waLast.P)); wsApply(box); }
       return;
     }
-    if (t.hasAttribute('data-wad-n')) { WA.dN = +t.getAttribute('data-wad-n'); _waSave(); if (_waLast) { _waLast.dir = wadData(_waLast.rg); _wsRe('waFindC', _waFind(_waLast.A, _waLast.P, _waGapOn())); _wsRe('waKpiC', wakCard(_waLast.A, _waLast.P)); _wsRe('waDirC', wadCard()); wsApply(box); } return; }
+    if (t.hasAttribute('data-wad-n')) { WA.dN = +t.getAttribute('data-wad-n'); _waSave(); if (_waLast) { _waLast.dir = wadData(_waLast.rg); _wsRe('waFindC', _waFind(_waLast.A, _waLast.P, _waGapOn())); _wsRe('waKpiC', wakCard(_waLast.A, _waLast.P)); _wsRe('waDirC', wadCard()); if (typeof wa2Re === 'function') wa2Re('dir', true); wsApply(box); } return; }
     if (t.hasAttribute('data-waq-y')) { WA.sy = t.getAttribute('data-waq-y'); _waSave(); if (_waLast) { _wsRe('waSctC', waqCard(_waLast.A)); wsApply(box); } return; }
     if (getSelection && String(getSelection()).length > 2) return;   // 글자를 긁는 중이면 강조 안 함
     wsToggle(t.getAttribute('data-wa-sel'), e.ctrlKey || e.metaKey);
@@ -137,8 +138,8 @@ function _wadMon(s) { var w = _waD(s).getUTCDay(); return _waAdd(s, -((w + 6) % 
 /** 최근 N주 (고른 기간의 마지막 날까지) — 같은 공통 필터, 기간만 넓혀서 (gfRange) */
 function wadData(rg) {
   if (typeof gfRange !== 'function' || !rg || !rg.e) return null;
-  var N = WA.dN || 12, s = _waAdd(_wadMon(rg.e), -(N - 1) * 7), W = {}, ppl = {};
-  _waRows(gfRange(s, rg.e)).forEach(function (r) {
+  var N = WA.dN || 12, s = _waAdd(_wadMon(rg.e), -(N - 1) * 7), W = {}, ppl = {}, rows = _waRows(gfRange(s, rg.e));
+  rows.forEach(function (r) {
     if (_waVac(r)) return;
     var h = +r.hours || 0; if (!h) return;
     var wk = _wadMon(r.date), g = _wadOf(r.abbr || '');
@@ -150,7 +151,7 @@ function wadData(rg) {
   var L = [];
   for (var i = 0; i < N; i++) { var k = _waAdd(s, i * 7); if (W[k] && W[k].t > 0) L.push(W[k]); }
   var gs = _wadGs().filter(function (g) { return L.some(function (w) { return w.g[g.k]; }); });
-  return { N: N, s: s, e: rg.e, W: L, gs: gs, team: _wadSlopes(L, gs), ppl: Object.keys(ppl) };
+  return { N: N, s: s, e: rg.e, W: L, gs: gs, team: _wadSlopes(L, gs), ppl: Object.keys(ppl), rows: rows };   // rows = 2단계(wr-analytics-p2.js)가 다시 묶음
 }
 /* 기울기 — 8h 이상 기록한 주만, 최근 8주를 직선으로 맞춤 (sl = 주마다 %p · a/b = 맞춘 선의 처음/끝) */
 function _wadSlopes(ws, gs) {

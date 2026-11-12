@@ -140,12 +140,15 @@ function waRender(f) {
     + _waFind(A, P, gapOn)
     + '<div class="wa-g2">' + _waMix(A, P, gapOn) + _waPeople(A) + '</div>'
     + (typeof wakCard === 'function' ? wakCard(A, P) : '')
+    + (typeof wapCard === 'function' ? wapCard(A) : '')   // v13.460 고른 한 사람 자세히
     + (typeof wadCard === 'function' ? '<div class="wa-g2 wa-g2r">' + waqCard(A) + wadCard() + '</div>' : '')
+    + (typeof watCard === 'function' ? watCard(A) + '<div class="wa-g2 wa-g2r">' + warCard() + wavCard() + '</div>' : '')
     + _waDaily(A, gapOn)
     + _waTop(A, P)
     + '<div id="waMonth">' + _waMonth(rg) + '</div>';
   _waBind(box);
   if (typeof wsBind === 'function') wsBind(box);
+  if (typeof wa2Bind === 'function') wa2Bind(box);
 }
 
 /* ─── ① 숫자 ─── */
@@ -215,6 +218,7 @@ function _waFind(A, P, gapOn) {
     if (per > 9.5) F.push(['warn', '가장 바쁜 날 ' + _waMD(top.d) + ' — 인당 ' + _waR1(per) + 'h']);
   }
   if (typeof wadFind === 'function') wadFind(F);
+  if (typeof wa2Find === 'function') wa2Find(F, A);   // v13.460 목표 · 의존 · 업체 이동
   if (!F.length) F.push(['good', '눈에 띄는 쏠림 · 과부하 없음']);
   if (typeof wsFindSort === 'function') F = wsFindSort(F);
   var ic = { bad: '⛔', warn: '⚠️', info: '•', good: '✅' };

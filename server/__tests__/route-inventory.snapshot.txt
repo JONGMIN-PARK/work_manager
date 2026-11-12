@@ -368,6 +368,7 @@ GET /api/v1/users/departments
 GET /api/v1/users/lookup
 GET /api/v1/users/operator-list
 GET /api/v1/users/pending
+GET /api/wa-targets
 GET /api/weekly-reports
 GET /api/weekly-reports/:id
 GET /api/weekly-reports/goals
@@ -740,6 +741,7 @@ PUT /api/v1/users/:id/operator-mode
 PUT /api/v1/users/:id/reject
 PUT /api/v1/users/:id/role
 PUT /api/v1/users/:id/status
+PUT /api/wa-targets
 PUT /api/weekly-reports/goals
 PUT /api/white-label
 PUT /api/workflows/:id

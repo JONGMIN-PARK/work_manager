@@ -126,7 +126,7 @@ else
   run_batch e2e53-wr-insights.js
   run_batch e2e54-lazy-libs.js
   run_batch e2e55-wr-goals.js
-  run_batch e2e56-wr-analytics.js e2e82-wa-kpi.js
+  run_batch e2e56-wr-analytics.js e2e82-wa-kpi.js e2e83-wa-p2.js
   run_batch e2e57-mtl-longbar.js
   run_batch e2e58-chat.js
   run_batch e2e59-notebook.js
