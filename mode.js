@@ -8,6 +8,7 @@ var WM_LAST_VIEW='wm-last-view';
 var _wmNavMoved=false;      // 시작 후 사용자가(또는 알림 링크 등이) 이미 화면을 옮겼으면 복원하지 않음
 var _wmViewRestoring=false;
 function _wmSaveView(){
+  if(window._wmNoSaveView)return;  // v13.467 권한 없는 화면에서 자동으로 옮길 때는 기억을 덮지 않음
   if(window.WM_SOLO||window.WM_PDWIN)return;  // 떼어 낸 대화 창 · 프로젝트 창은 본 창의 '마지막 화면' 을 바꾸지 않음 (v13.447 · v13.464)
   if(!_wmViewRestoring)_wmNavMoved=true;
   lsSetJSON(WM_LAST_VIEW,{page:curPage,mode:curMode});
@@ -49,6 +50,7 @@ function setPage(page){
     document.querySelectorAll('#modeTabs .tab').forEach(function(t){t.classList.toggle('on',t.dataset.m===page)});
     page='team';
   }
+  if(page==='team'&&typeof wmCanTeam==='function'&&typeof currentUser!=='undefined'&&currentUser&&!wmCanTeam())page='mywork';  // v13.467 업무 관리는 허락된 사람만 — 바로 가기 · 마지막 화면 · 알림으로 와도 내 업무로
   if(curPage==='mindmap'&&page!=='mindmap'&&typeof mmOnLeave==='function')mmOnLeave();  // 저장 마무리 · 편집 잠금 해제
   if(curPage==='notebook'&&page!=='notebook'&&typeof _nbFlush==='function')_nbFlush();  // 노트북 — 남은 저장 마저
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwOnLeave==='function')mwOnLeave();  // 지금 상태 기억 — 다시 오면 그대로 (v13.286)

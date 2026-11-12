@@ -104,7 +104,15 @@ function waPrevRange(rg) {
 }
 function _waRows(rows) { return typeof wdApply === 'function' ? wdApply(rows) : rows; }
 
-var _waLast = null;
+var _waLast = null, _waTok = 0, _waLite = false;
+/* 아래쪽 카드 — 처음 열 때는 첫 화면 뒤에 채움 (waRender) */
+function _waRestHtml(A, P, gapOn, rg) {
+  return (typeof wadCard === 'function' ? '<div class="wa-g2 wa-g2r">' + waqCard(A) + wadCard() + '</div>' : '')
+    + (typeof watCard === 'function' ? watCard(A) + '<div class="wa-g2 wa-g2r">' + warCard() + wavCard() + '</div>' : '')
+    + _waDaily(A, gapOn)
+    + _waTop(A, P)
+    + '<div id="waMonth">' + _waMonth(rg) + '</div>';
+}
 /* v13.405 창 크기가 바뀌면 그래프를 새 폭으로 다시 그림 — 넓을 때 그린 그래프(고정 px)가 줄인 창에서 그대로 남아 화면이 옆으로 길어지던 것 */
 var _waRO = null, _waW = 0, _waROT = null;
 function _waWatch() {
@@ -132,7 +140,9 @@ function waRender(f) {
   if (typeof wadData === 'function') _waLast.dir = wadData(rg);   // v13.459 업무 방향 (최근 N주) — 한눈에 문장에도 씀
   setTimeout(_waWatch, 0);
   var gapOn = _waGapOn();
-  box.innerHTML = ''
+  var first = !box.querySelector('.wa-card'), tok = ++_waTok;
+  _waLite = first;   // 처음엔 한눈에 의 최근 N주 문장(의존 · 업체 이동)은 아래 카드와 함께
+  var top = ''
     + '<div class="wa-scope">' + _waMD(rg.s) + ' ~ ' + _waMD(rg.e) + ' · 평일 ' + A.wd + '일 · ' + A.people + '명 · ' + A.n.toLocaleString() + '건'
     + (P ? ' <span class="wa-vs">비교: 지난 기간 ' + _waMD(prg.s) + ' ~ ' + _waMD(prg.e) + '</span>' : selWeek ? ' <span class="wa-vs">지난 기간 기록 없음 — 비교 생략</span>' : ' <span class="wa-vs">전체 기간 — 주 · 기간을 고르면 지난 기간과 비교</span>') + '</div>'
     + (typeof wsBar === 'function' ? wsBar() : '')
@@ -140,12 +150,23 @@ function waRender(f) {
     + _waFind(A, P, gapOn)
     + '<div class="wa-g2">' + _waMix(A, P, gapOn) + _waPeople(A) + '</div>'
     + (typeof wakCard === 'function' ? wakCard(A, P) : '')
-    + (typeof wapCard === 'function' ? wapCard(A) : '')   // v13.460 고른 한 사람 자세히
-    + (typeof wadCard === 'function' ? '<div class="wa-g2 wa-g2r">' + waqCard(A) + wadCard() + '</div>' : '')
-    + (typeof watCard === 'function' ? watCard(A) + '<div class="wa-g2 wa-g2r">' + warCard() + wavCard() + '</div>' : '')
-    + _waDaily(A, gapOn)
-    + _waTop(A, P)
-    + '<div id="waMonth">' + _waMonth(rg) + '</div>';
+    + (typeof wapCard === 'function' ? wapCard(A) : '');   // v13.460 고른 한 사람 자세히
+  _waLite = false;
+  if (first) {
+    // v13.467 처음 열 때 — 위쪽 카드부터 바로 보이고, 아래쪽(사분면 · 방향 · 목표 · 의존 · 이동 · 날짜별 · 순위 · 월별)은 첫 화면이 나온 직후에
+    //   (열두 장 · 요소 1,300개를 한꺼번에 만들고 그리느라 느린 PC 에서 2초 넘게 빈 화면이었음)
+    box.innerHTML = top + '<div id="waRest" class="wa-rest" aria-busy="true"><div class="wa-empty">아래 카드 그리는 중…</div></div>';
+    var fill = function () {
+      var r = document.getElementById('waRest'); if (tok !== _waTok || !r || !_waLast) return;
+      var L = _waLast, t = document.createElement('div');
+      t.innerHTML = _waRestHtml(L.A, L.P, _waGapOn(), L.rg);
+      r.replaceWith.apply(r, Array.prototype.slice.call(t.childNodes));
+      if (typeof _wsRe === 'function') _wsRe('waFindC', _waFind(L.A, L.P, _waGapOn()));   // 의존 · 업체 이동 문장까지
+      if (typeof wsApply === 'function') wsApply(box);
+    };
+    requestAnimationFrame(function () { requestAnimationFrame(function () { setTimeout(fill, 0); }); });   // 화면이 한 번 그려진 뒤에
+    setTimeout(fill, 1500);   // 탭이 뒤에 있어 rAF 가 안 돌 때
+  } else box.innerHTML = top + _waRestHtml(A, P, gapOn, rg);
   _waBind(box);
   if (typeof wsBind === 'function') wsBind(box);
   if (typeof wa2Bind === 'function') wa2Bind(box);

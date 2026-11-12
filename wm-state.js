@@ -162,7 +162,7 @@ function rFsz(){
   if(nm) nm.textContent=f?f.l.replace(/\s*\(.*\)$/,''):'';
   var g=v.parentNode; if(g&&f) g.title='화면 전체 글자 크기 — '+nm.textContent+' 기준 · 글씨체마다 따로 기억';
 }
-_wmFs.crisp=lsGet('wa-crisp')==='1'; _wmFs.s=_wmFsOf(cFnt);
+var _wmCr0=lsGet('wa-crisp'); _wmFs.crisp=_wmCr0==null?true:_wmCr0==='1'; _wmFs.s=_wmFsOf(cFnt);   // v13.467 작은 글자 키우기는 기본 켬 (끈 적이 있으면 '' 로 저장돼 있어 그대로 꺼짐)
 if(_wmFs.crisp||_wmFs.s!==1){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_wmFsApply); else _wmFsApply(); window.addEventListener('load',function(){ if(document.getElementById('wmCrispCss')) _wmCrispBuild(); }); }
 document.addEventListener('DOMContentLoaded',function(){ rFsz(); var c=document.getElementById('crispChk'); if(c) c.checked=_wmFs.crisp; });
 /* 헤더 · 툴바 펼침 메뉴(.hdr-pop) — 한 번에 하나만, 바깥 누르기 · Esc 로 닫음 (v13.287) */

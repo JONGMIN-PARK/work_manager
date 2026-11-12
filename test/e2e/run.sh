@@ -134,6 +134,7 @@ else
   run_batch e2e86-font-size.js
   run_batch e2e87-pd-win.js
   run_batch e2e88-mw-panel-close.js
+  run_batch e2e89-team-access.js
   run_batch e2e59-notebook.js
   run_batch e2e60-notebook-links-coach.js
   run_batch e2e61-notebook-print.js

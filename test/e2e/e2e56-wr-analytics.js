@@ -96,8 +96,10 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.evaluate(function () { document.getElementById('dateRangeFrom').value = '2026-09-14'; document.getElementById('dateRangeTo').value = '2026-09-18'; pickDateRange(); });
     await page.setViewport({ width: 402, height: 874, isMobile: true, hasTouch: true });
     await wait(700);
+    await page.waitForFunction(function () { return typeof aD !== 'undefined' && aD.length > 0 && !document.getElementById('initLoading') && typeof rCht === 'function'; }, { timeout: 60000 });   // 휴대폰 흉내로 바꾸면 페이지가 다시 읽힘 — 데이터가 온 뒤에
     await page.evaluate(function () { rCht(); });
-    await wait(300);
+    await page.waitForSelector('#waBox .wa-tiles', { timeout: 15000 });
+    await wait(600);
     var mob = await page.evaluate(function () {
       var wide = Array.prototype.filter.call(document.querySelectorAll('#waBox *'), function (e) { var r = e.getBoundingClientRect(); return r.width > 0 && r.right > 404 && !e.closest('.wa-tw,.wa-chart'); }).slice(0, 5).map(function (e) { return (e.className && e.className.baseVal != null ? e.className.baseVal : e.className) + ':' + Math.round(e.getBoundingClientRect().right); });
       return { sw: document.documentElement.scrollWidth, wide: wide, tiles: getComputedStyle(document.querySelector('.wa-tiles')).gridTemplateColumns.split(' ').length };

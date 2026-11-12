@@ -269,7 +269,9 @@ function _wmUpdateShow(d) {
   var bar = document.createElement('div'); bar.id = 'wmUpd'; bar.className = 'wm-upd'; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span class="wm-upd-i">⬆</span><span class="wm-upd-t"><b></b><i></i></span><button type="button" class="wm-upd-go">지금 새로 고침</button><button type="button" class="wm-upd-x" title="1시간 뒤에 다시 알림">나중에</button>';
   bar.querySelector('b').textContent = '새 버전' + (d.version ? ' v' + d.version : '') + '이 나왔습니다';
-  bar.querySelector('i').textContent = d.title || '새로 고치면 바로 적용됩니다 — 쓰던 메시지는 그대로 남습니다';
+  // v13.467 무엇이 바뀌었는지(제목)는 관리자에게만 — 그 밖엔 버전 번호만
+  var _adm = typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin';
+  bar.querySelector('i').textContent = (_adm && d.title) || '새로 고치면 바로 적용됩니다 — 쓰던 메시지는 그대로 남습니다';
   bar.querySelector('.wm-upd-go').onclick = wmUpdateApply;
   bar.querySelector('.wm-upd-x').onclick = function () { try { localStorage.setItem('wm-upd-later', JSON.stringify({ build: d.build, until: Date.now() + 3600000 })); } catch (_) {} bar.remove(); };
   document.body.appendChild(bar);

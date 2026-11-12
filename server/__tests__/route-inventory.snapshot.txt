@@ -716,6 +716,7 @@ PUT /api/users/:id/operator-mode
 PUT /api/users/:id/reject
 PUT /api/users/:id/role
 PUT /api/users/:id/status
+PUT /api/users/:id/team-access
 PUT /api/v1/ai/config
 PUT /api/v1/auth/change-password
 PUT /api/v1/checklists/:id
@@ -741,6 +742,7 @@ PUT /api/v1/users/:id/operator-mode
 PUT /api/v1/users/:id/reject
 PUT /api/v1/users/:id/role
 PUT /api/v1/users/:id/status
+PUT /api/v1/users/:id/team-access
 PUT /api/wa-targets
 PUT /api/weekly-reports/goals
 PUT /api/white-label

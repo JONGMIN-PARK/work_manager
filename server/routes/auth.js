@@ -223,12 +223,16 @@ async function _meData(user) {
     user.role === 'admin' ? true : db.query("SELECT value FROM user_settings WHERE user_id = $1 AND key = 'operator_mode'", [user.id])
       .then(function (x) { return !!(x.rows.length && x.rows[0].value && x.rows[0].value.enabled); }, function () { return false; }),
     // 마인드맵 사용 권한 (admin 자동 또는 user_settings 'mindmap_access' 부여)
-    mindmapAccess.hasMindmapAccessByUser(user.id, user.role)
+    mindmapAccess.hasMindmapAccessByUser(user.id, user.role),
+    // 📒 업무 관리 보기 (v13.467) — 관리자 · 임원 · 팀장은 늘, 그 밖엔 관리자가 켠 사람만 (user_settings 'team_access')
+    ['admin', 'executive', 'manager'].indexOf(user.role) >= 0 ? true : db.query("SELECT value FROM user_settings WHERE user_id = $1 AND key = 'team_access'", [user.id])
+      .then(function (x) { return !!(x.rows.length && x.rows[0].value && x.rows[0].value.enabled); }, function () { return false; })
   ]);
   var sanitized = authService.sanitizeUser(user);
   sanitized.plProjects = r[0];
   sanitized.operatorMode = r[1];
   sanitized.mindmapAccess = r[2];
+  sanitized.teamAccess = r[3];
   return sanitized;
 }
 

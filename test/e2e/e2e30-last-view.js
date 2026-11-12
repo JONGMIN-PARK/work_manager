@@ -80,7 +80,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await wait(800);
     await login('kim@t.com');
     var v3 = await view();
-    check(v3.page === 'team' && v3.mode === 'weekly' && !v3.wr, '권한 없는 탭은 복원 안 함 → 기본 화면 ' + JSON.stringify(v3));
+    check(v3.page === 'mywork' && !v3.wr, '권한 없는 탭은 복원 안 함 → 기본 화면(v13.467 팀원은 업무 관리 대신 내 업무) ' + JSON.stringify(v3));
     // 패치노트 — 관리자만 (v13.263)
     var pn = await page.evaluate(function () { setPage('patchnotes'); return { tab: document.getElementById('tabPatchNotes').style.display, page: curPage }; });
     check(pn.tab === 'none' && pn.page !== 'patchnotes', '팀원 — 패치노트 탭 숨김 · 열리지 않음 ' + JSON.stringify(pn));

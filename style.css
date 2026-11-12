@@ -7974,3 +7974,16 @@ html.wm-pdwin .pd-maxbtn,html.wm-pdwin .pd-popbtn,html.wm-pdwin .pd-resizer,html
 #loginOverlay.wm-login .wm-li-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:color-mix(in srgb,var(--bg-p) 96%,transparent)}
 #loginOverlay.wm-login .wm-li-logo{will-change:transform}
 #loginOverlay.wm-login .wm-li-f input{transition:border-color .15s,box-shadow .15s}
+/* ═══ v13.467 시인성 — 포커스(기본 테마) 흐린 글자 두 단계가 흰 바탕에서 명암비 3.9 · 2.3 이던 것 → 6.5 · 5.3 (WCAG 4.5 이상)
+ *   안 고른 탭 · 라벨 · 힌트 · 도움말 · 버전 표시가 모두 이 색. 그 위 단계(--t4)도 한 칸 진하게 */
+[data-theme="focus"]{--t4:#414E61;--t5:#525F73;--t6:#5F6C82}
+/* 밝은 하늘색 글자(#22D3EE)는 흰 바탕에서 1.8 — 테마 글자색을 섞어 밝은 테마에선 진하게, 어두운 테마에선 밝게 */
+.awAdminBtn{color:color-mix(in srgb,#0891B2 70%,var(--t1))!important;border-color:color-mix(in srgb,#06B6D4 65%,var(--bd))!important}
+.mtl-t2.is-sat,.mtl-cal-w .is-sat{color:color-mix(in srgb,#3B82F6 70%,var(--t1))}
+.mtl-guide.is-pick span{color:#1F1300}   /* 주황 바탕 흰 글자(2.1) → 짙은 글자 */
+.mw-pill.is-0{opacity:.8}
+[data-theme="pearl"]{--t6:#666D8E}   /* 3.5 → 4.9 */
+[data-theme="nova"]{--t6:#7C86B4}   /* 4.0 → 5.2 */
+.mtl-t2.is-sun,.mtl-cal-w .is-sun{color:color-mix(in srgb,#EF4444 80%,var(--t1))}
+/* v13.467 작은 글자 키우기가 기본이 되면서 휴대폰 KPI 띠가 1~2px 높아짐 → 칸 위아래 여백을 줄여 예전 높이로 */
+@media (max-width:768px){[data-crisp] #mWeekly #kpiSticky .sc{padding-top:2px;padding-bottom:2px}[data-crisp] #mWeekly #kpiSticky .sl{line-height:1.05}}

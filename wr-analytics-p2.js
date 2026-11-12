@@ -411,6 +411,7 @@ function wa2Find(F, A) {
       });
     }
   }
+  if (typeof _waLite !== 'undefined' && _waLite) return;   // 처음 그릴 땐 아래 카드와 함께 (wr-analytics.js waRender)
   var D = _waLast && _waLast.dir, X = _wa2(D); if (!X) return;
   // 한 사람 의존
   if (mgr && Object.keys(X.P).length >= 2) {
