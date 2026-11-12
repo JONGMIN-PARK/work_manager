@@ -448,9 +448,10 @@
     if (typeof setPage === 'function') setPage('weekly_report');
     var tries = 0;
     (function put() {
-      var id = _authorState.viewMode === 'compare' ? 'wrAuEditorCur' : 'wrAuEditor';
+      var id = vmode() === 'compare' ? 'wrAuEditorCur' : 'wrAuEditor';
       if ($(id) && STATE.tab === 'author') {
-        if (_authorState.viewMode !== 'compare' && _authorState.editPane !== 'cur') { _authorState.editPane = 'cur'; renderAuthor(); }
+        if (wrNarrow()) setNp('cur');
+        if (vmode() !== 'compare' && _authorState.editPane !== 'cur') { _authorState.editPane = 'cur'; renderAuthor(); }
         var ta = $(id), v = ta.value;
         if (ta.selectionStart === 0 && ta.selectionEnd === 0 && v) ta.setSelectionRange(v.length, v.length);   // 커서가 없으면 끝에
         insertAtCursor(id, (v && !/\n$/.test(v.slice(0, ta.selectionStart)) ? '\n' : '') + String(text || '').replace(/\n*$/, '\n'));
@@ -540,7 +541,7 @@
   function renderSearch() {
     $('wrPanel').innerHTML = ''
       + '<div class="wr-card wr-mb">'
-      +   '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'
+      +   '<div class="wr-sgrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'
       +     inputCell('wrSQ', 'text', '키워드 (이름/세부)')
       +     inputCell('wrSAssignee', 'text', '담당자 (예: 박종민)')
       +     inputCell('wrSClient', 'text', '사이트 (예: 디케이티)')
@@ -604,7 +605,7 @@
         return;
       }
       var html = '<div class="wr-card wr-tbl-wrap">'
-        + '<table class="wr-tbl">'
+        + '<table class="wr-tbl wr-cards wr-scards">'
         +   '<thead><tr>'
         +     th('주차') + th('섹션') + th('사이트') + th('업무') + th('D-day') + th('%') + th('담당자') + th('상태')
         +   '</tr></thead><tbody>'
@@ -617,14 +618,14 @@
               return '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;background:var(--bg-i);color:var(--t5);margin:1px 2px 1px 0">@' + esc(mm) + '</span>';
             }).join('');
             return '<tr>'
-              + td('<div style="font-weight:600">' + esc(m.week_label || '-') + '</div><div style="font-size:10px;color:var(--t6)">' + esc(m.team || '') + '</div>')
-              + td(esc(secLabel(it.section) || ''))
-              + td('<strong>' + esc(it.client || '') + '</strong>')
-              + td(esc(it.name || '') + details)
-              + td(esc(it.deadline || ''))
-              + td(it.pct >= 0 ? esc(it.pct + '%') : '')
-              + td(members)
-              + td(statusPill(it.status))
+              + td('<div style="font-weight:600">' + esc(m.week_label || '-') + '</div><div class="wr-c-team" style="font-size:10px;color:var(--t6)">' + esc(m.team || '') + '</div>', 'c-wk')
+              + td(esc(secLabel(it.section) || ''), 'c-sec')
+              + td('<strong>' + esc(it.client || '') + '</strong>', 'c-cl')
+              + td('<span class="c-nm-t">' + esc(it.name || '') + '</span>' + details, 'c-nm')
+              + td(it.deadline ? esc(it.deadline) : '', 'c-dd' + (it.deadline ? '' : ' c-empty'))
+              + td(it.pct >= 0 ? esc(it.pct + '%') : '', 'c-pct' + (it.pct >= 0 ? '' : ' c-empty'))
+              + td(members, 'c-mem' + (members ? '' : ' c-empty'))
+              + td(statusPill(it.status), 'c-st')
               + '</tr>';
           }).join('')
         + '</tbody></table></div>';
@@ -635,7 +636,15 @@
   }
 
   function th(t) { return '<th>' + t + '</th>'; }
-  function td(html) { return '<td>' + html + '</td>'; }
+  function td(html, cls) { return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + html + '</td>'; }
+  /* v13.461 DATE 칸 — 서버가 한국 자정을 UTC 로 보내 '2026-11-08T15:00:00.000Z' 처럼 하루 앞 날짜로 보이던 것 → 이 기기 날짜로 */
+  function ymd(v) {
+    if (!v) return '';
+    var t = String(v); if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    var d = new Date(t); if (isNaN(d)) return t.slice(0, 10);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function rangeTxt(a, b) { a = ymd(a); b = ymd(b); if (!a && !b) return '-'; return (a ? a.slice(5).replace('-', '/') : '?') + ' ~ ' + (b ? b.slice(5).replace('-', '/') : '?'); }
 
   /* ─── 📈 분석 (v13.310) — 보고서를 주를 넘어 이어 붙여 추세 · 경과 · 효율 · 목표 (server/lib/weekly-insights) ─── */
   var WRI = { weeks: 12, team: '', risk: 'overdue', data: null, q: '', sel: {} };
@@ -1083,19 +1092,19 @@
         var st = (it.stats && it.stats.cur) || {};
         var bs = st.byStatus || {};
         return '<tr>'
-          + td('<strong>' + esc(it.week_label || '-') + '</strong>')
-          + td(esc(it.team || '-'))
-          + td('<span style="font-size:11px;color:var(--t5)">' + esc(it.name) + '</span>')
-          + td(esc(it.week_start || '-') + ' ~ ' + esc(it.week_end || '-'))
-          + td('<span style="color:#1a8a40">' + (bs.done || 0) + '</span> / <span style="color:#d03030">' + (bs.in_progress || 0) + '</span> / ' + (st.total || 0))
-          + td('<span style="font-size:11px;color:var(--t6)">' + esc(it.saved_at ? new Date(it.saved_at).toLocaleString('ko-KR') : '-') + '</span>')
+          + td('<strong>' + esc(it.week_label || '-') + '</strong>', 'c-wk')
+          + td(esc(it.team || '-'), 'c-team')
+          + td('<span style="font-size:11px;color:var(--t5)">' + esc(it.name) + '</span>', 'c-name')
+          + td('<span title="' + esc(ymd(it.week_start) + ' ~ ' + ymd(it.week_end)) + '">' + esc(rangeTxt(it.week_start, it.week_end)) + '</span>', 'c-rg')
+          + td('<span class="c-lbl">완료/진행/총 </span><span style="color:#1a8a40">' + (bs.done || 0) + '</span> / <span style="color:#d03030">' + (bs.in_progress || 0) + '</span> / ' + (st.total || 0), 'c-cnt')
+          + td('<span style="font-size:11px;color:var(--t6)">' + esc(it.saved_at ? new Date(it.saved_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-') + '</span>', 'c-sv')
           + td('<button class="tab" data-prev="' + esc(it.id) + '" style="padding:4px 10px;font-size:11px;color:var(--ac);border:1px solid var(--ac);background:transparent;margin-right:4px">미리보기</button>'
-              + '<button class="tab" data-del="' + esc(it.id) + '" style="padding:4px 10px;font-size:11px;color:#d03030;border:1px solid #d03030;background:transparent">삭제</button>')
+              + '<button class="tab" data-del="' + esc(it.id) + '" style="padding:4px 10px;font-size:11px;color:#d03030;border:1px solid #d03030;background:transparent">삭제</button>', 'c-act')
           + '</tr>';
       }).join('');
       box.innerHTML = ''
         + '<div class="wr-card wr-tbl-wrap">'
-        +   '<table class="wr-tbl">'
+        +   '<table class="wr-tbl wr-cards wr-lcards">'
         +     '<thead><tr>'
         +       th('주차') + th('팀') + th('이름') + th('기간') + th('완료/진행/총') + th('저장') + th('')
         +     '</tr></thead>'
@@ -1142,7 +1151,7 @@
       +   '<button id="wrPrevBack" class="tab" style="padding:6px 12px">← 목록</button>'
       +   '<div style="flex:1">'
       +     '<div style="font-size:15px;font-weight:700">' + esc(meta.weekLabel || d.week_label || '-') + ' · ' + esc(meta.team || d.team || '') + '</div>'
-      +     '<div style="font-size:11px;color:var(--t5)">' + esc(d.name) + ' · ' + esc(d.week_start || '') + ' ~ ' + esc(d.week_end || '') + '</div>'
+      +     '<div style="font-size:11px;color:var(--t5)">' + esc(d.name) + ' · ' + esc(ymd(d.week_start)) + ' ~ ' + esc(ymd(d.week_end)) + '</div>'
       +   '</div>'
       +   '<div class="tabs sub-tabs" style="margin:0">'
       +     '<button class="tab' + (pane === 'last' ? ' on' : '') + '" data-pp="last">지난주</button>'
@@ -1181,6 +1190,25 @@
   var LS_SRC_WIDTH = 'wr-src-width';
   var LS_SRC_COLLAPSED = 'wr-src-collapsed';
   var SRC_W_DEFAULT = 440, SRC_W_MIN = 320, SRC_W_MAX = 960;
+  /* v13.461 좁은 화면(≤768px — 휴대폰 · 줄인 PC 창) — 작성은 지난주 · 금주 · 미리보기 · 업무일지를 한 칸씩 (wr-np 막대) */
+  var LS_NP = 'wr-au-np';
+  function wrNarrow() { return window.matchMedia ? window.matchMedia('(max-width:768px)').matches : window.innerWidth <= 768; }
+  function vmode() { return wrNarrow() ? 'compare' : _authorState.viewMode; }   // 좁으면 늘 비교 틀(두 칸 다 그려 두고 CSS 로 하나만)
+  function pvOn() { return _authorState.showPreview || wrNarrow(); }
+  function srcOff() { return _authorState.src.collapsed && !wrNarrow(); }
+  function setNp(np) {
+    _authorState.np = np; lsSet(LS_NP, np);
+    var w = $('wrAuWork'); if (w) w.setAttribute('data-np', np);
+    document.querySelectorAll('#wrNp [data-np]').forEach(function (b) { var on = b.dataset.np === np; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    if (np === 'last' || np === 'cur') _authorState.editPane = np;
+    if (np === 'pv') updateAuthorPreview();
+  }
+  function npBar() {
+    var np = _authorState.np;
+    function b(k, lb) { return '<button type="button" role="tab" data-np="' + k + '" class="' + (np === k ? 'on' : '') + '" aria-selected="' + (np === k) + '">' + lb + '</button>'; }
+    return '<div class="wr-np wm-seg" id="wrNp" role="tablist" aria-label="작성 화면 고르기">'
+      + b('last', '지난주' + paneDirtyBadge('last', true)) + b('cur', '금주' + paneDirtyBadge('cur', true)) + b('pv', '👁 미리보기') + b('src', '📋 업무일지') + '</div>';
+  }
   function clampSrcWidth(w) { return Math.max(SRC_W_MIN, Math.min(SRC_W_MAX, w || SRC_W_DEFAULT)); }
 
   // 작성 탭 상태
@@ -1193,6 +1221,7 @@
     editPane: 'cur',
     previewPane: 'cur',
     viewMode: 'compare', // 'compare' = 지난주+금주 동시, 'single' = 토글
+    np: lsGet('wr-au-np') || 'cur',   // 좁은 화면에서 보이는 칸 — last | cur | pv | src
     loadedId: null,
     loadedName: '',
     loadedVersion: null,   // 덮어쓰기 충돌 확인용 (서버 version)
@@ -1236,7 +1265,9 @@
       _authorState.weekStart = d.start;
       _authorState.weekEnd = d.end;
     }
-    var box = $('wrPanel');
+    var box = $('wrPanel'), nar = wrNarrow();
+    window._wrAuNar = nar;
+    if (['last', 'cur', 'pv', 'src'].indexOf(_authorState.np) < 0) _authorState.np = 'cur';
     box.innerHTML = ''
       + '<div class="wr-card wr-mb10">'
       +   '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
@@ -1246,11 +1277,11 @@
       +     '<input id="wrAuStart" type="date" value="' + esc(_authorState.weekStart) + '" class="wr-inp wr-inp-sm">'
       +     '<span style="color:var(--t6)">~</span>'
       +     '<input id="wrAuEnd" type="date" value="' + esc(_authorState.weekEnd) + '" class="wr-inp wr-inp-sm">'
-      +     '<span class="wm-seg" title="뷰 모드">'
+      +     '<span class="wm-seg wr-au-vm" title="뷰 모드">'
       +       '<button class="' + (_authorState.viewMode === 'compare' ? 'on' : '') + '" data-vm="compare" title="지난주 · 금주를 위아래로">비교</button>'
       +       '<button class="' + (_authorState.viewMode === 'single'  ? 'on' : '') + '" data-vm="single">단일</button>'
       +     '</span>'
-      +     '<span class="wm-seg"><button id="wrAuPvToggle" class="' + (_authorState.showPreview ? 'on' : '') + '" title="미리보기를 숨기면 편집창이 전체 폭을 씁니다">👁 미리보기</button></span>'
+      +     '<span class="wm-seg wr-au-vm"><button id="wrAuPvToggle" class="' + (_authorState.showPreview ? 'on' : '') + '" title="미리보기를 숨기면 편집창이 전체 폭을 씁니다">👁 미리보기</button></span>'
       +     '<div class="wm-tb-sp"></div>'
       +     '<span id="wrAuStatusBadge" style="font-size:11px;color:var(--t5);flex:1 1 120px;min-width:0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
       +     '<button id="wrAuLoadList" class="btn btn-g" title="저장된 보고서 열기">📂 불러오기</button>'
@@ -1270,8 +1301,9 @@
       +   '<div id="wrAuLoadDropdown" style="display:none;margin-top:8px"></div>'
       + '</div>'
       + '<div id="wrAuCheck"></div>'
-      + '<div id="wrAuWork" class="wr-au-work' + (_authorState.src.collapsed ? ' src-off' : '') + '" style="--wr-src-w:' + _authorState.src.width + 'px">'
-      +   '<div id="wrAuEditArea" class="wr-au-edit">' + (_authorState.viewMode === 'compare' ? renderAuthorCompare() : renderAuthorSingle()) + '</div>'
+      + (nar ? npBar() : '')
+      + '<div id="wrAuWork" class="wr-au-work' + (srcOff() ? ' src-off' : '') + (nar ? ' wr-nar' : '') + '"' + (nar ? ' data-np="' + esc(_authorState.np) + '"' : '') + ' style="--wr-src-w:' + _authorState.src.width + 'px">'
+      +   '<div id="wrAuEditArea" class="wr-au-edit">' + (vmode() === 'compare' ? renderAuthorCompare() : renderAuthorSingle()) + '</div>'
       +   '<div id="wrSrcResizer" class="wr-src-resizer" title="드래그: 패널 폭 조절 · 더블클릭: 기본 폭"></div>'
       +   '<aside id="wrSrc" class="wr-src">' + renderSrcShell() + '</aside>'
       + '</div>';
@@ -1282,6 +1314,7 @@
     $('wrAuStart').addEventListener('change', function (e) { _authorTouch(); _authorState.weekStart = e.target.value; loadWorkRecords(); scheduleCheck(300); });
     $('wrAuEnd').addEventListener('change', function (e) { _authorTouch(); _authorState.weekEnd = e.target.value; loadWorkRecords(); });
 
+    box.querySelectorAll('#wrNp [data-np]').forEach(function (b) { b.addEventListener('click', function () { syncAuthorEditorsToState(); setNp(b.dataset.np); }); });
     box.querySelectorAll('[data-vm]').forEach(function (b) {
       b.addEventListener('click', function () { syncAuthorEditorsToState(); _authorState.viewMode = b.dataset.vm; renderAuthor(); });
     });
@@ -1359,6 +1392,7 @@
     function check() {
       var area = $('wrAuEditArea');
       var w = area ? area.getBoundingClientRect().width : window.innerWidth;
+      if (window._wrAuNar !== undefined && window._wrAuNar !== wrNarrow() && $('wrAuWork') && STATE.tab === 'author') { syncAuthorEditorsToState(); renderAuthor(); return; }   // 좁은 ↔ 넓은 화면을 넘나들면 틀을 다시
       var two = _authorState.showPreview && w >= 760;
       ['wrAuMain', 'wrAuMainLast', 'wrAuMainCur'].forEach(function (id) {
         var m = $(id); if (m) m.style.gridTemplateColumns = two ? '1fr 1fr' : '1fr';
@@ -1381,7 +1415,7 @@
     function sbtn(label, key, title) {
       return '<button class="tab"' + t + ' data-status="' + key + '" title="' + esc(title) + '" style="padding:4px 8px;font-size:11px">' + esc(label) + '</button>';
     }
-    return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px" title="Enter: 다음 줄 머리 이어 쓰기 · Tab/Shift+Tab: 들여쓰기 · Alt+1/2/3/0: 상태">'
+    return '<div class="wr-au-tbar" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px" title="Enter: 다음 줄 머리 이어 쓰기 · Tab/Shift+Tab: 들여쓰기 · Alt+1/2/3/0: 상태">'
       + btn('[개발]', '\n[개발]\n')
       + btn('[셋업]', '\n[셋업]\n')
       + btn('[C/S]', '\n[C/S]\n')
@@ -1407,7 +1441,7 @@
       var pvId = 'wrAuPreview' + (key === 'last' ? 'Last' : 'Cur');
       var color = key === 'last' ? '#506070' : 'var(--ac)';
       return '<div id="wrAuMain' + (key === 'last' ? 'Last' : 'Cur') + '" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-        + '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + color + ';border-radius:8px;padding:10px;display:flex;flex-direction:column;min-height:340px">'
+        + '<div class="wr-ed-blk" style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + color + ';border-radius:8px;padding:10px;display:flex;flex-direction:column;min-height:340px">'
         +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
         +     '<span style="font-size:11px;font-weight:700;color:' + color + ';background:rgba(58,106,176,.08);padding:2px 8px;border-radius:4px">' + title + '</span>'
         +     paneDirtyBadge(key)
@@ -1416,7 +1450,7 @@
         +   authorToolbar(edId)
         +   '<textarea id="' + edId + '" data-pane="' + key + '" spellcheck="false" placeholder="[개발]\n- [사이트] 업무명 ~MM/DD 50% @담당자\n  : 세부내용 #진행중\n..." style="flex:1;width:100%;min-height:240px;padding:10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12.5px;font-family:ui-monospace,Consolas,monospace;line-height:1.6;resize:vertical"></textarea>'
         + '</div>'
-        + (!_authorState.showPreview ? '' : '<div style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + color + ';border-radius:8px;padding:10px;min-height:340px">'
+        + (!pvOn() ? '' : '<div class="wr-pv-blk" style="background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid ' + color + ';border-radius:8px;padding:10px;min-height:340px">'
         +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
         +     '<span style="font-size:11px;font-weight:700;color:' + color + ';background:rgba(58,106,176,.08);padding:2px 8px;border-radius:4px">' + title + '</span>'
         +     '<div style="font-size:11px;color:var(--t5)">👁 미리보기</div>'
@@ -1427,7 +1461,7 @@
         + '</div>';
     }
     return row('last', '지난주') + row('cur', '금주')
-      + '<div style="font-size:10.5px;color:var(--t6);margin:-4px 0 8px;line-height:1.5">'
+      + '<div class="wr-au-help" style="font-size:10.5px;color:var(--t6);margin:-4px 0 8px;line-height:1.5">'
       +   '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 세부: <code>: 세부내용</code> · 태그: <code>#완료 #진행중 #예정 #%70 {bold} =y{형광}</code> · 단축키: <b>Enter</b> 다음 줄 머리 · <b>Tab</b>/<b>Shift+Tab</b> 들여쓰기 · <b>Alt+1/2/3/0</b> 완료/진행/예정/지움'
       + '</div>';
   }
@@ -1449,7 +1483,7 @@
       +     '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 태그: <code>#완료 #진행중 #예정 #%70 {bold} =y{형광}</code> · 단축키: <b>Enter</b> 다음 줄 머리 · <b>Tab</b>/<b>Shift+Tab</b> 들여쓰기 · <b>Alt+1/2/3/0</b> 완료/진행/예정/지움'
       +   '</div>'
       + '</div>'
-      + (!_authorState.showPreview ? '' : '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:10px;min-height:480px">'
+      + (!pvOn() ? '' : '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:10px;min-height:480px">'
       +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px;flex-wrap:wrap">'
       +     '<div style="font-size:12px;font-weight:600;color:var(--t3)">👁 미리보기</div>'
       +     '<div style="display:flex;align-items:center;gap:6px">'
@@ -1513,7 +1547,7 @@
 
   // 단일 뷰에서 툴바 버튼이 어느 textarea에 삽입할지 (단일 textarea면 그것, 비교 모드면 마지막 포커스/금주)
   function pickInsertTarget() {
-    if (_authorState.viewMode === 'single') return 'wrAuEditor';
+    if (vmode() === 'single') return 'wrAuEditor';
     return _authorState.editPane === 'last' ? 'wrAuEditorLast' : 'wrAuEditorCur';
   }
 
@@ -1637,7 +1671,7 @@
         paintPreview(pv, clientParseText(text));
       }
     }
-    if (_authorState.viewMode === 'compare') {
+    if (vmode() === 'compare') {
       if (!paneKey || paneKey === 'last') fillOne('wrAuPreviewLast', _authorState.lastText);
       if (!paneKey || paneKey === 'cur')  fillOne('wrAuPreviewCur',  _authorState.curText);
     } else {
@@ -1658,7 +1692,7 @@
     return (_authorState[pane === 'last' ? 'lastText' : 'curText'] || '') !== saved;
   }
   function updatePaneDirtyBadges() {
-    document.querySelectorAll('#wrAuEditArea [data-dirty-pane]').forEach(function (b) {
+    document.querySelectorAll('#wrPanel [data-dirty-pane]').forEach(function (b) {
       b.style.display = isPaneDirty(b.dataset.dirtyPane) ? '' : 'none';
     });
   }
@@ -1897,8 +1931,9 @@
       r.addEventListener('click', function () {
         var f = WRC.wf[+r.dataset.wrcW]; if (!f) return;
         syncAuthorEditorsToState();
-        var id = _authorState.viewMode === 'compare' ? 'wrAuEditorCur' : 'wrAuEditor';
-        if (_authorState.viewMode !== 'compare' && _authorState.editPane !== 'cur') { _authorState.editPane = 'cur'; renderAuthor(); }
+        var id = vmode() === 'compare' ? 'wrAuEditorCur' : 'wrAuEditor';
+        if (wrNarrow()) setNp('cur');
+        if (vmode() !== 'compare' && _authorState.editPane !== 'cur') { _authorState.editPane = 'cur'; renderAuthor(); }
         var ta = $(id); if (!ta) return;
         var at = ta.value.indexOf(f.quote.slice(0, 30)), end = at >= 0 ? at + (f.end - f.start) : -1;
         if (at < 0) { at = f.start; end = f.end; }
@@ -1932,8 +1967,9 @@
       return false;
     });
     if (!pane) { if (typeof showToast === 'function') showToast('편집창에서 그 줄을 찾지 못했습니다', 'warn'); return; }
-    var id = _authorState.viewMode === 'compare' ? (pane === 'last' ? 'wrAuEditorLast' : 'wrAuEditorCur') : 'wrAuEditor';
-    if (_authorState.viewMode !== 'compare' && _authorState.editPane !== pane) { _authorState.editPane = pane; renderAuthor(); }
+    if (wrNarrow()) setNp(pane);
+    var id = vmode() === 'compare' ? (pane === 'last' ? 'wrAuEditorLast' : 'wrAuEditorCur') : 'wrAuEditor';
+    if (vmode() !== 'compare' && _authorState.editPane !== pane) { _authorState.editPane = pane; renderAuthor(); }
     var ta = $(id); if (!ta) return;
     var lines = ta.value.split('\n'), s = 0;
     for (var j = 0; j < idx; j++) s += lines[j].length + 1;
@@ -2245,7 +2281,7 @@
     if (el) el.value = txt;
     var single = $('wrAuEditor');
     if (single && (single.dataset.pane || _authorState.editPane) === pane) single.value = txt;
-    updateAuthorPreview(_authorState.viewMode === 'compare' ? pane : undefined);
+    updateAuthorPreview(vmode() === 'compare' ? pane : undefined);
     updateAuthorStatusBadge();
   }
 
@@ -2300,7 +2336,7 @@
   }
   function renderSrcShell() {
     var s = _authorState.src;
-    if (s.collapsed) {
+    if (srcOff()) {
       return '<button id="wrSrcExpand" class="wr-src-rail" title="업무일지 패널 펼치기">⟨<span>📋 업무일지</span></button>';
     }
     var rg = srcRange();
@@ -2423,7 +2459,7 @@
     }
     if (typeof wmTouchDrag === 'function') wmTouchDrag(h);   // 패드 — 손가락으로 폭 조절 (v13.257)
     h.addEventListener('mousedown', function (e) {
-      if (_authorState.src.collapsed) return;
+      if (srcOff()) return;
       e.preventDefault();
       h.classList.add('drag');
       document.body.style.userSelect = 'none';

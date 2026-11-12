@@ -7884,3 +7884,59 @@ html.wm-tbo .pd-panel .pd-sticky{padding-right:max(var(--pdx,20px),calc(var(--wm
 [data-theme="nova"] .cx-main{background:radial-gradient(color-mix(in srgb,#818CF8 14%,transparent) 1px,transparent 1.4px) 0 0/22px 22px,linear-gradient(180deg,#0A0D1B,#0C0F22)}
 [data-theme="pearl"] .cx-main{background:radial-gradient(rgba(91,91,240,.12) 1px,transparent 1.4px) 0 0/22px 22px,linear-gradient(180deg,#FAFAFE,#F4F5FC)}
 @media (hover:none) and (pointer:coarse){[data-theme="nova"] .hdr,[data-theme="pearl"] .hdr{backdrop-filter:none;-webkit-backdrop-filter:none}[data-theme="nova"] .hdr{background:#0A0D1B!important}[data-theme="pearl"] .hdr{background:#FFFFFF!important}}
+/* ═══ v13.461 📅 주간 업무 — 좁은 화면(≤768px · 휴대폰 · 줄인 PC 창) ═══
+ * 작성: 지난주 · 금주 · 미리보기 · 업무일지를 위 막대(.wr-np)로 한 칸씩 — 예전엔 네 덩이가 위아래로 쌓여 3,000px 넘게 길었음
+ * 검색 결과 · 목록: 표 → 카드 (td 의 c-* 칸 이름으로 줄 배치) */
+.wr-np{display:none}
+.wr-tbl .c-lbl{display:none}
+@media (max-width:768px){
+  #mWeeklyReport .wr-au-vm{display:none}
+  .wr-card:has(>div>#wrAuTeam)>div>label{display:none}
+  #wrAuTeam{flex:1 1 100%;width:auto!important;min-width:0}
+  #wrAuStart,#wrAuEnd{flex:1 1 0;min-width:0}
+  #wrAuStatusBadge{flex:1 1 100%!important;text-align:left!important;order:9}
+  .wr-np{display:flex;position:sticky;top:0;z-index:6;gap:2px;margin:0 0 8px;padding:3px;background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;box-shadow:0 6px 14px -10px rgba(0,0,0,.35)}
+  .wr-np button{flex:1 1 0;min-width:0;padding:8px 4px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:7px}
+  .wr-np .wr-dirty{color:var(--ac);font-weight:800}
+  .wr-nar .wr-au-help,.wr-nar .wr-src-resizer{display:none!important}
+  .wr-nar[data-np="last"] #wrAuMainCur,.wr-nar[data-np="cur"] #wrAuMainLast{display:none!important}
+  .wr-nar[data-np="last"] .wr-pv-blk,.wr-nar[data-np="cur"] .wr-pv-blk,.wr-nar[data-np="pv"] .wr-ed-blk{display:none!important}
+  .wr-nar[data-np="pv"] #wrAuEditArea{display:flex;flex-direction:column}
+  .wr-nar[data-np="pv"] #wrAuMainCur{order:-1}
+  .wr-nar:not([data-np="src"]) #wrSrc,.wr-nar[data-np="src"] #wrAuEditArea{display:none!important}
+  .wr-nar[data-np="src"] .wr-src{margin-top:0}
+  .wr-nar .wr-src-body{max-height:calc(100dvh - 260px);min-height:260px}
+  .wr-nar .wr-ed-blk,.wr-nar .wr-pv-blk{min-height:0!important}
+  .wr-nar .wr-ed-blk textarea{min-height:max(260px,calc(100dvh - 300px))!important}
+  .wr-nar .wr-pv-blk>div:last-child{max-height:none!important;min-height:0!important}
+  .wr-au-tbar{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .wr-au-tbar::-webkit-scrollbar{display:none}
+  .wr-au-tbar>*{flex:0 0 auto}
+  /* 표 → 카드 */
+  .wr-cards thead{display:none}
+  .wr-cards,.wr-cards tbody{display:block}
+  .wr-cards tr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:10px 12px;border-bottom:1px solid var(--bd)}
+  .wr-cards tr:last-child{border-bottom:0}
+  .wr-cards td{display:block;padding:0!important;border:0!important;min-width:0}
+  .wr-cards td.c-empty{display:none}
+  .wr-cards .c-lbl{display:inline;color:var(--t5);font-size:11px}
+  .wr-scards .c-wk{order:1;display:flex;gap:6px;align-items:baseline}
+  .wr-scards .c-sec{order:2;font-size:11px;color:var(--t4);background:var(--bg-i);padding:1px 7px!important;border-radius:4px}
+  .wr-scards .c-st{order:3;margin-left:auto}
+  .wr-scards .c-cl{order:4;font-size:13px}
+  .wr-scards .c-nm{order:5;flex:1 1 60%;font-size:13px;color:var(--t2);line-height:1.5}
+  .wr-scards .c-dd,.wr-scards .c-pct{order:6;font-size:11.5px;color:var(--t4);font-variant-numeric:tabular-nums;background:var(--bg-i);padding:1px 7px!important;border-radius:4px}
+  .wr-scards .c-mem{order:7;margin-left:auto}
+  .wr-lcards .c-wk{order:1;font-size:14px}
+  .wr-lcards .c-team{order:2;color:var(--t4);font-size:12px}
+  .wr-lcards .c-rg{order:3;color:var(--t3);font-size:12px;font-variant-numeric:tabular-nums}
+  .wr-lcards .c-name{display:none}
+  .wr-lcards .c-cnt{order:4;font-size:12px;font-variant-numeric:tabular-nums}
+  .wr-lcards .c-sv{order:5;margin-left:auto}
+  .wr-lcards .c-act{order:6;flex-basis:100%;display:flex;gap:6px}
+  .wr-lcards .c-act .tab{flex:1;padding:7px 10px!important;margin:0!important}
+}
+@media (max-width:600px){
+  .wr-sgrid{grid-template-columns:1fr 1fr!important}
+  .wr-sgrid #wrSQ{grid-column:1/-1}
+}

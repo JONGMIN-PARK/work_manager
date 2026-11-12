@@ -47,7 +47,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
       var w = document.getElementById('wrAuWork');
       return { grid: getComputedStyle(w).display, card: getComputedStyle(document.querySelector('.wr-card')).borderRadius };
     });
-    check(css.grid === 'grid' && css.card === '8px', 'style.css 의 .wr-au-work · .wr-card 적용 ' + JSON.stringify(css));
+    check(css.grid === 'grid' && /^(8|14)px$/.test(css.card), 'style.css 의 .wr-au-work · .wr-card 적용 ' + JSON.stringify(css));
     // 기본값 — 업무일지 패널 원본 · 날짜별 (v13.259)
     var dv = await page.evaluate(function () {
       return { team: document.getElementById('wrAuTeam').value, view: (document.querySelector('[data-src-view].on') || {}).textContent, by: (document.querySelector('[data-src-rawby].on') || {}).textContent };
