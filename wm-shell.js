@@ -23,6 +23,36 @@
     return null;
   }
   window.wmShellOn = on; window.wmShellScroller = scroller; window.wmRealScrollTo = realScrollTo;
+  /* v13.473 📐 화면 진단 — 아이폰이 알려 주는 높이 값들과, 맨 아래에 그려지는지 보는 색 띠 3개 (🎨 화면 설정 › 화면 진단). 찍어서 보내면 정확히 맞출 수 있음 */
+  window.wmShellDiag = function () {
+    var old = document.querySelectorAll('.wm-diag,.wm-diag-p'); if (old.length) { old.forEach(function (e) { e.remove(); }); return; }
+    function unit(u) { var d = document.createElement('div'); d.style.cssText = 'position:fixed;left:-9px;top:0;width:1px;height:' + u + ';visibility:hidden'; document.body.appendChild(d); var h = d.getBoundingClientRect().height; d.remove(); return Math.round(h * 10) / 10; }
+    function inset(side) { var d = document.createElement('div'); d.style.cssText = 'position:fixed;left:-9px;top:0;width:1px;visibility:hidden;padding-top:env(safe-area-inset-' + side + ',0px)'; document.body.appendChild(d); var h = d.getBoundingClientRect().height; d.remove(); return Math.round(h * 10) / 10; }
+    var vv = window.visualViewport, b = document.body.getBoundingClientRect(), s = scroller(), sr = s ? s.getBoundingClientRect() : null;
+    var cx = document.querySelector('#mMessages .cx'), cr = cx && cx.offsetParent !== null ? cx.getBoundingClientRect() : null;
+    var L = [
+      '<b>📐 화면 진단</b> v' + (typeof WM_VERSION !== 'undefined' ? WM_VERSION : '?'),
+      'standalone=' + window.navigator.standalone + ' dm=' + (window.matchMedia && matchMedia('(display-mode: standalone)').matches),
+      'screen=' + screen.width + 'x' + screen.height + ' avail=' + screen.availWidth + 'x' + screen.availHeight + ' dpr=' + window.devicePixelRatio,
+      'inner=' + window.innerWidth + 'x' + window.innerHeight + ' outer=' + window.outerWidth + 'x' + window.outerHeight,
+      'client=' + docEl.clientWidth + 'x' + docEl.clientHeight + ' scrollH=' + docEl.scrollHeight,
+      'vv=' + (vv ? Math.round(vv.width) + 'x' + Math.round(vv.height * 10) / 10 + ' off=' + Math.round(vv.offsetTop) + ' sc=' + vv.scale : '-'),
+      'vh=' + unit('100vh') + ' lvh=' + unit('100lvh') + ' svh=' + unit('100svh') + ' dvh=' + unit('100dvh') + ' 100%=' + unit('100%'),
+      'inset t=' + inset('top') + ' b=' + inset('bottom') + ' l=' + inset('left') + ' r=' + inset('right'),
+      'realY=' + realY() + ' body=' + Math.round(b.top) + '~' + Math.round(b.bottom) + ' pos=' + getComputedStyle(document.body).position,
+      'page=' + (s ? s.id + ' ' + Math.round(sr.top) + '~' + Math.round(sr.bottom) : '-') + (cr ? ' cx=' + Math.round(cr.top) + '~' + Math.round(cr.bottom) : ''),
+      'kb=' + docEl.classList.contains('wm-kb') + ' full=' + docEl.classList.contains('cx-full') + ' ua=' + navigator.userAgent.replace(/^.*?(iPhone OS [\d_]+).*?(Version\/[\d.]+)?.*$/, '$1 $2'),
+      '색 띠: 빨강=고정 맨 아래 · 파랑=고정 +inset 아래 · 초록=100vh 끝 · 노랑=100lvh 끝',
+      '→ 이 화면을 찍어 보내 주세요 (맨 아래까지 나오게)'
+    ];
+    var box = document.createElement('div'); box.className = 'wm-diag';
+    box.innerHTML = L.join('\n') + '\n<button type="button" onclick="wmShellDiag()">닫기</button>';
+    document.body.appendChild(box);
+    var it = inset('top');
+    [['#DC2626', 'bottom:0', '빨강 fixed bottom:0'], ['#2563EB', 'bottom:' + (-it) + 'px', '파랑 fixed bottom:-' + it], ['#16A34A', 'top:calc(100vh - 14px)', '초록 100vh'], ['#CA8A04', 'top:calc(100lvh - 28px)', '노랑 100lvh-14']].forEach(function (x, i) {
+      var d = document.createElement('div'); d.className = 'wm-diag-p'; d.style.cssText = 'background:' + x[0] + ';' + x[1] + ';left:' + (i * 25) + '%;width:25%'; d.textContent = x[2]; docEl.appendChild(d);
+    });
+  };
 
   function apply() {
     var want = !!(mq && mq.matches) && !window.WM_SOLO && !window.WM_PDWIN;
@@ -39,18 +69,6 @@
     var a = document.activeElement, typing = !!(a && a.matches && a.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]),textarea,[contenteditable="true"]'));
     var kb = typing && h > 100 && full - h > 120;   // 입력 중이고 보이는 높이가 눈에 띄게 줄었을 때만
     docEl.classList.toggle('wm-kb', kb);
-    /* v13.472 아이폰 홈 화면 바로가기(설치형) — 화면 높이를 상태 표시줄만큼 짧게 잡는 경우가 있어(맨 아래가 그만큼 빔)
-       기기 화면 높이와 견줘 모자란 만큼(--wm-short) 틀을 아래로 늘림. 아이폰 설치형일 때만(navigator.standalone) · 16~90px 일 때만 */
-    if (!kb) {
-      var sh = 0;
-      if (window.navigator.standalone === true && window.screen) {
-        var land = window.innerWidth > window.innerHeight;
-        var scr = land ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
-        var d = scr - full;
-        if (d >= 16 && d <= 90) sh = Math.round(d);
-      }
-      docEl.style.setProperty('--wm-short', sh + 'px');
-    }
     if (kb) docEl.style.setProperty('--wm-vh', Math.round(h) + 'px'); else docEl.style.removeProperty('--wm-vh');
     if (realY() > 0 || (vv && vv.offsetTop > 0 && !kb) || (kb && vv && vv.offsetTop > 0)) realScrollTo(0, 0);
   }
