@@ -8009,17 +8009,8 @@ html.wm-shell .con>#mMessages:not(.hidden){display:flex;flex-direction:column}
 html.wm-shell .con>#mMessages>.cx:not(.cx-kb){flex:1 1 auto;height:auto!important;min-height:0!important}
 /* v13.473 📱 v13.472 의 '아래로 늘리기' 는 뺌 — 아이폰이 그 아래는 그려 주지 않아 입력 줄만 화면 밖으로 나갔음. 키보드 때(.cx-kb)는 높이를 건드리지 않음
    임시: 메신저에선 맨 아래 빈칸이 입력 줄과 같은 색으로 보이게 (빈칸은 문서 바탕색이 비치는 자리) · 📐 화면 진단(wmShellDiag) */
-html.wm-shell:has(#mMessages:not(.hidden)){background:var(--bg-p)}
 .wm-diag{position:fixed;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));z-index:100000;background:#111827;color:#F9FAFB;border-radius:12px;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;box-shadow:0 12px 40px rgba(0,0,0,.5);white-space:pre-wrap;word-break:break-all}
 .wm-diag b{color:#FDE68A}.wm-diag button{margin-top:8px;padding:8px 14px;border:0;border-radius:8px;background:#F9FAFB;color:#111827;font-weight:700;font-size:13px}
 .wm-diag-p{position:fixed;left:0;height:14px;z-index:99999;font:700 10px/14px ui-monospace,monospace;color:#fff;padding:0 6px;pointer-events:none}
 .hdr-diag{display:none;width:100%;margin-top:8px;padding:8px;border:1px dashed var(--bd);border-radius:8px;background:transparent;color:var(--t4);font-size:12px}
 html.wm-shell .hdr-diag{display:block}
-/* v13.475 📱 아이폰 설치형 — 맨 아래까지 채우기 (wm-shell.js html.wm-fill): 넘침 숨김을 풀고 높이를 100vh 로 */
-html.wm-shell.wm-fill{overflow:visible}
-html.wm-shell.wm-fill body{bottom:auto;height:100vh}
-html.wm-shell.wm-fill.wm-kb body{height:var(--wm-vh,100dvh)}
-html.wm-shell.wm-fill.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx:not(.cx-kb){top:0!important;bottom:auto!important;height:100vh!important}
-html.wm-shell.wm-fill .wm-splash,html.wm-shell.wm-fill #loginOverlay,html.wm-shell.wm-fill .wa-modal-overlay,html.wm-shell.wm-fill .pd-panel,html.wm-shell.wm-fill #projDetailBackdrop{bottom:auto!important;height:100vh!important}
-.hdr-fill{display:none;width:100%;margin-top:8px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-i);color:var(--t2);font-size:12px;font-weight:600}
-html.wm-shell.wm-fill-can .hdr-fill{display:block}

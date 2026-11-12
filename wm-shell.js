@@ -23,25 +23,9 @@
     return null;
   }
   window.wmShellOn = on; window.wmShellScroller = scroller; window.wmRealScrollTo = realScrollTo;
-  /* v13.475 아이폰 설치형 맨 아래 빈칸 — 진단 값(iOS 18.7): 화면 874 인데 inner · 100% · dvh · 고정 요소 기준이 812 (= 874 − 위 안전 영역 62), 100vh · lvh 만 874.
-     '화면 전체(fixed inset:0 · 100%)' 가 모두 812 에서 끝나고, html{overflow:hidden} 이 그 아래를 잘라 그림.
-     → 채우기(html.wm-fill): 넘침 숨김을 풀고 틀 · 화면 가득 창들의 높이를 100vh(874) 로. 문서 자체는 여전히 안 굴러감(틀이 fixed 라 문서 높이에 안 들어감).
-     끄기: 🎨 화면 설정 › 「맨 아래까지 채우기」 (localStorage wm-fill = '0') — 아래가 잘려 보이면 끌 수 있게 */
-  var vhPx = 0;
-  function measureVh() { try { var d = document.createElement('div'); d.style.cssText = 'position:fixed;left:-9px;top:0;width:1px;height:100vh;visibility:hidden;pointer-events:none'; docEl.appendChild(d); vhPx = d.getBoundingClientRect().height; d.remove(); } catch (e) { vhPx = 0; } return vhPx; }
-  /* v13.476 기본은 끔 — 켜면 입력 줄이 화면 밖으로 나감(812 아래는 웹 화면이 그릴 수 없는 자리로 확인). 남겨 두되 직접 켠 사람만(wm-fill3) */
-  function fillWanted() { var v = null; try { v = localStorage.getItem('wm-fill3'); } catch (e) {} return v === '1'; }
-  function fillCheck() {
-    var gap = 0;
-    if (on() && window.navigator.standalone === true) { gap = Math.round(measureVh() - Math.max(window.innerHeight || 0, docEl.clientHeight || 0)); if (docEl.classList.contains('wm-kb')) gap = fillGap; }
-    if (!(gap >= 16 && gap <= 90)) gap = 0;
-    fillGap = gap;
-    docEl.classList.toggle('wm-fill', gap > 0 && fillWanted());
-    docEl.classList.toggle('wm-fill-can', gap > 0);
-    var b = document.getElementById('hdrFillBtn'); if (b) b.textContent = '📱 맨 아래까지 채우기(시험): ' + (fillWanted() ? '켬 — 아래가 잘리면 눌러서 끄기' : '끔');
-  }
-  var fillGap = 0;
-  window.wmShellFill = function (v) { try { localStorage.setItem('wm-fill3', (v == null ? !fillWanted() : v) ? '1' : '0'); } catch (e) {} fillCheck(); };
+  /* 아이폰 설치형 맨 아래 빈칸(v13.469~476 기록) — iOS 18.7 은 상태 표시줄 방식이 black-translucent 면 화면(874) 대신 812(= 874 − 위 안전 영역 62)를
+     '화면 전체' 로 잡고 그 아래는 웹 화면이 그릴 수 없음(틀을 늘려도 · 넘침을 풀어도 안 그려지고 입력 줄만 밖으로 나감).
+     해결 = <meta apple-mobile-web-app-status-bar-style content="default"> + 홈 화면 바로가기 다시 만들기(만들 때 값이 저장됨). 화면 안에서 높이를 늘리는 시도는 하지 말 것 */
   /* v13.473 📐 화면 진단 — 아이폰이 알려 주는 높이 값들과, 맨 아래에 그려지는지 보는 색 띠 3개 (🎨 화면 설정 › 화면 진단). 찍어서 보내면 정확히 맞출 수 있음 */
   window.wmShellDiag = function () {
     var old = document.querySelectorAll('.wm-diag,.wm-diag-p'); if (old.length) { old.forEach(function (e) { e.remove(); }); return; }
@@ -62,7 +46,7 @@
       'realY=' + realY() + ' body=' + Math.round(b.top) + '~' + Math.round(b.bottom) + ' pos=' + getComputedStyle(document.body).position,
       'page=' + (s ? s.id + ' ' + Math.round(sr.top) + '~' + Math.round(sr.bottom) : '-') + (cr ? ' cx=' + Math.round(cr.top) + '~' + Math.round(cr.bottom) : ''),
       'bar=' + ((document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]') || {}).content || '-'),
-      'fill=' + docEl.classList.contains('wm-fill') + ' gap=' + fillGap + ' htmlOv=' + getComputedStyle(docEl).overflowY,
+      'htmlOv=' + getComputedStyle(docEl).overflowY,
       'kb=' + docEl.classList.contains('wm-kb') + ' full=' + docEl.classList.contains('cx-full') + ' ua=' + navigator.userAgent.replace(/^.*?(iPhone OS [\d_]+).*?(Version\/[\d.]+)?.*$/, '$1 $2'),
       '색 띠: 빨강=고정 맨 아래 · 파랑=고정 +inset 아래 · 초록=100vh 끝 · 노랑=100lvh 끝',
       '→ 이 화면을 찍어 보내 주세요 (맨 아래까지 나오게)'
@@ -79,7 +63,7 @@
   function apply() {
     var want = !!(mq && mq.matches) && !window.WM_SOLO && !window.WM_PDWIN;
     if (want !== on()) docEl.classList.toggle('wm-shell', want);
-    if (want) fit(); else { docEl.style.removeProperty('--wm-vh'); docEl.classList.remove('wm-kb', 'wm-tabs-off', 'wm-fill', 'wm-fill-can'); }
+    if (want) fit(); else { docEl.style.removeProperty('--wm-vh'); docEl.classList.remove('wm-kb', 'wm-tabs-off'); }
   }
   /* 틀 높이 = 지금 보이는 높이(키보드가 올라오면 그만큼 줄어듦) · iOS 가 문서를 밀어 올렸으면 되돌림 */
   /* v13.470 평소엔 틀을 화면 위아래 끝에 그대로 붙임(top:0 · bottom:0) — 홈 화면 바로가기(설치형)에서 아이폰이 '보이는 높이' 를
@@ -91,7 +75,6 @@
     var a = document.activeElement, typing = !!(a && a.matches && a.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]),textarea,[contenteditable="true"]'));
     var kb = typing && h > 100 && full - h > 120;   // 입력 중이고 보이는 높이가 눈에 띄게 줄었을 때만
     docEl.classList.toggle('wm-kb', kb);
-    if (!kb) fillCheck();
     if (kb) docEl.style.setProperty('--wm-vh', Math.round(h) + 'px'); else docEl.style.removeProperty('--wm-vh');
     if (realY() > 0 || (vv && vv.offsetTop > 0 && !kb) || (kb && vv && vv.offsetTop > 0)) realScrollTo(0, 0);
   }
