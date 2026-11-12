@@ -29,7 +29,8 @@
      끄기: 🎨 화면 설정 › 「맨 아래까지 채우기」 (localStorage wm-fill = '0') — 아래가 잘려 보이면 끌 수 있게 */
   var vhPx = 0;
   function measureVh() { try { var d = document.createElement('div'); d.style.cssText = 'position:fixed;left:-9px;top:0;width:1px;height:100vh;visibility:hidden;pointer-events:none'; docEl.appendChild(d); vhPx = d.getBoundingClientRect().height; d.remove(); } catch (e) { vhPx = 0; } return vhPx; }
-  function fillWanted() { var v = null; try { v = localStorage.getItem('wm-fill'); } catch (e) {} return v !== '0'; }
+  /* v13.476 기본은 끔 — 켜면 입력 줄이 화면 밖으로 나감(812 아래는 웹 화면이 그릴 수 없는 자리로 확인). 남겨 두되 직접 켠 사람만(wm-fill3) */
+  function fillWanted() { var v = null; try { v = localStorage.getItem('wm-fill3'); } catch (e) {} return v === '1'; }
   function fillCheck() {
     var gap = 0;
     if (on() && window.navigator.standalone === true) { gap = Math.round(measureVh() - Math.max(window.innerHeight || 0, docEl.clientHeight || 0)); if (docEl.classList.contains('wm-kb')) gap = fillGap; }
@@ -37,10 +38,10 @@
     fillGap = gap;
     docEl.classList.toggle('wm-fill', gap > 0 && fillWanted());
     docEl.classList.toggle('wm-fill-can', gap > 0);
-    var b = document.getElementById('hdrFillBtn'); if (b) b.textContent = '📱 맨 아래까지 채우기: ' + (fillWanted() ? '켬' : '끔') + ' (누르면 바꿈)';
+    var b = document.getElementById('hdrFillBtn'); if (b) b.textContent = '📱 맨 아래까지 채우기(시험): ' + (fillWanted() ? '켬 — 아래가 잘리면 눌러서 끄기' : '끔');
   }
   var fillGap = 0;
-  window.wmShellFill = function (v) { try { localStorage.setItem('wm-fill', (v == null ? !fillWanted() : v) ? '1' : '0'); } catch (e) {} fillCheck(); };
+  window.wmShellFill = function (v) { try { localStorage.setItem('wm-fill3', (v == null ? !fillWanted() : v) ? '1' : '0'); } catch (e) {} fillCheck(); };
   /* v13.473 📐 화면 진단 — 아이폰이 알려 주는 높이 값들과, 맨 아래에 그려지는지 보는 색 띠 3개 (🎨 화면 설정 › 화면 진단). 찍어서 보내면 정확히 맞출 수 있음 */
   window.wmShellDiag = function () {
     var old = document.querySelectorAll('.wm-diag,.wm-diag-p'); if (old.length) { old.forEach(function (e) { e.remove(); }); return; }
@@ -60,6 +61,7 @@
       'fixed inset0=' + (function () { var d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;visibility:hidden;pointer-events:none'; docEl.appendChild(d); var r = d.getBoundingClientRect(); d.remove(); return Math.round(r.top) + '~' + Math.round(r.bottom * 10) / 10; })() + ' html=' + Math.round(docEl.getBoundingClientRect().height * 10) / 10,
       'realY=' + realY() + ' body=' + Math.round(b.top) + '~' + Math.round(b.bottom) + ' pos=' + getComputedStyle(document.body).position,
       'page=' + (s ? s.id + ' ' + Math.round(sr.top) + '~' + Math.round(sr.bottom) : '-') + (cr ? ' cx=' + Math.round(cr.top) + '~' + Math.round(cr.bottom) : ''),
+      'bar=' + ((document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]') || {}).content || '-'),
       'fill=' + docEl.classList.contains('wm-fill') + ' gap=' + fillGap + ' htmlOv=' + getComputedStyle(docEl).overflowY,
       'kb=' + docEl.classList.contains('wm-kb') + ' full=' + docEl.classList.contains('cx-full') + ' ua=' + navigator.userAgent.replace(/^.*?(iPhone OS [\d_]+).*?(Version\/[\d.]+)?.*$/, '$1 $2'),
       '색 띠: 빨강=고정 맨 아래 · 파랑=고정 +inset 아래 · 초록=100vh 끝 · 노랑=100lvh 끝',
