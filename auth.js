@@ -362,12 +362,6 @@ function isPL(projectId) {
 }
 
 /* 운영자 모드 여부 — admin 자동 또는 관리자가 부여한 사용자(operatorMode) */
-/* v13.467 📒 업무 관리(주간 분석 · 주간 업무 · 업무 부하) — 허락된 사람만: 관리자 · 임원 · 팀장은 늘, 그 밖엔 관리자가 켠 사람(teamAccess) */
-function wmCanTeam() {
-  if (AUTH_SKIP) return true;
-  if (!currentUser) return false;
-  return ['admin', 'executive', 'manager'].indexOf(currentUser.role) >= 0 || !!currentUser.teamAccess;
-}
 function isOperator() {
   return !!(currentUser && (currentUser.role === 'admin' || currentUser.operatorMode));
 }
@@ -574,14 +568,6 @@ function updateAuthUI() {
   if (wrTab) {
     wrTab.style.display = currentUser.role === 'admin' ? '' : 'none';
   }
-  // v13.467 📒 업무 관리 — 허락된 사람만 (탭 숨김 · 보고 있었다면 내 업무로)
-  var teamOk = wmCanTeam();
-  document.querySelectorAll('#pageTabs [data-page="team"]').forEach(function (b) { b.style.display = teamOk ? '' : 'none'; });
-  if (!teamOk && typeof curPage !== 'undefined' && curPage === 'team' && typeof setPage === 'function') {
-    // 사용자가 옮긴 것이 아님 — '마지막 화면 되돌리기' 가 그대로 돌게 (안 그러면 팀원은 새로 고칠 때마다 내 업무로만 감)
-    var _vr = typeof _wmViewRestoring !== 'undefined' ? _wmViewRestoring : false, _nm = typeof _wmNavMoved !== 'undefined' ? _wmNavMoved : false;
-    try { _wmViewRestoring = true; window._wmNoSaveView = true; setPage('mywork'); } finally { _wmViewRestoring = _vr; _wmNavMoved = _nm; window._wmNoSaveView = false; }
-  }
   // 패치노트 — 관리자만 (헤더 버전 표시를 눌러 여는 것도)
   var pnTab = document.getElementById('tabPatchNotes');
   if (pnTab) pnTab.style.display = currentUser.role === 'admin' ? '' : 'none';
@@ -730,7 +716,7 @@ function renderUserTable(users, depts, isActive) {
 
   var html = '<table style="width:100%;border-collapse:collapse;font-size:13px">';
   html += '<tr style="border-bottom:1px solid var(--bd,#222C44);color:var(--t5,#6070A0)">';
-  html += '<th style="padding:8px;text-align:left">이름</th><th style="padding:8px;text-align:left">이메일</th><th style="padding:8px">역할</th><th style="padding:8px">부서</th>' + (isActive ? '<th style="padding:8px" title="📒 업무 관리(주간 분석 · 주간 업무 · 업무 부하) 메뉴를 볼 수 있는 사람 — 관리자 · 임원 · 팀장은 늘 볼 수 있고, 팀원은 여기서 켠 사람만">업무 관리</th>' : '') + '<th style="padding:8px">최근 로그인</th><th style="padding:8px">작업</th></tr>';
+  html += '<th style="padding:8px;text-align:left">이름</th><th style="padding:8px;text-align:left">이메일</th><th style="padding:8px">역할</th><th style="padding:8px">부서</th>' + '<th style="padding:8px">최근 로그인</th><th style="padding:8px">작업</th></tr>';
 
   users.forEach(function (u) {
     html += '<tr style="border-bottom:1px solid var(--bd,#222C44)">';
@@ -738,9 +724,6 @@ function renderUserTable(users, depts, isActive) {
     html += '<td style="padding:8px;color:var(--t5,#6070A0)">' + eH(u.email) + '</td>';
     html += '<td style="padding:8px;text-align:center">' + (roleLabels[u.role] || u.role) + '</td>';
     html += '<td style="padding:8px;text-align:center">' + eH(deptMap[u.department_id] || '-') + '</td>';
-    if (isActive) html += '<td style="padding:8px;text-align:center">' + (['admin', 'executive', 'manager'].indexOf(u.role) >= 0
-      ? '<span style="color:var(--t5,#6070A0);font-size:12px" title="관리자 · 임원 · 팀장은 늘 볼 수 있습니다">늘 보임</span>'
-      : '<input type="checkbox" class="ua-team" data-ua-team="' + eH(u.id) + '"' + (u.team_access ? ' checked' : '') + ' onchange="uaTeamAccess(\'' + eH(u.id) + '\',this.checked,this)" title="켜면 이 사람도 📒 업무 관리를 볼 수 있습니다" aria-label="' + eH(u.name) + ' 업무 관리 보기">') + '</td>';
     html += '<td style="padding:8px;text-align:center;color:var(--t5,#6070A0)">' + (u.last_login_at ? _wmKst(u.last_login_at, 10) : '-') + '</td>';
     html += '<td style="padding:8px;text-align:center">';
     if (isActive) {
@@ -757,15 +740,6 @@ function renderUserTable(users, depts, isActive) {
   return html;
 }
 
-/* v13.467 📒 업무 관리 보기 권한 켜기/끄기 (관리자) — 그 사람은 다음에 열 때(새로 고침) 반영 */
-function uaTeamAccess(userId, enabled, el) {
-  apiFetch('/api/users/' + userId + '/team-access', { method: 'PUT', body: JSON.stringify({ enabled: !!enabled }) })
-    .then(function () { if (typeof showToast === 'function') showToast(enabled ? '📒 업무 관리 보기 허락 — 그 사람이 새로 고치면 반영' : '📒 업무 관리 보기 거둠 — 그 사람이 새로 고치면 반영'); })
-    .catch(function (err) {
-      if (el) el.checked = !enabled;
-      if (typeof showToast === 'function') showToast('❌ ' + ((err && err.message) || '바꾸지 못했습니다'), 'error');
-    });
-}
 function switchUserTab(tab) {
   var tabs = ['pending', 'active', 'inactive'];
   tabs.forEach(function (t) {

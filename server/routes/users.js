@@ -33,10 +33,7 @@ router.get('/', async function (req, res) {
     var tid = callerTenant(req);
 
     if (role === 'admin') {
-      // v13.467 team_access = 📒 업무 관리 보기 권한 (관리자가 사람마다 켬 — 관리자 · 임원 · 팀장은 늘 볼 수 있음)
-      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at, " +
-        "COALESCE((SELECT (s.value->>'enabled')::boolean FROM user_settings s WHERE s.user_id = users.id AND s.key = 'team_access'), false) AS team_access " +
-        "FROM users WHERE tenant_id = $1 ORDER BY created_at DESC";
+      sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE tenant_id = $1 ORDER BY created_at DESC";
       params = [tid];
     } else if (role === 'manager') {
       sql = "SELECT id, email, name, display_name, role, department_id, position, phone, status, created_at, last_login_at FROM users WHERE department_id = $1 AND tenant_id = $2 ORDER BY name";
@@ -113,24 +110,6 @@ router.put('/:id/operator-mode', authMiddleware.requireRole('admin'), async func
     res.json({ data: { userId: req.params.id, enabled: enabled } });
   } catch (e) {
     httpErr.serverError(res, '[users/operator-mode]', e);
-  }
-});
-
-// ─── PUT /api/users/:id/team-access ─── 📒 업무 관리 보기 권한 주기/거두기 (admin only, v13.467)
-router.put('/:id/team-access', authMiddleware.requireRole('admin'), async function (req, res) {
-  try {
-    var enabled = !!(req.body && req.body.enabled);
-    var ur = await db.query('SELECT id, tenant_id FROM users WHERE id = $1 AND tenant_id = $2', [req.params.id, callerTenant(req)]);
-    if (!ur.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '사용자를 찾을 수 없습니다.' });
-    var tid = ur.rows[0].tenant_id || '00000000-0000-0000-0000-000000000001';
-    await db.query(
-      "INSERT INTO user_settings (user_id, key, value, updated_at, tenant_id) VALUES ($1, 'team_access', $2, NOW(), $3) " +
-      "ON CONFLICT (user_id, key) DO UPDATE SET value = $2, updated_at = NOW()",
-      [req.params.id, JSON.stringify({ enabled: enabled }), tid]
-    );
-    res.json({ data: { userId: req.params.id, enabled: enabled } });
-  } catch (e) {
-    httpErr.serverError(res, '[users/team-access]', e);
   }
 });
 

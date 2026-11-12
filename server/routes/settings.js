@@ -42,7 +42,7 @@ router.get('/:key', async function (req, res) {
 
 // PUT /api/settings/:key — 특정 키 저장 (upsert, DB 콜드스타트 재시도)
 // v13.467 권한 열쇠는 본인이 못 바꿈 — 관리자가 /api/users/:id/... 로만 (예전엔 이 주소로 자기 권한을 켤 수 있었음)
-var RESERVED_KEYS = ['operator_mode', 'mindmap_access', 'team_access'];
+var RESERVED_KEYS = ['operator_mode', 'mindmap_access'];
 router.put('/:key', async function (req, res) {
   if (RESERVED_KEYS.indexOf(req.params.key) >= 0) return res.status(403).json({ error: 'FORBIDDEN', message: '이 설정은 관리자만 바꿀 수 있습니다.' });
   var value = req.body.value;
