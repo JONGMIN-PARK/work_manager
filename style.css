@@ -8000,3 +8000,7 @@ html.wm-shell.wm-kb body{bottom:auto;height:var(--wm-vh,100dvh)}
 html.wm-shell.wm-tabs-off .con>.tabs{display:none!important}
 html.wm-shell .con{padding-top:4px}
 html.wm-shell .con>div[id^="m"]:not(.tabs){padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+/* v13.471 📱 대화방(화면 가득)이 바깥 칸에 잘려 아래가 비던 것 — 아이폰은 굴리는 칸(-webkit-overflow-scrolling · overflow) 안의 고정 요소를 그 칸 크기로 잘라 그림 */
+html.wm-shell .con>#mMessages{-webkit-overflow-scrolling:auto}
+html.wm-shell.cx-full .con>#mMessages{overflow:visible!important}
+html.wm-shell.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx:not(.cx-kb){top:0!important;bottom:0!important;height:auto!important}
