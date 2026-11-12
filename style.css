@@ -7989,9 +7989,14 @@ html.wm-pdwin .pd-maxbtn,html.wm-pdwin .pd-popbtn,html.wm-pdwin .pd-resizer,html
 @media (max-width:768px){[data-crisp] #mWeekly #kpiSticky .sc{padding-top:2px;padding-bottom:2px}[data-crisp] #mWeekly #kpiSticky .sl{line-height:1.05}}
 /* ═══ v13.469 📱 휴대폰 틀 고정 (wm-shell.js) — 문서는 안 굴러가고, 머리 줄 · 탭 줄은 제자리, 화면(#mXxx)만 그 안에서 굴림 ═══ */
 html.wm-shell{height:100%;overflow:hidden;overscroll-behavior:none}
-html.wm-shell body{position:fixed;left:0;right:0;top:0;width:100%;height:var(--wm-vh,100dvh);min-height:0!important;overflow:hidden;overscroll-behavior:none;display:flex;flex-direction:column;padding-bottom:0!important}
+html.wm-shell body{position:fixed;left:0;right:0;top:0;bottom:0;width:100%;height:auto;min-height:0!important;overflow:hidden;overscroll-behavior:none;display:flex;flex-direction:column;padding-bottom:0!important}
 html.wm-shell .hdr{flex:none}
 html.wm-shell .con{flex:1 1 auto;min-height:0;width:100%;margin:0;display:flex;flex-direction:column;padding-bottom:0!important}
 html.wm-shell .con>.tabs{flex:none}
 html.wm-shell .con>div[id^="m"]:not(.tabs){flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
 html.wm-shell .con>#mMessages{padding-bottom:0;overflow:hidden}   /* 메신저는 자기 높이를 스스로 맞춤 — 바깥 굴림 없음 */
+/* v13.470 📱 틀을 화면 맨 아래(둥근 모서리)까지 · 키보드가 올라왔을 때만 보이는 높이로 · 아래로 굴리면 탭 줄 접기 */
+html.wm-shell.wm-kb body{bottom:auto;height:var(--wm-vh,100dvh)}
+html.wm-shell.wm-tabs-off .con>.tabs{display:none!important}
+html.wm-shell .con{padding-top:4px}
+html.wm-shell .con>div[id^="m"]:not(.tabs){padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}

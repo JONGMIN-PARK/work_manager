@@ -27,15 +27,40 @@
   function apply() {
     var want = !!(mq && mq.matches) && !window.WM_SOLO && !window.WM_PDWIN;
     if (want !== on()) docEl.classList.toggle('wm-shell', want);
-    if (want) fit(); else docEl.style.removeProperty('--wm-vh');
+    if (want) fit(); else { docEl.style.removeProperty('--wm-vh'); docEl.classList.remove('wm-kb', 'wm-tabs-off'); }
   }
   /* 틀 높이 = 지금 보이는 높이(키보드가 올라오면 그만큼 줄어듦) · iOS 가 문서를 밀어 올렸으면 되돌림 */
+  /* v13.470 평소엔 틀을 화면 위아래 끝에 그대로 붙임(top:0 · bottom:0) — 홈 화면 바로가기(설치형)에서 아이폰이 '보이는 높이' 를
+     실제 화면보다 짧게 알려 줘 맨 아래(둥근 모서리)까지 안 닿던 것. 키보드가 올라왔을 때만(html.wm-kb) 보이는 높이로 줄임 */
   function fit() {
     if (!on()) return;
     var vv = window.visualViewport, h = vv ? vv.height : window.innerHeight;
-    if (h > 100) docEl.style.setProperty('--wm-vh', Math.round(h) + 'px');
-    if (realY() > 0 || (vv && vv.offsetTop > 0)) realScrollTo(0, 0);
+    var full = Math.max(window.innerHeight || 0, docEl.clientHeight || 0);
+    var a = document.activeElement, typing = !!(a && a.matches && a.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]),textarea,[contenteditable="true"]'));
+    var kb = typing && h > 100 && full - h > 120;   // 입력 중이고 보이는 높이가 눈에 띄게 줄었을 때만
+    docEl.classList.toggle('wm-kb', kb);
+    if (kb) docEl.style.setProperty('--wm-vh', Math.round(h) + 'px'); else docEl.style.removeProperty('--wm-vh');
+    if (realY() > 0 || (vv && vv.offsetTop > 0 && !kb) || (kb && vv && vv.offsetTop > 0)) realScrollTo(0, 0);
   }
+  /* 세로 공간 — 아래로 굴리면 탭 줄들을 접고(html.wm-tabs-off), 위로 조금 굴리거나 맨 위면 다시. 접고 펼 때 내용이 튀지 않게 굴린 값을 맞춤 */
+  var tS = null, tY = 0, tAcc = 0, tLock = 0;
+  function tabsSet(off, s) {
+    if (docEl.classList.contains('wm-tabs-off') === off) return;
+    var t0 = s ? s.getBoundingClientRect().top : 0;
+    docEl.classList.toggle('wm-tabs-off', off);
+    if (s) { var d = s.getBoundingClientRect().top - t0; if (d) s.scrollTop += d; tY = s.scrollTop; }
+    tAcc = 0; tLock = Date.now() + 250;
+  }
+  function tabsOnScroll(s) {
+    var y = s.scrollTop;
+    if (s !== tS) { tS = s; tY = y; tAcc = 0; tabsSet(false, null); return; }
+    var d = y - tY; tY = y; if (!d || Date.now() < tLock) return;
+    tAcc = (d > 0) === (tAcc > 0) ? tAcc + d : d;
+    var off = docEl.classList.contains('wm-tabs-off');
+    if (!off && tAcc > 48 && y > 90 && s.scrollHeight - s.clientHeight > 260) tabsSet(true, s);   // 굴릴 거리가 넉넉할 때만 접음
+    else if (off && (tAcc < -28 || y < 24)) tabsSet(false, s);
+  }
+  window.wmShellTabs = function (show) { tabsSet(!show, scroller()); };
 
   // 문서 굴림을 쓰던 코드 → 지금 보이는 화면으로
   window.scrollTo = window.scroll = function (x, y) {
@@ -54,9 +79,13 @@
   // 화면이 굴러가면 예전처럼 window 'scroll' 도 알림 (굴린 자리 기억 등)
   document.addEventListener('scroll', function (e) {
     var t = e.target;
-    if (on() && t && t.nodeType === 1 && t.parentElement && t.parentElement.classList.contains('con')) { try { window.dispatchEvent(new Event('scroll')); } catch (x) {} }
+    if (on() && t && t.nodeType === 1 && t.parentElement && t.parentElement.classList.contains('con')) { tabsOnScroll(t); try { window.dispatchEvent(new Event('scroll')); } catch (x) {} }
   }, true);
 
+  // 화면이 바뀌었으면(머리 줄 단추 · 알림 · 바로 가기) 탭 줄을 다시 — 접힌 채 남아 다른 화면으로 못 가는 일이 없게
+  function tabsCheck() { if (!on() || !docEl.classList.contains('wm-tabs-off')) return; var s = scroller(); if (s !== tS || !s || s.scrollTop < 24 || s.scrollHeight - s.clientHeight < 120) { tS = s; tY = s ? s.scrollTop : 0; tabsSet(false, null); } }
+  document.addEventListener('click', function () { setTimeout(tabsCheck, 60); setTimeout(tabsCheck, 500); }, true);
+  setInterval(tabsCheck, 1500);
   if (mq) { if (mq.addEventListener) mq.addEventListener('change', apply); else if (mq.addListener) mq.addListener(apply); }
   apply();
   var soon = function () { fit(); setTimeout(fit, 120); setTimeout(fit, 400); };

@@ -33,7 +33,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     // 화면 안에서만 굴림 — 머리 줄은 제자리 · window.scrollY 도 따라옴
     await page.evaluate(function () { setPage('mywork'); }); await wait(1500);
     await page.evaluate(function () { var g = document.querySelector('#mMyWork [data-grp="later"]'); if (g && g.classList.contains('mw-folded')) g.querySelector('[data-fold]').click(); document.querySelectorAll('#mMyWork [data-mw-more]').forEach(function (b) { b.click(); }); });
-    await wait(500);
+    await page.waitForFunction(function () { var g = document.querySelector('#mMyWork [data-grp="later"]'); if (g && g.classList.contains('mw-folded')) g.querySelector('[data-fold]').click(); document.querySelectorAll('#mMyWork [data-mw-more]').forEach(function (b) { b.click(); }); var s = wmShellScroller(); return s && s.id === 'mMyWork' && s.scrollHeight - s.clientHeight > 300; }, { timeout: 20000, polling: 300 });
     a = await st();
     check(a.sid === 'mMyWork' && a.sMax > 200, '내 업무 — 화면 안에 굴릴 거리 있음 ' + a.sMax);
     await page.evaluate(function () { wmShellScroller().scrollTop = 99999; }); await wait(300);
@@ -53,9 +53,23 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await wait(700);
     a = await st();
     check(a.hdrTop === 0 && a.sTop > 100, '손가락으로 끌어도 머리 줄 제자리 · 화면만 굴러감 ' + JSON.stringify([a.hdrTop, a.sTop]));
+    // v13.470 세로 공간 — 아래로 굴리면 탭 줄 접힘 · 위로 굴리면 다시 · 접힐 때 내용이 튀지 않음 · 틀은 화면 맨 아래까지
+    await page.evaluate(function () { wmShellScroller().scrollTop = 0; wmShellTabs(true); }); await wait(400);
+    var tabsVis = function () { return page.evaluate(function () { var t = document.getElementById('pageTabs'); return !!(t && t.offsetParent); }); };
+    check(await tabsVis(), '맨 위 — 탭 줄 보임');
+    var before = await page.evaluate(function () { var s = wmShellScroller(), y = 0; return new Promise(function (res) { (function step() { y += 30; s.scrollTop = y; if (y < 240) setTimeout(step, 40); else setTimeout(function () { var r = document.querySelector('#mMyWork .mw-row'); res({ off: document.documentElement.classList.contains('wm-tabs-off'), sTop: Math.round(s.scrollTop), h: s.clientHeight }); }, 400); })(); }); });
+    check(before.off && !(await tabsVis()), '아래로 굴리면 탭 줄 접힘 — 화면이 그만큼 커짐 ' + JSON.stringify(before));
+    await page.evaluate(function () { var s = wmShellScroller(), y = s.scrollTop; return new Promise(function (res) { (function step(n) { y -= 20; s.scrollTop = y; if (n < 3) setTimeout(function () { step(n + 1); }, 40); else setTimeout(res, 400); })(0); }); });
+    check(await tabsVis(), '위로 조금 굴리면 탭 줄 다시');
+    var edge = await page.evaluate(function () { var b = document.body.getBoundingClientRect(), s = wmShellScroller().getBoundingClientRect(), cs = getComputedStyle(document.body); return { bottom: Math.round(b.bottom), sBottom: Math.round(s.bottom), ih: innerHeight, h: cs.height, kb: document.documentElement.classList.contains('wm-kb'), vh: document.documentElement.style.getPropertyValue('--wm-vh') }; });
+    check(edge.bottom === edge.ih && edge.sBottom === edge.ih && !edge.kb && !edge.vh, '틀 · 화면이 맨 아래 끝까지 (키보드 없을 땐 높이를 따로 안 잡음) ' + JSON.stringify(edge));
     // 화면을 바꿔도 틀은 그대로 (굴린 채로 다른 화면 → 머리 줄 0)
-    await page.evaluate(function () { setPage('project'); }); await wait(800);
+    await page.evaluate(function () { wmShellScroller().scrollTop = 0; }); await wait(600);
+    await page.evaluate(function () { var s = wmShellScroller(), y = 0; return new Promise(function (res) { (function step() { y += 30; s.scrollTop = y; if (y < 240) setTimeout(step, 40); else setTimeout(res, 400); })(); }); });
+    check(!(await tabsVis()), '(다시 아래로 굴려 탭 접힘) ' + JSON.stringify(await page.evaluate(function () { var s = wmShellScroller(); return { id: s.id, top: s.scrollTop, max: s.scrollHeight - s.clientHeight, off: document.documentElement.classList.contains('wm-tabs-off'), act: document.activeElement && document.activeElement.id, kb: document.documentElement.classList.contains('wm-kb') }; })));
+    await page.evaluate(function () { setPage('project'); }); await wait(1800);
     check((await st()).hdrTop === 0, '굴린 뒤 다른 화면으로 가도 머리 줄 제자리');
+    check(await tabsVis(), '다른 화면으로 가면 탭 줄 다시 보임');
     // 입력 칸 — 누른 뒤에도 문서는 0
     await page.evaluate(function () { setPage('mywork'); }); await wait(1000);
     await page.tap('#mwAddTitle'); await wait(600);
