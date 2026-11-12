@@ -39,6 +39,7 @@
       'vv=' + (vv ? Math.round(vv.width) + 'x' + Math.round(vv.height * 10) / 10 + ' off=' + Math.round(vv.offsetTop) + ' sc=' + vv.scale : '-'),
       'vh=' + unit('100vh') + ' lvh=' + unit('100lvh') + ' svh=' + unit('100svh') + ' dvh=' + unit('100dvh') + ' 100%=' + unit('100%'),
       'inset t=' + inset('top') + ' b=' + inset('bottom') + ' l=' + inset('left') + ' r=' + inset('right'),
+      'fixed inset0=' + (function () { var d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;visibility:hidden;pointer-events:none'; docEl.appendChild(d); var r = d.getBoundingClientRect(); d.remove(); return Math.round(r.top) + '~' + Math.round(r.bottom * 10) / 10; })() + ' html=' + Math.round(docEl.getBoundingClientRect().height * 10) / 10,
       'realY=' + realY() + ' body=' + Math.round(b.top) + '~' + Math.round(b.bottom) + ' pos=' + getComputedStyle(document.body).position,
       'page=' + (s ? s.id + ' ' + Math.round(sr.top) + '~' + Math.round(sr.bottom) : '-') + (cr ? ' cx=' + Math.round(cr.top) + '~' + Math.round(cr.bottom) : ''),
       'kb=' + docEl.classList.contains('wm-kb') + ' full=' + docEl.classList.contains('cx-full') + ' ua=' + navigator.userAgent.replace(/^.*?(iPhone OS [\d_]+).*?(Version\/[\d.]+)?.*$/, '$1 $2'),
@@ -116,6 +117,19 @@
   function tabsCheck() { if (!on() || !docEl.classList.contains('wm-tabs-off')) return; var s = scroller(); if (s !== tS || !s || s.scrollTop < 24 || s.scrollHeight - s.clientHeight < 120) { tS = s; tY = s ? s.scrollTop : 0; tabsSet(false, null); } }
   document.addEventListener('click', function () { setTimeout(tabsCheck, 60); setTimeout(tabsCheck, 500); }, true);
   setInterval(tabsCheck, 1500);
+  /* v13.474 아이폰 설치형(홈 화면 바로가기)으로 관리자가 열면 📐 화면 진단을 한 번 자동으로 — 맨 아래 빈칸 원인을 재려고 (값을 받으면 뺄 것) */
+  (function () {
+    var n = 0, iv = setInterval(function () {
+      if (++n > 60) { clearInterval(iv); return; }
+      if (window.navigator.standalone !== true || !on()) { if (n > 5) clearInterval(iv); return; }
+      if (typeof currentUser === 'undefined' || !currentUser || !currentUser.id || document.getElementById('initLoading')) return;
+      clearInterval(iv);
+      var seen = null; try { seen = localStorage.getItem('wm-diag-474'); } catch (e) {}
+      if (seen || currentUser.role !== 'admin') return;
+      try { localStorage.setItem('wm-diag-474', '1'); } catch (e) {}
+      setTimeout(function () { if (!document.querySelector('.wm-diag')) window.wmShellDiag(); }, 1200);
+    }, 1000);
+  })();
   if (mq) { if (mq.addEventListener) mq.addEventListener('change', apply); else if (mq.addListener) mq.addListener(apply); }
   apply();
   var soon = function () { fit(); setTimeout(fit, 120); setTimeout(fit, 400); };
