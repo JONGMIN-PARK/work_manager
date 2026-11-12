@@ -10,12 +10,17 @@
  *   ⑦ 월별 추이 — 분장 / 사람 / 업체 × 최근 3·6·12개월 색 농도 표 + 인당 하루 평균 줄
  * 필터는 화면 위 공통 필터 그대로 (gF · wdApply) — 지난 기간 · 월별은 같은 필터를 다른 기간에 (wr-filters.js gfRange)
  * 의존(전역): aD, sN, sT, sO, sON, sCL, cKw, excludeVac, selWeek, AM, getABR, getOClient, getOCmt, eH, fD, gF, gfRange, wdApply, krHolidayName */
-var WA = { dim: 'client', mDim: 'abbr', mN: 6, hideUn: false };
-(function () { try { var s = JSON.parse(localStorage.getItem('wm-wa') || '{}'); ['dim', 'mDim', 'mN', 'hideUn'].forEach(function (k) { if (s[k] != null) WA[k] = s[k]; }); } catch (e) {} })();
-function _waSave() { try { localStorage.setItem('wm-wa', JSON.stringify({ dim: WA.dim, mDim: WA.mDim, mN: WA.mN, hideUn: WA.hideUn })); } catch (e) {} }
+var WA = { dim: 'client', mDim: 'abbr', mN: 6, hideUn: false, sel: [], dN: 12, sy: 'ord', kSort: null };   // v13.459 sel = 강조(선택) · dN = 방향 추이 주 수 · sy = 사분면 세로축 · kSort = 개인 KPI 정렬
+(function () { try { var s = JSON.parse(localStorage.getItem('wm-wa') || '{}'); ['dim', 'mDim', 'mN', 'hideUn', 'sel', 'dN', 'sy', 'kSort'].forEach(function (k) { if (s[k] != null) WA[k] = s[k]; }); } catch (e) {} })();
+function _waSave() { try { localStorage.setItem('wm-wa', JSON.stringify({ dim: WA.dim, mDim: WA.mDim, mN: WA.mN, hideUn: WA.hideUn, sel: WA.sel, dN: WA.dN, sy: WA.sy, kSort: WA.kSort })); } catch (e) {} }
 
 var WA_ST = { good: '#1a8a40', warn: '#c8730a', bad: '#d21f1f' };
 var WA_GAP_COL = '#a3acb9';   // 8h 미달 — 분장 색과 겹치지 않는 회색
+/* v13.459 강조(선택) — data-wa-sel="종류:키" (p 사람 · ab 분장 · cl 업체 · ord 수주 · dir 방향) · 동작은 wr-analytics-kpi.js */
+function _wsA(k) { return ' data-wa-sel="' + eH(k) + '"'; }
+function _wsPpl() { return (WA.sel || []).filter(function (x) { return x.slice(0, 2) === 'p:'; }).map(function (x) { return x.slice(2); }); }
+function _wsPH(map) { var t = 0; _wsPpl().forEach(function (n) { t += (map && map[n]) || 0; }); return t; }   // 고른 사람들의 시간 합 (map = { 이름: 시간 })
+function _wsNm() { var p = _wsPpl(); return p.length === 1 ? (typeof shortName === 'function' ? shortName(p[0]) : p[0]) : p.length + '명'; }
 function _waR1(n) { return Math.round(n * 10) / 10; }
 function _waH(n) { n = _waR1(n || 0); return (n >= 1000 ? Math.round(n).toLocaleString() : String(n)) + 'h'; }
 function _waPct(a, b) { return b > 0 ? _waR1(a / b * 100) : 0; }
@@ -50,21 +55,22 @@ function waAgg(rows, rg) {
   rows.forEach(function (r) {
     var h = +r.hours || 0, ab = r.abbr || '?';
     A.total += h; A.ab[ab] = (A.ab[ab] || 0) + h;
-    var p = A.P[r.name] || (A.P[r.name] = { k: r.name, h: 0, work: 0, vac: 0, days: {}, ab: {}, ord: {} });
-    p.h += h; p.ab[ab] = (p.ab[ab] || 0) + h;
-    var dy = A.D[r.date] || (A.D[r.date] = { d: r.date, h: 0, ab: {}, ppl: {} });
-    dy.h += h; dy.ab[ab] = (dy.ab[ab] || 0) + h; dy.ppl[r.name] = 1;
+    var p = A.P[r.name] || (A.P[r.name] = { k: r.name, h: 0, work: 0, vac: 0, days: {}, ab: {}, ord: {}, rd: {}, dh: {}, dord: {}, nr: 0, short: 0, dept: {} });
+    p.h += h; p.ab[ab] = (p.ab[ab] || 0) + h; p.rd[r.date] = 1; if (r.dept) p.dept[r.dept] = (p.dept[r.dept] || 0) + 1;
+    var dy = A.D[r.date] || (A.D[r.date] = { d: r.date, h: 0, ab: {}, ppl: {}, ph: {} });
+    dy.h += h; dy.ab[ab] = (dy.ab[ab] || 0) + h; dy.ppl[r.name] = 1; dy.ph[r.name] = (dy.ph[r.name] || 0) + h;
     var key = r.name + '\u0001' + r.date; A.pd[key] = (A.pd[key] || 0) + h;
     if (_waVac(r)) { A.vac += h; p.vac += h; return; }
-    A.work += h; p.work += h; p.days[r.date] = 1;
-    var c = _waCl(r), C = A.C[c] || (A.C[c] = { k: c, h: 0, ppl: {}, days: {} });
-    C.h += h; C.ppl[r.name] = 1; C.days[r.date] = 1;
+    A.work += h; p.work += h; p.days[r.date] = 1; p.dh[r.date] = (p.dh[r.date] || 0) + h;
+    p.nr++; if (String(r.content || '').replace(/s+/g, '').length < 10) p.short++;
+    var c = _waCl(r), C = A.C[c] || (A.C[c] = { k: c, h: 0, ppl: {}, days: {}, ph: {} });
+    C.h += h; C.ppl[r.name] = 1; C.days[r.date] = 1; C.ph[r.name] = (C.ph[r.name] || 0) + h;
     if (c === '(미지정)') A.unCl += h;
     var no = r.orderNo || '';
     if (_waIsOrd(no)) {
-      A.ord += h; p.ord[no] = (p.ord[no] || 0) + h;
-      var o = A.O[no] || (A.O[no] = { k: no, nm: r.ocmt || (typeof getOCmt === 'function' ? getOCmt(no) : '') || '', cl: c, h: 0, ppl: {}, days: {} });
-      o.h += h; o.ppl[r.name] = 1; o.days[r.date] = 1;
+      A.ord += h; p.ord[no] = (p.ord[no] || 0) + h; (p.dord[r.date] || (p.dord[r.date] = {}))[no] = 1;
+      var o = A.O[no] || (A.O[no] = { k: no, nm: r.ocmt || (typeof getOCmt === 'function' ? getOCmt(no) : '') || '', cl: c, h: 0, ppl: {}, days: {}, ph: {} });
+      o.h += h; o.ppl[r.name] = 1; o.days[r.date] = 1; o.ph[r.name] = (o.ph[r.name] || 0) + h;
     }
   });
   Object.keys(A.pd).forEach(function (k) {
@@ -123,18 +129,23 @@ function waRender(f) {
     if (pr.length) P = waAgg(pr, prg);
   }
   _waLast = { f: f, A: A, P: P, rg: rg, prg: prg };
+  if (typeof wadData === 'function') _waLast.dir = wadData(rg);   // v13.459 업무 방향 (최근 N주) — 한눈에 문장에도 씀
   setTimeout(_waWatch, 0);
   var gapOn = _waGapOn();
   box.innerHTML = ''
     + '<div class="wa-scope">' + _waMD(rg.s) + ' ~ ' + _waMD(rg.e) + ' · 평일 ' + A.wd + '일 · ' + A.people + '명 · ' + A.n.toLocaleString() + '건'
     + (P ? ' <span class="wa-vs">비교: 지난 기간 ' + _waMD(prg.s) + ' ~ ' + _waMD(prg.e) + '</span>' : selWeek ? ' <span class="wa-vs">지난 기간 기록 없음 — 비교 생략</span>' : ' <span class="wa-vs">전체 기간 — 주 · 기간을 고르면 지난 기간과 비교</span>') + '</div>'
+    + (typeof wsBar === 'function' ? wsBar() : '')
     + _waTiles(A, P, gapOn)
     + _waFind(A, P, gapOn)
     + '<div class="wa-g2">' + _waMix(A, P, gapOn) + _waPeople(A) + '</div>'
+    + (typeof wakCard === 'function' ? wakCard(A, P) : '')
+    + (typeof wadCard === 'function' ? '<div class="wa-g2 wa-g2r">' + waqCard(A) + wadCard() + '</div>' : '')
     + _waDaily(A, gapOn)
     + _waTop(A, P)
     + '<div id="waMonth">' + _waMonth(rg) + '</div>';
   _waBind(box);
+  if (typeof wsBind === 'function') wsBind(box);
 }
 
 /* ─── ① 숫자 ─── */
@@ -203,10 +214,12 @@ function _waFind(A, P, gapOn) {
     var top = days.slice().sort(function (a, b) { return b.h / Object.keys(b.ppl).length - a.h / Object.keys(a.ppl).length; })[0], per = top.h / Object.keys(top.ppl).length;
     if (per > 9.5) F.push(['warn', '가장 바쁜 날 ' + _waMD(top.d) + ' — 인당 ' + _waR1(per) + 'h']);
   }
+  if (typeof wadFind === 'function') wadFind(F);
   if (!F.length) F.push(['good', '눈에 띄는 쏠림 · 과부하 없음']);
+  if (typeof wsFindSort === 'function') F = wsFindSort(F);
   var ic = { bad: '⛔', warn: '⚠️', info: '•', good: '✅' };
   return '<section class="wa-card wa-find" id="waFindC"><div class="wa-h"><h4>🔎 한눈에</h4></div><ul>'
-    + F.slice(0, 7).map(function (x) { return '<li><span class="wa-fi" style="color:' + (WA_ST[x[0]] || 'var(--t5)') + '">' + ic[x[0]] + '</span>' + eH(x[1]) + '</li>'; }).join('') + '</ul></section>';
+    + F.slice(0, 8).map(function (x) { return '<li' + (x[2] ? ' class="wa-fsel"' : '') + '><span class="wa-fi" style="color:' + (WA_ST[x[0]] || 'var(--t5)') + '">' + ic[x[0]] + '</span>' + eH(x[1]) + '</li>'; }).join('') + '</ul></section>';
 }
 
 function _waSaveBtn(id) {
@@ -221,18 +234,20 @@ function _waMix(A, P, gapOn) {
     .sort(function (a, b) { return b.h - a.h; });
   if (gapOn && A.gap > 0) parts.push({ k: '_gap', n: '8h 미달', h: A.gap, c: WA_GAP_COL });
   var tot = parts.reduce(function (s, x) { return s + x.h; }, 0) || 1;
+  var sp = _wsPpl().length, sh = function (k) { return sp && k !== '_gap' ? _wsPH(Object.keys(A.P).reduce(function (o, n) { o[n] = A.P[n].ab[k] || 0; return o; }, {})) : 0; };
   var bar = '<div class="wa-seg" role="img" aria-label="분장별 시간 구성">' + parts.map(function (x) {
-    var p = x.h / tot * 100;
-    return '<div class="wa-sg" style="flex:' + x.h + ' 1 0;background:' + x.c + '"' + _waTip([_waH(x.h) + ' · ' + _waR1(p) + '%', x.n]) + '>' + (p >= 8 ? '<span style="color:' + _waInk(x.c) + '">' + Math.round(p) + '%</span>' : '') + '</div>';
+    var p = x.h / tot * 100, s = sh(x.k);
+    return '<div class="wa-sg" style="flex:' + x.h + ' 1 0;background:' + x.c + '"' + (x.k !== '_gap' ? _wsA('ab:' + x.k) : '') + _waTip([_waH(x.h) + ' · ' + _waR1(p) + '%', x.n].concat(sp && x.k !== '_gap' ? ['선택(' + _wsNm() + ') ' + _waH(s) + ' · ' + _waPct(s, x.h) + '%'] : [])) + '>' + (sp && s > 0 ? '<i class="wa-ov" style="width:' + Math.min(100, s / x.h * 100).toFixed(1) + '%"></i>' : '') + (p >= 8 ? '<span style="color:' + _waInk(x.c) + '">' + Math.round(p) + '%</span>' : '') + '</div>';
   }).join('') + '</div>';
   var pt = P ? (P.total + (gapOn ? P.gap : 0)) : 0;
   var rows = parts.map(function (x) {
     var p = _waR1(x.h / tot * 100), d = '';
     if (P) { var pv = x.k === '_gap' ? P.gap : (P.ab[x.k] || 0), dp = _waR1(p - (pt ? pv / pt * 100 : 0)); d = Math.abs(dp) < 0.5 ? '<span class="wa-mut">–</span>' : '<span class="wa-mut">' + (dp > 0 ? '▲' : '▼') + Math.abs(dp) + '%p</span>'; }
-    return '<tr><td><span class="wa-sw" style="background:' + x.c + '"></span>' + eH(x.n) + '</td><td class="num">' + _waH(x.h) + '</td><td class="num">' + p + '%</td>' + (P ? '<td class="num">' + d + '</td>' : '') + '</tr>';
+    var s = sh(x.k);
+    return '<tr' + (x.k !== '_gap' ? _wsA('ab:' + x.k) : '') + '><td><span class="wa-sw" style="background:' + x.c + '"></span>' + eH(x.n) + '</td><td class="num">' + _waH(x.h) + '</td><td class="num">' + p + '%</td>' + (P ? '<td class="num">' + d + '</td>' : '') + (sp ? '<td class="num wa-selc">' + (s ? _waH(s) : '') + '</td>' : '') + '</tr>';
   }).join('');
   return '<section class="wa-card" id="waMixC"><div class="wa-h"><h4>🧩 시간 구성 <span class="wa-sub">분장별 · 전체 = 100%</span></h4>' + _waSaveBtn('waMixC') + '</div>' + bar
-    + '<table class="wa-tbl"><thead><tr><th>분장</th><th class="num">시간</th><th class="num">비중</th>' + (P ? '<th class="num">지난 기간 대비</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<table class="wa-tbl"><thead><tr><th>분장</th><th class="num">시간</th><th class="num">비중</th>' + (P ? '<th class="num">지난 기간 대비</th>' : '') + (sp ? '<th class="num wa-selc" title="고른 사람의 시간">' + eH(_wsNm()) + '</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table>'
     + (gapOn && A.gap > 0 ? '<div class="wa-note">8h 미달 = 평일 기록이 8h 에 못 미친 만큼 (반차 · 미기록 추정)</div>' : '') + '</section>';
 }
 
@@ -249,7 +264,7 @@ function _waPeople(A) {
     var to = Object.keys(p.ord).sort(function (a, b) { return p.ord[b] - p.ord[a]; })[0];
     var tn = to ? ((A.O[to] && A.O[to].nm) || to) : '';
     var dn = typeof shortName === 'function' ? shortName(p.k) : p.k;
-    return '<div class="wa-pr"><div class="wa-pn" title="' + eH(p.k) + '">' + eH(dn) + '</div>'
+    return '<div class="wa-pr"' + _wsA('p:' + p.k) + '><div class="wa-pn" title="' + eH(p.k) + '">' + eH(dn) + '</div>'
       + '<div class="wa-pm"' + _waTip([_waR1(p.avg) + 'h / 일', p.k + ' · ' + p.nd + '일 · 업무 ' + _waH(p.work) + (p.vac ? ' · 휴가 ' + _waH(p.vac) : '')]) + '><div class="wa-mt"><i style="width:' + Math.min(100, p.avg / MAX * 100) + '%;background:' + col + '"></i><b style="left:' + (8 / MAX * 100) + '%"></b></div>'
       + '<span class="wa-pv">' + (st ? '<em style="color:' + col + '">' + st[1] + '</em>' : '') + _waR1(p.avg) + 'h</span></div>'
       + '<div class="wa-pmx">' + mix + '</div>'
@@ -272,11 +287,11 @@ function _waBuckets(A) {
     var k = x;
     if (weekly) { var w = _waD(x).getUTCDay(); k = _waAdd(x, -((w + 6) % 7)); }
     var b = map[k];
-    if (!b) { b = map[k] = { k: k, h: 0, ab: {}, wd: 0, ppl: {}, off: !_waIsWork(x) }; B.push(b); }
+    if (!b) { b = map[k] = { k: k, h: 0, ab: {}, wd: 0, ppl: {}, ph: {}, off: !_waIsWork(x) }; B.push(b); }
     if (_waIsWork(x)) { b.wd++; b.off = false; }
     var D = A.D[x]; if (!D) return;
     b.h += D.h; Object.keys(D.ab).forEach(function (a) { b.ab[a] = (b.ab[a] || 0) + D.ab[a]; });
-    Object.keys(D.ppl).forEach(function (p) { b.ppl[p] = 1; });
+    Object.keys(D.ppl).forEach(function (p) { b.ppl[p] = 1; b.ph[p] = (b.ph[p] || 0) + (D.ph[p] || 0); });
   });
   B.forEach(function (b) { b.cap = b.wd * A.people * 8; });
   return { B: B, weekly: weekly };
@@ -307,16 +322,23 @@ function _waDaily(A, gapOn) {
     segs.forEach(function (sg, j) {
       var hh = sg[1] / top * ch, gap = j < segs.length - 1 && hh > 3 ? 2 : 0;
       cy -= hh;
-      s += j === segs.length - 1 ? '<path d="' + _waColPath(x, cy, bw, hh, 3) + '" fill="' + _waAbCol(sg[0]) + '"/>' : '<rect x="' + x.toFixed(1) + '" y="' + (cy + gap).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, hh - gap).toFixed(1) + '" fill="' + _waAbCol(sg[0]) + '"/>';
+      s += j === segs.length - 1 ? '<path d="' + _waColPath(x, cy, bw, hh, 3) + '" fill="' + _waAbCol(sg[0]) + '"' + _wsA('ab:' + sg[0]) + '/>' : '<rect x="' + x.toFixed(1) + '" y="' + (cy + gap).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, hh - gap).toFixed(1) + '" fill="' + _waAbCol(sg[0]) + '"' + _wsA('ab:' + sg[0]) + '/>';
     });
     if (b.cap) s += '<line x1="' + (L + i * step + 2).toFixed(1) + '" x2="' + (L + (i + 1) * step - 2).toFixed(1) + '" y1="' + y(b.cap).toFixed(1) + '" y2="' + y(b.cap).toFixed(1) + '" class="wa-cap"/>';
     if (i % lblEvery === 0) s += '<text x="' + (L + i * step + step / 2).toFixed(1) + '" y="' + (H - 12) + '" class="wa-ax' + (b.off ? ' off' : '') + '" text-anchor="middle">' + _waMD(b.k) + '</text>';
+    if (_wsPpl().length) { var sv = _wsPH(b.ph); b._sy = y(sv); b._sx = L + i * step + step / 2; }
     var tip = [_waH(b.h) + (b.cap ? ' / 기준 ' + _waH(b.cap) + ' (' + _waPct(b.h, b.cap) + '%)' : ''), (bk.weekly ? _waMD(b.k) + ' 주' : _waMD(b.k) + (b.off ? ' (휴일)' : '')) + ' · ' + Object.keys(b.ppl).length + '명']
-      .concat(segs.slice().reverse().map(function (sg) { return _waAbName(sg[0]) + '  ' + _waH(sg[1]); }));
+      .concat(segs.slice().reverse().map(function (sg) { return _waAbName(sg[0]) + '  ' + _waH(sg[1]); }))
+      .concat(_wsPpl().length ? ['선택(' + _wsNm() + ')  ' + _waH(_wsPH(b.ph))] : []);
     s += '<rect class="wa-hit" x="' + (L + i * step).toFixed(1) + '" y="' + T + '" width="' + step.toFixed(1) + '" height="' + ch + '"' + _waTip(tip) + '/>';
   });
+  if (_wsPpl().length) {   // v13.459 고른 사람의 투입 — 진한 선 + 점 (팀 막대 위에)
+    var pts = B.filter(function (b) { return b._sx != null; });
+    s += '<path class="wa-selln" d="' + pts.map(function (b, i) { return (i ? 'L' : 'M') + b._sx.toFixed(1) + ' ' + b._sy.toFixed(1); }).join('') + '"/>';
+    pts.forEach(function (b) { s += '<circle class="wa-seldot" cx="' + b._sx.toFixed(1) + '" cy="' + b._sy.toFixed(1) + '" r="4"/>'; });
+  }
   s += '</svg>';
-  var legend = '<div class="wa-lg">' + codes.map(function (k) { return '<span><i style="background:' + _waAbCol(k) + '"></i>' + eH(_waAbName(k)) + '</span>'; }).join('') + '<span><i class="ln"></i>기준 = 인원 × 8h × 평일</span></div>';
+  var legend = '<div class="wa-lg">' + codes.map(function (k) { return '<span class="wa-lgk"' + _wsA('ab:' + k) + '><i style="background:' + _waAbCol(k) + '"></i>' + eH(_waAbName(k)) + '</span>'; }).join('') + '<span><i class="ln"></i>기준 = 인원 × 8h × 평일</span>' + (_wsPpl().length ? '<span><i class="ln sel"></i>선택(' + eH(_wsNm()) + ')</span>' : '') + '</div>';
   var tbl = '<details class="wa-tview"><summary>표로 보기</summary><div class="wa-tw"><table class="wa-tbl"><thead><tr><th>' + (bk.weekly ? '주' : '날짜') + '</th><th class="num">합계</th><th class="num">기준</th>' + codes.map(function (k) { return '<th class="num">' + eH(k) + '</th>'; }).join('') + '</tr></thead><tbody>'
     + B.map(function (b) { return '<tr><td>' + _waMD(b.k) + '</td><td class="num">' + _waR1(b.h) + '</td><td class="num">' + _waR1(b.cap) + '</td>' + codes.map(function (k) { return '<td class="num">' + (b.ab[k] ? _waR1(b.ab[k]) : '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></details>';
   return '<section class="wa-card" id="waDayC"><div class="wa-h"><h4>📅 ' + (bk.weekly ? '주별' : '날짜별') + ' 투입 <span class="wa-sub">분장별로 쌓음 · 짧은 가로선 = 기준 시간</span></h4>' + _waSaveBtn('waDayC') + '</div>'
@@ -337,9 +359,10 @@ function _waTop(A, P) {
     if (!cut && !x._etc && cp >= 80) { cut = true; mark = ' wa-80'; }
     var pv = prv && !x._etc ? ((prv[x.k] || {}).h || 0) : null, d = '';
     if (pv != null) { var dd = _waR1(x.h - pv); d = pv === 0 ? '<span class="wa-mut">새로</span>' : Math.abs(dd) < 0.5 ? '<span class="wa-mut">–</span>' : '<span class="wa-mut">' + (dd > 0 ? '▲' : '▼') + Math.abs(dd) + 'h</span>'; }
+    var ss = !x._etc && _wsPpl().length ? _wsPH(x.ph) : 0;
     var name = isCl || x._etc ? eH(x.k) : '<b>' + eH(x.nm || x.k) + '</b> <span class="wa-mut">' + eH(x.k) + (x.cl && x.cl !== '(미지정)' ? ' · ' + eH(x.cl) : '') + '</span>';
-    return '<tr class="' + mark + '"><td class="wa-tn" title="' + eH(x.nm ? x.nm + ' ' + x.k : x.k) + '">' + name + '</td>'
-      + '<td class="wa-bc"' + _waTip([_waH(x.h) + ' · ' + _waPct(x.h, tot) + '%', (x.nm || x.k) + ' · ' + Object.keys(x.ppl).length + '명' + (x._etc ? '' : ' · ' + Object.keys(x.days).length + '일')]) + '><span class="wa-b" style="width:calc(' + (x.h / max).toFixed(3) + ' * (100% - 52px))' + (x._etc ? ';opacity:.45' : '') + '"></span><span class="wa-bv">' + _waH(x.h) + '</span></td>'
+    return '<tr class="' + mark + '"' + (x._etc ? '' : _wsA((isCl ? 'cl:' : 'ord:') + x.k)) + '><td class="wa-tn" title="' + eH(x.nm ? x.nm + ' ' + x.k : x.k) + '">' + name + '</td>'
+      + '<td class="wa-bc"' + _waTip([_waH(x.h) + ' · ' + _waPct(x.h, tot) + '%', (x.nm || x.k) + ' · ' + Object.keys(x.ppl).length + '명' + (x._etc ? '' : ' · ' + Object.keys(x.days).length + '일')].concat(ss ? ['선택(' + _wsNm() + ') ' + _waH(ss) + ' · ' + _waPct(ss, x.h) + '%'] : [])) + '><span class="wa-b" style="width:calc(' + (x.h / max).toFixed(3) + ' * (100% - 52px))' + (x._etc ? ';opacity:.45' : '') + '">' + (ss ? '<i class="wa-bsel" style="width:' + Math.min(100, ss / x.h * 100).toFixed(1) + '%"></i>' : '') + '</span><span class="wa-bv">' + _waH(x.h) + '</span></td>'
       + '<td class="num">' + _waPct(x.h, tot) + '%</td><td class="num wa-mut">' + cp + '%</td><td class="num">' + Object.keys(x.ppl).length + '</td><td class="num">' + (x._etc ? '' : Object.keys(x.days).length) + '</td>' + (prv ? '<td class="num">' + d + '</td>' : '') + '</tr>';
   }).join('');
   return '<section class="wa-card" id="waTopC"><div class="wa-h"><h4>🏢 어디에 시간을 썼나 <span class="wa-sub">' + (isCl ? '업체' : '수주') + ' ' + list.length + '개 · 휴가 제외</span></h4>'
@@ -390,7 +413,7 @@ function _waMonth(rg) {
   var head = '<tr><th>' + ({ abbr: '분장', person: '사람', client: '업체' })[dim] + '</th>' + ms.map(function (mo) { return '<th class="num">' + (+mo.slice(4)) + '월' + (mo === curMo ? '<sup title="이번 달 — 아직 진행 중">*</sup>' : '') + '</th>'; }).join('') + '<th class="num">합계</th><th class="num" title="마지막 달 ÷ 그 전 달">전월 대비</th></tr>';
   var body = list.map(function (x) {
     var nm = dim === 'abbr' ? '<span class="wa-sw" style="background:' + _waAbCol(x.k) + '"></span>' + eH(_waAbName(x.k)) : eH(x.k);
-    return '<tr><td class="wa-tn">' + nm + '</td>' + ms.map(function (mo) { return cell(x.m[mo] || 0, [_waH(x.m[mo] || 0) + (tot[mo] ? ' · ' + _waPct(x.m[mo] || 0, dim === 'abbr' ? tot[mo] : work[mo]) + '%' : ''), (dim === 'abbr' ? _waAbName(x.k) : x.k) + ' · ' + mo.slice(0, 4) + '년 ' + (+mo.slice(4)) + '월']); }).join('')
+    return '<tr' + (x.etc ? '' : _wsA((dim === 'abbr' ? 'ab:' : dim === 'person' ? 'p:' : 'cl:') + x.k)) + '><td class="wa-tn">' + nm + '</td>' + ms.map(function (mo) { return cell(x.m[mo] || 0, [_waH(x.m[mo] || 0) + (tot[mo] ? ' · ' + _waPct(x.m[mo] || 0, dim === 'abbr' ? tot[mo] : work[mo]) + '%' : ''), (dim === 'abbr' ? _waAbName(x.k) : x.k) + ' · ' + mo.slice(0, 4) + '년 ' + (+mo.slice(4)) + '월']); }).join('')
       + '<td class="num"><b>' + Math.round(x.t) + '</b></td><td class="num">' + chg(x.m) + '</td></tr>';
   }).join('');
   var sumRow = '<tr class="wa-sum"><td>합계' + (dim === 'abbr' ? '' : ' (휴가 제외)') + '</td>' + ms.map(function (mo) { var v = dim === 'abbr' ? tot[mo] || 0 : work[mo] || 0; return '<td class="num">' + (v ? Math.round(v) : '<span class="wa-mut">기록 없음</span>') + '</td>'; }).join('') + '<td></td><td class="num">' + chg(dim === 'abbr' ? tot : work) + '</td></tr>';
