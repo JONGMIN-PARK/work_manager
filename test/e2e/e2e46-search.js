@@ -136,6 +136,53 @@ var SHOTS = path.join(__dirname, '.shots');
 
     // 정리
     await page.setViewport({ width: 1400, height: 900 }); await wait(300); await ready();
+
+    // 5. v13.484 — 여러 단어 · 새 범주 · 결과 창 폭 · 패널 닫고 이동 · 휴대폰 대화방
+    await page.keyboard.press('Escape');
+    var ev = await api('/api/events', 'POST', { title: K + ' 일정', startDate: '2026-11-20', memo: '납품 검수' });
+    var multi = await page.evaluate(async function (K) {
+      var g = async function (q) { var r = await apiFetch('/api/search?q=' + encodeURIComponent(q)); var o = {}; (r.data.groups || []).forEach(function (x) { o[x.key] = x.total; }); return o; };
+      return { apart: await g('측정 완료 ' + K), rev: await g('완료   측정 ' + K), none: await g(K + ' 없는낱말qqq'), byName: await g('관리자 ' + K), ev: await g(K + ' 검수'), like: await g('%_%') };
+    }, K);
+    check(multi.apart.work >= 1 && multi.rev.work >= 1, '여러 단어 — 떨어져 있어도 · 순서가 달라도 찾음 ' + JSON.stringify([multi.apart, multi.rev]));
+    check(Object.keys(multi.none).length === 0, '여러 단어 — 한 단어라도 없으면 안 나옴 ' + JSON.stringify(multi.none));
+    check(multi.byName.work >= 1, '업무일지 — 사람 이름 + 내용 단어 ' + JSON.stringify(multi.byName));
+    check(multi.ev.event === 1, '일정 — 제목 + 메모 단어 ' + JSON.stringify(multi.ev));
+    var kimName = await page.evaluate(async function () { var u = ((await apiFetch('/api/users')).data || []).filter(function (x) { return x.email === 'kim@t.com'; })[0]; return u ? (u.display_name || u.name) : ''; });
+    var rooms = kimName ? await page.evaluate(async function (n) { var r = await apiFetch('/api/search?q=' + encodeURIComponent(n)); return (r.data.groups || []).map(function (x) { return x.key; }); }, kimName) : ['room'];
+    check(rooms.indexOf('room') >= 0, '대화방 — 1:1 상대 이름으로 ' + JSON.stringify([kimName, rooms]));
+    await search('측정 완료 ' + K);
+    var dd = await page.evaluate(function () { var b = document.getElementById('globalSearchDropdown').getBoundingClientRect(); return { w: Math.round(b.width), l: Math.round(b.left), r: Math.round(b.right), marks: document.querySelectorAll('#globalSearchDropdown .gs-item mark').length }; });
+    check(dd.w >= 700 && dd.l >= 0 && dd.r <= 1400 && dd.marks >= 3, '결과 창 넓게(700px 이상) · 화면 안 · 단어마다 형광 ' + JSON.stringify(dd));
+    await page.setViewport({ width: 800, height: 900 }); await wait(400);
+    await search(K);
+    var dd2 = await page.evaluate(function () { var b = document.getElementById('globalSearchDropdown').getBoundingClientRect(); return { l: Math.round(b.left), r: Math.round(b.right) }; });
+    check(dd2.l >= 0 && dd2.r <= 800, '좁은 창(800px) — 결과 창 화면 안 ' + JSON.stringify(dd2));
+    await page.keyboard.press('Escape');
+    await page.setViewport({ width: 1400, height: 900 }); await wait(400);
+    // 프로젝트 패널이 열린 채 업무일지 결과 → 패널 닫고 이동
+    await page.evaluate(function (id) { setPage('project'); return showProjectDetail(id); }, made.proj); await wait(800);
+    var hadPanel = await page.evaluate(function () { return !!document.getElementById('projDetailPanel'); });
+    await page.evaluate(async function (K) { await globalSearch('측정 ' + K); gsPick('work', 0); }, K); await wait(1200);
+    var after = await page.evaluate(function () { return { panel: !!document.getElementById('projDetailPanel'), page: curPage, weekly: !!(document.getElementById('mWeekly') && document.getElementById('mWeekly').offsetParent) }; });
+    check(hadPanel && !after.panel && after.page === 'team' && after.weekly, '프로젝트 패널이 열려 있어도 업무일지 결과로 가면 패널 닫힘 ' + JSON.stringify(after));
+    await page.evaluate(function () { if (typeof wmHitOff === 'function') wmHitOff(true); });
+    if (ev && ev.id) await api('/api/events/' + ev.id, 'DELETE');
+    // 휴대폰 대화방 — 머리 줄 · 대메뉴가 그대로 보이고 눌림
+    await page.setViewport({ width: 402, height: 874, isMobile: true, hasTouch: true }); await wait(400); await ready();
+    await page.evaluate(function () { setPage('messages'); }); await wait(1500);
+    await page.evaluate(function () { var r = (CX.rooms || [])[0]; if (r) chatOpenRoom(r.id); }); await wait(1500);
+    var cxp = await page.evaluate(function () {
+      var h = document.querySelector('.hdr').getBoundingClientRect(), t = document.getElementById('pageTabs'), tr = t.getBoundingClientRect(), c = document.querySelector('#mMessages .cx').getBoundingClientRect();
+      var top = document.elementFromPoint(200, Math.round(h.top + h.height / 2)), tab = document.elementFromPoint(40, Math.round(tr.top + tr.height / 2));
+      return { full: document.documentElement.classList.contains('cx-full'), room: document.querySelector('#mMessages .cx').classList.contains('has-room'), hdr: Math.round(h.height), tabs: Math.round(tr.height), tabsIn: !!t.offsetParent, cxTop: Math.round(c.top), cxBottom: Math.round(c.bottom), below: Math.round(Math.max(h.bottom, t.offsetParent ? tr.bottom : 0)), ih: innerHeight, hitHdr: !!(top && top.closest('.hdr')), hitTab: !!(tab && tab.closest('#pageTabs')), comp: !!(document.getElementById('cxIn') && document.getElementById('cxIn').offsetParent) };
+    });
+    check(cxp.full && cxp.room && cxp.hdr > 20 && cxp.tabsIn && cxp.hitHdr && cxp.hitTab, '휴대폰 대화방 — 머리 줄 · 대메뉴가 보이고 눌림 ' + JSON.stringify(cxp));
+    check(cxp.cxTop >= cxp.below - 1 && cxp.cxBottom === cxp.ih && cxp.comp, '휴대폰 대화방 — 메뉴 아래부터 화면 끝까지 · 입력 줄 보임 ' + JSON.stringify([cxp.cxTop, cxp.below, cxp.cxBottom, cxp.ih]));
+    await page.screenshot({ path: path.join(SHOTS, 'chat-phone-room.png') });
+    await page.evaluate(function () { setPage('mywork'); }); await wait(800);
+    check(await page.evaluate(function () { return curPage === 'mywork' && !!document.querySelector('.hdr').offsetParent; }), '휴대폰 대화방 → 다른 화면 이동');
+    await page.setViewport({ width: 1400, height: 900 }); await wait(300); await ready();
     if (made.mm) await api('/api/mindmaps/' + made.mm, 'DELETE');
     if (made.mm2) await api('/api/mindmaps/' + made.mm2, 'DELETE');
     await api('/api/projects/' + made.proj, 'DELETE');

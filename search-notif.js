@@ -35,24 +35,32 @@ var GS_CATS = {
   as:        { label: '🛠️ A/S',       icon: '🛠️' },
   weekly:    { label: '📅 주간 업무', icon: '📅' },
   message:   { label: '✉️ 메시지',    icon: '✉️' },
+  event:     { label: '📆 일정',      icon: '📆' },
+  myproj:    { label: '🗂 내 프로젝트', icon: '🗂' },
+  notice:    { label: '📢 공지',      icon: '📢' },
+  room:      { label: '💬 대화방',    icon: '💬' },
   member:    { label: '👤 팀원',      icon: '👤' },
   group:     { label: '👥 그룹',      icon: '👥' }
 };
 var _gs = { q: '', groups: [], only: null, seq: 0 };
 var GS_RECENT = 'wm-gs-recent';
 
+/* v13.484 띄어 쓴 단어마다 칠함 (서버가 단어를 모두 포함한 것을 찾음) */
+function gsTokens(kw) { return String(kw || '').split(/\s+/).filter(Boolean).slice(0, 6); }
 function gsHighlight(text, kw) {
   if (!text || !kw) return eH(text || '');
   var escaped = eH(text);
-  var kwEsc = eH(kw).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return escaped.replace(new RegExp('(' + kwEsc + ')', 'gi'), '<mark>$1</mark>');
+  var alt = gsTokens(kw).map(function (t) { return eH(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).sort(function (x, y) { return y.length - x.length; }).join('|');
+  if (!alt) return escaped;
+  return escaped.replace(new RegExp('(' + alt + ')', 'gi'), '<mark>$1</mark>');
 }
 
 /* 그룹(팀원 묶음)은 설정에만 있어 화면에서 찾는다 */
 function gsLocalGroups(kl) {
   var out = [];
   (typeof memberGroups !== 'undefined' && Array.isArray(memberGroups) ? memberGroups : []).forEach(function (g) {
-    if ((g.name && g.name.toLowerCase().indexOf(kl) >= 0) || (g.members || []).some(function (m) { return String(m).toLowerCase().indexOf(kl) >= 0; }))
+    var hay = ((g.name || '') + ' ' + (g.members || []).join(' ')).toLowerCase();
+    if (gsTokens(kl).every(function (t) { return hay.indexOf(t) >= 0; }))
       out.push({ id: g.id, title: g.name, sub: (g.members || []).length + '명', nav: { groupId: g.id } });
   });
   return out.length ? { key: 'group', total: out.length, items: out.slice(0, 5) } : null;
@@ -216,9 +224,12 @@ function _gsOpenProject(pid, tab, cb) {
   });
 }
 
+var GS_PROJ_TYPES = { project: 1, milestone: 1, dev: 1, checklist: 1, comment: 1 };
 function globalSearchNav(type, it, kw) {
   var n = (it && it.nav) || {};
   var hit = function (root, opt) { wmHitShow(root, kw, opt); };
+  // v13.484 프로젝트 상세 패널이 열려 있으면 다른 화면 결과를 가림 → 프로젝트 계열(· 프로젝트에 걸린 회의)이 아니면 닫고 감
+  if (!GS_PROJ_TYPES[type] && !(type === 'meeting' && n.projectId) && document.getElementById('projDetailPanel') && typeof pdCloseDetail === 'function') { try { pdCloseDetail(); } catch (e) {} }
   if (type === 'project') {
     _gsOpenProject(n.projectId, 'overview', function () { hit('#projDetailPanel'); });
   } else if (type === 'milestone') {
@@ -311,6 +322,20 @@ function globalSearchNav(type, it, kw) {
     // v13.315 메신저 — 그 방 · 그 메시지로 (예전 링크는 상대와의 1:1)
     if (n.roomId && typeof chatOpenRoom === 'function') chatOpenRoom(n.roomId, false, n.messageId || null);
     else { setPage('messages'); setTimeout(function () { if (typeof msgOpenThread === 'function') msgOpenThread(n.peerId); hit('#mMessages'); }, 300); }
+  } else if (type === 'event') {
+    setPage('project'); setMode('calendar');
+    setTimeout(function () { if (typeof showEventModal === 'function') showEventModal(n.eventId); hit('#evtModal'); }, 400);
+  } else if (type === 'myproj') {
+    setPage('mywork');
+    var pt = 0;
+    (function openP() {
+      if (typeof mwProjById === 'function' && mwProjById(n.myProjId) && typeof mwProjOpen === 'function') { mwProjOpen(n.myProjId); hit('#mMyWork'); }
+      else if (++pt < 30) setTimeout(openP, 150);
+    })();
+  } else if (type === 'notice') {
+    if (typeof wmNoticeOpen === 'function') wmNoticeOpen(n.noticeId);
+  } else if (type === 'room') {
+    if (typeof chatOpenRoom === 'function') chatOpenRoom(n.roomId);
   } else if (type === 'member') {
     setPage('team'); setMode('weekly');
     setTimeout(function () {
@@ -400,22 +425,24 @@ function wmHitOff(silent) {
 function wmHitMark(root, kw, focus) {
   wmHitClear();
   _wmHitBusy = true;
-  var kl = String(kw).toLowerCase(), marks = [];
+  var kls = gsTokens(String(kw).toLowerCase()), marks = [];   // v13.484 띄어 쓴 단어마다
+  if (!kls.length) { _wmHitBusy = false; return 0; }
+  var next = function (low, i) { var best = null; kls.forEach(function (k) { var j = low.indexOf(k, i); if (j >= 0 && (!best || j < best.j || (j === best.j && k.length > best.n))) best = { j: j, n: k.length }; }); return best; };
   var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: function (t) {
       var p = t.parentNode;
       if (!p || /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION|MARK)$/.test(p.nodeName)) return NodeFilter.FILTER_REJECT;
       if (p.closest && p.closest('[contenteditable=""],[contenteditable="true"],#wmHitBar')) return NodeFilter.FILTER_REJECT;
-      return t.nodeValue.toLowerCase().indexOf(kl) >= 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+      return next(t.nodeValue.toLowerCase(), 0) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
     }
   });
   var nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
   nodes.slice(0, 300).forEach(function (t) {
-    var s = t.nodeValue, low = s.toLowerCase(), i = 0, j, frag = document.createDocumentFragment();
-    while ((j = low.indexOf(kl, i)) >= 0) {
-      if (j > i) frag.appendChild(document.createTextNode(s.slice(i, j)));
-      var m = document.createElement('mark'); m.className = 'wm-hit'; m.textContent = s.slice(j, j + kl.length);
-      frag.appendChild(m); marks.push(m); i = j + kl.length;
+    var s = t.nodeValue, low = s.toLowerCase(), i = 0, h, frag = document.createDocumentFragment();
+    while ((h = next(low, i))) {
+      if (h.j > i) frag.appendChild(document.createTextNode(s.slice(i, h.j)));
+      var m = document.createElement('mark'); m.className = 'wm-hit'; m.textContent = s.slice(h.j, h.j + h.n);
+      frag.appendChild(m); marks.push(m); i = h.j + h.n;
     }
     if (i < s.length) frag.appendChild(document.createTextNode(s.slice(i)));
     t.parentNode.replaceChild(frag, t);
@@ -427,6 +454,7 @@ function wmHitMark(root, kw, focus) {
 /* 글자가 입력칸(회의록 · 메모 칸)에만 있으면 그 칸 테두리를 칠함 */
 function wmHitField(root, kw, focus) {
   var kl = String(kw).toLowerCase();
+  var tk = gsTokens(kl); if (tk.length > 1) kl = tk.filter(function (t) { return Array.prototype.some.call(root.querySelectorAll('textarea, input[type=text], input:not([type])'), function (e) { return String(e.value || '').toLowerCase().indexOf(t) >= 0; }); })[0] || tk[0];
   var f = Array.prototype.slice.call(root.querySelectorAll('textarea, input[type=text], input:not([type])')).filter(function (e) { return String(e.value || '').toLowerCase().indexOf(kl) >= 0; })[0];
   if (!f) return 0;
   _wmHitBusy = true; f.classList.add('wm-hit-field'); _wmHitBusy = false;

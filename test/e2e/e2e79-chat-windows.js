@@ -108,7 +108,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(!!fr, '옆 칸이 생김');
     check(await fr.waitForFunction(function (r) { return typeof CX !== 'undefined' && CX.room === r && document.querySelectorAll('#cxMsgs .cx-mw').length >= 3; }, { timeout: 20000 }, rooms.grp).then(function () { return true; }, function () { return false; }), '옆 칸에 그 방 대화가 보임');
     var lay = await a.evaluate(function () { var m = document.querySelector('#mMessages .cx').getBoundingClientRect(), p = document.querySelector('#cxSplit .cx-pane').getBoundingClientRect(); return { side: p.left >= m.right - 1, same: Math.abs(p.height - m.height) < 3 && Math.abs(p.top - m.top) < 3, pw: Math.round(p.width), mw: Math.round(m.width), in: p.right <= innerWidth + 1 }; });
-    check(lay.side && lay.same && lay.pw >= 340 && lay.in, '본 칸 옆에 같은 높이로 (' + lay.mw + ' + ' + lay.pw + 'px)');
+    check(lay.side && lay.same && lay.pw >= 340 && lay.in, '본 칸 옆에 같은 높이로 (' + lay.mw + ' + ' + lay.pw + 'px) ' + JSON.stringify(lay));
     check(await fr.evaluate(function () { return document.documentElement.classList.contains('wm-embed') && !!document.querySelector('#cxHead [data-h="closepane"]') && !!document.querySelector('#cxHead [data-h="pop"]'); }), '옆 칸 머리에 ✕ 닫기 · ↗ 새 창');
     await a.screenshot({ path: path.join(SHOT, 'e2e79-split.png') });
     // 옆 칸에서 보내기 · 받기

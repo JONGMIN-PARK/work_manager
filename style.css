@@ -6403,13 +6403,13 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cx-unup:hover{background:color-mix(in srgb,var(--ac) 16%,var(--bg-p))}
 /* v13.385 휴대폰 대화방 — 앱 머리 · 탭 줄을 숨겨 세로를 다 씀, 위는 상태 표시줄(노치)만 비우고 아래는 둥근 모서리 쪽까지 */
 @media (max-width:760px){
-  html.cx-full:has(#mMessages:not(.hidden)) .hdr,
-  html.cx-full:has(#mMessages:not(.hidden)) #pageTabs,
-  html.cx-full:has(#mMessages:not(.hidden)) .sub-tabs{display:none!important}
-  html.cx-full:has(#mMessages:not(.hidden)) .con{padding-top:0!important;padding-bottom:0!important}
-  html.cx-full:has(#mMessages:not(.hidden)) body{padding-bottom:0!important}
-  html.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx{border-top:0}
-  html.cx-full:has(#mMessages:not(.hidden)) #cxHead{padding-top:calc(8px + env(safe-area-inset-top,0px))!important}   /* v13.388 휴대폰 .cx-h{padding:6px!important} 가 덮어 위 메뉴가 상태 표시줄 밑에 깔렸던 것 */
+  html.cx-full:is(:not(.wm-shell),.cx-kb-on):has(#mMessages:not(.hidden)) .hdr,
+  html.cx-full:is(:not(.wm-shell),.cx-kb-on):has(#mMessages:not(.hidden)) #pageTabs,
+  html.cx-full:is(:not(.wm-shell),.cx-kb-on):has(#mMessages:not(.hidden)) .sub-tabs{display:none!important}
+  html.cx-full:is(:not(.wm-shell),.cx-kb-on):has(#mMessages:not(.hidden)) .con{padding-top:0!important;padding-bottom:0!important}
+  html.cx-full:is(:not(.wm-shell),.cx-kb-on):has(#mMessages:not(.hidden)) body{padding-bottom:0!important}
+  html.cx-full:is(:not(.wm-shell),.cx-kb-on):has(#mMessages:not(.hidden)) #mMessages .cx{border-top:0}
+  html.cx-full:is(:not(.wm-shell),.cx-kb-on):has(#mMessages:not(.hidden)) #cxHead{padding-top:calc(8px + env(safe-area-inset-top,0px))!important}   /* v13.388 휴대폰 .cx-h{padding:6px!important} 가 덮어 위 메뉴가 상태 표시줄 밑에 깔렸던 것 */
   /* 입력 줄 — 홈 막대만큼 다 띄우던 것(8px+34px)을 줄여 둥근 아래쪽까지 내려감 */
   .cx-comp{padding-bottom:max(8px,calc(env(safe-area-inset-bottom,0px) - 12px))!important}
   .cx.cx-kb .cx-comp{padding-bottom:6px!important}
@@ -6426,8 +6426,8 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 /* v13.387 휴대폰 대화방 — 화면에 붙박이(position:fixed; inset:0). 아이폰이 입력칸을 누를 때 페이지를 밀어 올려도 틀은 그대로,
  *   위 메뉴가 상태 표시줄 밑으로 가지 않음. 키보드가 뜨면 .cx-kb 가 보이는 영역에 맞춤(인라인 top · height) */
 @media (max-width:760px){
-  html.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx{position:fixed!important;inset:0;left:0;width:auto;margin:0;height:auto;min-height:0!important;z-index:60}
-  html.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx.cx-kb{bottom:auto}
+  html.cx-full:is(:not(.wm-shell),.cx-kb-on):has(#mMessages:not(.hidden)) #mMessages .cx{position:fixed!important;inset:0;left:0;width:auto;margin:0;height:auto;min-height:0!important;z-index:60}
+  html.cx-full:is(:not(.wm-shell),.cx-kb-on):has(#mMessages:not(.hidden)) #mMessages .cx.cx-kb{bottom:auto}
   /* 입력 줄은 홈 막대 바로 위까지 (예전 34−12=22pt + 위아래 여백 → 이제 약 14pt) */
   html.cx-full:has(#mMessages:not(.hidden)) .cx-comp{padding-bottom:max(6px,calc(env(safe-area-inset-bottom,0px) - 20px))!important}
 }
@@ -8144,3 +8144,26 @@ body.wl-ro #mWeekly:has(>#mainArea.hidden) .wl-empty{display:block}   /* 데이�
 .pva-v-tenant{border-color:var(--ac);background:var(--ac-bg);color:var(--ac-t)}
 .pva-v-dept{border-color:color-mix(in srgb,#10B981 50%,var(--bd));color:color-mix(in srgb,#10B981 70%,var(--t1))}
 @media (max-width:700px){.pva{padding:12px}.pva-t th:nth-child(n+4):nth-child(-n+7),.pva-t td:nth-child(n+4):nth-child(-n+7){display:none}.pva-b{flex:1;min-height:36px}.pva-cnt{flex:1 1 100%}}
+
+/* ═══ v13.484 🔎 통합 검색 결과 창 넓게 · 💬 휴대폰 대화방이 머리 줄 · 대메뉴를 덮지 않음 ═══ */
+/* 결과 창 — 520px → 760px · 높이도 넉넉히 · 입력칸 가운데에 맞춤 (좁은 화면은 예전처럼 화면 폭) · 제목은 두 줄까지 */
+@media (min-width:601px){
+  #globalSearchDropdown{width:min(760px,calc(100vw - 24px));max-height:min(82vh,760px);left:50%;right:auto;transform:translateX(-50%)}
+}
+.gs-item{align-items:flex-start}
+.gs-item .gs-icon{margin-top:1px}
+.gs-item .gs-name{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;line-height:1.4}
+.gs-snip{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4}
+.gs-item .gs-sub{max-width:220px;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+@media (max-width:600px){.gs-item .gs-sub{max-width:38%}}
+/* 대화방(틀 고정) — 예전엔 방에 들어가면 화면 전체를 덮어 머리 줄(🔎 · 🔔) · 대메뉴를 못 눌렀음. 이제 그 아래 칸만 채우고, 키보드가 올라왔을 때만 전체를 씀 */
+@media (max-width:760px){
+  html.wm-shell.cx-full:not(.cx-kb-on):has(#mMessages:not(.hidden)) .con{padding-bottom:0!important}
+  html.wm-shell.cx-full:not(.cx-kb-on):has(#mMessages:not(.hidden)) #mMessages .cx{min-height:0!important}
+}
+/* v13.484 PC 틀 고정에서 대화 옆 칸(나란히 보기)이 아래로 쌓이던 것 — 틀 고정이 #mMessages 를 세로 flex 로 바꿔서. 넓은 창에선 가로로 */
+@media (min-width:1100px){
+  html.wm-shell-pc .con>#mMessages.has-split:not(.hidden){flex-direction:row}
+  html.wm-shell-pc .con>#mMessages.has-split>.cx{flex:1.5 1 0}
+  html.wm-shell-pc .cx-splitbox{height:auto;min-height:0}
+}

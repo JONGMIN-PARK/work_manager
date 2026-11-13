@@ -43,7 +43,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
 
     // 보던 자리 표시 → 위로 굴려 옛 대화 받기 — 노드 그대로 · 자리 그대로
     await a.evaluate(function () {
-      var bx = document.getElementById('cxMsgs'); _cxUnstick(); bx.scrollTop = Math.min(900, bx.scrollHeight - bx.clientHeight);
+      var bx = document.getElementById('cxMsgs'); _cxUnstick(); bx.scrollTop = Math.min(700, bx.scrollHeight - bx.clientHeight);   // v13.484 대화 칸이 머리 줄만큼 낮아져 미리 받기 기준(칸 높이 × 1.5) 안쪽으로
       var ws = bx.querySelectorAll('.cx-mw'); ws[ws.length - 1]._keep = 1;
       var mid = Array.from(ws).find(function (w) { var r = w.getBoundingClientRect(); return r.top > 200 && r.top < 600; }) || ws[ws.length - 5];
       window.__anc = mid; window.__ancTop = mid.getBoundingClientRect().top;

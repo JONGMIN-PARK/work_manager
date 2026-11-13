@@ -24,7 +24,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.evaluate(function (id) { chatOpenRoom(id); }, rid);
     await page.waitForSelector('#cxMsgs .cx-m', { timeout: 15000 }); await wait(500);
     var a = await st();
-    check(a.page === 'messages' && a.full && !a.tabs, '내 업무에서 곧장 연 방 — 화면 전체 ' + JSON.stringify(a));
+    check(a.page === 'messages' && a.full && a.tabs, '내 업무에서 곧장 연 방 — 대메뉴는 그대로(v13.484) ' + JSON.stringify(a));
     check(await page.evaluate(function () { return document.querySelector('#cxHead [data-h="back"]').getAttribute('aria-label') === '이전 화면으로'; }), '← 단추 이름 = 이전 화면으로');
     await page.click('#cxHead [data-h="back"]'); await wait(700);
     a = await st();
