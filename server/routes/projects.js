@@ -31,6 +31,39 @@ var syncDonePhase = pc.syncDonePhase;
 var insertProject = pc.insertProject;
 var _afterProjectCreate = pc.afterProjectCreate;
 
+// ─── 공개 범위 일괄 관리 (admin only, v13.483) — 사용자 관리 화면 ───
+// GET  /api/projects/visibility/list  → 회사 전체 프로젝트 { id, name, orderNo, status, visibility, departmentId, deptName, ownerName, members }
+// POST /api/projects/visibility/bulk  { ids:[…], visibility:'private'|'dept'|'tenant' } → { count, noDept }
+router.get('/visibility/list', auth.requireRole('admin'), async function (req, res) {
+  try {
+    var r = await db.query(
+      'SELECT p.id, p.name, p.order_no, p.status, p.visibility, p.department_id, d.name AS dept_name, COALESCE(u.display_name, u.name) AS owner_name, ' +
+      "(SELECT COUNT(*)::int FROM project_members m WHERE m.project_id = p.id AND m.released_at IS NULL) AS members " +
+      'FROM projects p LEFT JOIN departments d ON d.id = p.department_id LEFT JOIN users u ON u.id = p.owner_id ' +
+      'WHERE p.tenant_id = $1 ORDER BY p.created_at DESC NULLS LAST, p.id', [req.tenant.id]);
+    res.json({ data: r.rows.map(function (x) { return { id: x.id, name: x.name, orderNo: x.order_no, status: x.status, visibility: x.visibility || 'private', departmentId: x.department_id, deptName: x.dept_name, ownerName: x.owner_name, members: x.members }; }) });
+  } catch (e) {
+    httpErr.serverError(res, '[projects/visibility/list]', e);
+  }
+});
+router.post('/visibility/bulk', auth.requireRole('admin'), async function (req, res) {
+  try {
+    var b = req.body || {}, v = b.visibility;
+    var ids = Array.isArray(b.ids) ? b.ids.filter(function (x) { return typeof x === 'string' && x; }) : [];
+    if (['private', 'dept', 'tenant'].indexOf(v) === -1) return res.status(400).json({ error: 'BAD_REQUEST', message: '공개 범위 값이 올바르지 않습니다.' });
+    if (!ids.length) return res.status(400).json({ error: 'BAD_REQUEST', message: '프로젝트를 고르세요.' });
+    if (ids.length > 2000) return res.status(400).json({ error: 'BAD_REQUEST', message: '한 번에 2000개까지 바꿀 수 있습니다.' });
+    // 이미 같은 값인 행은 건드리지 않음(버전 · 수정 시각 그대로)
+    var r = await db.query(
+      'UPDATE projects SET visibility = $1, version = COALESCE(version, 0) + 1, updated_at = NOW(), updated_by = $2 ' +
+      "WHERE tenant_id = $3 AND id::text = ANY($4::text[]) AND COALESCE(visibility, 'private') <> $1 RETURNING id, department_id", [v, req.user.sub, req.tenant.id, ids]);
+    var noDept = v === 'dept' ? r.rows.filter(function (x) { return !x.department_id; }).length : 0;
+    res.json({ data: { count: r.rows.length, noDept: noDept, visibility: v } });
+  } catch (e) {
+    httpErr.serverError(res, '[projects/visibility/bulk]', e);
+  }
+});
+
 // ─── GET /api/projects ───
 router.get('/', async function (req, res) {
   try {

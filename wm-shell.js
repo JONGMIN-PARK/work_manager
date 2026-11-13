@@ -67,7 +67,8 @@
     var want = !window.WM_SOLO && !window.WM_PDWIN && !printing, pc = want && !(mq && mq.matches);
     if (want !== on()) docEl.classList.toggle('wm-shell', want);
     if (pc !== pcOn()) docEl.classList.toggle('wm-shell-pc', pc);
-    if (!want || pc) { docEl.style.removeProperty('--wm-vh'); docEl.classList.remove('wm-kb', 'wm-tabs-off'); }
+    if (!want || pc) { docEl.style.removeProperty('--wm-vh'); docEl.classList.remove('wm-kb'); }
+    if (!want) docEl.classList.remove('wm-tabs-off');
     if (want) fit();
     pageH();
   }
@@ -97,10 +98,10 @@
     var t0 = s ? s.getBoundingClientRect().top : 0;
     docEl.classList.toggle('wm-tabs-off', off);
     if (s) { var d = s.getBoundingClientRect().top - t0; if (d) s.scrollTop += d; tY = s.scrollTop; }
-    tAcc = 0; tLock = Date.now() + 250;
+    tAcc = 0; tLock = Date.now() + 250; pageH();
   }
+  /* v13.482 접는 것은 하위 탭만(대메뉴 줄은 늘 제자리) · PC 도 같이 */
   function tabsOnScroll(s) {
-    if (pcOn()) return;
     var y = s.scrollTop;
     if (s !== tS) { tS = s; tY = y; tAcc = 0; tabsSet(false, null); return; }
     var d = y - tY; tY = y; if (!d || Date.now() < tLock) return;

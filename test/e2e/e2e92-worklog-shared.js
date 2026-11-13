@@ -65,6 +65,18 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(ids.length === 3, '관리자 — 3건 올림');
     var a1 = await view(adm.page);
     check(!a1.ro && a1.can && a1.open && a1.info.canManage && /공용 데이터/.test(a1.pill), '관리자 — 파일 열기 보임 · 「공용 데이터」 알약 ' + JSON.stringify([a1.ro, a1.open, a1.pill]));
+    // v13.482 좁은 화면 — 알약이 옆 단추와 겹치지 않음 (아이콘만)
+    var vp0 = adm.page.viewport();
+    await adm.page.setViewport({ width: 390, height: 844 }); await new Promise(function (r) { setTimeout(r, 500); });
+    var nar = await adm.page.evaluate(function () {
+      var tb = document.querySelector('#mainArea .wm-tb'), el = document.getElementById('wlInfo'), a = el.getBoundingClientRect(), hit = [];
+      [].forEach.call(tb.children, function (c) { if (c === el || !c.offsetParent) return; var b = c.getBoundingClientRect(); if (!b.width) return; if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) hit.push(c.className || c.tagName); });
+      var pt = el.querySelector('.wl-pt'), wh = el.querySelector('.wl-when');
+      var mo = tb.querySelector('.wm-more,.hdr-pop'), mr = mo ? mo.getBoundingClientRect() : null; return { more: !mr || mr.right <= innerWidth + 1, hit: hit, w: Math.round(a.width), pt: pt ? getComputedStyle(pt).display : '-', when: wh ? getComputedStyle(wh).display : '-', inside: a.left >= tb.getBoundingClientRect().left && a.right <= tb.getBoundingClientRect().right + 1 };
+    });
+    check(!nar.hit.length && nar.more, '좁은 화면 — 알약이 단추와 안 겹침(아이콘만) ' + JSON.stringify(nar));
+    await adm.page.screenshot({ path: require('path').join(__dirname, 'zz-wl-narrow.png') });
+    await adm.page.setViewport(vp0 || { width: 1400, height: 900 }); await new Promise(function (r) { setTimeout(r, 400); });
     // 팀원 — 새로 고치면 같이 보임
     await reload(kim);
     var k1 = await view(kim.page);
@@ -114,6 +126,44 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
       return { before: before, after: (await apiFetch('/api/archives/records/count')).data.count };
     });
     check(dd.before === 4 && dd.after === 3, '중복 제거 — 겹친 1건만 지움 ' + JSON.stringify(dd));
+    // v13.483 📁 프로젝트 공개 범위 일괄 변경 (사용자 관리)
+    var pv = await adm.page.evaluate(async function () {
+      var mk = [];
+      for (var i = 1; i <= 3; i++) { var r = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify({ name: 'ZZ공개' + i, startDate: '2026-11-01', endDate: '2026-12-01', status: 'active' }) }); mk.push(r.data.id); }
+      window.__wmDialogUi = false;
+      await renderUserAdmin(); await new Promise(function (r) { setTimeout(r, 1500); });
+      var box = document.getElementById('pvaBox'); if (!box) return { err: 'no box' };
+      var q = document.getElementById('pvaQ'); q.value = 'ZZ공개'; q.dispatchEvent(new Event('input'));
+      var rows = box.querySelectorAll('.pva-t tbody tr');
+      var before = [].map.call(rows, function (t) { return t.querySelector('.pva-v').textContent; });
+      var dis0 = box.querySelector('.pva-b[data-v="tenant"]').disabled;
+      document.getElementById('pvaAll').click();
+      var cnt = box.querySelector('.pva-cnt').textContent, dis1 = box.querySelector('.pva-b[data-v="tenant"]').disabled;
+      var oc = window.wmConfirm, asked = ''; window.wmConfirm = async function (m) { asked = m; return true; };
+      await pvaApply('tenant');
+      window.wmConfirm = oc;
+      await new Promise(function (r) { setTimeout(r, 600); });
+      var after = [].map.call(document.querySelectorAll('#pvaBox .pva-t tbody tr'), function (t) { return t.querySelector('.pva-v').textContent; });
+      return { mk: mk, n: rows.length, before: before, dis0: dis0, dis1: dis1, cnt: cnt, asked: asked, after: after, sel: Object.keys(PVA.sel).length };
+    });
+    check(pv.n === 3 && pv.before.every(function (t) { return /비공개/.test(t); }) && pv.dis0 && !pv.dis1 && /3개/.test(pv.cnt), '공개 범위 — 찾기로 3개 · 모두 고르면 단추 켜짐 ' + JSON.stringify(pv));
+    check(/3개/.test(pv.asked) && pv.after.length === 3 && pv.after.every(function (t) { return /전체/.test(t); }) && pv.sel === 0, '공개 범위 — 한 번에 🌐 전체로 ' + JSON.stringify([pv.asked, pv.after]));
+    var pk = await kim.page.evaluate(async function (ids) {
+      var l = (await apiFetch('/api/projects?limit=1000')).data || [];
+      var seen = ids.filter(function (id) { return l.some(function (p) { return p.id === id; }); }).length;
+      var w = await apiFetch('/api/projects/visibility/bulk', { method: 'POST', body: JSON.stringify({ ids: ids, visibility: 'private' }) }).then(function () { return 200; }, function (e) { return e.status || 403; });
+      var g = await apiFetch('/api/projects/visibility/list').then(function () { return 200; }, function (e) { return e.status || 403; });
+      return { seen: seen, w: w, g: g };
+    }, pv.mk);
+    check(pk.seen === 3 && pk.w === 403 && pk.g === 403, '공개 범위 — 팀원에게 3개 보임 · 팀원은 일괄 변경 · 목록 403 ' + JSON.stringify(pk));
+    var pv2 = await adm.page.evaluate(async function (ids) {
+      var r = await apiFetch('/api/projects/visibility/bulk', { method: 'POST', body: JSON.stringify({ ids: [ids[0], ids[1]], visibility: 'private' }) });
+      var same = await apiFetch('/api/projects/visibility/bulk', { method: 'POST', body: JSON.stringify({ ids: [ids[0]], visibility: 'private' }) });
+      var bad = await apiFetch('/api/projects/visibility/bulk', { method: 'POST', body: JSON.stringify({ ids: ids, visibility: 'everyone' }) }).then(function () { return 200; }, function (e) { return e.status || 400; });
+      return { c: r.data.count, same: same.data.count, bad: bad };
+    }, pv.mk);
+    var pk2 = await kim.page.evaluate(async function (ids) { var l = (await apiFetch('/api/projects?limit=1000')).data || []; return ids.filter(function (id) { return l.some(function (p) { return p.id === id; }); }).length; }, pv.mk);
+    check(pv2.c === 2 && pv2.same === 0 && pv2.bad === 400 && pk2 === 1, '공개 범위 — 2개 다시 비공개 → 팀원에겐 1개만 · 같은 값은 0 · 잘못된 값 400 ' + JSON.stringify([pv2, pk2]));
     // 지정 해제 → 다시 보기 전용
     await adm.page.evaluate(function () { var row = [].filter.call(document.querySelectorAll('#mUserAdmin table tr'), function (r) { return /kim@t\.com/.test(r.textContent); })[0]; row.querySelector('.ua-wlm').click(); });
     await wait(900); await reload(kim);

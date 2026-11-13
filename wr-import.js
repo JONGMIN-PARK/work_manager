@@ -743,7 +743,7 @@ function wlInfoRender(){
   var el=document.getElementById('wlInfo');
   if(el){
     var when=_wlWhen(i.lastAt);
-    el.innerHTML='<span class="wl-pill'+(can?' is-mgr':'')+'">'+(can?'🌐 공용 데이터':'👀 보기 전용')+'</span>'+(when?'<span class="wl-when">'+eH(when)+(i.lastBy?' · '+eH(i.lastBy):'')+' 올림</span>':'');
+    el.innerHTML='<span class="wl-pill'+(can?' is-mgr':'')+'">'+(can?'🌐<span class="wl-pt"> 공용 데이터</span>':'👀<span class="wl-pt"> 보기 전용</span>')+'</span>'+(when?'<span class="wl-when">'+eH(when)+(i.lastBy?' · '+eH(i.lastBy):'')+' 올림</span>':'');
     el.title=(can?'이 업무 데이터는 모든 사용자가 함께 봅니다. 넣기 · 고치기 · 지우기는 담당자만.':'모든 사용자가 같은 업무 데이터를 봅니다. 넣기 · 고치기 · 지우기는 담당자만 할 수 있습니다.')+(names.length?'\n담당: '+names.join(' · '):'')+(i.count?'\n전체 '+i.count.toLocaleString()+'건'+(i.dateFrom?' · '+i.dateFrom+' ~ '+i.dateTo:''):'')+(when?'\n마지막으로 올린 때: '+when+(i.lastBy?' ('+i.lastBy+')':''):'');
     el.classList.remove('hidden');
   }

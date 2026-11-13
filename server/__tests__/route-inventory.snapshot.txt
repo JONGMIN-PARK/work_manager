@@ -275,6 +275,7 @@ GET /api/projects/:id/spec-files/:fid/download-url
 GET /api/projects/all
 GET /api/projects/covers
 GET /api/projects/members/all
+GET /api/projects/visibility/list
 GET /api/push/key
 GET /api/search
 GET /api/settings
@@ -354,6 +355,7 @@ GET /api/v1/projects/:id/members
 GET /api/v1/projects/all
 GET /api/v1/projects/covers
 GET /api/v1/projects/members/all
+GET /api/v1/projects/visibility/list
 GET /api/v1/settings
 GET /api/v1/settings/:key
 GET /api/v1/stats/by-order
@@ -557,6 +559,7 @@ POST /api/projects/:id/specs/copy-from/:srcId
 POST /api/projects/:id/transfer
 POST /api/projects/full
 POST /api/projects/reorder
+POST /api/projects/visibility/bulk
 POST /api/push/subscribe
 POST /api/push/test
 POST /api/push/unsubscribe
@@ -620,6 +623,7 @@ POST /api/v1/projects/:id/members
 POST /api/v1/projects/:id/transfer
 POST /api/v1/projects/full
 POST /api/v1/projects/reorder
+POST /api/v1/projects/visibility/bulk
 POST /api/v1/telegram/auth-code
 POST /api/v1/telegram/group-code
 POST /api/v1/telegram/mywork-send

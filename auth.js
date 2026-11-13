@@ -706,6 +706,7 @@ async function renderUserAdmin() {
     container.innerHTML = html;
 
     // v13.68: 조직 관리·감사 로그는 메인 렌더 차단 없이 비동기로 (체감 즉시)
+    setTimeout(function () { try { renderProjVisAdmin(); } catch (e) { console.warn('[projVis]', e); } }, 0);   // v13.483 프로젝트 공개 범위
     setTimeout(function () { try { renderOrgManagement(); } catch (e) { console.warn('[orgMgmt]', e); } }, 0);
     setTimeout(function () { try { renderAuditLog(); } catch (e) { console.warn('[auditLog]', e); } }, 0);
   } catch (e) {
@@ -747,6 +748,121 @@ function renderUserTable(users, depts, isActive) {
 
   html += '</table>';
   return html;
+}
+
+/* ═══ v13.483 📁 프로젝트 공개 범위 일괄 변경 (사용자 관리 · 관리자) ═══
+ *   회사 전체 프로젝트를 표로 — 찾기 · 지금 범위 · 상태로 거르고, 체크한 것을 한 번에 🔒 비공개 / 👥 부서 / 🌐 전체 로.
+ *   서버: GET /api/projects/visibility/list · POST /api/projects/visibility/bulk (admin only) */
+var PVA = { list: [], sel: {}, q: '', vis: '', st: '', busy: false };
+var PVA_VIS = { 'private': ['🔒', '비공개', '만든 사람 + 공유한 사용자만'], dept: ['👥', '부서', '같은 부서 사용자'], tenant: ['🌐', '전체', '모든 사용자'] };
+async function renderProjVisAdmin() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  var container = document.getElementById('mUserAdmin'); if (!container) return;
+  var box = document.getElementById('pvaBox');
+  if (!box) {
+    box = document.createElement('div'); box.id = 'pvaBox'; box.className = 'pva';
+    (container.firstElementChild || container).appendChild(box);
+  }
+  if (!PVA.list.length) box.innerHTML = '<div class="pva-h"><h4>📁 프로젝트 공개 범위</h4></div><p class="pva-note">불러오는 중…</p>';
+  try {
+    var r = await apiFetch('/api/projects/visibility/list');
+    PVA.list = (r && r.data) || [];
+    var alive = {}; PVA.list.forEach(function (p) { if (PVA.sel[p.id]) alive[p.id] = 1; }); PVA.sel = alive;
+  } catch (e) {
+    box.innerHTML = '<div class="pva-h"><h4>📁 프로젝트 공개 범위</h4></div><p class="pva-note" style="color:' + SEM_COLOR.danger + '">불러오지 못했습니다: ' + eH(e.message || '서버 오류') + '</p>';
+    return;
+  }
+  _pvaDraw();
+}
+function _pvaFiltered() {
+  var q = PVA.q.trim().toLowerCase();
+  return PVA.list.filter(function (p) {
+    if (PVA.vis && p.visibility !== PVA.vis) return false;
+    if (PVA.st && p.status !== PVA.st) return false;
+    if (q && ((p.name || '') + ' ' + (p.orderNo || '') + ' ' + (p.ownerName || '') + ' ' + (p.deptName || '')).toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+}
+function _pvaStLabel(s) { var o = typeof PROJ_STATUS !== 'undefined' && PROJ_STATUS[s]; return o ? ((o.icon ? o.icon + ' ' : '') + o.label) : (s || '-'); }
+function _pvaDraw() {
+  var box = document.getElementById('pvaBox'); if (!box) return;
+  var cnt = { 'private': 0, dept: 0, tenant: 0 }, sts = {};
+  PVA.list.forEach(function (p) { cnt[p.visibility] = (cnt[p.visibility] || 0) + 1; if (p.status) sts[p.status] = 1; });
+  var h = '<div class="pva-h"><h4>📁 프로젝트 공개 범위</h4><span class="pva-sum">전체 ' + PVA.list.length + '개 — ' +
+    ['private', 'dept', 'tenant'].map(function (v) { return PVA_VIS[v][0] + ' ' + PVA_VIS[v][1] + ' ' + (cnt[v] || 0); }).join(' · ') + '</span></div>' +
+    '<p class="pva-note">프로젝트를 고르고 아래 단추로 공개 범위를 한 번에 바꿉니다. 🔒 비공개 = 만든 사람 + 공유한 사용자만 · 👥 부서 = 같은 부서 · 🌐 전체 = 모든 사용자 (보기만 넓어지고 고치기 권한은 그대로)</p>' +
+    '<div class="pva-tb">' +
+      '<input type="search" id="pvaQ" class="pva-q" placeholder="🔎 이름 · 수주번호 · 만든 사람 · 부서" value="' + eA(PVA.q) + '" oninput="_pvaSet(\'q\',this.value)">' +
+      '<select id="pvaVis" class="pva-sel" onchange="_pvaSet(\'vis\',this.value)" aria-label="지금 공개 범위"><option value="">지금 범위: 모두</option>' +
+        ['private', 'dept', 'tenant'].map(function (v) { return '<option value="' + v + '"' + (PVA.vis === v ? ' selected' : '') + '>' + PVA_VIS[v][0] + ' ' + PVA_VIS[v][1] + ' (' + (cnt[v] || 0) + ')</option>'; }).join('') + '</select>' +
+      '<select id="pvaSt" class="pva-sel" onchange="_pvaSet(\'st\',this.value)" aria-label="상태"><option value="">상태: 모두</option>' +
+        Object.keys(sts).map(function (s) { return '<option value="' + eA(s) + '"' + (PVA.st === s ? ' selected' : '') + '>' + eH(_pvaStLabel(s)) + '</option>'; }).join('') + '</select>' +
+    '</div>' +
+    '<div class="pva-act" id="pvaAct"></div>' +
+    '<div class="pva-list" id="pvaList"></div>';
+  box.innerHTML = h;
+  _pvaRows();
+}
+function _pvaRows() {
+  var el = document.getElementById('pvaList'); if (!el) return;
+  var rows = _pvaFiltered();
+  if (!rows.length) { el.innerHTML = '<p class="pva-note" style="padding:14px;margin:0">' + (PVA.list.length ? '조건에 맞는 프로젝트가 없습니다.' : '프로젝트가 없습니다.') + '</p>'; _pvaAct(); return; }
+  var h = '<table class="pva-t"><thead><tr><th class="pva-c"><input type="checkbox" id="pvaAll" onchange="_pvaAll(this.checked)" title="보이는 것 모두 고르기" aria-label="보이는 것 모두 고르기"></th><th>프로젝트</th><th>수주번호</th><th>상태</th><th>부서</th><th>만든 사람</th><th>공유</th><th>공개 범위</th></tr></thead><tbody>';
+  rows.forEach(function (p) {
+    var v = PVA_VIS[p.visibility] || PVA_VIS['private'];
+    h += '<tr class="' + (PVA.sel[p.id] ? 'on' : '') + '" data-id="' + eA(p.id) + '" onclick="_pvaRowClick(this)">' +
+      '<td class="pva-c"><input type="checkbox" class="pva-cb" ' + (PVA.sel[p.id] ? 'checked ' : '') + 'aria-label="고르기"></td>' +
+      '<td class="pva-n">' + eH(p.name || '(이름 없음)') + '</td><td class="pva-m">' + eH(p.orderNo || '-') + '</td><td class="pva-m">' + eH(_pvaStLabel(p.status)) + '</td>' +
+      '<td class="pva-m">' + eH(p.deptName || '-') + '</td><td class="pva-m">' + eH(p.ownerName || '-') + '</td><td class="pva-m">' + (p.members ? p.members + '명' : '-') + '</td>' +
+      '<td><span class="pva-v pva-v-' + eA(p.visibility) + '" title="' + eA(v[2]) + '">' + v[0] + ' ' + v[1] + '</span></td></tr>';
+  });
+  el.innerHTML = h + '</tbody></table>';
+  _pvaAct();
+}
+function _pvaAct() {
+  var el = document.getElementById('pvaAct'); if (!el) return;
+  var n = Object.keys(PVA.sel).length, rows = _pvaFiltered();
+  el.innerHTML = '<span class="pva-cnt">' + (n ? '<b>' + n + '개</b> 고름' : '고른 것 없음') + ' <i>· 보이는 것 ' + rows.length + '개</i></span>' +
+    ['private', 'dept', 'tenant'].map(function (v) { return '<button type="button" class="pva-b" data-v="' + v + '" ' + (n && !PVA.busy ? '' : 'disabled ') + 'onclick="pvaApply(\'' + v + '\')" title="' + eA(PVA_VIS[v][2]) + '">' + PVA_VIS[v][0] + ' ' + PVA_VIS[v][1] + '로</button>'; }).join('') +
+    (n ? '<button type="button" class="pva-x" onclick="_pvaClear()">고르기 풀기</button>' : '');
+  var a = document.getElementById('pvaAll');
+  if (a) { var c = rows.filter(function (p) { return PVA.sel[p.id]; }).length; a.checked = !!rows.length && c === rows.length; a.indeterminate = c > 0 && c < rows.length; }
+}
+function _pvaSet(k, v) { PVA[k] = v; _pvaRows(); }
+function _pvaAll(on) { _pvaFiltered().forEach(function (p) { if (on) PVA.sel[p.id] = 1; else delete PVA.sel[p.id]; }); _pvaRows(); }
+function _pvaClear() { PVA.sel = {}; _pvaRows(); }
+function _pvaRowClick(tr) {
+  var id = tr.getAttribute('data-id'); if (!id) return;
+  if (PVA.sel[id]) delete PVA.sel[id]; else PVA.sel[id] = 1;
+  tr.classList.toggle('on', !!PVA.sel[id]);
+  var cb = tr.querySelector('.pva-cb'); if (cb) cb.checked = !!PVA.sel[id];
+  _pvaAct();
+}
+/** 고른 프로젝트의 공개 범위를 한 번에 바꿈 */
+async function pvaApply(v) {
+  var ids = Object.keys(PVA.sel); if (!ids.length || PVA.busy || !PVA_VIS[v]) return;
+  var byId = {}; PVA.list.forEach(function (p) { byId[p.id] = p; });
+  var change = ids.filter(function (id) { return byId[id] && byId[id].visibility !== v; });
+  if (!change.length) { showToast('고른 프로젝트는 이미 모두 ' + PVA_VIS[v][1] + '입니다'); return; }
+  var noDept = v === 'dept' ? change.filter(function (id) { return !byId[id].departmentId; }).length : 0;
+  var msg = '프로젝트 ' + change.length + '개의 공개 범위를 「' + PVA_VIS[v][0] + ' ' + PVA_VIS[v][1] + '」(' + PVA_VIS[v][2] + ')로 바꿉니다.' +
+    (ids.length !== change.length ? '\n(고른 ' + ids.length + '개 가운데 ' + (ids.length - change.length) + '개는 이미 같은 값)' : '') +
+    (noDept ? '\n\n⚠ ' + noDept + '개는 부서가 없어, 부서 공개로 바꿔도 만든 사람 · 공유한 사용자만 봅니다.' : '') +
+    (v === 'tenant' ? '\n\n모든 사용자가 이 프로젝트를 보게 됩니다.' : '');
+  if (!(await wmConfirm(msg))) return;
+  PVA.busy = true; _pvaAct();
+  try {
+    var r = await apiFetch('/api/projects/visibility/bulk', { method: 'POST', body: JSON.stringify({ ids: change, visibility: v }) });
+    var n = (r && r.data && r.data.count) || 0;
+    PVA.sel = {};
+    showToast('✅ 프로젝트 ' + n + '개를 ' + PVA_VIS[v][0] + ' ' + PVA_VIS[v][1] + '로 바꿨습니다');
+    PVA.busy = false;
+    await renderProjVisAdmin();   // 서버 값으로 다시
+    try { if (typeof _pdInvalidate === 'function') { _pdInvalidate('proj'); _pdInvalidate('projAll'); } } catch (_) {}   // 프로젝트 목록(버전 포함)은 다음에 열 때 새로 받음
+  } catch (e) {
+    PVA.busy = false; _pvaAct();
+    showToast('바꾸지 못했습니다: ' + (e.message || '서버 오류'), 'error');
+  }
 }
 
 /* v13.481 업무 데이터 담당 지정/해제 — 그 사람은 다음에 들어올 때(새로 고침)부터 적용 */

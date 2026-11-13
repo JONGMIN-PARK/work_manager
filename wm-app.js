@@ -278,11 +278,14 @@ function _wmUpdateShow(d) {
 }
 /** 새로 고침 — 서비스 워커도 새 것으로 */
 function wmUpdateApply() {
-  var go = function () { location.reload(); };
+  // v13.482 누르자마자 표시(휴대폰에서 눌렸는지 몰라 여러 번 누르던 것) · 기다림은 0.7초까지만
+  var bar = document.getElementById('wmUpd');
+  if (bar) { if (bar.classList.contains('is-busy')) return; bar.classList.add('is-busy'); var g = bar.querySelector('.wm-upd-go'); if (g) g.textContent = '⏳ 새로 고치는 중…'; }
+  var done = false, go = function () { if (done) return; done = true; if (typeof window.__wmReload === 'function') window.__wmReload(); else location.reload(); };   // __wmReload = 시험용
   try {
     if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
       navigator.serviceWorker.getRegistration('/').then(function (r) { return r && r.update(); }).catch(function () {}).then(go);
-      setTimeout(go, 1500);   // 서비스 워커가 늦어도
+      setTimeout(go, 700);   // 서비스 워커가 늦어도
       return;
     }
   } catch (_) {}

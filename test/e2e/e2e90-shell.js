@@ -58,24 +58,32 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var tabsVis = function () { return page.evaluate(function () { var t = document.getElementById('pageTabs'); return !!(t && t.offsetParent); }); };
     check(await tabsVis(), '맨 위 — 탭 줄 보임');
     var before = await page.evaluate(function () { var s = wmShellScroller(), y = 0; return new Promise(function (res) { (function step() { y += 30; s.scrollTop = y; if (y < 240) setTimeout(step, 40); else setTimeout(function () { var r = document.querySelector('#mMyWork .mw-row'); res({ off: document.documentElement.classList.contains('wm-tabs-off'), sTop: Math.round(s.scrollTop), h: s.clientHeight }); }, 400); })(); }); });
-    check(before.off && !(await tabsVis()), '아래로 굴리면 탭 줄 접힘 — 화면이 그만큼 커짐 ' + JSON.stringify(before));
+    check(before.off && (await tabsVis()), '아래로 굴리면 접힘 상태(하위 탭만) — 대메뉴 줄은 그대로 ' + JSON.stringify(before));
     await page.evaluate(function () { var s = wmShellScroller(), y = s.scrollTop; return new Promise(function (res) { (function step(n) { y -= 20; s.scrollTop = y; if (n < 3) setTimeout(function () { step(n + 1); }, 40); else setTimeout(res, 400); })(0); }); });
-    check(await tabsVis(), '위로 조금 굴리면 탭 줄 다시');
+    check(await tabsVis() && !(await page.evaluate(function () { return document.documentElement.classList.contains('wm-tabs-off'); })), '위로 조금 굴리면 접힘 풀림');
     var edge = await page.evaluate(function () { var b = document.body.getBoundingClientRect(), s = wmShellScroller().getBoundingClientRect(), cs = getComputedStyle(document.body); return { bottom: Math.round(b.bottom), sBottom: Math.round(s.bottom), ih: innerHeight, h: cs.height, kb: document.documentElement.classList.contains('wm-kb'), vh: document.documentElement.style.getPropertyValue('--wm-vh') }; });
     check(edge.bottom === edge.ih && edge.sBottom === edge.ih && !edge.kb && !edge.vh, '틀 · 화면이 맨 아래 끝까지 (키보드 없을 땐 높이를 따로 안 잡음) ' + JSON.stringify(edge));
     // 화면을 바꿔도 틀은 그대로 (굴린 채로 다른 화면 → 머리 줄 0)
     await page.evaluate(function () { wmShellScroller().scrollTop = 0; }); await wait(600);
     await page.evaluate(function () { var s = wmShellScroller(), y = 0; return new Promise(function (res) { (function step() { y += 30; s.scrollTop = y; if (y < 240) setTimeout(step, 40); else setTimeout(res, 400); })(); }); });
-    check(!(await tabsVis()), '(다시 아래로 굴려 탭 접힘) ' + JSON.stringify(await page.evaluate(function () { var s = wmShellScroller(); return { id: s.id, top: s.scrollTop, max: s.scrollHeight - s.clientHeight, off: document.documentElement.classList.contains('wm-tabs-off'), act: document.activeElement && document.activeElement.id, kb: document.documentElement.classList.contains('wm-kb') }; })));
+    check(await page.evaluate(function () { return document.documentElement.classList.contains('wm-tabs-off'); }), '(다시 아래로 굴려 접힘) ' + JSON.stringify(await page.evaluate(function () { var s = wmShellScroller(); return { id: s.id, top: s.scrollTop, max: s.scrollHeight - s.clientHeight, off: document.documentElement.classList.contains('wm-tabs-off'), act: document.activeElement && document.activeElement.id, kb: document.documentElement.classList.contains('wm-kb') }; })));
     await page.evaluate(function () { setPage('project'); }); await wait(1800);
     check((await st()).hdrTop === 0, '굴린 뒤 다른 화면으로 가도 머리 줄 제자리');
-    check(await tabsVis(), '다른 화면으로 가면 탭 줄 다시 보임');
+    check(await tabsVis() && await page.evaluate(function () { return !document.documentElement.classList.contains('wm-tabs-off') && document.getElementById('modeTabsProj').offsetHeight > 10; }), '다른 화면으로 가면 하위 탭 다시 보임');
+    // v13.482 하위 탭만 접힘 — 대메뉴(내 업무 ~ 노트)는 제자리
+    var sub = await page.evaluate(function () { var s = wmShellScroller(), pad = document.createElement('div'); pad.id = 'zzPad2'; pad.style.height = '3000px'; s.appendChild(pad); var y = 0; return new Promise(function (res) { (function step() { y += 30; s.scrollTop = y; if (y < 300) setTimeout(step, 40); else setTimeout(function () { var r = { off: document.documentElement.classList.contains('wm-tabs-off'), sub: document.getElementById('modeTabsProj').offsetHeight, page: document.getElementById('pageTabs').offsetHeight, pt: Math.round(document.getElementById('pageTabs').getBoundingClientRect().top), hb: Math.round(document.querySelector('.hdr').getBoundingClientRect().bottom) }; pad.remove(); res(r); }, 400); })(); }); });
+    check(sub.off && sub.sub === 0 && sub.page > 20 && sub.pt >= sub.hb - 1, '휴대폰 — 굴리면 하위 탭만 접히고 대메뉴 줄은 제자리 ' + JSON.stringify(sub));
+    // v13.482 새 버전 띠 — 아래쪽 · 큰 단추 · 누르면 바로 표시
+    var upd = await page.evaluate(function () { try { localStorage.removeItem('wm-upd-later'); } catch (e) {} _wmUpdateShow({ build: 'zz-test', version: '99.0' }); var b = document.getElementById('wmUpd'), r = b.getBoundingClientRect(), g = b.querySelector('.wm-upd-go').getBoundingClientRect(), x = b.querySelector('.wm-upd-x').getBoundingClientRect(); var hit = document.elementFromPoint(g.left + g.width / 2, g.top + g.height / 2); return { bottom: Math.round(innerHeight - r.bottom), gh: Math.round(g.height), xh: Math.round(x.height), gw: Math.round(g.width), hit: !!(hit && hit.closest('.wm-upd-go')), inside: r.left >= 0 && r.right <= innerWidth }; });
+    check(upd.bottom >= 0 && upd.bottom < 60 && upd.gh >= 44 && upd.xh >= 44 && upd.hit && upd.inside, '휴대폰 — 새 버전 띠는 화면 아래 · 단추 44px 이상 · 가려지지 않음 ' + JSON.stringify(upd));
+    var busy = await page.evaluate(function () { window.__zzReload = 0; window.__wmReload = function () { window.__zzReload++; }; var b = document.getElementById('wmUpd'); b.querySelector('.wm-upd-go').click(); var r = { busy: b.classList.contains('is-busy'), txt: b.querySelector('.wm-upd-go').textContent }; b.querySelector('.wm-upd-go').click(); return new Promise(function (res) { setTimeout(function () { r.n = window.__zzReload; delete window.__wmReload; b.remove(); res(r); }, 1200); }); });
+    check(busy.busy && /새로 고치는 중/.test(busy.txt) && busy.n === 1, '새 버전 띠 — 누르자마자 「새로 고치는 중」 · 두 번 눌러도 한 번만 ' + JSON.stringify(busy));
     // 입력 칸 — 누른 뒤에도 문서는 0
     await page.evaluate(function () { setPage('mywork'); }); await wait(1000);
     await page.tap('#mwAddTitle'); await wait(600);
     a = await st(); real = await page.evaluate(function () { return document.scrollingElement.scrollTop; });
     check(a.hdrTop === 0 && real === 0, '입력 칸을 눌러도 틀 그대로 ' + JSON.stringify([a.hdrTop, real]));
-    // PC 폭 — v13.480 PC 도 틀 고정: 머리 줄 · 하위 탭은 제자리, 화면만 굴림 (휴대폰 전용 탭 접기는 안 함)
+    // PC 폭 — v13.480 PC 도 틀 고정 · v13.482 굴리면 하위 탭은 접히고 머리 줄(대메뉴)만 제자리
     await page.setViewport({ width: 1400, height: 700 });
     await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(800);
@@ -88,11 +96,14 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     });
     check(pc.shell && pc.pc && pc.id === 'mPipeline', 'PC — 틀 고정 켜짐 ' + JSON.stringify(pc));
     check(pc.st === 900 && pc.y === 900 && pc.doc === 0, 'PC — 화면만 굴림(문서는 그대로) ' + JSON.stringify([pc.st, pc.y, pc.doc]));
-    check(pc.hdr === 0 && pc.tabsVis && pc.on === 'pipeline' && pc.scTop >= pc.tabsBottom, 'PC — 굴려도 머리 줄 · 하위 탭(파이프라인 선택) 제자리 ' + JSON.stringify([pc.hdr, pc.tabs, pc.scTop]));
+    check(pc.hdr === 0 && pc.on === 'pipeline', 'PC — 굴려도 머리 줄 제자리 ' + JSON.stringify([pc.hdr, pc.tabs, pc.scTop]));
     check(pc.right === pc.iw, 'PC — 굴림 막대가 창 오른쪽 끝 ' + JSON.stringify([pc.right, pc.iw]));
     await page.evaluate(function () { var s = wmShellScroller(); s.scrollTop = 1500; }); await wait(400);
-    var pc2 = await page.evaluate(function () { var p = document.getElementById('zzPad'); var r = { off: document.documentElement.classList.contains('wm-tabs-off'), tabs: document.getElementById('modeTabsProj').offsetHeight > 20, ph: getComputedStyle(document.documentElement).getPropertyValue('--wm-ph'), ch: wmShellScroller().clientHeight }; if (p) p.remove(); return r; });
-    check(!pc2.off && pc2.tabs && parseInt(pc2.ph, 10) === pc2.ch, 'PC — 아래로 굴려도 탭 줄 안 접힘 · 화면 높이(--wm-ph) 맞음 ' + JSON.stringify(pc2));
+    var pc2 = await page.evaluate(function () { var p = document.getElementById('zzPad'); var r = { hdr: Math.round(document.querySelector('.hdr').getBoundingClientRect().top), menu: !!(document.querySelector('.hdr #pageTabs') && document.getElementById('pageTabs').offsetHeight > 10), off: document.documentElement.classList.contains('wm-tabs-off'), tabs: document.getElementById('modeTabsProj').offsetHeight > 20, ph: getComputedStyle(document.documentElement).getPropertyValue('--wm-ph'), ch: wmShellScroller().clientHeight }; return r; });
+    check(pc2.off && !pc2.tabs && pc2.hdr === 0 && pc2.menu && parseInt(pc2.ph, 10) === pc2.ch, 'PC — 아래로 굴리면 하위 탭 접힘 · 머리 줄(대메뉴) 제자리 · 화면 높이(--wm-ph) 맞음 ' + JSON.stringify(pc2));
+    await page.evaluate(function () { var s = wmShellScroller(); s.scrollTop = 1400; }); await wait(400);
+    var pc3 = await page.evaluate(function () { var r = { off: document.documentElement.classList.contains('wm-tabs-off'), tabs: document.getElementById('modeTabsProj').offsetHeight > 20 }; var p = document.getElementById('zzPad'); if (p) p.remove(); return r; });
+    check(!pc3.off && pc3.tabs, 'PC — 위로 굴리면 하위 탭 다시 ' + JSON.stringify(pc3));
     check(!errs.length, '페이지 오류 없음 ' + JSON.stringify(errs));
   } catch (e) { fail++; console.log('FAIL 예외', e && e.stack || e); }
   await browser.close();
