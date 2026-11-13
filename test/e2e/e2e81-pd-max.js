@@ -47,9 +47,9 @@ var SHOT = path.join(__dirname, '.shots');
     var b4 = await box();
     check(b4.l === 0 && b4.w >= 388 && !b4.btn && !b4.hscroll, '휴대폰 — 늘 가득 · 단추 숨김 · 옆으로 안 넘침 (' + JSON.stringify(b4) + ')');
     await page.screenshot({ path: path.join(SHOT, 'e2e81-phone.png') });
-    await page.evaluate(function () { pdTogglePanelMax(false); }); await wait(200);
+    await page.evaluate(function () { pdTogglePanelMax(false); }); await wait(600);   // 들어오는 움직임(slideIn)이 끝난 뒤에 잼
     var b5 = await box();
-    check(b5.l === 0 && b5.w >= 388, '휴대폰 — 옆 패널로 기억돼 있어도 가득');
+    check(b5.l === 0 && b5.w >= 388, '휴대폰 — 옆 패널로 기억돼 있어도 가득 ' + JSON.stringify(b5));
     check(!errs.length, '화면 오류 없음' + (errs.length ? ' — ' + errs.slice(0, 3).join(' | ') : ''));
   } catch (e) { fail++; console.log('FAIL 예외', e && e.stack || e); }
   await browser.close();

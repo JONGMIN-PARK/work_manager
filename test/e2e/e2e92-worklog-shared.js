@@ -96,8 +96,8 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await adm.page.evaluate(function () { setPage('useradmin'); });
     await adm.page.waitForFunction(function () { return document.querySelectorAll('#mUserAdmin .ua-wlm').length > 0; }, { timeout: 15000 });
     var ua = await adm.page.evaluate(function () {
-      var ths = [].map.call(document.querySelectorAll('#mUserAdmin table th'), function (t) { return t.textContent.trim(); });
       var row = [].filter.call(document.querySelectorAll('#mUserAdmin table tr'), function (r) { return /kim@t\.com/.test(r.textContent); })[0];
+      var ths = [].map.call((row ? row.closest('table') : document).querySelectorAll('th'), function (t) { return t.textContent.trim(); });   // 같은 화면의 다른 표(공개 범위)는 빼고
       var cb = row && row.querySelector('.ua-wlm'); if (cb) cb.click();
       return { th: ths.indexOf('업무 데이터') >= 0, cb: !!cb, tds: row ? row.children.length : 0, ths: ths.length };
     });

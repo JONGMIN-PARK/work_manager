@@ -28,7 +28,7 @@ var ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
     for (var q = 1; q <= 3; q++) await createOrder({ orderNo: 'SP' + (3960 + q) + '-EPN', name: 'UV LASER CUT SYSTEM ' + q + '호기 — 고객사 라인 증설', client: '대덕전자', date: d(-20 * q), amount: 120000000 * q, manager: '관리자', delivery: d(30 * q) }).catch(function () {});
     return p.id;
   });
-  function clean() { return page.evaluate(function () { try { pdSwitchTab('overview'); } catch (_) {} document.querySelectorAll('.wa-modal-overlay,#projModal,#evtModal,.pd-overlay,#pdOverlay,#issueModal,#asModal,#mwPanel.on').forEach(function (e) { e.remove(); }); try { if (typeof mwPanelClose === 'function') mwPanelClose(); } catch (_) {} try { if (typeof pdCloseDetail === 'function') pdCloseDetail(); } catch (_) {} var h = document.querySelector('.hdr'); if (h) h.classList.remove('more-on'); var nd = document.getElementById('notifDropdown'); if (nd) nd.style.display = 'none'; window.scrollTo(0, 0); }); }
+  function clean() { return page.evaluate(function () { try { pdSwitchTab('overview'); } catch (_) {} var u = document.getElementById('wmUpd'); if (u) u.remove(); var gi = document.getElementById('globalSearchInput'); if (gi) { gi.value = ''; gi.blur(); } var gd = document.getElementById('globalSearchDropdown'); if (gd) gd.style.display = 'none'; if (typeof setPage === 'function' && typeof curPage !== 'undefined' && curPage === 'messages') setPage('mywork'); document.querySelectorAll('.nt-overlay,#ntOverlay,.wa-modal-overlay,#projModal,#evtModal,.pd-overlay,#pdOverlay,#issueModal,#asModal,#mwPanel.on').forEach(function (e) { e.remove(); }); try { if (typeof mwPanelClose === 'function') mwPanelClose(); } catch (_) {} try { if (typeof pdCloseDetail === 'function') pdCloseDetail(); } catch (_) {} var h = document.querySelector('.hdr'); if (h) h.classList.remove('more-on'); var nd = document.getElementById('notifDropdown'); if (nd) nd.style.display = 'none'; window.scrollTo(0, 0); }); }
   var screens = [
     ['mywork', function () { setPage('mywork'); }],
     ['mywork-month', function () { setPage('mywork'); var b = document.querySelector('#mMyWork [data-mwc-view="month"]'); if (b) b.click(); }],
@@ -84,11 +84,17 @@ var ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
     ['pd-work', function (pid) { return showProjectDetail(pid).then(function () { pdSwitchTab('work', pid); }); }],
     ['pd-spec', function (pid) { return showProjectDetail(pid).then(function () { pdSwitchTab('spec', pid); }); }],
     ['profile', function () { return showProfileModal(); }],
+    // v13.485 에서 더한 화면
+    ['team-weekly-ai', function () { setPage('team'); setMode('weekly'); try { selAll(); } catch (_) {} if (typeof sTab === 'function') sTab('ai'); }],
+    ['chat-room', function () { setPage('messages'); return new Promise(function (res) { setTimeout(function () { var r = (CX.rooms || [])[0]; if (r) chatOpenRoom(r.id); res(); }, 900); }); }],
+    ['notices', function () { if (typeof wmNoticeOpen === 'function') wmNoticeOpen(); }],
+    ['search-results', function () { var i = document.getElementById('globalSearchInput'); i.focus(); i.value = '점검'; return globalSearch('점검'); }],
+    ['update-bar', function () { try { localStorage.removeItem('wm-upd-later'); } catch (_) {} _wmUpdateShow({ build: 'zz', version: '99.0' }); }],
     ['mindmap-map', function () { setPage('mindmap'); return apiFetch('/api/mindmaps').then(function (r) { var m = (r.data || [])[0]; if (m) { mmOpen(m.id); setTimeout(function () { _mmSetView('map'); }, 900); } }); }]
   ];
   var report = [];
   // v13.404 D = 줄인 PC 창(480, 마우스) — ORI=P,D 처럼 고름
-  var ALL_OR = { P: ['P', 402, 874, true], L: ['L', 874, 402, true], D: ['D', 480, 890, false] };
+  var ALL_OR = { P: ['P', 402, 874, true], L: ['L', 874, 402, true], D: ['D', 480, 890, false], A: ['A', 390, 844, true], S: ['S', 360, 780, true], X: ['X', 320, 640, true] };   // A · S · X = 좁은 휴대폰 (v13.485)
   var orients = (process.env.ORI || 'P,L').split(',').map(function (k) { return ALL_OR[k]; }).filter(Boolean);
   for (var oi = 0; oi < orients.length; oi++) {
     var o = orients[oi];
@@ -112,6 +118,27 @@ var ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
             out.off.push((el.id ? '#' + el.id : el.tagName.toLowerCase() + '.' + String(el.className || '').split(' ')[0]) + ' [' + Math.round(r.left) + '→' + Math.round(r.right) + ']');
           }
         });
+        // v13.485 틀 고정 뒤로는 화면이 모두 굴림 칸 안 → 잘린 것(clip) · 가로로 밀리는 칸(hs)을 따로 봄
+        out.clip = []; out.hs = [];
+        function nm(el) { return (el.id ? '#' + el.id : el.tagName.toLowerCase() + '.' + String(el.className && el.className.baseVal != null ? el.className.baseVal : el.className || '').trim().split(/\s+/).slice(0, 2).join('.')); }
+        Array.from(document.querySelectorAll('button,a,input,select,textarea,[onclick],h1,h2,h3,h4,b,label,td,th')).forEach(function (el) {
+          if (!vis(el) || out.clip.length >= 10) return;
+          var r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > window.innerHeight * 3) return;
+          for (var p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
+            var cs = getComputedStyle(p), ox = cs.overflowX;
+            if (ox === 'visible') continue;
+            if (ox === 'auto' || ox === 'scroll') return;   // 밀어서 볼 수 있음
+            var pr = p.getBoundingClientRect();
+            if (cs.textOverflow === 'ellipsis') return;
+            if (r.right > pr.right + 2 || r.left < pr.left - 2) { if (r.left >= pr.right || r.right <= pr.left) return; out.clip.push(nm(el) + ' "' + (el.textContent || el.value || el.placeholder || '').trim().slice(0, 10) + '" [' + Math.round(r.left) + '→' + Math.round(r.right) + '] in ' + nm(p) + ' [' + Math.round(pr.left) + '→' + Math.round(pr.right) + ']'); }
+            return;
+          }
+        });
+        Array.from(document.querySelectorAll('body *')).forEach(function (el) {
+          if (out.hs.length >= 10 || !vis(el)) return;
+          var cs = getComputedStyle(el); if (!/(auto|scroll)/.test(cs.overflowX)) return;
+          if (el.scrollWidth > el.clientWidth + 4 && el.clientWidth > 60) out.hs.push(nm(el) + ' ' + el.clientWidth + '<' + el.scrollWidth);
+        });
         Array.from(document.querySelectorAll('input,select,textarea')).forEach(function (el) {
           if (!vis(el) || el.type === 'checkbox' || el.type === 'radio' || el.type === 'hidden' || el.type === 'file' || el.type === 'range' || el.type === 'color') return;
           var fs = parseFloat(getComputedStyle(el).fontSize);
@@ -133,7 +160,7 @@ var ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
   await page.evaluate(function (id) { return deleteProjectCascade(id); }, pid).catch(function () {});
   await browser.close();
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 1));
-  report.forEach(function (r) { console.log(r.s, r.err ? 'ERR ' + r.err : ('ovX=' + r.overflowX + ' off=' + r.off.length + ' smallIn=' + r.smallInputs + ' tiny=' + r.tinyTaps)); });
+  report.forEach(function (r) { console.log(r.s, r.err ? 'ERR ' + r.err : ('ovX=' + r.overflowX + ' off=' + r.off.length + ' clip=' + (r.clip || []).length + ' hs=' + (r.hs || []).length + ' smallIn=' + r.smallInputs + ' tiny=' + r.tinyTaps)); });
   console.log('errs', JSON.stringify(errs.slice(0, 5)));
   console.log('ALL PASS audit');
 })().catch(function (e) { console.log('ERR', e.message); process.exit(1); });

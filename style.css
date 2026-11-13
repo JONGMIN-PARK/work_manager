@@ -8167,3 +8167,46 @@ body.wl-ro #mWeekly:has(>#mainArea.hidden) .wl-empty{display:block}   /* 데이�
   html.wm-shell-pc .con>#mMessages.has-split>.cx{flex:1.5 1 0}
   html.wm-shell-pc .cx-splitbox{height:auto;min-height:0}
 }
+
+/* ═══ v13.485 📱 좁은 휴대폰(≤400px · 360 · 320) 구석구석 — 머리 줄 겹침 · 툴바 잘림 · 숫자 카드 ═══ */
+/* 머리 줄 — 400px 아래에선 「업무 관리자」 글자 대신 로고 + 버전만 (글자 · 버전이 🔎 🔔 밑에 깔려 겹쳐 보이던 것) */
+@media (max-width:400px){
+  .hdr-brand h1{font-size:0!important;display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .hdr-brand h1 .hdr-mark{font-size:15px}
+  #wmVerBadge{font-size:9px!important;padding:1px 4px!important;margin-left:0!important}
+  .hdr-ctl{gap:4px!important}
+  .hdr{padding-left:10px!important;padding-right:10px!important}
+}
+@media (max-width:340px){ #wmVerBadge{display:none!important} .hdr-ctl{gap:3px!important} }
+/* 주간 분석 제목 줄 — 380px 아래에선 [💾] 만 (주차 저장 글자 때문에 ⋯ 가 화면 밖으로 밀림) */
+@media (max-width:380px){
+  #mWeekly .wm-tb .wm-tl2{display:none}
+  #mWeekly .wm-tb{gap:4px}
+  #mWeekly .wm-tb .btn,#mWeekly .wm-tb .wm-pri,#mWeekly .wm-tb .wm-more{padding-left:8px!important;padding-right:8px!important}
+}
+/* 숫자 네 칸 — 「기간」 칸을 넓게 · 글자를 조금 줄여 「11/02 ~ 11/…」 「총 투입…」 처럼 잘리지 않게 */
+@media (max-width:480px){
+  #mWeekly #kpiSticky.ws-strip{grid-template-columns:minmax(0,.8fr) minmax(0,1fr) minmax(0,1.5fr) minmax(0,1.05fr)}
+  #mWeekly #kpiSticky .sl{font-size:9px;letter-spacing:-.2px}
+  #mWeekly #kpiSticky .sv.sm{font-size:10.5px;letter-spacing:-.2px}
+  #mWeekly #kpiSticky .sc{padding:3px 4px 3px 7px}
+}
+@media (max-width:340px){
+  #mWeekly #kpiSticky .sl{font-size:8.5px}
+  #mWeekly #kpiSticky .sv{font-size:12.5px}
+  #mWeekly #kpiSticky .sv.sm{font-size:9.5px;letter-spacing:-.4px}
+}
+/* 사용자 관리 › 공개 범위 단추 — 아이콘과 글자가 두 줄로 꺾이던 것 */
+.pva-b{white-space:nowrap}
+@media (max-width:420px){.pva-b{padding:6px 4px;font-size:12px}.pva-act{gap:6px;padding:8px}}
+/* 프로젝트 상세 탭 8개 — 400px 아래에서 마지막 「사양」이 잘리던 것: 간격을 줄여 한 줄에 */
+@container pd (max-width:410px){.pd-tabs{gap:0}.pd-tab{padding:7px 6px;gap:3px;font-size:11.5px}.pd-tab-n{padding:0 4px!important}}
+@container pd (max-width:340px){.pd-tab{padding:7px 4px;font-size:11px;letter-spacing:-.2px}}
+/* 주간 업무 화면 탭 · 주간 분석 비교 표 · 공개 범위 표 — 360px 아래에서 조금씩 넘치던 것 */
+@media (max-width:380px){
+  #wrSubTabs>button{padding-left:7px!important;padding-right:7px!important}
+  #cmpTable th,#cmpTable td{padding-left:3px!important;padding-right:3px!important;font-size:10.5px}
+  .pva-t th:nth-child(3),.pva-t td:nth-child(3){display:none}
+  .pva-n{min-width:0}
+  #auditLogList{font-size:11px}
+}
