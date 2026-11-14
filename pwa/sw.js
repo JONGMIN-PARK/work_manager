@@ -21,9 +21,12 @@ self.addEventListener('fetch', function (e) {
 self.addEventListener('push', function (e) {
   var d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || '업무 관리자', {
+  var jobs = [self.registration.showNotification(d.title || '업무 관리자', {
     body: d.body || '', tag: d.tag, renotify: !!d.tag, icon: '/icons/icon-192.png', badge: '/icons/badge-72.png', data: { go: d.go || '' }
-  }));
+  })];
+  // v13.501 ⬆ 새 버전 — 홈 화면 앱 아이콘에 표시(앱을 열면 안 읽은 수로 되돌아감)
+  if (d.kind === 'update' && self.navigator && self.navigator.setAppBadge) jobs.push(self.navigator.setAppBadge().catch(function () {}));
+  e.waitUntil(Promise.all(jobs));
 });
 
 self.addEventListener('notificationclick', function (e) {

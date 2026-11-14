@@ -1,7 +1,7 @@
 // run.sh 로 서버를 띄운 채 PC 앱 자체 업데이트 연기 시험 (desktop/scripts/upd-smoke.js)
 //   desktop/release 에 잠깐 '13.496.0' (내용은 지금 설치 파일 · sha512 맞춤) 을 올렸다가 시험 뒤 원래대로
 var cp = require('child_process'), path = require('path'), fs = require('fs'), crypto = require('crypto');
-var REL = path.join(__dirname, '../../desktop/release');
+var REL = path.join(__dirname, '../../release/desktop');
 var yml = path.join(REL, 'latest.yml'), orig = fs.readFileSync(yml, 'utf8');
 var cur = (/^path:\s*(\S+)/m.exec(orig) || [])[1];
 var fake = 'WorkManager-Setup-13.496.0.exe', fakePath = path.join(REL, fake);

@@ -164,3 +164,67 @@
     }, 350);
   });
 })();
+
+/* v13.501 📱 휴대폰 맨 위(상태 표시줄) 색 = 지금 화면 맨 위(머리 줄 · 대화방 머리)의 실제 색
+ *   예전: theme-color 가 #2563EB 고정 → 테마와 안 맞고, 아이폰 설치형(status-bar-style default)에선 까맣게 빈 띠로 보였음.
+ *   지금: 맨 위 가운데 점의 요소부터 위로 올라가며 배경색을 겹쳐(반투명 머리 줄도) 불투명한 한 색으로 → <meta name="theme-color"> 갱신.
+ *   테마 바꿈 · 시스템 밝기 · 화면 바뀜(대화방 전체 화면 등) 때마다 다시. */
+(function () {
+  var docEl = document.documentElement, last = '', t = 0;
+  function parse(c) {
+    if (!c) return null;
+    var m = c.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,\/]\s*([\d.]+%?))?\s*\)$/);
+    if (m) return [+m[1], +m[2], +m[3], m[4] == null ? 1 : (/%$/.test(m[4]) ? parseFloat(m[4]) / 100 : +m[4])];
+    m = c.match(/^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+%?))?\s*\)$/);
+    if (m) return [m[1] * 255, m[2] * 255, m[3] * 255, m[4] == null ? 1 : (/%$/.test(m[4]) ? parseFloat(m[4]) / 100 : +m[4])];
+    return null;
+  }
+  /** 그라데이션 배경 — 맨 위 겹의 앞 색으로 한 겹 (머리 줄 135° 그라데이션은 앞 두 색 사이 · 빛 번짐은 가운데 색) */
+  function grad(img) {
+    if (!img || img === 'none' || !/gradient/.test(img)) return null;
+    var cs = img.match(/rgba?\([^)]*\)/g); if (!cs) return null;
+    var c0 = parse(cs[0]), c1 = cs[1] && /^linear/.test(img) ? parse(cs[1]) : null;   // 맨 위 겹의 시작 색(빛 번짐의 가운데) · 직선은 두 색 사이
+    if (!c0) return null;
+    return c1 ? [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2, (c0[2] + c1[2]) / 2, (c0[3] + c1[3]) / 2] : c0;
+  }
+  /** 이 점에 실제로 보이는 색 — 위 요소부터 아래로 반투명을 겹침 */
+  function colorAt(x, y) {
+    var el = document.elementFromPoint(x, y), layers = [];
+    while (el && el.nodeType === 1) {
+      var cs = getComputedStyle(el), g = grad(cs.backgroundImage), c = parse(cs.backgroundColor);
+      if (g && g[3] > 0.01) { layers.push(g); if (g[3] >= 0.99) break; }   // 그라데이션 = 배경색 위에 그려짐
+      if (c && c[3] > 0.01) { layers.push(c); if (c[3] >= 0.99) break; }
+      el = el.parentElement;
+    }
+    var dark = /dark/.test(getComputedStyle(docEl).colorScheme || '');
+    var out = dark ? [0, 0, 0] : [255, 255, 255];
+    for (var i = layers.length - 1; i >= 0; i--) { var l = layers[i], a = l[3]; out = [l[0] * a + out[0] * (1 - a), l[1] * a + out[1] * (1 - a), l[2] * a + out[2] * (1 - a)]; }
+    return '#' + out.map(function (v) { return ('0' + Math.round(Math.max(0, Math.min(255, v))).toString(16)).slice(-2); }).join('');
+  }
+  function sync() {
+    t = 0;
+    if (!document.body || document.hidden) return;
+    var col; try { col = colorAt(Math.round(window.innerWidth / 2), 2); } catch (e) { return; }
+    if (col === last) return;
+    last = col;
+    var metas = document.querySelectorAll('meta[name="theme-color"]'), m = metas[0];
+    for (var i = 1; i < metas.length; i++) metas[i].remove();
+    if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }
+    m.removeAttribute('media');
+    m.content = col;
+  }
+  function soon(ms) { if (t) clearTimeout(t); t = setTimeout(sync, ms == null ? 60 : ms); }
+  window.wmTopBarSync = function () { last = ''; soon(0); };
+  window.wmTopBarColor = function () { return last; };
+  try { new MutationObserver(function () { soon(); setTimeout(function () { soon(0); }, 380); setTimeout(function () { soon(0); }, 900); }).observe(docEl, { attributes: true, attributeFilter: ['data-theme', 'class'] }); } catch (e) {}
+  function start() {
+    soon(0); setTimeout(soon, 600); setTimeout(soon, 2000);
+    try { new MutationObserver(function () { soon(120); }).observe(document.body, { attributes: true, attributeFilter: ['class'], childList: true }); } catch (e) {}
+    document.addEventListener('click', function () { soon(250); }, true);   // 탭 · 화면 바꿈
+    document.addEventListener('transitionend', function (e) { if (e.propertyName && /background/.test(e.propertyName) && e.target && e.target.getBoundingClientRect && e.target.getBoundingClientRect().top <= 2) soon(0); }, true);   // 머리 줄 색이 천천히 바뀌는 테마
+  }
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+  window.addEventListener('pageshow', function () { soon(0); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) soon(0); });
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () { soon(300); }); } catch (e) {}
+})();

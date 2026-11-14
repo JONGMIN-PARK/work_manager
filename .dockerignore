@@ -37,6 +37,4 @@ web
 *.md
 *.py
 desktop
-# v13.495 PC 앱 자체 업데이트 — 서버가 /desktop-release/ 로 내려 줄 최신 설치 파일만 이미지에
-!desktop/release
-desktop/release/*.md
+# v13.501 배포판은 release/ 에 따로 — desktop/ = PC 앱 설치 파일 + latest.yml (/desktop-release/ · 자동 업데이트 원본), site/ = 소개 · 내려받기 · 사용 설명서 (/download)

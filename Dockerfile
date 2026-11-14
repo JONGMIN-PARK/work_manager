@@ -24,8 +24,8 @@ COPY migrations/ migrations/
 COPY *.html *.js *.css ./
 # 앱으로 설치 (v13.355): manifest · 서비스 워커 · 아이콘
 COPY pwa/ pwa/
-# v13.495 PC 앱 자체 업데이트 원본 (latest.yml · 설치 파일) — /desktop-release/
-COPY desktop/release/ desktop/release/
+# v13.501 배포판 (release/) — desktop: PC 앱 자체 업데이트 원본(/desktop-release/) · site: 소개 · 내려받기 · 사용 설명서(/download)
+COPY release/ release/
 
 EXPOSE 3000
 

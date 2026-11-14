@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>업무 관리자 내려받기</title>
+<meta name="description" content="업무 관리자 — PC 앱 내려받기 · 휴대폰 설치 · 화면 소개 · 사용 설명서">
+<meta name="theme-color" content="#F5F6FB" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0E1A" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<style>
+:root{--bg:#F5F6FB;--card:#FFFFFF;--t1:#0E1330;--t2:#3F466A;--t3:#5C638A;--bd:#E3E6F3;--ac:#5B5BF0;--ac-t:#4338CA;--ac-bg:#EEF0FF;--ok:#0F9D58;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0B0E1A;--card:#141932;--t1:#F1F4FF;--t2:#C9D0EA;--t3:#9AA3C7;--bd:#262D52;--ac:#7C7CFF;--ac-t:#C7D2FE;--ac-bg:#1D2347;--ok:#34D399;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t1);font:15px/1.7 "Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--ac-t)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+header{padding:56px 0 28px}
+.brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:15px;color:var(--t2)}
+.brand img{width:36px;height:36px;border-radius:9px}
+h1{font-size:clamp(28px,5vw,42px);line-height:1.25;margin:18px 0 10px;letter-spacing:-.02em}
+.lead{font-size:17px;color:var(--t2);max-width:640px;margin:0}
+.dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:28px 0 8px}
+.dl a,.dl div{display:block;padding:18px;border-radius:16px;background:var(--card);border:1px solid var(--bd);text-decoration:none;color:var(--t1)}
+.dl a.main{background:var(--ac);border-color:var(--ac);color:#fff}
+.dl b{display:block;font-size:17px}
+.dl span{font-size:13px;opacity:.85}
+.meta{font-size:13px;color:var(--t3)}
+section{padding:36px 0;border-top:1px solid var(--bd)}
+h2{font-size:24px;margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--t3);margin:0 0 20px}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
+figure{margin:0;background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:hidden}
+figure img{display:block;width:100%;height:auto;cursor:zoom-in}
+figcaption{padding:10px 14px;font-size:14px;color:var(--t2)}
+figcaption b{color:var(--t1)}
+.phones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.phones figure img{aspect-ratio:390/844;object-fit:cover;object-position:top}
+@media (max-width:640px){.phones{grid-template-columns:repeat(2,minmax(0,1fr))}.phones figure:last-child{display:none}}
+.steps{counter-reset:s;display:grid;gap:12px;padding:0;margin:0;list-style:none}
+.steps li{position:relative;padding:14px 16px 14px 56px;background:var(--card);border:1px solid var(--bd);border-radius:14px}
+.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:16px;top:14px;width:26px;height:26px;border-radius:50%;background:var(--ac-bg);color:var(--ac-t);font-weight:800;font-size:13px;display:grid;place-items:center}
+.steps b{display:block}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
+.card h3{margin:0 0 6px;font-size:16px}
+.card p,.card ul{margin:0;color:var(--t2);font-size:14px}
+.card ul{padding-left:18px}
+kbd{font:12px/1 ui-monospace,Consolas,monospace;padding:2px 6px;border:1px solid var(--bd);border-bottom-width:2px;border-radius:5px;background:var(--bg)}
+footer{padding:28px 0 48px;color:var(--t3);font-size:13px;border-top:1px solid var(--bd)}
+.zoom{position:fixed;inset:0;z-index:9;background:rgba(5,8,20,.86);display:none;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+.zoom.on{display:flex}
+.zoom img{max-width:100%;max-height:100%;border-radius:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand"><img src="/icons/icon-192.png" alt="">업무 관리자</div>
+  <h1>할 일 · 업무일지 · 프로젝트 · 메신저를<br>한곳에서</h1>
+  <p class="lead">PC 앱, 휴대폰 앱, 웹 브라우저 어디서나 같은 화면으로 씁니다. 새 버전이 나오면 알려 주고, 새로 고치면 바로 적용됩니다.</p>
+  <div class="dl">
+    <a class="main" id="dlPc" href="https://github.com/JONGMIN-PARK/work_manager/tree/main/release/desktop" rel="noopener"><b>⬇ PC 앱 내려받기 (Windows)</b><span id="dlPcSub">GitHub 저장소에서 받습니다</span></a>
+    <a href="#phone"><b>📱 휴대폰에 설치</b><span>아이폰 · 안드로이드 — 홈 화면에 추가</span></a>
+    <a href="/"><b>🌐 웹에서 바로 열기</b><span>설치 없이 브라우저로</span></a>
+  </div>
+  <p class="meta" id="verLine">최신 버전을 확인하는 중…</p>
+</header>
+
+<section>
+  <h2>화면 둘러보기</h2>
+  <p class="sub">아래 화면은 모두 가상의 사람 · 회사 · 업무로 채운 예시입니다.</p>
+  <div class="shots">
+    <figure><img src="pc-mywork.jpg" alt="내 업무 화면 — 타임라인 · 달력 · 할 일 목록" loading="lazy"><figcaption><b>🎯 내 업무</b> — 할 일 · 일정 · 마감을 타임라인과 달력으로</figcaption></figure>
+    <figure><img src="pc-team.jpg" alt="업무 관리 주간 분석 화면 — 팀원별 업무일지 시간" loading="lazy"><figcaption><b>📒 업무 관리</b> — 업무일지 주간 분석 · 주간 업무 보고 · 업무 부하</figcaption></figure>
+    <figure><img src="pc-project.jpg" alt="프로젝트 관리 파이프라인 화면" loading="lazy"><figcaption><b>📁 프로젝트 관리</b> — 수주부터 완료까지 단계별 진행률</figcaption></figure>
+    <figure><img src="pc-chat.jpg" alt="메신저 대화방 화면" loading="lazy"><figcaption><b>💬 메신저</b> — 팀 대화 · 파일 · 사진 칠판 · 통화</figcaption></figure>
+  </div>
+  <h2 style="margin-top:32px">휴대폰</h2>
+  <p class="sub">머리 줄 왼쪽의 검은 캡슐(아일랜드)을 누르면 빠른 메뉴가 펼쳐집니다.</p>
+  <div class="phones">
+    <figure><img src="m-mywork.jpg" alt="휴대폰 내 업무 화면" loading="lazy"><figcaption><b>내 업무</b></figcaption></figure>
+    <figure><img src="m-island.jpg" alt="휴대폰 아일랜드 빠른 메뉴" loading="lazy"><figcaption><b>아일랜드 빠른 메뉴</b></figcaption></figure>
+    <figure><img src="m-chat.jpg" alt="휴대폰 메신저 화면" loading="lazy"><figcaption><b>메신저</b></figcaption></figure>
+  </div>
+</section>
+
+<section id="install">
+  <h2>설치하기</h2>
+  <p class="sub">한 번만 설치하면 그 뒤로는 저절로 새 버전으로 바뀝니다.</p>
+  <div class="grid2">
+    <div class="card"><h3>🖥 PC 앱 (Windows)</h3><ul>
+      <li>위의 <b>PC 앱 내려받기</b>를 눌러 <code>WorkManager-Setup-x.y.z.exe</code>를 받습니다.</li>
+      <li>받은 파일을 실행합니다. "Windows의 PC 보호" 창이 뜨면 <b>추가 정보 → 실행</b>을 누릅니다.</li>
+      <li>설치가 끝나면 업무 관리자가 열립니다. 회사 계정으로 로그인합니다.</li>
+      <li>창을 닫아도 오른쪽 아래 트레이에서 계속 알림을 받습니다.</li></ul></div>
+    <div class="card" id="phone"><h3>📱 휴대폰 (아이폰 · 안드로이드)</h3><ul>
+      <li><b>아이폰</b>: Safari로 업무 관리자 주소를 열고 <b>공유 → 홈 화면에 추가</b>를 누릅니다. (iOS 16.4 이상)</li>
+      <li><b>안드로이드</b>: Chrome으로 열고 <b>⋮ → 앱 설치</b>(또는 홈 화면에 추가)를 누릅니다.</li>
+      <li>홈 화면의 아이콘으로 열어 로그인한 뒤, <b>🔔 알림 켜기</b>를 눌러 두면 앱을 닫아도 메시지와 새 버전 알림이 옵니다.</li></ul></div>
+  </div>
+</section>
+
+<section id="manual">
+  <h2>간단 사용 설명서</h2>
+  <p class="sub">처음 쓰는 분이 10분 안에 익힐 수 있는 순서입니다.</p>
+  <ol class="steps">
+    <li><b>로그인</b>회사에서 받은 이메일과 비밀번호로 들어갑니다. 구글 계정 로그인을 켜 둔 회사는 구글로도 됩니다.</li>
+    <li><b>🎯 내 업무 — 할 일 넣기</b>입력 칸에 "내일 14:00 !긴급 견적"처럼 쓰면 마감 · 시간 · 중요도가 함께 들어갑니다. 할 일을 누르면 상세 창에서 메모 · 하위 항목 · 반복을 정합니다. 끌어서 달력의 다른 날로 옮길 수 있습니다.</li>
+    <li><b>📒 업무 관리 — 업무일지</b>엑셀 업무일지를 <b>파일 열기</b>로 올리면 팀 전체가 같은 데이터를 봅니다. 주차 · 팀원 · 사업부로 골라 시간과 내용을 분석합니다.</li>
+    <li><b>📒 업무 관리 — 주간 업무 보고</b>지난주 실적과 이번 주 계획을 쓰면 업무일지에서 빠진 일을 찾아 줍니다. 처리할 일은 <b>휴지통(처리 대기)</b>에 두었다가 다시 꺼내 씁니다. 미리보기에서 보고용으로 인쇄 · 복사합니다.</li>
+    <li><b>📁 프로젝트 관리</b>수주 → 설계 → 제작 → 검수 → 납품 → 완료 단계로 진행률을 관리합니다. 프로젝트를 누르면 일정 · 이슈 · 문서 · 회의록을 한 화면에서 봅니다.</li>
+    <li><b>💬 메신저</b>1:1 · 그룹 · 프로젝트 방에서 대화하고 파일 · 사진을 보냅니다. 사진을 누르면 칠판에서 표시를 그려 함께 볼 수 있습니다.</li>
+    <li><b>🔎 통합 검색</b>맨 위 검색 칸(<kbd>Ctrl</kbd>+<kbd>K</kbd>)에서 프로젝트 · 이슈 · 회의 · 할 일을 한꺼번에 찾습니다. 휴대폰은 🔎를 누르면 검색 칸이 펼쳐집니다.</li>
+    <li><b>⬆ 새 버전</b>새 버전이 나오면 화면 위에 알림 띠가 뜹니다. 휴대폰은 알림으로, PC 앱은 윈도우 알림으로 옵니다. <b>지금 새로 고침</b>(또는 <kbd>F5</kbd>)을 누르면 PC 앱까지 함께 업데이트됩니다.</li>
+  </ol>
+  <div class="grid2" style="margin-top:16px">
+    <div class="card"><h3>📱 휴대폰 팁</h3><ul><li>왼쪽 위 검은 캡슐 = 빠른 메뉴 (화면 이동 · 검색 · 알림 · 밝게/어둡게 · 맨 위로 · 새로 고침)</li><li>캡슐에 💬 숫자가 보이면 안 읽은 메시지, ⬆ 가 보이면 새 버전이 있다는 뜻입니다.</li><li>🎨 화면 설정에서 테마를 바꾸면 맨 위 상태 표시줄 색도 따라 바뀝니다.</li></ul></div>
+    <div class="card"><h3>⌨ PC 단축키</h3><ul><li><kbd>Ctrl</kbd>+<kbd>K</kbd> 통합 검색</li><li><kbd>F5</kbd> · <kbd>Ctrl</kbd>+<kbd>R</kbd> 새로 고침 (받아 둔 PC 앱 업데이트도 설치)</li><li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd> 항상 위에 두기 (PC 앱)</li><li><kbd>Alt</kbd>+<kbd>W</kbd> 글쓰기 · <kbd>Alt</kbd>+<kbd>N</kbd> 낙서장</li></ul></div>
+  </div>
+</section>
+
+<footer>
+  <div>설치 파일 원본: <a href="https://github.com/JONGMIN-PARK/work_manager/tree/main/release/desktop" rel="noopener">GitHub · release/desktop</a> · 이 페이지는 업무 관리자 서버의 <code>/download</code> 에서 늘 최신으로 보입니다.</div>
+</footer>
+</div>
+<div class="zoom" id="zoom" role="dialog" aria-label="크게 보기"><img alt=""></div>
+<script>
+(function () {
+  fetch('/api/build', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    var d = j && j.data || {}, k = d.desktop;
+    var line = '웹 최신 버전 v' + (d.version || '?');
+    if (k && k.version) {
+      var a = document.getElementById('dlPc');
+      a.href = k.file; a.setAttribute('download', '');
+      document.getElementById('dlPcSub').textContent = 'v' + k.version + ' · GitHub 저장소에서 받습니다';
+      line += ' · PC 앱 v' + k.version;
+    }
+    document.getElementById('verLine').textContent = line;
+  }).catch(function () { document.getElementById('verLine').textContent = ''; });
+  var z = document.getElementById('zoom'), zi = z.querySelector('img');
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t.tagName === 'IMG' && t.closest('figure')) { zi.src = t.src; zi.alt = t.alt; z.classList.add('on'); }
+    else if (z.classList.contains('on')) z.classList.remove('on');
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') z.classList.remove('on'); });
+})();
+</script>
+</body>
+</html>

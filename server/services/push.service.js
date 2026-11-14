@@ -39,11 +39,18 @@ function _setSender(fn) { _sender = fn; }
 /** userIds 에게 푸시 — 기다리지 않아도 됨(실패는 기록만) */
 async function sendToUsers(userIds, payload) {
   if (!userIds || !userIds.length) return 0;
+  return _send('SELECT endpoint, p256dh, auth, user_id FROM push_subs WHERE user_id = ANY($1)', [userIds], payload);
+}
+/** v13.501 구독한 모든 기기에 (새 버전 알림) */
+async function sendToAll(payload) {
+  return _send('SELECT endpoint, p256dh, auth, user_id FROM push_subs', [], payload);
+}
+async function _send(sql, args, payload) {
   try {
-    var r = await db.query('SELECT endpoint, p256dh, auth, user_id FROM push_subs WHERE user_id = ANY($1)', [userIds]);
+    var r = await db.query(sql, args);
     if (!r.rows.length) return 0;
     await keys();
-    var body = JSON.stringify({ title: String(payload.title || '업무 관리자').slice(0, 120), body: String(payload.body || '').slice(0, 300), tag: payload.tag || undefined, go: payload.go || '' });
+    var body = JSON.stringify({ title: String(payload.title || '업무 관리자').slice(0, 120), body: String(payload.body || '').slice(0, 300), tag: payload.tag || undefined, go: payload.go || '', kind: payload.kind || undefined });
     var sent = 0;
     await Promise.all(r.rows.map(function (s) {
       var sub = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } };
@@ -58,4 +65,4 @@ async function sendToUsers(userIds, payload) {
   } catch (e) { console.error('[push]', e.message); return 0; }
 }
 
-module.exports = { publicKey: publicKey, subscribe: subscribe, unsubscribe: unsubscribe, count: count, sendToUsers: sendToUsers, _setSender: _setSender };
+module.exports = { publicKey: publicKey, subscribe: subscribe, unsubscribe: unsubscribe, count: count, sendToUsers: sendToUsers, sendToAll: sendToAll, _setSender: _setSender };

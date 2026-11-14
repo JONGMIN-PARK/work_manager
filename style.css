@@ -3302,10 +3302,10 @@ mark.wd-hl{background:var(--ac-g);color:var(--ac-t);outline:1px solid var(--ac);
   #globalSearchInput,#globalSearchInput:focus{width:34px;height:32px;padding:0;color:transparent;cursor:pointer}
   #globalSearchInput::placeholder{color:transparent}
   #gsIcon{left:50%;transform:translate(-50%,-50%);font-size:13px}
-  #globalSearchWrap:focus-within{position:absolute;left:12px;right:12px;top:max(8px,env(safe-area-inset-top));z-index:5;margin:0}
-  #globalSearchWrap:focus-within #globalSearchInput{width:100%;padding:0 12px 0 30px;color:var(--t2);cursor:text}
-  #globalSearchWrap:focus-within #globalSearchInput::placeholder{color:var(--t6)}
-  #globalSearchWrap:focus-within #gsIcon{left:10px;transform:translateY(-50%)}
+#globalSearchWrap:focus-within,#globalSearchWrap.gs-open{position:absolute;left:12px;right:12px;top:max(8px,env(safe-area-inset-top));z-index:5;margin:0}
+#globalSearchWrap:focus-within #globalSearchInput,#globalSearchWrap.gs-open #globalSearchInput{width:100%;padding:0 12px 0 30px;color:var(--t2);cursor:text}
+#globalSearchWrap:focus-within #globalSearchInput::placeholder,#globalSearchWrap.gs-open #globalSearchInput::placeholder{color:var(--t6)}
+#globalSearchWrap:focus-within #gsIcon,#globalSearchWrap.gs-open #gsIcon{left:10px;transform:translateY(-50%)}
   #globalSearchDropdown{left:0!important;right:0!important;width:auto!important;max-height:70vh!important}
   /* 펼침 메뉴 — 버튼 자리 기준이면 화면 밖으로 나감 → 헤더 바로 아래 화면 폭 */
   #notifWrap,.hdr .hdr-pop{position:static}
@@ -3634,7 +3634,7 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 @media (max-width:600px), (max-height:500px) and (orientation:landscape){
   /* 위 · 좌우는 노치 · 다이내믹 아일랜드 · 상태 표시줄 안전 영역만큼 띄움 — 홈 화면 앱(투명 상태 표시줄)에서 메뉴가 상태 표시줄 밑으로 올라가 눌리지 않던 것 (v13.371) */
   .hdr{padding:max(4px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) 4px max(8px,env(safe-area-inset-left))!important}
-  #globalSearchWrap:focus-within{top:max(4px,env(safe-area-inset-top))!important;left:max(8px,env(safe-area-inset-left))!important;right:max(8px,env(safe-area-inset-right))!important}
+#globalSearchWrap:focus-within,#globalSearchWrap.gs-open{top:max(4px,env(safe-area-inset-top))!important;left:max(8px,env(safe-area-inset-left))!important;right:max(8px,env(safe-area-inset-right))!important}
   .hdr-in{gap:6px!important}
   .hdr-brand h1{font-size:15px!important}
   #wmVerBadge{font-size:9px!important;padding:1px 4px!important;margin-left:2px;flex:none}   /* v13.428 좁은 창에서도 버전 표시 (예전엔 숨김) */
@@ -7972,7 +7972,7 @@ html.wm-tbo body,html.wm-tbo .hdr,html.wm-tbo.wm-solo #cxHead{transition:none!im
   html.wm-tbo .hdr-ctl{gap:4px!important}
   html.wm-tbo .hdr-ic{width:30px}
   html.wm-tbo .hdr-user-btn{max-width:96px}
-  html.wm-tbo #globalSearchWrap:focus-within{right:calc(8px + var(--wm-tbo-r))!important}
+html.wm-tbo #globalSearchWrap:focus-within,html.wm-tbo #globalSearchWrap.gs-open{right:calc(8px + var(--wm-tbo-r))!important}
 }
 /* 머리 줄 위로 덮이는 패널 · 창 — 오른쪽 위 창 단추 밑에 ✕ · ⛶ 가 깔리지 않게 그만큼 비우고,
    밑에 깔린 머리 줄의 '끌기' 영역이 클릭을 가로채지 않게 no-drag */
@@ -8375,4 +8375,70 @@ body.wl-ro #mWeekly:has(>#mainArea.hidden) .wl-empty{display:block}   /* 데이�
   .pva-t th:nth-child(3),.pva-t td:nth-child(3){display:none}
   .pva-n{min-width:0}
   #auditLogList{font-size:11px}
+}
+
+/* ═══ v13.501 📱 아일랜드 빠른 메뉴 (wm-island.js) — 휴대폰 머리 줄 왼쪽 검은 캡슐 → 누르면 그 자리에서 커지는 메뉴 ═══ */
+html.wm-isl-on .hdr-brand h1{display:none}
+.wm-isl{display:inline-flex;align-items:center;gap:6px;height:30px;max-width:min(52vw,240px);padding:0 11px 0 9px;border:0;border-radius:999px;background:#0B0B0F;color:#F5F5F7;font:600 13px/1 inherit;font-family:inherit;cursor:pointer;box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 4px 14px -6px rgba(0,0,0,.55);transition:transform .18s cubic-bezier(.2,.9,.25,1.2),padding .2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.wm-isl:active,.wm-isl.open{transform:scale(.96)}
+.wm-isl:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.wm-isl-ic{font-size:14px;line-height:1;flex:none}
+.wm-isl-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wm-isl-c{flex:none;font-style:normal;font-size:11px;font-weight:700;line-height:1;padding:3px 6px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff}
+.wm-isl-c.msg{background:#FF453A}
+.wm-isl-c.up{background:#30D158;color:#04210E}
+.wm-isl.has-c .wm-isl-t{max-width:28vw}
+.wm-islp-bk{position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,0);transition:background .22s}
+.wm-islp-bk.in{background:rgba(0,0,0,.28)}
+.wm-islp{position:fixed;z-index:10050;top:calc(6px + env(safe-area-inset-top,0px));left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));max-height:calc(100dvh - 24px - env(safe-area-inset-top,0px));overflow-y:auto;box-sizing:border-box;padding:12px;border-radius:28px;background:rgba(11,11,15,.96);color:#F5F5F7;box-shadow:0 24px 60px -18px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06) inset;opacity:0;transform:scale(.22,.12);transition:transform .34s cubic-bezier(.2,.95,.25,1.12),opacity .18s;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+.wm-islp.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.wm-islp,.wm-islp-bk,.wm-isl{transition:none}}
+.wm-islp-h{display:flex;align-items:center;gap:8px;padding:2px 4px 10px}
+.wm-islp-h b{font-size:15px}
+.wm-islp-h>span{font-size:11px;color:#A1A1AA}
+.wm-islp-x{margin-left:auto;width:32px;height:32px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:#F5F5F7;font-size:14px;cursor:pointer}
+.wm-islp-g{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.wm-islp-g button,.wm-islp-a button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:62px;padding:8px 4px;border:0;border-radius:18px;background:rgba(255,255,255,.07);color:#F5F5F7;font:500 12px/1.2 inherit;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.wm-islp-g button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wm-islp-g button em,.wm-islp-a button em{font-style:normal;font-size:20px;line-height:1}
+.wm-islp-g button.on{background:rgba(255,255,255,.2);box-shadow:0 0 0 1.5px rgba(255,255,255,.5) inset}
+.wm-islp-g button:active,.wm-islp-a button:active{background:rgba(255,255,255,.22)}
+.wm-islp-g button i,.wm-islp-a button i{position:absolute;top:6px;right:8px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;background:#FF453A;color:#fff;font:700 11px/18px inherit;font-family:inherit;font-style:normal}
+.wm-islp-a{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
+.wm-islp-a button{min-height:56px;font-size:11px;border-radius:16px}
+.wm-islp-a button em{font-size:17px}
+.wm-islp-a button.up{background:#30D158;color:#04210E}
+
+/* ═══ v13.501 📱 내 업무 상세 창 — 작은 화면 (휴대폰 · 좁은 창 · 낮은 창) ═══ */
+@media (max-width:768px){
+  /* 틀 높이(키보드가 올라오면 줄어듦)에 맞춤 — 메모를 쓸 때 아래가 키보드 밑으로 숨지 않게 · 상태 표시줄 · 홈 막대 자리 */
+  .mwp{bottom:auto;height:var(--wm-vh,100dvh);box-shadow:none}
+  .mwp-h{padding:max(8px,env(safe-area-inset-top,0px)) 10px 8px 14px;min-height:48px;box-sizing:border-box}
+  .mwp-x{width:40px;height:40px;font-size:18px;padding:0}
+  .mwp-b{padding:12px 14px 24px;gap:12px;overscroll-behavior:contain}
+  .mwp-f{padding:8px 14px max(8px,env(safe-area-inset-bottom,0px))}
+  .mwp-keys{display:none}
+  .mwp-del{margin-left:auto}
+  /* 단추 · 칩 — 손가락 크기 */
+  .mwp-seg button,.mwp-chip{min-height:34px;padding:6px 12px}
+  /* 시작 ~ 마감 · 시각 — 한 줄에 고르게 (예전: 시각만 다음 줄로 떨어짐) */
+  .mwp-sec .mwp-row:has(#mwpStart){display:grid;grid-template-columns:minmax(0,1.2fr) auto minmax(0,1fr);gap:6px 4px;align-items:center}
+  .mwp-sec .mwp-row:has(#mwpStart)>#mwpTime{grid-column:1/2;max-width:150px;margin-left:30px;width:calc(100% - 30px)}   /* 시각은 다음 줄 시작 칸 아래 */
+  .mwp-sec .mwp-row:has(#mwpStart)>*:not(.mwp-tilde){min-width:0;width:100%;box-sizing:border-box}
+  .mwp-row input[type=date],.mwp-row input[type=time]{padding-left:6px;padding-right:4px}
+  .mwp-row .mwp-start{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t4);white-space:nowrap}
+  .mwp-row .mwp-start input{flex:1;min-width:0}
+  .mwp-two{gap:12px}
+  .mwp-two>div{flex:1;min-width:0}
+  .mwp-two .mw-sel,.mwp-num{width:100%;box-sizing:border-box}
+  .mwp-sec .mwp-row:has(#mwpCat) .mw-sel,.mwp-sec .mwp-row:has(#mwpProj) .mw-sel{flex:1;min-width:0}
+  .mwp-memo{min-height:120px}
+  .mwp-cli .mw-x,.mwp-grip{opacity:1}
+  .mwp-cli .mw-x{width:32px;height:32px}
+}
+/* 낮은 창(높이 600 이하 · 노트북 작은 창) — 위아래 여백 줄임 */
+@media (max-height:600px){
+  .mwp-h{padding-top:6px;padding-bottom:6px}
+  .mwp-b{gap:10px;padding-top:10px}
+  .mwp-f{padding-top:6px;padding-bottom:6px}
 }

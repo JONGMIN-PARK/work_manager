@@ -157,7 +157,7 @@ function _mwpRender(p) {
       '<input id="mwpClAdd" class="mw-input mwp-in" maxlength="200" placeholder="+ 하위 항목 — Enter 로 계속, 여러 줄 붙여넣기 가능"></div>';
     h += '<div class="mwp-sec"><div class="mwp-l">메모</div><textarea id="mwpMemo" class="mw-input mwp-memo" data-f="memo" maxlength="5000" placeholder="자세한 내용 · 링크 · 연락처…">' + _mwEsc(it.memo || '') + '</textarea></div>';
   }
-  h += '</div>';
+  // (v13.501 .mwp-b 는 칸 · 프로젝트까지 담고 아래에서 닫음 — 예전엔 여기서 닫아 두 칸이 굴림 밖에 붙어 메모 아래를 가리고 작은 화면에서 자리를 차지했음)
   // 칸 (v13.268) — 보드의 어느 칸에 있는지 · 옮기기
   if (_mw.data.self && !it.done && typeof mwBoardColOf === 'function') {
     var col = mwBoardColOf(it);
@@ -173,6 +173,7 @@ function _mwpRender(p) {
         return '<option value="' + _mwEsc(c[0]) + '"' + (pj && pj.id === c[0] ? ' selected' : '') + '>' + _mwEsc(c[1]) + '</option>';
       }).join('') + '</select>' + (pj ? '<button class="mwp-chip" data-p="proj">📁 열기</button>' : '') + '</div></div>';
   }
+  h += '</div>';   // .mwp-b
   h += '<div class="mwp-f">' + (todo ? '<button class="mw-btn mwp-del" data-p="delete">🗑 휴지통으로</button>' : '') +
     '<span class="mwp-keys" title="단축키">Esc 닫기 · ? 단축키</span></div>';
   p.innerHTML = h;

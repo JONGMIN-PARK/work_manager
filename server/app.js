@@ -207,16 +207,30 @@ function buildInfo() {
   return BUILD_INFO;
 }
 /* 🖥 PC 앱 자체 업데이트 (v13.495) — 저장소 desktop/release 의 최신 설치 파일 · latest.yml 을 그대로 내려 줌
- *   PC 앱(electron-updater generic)이 /desktop-release/latest.yml 을 보고 받음 → 저장소에 커밋 · 푸시만 하면 배포 끝 (GitHub 릴리스 · 토큰 없이)
+ *   PC 앱(electron-updater generic)이 /desktop-release/latest.yml 을 보고 받음 (v13.501 원본 위치 release/desktop) → 저장소에 커밋 · 푸시만 하면 배포 끝 (GitHub 릴리스 · 토큰 없이)
  *   예전 PC 앱(GitHub 릴리스를 보던 것)은 웹이 /api/build 의 desktop 을 보고 '설치 파일 받기' 띠를 띄움 */
-var DESK_DIR = path.join(__dirname, '..', 'desktop', 'release');
+var DESK_DIR = path.join(__dirname, '..', 'release', 'desktop');   // v13.501 배포판은 release/ 에 따로 (예전 desktop/release)
+var SITE_DIR = path.join(__dirname, '..', 'release', 'site');
+// 설치 파일 내려받기 링크는 GitHub 저장소 주소 (자동 업데이트는 지금처럼 우리 서버 /desktop-release/ 에서)
+var GH_REL = (process.env.GH_RELEASE_BASE || 'https://github.com/JONGMIN-PARK/work_manager/raw/main/release/desktop/').replace(/\/*$/, '/');
 function desktopInfo() {
   try {
     var y = fs.readFileSync(path.join(DESK_DIR, 'latest.yml'), 'utf8');
     var v = (/^version:\s*([\d.]+)/m.exec(y) || [])[1], f = (/^path:\s*(\S+)/m.exec(y) || [])[1];
-    return v && f ? { version: v, file: '/desktop-release/' + f } : null;
+    return v && f ? { version: v, file: GH_REL + f, local: '/desktop-release/' + f, page: '/download' } : null;
   } catch (e) { return null; }
 }
+/* v13.501 📦 소개 · 내려받기 · 사용 설명서 — 로그인 없이 (release/site) */
+app.get(['/download', '/download/'], function (req, res) {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(SITE_DIR, 'index.html'), function (err) { if (err && !res.headersSent) res.status(404).end(); });
+});
+app.get('/download/:name', function (req, res, next) {
+  var n = req.params.name;
+  if (!/^[a-z0-9-]+\.(png|jpg|webp|svg|css|js|json)$/.test(n)) return next();
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.sendFile(path.join(SITE_DIR, n), function (err) { if (err && !res.headersSent) res.status(404).end(); });
+});
 app.get('/desktop-release/:name', function (req, res, next) {
   var n = req.params.name;
   if (!/^(latest\.yml|WorkManager-Setup-\d+\.\d+\.\d+\.exe(\.blockmap)?)$/.test(n)) return next();
@@ -225,6 +239,7 @@ app.get('/desktop-release/:name', function (req, res, next) {
   res.type(yml ? 'text/yaml' : 'application/octet-stream');
   res.sendFile(path.join(DESK_DIR, n), function (err) { if (err && !res.headersSent) res.status(404).end(); });
 });
+app.locals.buildInfo = buildInfo;   // v13.501 server.js 가 켜진 뒤 새 버전 알림 푸시에 씀
 app.get('/api/build', function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.json({ data: buildInfo() });

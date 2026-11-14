@@ -14,13 +14,13 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     // 서버 — 버전 정보 · 파일
     await page.goto(base + '/api/build');
     var b = JSON.parse(await page.evaluate(function () { return document.body.innerText; })).data;
-    check(b.desktop && /^\d+\.\d+\.\d+$/.test(b.desktop.version) && /^\/desktop-release\/WorkManager-Setup-[\d.]+\.exe$/.test(b.desktop.file), '/api/build 에 PC 앱 최신 버전 ' + JSON.stringify(b.desktop));
+    check(b.desktop && /^\d+\.\d+\.\d+$/.test(b.desktop.version) && /^https:\/\/github\.com\/.+\/release\/desktop\/WorkManager-Setup-[\d.]+\.exe$/.test(b.desktop.file) && /^\/desktop-release\/WorkManager-Setup-[\d.]+\.exe$/.test(b.desktop.local), '/api/build 에 PC 앱 최신 버전 ' + JSON.stringify(b.desktop));
     var r = await page.evaluate(async function (f) {
       var y = await fetch('/desktop-release/latest.yml'); var yt = await y.text();
       var e = await fetch(f, { method: 'HEAD' });
       var bad = await fetch('/desktop-release/..%2Fpackage.json'); var bad2 = await fetch('/desktop-release/main.js');
       return { y: y.status, cc: y.headers.get('cache-control'), ver: (/version: (\S+)/.exec(yt) || [])[1], e: e.status, len: +e.headers.get('content-length'), bad: bad.status, bad2: bad2.status };
-    }, b.desktop.file);
+    }, b.desktop.local);
     check(r.y === 200 && /no-cache/.test(r.cc) && r.ver === b.desktop.version, 'latest.yml 내려 줌 (늘 새로) ' + JSON.stringify(r));
     check(r.e === 200 && r.len > 50e6, '설치 파일 내려 줌 ' + r.len);
     check(r.bad === 404 && r.bad2 === 404, '다른 파일은 못 받음 ' + r.bad + '/' + r.bad2);

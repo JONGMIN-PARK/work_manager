@@ -89,6 +89,7 @@ function wmDeepGo(go) {
   if (!m) return false;
   var type = m[1], id = m[2] || '';
   if (type === 'mywork') { if (typeof setPage === 'function') setPage('mywork'); return true; }
+  if (type === 'update') { if (typeof wmUpdateCheck === 'function') wmUpdateCheck(true, true); return true; }   // v13.501 ⬆ 새 버전 알림을 누름 → 옛 화면이면 바로 새로 고침
   if (type === 'messages') { if (typeof setPage === 'function') setPage('messages'); return true; }   // v13.355 앱 바로 가기 · PC 앱 트레이
   if (type === 'chat' && id && typeof wmChatWinFocus === 'function' && wmChatWinFocus(id)) return true;   // v13.447 그 방이 새 창으로 떠 있으면 그 창을 앞으로
   if (type === 'chat' && id && typeof chatOpenRoom === 'function') { chatOpenRoom(id); return true; }

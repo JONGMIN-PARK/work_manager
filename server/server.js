@@ -14,6 +14,13 @@ app.listen(PORT, '0.0.0.0', function () {
   console.log('[Server] 포트: ' + PORT);
   console.log('[Server] http://localhost:' + PORT);
 
+  // v13.501 ⬆ 새로 배포됐으면 알림을 켜 둔 기기 모두에 푸시 (운영만 · 시험은 UPDATE_PUSH=1) — 마이그레이션 · 상태 점검이 끝날 틈을 두고
+  if (process.env.NODE_ENV === 'production' || process.env.UPDATE_PUSH === '1') {
+    setTimeout(function () {
+      try { require('./services/update-announce').announce(app.locals.buildInfo()).catch(function (e) { console.warn('[update-push]', e.message); }); } catch (e) { console.warn('[update-push]', e.message); }
+    }, +(process.env.UPDATE_PUSH_DELAY || 30000)).unref();
+  }
+
   // A/S 자동화 스케줄러 시작 (SCHEDULER_DISABLED=1 이면 스킵)
   try {
     require('./services/scheduler.service').start();

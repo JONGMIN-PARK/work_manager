@@ -387,6 +387,9 @@ GET /api/weekly-reports/stats
 GET /api/white-label
 GET /api/workflows
 GET /desktop-release/:name
+GET /download
+GET /download/
+GET /download/:name
 GET /favicon.ico
 GET /health
 GET /icons/:name

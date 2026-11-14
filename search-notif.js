@@ -158,7 +158,24 @@ function gsUseRecent(q) {
   globalSearch(q);
 }
 
+/* v13.501 📱 휴대폰 검색 칸 펼침 유지 — 예전엔 :focus-within 에만 기대서, 결과 목록을 굴리거나 키보드를 내리거나 칩을 누르는 순간
+ *   입력 칸에서 커서가 빠져 칸이 🔎 크기(34px)로 접히고, 그 안의 결과 목록도 34px 폭으로 쪼그라들어 결과를 누를 수 없었음.
+ *   → 펼침을 .gs-open 으로 따로 들고, 결과 목록이 닫힐 때(바깥 누름 · 고름 · Esc)만 접음 */
+function gsOpenState(on) {
+  var w = document.getElementById('globalSearchWrap'); if (!w) return;
+  w.classList.toggle('gs-open', !!on);
+}
+(function () {
+  function watch() {
+    var dd = document.getElementById('globalSearchDropdown'), inp = document.getElementById('globalSearchInput');
+    if (!dd || !inp) return;
+    new MutationObserver(function () { if (dd.style.display === 'none' && document.activeElement !== inp) gsOpenState(false); }).observe(dd, { attributes: true, attributeFilter: ['style'] });
+    inp.addEventListener('blur', function () { setTimeout(function () { if (dd.style.display === 'none' && document.activeElement !== inp) gsOpenState(false); }, 0); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch); else watch();
+})();
 function gsOnFocus(v) {
+  gsOpenState(true);
   if (typeof wmAiCheck === 'function') wmAiCheck();
   var dd = document.getElementById('globalSearchDropdown');
   if (dd && dd.style.display === 'flex' && (v || '').trim() === _gs.q) return;
@@ -210,6 +227,7 @@ function gsPick(key, i) {
   if (dd) dd.style.display = 'none';
   var inp = document.getElementById('globalSearchInput');
   if (inp) { inp.value = ''; inp.blur(); }
+  gsOpenState(false);
   globalSearchNav(key, it, kw);
 }
 
@@ -505,7 +523,7 @@ function _wmHitBar() {
 function gsKeyNav(e) {
   var dd = document.getElementById('globalSearchDropdown');
   if (!dd || dd.style.display === 'none') {
-    if (e.key === 'Escape') { e.target.blur(); return; }
+    if (e.key === 'Escape') { gsOpenState(false); e.target.blur(); return; }
     return;
   }
   if (e.key === 'Enter' && _gsActiveIdx < 0 && typeof _wmAi !== 'undefined' && _wmAi.ready && wmAiLooksQuestion(e.target.value)) {   // v13.297 문장 + Enter → AI 에게

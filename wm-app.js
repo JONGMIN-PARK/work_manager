@@ -286,10 +286,12 @@ var WMU = { mine: '', t: 0, busy: false, shown: '' };
   document.addEventListener('visibilitychange', function () { if (!document.hidden) wmUpdateCheck(); });
   window.addEventListener('focus', function () { wmUpdateCheck(); });
   window.addEventListener('online', function () { wmUpdateCheck(true); });
-  setInterval(function () { if (!document.hidden) wmUpdateCheck(); }, 10 * 60000);
+  // v13.501 PC 앱은 트레이 · 최소화(화면 숨김)여도 확인 → 윈도우 알림. 브라우저 · 휴대폰은 보일 때만(뒤에선 서버 푸시가 알림)
+  setInterval(function () { if (!document.hidden || wmIsDesktopApp()) wmUpdateCheck(); }, 10 * 60000);
 })();
 /** 서버 빌드와 비교 — force 가 아니면 1분에 한 번만 */
-function wmUpdateCheck(force) {
+function wmUpdateCheck(force, apply) {
+  if (apply) WMU.apply = true;   // 알림을 눌러 들어옴 — 새 것이면 묻지 않고 새로 고침
   if (!WMU.mine || WMU.busy || location.protocol === 'file:') return;
   var now = Date.now(); if (!force && now - WMU.t < 60000) return;
   WMU.t = now; WMU.busy = true;
@@ -301,6 +303,8 @@ function wmUpdateCheck(force) {
 }
 function _wmUpdateShow(d) {
   _wmDeskUpdate(d.desktop);   // v13.495 PC 앱도 새 것이 있으면 지금부터 받아 둠 → 새로 고칠 때 같이 설치
+  if (WMU.apply) { WMU.apply = false; wmUpdateApply(); return; }
+  _wmUpdNotify(d);
   var later = null; try { later = JSON.parse(localStorage.getItem('wm-upd-later') || 'null'); } catch (_) {}
   if (later && later.build === d.build && later.until > Date.now()) return;   // '나중에' 누른 것은 1시간 조용히
   if (WMU.shown === d.build && document.getElementById('wmUpd')) return;
@@ -312,6 +316,18 @@ function _wmUpdateShow(d) {
     sub: (_adm && d.title) || (desk ? '새로 고치면 PC 앱(v' + d.desktop.version + ')까지 업데이트됩니다' : '새로 고치면 바로 적용됩니다 — 쓰던 메시지는 그대로 남습니다'),
     go: wmUpdateApply,
     later: function () { try { localStorage.setItem('wm-upd-later', JSON.stringify({ build: d.build, until: Date.now() + 3600000 })); } catch (_) {} } });
+}
+/* v13.501 ⬆ 새 버전 — 화면을 안 보고 있을 때(PC 앱 트레이 · 최소화 · 뒤에 있는 탭)는 알림으로. 빌드마다 한 번 · 기기마다 한 번
+ *   PC 앱 = 윈도우 알림(누르면 창이 앞으로 + 새로 고침) · 브라우저 = 알림 허용했으면 서비스 워커 알림 */
+function _wmUpdNotify(d) {
+  if (!document.hidden && document.hasFocus()) return;
+  var key = 'wm-upd-noti'; try { if (localStorage.getItem(key) === d.build) return; localStorage.setItem(key, d.build); } catch (_) {}
+  var title = '⬆ 업무 관리자 새 버전' + (d.version ? ' v' + d.version : ''), body = '누르면 새로 고쳐 바로 적용합니다' + (d.desktop && wmIsDesktopApp() && _wmVerNewer(d.desktop.version, WMD.ver) ? ' (PC 앱 v' + d.desktop.version + ' 포함)' : '');
+  if (wmIsDesktopApp()) { wmAppNotify(title, body, 'update', { tag: 'wm-update' }); return; }
+  try {
+    if (window.Notification && Notification.permission === 'granted' && navigator.serviceWorker && navigator.serviceWorker.getRegistration)
+      navigator.serviceWorker.getRegistration('/').then(function (r) { if (r) r.showNotification(title, { body: body, tag: 'wm-update', icon: '/icons/icon-192.png', badge: '/icons/badge-72.png', data: { go: 'update' } }); }).catch(function () {});
+  } catch (_) {}
 }
 /* ─── 🖥 PC 앱 자체 업데이트 (v13.495) — 웹 새로 고침과 같이 ───
  *   새 PC 앱(wmDesktop.appUpdate): 서버에 더 새 설치 파일이 있으면 뒤에서 받아 두고, 새로 고칠 때(띠 · F5 · Ctrl+R) 설치하고 다시 시작
@@ -335,7 +351,7 @@ function _wmDeskUpdate(info) {
   try { later = +localStorage.getItem(key) || 0; } catch (_) {}
   if (later > Date.now() || document.getElementById('wmUpd')) return;
   _wmUpdBar({ title: 'PC 앱 새 버전 v' + info.version, sub: '설치 파일을 한 번만 받아 설치하면 그 뒤로는 새로 고칠 때 저절로 업데이트됩니다',
-    goText: '⬇ 설치 파일 받기', go: function () { var a = document.createElement('a'); a.href = info.file; a.download = ''; document.body.appendChild(a); a.click(); a.remove(); },
+    goText: '⬇ 설치 파일 받기', go: function () { window.open(info.file, '_blank', 'noopener'); },   // v13.501 GitHub 저장소 주소 — PC 앱은 기본 브라우저로 열려 받음
     later: function () { try { localStorage.setItem(key, String(Date.now() + 86400000)); } catch (_) {} } });
 }
 function _wmDeskState(s) {
