@@ -73,6 +73,15 @@
     return 'none';
   }
 
+  /** v13.487 보고 표시 — #지연 · #이슈 · #위험 · #문제 = 주의(빨강, 상태와 따로) · #중요 · ★ = 핵심(맨 위 · ★) */
+  var RISK_RE = /#(지연|이슈|위험|문제)/;
+  var FLAG_STRIP_RE = /#(?:지연|이슈|위험|문제|중요)|★/g;
+  function flagsOf(text) {
+    text = String(text || '');
+    var m = text.match(RISK_RE);
+    return { risk: m ? m[1] : '', star: /#중요|★/.test(text) };
+  }
+
   /** 기한 '~12/04' · '~12/4' · '~12.4' · '~12-04' · '~ 12/04(목)' → '~12/04' (없으면 '') */
   var DEADLINE_RE = /~\s*(\d{1,2})\s*[\/.\-]\s*(\d{1,2})(?:\s*\([^)]{1,3}\))?/;
   function normDeadline(m) {
@@ -88,6 +97,7 @@
     var s = String(rest || '');
     var members = extractMembers(s);
     var status = detectStatus(s);
+    var fl = flagsOf(s);
     var dl = s.match(DEADLINE_RE);
     var deadline = dl ? normDeadline(dl) : '';
     var pct = -1;
@@ -98,6 +108,7 @@
       .replace(new RegExp(DEADLINE_RE.source, 'g'), ' ')
       .replace(/#%\d{1,3}/g, ' ')
       .replace(/#완료|#진행중?|#예정/g, ' ')
+      .replace(FLAG_STRIP_RE, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     // 꼬리의 맨 글 진행률 (뒤에서부터 하나)
@@ -107,7 +118,7 @@
       name = name.slice(0, tail.index).trim();
     }
     if (pct > 100) pct = 100;
-    return { name: name, deadline: deadline, pct: pct, members: members, status: status };
+    return { name: name, deadline: deadline, pct: pct, members: members, status: status, risk: fl.risk, star: fl.star };
   }
 
   // 들여쓰기 없이 이어진 줄을 앞 줄에 붙일지 — 앞 줄이 이어지는 꼴로 끝날 때 (쉼표 · 및 · / · 여는 괄호 · 하이픈 등)
@@ -124,7 +135,8 @@
     }
     function addDetail(raw, dt) {
       var dMembers = extractMembers(dt);
-      var d = { text: dt, members: dMembers, status: detectStatus(dt), sub: isSubLine(raw, raw.trim()) };
+      var fl = flagsOf(dt);
+      var d = { text: dt, members: dMembers, status: detectStatus(dt), sub: isSubLine(raw, raw.trim()), risk: fl.risk, star: fl.star };
       item.details.push(d);
       dMembers.forEach(function (m) { if (item.members.indexOf(m) < 0) item.members.push(m); });
       last = { kind: 'detail', ref: d };
@@ -155,6 +167,8 @@
           pct: meta.pct,
           members: meta.members,
           status: meta.status,
+          risk: meta.risk,
+          star: meta.star,
           ownStatus: meta.status,   // 업무 줄에 직접 붙은 상태 — 태그 없는 세부 줄은 이것만 따름 (아래에서 세부로부터 올린 status 와 구분)
           details: [],
           raw: line
@@ -175,6 +189,7 @@
         if (last.kind === 'detail') {
           last.ref.text = prev + ' ' + line;
           if (last.ref.status === 'none') last.ref.status = detectStatus(line);
+          var lf = flagsOf(line); if (!last.ref.risk) last.ref.risk = lf.risk; if (lf.star) last.ref.star = true;
           extractMembers(line).forEach(function (m) { if (item.members.indexOf(m) < 0) item.members.push(m); if (last.ref.members.indexOf(m) < 0) last.ref.members.push(m); });
         } else {
           var more = splitMeta(line);
@@ -182,6 +197,7 @@
           if (!item.deadline) item.deadline = more.deadline;
           if (item.pct < 0) item.pct = more.pct;
           if (item.status === 'none') item.status = item.ownStatus = more.status;
+          if (!item.risk) item.risk = more.risk; if (more.star) item.star = true;
           more.members.forEach(function (m) { if (item.members.indexOf(m) < 0) item.members.push(m); });
         }
         continue;
@@ -279,6 +295,8 @@
     isSubLine: isSubLine,
     sectionOfLine: sectionOfLine,
     detectStatus: detectStatus,
+    flagsOf: flagsOf,
+    FLAG_STRIP_RE: FLAG_STRIP_RE,
     extractMembers: extractMembers,
     splitMeta: splitMeta,
     parseText: parseText,

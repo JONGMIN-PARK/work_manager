@@ -19,9 +19,10 @@
   function secLabel(t) { return (SECTIONS[t] || {}).label || t; }
 
   // ── 상태/진행률 상수 (색·크기·임계값 단일 소스) ──
-  var STATUS_COLORS = { planned: '#3B82F6', in_progress: '#E5484D', done: '#16A34A' };
+  // v13.487 빨강은 '문제'에만 — 진행 중은 파랑, 예정은 회색, 빨강은 #지연 · #이슈(risk) 전용 (보고받는 쪽이 빨강 = 사고로 읽음)
+  var STATUS_COLORS = { planned: '#94A3B8', in_progress: '#2563EB', done: '#16A34A', risk: '#DC2626' };
   var ICON_PX = 13; // 상태 아이콘 지름(px)
-  var HEAT = { midAt: 30, highAt: 70, low: '#E5484D', mid: '#D97706', high: '#16A34A' };
+  var HEAT = { midAt: 30, highAt: 70, low: '#60A5FA', mid: '#2563EB', high: '#16A34A' };
   function heatColor(p) { return p >= HEAT.highAt ? HEAT.high : (p >= HEAT.midAt ? HEAT.mid : HEAT.low); }
 
   // ── D-day 임계값·색 (기한 임박도) ──
@@ -45,7 +46,7 @@
   }
   function statusPill(st) {
     if (st === 'done') return '<span style="color:#1a8a40;background:rgba(26,138,64,.12);padding:1px 6px;border-radius:4px;font-size:11px">● 완료</span>';
-    if (st === 'in_progress') return '<span style="color:#d03030;background:rgba(208,48,48,.12);padding:1px 6px;border-radius:4px;font-size:11px">● 진행중</span>';
+    if (st === 'in_progress') return '<span style="color:#2563EB;background:rgba(37,99,235,.12);padding:1px 6px;border-radius:4px;font-size:11px">● 진행중</span>';
     return '';
   }
   // D-day 계산 (deadline = "~05/29" 형식)
@@ -165,11 +166,11 @@
       // 둘 다 모드: 각 페인을 헤더 함께 출력
       parsedPane.forEach(function (p, i) {
         body += (i > 0 ? '<div style="margin:10px 0;border-top:1px dashed var(--bd)"></div>' : '')
-          + (p.label ? '<div style="font-size:12px;font-weight:700;color:var(--ac);margin-bottom:6px">' + esc(p.label) + '</div>' : '')
-          + buildPreviewHTML(p.parsed, theme);
+          + (p.label && !p.ctx ? '<div style="font-size:12px;font-weight:700;color:var(--ac);margin-bottom:6px">' + esc(p.label) + '</div>' : '')
+          + buildPreviewHTML(p.parsed, theme, p.ctx);
       });
     } else {
-      body = buildPreviewHTML(parsedPane, theme);
+      body = buildPreviewHTML(parsedPane, theme, opts.ctx);
     }
     return ''
       + '<!DOCTYPE html>\n'
@@ -213,7 +214,62 @@
     if (st === 'done') return o + '<circle cx="8" cy="8" r="8" fill="' + STATUS_COLORS.done + '"/><path d="M4.4 8.4l2.4 2.4 4.9-5.1" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     if (st === 'in_progress') return o + '<circle cx="8" cy="8" r="6.9" fill="none" stroke="' + STATUS_COLORS.in_progress + '" stroke-width="2.2"/><path d="M8 3.6a4.4 4.4 0 0 1 0 8.8z" fill="' + STATUS_COLORS.in_progress + '"/></svg>';
     if (st === 'planned') return o + '<circle cx="8" cy="8" r="6.9" fill="none" stroke="' + STATUS_COLORS.planned + '" stroke-width="2"/></svg>';
+    // v13.487 주의(#지연 · #이슈) — 빨간 원 + 느낌표
+    if (st === 'risk') return o + '<circle cx="8" cy="8" r="8" fill="' + STATUS_COLORS.risk + '"/><path d="M8 4.2v4.6" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="8" cy="11.6" r="1.15" fill="#fff"/></svg>';
     return '';
+  }
+  // ── v13.487 보고용 표시 도우미 ──
+  // 'A → B' · 'A => B' · 'A ⇒ B' — 뒤쪽 B 를 '결과'로 따로 (줄 머리의 → 는 파서가 하위 표시로 이미 뗌)
+  function splitResult(text) {
+    var m = String(text || '').match(/^(.*?\S)\s*(?:=>|→|⇒)\s*(\S.*)$/);
+    return m ? { main: m[1], res: m[2] } : { main: String(text || ''), res: '' };
+  }
+  function markupWithResult(text) {
+    var r = splitResult(text);
+    return inlineMarkup(r.main) + (r.res ? '<span class="wrp-res">→ ' + inlineMarkup(r.res) + '</span>' : '');
+  }
+  function stripFlags(t) { return String(t || '').replace(WRP.FLAG_STRIP_RE || /#(?:지연|이슈|위험|문제|중요)|★/g, '').replace(/\s+/g, ' ').trim(); }
+  function itemRisk(it) {
+    if (it.risk) return it.risk;
+    var d = (it.details || []).filter(function (x) { return x.risk; })[0];
+    return d ? d.risk : '';
+  }
+  function flagChip(kind, label, title) {
+    return '<span class="wrp-chip ' + kind + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' + label + '</span>';
+  }
+  // 지난주 ↔ 금주 같은 업무 찾기 — 같은 사이트에서 이름이 같거나 한쪽이 다른 쪽을 품거나 글자 짝이 절반 넘게 겹치면
+  function normKey(s) { return String(s || '').toLowerCase().replace(/[\s\-_·,.()\[\]{}\/]+/g, ''); }
+  function bigrams(s) { var o = []; for (var i = 0; i < s.length - 1; i++) o.push(s.slice(i, i + 2)); return o; }
+  function nameSim(a, b) {
+    a = normKey(a); b = normKey(b);
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    if (Math.min(a.length, b.length) >= 2 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0)) return 0.9;
+    var A = bigrams(a), B = bigrams(b), hit = 0, used = {};
+    A.forEach(function (g) { for (var j = 0; j < B.length; j++) if (!used[j] && B[j] === g) { used[j] = 1; hit++; break; } });
+    return (A.length + B.length) ? 2 * hit / (A.length + B.length) : 0;
+  }
+  function findTwin(it, pane) {
+    if (!pane || !pane.items) return null;
+    var best = null, bs = 0, c = normKey(it.client);
+    pane.items.forEach(function (o) {
+      if (normKey(o.client) !== c) return;
+      var s = nameSim(it.name, o.name);
+      if (s > bs) { bs = s; best = o; }
+    });
+    return bs >= 0.5 ? best : null;
+  }
+  function wkMmdd(iso, addDays) {   // (아래 업무일지 패널에 같은 이름 mmdd 가 있어 따로)
+    var p = String(iso || '').split('-').map(Number);
+    if (p.length !== 3 || p.some(isNaN)) return '';
+    var d = new Date(p[0], p[1] - 1, p[2] + (addDays || 0));
+    return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
+  }
+  /** 보고용 맥락 — role: 'last' | 'cur', other: 반대쪽 파싱 결과, weekStart/End: 금주 'YYYY-MM-DD' */
+  function paneCtx(role, other, weekStart, weekEnd) {
+    var off = role === 'last' ? -7 : 0;
+    var a = wkMmdd(weekStart, off), b = wkMmdd(weekEnd, off);
+    return { role: role, other: other || null, range: a && b ? a + ' ~ ' + b : '' };
   }
   // 상태/마커를 고정폭 슬롯에 담아 뒤 텍스트 시작 위치를 통일
   function iconSlot(inner) {
@@ -257,25 +313,28 @@
   }
   // 세부 한 줄: 상태 도형(무태그=항목 상태, 없으면 예정) · 하위 줄(└ ↳ → 또는 들여쓰기)은 └
   function renderDetail(d, di, itemStatus, np) {
-    var dText = String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').replace(/#예정/g, '').trim();
+    var dText = stripFlags(String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').replace(/#예정/g, ''));
     var own = (d.status && d.status !== 'none') ? d.status : null;
     var lineSt = own || (d.sub ? 'none' : (itemStatus === 'none' ? 'planned' : itemStatus));
     // 칸 전체가 예정뿐(np)이면 세부 줄 앞에 아무 표시도 없이 — 글자가 업무 이름과 같은 자리에서 시작 (하위 줄 └ 는 그대로)
-    var bare = np && lineSt === 'planned';
-    var inner = statusIcon(lineSt) || '<span style="color:var(--t6);font-size:11px">└</span>';
-    return '<div class="wrp-dl' + (d.sub ? ' sub' : '') + (lineSt === 'done' ? ' dn' : '') + '">'
+    var bare = np && lineSt === 'planned' && !d.risk;
+    var inner = statusIcon(d.risk ? 'risk' : lineSt) || '<span style="color:var(--t6);font-size:11px">└</span>';
+    return '<div class="wrp-dl' + (d.sub ? ' sub' : '') + (lineSt === 'done' && !d.risk ? ' dn' : '') + (d.risk ? ' rk' : '') + '">'
       + (bare ? '' : '<span class="wrp-dic">' + inner + '</span>')
-      + '<span class="wrp-dt" title="' + esc(dText) + '">' + inlineMarkup(dText) + '</span>'
+      + '<span class="wrp-dt" title="' + esc(dText) + '">' + (d.star ? '<span class="wrp-star">★</span>' : '') + markupWithResult(dText)
+      + (d.risk ? ' ' + flagChip('rk', esc(d.risk)) : '') + '</span>'
       + '</div>';
   }
-  // 진행 줄: [막대] 40% · ~12/04 ········ D-28
-  function progressLine(it, pct) {
+  // 진행 줄: [막대] 40% · ~12/04 ········ D-28   (v13.487 지난주 값이 있으면 60 → 65% · +5)
+  function progressLine(it, pct, prevPct) {
     if (!it.deadline && pct === null) return '';
     var h = '<div class="wrp-pg">';
     if (pct !== null) {
       var heat = heatColor(pct);
+      var moved = prevPct != null && prevPct >= 0 && prevPct !== pct;
       h += '<span class="wrp-bar"><span style="width:' + pct + '%;background:' + heat + '"></span></span>'
-        + '<span class="wrp-pct" style="color:' + heat + '">' + pct + '%</span>';
+        + '<span class="wrp-pct" style="color:' + heat + '">' + (moved ? '<span class="wrp-pprev">' + prevPct + ' →</span> ' : '') + pct + '%</span>'
+        + (moved ? '<span class="wrp-pdelta' + (pct < prevPct ? ' dn' : '') + '">' + (pct > prevPct ? '+' : '') + (pct - prevPct) + '</span>' : '');
     }
     if (it.deadline) h += '<span class="wrp-due">' + ICO.cal + esc(it.deadline) + '</span>' + ddayBadge(it.deadline);
     return h + '</div>';
@@ -300,6 +359,9 @@
     if (n.done) txt.push('<b style="color:' + STATUS_COLORS.done + '">완료 ' + n.done + '</b>');
     if (n.in_progress) txt.push('<b style="color:' + STATUS_COLORS.in_progress + '">진행 ' + n.in_progress + '</b>');
     if (n.planned) txt.push('<b style="color:' + STATUS_COLORS.planned + '">예정 ' + n.planned + '</b>');
+    var rk = items.filter(itemRisk).length;
+    if (rk) txt.push('<b style="color:' + STATUS_COLORS.risk + '">주의 ' + rk + '</b>');
+    if (np && rk) np = false;   // 주의가 있으면 막대 · 개수를 보여 줌
     return '<div class="wrp-sh">'
       + '<span class="wrp-no" style="background:' + cl.main + '">' + cl.num + '</span>'
       + '<span class="wrp-sl"><span class="wrp-sic" style="color:' + cl.main + '">' + (ICO[sec.type] || ICO.etc) + '</span>' + esc(secLabel(sec.type)) + '</span>'
@@ -310,20 +372,38 @@
           + '<span class="wrp-stx">' + txt.join('<i>·</i>') + '</span>')
       + '</div>';
   }
-  function renderItemRow(it, cl, uniformSiteW, np) {
+  function renderItemRow(it, cl, uniformSiteW, np, ctx) {
     var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
     var ms = it.members || [];
     var hasDetails = !!(it.details && it.details.length);
     var detailsHtml = hasDetails ? it.details.map(function (d, di) { return renderDetail(d, di, it.ownStatus != null ? it.ownStatus : it.status, np); }).join('') : '';
     var st = it.status === 'none' ? 'planned' : it.status;
-    // 기한(=D-day)이 박힌 항목은 제목을 굵게 — 날짜가 걸린 일이 목록에서 먼저 눈에 띄도록
-    var titleWeight = it.deadline ? '700' : '400';   // v13.486 500 은 맑은 고딕엔 없어 보통으로 보이지만, 붙여 넣은 곳 글꼴(Pretendard 등)에선 굵게 나옴 → 400
-    return '<div class="wrp-it' + (hasDetails ? ' has-d' : '') + (!hasDetails && st === 'done' ? ' dn' : '') + '"' + (uniformSiteW ? ' style="--sw:' + uniformSiteW + 'px"' : '') + '>'
+    var risk = it.risk || '';                 // 업무 줄에 직접 붙은 주의 (세부 줄 주의는 그 줄에)
+    var anyRisk = itemRisk(it);
+    // v13.487 지난주 ↔ 금주 이어 보기
+    var chips = '', prevPct = null;
+    if (ctx && ctx.other && ctx.other.items && ctx.other.items.length) {
+      var twin = findTwin(it, ctx.other);
+      if (ctx.role === 'cur') {
+        if (twin) { chips += flagChip('cont', '↻ 계속', '지난주에도 있던 업무'); if (typeof twin.pct === 'number' && twin.pct >= 0) prevPct = twin.pct; }
+        else chips += flagChip('new', '신규', '이번 주에 새로 시작');
+      } else if (!twin && taskStates(it).some(function (s) { return s !== 'done'; })) {
+        chips += flagChip('miss', '금주 계획 없음', '끝나지 않았는데 금주 칸에 없음 — 마무리됐으면 #완료, 이어 하면 금주에 적기');
+      }
+    }
+    if (risk) chips = flagChip('rk', esc(risk)) + chips;
+    // 기한(=D-day)이 박힌 항목 · ★ 핵심은 제목을 굵게 — 날짜가 걸린 일이 목록에서 먼저 눈에 띄도록
+    var titleWeight = it.deadline || it.star ? '700' : '400';   // v13.486 500 은 맑은 고딕엔 없어 보통으로 보이지만, 붙여 넣은 곳 글꼴(Pretendard 등)에선 굵게 나옴 → 400
+    var pl = progressLine(it, pct, prevPct);
+    return '<div class="wrp-it' + (hasDetails ? ' has-d' : '') + (!hasDetails && st === 'done' && !risk ? ' dn' : '') + (anyRisk ? ' rk' : '') + (it.star ? ' star' : '') + '"' + (uniformSiteW ? ' style="--sw:' + uniformSiteW + 'px"' : '') + '>'
       +   '<span class="wrp-site" title="' + esc(it.client || '') + '" style="background:' + cl.bg + ';color:' + cl.main + '">' + esc(it.client || '') + '</span>'
-      +   (hasDetails || np ? '' : '<span class="wrp-ic">' + statusIcon(st) + '</span>')
-      +   '<span class="wrp-name" style="font-weight:' + titleWeight + '" title="' + esc(it.name || '') + '">' + inlineMarkup(it.name || '') + '</span>'
+      +   (hasDetails || (np && !risk) ? '' : '<span class="wrp-ic">' + statusIcon(risk ? 'risk' : st) + '</span>')
+      +   '<span class="wrp-name" title="' + esc(it.name || '') + '">'
+      +     (it.star ? '<span class="wrp-star" title="핵심">★</span>' : '')
+      +     '<span class="wrp-nt" style="font-weight:' + titleWeight + '">' + markupWithResult(it.name || '') + '</span>' + chips
+      +   '</span>'
       +   '<span class="wrp-mem"' + (ms.length ? ' title="담당자: ' + esc(ms.map(function (m) { return '@' + m; }).join(', ')) + '"' : '') + '>' + membersHtml(ms) + '</span>'
-      +   (progressLine(it, pct) ? '<div class="wrp-pgw">' + progressLine(it, pct) + '</div>' : '')
+      +   (pl ? '<div class="wrp-pgw">' + pl + '</div>' : '')
       +   (hasDetails ? '<div class="wrp-det">' + detailsHtml + '</div>' : '')
       + '</div>';
   }
@@ -347,12 +427,37 @@
     + '.wrp-site{grid-column:1;grid-row:1;max-width:100px;font-size:12px;font-weight:700;line-height:20px;padding:0 7px;border-radius:5px;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}'
     + '.wrp-ic{grid-column:2;grid-row:1;height:20px;display:flex;align-items:center}'
     // v13.348 이름은 늘 한 줄 — 넘치면 … (전체는 마우스를 올리면 title 로)
-    + '.wrp-name{grid-column:3;grid-row:1;min-width:0;font-size:13px;color:var(--t2);line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    + '.wrp-name{grid-column:3;grid-row:1;min-width:0;font-size:13px;color:var(--t2);line-height:20px;display:flex;align-items:center;gap:5px;white-space:nowrap}'
+    + '.wrp-nt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    // v13.487 보고용 표시 — 주의(빨강) · 계속/신규 · 금주 계획 없음 · ★ 핵심 · → 결과
+    + '.wrp-chip{flex-shrink:0;display:inline-block;font-size:10px;font-weight:700;line-height:16px;padding:0 6px;border-radius:8px;white-space:nowrap;vertical-align:1px;font-style:normal}'
+    + '.wrp-chip.rk{color:#fff;background:#DC2626}'
+    + '.wrp-chip.new{color:#2563EB;background:rgba(37,99,235,.12)}'
+    + '.wrp-chip.cont{color:var(--t5);background:rgba(127,127,127,.13);font-weight:400}'
+    + '.wrp-chip.miss{color:#B45309;background:rgba(217,119,6,.14)}'
+    + '.wrp-it.rk{background:rgba(220,38,38,.06);box-shadow:inset 3px 0 0 #DC2626}'
+    + '.wrp-dl.rk .wrp-dt{color:#B91C1C}'
+    + '.wrp-star{color:#F59E0B;font-size:13px;line-height:1;flex-shrink:0;margin-right:2px}'
+    + '.wrp-res{color:#15803D;font-weight:700;margin-left:5px}'
+    + '.wrp-pprev{color:var(--t6);font-weight:400}'
+    + '.wrp-pdelta{font:700 10px/1 ui-monospace,Consolas,monospace;color:#16A34A}.wrp-pdelta.dn{color:#DC2626}'
+    // 맨 위 요약 띠
+    + '.wrp-sum{background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:8px 11px;margin-bottom:12px}'
+    + '.wrp-sum-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}'
+    + '.wrp-sum-t{font-size:15px;font-weight:800;color:var(--t2)}.wrp-sum-r{font-size:11.5px;color:var(--t5);font-family:ui-monospace,Consolas,monospace}'
+    + '.wrp-kpis{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}'
+    + '.wrp-k{font-size:11.5px;color:var(--t5);white-space:nowrap}.wrp-k b{font-size:18px;font-weight:800;margin-right:3px;font-family:ui-monospace,Consolas,monospace}'
+    + '.wrp-k.sep{color:var(--t6)}'
+    + '.wrp-alert{margin-top:6px;padding:5px 8px;border-radius:6px;background:rgba(220,38,38,.08);color:#B91C1C;font-size:12px;line-height:1.5}'
+    + '.wrp-alert b{font-weight:700}'
+    + '.wrp-next{margin-top:5px;font-size:11.5px;color:var(--t3)}.wrp-next b{font-weight:700;color:var(--t2)}'
+    // 덜 중요한 것은 옅게 — 기타 절 머리
+    + '.wrp-sec.etc .wrp-sl{color:var(--t3)}'
     + '.wrp-it.has-d .wrp-name{grid-column:2/4}'
     + '.wrp-it.dn .wrp-name{color:var(--t3)}'
     + '.wrp-mem{grid-column:4;grid-row:1;height:20px;display:flex;align-items:center;justify-content:flex-end;gap:3px;max-width:132px;min-width:0}'
-    + '.wrp-mem .wrp-ico{color:var(--t5);flex-shrink:0}'
-    + '.wrp-mn{font-size:11.5px;font-weight:400;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.wrp-mn i{font-style:normal;color:var(--t6);margin:0 2px}.wrp-mx{color:var(--t5);font-weight:400}'
+    + '.wrp-mem .wrp-ico{color:var(--t6);flex-shrink:0}'
+    + '.wrp-mn{font-size:11px;font-weight:400;color:var(--t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.wrp-mn i{font-style:normal;color:var(--t6);margin:0 2px}.wrp-mx{color:var(--t5);font-weight:400}'
     + '.wrp-due .wrp-ico{margin-right:3px;opacity:.75}'
     + '.wrp-rule{flex:1;height:1px;background:rgba(127,127,127,.22)}'
     // 예정뿐인 칸: 상태 칸을 0 으로 접고 이름 · 진행 줄 · 세부 줄을 모두 3번째 칸에서 시작 (세 줄의 글자 시작이 같음)
@@ -386,7 +491,7 @@
   }
 
   // 파싱된 sections/items 배열을 보기용 HTML로 빌드
-  function buildPreviewHTML(parsedPane, themeId) {
+  function buildPreviewHTML(parsedPane, themeId, ctx) {
     if (!parsedPane || !parsedPane.sections || !parsedPane.sections.length) {
       return '<div class="wr-msg">내용 없음</div>';
     }
@@ -402,14 +507,65 @@
         return taskStates(it).every(function (st) { return st === 'planned'; }) && (it.details || []).every(function (d) { return !d.status || d.status === 'none' || d.status === 'planned'; });
       });
     });
-    return PREVIEW_CSS + '<div class="wrp' + (np ? ' np' : '') + '">' + parsedPane.sections.map(function (sec) {
+    return PREVIEW_CSS + '<div class="wrp' + (np ? ' np' : '') + '">' + (ctx ? summaryBand(parsedPane, ctx) : '') + parsedPane.sections.map(function (sec) {
       var cl = secOfTheme(sec.type, themeId);
-      return '<div class="wrp-sec">'
+      // v13.487 ★ 핵심 → 주의 → 나머지 순 (같은 무리 안에선 쓴 순서 그대로)
+      var rows = (sec.items || []).map(function (it, i) { return { it: it, i: i, w: (it.star ? 0 : 2) + (itemRisk(it) ? 0 : 1) }; })
+        .sort(function (a, b) { return a.w - b.w || a.i - b.i; });
+      return '<div class="wrp-sec ' + esc(sec.type) + '">'
         + renderSectionHeader(sec, themeId, np)
         + '<div class="wrp-card" style="border-left-color:' + cl.main + '">'
-        + (sec.items || []).map(function (it) { return renderItemRow(it, cl, uniformSiteW, np); }).join('')
+        + rows.map(function (r) { return renderItemRow(r.it, cl, uniformSiteW, np, ctx); }).join('')
         + '</div></div>';
     }).join('') + '</div>';
+  }
+
+  // v13.487 맨 위 요약 띠 — 제목 · 기간 · 핵심 숫자 · 주의 목록 · 다음 기한
+  function summaryBand(pane, ctx) {
+    var items = pane.items || [];
+    var n = { done: 0, in_progress: 0, planned: 0 }, tot = 0;
+    items.forEach(function (it) { taskStates(it).forEach(function (st) { n[st]++; tot++; }); });
+    var risks = [];
+    items.forEach(function (it) {
+      if (it.risk) risks.push({ it: it, what: it.name, why: it.risk });
+      (it.details || []).forEach(function (d) { if (d.risk) risks.push({ it: it, what: stripFlags(String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료|#진행중?|#예정/g, '')), why: d.risk }); });
+    });
+    var other = ctx.other && ctx.other.items && ctx.other.items.length ? ctx.other : null;
+    var cont = 0, fresh = 0, miss = 0;
+    if (other) items.forEach(function (it) {
+      var tw = findTwin(it, other);
+      if (ctx.role === 'cur') { if (tw) cont++; else fresh++; }
+      else if (!tw && taskStates(it).some(function (s) { return s !== 'done'; })) miss++;
+    });
+    function k(num, label, color) { return '<span class="wrp-k"><b style="color:' + (color || 'var(--t2)') + '">' + num + '</b>' + label + '</span>'; }
+    var kp = [];
+    if (ctx.role === 'last') {
+      kp.push(k(n.done, '완료', STATUS_COLORS.done));
+      if (n.in_progress) kp.push(k(n.in_progress, '진행', STATUS_COLORS.in_progress));
+      if (n.planned) kp.push(k(n.planned, '미착수', STATUS_COLORS.planned));
+      if (tot) kp.push(k(Math.round(n.done * 100 / tot) + '%', '완료율'));
+      if (other && miss) kp.push(k(miss, '금주 계획 없음', '#B45309'));
+    } else {
+      kp.push(k(items.length, '업무'));
+      if (other) { kp.push(k(cont, '계속')); kp.push(k(fresh, '신규', STATUS_COLORS.in_progress)); }
+      if (n.done) kp.push(k(n.done, '완료', STATUS_COLORS.done));
+    }
+    kp.push(k(risks.length, '주의', risks.length ? STATUS_COLORS.risk : 'var(--t6)'));
+    // 다음 기한 — 남은 날이 가장 적은 것 2개 (지난 것 먼저)
+    var dues = items.filter(function (it) { return it.deadline && dday(it.deadline) && taskStates(it).some(function (s) { return s !== 'done'; }); })
+      .map(function (it) { var lb = dday(it.deadline).label; return { it: it, n: lb === 'D-DAY' ? 0 : (lb.charAt(1) === '+' ? -1 : 1) * parseInt(lb.slice(2), 10) }; })
+      .sort(function (a, b) { return a.n - b.n; }).slice(0, 2);
+    var title = ctx.title || (ctx.role === 'last' ? '지난주 실적' : '금주 계획');
+    return '<div class="wrp-sum">'
+      + '<div class="wrp-sum-h"><span class="wrp-sum-t">' + esc(title) + '</span>' + (ctx.range ? '<span class="wrp-sum-r">' + esc(ctx.range) + '</span>' : '') + '</div>'
+      + '<div class="wrp-kpis">' + kp.join('') + '</div>'
+      + (risks.length ? '<div class="wrp-alert">⚠ ' + risks.slice(0, 4).map(function (r) {
+          return '<b>' + esc(r.it.client || '') + '</b> ' + esc(stripFlags(splitResult(r.what).main)) + ' <span class="wrp-chip rk">' + esc(r.why) + '</span>';
+        }).join(' &nbsp;·&nbsp; ') + (risks.length > 4 ? ' 외 ' + (risks.length - 4) : '') + '</div>' : '')
+      + (dues.length ? '<div class="wrp-next">다음 기한 ' + dues.map(function (d) {
+          return '<b>' + esc(d.it.client || '') + ' ' + esc(stripFlags(d.it.name)) + '</b> ' + esc(d.it.deadline) + ddayBadge(d.it.deadline);
+        }).join(' &nbsp;·&nbsp; ') + '</div>' : '')
+      + '</div>';
   }
 
   function shell() {
@@ -1159,7 +1315,7 @@
       +   '</div>'
       + '</div>'
       + '<div id="wrPrevBody" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:16px">'
-      +   buildPreviewHTML(paneData)
+      +   buildPreviewHTML(paneData, null, paneCtx(pane, parsed[pane === 'last' ? 'cur' : 'last'], meta.weekStart || ymd(d.week_start), meta.weekEnd || ymd(d.week_end)))
       + '</div>';
     $('wrPrevBack').addEventListener('click', function () { renderList(); });
     box.querySelectorAll('[data-pp]').forEach(function (b) {
@@ -1429,6 +1585,10 @@
       + sbtn('#예정', 'planned', '지금 줄(고른 줄들)을 예정으로 — 다시 누르면 지움 · Alt+3 (Alt+0 은 태그 지움)')
       + btn('#%50', ' #%50 ')
       + '<span style="width:8px"></span>'
+      + btn('⚠ 지연', ' #지연', '문제가 있는 줄 — 보고서에서 빨갛게 · 맨 위 요약에 모임 (#이슈 · #위험 도 같음)')
+      + btn('★ 중요', ' #중요', '핵심 업무 — 절 맨 위로 · ★ · 굵게')
+      + btn('→ 결과', ' → ', '업무 뒤에 결과 한마디 — 예) A1 Fault 대응 → 원인 확인 · 재발 0건')
+      + '<span style="width:8px"></span>'
       + btn('{굵게}', '{}')
       + btn('=y{형광}', '=y{}')
       + '</div>';
@@ -1462,7 +1622,7 @@
     }
     return row('last', '지난주') + row('cur', '금주')
       + '<div class="wr-au-help" style="font-size:10.5px;color:var(--t6);margin:-4px 0 8px;line-height:1.5">'
-      +   '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 세부: <code>: 세부내용</code> · 태그: <code>#완료 #진행중 #예정 #%70 {bold} =y{형광}</code> · 단축키: <b>Enter</b> 다음 줄 머리 · <b>Tab</b>/<b>Shift+Tab</b> 들여쓰기 · <b>Alt+1/2/3/0</b> 완료/진행/예정/지움'
+      +   '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 세부: <code>: 세부내용</code> · 태그: <code>#완료 #진행중 #예정 #%70 #지연 #이슈 #중요 {bold} =y{형광}</code> · 결과: <code>업무 → 결과</code> · 단축키: <b>Enter</b> 다음 줄 머리 · <b>Tab</b>/<b>Shift+Tab</b> 들여쓰기 · <b>Alt+1/2/3/0</b> 완료/진행/예정/지움'
       + '</div>';
   }
 
@@ -1480,7 +1640,7 @@
       +   authorToolbar('wrAuEditor')
       +   '<textarea id="wrAuEditor" data-pane="' + _authorState.editPane + '" spellcheck="false" placeholder="[개발]\n- [사이트] 업무명 ~MM/DD 50% @담당자\n..." style="flex:1;width:100%;min-height:380px;padding:10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);font-size:12.5px;font-family:ui-monospace,Consolas,monospace;line-height:1.6;resize:vertical"></textarea>'
       +   '<div style="font-size:10.5px;color:var(--t6);margin-top:6px;line-height:1.5">'
-      +     '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 태그: <code>#완료 #진행중 #예정 #%70 {bold} =y{형광}</code> · 단축키: <b>Enter</b> 다음 줄 머리 · <b>Tab</b>/<b>Shift+Tab</b> 들여쓰기 · <b>Alt+1/2/3/0</b> 완료/진행/예정/지움'
+      +     '섹션: <code>[개발][셋업][C/S][기타]</code> · 항목: <code>- [사이트] 이름 ~MM/DD 50% @담당자</code> · 태그: <code>#완료 #진행중 #예정 #%70 #지연 #이슈 #중요 {bold} =y{형광}</code> · 결과: <code>업무 → 결과</code> · 단축키: <b>Enter</b> 다음 줄 머리 · <b>Tab</b>/<b>Shift+Tab</b> 들여쓰기 · <b>Alt+1/2/3/0</b> 완료/진행/예정/지움'
       +   '</div>'
       + '</div>'
       + (!pvOn() ? '' : '<div style="background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:10px;min-height:480px">'
@@ -1512,10 +1672,15 @@
     updateAuthorPreview();
   }
   // 미리보기 칸에 고른 테마 그대로 (복사 · 내보내기와 같은 모양)
-  function paintPreview(pv, parsed) {
+  function paintPreview(pv, parsed, ctx) {
     var th = reportTheme(_pvTheme);
     pv.style.background = th.v.bgPage;
-    pv.innerHTML = inlineThemeVars(buildPreviewHTML(parsed, th.id), th.id);
+    pv.innerHTML = inlineThemeVars(buildPreviewHTML(parsed, th.id, ctx), th.id);
+  }
+  // v13.487 작성 칸의 보고 맥락 — 반대쪽 칸 · 주차 기간
+  function authorCtx(role) {
+    var otherText = role === 'last' ? _authorState.curText : _authorState.lastText;
+    return paneCtx(role, otherText && otherText.trim() ? clientParseText(otherText) : null, _authorState.weekStart, _authorState.weekEnd);
   }
 
   async function copyPreviewInner(paneKey, theme) {
@@ -1525,7 +1690,7 @@
       alert('내용이 없습니다.');
       return;
     }
-    var raw = buildPreviewHTML(clientParseText(text), theme);
+    var raw = buildPreviewHTML(clientParseText(text), theme, authorCtx(paneKey === 'last' ? 'last' : 'cur'));
     var html = inlineThemeVars(raw, theme);
     // v13.486 붙여 넣은 곳 글꼴 · 굵기를 따라가지 않게 — 지금 미리보기에 보이는 글꼴을 그대로 박음
     var pvEl = document.querySelector('.wrp') || document.body;
@@ -1667,21 +1832,22 @@
   }
 
   function updateAuthorPreview(paneKey) {
-    function fillOne(pvId, text) {
+    function fillOne(pvId, text, role) {
       var pv = $(pvId);
       if (!pv) return;
       if (!text || !text.trim()) {
         pv.innerHTML = '<div style="color:var(--t6);text-align:center;padding:32px;font-size:12.5px">내용을 입력하면 여기에 미리보기가 표시됩니다</div>';
       } else {
-        paintPreview(pv, clientParseText(text));
+        paintPreview(pv, clientParseText(text), authorCtx(role));
       }
     }
     if (vmode() === 'compare') {
-      if (!paneKey || paneKey === 'last') fillOne('wrAuPreviewLast', _authorState.lastText);
-      if (!paneKey || paneKey === 'cur')  fillOne('wrAuPreviewCur',  _authorState.curText);
+      // 한쪽을 고치면 다른 쪽의 '계속 · 신규 · 금주 계획 없음' 도 바뀌므로 둘 다 다시
+      fillOne('wrAuPreviewLast', _authorState.lastText, 'last');
+      fillOne('wrAuPreviewCur',  _authorState.curText, 'cur');
     } else {
       var text = _authorState.previewPane === 'last' ? _authorState.lastText : _authorState.curText;
-      fillOne('wrAuPreview', text);
+      fillOne('wrAuPreview', text, _authorState.previewPane === 'last' ? 'last' : 'cur');
     }
   }
 
@@ -2038,13 +2204,13 @@
     var headerSub = _authorState.loadedName || '';
     if (which === 'both') {
       var arr = [];
-      if (_authorState.lastText) arr.push({ label: '지난주', parsed: clientParseText(_authorState.lastText) });
-      if (_authorState.curText)  arr.push({ label: '금주',   parsed: clientParseText(_authorState.curText) });
+      if (_authorState.lastText) arr.push({ label: '지난주', parsed: clientParseText(_authorState.lastText), ctx: authorCtx('last') });
+      if (_authorState.curText)  arr.push({ label: '금주',   parsed: clientParseText(_authorState.curText), ctx: authorCtx('cur') });
       return buildStandaloneHTML(arr, { theme: theme, title: headerLabel, headerLabel: headerLabel, headerSub: headerSub });
     }
     var text = which === 'last' ? _authorState.lastText : _authorState.curText;
     var label = which === 'last' ? '지난주' : '금주';
-    return buildStandaloneHTML(clientParseText(text), { theme: theme, title: headerLabel + ' (' + label + ')', headerLabel: headerLabel + ' — ' + label, headerSub: headerSub });
+    return buildStandaloneHTML(clientParseText(text), { theme: theme, title: headerLabel + ' (' + label + ')', headerLabel: headerLabel + ' — ' + label, headerSub: headerSub, ctx: authorCtx(which === 'last' ? 'last' : 'cur') });
   }
 
   async function runExport(which, action, theme) {
