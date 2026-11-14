@@ -7955,6 +7955,18 @@ html.wm-tbo body,html.wm-tbo .hdr,html.wm-tbo.wm-solo #cxHead{transition:none!im
 }
 /* 머리 줄 위로 덮이는 패널 · 창 — 오른쪽 위 창 단추 밑에 ✕ · ⛶ 가 깔리지 않게 그만큼 비우고,
    밑에 깔린 머리 줄의 '끌기' 영역이 클릭을 가로채지 않게 no-drag */
+/* v13.494 PC 앱 창 단추를 머리 줄 안에 직접 (html.wm-wc · wm-app.js wmWinControls) — 기본 단추처럼 덮지 않으니 자리만 비워 둠 */
+html.wm-wc{--wm-tbo-r:138px}
+html.wm-wc .hdr{padding-right:calc(10px + var(--wm-tbo-r))!important}
+.wm-wc-box{position:absolute;top:0;right:0;bottom:0;display:flex;align-items:stretch;-webkit-app-region:no-drag;z-index:2}
+.wm-wc-box button{width:46px;border:0;margin:0;padding:0;background:transparent;color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:default;transition:background .12s,color .12s;-webkit-app-region:no-drag}
+.wm-wc-box button:hover{background:rgba(127,127,127,.16)}
+.wm-wc-box button:active{background:rgba(127,127,127,.26)}
+.wm-wc-box button.x:hover{background:#C42B1C;color:#fff}
+.wm-wc-box button.x:active{background:#B22A1C;color:#fff}
+.wm-wc-box button:focus-visible{outline:2px solid var(--ac);outline-offset:-3px}
+html.wm-wc-blur .wm-wc-box button:not(:hover){color:var(--t5)}
+@media(max-width:700px){html.wm-wc{--wm-tbo-r:120px}.wm-wc-box button{width:40px}html.wm-wc .hdr{padding-right:calc(6px + var(--wm-tbo-r))!important}}
 html.wm-tbo .pd-panel,html.wm-tbo .wa-modal-overlay,html.wm-tbo #notifDropdown,html.wm-tbo .hdr-pop-menu,html.wm-tbo #globalSearchDropdown{-webkit-app-region:no-drag}
 /* 좁은 창 메신저(cx-full: 메신저가 창을 다 덮음) — PC 앱은 머리 줄은 남겨 둠: 창 끌기 · 창 단추 자리가 그대로이고 대화방 위 메뉴(멤버 · 파일 · ⓘ)가 단추 밑에 깔리지 않음 */
 html.wm-tbo.cx-full:has(#mMessages:not(.hidden)) #mMessages .cx{top:var(--wm-tbo-h,40px)!important}

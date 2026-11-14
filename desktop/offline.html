@@ -20,6 +20,12 @@
   .l3{animation-delay:.1s}.l2{animation-delay:.25s}.l1{animation-delay:.4s}
   @keyframes dp{0%{opacity:0;transform:translateY(-18px)}60%{opacity:1}100%{opacity:1;transform:none}}
   .drag{position:fixed;left:0;right:0;top:0;height:40px;-webkit-app-region:drag}   /* v13.454 제목 줄이 없으니 위쪽을 끌어 창을 옮김 */
+  /* v13.494 윈도우 기본 단추가 없으니 연결 기다리는 동안에도 최소화 · 최대화 · 닫기 */
+  .wc{position:fixed;top:0;right:0;height:40px;display:flex;-webkit-app-region:no-drag;z-index:5}
+  .wc[hidden]{display:none}
+  .wc button{width:46px;height:40px;padding:0;margin:0;border-radius:0;background:transparent;box-shadow:none;color:#cbd5e1;display:flex;align-items:center;justify-content:center;cursor:default}
+  .wc button:hover{background:rgba(255,255,255,.1);filter:none}
+  .wc button.x:hover{background:#C42B1C;color:#fff}
   .tk{fill:none;stroke:#fff;stroke-width:5.4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:100;stroke-dashoffset:100;animation:dw .5s cubic-bezier(.65,0,.35,1) 1.25s forwards}
   h2{margin:0 0 8px;font-size:23px;font-weight:800;letter-spacing:-.5px;color:#fff;opacity:0;animation:up .6s cubic-bezier(.2,.8,.2,1) .6s forwards}
   p{color:#9ca3af;font-size:13px;line-height:1.6;margin:0 0 18px;opacity:0;animation:up .6s cubic-bezier(.2,.8,.2,1) .9s forwards}
@@ -39,7 +45,12 @@
   @keyframes mv{0%{left:-40%}100%{left:100%}}
   @media (prefers-reduced-motion:reduce){*{animation:none!important}.l1,.l2,.l3{opacity:1;transform:none}.ln,.tk{stroke-dashoffset:0}.fi,h2,p,.bar,.muted{opacity:1}}
 </style></head>
-<body><div class="drag"></div><div class="au"><i></i><i></i><i></i></div><div class="dots"></div>
+<body><div class="drag"></div>
+<div class="wc" id="wc" hidden role="group" aria-label="창">
+  <button type="button" data-a="min" title="최소화" aria-label="최소화"><svg viewBox="0 0 11 11" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"><path d="M1 5.5h9"/></svg></button>
+  <button type="button" data-a="max" title="최대화" aria-label="최대화"><svg viewBox="0 0 11 11" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.15"><rect x="1" y="1" width="9" height="9" rx="1.2"/></svg></button>
+  <button type="button" data-a="close" class="x" title="닫기 — 트레이로" aria-label="닫기"><svg viewBox="0 0 11 11" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"><path d="M1.2 1.2l8.6 8.6M9.8 1.2l-8.6 8.6"/></svg></button>
+</div><div class="au"><i></i><i></i><i></i></div><div class="dots"></div>
 <div class="box" id="box">
   <div class="logo"><svg viewBox="0 0 96 96" aria-hidden="true"><defs>
     <linearGradient id="k1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7dd3fc"/><stop offset=".5" stop-color="#818cf8"/><stop offset="1" stop-color="#c084fc"/></linearGradient>
@@ -66,5 +77,9 @@
     document.getElementById('retry').hidden = false;
   }
   document.getElementById('retry').onclick = function () { window.wmDesktop && window.wmDesktop.retry(); };
+  if (window.wmDesktop && window.wmDesktop.winControls) {
+    var wc = document.getElementById('wc'); wc.hidden = false;
+    wc.onclick = function (e) { var b = e.target.closest('[data-a]'); if (b) window.wmDesktop.winAction(b.dataset.a); };
+  }
 </script>
 </body></html>

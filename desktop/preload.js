@@ -45,7 +45,12 @@ function trayPngs(n) {
 
 contextBridge.exposeInMainWorld('wmDesktop', {
   isDesktop: true,
-  titleBarOverlay: process.platform === 'win32',   // v13.454 제목 줄을 웹 머리 줄이 맡음 (드래그 영역 · 단추 색)
+  titleBarOverlay: false,   // v13.454~493 윈도우 기본 단추를 덮어 씀 → v13.494 부터 끔 (아래 winControls)
+  // v13.494 제목 줄을 웹 머리 줄이 맡고, 최소화 · 최대화 · 닫기도 웹이 그림 (테마 색 · 겹침 없음)
+  winControls: process.platform === 'win32',
+  winAction: (a) => { if (a === 'min' || a === 'max' || a === 'close') ipcRenderer.send('wm:win', a); },
+  winState: () => ipcRenderer.invoke('wm:winstate'),
+  onWinState: (cb) => { ipcRenderer.on('wm:winstate', (_e, s) => { try { cb(s || {}); } catch (_) {} }); },
   setTitleBar: (o) => { if (o && typeof o === 'object') ipcRenderer.send('wm:titlebar', { color: String(o.color || ''), symbol: String(o.symbol || ''), h: +o.h || 0 }); },
   platform: process.platform,
   notify: (o) => ipcRenderer.send('wm:notify', { title: o && o.title, body: o && o.body, go: o && o.go, urgent: !!(o && o.urgent), tag: o && o.tag ? String(o.tag) : '' }),

@@ -71,8 +71,10 @@ function createWindow() {
     width: st.width || 1280, height: st.height || 820, x: st.x, y: st.y,
     minWidth: 380, minHeight: 520,
     title: '업무 관리자', icon: ICON, show: false, backgroundColor: '#0f1220', autoHideMenuBar: true,
-    // v13.454 윈도우 기본 제목 표시줄을 숨기고 웹 머리 줄이 그 자리를 맡음 — 최소화 · 최대화 · 닫기 단추 색은 웹 테마를 따라감 (wm:titlebar)
-    ...(process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#0b1022', symbolColor: '#e2e8f0', height: 40 } } : {}),
+    // v13.454 윈도우 기본 제목 표시줄을 숨기고 웹 머리 줄이 그 자리를 맡음
+    // v13.494 최소화 · 최대화 · 닫기도 윈도우 기본 단추(titleBarOverlay — 늘 맨 위에 덮여 알림 · 검색 · 창과 겹치고 색이 테마와 어긋남) 대신
+    //         웹 머리 줄 안에 테마 색으로 그림 (wm:win · wm:winstate). 창 가장자리 크기 조절 · 머리 줄 끌기 · 두 번 눌러 최대화는 그대로
+    ...(process.platform === 'win32' ? { titleBarStyle: 'hidden' } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, partition: 'persist:wm', spellcheck: false, backgroundThrottling: false }   // v13.382 창을 숨겨 둬도 실시간 연결 · 통화 울림이 늦지 않게
   });
   if (st.max) win.maximize();
@@ -107,7 +109,11 @@ function createWindow() {
     if (!quitting) { e.preventDefault(); win.hide(); trayHint(); }   // 닫아도 트레이에 남아 알림을 받는다
   });
   win.on('focus', () => win.flashFrame(false));
+  // v13.494 최대화 · 이전 크기 · 전체 화면이 바뀌면 웹 창 단추 모양(□ ↔ ❐)도
+  const sendState = () => { try { win.webContents.send('wm:winstate', winState()); } catch (_) {} };
+  ['maximize', 'unmaximize', 'restore', 'enter-full-screen', 'leave-full-screen', 'focus', 'blur'].forEach((ev) => win.on(ev, sendState));
 }
+function winState() { return { max: !!(win && win.isMaximized()), full: !!(win && win.isFullScreen()), focus: !!(win && win.isFocused()) }; }
 
 /* v13.382 📌 항상 위 — 다른 프로그램을 써도 이 창이 위에 (기억해 둠) */
 /* v13.383 윈도우는 단계('floating' 등)를 붙이면 맨 위가 걸리지 않음(Electron 33 실측) → 단계 없이. 맥만 'floating' */
@@ -302,12 +308,19 @@ ipcMain.handle('wm:capture-window', async (_e, id) => {
   capWinCache.clear(); clearTimeout(capWinTimer);
   return img && !img.isEmpty() ? img.toDataURL() : '';
 });
-/* v13.454 창 테두리 · 제목 줄 단추 색 — 웹 화면이 지금 테마의 머리 줄 색 · 글자 색 · 높이를 알려 줌 */
+/* v13.494 웹 머리 줄의 창 단추 — 최소화 · 최대화/이전 크기 · 닫기(트레이로) */
+ipcMain.on('wm:win', (e, a) => {
+  if (!win || e.sender !== win.webContents) return;
+  if (a === 'min') win.minimize();
+  else if (a === 'max') { if (win.isFullScreen()) win.setFullScreen(false); else if (win.isMaximized()) win.unmaximize(); else win.maximize(); }
+  else if (a === 'close') win.close();
+});
+ipcMain.handle('wm:winstate', (e) => (win && e.sender === win.webContents ? winState() : null));
+/* v13.454 창 테두리 · 제목 줄 단추 색 — 웹 화면이 지금 테마의 머리 줄 색 · 글자 색 · 높이를 알려 줌 (v13.494 부터 기본 단추가 없어 바탕색만) */
 ipcMain.on('wm:titlebar', (e, o) => {
   if (!win || e.sender !== win.webContents || process.platform !== 'win32' || !o) return;
   const hex = (v, d) => (/^#[0-9a-fA-F]{6}$/.test(String(v || '')) ? v : d);
   try {
-    win.setTitleBarOverlay({ color: hex(o.color, '#0b1022'), symbolColor: hex(o.symbol, '#e2e8f0'), height: Math.max(28, Math.min(80, Math.round(+o.h || 40))) });
     win.setBackgroundColor(hex(o.color, '#0b1022'));
   } catch (_) {}
 });

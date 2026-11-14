@@ -118,6 +118,45 @@ if (wmIsDesktopApp() && window.wmDesktop.titleBarOverlay) {
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wmTbInit); else _wmTbInit();
 }
+/* v13.494 PC 앱 창 단추 — 윈도우 기본 단추(늘 맨 위에 덮여 알림 · 검색 · 창과 겹치고, 테마와 색이 어긋남) 대신 머리 줄 오른쪽 끝에 직접.
+ *   글자색(--t2)을 따르는 가는 선 아이콘 · 마우스를 올리면 옅은 바탕, 닫기만 빨강 · 최대화면 '이전 크기로' 모양 · 창이 뒤로 가면 흐리게
+ *   예전 PC 앱(titleBarOverlay)이면 위의 예전 방식 그대로. 따로 띄운 창(?solo)은 윈도우 제목 줄이 있어 그리지 않음 */
+var _WM_WC_ICON = {
+  min: '<path d="M1 5.5h9"/>',
+  max: '<rect x="1" y="1" width="9" height="9" rx="1.2"/>',
+  res: '<rect x="1" y="3" width="7" height="7" rx="1.2"/><path d="M3.2 3V2.2C3.2 1.5 3.7 1 4.4 1h4.4c.7 0 1.2.5 1.2 1.2v4.4c0 .7-.5 1.2-1.2 1.2H8"/>',
+  close: '<path d="M1.2 1.2l8.6 8.6M9.8 1.2l-8.6 8.6"/>'
+};
+function _wmWcSvg(k) { return '<svg viewBox="0 0 11 11" width="11" height="11" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round">' + _WM_WC_ICON[k] + '</svg>'; }
+function wmWinControls() {
+  if (!(wmIsDesktopApp() && window.wmDesktop.winControls && window.wmDesktop.winAction) || window.WM_SOLO) return;
+  var hdr = document.querySelector('.hdr');
+  if (!hdr || document.getElementById('wmWc')) return;
+  var de = document.documentElement;
+  de.classList.add('wm-tbo', 'wm-wc');
+  var box = document.createElement('div');
+  box.id = 'wmWc'; box.className = 'wm-wc-box'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', '창');
+  box.innerHTML = '<button type="button" data-a="min" title="최소화" aria-label="최소화">' + _wmWcSvg('min') + '</button>'
+    + '<button type="button" data-a="max" title="최대화" aria-label="최대화">' + _wmWcSvg('max') + '</button>'
+    + '<button type="button" data-a="close" class="x" title="닫기 — 트레이로 (알림 · 통화는 계속 받음)" aria-label="닫기">' + _wmWcSvg('close') + '</button>';
+  hdr.appendChild(box);
+  box.addEventListener('click', function (e) { var b = e.target.closest('[data-a]'); if (b) window.wmDesktop.winAction(b.dataset.a); });
+  function show(s) {
+    s = s || {};
+    var m = !!(s.max || s.full), b = box.querySelector('[data-a="max"]');
+    if (b.dataset.m !== String(m)) { b.dataset.m = String(m); b.innerHTML = _wmWcSvg(m ? 'res' : 'max'); b.title = m ? '이전 크기로' : '최대화'; b.setAttribute('aria-label', b.title); }
+    de.classList.toggle('wm-wc-max', m);
+    if (s.focus != null) de.classList.toggle('wm-wc-blur', !s.focus);
+  }
+  if (window.wmDesktop.winState) window.wmDesktop.winState().then(show).catch(function () {});
+  if (window.wmDesktop.onWinState) window.wmDesktop.onWinState(show);
+  wmTitleBarArea();
+  window.addEventListener('resize', function () { clearTimeout(_wmWcT); _wmWcT = setTimeout(wmTitleBarArea, 120); });
+}
+var _wmWcT = 0;
+if (wmIsDesktopApp() && window.wmDesktop.winControls) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wmWinControls); else wmWinControls();
+}
 if (wmIsDesktopApp() && window.wmDesktop.onGo) {
   window.wmDesktop.onGo(function (go) { if (go && typeof wmDeepGo === 'function') wmDeepGo(go); });
 }
