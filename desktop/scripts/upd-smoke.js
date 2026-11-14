@@ -38,7 +38,7 @@ app.on('browser-window-created', (_e, w) => {
         await wait(1200);
         const after = await js(`(document.getElementById('wmUpd') || {}).textContent || ''`);
         if (!/설치 중/.test(after)) log.push('설치 중 띠 없음: ' + after.slice(0, 40));
-        const ok = /설치 중/.test(after) && log.some((l) => new RegExp('^update-downloaded ' + WANT.replace(/\./g, '\.')).test(l)) && new RegExp('PC 앱 새 버전 v' + WANT.replace(/\./g, '\.') + ' 준비됨').test(st.bar) && state && state.ready === WANT && installCalled === 1;
+        const ok = /설치 중/.test(after) && log.some((l) => new RegExp('^update-downloaded ' + WANT.replace(/\./g, '\\.')).test(l)) && new RegExp('PC 앱 새 버전 v' + WANT.replace(/\./g, '\\.') + ' 준비됨').test(st.bar) && state && state.ready === WANT && installCalled === 1;
         console.log((ok ? 'UPD OK ' : 'UPD FAIL ') + JSON.stringify({ log, bar: st.bar.slice(0, 60), state, installCalled }));
         app.exit(ok ? 0 : 1);
       } catch (e) { console.log('UPD FAIL ' + (e && e.message) + ' ' + JSON.stringify(log)); app.exit(1); }
