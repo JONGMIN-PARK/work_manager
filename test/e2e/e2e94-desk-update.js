@@ -65,7 +65,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(ap.calls.indexOf('apply') >= 0 && !ap.reloaded && /PC 앱 업데이트 설치 중/.test(ap.txt), '지금 적용 → PC 앱 설치(웹만 새로 고치지 않음) ' + JSON.stringify(ap));
     // v13.496 받는 중에 새로 고침 → 띠에 % 막대 · 다 받으면 '설치 중'
     await page2.evaluate(function () {
-      window.__st = { version: '13.400.0', busy: true, pct: 30, ready: null }; window.__wmDeskSkip = false; window.__reloaded = false;
+      window.__st = { version: '13.400.0', busy: true, pct: 30, ready: null }; window.__wmUpdGoing = false; window.__reloaded = false;
       var u = document.getElementById('wmUpd'); if (u) u.remove();
       var orig = window.__origUpd = window.wmDesktop.appUpdate;
       window.wmDesktop.appUpdate = function (a) { if (a === 'apply') return Promise.resolve(Object.assign({}, window.__st, { waiting: true })); return orig(a); };
@@ -82,9 +82,23 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(/PC 앱 업데이트 설치 중/.test(ins) && /설치 창이 뜨고/.test(ins), '다 받으면 → 설치 중 띠 ' + ins.slice(0, 50));
     await page2.evaluate(function () { var u = document.getElementById('wmUpd'); if (u) u.remove(); WMD.waiting = false; window.__st.busy = false; window.wmDesktop.appUpdate = window.__origUpd; });
     // 받아 둔 것이 없으면 웹만 새로 고침
-    await page2.evaluate(function () { window.__st.ready = null; window.__wmDeskSkip = false; window.__reloaded = false; var u = document.getElementById('wmUpd'); if (u) u.remove(); wmUpdateApply(); });
+    await page2.evaluate(function () { window.__st.ready = null; window.__wmUpdGoing = false; window.__reloaded = false; var u = document.getElementById('wmUpd'); if (u) u.remove(); wmUpdateApply(); });
     await wait(1000);
     check(await page2.evaluate(function () { return window.__reloaded; }), '받아 둔 PC 앱이 없으면 웹만 새로 고침');
+    // v13.499 띠가 떠 있는 채로 「지금 새로 고침」 — 받아 둔 PC 앱이 없으면 반드시 다시 엶 (v13.495~498 은 여기서 멈췄음)
+    await page2.evaluate(function () {
+      window.__st = { version: '13.400.0', busy: false, pct: 0, ready: null }; window.__wmUpdGoing = false; window.__reloaded = false; WMD.waiting = false;
+      _wmUpdBar({ title: '새 버전 v9', go: wmUpdateApply });
+      // 새 빌드인 척 — 지금 화면이 쓰는 스크립트 하나를 목록에서 빼 두면 미리 받을 것이 생김
+      var sc = document.querySelector('script[src*="chat-ui.js?v="]'); if (sc) sc.removeAttribute('src');
+      window.__steps = [];
+      var orig = window._wmUpdStep; window._wmUpdStep = function (t, s, p) { window.__steps.push(t); return orig(t, s, p); };
+    });
+    await page2.$eval('#wmUpd .wm-upd-go', function (b) { b.click(); });
+    var reloadedOk = await page2.waitForFunction(function () { return window.__reloaded; }, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
+    var steps = await page2.evaluate(function () { return window.__steps; });
+    check(reloadedOk, '띠의 「지금 새로 고침」 → 실제로 다시 엶 (멈추지 않음)');
+    check(steps.some(function (t) { return /PC 앱 업데이트 확인/.test(t); }) && steps.some(function (t) { return /새 화면 받는 중 1\/1/.test(t); }) && /다시 여는 중/.test(steps[steps.length - 1]), '단계가 보임 — ' + steps.join(' → '));
     // 브라우저(PC 앱 아님)에는 아무것도
     var page3 = await browser.newPage();
     await page3.evaluateOnNewDocument(function () { try { localStorage.clear(); } catch (e) {} });

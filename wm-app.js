@@ -389,25 +389,80 @@ function _wmUpdBar(o) {
 }
 /** 새로 고침 — 서비스 워커도 새 것으로 · PC 앱은 받아 둔 새 버전도 설치 (v13.495) */
 function wmUpdateApply() {
-  // v13.482 누르자마자 표시(휴대폰에서 눌렸는지 몰라 여러 번 누르던 것) · 기다림은 0.7초까지만
+  // v13.482 누르자마자 표시(휴대폰에서 눌렸는지 몰라 여러 번 누르던 것)
+  // v13.499 단계가 보이게 · 더 빠르게 — ① PC 앱 업데이트 확인 ② 새 화면 파일을 미리 받음(받는 중 n/N) ③ 다시 엶.
+  //   (v13.495~498 은 PC 앱에서 같은 함수를 다시 부르다 '처리 중' 표시에 막혀 '새로 고치는 중…' 에서 멈췄음)
+  //   어느 단계가 늦어도 15초 안에는 반드시 다시 엶
   var bar = document.getElementById('wmUpd');
-  if (bar) { if (bar.classList.contains('is-busy')) return; bar.classList.add('is-busy'); var g = bar.querySelector('.wm-upd-go'); if (g) g.textContent = '⏳ 새로 고치는 중…'; }
-  if (wmIsDesktopApp() && window.wmDesktop.appUpdate && !window.__wmDeskSkip) {
-    window.__wmDeskSkip = true;   // 설치를 못 하면 웹만 새로 고침
+  if (bar) { if (bar.classList.contains('is-busy')) return; bar.classList.add('is-busy'); }
+  if (window.__wmUpdGoing) return;
+  window.__wmUpdGoing = true;
+  var done = false;
+  var go = function () {
+    if (done) return; done = true;
+    _wmUpdStep('🔄 다시 여는 중…', '잠시면 새 화면이 뜹니다', 100);
+    if (typeof window.__wmReload === 'function') window.__wmReload(); else location.reload();   // __wmReload = 시험용
+  };
+  _wmUpdStep('⏳ 새로 고치는 중…', '', 1);   // 누르자마자 (아래 단계는 그 뒤)
+  var guard = setTimeout(go, 15000);
+  var webStep = function () {
+    _wmUpdStep('⬇ 새 화면 받는 중…', '받아 둔 뒤 다시 열어서 빨리 뜹니다', 3);
+    _wmUpdPrefetch(function (n, t) { _wmUpdStep('⬇ 새 화면 받는 중 ' + n + '/' + t, '받아 둔 뒤 다시 열어서 빨리 뜹니다', Math.round(n / t * 100)); })
+      .then(function () {
+        try {
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+            var t = setTimeout(go, 700);   // 서비스 워커가 늦어도
+            navigator.serviceWorker.getRegistration('/').then(function (r) { return r && r.update(); }).catch(function () {}).then(function () { clearTimeout(t); go(); });
+            return;
+          }
+        } catch (_) {}
+        go();
+      });
+  };
+  if (wmIsDesktopApp() && window.wmDesktop.appUpdate) {
+    _wmUpdStep('🖥 PC 앱 업데이트 확인 중…', '', 2);
     window.wmDesktop.appUpdate('apply').then(function (s) {
-      if (s && s.installing) { _wmDeskInstalling(document.getElementById('wmUpd')); return; }
-      if (s && s.waiting) { WMD.waiting = true; WMD.pct = s.pct || 0; _wmDeskProgress(document.getElementById('wmUpd')); return; }   // 다 받는 대로 PC 앱이 설치하고 다시 엶
-      wmUpdateApply();   // 받아 둔 것이 없으면 웹만 새로 고침
-    }).catch(function () { wmUpdateApply(); });
+      if (s && s.installing) { clearTimeout(guard); done = true; _wmDeskInstalling(document.getElementById('wmUpd')); return; }
+      if (s && s.waiting) { clearTimeout(guard); done = true; WMD.waiting = true; WMD.pct = s.pct || 0; _wmDeskProgress(document.getElementById('wmUpd')); return; }   // 다 받는 대로 PC 앱이 설치하고 다시 엶
+      webStep();   // 받아 둔 PC 앱이 없으면 웹만
+    }).catch(webStep);
     return;
   }
-  var done = false, go = function () { if (done) return; done = true; if (typeof window.__wmReload === 'function') window.__wmReload(); else location.reload(); };   // __wmReload = 시험용
-  try {
-    if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
-      navigator.serviceWorker.getRegistration('/').then(function (r) { return r && r.update(); }).catch(function () {}).then(go);
-      setTimeout(go, 700);   // 서비스 워커가 늦어도
-      return;
+  webStep();
+}
+/* 진행 단계를 띠에 (없으면 새로) — 제목 · 설명 · 막대 % */
+function _wmUpdStep(title, sub, pct) {
+  var bar = document.getElementById('wmUpd');
+  try { _wmDeskBar(bar, title, sub || '', pct == null ? null : pct); } catch (_) {}
+}
+/* v13.499 새 화면 파일 미리 받기 — 서버의 새 HTML 이 부르는 스크립트 · 스타일(?v=새 빌드)을 6개씩 받아 브라우저 캐시에 넣어 둠
+ *   (다시 열 때 80여 개를 처음부터 받느라 오래 걸리던 것). 같은 주소면 이미 받은 것이라 건너뜀. 실패해도 그냥 다시 엶 */
+function _wmUpdPrefetch(onProg) {
+  var base = (typeof API_BASE !== 'undefined' ? API_BASE : '');
+  return fetch(base + '/', { cache: 'no-store', credentials: 'same-origin' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
+    var re = /(?:src|href)="([^"?#]+\.(?:js|css)\?v=[^"]+)"/g, m, list = [], seen = {};
+    while ((m = re.exec(html))) {
+      var u = m[1];
+      if (/^(https?:)?\/\//.test(u) || seen[u]) continue;
+      seen[u] = 1;
+      if (document.querySelector('script[src="' + u + '"],link[href="' + u + '"]')) continue;   // 지금 화면이 이미 쓰는 주소(같은 빌드)
+      list.push(u);
     }
-  } catch (_) {}
-  go();
+    if (!list.length) return;
+    var n = 0, i = 0, t = list.length;
+    onProg(0, t);
+    return new Promise(function (ok) {
+      var running = 0;
+      function next() {
+        if (i >= t && !running) return ok();
+        while (running < 6 && i < t) {
+          var u = list[i++]; running++;
+          fetch(base + '/' + u.replace(/^\//, ''), { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).catch(function () {}).then(function () {
+            running--; n++; onProg(n, t); next();
+          });
+        }
+      }
+      next();
+    });
+  }).catch(function () {});
 }
