@@ -5,12 +5,13 @@
 const { app } = require('electron');
 Object.defineProperty(app, 'isPackaged', { get: () => true, configurable: true });   // 개발 실행에서도 업데이트 길로
 // scripts/ 로 띄우면 앱 버전이 Electron 버전(33.x)으로 잡힘 → 설치본과 같게 package.json 버전으로
-const PKG_VER = require('../package.json').version;
+const PKG_VER = process.env.UPD_AS || require('../package.json').version;   // UPD_AS=13.495.0 → 그 버전을 설치한 PC 인 척 (운영 서버 점검)
 app.getVersion = () => PKG_VER;
 const au = require('electron-updater').autoUpdater;
 au.forceDevUpdateConfig = true;
 au.updateConfigPath = require('path').join(__dirname, '../dist/win-unpacked/resources/app-update.yml');   // 설치본과 같은 설정(내려받기 캐시 폴더 이름 등)
 au.autoInstallOnAppQuit = false;
+const WANT = process.env.UPD_WANT || '13.496.0';   // 받아야 할 버전
 const log = [];
 let installCalled = 0;
 au.quitAndInstall = () => { installCalled++; log.push('quitAndInstall'); };
@@ -37,7 +38,7 @@ app.on('browser-window-created', (_e, w) => {
         await wait(1200);
         const after = await js(`(document.getElementById('wmUpd') || {}).textContent || ''`);
         if (!/설치 중/.test(after)) log.push('설치 중 띠 없음: ' + after.slice(0, 40));
-        const ok = /설치 중/.test(after) && log.some((l) => /^update-downloaded 13\.496\.0/.test(l)) && /PC 앱 새 버전 v13\.496\.0 준비됨/.test(st.bar) && state && state.ready === '13.496.0' && installCalled === 1;
+        const ok = /설치 중/.test(after) && log.some((l) => new RegExp('^update-downloaded ' + WANT.replace(/\./g, '\.')).test(l)) && new RegExp('PC 앱 새 버전 v' + WANT.replace(/\./g, '\.') + ' 준비됨').test(st.bar) && state && state.ready === WANT && installCalled === 1;
         console.log((ok ? 'UPD OK ' : 'UPD FAIL ') + JSON.stringify({ log, bar: st.bar.slice(0, 60), state, installCalled }));
         app.exit(ok ? 0 : 1);
       } catch (e) { console.log('UPD FAIL ' + (e && e.message) + ' ' + JSON.stringify(log)); app.exit(1); }
