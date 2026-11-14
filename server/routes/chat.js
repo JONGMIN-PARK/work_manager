@@ -918,6 +918,7 @@ router.get('/files/:fid', async function (req, res) {
     res.setHeader('Content-Disposition', (req.query.dl ? 'attachment' : 'inline') + "; filename*=UTF-8''" + encodeURIComponent(f.name));
     res.setHeader('Cache-Control', 'private, max-age=600');
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (Buffer.isBuffer(f.data)) { res.setHeader('Content-Length', String(f.data.length)); res.setHeader('X-Size', String(f.data.length)); }   // v13.497 받는 쪽이 진행률(%)을 알게
     res.end(f.data);
   } catch (e) { httpErr.serverError(res, '[chat/file/get]', e); }
 });
@@ -1043,11 +1044,21 @@ router.post('/thumbs', async function (req, res) {
   try {
     var ids = Array.isArray((req.body || {}).ids) ? req.body.ids.filter(function (x) { return typeof x === 'string' && x.length <= 40; }).slice(0, 40) : [];
     if (!ids.length) return res.json({ data: {} });
-    var r = await db.query('SELECT f.id, f.thumb FROM chat_files f JOIN chat_members m ON m.room_id = f.room_id AND m.user_id = $3 AND m.left_at IS NULL ' +
-      'WHERE f.id = ANY($1) AND f.tenant_id = $2 AND f.thumb IS NOT NULL', [ids, req.tenant.id, me(req)]);
-    var out = {}; r.rows.forEach(function (x) { out[x.id] = x.thumb.toString('base64'); });
+    // v13.497 urls:true — 원본 서명 주소(1시간)도 같이: 사진을 누를 때 서버에 다시 묻지 않고 저장소(GCS)에서 바로 받게 (왕복 한 번 줄임)
+    var withUrls = !!(req.body || {}).urls;
+    var r = await db.query('SELECT f.id, f.thumb, ' + (withUrls ? 'f.storage_key' : 'NULL AS storage_key') + ' FROM chat_files f JOIN chat_members m ON m.room_id = f.room_id AND m.user_id = $3 AND m.left_at IS NULL ' +
+      'WHERE f.id = ANY($1) AND f.tenant_id = $2' + (withUrls ? '' : ' AND f.thumb IS NOT NULL'), [ids, req.tenant.id, me(req)]);
+    var out = {}, urls = {};
+    var noThumb = {}; (Array.isArray((req.body || {}).nothumb) ? req.body.nothumb : []).forEach(function (x) { noThumb[x] = 1; });   // 기기에 미리보기가 있는 것 — 주소만
+    r.rows.forEach(function (x) { if (x.thumb && !noThumb[x.id]) out[x.id] = x.thumb.toString('base64'); });
+    if (withUrls) {
+      var gcs = require('../services/gcs.service');
+      await Promise.all(r.rows.filter(function (x) { return x.storage_key; }).map(function (x) {
+        return gcs.signDownloadUrl(x.storage_key, null, 60 * 60 * 1000).then(function (u) { urls[x.id] = u; }).catch(function () {});
+      }));
+    }
     res.setHeader('Cache-Control', 'private, no-store');
-    res.json({ data: out });
+    res.json(withUrls ? { data: out, urls: urls, ttl: 3600 } : { data: out });
   } catch (e) { httpErr.serverError(res, '[chat/thumbs]', e); }
 });
 /* 🖼 작은 미리보기 올리기 (v13.377) — 서버에 사진 줄이는 도구가 없어 브라우저가 만들어 올림. 이미 있으면 보낸 사람만 바꿈 */

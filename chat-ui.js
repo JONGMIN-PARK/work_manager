@@ -1087,20 +1087,86 @@ function _cxJump(id) {
 function _cxBlob(fid, thumb) {
   var key = thumb ? fid + ':t' : fid;
   if (CX.blobs[key]) return CX.blobs[key];
-  CX.blobs[key] = _cxBlobFetch(fid, thumb);
+  CX.blobs[key] = thumb ? _cxBlobFetch(fid, true) : _cxFullFetch(fid);
   CX.blobs[key].catch(function () { delete CX.blobs[key]; });
   return CX.blobs[key];
+}
+/* ─── v13.497 🖼 사진 원본을 빨리 — ① 기기에 담아 둔 것 ② 미리 받아 둔 서명 주소로 저장소에서 바로(서버 왕복 없음)
+ *   ③ 없으면 서버에 물어서. 받는 동안 진행률(cxfullprog 이벤트 → 사진 칠판 '원본 받는 중 45%') · 다 받으면 기기에 담음 ─── */
+CX.furl = CX.furl || {}; CX.fprog = CX.fprog || {};
+function _cxProg(fid, pct) {
+  CX.fprog[fid] = pct;
+  try { document.dispatchEvent(new CustomEvent('cxfullprog', { detail: { fid: fid, pct: pct } })); } catch (e) {}
+}
+function _cxReadBody(res, fid) {
+  // 크기는 Content-Length (압축 · 프록시가 지우면 X-Size). 모르면 받은 양(KB)으로 — 끝나면 늘 100
+  var total = +res.headers.get('content-length') || +res.headers.get('x-size') || 0, type = res.headers.get('content-type') || 'image/jpeg';
+  if (!res.body || !res.body.getReader) return res.blob().then(function (b) { _cxProg(fid, 100); return b; });
+  var rd = res.body.getReader(), got = 0, parts = [], last = -1;
+  function pump() {
+    return rd.read().then(function (x) {
+      if (x.done) { _cxProg(fid, 100); return new Blob(parts, { type: type }); }
+      parts.push(x.value); got += x.value.byteLength;
+      var p = total ? Math.min(99, Math.floor(got / total * 100)) : -Math.round(got / 1024);   // 음수 = 받은 KB (크기 모름)
+      if (p !== last) { last = p; _cxProg(fid, p); }
+      return pump();
+    });
+  }
+  return pump();
+}
+function _cxFullFetch(fid) {
+  var local = typeof chatFullGet === 'function' ? chatFullGet(fid) : Promise.resolve(null);
+  return local.then(function (b) {
+    if (b) { _cxProg(fid, 100); return URL.createObjectURL(b); }
+    _cxProg(fid, 0);
+    var cu = CX.furl[fid], api = (typeof API_BASE !== 'undefined' ? API_BASE : '');
+    var direct = cu && cu.exp > Date.now() ? cu.u : null;
+    var viaServer = function () {
+      return fetch(api + '/api/chat/files/' + encodeURIComponent(fid), { headers: { Authorization: 'Bearer ' + _accessToken } }).then(function (res) {
+        if (!res.ok) throw new Error('사진을 불러오지 못했습니다');
+        if ((res.headers.get('content-type') || '').indexOf('application/json') >= 0) return res.json().then(function (j) { return fromUrl(j.data.url, true); });
+        return _cxReadBody(res, fid).then(keep);
+      });
+    };
+    var keep = function (blob) { if (typeof chatFullPut === 'function') chatFullPut(fid, blob); return URL.createObjectURL(blob); };
+    // 저장소 주소를 바로 받기 — CORS 로 막히면(설정 전 버킷) 예전처럼 주소 그대로 (사진은 뜨지만 담아 두지는 못함)
+    var fromUrl = function (u, last) {
+      return fetch(u).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return _cxReadBody(r, fid).then(keep); })
+        .catch(function (e) { if (!last && /^(403|400)$/.test(e && e.message)) { delete CX.furl[fid]; return viaServer(); } return u; });
+    };
+    return direct ? fromUrl(direct, false) : viaServer();
+  });
+}
+/* v13.497 방을 열고 잠시 쉬면 — 화면 가까이 있는 최근 사진 원본 몇 장을 미리 받아 둠 (누르면 바로).
+ *   데이터 절약 · 느린 연결 · 큰 사진(3MB 넘음)은 건너뜀 · 한 번 받은 것은 기기에 있어 다시 받지 않음 */
+var _cxPfT = 0;
+function _cxPrefetchFull(msgs) {
+  var c = navigator.connection || {};
+  if (c.saveData || /(^|-)2g$|^3g$/.test(c.effectiveType || '')) return;
+  var list = (msgs || []).filter(function (m) { return m && m.file && /^image\/(png|jpe?g|gif|webp|bmp)$/i.test(m.file.mime || '') && (!m.file.size || m.file.size <= 3 * 1024 * 1024); }).slice(-4);
+  if (!list.length) return;
+  clearTimeout(_cxPfT);
+  _cxPfT = setTimeout(function () {
+    var go = function () {
+      var i = 0;
+      (function next() { var m = list[list.length - 1 - i++]; if (!m) return; if (CX.blobs[m.file.id]) return next(); _cxBlob(m.file.id).then(next, next); })();   // 한 장씩 차례로 (대화 · 업로드 대역을 덜 씀)
+    };
+    if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 4000 }); else go();
+  }, 1500);
 }
 /* v13.436 🖼 미리보기 한 번에 — 대화 한 쪽에 든 사진을 모아 ① 기기에 담아 둔 것(IndexedDB) ② 없는 것만 서버에 한 번(40장씩) 요청.
  *   사진마다 따로 받던 것(장마다 서버 왕복 · 화면 가까이 와야 시작)이라 옛 대화를 올리면 빈 칸이 한참 보였다.
  *   묶음에 없는 것(미리보기가 아직 없는 예전 사진)은 예전처럼 한 장씩 */
 function _cxWarm(msgs) {
   if (typeof chatBoardWarmAnnots === 'function') chatBoardWarmAnnots(msgs);   // v13.451 ✏️ 표시도 한 번에
-  var ids = [], seen = {};
+  var ids = [], seen = {}, urlIds = [], now = Date.now();
   (msgs || []).forEach(function (m) {
     var f = m && m.file; if (!f || !f.id || seen[f.id] || !/^image\/(png|jpe?g|gif|webp|bmp)$/i.test(f.mime || '')) return;
     seen[f.id] = 1; if (!CX.blobs[f.id + ':t'] && !CX.blobs[f.id]) ids.push(f.id);
+    if (!CX.blobs[f.id] && !(CX.furl[f.id] && CX.furl[f.id].exp > now + 600000)) urlIds.push(f.id);
   });
+  _cxWarmUrls(urlIds.filter(function (id) { return ids.indexOf(id) < 0; }));   // 미리보기는 있는데 원본 주소만 없는 것
+  _cxPrefetchFull(msgs);
   if (!ids.length) return;
   var local = typeof chatThumbGet === 'function' ? chatThumbGet(ids) : Promise.resolve({});
   var all = local.then(function (have) {
@@ -1109,7 +1175,7 @@ function _cxWarm(msgs) {
     if (!miss.length) return out;
     var parts = []; for (var i = 0; i < miss.length; i += 40) parts.push(miss.slice(i, i + 40));
     return Promise.all(parts.map(function (part) {
-      return apiFetch('/api/chat/thumbs', { method: 'POST', body: JSON.stringify({ ids: part }) }).then(function (r) { return r.data || {}; }).catch(function () { return {}; });
+      return apiFetch('/api/chat/thumbs', { method: 'POST', body: JSON.stringify({ ids: part, urls: true }) }).then(function (r) { _cxKeepUrls(r); return r.data || {}; }).catch(function () { return {}; });
     })).then(function (rs) {
       var save = {};
       rs.forEach(function (d) { Object.keys(d).forEach(function (id) {
@@ -1119,11 +1185,26 @@ function _cxWarm(msgs) {
       return out;
     });
   }).catch(function () { return {}; });
+  _cxWarmUrls(ids);   // 기기에 미리보기가 있던 것도 원본 주소는 받아 둠 (서버는 미리보기 없이 주소만)
   ids.forEach(function (id) {
     var key = id + ':t';
     CX.blobs[key] = all.then(function (m) { return m[id] || _cxBlobFetch(id, true); });
     CX.blobs[key].catch(function () { delete CX.blobs[key]; });
   });
+}
+function _cxKeepUrls(r) {
+  var u = r && r.urls, exp = Date.now() + ((r && r.ttl) || 3600) * 1000 - 300000;
+  if (u) Object.keys(u).forEach(function (id) { CX.furl[id] = { u: u[id], exp: exp }; });
+}
+var _cxUrlAsked = {};
+function _cxWarmUrls(ids) {
+  ids = (ids || []).filter(function (id) { return !_cxUrlAsked[id] || _cxUrlAsked[id] < Date.now() - 600000; });
+  if (!ids.length || typeof apiFetch !== 'function') return;
+  ids.forEach(function (id) { _cxUrlAsked[id] = Date.now(); });
+  for (var i = 0; i < ids.length; i += 40) {
+    var part = ids.slice(i, i + 40);
+    apiFetch('/api/chat/thumbs', { method: 'POST', body: JSON.stringify({ ids: part, urls: true, nothumb: part }) }).then(_cxKeepUrls).catch(function () {});
+  }
 }
 function _cxBlobFetch(fid, thumb) {
   var _p = fetch((typeof API_BASE !== 'undefined' ? API_BASE : '') + '/api/chat/files/' + encodeURIComponent(fid) + (thumb ? '?thumb=1' : ''), { headers: { Authorization: 'Bearer ' + _accessToken } }).then(function (res) {

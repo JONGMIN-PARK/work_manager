@@ -57,6 +57,35 @@ function chatThumbGet(ids) {
     });
   }).catch(function () { return {}; });
 }
+/* v13.497 🖼 사진 원본 담아 두기 — 'o:<파일 id>' = Blob. 'oidx' = [[id, 바이트]] 넣은 순서(가장 최근 끝).
+ *   한 번 크게 본 사진은 다시 열거나 ◀ ▶ 로 넘기거나 앱을 다시 켜도 서버 · 저장소에 묻지 않고 바로. 300MB · 400장 넘으면 오래된 것부터 버림 */
+var CXL_FULL_MAX = 300 * 1024 * 1024, CXL_FULL_N = 400;
+function chatFullGet(id) {
+  return _cxlOpen().then(function (db) {
+    return new Promise(function (ok) {
+      var tx = db.transaction('kv', 'readonly'), r = tx.objectStore('kv').get('o:' + id), out = null;
+      r.onsuccess = function () { if (r.result && r.result.size) out = r.result; };
+      tx.oncomplete = function () { ok(out); }; tx.onerror = tx.onabort = function () { ok(null); };
+    });
+  }).catch(function () { return null; });
+}
+function chatFullPut(id, blob) {
+  if (!id || !blob || !blob.size || blob.size > 60 * 1024 * 1024) return Promise.resolve();
+  return _cxlOpen().then(function (db) {
+    return new Promise(function (ok) {
+      var tx = db.transaction('kv', 'readwrite'), st = tx.objectStore('kv'), g = st.get('oidx');
+      g.onsuccess = function () {
+        var idx = (Array.isArray(g.result) ? g.result : []).filter(function (x) { return x[0] !== id; });
+        idx.push([id, blob.size]); st.put(blob, 'o:' + id);
+        var tot = idx.reduce(function (s, x) { return s + x[1]; }, 0);
+        while (idx.length > 1 && (tot > CXL_FULL_MAX || idx.length > CXL_FULL_N)) { var x = idx.shift(); tot -= x[1]; st.delete('o:' + x[0]); }
+        st.put(idx, 'oidx');
+      };
+      tx.oncomplete = tx.onerror = tx.onabort = function () { ok(); };
+    });
+  }).catch(function () {});
+}
+if (typeof window !== 'undefined') { window.chatFullGet = chatFullGet; window.chatFullPut = chatFullPut; }
 function chatThumbPut(map) {
   var ids = Object.keys(map || {}); if (!ids.length) return Promise.resolve();
   return _cxlOpen().then(function (db) {

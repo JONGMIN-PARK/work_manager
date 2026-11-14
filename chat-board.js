@@ -432,6 +432,7 @@ function chatBoardOpen(fid, name, roomId) {
   _cbStart({ fid: fid, name: name, roomId: roomId || (typeof CX !== 'undefined' && CX.room), tool: 'pan' });
   var my = CB;
   _cbPreview(my, fid);   // v13.448 원본을 받는 동안 대화에 떠 있던 미리보기를 먼저 크게
+  _cbProgress(my, fid);  // v13.497 원본 받는 중 % (기기에 담아 둔 것이면 바로 끝)
   Promise.all([
     _cbFileImg(fid),
     apiFetch('/api/chat/files/' + encodeURIComponent(fid) + '/annot').catch(function () { return null; })
@@ -465,6 +466,23 @@ function _cbPreview(my, fid) {
   if (src) return put(src);
   var p = typeof CX !== 'undefined' && CX.blobs && (CX.blobs[fid + ':t'] || null);
   if (p && p.then) p.then(put, function () {});
+}
+/* v13.497 원본 받는 진행률 — 미리보기 아래 '원본 받는 중 45%' + 가는 막대 */
+function _cbProgress(my, fid) {
+  var ld = my.el.querySelector('[data-loading]'); if (!ld) return;
+  ld.innerHTML = '<span class="cb-ld-t">사진 불러오는 중…</span><span class="cb-ld-bar" hidden><i></i></span>';
+  var t = ld.querySelector('.cb-ld-t'), bar = ld.querySelector('.cb-ld-bar'), fill = bar.firstChild;
+  function show(p) {
+    if (CB !== my || p == null) return;
+    if (p < 0) { t.textContent = '원본 받는 중 ' + (-p >= 1024 ? (-p / 1024).toFixed(1) + 'MB' : -p + 'KB'); bar.hidden = false; bar.classList.add('ind'); return; }   // 크기를 모름 — 받은 양
+    bar.classList.remove('ind');
+    t.textContent = p >= 100 ? '사진 여는 중…' : '원본 받는 중 ' + p + '%';
+    bar.hidden = false; fill.style.width = Math.max(3, p) + '%';
+  }
+  var cur = typeof CX !== 'undefined' && CX.fprog ? CX.fprog[fid] : null;
+  if (cur != null) show(cur);
+  function on(e) { if (CB !== my || !ld.isConnected) { document.removeEventListener('cxfullprog', on); return; } if (e.detail && e.detail.fid === fid) show(e.detail.pct); }
+  document.addEventListener('cxfullprog', on);
 }
 /** v13.448 누르기 직전에 원본을 미리 받기 — 대화 속 사진에 마우스를 올리거나(0.15초) 손가락이 닿으면 */
 function chatBoardPrefetch(fid) { if (fid) _cbFileImg(fid).catch(function () {}); }

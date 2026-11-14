@@ -7463,6 +7463,20 @@ html.cx-locked #mMessages{position:relative}
 @supports not (overflow-anchor:auto){.cx-msgs .cx-m{content-visibility:visible;contain-intrinsic-size:auto}}
 /* v13.436 사진 자리 미리 잡기 — 주소가 아직 없는 img 는 글자(대체 문구)처럼 다뤄져 가로 · 세로가 안 먹으므로 칸으로 */
 .cx-img img[data-dim]{display:inline-block;vertical-align:top}
+/* v13.497 사진 자리 — 받는 동안 은은하게 반짝임 · 들어오면 짧게 나타남 */
+.cx-img img:not([src]){background:linear-gradient(100deg,var(--bg-i) 30%,color-mix(in srgb,var(--bg-i) 70%,var(--bg-p)) 50%,var(--bg-i) 70%);background-size:220% 100%;animation:cxImgShim 1.3s linear infinite}
+.cx-img img[src]{animation:cxImgIn .2s ease-out}
+@keyframes cxImgShim{from{background-position:120% 0}to{background-position:-120% 0}}
+@keyframes cxImgIn{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.cx-img img:not([src]),.cx-img img[src]{animation:none}}
+/* v13.497 사진 칠판 — 원본 받는 중 % 막대 */
+.cb-loading{flex-direction:column;gap:8px}
+.cb-ld-bar{width:min(220px,50%);height:4px;border-radius:2px;background:rgba(255,255,255,.18);overflow:hidden}
+.cb-ld-bar[hidden]{display:none}
+.cb-ld-bar i{display:block;height:100%;width:3%;border-radius:2px;background:#60A5FA;transition:width .25s ease}
+.cb-ld-bar.ind i{width:35%!important;animation:cbLdInd 1.1s ease-in-out infinite}
+@keyframes cbLdInd{from{transform:translateX(-100%)}to{transform:translateX(290%)}}
+@media (prefers-reduced-motion:reduce){.cb-ld-bar.ind i{animation:none}}
 
 /* v13.437 🖼 사진 칠판 — 두 손가락 확대는 사진만. 도구 줄 · 확대 단추 위에서(또는 한 손가락이 거기 걸친 채) 벌리면
    브라우저가 화면 전체를 키워 단추까지 같이 커졌다 → 칠판 안에서는 화면 확대(벌리기 · 두 번 두드리기)를 막고 밀기만 허용 */
