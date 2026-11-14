@@ -37,3 +37,6 @@ web
 *.md
 *.py
 desktop
+# v13.495 PC 앱 자체 업데이트 — 서버가 /desktop-release/ 로 내려 줄 최신 설치 파일만 이미지에
+!desktop/release
+desktop/release/*.md
