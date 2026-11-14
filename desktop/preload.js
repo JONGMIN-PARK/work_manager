@@ -48,6 +48,9 @@ contextBridge.exposeInMainWorld('wmDesktop', {
   titleBarOverlay: false,   // v13.454~493 윈도우 기본 단추를 덮어 씀 → v13.494 부터 끔 (아래 winControls)
   // v13.494 제목 줄을 웹 머리 줄이 맡고, 최소화 · 최대화 · 닫기도 웹이 그림 (테마 색 · 겹침 없음)
   winControls: process.platform === 'win32',
+  // v13.495 PC 앱 업데이트 — 우리 서버에서 받아 두고, 웹이 새로 고칠 때 설치
+  appUpdate: (a) => ipcRenderer.invoke('wm:update', a === 'apply' ? 'apply' : a === 'check' ? 'check' : 'state'),
+  onAppUpdate: (cb) => { ipcRenderer.on('wm:update-state', (_e, s) => { try { cb(s || {}); } catch (_) {} }); },
   winAction: (a) => { if (a === 'min' || a === 'max' || a === 'close') ipcRenderer.send('wm:win', a); },
   winState: () => ipcRenderer.invoke('wm:winstate'),
   onWinState: (cb) => { ipcRenderer.on('wm:winstate', (_e, s) => { try { cb(s || {}); } catch (_) {} }); },

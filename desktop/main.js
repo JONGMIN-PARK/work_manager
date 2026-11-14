@@ -80,7 +80,12 @@ function createWindow() {
   if (st.max) win.maximize();
   if (readCfg().onTop) applyOnTop(true);   // v13.382 📌 항상 위
   // 창 안 단축키: Ctrl+Alt+T 📌 항상 위 켜기 · 끄기
-  win.webContents.on('before-input-event', (e, i) => { if (i.type === 'keyDown' && i.control && i.alt && !i.shift && (i.key === 't' || i.key === 'T')) { e.preventDefault(); setOnTop(!win.isAlwaysOnTop()); } });
+  win.webContents.on('before-input-event', (e, i) => {
+    if (i.type !== 'keyDown') return;
+    if (i.control && i.alt && !i.shift && (i.key === 't' || i.key === 'T')) { e.preventDefault(); setOnTop(!win.isAlwaysOnTop()); return; }
+    // v13.495 새로 고침(F5 · Ctrl+R) 때 PC 앱 새 버전을 받아 두었으면 그것까지 설치하고 다시 시작
+    if (upd.ready && app.isPackaged && (i.key === 'F5' || (i.control && !i.alt && (i.key === 'r' || i.key === 'R')))) { e.preventDefault(); installNow(); }
+  });
   // 구글 로그인은 'Electron' 이 든 브라우저 이름을 막는다 → 보통 크롬 이름으로
   win.webContents.setUserAgent(win.webContents.getUserAgent().replace(/\s(Electron|work-manager-desktop|업무 관리자)\/\S+/g, ''));
   win.loadFile(path.join(__dirname, 'offline.html'), { query: { server: SERVER() } });   // 서버가 깨어나는 동안 보이는 화면
@@ -164,27 +169,46 @@ function refreshTray() {
   tray.setContextMenu(buildTrayMenu());
 }
 
-/* ─── ⬆ 자동 업데이트 (v13.360) — GitHub Releases 의 latest.yml 을 보고 뒤에서 받아 두었다가, 끝낼 때 또는 트레이에서 바로 설치 ─── */
-const upd = { busy: false, ready: null, pct: 0, manual: false };
+/* ─── ⬆ 자동 업데이트 (v13.360) — latest.yml 을 보고 뒤에서 받아 두었다가, 끝낼 때 · 트레이 · 웹 새로 고침 때 설치 ───
+ * v13.495 GitHub 릴리스(토큰이 있어야 올림) 대신 우리 서버 /desktop-release/ (저장소 desktop/release 를 서버가 내려 줌)
+ *   → 저장소에 설치 파일을 커밋 · 푸시만 하면 PC 앱이 알아서 받음. 웹에서 새로 고치면(새 버전 띠 · F5 · Ctrl+R) 받아 둔 것을 바로 설치 */
+const upd = { busy: false, ready: null, pct: 0, manual: false, applyWhenReady: false };
+function feedUrl() { return SERVER().replace(/\/+$/, '') + '/desktop-release/'; }
+function updState() { return { version: app.getVersion(), busy: upd.busy, pct: upd.pct, ready: upd.ready }; }
+function sendUpd() { try { if (win) win.webContents.send('wm:update-state', updState()); } catch (_) {} }
+function installNow() { quitting = true; ctlStop(false); require('electron-updater').autoUpdater.quitAndInstall(true, true); }
 function setupUpdater() {
   const au = require('electron-updater').autoUpdater;
+  try { au.setFeedURL({ provider: 'generic', url: feedUrl() }); } catch (e) { console.warn('[update] feed', e.message); }
   au.autoDownload = true; au.autoInstallOnAppQuit = true;
-  au.on('update-available', (i) => { upd.busy = true; refreshTray(); if (upd.manual) toast('⬆ 새 버전 ' + i.version + ' 을 받는 중입니다'); });
-  au.on('update-not-available', () => { upd.busy = false; refreshTray(); if (upd.manual) toast('✅ 최신 버전입니다 (' + app.getVersion() + ')'); upd.manual = false; });
-  au.on('download-progress', (p) => { upd.pct = Math.round(p.percent || 0); refreshTray(); });
+  au.on('update-available', (i) => { upd.busy = true; refreshTray(); sendUpd(); if (upd.manual) toast('⬆ 새 버전 ' + i.version + ' 을 받는 중입니다'); });
+  au.on('update-not-available', () => { upd.busy = false; upd.applyWhenReady = false; refreshTray(); sendUpd(); if (upd.manual) toast('✅ 최신 버전입니다 (' + app.getVersion() + ')'); upd.manual = false; });
+  au.on('download-progress', (p) => { const n = Math.round(p.percent || 0); if (n !== upd.pct) { upd.pct = n; refreshTray(); sendUpd(); } });
   au.on('update-downloaded', (i) => {
-    upd.busy = false; upd.ready = i.version; refreshTray();
+    upd.busy = false; upd.ready = i.version; refreshTray(); sendUpd();
+    if (upd.applyWhenReady) { installNow(); return; }   // 웹에서 새로 고침을 눌렀을 때 아직 받는 중이었으면 — 다 받는 대로 설치
     const n = new Notification({ title: '⬆ 업무 관리자 ' + i.version + ' 준비됨', body: '누르면 바로 설치하고 다시 시작합니다 (그냥 두면 끝낼 때 설치)', icon: ICON });
     n.on('click', () => { quitting = true; ctlStop(false); au.quitAndInstall(true, true); });
     n.show();
   });
-  au.on('error', (e) => { upd.busy = false; refreshTray(); if (upd.manual) toast('업데이트를 확인하지 못했습니다: ' + (e && e.message ? e.message.slice(0, 80) : '')); upd.manual = false; });
+  au.on('error', (e) => { upd.busy = false; upd.applyWhenReady = false; refreshTray(); sendUpd(); if (upd.manual) toast('업데이트를 확인하지 못했습니다: ' + (e && e.message ? e.message.slice(0, 80) : '')); upd.manual = false; });
 }
 function checkUpdate(manual) {
   if (!app.isPackaged || upd.busy || upd.ready) { if (manual && upd.ready) toast('⬆ ' + upd.ready + ' 이 준비돼 있습니다 — 트레이 메뉴에서 설치'); return; }
   upd.manual = manual;
   try { require('electron-updater').autoUpdater.checkForUpdates().catch(() => {}); } catch (e) { console.warn('[update]', e.message); }
 }
+/* v13.495 웹 ↔ 업데이트 — 버전 · 상태 묻기, 확인(받기), 적용(받아 둔 것이 있으면 설치하고 다시 시작) */
+ipcMain.handle('wm:update', (e, a) => {
+  if (!win || e.sender !== win.webContents) return null;
+  if (a === 'apply') {
+    if (upd.ready && app.isPackaged) { setTimeout(installNow, 150); return Object.assign(updState(), { installing: true }); }
+    if (upd.busy) { upd.applyWhenReady = true; return Object.assign(updState(), { waiting: true }); }
+    return updState();
+  }
+  if (a === 'check') checkUpdate(false);
+  return updState();
+});
 function toast(body) { if (Notification.isSupported()) new Notification({ title: '업무 관리자', body: body, icon: ICON }).show(); }
 
 /* ─── 웹 화면 ↔ 앱 ─── */

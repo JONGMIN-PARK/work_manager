@@ -203,9 +203,28 @@ function buildInfo() {
     var m = /\{ver:'([^']+)',date:'[^']*',title:'((?:[^'\\]|\\.)*)'/.exec(pn);
     if (m && m[1] === ver) title = m[2].replace(/\\'/g, "'");
   } catch (e) {}
-  BUILD_INFO = { build: BUILD_VERSION, version: ver, title: title };
+  BUILD_INFO = { build: BUILD_VERSION, version: ver, title: title, desktop: desktopInfo() };
   return BUILD_INFO;
 }
+/* 🖥 PC 앱 자체 업데이트 (v13.495) — 저장소 desktop/release 의 최신 설치 파일 · latest.yml 을 그대로 내려 줌
+ *   PC 앱(electron-updater generic)이 /desktop-release/latest.yml 을 보고 받음 → 저장소에 커밋 · 푸시만 하면 배포 끝 (GitHub 릴리스 · 토큰 없이)
+ *   예전 PC 앱(GitHub 릴리스를 보던 것)은 웹이 /api/build 의 desktop 을 보고 '설치 파일 받기' 띠를 띄움 */
+var DESK_DIR = path.join(__dirname, '..', 'desktop', 'release');
+function desktopInfo() {
+  try {
+    var y = fs.readFileSync(path.join(DESK_DIR, 'latest.yml'), 'utf8');
+    var v = (/^version:\s*([\d.]+)/m.exec(y) || [])[1], f = (/^path:\s*(\S+)/m.exec(y) || [])[1];
+    return v && f ? { version: v, file: '/desktop-release/' + f } : null;
+  } catch (e) { return null; }
+}
+app.get('/desktop-release/:name', function (req, res, next) {
+  var n = req.params.name;
+  if (!/^(latest\.yml|WorkManager-Setup-\d+\.\d+\.\d+\.exe(\.blockmap)?)$/.test(n)) return next();
+  var yml = n === 'latest.yml';
+  res.setHeader('Cache-Control', yml ? 'no-cache' : 'public, max-age=31536000, immutable');
+  res.type(yml ? 'text/yaml' : 'application/octet-stream');
+  res.sendFile(path.join(DESK_DIR, n), function (err) { if (err && !res.headersSent) res.status(404).end(); });
+});
 app.get('/api/build', function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.json({ data: buildInfo() });
