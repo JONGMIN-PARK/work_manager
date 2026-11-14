@@ -270,12 +270,14 @@ test('보고용 표시 (v13.487~488): 결과 · ★ 핵심 · 요약 띠 · 진�
   const staff = strip(client.buildPreviewHTML(last, 'light', client.paneCtx('last', cur, '2026-11-09', '2026-11-13', false)));
   assert.match(staff, /wrp-sum-t">지난주 실적<\/span><span class="wrp-sum-r">11\/02 ~ 11\/06/);
   assert.match(staff, /wrp-res">→ 재발 0건/);
-  assert.ok(!/wrp-alert|wrp-st-risk|wrp-it rk|확인 필요|지원 필요|#지연/.test(staff));
+  assert.ok(!/wrp-st-risk|wrp-it rk|확인 필요|지원 필요|#지연/.test(staff));
+  assert.match(staff, /class="wrp-sum-2"[^>]*>(?:<span class="none">|<span class="due")/);   // 둘째 줄은 늘 있음
   assert.ok(!/miss|금주 계획 없음|금주 미기재|신규|계속/.test(staff));      // 단발 업무가 많아 이어짐 표시는 안 씀
 
   // 보고용: 부드러운 말로
   const boss = strip(client.buildPreviewHTML(last, 'light', client.paneCtx('last', cur, '2026-11-09', '2026-11-13', true)));
-  assert.match(boss, /wrp-alert">⚠ <b>SDC<\/b> 챔퍼링 <span class="wrp-chip rk">지원 필요/);
+  assert.match(boss, /<span class="rk" title="확인 필요">⚠<\/span> <b>SDC<\/b> 챔퍼링/);
+  assert.match(boss, /<span class="wrp-chip rk">지원 필요/);
   assert.match(boss, /wrp-it rk/);
   assert.match(boss, /wrp-st-risk/);
   assert.match(boss, /확인 필요 1<\/b>/);

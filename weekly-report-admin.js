@@ -460,14 +460,15 @@
     + '.wrp-pprev{color:var(--t6);font-weight:400}'
     + '.wrp-pdelta{font:700 10px/1 ui-monospace,Consolas,monospace;color:#16A34A}.wrp-pdelta.dn{color:#DC2626}'
     // 맨 위 요약 띠
-    + '.wrp-sum{background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:8px 11px;margin-bottom:12px}'
-    + '.wrp-sum-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}'
-    + '.wrp-sum-t{font-size:15px;font-weight:800;color:var(--t2)}.wrp-sum-r{font-size:11.5px;color:var(--t5);font-family:ui-monospace,Consolas,monospace}'
-    + '.wrp-kpis{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}'
-    + '.wrp-k{font-size:11.5px;color:var(--t5);white-space:nowrap}.wrp-k b{font-size:18px;font-weight:800;margin-right:3px;font-family:ui-monospace,Consolas,monospace}'
-    + '.wrp-alert{margin-top:6px;padding:5px 8px;border-radius:6px;background:rgba(220,38,38,.08);color:#B91C1C;font-size:12px;line-height:1.5}'
-    + '.wrp-alert b{font-weight:700}'
-    + '.wrp-next{margin-top:5px;font-size:11.5px;color:var(--t3)}.wrp-next b{font-weight:700;color:var(--t2)}'
+    // 요약 띠는 늘 두 줄 · 같은 높이 (v13.489) — 지난주 · 금주 칸을 나란히 놓아도 테두리가 맞음. 넘치는 글은 … (전체는 title)
+    + '.wrp-sum{background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:5px 10px;margin-bottom:10px;display:grid;grid-template-rows:22px 18px;row-gap:2px;box-sizing:border-box;height:51px;overflow:hidden}'
+    + '.wrp-sum-h,.wrp-sum-2{display:flex;align-items:center;min-width:0;white-space:nowrap;overflow:hidden}'
+    + '.wrp-sum-h{gap:8px}'
+    + '.wrp-sum-t{font-size:14px;font-weight:800;color:var(--t2);flex-shrink:0}.wrp-sum-r{font-size:11px;color:var(--t5);font-family:ui-monospace,Consolas,monospace;flex-shrink:0}'
+    + '.wrp-kpis{display:flex;gap:10px;align-items:baseline;margin-left:auto;min-width:0;overflow:hidden}'
+    + '.wrp-k{font-size:11px;color:var(--t5);white-space:nowrap}.wrp-k b{font-size:14px;font-weight:800;margin-right:2px;font-family:ui-monospace,Consolas,monospace}'
+    + '.wrp-sum-2{font-size:11.5px;line-height:18px;color:var(--t3);gap:5px;text-overflow:ellipsis}.wrp-sum-2 b{font-weight:700;color:var(--t2)}'
+    + '.wrp-sum-2 .rk{color:#B91C1C;font-weight:700}.wrp-sum-2 .due{color:var(--t5);display:inline-flex}.wrp-sum-2 .none{color:var(--t6)}.wrp-sum-2 .wrp-dd{margin-left:2px}'
     // 덜 중요한 것은 옅게 — 기타 절 머리
     + '.wrp-sec.etc .wrp-sl{color:var(--t3)}'
     + '.wrp-it.has-d .wrp-name{grid-column:2/4}'
@@ -562,19 +563,26 @@
     }
     if (ctx.boss) kp.push(k(risks.length, '확인 필요', risks.length ? STATUS_COLORS.risk : 'var(--t6)'));
     // 다음 기한 — 안 끝난 일 중 남은 날이 가장 적은 2개 (지난 것 먼저)
-    var dues = items.filter(function (it) { return daysLeft(it.deadline) !== null && taskStates(it).some(function (s) { return s !== 'done'; }); })
+    //   진행률이 100 미만인 프로젝트는 그 주 할 일을 다 끝냈어도 아직 안 끝난 일
+    var open = function (it) { return (typeof it.pct === 'number' && it.pct >= 0) ? it.pct < 100 : taskStates(it).some(function (s) { return s !== 'done'; }); };
+    var dues = items.filter(function (it) { return daysLeft(it.deadline) !== null && open(it); })
       .sort(function (a, b) { return daysLeft(a.deadline) - daysLeft(b.deadline); }).slice(0, 2);
     var title = ctx.title || (ctx.role === 'last' ? '지난주 실적' : '금주 계획');
-    var sep = ' &nbsp;·&nbsp; ';
+    var sep = '<i style="font-style:normal;color:var(--t6)">·</i>';
+    // 둘째 줄 — (보고용이면) 확인 필요 먼저, 그다음 다음 기한. 아무것도 없어도 줄은 남겨 높이를 맞춤
+    var line2 = [];
+    //   칸 폭(~410px)에 다 들어가게 말머리는 기호로 — '확인 필요' 개수는 첫 줄에 있음
+    if (risks.length) line2.push('<span class="rk" title="확인 필요">⚠</span> ' + risks.slice(0, 2).map(function (r) {
+      return '<b>' + esc(r.it.client || '') + '</b> ' + esc(stripFlags(splitResult(r.what).main));
+    }).join(', ') + (risks.length > 2 ? ' 외 ' + (risks.length - 2) : ''));
+    if (dues.length) line2.push('<span class="due" title="다음 기한">' + ICO.cal + '</span> ' + dues.map(function (it) {
+      return '<b>' + esc(it.client || '') + ' ' + esc(stripFlags(splitResult(it.name).main)) + '</b> ' + esc(it.deadline) + ddayBadge(it.deadline);
+    }).join(sep));
+    var plain2 = (risks.length ? '확인 필요: ' : '') + line2.join(' · ').replace('<span class="due" title="다음 기한">', '다음 기한 ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();   // 줄이 넘쳐 … 로 잘려도 마우스를 올리면 전부
     return '<div class="wrp-sum">'
-      + '<div class="wrp-sum-h"><span class="wrp-sum-t">' + esc(title) + '</span>' + (ctx.range ? '<span class="wrp-sum-r">' + esc(ctx.range) + '</span>' : '') + '</div>'
-      + '<div class="wrp-kpis">' + kp.join('') + '</div>'
-      + (risks.length ? '<div class="wrp-alert">⚠ ' + risks.slice(0, 4).map(function (r) {
-          return '<b>' + esc(r.it.client || '') + '</b> ' + esc(stripFlags(splitResult(r.what).main)) + ' ' + chip('rk', esc(riskLabel(r.why)));
-        }).join(sep) + (risks.length > 4 ? ' 외 ' + (risks.length - 4) : '') + '</div>' : '')
-      + (dues.length ? '<div class="wrp-next">다음 기한 ' + dues.map(function (it) {
-          return '<b>' + esc(it.client || '') + ' ' + esc(stripFlags(splitResult(it.name).main)) + '</b> ' + esc(it.deadline) + ddayBadge(it.deadline);
-        }).join(sep) + '</div>' : '')
+      + '<div class="wrp-sum-h"><span class="wrp-sum-t">' + esc(title) + '</span>' + (ctx.range ? '<span class="wrp-sum-r">' + esc(ctx.range) + '</span>' : '')
+      +   '<span class="wrp-kpis">' + kp.join('') + '</span></div>'
+      + '<div class="wrp-sum-2"' + (plain2 ? ' title="' + esc(plain2) + '"' : '') + '>' + (line2.length ? line2.join(sep) : '<span class="none">다가오는 기한 없음</span>') + '</div>'
       + '</div>';
   }
 
