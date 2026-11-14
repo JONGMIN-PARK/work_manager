@@ -14,6 +14,7 @@ var auth = require('../middleware/auth');
 var tenant = require('../middleware/tenant');
 var ps = require('../lib/project-access');
 var { recordScope } = require('../lib/record-scope');
+var recordDept = require('../lib/record-dept');   // v13.498 업무일지 사업부
 var _hasMs = null;   // work_records.milestone_id 컬럼 있는지 (서버 켜진 뒤 한 번만 확인)
 var httpErr = require('../lib/http-errors');
 
@@ -67,10 +68,11 @@ router.get('/', async function (req, res) {
       _hasMs = colCheck.rows.length > 0;
     }
     var hasMs = _hasMs;
-    var cols = 'id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient' + (hasMs ? ', milestone_id' : '');
+    var cols = 'id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, dept' + (hasMs ? ', milestone_id' : '');
     var arQ = db.query('SELECT ' + cols + ' FROM work_records ' + arWhere + ' ORDER BY date DESC LIMIT 50000', arParams);
 
-    var results = await Promise.all([projQ, msQ, evQ, arQ]);
+    var results = await Promise.all([projQ, msQ, evQ, arQ, recordDept.deptMap(db, req.tenant.id)]);
+    recordDept.attach(results[3].rows, results[4]);
 
     res.setHeader('Cache-Control', 'private, no-cache');
     res.json({

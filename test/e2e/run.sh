@@ -141,6 +141,7 @@ else
   run_batch e2e93-wr-plan-actual.js
   run_batch e2e94-desk-update.js
   run_batch e2e95-chat-img-fast.js
+  run_batch e2e96-worklog-dept.js
   run_batch e2e59-notebook.js
   run_batch e2e60-notebook-links-coach.js
   run_batch e2e61-notebook-print.js

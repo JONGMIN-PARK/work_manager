@@ -8,6 +8,7 @@ var { parsePagination } = require('../middleware/pagination');
 var { recordScope } = require('../lib/record-scope');
 var httpErr = require('../lib/http-errors');
 var wlm = require('../middleware/worklog-manager');
+var recordDept = require('../lib/record-dept');   // v13.498 사업부
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
@@ -46,14 +47,16 @@ router.get('/records', async function (req, res) {
       _hasMs = colCheck.rows.length > 0;
     }
     var hasMs = _hasMs;
-    var cols = 'id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient' + (hasMs ? ', milestone_id' : '');
+    var cols = 'id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, dept' + (hasMs ? ', milestone_id' : '');
     var dataSql = 'SELECT ' + cols + ' FROM work_records ' + where +
       ' ORDER BY date DESC, name, order_no LIMIT $' + idx++ + ' OFFSET $' + idx++;
     params.push(pg.limit, pg.offset);
-    var r = await db.query(dataSql, params);
+    var both = await Promise.all([db.query(dataSql, params), recordDept.deptMap(db, req.tenant.id)]);
+    var r = both[0], dm = both[1];
+    recordDept.attach(r.rows, dm);   // v13.498 사업부 — 저장된 것, 없으면 작성자의 부서
 
-    // ETag 기반 캐싱: 데이터 변경 없으면 304 반환
-    var etag = '"wr-' + r.rows.length + '-' + (r.rows.length > 0 ? r.rows[0].id : 0) + '-' + (r.rows.length > 0 ? r.rows[r.rows.length - 1].id : 0) + '"';
+    // ETag 기반 캐싱: 데이터 변경 없으면 304 반환 (사람의 부서가 바뀌어도 새로 받게 부서 지문 포함)
+    var etag = '"wr-' + r.rows.length + '-' + (r.rows.length > 0 ? r.rows[0].id : 0) + '-' + (r.rows.length > 0 ? r.rows[r.rows.length - 1].id : 0) + '-' + dm.sig + '"';
     res.setHeader('Cache-Control', 'private, no-cache');
     res.setHeader('ETag', etag);
     if (req.headers['if-none-match'] === etag) {
@@ -84,17 +87,18 @@ async function _insertRecords(client, records, userId, tenantId, returning) {
   var out = [], n = 0;
   var STEP = 20000;
   for (var b = 0; b < records.length; b += STEP) {
-    var cols = [[], [], [], [], [], [], [], [], [], []];
+    var cols = [[], [], [], [], [], [], [], [], [], [], []];
     records.slice(b, b + STEP).forEach(function (r) {
-      var row = [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, r.milestoneId || r.milestone_id || null];
+      var row = [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, r.milestoneId || r.milestone_id || null,
+        r.dept ? String(r.dept).slice(0, 100) : null];   // v13.498 불러올 때 고른 사업부
       for (var c = 0; c < row.length; c++) cols[c].push(row[c] == null ? null : String(row[c]));
     });
     var r2 = await client.query(
-      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, user_id, tenant_id) ' +
-      'SELECT u.date, u.name, u.order_no, u.hours::numeric, u.task_type, u.abbr, u.content, u.ocmt, u.oclient, u.milestone_id, $11, $12 ' +
-      'FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[]) ' +
-      'AS u(date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id)' +
-      (returning ? ' RETURNING id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, user_id' : ''),
+      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, dept, user_id, tenant_id) ' +
+      'SELECT u.date, u.name, u.order_no, u.hours::numeric, u.task_type, u.abbr, u.content, u.ocmt, u.oclient, u.milestone_id, u.dept, $12, $13 ' +
+      'FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[], $11::text[]) ' +
+      'AS u(date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, dept)' +
+      (returning ? ' RETURNING id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, dept, user_id' : ''),
       cols.concat([userId, tenantId])
     );
     if (returning) out = out.concat(r2.rows);
@@ -148,16 +152,16 @@ router.post('/records/sync', wlm.requireWorklogManager, async function (req, res
     if (upd.length) {
       var byId = new Map();
       upd.forEach(function (u) {
-        byId.set(String(u.id), [u.id, u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null]);
+        byId.set(String(u.id), [u.id, u.date || '', u.name || '', u.orderNo || u.order_no || '', u.hours || 0, u.taskType || u.task_type || '', u.abbr || '', u.content || '', u.ocmt || null, u.oclient || null, u.dept ? String(u.dept).slice(0, 100) : null]);
       });
-      var cols = [[], [], [], [], [], [], [], [], [], []];
+      var cols = [[], [], [], [], [], [], [], [], [], [], []];
       byId.forEach(function (row) { for (var c = 0; c < row.length; c++) cols[c].push(row[c] == null ? null : String(row[c])); });
-      var scU = recordScope(req, { alias: 'w', startIdx: 11 });
+      var scU = recordScope(req, { alias: 'w', startIdx: 12 });
       await client.query(
         'UPDATE work_records w SET date=u.date, name=u.name, order_no=u.order_no, hours=u.hours::numeric, task_type=u.task_type, ' +
-        'abbr=u.abbr, content=u.content, ocmt=u.ocmt, oclient=u.oclient ' +
-        'FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[]) ' +
-        'AS u(id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient) ' +
+        'abbr=u.abbr, content=u.content, ocmt=u.ocmt, oclient=u.oclient, dept=COALESCE(u.dept, w.dept) ' +
+        'FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[], $11::text[]) ' +
+        'AS u(id, date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, dept) ' +
         'WHERE w.id = u.id::integer AND ' + scU.where,
         cols.concat(scU.params)
       );
@@ -267,8 +271,8 @@ router.post('/records', wlm.requireWorklogManager, async function (req, res) {
     var r = req.body;
     if (!r.date || !r.name) return res.status(400).json({ error: 'INVALID', message: 'date, name 필수' });
     var result = await db.query(
-      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, user_id, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',
-      [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, r.milestoneId || r.milestone_id || null, req.user.sub, req.tenant.id]
+      'INSERT INTO work_records (date, name, order_no, hours, task_type, abbr, content, ocmt, oclient, milestone_id, dept, user_id, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *',
+      [r.date || '', r.name || '', r.orderNo || r.order_no || '', r.hours || 0, r.taskType || r.task_type || '', r.abbr || '', r.content || '', r.ocmt || null, r.oclient || null, r.milestoneId || r.milestone_id || null, r.dept ? String(r.dept).slice(0, 100) : null, req.user.sub, req.tenant.id]
     );
     res.status(201).json({ data: result.rows[0] });
   } catch (e) {

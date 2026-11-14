@@ -203,7 +203,7 @@ function wrAnalyzeImport(existing,newRecs){
 /* 병합 결과 → 서버에 보낼 차이 (v13.258)
    - insert: id 없는 것(새 행) · deleteIds: 기존에 있었는데 결과에 없는 것(중복 정리 · 대체 모드에서 빠진 것)
    - update: id 가 있고 저장되는 칸(날짜·이름·수주번호·시간·업무분장·약자·내용·수주명·거래처)이 실제로 달라진 것만 */
-var WR_SAVED_FIELDS=['date','name','orderNo','hours','taskType','abbr','content','ocmt','oclient'];
+var WR_SAVED_FIELDS=['date','name','orderNo','hours','taskType','abbr','content','ocmt','oclient','dept'];   // v13.498 사업부도 저장
 function _wrNorm(k,v){if(v==null)return '';if(k==='hours')return String(parseFloat(v)||0);return String(v)}
 function wrMergeDiff(existing,merged){
   var byId=new Map();existing.forEach(function(r){if(r.id!=null)byId.set(String(r.id),r)});
