@@ -354,9 +354,31 @@ function _cbSave(op) {
   if (op.clear) body.clear = true;
   if (CB.W && CB.H) { body.W = CB.W; body.H = CB.H; }   // v13.455 원본 크기 — 미리보기에 줄여 그릴 기준
   CB.saving = (CB.saving || 0) + 1; _cbInfo();
-  apiFetch('/api/chat/files/' + encodeURIComponent(CB.fid) + '/annot', { method: 'POST', body: JSON.stringify(body) })
+  var fid = CB.fid;
+  apiFetch('/api/chat/files/' + encodeURIComponent(fid) + '/annot', { method: 'POST', body: JSON.stringify(body) })
+    .then(function (r) {
+      // v13.500 내 화면의 대화 미리보기는 실시간 신호를 기다리지 않고 바로 — 연결이 끊겼다 붙는 사이에 지우면 표시가 남은 채 그대로였음
+      var d = (r && r.data) || {};
+      _cbSyncThumbs(fid, { rot: d.rot || 0, n: d.n || 0, crop: !!d.crop, at: Date.now() });
+    })
     .catch(function (e) { _cbToast((e && e.data && e.data.message) || '표시를 저장하지 못했습니다', 'error'); })
     .then(function () { if (CB) { CB.saving--; _cbInfo(); } });
+}
+/** v13.500 이 사진의 표시 요약을 대화(본문 · 답글 · 담아 둔 방) · 기기 저장본에 반영하고 화면의 미리보기를 다시 그림 */
+var _cbSyncT = {};
+function _cbSyncThumbs(fid, sum) {
+  if (!fid || !sum) return;
+  if (typeof CX !== 'undefined') {
+    var lists = [CX.msgs || [], CX.threadMsgs || []];
+    if (CX.cache) Object.keys(CX.cache).forEach(function (k) { var c = CX.cache[k]; if (c && c.msgs) lists.push(c.msgs); });
+    lists.forEach(function (l) { l.forEach(function (m) { if (m && m.file && m.file.id === fid) m.file.annot = Object.assign({}, m.file.annot || {}, sum); }); });
+    if (typeof chatLocalSave === 'function') chatLocalSave();   // 앱을 새로 열어도 예전 표시로 그리지 않게
+  }
+  delete _cbAnnC[fid];   // 받아 둔 표시 데이터도 버림 (다음에 새로)
+  clearTimeout(_cbSyncT[fid]);
+  _cbSyncT[fid] = setTimeout(function () {
+    document.querySelectorAll('img[data-cbthumb="' + fid + '"]').forEach(function (img) { chatBoardThumb(img, { id: fid, annot: sum }, true); });
+  }, 150);
 }
 
 /* ─── 열기 ─── */
@@ -535,6 +557,7 @@ function _cbReady(img) {
 function chatBoardClose() {
   if (!CB) return;
   if (CB.fid && CB.room) _cbCursor({ bye: true }, true);
+  if (CB.fid && CB.a && CB.undo && CB.undo.length) _cbSyncThumbs(CB.fid, { rot: CB.a.rot || 0, n: (CB.a.shapes || []).length, crop: !!CB.a.crop, at: Date.now() });   // v13.500 이번에 고친 것이 있으면
   if (CB.textEl) CB.textEl.remove();
   CB.el.remove();
   document.removeEventListener('keydown', _cbKey, true);
@@ -1063,7 +1086,12 @@ function chatBoardThumb(img, f, force) {
   }
   img.dataset.cbthumb = f.id;
   var need = !!(an && (an.n || an.crop)), rot = v ? v.a : (an && an.rot) || 0;
-  if (!need && !rot) { delete img.dataset.cbkey; if (force) _cbFileUrl(f.id).then(function (u) { img.src = u; }); return; }
+  if (!need && !rot) {
+    delete img.dataset.cbkey;
+    // v13.500 표시를 다 지운 사진 — 작은 미리보기로 되돌림 (원본을 받아 그리던 것) · 앨범 · 인용 칸도 같이
+    if (force) (typeof _cxBlob === 'function' ? _cxBlob(f.id, true) : _cbFileUrl(f.id)).then(function (u) { if (!img.dataset.cbkey) img.src = u; }).catch(function () {});
+    return;
+  }
   // v13.440 만든 미리보기는 담아 두고 다시 씀 — 굴릴 때마다 · 목록을 다시 그릴 때마다 새로 만들던 것 (휴대폰 굴림이 끊기던 가장 큰 원인)
   var fill = !!(v && v.f), key = f.id + '|' + rot + '|' + (fill ? 1 : 0) + '|' + (an ? (an.n || 0) + ':' + (an.crop ? 1 : 0) + ':' + (an.at || 0) : '');
   var old = _cbThumbKey[f.id];
