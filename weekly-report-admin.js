@@ -49,8 +49,8 @@
     if (st === 'in_progress') return '<span style="color:#2563EB;background:rgba(37,99,235,.12);padding:1px 6px;border-radius:4px;font-size:11px">● 진행중</span>';
     return '';
   }
-  // D-day 계산 (deadline = "~05/29" 형식)
-  function dday(deadline) {
+  // 남은 날 (deadline = "~05/29" 형식) — 없거나 못 읽으면 null. 지난 날은 음수
+  function daysLeft(deadline) {
     if (!deadline) return null;
     var m = String(deadline).match(/~?(\d{1,2})\/(\d{1,2})/);
     if (!m) return null;
@@ -61,6 +61,12 @@
     // 기한엔 해가 없다 — 반년 넘게 차이 나면 해를 넘긴 것으로 (12월에 본 ~01/05 = D-몇, 1월에 본 ~12/20 = 지난해)
     if (diff > 183) { target.setFullYear(target.getFullYear() - 1); diff = Math.round((target - today) / 86400000); }
     else if (diff < -183) { target.setFullYear(target.getFullYear() + 1); diff = Math.round((target - today) / 86400000); }
+    return diff;
+  }
+  // D-day 표시 (라벨 · 색)
+  function dday(deadline) {
+    var diff = daysLeft(deadline);
+    if (diff === null) return null;
     if (diff === 0) return { label: 'D-DAY', color: DDAY.dday.color, bg: DDAY.dday.bg };
     if (diff > 0) {
       var t = diff <= DDAY.soonAt ? DDAY.soon : (diff <= DDAY.nearAt ? DDAY.near : DDAY.far);
@@ -207,19 +213,25 @@
   // ── 미리보기 렌더 헬퍼 (buildPreviewHTML 구성요소) ──
   var ICON_SLOT = 14; // 상태 아이콘 고정 슬롯(px) — 이름/세부 시작 위치 정렬
 
-  // 상태 아이콘(v13.349 SVG): 완료=초록 원 + 체크 · 진행중=빨간 테 + 반쯤 찬 원(하고 있는 중) · 예정=파란 빈 원
+  // 상태 아이콘(v13.349 SVG): 완료=초록 원 + 체크 · 진행중=파란 테 + 반쯤 찬 원 · 예정=회색 빈 원 · 확인 필요=빨간 원 + ! (v13.487)
   //   벡터라 확대 · 고해상도 화면 · 다른 페이지에 붙여도 또렷. 3종 같은 지름(ICON_PX)
   function statusIcon(st) {
     var o = '<svg class="wrp-st wrp-st-' + st + '" width="' + ICON_PX + '" height="' + ICON_PX + '" viewBox="0 0 16 16" aria-hidden="true" style="display:inline-block;vertical-align:middle;flex-shrink:0">';
     if (st === 'done') return o + '<circle cx="8" cy="8" r="8" fill="' + STATUS_COLORS.done + '"/><path d="M4.4 8.4l2.4 2.4 4.9-5.1" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     if (st === 'in_progress') return o + '<circle cx="8" cy="8" r="6.9" fill="none" stroke="' + STATUS_COLORS.in_progress + '" stroke-width="2.2"/><path d="M8 3.6a4.4 4.4 0 0 1 0 8.8z" fill="' + STATUS_COLORS.in_progress + '"/></svg>';
     if (st === 'planned') return o + '<circle cx="8" cy="8" r="6.9" fill="none" stroke="' + STATUS_COLORS.planned + '" stroke-width="2"/></svg>';
-    // v13.487 주의(#지연 · #이슈) — 빨간 원 + 느낌표
     if (st === 'risk') return o + '<circle cx="8" cy="8" r="8" fill="' + STATUS_COLORS.risk + '"/><path d="M8 4.2v4.6" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="8" cy="11.6" r="1.15" fill="#fff"/></svg>';
     return '';
   }
-  // ── v13.487 보고용 표시 도우미 ──
-  // 'A → B' · 'A => B' · 'A ⇒ B' — 뒤쪽 B 를 '결과'로 따로 (줄 머리의 → 는 파서가 하위 표시로 이미 뗌)
+  // ── 보고용 표시 (v13.487~488) ─────────────────────────────────────────
+  //   · '업무 → 결과' 의 결과 강조 · ★ 핵심(#중요 · ★)은 늘 보임 — 사실 · 성과라 직원과 같이 봐도 됨
+  //   · 확인 필요(#지연 · #이슈 · #위험 · #문제)는 [👔 보고용] 을 켰을 때만, 말도 탓하는 느낌 없이
+  //   · 지난주와 이어지는 것은 진행률 변화(60 → 65%)만 — '신규 · 계속 · 빠짐' 은 단발 업무가 많아 뜻이 없어 안 씀
+  var RISK_LABEL = { '지연': '지원 필요', '문제': '지원 필요', '이슈': '확인 필요', '위험': '확인 필요' };
+  function riskLabel(r) { return RISK_LABEL[r] || '확인 필요'; }
+  var _pvBoss = (function () { try { return localStorage.getItem('wr-pv-boss') === '1'; } catch (e) { return false; } })();
+
+  // 'A → B' · 'A => B' · 'A ⇒ B' — 뒤쪽 B 를 결과로 (줄 머리의 → 는 파서가 하위 표시로 이미 뗌)
   function splitResult(text) {
     var m = String(text || '').match(/^(.*?\S)\s*(?:=>|→|⇒)\s*(\S.*)$/);
     return m ? { main: m[1], res: m[2] } : { main: String(text || ''), res: '' };
@@ -228,48 +240,64 @@
     var r = splitResult(text);
     return inlineMarkup(r.main) + (r.res ? '<span class="wrp-res">→ ' + inlineMarkup(r.res) + '</span>' : '');
   }
-  function stripFlags(t) { return String(t || '').replace(WRP.FLAG_STRIP_RE || /#(?:지연|이슈|위험|문제|중요)|★/g, '').replace(/\s+/g, ' ').trim(); }
-  function itemRisk(it) {
-    if (it.risk) return it.risk;
-    var d = (it.details || []).filter(function (x) { return x.risk; })[0];
-    return d ? d.risk : '';
-  }
-  function flagChip(kind, label, title) {
-    return '<span class="wrp-chip ' + kind + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' + label + '</span>';
-  }
-  // 지난주 ↔ 금주 같은 업무 찾기 — 같은 사이트에서 이름이 같거나 한쪽이 다른 쪽을 품거나 글자 짝이 절반 넘게 겹치면
+  function stripFlags(t) { return String(t || '').replace(WRP.FLAG_STRIP_RE, '').replace(/\s+/g, ' ').trim(); }
+  // 세부 줄 보이는 글 — 담당 · 상태 · 보고 태그를 뺀 것
+  function detailText(d) { return stripFlags(String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료|#진행중?|#예정/g, '')); }
+  function chip(kind, label) { return '<span class="wrp-chip ' + kind + '">' + label + '</span>'; }
+
+  // 지난주 같은 업무 — 같은 사이트에서 이름이 같거나 · 한쪽이 다른 쪽을 품거나 · 글자 짝이 절반 넘게 겹치면 (진행률 변화용)
   function normKey(s) { return String(s || '').toLowerCase().replace(/[\s\-_·,.()\[\]{}\/]+/g, ''); }
-  function bigrams(s) { var o = []; for (var i = 0; i < s.length - 1; i++) o.push(s.slice(i, i + 2)); return o; }
   function nameSim(a, b) {
     a = normKey(a); b = normKey(b);
     if (!a || !b) return 0;
     if (a === b) return 1;
     if (Math.min(a.length, b.length) >= 2 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0)) return 0.9;
-    var A = bigrams(a), B = bigrams(b), hit = 0, used = {};
-    A.forEach(function (g) { for (var j = 0; j < B.length; j++) if (!used[j] && B[j] === g) { used[j] = 1; hit++; break; } });
-    return (A.length + B.length) ? 2 * hit / (A.length + B.length) : 0;
+    var B = [], hit = 0, i;
+    for (i = 0; i < b.length - 1; i++) B.push(b.slice(i, i + 2));
+    var nA = Math.max(0, a.length - 1), nB = B.length;
+    for (i = 0; i < a.length - 1; i++) { var j = B.indexOf(a.slice(i, i + 2)); if (j >= 0) { B[j] = null; hit++; } }
+    return (nA + nB) ? 2 * hit / (nA + nB) : 0;
   }
   function findTwin(it, pane) {
-    if (!pane || !pane.items) return null;
-    var best = null, bs = 0, c = normKey(it.client);
-    pane.items.forEach(function (o) {
+    var best = null, bs = 0.5, c = normKey(it.client);
+    ((pane && pane.items) || []).forEach(function (o) {
       if (normKey(o.client) !== c) return;
       var s = nameSim(it.name, o.name);
-      if (s > bs) { bs = s; best = o; }
+      if (s >= bs) { bs = s; best = o; }
     });
-    return bs >= 0.5 ? best : null;
+    return best;
   }
-  function wkMmdd(iso, addDays) {   // (아래 업무일지 패널에 같은 이름 mmdd 가 있어 따로)
+
+  function wkMmdd(iso, addDays) {   // (업무일지 패널에 같은 이름 mmdd 가 따로 있음)
     var p = String(iso || '').split('-').map(Number);
     if (p.length !== 3 || p.some(isNaN)) return '';
     var d = new Date(p[0], p[1] - 1, p[2] + (addDays || 0));
     return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
   }
-  /** 보고용 맥락 — role: 'last' | 'cur', other: 반대쪽 파싱 결과, weekStart/End: 금주 'YYYY-MM-DD' */
-  function paneCtx(role, other, weekStart, weekEnd) {
+  /** 칸 맥락 — role: 'last' | 'cur' · other: 반대쪽 파싱 결과 · weekStart/End: 금주 'YYYY-MM-DD' · boss: 보고용(생략하면 고른 값) */
+  function paneCtx(role, other, weekStart, weekEnd, boss) {
     var off = role === 'last' ? -7 : 0;
     var a = wkMmdd(weekStart, off), b = wkMmdd(weekEnd, off);
-    return { role: role, other: other || null, range: a && b ? a + ' ~ ' + b : '' };
+    return { role: role, other: other || null, range: a && b ? a + ' ~ ' + b : '', boss: boss == null ? _pvBoss : !!boss };
+  }
+  /** 그리기용 보기 설정 — buildPreviewHTML 이 한 번 만들어 아래 그리기 함수들에 넘김 */
+  function makeView(ctx, np) {
+    var boss = !!(ctx && ctx.boss);
+    var prev = ctx && ctx.role === 'cur' && ctx.other ? ctx.other : null;
+    return {
+      np: np,
+      risk: function (x) { return boss && x && x.risk ? x.risk : ''; },   // 이 줄 자체의 확인 필요
+      itemRisk: function (it) {                                           // 업무 줄 또는 세부 줄 어디든
+        if (!boss) return '';
+        if (it.risk) return it.risk;
+        for (var i = 0; i < (it.details || []).length; i++) if (it.details[i].risk) return it.details[i].risk;
+        return '';
+      },
+      prevPct: function (it) {
+        var tw = prev && findTwin(it, prev);
+        return tw && typeof tw.pct === 'number' && tw.pct >= 0 ? tw.pct : null;
+      }
+    };
   }
   // 상태/마커를 고정폭 슬롯에 담아 뒤 텍스트 시작 위치를 통일
   function iconSlot(inner) {
@@ -312,20 +340,21 @@
     return ICO.user + '<span class="wrp-mn">' + names + '</span>';
   }
   // 세부 한 줄: 상태 도형(무태그=항목 상태, 없으면 예정) · 하위 줄(└ ↳ → 또는 들여쓰기)은 └
-  function renderDetail(d, di, itemStatus, np) {
-    var dText = stripFlags(String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료/g, '').replace(/#진행중?/g, '').replace(/#예정/g, ''));
+  function renderDetail(d, itemStatus, view) {
+    var dText = detailText(d);
     var own = (d.status && d.status !== 'none') ? d.status : null;
     var lineSt = own || (d.sub ? 'none' : (itemStatus === 'none' ? 'planned' : itemStatus));
+    var rk = view.risk(d);
     // 칸 전체가 예정뿐(np)이면 세부 줄 앞에 아무 표시도 없이 — 글자가 업무 이름과 같은 자리에서 시작 (하위 줄 └ 는 그대로)
-    var bare = np && lineSt === 'planned' && !d.risk;
-    var inner = statusIcon(d.risk ? 'risk' : lineSt) || '<span style="color:var(--t6);font-size:11px">└</span>';
-    return '<div class="wrp-dl' + (d.sub ? ' sub' : '') + (lineSt === 'done' && !d.risk ? ' dn' : '') + (d.risk ? ' rk' : '') + '">'
+    var bare = view.np && lineSt === 'planned' && !rk;
+    var inner = statusIcon(rk ? 'risk' : lineSt) || '<span style="color:var(--t6);font-size:11px">└</span>';
+    return '<div class="wrp-dl' + (d.sub ? ' sub' : '') + (lineSt === 'done' && !rk ? ' dn' : '') + (rk ? ' rk' : '') + '">'
       + (bare ? '' : '<span class="wrp-dic">' + inner + '</span>')
       + '<span class="wrp-dt" title="' + esc(dText) + '">' + (d.star ? '<span class="wrp-star">★</span>' : '') + markupWithResult(dText)
-      + (d.risk ? ' ' + flagChip('rk', esc(d.risk)) : '') + '</span>'
+      + (rk ? ' ' + chip('rk', esc(riskLabel(rk))) : '') + '</span>'
       + '</div>';
   }
-  // 진행 줄: [막대] 40% · ~12/04 ········ D-28   (v13.487 지난주 값이 있으면 60 → 65% · +5)
+  // 진행 줄: [막대] 40% · ~12/04 ········ D-28   (지난주 값이 있으면 60 → 65% +5)
   function progressLine(it, pct, prevPct) {
     if (!it.deadline && pct === null) return '';
     var h = '<div class="wrp-pg">';
@@ -348,59 +377,51 @@
     var own = it.ownStatus != null ? it.ownStatus : it.status;   // v13.353 업무 줄에 직접 붙은 태그만 물려받음 (세부에서 올린 상태는 아님)
     return lines.map(function (d) { return norm(d.status && d.status !== 'none' ? d.status : own); });
   }
-  // 절 머리: 01 개발  3건 ━━━━━━ 완료 2 · 진행 1
-  function renderSectionHeader(sec, themeId, np) {
+  // 절 머리: 01 개발  3건 ━━━━━━ 완료 2 · 진행 1 (· 확인 필요 1)
+  function renderSectionHeader(sec, themeId, view) {
     var cl = secOfTheme(sec.type, themeId), items = sec.items || [];
-    var n = { done: 0, in_progress: 0, planned: 0 }, tot = 0;
-    items.forEach(function (it) { taskStates(it).forEach(function (st) { n[st]++; tot++; }); });
-    var cnt = tot; tot = tot || 1;
+    var n = countTasks(items), tot = n.total || 1;
     var seg = function (k) { return n[k] ? '<span style="width:' + (n[k] * 100 / tot) + '%;background:' + STATUS_COLORS[k] + '"></span>' : ''; };
+    var rk = items.filter(view.itemRisk).length;
     var txt = [];
     if (n.done) txt.push('<b style="color:' + STATUS_COLORS.done + '">완료 ' + n.done + '</b>');
     if (n.in_progress) txt.push('<b style="color:' + STATUS_COLORS.in_progress + '">진행 ' + n.in_progress + '</b>');
     if (n.planned) txt.push('<b style="color:' + STATUS_COLORS.planned + '">예정 ' + n.planned + '</b>');
-    var rk = items.filter(itemRisk).length;
-    if (rk) txt.push('<b style="color:' + STATUS_COLORS.risk + '">주의 ' + rk + '</b>');
-    if (np && rk) np = false;   // 주의가 있으면 막대 · 개수를 보여 줌
+    if (rk) txt.push('<b style="color:' + STATUS_COLORS.risk + '">확인 필요 ' + rk + '</b>');
+    // 전부 예정인 칸(다음 주 등)은 막대 · 개수가 다 '예정' 이라 뜻이 없음 — 가는 줄만 (확인 필요가 있으면 보여 줌)
+    var bare = view.np && !rk;
     return '<div class="wrp-sh">'
       + '<span class="wrp-no" style="background:' + cl.main + '">' + cl.num + '</span>'
       + '<span class="wrp-sl"><span class="wrp-sic" style="color:' + cl.main + '">' + (ICO[sec.type] || ICO.etc) + '</span>' + esc(secLabel(sec.type)) + '</span>'
-      + '<span class="wrp-cnt" title="할 일 ' + cnt + '건 (업무 ' + items.length + '개)">' + cnt + '건</span>'
-      // 전부 예정인 칸(다음 주 등)은 막대 · 개수가 다 '예정' 이라 뜻이 없음 — 가는 줄만
-      + (np ? '<span class="wrp-rule"></span>'
+      + '<span class="wrp-cnt" title="할 일 ' + n.total + '건 (업무 ' + items.length + '개)">' + n.total + '건</span>'
+      + (bare ? '<span class="wrp-rule"></span>'
           : '<span class="wrp-sbar" title="완료 ' + n.done + ' · 진행 ' + n.in_progress + ' · 예정 ' + n.planned + '">' + seg('done') + seg('in_progress') + seg('planned') + '</span>'
           + '<span class="wrp-stx">' + txt.join('<i>·</i>') + '</span>')
       + '</div>';
   }
-  function renderItemRow(it, cl, uniformSiteW, np, ctx) {
+  function countTasks(items) {
+    var n = { done: 0, in_progress: 0, planned: 0, total: 0 };
+    items.forEach(function (it) { taskStates(it).forEach(function (st) { n[st]++; n.total++; }); });
+    return n;
+  }
+  function renderItemRow(it, cl, uniformSiteW, view) {
     var pct = (typeof it.pct === 'number' && it.pct >= 0) ? it.pct : null;
     var ms = it.members || [];
     var hasDetails = !!(it.details && it.details.length);
-    var detailsHtml = hasDetails ? it.details.map(function (d, di) { return renderDetail(d, di, it.ownStatus != null ? it.ownStatus : it.status, np); }).join('') : '';
+    var itemSt = it.ownStatus != null ? it.ownStatus : it.status;
+    var detailsHtml = hasDetails ? it.details.map(function (d) { return renderDetail(d, itemSt, view); }).join('') : '';
     var st = it.status === 'none' ? 'planned' : it.status;
-    var risk = it.risk || '';                 // 업무 줄에 직접 붙은 주의 (세부 줄 주의는 그 줄에)
-    var anyRisk = itemRisk(it);
-    // v13.487 지난주 ↔ 금주 이어 보기
-    var chips = '', prevPct = null;
-    if (ctx && ctx.other && ctx.other.items && ctx.other.items.length) {
-      var twin = findTwin(it, ctx.other);
-      if (ctx.role === 'cur') {
-        if (twin) { chips += flagChip('cont', '↻ 계속', '지난주에도 있던 업무'); if (typeof twin.pct === 'number' && twin.pct >= 0) prevPct = twin.pct; }
-        else chips += flagChip('new', '신규', '이번 주에 새로 시작');
-      } else if (!twin && taskStates(it).some(function (s) { return s !== 'done'; })) {
-        chips += flagChip('miss', '금주 계획 없음', '끝나지 않았는데 금주 칸에 없음 — 마무리됐으면 #완료, 이어 하면 금주에 적기');
-      }
-    }
-    if (risk) chips = flagChip('rk', esc(risk)) + chips;
-    // 기한(=D-day)이 박힌 항목 · ★ 핵심은 제목을 굵게 — 날짜가 걸린 일이 목록에서 먼저 눈에 띄도록
-    var titleWeight = it.deadline || it.star ? '700' : '400';   // v13.486 500 은 맑은 고딕엔 없어 보통으로 보이지만, 붙여 넣은 곳 글꼴(Pretendard 등)에선 굵게 나옴 → 400
-    var pl = progressLine(it, pct, prevPct);
-    return '<div class="wrp-it' + (hasDetails ? ' has-d' : '') + (!hasDetails && st === 'done' && !risk ? ' dn' : '') + (anyRisk ? ' rk' : '') + (it.star ? ' star' : '') + '"' + (uniformSiteW ? ' style="--sw:' + uniformSiteW + 'px"' : '') + '>'
+    var rk = view.risk(it);   // 업무 줄에 직접 붙은 확인 필요 (세부 줄 것은 그 줄에)
+    // 기한(=D-day)이 박힌 항목 · ★ 핵심은 제목을 굵게. 500 은 쓰지 않음(v13.486 — 맑은 고딕엔 없어 보통으로, 붙인 곳 글꼴에선 굵게 보임)
+    var titleWeight = it.deadline || it.star ? '700' : '400';
+    var pl = progressLine(it, pct, view.prevPct(it));
+    return '<div class="wrp-it' + (hasDetails ? ' has-d' : '') + (!hasDetails && st === 'done' && !rk ? ' dn' : '') + (view.itemRisk(it) ? ' rk' : '') + '"' + (uniformSiteW ? ' style="--sw:' + uniformSiteW + 'px"' : '') + '>'
       +   '<span class="wrp-site" title="' + esc(it.client || '') + '" style="background:' + cl.bg + ';color:' + cl.main + '">' + esc(it.client || '') + '</span>'
-      +   (hasDetails || (np && !risk) ? '' : '<span class="wrp-ic">' + statusIcon(risk ? 'risk' : st) + '</span>')
+      +   (hasDetails || (view.np && !rk) ? '' : '<span class="wrp-ic">' + statusIcon(rk ? 'risk' : st) + '</span>')
       +   '<span class="wrp-name" title="' + esc(it.name || '') + '">'
       +     (it.star ? '<span class="wrp-star" title="핵심">★</span>' : '')
-      +     '<span class="wrp-nt" style="font-weight:' + titleWeight + '">' + markupWithResult(it.name || '') + '</span>' + chips
+      +     '<span class="wrp-nt" style="font-weight:' + titleWeight + '">' + markupWithResult(it.name || '') + '</span>'
+      +     (rk ? chip('rk', esc(riskLabel(rk))) : '')
       +   '</span>'
       +   '<span class="wrp-mem"' + (ms.length ? ' title="담당자: ' + esc(ms.map(function (m) { return '@' + m; }).join(', ')) + '"' : '') + '>' + membersHtml(ms) + '</span>'
       +   (pl ? '<div class="wrp-pgw">' + pl + '</div>' : '')
@@ -429,12 +450,9 @@
     // v13.348 이름은 늘 한 줄 — 넘치면 … (전체는 마우스를 올리면 title 로)
     + '.wrp-name{grid-column:3;grid-row:1;min-width:0;font-size:13px;color:var(--t2);line-height:20px;display:flex;align-items:center;gap:5px;white-space:nowrap}'
     + '.wrp-nt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-    // v13.487 보고용 표시 — 주의(빨강) · 계속/신규 · 금주 계획 없음 · ★ 핵심 · → 결과
+    // 보고용 표시 — 확인 필요(빨강) · ★ 핵심 · → 결과 · 진행률 변화
     + '.wrp-chip{flex-shrink:0;display:inline-block;font-size:10px;font-weight:700;line-height:16px;padding:0 6px;border-radius:8px;white-space:nowrap;vertical-align:1px;font-style:normal}'
     + '.wrp-chip.rk{color:#fff;background:#DC2626}'
-    + '.wrp-chip.new{color:#2563EB;background:rgba(37,99,235,.12)}'
-    + '.wrp-chip.cont{color:var(--t5);background:rgba(127,127,127,.13);font-weight:400}'
-    + '.wrp-chip.miss{color:#B45309;background:rgba(217,119,6,.14)}'
     + '.wrp-it.rk{background:rgba(220,38,38,.06);box-shadow:inset 3px 0 0 #DC2626}'
     + '.wrp-dl.rk .wrp-dt{color:#B91C1C}'
     + '.wrp-star{color:#F59E0B;font-size:13px;line-height:1;flex-shrink:0;margin-right:2px}'
@@ -447,7 +465,6 @@
     + '.wrp-sum-t{font-size:15px;font-weight:800;color:var(--t2)}.wrp-sum-r{font-size:11.5px;color:var(--t5);font-family:ui-monospace,Consolas,monospace}'
     + '.wrp-kpis{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}'
     + '.wrp-k{font-size:11.5px;color:var(--t5);white-space:nowrap}.wrp-k b{font-size:18px;font-weight:800;margin-right:3px;font-family:ui-monospace,Consolas,monospace}'
-    + '.wrp-k.sep{color:var(--t6)}'
     + '.wrp-alert{margin-top:6px;padding:5px 8px;border-radius:6px;background:rgba(220,38,38,.08);color:#B91C1C;font-size:12px;line-height:1.5}'
     + '.wrp-alert b{font-weight:700}'
     + '.wrp-next{margin-top:5px;font-size:11.5px;color:var(--t3)}.wrp-next b{font-weight:700;color:var(--t2)}'
@@ -491,6 +508,7 @@
   }
 
   // 파싱된 sections/items 배열을 보기용 HTML로 빌드
+  //   ctx(paneCtx) 를 주면 맨 위 요약 띠 · 진행률 변화 · (보고용이면) 확인 필요. 없으면 예전 모양
   function buildPreviewHTML(parsedPane, themeId, ctx) {
     if (!parsedPane || !parsedPane.sections || !parsedPane.sections.length) {
       return '<div class="wr-msg">내용 없음</div>';
@@ -507,35 +525,28 @@
         return taskStates(it).every(function (st) { return st === 'planned'; }) && (it.details || []).every(function (d) { return !d.status || d.status === 'none' || d.status === 'planned'; });
       });
     });
-    return PREVIEW_CSS + '<div class="wrp' + (np ? ' np' : '') + '">' + (ctx ? summaryBand(parsedPane, ctx) : '') + parsedPane.sections.map(function (sec) {
+    var view = makeView(ctx, np);
+    return PREVIEW_CSS + '<div class="wrp' + (np ? ' np' : '') + '">' + (ctx ? summaryBand(parsedPane, ctx, view) : '') + parsedPane.sections.map(function (sec) {
       var cl = secOfTheme(sec.type, themeId);
-      // v13.487 ★ 핵심 → 주의 → 나머지 순 (같은 무리 안에선 쓴 순서 그대로)
-      var rows = (sec.items || []).map(function (it, i) { return { it: it, i: i, w: (it.star ? 0 : 2) + (itemRisk(it) ? 0 : 1) }; })
+      // ★ 핵심 → 확인 필요 → 나머지 (같은 무리 안에선 쓴 순서 그대로)
+      var rows = (sec.items || []).map(function (it, i) { return { it: it, i: i, w: (it.star ? 0 : 2) + (view.itemRisk(it) ? 0 : 1) }; })
         .sort(function (a, b) { return a.w - b.w || a.i - b.i; });
       return '<div class="wrp-sec ' + esc(sec.type) + '">'
-        + renderSectionHeader(sec, themeId, np)
+        + renderSectionHeader(sec, themeId, view)
         + '<div class="wrp-card" style="border-left-color:' + cl.main + '">'
-        + rows.map(function (r) { return renderItemRow(r.it, cl, uniformSiteW, np, ctx); }).join('')
+        + rows.map(function (r) { return renderItemRow(r.it, cl, uniformSiteW, view); }).join('')
         + '</div></div>';
     }).join('') + '</div>';
   }
 
-  // v13.487 맨 위 요약 띠 — 제목 · 기간 · 핵심 숫자 · 주의 목록 · 다음 기한
-  function summaryBand(pane, ctx) {
+  // 맨 위 요약 띠 — 칸 제목 · 기간 · 숫자 · (보고용이면) 확인 필요 목록 · 다음 기한
+  function summaryBand(pane, ctx, view) {
     var items = pane.items || [];
-    var n = { done: 0, in_progress: 0, planned: 0 }, tot = 0;
-    items.forEach(function (it) { taskStates(it).forEach(function (st) { n[st]++; tot++; }); });
+    var n = countTasks(items);
     var risks = [];
     items.forEach(function (it) {
-      if (it.risk) risks.push({ it: it, what: it.name, why: it.risk });
-      (it.details || []).forEach(function (d) { if (d.risk) risks.push({ it: it, what: stripFlags(String(d.text || '').replace(/@[^\s@]+/g, '').replace(/#완료|#진행중?|#예정/g, '')), why: d.risk }); });
-    });
-    var other = ctx.other && ctx.other.items && ctx.other.items.length ? ctx.other : null;
-    var cont = 0, fresh = 0, miss = 0;
-    if (other) items.forEach(function (it) {
-      var tw = findTwin(it, other);
-      if (ctx.role === 'cur') { if (tw) cont++; else fresh++; }
-      else if (!tw && taskStates(it).some(function (s) { return s !== 'done'; })) miss++;
+      if (view.risk(it)) risks.push({ it: it, what: it.name, why: it.risk });
+      (it.details || []).forEach(function (d) { if (view.risk(d)) risks.push({ it: it, what: detailText(d), why: d.risk }); });
     });
     function k(num, label, color) { return '<span class="wrp-k"><b style="color:' + (color || 'var(--t2)') + '">' + num + '</b>' + label + '</span>'; }
     var kp = [];
@@ -543,28 +554,27 @@
       kp.push(k(n.done, '완료', STATUS_COLORS.done));
       if (n.in_progress) kp.push(k(n.in_progress, '진행', STATUS_COLORS.in_progress));
       if (n.planned) kp.push(k(n.planned, '미착수', STATUS_COLORS.planned));
-      if (tot) kp.push(k(Math.round(n.done * 100 / tot) + '%', '완료율'));
-      if (other && miss) kp.push(k(miss, '금주 계획 없음', '#B45309'));
+      if (n.total) kp.push(k(Math.round(n.done * 100 / n.total) + '%', '완료율'));
     } else {
       kp.push(k(items.length, '업무'));
-      if (other) { kp.push(k(cont, '계속')); kp.push(k(fresh, '신규', STATUS_COLORS.in_progress)); }
+      kp.push(k(n.total, '할 일'));
       if (n.done) kp.push(k(n.done, '완료', STATUS_COLORS.done));
     }
-    kp.push(k(risks.length, '주의', risks.length ? STATUS_COLORS.risk : 'var(--t6)'));
-    // 다음 기한 — 남은 날이 가장 적은 것 2개 (지난 것 먼저)
-    var dues = items.filter(function (it) { return it.deadline && dday(it.deadline) && taskStates(it).some(function (s) { return s !== 'done'; }); })
-      .map(function (it) { var lb = dday(it.deadline).label; return { it: it, n: lb === 'D-DAY' ? 0 : (lb.charAt(1) === '+' ? -1 : 1) * parseInt(lb.slice(2), 10) }; })
-      .sort(function (a, b) { return a.n - b.n; }).slice(0, 2);
+    if (ctx.boss) kp.push(k(risks.length, '확인 필요', risks.length ? STATUS_COLORS.risk : 'var(--t6)'));
+    // 다음 기한 — 안 끝난 일 중 남은 날이 가장 적은 2개 (지난 것 먼저)
+    var dues = items.filter(function (it) { return daysLeft(it.deadline) !== null && taskStates(it).some(function (s) { return s !== 'done'; }); })
+      .sort(function (a, b) { return daysLeft(a.deadline) - daysLeft(b.deadline); }).slice(0, 2);
     var title = ctx.title || (ctx.role === 'last' ? '지난주 실적' : '금주 계획');
+    var sep = ' &nbsp;·&nbsp; ';
     return '<div class="wrp-sum">'
       + '<div class="wrp-sum-h"><span class="wrp-sum-t">' + esc(title) + '</span>' + (ctx.range ? '<span class="wrp-sum-r">' + esc(ctx.range) + '</span>' : '') + '</div>'
       + '<div class="wrp-kpis">' + kp.join('') + '</div>'
       + (risks.length ? '<div class="wrp-alert">⚠ ' + risks.slice(0, 4).map(function (r) {
-          return '<b>' + esc(r.it.client || '') + '</b> ' + esc(stripFlags(splitResult(r.what).main)) + ' <span class="wrp-chip rk">' + esc(r.why) + '</span>';
-        }).join(' &nbsp;·&nbsp; ') + (risks.length > 4 ? ' 외 ' + (risks.length - 4) : '') + '</div>' : '')
-      + (dues.length ? '<div class="wrp-next">다음 기한 ' + dues.map(function (d) {
-          return '<b>' + esc(d.it.client || '') + ' ' + esc(stripFlags(d.it.name)) + '</b> ' + esc(d.it.deadline) + ddayBadge(d.it.deadline);
-        }).join(' &nbsp;·&nbsp; ') + '</div>' : '')
+          return '<b>' + esc(r.it.client || '') + '</b> ' + esc(stripFlags(splitResult(r.what).main)) + ' ' + chip('rk', esc(riskLabel(r.why)));
+        }).join(sep) + (risks.length > 4 ? ' 외 ' + (risks.length - 4) : '') + '</div>' : '')
+      + (dues.length ? '<div class="wrp-next">다음 기한 ' + dues.map(function (it) {
+          return '<b>' + esc(it.client || '') + ' ' + esc(stripFlags(splitResult(it.name).main)) + '</b> ' + esc(it.deadline) + ddayBadge(it.deadline);
+        }).join(sep) + '</div>' : '')
       + '</div>';
   }
 
@@ -1487,6 +1497,16 @@
     box.querySelectorAll('[data-pv-copy]').forEach(function (b) {
       b.addEventListener('click', function () { copyPreviewInner(b.dataset.pvCopy, _pvTheme); });
     });
+    box.querySelectorAll('[data-pv-boss]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        _pvBoss = !_pvBoss;
+        try { localStorage.setItem('wr-pv-boss', _pvBoss ? '1' : '0'); } catch (e) {}
+        document.querySelectorAll('[data-pv-boss]').forEach(function (x) { x.classList.toggle('on', _pvBoss); });
+        syncAuthorEditorsToState();
+        updateAuthorPreview();
+        if (typeof showToast === 'function') showToast(_pvBoss ? '👔 보고용 — 확인 필요 표시가 보이고 복사에도 들어갑니다' : '직원용 — 확인 필요 표시를 숨겼습니다', 'ok');
+      });
+    });
     box.querySelectorAll('[data-pv-th]').forEach(function (el) {
       el.addEventListener('change', function () { setPreviewTheme(el.value); });
     });
@@ -1585,7 +1605,7 @@
       + sbtn('#예정', 'planned', '지금 줄(고른 줄들)을 예정으로 — 다시 누르면 지움 · Alt+3 (Alt+0 은 태그 지움)')
       + btn('#%50', ' #%50 ')
       + '<span style="width:8px"></span>'
-      + btn('⚠ 지연', ' #지연', '문제가 있는 줄 — 보고서에서 빨갛게 · 맨 위 요약에 모임 (#이슈 · #위험 도 같음)')
+      + btn('⚠ 지연', ' #지연', '도움이 필요한 줄 — 👔 보고용을 켰을 때만 빨갛게 「지원 필요」 · 맨 위 요약에 모임 (#이슈 · #위험 은 「확인 필요」). 끄면 아무 표시 없음')
       + btn('★ 중요', ' #중요', '핵심 업무 — 절 맨 위로 · ★ · 굵게')
       + btn('→ 결과', ' → ', '업무 뒤에 결과 한마디 — 예) A1 Fault 대응 → 원인 확인 · 재발 0건')
       + '<span style="width:8px"></span>'
@@ -1662,6 +1682,7 @@
   // 프리뷰 헤더 — 보고서 테마 고르기(미리보기에 바로 반영 · 기억) + 그 테마로 HTML 복사 (v13.349)
   function previewCopyButtons(paneKey) {
     return '<select data-pv-th title="보고서 테마 — 미리보기 · 복사 · 내보내기에 함께 쓰임" style="padding:3px 6px;font-size:11px;border-radius:6px;border:1px solid var(--bd);background:var(--bg-p);color:var(--t2)">' + themeOptions(_pvTheme) + '</select>'
+      + '<button class="tab' + (_pvBoss ? ' on' : '') + '" data-pv-boss title="보고용 — 켜면 #지연 · #이슈 줄을 빨갛게 「지원 필요」 「확인 필요」 표시 · 맨 위에 확인할 일 목록. 끄면 직원과 같이 보는 평소 모양 (복사 · 내보내기도 따라감)" style="padding:3px 8px;font-size:10.5px">👔 보고용</button>'
       + '<button class="tab" data-pv-copy="' + paneKey + '" title="고른 테마로 HTML 내용 복사" style="padding:3px 8px;font-size:10.5px">📋 복사</button>';
   }
   function setPreviewTheme(id) {
@@ -1699,7 +1720,7 @@
     if (ff) html = html.replace('<div class="wrp', '<div style="font-family:' + ff + '" class="wrp');
     try {
       await navigator.clipboard.writeText(html);
-      if (typeof showToast === 'function') showToast('미리보기 HTML 복사됨 (' + (paneKey === 'last' ? '지난주' : '금주') + ' · ' + reportTheme(theme).l + ')', 'ok');
+      if (typeof showToast === 'function') showToast('미리보기 HTML 복사됨 (' + (paneKey === 'last' ? '지난주' : '금주') + ' · ' + reportTheme(theme).l + (_pvBoss ? ' · 👔 보고용' : ' · 직원용') + ')', 'ok');
     } catch (e) {
       alert('복사 실패: ' + (e.message || e));
     }
@@ -1842,7 +1863,7 @@
       }
     }
     if (vmode() === 'compare') {
-      // 한쪽을 고치면 다른 쪽의 '계속 · 신규 · 금주 계획 없음' 도 바뀌므로 둘 다 다시
+      // 지난주를 고치면 금주의 진행률 변화(60 → 65%)도 바뀌므로 둘 다 다시
       fillOne('wrAuPreviewLast', _authorState.lastText, 'last');
       fillOne('wrAuPreviewCur',  _authorState.curText, 'cur');
     } else {

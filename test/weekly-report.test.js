@@ -252,7 +252,7 @@ test('buildPreviewHTML (v13.352): 절 머리는 할 일(세부 줄) 단위로 �
   assert.match(inh, /완료 1<\/b>/);
 });
 
-test('보고용 표시 (v13.487): #지연 · #중요 · → 결과 · 요약 띠 · 지난주↔금주 잇기', () => {
+test('보고용 표시 (v13.487~488): 결과 · ★ 핵심 · 요약 띠 · 진행률 변화 — 확인 필요는 보고용일 때만', () => {
   // 파서: 태그는 이름에서 빠지고 risk · star 로
   const p = client.clientParseText('[C/S]\n- [SDC] 챔퍼링 #중요 @박성민\n  : 홀 얼라인 개선 #진행중 #지연\n- [디오] A1 대응 #이슈');
   assert.strictEqual(p.items[0].name, '챔퍼링');
@@ -264,22 +264,31 @@ test('보고용 표시 (v13.487): #지연 · #중요 · → 결과 · 요약 띠
 
   const last = client.clientParseText('[개발]\n- [SENKO] PICAlign 60% #진행중\n- [A] 끝 안 난 일 #진행중\n[C/S]\n- [디오] A1 Fault 대응 → 재발 0건 #완료\n- [SDC] 챔퍼링 #진행중 #지연');
   const cur = client.clientParseText('[개발]\n- [SENKO] PICAlign 65%\n- [B] 새 일');
-  const lh = client.buildPreviewHTML(last, 'light', client.paneCtx('last', cur, '2026-11-09', '2026-11-13'));
-  assert.match(lh, /wrp-sum-t">지난주 실적<\/span><span class="wrp-sum-r">11\/02 ~ 11\/06/);
-  assert.match(lh, /wrp-res">→ 재발 0건/);
-  assert.match(lh, /wrp-alert">⚠ <b>SDC<\/b> 챔퍼링/);
-  assert.match(lh, /wrp-it rk/);
-  assert.match(lh, /wrp-st-risk/);
-  assert.match(lh, /끝 안 난 일<\/span><span class="wrp-chip miss"/);     // 금주에 없음
-  assert.ok(!/PICAlign<\/span><span class="wrp-chip miss"/.test(lh));     // 금주에 이어짐
-  const ch = client.buildPreviewHTML(cur, 'light', client.paneCtx('cur', last, '2026-11-09', '2026-11-13'));
+  const strip = (h) => h.replace(/<style>[\s\S]*?<\/style>/, '');
+
+  // 직원용(기본): 확인 필요 표시가 전혀 없음 · 태그 글자도 안 보임
+  const staff = strip(client.buildPreviewHTML(last, 'light', client.paneCtx('last', cur, '2026-11-09', '2026-11-13', false)));
+  assert.match(staff, /wrp-sum-t">지난주 실적<\/span><span class="wrp-sum-r">11\/02 ~ 11\/06/);
+  assert.match(staff, /wrp-res">→ 재발 0건/);
+  assert.ok(!/wrp-alert|wrp-st-risk|wrp-it rk|확인 필요|지원 필요|#지연/.test(staff));
+  assert.ok(!/miss|금주 계획 없음|금주 미기재|신규|계속/.test(staff));      // 단발 업무가 많아 이어짐 표시는 안 씀
+
+  // 보고용: 부드러운 말로
+  const boss = strip(client.buildPreviewHTML(last, 'light', client.paneCtx('last', cur, '2026-11-09', '2026-11-13', true)));
+  assert.match(boss, /wrp-alert">⚠ <b>SDC<\/b> 챔퍼링 <span class="wrp-chip rk">지원 필요/);
+  assert.match(boss, /wrp-it rk/);
+  assert.match(boss, /wrp-st-risk/);
+  assert.match(boss, /확인 필요 1<\/b>/);
+  assert.ok(!/>지연</.test(boss));
+
+  // 금주: 지난주 같은 업무의 진행률 변화만
+  const ch = strip(client.buildPreviewHTML(cur, 'light', client.paneCtx('cur', last, '2026-11-09', '2026-11-13', false)));
   assert.match(ch, /wrp-sum-t">금주 계획<\/span><span class="wrp-sum-r">11\/09 ~ 11\/13/);
-  assert.match(ch, /PICAlign<\/span><span class="wrp-chip cont"/);
-  assert.match(ch, /새 일<\/span><span class="wrp-chip new"/);
-  assert.match(ch, /wrp-pprev">60 →<\/span> 65%/);
+  assert.match(ch, /wrp-pprev">60 →<\/span> 65%<\/span><span class="wrp-pdelta">\+5/);
+  assert.ok(!/wrp-chip/.test(ch));
   // ★ 핵심은 절 맨 위로
   const st = client.buildPreviewHTML(client.clientParseText('[기타]\n- [A] 보통\n- [B] 핵심 ★'));
   assert.ok(st.indexOf('핵심') < st.indexOf('보통'));
   // 맥락 없이 부르면 요약 띠 없음 (예전 모양)
-  assert.ok(!/wrp-sum/.test(client.buildPreviewHTML(cur).replace(/<style>[\s\S]*?<\/style>/, '')));
+  assert.ok(!/wrp-sum/.test(strip(client.buildPreviewHTML(cur))));
 });
