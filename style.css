@@ -2634,6 +2634,21 @@ textarea.mwp-title:focus{border-color:var(--ac);outline:none;background:var(--bg
 .wr-src-f input[type=search]{width:100%;box-sizing:border-box;padding:6px 10px}
 .wr-src-f input:disabled{opacity:.6}
 .wr-src-seg{margin:0!important}.wr-src-seg .tab{padding:3px 8px;font-size:11px}
+/* v13.491 기간 칩(날짜 같이) · ◀ ▶ · 보고서 반영 줄 */
+.wr-src-rg{flex-wrap:nowrap}
+.wr-src-rg .wr-src-seg{flex:1;min-width:0;display:flex;overflow-x:auto;scrollbar-width:none}
+.wr-src-rg .wr-src-seg .tab{white-space:nowrap}
+.wr-src-seg .tab small{font-size:10px;opacity:.75;font-family:ui-monospace,Consolas,monospace;margin-left:2px}
+.wr-src-shift{flex:none;padding:3px 7px!important;font-size:10px!important}
+.wr-src-cov{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 10px;font-size:12px;border-bottom:1px solid var(--bd)}
+.wr-src-cov:empty{display:none}
+.wr-src-cov>span{flex:1 1 160px;min-width:0}
+.wr-src-cov small{color:var(--t5)}
+.wr-src-cov{color:var(--t2)}
+.wr-src-cov.miss{background:rgba(217,119,6,.10)}.wr-src-cov.miss b{color:#D97706}
+.wr-src-cov.ok{background:rgba(22,163,74,.08)}.wr-src-cov.ok b{color:#16A34A}
+.wr-src-cov .tab{padding:2px 8px;font-size:11px}
+.wr-sum-it.wr-miss,.wr-raw-row.wr-miss{box-shadow:inset 3px 0 0 #D97706}
 .wr-src-chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center;max-height:92px;overflow:auto}
 .wr-src-lbl{font-size:10.5px;color:var(--t5);width:28px;flex-shrink:0}
 .wr-chip{--chip-c:var(--ac);border:1px solid var(--bd);background:var(--bg-i);color:var(--t4);border-radius:12px;padding:2px 9px;font-size:11px;font-family:inherit;cursor:pointer;line-height:1.5}

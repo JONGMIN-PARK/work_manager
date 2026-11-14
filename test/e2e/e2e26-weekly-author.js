@@ -134,22 +134,52 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var sp = await page.evaluate(function () {
       return { range: (document.querySelector('[data-src-range].on') || {}).textContent, target: (document.querySelector('[data-src-target].on') || {}).getAttribute('data-src-target'), body: document.getElementById('wrSrcBody').textContent };
     });
-    check(sp.range === '작성 주차' && sp.target === 'cur', '기본 기간 = 작성 주차 · 삽입 → 금주 ' + JSON.stringify([sp.range, sp.target]));
+    check(/^금주 10\/26~11\/01$/.test(sp.range) && sp.target === 'cur', '기본 기간 = 금주(작성 주차, 날짜 같이) · 삽입 → 금주 ' + JSON.stringify([sp.range, sp.target]));
     check(/E2E업무일지 도면/.test(sp.body) && !/E2E업무일지 지난주/.test(sp.body), '작성 주차의 업무일지만 보임');
     await page.click('[data-src-view="summary"]');
     await page.waitForSelector('#wrSrcBody [data-sum-idx]', { timeout: 5000 }).catch(function () {});
-    var sumBtn = await page.evaluateHandle(function () { return Array.from(document.querySelectorAll('#wrSrcBody [data-sum-idx]')).filter(function (b) { return /시험사이트/.test(b.getAttribute('data-head')); })[0]; });
+    // v13.491 보고서 반영 추적 — 넣기 전엔 미반영으로 셈
+    var cov0 = await page.$eval('#wrSrcCov', function (e) { return { cls: e.className, txt: e.textContent }; });
+    check(/miss/.test(cov0.cls) && /금주 칸에 안 들어간 업무 \d+건/.test(cov0.txt), '넣기 전 — 📌 금주 칸에 안 들어간 업무 표시 ' + JSON.stringify(cov0));
+    var sumBtn = await page.evaluateHandle(function () { return Array.from(document.querySelectorAll('#wrSrcBody [data-sum-idx]')).filter(function (b) { return /시험사이트/.test(b.closest('.wr-sum-it').textContent); })[0]; });
     await sumBtn.click();
     await wait(300);
     var ins = await page.evaluate(function () {
-      var b = Array.from(document.querySelectorAll('#wrSrcBody [data-sum-idx]')).filter(function (x) { return /시험사이트/.test(x.getAttribute('data-head')); })[0];
+      var b = Array.from(document.querySelectorAll('#wrSrcBody [data-sum-idx]')).filter(function (x) { return /시험사이트/.test(x.closest('.wr-sum-it').textContent); })[0];
       return { cur: document.getElementById('wrAuEditorCur').value, done: b.classList.contains('wr-ins-done'), txt: b.textContent };
     });
     check(/^- \[시험사이트\] 검사기 개조 @관리자$/m.test(ins.cur) && ins.cur.indexOf('[개발]') < ins.cur.indexOf('[시험사이트]') && ins.done && ins.txt === '✓', '＋ → 금주 [개발]에 들어가고 ✓ 표시 ' + JSON.stringify(ins));
     await page.click('#wrSrcInsertAll');
     await wait(300);
     var cnt = await page.$eval('#wrAuEditorCur', function (e) { return (e.value.match(/- \[시험사이트\]/g) || []).length; });
-    check(cnt === 1, '요약 전체 삽입은 이미 있는 항목을 건너뜀 (' + cnt + ')');
+    check(cnt === 1, '빠진 것 모두 넣기는 이미 있는 항목을 건너뜀 (' + cnt + ')');
+    var cov1 = await page.$eval('#wrSrcCov', function (e) { return e.className + ' ' + e.textContent; });
+    check(/ok/.test(cov1) && /모두 금주 칸에 반영됨/.test(cov1), '모두 넣은 뒤 — ✅ 모두 반영됨 ' + cov1);
+    // 줄을 고쳐 써도(이름을 바꿔도 업체 + 비슷한 이름이면) 반영된 것으로 인정
+    await page.$eval('#wrAuEditorCur', function (e) { e.value = e.value.replace('- [시험사이트] 검사기 개조 @관리자', '- [시험사이트] 검사기 개조 2차 ~11/20 40% @관리자'); e.dispatchEvent(new Event('input', { bubbles: true })); });
+    await wait(500);
+    var cov2 = await page.$eval('#wrSrcCov', function (e) { return e.className; });
+    var bt2 = await page.evaluate(function () { var b = Array.from(document.querySelectorAll('#wrSrcBody [data-sum-idx]')).filter(function (x) { return /시험사이트/.test(x.closest('.wr-sum-it').textContent); })[0]; return b.textContent; });
+    check(/ok/.test(cov2) && bt2 === '✓', '고쳐 쓴 줄도 반영으로 인정 ' + JSON.stringify([cov2, bt2]));
+    // 지우면 다시 미반영 · 미반영만 보기
+    var saved = await page.$eval('#wrAuEditorCur', function (e) { var v = e.value; e.value = ''; e.dispatchEvent(new Event('input', { bubbles: true })); return v; });
+    await wait(500);
+    await page.click('#wrSrcCov [data-src-onlymiss]'); await wait(200);
+    var om = await page.evaluate(function () { return { n: document.querySelectorAll('#wrSrcBody .wr-sum-it').length, miss: document.querySelectorAll('#wrSrcBody .wr-sum-it.wr-miss').length }; });
+    check(om.n > 0 && om.n === om.miss, '미반영만 보기 — 보이는 것은 모두 미반영 ' + JSON.stringify(om));
+    await page.click('#wrSrcCov [data-src-addmiss]'); await wait(400);
+    var om2 = await page.evaluate(function () { return { cov: document.getElementById('wrSrcCov').className, body: document.getElementById('wrSrcBody').textContent }; });
+    check(/ok/.test(om2.cov) && /모두 금주 칸에 들어가 있습니다/.test(om2.body), '＋ 모두 넣기 → 미반영만 보기에서 바로 빠짐 ' + JSON.stringify(om2.cov));
+    await page.click('#wrSrcCov [data-src-onlymiss]'); await wait(200);
+    await page.$eval('#wrAuEditorCur', function (e, v) { e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, saved);
+    await wait(400);
+    // ▶ 한 주 뒤로 → 직접(11/02~11/08) 으로 바뀌고 날짜 입력이 나타남 (지난주 캐시 시험과 겹치지 않게 뒤로)
+    await page.click('[data-src-shift="7"]');
+    await page.waitForSelector('#wrSrcStart', { timeout: 4000 }).catch(function () {});
+    var sh = await page.evaluate(function () { var a = document.getElementById('wrSrcStart'); return [a && a.value, (document.getElementById('wrSrcEnd') || {}).value, (document.querySelector('[data-src-range].on') || {}).getAttribute('data-src-range')]; });
+    check(sh[0] === '2026-11-02' && sh[1] === '2026-11-08' && sh[2] === 'custom', '▶ 한 주 뒤로 → 직접 ' + JSON.stringify(sh));
+    await page.click('[data-src-range="cur"]'); await wait(300);
+    check(!(await page.$('#wrSrcStart')), '프리셋이면 날짜 입력 칸 숨김');
     var reqs = 0;
     page.on('request', function (r) { if (/\/api\/archives\/records\?/.test(r.url())) reqs++; });
     await page.click('[data-src-range="prev"]');

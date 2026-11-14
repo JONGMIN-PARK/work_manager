@@ -1417,7 +1417,8 @@
       targetAuto: true,
       collapsed: lsGet(LS_SRC_COLLAPSED) === '1',
       width: clampSrcWidth(parseInt(lsGet(LS_SRC_WIDTH), 10)),
-      aiText: '', aiBusy: false
+      aiText: '', aiBusy: false,
+      onlyMissing: false    // 보고서 칸에 아직 안 들어간 업무만 보기 (v13.491)
     }
   };
 
@@ -2476,14 +2477,64 @@
     d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
     return d;
   }
-  // 조회 기간 — 주말 작업도 잡히도록 월~일
+  // 조회 기간 — 주말 작업도 잡히도록 월~일. prev 지난주 · cur 금주(작성 주차) · both 지난주+금주 · custom 직접
+  function presetRange(range) {
+    var mon = mondayOf(_authorState.weekStart);
+    var start = new Date(mon);
+    if (range === 'prev' || range === 'both') start.setDate(mon.getDate() - 7);
+    var sun = new Date(mon); sun.setDate(mon.getDate() + (range === 'prev' ? -1 : 6));
+    return { start: isoDate(start), end: isoDate(sun) };
+  }
   function srcRange() {
     var s = _authorState.src;
-    if (s.range === 'custom') return { start: s.start, end: s.end };
-    var mon = mondayOf(_authorState.weekStart);
-    if (s.range === 'prev') mon.setDate(mon.getDate() - 7);
-    var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    return { start: isoDate(mon), end: isoDate(sun) };
+    return s.range === 'custom' ? { start: s.start, end: s.end } : presetRange(s.range);
+  }
+  function shortRange(rg) {   // 11/02~08 · 해가 바뀌거나 달이 바뀌면 11/30~12/06
+    var a = mmdd(rg.start), b = mmdd(rg.end);
+    return a && b ? a + '~' + (a.slice(0, 2) === b.slice(0, 2) ? b.slice(3) : b) : '';
+  }
+  // ◀ ▶ 한 주 옮기기 — 지금 보이는 기간을 7일 밀어 '직접' 으로
+  function shiftSrcRange(days) {
+    var s = _authorState.src, rg = srcRange();
+    if (!rg.start || !rg.end) return;
+    function mv(iso) { var d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + days); return isoDate(d); }
+    s.range = 'custom'; s.start = mv(rg.start); s.end = mv(rg.end);
+    rerenderSrcShell();
+    loadWorkRecords();
+  }
+
+  /* ─── 보고서 반영 추적 (v13.491) — 업무일지에 시간이 찍힌 일이 보고서 칸에 들어갔는지 ───
+   *   줄 머리가 똑같아야만 인정하던 것을, 고쳐 쓴 줄도 인정: 수주번호가 들어 있거나 · 같은 업체(포함 관계)에 이름이 비슷하거나(≥0.5) · 세부 글이 업무 이름과 비슷하면
+   *   대상 칸(삽입 → 지난주/금주)을 기준으로 셈 */
+  function sumKeyOf(sec, orderNo, site) { return sec + '|' + (orderNo || 'site:' + site); }
+  function clientMatch(a, b) {
+    a = normKey(a); b = normKey(b);
+    return !!a && !!b && (a === b || (Math.min(a.length, b.length) >= 2 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0)));
+  }
+  function itemCovered(it, pane, rawText) {
+    if (it.orderNo && rawText.indexOf(it.orderNo) >= 0) return true;
+    return (pane.items || []).some(function (p) {
+      if (!clientMatch(p.client, it.site)) return false;
+      if (nameSim(p.name, it.title) >= 0.5) return true;
+      return it.detailList.slice(0, 5).some(function (d) {
+        return nameSim(p.name, d.text) >= 0.5 || (p.details || []).some(function (pd) { return nameSim(pd.text, d.text) >= 0.6; });
+      });
+    });
+  }
+  // 지금 조건(팀 · 팀원 · 검색)의 업무일지를 수주별로 묶어 반영 여부 — { key: true|false }, 미반영 건수 · 시간
+  function srcCoverage() {
+    var target = _authorState.src.target;
+    var raw = _authorState[paneKeyText(target)] || '';
+    var pane = clientParseText(raw);
+    var items = buildSrcSummary(srcRows(), 'order');
+    var cov = { map: {}, miss: 0, missH: 0, total: items.length, items: items };
+    items.forEach(function (it) {
+      var ok = itemCovered(it, pane, raw);
+      cov.map[sumKeyOf(it.sec, it.orderNo, it.site)] = ok;
+      if (!ok) { cov.miss++; cov.missH += it.hours; }
+    });
+    cov.missH = Math.round(cov.missH * 10) / 10;
+    return cov;
   }
   function mmdd(v) {
     var t = String(v || '').replace(/-/g, '');
@@ -2602,28 +2653,40 @@
     return line;
   }
 
-  // 이미 넣은 항목 표시 — 대상 편집창에 같은 '- [사이트] 제목' 으로 시작하는 줄이 있으면 들어간 것으로 본다
-  function lineHead(s) { return String(s || '').split('\n')[0].replace(/\s+/g, ' ').trim(); }
-  function summaryHead(it) { return lineHead('- [' + reportSafe(it.site) + '] ' + reportSafe(it.title)); }
-  function paneHasHead(lines, head) {
-    for (var i = 0; i < lines.length; i++) { if (lines[i] === head || lines[i].indexOf(head + ' ') === 0) return true; }
-    return false;
-  }
-  function paneLines(pane) {
-    return (_authorState[paneKeyText(pane)] || '').split('\n').map(lineHead).filter(function (l) { return l.charAt(0) === '-'; });
-  }
   function refreshSrcMarks() {
     var body = $('wrSrcBody');
     if (!body) return;
-    var lines = paneLines(_authorState.src.target);
-    body.querySelectorAll('[data-head]').forEach(function (b) {
-      var on = paneHasHead(lines, b.getAttribute('data-head'));
+    var s = _authorState.src, tl = paneLabel(s.target);
+    var cov = WRS.cov = srcCoverage();
+    body.querySelectorAll('[data-cov]').forEach(function (b) {
+      var on = !!cov.map[b.getAttribute('data-cov')];
+      var row = b.closest('.wr-sum-it,.wr-raw-row'); if (row) row.classList.toggle('wr-miss', !on);
       if (b.classList.contains('wr-ins-done') === on) return;
       b.classList.toggle('wr-ins-done', on);
       b.textContent = on ? '✓' : '＋';
-      b.title = on ? '이미 ' + paneLabel(_authorState.src.target) + ' 편집창에 있음 — 누르면 한 번 더 넣음'
-        : paneLabel(_authorState.src.target) + ' 편집창의 해당 섹션에 삽입';
+      b.title = on ? '이미 ' + tl + ' 칸에 반영됨 — 누르면 한 번 더 넣음' : tl + ' 칸에 아직 없음 — 눌러서 해당 섹션에 넣기';
     });
+    drawSrcCoverage(cov);
+    // '미반영만' 을 보고 있으면 반영된 것이 바로 빠지게 다시 그림
+    if (s.onlyMissing && WRS.lastMiss != null && WRS.lastMiss !== cov.miss) { WRS.lastMiss = cov.miss; renderSrcBody(); return; }
+    WRS.lastMiss = cov.miss;
+  }
+  var WRS = { cov: null, lastMiss: null };
+  function drawSrcCoverage(cov) {
+    var el = $('wrSrcCov'); if (!el) return;
+    var s = _authorState.src, tl = paneLabel(s.target);
+    if (!cov.total) { el.innerHTML = ''; el.className = 'wr-src-cov'; return; }
+    el.className = 'wr-src-cov ' + (cov.miss ? 'miss' : 'ok');
+    el.innerHTML = cov.miss
+      ? '<span>📌 <b>' + tl + ' 칸</b>에 안 들어간 업무 <b>' + cov.miss + '건 · ' + cov.missH + 'h</b> <small>/ ' + cov.total + '건</small></span>'
+        + '<button type="button" class="tab' + (s.onlyMissing ? ' on' : '') + '" data-src-onlymiss title="반영 안 된 업무만 보기">미반영만</button>'
+        + '<button type="button" class="tab" data-src-addmiss title="반영 안 된 업무를 ' + tl + ' 칸에 섹션별로 모두 넣기">＋ 모두 넣기</button>'
+      : '<span>✅ 업무일지 ' + cov.total + '건이 모두 <b>' + tl + ' 칸</b>에 반영됨</span>'
+        + (s.onlyMissing ? '<button type="button" class="tab on" data-src-onlymiss>미반영만</button>' : '');
+    var om = el.querySelector('[data-src-onlymiss]');
+    if (om) om.addEventListener('click', function () { s.onlyMissing = !s.onlyMissing; renderSrcBody(); });
+    var am = el.querySelector('[data-src-addmiss]');
+    if (am) am.addEventListener('click', function () { insertSummaryItems(cov.items.filter(function (it) { return !cov.map[sumKeyOf(it.sec, it.orderNo, it.site)]; })); });
   }
 
   function paneKeyText(pane) { return pane === 'last' ? 'lastText' : 'curText'; }
@@ -2703,12 +2766,18 @@
       +   '<button id="wrSrcCollapse" class="tab" title="패널 접기 — 편집 영역을 넓게">⟩</button>'
       + '</div>'
       + '<div class="wr-src-f">'
-      +   '<div class="wr-src-row">'
-      +     segBtns('data-src-range', s.range, [['prev', '지난주'], ['cur', '작성 주차'], ['custom', '직접']])
-      +     '<input id="wrSrcStart" type="date" value="' + esc(rg.start) + '"' + (s.range === 'custom' ? '' : ' disabled') + '>'
-      +     '<span class="wr-src-muted">~</span>'
-      +     '<input id="wrSrcEnd" type="date" value="' + esc(rg.end) + '"' + (s.range === 'custom' ? '' : ' disabled') + '>'
+      +   '<div class="wr-src-row wr-src-rg">'
+      +     '<button type="button" class="tab wr-src-shift" data-src-shift="-7" title="한 주 앞으로">◀</button>'
+      +     segBtns('data-src-range', s.range, [
+              ['prev', '지난주 <small>' + shortRange(presetRange('prev')) + '</small>'],
+              ['cur', '금주 <small>' + shortRange(presetRange('cur')) + '</small>'],
+              ['both', '2주'],
+              ['custom', '직접']])
+      +     '<button type="button" class="tab wr-src-shift" data-src-shift="7" title="한 주 뒤로">▶</button>'
       +   '</div>'
+      +   (s.range === 'custom'
+            ? '<div class="wr-src-row"><input id="wrSrcStart" type="date" value="' + esc(rg.start) + '"><span class="wr-src-muted">~</span><input id="wrSrcEnd" type="date" value="' + esc(rg.end) + '"></div>'
+            : '')
       +   '<div id="wrSrcTeams" class="wr-src-chips"></div>'
       +   '<div id="wrSrcMembers" class="wr-src-chips"></div>'
       +   '<input id="wrSrcQ" type="search" placeholder="🔍 내용·사이트·수주 검색" value="' + esc(s.q) + '">'
@@ -2722,9 +2791,10 @@
       +     segBtns('data-src-target', s.target, [['last', '지난주'], ['cur', '금주']])
       +   '</div>'
       + '</div>'
+      + '<div id="wrSrcCov" class="wr-src-cov"></div>'
       + '<div id="wrSrcBody" class="wr-src-body"></div>'
       + '<div class="wr-src-foot">'
-      +   '<button id="wrSrcInsertAll" class="tab on" title="보이는 요약 항목 전체를 섹션별로 삽입">＋ 요약 전체 삽입</button>'
+      +   '<button id="wrSrcInsertAll" class="tab on" title="보이는 업무 중 대상 칸에 아직 없는 것을 섹션별로 모두 넣기 (이미 있는 것은 건너뜀)">＋ 빠진 것 모두 넣기</button>'
       +   '<button id="wrSrcAi" class="tab" title="선택된 업무일지를 AI 가 주간보고 문법으로 정리">🤖 AI 초안</button>'
       + '</div>';
   }
@@ -2742,7 +2812,11 @@
       box.querySelectorAll('[data-src-range]').forEach(function (b) {
         b.addEventListener('click', function () { setSrcRange(b.dataset.srcRange); });
       });
+      box.querySelectorAll('[data-src-shift]').forEach(function (b) {
+        b.addEventListener('click', function () { shiftSrcRange(+b.dataset.srcShift); });
+      });
       ['wrSrcStart', 'wrSrcEnd'].forEach(function (id) {
+        if (!$(id)) return;
         $(id).addEventListener('change', function (e) {
           s[id === 'wrSrcStart' ? 'start' : 'end'] = e.target.value;
           if (s.start && s.end) loadWorkRecords();
@@ -2776,7 +2850,7 @@
     var s = _authorState.src;
     if (s.range === range) return;
     if (range === 'custom') { var cr = srcRange(); s.start = cr.start; s.end = cr.end; }
-    else if (s.targetAuto) s.target = range === 'prev' ? 'last' : 'cur';
+    else if (s.targetAuto && range !== 'both') s.target = range === 'prev' ? 'last' : 'cur';
     s.range = range;
     rerenderSrcShell();
     loadWorkRecords();
@@ -2853,9 +2927,11 @@
     if (!rg.start || !rg.end) { _authorState.workRecords = []; _authorState.workRecordsKey = ''; renderSrcDynamic(); return; }
     var key = rg.start + '~' + rg.end;
     _authorState.workRecordsKey = key;
-    // 기간 입력칸이 prev/cur 모드면 작성 주차 변경을 따라가도록 갱신
-    var si = $('wrSrcStart'), ei = $('wrSrcEnd');
-    if (si && _authorState.src.range !== 'custom') { si.value = rg.start; ei.value = rg.end; }
+    // 작성 주차가 바뀌면 기간 칩의 날짜도 따라가게
+    if (_authorState.src.range !== 'custom' && $('wrSrc') && !srcOff()) {
+      var cur = $('wrSrc').querySelector('[data-src-range="cur"] small');
+      if (cur && cur.textContent !== shortRange(presetRange('cur'))) { rerenderSrcShell(); return; }
+    }
     if (force !== true && _recCache[key]) { _authorState.workRecords = _recCache[key]; renderSrcDynamic(); return; }
     if (body) body.innerHTML = '<div class="wr-src-empty">⏳ 로드 중...</div>';
     var gen = _recGen;
@@ -2953,6 +3029,15 @@
       if (tp) tp.addEventListener('click', function () { setSrcRange('prev'); });
       return;
     }
+    if (s.onlyMissing) {
+      var cov0 = srcCoverage();
+      rows = rows.filter(function (r) { var sec = srcSectionOf(r); return sec && !cov0.map[sumKeyOf(sec, r.order_no || '', recSite(r))]; });
+      if (!rows.length) {
+        body.innerHTML = aiHtml + '<div class="wr-src-empty">✅ 이 조건의 업무일지는 모두 ' + paneLabel(s.target) + ' 칸에 들어가 있습니다</div>';
+        bindSrcAiCard(); refreshSrcMarks();
+        return;
+      }
+    }
     body.innerHTML = aiHtml + (s.view === 'summary' ? renderSummaryHtml(rows) : renderRawHtml(rows));
     bindSrcAiCard();
     body.querySelectorAll('[data-sum-idx]').forEach(function (b) {
@@ -2981,20 +3066,23 @@
   }
 
   var _srcSummaryCache = [];
-  // 여러 개 넣기는 이미 들어간 항목을 건너뛴다 (한 개씩 ＋ 는 그래도 넣을 수 있음)
+  // 여러 개 넣기는 이미 들어간 항목을 건너뛴다 — 반영 판정(itemCovered)과 같은 기준 (한 개씩 ＋ 는 그래도 넣을 수 있음)
   function insertSummaryItems(items) {
-    if (!items.length) { alert('삽입할 항목이 없습니다.'); return; }
     var target = _authorState.src.target;
+    if (!items.length) { if (typeof showToast === 'function') showToast('넣을 항목이 없습니다', 'info'); return; }
     syncAuthorEditorsToState();
-    var lines = paneLines(target);
-    var fresh = items.filter(function (it) { return !paneHasHead(lines, summaryHead(it)); });
+    var raw = _authorState[paneKeyText(target)] || '', pane = clientParseText(raw);
+    var fresh = items.filter(function (it) { return !itemCovered(it, pane, raw); });
     if (!fresh.length) { if (typeof showToast === 'function') showToast('모두 이미 ' + paneLabel(target) + ' 편집창에 있습니다', 'ok'); return; }
     var bySec = {};
     fresh.forEach(function (it) { (bySec[it.sec] = bySec[it.sec] || []).push(summaryItemText(it)); });
     insertBlocksBySection(target, bySec, items.length - fresh.length);
   }
   function insertAllSummary() {
-    insertSummaryItems(buildSrcSummary(srcRows(), 'order'));
+    var cov = srcCoverage();
+    var miss = cov.items.filter(function (it) { return !cov.map[sumKeyOf(it.sec, it.orderNo, it.site)]; });
+    if (!miss.length) { if (typeof showToast === 'function') showToast('✅ 모두 이미 ' + paneLabel(_authorState.src.target) + ' 칸에 있습니다', 'ok'); return; }
+    insertSummaryItems(miss);
   }
 
   function renderSummaryHtml(rows) {
@@ -3022,7 +3110,7 @@
         +   (s.sumBy === 'person' ? '<span class="wr-sum-sec" style="color:' + SECTIONS[it.sec].main + ';background:' + SECTIONS[it.sec].bg + '">' + esc(SECTIONS[it.sec].label) + '</span>' : '')
         +   '<span class="wr-sum-site">[' + esc(it.site) + ']</span>'
         +   '<span class="wr-sum-title" title="' + esc(it.orderNo) + '">' + esc(it.title) + '</span>'
-        +   '<button class="tab" data-sum-idx="' + idx + '" data-head="' + esc(summaryHead(it)) + '" title="' + paneLabel(s.target) + ' 편집창의 해당 섹션에 삽입">＋</button>'
+        +   '<button class="tab" data-sum-idx="' + idx + '" data-cov="' + esc(sumKeyOf(it.sec, it.orderNo, it.site)) + '" title="' + paneLabel(s.target) + ' 편집창의 해당 섹션에 삽입">＋</button>'
         + '</div>'
         + '<div class="wr-sum-meta">' + esc(it.members.join(', ')) + ' · ' + it.hours + 'h · ' + esc(range)
         +   (it.orderNo ? ' · <span style="font-family:ui-monospace,monospace">' + esc(it.orderNo) + '</span>' : '') + '</div>'
@@ -3057,7 +3145,7 @@
               + '<span class="wr-raw-n">' + esc(r.name || '') + '</span>'
               + '<span class="wr-raw-c"><span style="color:var(--ac)">' + esc(r.oclient || '') + '</span> ' + esc(content)
               +   ' <span class="wr-src-muted">' + (Number(r.hours) || 0) + 'h' + (r.abbr ? ' · ' + esc(r.abbr) : '') + '</span></span>'
-              + '<button class="tab" data-src-sec="' + (srcSectionOf(r) || 'etc') + '" data-src-add="' + esc(inj) + '" data-head="' + esc(lineHead(inj)) + '" title="' + paneLabel(s.target) + ' 편집창의 해당 섹션에 삽입">＋</button>'
+              + '<button class="tab" data-src-sec="' + (srcSectionOf(r) || 'etc') + '" data-src-add="' + esc(inj) + '" data-cov="' + esc(sumKeyOf(srcSectionOf(r) || 'etc', r.order_no || '', recSite(r))) + '" title="' + paneLabel(s.target) + ' 편집창의 해당 섹션에 삽입">＋</button>'
               + '</div>';
           }).join('')
         + '</details>';
