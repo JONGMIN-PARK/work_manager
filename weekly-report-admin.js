@@ -274,11 +274,19 @@
     var d = new Date(p[0], p[1] - 1, p[2] + (addDays || 0));
     return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
   }
+  /** ISO 주차 번호 (월요일 시작 · 그 주 목요일이 속한 해) — 보고서에 '45주차' */
+  function isoWeekNo(iso, addDays) {
+    var p = String(iso || '').split('-').map(Number);
+    if (p.length !== 3 || p.some(isNaN)) return null;
+    var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + (addDays || 0)));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    return Math.ceil(((d - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7);
+  }
   /** 칸 맥락 — role: 'last' | 'cur' · other: 반대쪽 파싱 결과 · weekStart/End: 금주 'YYYY-MM-DD' · boss: 보고용(생략하면 고른 값) */
   function paneCtx(role, other, weekStart, weekEnd, boss) {
     var off = role === 'last' ? -7 : 0;
     var a = wkMmdd(weekStart, off), b = wkMmdd(weekEnd, off);
-    return { role: role, other: other || null, range: a && b ? a + ' ~ ' + b : '', boss: boss == null ? _pvBoss : !!boss };
+    return { role: role, other: other || null, range: a && b ? a + ' ~ ' + b : '', week: isoWeekNo(weekStart, off), boss: boss == null ? _pvBoss : !!boss };
   }
   /** 그리기용 보기 설정 — buildPreviewHTML 이 한 번 만들어 아래 그리기 함수들에 넘김 */
   function makeView(ctx, np) {
@@ -325,6 +333,9 @@
   }
   var ICO = {
     cal: svgIco(11, '<rect x="3" y="4" width="18" height="18" rx="3"/><path d="M8 2v4M16 2v4M3 10h18"/>', 2.2),
+    // v13.493 요약 띠 칸 제목 — 지난주 실적: 체크한 서류(한 일) · 금주 계획: 과녁(목표)
+    done: svgIco(13, '<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 3.5V5h6V3.5M9 12.5l2.2 2.2L15.5 10"/>', 2.1),
+    plan: svgIco(13, '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>', 2.1),
     user: svgIco(12, '<circle cx="12" cy="8" r="4.2"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>', 2.2),
     dev: svgIco(14, '<path d="m18 16 4-4-4-4M6 8l-4 4 4 4M14.5 4l-5 16"/>'),
     setup: svgIco(14, '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/>'),
@@ -461,7 +472,13 @@
     + '.wrp-pdelta{font:700 10px/1 ui-monospace,Consolas,monospace;color:#16A34A}.wrp-pdelta.dn{color:#DC2626}'
     // 맨 위 요약 띠
     // 요약 띠는 늘 두 줄 · 같은 높이 (v13.489) — 지난주 · 금주 칸을 나란히 놓아도 테두리가 맞음. 넘치는 글은 … (전체는 title)
-    + '.wrp-sum{background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;padding:5px 10px;margin-bottom:10px;display:grid;grid-template-rows:22px 18px;row-gap:2px;box-sizing:border-box;height:51px;overflow:hidden}'
+    + '.wrp-sum{background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid var(--wrp-sum-c,#64748B);border-radius:8px;padding:5px 10px 5px 9px;margin-bottom:10px;display:grid;grid-template-rows:22px 18px;row-gap:2px;box-sizing:border-box;height:51px;overflow:hidden}'
+    // v13.493 칸마다 뜻 색 — 지난주 실적은 초록(한 일) · 금주 계획은 파랑(할 일). 아이콘은 같은 색 옅은 바탕의 작은 칸
+    + '.wrp-sum.last{--wrp-sum-c:#16A34A}.wrp-sum.cur{--wrp-sum-c:#2563EB}'
+    + '.wrp-sum-i{flex-shrink:0;width:20px;height:20px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--wrp-sum-c)}'
+    + '.wrp-sum.last .wrp-sum-i{background:rgba(22,163,74,.13)}.wrp-sum.cur .wrp-sum-i{background:rgba(37,99,235,.12)}'
+    + '.wrp-sum-i .wrp-ico{vertical-align:0}'
+    + '.wrp-sum-r em{font-style:normal;font-family:inherit;font-weight:700;color:var(--t3);margin-left:6px;padding:0 5px;border-radius:4px;background:rgba(127,127,127,.12)}'
     + '.wrp-sum-h,.wrp-sum-2{display:flex;align-items:center;min-width:0;white-space:nowrap;overflow:hidden}'
     + '.wrp-sum-h{gap:8px}'
     + '.wrp-sum-t{font-size:14px;font-weight:800;color:var(--t2);flex-shrink:0}.wrp-sum-r{font-size:11px;color:var(--t5);font-family:ui-monospace,Consolas,monospace;flex-shrink:0}'
@@ -579,8 +596,11 @@
       return '<b>' + esc(it.client || '') + ' ' + esc(stripFlags(splitResult(it.name).main)) + '</b> ' + esc(it.deadline) + ddayBadge(it.deadline);
     }).join(sep));
     var plain2 = (risks.length ? '확인 필요: ' : '') + line2.join(' · ').replace('<span class="due" title="다음 기한">', '다음 기한 ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();   // 줄이 넘쳐 … 로 잘려도 마우스를 올리면 전부
-    return '<div class="wrp-sum">'
-      + '<div class="wrp-sum-h"><span class="wrp-sum-t">' + esc(title) + '</span>' + (ctx.range ? '<span class="wrp-sum-r">' + esc(ctx.range) + '</span>' : '')
+    var role = ctx.role === 'last' ? 'last' : 'cur';
+    return '<div class="wrp-sum ' + role + '">'
+      + '<div class="wrp-sum-h"><span class="wrp-sum-i" aria-hidden="true">' + (role === 'last' ? ICO.done : ICO.plan) + '</span>'
+      +   '<span class="wrp-sum-t">' + esc(title) + '</span>'
+      +   (ctx.range ? '<span class="wrp-sum-r">' + esc(ctx.range) + (ctx.week ? '<em>' + ctx.week + '주차</em>' : '') + '</span>' : '')
       +   '<span class="wrp-kpis">' + kp.join('') + '</span></div>'
       + '<div class="wrp-sum-2"' + (plain2 ? ' title="' + esc(plain2) + '"' : '') + '>' + (line2.length ? line2.join(sep) : '<span class="none">다가오는 기한 없음</span>') + '</div>'
       + '</div>';
