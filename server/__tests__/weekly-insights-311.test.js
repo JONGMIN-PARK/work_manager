@@ -112,3 +112,16 @@ test('작성 중 점검 — 빈 보고서는 아무것도 안 함', function () 
   expect(c.missing).toEqual([]);
   expect(c.flags).toEqual([]);
 });
+
+test('작성 중 점검 — 🗑 휴지통에 넣은 일은 빠진 일에서 뺌 · 그 뒤 다시 나왔다 빠지면 다시 뜸 (v13.490)', function () {
+  var draft = parser.buildParsed({ lastText: '', curText: '[개발]\n- [A사] 화면 개편 2차 ~11/13 70% @홍\n- [B사] 비전 모듈 ~10/20 10% @김' });
+  var kc = wi.itemKey(T, { client: 'C사', name: '통신 점검' });
+  var base = { team: T, week_start: '2026-10-26', parsed: { last: draft.last, cur: draft.cur } };
+  var c = wi.check(rows, base, { bin: { [kc]: '2026-10-19' } });
+  expect(c.missing).toEqual([]);
+  expect(c.binned).toBe(1);
+  expect(wi.check(rows, base).missing[0].team).toBe(T);
+  // 휴지통에 넣은 뒤(10/12 기준) 10/19 보고서에 다시 나왔으면 → 다시 빠진 일
+  var c2 = wi.check(rows, base, { bin: { [kc]: '2026-10-12' } });
+  expect(c2.missing.map(function (m) { return m.name; })).toEqual(['통신 점검']);
+});

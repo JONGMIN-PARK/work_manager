@@ -90,6 +90,7 @@ DELETE /api/v1/projects/:id/members/:userId
 DELETE /api/v1/telegram/groups/:id
 DELETE /api/v1/telegram/unlink
 DELETE /api/weekly-reports/:id
+DELETE /api/weekly-reports/bin/:binId
 DELETE /api/workflows/:id
 GET *
 GET /
@@ -375,6 +376,7 @@ GET /api/v1/users/pending
 GET /api/wa-targets
 GET /api/weekly-reports
 GET /api/weekly-reports/:id
+GET /api/weekly-reports/bin
 GET /api/weekly-reports/goals
 GET /api/weekly-reports/insights
 GET /api/weekly-reports/insights/item
@@ -396,6 +398,7 @@ PATCH /api/locks
 PATCH /api/projects/:id/specs
 PATCH /api/v1/archives/records/batch
 PATCH /api/v1/locks
+PATCH /api/weekly-reports/bin/:binId
 POST /api/ai/query
 POST /api/ai/summary
 POST /api/anyworks/cancel/:id
@@ -634,6 +637,8 @@ POST /api/v1/tenants/invite
 POST /api/v1/tenants/join/:token
 POST /api/v1/users/:id/reset-password
 POST /api/weekly-reports
+POST /api/weekly-reports/bin
+POST /api/weekly-reports/bin/:binId/use
 POST /api/weekly-reports/check
 POST /api/weekly-reports/item-links
 POST /api/workflows

@@ -3758,6 +3758,36 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 .wrc-t{font-size:11.5px;color:var(--t5)}
 .wrc-acts{margin-left:auto;display:inline-flex;gap:4px}
 .wrc-acts .btn{padding:2px 8px;font-size:11.5px}
+/* v13.490 🗑 휴지통(보관함) */
+.wrc-head{display:flex;align-items:center;gap:6px;padding-right:8px}
+.wrc-head .wrc-sum{flex:1;min-width:0}
+.wrc-bin{flex:none;white-space:nowrap}
+.wrc-bin.on{color:#B45309;border-color:rgba(217,119,6,.45);background:rgba(217,119,6,.08)}
+.wrc-bin.warn{color:#B91C1C;border-color:rgba(220,38,38,.5);background:rgba(220,38,38,.08)}
+.wrc-bin b{font-weight:800}
+.wrb-top .wm-seg{flex:none}
+.wrb-age{flex:none;font-size:10.5px;font-weight:800;color:#B45309;background:rgba(217,119,6,.12);border-radius:4px;padding:1px 6px;white-space:nowrap}
+.wrb-r.warn{border-color:rgba(220,38,38,.45)}
+.wrb-r.warn .wrb-age{color:#B91C1C;background:rgba(220,38,38,.1)}
+.wrb-note{display:block;font-style:normal;font-size:11px;color:var(--t3);overflow:hidden;text-overflow:ellipsis}
+.wrc-binall{display:inline-flex;gap:4px;margin-left:6px;vertical-align:middle}
+.wrc-binall .btn,.wrc-ok .btn{padding:1px 8px;font-size:11px}
+.wrb-top{display:flex;gap:8px;align-items:center}
+.wrb-top .wr-inp{flex:1;min-width:0}
+.wrb-n{font-size:12px;color:var(--t5);white-space:nowrap}
+.wrb-help{font-size:11.5px;color:var(--t5);margin:6px 0 8px}
+.wrb-list{display:grid;gap:4px;max-height:min(56vh,480px);overflow:auto}
+.wrb-r{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--bd);border-radius:7px;background:var(--bg-p);cursor:pointer}
+.wrb-r:hover{border-color:var(--ac)}
+.wrb-r input{flex:none;width:16px;height:16px;margin:0}
+.wrb-sec{flex:none;font-size:10.5px;font-weight:800;border-radius:4px;padding:1px 6px}
+.wrb-main{flex:1;min-width:0;font-size:12.5px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wrb-main b{color:var(--t1)}
+.wrb-main small{display:block;font-size:11px;color:var(--t5);overflow:hidden;text-overflow:ellipsis}
+.wrb-acts{flex:none;display:inline-flex;gap:4px}
+.wrb-acts .btn{padding:2px 7px;font-size:11px}
+.wrb-foot{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap}
+@media (max-width:600px){.wrb-r{flex-wrap:wrap}.wrb-main{flex-basis:calc(100% - 80px);white-space:normal}.wrb-acts{width:100%}.wrb-acts .btn{flex:1;min-height:32px}}
 .wri-gedit{margin-left:auto}
 .wri-goals{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px 14px}
 .wri-g1{display:flex;align-items:baseline;gap:8px;font-size:12.5px}

@@ -539,10 +539,110 @@ router.post('/check', async function (req, res) {
     var from = new Date(mon.getTime() - 56 * 86400000).toISOString().slice(0, 10);
     var rows = team ? await weeklyInsights.load(db, req.tenant.id, { team: team, from: from, to: before }) : [];
     var parsed = parser.buildParsed({ lastText: b.lastText || '', curText: b.curText || '' });
-    var out = weeklyInsights.check(rows, { team: team, week_start: W, parsed: { last: parsed.last, cur: parsed.cur } }, { links: await loadLinks(req.tenant.id) });
+    var bin = team ? await weeklyInsights.loadBin(db, req.tenant.id, team) : {};
+    var out = weeklyInsights.check(rows, { team: team, week_start: W, parsed: { last: parsed.last, cur: parsed.cur } }, { links: await loadLinks(req.tenant.id), bin: bin });
+    if (team) out.bin = await binSummary(req.tenant.id, team);   // 처리 대기 — 점검 띠에 늘
     res.json({ data: out });
   } catch (e) {
     httpErr.serverError(res, '[weekly-reports/check]', e);
+  }
+});
+
+// ─── 🗑 휴지통 · 처리 대기 (v13.490) — 점검 「빠진 일」을 없애기로 옮겨 둔 것. 잊는 게 아니라 결말을 낼 때까지 추적 ───
+// GET    /bin?team=             목록 — 처리 대기(오래된 것 먼저) → 처리됨(자주 쓴 것 먼저) · summary { wait, oldestAt }
+// POST   /bin                   { team, items:[{ key, section, client, name, line, members, pct, deadline, lastWeek, note }] } — 옮기기(같은 일은 다시 대기로)
+// POST   /bin/:binId/use        { as: 'done' | 'resume' } 완료 처리 · 금주 재개 (횟수 +1, 처리됨으로)
+// PATCH  /bin/:binId            { note?, state?: 'wait' } 메모 · 다시 대기로
+// DELETE /bin/:binId            영구 삭제
+function binRow(x) {
+  return { id: String(x.id), team: x.team, key: x.item_key, section: x.section, client: x.client, name: x.name, line: x.line, members: x.members || [],
+    pct: x.pct, deadline: x.deadline, lastWeek: x.last_week, useCount: x.use_count, lastUsedAt: x.last_used_at, createdName: x.created_name, createdAt: x.created_at,
+    state: x.state, note: x.note || '', resolvedAt: x.resolved_at, updatedAt: x.updated_at };
+}
+var BIN_COLS = "id, team, item_key, section, client, name, line, members, pct, deadline, to_char(last_week, 'YYYY-MM-DD') AS last_week, use_count, last_used_at, created_name, created_at, state, note, resolved_at, updated_at";
+/** 처리 대기 요약 — 점검 띠에 늘 보임 */
+async function binSummary(tenantId, team) {
+  var r = await db.query("SELECT COUNT(*)::int AS n, MIN(updated_at) AS oldest FROM weekly_item_bin WHERE tenant_id = $1 AND team = $2 AND state = 'wait'", [tenantId, team || '']);
+  return { wait: r.rows[0].n, oldestAt: r.rows[0].oldest };
+}
+router.get('/bin', async function (req, res) {
+  try {
+    var team = String(req.query.team || '').trim();
+    var r = await db.query('SELECT ' + BIN_COLS + " FROM weekly_item_bin WHERE tenant_id = $1 AND team = $2 " +
+      "ORDER BY (state = 'wait') DESC, CASE WHEN state = 'wait' THEN updated_at END ASC, use_count DESC, COALESCE(resolved_at, created_at) DESC LIMIT 500",
+      [req.tenant.id, team]);
+    res.json({ data: r.rows.map(binRow), summary: await binSummary(req.tenant.id, team) });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/bin/get]', e);
+  }
+});
+router.post('/bin', async function (req, res) {
+  try {
+    var b = req.body || {}, team = String(b.team || '').trim().slice(0, 100);
+    var list = (Array.isArray(b.items) ? b.items : []).slice(0, 100).filter(function (x) {
+      return x && typeof x.key === 'string' && x.key.length > 2 && x.key.length <= 400 && String(x.line || '').trim();
+    });
+    if (!list.length) return res.status(400).json({ error: 'VALIDATION', message: '보관할 항목이 없습니다.' });
+    var uid = (req.user && req.user.id) || null, uname = String((req.user && req.user.name) || '').slice(0, 100);
+    var saved = [];
+    for (var i = 0; i < list.length; i++) {
+      var x = list[i];
+      var sec = ['dev', 'setup', 'cs', 'etc'].indexOf(x.section) >= 0 ? x.section : 'etc';
+      var lw = /^\d{4}-\d{2}-\d{2}$/.test(String(x.lastWeek || '')) ? x.lastWeek : null;
+      var pct = x.pct == null || isNaN(+x.pct) ? null : Math.max(0, Math.min(100, Math.round(+x.pct)));
+      var members = (Array.isArray(x.members) ? x.members : []).map(function (m) { return String(m).slice(0, 50); }).slice(0, 20);
+      var r = await db.query(
+        'INSERT INTO weekly_item_bin (tenant_id, team, item_key, section, client, name, line, members, pct, deadline, last_week, created_by, created_name, note) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14) ' +
+        'ON CONFLICT (tenant_id, team, item_key) DO UPDATE SET section = EXCLUDED.section, client = EXCLUDED.client, name = EXCLUDED.name, line = EXCLUDED.line, ' +
+        'members = EXCLUDED.members, pct = EXCLUDED.pct, deadline = EXCLUDED.deadline, ' +
+        'last_week = GREATEST(weekly_item_bin.last_week, EXCLUDED.last_week), ' +
+        "note = CASE WHEN EXCLUDED.note <> '' THEN EXCLUDED.note ELSE weekly_item_bin.note END, " +
+        "state = 'wait', resolved_at = NULL, updated_at = now() " +        // 처리했던 일이 또 빠졌으면 다시 대기
+        'RETURNING ' + BIN_COLS,
+        [req.tenant.id, team, x.key, sec, String(x.client || '').slice(0, 200), String(x.name || '').slice(0, 500), String(x.line).slice(0, 1000),
+          JSON.stringify(members), pct, x.deadline ? String(x.deadline).slice(0, 20) : null, lw, uid, uname, String(x.note || '').slice(0, 300)]);
+      saved.push(binRow(r.rows[0]));
+    }
+    res.json({ data: saved, summary: await binSummary(req.tenant.id, team) });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/bin/post]', e);
+  }
+});
+router.post('/bin/:binId/use', async function (req, res) {
+  try {
+    if (!/^\d+$/.test(req.params.binId)) return res.status(400).json({ error: 'VALIDATION', message: '잘못된 항목입니다.' });
+    var as = (req.body && req.body.as) === 'done' ? 'done' : 'resumed';
+    var r = await db.query('UPDATE weekly_item_bin SET use_count = use_count + 1, last_used_at = now(), state = $3, resolved_at = now() WHERE id = $1 AND tenant_id = $2 RETURNING ' + BIN_COLS,
+      [req.params.binId, req.tenant.id, as]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '없습니다.' });
+    res.json({ data: binRow(r.rows[0]) });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/bin/use]', e);
+  }
+});
+router.patch('/bin/:binId', async function (req, res) {
+  try {
+    if (!/^\d+$/.test(req.params.binId)) return res.status(400).json({ error: 'VALIDATION', message: '잘못된 항목입니다.' });
+    var b = req.body || {}, sets = [], params = [req.params.binId, req.tenant.id];
+    if (typeof b.note === 'string') { params.push(b.note.slice(0, 300)); sets.push('note = $' + params.length); }
+    if (b.state === 'wait') sets.push("state = 'wait', resolved_at = NULL, updated_at = now()");
+    if (!sets.length) return res.status(400).json({ error: 'VALIDATION', message: '바꿀 것이 없습니다.' });
+    var r = await db.query('UPDATE weekly_item_bin SET ' + sets.join(', ') + ' WHERE id = $1 AND tenant_id = $2 RETURNING ' + BIN_COLS, params);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '없습니다.' });
+    res.json({ data: binRow(r.rows[0]) });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/bin/patch]', e);
+  }
+});
+router.delete('/bin/:binId', async function (req, res) {
+  try {
+    if (!/^\d+$/.test(req.params.binId)) return res.status(400).json({ error: 'VALIDATION', message: '잘못된 항목입니다.' });
+    var r = await db.query('DELETE FROM weekly_item_bin WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.binId, req.tenant.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: '없습니다.' });
+    res.json({ data: { id: req.params.binId } });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/bin/delete]', e);
   }
 });
 

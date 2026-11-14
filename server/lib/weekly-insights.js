@@ -336,11 +336,14 @@ function check(rows, draft, opts) {
   var inKeys = {}, inDraft = items.filter(function (i) { return i.inDraft; });
   inDraft.forEach(function (i) { (i.variants || [{ key: i.key }]).forEach(function (v) { inKeys[v.key] = true; }); });
   var prev = rows && rows.length ? compute(rows, { links: opts.links, withItems: true }).items : [];
+  var bin = opts.bin || {};   // v13.490 🗑 휴지통 — { item_key: 없앨 때 마지막으로 본 주 }. 그 주 뒤에 다시 나온 일은 다시 점검
+  res.binned = 0;
   prev.forEach(function (i) {
     if (i.doneWeek || i.lastWeek < since) return;
     if ((i.variants || [{ key: i.key }]).some(function (v) { return inKeys[v.key]; })) return;
+    if ((i.variants || [{ key: i.key }]).some(function (v) { return bin[v.key] && bin[v.key] >= i.lastWeek; })) { res.binned++; return; }
     if (!i.split && inDraft.some(function (d) { return norm(d.client) === norm(i.client) && dice(norm(d.name), norm(i.name)) >= 0.6; })) return;
-    res.missing.push({ key: i.key, section: i.section, client: i.client, name: i.name, members: i.members, pct: i.pct, deadline: i.deadline, lastWeek: i.lastWeek, line: itemLine(i) });
+    res.missing.push({ key: i.key, team: i.team, section: i.section, client: i.client, name: i.name, members: i.members, pct: i.pct, deadline: i.deadline, lastWeek: i.lastWeek, line: itemLine(i) });
   });
   items.forEach(function (i) {
     if (!i.inDraft || i.doneWeek) return;
@@ -438,9 +441,16 @@ async function loadLinks(db, tenantId) {
   return out;
 }
 /** 팀(빈 값 = 모든 팀) 목표 */
+/** 🗑 휴지통 (v13.490) — 점검에서 빼 둔 일 { item_key: 'YYYY-MM-DD'(마지막으로 본 주) } */
+async function loadBin(db, tenantId, team) {
+  var r = await db.query("SELECT item_key, to_char(last_week, 'YYYY-MM-DD') AS w FROM weekly_item_bin WHERE tenant_id = $1 AND team = $2", [tenantId, team || '']);
+  var out = {};
+  r.rows.forEach(function (x) { out[x.item_key] = x.w || '9999-12-31'; });
+  return out;
+}
 async function loadGoals(db, tenantId, team) {
   var r = await db.query('SELECT member, metric, target::float AS target FROM weekly_goals WHERE tenant_id = $1 AND team = $2 ORDER BY member, metric', [tenantId, team || '']);
   return r.rows;
 }
 
-module.exports = { loadLinks: loadLinks, loadGoals: loadGoals, GOAL_METRICS: GOAL_METRICS, check: check, itemKey: itemKey, itemLine: itemLine, load: load, compute: compute, toText: toText, latestPerWeek: latestPerWeek, snapshots: snapshots, deadlineDate: deadlineDate, dice: dice, norm: norm };
+module.exports = { loadLinks: loadLinks, loadBin: loadBin, loadGoals: loadGoals, GOAL_METRICS: GOAL_METRICS, check: check, itemKey: itemKey, itemLine: itemLine, load: load, compute: compute, toText: toText, latestPerWeek: latestPerWeek, snapshots: snapshots, deadlineDate: deadlineDate, dice: dice, norm: norm };

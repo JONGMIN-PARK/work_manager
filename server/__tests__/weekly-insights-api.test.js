@@ -33,6 +33,7 @@ afterAll(async function () {
   await db.query('DELETE FROM weekly_reports WHERE tenant_id = $1', [T]);
   await db.query('DELETE FROM weekly_item_links WHERE tenant_id = $1', [T]);
   await db.query('DELETE FROM weekly_goals WHERE tenant_id = $1', [T]);
+  await db.query('DELETE FROM weekly_item_bin WHERE tenant_id = $1', [T]);
   await h.cleanup();
 });
 
@@ -118,4 +119,37 @@ test('작성 중 점검 — 지난주 보고서에 있던 일이 빠지면 알�
   expect(r.body.data.quality[0].text).toMatch(/납기 · 담당 없음/);
   var bad = await api('post', '/api/weekly-reports/check', admin).send({ team: TEAM, weekStart: 'x' });
   expect(bad.status).toBe(400);
+});
+
+test('🗑 휴지통 · 처리 대기 (v13.490) — 없애면 점검에서 빠지고 대기로 추적 · 완료 처리 · 다시 대기 · 삭제', async function () {
+  var body = { team: TEAM, weekStart: monday(0), lastText: '', curText: '[개발]\n- [C사] 새 일 #진행중' };
+  var c0 = await api('post', '/api/weekly-reports/check', admin).send(body);
+  var m = c0.body.data.missing[0];
+  expect(c0.body.data.bin).toEqual({ wait: 0, oldestAt: null });
+  var put = await api('post', '/api/weekly-reports/bin', admin).send({ team: TEAM, items: [m] });
+  expect(put.status).toBe(200);
+  expect(put.body.data[0]).toMatchObject({ client: 'A사', state: 'wait', line: m.line });
+  expect(put.body.summary.wait).toBe(1);
+  var c1 = await api('post', '/api/weekly-reports/check', admin).send(body);
+  expect(c1.body.data.missing).toEqual([]);            // 점검에서 빠짐
+  expect(c1.body.data.binned).toBe(1);
+  expect(c1.body.data.bin.wait).toBe(1);               // 하지만 처리 대기로 늘 보임
+  var id = put.body.data[0].id;
+  var note = await api('patch', '/api/weekly-reports/bin/' + id, admin).send({ note: '고객 회신 대기' });
+  expect(note.body.data.note).toBe('고객 회신 대기');
+  var use = await api('post', '/api/weekly-reports/bin/' + id + '/use', admin).send({ as: 'done' });
+  expect(use.body.data).toMatchObject({ state: 'done', useCount: 1 });
+  var list = await api('get', '/api/weekly-reports/bin?team=' + encodeURIComponent(TEAM), admin);
+  expect(list.body.summary.wait).toBe(0);
+  expect(list.body.data.length).toBe(1);               // 처리됨으로 남아 다시 꺼내 씀
+  var back = await api('patch', '/api/weekly-reports/bin/' + id, admin).send({ state: 'wait' });
+  expect(back.body.data.state).toBe('wait');
+  // 같은 일을 또 없애면 다시 대기 (중복 없음)
+  await api('post', '/api/weekly-reports/bin/' + id + '/use', admin).send({ as: 'resume' });
+  var again = await api('post', '/api/weekly-reports/bin', admin).send({ team: TEAM, items: [m] });
+  expect(again.body.data[0]).toMatchObject({ id: id, state: 'wait', note: '고객 회신 대기' });
+  expect((await api('delete', '/api/weekly-reports/bin/' + id, admin)).status).toBe(200);
+  expect((await api('delete', '/api/weekly-reports/bin/' + id, admin)).status).toBe(404);
+  expect((await api('post', '/api/weekly-reports/bin', admin).send({ team: TEAM, items: [] })).status).toBe(400);
+  expect((await api('patch', '/api/weekly-reports/bin/abc', admin).send({ note: 'x' })).status).toBe(400);
 });
