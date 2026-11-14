@@ -156,7 +156,7 @@ function buildTrayMenu() {
     { label: '윈도우 시작할 때 실행', type: 'checkbox', checked: login, click: (m) => app.setLoginItemSettings({ openAtLogin: m.checked, args: ['--hidden'] }) },
     { label: '새로 고침', click: () => { showWin(); loadApp(); } },
     { label: '서버: ' + SERVER(), enabled: false },
-    upd.ready ? { label: '⬆ 새 버전 ' + upd.ready + ' — 설치하고 다시 시작', click: () => { quitting = true; ctlStop(false); require('electron-updater').autoUpdater.quitAndInstall(true, true); } }
+    upd.ready ? { label: '⬆ 새 버전 ' + upd.ready + ' — 설치하고 다시 시작', click: () => installNow() }
       : { label: upd.busy ? '업데이트 받는 중… ' + (upd.pct || 0) + '%' : '업데이트 확인', enabled: app.isPackaged && !upd.busy, click: () => checkUpdate(true) },
     { label: '버전 ' + app.getVersion(), enabled: false },
     { type: 'separator' },
@@ -176,7 +176,12 @@ const upd = { busy: false, ready: null, pct: 0, manual: false, applyWhenReady: f
 function feedUrl() { return SERVER().replace(/\/+$/, '') + '/desktop-release/'; }
 function updState() { return { version: app.getVersion(), busy: upd.busy, pct: upd.pct, ready: upd.ready }; }
 function sendUpd() { try { if (win) win.webContents.send('wm:update-state', updState()); } catch (_) {} }
-function installNow() { quitting = true; ctlStop(false); require('electron-updater').autoUpdater.quitAndInstall(true, true); }
+// v13.496 설치 진행이 보이게 — 조용히(silent) 설치하면 창이 사라졌다 몇 초 뒤 다시 열려 무슨 일인지 몰랐음 → 윈도우 설치 진행 창(막대)을 띄우고 끝나면 다시 엶
+function installNow() {
+  try { if (win) win.webContents.send('wm:update-state', Object.assign(updState(), { installing: true })); } catch (_) {}
+  quitting = true; ctlStop(false);
+  setTimeout(() => require('electron-updater').autoUpdater.quitAndInstall(false, true), 400);   // 웹이 '설치 중' 을 그릴 틈
+}
 function setupUpdater() {
   const au = require('electron-updater').autoUpdater;
   try { au.setFeedURL({ provider: 'generic', url: feedUrl() }); } catch (e) { console.warn('[update] feed', e.message); }
@@ -188,7 +193,7 @@ function setupUpdater() {
     upd.busy = false; upd.ready = i.version; refreshTray(); sendUpd();
     if (upd.applyWhenReady) { installNow(); return; }   // 웹에서 새로 고침을 눌렀을 때 아직 받는 중이었으면 — 다 받는 대로 설치
     const n = new Notification({ title: '⬆ 업무 관리자 ' + i.version + ' 준비됨', body: '누르면 바로 설치하고 다시 시작합니다 (그냥 두면 끝낼 때 설치)', icon: ICON });
-    n.on('click', () => { quitting = true; ctlStop(false); au.quitAndInstall(true, true); });
+    n.on('click', () => installNow());
     n.show();
   });
   au.on('error', (e) => { upd.busy = false; upd.applyWhenReady = false; refreshTray(); sendUpd(); if (upd.manual) toast('업데이트를 확인하지 못했습니다: ' + (e && e.message ? e.message.slice(0, 80) : '')); upd.manual = false; });
@@ -202,7 +207,7 @@ function checkUpdate(manual) {
 ipcMain.handle('wm:update', (e, a) => {
   if (!win || e.sender !== win.webContents) return null;
   if (a === 'apply') {
-    if (upd.ready && app.isPackaged) { setTimeout(installNow, 150); return Object.assign(updState(), { installing: true }); }
+    if (upd.ready && app.isPackaged) { installNow(); return Object.assign(updState(), { installing: true }); }
     if (upd.busy) { upd.applyWhenReady = true; return Object.assign(updState(), { waiting: true }); }
     return updState();
   }

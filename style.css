@@ -6190,6 +6190,13 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .wm-upd-t i{font-style:normal;font-size:11.5px;color:var(--t4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46ch}
 .wm-upd button{flex:none;border-radius:9px;font:inherit;font-size:12.5px;cursor:pointer;padding:7px 12px}
 .wm-upd-go{border:0;background:var(--ac);color:#fff;font-weight:700}
+/* v13.496 PC 앱 업데이트 — 받는 중 % 막대 · 설치 중 */
+.wm-upd.wm-upd-desk{flex-wrap:wrap;padding-right:14px;min-width:min(360px,calc(100vw - 20px))}
+.wm-upd-pg{flex-basis:100%;height:5px;border-radius:3px;background:var(--bg-i);overflow:hidden;margin:2px 0 0 38px}
+.wm-upd-pg i{display:block;height:100%;width:2%;border-radius:3px;background:var(--ac);transition:width .4s ease}
+.wm-upd-desk .wm-upd-i{animation:wmUpdPulse 1.4s ease-in-out infinite}
+@keyframes wmUpdPulse{50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.wm-upd-desk .wm-upd-i{animation:none}.wm-upd-pg i{transition:none}}
 @media (hover:hover){.wm-upd-go:hover{filter:brightness(1.08)}}
 .wm-upd-x{border:1px solid var(--bd);background:none;color:var(--t3)}
 @media (max-width:600px){.wm-upd{left:8px;right:8px;transform:none;width:auto;flex-wrap:wrap}.wm-upd-t{flex:1 1 calc(100% - 40px)}.wm-upd-t i{max-width:none;white-space:normal}.wm-upd button{flex:1}@keyframes wmUpdIn{from{opacity:0}to{opacity:1}}}

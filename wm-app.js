@@ -341,6 +341,10 @@ function _wmDeskUpdate(info) {
 function _wmDeskState(s) {
   s = s || {};
   WMD.ver = s.version || WMD.ver; WMD.ready = s.ready || ''; WMD.pct = s.pct || 0; WMD.busy = !!s.busy;
+  // v13.496 설치 과정이 보이게 — 새로 고침을 눌렀는데 아직 받는 중이면 띠에 % · 다 받으면 '설치 중'
+  var bar = document.getElementById('wmUpd');
+  if (s.installing) { _wmDeskInstalling(bar); return; }
+  if (WMD.waiting && WMD.busy) { _wmDeskProgress(bar); return; }
   // 웹은 그대로인데 PC 앱만 새 것을 받아 둠 → 다시 시작하면 적용
   if (WMD.ready && !document.getElementById('wmUpd')) {
     _wmUpdBar({ title: 'PC 앱 새 버전 v' + WMD.ready + ' 준비됨', sub: '새로 고치면(F5) 설치하고 다시 시작합니다 — 쓰던 메시지는 그대로 남습니다', goText: '지금 적용', go: wmUpdateApply });
@@ -349,6 +353,27 @@ function _wmDeskState(s) {
 if (wmIsDesktopApp() && window.wmDesktop.onAppUpdate) {
   window.wmDesktop.onAppUpdate(_wmDeskState);
   window.wmDesktop.appUpdate('state').then(_wmDeskState).catch(function () {});
+}
+/* 받는 중 % 막대 · 설치 중 — 띠를 그 자리에서 바꿈 (없으면 새로) */
+function _wmDeskBar(bar, title, sub, pct) {
+  if (!bar) bar = _wmUpdBar({ title: '', go: function () {} });
+  bar.classList.add('is-busy', 'wm-upd-desk');
+  bar.querySelector('b').textContent = title;
+  bar.querySelector('i').textContent = sub;
+  var go = bar.querySelector('.wm-upd-go'); if (go) go.remove();
+  var x = bar.querySelector('.wm-upd-x'); if (x) x.remove();
+  var p = bar.querySelector('.wm-upd-pg');
+  if (pct == null) { if (p) p.remove(); return bar; }
+  if (!p) { p = document.createElement('span'); p.className = 'wm-upd-pg'; p.innerHTML = '<i></i>'; bar.appendChild(p); }
+  p.firstChild.style.width = Math.max(2, Math.min(100, pct)) + '%';
+  p.setAttribute('role', 'progressbar'); p.setAttribute('aria-valuenow', String(pct)); p.setAttribute('aria-valuemin', '0'); p.setAttribute('aria-valuemax', '100');
+  return bar;
+}
+function _wmDeskProgress(bar) {
+  _wmDeskBar(bar, '⬇ PC 앱 새 버전 받는 중 ' + (WMD.pct || 0) + '%', '다 받으면 바로 설치하고 다시 엽니다 — 그동안 계속 쓰셔도 됩니다', WMD.pct || 0);
+}
+function _wmDeskInstalling(bar) {
+  _wmDeskBar(bar, '⏳ PC 앱 업데이트 설치 중…', '설치 창이 뜨고, 끝나면 업무 관리자가 다시 열립니다 (10초쯤)', 100);
 }
 /** 띠 하나 — 웹 새 버전 · PC 앱 새 버전 같은 모양 */
 function _wmUpdBar(o) {
@@ -370,8 +395,9 @@ function wmUpdateApply() {
   if (wmIsDesktopApp() && window.wmDesktop.appUpdate && !window.__wmDeskSkip) {
     window.__wmDeskSkip = true;   // 설치를 못 하면 웹만 새로 고침
     window.wmDesktop.appUpdate('apply').then(function (s) {
-      if (s && s.installing) { var g2 = bar && bar.querySelector('.wm-upd-go'); if (g2) g2.textContent = '⏳ PC 앱 업데이트 설치 중… 곧 다시 열립니다'; return; }
-      wmUpdateApply();   // 받아 둔 것이 없으면(또는 받는 중이면 다 받는 대로 설치) 웹만 새로 고침
+      if (s && s.installing) { _wmDeskInstalling(document.getElementById('wmUpd')); return; }
+      if (s && s.waiting) { WMD.waiting = true; WMD.pct = s.pct || 0; _wmDeskProgress(document.getElementById('wmUpd')); return; }   // 다 받는 대로 PC 앱이 설치하고 다시 엶
+      wmUpdateApply();   // 받아 둔 것이 없으면 웹만 새로 고침
     }).catch(function () { wmUpdateApply(); });
     return;
   }
