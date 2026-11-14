@@ -595,6 +595,7 @@
       +     '<button class="tab on" data-wt="author" role="tab">✍️ 작성</button>'
       +     '<button class="tab" data-wt="search" role="tab">🔍 검색</button>'
       +     '<button class="tab" data-wt="stats" role="tab" title="보고서를 주를 넘어 이어 붙여 추세 · 경과 · 효율">📈 분석</button>'
+      +     '<button class="tab" data-wt="pa" role="tab" title="계획(금주 칸) 대비 실적(다음 주 지난주 칸) — 기간 · 업체 · 프로젝트 · 인원 조합 · 부족 요인">🎯 계획 대비 실적</button>'
       +     '<button class="tab" data-wt="list" role="tab">🗂️ 목록</button>'
       +     '<button class="tab" data-wt="upload" role="tab">📤 업로드</button>'
       +   '</span>'
@@ -646,6 +647,7 @@
     else if (name === 'upload') renderUpload();
     else if (name === 'search') renderSearch();
     else if (name === 'stats') renderStats();
+    else if (name === 'pa') { if (typeof window.wrPaRender === 'function') window.wrPaRender($('wrPanel')); else $('wrPanel').innerHTML = '<div class="wr-msg">불러오는 중…</div>'; }
     else if (name === 'list') renderList();
   }
 

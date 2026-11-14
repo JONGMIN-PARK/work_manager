@@ -548,6 +548,37 @@ router.post('/check', async function (req, res) {
   }
 });
 
+// ─── GET /api/weekly-reports/plan-actual — 🎯 계획 대비 실적 (v13.492) ───
+// ?team= · ?weeks=12 또는 ?from=&to=(YYYY-MM-DD, 주 단위) · ?capacity=40 (1인 주당 기준 시간)
+// ?filter={"clients":[…],"members":[…],"projects":["업체|이름"…],"sections":["dev"…]} — 축 안은 OR, 축끼리는 AND
+var planActual = require('../lib/weekly-plan-actual');
+router.get('/plan-actual', async function (req, res) {
+  try {
+    var q = req.query, team = String(q.team || '').trim();
+    var today = planActual.mondayOf(new Date().toISOString().slice(0, 10));
+    var to = /^\d{4}-\d{2}-\d{2}$/.test(String(q.to || '')) ? planActual.mondayOf(q.to) : planActual.addDays(today, -7);   // 실적까지 나온 마지막 주 = 지난주
+    var n = Math.min(Math.max(parseInt(q.weeks, 10) || 12, 1), 104);
+    var from = /^\d{4}-\d{2}-\d{2}$/.test(String(q.from || '')) ? planActual.mondayOf(q.from) : planActual.addDays(to, -7 * (n - 1));
+    if (from > to) { var t = from; from = to; to = t; }
+    var filter = {};
+    try { filter = q.filter ? JSON.parse(String(q.filter)) : {}; } catch (e) { return res.status(400).json({ error: 'VALIDATION', message: 'filter 가 올바른 JSON 이 아닙니다.' }); }
+    ['clients', 'members', 'projects', 'sections'].forEach(function (k) { filter[k] = (Array.isArray(filter[k]) ? filter[k] : []).map(String).slice(0, 50); });
+    var links = await loadLinks(req.tenant.id);
+    // 실적은 다음 주 보고서의 '지난주' 칸 — 한 주 뒤 보고서까지 읽음
+    var rows = await weeklyInsights.load(db, req.tenant.id, { team: team, from: from, to: planActual.addDays(to, 7) });
+    var hours = await planActual.loadHours(db, req.tenant.id, from, planActual.addDays(to, 6));
+    var insightItems = weeklyInsights.compute(rows, { withItems: true, links: links }).items;
+    var out = planActual.compute(rows, hours, { links: links, from: from, to: to, capacity: q.capacity, filter: filter, insightItems: insightItems });
+    var teamsR = await db.query('SELECT DISTINCT team FROM weekly_reports WHERE tenant_id = $1 AND team IS NOT NULL ORDER BY team', [req.tenant.id]);
+    out.teams = teamsR.rows.map(function (t) { return t.team; });
+    out.filter = filter;
+    out.query = { team: team, from: from, to: to };
+    res.json({ data: out });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/plan-actual]', e);
+  }
+});
+
 // ─── 🗑 휴지통 · 처리 대기 (v13.490) — 점검 「빠진 일」을 없애기로 옮겨 둔 것. 잊는 게 아니라 결말을 낼 때까지 추적 ───
 // GET    /bin?team=             목록 — 처리 대기(오래된 것 먼저) → 처리됨(자주 쓴 것 먼저) · summary { wait, oldestAt }
 // POST   /bin                   { team, items:[{ key, section, client, name, line, members, pct, deadline, lastWeek, note }] } — 옮기기(같은 일은 다시 대기로)

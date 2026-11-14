@@ -440,7 +440,6 @@ async function loadLinks(db, tenantId) {
   r.rows.forEach(function (x) { if (x.kind === 'merge' && x.target_key) out.merge[x.item_key] = x.target_key; else if (x.kind === 'split') out.split[x.item_key] = true; });
   return out;
 }
-/** 팀(빈 값 = 모든 팀) 목표 */
 /** 🗑 휴지통 (v13.490) — 점검에서 빼 둔 일 { item_key: 'YYYY-MM-DD'(마지막으로 본 주) } */
 async function loadBin(db, tenantId, team) {
   var r = await db.query("SELECT item_key, to_char(last_week, 'YYYY-MM-DD') AS w FROM weekly_item_bin WHERE tenant_id = $1 AND team = $2", [tenantId, team || '']);
@@ -448,6 +447,7 @@ async function loadBin(db, tenantId, team) {
   r.rows.forEach(function (x) { out[x.item_key] = x.w || '9999-12-31'; });
   return out;
 }
+/** 팀(빈 값 = 모든 팀) 목표 */
 async function loadGoals(db, tenantId, team) {
   var r = await db.query('SELECT member, metric, target::float AS target FROM weekly_goals WHERE tenant_id = $1 AND team = $2 ORDER BY member, metric', [tenantId, team || '']);
   return r.rows;

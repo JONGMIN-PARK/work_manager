@@ -381,6 +381,7 @@ GET /api/weekly-reports/goals
 GET /api/weekly-reports/insights
 GET /api/weekly-reports/insights/item
 GET /api/weekly-reports/next-name
+GET /api/weekly-reports/plan-actual
 GET /api/weekly-reports/search
 GET /api/weekly-reports/stats
 GET /api/white-label

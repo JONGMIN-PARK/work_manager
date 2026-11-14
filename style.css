@@ -3701,6 +3701,94 @@ mark.wm-hit.on{background:#F97316;color:#fff;box-shadow:0 0 0 2px rgba(249,115,2
 
 /* ═══ 📈 주간 업무 분석 (v13.310, weekly-report-admin.js) ═══ */
 .wri-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+/* v13.492 🎯 계획 대비 실적 */
+.wpa{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+.wpa>*,#wpaBody{min-width:0}
+#wpaBody{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+#wpaWeeks{max-width:100%;overflow-x:auto;scrollbar-width:none}
+.wpa-bar{margin-bottom:0}
+.wpa-range{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--t5)}
+.wpa-range[hidden]{display:none}
+.wpa-range .wr-inp{width:138px}
+.wpa-cap{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--t5)}
+.wpa-cap .wr-inp{width:58px}
+.wpa-fbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.wpa-fbtn.on{border-color:var(--ac);color:var(--ac);background:var(--ac-bg)}
+.wpa-fbtn.open{box-shadow:0 0 0 2px var(--ac-bg)}
+.wpa-chips{display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center}
+.wpa-chip{display:inline-flex;align-items:center;gap:3px;font-size:12px;padding:2px 4px 2px 8px;border-radius:12px;background:var(--bg-i);border:1px solid var(--bd);color:var(--t2)}
+.wpa-chip button{border:0;background:none;color:var(--t5);cursor:pointer;font-size:11px;padding:0 3px}
+.wpa-hint{font-size:11.5px;color:var(--t5);font-weight:400}
+.wpa-on{color:var(--ac);font-weight:700}
+.wpa-sets{max-width:200px}
+.wpa-pop{border:1px solid var(--bd);border-radius:10px;background:var(--bg-p);box-shadow:0 8px 24px rgba(15,23,42,.12);padding:8px;max-width:520px}
+.wpa-pop[hidden]{display:none}
+.wpa-pop-h{display:flex;gap:6px;align-items:center}.wpa-pop-h .wr-inp{flex:1;min-width:0}
+.wpa-pop-l{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 8px;max-height:260px;overflow:auto;margin:8px 0}
+.wpa-opt{display:flex;align-items:center;gap:6px;font-size:12.5px;padding:3px 4px;border-radius:5px;cursor:pointer;min-width:0}
+.wpa-opt:hover{background:var(--bg-i)}
+.wpa-opt span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wpa-opt small{color:var(--t6);font-size:10.5px}
+.wpa-pop-f{display:flex;align-items:center;gap:6px}
+#wpaBody{transition:opacity .15s}#wpaBody.wpa-loading{opacity:.55}
+.wpa-head{font-size:12.5px;color:var(--t3)}
+.wpa-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px}
+.wpa-kpi{background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;padding:8px 10px;display:grid;gap:1px;min-width:0}
+.wpa-kpi span{font-size:11.5px;color:var(--t5);font-weight:700}
+.wpa-kpi b{font-size:20px;font-weight:800;color:var(--t1);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wpa-kpi small{font-size:11px;color:var(--t5)}
+.wpa-kpi.warn{border-color:rgba(217,119,6,.5);background:rgba(217,119,6,.06)}
+.wpa-tr{font-weight:700}.wpa-tr.up{color:#16A34A}.wpa-tr.dn{color:#DC2626}
+.wpa-card{background:var(--bg-p);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;min-width:0}
+.wpa-card h4{margin:0 0 8px;font-size:13px;color:var(--t1)}
+.wpa-grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:10px}
+.wpa-dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:8px}
+.wpa-d{border:1px solid var(--bd);border-left:4px solid var(--t6);border-radius:8px;padding:8px 10px;min-width:0}
+.wpa-d.high{border-left-color:#DC2626;background:rgba(220,38,38,.05)}
+.wpa-d.mid{border-left-color:#D97706;background:rgba(217,119,6,.05)}
+.wpa-d.info{border-left-color:#2563EB}
+.wpa-dt{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.wpa-dk{font-size:11px;font-weight:800;color:var(--t5)}
+.wpa-dt b{font-size:13.5px;color:var(--t1)}
+.wpa-d p{margin:4px 0 0;font-size:12.5px;color:var(--t2);line-height:1.5}
+.wpa-d ul{margin:4px 0 0;padding-left:18px;font-size:12px;color:var(--t3);line-height:1.5}
+.wpa-chart{position:relative}
+.wpa-chart svg{display:block;width:100%;height:auto;max-height:240px}
+.wpa-gl{stroke:var(--bd);stroke-width:1}
+.wpa-ax{font-size:10px;fill:var(--t5);font-variant-numeric:tabular-nums}
+.wpa-dl{font-size:10.5px;font-weight:700;fill:var(--t2)}
+.wpa-hit{fill:transparent;cursor:crosshair}
+.wpa-xh{stroke:var(--t5);stroke-width:1;stroke-dasharray:3 3}
+.wpa-xh[hidden]{display:none}
+.wpa-tip{position:absolute;top:6px;pointer-events:none;white-space:pre-line;font-size:11.5px;line-height:1.5;background:var(--bg-p);color:var(--t1);border:1px solid var(--bd);border-radius:7px;padding:5px 8px;box-shadow:0 4px 14px rgba(15,23,42,.14);z-index:2}
+.wpa-tip[hidden]{display:none}
+.wpa-leg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--t3);margin-top:4px}
+.wpa-leg span{display:inline-flex;align-items:center;gap:5px}
+.wpa-leg i{display:inline-block;width:12px;height:8px;border-radius:2px}
+.wpa-tw{overflow-x:auto}
+.wpa-t{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.wpa-t th{font-size:11px;font-weight:700;color:var(--t5);text-align:left;padding:4px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+.wpa-t td{padding:5px 8px;border-bottom:1px solid var(--bd);color:var(--t2);white-space:nowrap}
+.wpa-t td.n{text-align:right}.wpa-t td.z{color:var(--t6)}
+.wpa-t td.bad{color:#DC2626;font-weight:700}
+.wpa-t tr.hot td{background:rgba(220,38,38,.04)}
+.wpa-t small{color:var(--t5)}
+.wpa-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:0}
+.wpa-link{border:0;background:none;padding:0;color:var(--t1);font:inherit;font-weight:700;cursor:pointer;text-align:left}
+.wpa-link:hover{color:var(--ac);text-decoration:underline}
+.wpa-rc{min-width:120px}
+.wpa-rb{display:inline-block;width:64px;height:6px;border-radius:3px;background:var(--bg-i);overflow:hidden;vertical-align:middle;margin-right:6px}
+.wpa-rb i{display:block;height:100%;border-radius:3px}
+.wpa-st{font-size:11px;font-weight:700;padding:1px 7px;border-radius:9px;background:var(--bg-i);color:var(--t3)}
+.wpa-st.ok{color:#16A34A;background:rgba(22,163,74,.1)}.wpa-st.warn{color:#B45309;background:rgba(217,119,6,.12)}.wpa-st.bad{color:#DC2626;background:rgba(220,38,38,.1)}
+.wpa-secs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.wpa-sec{display:grid;gap:3px;text-align:left;border:1px solid var(--bd);border-radius:8px;padding:8px 10px;background:var(--bg-p);color:var(--t2);cursor:pointer;font:inherit;font-size:12px}
+.wpa-sec:hover{border-color:var(--ac)}
+.wpa-sec b{font-size:13px;color:var(--t1)}
+.wpa-recs summary{cursor:pointer;list-style:none}.wpa-recs summary h4{display:inline;margin:0}
+.wpa-rf{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0}.wpa-rf .btn.on{border-color:var(--ac);color:var(--ac)}
+.wpa-res{font-size:11px;font-weight:700;color:var(--c);border:1px solid var(--c);border-radius:9px;padding:0 7px}
+@media (max-width:600px){.wpa-kpi b{font-size:17px}.wpa-sets{max-width:150px}.wpa-range .wr-inp{width:124px}}
 .wri-bar .wm-seg>button{padding:4px 10px}
 .wri-range{font-size:11px;color:var(--t5);margin:0 2px 6px}
 .wri-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:6px;margin-bottom:8px}
