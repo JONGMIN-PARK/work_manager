@@ -317,7 +317,7 @@
     var detailsHtml = hasDetails ? it.details.map(function (d, di) { return renderDetail(d, di, it.ownStatus != null ? it.ownStatus : it.status, np); }).join('') : '';
     var st = it.status === 'none' ? 'planned' : it.status;
     // 기한(=D-day)이 박힌 항목은 제목을 굵게 — 날짜가 걸린 일이 목록에서 먼저 눈에 띄도록
-    var titleWeight = it.deadline ? '700' : '500';
+    var titleWeight = it.deadline ? '700' : '400';   // v13.486 500 은 맑은 고딕엔 없어 보통으로 보이지만, 붙여 넣은 곳 글꼴(Pretendard 등)에선 굵게 나옴 → 400
     return '<div class="wrp-it' + (hasDetails ? ' has-d' : '') + (!hasDetails && st === 'done' ? ' dn' : '') + '"' + (uniformSiteW ? ' style="--sw:' + uniformSiteW + 'px"' : '') + '>'
       +   '<span class="wrp-site" title="' + esc(it.client || '') + '" style="background:' + cl.bg + ';color:' + cl.main + '">' + esc(it.client || '') + '</span>'
       +   (hasDetails || np ? '' : '<span class="wrp-ic">' + statusIcon(st) + '</span>')
@@ -330,7 +330,7 @@
   // 미리보기 모양 — 내보내기 HTML 에도 그대로 들어감 (var(--…) 는 inlineThemeVars 가 색으로 바꿈)
   //   줄 · 옅은 바탕은 테마와 상관없이 보이게 반투명 회색 (라이트 · 다크 · 다른 페이지에 붙여도 같음)
   var PREVIEW_CSS = '<style>'
-    + '.wrp{font-size:13px;line-height:1.45}'
+    + '.wrp{font-size:13px;line-height:1.45;font-weight:400;font-style:normal;letter-spacing:normal}'
     + '.wrp-sec{margin-bottom:12px}'
     + '.wrp-sh{display:flex;align-items:center;gap:7px;margin:0 0 5px;min-width:0}'
     + '.wrp-no{color:#fff;font:800 10px/1 ui-monospace,Consolas,monospace;padding:3px 5px;border-radius:5px;flex-shrink:0}'
@@ -352,7 +352,7 @@
     + '.wrp-it.dn .wrp-name{color:var(--t3)}'
     + '.wrp-mem{grid-column:4;grid-row:1;height:20px;display:flex;align-items:center;justify-content:flex-end;gap:3px;max-width:132px;min-width:0}'
     + '.wrp-mem .wrp-ico{color:var(--t5);flex-shrink:0}'
-    + '.wrp-mn{font-size:11.5px;font-weight:500;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.wrp-mn i{font-style:normal;color:var(--t6);margin:0 2px}.wrp-mx{color:var(--t5);font-weight:500}'
+    + '.wrp-mn{font-size:11.5px;font-weight:400;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.wrp-mn i{font-style:normal;color:var(--t6);margin:0 2px}.wrp-mx{color:var(--t5);font-weight:400}'
     + '.wrp-due .wrp-ico{margin-right:3px;opacity:.75}'
     + '.wrp-rule{flex:1;height:1px;background:rgba(127,127,127,.22)}'
     // 예정뿐인 칸: 상태 칸을 0 으로 접고 이름 · 진행 줄 · 세부 줄을 모두 3번째 칸에서 시작 (세 줄의 글자 시작이 같음)
@@ -1527,6 +1527,11 @@
     }
     var raw = buildPreviewHTML(clientParseText(text), theme);
     var html = inlineThemeVars(raw, theme);
+    // v13.486 붙여 넣은 곳 글꼴 · 굵기를 따라가지 않게 — 지금 미리보기에 보이는 글꼴을 그대로 박음
+    var pvEl = document.querySelector('.wrp') || document.body;
+    var ff = '';
+    try { ff = getComputedStyle(pvEl).fontFamily.replace(/"/g, "'"); } catch (e) {}
+    if (ff) html = html.replace('<div class="wrp', '<div style="font-family:' + ff + '" class="wrp');
     try {
       await navigator.clipboard.writeText(html);
       if (typeof showToast === 'function') showToast('미리보기 HTML 복사됨 (' + (paneKey === 'last' ? '지난주' : '금주') + ' · ' + reportTheme(theme).l + ')', 'ok');
