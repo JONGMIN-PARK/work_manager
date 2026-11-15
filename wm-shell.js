@@ -170,7 +170,20 @@
  *   지금: 맨 위 가운데 점의 요소부터 위로 올라가며 배경색을 겹쳐(반투명 머리 줄도) 불투명한 한 색으로 → <meta name="theme-color"> 갱신.
  *   테마 바꿈 · 시스템 밝기 · 화면 바뀜(대화방 전체 화면 등) 때마다 다시. */
 (function () {
-  var docEl = document.documentElement, last = '', t = 0;
+  var docEl = document.documentElement, last = '', t = 0, tint = null;
+  /* v13.502 🍎 아이폰(iOS 26~) 사파리는 상단 색을 theme-color 가 아니라 '맨 위에 붙은 고정 요소의 배경색'에서 읽음.
+   *   휴대폰 틀은 body 자체가 고정 · 배경은 캔버스로 넘어가 투명 → 시작 때 덮고 있던 검은 인트로 색이 그대로 남고,
+   *   아일랜드 패널(고정 요소)을 열고 닫아야 그제야 다시 읽던 문제. → 맨 위에 머리 줄 색과 같은 얇은 고정 띠를 두고 색을 같이 바꿈 */
+  var IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  function paintTint(col) {
+    if (!IOS || !document.body) return;
+    if (!tint || !tint.isConnected) {
+      tint = document.createElement('div'); tint.id = 'wmTopTint'; tint.setAttribute('aria-hidden', 'true');
+      tint.style.cssText = 'position:fixed;left:0;right:0;top:0;height:3px;z-index:2147483646;margin:0;padding:0;border:0';
+      docEl.appendChild(tint);   // body 밖 — body 자식 변화 감시에 안 걸리게
+    }
+    tint.style.backgroundColor = col;
+  }
   function parse(c) {
     if (!c) return null;
     var m = c.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,\/]\s*([\d.]+%?))?\s*\)$/);
@@ -189,7 +202,8 @@
   }
   /** 이 점에 실제로 보이는 색 — 위 요소부터 아래로 반투명을 겹침 */
   function colorAt(x, y) {
-    var el = document.elementFromPoint(x, y), layers = [];
+    var all = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [document.elementFromPoint(x, y)], el = null, layers = [];
+    for (var k = 0; k < all.length; k++) if (all[k] && all[k] !== tint) { el = all[k]; break; }   // 맨 위 색 띠(tint) 자신은 건너뜀
     while (el && el.nodeType === 1) {
       var cs = getComputedStyle(el), g = grad(cs.backgroundImage), c = parse(cs.backgroundColor);
       if (g && g[3] > 0.01) { layers.push(g); if (g[3] >= 0.99) break; }   // 그라데이션 = 배경색 위에 그려짐
@@ -205,8 +219,9 @@
     t = 0;
     if (!document.body || document.hidden) return;
     var col; try { col = colorAt(Math.round(window.innerWidth / 2), 2); } catch (e) { return; }
-    if (col === last) return;
+    if (col === last && (!IOS || (tint && tint.isConnected))) return;
     last = col;
+    paintTint(col);
     var metas = document.querySelectorAll('meta[name="theme-color"]'), m = metas[0];
     for (var i = 1; i < metas.length; i++) metas[i].remove();
     if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }

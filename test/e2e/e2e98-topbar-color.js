@@ -45,6 +45,19 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.evaluate(function () { setPage('messages'); }); await wait(1500);
     var m2 = await meta(), p2 = await px();
     check(near(hex2(m2.c), p2), '메신저 화면에서도 맨 위 실제 색과 같음 ' + m2.c + ' rgb(' + p2 + ')');
+    // v13.502 🍎 아이폰은 맨 위 고정 띠(#wmTopTint) 색을 읽음 — 띠 색 = theme-color
+    var tt = await page.evaluate(function () { var e = document.getElementById('wmTopTint'), m = document.querySelector('meta[name="theme-color"]'); if (!e) return null; var cs = getComputedStyle(e); return { pos: cs.position, top: e.getBoundingClientRect().top, w: e.getBoundingClientRect().width, bg: cs.backgroundColor, meta: m.content }; });
+    check(tt && tt.pos === 'fixed' && tt.top === 0 && tt.w >= 400 && near(tt.bg.match(/\d+/g).map(Number), hex2(tt.meta)), '맨 위 고정 띠 = 상단 색 ' + JSON.stringify(tt));
+    // 앱 시작(저장된 로그인으로 새로 고침) — 검은 인트로가 걷힌 뒤 손대지 않아도 머리 줄 색으로 바뀜
+    await page.evaluate(function () { setPage('mywork'); aTh('pearl'); }); await wait(1200);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    var dark0 = await page.waitForFunction(function () { var e = document.getElementById('wmTopTint'); return document.getElementById('initLoading') && e && e.style.backgroundColor; }, { timeout: 20000 }).then(function () { return page.evaluate(function () { return document.getElementById('wmTopTint').style.backgroundColor; }); }).catch(function () { return ''; });
+    await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
+    await wait(500);
+    var after = await page.evaluate(function () { var e = document.getElementById('wmTopTint'); return { t: e && e.style.backgroundColor, m: document.querySelector('meta[name="theme-color"]').content }; });
+    var ap = await px();
+    var tc = after.t ? after.t.match(/\d+/g).map(Number) : [0, 0, 0];
+    check(tc[0] + tc[1] + tc[2] > 600 && near(tc, ap) && near(hex2(after.m), ap), '시작 인트로(' + dark0 + ') 뒤 바로 머리 줄 색 — 띠 ' + after.t + ' · meta ' + after.m + ' · 실제 rgb(' + ap + ')');
     await page.screenshot({ path: path.join(SHOT, 'topbar-color.png'), clip: { x: 0, y: 0, width: 402, height: 120 } });
     check(!errs.length, '페이지 오류 없음 ' + errs.join(' | '));
   } catch (e) { fail++; console.log('FAIL 예외', e && e.stack || e); }
