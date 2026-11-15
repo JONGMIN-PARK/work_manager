@@ -480,11 +480,11 @@
     + '.wrp-sum-i .wrp-ico{vertical-align:0}'
     + '.wrp-sum-r em{font-style:normal;font-family:inherit;font-weight:700;color:var(--t3);margin-left:6px;padding:0 5px;border-radius:4px;background:rgba(127,127,127,.12)}'
     + '.wrp-sum-h{display:flex;align-items:center;gap:8px;flex:1;min-width:0;white-space:nowrap;overflow:hidden}'
-    // v13.504 숫자(완료 · 진행 · 완료율)는 절대 안 잘리게 — 모자라면 기간 글이 먼저 … 로 줄어듦
+    // v13.504 숫자(완료 · 진행)는 절대 안 잘리게 — 모자라면 기간 글이 먼저 … 로 줄어듦
     + '.wrp-sum-t{font-size:14px;font-weight:800;color:var(--t2);flex-shrink:0}.wrp-sum-r{font-size:11px;color:var(--t5);font-family:ui-monospace,Consolas,monospace;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis}'
     + '.wrp-kpis{display:flex;gap:10px;align-items:baseline;margin-left:auto;flex-shrink:0}'
     + '.wrp-k .ks{display:none}'
-    // 칸이 좁으면(지난주 · 금주 나란히 ≈ 400px) 단계적으로 — ① 간격 줄이고 긴 말머리는 짧게(완료율 → 숨김 · 확인 필요 → 확인)
+    // 칸이 좁으면(지난주 · 금주 나란히 ≈ 400px) 단계적으로 — ① 간격 줄이고 긴 말머리는 짧게(확인 필요 → 확인)
     + '.wrp-sum{container-type:inline-size}'
     + '@container (max-width:470px){.wrp-sum-h{gap:6px}.wrp-kpis{gap:7px}.wrp-sum-r em{margin-left:4px}.wrp-k .kl{display:none}.wrp-k .ks{display:inline}}'
     // ② 더 좁으면 기간 날짜는 빼고 주차만 (날짜는 마우스를 올리면 보임)
@@ -578,10 +578,9 @@
     }
     var kp = [];
     if (ctx.role === 'last') {
+      // v13.506 지난주 실적은 완료 · 진행 수량만 — 완료율 · 미착수는 다른 데이터와 연계되지 않아 뺌
       kp.push(k(n.done, '완료', STATUS_COLORS.done));
-      if (n.in_progress) kp.push(k(n.in_progress, '진행', STATUS_COLORS.in_progress));
-      if (n.planned) kp.push(k(n.planned, '미착수', STATUS_COLORS.planned));
-      if (n.total) kp.push(k(Math.round(n.done * 100 / n.total) + '%', '완료율', null, ''));
+      kp.push(k(n.in_progress || 0, '진행', STATUS_COLORS.in_progress));
     } else {
       kp.push(k(items.length, '업무'));
       kp.push(k(n.total, '할 일'));

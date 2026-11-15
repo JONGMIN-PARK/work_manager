@@ -272,6 +272,7 @@ test('보고용 표시 (v13.487~488): 결과 · ★ 핵심 · 요약 띠 · 진�
   assert.match(staff, /wrp-res">→ 재발 0건/);
   assert.ok(!/wrp-st-risk|wrp-it rk|확인 필요|지원 필요|#지연/.test(staff));
   assert.ok(!/wrp-sum-2/.test(staff));   // v13.504 요약 띠는 한 줄만
+  assert.ok(!/완료율|미착수/.test(staff.match(/wrp-kpis[\s\S]*?<\/span><\/div>/)[0]) && /완료/.test(staff) && /진행/.test(staff));   // v13.506 지난주 실적은 완료 · 진행 수량만
   assert.ok(!/miss|금주 계획 없음|금주 미기재|신규|계속/.test(staff));      // 단발 업무가 많아 이어짐 표시는 안 씀
 
   // 보고용: 부드러운 말로
