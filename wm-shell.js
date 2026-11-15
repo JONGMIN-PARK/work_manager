@@ -252,6 +252,10 @@
   window.wmTopBarSync = function () { last = ''; soon(0); };
   /* v13.507 인트로 · 로그인 창처럼 화면 전체를 덮던 것이 걷힌 뒤 — 색이 천천히 바뀌는 테마까지 몇 번 더 맞춤 */
   window.wmTopBarSettle = function () {
+    /* v13.509 🏝 아일랜드 패널을 열면(화면 전체 고정 뒤 배경이 생김) 고쳐지던 것과 같게 — 화면 전체 투명 판을 잠깐 넣었다 뺌 */
+    if (IOS) setTimeout(function () {
+      try { var d = document.createElement('div'); d.setAttribute('aria-hidden', 'true'); d.style.cssText = 'position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,0);pointer-events:none'; document.body.appendChild(d); setTimeout(function () { d.remove(); }, 260); } catch (e) {}
+    }, 200);
     [0, 150, 400, 900, 1800, 3500].forEach(function (ms) { setTimeout(function () { last = ''; sync(); }, ms); });   // sync 안에서 replaceState 까지
   };
   window.wmTopBarColor = function () { return last; };

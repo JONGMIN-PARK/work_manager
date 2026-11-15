@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>상단 색 시험</title>
+<meta name="theme-color" content="#2563EB">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!-- v13.509 🧪 아이폰 맨 위(시계 줄) 색 시험 — 사파리가 언제 · 무엇을 보고 색을 다시 읽는지 실기기에서 하나씩 확인.
+     앱과 같은 틀: html 굴림 없음 · body 고정 · 머리 줄은 body 안 맨 위 · 3px 고정 띠. 시작 때 검은 시작 화면 1.5초. -->
+<style>
+  html{height:100%;overflow:hidden;background:#E9EEF5;-webkit-text-size-adjust:100%}
+  body{position:fixed;inset:0;margin:0;display:flex;flex-direction:column;font:14px/1.45 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:#0F172A}
+  #hd{flex:none;height:52px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#2563EB;color:#fff;font-weight:700}
+  #hd small{font-weight:500;opacity:.85}
+  #main{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 40px}
+  .card{background:#fff;border-radius:14px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .card h3{margin:0 0 6px;font-size:15px}
+  .row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  button{min-height:40px;padding:0 12px;border:1px solid #CBD5E1;border-radius:10px;background:#F8FAFC;color:#0F172A;font:inherit;font-weight:600}
+  button.go{background:#0F172A;color:#fff;border-color:#0F172A;width:100%;text-align:left}
+  button.ok{background:#DCFCE7;border-color:#22C55E}
+  button.no{background:#FEE2E2;border-color:#EF4444}
+  .t{display:block;margin-bottom:8px}
+  .t .ans{display:none}
+  .t.ask .ans{display:flex}
+  .res{font-size:12px;color:#475569;margin-top:4px}
+  #sum{white-space:pre-wrap;font:12px/1.5 ui-monospace,Menlo,monospace;background:#0F172A;color:#E2E8F0;border-radius:10px;padding:10px;user-select:all}
+  .sw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:4px;border:1px solid rgba(0,0,0,.2)}
+  #splash{position:fixed;inset:0;z-index:10000;background:#05070f;color:#94A3B8;display:flex;align-items:center;justify-content:center;font-size:15px}
+</style>
+</head>
+<body>
+<div id="splash">시작 화면 흉내 (1.5초)</div>
+<div id="hd">🧪 상단 색 시험 <small id="hdc"></small></div>
+<div id="main">
+  <div class="card">
+    <h3>Q. 시작 화면이 걷힌 지금, 맨 위(시계 있는 줄) 색은?</h3>
+    <div class="row" id="q0">
+      <button data-q="검정">검정</button><button data-q="파랑(머리 줄)">파랑 (머리 줄과 같음)</button><button data-q="회색(바탕)">연회색 (바탕)</button><button data-q="흰색">흰색</button>
+    </div>
+    <div class="res" id="q0r"></div>
+  </div>
+  <div class="card">
+    <h3>시험 — 위에서부터 하나씩</h3>
+    <div style="font-size:13px;color:#475569">단추를 누르면 머리 줄이 <b>새 색</b>으로 바뀌고 그 방법을 씀. 1~2초 안에 <b>맨 위 시계 줄도 같은 색</b>이 되면 「바뀜」.</div>
+    <div id="tests" style="margin-top:10px"></div>
+  </div>
+  <div class="card">
+    <h3>결과 (길게 눌러 복사 · 또는 화면 캡처)</h3>
+    <div id="sum"></div>
+    <div class="row"><button onclick="location.href='/'">← 앱으로</button><button onclick="location.reload()">처음부터 다시</button></div>
+  </div>
+</div>
+<script>
+(function () {
+  var docEl = document.documentElement, hd = document.getElementById('hd'), main = document.getElementById('main');
+  var COLORS = [['빨강', '#DC2626'], ['초록', '#16A34A'], ['주황', '#EA580C'], ['보라', '#7C3AED'], ['청록', '#0891B2'], ['분홍', '#DB2777'], ['갈색', '#92400E'], ['남색', '#1E3A8A'], ['연두', '#65A30D'], ['자홍', '#A21CAF'], ['노랑', '#CA8A04'], ['회청', '#475569'], ['진초록', '#065F46'], ['진빨강', '#7F1D1D']];
+  var ci = 0, results = {}, q0 = '';
+  var tint = document.createElement('div');
+  tint.style.cssText = 'position:fixed;left:0;right:0;top:0;height:3px;z-index:2147483646;background:#2563EB';
+  docEl.appendChild(tint);
+  function meta(c) { var m = document.querySelector('meta[name="theme-color"]'); if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); } m.content = c; }
+  function paint(c) { hd.style.background = c; tint.style.background = c; meta(c); }
+  function flash(el, ms) { document.body.appendChild(el); setTimeout(function () { el.remove(); }, ms); }
+  var T = [
+    ['색만 바꿈 (머리 줄 · 3px 띠 · theme-color) — 지금 앱과 같음', function () {}],
+    ['+ 화면 전체 투명 판 넣었다 0.25초 뒤 빼기', function () { var d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,0);pointer-events:none'; flash(d, 250); }],
+    ['+ 반투명 검은 판 (🏝 아일랜드 뒤 배경과 같이) 0.25초', function () { var d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,.28);pointer-events:none'; flash(d, 250); }],
+    ['+ 3px 띠를 새 요소로 갈아 끼우기', function () { var n = tint.cloneNode(); docEl.appendChild(n); tint.remove(); tint = n; }],
+    ['+ 머리 줄 높이(52px) 고정 판을 같은 색으로 맨 위에 0.25초', function (c) { var d = document.createElement('div'); d.style.cssText = 'position:fixed;left:0;right:0;top:0;height:52px;z-index:10040;pointer-events:none;background:' + c; flash(d, 250); }],
+    ['+ history.replaceState (주소 그대로)', function () { history.replaceState(history.state, '', location.href); }],
+    ['+ history.pushState (뒤로 가기 기록 1개 생김)', function () { history.pushState({ lab: Date.now() }, '', location.href); }],
+    ['+ 주소 #해시 바꾸기', function () { location.hash = 't' + Date.now(); }],
+    ['+ 내용 칸 1px 굴렸다 되돌리기', function () { main.scrollTop += 1; setTimeout(function () { main.scrollTop -= 1; }, 60); }],
+    ['+ theme-color 태그를 지우고 새로 넣기', function (c) { var m = document.querySelector('meta[name="theme-color"]'); if (m) m.remove(); var n = document.createElement('meta'); n.name = 'theme-color'; n.content = c; document.head.appendChild(n); }],
+    ['+ 화면 전체 투명 판을 다음 그림 한 번만 (아주 짧게)', function () { var d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,0);pointer-events:none'; document.body.appendChild(d); requestAnimationFrame(function () { requestAnimationFrame(function () { d.remove(); }); }); }],
+    ['(뒤 시험에 남음) + 머리 줄 높이 고정 판을 같은 색으로 계속 둠', function (c) { var d = document.getElementById('fixbar'); if (!d) { d = document.createElement('div'); d.id = 'fixbar'; d.style.cssText = 'position:fixed;left:0;right:0;top:0;height:52px;z-index:-1;pointer-events:none'; document.body.appendChild(d); } d.style.background = c; }],
+    ['(뒤 시험에 남음) + html 배경색도 같은 색', function (c) { docEl.style.background = c; }],
+    ['(뒤 시험에 남음) + body 배경색도 같은 색', function (c) { document.body.style.background = c; }]
+  ];
+  var box = document.getElementById('tests');
+  T.forEach(function (t, i) {
+    var w = document.createElement('div'); w.className = 't'; w.id = 't' + i;
+    w.innerHTML = '<button class="go">' + i + '. ' + t[0] + '</button><div class="row ans"><span style="align-self:center" class="lab"></span><button class="ok">바뀜</button><button class="no">그대로</button><button class="oth">다른 색</button></div><div class="res"></div>';
+    w.querySelector('.go').onclick = function () {
+      var c = COLORS[ci++ % COLORS.length];
+      paint(c[1]);
+      try { t[1](c[1]); } catch (e) { results[i] = '오류 ' + e.message; }
+      document.getElementById('hdc').textContent = '→ ' + c[0];
+      w.classList.add('ask');
+      w.querySelector('.lab').innerHTML = '<i class="sw" style="background:' + c[1] + '"></i>맨 위가 ' + c[0] + '?';
+      w.dataset.col = c[0];
+    };
+    function ans(v) { return function () { results[i] = v + ' (' + w.dataset.col + ')'; w.classList.remove('ask'); w.querySelector('.res').textContent = '→ ' + results[i]; sum(); }; }
+    w.querySelector('.ok').onclick = ans('바뀜');
+    w.querySelector('.no').onclick = ans('그대로');
+    w.querySelector('.oth').onclick = ans('다른 색');
+    box.appendChild(w);
+  });
+  document.querySelectorAll('#q0 button').forEach(function (b) { b.onclick = function () { q0 = b.dataset.q; document.getElementById('q0r').textContent = '→ ' + q0; sum(); }; });
+  function sum() {
+    var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone;
+    var ua = (navigator.userAgent.match(/(iPhone OS [\d_]+|iPad; CPU OS [\d_]+|Android [\d.]+)/) || ['?'])[0] + ' ' + ((navigator.userAgent.match(/Version\/[\d.]+/) || [''])[0]);
+    var s = 'toplab · ' + (standalone ? '홈 화면 앱' : '브라우저') + ' · ' + ua + ' · ' + (matchMedia('(prefers-color-scheme: dark)').matches ? '다크' : '라이트') + '\n시작 뒤: ' + (q0 || '-') + '\n';
+    T.forEach(function (t, i) { if (results[i]) s += i + '. ' + results[i] + '\n'; });
+    document.getElementById('sum').textContent = s;
+  }
+  sum();
+  setTimeout(function () { var s = document.getElementById('splash'); if (s) s.remove(); }, 1500);
+})();
+</script>
+</body>
+</html>

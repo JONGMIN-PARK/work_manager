@@ -277,6 +277,11 @@ app.get('/ink-overlay', function (req, res) {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(PWA_DIR, 'ink-overlay.html'));
 });
+// 🧪 아이폰 맨 위(시계 줄) 색 시험 (v13.509) — 실기기에서 방법별로 눌러 보고 결과를 알려 주는 화면
+app.get('/toplab', function (req, res) {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(PWA_DIR, 'toplab.html'));
+});
 app.get('/favicon.ico', function (req, res) { res.redirect(301, '/icons/icon-192.png'); });
 
 // ─── API 라우트 ───

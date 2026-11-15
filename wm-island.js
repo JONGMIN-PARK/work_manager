@@ -47,7 +47,7 @@
       .map(function (b) { var m = /^(\S+)\s+(.+)$/.exec(b.textContent.trim()) || [0, '•', b.textContent.trim()]; return { p: b.dataset.page, ic: m[1], nm: m[2] }; });
     pages.push({ p: 'messages', ic: '💬', nm: '메신저', n: s.msg });
     var ver = typeof WM_VERSION !== 'undefined' ? 'v' + WM_VERSION : '';
-    var h = '<div class="wm-islp-h"><b>업무 관리자</b><span>' + esc(ver) + '</span>' + chips(s, true) + '<button type="button" class="wm-islp-x" data-isl="close" aria-label="닫기">✕</button></div>';
+    var h = '<div class="wm-islp-h"><b>업무 관리자</b><span>' + esc(ver) + '</span>' + chips(s, true) + (typeof wmCanSeePatchNotes === 'function' && wmCanSeePatchNotes() ? '<button type="button" class="wm-islp-lab" data-isl="toplab" title="아이폰 맨 위 색 시험">🧪</button>' : '') + '<button type="button" class="wm-islp-x" data-isl="close" aria-label="닫기">✕</button></div>';
     h += '<div class="wm-islp-g">' + pages.map(function (x) {
       return '<button type="button" data-isl-page="' + esc(x.p) + '"' + (x.p === cur ? ' class="on" aria-current="page"' : '') + '><em>' + esc(x.ic) + '</em><span>' + esc(x.nm) + '</span>' + (x.n ? '<i>' + x.n + '</i>' : '') + '</button>';
     }).join('') + '</div>';
@@ -96,6 +96,7 @@
     else if (a === 'noti') { if (typeof toggleNotifPanel === 'function') setTimeout(toggleNotifPanel, 60); }
     else if (a === 'theme') { if (typeof aTh === 'function') aTh(isDark() ? 'pearl' : 'nova', true); }
     else if (a === 'top') { var s = typeof wmShellScroller === 'function' && wmShellScroller(); if (s) s.scrollTo({ top: 0, behavior: 'smooth' }); else window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    else if (a === 'toplab') location.href = '/toplab';   // v13.509 관리자 — 아이폰 맨 위 색 시험
     else if (a === 'reload') { if (typeof wmUpdateApply === 'function') wmUpdateApply(); else location.reload(); }
   }
 

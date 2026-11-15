@@ -23,6 +23,13 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     });
     check(c.has && /내 업무/.test(c.txt) && c.h1 === 'none', '휴대폰 — 제목 대신 캡슐 · 지금 화면 ' + JSON.stringify(c.txt));
     check(c.right <= c.ctlL + 1 && c.sw <= 391, '머리 줄 단추와 안 겹침 · 옆으로 안 넘침 ' + JSON.stringify(c));
+    // v13.509 캡슐 폭 고정 — 화면 이름 · 알림 숫자가 달라도 같은 폭 · 같은 높이
+    var dims = [];
+    for (var pg of ['mywork', 'project', 'messages', 'team']) { await page.evaluate(function (x) { setPage(x); }, pg); await wait(500); dims.push(await page.evaluate(function () { var r = document.getElementById('wmIsland').getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); })); }
+    await page.evaluate(function () { var b = document.getElementById('msgBadge'); b.textContent = '12'; b.style.display = ''; }); await wait(400);
+    dims.push(await page.evaluate(function () { var r = document.getElementById('wmIsland').getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); }));
+    await page.evaluate(function () { var b = document.getElementById('msgBadge'); b.textContent = ''; b.style.display = 'none'; setPage('mywork'); }); await wait(500);
+    check(dims.every(function (d) { return d === dims[0]; }), '캡슐 크기 늘 그대로 ' + dims.join(' · '));
     // 안 읽은 메시지 · 새 버전 표시
     await page.evaluate(function () { var b = document.getElementById('msgBadge'); b.textContent = '3'; b.style.display = ''; _wmUpdBar({ title: '새 버전', go: function () {} }); });
     await wait(300);
