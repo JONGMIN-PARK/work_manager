@@ -471,21 +471,26 @@
     + '.wrp-pprev{color:var(--t6);font-weight:400}'
     + '.wrp-pdelta{font:700 10px/1 ui-monospace,Consolas,monospace;color:#16A34A}.wrp-pdelta.dn{color:#DC2626}'
     // 맨 위 요약 띠
-    // 요약 띠는 늘 두 줄 · 같은 높이 (v13.489) — 지난주 · 금주 칸을 나란히 놓아도 테두리가 맞음. 넘치는 글은 … (전체는 title)
-    + '.wrp-sum{background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid var(--wrp-sum-c,#64748B);border-radius:8px;padding:5px 10px 5px 9px;margin-bottom:10px;display:grid;grid-template-rows:22px 18px;row-gap:2px;box-sizing:border-box;height:51px;overflow:hidden}'
+    // 요약 띠는 한 줄 · 같은 높이 (v13.504) — 지난주 · 금주 칸을 나란히 놓아도 테두리가 맞음
+    + '.wrp-sum{background:var(--bg-p);border:1px solid var(--bd);border-left:3px solid var(--wrp-sum-c,#64748B);border-radius:8px;padding:5px 10px 5px 9px;margin-bottom:10px;box-sizing:border-box;height:34px;display:flex;align-items:center;overflow:hidden}'
     // v13.493 칸마다 뜻 색 — 지난주 실적은 초록(한 일) · 금주 계획은 파랑(할 일). 아이콘은 같은 색 옅은 바탕의 작은 칸
     + '.wrp-sum.last{--wrp-sum-c:#16A34A}.wrp-sum.cur{--wrp-sum-c:#2563EB}'
     + '.wrp-sum-i{flex-shrink:0;width:20px;height:20px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--wrp-sum-c)}'
     + '.wrp-sum.last .wrp-sum-i{background:rgba(22,163,74,.13)}.wrp-sum.cur .wrp-sum-i{background:rgba(37,99,235,.12)}'
     + '.wrp-sum-i .wrp-ico{vertical-align:0}'
     + '.wrp-sum-r em{font-style:normal;font-family:inherit;font-weight:700;color:var(--t3);margin-left:6px;padding:0 5px;border-radius:4px;background:rgba(127,127,127,.12)}'
-    + '.wrp-sum-h,.wrp-sum-2{display:flex;align-items:center;min-width:0;white-space:nowrap;overflow:hidden}'
-    + '.wrp-sum-h{gap:8px}'
-    + '.wrp-sum-t{font-size:14px;font-weight:800;color:var(--t2);flex-shrink:0}.wrp-sum-r{font-size:11px;color:var(--t5);font-family:ui-monospace,Consolas,monospace;flex-shrink:0}'
-    + '.wrp-kpis{display:flex;gap:10px;align-items:baseline;margin-left:auto;min-width:0;overflow:hidden}'
+    + '.wrp-sum-h{display:flex;align-items:center;gap:8px;flex:1;min-width:0;white-space:nowrap;overflow:hidden}'
+    // v13.504 숫자(완료 · 진행 · 완료율)는 절대 안 잘리게 — 모자라면 기간 글이 먼저 … 로 줄어듦
+    + '.wrp-sum-t{font-size:14px;font-weight:800;color:var(--t2);flex-shrink:0}.wrp-sum-r{font-size:11px;color:var(--t5);font-family:ui-monospace,Consolas,monospace;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis}'
+    + '.wrp-kpis{display:flex;gap:10px;align-items:baseline;margin-left:auto;flex-shrink:0}'
+    + '.wrp-k .ks{display:none}'
+    // 칸이 좁으면(지난주 · 금주 나란히 ≈ 400px) 단계적으로 — ① 간격 줄이고 긴 말머리는 짧게(완료율 → 숨김 · 확인 필요 → 확인)
+    + '.wrp-sum{container-type:inline-size}'
+    + '@container (max-width:470px){.wrp-sum-h{gap:6px}.wrp-kpis{gap:7px}.wrp-sum-r em{margin-left:4px}.wrp-k .kl{display:none}.wrp-k .ks{display:inline}}'
+    // ② 더 좁으면 기간 날짜는 빼고 주차만 (날짜는 마우스를 올리면 보임)
+    + '@container (max-width:365px){.wrp-sum-r .rd{display:none}.wrp-sum-r em{margin-left:0}}'
+    + '@container (max-width:400px){.wrp-sum.boss .wrp-sum-r .rd{display:none}.wrp-sum.boss .wrp-sum-r em{margin-left:0}}'   // 보고용은 「확인」 숫자가 하나 더
     + '.wrp-k{font-size:11px;color:var(--t5);white-space:nowrap}.wrp-k b{font-size:14px;font-weight:800;margin-right:2px;font-family:ui-monospace,Consolas,monospace}'
-    + '.wrp-sum-2{font-size:11.5px;line-height:18px;color:var(--t3);gap:5px;text-overflow:ellipsis}.wrp-sum-2 b{font-weight:700;color:var(--t2)}'
-    + '.wrp-sum-2 .rk{color:#B91C1C;font-weight:700}.wrp-sum-2 .due{color:var(--t5);display:inline-flex}.wrp-sum-2 .none{color:var(--t6)}.wrp-sum-2 .wrp-dd{margin-left:2px}'
     // 덜 중요한 것은 옅게 — 기타 절 머리
     + '.wrp-sec.etc .wrp-sl{color:var(--t3)}'
     + '.wrp-it.has-d .wrp-name{grid-column:2/4}'
@@ -557,7 +562,7 @@
     }).join('') + '</div>';
   }
 
-  // 맨 위 요약 띠 — 칸 제목 · 기간 · 숫자 · (보고용이면) 확인 필요 목록 · 다음 기한
+  // 맨 위 요약 띠 — 한 줄: 칸 제목 · 기간 · 숫자 (보고용이면 확인 필요 개수)
   function summaryBand(pane, ctx, view) {
     var items = pane.items || [];
     var n = countTasks(items);
@@ -566,43 +571,32 @@
       if (view.risk(it)) risks.push({ it: it, what: it.name, why: it.risk });
       (it.details || []).forEach(function (d) { if (view.risk(d)) risks.push({ it: it, what: detailText(d), why: d.risk }); });
     });
-    function k(num, label, color) { return '<span class="wrp-k"><b style="color:' + (color || 'var(--t2)') + '">' + num + '</b>' + label + '</span>'; }
+    // short — 칸이 좁을 때 대신 보일 짧은 말머리('' 이면 숫자만). 원래 말은 title 로 남김
+    function k(num, label, color, short) {
+      var lb = short === undefined ? label : '<span class="kl">' + label + '</span>' + (short ? '<span class="ks">' + short + '</span>' : '');
+      return '<span class="wrp-k" title="' + label + ' ' + num + '"><b style="color:' + (color || 'var(--t2)') + '">' + num + '</b>' + lb + '</span>';
+    }
     var kp = [];
     if (ctx.role === 'last') {
       kp.push(k(n.done, '완료', STATUS_COLORS.done));
       if (n.in_progress) kp.push(k(n.in_progress, '진행', STATUS_COLORS.in_progress));
       if (n.planned) kp.push(k(n.planned, '미착수', STATUS_COLORS.planned));
-      if (n.total) kp.push(k(Math.round(n.done * 100 / n.total) + '%', '완료율'));
+      if (n.total) kp.push(k(Math.round(n.done * 100 / n.total) + '%', '완료율', null, ''));
     } else {
       kp.push(k(items.length, '업무'));
       kp.push(k(n.total, '할 일'));
       if (n.done) kp.push(k(n.done, '완료', STATUS_COLORS.done));
     }
-    if (ctx.boss) kp.push(k(risks.length, '확인 필요', risks.length ? STATUS_COLORS.risk : 'var(--t6)'));
-    // 다음 기한 — 안 끝난 일 중 남은 날이 가장 적은 2개 (지난 것 먼저)
-    //   진행률이 100 미만인 프로젝트는 그 주 할 일을 다 끝냈어도 아직 안 끝난 일
-    var open = function (it) { return (typeof it.pct === 'number' && it.pct >= 0) ? it.pct < 100 : taskStates(it).some(function (s) { return s !== 'done'; }); };
-    var dues = items.filter(function (it) { return daysLeft(it.deadline) !== null && open(it); })
-      .sort(function (a, b) { return daysLeft(a.deadline) - daysLeft(b.deadline); }).slice(0, 2);
+    if (ctx.boss) kp.push(k(risks.length, '확인 필요', risks.length ? STATUS_COLORS.risk : 'var(--t6)', '확인')
+      .replace(/title="[^"]*"/, 'title="' + esc('확인 필요 ' + risks.length + (risks.length ? ': ' + risks.map(function (r) { return (r.it.client ? r.it.client + ' ' : '') + stripFlags(splitResult(r.what).main); }).join(', ') : '')) + '"'));
     var title = ctx.title || (ctx.role === 'last' ? '지난주 실적' : '금주 계획');
-    var sep = '<i style="font-style:normal;color:var(--t6)">·</i>';
-    // 둘째 줄 — (보고용이면) 확인 필요 먼저, 그다음 다음 기한. 아무것도 없어도 줄은 남겨 높이를 맞춤
-    var line2 = [];
-    //   칸 폭(~410px)에 다 들어가게 말머리는 기호로 — '확인 필요' 개수는 첫 줄에 있음
-    if (risks.length) line2.push('<span class="rk" title="확인 필요">⚠</span> ' + risks.slice(0, 2).map(function (r) {
-      return '<b>' + esc(r.it.client || '') + '</b> ' + esc(stripFlags(splitResult(r.what).main));
-    }).join(', ') + (risks.length > 2 ? ' 외 ' + (risks.length - 2) : ''));
-    if (dues.length) line2.push('<span class="due" title="다음 기한">' + ICO.cal + '</span> ' + dues.map(function (it) {
-      return '<b>' + esc(it.client || '') + ' ' + esc(stripFlags(splitResult(it.name).main)) + '</b> ' + esc(it.deadline) + ddayBadge(it.deadline);
-    }).join(sep));
-    var plain2 = (risks.length ? '확인 필요: ' : '') + line2.join(' · ').replace('<span class="due" title="다음 기한">', '다음 기한 ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();   // 줄이 넘쳐 … 로 잘려도 마우스를 올리면 전부
+    // v13.504 한 줄로만 — 둘째 줄(다음 기한 · 확인 필요 목록)은 뺌. 확인 필요 목록은 그 숫자에 마우스를 올리면
     var role = ctx.role === 'last' ? 'last' : 'cur';
-    return '<div class="wrp-sum ' + role + '">'
+    return '<div class="wrp-sum ' + role + (ctx.boss ? ' boss' : '') + '">'
       + '<div class="wrp-sum-h"><span class="wrp-sum-i" aria-hidden="true">' + (role === 'last' ? ICO.done : ICO.plan) + '</span>'
       +   '<span class="wrp-sum-t">' + esc(title) + '</span>'
-      +   (ctx.range ? '<span class="wrp-sum-r">' + esc(ctx.range) + (ctx.week ? '<em>' + ctx.week + '주차</em>' : '') + '</span>' : '')
+      +   (ctx.range ? '<span class="wrp-sum-r" title="' + esc(ctx.range) + '"><span class="rd">' + esc(ctx.range) + '</span>' + (ctx.week ? '<em>' + ctx.week + '주차</em>' : '') + '</span>' : '')
       +   '<span class="wrp-kpis">' + kp.join('') + '</span></div>'
-      + '<div class="wrp-sum-2"' + (plain2 ? ' title="' + esc(plain2) + '"' : '') + '>' + (line2.length ? line2.join(sep) : '<span class="none">다가오는 기한 없음</span>') + '</div>'
       + '</div>';
   }
 

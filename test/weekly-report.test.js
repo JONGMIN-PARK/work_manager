@@ -268,15 +268,15 @@ test('보고용 표시 (v13.487~488): 결과 · ★ 핵심 · 요약 띠 · 진�
 
   // 직원용(기본): 확인 필요 표시가 전혀 없음 · 태그 글자도 안 보임
   const staff = strip(client.buildPreviewHTML(last, 'light', client.paneCtx('last', cur, '2026-11-09', '2026-11-13', false)));
-  assert.match(staff, /wrp-sum-t">지난주 실적<\/span><span class="wrp-sum-r">11\/02 ~ 11\/06/);
+  assert.match(staff, /wrp-sum-t">지난주 실적<\/span><span class="wrp-sum-r"[^>]*><span class="rd">11\/02 ~ 11\/06/);
   assert.match(staff, /wrp-res">→ 재발 0건/);
   assert.ok(!/wrp-st-risk|wrp-it rk|확인 필요|지원 필요|#지연/.test(staff));
-  assert.match(staff, /class="wrp-sum-2"[^>]*>(?:<span class="none">|<span class="due")/);   // 둘째 줄은 늘 있음
+  assert.ok(!/wrp-sum-2/.test(staff));   // v13.504 요약 띠는 한 줄만
   assert.ok(!/miss|금주 계획 없음|금주 미기재|신규|계속/.test(staff));      // 단발 업무가 많아 이어짐 표시는 안 씀
 
   // 보고용: 부드러운 말로
   const boss = strip(client.buildPreviewHTML(last, 'light', client.paneCtx('last', cur, '2026-11-09', '2026-11-13', true)));
-  assert.match(boss, /<span class="rk" title="확인 필요">⚠<\/span> <b>SDC<\/b> 챔퍼링/);
+  assert.match(boss, /title="확인 필요 1: SDC 챔퍼링/);   // 목록은 숫자의 title 로
   assert.match(boss, /<span class="wrp-chip rk">지원 필요/);
   assert.match(boss, /wrp-it rk/);
   assert.match(boss, /wrp-st-risk/);
@@ -285,7 +285,7 @@ test('보고용 표시 (v13.487~488): 결과 · ★ 핵심 · 요약 띠 · 진�
 
   // 금주: 지난주 같은 업무의 진행률 변화만
   const ch = strip(client.buildPreviewHTML(cur, 'light', client.paneCtx('cur', last, '2026-11-09', '2026-11-13', false)));
-  assert.match(ch, /wrp-sum-t">금주 계획<\/span><span class="wrp-sum-r">11\/09 ~ 11\/13/);
+  assert.match(ch, /wrp-sum-t">금주 계획<\/span><span class="wrp-sum-r"[^>]*><span class="rd">11\/09 ~ 11\/13/);
   assert.match(ch, /wrp-pprev">60 →<\/span> 65%<\/span><span class="wrp-pdelta">\+5/);
   assert.ok(!/wrp-chip/.test(ch));
   // ★ 핵심은 절 맨 위로
