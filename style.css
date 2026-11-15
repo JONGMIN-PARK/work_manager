@@ -8389,7 +8389,10 @@ html.wm-isl-on .hdr-brand h1{display:none}
 .wm-isl-c.up{background:#30D158;color:#04210E}
 .wm-isl.has-c .wm-isl-t{max-width:28vw}
 /* v13.509 캡슐 폭 고정 — 화면 이름 · 알림 숫자에 따라 늘었다 줄었다 하지 않게 (넘치는 이름은 …) */
-.wm-isl{width:min(46vw,176px);max-width:none;flex:none;box-sizing:border-box;justify-content:flex-start}
+.wm-isl{width:100%;max-width:200px;min-width:0;box-sizing:border-box;justify-content:flex-start}
+/* 캡슐 자리 = 오른쪽 단추(🔎🔔📢💬🎨👤)를 뺀 남은 폭 — 단추가 캡슐 위로 밀려 겹치지 않게 (v13.510) */
+html.wm-isl-on .hdr-brand{flex:1 1 auto;min-width:0;display:flex}
+html.wm-isl-on .hdr-ctl{flex:none}
 .wm-isl .wm-isl-t{flex:1 1 auto;text-align:left}
 .wm-isl.has-c .wm-isl-t{max-width:none}
 .wm-islp-lab{width:32px;height:32px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:#F5F5F7;font-size:14px;cursor:pointer}

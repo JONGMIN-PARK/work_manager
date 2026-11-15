@@ -30,6 +30,14 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     dims.push(await page.evaluate(function () { var r = document.getElementById('wmIsland').getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); }));
     await page.evaluate(function () { var b = document.getElementById('msgBadge'); b.textContent = ''; b.style.display = 'none'; setPage('mywork'); }); await wait(500);
     check(dims.every(function (d) { return d === dims[0]; }), '캡슐 크기 늘 그대로 ' + dims.join(' · '));
+    // v13.510 캡슐 폭을 고정하자 오른쪽 단추가 넘쳐 🔎 가 캡슐 위로 겹쳤던 것 — 단추 하나하나와 비교 (402 · 360 · 320)
+    var ov = [];
+    for (var vw of [402, 360, 320]) {
+      await page.setViewport({ width: vw, height: 844, isMobile: true, hasTouch: true }); await wait(500);
+      ov.push(await page.evaluate(function () { var c = document.getElementById('wmIsland').getBoundingClientRect(), worst = 9999; document.querySelectorAll('.hdr-ctl > *').forEach(function (k) { var r = k.getBoundingClientRect(); if (r.width) worst = Math.min(worst, r.left - c.right); }); return Math.round(worst); }));
+    }
+    await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await wait(400);
+    check(ov.every(function (g) { return g >= 0; }), '캡슐과 오른쪽 단추가 안 겹침(틈 px) ' + ov.join(' · '));
     // 안 읽은 메시지 · 새 버전 표시
     await page.evaluate(function () { var b = document.getElementById('msgBadge'); b.textContent = '3'; b.style.display = ''; _wmUpdBar({ title: '새 버전', go: function () {} }); });
     await wait(300);
