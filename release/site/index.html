@@ -3,149 +3,209 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>업무 관리자 내려받기</title>
-<meta name="description" content="업무 관리자 — PC 앱 내려받기 · 휴대폰 설치 · 화면 소개 · 사용 설명서">
+<title>업무 관리자 — 할 일 · 업무일지 · 프로젝트 · 메신저를 한곳에서</title>
+<meta name="description" content="업무 관리자 — 내 업무 · 업무일지 분석 · 주간 보고 · 프로젝트 관리 · 마인드맵 · 노트북 · 메신저. PC 앱(Windows) 내려받기 · 휴대폰 설치 · 사용 설명서.">
+<meta property="og:title" content="업무 관리자">
+<meta property="og:description" content="할 일 · 업무일지 · 프로젝트 · 메신저를 한곳에서 — PC · 휴대폰 · 웹">
+<meta property="og:image" content="pc-mywork.jpg">
 <meta name="theme-color" content="#F5F6FB" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0B0E1A" media="(prefers-color-scheme: dark)">
-<link rel="icon" type="image/png" href="/icons/icon-192.png">
-<style>
-:root{--bg:#F5F6FB;--card:#FFFFFF;--t1:#0E1330;--t2:#3F466A;--t3:#5C638A;--bd:#E3E6F3;--ac:#5B5BF0;--ac-t:#4338CA;--ac-bg:#EEF0FF;--ok:#0F9D58;color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#0B0E1A;--card:#141932;--t1:#F1F4FF;--t2:#C9D0EA;--t3:#9AA3C7;--bd:#262D52;--ac:#7C7CFF;--ac-t:#C7D2FE;--ac-bg:#1D2347;--ok:#34D399;color-scheme:dark}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--t1);font:15px/1.7 "Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-a{color:var(--ac-t)}
-.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
-header{padding:56px 0 28px}
-.brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:15px;color:var(--t2)}
-.brand img{width:36px;height:36px;border-radius:9px}
-h1{font-size:clamp(28px,5vw,42px);line-height:1.25;margin:18px 0 10px;letter-spacing:-.02em}
-.lead{font-size:17px;color:var(--t2);max-width:640px;margin:0}
-.dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:28px 0 8px}
-.dl a,.dl div{display:block;padding:18px;border-radius:16px;background:var(--card);border:1px solid var(--bd);text-decoration:none;color:var(--t1)}
-.dl a.main{background:var(--ac);border-color:var(--ac);color:#fff}
-.dl b{display:block;font-size:17px}
-.dl span{font-size:13px;opacity:.85}
-.meta{font-size:13px;color:var(--t3)}
-section{padding:36px 0;border-top:1px solid var(--bd)}
-h2{font-size:24px;margin:0 0 6px;letter-spacing:-.01em}
-.sub{color:var(--t3);margin:0 0 20px}
-.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
-figure{margin:0;background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:hidden}
-figure img{display:block;width:100%;height:auto;cursor:zoom-in}
-figcaption{padding:10px 14px;font-size:14px;color:var(--t2)}
-figcaption b{color:var(--t1)}
-.phones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
-.phones figure img{aspect-ratio:390/844;object-fit:cover;object-position:top}
-@media (max-width:640px){.phones{grid-template-columns:repeat(2,minmax(0,1fr))}.phones figure:last-child{display:none}}
-.steps{counter-reset:s;display:grid;gap:12px;padding:0;margin:0;list-style:none}
-.steps li{position:relative;padding:14px 16px 14px 56px;background:var(--card);border:1px solid var(--bd);border-radius:14px}
-.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:16px;top:14px;width:26px;height:26px;border-radius:50%;background:var(--ac-bg);color:var(--ac-t);font-weight:800;font-size:13px;display:grid;place-items:center}
-.steps b{display:block}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
-.card h3{margin:0 0 6px;font-size:16px}
-.card p,.card ul{margin:0;color:var(--t2);font-size:14px}
-.card ul{padding-left:18px}
-kbd{font:12px/1 ui-monospace,Consolas,monospace;padding:2px 6px;border:1px solid var(--bd);border-bottom-width:2px;border-radius:5px;background:var(--bg)}
-footer{padding:28px 0 48px;color:var(--t3);font-size:13px;border-top:1px solid var(--bd)}
-.zoom{position:fixed;inset:0;z-index:9;background:rgba(5,8,20,.86);display:none;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
-.zoom.on{display:flex}
-.zoom img{max-width:100%;max-height:100%;border-radius:10px}
-</style>
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="stylesheet" href="site.css">
 </head>
 <body>
+<div class="top"><div class="wrap">
+  <a class="brand" href="#"><img src="icon.png" alt="">업무 관리자</a>
+  <nav>
+    <a href="#features">기능</a><a href="#mobile">휴대폰</a><a href="#install">설치</a><a href="manual.html">사용 설명서</a>
+    <a class="cta dl-pc" href="https://github.com/JONGMIN-PARK/work_manager/releases/latest">⬇ 내려받기</a>
+  </nav>
+</div></div>
+
 <div class="wrap">
-<header>
-  <div class="brand"><img src="/icons/icon-192.png" alt="">업무 관리자</div>
-  <h1>할 일 · 업무일지 · 프로젝트 · 메신저를<br>한곳에서</h1>
-  <p class="lead">PC 앱, 휴대폰 앱, 웹 브라우저 어디서나 같은 화면으로 씁니다. 새 버전이 나오면 알려 주고, 새로 고치면 바로 적용됩니다.</p>
-  <div class="dl">
-    <a class="main" id="dlPc" href="https://github.com/JONGMIN-PARK/work_manager/tree/main/release/desktop" rel="noopener"><b>⬇ PC 앱 내려받기 (Windows)</b><span id="dlPcSub">GitHub 저장소에서 받습니다</span></a>
-    <a href="#phone"><b>📱 휴대폰에 설치</b><span>아이폰 · 안드로이드 — 홈 화면에 추가</span></a>
-    <a href="/"><b>🌐 웹에서 바로 열기</b><span>설치 없이 브라우저로</span></a>
+  <header class="hero">
+    <div>
+      <h1>흩어진 일을<br><em>한 화면에서</em><br>놓치지 않게</h1>
+      <p class="lead">할 일 · 업무일지 · 주간 보고 · 프로젝트 · 회의록 · 메신저를 하나로 묶었습니다. PC 앱, 휴대폰, 웹 브라우저 어디서나 같은 화면을 씁니다.</p>
+      <div class="acts">
+        <a class="btn main dl-pc" href="https://github.com/JONGMIN-PARK/work_manager/releases/latest">⬇ PC 앱 내려받기 <small class="dl-sub">Windows 10 · 11</small></a>
+        <a class="btn" href="#mobile">📱 휴대폰에 설치</a>
+        <a class="btn" href="manual.html">📘 사용 설명서</a>
+      </div>
+      <p class="meta" id="verLine">설치 파일은 GitHub 릴리스에서 누구나 받을 수 있습니다.</p>
+    </div>
+    <figure class="shot"><img src="pc-mywork.jpg" alt="내 업무 화면 — 할 일 목록 · 타임라인 · 옆 달력"></figure>
+  </header>
+  <div class="facts">
+    <div><b>🖥 📱 🌐</b><span>PC 앱 · 휴대폰 · 웹 같은 화면</span></div>
+    <div><b>⬆ 자동</b><span>새 버전은 저절로 적용</span></div>
+    <div><b>🔔 알림</b><span>앱을 닫아도 메시지 · 마감 알림</span></div>
+    <div><b>🔒 회사별</b><span>회사마다 따로 · 권한별 공개</span></div>
   </div>
-  <p class="meta" id="verLine">최신 버전을 확인하는 중…</p>
-</header>
-
-<section>
-  <h2>화면 둘러보기</h2>
-  <p class="sub">아래 화면은 모두 가상의 사람 · 회사 · 업무로 채운 예시입니다.</p>
-  <div class="shots">
-    <figure><img src="pc-mywork.jpg" alt="내 업무 화면 — 타임라인 · 달력 · 할 일 목록" loading="lazy"><figcaption><b>🎯 내 업무</b> — 할 일 · 일정 · 마감을 타임라인과 달력으로</figcaption></figure>
-    <figure><img src="pc-team.jpg" alt="업무 관리 주간 분석 화면 — 팀원별 업무일지 시간" loading="lazy"><figcaption><b>📒 업무 관리</b> — 업무일지 주간 분석 · 주간 업무 보고 · 업무 부하</figcaption></figure>
-    <figure><img src="pc-project.jpg" alt="프로젝트 관리 파이프라인 화면" loading="lazy"><figcaption><b>📁 프로젝트 관리</b> — 수주부터 완료까지 단계별 진행률</figcaption></figure>
-    <figure><img src="pc-chat.jpg" alt="메신저 대화방 화면" loading="lazy"><figcaption><b>💬 메신저</b> — 팀 대화 · 파일 · 사진 칠판 · 통화</figcaption></figure>
-  </div>
-  <h2 style="margin-top:32px">휴대폰</h2>
-  <p class="sub">머리 줄 왼쪽의 검은 캡슐(아일랜드)을 누르면 빠른 메뉴가 펼쳐집니다.</p>
-  <div class="phones">
-    <figure><img src="m-mywork.jpg" alt="휴대폰 내 업무 화면" loading="lazy"><figcaption><b>내 업무</b></figcaption></figure>
-    <figure><img src="m-island.jpg" alt="휴대폰 아일랜드 빠른 메뉴" loading="lazy"><figcaption><b>아일랜드 빠른 메뉴</b></figcaption></figure>
-    <figure><img src="m-chat.jpg" alt="휴대폰 메신저 화면" loading="lazy"><figcaption><b>메신저</b></figcaption></figure>
-  </div>
-</section>
-
-<section id="install">
-  <h2>설치하기</h2>
-  <p class="sub">한 번만 설치하면 그 뒤로는 저절로 새 버전으로 바뀝니다.</p>
-  <div class="grid2">
-    <div class="card"><h3>🖥 PC 앱 (Windows)</h3><ul>
-      <li>위의 <b>PC 앱 내려받기</b>를 눌러 <code>WorkManager-Setup-x.y.z.exe</code>를 받습니다.</li>
-      <li>받은 파일을 실행합니다. "Windows의 PC 보호" 창이 뜨면 <b>추가 정보 → 실행</b>을 누릅니다.</li>
-      <li>설치가 끝나면 업무 관리자가 열립니다. 회사 계정으로 로그인합니다.</li>
-      <li>창을 닫아도 오른쪽 아래 트레이에서 계속 알림을 받습니다.</li></ul></div>
-    <div class="card" id="phone"><h3>📱 휴대폰 (아이폰 · 안드로이드)</h3><ul>
-      <li><b>아이폰</b>: Safari로 업무 관리자 주소를 열고 <b>공유 → 홈 화면에 추가</b>를 누릅니다. (iOS 16.4 이상)</li>
-      <li><b>안드로이드</b>: Chrome으로 열고 <b>⋮ → 앱 설치</b>(또는 홈 화면에 추가)를 누릅니다.</li>
-      <li>홈 화면의 아이콘으로 열어 로그인한 뒤, <b>🔔 알림 켜기</b>를 눌러 두면 앱을 닫아도 메시지와 새 버전 알림이 옵니다.</li></ul></div>
-  </div>
-</section>
-
-<section id="manual">
-  <h2>간단 사용 설명서</h2>
-  <p class="sub">처음 쓰는 분이 10분 안에 익힐 수 있는 순서입니다.</p>
-  <ol class="steps">
-    <li><b>로그인</b>회사에서 받은 이메일과 비밀번호로 들어갑니다. 구글 계정 로그인을 켜 둔 회사는 구글로도 됩니다.</li>
-    <li><b>🎯 내 업무 — 할 일 넣기</b>입력 칸에 "내일 14:00 !긴급 견적"처럼 쓰면 마감 · 시간 · 중요도가 함께 들어갑니다. 할 일을 누르면 상세 창에서 메모 · 하위 항목 · 반복을 정합니다. 끌어서 달력의 다른 날로 옮길 수 있습니다.</li>
-    <li><b>📒 업무 관리 — 업무일지</b>엑셀 업무일지를 <b>파일 열기</b>로 올리면 팀 전체가 같은 데이터를 봅니다. 주차 · 팀원 · 사업부로 골라 시간과 내용을 분석합니다.</li>
-    <li><b>📒 업무 관리 — 주간 업무 보고</b>지난주 실적과 이번 주 계획을 쓰면 업무일지에서 빠진 일을 찾아 줍니다. 처리할 일은 <b>휴지통(처리 대기)</b>에 두었다가 다시 꺼내 씁니다. 미리보기에서 보고용으로 인쇄 · 복사합니다.</li>
-    <li><b>📁 프로젝트 관리</b>수주 → 설계 → 제작 → 검수 → 납품 → 완료 단계로 진행률을 관리합니다. 프로젝트를 누르면 일정 · 이슈 · 문서 · 회의록을 한 화면에서 봅니다.</li>
-    <li><b>💬 메신저</b>1:1 · 그룹 · 프로젝트 방에서 대화하고 파일 · 사진을 보냅니다. 사진을 누르면 칠판에서 표시를 그려 함께 볼 수 있습니다.</li>
-    <li><b>🔎 통합 검색</b>맨 위 검색 칸(<kbd>Ctrl</kbd>+<kbd>K</kbd>)에서 프로젝트 · 이슈 · 회의 · 할 일을 한꺼번에 찾습니다. 휴대폰은 🔎를 누르면 검색 칸이 펼쳐집니다.</li>
-    <li><b>⬆ 새 버전</b>새 버전이 나오면 화면 위에 알림 띠가 뜹니다. 휴대폰은 알림으로, PC 앱은 윈도우 알림으로 옵니다. <b>지금 새로 고침</b>(또는 <kbd>F5</kbd>)을 누르면 PC 앱까지 함께 업데이트됩니다.</li>
-  </ol>
-  <div class="grid2" style="margin-top:16px">
-    <div class="card"><h3>📱 휴대폰 팁</h3><ul><li>왼쪽 위 검은 캡슐 = 빠른 메뉴 (화면 이동 · 검색 · 알림 · 밝게/어둡게 · 맨 위로 · 새로 고침)</li><li>캡슐에 💬 숫자가 보이면 안 읽은 메시지, ⬆ 가 보이면 새 버전이 있다는 뜻입니다.</li><li>🎨 화면 설정에서 테마를 바꾸면 맨 위 상태 표시줄 색도 따라 바뀝니다.</li></ul></div>
-    <div class="card"><h3>⌨ PC 단축키</h3><ul><li><kbd>Ctrl</kbd>+<kbd>K</kbd> 통합 검색</li><li><kbd>F5</kbd> · <kbd>Ctrl</kbd>+<kbd>R</kbd> 새로 고침 (받아 둔 PC 앱 업데이트도 설치)</li><li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd> 항상 위에 두기 (PC 앱)</li><li><kbd>Alt</kbd>+<kbd>W</kbd> 글쓰기 · <kbd>Alt</kbd>+<kbd>N</kbd> 낙서장</li></ul></div>
-  </div>
-</section>
-
-<footer>
-  <div>설치 파일 원본: <a href="https://github.com/JONGMIN-PARK/work_manager/tree/main/release/desktop" rel="noopener">GitHub · release/desktop</a> · 이 페이지는 업무 관리자 서버의 <code>/download</code> 에서 늘 최신으로 보입니다.</div>
-</footer>
 </div>
+
+<section id="features" style="margin-top:56px"><div class="wrap">
+  <span class="eyebrow">주요 기능</span>
+  <h2>하루 업무의 처음부터 끝까지</h2>
+  <p class="sub">아래 화면은 모두 가상의 사람 · 회사 · 업무로 채운 예시입니다. 그림을 누르면 크게 보입니다.</p>
+
+  <div class="feat">
+    <figure class="shot"><img src="pc-mywork.jpg" alt="내 업무 — 할 일 목록과 타임라인" loading="lazy"></figure>
+    <div>
+      <h3>🎯 내 업무 — 오늘 할 일부터 다음 달 마감까지</h3>
+      <p>말하듯 적으면 마감 · 시간 · 중요도가 함께 들어갑니다. 목록 · 보드 · 타임라인 · 달력 중 편한 보기로 봅니다.</p>
+      <ul>
+        <li><b>"내일 14:00 !긴급 견적"</b>처럼 한 줄로 등록</li>
+        <li>중요도 4단계 · 반복 · 하위 항목 · 메모 · 내 프로젝트로 묶기</li>
+        <li>휴대폰 달력에 <b>.ics 구독</b> · 회의 30분 전 알림</li>
+        <li>텔레그램에서 <code>/todo</code> 로 바로 등록</li>
+      </ul>
+      <div class="pair"><figure class="shot"><img src="pc-calendar.jpg" alt="내 업무 달력 — 월 보기" loading="lazy"></figure></div>
+    </div>
+  </div>
+
+  <div class="feat rev">
+    <figure class="shot"><img src="pc-team.jpg" alt="업무일지 주간 분석 — 팀원별 시간" loading="lazy"></figure>
+    <div>
+      <h3>📒 업무일지 분석 — 팀이 어디에 시간을 쓰는지</h3>
+      <p>엑셀 업무일지를 올리면 팀 전체가 같은 데이터를 봅니다. 주차 · 팀원 · 사업부 · 수주별로 골라 시간과 내용을 나눠 봅니다.</p>
+      <ul>
+        <li>사람 · 날짜 · 수주 · 격자 보기와 <b>📊 분석</b> 차트</li>
+        <li>주간 비교 · 목표 대비 · 같은 일 묶기</li>
+        <li><b>✨ AI 요약</b> — 한 주 업무를 문장으로 정리</li>
+        <li>👥 업무 부하 — 누가 바쁜지 한눈에</li>
+      </ul>
+      <div class="pair"><figure class="shot"><img src="pc-workload.jpg" alt="업무 부하" loading="lazy"></figure></div>
+    </div>
+  </div>
+
+  <div class="feat">
+    <figure class="shot"><img src="pc-weekly.jpg" alt="주간 업무 보고 작성" loading="lazy"></figure>
+    <div>
+      <h3>📅 주간 업무 보고 — 빠진 일 없이</h3>
+      <p>지난주 실적과 이번 주 계획을 쓰면 업무일지에서 빠진 일을 찾아 알려 줍니다. 치운 일도 결말까지 따라갑니다.</p>
+      <ul>
+        <li>업무일지 → 보고서 끌어다 넣기 · 중복 삽입 방지</li>
+        <li><b>🎯 계획 대비 실적</b> · 처리 대기(휴지통)</li>
+        <li>보고용 미리보기 · 테마 10종 · 인쇄 / PDF</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="feat rev">
+    <figure class="shot"><img src="pc-project.jpg" alt="프로젝트 관리 파이프라인" loading="lazy"></figure>
+    <div>
+      <h3>📁 프로젝트 관리 — 수주부터 A/S까지</h3>
+      <p>수주 → 설계 → 제작 → 검수 → 납품 → 완료 단계로 진행률을 관리합니다. 프로젝트 하나를 누르면 모든 것이 한 화면에 있습니다.</p>
+      <ul>
+        <li>파이프라인 · 달력 · 타임라인(간트) · 수주대장</li>
+        <li>상세 창: 단계 체크리스트 · 이슈 · 개발 · 회의록 · 문서 · 투입 시간 · 장비 사양서</li>
+        <li>이슈 · A/S 접수와 보고서 PDF · 사전검토 · 요소기술</li>
+      </ul>
+      <div class="pair">
+        <figure class="shot"><img src="pc-detail.jpg" alt="프로젝트 상세 창" loading="lazy"></figure>
+        <figure class="shot"><img src="pc-timeline.jpg" alt="프로젝트 타임라인" loading="lazy"></figure>
+      </div>
+    </div>
+  </div>
+
+  <div class="feat">
+    <figure class="shot"><img src="pc-mindmap.jpg" alt="마인드맵 편집" loading="lazy"></figure>
+    <div>
+      <h3>🧠 마인드맵 — 생각을 계획으로</h3>
+      <p>회의 · 기획 내용을 가지로 펼치고, 그대로 일정과 담당으로 이어 갑니다.</p>
+      <ul>
+        <li>구조 여러 가지 · 마커 · 메모 · 첨부 · 템플릿 21종</li>
+        <li>간트 · 진행률 · 담당 · 함께 편집 · 댓글</li>
+        <li>XMind 파일 열기 · 발표 모드</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="feat rev">
+    <figure class="shot"><img src="pc-notebook.jpg" alt="노트북 — 회의 메모" loading="lazy"></figure>
+    <div>
+      <h3>📓 노트북 — 회의록 · 메모 · 보고서</h3>
+      <p>쓰면서 바로 종이 모양으로 보고, 같은 양식으로 묶어 출력합니다.</p>
+      <ul>
+        <li>폴더 · 태그 · 연결 · 공유 · 동시 편집</li>
+        <li>✍️ 글쓰기 코치 · AI 맞춤법 · <kbd>Alt</kbd>+<kbd>W</kbd> 빠른 메모</li>
+        <li>출력 양식 · 쪽 나누기 · 묶어 출력</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="feat">
+    <figure class="shot"><img src="pc-chat.jpg" alt="메신저 대화방" loading="lazy"></figure>
+    <div>
+      <h3>💬 메신저 — 업무 대화를 한곳에</h3>
+      <p>1:1 · 그룹 · 프로젝트 방에서 대화하고, 업무 카드와 파일을 그대로 주고받습니다.</p>
+      <ul>
+        <li>사진 칠판(표시 그리기) · 2GB 큰 파일 · 음성 메시지</li>
+        <li>투표 · 약속 · 확인 요청 · 공지 · 게시판 · 요청함</li>
+        <li>음성 · 화면 공유 · 원격 제어 · 공동 문서</li>
+        <li>앱을 닫아도 휴대폰 · 윈도우 알림</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section class="alt"><div class="wrap">
+  <span class="eyebrow">더 있습니다</span>
+  <h2>일을 덜어 주는 작은 기능들</h2>
+  <p class="sub">자주 쓰는 일은 짧게, 잊기 쉬운 일은 알아서.</p>
+  <div class="cards">
+    <div class="card"><div class="ic">🔎</div><h3>통합 검색</h3><p><kbd>Ctrl</kbd>+<kbd>K</kbd> — 프로젝트 · 이슈 · 회의 · 할 일 · 업무일지를 한 번에, 찾은 자리를 형광으로.</p></div>
+    <div class="card"><div class="ic">✨</div><h3>AI에게 묻기</h3><p>"이번 주 지연 위험 프로젝트는?" 처럼 물으면 우리 데이터로 답합니다. 월요일 아침 브리핑.</p></div>
+    <div class="card"><div class="ic">✈️</div><h3>텔레그램 창구</h3><p>내 일정 · 할 일 알림을 받고, 말로 등록하고, 답장으로 처리합니다.</p></div>
+    <div class="card"><div class="ic">📢</div><h3>공지 · 알림</h3><p>공지사항 · 멘션 · 마감 · 새 버전 알림을 한 곳에서. 방해 금지 시간도 정할 수 있습니다.</p></div>
+    <div class="card"><div class="ic">🎨</div><h3>테마 · 글씨</h3><p>밝게 / 어둡게 · 시그니처 테마 · 글자 크기 · 선명한 글씨체를 내 눈에 맞게.</p></div>
+    <div class="card"><div class="ic">🛡</div><h3>권한 · 백업</h3><p>회사별로 데이터를 나누고, 프로젝트마다 공개 범위를 정합니다. DB는 매일 백업합니다.</p></div>
+  </div>
+</div></section>
+
+<section id="mobile"><div class="wrap">
+  <span class="eyebrow">휴대폰</span>
+  <h2>손가락으로 편하게</h2>
+  <p class="sub">휴대폰에서는 화면이 한 손에 맞게 바뀝니다. 왼쪽 위 검은 캡슐(아일랜드)을 누르면 빠른 메뉴가 펼쳐지고, 단추는 손가락으로 누르기 좋은 크기입니다.</p>
+  <div class="phones">
+    <figure><div class="shot"><img src="m-mywork.jpg" alt="휴대폰 내 업무" loading="lazy"></div><figcaption>내 업무</figcaption></figure>
+    <figure><div class="shot"><img src="m-island.jpg" alt="휴대폰 아일랜드 빠른 메뉴" loading="lazy"></div><figcaption>빠른 메뉴</figcaption></figure>
+    <figure><div class="shot"><img src="m-team.jpg" alt="휴대폰 업무일지 분석" loading="lazy"></div><figcaption>업무일지 분석</figcaption></figure>
+    <figure><div class="shot"><img src="m-project.jpg" alt="휴대폰 프로젝트 파이프라인" loading="lazy"></div><figcaption>프로젝트</figcaption></figure>
+    <figure><div class="shot"><img src="m-chat.jpg" alt="휴대폰 메신저" loading="lazy"></div><figcaption>메신저</figcaption></figure>
+  </div>
+</div></section>
+
+<section id="install" class="alt"><div class="wrap">
+  <span class="eyebrow">설치</span>
+  <h2>한 번 설치하면 그 뒤로는 저절로</h2>
+  <p class="sub">새 버전이 나오면 알려 주고, 새로 고치면 바로 적용됩니다. 계정은 회사 관리자에게 받습니다.</p>
+  <div class="cards">
+    <div class="card"><div class="ic">🖥</div><h3>PC 앱 (Windows 10 · 11)</h3><ul>
+      <li><a class="dl-pc" href="https://github.com/JONGMIN-PARK/work_manager/releases/latest">설치 파일</a>(<code>WorkManager-Setup-x.y.z.exe</code>)을 받아 실행합니다.</li>
+      <li>"Windows의 PC 보호" 창이 뜨면 <b>추가 정보 → 실행</b>.</li>
+      <li>창을 닫아도 트레이에서 알림을 계속 받습니다.</li></ul></div>
+    <div class="card"><div class="ic">🍎</div><h3>아이폰 · 아이패드</h3><ul>
+      <li>Safari로 회사 업무 관리자 주소를 엽니다.</li>
+      <li><b>공유 → 홈 화면에 추가</b> (iOS 16.4 이상).</li>
+      <li>홈 화면 아이콘으로 열고 <b>🔔 알림 켜기</b>.</li></ul></div>
+    <div class="card"><div class="ic">🤖</div><h3>안드로이드</h3><ul>
+      <li>Chrome으로 회사 업무 관리자 주소를 엽니다.</li>
+      <li><b>⋮ → 앱 설치</b>(또는 홈 화면에 추가).</li>
+      <li>열어서 로그인한 뒤 <b>🔔 알림 켜기</b>.</li></ul></div>
+  </div>
+  <div class="band" style="margin-top:28px">
+    <div><h2>처음이라면 10분 사용 설명서부터</h2><p>로그인부터 할 일 · 업무일지 · 프로젝트 · 메신저까지 순서대로.</p></div>
+    <a class="btn" href="manual.html">📘 사용 설명서 보기</a>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  업무 관리자 · <a href="https://github.com/JONGMIN-PARK/work_manager/releases">모든 배포판 (GitHub 릴리스)</a> · <a href="manual.html">사용 설명서</a>
+</div></footer>
+
 <div class="zoom" id="zoom" role="dialog" aria-label="크게 보기"><img alt=""></div>
-<script>
-(function () {
-  fetch('/api/build', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
-    var d = j && j.data || {}, k = d.desktop;
-    var line = '웹 최신 버전 v' + (d.version || '?');
-    if (k && k.version) {
-      var a = document.getElementById('dlPc');
-      a.href = k.file; a.setAttribute('download', '');
-      document.getElementById('dlPcSub').textContent = 'v' + k.version + ' · GitHub 저장소에서 받습니다';
-      line += ' · PC 앱 v' + k.version;
-    }
-    document.getElementById('verLine').textContent = line;
-  }).catch(function () { document.getElementById('verLine').textContent = ''; });
-  var z = document.getElementById('zoom'), zi = z.querySelector('img');
-  document.addEventListener('click', function (e) {
-    var t = e.target;
-    if (t.tagName === 'IMG' && t.closest('figure')) { zi.src = t.src; zi.alt = t.alt; z.classList.add('on'); }
-    else if (z.classList.contains('on')) z.classList.remove('on');
-  });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') z.classList.remove('on'); });
-})();
-</script>
+<script src="site.js"></script>
 </body>
 </html>

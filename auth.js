@@ -1631,7 +1631,7 @@ async function renderAuditLog() {
     '<div style="background:var(--bg-p,#111620);border-radius:12px;padding:16px;margin-top:16px;border:1px solid var(--bd,#222C44)">' +
       '<h4 style="margin:0 0 12px;font-size:15px">감사 로그</h4>' +
       '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
-        '<input id="auditSearch" placeholder="검색 (이름, 이메일, 액션)" style="flex:1;min-width:180px;padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
+        '<input id="auditSearch" placeholder="검색 (이름, 이메일, 액션)" data-ph-m="이름 · 이메일 · 액션" style="flex:1;min-width:180px;padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
         '<input id="auditFrom" type="date" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
         '<input id="auditTo" type="date" style="padding:6px 10px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
         '<button id="auditSearchBtn" style="padding:6px 14px;border:none;border-radius:6px;background:' + SEM_COLOR.info + ';color:#fff;cursor:pointer;font-size:12px">조회</button>' +

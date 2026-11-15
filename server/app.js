@@ -222,13 +222,14 @@ function desktopInfo() {
 }
 /* v13.501 📦 소개 · 내려받기 · 사용 설명서 — 로그인 없이 (release/site) */
 app.get(['/download', '/download/'], function (req, res) {
+  if (!/\/$/.test(req.originalUrl.split('?')[0])) return res.redirect(301, '/download/');   // v13.503 상대 경로(그림 · manual.html)가 /download/ 아래로 가게
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(SITE_DIR, 'index.html'), function (err) { if (err && !res.headersSent) res.status(404).end(); });
 });
 app.get('/download/:name', function (req, res, next) {
   var n = req.params.name;
-  if (!/^[a-z0-9-]+\.(png|jpg|webp|svg|css|js|json)$/.test(n)) return next();
-  res.setHeader('Cache-Control', 'public, max-age=3600');
+  if (!/^[a-z0-9-]+\.(png|jpg|webp|svg|css|js|json|html)$/.test(n)) return next();
+  res.setHeader('Cache-Control', /\.html$/.test(n) ? 'no-cache' : 'public, max-age=3600');
   res.sendFile(path.join(SITE_DIR, n), function (err) { if (err && !res.headersSent) res.status(404).end(); });
 });
 app.get('/desktop-release/:name', function (req, res, next) {

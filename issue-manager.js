@@ -212,8 +212,8 @@ function renderIssues(afterRender) {
       html += '<td class="c-status" style="padding:6px;' + ell + '"><span style="font-size:10px;padding:1px 6px;border-radius:8px;background:' + st.color + '22;color:' + st.color + ';font-weight:600;white-space:nowrap">' + st.label + '</span></td>';
       html += '<td class="c-title" style="padding:6px;' + ell + 'color:var(--t1);font-weight:500">' + eH(iss.title) + '</td>';
       html += '<td style="padding:6px;white-space:nowrap" onclick="event.stopPropagation()">';
-      html += '<button onclick="showIssueModal(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="편집">✏️</button>';
-      html += '<button onclick="confirmDeleteIssue(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="삭제">🗑️</button>';
+      html += '<button class="is-ico" onclick="showIssueModal(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="편집">✏️</button>';
+      html += '<button class="is-ico" onclick="confirmDeleteIssue(\'' + safeId + '\')" style="font-size:10px;border:none;background:none;color:var(--t5);cursor:pointer" title="삭제">🗑️</button>';
       html += '</td></tr>';
     });
 

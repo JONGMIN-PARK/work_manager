@@ -1,0 +1,30 @@
+# 📦 소개 · 사용 설명서 페이지(release/site) → GitHub Pages (누구나 볼 수 있음)
+#   주소: https://jongmin-park.github.io/work_manager/
+#   설치 파일은 GitHub 릴리스(Latest)에 올림 — 페이지가 releases/latest API 로 최신 .exe 주소를 찾음
+name: pages
+on:
+  push:
+    branches: [main]
+    paths: ['release/site/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.dep.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: release/site
+      - id: dep
+        uses: actions/deploy-pages@v4

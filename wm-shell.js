@@ -243,3 +243,22 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden) soon(0); });
   try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () { soon(300); }); } catch (e) {}
 })();
+
+/* v13.503 📱 휴대폰 짧은 안내 글 — data-ph-m 이 있는 입력칸은 휴대폰(틀 고정)에서 그 짧은 글로 (긴 글은 title 로 남김) */
+(function () {
+  var mq = window.matchMedia ? window.matchMedia('(max-width:768px) and (pointer:coarse)') : null, q = 0;
+  function run() {
+    q = 0;
+    var on = mq && mq.matches, els = document.querySelectorAll('[data-ph-m]');
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i];
+      if (e.getAttribute('data-ph-full') == null) e.setAttribute('data-ph-full', e.getAttribute('placeholder') || '');
+      var want = on ? e.getAttribute('data-ph-m') : e.getAttribute('data-ph-full');
+      if (e.getAttribute('placeholder') !== want) { e.setAttribute('placeholder', want); if (on && !e.title) e.title = e.getAttribute('data-ph-full'); }
+    }
+  }
+  function soon() { if (!q) q = requestAnimationFrame(run); }
+  function start() { run(); try { new MutationObserver(soon).observe(document.body, { childList: true, subtree: true }); } catch (e) {} }
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+  try { mq && mq.addEventListener('change', run); } catch (e) {}
+})();

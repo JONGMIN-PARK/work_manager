@@ -132,7 +132,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await ready(); await setup(); await wait(500);
     var mb = await page.evaluate(function () { return { cards: document.querySelectorAll('#wdCards .wdc-g').length, tw: getComputedStyle(document.querySelector('#tTbl .tw')).display, kpiH: document.getElementById('kpiSticky').offsetHeight, sw: document.documentElement.scrollWidth }; });
     check(mb.cards === 3 && mb.tw === 'none', '휴대폰 — 표 대신 사람 카드 3장 ' + JSON.stringify(mb));
-    check(mb.kpiH < 80, 'KPI 한 줄 요약 바 (높이 ' + mb.kpiH + ')');
+    check(mb.kpiH < 92, 'KPI 한 줄 요약 바 (v13.503 탭 36px — 손가락 크기) (높이 ' + mb.kpiH + ')');
     check(mb.sw <= 392, '가로 넘침 없음 ' + mb.sw);
     await page.evaluate(function () { document.querySelector('#wdCards .wdc-g').click(); }); await wait(200);
     var mc = await page.evaluate(function () { return { r: document.querySelectorAll('#wdCards .wdc-r').length, s: document.querySelectorAll('#wdCards .wdc-s').length, cw: document.querySelector('#wdCards .wdc-r').offsetWidth }; });

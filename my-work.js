@@ -323,7 +323,7 @@ function _mwPaintNow(el) {
       '<div class="mw-cfg" role="dialog" aria-label="보기 설정">' + cfg + '</div></div>';
   bar += '<span class="mw-bar2-sp"></span>';
   if (r.self) {
-    bar += '<form class="mw-add" id="mwAdd"><input id="mwAddTitle" class="mw-input" maxlength="500" placeholder="+ 할 일 — &quot;내일 14:00 !긴급 견적&quot;" title="&quot;내일 14:00 !긴급 견적 회신&quot; 처럼 적으면 마감 · 중요도까지" autocomplete="off" aria-label="새 할 일">' +
+    bar += '<form class="mw-add" id="mwAdd"><input id="mwAddTitle" class="mw-input" maxlength="500" placeholder="+ 할 일 — &quot;내일 14:00 !긴급 견적&quot;" data-ph-m="+ 할 일 추가" title="&quot;내일 14:00 !긴급 견적 회신&quot; 처럼 적으면 마감 · 중요도까지" autocomplete="off" aria-label="새 할 일">' +
       '<button type="button" class="mw-btn mw-due-pick" data-mw-duepick="1" title="마감 날짜 고르기 (없어도 됨)">마감</button>' +
       '<input id="mwAddDue" type="date" class="mw-input mw-date" title="마감 (없어도 됨)" aria-label="마감 날짜"><button class="mw-btn mw-btn-p" type="submit">추가</button>' +
       '<button class="mw-btn" type="button" data-mwt="new" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅<span class="mw-add-lbl"> 일정…</span></button></form>';

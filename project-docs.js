@@ -50,7 +50,7 @@ function pdRenderDocs() {
       '</select></span>' +
       '<input type="file" id="pdDocsInput" multiple style="display:none" onchange="pdDocsUpload(this.files);this.value=\'\'">' +
     '</div>' +
-    '<input class="si pdd-q" placeholder="문서 이름 · 태그 찾기" value="' + eA(_pdDocs.q) + '" oninput="_pdDocs.q=this.value;_pdDocsListOnly()">' +
+    '<input class="si pdd-q" placeholder="문서 이름 · 태그 찾기" data-ph-m="문서 · 태그 찾기" value="' + eA(_pdDocs.q) + '" oninput="_pdDocs.q=this.value;_pdDocsListOnly()">' +
     '<button class="btn btn-g btn-s" onclick="pdDocsOpenManager()" title="문서 화면 — 미리보기 · AI 요약 · 버전 · 폴더 관리">↗ 문서 화면</button>' +
   '</div>';
   h += '<div class="pdd-hint pd-edit-only">여기에 파일을 끌어다 놓거나 Ctrl+V — 모든 형식 · 파일당 50MB</div>';

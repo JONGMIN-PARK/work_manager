@@ -59,6 +59,41 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await shot(page, 'pc-team');
     await page.evaluate(function (id) { setPage('messages'); setTimeout(function () { if (typeof chatOpenRoom === 'function') chatOpenRoom(id); }, 600); }, room); await wait(3000);
     await shot(page, 'pc-chat');
+    // v13.503 랜딩 페이지 — 주요 기능 화면 더
+    var ids = await page.evaluate(async function () {
+      var N = function (t, c) { return { id: 'n' + Math.random().toString(36).slice(2, 9), text: t, children: (c || []) }; };
+      var doc = { sheets: [{ id: 'sh-1', title: '시트 1', structure: 'balanced', root: { id: 'n-root', text: '정렬 장비 2차 개발', children: [
+        N('요구 사항', [N('정렬 정밀도 ±2µm'), N('택트 타임 12초'), N('고객 사양서 검토')]),
+        N('설계', [N('스테이지 구조'), N('카메라 · 조명'), N('제어 보드')]),
+        N('일정', [N('11월 설계 검토'), N('12월 시제품'), N('1월 납품')]),
+        N('위험', [N('부품 납기 지연'), N('현장 진동')]),
+        N('담당', [N('김하늘 — 총괄'), N('이도윤 — 비전'), N('박서준 — 기구')])
+      ] } }] };
+      var m = await apiFetch('/api/mindmaps', { method: 'POST', body: JSON.stringify({ title: '정렬 장비 2차 개발', doc: doc }) });
+      var n = await apiFetch('/api/notebook/notes', { method: 'POST', body: JSON.stringify({ title: '11월 3주 정렬 장비 검토 회의', body: '## 회의 요약\n참석: 김하늘, 이도윤, 박서준\n\n### 결정 사항\n- 스테이지 구조는 **2안**으로 확정\n- 카메라는 5MP 모델로 시험 후 결정\n- 12월 2주 시제품 조립 시작\n\n### 할 일\n- [ ] 이도윤 — 비전 시험 결과 정리 (11/20)\n- [ ] 박서준 — 기구 도면 수정 (11/22)\n- [x] 김하늘 — 고객사 일정 공유' }) }).catch(function () { return {}; });
+      // 상세 창이 비어 보이지 않게 — 마일스톤 · 체크리스트
+      try {
+        var ms = [['요구 사항 확정', '2026-09-01', '2026-09-20', 'done'], ['설계 · 도면 검토', '2026-09-21', '2026-10-25', 'done'], ['제작 · 조립', '2026-10-26', '2026-11-30', 'inProgress'], ['검수 · 납품', '2026-12-01', '2026-12-20', 'pending']];
+        for (var k = 0; k < ms.length; k++) await createMilestone({ projectId: 'demo-p0', name: ms[k][0], startDate: ms[k][1], endDate: ms[k][2], status: ms[k][3], order: k });
+        if (typeof pdGenerateChecklists === 'function') await pdGenerateChecklists('demo-p0');
+      } catch (e) {}
+      return { mm: m && m.data && m.data.id, nb: n && n.data && n.data.id };
+    });
+    var more = [
+      ['pc-mindmap', function (x) { setPage('mindmap'); setTimeout(function () { if (x.mm) mmOpen(x.mm); }, 500); }],
+      ['pc-notebook', function (x) { setPage('notebook'); setTimeout(function () { if (x.nb && typeof nbOpenNote === 'function') nbOpenNote(x.nb); }, 800); }],
+      ['pc-weekly', function () { setPage('team'); setMode('weekly_report'); }],
+      ['pc-workload', function () { setPage('team'); setMode('workload'); }],
+      ['pc-timeline', function () { setPage('project'); setMode('timeline'); }],
+      ['pc-detail', function () { setPage('project'); setMode('pipeline'); setTimeout(function () { showProjectDetail('demo-p0'); }, 600); }],
+      ['pc-calendar', function () { setPage('mywork'); setTimeout(function () { var b = document.querySelector('#mMyWork [data-mwc-view="month"]'); if (b) b.click(); }, 600); }]
+    ];
+    for (var q = 0; q < more.length; q++) {
+      await page.evaluate(function () { try { if (typeof pdCloseDetail === 'function') pdCloseDetail(); } catch (e) {} });
+      await page.evaluate(more[q][1], ids); await wait(3200);
+      await shot(page, more[q][0]);
+    }
+    await page.evaluate(function () { try { if (typeof pdCloseDetail === 'function') pdCloseDetail(); } catch (e) {} setPage('mywork'); try { var b = document.querySelector('#mMyWork [data-mwc-view="list"]'); if (b) b.click(); } catch (e) {} }); await wait(800);
     var m = await browser.newPage();
     await m.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1');
     await m.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
@@ -69,6 +104,10 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await shot(m, 'm-island');
     await m.evaluate(function (id) { wmIsland.close(); setPage('messages'); setTimeout(function () { if (typeof chatOpenRoom === 'function') chatOpenRoom(id); }, 600); }, room); await wait(3000);
     await shot(m, 'm-chat');
+    await m.evaluate(function () { if (typeof chatCloseRoom === 'function') try { chatCloseRoom(); } catch (e) {} setPage('project'); setMode('pipeline'); }); await wait(2500);
+    await shot(m, 'm-project');
+    await m.evaluate(function () { setPage('team'); setMode('weekly'); try { selAll(); } catch (e) {} }); await wait(2500);
+    await shot(m, 'm-team');
     console.log('done');
   } catch (e) { console.log('FAIL', e && e.stack || e); }
   await browser.close();

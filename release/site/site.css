@@ -1,0 +1,111 @@
+/* 업무 관리자 — 소개 · 매뉴얼 페이지 공용 (release/site · GitHub Pages 와 서버 /download/ 양쪽) */
+:root{--bg:#F5F6FB;--bg2:#ECEEF8;--card:#FFFFFF;--t1:#0E1330;--t2:#3F466A;--t3:#5C638A;--bd:#E3E6F3;--ac:#5B5BF0;--ac2:#7C3AED;--ac-t:#4338CA;--ac-bg:#EEF0FF;--ok:#0F9D58;--sh:0 1px 2px rgba(17,24,64,.06),0 12px 32px -12px rgba(17,24,64,.18);color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0B0E1A;--bg2:#10142A;--card:#141932;--t1:#F1F4FF;--t2:#C9D0EA;--t3:#9AA3C7;--bd:#262D52;--ac:#7C7CFF;--ac2:#A78BFA;--ac-t:#C7D2FE;--ac-bg:#1D2347;--ok:#34D399;--sh:0 1px 2px rgba(0,0,0,.3),0 16px 40px -16px rgba(0,0,0,.6);color-scheme:dark}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--t1);font:16px/1.75 "Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;-webkit-font-smoothing:antialiased;word-break:keep-all;overflow-wrap:break-word}
+a{color:var(--ac-t)}
+img{max-width:100%}
+.wrap{max-width:1160px;margin:0 auto;padding:0 16px}
+/* 위 띠 */
+.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--bd)}
+.top .wrap{display:flex;align-items:center;gap:16px;height:60px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;color:var(--t1);text-decoration:none;font-size:16px;white-space:nowrap}
+.brand img{width:32px;height:32px;border-radius:8px}
+.top nav{display:flex;gap:4px;margin-left:auto;overflow-x:auto;scrollbar-width:none}
+.top nav::-webkit-scrollbar{display:none}
+.top nav a{padding:8px 12px;border-radius:9px;color:var(--t2);text-decoration:none;font-size:14px;font-weight:600;white-space:nowrap}
+.top nav a:hover{background:var(--ac-bg);color:var(--ac-t)}
+.top nav a.cta{background:var(--ac);color:#fff}
+@media (max-width:640px){.top nav a:not(.cta){display:none}}
+/* 단추 */
+.btn{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:12px 20px;border-radius:13px;border:1px solid var(--bd);background:var(--card);color:var(--t1);font-weight:700;text-decoration:none;font-size:16px}
+.btn small{font-weight:500;color:var(--t3);font-size:13px}
+.btn.main{background:linear-gradient(135deg,var(--ac),var(--ac2));border-color:transparent;color:#fff;box-shadow:0 10px 24px -10px color-mix(in srgb,var(--ac) 70%,transparent)}
+.btn.main small{color:rgba(255,255,255,.85)}
+.btn:hover{transform:translateY(-1px)}
+/* 첫 화면 */
+.hero{padding:56px 0 36px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:40px;align-items:center}
+.hero h1{text-wrap:balance;font-size:clamp(30px,4.2vw,44px);line-height:1.22;letter-spacing:-.025em;margin:0 0 16px}
+.hero h1 em{font-style:normal;background:linear-gradient(135deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p.lead{font-size:18px;color:var(--t2);margin:0 0 24px}
+.hero .acts{display:flex;flex-wrap:wrap;gap:10px}
+.meta{font-size:13px;color:var(--t3);margin-top:12px}
+.shot{margin:0;border-radius:16px;overflow:hidden;border:1px solid var(--bd);background:var(--card);box-shadow:var(--sh)}
+.shot img{display:block;width:100%;height:auto;cursor:zoom-in}
+@media (max-width:860px){.hero{grid-template-columns:1fr;padding-top:32px;gap:28px}}
+/* 숫자 띠 */
+.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:8px 0 0}
+.facts div{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px}
+.facts b{display:block;font-size:20px}
+.facts span{font-size:13px;color:var(--t3)}
+@media (max-width:640px){.facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 구역 */
+section{padding:64px 0;border-top:1px solid var(--bd)}
+section.alt{background:var(--bg2)}
+.eyebrow{display:inline-block;font-size:13px;font-weight:800;color:var(--ac-t);background:var(--ac-bg);padding:4px 10px;border-radius:99px;margin-bottom:10px}
+h2{font-size:clamp(24px,3.2vw,32px);letter-spacing:-.02em;line-height:1.3;margin:0 0 10px}
+.sub{color:var(--t2);margin:0 0 28px;max-width:720px}
+/* 기능 한 줄 — 그림 + 설명 (번갈아) */
+.feat{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:36px;align-items:center;margin:0 0 56px}
+.feat:last-child{margin-bottom:0}
+.feat.rev{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)}
+.feat.rev .shot{order:2}
+.feat h3{font-size:22px;margin:0 0 8px;letter-spacing:-.01em}
+.feat p{color:var(--t2);margin:0 0 12px}
+.feat ul{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.feat li{position:relative;padding-left:26px;color:var(--t2);font-size:15px}
+.feat li::before{content:"✓";position:absolute;left:0;top:0;width:18px;height:18px;margin-top:4px;border-radius:50%;background:var(--ac-bg);color:var(--ac-t);font-size:11px;font-weight:800;display:grid;place-items:center;line-height:1}
+.feat li b{color:var(--t1)}
+@media (max-width:860px){.feat,.feat.rev{grid-template-columns:1fr;gap:18px}.feat.rev .shot{order:0}}
+/* 작은 그림 두 장 */
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}
+.pair figure{margin:0}
+.pair figcaption{font-size:13px;color:var(--t3);padding:6px 2px 0}
+/* 휴대폰 */
+.phones{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+.phones figure{margin:0}
+.phones .shot{border-radius:22px}
+.phones img{aspect-ratio:390/844;object-fit:cover;object-position:top}
+.phones figcaption{text-align:center;font-size:14px;color:var(--t2);padding-top:8px;font-weight:600}
+@media (max-width:860px){.phones{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:560px){.phones{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 카드 */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:18px}
+.card .ic{font-size:24px;line-height:1;margin-bottom:8px}
+.card h3{margin:0 0 6px;font-size:16px}
+.card p,.card ul{margin:0;color:var(--t2);font-size:14px}
+.card ul{padding-left:18px}
+/* 단계 */
+.steps{counter-reset:s;display:grid;gap:12px;padding:0;margin:0;list-style:none}
+.steps>li{position:relative;padding:16px 18px 16px 60px;background:var(--card);border:1px solid var(--bd);border-radius:14px;color:var(--t2)}
+.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:18px;top:16px;width:28px;height:28px;border-radius:50%;background:var(--ac-bg);color:var(--ac-t);font-weight:800;font-size:14px;display:grid;place-items:center}
+.steps b{display:block;color:var(--t1)}
+kbd{font:12px/1 ui-monospace,Consolas,monospace;padding:3px 6px;border:1px solid var(--bd);border-bottom-width:2px;border-radius:5px;background:var(--bg)}
+code{font:13px ui-monospace,Consolas,monospace;background:var(--ac-bg);color:var(--ac-t);padding:1px 6px;border-radius:5px}
+.band{border-radius:20px;padding:32px;background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;display:flex;flex-wrap:wrap;align-items:center;gap:20px;justify-content:space-between}
+.band h2{color:#fff;margin:0}
+.band p{margin:4px 0 0;opacity:.9}
+.band .btn{background:#fff;color:#1e1b4b;border-color:#fff}
+footer{padding:32px 0 56px;color:var(--t3);font-size:14px;border-top:1px solid var(--bd)}
+footer a{color:var(--t2)}
+.zoom{position:fixed;inset:0;z-index:20;background:rgba(5,8,20,.88);display:none;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+.zoom.on{display:flex}
+.zoom img{max-width:100%;max-height:100%;border-radius:10px}
+/* 매뉴얼 */
+.doc{display:grid;grid-template-columns:240px minmax(0,1fr);gap:40px;padding:40px 0 64px}
+.toc{position:sticky;top:76px;align-self:start;font-size:14px}
+.toc b{display:block;margin-bottom:8px}
+.toc a{display:block;padding:6px 10px;border-radius:8px;color:var(--t2);text-decoration:none}
+.toc a:hover{background:var(--ac-bg);color:var(--ac-t)}
+.doc article h1{font-size:clamp(28px,4vw,38px);letter-spacing:-.02em;margin:0 0 8px;line-height:1.25}
+.doc article>section{padding:36px 0;border-top:1px solid var(--bd);scroll-margin-top:72px}
+.doc article h2{font-size:24px}
+.doc article h3{font-size:17px;margin:22px 0 8px}
+.doc article p,.doc article li{color:var(--t2)}
+.doc article ul,.doc article ol{padding-left:22px}
+.tip{border-left:4px solid var(--ac);background:var(--ac-bg);border-radius:0 12px 12px 0;padding:12px 16px;margin:14px 0;color:var(--t2);font-size:15px}
+.tip b{color:var(--t1)}
+.doc .shot{margin:14px 0}
+@media (max-width:860px){.doc{grid-template-columns:1fr;gap:0}.toc{position:static;display:flex;flex-wrap:wrap;gap:4px;margin-bottom:24px}.toc b{width:100%}.toc a{background:var(--card);border:1px solid var(--bd)}}

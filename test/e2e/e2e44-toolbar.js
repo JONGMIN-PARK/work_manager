@@ -66,7 +66,7 @@ var SHOTS = path.join(__dirname, '.shots');
     await page.evaluate(function () { setMode('weekly_report'); }); await wait(1500);
     var r = await tb('mWeeklyReport');
     var seg = await page.$$eval('#wrSubTabs > button', function (a) { return a.map(function (b) { return b.dataset.wt; }).join(','); });
-    check(r && r.title === '📅 주간 업무' && seg === 'author,search,stats,list,upload', '주간 업무 — 툴바 전환 ' + seg + ' ' + JSON.stringify(r));
+    check(r && r.title === '📅 주간 업무' && seg === 'author,search,stats,pa,list,upload', '주간 업무 — 툴바 전환 ' + seg + ' ' + JSON.stringify(r));
     var au = await page.evaluate(function () { var row = document.getElementById('wrAuSave').parentElement, r0 = row.getBoundingClientRect(); return { h: Math.round(r0.height), save: document.getElementById('wrAuSave').classList.contains('wm-pri'), inMenu: ['wrAuNew', 'wrAuLoadPrev', 'wrAuExport'].every(function (id) { return !!document.getElementById(id).closest('.hdr-pop-menu'); }) }; });
     check(au.save && au.inMenu && au.h < 50, '작성 줄 한 줄 · 저장이 주 버튼 · 새로 만들기 등은 ⋯ ' + JSON.stringify(au));
     await page.screenshot({ path: path.join(SHOTS, 'tb-weekly-report.png'), clip: { x: 0, y: 120, width: 1400, height: 200 } });
