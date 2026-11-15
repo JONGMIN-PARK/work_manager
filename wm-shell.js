@@ -183,11 +183,25 @@
     if (tint && tint.isConnected && tint.style.backgroundColor && tint.getAttribute('data-col') === col) return;
     var old = tint, nt = document.createElement('div');
     nt.id = 'wmTopTint'; nt.setAttribute('aria-hidden', 'true'); nt.setAttribute('data-col', col); nt.setAttribute('data-n', String(++tintN));
-    nt.style.cssText = 'position:fixed;left:0;right:0;top:0;height:3px;z-index:2147483646;margin:0;padding:0;border:0;pointer-events:none;background-color:' + col;
+    nt.style.cssText = 'position:fixed;left:0;right:0;top:0;height:3px;z-index:2147483646;margin:0;padding:0;border:0;background-color:' + col;
     docEl.appendChild(nt);   // body 밖 — body 자식 변화 감시에 안 걸리게
     tint = nt;
     if (old && old !== nt && old.parentNode) old.parentNode.removeChild(old);
     void nt.offsetHeight;   // 바로 배치 계산 — 사파리가 고정 요소 바뀜을 알아채게
+  }
+  /* v13.508 🍎 실기기에서 v13.507 도 안 먹힘 → 사파리는 '같은 페이지 안 주소 바뀜(pushState)' 때 상단 색을 다시 읽는 것으로 보임.
+   *   (휴대폰 메뉴 · 🏝 아일랜드 패널은 wm-layer.js 가 pushState → 그래서 메뉴를 몇 번 옮기면 고쳐졌음)
+   *   → 색이 바뀌고 나서 같은 주소 · 같은 상태로 replaceState — 뒤로 가기 기록은 안 늘어남 */
+  var navT = 0;
+  function nudgeNav() {
+    if (!IOS) return;
+    if (navT) clearTimeout(navT);
+    navT = setTimeout(function () {
+      navT = 0;
+      requestAnimationFrame(function () { requestAnimationFrame(function () {   // 새 색이 화면에 그려진 뒤
+        try { history.replaceState(history.state, '', location.href); window.__wmTopNav = (window.__wmTopNav || 0) + 1; } catch (e) {}
+      }); });
+    }, 40);
   }
   function parse(c) {
     if (!c) return null;
@@ -232,12 +246,13 @@
     if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }
     m.removeAttribute('media');
     m.content = col;
+    nudgeNav();
   }
   function soon(ms) { if (t) clearTimeout(t); t = setTimeout(sync, ms == null ? 60 : ms); }
   window.wmTopBarSync = function () { last = ''; soon(0); };
   /* v13.507 인트로 · 로그인 창처럼 화면 전체를 덮던 것이 걷힌 뒤 — 색이 천천히 바뀌는 테마까지 몇 번 더 맞춤 */
   window.wmTopBarSettle = function () {
-    [0, 150, 400, 900, 1800, 3500].forEach(function (ms) { setTimeout(function () { last = ''; sync(); }, ms); });
+    [0, 150, 400, 900, 1800, 3500].forEach(function (ms) { setTimeout(function () { last = ''; sync(); }, ms); });   // sync 안에서 replaceState 까지
   };
   window.wmTopBarColor = function () { return last; };
   try { new MutationObserver(function () { soon(); setTimeout(function () { soon(0); }, 380); setTimeout(function () { soon(0); }, 900); }).observe(docEl, { attributes: true, attributeFilter: ['data-theme', 'class'] }); } catch (e) {}

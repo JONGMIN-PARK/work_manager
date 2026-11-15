@@ -59,8 +59,8 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var tc = after.t ? after.t.match(/\d+/g).map(Number) : [0, 0, 0];
     check(tc[0] + tc[1] + tc[2] > 600 && near(tc, ap) && near(hex2(after.m), ap), '시작 인트로(' + dark0 + ') 뒤 바로 머리 줄 색 — 띠 ' + after.t + ' · meta ' + after.m + ' · 실제 rgb(' + ap + ')');
     // v13.507 아이폰은 색만 바뀌면 다시 안 읽음 → 인트로 뒤 띠가 새 요소로 갈아 끼워져야 함 · 띠는 늘 하나
-    var rep = await page.evaluate(function () { var es = document.querySelectorAll('#wmTopTint'); return { cnt: es.length, n0: window.__tn0, n1: es[0] && es[0].getAttribute('data-n') }; });
-    check(rep.cnt === 1 && rep.n0 && rep.n1 && rep.n0 !== rep.n1, '인트로 뒤 띠를 새 요소로 갈아 끼움 · 하나만 ' + JSON.stringify(rep));
+    var rep = await page.evaluate(function () { var es = document.querySelectorAll('#wmTopTint'); return { cnt: es.length, n0: window.__tn0, n1: es[0] && es[0].getAttribute('data-n'), nav: window.__wmTopNav || 0, hl: history.length }; });
+    check(rep.cnt === 1 && rep.n0 && rep.n1 && rep.n0 !== rep.n1 && rep.nav >= 1, '인트로 뒤 띠 교체 · 하나만 · replaceState 로 사파리에 알림(v13.508) ' + JSON.stringify(rep));
     await page.screenshot({ path: path.join(SHOT, 'topbar-color.png'), clip: { x: 0, y: 0, width: 402, height: 120 } });
     check(!errs.length, '페이지 오류 없음 ' + errs.join(' | '));
   } catch (e) { fail++; console.log('FAIL 예외', e && e.stack || e); }
