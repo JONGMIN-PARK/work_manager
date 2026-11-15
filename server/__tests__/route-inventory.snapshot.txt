@@ -398,6 +398,7 @@ GET /index.html
 GET /ink-overlay
 GET /manifest.webmanifest
 GET /sw.js
+GET /toplab
 PATCH /api/archives/records/batch
 PATCH /api/locks
 PATCH /api/projects/:id/specs
