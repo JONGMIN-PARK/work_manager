@@ -15,7 +15,7 @@ var _cbImgs = {};
 var _cbMosC = typeof WeakMap !== 'undefined' ? new WeakMap() : { get: function () { return null; }, set: function () {} };   // 사진별 흐리게 조각   // fid → 불러온 사진 (미리보기 · 칠판이 같이 씀)
 var CB_COLORS = ['#EF4444', '#F59E0B', '#22C55E', '#3B82F6', '#A855F7', '#111827', '#FFFFFF'];
 var CB_TOOLS = [
-  ['pan', '✋', '옮기기 (Space 누르고 끌어도 됨)', 'V'], ['pen', '✏️', '펜', 'P'], ['hl', '🖍️', '형광펜', 'M'], ['text', '🅣', '글자', 'T'],
+  ['pan', '✋', '옮기기 (Space 누르고 끌어도 됨)', 'V'], ['sel', '⬚', '선택 — 표시를 눌러 고르고 끌어 옮기기 · Delete 지우기 · 순서 바꾸기', 'S'], ['pen', '✏️', '펜', 'P'], ['hl', '🖍️', '형광펜', 'M'], ['text', '🅣', '글자', 'T'],
   ['arrow', '↗', '화살표', 'A'], ['rect', '▭', '사각형', 'R'], ['ellipse', '◯', '원', 'O'],
   ['blur', '▦', '흐리게 — 개인정보 · 비밀 가리기', 'B'], ['box', '🔦', '집중 — 고른 곳만 밝게', 'F'],
   ['crop', '✂️', '자르기 · 잘라서 복사 · 잘라서 보내기', 'C'], ['erase', '🧽', '지우개 — 누른 표시 지우기', 'E']
@@ -109,7 +109,7 @@ function _cbMosaic(s, img) {
   var r = _cbNorm(s), blk = Math.max(6, Math.round(Math.max(r.w, r.h) / 18));
   var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(r.w / blk)); c.height = Math.max(1, Math.round(r.h / blk));
   c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
-  if (!(CB && CB.draft === s) && !/^live/.test(s.id || '')) box[key] = c;   // 그리는 중인 것은 담아 두지 않음
+  if (!(CB && (CB.draft === s || (CB.mv && CB.mv.s === s))) && !/^live/.test(s.id || '')) box[key] = c;   // 그리는 중인 것은 담아 두지 않음
   return c;
 }
 function _cbShape(g, s, img, live) {
@@ -205,7 +205,7 @@ function _cbDraw() {
     g.setTransform(m[0] * dpr, m[1] * dpr, m[2] * dpr, m[3] * dpr, m[4] * dpr, m[5] * dpr);
     var area = _cbArea();
     // v13.373 바탕(그림자 판 + 사진 + 끝낸 표시)은 한 장 담아 두고 — 같이 보는 사람 손가락 · 그리는 중인 선만 바뀌면 그것만 다시
-    var key = m.join(',') + '|' + (CB.rev || 0) + '|' + CB.mode + '|' + _cbFill() + CB.tool + '|' + cv.width + 'x' + cv.height + '|' + area.x + ',' + area.y + ',' + area.w + ',' + area.h;
+    var key = m.join(',') + '|' + (CB.rev || 0) + '|' + (CB.mv ? CB.mv.id : '') + '|' + CB.mode + '|' + _cbFill() + CB.tool + '|' + cv.width + 'x' + cv.height + '|' + area.x + ',' + area.y + ',' + area.w + ',' + area.h;
     if (!CB.base || CB.baseKey !== key) {
       var bc = CB.base || (CB.base = document.createElement('canvas'));
       if (bc.width !== cv.width || bc.height !== cv.height) { bc.width = cv.width; bc.height = cv.height; }
@@ -219,7 +219,7 @@ function _cbDraw() {
       }
       bg.setTransform(m[0] * dpr, m[1] * dpr, m[2] * dpr, m[3] * dpr, m[4] * dpr, m[5] * dpr);
       bg.save(); bg.shadowColor = 'rgba(0,0,0,.45)'; bg.shadowBlur = 30 / CB.zoom; bg.fillStyle = '#fff'; bg.fillRect(area.x, area.y, area.w, area.h); bg.restore();
-      _cbPaint(bg, CB.img, CB.mode === 'orig' ? { shapes: [] } : CB.a, { area: area, marks: CB.mode !== 'orig' });
+      _cbPaint(bg, CB.img, CB.mode === 'orig' ? { shapes: [] } : _cbShown(), { area: area, marks: CB.mode !== 'orig' });
       bg.restore();
       CB.baseKey = key;
     }
@@ -229,6 +229,7 @@ function _cbDraw() {
     if (CB.mode !== 'orig') {
       g.save(); g.beginPath(); g.rect(area.x, area.y, area.w, area.h); g.clip();
       if (CB.draft) _cbShape(g, CB.draft, CB.img, true);
+      if (CB.mv && CB.mv.s) _cbShape(g, CB.mv.s, CB.img, true);   // v13.511 옮기는 중인 표시
       Object.keys(CB.peers).forEach(function (k) { var p = CB.peers[k]; if (p.live) _cbShape(g, p.live, CB.img, true); });
       g.restore();
     }
@@ -250,6 +251,7 @@ function _cbDraw() {
       if (cs) { g.setLineDash([8 / CB.zoom, 5 / CB.zoom]); g.lineWidth = 2 / CB.zoom; g.strokeStyle = '#fff'; g.strokeRect(cs.x, cs.y, cs.w, cs.h); }
       g.restore();
     }
+    if (CB.sel && CB.mode !== 'orig') _cbSelBox(g);   // v13.511 고른 표시 테두리
     // 같이 보는 사람 손가락
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     Object.keys(CB.peers).forEach(function (k) {
@@ -265,6 +267,8 @@ function _cbDraw() {
       g.restore();
     });
     if (CB.lvl) _cbDrawLevel(g);
+    if (CB.mag && CB.magPt) _cbLoupe(g, m, dpr, area);   // v13.511 🔍 돋보기
+    _cbSelUi();
     _cbZoomLabel();
   });
 }
@@ -311,10 +315,18 @@ function _cbApplyOp(op) {
   var a = CB.a;
   if (op.clear) a.shapes = [];
   if (op.remove && op.remove.length) a.shapes = a.shapes.filter(function (s) { return op.remove.indexOf(s.id) < 0; });
-  if (op.add) op.add.forEach(function (s) { a.shapes = a.shapes.filter(function (x) { return x.id !== s.id; }); a.shapes.push(s); });
+  if (op.add) op.add.forEach(function (s) { _cbPut(a.shapes, s); });
+  if (op.order) a.shapes = _cbReorder(a.shapes, op.order);
   if ('rot' in op) a.rot = op.rot;
   if ('crop' in op) a.crop = op.crop;
   CB.rev = (CB.rev || 0) + 1;
+}
+/* v13.511 같은 id 는 제자리에서 바꿈(옮기기) — 없으면 맨 위에. 순서(order)는 고른 id 순서대로, 목록에 없는 것은 맨 위 그대로 (서버 annPut · annReorder 와 같음) */
+function _cbPut(list, s) { for (var i = 0; i < list.length; i++) if (list[i].id === s.id) { list[i] = s; return; } list.push(s); }
+function _cbReorder(shapes, order) {
+  var ix = {}; order.forEach(function (id, i) { if (!(id in ix)) ix[id] = i; });
+  return shapes.filter(function (s) { return s.id in ix; }).sort(function (a, b) { return ix[a.id] - ix[b.id]; })
+    .concat(shapes.filter(function (s) { return !(s.id in ix); }));
 }
 function _cbDo(op, fromUndo) {
   _cbApplyOp(op);
@@ -327,8 +339,10 @@ function _cbDo(op, fromUndo) {
 }
 function _cbInverse(op, before) {
   var inv = {};
-  if (op.add) inv.remove = op.add.map(function (s) { return s.id; });
-  if (op.remove) inv.add = before.shapes.filter(function (s) { return op.remove.indexOf(s.id) >= 0; });
+  var had = {}; before.shapes.forEach(function (s) { had[s.id] = s; });
+  if (op.add) op.add.forEach(function (s) { if (had[s.id]) (inv.add = inv.add || []).push(had[s.id]); else (inv.remove = inv.remove || []).push(s.id); });   // v13.511 옮긴 것은 예전 자리로
+  if (op.remove) { inv.add = (inv.add || []).concat(before.shapes.filter(function (s) { return op.remove.indexOf(s.id) >= 0; })); inv.order = before.shapes.map(function (s) { return s.id; }); }   // 지운 것은 원래 층으로
+  if (op.order) inv.order = before.shapes.map(function (s) { return s.id; });
   if ('rot' in op) inv.rot = before.rot || 0;
   if ('crop' in op) inv.crop = before.crop || null;
   return inv;
@@ -349,6 +363,7 @@ function _cbSave(op) {
   var body = {};
   if (op.add) body.add = op.add;
   if (op.remove) body.remove = op.remove;
+  if (op.order) body.order = op.order;
   if ('rot' in op) body.rot = op.rot;
   if ('crop' in op) body.crop = op.crop;
   if (op.clear) body.clear = true;
@@ -423,6 +438,7 @@ function _cbShell(title) {
         '<button type="button" data-a="rotl" title="왼쪽으로 90° — 내 화면에만 · 저장됨 ([)">⟲</button><button type="button" data-a="rotr" title="오른쪽으로 90° — 내 화면에만 · 저장됨 (])">⟳</button>' +
         '<button type="button" data-a="angle" title="📐 비스듬히 바로잡기 · 수평 맞추기 · 모두에게">📐</button>' +
         '<button type="button" data-a="zout" title="작게 (-)">−</button><button type="button" class="cb-zl" data-a="fit" data-zl title="화면에 맞추기 (0)">100%</button><button type="button" data-a="zin" title="크게 (+)">＋</button>' +
+        '<button type="button" class="cb-mag" data-a="mag" title="🔍 돋보기 — 가리킨 곳 둘레를 크게 보며 정확히 그리기 (Z · 누를 때마다 2× → 4× → 끔 · Alt+휠로 배율)">🔍<small data-magv></small></button>' +
         '<button type="button" data-a="clear" title="표시 모두 지우기">🗑</button>' +
       '</div>' +
     '</div>';
@@ -574,6 +590,7 @@ function _cbSyncUi() {
   el.querySelectorAll('[data-w]').forEach(function (b) { b.classList.toggle('on', +b.dataset.w === CB.wSel); });
   el.classList.toggle('orig', CB.mode === 'orig');
   el.dataset.tool = CB.tool;
+  var mb = el.querySelector('[data-a="mag"]'); if (mb) { mb.classList.toggle('on', !!CB.mag); mb.querySelector('[data-magv]').textContent = CB.mag ? CB.mag + '×' : ''; }
   var u = el.querySelector('[data-a="undo"]'), r = el.querySelector('[data-a="redo"]');
   if (u) u.disabled = !CB.undo.length; if (r) r.disabled = !CB.redo.length;
 }
@@ -610,6 +627,7 @@ function _cbSetTool(t) {
   if (CB.textEl) _cbTextDone();
   var was = CB.tool;
   CB.tool = t; CB.cropSel = null; _cbCropMenu(false);
+  if (t !== 'sel') { CB.sel = null; CB.mv = null; }
   if (t !== 'pan' && t !== 'crop' && t !== 'level' && CB.mode === 'orig') CB.mode = 'mark';
   if (t === 'crop') { CB.mode = 'mark'; _cbFit(); _cbHint(_cbSkew(_cbAng()) ? '비스듬히 돌린 모습 그대로 고르세요 — 잘라서 복사 · 보내기' : '잘라낼 곳을 끌어 고르세요 — 원본은 그대로 남습니다'); }
   else if (was === 'crop' && _cbFill()) _cbFit();
@@ -631,6 +649,7 @@ function _cbBind() {
     if (b.dataset.color) { CB.color = b.dataset.color; _cbPref(); _cbSyncUi(); if (CB.tool === 'pan' || CB.tool === 'erase' || CB.tool === 'crop') _cbSetTool('pen'); return; }
     if (b.dataset.w) { CB.wSel = +b.dataset.w; _cbPref(); _cbSyncUi(); return; }
     if (b.dataset.cm) return _cbCropAct(b.dataset.cm);
+    if (b.dataset.sm) return _cbSelAct(b.dataset.sm);
     var a = b.dataset.a; if (!a) return;
     if (a === 'close') chatBoardClose();
     else if (a === 'undo') _cbUndo(false);
@@ -643,6 +662,7 @@ function _cbBind() {
     else if (a === 'rotshare') _cbRotShare();
     else if (a === 'rot0') _cbRotReset();
     else if (a === 'prev' || a === 'next') _cbNav(a === 'next' ? 1 : -1);
+    else if (a === 'mag') _cbMagCycle();
     else if (a === 'zin' || a === 'zout') _cbZoomAt(a === 'zin' ? 1.25 : 0.8, cv.clientWidth / 2, cv.clientHeight / 2);
     else if (a === 'fit') { if (Math.abs(CB.zoom - 1) < 0.01) _cbFit(); else _cbZoomAt(1 / CB.zoom, cv.clientWidth / 2, cv.clientHeight / 2); }
     else if (a === 'clear') { if (!CB.a.shapes.length) return; if (!(await wmConfirm('표시 ' + CB.a.shapes.length + '개를 모두 지울까요? (되돌리기 가능)'))) return; _cbCommit({ remove: CB.a.shapes.map(function (s) { return s.id; }) }); }
@@ -656,6 +676,7 @@ function _cbBind() {
   fine.addEventListener('keydown', function (e) { if (e.key === 'Escape') fine.blur(); });
   cv.addEventListener('wheel', function (e) {
     e.preventDefault();
+    if (CB.mag && e.altKey) { CB.mag = Math.max(1.5, Math.min(8, Math.round(CB.mag * (e.deltaY < 0 ? 1.25 : 0.8) * 10) / 10)); _cbSyncUi(); _cbDraw(); return; }   // v13.511 돋보기 배율
     var p = _cbPt(e);
     if (e.ctrlKey || e.metaKey || !e.shiftKey) _cbZoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)), p.sx, p.sy);
     else { CB.panX -= e.deltaY; _cbDraw(); }
@@ -665,7 +686,7 @@ function _cbBind() {
   cv.addEventListener('pointermove', _cbMove);
   cv.addEventListener('pointerup', _cbUp);
   cv.addEventListener('pointercancel', _cbUp);
-  cv.addEventListener('pointerleave', function () { if (CB && CB.fid) _cbCursor({ x: null }); });
+  cv.addEventListener('pointerleave', function () { if (!CB) return; if (CB.magPt) { CB.magPt = null; _cbDraw(); } if (CB.fid) _cbCursor({ x: null }); });
   document.addEventListener('keydown', _cbKey, true);
   window.addEventListener('resize', _cbResize);
 }
@@ -675,11 +696,13 @@ function _cbKey(e) {
   if (CB.textEl && e.target === CB.textEl) return;
   if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '') && CB.el.contains(e.target)) return;   // 칠판 안 입력칸만 (뒤 대화 입력칸에 초점이 남아 있어도 칠판 단축키는 됨)
   var k = e.key, mod = e.ctrlKey || e.metaKey;
+  if (k === 'Escape' && CB.sel) { e.preventDefault(); e.stopPropagation(); CB.sel = null; _cbDraw(); return; }   // v13.511 고른 것 풀기
   if (k === 'Escape' && CB.tool === 'level') { e.preventDefault(); e.stopPropagation(); CB.lvl = null; _cbSetTool('pan'); return; }
   if (k === 'Escape') { e.preventDefault(); e.stopPropagation(); if (CB.tool === 'crop' && CB.cropSel) { CB.cropSel = null; _cbCropMenu(false); _cbDraw(); } else chatBoardClose(); return; }
   if (mod && (k === 'z' || k === 'Z')) { e.preventDefault(); _cbUndo(e.shiftKey); return; }
   if (mod && (k === 'y' || k === 'Y')) { e.preventDefault(); _cbUndo(true); return; }
   if (mod && (k === 'c' || k === 'C')) { e.preventDefault(); _cbCopy(); return; }
+  if (mod && CB.sel && (e.code === 'BracketRight' || e.code === 'BracketLeft')) { e.preventDefault(); _cbSelAct(e.code === 'BracketRight' ? (e.shiftKey ? 'front' : 'fwd') : (e.shiftKey ? 'back' : 'bwd')); return; }
   if (mod && k === 'Enter' && !CB.fid) { e.preventDefault(); _cbSendDraft(); return; }
   if (mod) return;
   if (k === ' ') { e.preventDefault(); CB.space = true; CB.cv.style.cursor = 'grab'; document.addEventListener('keyup', function up(ev) { if (ev.key === ' ') { if (CB) { CB.space = false; CB.cv.style.cursor = ''; } document.removeEventListener('keyup', up); } }); return; }
@@ -693,6 +716,8 @@ function _cbKey(e) {
   if ((k === 'ArrowLeft' || k === 'ArrowRight') && CB.list) { e.preventDefault(); _cbNav(k === 'ArrowRight' ? 1 : -1); return; }
   if (k === 'Enter' && !CB.fid) { e.preventDefault(); _cbSendDraft(); return; }
   if ((k === 'Delete' || k === 'Backspace') && CB.cropSel) return;
+  if ((k === 'Delete' || k === 'Backspace') && CB.sel) { e.preventDefault(); _cbSelAct('del'); return; }
+  if (k === 'z' || k === 'Z') { e.preventDefault(); _cbMagCycle(); return; }
   var t = CB_KEYS[k.toLowerCase()]; if (t) { e.preventDefault(); _cbSetTool(t); }
 }
 function _cbDown(e) {
@@ -702,7 +727,7 @@ function _cbDown(e) {
   CB.ptrs[e.pointerId] = p;
   var ids = Object.keys(CB.ptrs);
   if (ids.length === 2) {   // 두 손가락 — 확대 · 옮기기
-    CB.draft = null; CB.drag = null;
+    CB.draft = null; CB.drag = null; CB.mv = null; CB.magPt = null;
     var a = CB.ptrs[ids[0]], b = CB.ptrs[ids[1]];
     CB.pinch = { d: Math.hypot(a.sx - b.sx, a.sy - b.sy), cx: (a.sx + b.sx) / 2, cy: (a.sy + b.sy) / 2 };
     _cbDraw(); return;
@@ -710,8 +735,15 @@ function _cbDown(e) {
   if (CB.textEl) { _cbTextDone(); return; }
   var tool = (CB.space || e.button === 1 || (CB.mode === 'orig' && CB.tool !== 'level')) ? 'pan' : CB.tool;
   var ip = _cbToImg(p.sx, p.sy);
-  CB.drag = { tool: tool, sx: p.sx, sy: p.sy, px: CB.panX, py: CB.panY, ix: ip.x, iy: ip.y, rx: (p.sx - CB.panX) / CB.zoom, ry: (p.sy - CB.panY) / CB.zoom };
-  if (tool === 'pan') { cv.style.cursor = 'grabbing'; return; }
+  if (CB.mag) CB.magPt = { sx: p.sx, sy: p.sy, touch: e.pointerType !== 'mouse' };
+  if (tool === 'sel') {   // v13.511 선택 — 누른 표시를 고름(끌면 옮김) · 빈 곳을 끌면 화면 옮기기
+    var hit = _cbPick(ip);
+    CB.sel = hit ? hit.id : null;
+    if (!hit) tool = 'pan';
+  }
+  CB.drag = { tool: tool, s0: tool === 'sel' ? _cbSelShape() : null, sx: p.sx, sy: p.sy, px: CB.panX, py: CB.panY, ix: ip.x, iy: ip.y, rx: (p.sx - CB.panX) / CB.zoom, ry: (p.sy - CB.panY) / CB.zoom };
+  if (tool === 'pan') { cv.style.cursor = 'grabbing'; if (CB.tool === 'sel' || CB.mag) _cbDraw(); return; }
+  if (tool === 'sel') { _cbDraw(); return; }
   if (tool === 'level') { CB.lvl = { x1: p.sx, y1: p.sy, x2: p.sx, y2: p.sy }; _cbDraw(); return; }
   if (tool === 'erase') { _cbErase(ip); return; }
   if (tool === 'text') { CB.drag = null; _cbText(ip, p); return; }
@@ -736,7 +768,18 @@ function _cbMove(e) {
   }
   var ip = _cbToImg(p.sx, p.sy), d0 = CB.drag;
   if (CB.fid) _cbCursor({ x: ip.x, y: ip.y, live: CB.draft });
-  if (!d0) return;
+  if (CB.mag && (e.pointerType === 'mouse' || CB.ptrs[e.pointerId])) CB.magPt = { sx: p.sx, sy: p.sy, touch: e.pointerType !== 'mouse' };
+  if (!d0) {
+    if (CB.tool === 'sel' && e.pointerType === 'mouse' && CB.mode !== 'orig') CB.cv.style.cursor = _cbPick(ip) ? 'move' : '';
+    if (CB.mag) _cbDraw();
+    return;
+  }
+  if (d0.tool === 'sel') {   // v13.511 고른 표시 옮기기
+    if (!d0.s0) return;
+    if (!CB.mv && Math.hypot(p.sx - d0.sx, p.sy - d0.sy) < 3) return;
+    CB.mv = { id: d0.s0.id, s: _cbMoved(d0.s0, ip.x - d0.ix, ip.y - d0.iy) };
+    _cbDraw(); return;
+  }
   if (d0.tool === 'pan') { CB.panX = d0.px + p.sx - d0.sx; CB.panY = d0.py + p.sy - d0.sy; _cbDraw(); return; }
   if (d0.tool === 'erase') { _cbErase(ip); return; }
   if (d0.tool === 'level') { CB.lvl.x2 = p.sx; CB.lvl.y2 = p.sy; _cbDraw(); return; }
@@ -766,12 +809,19 @@ function _cbMove(e) {
 function _cbUp(e) {
   if (!CB) return;
   delete CB.ptrs[e.pointerId];
+  if (CB.magPt && CB.magPt.touch) { CB.magPt = null; _cbDraw(); }   // 손가락을 떼면 돋보기도 치움
   if (CB.pinch) { if (Object.keys(CB.ptrs).length < 2) CB.pinch = null; return; }
   var d0 = CB.drag; CB.drag = null; CB.cv.style.cursor = '';
   if (!d0) return;
   if (d0.tool === 'level') {
     var L = CB.lvl; CB.lvl = null;
     if (L && Math.hypot(L.x2 - L.x1, L.y2 - L.y1) > 24) { var dl = _cbLvlDelta(L); _cbSetTool('pan'); if (Math.abs(dl) >= 0.05) { _cbTurn(dl); _cbHint('📏 ' + _cbDeg(Math.abs(dl)) + '° 바로잡았습니다' + (CB.fid ? ' — 내 화면에만' : '')); } }
+    else _cbDraw();
+    return;
+  }
+  if (d0.tool === 'sel') {
+    var mv = CB.mv; CB.mv = null;
+    if (mv && CB.a.shapes.some(function (x) { return x.id === mv.id; })) _cbCommit({ add: [mv.s] });   // 같은 id → 제자리(층 그대로)에서 바뀜
     else _cbDraw();
     return;
   }
@@ -804,6 +854,159 @@ function _cbSeg(p, x1, y1, x2, y2) {
 function _cbErase(p) {
   for (var i = CB.a.shapes.length - 1; i >= 0; i--) { if (_cbHit(CB.a.shapes[i], p)) { _cbCommit({ remove: [CB.a.shapes[i].id] }); return; } }
 }
+
+/* ─── v13.511 ⬚ 선택 · 옮기기 · 지우기 · 순서 ─── */
+function _cbShown() { return CB.mv ? Object.assign({}, CB.a, { shapes: CB.a.shapes.filter(function (s) { return s.id !== CB.mv.id; }) }) : CB.a; }
+function _cbSelShape() { if (!CB || !CB.sel) return null; for (var i = 0; i < CB.a.shapes.length; i++) if (CB.a.shapes[i].id === CB.sel) return CB.a.shapes[i]; return null; }
+/** 누른 곳의 맨 위 표시 — 선 위를 먼저, 없으면 닫힌 모양(사각형 · 원 · 글자 · 흐리게 · 집중) 안쪽 */
+function _cbPick(p) {
+  var L = CB.a.shapes, i;
+  for (i = L.length - 1; i >= 0; i--) if (_cbHit(L[i], p)) return L[i];
+  for (i = L.length - 1; i >= 0; i--) {
+    var s = L[i]; if (s.p || s.t === 'line' || s.t === 'arrow') continue;
+    var b = _cbBBox(s); if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return s;
+  }
+  return null;
+}
+var _cbMeasure = null;
+function _cbBBox(s) {
+  var r, pad = (s.w || 4) / 2;
+  if (s.p) {
+    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    for (var i = 0; i < s.p.length; i += 2) { x1 = Math.min(x1, s.p[i]); x2 = Math.max(x2, s.p[i]); y1 = Math.min(y1, s.p[i + 1]); y2 = Math.max(y2, s.p[i + 1]); }
+    r = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 }; if (s.t === 'hl') pad = (s.w || 4) * 2;
+  } else if (s.t === 'text') {
+    var lines = String(s.s || '').split('\n'), fs = s.fs || 32;
+    var g = (_cbMeasure || (_cbMeasure = document.createElement('canvas').getContext('2d')));
+    g.font = '700 ' + fs + 'px "Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+    r = { x: s.x, y: s.y, w: Math.max.apply(null, lines.map(function (l) { return g.measureText(l).width; })), h: lines.length * fs * 1.25 };
+    pad = fs / 7;
+  } else {
+    r = _cbNorm(s);
+    if (s.t === 'arrow') pad = Math.max(s.w * 3.5, 14 * _cbScale()) / 2;
+  }
+  pad += 3 / CB.zoom;
+  return { x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 };
+}
+function _cbMoved(s, dx, dy) {
+  var o = JSON.parse(JSON.stringify(s)), r1 = function (v) { return Math.round(v * 10) / 10; };
+  if (o.p) for (var i = 0; i < o.p.length; i += 2) { o.p[i] = r1(o.p[i] + dx); o.p[i + 1] = r1(o.p[i + 1] + dy); }
+  else { o.x = r1(o.x + dx); o.y = r1(o.y + dy); if (o.t !== 'text') { o.x2 = r1(o.x2 + dx); o.y2 = r1(o.y2 + dy); } }
+  return o;
+}
+/* 흐리게 → 집중 → 나머지 순으로 깔리므로(_cbPaint) 순서는 같은 무리 안에서만 의미가 있음 */
+function _cbGroup(s) { return s.t === 'blur' ? 0 : s.t === 'box' ? 1 : 2; }
+function _cbSelPos(s) {
+  var L = CB.a.shapes, i = L.indexOf(s), g = _cbGroup(s), top = true, bot = true;
+  for (var j = 0; j < L.length; j++) if (j !== i && _cbGroup(L[j]) === g) { if (j > i) top = false; else bot = false; }
+  return { top: top, bot: bot };
+}
+function _cbSelBox(g) {
+  var s = CB.mv ? CB.mv.s : _cbSelShape(); if (!s) return;
+  var b = _cbBBox(s), z = CB.zoom, h = 7 / z;
+  g.save();
+  g.lineWidth = 3.5 / z; g.strokeStyle = 'rgba(15,18,32,.55)'; g.strokeRect(b.x, b.y, b.w, b.h);
+  g.lineWidth = 1.6 / z; g.strokeStyle = '#fff'; g.setLineDash([6 / z, 4 / z]); g.strokeRect(b.x, b.y, b.w, b.h); g.setLineDash([]);
+  g.fillStyle = '#fff'; g.strokeStyle = '#2563EB'; g.lineWidth = 1.5 / z;
+  [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].forEach(function (c) { g.fillRect(c[0] - h / 2, c[1] - h / 2, h, h); g.strokeRect(c[0] - h / 2, c[1] - h / 2, h, h); });
+  g.restore();
+}
+/** 고른 표시 위에 뜨는 작은 메뉴 — 맨 앞 · 앞 · 뒤 · 맨 뒤 · 지우기 */
+function _cbSelUi() {
+  if (!CB) return;
+  var el = CB.el.querySelector('.cb-sm');
+  var s = CB.mode !== 'orig' && CB.tool === 'sel' ? (CB.mv ? CB.mv.s : _cbSelShape()) : null;
+  if (!s) { if (el) el.remove(); if (CB.sel && !_cbSelShape()) CB.sel = null; return; }
+  if (!el) {
+    el = document.createElement('div'); el.className = 'cb-sm'; el.setAttribute('role', 'toolbar'); el.setAttribute('aria-label', '고른 표시');
+    el.innerHTML =
+      '<button type="button" data-sm="front" title="맨 앞으로 (Ctrl+Shift+])">⤒<span>맨 앞으로</span></button>' +
+      '<button type="button" data-sm="fwd" title="앞으로 (Ctrl+])">↑<span>앞으로</span></button>' +
+      '<button type="button" data-sm="bwd" title="뒤로 (Ctrl+[)">↓<span>뒤로</span></button>' +
+      '<button type="button" data-sm="back" title="맨 뒤로 (Ctrl+Shift+[)">⤓<span>맨 뒤로</span></button>' +
+      '<i></i><button type="button" class="cb-sm-del" data-sm="del" title="지우기 (Delete)">🗑<span>지우기</span></button>';
+    CB.el.querySelector('.cb-stage').appendChild(el);
+  }
+  var pos = _cbSelPos(_cbSelShape() || s);
+  el.querySelector('[data-sm="front"]').disabled = el.querySelector('[data-sm="fwd"]').disabled = pos.top;
+  el.querySelector('[data-sm="back"]').disabled = el.querySelector('[data-sm="bwd"]').disabled = pos.bot;
+  el.style.visibility = CB.mv ? 'hidden' : '';
+  var b = _cbBBox(s), m = _cbViewM();
+  var pts = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].map(function (c) { return _cbApply(m, c[0], c[1]); });
+  var xs = pts.map(function (q) { return q.x; }), ys = pts.map(function (q) { return q.y; });
+  var cw = CB.cv.clientWidth, ch = CB.cv.clientHeight, w = el.offsetWidth, h = el.offsetHeight;
+  var top = Math.min.apply(null, ys) - h - 10;
+  if (top < 8) top = Math.min(ch - h - 8, Math.max.apply(null, ys) + 10);
+  var left = (Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2 - w / 2;
+  el.style.left = Math.round(Math.max(8, Math.min(cw - w - 8, left))) + 'px';
+  el.style.top = Math.round(Math.max(8, top)) + 'px';
+}
+function _cbSelAct(how) {
+  var s = _cbSelShape(); if (!s) return;
+  if (how === 'del') { CB.sel = null; _cbCommit({ remove: [s.id] }); return; }
+  var L = CB.a.shapes.slice(), i = L.indexOf(s), g = _cbGroup(s), j, pos = _cbSelPos(s);
+  if ((how === 'front' || how === 'fwd') && pos.top) return _cbHint('이미 맨 앞입니다');
+  if ((how === 'back' || how === 'bwd') && pos.bot) return _cbHint('이미 맨 뒤입니다');
+  L.splice(i, 1);
+  if (how === 'front') L.push(s);
+  else if (how === 'back') L.unshift(s);
+  else if (how === 'fwd') { for (j = i; j < L.length && _cbGroup(L[j]) !== g; j++); L.splice(j + 1, 0, s); }   // 같은 무리의 바로 위 표시 다음으로
+  else if (how === 'bwd') { for (j = i - 1; j >= 0 && _cbGroup(L[j]) !== g; j--); L.splice(Math.max(0, j), 0, s); }   // 바로 아래 표시 앞으로
+  _cbCommit({ order: L.map(function (x) { return x.id; }) });
+  if (g !== 2) _cbHint('흐리게 · 집중은 늘 다른 표시 아래에 깔립니다 — 같은 종류끼리 순서가 바뀝니다', 4000);
+}
+
+/* ─── v13.511 🔍 돋보기 — 가리킨 곳 둘레를 동그랗게 크게 (나만 보임 · 저장 안 됨) ─── */
+function _cbMagCycle() {
+  if (!CB) return;
+  CB.mag = !CB.mag ? 2 : CB.mag < 4 ? 4 : 0;
+  if (!CB.mag) CB.magPt = null;
+  _cbHint(CB.mag ? '🔍 돋보기 ' + CB.mag + '× — 가리킨 곳이 크게 보입니다 · Alt+휠로 배율 · Z 를 다시 누르면 ' + (CB.mag < 4 ? '4×' : '끔') : '🔍 돋보기 끔');
+  _cbSyncUi(); _cbDraw();
+}
+function _cbLoupe(g, m, dpr, area) {
+  var P = CB.magPt, k = CB.mag, cw = CB.cv.clientWidth, ch = CB.cv.clientHeight;
+  var r = Math.round(Math.max(54, Math.min(110, Math.min(cw, ch) * 0.17)));
+  var cx = P.sx, cy = P.sy;
+  if (P.touch) {   // 손가락에 가리지 않게 위로 (위가 모자라면 아래로)
+    cy = P.sy - r - 44; if (cy < r + 6) cy = P.sy + r + 44;
+    cx = Math.max(r + 6, Math.min(cw - r - 6, cx));
+  }
+  g.save();
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.save();
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.clip();
+  g.fillStyle = '#161a27'; g.fillRect(cx - r, cy - r, r * 2, r * 2);
+  // 가리킨 점(P)이 돋보기 가운데(c)에 오게 k 배 — 화면을 늘리지 않고 사진에서 다시 그려 흐릿하지 않게
+  g.setTransform(m[0] * k * dpr, m[1] * k * dpr, m[2] * k * dpr, m[3] * k * dpr, (cx + (m[4] - P.sx) * k) * dpr, (cy + (m[5] - P.sy) * k) * dpr);
+  g.fillStyle = '#fff'; g.fillRect(area.x, area.y, area.w, area.h);
+  var keep = _cbDim;
+  _cbPaint(g, CB.img, CB.mode === 'orig' ? { shapes: [] } : _cbShown(), { area: area, marks: CB.mode !== 'orig' });
+  _cbDim = keep;
+  if (CB.mode !== 'orig') {
+    g.beginPath(); g.rect(area.x, area.y, area.w, area.h); g.clip();
+    if (CB.draft) _cbShape(g, CB.draft, CB.img, true);
+    if (CB.mv && CB.mv.s) _cbShape(g, CB.mv.s, CB.img, true);
+  }
+  g.restore();
+  // 테두리 · 가운데 십자 · 배율
+  g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 16;
+  g.strokeStyle = '#fff'; g.lineWidth = 3.5; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  g.shadowBlur = 0;
+  g.strokeStyle = 'rgba(15,23,42,.6)'; g.lineWidth = 1; g.beginPath(); g.arc(cx, cy, r + 2.2, 0, Math.PI * 2); g.stroke();
+  [['rgba(15,23,42,.7)', 3], ['#fff', 1.2]].forEach(function (st) {
+    g.strokeStyle = st[0]; g.lineWidth = st[1]; g.beginPath();
+    g.moveTo(cx - 9, cy); g.lineTo(cx - 3, cy); g.moveTo(cx + 3, cy); g.lineTo(cx + 9, cy);
+    g.moveTo(cx, cy - 9); g.lineTo(cx, cy - 3); g.moveTo(cx, cy + 3); g.lineTo(cx, cy + 9); g.stroke();
+  });
+  var t = k + '×';
+  g.font = '700 11px "Malgun Gothic",sans-serif';
+  var tw = g.measureText(t).width;
+  g.fillStyle = 'rgba(15,18,32,.85)'; _cbRound(g, cx - tw / 2 - 7, cy + r - 24, tw + 14, 17, 8.5); g.fill();
+  g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillText(t, cx, cy + r - 15.5);
+  g.restore();
+}
+
 /* 글자 — 누른 곳에 바로 쓰기 (Enter 넣기 · Shift+Enter 줄바꿈 · Esc 그만) */
 function _cbText(ip, sp) {
   var ta = document.createElement('textarea');
@@ -928,7 +1131,7 @@ var _cbCurT = 0, _cbCurQ = null, _cbCurTimer = 0, _cbCurPend = 0;
 function _cbCursor(o, now) {
   if (!CB || !CB.fid) return;
   var body = { x: o.x, y: o.y, bye: o.bye };
-  if (o.op) body.op = { add: o.op.add, remove: o.op.remove, clear: o.op.clear, rot: o.op.rot, crop: o.op.crop };
+  if (o.op) body.op = { add: o.op.add, remove: o.op.remove, order: o.op.order, clear: o.op.clear, rot: o.op.rot, crop: o.op.crop };
   if (o.op && !('crop' in o.op)) delete body.op.crop;
   if ('live' in o) {
     var s = o.live; body.lt = s ? s.t : null; body.c = s ? s.c : CB.color; body.w = s ? s.w : 0;

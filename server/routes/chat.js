@@ -941,6 +941,15 @@ function annShape(s, uid) {
   return o;
 }
 /* v13.409 회전은 0.1° 단위 (비스듬히 찍힌 사진 바로잡기) — 0 이상 360 미만 */
+/* v13.511 표시 순서 — 고른 id 순서대로 앞(아래)부터, 목록에 없는 것(그사이 남이 그린 것)은 맨 위에 그대로 */
+function annOrderList(v) { return Array.isArray(v) ? v.slice(0, ANN_MAX).map(String) : null; }
+function annReorder(shapes, order) {
+  var ix = {}; order.forEach(function (id, i) { if (!(id in ix)) ix[id] = i; });
+  var inL = shapes.filter(function (s) { return s.id in ix; }).sort(function (a, b) { return ix[a.id] - ix[b.id]; });
+  return inL.concat(shapes.filter(function (s) { return !(s.id in ix); }));
+}
+/* 같은 id 는 제자리에서 바꿈(옮기기 · 고치기) — 없으면 맨 위에 */
+function annPut(shapes, s) { var i = shapes.findIndex(function (x) { return x.id === s.id; }); if (i >= 0) shapes[i] = s; else shapes.push(s); }
 function annAng(v) { v = Math.round((+v || 0) * 10) / 10; v = ((v % 360) + 360) % 360; return v >= 359.95 ? 0 : Math.round(v * 10) / 10; }
 function annRect(c) {
   if (!c || typeof c !== 'object') return null;
@@ -975,13 +984,16 @@ router.post('/files/:fid/annot', async function (req, res) {
     var b = req.body || {}, uid = me(req);
     var add = (Array.isArray(b.add) ? b.add : []).slice(0, 50).map(function (s) { return annShape(s, uid); }).filter(Boolean);
     var remove = (Array.isArray(b.remove) ? b.remove : []).slice(0, 600).map(String);
+    var order = annOrderList(b.order);
     var op = { add: add, remove: remove };
+    if (order) op.order = order;
     async function apply(a0, write) {
       var a = a0 ? JSON.parse(JSON.stringify(a0)) : { rot: 0, crop: null, shapes: [] };
       a.shapes = Array.isArray(a.shapes) ? a.shapes : [];
       if (b.clear) { a.shapes = []; op.clear = true; }
       if (remove.length) a.shapes = a.shapes.filter(function (s) { return remove.indexOf(s.id) < 0; });
-      add.forEach(function (s) { a.shapes = a.shapes.filter(function (x) { return x.id !== s.id; }); a.shapes.push(s); });
+      add.forEach(function (s) { annPut(a.shapes, s); });
+      if (order) a.shapes = annReorder(a.shapes, order);
       if (b.rot != null) { a.rot = annAng(b.rot); op.rot = a.rot; }
       if ('crop' in b) { a.crop = annRect(b.crop); op.crop = a.crop; }
       // v13.455 원본 사진 크기 — 표시 좌표의 기준. 대화 속 작은 미리보기에 줄여 그릴 때 씀 (메시지의 w · h 는 자리 잡기용이라 예전 사진은 미리보기 크기)
@@ -1092,6 +1104,7 @@ router.post('/files/:fid/cursor', async function (req, res) {
     if (b.op && typeof b.op === 'object' && !c.ro) {
       op = { add: (Array.isArray(b.op.add) ? b.op.add : []).slice(0, 50).map(function (s) { return annShape(s, uid); }).filter(Boolean), remove: (Array.isArray(b.op.remove) ? b.op.remove : []).slice(0, 600).map(String) };
       if (b.op.clear) op.clear = true;
+      var ord = annOrderList(b.op.order); if (ord) op.order = ord;
       if (b.op.rot != null) op.rot = annAng(b.op.rot);
       if ('crop' in b.op) op.crop = annRect(b.op.crop);
     }

@@ -4676,6 +4676,18 @@ html.wm-desktop #mMessages{--cx-h:calc(100dvh - 96px)}
 .cb-view [data-a="angle"].on{background:rgba(250,204,21,.22);box-shadow:inset 0 0 0 1px rgba(250,204,21,.6)}
 .cb[data-tool="level"] .cb-stage canvas{cursor:crosshair}
 .cb-stage:has(.cb-cm) .cb-ang{display:none}
+/* v13.511 ⬚ 고른 표시 메뉴 (맨 앞 · 앞 · 뒤 · 맨 뒤 · 지우기) · 🔍 돋보기 단추 */
+.cb-sm{position:absolute;z-index:3;display:flex;align-items:center;gap:2px;padding:4px;border-radius:12px;background:rgba(15,18,32,.94);border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 32px rgba(0,0,0,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);white-space:nowrap}
+.cb-sm button{display:inline-flex;align-items:center;gap:4px;height:30px;border:0;border-radius:8px;background:none;padding:0 9px;font-size:12px;font-weight:600;color:#e5e7eb}
+.cb-sm button:hover:not(:disabled){background:rgba(255,255,255,.14)}
+.cb-sm button:disabled{opacity:.35;cursor:default}
+.cb-sm i{width:1px;height:18px;margin:0 3px;background:rgba(255,255,255,.16)}
+.cb-sm .cb-sm-del{color:#fca5a5}
+.cb-sm .cb-sm-del:hover{background:rgba(239,68,68,.22)}
+.cb[data-tool="sel"] .cb-stage canvas{cursor:default}
+.cb-view .cb-mag small{font-size:10px;font-weight:800;margin-left:1px}
+.cb-view .cb-mag.on{background:rgba(96,165,250,.25);box-shadow:inset 0 0 0 1px rgba(96,165,250,.7)}
+@media (max-width:560px){.cb-sm button span{display:none}.cb-sm button{padding:0 10px;font-size:15px}}
 .cb-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:44px;height:64px;border:0;border-radius:14px;background:rgba(15,18,32,.55);color:#fff;font-size:34px;line-height:1;display:flex;align-items:center;justify-content:center;opacity:.75;transition:opacity .15s,background .15s}
 .cb-nav:hover:not(:disabled){opacity:1;background:rgba(15,18,32,.85)}
 .cb-nav:disabled{opacity:.2;cursor:default}
