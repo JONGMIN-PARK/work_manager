@@ -51,13 +51,16 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     // 앱 시작(저장된 로그인으로 새로 고침) — 검은 인트로가 걷힌 뒤 손대지 않아도 머리 줄 색으로 바뀜
     await page.evaluate(function () { setPage('mywork'); aTh('pearl'); }); await wait(1200);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    var dark0 = await page.waitForFunction(function () { var e = document.getElementById('wmTopTint'); return document.getElementById('initLoading') && e && e.style.backgroundColor; }, { timeout: 20000 }).then(function () { return page.evaluate(function () { return document.getElementById('wmTopTint').style.backgroundColor; }); }).catch(function () { return ''; });
+    var dark0 = await page.waitForFunction(function () { var e = document.getElementById('wmTopTint'); return document.getElementById('initLoading') && e && e.style.backgroundColor; }, { timeout: 20000 }).then(function () { return page.evaluate(function () { var e = document.getElementById('wmTopTint'); window.__tn0 = e.getAttribute('data-n'); return e.style.backgroundColor; }); }).catch(function () { return ''; });
     await page.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
     await wait(500);
     var after = await page.evaluate(function () { var e = document.getElementById('wmTopTint'); return { t: e && e.style.backgroundColor, m: document.querySelector('meta[name="theme-color"]').content }; });
     var ap = await px();
     var tc = after.t ? after.t.match(/\d+/g).map(Number) : [0, 0, 0];
     check(tc[0] + tc[1] + tc[2] > 600 && near(tc, ap) && near(hex2(after.m), ap), '시작 인트로(' + dark0 + ') 뒤 바로 머리 줄 색 — 띠 ' + after.t + ' · meta ' + after.m + ' · 실제 rgb(' + ap + ')');
+    // v13.507 아이폰은 색만 바뀌면 다시 안 읽음 → 인트로 뒤 띠가 새 요소로 갈아 끼워져야 함 · 띠는 늘 하나
+    var rep = await page.evaluate(function () { var es = document.querySelectorAll('#wmTopTint'); return { cnt: es.length, n0: window.__tn0, n1: es[0] && es[0].getAttribute('data-n') }; });
+    check(rep.cnt === 1 && rep.n0 && rep.n1 && rep.n0 !== rep.n1, '인트로 뒤 띠를 새 요소로 갈아 끼움 · 하나만 ' + JSON.stringify(rep));
     await page.screenshot({ path: path.join(SHOT, 'topbar-color.png'), clip: { x: 0, y: 0, width: 402, height: 120 } });
     check(!errs.length, '페이지 오류 없음 ' + errs.join(' | '));
   } catch (e) { fail++; console.log('FAIL 예외', e && e.stack || e); }

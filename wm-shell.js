@@ -175,14 +175,19 @@
    *   휴대폰 틀은 body 자체가 고정 · 배경은 캔버스로 넘어가 투명 → 시작 때 덮고 있던 검은 인트로 색이 그대로 남고,
    *   아일랜드 패널(고정 요소)을 열고 닫아야 그제야 다시 읽던 문제. → 맨 위에 머리 줄 색과 같은 얇은 고정 띠를 두고 색을 같이 바꿈 */
   var IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  /* v13.507 아이폰은 고정 요소의 '색만' 바뀌면 다시 읽지 않음(요소가 새로 생기거나 없어질 때만 — 아일랜드 패널을 열고 닫으면 고쳐지던 이유).
+   *   → 색이 바뀔 때마다 띠를 새 요소로 갈아 끼움(새 띠를 먼저 넣고 옛 띠를 뺌 — 그 사이 빈틈 없게). */
+  var tintN = 0;
   function paintTint(col) {
     if (!IOS || !document.body) return;
-    if (!tint || !tint.isConnected) {
-      tint = document.createElement('div'); tint.id = 'wmTopTint'; tint.setAttribute('aria-hidden', 'true');
-      tint.style.cssText = 'position:fixed;left:0;right:0;top:0;height:3px;z-index:2147483646;margin:0;padding:0;border:0';
-      docEl.appendChild(tint);   // body 밖 — body 자식 변화 감시에 안 걸리게
-    }
-    tint.style.backgroundColor = col;
+    if (tint && tint.isConnected && tint.style.backgroundColor && tint.getAttribute('data-col') === col) return;
+    var old = tint, nt = document.createElement('div');
+    nt.id = 'wmTopTint'; nt.setAttribute('aria-hidden', 'true'); nt.setAttribute('data-col', col); nt.setAttribute('data-n', String(++tintN));
+    nt.style.cssText = 'position:fixed;left:0;right:0;top:0;height:3px;z-index:2147483646;margin:0;padding:0;border:0;pointer-events:none;background-color:' + col;
+    docEl.appendChild(nt);   // body 밖 — body 자식 변화 감시에 안 걸리게
+    tint = nt;
+    if (old && old !== nt && old.parentNode) old.parentNode.removeChild(old);
+    void nt.offsetHeight;   // 바로 배치 계산 — 사파리가 고정 요소 바뀜을 알아채게
   }
   function parse(c) {
     if (!c) return null;
@@ -203,7 +208,7 @@
   /** 이 점에 실제로 보이는 색 — 위 요소부터 아래로 반투명을 겹침 */
   function colorAt(x, y) {
     var all = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [document.elementFromPoint(x, y)], el = null, layers = [];
-    for (var k = 0; k < all.length; k++) if (all[k] && all[k] !== tint) { el = all[k]; break; }   // 맨 위 색 띠(tint) 자신은 건너뜀
+    for (var k = 0; k < all.length; k++) if (all[k] && all[k].id !== 'wmTopTint') { el = all[k]; break; }   // 맨 위 색 띠(tint) 자신은 건너뜀
     while (el && el.nodeType === 1) {
       var cs = getComputedStyle(el), g = grad(cs.backgroundImage), c = parse(cs.backgroundColor);
       if (g && g[3] > 0.01) { layers.push(g); if (g[3] >= 0.99) break; }   // 그라데이션 = 배경색 위에 그려짐
@@ -230,6 +235,10 @@
   }
   function soon(ms) { if (t) clearTimeout(t); t = setTimeout(sync, ms == null ? 60 : ms); }
   window.wmTopBarSync = function () { last = ''; soon(0); };
+  /* v13.507 인트로 · 로그인 창처럼 화면 전체를 덮던 것이 걷힌 뒤 — 색이 천천히 바뀌는 테마까지 몇 번 더 맞춤 */
+  window.wmTopBarSettle = function () {
+    [0, 150, 400, 900, 1800, 3500].forEach(function (ms) { setTimeout(function () { last = ''; sync(); }, ms); });
+  };
   window.wmTopBarColor = function () { return last; };
   try { new MutationObserver(function () { soon(); setTimeout(function () { soon(0); }, 380); setTimeout(function () { soon(0); }, 900); }).observe(docEl, { attributes: true, attributeFilter: ['data-theme', 'class'] }); } catch (e) {}
   function start() {

@@ -238,7 +238,7 @@ window.wmSplash = (function () {
     try { if (typeof currentUser !== 'undefined' && currentUser && currentUser.name) localStorage.setItem('wm_sp_name', currentUser.name); } catch (e) {}   // v13.384 다음 인트로 인사
     setTimeout(function () {
       el.classList.add('out');
-      setTimeout(function () { if (el.parentNode) el.remove(); }, 460);
+      setTimeout(function () { if (el.parentNode) el.remove(); try { window.wmTopBarSettle && window.wmTopBarSettle(); } catch (e) {} }, 460);   // v13.507 인트로 걷힌 뒤 아이폰 상단 색 다시
     }, 220);
   }
   function start() {

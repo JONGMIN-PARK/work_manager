@@ -412,6 +412,7 @@ function hideLoginOverlay() {
   var el = document.getElementById('loginOverlay');
   if (!el) return;
   el.style.display = 'none';
+  try { window.wmTopBarSettle && window.wmTopBarSettle(); } catch (e) {}   // v13.507 아이폰 상단 색 다시
 }
 
 function buildLoginHTML() {
