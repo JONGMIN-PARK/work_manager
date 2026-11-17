@@ -1116,13 +1116,20 @@ function mwLoadTimelineMount(el) {
 
 /* v13.403 창 크기를 줄이거나 늘려 좁은 창 ↔ 넓은 창이 바뀌면 그 쪽에서 기억한 접힘으로 */
 (function () {
-  var t = null;
+  var t = null, lw = window.innerWidth;
   window.addEventListener('resize', function () {
     clearTimeout(t);
     t = setTimeout(function () {
+      var wch = window.innerWidth !== lw; lw = window.innerWidth;   // 폭이 바뀐 때만 (휴대폰 키보드 · 주소 줄은 높이만 바뀜)
       [typeof _mtlMain !== 'undefined' ? _mtlMain : null, typeof _mtlLoad !== 'undefined' ? _mtlLoad : null].forEach(function (tl) {
-        if (tl && tl.el && tl.el.isConnected && tl._fitFold()) tl.update();
+        if (!tl || !tl.el || !tl.el.isConnected) return;
+        var f = tl._fitFold();
+        // v13.515 내 업무 타임라인 — 창 폭이 바뀌면 오늘로 (오늘 단추와 같은 자리 · 오늘을 고름). 가려져 있으면 돌아올 때 mount 가 함
+        if (wch && tl === _mtlMain && tl.el.offsetParent) { tl.st.center = null; tl.calMonth = null; tl.update(); tl.save(true); tl.setPick(mwToday()); }
+        else if (f) tl.update();
       });
     }, 200);
   });
 })();
+/** 내 업무에서 다른 화면으로 나갈 때 (mode.js setPage) — 돌아오면 타임라인이 오늘로 가서 오늘을 고름 (v13.515) */
+function mwTimelineLeave() { if (_mtlMain) _mtlMain._day = null; }

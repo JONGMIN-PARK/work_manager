@@ -52,6 +52,7 @@ function setPage(page){
   if(curPage==='mindmap'&&page!=='mindmap'&&typeof mmOnLeave==='function')mmOnLeave();  // 저장 마무리 · 편집 잠금 해제
   if(curPage==='notebook'&&page!=='notebook'&&typeof _nbFlush==='function')_nbFlush();  // 노트북 — 남은 저장 마저
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwOnLeave==='function')mwOnLeave();  // 지금 상태 기억 — 다시 오면 그대로 (v13.286)
+  if(curPage==='mywork'&&page!=='mywork'&&typeof mwTimelineLeave==='function')mwTimelineLeave();  // 돌아오면 타임라인은 오늘로 (v13.515)
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwPanelClose==='function')mwPanelClose();
   if(curPage==='mywork'&&page!=='mywork'&&typeof mwNotesClose==='function')mwNotesClose();  // 📝 노트 서랍 — 저장 마저 하고 닫음 (다른 화면 위에 떠 있지 않게 · v13.331)  // 내 업무 상세 패널 — 남은 저장 마저 하고 닫음 (다른 화면을 가리지 않게)
   curPage=page;

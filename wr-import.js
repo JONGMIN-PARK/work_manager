@@ -217,6 +217,47 @@ function wrMergeDiff(existing,merged){
   var deleteIds=[];byId.forEach(function(r,id){if(!kept.has(id))deleteIds.push(r.id)});
   return{insert:insert,update:update,deleteIds:deleteIds};
 }
+/* ═══ v13.515 묻지 않고 합치기 — 🔄 최근 내려받기(애니웍스)용 ═══
+   ① 날짜·이름·수주번호·시간·내용이 같은 행 → 그대로 (업무분장 · 약자 등이 달라졌으면 그 칸만 고침)
+   ② 날짜·이름·수주번호만 같은 행 → 애니웍스에서 고친 것으로 보고 그 행을 고침 (번호 유지 → 마일스톤 연결 그대로). 시간 같은 것 → 내용 같은 것 → 순서대로 짝지음
+   ③ 짝이 없는 새 행 → 추가
+   기존에만 있는 행은 지우지 않는다 — 받은 기간(scope.from~to, YYYYMMDD) 안에서 파일에 나온 사람의 것만 세어 missing 으로 알림.
+   돌려줌 { merged, added, updated, same, missing, by: { 사업부: { added, updated, same } } } */
+function wrAutoMerge(existing,newRecs,scope){
+  scope=scope||{};
+  var merged=existing.slice(),used=new Set(),byId={},byLoose={};
+  existing.forEach(function(r,i){var a=wrIdKey(r),b=wrLooseKey(r);(byId[a]=byId[a]||[]).push(i);(byLoose[b]=byLoose[b]||[]).push(i)});
+  var out={merged:merged,added:0,updated:0,same:0,missing:0,by:{}};
+  function tally(nr,k){var d=nr.dept||'';var b=out.by[d]=out.by[d]||{added:0,updated:0,same:0};b[k]++;out[k]++}
+  function put(i,nr){
+    var old=existing[i],nx=Object.assign({},old);
+    WR_SAVED_FIELDS.forEach(function(k){
+      var v=nr[k];
+      if(v===undefined||v===null)return;
+      if((k==='ocmt'||k==='oclient')&&v==='')return;   // 파일에 없는 수주명 · 거래처로 지우지 않음
+      if(k==='dept'&&old.dept)return;                    // 이미 적힌 사업부는 그대로
+      nx[k]=v;
+    });
+    used.add(i);
+    if(WR_SAVED_FIELDS.some(function(k){return _wrNorm(k,nx[k])!==_wrNorm(k,old[k])})){merged[i]=nx;tally(nr,'updated')}else tally(nr,'same');
+  }
+  var left=[],names=new Set();
+  newRecs.forEach(function(nr){
+    names.add(nr.name);
+    var c=(byId[wrIdKey(nr)]||[]).find(function(i){return !used.has(i)});
+    if(c!==undefined)put(c,nr);else left.push(nr);
+  });
+  left.forEach(function(nr){
+    var cs=(byLoose[wrLooseKey(nr)]||[]).filter(function(i){return !used.has(i)});
+    if(!cs.length){merged.push(nr);tally(nr,'added');return}
+    var h=_wrNorm('hours',nr.hours),t=(nr.content||'').trim();
+    var c=cs.find(function(i){return _wrNorm('hours',existing[i].hours)===h});
+    if(c===undefined)c=cs.find(function(i){return (existing[i].content||'').trim()===t});
+    put(c===undefined?cs[0]:c,nr);
+  });
+  if(scope.from&&scope.to)existing.forEach(function(r,i){if(!used.has(i)&&r.date>=scope.from&&r.date<=scope.to&&names.has(r.name))out.missing++});
+  return out;
+}
 /* 서버 목록과 같은 순서 (날짜 최신 → 이름 → 수주번호) */
 function wrSortRecords(arr){
   return arr.sort(function(a,b){
@@ -699,10 +740,12 @@ function showDeptSelectModal(){
     ov.onclick=function(e){if(e.target===ov)close('')};
   });
 }
+/* v13.515 다 넣을 때까지 기다림 — 예전엔 읽기를 걸어 두고 바로 돌아와, 여러 파일을 넣으면 같은 기존 데이터를 놓고 동시에 합쳤다 */
 async function hFile(file,enc){if(!file)return;document.getElementById('fnDisp').textContent=file.name;
   var dept=detectDept(file.name);
   if(dept===null)dept=await showDeptSelectModal();
-  const r=new FileReader();r.onload=async function(e){await ldBuf(e.target.result,enc||cEnc,dept)};r.readAsArrayBuffer(file)}
+  var buf=await new Promise(function(res,rej){const r=new FileReader();r.onload=function(e){res(e.target.result)};r.onerror=function(){rej(r.error||new Error('파일을 읽지 못했습니다'))};r.readAsArrayBuffer(file)});
+  await ldBuf(buf,enc||cEnc,dept)}
 
 /* 여러 파일 순차 처리 */
 async function hFiles(fileList){
@@ -712,7 +755,7 @@ async function hFiles(fileList){
   var files=Array.from(fileList).filter(function(f){return/\.(xls|xlsx|html?|csv)$/i.test(f.name)});
   if(typeof wmLib==='function')await wmLib('xlsx').catch(function(){});  // 엑셀 도구는 처음 쓸 때 받음 (v13.310)
   if(!files.length){showToast('지원하지 않는 파일 형식입니다.','error');return}
-  if(files.length===1){hFile(files[0]);return}
+  if(files.length===1){await hFile(files[0]);return}
   showToast('📂 '+files.length+'개 파일 로드 중...');
   for(var i=0;i<files.length;i++){
     await hFile(files[i]);
