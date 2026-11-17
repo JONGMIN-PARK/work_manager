@@ -11,6 +11,7 @@
  *   DELETE /api/notices/:id
  *   POST   /api/notices/:id/read    읽음 · POST /api/notices/read-all
  *   GET    /api/notices/:id/readers 읽은 사람 · 안 읽은 사람 (작성자)
+ *   GET    /api/notices/:id/images  붙인 그림 (v13.514) — 쓰기 · 고치기에 images: [data URL…] 을 주면 통째로 바꿈 (8장 · 한 장 약 1.2MB 까지)
  *   GET    /api/notices/writers     작성자 지정 화면용 사용자 목록 (관리자) · PUT /api/notices/writers { userIds }
  */
 var express = require('express');
@@ -26,6 +27,21 @@ router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
 var LEVELS = ['normal', 'important'];
+var IMG_MAX = 8, IMG_LEN = 1700000;
+var IMG_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
+var IMG_N = '(SELECT COUNT(*) FROM notice_images i WHERE i.notice_id = n.id) AS img_n';
+/** 그림 목록 검사 — 틀리면 null */
+function cleanImages(v) {
+  if (!Array.isArray(v) || v.length > IMG_MAX) return null;
+  for (var i = 0; i < v.length; i++) { if (typeof v[i] !== 'string' || v[i].length > IMG_LEN || !IMG_RE.test(v[i])) return null; }
+  return v;
+}
+async function saveImages(noticeId, list) {
+  await db.query('DELETE FROM notice_images WHERE notice_id = $1', [noticeId]);
+  for (var i = 0; i < list.length; i++) await db.query('INSERT INTO notice_images (notice_id, idx, src) VALUES ($1,$2,$3)', [noticeId, i, list[i]]);
+}
+/** 알림 · 미리보기용 — 꾸미기 기호를 뺀 글 */
+function plain(s) { return String(s || '').replace(/\[그림\s*\d+\]/g, ' ').replace(/^\s*(#{1,2}|>|-{3,})\s?/gm, '').replace(/\*\*|==/g, '').replace(/\s+/g, ' ').trim(); }
 function me(req) { return req.user.sub; }
 function isAdmin(req) { return req.user.role === 'admin'; }
 async function canWrite(req) {
@@ -59,6 +75,7 @@ function row(r) {
   };
   if (r.is_read !== undefined) o.read = !!r.is_read;
   if (r.read_n !== undefined) o.readCount = Number(r.read_n) || 0;
+  if (r.img_n !== undefined) o.imageCount = Number(r.img_n) || 0;
   return o;
 }
 var LIVE = "n.status = 'published' AND (n.expires_at IS NULL OR n.expires_at > now())";
@@ -73,7 +90,7 @@ async function announce(req, n, op) {
     var ids = await allUserIds(req.tenant.id);
     hub.publish(ids, 'wmnotice', { op: op, id: Number(n.id), title: n.title, level: n.level, by: me(req) });
     if (op === 'publish') {
-      var body = String(n.body || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      var body = plain(n.body).slice(0, 120);
       push.sendToUsers(ids.filter(function (u) { return u !== me(req); }), { title: (n.level === 'important' ? '📢 [중요] ' : '📢 공지 — ') + n.title, body: body, tag: 'notice-' + n.id, go: 'notice:' + n.id });
     }
   } catch (e) { console.error('[notices/announce]', e.message); }
@@ -91,7 +108,7 @@ async function loadOwn(req, res) {
 router.get('/', async function (req, res) {
   try {
     var writer = await canWrite(req), manage = writer && req.query.manage === '1';
-    var sql = 'SELECT n.*, EXISTS (SELECT 1 FROM notice_reads x WHERE x.notice_id = n.id AND x.user_id = $2) AS is_read' +
+    var sql = 'SELECT n.*, ' + IMG_N + ', EXISTS (SELECT 1 FROM notice_reads x WHERE x.notice_id = n.id AND x.user_id = $2) AS is_read' +
       (manage ? ', (SELECT COUNT(*) FROM notice_reads x WHERE x.notice_id = n.id) AS read_n' : '') +
       ' FROM notices n WHERE n.tenant_id = $1 AND ' + (manage ? (isAdmin(req) ? 'TRUE' : "(n.author_id = $2 OR (" + LIVE + '))') : LIVE) +
       ' ORDER BY ' + (manage ? '' : 'n.pinned DESC, ') + "COALESCE(n.published_at, n.updated_at) DESC LIMIT 200";
@@ -104,9 +121,9 @@ router.get('/', async function (req, res) {
 
 router.get('/summary', async function (req, res) {
   try {
-    var r = await db.query('SELECT n.id, n.title, n.body, n.level, n.pinned, n.published_at, n.author_name FROM notices n WHERE n.tenant_id = $1 AND ' + LIVE +
+    var r = await db.query('SELECT n.id, n.title, n.body, n.level, n.pinned, n.published_at, n.author_name, ' + IMG_N + ' FROM notices n WHERE n.tenant_id = $1 AND ' + LIVE +
       " AND n.level = 'important' AND NOT EXISTS (SELECT 1 FROM notice_reads x WHERE x.notice_id = n.id AND x.user_id = $2) ORDER BY n.published_at DESC LIMIT 5", [req.tenant.id, me(req)]);
-    res.json({ data: { unread: await unreadOf(req), important: r.rows.map(function (x) { return { id: Number(x.id), title: x.title, body: x.body, level: x.level, pinned: x.pinned, publishedAt: x.published_at, authorName: x.author_name }; }), canWrite: await canWrite(req) } });
+    res.json({ data: { unread: await unreadOf(req), important: r.rows.map(function (x) { return { id: Number(x.id), title: x.title, body: x.body, level: x.level, pinned: x.pinned, publishedAt: x.published_at, authorName: x.author_name, imageCount: Number(x.img_n) || 0 }; }), canWrite: await canWrite(req) } });
   } catch (e) { httpErr.serverError(res, '[notices/summary]', e); }
 });
 
@@ -146,10 +163,14 @@ router.post('/', async function (req, res) {
     if (!(await canWrite(req))) return res.status(403).json({ error: 'FORBIDDEN', message: '공지를 쓸 권한이 없습니다.' });
     var c = clean(req.body || {});
     if (!c.title) return res.status(400).json({ error: 'VALIDATION', message: '제목을 적어 주세요.' });
+    var imgs = req.body.images !== undefined ? cleanImages(req.body.images) : [];
+    if (!imgs) return res.status(400).json({ error: 'VALIDATION', message: '그림은 ' + IMG_MAX + '장까지, 한 장이 너무 크지 않게 붙여 주세요.' });
     var pub = !!req.body.publish;
     var r = await db.query('INSERT INTO notices (tenant_id, title, body, level, pinned, status, published_at, expires_at, author_id, author_name, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$9) RETURNING *',
       [req.tenant.id, c.title, c.body || '', c.level || 'normal', !!c.pinned, pub ? 'published' : 'draft', pub ? new Date() : null, c.expiresAt || null, me(req), await myName(req)]);
     var n = r.rows[0];
+    if (imgs.length) await saveImages(n.id, imgs);
+    n.img_n = imgs.length;
     if (pub) { await db.query('INSERT INTO notice_reads (notice_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [n.id, me(req)]); await announce(req, n, 'publish'); }
     res.status(201).json({ data: row(n) });
   } catch (e) { httpErr.serverError(res, '[notices/create]', e); }
@@ -160,6 +181,9 @@ router.put('/:id', async function (req, res) {
     var n = await loadOwn(req, res); if (!n) return;
     var c = clean(req.body || {});
     if (c.title !== undefined && !c.title) return res.status(400).json({ error: 'VALIDATION', message: '제목을 적어 주세요.' });
+    var imgs = req.body.images !== undefined ? cleanImages(req.body.images) : undefined;
+    if (imgs === null) return res.status(400).json({ error: 'VALIDATION', message: '그림은 ' + IMG_MAX + '장까지, 한 장이 너무 크지 않게 붙여 주세요.' });
+    if (imgs) await saveImages(n.id, imgs);
     var r = await db.query('UPDATE notices SET title = $2, body = $3, level = $4, pinned = $5, expires_at = $6, updated_by = $7, updated_at = now() WHERE id = $1 RETURNING *',
       [n.id, c.title !== undefined ? c.title : n.title, c.body !== undefined ? c.body : n.body, c.level !== undefined ? c.level : n.level, c.pinned !== undefined ? c.pinned : n.pinned, c.expiresAt !== undefined ? c.expiresAt : n.expires_at, me(req)]);
     var u = r.rows[0];
@@ -209,6 +233,19 @@ router.post('/:id/read', async function (req, res) {
     await db.query('INSERT INTO notice_reads (notice_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [r.rows[0].id, me(req)]);
     res.json({ data: { unread: await unreadOf(req) } });
   } catch (e) { httpErr.serverError(res, '[notices/read]', e); }
+});
+
+router.get('/:id/images', async function (req, res) {
+  try {
+    var id = parseInt(req.params.id, 10) || 0;
+    var r = await db.query('SELECT n.id, n.author_id, (' + LIVE + ') AS live FROM notices n WHERE n.id = $1 AND n.tenant_id = $2', [id, req.tenant.id]);
+    var n = r.rows[0];
+    // 게시 중이면 누구나, 아니면(임시 · 끝남) 쓸 수 있는 사람만
+    if (!n || (!n.live && !(await canWrite(req)))) return res.status(404).json({ error: 'NOT_FOUND', message: '공지를 찾을 수 없습니다.' });
+    var im = await db.query('SELECT src FROM notice_images WHERE notice_id = $1 ORDER BY idx, id', [id]);
+    res.set('Cache-Control', 'private, max-age=60');
+    res.json({ data: im.rows.map(function (x) { return x.src; }) });
+  } catch (e) { httpErr.serverError(res, '[notices/images]', e); }
 });
 
 router.get('/:id/readers', async function (req, res) {

@@ -76,8 +76,8 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(await k.evaluate(function () { return !document.querySelector('#wmNoticeModal .nt-tabs') && !document.querySelector('#wmNoticeModal [data-nt="new"]') && !!document.querySelector('#wmNoticeModal .nt-card.unread .nt-new'); }), '팀원 창 — 쓰기 단추 없음 · NEW 표시');
     await k.click('#wmNoticeModal .nt-card [data-nt="toggle"]');
     await until(k, function () { return !!document.querySelector('#wmNoticeModal .nt-card.open .nt-body'); });
-    var body = await k.evaluate(function () { var b = document.querySelector('#wmNoticeModal .nt-card.open .nt-body'); return { html: b.innerHTML, link: !!b.querySelector('a[href="https://example.com/notice"]'), bold: !!b.querySelector('b'), br: b.querySelectorAll('br').length }; });
-    check(body.link && !body.bold && body.br === 1, '본문 — 주소는 링크 · 줄바꿈 유지 · HTML 은 글자 그대로');
+    var body = await k.evaluate(function () { var b = document.querySelector('#wmNoticeModal .nt-card.open .nt-body'); return { html: b.innerHTML, link: !!b.querySelector('a[href="https://example.com/notice"]'), bold: !!b.querySelector('b'), br: b.querySelectorAll('.nt-p').length }; });
+    check(body.link && !body.bold && body.br === 2, '본문 — 주소는 링크 · 줄바꿈 유지 · HTML 은 글자 그대로 ' + (body.link && !body.bold && body.br === 2 ? '' : body.html));
     check(await until(k, function () { var b = document.getElementById('noticeBadge'); return b.style.display === 'none'; }), '펼치면 읽음 → 숫자 사라짐');
     await k.screenshot({ path: path.join(SHOT, 'e2e78-view.png') });
     // 관리자: 읽은 사람

@@ -272,6 +272,12 @@ app.get('/icons/:name', function (req, res, next) {
   res.setHeader('Cache-Control', 'public, max-age=604800');
   res.sendFile(path.join(PWA_DIR, 'icons', req.params.name), function (err) { if (err) res.status(404).end(); });
 });
+// 📢 공지 ✨ 예시에 붙이는 캡처 (v13.514) — pwa/notice/*.png
+app.get('/notice-img/:name', function (req, res, next) {
+  if (!/^[a-z0-9-]+\.png$/.test(req.params.name)) return next();
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(path.join(PWA_DIR, 'notice', req.params.name), function (err) { if (err) res.status(404).end(); });
+});
 // 🎤 발표 펜 투명 창 (v13.369) — PC 앱이 공유 화면 위에 띄움. 같은 출처라 chat-ink.js · style.css 를 그대로 불러 씀
 app.get('/ink-overlay', function (req, res) {
   res.setHeader('Cache-Control', 'no-cache');

@@ -250,6 +250,7 @@ GET /api/notebook/shelf
 GET /api/notebook/template/daily
 GET /api/notebook/titles
 GET /api/notices
+GET /api/notices/:id/images
 GET /api/notices/:id/readers
 GET /api/notices/summary
 GET /api/notices/writers
@@ -400,6 +401,7 @@ GET /index
 GET /index.html
 GET /ink-overlay
 GET /manifest.webmanifest
+GET /notice-img/:name
 GET /sw.js
 GET /toplab
 PATCH /api/archives/records/batch

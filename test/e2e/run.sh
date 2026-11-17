@@ -145,6 +145,7 @@ else
   run_batch e2e97-board-clear-thumb.js
   run_batch e2e103-gongsu.js
   run_batch e2e104-aw-orders.js
+  run_batch e2e105-notice-rich.js
   run_batch e2e59-notebook.js
   run_batch e2e60-notebook-links-coach.js
   run_batch e2e61-notebook-print.js
