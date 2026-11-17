@@ -269,18 +269,28 @@
 /* v13.103: pointer:coarse가 iPad+Magic Keyboard/트랙패드 조합에서 false로 보고되는 케이스 발견.
    any-pointer:coarse(touch가 어느 한 input mechanism으로 존재) + viewport 폴백으로 교체. */
 @media (max-width:768px), (any-pointer:coarse), (max-width:1366px) and (hover:none){
-  .proj-ms-row{grid-template-columns:18px 1fr 1fr!important;row-gap:6px;column-gap:8px;padding:8px 0!important}
-  .proj-ms-row>.ms-drag-handle{grid-row:1 / span 4;align-self:start;padding-top:6px}
-  .proj-ms-row>.ms-name{grid-column:2 / -1;grid-row:1}
-  .proj-ms-row>.ms-start{grid-column:2;grid-row:2}
-  .proj-ms-row>.ms-end{grid-column:3;grid-row:2}
-  .proj-ms-row>.ms-status{grid-column:2 / -1;grid-row:3}
-  /* 액션 버튼 — 마지막 버튼은 우측, 끝에서 2번째 버튼(이관)은 좌측 옆 칸 */
-  .proj-ms-row>button{grid-row:4;justify-self:end;min-width:36px;min-height:30px}
-  .proj-ms-row>button:last-child{grid-column:3}
-  .proj-ms-row>button:nth-last-child(2){grid-column:2}
+  /* v13.520: 3줄 — ① 이름 ② 시작 · 종료(반반) ③ 상태 + 이관 · 빼기. 날짜 칸이 제 너비를 고집해 오른쪽으로 삐져나오고
+     단추가 따로 놀던 것 → 줄바꿈 flex + min-width:0 으로 모든 줄의 좌우 끝을 맞춤 */
+  .proj-ms-row{display:flex!important;flex-wrap:wrap;align-items:center;gap:6px 8px;position:relative;padding:8px 0 8px 24px!important}
+  .proj-ms-row>*{box-sizing:border-box;min-width:0}
+  .proj-ms-row>.ms-drag-handle{position:absolute;left:0;top:8px;width:18px;padding-top:8px}
+  .proj-ms-row>.ms-name{flex:1 1 100%;width:auto}
+  .proj-ms-row>.ms-start,.proj-ms-row>.ms-end{flex:1 1 calc(50% - 4px);width:calc(50% - 4px);max-width:calc(50% - 4px);margin:0}
+  .proj-ms-row>.ms-status{flex:1 1 40%;width:auto}
+  .proj-ms-row>input,.proj-ms-row>select,.proj-ms-row>button{height:38px!important;min-height:38px!important}
+  .proj-ms-row>.ms-start,.proj-ms-row>.ms-end{position:relative;text-align:center;letter-spacing:-.3px}
+  .proj-ms-row>span:empty{display:none}
+  .proj-ms-row>button{flex:0 0 40px;min-width:40px;min-height:36px;margin:0;padding:0!important;display:inline-flex;align-items:center;justify-content:center}
   /* 인풋·셀렉트 폰트 살짝 키워 가독성 (iPad 터치 친화) */
   .proj-ms-row .ms-name,.proj-ms-row .ms-start,.proj-ms-row .ms-end,.proj-ms-row .ms-status{font-size:12px!important;padding:6px 8px!important}
+}
+/* 휴대폰 폭 — 날짜 칸이 좁아 날짜가 잘리지 않게: 달력 아이콘은 숨기고 칸 전체를 누르면 달력이 열림 · 안 여백 줄임 */
+@media (max-width:480px){
+  .proj-ms-row{padding-left:20px!important}
+  .proj-ms-row>.ms-drag-handle{width:14px}
+  .proj-ms-row .ms-start,.proj-ms-row .ms-end{padding:6px 2px!important;letter-spacing:-.5px}
+  .proj-ms-row .ms-start::-webkit-calendar-picker-indicator,.proj-ms-row .ms-end::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:auto;height:auto;margin:0;padding:0;opacity:0;cursor:pointer}
+  .proj-ms-row .ms-start::-webkit-date-and-time-value,.proj-ms-row .ms-end::-webkit-date-and-time-value{text-align:center;margin:0}
 }
 /* 프로젝트 모달 — 터치 디바이스(iPad 포함, 가로/세로 모두)에서 더 넓게 (v13.103) */
 @media (any-pointer:coarse), (max-width:1366px) and (hover:none){
