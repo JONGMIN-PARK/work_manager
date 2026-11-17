@@ -97,6 +97,55 @@ describe('Orders API', () => {
   });
 
   // ─────────────────────────────────────────────
+  // 애니웍스 수주 반영 (aw-sync) — v13.513
+  // ─────────────────────────────────────────────
+  describe('POST /api/orders/aw-sync', () => {
+    test('add 는 없는 번호만 넣고, update 는 이름 · 거래처만 바꾼다 (수주일 · 금액 · 담당은 그대로)', async () => {
+      await h.request(h.app).post('/api/orders/bulk')
+        .set('Authorization', 'Bearer ' + manager.token)
+        .send({ records: [{ orderNo: 'AW001', date: '2026-01-02', client: '원래거래처', name: '원래이름', amount: 700, manager: '김담당', delivery: '2026-05-01' }] });
+
+      var res = await h.request(h.app).post('/api/orders/aw-sync')
+        .set('Authorization', 'Bearer ' + manager.token)
+        .send({
+          add: [{ orderNo: 'AW001', client: '덮으면안됨', name: '덮으면안됨' }, { orderNo: 'AW002', client: '새거래처', name: '새수주' }, { orderNo: 'AW002', name: '둘째줄' }, { orderNo: '', name: '번호없음' }],
+          update: [{ orderNo: 'AW001', client: '바뀐거래처', name: '바뀐이름' }, { orderNo: 'AW999', name: '없는번호' }]
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.inserted).toBe(1);
+      expect(res.body.updated).toBe(1);
+
+      var r = await h.db.query('SELECT * FROM orders WHERE tenant_id = $1 ORDER BY order_no', [h.TEST_TENANT_ID]);
+      expect(r.rows.map(function (x) { return x.order_no; })).toEqual(['AW001', 'AW002']);
+      expect(r.rows[0].name).toBe('바뀐이름');
+      expect(r.rows[0].client).toBe('바뀐거래처');
+      expect(r.rows[0].date).toBe('2026-01-02');
+      expect(Number(r.rows[0].amount)).toBe(700);
+      expect(r.rows[0].manager).toBe('김담당');
+      expect(r.rows[0].delivery).toBe('2026-05-01');
+      expect(r.rows[0].version).toBe(2);
+      expect(r.rows[1].name).toBe('새수주');
+      expect(r.rows[1].client).toBe('새거래처');
+
+      // 같은 내용을 다시 보내면 바뀌는 것이 없다 (버전도 그대로)
+      var again = await h.request(h.app).post('/api/orders/aw-sync')
+        .set('Authorization', 'Bearer ' + manager.token)
+        .send({ add: [{ orderNo: 'AW002', name: '새수주' }], update: [{ orderNo: 'AW001', client: '바뀐거래처', name: '바뀐이름' }] });
+      expect(again.body.inserted).toBe(0);
+      expect(again.body.updated).toBe(0);
+    });
+
+    test('수주를 고칠 수 없는 사람은 거절', async () => {
+      var res = await h.request(h.app).post('/api/orders/aw-sync')
+        .set('Authorization', 'Bearer ' + member.token)
+        .send({ add: [{ orderNo: 'AW100', name: 'x' }] });
+      expect(res.status).toBe(403);
+      var r = await h.db.query('SELECT 1 FROM orders WHERE order_no = $1', ['AW100']);
+      expect(r.rows.length).toBe(0);
+    });
+  });
+
+  // ─────────────────────────────────────────────
   // 수주번호 변경 (renumber)
   // ─────────────────────────────────────────────
   describe('POST /api/orders/:orderNo/renumber', () => {

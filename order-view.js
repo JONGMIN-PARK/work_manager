@@ -127,6 +127,7 @@ function renderOrders(afterRender) {
     html += '<button class="wm-pri" onclick="showOrderModal()">+ 신규 수주</button>';
     html += wmMoreHtml('orderMoreWrap', [
       ['📥 엑셀 불러오기', 'importOrderExcel()'],
+      (typeof awoCan === 'function' && awoCan()) ? ['🔄 애니웍스에서 가져오기', 'wmHdrPopClose();awoScan()', false, '애니웍스 수주번호 · 거래처 · 프로젝트명을 훑어 와 새 수주를 넣고, 다른 것은 물어봅니다'] : false,
       ['📤 엑셀 저장', 'exportOrderExcel()'],
       null,
       ['🔄 DB 동기화', 'syncOrdersToDB()', false, '화면의 수주 목록을 서버에 맞춤']

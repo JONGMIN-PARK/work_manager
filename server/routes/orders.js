@@ -181,6 +181,44 @@ router.post('/bulk', rbac.checkPermission('order.edit'), async function (req, re
   }
 });
 
+// POST /api/orders/aw-sync — 애니웍스에서 훑어 온 수주 반영 (v13.513)
+//   body { add: [{orderNo, client, name}], update: [{orderNo, client, name}] }
+//   · add    : 없는 번호만 새로 넣는다 (이미 있으면 건드리지 않음)
+//   · update : 프로젝트명 · 거래처만 바꾼다 — 수주일 · 금액 · 담당 · 납기 · 메모는 그대로
+//              (/bulk 는 그 칸들도 덮어써서, 이름만 온 자료로 쓰면 날짜 · 금액이 지워진다)
+router.post('/aw-sync', rbac.checkPermission('order.edit'), async function (req, res) {
+  try {
+    var b = req.body || {};
+    var norm = function (list) {
+      var seen = {}, out = [];
+      (Array.isArray(list) ? list : []).forEach(function (r) {
+        var no = String((r && (r.orderNo || r.order_no)) || '').trim();
+        if (!no || no.length > ORDER_NO_MAX || seen[no]) return;
+        seen[no] = true;
+        out.push({ no: no, client: String((r && r.client) || '').trim().slice(0, 200), name: String((r && r.name) || '').trim().slice(0, 255) });
+      });
+      return out;
+    };
+    var add = norm(b.add), upd = norm(b.update);
+    if (add.length + upd.length > 5000) return res.status(400).json({ error: 'TOO_MANY', message: '한 번에 최대 5000건까지입니다. 나눠서 요청하세요.' });
+    var inserted = 0, updated = 0;
+    for (var i = 0; i < add.length; i += 500) {
+      var part = add.slice(i, i + 500), vals = [], params = [req.user.sub, req.tenant.id], k = 3;
+      part.forEach(function (r) { vals.push("($" + k++ + ",'',$" + k++ + ",$" + k++ + ",0,'','','',$1,$2)"); params.push(r.no, r.client, r.name); });
+      var ins = await db.query('INSERT INTO orders (order_no, date, client, name, amount, manager, delivery, memo, created_by, tenant_id) VALUES ' + vals.join(',') + ' ON CONFLICT (order_no) DO NOTHING RETURNING order_no', params);
+      inserted += ins.rows.length;
+    }
+    for (var j = 0; j < upd.length; j++) {
+      var u = await db.query('UPDATE orders SET name = $1, client = $2, version = version + 1, updated_at = now(), updated_by = $3 WHERE order_no = $4 AND tenant_id = $5 AND (name IS DISTINCT FROM $1 OR client IS DISTINCT FROM $2)',
+        [upd[j].name, upd[j].client, req.user.sub, upd[j].no, req.tenant.id]);
+      updated += u.rowCount;
+    }
+    res.json({ inserted: inserted, updated: updated, skipped: add.length - inserted + upd.length - updated });
+  } catch (e) {
+    httpErrors.serverError(res, '[orders/aw-sync]', e);
+  }
+});
+
 // GET /api/orders/:orderNo
 router.get('/:orderNo', async function (req, res) {
   try {

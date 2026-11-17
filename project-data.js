@@ -873,7 +873,7 @@ function wmNormOrderAmount(v) {
 }
 
 // 기본 limit 은 100 이라 수주가 100건을 넘으면 최신 100건만 내려온다 → 대장 전체를 받는다.
-function orderGetAll() { return apiFetch('/api/orders?all=true&limit=2000').then(function (r) { return toCamelArray(r.data); }); }
+function orderGetAll() { return apiFetch('/api/orders?all=true&limit=20000').then(function (r) { return toCamelArray(r.data); }); }
 function orderGet(orderNo) { return apiFetch('/api/orders/' + encodeURIComponent(orderNo)).then(function (r) { return toCamel(r.data); }); }
 function orderPut(order) {
   return apiFetch('/api/orders', { method: 'POST', body: JSON.stringify(order) })

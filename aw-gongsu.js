@@ -1,4 +1,4 @@
-/* aw-gongsu.js — 📝 애니웍스 공수 등록 (v13.512)
+/* aw-gongsu.js — 📝 애니웍스 공수 등록 (v13.512) · 📚 이력 (v13.513)
  *   내 업무일지를 여기서 쓰고(날짜별 초안은 서버에 저장 → 휴대폰 · 웹에서도 이어 씀),
  *   PC 앱이면 애니웍스에 바로 등록한다: ① 웹에 입력(애니웍스 화면 캡처로 확인) → ② 등록 → 주간일지를 내려받아 올라갔는지 확인.
  *   실제 애니웍스 조작은 PC 앱(desktop/anyworks.js · window.wmDesktop.aw)이 한다. 아이디 · 비밀번호는 그 PC 에만 있다.
@@ -36,11 +36,12 @@ function _awgKey(orderno, hours, memo) { return String(orderno).trim() + '|' + (
 function _awgTime(ts) { var d = new Date(ts); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
 
 /* ─── 열기 ─── */
-function awgOpen(day) {
-  if (typeof wmGuardedModal !== 'function') return _awgBuild(day);
-  return wmGuardedModal('awg', function () { return _awgBuild(day); }, 'awgBox');
+function awgOpen(day, view) {
+  if (typeof wmGuardedModal !== 'function') return _awgBuild(day, view);
+  return wmGuardedModal('awg', function () { return _awgBuild(day, view); }, 'awgBox');
 }
-function _awgBuild(day) {
+function awgHistOpen() { return awgOpen('', 'hist'); }
+function _awgBuild(day, view) {
   var m = createModal({
     id: 'awgModal', title: '📝 공수 등록 <span class="awg-sub">애니웍스 업무보고</span>', width: '1100px', boxStyle: 'padding:18px 20px',
     onClose: function () { var s = _awg; _awg = null; if (s) { clearTimeout(s.saveT); if (s.dirty) _awgSaveOf(s); } }
@@ -48,7 +49,7 @@ function _awgBuild(day) {
   var el = document.createElement('div');
   el.id = 'awgBox'; el.className = 'awg';
   m.box.appendChild(el);
-  _awg = { el: el, day: /^\d{4}-\d{2}-\d{2}$/.test(day || '') ? day : _awgIso(new Date()), items: [_awgBlank()], docs: {}, range: null, orders: [], st: null, shot: null, dup: null, note: null, busy: '', saveT: 0, dirty: false, saved: '' };
+  _awg = { el: el, day: /^\d{4}-\d{2}-\d{2}$/.test(day || '') ? day : _awgIso(new Date()), items: [_awgBlank()], docs: {}, range: null, orders: [], view: view === 'hist' ? 'hist' : 'edit', hist: null, st: null, shot: null, dup: null, note: null, busy: '', saveT: 0, dirty: false, saved: '' };
   el.innerHTML = '<div class="awg-load">불러오는 중…</div>';
   _awgBind(el);
   _awgLoad();
@@ -72,20 +73,20 @@ async function _awgLoad() {
     s.docs = {}; (rs[0].data || []).forEach(function (d) { s.docs[d.day] = d; });
     s.range = [from, to];
     s.orders = (rs[1] && rs[1].data) || [];
-    _awgShow(s.day);
+    if (s.view === 'hist') { _awgShow(s.day, true); _awgHistLoad(); } else _awgShow(s.day);
   } catch (e) {
     if (_awg !== s) return;
     s.el.innerHTML = '<div class="awg-load">불러오지 못했습니다 — ' + eH((e && e.message) || '') + ' <button class="btn btn-g btn-s" data-awg="reload">다시</button></div>';
   }
 }
 /* 그 날짜를 화면에 */
-function _awgShow(day) {
+function _awgShow(day, quiet) {
   var s = _awg; if (!s) return;
   s.day = day;
   var doc = s.docs[day];
   s.items = doc && doc.items && doc.items.length ? doc.items.map(function (it) { return Object.assign(_awgBlank(), it, { hours: +it.hours > 0 ? it.hours : '' }); }) : [_awgBlank()];
   s.shot = null; s.dup = null; s.note = null; s.dirty = false; s.saved = '';
-  _awgPaint();
+  if (!quiet) _awgPaint();
 }
 async function _awgGo(day) {
   var s = _awg; if (!s || s.busy) return;
@@ -149,6 +150,7 @@ function _awgRowHtml(it, i) {
 }
 function _awgPaint() {
   var s = _awg; if (!s) return;
+  if (s.view === 'hist' && s.hist) return _awgHistPaint();
   var today = _awgIso(new Date());
   var h = '<div class="awg-top">' +
       '<button type="button" class="awg-b" data-awg-day="' + _awgAdd(s.day, -1) + '" title="전날">◀</button>' +
@@ -156,7 +158,7 @@ function _awgPaint() {
       '<button type="button" class="awg-b" data-awg-day="' + _awgAdd(s.day, 1) + '" title="다음 날">▶</button>' +
       (s.day !== today ? '<button type="button" class="awg-b" data-awg-day="' + today + '">오늘</button>' : '') +
       '<span class="awg-wk" title="이번 주 — ✓ 등록함 · ✎ 작성 중 · · 비어 있음">' + _awgWeekHtml() + '</span>' +
-      '<span class="awg-sp"></span>' + _awgCopyHtml() + _awgAcctHtml() +
+      '<span class="awg-sp"></span>' + _awgCopyHtml() + '<button type="button" class="awg-b" data-awg="hist" title="날짜별로 써 둔 · 올린 공수를 모아 보고, 골라서 다른 날짜에 복사">📚 이력</button>' + _awgAcctHtml() +
     '</div>' +
     '<div class="awg-state" id="awgState">' + _awgStateHtml() + '<span class="awg-saved" id="awgSaved"></span></div>' +
     '<div class="awg-rows" id="awgRows">' +
@@ -243,6 +245,7 @@ function _awgWeekSync() { var s = _awg, w = s && s.el.querySelector('.awg-wk'); 
 function _awgBind(el) {
   el.addEventListener('input', function (e) {
     var s = _awg, t = e.target, f = t.getAttribute && t.getAttribute('data-f'), r = t.closest && t.closest('.awg-r');
+    if (s && s.view === 'hist' && t.id === 'awgHQ') { s.hist.q = t.value.trim(); _awgHistList(); return; }
     if (!s || !f || !r) return;
     var it = s.items[+r.getAttribute('data-i')]; if (!it) return;
     it[f] = t.value;
@@ -260,6 +263,7 @@ function _awgBind(el) {
     var s = _awg, t = e.target; if (!s) return;
     if (t.id === 'awgDay' && /^\d{4}-\d{2}-\d{2}$/.test(t.value)) _awgGo(t.value);
     if (t.id === 'awgCopy' && t.value) { var d = t.value; t.value = ''; _awgCopy(d); }
+    if (s.view === 'hist') _awgHistChange(t);
   });
   el.addEventListener('keydown', function (e) {
     var s = _awg, t = e.target;
@@ -282,6 +286,8 @@ function _awgBind(el) {
     else if (a === 'send') _awgSend();
     else if (a === 'pull') awgPullOpen();
     else if (a === 'wipe') _awgWipe();
+    else if (a === 'hist') _awgHistOpen();
+    else if (a.indexOf('h-') === 0) _awgHistClick(a, b);
   });
 }
 function _awgPsSync(r, it) { var p = r.querySelector('[data-ps]'); if (p) { p.innerHTML = it.prodspec ? eH(it.prodspec) : '<i>프로젝트명</i>'; p.title = it.prodspec || ''; } }
@@ -293,9 +299,15 @@ function _awgAddRow() {
 }
 async function _awgCopy(from) {
   var s = _awg, src = s && s.docs[from]; if (!src) return;
-  var add = src.items.filter(_awgHasText).map(function (it) { return Object.assign(_awgBlank(), it); }), cur = _awgRows();
-  if (cur.length && !(await wmConfirm(_awgLabel(from) + ' 에 쓴 ' + add.length + '행을 가져옵니다. 지금 내용을 바꿀까요?', { ok: '바꾸기', cancel: '뒤에 붙이기' }))) add = cur.concat(add);
+  return _awgPutRows(src.items, _awgLabel(from) + ' 에 쓴 ');
+}
+/* 가져온 행을 지금 날짜에 — 이미 쓴 것이 있으면 바꿀지 · 뒤에 붙일지 묻는다 */
+async function _awgPutRows(items, label) {
+  var s = _awg; if (!s) return;
+  var add = items.filter(_awgHasText).map(function (it) { return Object.assign(_awgBlank(), it, { hours: +it.hours > 0 ? it.hours : '' }); }), cur = _awgRows();
+  if (cur.length && !(await wmConfirm(label + add.length + '행을 가져옵니다. 지금 내용을 바꿀까요?', { ok: '바꾸기', cancel: '뒤에 붙이기' }))) add = cur.concat(add);
   if (_awg !== s) return;
+  if (add.length > AWG_MAX) showToast('⚠ 한 날짜에 ' + AWG_MAX + '행까지라 뒤의 ' + (add.length - AWG_MAX) + '행은 빠졌습니다', 'warn');
   s.items = add.slice(0, AWG_MAX);
   s.shot = null; _awgPaint(); _awgTouched();
 }
@@ -307,6 +319,145 @@ async function _awgWipe() {
   clearTimeout(s.saveT); s.dirty = false;
   try { await apiFetch('/api/gongsu/' + s.day, { method: 'DELETE' }); delete s.docs[s.day]; _awgShow(s.day); }
   catch (e) { showToast('❌ 지우지 못했습니다', 'error'); }
+}
+
+/* ─── 📚 이력 (v13.513) — 날짜별로 써 둔 · 올린 공수를 모아 보고, 골라서 다른 날짜에 복사해 고쳐 올린다 ─── */
+var AWG_HRANGE = [['1', '최근 1개월'], ['3', '최근 3개월'], ['6', '최근 6개월'], ['y', '올해'], ['ly', '작년']];
+function _awgHRange(k) {
+  var t = _awgIso(new Date()), y = +t.slice(0, 4);
+  if (k === 'y') return [y + '-01-01', y + '-12-31'];
+  if (k === 'ly') return [(y - 1) + '-01-01', (y - 1) + '-12-31'];
+  var d = new Date(); d.setMonth(d.getMonth() - (+k || 3));
+  return [_awgIso(d), _awgAdd(t, 14)];
+}
+async function _awgHistOpen() {
+  var s = _awg; if (!s || s.busy) return;
+  await _awgFlush();
+  if (_awg !== s) return;
+  s.view = 'hist';
+  _awgHistLoad();
+}
+async function _awgHistLoad() {
+  var s = _awg; if (!s) return;
+  var h = s.hist || (s.hist = { k: '3', q: '', days: [], sel: {}, to: _awgIso(new Date()) });
+  s.el.innerHTML = '<div class="awg-load">불러오는 중…</div>';
+  var rg = _awgHRange(h.k);
+  try {
+    var r = await apiFetch('/api/gongsu?from=' + rg[0] + '&to=' + rg[1]);
+    if (_awg !== s || s.view !== 'hist') return;
+    h.days = ((r && r.data) || []).filter(function (d) { return (d.items || []).some(_awgHasText); }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
+    h.days.forEach(function (d) { d.rows = d.items.filter(_awgHasText); });
+    h.sel = {};
+    _awgHistPaint();
+  } catch (e) {
+    if (_awg === s) s.el.innerHTML = '<div class="awg-load">불러오지 못했습니다 — ' + eH((e && e.message) || '') + ' <button class="btn btn-g btn-s" data-awg="h-reload">다시</button> <button class="btn btn-g btn-s" data-awg="h-back">← 작성으로</button></div>';
+  }
+}
+function _awgHistMatch(d) {
+  var q = _awg.hist.q.toLowerCase();
+  if (!q) return d.rows.map(function (_, i) { return i; });
+  var out = [];
+  d.rows.forEach(function (it, i) { if ((it.orderno + ' ' + (it.prodspec || '') + ' ' + it.memo + ' ' + it.job).toLowerCase().indexOf(q) >= 0) out.push(i); });
+  return out;
+}
+function _awgHistPaint() {
+  var s = _awg, h = s.hist;
+  s.el.innerHTML = '<div class="awg-top">' +
+      '<button type="button" class="awg-b" data-awg="h-back" title="공수 작성 화면으로">← 작성</button><b class="awg-htitle">📚 공수 이력</b>' +
+      '<select class="awg-in awg-hrange" id="awgHRange" aria-label="기간">' + AWG_HRANGE.map(function (o) { return '<option value="' + o[0] + '"' + (h.k === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<input class="awg-in awg-hq" id="awgHQ" placeholder="🔍 수주번호 · 프로젝트 · 내용" value="' + eH(h.q) + '">' +
+      '<span class="awg-sp"></span><span class="awg-hint" id="awgHTot"></span></div>' +
+    '<div class="awg-hsum" id="awgHSum"></div>' +
+    '<div class="awg-hlist" id="awgHList"></div>' +
+    '<div class="awg-act awg-hact"><span class="awg-hint" id="awgHSel"></span><span class="awg-sp"></span>' +
+      '<button type="button" class="awg-b" data-awg="h-clear">선택 풀기</button>' +
+      '<label class="awg-hto">넣을 날짜 <input type="date" class="awg-in" id="awgHTo" value="' + h.to + '"></label>' +
+      '<button type="button" class="btn btn-p" data-awg="h-put" id="awgHPut" title="고른 행을 그 날짜의 작성 화면에 넣습니다. 고친 뒤 ① ② 로 애니웍스에 올리면 됩니다">📋 그 날짜에 복사해서 쓰기</button></div>';
+  _awgHistList();
+}
+function _awgHistList() {
+  var s = _awg, h = s.hist, box = s.el.querySelector('#awgHList'); if (!box) return;
+  var nDay = 0, nRow = 0, hrs = 0, by = {}, html = '';
+  h.days.forEach(function (d) {
+    var idx = _awgHistMatch(d); if (!idx.length) return;
+    nDay++;
+    var sent = d.status === 'sent', changed = sent && _awgSig(d.rows) !== _awgSig(d.sentItems || []), all = idx.every(function (i) { return h.sel[d.day + '|' + i]; });
+    html += '<div class="awg-hday" data-day="' + d.day + '"><div class="awg-hday-h"><label title="이 날짜의 행 모두 고르기"><input type="checkbox" data-hday="' + d.day + '"' + (all ? ' checked' : '') + '><b>' + d.day.slice(0, 4) + ' ' + _awgLabel(d.day) + '</b></label>' +
+      (sent ? '<span class="awg-st ok">✓ 등록함' + (d.sentAt ? ' ' + _awgTime(d.sentAt) : '') + '</span>' + (d.checkedAt ? '<span class="awg-st ok">확인됨</span>' : '') + (changed ? '<span class="awg-st warn" title="애니웍스에 올린 뒤에 여기 내용을 고쳤습니다">⚠ 올린 뒤 바뀜</span>' : '') : '<span class="awg-st">✎ 작성 중</span>') +
+      '<span class="awg-hint">' + d.rows.length + '행 · ' + _awgSum(d.rows) + 'h</span><span class="awg-sp"></span>' +
+      '<button type="button" class="awg-b" data-awg="h-open" title="이 날짜를 작성 화면에서 열기 (고쳐서 다시 올릴 수 있음)">열기</button>' +
+      '<button type="button" class="awg-b" data-awg="h-dup" title="이 날짜의 행을 「넣을 날짜」 에 복사">📋 복사</button></div>';
+    idx.forEach(function (i) {
+      var it = d.rows[i], k = d.day + '|' + i;
+      nRow++; hrs += +it.hours || 0;
+      var o = by[it.orderno] || (by[it.orderno] = { no: it.orderno, ps: it.prodspec || '', h: 0 }); o.h += +it.hours || 0; if (!o.ps && it.prodspec) o.ps = it.prodspec;
+      html += '<label class="awg-hrow' + (h.sel[k] ? ' on' : '') + '"><input type="checkbox" data-hk="' + k + '"' + (h.sel[k] ? ' checked' : '') + '><b>' + eH(it.orderno || '—') + '</b><span class="awg-hps">' + eH(it.prodspec || '') + '</span><span class="awg-hh">' + (+it.hours || 0) + 'h</span><span class="awg-hj">' + eH([it.divi, it.job].filter(Boolean).join(' · ')) + '</span><span class="awg-hm">' + eH(it.memo || '') + '</span></label>';
+    });
+    html += '</div>';
+  });
+  box.innerHTML = html || '<div class="awg-load">' + (h.q ? '찾는 것이 없습니다' : '이 기간에 써 둔 공수가 없습니다') + '</div>';
+  hrs = Math.round(hrs * 100) / 100;
+  s.el.querySelector('#awgHTot').textContent = nDay + '일 · ' + nRow + '행 · ' + hrs + 'h';
+  var top = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.h - a.h; });
+  s.el.querySelector('#awgHSum').innerHTML = top.slice(0, 12).map(function (o) {
+    return '<button type="button" class="awg-hchip' + (h.q === o.no ? ' on' : '') + '" data-awg="h-ord" data-no="' + eH(o.no) + '" title="' + eH(o.ps) + ' — 눌러서 이 수주만 보기"><b>' + eH(o.no || '—') + '</b> ' + (Math.round(o.h * 100) / 100) + 'h</button>';
+  }).join('') + (top.length > 12 ? '<span class="awg-hint">외 ' + (top.length - 12) + '개 수주</span>' : '');
+  _awgHistSel();
+}
+function _awgHistPicked() {
+  var h = _awg.hist, out = [];
+  h.days.slice().reverse().forEach(function (d) { d.rows.forEach(function (it, i) { if (h.sel[d.day + '|' + i]) out.push(it); }); });
+  return out;
+}
+function _awgHistSel() {
+  var s = _awg, p = _awgHistPicked(), el = s.el.querySelector('#awgHSel'), b = s.el.querySelector('#awgHPut');
+  if (el) el.textContent = p.length ? '선택 ' + p.length + '행 · ' + _awgSum(p) + 'h' : '복사할 행을 고르세요 (날짜 앞 칸을 누르면 그 날 전부)';
+  if (b) b.disabled = !p.length;
+}
+function _awgHistChange(t) {
+  var s = _awg, h = s.hist; if (!h || !t.getAttribute) return;
+  if (t.id === 'awgHRange') { h.k = t.value; _awgHistLoad(); return; }
+  if (t.id === 'awgHTo') { if (/^\d{4}-\d{2}-\d{2}$/.test(t.value)) h.to = t.value; return; }
+  var k = t.getAttribute('data-hk'), day = t.getAttribute('data-hday');
+  if (k) {
+    if (t.checked) h.sel[k] = 1; else delete h.sel[k];
+    t.closest('.awg-hrow').classList.toggle('on', t.checked);
+    var dd = t.closest('.awg-hday');
+    dd.querySelector('[data-hday]').checked = [].every.call(dd.querySelectorAll('[data-hk]'), function (c) { return c.checked; });
+    _awgHistSel();
+  } else if (day) {
+    [].forEach.call(t.closest('.awg-hday').querySelectorAll('[data-hk]'), function (c) {
+      c.checked = t.checked;
+      if (t.checked) h.sel[c.getAttribute('data-hk')] = 1; else delete h.sel[c.getAttribute('data-hk')];
+      c.closest('.awg-hrow').classList.toggle('on', t.checked);
+    });
+    _awgHistSel();
+  }
+}
+function _awgHistClick(a, b) {
+  var s = _awg, h = s.hist, dd = b.closest('.awg-hday'), day = dd && dd.getAttribute('data-day');
+  if (a === 'h-back') _awgHistBack(s.day);
+  else if (a === 'h-reload') _awgHistLoad();
+  else if (a === 'h-open') _awgHistBack(day);
+  else if (a === 'h-clear') { h.sel = {}; _awgHistList(); }
+  else if (a === 'h-ord') { var no = b.getAttribute('data-no'); h.q = h.q === no ? '' : no; s.el.querySelector('#awgHQ').value = h.q; _awgHistList(); }
+  else if (a === 'h-dup') { var d = h.days.filter(function (x) { return x.day === day; })[0]; if (d) _awgHistPut(_awgHistMatch(d).map(function (i) { return d.rows[i]; }), _awgLabel(day) + ' 의 '); }
+  else if (a === 'h-put') _awgHistPut(_awgHistPicked(), '고른 ');
+}
+/* 작성 화면으로 돌아가 그 날짜를 연다 */
+async function _awgHistBack(day) {
+  var s = _awg; if (!s) return;
+  s.view = 'edit';
+  if (!s.range || day < s.range[0] || day > s.range[1]) { s.day = day; s.el.innerHTML = '<div class="awg-load">불러오는 중…</div>'; await _awgLoad(); }
+  else _awgShow(day);
+}
+async function _awgHistPut(items, label) {
+  var s = _awg, h = s.hist; if (!s || !items.length) return;
+  var to = h.to;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(to)) { showToast('넣을 날짜를 골라 주세요', 'warn'); return; }
+  await _awgHistBack(to);
+  if (_awg !== s || s.view !== 'edit' || s.day !== to) return;
+  await _awgPutRows(items, label + _awgLabel(to) + ' 로 ');
 }
 
 /* ─── 애니웍스: 입력 → 등록 → 확인 ─── */
@@ -549,6 +700,7 @@ function _awgPullBuild() {
 function awgClick(e) {
   var b = e.target.closest && e.target.closest('[data-awg-open]');
   if (!b) return false;
-  awgOpen(b.getAttribute('data-awg-open') || '');
+  var v = b.getAttribute('data-awg-open') || '';
+  if (v === 'hist') awgHistOpen(); else awgOpen(v);
   return true;
 }

@@ -559,6 +559,7 @@ POST /api/notices/:id/unpublish
 POST /api/notices/read-all
 POST /api/orders
 POST /api/orders/:orderNo/renumber
+POST /api/orders/aw-sync
 POST /api/orders/bulk
 POST /api/prestudies
 POST /api/prestudies/:id/convert
@@ -628,6 +629,7 @@ POST /api/v1/milestones/:id/logs/:logId/toggle-check
 POST /api/v1/milestones/:id/transfer
 POST /api/v1/orders
 POST /api/v1/orders/:orderNo/renumber
+POST /api/v1/orders/aw-sync
 POST /api/v1/orders/bulk
 POST /api/v1/progress
 POST /api/v1/projects

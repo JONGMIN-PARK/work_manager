@@ -287,7 +287,7 @@ function _mwPaintNow(el) {
         (typeof mwIoToolsHtml === 'function' ? mwIoToolsHtml(r) : '') +
         (r.self && typeof mwCalFeedModal === 'function' ? '<div class="hdr-mi-sep"></div><button class="hdr-mi" data-mwc="feed" title="구글 · 아웃룩 달력에서 내 업무 보기">📅 달력 구독 (구글 · 아웃룩)</button>' : '') +
         (r.self ? '<div class="hdr-mi-sep mw-nar"></div><button class="hdr-mi mw-nar" type="button" data-mwt="new" onclick="wmHdrPopClose()" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅 일정 등록 (회의 · 출장 · 연차 …)</button>' : '') +
-        (r.self && typeof awgOpen === 'function' ? '<button class="hdr-mi mw-nar" type="button" data-awg-open="" onclick="wmHdrPopClose()" title="오늘 한 일을 써서 애니웍스 업무보고에 올리기">📝 공수 등록 (애니웍스)</button>' : '') +
+        (r.self && typeof awgOpen === 'function' ? '<button class="hdr-mi mw-nar" type="button" data-awg-open="" onclick="wmHdrPopClose()" title="오늘 한 일을 써서 애니웍스 업무보고에 올리기">📝 공수 등록 (애니웍스)</button><button class="hdr-mi" type="button" data-awg-open="hist" onclick="wmHdrPopClose()" title="날짜별로 써 둔 · 올린 공수를 모아 보고, 골라서 다른 날짜에 복사">📚 공수 이력</button>' : '') +
         '<div class="hdr-mi-sep"></div><button class="hdr-mi" data-mw="refresh" title="새로 고침">↻ 새로 고침</button>' +
       '</div></div>';
   var h = '';

@@ -50,7 +50,7 @@ router.get('/', async function (req, res) {
   try {
     var q = req.query || {};
     if (!isDay(q.from) || !isDay(q.to)) return bad(res, '기간(from · to)이 올바르지 않습니다');
-    var r = await db.query('SELECT ' + COLS + ' FROM gongsu_days WHERE tenant_id = $1 AND user_id = $2 AND day BETWEEN $3 AND $4 ORDER BY day LIMIT 200',
+    var r = await db.query('SELECT ' + COLS + ' FROM gongsu_days WHERE tenant_id = $1 AND user_id = $2 AND day BETWEEN $3 AND $4 ORDER BY day LIMIT 400',
       [req.tenant.id, req.user.sub, q.from, q.to]);
     res.json({ data: r.rows.map(row) });
   } catch (e) { httpErr.serverError(res, '[gongsu/list]', e); }

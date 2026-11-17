@@ -167,7 +167,7 @@ const JS_POPUP_ROWS = `(function(){ var out = [];
   }); return out; })()`;
 
 async function popupSearch(n, q, field) {
-  if (popup) { try { popup.destroy(); } catch (_) {} popup = null; }
+  await closePopup();
   await inFrame('document.frm_gBoard.gs_orderno' + n + '.click()', true);
   await until(() => popup, 8000, '수주번호 조회 창');
   const pw = popup.webContents;
@@ -179,14 +179,33 @@ async function popupSearch(n, q, field) {
   await until(() => pw.executeJavaScript('!!document.frm_pjt && !window.__awOld && document.readyState === "complete"'), 12000, '수주번호 조회 결과');
   return pw.executeJavaScript(JS_POPUP_ROWS);
 }
-function closePopup() { if (popup) { try { popup.destroy(); } catch (_) {} popup = null; } }
+/* 닫힐 때까지 기다린다 — 닫는 도중에 바로 다시 열면 사이트의 window.open 이 죽어 가는 창을 잡아 새 창이 안 뜬다 */
+async function closePopup() {
+  const w = popup; popup = null;
+  if (!w || w.isDestroyed()) return;
+  const closed = new Promise((r) => w.once('closed', r));
+  try { w.destroy(); } catch (_) {}
+  await Promise.race([closed, sleep(1500)]);
+  await sleep(250);
+}
 
 async function orders(a) {
   const q = String((a && a.q) || '').trim().slice(0, 60);
   const field = POPUP_FIELDS[(a && a.field) || 'orderno'] || 'orderno';
   if (!await formOpen()) await openForm();
   const n = Math.min(MAX_ROWS, (filled ? filled.n : 0) + 1);      // 입력해 둔 행은 건드리지 않게 빈 행에서 연다
-  try { return { rows: (await popupSearch(n, q, field)).slice(0, 300) }; } finally { closePopup(); }
+  try { return { rows: (await popupSearch(n, q, field)).slice(0, 300) }; } finally { await closePopup(); }
+}
+
+/* 수주 전체 훑기 (v13.513) — 조회 창에 % 를 넣으면 전부(2천여 건)가 한 번에 나온다. 조회만 한다 */
+async function scan() {
+  if (!await formOpen()) await openForm();
+  const n = Math.min(MAX_ROWS, (filled ? filled.n : 0) + 1);
+  try {
+    const rows = await popupSearch(n, '%', 'orderno');
+    const cut = (v, len) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, len);
+    return { rows: rows.map((r) => ({ orderno: cut(r.orderno, 40), client: cut(r.cells[1], 200), name: cut(r.cells[2] || r.prodspec, 300) })).filter((r) => r.orderno).slice(0, 20000) };
+  } finally { await closePopup(); }
 }
 
 async function selectOrder(n, it) {
@@ -200,7 +219,7 @@ async function selectOrder(n, it) {
         if (!hit && m && m[1] === want) hit = el; });
       if (hit) hit.click(); })()`, true).catch(() => {});
     await Promise.race([closed, sleep(5000)]);
-  } finally { closePopup(); }
+  } finally { await closePopup(); }
   const got = await inFrame('document.frm_gBoard.gs_orderno' + n + '.value');
   if (got !== it.orderno) throw E('ORDER', n + '행: 수주번호가 화면에 반영되지 않았습니다 (현재 「' + got + '」)');
 }
@@ -349,8 +368,8 @@ async function download(a) {
     await inFrame('doExcel()', true);
     try {
       await until(() => downloads.length > before && downloads[downloads.length - 1].state !== 'progressing', 20000, '엑셀 내려받기(' + team + ')');
-    } catch (e) { closePopup(); skipped.push({ team, why: '내려받지 못함' }); continue; }
-    closePopup();
+    } catch (e) { await closePopup(); skipped.push({ team, why: '내려받지 못함' }); continue; }
+    await closePopup();
     const d = downloads[downloads.length - 1];
     if (d.state !== 'completed') { skipped.push({ team, why: '내려받지 못함' }); continue; }
     try {
@@ -364,7 +383,7 @@ async function download(a) {
 
 /* ─── 창구: 한 번에 하나씩 ─── */
 const CMDS = {
-  orders, fill, submit, download,
+  orders, scan, fill, submit, download,
   test: async () => { closeWin(); await login(); return { id: (readCred() || {}).id }; }
 };
 function run(cmd, a) {
@@ -377,7 +396,7 @@ function run(cmd, a) {
 }
 function status() {
   const c = readCred();
-  return { v: 1, hasCred: !!c, id: c ? c.id : '', safe: safeStorage.isEncryptionAvailable(), open: !!(aw && !aw.isDestroyed()), running, filled: filled ? { date: filled.date, count: filled.n } : null, maxRows: MAX_ROWS, memoMax: MEMO_MAX, divi: Object.keys(DIVI), job: Object.keys(JOB) };
+  return { v: 2, hasCred: !!c, id: c ? c.id : '', safe: safeStorage.isEncryptionAvailable(), open: !!(aw && !aw.isDestroyed()), running, filled: filled ? { date: filled.date, count: filled.n } : null, maxRows: MAX_ROWS, memoMax: MEMO_MAX, divi: Object.keys(DIVI), job: Object.keys(JOB) };
 }
 
 /** main.js 에서 한 번 부른다. allowed(e): 우리 웹 화면(메인 창 · 같은 서버)에서 온 호출인지 */

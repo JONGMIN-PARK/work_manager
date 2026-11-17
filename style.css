@@ -8585,3 +8585,46 @@ button.awg-chip{cursor:pointer}
   .awg-top .awg-copy{width:100%}
   .awg-wk{margin-left:0}
 }
+
+/* ─── 📚 공수 이력 · 🔄 애니웍스 수주 가져오기 (v13.513) ─── */
+.awg-htitle{font-size:13.5px;color:var(--t1);margin:0 4px}
+.awg-top .awg-hrange{width:130px}.awg-top .awg-hq{width:230px}
+.awg-hsum{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:10px 0 2px;min-height:26px}
+.awg-hchip{padding:3px 9px;border-radius:999px;border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);font-size:11.5px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.awg-hchip b{color:var(--t1)}
+.awg-hchip:hover,.awg-hchip.on{border-color:var(--ac);color:var(--ac-t)}.awg-hchip.on{background:var(--ac-bg)}
+.awg-hlist{max-height:min(52vh,560px);overflow:auto;margin-top:8px;border:1px solid var(--bd);border-radius:9px}
+.awg-hday{border-bottom:1px solid var(--bd)}.awg-hday:last-child{border-bottom:0}
+.awg-hday-h{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:7px 10px;background:var(--bg-i);position:sticky;top:0;z-index:1}
+.awg-hday-h label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:var(--t1);font-size:12.5px}
+.awg-hday-h .awg-b{padding:4px 9px;font-size:11.5px}
+.awg-hday-h .awg-st{padding:1px 8px;font-size:11px}
+.awg-hrow{display:grid;grid-template-columns:18px 84px minmax(0,1.1fr) 44px 86px minmax(0,2fr);gap:8px;align-items:center;padding:5px 10px 5px 14px;font-size:12.5px;color:var(--t2);cursor:pointer}
+.awg-hrow:hover{background:var(--bg-hv)}.awg-hrow.on{background:var(--ac-bg)}
+.awg-hrow b{color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.awg-hps,.awg-hm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.awg-hps,.awg-hj{color:var(--t4);font-size:11.5px}
+.awg-hh{text-align:right;font-variant-numeric:tabular-nums;color:var(--t1)}
+.awg-hto{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--t4)}.awg-hto .awg-in{width:150px}
+.awo-sum{font-size:12.5px;color:var(--t3);margin-bottom:10px}.awo-sum b{color:var(--t1)}
+.awo-tab{padding:6px 12px;border-radius:8px;border:1px solid var(--bd);background:none;color:var(--t3);font-size:12.5px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.awo-tab b{color:var(--t1)}.awo-tab.on{background:var(--ac-bg);border-color:var(--ac);color:var(--ac-t)}.awo-tab:disabled{opacity:.45;cursor:default}
+.awg-top .awo-q{width:240px}
+.awo-hint{margin:10px 0 8px}
+.awo-list{max-height:min(50vh,520px);overflow:auto;border:1px solid var(--bd);border-radius:9px}
+.awo-r{display:flex;align-items:center;gap:9px;padding:6px 10px;font-size:12.5px;color:var(--t2);cursor:pointer;border-bottom:1px solid var(--bd)}
+.awo-r:last-child{border-bottom:0}.awo-r:hover{background:var(--bg-hv)}.awo-r.on{background:var(--ac-bg)}
+.awo-r b{flex:none;width:82px;color:var(--t1)}
+.awo-nm{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.awo-cl{flex:none;width:200px;color:var(--t4);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.awo-dfs{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:2px}
+.awo-df{overflow-wrap:anywhere}.awo-df i{font-style:normal;color:var(--t5);font-size:11px;margin-right:6px}.awo-df s{color:var(--t4)}.awo-df em{font-style:normal;color:var(--t1);font-weight:600}
+.awo-tag{flex:none;padding:1px 8px;border-radius:999px;border:1px solid var(--bd);font-size:11px;color:var(--t4)}
+.awo-tag.warn{border-color:#F59E0B;color:var(--mk-t)}
+.awo-auto{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--t4);cursor:pointer}
+@media (max-width:760px){
+  .awg-top .awg-hq,.awg-top .awo-q{width:100%}
+  .awg-hrow{grid-template-columns:18px 76px minmax(0,1fr) 44px;grid-template-areas:"c no ps h" "c memo memo memo";row-gap:1px;padding:7px 8px}
+  .awg-hrow input{grid-area:c}.awg-hrow b{grid-area:no}.awg-hps{grid-area:ps}.awg-hh{grid-area:h}.awg-hj{display:none}.awg-hm{grid-area:memo;white-space:normal}
+  .awg-hact .awg-sp{display:none}.awg-hact .btn{width:100%}
+  .awo-cl{display:none}.awo-r b{width:70px}
+}

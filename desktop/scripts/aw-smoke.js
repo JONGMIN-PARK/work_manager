@@ -1,6 +1,7 @@
 // 📝 애니웍스 공수 등록 연기 시험 (v13.512): 실제 main.js 를 띄워 진짜 애니웍스(works.animotion.co.kr)까지 가 본다.
 //   · 웹 화면의 공수 등록 창 → PC 앱 다리(wmDesktop.aw) → 숨은 창 로그인 → 수주번호 조회 → 「① 웹에 입력」 → 캡처가 창에 보이는지
 //   · 📥 주간일지 받기가 사업부 파일을 넘기는지
+//   · 🔄 수주 가져오기(v13.513)가 수주 목록을 훑어 견주는 창을 띄우는지 (적용은 안 누름)
 //   ⚠ [등 록] 은 누르지 않는다 — 애니웍스에 아무것도 올리지 않는다.
 //   계정: AW_ID · AW_PW 환경변수, 또는 AW_SETTINGS=<{username,password} 가 든 JSON 파일>.  수주번호: AW_ORDER (기본 공통업무)
 //   AW_ID=.. AW_PW=.. npx electron scripts/aw-smoke.js --server=http://localhost:3000   → 'AW OK …'
@@ -26,6 +27,7 @@ app.on('browser-window-created', (_e, w) => {
       const t0 = Date.now();
       try {
         if (!c) throw new Error('계정 없음 — AW_ID · AW_PW 또는 AW_SETTINGS');
+        await js(`try{localStorage.setItem('wm_awo_auto','0')}catch(_){}`);   // 로그인 뒤 자동 수주 확인은 끄고, 아래에서 직접 부른다
         await js(`(function(){var e=document.getElementById('loginEmail');if(e&&e.offsetParent){e.value='admin@t.com';document.getElementById('loginPw').value='Test1234!';var f=e.form||e.closest('form');if(f&&f.requestSubmit)f.requestSubmit();else document.getElementById('loginPw').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));}})()`);
         await until(`typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading') && typeof awgOpen === 'function'`, 60000, '로그인');
         if (!(await js(`!!(window.wmDesktop && typeof window.wmDesktop.aw === 'function')`))) throw new Error('다리(wmDesktop.aw) 없음');
@@ -65,9 +67,16 @@ app.on('browser-window-created', (_e, w) => {
         const got = await until(`!!window.__hf || /❌|없습니다/.test((document.getElementById('awgPullMsg')||{}).textContent||'')`, 60000, '주간일지 받기');
         const files = await js(`window.__hf`);
         if (!got || !files || !files.length) fail.push('주간일지 받기 ' + (await js(`(document.getElementById('awgPullMsg')||{}).textContent`)));
+        // 🔄 수주 가져오기 (v13.513) — 진짜 애니웍스 수주 목록을 훑어 견주는 창까지. 적용은 누르지 않는다
+        await js(`awoScan()`);
+        const scanOk = await until(`!!document.querySelector('#awoBox .awo-sum')`, 40000, '수주 훑기');
+        const scan = scanOk ? await js(`({ total: _awo.cmp.total, add: _awo.cmp.add.length, diff: _awo.cmp.diff.length, same: _awo.cmp.same, rows: document.querySelectorAll('#awoBox .awo-r').length })`) : null;
+        if (!scan || scan.total < 500 || scan.total !== scan.add + scan.diff + scan.same || !scan.rows) fail.push('수주 훑기 ' + JSON.stringify(scan));
+        fs.writeFileSync(path.join(__dirname, '.aw-scan.png'), (await w.webContents.capturePage()).toPNG());
+        await js(`(function(){var b=document.querySelector('#awoBox [data-awo="later"]'); if(b) b.click();})()`);
         const filled = await js(`window.wmDesktop.aw('status')`);
         if (filled.filled) fail.push('내려받은 뒤에도 입력 상태가 남음 (등록이 눌릴 수 있음)');
-        console.log('AW ' + (fail.length ? 'FAIL ' + fail.join(' | ') : 'OK') + ' — ' + JSON.stringify({ sec: Math.round((Date.now() - t0) / 100) / 10, order: ORDER, prodspec: st.ps, capture: st.img, already: st.dup, files: files }));
+        console.log('AW ' + (fail.length ? 'FAIL ' + fail.join(' | ') : 'OK') + ' — ' + JSON.stringify({ sec: Math.round((Date.now() - t0) / 100) / 10, order: ORDER, prodspec: st.ps, capture: st.img, already: st.dup, files: files, scan: scan }));
       } catch (e) { console.log('AW FAIL ' + (e && e.message)); }
       finally {
         try { await js(`window.wmDesktop.aw('cred-clear')`); } catch (_) {}   // 시험 계정은 남기지 않는다
