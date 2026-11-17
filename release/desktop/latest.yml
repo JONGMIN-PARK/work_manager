@@ -1,8 +1,8 @@
-version: 13.496.0
+version: 13.512.0
 files:
-  - url: WorkManager-Setup-13.496.0.exe
-    sha512: +4LMZKCRAVpFY/e/9WfIgZ+Qin6VJCig0btDJmoooDjtla5BszFOsLqwtj8Xl25MZdVhTI1Iuv6qCDfjnE8uAw==
-    size: 82332695
-path: WorkManager-Setup-13.496.0.exe
-sha512: +4LMZKCRAVpFY/e/9WfIgZ+Qin6VJCig0btDJmoooDjtla5BszFOsLqwtj8Xl25MZdVhTI1Iuv6qCDfjnE8uAw==
-releaseDate: '2026-11-14T03:35:56.415Z'
+  - url: WorkManager-Setup-13.512.0.exe
+    sha512: vgpoRCiF6yEK6Nz+WGJUPz25Hocna+6mkc7T/vtMdUsprgcXLR20HmXY5P3lRbDvBcouVkV5ZOqgxXpVkhl9ow==
+    size: 82339884
+path: WorkManager-Setup-13.512.0.exe
+sha512: vgpoRCiF6yEK6Nz+WGJUPz25Hocna+6mkc7T/vtMdUsprgcXLR20HmXY5P3lRbDvBcouVkV5ZOqgxXpVkhl9ow==
+releaseDate: '2026-11-17T06:04:34.337Z'

@@ -28,6 +28,7 @@ DELETE /api/dev-items/:id
 DELETE /api/docs/files/:id
 DELETE /api/docs/folders/:id
 DELETE /api/events/:id
+DELETE /api/gongsu/:day
 DELETE /api/issues/:id
 DELETE /api/issues/:id/logs/:logId
 DELETE /api/locks
@@ -189,6 +190,8 @@ GET /api/docs/folders
 GET /api/docs/folders/:id
 GET /api/events
 GET /api/events/:id
+GET /api/gongsu
+GET /api/gongsu/orders
 GET /api/ics/:file
 GET /api/issues
 GET /api/issues/:id
@@ -494,6 +497,8 @@ POST /api/docs/files
 POST /api/docs/files/upload-url
 POST /api/docs/folders
 POST /api/events
+POST /api/gongsu/:day/checked
+POST /api/gongsu/:day/sent
 POST /api/issues
 POST /api/issues/:id/logs
 POST /api/license/activate
@@ -681,6 +686,7 @@ PUT /api/dev-items/:id/move
 PUT /api/docs/files/:id
 PUT /api/docs/folders/:id
 PUT /api/events/:id
+PUT /api/gongsu/:day
 PUT /api/issues/:id
 PUT /api/meetings/:id
 PUT /api/meetings/:id/actions/:aid

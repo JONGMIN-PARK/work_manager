@@ -80,5 +80,7 @@ contextBridge.exposeInMainWorld('wmDesktop', {
   inkOverlay: (o) => ipcRenderer.send('wm:ink-open', { me: String((o && o.me) || '').slice(0, 80) }),
   inkClose: () => ipcRenderer.send('wm:ink-close'),
   inkSend: (m) => { if (m && typeof m === 'object') ipcRenderer.send('wm:ink', m); },
-  onInk: (cb) => { ipcRenderer.on('wm:ink', (_e, m) => { try { cb(m); } catch (_) {} }); }
+  onInk: (cb) => { ipcRenderer.on('wm:ink', (_e, m) => { try { cb(m); } catch (_) {} }); },
+  // v13.512 애니웍스 공수 등록 · 주간일지 내려받기 — status · cred-set · cred-clear · test · orders · fill · submit · download · close
+  aw: (cmd, a) => ipcRenderer.invoke('wm:aw', String(cmd || ''), a && typeof a === 'object' ? a : {})
 });

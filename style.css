@@ -6686,7 +6686,7 @@ html:not([data-cx-depth="0"]) .cxw-b.me{background:linear-gradient(180deg,rgba(2
   #mMyWork .mw-add .mw-date{flex:none;width:124px;height:32px;padding:4px 6px}
   #mMyWork .mw-add .mw-btn{flex:none;height:32px;padding:0 10px}
   #mMyWork .mw-add [data-mwt="new"]{width:34px;padding:0;justify-content:center;font-size:14px}
-  #mMyWork .mw-add [data-mwt="new"] .mw-add-lbl{display:none}   /* 좁은 창은 📅 아이콘만 (v13.427 — font-size:0 + ::before 는 뒤 규칙에 덮여 아이콘이 두 개 나왔음) */
+  #mMyWork .mw-add [data-mwt="new"] .mw-add-lbl,#mMyWork .mw-add .mw-awg .mw-add-lbl{display:none}   /* 좁은 창은 📅 아이콘만 (v13.427 — font-size:0 + ::before 는 뒤 규칙에 덮여 아이콘이 두 개 나왔음) */
   /* 목록 줄 — 한 줄로 (제목이 길면 …), 마감 · ✕ 는 오른쪽 */
   #mMyWork .mw-row{flex-wrap:nowrap;gap:6px;padding:4px 8px;min-height:34px}
   #mMyWork .mw-title{flex:1 1 auto;min-width:0}
@@ -8501,4 +8501,87 @@ html.wm-isl-on .hdr-ctl{flex:none}
   div:has(>input[type=datetime-local]){grid-column:1/-1}
   /* 메신저 위 도구 줄 — '💬 메신저' 제목은 머리 줄 아일랜드에 이미 있음 · 아이콘 자리 확보 */
   .cx-side-h>b{display:none}
+}
+
+/* ═══ 📝 애니웍스 공수 등록 (v13.512 · aw-gongsu.js) ═══ */
+.awg{font-size:12.5px;color:var(--t2)}
+.awg-sub{font-size:11px;font-weight:500;color:var(--t5);margin-left:6px}
+.awg-load{padding:26px 8px;text-align:center;color:var(--t4)}
+.awg-sp{flex:1 1 auto}
+.awg-in{background:var(--bg-i);border:1px solid var(--bd-i);border-radius:7px;padding:7px 9px;font-size:12.5px;color:var(--t1);font-family:inherit;outline:none;min-width:0;width:100%;box-sizing:border-box}
+.awg-in:focus{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac-g)}
+.awg-in::placeholder{color:var(--t6)}
+.awg-b{background:var(--bg-i);border:1px solid var(--bd);color:var(--t3);border-radius:7px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.awg-b:hover:not(:disabled){border-color:var(--ac);color:var(--t1)}
+.awg-b:disabled,.awg .btn:disabled{opacity:.45;cursor:default;transform:none;box-shadow:none}
+.awg-quiet{border-color:transparent;background:none;color:var(--t5)}
+.awg-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.awg-top .awg-day{width:150px}
+.awg-top .awg-copy{width:170px}
+.awg-wk{display:inline-flex;gap:3px;margin-left:6px}
+.awg-wd{display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:30px;padding:3px 5px;border-radius:7px;border:1px solid var(--bd);background:none;color:var(--t4);font-size:11px;cursor:pointer;font-family:inherit;line-height:1.15}
+.awg-wd b{font-size:11px;font-weight:700;color:var(--t6)}
+.awg-wd.draft b{color:var(--mk-t)}
+.awg-wd.sent{border-color:var(--stat-green,#10B981)}.awg-wd.sent b{color:var(--stat-green,#10B981)}
+.awg-wd.today{color:var(--t1);font-weight:700}
+.awg-wd.on{background:var(--ac-bg);border-color:var(--ac);color:var(--ac-t)}
+.awg-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;border:1px solid var(--bd);background:none;color:var(--t4);font-size:11.5px;font-family:inherit;white-space:nowrap}
+button.awg-chip{cursor:pointer}
+.awg-chip.on{color:var(--t2)}
+.awg-chip.warn{border-color:#F59E0B;color:var(--mk-t)}
+.awg-state{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0 8px;min-height:24px}
+.awg-st{padding:3px 9px;border-radius:999px;background:var(--bg-i);border:1px solid var(--bd);font-size:11.5px;color:var(--t3)}
+.awg-st.ok{border-color:var(--stat-green,#10B981);color:var(--stat-green,#10B981)}
+.awg-st.warn{border-color:#F59E0B;color:var(--mk-t)}
+.awg-saved{font-size:11px;color:var(--t5);margin-left:auto}
+.awg-hd,.awg-r{display:grid;grid-template-columns:22px 158px minmax(110px,1.1fr) 70px 78px 96px minmax(200px,2.6fr) 30px;gap:6px;align-items:center}
+.awg-hd{font-size:11px;color:var(--t5);padding:0 0 4px}
+.awg-r{padding:3px 0}
+.awg-no{text-align:center;color:var(--t6);font-size:11px}
+.awg-c{min-width:0;display:flex;align-items:center;gap:4px;position:relative}
+.awg-c-ps{color:var(--t3);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:block;padding:0 2px}
+.awg-c-ps i{color:var(--t6);font-style:normal}
+.awg-c-ord .awg-b{padding:6px 7px}
+.awg-c-memo .awg-in{padding-right:48px}
+.awg-cnt{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10.5px;font-style:normal;color:var(--t6);pointer-events:none}
+.awg-del{padding:5px 0;width:28px;color:var(--t5);border-color:transparent;background:none}
+.awg-del:hover{color:var(--d-t)!important;border-color:var(--d-bd)!important}
+.awg-foot{display:flex;align-items:center;gap:10px;margin-top:6px}
+.awg-sum{color:var(--t3)}.awg-sum b{color:var(--t1);font-size:13.5px}
+.awg-act{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--bd)}
+.awg-act .btn{font-size:12.5px;padding:9px 16px}
+.awg-hint{color:var(--t4);font-size:11.5px;line-height:1.5}
+.awg-shot{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.awg-msg{padding:9px 12px;border-radius:9px;border:1px solid var(--bd);background:var(--bg-i);line-height:1.55}
+.awg-msg.run{color:var(--t3)}
+.awg-msg.ok{border-color:var(--stat-green,#10B981)}
+.awg-msg.warn{border-color:#F59E0B}
+.awg-msg.err{border-color:var(--d-bd);color:var(--d-t);background:var(--d-bg)}
+.awg-said{margin-top:4px;font-size:11.5px;color:var(--t4)}
+.awg-dup{margin-top:6px;font-size:11.5px;color:var(--t3);display:flex;flex-direction:column;gap:2px}
+.awg-cap{border:1px solid var(--bd);border-radius:9px;overflow:hidden;background:#fff}
+.awg-cap-t{padding:6px 10px;font-size:11px;color:var(--t4);background:var(--bg-i);border-bottom:1px solid var(--bd)}
+.awg-cap img{display:block;max-width:100%;height:auto}
+.awg-cap .awg-dup{padding:8px 10px;margin:0;color:#222}
+.awg-spin{display:inline-block;width:12px;height:12px;border:2px solid var(--bd2);border-top-color:var(--ac);border-radius:50%;margin-right:7px;vertical-align:-2px;animation:awgSpin .8s linear infinite}
+@keyframes awgSpin{to{transform:rotate(360deg)}}
+.awg.busy .awg-rows,.awg.busy .awg-top,.awg.busy .awg-foot{pointer-events:none;opacity:.6}
+.awg-find-bar{display:flex;gap:6px}.awg-find-bar select{width:120px;flex:none}
+.awg-find-list{margin-top:10px;max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:3px}
+.awg-find-row{display:flex;gap:10px;align-items:baseline;text-align:left;padding:8px 10px;border-radius:7px;border:1px solid transparent;background:none;color:var(--t2);font-family:inherit;font-size:12.5px;cursor:pointer}
+.awg-find-row:hover,.awg-find-row:focus{background:var(--bg-hv);border-color:var(--bd)}
+.awg-find-row b{flex:none;min-width:96px;color:var(--t1)}.awg-find-row span{color:var(--t3)}
+.awg-acct form,.awg-pull{display:flex;flex-direction:column;gap:10px}
+.awg-acct label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--t4)}
+.awg-acct-msg{min-height:18px;font-size:12px;color:var(--t3)}
+.awg-acct-btns{display:flex;align-items:center;gap:8px}
+.awg-pull-r{display:flex;align-items:center;gap:8px}
+.awg-pull-q{display:flex;gap:6px;flex-wrap:wrap}
+@media (max-width:820px){
+  .awg-hd{display:none}
+  .awg-r{grid-template-columns:22px 1fr 1fr 1fr 30px;grid-template-areas:"no ord ord ps del" "no h d j del" "no memo memo memo del";padding:8px 0;border-bottom:1px solid var(--bd)}
+  .awg-no{grid-area:no;align-self:start;padding-top:9px}.awg-c-ord{grid-area:ord}.awg-c-ps{grid-area:ps}.awg-c-h{grid-area:h}.awg-c-d{grid-area:d}.awg-c-j{grid-area:j}.awg-c-memo{grid-area:memo}.awg-del{grid-area:del;align-self:start}
+  .awg-in{font-size:16px;padding:8px 9px}
+  .awg-top .awg-copy{width:100%}
+  .awg-wk{margin-left:0}
 }

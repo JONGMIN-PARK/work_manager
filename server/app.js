@@ -376,6 +376,7 @@ app.use('/api/data-export', dataExportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/notices', require('./routes/notices'));   // 📢 공지사항 (v13.444)
 app.use('/api/wa-targets', require('./routes/wa-targets'));   // 🎯 목표 분장 비율 (v13.460)
+app.use('/api/gongsu', require('./routes/gongsu'));   // 📝 애니웍스 공수 등록 — 날짜별 초안 · 등록 기록 (v13.512)
 app.use('/api/weekly-reports', weeklyReportRoutes);
 app.use('/api/dev-items', devItemRoutes);
 app.use('/api/meetings', meetingRoutes);

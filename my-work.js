@@ -287,6 +287,7 @@ function _mwPaintNow(el) {
         (typeof mwIoToolsHtml === 'function' ? mwIoToolsHtml(r) : '') +
         (r.self && typeof mwCalFeedModal === 'function' ? '<div class="hdr-mi-sep"></div><button class="hdr-mi" data-mwc="feed" title="구글 · 아웃룩 달력에서 내 업무 보기">📅 달력 구독 (구글 · 아웃룩)</button>' : '') +
         (r.self ? '<div class="hdr-mi-sep mw-nar"></div><button class="hdr-mi mw-nar" type="button" data-mwt="new" onclick="wmHdrPopClose()" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅 일정 등록 (회의 · 출장 · 연차 …)</button>' : '') +
+        (r.self && typeof awgOpen === 'function' ? '<button class="hdr-mi mw-nar" type="button" data-awg-open="" onclick="wmHdrPopClose()" title="오늘 한 일을 써서 애니웍스 업무보고에 올리기">📝 공수 등록 (애니웍스)</button>' : '') +
         '<div class="hdr-mi-sep"></div><button class="hdr-mi" data-mw="refresh" title="새로 고침">↻ 새로 고침</button>' +
       '</div></div>';
   var h = '';
@@ -326,7 +327,8 @@ function _mwPaintNow(el) {
     bar += '<form class="mw-add" id="mwAdd"><input id="mwAddTitle" class="mw-input" maxlength="500" placeholder="+ 할 일 — &quot;내일 14:00 !긴급 견적&quot;" data-ph-m="+ 할 일 추가" title="&quot;내일 14:00 !긴급 견적 회신&quot; 처럼 적으면 마감 · 중요도까지" autocomplete="off" aria-label="새 할 일">' +
       '<button type="button" class="mw-btn mw-due-pick" data-mw-duepick="1" title="마감 날짜 고르기 (없어도 됨)">마감</button>' +
       '<input id="mwAddDue" type="date" class="mw-input mw-date" title="마감 (없어도 됨)" aria-label="마감 날짜"><button class="mw-btn mw-btn-p" type="submit">추가</button>' +
-      '<button class="mw-btn" type="button" data-mwt="new" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅<span class="mw-add-lbl"> 일정…</span></button></form>';
+      '<button class="mw-btn" type="button" data-mwt="new" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅<span class="mw-add-lbl"> 일정…</span></button>' +
+      (typeof awgOpen === 'function' ? '<button class="mw-btn mw-awg" type="button" data-awg-open="" title="📝 공수 등록 — 오늘 한 일을 써서 애니웍스 업무보고에 올리기">📝<span class="mw-add-lbl"> 공수</span></button>' : '') + '</form>';
   }
   bar += moreMenu + '</div>';
   var top = h + bar;
@@ -511,6 +513,7 @@ function _mwBind(el) {
     if (t.closest('[data-mw-duepick]')) { _mwDuePick(el); return; }
     if (t.closest('[data-mw="refresh"]')) { renderMyWork(); return; }
     if (t.closest('[data-mwn="open"]')) { mwNotesToggle(); return; }
+    if (typeof awgClick === 'function' && awgClick(e)) return;   // v13.512 📝 공수 등록
     if (typeof mwIoClick === 'function' && mwIoClick(e)) return;
     if (typeof mwProjClick === 'function' && mwProjClick(e)) return;
     if (typeof mwBoardClick === 'function' && mwBoardClick(e)) return;

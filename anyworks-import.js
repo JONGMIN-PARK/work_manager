@@ -31,7 +31,9 @@ function awGetServerBase() {
 }
 
 /* ── 모달 열기 ── */
-async function openAnyworksModal() {
+async function openAnyworksModal(legacy) {
+  // v13.512 PC 앱이면 PC 앱이 직접 내려받는다 (사내PC 프로그램 · 클라우드 없이). 예전 방식은 그 창의 「예전 방식으로」
+  if (legacy !== true && typeof awgPullOk === 'function' && awgPullOk()) return awgPullOpen();
   var old = document.getElementById('anyworksOverlay');
   if (old) old.remove();
 

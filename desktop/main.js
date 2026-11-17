@@ -16,6 +16,7 @@ const TRAY_ICON = path.join(__dirname, 'build', 'tray.png');
 let win = null, tray = null, quitting = false, retryTimer = null, unread = 0;
 let sharedDisplayId = null, ctlOn = false;   // 🖱 원격 제어 (v13.360)
 const remote = require('./remote-input');
+const anyworks = require('./anyworks');   // v13.512 애니웍스 공수 등록 · 주간일지 내려받기 (숨은 창)
 
 /* ─── 설정 ─── */
 const cfgPath = () => path.join(app.getPath('userData'), 'config.json');
@@ -443,6 +444,9 @@ app.whenReady().then(() => {
     setInterval(() => checkUpdate(false), 4 * 3600 * 1000);   // 4시간마다
   }
 });
+
+// v13.512 애니웍스 — 메인 창에 떠 있는 우리 서버 화면(맨 위 프레임)에서 온 호출만 받는다
+anyworks.init(ipcMain, (e) => !!(win && e.sender === win.webContents && e.senderFrame === e.sender.mainFrame && sameOrigin(e.senderFrame.url)));
 
 app.on('before-quit', () => { quitting = true; ctlStop(false); inkClose(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
