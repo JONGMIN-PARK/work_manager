@@ -62,15 +62,30 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
 
     /* 한 칸이 비면 올리지 않음 */
     await setEd(p, '#wrAuEditorLast', '[개발]\n- [P사] 배선 점검 #완료 @관리자');
-    await menu(p); await wait(500);
-    check(!(await p.$('#awwModal')) && await p.evaluate(function () { return !window.__aww.calls.length; }), '금주 칸이 비면 창을 열지 않음');
+    await menu(p);
+    check(await until(p, function () { return !!document.querySelector('#awwBox [data-aww-d]'); }), '금주 칸이 비어도 창은 열림 (내 양식을 붙여 넣을 수 있게)');
+    check(await p.evaluate(function () { return document.getElementById('awwHtml').open && document.getElementById('awwFill').disabled && document.getElementById('awwR').value === '' && /배선 점검/.test(document.getElementById('awwL').value); }), '빈 칸이 있으면 HTML 칸이 펼쳐지고 ① 은 잠김');
+    // 내 양식 붙여 넣기 → 그대로 들어감
+    var MINE_L = '<table class="my-form"><tr><th>MY FORM</th></tr><tr><td>this week</td></tr></table>', MINE_R = '<div class="my-form">next week plan</div>';
+    await setEd(p, '#awwL', MINE_L); await setEd(p, '#awwR', MINE_R);
+    check(await p.evaluate(function () { return !document.getElementById('awwFill').disabled && /직접 고침/.test(document.getElementById('awwSize').textContent); }), '양쪽에 내 HTML 을 넣으면 ① 열림 · 「직접 고침」 표시');
+    await p.click('[data-aww-d="2026-11-06"]');
+    await p.click('#awwFill');
+    await until(p, function () { return !!document.querySelector('#awwCap img'); });
+    check(await p.evaluate(function (a) { var c = window.__aww.calls.filter(function (x) { return x.cmd === 'wwrFill'; })[0].a; return c.left === a[0] && c.right === a[1] && c.date === '2026-11-06'; }, [MINE_L, MINE_R]), '내 양식 HTML 이 한 글자도 안 바뀌고 넘어감');
+    await setEd(p, '#awwL', MINE_L + '<p>more</p>');
+    check(await p.evaluate(function () { return document.getElementById('awwSave').disabled && !document.querySelector('#awwCap img'); }), 'HTML 을 고치면 ② 가 잠기고 다시 ① 부터');
+    await p.click('#awwHtmlReset');
+    check(await p.evaluate(function () { return /배선 점검/.test(document.getElementById('awwL').value) && document.getElementById('awwR').value === '' && document.getElementById('awwFill').disabled; }), '↺ 미리보기 HTML 로 되돌리기');
+    await p.evaluate(function () { document.querySelector('#awwModal [data-wm-close]').click(); window.__aww.calls = []; });
+    await wait(400);
 
     /* 창 — 기본 등록일은 작성 주차의 금요일 */
     await setEd(p, '#wrAuEditorCur', '[개발]\n- [Q사] 모션 튜닝 30% @관리자');
     await menu(p);
     check(await until(p, function () { return !!document.querySelector('#awwBox [data-aww-d]'); }), '창이 뜨고 애니웍스 날짜 목록이 보임');
     var v0 = await p.evaluate(function () { return { d: document.getElementById('awwDate').value, day: document.getElementById('awwDay').textContent, chips: document.querySelectorAll('[data-aww-d]').length, fill: document.getElementById('awwFill').disabled, save: document.getElementById('awwSave').disabled }; });
-    check(v0.d === '2026-11-20' && /아직 없음/.test(v0.day) && !/금요일이 아님/.test(v0.day) && v0.chips === 2 && !v0.fill && v0.save, '등록일 = 그 주 금요일(11/20) · 아직 없음 표시 · ② 는 잠김 ' + JSON.stringify(v0));
+    check(v0.d === '2026-11-20' && /아직 없음/.test(v0.day) && !/금요일이 아님/.test(v0.day) && v0.chips === 2 && !v0.fill && v0.save && await p.evaluate(function () { return !document.getElementById('awwHtml').open; }), '등록일 = 그 주 금요일(11/20) · 아직 없음 표시 · ② 는 잠김 ' + JSON.stringify(v0));
 
     /* 있는 날짜 고르기 → 넣기 → 캡처 · 이미 있던 내용 경고 */
     await p.click('[data-aww-d="2026-11-13"]');
@@ -127,7 +142,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var w = await open(false);
     await setEd(w, '#wrAuEditorLast', '[개발]\n- [P사] a');
     await setEd(w, '#wrAuEditorCur', '[개발]\n- [Q사] b');
-    await menu(w); await wait(500);
+    await w.click('#wrAuMoreWrap > button'); await wait(120); await w.click('#wrAuAw'); await wait(500);
     check(!(await w.$('#awwModal')) && await w.evaluate(function () { return /PC 앱/.test(document.body.textContent); }), '웹 브라우저 — 창 대신 「PC 앱에서」 안내');
 
     check(!errs.length, '페이지 오류 없음 ' + errs.join(' | '));

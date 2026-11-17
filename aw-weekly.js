@@ -2,7 +2,8 @@
  *   주간 업무 작성 ⋯ › 🌐 애니웍스에 올리기 → awwOpen({ left, right, weekEnd, theme, boss })
  *     left  = 지난주 실적 미리보기 HTML → 애니웍스 「금주 업무 현황」(왼쪽 편집기)
  *     right = 금주 계획 미리보기 HTML   → 애니웍스 「차주 예정 현황」(오른쪽 편집기)
- *   등록일은 작성 주차의 금요일이 기본 (바꿀 수 있음 · 애니웍스에 이미 있는 날짜는 칩으로).
+ *   등록일은 작성 주차의 금요일이 기본 (바꿀 수 있음 · 애니웍스에 이미 있는 날짜는 칩으로 · 없는 날짜는 물어본 뒤 새로 등록).
+ *   넣을 HTML 은 창 안에서 직접 보고 고칠 수 있다 (v13.518) — 내 양식을 붙여 넣으면 그대로 들어감. 칸이 비어 있어도 창은 열림.
  *   공수 등록처럼 두 단계 — ① 애니웍스에 넣기(PC 앱 숨은 창 편집기에 넣고 그 화면을 캡처로 보여 줌) → 확인 → ② 저 장.
  *   PC 앱 다리 wmDesktop.aw('wwrDates' | 'wwrFill' | 'wwrSave') — desktop/anyworks.js (status.v >= 3).
  *   이름: aww… / _aww… · 스타일 .aww-* (+ 공수 창의 .awg-* 를 같이 씀). 도우미 _awgDesk · _awgIso · _awgAdd · _awgMon · _awgLabel · awgAcctOpen 은 aw-gongsu.js */
@@ -15,18 +16,23 @@ function awwOpen(p) {
 function _awwBuild(p) {
   var desk = _awgDesk();
   if (!desk) { showToast('PC 앱(업무 관리자)에서 쓸 수 있습니다', 'warn'); return false; }
-  if (!p.left || !p.right) { showToast('지난주 · 금주 칸을 모두 써야 애니웍스에 올릴 수 있습니다', 'warn'); return false; }
   var today = _awgIso(new Date());
   var base = /^\d{4}-\d{2}-\d{2}$/.test(p.weekEnd || '') ? p.weekEnd : today;
-  var st = { dates: null, filled: null, busy: false };
+  // left · right = 실제로 넣을 HTML — 처음엔 미리보기 HTML, 「넣을 HTML 직접 고치기」 에서 내 양식으로 바꿀 수 있음 (v13.518)
+  var st = { dates: null, filled: null, busy: false, left: p.left || '', right: p.right || '' };
   var m = createModal({ id: 'awwModal', titleText: '🌐 애니웍스 주간업무보고에 올리기', width: '760px', closeOnEsc: true });
   var box = document.createElement('div'); box.id = 'awwBox'; box.className = 'awg aww';
   box.innerHTML =
     '<p class="awg-hint">지난주 실적 → <b>금주 업무 현황</b>(왼쪽) · 금주 계획 → <b>차주 예정 현황</b>(오른쪽) 에 지금 미리보기 모양 그대로 들어갑니다' +
       (p.theme ? ' <span class="aww-th">테마 ' + eH(p.theme) + (p.boss ? ' · 👔 보고용' : ' · 직원용') + '</span>' : '') + '</p>' +
     '<div class="aww-row"><label for="awwDate">등록일</label><input type="date" class="awg-in" id="awwDate" value="' + _awwFriday(base) + '"><span class="aww-day" id="awwDay"></span>' +
-      '<span class="aww-size">왼쪽 ' + p.left.length.toLocaleString() + '자 · 오른쪽 ' + p.right.length.toLocaleString() + '자</span></div>' +
+      '<span class="aww-size" id="awwSize"></span></div>' +
     '<div class="aww-dates" id="awwDates"><span class="awg-hint"><span class="awg-spin"></span>애니웍스의 날짜 목록을 읽는 중…</span></div>' +
+    '<details class="aww-html" id="awwHtml"' + (p.left && p.right ? '' : ' open') + '><summary>✏️ 넣을 HTML 직접 보기 · 고치기 — 내 양식을 붙여 넣어도 됩니다</summary>' +
+      '<div class="aww-html-g"><label>왼쪽 — 금주 업무 현황<textarea class="awg-in" id="awwL" spellcheck="false" placeholder="여기에 HTML 을 붙여 넣으세요"></textarea></label>' +
+        '<label>오른쪽 — 차주 예정 현황<textarea class="awg-in" id="awwR" spellcheck="false" placeholder="여기에 HTML 을 붙여 넣으세요"></textarea></label></div>' +
+      '<div class="awg-acct-btns"><span class="awg-hint">여기 적힌 그대로 애니웍스 편집기에 들어갑니다 (고치면 ① 부터 다시)</span><span class="awg-sp"></span>' +
+        '<button type="button" class="awg-b" id="awwHtmlReset" title="주간 업무 미리보기에서 만든 HTML 로 되돌리기">↺ 미리보기 HTML 로</button></div></details>' +
     '<div id="awwMsg"></div><div id="awwCap"></div>' +
     '<div class="awg-acct-btns"><span class="awg-sp"></span>' +
       '<button type="button" class="btn btn-g" id="awwFill" disabled>① 애니웍스에 넣기</button>' +
@@ -44,10 +50,17 @@ function _awwBuild(p) {
       (st.dates ? (exists(d) ? ' · 애니웍스에 있는 날짜' : ' · <b class="aww-new">아직 없음 — 넣을 때 새로 등록</b>') : '');
     if (st.dates) datesEl.innerHTML = '<span class="awg-hint">애니웍스에 있는 날짜</span>' + (st.dates.length ? st.dates.map(function (x) {
       return '<button type="button" class="awg-chip' + (x.date === d ? ' on' : '') + '" data-aww-d="' + eA(x.date) + '">' + eH(_awgLabel(x.date)) + '</button>'; }).join('') : '<span class="awg-hint">— 없음</span>');
-    bFill.disabled = st.busy || !ok || !st.dates;
+    var both = !!(st.left.trim() && st.right.trim()), mine = st.left !== (p.left || '') || st.right !== (p.right || '');
+    sizeEl.textContent = '왼쪽 ' + st.left.length.toLocaleString() + '자 · 오른쪽 ' + st.right.length.toLocaleString() + '자' + (mine ? ' · 직접 고침' : '');
+    bFill.disabled = st.busy || !ok || !st.dates || !both;
+    bFill.title = both ? '' : '왼쪽 · 오른쪽 내용이 모두 있어야 합니다';
     bSave.disabled = st.busy || !st.filled || st.filled.date !== d;
   }
   function reset() { st.filled = null; cap.innerHTML = ''; say('', ''); paint(); }
+  var sizeEl = box.querySelector('#awwSize'), taL = box.querySelector('#awwL'), taR = box.querySelector('#awwR');
+  taL.value = st.left; taR.value = st.right;
+  taL.oninput = taR.oninput = function () { st.left = taL.value; st.right = taR.value; if (st.filled || cap.firstChild) reset(); else paint(); };
+  box.querySelector('#awwHtmlReset').onclick = function () { taL.value = st.left = p.left || ''; taR.value = st.right = p.right || ''; reset(); };
   D.onchange = reset;
   datesEl.onclick = function (e) { var b = e.target.closest && e.target.closest('[data-aww-d]'); if (!b || st.busy) return; D.value = b.getAttribute('data-aww-d'); reset(); };
 
@@ -77,7 +90,7 @@ function _awwBuild(p) {
     st.busy = true; st.filled = null; cap.innerHTML = ''; paint();
     say('run', '<span class="awg-spin"></span>애니웍스 화면에 넣는 중…');
     try {
-      var r = await desk('wwrFill', { date: d, left: p.left, right: p.right, create: create });
+      var r = await desk('wwrFill', { date: d, left: st.left, right: st.right, create: create });
       if (!alive()) return;
       if (!r || !r.ok) { say('err', '❌ ' + eH((r && r.error) || '넣지 못했습니다')); if (r && (r.code === 'LOGIN' || r.code === 'NO_CRED')) awgAcctOpen(); return; }
       if (r.created && st.dates && !exists(d)) st.dates.unshift({ date: d, seq: r.seq });
