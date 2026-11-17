@@ -89,7 +89,7 @@ function normAmount(v) {
 }
 
 // GET /api/orders — v13.36 정책: 수주대장은 tenant 전체 공개 (누구나 조회).
-//   수정/생성/삭제는 RBAC(order.edit)에서 admin/manager/executive로 제한.
+//   수정/생성은 RBAC(order.edit)에서 admin/manager/executive로 제한 · 삭제는 관리자만 (v13.516).
 router.get('/', async function (req, res) {
   try {
     var pg = parsePagination(req.query, 100);
@@ -449,8 +449,8 @@ router.put('/:orderNo', rbac.checkPermission('order.edit'), async function (req,
   }
 });
 
-// DELETE /api/orders/:orderNo
-router.delete('/:orderNo', rbac.checkPermission('order.edit'), async function (req, res) {
+// DELETE /api/orders/:orderNo — 관리자만 (v13.516 · 고치기는 예전대로 admin/manager/executive)
+router.delete('/:orderNo', auth.requireRole('admin'), async function (req, res) {
   try {
     var r = await db.query('DELETE FROM orders WHERE order_no = $1 AND tenant_id = $2 RETURNING order_no', [req.params.orderNo, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });

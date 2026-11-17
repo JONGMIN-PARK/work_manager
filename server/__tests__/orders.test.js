@@ -20,6 +20,19 @@ describe('Orders API', () => {
     await h.db.query('DELETE FROM orders WHERE tenant_id = $1', [h.TEST_TENANT_ID]);
   });
 
+  // 삭제는 관리자만 (v13.516) — 팀장은 고칠 수는 있어도 지우지 못함
+  test('DELETE /api/orders/:orderNo — 팀장 403 · 관리자 200', async () => {
+    var admin = await h.createTestUser({ role: 'admin', email: 'ord-admin@test.com' });
+    await h.request(h.app).post('/api/orders/bulk').set('Authorization', 'Bearer ' + manager.token)
+      .send({ records: [{ orderNo: 'DEL001', date: '2026-01-02', client: 'c', name: 'n', amount: 1 }] });
+    var m = await h.request(h.app).delete('/api/orders/DEL001').set('Authorization', 'Bearer ' + manager.token);
+    expect(m.status).toBe(403);
+    expect((await h.db.query('SELECT 1 FROM orders WHERE order_no = $1 AND tenant_id = $2', ['DEL001', h.TEST_TENANT_ID])).rowCount).toBe(1);
+    var a = await h.request(h.app).delete('/api/orders/DEL001').set('Authorization', 'Bearer ' + admin.token);
+    expect(a.status).toBe(200);
+    expect((await h.db.query('SELECT 1 FROM orders WHERE order_no = $1 AND tenant_id = $2', ['DEL001', h.TEST_TENANT_ID])).rowCount).toBe(0);
+  });
+
   // ─────────────────────────────────────────────
   // 엑셀 불러오기 (bulk upsert)
   // ─────────────────────────────────────────────

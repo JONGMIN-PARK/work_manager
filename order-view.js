@@ -218,9 +218,9 @@ function renderOrders(afterRender) {
       }
 
       html += '<td style="padding:8px 6px;white-space:nowrap">';
-      var safeNo = safeOrderNo;
+      var safeNo = safeOrderNo, _ovAdmin = typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin';   // 삭제는 관리자만 (v13.516)
       html += '<button class="btn btn-g" style="padding:2px 6px;font-size:9px;margin-right:3px" onclick="showOrderModal(\'' + safeNo + '\')">편집</button>';
-      html += '<button class="btn btn-d" style="padding:2px 6px;font-size:9px" onclick="confirmDeleteOrder(\'' + safeNo + '\')">삭제</button>';
+      if (_ovAdmin) html += '<button class="btn btn-d" style="padding:2px 6px;font-size:9px" onclick="confirmDeleteOrder(\'' + safeNo + '\')">삭제</button>';
       html += '</td>';
       html += '</tr>';
     });
