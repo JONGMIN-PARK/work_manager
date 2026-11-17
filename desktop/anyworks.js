@@ -20,6 +20,8 @@ const HOST = 'works.animotion.co.kr';
 const BASE = 'https://' + HOST;
 const URL_FORM = BASE + '/Sales/common_gs_insert.asp?mun=4&table=WeekList&top_id=80';
 const URL_LIST = BASE + '/Sales/Week_List.asp?top_id=80&mun=6&table=WeekList';
+const URL_WWR_POP = BASE + '/Sales/wwr_insert.asp?top_id=80&mun=3';          // 주간업무보고 — 등록일 선택 (날짜 목록 + 새 날짜 등록)
+const URL_WWR = BASE + '/Sales/wwr_Default.asp?mun=3&top_id=80&Seq=';     // 주간업무보고 — 그 날짜의 내 금주 · 차주 편집 화면
 const MAX_ROWS = 15, MEMO_MAX = 50, IDLE_MS = 10 * 60 * 1000;
 const DIVI = { '사내': '0', '사외': '1' };
 const JOB = { '제안': 'R', '수주': 'B', '개발': 'D', '지원': 'S', 'CS': 'A', '양산': 'M', '공통': 'G' };
@@ -27,6 +29,7 @@ const POPUP_FIELDS = { orderno: 'orderno', custnm: 'custnm', prodspec: 'prodspec
 
 let aw = null, popup = null, idleTimer = null, chain = Promise.resolve(), running = '';
 let filled = null;            // { date, n } — fill 이 끝나고 아직 등록 전
+let wwrFilled = null;         // { seq, date, l, r } — 주간업무보고 편집기에 넣고 아직 저장 전
 const downloads = [];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -141,6 +144,7 @@ async function login() {
 
 /* 메인 화면의 iframe 을 원하는 화면으로 바꾼다. 로그인이 풀렸으면 한 번 다시 로그인 */
 async function openPage(url, readyJs, label) {
+  wwrFilled = null;                    // 화면이 바뀌면 넣어 둔 주간업무보고는 없던 것으로
   for (let attempt = 0; attempt < 2; attempt++) {
     if (!aw || aw.isDestroyed() || !atMain()) await login();
     try {
@@ -381,9 +385,122 @@ async function download(a) {
   return { files, skipped, teams: all, start: a.start, end: a.end };
 }
 
+/* ─── 주간업무보고 (v13.517) ───
+   등록일 선택 창 (Sales/wwr_insert.asp · form frm_week → wwr_insert_pass.asp): 최근 날짜 목록 a[href="javascript:goPass('seq')"] · 새 날짜는 weekdate 넣고 submit
+   작성 화면 (Sales/wwr_Default.asp?Seq=seq · form frm_update → wwr_Update_pass.asp): seq · weekdate(읽기 전용) ·
+     스마트에디터 2개 oEditors.getById.ir1(금주 업무 현황 → nContent) · ir2(차주 예정 현황 → mContent) · [저 장] = goWeekPass()
+   공수 등록처럼 두 단계: wwrFill(편집기에 넣고 캡처) → 사람이 확인 → wwrSave(저 장). 저장 뒤 다시 열어 들어갔는지 본다. */
+const WWR_MAX = 400000;
+const JS_WWR_LIST = `(function(){ var out = [];
+  document.querySelectorAll('a[href*="goPass("]').forEach(function(a){
+    var m = (a.getAttribute('href') || '').match(/goPass\\('(\\d+)'\\)/), d = (a.textContent || '').match(/(\\d{4}-\\d{2}-\\d{2})/);
+    if (m && d) out.push({ seq: m[1], date: d[1] }); });
+  return out; })()`;
+const JS_WWR_READY = `(function(){ try { return typeof oEditors !== 'undefined' && !!oEditors.getById && !!oEditors.getById.ir1 && !!oEditors.getById.ir2 &&
+  typeof oEditors.getById.ir1.getIR() === 'string' && typeof oEditors.getById.ir2.getIR() === 'string' && !!document.frm_update; } catch (e) { return false; } })()`;
+const JS_WWR_LEN = `(function(){ var f = document.frm_update; return { seq: f.seq.value, date: f.weekdate.value, l: oEditors.getById.ir1.getIR().length, r: oEditors.getById.ir2.getIR().length }; })()`;
+async function wwrList() {
+  await openPage(URL_WWR_POP, '!!document.frm_week', '주간업무보고 날짜 화면');
+  return inFrame(JS_WWR_LIST);
+}
+async function wwrOpen(seq) {
+  await openPage(URL_WWR + encodeURIComponent(seq), JS_WWR_READY, '주간업무보고 작성 화면');
+  // 편집기가 저장돼 있던 내용을 다 읽어 들일 때까지 — 길이가 두 번 같으면
+  let last = null;
+  for (let i = 0; i < 12; i++) {
+    await sleep(350);
+    const v = await inFrame(JS_WWR_LEN);
+    if (last && last.l === v.l && last.r === v.r) return v;
+    last = v;
+  }
+  return last;
+}
+async function wwrDates() { return { dates: await wwrList() }; }
+
+async function wwrFill(a) {
+  const date = String((a && a.date) || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) throw E('BAD', '등록일이 올바르지 않습니다');
+  const left = String((a && a.left) || ''), right = String((a && a.right) || '');
+  if (!left.trim() || !right.trim()) throw E('BAD', '금주 · 차주 내용이 모두 있어야 합니다');
+  if (left.length > WWR_MAX || right.length > WWR_MAX) throw E('BAD', '내용이 너무 깁니다');
+  let hit = (await wwrList()).find((x) => x.date === date), created = false;
+  if (!hit) {
+    if (!(a && a.create)) throw E('NO_DATE', date + ' 주간업무보고가 아직 없습니다');
+    await drain();
+    await inFrame(`(function(){ var f = document.frm_week; f.weekdate.value = ${J(date)}; f.submit(); })()`, true);
+    await sleep(1800);
+    const said = (await drain()).map((d) => d.m);
+    hit = (await wwrList()).find((x) => x.date === date);
+    if (!hit) throw E('CREATE', date + ' 날짜를 등록하지 못했습니다' + (said.length ? ' (' + said.join(' / ').slice(0, 120) + ')' : ''));
+    created = true;
+  }
+  const info = await wwrOpen(hit.seq);
+  if (!info || info.seq !== hit.seq || info.date !== date) throw E('MISMATCH', '다른 날짜의 화면이 열렸습니다 (' + ((info && info.date) || '?') + ') — 다시 시도해 주세요');
+  const back = await inFrame(`(function(){ oEditors.getById.ir1.setIR(${J(left)}); oEditors.getById.ir2.setIR(${J(right)});
+    return { l: oEditors.getById.ir1.getIR().length, r: oEditors.getById.ir2.getIR().length }; })()`);
+  if (!back.l || !back.r) throw E('MISMATCH', '편집기에 내용이 들어가지 않았습니다 — 다시 시도해 주세요');
+  wwrFilled = { seq: hit.seq, date, l: back.l, r: back.r };
+  let png = null;
+  try { png = await captureFrame(); } catch (_) {}
+  return { seq: hit.seq, date, created, before: { left: info.l, right: info.r }, after: { left: back.l, right: back.r }, png };
+}
+/* 작성 화면 전체를 찍는다 (iframe 을 잠깐 창 전체로) */
+async function captureFrame() {
+  const wc = aw.webContents;
+  const old = await inTop(`(function(){ var f = document.getElementsByTagName('iframe')[0]; var o = f.getAttribute('style') || '';
+    f.setAttribute('style', o + ';position:fixed !important;left:0 !important;top:0 !important;width:100vw !important;height:100vh !important;max-height:none !important;margin:0 !important;border:0 !important;z-index:2147483647 !important;background:#fff !important;transform:none !important;');
+    return o; })()`);
+  try {
+    await sleep(150);
+    try { wc.invalidate(); } catch (_) {}
+    await sleep(700);
+    const img = await Promise.race([wc.capturePage(), sleep(6000).then(() => null)]);
+    if (!img || img.isEmpty()) return null;
+    const sz = img.getSize();
+    return (sz.width > 1200 ? img.resize({ width: 1200 }) : img).toDataURL();
+  } finally {
+    await inTop('(function(){ var f = document.getElementsByTagName("iframe")[0]; if (f) f.setAttribute("style", ' + J(old) + '); })()').catch(() => {});
+  }
+}
+
+async function wwrSave() {
+  const was = wwrFilled; wwrFilled = null;           // 어떤 결과든 같은 입력으로 두 번 누르지 못하게
+  let cur = null;
+  try { if (was && aw && !aw.isDestroyed() && atMain() && await inFrame(JS_WWR_READY)) cur = await inFrame(JS_WWR_LEN); } catch (_) {}
+  if (!was || !cur || cur.seq !== was.seq || cur.date !== was.date) throw E('NOT_FILLED', '먼저 「애니웍스에 넣기」 로 내용을 넣고 확인해 주세요');
+  if (cur.l !== was.l || cur.r !== was.r) throw E('MISMATCH', '편집기 내용이 넣은 것과 다릅니다 — 다시 넣어 주세요');
+  await drain();
+  await inFrame(`(function(){ window.__awOld = 1; var b = document.querySelector("input[onclick='goWeekPass()']"); if (b) b.click(); else goWeekPass(); })()`, true);
+  const messages = []; let left = false;
+  const end = Date.now() + 20000;
+  while (Date.now() < end) {
+    (await drain()).forEach((d) => messages.push(d.m));
+    let st = null;
+    try { st = await inFrame(`(function(){ var o = { old: !!window.__awOld };
+      try { if (typeof Swal !== 'undefined' && Swal.isVisible()) { var t = document.querySelector('.swal2-title'), x = document.querySelector('.swal2-html-container, .swal2-content');
+        o.swal = ((t && t.textContent || '') + ' ' + (x && x.textContent || '')).trim(); } } catch (e) {}
+      return o; })()`); } catch (_) {}
+    if (st && st.old && st.swal) { await inFrame('Swal.clickConfirm()').catch(() => {}); throw E('VALID', '애니웍스가 저장을 받지 않았습니다: ' + st.swal); }
+    if (st && !st.old) { left = true; break; }
+    await sleep(200);
+  }
+  if (!left) throw E('UNSURE', '저장 결과를 확인하지 못했습니다 — 다시 누르지 말고 애니웍스에서 직접 확인해 주세요' + (messages.length ? ' (' + messages.join(' / ').slice(0, 160) + ')' : ''));
+  await sleep(700);
+  (await drain()).forEach((d) => messages.push(d.m));
+  // 다시 열어 들어갔는지 확인 (길이가 2% 안쪽으로 같으면)
+  let got = null, verified = false;
+  try {
+    got = await wwrOpen(was.seq);
+    const near = (x, y) => Math.abs(x - y) <= Math.max(20, y * 0.02);
+    verified = !!got && got.seq === was.seq && near(got.l, was.l) && near(got.r, was.r);
+  } catch (_) {}
+  wwrFilled = null;
+  return { seq: was.seq, date: was.date, messages, verified, sent: { left: was.l, right: was.r }, saved: got ? { left: got.l, right: got.r } : null };
+}
+
 /* ─── 창구: 한 번에 하나씩 ─── */
 const CMDS = {
-  orders, scan, fill, submit, download,
+  orders, scan, fill, submit, download, wwrDates, wwrFill, wwrSave,
   test: async () => { closeWin(); await login(); return { id: (readCred() || {}).id }; }
 };
 function run(cmd, a) {
@@ -396,7 +513,7 @@ function run(cmd, a) {
 }
 function status() {
   const c = readCred();
-  return { v: 2, hasCred: !!c, id: c ? c.id : '', safe: safeStorage.isEncryptionAvailable(), open: !!(aw && !aw.isDestroyed()), running, filled: filled ? { date: filled.date, count: filled.n } : null, maxRows: MAX_ROWS, memoMax: MEMO_MAX, divi: Object.keys(DIVI), job: Object.keys(JOB) };
+  return { v: 3, hasCred: !!c, id: c ? c.id : '', safe: safeStorage.isEncryptionAvailable(), open: !!(aw && !aw.isDestroyed()), running, filled: filled ? { date: filled.date, count: filled.n } : null, maxRows: MAX_ROWS, memoMax: MEMO_MAX, divi: Object.keys(DIVI), job: Object.keys(JOB) };
 }
 
 /** main.js 에서 한 번 부른다. allowed(e): 우리 웹 화면(메인 창 · 같은 서버)에서 온 호출인지 */

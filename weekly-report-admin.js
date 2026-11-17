@@ -1485,6 +1485,7 @@
       +         '<button id="wrAuBin" class="hdr-mi" role="menuitem" title="점검에서 없앤 일 — 처리 대기 · 처리됨. 골라서 지난주 · 금주 칸에 다시 넣기">🗑 휴지통 · 처리 대기</button>'
       +         '<div class="hdr-mi-sep"></div>'
       +         '<button id="wrAuExport" class="hdr-mi" role="menuitem" title="iframe 임베드용 HTML 복사/다운로드">📋 HTML 내보내기</button>'
+      +         '<button id="wrAuAw" class="hdr-mi" role="menuitem" title="지난주 · 금주 미리보기를 애니웍스 주간업무보고(금주 업무 현황 · 차주 예정 현황)에 넣고 저장 — PC 앱에서">🌐 애니웍스에 올리기</button>'
       +       '</div>'
       +     '</div>'
       +   '</div>'
@@ -1561,6 +1562,7 @@
     $('wrAuLoadPrev').addEventListener('click', authorLoadFromPrevWeek);
     $('wrAuBin').addEventListener('click', function () { openBin(); });
     $('wrAuExport').addEventListener('click', toggleExportPanel);
+    $('wrAuAw').addEventListener('click', postToAnyworks);
     $('wrAuSave').addEventListener('click', function () { saveAuthor(true); });
     $('wrAuOverwrite').addEventListener('click', function () { saveAuthor(false); });
 
@@ -1730,6 +1732,25 @@
     return paneCtx(role, otherText && otherText.trim() ? clientParseText(otherText) : null, _authorState.weekStart, _authorState.weekEnd);
   }
 
+  // 칸 하나의 미리보기 HTML (📋 복사 · 🌐 애니웍스에 올리기 공용) — 고른 테마 · 보고용 여부 그대로
+  function paneHtml(paneKey, theme) {
+    var text = paneKey === 'last' ? _authorState.lastText : _authorState.curText;
+    if (!text || !text.trim()) return '';
+    var html = inlineThemeVars(buildPreviewHTML(clientParseText(text), theme, authorCtx(paneKey === 'last' ? 'last' : 'cur')), theme);
+    // v13.486 붙여 넣은 곳 글꼴 · 굵기를 따라가지 않게 — 지금 미리보기에 보이는 글꼴을 그대로 박음
+    var pvEl = document.querySelector('.wrp') || document.body;
+    var ff = '';
+    try { ff = getComputedStyle(pvEl).fontFamily.replace(/"/g, "'"); } catch (e) {}
+    if (ff) html = html.replace('<div class="wrp', '<div style="font-family:' + ff + '" class="wrp');
+    return html;
+  }
+  // 🌐 애니웍스 주간업무보고에 올리기 (v13.517 · aw-weekly.js) — 지난주 실적 → 금주 업무 현황 · 금주 계획 → 차주 예정 현황
+  function postToAnyworks() {
+    syncAuthorEditorsToState();
+    if (typeof awwOpen !== 'function') { if (typeof showToast === 'function') showToast('애니웍스 올리기를 불러오지 못했습니다 — 새로 고침해 주세요', 'warn'); return; }
+    awwOpen({ left: paneHtml('last', _pvTheme), right: paneHtml('cur', _pvTheme), weekStart: _authorState.weekStart, weekEnd: _authorState.weekEnd, theme: reportTheme(_pvTheme).l, boss: !!_pvBoss });
+  }
+
   async function copyPreviewInner(paneKey, theme) {
     syncAuthorEditorsToState();
     var text = paneKey === 'last' ? _authorState.lastText : _authorState.curText;
@@ -1737,13 +1758,7 @@
       alert('내용이 없습니다.');
       return;
     }
-    var raw = buildPreviewHTML(clientParseText(text), theme, authorCtx(paneKey === 'last' ? 'last' : 'cur'));
-    var html = inlineThemeVars(raw, theme);
-    // v13.486 붙여 넣은 곳 글꼴 · 굵기를 따라가지 않게 — 지금 미리보기에 보이는 글꼴을 그대로 박음
-    var pvEl = document.querySelector('.wrp') || document.body;
-    var ff = '';
-    try { ff = getComputedStyle(pvEl).fontFamily.replace(/"/g, "'"); } catch (e) {}
-    if (ff) html = html.replace('<div class="wrp', '<div style="font-family:' + ff + '" class="wrp');
+    var html = paneHtml(paneKey, theme);
     try {
       await navigator.clipboard.writeText(html);
       if (typeof showToast === 'function') showToast('미리보기 HTML 복사됨 (' + (paneKey === 'last' ? '지난주' : '금주') + ' · ' + reportTheme(theme).l + (_pvBoss ? ' · 👔 보고용' : ' · 직원용') + ')', 'ok');
