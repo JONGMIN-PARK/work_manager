@@ -95,6 +95,22 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     check(await until(p, function () { return document.getElementById('awgSaved').textContent === '저장됨'; }, null, 5000), '자동 저장');
     var row = (await c.query("SELECT items, status FROM gongsu_days WHERE day = $1", [DAY])).rows[0];
     check(row && row.status === 'draft' && row.items.length === 2 && row.items[0].hours === 6.5 && row.items[1].divi === '사외', '서버에 초안 저장 ' + JSON.stringify(row && row.items));
+    /* 순서 바꾸기 (v13.522) — 번호 칸 끌기 · Alt+↑↓ · 서버에도 그 순서로 */
+    var ordOf = function () { return p.evaluate(function () { return _awg.items.filter(_awgHasText).map(function (x) { return x.memo; }).join('|'); }); };
+    var o0 = await ordOf();
+    var grip = await p.evaluate(function () { var a = document.querySelector('.awg-r[data-i="0"] .awg-no').getBoundingClientRect(), b = document.querySelector('.awg-r[data-i="1"]').getBoundingClientRect(); return { x: a.left + a.width / 2, y: a.top + a.height / 2, y2: b.bottom - 3, cur: getComputedStyle(document.querySelector('.awg-no')).cursor }; });
+    await p.mouse.move(grip.x, grip.y); await p.mouse.down(); await p.mouse.move(grip.x, grip.y + 10, { steps: 3 }); await p.mouse.move(grip.x, grip.y2, { steps: 4 });
+    check(grip.cur === 'grab' && await p.evaluate(function () { return !!document.querySelector('.awg-r.awg-drag') && !!document.querySelector('.awg-r[data-i="1"].awg-drop-b'); }), '번호 칸을 끌면 놓일 자리에 줄이 보임');
+    await p.mouse.up();
+    var o1 = await ordOf();
+    check(o1 === o0.split('|').reverse().join('|') && await p.evaluate(function () { return document.querySelector('.awg-r[data-i="0"] [data-f="memo"]').value === _awg.items[0].memo && !document.querySelector('.awg-drag,.awg-drop-a,.awg-drop-b'); }), '1번 행을 2번 아래로 끌어 순서 바뀜 ' + o0 + ' → ' + o1);
+    check(await until(p, function () { return document.getElementById('awgSaved').textContent === '저장됨'; }, null, 5000) && (await c.query('SELECT items FROM gongsu_days')).rows[0].items.map(function (x) { return x.memo; }).join('|') === o1, '바꾼 순서로 서버에 저장');
+    await p.focus('.awg-r[data-i="1"] [data-f="hours"]');
+    await p.keyboard.down('Alt'); await p.keyboard.press('ArrowUp'); await p.keyboard.up('Alt');
+    check(await ordOf() === o0 && await p.evaluate(function () { var a = document.activeElement; return a && a.getAttribute('data-f') === 'hours' && a.closest('.awg-r').getAttribute('data-i') === '0'; }), 'Alt+↑ 로 한 칸 위로 · 치던 칸 그대로 (원래 순서로 돌아옴)');
+    await p.keyboard.down('Alt'); await p.keyboard.press('ArrowUp'); await p.keyboard.up('Alt');
+    check(await ordOf() === o0, '맨 위에서 Alt+↑ 는 그대로');
+    await until(p, function () { return document.getElementById('awgSaved').textContent === '저장됨'; }, null, 5000);
 
     // 🔍 수주번호 찾기
     await p.click('.awg-r[data-i="1"] [data-awg="find"]');

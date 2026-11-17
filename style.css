@@ -8547,7 +8547,13 @@ button.awg-chip{cursor:pointer}
 .awg-hd,.awg-r{display:grid;grid-template-columns:22px 158px minmax(110px,1.1fr) 70px 78px 96px minmax(200px,2.6fr) 30px;gap:6px;align-items:center}
 .awg-hd{font-size:11px;color:var(--t5);padding:0 0 4px}
 .awg-r{padding:3px 0}
-.awg-no{text-align:center;color:var(--t6);font-size:11px}
+.awg-no{text-align:center;color:var(--t6);font-size:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;align-self:stretch;border-radius:5px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.awg-no b{font-weight:500}.awg-no i{font-style:normal;font-size:10px;letter-spacing:-1px;opacity:.55}
+.awg-no:hover{background:var(--bg-hv);color:var(--t2)}.awg-no:hover i{opacity:1}
+/* 순서 바꾸기 (v13.522) — 끄는 행은 흐리게, 놓일 자리에 줄 */
+.awg-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}.awg-dragging .awg-no{cursor:grabbing}
+.awg-r.awg-drag{opacity:.45;background:var(--ac-bg);border-radius:6px}
+.awg-r.awg-drop-a{box-shadow:0 -2px 0 0 var(--ac)}.awg-r.awg-drop-b{box-shadow:0 2px 0 0 var(--ac)}
 .awg-c{min-width:0;display:flex;align-items:center;gap:4px;position:relative}
 .awg-c-ps{color:var(--t3);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:block;padding:0 2px}
 .awg-c-ps i{color:var(--t6);font-style:normal}

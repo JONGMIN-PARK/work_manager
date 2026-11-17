@@ -137,7 +137,7 @@ function _awgRowHtml(it, i) {
     return '<select class="awg-in" data-f="' + f + '" aria-label="' + ph + '">' + (ph === '업무구분' ? '<option value="">업무구분</option>' : '') + list.map(function (v) { return '<option' + (it[f] === v ? ' selected' : '') + '>' + v + '</option>'; }).join('') + '</select>';
   };
   return '<div class="awg-r" data-i="' + i + '">' +
-    '<span class="awg-no">' + (i + 1) + '</span>' +
+    '<span class="awg-no" title="끌어서 순서 바꾸기 (칸 안에서 Alt+↑ · ↓)" aria-label="' + (i + 1) + '번 행 — 끌어서 순서 바꾸기"><b>' + (i + 1) + '</b><i aria-hidden="true">⠿</i></span>' +
     '<span class="awg-c awg-c-ord"><input class="awg-in" data-f="orderno" list="awgOrdList" maxlength="40" placeholder="수주번호" autocomplete="off" aria-label="수주번호" value="' + eH(it.orderno || '') + '">' +
       (_awgDesk() ? '<button type="button" class="awg-b" data-awg="find" title="애니웍스에서 수주번호 · 고객 · 프로젝트명으로 찾기">🔍</button>' : '') + '</span>' +
     '<span class="awg-c awg-c-ps" data-ps title="' + eH(it.prodspec || '') + '">' + (it.prodspec ? eH(it.prodspec) : '<i>프로젝트명</i>') + '</span>' +
@@ -243,6 +243,7 @@ function _awgWeekSync() { var s = _awg, w = s && s.el.querySelector('.awg-wk'); 
 
 /* ─── 입력 · 누르기 ─── */
 function _awgBind(el) {
+  _awgDragBind(el);
   el.addEventListener('input', function (e) {
     var s = _awg, t = e.target, f = t.getAttribute && t.getAttribute('data-f'), r = t.closest && t.closest('.awg-r');
     if (s && s.view === 'hist' && t.id === 'awgHQ') { s.hist.q = t.value.trim(); _awgHistList(); return; }
@@ -267,6 +268,13 @@ function _awgBind(el) {
   });
   el.addEventListener('keydown', function (e) {
     var s = _awg, t = e.target;
+    // Alt+↑ · ↓ — 이 행을 한 칸 위 · 아래로 (v13.522)
+    if (s && s.view !== 'hist' && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && t.closest && t.closest('.awg-r')) {
+      e.preventDefault();
+      var from = +t.closest('.awg-r').getAttribute('data-i');
+      _awgMove(from, from + (e.key === 'ArrowUp' ? -1 : 1), t.getAttribute('data-f'));
+      return;
+    }
     if (!s || e.key !== 'Enter' || e.isComposing || !t.getAttribute || t.getAttribute('data-f') !== 'memo') return;
     var r = t.closest('.awg-r'), i = +r.getAttribute('data-i');
     e.preventDefault();
@@ -288,6 +296,51 @@ function _awgBind(el) {
     else if (a === 'wipe') _awgWipe();
     else if (a === 'hist') _awgHistOpen();
     else if (a.indexOf('h-') === 0) _awgHistClick(a, b);
+  });
+}
+/* 순서 바꾸기 (v13.522) — from 번째 행을 to 번째 자리로. 올리는 순서도 이대로라 ① 확인은 다시 */
+function _awgMove(from, to, focusField) {
+  var s = _awg; if (!s || s.busy) return false;
+  var n = s.items.length;
+  if (!(from >= 0 && from < n && to >= 0 && to < n) || from === to) return false;
+  s.items.splice(to, 0, s.items.splice(from, 1)[0]);
+  s.shot = null;
+  _awgPaint(); _awgTouched();
+  if (focusField) { var f = s.el.querySelector('.awg-r[data-i="' + to + '"] [data-f="' + focusField + '"]'); if (f) f.focus(); }
+  return true;
+}
+/* 번호 칸(⠿)을 끌어 순서 바꾸기 — 마우스 · 손가락 모두 (pointer). 놓을 자리에 줄을 그어 보여 줌 */
+function _awgDragBind(el) {
+  el.addEventListener('pointerdown', function (e) {
+    var s = _awg, g = e.target.closest && e.target.closest('.awg-no');
+    if (!s || !g || s.busy || s.view === 'hist' || e.button > 0) return;
+    var rows = Array.prototype.slice.call(el.querySelectorAll('.awg-r')), row = g.closest('.awg-r'), from = rows.indexOf(row);
+    if (from < 0 || rows.length < 2) return;
+    e.preventDefault();
+    if (document.activeElement && document.activeElement.blur && el.contains(document.activeElement)) document.activeElement.blur();
+    var to = from, y0 = e.clientY, moved = false;
+    var mark = function (on) {
+      rows.forEach(function (x, i) {
+        x.classList.toggle('awg-drag', on && i === from);
+        x.classList.toggle('awg-drop-a', on && to < from && i === to);
+        x.classList.toggle('awg-drop-b', on && to > from && i === to);
+      });
+      el.classList.toggle('awg-dragging', on);
+    };
+    var mv = function (ev) {
+      if (!moved && Math.abs(ev.clientY - y0) < 4) return;
+      moved = true;
+      var k = 0;
+      rows.forEach(function (x, i) { if (i === from) return; var b = x.getBoundingClientRect(); if (ev.clientY > b.top + b.height / 2) k++; });
+      to = k; mark(true);
+      ev.preventDefault();
+    };
+    var end = function (ev) {
+      document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', end); document.removeEventListener('pointercancel', end);
+      mark(false);
+      if (moved && ev.type === 'pointerup' && _awg === s) _awgMove(from, to);
+    };
+    document.addEventListener('pointermove', mv); document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
   });
 }
 function _awgPsSync(r, it) { var p = r.querySelector('[data-ps]'); if (p) { p.innerHTML = it.prodspec ? eH(it.prodspec) : '<i>프로젝트명</i>'; p.title = it.prodspec || ''; } }
