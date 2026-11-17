@@ -8,6 +8,39 @@ var httpErr = require('../lib/http-errors');
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
 
+/* ─── 회사 공통 설정 (v13.521) — 모두 읽고, 관리자만 바꿈. 정해 둔 열쇠만 ───
+   aw_auto { on, min } : 애니웍스 수주 · 업무일지 자동 갱신 (PC 앱이 켜져 있는 동안 min 분마다) */
+var ORG_KEYS = {
+  aw_auto: {
+    def: { on: true, min: 5 },
+    clean: function (v) {
+      var min = Math.round(Number(v && v.min));
+      if (!isFinite(min) || min < 1 || min > 720) return null;
+      return { on: !(v && v.on === false), min: min };
+    }
+  }
+};
+router.get('/org/:key', async function (req, res) {
+  var k = ORG_KEYS[req.params.key];
+  if (!k) return res.status(404).json({ error: 'NOT_FOUND', message: '없는 설정입니다.' });
+  try {
+    var r = await db.query('SELECT value FROM tenant_settings WHERE tenant_id = $1 AND key = $2', [req.tenant.id, req.params.key]);
+    var v = r.rows.length ? k.clean(r.rows[0].value) : null;
+    res.json({ data: v || k.def });
+  } catch (e) { httpErr.serverError(res, '[settings/org-get]', e); }
+});
+router.put('/org/:key', auth.requireRole('admin'), async function (req, res) {
+  var k = ORG_KEYS[req.params.key];
+  if (!k) return res.status(404).json({ error: 'NOT_FOUND', message: '없는 설정입니다.' });
+  var v = k.clean(req.body && req.body.value);
+  if (!v) return res.status(400).json({ error: 'INVALID', message: '값을 확인해 주세요 (주기는 1 ~ 720분).' });
+  try {
+    await db.query('INSERT INTO tenant_settings (tenant_id, key, value, updated_by, updated_at) VALUES ($1, $2, $3, $4, NOW()) ' +
+      'ON CONFLICT (tenant_id, key) DO UPDATE SET value = $3, updated_by = $4, updated_at = NOW()', [req.tenant.id, req.params.key, JSON.stringify(v), req.user.sub]);
+    res.json({ data: v });
+  } catch (e) { httpErr.serverError(res, '[settings/org-put]', e); }
+});
+
 // GET /api/settings — 현재 사용자의 모든 설정 조회
 router.get('/', async function (req, res) {
   try {

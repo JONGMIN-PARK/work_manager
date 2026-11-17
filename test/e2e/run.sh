@@ -148,6 +148,7 @@ else
   run_batch e2e105-notice-rich.js
   run_batch e2e106-recent-pull.js
   run_batch e2e107-aw-weekly.js
+  run_batch e2e108-aw-auto.js
   run_batch e2e59-notebook.js
   run_batch e2e60-notebook-links-coach.js
   run_batch e2e61-notebook-print.js

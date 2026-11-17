@@ -726,29 +726,49 @@ function awgRecentPlan(recs, today) {
   return { start: start, end: today, first: first, last: last, lastAll: all, capped: capped };
 }
 function _awgFirstDone() { try { return JSON.parse(localStorage.getItem('wm_awg_first') || '[]') || []; } catch (e) { return []; } }
-async function awgRecentPull() {
+/* opt.silent (v13.521 자동 갱신 aw-auto.js) — 진행 창 · 알림 · 계정 창 없이 조용히. 결과를 돌려준다:
+     { changed, added, updated, parts, range } · 건너뜀 { skip: 'perm'|'busy'|'cred' } · 실패 { error }
+   조용히 돌 때는 내려받은 파일이 지난번과 글자 하나 안 다르면 서버 기록을 다시 읽지 않는다 (wm_awg_sig — 같은 날 · 같은 기간일 때만) */
+function _awgFilesSig(files) {
+  var h = 5381, n = 0;
+  (files || []).forEach(function (f) { var s = (f.team || '') + '|' + (f.base64 || ''); n += s.length; for (var i = 0; i < s.length; i += 7) h = ((h << 5) + h + s.charCodeAt(i)) | 0; });
+  return n + ':' + h;
+}
+function _awgFilesSigGet() { try { return JSON.parse(localStorage.getItem('wm_awg_sig') || 'null'); } catch (e) { return null; } }
+async function awgRecentPull(opt) {
+  var silent = !!(opt && opt.silent);
+  var say = function (m, t) { if (!silent) showToast(m, t); };
   var desk = _awgDesk();
-  if (!desk) { if (typeof openAnyworksModal === 'function') return openAnyworksModal(true); showToast('PC 앱(업무 관리자)에서 쓸 수 있습니다', 'warn'); return; }
-  if (typeof wlDenyToast === 'function' && wlDenyToast()) return;
-  if (_awgRecentBusy) { showToast('이미 내려받는 중입니다', 'info'); return; }
+  if (!desk) { if (silent) return { skip: 'app' }; if (typeof openAnyworksModal === 'function') return openAnyworksModal(true); showToast('PC 앱(업무 관리자)에서 쓸 수 있습니다', 'warn'); return; }
+  if (silent) { if (typeof wmCanWorklog !== 'function' || !wmCanWorklog()) return { skip: 'perm' }; }
+  else if (typeof wlDenyToast === 'function' && wlDenyToast()) return;
+  if (_awgRecentBusy) { say('이미 내려받는 중입니다', 'info'); return silent ? { skip: 'busy' } : undefined; }
   _awgRecentBusy = true;
   var prog = function (o) {
-    if (typeof wmProgress === 'undefined') return;
+    if (silent || typeof wmProgress === 'undefined') return;
     if (document.getElementById('wmProgOverlay')) wmProgress.update(o);
     else wmProgress.show(Object.assign({ icon: '🔄', title: '최근 업무일지 내려받는 중', tip: '마지막 기록 뒤의 것만 받아 바뀐 것만 저장해요' }, o));
   };
   try {
     var st = await desk('status');
-    if (!st || !st.hasCred) { showToast('먼저 애니웍스 계정을 연결해 주세요', 'warn'); awgAcctOpen(); return; }
+    if (!st || !st.hasCred) { if (silent) return { skip: 'cred' }; showToast('먼저 애니웍스 계정을 연결해 주세요', 'warn'); awgAcctOpen(); return; }
     prog({ step: '🗂 지금 기록 확인', pct: 5 });
     if (typeof wmLib === 'function') await wmLib('xlsx').catch(function () {});
-    var existing = await wrGetAll();
-    var today = _awgIso(new Date()), plan = awgRecentPlan(existing, today);
+    var today = _awgIso(new Date()), memo = silent ? _awgFilesSigGet() : null, existing = null, plan;
+    if (memo && memo.day === today && memo.start && memo.sig) plan = { start: memo.start, end: today, first: _awgAdd(today, -AWG_RECENT_FIRST), capped: false };
+    else { memo = null; existing = await wrGetAll(); plan = awgRecentPlan(existing, today); }
     var range = _awgMd(plan.start) + ' ~ ' + _awgMd(plan.end);
     prog({ sub: range, step: '🌐 애니웍스에서 내려받는 중', pct: 20 });
     var r = await desk('download', { start: plan.start, end: plan.end });
-    if (!r || !r.ok) { showToast('❌ ' + ((r && r.error) || '내려받지 못했습니다'), 'error'); if (r && (r.code === 'LOGIN' || r.code === 'NO_CRED')) awgAcctOpen(); return; }
+    if (!r || !r.ok) {
+      var why = (r && r.error) || '내려받지 못했습니다';
+      if (silent) return { error: why, code: r && r.code };
+      showToast('❌ ' + why, 'error'); if (r && (r.code === 'LOGIN' || r.code === 'NO_CRED')) awgAcctOpen(); return;
+    }
     var files = (r.files || []).slice(), skipped = (r.skipped || []).filter(function (x) { return x.why !== '내용 없음'; }), from = plan.start;
+    var sig = _awgFilesSig(files);
+    if (memo && memo.sig === sig) return { changed: 0, added: 0, updated: 0, parts: [], range: range, quick: true };
+    if (!existing) existing = await wrGetAll();
     // 처음 받는 사업부 — 최근 3개월
     var has = {}, done = _awgFirstDone();
     existing.forEach(function (x) { if (x.dept) has[x.dept] = 1; });
@@ -759,7 +779,12 @@ async function awgRecentPull() {
       if (r2 && r2.ok) { files = files.concat(r2.files || []); from = plan.first; }
     }
     try { localStorage.setItem('wm_awg_first', JSON.stringify(done.concat(fresh).slice(-30))); } catch (e) {}
-    if (!files.length) { showToast('받을 내용이 없습니다 (' + range + ')' + (skipped.length ? ' — ' + skipped.map(function (x) { return x.team + ' ' + x.why; }).join(', ') : ''), skipped.length ? 'warn' : 'info'); return; }
+    var remember = function () { if (silent) try { localStorage.setItem('wm_awg_sig', JSON.stringify({ day: today, start: plan.start, sig: sig })); } catch (e) {} };
+    if (!files.length) {
+      remember();
+      say('받을 내용이 없습니다 (' + range + ')' + (skipped.length ? ' — ' + skipped.map(function (x) { return x.team + ' ' + x.why; }).join(', ') : ''), skipped.length ? 'warn' : 'info');
+      return silent ? { changed: 0, added: 0, updated: 0, parts: [], range: range } : undefined;
+    }
     prog({ step: '🔍 기존 기록과 비교', pct: 60 });
     await new Promise(function (ok) { setTimeout(ok, 30); });
     var news = [], seen = new Set();
@@ -777,10 +802,14 @@ async function awgRecentPull() {
       prog({ sub: '추가 ' + diff.insert.length.toLocaleString() + ' · 수정 ' + diff.update.length.toLocaleString(), step: '💾 바뀐 것만 저장', pct: 75 });
       var sync = await wrSync(diff.insert, diff.update, []);
       aD = wrSortRecords(res.merged.filter(function (x) { return x.id != null; }).concat(sync.inserted));
-    } else aD = wrSortRecords(existing.slice());
+    } else if (!silent) aD = wrSortRecords(existing.slice());
+    remember();
     prog({ step: '🖥 화면 갱신', pct: 92 });
-    var fn = document.getElementById('fnDisp'); if (fn) fn.textContent = '애니웍스 ' + range;
-    if (aD.length) applyADToUI();
+    // 조용히 돌 때는 바뀐 것이 있을 때만 화면을 다시 그린다 (보던 화면을 흔들지 않게)
+    if (!silent || changed) {
+      var fn = document.getElementById('fnDisp'); if (fn) fn.textContent = '애니웍스 ' + range;
+      if (aD.length) applyADToUI();
+    }
     var parts = Object.keys(res.by).map(function (d) {
       var b = res.by[d], s = []; if (b.added) s.push('+' + b.added); if (b.updated) s.push('수정 ' + b.updated);
       return s.length ? (d || '사업부 없음') + ' ' + s.join(' · ') : '';
@@ -788,10 +817,10 @@ async function awgRecentPull() {
     var tail = (res.missing ? ' · 애니웍스에 없는 기록 ' + res.missing + '건은 그대로 둠' : '') +
       (skipped.length ? ' · ' + skipped.map(function (x) { return x.team + ' ' + x.why; }).join(', ') : '') +
       (plan.capped ? ' · 3개월보다 옛날 것은 「기간 골라 받기」로' : '');
-    showToast(changed ? '🔄 최근 업무일지 ' + range + ' — ' + parts.join(' / ') + tail : '✓ 이미 최신입니다 (' + range + ' · ' + news.length.toLocaleString() + '건 확인)' + tail, skipped.length ? 'warn' : 'success');
-    return { range: range, added: res.added, updated: res.updated, same: res.same, missing: res.missing };
-  } catch (e) { showToast('❌ 최근 내려받기 실패: ' + ((e && e.message) || '오류'), 'error'); }
-  finally { _awgRecentBusy = false; if (typeof wmProgress !== 'undefined') wmProgress.hide(); }
+    say(changed ? '🔄 최근 업무일지 ' + range + ' — ' + parts.join(' / ') + tail : '✓ 이미 최신입니다 (' + range + ' · ' + news.length.toLocaleString() + '건 확인)' + tail, skipped.length ? 'warn' : 'success');
+    return { range: range, added: res.added, updated: res.updated, changed: changed, parts: parts, same: res.same, missing: res.missing };
+  } catch (e) { if (silent) return { error: (e && e.message) || '오류' }; showToast('❌ 최근 내려받기 실패: ' + ((e && e.message) || '오류'), 'error'); }
+  finally { _awgRecentBusy = false; if (!silent && typeof wmProgress !== 'undefined') wmProgress.hide(); }
 }
 /* 주간 분석 툴바 단추 — PC 앱이면 「🔄 최근 받기」 로 */
 (function () {

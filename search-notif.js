@@ -725,6 +725,16 @@ async function loadNotifications() {
   return items;
 }
 
+/* 알림 항목을 누르면 그 자리로 — 이슈는 이슈 상세, 프로젝트 · 마일스톤은 프로젝트 상세.
+   v13.521: 예전엔 globalSearchNav 에 id 글자만 넘겨(검색 서버화 뒤로는 { nav:{…} } 를 받음) 눌러도 아무 데도 안 갔다 */
+var _ncShown = [];
+function notifGo(i) {
+  var it = _ncShown[i], dd = document.getElementById('notifDropdown');
+  if (dd) dd.style.display = 'none';
+  if (!it || typeof globalSearchNav !== 'function') return;
+  if (it.type === 'issue') globalSearchNav('issue', { nav: { issueId: it.id } }, '');
+  else globalSearchNav('project', { nav: { projectId: it.id } }, '');
+}
 function renderNotificationPanel(items) {
   const dd = document.getElementById('notifDropdown');
   const badge = document.getElementById('notifBadge');
@@ -745,11 +755,9 @@ function renderNotificationPanel(items) {
   }
 
   let html = `<div class="notif-hdr"><span>🔔 알림 (${items.length})</span><span style="font-size:10px;color:var(--t5);font-weight:400;cursor:pointer" onclick="document.getElementById('notifDropdown').style.display='none'">✕</span></div>`;
+  _ncShown = [];
   items.forEach(it => {
-    const nav = it.type === 'issue'
-      ? `globalSearchNav('issue','${it.id}')`
-      : `globalSearchNav('project','${it.id}')`;
-    html += `<div class="notif-item" onclick="${nav};document.getElementById('notifDropdown').style.display='none'">`;
+    html += `<div class="notif-item" onclick="notifGo(${_ncShown.push(it) - 1})">`;
     html += `<span class="notif-icon">${it.icon}</span>`;
     html += `<div class="notif-body"><div class="notif-msg">${eH(it.msg)}</div><div class="notif-date">${eH(it.date || '')}</div></div>`;
     html += '</div>';

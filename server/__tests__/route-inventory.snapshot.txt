@@ -285,6 +285,7 @@ GET /api/push/key
 GET /api/search
 GET /api/settings
 GET /api/settings/:key
+GET /api/settings/org/:key
 GET /api/spec-templates
 GET /api/spec-templates/:id/versions/:ver
 GET /api/sso/config
@@ -363,6 +364,7 @@ GET /api/v1/projects/members/all
 GET /api/v1/projects/visibility/list
 GET /api/v1/settings
 GET /api/v1/settings/:key
+GET /api/v1/settings/org/:key
 GET /api/v1/stats/by-order
 GET /api/v1/stats/by-team
 GET /api/v1/stats/summary
@@ -729,6 +731,7 @@ PUT /api/projects/:id
 PUT /api/projects/:id/spec-files/:fid
 PUT /api/projects/:id/specs
 PUT /api/settings/:key
+PUT /api/settings/org/:key
 PUT /api/spec-templates/:id
 PUT /api/tech/:id
 PUT /api/tech/:id/logs/:logId
@@ -758,6 +761,7 @@ PUT /api/v1/profile
 PUT /api/v1/projects/:id
 PUT /api/v1/projects/:id/specs
 PUT /api/v1/settings/:key
+PUT /api/v1/settings/org/:key
 PUT /api/v1/telegram/prefs
 PUT /api/v1/telegram/prefs/lead
 PUT /api/v1/telegram/prefs/quiet

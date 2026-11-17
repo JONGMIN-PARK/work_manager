@@ -76,6 +76,44 @@ async function awoScan(opt) {
   finally { _awoBusy = false; }
 }
 
+/* 조용히 맞추기 (v13.521 자동 갱신 aw-auto.js) — 창을 띄우지 않는다.
+   · 수주 대장에 없는 새 수주(지난번에 넘긴 것은 빼고)는 넣는다          · 빈 칸만 채우는 것은 채운다
+   · 적힌 값을 덮어써야 하는 것은 건드리지 않고 건수(ask)만 돌려준다 — 사람이 「수주 가져오기」 창에서 고른다
+   · 새 수주가 한꺼번에 AWO_AUTO_MAX 건을 넘으면(처음 맞출 때 등) 넣지 않고 ask 로 넘긴다
+   결과 { added, filled, ask, nos:[넣은 번호 몇 개], total } · 건너뜀 { skip } · 실패 { error } */
+var AWO_AUTO_MAX = 50;
+async function awoAutoSync() {
+  var desk = _awoDesk();
+  if (!desk) return { skip: 'app' };
+  if (!awoCan()) return { skip: 'perm' };
+  if (_awoBusy || _awo) return { skip: 'busy' };
+  _awoBusy = true;
+  try {
+    var st = await desk('status');
+    if (!st || !st.ok || !st.hasCred) return { skip: 'cred' };
+    var rs = await Promise.all([desk('scan'), orderGetAll()]), r = rs[0];
+    if (!r || !r.ok) return { error: (r && r.error) || '애니웍스에서 수주를 가져오지 못했습니다', code: r && r.code };
+    var cmp = _awoCompare(r.rows, rs[1]);
+    var pick = function (l) { return l.map(function (x) { return { orderNo: x.no, client: x.client, name: x.name }; }); };
+    var add = cmp.add.filter(function (x) { return !x.skipped; }), fill = cmp.diff.filter(function (x) { return x.fill && !x.skipped; });
+    var ask = cmp.diff.filter(function (x) { return !x.fill && !x.skipped; }).length;
+    if (add.length > AWO_AUTO_MAX) { ask += add.length; add = []; }
+    var ins = 0, up = 0;
+    if (add.length + fill.length) {
+      var res = await apiFetch('/api/orders/aw-sync', { method: 'POST', body: JSON.stringify({ add: pick(add), update: pick(fill) }) });
+      if (!res) return { error: '수주를 저장하지 못했습니다' };
+      ins = res.inserted || 0; up = res.updated || 0;
+      if (ins + up) {
+        if (typeof loadOrdersToMap === 'function') { try { await loadOrdersToMap(); } catch (_) {} }
+        if (typeof _emitBus === 'function') _emitBus('order', 'bulk-synced', { count: ins + up });
+        if (typeof renderOrders === 'function' && document.getElementById('orderQ')) { try { renderOrders(); } catch (_) {} }
+      }
+    }
+    return { added: ins, filled: up, ask: ask, nos: add.slice(0, 4).map(function (x) { return x.no; }), total: cmp.total };
+  } catch (e) { return { error: (e && e.message) || '실패했습니다' }; }
+  finally { _awoBusy = false; }
+}
+
 function awoOpen(cmp, auto) {
   var build = function () { return _awoBuild(cmp, auto); };
   return typeof wmGuardedModal === 'function' ? wmGuardedModal('awo', build, 'awoBox') : build();
