@@ -69,6 +69,13 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var MINE_L = '<table class="my-form"><tr><th>MY FORM</th></tr><tr><td>this week</td></tr></table>', MINE_R = '<div class="my-form">next week plan</div>';
     await setEd(p, '#awwL', MINE_L); await setEd(p, '#awwR', MINE_R);
     check(await p.evaluate(function () { return !document.getElementById('awwFill').disabled && /직접 고침/.test(document.getElementById('awwSize').textContent); }), '양쪽에 내 HTML 을 넣으면 ① 열림 · 「직접 고침」 표시');
+    // 👁 미리보기 — 붙여 넣은 양식이 그 자리에서 그려짐 (스크립트는 안 돎)
+    var pvOk = await until(p, function () { var d = document.getElementById('awwPvL').contentDocument, e = document.getElementById('awwPvR').contentDocument; return !!d && !!d.querySelector('table.my-form th') && d.querySelector('table.my-form th').textContent === 'MY FORM' && !!e && /next week plan/.test(e.body.textContent); }, null, 4000);
+    check(pvOk, '미리보기에 내 양식이 그려짐 (왼쪽 표 · 오른쪽 글)');
+    await setEd(p, '#awwR', MINE_R + '<script>parent.__awwHacked = 1</scr' + 'ipt><b id="late">changed</b>');
+    check(await until(p, function () { var e = document.getElementById('awwPvR').contentDocument; return !!e && !!e.getElementById('late'); }, null, 4000) && await p.evaluate(function () { return !window.__awwHacked; }), '고치면 미리보기가 바로 바뀜 · 안의 스크립트는 돌지 않음');
+    await setEd(p, '#awwR', MINE_R);
+    await p.screenshot({ path: path.join(__dirname, '.shots', 'e2e107-aww-html.png') }).catch(function () {});
     await p.click('[data-aww-d="2026-11-06"]');
     await p.click('#awwFill');
     await until(p, function () { return !!document.querySelector('#awwCap img'); });
@@ -85,7 +92,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await menu(p);
     check(await until(p, function () { return !!document.querySelector('#awwBox [data-aww-d]'); }), '창이 뜨고 애니웍스 날짜 목록이 보임');
     var v0 = await p.evaluate(function () { return { d: document.getElementById('awwDate').value, day: document.getElementById('awwDay').textContent, chips: document.querySelectorAll('[data-aww-d]').length, fill: document.getElementById('awwFill').disabled, save: document.getElementById('awwSave').disabled }; });
-    check(v0.d === '2026-11-20' && /아직 없음/.test(v0.day) && !/금요일이 아님/.test(v0.day) && v0.chips === 2 && !v0.fill && v0.save && await p.evaluate(function () { return !document.getElementById('awwHtml').open; }), '등록일 = 그 주 금요일(11/20) · 아직 없음 표시 · ② 는 잠김 ' + JSON.stringify(v0));
+    check(v0.d === '2026-11-20' && /아직 없음/.test(v0.day) && !/금요일이 아님/.test(v0.day) && v0.chips === 2 && !v0.fill && v0.save && await p.evaluate(function () { var d = document.getElementById('awwPvL').contentDocument; return document.getElementById('awwHtml').open && !!d && /배선 점검/.test(d.body.textContent); }), '등록일 = 그 주 금요일(11/20) · 아직 없음 표시 · ② 는 잠김 · 미리보기가 처음부터 보임 ' + JSON.stringify(v0));
 
     /* 있는 날짜 고르기 → 넣기 → 캡처 · 이미 있던 내용 경고 */
     await p.click('[data-aww-d="2026-11-13"]');

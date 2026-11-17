@@ -28,9 +28,11 @@ function _awwBuild(p) {
     '<div class="aww-row"><label for="awwDate">등록일</label><input type="date" class="awg-in" id="awwDate" value="' + _awwFriday(base) + '"><span class="aww-day" id="awwDay"></span>' +
       '<span class="aww-size" id="awwSize"></span></div>' +
     '<div class="aww-dates" id="awwDates"><span class="awg-hint"><span class="awg-spin"></span>애니웍스의 날짜 목록을 읽는 중…</span></div>' +
-    '<details class="aww-html" id="awwHtml"' + (p.left && p.right ? '' : ' open') + '><summary>✏️ 넣을 HTML 직접 보기 · 고치기 — 내 양식을 붙여 넣어도 됩니다</summary>' +
+    '<details class="aww-html" id="awwHtml" open><summary>✏️ 넣을 HTML 직접 보기 · 고치기 — 내 양식을 붙여 넣어도 됩니다</summary>' +
       '<div class="aww-html-g"><label>왼쪽 — 금주 업무 현황<textarea class="awg-in" id="awwL" spellcheck="false" placeholder="여기에 HTML 을 붙여 넣으세요"></textarea></label>' +
         '<label>오른쪽 — 차주 예정 현황<textarea class="awg-in" id="awwR" spellcheck="false" placeholder="여기에 HTML 을 붙여 넣으세요"></textarea></label></div>' +
+      '<div class="aww-pv-t">👁 미리보기 — 들어갈 모양 (고치면 바로 바뀜)</div>' +
+      '<div class="aww-html-g aww-pv"><iframe id="awwPvL" title="왼쪽 미리보기 — 금주 업무 현황" sandbox="allow-same-origin"></iframe><iframe id="awwPvR" title="오른쪽 미리보기 — 차주 예정 현황" sandbox="allow-same-origin"></iframe></div>' +
       '<div class="awg-acct-btns"><span class="awg-hint">여기 적힌 그대로 애니웍스 편집기에 들어갑니다 (고치면 ① 부터 다시)</span><span class="awg-sp"></span>' +
         '<button type="button" class="awg-b" id="awwHtmlReset" title="주간 업무 미리보기에서 만든 HTML 로 되돌리기">↺ 미리보기 HTML 로</button></div></details>' +
     '<div id="awwMsg"></div><div id="awwCap"></div>' +
@@ -59,8 +61,16 @@ function _awwBuild(p) {
   function reset() { st.filled = null; cap.innerHTML = ''; say('', ''); paint(); }
   var sizeEl = box.querySelector('#awwSize'), taL = box.querySelector('#awwL'), taR = box.querySelector('#awwR');
   taL.value = st.left; taR.value = st.right;
-  taL.oninput = taR.oninput = function () { st.left = taL.value; st.right = taR.value; if (st.filled || cap.firstChild) reset(); else paint(); };
-  box.querySelector('#awwHtmlReset').onclick = function () { taL.value = st.left = p.left || ''; taR.value = st.right = p.right || ''; reset(); };
+  // 👁 미리보기 (v13.519) — 넣을 HTML 을 그 자리에서 그려 봄. 스크립트는 돌지 않는 틀(sandbox) 안에, 애니웍스 편집기처럼 흰 바탕
+  var pvL = box.querySelector('#awwPvL'), pvR = box.querySelector('#awwPvR'), pvT = null;
+  var pvDoc = function (h) { return '<!doctype html><meta charset="utf-8"><base target="_blank"><body style="margin:8px;background:#fff;color:#000;font:12px/1.5 \'Malgun Gothic\',sans-serif">' + (h.trim() ? h : '<span style="color:#999">(비어 있음)</span>'); };
+  function preview(now) {
+    clearTimeout(pvT);
+    pvT = setTimeout(function () { if (!alive()) return; pvL.srcdoc = pvDoc(st.left); pvR.srcdoc = pvDoc(st.right); }, now ? 0 : 250);
+  }
+  preview(true);
+  taL.oninput = taR.oninput = function () { st.left = taL.value; st.right = taR.value; preview(); if (st.filled || cap.firstChild) reset(); else paint(); };
+  box.querySelector('#awwHtmlReset').onclick = function () { taL.value = st.left = p.left || ''; taR.value = st.right = p.right || ''; preview(true); reset(); };
   D.onchange = reset;
   datesEl.onclick = function (e) { var b = e.target.closest && e.target.closest('[data-aww-d]'); if (!b || st.busy) return; D.value = b.getAttribute('data-aww-d'); reset(); };
 
