@@ -8567,6 +8567,8 @@ button.awg-chip{cursor:pointer}
 .awg-act{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--bd)}
 .awg-act .btn{font-size:12.5px;padding:9px 16px}
 .awg-hint{color:var(--t4);font-size:11.5px;line-height:1.5}
+.awg-signopt{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--t3);white-space:nowrap;cursor:pointer;user-select:none}
+.awg-signopt input{margin:0;cursor:pointer}
 .awg-shot{margin-top:10px;display:flex;flex-direction:column;gap:8px}
 .awg-msg{padding:9px 12px;border-radius:9px;border:1px solid var(--bd);background:var(--bg-i);line-height:1.55}
 .awg-msg.run{color:var(--t3)}

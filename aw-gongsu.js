@@ -192,7 +192,9 @@ function _awgSync() {
   } else {
     a = '<button type="button" class="btn btn-g" data-awg="fill"' + (busy || !rows.length ? ' disabled' : '') + ' title="애니웍스 공수등록 화면에 넣어 보고, 들어간 화면을 아래에 보여 줍니다 (아직 등록 전)">① 웹에 입력 · 확인</button>' +
       '<button type="button" class="btn btn-p" data-awg="send"' + (busy || !ready ? ' disabled' : '') + ' title="' + (ready ? '애니웍스에 등록' : '먼저 ① 웹에 입력으로 확인') + '">② ▶ 애니웍스에 등록</button>' +
+      (_awgCanSign() ? '<label class="awg-signopt" title="등록이 주간일지에서 확인되면 그날 내 칸의 [팀장승인] 까지 누릅니다"><input type="checkbox" data-awg-signopt' + (_awgSignOn() ? ' checked' : '') + (busy ? ' disabled' : '') + '> 등록 뒤 팀장승인까지</label>' : '') +
       '<span class="awg-hint">' + (busy ? '' : ready ? '아래 화면이 맞으면 등록을 누르세요' : s.shot ? '내용이 바뀌었습니다 — ① 을 다시 눌러 주세요' : '') + '</span><span class="awg-sp"></span>' +
+      (_awgCanSign() && s.docs[s.day] && s.docs[s.day].status === 'sent' && !ready ? '<button type="button" class="awg-b" data-awg="sign"' + (busy ? ' disabled' : '') + ' title="' + _awgLabel(s.day) + ' 애니웍스 일일 업무보고의 내 칸 [팀장승인] 을 누릅니다">✍ 팀장승인</button>' : '') +
       (typeof wmCanWorklog === 'function' && wmCanWorklog() ? '<button type="button" class="awg-b" data-awg="pull"' + (busy ? ' disabled' : '') + ' title="3개 사업부 주간일지를 내려받아 업무일지 데이터를 갱신">📥 주간일지 받기</button>' : '');
   }
   put('awgAct', a);
@@ -201,7 +203,7 @@ function _awgSync() {
 }
 function _awgShotHtml(ready) {
   var s = _awg, h = '';
-  var BUSY = { check: '애니웍스에 이미 올라간 것이 있는지 확인하는 중…', fill: '애니웍스 공수등록 화면에 넣는 중…', send: '애니웍스에 등록하는 중…', verify: '주간일지를 내려받아 올라갔는지 확인하는 중…', pull: '주간일지를 내려받는 중…' };
+  var BUSY = { check: '애니웍스에 이미 올라간 것이 있는지 확인하는 중…', fill: '애니웍스 공수등록 화면에 넣는 중…', send: '애니웍스에 등록하는 중…', verify: '주간일지를 내려받아 올라갔는지 확인하는 중…', sign: '애니웍스에서 팀장승인을 누르는 중…', pull: '주간일지를 내려받는 중…' };
   if (s.busy) h += '<div class="awg-msg run"><span class="awg-spin"></span>' + BUSY[s.busy] + '</div>';
   if (s.note) h += '<div class="awg-msg ' + s.note.t + '">' + s.note.html + '</div>';
   if (s.dup && s.dup.length && (s.shot || s.busy === 'fill')) {
@@ -264,6 +266,7 @@ function _awgBind(el) {
     var s = _awg, t = e.target; if (!s) return;
     if (t.id === 'awgDay' && /^\d{4}-\d{2}-\d{2}$/.test(t.value)) _awgGo(t.value);
     if (t.id === 'awgCopy' && t.value) { var d = t.value; t.value = ''; _awgCopy(d); }
+    if (t.hasAttribute && t.hasAttribute('data-awg-signopt')) { try { localStorage.setItem('wm_awg_sign', t.checked ? '1' : '0'); } catch (_) {} }
     if (s.view === 'hist') _awgHistChange(t);
   });
   el.addEventListener('keydown', function (e) {
@@ -292,6 +295,7 @@ function _awgBind(el) {
     else if (a === 'acct') awgAcctOpen();
     else if (a === 'fill') _awgFill();
     else if (a === 'send') _awgSend();
+    else if (a === 'sign') _awgSignOnly();
     else if (a === 'pull') awgPullOpen();
     else if (a === 'wipe') _awgWipe();
     else if (a === 'hist') _awgHistOpen();
@@ -596,7 +600,8 @@ async function _awgSend() {
   var late = new Date() > new Date(_awgDate(_awgAdd(day, 1)).getTime() + (8 * 60 + 20) * 60000);
   var msg = _awgLabel(day) + ' 업무 ' + items.length + '행 · ' + _awgSum(items) + 'h 를 애니웍스에 등록합니다.\n등록한 뒤에는 여기서 되돌릴 수 없습니다.' +
     (s.dup && s.dup.length ? '\n\n⚠ 이 날짜에 이미 ' + s.dup.length + '행이 올라가 있습니다. 그 위에 더해질 수 있습니다.' : doc && doc.status === 'sent' ? '\n\n⚠ 이 날짜는 이미 한 번 등록했습니다.' : '') +
-    (late ? '\n\n마감(다음 날 08:20)이 지난 날짜라 애니웍스가 지연 경고를 띄웁니다.' : '');
+    (late ? '\n\n마감(다음 날 08:20)이 지난 날짜라 애니웍스가 지연 경고를 띄웁니다.' : '') +
+    (_awgCanSign() && _awgSignOn() ? '\n\n✍ 등록이 확인되면 그날 [팀장승인] 까지 누릅니다.' : '');
   if (!(await wmConfirm(msg, { ok: '등록' }))) return;
   if (_awg !== s || s.busy) return;
   var before = _awgCount(s.shot.before);
@@ -617,6 +622,8 @@ async function _awgSend() {
       if (!(r && r.ok)) await _awgMarkSent(s, day, items, said);
       try { var c = await apiFetch('/api/gongsu/' + day + '/checked', { method: 'POST' }); if (c && c.data) s.docs[day] = c.data; } catch (_) {}
       s.note = { t: 'ok', html: '✅ <b>' + _awgLabel(day) + ' ' + items.length + '행 · ' + _awgSum(items) + 'h 등록 완료</b> — 주간일지에서도 확인했습니다.' + (said ? '<div class="awg-said">애니웍스: ' + eH(said) + '</div>' : '') };
+      // 등록이 확인됐을 때만 팀장승인까지 (v13.547)
+      if (_awgCanSign() && _awgSignOn()) { s.busy = 'sign'; _awgSync(); var sg = await _awgSign(day); if (_awg !== s) return; s.note.html += sg.html; if (!sg.ok) s.note.t = 'warn'; }
     } else if (r && r.ok) {
       s.note = { t: 'warn', html: '✅ 등록은 눌렀습니다. 다만 주간일지 목록에서는 아직 내 행을 찾지 못했습니다' + (after.ok ? ' (이름 「' + eH(_awgNames().join(' · ')) + '」 로 찾음)' : ' (' + eH(after.error) + ')') + ' — 애니웍스에서 한 번 확인해 주세요.' + (said ? '<div class="awg-said">애니웍스: ' + eH(said) + '</div>' : '') };
     } else {
@@ -624,6 +631,28 @@ async function _awgSend() {
     }
     if (_awg === s && s.day === day) { _awgWeekSync(); }
   } catch (e) { if (_awg === s) s.note = { t: 'err', html: '❌ ' + eH((e && e.message) || '실패했습니다') + ' — 다시 누르기 전에 애니웍스에서 올라갔는지 확인해 주세요.' }; }
+  finally { if (_awg === s) { s.busy = ''; _awgSync(); } }
+}
+/* ─── 팀장승인 (v13.547) — PC 앱 approve: 그날 일일 업무보고의 내 칸 [팀장승인] ─── */
+function _awgCanSign() { var s = _awg; return !!(_awgDesk() && s && s.st && s.st.hasCred && s.st.v >= 4); }
+function _awgSignOn() { try { return localStorage.getItem('wm_awg_sign') !== '0'; } catch (_) { return true; } }
+async function _awgSign(day) {
+  var desk = _awgDesk();
+  try {
+    var r = await desk('approve', { date: day, names: _awgNames() });
+    if (r && r.ok && r.already) return { ok: true, html: '<div class="awg-said">✍ 팀장승인은 이미 되어 있습니다.</div>' };
+    if (r && r.ok && r.approved) return { ok: true, html: '<div class="awg-said">✍ <b>팀장승인 완료</b>' + (r.signed ? ' — 서명까지 확인했습니다.' : '') + '</div>' };
+    if (r && r.ok) return { ok: false, html: '<div class="awg-said">⚠ 팀장승인을 눌렀지만 단추가 그대로입니다 — 애니웍스에서 확인해 주세요.</div>' };
+    return { ok: false, html: '<div class="awg-said">⚠ 팀장승인 못 함: ' + eH((r && r.error) || '실패했습니다') + '</div>' };
+  } catch (e) { return { ok: false, html: '<div class="awg-said">⚠ 팀장승인 못 함: ' + eH((e && e.message) || '실패했습니다') + '</div>' }; }
+}
+async function _awgSignOnly() {
+  var s = _awg; if (!s || s.busy || !_awgCanSign()) return;
+  var day = s.day;
+  if (!(await wmConfirm(_awgLabel(day) + ' 애니웍스 일일 업무보고의 내 칸 [팀장승인] 을 누릅니다.\n승인한 뒤에는 여기서 되돌릴 수 없습니다.', { ok: '승인' }))) return;
+  if (_awg !== s || s.busy) return;
+  s.busy = 'sign'; s.note = null; _awgSync();
+  try { var sg = await _awgSign(day); if (_awg === s) s.note = { t: sg.ok ? 'ok' : 'warn', html: sg.html }; }
   finally { if (_awg === s) { s.busy = ''; _awgSync(); } }
 }
 async function _awgMarkSent(s, day, items, said) {

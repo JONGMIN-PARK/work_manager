@@ -498,9 +498,68 @@ async function wwrSave() {
   return { seq: was.seq, date: was.date, messages, verified, sent: { left: was.l, right: was.r }, saved: got ? { left: got.l, right: got.r } : null };
 }
 
+/* ─── 팀장승인 (v13.547) ───
+   일일 업무보고 목록(Week_List.asp)의 링크 week_Count.asp?seq=N&…&LogDate=날짜 로 그날 seq 를 찾고,
+   week_Content.asp?seq=N 의 [팀장승인] = appsign() → SweetAlert 「승인하시겠습니까?」 → week_AppSign.asp?seq=N 로 이동.
+   승인된 뒤에는 단추가 없어지고 내 칸에 .sign-box (서명 그림) 가 보인다. 단추는 로그인한 본인 칸에만 있다. */
+const JS_SIGN_STATE = (names) => `(function(){ var names = ${J(names || [])};
+  var b = document.querySelector('[onclick*="appsign"]');
+  var mine = null;
+  if (names.length) [].some.call(document.querySelectorAll('td'), function(td){
+    var n = td.querySelector('.user-name'); if (!n) return false;
+    var t = n.textContent.replace(/\\s/g, ''); if (names.indexOf(t) < 0) return false; mine = td; return true; });
+  return { btn: !!b, signed: !!(mine && mine.querySelector('.sign-box img')), found: !!mine,
+    date: ((document.body.innerText || '').match(/20\\d\\d-\\d\\d-\\d\\d/) || [])[0] || '' }; })()`;
+async function signSeq(date) {
+  for (let page = 1; page <= 3; page++) {
+    await openPage(URL_LIST + '&page=' + page, '!!document.getElementsByName("TeamName")[0]', '일일 업무보고 목록');
+    const seq = await inFrame(`(function(){ var hit = '';
+      [].some.call(document.querySelectorAll('a[href*="LogDate="]'), function(a){ var h = a.getAttribute('href') || '';
+        var m = h.match(/[?&]seq=(\\d+)/i), d = h.match(/LogDate=(\\d{4}-\\d{2}-\\d{2})/i);
+        if (m && d && d[1] === ${J(date)}) { hit = m[1]; return true; } return false; });
+      return hit; })()`);
+    if (seq) return seq;
+  }
+  return '';
+}
+const URL_DAY = (seq, date) => BASE + '/Sales/week_Content.asp?seq=' + encodeURIComponent(seq) + '&page=1&mun=6&table=week&top_id=80&LogDate=' + encodeURIComponent(date);
+async function approve(a) {
+  const date = String((a && a.date) || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) throw E('BAD', '날짜가 올바르지 않습니다');
+  const names = (Array.isArray(a && a.names) ? a.names : []).map((s) => String(s).replace(/\s/g, '')).filter(Boolean).slice(0, 4);
+  filled = null;
+  const seq = await signSeq(date);
+  if (!seq) throw E('NO_DAY', date + ' 일일 업무보고를 애니웍스 목록에서 찾지 못했습니다');
+  await openPage(URL_DAY(seq, date), '!!document.body && document.body.innerText.length > 50', '일일 업무보고 화면');
+  let st = await inFrame(JS_SIGN_STATE(names));
+  if (st.date && st.date !== date) throw E('MISMATCH', '다른 날짜의 화면이 열렸습니다 (' + st.date + ')');
+  if (a.dry) return { date, seq, dry: true, btn: st.btn, signed: st.signed, found: st.found };      // 보기만 (시험용)
+  if (!st.btn) {
+    if (st.signed) return { date, seq, already: true, approved: true };
+    throw E('NO_BTN', date + ' 화면에 팀장승인 단추가 없습니다' + (st.found ? '' : ' (내 칸을 찾지 못함)'));
+  }
+  await drain();
+  await inFrame('window.__awOld = 1; appsign(); 1', true);
+  // 「승인하시겠습니까?」 → [승인]
+  await until(() => inFrame(`typeof Swal !== 'undefined' && Swal.isVisible() && /승인/.test((document.querySelector('.swal2-title') || {}).textContent || '')`), 5000, '승인 확인 창');
+  await inFrame('Swal.clickConfirm(); 1', true);
+  const messages = [];
+  try {
+    await until(async () => { (await drain()).forEach((d) => messages.push(d.m)); return inFrame('!window.__awOld && document.readyState === "complete"'); }, 15000, '승인 처리');
+  } catch (e) {
+    throw E('UNSURE', '승인 결과를 확인하지 못했습니다 — 애니웍스에서 직접 확인해 주세요' + (messages.length ? ' (' + messages.join(' / ').slice(0, 120) + ')' : ''));
+  }
+  await sleep(500);
+  (await drain()).forEach((d) => messages.push(d.m));
+  // 다시 열어 단추가 없어지고 서명이 보이는지
+  await openPage(URL_DAY(seq, date), '!!document.body && document.body.innerText.length > 50', '일일 업무보고 화면');
+  st = await inFrame(JS_SIGN_STATE(names));
+  return { date, seq, approved: !st.btn, signed: st.signed, messages };
+}
+
 /* ─── 창구: 한 번에 하나씩 ─── */
 const CMDS = {
-  orders, scan, fill, submit, download, wwrDates, wwrFill, wwrSave,
+  orders, scan, fill, submit, download, wwrDates, wwrFill, wwrSave, approve,
   test: async () => { closeWin(); await login(); return { id: (readCred() || {}).id }; }
 };
 function run(cmd, a) {
@@ -513,7 +572,7 @@ function run(cmd, a) {
 }
 function status() {
   const c = readCred();
-  return { v: 3, hasCred: !!c, id: c ? c.id : '', safe: safeStorage.isEncryptionAvailable(), open: !!(aw && !aw.isDestroyed()), running, filled: filled ? { date: filled.date, count: filled.n } : null, maxRows: MAX_ROWS, memoMax: MEMO_MAX, divi: Object.keys(DIVI), job: Object.keys(JOB) };
+  return { v: 4, hasCred: !!c, id: c ? c.id : '', safe: safeStorage.isEncryptionAvailable(), open: !!(aw && !aw.isDestroyed()), running, filled: filled ? { date: filled.date, count: filled.n } : null, maxRows: MAX_ROWS, memoMax: MEMO_MAX, divi: Object.keys(DIVI), job: Object.keys(JOB) };
 }
 
 /** main.js 에서 한 번 부른다. allowed(e): 우리 웹 화면(메인 창 · 같은 서버)에서 온 호출인지 */
