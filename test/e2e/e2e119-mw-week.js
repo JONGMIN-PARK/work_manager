@@ -69,7 +69,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.setViewport({ width: 1200, height: 900 });
     await wait(600);
     var one = await page.evaluate(function () { var s = document.getElementById('mwwStrip'), h = s.querySelector('.mwj-h'); return { side: Math.round(s.closest('.mw-side').getBoundingClientRect().width), head: Math.round(h.getBoundingClientRect().height), rows: [].map.call(s.querySelectorAll('.mww-r'), function (r) { return Math.round(r.getBoundingClientRect().height); }) }; });
-    check(one.side <= 302 && one.head <= 34 && one.rows.every(function (h) { return h <= 30; }), '좁은 칸 — 머리 · 항목 한 줄 ' + JSON.stringify(one));
+    check(one.side <= 302 && one.head <= 34 && one.rows.every(function (h) { return h <= 36; }), '좁은 칸 — 머리 · 항목 한 줄 ' + JSON.stringify(one));
     // 다른 이름 — 관리자 계정에 '박종민' → 보고서 @박종민 이 관리자 금주 할 일로
     var ah = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + at };
     var pf = await (await fetch(B + '/api/profile', { method: 'PUT', headers: ah, body: JSON.stringify({ aliases: '박종민, @Alex, 박종민' }) })).json();

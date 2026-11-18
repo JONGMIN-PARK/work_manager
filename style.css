@@ -9194,3 +9194,44 @@ button.awg-chip{cursor:pointer}
 .cm-at-pop button.on,.cm-at-pop button:hover{background:var(--ac-bg);color:var(--ac)}
 .cm-at-pop small{color:var(--t5);font-size:10.5px}
 .cm-at-none{font-size:11.5px;color:var(--t5);padding:6px 9px}
+
+/* ═══ v13.546 내 업무 오른쪽 칸 — 📅 오늘 일정 · 📋 금주 할 일 · 📁 내 프로젝트 · 🔖 바로가기 한 벌로 ═══
+   같은 틀(테두리 · 둥글기 · 여백) · 위 색 띠(카드마다 색) · 제목 13.5px 굵게 + 형광 밑줄 · 머리 아래 가는 줄
+   본문 글씨 13px · 보조 11.5px · 줄마다 옅은 구분선 · 누르는 곳 높이 맞춤 */
+.mw-side{--sd-t:13px;--sd-s:11.5px;gap:12px}
+.mw-side .mwc-todaybar{--sa:#0EA5E9}
+.mw-side .mww{--sa:#2563EB}
+.mw-side .mwj:not(.mww){--sa:#7C3AED}
+.mw-side .wsc-box{--sa:#E11D48}
+.mw-side :is(.mwc-todaybar,.mwj,.wsc-box){border:1px solid var(--bd);border-radius:12px;background:var(--bg-p);padding:9px 12px 10px;gap:0;
+  box-shadow:inset 0 3px 0 var(--sa),0 1px 2px rgba(0,0,0,.04);margin:0}
+/* 머리 — 높이 · 아래 줄 · 제목 */
+.mw-side :is(.mwj-h,.wsc-hd){min-height:28px;padding:2px 0 7px;margin-bottom:4px;border-bottom:1px solid var(--bd);gap:6px}
+.mw-side .mwc-tb-h{display:block;min-height:28px;line-height:24px;padding:2px 0 7px;margin:0 0 6px;border-bottom:1px solid var(--bd)}
+.mw-side :is(.mwj.is-folded .mwj-h,.wsc-box.is-folded .wsc-hd){border-bottom-color:transparent;padding-bottom:0;margin-bottom:0}
+.mw-side :is(.mwj-ttl,.wsc-hd b,.mwc-tb-h){font-size:13.5px;font-weight:700;color:var(--t1);letter-spacing:-.01em;
+  text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--sa) 38%,transparent);text-decoration-thickness:6px;text-underline-offset:-2px;text-decoration-skip-ink:none}
+.mw-side :is(.mwj-n,.wsc-hd .wsc-n){font-style:normal;font-size:11px;font-weight:700;color:var(--sa);background:color-mix(in srgb,var(--sa) 10%,transparent);border:0;border-radius:10px;padding:1px 7px;line-height:16px}
+.mw-side .mwj-tri,.mw-side .wsc-hd .wsc-car{color:var(--t5);font-size:11px;width:16px;text-align:center;padding:0}
+.mw-side .wsc-hd .wsc-a,.mw-side .mww-nav{width:24px;height:24px;min-width:24px;display:inline-flex;align-items:center;justify-content:center;padding:0}
+/* 본문 글씨 — 한 크기 */
+.mw-side .mwc-todaybar .mwc-chip{font-size:var(--sd-t);padding:5px 8px;border-radius:7px;margin-top:3px}
+.mw-side .mww-t,.mw-side .wsc-t b,.mw-side .mwj-its-t{font-size:var(--sd-t)}
+.mw-side .mwj-t{font-size:var(--sd-t);font-weight:700}
+.mw-side :is(.mww-d li,.wsc-t small,.mwj-m,.mwj-e,.mww-e,.wsc-empty){font-size:var(--sd-s)}
+.mw-side :is(.mww-p,.mww-who){font-size:var(--sd-s)}
+.mw-side :is(.mww-gh,.wsc-gh){font-size:12px;font-weight:700;color:var(--t3);padding:8px 2px 3px}
+.mw-side .mww-gh{border-top:0;margin-top:4px}
+/* 줄 — 같은 높이 · 옅은 구분선 · 같은 hover */
+.mw-side .mww-l{gap:0;padding:0}
+.mw-side .mww-r{padding:6px 4px;min-height:30px;box-sizing:border-box;border-radius:6px}
+.mw-side .mww-l>.mww-r:not(:first-child){border-top:1px solid color-mix(in srgb,var(--bd) 55%,transparent)}
+.mw-side .mww-d{padding-bottom:4px}
+.mw-side .wsc-row{border-radius:6px}
+.mw-side .wsc-grp>.wsc-row+.wsc-row{border-top:1px solid color-mix(in srgb,var(--bd) 55%,transparent)}
+.mw-side .wsc-go{padding:6px 4px;min-height:30px}
+.mw-side :is(.mww-r,.wsc-row,.mwj-it):hover{background:color-mix(in srgb,var(--sa) 7%,transparent)}
+.mw-side .mwj-l{padding-top:6px}
+.mw-side .mwj-c{border-radius:9px}
+/* 아래 줄 */
+.mw-side :is(.mww-f,.wsc-ft){border-top:1px solid var(--bd);margin-top:6px;padding-top:6px;font-size:11px}
