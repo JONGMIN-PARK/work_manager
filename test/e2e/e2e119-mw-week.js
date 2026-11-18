@@ -65,6 +65,22 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.waitForSelector('#mwwStrip', { timeout: 8000 });
     check(await page.evaluate(function () { var s = document.getElementById('mwwStrip'); return s.classList.contains('is-folded') && !s.querySelector('.mww-r'); }), '접기 — 다시 그려도 기억');
     await page.evaluate(function () { document.querySelector('#mwwStrip [data-mww="fold"]').click(); });
+    // 오른쪽 칸이 가장 좁을 때(300px)도 머리 · 항목 한 줄 (v13.540)
+    await page.setViewport({ width: 1200, height: 900 });
+    await wait(600);
+    var one = await page.evaluate(function () { var s = document.getElementById('mwwStrip'), h = s.querySelector('.mwj-h'); return { side: Math.round(s.closest('.mw-side').getBoundingClientRect().width), head: Math.round(h.getBoundingClientRect().height), rows: [].map.call(s.querySelectorAll('.mww-r'), function (r) { return Math.round(r.getBoundingClientRect().height); }) }; });
+    check(one.side <= 302 && one.head <= 34 && one.rows.every(function (h) { return h <= 30; }), '좁은 칸 — 머리 · 항목 한 줄 ' + JSON.stringify(one));
+    // 다른 이름 — 관리자 계정에 '박종민' → 보고서 @박종민 이 관리자 금주 할 일로
+    var ah = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + at };
+    var pf = await (await fetch(B + '/api/profile', { method: 'PUT', headers: ah, body: JSON.stringify({ aliases: '박종민, @Alex, 박종민' }) })).json();
+    check(pf.data && pf.data.aliases === '박종민, Alex', '내 프로필 다른 이름 저장 (@ 떼고 · 중복 빼고) ' + (pf.data && pf.data.aliases));
+    var s9 = mon(0), e9 = new Date(s9); e9.setDate(e9.getDate() + 4);
+    await fetch(B + '/api/weekly-reports', { method: 'POST', headers: ah, body: JSON.stringify({ autoName: { team: team + 'B', weekStart: ymd(s9), weekEnd: ymd(e9) }, lastText: '', curText: ['[개발]', '- [SENKO] 비전 검사 50% @박종민'].join(String.fromCharCode(10)) }) });
+    var mn = await (await fetch(B + '/api/weekly-reports/mine?week=' + ymd(s9), { headers: ah })).json();
+    check((mn.data.items || []).some(function (x) { return x.name === '비전 검사'; }), '@박종민 일이 관리자 금주 할 일로');
+    var lk = await (await fetch(B + '/api/users/lookup', { headers: ah })).json();
+    check((lk.data || []).some(function (u) { return /박종민/.test(u.aliases || ''); }), '사람 목록에 다른 이름 (찾기 · 담당 맞추기)');
+    await fetch(B + '/api/profile', { method: 'PUT', headers: ah, body: JSON.stringify({ aliases: '' }) });
     // 좁은 화면 — 넘침 없음
     await page.setViewport({ width: 900, height: 900 });
     await wait(500);

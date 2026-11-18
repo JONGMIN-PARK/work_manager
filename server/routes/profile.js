@@ -14,10 +14,10 @@ router.get('/', async function (req, res) {
   try {
     var sql, params;
     if (req.tenant) {
-      sql = "SELECT u.id, u.email, u.name, u.display_name, u.role, u.department_id, d.name as department_name, u.position, u.phone, u.status, u.password_changed_at, u.created_at, u.last_login_at FROM users u LEFT JOIN departments d ON u.department_id = d.id WHERE u.id = $1 AND u.tenant_id = $2";
+      sql = "SELECT u.id, u.email, u.name, u.display_name, u.role, u.department_id, d.name as department_name, u.position, u.phone, u.aliases, u.status, u.password_changed_at, u.created_at, u.last_login_at FROM users u LEFT JOIN departments d ON u.department_id = d.id WHERE u.id = $1 AND u.tenant_id = $2";
       params = [req.user.sub, req.tenant.id];
     } else {
-      sql = "SELECT u.id, u.email, u.name, u.display_name, u.role, u.department_id, d.name as department_name, u.position, u.phone, u.status, u.password_changed_at, u.created_at, u.last_login_at FROM users u LEFT JOIN departments d ON u.department_id = d.id WHERE u.id = $1";
+      sql = "SELECT u.id, u.email, u.name, u.display_name, u.role, u.department_id, d.name as department_name, u.position, u.phone, u.aliases, u.status, u.password_changed_at, u.created_at, u.last_login_at FROM users u LEFT JOIN departments d ON u.department_id = d.id WHERE u.id = $1";
       params = [req.user.sub];
     }
     var r = await db.query(sql, params);
@@ -44,6 +44,11 @@ router.put('/', async function (req, res) {
     }
     if (b.phone !== undefined) { sets.push('phone = $' + idx++); params.push(b.phone.trim()); }
     if (b.position !== undefined) { sets.push('position = $' + idx++); params.push(b.position.trim()); }
+    // 다른 이름 (v13.540) — 쉼표 · 공백 구분, '@' 떼고 5개 · 이름마다 30자
+    if (b.aliases !== undefined) {
+      var al = String(b.aliases || '').split(/[,，\n]+/).map(function (x) { return x.trim().replace(/^@+/, '').trim().slice(0, 30); }).filter(function (x, i, a) { return x && a.indexOf(x) === i; }).slice(0, 5);
+      sets.push('aliases = $' + idx++); params.push(al.join(', ') || null);
+    }
 
     if (!sets.length) return res.status(400).json({ error: 'VALIDATION', message: '변경할 항목이 없습니다.' });
 
@@ -56,7 +61,7 @@ router.put('/', async function (req, res) {
       params.push(req.tenant.id);
       sql += ' AND tenant_id = $' + idx;
     }
-    sql += ' RETURNING id, email, name, display_name, role, department_id, position, phone';
+    sql += ' RETURNING id, email, name, display_name, role, department_id, position, phone, aliases';
     var r = await db.query(sql, params);
 
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });

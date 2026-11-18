@@ -27,7 +27,7 @@ function _mmRenderEditor() {
     '<button class="mm-tbtn mm-tbtn-icon" data-act="back" title="목록으로">' + _mmIcon('back', 18) + '</button>' +
     '<div class="mm-titlebox"><input id="mmTitle" class="mm-title" value="' + _mmEsc(row.title) + '" maxlength="255">' +
     '<div class="mm-subline"><span class="mm-badge">' + sc.i + ' ' + sc.l + (row.project_name ? ' · ' + _mmEsc(row.project_name) : '') + '</span>' +
-    '<span id="mmStatus" class="mm-status"></span></div></div>' +
+    '<span id="mmStatus" class="mm-status"></span><span class="wpr-slot" data-wpr="map:' + _mmEsc(row.id) + '" hidden></span></div></div>' +
     '<span class="mm-flex"></span>' +
     '<div class="mm-top2">' +   // v13.415 넓은 화면에선 없는 것처럼(display:contents) · 좁으면 둘째 줄 한 줄로 옆으로 밀기
     '<label class="mm-searchbox">' + _mmIcon('search', 14) + '<input id="mmSearch" class="mm-search" placeholder="맵에서 찾기' + (window.matchMedia && matchMedia('(pointer:coarse)').matches ? '' : '  Ctrl+F') + '"></label>' +

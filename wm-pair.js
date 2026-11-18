@@ -72,7 +72,7 @@ function wpPickPerson(it, onPick) {
       var q = md.box.querySelector('#wpQ'), list = md.box.querySelector('.wp-list');
       var draw = function () {
         var v = q.value.trim().toLowerCase(), cur = null, h = '';
-        people.filter(function (p) { return taken.indexOf(p.id) < 0 && (!v || [p.name, p.reg, p.nm, p.dept].some(function (x) { return String(x || '').toLowerCase().indexOf(v) >= 0; })); })
+        people.filter(function (p) { return taken.indexOf(p.id) < 0 && (!v || [p.name, p.reg, p.nm, p.dept].concat(p.al || []).some(function (x) { return String(x || '').toLowerCase().indexOf(v) >= 0; })); })
           .sort(function (a, b) { return (a.dept ? 0 : 1) - (b.dept ? 0 : 1) || String(a.dept || '').localeCompare(String(b.dept || ''), 'ko') || a.name.localeCompare(b.name, 'ko'); })
           .forEach(function (p) { var d = p.dept || '부서 없음'; if (d !== cur) { cur = d; h += '<div class="wp-dept">🏢 ' + _wpE(d) + '</div>'; } h += '<button type="button" class="wp-p" data-id="' + _wpE(p.id) + '">' + _wpE(p.name) + '</button>'; });
         list.innerHTML = h || '<div class="wp-none">맞는 사람이 없습니다</div>';
@@ -117,7 +117,7 @@ function wpStart(o) {
       var box = md.box, list = box.querySelector('.wp-list'), q = box.querySelector('#wpQ2');
       var draw = function () {
         var v = q.value.trim().toLowerCase(), cur = null, h = '';
-        people.filter(function (p) { return pick[p.id] || !v || [p.name, p.reg, p.nm, p.dept].some(function (x) { return String(x || '').toLowerCase().indexOf(v) >= 0; }); })
+        people.filter(function (p) { return pick[p.id] || !v || [p.name, p.reg, p.nm, p.dept].concat(p.al || []).some(function (x) { return String(x || '').toLowerCase().indexOf(v) >= 0; }); })
           .sort(function (a, b) { return (pick[b.id] ? 1 : 0) - (pick[a.id] ? 1 : 0) || (a.dept ? 0 : 1) - (b.dept ? 0 : 1) || String(a.dept || '').localeCompare(String(b.dept || ''), 'ko') || a.name.localeCompare(b.name, 'ko'); })
           .forEach(function (p) { var d = pick[p.id] ? '✔ 고른 사람' : (p.dept || '부서 없음'); if (d !== cur) { cur = d; h += '<div class="wp-dept">' + (pick[p.id] ? '' : '🏢 ') + _wpE(d) + '</div>'; } h += '<label class="wp-p"><input type="checkbox" data-id="' + _wpE(p.id) + '"' + (pick[p.id] ? ' checked' : '') + '> ' + _wpE(p.name) + '</label>'; });
         list.innerHTML = h || '<div class="wp-none">맞는 사람이 없습니다</div>';

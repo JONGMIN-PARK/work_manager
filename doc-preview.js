@@ -726,6 +726,7 @@ function _dpBuildViewer(f) {
   m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', f.name || '미리보기');
   m.innerHTML = '<div class="dpv-box"><div class="dpv-head"><span class="dpv-ic">' + icon + '</span><span class="dpv-nm" title="' + _dpEsc(f.name) + '">' + _dpEsc(f.name) + '</span>' +
     '<span class="dpv-sz">' + (typeof formatFileSize === 'function' ? formatFileSize(f.size) : '') + '</span>' +
+    '<span class="wpr-slot" data-wpr="doc:' + _dpEsc(f.id) + '" hidden></span>' +
     '<button type="button" class="btn btn-p btn-s dpv-pres-b" onclick="docViewPresent()" title="▶ 발표 — 전체 화면으로 한 쪽씩 (← → · Space 로 넘기기, 칠판으로 표시)" disabled>▶<span class="dpv-lbl"> 발표</span></button>' +
     '<button type="button" class="btn btn-g btn-s dpv-board-b" onclick="docViewBoard()" title="✏️ 칠판 — 펜 · 형광펜 · 도형 · 글자 · 캡처 붙여넣기(Ctrl+V), 쪽마다 자동 저장" disabled>✏️<span class="dpv-lbl"> 칠판</span></button>' +
     '<button type="button" class="btn btn-g btn-s" onclick="docDownloadFile(\'' + id + '\')" title="내려받기">💾<span class="dpv-lbl"> 내려받기</span></button>' +

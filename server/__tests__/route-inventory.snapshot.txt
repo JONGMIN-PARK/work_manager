@@ -584,6 +584,7 @@ POST /api/orders/bulk
 POST /api/pair
 POST /api/pair/:id/end
 POST /api/pair/:id/join
+POST /api/presence
 POST /api/prestudies
 POST /api/prestudies/:id/convert
 POST /api/progress

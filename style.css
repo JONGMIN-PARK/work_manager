@@ -9141,3 +9141,25 @@ button.awg-chip{cursor:pointer}
 .mww-r.is-done .mww-t{color:var(--t5);text-decoration:line-through}
 .mww-e{font-size:11.5px;color:var(--t5);padding:8px 6px;line-height:1.6}
 .mww-f{display:flex;align-items:center;gap:6px;justify-content:space-between;font-size:10.5px;color:var(--t5);padding:4px 6px 0;border-top:1px dashed var(--bd);margin-top:4px}
+
+/* ═══ v13.539 👀 지금 같이 보는 사람 ═══ */
+.wpr-slot{display:inline-flex;align-items:center;gap:3px;flex:none;font-size:11px;color:#047857;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);border-radius:99px;padding:1px 8px 1px 6px;white-space:nowrap;max-width:220px;overflow:hidden}
+.wpr-slot[hidden]{display:none}
+.wpr-dot{width:7px;height:7px;border-radius:50%;background:#10B981;box-shadow:0 0 0 0 rgba(16,185,129,.6);animation:wprPulse 2s infinite}
+@keyframes wprPulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.55)}70%{box-shadow:0 0 0 6px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+@media (prefers-reduced-motion:reduce){.wpr-dot{animation:none}}
+.wpr-av{width:17px;height:17px;border-radius:50%;background:#10B981;color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-left:-4px;border:1.5px solid var(--bg-p)}
+.wpr-av:first-of-type{margin-left:2px}
+.wpr-t{margin-left:3px;overflow:hidden;text-overflow:ellipsis}
+.nb-head .wpr-slot{margin-left:8px}
+@media (max-width:640px){.wpr-t{display:none}}
+
+/* v13.540 📋 금주 할 일 머리 — 한 줄 지키기: 좁으면 날짜(11/16~11/20) → 제목 순으로 줄임 */
+.mww{container-type:inline-size}
+.mww .mwj-h{flex-wrap:nowrap;gap:6px;min-width:0}
+.mww .mwj-ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.mww .mwj-n,.mww .mwj-tri{flex:none}
+.mww-pg{min-width:0}
+.mww-lbl{overflow:hidden;text-overflow:ellipsis}
+@container (max-width:330px){.mww-lbl small{display:none}}
+@container (max-width:250px){.mww .mwj-ttl{font-size:12.5px}}

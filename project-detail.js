@@ -94,6 +94,7 @@ function _pdDetailHeaderHtml(proj, stInfo) {
   var html = '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:14px">' +
     '<div style="display:flex;align-items:center;gap:4px;min-width:0">' +
       '<h3 style="font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(proj.name) + '"><span style="background:' + eC(proj.color) + ';width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis">' + eH(proj.name) + '</span></h3>' +
+      '<span class="wpr-slot" data-wpr="project:' + idA + '" hidden></span>' +
       '<button class="btn btn-g btn-s pd-edit-only" style="flex-shrink:0;padding:2px 7px" onclick="pdEditProject(\'' + idA + '\')" title="프로젝트 편집 — 저장하면 이 패널로 돌아옵니다">✏️ 편집</button>' +
       (typeof wrqFromProject === 'function' ? '<button class="btn btn-g btn-s pd-wrq-btn" style="flex-shrink:0;padding:2px 7px" onclick="wrqFromProject(\'' + idA + '\')" title="이 프로젝트 업무를 사람에게 — 지시 · 이관 · 전달 · 일정 (메신저로 가고, 수락하면 그 사람 할 일로)">📨 업무 보내기</button>' : '') +
       '<span class="pd-more" style="position:relative;flex-shrink:0">' +

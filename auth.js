@@ -994,6 +994,7 @@ async function showProfileModal() {
       '<span style="color:var(--t5,#6070A0)">부서</span><span>' + eH(p.department_name || '-') + '</span>' +
       '<label style="color:var(--t5,#6070A0)">이름</label><input id="profName" value="' + eH(p.name || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
       '<label style="color:var(--t5,#6070A0)">표시명</label><input id="profDisplay" value="' + eH(p.display_name || '') + '" placeholder="별칭 (선택)" style="padding:8px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
+      '<label style="color:var(--t5,#6070A0)" title="주간 보고서 · 업무일지에 쓰는 이름이 계정 이름과 다를 때 — 쉼표로 여러 개">다른 이름</label><input id="profAliases" value="' + eH(p.aliases || '') + '" placeholder="보고서 · 업무일지에 쓰는 이름 (예: 박종민) — 쉼표로 여러 개" style="padding:8px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t1,#E2E8F0);font-size:12px">' +
       '<label style="color:var(--t5,#6070A0)">직급</label><input id="profPosition" value="' + eH(p.position || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
       '<label style="color:var(--t5,#6070A0)">연락처</label><input id="profPhone" value="' + eH(p.phone || '') + '" style="padding:8px;border-radius:6px;border:1px solid var(--bd,#222C44);background:var(--bg-i,#0D1018);color:var(--t2,#D8DEE8);font-size:13px">' +
     '</div>' +
@@ -1023,6 +1024,7 @@ async function showProfileModal() {
           name: document.getElementById('profName').value.trim(),
           displayName: document.getElementById('profDisplay').value.trim(),
           position: document.getElementById('profPosition').value.trim(),
+          aliases: (document.getElementById('profAliases') || { value: '' }).value.trim(),
           phone: document.getElementById('profPhone').value.trim()
         })
       });

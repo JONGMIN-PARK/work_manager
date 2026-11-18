@@ -31,7 +31,8 @@ function _wqLoadPeople() {
       // 바꾼 이름(display_name)이 있으면 'Alex(박종민)' — 등록한 원래 이름으로도 찾게 (v13.530)
       var nm = u.name || '', disp = u.display_name || u.displayName || '', reg = u.reg_name || u.regName || '';
       var shown = disp || nm, other = nm && nm !== shown ? nm : (reg && reg !== shown ? reg : '');
-      return { id: u.id, name: shown + (other ? '(' + other + ')' : ''), nm: nm, reg: reg, disp: disp, dept: u.dept_name || u.deptName || '' };
+      var al = String(u.aliases || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);   // 다른 이름 (v13.540)
+      return { id: u.id, name: shown + (other ? '(' + other + ')' : ''), nm: nm, reg: reg, disp: disp, al: al, dept: u.dept_name || u.deptName || '' };
     })
       .filter(function (u) { return u.id && u.id !== me && u.name; })
       .sort(function (a, b) { return a.name.localeCompare(b.name, 'ko'); });
@@ -79,7 +80,7 @@ function _wqBuild(o, people) {
   /* 등록된 사람 모두 — 부서별로 묶고 스크롤 (v13.529 — 예전엔 8명만 보였다). 이름 · 부서 이름으로 찾기 */
   var showSug = function () {
     var v = inp.value.trim().toLowerCase();
-    list = people.filter(function (p) { return st.to.indexOf(p.id) < 0 && (!v || [p.name, p.nm, p.reg, p.disp, p.dept].some(function (x) { return String(x || '').toLowerCase().indexOf(v) >= 0; })); });
+    list = people.filter(function (p) { return st.to.indexOf(p.id) < 0 && (!v || [p.name, p.nm, p.reg, p.disp, p.dept].concat(p.al || []).some(function (x) { return String(x || '').toLowerCase().indexOf(v) >= 0; })); });
     // 부서 순(부서 없음은 맨 뒤) → 이름 순, 키보드 이동도 이 순서
     list.sort(function (a, b) { return (a.dept ? 0 : 1) - (b.dept ? 0 : 1) || (a.dept || '').localeCompare(b.dept || '', 'ko') || a.name.localeCompare(b.name, 'ko'); });
     if (!v && document.activeElement !== inp) { sug.hidden = true; return; }

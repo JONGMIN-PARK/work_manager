@@ -2129,7 +2129,7 @@
       var ids = [];
       (x.members || []).forEach(function (nm) {
         nm = String(nm || '').trim(); if (!nm) return;
-        var p = people.filter(function (q) { return q.nm === nm || q.disp === nm || q.reg === nm || q.name === nm; })[0];
+        var p = people.filter(function (q) { return q.nm === nm || q.disp === nm || q.reg === nm || q.name === nm || (q.al || []).indexOf(nm) >= 0; })[0];
         if (p && ids.indexOf(p.id) < 0) ids.push(p.id);
       });
       // 기한 — 따로 온 값 · 이름 · 줄에서 '~2026-12-04' · '~12/04' 를 찾아 기한 칸으로 (이름에 붙어 오는 경우가 있음), 제목에선 뺌

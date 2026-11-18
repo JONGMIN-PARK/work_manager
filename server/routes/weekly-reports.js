@@ -75,8 +75,8 @@ router.get('/mine', async function (req, res) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(w)) return res.status(400).json({ error: 'VALIDATION', message: 'week(YYYY-MM-DD) 가 필요합니다.' });
     var d0 = new Date(w + 'T00:00:00Z'), mon = new Date(d0.getTime() - ((d0.getUTCDay() + 6) % 7) * 86400000);
     var week = mon.toISOString().slice(0, 10), next = new Date(mon.getTime() + 7 * 86400000).toISOString().slice(0, 10);
-    var u = (await db.query('SELECT name, display_name, reg_name FROM users WHERE id = $1', [req.user.sub])).rows[0] || {};
-    var mine = [u.name, u.display_name, u.reg_name, req.user.name].map(_mineNorm).filter(Boolean);
+    var u = (await db.query('SELECT name, display_name, reg_name, aliases FROM users WHERE id = $1', [req.user.sub])).rows[0] || {};
+    var mine = [u.name, u.display_name, u.reg_name, req.user.name].concat(String(u.aliases || '').split(',')).map(_mineNorm).filter(Boolean);   // + 다른 이름 (v13.540)
     var r = await db.query("SELECT id, team, to_char(week_start, 'YYYY-MM-DD') AS week_start, updated_at, saved_at, parsed FROM weekly_reports WHERE tenant_id = $1 AND week_start IN ($2::date, $3::date)", [req.tenant.id, week, next]);
     var latest = {};
     r.rows.forEach(function (x) { var k = (x.team || '') + '|' + x.week_start, t = Date.parse(x.updated_at || x.saved_at || 0) || 0; if (!latest[k] || t >= latest[k]._t) latest[k] = Object.assign({}, x, { _t: t }); });

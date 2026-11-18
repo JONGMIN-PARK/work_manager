@@ -389,7 +389,8 @@ function _nbDrawMain() {
   else if (trash) h += '<div class="nb-bar warn">🗑 휴지통에 있는 노트입니다 <button class="nb-btn sm" data-restore="' + _nbE(NB.cur.id) + '">되살리기</button></div>';
   h += '<div id="nbBars"></div>';
   h += '<div class="nb-head"><input class="nb-title" id="nbTitle" placeholder="제목" maxlength="300" value="' + _nbE(daily ? NB.daily1.title : NB.cur.title) + '"' + (daily || trash ? ' readonly' : '') + ' aria-label="제목">' +
-    (daily ? '' : '<div class="nb-tagrow" id="nbTagRow">' + _nbTagsHtml() + '</div>') + '</div>';
+    (daily ? '' : '<div class="nb-tagrow" id="nbTagRow">' + _nbTagsHtml() + '</div>') +
+    (!daily && NB.cur && NB.cur.id ? '<span class="wpr-slot" data-wpr="note:' + _nbE(NB.cur.id) + '" hidden></span>' : '') + '</div>';   // 👀 v13.539
   if (!shared) h += '<div class="nb-tb" id="nbTb" role="toolbar" aria-label="서식">' + _nbTbHtml(daily) + '</div>';
   h += '<div class="nb-ed nb-m-' + (shared ? 'view' : NB.mode) + '" id="nbEd">' +
     '<textarea class="nb-src nb-scroll" id="nbSrc" spellcheck="false" placeholder="여기에 쓰세요 — 마크다운 · / 명령 · [[ 노트 잇기 · 사진은 붙여넣기" aria-label="본문"' + (trash ? ' readonly' : '') + '></textarea>' +
