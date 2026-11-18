@@ -80,7 +80,8 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     await wait(500);
     var mk = (await c.query("SELECT m.project_id, t.due_date FROM my_work_marks m JOIN my_todos t ON m.item_key = 'todo:' || t.id WHERE m.user_id = $1 AND t.title = '프로젝트화면 시안 검토'", [me.id])).rows[0];
     check(mk && mk.project_id === pid && mk.due_date === kst(1), '서버에도 소속 · 마감 내일');
-    check(await ev(function (id) { var c = document.querySelector('#mwjStrip .mwj-c[data-pj="' + id + '"]'); return /☐ 1/.test(c.textContent) && /0%/.test(c.textContent); }, pid), '카드 — 남은 1 · 진행 0%');
+    check(await ev(function (id) { var c = document.querySelector('#mwjStrip .mwj-c[data-pj="' + id + '"]'); return /남은 항목 1/.test(c.textContent) && /0%/.test(c.textContent); }, pid), '카드 — 남은 항목 1 · 진행 0%');
+    check(await ev(function (id) { var t = document.querySelector('#mwjStrip .mwj-c[data-pj="' + id + '"] .mwj-cnt').title; return /0\/1 완료/.test(t) && /남은 항목/.test(t) && /프로젝트화면 시안 검토/.test(t); }, pid), '「남은 항목」 위에 올리면 남은 것 제목');
 
     // 4. 타임라인 막대 · 👁 · 전체 끄기
     var bar = '.mtl-lane[data-lane="__pj"] .mtl-proj[data-tk="pj:' + pid + '"]';

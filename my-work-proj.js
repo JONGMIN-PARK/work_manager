@@ -112,8 +112,15 @@ function _mwjCard(p, today) {
     '<div class="mwj-m">' + (p.start || p.end ? '<span>' + _mwjMd(p.start) + ' ~ ' + _mwjMd(p.end) + '</span>' : '<span class="mwj-nod">기간 없음</span>') +
       (dd.t ? '<span class="mwj-dd ' + dd.cls + '">' + dd.t + '</span>' : '') +
       (s.prog != null ? '<span>' + s.prog + '%</span>' : '') +
-      '<span class="mwj-cnt" title="남은 항목">☐ ' + s.open + '</span>' +
+      (s.open + s.done ? '<span class="mwj-cnt" title="' + _mwEsc(_mwjOpenTip(s)) + '">' + (s.open ? '남은 항목 ' + s.open : '항목 다 끝남') + '</span>' : '') +
       (st === 'hold' || st === 'plan' ? '<span class="mwj-st">' + MW_PJ_STATUS[st] + '</span>' : '') + '</div></div>';
+}
+/** 「남은 항목」 위에 올리면 — 남은 것 제목 (마감 빠른 순, 12개까지) */
+function _mwjOpenTip(s) {
+  var open = s.items.filter(function (x) { return !x.done; }).sort(function (a, b) { return String(a.due || '9999').localeCompare(String(b.due || '9999')); });
+  var lines = open.slice(0, 12).map(function (x) { return '☐ ' + String(x.title || '(제목 없음)').slice(0, 60) + (x.due ? '  · ' + _mwjMd(x.due) : ''); });
+  if (open.length > 12) lines.push('… 외 ' + (open.length - 12) + '개');
+  return '항목 ' + s.done + '/' + (s.open + s.done) + ' 완료' + (lines.length ? '\n남은 항목\n' + lines.join('\n') : '');
 }
 /** 목록 줄 · 보드 카드의 작은 프로젝트 표 */
 function mwProjTag(it) {
