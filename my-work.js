@@ -336,6 +336,7 @@ function _mwPaintNow(el) {
   bar += moreMenu + '</div>';
   var top = h + bar;
   var wrap = function (main, cls) {
+    if (r.self && typeof wrqMwHtml === 'function') main = wrqMwHtml() + main;   // 📨 받은 요청 — 목록 맨 위 (v13.531)
     return '<div class="mw-wrap' + (cls || '') + '">' + top + '<div class="mw-body' + (side && sideOn ? '' : ' no-side') + '"><div class="mw-main">' + main + '</div>' +
       (side ? '<aside class="mw-side"' + (sideOn ? '' : ' hidden') + '>' + side + '</aside>' : '') + '</div></div>';
   };

@@ -201,6 +201,7 @@ async function wrqAct(act, id, btn) {
     if (act === 'accept' || act === 'done') { if (typeof _pdInvalidate === 'function') _pdInvalidate('evt'); if (window.wmDataBus) try { window.wmDataBus.emit(w && w.type === 'event' ? 'event' : 'myWork', 'updated', {}); } catch (_) {} }
     _wqBadge();
     if (document.getElementById('wrqBox')) _wqBoxLoad();
+    if (document.getElementById('mwWrq')) wrqMwLoad();   // 메신저 · 요청함에서 답해도 내 업무 칸이 맞게
     return w;
   }).catch(function (e) { if (btn) btn.disabled = false; _wqToast('처리하지 못했습니다: ' + ((e && e.data && e.data.message) || e.message || e), 'error'); });
 }
@@ -267,7 +268,7 @@ function _wqBadge() {
 /* 받은 요청 수 — 로그인 뒤 · 2분마다(화면이 보일 때) · 메신저로 새 요청이 오면 */
 (function () {
   var started = false;
-  function tick() { if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return; _wqBadge(); }
+  function tick() { if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return; _wqBadge(); if (document.getElementById('mwWrq')) wrqMwLoad(); }
   function start() {
     if (started) return;
     if (typeof currentUser === 'undefined' || !currentUser) return setTimeout(start, 1500);
@@ -278,3 +279,64 @@ function _wqBadge() {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(start, 1500); }); else setTimeout(start, 1500);
   }
 })();
+
+/* ═══ 🎯 내 업무 — 📨 받은 요청 칸 (v13.531) ═══
+   목록 맨 위에 아직 답하지 않은 요청. 그 자리에서 ✔ 수락(→ 내 할 일 · 일정) · 👍 확인만(전달) · ↩ 반려.
+   수락 · 확인하면 내 업무를 다시 받아 새 할 일이 바로 보임. 접기는 이 기기에 기억 */
+var WRQ_MW = { list: null, at: 0, busy: null, fold: false };
+try { WRQ_MW.fold = localStorage.getItem('wm.wrq.mwfold') === '1'; } catch (_) {}
+function wrqMwHtml() {
+  if (!WRQ_MW.busy && Date.now() - WRQ_MW.at > 20000) setTimeout(wrqMwLoad, 0);   // 20초 지난 것은 새로
+  return '<div id="mwWrq" class="mwq"' + (WRQ_MW.list && WRQ_MW.list.length ? '' : ' hidden') + '>' + _wqMwInner() + '</div>';
+}
+function wrqMwLoad() {
+  if (WRQ_MW.busy) return WRQ_MW.busy;
+  WRQ_MW.busy = apiFetch('/api/work-requests?box=in&open=1').then(function (r) {
+    WRQ_MW.list = ((r && r.data) || []).filter(function (w) { return w.status === 'sent'; });
+    WRQ_MW.at = Date.now();
+    _wqMwPaint();
+  }).catch(function () {}).then(function () { WRQ_MW.busy = null; });
+  return WRQ_MW.busy;
+}
+function _wqMwPaint() {
+  var el = document.getElementById('mwWrq'); if (!el) return;
+  el.hidden = !(WRQ_MW.list || []).length;
+  el.innerHTML = _wqMwInner();
+}
+function _wqMwInner() {
+  var L = WRQ_MW.list || []; if (!L.length) return '';
+  var today = _wqToday(), late = L.filter(function (w) { return w.dueDate && w.dueDate < today; }).length;
+  var h = '<div class="mwq-hd"><button type="button" class="mwq-tg" data-mwq="fold" aria-expanded="' + !WRQ_MW.fold + '" title="접기 · 펴기">' + (WRQ_MW.fold ? '▸' : '▾') + '</button>' +
+    '<b>📨 받은 요청 ' + L.length + '</b>' + (late ? '<span class="mwq-late">⚠ 기한 지남 ' + late + '</span>' : '') +
+    '<span class="mwq-sub">수락하면 내 할 일(일정은 내 일정)에 들어갑니다</span><span style="flex:1"></span>' +
+    '<button type="button" class="wsc-a" data-mwq="box" title="받은 · 보낸 요청 모두">요청함 ↗</button></div>';
+  if (WRQ_MW.fold) return h;
+  return h + '<div class="mwq-list">' + L.map(function (w) {
+    var t = WRQ_TYPES[w.type] || WRQ_TYPES.order, id = _wqE(w.id), isLate = w.dueDate && w.dueDate < today;
+    var acts = '<button type="button" class="btn btn-p btn-s" data-wq="accept" data-id="' + id + '">✔ ' + (w.type === 'event' ? '일정에 넣기' : '할 일로') + '</button>' +
+      (w.type === 'forward' ? '<button type="button" class="btn btn-g btn-s" data-wq="done" data-id="' + id + '" title="할 일 없이 확인만">👍 확인만</button>' : '') +
+      '<button type="button" class="btn btn-g btn-s" data-wq="decline" data-id="' + id + '" title="반려 — 이유를 적어 돌려보냄">↩ 반려</button>';
+    return '<div class="mwq-it' + (isLate ? ' late' : '') + '"><div class="mwq-m"><div class="mwq-top"><span class="mwq-type">' + t.icon + ' ' + t.label + '</span><span class="mwq-from">' + _wqE(w.fromName) + ' →</span>' +
+      (w.dueDate ? '<span class="mwq-due">' + (isLate ? '⚠ ' : (w.type === 'event' ? '🗓 ' : '⏰ ')) + _wqE(w.dueDate) + (w.dueTime ? ' ' + _wqE(w.dueTime) : '') + '</span>' : '') +
+      (w.projectName ? '<span class="mwq-proj">📁 ' + _wqE(w.projectName) + '</span>' : '') + '</div>' +
+      '<div class="mwq-title">' + _wqE(w.title) + '</div>' + (w.body ? '<div class="mwq-body">' + _wqE(w.body.length > 140 ? w.body.slice(0, 140) + '…' : w.body) + '</div>' : '') + '</div>' +
+      '<div class="mwq-acts">' + acts + '</div></div>';
+  }).join('') + '</div>';
+}
+document.addEventListener('click', function (e) {
+  var root = e.target.closest && e.target.closest('#mwWrq'); if (!root) return;
+  var f = e.target.closest('[data-mwq]');
+  if (f) {
+    if (f.dataset.mwq === 'fold') { WRQ_MW.fold = !WRQ_MW.fold; try { localStorage.setItem('wm.wrq.mwfold', WRQ_MW.fold ? '1' : '0'); } catch (_) {} _wqMwPaint(); }
+    else if (f.dataset.mwq === 'box') wrqBox('in');
+    return;
+  }
+  var b = e.target.closest('[data-wq]'); if (!b) return;
+  var act = b.dataset.wq;
+  Promise.resolve(wrqAct(act, b.dataset.id, b)).then(function (w) {
+    if (!w) return;
+    WRQ_MW.list = (WRQ_MW.list || []).filter(function (x) { return x.id !== w.id; });
+    _wqMwPaint();
+    if ((act === 'accept' || act === 'done') && typeof renderMyWork === 'function' && typeof curPage !== 'undefined' && curPage === 'mywork') renderMyWork();   // 새 할 일 바로 보이게
+  });
+});
