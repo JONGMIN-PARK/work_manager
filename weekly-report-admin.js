@@ -2059,6 +2059,7 @@
       _authorState.savedSig = sig;
       rememberLoaded(saved.id);
       if (typeof showToast === 'function') showToast('저장됨: ' + saved.name, 'ok');
+      if (typeof mwWeekReset === 'function') mwWeekReset();   // 🎯 내 업무 📋 금주 할 일 — 바로 새로 (v13.543)
       updateAuthorStatusBadge();
     } catch (e) {
       if (e && e.status === 409) {

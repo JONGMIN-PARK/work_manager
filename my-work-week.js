@@ -3,7 +3,9 @@
  *   주간 보고서 금주 칸에서 담당(@이름)이 나인 일. ◀ ▶ 로 지난주 · 다음 주 넘겨 보기, 실적이 들어온 주는 결과(✅ · 진행률)로
  *   📁 내 프로젝트와 같은 틀(.mwj) — 접기 ▾ · 개수. 서버 GET /api/weekly-reports/mine?week=
  */
-var _mww = { week: null, cache: {}, busy: {} };
+var _mww = { week: null, cache: {}, busy: {}, at: {} };   // at: 받은 시각 — 30초 지나면 다시 그릴 때 새로 받음 (v13.543)
+/** 기억 비우기 — 주간 업무 저장 · 내 프로필(다른 이름) 저장 뒤 */
+function mwWeekReset() { _mww.cache = {}; _mww.at = {}; _mwwRepaint(); }
 var MWW_SEC = { dev: ['개발', '#2563EB'], setup: ['셋업', '#7C3AED'], cs: ['C/S', '#D97706'], etc: ['기타', '#64748B'] };
 function _mwwMon(d) { var t = new Date(d + 'T00:00:00Z'); t = new Date(t.getTime() - ((t.getUTCDay() + 6) % 7) * 86400000); return t.toISOString().slice(0, 10); }
 function _mwwAdd(d, n) { return new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10); }
@@ -19,7 +21,8 @@ function mwWeekStripHtml(today) {
   var thisMon = _mwwMon(today);
   if (!_mww.week) _mww.week = thisMon;
   var w = _mww.week, d = _mww.cache[w], folded = !!_mwLS('wwfold');
-  if (!d && !_mww.busy[w]) setTimeout(function () { mwWeekLoad(w); }, 0);
+  // 없거나 30초 지났으면 새로 (예전엔 페이지를 새로 고칠 때까지 처음 받은 것을 썼다 — 그사이 저장한 보고서 · 다른 이름이 안 보임)
+  if ((!d || Date.now() - (_mww.at[w] || 0) > 30000) && !_mww.busy[w]) setTimeout(function () { mwWeekLoad(w); }, 0);
   var off = Math.round((Date.parse(w) - Date.parse(thisMon)) / (7 * 86400000));
   var lbl = off === 0 ? '이번 주' : off === -1 ? '지난주' : off === 1 ? '다음 주' : (off < 0 ? (-off) + '주 전' : off + '주 뒤');
   var items = d ? d.items : [], open = items.filter(function (x) { return x.status !== 'done'; }).length;
@@ -43,9 +46,9 @@ function mwWeekStripHtml(today) {
 }
 function mwWeekLoad(w) {
   if (_mww.busy[w]) return;
-  _mww.busy[w] = apiFetch('/api/weekly-reports/mine?week=' + w).then(function (r) { _mww.cache[w] = (r && r.data) || { items: [], teams: [] }; })
+  _mww.busy[w] = apiFetch('/api/weekly-reports/mine?week=' + w).then(function (r) { _mww.cache[w] = (r && r.data) || { items: [], teams: [] }; _mww.at[w] = Date.now(); })
     .catch(function () { _mww.cache[w] = { items: [], teams: [], err: true }; })
-    .then(function () { delete _mww.busy[w]; _mwwRepaint(); });
+    .then(function () { delete _mww.busy[w]; if (_mww.week === w) _mwwRepaint(); });
 }
 function _mwwRepaint() {
   var el = document.getElementById('mwwStrip'); if (!el || typeof mwToday !== 'function') return;

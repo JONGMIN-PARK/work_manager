@@ -1031,6 +1031,8 @@ async function showProfileModal() {
       await authFetchMe();
       updateAuthUI();
       if (typeof showToast === 'function') showToast('프로필이 수정되었습니다.');
+      if (typeof mwWeekReset === 'function') mwWeekReset();   // 다른 이름이 바뀌면 📋 금주 할 일도 새로 (v13.543)
+      if (typeof _wqPeople !== 'undefined') _wqPeople = null;   // 사람 목록(다른 이름)도
       modal.close();
     } catch (e) {
       if (typeof showToast === 'function') showToast(e.message, 'error');

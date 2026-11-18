@@ -80,7 +80,8 @@ router.get('/mine', async function (req, res) {
     var r = await db.query("SELECT id, team, to_char(week_start, 'YYYY-MM-DD') AS week_start, updated_at, saved_at, parsed FROM weekly_reports WHERE tenant_id = $1 AND week_start IN ($2::date, $3::date)", [req.tenant.id, week, next]);
     var latest = {};
     r.rows.forEach(function (x) { var k = (x.team || '') + '|' + x.week_start, t = Date.parse(x.updated_at || x.saved_at || 0) || 0; if (!latest[k] || t >= latest[k]._t) latest[k] = Object.assign({}, x, { _t: t }); });
-    var isMine = function (it) { return (it.members || []).some(function (m) { return mine.indexOf(_mineNorm(m)) >= 0; }); };
+    // 담당이 '박종민·김경우' 처럼 한 덩어리로 들어와도 나눠서 비교 (v13.543)
+    var isMine = function (it) { return (it.members || []).some(function (m) { return String(m || '').split(/[·,，/&+\s]+/).concat([m]).some(function (x) { return mine.indexOf(_mineNorm(x)) >= 0; }); }); };
     var key = function (team, it) { return (team || '') + '|' + _mineNorm(it.client) + '|' + _mineNorm(it.name); };
     var res2 = {};   // 다음 주 보고서의 지난주 칸 = 이번 주 결과
     Object.keys(latest).forEach(function (k) { var x = latest[k]; if (x.week_start !== next) return; (((x.parsed || {}).last || {}).items || []).forEach(function (it) { res2[key(x.team, it)] = it; }); });
