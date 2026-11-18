@@ -193,7 +193,7 @@ function _awgSync() {
     a = '<button type="button" class="btn btn-g" data-awg="fill"' + (busy || !rows.length ? ' disabled' : '') + ' title="애니웍스 공수등록 화면에 넣어 보고, 들어간 화면을 아래에 보여 줍니다 (아직 등록 전)">① 웹에 입력 · 확인</button>' +
       '<button type="button" class="btn btn-p" data-awg="send"' + (busy || !ready ? ' disabled' : '') + ' title="' + (ready ? '애니웍스에 등록' : '먼저 ① 웹에 입력으로 확인') + '">② ▶ 애니웍스에 등록</button>' +
       '<span class="awg-hint">' + (busy ? '' : ready ? '아래 화면이 맞으면 등록을 누르세요' : s.shot ? '내용이 바뀌었습니다 — ① 을 다시 눌러 주세요' : '') + '</span><span class="awg-sp"></span>' +
-      (_awgCanSign() && _awgSigner() && s.docs[s.day] && s.docs[s.day].status === 'sent' && !ready ? '<button type="button" class="awg-b" data-awg="sign"' + (busy ? ' disabled' : '') + ' title="' + _awgLabel(s.day) + ' 애니웍스 일일 업무보고의 내 칸 [팀장승인] 을 누릅니다">✍ 팀장승인</button>' : '') +
+      (!ready ? '<button type="button" class="awg-b" data-awg="sign"' + (busy ? ' disabled' : '') + ' title="' + _awgLabel(s.day) + ' 애니웍스 일일 업무보고의 내 칸 [팀장승인] 을 누릅니다">✍ 팀장승인</button>' : '') +
       (typeof wmCanWorklog === 'function' && wmCanWorklog() ? '<button type="button" class="awg-b" data-awg="pull"' + (busy ? ' disabled' : '') + ' title="3개 사업부 주간일지를 내려받아 업무일지 데이터를 갱신">📥 주간일지 받기</button>' : '');
   }
   put('awgAct', a);
@@ -668,8 +668,20 @@ async function _awgSign(day) {
   } catch (e) { return { ok: false, html: '<div class="awg-said">⚠ 팀장승인 못 함: ' + eH((e && e.message) || '실패했습니다') + '</div>' }; }
 }
 async function _awgSignOnly() {
-  var s = _awg; if (!s || s.busy || !_awgCanSign()) return;
+  var s = _awg; if (!s || s.busy) return;
+  if (!_awgCanSign()) { s.note = { t: 'warn', html: '⚠ 팀장승인은 PC 앱 새 버전(13.547 이상)에서 됩니다 — 화면을 새로 고치면(F5) PC 앱이 업데이트됩니다. (지금 PC 앱 v' + eH(String((s.st && s.st.v) || '?')) + ')' }; _awgSync(); return; }
   var day = s.day;
+  s.busy = 'signchk'; s.note = null; _awgSync();
+  var chk = null;
+  try { chk = await _awgDesk()('approve', { date: day, names: _awgNames(), dry: true }); } catch (e) { chk = { ok: false, error: e && e.message }; }
+  if (_awg !== s) return;
+  s.busy = ''; _awgSync();
+  if (!chk || !chk.ok) { s.note = { t: 'warn', html: '⚠ ' + eH((chk && chk.error) || '애니웍스 화면을 열지 못했습니다') }; _awgSync(); return; }
+  if (!chk.btn) {
+    s.note = chk.signed ? { t: 'ok', html: '✍ ' + _awgLabel(day) + ' 팀장승인은 이미 되어 있습니다.' } : { t: 'warn', html: '⚠ ' + _awgLabel(day) + ' 애니웍스 화면에 내 팀장승인 단추가 없습니다 (팀장만 승인할 수 있습니다).' };
+    _awgSync(); return;
+  }
+  _awgSignerSet();
   if (!(await wmConfirm(_awgLabel(day) + ' 애니웍스 일일 업무보고의 내 칸 [팀장승인] 을 누릅니다.\n승인한 뒤에는 여기서 되돌릴 수 없습니다.', { ok: '승인' }))) return;
   if (_awg !== s || s.busy) return;
   s.busy = 'sign'; s.note = null; _awgSync();
