@@ -9163,3 +9163,11 @@ button.awg-chip{cursor:pointer}
 .mww-lbl{overflow:hidden;text-overflow:ellipsis}
 @container (max-width:330px){.mww-lbl small{display:none}}
 @container (max-width:250px){.mww .mwj-ttl{font-size:12.5px}}
+
+/* ═══ v13.542 💬 댓글 @이름 ═══ */
+.cm-at{color:var(--ac);font-weight:700}
+.cm-at-pop{position:fixed;z-index:10080;background:var(--bg-p);border:1px solid var(--bd2,var(--bd));border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.2);padding:4px;display:flex;flex-direction:column;min-width:180px;max-height:220px;overflow:auto}
+.cm-at-pop button{border:0;background:none;text-align:left;padding:5px 9px;border-radius:6px;font:inherit;font-size:12.5px;color:var(--t2);cursor:pointer}
+.cm-at-pop button.on,.cm-at-pop button:hover{background:var(--ac-bg);color:var(--ac)}
+.cm-at-pop small{color:var(--t5);font-size:10.5px}
+.cm-at-none{font-size:11.5px;color:var(--t5);padding:6px 9px}

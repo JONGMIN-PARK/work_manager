@@ -114,7 +114,10 @@ function _cmBuildCommentModal(targetType, targetId, opts) {
     ? '<div style="font-size:11px;color:var(--ac);margin-bottom:8px;line-height:1.5">↩ <b>' + _cmEsc(opts.replyTo || '') + '</b> 님의 코멘트에 답글을 작성합니다.</div>'
     : '';
 
-  var modal = createModal({ id: 'commentModal', z: MODAL_Z + 2, overlayStyle: 'padding:0;background:rgba(0,0,0,.6)' }).overlay;
+  // 떠 있는 창(문서 크게 보기 · 댓글 창 등) 위로 (v13.542)
+  var zTop = MODAL_Z + 2;
+  document.querySelectorAll('.wa-modal-overlay,.dpv').forEach(function (el) { var z = parseInt(getComputedStyle(el).zIndex, 10); if (z >= zTop) zTop = z + 2; });
+  var modal = createModal({ id: 'commentModal', z: zTop, overlayStyle: 'padding:0;background:rgba(0,0,0,.6)' }).overlay;
   // backdrop 클릭 닫기 비활성화 — 작성 중 데이터 유실 방지 (취소/✕ 버튼만 닫기)
 
   modal.innerHTML =
@@ -124,7 +127,7 @@ function _cmBuildCommentModal(targetType, targetId, opts) {
         '<button class="btn btn-g btn-s" onclick="closeCommentModal()" aria-label="닫기">✕</button>' +
       '</div>' +
       replyNote +
-      '<div style="font-size:11px;color:var(--t5);margin-bottom:8px;line-height:1.5">담당자에게 전송됩니다.</div>' +
+      '<div style="font-size:11px;color:var(--t5);margin-bottom:8px;line-height:1.5">담당자에게 전송됩니다 · <b>@이름</b> 으로 부르면 그 사람에게도 알림 (프로젝트를 볼 수 있는 사람)</div>' +
       '<textarea id="commentBody" placeholder="' + (isReply ? '답글 내용을 입력하세요...' : '피드백 내용을 입력하세요...') + '" ' +
         'style="width:100%;min-height:120px;resize:vertical;box-sizing:border-box;padding:10px;font-size:13px;line-height:1.5;' +
         'color:var(--t2);background:var(--bg-i);border:1px solid var(--bd);border-radius:8px"></textarea>' +
@@ -245,13 +248,14 @@ async function renderCommentThread(targetType, targetId, containerId) {
           _cmEsc(targetId) + '\',\'' + _cmEsc(containerId) + '\')">🗑</button>'
       : '';
     // 답글(대댓글) — 로그인 당사자 명으로 작성됨(서버가 인증 사용자로 author 설정)
-    var replyBtn = '<button class="btn btn-g btn-s" style="font-size:10px;padding:1px 5px" title="답글" ' +
+    var reqBtn = typeof wrqOpen === 'function' ? '<button class="btn btn-g btn-s" style="font-size:10px;padding:1px 5px" title="📨 이 댓글을 업무 요청 · 할 일로" data-cm-req="' + _cmEsc(c.id) + '">📨</button>' : '';
+    var replyBtn = reqBtn + '<button class="btn btn-g btn-s" style="font-size:10px;padding:1px 5px" title="답글" ' +
         'onclick="openCommentModal(\'' + _cmEsc(targetType) + '\',\'' + _cmEsc(targetId) + '\',' +
         '{containerId:\'' + _cmEsc(containerId) + '\',parentId:\'' + _cmEsc(c.id) + '\',replyTo:\'' + _cmEsc(author) + '\'})">↩ 답글</button>';
-    var bodyHtml = _cmEsc(c.body).replace(/\n/g, '<br>');
+    var bodyHtml = _cmEsc(c.body).replace(/\n/g, '<br>').replace(/@([^\s@,，.!?()<>&\[\]]{1,30})/g, '<b class="cm-at">@$1</b>');   // @이름 강조 (v13.542)
     var indent = depth > 0 ? ('margin-left:' + Math.min(depth, 4) * 16 + 'px;') : '';
     var accent = depth > 0 ? 'border-left:2px solid var(--ac);' : '';
-    var html = '<div style="' + indent + 'padding:8px 10px;margin-bottom:6px;background:var(--bg-i);border:1px solid var(--bd);' + accent + 'border-radius:8px">' +
+    var html = '<div class="cm-item" style="' + indent + 'padding:8px 10px;margin-bottom:6px;background:var(--bg-i);border:1px solid var(--bd);' + accent + 'border-radius:8px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">' +
           '<span style="font-size:11px;font-weight:600;color:var(--t2)">' + (depth > 0 ? '↳ ' : '') + _cmEsc(author) + '</span>' +
           '<span style="display:flex;align-items:center;gap:6px">' +
@@ -259,7 +263,7 @@ async function renderCommentThread(targetType, targetId, containerId) {
             replyBtn + delBtn +
           '</span>' +
         '</div>' +
-        '<div style="font-size:12px;color:var(--t3);line-height:1.5;word-break:break-word">' + bodyHtml + '</div>' +
+        '<div class="cm-body" style="font-size:12px;color:var(--t3);line-height:1.5;word-break:break-word">' + bodyHtml + '</div>' +
       '</div>';
     (kids[c.id] || []).forEach(function (ch) { html += renderOne(ch, depth + 1); });
     return html;
@@ -292,3 +296,55 @@ if (typeof window !== 'undefined') {
   window.renderCommentThread = renderCommentThread;
   window.commentDelUI = commentDelUI;
 }
+
+
+/* ═══ v13.542 @이름 부르기 · 📨 댓글을 요청으로 ═══ */
+/* 댓글 입력칸에서 '@' 를 치면 사람 고르기 (📨 업무 보내기와 같은 사람 목록 — 바꾼 이름(등록 이름) · 다른 이름으로도) */
+(function () {
+  var pop = null, at = -1, list = [], pick = 0;
+  function close() { if (pop) pop.remove(); pop = null; at = -1; }
+  function paint(ta) {
+    if (!pop) { pop = document.createElement('div'); pop.className = 'cm-at-pop'; document.body.appendChild(pop);
+      pop.addEventListener('mousedown', function (e) { var b = e.target.closest('[data-i]'); if (!b) return; e.preventDefault(); put(ta, list[+b.dataset.i]); }); }
+    pop.innerHTML = list.length ? list.map(function (p, i) { return '<button type="button" data-i="' + i + '" class="' + (i === pick ? 'on' : '') + '">' + _cmEsc(p.name) + (p.dept ? ' <small>' + _cmEsc(p.dept) + '</small>' : '') + '</button>'; }).join('') : '<div class="cm-at-none">맞는 사람이 없습니다</div>';
+    var r = ta.getBoundingClientRect();
+    pop.style.left = Math.round(r.left + 8) + 'px'; pop.style.top = Math.round(Math.min(r.bottom + 4, window.innerHeight - 220)) + 'px';
+  }
+  function put(ta, p) {
+    if (!p) return;
+    var v = ta.value, c = ta.selectionStart, nm = (p.nm && p.nm !== p.name.split('(')[0] ? p.name.split('(')[0] : p.nm) || p.name;
+    ta.value = v.slice(0, at) + '@' + nm + ' ' + v.slice(c);
+    var np = at + nm.length + 2; ta.setSelectionRange(np, np); ta.focus(); close();
+  }
+  document.addEventListener('input', function (e) {
+    var ta = e.target; if (!ta || ta.id !== 'commentBody') return;
+    var c = ta.selectionStart, before = ta.value.slice(0, c), m = /(^|\s)@([^\s@]{0,20})$/.exec(before);
+    if (!m) return close();
+    at = c - m[2].length - 1;
+    var q = m[2].toLowerCase();
+    (typeof _wqLoadPeople === 'function' ? _wqLoadPeople() : Promise.resolve([])).then(function (people) {
+      list = people.filter(function (p) { return !q || [p.name, p.nm, p.reg, p.disp, p.dept].concat(p.al || []).some(function (x) { return String(x || '').toLowerCase().indexOf(q) >= 0; }); }).slice(0, 8);
+      pick = 0; paint(ta);
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!pop || !e.target || e.target.id !== 'commentBody') return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (list.length) { pick = (pick + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length; paint(e.target); } }
+    else if ((e.key === 'Enter' || e.key === 'Tab') && list.length && !e.isComposing) { e.preventDefault(); put(e.target, list[pick]); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+  }, true);
+  document.addEventListener('focusout', function (e) { if (e.target && e.target.id === 'commentBody') setTimeout(close, 150); });
+})();
+/* 📨 댓글 → 업무 요청 · 할 일 (본문 그대로, 불린 @이름 은 받는 사람으로) */
+document.addEventListener('click', function (e) {
+  var b = e.target.closest && e.target.closest('[data-cm-req]'); if (!b || typeof wrqOpen !== 'function') return;
+  e.preventDefault();
+  var box = b.closest('.cm-item'), txt = '';
+  var bodyEl = box && box.querySelector('.cm-body'); txt = bodyEl ? bodyEl.textContent : (box ? box.textContent : '');
+  (typeof _wqLoadPeople === 'function' ? _wqLoadPeople() : Promise.resolve([])).then(function (people) {
+    var to = [], re = /@([^\s@,，.!?()\[\]]{1,30})/g, m;
+    while ((m = re.exec(txt))) { var t = m[1]; var p = people.filter(function (x) { return x.nm === t || x.disp === t || x.reg === t || (x.al || []).indexOf(t) >= 0; })[0]; if (p && to.indexOf(p.id) < 0) to.push(p.id); }
+    var first = String(txt).split('\n')[0].replace(/@\S+\s?/g, '').trim();
+    wrqOpen({ type: 'order', title: first.slice(0, 80), body: txt.trim(), to: to });
+  });
+});

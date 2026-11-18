@@ -272,6 +272,8 @@ function createModal(opts) {
   opts = opts || {};
   if (opts.id) { var prev = document.getElementById(opts.id); if (prev) prev.remove(); }
   var z = opts.z || (MODAL_Z + document.querySelectorAll('.wa-modal-overlay').length);
+  // 떠 있는 큰 창(문서 크게 보기 등 z 가 높은 것) 위에서 열어도 뒤에 숨지 않게 (v13.542)
+  if (!opts.z) document.querySelectorAll('.wa-modal-overlay,.dpv').forEach(function (el) { var zz = parseInt(el.style.zIndex || getComputedStyle(el).zIndex, 10); if (zz >= z) z = zz + 1; });
   var ov = document.createElement('div');
   ov.className = 'wa-modal-overlay';
   if (opts.id) ov.id = opts.id;

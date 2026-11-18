@@ -730,6 +730,7 @@ function _dpBuildViewer(f) {
     '<button type="button" class="btn btn-p btn-s dpv-pres-b" onclick="docViewPresent()" title="▶ 발표 — 전체 화면으로 한 쪽씩 (← → · Space 로 넘기기, 칠판으로 표시)" disabled>▶<span class="dpv-lbl"> 발표</span></button>' +
     '<button type="button" class="btn btn-g btn-s dpv-board-b" onclick="docViewBoard()" title="✏️ 칠판 — 펜 · 형광펜 · 도형 · 글자 · 캡처 붙여넣기(Ctrl+V), 쪽마다 자동 저장" disabled>✏️<span class="dpv-lbl"> 칠판</span></button>' +
     '<button type="button" class="btn btn-g btn-s" onclick="docDownloadFile(\'' + id + '\')" title="내려받기">💾<span class="dpv-lbl"> 내려받기</span></button>' +
+    (f.projectId || f.project_id ? '<button type="button" class="btn btn-g btn-s dpv-cmt-b" onclick="docViewComments()" title="💬 이 문서에 댓글 — @이름 으로 사람 부르기 · 📨 요청으로">💬<span class="dpv-lbl"> 댓글</span></button>' : '') +
     (typeof wscAddHere === 'function' ? '<button type="button" class="btn btn-g btn-s" onclick="wscAddHere()" title="🔖 이 문서를 바로가기로 — 내 업무에서 바로 열기">🔖</button>' : '') +
     '<button type="button" class="btn btn-g btn-s dpv-x" onclick="docViewClose()" title="닫기 (Esc)">✕</button></div>' +
     '<div class="dpv-bdock" hidden></div>' +
@@ -847,4 +848,13 @@ function _dpPresEnd(m) {
   try { if (document.fullscreenElement && document.exitFullscreen) { var xp = document.exitFullscreen(); if (xp && xp.catch) xp.catch(function () {}); } } catch (_) {}
   var cur = m.querySelectorAll('.dpv-body .dp-pg')[m.__cur || 0];
   if (cur) setTimeout(function () { cur.scrollIntoView({ block: 'start' }); }, 80);
+}
+
+/* 💬 문서 댓글 (v13.542) — 크게 보기 위에 댓글 창: 목록 · 답글 · @이름 · 📨 요청으로 (comments-ui.js) */
+function docViewComments() {
+  var m = document.getElementById('docViewModal'), f = m && m.__file; if (!f || typeof renderCommentThread !== 'function') return;
+  return wmGuardedModal('dpvCmt', function () {
+    createModal({ id: 'dpvCmtModal', title: '💬 ' + _dpEsc(f.name || '문서') + ' — 댓글', width: '520px', closeOnEsc: true, z: 10060, html: '<div id="dpvCmtBox"></div>' });
+    return renderCommentThread('doc', f.id, 'dpvCmtBox');
+  }, 'dpvCmtModal');
 }
