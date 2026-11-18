@@ -396,6 +396,7 @@ GET /api/weekly-reports/bin
 GET /api/weekly-reports/goals
 GET /api/weekly-reports/insights
 GET /api/weekly-reports/insights/item
+GET /api/weekly-reports/mine
 GET /api/weekly-reports/next-name
 GET /api/weekly-reports/plan-actual
 GET /api/weekly-reports/search

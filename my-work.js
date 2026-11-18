@@ -307,7 +307,8 @@ function _mwPaintNow(el) {
       return '<button class="mw-chip' + (_mw.src === k ? ' on' : '') + '" data-src="' + k + '">' + MW_SRC[k].icon + ' ' + MW_SRC[k].label + ' ' + counts[k] + '</button>';
     }).join('') + (typeof mwCalChipHtml === 'function' ? mwCalChipHtml() : '') + '</div>';
   var sideBtn = '';
-  var side = (typeof mwCalTodayHtml === 'function' ? mwCalTodayHtml(today) : '') + (typeof mwProjStripHtml === 'function' ? mwProjStripHtml(today) : '');
+  // 오른쪽 칸 — 📅 오늘 일정 · 📋 금주 할 일(주간 업무, v13.537) · 📁 내 프로젝트 · 🔖 바로가기
+  var side = (typeof mwCalTodayHtml === 'function' ? mwCalTodayHtml(today) : '') + (typeof mwWeekStripHtml === 'function' ? mwWeekStripHtml(today) : '') + (typeof mwProjStripHtml === 'function' ? mwProjStripHtml(today) : '');
   // 🔖 바로가기 — 오른쪽 칸 맨 아래 (v13.528, wm-shortcuts.js)
   if (r.self && typeof wscBoxHtml === 'function') { side += wscBoxHtml(); if (!WSC.list) wscLoad().then(wscRepaint).catch(function () {}); }
   if (side) {

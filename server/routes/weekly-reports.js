@@ -64,6 +64,47 @@ async function notifyWeeklyReportUploads(tenantId, savedReports, uploaderName) {
 
 router.use(auth.authenticate);
 router.use(tenant.tenantScope);
+// ─── GET /api/weekly-reports/mine?week=YYYY-MM-DD — 🎯 내 업무 오른쪽 칸 '📋 금주 할 일' (v13.537) ───
+//  그 주(월요일) 보고서들의 금주 칸(계획)에서 담당(@이름)이 나인 일. 다음 주 보고서의 지난주 칸(실적)에 같은 일이 있으면 결과(완료 · 진행률)로 덧씀
+//  팀마다 그 주 가장 최근 판(R 번호)만. 내 이름 = 이름 · 표시 이름 · 등록 이름
+//  ⚠ 아래 관리자 전용(requireRole) 앞 — 모든 직원이 쓰되 '내 이름이 붙은 일'만 돌려줌 (보고서 전체 · 남의 일은 그대로 관리자만)
+function _mineNorm(s) { return String(s || '').toLowerCase().replace(/[\s\-_.,()[\]{}·:/\\'"`~!?#@%&*+=|<>]+/g, ''); }
+router.get('/mine', async function (req, res) {
+  try {
+    var w = String(req.query.week || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(w)) return res.status(400).json({ error: 'VALIDATION', message: 'week(YYYY-MM-DD) 가 필요합니다.' });
+    var d0 = new Date(w + 'T00:00:00Z'), mon = new Date(d0.getTime() - ((d0.getUTCDay() + 6) % 7) * 86400000);
+    var week = mon.toISOString().slice(0, 10), next = new Date(mon.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+    var u = (await db.query('SELECT name, display_name, reg_name FROM users WHERE id = $1', [req.user.sub])).rows[0] || {};
+    var mine = [u.name, u.display_name, u.reg_name, req.user.name].map(_mineNorm).filter(Boolean);
+    var r = await db.query("SELECT id, team, to_char(week_start, 'YYYY-MM-DD') AS week_start, updated_at, saved_at, parsed FROM weekly_reports WHERE tenant_id = $1 AND week_start IN ($2::date, $3::date)", [req.tenant.id, week, next]);
+    var latest = {};
+    r.rows.forEach(function (x) { var k = (x.team || '') + '|' + x.week_start, t = Date.parse(x.updated_at || x.saved_at || 0) || 0; if (!latest[k] || t >= latest[k]._t) latest[k] = Object.assign({}, x, { _t: t }); });
+    var isMine = function (it) { return (it.members || []).some(function (m) { return mine.indexOf(_mineNorm(m)) >= 0; }); };
+    var key = function (team, it) { return (team || '') + '|' + _mineNorm(it.client) + '|' + _mineNorm(it.name); };
+    var res2 = {};   // 다음 주 보고서의 지난주 칸 = 이번 주 결과
+    Object.keys(latest).forEach(function (k) { var x = latest[k]; if (x.week_start !== next) return; (((x.parsed || {}).last || {}).items || []).forEach(function (it) { res2[key(x.team, it)] = it; }); });
+    var items = [], teams = [];
+    Object.keys(latest).forEach(function (k) {
+      var x = latest[k]; if (x.week_start !== week) return;
+      (((x.parsed || {}).cur || {}).items || []).forEach(function (it) {
+        if (!isMine(it)) return;
+        var rs = res2[key(x.team, it)];
+        if (teams.indexOf(x.team) < 0) teams.push(x.team);
+        items.push({ team: x.team || '', section: it.section || 'etc', client: it.client || '', name: it.name || '', members: it.members || [],
+          pct: typeof (rs || it).pct === 'number' && (rs || it).pct >= 0 ? (rs || it).pct : null,   // 해석기는 진행률이 없으면 -1
+          deadline: (rs || it).deadline || it.deadline || '',
+          status: (rs && rs.status) || it.status || 'none', result: !!rs, reportId: x.id });
+      });
+    });
+    var ord = { dev: 0, setup: 1, cs: 2, etc: 3 };
+    items.sort(function (a, b) { return (a.status === 'done') - (b.status === 'done') || (ord[a.section] || 9) - (ord[b.section] || 9) || String(a.client).localeCompare(String(b.client), 'ko'); });
+    res.json({ data: { week: week, items: items, teams: teams, hasReport: Object.keys(latest).some(function (k) { return latest[k].week_start === week; }) } });
+  } catch (e) {
+    httpErr.serverError(res, '[weekly-reports/mine]', e);
+  }
+});
+
 router.use(auth.requireRole('admin'));
 
 // 저장 시각 — ISO 또는 예전 도구가 쓰던 '2026. 4. 24. 오후 3:12:05'(ko-KR). 못 읽으면 지금

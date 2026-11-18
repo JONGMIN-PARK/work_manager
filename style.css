@@ -9116,3 +9116,28 @@ button.awg-chip{cursor:pointer}
 .wg-m{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 0 24px}
 .wg-mc{font-size:11.5px;background:var(--bg-i);border:1px solid var(--bd);border-radius:99px;padding:1px 8px;color:var(--t2)}
 .wg-mc.lead{border-color:#8B5CF6;color:#6D28D9}
+
+/* ═══ v13.537 🎯 내 업무 오른쪽 칸 — 📋 금주 할 일 · 칸 폭 ═══
+ *  칸 폭 288px 고정 → 화면에 맞춰 300~360px (글자가 덜 잘리게) · 세 카드(오늘 일정 · 금주 할 일 · 내 프로젝트 · 바로가기) 같은 폭 · 같은 틀 */
+@media (min-width:1101px){
+  .mw-body{grid-template-columns:minmax(0,1fr) clamp(300px,22vw,360px)}
+}
+.mw-side>*{width:100%;box-sizing:border-box}
+.mww .mwj-h{flex-wrap:nowrap}
+.mww-pg{display:inline-flex;align-items:center;gap:2px;margin-left:auto;flex:none}
+.mww-nav{width:24px;height:24px;border:1px solid var(--bd);background:var(--bg-i);border-radius:6px;font-size:10px;color:var(--t4);cursor:pointer;padding:0}
+.mww-nav:hover{color:var(--t1);border-color:var(--bd2)}
+.mww-lbl{border:0;background:none;font:inherit;font-size:12px;font-weight:700;color:var(--t2);cursor:pointer;padding:0 4px;white-space:nowrap}
+.mww-lbl small{font-weight:400;color:var(--t5);font-size:10.5px}
+.mww-lbl.off{color:var(--ac)}
+.mww-l{display:flex;flex-direction:column;gap:2px;padding:2px 2px 0}
+.mww-r{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:7px;font-size:12.5px;min-width:0}
+.mww-r:hover{background:var(--bg-hv)}
+.mww-sec{flex:none;font-size:10px;font-weight:700;color:var(--sc);background:color-mix(in srgb,var(--sc) 12%,transparent);border-radius:5px;padding:1px 5px}
+.mww-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t1)}
+.mww-t b{font-weight:700}
+.mww-p{flex:none;font-size:11px;color:var(--t4);font-variant-numeric:tabular-nums}
+.mww-r .mwb-dd{flex:none}
+.mww-r.is-done .mww-t{color:var(--t5);text-decoration:line-through}
+.mww-e{font-size:11.5px;color:var(--t5);padding:8px 6px;line-height:1.6}
+.mww-f{display:flex;align-items:center;gap:6px;justify-content:space-between;font-size:10.5px;color:var(--t5);padding:4px 6px 0;border-top:1px dashed var(--bd);margin-top:4px}
