@@ -56,8 +56,9 @@ function checkPermission(action, getResourceId) {
 
     var body = req.body || {};
     var projectId = getResourceId ? getResourceId(req) : (req.params.projectId || req.params.id || body.projectId || body.project_id);
-    var pl = projectId ? await isProjectPL(userId, projectId) : false;
-    var member = projectId ? await isProjectMember(userId, projectId) : false;
+    // 두 조회는 서로 무관 — 동시에 (요청마다 DB 왕복 1번 줄임)
+    var _pm = projectId ? await Promise.all([isProjectPL(userId, projectId), isProjectMember(userId, projectId)]) : [false, false];
+    var pl = _pm[0], member = _pm[1];
 
     var allowed = false;
 

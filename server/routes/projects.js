@@ -165,6 +165,27 @@ router.post('/', rbac.checkPermission('project.create'), async function (req, re
   }
 });
 
+/* 담당자 이름 중 이번에 새로 들어온 것만 멤버로 추가 (해제됐던 사람은 다시 활성, 이미 활성인 사람의 역할은 그대로) */
+async function _syncNewAssigneeMembers(req, projectId, prev, assignees) {
+  var old = prev.assignees;
+  if (typeof old === 'string') { try { old = JSON.parse(old); } catch (e) { old = []; } }
+  var had = {};
+  (Array.isArray(old) ? old : []).forEach(function (n) { had[String(n || '').trim()] = true; });
+  var names = [];
+  assignees.forEach(function (n) { n = String(n || '').trim(); if (n && !had[n] && names.indexOf(n) < 0) names.push(n); });
+  if (!names.length) return;
+  // 같은 이름이 여럿이면 먼저 만든 한 명만 (화면 syncAssigneesToMembers 와 같은 규칙) · 소유자는 멤버로 넣지 않음
+  await db.query(
+    "INSERT INTO project_members (project_id, user_id, role, assigned_by, tenant_id) " +
+    "SELECT $1, x.id, 'assignee', $2, $3 FROM (" +
+    "SELECT DISTINCT ON (n.nm) u.id FROM unnest($4::text[]) AS n(nm) " +
+    "JOIN users u ON u.tenant_id = $3 AND (u.name = n.nm OR u.display_name = n.nm) ORDER BY n.nm, u.created_at) x " +
+    "WHERE x.id IS DISTINCT FROM $5::uuid GROUP BY x.id " +
+    "ON CONFLICT (project_id, user_id) DO UPDATE SET released_at = NULL, role = 'assignee', assigned_by = $2, assigned_at = now() " +
+    "WHERE project_members.released_at IS NOT NULL",
+    [projectId, req.user.sub, req.tenant.id, names, prev.owner_id || null]);
+}
+
 // ─── PUT /api/projects/:id ───
 router.put('/:id', rbac.checkPermission('project.edit'), async function (req, res) {
   try {
@@ -208,6 +229,12 @@ router.put('/:id', rbac.checkPermission('project.edit'), async function (req, re
 
     if (result.conflict) return lock.sendConflict(res, result.latest, result.yourVersion);
     if (!result.success) return res.status(404).json({ error: 'NOT_FOUND', message: '프로젝트를 찾을 수 없습니다.' });
+
+    // 새로 넣은 담당자 이름 → 같은 테넌트 사용자면 멤버(assignee)로. 예전엔 화면이 저장 뒤 사용자 목록을 받고
+    // 이름마다 멤버 추가 요청을 보내 저장이 느렸다. 빠진 이름은 해제하지 않는다(의도치 않은 접근 손실 방지) · best-effort
+    if (Array.isArray(b.assignees)) {
+      try { await _syncNewAssigneeMembers(req, req.params.id, prev, b.assignees); } catch (e) { console.warn('[projects/update] member sync:', e.message); }
+    }
 
     res.json({ data: result.row });
     // (v13.283) '지연' 은 더 이상 저장 상태가 아니라 날짜로 계산 — 상태를 지연으로 바꿀 때 보내던 알림은 없앰

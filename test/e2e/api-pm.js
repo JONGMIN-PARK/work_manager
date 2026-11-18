@@ -83,6 +83,20 @@ function check(n, c, x) { if (!c) { console.log('FAIL', n, JSON.stringify(x)); p
   var ps = await A('POST', '/api/prestudies', { title: '검토 ' + T, priority: 'urgent' });
   check('사전검토 긴급 저장', ps.s < 300 && ps.d.data.priority === 'urgent', ps.d);
   await A('DELETE', '/api/prestudies/' + ps.d.data.id);
+  // 7. 담당자 이름을 새로 넣으면 서버가 멤버로 (v13.523 — 예전엔 화면이 이름마다 요청) · 빼도 해제 안 함 · 계정 없는 이름은 무시
+  var us = (await A('GET', '/api/users/lookup')).d.data || [];
+  var own = bad.d.data.owner_id, kim = us.filter(function (u) { return u.id !== own && u.name && us.filter(function (x) { return x.name === u.name; }).length === 1; })[0];
+  var memOf = async function () { return ((await A('GET', '/api/projects/' + pid + '/members')).d.data || []).map(function (m) { return m.user_id; }); };
+  var a1 = await A('PUT', '/api/projects/' + pid, { assignees: [kim.name, '외부 사람'] });
+  check('담당자 저장', a1.s === 200, a1);
+  var m1 = await memOf();
+  check('새 담당자 → 멤버 1명', m1.length === 1 && m1[0] === kim.id, m1);
+  await A('DELETE', '/api/projects/' + pid + '/members/' + kim.id);
+  await A('PUT', '/api/projects/' + pid, { assignees: [kim.name, '외부 사람'], memo: 'x' });
+  check('그대로인 이름은 다시 넣지 않음(해제 유지)', (await memOf()).length === 0);
+  await A('PUT', '/api/projects/' + pid, { assignees: [] });
+  await A('PUT', '/api/projects/' + pid, { assignees: [kim.name, kim.name] });
+  check('다시 넣으면 해제됐던 멤버 되살림', (await memOf()).join() === kim.id);
   // 정리
   await A('DELETE', '/api/issues/' + iid);
   await A('DELETE', '/api/projects/' + pid);

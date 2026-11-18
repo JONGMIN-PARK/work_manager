@@ -2064,10 +2064,23 @@ async function saveProjectUI(existingId) {
   var projId;
   try {
     if (existingId) {
-      var up = await updateProject(existingId, data, window._projModalBaseVersion);
+      // 프로젝트 · 마일스톤을 한꺼번에 보낸다(서로 다른 행) — 예전엔 차례로 보내 저장이 느렸다.
+      //  둘 다 끝난 뒤에 실패를 알린다(중간에 다시 누르면 아직 가고 있는 마일스톤이 두 벌 생길 수 있다)
       projId = existingId;
-      if (up && up.version != null) window._projModalBaseVersion = up.version;   // 뒤 단계가 실패해 다시 누를 때 자기 자신과 409 나지 않게
-      if (data.currentPhase) window._projModalOrigPhase = data.currentPhase;
+      var keepOrig = window._projMsOrigIds, keepDup = window._projMsDupIds;   // 마일스톤만 성공하면 비워지므로 — 다시 누를 때 새로 만들지 않게 되돌린다
+      var both = await Promise.allSettled([
+        updateProject(existingId, data, window._projModalBaseVersion).then(function (up) {
+          if (up && up.version != null) window._projModalBaseVersion = up.version;   // 다른 쪽이 실패해 다시 누를 때 자기 자신과 409 나지 않게
+          if (data.currentPhase) window._projModalOrigPhase = data.currentPhase;
+        }),
+        _projSyncMilestones(projId, existingId)
+      ]);
+      var bad = both.filter(function (x) { return x.status === 'rejected'; })[0];
+      if (bad) {
+        if (!window._projMsOrigIds) window._projMsOrigIds = keepOrig;
+        if (!window._projMsDupIds) window._projMsDupIds = keepDup;
+        throw bad.reason;
+      }
     } else {
       var p = await createProject(data);
       if (!p || !p.id) { showToast('프로젝트 저장 실패: DB 연결을 확인하세요.','warn'); return; }
@@ -2083,12 +2096,8 @@ async function saveProjectUI(existingId) {
       if (typeof pimgFlushStaging === 'function') { try { await pimgFlushStaging(projId); } catch (_) {} }
     }
 
-    await _projSyncMilestones(projId, existingId);
-
-    // 담당자 이름 → project_members 자동 동기화 (additive, best-effort) — 새 프로젝트는 서버가 만들 때 이미 넣는다(v13.283)
-    if (existingId && typeof syncAssigneesToMembers === 'function' && assignees.length) {
-      try { await syncAssigneesToMembers(projId, assignees); } catch (_) { /* ignore */ }
-    }
+    if (!existingId) await _projSyncMilestones(projId, existingId);
+    // 담당자 이름 → 멤버 맞춤은 서버가 한다 — 새 프로젝트는 만들 때(v13.283), 수정은 PUT 에서 새로 넣은 이름만
 
     _projModalClose(true);
     showToast(existingId ? '프로젝트가 수정되었습니다' : '프로젝트가 등록되었습니다');
