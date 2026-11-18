@@ -32,20 +32,35 @@ function mwWeekStripHtml(today) {
     '</div>';
   if (folded) return h + '</section>';
   if (!d) return h + '<div class="mww-e">⏳</div></section>';
-  if (!items.length) return h + '<div class="mww-e">' + (d.hasReport ? lbl + ' 주간 보고서에 내 이름(@' + _mwEsc((typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || '이름') + ')이 붙은 일이 없습니다'
-    : lbl + ' 주간 보고서가 아직 없습니다') + ' · <button class="mwj-lnk" data-mww="open">주간 업무 ↗</button></div></section>';
-  h += '<div class="mww-l">' + items.map(function (x) {
-    var sc = MWW_SEC[x.section] || MWW_SEC.etc, done = x.status === 'done', dl = _mwwDl(x.deadline, w), dd = '';
+  var picks = d.picks || [];
+  var row = function (x, pk) {
+    var sc = MWW_SEC[x.section] || MWW_SEC.etc, done = x.status === 'done', dl = _mwwDl(x.deadline, w), dd = '', ck = pk && !!x.checked;
     if (dl && !done) { var n = Math.round((Date.parse(dl) - Date.parse(today)) / 86400000); dd = '<span class="mwb-dd' + (n < 0 ? ' late' : n === 0 ? ' today' : n <= 3 ? ' soon' : '') + '">' + (n === 0 ? 'D-day' : n > 0 ? 'D-' + n : 'D+' + (-n)) + '</span>'; }
-    return '<div class="mww-r' + (done ? ' is-done' : '') + '" title="' + _mwEsc([x.team, x.client, x.name].filter(Boolean).join(' · ') + (dl ? ' · 기한 ' + dl : '') + (x.members.length > 1 ? ' · 함께: ' + x.members.join(', ') : '') + (x.result ? ' · 실적 반영' : '')) + '">' +
+    var who = pk ? (x.members || []).join('·') : '';
+    return '<div class="mww-r' + (done ? ' is-done' : '') + (ck ? ' is-ck' : '') + (pk ? ' is-pk' : '') + '"' + (pk ? ' data-pk="' + _mwEsc(x.pickId) + '"' : '') + ' title="' + _mwEsc([x.team, x.client, x.name].filter(Boolean).join(' · ') + (dl ? ' · 기한 ' + dl : '') + (x.members.length ? (pk ? ' · 담당: ' : x.members.length > 1 ? ' · 함께: ' : '') + (pk || x.members.length > 1 ? x.members.join(', ') : '') : '') + (x.result ? ' · 실적 반영' : '') + (pk && x.checked ? ' · 확인 ' + String(x.checked).slice(5, 16).replace('T', ' ') : '')) + '">' +
+      (pk ? '<button class="mww-ck' + (ck ? ' on' : '') + '" data-mww="ck" title="' + (ck ? '확인 풀기' : '이번 주 확인') + '">' + (ck ? '✓' : '') + '</button>' : '') +
       '<span class="mww-sec" style="--sc:' + sc[1] + '">' + sc[0] + '</span>' +
       '<span class="mww-t">' + (done ? '✅ ' : '') + (x.client ? '<b>' + _mwEsc(x.client) + '</b> ' : '') + _mwEsc(x.name) + '</span>' +
-      (x.pct != null && x.pct >= 0 && !done ? '<span class="mww-p">' + x.pct + '%</span>' : '') + dd + '</div>' +
+      (who ? '<span class="mww-who">@' + _mwEsc(who) + '</span>' : '') +
+      (x.pct != null && x.pct >= 0 && !done ? '<span class="mww-p">' + x.pct + '%</span>' : '') + dd +
+      (pk ? '<button class="mww-un" data-mww="unpick" title="찜 풀기">✕</button>' : '') + '</div>' +
+      (pk && !x.found ? '<ul class="mww-d"><li>이 주 보고서엔 없음</li></ul>' : '') +
       // 할 내용 — 제목 아래 세부 줄 (v13.544)
       ((x.details || []).length ? '<ul class="mww-d' + (done ? ' is-done' : '') + '">' + x.details.map(function (t) {
         return '<li class="' + (t.sub ? 'sub' : '') + (t.status === 'done' ? ' ok' : '') + '">' + _mwEsc(String(t.text || '').replace(/^[-*•·▪◦ㄴ└>]+\s*/, '')) + '</li>';
       }).join('') + '</ul>' : '');
-  }).join('') + '</div><div class="mww-f"><span>' + (d.teams.length ? _mwEsc(d.teams.join(' · ')) : '') + '</span><button class="mwj-lnk" data-mww="open">주간 업무 ↗</button></div>';
+  };
+  var foot = '<div class="mww-f"><span>' + (d.teams.length ? _mwEsc(d.teams.join(' · ')) : '') + '</span><button class="mwj-lnk" data-mww="open">주간 업무 ↗</button></div>';
+  // 내 일 — 없으면 한 줄 안내 (☆ 찜이 있으면 그 아래로)
+  if (!items.length) h += '<div class="mww-e">' + (d.hasReport ? lbl + ' 주간 보고서에 내 이름(@' + _mwEsc((typeof currentUser !== 'undefined' && currentUser && (currentUser.displayName || currentUser.name)) || '이름') + ')이 붙은 일이 없습니다'
+    : lbl + ' 주간 보고서가 아직 없습니다') + (picks.length ? '' : ' · <button class="mwj-lnk" data-mww="open">주간 업무 ↗</button>') + '</div>';
+  else h += '<div class="mww-l">' + items.map(function (x) { return row(x, false); }).join('') + '</div>';
+  // ☆ 찜 — 관리하는 일. 주마다 ☐ 확인 (v13.545)
+  if (picks.length) {
+    var nck = picks.filter(function (x) { return x.checked; }).length;
+    h += '<div class="mww-gh">★ 찜한 일 <i>' + nck + '/' + picks.length + ' 확인</i></div><div class="mww-l mww-pl">' + picks.map(function (x) { return row(x, true); }).join('') + '</div>';
+  }
+  if (items.length || picks.length) h += foot;
   return h + '</section>';
 }
 function mwWeekLoad(w) {
@@ -65,5 +80,25 @@ document.addEventListener('click', function (e) {
   if (a === 'fold') { _mwLS('wwfold', _mwLS('wwfold') ? '' : '1'); return _mwwRepaint(); }
   if (a === 'prev' || a === 'next') { _mww.week = _mwwAdd(_mww.week || _mwwMon(today), a === 'prev' ? -7 : 7); return _mwwRepaint(); }
   if (a === 'now') { _mww.week = _mwwMon(today); delete _mww.cache[_mww.week]; return _mwwRepaint(); }   // 이번 주로 · 새로 받기
+  if (a === 'ck' || a === 'unpick') return _mwwPickAct(a, b);
   if (a === 'open') { if (typeof setPage === 'function') setPage('weekly_report'); }
 });
+
+/** ☆ 찜 — ☐ 확인 · ✕ 찜 풀기 (v13.545) */
+async function _mwwPickAct(a, b) {
+  var r = b.closest('.mww-r'), id = r && r.getAttribute('data-pk'), w = _mww.week, d = _mww.cache[w];
+  if (!id || !d) return;
+  var x = (d.picks || []).filter(function (p) { return p.pickId === id; })[0]; if (!x) return;
+  b.disabled = true;
+  try {
+    if (a === 'ck') {
+      var res = await apiFetch('/api/weekly-reports/picks/' + encodeURIComponent(id) + '/check', { method: 'PUT', body: JSON.stringify({ week: w, checked: !x.checked }) });
+      x.checked = (res && res.data && res.data.checked) || null;
+    } else {
+      if (typeof wmConfirm === 'function' && !(await wmConfirm('찜을 풀까요? (' + (x.client ? x.client + ' ' : '') + x.name + ')'))) { b.disabled = false; return; }
+      await apiFetch('/api/weekly-reports/picks/' + encodeURIComponent(id), { method: 'DELETE' });
+      Object.keys(_mww.cache).forEach(function (k) { var c = _mww.cache[k]; if (c && c.picks) c.picks = c.picks.filter(function (p) { return p.pickId !== id; }); });
+    }
+  } catch (e) { if (typeof showToast === 'function') showToast('실패: ' + (e.message || e), 'error'); }
+  _mwwRepaint();
+}

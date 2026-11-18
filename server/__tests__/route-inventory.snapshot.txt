@@ -95,6 +95,7 @@ DELETE /api/v1/telegram/groups/:id
 DELETE /api/v1/telegram/unlink
 DELETE /api/weekly-reports/:id
 DELETE /api/weekly-reports/bin/:binId
+DELETE /api/weekly-reports/picks/:pid
 DELETE /api/workflows/:id
 GET *
 GET /
@@ -398,6 +399,7 @@ GET /api/weekly-reports/insights
 GET /api/weekly-reports/insights/item
 GET /api/weekly-reports/mine
 GET /api/weekly-reports/next-name
+GET /api/weekly-reports/picks
 GET /api/weekly-reports/plan-actual
 GET /api/weekly-reports/search
 GET /api/weekly-reports/stats
@@ -680,6 +682,7 @@ POST /api/weekly-reports/bin
 POST /api/weekly-reports/bin/:binId/use
 POST /api/weekly-reports/check
 POST /api/weekly-reports/item-links
+POST /api/weekly-reports/picks
 POST /api/work-requests
 POST /api/work-requests/:id/accept
 POST /api/work-requests/:id/cancel
@@ -809,5 +812,6 @@ PUT /api/v1/users/:id/status
 PUT /api/v1/users/:id/worklog-manager
 PUT /api/wa-targets
 PUT /api/weekly-reports/goals
+PUT /api/weekly-reports/picks/:pid/check
 PUT /api/white-label
 PUT /api/workflows/:id

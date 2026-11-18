@@ -430,6 +430,7 @@
       +   '<span class="wrp-site" title="' + esc(it.client || '') + '" style="background:' + cl.bg + ';color:' + cl.main + '">' + esc(it.client || '') + '</span>'
       +   (hasDetails || (view.np && !rk) ? '' : '<span class="wrp-ic">' + statusIcon(rk ? 'risk' : st) + '</span>')
       +   '<span class="wrp-name" title="' + esc(it.name || '') + '">'
+      +     (_wrPickOn ? _wrPickBtn(it) : '')   // ☆ 찜 — 저장된 보고서 보기에서만 (내보내기 HTML 엔 안 들어감, v13.545)
       +     (it.star ? '<span class="wrp-star" title="핵심">★</span>' : '')
       +     '<span class="wrp-nt" style="font-weight:' + titleWeight + '">' + markupWithResult(it.name || '') + '</span>'
       +     (rk ? chip('rk', esc(riskLabel(rk))) : '')
@@ -1311,6 +1312,36 @@
     }
   }
 
+  /* ─── ☆ 찜 (v13.545) — 남의 일을 찜해 두면 🎯 내 업무 📋 금주 할 일에 모여 주마다 ☐ 확인 ─── */
+  var _wrPickOn = false, _wrPickTeam = '', _wrPicks = null;
+  function _wrPickNorm(s) { return String(s || '').toLowerCase().replace(/[\s\-_.,()[\]{}·:/\\'"`~!?#@%&*+=|<>]+/g, ''); }   // 서버 _mineNorm 과 같게
+  function _wrPickFind(client, name) {
+    var k = _wrPickNorm(client) + '|' + _wrPickNorm(name);
+    return (_wrPicks || []).filter(function (p) { return (p.team || '') === _wrPickTeam && p.ikey === k; })[0];
+  }
+  function _wrPickBtn(it) {
+    var on = !!_wrPickFind(it.client, it.name);
+    return '<button type="button" class="wrp-pick' + (on ? ' on' : '') + '" data-wpk-c="' + esc(it.client || '') + '" data-wpk-n="' + esc(it.name || '') + '" title="' + (on ? '찜 풀기' : '찜 — 내 업무 📋 금주 할 일에서 주마다 확인') + '">' + (on ? '★' : '☆') + '</button>';
+  }
+  async function _wrPickToggle(b) {
+    var c = b.getAttribute('data-wpk-c'), n = b.getAttribute('data-wpk-n'), p = _wrPickFind(c, n);
+    b.disabled = true;
+    try {
+      if (p) {
+        await apiFetch('/api/weekly-reports/picks/' + encodeURIComponent(p.id), { method: 'DELETE' });
+        _wrPicks = _wrPicks.filter(function (x) { return x !== p; });
+      } else {
+        var r = await apiFetch('/api/weekly-reports/picks', { method: 'POST', body: JSON.stringify({ team: _wrPickTeam, client: c, name: n }) });
+        _wrPicks.push({ id: r.data.id, team: _wrPickTeam, ikey: r.data.ikey, client: c, name: n });
+      }
+      var on = !p;
+      b.classList.toggle('on', on); b.textContent = on ? '★' : '☆'; b.title = on ? '찜 풀기' : '찜 — 내 업무 📋 금주 할 일에서 주마다 확인';
+      if (typeof showToast === 'function') showToast(on ? '☆ 찜 — 내 업무 📋 금주 할 일에서 확인' : '찜 풀었습니다', 'ok');
+      if (typeof mwWeekReset === 'function') mwWeekReset();
+    } catch (e) { if (typeof showToast === 'function') showToast('찜 실패: ' + (e.message || e), 'error'); }
+    b.disabled = false;
+  }
+
   /* ─── 미리보기 ─── */
   var _previewState = { id: null, pane: 'cur', data: null };
   async function renderPreview(id) {
@@ -1348,8 +1379,10 @@
       +   '</div>'
       + '</div>'
       + '<div id="wrPrevBody" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:16px">'
-      +   buildPreviewHTML(paneData, null, paneCtx(pane, parsed[pane === 'last' ? 'cur' : 'last'], meta.weekStart || ymd(d.week_start), meta.weekEnd || ymd(d.week_end)))
+      +   (function () { _wrPickOn = pane === 'cur' && !!_wrPicks; _wrPickTeam = d.team || meta.team || ''; try { return buildPreviewHTML(paneData, null, paneCtx(pane, parsed[pane === 'last' ? 'cur' : 'last'], meta.weekStart || ymd(d.week_start), meta.weekEnd || ymd(d.week_end))); } finally { _wrPickOn = false; } })()
       + '</div>';
+    $('wrPrevBody').addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('.wrp-pick'); if (b) { e.stopPropagation(); _wrPickToggle(b); } });
+    if (!_wrPicks) apiFetch('/api/weekly-reports/picks').then(function (r) { _wrPicks = (r && r.data) || []; if (_previewState.data === d && pane === 'cur') drawPreview(); }).catch(function () {});
     $('wrPrevBack').addEventListener('click', function () { renderList(); });
     box.querySelectorAll('[data-pp]').forEach(function (b) {
       b.addEventListener('click', function () { _previewState.pane = b.dataset.pp; drawPreview(); });

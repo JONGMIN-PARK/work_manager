@@ -102,10 +102,64 @@ router.get('/mine', async function (req, res) {
     });
     var ord = { dev: 0, setup: 1, cs: 2, etc: 3 };
     items.sort(function (a, b) { return (a.status === 'done') - (b.status === 'done') || (ord[a.section] || 9) - (ord[b.section] || 9) || String(a.client).localeCompare(String(b.client), 'ko'); });
-    res.json({ data: { week: week, items: items, teams: teams, hasReport: Object.keys(latest).some(function (k) { return latest[k].week_start === week; }) } });
+    // ☆ 찜 — 그 주 보고서에서 같은 일(팀 · 업체 · 일 이름)을 찾아 지금 모습으로 (v13.545). 없으면 found:false (그 팀 보고서가 있을 때만 '이번 주엔 없음')
+    var picks = [];
+    var pr = await db.query('SELECT id, team, ikey, client, name, checks FROM weekly_picks WHERE tenant_id = $1 AND user_id = $2 ORDER BY created_at', [req.tenant.id, req.user.sub]);
+    if (pr.rows.length) {
+      var curByKey = {}, teamHas = {};
+      Object.keys(latest).forEach(function (k) { var x = latest[k]; if (x.week_start !== week) return; teamHas[x.team || ''] = true; (((x.parsed || {}).cur || {}).items || []).forEach(function (it) { curByKey[key(x.team, it)] = { it: it, rid: x.id }; }); });
+      pr.rows.forEach(function (p) {
+        var k = (p.team || '') + '|' + p.ikey, c = curByKey[k], rs = res2[k], ck = (p.checks || {})[week] || null;
+        if (!c && !teamHas[p.team || '']) return;   // 그 주 그 팀 보고서가 아직 없음 — 띄우지 않음
+        var it = c ? c.it : { client: p.client, name: p.name, members: [] }, src = rs || it;
+        picks.push({ pickId: String(p.id), team: p.team || '', section: it.section || 'etc', client: it.client || p.client || '', name: it.name || p.name || '', members: it.members || [],
+          pct: typeof src.pct === 'number' && src.pct >= 0 ? src.pct : null, deadline: src.deadline || it.deadline || '',
+          status: (rs && rs.status) || it.status || 'none', result: !!rs, found: !!c, checked: ck,
+          details: (it.details || []).slice(0, 12).map(function (d) { return { text: String(d.text || '').slice(0, 300), sub: !!d.sub, status: d.status || 'none' }; }) });
+      });
+    }
+    res.json({ data: { week: week, items: items, teams: teams, picks: picks, hasReport: Object.keys(latest).some(function (k) { return latest[k].week_start === week; }) } });
   } catch (e) {
     httpErr.serverError(res, '[weekly-reports/mine]', e);
   }
+});
+
+// ─── ☆ 찜 (v13.545) — 내 것만. 보고서 화면(관리자)에서 찜, 📋 금주 할 일에서 주마다 ☐ 확인 ───
+router.get('/picks', async function (req, res) {
+  try {
+    var r = await db.query('SELECT id, team, ikey, client, name FROM weekly_picks WHERE tenant_id = $1 AND user_id = $2', [req.tenant.id, req.user.sub]);
+    res.json({ data: r.rows.map(function (x) { return { id: String(x.id), team: x.team, ikey: x.ikey, client: x.client, name: x.name }; }) });
+  } catch (e) { httpErr.serverError(res, '[weekly-reports/picks]', e); }
+});
+router.post('/picks', async function (req, res) {   // { team, client, name } — 이미 있으면 그대로
+  try {
+    var b = req.body || {}, name = String(b.name || '').trim().slice(0, 400), client = String(b.client || '').trim().slice(0, 200), team = String(b.team || '').trim().slice(0, 100);
+    if (!name) return res.status(400).json({ error: 'VALIDATION', message: '일 이름이 필요합니다.' });
+    var ikey = (_mineNorm(client) + '|' + _mineNorm(name)).slice(0, 400);
+    var r = await db.query('INSERT INTO weekly_picks (tenant_id, user_id, team, ikey, client, name) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (user_id, team, ikey) DO UPDATE SET client = EXCLUDED.client, name = EXCLUDED.name RETURNING id',
+      [req.tenant.id, req.user.sub, team, ikey, client, name]);
+    res.status(201).json({ data: { id: String(r.rows[0].id), team: team, ikey: ikey } });
+  } catch (e) { httpErr.serverError(res, '[weekly-reports/picks POST]', e); }
+});
+router.put('/picks/:pid/check', async function (req, res) {   // { week, checked }
+  try {
+    if (!/^\d+$/.test(req.params.pid)) return res.status(404).json({ error: 'NOT_FOUND' });
+    var w = String((req.body || {}).week || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(w)) return res.status(400).json({ error: 'VALIDATION', message: 'week 가 필요합니다.' });
+    var on = !!(req.body || {}).checked, at = new Date().toISOString();
+    var r = await db.query(on ? "UPDATE weekly_picks SET checks = checks || jsonb_build_object($4::text, $5::text) WHERE id = $1 AND tenant_id = $2 AND user_id = $3 RETURNING id"
+      : 'UPDATE weekly_picks SET checks = checks - $4::text WHERE id = $1 AND tenant_id = $2 AND user_id = $3 RETURNING id',
+      on ? [req.params.pid, req.tenant.id, req.user.sub, w, at] : [req.params.pid, req.tenant.id, req.user.sub, w]);
+    if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.json({ data: { checked: on ? at : null } });
+  } catch (e) { httpErr.serverError(res, '[weekly-reports/picks check]', e); }
+});
+router.delete('/picks/:pid', async function (req, res) {
+  try {
+    if (!/^\d+$/.test(req.params.pid)) return res.status(404).json({ error: 'NOT_FOUND' });
+    await db.query('DELETE FROM weekly_picks WHERE id = $1 AND tenant_id = $2 AND user_id = $3', [req.params.pid, req.tenant.id, req.user.sub]);
+    res.json({ data: { ok: true } });
+  } catch (e) { httpErr.serverError(res, '[weekly-reports/picks DELETE]', e); }
 });
 
 router.use(auth.requireRole('admin'));
