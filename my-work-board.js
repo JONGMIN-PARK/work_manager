@@ -95,7 +95,13 @@ function _mwbCard(it, today) {
   var late = !it.done && it.due && it.due < today;
   var k = _mwEsc(it.key);
   var meta = '';
-  if (it.due) meta += '<span class="mw-due' + (late ? ' mw-late' : '') + '">' + _mwEsc(_mwDueLabel(it.due, today)) + (it.dueTime ? ' ' + _mwEsc(it.dueTime) : '') + '</span>';
+  // 날짜 + D-day 함께 (v13.532 — 한 줄 카드에서 한눈에). 오늘 · 내일은 말로, 그 밖은 11/20 (금)
+  if (it.due) {
+    var dd = _mwDays(today, it.due), ddl = dd === 0 ? 'D-day' : dd > 0 ? 'D-' + dd : 'D+' + (-dd);
+    var dl = dd === 0 ? '오늘' : dd === 1 ? '내일' : (+it.due.slice(5, 7)) + '/' + (+it.due.slice(8, 10)) + ' (' + _mwWeekday(it.due) + ')';
+    meta += '<span class="mw-due mwb-date' + (late ? ' mw-late' : '') + '">' + _mwEsc(dl) + (it.dueTime ? ' ' + _mwEsc(it.dueTime) : '') + '</span>' +
+      (it.done ? '' : '<span class="mwb-dd' + (dd < 0 ? ' late' : dd === 0 ? ' today' : dd <= 3 ? ' soon' : '') + '">' + ddl + '</span>');
+  }
   if (it.checkTotal) meta += '<span class="mwb-m">☑ ' + it.checkDone + '/' + it.checkTotal + '</span>';
   else if (it.progress != null && !it.done) meta += '<span class="mwb-m">' + it.progress + '%</span>';
   if (it.todoStatus === 'doing') meta += '<span class="mw-st mw-st-doing">진행 중</span>';
@@ -113,7 +119,7 @@ function _mwbCard(it, today) {
   return '<div class="mwb-i' + (it.done ? ' mw-done' : '') + (it.pending ? ' is-pending' : '') + (it.pri === 1 && !it.done ? ' is-urg' : '') + (it.focus ? ' is-focus' : '') + '" data-qk="' + k + '"' + (self && !it.done ? ' draggable="true"' : '') + '>' +
     '<div class="mwb-top">' +
       (it.canDone ? '<input type="checkbox" class="mw-chk" data-done="' + k + '"' + (it.done ? ' checked' : '') + ' title="' + (it.done ? '완료 되돌리기' : '완료') + '">' : '<span class="mw-chk-sp"></span>') +
-      '<span class="mwb-t" data-open="' + k + '"><em title="' + _mwEsc(s.label) + '">' + s.icon + '</em> ' + _mwEsc(it.title) + '</span>' + acts + '</div>' +
+      '<span class="mwb-t" data-open="' + k + '" title="' + _mwEsc(it.title) + (it.ctx ? ' — ' + _mwEsc(it.ctx) : '') + (it.due ? ' · 마감 ' + _mwEsc(it.due) + (it.dueTime ? ' ' + _mwEsc(it.dueTime) : '') : '') + '"><em title="' + _mwEsc(s.label) + '">' + s.icon + '</em> ' + _mwEsc(it.title) + '</span>' + acts + '</div>' +
     '<div class="mwb-meta">' + mwPriBadge(it) + meta + '</div></div>';
 }
 

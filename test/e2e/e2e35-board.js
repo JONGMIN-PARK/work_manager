@@ -64,7 +64,9 @@ function kst(k) { var d = new Date(Date.now() + 9 * 3600 * 1000); d.setUTCDate(d
     check(await page.evaluate(function () { return document.querySelectorAll('.mwb-c').length === 4; }), '기본 4칸');
     check(/지금 하기/.test(await colOf('보드 견적')) && /계획하기/.test(await colOf('보드 계획')) && /빨리 끝내기/.test(await colOf('보드 잡일')) && /나중에/.test(await colOf('보드 언젠가')) && /지금 하기/.test(await colOf('보드 이슈')), '중요 × 급함 자동 분류');
     var hgt = await page.evaluate(function () { return Array.from(document.querySelectorAll('.mwb-c')).map(function (x) { return x.getBoundingClientRect().height; }); });
-    check(hgt.every(function (h) { return h >= 500; }), '칸 높이 — 화면에 맞춰 키움 ' + hgt.map(Math.round).join(','));
+    // v13.532 칸 높이는 내용만큼(리스트 전부 보이게) — 같은 줄 칸은 같은 높이, 칸 안 스크롤 없음
+    var sc = await page.evaluate(function () { return Array.from(document.querySelectorAll('.mwb-l')).filter(function (l) { return l.scrollHeight > l.clientHeight + 1; }).length; });
+    check(Math.max.apply(null, hgt) - Math.min.apply(null, hgt) < 2 && sc === 0, '칸 높이 — 같은 줄은 같게 · 칸 안 스크롤 없이 모두 보임 ' + hgt.map(Math.round).join(','));
     check(await page.evaluate(function () { var c = document.querySelectorAll('.mwb-c'); return c[0].getBoundingClientRect().top === c[3].getBoundingClientRect().top; }), '넓은 화면은 4칸 한 줄');
     check(await page.evaluate(function () { var i = Array.from(document.querySelectorAll('.mwb-i')).filter(function (x) { return /보드 견적/.test(x.textContent); })[0]; return /☑ 1\/2/.test(i.textContent) && /오늘/.test(i.textContent) && /긴급/.test(i.textContent); }), '카드 — 하위 항목 · 마감 · 중요도');
     await page.screenshot({ path: path.join(SHOT, 'board.png') });

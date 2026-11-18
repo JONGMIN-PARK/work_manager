@@ -9027,3 +9027,38 @@ button.awg-chip{cursor:pointer}
 .mwq-body{font-size:11.5px;color:var(--t3);margin-top:2px;white-space:pre-wrap;word-break:break-word}
 .mwq-acts{display:flex;gap:4px;flex-shrink:0}
 @media (max-width:640px){.mwq-it{flex-wrap:wrap}.mwq-acts{width:100%;justify-content:flex-end}.mwq-sub{display:none}}
+
+/* ═══ v13.532 🎯 내 업무 보드 — 리스트 전부 보이게 · 넓으면 한 줄 카드 ═══
+ *  칸 높이를 내용만큼(예전: 화면 높이 고정 + 칸 안 스크롤 → 빈 칸도 크게 자리 차지, 항목은 가려짐)
+ *  칸 폭이 250px 넘으면 카드 한 줄: ☐ 아이콘 항목명 …… (맥락) · 중요도 · (날짜) · D-day — 좁을수록 괄호 것을 뺌, 250 미만은 예전처럼 두 줄
+ *  손질 단추(⭐ 📅 🗑 ⋯)는 한 줄일 때 올렸을 때만 오른쪽에 겹쳐 뜸 — 평소엔 자리를 안 차지 */
+#mMyWork .mwb-c{height:auto;min-height:0}
+#mMyWork .mwb-l{flex:none;overflow:visible;container-type:inline-size}
+#mMyWork .mwb-e{padding:10px 8px;font-size:12px}
+.mwb-dd{font-size:11px;font-weight:700;color:var(--t4);background:var(--bg-i);border-radius:99px;padding:0 7px;line-height:18px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mwb-dd.soon{color:#B45309;background:rgba(245,158,11,.14)}
+.mwb-dd.today{color:#fff;background:#D97706}
+.mwb-dd.late{color:#fff;background:#DC2626}
+.mwb-date{white-space:nowrap;font-variant-numeric:tabular-nums}
+@container (min-width:250px){
+  #mMyWork .mwb-i{flex-direction:row;align-items:center;gap:8px;padding:4px 9px;min-height:30px}
+  #mMyWork .mwb-top{flex:1;min-width:0;align-items:center;gap:7px}
+  #mMyWork .mwb-top .mw-chk{margin-top:0}
+  #mMyWork .mwb-t{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-line-clamp:unset;line-height:1.5}
+  #mMyWork .mwb-meta{flex:0 1 auto;flex-wrap:nowrap;padding-left:0;gap:6px;min-width:0;justify-content:flex-end;overflow:hidden}
+  #mMyWork .mwb-meta>*{flex:none}
+  #mMyWork .mwb-meta .mwb-ctx{order:-1;flex:0 1 auto;min-width:0;max-width:130px;font-size:11px}
+  #mMyWork .mwb-meta .mw-pri{order:0}
+  #mMyWork .mwb-meta .mwb-date{order:1;min-width:64px;text-align:right}
+  #mMyWork .mwb-meta .mwb-dd{order:2;min-width:38px;text-align:center}
+  #mMyWork .mwb-meta .mwb-pin{order:3;margin-left:0}
+  #mMyWork .mwb-acts{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:1px 2px;pointer-events:none}
+  #mMyWork .mwb-i:hover .mwb-acts,#mMyWork .mwb-i.mw-picked .mwb-acts,#mMyWork .mwb-i:focus-within .mwb-acts{pointer-events:auto}
+}
+/* 칸이 좁을수록 덜 중요한 것부터 뺌 — 250~340: 중요도 · D-day 만 (날짜는 올리면 title) · 340~420: + 날짜 · 420~: + 맥락 */
+@container (min-width:250px) and (max-width:339.98px){
+  #mMyWork .mwb-meta .mwb-date,#mMyWork .mwb-meta .mwb-ctx,#mMyWork .mwb-meta .mwb-m{display:none}
+}
+@container (min-width:340px) and (max-width:419.98px){
+  #mMyWork .mwb-meta .mwb-ctx{display:none}
+}
