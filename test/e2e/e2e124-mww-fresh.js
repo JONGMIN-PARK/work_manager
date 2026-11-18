@@ -26,7 +26,7 @@ async function tok(email) { var r = await fetch(B + '/api/auth/login', { method:
     await page.waitForFunction(function () { var s = document.getElementById('mwwStrip'); return s && s.querySelector('.mww-e') && !/⏳/.test(s.querySelector('.mww-e').textContent); }, { timeout: 15000 });
     var before = await page.evaluate(function () { return document.querySelectorAll('#mwwStrip .mww-r').length; });
     // 열어 둔 사이 이번 주 보고서가 저장됨 — 담당을 '@이팀원·김팀원' 한 덩어리로
-    var cur = ['[개발]', '- [SENKO] PICAlign 70% @이팀원·김팀원', '[C/S]', '- [SDC] 글라스 챔퍼링'].join(String.fromCharCode(10));
+    var cur = ['[개발]', '- [SENKO] PICAlign 70% @이팀원·김팀원', '  - 얼라인 보정 알고리즘 검증', '  - 현장 셋업 일정 협의', '[C/S]', '- [SDC] 글라스 챔퍼링'].join(String.fromCharCode(10));
     var pr = await fetch(B + '/api/weekly-reports', { method: 'POST', headers: H, body: JSON.stringify({ autoName: { team: team, weekStart: ymd(s0), weekEnd: ymd(e0) }, lastText: '', curText: cur }) });
     check(pr.status < 300, '이번 주 보고서 저장');
     // 30초가 지난 것처럼 → 내 업무를 다시 그리면 새로 받음 (예전엔 페이지를 새로 고칠 때까지 처음 것)
@@ -34,6 +34,16 @@ async function tok(email) { var r = await fetch(B + '/api/auth/login', { method:
     await page.waitForSelector('#mwwStrip .mww-r', { timeout: 10000 }).catch(function () {});
     var after = await page.evaluate(function () { return [].map.call(document.querySelectorAll('#mwwStrip .mww-r'), function (r) { return r.textContent; }); });
     check(before === 0 && after.length === 1 && /PICAlign/.test(after[0]), '다시 그리면 새 보고서가 보임 · 한 덩어리 담당도 알아봄 ' + JSON.stringify(after));
+    var det = await page.evaluate(function () { return [].map.call(document.querySelectorAll('#mwwStrip .mww-d li'), function (x) { return x.textContent; }); });
+    check(det.length === 2 && det[0] === '얼라인 보정 알고리즘 검증' && det[1] === '현장 셋업 일정 협의', '제목 아래 할 내용 ' + JSON.stringify(det));
+    // 🔖 바로가기 목록 통째로 접기 (v13.544)
+    await page.evaluate(function () { document.querySelector('#wscBox [data-wsc="foldall"]').click(); });
+    await wait(200);
+    var fo = await page.evaluate(function () { var b = document.getElementById('wscBox'); return { f: b.classList.contains('is-folded'), rows: b.querySelectorAll('.wsc-row,.wsc-empty,.wsc-ft').length, h: b.offsetHeight }; });
+    check(fo.f && fo.rows === 0 && fo.h < 50, '🔖 바로가기 접기 ' + JSON.stringify(fo));
+    await page.evaluate(function () { document.querySelector('#wscBox [data-wsc="foldall"]').click(); });
+    await wait(200);
+    check(await page.evaluate(function () { return !document.getElementById('wscBox').classList.contains('is-folded') && !!document.querySelector('#wscBox .wsc-ft'); }), '🔖 다시 펴기');
     // 저장하면 바로 (mwWeekReset)
     await fetch(B + '/api/weekly-reports', { method: 'POST', headers: H, body: JSON.stringify({ autoName: { team: team + 'B', weekStart: ymd(s0), weekEnd: ymd(e0) }, lastText: '', curText: ['[기타]', '- [사내] 회의 자료 @이팀원'].join(String.fromCharCode(10)) }) });
     await page.evaluate(function () { mwWeekReset(); });

@@ -127,8 +127,10 @@ function _wscRow(s, mode) {
 }
 function wscBoxHtml() {
   var list = WSC.list;
-  var h = '<div class="wsc-box" id="wscBox"><div class="wsc-hd"><b>🔖 바로가기</b>' + (list ? '<span class="wsc-n">' + list.length + '</span>' : '') +
+  var all = !!WSC.folded.__all;   // 목록 통째로 접기 (v13.544)
+  var h = '<div class="wsc-box' + (all ? ' is-folded' : '') + '" id="wscBox"><div class="wsc-hd"><button type="button" class="wsc-hf" data-wsc="foldall" title="목록 접기 · 펴기"><span class="wsc-car">' + (all ? '▸' : '▾') + '</span><b>🔖 바로가기</b>' + (list ? '<span class="wsc-n">' + list.length + '</span>' : '') + '</button>' +
     '<span style="flex:1"></span><button type="button" class="wsc-a" data-wsc="add" title="지금 화면을 바로가기로 — 다른 화면에서는 머리 줄 🔖">＋</button></div>';
+  if (all) return h + '</div>';
   if (!list) return h + '<div class="wsc-empty">⏳</div></div>';
   if (WSC.showTrash) {
     var tl = WSC.trash || [];
@@ -157,7 +159,8 @@ async function _wscAct(a, id, f) {
   if (a === 'go') return wscGo(_wscFind(id));
   if (a === 'add') return wscAddHere();
   if (a === 'filter') { WSC.filter = f || ''; return wscRepaint(); }
-  if (a === 'fold') { WSC.folded[f] = !WSC.folded[f]; try { localStorage.setItem('wm.wsc.fold', JSON.stringify(WSC.folded)); } catch (_) {} return wscRepaint(); }
+  if (a === 'foldall') f = '__all';
+  if (a === 'fold' || a === 'foldall') { WSC.folded[f] = !WSC.folded[f]; try { localStorage.setItem('wm.wsc.fold', JSON.stringify(WSC.folded)); } catch (_) {} return wscRepaint(); }
   if (a === 'trashon') { WSC.showTrash = true; WSC.trash = null; wscRepaint(); var r = await apiFetch('/api/shortcuts?trash=1'); WSC.trash = (r && r.data) || []; return wscRepaint(); }
   if (a === 'trashoff') { WSC.showTrash = false; return wscRepaint(); }
   try {

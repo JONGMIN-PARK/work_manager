@@ -95,7 +95,9 @@ router.get('/mine', async function (req, res) {
         items.push({ team: x.team || '', section: it.section || 'etc', client: it.client || '', name: it.name || '', members: it.members || [],
           pct: typeof (rs || it).pct === 'number' && (rs || it).pct >= 0 ? (rs || it).pct : null,   // 해석기는 진행률이 없으면 -1
           deadline: (rs || it).deadline || it.deadline || '',
-          status: (rs && rs.status) || it.status || 'none', result: !!rs, reportId: x.id });
+          status: (rs && rs.status) || it.status || 'none', result: !!rs, reportId: x.id,
+          // 할 내용 — 제목 아래 세부 줄 (v13.544)
+          details: (it.details || []).slice(0, 12).map(function (d) { return { text: String(d.text || '').slice(0, 300), sub: !!d.sub, status: d.status || 'none' }; }) });
       });
     });
     var ord = { dev: 0, setup: 1, cs: 2, etc: 3 };

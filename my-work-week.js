@@ -40,7 +40,11 @@ function mwWeekStripHtml(today) {
     return '<div class="mww-r' + (done ? ' is-done' : '') + '" title="' + _mwEsc([x.team, x.client, x.name].filter(Boolean).join(' · ') + (dl ? ' · 기한 ' + dl : '') + (x.members.length > 1 ? ' · 함께: ' + x.members.join(', ') : '') + (x.result ? ' · 실적 반영' : '')) + '">' +
       '<span class="mww-sec" style="--sc:' + sc[1] + '">' + sc[0] + '</span>' +
       '<span class="mww-t">' + (done ? '✅ ' : '') + (x.client ? '<b>' + _mwEsc(x.client) + '</b> ' : '') + _mwEsc(x.name) + '</span>' +
-      (x.pct != null && x.pct >= 0 && !done ? '<span class="mww-p">' + x.pct + '%</span>' : '') + dd + '</div>';
+      (x.pct != null && x.pct >= 0 && !done ? '<span class="mww-p">' + x.pct + '%</span>' : '') + dd + '</div>' +
+      // 할 내용 — 제목 아래 세부 줄 (v13.544)
+      ((x.details || []).length ? '<ul class="mww-d' + (done ? ' is-done' : '') + '">' + x.details.map(function (t) {
+        return '<li class="' + (t.sub ? 'sub' : '') + (t.status === 'done' ? ' ok' : '') + '">' + _mwEsc(String(t.text || '').replace(/^[-*•·▪◦ㄴ└>]+\s*/, '')) + '</li>';
+      }).join('') + '</ul>' : '');
   }).join('') + '</div><div class="mww-f"><span>' + (d.teams.length ? _mwEsc(d.teams.join(' · ')) : '') + '</span><button class="mwj-lnk" data-mww="open">주간 업무 ↗</button></div>';
   return h + '</section>';
 }
