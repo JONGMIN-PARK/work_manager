@@ -568,20 +568,64 @@ function pmtSaveForm(mid, quiet) {
     return true;
   });
 }
+/* ═══ 같이 고치기 — 3방향 합치기 (v13.541) ═══
+   처음 연 회의(base) · 내가 고친 것(patch) · 그새 다른 사람이 저장한 것(latest) 을 칸마다 합친다
+     글(회의록 본문 · 양식 칸): 줄 단위 3방향 합치기(메신저 공동 문서와 같은 chatDocMerge) — 서로 다른 줄을 고쳤으면 둘 다 살림
+     목록(참석자 · 안건): 남이 더한 것 + 내가 더한 것, 내가 뺀 것은 뺌
+     짧은 칸(제목 · 날짜): 한쪽만 바꿨으면 그쪽, 둘 다 바꿨으면 내 것 */
+function _pmtEq(a, b) { return JSON.stringify(a == null ? '' : a) === JSON.stringify(b == null ? '' : b); }
+function _pmtMergeText(b, m, t) {
+  b = b == null ? '' : String(b); m = m == null ? '' : String(m); t = t == null ? '' : String(t);
+  if (m === b) return t; if (t === b || t === m) return m;
+  return typeof chatDocMerge === 'function' ? chatDocMerge(b, m, t) : (typeof wmMergeNote === 'function' ? wmMergeNote(b, m, t) : m);
+}
+function _pmtMergeList(b, m, t) {
+  b = b || []; m = m || []; t = t || [];
+  var key = function (x) { return JSON.stringify(x); }, kb = b.map(key), km = m.map(key), kt = t.map(key);
+  var out = t.filter(function (x, i) { return !(kb.indexOf(kt[i]) >= 0 && km.indexOf(kt[i]) < 0); });   // 내가 뺀 것 빼기
+  var ko = out.map(key);
+  m.forEach(function (x, i) { if (kb.indexOf(km[i]) < 0 && ko.indexOf(km[i]) < 0) { out.push(x); ko.push(km[i]); } });   // 내가 더한 것
+  return out;
+}
+function _pmtMerge3(base, patch, latest) {
+  var out = {};
+  Object.keys(patch).forEach(function (k) {
+    var b = base ? base[k] : undefined, m = patch[k], t = latest[k];
+    if (k === 'minutes') out[k] = _pmtMergeText(b, m, t);
+    else if (k === 'attendees' || k === 'agenda') out[k] = _pmtMergeList(b, m, t);
+    else if (k === 'form' && m && typeof m === 'object') {
+      var f = {}, bf = (b && typeof b === 'object') ? b : {}, tf = (t && typeof t === 'object') ? t : {};
+      Object.keys(Object.assign({}, tf, m)).forEach(function (fk) {
+        var mv = m[fk], tv = tf[fk], bv = bf[fk];
+        f[fk] = (typeof mv === 'string' || typeof tv === 'string') ? _pmtMergeText(bv, mv, tv) : (_pmtEq(mv, bv) ? tv : mv);
+      });
+      out[k] = f;
+    } else out[k] = _pmtEq(m, b) ? t : m;
+  });
+  return out;
+}
 /* 회의 필드 저장 → 서버 응답으로 갱신(액션은 그대로 유지). 성공 여부
-   version 을 함께 보낸다(v13.202) — 그사이 다른 사람이 저장했으면 409 + 최신 회의: 최신 내용으로 바꾸고
-   이쪽 초안(_pmt.drafts)은 남겨 두어, 확인 후 다시 저장하면 고친 칸만 덮어쓴다 */
-function _pmtUpdate(mid, patch) {
+   version 을 함께 보낸다(v13.202) — 그사이 다른 사람이 저장했으면 409 + 최신 회의
+   v13.541: 그때 3방향으로 합쳐 최신 version 으로 한 번 더 저장 (회의 중 여럿이 같이 적어도 서로 지우지 않게).
+            또 겹치면 예전처럼 최신을 보여 주고 내 초안은 남김 */
+function _pmtUpdate(mid, patch, again) {
   var cur = _pmtFind(mid);
   var body = Object.assign({}, patch, cur && cur.version != null ? { version: cur.version } : {});
   return apiFetch('/api/meetings/' + encodeURIComponent(mid), { method: 'PUT', body: JSON.stringify(body) }).then(function (r) {
     var old = _pmtFind(mid); if (!old) return false;
     var m = _pmtNorm(r.data); m.actionItems = old.actionItems;
     _pmtReplace(m);
+    if (again) _pmtToast('🤝 다른 사람이 그새 고친 내용과 합쳐서 저장했습니다', 'success');
     return true;
   }).catch(function (e) {
     if (e && e.status === 409 && e.data && e.data.data) {
-      _pmtReplace(_pmtNorm(e.data.data));
+      var latest = _pmtNorm(e.data.data);
+      if (!again) {
+        var merged = _pmtMerge3(cur, patch, latest);
+        latest.actionItems = cur && cur.actionItems; _pmtReplace(latest);
+        return _pmtUpdate(mid, merged, true);
+      }
+      _pmtReplace(latest);
       _pmtPaintCard(mid);
       _pmtToast('⚠ 다른 사람이 먼저 저장해 최신 내용을 불러왔습니다. 내가 고친 칸은 남아 있으니 확인 후 다시 저장하세요.', 'warn');
       return false;
