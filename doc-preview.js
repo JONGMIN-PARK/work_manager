@@ -729,6 +729,7 @@ function _dpBuildViewer(f) {
     '<button type="button" class="btn btn-p btn-s dpv-pres-b" onclick="docViewPresent()" title="▶ 발표 — 전체 화면으로 한 쪽씩 (← → · Space 로 넘기기, 칠판으로 표시)" disabled>▶<span class="dpv-lbl"> 발표</span></button>' +
     '<button type="button" class="btn btn-g btn-s dpv-board-b" onclick="docViewBoard()" title="✏️ 칠판 — 펜 · 형광펜 · 도형 · 글자 · 캡처 붙여넣기(Ctrl+V), 쪽마다 자동 저장" disabled>✏️<span class="dpv-lbl"> 칠판</span></button>' +
     '<button type="button" class="btn btn-g btn-s" onclick="docDownloadFile(\'' + id + '\')" title="내려받기">💾<span class="dpv-lbl"> 내려받기</span></button>' +
+    (typeof wscAddHere === 'function' ? '<button type="button" class="btn btn-g btn-s" onclick="wscAddHere()" title="🔖 이 문서를 바로가기로 — 내 업무에서 바로 열기">🔖</button>' : '') +
     '<button type="button" class="btn btn-g btn-s dpv-x" onclick="docViewClose()" title="닫기 (Esc)">✕</button></div>' +
     '<div class="dpv-bdock" hidden></div>' +
     '<div class="dpv-body"><div class="dp-msg">⏳ 불러오는 중…</div></div>' +

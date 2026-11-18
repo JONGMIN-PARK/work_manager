@@ -8959,3 +8959,44 @@ button.awg-chip{cursor:pointer}
   .dpv-bslot .db-bar{flex-wrap:nowrap}
 }
 
+
+/* ═══ 🔖 바로가기 (v13.528, wm-shortcuts.js) — 내 업무 오른쪽 아래 · 머리 줄 팝업 ═══ */
+.wsc-box{margin-top:auto;border:1px solid var(--bd);border-radius:12px;background:var(--bg-p);padding:8px;display:flex;flex-direction:column;gap:4px;transition:box-shadow .3s}
+.wsc-box.flash{box-shadow:0 0 0 3px var(--ac)}
+.wsc-hd{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t1);padding:2px 2px 4px}
+.wsc-n{font-size:10.5px;color:var(--t5);font-weight:600}
+.wsc-a{border:1px solid transparent;background:none;color:var(--t4);border-radius:6px;font:inherit;font-size:12px;cursor:pointer;padding:2px 6px;min-width:24px}
+.wsc-a:hover{background:var(--bg-hv);color:var(--t1)}
+.wsc-a.dng:hover{color:#e5484d}
+.wsc-chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:2px}
+.wsc-chip{border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);border-radius:12px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer}
+.wsc-chip.on{background:var(--ac-bg);border-color:var(--ac);color:var(--ac);font-weight:700}
+.wsc-gh{display:flex;align-items:center;gap:4px;width:100%;border:0;background:none;color:var(--t3);font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;padding:4px 2px;text-align:left}
+.wsc-car{width:12px;color:var(--t5)}
+.wsc-row{display:flex;align-items:center;gap:2px;border-radius:8px}
+.wsc-row:hover{background:var(--bg-hv)}
+.wsc-go{flex:1;min-width:0;display:flex;align-items:center;gap:7px;border:0;background:none;color:var(--t2);font:inherit;text-align:left;cursor:pointer;padding:5px 6px;border-radius:8px}
+.wsc-go:disabled{cursor:default;opacity:.7}
+.wsc-ic{font-size:15px;flex-shrink:0}
+.wsc-t{min-width:0;display:flex;flex-direction:column}
+.wsc-t b{font-size:12.5px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wsc-t small{font-size:10.5px;color:var(--t5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wsc-acts{display:flex;gap:0;opacity:0;transition:opacity .15s}
+.wsc-row:hover .wsc-acts,.wsc-row:focus-within .wsc-acts{opacity:1}
+@media (hover:none){.wsc-acts{opacity:1}}
+.wsc-acts .wsc-a{padding:2px 3px;min-width:22px;font-size:11px}
+.wsc-row.tr .wsc-acts{opacity:1}
+.wsc-empty{font-size:11.5px;color:var(--t5);text-align:center;padding:12px 6px;line-height:1.6}
+.wsc-ft{display:flex;justify-content:flex-end;border-top:1px dashed var(--bd);padding-top:4px;margin-top:2px}
+.wsc-trhd{display:flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;color:var(--t3)}
+.wsc-crumb{font-size:12px;color:var(--t2);line-height:1.5;word-break:keep-all}
+.wsc-crumb i{font-style:normal;color:var(--t5);margin:0 2px}
+.wsc-add .wsc-crumb{background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:7px 10px;margin-bottom:10px}
+.wsc-hint{font-size:11px;color:var(--t5);margin:-4px 0 6px}
+/* 머리 줄 팝업 */
+.wsc-pop{position:fixed;z-index:10040;width:min(360px,calc(100vw - 16px));max-height:min(70vh,560px);overflow:auto;background:var(--bg-p);border:1px solid var(--bd);border-radius:12px;box-shadow:0 12px 34px rgba(0,0,0,.22);padding:10px;display:flex;flex-direction:column;gap:6px}
+.wsc-pop[hidden]{display:none}
+.wsc-here{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--bd);padding-bottom:8px}
+.wsc-pg{font-size:10.5px;font-weight:700;color:var(--t5);margin:6px 2px 0}
+.wsc-poplist .wsc-row .wsc-acts{display:none}
+@media (max-width:640px){#hdrScBtn{display:none}}

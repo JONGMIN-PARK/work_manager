@@ -60,6 +60,8 @@ DELETE /api/projects/:id
 DELETE /api/projects/:id/images/:imgId
 DELETE /api/projects/:id/members/:userId
 DELETE /api/projects/:id/spec-files/:fid
+DELETE /api/shortcuts/:id
+DELETE /api/shortcuts/trash
 DELETE /api/spec-templates/:id
 DELETE /api/sso/config/:id
 DELETE /api/tech/:id
@@ -288,6 +290,7 @@ GET /api/search
 GET /api/settings
 GET /api/settings/:key
 GET /api/settings/org/:key
+GET /api/shortcuts
 GET /api/spec-templates
 GET /api/spec-templates/:id/versions/:ver
 GET /api/sso/config
@@ -588,6 +591,8 @@ POST /api/projects/visibility/bulk
 POST /api/push/subscribe
 POST /api/push/test
 POST /api/push/unsubscribe
+POST /api/shortcuts
+POST /api/shortcuts/:id/restore
 POST /api/spec-templates
 POST /api/spec-templates/:id/publish
 POST /api/sso/config
@@ -744,6 +749,8 @@ PUT /api/projects/:id/spec-files/:fid
 PUT /api/projects/:id/specs
 PUT /api/settings/:key
 PUT /api/settings/org/:key
+PUT /api/shortcuts/:id
+PUT /api/shortcuts/order
 PUT /api/spec-templates/:id
 PUT /api/tech/:id
 PUT /api/tech/:id/logs/:logId

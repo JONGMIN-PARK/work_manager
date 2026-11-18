@@ -101,6 +101,7 @@ function _pdDetailHeaderHtml(proj, stInfo) {
         '<div class="pd-more-menu" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;min-width:150px;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:4px;z-index:5">' +
           _pdMoreItem('📋 업무 지시 보내기', 'wrqFromProject(\'' + idA + '\')', '') +
           _pdMoreItem('📨 업무 요청함', 'wrqBox(\'out\')', '') +
+          _pdMoreItem('🔖 바로가기에 추가', 'wscAddProject(\'' + idA + '\')', '') +
           '<div class="pd-more-sep"></div>' +
           _pdMoreItem('👥 공유 관리', 'showProjectShareModal(\'' + idA + '\')', 'pd-edit-only') +
           _pdMoreItem('📄 복사', 'showProjectCopyModal(\'' + idA + '\')', '') +
@@ -497,6 +498,7 @@ if (typeof document !== 'undefined' && document.addEventListener) {
 function _pdAttachDetailPanel(id, proj, html) {
   var panel = document.createElement('div');
   panel.id = 'projDetailPanel';
+  panel.setAttribute('data-pid', id); panel.setAttribute('data-pname', (proj && (proj.name || proj.orderNo)) || '');   // 🔖 바로가기가 지금 프로젝트를 알게 (v13.528)
   // v13.213: 편집 권한 없는 프로젝트는 보기 전용 — 체크·추가·삭제·드래그·단계 전환·편집 버튼을 숨김(.pd-ro, style.css)
   panel.className = 'pd-panel' + (projCanEdit(proj) ? '' : ' pd-ro');
   panel.style.cssText = 'position:fixed;top:0;right:0;bottom:0;background:var(--bg-p);border-left:1px solid var(--bd);z-index:9998;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15);padding:20px;animation:slideIn .2s ease';

@@ -308,6 +308,8 @@ function _mwPaintNow(el) {
     }).join('') + (typeof mwCalChipHtml === 'function' ? mwCalChipHtml() : '') + '</div>';
   var sideBtn = '';
   var side = (typeof mwCalTodayHtml === 'function' ? mwCalTodayHtml(today) : '') + (typeof mwProjStripHtml === 'function' ? mwProjStripHtml(today) : '');
+  // 🔖 바로가기 — 오른쪽 칸 맨 아래 (v13.528, wm-shortcuts.js)
+  if (r.self && typeof wscBoxHtml === 'function') { side += wscBoxHtml(); if (!WSC.list) wscLoad().then(wscRepaint).catch(function () {}); }
   if (side) {
     var pjn = typeof mwProjs === 'function' && r.self ? mwProjs().filter(function (p) { return mwProjSt(p) !== 'done'; }).length : 0;
     sideBtn = '<button class="mw-btn mw-side-tg' + (sideOn ? ' on' : '') + '" data-mw-side="1" title="옆 칸 (오늘 일정 · 📁 내 프로젝트) ' + (sideOn ? '접기' : '펴기') + '">📁 프로젝트 ' + (pjn ? '<b>' + pjn + '</b> ' : '') + (sideOn ? '▸' : '◂') + '</button>';
