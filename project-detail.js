@@ -102,6 +102,7 @@ function _pdDetailHeaderHtml(proj, stInfo) {
           _pdMoreItem('📋 업무 지시 보내기', 'wrqFromProject(\'' + idA + '\')', '') +
           _pdMoreItem('📨 업무 요청함', 'wrqBox(\'out\')', '') +
           _pdMoreItem('🔖 바로가기에 추가', 'wscAddProject(\'' + idA + '\')', '') +
+          _pdMoreItem('🤝 함께 하기', 'wpStartProject(\'' + idA + '\')', '') +
           '<div class="pd-more-sep"></div>' +
           _pdMoreItem('👥 공유 관리', 'showProjectShareModal(\'' + idA + '\')', 'pd-edit-only') +
           _pdMoreItem('📄 복사', 'showProjectCopyModal(\'' + idA + '\')', '') +

@@ -46,7 +46,7 @@ async function setDone(req, src, id, subject, done) {
   // 개인 할 일은 바로 — 내 것인지는 UPDATE 조건으로 (예전엔 할 일 목록을 다 모아 확인, v13.270)
   if (src === 'todo') {
     var tr = await db.query('UPDATE my_todos SET done_at = ' + (done ? 'COALESCE(done_at, now())' : 'NULL') + ', updated_at = now() ' +
-      'WHERE id = $1 AND tenant_id = $2 AND user_id = $3 AND deleted_at IS NULL RETURNING *', [id, req.tenant.id, req.user.sub]);
+      'WHERE id = $1 AND tenant_id = $2 AND (user_id = $3 OR $3 = ANY(partners)) AND deleted_at IS NULL RETURNING *', [id, req.tenant.id, req.user.sub]);   // 🤝 같이 담당도 (v13.533)
     if (!tr.rows.length) return { err: [404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.'] };
     var nx = done && tr.rows[0].repeat ? await repeatNext(req, id, tr.rows[0]) : null;
     await require('../routes/work-requests').onTodoDone(req.tenant.id, req.user.sub, id, !!done, req.user.name);   // 📨 받은 요청이면 보낸 사람에게 완료

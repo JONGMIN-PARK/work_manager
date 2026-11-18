@@ -278,12 +278,43 @@ router.put('/todos/:id', async function (req, res) {
     if (b.done !== undefined) sets.push(b.done ? 'done_at = COALESCE(done_at, now())' : 'done_at = NULL');
     if (!sets.length) return httpErr.sendError(res, 400, 'VALIDATION', '바꿀 내용이 없습니다.');
     params.push(req.params.id, req.tenant.id, req.user.sub);
-    var r = await db.query('UPDATE my_todos SET ' + sets.join(', ') + ', updated_at = now() WHERE id = $' + (params.length - 2) + ' AND tenant_id = $' + (params.length - 1) + ' AND user_id = $' + params.length + ' AND deleted_at IS NULL RETURNING *', params);
+    // 주인이거나 🤝 같이 담당 (v13.533)
+    var r = await db.query('UPDATE my_todos SET ' + sets.join(', ') + ', updated_at = now() WHERE id = $' + (params.length - 2) + ' AND tenant_id = $' + (params.length - 1) + ' AND (user_id = $' + params.length + ' OR $' + params.length + ' = ANY(partners)) AND deleted_at IS NULL RETURNING *', params);
     if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
     var nx = b.done && r.rows[0].repeat ? await repeatNext(req, req.params.id, r.rows[0]) : null;
     if (b.done !== undefined) await require('./work-requests').onTodoDone(req.tenant.id, req.user.sub, req.params.id, !!b.done, req.user.name);   // 📨 v13.525
     res.json({ data: r.rows[0], next: nx ? nx.id : null, nextRow: nx });
   } catch (e) { httpErr.serverError(res, '[my-work/todo-update]', e); }
+});
+
+/* 🤝 같이 담당 (v13.533) — PUT /api/my-work/todos/:id/partners { userIds: [...] }
+   주인 · 같이 담당 누구나 사람을 더할 수 있고, 빼기는 주인만(자기 자신 빠지기는 누구나). 새로 들어온 사람에게 1:1 메신저로 알림 */
+router.put('/todos/:id/partners', async function (req, res) {
+  try {
+    var b = req.body || {}, tid = req.tenant.id, me = req.user.sub;
+    var cur = (await db.query('SELECT * FROM my_todos WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL AND (user_id = $3 OR $3 = ANY(partners))', [req.params.id, tid, me])).rows[0];
+    if (!cur) return httpErr.sendError(res, 404, 'NOT_FOUND');
+    var want = (Array.isArray(b.userIds) ? b.userIds : []).filter(function (x, i, a) { return typeof x === 'string' && x && x !== cur.user_id && a.indexOf(x) === i; }).slice(0, 20);
+    var had = cur.partners || [];
+    var removed = had.filter(function (u) { return want.indexOf(u) < 0; });
+    if (removed.length && cur.user_id !== me && !(removed.length === 1 && removed[0] === me)) return httpErr.sendError(res, 403, 'FORBIDDEN', '같이 담당을 빼는 것은 주인만 할 수 있습니다 (나 빠지기는 됨).');
+    if (want.length) {
+      var ok = await db.query("SELECT id FROM users WHERE tenant_id = $1 AND id = ANY($2::uuid[]) AND status = 'active'", [tid, want]);
+      if (ok.rows.length !== want.length) return httpErr.sendError(res, 400, 'VALIDATION', '같은 회사 사용자만 고를 수 있습니다.');
+    }
+    var r = await db.query('UPDATE my_todos SET partners = $1::uuid[], updated_at = now() WHERE id = $2 AND tenant_id = $3 RETURNING *', [want, cur.id, tid]);
+    res.json({ data: r.rows[0] });
+    var added = want.filter(function (u) { return had.indexOf(u) < 0 && u !== me; });
+    if (added.length) {
+      try {
+        var chat = require('./chat');
+        for (var i = 0; i < added.length; i++) {
+          var room = await chat.dmRoom(tid, me, added[i], me);
+          await chat.postMessage({ tenantId: tid }, room, { userId: me, kind: 'text', body: '🤝 할 일을 같이 담당해요: ' + cur.title + (cur.due_date ? ' (' + cur.due_date + ')' : '') + ' — 내 업무에 보입니다', mentions: [] });
+        }
+      } catch (e) { console.warn('[todo/partners notify]', e.message); }
+    }
+  } catch (e) { httpErr.serverError(res, '[my-work/todo-partners]', e); }
 });
 
 // 지우기 = 휴지통으로 (v13.268). 비우기 전까지 보관
@@ -740,7 +771,7 @@ router.put('/due', async function (req, res) {
     var userId = who.userId;
     var tid = req.tenant.id;
     if (b.src === 'todo') {
-      await db.query('UPDATE my_todos SET due_date = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 AND user_id = $4', [due, b.id, tid, req.user.sub]);
+      await db.query('UPDATE my_todos SET due_date = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 AND (user_id = $4 OR $4 = ANY(partners))', [due, b.id, tid, req.user.sub]);
     } else if (b.src === 'issue') {
       await db.query('UPDATE issues SET due_date = $1, updated_by = $2, updated_at = now() WHERE id = $3 AND tenant_id = $4', [due, req.user.sub, b.id, tid]);
     } else if (b.src === 'action') {
@@ -770,7 +801,7 @@ router.put('/priority', async function (req, res) {
     var userId = who.userId;
     var tid = req.tenant.id;
     if (b.src === 'todo') {
-      await db.query('UPDATE my_todos SET priority = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 AND user_id = $4', [p, b.id, tid, req.user.sub]);
+      await db.query('UPDATE my_todos SET priority = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 AND (user_id = $4 OR $4 = ANY(partners))', [p, b.id, tid, req.user.sub]);
     } else if (b.src === 'issue') {
       await db.query('UPDATE issues SET urgency = $1, updated_by = $2, updated_at = now() WHERE id = $3 AND tenant_id = $4', [prio.toWord(p), req.user.sub, b.id, tid]);
     } else if (b.src === 'action') {

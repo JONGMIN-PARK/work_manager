@@ -109,11 +109,12 @@ function _mwbCard(it, today) {
   if (it.ctx) meta += '<span class="mwb-ctx" title="' + _mwEsc(it.ctx) + '">' + _mwEsc(it.ctx) + '</span>';
   if (it.cat && mwBoardColOf(it).id === it.cat) meta += '<span class="mwb-pin" title="이 칸에 고정 — ⋯ 에서 풀기">📌</span>';
   if (typeof mwProjTag === 'function') meta += mwProjTag(it);   // 📁 내 프로젝트 (v13.273)
+  if (typeof mwPairTag === 'function') meta += mwPairTag(it);   // 🤝 같이 담당 (v13.533)
   var acts = '';
   if (self && !it.done) {
     acts = '<span class="mwb-acts">' + mwFocusBtn(it) +
       (_mwpCanDue(it) ? '<button data-bdue="' + k + '" title="마감 바꾸기">📅</button>' : '') +
-      (it.src === 'todo' ? '<button data-btrash="' + k + '" title="휴지통으로">🗑</button>' : '') +
+      (it.src === 'todo' && it.isOwner !== false ? '<button data-btrash="' + k + '" title="휴지통으로">🗑</button>' : '') +
       '<button data-bmenu="' + k + '" title="다른 칸으로 (m)">⋯</button></span>';
   }
   return '<div class="mwb-i' + (it.done ? ' mw-done' : '') + (it.pending ? ' is-pending' : '') + (it.pri === 1 && !it.done ? ' is-urg' : '') + (it.focus ? ' is-focus' : '') + '" data-qk="' + k + '"' + (self && !it.done ? ' draggable="true"' : '') + '>' +

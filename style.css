@@ -9062,3 +9062,39 @@ button.awg-chip{cursor:pointer}
 @container (min-width:340px) and (max-width:419.98px){
   #mMyWork .mwb-meta .mwb-ctx{display:none}
 }
+
+/* ═══ v13.533 🤝 같이 담당 ═══ */
+.mw-pair{font-size:11px;color:#0E7490;background:rgba(6,182,212,.12);border-radius:99px;padding:0 7px;line-height:18px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.mwp-pair{flex-wrap:wrap;gap:5px}
+.mwp-pc{display:inline-flex;align-items:center;gap:2px;font-size:12px;background:var(--bg-i);border:1px solid var(--bd);border-radius:99px;padding:2px 4px 2px 9px}
+.mwp-pc.own,.mwp-pc.me{padding-right:9px}
+.mwp-pc.me{background:var(--ac-bg);border-color:var(--ac);color:var(--ac)}
+.mwp-pc button{border:0;background:none;color:var(--t5);cursor:pointer;font-size:11px;padding:0 3px}
+.mwp-pc button:hover{color:#e5484d}
+.wp-pick .wr-inp{width:100%;box-sizing:border-box;margin-bottom:8px}
+.wp-list{max-height:min(52vh,420px);overflow:auto;display:flex;flex-direction:column}
+.wp-dept{font-size:11px;font-weight:700;color:var(--t5);padding:6px 6px 2px}
+.wp-p{border:0;background:none;text-align:left;padding:6px 10px 6px 18px;border-radius:7px;font:inherit;font-size:13px;color:var(--t2);cursor:pointer}
+.wp-p:hover{background:var(--bg-hv)}
+.wp-none{font-size:12px;color:var(--t5);padding:12px;text-align:center}
+
+/* ═══ v13.534 🤝 함께 하기 — 시작 창 · 진행 중 막대 · 기록 ═══ */
+.wp-multi{max-height:min(38vh,300px);border:1px solid var(--bd);border-radius:8px;padding:4px;margin-top:4px}
+.wp-multi .wp-p{display:flex;align-items:center;gap:6px;padding:5px 8px 5px 14px}
+.wp-hint{font-size:11px;color:var(--t5);line-height:1.6;margin:4px 0 8px}
+.wp-ck{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t3);margin-bottom:6px}
+.wp-bar{position:fixed;left:12px;bottom:12px;z-index:9990;display:flex;flex-direction:column;gap:6px;max-width:min(440px,calc(100vw - 24px))}
+.wp-s{display:flex;align-items:center;gap:6px;background:var(--bg-p);border:1.5px solid #06B6D4;border-radius:14px;padding:6px 8px 6px 10px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.wp-ic{font-size:18px}
+.wp-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.wp-t b{font-size:12.5px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wp-t small{font-size:10.5px;color:var(--t5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wp-b{width:30px;height:30px;border:1px solid var(--bd);background:var(--bg-i);border-radius:8px;cursor:pointer;font-size:14px;padding:0}
+.wp-b:hover{background:var(--bg-hv)}
+.wp-b.end:hover{border-color:#e5484d;background:rgba(229,72,77,.1)}
+.wp-h{border:1px solid var(--bd);border-left:4px solid #06B6D4;border-radius:8px;padding:8px 10px;margin-bottom:6px}
+.wp-h-t{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--t1)}
+.wp-h-t span{font-size:11px;color:var(--t5);white-space:nowrap}
+.wp-h-s{font-size:11.5px;color:var(--t3);margin-top:2px}
+.wp-h-a{display:flex;justify-content:flex-end}
+@media (max-width:640px){.wp-bar{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));max-width:none}}

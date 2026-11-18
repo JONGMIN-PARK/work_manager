@@ -250,8 +250,9 @@ router.post('/:id/cancel', async function (req, res) {
 async function onTodoDone(tenantId, userId, todoId, done, userName) {
   try {
     var r = await db.query(
-      "UPDATE work_requests SET status = $4, done_at = " + (done ? 'now()' : 'NULL') + ", updated_at = now() WHERE tenant_id = $1 AND to_user_id = $2 AND result_key = $3 AND status = $5 RETURNING *",
-      [tenantId, userId, 'todo:' + todoId, done ? 'done' : 'accepted', done ? 'accepted' : 'done']);
+      // 받은 사람 말고 🤝 같이 담당이 끝내도 (v13.533) — result_key 는 할 일 하나에 하나
+      "UPDATE work_requests SET status = $3, done_at = " + (done ? 'now()' : 'NULL') + ", updated_at = now() WHERE tenant_id = $1 AND result_key = $2 AND status = $4 RETURNING *",
+      [tenantId, 'todo:' + todoId, done ? 'done' : 'accepted', done ? 'accepted' : 'done']);
     for (var i = 0; i < r.rows.length; i++) await syncCard(tenantId, r.rows[i], lineOf(r.rows[i], userName, done ? '완료 ✅' : '완료를 되돌림'));
   } catch (e) { console.error('[wreq/todo-done]', e.message); }
 }

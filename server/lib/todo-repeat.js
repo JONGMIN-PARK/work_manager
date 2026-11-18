@@ -36,7 +36,7 @@ function nextDue(due, rep) {
 async function repeatNext(req, id, row) {
   var t = row;
   if (!t) {
-    var r = await db.query('SELECT * FROM my_todos WHERE id = $1 AND tenant_id = $2 AND user_id = $3 AND deleted_at IS NULL', [id, req.tenant.id, req.user.sub]);
+    var r = await db.query('SELECT * FROM my_todos WHERE id = $1 AND tenant_id = $2 AND (user_id = $3 OR $3 = ANY(partners)) AND deleted_at IS NULL', [id, req.tenant.id, req.user.sub]);
     t = r.rows[0];
   }
   if (!t || !t.repeat) return null;
@@ -50,12 +50,13 @@ async function repeatNext(req, id, row) {
   var cl = (Array.isArray(t.checklist) ? t.checklist : []).map(function (c) { return { id: c.id, t: c.t, d: false }; });
   // 같은 회차가 없을 때만 넣기 — 확인과 넣기를 한 문장으로 (v13.270)
   var ins = await db.query(
-    'INSERT INTO my_todos (id, tenant_id, user_id, title, due_date, due_time, priority, memo, repeat, estimate_h, checklist, start_date) ' +
-    'SELECT $1::varchar, $2::uuid, $3::uuid, $4::varchar, $5::varchar, $6::varchar, $7::smallint, $8::text, $9::varchar, $10::numeric, $11::jsonb, $12::varchar ' +
+    // 다음 회차는 주인 것 · 같이 담당도 그대로 (같이 담당이 끝내도 v13.533)
+    'INSERT INTO my_todos (id, tenant_id, user_id, title, due_date, due_time, priority, memo, repeat, estimate_h, checklist, start_date, partners) ' +
+    'SELECT $1::varchar, $2::uuid, $3::uuid, $4::varchar, $5::varchar, $6::varchar, $7::smallint, $8::text, $9::varchar, $10::numeric, $11::jsonb, $12::varchar, $13::uuid[] ' +
     'WHERE NOT EXISTS (SELECT 1 FROM my_todos WHERE tenant_id = $2::uuid AND user_id = $3::uuid AND title = $4::varchar AND due_date = $5::varchar AND done_at IS NULL AND deleted_at IS NULL) RETURNING *',
-    [genId(), req.tenant.id, req.user.sub, t.title, due, t.due_time, t.priority, t.memo, t.repeat, t.estimate_h, JSON.stringify(cl), start]);
+    [genId(), req.tenant.id, t.user_id || req.user.sub, t.title, due, t.due_time, t.priority, t.memo, t.repeat, t.estimate_h, JSON.stringify(cl), start, t.partners || []]);
   if (ins.rows.length) return ins.rows[0];
-  var dup = await db.query('SELECT * FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND title = $3 AND due_date = $4 AND done_at IS NULL AND deleted_at IS NULL LIMIT 1', [req.tenant.id, req.user.sub, t.title, due]);
+  var dup = await db.query('SELECT * FROM my_todos WHERE tenant_id = $1 AND user_id = $2 AND title = $3 AND due_date = $4 AND done_at IS NULL AND deleted_at IS NULL LIMIT 1', [req.tenant.id, t.user_id || req.user.sub, t.title, due]);
   return dup.rows[0] || null;
 }
 

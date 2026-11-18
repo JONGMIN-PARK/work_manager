@@ -265,6 +265,7 @@ GET /api/orders
 GET /api/orders/:orderNo
 GET /api/orders/:orderNo/history
 GET /api/orders/:orderNo/references
+GET /api/pair
 GET /api/prestudies
 GET /api/prestudies/:id
 GET /api/prestudies/clients
@@ -574,6 +575,9 @@ POST /api/orders
 POST /api/orders/:orderNo/renumber
 POST /api/orders/aw-sync
 POST /api/orders/bulk
+POST /api/pair
+POST /api/pair/:id/end
+POST /api/pair/:id/join
 POST /api/prestudies
 POST /api/prestudies/:id/convert
 POST /api/progress
@@ -730,6 +734,7 @@ PUT /api/my-work/projects-order
 PUT /api/my-work/projects/:id
 PUT /api/my-work/reassign
 PUT /api/my-work/todos/:id
+PUT /api/my-work/todos/:id/partners
 PUT /api/notebook/folders-order
 PUT /api/notebook/folders/:id
 PUT /api/notebook/notes/:id

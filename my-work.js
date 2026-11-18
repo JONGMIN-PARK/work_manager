@@ -413,7 +413,7 @@ function _mwRowHtml(it, today) {
     (typeof mwPriBadge === 'function' ? mwPriBadge(it) : '') +
     '<span class="mw-title' + (it.src === 'todo' ? ' mw-todo-t' : '') + '" data-open="' + _mwEsc(it.key) + '">' + _mwEsc(it.title) + '</span>' +
     (it.src === 'todo' && typeof mwTodoExtra === 'function' ? mwTodoExtra(it) : '') +
-    (typeof mwProjTag === 'function' ? mwProjTag(it) : '') +
+    (typeof mwProjTag === 'function' ? mwProjTag(it) : '') + (typeof mwPairTag === 'function' ? mwPairTag(it) : '') +
     (it.ctx ? '<span class="mw-ctx" title="' + _mwEsc(it.ctx) + '">' + _mwEsc(it.ctx) + '</span>' : '<span class="mw-ctx"></span>') +
     (it.progress != null && !it.done && it.src !== 'todo' ? '<span class="mw-prog' + (it.progress ? '' : ' is-zero') + '" title="진행률"><span style="width:' + Math.max(0, Math.min(100, it.progress)) + '%"></span><em>' + it.progress + '%</em></span>' : '') +
     // 개인 할 일 마감은 눌러서 편집 창에서 (v13.253 — 날짜 · 시각 · 반복을 같이)

@@ -147,18 +147,35 @@ async function collect(req, users, opt) {
   if (want('todo')) jobs.push((async function () {
     if (!onlySelf && !opt.load) return;   // 개인 할 일은 본인만 — 업무 부하에서는 개수만
     var r = await db.query(
-      'SELECT id, user_id, title, start_date, due_date, done_at, priority, status, waiting_for, memo, due_time, repeat, estimate_h, checklist FROM my_todos WHERE tenant_id = $1 AND user_id = ANY($2) AND deleted_at IS NULL ' +
+      // 🤝 같이 담당(partners) 도 그 사람 할 일로 (v13.533)
+      'SELECT id, user_id, title, start_date, due_date, done_at, priority, status, waiting_for, memo, due_time, repeat, estimate_h, checklist, partners FROM my_todos WHERE tenant_id = $1 AND (user_id = ANY($2) OR partners && $2::uuid[]) AND deleted_at IS NULL ' +
       'AND (done_at IS NULL OR ($3::int > 0 AND done_at >= now() - make_interval(days => $3::int)))',
       [tid, ids, doneWin]
     );
-    r.rows.forEach(function (x) {
-      var it = { src: 'todo', id: x.id, userId: x.user_id, title: onlySelf ? firstLine(x.title, 500) : '개인 할 일', ctx: '', start: ymd(x.start_date), due: ymd(x.due_date), done: !!x.done_at, doneAt: x.done_at,
+    // 같이 담당 이름 — 한 번에
+    var pids = [];
+    r.rows.forEach(function (x) { [x.user_id].concat(x.partners || []).forEach(function (u) { if (pids.indexOf(u) < 0) pids.push(u); }); });
+    var pnm = {};
+    if (r.rows.some(function (x) { return (x.partners || []).length; })) {
+      (await db.query("SELECT id, COALESCE(NULLIF(display_name,''), name) AS n FROM users WHERE tenant_id = $1 AND id = ANY($2::uuid[])", [tid, pids])).rows.forEach(function (u) { pnm[u.id] = u.n; });
+    }
+    var rows2 = [];
+    r.rows.forEach(function (x) {   // 한 할 일이 여러 사람(주인 · 같이 담당) 몫이면 그 사람마다 (업무 부하 · 남의 업무 보기)
+      [x.user_id].concat(x.partners || []).forEach(function (u) { if (ids.indexOf(u) >= 0) rows2.push(Object.assign({}, x, { _for: u })); });
+    });
+    rows2.forEach(function (x) {
+      var it = { src: 'todo', id: x.id, userId: x._for, title: onlySelf ? firstLine(x.title, 500) : '개인 할 일', ctx: '', start: ymd(x.start_date), due: ymd(x.due_date), done: !!x.done_at, doneAt: x.done_at,
         pri: prio.fromInt(x.priority), estimateH: x.estimate_h != null ? Number(x.estimate_h) : null };
       var cl = Array.isArray(x.checklist) ? x.checklist : [];
       if (cl.length) { it.checkDone = cl.filter(function (c) { return c && c.d; }).length; it.checkTotal = cl.length; it.progress = Math.round(it.checkDone / it.checkTotal * 100); }
       if (onlySelf) {   // 내용은 본인만
         it.todoStatus = x.status || 'todo'; it.waitingFor = x.waiting_for || ''; it.memo = x.memo || ''; it.dueTime = x.due_time || null;
         it.repeat = x.repeat || null; it.checklist = cl;
+      }
+      if ((x.partners || []).length) {   // 🤝 같이 담당 — 주인 · 같이 하는 사람
+        it.ownerId = x.user_id; it.ownerName = pnm[x.user_id] || '';
+        it.partners = x.partners.map(function (u) { return { id: u, name: pnm[u] || '' }; });
+        it.isOwner = x._for === x.user_id;
       }
       out.push(it);
     });
