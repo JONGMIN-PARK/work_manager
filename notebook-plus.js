@@ -54,7 +54,7 @@ function _nbAfterRender(doc) {
     doc.querySelectorAll('li.nb-task').forEach(function (li) {
       var body = li.querySelector(':scope > div'); if (!body) return;
       var linked = body.querySelector(':scope > a.nb-todo-ref, :scope > a.nb-ref[data-ref^="issue:"]');
-      if (linked || li.classList.contains('done')) return;
+      if (linked || li.classList.contains('done') || body.querySelector(':scope > .nb-task-acts')) return;   // 그대로 둔 블록에 또 붙이지 않게 (v13.527)
       var s = document.createElement('span'); s.className = 'nb-task-acts';
       s.innerHTML = '<button type="button" data-tk="todo" title="✏️ 내 할 일로 — 날짜 · 중요도(내일 !높음)도 읽음">✏️ 할 일</button><button type="button" data-tk="issue" title="🐞 프로젝트 이슈로">🐞 이슈</button>';
       body.appendChild(s);

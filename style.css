@@ -5914,8 +5914,8 @@ div.nb-ai{display:flex;flex-direction:column;gap:12px}
 .nb-top>.nb-sp{flex:1 1 0;min-width:4px}
 .nb-tb{flex-wrap:wrap;row-gap:2px;overflow:visible}
 /* 보기 모드 — 글 꾸밈 단추는 숨기고 ✍️ 손글씨 · 🖍 마커만 */
-.nb-main:has(.nb-ed.nb-m-view) .nb-tb{justify-content:flex-end;padding-top:4px;padding-bottom:4px}
-.nb-main:has(.nb-ed.nb-m-view) .nb-tb>:not([data-fmt="ink"]):not([data-fmt="over"]){display:none}
+.nb-main.nb-mv-view .nb-tb{justify-content:flex-end;padding-top:4px;padding-bottom:4px}
+.nb-main.nb-mv-view .nb-tb>:not([data-fmt="ink"]):not([data-fmt="over"]){display:none}
 @container nbmain (max-width:900px){
   .nb-seg button span,.nb-ib.nb-ai span,.nb-ib.nb-cbtn span{display:none}
   .nb-seg button{padding:4px 8px}
@@ -8958,3 +8958,4 @@ button.awg-chip{cursor:pointer}
   .dpv-bslot{display:flex}
   .dpv-bslot .db-bar{flex-wrap:nowrap}
 }
+

@@ -398,6 +398,8 @@ function _nbDrawMain() {
     '</div>';
   h += '<div class="nb-foot" id="nbFoot"></div>';
   m.innerHTML = h;
+  m.classList.toggle('nb-mv-view', (shared ? 'view' : NB.mode) === 'view');   // v13.527 — CSS :has() 대신 (글자마다 화면 전체 스타일을 다시 계산하던 원인)
+  NB._prevKeys = null;   // 미리보기 바꿔 끼우기 기준 — 새 노트는 처음부터
   var src = document.getElementById('nbSrc');
   src.value = daily ? NB.daily1.body : NB.cur.body;
   _nbRenderPrev();
@@ -435,19 +437,65 @@ function _nbFoot() {
 }
 function _nbState(s, msg) {
   var el = document.getElementById('nbState'); if (!el) return;
+  var key = s + '|' + (msg || '');
+  if (el.__st === key) return;   // v13.527 같은 상태면 DOM 을 건드리지 않음 (글자마다 바꾸던 것)
+  el.__st = key;
   el.className = 'nb-state ' + s;
   el.textContent = s === 'saving' ? '저장 중…' : s === 'dirty' ? '고치는 중' : s === 'error' ? '⚠️ ' + (msg || '저장 안 됨') : s === 'offline' ? '⚠️ ' + (msg || '연결 끊김 — 이 기기에 보관 중') : '저장됨';
   el.title = s === 'offline' || s === 'error' ? '못 보낸 글은 이 기기에 남아 있습니다 — Ctrl+S 로 바로 다시 보낼 수 있습니다' : '';
 }
 
 /* 미리보기 */
+/* v13.527 바꿔 끼우기 — 앞뒤로 같은 블록은 그대로 두고 가운데(고친 곳)만 새로. 긴 노트에서 멈췄다 칠 때 화면이 굳던 것
+   블록 비교는 그린 원래 글(data-line 뺀 것)로 — 화면에서 덧붙인 것(사진 · 칩 · 단추)은 비교에 안 들어감.
+   되면 true (뒤 손질은 새로 넣은 블록만), 못 하면 false → 통째로 */
+function _nbPatchPrev(doc, html) {
+  if (!html || NB.inkId || NB.overEd) { NB._prevKeys = null; return false; }
+  var tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  var nk = [], nodes = tpl.content.childNodes;
+  for (var i = 0; i < nodes.length; i++) {
+    var nd = nodes[i];
+    if (nd.nodeType === 3 && !/\S/.test(nd.nodeValue)) continue;
+    if (nd.nodeType !== 1) { NB._prevKeys = null; return false; }
+    nk.push(nd);
+  }
+  var keys = nk.map(function (el) { return el.outerHTML.replace(/ data-(line|task)="\d+"/g, ''); });   // 줄 번호 속성은 빼고 비교
+  var old = NB._prevKeys, oe = doc.children;
+  NB._prevKeys = keys;
+  if (!old || old.length !== oe.length || !old.length) return false;
+  var p = 0, s = 0, n = keys.length, o = old.length;
+  while (p < n && p < o && keys[p] === old[p]) p++;
+  while (s < n - p && s < o - p && keys[n - 1 - s] === old[o - 1 - s]) s++;
+  if (p === n && p === o) { _nbPrevLines(oe, nk, 0, n); return []; }   // 그대로 (줄 번호만)
+  var anchor = oe[o - s] || null, removed = [];
+  for (var k = o - s - 1; k >= p; k--) { removed.push(oe[k]); oe[k].remove(); }
+  var added = nk.slice(p, n - s);
+  added.forEach(function (el) { doc.insertBefore(el, anchor); });
+  _nbPrevLines(doc.children, nk, n - s, n);
+  return { added: added, removed: removed };
+}
+/* 그대로 둔 블록의 줄 번호(data-line · 체크 칸 data-task)를 새 것으로 — 앞 줄을 고치면 뒤 블록 줄 번호가 밀림.
+   안 고치면 체크를 눌렀을 때 다른 줄이 바뀐다 */
+function _nbPrevLines(cur, nk, from, to) {
+  var SEL = '[data-line],[data-task]';
+  var list = function (el) { return [el].concat([].slice.call(el.querySelectorAll(SEL))).filter(function (x) { return x.hasAttribute('data-line') || x.hasAttribute('data-task'); }); };
+  for (var i = from; i < to; i++) {
+    var a = cur[i], b = nk[i]; if (!a || !b) continue;
+    var la = list(a), lb = list(b);
+    for (var j = 0; j < la.length && j < lb.length; j++) ['data-line', 'data-task'].forEach(function (at) { var v = lb[j].getAttribute(at); if (v != null && la[j].getAttribute(at) !== v) la[j].setAttribute(at, v); });
+  }
+}
 function _nbRenderPrev() {
   var doc = document.getElementById('nbDoc'), src = document.getElementById('nbSrc'); if (!doc || !src) return;
   var r = NbMd.render(src.value);
   NB.toc = r.toc;
+  var pt = _nbPatchPrev(doc, r.html);
+  if (pt) { _nbAfterPatch(doc, pt); return; }
   var keepImg = null;   // 이미 받아 둔 사진 요소 — 새로 그린 자리에 옮겨 씀 (다시 그릴 때 깜빡이지 않게 · v13.333)
   doc.querySelectorAll('img[data-nbfid]').forEach(function (img) { if (!img.getAttribute('src')) return; keepImg = keepImg || {}; var id = img.getAttribute('data-nbfid'); (keepImg[id] = keepImg[id] || []).push(img); });
   doc.innerHTML = r.html || '<p class="nb-ph">' + (NB.mode === 'view' ? '비어 있는 노트 — ✏️ 편집 을 누르거나 더블클릭해서 쓰세요' : '미리보기') + '</p>';
+  if (!r.html) NB._prevKeys = null;
   var ink = NB.cur && NB.cur.ink && NB.cur.ink.blocks || {};
   doc.querySelectorAll('.nb-ink').forEach(function (el) {
     var id = el.getAttribute('data-ink'), blk = ink[id];
@@ -469,6 +517,29 @@ function _nbRenderPrev() {
   _nbDrawOver();
   if (typeof _nbAfterRender === 'function') _nbAfterRender(doc);   // 🔗 링크 · 칩 · 체크 단추 · 가리키는 노트 (notebook-plus.js)
   if (NB.mode === 'paper' && typeof nbPaperLive === 'function') nbPaperLive();   // 🖨 출력 모양 — 쓰는 대로 종이에 (v13.321)
+}
+/* 바꿔 끼운 뒤 — 새로 넣은 블록만 손질 (손글씨 칸 · 사진은 뺀 블록의 것을 다시 씀) */
+function _nbAfterPatch(doc, pt) {
+  if (Array.isArray(pt)) { if (NB.mode === 'paper' && typeof nbPaperLive === 'function') nbPaperLive(); return; }   // 그대로 — 손질 없음
+  var keepImg = null;
+  pt.removed.forEach(function (el) { el.querySelectorAll('img[data-nbfid]').forEach(function (img) { if (!img.getAttribute('src')) return; keepImg = keepImg || {}; var id = img.getAttribute('data-nbfid'); (keepImg[id] = keepImg[id] || []).push(img); }); });
+  var ink = NB.cur && NB.cur.ink && NB.cur.ink.blocks || {};
+  pt.added.forEach(function (root) {
+    [root].concat([].slice.call(root.querySelectorAll('.nb-ink'))).filter(function (el) { return el.classList && el.classList.contains('nb-ink'); }).forEach(function (el) {
+      var id = el.getAttribute('data-ink'), blk = ink[id];
+      el.innerHTML = blk ? NbInk.svg(blk) : '<div class="nb-ink-miss">✍️ 손글씨 칸 (비어 있음)</div>';
+      if (blk) el.style.aspectRatio = NbInk.W + ' / ' + Math.max(40, blk.h || 300);
+      if (NB.cur && !_nbRO()) { var b = document.createElement('button'); b.className = 'nb-ink-go'; b.type = 'button'; b.setAttribute('data-inkgo', id); b.textContent = '✍️ 그리기'; el.appendChild(b); }
+    });
+    if (keepImg) root.querySelectorAll('img[data-nbf]').forEach(function (img) {
+      var k = keepImg[img.getAttribute('data-nbf')], old = k && k.shift();
+      if (old) { old.alt = img.alt; if (img.title) old.title = img.title; else old.removeAttribute('title'); img.replaceWith(old); }
+    });
+  });
+  _nbLoadImgs(doc);
+  _nbDrawOver();
+  if (typeof _nbAfterRender === 'function') _nbAfterRender(doc);
+  if (NB.mode === 'paper' && typeof nbPaperLive === 'function') nbPaperLive();
 }
 /* 🖍 덮어 그린 표시 */
 function _nbDrawOver() {
@@ -647,6 +718,7 @@ function _nbSetMode(m) {
   if (m === NB.mode) return;
   NB.mode = m; _nbSavePrefs();
   var ed = document.getElementById('nbEd'); if (ed) ed.className = 'nb-ed nb-m-' + m;
+  var mm = document.getElementById('nbMain'); if (mm) mm.classList.toggle('nb-mv-view', m === 'view');
   document.querySelectorAll('#nbMain .nb-seg button').forEach(function (b) { var on = b.getAttribute('data-mode') === m; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
   if (m === 'edit') { _nbInkStop(); _nbOverStop(); }
   _nbRenderPrev();
