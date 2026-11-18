@@ -166,13 +166,21 @@ MwTimeline.prototype.update = function () {
   if (o.calendar) this.drawCal();
   this.fitHeight();
 };
-/** v13.336 높이 = min(정한 높이, 내용 높이) — 항목이 적으면 빈 칸 없이 줄여 아래 목록이 위로 */
+/** v13.336 높이 = min(정한 높이, 내용 높이) — 항목이 적으면 빈 칸 없이 줄여 아래 목록이 위로
+ *  v13.538 옆 달력이 보이면 달력(📌 고른 날 목록 포함)이 다 보이는 높이까지는 늘림 — 날짜를 바꿔 목록이 길어져도 달력 안에서 굴리지 않게
+ *          (화면 높이 85% 까지 · 휴대폰처럼 위아래로 쌓일 때는 CSS 가 높이를 정함) */
 MwTimeline.prototype.fitHeight = function () {
   var main = this.el.querySelector('.mtl-main');
   if (!main || this.st.collapsed) return;
   main.style.height = 'auto';
   var nat = main.offsetHeight;
-  main.style.height = (nat > 0 ? Math.min(this.st.height, nat) : this.st.height) + 'px';
+  var want = nat > 0 ? Math.min(this.st.height, nat) : this.st.height;
+  var cal = this.el.querySelector('.mtl-cal');
+  if (cal && this.st.cal && cal.offsetWidth && getComputedStyle(main).flexDirection === 'row') {
+    var cs = getComputedStyle(cal), calNat = cal.scrollHeight + (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+    want = Math.max(want, Math.min(calNat, Math.round(window.innerHeight * 0.85)));
+  }
+  main.style.height = want + 'px';
 };
 
 /** 줄마다 쌓기 · 그리기 */
@@ -776,6 +784,7 @@ MwTimeline.prototype.drawCal = function () {
   }
   cal.innerHTML = h;
   this.drawBand();
+  if (!this._fitting) { this._fitting = true; try { this.fitHeight(); } finally { this._fitting = false; } }   // v13.538 날짜를 바꾸면 달력 · 고른 날 목록에 맞춰 높이
 };
 /* ── 풍선 도움말 (v13.279) — 옆 달력 날짜 칸: 그날 항목 목록 · 고른 날 목록 · 타임라인 막대: 항목 상세
    띄우기는 my-work-task.js _mwMemo (목록 · 달력과 같은 창), 항목 상세는 mwCalTipHtml (my-work-cal.js) */
