@@ -97,6 +97,14 @@ function check(n, c, x) { if (!c) { console.log('FAIL', n, JSON.stringify(x)); p
   await A('PUT', '/api/projects/' + pid, { assignees: [] });
   await A('PUT', '/api/projects/' + pid, { assignees: [kim.name, kim.name] });
   check('다시 넣으면 해제됐던 멤버 되살림', (await memOf()).join() === kim.id);
+  // 8. 문서 원본 /raw (v13.524) — 원본 없음 404 · 저장소 없음(시험 서버) 503 · 남의 개인 문서 404
+  var tidR = ((await A('GET', '/api/auth/me')).d.data || {}); tidR = tidR.tenant_id || tidR.tenantId || (tidR.user && (tidR.user.tenant_id || tidR.user.tenantId));
+  var f1 = await A('POST', '/api/docs/files', { name: 'a.txt', ext: 'txt' });
+  var f2 = await A('POST', '/api/docs/files', { name: 'b.pdf', ext: 'pdf', storageKey: 'tenants/' + tidR + '/docs/zz.pdf' });
+  check('원본 없는 파일 raw → 404', (await A('GET', '/api/docs/files/' + f1.d.data.id + '/raw')).s === 404);
+  check('저장소 꺼짐 raw → 503', (await A('GET', '/api/docs/files/' + f2.d.data.id + '/raw')).s === 503);
+  check('남의 개인 문서 raw → 404', (await K('GET', '/api/docs/files/' + f2.d.data.id + '/raw')).s === 404);
+  await A('DELETE', '/api/docs/files/' + f1.d.data.id); await A('DELETE', '/api/docs/files/' + f2.d.data.id);
   // 정리
   await A('DELETE', '/api/issues/' + iid);
   await A('DELETE', '/api/projects/' + pid);

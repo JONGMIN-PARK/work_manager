@@ -84,8 +84,9 @@ function _pdDocsListHtml(files) {
       var old = (f.tags || []).indexOf('이전버전') >= 0;
       h += '<div class="pdd-row' + (old ? ' pdd-old' : '') + '">' +
         '<span class="pdd-ic">' + ic.icon + '</span>' +
-        '<span class="pdd-nm" title="' + eA(f.name) + '" onclick="pdDocsOpenManager(\'' + eA(f.id) + '\')">' + eH(f.name) + '</span>' +
+        '<span class="pdd-nm" title="' + eA(f.name) + ' — 눌러서 미리보기" onclick="pdDocsView(\'' + eA(f.id) + '\')">' + eH(f.name) + '</span>' +
         '<span class="pdd-mt">' + formatFileSize(f.size || 0) + (f.createdAt ? ' · ' + eH(String(f.createdAt).slice(0, 10)) : '') + '</span>' +
+        '<button class="pdd-b" title="미리보기 (크게)" onclick="pdDocsView(\'' + eA(f.id) + '\')">👁</button>' +
         '<button class="pdd-b" title="내려받기" onclick="docDownloadFile(\'' + eA(f.id) + '\')">⬇</button>' +
         '<button class="pdd-b" title="문서 화면에서 열기 (미리보기 · AI 요약)" onclick="pdDocsOpenManager(\'' + eA(f.id) + '\')">↗</button>' +
       '</div>';
@@ -108,6 +109,12 @@ function pdDocsUpload(fileList) {
 }
 
 /** 문서 화면으로 — 이 프로젝트 · (있으면) 그 파일을 고른 채 */
+/* 👁 미리보기 — 문서 화면으로 옮기지 않고 그 자리에서 크게 (doc-preview.js, v13.524) */
+function pdDocsView(fileId) {
+  var f = (_pdDocs.files || []).filter(function (x) { return x.id === fileId; })[0];
+  if (typeof docViewFile !== 'function') return pdDocsOpenManager(fileId);
+  return docViewFile(f || fileId);
+}
 function pdDocsOpenManager(fileId) {
   var projId = _pdDocs.projId || (window._pdProj && window._pdProj.id);
   if (typeof pdCloseDetail === 'function') pdCloseDetail();

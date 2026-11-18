@@ -260,6 +260,39 @@ router.get('/files/:id/download-url', async function (req, res) {
   }
 });
 
+// GET /api/docs/files/:id/raw — 미리보기용 원본 (v13.524)
+//  서버가 GCS 에서 받아 그대로 흘려 보낸다 — 예전엔 브라우저가 서명 URL 에서 직접 받아, 버킷 CORS 가 막히면 모든 미리보기가 실패했다.
+//  화면은 fetch(Authorization) 로만 읽는다. 주소를 직접 열어도 이 출처에서 그려지지 않게 attachment + sandbox (업로드 HTML·SVG 의 스크립트 차단)
+var RAW_MIME = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp', svg: 'image/svg+xml',
+  avif: 'image/avif', ico: 'image/x-icon', mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
+  m4a: 'audio/mp4', aac: 'audio/aac', flac: 'audio/flac', txt: 'text/plain' };
+router.get('/files/:id/raw', async function (req, res) {
+  try {
+    if (!await _gateDoc(req, res, 'project_files', req.params.id, 'read')) return;
+    var r = await db.query('SELECT name, ext, mime_type, storage_key FROM project_files WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);
+    var row = r.rows[0];
+    if (!row || !row.storage_key) return res.status(404).json({ error: 'NO_BINARY', message: '이 파일은 원본이 저장되어 있지 않습니다.' });
+    if (!gcs.isEnabled()) return res.status(503).json({ error: 'STORAGE_DISABLED', message: '파일 스토리지(GCS)가 설정되지 않았습니다.' });
+    var o = await gcs.openRead(row.storage_key);
+    var ext = String(row.ext || '').toLowerCase();
+    res.set({
+      'Content-Type': RAW_MIME[ext] || row.mime_type || o.contentType || 'application/octet-stream',
+      'Content-Disposition': "attachment; filename*=UTF-8''" + encodeURIComponent(row.name || 'file'),
+      'Content-Security-Policy': "sandbox; default-src 'none'",
+      'Cache-Control': 'private, max-age=300'
+    });
+    if (o.size) res.set('Content-Length', String(o.size));
+    o.stream.on('error', function (e) {
+      console.warn('[files/raw] stream', e.message);
+      if (!res.headersSent) res.status(502).json({ error: 'STORAGE_READ', message: '원본을 읽지 못했습니다.' }); else res.destroy(e);
+    });
+    o.stream.pipe(res);
+  } catch (e) {
+    if (e && e.code === 404) return res.status(404).json({ error: 'NO_BINARY', message: '저장소에 원본이 없습니다.' });
+    httpErr.serverError(res, '[files/raw]', e, '원본을 읽지 못했습니다');
+  }
+});
+
 // GET /api/docs/files/:id — 단건 (v13.281)
 router.get('/files/:id', async function (req, res) {
   try {

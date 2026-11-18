@@ -131,6 +131,14 @@ async function listObjects(prefix) {
   var r = await _bucket.getFiles({ prefix: prefix, autoPaginate: true });
   return (r[0] || []).map(function (f) { var m = f.metadata || {}; return { key: f.name, size: +(m.size || 0), updated: m.updated || m.timeCreated || null }; });
 }
+/* v13.524 문서 미리보기 — 서버가 원본을 받아 그대로 흘려 보냄(브라우저 ↔ GCS CORS 와 무관). { stream, size, contentType } */
+async function openRead(key) {
+  _init();
+  if (!_bucket) throw _initErr || new Error('GCS not enabled');
+  var f = _bucket.file(key);
+  var md = ((await f.getMetadata())[0]) || {};
+  return { stream: f.createReadStream(), size: +(md.size || 0), contentType: md.contentType || '' };
+}
 async function readText(key) {
   _init();
   if (!_bucket) throw _initErr || new Error('GCS not enabled');
@@ -142,6 +150,7 @@ module.exports = {
   uploadFile: uploadFile,
   listObjects: listObjects,
   readText: readText,
+  openRead: openRead,
   createResumable: createResumable,
   objectSize: objectSize,
   ensureCors: ensureCors,

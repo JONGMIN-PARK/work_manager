@@ -43,6 +43,10 @@ app.use(helmet({
       // draw.io 편집기 embed (사양서 구성도, v13.196)
       frameSrc: ["'self'", "blob:", "data:", "https://embed.diagrams.net"],
       objectSrc: ["'self'", "blob:", "data:"],
+      // 문서 미리보기 동영상 · 소리 (blob:, v13.524)
+      mediaSrc: ["'self'", "blob:", "data:"],
+      // pdf.js 가 blob: 작업자(worker)를 만든다 — 없으면 화면 스레드에서 돌아 큰 PDF 가 멈칫함 (v13.524)
+      workerSrc: ["'self'", "blob:", "https://cdnjs.cloudflare.com"],
       // cdn.jsdelivr.net: A/S 보고서 PDF 에 넣을 한글 글꼴(나눔고딕 TTF)을 fetch 로 받음 (v13.344)
       connectSrc: ["'self'", "https://generativelanguage.googleapis.com", "https://api.anthropic.com", "https://api.telegram.org", "https://storage.googleapis.com", "https://cdn.jsdelivr.net"]
     }

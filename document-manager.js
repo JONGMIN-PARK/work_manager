@@ -49,7 +49,6 @@ function _docInjectStyle() {
       '#docPanels{grid-template-columns:200px minmax(0,1fr) minmax(520px,1.2fr)}' +
       '#docPanels>#docPreviewPanel{grid-column:auto;position:sticky;top:12px}' +
       '#docPreviewContent{max-height:calc(100vh - 220px)!important}' +
-      '#docPreviewContent iframe{height:calc(100vh - 320px)!important;min-height:460px}' +
     '}';
   document.head.appendChild(st);
 }
@@ -394,7 +393,7 @@ function renderPreviewPanel() {
   html += '<button class="tab' + (docPreviewTab === 'summary' ? ' on' : '') + '" onclick="docSetPreviewTab(\'summary\')" style="flex:1;border-radius:0;font-size:11px">🤖 AI 요약</button>';
   html += '</div>';
 
-  html += '<div id="docPreviewContent" style="flex:1;overflow-y:auto;padding:14px;max-height:520px">';
+  html += '<div id="docPreviewContent" style="flex:1;overflow-y:auto;padding:14px;max-height:min(72vh,760px)">';
   if (!docSelFile) {
     html += '<div style="text-align:center;padding:30px;color:var(--t5)"><div style="font-size:28px;margin-bottom:8px">📄</div><div style="font-size:11px">파일을 선택하면 미리보기가 표시됩니다</div></div>';
   }
@@ -469,7 +468,7 @@ async function extractTextFromFile(fileRecord) {
   try {
     // 텍스트 파일
     if (['txt', 'csv', 'md', 'json', 'xml', 'log'].indexOf(ext) >= 0) {
-      return new TextDecoder('utf-8', { fatal: false }).decode(data);
+      return typeof docDecodeText === 'function' ? docDecodeText(data) : new TextDecoder('utf-8', { fatal: false }).decode(data);   // EUC-KR 메모장 파일도
     }
 
     // 엑셀
@@ -543,12 +542,10 @@ async function showFilePreview(fileRecord) {
 
   var ext = fileRecord.ext;
   var data = fileRecord.data;
-  // 미리보기 · 글 뽑기에 필요한 도구는 처음 쓸 때 받음 (v13.310)
-  await _docNeedLib(ext);
 
   // 파일 정보 사이드바
   var icon = getDocIcon(ext);
-  var infoHtml = '<div style="min-width:220px;max-width:280px;padding-right:14px;border-right:1px solid var(--bd)">';
+  var infoHtml = '<div class="dp-info">';
   infoHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
   infoHtml += '<span style="font-size:22px">' + icon.icon + '</span>';
   infoHtml += '<div><div style="font-size:12px;font-weight:700;color:var(--t1);word-break:break-all">' + eH(fileRecord.name) + '</div>';
@@ -564,6 +561,7 @@ async function showFilePreview(fileRecord) {
     infoHtml += '<div style="font-size:10px;color:var(--t4);margin-bottom:6px;background:var(--bg-i);padding:6px 8px;border-radius:4px;max-height:80px;overflow-y:auto;line-height:1.5">' + eH(fileRecord.memo).slice(0, 300) + '</div>';
   }
   infoHtml += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
+  infoHtml += '<button class="btn btn-p btn-s" onclick="docViewFile(\'' + eA(fileRecord.id) + '\')" title="화면 가득 보기">⛶ 크게 보기</button>';
   infoHtml += '<button class="btn btn-g btn-s" onclick="docDownloadFile(\'' + eA(fileRecord.id) + '\')">💾 다운로드</button>';
   infoHtml += '<button class="btn btn-g btn-s" onclick="docEditFileMeta(\'' + eA(fileRecord.id) + '\')">✏️ 편집</button>';
   infoHtml += (docSelProject === DOC_PERSONAL
@@ -572,145 +570,25 @@ async function showFilePreview(fileRecord) {
   infoHtml += '<button class="btn btn-d btn-s" onclick="docDeleteFile(\'' + eA(fileRecord.id) + '\')">🗑️ 삭제</button>';
   infoHtml += '</div></div>';
 
-  // 서버에서 불러온 파일은 data가 없음 → GCS에서 원본 바이너리를 가져온다
-  // signedDownloadUrl: 공개 접근 가능한 서명 URL(15분). Office/PPT 등 외부 뷰어 폴백에 재사용.
-  var signedDownloadUrl = null;
-  if (!data && fileRecord.storageKey) {
-    try {
-      var dl = await apiFetch('/api/docs/files/' + fileRecord.id + '/download-url');
-      if (dl && dl.data && dl.data.downloadUrl) {
-        signedDownloadUrl = dl.data.downloadUrl;
-        var resp = await fetch(dl.data.downloadUrl);
-        if (_stale()) return;
-        if (resp.ok) data = await resp.arrayBuffer();
-      }
-    } catch (e) { console.warn('[docPreview] GCS fetch failed', e); }
-    if (_stale()) return;
-  }
 
-  if (!data) {
-    var noData = fileRecord.storageKey ? '미리보기를 불러오지 못했습니다' : '원본 파일이 저장되어 있지 않습니다 (이전 버전 업로드)';
-    content.innerHTML = '<div style="display:flex;gap:14px">' + infoHtml + '<div style="flex:1;text-align:center;padding:20px;color:var(--t5)">' + noData + '</div></div>';
+  // 원본 받기 · 그리기는 doc-preview.js (v13.524) — 서버를 거쳐 받으므로(같은 출처) 버킷 CORS 와 무관
+  content.innerHTML = '<div class="dp-flex" id="docPreviewFlex">' + infoHtml + '<div class="dp-main"><div class="dp-view"><div class="dp-msg">⏳ 불러오는 중…</div></div></div></div>';
+  var view = content.querySelector('.dp-view');
+  if (!data && !fileRecord.storageKey) {
+    view.innerHTML = '<div class="dp-msg">원본 파일이 저장되어 있지 않습니다 (이전 버전 업로드)</div>';
     return;
   }
-
-  var previewHtml = '';
-
   try {
-    // 이미지
-    if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg'].indexOf(ext) >= 0) {
-      var url = docCreateBlobUrl(data, fileRecord.type);
-      previewHtml = '<div style="text-align:center"><img src="' + url + '" style="max-width:100%;max-height:420px;border-radius:6px;border:1px solid var(--bd)" alt="' + eH(fileRecord.name) + '"></div>';
-    }
-    // PDF
-    else if (ext === 'pdf') {
-      var url = docCreateBlobUrl(data, 'application/pdf');
-      previewHtml = '<iframe src="' + url + '" style="width:100%;height:460px;border:1px solid var(--bd);border-radius:6px;background:#fff"></iframe>';
-      previewHtml += '<div style="margin-top:6px;text-align:right"><a href="' + url + '" target="_blank" rel="noopener" style="font-size:10px;color:var(--ac)">🔗 새 탭에서 열기</a></div>';
-    }
-    // 엑셀
-    else if (['xlsx', 'xls'].indexOf(ext) >= 0 && typeof XLSX !== 'undefined') {
-      var wb = XLSX.read(data, { type: 'array' });
-      previewHtml = '<div style="margin-bottom:6px;display:flex;gap:4px;flex-wrap:wrap">';
-      wb.SheetNames.forEach(function (name, idx) {
-        previewHtml += '<button class="btn btn-s ' + (idx === 0 ? 'btn-p' : 'btn-g') + '" onclick="docShowSheet(this,' + idx + ')" data-sheet="' + idx + '">' + eH(name) + '</button>';
-      });
-      previewHtml += '</div>';
-      wb.SheetNames.forEach(function (name, idx) {
-        var sheetHtml = XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false });
-        previewHtml += '<div class="doc-sheet tw" data-sheet-idx="' + idx + '" style="' + (idx > 0 ? 'display:none;' : '') + 'font-size:10px;max-height:380px;overflow:auto">' + sheetHtml + '</div>';
-      });
-    }
-    // 텍스트 (.md 는 마크다운 렌더, 그 외는 원문 그대로)
-    else if (['txt', 'csv', 'md', 'json', 'xml', 'log'].indexOf(ext) >= 0) {
-      var text = new TextDecoder('utf-8', { fatal: false }).decode(data);
-      if (ext === 'md' && typeof rMD === 'function') {
-        previewHtml = '<div class="doc-md" style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:14px;font-size:12px;max-height:460px;overflow:auto;color:var(--t2);line-height:1.7">' + _docMD(text.slice(0, 30000)) + '</div>';
-      } else {
-        previewHtml = '<pre style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;font-family:\'JetBrains Mono\',monospace;max-height:460px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--t2)">' + eH(text.slice(0, 30000)) + '</pre>';
-      }
-    }
-    // Word — DOCX 는 mammoth 로 서식 포함 렌더(클라이언트 사이드), 실패 시 텍스트 추출 폴백
-    else if (ext === 'docx') {
-      var html = '';
-      if (typeof mammoth !== 'undefined') {
-        try {
-          var conv = await mammoth.convertToHtml({ arrayBuffer: data });
-          if (_stale()) return;
-          html = conv && conv.value ? conv.value : '';
-        } catch (mErr) { console.warn('[docPreview] mammoth', mErr); }
-      }
-      if (html) {
-        previewHtml = '<div class="doc-word" style="background:#fff;color:#111;border:1px solid var(--bd);border-radius:6px;padding:20px 24px;font-size:12.5px;line-height:1.7;max-height:460px;overflow:auto">' + html + '</div>';
-      } else {
-        var wtext = fileRecord.textCache || await extractTextFromFile(fileRecord);
-        if (_stale()) return;
-        previewHtml = wtext
-          ? '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;max-height:460px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:var(--t2);line-height:1.6">' + eH(wtext.slice(0, 20000)) + '</div>'
-          : docPreviewFallbackHtml(icon, signedDownloadUrl);
-      }
-    }
-    // PowerPoint — PPTX 는 슬라이드별 텍스트 카드, 원본 서식은 Office 뷰어(선택)로
-    else if (ext === 'pptx') {
-      var ptext = fileRecord.textCache || await extractTextFromFile(fileRecord);
-      if (_stale()) return;
-      if (ptext) {
-        var slides = ptext.split(/---\s*Slide\s*\d+\s*---/).map(function (s) { return s.trim(); }).filter(Boolean);
-        var body = slides.length
-          ? slides.map(function (s, i) {
-              return '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:10px 12px;margin-bottom:8px">' +
-                '<div style="font-size:9px;font-weight:700;color:var(--t5);margin-bottom:4px">슬라이드 ' + (i + 1) + '</div>' +
-                '<div style="font-size:11px;color:var(--t2);line-height:1.6;white-space:pre-wrap;word-break:break-all">' + eH(s.slice(0, 4000)) + '</div></div>';
-            }).join('')
-          : '<div style="background:var(--bg-i);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;color:var(--t2);white-space:pre-wrap">' + eH(ptext.slice(0, 20000)) + '</div>';
-        previewHtml = '<div style="max-height:460px;overflow:auto">' + body + '</div>' + docOfficeViewerBtn(signedDownloadUrl);
-      } else {
-        previewHtml = docPreviewFallbackHtml(icon, signedDownloadUrl);
-      }
-    }
-    // 구버전 PPT / DOC (바이너리) — 클라이언트 렌더 불가 → Office 뷰어(선택) 안내
-    else if (['ppt', 'doc'].indexOf(ext) >= 0) {
-      previewHtml = docPreviewFallbackHtml(icon, signedDownloadUrl);
-    }
-    // 기타
-    else {
-      previewHtml = docPreviewFallbackHtml(icon, signedDownloadUrl);
-    }
+    data = data || await docFetchRaw(fileRecord);
   } catch (e) {
-    console.warn('[DocManager] preview error', e);
-    previewHtml = '<div style="text-align:center;padding:20px;color:var(--d-t)">미리보기 오류: ' + eH(e.message || '') + '</div>';
+    if (_stale()) return;
+    console.warn('[docPreview] fetch', e);
+    view.innerHTML = '<div class="dp-msg">미리보기를 불러오지 못했습니다 — ' + eH(e.message || '') + '</div>';
+    return;
   }
-
   if (_stale()) return;
-  content.innerHTML = '<div style="display:flex;gap:14px" id="docPreviewFlex">' + infoHtml + '<div style="flex:1;min-width:0">' + previewHtml + '</div></div>';
-}
-
-/* Office Online 뷰어 버튼 — 서명 URL이 있을 때만. 외부(Microsoft) 서비스로 원본을 전송하므로 사용자가 직접 클릭해 여는 opt-in 방식 */
-function docOfficeViewerBtn(signedUrl) {
-  if (!signedUrl) return '';
-  var viewer = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(signedUrl);
-  return '<div style="margin-top:8px;text-align:center">' +
-    '<a href="' + viewer + '" target="_blank" rel="noopener" class="btn btn-g btn-s" style="text-decoration:none">🌐 Office 뷰어로 원본 서식 보기 (외부 서비스)</a>' +
-    '<div style="font-size:9px;color:var(--t5);margin-top:4px">원본이 Microsoft Office Online으로 전송됩니다</div></div>';
-}
-
-/* 클라이언트 렌더 불가 형식의 폴백 — 안내 + (가능하면) Office 뷰어 버튼 */
-function docPreviewFallbackHtml(icon, signedUrl) {
-  var html = '<div style="text-align:center;padding:30px 20px;color:var(--t5)">' +
-    '<div style="font-size:24px;margin-bottom:8px">' + (icon && icon.icon ? icon.icon : '📎') + '</div>' +
-    '<div style="font-size:11px">브라우저에서 직접 미리보기가 어려운 형식입니다.<br>다운로드하거나 아래 Office 뷰어로 확인하세요.</div></div>';
-  return html + docOfficeViewerBtn(signedUrl);
-}
-
-/* 엑셀 시트 탭 전환 */
-function docShowSheet(btn, idx) {
-  // 버튼 활성화
-  var btns = btn.parentElement.querySelectorAll('button');
-  btns.forEach(function (b) { b.className = 'btn btn-s btn-g'; });
-  btn.className = 'btn btn-s btn-p';
-  // 시트 표시
-  var sheets = document.querySelectorAll('.doc-sheet');
-  sheets.forEach(function (s) { s.style.display = parseInt(s.dataset.sheetIdx) === idx ? '' : 'none'; });
+  if (!data) { view.innerHTML = '<div class="dp-msg">원본 파일이 저장되어 있지 않습니다</div>'; return; }
+  await docPreviewInto(view, fileRecord, data, { isStale: _stale });
 }
 
 /* ═══ AI 요약 패널 ═══ */
