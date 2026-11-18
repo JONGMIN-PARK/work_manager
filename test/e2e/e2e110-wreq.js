@@ -40,6 +40,31 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     });
     check(m1.type === 'order' && /요청 화면/.test(m1.proj || '') && /요청 화면/.test(m1.title), '보내기 창 — 업무 지시 · 프로젝트 · 제목 채움 ' + JSON.stringify(m1));
     check(m1.types === 'order,transfer,forward,event', '프로젝트에서 — 지시 · 이관 · 전달 · 일정');
+    // 빈 칸을 누르면 등록된 사람 모두 (예전엔 8명만)
+    await A.focus('#wrqModal .wrq-who-in');
+    await A.waitForSelector('#wrqModal .wrq-sg', { timeout: 5000 });
+    var all = await A.evaluate(function () { return apiFetch('/api/users/lookup').then(function (r) { return { n: r.data.length, shown: document.querySelectorAll('#wrqModal .wrq-sg').length, dept: 'dept_name' in r.data[0] }; }); });
+    check(all.shown === all.n - 1 && all.dept, '빈 칸 — 나 빼고 등록 인원 모두 ' + JSON.stringify(all));
+    await A.evaluate(function () { var m = document.getElementById('wrqModal'); m._wmClose ? m._wmClose() : m.remove(); });
+    // 15명 · 부서 3개로 — 다 보이고 부서별 묶음 · 부서 이름으로 찾기 · 부서 모두 넣기
+    var big = await A.evaluate(function () {
+      var save = _wqPeople;
+      _wqPeople = []; for (var i = 0; i < 15; i++) _wqPeople.push({ id: 'u' + i, name: '사람' + String(i).padStart(2, '0'), dept: ['설계팀', '제어팀', '생산팀'][i % 3] });
+      return wrqOpen({ type: 'order' }).then(function () {
+        var inp = document.querySelector('#wrqModal .wrq-who-in'); inp.focus(); inp.dispatchEvent(new Event('focus'));
+        var r = { shown: document.querySelectorAll('#wrqModal .wrq-sg').length, depts: [].map.call(document.querySelectorAll('#wrqModal .wrq-sg-dept'), function (x) { return x.textContent; }) };
+        inp.value = '제어'; inp.dispatchEvent(new Event('input'));
+        r.find = document.querySelectorAll('#wrqModal .wrq-sg').length;
+        var d = document.querySelector('#wrqModal .wrq-sg-dept'); d.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        r.chips = document.querySelectorAll('#wrqModal .wrq-chip').length;
+        var m = document.getElementById('wrqModal'); m._wmClose ? m._wmClose() : m.remove();
+        _wqPeople = save;
+        return r;
+      });
+    });
+    check(big.shown === 15 && big.depts.length === 3 && big.find === 5 && big.chips === 5, '15명 모두 · 부서 3묶음 · 부서로 찾기 5 · 부서 모두 넣기 5 ' + JSON.stringify(big));
+    await A.click('.pd-wrq-btn');
+    await A.waitForSelector('#wrqModal .wrq-who-in', { timeout: 8000 });
     await A.type('#wrqModal .wrq-who-in', '김');
     await A.waitForSelector('#wrqModal .wrq-sg', { timeout: 5000 });
     await A.keyboard.press('Enter');

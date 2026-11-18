@@ -27,7 +27,7 @@ function _wqLoadPeople() {
   if (_wqPeople) return Promise.resolve(_wqPeople);
   return apiFetch('/api/users/lookup').then(function (r) {
     var me = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : '';
-    _wqPeople = ((r && r.data) || []).map(function (u) { return { id: u.id, name: u.display_name || u.displayName || u.name || '' }; })
+    _wqPeople = ((r && r.data) || []).map(function (u) { return { id: u.id, name: u.display_name || u.displayName || u.name || '', dept: u.dept_name || u.deptName || '' }; })
       .filter(function (u) { return u.id && u.id !== me && u.name; })
       .sort(function (a, b) { return a.name.localeCompare(b.name, 'ko'); });
     return _wqPeople;
@@ -71,12 +71,21 @@ function _wqBuild(o, people) {
     q('[data-a="send"]').textContent = '보내기' + (st.to.length > 1 ? ' (' + st.to.length + '명)' : '');
   };
   var inp = q('.wrq-who-in'), sug = q('.wrq-sug'), pick = 0, list = [];
+  /* 등록된 사람 모두 — 부서별로 묶고 스크롤 (v13.529 — 예전엔 8명만 보였다). 이름 · 부서 이름으로 찾기 */
   var showSug = function () {
-    var v = inp.value.trim();
-    list = people.filter(function (p) { return st.to.indexOf(p.id) < 0 && (!v || p.name.indexOf(v) >= 0); }).slice(0, 8);
+    var v = inp.value.trim().toLowerCase();
+    list = people.filter(function (p) { return st.to.indexOf(p.id) < 0 && (!v || p.name.toLowerCase().indexOf(v) >= 0 || (p.dept || '').toLowerCase().indexOf(v) >= 0); });
+    // 부서 순(부서 없음은 맨 뒤) → 이름 순, 키보드 이동도 이 순서
+    list.sort(function (a, b) { return (a.dept ? 0 : 1) - (b.dept ? 0 : 1) || (a.dept || '').localeCompare(b.dept || '', 'ko') || a.name.localeCompare(b.name, 'ko'); });
     if (!v && document.activeElement !== inp) { sug.hidden = true; return; }
     pick = 0;
-    sug.innerHTML = list.length ? list.map(function (p, i) { return '<button type="button" class="wrq-sg' + (i === pick ? ' on' : '') + '" data-id="' + _wqE(p.id) + '">' + _wqE(p.name) + '</button>'; }).join('') : '<div class="wrq-sg-none">맞는 사람이 없습니다</div>';
+    var h = '<div class="wrq-sg-top">' + (v ? '찾은 사람 ' + list.length + '명' : '전체 ' + list.length + '명') + (st.type === 'transfer' ? ' · 이관은 한 사람만' : ' · 부서 이름을 누르면 그 부서 모두') + '</div>', cur = null;
+    list.forEach(function (p, i) {
+      var dg = p.dept || '부서 없음';
+      if (dg !== cur) { cur = dg; var n = list.filter(function (x) { return (x.dept || '부서 없음') === dg; }).length; h += '<button type="button" class="wrq-sg-dept" data-dept="' + _wqE(dg) + '"' + (st.type === 'transfer' ? ' disabled' : '') + '>🏢 ' + _wqE(dg) + ' <small>' + n + '</small></button>'; }
+      h += '<button type="button" class="wrq-sg' + (i === pick ? ' on' : '') + '" data-id="' + _wqE(p.id) + '" data-i="' + i + '">' + _wqE(p.name) + '</button>';
+    });
+    sug.innerHTML = list.length ? h : '<div class="wrq-sg-none">맞는 사람이 없습니다</div>';
     sug.hidden = false;
   };
   var add = function (id) { if (id && st.to.indexOf(id) < 0) { if (st.type === 'transfer') st.to = []; st.to.push(id); } inp.value = ''; sug.hidden = true; paint(); inp.focus(); };
@@ -84,11 +93,19 @@ function _wqBuild(o, people) {
   inp.addEventListener('focus', showSug);
   inp.addEventListener('blur', function () { setTimeout(function () { sug.hidden = true; }, 150); });
   inp.addEventListener('keydown', function (e) {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!list.length) return; pick = (pick + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length; sug.querySelectorAll('.wrq-sg').forEach(function (b, i) { b.classList.toggle('on', i === pick); }); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!list.length) return; pick = (pick + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length; sug.querySelectorAll('.wrq-sg').forEach(function (b, i) { b.classList.toggle('on', i === pick); if (i === pick) b.scrollIntoView({ block: 'nearest' }); }); }
     else if (e.key === 'Enter') { e.preventDefault(); if (!sug.hidden && list[pick]) add(list[pick].id); }
     else if (e.key === 'Backspace' && !inp.value && st.to.length) { st.to.pop(); paint(); }
   });
-  sug.addEventListener('mousedown', function (e) { var b = e.target.closest('[data-id]'); if (b) { e.preventDefault(); add(b.dataset.id); } });
+  sug.addEventListener('mousedown', function (e) {
+    var b = e.target.closest('[data-id]'); if (b) { e.preventDefault(); add(b.dataset.id); return; }
+    var d = e.target.closest('[data-dept]');   // 부서 모두 넣기
+    if (d && !d.disabled) {
+      e.preventDefault();
+      list.filter(function (p) { return (p.dept || '부서 없음') === d.dataset.dept; }).forEach(function (p) { if (st.to.indexOf(p.id) < 0) st.to.push(p.id); });
+      inp.value = ''; paint(); showSug(); inp.focus();
+    }
+  });
   box.addEventListener('click', function (e) {
     var t = e.target.closest('[data-t]'); if (t) { st.type = t.dataset.t; paint(); return; }
     var rm = e.target.closest('[data-rm]'); if (rm) { st.to = st.to.filter(function (x) { return x !== rm.dataset.rm; }); paint(); return; }

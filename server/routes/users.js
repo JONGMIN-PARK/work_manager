@@ -60,7 +60,8 @@ router.get('/lookup', async function (req, res) {
   try {
     if (!req.tenant || !req.tenant.id) return res.json({ data: [] });
     var r = await db.query(
-      "SELECT id, name, display_name FROM users WHERE tenant_id = $1 AND status = 'active' ORDER BY name",
+      // dept_name — 📨 업무 보내기 사람 고르기에서 부서별로 묶음 (v13.529)
+      "SELECT u.id, u.name, u.display_name, d.name AS dept_name FROM users u LEFT JOIN departments d ON d.id = u.department_id WHERE u.tenant_id = $1 AND u.status = 'active' ORDER BY u.name",
       [req.tenant.id]
     );
     res.json({ data: r.rows });

@@ -9000,3 +9000,11 @@ button.awg-chip{cursor:pointer}
 .wsc-pg{font-size:10.5px;font-weight:700;color:var(--t5);margin:6px 2px 0}
 .wsc-poplist .wsc-row .wsc-acts{display:none}
 @media (max-width:640px){#hdrScBtn{display:none}}
+/* v13.529 📨 사람 고르기 — 전체 · 부서별 */
+.wrq-sug{max-height:min(46vh,360px)}
+.wrq-sg-top{position:sticky;top:-4px;background:var(--bg-p);font-size:10.5px;color:var(--t5);padding:4px 8px 5px;border-bottom:1px solid var(--bd);margin:-4px -4px 2px;z-index:1}
+.wrq-sg-dept{display:flex;align-items:center;gap:4px;width:100%;border:0;background:none;color:var(--t4);font:inherit;font-size:11px;font-weight:700;text-align:left;padding:6px 8px 3px;cursor:pointer;border-radius:6px}
+.wrq-sg-dept:hover:not(:disabled){background:var(--ac-bg);color:var(--ac)}
+.wrq-sg-dept:disabled{cursor:default}
+.wrq-sg-dept small{font-weight:400;color:var(--t5)}
+.wrq-sg{padding-left:20px}
