@@ -185,6 +185,7 @@ GET /api/dev-items
 GET /api/dev-items/:id
 GET /api/docs/files
 GET /api/docs/files/:id
+GET /api/docs/files/:id/annot
 GET /api/docs/files/:id/download-url
 GET /api/docs/files/:id/raw
 GET /api/docs/folders
@@ -334,6 +335,7 @@ GET /api/v1/departments
 GET /api/v1/departments/:id/members
 GET /api/v1/docs/files
 GET /api/v1/docs/files/:id
+GET /api/v1/docs/files/:id/annot
 GET /api/v1/docs/files/:id/download-url
 GET /api/v1/docs/files/:id/raw
 GET /api/v1/docs/folders
@@ -699,6 +701,7 @@ PUT /api/departments/:id
 PUT /api/dev-items/:id
 PUT /api/dev-items/:id/move
 PUT /api/docs/files/:id
+PUT /api/docs/files/:id/annot/:page
 PUT /api/docs/folders/:id
 PUT /api/events/:id
 PUT /api/gongsu/:day
@@ -761,6 +764,7 @@ PUT /api/v1/auth/change-password
 PUT /api/v1/checklists/:id
 PUT /api/v1/departments/:id
 PUT /api/v1/docs/files/:id
+PUT /api/v1/docs/files/:id/annot/:page
 PUT /api/v1/docs/folders/:id
 PUT /api/v1/events/:id
 PUT /api/v1/issues/:id

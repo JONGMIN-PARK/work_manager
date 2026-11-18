@@ -107,7 +107,17 @@ function _dpNeed(ext) {
 /* ═══ 그리기 ═══
    el: 넣을 곳 · data: ArrayBuffer · opts: { big: 크게 보기, isStale(): 그사이 다른 파일로 바뀜, signedUrl, onLink }
    el.__dpCleanup 에 정리 함수(관찰자 · blob 주소)를 달아 둔다 — 다음 그리기 전에 부른다 */
+/* 쪽이 없는 형식(Word · 글 · 표 …)은 내용 전체를 한 장(0쪽)으로 — 칠판을 얹을 수 있게 */
+function _dpMarkWhole(el) {
+  if (el.querySelector('.dp-pg')) return;
+  var t = el.querySelector('.dp-paper,.dp-pre,.dp-md,.dp-sheets,.dp-zip');
+  if (t) { t.classList.add('dp-pg'); t.setAttribute('data-pg', '0'); }
+}
 async function docPreviewInto(el, f, data, opts) {
+  await _docPreviewInto0(el, f, data, opts);
+  if (el.isConnected) _dpMarkWhole(el);
+}
+async function _docPreviewInto0(el, f, data, opts) {
   opts = opts || {};
   if (el.__dpCleanup) { try { el.__dpCleanup(); } catch (_) {} el.__dpCleanup = null; }
   var ext = _dpExt(f), bag = [], obs = [];
@@ -138,11 +148,11 @@ async function docPreviewInto(el, f, data, opts) {
 
 function _dpImage(ctx, data) {
   var u = _dpBlobUrl(ctx.bag, data, DP_MIME[ctx.ext]);
-  ctx.el.innerHTML = '<div class="dp-img' + (ctx.big ? ' big' : '') + '"><img src="' + u + '" alt="' + _dpEsc(ctx.f.name) + '"></div>';
+  ctx.el.innerHTML = '<div class="dp-img' + (ctx.big ? ' big' : '') + '"><span class="dp-pgw dp-pg" data-pg="0"><img src="' + u + '" alt="' + _dpEsc(ctx.f.name) + '"></span></div>';
   var img = ctx.el.querySelector('img');
   img.onerror = function () { ctx.el.innerHTML = '<div class="dp-msg">이 그림 형식은 브라우저가 보여 주지 못합니다.</div>' + _dpFallbackBtns(ctx); };
   // 크게 보기: 눌러서 원래 크기 ↔ 화면 맞춤
-  if (ctx.big) img.onclick = function () { img.parentNode.classList.toggle('full'); };
+  if (ctx.big) img.onclick = function () { if (!ctx.el.classList.contains('db-on')) img.closest('.dp-img').classList.toggle('full'); };
 }
 
 function _dpMedia(ctx, data) {
@@ -216,7 +226,7 @@ async function _dpPdf(ctx, data) {
   var n = pdf.numPages, first = await pdf.getPage(1), vp1 = first.getViewport({ scale: 1 });
   var openUrl = _dpBlobUrl(ctx.bag, data, 'application/pdf');
   var html = '<div class="dp-bar"><span>' + n + '쪽</span><a href="' + openUrl + '" target="_blank" rel="noopener">🔗 새 탭에서 열기</a></div><div class="dp-pages">';
-  for (var i = 1; i <= n; i++) html += '<div class="dp-page" data-p="' + i + '" style="aspect-ratio:' + vp1.width + '/' + vp1.height + '"><span class="dp-pno">' + i + '</span></div>';
+  for (var i = 1; i <= n; i++) html += '<div class="dp-page dp-pg" data-pg="' + (i - 1) + '" data-p="' + i + '" style="aspect-ratio:' + vp1.width + '/' + vp1.height + '"><span class="dp-pno">' + i + '</span></div>';
   ctx.el.innerHTML = html + '</div>';
   var busy = {};
   var draw = async function (box, ahead) {
@@ -243,6 +253,7 @@ async function _dpPdf(ctx, data) {
   // 폭이 바뀌면(크게 보기 · 창 크기) 보이는 쪽을 다시 선명하게
   var tm = null, ro = new ResizeObserver(function () { clearTimeout(tm); tm = setTimeout(function () { ctx.el.querySelectorAll('.dp-page').forEach(function (b) { var r = b.getBoundingClientRect(); if (r.bottom > -600 && r.top < innerHeight + 600) draw(b).catch(function () {}); }); }, 250); });
   ro.observe(ctx.el);
+  ctx.el.querySelectorAll('.dp-page').forEach(function (b) { ro.observe(b); });   // 발표 모드 — 숨었던 쪽이 나타나도
   ctx.obs.push(ro, { disconnect: function () { try { pdf.destroy(); } catch (_) {} } });
 }
 
@@ -371,7 +382,7 @@ async function _dpPptx(ctx, data) {
     return cache[p];
   };
   ctx.el.innerHTML = '<div class="dp-bar"><span>슬라이드 ' + slides.length + '장</span></div><div class="dp-slides">' +
-    slides.map(function (s, i) { return '<div class="dp-slide-wrap" data-i="' + i + '" style="aspect-ratio:' + W + '/' + H + '"><span class="dp-pno">' + (i + 1) + '</span></div>'; }).join('') + '</div>';
+    slides.map(function (s, i) { return '<div class="dp-slide-wrap dp-pg" data-pg="' + i + '" data-i="' + i + '" style="aspect-ratio:' + W + '/' + H + '"><span class="dp-pno">' + (i + 1) + '</span></div>'; }).join('') + '</div>';
   var done = {};
   /* ahead: 그린 뒤 다음 몇 장을 미리(칸 안에서 빠르게 넘겨도 빈 슬라이드가 덜 보이게) */
   var render = async function (wrap, ahead) {
@@ -427,6 +438,7 @@ async function _dpPptx(ctx, data) {
   var w0 = ctx.el.querySelector('.dp-slide-wrap'); if (w0) render(w0, 1).catch(function () {});   // 첫 슬라이드는 바로
   var ro = new ResizeObserver(function () { ctx.el.querySelectorAll('.dp-slide-wrap').forEach(fit); });
   ro.observe(ctx.el);
+  ctx.el.querySelectorAll('.dp-slide-wrap').forEach(function (w) { ro.observe(w); });   // 발표 모드 — 숨었던 슬라이드가 나타나도
   ctx.obs.push(io, ro);
 }
 
@@ -694,6 +706,13 @@ function docViewFile(fileOrId) {
 }
 function docViewClose() {
   var m = document.getElementById('docViewModal'); if (!m) return;
+  if (m.__pres) _dpPresEnd(m);
+  if (m.__board) {
+    var bd = m.__board; m.__board = null;
+    try { bd.destroy(); } catch (_) {}
+    // 표시를 저장했으면 문서 목록의 🖍 숫자도 새로 (저장이 끝난 뒤)
+    setTimeout(function () { if (bd.savedAny && typeof renderDocManager === 'function' && document.getElementById('mDocs') && !document.getElementById('mDocs').classList.contains('hidden')) renderDocManager(); }, 1500);
+  }
   var b = m.querySelector('.dpv-body'); if (b && b.__dpCleanup) b.__dpCleanup();
   if (m.__key) document.removeEventListener('keydown', m.__key, true);
   m.remove();
@@ -707,18 +726,123 @@ function _dpBuildViewer(f) {
   m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', f.name || '미리보기');
   m.innerHTML = '<div class="dpv-box"><div class="dpv-head"><span class="dpv-ic">' + icon + '</span><span class="dpv-nm" title="' + _dpEsc(f.name) + '">' + _dpEsc(f.name) + '</span>' +
     '<span class="dpv-sz">' + (typeof formatFileSize === 'function' ? formatFileSize(f.size) : '') + '</span>' +
-    '<button type="button" class="btn btn-g btn-s" onclick="docDownloadFile(\'' + id + '\')">💾 내려받기</button>' +
+    '<button type="button" class="btn btn-p btn-s dpv-pres-b" onclick="docViewPresent()" title="▶ 발표 — 전체 화면으로 한 쪽씩 (← → · Space 로 넘기기, 칠판으로 표시)" disabled>▶<span class="dpv-lbl"> 발표</span></button>' +
+    '<button type="button" class="btn btn-g btn-s dpv-board-b" onclick="docViewBoard()" title="✏️ 칠판 — 펜 · 형광펜 · 도형 · 글자 · 캡처 붙여넣기(Ctrl+V), 쪽마다 자동 저장" disabled>✏️<span class="dpv-lbl"> 칠판</span></button>' +
+    '<button type="button" class="btn btn-g btn-s" onclick="docDownloadFile(\'' + id + '\')" title="내려받기">💾<span class="dpv-lbl"> 내려받기</span></button>' +
     '<button type="button" class="btn btn-g btn-s dpv-x" onclick="docViewClose()" title="닫기 (Esc)">✕</button></div>' +
-    '<div class="dpv-body"><div class="dp-msg">⏳ 불러오는 중…</div></div></div>';
+    '<div class="dpv-bdock" hidden></div>' +
+    '<div class="dpv-body"><div class="dp-msg">⏳ 불러오는 중…</div></div>' +
+    '<div class="dpv-pbar" hidden><button type="button" class="dpv-nav" data-nav="-1" title="앞 쪽 (←)">◀</button><span class="dpv-pno">1 / 1</span><button type="button" class="dpv-nav" data-nav="1" title="다음 쪽 (→ · Space)">▶</button>' +
+      '<div class="dpv-bslot"></div><button type="button" class="dpv-nav dpv-pend" title="발표 끝내기 (Esc)">✕ 끝내기</button></div></div>';
+  m.__file = f;
   m.addEventListener('mousedown', function (e) { if (e.target === m) m.__downOut = true; });
-  m.addEventListener('click', function (e) { if (e.target === m && m.__downOut) docViewClose(); m.__downOut = false; });
-  m.__key = function (e) { if (e.key === 'Escape' && document.getElementById('docViewModal') === m) { e.stopPropagation(); e.preventDefault(); docViewClose(); } };
+  m.addEventListener('click', function (e) { if (e.target === m && m.__downOut && !m.__pres) docViewClose(); m.__downOut = false; });
+  m.querySelector('.dpv-pbar').addEventListener('click', function (e) {
+    var nv = e.target.closest('[data-nav]'); if (nv) { _dpPresGo(m, m.__cur + (+nv.dataset.nav)); return; }
+    if (e.target.closest('.dpv-pend')) _dpPresEnd(m);
+  });
+  m.__key = function (e) {
+    if (document.getElementById('docViewModal') !== m) return;
+    var ae = document.activeElement, typing = ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT');
+    if (e.key === 'Escape') {
+      if (typing) return;
+      e.stopPropagation(); e.preventDefault();
+      if (m.__board && m.__board.esc()) return;   // 도구 · 고른 것부터 풀기
+      if (m.__pres) return _dpPresEnd(m);
+      return docViewClose();
+    }
+    if (!m.__pres || typing || e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = e.key, d = 0;
+    if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || k === ' ' || k === 'Enter') d = 1;
+    else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp' || (k === 'Backspace' && !(m.__board && m.__board.sel))) d = -1;
+    else if (k === 'Home') d = -1e6; else if (k === 'End') d = 1e6;
+    if (!d) return;
+    e.preventDefault(); e.stopPropagation();
+    _dpPresGo(m, m.__cur + d);
+  };
   document.addEventListener('keydown', m.__key, true);
   document.body.appendChild(m);
   var body = m.querySelector('.dpv-body'), stale = function () { return !body.isConnected; };
   docFetchRaw(f).then(function (data) {
     if (stale()) return;
     if (!data) { body.innerHTML = '<div class="dp-msg">원본 파일이 저장되어 있지 않습니다 (이전 버전 업로드)</div>'; return; }
-    return docPreviewInto(body, f, data, { big: true, isStale: stale });
+    return docPreviewInto(body, f, data, { big: true, isStale: stale }).then(function () {
+      if (stale() || !body.querySelector('.dp-pg')) return;
+      m.querySelectorAll('.dpv-pres-b,.dpv-board-b').forEach(function (b) { b.disabled = false; });
+      if (typeof docBoardAttach === 'function') {   // 저장된 표시는 바로 보이게 (도구는 ✏️ 칠판 · ▶ 발표에서)
+        m.__board = docBoardAttach(body, f, { bar: m.querySelector('.dpv-bdock'), current: function () { return m.__pres ? m.__cur : null; } });
+      }
+    });
   }).catch(function (e) { if (!stale()) body.innerHTML = '<div class="dp-msg">원본을 받지 못했습니다 — ' + _dpEsc(e.message || e) + '</div>'; });
+}
+
+/* ✏️ 칠판 — 막대 펴기 · 접기 (크게 보기) */
+function docViewBoard(on) {
+  var m = document.getElementById('docViewModal'); if (!m || !m.__board) return;
+  var show = on == null ? !m.classList.contains('board') : !!on;
+  m.classList.toggle('board', show);
+  if (!m.__pres) m.querySelector('.dpv-bdock').hidden = !show;
+  var b = m.querySelector('.dpv-board-b'); if (b) b.classList.toggle('on', show);
+  if (show && m.__board.tool === 'none') m.__board.setTool('pen');
+  if (!show) m.__board.setTool('none');
+}
+
+/* ═══ ▶ 발표 모드 — 전체 화면 · 한 쪽씩 · 칠판 ═══ */
+function docViewPresent() {
+  var m = document.getElementById('docViewModal'); if (!m) return;
+  var pages = m.querySelectorAll('.dpv-body .dp-pg');
+  if (!pages.length) return;
+  // 지금 가장 많이 보이는 쪽부터
+  var best = 0, bestV = -1;
+  pages.forEach(function (el, i) { var r = el.getBoundingClientRect(), v = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)); if (v > bestV) { bestV = v; best = i; } });
+  m.__pres = true; m.classList.add('pres');
+  var pbar = m.querySelector('.dpv-pbar'), dock = m.querySelector('.dpv-bdock');
+  pbar.hidden = false;
+  m.querySelector('.dpv-bslot').appendChild(dock); dock.hidden = false;
+  try { if (m.requestFullscreen && !document.fullscreenElement) { var fp = m.requestFullscreen(); if (fp && fp.catch) fp.catch(function () {}); } } catch (_) {}
+  m.__fs = function () { if (document.fullscreenElement) m.__wasFs = true; else if (m.__pres && m.__wasFs) { _dpPresEnd(m); return; } setTimeout(function () { _dpPresFit(m); }, 60); };
+  document.addEventListener('fullscreenchange', m.__fs);
+  m.__rs = function () { _dpPresFit(m); };
+  window.addEventListener('resize', m.__rs);
+  // 마우스를 멈추면 막대 숨김 (움직이면 다시)
+  m.__idle = function () {
+    m.classList.remove('idle'); clearTimeout(m.__idleT);
+    m.__idleT = setTimeout(function () { if (m.__pres && !m.querySelector('.dpv-pbar:hover') && !(m.__board && m.__board.text)) m.classList.add('idle'); }, 2600);
+  };
+  m.addEventListener('pointermove', m.__idle);
+  m.__idle();
+  _dpPresGo(m, best);
+}
+function _dpPresGo(m, i) {
+  var pages = m.querySelectorAll('.dpv-body .dp-pg'); if (!pages.length) return;
+  i = Math.max(0, Math.min(pages.length - 1, i));
+  if (m.__board && m.__board.text && typeof _dbCommitText === 'function') _dbCommitText(m.__board);
+  if (m.__board) m.__board.sel = null;
+  m.__cur = i;
+  pages.forEach(function (el, k) { el.classList.toggle('cur', k === i); });
+  m.querySelector('.dpv-pno').textContent = (i + 1) + ' / ' + pages.length;
+  m.querySelectorAll('.dpv-nav[data-nav]').forEach(function (b) { b.disabled = (+b.dataset.nav < 0 ? i === 0 : i === pages.length - 1); });
+  _dpPresFit(m);
+}
+/* 지금 쪽을 화면에 꽉 맞춤 (가로세로 비율 유지) */
+function _dpPresFit(m) {
+  if (!m.__pres) return;
+  var el = m.querySelector('.dpv-body .dp-pg.cur'); if (!el) return;
+  var ar = String(el.style.aspectRatio || '').split('/').map(Number), W = window.innerWidth, H = window.innerHeight;
+  if (ar.length === 2 && ar[0] > 0 && ar[1] > 0) { var ratio = ar[0] / ar[1]; el.style.width = Math.floor(Math.min(W * 0.985, H * 0.97 * ratio)) + 'px'; }
+  else el.style.width = '';
+}
+function _dpPresEnd(m) {
+  if (!m || !m.__pres) return;
+  m.__pres = false; m.classList.remove('pres', 'idle');
+  m.querySelectorAll('.dpv-body .dp-pg').forEach(function (el) { el.classList.remove('cur'); el.style.width = ''; });
+  var dock = m.querySelector('.dpv-bdock'), box = m.querySelector('.dpv-box');
+  box.insertBefore(dock, m.querySelector('.dpv-body')); dock.hidden = !m.classList.contains('board');
+  m.querySelector('.dpv-pbar').hidden = true;
+  if (m.__board && !m.classList.contains('board')) m.__board.setTool('none');
+  document.removeEventListener('fullscreenchange', m.__fs); window.removeEventListener('resize', m.__rs); m.removeEventListener('pointermove', m.__idle);
+  clearTimeout(m.__idleT); m.__wasFs = false;
+  try { if (document.fullscreenElement && document.exitFullscreen) { var xp = document.exitFullscreen(); if (xp && xp.catch) xp.catch(function () {}); } } catch (_) {}
+  var cur = m.querySelectorAll('.dpv-body .dp-pg')[m.__cur || 0];
+  if (cur) setTimeout(function () { cur.scrollIntoView({ block: 'start' }); }, 80);
 }

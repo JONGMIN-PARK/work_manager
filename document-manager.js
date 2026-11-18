@@ -346,7 +346,7 @@ function renderFileList(folders, allFiles) {
         html += '<div onclick="docClickFile(\'' + eA(f.id) + '\')" style="padding:12px 10px;border-radius:8px;border:1px solid var(--bd);cursor:pointer;text-align:center;transition:all .15s;' + sel + '" onmouseover="this.style.borderColor=\'var(--ac)\'" onmouseout="if(\'' + eA(f.id) + '\'!==docSelFile)this.style.borderColor=\'var(--bd)\'">';
         html += '<div style="font-size:28px;margin-bottom:6px">' + icon.icon + '</div>';
         html += '<div style="font-size:10px;font-weight:600;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(f.name) + '">' + eH(f.name) + '</div>';
-        html += '<div style="font-size:9px;color:var(--t5);margin-top:3px">' + formatFileSize(f.size) + '</div>';
+        html += '<div style="font-size:9px;color:var(--t5);margin-top:3px">' + formatFileSize(f.size) + (f.annotPages ? ' · <span title="칠판 표시가 있는 쪽">🖍 ' + f.annotPages + '</span>' : '') + '</div>';
         html += '</div>';
       });
       html += '</div>';
@@ -359,7 +359,7 @@ function renderFileList(folders, allFiles) {
         html += '<td><span style="margin-right:4px">' + icon.icon + '</span>' + eH(f.name);
         if (f.tags && f.tags.length) html += ' <span style="font-size:9px;color:var(--tg-t)">' + f.tags.map(function(t){return '#'+eH(t)}).join(' ') + '</span>';
         html += '</td>';
-        html += '<td class="mono">' + formatFileSize(f.size) + '</td>';
+        html += '<td class="mono">' + formatFileSize(f.size) + (f.annotPages ? ' <span title="칠판 표시가 있는 쪽">🖍' + f.annotPages + '</span>' : '') + '</td>';
         html += '<td>' + eH((f.ext || '').toUpperCase()) + '</td>';
         html += '<td style="font-size:10px">' + (f.createdAt ? new Date(f.createdAt).toLocaleDateString('ko') : '') + '</td>';
         html += '<td style="white-space:nowrap">';
@@ -561,6 +561,7 @@ async function showFilePreview(fileRecord) {
     infoHtml += '<div style="font-size:10px;color:var(--t4);margin-bottom:6px;background:var(--bg-i);padding:6px 8px;border-radius:4px;max-height:80px;overflow-y:auto;line-height:1.5">' + eH(fileRecord.memo).slice(0, 300) + '</div>';
   }
   infoHtml += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
+  if (fileRecord.annotPages) infoHtml += '<div style="font-size:10.5px;color:var(--t4);margin-bottom:6px">🖍 칠판 표시 ' + fileRecord.annotPages + '쪽 — ⛶ 크게 보기 · ▶ 발표에서 고칠 수 있어요</div>';
   infoHtml += '<button class="btn btn-p btn-s" onclick="docViewFile(\'' + eA(fileRecord.id) + '\')" title="화면 가득 보기">⛶ 크게 보기</button>';
   infoHtml += '<button class="btn btn-g btn-s" onclick="docDownloadFile(\'' + eA(fileRecord.id) + '\')">💾 다운로드</button>';
   infoHtml += '<button class="btn btn-g btn-s" onclick="docEditFileMeta(\'' + eA(fileRecord.id) + '\')">✏️ 편집</button>';
@@ -589,6 +590,12 @@ async function showFilePreview(fileRecord) {
   if (_stale()) return;
   if (!data) { view.innerHTML = '<div class="dp-msg">원본 파일이 저장되어 있지 않습니다</div>'; return; }
   await docPreviewInto(view, fileRecord, data, { isStale: _stale });
+  // 🖍 저장된 칠판 표시 — 미리보기 칸에서는 보기만 (그리기는 ⛶ 크게 보기 · ▶ 발표)
+  if (!_stale() && fileRecord.annotPages && typeof docBoardAttach === 'function') {
+    var _bd = docBoardAttach(view, fileRecord, { readOnly: true });
+    var _prevClean = view.__dpCleanup;
+    view.__dpCleanup = function () { try { _bd.destroy(); } catch (_) {} if (_prevClean) _prevClean(); };
+  }
 }
 
 /* ═══ AI 요약 패널 ═══ */

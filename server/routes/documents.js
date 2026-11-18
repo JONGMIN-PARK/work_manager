@@ -161,7 +161,7 @@ router.delete('/folders/:id', async function (req, res) {
 // GET /api/files?projectId=xxx&folderId=yyy — v13.34 가시성
 router.get('/files', async function (req, res) {
   try {
-    var sql = 'SELECT *, COUNT(*) OVER() AS _total FROM project_files WHERE tenant_id = $1';
+    var sql = "SELECT *, (SELECT COUNT(*)::int FROM doc_annotations a WHERE a.file_id = project_files.id AND a.tenant_id = project_files.tenant_id AND jsonb_array_length(a.items) > 0) AS annot_pages, COUNT(*) OVER() AS _total FROM project_files WHERE tenant_id = $1";
     var params = [req.tenant.id];
     var idx = 2;
     if (req.query.projectId) { sql += ' AND project_id = $' + idx++; params.push(req.query.projectId); }
@@ -360,6 +360,7 @@ router.delete('/files/:id', async function (req, res) {
     if (!await _gateDoc(req, res, 'project_files', req.params.id, 'edit')) return;
     var r = await db.query('DELETE FROM project_files WHERE id = $1 AND tenant_id = $2 RETURNING id, storage_key', [req.params.id, req.tenant.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'NOT_FOUND' });
+    await db.query('DELETE FROM doc_annotations WHERE file_id = $1 AND tenant_id = $2', [req.params.id, req.tenant.id]);   // 🖍 칠판 표시도
     // GCS 원본도 삭제 (실패해도 메타데이터 삭제는 성공 처리 — 고아 객체는 추후 정리)
     var sk = r.rows[0].storage_key;
     if (sk && gcs.isEnabled()) {
@@ -369,6 +370,66 @@ router.delete('/files/:id', async function (req, res) {
   } catch (e) {
     httpErr.serverError(res, '[files/delete]', e);
   }
+});
+
+// ═══ 🖍 문서 칠판 (v13.526) — 쪽마다 표시 · 글 · 붙인 그림 ═══
+// GET /api/docs/files/:id/annot          → { pages: { "<쪽>": { items, version, updatedBy, updatedAt } }, canEdit }
+// PUT /api/docs/files/:id/annot/:page    { items, version } → { page, version }  (version 이 다르면 409 + 최신)
+//  읽기 = 문서를 볼 수 있는 사람, 저장 = 문서를 고칠 수 있는 사람(프로젝트 참여자 · 개인 문서는 만든 사람)
+var ANNOT_KINDS = ['pen', 'line', 'arrow', 'rect', 'ell', 'text', 'img'];
+var ANNOT_MAX = 4 * 1024 * 1024;   // 쪽 하나 4MB (붙인 그림 포함)
+async function _canEditDoc(req, row) {
+  if (row.project_id) return !!(await ps.canEditById(req, row.project_id));
+  return row._owner === req.user.sub || req.user.role === 'admin';
+}
+function _cleanAnnot(items) {
+  if (!Array.isArray(items)) return null;
+  var out = [];
+  for (var i = 0; i < items.length && out.length < 3000; i++) {
+    var it = items[i];
+    if (!it || typeof it !== 'object' || ANNOT_KINDS.indexOf(it.k) < 0) continue;
+    if (it.k === 'img' && !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(String(it.src || ''))) continue;
+    if (it.c != null && !/^#[0-9a-fA-F]{3,8}$/.test(String(it.c))) it.c = '#EF4444';
+    if (it.k === 'text') it.t = String(it.t || '').slice(0, 2000);
+    out.push(it);
+  }
+  return out;
+}
+router.get('/files/:id/annot', async function (req, res) {
+  try {
+    var row = await _gateDoc(req, res, 'project_files', req.params.id, 'read'); if (!row) return;
+    var r = await db.query('SELECT page, items, version, updated_by, updated_at FROM doc_annotations WHERE file_id = $1 AND tenant_id = $2 ORDER BY page', [req.params.id, req.tenant.id]);
+    var pages = {};
+    r.rows.forEach(function (x) { pages[x.page] = { items: x.items || [], version: x.version, updatedBy: x.updated_by, updatedAt: x.updated_at }; });
+    res.json({ data: { pages: pages, canEdit: await _canEditDoc(req, row) } });
+  } catch (e) { httpErr.serverError(res, '[files/annot]', e); }
+});
+router.put('/files/:id/annot/:page', async function (req, res) {
+  try {
+    var page = parseInt(req.params.page, 10);
+    if (!(page >= 0 && page < 5000)) return res.status(400).json({ error: 'VALIDATION', message: '쪽 번호가 맞지 않습니다.' });
+    var row = await _gateDoc(req, res, 'project_files', req.params.id, 'read'); if (!row) return;
+    if (!await _canEditDoc(req, row)) return res.status(403).json({ error: 'FORBIDDEN', message: '이 문서를 고칠 수 있는 사람만 표시를 저장할 수 있습니다.' });
+    var b = req.body || {}, items = _cleanAnnot(b.items);
+    if (!items) return res.status(400).json({ error: 'VALIDATION', message: 'items 가 필요합니다.' });
+    var json = JSON.stringify(items);
+    if (json.length > ANNOT_MAX) return res.status(413).json({ error: 'TOO_LARGE', message: '이 쪽의 표시가 너무 큽니다 (붙인 그림을 줄여 주세요).' });
+    var ver = b.version == null ? null : +b.version;
+    var r;
+    if (ver == null || ver === 0) {
+      r = await db.query('INSERT INTO doc_annotations (file_id, page, tenant_id, items, updated_by) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (file_id, page) DO NOTHING RETURNING version',
+        [req.params.id, page, req.tenant.id, json, req.user.sub]);
+    } else {
+      r = await db.query('UPDATE doc_annotations SET items = $4, version = version + 1, updated_by = $5, updated_at = now() WHERE file_id = $1 AND page = $2 AND tenant_id = $3 AND version = $6 RETURNING version',
+        [req.params.id, page, req.tenant.id, json, req.user.sub, ver]);
+    }
+    if (!r.rows.length) {
+      var cur = await db.query('SELECT items, version, updated_by, updated_at FROM doc_annotations WHERE file_id = $1 AND page = $2 AND tenant_id = $3', [req.params.id, page, req.tenant.id]);
+      var c = cur.rows[0];
+      return res.status(409).json({ error: 'CONFLICT', message: '다른 사람이 이 쪽 표시를 먼저 고쳤습니다.', latest: c ? { items: c.items, version: c.version, updatedBy: c.updated_by, updatedAt: c.updated_at } : null });
+    }
+    res.json({ data: { page: page, version: r.rows[0].version } });
+  } catch (e) { httpErr.serverError(res, '[files/annot-put]', e); }
 });
 
 module.exports = router;

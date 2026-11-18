@@ -315,6 +315,7 @@ router.delete('/:id', rbac.checkPermission('project.delete'), async function (re
     var id = req.params.id, tid = req.tenant.id;
     var storageKeys = [];
     var r = await db.transaction(async function (client) {
+      await client.query('DELETE FROM doc_annotations WHERE tenant_id = $2 AND file_id IN (SELECT id FROM project_files WHERE project_id = $1 AND tenant_id = $2)', [id, tid]);   // 🖍 v13.526
       var fr = await client.query('DELETE FROM project_files WHERE project_id = $1 AND tenant_id = $2 RETURNING storage_key', [id, tid]);
       storageKeys = fr.rows.map(function (x) { return x.storage_key; }).filter(Boolean);
       await client.query('DELETE FROM project_folders WHERE project_id = $1 AND tenant_id = $2', [id, tid]);
