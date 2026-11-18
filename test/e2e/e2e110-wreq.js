@@ -62,6 +62,22 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
         return r;
       });
     });
+    // 이름을 바꾼 사람 — 'Alex(김팀원)' 로 보이고 둘 다로 찾힘 (v13.530)
+    var kt = await (async function () { var r = await fetch('http://localhost:3000/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'kim@t.com', password: 'Test1234!' }) }); return (await r.json()).data.accessToken; })();
+    var kput = function (b) { return fetch('http://localhost:3000/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + kt }, body: JSON.stringify(b) }); };
+    await kput({ displayName: 'Alex' });
+    var nm = await A.evaluate(function () {
+      _wqPeople = null;
+      return wrqOpen({ type: 'order' }).then(function () {
+        var inp = document.querySelector('#wrqModal .wrq-who-in'), q = function (v) { inp.value = v; inp.dispatchEvent(new Event('input')); return [].map.call(document.querySelectorAll('#wrqModal .wrq-sg'), function (x) { return x.textContent; }); };
+        var r = { alex: q('Alex'), reg: q('김팀원') };
+        var m = document.getElementById('wrqModal'); m._wmClose ? m._wmClose() : m.remove();
+        return r;
+      });
+    });
+    await kput({ displayName: '' });
+    await A.evaluate(function () { _wqPeople = null; });
+    check(nm.alex.join() === 'Alex(김팀원)' && nm.reg.join() === 'Alex(김팀원)', '바꾼 이름(등록 이름) 표시 · 둘 다로 찾기 ' + JSON.stringify(nm));
     check(big.shown === 15 && big.depts.length === 3 && big.find === 5 && big.chips === 5, '15명 모두 · 부서 3묶음 · 부서로 찾기 5 · 부서 모두 넣기 5 ' + JSON.stringify(big));
     await A.click('.pd-wrq-btn');
     await A.waitForSelector('#wrqModal .wrq-who-in', { timeout: 8000 });
@@ -97,7 +113,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await K.waitForFunction(function () { var c = Array.prototype.filter.call(document.querySelectorAll('.wrq-card'), function (x) { return /도면 검토/.test(x.textContent); }).pop(); return c && c.classList.contains('st-accepted'); }, { timeout: 8000 }).catch(function () {});
     var st = await K.evaluate(function () { var c = Array.prototype.filter.call(document.querySelectorAll('.wrq-card'), function (x) { return /도면 검토/.test(x.textContent); }).pop(); return c && { cls: c.className, done: !!c.querySelector('[data-wq="done"]') }; });
     check(st && /st-accepted/.test(st.cls) && st.done, '수락 → 카드 바뀜 · ✅ 완료 단추 ' + JSON.stringify(st));
-    var todo = await K.evaluate(function () { return apiFetch('/api/my-work').then(function (r) { var d = r.data || r, items = d.items || d; return (items || []).filter(function (x) { return x.src === 'todo' && /도면 검토/.test(x.title); }).map(function (x) { return { due: x.due, memo: x.memo }; })[0]; }); });
+    var todo = await K.evaluate(function () { return apiFetch('/api/my-work').then(function (r) { var d = r.data || r, items = d.items || d; return (items || []).filter(function (x) { return x.src === 'todo' && /요청 화면/.test(x.title) && /도면 검토/.test(x.title); }).slice(-1).map(function (x) { return { due: x.due, memo: x.memo }; })[0]; }); });
     check(todo && todo.due === '2026-12-03' && /업무 지시/.test(todo.memo || ''), '받는 사람 내 할 일 ' + JSON.stringify(todo));
 
     // 3) 보낸 사람 — 📨 요청함 (보낸 요청 · 수락)

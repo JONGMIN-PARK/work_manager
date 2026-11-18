@@ -38,8 +38,15 @@ function cleanDate(v) { v = String(v || '').trim(); return /^\d{4}-\d{2}-\d{2}$/
 function cleanTime(v) { v = String(v || '').trim(); return /^\d{2}:\d{2}$/.test(v) ? v : null; }
 function rid() { return 'wrq-' + crypto.randomUUID().slice(0, 12); }
 
-async function names(tenantId, ids) {
-  var r = await db.query("SELECT id, COALESCE(NULLIF(display_name,''), name) AS n FROM users WHERE tenant_id = $1 AND id = ANY($2::uuid[])", [tenantId, ids]);
+/* 표시 이름 — 바꾼 이름이 있으면 '바꾼 이름(등록 이름)' (v13.530, 예: Alex(박종민)). label=false 면 이름 맞추기용 원래 값 */
+var LABEL_SQL = function (t) {
+  // 보이는 이름 = 표시명 || 이름. 괄호 = 그와 다른 이름(이름, 없으면 등록 이름) — 예: Alex(박종민) · Alex(관리자)
+  var shown = "COALESCE(NULLIF(" + t + ".display_name,''), " + t + ".name)";
+  var other = "CASE WHEN " + t + ".name IS DISTINCT FROM " + shown + " THEN " + t + ".name WHEN COALESCE(" + t + ".reg_name,'') <> '' AND " + t + ".reg_name IS DISTINCT FROM " + shown + " THEN " + t + ".reg_name END";
+  return "(" + shown + " || COALESCE('(' || " + other + " || ')', ''))";
+};
+async function names(tenantId, ids, label) {
+  var r = await db.query("SELECT u.id, " + (label ? LABEL_SQL('u') : "COALESCE(NULLIF(u.display_name,''), u.name)") + " AS n FROM users u WHERE u.tenant_id = $1 AND u.id = ANY($2::uuid[])", [tenantId, ids]);
   var o = {}; r.rows.forEach(function (u) { o[u.id] = u.n; }); return o;
 }
 
@@ -61,7 +68,7 @@ async function syncCard(tenantId, w, line) {
   if (!w.chat_msg_id) return;
   try {
     var chat = require('./chat');
-    var nm = await names(tenantId, [w.from_user_id, w.to_user_id]);
+    var nm = await names(tenantId, [w.from_user_id, w.to_user_id], true);
     await db.query('UPDATE chat_messages SET wreq = $2 WHERE id = $1', [w.chat_msg_id, JSON.stringify(snap(w, nm))]);
     await chat.refreshMsg(+w.chat_msg_id);
     if (line) {
@@ -91,7 +98,7 @@ async function makeResult(req, w) {
        (w.body ? w.body + '\n\n' : '') + '📨 ' + (nm[w.from_user_id] || '') + ' 님이 보낸 일정', req.user.sub, req.tenant.id, w.due_time || null, w.end_time || null, w.location || null]);
     return 'event:' + eid;
   }
-  var from = (await names(req.tenant.id, [w.from_user_id]))[w.from_user_id] || '';
+  var from = (await names(req.tenant.id, [w.from_user_id], true))[w.from_user_id] || '';
   var memo = [t.icon + ' ' + from + ' 님의 ' + t.label + (w.project_name ? ' · 📁 ' + w.project_name : ''), w.body || ''].filter(Boolean).join('\n\n');
   var tid = 'todo-' + crypto.randomUUID().slice(0, 12);
   await db.query(
@@ -119,7 +126,7 @@ router.post('/', async function (req, res) {
     var to = (Array.isArray(b.toUserIds) ? b.toUserIds : [b.toUserId]).filter(function (x, i, a) { return x && typeof x === 'string' && a.indexOf(x) === i; }).slice(0, 30);
     to = to.filter(function (x) { return x !== req.user.sub; });
     if (!to.length) return bad(res, '받는 사람을 고르세요 (나 말고).');
-    var nm = await names(req.tenant.id, to.concat([req.user.sub]));
+    var nm = await names(req.tenant.id, to.concat([req.user.sub]), true);
     if (to.some(function (x) { return !nm[x]; })) return bad(res, '받는 사람을 찾을 수 없습니다.', 404);
     if (type === 'transfer' && to.length > 1) return bad(res, '이관은 한 사람에게만 할 수 있습니다.');
     var due = cleanDate(b.dueDate), tm = cleanTime(b.dueTime), et = cleanTime(b.endTime);
@@ -163,7 +170,7 @@ router.get('/', async function (req, res) {
     var cond = box === 'out' ? 'w.from_user_id = $2' : 'w.to_user_id = $2';
     if (req.query.open === '1') cond += " AND w.status IN ('sent','accepted')";
     var r = await db.query(
-      "SELECT w.*, COALESCE(NULLIF(fu.display_name,''), fu.name) AS from_name, COALESCE(NULLIF(tu.display_name,''), tu.name) AS to_name FROM work_requests w " +
+      "SELECT w.*, " + LABEL_SQL('fu') + " AS from_name, " + LABEL_SQL('tu') + " AS to_name FROM work_requests w " +
       'JOIN users fu ON fu.id = w.from_user_id JOIN users tu ON tu.id = w.to_user_id WHERE w.tenant_id = $1 AND ' + cond +
       " ORDER BY (w.status IN ('sent','accepted')) DESC, w.created_at DESC LIMIT 300", [req.tenant.id, req.user.sub]);
     res.json({ data: r.rows.map(shapeRow) });

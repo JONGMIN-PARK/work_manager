@@ -103,6 +103,23 @@ function uidOf(me) { var u = me.d.data || me.d; return u.id || (u.user && u.user
   var d6 = await K('POST', '/api/work-requests/' + s6.d.data[0].id + '/done');
   check('전달 → 바로 확인(완료)', d6.d.data.status === 'done' && !d6.d.data.resultKey, d6.d);
 
+  // 9. 이름 바꿔도 등록 이름 함께 (v13.530) — 표시명만 바꿈 → Alex(김팀원) · 이름 자체를 바꿈 → Alex2(김팀원)
+  var kimOrig = (await K('GET', '/api/profile')).d.data;
+  await K('PUT', '/api/profile', { displayName: 'Alex' });
+  var lk = ((await A('GET', '/api/users/lookup')).d.data || []).filter(function (u) { return u.id === kId; })[0];
+  check('lookup — 표시명 · 이름 · 등록 이름', lk.display_name === 'Alex' && lk.name === kimOrig.name && lk.reg_name === kimOrig.name, lk);
+  var s9 = await A('POST', '/api/work-requests', { type: 'forward', title: '이름 시험 ' + T, toUserIds: [kId] });
+  check('보낸 요청 받는 사람 = Alex(김팀원)', s9.d.data[0].toName === 'Alex(' + kimOrig.name + ')', s9.d.data[0].toName);
+  await K('PUT', '/api/profile', { name: 'Alex2', displayName: '' });
+  var lk2 = ((await A('GET', '/api/users/lookup')).d.data || []).filter(function (u) { return u.id === kId; })[0];
+  check('이름을 바꿔도 등록 이름 남음', lk2.name === 'Alex2' && lk2.reg_name === kimOrig.name, lk2);
+  var o9 = (await A('GET', '/api/work-requests?box=out')).d.data.filter(function (x) { return x.id === s9.d.data[0].id; })[0];
+  check('요청함 = Alex2(김팀원)', o9.toName === 'Alex2(' + kimOrig.name + ')', o9.toName);
+  await K('PUT', '/api/profile', { name: kimOrig.name, displayName: kimOrig.display_name || '' });
+  var lk3 = ((await A('GET', '/api/users/lookup')).d.data || []).filter(function (u) { return u.id === kId; })[0];
+  var o10 = (await A('GET', '/api/work-requests?box=out')).d.data.filter(function (x) { return x.id === s9.d.data[0].id; })[0];
+  check('되돌리면 괄호 없음', lk3.name === kimOrig.name && o10.toName === kimOrig.name, o10.toName);
+
   await A('DELETE', '/api/projects/' + pid);
   console.log('\nALL PASS ' + ok);
 })().catch(function (e) { console.log('ERR', e.stack || e.message); process.exit(1); });

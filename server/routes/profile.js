@@ -36,7 +36,8 @@ router.put('/', async function (req, res) {
     var params = [];
     var idx = 1;
 
-    if (b.name !== undefined) { sets.push('name = $' + idx++); params.push(b.name.trim()); }
+    // 처음 이름은 남김 — 바꾸기 전 이름을 reg_name 에 (이미 있으면 그대로, v13.530). SET 안의 name 은 바꾸기 전 값
+    if (b.name !== undefined) { sets.push("reg_name = COALESCE(NULLIF(reg_name, ''), name)"); sets.push('name = $' + idx++); params.push(b.name.trim()); }
     if (b.displayName !== undefined || b.display_name !== undefined) {
       sets.push('display_name = $' + idx++);
       params.push((b.displayName || b.display_name || '').trim());
