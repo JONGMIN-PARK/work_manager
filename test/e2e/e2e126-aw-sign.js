@@ -33,6 +33,7 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
           return res({ ok: true, date: f.date, count: f.items.length, messages: [], page: '/Sales/Week_List.asp' });
         }
         if (cmd === 'download') return res({ ok: true, files: [{ team: 'T1', name: 'T1.xls', size: 1, base64: xls(window.__awSite.filter(function (r) { return r.day >= a.start && r.day <= a.end; })) }], skipped: [], teams: ['T1'] });
+        if (cmd === 'approve' && a.dry) { window.__awDry = (window.__awDry || 0) + 1; return res({ ok: true, date: a.date, seq: '1', dry: true, btn: !!window.__awLead && !window.__awSigned[a.date], signed: !!window.__awSigned[a.date], found: true }); }
         if (cmd === 'approve') {
           window.__awSignArgs = a;
           if (window.__awSigned[a.date]) return res({ ok: true, date: a.date, seq: '1', already: true, approved: true });
@@ -68,50 +69,58 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await p.type('#loginEmail', 'admin@t.com'); await p.type('#loginPw', 'Test1234!');
     await p.keyboard.press('Enter');
     await p.waitForFunction(function () { return typeof currentUser !== 'undefined' && currentUser && currentUser.id && !document.getElementById('initLoading'); }, { timeout: 60000 });
-    await p.evaluate(function () { window.__wmDialogUi = true; currentUser.display_name = 'tester'; try { localStorage.removeItem('wm_awg_sign'); } catch (_) {} awgOpen('2026-11-16'); });
+    await p.evaluate(function () { window.__wmDialogUi = true; currentUser.display_name = 'tester'; try { localStorage.removeItem('wm_awg_signer'); } catch (_) {} awgOpen('2026-11-16'); });
     await until(function () { return !!document.querySelector('[data-awg="fill"]'); }, null, 10000);
 
-    check(await p.evaluate(function () { var c = document.querySelector('[data-awg-signopt]'); return !!c && c.checked; }), '「등록 뒤 팀장승인까지」 — 기본으로 켜짐');
-    check(await p.evaluate(function () { return !document.querySelector('[data-awg="sign"]'); }), '등록 전에는 ✍ 팀장승인 단추 없음');
+    // 팀원 — 애니웍스에 승인 단추가 없음 → 묻지도 · 알리지도 않음
+    check(await p.evaluate(function () { return !document.querySelector('[data-awg="sign"]'); }), '처음에는 ✍ 팀장승인 단추 없음');
     await writeRow();
     var t = await fillSend();
-    check(/팀장승인/.test(t), '등록 확인 창에 「팀장승인까지」 안내');
-    check(await until(function () { var m = document.querySelector('.awg-msg.ok'); return !!m && /등록 완료/.test(m.textContent) && /팀장승인 완료/.test(m.textContent); }, null, 10000), '등록 → 확인 → 팀장승인 완료');
-    check(await p.evaluate(function () { var c = window.__awCalls, i = c.lastIndexOf('approve'); return i > c.indexOf('submit') && c.lastIndexOf('download') < i && window.__awSignArgs.date === '2026-11-16' && window.__awSignArgs.names.indexOf('tester') >= 0; }), '승인은 등록 · 주간일지 확인 뒤에, 그 날짜 · 내 이름으로');
+    check(!/팀장승인/.test(t), '등록 확인 창에는 승인 이야기 없음');
+    check(await until(function () { var m = document.querySelector('.awg-msg.ok'); return !!m && /등록 완료/.test(m.textContent) && !_awg.busy; }, null, 10000), '팀원 — 등록 완료');
+    await wait(300);
+    check(await p.evaluate(function () { return window.__awDry === 1 && window.__awCalls.filter(function (x) { return x === 'approve'; }).length === 1 && !document.querySelector('.wmd') && !/팀장승인/.test(document.querySelector('.awg-msg.ok').textContent) && !document.querySelector('[data-awg="sign"]') && localStorage.getItem('wm_awg_signer') !== '1'; }), '팀원 — 단추만 보고 끝 (묻지 않음 · 경고 없음 · ✍ 단추 없음)');
 
-    // 이미 등록한 날 — ✍ 팀장승인 단추 (이미 승인돼 있으면 그렇다고)
-    check(await until(function () { return !!document.querySelector('[data-awg="sign"]'); }), '등록한 날에는 ✍ 팀장승인 단추');
-    await p.click('[data-awg="sign"]');
-    await until(function () { return !!document.querySelector('.wmd .wmd-btn.ok'); }, null, 3000);
-    check(await p.evaluate(function () { return document.querySelector('.wmd .wmd-btn.ok').textContent === '승인'; }), '단추 → 「승인」 확인 창');
-    await p.click('.wmd .wmd-btn.ok');
-    check(await until(function () { var m = document.querySelector('.awg-msg.ok'); return !!m && /이미 되어 있습니다/.test(m.textContent); }), '이미 승인된 날 → 「이미 되어 있습니다」');
-
-    // 끄면 승인하지 않음 · 기억
-    await p.evaluate(function () { document.querySelector('[data-awg-day="2026-11-17"]').click(); });
-    await until(function () { return _awg.day === '2026-11-17' && !!document.querySelector('[data-awg-signopt]'); });
-    await p.evaluate(function () { var c = document.querySelector('[data-awg-signopt]'); c.checked = false; c.dispatchEvent(new Event('change', { bubbles: true })); });
-    check(await p.evaluate(function () { return localStorage.getItem('wm_awg_sign') === '0'; }), '끈 것을 기억');
-    await writeRow();
-    var n0 = await p.evaluate(function () { return window.__awCalls.filter(function (x) { return x === 'approve'; }).length; });
-    t = await fillSend();
-    check(!/팀장승인/.test(t), '끄면 확인 창에 승인 안내 없음');
-    await until(function () { var m = document.querySelector('.awg-msg.ok'); return !!m && /등록 완료/.test(m.textContent); }, null, 10000);
-    check(await p.evaluate(function (n0) { return window.__awCalls.filter(function (x) { return x === 'approve'; }).length === n0 && !window.__awSigned['2026-11-17']; }, n0), '끄면 승인하지 않음');
-
-    // 등록이 주간일지에서 확인되지 않으면 승인하지 않음
-    await p.evaluate(function () { var c = document.querySelector('[data-awg-signopt]'); c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); window.__awLose = true; document.querySelector('[data-awg-day="2026-11-18"]').click(); });
-    await until(function () { return _awg.day === '2026-11-18'; });
+    // 팀장 — 단추가 있음 → 「팀장승인도 할까요?」 → 나중에
+    await p.evaluate(function () { window.__awLead = true; document.querySelector('[data-awg-day="2026-11-17"]').click(); });
+    await until(function () { return _awg.day === '2026-11-17' && !!document.querySelector('[data-awg="fill"]'); });
     await writeRow();
     await fillSend();
-    check(await until(function () { var m = document.querySelector('.awg-msg.warn'); return !!m && /찾지 못했습니다/.test(m.textContent); }, null, 10000) && await p.evaluate(function () { return !window.__awSigned['2026-11-18']; }), '주간일지에서 못 찾으면 승인하지 않음');
+    check(await until(function () { var d = document.querySelector('.wmd'); return !!d && /팀장승인도 할까요/.test(d.textContent); }, null, 10000), '팀장 — 등록 확인 뒤 「팀장승인도 할까요?」');
+    check(await p.evaluate(function () { var d = document.querySelector('.wmd'); return d.querySelector('.wmd-btn.ok').textContent === '승인' && /나중에/.test(d.textContent) && /등록 완료/.test(document.querySelector('.awg-msg.ok').textContent); }), '[승인] · [나중에] · 등록 완료는 이미 보임');
+    await p.click('.wmd .wmd-btn:not(.ok)');
+    check(await until(function () { return /하지 않았습니다/.test((document.querySelector('.awg-msg.ok') || {}).textContent || ''); }) && await p.evaluate(function () { return !window.__awSigned['2026-11-17'] && !window.__awSignArgs; }), '나중에 → 승인하지 않음');
+    check(await until(function () { return !!document.querySelector('[data-awg="sign"]'); }), '팀장으로 알아본 뒤 ✍ 팀장승인 단추');
+
+    // ✍ 단추로 따로 승인
+    await p.click('[data-awg="sign"]');
+    await until(function () { return !!document.querySelector('.wmd .wmd-btn.ok'); }, null, 3000);
+    await p.click('.wmd .wmd-btn.ok');
+    check(await until(function () { var m = document.querySelector('.awg-msg.ok'); return !!m && /팀장승인 완료/.test(m.textContent); }) && await p.evaluate(function () { return window.__awSigned['2026-11-17'] && window.__awSignArgs.date === '2026-11-17' && window.__awSignArgs.names.indexOf('tester') >= 0; }), '✍ 단추 → 그 날짜 · 내 이름으로 승인 완료');
+
+    // 팀장 — 다음 날 등록 → 승인
+    await p.evaluate(function () { document.querySelector('[data-awg-day="2026-11-18"]').click(); });
+    await until(function () { return _awg.day === '2026-11-18' && !!document.querySelector('[data-awg="fill"]'); });
+    await writeRow();
+    await fillSend();
+    await until(function () { var d = document.querySelector('.wmd'); return !!d && /팀장승인도/.test(d.textContent); }, null, 10000);
+    await p.click('.wmd .wmd-btn.ok');
+    check(await until(function () { var m = document.querySelector('.awg-msg.ok'); return !!m && /등록 완료/.test(m.textContent) && /팀장승인 완료/.test(m.textContent); }, null, 10000), '팀장 — 등록 → 확인 → 승인 완료 한 번에');
+    check(await p.evaluate(function () { var c = window.__awCalls, i = c.lastIndexOf('approve'); return i > c.lastIndexOf('submit') && c.lastIndexOf('download') < i; }), '승인은 등록 · 주간일지 확인 뒤');
+
+    // 등록이 주간일지에서 확인되지 않으면 단추도 보지 않음
+    await p.evaluate(function () { window.__awLose = true; window.__awDry = 0; document.querySelector('[data-awg-day="2026-11-19"]') ? document.querySelector('[data-awg-day="2026-11-19"]').click() : awgOpen('2026-11-19'); });
+    await until(function () { return _awg && _awg.day === '2026-11-19' && !!document.querySelector('[data-awg="fill"]'); }, null, 8000);
+    await writeRow();
+    await fillSend();
+    check(await until(function () { var m = document.querySelector('.awg-msg.warn'); return !!m && /찾지 못했습니다/.test(m.textContent); }, null, 10000) && await p.evaluate(function () { return !window.__awDry && !window.__awSigned['2026-11-19']; }), '주간일지에서 못 찾으면 승인하지 않음');
 
     // 예전 PC 앱(v3)이면 승인 기능을 보이지 않음
     await p.evaluate(function () { window.__awV = 3; document.querySelector('#awgModal [data-wm-close]').click(); });
     await wait(500);
     await p.evaluate(function () { awgOpen('2026-11-16'); });
     await until(function () { return !!document.querySelector('[data-awg="fill"]'); }, null, 10000);
-    check(await p.evaluate(function () { return !document.querySelector('[data-awg-signopt]') && !document.querySelector('[data-awg="sign"]'); }), '예전 PC 앱은 승인 기능 숨김');
+    check(await p.evaluate(function () { return !document.querySelector('[data-awg="sign"]'); }), '예전 PC 앱은 ✍ 단추 숨김');
     check(!errs.length, '페이지 오류 없음 ' + errs.join(' | '));
   } catch (e) { fail++; console.log('FAIL 예외', e && e.stack); }
   finally { for (var i = 0; i < B.length; i++) await B[i].close(); await c.end(); }
