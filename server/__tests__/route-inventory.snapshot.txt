@@ -186,6 +186,7 @@ GET /api/dev-items/:id
 GET /api/docs/files
 GET /api/docs/files/:id
 GET /api/docs/files/:id/download-url
+GET /api/docs/files/:id/raw
 GET /api/docs/folders
 GET /api/docs/folders/:id
 GET /api/events
@@ -334,6 +335,7 @@ GET /api/v1/departments/:id/members
 GET /api/v1/docs/files
 GET /api/v1/docs/files/:id
 GET /api/v1/docs/files/:id/download-url
+GET /api/v1/docs/files/:id/raw
 GET /api/v1/docs/folders
 GET /api/v1/docs/folders/:id
 GET /api/v1/events
@@ -391,6 +393,8 @@ GET /api/weekly-reports/plan-actual
 GET /api/weekly-reports/search
 GET /api/weekly-reports/stats
 GET /api/white-label
+GET /api/work-requests
+GET /api/work-requests/count
 GET /api/workflows
 GET /desktop-release/:name
 GET /download
@@ -658,6 +662,11 @@ POST /api/weekly-reports/bin
 POST /api/weekly-reports/bin/:binId/use
 POST /api/weekly-reports/check
 POST /api/weekly-reports/item-links
+POST /api/work-requests
+POST /api/work-requests/:id/accept
+POST /api/work-requests/:id/cancel
+POST /api/work-requests/:id/decline
+POST /api/work-requests/:id/done
 POST /api/workflows
 POST /api/workflows/:id/validate
 PUT /api/ai/config

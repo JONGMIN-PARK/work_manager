@@ -394,6 +394,7 @@ app.use('/api/prestudies', prestudyRoutes);
 app.use('/api/tech', techRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/work-requests', require('./routes/work-requests'));   // v13.525 📨 업무 요청
 app.use('/api/chat', require('./routes/chat'));   // 💬 사내 메신저 (v13.315)
 app.use('/api/push', require('./routes/push'));   // 📲 휴대폰 · 브라우저 푸시 (v13.359)
 require('./lib/chat-timers').start();   // ⏰ 메신저 예약 보내기 · 다시 알림 (v13.362) — 테스트에선 안 켬

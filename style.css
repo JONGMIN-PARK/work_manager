@@ -8835,3 +8835,61 @@ button.awg-chip{cursor:pointer}
   .dpv-sz{display:none}
   .dp-word{padding:16px 14px}
 }
+
+/* ═══ 📨 업무 요청 (v13.525, wreq.js) — 보내기 창 · 메신저 카드 · 요청함 ═══ */
+.wrq-badge{position:absolute;top:-5px;right:-5px;background:#EF4444;color:#fff;font-size:9px;font-weight:700;border-radius:9px;min-width:15px;height:15px;display:flex;align-items:center;justify-content:center;padding:0 3px;pointer-events:none;box-sizing:border-box;box-shadow:0 0 0 2px var(--bg-h,var(--bg-p))}
+.wrq-badge[hidden]{display:none}
+#hdrWrqBtn{position:relative;overflow:visible}
+.mw-wrq{position:relative;overflow:visible}
+.wrq-types{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.wrq-type{border:1px solid var(--bd);background:var(--bg-i);color:var(--t2);border-radius:18px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit}
+.wrq-type.on{background:var(--ac-bg);border-color:var(--ac);color:var(--ac);font-weight:700}
+.wrq-hint{font-size:11px;color:var(--t5);margin-bottom:10px;min-height:15px}
+.wrq-proj{font-size:11.5px;color:var(--t3);background:var(--bg-i);border:1px solid var(--bd);border-radius:8px;padding:5px 9px;margin-bottom:10px}
+.wrq-f{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;position:relative;min-width:0}
+.wrq-f>span{font-size:11px;font-weight:600;color:var(--t4)}
+.wrq-f .wr-inp{width:100%;box-sizing:border-box}
+.wrq-f textarea{resize:vertical;min-height:72px;font-family:inherit}
+.wrq-row{display:flex;gap:8px}.wrq-row .wrq-f{flex:1}
+.wrq-who{display:flex;flex-wrap:wrap;align-items:center;gap:4px;border:1px solid var(--bd);border-radius:8px;padding:4px 6px;background:var(--bg-i);min-height:34px;box-sizing:border-box}
+.wrq-chips{display:contents}
+.wrq-chip{display:inline-flex;align-items:center;gap:3px;background:var(--ac-bg);color:var(--ac);border-radius:14px;padding:2px 4px 2px 9px;font-size:12px;font-weight:600}
+.wrq-chip button{border:0;background:none;color:inherit;cursor:pointer;font-size:11px;padding:0 3px}
+.wrq-who-in{flex:1;min-width:110px;border:0;background:transparent;color:var(--t1);font:inherit;font-size:12.5px;outline:none;padding:3px 2px}
+.wrq-sug{position:absolute;left:0;right:0;top:100%;z-index:3;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 22px rgba(0,0,0,.18);padding:4px;max-height:240px;overflow:auto}
+.wrq-sg{display:block;width:100%;text-align:left;border:0;background:none;color:var(--t2);padding:6px 9px;border-radius:6px;font:inherit;font-size:12.5px;cursor:pointer}
+.wrq-sg.on,.wrq-sg:hover{background:var(--bg-hv)}
+.wrq-sg-none{font-size:11.5px;color:var(--t5);padding:6px 9px}
+.wrq-foot{display:flex;gap:8px;align-items:center;margin-top:6px}
+/* 메신저 카드 */
+.wrq-card{margin-top:4px;border:1px solid var(--bd);border-left:4px solid var(--ac);border-radius:10px;background:var(--bg-p);padding:9px 11px;max-width:360px;color:var(--t2)}
+.wrq-card.st-accepted{border-left-color:#22a06b}.wrq-card.st-done{border-left-color:#7a8699;opacity:.92}.wrq-card.st-declined,.wrq-card.st-canceled{border-left-color:#e5484d;opacity:.85}
+.wrq-c-h{display:flex;justify-content:space-between;gap:8px;font-size:11px;margin-bottom:3px}
+.wrq-c-t{font-weight:700;color:var(--ac)}.wrq-c-st{color:var(--t4);white-space:nowrap}
+.wrq-c-title{font-size:13.5px;font-weight:700;color:var(--t1);word-break:break-word}
+.wrq-c-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--t4);margin-top:4px}
+.wrq-c-body{font-size:12px;white-space:pre-wrap;word-break:break-word;margin-top:6px;color:var(--t2);line-height:1.55}
+.wrq-c-reply{font-size:11.5px;margin-top:6px;color:#c2410c}
+.wrq-c-to{font-size:10.5px;color:var(--t5);margin-top:4px}
+.wrq-c-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+/* 요청함 */
+.wrq-tabs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.wrq-tabs [data-tab]{border:1px solid var(--bd);background:var(--bg-i);color:var(--t3);border-radius:8px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
+.wrq-tabs [data-tab].on{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:700}
+.wrq-open{font-size:11.5px;color:var(--t4);display:flex;align-items:center;gap:4px}
+.wrq-list{display:flex;flex-direction:column;gap:6px;max-height:60vh;overflow:auto}
+.wrq-item{display:flex;gap:10px;align-items:center;border:1px solid var(--bd);border-left:4px solid var(--ac);border-radius:8px;padding:8px 10px;background:var(--bg-p)}
+.wrq-item.st-accepted{border-left-color:#22a06b}.wrq-item.st-done{border-left-color:#7a8699}.wrq-item.st-declined,.wrq-item.st-canceled{border-left-color:#e5484d}
+.wrq-i-main{flex:1;min-width:0}
+.wrq-i-top{display:flex;gap:8px;font-size:11px;color:var(--t4);flex-wrap:wrap}
+.wrq-i-type{font-weight:700;color:var(--ac)}.wrq-i-st{margin-left:auto}
+.wrq-i-title{font-size:13px;font-weight:700;color:var(--t1);margin:2px 0;word-break:break-word}
+.wrq-i-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--t5)}
+.wrq-i-meta .late{color:#e5484d;font-weight:700}
+.wrq-i-acts{display:flex;gap:4px;flex-shrink:0}
+.wrq-empty{text-align:center;color:var(--t5);font-size:12px;padding:26px 10px}
+@media (max-width:640px){
+  .wrq-row{flex-wrap:wrap}.wrq-row .wrq-f{flex:1 1 40%}
+  .wrq-item{flex-wrap:wrap}.wrq-i-acts{width:100%;justify-content:flex-end}
+  #hdrWrqBtn{display:none}   /* 휴대폰 머리 줄은 좁음 — 사용자 메뉴 📨 업무 요청함으로 */
+}

@@ -116,7 +116,8 @@ function _mwpRender(p) {
   h += '<div class="mwp-acts">' +
     (_mw.data.self && !it.done ? '<button class="mwp-chip' + (it.focus ? ' on' : '') + '" data-p="focus">' + (it.focus ? '★ 오늘 집중' : '☆ 오늘 집중') + '</button>' : '') +
     (!todo ? '<button class="mwp-chip" data-p="source">↗ ' + _mwEsc(s.label) + ' 화면에서 열기</button>' : '') +
-    (typeof chatShareRef === 'function' && ['todo', 'issue', 'milestone', 'as', 'project'].indexOf(it.src) >= 0 && (it.src !== 'todo' || todo) ? '<button class="mwp-chip" data-p="share" onclick="chatShareRef(\'' + it.src + '\',\'' + String(it.id).replace(/[^\w.:-]/g, '') + '\')">💬 대화로 보내기</button>' : '') + '</div>';
+    (typeof chatShareRef === 'function' && ['todo', 'issue', 'milestone', 'as', 'project'].indexOf(it.src) >= 0 && (it.src !== 'todo' || todo) ? '<button class="mwp-chip" data-p="share" onclick="chatShareRef(\'' + it.src + '\',\'' + String(it.id).replace(/[^\w.:-]/g, '') + '\')">💬 대화로 보내기</button>' : '') +
+    (typeof wrqFromItem === 'function' && _mw.data && _mw.data.self && !it.done ? '<button class="mwp-chip" data-p="wreq" title="다른 사람에게 — 이관 · 지시 · 전달 (수락하면 그 사람 할 일로)">📨 보내기</button>' : '') + '</div>';
   // 중요도
   h += '<div class="mwp-sec"><div class="mwp-l">중요도' + (!todo && it.canPri ? ' <i>' + _mwEsc(s.label) + '에도 반영</i>' : '') + '</div>' +
     (it.canPri && !it.done ? '<div class="mwp-seg" data-g="pri">' + [1, 2, 3, 4].map(function (v) {
@@ -402,6 +403,7 @@ function _mwpBind(p) {
       if (k === 'focus') { mwToggleFocus(it); setTimeout(function () { if (_mwp.key === it.key) _mwpRender(p); }, 0); return; }
       if (k === 'source') { mwPanelClose(); mwOpenItem(it); return; }   // 다른 화면으로 가면 패널은 닫음
       if (k === 'delete') return mwDeleteTodo(it);
+      if (k === 'wreq') return wrqFromItem(it);   // 📨 v13.525
       if (k === 'unpin') { mwSetCat(it, null); return; }
       if (k === 'proj') { var pj = mwProjOf(it); if (pj) mwProjOpen(pj.id); return; }
       if (k === 'done') return;   // change 에서

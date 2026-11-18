@@ -93,7 +93,7 @@ var MSG_SQL = 'SELECT m.id, m.room_id, m.user_id, m.kind, m.body, m.cards, m.men
   "(f.annot->>'rot')::real AS f_rot, jsonb_array_length(COALESCE(f.annot->'shapes', '[]'::jsonb)) AS f_n, (f.annot->'crop') IS NOT NULL AND f.annot->>'crop' <> 'null' AS f_crop, f.annot_at AS f_at, " +
   'rp.replies, rp.last_reply_at, ' +
   // v13.376 인용 답장 — 원문 한 줄 (지웠으면 표시만)
-  "m.grp, m.link, m.poll, m.ack, m.quote_id, qm.body AS q_body, qm.deleted_at AS q_del, qm.kind AS q_kind, qm.post->>'title' AS q_ptitle, COALESCE(qu.display_name, qu.name) AS q_user, qf.id AS q_fid, qf.name AS q_fname, qf.mime AS q_fmime " +
+  "m.grp, m.link, m.poll, m.ack, m.wreq, m.quote_id, qm.body AS q_body, qm.deleted_at AS q_del, qm.kind AS q_kind, qm.post->>'title' AS q_ptitle, COALESCE(qu.display_name, qu.name) AS q_user, qf.id AS q_fid, qf.name AS q_fname, qf.mime AS q_fmime " +
   'FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN chat_files f ON f.id = m.file_id ' +
   'LEFT JOIN chat_messages qm ON qm.id = m.quote_id LEFT JOIN users qu ON qu.id = qm.user_id LEFT JOIN chat_files qf ON qf.id = qm.file_id ' +
   'LEFT JOIN LATERAL (SELECT COUNT(*)::int AS replies, MAX(t.created_at) AS last_reply_at FROM chat_messages t WHERE t.reply_to = m.id AND t.deleted_at IS NULL) rp ON TRUE ';
@@ -102,7 +102,7 @@ function shape(r) {
     body: r.deleted_at ? '' : r.body, deleted: !!r.deleted_at, edited: !!r.edited_at, cards: r.deleted_at ? null : r.cards, mentions: r.mentions || [],
     replyTo: r.reply_to ? +r.reply_to : null, replies: r.replies || 0, lastReplyAt: r.last_reply_at, reactions: r.deleted_at ? null : r.reactions || null,
     post: r.deleted_at || !r.post ? null : Object.assign({}, r.post, { assigneeName: r.asg_name || null }), file: r.f_id && !r.deleted_at ? annSum(Object.assign({ id: r.f_id, name: r.f_name, mime: r.f_mime, size: r.f_size }, r.f_dur ? { dur: +r.f_dur } : {}, r.f_tx ? { transcript: r.f_tx } : {}, r.f_w && r.f_h ? { w: r.f_w, h: r.f_h } : {}), r) : null, at: r.created_at,
-    grp: r.grp || null, link: r.deleted_at ? null : r.link || null, poll: r.deleted_at ? null : r.poll || null, ack: r.deleted_at ? null : r.ack || null,
+    grp: r.grp || null, link: r.deleted_at ? null : r.link || null, poll: r.deleted_at ? null : r.poll || null, ack: r.deleted_at ? null : r.ack || null, wreq: r.deleted_at ? null : r.wreq || null,
     quote: r.quote_id && !r.deleted_at ? { id: +r.quote_id, userName: r.q_user || (r.q_kind === 'ai' ? 'AI' : ''), deleted: !!r.q_del, body: r.q_del ? '' : String(r.q_ptitle ? '📌 ' + r.q_ptitle : r.q_body || '').slice(0, 200), file: r.q_fid && !r.q_del ? { id: r.q_fid, name: r.q_fname, mime: r.q_fmime } : null } : null };
 }
 // 사진 칠판 요약 — 목록에선 회전 · 표시 수 · 자름 여부만 (전체는 /files/:fid/annot)
@@ -143,8 +143,8 @@ async function postMessage(ctx, room, m) {
   var body = String(m.body || '').slice(0, MAX_BODY);
   var mentions = m.mentions || (m.kind === 'text' || !m.kind ? await findMentions(ctx.tenantId, room.id, body) : []);
   var ins = await db.query(
-    'INSERT INTO chat_messages (room_id, tenant_id, user_id, kind, body, cards, file_id, mentions, reply_to, legacy_id, post, quote_id, grp, poll, ack) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id',
-    [room.id, ctx.tenantId, m.userId || null, m.kind || 'text', body, m.cards ? JSON.stringify(m.cards) : null, m.fileId || null, JSON.stringify(mentions), m.replyTo || null, m.legacyId || null, m.post ? JSON.stringify(m.post) : null, m.quoteId || null, m.grp || null, m.poll ? JSON.stringify(m.poll) : null, m.ack ? JSON.stringify(m.ack) : null]);
+    'INSERT INTO chat_messages (room_id, tenant_id, user_id, kind, body, cards, file_id, mentions, reply_to, legacy_id, post, quote_id, grp, poll, ack, wreq) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id',
+    [room.id, ctx.tenantId, m.userId || null, m.kind || 'text', body, m.cards ? JSON.stringify(m.cards) : null, m.fileId || null, JSON.stringify(mentions), m.replyTo || null, m.legacyId || null, m.post ? JSON.stringify(m.post) : null, m.quoteId || null, m.grp || null, m.poll ? JSON.stringify(m.poll) : null, m.ack ? JSON.stringify(m.ack) : null, m.wreq ? JSON.stringify(m.wreq) : null]);
   var id = +ins.rows[0].id;
   var par = await Promise.all([
     db.query('UPDATE chat_rooms SET last_msg_at = now() WHERE id = $1', [room.id]),
@@ -2598,4 +2598,6 @@ module.exports = router;
 module.exports.postMessage = postMessage;
 module.exports.projectNote = projectNote;
 module.exports.dmRoom = dmRoom;
+/** 메시지 다시 읽어 방 사람들에게 'upd' — 📨 업무 요청 상태가 바뀔 때 (v13.525) */
+module.exports.refreshMsg = async function (id) { var msg = await loadMsg(id); if (msg) hub.publish(await memberIds(msg.roomId), 'upd', msg); return msg; };
 module.exports.membership = membership;

@@ -735,6 +735,7 @@ async function _showEventModalRaw(evtId, defaultDate, opts) {
     '</div>' +
     '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">' +
       (evt && _evtCanMod ? '<button class="btn btn-d btn-s" onclick="deleteEventUI(\'' + eA(evt.id) + '\')">🗑 삭제</button>' : '') +
+      (evt && typeof wrqFromEvent === 'function' ? '<button class="btn btn-g btn-s" onclick="_calWrqSend(\'' + eA(evt.id) + '\')" title="이 일정을 다른 사람에게 — 수락하면 그 사람 일정에 들어감">📨 보내기</button>' : '') +
       (_evtCanMod ? '<button class="btn btn-p" onclick="saveEventUI(\'' + (evt ? evt.id : '') + '\')">' + (evt ? '💾 수정' : '➕ 등록') + '</button>'
                   : '<span style="font-size:11px;color:var(--t6);align-self:center">보기 전용 — 작성자·연결 프로젝트 참여자만 수정할 수 있습니다</span>') +
     '</div>' +
@@ -869,6 +870,13 @@ function _calErrMsg(err) {
   return (err && err.data && err.data.message) || (err && err.message) || '알 수 없는 오류';
 }
 
+/* 📨 일정 보내기 (v13.525) — 편집 창은 닫고 보내기 창으로 */
+function _calWrqSend(id) {
+  return evtGet(id).then(function (ev) {
+    var m = document.getElementById('evtModal'); if (m) m.remove();
+    return wrqFromEvent(ev);
+  });
+}
 async function deleteEventUI(id) {
   try {
     var ev = await evtGet(id);

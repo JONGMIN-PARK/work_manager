@@ -281,6 +281,7 @@ router.put('/todos/:id', async function (req, res) {
     var r = await db.query('UPDATE my_todos SET ' + sets.join(', ') + ', updated_at = now() WHERE id = $' + (params.length - 2) + ' AND tenant_id = $' + (params.length - 1) + ' AND user_id = $' + params.length + ' AND deleted_at IS NULL RETURNING *', params);
     if (!r.rows.length) return httpErr.sendError(res, 404, 'NOT_FOUND');
     var nx = b.done && r.rows[0].repeat ? await repeatNext(req, req.params.id, r.rows[0]) : null;
+    if (b.done !== undefined) await require('./work-requests').onTodoDone(req.tenant.id, req.user.sub, req.params.id, !!b.done, req.user.name);   // 📨 v13.525
     res.json({ data: r.rows[0], next: nx ? nx.id : null, nextRow: nx });
   } catch (e) { httpErr.serverError(res, '[my-work/todo-update]', e); }
 });

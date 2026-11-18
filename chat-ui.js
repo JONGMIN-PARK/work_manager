@@ -831,6 +831,7 @@ function _cxMsgHtml(m, prev, inThread, next) {
       (!ai && !qIn && typeof chatEmojiOnly === 'function' ? (chatEmojiOnly(m.body) ? ' cx-jumbo' : chatCodeOnly(m.body) ? ' cx-codeonly' : '') : '') + '">' + (qIn ? qh : '') + (ai ? '<div class="cx-ai-h">' + (/^☀️/.test(m.body) ? '☀️ 아침 브리핑 · 나만 보는 정리' : /^📢/.test(m.body) ? '🤖 AI 답 공유 · 공유한 사람 권한의 데이터' : '🤖 AI · 내가 볼 수 있는 데이터로 답함') + '</div>' + (typeof rMD === 'function' ? rMD(_cxE(m.body)) : _cxText(m.body)) : _cxText(m.body)) + (m.edited ? '<i class="cx-ed">수정됨</i>' : '') + '</div>';
     if (m.link && typeof chatLinkHtml === 'function') body += chatLinkHtml(m.link);   // v13.378 🔗
     if (m.ack && !m.pending && typeof chatAckHtml === 'function') body += chatAckHtml(m);   // v13.381 ✔
+    if (m.wreq && typeof chatWreqHtml === 'function') body += chatWreqHtml(m);   // v13.525 📨 업무 요청
     if (alb) body += _cxAlbumHtml(alb);
     else if (m.file) body += _cxFileHtml(m.file);
     if (m.cards && m.cards.length) body += '<div class="cx-cards">' + m.cards.map(function (c, i) { return _cxCardHtml(c, i, m); }).join('') + '</div>';
@@ -1281,6 +1282,7 @@ function _cxMsgClick(e) {
   var mel = t.closest('[data-mid]'), m = mel && _cxFindMsg(+mel.dataset.mid);
   if (t.closest('[data-voice]') && typeof chatVoiceClick === 'function' && chatVoiceClick(t, e)) return;   // v13.379 🎤
   if (typeof chatMoreClick === 'function' && t.closest('[data-vote],[data-pclose],[data-ack],[data-ackl]') && chatMoreClick(t)) return;   // v13.381
+  if (typeof chatWreqClick === 'function' && t.closest('[data-wq]') && chatWreqClick(t)) return;   // v13.525 📨
   var qj = t.closest('[data-qjump]');
   if (qj) { _cxJump(+qj.dataset.qjump); return; }   // v13.376 인용 → 원문 자리
   var un = t.closest('[data-un]');

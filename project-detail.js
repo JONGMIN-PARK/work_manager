@@ -95,9 +95,13 @@ function _pdDetailHeaderHtml(proj, stInfo) {
     '<div style="display:flex;align-items:center;gap:4px;min-width:0">' +
       '<h3 style="font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + eH(proj.name) + '"><span style="background:' + eC(proj.color) + ';width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis">' + eH(proj.name) + '</span></h3>' +
       '<button class="btn btn-g btn-s pd-edit-only" style="flex-shrink:0;padding:2px 7px" onclick="pdEditProject(\'' + idA + '\')" title="프로젝트 편집 — 저장하면 이 패널로 돌아옵니다">✏️ 편집</button>' +
+      (typeof wrqFromProject === 'function' ? '<button class="btn btn-g btn-s pd-wrq-btn" style="flex-shrink:0;padding:2px 7px" onclick="wrqFromProject(\'' + idA + '\')" title="이 프로젝트 업무를 사람에게 — 지시 · 이관 · 전달 · 일정 (메신저로 가고, 수락하면 그 사람 할 일로)">📨 업무 보내기</button>' : '') +
       '<span class="pd-more" style="position:relative;flex-shrink:0">' +
         '<button class="btn btn-g btn-s" style="padding:2px 8px" onclick="pdToggleMore(event)" title="더보기 — 공유 · 복사 · 소유권 이관 · 삭제" aria-haspopup="true">⋯</button>' +
         '<div class="pd-more-menu" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;min-width:150px;background:var(--bg-p);border:1px solid var(--bd);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:4px;z-index:5">' +
+          _pdMoreItem('📋 업무 지시 보내기', 'wrqFromProject(\'' + idA + '\')', '') +
+          _pdMoreItem('📨 업무 요청함', 'wrqBox(\'out\')', '') +
+          '<div class="pd-more-sep"></div>' +
           _pdMoreItem('👥 공유 관리', 'showProjectShareModal(\'' + idA + '\')', 'pd-edit-only') +
           _pdMoreItem('📄 복사', 'showProjectCopyModal(\'' + idA + '\')', '') +
           _pdMoreItem('💬 프로젝트 방 (메신저)', 'chatOpenProject(\'' + idA + '\')', '') +

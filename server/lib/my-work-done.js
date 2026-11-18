@@ -49,6 +49,7 @@ async function setDone(req, src, id, subject, done) {
       'WHERE id = $1 AND tenant_id = $2 AND user_id = $3 AND deleted_at IS NULL RETURNING *', [id, req.tenant.id, req.user.sub]);
     if (!tr.rows.length) return { err: [404, 'NOT_FOUND', '담당 업무에서 찾을 수 없습니다.'] };
     var nx = done && tr.rows[0].repeat ? await repeatNext(req, id, tr.rows[0]) : null;
+    await require('../routes/work-requests').onTodoDone(req.tenant.id, req.user.sub, id, !!done, req.user.name);   // 📨 받은 요청이면 보낸 사람에게 완료
     return { data: { src: src, id: id, done: done, next: nx ? nx.id : null, nextRow: nx, title: tr.rows[0].title } };
   }
   // 그 사람 담당이 맞는지 — 목록을 다시 모아 확인 (권한 · 가시성 규칙을 한 곳에)

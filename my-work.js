@@ -328,6 +328,7 @@ function _mwPaintNow(el) {
       '<button type="button" class="mw-btn mw-due-pick" data-mw-duepick="1" title="마감 날짜 고르기 (없어도 됨)">마감</button>' +
       '<input id="mwAddDue" type="date" class="mw-input mw-date" title="마감 (없어도 됨)" aria-label="마감 날짜"><button class="mw-btn mw-btn-p" type="submit">추가</button>' +
       '<button class="mw-btn" type="button" data-mwt="new" title="회의 · 출장 · 외근 · 연차 · 검토 등 종류별로 등록">📅<span class="mw-add-lbl"> 일정…</span></button>' +
+      (typeof wrqOpen === 'function' ? '<button class="mw-btn mw-wrq" type="button" onclick="wrqOpen({type:\'event\'})" title="📨 다른 사람에게 일정 · 할 일 · 업무 지시 보내기 (수락하면 그 사람 일정 · 할 일로)">📨<span class="mw-add-lbl"> 보내기</span><span class="wrq-badge" hidden>0</span></button>' : '') +
       (typeof awgOpen === 'function' ? '<button class="mw-btn mw-awg" type="button" data-awg-open="" title="📝 공수 등록 — 오늘 한 일을 써서 애니웍스 업무보고에 올리기">📝<span class="mw-add-lbl"> 공수</span></button>' : '') + '</form>';
   }
   bar += moreMenu + '</div>';
