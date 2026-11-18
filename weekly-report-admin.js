@@ -2114,17 +2114,45 @@
     sum = sum || {};
     var n = sum.wait || 0, days = daysSince(sum.oldestAt), warn = n && days >= BIN_WARN_DAYS;
     return '<button type="button" class="btn btn-g btn-s wrc-bin' + (n ? ' on' : '') + (warn ? ' warn' : '') + '" data-wrc-binopen'
-      + ' title="' + (n ? '없애기로 옮겨 둔 일 중 아직 결말(완료 · 재개)을 안 낸 일 — 가장 오래된 것 ' + ageText(days) : '없애기로 옮겨 둔 일 보관함') + '">'
-      + (n ? '⏳ 처리 대기 <b>' + n + '</b>' + (days >= 7 ? ' · 최장 ' + ageText(days).replace('째', '') : '') : '🗑 휴지통') + '</button>';
+      + ' title="' + (n ? '📦 보관한 일 중 아직 결말(완료 · 재개)을 안 낸 일 — 가장 오래된 것 ' + ageText(days) : '📦 보관한 일 — 지우지 않고 결말을 낼 때까지 추적') + '">'
+      + (n ? '⏳ 처리 대기 <b>' + n + '</b>' + (days >= 7 ? ' · 최장 ' + ageText(days).replace('째', '') : '') : '📦 보관함') + '</button>';
   }
   function bindBinBtn(box) {
     box.querySelectorAll('[data-wrc-binopen]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); openBin(); }); });
+  }
+  /* 🎯 추적 (v13.536) — 빠진 일 · 보관한 일을 담당자에게 📨 업무 요청(할 일)으로. 담당 이름은 등록된 사람과 맞춰 미리 넣음
+     after(보낸 사람 이름) — 보낸 뒤 할 일(보관 · 메모) */
+  function wrTrackItem(x, after) {
+    if (typeof wrqOpen !== 'function') { if (typeof showToast === 'function') showToast('업무 요청을 열 수 없습니다', 'error'); return; }
+    var load = typeof _wqLoadPeople === 'function' ? _wqLoadPeople() : Promise.resolve([]);
+    return load.then(function (people) {
+      var ids = [];
+      (x.members || []).forEach(function (nm) {
+        nm = String(nm || '').trim(); if (!nm) return;
+        var p = people.filter(function (q) { return q.nm === nm || q.disp === nm || q.reg === nm || q.name === nm; })[0];
+        if (p && ids.indexOf(p.id) < 0) ids.push(p.id);
+      });
+      // 기한 — 따로 온 값 · 이름 · 줄에서 '~2026-12-04' · '~12/04' 를 찾아 기한 칸으로 (이름에 붙어 오는 경우가 있음), 제목에선 뺌
+      var DL_RE = /~\s*(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2})/;
+      var dm = DL_RE.exec([x.deadline, x.name, x.line].map(function (v) { return String(v || ''); }).join(' ')), dl = null;
+      if (dm) {
+        var raw = dm[1], yy = new Date().getFullYear(), pp;
+        if (raw.indexOf('-') > 0) { pp = raw.split('-'); dl = [pp[0], ('0' + pp[1]).slice(-2), ('0' + pp[2]).slice(-2)].join('-'); }
+        else { pp = raw.split('/'); dl = [yy, ('0' + pp[0]).slice(-2), ('0' + pp[1]).slice(-2)].join('-'); }
+        dl = [dl];
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(String(x.deadline || ''))) dl = [x.deadline];
+      var title = [x.client, String(x.name || '').replace(/\s*~\s*(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2})/g, '').trim()].filter(Boolean).join(' ');
+      var body = '📋 주간 업무에서 빠진 일 — 결말(완료 · 계속)을 알려 주세요\n' + String(x.line || '').trim() + (x.lastWeek ? '\n(마지막 보고 ' + x.lastWeek + ' 주)' : '');
+      var sentNames = function () { return ids.map(function (u) { var p = people.filter(function (q) { return q.id === u; })[0]; return p ? p.name : ''; }).filter(Boolean).join(', ') || '담당'; };
+      wrqOpen({ type: 'todo', types: ['todo', 'order', 'forward'], title: title, body: body, dueDate: dl ? dl[0] : '', to: ids,
+        onSent: function (rows) { if (after) after((rows || []).map(function (w) { return w.toName; }).filter(Boolean).join(', ') || sentNames()); } });
+    });
   }
   async function binPut(items) {
     var team = _authorState.team || '';
     try {
       await apiFetch('/api/weekly-reports/bin', { method: 'POST', body: JSON.stringify({ team: team, items: items.map(function (m) {
-        return { key: m.key, section: m.section, client: m.client, name: m.name, line: m.line, members: m.members || [], pct: m.pct, deadline: m.deadline, lastWeek: m.lastWeek };
+        return { key: m.key, section: m.section, client: m.client, name: m.name, line: m.line, members: m.members || [], pct: m.pct, deadline: m.deadline, lastWeek: m.lastWeek, note: m.note || '' };
       }) }) });
       WRB.list = null;
       if (typeof showToast === 'function') showToast('⏳ ' + items.length + '건을 처리 대기로 옮겼습니다 — 완료 · 재개할 때까지 점검 머리에 남아요', 'ok');
@@ -2143,7 +2171,7 @@
       var r = await apiFetch('/api/weekly-reports/bin?team=' + encodeURIComponent(team));
       WRB.list = (r && r.data) || [];
       if (!WRB.list.some(function (x) { return x.state === 'wait'; }) && WRB.list.length) WRB.tab = 'done';
-      var m = createModal({ id: 'wrBinModal', title: '🗑 휴지통 · 처리 대기 — ' + esc(team || '팀 없음'), width: '760px', closeOnEsc: true,
+      var m = createModal({ id: 'wrBinModal', title: '📦 보관함 · 처리 대기 — ' + esc(team || '팀 없음'), width: '760px', closeOnEsc: true,
         html: '<div class="wrb-top"><span class="wm-seg" id="wrBinTabs"></span><input id="wrBinQ" class="wr-inp" type="search" placeholder="업체 · 업무 · 담당 · 메모로 찾기" autocomplete="off"></div>'
           + '<div class="wrb-help" id="wrBinHelp"></div>'
           + '<div id="wrBinList" class="wrb-list"></div>'
@@ -2178,12 +2206,13 @@
             + '<span class="wrb-acts">'
             +   '<button type="button" class="btn btn-g btn-s" data-cur="' + esc(x.id) + '" title="금주 칸에 다시 넣기">↩ 금주</button>'
             +   '<button type="button" class="btn btn-g btn-s" data-last="' + esc(x.id) + '" title="지난주 칸에 #완료 로">✅ 완료</button>'
+            +   (x.state === 'wait' ? '<button type="button" class="btn btn-g btn-s" data-track="' + esc(x.id) + '" title="🎯 추적 — 담당자에게 업무 요청(할 일)으로">🎯</button>' : '')
             +   (x.state === 'wait' ? '<button type="button" class="btn btn-g btn-s" data-note="' + esc(x.id) + '" title="대기 사유 메모">📝</button>'
                 : '<button type="button" class="btn btn-g btn-s" data-rewait="' + esc(x.id) + '" title="다시 처리 대기로">⏳</button>')
             +   '<button type="button" class="btn btn-g btn-s" data-del="' + esc(x.id) + '" title="영구 삭제">✕</button>'
             + '</span></label>';
         }).join('') : '<div class="wr-msg">' + (q ? '찾는 항목이 없습니다'
-          : WRB.tab === 'wait' ? '처리 대기 중인 일이 없습니다 👍 — 🔎 점검의 「빠진 일」에서 🗑 없애기를 누르면 여기로 옵니다' : '처리한 일이 아직 없습니다') + '</div>';
+          : WRB.tab === 'wait' ? '처리 대기 중인 일이 없습니다 👍 — 🔎 점검의 「빠진 일」에서 📦 보관을 누르면 여기로 옵니다' : '처리한 일이 아직 없습니다') + '</div>';
         var n = Object.keys(sel).length;
         $('wrBinSel').textContent = n ? n + '건 고름' : '';
         $('wrBinToCur').disabled = $('wrBinToLast').disabled = !n;
@@ -2221,6 +2250,10 @@
         try {
           if (b.dataset.cur) return await use([b.dataset.cur], false);
           if (b.dataset.last) return await use([b.dataset.last], true);
+          if (b.dataset.track) {   // 🎯 추적 — 보낸 뒤 대기 메모에 남김
+            var tx = byId(b.dataset.track); if (!tx) return;
+            return wrTrackItem(tx, function (names) { return patch(tx, { note: ('🎯 추적 중 → ' + names + (tx.note && tx.note.indexOf('🎯') < 0 ? ' · ' + tx.note : '')).slice(0, 300) }); });
+          }
           var x = byId(b.dataset.note || b.dataset.rewait || b.dataset.del); if (!x) return;
           if (b.dataset.note) {
             var note = await wmPrompt('대기 사유 메모 (예: 고객 회신 대기 · 부품 입고 대기 · 보류)', x.note || '');
@@ -2268,13 +2301,14 @@
       h += '<div class="wrc-body">';
       if (d.missing.length) {
         h += '<div class="wrc-g">' + (d.lastEmpty ? '지난주 칸이 비어 있어요 — 앞 주 보고서에 있던 일이 금주에도 없습니다. 끝냈으면 완료로, 계속하면 다시 넣으세요' : '앞 주 보고서에 있던 일이 이번 보고서에 없습니다 — 끝냈나요?')
-          + ' <span class="wrc-binall"><button type="button" class="btn btn-g btn-s" data-wrc-binall title="빠진 일을 모두 ⏳ 처리 대기로 (지우는 게 아니라 결말을 낼 때까지 추적)">🗑 모두 없애기</button></span></div>';
+          + ' <span class="wrc-binall"><button type="button" class="btn btn-g btn-s" data-wrc-binall title="빠진 일을 모두 📦 보관 — 지우지 않고 ⏳ 처리 대기로 결말을 낼 때까지 추적">📦 모두 보관</button></span></div>';
         d.missing.forEach(function (m, n) {
           go.push(null);
           h += wrcRow('missing', { client: m.client, name: m.name, text: [m.pct != null ? m.pct + '%' : '', m.deadline ? '~' + m.deadline.slice(5).replace('-', '/') : '', (m.members || []).join('·')].filter(Boolean).join(' · ') }, go.length - 1,
             '<span class="wrc-acts"><button type="button" class="btn btn-g btn-s" data-wrc-done="' + n + '" title="지난주 칸에 #완료 로 넣기">✅ 완료로</button>'
             + '<button type="button" class="btn btn-g btn-s" data-wrc-keep="' + n + '" title="금주 칸에 그대로 다시 넣기">↩ 금주에</button>'
-            + '<button type="button" class="btn btn-g btn-s" data-wrc-bin="' + n + '" title="이번 보고서에서 빼고 ⏳ 처리 대기로 — 완료 · 재개할 때까지 점검 머리에 남음">🗑 없애기</button></span>');
+            + '<button type="button" class="btn btn-g btn-s" data-wrc-bin="' + n + '" title="이번 보고서에서만 빼고 📦 보관(⏳ 처리 대기) — 지우지 않음. 완료 · 재개할 때까지 점검 머리에 남고 언제든 다시 넣음">📦 보관</button>'
+            + '<button type="button" class="btn btn-g btn-s" data-wrc-track="' + n + '" title="🎯 추적 — 담당자에게 업무 요청(할 일)으로 보내 내 업무에서 끝까지 챙기게">🎯 추적</button></span>');
         });
       }
       d.flags.forEach(function (f) { go.push(f); h += wrcRow(f.kind, f, go.length - 1); });
@@ -2300,6 +2334,12 @@
       e.stopPropagation();
       if (!(await wmConfirm('빠진 일 ' + d.missing.length + '건을 모두 ⏳ 처리 대기로 옮길까요?\n(지우는 게 아니라 보관 — 완료 · 재개할 때까지 점검 머리에 남습니다)'))) return;
       binPut(d.missing);
+    });
+    box.querySelectorAll('[data-wrc-track]').forEach(function (b) {   // 🎯 빠진 일 — 보관하면서 담당자에게 추적 걸기
+      b.addEventListener('click', function (e) {
+        e.stopPropagation(); var m = d.missing[+b.dataset.wrcTrack]; if (!m) return;
+        wrTrackItem(m, function (names) { m.note = '🎯 추적 중 → ' + names; binPut([m]); });
+      });
     });
     box.querySelectorAll('[data-wrc-done],[data-wrc-keep]').forEach(function (b) {
       b.addEventListener('click', function (e) {

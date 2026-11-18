@@ -139,6 +139,7 @@ function _wqBuild(o, people) {
         var n = (r && r.data && r.data.length) || 0;
         var m1 = document.getElementById('wrqModal'); if (m1) (m1._wmClose ? m1._wmClose() : m1.remove());
         _wqToast('📨 ' + WRQ_TYPES[st.type].label + '을(를) ' + n + '명에게 보냈습니다 — 메신저 1:1 방 · 📨 요청함에서 볼 수 있어요');
+        if (typeof o.onSent === 'function') { try { o.onSent(r.data || []); } catch (_) {} }   // 부른 쪽 뒤처리 (🎯 주간 업무 추적 등)
         _wqBadge();
       })
       .catch(function (e) { btn.disabled = false; _wqToast('보내지 못했습니다: ' + ((e && e.data && e.data.message) || e.message || e), 'error'); });
