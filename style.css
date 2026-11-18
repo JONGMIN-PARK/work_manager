@@ -9098,3 +9098,21 @@ button.awg-chip{cursor:pointer}
 .wp-h-s{font-size:11.5px;color:var(--t3);margin-top:2px}
 .wp-h-a{display:flex;justify-content:flex-end}
 @media (max-width:640px){.wp-bar{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));max-width:none}}
+
+/* ═══ v13.535 👥 그룹(TFT) ═══ */
+.wg-chips{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:4px 4px 6px;border-bottom:1px dashed var(--bd);margin-bottom:4px}
+.wg-l{font-size:10.5px;font-weight:700;color:var(--t5);margin-right:2px}
+.wg-chip{border:1px solid color-mix(in srgb,#8B5CF6 45%,var(--bd));background:rgba(139,92,246,.1);color:#6D28D9;border-radius:99px;padding:2px 9px;font:inherit;font-size:11.5px;font-weight:600;cursor:pointer}
+.wg-chip small{font-weight:400;opacity:.75}
+.wg-chip:hover:not(:disabled){background:rgba(139,92,246,.2)}
+.wg-chip:disabled{opacity:.45;cursor:default}
+.wg-slot:empty{display:none}
+.wg-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+.wg-hint{flex:1;font-size:11.5px;color:var(--t5);line-height:1.6}
+.wg-card{border:1px solid var(--bd);border-left:4px solid #8B5CF6;border-radius:10px;padding:8px 10px;margin-bottom:8px}
+.wg-h{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t1)}
+.wg-ic{font-size:16px}.wg-n{font-size:11px;color:var(--t5)}
+.wg-p{font-size:11.5px;color:var(--t3);margin:3px 0 0 24px}
+.wg-m{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 0 24px}
+.wg-mc{font-size:11.5px;background:var(--bg-i);border:1px solid var(--bd);border-radius:99px;padding:1px 8px;color:var(--t2)}
+.wg-mc.lead{border-color:#8B5CF6;color:#6D28D9}

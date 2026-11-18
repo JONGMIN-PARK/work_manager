@@ -63,11 +63,12 @@ function _wpAfter(it) { if (typeof renderMyWork === 'function') renderMyWork(); 
 /* 사람 고르기 — 📨 업무 보내기와 같은 사람 목록(바꾼 이름(등록 이름) · 부서) */
 function wpPickPerson(it, onPick) {
   return wmGuardedModal('wpPick', function () {
-    var load = typeof _wqLoadPeople === 'function' ? _wqLoadPeople() : apiFetch('/api/users/lookup').then(function (r) { return (r.data || []).map(function (u) { return { id: u.id, name: u.display_name || u.name, dept: u.dept_name || '' }; }); });
+    var load = (typeof _wqLoadPeople === 'function' ? _wqLoadPeople() : apiFetch('/api/users/lookup').then(function (r) { return (r.data || []).map(function (u) { return { id: u.id, name: u.display_name || u.name, dept: u.dept_name || '' }; }); }))
+      .then(function (p) { return typeof wgLoad === 'function' ? wgLoad().then(function () { return p; }) : p; });
     return load.then(function (people) {
       var taken = it ? [it.ownerId].concat((it.partners || []).map(function (p) { return p.id; })) : [];
       var md = createModal({ id: 'wpPickModal', title: it ? '🤝 같이 담당할 사람' : '🤝 함께 할 사람', width: '400px', closeOnEsc: true,
-        html: '<div class="wp-pick"><input class="wr-inp" id="wpQ" placeholder="이름 · 부서로 찾기" autocomplete="off"><div class="wp-list"></div></div>' });
+        html: '<div class="wp-pick"><input class="wr-inp" id="wpQ" placeholder="이름 · 부서 · 그룹으로 찾기" autocomplete="off"><div class="wg-slot"></div><div class="wp-list"></div></div>' });
       var q = md.box.querySelector('#wpQ'), list = md.box.querySelector('.wp-list');
       var draw = function () {
         var v = q.value.trim().toLowerCase(), cur = null, h = '';
@@ -75,8 +76,16 @@ function wpPickPerson(it, onPick) {
           .sort(function (a, b) { return (a.dept ? 0 : 1) - (b.dept ? 0 : 1) || String(a.dept || '').localeCompare(String(b.dept || ''), 'ko') || a.name.localeCompare(b.name, 'ko'); })
           .forEach(function (p) { var d = p.dept || '부서 없음'; if (d !== cur) { cur = d; h += '<div class="wp-dept">🏢 ' + _wpE(d) + '</div>'; } h += '<button type="button" class="wp-p" data-id="' + _wpE(p.id) + '">' + _wpE(p.name) + '</button>'; });
         list.innerHTML = h || '<div class="wp-none">맞는 사람이 없습니다</div>';
+        var slot = md.box.querySelector('.wg-slot'); if (slot) slot.innerHTML = it && typeof wgChipsHtml === 'function' ? wgChipsHtml('data-wgp', false, q.value) : '';
       };
       q.addEventListener('input', draw);
+      md.box.querySelector('.wg-slot').addEventListener('click', function (e) {   // 👥 그룹 — 구성원 모두 같이 담당으로
+        var gb = e.target.closest('[data-wgp]'); if (!gb || !it) return;
+        md.close();
+        var now = (it.partners || []).map(function (p) { return p.id; });
+        wgMembersOf(gb.dataset.wgp, true).forEach(function (u) { if (now.indexOf(u) < 0 && u !== it.ownerId) now.push(u); });
+        _wpSave(it, now).then(function () { _wpAfter(it); _wpToast('🤝 그룹 구성원을 같이 담당으로 넣었습니다'); }).catch(_wpErr);
+      });
       list.addEventListener('click', function (e) {
         var b = e.target.closest('[data-id]'); if (!b) return;
         md.close();
@@ -97,12 +106,12 @@ var WP = { active: [], tick: null };
 function wpStart(o) {
   o = o || {};
   return wmGuardedModal('wpStart', function () {
-    var load = typeof _wqLoadPeople === 'function' ? _wqLoadPeople() : Promise.resolve([]);
+    var load = typeof _wqLoadPeople === 'function' ? Promise.all([_wqLoadPeople(), typeof wgLoad === 'function' ? wgLoad() : null]).then(function (r) { return r[0]; }) : Promise.resolve([]);
     return load.then(function (people) {
       var pick = {};
       var md = createModal({ id: 'wpStartModal', title: '🤝 함께 하기', width: '440px', closeOnEsc: true,
         html: '<div class="wp-start"><label class="wrq-f"><span>무엇을 함께</span><input class="wr-inp" id="wpTitle" maxlength="200" value="' + _wpE(o.title || '') + '" placeholder="예: 견적 검토 · 3번 축 디버깅"></label>' +
-          '<div class="wrq-f"><span>함께 할 사람 <i id="wpN"></i></span><input class="wr-inp" id="wpQ2" placeholder="이름 · 부서로 찾기" autocomplete="off"><div class="wp-list wp-multi"></div></div>' +
+          '<div class="wrq-f"><span>함께 할 사람 <i id="wpN"></i></span><div class="wg-slot"></div><input class="wr-inp" id="wpQ2" placeholder="이름 · 부서 · 그룹으로 찾기" autocomplete="off"><div class="wp-list wp-multi"></div></div>' +
           '<div class="wp-hint">시작하면 함께 쓰는 📝 공동 메모가 있는 대화방이 열리고, 필요하면 📞 통화 · 화면 공유로 이어 갈 수 있어요. 끝내면 걸린 시간과 요약이 참여자 모두의 노트에 남습니다.</div>' +
           '<div class="wrq-foot"><span style="flex:1"></span><button type="button" class="btn btn-g" data-x>취소</button><button type="button" class="btn btn-p" data-go>🤝 시작</button></div></div>' });
       var box = md.box, list = box.querySelector('.wp-list'), q = box.querySelector('#wpQ2');
@@ -113,9 +122,17 @@ function wpStart(o) {
           .forEach(function (p) { var d = pick[p.id] ? '✔ 고른 사람' : (p.dept || '부서 없음'); if (d !== cur) { cur = d; h += '<div class="wp-dept">' + (pick[p.id] ? '' : '🏢 ') + _wpE(d) + '</div>'; } h += '<label class="wp-p"><input type="checkbox" data-id="' + _wpE(p.id) + '"' + (pick[p.id] ? ' checked' : '') + '> ' + _wpE(p.name) + '</label>'; });
         list.innerHTML = h || '<div class="wp-none">맞는 사람이 없습니다</div>';
         box.querySelector('#wpN').textContent = Object.keys(pick).length ? Object.keys(pick).length + '명' : '';
+        box.querySelector('.wg-slot').innerHTML = typeof wgChipsHtml === 'function' ? wgChipsHtml('data-wgp', false, q.value) : '';
       };
       q.addEventListener('input', draw);
       list.addEventListener('change', function (e) { var c = e.target.closest('[data-id]'); if (!c) return; if (c.checked) pick[c.dataset.id] = 1; else delete pick[c.dataset.id]; draw(); });
+      box.querySelector('.wg-slot').addEventListener('click', function (e) {   // 👥 그룹 — 모두 고르기 (다 골라져 있으면 모두 풀기)
+        var gb = e.target.closest('[data-wgp]'); if (!gb) return;
+        var ids = wgMembersOf(gb.dataset.wgp, true), all = ids.every(function (u) { return pick[u]; });
+        ids.forEach(function (u) { if (all) delete pick[u]; else pick[u] = 1; });
+        if (!box.querySelector('#wpTitle').value.trim()) { var g = (WG.list || []).filter(function (x) { return x.id === gb.dataset.wgp; })[0]; if (g) box.querySelector('#wpTitle').value = g.name + ' '; }
+        q.value = ''; draw();
+      });
       box.querySelector('[data-x]').onclick = function () { md.close(); };
       box.querySelector('[data-go]').onclick = function () {
         var btn = this, title = box.querySelector('#wpTitle').value.trim(), ids = Object.keys(pick);

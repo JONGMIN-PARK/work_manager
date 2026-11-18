@@ -2601,3 +2601,17 @@ module.exports.dmRoom = dmRoom;
 /** 메시지 다시 읽어 방 사람들에게 'upd' — 📨 업무 요청 상태가 바뀔 때 (v13.525) */
 module.exports.refreshMsg = async function (id) { var msg = await loadMsg(id); if (msg) hub.publish(await memberIds(msg.roomId), 'upd', msg); return msg; };
 module.exports.membership = membership;
+/** 방 구성원을 ids 로 맞춤 (👥 그룹 · TFT, v13.535) — 새 사람은 넣고(나갔던 사람은 되돌림), 빠진 사람은 나감 처리 · 캐시 비움 · 알림 */
+module.exports.setRoomMembers = async function (tenantId, roomId, ids, ownerId) {
+  var cur = (await db.query('SELECT user_id, left_at FROM chat_members WHERE room_id = $1', [roomId])).rows;
+  var active = cur.filter(function (m) { return !m.left_at; }).map(function (m) { return m.user_id; });
+  var before = active.slice();
+  for (var i = 0; i < ids.length; i++) if (active.indexOf(ids[i]) < 0) {
+    await db.query("INSERT INTO chat_members (room_id, user_id, tenant_id, role) VALUES ($1,$2,$3,$4) ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL", [roomId, ids[i], tenantId, ids[i] === ownerId ? 'owner' : 'member']);
+  }
+  var gone = active.filter(function (u) { return ids.indexOf(u) < 0; });
+  if (gone.length) await db.query('UPDATE chat_members SET left_at = now() WHERE room_id = $1 AND user_id = ANY($2::uuid[])', [roomId, gone]);
+  _midDrop(roomId);
+  hub.publish(before.concat(ids.filter(function (u) { return before.indexOf(u) < 0; })), 'room', { roomId: roomId });
+  return { added: ids.filter(function (u) { return before.indexOf(u) < 0; }), removed: gone };
+};

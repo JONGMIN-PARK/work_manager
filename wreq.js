@@ -43,7 +43,7 @@ function _wqLoadPeople() {
 function wrqOpen(opts) {
   opts = opts || {};
   return wmGuardedModal('wrqSend', function () {
-    return _wqLoadPeople().then(function (people) { _wqBuild(opts, people); });
+    return Promise.all([_wqLoadPeople(), typeof wgLoad === 'function' ? wgLoad() : null]).then(function (r) { _wqBuild(opts, r[0]); });   // 👥 그룹도 (v13.535)
   }, 'wrqModal', { onOpen: function () { var i = document.querySelector('#wrqModal .wrq-who-in'); if (i) i.focus(); } });
 }
 function _wqBuild(o, people) {
@@ -90,7 +90,8 @@ function _wqBuild(o, people) {
       if (dg !== cur) { cur = dg; var n = list.filter(function (x) { return (x.dept || '부서 없음') === dg; }).length; h += '<button type="button" class="wrq-sg-dept" data-dept="' + _wqE(dg) + '"' + (st.type === 'transfer' ? ' disabled' : '') + '>🏢 ' + _wqE(dg) + ' <small>' + n + '</small></button>'; }
       h += '<button type="button" class="wrq-sg' + (i === pick ? ' on' : '') + '" data-id="' + _wqE(p.id) + '" data-i="' + i + '">' + _wqE(p.name) + '</button>';
     });
-    sug.innerHTML = list.length ? h : '<div class="wrq-sg-none">맞는 사람이 없습니다</div>';
+    var gh = typeof wgChipsHtml === 'function' ? wgChipsHtml('data-grp', st.type === 'transfer', v) : '';   // 👥 그룹 — 누르면 구성원 모두
+    sug.innerHTML = gh + (list.length ? h : '<div class="wrq-sg-none">맞는 사람이 없습니다</div>');
     sug.hidden = false;
   };
   var add = function (id) { if (id && st.to.indexOf(id) < 0) { if (st.type === 'transfer') st.to = []; st.to.push(id); } inp.value = ''; sug.hidden = true; paint(); inp.focus(); };
@@ -104,6 +105,13 @@ function _wqBuild(o, people) {
   });
   sug.addEventListener('mousedown', function (e) {
     var b = e.target.closest('[data-id]'); if (b) { e.preventDefault(); add(b.dataset.id); return; }
+    var gb = e.target.closest('[data-grp]');   // 👥 그룹 모두 넣기
+    if (gb && !gb.disabled) {
+      e.preventDefault();
+      wgMembersOf(gb.dataset.grp, true).forEach(function (u) { if (st.to.indexOf(u) < 0 && people.some(function (p) { return p.id === u; })) st.to.push(u); });
+      inp.value = ''; paint(); showSug(); inp.focus();
+      return;
+    }
     var d = e.target.closest('[data-dept]');   // 부서 모두 넣기
     if (d && !d.disabled) {
       e.preventDefault();
