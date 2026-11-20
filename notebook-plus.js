@@ -141,13 +141,14 @@ function _nbpTaskToggled(line, done) {
 /* ─── 가리키는 노트 ─── */
 function _nbpBacklinks() {
   var box = document.getElementById('nbBL'); if (!box) return;
-  if (!NB.cur || NB.cur.readOnly) { box.innerHTML = ''; return; }
+  if (!NB.cur || NB.cur.readOnly) { box.innerHTML = ''; box.__h = ''; return; }
   var id = NB.cur.id;
   function draw(list) {
     if (!NB.cur || NB.cur.id !== id) return;
-    box.innerHTML = list.length ? '<div class="nb-bl-h">🔗 이 노트를 가리키는 노트 <b>' + list.length + '</b></div>' + list.map(function (x) {
+    var bh = list.length ? '<div class="nb-bl-h">🔗 이 노트를 가리키는 노트 <b>' + list.length + '</b></div>' + list.map(function (x) {
       return '<button type="button" class="nb-bl-i" data-open-note="' + _nbE(x.id) + '"><b>' + _nbE(x.title) + '</b><span>' + _nbE(x.ctx || '') + '</span></button>';
     }).join('') : '';
+    if (box.__h !== bh) { box.__h = bh; box.innerHTML = bh; }   // v13.551 그릴 때마다 같은 것을 다시 넣지 않음
   }
   if (NBP.backFor === id && NBP.back) { draw(NBP.back); return; }
   NBP.backFor = id; NBP.back = [];

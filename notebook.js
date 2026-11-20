@@ -16,7 +16,7 @@ var NB = {
   inited: false, meta: null, view: 'all', folder: null, tag: null, q: '', sort: 'updated', list: [], daily: [],
   cur: null, daily1: null, mode: 'split', pane: 'list', saving: null, timer: null, conflict: null, conflictKey: null,
   // v13.332 저장 — 노트(일일 노트)마다 따로 대기: pend[key] = 그때 값 · revs[id] = 마지막으로 안 서버 rev · err[key] = 다시 보내지 않을 오류
-  pend: {}, revs: {}, err: {}, sending: {}, retryN: 0, retryT: null, dtimer: null, openSeq: 0,
+  pend: {}, revs: {}, err: {}, sending: {}, retryN: 0, retryT: null, dtimer: null, openSeq: 0, saveGen: 0, pre: {},
   inkEd: null, inkId: null, overEd: null, overHide: false, blobs: {}, focus: false, seq: 0
 };
 var NB_LS = 'nb-prefs';
@@ -300,8 +300,9 @@ function _nbOpen(id, kw, quiet) {
   if (NB.cur && NB.cur.id === id) { _nbSetPane('note'); return Promise.resolve(); }
   var seq = ++NB.openSeq;   // 빨리 여러 개를 누르면 마지막 것만 그림
   _nbInkStop();
+  var pre = _nbPreTake(id);   // v13.551 목록에 마우스를 올렸을 때 미리 받아 둔 것 (그 뒤 저장이 없었을 때만)
   // 보내던 글이 다 닿은 뒤에 받음 — 방금 고친 것이 옛 글로 보이지 않게
-  return _nbFlush().then(function () { return apiFetch('/api/notebook/notes/' + encodeURIComponent(id)); }).then(function (r) {
+  return _nbFlush().then(function () { return pre && !NB.pend['n:' + id] && pre.gen === NB.saveGen ? pre.pr : apiFetch('/api/notebook/notes/' + encodeURIComponent(id)); }).then(function (r) {
     if (seq !== NB.openSeq) return;
     var n = r.data, key = 'n:' + id, p = NB.pend[key];
     if (p) {   // 아직 못 보낸 글 — 그 위에 얹고 기준 rev 는 그대로 (그새 다른 곳에서 고쳤으면 충돌로 알림)
@@ -320,6 +321,24 @@ function _nbOpen(id, kw, quiet) {
     if (p) _nbQueue(10); else _nbDraftCheck(n);
     if (kw) setTimeout(function () { _nbFindInDoc(kw); }, 60);
   }).catch(function (e) { if (seq !== NB.openSeq) return; if (!quiet) _nbToast('❌ 노트를 열지 못했습니다 — ' + _nbErr(e), 'error'); else _nbLS('last:' + _nbUid(), null); });
+}
+/* v13.551 미리 받기 — 목록에 마우스를 올리고 잠깐(90ms) 있으면 노트 본문을 먼저 받아 둠. 누르면 기다림 없이 그림.
+   서버가 멀어(미국 ↔ DB 싱가포르) 한 번 묻는 데 수백 ms 라, 누르는 순간 받기 시작하면 늘 그만큼 늦었음.
+   15초 지났거나 그새 저장한 게 있으면(saveGen) 버리고 새로 받음 */
+function _nbPrefetch(id) {
+  if (!id || (NB.cur && NB.cur.id === id) || NB.view === 'trash') return;
+  NB.pre = NB.pre || {};
+  var c = NB.pre[id];
+  if (c && Date.now() - c.t < 15000 && c.gen === NB.saveGen) return;
+  var pr = apiFetch('/api/notebook/notes/' + encodeURIComponent(id));
+  pr.catch(function () { if (NB.pre && NB.pre[id] && NB.pre[id].pr === pr) delete NB.pre[id]; });
+  NB.pre[id] = { pr: pr, t: Date.now(), gen: NB.saveGen };
+  var ks = Object.keys(NB.pre); if (ks.length > 12) delete NB.pre[ks[0]];
+}
+function _nbPreTake(id) {
+  var c = NB.pre && NB.pre[id]; if (!c) return null;
+  delete NB.pre[id];
+  return Date.now() - c.t < 15000 ? c : null;
 }
 function _nbOpenDaily(date, ref) {
   ref = ref || '';
@@ -432,9 +451,10 @@ function _nbFoot() {
   var chars = s.replace(/```[\s\S]*?```/g, '').replace(/^::ink\[[^\]]*\]$/gm, '').replace(/[#>*_`~=\-|[\]()]/g, '').replace(/\s+/g, '').length;
   var mins = Math.max(1, Math.round(chars / 500));
   var n = _nbDoc();
-  el.innerHTML = '<span>글자 ' + chars.toLocaleString() + '</span><span>읽기 약 ' + mins + '분</span>' +
+  var fh = '<span>글자 ' + chars.toLocaleString() + '</span><span>읽기 약 ' + mins + '분</span>' +
     (NB.cur ? '<span>만든 날 ' + new Date(NB.cur.createdAt).toLocaleDateString() + '</span><span id="nbUpd">고침 ' + _nbWhen(NB.cur.updatedAt) + '</span>' : '<span>' + _nbE(n.date) + '</span>') +
     '<span class="nb-sp"></span><span class="nb-foot-k">/ 명령 · Ctrl+S 저장 · Ctrl+Alt+1~4 보기</span>';
+  if (el.__h !== fh) { el.__h = fh; el.innerHTML = fh; }   // v13.551 같으면 그대로
 }
 function _nbState(s, msg) {
   var el = document.getElementById('nbState'); if (!el) return;
@@ -450,48 +470,58 @@ function _nbState(s, msg) {
 /* v13.527 바꿔 끼우기 — 앞뒤로 같은 블록은 그대로 두고 가운데(고친 곳)만 새로. 긴 노트에서 멈췄다 칠 때 화면이 굳던 것
    블록 비교는 그린 원래 글(data-line 뺀 것)로 — 화면에서 덧붙인 것(사진 · 칩 · 단추)은 비교에 안 들어감.
    되면 true (뒤 손질은 새로 넣은 블록만), 못 하면 false → 통째로 */
-function _nbPatchPrev(doc, html) {
-  if (!html || NB.inkId || NB.overEd) { NB._prevKeys = null; return false; }
-  var tpl = document.createElement('template');
-  tpl.innerHTML = html;
-  var nk = [], nodes = tpl.content.childNodes;
-  for (var i = 0; i < nodes.length; i++) {
-    var nd = nodes[i];
-    if (nd.nodeType === 3 && !/\S/.test(nd.nodeValue)) continue;
-    if (nd.nodeType !== 1) { NB._prevKeys = null; return false; }
-    nk.push(nd);
+/* v13.551 블록 비교를 DOM 이 아니라 글(조각 HTML)로 — 예전엔 노트 전체 HTML 을 통째로 DOM 으로 만든 뒤 outerHTML 로 비교해서
+   긴 노트는 멈출 때마다 수백 ms. 이제 바뀐 블록만 DOM 으로 만듦.
+   한 블록 안의 줄 번호는 첫 줄에서 떨어진 거리가 늘 같음 → 그대로 둔 블록은 첫 줄 차이(d)만큼 밀어 줌 */
+var _NB_LN_RE = / data-(line|task)="\d+"/g, _NB_LN1_RE = / data-line="(\d+)"/;
+function _nbPatchPrev(doc, r) {
+  var parts = r && r.parts;
+  if (!parts || !parts.length || NB.inkId || NB.overEd) { NB._prevKeys = null; return false; }
+  var keys = new Array(parts.length), lines = new Array(parts.length);
+  for (var i = 0; i < parts.length; i++) {
+    keys[i] = parts[i].replace(_NB_LN_RE, '');   // 줄 번호 속성은 빼고 비교
+    var lm = _NB_LN1_RE.exec(parts[i]); lines[i] = lm ? +lm[1] : -1;
   }
-  var keys = nk.map(function (el) { return el.outerHTML.replace(/ data-(line|task)="\d+"/g, ''); });   // 줄 번호 속성은 빼고 비교
   var old = NB._prevKeys, oe = doc.children;
-  NB._prevKeys = keys;
-  if (!old || old.length !== oe.length || !old.length) return false;
-  var p = 0, s = 0, n = keys.length, o = old.length;
-  while (p < n && p < o && keys[p] === old[p]) p++;
-  while (s < n - p && s < o - p && keys[n - 1 - s] === old[o - 1 - s]) s++;
-  if (p === n && p === o) { _nbPrevLines(oe, nk, 0, n); return []; }   // 그대로 (줄 번호만)
+  NB._prevKeys = { k: keys, l: lines };
+  if (!old || old.k.length !== oe.length || !old.k.length) return false;
+  var ok = old.k, ol = old.l, p = 0, s = 0, n = keys.length, o = ok.length;
+  while (p < n && p < o && keys[p] === ok[p]) p++;
+  while (s < n - p && s < o - p && keys[n - 1 - s] === ok[o - 1 - s]) s++;
+  var added = [];
+  if (!(p === n && p === o)) {
+    var tpl = document.createElement('template');
+    tpl.innerHTML = parts.slice(p, n - s).join('');
+    added = [].slice.call(tpl.content.children);
+    if (added.length !== n - s - p || tpl.content.childNodes.length !== added.length) { NB._prevKeys = { k: keys, l: lines }; return false; }   // 조각 하나가 블록 하나가 아님 — 통째로
+  }
+  // 그대로 둔 블록 줄 번호 (앞 · 뒤)
+  for (var a = 0; a < p; a++) if (lines[a] !== ol[a]) _nbShiftLines(oe[a], lines[a] - ol[a]);
+  for (var b = 0; b < s; b++) { var oi = o - 1 - b, ni = n - 1 - b; if (lines[ni] !== ol[oi]) _nbShiftLines(oe[oi], lines[ni] - ol[oi]); }
+  if (p === n && p === o) return [];   // 그대로 (줄 번호만)
   var anchor = oe[o - s] || null, removed = [];
   for (var k = o - s - 1; k >= p; k--) { removed.push(oe[k]); oe[k].remove(); }
-  var added = nk.slice(p, n - s);
-  added.forEach(function (el) { doc.insertBefore(el, anchor); });
-  _nbPrevLines(doc.children, nk, n - s, n);
+  var frag = document.createDocumentFragment();
+  added.forEach(function (el) { frag.appendChild(el); });
+  doc.insertBefore(frag, anchor);
   return { added: added, removed: removed };
 }
-/* 그대로 둔 블록의 줄 번호(data-line · 체크 칸 data-task)를 새 것으로 — 앞 줄을 고치면 뒤 블록 줄 번호가 밀림.
+/* 그대로 둔 블록의 줄 번호(data-line · 체크 칸 data-task)를 d 만큼 — 앞 줄을 고치면 뒤 블록 줄 번호가 밀림.
    안 고치면 체크를 눌렀을 때 다른 줄이 바뀐다 */
-function _nbPrevLines(cur, nk, from, to) {
-  var SEL = '[data-line],[data-task]';
-  var list = function (el) { return [el].concat([].slice.call(el.querySelectorAll(SEL))).filter(function (x) { return x.hasAttribute('data-line') || x.hasAttribute('data-task'); }); };
-  for (var i = from; i < to; i++) {
-    var a = cur[i], b = nk[i]; if (!a || !b) continue;
-    var la = list(a), lb = list(b);
-    for (var j = 0; j < la.length && j < lb.length; j++) ['data-line', 'data-task'].forEach(function (at) { var v = lb[j].getAttribute(at); if (v != null && la[j].getAttribute(at) !== v) la[j].setAttribute(at, v); });
-  }
+function _nbShiftLines(el, d) {
+  if (!el || !d) return;
+  var list = [el].concat([].slice.call(el.querySelectorAll('[data-line],[data-task]')));
+  list.forEach(function (x) { ['data-line', 'data-task'].forEach(function (at) { var v = x.getAttribute(at); if (v != null && /^\d+$/.test(v)) x.setAttribute(at, String(+v + d)); }); });
 }
 function _nbRenderPrev() {
   var doc = document.getElementById('nbDoc'), src = document.getElementById('nbSrc'); if (!doc || !src) return;
   var r = NbMd.render(src.value);
   NB.toc = r.toc;
-  var pt = _nbPatchPrev(doc, r.html);
+  // v13.551 긴 노트는 화면 밖 블록 배치를 건너뜀 (content-visibility) — 열기 · 보기 바꾸기 · 멈췄다 칠 때가 몇 배 빨라짐.
+  //   🖍 마커가 있으면 끔 (마커 칸 높이가 실제 높이여야 함)
+  var ov = NB.cur && NB.cur.ink && NB.cur.ink.over;
+  doc.classList.toggle('nb-cv', r.parts.length > 80 && !NB.overEd && !(ov && ov.s && ov.s.length));
+  var pt = _nbPatchPrev(doc, r);
   if (pt) { _nbAfterPatch(doc, pt); return; }
   var keepImg = null;   // 이미 받아 둔 사진 요소 — 새로 그린 자리에 옮겨 씀 (다시 그릴 때 깜빡이지 않게 · v13.333)
   doc.querySelectorAll('img[data-nbfid]').forEach(function (img) { if (!img.getAttribute('src')) return; keepImg = keepImg || {}; var id = img.getAttribute('data-nbfid'); (keepImg[id] = keepImg[id] || []).push(img); });
@@ -547,7 +577,7 @@ function _nbDrawOver() {
   var ov = document.getElementById('nbOver'), doc = document.getElementById('nbDoc'); if (!ov || !doc) return;
   if (NB.overEd) return;   // 그리는 중
   var o = NB.cur && NB.cur.ink && NB.cur.ink.over;
-  if (!o || !o.s || !o.s.length || NB.overHide) { ov.innerHTML = ''; ov.classList.remove('has'); return; }
+  if (!o || !o.s || !o.s.length || NB.overHide) { if (ov.firstChild) ov.innerHTML = ''; if (ov.classList.contains('has')) ov.classList.remove('has'); return; }   // v13.551 비었으면 건드리지 않음 (그릴 때마다 배치 다시)
   var h = doc.offsetHeight * NbInk.W / Math.max(1, doc.offsetWidth);
   ov.innerHTML = NbInk.svg({ h: h, s: o.s });
   ov.classList.add('has');
@@ -557,6 +587,14 @@ function _nbDrawOver() {
 function _nbBind(root) {
   var prevT = null;
   root.addEventListener('click', _nbClick);
+  // v13.551 목록에 올리면 미리 받기 — 누르기 전에 본문이 와 있게
+  var preT = null;
+  root.addEventListener('mouseover', function (e) {
+    var it = e.target.closest && e.target.closest('#nbItems .nb-it[data-id]'); if (!it) return;
+    clearTimeout(preT); preT = setTimeout(function () { _nbPrefetch(it.getAttribute('data-id')); }, 90);
+  });
+  root.addEventListener('mouseout', function (e) { if (e.target.closest && e.target.closest('#nbItems .nb-it')) clearTimeout(preT); });
+  root.addEventListener('pointerdown', function (e) { var it = e.target.closest && e.target.closest('#nbItems .nb-it[data-id]'); if (it && !e.target.closest('button')) _nbPrefetch(it.getAttribute('data-id')); });
   root.addEventListener('dblclick', function (e) {
     var blk = e.target.closest('#nbDoc [data-line]');
     if (!blk || NB.mode !== 'view' || !_nbDoc() || _nbRO() || e.target.closest('.nb-ink, a, button')) return;
@@ -1055,7 +1093,7 @@ function _nbDone(j, o, sent) {
     var dd = _nbDDraft(j.date, j.ref); if (dd && (!NB.pend[j.key] || dd.body === j.body)) _nbDDraft(j.date, j.ref, null);
     return;
   }
-  NB.revs[j.id] = o.rev;
+  NB.revs[j.id] = o.rev; NB.saveGen++;   // 미리 받아 둔 노트는 이제 옛것 (v13.551)
   if (!NB.pend[j.key]) _nbDraft(j.id, null);
   if (j.force) _nbToast('✓ 내 것으로 저장했습니다');
   try {
@@ -1150,7 +1188,7 @@ function nbReset() {
   clearTimeout(NB.timer); clearTimeout(NB.retryT); clearTimeout(NB.dtimer);
   Object.keys(NB.blobs).forEach(function (k) { Promise.resolve(NB.blobs[k]).then(function (u) { if (/^blob:/.test(u)) URL.revokeObjectURL(u); }).catch(function () {}); });
   Object.assign(NB, { inited: false, meta: null, list: [], daily: [], q: '', cur: null, daily1: null, saving: null, timer: null, conflict: null, conflictKey: null,
-    pend: {}, revs: {}, err: {}, sending: {}, retryN: 0, retryT: null, dtimer: null, openSeq: NB.openSeq + 1, blobs: {}, pendingOpen: null, toc: null, _draft: null, inkEd: null, inkId: null, overEd: null });
+    pend: {}, revs: {}, err: {}, sending: {}, retryN: 0, retryT: null, dtimer: null, openSeq: NB.openSeq + 1, saveGen: (NB.saveGen || 0) + 1, pre: {}, blobs: {}, pendingOpen: null, toc: null, _draft: null, inkEd: null, inkId: null, overEd: null });
   if (typeof NBP !== 'undefined') { NBP.ai = null; NBP.sp = null; NBP.open = {}; NBP.titles = null; NBP.kindOver = null; NBP.filter = ''; }
   var r = document.getElementById('mNotebook'); if (r) r.innerHTML = '';
   var q = document.getElementById('nbQuick'); if (q) q.remove();
@@ -1183,7 +1221,7 @@ function _nbListUpdate(o, sent) {
 /** 부분 고치기 (고정 · 즐겨찾기 · 폴더 · 태그 · 낙서장) — 충돌 확인 없이 */
 function _nbPatch(id, patch, okMsg) {
   return apiFetch('/api/notebook/notes/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(patch) }).then(function (r) {
-    var o = r.data;
+    var o = r.data; NB.saveGen++;
     if (NB.cur && NB.cur.id === id) { Object.keys(patch).forEach(function (k) { NB.cur[k] = o[k]; }); _nbDrawTopOnly(); }
     if (okMsg) _nbToast(okMsg);
     _nbLoadMeta().then(function () { if ('folderId' in patch && NB.cur && NB.cur.id === id) _nbDrawTopOnly(); });   // 새 폴더 이름이 머리에 보이게
@@ -1611,6 +1649,7 @@ function _nbOverToggle() {
   if (NB.mode !== 'view') _nbSetMode('view');   // 다 쓴 노트 위에 표시 — 넓은 보기에서 (나란히면 글이 바뀌며 자리가 밀림)
   _nbInkStop();
   var ov = document.getElementById('nbOver'), doc = document.getElementById('nbDoc'); if (!ov || !doc) return;
+  doc.classList.remove('nb-cv');   // v13.551 마커는 실제 높이로 (건너뛴 블록이 있으면 표시 자리가 어긋남)
   var ink = _nbInk(); if (!ink.over) ink.over = { s: [] };
   NB.overHide = false;
   if (NbInk.tool.t === 'pen' && !ink.over.s.length) { NbInk.tool.t = 'pen'; NbInk.tool.c = '#dc2626'; }

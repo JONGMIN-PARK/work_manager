@@ -5351,6 +5351,8 @@ button.nb-crumb:hover{background:var(--bg-hv)}
 .nb-src{border:0;outline:0;resize:none;background:var(--bg-p);color:var(--t1);padding:18px 22px 40vh;font-size:var(--nb-fs-src,14px);line-height:var(--nb-lh,1.75);font-family:"JetBrains Mono","D2Coding",Consolas,"Malgun Gothic",monospace;tab-size:2;min-height:0;box-sizing:border-box;width:100%}
 .nb-m-edit .nb-src{padding-left:max(22px,calc(50% - 400px));padding-right:max(22px,calc(50% - 400px))}
 .nb-prev{background:var(--bg-p);min-height:0;position:relative}
+#mNotebook .nb-src,#mNotebook .nb-prev{contain:strict}   /* v13.551 글 칠 때 다시 배치 · 다시 칠하는 범위를 글 상자 · 미리보기 안으로 — 크기는 칸(grid)이 정하므로 안전. 긴 노트에서 한 글자마다 옆 미리보기까지 다시 칠하던 것 */
+#nbDoc.nb-cv>*{content-visibility:auto;contain-intrinsic-size:auto 48px}   /* v13.551 긴 노트(블록 80개 넘음)만 — 화면 밖 블록은 배치 · 칠하기 건너뜀 */
 .nb-doc-w{position:relative;max-width:820px;margin:0 auto;padding:18px 26px 30vh}
 .nb-m-split .nb-doc-w{padding:18px 22px 30vh}
 .nb-over{position:absolute;left:26px;right:26px;top:18px;pointer-events:none;z-index:2}

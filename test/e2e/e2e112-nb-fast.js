@@ -88,6 +88,16 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     var r4 = await same();
     check(r4.ok && r4.an === r0.an, '블록 지우기 — 같음 (머리 하나 늘고 표 하나 줄어 블록 수 같음) ' + r4.an + '/' + r0.an);
 
+    // v13.551 빈 줄만 넣기 — 블록 내용은 모두 같고 줄 번호만 밀림 (조각 글 비교)
+    await page.evaluate(function () { window.__lastTbl = [].slice.call(document.querySelectorAll('#nbDoc .nb-tbl')).pop(); });
+    await typeAt(0, '\n\n');
+    var r6 = await same();
+    var kept6 = await page.evaluate(function () { return window.__lastTbl === [].slice.call(document.querySelectorAll('#nbDoc .nb-tbl')).pop(); });
+    check(r6.ok && kept6, '빈 줄만 넣기 — 줄 번호만 밀리고 블록은 그대로 ' + JSON.stringify(r6).slice(0, 120));
+    // v13.551 긴 노트(블록 80개 넘음)는 화면 밖 배치 건너뛰기 · 글 상자 · 미리보기 격리
+    var cv = await page.evaluate(function () { var d = document.getElementById('nbDoc'); return { on: d.classList.contains('nb-cv'), cv: getComputedStyle(d.children[3]).contentVisibility, n: d.children.length, ct: getComputedStyle(document.getElementById('nbSrc')).contain }; });
+    check(cv.on && cv.cv === 'auto' && cv.n > 80 && /strict|size/.test(cv.ct), '긴 노트 — content-visibility · contain ' + JSON.stringify(cv));
+
     // 보기 모드 — 도구 막대(손글씨 · 덮어 그리기만) : :has 대신 클래스
     await page.evaluate(function () { _nbSetMode('view'); });
     await wait(300);
@@ -113,6 +123,23 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
     await page.waitForFunction(function () { return typeof NB !== 'undefined' && !Object.keys(NB.pend).length && !NB.saving; }, { timeout: 10000 }).catch(function () {});
     var saved = await page.evaluate(function (id) { return apiFetch('/api/notebook/notes/' + id).then(function (r) { return r.data.body === document.getElementById('nbSrc').value; }); }, id);
     check(saved, '저장된 글 == 쓴 글');
+
+    // v13.551 목록에 올리면 미리 받기 → 누르면 다시 묻지 않음 · 짧은 노트는 content-visibility 안 씀
+    var id2 = await page.evaluate(function () { return apiFetch('/api/notebook/notes', { method: 'POST', body: JSON.stringify({ title: '미리 받기 시험', body: '짧은 글\n\n- [ ] 하나' }) }).then(function (r) { return r.data.id; }); });
+    await page.evaluate(function () { _nbLoadList(); });
+    await page.waitForSelector('#nbItems .nb-it[data-id="' + id2 + '"]', { timeout: 8000 });
+    var gets = 0;
+    page.on('request', function (q) { if (q.method() === 'GET' && q.url().indexOf('/api/notebook/notes/' + id2) >= 0 && q.url().indexOf('backlinks') < 0) gets++; });
+    await page.hover('#nbItems .nb-it[data-id="' + id2 + '"]');
+    await wait(400);
+    var pre = await page.evaluate(function (id2) { return !!(NB.pre && NB.pre[id2]); }, id2);
+    await page.click('#nbItems .nb-it[data-id="' + id2 + '"]');
+    await page.waitForFunction(function (id2) { return NB.cur && NB.cur.id === id2; }, { timeout: 8000 }, id2);
+    await wait(300);
+    var cv2 = await page.evaluate(function () { return document.getElementById('nbDoc').classList.contains('nb-cv'); });
+    check(pre && gets === 1, '올리면 미리 받기 · 누르면 그것으로 (본문 요청 ' + gets + '번)');
+    check(!cv2 && /짧은 글/.test(await page.evaluate(function () { return document.getElementById('nbDoc').textContent; })), '짧은 노트 — content-visibility 안 씀 · 내용 보임');
+    await page.evaluate(function (id2) { return apiFetch('/api/notebook/notes/' + id2, { method: 'DELETE' }).catch(function () {}); }, id2);
     check(!errs.length, '페이지 오류 없음 ' + errs.join(' | '));
   } catch (e) {
     fail++; console.log('ERR', e && e.stack || e);

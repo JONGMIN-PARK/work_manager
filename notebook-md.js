@@ -31,7 +31,17 @@ var NbMd = (function () {
        → 뒤의 정규식이 이미 만든 태그의 속성 안 글자('[' 등)를 다시 잡아 따옴표를 열고 닫는 일이 없음
        · 속성에 들어갈 값(주소 · alt · 제목 · id)에 자리표가 섞여 있으면 태그로 바꾸지 않음 */
   var CTRL = /[\u0000-\u0003]/;
+  /* v13.551 같은 줄은 다시 꾸미지 않음 — 글자 칠 때마다 노트 전체를 다시 그려도 바뀐 줄만 계산 (순수 함수라 결과를 기억해도 같음) */
+  var _memo = new Map();
   function inline(src) {
+    var key = String(src), hit = _memo.get(key);
+    if (hit !== undefined) return hit;
+    var out = inline0(key);
+    if (_memo.size > 5000) _memo.clear();
+    _memo.set(key, out);
+    return out;
+  }
+  function inline0(src) {
     var codes = [], tags = [];
     function ph(h) { tags.push(h); return '\u0001' + (tags.length - 1) + '\u0001'; }
     function open(h) { tags.push(h); return '\u0002' + (tags.length - 1) + '\u0002'; }
@@ -135,11 +145,12 @@ var NbMd = (function () {
   }
 
   /* ─── 블록 ─── */
-  function blocks(lines, base, toc) {
-    var h = '', i = 0, para = [], paraLine = 0;
+  /* 맨 위 블록 하나 = h 의 한 칸 (v13.551 — 미리보기는 칸끼리 글로 비교해서 바뀐 블록만 새로 만듦) */
+  function blocks(lines, base, toc, parts) {
+    var h = parts || [], i = 0, para = [], paraLine = 0;
     function flush() {
       if (!para.length) return;
-      h += '<p data-line="' + (paraLine + base) + '">' + para.map(inline).join('<br>') + '</p>';
+      h.push('<p data-line="' + (paraLine + base) + '">' + para.map(function (x) { return inline(x); }).join('<br>') + '</p>');
       para = [];
     }
     while (i < lines.length) {
@@ -151,12 +162,12 @@ var NbMd = (function () {
         i++;
         while (i < lines.length && lines[i].trim().indexOf(fence) !== 0) { buf.push(lines[i]); i++; }
         i++;
-        h += '<div class="nb-code" data-line="' + (s0 + base) + '">' + (lang ? '<span class="nb-code-lang">' + esc(lang) + '</span>' : '') +
-          '<button class="nb-code-copy" type="button" title="복사">복사</button><pre><code>' + esc(buf.join('\n')) + '</code></pre></div>';
+        h.push('<div class="nb-code" data-line="' + (s0 + base) + '">' + (lang ? '<span class="nb-code-lang">' + esc(lang) + '</span>' : '') +
+          '<button class="nb-code-copy" type="button" title="복사">복사</button><pre><code>' + esc(buf.join('\n')) + '</code></pre></div>');
         continue;
       }
       // 손글씨 칸
-      if ((m = /^::ink\[([A-Za-z0-9_-]{1,40})\]\s*$/.exec(l))) { flush(); h += '<div class="nb-ink" data-ink="' + m[1] + '" data-line="' + (i + base) + '"></div>'; i++; continue; }
+      if ((m = /^::ink\[([A-Za-z0-9_-]{1,40})\]\s*$/.exec(l))) { flush(); h.push('<div class="nb-ink" data-ink="' + m[1] + '" data-line="' + (i + base) + '"></div>'); i++; continue; }
       if (!l.trim()) { flush(); i++; continue; }
       // 제목
       if ((m = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(l))) {
@@ -165,11 +176,11 @@ var NbMd = (function () {
         var dup = toc.filter(function (t) { return t.id === id || t.id.indexOf(id + '-') === 0; }).length;
         if (dup) id += '-' + dup;
         toc.push({ level: lv, text: inner.replace(/<[^>]*>/g, ''), id: id, line: i + base });
-        h += '<h' + lv + ' id="' + id + '" data-line="' + (i + base) + '">' + inner + '</h' + lv + '>';
+        h.push('<h' + lv + ' id="' + id + '" data-line="' + (i + base) + '">' + inner + '</h' + lv + '>');
         i++; continue;
       }
       // 구분선
-      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) { flush(); h += '<hr data-line="' + (i + base) + '">'; i++; continue; }
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) { flush(); h.push('<hr data-line="' + (i + base) + '">'); i++; continue; }
       // 인용 · 알림 상자
       if (/^\s*>/.test(l)) {
         flush();
@@ -178,9 +189,9 @@ var NbMd = (function () {
         var cm = /^\[!([A-Za-z]+)\]\s*(.*)$/.exec(q[0] || '');
         if (cm && CALLOUT[cm[1].toUpperCase()]) {
           var k = cm[1].toUpperCase(), c = CALLOUT[k];
-          h += '<div class="nb-callout nb-co-' + k.toLowerCase() + '" data-line="' + (q0 + base) + '"><div class="nb-co-t">' + c[0] + ' ' + (cm[2] ? inline(cm[2]) : c[1]) + '</div>' + blocks(q.slice(1), q0 + 1 + base, toc) + '</div>';
+          h.push('<div class="nb-callout nb-co-' + k.toLowerCase() + '" data-line="' + (q0 + base) + '"><div class="nb-co-t">' + c[0] + ' ' + (cm[2] ? inline(cm[2]) : c[1]) + '</div>' + blocks(q.slice(1), q0 + 1 + base, toc) + '</div>');
         } else {
-          h += '<blockquote data-line="' + (q0 + base) + '">' + blocks(q, q0 + base, toc) + '</blockquote>';
+          h.push('<blockquote data-line="' + (q0 + base) + '">' + blocks(q, q0 + base, toc) + '</blockquote>');
         }
         continue;
       }
@@ -193,28 +204,29 @@ var NbMd = (function () {
         var rows = [];
         while (i < lines.length && lines[i].indexOf('|') >= 0 && lines[i].trim()) { rows.push(splitRow(lines[i])); i++; }
         function td(tag, c, j) { return '<' + tag + (al[j] ? ' style="text-align:' + al[j] + '"' : '') + '>' + inline(c || '') + '</' + tag + '>'; }
-        h += '<div class="nb-tbl" data-line="' + (t0 + base) + '"><table><thead><tr>' + head.map(function (c, j) { return td('th', c, j); }).join('') + '</tr></thead><tbody>' +
-          rows.map(function (r) { return '<tr>' + head.map(function (_, j) { return td('td', r[j], j); }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+        h.push('<div class="nb-tbl" data-line="' + (t0 + base) + '"><table><thead><tr>' + head.map(function (c, j) { return td('th', c, j); }).join('') + '</tr></thead><tbody>' +
+          rows.map(function (r) { return '<tr>' + head.map(function (_, j) { return td('td', r[j], j); }).join('') + '</tr>'; }).join('') + '</tbody></table></div>');
         continue;
       }
       // 목록
       if (LI_RE.test(l)) {
         flush();
         var L = renderList(lines, i, base);
-        h += L.html; i = L.next; continue;
+        h.push(L.html); i = L.next; continue;
       }
       if (!para.length) paraLine = i;
       para.push(l);
       i++;
     }
     flush();
-    return h;
+    return h.join('');
   }
 
+  /** → { html, toc, parts } — parts: 맨 위 블록마다 HTML 한 조각 (이어 붙이면 html) */
   function render(src) {
-    var toc = [];
-    var html = blocks(String(src || '').replace(/\r\n?/g, '\n').split('\n'), 0, toc);
-    return { html: html, toc: toc };
+    var toc = [], parts = [];
+    blocks(String(src || '').replace(/\r\n?/g, '\n').split('\n'), 0, toc, parts);
+    return { html: parts.join(''), toc: toc, parts: parts };
   }
 
   /** 체크 줄 바꾸기 — 미리보기에서 눌렀을 때 */
