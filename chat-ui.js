@@ -501,6 +501,7 @@ function chatOpenRoom(id, keep, focusMid) {
   _cxDrawRooms(); if (!reuse) _cxDrawMain();
   if (cached) { _cxDrawHead(); _cxDrawNotice(); _cxDrawMsgs(false); _cxDrawAside(); }
   var my = id;
+  if (typeof _cbViewsLoad === 'function') _cbViewsLoad();   // v13.552 내가 돌려 둔 사진 각도 — 메시지와 같이 받기 시작 (예전엔 메시지가 온 뒤에 물어 돌린 사진이 한 번 더 기다림)
   if (changed && !focusMid) _cxReadEarly(id);   // v13.372 열자마자 읽음 — 내용 받기를 기다리지 않음
   (focusMid ? _cxFetchRoomNow(id, focusMid) : _cxFetchRoom(id)).then(function (rs) {
     if (CX.room !== my) return;
@@ -524,9 +525,13 @@ function chatOpenRoom(id, keep, focusMid) {
 /* v13.372 방 내용 받기 — 미리 받기(목록에 손가락 · 마우스가 올라가면, 안 읽은 방은 한가할 때)와 열기가 같은 요청을 나눠 씀 */
 CX.pf = {};
 function _cxFetchRoomNow(id, around) {
-  var e = encodeURIComponent(id);
-  return Promise.all([apiFetch('/api/chat/rooms/' + e), apiFetch('/api/chat/rooms/' + e + '/messages' + (around ? '?around=' + around : ''))]);
+  // v13.552 처음 여는 방 — 미리보기도 같은 응답에 (왕복 한 번 줄임). 이 기기에서 열어 본 방은 미리보기가 기기에 있어 빼고 받음
+  var e = encodeURIComponent(id), seen = _cxThSeen(), th = around || (!CX.cache[id] && seen.indexOf(id) < 0);
+  var p = apiFetch('/api/chat/rooms/' + e + '/messages' + (around ? '?around=' + around : '') + (th ? (around ? '&' : '?') + 'th=1' : '')).then(_cxTakeThumbs);
+  p.then(function () { var l = _cxThSeen().filter(function (x) { return x !== id; }); l.push(id); _cxLsSet('wm-cx-thr', JSON.stringify(l.slice(-80))); }, function () {});
+  return Promise.all([apiFetch('/api/chat/rooms/' + e), p]);
 }
+function _cxThSeen() { try { var l = JSON.parse(_cxLsGet('wm-cx-thr') || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
 function _cxFetchRoom(id) {
   var f = CX.pf[id];
   if (f && Date.now() - f.t < 15000) { delete CX.pf[id]; return f.p; }   // 한 번만 씀 — 다음 열기는 새로
@@ -607,6 +612,7 @@ function _cxDrawMain() {
   var ta0 = m.querySelector('#cxIn'); if (ta0 && CX.drafts[CX.room]) { ta0.value = CX.drafts[CX.room]; ta0.style.height = 'auto'; ta0.style.height = Math.min(160, ta0.scrollHeight) + 'px'; }
   var box = m.querySelector('#cxMsgs');
   box.addEventListener('scroll', function () {
+    if (CX.pdT) { clearTimeout(CX.pdT); CX.pdT = 0; }
     if (CX.more && !CX.pre && !CX.loading && box.scrollHeight - box.scrollTop - box.clientHeight > 150) _cxPreOlder();   // v13.436 올리기 시작하면 다음 쪽을 미리
     if (box.scrollTop < Math.max(600, box.clientHeight * 1.5) && CX.more && !CX.loading) _cxLoadOlder();   // v13.414 위 끝에 닿기 전에 미리 받아 둠 (닿고 나서 받으면 휴대폰에서 굴림이 멈칫)
     if (CX.fwd && !CX.loading && box.scrollHeight - box.scrollTop - box.clientHeight < 200) _cxLoadNewer();   // v13.375 앞으로 읽기
@@ -627,7 +633,13 @@ function _cxDrawMain() {
   // v13.448 🖼 사진 — 누르기 직전에 원본을 미리 받음 (마우스는 0.15초 올려 두면 · 손가락은 닿는 순간)
   var pfT = null;
   box.addEventListener('pointerover', function (e) { if (e.pointerType !== 'mouse') return; var b = e.target.closest('.cx-img[data-file]'); clearTimeout(pfT); if (b && typeof chatBoardPrefetch === 'function') pfT = setTimeout(function () { chatBoardPrefetch(b.dataset.file); }, 150); }, { passive: true });
-  box.addEventListener('pointerdown', function (e) { var b = e.target.closest('.cx-img[data-file]'); if (b && typeof chatBoardPrefetch === 'function') chatBoardPrefetch(b.dataset.file); }, { passive: true });
+  // v13.552 손가락은 사진 위에 0.16초 머물 때만 — 굴리려고 사진을 짚을 때마다 원본(수 MB)을 받아 풀어 두던 것(굴리는 동안 미리보기와 대역을 다투고 메모리가 쌓임)
+  box.addEventListener('pointerdown', function (e) {
+    var b = e.target.closest('.cx-img[data-file]'); if (!b || typeof chatBoardPrefetch !== 'function') return;
+    clearTimeout(CX.pdT); var fid = b.dataset.file;
+    if (e.pointerType === 'touch') CX.pdT = setTimeout(function () { chatBoardPrefetch(fid); }, 160); else chatBoardPrefetch(fid);
+  }, { passive: true });
+  ['pointercancel', 'pointerup', 'pointerleave'].forEach(function (ev) { box.addEventListener(ev, function () { clearTimeout(CX.pdT); }, { passive: true }); });
   _cxLongPress(box);
   // 끌어 놓기
   var dz = m.querySelector('#cxDrop'), dc = 0;
@@ -817,7 +829,10 @@ function _cxMsgHtml(m, prev, inThread, next) {
     if (alb.length < 2) alb = null;
     else if (alb[0].id !== m.id) return h + '<div class="cx-gh" hidden></div>';
   }
-  var cont = prev && prev.userId === m.userId && prev.kind !== 'system' && (new Date(m.at) - new Date(prev.at)) < 5 * 60000 && new Date(prev.at).toDateString() === new Date(m.at).toDateString();
+  var cont = _cxCont(prev, m);
+  // v13.552 묶음 모양을 그릴 때 정함 — 예전엔 CSS :has(+ 형제) 로 찾아 목록이 바뀔 때마다 브라우저가 형제를 다시 훑었다
+  var nx = next && !next.eph && next.kind !== 'system' && _cxCont(m, next) && !(!inThread && next.grp && next.file && !next.deleted && !_cxAlbFirst(next));
+  var afs = prev && prev.kind === 'system' && !prev.eph;
   var ai = m.kind === 'ai';
   var body = '';
   if (m.deleted) body = '<div class="cx-b cx-del">삭제된 메시지입니다</div>';
@@ -841,7 +856,7 @@ function _cxMsgHtml(m, prev, inThread, next) {
   var meta = m.pending ? '<span class="cx-meta">' + (m.failed ? '<span class="cx-fail' + (m.wait ? ' wait' : '') + '">' + (m.wait ? '⏳ 연결되면 보냄' : '⚠ 못 보냄') + ' <button type="button" data-retry="' + m.id + '">' + (m.wait ? '지금' : '다시 보내기') + '</button><button type="button" data-drop="' + m.id + '">지우기</button></span>' : '<i class="cx-sending" title="보내는 중">◷</i>') + '</span>'
     : '<span class="cx-meta"><em class="cx-un" data-un="' + m.id + '"></em>' + (!alb && _cxSameMin(m, next) ? '' : '<i>' + _cxT(m.at) + '</i>') + '</span>';   // 읽음 숫자는 _cxDrawReadCounts 가 채움 · v13.376 같은 사람 같은 분에 이어 보낸 건 마지막에만 시각
   var atMe = !mine && !m.deleted && (m.mentions || []).indexOf(_cxMe()) >= 0, atAll = atMe && /(^|\s)@(모두|all|everyone)\b/.test(m.body || '');   // v13.426 나를 부른 글
-  h += '<div class="cx-m' + (mine ? ' mine' : '') + (cont ? ' cont' : '') + (atMe ? ' at-me' + (atAll ? ' at-all' : '') : '') + (ai ? ' is-ai' : '') + (m.pending ? ' cx-pend' + (m.failed ? ' failed' : '') : '') + '" data-mid="' + m.id + '">' +
+  h += '<div class="cx-m' + (mine ? ' mine' : '') + (cont ? ' cont' : '') + (nx ? ' cx-nx' : '') + (afs ? ' cx-afs' : '') + (atMe ? ' at-me' + (atAll ? ' at-all' : '') : '') + (ai ? ' is-ai' : '') + (m.pending ? ' cx-pend' + (m.failed ? ' failed' : '') : '') + '" data-mid="' + m.id + '">' +
     (!mine && !cont ? (ai ? '<span class="cx-av cx-av-ai">🤖</span>' : _cxAv(m.userId, m.userName)) : (!mine ? '<span class="cx-av-sp"></span>' : '')) +
     '<div class="cx-col">' + (!mine && (!cont || atMe) ? '<div class="cx-who">' + (!cont ? _cxE(ai ? 'AI' : m.userName) : '') + (atMe ? '<em class="cx-atme-tag">' + (atAll ? '📢 @모두' : '🔔 나를 불렀어요') + '</em>' : '') + '</div>' : '') +
     '<div class="cx-row">' + (mine ? meta : '') + '<div class="cx-bw">' + body + '</div>' + (!mine ? meta : '') +
@@ -851,6 +866,10 @@ function _cxMsgHtml(m, prev, inThread, next) {
     '</div></div>';
   return h;
 }
+/** 앞 말풍선에 이어 붙는지 — 같은 사람 · 5분 안 · 같은 날 */
+function _cxCont(prev, m) { return !!(prev && prev.userId === m.userId && prev.kind !== 'system' && (new Date(m.at) - new Date(prev.at)) < 5 * 60000 && new Date(prev.at).toDateString() === new Date(m.at).toDateString()); }
+/** 앨범(2장 넘게 묶음)에서 첫 장이거나 앨범이 아닌지 — 첫 장이 아니면 화면에 따로 안 그림 */
+function _cxAlbFirst(m) { var a = CX.msgs.filter(function (x) { return x.grp === m.grp && x.file && !x.deleted && !x.replyTo; }); return a.length < 2 || a[0].id === m.id; }
 /** 다음 메시지가 같은 사람 · 같은 분이면 시각은 다음에 (카톡처럼 묶음 끝에만) */
 function _cxSameMin(m, next) {
   if (!next || next.pending || m.pending || next.kind === 'system' || next.userId !== m.userId) return false;
@@ -1060,7 +1079,7 @@ function _cxLoadNewer() {
 function chatReadFromStart() {
   if (!CX.room) return;
   CX.loading = true; var my = CX.room;
-  apiFetch('/api/chat/rooms/' + encodeURIComponent(my) + '/messages?after=0').then(function (r) {
+  apiFetch('/api/chat/rooms/' + encodeURIComponent(my) + '/messages?after=0&th=1').then(_cxTakeThumbs).then(function (r) {
     CX.loading = false; if (CX.room !== my) return;
     CX.msgs = r.data || []; CX.more = false; CX.fwd = !!r.more; CX.readMark = null; CX.newBelow = 0;
     var box = document.getElementById('cxMsgs'); if (box) { box._ids = null; }
@@ -1080,7 +1099,7 @@ function _cxToLatest() {
 }
 function _cxJump(id) {
   var el = document.querySelector('#cxMsgs [data-mid="' + id + '"]');
-  if (!el) { if (CX.more) { CX.loading = true; apiFetch('/api/chat/rooms/' + CX.room + '/messages?around=' + id + '&limit=120').then(function (r) { CX.loading = false; CX.msgs = r.data || []; CX.more = !!r.more; var rr1 = CX.rooms.filter(function (x) { return x.id === CX.room; })[0]; CX.fwd = !!(rr1 && rr1.lastId > _cxLastId()); _cxDrawMsgs('newer', null); var e2 = document.querySelector('#cxMsgs [data-mid="' + id + '"]'); if (e2) { e2.scrollIntoView({ block: 'center' }); e2.classList.add('cx-hl'); } }).catch(function () { CX.loading = false; }); } return; }
+  if (!el) { if (CX.more) { CX.loading = true; apiFetch('/api/chat/rooms/' + CX.room + '/messages?around=' + id + '&limit=120&th=1').then(_cxTakeThumbs).then(function (r) { CX.loading = false; CX.msgs = r.data || []; CX.more = !!r.more; var rr1 = CX.rooms.filter(function (x) { return x.id === CX.room; })[0]; CX.fwd = !!(rr1 && rr1.lastId > _cxLastId()); _cxDrawMsgs('newer', null); var e2 = document.querySelector('#cxMsgs [data-mid="' + id + '"]'); if (e2) { e2.scrollIntoView({ block: 'center' }); e2.classList.add('cx-hl'); } }).catch(function () { CX.loading = false; }); } return; }
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   el.classList.remove('cx-hl'); void el.offsetWidth; el.classList.add('cx-hl');
 }
@@ -1180,7 +1199,7 @@ function _cxWarm(msgs) {
     })).then(function (rs) {
       var save = {};
       rs.forEach(function (d) { Object.keys(d).forEach(function (id) {
-        try { var bin = atob(d[id]), u8 = new Uint8Array(bin.length); for (var j = 0; j < bin.length; j++) u8[j] = bin.charCodeAt(j); out[id] = URL.createObjectURL(new Blob([u8], { type: 'image/jpeg' })); save[id] = u8.buffer; } catch (e) {}
+        try { var u8 = _cxB64(d[id]); out[id] = URL.createObjectURL(new Blob([u8], { type: 'image/jpeg' })); save[id] = u8.buffer; } catch (e) {}
       }); });
       if (typeof chatThumbPut === 'function') chatThumbPut(save);
       return out;
@@ -1192,6 +1211,19 @@ function _cxWarm(msgs) {
     CX.blobs[key] = all.then(function (m) { return m[id] || _cxBlobFetch(id, true); });
     CX.blobs[key].catch(function () { delete CX.blobs[key]; });
   });
+}
+/* v13.552 응답에 같이 온 미리보기(base64) — 바로 쓰고(CX.blobs) 기기에도 담음. 응답은 그대로 돌려줌 */
+function _cxB64(s) { if (Uint8Array.fromBase64) return Uint8Array.fromBase64(s); var bin = atob(s), u8 = new Uint8Array(bin.length); for (var j = 0; j < bin.length; j++) u8[j] = bin.charCodeAt(j); return u8; }
+function _cxTakeThumbs(r) {
+  var t = r && r.thumbs; if (!t) return r;
+  var save = {}, n = 0;
+  Object.keys(t).forEach(function (id) {
+    var key = id + ':t'; if (CX.blobs[key] || CX.blobs[id]) return;
+    try { var u8 = _cxB64(t[id]); CX.blobs[key] = Promise.resolve(URL.createObjectURL(new Blob([u8], { type: 'image/jpeg' }))); save[id] = u8.buffer; n++; } catch (e) {}
+  });
+  if (n && typeof chatThumbPut === 'function') chatThumbPut(save);
+  delete r.thumbs;
+  return r;
 }
 function _cxKeepUrls(r) {
   var u = r && r.urls, exp = Date.now() + ((r && r.ttl) || 3600) * 1000 - 300000;

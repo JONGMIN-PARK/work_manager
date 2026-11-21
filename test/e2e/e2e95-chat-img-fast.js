@@ -54,16 +54,22 @@ var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); 
 
     // 김팀원 — 방을 열고 쉼
     K = await open('kim@t.com', dirK);
-    var k = K.p, fileReqs = [], thumbBodies = [];
+    var k = K.p, fileReqs = [], thumbBodies = [], msgReqs = [];
     k.on('request', function (r) {
       var u = r.url();
       if (/\/api\/chat\/files\/[^/?]+(\?.*)?$/.test(u) && !/thumb=1/.test(u)) fileReqs.push(u.replace(/.*\/files\//, '').replace(/\?.*/, ''));
       if (/\/api\/chat\/thumbs$/.test(u) && r.method() === 'POST') thumbBodies.push(r.postData() || '');
+      if (/\/api\/chat\/rooms\/[^/]+\/messages/.test(u) && r.method() === 'GET') msgReqs.push(u);
     });
     await k.click('#hdrMsgBtn'); await k.waitForSelector('#mMessages .cx');
     await k.evaluate(function (rid) { return chatOpenRoom(rid); }, room);
     await until(k, function () { return document.querySelectorAll('#cxMsgs .cx-img img[src]').length >= 5; }, null, 15000);
     check(thumbBodies.some(function (b) { return /"urls":true/.test(b); }), '미리보기 묶음 요청에 원본 주소도 같이 (urls:true)');
+    // v13.552 처음 여는 방 — 미리보기가 메시지 응답에 같이 옴(th=1) → 미리보기를 따로 다시 묻지 않음(주소만 묻는 nothumb)
+    check(msgReqs.some(function (u) { return /[?&]th=1/.test(u); }), '처음 여는 방은 메시지와 미리보기를 한 번에 (th=1)');
+    check(thumbBodies.every(function (b) { var j = JSON.parse(b); return (j.nothumb || []).length === j.ids.length; }), '미리보기를 따로 다시 받지 않음 ' + thumbBodies.length);
+    var thLocal = await k.evaluate(function (ids) { return chatThumbGet(ids).then(function (m) { return Object.keys(m).length; }); }, files.map(function (f) { return f.id; }));
+    check(thLocal === 5, '같이 온 미리보기는 기기에도 담음 ' + thLocal);
     // 미리 받기 — 최근 4장
     var pre = await until(k, function (ids) { return ids.every(function (id) { return CX.blobs[id]; }); }, files.slice(1).map(function (f) { return f.id; }), 12000);
     await wait(500);

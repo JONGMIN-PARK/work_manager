@@ -42,6 +42,7 @@ function chatLocalSave() {
 }
 function chatLocalClear() {
   clearTimeout(CXL.t);
+  try { localStorage.removeItem('wm-cx-thr'); } catch (e) {}   // v13.552 미리보기를 기기에 둔 방 목록도 같이
   return _cxlTx('readwrite', function (st) { return st.clear(); }).catch(function () {});
 }
 if (typeof window !== 'undefined') { window.chatLocalLoad = chatLocalLoad; window.chatLocalSave = chatLocalSave; window.chatLocalClear = chatLocalClear; }

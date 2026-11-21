@@ -6506,9 +6506,9 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 }
 /* v13.384 말풍선 묶음 — 같은 사람이 이어 보낸 말풍선은 맞닿는 쪽 모서리를 작게(한 덩어리로 보이게) */
 /* (메시지마다 .cx-mw{display:contents} 로 싸여 있어 형제는 .cx-mw 끼리) */
-.cx-mw:has(> .cx-m.mine):has(+ .cx-mw > .cx-m.mine.cont) .cx-b{border-bottom-right-radius:6px}
+.cx-m.mine.cx-nx .cx-b{border-bottom-right-radius:6px}   /* v13.552 :has(+ 형제) → 그릴 때 붙이는 .cx-nx (다음 말풍선이 이어 붙음) */
 .cx-m.mine.cont .cx-b{border-top-right-radius:6px}
-.cx-mw:has(> .cx-m:not(.mine)):has(+ .cx-mw > .cx-m.cont:not(.mine)) .cx-b{border-bottom-left-radius:6px}
+.cx-m.cx-nx:not(.mine) .cx-b{border-bottom-left-radius:6px}
 .cx-m.cont:not(.mine) .cx-b{border-top-left-radius:6px}
 /* ═══ v13.393 내 말풍선 — 아이콘 · 글자가 말풍선 색에 묻히지 않게 ═══
    ① 테마마다 말풍선 색 · 글자색 (흰 글자 대비 4.5 이상 — 모자란 테마는 조금 진하게, 밝은 강조색 테마는 진한 글자) */
@@ -6548,7 +6548,7 @@ html.cx-kb-on,html.cx-kb-on body{overscroll-behavior:none}
 .cx-m.cont{margin-top:-25px}
 .cx-day+.cx-m{margin-top:-10px}
 .cx-unl+.cx-m{margin-top:-8px}
-.cx-mw:has(>.cx-sys)+.cx-mw>.cx-m{margin-top:-8px}
+.cx-msgs .cx-mw>.cx-m.cx-afs{margin-top:-8px}   /* v13.552 바로 앞이 알림 줄 (예전 :has(>.cx-sys)+) */
 /* 칸이 겹치는 여백은 눌리지 않게 — 윗 메시지 아래 끝을 아랫 메시지 빈 여백이 가로채지 않도록 */
 .cx-msgs .cx-m{pointer-events:none}
 .cx-msgs .cx-m>*{pointer-events:auto}

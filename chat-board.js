@@ -45,8 +45,12 @@ function _cbLoadImg(src) {
   });
 }
 function _cbFileUrl(fid) { return typeof _cxBlob === 'function' ? _cxBlob(fid) : Promise.reject(new Error('no blob')); }
+/* v13.552 풀어 둔 원본은 최근 8장만 — 2048px 사진 한 장이 메모리 12MB 쯤이라, 넘겨 보거나 미리 받은 것이 끝없이 쌓이면 휴대폰이 느려짐 */
+var _cbImgOrder = [];
 function _cbFileImg(fid) {
   if (!_cbImgs[fid]) { _cbImgs[fid] = _cbFileUrl(fid).then(_cbLoadImg); _cbImgs[fid].catch(function () { delete _cbImgs[fid]; }); }
+  var i = _cbImgOrder.indexOf(fid); if (i >= 0) _cbImgOrder.splice(i, 1); _cbImgOrder.push(fid);
+  while (_cbImgOrder.length > 8) { var old = _cbImgOrder.shift(); if (!(CB && CB.fid === old)) delete _cbImgs[old]; }
   return _cbImgs[fid];
 }
 

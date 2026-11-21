@@ -97,6 +97,8 @@ var MSG_SQL = 'SELECT m.id, m.room_id, m.user_id, m.kind, m.body, m.cards, m.men
   'FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN chat_files f ON f.id = m.file_id ' +
   'LEFT JOIN chat_messages qm ON qm.id = m.quote_id LEFT JOIN users qu ON qu.id = qm.user_id LEFT JOIN chat_files qf ON qf.id = qm.file_id ' +
   'LEFT JOIN LATERAL (SELECT COUNT(*)::int AS replies, MAX(t.created_at) AS last_reply_at FROM chat_messages t WHERE t.reply_to = m.id AND t.deleted_at IS NULL) rp ON TRUE ';
+// v13.552 미리보기(작은 JPEG)까지 — 사진이고 64KB 이하인 것만
+var MSG_SQL_TH = MSG_SQL.replace('SELECT m.id, ', "SELECT m.id, CASE WHEN f.mime LIKE 'image/%' AND octet_length(f.thumb) <= 65536 THEN f.thumb END AS f_thumb, ");
 function shape(r) {
   return { id: +r.id, roomId: r.room_id, userId: r.user_id, userName: r.user_name || (r.kind === 'ai' ? 'AI' : ''), kind: r.kind,
     body: r.deleted_at ? '' : r.body, deleted: !!r.deleted_at, edited: !!r.edited_at, cards: r.deleted_at ? null : r.cards, mentions: r.mentions || [],
@@ -629,13 +631,20 @@ router.get('/rooms/:id/messages', async function (req, res) {
     var fwd = req.query.after != null && req.query.after !== '';   // v13.375 앞으로 읽기 — after 다음부터 오래된 순
     if (fwd) { params.push(Math.max(0, +req.query.after || 0)); where.push('m.id > $' + params.length); }
     params.push(lim);
+    var th = req.query.th === '1';   // v13.552 처음 여는 방 — 사진 미리보기도 같은 응답에 (따로 /thumbs 를 한 번 더 묻던 왕복을 없앰)
     var both = await Promise.all([   // v13.372 메시지 · 읽은 위치 동시에
-      db.query(MSG_SQL + 'WHERE ' + where.join(' AND ') + ' ORDER BY m.id ' + (fwd ? 'ASC' : 'DESC') + ' LIMIT $' + params.length, params),
+      db.query((th ? MSG_SQL_TH : MSG_SQL) + 'WHERE ' + where.join(' AND ') + ' ORDER BY m.id ' + (fwd ? 'ASC' : 'DESC') + ' LIMIT $' + params.length, params),
       db.query('SELECT user_id, last_read_id FROM chat_members WHERE room_id = $1 AND left_at IS NULL', [room.id])
     ]);
     var r = both[0], reads = both[1];
     var rows = r.rows.map(shape); if (!fwd) rows.reverse();
-    res.json({ data: rows, more: r.rows.length === lim, reads: reads.rows.map(function (x) { return { userId: x.user_id, id: +x.last_read_id }; }) });
+    var out = { data: rows, more: r.rows.length === lim, reads: reads.rows.map(function (x) { return { userId: x.user_id, id: +x.last_read_id }; }) };
+    if (th) {   // 최근 것부터 모두 합쳐 1.2MB 까지 — 넘는 것은 예전처럼 /thumbs 로
+      var thumbs = {}, tot = 0;
+      for (var i = 0; i < r.rows.length; i++) { var x = r.rows[i]; if (!x.f_thumb || thumbs[x.f_id] || x.deleted_at) continue; tot += x.f_thumb.length; if (tot > 1200 * 1024) break; thumbs[x.f_id] = x.f_thumb.toString('base64'); }
+      out.thumbs = thumbs;
+    }
+    res.json(out);
   } catch (e) { httpErr.serverError(res, '[chat/messages]', e); }
 });
 
